@@ -4,76 +4,54 @@
 	////////////////
 
 #include <mfhdf.h>
-#include <stdio.h>
+#include <curand_kernel.h>
+
 /*
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
 #include <hdf.h>
 #include <float.h>
 #include <cutil.h>
 #include <math.h>
 #include <limits.h>
-#include <stdlib.h>
 #include <string.h>
-#include <time.h>
-#include <stdio.h>
+//#include <shrUtils.h>
+//#include <shrQATest.h>
+//#include <cutil_inline.h>
 */
 
-	  //////////////////////////
-	 // PARAMETRES PHYSIQUES //
-	//////////////////////////
+	  ////////////////////////////
+	 // CONSTANTES PREDEFINIES //
+	////////////////////////////
+
+// Constantes pour la fonction random Mersenne Twister
+#define MT_MM 9
+#define MT_NN 19
+#define MT_WMASK 0xFFFFFFFFU
+#define MT_UMASK 0xFFFFFFFEU
+#define MT_LMASK 0x1U
+#define MT_SHIFT0 12
+#define MT_SHIFTB 7
+#define MT_SHIFTC 15
+#define MT_SHIFT1 18
 
 // Poids initial du photon
 #define WEIGHTINIT 1.F
 // Au dela du poids WEIGHTMAX le photon est considéré comme une erreur
 #define WEIGHTMAX 50.F
-// Angle zénithal solaire
-#define THETASOL 70.F
-// Epaisseur optique Rayleigh
-#define TAU 0.05330F
 #define DEPO 0.0279F
 #define PI 3.1415927F
 //3.141 592 653 589F
-#define PImul2 6.2831853F
+#define DEUXPI 6.2831853F
 //6.283 185 307 17F
-#define PIdiv2 1.5707963F
+#define DEMIPI 1.5707963F
 //1.570 796 326 79F
-
-	  ///////////////////////////
-	 // PARAMETRES SIMULATION //
-	///////////////////////////
 
 // Precision de la recupération des poids des photons
 #define SCALEFACTOR 1000000000
 // Détecte les photons très proches du zenith
 #define VALMIN 0.000001F
-// Nombre de photons à lancer (limite unsigned long long
-// + limite "contrôlée" du poids total des photons sortis unsigned long long)
-#define NBPHOTONS 2000000000
-// Nombres de Stokes pris en compte
-#define NBSTOKES 2
-// Nombre de boucles dans le kernel (limite unsigned int + limite watchdog 5s)
-#define NBLOOP 10000
-// Organisation des threads en blocks (matrice de threads) et grids (matrice de blocks)
-#define XBLOCK	8
-#define YBLOCK	4
-#define XGRID	2
-#define YGRID	6
-
-	  //////////////////////////
-	 // PARAMETRES DE SORTIE //
-	//////////////////////////
-
-// Echantillonnage d'une demi-sphère pour classer les photons sortants
-// Theta parcourt PI/2
-#define NBTHETA 180
-// Phi parcourt 2.PI, NBPHI doit être pair
-#define NBPHI 360
-
-// Provisoire : Nombre d'itérations du programme, pour faire des tests
-#define NBITERATIONS	1
-
-	  ///////////////////////
-	 // AUTRES PARAMETRES //
-	///////////////////////
 
 // Localisation du photon
 #define SPACE		0
@@ -81,6 +59,48 @@
 #define SURFACE		2
 #define ABSORBED	3
 #define NONE		4
+
+// DEBUG Test des differentes fonctions random
+#ifdef RANDMWC
+#define RAND randomMWCfloat_co(tab.x+idx,tab.a+idx)
+#endif
+#ifdef RANDCUDA
+#define RAND curand_uniform(tab.globalRand+idx)
+#endif
+#ifdef RANDMT
+#define RAND randomMTfloat(tab.etat+idx, tab.config+idx)
+#endif
+
+	  /////////////////////////////
+	 // CONSTANTES FICHIER HOST //
+	/////////////////////////////
+
+extern unsigned long long NBPHOTONS;
+extern unsigned int NBLOOP;
+extern float THETASOL;
+extern float LAMBDA;
+extern float TAURAY;
+extern float TAUAER;
+extern float W0AER;
+extern float HA;
+extern float HR;
+extern float ZMIN;
+extern float ZMAX;
+extern float WINDSPEED;
+extern float NH2O;
+extern float CONPHY;
+extern int XBLOCK;
+extern int YBLOCK;
+extern int XGRID;
+extern int YGRID;
+extern int NBTHETA;
+extern int NBPHI;
+extern int NBSTOKES;
+extern int PROFIL;
+extern int SIM;
+extern int SUR;
+extern int DIOPTRE;
+extern int DIFFF;
 
 	  //////////////
 	 // TYPEDEFS //
@@ -111,36 +131,52 @@ typedef struct __align__(16)
 
 typedef struct __align__(16)
 {
-	float thS; //thetaSolaire_Host
-	float cThS; //cosThetaSolaire_Host
-	float sThS; //sinThetaSolaire_Host
-	float tauMax; //tau initial du photon (Host)
-}Constantes;
+	unsigned long long nbPhotons; //nombre de photons traités pour un appel du Kernel
+	int erreurpoids; //nombre de photons ayant un poids anormalement élevé
+	int erreurtheta; //nombre de photons ignorés (sortant dans la direction solaire)
+	#ifdef PROGRESSION
+	unsigned long long nbThreads; //nombre total de threads lancés
+	unsigned long long nbPhotonsSor; //nombre de photons ressortis pour un appel du Kernel
+	int erreurvxy; //nombre de photons sortant au zénith et donc difficiles à classer
+	int erreurvy; //nombre de photons sortant à phi=0 ou phi=PI et donc difficiles à classer
+	int erreurcase; // nombre de photons rangé dans une case inexistante
+	#endif
+}Variables; //Regroupement des variables envoyées dans le kernel
+
+typedef struct {
+	unsigned int matrix_a;
+	unsigned int mask_b;
+	unsigned int mask_c;
+	unsigned int seed;
+} ConfigMT; // Parametres pour la fonction random Mersenne Twister
+
+typedef struct {
+	unsigned int mt[MT_NN];
+	int iState;
+	unsigned int mti1;
+} EtatMT; // Etat ddu generateur pour la fonction random Mersenne Twister
 
 typedef struct __align__(16)
 {
-	unsigned long long x;
-	unsigned int a;
-}Random;
+	unsigned long long* tabPhotons;
+	
+	#ifdef RANDMWC
+	unsigned long long* x;
+	unsigned int* a;
+	#endif
+	#ifdef RANDCUDA
+	curandState_t* globalRand;
+	#endif
+	#ifdef RANDMT
+	ConfigMT* config;
+	EtatMT* etat;
+	#endif
+}Tableaux; // Regroupement des tableaux envoyés dans le kernel
+
 
 typedef struct __align__(16)
 {
 	int action;
 	float tau;
 	float poids;
-}Evnt;
-
-typedef struct __align__(16)
-{
-	unsigned long long nbPhotons; //nombre de photons traités pour un appel du Kernel
-	#ifdef PROGRESSION
-	unsigned long long nbThreads; //nombre total de threads lancés
-	unsigned long long nbPhotonsSor; //nombre de photons ressortis pour un appel du Kernel
-	#endif
-	int erreurpoids; //nombre de photons ayant un poids anormalement élevé
-	int erreurtheta; //nombre de photons ignorés (sortant dans la direction solaire)
-	int erreurvxy; //nombre de photons sortant au zénith et donc difficiles à classer
-	int erreurvy; //nombre de photons sortant à phi=0 ou phi=PI et donc difficiles à classer
-	int erreurcase; // nombre de photons rangé dans une case inexistante
-}Progress;
-
+}Evnt; // DEBUG permet de recuperer des infos sur certains photons

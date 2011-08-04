@@ -21,34 +21,37 @@ LFLAGS += -lcuda -lcudart -lcutil_x86_64
 # Options de sortie
 DFLAGS =
 # DFLAGS += -DPARAMETRES # Affichage des parametres initiaux
+DFLAGS += -DQUART # Calcul et creation-hdf du tableau final reporté sur un quart de sphère
+
+# Options pour debugage
 DFLAGS += -DPROGRESSION # Calcul et affichage de la progression de la simulation
 # DFLAGS += -DTRAJET # Calcul et affichage des premiers evenements d'un threads
-# DFLAGS += -DTABNBPHOTONS # Calcul et affichage du nombre de photons dans chaque morceau de demi-sphere
 # DFLAGS += -DTABSTOKES # Affichage des tableaux finaux pour chaque nombre de Stokes
-DFLAGS += -DTABFINAL # Affichage du tableau final
-DFLAGS += -DTEMPS # Calcul et affichage du temps d'execution total
-# DFLAGS += -DCONTROLE # Controle du tableau tabPhotonsTot
-DFLAGS += -DQUART # Calcul et creation-hdf du tableau final reporté sur un quart de sphère
+# DFLAGS += -DTABFINAL # Affichage du tableau final
 # DFLAGS += -DCOMPARAISON # Calcul et creation hdf du tableau de comparaison des 2 quarts de sphère
+# DFLAGS += -DRANDMWC
+DFLAGS += -DRANDCUDA
+# DFLAGS += -DRANDMT
+# DFLAGS += -DTABRAND
 
 #####################################################################################
 
 all: $(EXEC)
 
-LancePhotons: main.o host.o device.o
+LancePhotons: obj/main.o obj/host.o obj/device.o
 	$(CC) $^ $(IFLAGS) $(IIFLAGS) $(LFLAGS) -o $(EXEC)
 
-main.o: ./src/main.cu ./src/main.h ./src/communs.h ./src/host.h ./src/device.h
+obj/main.o: src/main.cu src/main.h src/communs.h src/host.h src/device.h
 	$(CC) -c $< $(CFLAGS) $(IFLAGS) $(DFLAGS) -o $@
 
-host.o: ./src/host.cu ./src/host.h ./src/communs.h
+obj/host.o: src/host.cu src/host.h src/communs.h src/device.h
 	$(CC) -c $< $(CFLAGS) $(IFLAGS) $(DFLAGS) -o $@
 
-device.o: ./src/device.cu ./src/device.h ./src/communs.h
+obj/device.o: src/device.cu src/device.h src/communs.h
 	$(CC) -c $< $(CFLAGS) $(IFLAGS) $(DFLAGS) -o $@
 
 clean:
-	rm -f *.o *~ src/*~
+	rm -f obj/*.o *~ src/*~
 
 mrproper: clean
-	rm -f $(EXEC) *.hdf
+	rm -f $(EXEC) out/*.hdf

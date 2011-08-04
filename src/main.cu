@@ -3,8 +3,8 @@
 	 // INCLUDES //
 	//////////////
 
-#include "communs.h"
 #include "main.h"
+#include "communs.h"
 #include "device.h"
 #include "host.h"
 
@@ -13,153 +13,208 @@
 	///////////////////
 
 // Fonction principale
-int main()
+int main (int argc, char *argv[])
 {
-	#ifdef TEMPS
-	// Récupération du temps initial
-	clock_t start, finish;
-	double duration;
-	start = clock();
-	#endif
+	// Suppression des anciens fichiers hdf pour éviter les confusions
+	remove("out/Resultats.hdf");
+	remove("out/Quart.hdf");
+	remove("out/Comparaison.hdf");
 	
-// Organisation des threads en blocks de threads et en grids de blocks
-	dim3 blockSize(XBLOCK,YBLOCK);
-	dim3 gridSize(XGRID,YGRID);
+	// Initialisation des constantes du host (en partie recuperees dans le fichier Parametres.txt
+	initConstantesHost(argc, argv);
+	// Initialisation des constantes du device à partir des constantes du host
+	initConstantesDevice();
 	
-// Fonction aléatoire : Allocate memory for RNG's
-	Random random_H[XBLOCK * YBLOCK * XGRID * YGRID];
-	Random* random_D;
-	cudaMalloc(&random_D, XBLOCK * YBLOCK * XGRID * YGRID * sizeof(Random));
-	initRandom(random_H, random_D);
-	
-// Constantes à envoyer dans le kernel
-	Constantes constantes_H;
-	Constantes* constantes_D;
-	cudaMalloc(&(constantes_D), sizeof(Constantes));
-	initConstantes(&constantes_H, constantes_D);
+	// DEBUG : Affichage basique des parametres de la simulation
+	printf("\n%lu - %u - %d - %d - %d - %d - %d - %d\n", NBPHOTONS,NBLOOP,XBLOCK,YBLOCK,XGRID,YGRID,NBTHETA,NBPHI);
 
-// Variables de récupération d'information (avancement)
+	// Regroupement et initialisation des variables a envoyer dans le kernel (structure de variables)
+	Variables* var_H; //variables version host
+	Variables* var_D; //variables version device
+	initVariables(&var_H, &var_D);
+	// Regroupement et initialisation des tableaux a envoyer dans le kernel (structure de pointeurs)
+	Tableaux tab_H; //tableaux version host
+	Tableaux tab_D; //tableaux version device
+	initTableaux(&tab_H, &tab_D);
+	// Variables et tableaux qui restent dans le host et se remplissent petit à petit
 	unsigned long long nbPhotonsTot = 0; //nombre total de photons traités
 	#ifdef PROGRESSION
 	unsigned long long nbPhotonsSorTot = 0; //nombre total de photons ressortis
 	#endif
-	Progress progress_H;
-	Progress* progress_D;
-	cudaMalloc(&progress_D, sizeof(Progress));
-	initProgress(&progress_H, progress_D);
+	unsigned long long* tabPhotonsTot; //tableau du poids total des photons sortis
+	tabPhotonsTot = (unsigned long long*)malloc(NBTHETA * NBPHI * NBSTOKES * sizeof(unsigned long long));
+
+	#ifdef TABRAND
+	// DEBUG Recuperations des nombres aleatoires des differents randoms pour verifier le bon fonctionnement
+	//RandomMWC
+	float tableau1H[100] = {0};
+	float* tableau1D;
+	cudaMalloc(&tableau1D, 100 * sizeof(float));
+	cudaMemset(tableau1D, 0, 100 * sizeof(float));
 	
-// Variables de récupération d'informations (tableaux)
-	unsigned long long tabPhotonsTot[NBTHETA * NBPHI * NBSTOKES] = {0}; //tableau regroupant le poids de tous les photons ressortis sur une demi-sphère pour chaque Stokes
-	unsigned long long* tabPhotons_D; //tableau des poids du photons ressortis pour un appel du Kernel (Device)
-	cudaMalloc(&tabPhotons_D, NBTHETA * NBPHI * NBSTOKES * sizeof(unsigned long long));
-	unsigned long long tabPhotons_H[NBTHETA * NBPHI * NBSTOKES]; //tableau du poids des photons ressortis pour un appel du Kernel (Host)
-
-	#ifdef TABNBPHOTONS
-	unsigned long long tabNbPhotonsTot[NBTHETA * NBPHI] = {0}; //tableau regroupant le nombre total de photons ressortis sur une demi-sphère
-	unsigned long long* tabNbPhotons_D; //tableau du nombre de photons ressortis pour un appel du Kernel (Device)
-	cudaMalloc(&tabNbPhotons_D, NBTHETA * NBPHI * sizeof(unsigned long long));
-	unsigned long long tabNbPhotons_H[NBTHETA * NBPHI]; //tableau du nombre de photons ressortis pour un appel du Kernel (Host)
+	unsigned long long* xH;
+	unsigned int* aH;
+	unsigned long long* xD;
+	unsigned int* aD;
+	unsigned long long seed = (unsigned long long) time(NULL);
+	xH = (unsigned long long*)malloc(5 * sizeof(unsigned long long));
+	cudaMalloc(&(xD), 5 * sizeof(unsigned long long));
+	aH = (unsigned int*)malloc(5 * sizeof(unsigned int));
+	cudaMalloc(&(aD), 5 * sizeof(unsigned int));
+	// Initialisation des tableaux host
+	initRandMWC(xH, aH, 5, "safeprimes_base32.txt", seed);
+	// Cpie dans les tableaux device
+	cudaMemcpy(xD, xH, 5 * sizeof(unsigned long long), cudaMemcpyHostToDevice);
+	cudaMemcpy(aD, aH, 5 * sizeof(unsigned int), cudaMemcpyHostToDevice);
+	
+	//RandomCuda
+	float tableau2H[100] = {0};
+	float* tableau2D;
+	cudaMalloc(&tableau2D, 100 * sizeof(float));
+	cudaMemset(tableau2D, 0, 100 * sizeof(float));
+	
+	curandState_t* globalRand;
+	cudaMalloc(&globalRand, 5 * sizeof(curandState_t));
+	unsigned long long seed2 = (unsigned long long) time(NULL);
+	initRandCUDA<<<1, 5>>>(globalRand, seed2);
+	
+	//RandomMT
+	float tableau3H[100] = {0};
+	float* tableau3D;
+	cudaMalloc(&tableau3D, 100 * sizeof(float));
+	cudaMemset(tableau3D, 0, 100 * sizeof(float));
+	
+	ConfigMT* configH;
+	ConfigMT* configD;
+	EtatMT* etatD;
+	cudaMalloc(&configD, 5 * sizeof(ConfigMT));
+	cudaMalloc(&etatD, 5 * sizeof(EtatMT));
+	configH = (ConfigMT*)malloc(5 * sizeof(ConfigMT));
+	// Initialisation de la config du MT de chaque thread
+	initRandMTConfig(configH, configD, 5);
+	// Initialisation de l'etat du MT de chaque thread
+	initRandMTEtat<<<1, 5>>>(etatD, configD);
 	#endif
-
-// Variables de récupération d'informations (trajet)
+	
+	// Fonction qui permet de poursuivre la simulation précédente si elle n'est pas terminee
+	double tempsPrec = 0.; //temps ecoule de la simulation precedente
+//================Retirée pour le debugage=============================================
+	lireHDFTemoin(var_H, var_D, &nbPhotonsTot, tabPhotonsTot, &tempsPrec);
+	
 	#ifdef TRAJET
+	// DEBUG : Variables permettant de récupérer le début du trajet d'un photon
 	Evnt evnt_H[20];
 	Evnt* evnt_D;
 	cudaMalloc(&evnt_D, 20 * sizeof(Evnt));
 	initEvnt(evnt_H, evnt_D);
 	#endif
 	
+	// Organisation des threads en blocks de threads et en grids de blocks
+	dim3 blockSize(XBLOCK,YBLOCK);
+	dim3 gridSize(XGRID,YGRID);
+	
 	// Affichage des paramètres de la simulation
 	#ifdef PARAMETRES
 	afficheParametres();
 	#endif
-	// Affichage de l'avancement de la simulation
-	#ifdef PROGRESSION
-	printf("\n");
-	#endif
-
+	
 	// Tant qu'il n'y a pas assez de photons traités on relance le kernel
 	while(nbPhotonsTot < NBPHOTONS)
 	{
-		reinitProgress(&progress_H, progress_D);
-
-		// Le tableau du poids des photons ressortis pour un appel du Kernel est remis à zéro
-		cudaMemset(tabPhotons_D, 0, NBTHETA * NBPHI * NBSTOKES * sizeof(unsigned long long));
-		memset(tabPhotons_H, 0, NBTHETA * NBPHI * NBSTOKES * sizeof(unsigned long long));
-
-		#ifdef TABNBPHOTONS
-		// Le tableau du nombre de photons ressortis pour un appel du Kernel est remis à zéro
-		cudaMemset(tabNbPhotons_D, 0, NBTHETA * NBPHI * sizeof(unsigned long long));
-		memset(tabNbPhotons_H, 0, NBTHETA * NBPHI * sizeof(unsigned long long));
-		#endif
-
+		// Remise à zéro de certaines variables et certains tableaux
+		reinitVariables(var_H, var_D);
+		cudaMemset(tab_D.tabPhotons, 0, NBTHETA * NBPHI * NBSTOKES * sizeof(unsigned long long));
+		
 		// Lancement du kernel
-		lancementKernel<<<gridSize, blockSize>>>(random_D, //variables fonction aléatoire
-				constantes_D, //constantes
-				progress_D //récupération d'informations
-				, tabPhotons_D //récupération d'informations
-				
-				#ifdef TABNBPHOTONS
-				, tabNbPhotons_D //récupération d'informations
+		lancementKernel<<<gridSize, blockSize>>>(var_D, tab_D			
+				#ifdef TABRAND
+				, xD, aD, tableau1D
+				, globalRand, tableau2D
+				, etatD, configD, tableau3D
 				#endif
-				
 				#ifdef TRAJET
-				, evnt_D //récupération d'informations
+				, evnt_D //récupération d'un trajet de photons
 				#endif
 							); 
-
-		// Récupération des variables envoyées dans le kernel
-		cudaMemcpy(&progress_H, progress_D, sizeof(Progress), cudaMemcpyDeviceToHost);
-		cudaMemcpy(&tabPhotons_H, tabPhotons_D, NBTHETA * NBPHI * NBSTOKES * sizeof(unsigned long long), cudaMemcpyDeviceToHost);
 		
-		#ifdef TABNBPHOTONS
-		cudaMemcpy(&tabNbPhotons_H, tabNbPhotons_D, NBTHETA * NBPHI * sizeof(unsigned long long), cudaMemcpyDeviceToHost);
-		#endif
-		
-		// Remplissage des variables "total"
-		nbPhotonsTot  += progress_H.nbPhotons;
-		
+		// Récupération des variables et d'un tableau envoyés dans le kernel
+		cudaMemcpy(var_H, var_D, sizeof(Variables), cudaMemcpyDeviceToHost);
+		cudaMemcpy(tab_H.tabPhotons, tab_D.tabPhotons, NBTHETA * NBPHI * NBSTOKES * sizeof(unsigned long long), cudaMemcpyDeviceToHost);
+				
+		// On remplit les variables et tableau qui restent dans le host
+		nbPhotonsTot += var_H->nbPhotons;
 		#ifdef PROGRESSION
-		nbPhotonsSorTot += progress_H.nbPhotonsSor;
+		nbPhotonsSorTot += var_H->nbPhotonsSor;
 		#endif
-		
 		for(int i = 0; i < NBTHETA * NBPHI * NBSTOKES; i++)
-		{
-			#ifdef CONTROLE
-			if(tabPhotons_H[i] + tabPhotonsTot[i] < tabPhotonsTot[i])
-			{
-				printf("\nERREUR : main tabPhotonsTot\n");
-				return 1;
-			}
-			#endif
-			tabPhotonsTot[i] += tabPhotons_H[i];
-		}
-
-		#ifdef TABNBPHOTONS
-		for(int i = 0; i < NBTHETA * NBPHI; i++)  tabNbPhotonsTot[i] += tabNbPhotons_H[i];
-		#endif
+			tabPhotonsTot[i] += tab_H.tabPhotons[i];
+		
+		// Creation d'un fichier témoin pour pouvoir reprendre la simulation en cas d'arrêt
+		creerHDFTemoin(tabPhotonsTot, nbPhotonsTot, var_H, tempsPrec);
 		
 		// Affichage de l'avancement de la simulation
-		#ifdef PROGRESSION
-		afficheProgress(nbPhotonsTot, nbPhotonsSorTot, &progress_H);
-		#endif
+		afficheProgress(nbPhotonsTot, var_H, tempsPrec
+			#ifdef PROGRESSION
+			, nbPhotonsSorTot
+			#endif
+			       );
 	}
-
+	
+	#ifdef TABRAND
+	// DEBUG Recuperations et affichage des nombres aleatoires des differents randoms
+	//randomMWC
+	cudaMemcpy(tableau1H, tableau1D, 100 * sizeof(float), cudaMemcpyDeviceToHost);
+	printf("\n=======MWC=======================\n");
+	for(int i = 0; i < 10; i++)
+	{
+		printf("thread%d : ", i%5);
+		for(int j = 0; j < 10; j++)
+		{
+			printf("%f - ", tableau1H[i*10+j]);
+		}
+		printf("\n");
+	}
+	printf("==================================\n");
+	
+	//randomCuda
+	cudaMemcpy(tableau2H, tableau2D, 100 * sizeof(float), cudaMemcpyDeviceToHost);
+	printf("\n====CUDA=========================\n");
+	for(int i = 0; i < 10; i++)
+	{
+		printf("thread%d : ", i%5);
+		for(int j = 0; j < 10; j++)
+		{
+			printf("%f - ", tableau2H[i*10+j]);
+		}
+		printf("\n");
+	}
+	printf("==================================\n");
+	
+	//randomMT
+	cudaMemcpy(tableau3H, tableau3D, 100 * sizeof(float), cudaMemcpyDeviceToHost);
+	printf("\n====MT===========================\n");
+	for(int i = 0; i < 10; i++)
+	{
+		printf("thread%d : ", i%5);
+		for(int j = 0; j < 10; j++)
+		{
+			printf("%f - ", tableau3H[i*10+j]);
+		}
+		printf("\n");
+	}
+	printf("==================================\n");
+	#endif
+	
 	#ifdef TRAJET
-	// Récupération des variables envoyées dans le kernel
+	// DEBUG Récupération des variables envoyées dans le kernel
 	cudaMemcpy(evnt_H, evnt_D, 20 * sizeof(Evnt), cudaMemcpyDeviceToHost);
 	// Affichage du trajet du premier thread
 	afficheTrajet(evnt_H);
 	#endif
-
+	
 	#ifdef TABSTOKES
 	// Affichage des tableaux "finaux" pour chaque nombre de Stokes
 	afficheTabStokes(tabPhotonsTot);
-	#endif
-
-	#ifdef TABNBPHOTONS
-	// Affichage du tableau regroupant le nombre de photons ressortis sur une demi-sphère
-	afficheTabNbPhotons(tabNbPhotonsTot);
 	#endif
 
 	// Création et calcul du tableau final (regroupant le poids de tous les photons ressortis sur une demi-sphère, par unité de surface)
@@ -167,102 +222,53 @@ int main()
 	float tabTh[NBTHETA]; //tableau contenant l'angle theta de chaque morceau de sphère
 	float tabPhi[NBPHI]; //tableau contenant l'angle psi de chaque morceau de sphère
 	// Remplissage des 3 tableaux
-	calculTabFinal(tabFinal, tabTh, tabPhi, tabPhotonsTot, &progress_H, nbPhotonsTot);
+	calculTabFinal(tabFinal, tabTh, tabPhi, tabPhotonsTot, nbPhotonsTot);
 
 	#ifdef TABFINAL
-	// Calcul et affichage du tableau final (regroupant le poids de tous les photons ressortis sur une demi-sphère, par unité de surface)
+	// DEBUG Affichage du tableau final (regroupant le poids de tous les photons ressortis sur une demi-sphère, par unité de surface)
 	afficheTabFinal(tabFinal);
 	#endif
 
-	// Fonction qui crée le fichier .hdf contenant le résultat final sur la demi-sphère
-	creerHDFResultats(tabFinal, tabTh, tabPhi);
-
-	#ifdef QUART
 	// Fonction qui crée le fichier .hdf contenant le résultat final reporté sur un quart de sphère
-	creerHDFResultatsQuartsphere(tabFinal, tabTh, tabPhi);
+	#ifdef QUART
+	creerHDFResultatsQuartsphere(tabFinal, tabTh, tabPhi, nbPhotonsTot, var_H, tempsPrec);
 	#endif
-
+	// DEBUG Fonction qui crée le fichier .hdf permettant de comparer les 2 quarts de sphère
 	#ifdef COMPARAISON
-	// Fonction qui crée le fichier .hdf permettant de comparer les 2 quarts de sphère
-	creerHDFComparaison(tabFinal, tabTh, tabPhi);
+	creerHDFComparaison(tabFinal, tabTh, tabPhi, nbPhotonsTot, var_H, tempsPrec);
 	#endif
+	// Fonction qui crée le fichier .hdf contenant le résultat final sur la demi-sphère
+	creerHDFResultats(tabFinal, tabTh, tabPhi, nbPhotonsTot, var_H, tempsPrec);
+	// Suppression du fichier Temoin.hdf
+	remove("out/Temoin.hdf");
 
-/////////////////////////////////////////////////////////////////////////////////////
-	/*
-	comp_info c_info;
-	comp_coder_t comp_type = COMP_CODE_DEFLATE; // Gzip
-	c_info.deflate.level = 9;
-	SDsetcompress(sdsSymetrie, comp_type, &c_info);
-	
-	if (hdf_datatype == DFNT_FLOAT32) {
-	float fillvalue_float = NaN;
-	SDsetfillvalue(sds_id, &fillvalue_float);
-}
-	*/
-	/*
-	FILE* fichier;
-	char nomFichier[30] = "Resultats";
-	
-	char texte[30] = "blablabla";
-	int i = 12;
-	unsigned long long j = 123456789123456789;
-	float f = 2.014;
-
-	fichier = fopen(nomFichier, "w");
-	
-	fprintf(fichier, "texte : %s\n", texte);
-	fprintf(fichier, "entier : %d\n", i);
-	fprintf(fichier, "ull : %lu\n", j);
-	fprintf(fichier, "float : %f\n", f);
-	
-	fclose(fichier);
-	
-	//Deuxième partie : Lire et afficher le contenu du fichier
-	P_FICHIER = fopen(NOM_FICHIER, "r");
-	C = 0;
-	while (!feof(P_FICHIER))
-	{
-	fscanf(P_FICHIER, "%s\n", NOM_PERS);
-	printf("NOM : %s\n", NOM_PERS);
-	C++;
-}
-	fclose(P_FICHIER);
-	*/
-
-	/*
-	DFNT_CHAR8 (4) 8-bit character type
-	DFNT_UCHAR8 (3) 8-bit unsigned character type
-	DFNT_INT8 (20) 8-bit integer type
-	DFNT_UINT8 (21) 8-bit unsigned integer type
-	DFNT_INT16 (22) 16-bit integer type
-	DFNT_UINT16 (23) 16-bit unsigned integer type
-	DFNT_INT32 (24) 32-bit integer type
-	DFNT_UINT32 (25) 32-bit unsigned integer type
-	DFNT_FLOAT32 (5) 32-bit floating-point type
-	DFNT_FLOAT64 (6) 64-bit floating-point type
-	*/
-
-	
-/////////////////////////////////////////////////////////////////////////////////////
-	
-	//Libération de la mémoire
-	cudaFree(random_D);
-	cudaFree(constantes_D);
-	cudaFree(progress_D);
-	cudaFree(tabPhotons_D);
-
-	#ifdef TABNBPHOTONS
-	cudaFree(tabNbPhotons_D);
-	#endif
-
+	// Libération du groupe de variables envoyé dans le kernel
+	cudaFree(var_D);
+	free(var_H);
+	// Libération des tableaux envoyés dans le kernel
+	freeTableaux(&tab_H, &tab_D);
+	// Libération du tableau du host
+	free(tabPhotonsTot);
+	// Libération des variables qui récupèrent le trajet d'un photon
 	#ifdef TRAJET
 	cudaFree(evnt_D);
 	#endif
-
-	#ifdef TEMPS
-	// Récupération du temps final et affichage du temps total
-	finish = clock();
-	duration = (double)(finish - start) / CLOCKS_PER_SEC;
-	printf("\n%.1fs\n", duration);
+	
+	#ifdef TABRAND
+	//DEBUG comparaison des differents randoms
+	//randomMWC
+	free(xH);
+	free(aH);
+	cudaFree(xD);
+	cudaFree(aD);
+	cudaFree(tableau1D);
+	//randomCuda
+	cudaFree(tableau2D);
+	cudaFree(globalRand);
+	//randomMT
+	cudaFree(tableau2D);
+	cudaFree(configD);
+	cudaFree(etatD);
+	free(configH);
 	#endif
 }
