@@ -3,21 +3,22 @@ import sys
 import os
 import numpy
 from time import time
-# import pylab
 from pylab import *
+import marshal
+import pyhdf.SD
 
 # -------------------------------------------------------------------------------------------
 
 def lancerSimulation(tabTemps,NBPHOTONS,NBLOOP,XBLOCK,YBLOCK,XGRID,YGRID,NBTHETA,NBPHI) :
 
-	temps = float(0)
+	temps = 0
 	done = 0
-	for tab in listeTemps:
-		if (tab[0:8] == [NBPHOTONS,NBLOOP,XBLOCK,YBLOCK,XGRID,YGRID,NBTHETA,NBPHI]).all():
-			temps = tab[8]
+	for sim in listeTemps:
+		if (sim[0]==NBPHOTONS and sim[1]==NBLOOP and sim[2]==XBLOCK and sim[3]==YBLOCK and sim[4]==XGRID and sim[5]==YGRID and sim[6]==NBTHETA and sim[7]==NBPHI):
+			temps = sim[8]
 			done = 1
 	if done == 0:
-		fichierParametres = open("Parametres.txt", "w") # argh j'ai tout ecrase !
+		fichierParametres = open("tmp/opt_avecX_param.txt", "w")
 		fichierParametres.write("NBPHOTONS = " + str(NBPHOTONS) + "\n")
 		fichierParametres.write("NBLOOP = " + str(NBLOOP) + "\n")
 		fichierParametres.write("XBLOCK = " + str(XBLOCK) + "\n")
@@ -27,7 +28,7 @@ def lancerSimulation(tabTemps,NBPHOTONS,NBLOOP,XBLOCK,YBLOCK,XGRID,YGRID,NBTHETA
 		fichierParametres.write("NBTHETA = " + str(NBTHETA) + "\n")
 		fichierParametres.write("NBPHI = " + str(NBPHI) + "\n")
 		fichierParametres.write("NBSTOKES = 2\n")
-		fichierParametres.write("THETASOL = 70.\n")
+		fichierParametres.write("THSDEG = 70.\n")
 		fichierParametres.write("LAMBDA = 635.\n")
 		fichierParametres.write("TAURAY = 0.05330\n")
 		fichierParametres.write("TAUAER = 0.0\n")
@@ -47,25 +48,79 @@ def lancerSimulation(tabTemps,NBPHOTONS,NBLOOP,XBLOCK,YBLOCK,XGRID,YGRID,NBTHETA
 		fichierParametres.close()
 		
 		start = time()
-		os.system("./LancePhotons Parametres.txt")
+		os.system("./Prog tmp/opt_avecX_param.txt")
 		temps = time() - start
+		os.system("rm -f tmp/opt_avecX_param.txt")
 		
-		listeTemps.append(array([NBPHOTONS,NBLOOP,XBLOCK,YBLOCK,XGRID,YGRID,NBTHETA,NBPHI,temps]))
+		# lecture fichier hdf
+		file_hdf = 'out_prog/Resultats.hdf'
+		hdf = pyhdf.SD.SD(file_hdf)
+		# lecture du nombre de photons traites et du nombre de photons demandes
+		NBPHOTONS = getattr(hdf,'NBPHOTONS')
+		nbPhotonsTot = getattr(hdf,'nbPhotonsTot')
+		
+		temps = temps*NBPHOTONS/nbPhotonsTot
+		
+		listeTemps.append([NBPHOTONS,NBLOOP,XBLOCK,YBLOCK,XGRID,YGRID,NBTHETA,NBPHI,temps])
+		marshal.dump(listeTemps, open("tmp/opt_avecX_sauv.txt", 'wb'))
 	return temps
 
 # -------------------------------------------------------------------------------------------
 
-os.system("cd /home/tristan/Desktop/TristanCuda")
+if os.path.exists("tmp/opt_avecX_sauv.txt"):
+	cont = 1
+	while cont:
+		sys.stdout.write("Continuer avec les simulations sauvegardees? [Y/n]\n")
+		choice = raw_input().lower()
+		if (choice == '' or choice == 'y' or choice == 'Y' or choice == 'yes' or choice == 'Yes'):
+			listeTemps = marshal.load(open("tmp/opt_avecX_sauv.txt", "rb")) ## Rechargement de la liste
+			cont = 0
+		elif (choice == 'n' or choice == 'N' or choice == 'no' or choice == 'No'):
+			listeTemps = []
+			os.system("rm -f tmp/opt_avecX_sauv.txt")
+			cont = 0
+else:
+	listeTemps = []
+
 os.system("make clean")
 os.system("make")
-listeTemps = []
+os.system("rm -rf out_scripts/analyse_optimisation_avecX")
+os.mkdir("out_scripts/analyse_optimisation_avecX")
+
+# -----------------------------------------Variation NBLOOP normal------------------------------------------------
+
+XBLOCK = 12
+YBLOCK = 1
+XGRID = 12
+YGRID = 1
+NBTHETA = 180
+NBPHI = 360
+listeNBPHOTONS = range(500000000, 1100000000, 100000000)
+listeNBLOOP = range(1000, 50000, 4000)
+listeNBLOOP.extend([60000, 80000, 100000])
+listePlots = []
+listeLegends = []
+for NBPHOTONS in listeNBPHOTONS:
+	listeGraphe = []
+	for NBLOOP in listeNBLOOP:
+		temps = lancerSimulation(listeTemps,NBPHOTONS,NBLOOP,XBLOCK,YBLOCK,XGRID,YGRID,NBTHETA,NBPHI)
+		listeGraphe.append(temps)
+	listePlots.append(plot(listeNBLOOP,listeGraphe, marker='.'))
+	listeLegends.append('NBPHOTONS = ' + str(NBPHOTONS))
+legend(listePlots, listeLegends, loc='best', numpoints=1)
+title("Temps en fonction de NBLOOP pour differents NBPHOTONS")
+xlabel("NBLOOP")
+ylabel("TEMPS")
+grid(True)
+savefig("out_scripts/analyse_optimisation_avecX/Variation NBLOOP.png", dpi=(140))
+figure()
 
 # ----------------------------------------Variation NBLOOP zoom------------------------------------------------
 
-XBLOCK = 4
-YBLOCK = 4
-XGRID = 4
-YGRID = 4
+XBLOCK = 16
+YBLOCK = 1
+XGRID = 16
+YGRID = 1
 NBTHETA = 180
 NBPHI = 360
 listeNBPHOTONS = range(100000000, 510000000, 100000000)
@@ -84,34 +139,7 @@ title("Temps en fonction de NBLOOP pour differents NBPHOTONS")
 xlabel("NBLOOP")
 ylabel("TEMPS")
 grid(True)
-savefig("out/Variation NBLOOP zoom.png", dpi=(140))
-figure()
-
-# -----------------------------------------Variation NBLOOP normal------------------------------------------------
-
-XBLOCK = 3
-YBLOCK = 4
-XGRID = 3
-YGRID = 4
-NBTHETA = 180
-NBPHI = 360
-listeNBPHOTONS = range(500000000, 1100000000, 100000000)
-listeNBLOOP.extend([60000, 80000, 100000])
-listePlots = []
-listeLegends = []
-for NBPHOTONS in listeNBPHOTONS:
-	listeGraphe = []
-	for NBLOOP in listeNBLOOP:
-		temps = lancerSimulation(listeTemps,NBPHOTONS,NBLOOP,XBLOCK,YBLOCK,XGRID,YGRID,NBTHETA,NBPHI)
-		listeGraphe.append(temps)
-	listePlots.append(plot(listeNBLOOP,listeGraphe, marker='.'))
-	listeLegends.append('NBPHOTONS = ' + str(NBPHOTONS))
-legend(listePlots, listeLegends, loc='best', numpoints=1)
-title("Temps en fonction de NBLOOP pour differents NBPHOTONS")
-xlabel("NBLOOP")
-ylabel("TEMPS")
-grid(True)
-savefig("out/Variation NBLOOP.png", dpi=(140))
+savefig("out_scripts/analyse_optimisation_avecX/Variation NBLOOP zoom.png", dpi=(140))
 figure()
 
 # ----------------------------------------Variation NBPHOTONS normal------------------------------------------------
@@ -153,16 +181,16 @@ ylim(0, ymax)  # set the xlim to xmin, xmax
 xlabel("NBPHOTONS")
 ylabel("TEMPS")
 grid(True)
-savefig("out/Variation NBPHOTONS.png", dpi=(140))
+savefig("out_scripts/analyse_optimisation_avecX/Variation NBPHOTONS.png", dpi=(140))
 figure()
 
 # ----------------------------------------Variation NBPHOTONS zoom-------------------------------------
 
 NBLOOP = 1000
-XBLOCK = 4
-YBLOCK = 4
-XGRID = 4
-YGRID = 4
+XBLOCK = 16
+YBLOCK = 1
+XGRID = 16
+YGRID = 1
 NBTHETA = 180
 NBPHI = 360
 listeNBPHOTONS = [100000, 500000, 1000000, 2000000, 4000000, 6000000, 8000000, 10000000]
@@ -194,94 +222,10 @@ ylim(0, ymax)  # set the xlim to xmin, xmax
 xlabel("NBPHOTONS")
 ylabel("TEMPS")
 grid(True)
-savefig("out/Variation NBPHOTONS zoom.png", dpi=(140))
+savefig("out_scripts/analyse_optimisation_avecX/Variation NBPHOTONS zoom.png", dpi=(140))
 figure()
 
-# ---------------------------------------NBTHREADS constant----------------------------------------------------
-
-NBTHETA = 180
-NBPHI = 360
-NBPHOTONS = 100000000
-NBLOOP = 1000
-XGRID = 2
-YGRID = 2
-listeXBLOCK = [1,2,3,4,6,8,12,24]
-listePlots = []
-listeLegends = []
-
-listeGraphe = []
-for XBLOCK in listeXBLOCK:
-	temps = lancerSimulation(listeTemps,NBPHOTONS,NBLOOP,XBLOCK,24/XBLOCK,XGRID,YGRID,NBTHETA,NBPHI)
-	listeGraphe.append(temps)
-listePlots.append(plot(range(len(listeXBLOCK)),listeGraphe, marker='.'))
-listeLegends.append("NBLOOP=1000 XGRID=2")
-
-NBLOOP = 10000
-listeGraphe = []
-for XBLOCK in listeXBLOCK:
-	temps = lancerSimulation(listeTemps,NBPHOTONS,NBLOOP,XBLOCK,24/XBLOCK,XGRID,YGRID,NBTHETA,NBPHI)
-	listeGraphe.append(temps)
-listePlots.append(plot(range(len(listeXBLOCK)),listeGraphe, marker='.'))
-listeLegends.append("NBLOOP=10000 XGRID=2")
-
-XGRID = 50
-listeGraphe = []
-for XBLOCK in listeXBLOCK:
-	temps = lancerSimulation(listeTemps,NBPHOTONS,NBLOOP,XBLOCK,24/XBLOCK,XGRID,YGRID,NBTHETA,NBPHI)
-	listeGraphe.append(temps)
-listePlots.append(plot(range(len(listeXBLOCK)),listeGraphe, marker='.'))
-listeLegends.append("NBLOOP=10000 XGRID=50")
-	
-legend(listePlots, listeLegends, loc='best', numpoints=1)
-title("Temps pour (XBLOCK,YBLOCK)=(1,24),(2,12)..(24,1)")
-ylabel("TEMPS")
-grid(True)
-savefig("out/NBTHREADS constant.png", dpi=(140))
-figure()
-
-# ---------------------------------------NBBLOCKS constant----------------------------------------------------
-
-NBTHETA = 180
-NBPHI = 360
-NBPHOTONS = 100000000
-NBLOOP = 1000
-XBLOCK = 2
-YBLOCK = 2
-listeXGRID = [1,2,3,4,6,8,12,24]
-listePlots = []
-listeLegends = []
-
-listeGraphe = []
-for XGRID in listeXGRID:
-	temps = lancerSimulation(listeTemps,NBPHOTONS,NBLOOP,XBLOCK,YBLOCK,XGRID,24/XGRID,NBTHETA,NBPHI)
-	listeGraphe.append(temps)
-listePlots.append(plot(range(len(listeXGRID)),listeGraphe, marker='.'))
-listeLegends.append("NBLOOP=1000 XBLOCK=2")
-
-NBLOOP = 10000
-listeGraphe = []
-for XGRID in listeXGRID:
-	temps = lancerSimulation(listeTemps,NBPHOTONS,NBLOOP,XBLOCK,YBLOCK,XGRID,24/XGRID,NBTHETA,NBPHI)
-	listeGraphe.append(temps)
-listePlots.append(plot(range(len(listeXGRID)),listeGraphe, marker='.'))
-listeLegends.append("NBLOOP=10000 XBLOCK=2")
-
-XBLOCK = 50
-listeGraphe = []
-for XGRID in listeXGRID:
-	temps = lancerSimulation(listeTemps,NBPHOTONS,NBLOOP,XBLOCK,YBLOCK,XGRID,24/XGRID,NBTHETA,NBPHI)
-	listeGraphe.append(temps)
-listePlots.append(plot(range(len(listeXGRID)),listeGraphe, marker='.'))
-listeLegends.append("NBLOOP=10000 XBLOCK=50")
-	
-legend(listePlots, listeLegends, loc='best', numpoints=1)
-title("Temps pour (XGRID,YGRID)=(1,24),(2,12)..(24,1)")
-ylabel("TEMPS")
-grid(True)
-savefig("out/NBBLOCKS constant.png", dpi=(140))
-figure()
-
-# --------------------------------Variation NBTHREADS NBBLOCKS---------------------------------
+# --------------------------------Variation NBTHREADS NBBLOCKS normal---------------------------------
 
 NBPHOTONS = 1000000000
 NBLOOP = 2000
@@ -305,7 +249,7 @@ title("Temps en fonction du NBTHREADS pour differents NBBLOCKS (NBPHOTONS=1milli
 xlabel("NBTHREADS")
 ylabel("TEMPS")
 grid(True)
-savefig("out/Variation NBTHREADS NBBLOCKS.png", dpi=(140))
+savefig("out_scripts/analyse_optimisation_avecX/Variation NBTHREADS NBBLOCKS.png", dpi=(140))
 figure()
 
 # --------------------------------Variation NBTHREADS NBBLOCKS zoom---------------------------------
@@ -332,7 +276,7 @@ title("Temps en fonction du NBTHREADS pour differents NBBLOCKS (NBPHOTONS=1milli
 xlabel("NBTHREADS")
 ylabel("TEMPS")
 grid(True)
-savefig("out/Variation NBTHREADS NBBLOCKS zoom.png", dpi=(140))
+savefig("out_scripts/analyse_optimisation_avecX/Variation NBTHREADS NBBLOCKS zoom.png", dpi=(140))
 figure()
 
 NBPHOTONS = 10000000
@@ -357,7 +301,7 @@ title("Temps en fonction du NBTHREADS pour differents NBBLOCKS (NBPHOTONS=10mill
 xlabel("NBTHREADS")
 ylabel("TEMPS")
 grid(True)
-savefig("out/Variation NBTHREADS NBBLOCKS bis.png", dpi=(140))
+savefig("out_scripts/analyse_optimisation_avecX/Variation NBTHREADS NBBLOCKS zoom.png", dpi=(140))
 figure()
 
 # -------------------------------- Variation NBCASES ---------------------------------
@@ -387,57 +331,36 @@ title("Temps en fonction du nombre de cases")
 xlabel("Nombre de cases")
 ylabel("TEMPS")
 grid(True)
-savefig("out/Variations NBCASES.png", dpi=(140))
+savefig("out_scripts/analyse_optimisation_avecX/Variations NBCASES.png", dpi=(140))
 figure()
+# -------------------------------- Variation NBCASES zoom---------------------------------
 
-# -------------------------------- Variation NBCASES cible1 ---------------------------------
-
-NBPHOTONS = 100000000
+listeNBPHOTONS = [10000000,100000000]
 NBLOOP = 1000
 XBLOCK = 64
 YBLOCK = 1
 XGRID = 42
 YGRID = 1
-listeNBTHETA = range(900,1000,1)
+listeNBTHETA = range(500,800,2)
 NBPHI = 100
+listeLegend = []
 listeAbscisses = []
 for NBTHETA in listeNBTHETA:
 	listeAbscisses.append(NBTHETA*NBPHI)
-listeGraphe = []
-for NBTHETA in listeNBTHETA:
-	temps = lancerSimulation(listeTemps,NBPHOTONS,NBLOOP,XBLOCK,YBLOCK,XGRID,YGRID,NBTHETA,NBPHI)
-	listeGraphe.append(temps)
-plot(listeAbscisses,listeGraphe, marker='.')
-title("Temps en fonction du nombre de cases (NBPHOTONS=100millions)")
+listePlot = []
+for NBPHOTONS in listeNBPHOTONS:
+	listeGraphe = []
+	for NBTHETA in listeNBTHETA:
+		temps = lancerSimulation(listeTemps,NBPHOTONS,NBLOOP,XBLOCK,YBLOCK,XGRID,YGRID,NBTHETA,NBPHI)
+		listeGraphe.append(temps)
+	listePlot.append(plot(listeAbscisses,listeGraphe, marker='.'))
+	listeLegend.append("NBPHOTONS = " + str(NBPHOTONS))
+legend(listePlot, listeLegend, loc='best', numpoints=1)
+title("Temps en fonction du nombre de cases")
 xlabel("Nombre de cases")
 ylabel("TEMPS")
 grid(True)
-savefig("out/Variations NBCASES cible1.png", dpi=(140))
-figure()
-
-# -------------------------------- Variation NBCASES cible2 ---------------------------------
-
-NBPHOTONS = 100000000
-NBLOOP = 1000
-XBLOCK = 64
-YBLOCK = 1
-XGRID = 42
-YGRID = 1
-listeNBTHETA = range(4600,4700,1)
-NBPHI = 20
-listeAbscisses = []
-for NBTHETA in listeNBTHETA:
-	listeAbscisses.append(NBTHETA*NBPHI)
-listeGraphe = []
-for NBTHETA in listeNBTHETA:
-	temps = lancerSimulation(listeTemps,NBPHOTONS,NBLOOP,XBLOCK,YBLOCK,XGRID,YGRID,NBTHETA,NBPHI)
-	listeGraphe.append(temps)
-plot(listeAbscisses,listeGraphe, marker='.')
-title("Temps en fonction du nombre de cases (NBPHOTONS=100millions)")
-xlabel("Nombre de cases")
-ylabel("TEMPS")
-grid(True)
-savefig("out/Variations NBCASES cible2.png", dpi=(140))
+savefig("out_scripts/analyse_optimisation_avecX/Variations NBCASES zoom.png", dpi=(140))
 figure()
 
 # --------------------------------Variation NBBLOCKS---------------------------------
@@ -464,11 +387,9 @@ title("Temps en fonction du NBBLOCKS pour differents NBTHREADS (NBPHOTONS=1milli
 xlabel("NBBLOCKS")
 ylabel("TEMPS")
 grid(True)
-savefig("out/Variation NBBLOCKS.png", dpi=(140))
+savefig("out_scripts/analyse_optimisation_avecX/Variation NBBLOCKS.png", dpi=(140))
 figure()
 
-# --------------------------------Variation NBTHREADS NBBLOCKS bis---------------------------------
-
-# -------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------
 
 # os.system("shutdown -s -t 0")
