@@ -135,11 +135,6 @@ int main (int argc, char *argv[])
 	// Affichage du trajet du premier thread
 	afficheTrajet(evnt_H);
 	#endif
-	
-	#ifdef TABSTOKES
-	// Affichage des tableaux "finaux" pour chaque nombre de Stokes
-	afficheTabStokes(tabPhotonsTot);
-	#endif
 
 	// Création et calcul du tableau final (regroupant le poids de tous les photons ressortis sur une demi-sphère, par unité de surface)
 	float tabFinal[NBTHETA * NBPHI]; //tableau final

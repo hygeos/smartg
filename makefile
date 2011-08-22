@@ -5,7 +5,7 @@ CFLAGS = -g -G -arch=sm_11 -O3 # -Xptxas -v
 # CFLAGS = -g -G -arch=sm_20 -O3 # -Xptxas -v
 
 IFLAGS = -I /opt/cuda/include
-# IFLAGS += -I /opt/NVIDIA_GPU_Computing_SDK/C/common/inc
+IFLAGS += -I /opt/NVIDIA_GPU_Computing_SDK/C/common/inc
 IFLAGS += -I /usr/include/hdf/
 
 IIFLAGS = $(wildcard /usr/lib/libdf.a /usr/lib64/hdf/libdf.a)
@@ -32,7 +32,6 @@ DFLAGS += -DRANDMWC
 # Options pour debogage
 DFLAGS += -DPROGRESSION # Calcul et affichage de la progression de la simulation
 # DFLAGS += -DTRAJET # Calcul et affichage des premiers evenements d'un threads
-# DFLAGS += -DTABSTOKES # Affichage des tableaux finaux pour chaque nombre de Stokes
 # DFLAGS += -DTABFINAL # Affichage du tableau final
 DFLAGS += -DCOMPARAISON # Calcul et creation hdf du tableau de comparaison des 2 quarts de sphère
 # DFLAGS += -DTABRAND

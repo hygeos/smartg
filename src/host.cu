@@ -525,29 +525,6 @@ void afficheTrajet(Evnt* evnt_H)
 	}
 }
 
-// Fonction qui affiche les tableaux "finaux" pour chaque nombre de Stokes
-void afficheTabStokes(unsigned long long* tabPhotonsTot)
-{
-	printf("\nTableau Stokes1 :\n");
-	for(int ith = 0; ith < NBTHETA; ith++)
-	{
-		for(int iphi = 0; iphi < NBPHI; iphi++)
-		{
-			printf("%llu ", tabPhotonsTot[0 * NBPHI * NBTHETA + ith * NBPHI + iphi]);
-		}
-		printf("\n");
-	}
-	printf("\nTableau Stokes2 :\n");
-	for(int ith = 0; ith < NBTHETA; ith++)
-	{
-		for(int iphi = 0; iphi < NBPHI; iphi++)
-		{
-			printf("%llu ", tabPhotonsTot[1 * NBPHI * NBTHETA + ith * NBPHI + iphi]);
-		}
-		printf("\n");
-	}
-}
-
 // Fonction qui affiche le tableau final
 void afficheTabFinal(float* tabFinal)
 {
