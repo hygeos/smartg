@@ -6,7 +6,7 @@
 // Creation des constantes du host (parametres de la 
 unsigned long long NBPHOTONS; //Nombre de photons a lancer
 unsigned int NBLOOP; //Nombre de boucles dans le kernel
-float THETASOL; //Angle zénithal solaire
+float THSDEG; //Angle zénithal solaire
 float LAMBDA; //Longueur d'onde [nm]
 float TAURAY; //Epaisseur optique moleculaire (Rayleigh)
 float TAUAER; //Epaisseur optique aerosol

@@ -6,7 +6,7 @@
 // Création des constantes utilisées dans le kernel et le fichier device uniquement
 __device__ __constant__ unsigned long long NBPHOTONSd;
 __device__ __constant__ unsigned int NBLOOPd;
-__device__ __constant__ float THETASOLd;
+__device__ __constant__ float THSDEGd;
 __device__ __constant__ float LAMBDAd;
 __device__ __constant__ float TAURAYd;
 __device__ __constant__ float TAUAERd;
@@ -30,10 +30,11 @@ __device__ __constant__ int SIMd;
 __device__ __constant__ int SURd;
 __device__ __constant__ int DIOPTREd;
 __device__ __constant__ int DIFFFd;
-__device__ __constant__ float THSd; //thetaSolaire_Host
+__device__ __constant__ float THSd; //thetaSolaire_Host en radians
 __device__ __constant__ float STHSd; //sinThetaSolaire_Host
 __device__ __constant__ float CTHSd; //cosThetaSolaire_Host
 __device__ __constant__ float TAUMAXd; //tau initial du photon (Host)
+__device__ __constant__ float GAMAd;
 
 	  ///////////////////////
 	 // PROTOTYPES DEVICE //
@@ -41,9 +42,7 @@ __device__ __constant__ float TAUMAXd; //tau initial du photon (Host)
 
 __global__ void lancementKernel(Variables*, Tableaux
 		#ifdef TABRAND
-		, unsigned long long*, unsigned int*, float*
-		, curandState_t*, float*
-		, EtatMT*, ConfigMT*, float*
+		, float*
 		#endif
 		#ifdef TRAJET
 		, Evnt*
@@ -56,19 +55,37 @@ __device__ void init(Photon*
 		, int, Evnt*
 		#endif
 		    );
-__device__ void move(Photon*, Tableaux, int
+__device__ void move(Photon*, Tableaux
+		#ifdef RANDMWC
+		, unsigned long long*, unsigned int*
+		#endif
+		#ifdef RANDCUDA
+		, curandState_t*
+		#endif
+		#ifdef RANDMT
+		, EtatMT*, ConfigMT*
+		#endif
 		#ifdef TRAJET
-		, Evnt*
+		, int, Evnt*
 		#endif
 		    );
-__device__ void scatter(Photon*, Tableaux, int
+__device__ void scatter(Photon*, Tableaux
+		#ifdef RANDMWC
+		, unsigned long long*, unsigned int*
+		#endif
+		#ifdef RANDCUDA
+		, curandState_t*
+		#endif
+		#ifdef RANDMT
+		, EtatMT*, ConfigMT*
+		#endif
 		#ifdef TRAJET
-		, Evnt*
+		, int, Evnt*
 		#endif
 		       );
-__device__ void surfac(Photon* , Variables*, Tableaux, int
+__device__ void surfac(Photon* , Variables*, Tableaux
 		#ifdef TRAJET
-		, Evnt*
+		, int, Evnt*
 		#endif
 		      );
 __device__ void exit(Photon* , Variables*, Tableaux, unsigned int*
@@ -79,12 +96,13 @@ __device__ void exit(Photon* , Variables*, Tableaux, unsigned int*
 		, int, Evnt*
 		#endif
 		    );
-__device__ void calculsPhoton(float, Photon*);
+__device__ void calculPsi(Photon*, float*, float);
+__device__ void modifStokes(Photon*, float, float, float);
 __device__ void calculCase(int*, int*, Photon*, Variables*);
-__device__ float randomMWCfloat_co(unsigned long long*,unsigned int*);
-__device__ float randomMWCfloat_oc(unsigned long long*,unsigned int*);
+__device__ float randomMWCfloat(unsigned long long*,unsigned int*);
 __device__ float randomMTfloat(EtatMT*, ConfigMT*);
 __device__ unsigned int randomMTuint(EtatMT*, ConfigMT*);
 __device__ void atomicAddULL(unsigned long long* address, unsigned int add);
 
 void initConstantesDevice();
+

@@ -16,11 +16,9 @@
 int main (int argc, char *argv[])
 {
 	// Suppression des anciens fichiers hdf pour éviter les confusions
-	remove("out/Resultats.hdf");
-	remove("out/Quart.hdf");
-	remove("out/Comparaison.hdf");
+	system("rm -f out_prog/*");
 	
-	// Initialisation des constantes du host (en partie recuperees dans le fichier Parametres.txt
+	// Initialisation des constantes du host (en partie recuperees dans le fichier Parametres.txt)
 	initConstantesHost(argc, argv);
 	// Initialisation des constantes du device à partir des constantes du host
 	initConstantesDevice();
@@ -45,61 +43,16 @@ int main (int argc, char *argv[])
 	tabPhotonsTot = (unsigned long long*)malloc(NBTHETA * NBPHI * NBSTOKES * sizeof(unsigned long long));
 
 	#ifdef TABRAND
-	// DEBUG Recuperations des nombres aleatoires des differents randoms pour verifier le bon fonctionnement
-	//RandomMWC
-	float tableau1H[100] = {0};
-	float* tableau1D;
-	cudaMalloc(&tableau1D, 100 * sizeof(float));
-	cudaMemset(tableau1D, 0, 100 * sizeof(float));
-	
-	unsigned long long* xH;
-	unsigned int* aH;
-	unsigned long long* xD;
-	unsigned int* aD;
-	unsigned long long seed = (unsigned long long) time(NULL);
-	xH = (unsigned long long*)malloc(5 * sizeof(unsigned long long));
-	cudaMalloc(&(xD), 5 * sizeof(unsigned long long));
-	aH = (unsigned int*)malloc(5 * sizeof(unsigned int));
-	cudaMalloc(&(aD), 5 * sizeof(unsigned int));
-	// Initialisation des tableaux host
-	initRandMWC(xH, aH, 5, "safeprimes_base32.txt", seed);
-	// Cpie dans les tableaux device
-	cudaMemcpy(xD, xH, 5 * sizeof(unsigned long long), cudaMemcpyHostToDevice);
-	cudaMemcpy(aD, aH, 5 * sizeof(unsigned int), cudaMemcpyHostToDevice);
-	
-	//RandomCuda
-	float tableau2H[100] = {0};
-	float* tableau2D;
-	cudaMalloc(&tableau2D, 100 * sizeof(float));
-	cudaMemset(tableau2D, 0, 100 * sizeof(float));
-	
-	curandState_t* globalRand;
-	cudaMalloc(&globalRand, 5 * sizeof(curandState_t));
-	unsigned long long seed2 = (unsigned long long) time(NULL);
-	initRandCUDA<<<1, 5>>>(globalRand, seed2);
-	
-	//RandomMT
-	float tableau3H[100] = {0};
-	float* tableau3D;
-	cudaMalloc(&tableau3D, 100 * sizeof(float));
-	cudaMemset(tableau3D, 0, 100 * sizeof(float));
-	
-	ConfigMT* configH;
-	ConfigMT* configD;
-	EtatMT* etatD;
-	cudaMalloc(&configD, 5 * sizeof(ConfigMT));
-	cudaMalloc(&etatD, 5 * sizeof(EtatMT));
-	configH = (ConfigMT*)malloc(5 * sizeof(ConfigMT));
-	// Initialisation de la config du MT de chaque thread
-	initRandMTConfig(configH, configD, 5);
-	// Initialisation de l'etat du MT de chaque thread
-	initRandMTEtat<<<1, 5>>>(etatD, configD);
+	// DEBUG Recuperations des nombres aleatoires du random en place
+	float tableauRand_H[100] = {0};
+	float* tableauRand_D;
+	cudaMalloc(&tableauRand_D, 100 * sizeof(float));
+	cudaMemset(tableauRand_D, 0, 100 * sizeof(float));
 	#endif
 	
 	// Fonction qui permet de poursuivre la simulation précédente si elle n'est pas terminee
 	double tempsPrec = 0.; //temps ecoule de la simulation precedente
-//================Retirée pour le debugage=============================================
-	lireHDFTemoin(var_H, var_D, &nbPhotonsTot, tabPhotonsTot, &tempsPrec);
+//lireHDFTemoin(var_H, var_D, &nbPhotonsTot, tabPhotonsTot, &tempsPrec);
 	
 	#ifdef TRAJET
 	// DEBUG : Variables permettant de récupérer le début du trajet d'un photon
@@ -128,14 +81,14 @@ int main (int argc, char *argv[])
 		// Lancement du kernel
 		lancementKernel<<<gridSize, blockSize>>>(var_D, tab_D			
 				#ifdef TABRAND
-				, xD, aD, tableau1D
-				, globalRand, tableau2D
-				, etatD, configD, tableau3D
+				, tableauRand_D
 				#endif
 				#ifdef TRAJET
 				, evnt_D //récupération d'un trajet de photons
 				#endif
-							); 
+							);
+		// Attend que tous les threads avant de faire autre chose
+		cudaThreadSynchronize();
 		
 		// Récupération des variables et d'un tableau envoyés dans le kernel
 		cudaMemcpy(var_H, var_D, sizeof(Variables), cudaMemcpyDeviceToHost);
@@ -161,44 +114,15 @@ int main (int argc, char *argv[])
 	}
 	
 	#ifdef TABRAND
-	// DEBUG Recuperations et affichage des nombres aleatoires des differents randoms
-	//randomMWC
-	cudaMemcpy(tableau1H, tableau1D, 100 * sizeof(float), cudaMemcpyDeviceToHost);
-	printf("\n=======MWC=======================\n");
+	// DEBUG Recuperations et affichage des nombres aleatoires du random
+	cudaMemcpy(tableauRand_H, tableauRand_D, 100 * sizeof(float), cudaMemcpyDeviceToHost);
+	printf("\n=====RAND========================\n");
 	for(int i = 0; i < 10; i++)
 	{
 		printf("thread%d : ", i%5);
 		for(int j = 0; j < 10; j++)
 		{
-			printf("%f - ", tableau1H[i*10+j]);
-		}
-		printf("\n");
-	}
-	printf("==================================\n");
-	
-	//randomCuda
-	cudaMemcpy(tableau2H, tableau2D, 100 * sizeof(float), cudaMemcpyDeviceToHost);
-	printf("\n====CUDA=========================\n");
-	for(int i = 0; i < 10; i++)
-	{
-		printf("thread%d : ", i%5);
-		for(int j = 0; j < 10; j++)
-		{
-			printf("%f - ", tableau2H[i*10+j]);
-		}
-		printf("\n");
-	}
-	printf("==================================\n");
-	
-	//randomMT
-	cudaMemcpy(tableau3H, tableau3D, 100 * sizeof(float), cudaMemcpyDeviceToHost);
-	printf("\n====MT===========================\n");
-	for(int i = 0; i < 10; i++)
-	{
-		printf("thread%d : ", i%5);
-		for(int j = 0; j < 10; j++)
-		{
-			printf("%f - ", tableau3H[i*10+j]);
+			printf("%f - ", tableauRand_H[i*10+j]);
 		}
 		printf("\n");
 	}
@@ -240,7 +164,7 @@ int main (int argc, char *argv[])
 	// Fonction qui crée le fichier .hdf contenant le résultat final sur la demi-sphère
 	creerHDFResultats(tabFinal, tabTh, tabPhi, nbPhotonsTot, var_H, tempsPrec);
 	// Suppression du fichier Temoin.hdf
-	remove("out/Temoin.hdf");
+	remove("tmp/Temoin.hdf");
 
 	// Libération du groupe de variables envoyé dans le kernel
 	cudaFree(var_D);
@@ -255,20 +179,7 @@ int main (int argc, char *argv[])
 	#endif
 	
 	#ifdef TABRAND
-	//DEBUG comparaison des differents randoms
-	//randomMWC
-	free(xH);
-	free(aH);
-	cudaFree(xD);
-	cudaFree(aD);
-	cudaFree(tableau1D);
-	//randomCuda
-	cudaFree(tableau2D);
-	cudaFree(globalRand);
-	//randomMT
-	cudaFree(tableau2D);
-	cudaFree(configD);
-	cudaFree(etatD);
-	free(configH);
+	//DEBUG random
+	cudaFree(tableauRand_D);
 	#endif
 }

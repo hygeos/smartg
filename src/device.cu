@@ -13,43 +13,42 @@
 // Fonction device principale qui lance tous les threads, leur associe des photons, et les fait évoluer
 __global__ void lancementKernel(Variables* var, Tableaux tab
 		#ifdef TABRAND
-		, unsigned long long* x, unsigned int* a, float* tableau1
-		, curandState_t *globalRand, float* tableau2
-		, EtatMT* etat, ConfigMT* config, float* tableau3
+		, float* tableauRand
 		#endif
 		#ifdef TRAJET
-		, Evnt* evnt //récupération d'informations
+		, Evnt* evnt
 		#endif
 			       )
 {
 	// idx est l'indice du thread considéré
 	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
 	
+	// Paramètres de la fonction random en mémoire locale
+	#ifdef RANDMWC
+	unsigned long long etatThr;
+	unsigned int configThr;
+	configThr = tab.config[idx];
+	etatThr = tab.etat[idx];
+	#endif
+	#ifdef RANDCUDA
+	curandState_t etatThr;
+	etatThr = tab.etat[idx];
+	#endif
+	#ifdef RANDMT
+	ConfigMT configThr;
+	EtatMT etatThr;
+	configThr = tab.config[idx];
+	etatThr = tab.etat[idx];
+	#endif
+
 	#ifdef TABRAND
-	// DEBUG Recuperation des nombres aleatoires generes par les differentes fonctions random
-	//RandomMWC
+	// DEBUG Recuperation des nombres aleatoires generes par la fonction random utilisée
 	if(idx < 5)
-		if(tableau1[50] == 0.f)
+		if(tableauRand[50] == 0.f)
 		{
 			int k = 0;
-			if(tableau1[0] != 0.f) k = 50;
-			for(int j = 0; j < 10; j++) tableau1[k+idx*10+j] = randomMWCfloat_co(x+idx,a+idx);
-		}
-	//RandomCuda
-	if(idx < 5)
-		if(tableau2[50] == 0.f)
-		{
-			int k = 0;
-			if(tableau2[0] != 0.f) k = 50;
-			for(int j = 0; j < 10; j++) tableau2[k+idx*10+j] = curand_uniform(globalRand+idx);
-		}
-	//RandomMT
-	if(idx < 5)
-		if(tableau3[50] == 0.f)
-		{
-			int k = 0;
-			if(tableau3[0] != 0.f) k = 50;
-			for(int j = 0; j < 10; j++) tableau3[k+idx*10+j] = randomMTfloat(etat+idx, config+idx);
+			if(tableauRand[0] != 0.f) k = 50;
+			for(int j = 0; j < 10; j++) tableauRand[k+idx*10+j] = RANDDEBUG;
 		}
 	#endif
 	
@@ -72,44 +71,53 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 				, idx, evnt
 				#endif
 					   );
+		// Chaque block attend tous ses threads avant de continuer
+		syncthreads();
 		
 		// Si le photon est à ATMOS on le avancer jusqu'à SURFACE, ou SPACE, ou ATMOS s'il subit une diffusion
-		if(photon.loc == ATMOS) move(&photon, tab
-				, idx
+		if(photon.loc == ATMOS) move(&photon, tab, &etatThr
+				#if defined(RANDMWC) || defined(RANDMT)
+				, &configThr
+				#endif
 				#ifdef TRAJET
-				, evnt
+				, idx, evnt
 				#endif
 					    );
+		// Chaque block attend tous ses threads avant de continuer
+		syncthreads();
 		
 		// Si le photon est encore à ATMOS il subit une diffusion et reste dans ATMOS
-		if(photon.loc == ATMOS) scatter(&photon
-				, tab
-				, idx
+		if(photon.loc == ATMOS) scatter(&photon, tab, &etatThr
+				#if defined(RANDMWC) || defined(RANDMT)
+				, &configThr
+				#endif
 				#ifdef TRAJET
-				, evnt
+				, idx, evnt
 				#endif
 					       );
+		// Chaque block attend tous ses threads avant de continuer
+		syncthreads();
 		
 		// Si le photon est à SURFACE on le met à ABSORBED
-		if(photon.loc == SURFACE) surfac(&photon
-				, var, tab
-				, idx
+		if(photon.loc == SURFACE) surfac(&photon, var, tab
 				#ifdef TRAJET
-				, evnt
+				, idx, evnt
 				#endif
 						);
+		// Chaque block attend tous ses threads avant de continuer
+		syncthreads();
 		
 		// Si le photon est dans SPACE ou ABSORBED on récupère ses infos et on le remet à NONE
-		if(photon.loc == ABSORBED || photon.loc == SPACE) exit(&photon
-				, var, tab
-				, &nbPhotonsThr
+		if(photon.loc == ABSORBED || photon.loc == SPACE) exit(&photon, var, tab, &nbPhotonsThr
 				#ifdef PROGRESSION
 				, &nbPhotonsSorThr
 				#endif
 				#ifdef TRAJET
 				, idx, evnt
 				#endif
-					       );
+								      );
+		// Chaque block attend tous ses threads avant de continuer
+		syncthreads();
 	}
 	
 	// Après la boucle on rassemble les nombres de photons traités par chaque thread
@@ -121,14 +129,17 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 	// On incrémente avncement qui compte le nombre d'appels du Kernel
 	atomicAddULL(&var->nbThreads, 1);
 	#endif
+	
+	// Sauvegarde de l'état du random pour que les nombres ne soient pas identiques à chaque appel du kernel
+	tab.etat[idx] = etatThr;
 }
 
 // Fonction qui initialise les generateurs du random cuda
-__global__ void initRandCUDA(curandState_t* globalRand, unsigned long long seed)
+__global__ void initRandCUDA(curandState_t* etat, unsigned long long seed)
 {
 	// Pour chaque thread on initialise son generateur avec le meme seed mais un idx different
 	int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
-	curand_init(seed, idx, 0, globalRand+idx);
+	curand_init(seed, idx, 0, etat+idx);
 }
 
 // Fonction qui initialise l'etat des generateurs du random Mersenne Twister (generateur = etat + config)
@@ -190,9 +201,17 @@ __device__ void init(Photon* photon
 
 // Fonction device qui traite les photons dans l'atmosphère en les faisant avancer
 __device__ void move(Photon* photon, Tableaux tab
-		, int idx
+		#ifdef RANDMWC
+		, unsigned long long* etatThr, unsigned int* configThr
+		#endif
+		#ifdef RANDCUDA
+		, curandState_t* etatThr
+		#endif
+		#ifdef RANDMT
+		, EtatMT* etatThr, ConfigMT* configThr
+		#endif
 		#ifdef TRAJET
-		, Evnt* evnt
+		, int idx, Evnt* evnt
 		#endif
 		    )
 {
@@ -201,7 +220,7 @@ __device__ void move(Photon* photon, Tableaux tab
 	// p->tau += -LOG(1.F-MersenneTwisterGenerateFloat(pmtState, initialConfig)*(1.F-EXP(-tau_max))) * p->v.z;
 	
 	// Tirage de la nouvelle épaisseur optique du photon sans diffusion forcée
-	photon->tau += -__logf(1.F - RAND) * photon->vz;
+	photon->tau += -__logf(RAND) * photon->vz;
 	
 	// Si tau<0 le photon atteint la surface
 	if(photon->tau < 0.F) photon->loc = SURFACE;
@@ -230,44 +249,33 @@ __device__ void move(Photon* photon, Tableaux tab
 }
 
 // Fonction device qui traite les photons qui sont encore dans l'atmosphère après "move" : rencontre avec une molécule
-__device__ void scatter(Photon* photon,
-		Tableaux tab
-		, int idx
+__device__ void scatter(Photon* photon, Tableaux tab
+		#ifdef RANDMWC
+		, unsigned long long* etatThr, unsigned int* configThr
+		#endif
+		#ifdef RANDCUDA
+		, curandState_t* etatThr
+		#endif
+		#ifdef RANDMT
+		, EtatMT* etatThr, ConfigMT* configThr
+		#endif
 		#ifdef TRAJET
-		, Evnt* evnt
+		, int idx, Evnt* evnt
 		#endif
 		       )
 {
 	// On détermine la nouvelle direction du photon
-	float cThP, cThP2, sThP, psiP, cPsiP, sPsiP;
+	float cTh, cTh2, sTh, psi, cPsi, sPsi;
 	// On prend un cosinus aléatoirement entre -1 et 1, il s'agit du cosinus de l'angle que fait la nouvelle direction avec l'ancienne, on prend le cos aléatoirement pour l'équiprobabilité dans toutes les directons
-	cThP = 2.F * RAND - 1.F; //cosThetaPhoton
-	cThP2 = cThP * cThP; //cosThetaPhotonCarré
-	sThP = sqrtf(1.F - cThP2);//sinThetaPhoton
+	cTh = 2.F * RAND - 1.F; //cosThetaPhoton
+	cTh2 = cTh * cTh; //cosThetaPhotonCarré
+	sTh = sqrtf(1.F - cTh2);//sinThetaPhoton
 	// On prend un angle phi aléatoirement entre 0 et 2.PI, il s'agit de l'angle entre le nouveau vecteur projeté dans le plan orthogonal à v et le vecteur u
-	psiP = RAND * DEUXPI; //psiPhoton
-	cPsiP = __cosf(psiP); //cosPsiPhoton
-	sPsiP = __sinf(psiP); //sinPsiPhoton
-	
-	// Dans certains cas on change les nombres de stokes du photon
-	if ((photon->stokes1 != photon->stokes2) || (photon->stokes3 != 0.F))
-	{
-		float cPsiP2 = cPsiP * cPsiP; //cosPsiPhotonCarré
-		float sPsiP2 = sPsiP * sPsiP; //sinPsiPhotonCarré
-		float psiP2 = 2.F * psiP; //2*PsiPhoton
-		float s2PsiP   = __sinf(psiP2); //sin(2*PsiPhoton)
-		
-		float stokes1, stokes2, stokes3;
-		stokes1 = photon->stokes1;
-		stokes2 = photon->stokes2;
-		stokes3 = photon->stokes3;
-		float a = __fdividef(s2PsiP * stokes3, 2.F);
-		
-		photon->stokes1 = cPsiP2 * stokes1 + sPsiP2 * stokes2 + a;
-		photon->stokes2 = sPsiP2 * stokes1 + cPsiP2 * stokes2 - a;
-		photon->stokes3 = s2PsiP * (stokes2 - stokes1) + __cosf(psiP2) * stokes3;
-	}
-
+	psi = RAND * DEUXPI; //psiPhoton
+	cPsi = __cosf(psi); //cosPsiPhoton
+	sPsi = __sinf(psi); //sinPsiPhoton
+	// Modification des nombres de Stokes
+	modifStokes(photon, psi, cPsi, sPsi);
 	// Création de 2 vecteurs provisoires w et v
 	float wx, wy, wz, vx, vy, vz;
 	// w est le rotationnel entre l'ancien vecteur u et l'ancien vecteur v du photon
@@ -275,29 +283,28 @@ __device__ void scatter(Photon* photon,
 	wy = photon->uz * photon->vx - photon->ux * photon->vz;
 	wz = photon->ux * photon->vy - photon->uy * photon->vx;
 	// v est le nouveau vecteur v du photon
-	vx = cThP * photon->vx + sThP * ( cPsiP * photon->ux + sPsiP * wx );
-	vy = cThP * photon->vy + sThP * ( cPsiP * photon->uy + sPsiP * wy );
-	vz = cThP * photon->vz + sThP * ( cPsiP * photon->uz + sPsiP * wz );
+	vx = cTh * photon->vx + sTh * ( cPsi * photon->ux + sPsi * wx );
+	vy = cTh * photon->vy + sTh * ( cPsi * photon->uy + sPsi * wy );
+	vz = cTh * photon->vz + sTh * ( cPsi * photon->uz + sPsi * wz );
 	// Changement du vecteur u (orthogonal au vecteur vitesse du photon)
-	photon->ux = __fdividef(cThP * vx - photon->vx, sThP);
-	photon->uy = __fdividef(cThP * vy - photon->vy, sThP);
-	photon->uz = __fdividef(cThP * vz - photon->vz, sThP);
+	photon->ux = __fdividef(cTh * vx - photon->vx, sTh);
+	photon->uy = __fdividef(cTh * vy - photon->vy, sTh);
+	photon->uz = __fdividef(cTh * vz - photon->vz, sTh);
 	// Changement du vecteur v (vitesse du photon)
 	photon->vx = vx;
 	photon->vy = vy;
 	photon->vz = vz;
 	
 	// Changement du poids et des nombres de stokes du photon
-	float gam = __fdividef(DEPO, 2.F-DEPO);
 	float stokes1 = photon->stokes1;
 	float stokes2 = photon->stokes2;
 	// Calcul du poids après diffusion
-	photon->weight *= __fdividef(1.5F * ((1.F+gam)*stokes2+((1.F-gam)*cThP2+2.F*gam)*stokes1), (1.F+2.F*gam) * (stokes1+stokes2));
+	photon->weight *= __fdividef(1.5F * ((1.F+GAMAd)*stokes2+((1.F-GAMAd)*cTh2+2.F*GAMAd)*stokes1), (1.F+2.F*GAMAd) * (stokes1+stokes2));
 	// Calcul des parametres de Stokes du photon apres diffusion
-	photon->stokes2 = stokes2 + gam * stokes1;
-	photon->stokes1 = ( (1.F - gam) * cThP2 + gam) * stokes1 + gam * photon->stokes2;
-	photon->stokes3 = (1.F - gam) * cThP * photon->stokes3;
-	photon->stokes4 = (1.F - 3.F * gam) * cThP * photon->stokes4;
+	photon->stokes2 = stokes2 + GAMAd * stokes1;
+	photon->stokes1 = ( (1.F - GAMAd) * cTh2 + GAMAd) * stokes1 + GAMAd * photon->stokes2;
+	photon->stokes3 = (1.F - GAMAd) * cTh * photon->stokes3;
+	photon->stokes4 = (1.F - 3.F * GAMAd) * cTh * photon->stokes4;
 	
 	#ifdef TRAJET
 	// Récupération d'informations sur le premier photon traité
@@ -320,27 +327,14 @@ __device__ void scatter(Photon* photon,
 }
 
 // Fonction device qui traite les photons atteignant le sol
-__device__ void surfac(Photon* photon,
-		Variables* var, Tableaux tab
-		, int idx
+__device__ void surfac(Photon* photon, Variables* var, Tableaux tab
 		#ifdef TRAJET
-		, Evnt* evnt //récupération d'informations
+		, int idx, Evnt* evnt
 		#endif
 		      )
 {
 	// Pour l'instant le sol absorbe tous les photons
 	photon->loc = ABSORBED;
-	
-	// TO DO
-	/*
-	if(rand_MWC_co(&(tab.x),&(tab.a))<0.5F) photon->loc = ABSORBED;
-	else
-	{
-		photon->loc = ATMOS;
-		photon->tau = 0.F;
-		photon->vz = -photon->vz;
-	}
-	*/
 	
 	#ifdef TRAJET
 	// Récupération d'informations sur le premier photon traité
@@ -363,9 +357,7 @@ __device__ void surfac(Photon* photon,
 }
 
 // Fonction device qui traite les photons absorbés ou atteignant l'espace
-__device__ void exit(Photon* photon,
-		Variables* var, Tableaux tab
-		, unsigned int* nbPhotonsThr
+__device__ void exit(Photon* photon, Variables* var, Tableaux tab, unsigned int* nbPhotonsThr
 		#ifdef PROGRESSION
 		, unsigned int* nbPhotonsSorThr
 		#endif
@@ -400,8 +392,16 @@ __device__ void exit(Photon* photon,
 		}
 		else
 		{
-			// Traitement du photon, poids et nombres de Stokes
-			calculsPhoton(theta, photon);
+			// Création d'un angle psi qui sert à modifier les nombres de Stokes
+			float psi;
+			// Initialisation de psi
+			calculPsi(photon, &psi, theta);
+			// Modification des nombres de Stokes
+			float cPsi = __cosf(psi);
+			float sPsi = __sinf(psi);
+			modifStokes(photon, psi, cPsi, sPsi);
+			// On modifie ensuite le poids du photon
+			photon->weight = __fdividef(photon->weight, photon->stokes1 + photon->stokes2);
 			// Calcul de la case dans laquelle le photon sort
 			int ith, iphi;
 			calculCase(&ith, &iphi, photon, var);
@@ -450,40 +450,39 @@ __device__ void exit(Photon* photon,
 }
 
 // Fonction qui traite les photons sortants dans l'espace: changement de poids et de Stokes
-__device__ void calculsPhoton(float theta, Photon* photon)
+__device__ void calculPsi(Photon* photon, float* psi, float theta)
 {
-	// Création d'un angle psi qui sert à modifier les nombres de Stokes
-	float psi;
 	if (theta < 0.0025F)
 	{
-		psi = acosf(fmin(1.F - VALMIN, fmax(-(1.F - VALMIN), - CTHSd * photon->ux + STHSd * photon->uz)));
+		*psi = acosf(fmin(1.F - VALMIN, fmax(-(1.F - VALMIN), - CTHSd * photon->ux + STHSd * photon->uz)));
 	}
 	else
 	{
-		psi = acosf(fmin(1.F, fmax(-1.F, __fdividef(STHSd * photon->ux + CTHSd * photon->uz, __sinf(theta)))));
+		*psi = acosf(fmin(1.F, fmax(-1.F, __fdividef(STHSd * photon->ux + CTHSd * photon->uz, __sinf(theta)))));
 	}
 	float sign = STHSd * (photon->uy * photon->vz - photon->uz * photon->vy) + CTHSd * (photon->ux * photon->vy - photon->uy * photon->vx);
-	if (sign < 0.F) psi = -psi;
+	if (sign < 0.F) *psi = -*psi;
+}
+
+// Fonction qui traite les photons sortants dans l'espace: changement de poids et de Stokes
+__device__ void modifStokes(Photon* photon, float psi, float cPsi, float sPsi)
+{
 	// On modifie les nombres de Stokes grâce à psi
 	if((photon->stokes1 != photon->stokes2) || (photon->stokes3 != 0.F))
 	{
-		float cp = __cosf(psi);
-		float sp = __sinf(psi);
-		float cp2 = cp * cp;
-		float sp2 = sp * sp;
+		float cPsi2 = cPsi * cPsi;
+		float sPsi2 = sPsi * sPsi;
 		float psi2 = 2.F * psi;
 		float stokes1, stokes2, stokes3;
 		stokes1 = photon->stokes1;
 		stokes2 = photon->stokes2;
 		stokes3 = photon->stokes3;
-		float s2p = __sinf(psi2);
-		float s2ps2u = __fdividef(s2p * stokes3, 2.F);
-		photon->stokes1 = cp2 * stokes1 + sp2 * stokes2 + s2ps2u;
-		photon->stokes2 = sp2 * stokes1 + cp2 * stokes2 - s2ps2u;
-		photon->stokes3 = s2p * (stokes2 - stokes1) + __cosf(psi2) * stokes3;
+		float s2Psi = __sinf(psi2);
+		float a = __fdividef(s2Psi * stokes3, 2.F);
+		photon->stokes1 = cPsi2 * stokes1 + sPsi2 * stokes2 + a;
+		photon->stokes2 = sPsi2 * stokes1 + cPsi2 * stokes2 - a;
+		photon->stokes3 = s2Psi * (stokes2 - stokes1) + __cosf(psi2) * stokes3;
 	}
-	// On modifie ensuite le poids du photon
-	photon->weight = __fdividef(photon->weight, photon->stokes1 + photon->stokes2);
 }
 
 // Fonction qui calcule la position (ith, iphi) du photon dans le tableau de sortie
@@ -523,26 +522,19 @@ __device__ void calculCase(int* ith, int* iphi, Photon* photon, Variables* var)
 	}
 }
 
-// Fonction random MWC qui renvoit un float de [0.1[ à partir d'un generateur (x+a)
-__device__ float randomMWCfloat_co(unsigned long long* x,unsigned int* a)
-{
-	//Generate a random number [0,1)
-	*x=(*x&0xffffffffull)*(*a)+(*x>>32);
-	return __fdividef(__uint2float_rz((unsigned int)(*x)),(float)0x100000000);// The typecast will truncate the x so that it is 0<=x<(2^32-1),__uint2float_rz ensures a round towards zero since 32-bit floating point cannot represent all integers that large. Dividing by 2^32 will hence yield [0,1)
-}//end __device__ rand_MWC_co
-
 // Fonction random MWC qui renvoit un float de ]0.1] à partir d'un generateur (x+a)
-__device__ float randomMWCfloat_oc(unsigned long long* x,unsigned int* a)
+__device__ float randomMWCfloat(unsigned long long* x,unsigned int* a)
 {
 	//Generate a random number (0,1]
-	return 1.0f-randomMWCfloat_co(x,a);
-}//end __device__ rand_MWC_oc
+	*x=(*x&0xffffffffull)*(*a)+(*x>>32);
+	return __fdividef(__uint2float_rz((unsigned int)(*x)) + 1.0f,(float)0x100000000);
+}
 
 // Fonction random Mersenne Twister qui renvoit un float de ]0.1] à partir d'un generateur (etat+config)
 __device__ float randomMTfloat(EtatMT* etat, ConfigMT* config)
 {
 	//Convert to (0, 1] float
-	return ((float)randomMTuint(etat, config) + 1.0f) / 4294967296.0f;
+	return __fdividef(__uint2float_rz(randomMTuint(etat, config)) + 1.0f, 4294967296.0f);
 }
 
 // Fonction random Mersenne Twister qui renvoit un uint à partir d'un generateur (etat+config)
@@ -588,7 +580,7 @@ void initConstantesDevice()
 {
 	cudaMemcpyToSymbol(NBPHOTONSd, &NBPHOTONS, sizeof(unsigned long long));
 	cudaMemcpyToSymbol(NBLOOPd, &NBLOOP, sizeof(unsigned int));
-	cudaMemcpyToSymbol(THETASOLd, &THETASOL, sizeof(float));
+	cudaMemcpyToSymbol(THSDEGd, &THSDEG, sizeof(float));
 	cudaMemcpyToSymbol(LAMBDAd, &LAMBDA, sizeof(float));
 	cudaMemcpyToSymbol(TAURAYd, &TAURAY, sizeof(float));
 	cudaMemcpyToSymbol(TAUAERd, &TAUAER, sizeof(float));
@@ -613,7 +605,7 @@ void initConstantesDevice()
 	cudaMemcpyToSymbol(DIOPTREd, &DIOPTRE, sizeof(int));
 	cudaMemcpyToSymbol(DIFFFd, &DIFFF, sizeof(int));
 	
-	float THSbis = THETASOL/180*PI; //thetaSolaire
+	float THSbis = THSDEG/180*PI; //thetaSolaire en radians
 	cudaMemcpyToSymbol(THSd, &THSbis, sizeof(float));
 
 	float CTHSbis = cosf(THSbis); //cosThetaSolaire
@@ -624,4 +616,8 @@ void initConstantesDevice()
 
 	float TAUMAXbis = TAURAY / CTHSbis; //tau initial du photon
 	cudaMemcpyToSymbol(TAUMAXd, &TAUMAXbis, sizeof(float));
+	
+	float GAMAbis = DEPO / (2.F-DEPO);
+	cudaMemcpyToSymbol(GAMAd, &GAMAbis, sizeof(float));
 }
+

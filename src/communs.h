@@ -7,9 +7,9 @@
 #include <curand_kernel.h>
 
 /*
+#include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
 #include <hdf.h>
 #include <float.h>
 #include <cutil.h>
@@ -62,13 +62,24 @@
 
 // DEBUG Test des differentes fonctions random
 #ifdef RANDMWC
-#define RAND randomMWCfloat_co(tab.x+idx,tab.a+idx)
+#define RAND randomMWCfloat(etatThr,configThr)
 #endif
 #ifdef RANDCUDA
-#define RAND curand_uniform(tab.globalRand+idx)
+#define RAND curand_uniform(etatThr)
 #endif
 #ifdef RANDMT
-#define RAND randomMTfloat(tab.etat+idx, tab.config+idx)
+#define RAND randomMTfloat(etatThr, configThr)
+#endif
+
+// DEBUG Test des differentes fonctions random
+#ifdef RANDMWC
+#define RANDDEBUG randomMWCfloat(&etatThr,&configThr)
+#endif
+#ifdef RANDCUDA
+#define RANDDEBUG curand_uniform(&etatThr)
+#endif
+#ifdef RANDMT
+#define RANDDEBUG randomMTfloat(&etatThr, &configThr)
 #endif
 
 	  /////////////////////////////
@@ -77,7 +88,7 @@
 
 extern unsigned long long NBPHOTONS;
 extern unsigned int NBLOOP;
-extern float THETASOL;
+extern float THSDEG;
 extern float LAMBDA;
 extern float TAURAY;
 extern float TAUAER;
@@ -161,11 +172,11 @@ typedef struct __align__(16)
 	unsigned long long* tabPhotons;
 	
 	#ifdef RANDMWC
-	unsigned long long* x;
-	unsigned int* a;
+	unsigned long long* etat;
+	unsigned int* config;
 	#endif
 	#ifdef RANDCUDA
-	curandState_t* globalRand;
+	curandState_t* etat;
 	#endif
 	#ifdef RANDMT
 	ConfigMT* config;
@@ -180,3 +191,4 @@ typedef struct __align__(16)
 	float tau;
 	float poids;
 }Evnt; // DEBUG permet de recuperer des infos sur certains photons
+
