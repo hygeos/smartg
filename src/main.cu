@@ -143,11 +143,6 @@ int main (int argc, char *argv[])
 	// Remplissage des 3 tableaux
 	calculTabFinal(tabFinal, tabTh, tabPhi, tabPhotonsTot, nbPhotonsTot);
 
-	#ifdef TABFINAL
-	// DEBUG Affichage du tableau final (regroupant le poids de tous les photons ressortis sur une demi-sphère, par unité de surface)
-	afficheTabFinal(tabFinal);
-	#endif
-
 	// Fonction qui crée le fichier .hdf contenant le résultat final reporté sur un quart de sphère
 	#ifdef QUART
 	creerHDFResultatsQuartsphere(tabFinal, tabTh, tabPhi, nbPhotonsTot, var_H, tempsPrec);

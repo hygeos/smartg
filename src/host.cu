@@ -525,21 +525,6 @@ void afficheTrajet(Evnt* evnt_H)
 	}
 }
 
-// Fonction qui affiche le tableau final
-void afficheTabFinal(float* tabFinal)
-{
-	// Affichage du tableau final
-	printf("\nTableau Final :\n");
-	for(int ith = 0; ith < NBTHETA; ith++)
-	{
-		for(int iphi = 0; iphi < NBPHI; iphi++)
-		{
-			printf("%f ", tabFinal[ith * NBPHI + iphi]);
-		}
-		printf("\n");
-	}
-}
-
 // Fonction qui crée un fichier .hdf contenant les informations nécessaires à la reprise du programme
 void creerHDFTemoin(unsigned long long* tabPhotonsTot, unsigned long long nbPhotonsTot, Variables* var, double tempsPrec)
 {

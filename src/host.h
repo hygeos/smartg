@@ -21,7 +21,6 @@ void afficheProgress(unsigned long long, Variables*, double
 		#endif
 		    );
 void afficheTrajet(Evnt*);
-void afficheTabFinal(float*);
 void creerHDFTemoin(unsigned long long*, unsigned long long, Variables*, double);
 void lireHDFTemoin(Variables*, Variables*, unsigned long long*, unsigned long long*, double*);
 void creerHDFResultats(float*, float*, float*, unsigned long long, Variables*, double);
