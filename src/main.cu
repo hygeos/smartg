@@ -143,10 +143,6 @@ int main (int argc, char *argv[])
 	// Remplissage des 3 tableaux
 	calculTabFinal(tabFinal, tabTh, tabPhi, tabPhotonsTot, nbPhotonsTot);
 
-	// Fonction qui crée le fichier .hdf contenant le résultat final reporté sur un quart de sphère
-	#ifdef QUART
-	creerHDFResultatsQuartsphere(tabFinal, tabTh, tabPhi, nbPhotonsTot, var_H, tempsPrec);
-	#endif
 	// Fonction qui crée le fichier .hdf contenant le résultat final sur la demi-sphère
 	creerHDFResultats(tabFinal, tabTh, tabPhi, nbPhotonsTot, var_H, tempsPrec);
 	// Suppression du fichier Temoin.hdf

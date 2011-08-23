@@ -23,7 +23,6 @@ LFLAGS += -lcuda -lcudart
 # Options de sortie
 DFLAGS =
 # DFLAGS += -DPARAMETRES # Affichage des parametres initiaux
-DFLAGS += -DQUART # Calcul et creation-hdf du tableau final reporté sur un quart de sphère
 DFLAGS += -DNEW # Pour que la simulation soit differente à chaque lancement
 DFLAGS += -DRANDMWC
 # DFLAGS += -DRANDCUDA
