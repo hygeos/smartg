@@ -12,8 +12,14 @@ import pyhdf.SD
 	         # PARAMETRES #
 	        ##############
 
+# Si l'un des fichiers suivant existe deja le prog s'arrête
 nomResultatsHDF = "Resultats"
 nomTemoinHDF = "Temoin"
+# Si l'un des fichiers/dossiers suivants existe deja il est supprimé
+nomDossierGraphes = "analyse_optimisation_sansX_512"
+nomFichierParam = "opt_sansX_512_param"
+# Si le fichier suivant existe deja on demande s'il faut poursuivre avec ou le supprimer
+nomFichierSauv = "opt_sansX_512_sauv"
 
 
 	          #############################
@@ -33,7 +39,7 @@ def lancerSimulation(tabTemps,NBPHOTONS,NBLOOP,XBLOCK,YBLOCK,XGRID,YGRID,NBTHETA
 	# si la simulation n'a pas deja ete lancee on la lance
 	if done == 0:
 		# creation du fichier contenant les parametres de la simulation
-		fichierParametres = open("tmp/opt_sansX_512_param.txt", "w")
+		fichierParametres = open("tmp/"+nomFichierParam+".txt", "w")
 		fichierParametres.write("NBPHOTONS = " + str(NBPHOTONS) + "\n")
 		fichierParametres.write("NBLOOP = " + str(NBLOOP) + "\n")
 		fichierParametres.write("XBLOCK = " + str(XBLOCK) + "\n")
@@ -64,22 +70,23 @@ def lancerSimulation(tabTemps,NBPHOTONS,NBLOOP,XBLOCK,YBLOCK,XGRID,YGRID,NBTHETA
 		fichierParametres.write("NOMTEMOINHDF = "+nomTemoinHDF+"\n")
 		fichierParametres.close()
 		# lancement du programme et calcul du temps
-		os.system("rm -f tmp/"+nomTemoinHDF+".hdf")
-		os.system("rm -f out_prog/"+nomResultatsHDF+".hdf")
 		start = time()
-		os.system("./Prog tmp/opt_sansX_512_param.txt")
+		os.system("./Prog tmp/"+nomFichierParam+".txt")
 		temps = time() - start
-		os.system("rm -f tmp/opt_sansX_512_param.txt")
 		# lecture du fichier Resultats.hdf pour recuperer le nombre de photons traites et le nombre de photons demandes
 		file_hdf = 'out_prog/Resultats.hdf'
 		hdf = pyhdf.SD.SD(file_hdf)
 		NBPHOTONS = getattr(hdf,'NBPHOTONS')
 		nbPhotonsTot = getattr(hdf,'nbPhotonsTot')
+		# Suppression des fichiers qui generaient les prochaines simulations
+		os.system("rm -f tmp/"+nomTemoinHDF+".hdf")
+		os.system("rm -f out_prog/"+nomResultatsHDF+".hdf")
+		os.system("rm -f tmp/"+nomFichierParam+".txt")
 		# on adapte le temps pour qu'il corresponde a une simulation à exactement 100% (car le programme depasse un peu les 100%)
 		temps = temps*NBPHOTONS/nbPhotonsTot
 		# sauvegarde de la simulation lancee
 		listeSim.append([NBPHOTONS,NBLOOP,XBLOCK,YBLOCK,XGRID,YGRID,NBTHETA,NBPHI,temps])
-		marshal.dump(listeSim, open("tmp/opt_sansX_512_sauv", 'wb'))
+		marshal.dump(listeSim, open("tmp/"+nomFichierSauv, 'wb'))
 	return temps
 	
 
@@ -93,7 +100,7 @@ if (os.path.exists("tmp/"+nomTemoinHDF+".hdf") or os.path.exists("out_prog/"+nom
 	sys.exit()
 else:
 	# on regarde s'il existe un fichier de sauvegarde des simulations
-	if os.path.exists('tmp/opt_sansX_512_sauv'):
+	if os.path.exists("tmp/"+nomFichierSauv):
 		# si c'est le cas on demande à l'utilisateur s'il veut utiliser les simulations sauvegardees ou pas
 		cont = 1
 		while cont:
@@ -101,12 +108,12 @@ else:
 			choice = raw_input().lower()
 			if (choice == '' or choice == 'y' or choice == 'Y' or choice == 'yes' or choice == 'Yes'):
 				# reponse positive: on initialise la liste de simulation avec celle sauvegardee
-				listeSim = marshal.load(open('tmp/opt_sansX_512_sauv', "rb"))
+				listeSim = marshal.load(open("tmp/"+nomFichierSauv, "rb"))
 				cont = 0
 			elif (choice == 'n' or choice == 'N' or choice == 'no' or choice == 'No'):
 				# reponse negative: on cree une liste vide et on supprime le fichier sauvegarde existent
 				listeSim = []
-				os.system('rm -f tmp/opt_sansX_512_sauv')
+				os.system("rm -f tmp/"+nomFichierSauv)
 				cont = 0
 	# si il n'y a pas de fichier de sauvegarde on cree une liste vide
 	else:
@@ -116,8 +123,8 @@ else:
 	os.system("make clean")
 	os.system("make")
 	# suppression du dossier de sortie existent et creation d'un nouveau dossier de sortie vide
-	os.system("rm -rf out_scripts/analyse_optimisation_sansX_512")
-	os.mkdir("out_scripts/analyse_optimisation_sansX_512")
+	os.system("rm -rf out_scripts/"+nomDossierGraphes)
+	os.mkdir("out_scripts/"+nomDossierGraphes)
 
 
 	          ###########################
@@ -149,7 +156,7 @@ title("Temps en fonction de NBLOOP pour differents NBPHOTONS")
 xlabel("NBLOOP")
 ylabel("Temps (sec)")
 grid(True)
-savefig("out_scripts/analyse_optimisation_sansX_512/variations_NBLOOP.png", dpi=(140))
+savefig("out_scripts/"+nomDossierGraphes+"/variations_NBLOOP.png", dpi=(140))
 figure()
 
 #===================Variations NBLOOP zoom==============
@@ -176,7 +183,7 @@ title("Temps en fonction de NBLOOP pour differents NBPHOTONS")
 xlabel("NBLOOP")
 ylabel("Temps (sec)")
 grid(True)
-savefig("out_scripts/analyse_optimisation_sansX_512/variations_NBLOOP_zoom.png", dpi=(140))
+savefig("out_scripts/"+nomDossierGraphes+"/variations_NBLOOP_zoom.png", dpi=(140))
 figure()
 
 #===================Variations NBPHOTONS================
@@ -218,7 +225,7 @@ ylim(0, ymax)
 xlabel("NBPHOTONS")
 ylabel("Temps (sec)")
 grid(True)
-savefig("out_scripts/analyse_optimisation_sansX_512/variations_NBPHOTONS.png", dpi=(140))
+savefig("out_scripts/"+nomDossierGraphes+"/variations_NBPHOTONS.png", dpi=(140))
 figure()
 
 #===================Variations NBPHOTONS zoom===========
@@ -259,7 +266,7 @@ ylim(0, ymax)
 xlabel("NBPHOTONS")
 ylabel("Temps (sec)")
 grid(True)
-savefig("out_scripts/analyse_optimisation_sansX_512/variations_NBPHOTONS_zoom.png", dpi=(140))
+savefig("out_scripts/"+nomDossierGraphes+"/variations_NBPHOTONS_zoom.png", dpi=(140))
 figure()
 
 #===================Variations NBTHETA==================
@@ -289,7 +296,7 @@ title("Temps en fonction de (NBTHETA*NBPHI) pour differents NBPHOTONS")
 xlabel("Nombre de cases")
 ylabel("Temps (sec)")
 grid(True)
-savefig("out_scripts/analyse_optimisation_sansX_512/variations_NBTHETA.png", dpi=(140))
+savefig("out_scripts/"+nomDossierGraphes+"/variations_NBTHETA.png", dpi=(140))
 figure()
 
 #===================Variations NBTHETA zoom=============
@@ -319,7 +326,7 @@ title("Temps en fonction de (NBTHETA*NBPHI) pour differents NBPHOTONS")
 xlabel("Nombre de cases")
 ylabel("Temps (sec)")
 grid(True)
-savefig("out_scripts/analyse_optimisation_sansX_512/variations_NBTHETA_zoom.png", dpi=(140))
+savefig("out_scripts/"+nomDossierGraphes+"/variations_NBTHETA_zoom.png", dpi=(140))
 figure()
 
 #===================Variations XBLOCK===================
@@ -346,7 +353,7 @@ title("Temps en fonction de XBLOCK pour differents XGRID\n(NBPHOTONS=1milliard)"
 xlabel("XBLOCK")
 ylabel("Temps (sec)")
 grid(True)
-savefig("out_scripts/analyse_optimisation_sansX_512/variations_XBLOCK.png", dpi=(140))
+savefig("out_scripts/"+nomDossierGraphes+"/variations_XBLOCK.png", dpi=(140))
 figure()
 
 #===================Variations XGRID====================
@@ -373,7 +380,7 @@ title("Temps en fonction de XGRID pour differents XBLOCK\n(NBPHOTONS=1milliard)"
 xlabel("XGRID")
 ylabel("Temps (sec)")
 grid(True)
-savefig("out_scripts/analyse_optimisation_sansX_512/variations_XGRID.png", dpi=(140))
+savefig("out_scripts/"+nomDossierGraphes+"/variations_XGRID.png", dpi=(140))
 figure()
 
 #===================Variations XGRID zoom===============
@@ -400,7 +407,7 @@ title("Temps en fonction de XGRID pour differents XBLOCK\n(NBPHOTONS=1milliard)"
 xlabel("XGRID")
 ylabel("Temps (sec)")
 grid(True)
-savefig("out_scripts/analyse_optimisation_sansX_512/variations_XGRID_zoom.png", dpi=(140))
+savefig("out_scripts/"+nomDossierGraphes+"/variations_XGRID_zoom.png", dpi=(140))
 figure()
 
 
