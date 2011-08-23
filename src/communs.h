@@ -112,8 +112,8 @@ extern int SIM;
 extern int SUR;
 extern int DIOPTRE;
 extern int DIFFF;
-extern char NOMRESULTATSHDF[];
-extern char NOMTEMOINHDF[];
+extern char PATHRESULTATSHDF[];
+extern char PATHTEMOINHDF[];
 
 	  //////////////
 	 // TYPEDEFS //

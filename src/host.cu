@@ -178,9 +178,13 @@ void initConstantesHost(int argc, char** argv)
 	chercheConstante(argv[1], "CONPHY", s);
 	CONPHY = atof(s);
 	
-	chercheConstante(argv[1], "NOMRESULTATSHDF", NOMRESULTATSHDF);
+	strcpy(s,"");
+	chercheConstante(argv[1], "NOMRESULTATSHDF", s);
+	sprintf(PATHRESULTATSHDF, "out_prog/%s.hdf", s);
 	
-	chercheConstante(argv[1], "NOMTEMOINHDF", NOMTEMOINHDF);
+	strcpy(s,"");
+	chercheConstante(argv[1], "NOMTEMOINHDF", s);
+	sprintf(PATHTEMOINHDF, "tmp/%s.hdf", s);
 
 	free(s);
 }
@@ -533,9 +537,7 @@ void afficheTrajet(Evnt* evnt_H)
 void creerHDFTemoin(unsigned long long* tabPhotonsTot, unsigned long long nbPhotonsTot, Variables* var, double tempsPrec)
 {
 	// Création du fichier de sortie
-	char nomFichier[100];
-	sprintf(nomFichier, "tmp/%s.hdf", NOMTEMOINHDF);
-	int sdFichier = SDstart(nomFichier, DFACC_CREATE);
+	int sdFichier = SDstart(PATHTEMOINHDF, DFACC_CREATE);
 	// Création et remplissage du tableau du fichier (en double car le format hdf n'accepte pas int64)
 	double* tab;
 	tab = (double*)malloc(NBTHETA * NBPHI * NBSTOKES * sizeof(double));
@@ -668,9 +670,7 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		unsigned long long* nbPhotonsTot, unsigned long long* tabPhotonsTot, double* tempsEcoule)
 {
 	// Ouverture du fichier temoin
-	char nomFichier[100];
-	sprintf(nomFichier, "tmp/%s.hdf", NOMTEMOINHDF);
-	int sdFichier = SDstart(nomFichier, DFACC_READ);
+	int sdFichier = SDstart(PATHTEMOINHDF, DFACC_READ);
 	if(sdFichier != -1)
 	{
 		// Ouverture de l'unique tableau du fichier temoin
@@ -810,9 +810,7 @@ void creerHDFResultats(float* tabFinal, float* tabTh, float* tabPhi,
 		unsigned long long nbPhotonsTot, Variables* var, double tempsPrec)
 {
 	// Création du fichier de sortie
-	char nomFichier[100];
-	sprintf(nomFichier, "out_prog/%s.hdf", NOMRESULTATSHDF);
-	int sdFichier = SDstart(nomFichier, DFACC_CREATE);
+	int sdFichier = SDstart(PATHRESULTATSHDF, DFACC_CREATE);
 	// Pour chaque phi on ajoute au fichier le tableau représentant le résultat final en fonction de theta
 	for(int iphi = 0; iphi < NBPHI; iphi++)
 	{

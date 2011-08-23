@@ -15,13 +15,17 @@
 // Fonction principale
 int main (int argc, char *argv[])
 {
-	// Suppression des anciens fichiers hdf pour éviter les confusions
-	system("rm -f out_prog/*");
-	
 	// Initialisation des constantes du host (en partie recuperees dans le fichier Parametres.txt)
 	initConstantesHost(argc, argv);
 	// Initialisation des constantes du device à partir des constantes du host
 	initConstantesDevice();
+	
+	// S'il existe déjà un fichier nommé NOMRESULTATSHDF (Parametres.txt) on arrête le programme
+	if (fopen(PATHRESULTATSHDF, "rb") != NULL)
+	{
+		printf("ERREUR: Le fichier %s existe deja.\n",PATHRESULTATSHDF);
+		exit(1);
+	}
 
 	// DEBUG : Affichage basique des parametres de la simulation
 	printf("\n%lu - %u - %d - %d - %d - %d - %d - %d\n", NBPHOTONS,NBLOOP,XBLOCK,YBLOCK,XGRID,YGRID,NBTHETA,NBPHI);

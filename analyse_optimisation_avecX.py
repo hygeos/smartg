@@ -8,6 +8,14 @@ import marshal
 import pyhdf.SD
 
 
+	          ##############
+	         # PARAMETRES #
+	        ##############
+
+nomResultatsHDF = "Resultats"
+nomTemoinHDF = "Temoin"
+
+
 	          #############################
 	         # FONCTION LANCERSIMULATION #
 	        #############################
@@ -52,10 +60,12 @@ def lancerSimulation(tabTemps,NBPHOTONS,NBLOOP,XBLOCK,YBLOCK,XGRID,YGRID,NBTHETA
 		fichierParametres.write("DIOPTRE = 1\n")
 		fichierParametres.write("CONPHY = 0.1\n")
 		fichierParametres.write("DIFFF = 0\n")
-		fichierParametres.write("NOMRESULTATSHDF = Resultats\n")
-		fichierParametres.write("NOMTEMOINHDF = Temoin\n")
+		fichierParametres.write("NOMRESULTATSHDF = "+nomResultatsHDF+"\n")
+		fichierParametres.write("NOMTEMOINHDF = "+nomTemoinHDF+"\n")
 		fichierParametres.close()
 		# lancement du programme et calcul du temps
+		os.system("rm -f tmp/"+nomTemoinHDF+".hdf")
+		os.system("rm -f out_prog/"+nomResultatsHDF+".hdf")
 		start = time()
 		os.system("./Prog tmp/opt_avecX_param.txt")
 		temps = time() - start
@@ -77,32 +87,37 @@ def lancerSimulation(tabTemps,NBPHOTONS,NBLOOP,XBLOCK,YBLOCK,XGRID,YGRID,NBTHETA
 	         # INITIALISATION DU SCRIPT #
 	        ############################
 
-# on regarde s'il existe un fichier de sauvegarde des simulations
-if os.path.exists("tmp/opt_avecX_sauv"):
-	# si c'est le cas on demande à l'utilisateur s'il veut utiliser les simulations sauvegardees ou pas
-	cont = 1
-	while cont:
-		sys.stdout.write("Continuer avec les simulations sauvegardees? [Y/n]\n")
-		choice = raw_input().lower()
-		if (choice == '' or choice == 'y' or choice == 'Y' or choice == 'yes' or choice == 'Yes'):
-			# reponse positive: on initialise la liste de simulation avec celle sauvegardee
-			listeSim = marshal.load(open("tmp/opt_avecX_sauv", "rb"))
-			cont = 0
-		elif (choice == 'n' or choice == 'N' or choice == 'no' or choice == 'No'):
-			# reponse negative: on cree une liste vide et on supprime le fichier sauvegarde existent
-			listeSim = []
-			os.system("rm -f tmp/opt_avecX_sauv")
-			cont = 0
-# si il n'y a pas de fichier de sauvegarde on cree une liste vide
+# on verifie que les fichiers de sortie n'existent pas deja
+if (os.path.exists("tmp/"+nomTemoinHDF+".hdf") or os.path.exists("out_prog/"+nomResultatsHDF+".hdf")):
+	sys.stdout.write("ERREUR: Un fichier de sortie existe deja (tmp/"+nomTemoinHDF+".hdf out_prog/"+nomResultatsHDF+".hdf)\n")
+	sys.exit()
 else:
-	listeSim = []
+	# on regarde s'il existe un fichier de sauvegarde des simulations
+	if os.path.exists("tmp/opt_avecX_sauv"):
+		# si c'est le cas on demande à l'utilisateur s'il veut utiliser les simulations sauvegardees ou pas
+		cont = 1
+		while cont:
+			sys.stdout.write("Continuer avec les simulations sauvegardees? [Y/n]\n")
+			choice = raw_input().lower()
+			if (choice == '' or choice == 'y' or choice == 'Y' or choice == 'yes' or choice == 'Yes'):
+				# reponse positive: on initialise la liste de simulation avec celle sauvegardee
+				listeSim = marshal.load(open("tmp/opt_avecX_sauv", "rb"))
+				cont = 0
+			elif (choice == 'n' or choice == 'N' or choice == 'no' or choice == 'No'):
+				# reponse negative: on cree une liste vide et on supprime le fichier sauvegarde existent
+				listeSim = []
+				os.system("rm -f tmp/opt_avecX_sauv")
+				cont = 0
+	# si il n'y a pas de fichier de sauvegarde on cree une liste vide
+	else:
+		listeSim = []
 
-# compilation du programme
-os.system("make clean")
-os.system("make")
-# suppression du dossier de sortie existent et creation d'un nouveau dossier de sortie vide
-os.system("rm -rf out_scripts/analyse_optimisation_avecX")
-os.mkdir("out_scripts/analyse_optimisation_avecX")
+	# compilation du programme
+	os.system("make clean")
+	os.system("make")
+	# suppression du dossier de sortie existent et creation d'un nouveau dossier de sortie vide
+	os.system("rm -rf out_scripts/analyse_optimisation_avecX")
+	os.mkdir("out_scripts/analyse_optimisation_avecX")
 
 
 	          ###########################
