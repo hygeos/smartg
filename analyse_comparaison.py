@@ -65,28 +65,30 @@ file_fortran_bin.close()
 	        ##################
 
 # verification de l'existence du fichier hdf
-if os.path.exists("out_prog/Quart.hdf"):
+if os.path.exists("out_prog/Resultats.hdf"):
 	# on vide le dossier de sortie du script
 	os.system("rm -rf out_scripts/analyse_comparaison")
 	os.mkdir("out_scripts/analyse_comparaison")
 	# lecture du fichier hdf
-	file_cuda = 'out_prog/Quart.hdf'
+	file_cuda = 'out_prog/Resultats.hdf'
 	sd_cuda = pyhdf.SD.SD(file_cuda)
 	# lecture du nombre de valeurs de phi
 	NBPHI_cuda = getattr(sd_cuda,'NBPHI')
-	NBPHI_cuda = NBPHI_cuda/2
 else:
-	sys.stdout.write("Pas de fichier Quart.hdf\n")
+	sys.stdout.write("Pas de fichier Resultats.hdf\n")
 	sys.exit()
 
 
 	          #######################
 	         # CREATION GRAPHIQUES #
 	        #######################
-
-# les tableaux doivent avoir le meme nombre de valeurs de phi
-if NBPHI_cuda == NBPHI_fortran:
-	for iphi in xrange(NBPHI_cuda):
+	        
+# Pour comparer les 2 resultats il faut que phi parcourt un meme intervalle et qu'il y ait le meme nombre de boites selon phi
+# Fortran :  intervalle=[0,PI]   nombre_de_boites=NBPHI_fortran
+# Cuda :     intervalle=[0,2PI]  nombre_de_boites=NBPHI_cuda
+# On va projeter les resultats du cuda sur [0,PI]
+if (NBPHI_cuda/2) == NBPHI_fortran:
+	for iphi in xrange(NBPHI_cuda/2):
 		# initialisation
 		listePlots = []
 		listeLegends = []
@@ -96,11 +98,14 @@ if NBPHI_cuda == NBPHI_fortran:
 		listeLegends.append('Fortran')
 		
 		# cuda
-		name = 'Quart (iphi = ' + str(iphi) + ')'
-		sds_cuda = sd_cuda.select(name)
-		tab_cuda = sds_cuda.get()
-		phi = getattr(sds_cuda,'phi')
-		listePlots.append(plot(tab_cuda[:,1],tab_cuda[:,0]))
+		name_1 = 'Resultats (iphi = ' + str(iphi) + ')'
+		sds_cuda_1 = sd_cuda.select(name_1)
+		tab_cuda_1 = sds_cuda_1.get()
+		phi = getattr(sds_cuda_1,'phi')
+		name_2 = "Resultats (iphi = " + str(NBPHI_cuda-iphi-1) + ")"
+		sds_hdf_2 = sd_cuda.select(name_2)
+		tab_cuda_2 = sds_hdf_2.get()
+		listePlots.append(plot(tab_cuda_1[:,1],(tab_cuda_1[:,0]+tab_cuda_2[:,0])/2))
 		listeLegends.append('Cuda')
 		
 		# commun
