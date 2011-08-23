@@ -88,3 +88,10 @@ CONPHY = 0.1
 
 # Forcage de la premiere diffusion (utilise si SIM=-2)
 DIFFF = 0
+
+# Nom du fichier de sortie
+NOMRESULTATSHDF = Resultats
+
+# Nom du fichier témoin
+NOMTEMOINHDF = Temoin
+

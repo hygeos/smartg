@@ -177,6 +177,10 @@ void initConstantesHost(int argc, char** argv)
 	strcpy(s,"");
 	chercheConstante(argv[1], "CONPHY", s);
 	CONPHY = atof(s);
+	
+	chercheConstante(argv[1], "NOMRESULTATSHDF", NOMRESULTATSHDF);
+	
+	chercheConstante(argv[1], "NOMTEMOINHDF", NOMTEMOINHDF);
 
 	free(s);
 }
@@ -481,13 +485,13 @@ void afficheProgress(unsigned long long nbPhotonsTot, Variables* var, double tem
 	
 	// Affichage
 	printf("\n");
-	printf("-------------------------------------------\n");
-	printf("Photons lances : %12lu (%3d%%)\n", nbPhotonsTot, pourcent);
-	printf("Photons pb     : %12d\n", var->erreurpoids + var->erreurtheta);
-	printf("Temps ecoule   : %d h %2d min %2d sec\n", hEcoulees, minEcoulees, secEcoulees);
-	printf("Temps restant  : %d h %2d min %2d sec\n", hRestantes, minRestantes, secRestantes);
-	printf("Date actuelle  : %02u/%02u/%04u %02u:%02u:%02u\n", date->tm_mday, date->tm_mon+1, 1900 + date->tm_year, date->tm_hour, date->tm_min, date->tm_sec);
-	printf("-------------------------------------------\n");
+	printf(" --------------------------------------\n");
+	printf("  Photons lances : %12lu (%3d%%)\n", nbPhotonsTot, pourcent);
+	printf("  Photons pb     : %12d\n", var->erreurpoids + var->erreurtheta);
+	printf("  Temps ecoule   : %d h %2d min %2d sec\n", hEcoulees, minEcoulees, secEcoulees);
+	printf("  Temps restant  : %d h %2d min %2d sec\n", hRestantes, minRestantes, secRestantes);
+	printf("  Date actuelle  : %02u/%02u/%04u %02u:%02u:%02u\n", date->tm_mday, date->tm_mon+1, 1900 + date->tm_year, date->tm_hour, date->tm_min, date->tm_sec);
+	printf(" --------------------------------------\n");
 	
 	#ifdef PROGRESSION
 	printf("%d%% - ", (int)(100*nbPhotonsTot/NBPHOTONS));
@@ -529,7 +533,8 @@ void afficheTrajet(Evnt* evnt_H)
 void creerHDFTemoin(unsigned long long* tabPhotonsTot, unsigned long long nbPhotonsTot, Variables* var, double tempsPrec)
 {
 	// Création du fichier de sortie
-	char nomFichier[20] = "tmp/Temoin.hdf";
+	char nomFichier[100];
+	sprintf(nomFichier, "tmp/%s.hdf", NOMTEMOINHDF);
 	int sdFichier = SDstart(nomFichier, DFACC_CREATE);
 	// Création et remplissage du tableau du fichier (en double car le format hdf n'accepte pas int64)
 	double* tab;
@@ -663,7 +668,8 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		unsigned long long* nbPhotonsTot, unsigned long long* tabPhotonsTot, double* tempsEcoule)
 {
 	// Ouverture du fichier temoin
-	char nomFichier[20] = "tmp/Temoin.hdf";
+	char nomFichier[100];
+	sprintf(nomFichier, "tmp/%s.hdf", NOMTEMOINHDF);
 	int sdFichier = SDstart(nomFichier, DFACC_READ);
 	if(sdFichier != -1)
 	{
@@ -672,8 +678,6 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		int sdsTab = SDselect (sdFichier, sdsIndex);
 		
 		// Recuperation des paramètres du fichier temoin
-		double NBPHOTONSdouble[1]; //on récupère d'abord la variable en double
-		unsigned long long NBPHOTONSrecup[1]; //puis on la passera en unsigned long long
 		unsigned int NBLOOPrecup[1];
 		float THSDEGrecup[1];
 		float LAMBDArecup[1];
@@ -700,8 +704,6 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		int SIMrecup[1];
 		int SURrecup[1];
 		
-		SDreadattr(sdsTab, SDfindattr(sdsTab, "NBPHOTONS"), (VOIDP)NBPHOTONSdouble);
-		NBPHOTONSrecup[0] = (unsigned long long)NBPHOTONSdouble[0];
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "NBLOOP"), (VOIDP)NBLOOPrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "THSDEG"), (VOIDP)THSDEGrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "LAMBDA"), (VOIDP)LAMBDArecup);
@@ -729,8 +731,7 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "SUR"), (VOIDP)SURrecup);
 		
 		// Si les parametres sont les memes on recupere des informations pour poursuivre la simulation précédente
-		if(NBPHOTONSrecup[0] == NBPHOTONS
-			&& NBLOOPrecup[0] == NBLOOP
+		if(NBLOOPrecup[0] == NBLOOP
 			&& THSDEGrecup[0] == THSDEG
 			&& LAMBDArecup[0] == LAMBDA
 			&& TAURAYrecup[0] == TAURAY
@@ -756,64 +757,45 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 			&& SIMrecup[0] == SIM
 			&& SURrecup[0] == SUR)
 		{
-		/*
-			char reponse;
-			int cont = 1;
-			while(cont)
+			// Recuperation du nombre de photons traités et du nombre d'erreurs
+			double nbPhotonsTotDouble[1]; //on récupère d'abord la variable en double
+			unsigned long long nbPhotonsTotRecup[1]; //puis on la passera en unsigned long long
+			int nbErreursPoidsRecup[1];
+			int nbErreursThetaRecup[1];
+			double tempsEcouleRecup[1];
+	
+			SDreadattr(sdsTab, SDfindattr(sdsTab, "nbPhotonsTot"), (VOIDP)nbPhotonsTotDouble);
+			nbPhotonsTotRecup[0] = (unsigned long long)nbPhotonsTotDouble[0];
+			SDreadattr(sdsTab, SDfindattr(sdsTab, "nbErreursPoids"), (VOIDP)nbErreursPoidsRecup);
+			SDreadattr(sdsTab, SDfindattr(sdsTab, "nbErreursTheta"), (VOIDP)nbErreursThetaRecup);
+			SDreadattr(sdsTab, SDfindattr(sdsTab, "tempsEcoule"), (VOIDP)tempsEcouleRecup);
+	
+			var_H->erreurpoids = nbErreursPoidsRecup[0];//nombre de photons ayant un poids anormalement élevé
+			var_H->erreurtheta = nbErreursThetaRecup[0];//nombre de photons sortant dans la direction solaire
+			cudaMemcpy(var_D, var_H, sizeof(Variables), cudaMemcpyHostToDevice);
+			*(nbPhotonsTot) = nbPhotonsTotRecup[0];
+			*(tempsEcoule) = tempsEcouleRecup[0];
+	
+			// Recuperation du tableau
+			int nbDimsTab = 1; //nombre de dimensions du tableau
+			int startTab[nbDimsTab], edgesTab[nbDimsTab]; //debut et fin de la lecture du tableau
+			startTab[0] = 0;
+			edgesTab[0] = NBTHETA * NBPHI * NBSTOKES;
+			double tabPhotonsTotRecup[NBTHETA * NBPHI * NBSTOKES]; //tableau de récuperation en double
+	
+			int status = SDreaddata (sdsTab, startTab, NULL, edgesTab, (VOIDP)tabPhotonsTotRecup);
+			// Vérification du bon fonctionnement de la lecture
+			if(status)
 			{
-				cout << "Continuer avec les simulations sauvegardees? [Y/n]\n";
-				cin >> reponse;
-				if (reponse == 'Y' || reponse == 'y' || reponse == '')
-				{
-					cont = 0;
-					*/
-					// Recuperation du nombre de photons traités et du nombre d'erreurs
-					double nbPhotonsTotDouble[1]; //on récupère d'abord la variable en double
-					unsigned long long nbPhotonsTotRecup[1]; //puis on la passera en unsigned long long
-					int nbErreursPoidsRecup[1];
-					int nbErreursThetaRecup[1];
-					double tempsEcouleRecup[1];
-			
-					SDreadattr(sdsTab, SDfindattr(sdsTab, "nbPhotonsTot"), (VOIDP)nbPhotonsTotDouble);
-					nbPhotonsTotRecup[0] = (unsigned long long)nbPhotonsTotDouble[0];
-					SDreadattr(sdsTab, SDfindattr(sdsTab, "nbErreursPoids"), (VOIDP)nbErreursPoidsRecup);
-					SDreadattr(sdsTab, SDfindattr(sdsTab, "nbErreursTheta"), (VOIDP)nbErreursThetaRecup);
-					SDreadattr(sdsTab, SDfindattr(sdsTab, "tempsEcoule"), (VOIDP)tempsEcouleRecup);
-			
-					var_H->erreurpoids = nbErreursPoidsRecup[0];//nombre de photons ayant un poids anormalement élevé
-					var_H->erreurtheta = nbErreursThetaRecup[0];//nombre de photons sortant dans la direction solaire
-					cudaMemcpy(var_D, var_H, sizeof(Variables), cudaMemcpyHostToDevice);
-					*(nbPhotonsTot) = nbPhotonsTotRecup[0];
-					*(tempsEcoule) = tempsEcouleRecup[0];
-			
-					// Recuperation du tableau
-					int nbDimsTab = 1; //nombre de dimensions du tableau
-					int startTab[nbDimsTab], edgesTab[nbDimsTab]; //debut et fin de la lecture du tableau
-					startTab[0] = 0;
-					edgesTab[0] = NBTHETA * NBPHI * NBSTOKES;
-					double tabPhotonsTotRecup[NBTHETA * NBPHI * NBSTOKES]; //tableau de récuperation en double
-			
-					int status = SDreaddata (sdsTab, startTab, NULL, edgesTab, (VOIDP)tabPhotonsTotRecup);
-					// Vérification du bon fonctionnement de la lecture
-					if(status)
-					{
-						printf("\nERREUR : read hdf resultats\n");
-						exit(1);
-					}
-			
-					// Conversion en unsigned long long
-					for(int i = 0; i < NBTHETA * NBPHI * NBSTOKES; i++)
-					{
-						tabPhotonsTot[i] = (unsigned long long)tabPhotonsTotRecup[i]; //conversion en ull
-					}
-					/*
-				}
-				else if (reponse == 'N' || reponse == 'n')
-				{
-					cont = 0;
-					remove("tmp/Temoin.hdf");
-				}
-			}*/
+				printf("\nERREUR : read hdf temoin\n");
+				exit(1);
+			}
+	
+			// Conversion en unsigned long long
+			for(int i = 0; i < NBTHETA * NBPHI * NBSTOKES; i++)
+			{
+				tabPhotonsTot[i] = (unsigned long long)tabPhotonsTotRecup[i]; //conversion en ull
+			}
 			
 		}
 		// Fermeture du tableau
@@ -828,7 +810,8 @@ void creerHDFResultats(float* tabFinal, float* tabTh, float* tabPhi,
 		unsigned long long nbPhotonsTot, Variables* var, double tempsPrec)
 {
 	// Création du fichier de sortie
-	char nomFichier[50] = "out_prog/Resultats.hdf";
+	char nomFichier[100];
+	sprintf(nomFichier, "out_prog/%s.hdf", NOMRESULTATSHDF);
 	int sdFichier = SDstart(nomFichier, DFACC_CREATE);
 	// Pour chaque phi on ajoute au fichier le tableau représentant le résultat final en fonction de theta
 	for(int iphi = 0; iphi < NBPHI; iphi++)

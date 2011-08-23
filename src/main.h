@@ -30,3 +30,6 @@ int DIFFF; //Forcage de la premiere diffusion (0=non, 1=oui) (utilise si SIM=-2)
 int PROFIL; //Type de profil atmospherique
 int SIM; //Type de simulation
 int SUR; //Type de reflexion de la surface
+char NOMRESULTATSHDF[100]; //Nom du fichier de sortie au format hdf
+char NOMTEMOINHDF[100]; //Nom du fichier témoin au format hdf
+

@@ -22,7 +22,7 @@ int main (int argc, char *argv[])
 	initConstantesHost(argc, argv);
 	// Initialisation des constantes du device à partir des constantes du host
 	initConstantesDevice();
-	
+
 	// DEBUG : Affichage basique des parametres de la simulation
 	printf("\n%lu - %u - %d - %d - %d - %d - %d - %d\n", NBPHOTONS,NBLOOP,XBLOCK,YBLOCK,XGRID,YGRID,NBTHETA,NBPHI);
 
@@ -52,7 +52,7 @@ int main (int argc, char *argv[])
 	
 	// Fonction qui permet de poursuivre la simulation précédente si elle n'est pas terminee
 	double tempsPrec = 0.; //temps ecoule de la simulation precedente
-//lireHDFTemoin(var_H, var_D, &nbPhotonsTot, tabPhotonsTot, &tempsPrec);
+lireHDFTemoin(var_H, var_D, &nbPhotonsTot, tabPhotonsTot, &tempsPrec);
 	
 	#ifdef TRAJET
 	// DEBUG : Variables permettant de récupérer le début du trajet d'un photon
@@ -70,6 +70,10 @@ int main (int argc, char *argv[])
 	#ifdef PARAMETRES
 	afficheParametres();
 	#endif
+	
+	// Variable permettant de savoir si on est passé dans la boucle ou non
+	bool passageBoucle = false;
+	if(nbPhotonsTot < NBPHOTONS) passageBoucle = true;
 	
 	// Tant qu'il n'y a pas assez de photons traités on relance le kernel
 	while(nbPhotonsTot < NBPHOTONS)
@@ -113,6 +117,13 @@ int main (int argc, char *argv[])
 			       );
 	}
 	
+	// Si on n'est pas passé dans la boucle on affiche quand-même l'avancement de la simulation
+	if(!passageBoucle) afficheProgress(nbPhotonsTot, var_H, tempsPrec
+					#ifdef PROGRESSION
+					, nbPhotonsSorTot
+					#endif
+					  );
+			       
 	#ifdef TABRAND
 	// DEBUG Recuperations et affichage des nombres aleatoires du random
 	cudaMemcpy(tableauRand_H, tableauRand_D, 100 * sizeof(float), cudaMemcpyDeviceToHost);
@@ -145,8 +156,6 @@ int main (int argc, char *argv[])
 
 	// Fonction qui crée le fichier .hdf contenant le résultat final sur la demi-sphère
 	creerHDFResultats(tabFinal, tabTh, tabPhi, nbPhotonsTot, var_H, tempsPrec);
-	// Suppression du fichier Temoin.hdf
-	remove("tmp/Temoin.hdf");
 
 	// Libération du groupe de variables envoyé dans le kernel
 	cudaFree(var_D);

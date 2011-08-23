@@ -52,6 +52,8 @@ def lancerSimulation(tabTemps,NBPHOTONS,NBLOOP,XBLOCK,YBLOCK,XGRID,YGRID,NBTHETA
 		fichierParametres.write("DIOPTRE = 1\n")
 		fichierParametres.write("CONPHY = 0.1\n")
 		fichierParametres.write("DIFFF = 0\n")
+		fichierParametres.write("NOMRESULTATSHDF = Resultats\n")
+		fichierParametres.write("NOMTEMOINHDF = Temoin\n")
 		fichierParametres.close()
 		# lancement du programme et calcul du temps
 		start = time()
