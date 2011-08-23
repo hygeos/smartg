@@ -32,7 +32,6 @@ DFLAGS += -DRANDMWC
 # Options pour debogage
 DFLAGS += -DPROGRESSION # Calcul et affichage de la progression de la simulation
 # DFLAGS += -DTRAJET # Calcul et affichage des premiers evenements d'un threads
-DFLAGS += -DCOMPARAISON # Calcul et creation hdf du tableau de comparaison des 2 quarts de sphère
 # DFLAGS += -DTABRAND
 
 #####################################################################################

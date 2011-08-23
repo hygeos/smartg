@@ -37,6 +37,6 @@ if os.path.exists("out_prog/Resultats.hdf"):
 		savefig("out_scripts/analyse_projection/analyse_projection_phi="+str(phi)+".png", dpi=(140))
 		figure()
 else:
-	sys.stdout.write("Pas de fichier Quart.hdf\n")
+	sys.stdout.write("Pas de fichier Resultats.hdf\n")
 
 

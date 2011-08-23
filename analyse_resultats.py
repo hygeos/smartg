@@ -15,7 +15,7 @@ if os.path.exists("out_prog/Resultats.hdf"):
 	# lecture du nombre de valeurs de phi
 	NBPHI = getattr(sd_hdf,'NBPHI')
 
-	# pour chaque phi on cree un graphique
+	# pour chaque iphi on cree un graphique
 	for iphi in xrange(NBPHI):
 		# lecture du dataset
 		name = "Resultats (iphi = " + str(iphi) + ")"

@@ -147,10 +147,6 @@ int main (int argc, char *argv[])
 	#ifdef QUART
 	creerHDFResultatsQuartsphere(tabFinal, tabTh, tabPhi, nbPhotonsTot, var_H, tempsPrec);
 	#endif
-	// DEBUG Fonction qui crée le fichier .hdf permettant de comparer les 2 quarts de sphère
-	#ifdef COMPARAISON
-	creerHDFComparaison(tabFinal, tabTh, tabPhi, nbPhotonsTot, var_H, tempsPrec);
-	#endif
 	// Fonction qui crée le fichier .hdf contenant le résultat final sur la demi-sphère
 	creerHDFResultats(tabFinal, tabTh, tabPhi, nbPhotonsTot, var_H, tempsPrec);
 	// Suppression du fichier Temoin.hdf
