@@ -22,7 +22,7 @@ LFLAGS += -lcuda -lcudart
 
 #=============Options de sortie============#
 DFLAGS =
-# DFLAGS += -DPARAMETRES # Affichage des parametres initiaux
+DFLAGS += -DPARAMETRES # Affichage des parametres initiaux
 DFLAGS += -DRANDMWC
 # DFLAGS += -DRANDCUDA
 # DFLAGS += -DRANDMT
