@@ -88,18 +88,6 @@
 
 extern unsigned long long NBPHOTONS;
 extern unsigned int NBLOOP;
-extern float THSDEG;
-extern float LAMBDA;
-extern float TAURAY;
-extern float TAUAER;
-extern float W0AER;
-extern float HA;
-extern float HR;
-extern float ZMIN;
-extern float ZMAX;
-extern float WINDSPEED;
-extern float NH2O;
-extern float CONPHY;
 extern int SEED;
 extern int XBLOCK;
 extern int YBLOCK;
@@ -113,6 +101,18 @@ extern int SIM;
 extern int SUR;
 extern int DIOPTRE;
 extern int DIFFF;
+extern float THSDEG;
+extern float LAMBDA;
+extern float TAURAY;
+extern float TAUAER;
+extern float W0AER;
+extern float HA;
+extern float HR;
+extern float ZMIN;
+extern float ZMAX;
+extern float WINDSPEED;
+extern float NH2O;
+extern float CONPHY;
 extern char PATHRESULTATSHDF[];
 extern char PATHTEMOINHDF[];
 

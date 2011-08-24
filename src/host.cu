@@ -398,6 +398,8 @@ void afficheParametres()
 	printf("\n");
 	printf("NBLOOP = %u", NBLOOP);
 	printf("\n");
+	printf("SEED = %d", SEED);
+	printf("\n");
 	printf("XBLOCK = %d", XBLOCK);
 	printf("\n");
 	printf("YBLOCK = %d", YBLOCK);
@@ -445,6 +447,10 @@ void afficheParametres()
 	printf("CONPHY = %f", CONPHY);
 	printf("\n");
 	printf("DIFFF = %d", DIFFF);
+	printf("\n");
+	printf("PATHRESULTATSHDF = %s", PATHRESULTATSHDF);
+	printf("\n");
+	printf("PATHTEMOINHDF = %s", PATHTEMOINHDF);
 	printf("\n");
 }
 
@@ -553,98 +559,44 @@ void creerHDFTemoin(unsigned long long* tabPhotonsTot, unsigned long long nbPhot
 	free(tab);
 	
 	// Ecriture de toutes les informations sur la simulation : paramètres, nbphotons, nbErreurs, tempsEcoule
-	double NBPHOTONSsave[1];
-	unsigned int NBLOOPsave[1];
-	float THSDEGsave[1];
-	float LAMBDAsave[1];
-	float TAURAYsave[1];
-	float TAUAERsave[1];
-	float W0AERsave[1];
-	float HAsave[1];
-	float HRsave[1];
-	float ZMINsave[1];
-	float ZMAXsave[1];
-	float WINDSPEEDsave[1];
-	float NH2Osave[1];
-	float CONPHYsave[1];
-	int XBLOCKsave[1];
-	int YBLOCKsave[1];
-	int XGRIDsave[1];
-	int YGRIDsave[1];
-	int NBTHETAsave[1];
-	int NBPHIsave[1];
-	int NBSTOKESsave[1];
-	int DIOPTREsave[1];
-	int DIFFFsave[1];
-	int PROFILsave[1];
-	int SIMsave[1];
-	int SURsave[1];
-	double nbPhotonsTotSave[1];
-	int nbErreursPoidsSave[1];
-	int nbErreursThetaSave[1];
-	double tempsEcouleSave[1];
+	double NBPHOTONSdouble = (double)NBPHOTONS; // on convertit en double car le hdf n'accepte pas ull
+	double nbPhotonsTotdouble = (double)nbPhotonsTot; // on convertit en double car le hdf n'accepte pas ull
+	double tempsEcouledouble = tempsPrec + (double)(clock() / CLOCKS_PER_SEC);
 	
-	NBPHOTONSsave[0] = (double)NBPHOTONS; // on convertit en double car le hdf n'accepte pas ull
-	NBLOOPsave[0] = NBLOOP;
-	THSDEGsave[0] = THSDEG;
-	LAMBDAsave[0] = LAMBDA;
-	TAURAYsave[0] = TAURAY;
-	TAUAERsave[0] = TAUAER;
-	W0AERsave[0] = W0AER;
-	HAsave[0] = HA;
-	HRsave[0] = HR;
-	ZMINsave[0] = ZMIN;
-	ZMAXsave[0] = ZMAX;
-	WINDSPEEDsave[0] = WINDSPEED;
-	NH2Osave[0] = NH2O;
-	CONPHYsave[0] = CONPHY;
-	XBLOCKsave[0] = XBLOCK;
-	YBLOCKsave[0] = YBLOCK;
-	XGRIDsave[0] = XGRID;
-	YGRIDsave[0] = YGRID;
-	NBTHETAsave[0] = NBTHETA;
-	NBPHIsave[0] = NBPHI;
-	NBSTOKESsave[0] = NBSTOKES;
-	DIOPTREsave[0] = DIOPTRE;
-	DIFFFsave[0] = DIFFF;
-	PROFILsave[0] = PROFIL;
-	SIMsave[0] = SIM;
-	SURsave[0] = SUR;
-	nbPhotonsTotSave[0] = (double)nbPhotonsTot; // on convertit en double car le hdf n'accepte pas ull
-	nbErreursPoidsSave[0] = var->erreurpoids;
-	nbErreursThetaSave[0] = var->erreurtheta;
-	tempsEcouleSave[0] = tempsPrec + (double)(clock() / CLOCKS_PER_SEC);
+	SDsetattr(sdsTab, "NBPHOTONS", DFNT_FLOAT64, 1, &NBPHOTONSdouble);
+	SDsetattr(sdsTab, "NBLOOP", DFNT_UINT32, 1, &NBLOOP);
+	SDsetattr(sdsTab, "SEED", DFNT_UINT32, 1, &SEED);
+	SDsetattr(sdsTab, "XBLOCK", DFNT_INT32, 1, &XBLOCK);
+	SDsetattr(sdsTab, "YBLOCK", DFNT_INT32, 1, &YBLOCK);
+	SDsetattr(sdsTab, "XGRID", DFNT_INT32, 1, &XGRID);
+	SDsetattr(sdsTab, "YGRID", DFNT_INT32, 1, &YGRID);
+	SDsetattr(sdsTab, "NBTHETA", DFNT_INT32, 1, &NBTHETA);
+	SDsetattr(sdsTab, "NBPHI", DFNT_INT32, 1, &NBPHI);
+	SDsetattr(sdsTab, "NBSTOKES", DFNT_INT32, 1, &NBSTOKES);
+	SDsetattr(sdsTab, "DIOPTRE", DFNT_INT32, 1, &DIOPTRE);
+	SDsetattr(sdsTab, "DIFFF", DFNT_INT32, 1, &DIFFF);
+	SDsetattr(sdsTab, "PROFIL", DFNT_INT32, 1, &PROFIL);
+	SDsetattr(sdsTab, "SIM", DFNT_INT32, 1, &SIM);
+	SDsetattr(sdsTab, "SUR", DFNT_INT32, 1, &SUR);
+	SDsetattr(sdsTab, "THSDEG", DFNT_FLOAT32, 1, &THSDEG);
+	SDsetattr(sdsTab, "LAMBDA", DFNT_FLOAT32, 1, &LAMBDA);
+	SDsetattr(sdsTab, "TAURAY", DFNT_FLOAT32, 1, &TAURAY);
+	SDsetattr(sdsTab, "TAUAER", DFNT_FLOAT32, 1, &TAUAER);
+	SDsetattr(sdsTab, "W0AER", DFNT_FLOAT32, 1, &W0AER);
+	SDsetattr(sdsTab, "HA", DFNT_FLOAT32, 1, &HA);
+	SDsetattr(sdsTab, "HR", DFNT_FLOAT32, 1, &HR);
+	SDsetattr(sdsTab, "ZMIN", DFNT_FLOAT32, 1, &ZMIN);
+	SDsetattr(sdsTab, "ZMAX", DFNT_FLOAT32, 1, &ZMAX);
+	SDsetattr(sdsTab, "WINDSPEED", DFNT_FLOAT32, 1, &WINDSPEED);
+	SDsetattr(sdsTab, "NH2O", DFNT_FLOAT32, 1, &NH2O);
+	SDsetattr(sdsTab, "CONPHY", DFNT_FLOAT32, 1, &CONPHY);
+	SDsetattr(sdsTab, "PATHRESULTATSHDF", DFNT_CHAR8, strlen(PATHRESULTATSHDF), PATHRESULTATSHDF);
+	SDsetattr(sdsTab, "PATHTEMOINHDF", DFNT_CHAR8, strlen(PATHTEMOINHDF), PATHTEMOINHDF);
 	
-	SDsetattr(sdsTab, "NBPHOTONS", DFNT_FLOAT64, 1, NBPHOTONSsave);
-	SDsetattr(sdsTab, "NBLOOP", DFNT_UINT32, 1, NBLOOPsave);
-	SDsetattr(sdsTab, "THSDEG", DFNT_FLOAT32, 1, THSDEGsave);
-	SDsetattr(sdsTab, "LAMBDA", DFNT_FLOAT32, 1, LAMBDAsave);
-	SDsetattr(sdsTab, "TAURAY", DFNT_FLOAT32, 1, TAURAYsave);
-	SDsetattr(sdsTab, "TAUAER", DFNT_FLOAT32, 1, TAUAERsave);
-	SDsetattr(sdsTab, "W0AER", DFNT_FLOAT32, 1, W0AERsave);
-	SDsetattr(sdsTab, "HA", DFNT_FLOAT32, 1, HAsave);
-	SDsetattr(sdsTab, "HR", DFNT_FLOAT32, 1, HRsave);
-	SDsetattr(sdsTab, "ZMIN", DFNT_FLOAT32, 1, ZMINsave);
-	SDsetattr(sdsTab, "ZMAX", DFNT_FLOAT32, 1, ZMAXsave);
-	SDsetattr(sdsTab, "WINDSPEED", DFNT_FLOAT32, 1, WINDSPEEDsave);
-	SDsetattr(sdsTab, "NH2O", DFNT_FLOAT32, 1, NH2Osave);
-	SDsetattr(sdsTab, "CONPHY", DFNT_FLOAT32, 1, CONPHYsave);
-	SDsetattr(sdsTab, "XBLOCK", DFNT_INT32, 1, XBLOCKsave);
-	SDsetattr(sdsTab, "YBLOCK", DFNT_INT32, 1, YBLOCKsave);
-	SDsetattr(sdsTab, "XGRID", DFNT_INT32, 1, XGRIDsave);
-	SDsetattr(sdsTab, "YGRID", DFNT_INT32, 1, YGRIDsave);
-	SDsetattr(sdsTab, "NBTHETA", DFNT_INT32, 1, NBTHETAsave);
-	SDsetattr(sdsTab, "NBPHI", DFNT_INT32, 1, NBPHIsave);
-	SDsetattr(sdsTab, "NBSTOKES", DFNT_INT32, 1, NBSTOKESsave);
-	SDsetattr(sdsTab, "DIOPTRE", DFNT_INT32, 1, DIOPTREsave);
-	SDsetattr(sdsTab, "DIFFF", DFNT_INT32, 1, DIFFFsave);
-	SDsetattr(sdsTab, "PROFIL", DFNT_INT32, 1, PROFILsave);
-	SDsetattr(sdsTab, "SIM", DFNT_INT32, 1, SIMsave);
-	SDsetattr(sdsTab, "SUR", DFNT_INT32, 1, SURsave);
-	SDsetattr(sdsTab, "nbPhotonsTot", DFNT_FLOAT64, 1, nbPhotonsTotSave);
-	SDsetattr(sdsTab, "nbErreursPoids", DFNT_INT32, 1, nbErreursPoidsSave);
-	SDsetattr(sdsTab, "nbErreursTheta", DFNT_INT32, 1, nbErreursThetaSave);
-	SDsetattr(sdsTab, "tempsEcoule", DFNT_FLOAT64, 1, tempsEcouleSave);
+	SDsetattr(sdsTab, "nbPhotonsTot", DFNT_FLOAT64, 1, &nbPhotonsTotdouble);
+	SDsetattr(sdsTab, "nbErreursPoids", DFNT_INT32, 1, &(var->erreurpoids));
+	SDsetattr(sdsTab, "nbErreursTheta", DFNT_INT32, 1, &(var->erreurtheta));
+	SDsetattr(sdsTab, "tempsEcoule", DFNT_FLOAT64, 1, &tempsEcouledouble);
 
 	// Fermeture du tableau
 	SDendaccess(sdsTab);
@@ -663,8 +615,16 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		int sdsIndex = 0;
 		int sdsTab = SDselect (sdFichier, sdsIndex);
 		
-		// Recuperation des paramètres du fichier temoin
-		unsigned int NBLOOPrecup[1];
+		// Recuperation de paramètres du fichier temoin
+		int SEEDrecup[1];
+		int NBTHETArecup[1];
+		int NBPHIrecup[1];
+		int NBSTOKESrecup[1];
+		int DIOPTRErecup[1];
+		int DIFFFrecup[1];
+		int PROFILrecup[1];
+		int SIMrecup[1];
+		int SURrecup[1];
 		float THSDEGrecup[1];
 		float LAMBDArecup[1];
 		float TAURAYrecup[1];
@@ -677,20 +637,16 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		float WINDSPEEDrecup[1];
 		float NH2Orecup[1];
 		float CONPHYrecup[1];
-		int XBLOCKrecup[1];
-		int YBLOCKrecup[1];
-		int XGRIDrecup[1];
-		int YGRIDrecup[1];
-		int NBTHETArecup[1];
-		int NBPHIrecup[1];
-		int NBSTOKESrecup[1];
-		int DIOPTRErecup[1];
-		int DIFFFrecup[1];
-		int PROFILrecup[1];
-		int SIMrecup[1];
-		int SURrecup[1];
 		
-		SDreadattr(sdsTab, SDfindattr(sdsTab, "NBLOOP"), (VOIDP)NBLOOPrecup);
+		SDreadattr(sdsTab, SDfindattr(sdsTab, "SEED"), (VOIDP)SEEDrecup);
+		SDreadattr(sdsTab, SDfindattr(sdsTab, "NBTHETA"), (VOIDP)NBTHETArecup);
+		SDreadattr(sdsTab, SDfindattr(sdsTab, "NBPHI"), (VOIDP)NBPHIrecup);
+		SDreadattr(sdsTab, SDfindattr(sdsTab, "NBSTOKES"), (VOIDP)NBSTOKESrecup);
+		SDreadattr(sdsTab, SDfindattr(sdsTab, "DIOPTRE"), (VOIDP)DIOPTRErecup);
+		SDreadattr(sdsTab, SDfindattr(sdsTab, "DIFFF"), (VOIDP)DIFFFrecup);
+		SDreadattr(sdsTab, SDfindattr(sdsTab, "PROFIL"), (VOIDP)PROFILrecup);
+		SDreadattr(sdsTab, SDfindattr(sdsTab, "SIM"), (VOIDP)SIMrecup);
+		SDreadattr(sdsTab, SDfindattr(sdsTab, "SUR"), (VOIDP)SURrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "THSDEG"), (VOIDP)THSDEGrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "LAMBDA"), (VOIDP)LAMBDArecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "TAURAY"), (VOIDP)TAURAYrecup);
@@ -703,21 +659,16 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "WINDSPEED"), (VOIDP)WINDSPEEDrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "NH2O"), (VOIDP)NH2Orecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "CONPHY"), (VOIDP)CONPHYrecup);
-		SDreadattr(sdsTab, SDfindattr(sdsTab, "XBLOCK"), (VOIDP)XBLOCKrecup);
-		SDreadattr(sdsTab, SDfindattr(sdsTab, "YBLOCK"), (VOIDP)YBLOCKrecup);
-		SDreadattr(sdsTab, SDfindattr(sdsTab, "XGRID"), (VOIDP)XGRIDrecup);
-		SDreadattr(sdsTab, SDfindattr(sdsTab, "YGRID"), (VOIDP)YGRIDrecup);
-		SDreadattr(sdsTab, SDfindattr(sdsTab, "NBTHETA"), (VOIDP)NBTHETArecup);
-		SDreadattr(sdsTab, SDfindattr(sdsTab, "NBPHI"), (VOIDP)NBPHIrecup);
-		SDreadattr(sdsTab, SDfindattr(sdsTab, "NBSTOKES"), (VOIDP)NBSTOKESrecup);
-		SDreadattr(sdsTab, SDfindattr(sdsTab, "DIOPTRE"), (VOIDP)DIOPTRErecup);
-		SDreadattr(sdsTab, SDfindattr(sdsTab, "DIFFF"), (VOIDP)DIFFFrecup);
-		SDreadattr(sdsTab, SDfindattr(sdsTab, "PROFIL"), (VOIDP)PROFILrecup);
-		SDreadattr(sdsTab, SDfindattr(sdsTab, "SIM"), (VOIDP)SIMrecup);
-		SDreadattr(sdsTab, SDfindattr(sdsTab, "SUR"), (VOIDP)SURrecup);
 		
 		// Si les parametres sont les memes on recupere des informations pour poursuivre la simulation précédente
-		if(NBLOOPrecup[0] == NBLOOP
+		if(NBTHETArecup[0] == NBTHETA
+			&& NBPHIrecup[0] == NBPHI
+			&& NBSTOKESrecup[0] == NBSTOKES
+			&& DIOPTRErecup[0] == DIOPTRE
+			&& DIFFFrecup[0] == DIFFF
+			&& PROFILrecup[0] == PROFIL
+			&& SIMrecup[0] == SIM
+			&& SURrecup[0] == SUR
 			&& THSDEGrecup[0] == THSDEG
 			&& LAMBDArecup[0] == LAMBDA
 			&& TAURAYrecup[0] == TAURAY
@@ -729,20 +680,10 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 			&& ZMAXrecup[0] == ZMAX
 			&& WINDSPEEDrecup[0] == WINDSPEED
 			&& NH2Orecup[0] == NH2O
-			&& CONPHYrecup[0] == CONPHY
-			&& XBLOCKrecup[0] == XBLOCK
-			&& YBLOCKrecup[0] == YBLOCK
-			&& XGRIDrecup[0] == XGRID
-			&& YGRIDrecup[0] == YGRID
-			&& NBTHETArecup[0] == NBTHETA
-			&& NBPHIrecup[0] == NBPHI
-			&& NBSTOKESrecup[0] == NBSTOKES
-			&& DIOPTRErecup[0] == DIOPTRE
-			&& DIFFFrecup[0] == DIFFF
-			&& PROFILrecup[0] == PROFIL
-			&& SIMrecup[0] == SIM
-			&& SURrecup[0] == SUR)
+			&& CONPHYrecup[0] == CONPHY)
 		{
+			printf("\nPOURSUITE D'UNE SIMULATION ANTERIEURE\n");
+			if(SEEDrecup[0] == SEED) printf("ATTENTION: Nous recommandons SEED=-1 sinon les nombres aleatoires sont identiques a chaque lancement.\n");
 			// Recuperation du nombre de photons traités et du nombre d'erreurs
 			double nbPhotonsTotDouble[1]; //on récupère d'abord la variable en double
 			unsigned long long nbPhotonsTotRecup[1]; //puis on la passera en unsigned long long
@@ -797,6 +738,46 @@ void creerHDFResultats(float* tabFinal, float* tabTh, float* tabPhi,
 {
 	// Création du fichier de sortie
 	int sdFichier = SDstart(PATHRESULTATSHDF, DFACC_CREATE);
+	// Ecriture des informations sur la simulation : paramètres, nbphotons, nbErreurs, tempsEcoule
+	double NBPHOTONSdouble = (double)NBPHOTONS;
+	double nbPhotonsTotdouble = (double)nbPhotonsTot;
+	double tempsEcouledouble = tempsPrec + (double)(clock() / CLOCKS_PER_SEC);
+
+	SDsetattr(sdFichier, "NBPHOTONS", DFNT_FLOAT64, 1, &NBPHOTONSdouble);
+	SDsetattr(sdFichier, "NBLOOP", DFNT_UINT32, 1, &NBLOOP);
+	SDsetattr(sdFichier, "SEED", DFNT_UINT32, 1, &SEED);
+	SDsetattr(sdFichier, "XBLOCK", DFNT_INT32, 1, &XBLOCK);
+	SDsetattr(sdFichier, "YBLOCK", DFNT_INT32, 1, &YBLOCK);
+	SDsetattr(sdFichier, "XGRID", DFNT_INT32, 1, &XGRID);
+	SDsetattr(sdFichier, "YGRID", DFNT_INT32, 1, &YGRID);
+	SDsetattr(sdFichier, "NBTHETA", DFNT_INT32, 1, &NBTHETA);
+	SDsetattr(sdFichier, "NBPHI", DFNT_INT32, 1, &NBPHI);
+	SDsetattr(sdFichier, "NBSTOKES", DFNT_INT32, 1, &NBSTOKES);
+	SDsetattr(sdFichier, "DIOPTRE", DFNT_INT32, 1, &DIOPTRE);
+	SDsetattr(sdFichier, "DIFFF", DFNT_INT32, 1, &DIFFF);
+	SDsetattr(sdFichier, "PROFIL", DFNT_INT32, 1, &PROFIL);
+	SDsetattr(sdFichier, "SIM", DFNT_INT32, 1, &SIM);
+	SDsetattr(sdFichier, "SUR", DFNT_INT32, 1, &SUR);
+	SDsetattr(sdFichier, "THSDEG", DFNT_FLOAT32, 1, &THSDEG);
+	SDsetattr(sdFichier, "LAMBDA", DFNT_FLOAT32, 1, &LAMBDA);
+	SDsetattr(sdFichier, "TAURAY", DFNT_FLOAT32, 1, &TAURAY);
+	SDsetattr(sdFichier, "TAUAER", DFNT_FLOAT32, 1, &TAUAER);
+	SDsetattr(sdFichier, "W0AER", DFNT_FLOAT32, 1, &W0AER);
+	SDsetattr(sdFichier, "HA", DFNT_FLOAT32, 1, &HA);
+	SDsetattr(sdFichier, "HR", DFNT_FLOAT32, 1, &HR);
+	SDsetattr(sdFichier, "ZMIN", DFNT_FLOAT32, 1, &ZMIN);
+	SDsetattr(sdFichier, "ZMAX", DFNT_FLOAT32, 1, &ZMAX);
+	SDsetattr(sdFichier, "WINDSPEED", DFNT_FLOAT32, 1, &WINDSPEED);
+	SDsetattr(sdFichier, "NH2O", DFNT_FLOAT32, 1, &NH2O);
+	SDsetattr(sdFichier, "CONPHY", DFNT_FLOAT32, 1, &CONPHY);
+	SDsetattr(sdFichier, "PATHRESULTATSHDF", DFNT_CHAR8, strlen(PATHRESULTATSHDF), PATHRESULTATSHDF);
+	SDsetattr(sdFichier, "PATHTEMOINHDF", DFNT_CHAR8, strlen(PATHTEMOINHDF), PATHTEMOINHDF);
+	
+	SDsetattr(sdFichier, "nbPhotonsTot", DFNT_FLOAT64, 1, &nbPhotonsTotdouble);
+	SDsetattr(sdFichier, "nbErreursPoids", DFNT_INT32, 1, &(var->erreurpoids));
+	SDsetattr(sdFichier, "nbErreursTheta", DFNT_INT32, 1, &(var->erreurtheta));
+	SDsetattr(sdFichier, "tempsEcoule", DFNT_FLOAT64, 1, &tempsEcouledouble);
+	
 	// Pour chaque phi on ajoute au fichier le tableau représentant le résultat final en fonction de theta
 	for(int iphi = 0; iphi < NBPHI; iphi++)
 	{
@@ -830,106 +811,10 @@ void creerHDFResultats(float* tabFinal, float* tabTh, float* tabPhi,
 			printf("\nERREUR : write hdf resultats\n");
 			exit(1);
 		}
-		
-		// Ecriture des informations sur la simulation : paramètres, nbphotons, nbErreurs, tempsEcoule
-		double NBPHOTONSsave[1];
-		unsigned int NBLOOPsave[1];
-		float THSDEGsave[1];
-		float LAMBDAsave[1];
-		float TAURAYsave[1];
-		float TAUAERsave[1];
-		float W0AERsave[1];
-		float HAsave[1];
-		float HRsave[1];
-		float ZMINsave[1];
-		float ZMAXsave[1];
-		float WINDSPEEDsave[1];
-		float NH2Osave[1];
-		float CONPHYsave[1];
-		int XBLOCKsave[1];
-		int YBLOCKsave[1];
-		int XGRIDsave[1];
-		int YGRIDsave[1];
-		int NBTHETAsave[1];
-		int NBPHIsave[1];
-		int NBSTOKESsave[1];
-		int DIOPTREsave[1];
-		int DIFFFsave[1];
-		int PROFILsave[1];
-		int SIMsave[1];
-		int SURsave[1];
-		double nbPhotonsTotSave[1];
-		int nbErreursPoidsSave[1];
-		int nbErreursThetaSave[1];
-		double tempsEcouleSave[1];
-	
-		NBPHOTONSsave[0] = (double)NBPHOTONS;
-		NBLOOPsave[0] = NBLOOP;
-		THSDEGsave[0] = THSDEG;
-		LAMBDAsave[0] = LAMBDA;
-		TAURAYsave[0] = TAURAY;
-		TAUAERsave[0] = TAUAER;
-		W0AERsave[0] = W0AER;
-		HAsave[0] = HA;
-		HRsave[0] = HR;
-		ZMINsave[0] = ZMIN;
-		ZMAXsave[0] = ZMAX;
-		WINDSPEEDsave[0] = WINDSPEED;
-		NH2Osave[0] = NH2O;
-		CONPHYsave[0] = CONPHY;
-		XBLOCKsave[0] = XBLOCK;
-		YBLOCKsave[0] = YBLOCK;
-		XGRIDsave[0] = XGRID;
-		YGRIDsave[0] = YGRID;
-		NBTHETAsave[0] = NBTHETA;
-		NBPHIsave[0] = NBPHI;
-		NBSTOKESsave[0] = NBSTOKES;
-		DIOPTREsave[0] = DIOPTRE;
-		DIFFFsave[0] = DIFFF;
-		PROFILsave[0] = PROFIL;
-		SIMsave[0] = SIM;
-		SURsave[0] = SUR;
-		nbPhotonsTotSave[0] = (double)nbPhotonsTot;
-		nbErreursPoidsSave[0] = var->erreurpoids;
-		nbErreursThetaSave[0] = var->erreurtheta;
-		tempsEcouleSave[0] = tempsPrec + (double)(clock() / CLOCKS_PER_SEC);
-	
-		SDsetattr(sdFichier, "NBPHOTONS", DFNT_FLOAT64, 1, NBPHOTONSsave);
-		SDsetattr(sdFichier, "NBLOOP", DFNT_UINT32, 1, NBLOOPsave);
-		SDsetattr(sdFichier, "THSDEG", DFNT_FLOAT32, 1, THSDEGsave);
-		SDsetattr(sdFichier, "LAMBDA", DFNT_FLOAT32, 1, LAMBDAsave);
-		SDsetattr(sdFichier, "TAURAY", DFNT_FLOAT32, 1, TAURAYsave);
-		SDsetattr(sdFichier, "TAUAER", DFNT_FLOAT32, 1, TAUAERsave);
-		SDsetattr(sdFichier, "W0AER", DFNT_FLOAT32, 1, W0AERsave);
-		SDsetattr(sdFichier, "HA", DFNT_FLOAT32, 1, HAsave);
-		SDsetattr(sdFichier, "HR", DFNT_FLOAT32, 1, HRsave);
-		SDsetattr(sdFichier, "ZMIN", DFNT_FLOAT32, 1, ZMINsave);
-		SDsetattr(sdFichier, "ZMAX", DFNT_FLOAT32, 1, ZMAXsave);
-		SDsetattr(sdFichier, "WINDSPEED", DFNT_FLOAT32, 1, WINDSPEEDsave);
-		SDsetattr(sdFichier, "NH2O", DFNT_FLOAT32, 1, NH2Osave);
-		SDsetattr(sdFichier, "CONPHY", DFNT_FLOAT32, 1, CONPHYsave);
-		SDsetattr(sdFichier, "XBLOCK", DFNT_INT32, 1, XBLOCKsave);
-		SDsetattr(sdFichier, "YBLOCK", DFNT_INT32, 1, YBLOCKsave);
-		SDsetattr(sdFichier, "XGRID", DFNT_INT32, 1, XGRIDsave);
-		SDsetattr(sdFichier, "YGRID", DFNT_INT32, 1, YGRIDsave);
-		SDsetattr(sdFichier, "NBTHETA", DFNT_INT32, 1, NBTHETAsave);
-		SDsetattr(sdFichier, "NBPHI", DFNT_INT32, 1, NBPHIsave);
-		SDsetattr(sdFichier, "NBSTOKES", DFNT_INT32, 1, NBSTOKESsave);
-		SDsetattr(sdFichier, "DIOPTRE", DFNT_INT32, 1, DIOPTREsave);
-		SDsetattr(sdFichier, "DIFFF", DFNT_INT32, 1, DIFFFsave);
-		SDsetattr(sdFichier, "PROFIL", DFNT_INT32, 1, PROFILsave);
-		SDsetattr(sdFichier, "SIM", DFNT_INT32, 1, SIMsave);
-		SDsetattr(sdFichier, "SUR", DFNT_INT32, 1, SURsave);
-		SDsetattr(sdFichier, "nbPhotonsTot", DFNT_FLOAT64, 1, nbPhotonsTotSave);
-		SDsetattr(sdFichier, "nbErreursPoids", DFNT_INT32, 1, nbErreursPoidsSave);
-		SDsetattr(sdFichier, "nbErreursTheta", DFNT_INT32, 1, nbErreursThetaSave);
-		SDsetattr(sdFichier, "tempsEcoule", DFNT_FLOAT64, 1, tempsEcouleSave);
-		
 		// Ecriture d'informations sur le tableau
 		char description[20];
 		sprintf(description, "%f", tabPhi[iphi]);
-		if(strcmp(description, "") != 0)
-			SDsetattr(sdsTab, "phi", DFNT_CHAR8, strlen(description), description);
+		SDsetattr(sdsTab, "phi", DFNT_CHAR8, strlen(description), description);
 		
 		// Fermeture du tableau
 		SDendaccess(sdsTab);
