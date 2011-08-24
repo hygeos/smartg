@@ -42,6 +42,7 @@ def lancerSimulation(tabTemps,NBPHOTONS,NBLOOP,XBLOCK,YBLOCK,XGRID,YGRID,NBTHETA
 		fichierParametres = open("tmp/"+nomFichierParam+".txt", "w")
 		fichierParametres.write("NBPHOTONS = " + str(NBPHOTONS) + "\n")
 		fichierParametres.write("NBLOOP = " + str(NBLOOP) + "\n")
+		fichierParametres.write("SEED = -1\n")	
 		fichierParametres.write("XBLOCK = " + str(XBLOCK) + "\n")
 		fichierParametres.write("YBLOCK = " + str(YBLOCK) + "\n")
 		fichierParametres.write("XGRID = " + str(XGRID) + "\n")
@@ -68,7 +69,6 @@ def lancerSimulation(tabTemps,NBPHOTONS,NBLOOP,XBLOCK,YBLOCK,XGRID,YGRID,NBTHETA
 		fichierParametres.write("DIFFF = 0\n")
 		fichierParametres.write("NOMRESULTATSHDF = "+nomResultatsHDF+"\n")
 		fichierParametres.write("NOMTEMOINHDF = "+nomTemoinHDF+"\n")
-		fichierParametres.write("SEED = -1\n")	
 		fichierParametres.close()
 		# lancement du programme et calcul du temps
 		start = time()
