@@ -66,7 +66,7 @@ int initRandMWC(unsigned long long *etat, unsigned int *config,
 // Fonction qui récupère les valeurs des constantes dans Parametres.txt et initialise les constantes du host
 void initConstantesHost(int argc, char** argv)
 {
-	if(argc <2)
+	if(argc < 2)
 	{
 		printf("ERREUR : lecture argv");
 		exit(1);
@@ -81,6 +81,11 @@ void initConstantesHost(int argc, char** argv)
 	strcpy(s,"");
 	chercheConstante(argv[1], "NBLOOP", s);
 	NBLOOP = atoi(s);
+
+	strcpy(s,"");
+	chercheConstante(argv[1], "SEED", s);
+	SEED = atoi(s);
+	if(SEED == -1) SEED = static_cast<int> (time(NULL));
 
 	strcpy(s,"");
 	chercheConstante(argv[1], "XBLOCK", s);
@@ -251,35 +256,22 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 {
 #ifdef RANDMWC
 	// Création des tableaux de generateurs pour la fonction Random MWC
-	#ifdef NEW
-	// La simulation est différente à chaque lancement
-	unsigned long long seed = (unsigned long long) time(NULL); //un seul seed pour tous les generateurs
-	#else
-	// La simulation est identique à chaque lancement
-	unsigned long long seed = 777ULL; //un seul seed pour tous les generateurs
-	#endif
 	tab_H->etat = (unsigned long long*)malloc(XBLOCK * YBLOCK * XGRID * YGRID * sizeof(unsigned long long));
 	cudaMalloc(&(tab_D->etat), XBLOCK * YBLOCK * XGRID * YGRID * sizeof(unsigned long long));
 	tab_H->config = (unsigned int*)malloc(XBLOCK * YBLOCK * XGRID * YGRID * sizeof(unsigned int));
 	cudaMalloc(&(tab_D->config), XBLOCK * YBLOCK * XGRID * YGRID * sizeof(unsigned int));
 	// Initialisation des tableaux host à l'aide du fichier et du seed
-	initRandMWC(tab_H->etat, tab_H->config, XBLOCK * YBLOCK * XGRID * YGRID, "MWC.txt", seed);
+	initRandMWC(tab_H->etat, tab_H->config, XBLOCK * YBLOCK * XGRID * YGRID, "MWC.txt", (unsigned long long)SEED);
 	// Copie dans les tableaux device
 	cudaMemcpy(tab_D->etat, tab_H->etat, XBLOCK * YBLOCK * XGRID * YGRID * sizeof(unsigned long long), cudaMemcpyHostToDevice);
 	cudaMemcpy(tab_D->config, tab_H->config, XBLOCK * YBLOCK * XGRID * YGRID * sizeof(unsigned int), cudaMemcpyHostToDevice);
 #endif
 #ifdef RANDCUDA
 	// Création du tableau de generateurs (=etat+config) pour la fonction Random Cuda
-	#ifdef NEW
-	// La simulation est différente à chaque lancement
-	unsigned long long seed = (unsigned long long) time(NULL); //un seul seed pour tous les generateurs
-	#else
-	// La simulation est identique à chaque lancement
-	unsigned long long seed = 777ULL; //un seul seed pour tous les generateurs
-	#endif
+	
 	cudaMalloc(&(tab_D->etat), XBLOCK * YBLOCK * XGRID * YGRID * sizeof(curandState_t));
 	// Initialisation du tableau dans une fonction du kernel
-	initRandCUDA<<<XGRID * YGRID, XBLOCK * YBLOCK>>>(tab_D->etat, seed);
+	initRandCUDA<<<XGRID * YGRID, XBLOCK * YBLOCK>>>(tab_D->etat, (unsigned long long)SEED);
 #endif
 #ifdef RANDMT
 	// Création des tableaux de generateurs pour la fonction Random Mersenne Twister
@@ -324,13 +316,7 @@ void initRandMTConfig(ConfigMT* config_H, ConfigMT* config_D, int nbThreads)
 		}
 	}
 	fclose(fd);
-	#ifdef NEW
-	// La simulation est différente à chaque lancement
-	srand(time(NULL));
-	#else
-	// La simulation est identique à chaque lancement
-	srand(777);
-	#endif
+	srand((unsigned int)SEED);
 	// Creation des seeds aleatoires pour que les threads aient des etats differents
 	for(int i = 0; i < nbThreads; i++) config_H[i].seed = (unsigned int)rand();
 	cudaMemcpy(config_D, config_H, nbThreads * sizeof(ConfigMT), cudaMemcpyHostToDevice);

@@ -18,6 +18,7 @@ float ZMAX; //Altitude haute de la couche aerosol [km] (utilise si PROFIL=3)
 float WINDSPEED; //Vitesse du vent [m/s] (utilisee pour le modele de Cox et Munk: si DIOPTRE=1)
 float NH2O; //Indice de refraction relatif air/eau
 float CONPHY; //Concentration en phytoplancton [mg.m-3] (utilise si SUR>=2)
+int SEED; //Graine pour les fonctions random, si SEED=-1 on choisit une graine aléatoirement
 int XBLOCK; //Longueur du bloc de threads
 int YBLOCK; //Hauteur du block de threads
 int XGRID; //Longueur de la grid de blocks

@@ -1,7 +1,7 @@
 CC = nvcc
 EXEC = Prog
 
-CFLAGS = -g -G -arch=sm_11 -O3 # -Xptxas -v
+CFLAGS = -g -G -arch=sm_11 -O3 -Xptxas -v
 # CFLAGS = -g -G -arch=sm_20 -O3 # -Xptxas -v
 
 IFLAGS = -I /opt/cuda/include
@@ -20,18 +20,17 @@ LFLAGS += -L /opt/cuda/bin
 LFLAGS += -L /opt/NVIDIA_GPU_Computing_SDK/C/lib
 LFLAGS += -lcuda -lcudart
 
-# Options de sortie
+#=============Options de sortie============#
 DFLAGS =
 # DFLAGS += -DPARAMETRES # Affichage des parametres initiaux
-DFLAGS += -DNEW # Pour que la simulation soit differente à chaque lancement
 DFLAGS += -DRANDMWC
 # DFLAGS += -DRANDCUDA
 # DFLAGS += -DRANDMT
 
-# Options pour debogage
+#==========Options pour debogage===========#
 DFLAGS += -DPROGRESSION # Calcul et affichage de la progression de la simulation
 # DFLAGS += -DTRAJET # Calcul et affichage des premiers evenements d'un threads
-# DFLAGS += -DTABRAND
+# DFLAGS += -DTABRAND # Affichage des premiers nombre aleatoires generes
 
 #####################################################################################
 
@@ -54,4 +53,9 @@ clean:
 
 mrproper: clean
 	rm -rf tmp/* out_prog/* out_scripts/* $(EXEC)
+	
+suppr:
+	rm -f out_prog/Resultats.hdf tmp/Temoin.hdf
+	
+rebuild: suppr clean all
 

@@ -12,11 +12,11 @@
 #include <stdlib.h>
 #include <hdf.h>
 #include <float.h>
-#include <cutil.h>
 #include <math.h>
 #include <limits.h>
 #include <string.h>
-//#include <shrUtils.h>
+//#include <cutil.h>>
+//#include <shrUtils.h
 //#include <shrQATest.h>
 //#include <cutil_inline.h>
 */
@@ -100,6 +100,7 @@ extern float ZMAX;
 extern float WINDSPEED;
 extern float NH2O;
 extern float CONPHY;
+extern int SEED;
 extern int XBLOCK;
 extern int YBLOCK;
 extern int XGRID;

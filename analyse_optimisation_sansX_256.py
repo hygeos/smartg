@@ -68,6 +68,7 @@ def lancerSimulation(tabTemps,NBPHOTONS,NBLOOP,XBLOCK,YBLOCK,XGRID,YGRID,NBTHETA
 		fichierParametres.write("DIFFF = 0\n")
 		fichierParametres.write("NOMRESULTATSHDF = "+nomResultatsHDF+"\n")
 		fichierParametres.write("NOMTEMOINHDF = "+nomTemoinHDF+"\n")
+		fichierParametres.write("SEED = -1\n")	
 		fichierParametres.close()
 		# lancement du programme et calcul du temps
 		start = time()
