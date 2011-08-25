@@ -66,7 +66,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 	for(iloop = 0; iloop < NBLOOPd; iloop++)
 	{
 		// Si le photon est à NONE on l'initialise et on le met à ATMOS
-		if(photon.loc == NONE) init(&photon, var, tab
+		if(photon.loc == NONE) init(&photon
 				#ifdef TRAJET
 				, idx, evnt
 				#endif
@@ -75,7 +75,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 		syncthreads();
 		
 		// Si le photon est à ATMOS on le avancer jusqu'à SURFACE, ou SPACE, ou ATMOS s'il subit une diffusion
-		if(photon.loc == ATMOS) move(&photon, var, tab, &etatThr
+		if(photon.loc == ATMOS) move(&photon, &etatThr
 				#if defined(RANDMWC) || defined(RANDMT)
 				, &configThr
 				#endif
@@ -87,7 +87,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 		syncthreads();
 		
 		// Si le photon est encore à ATMOS il subit une diffusion et reste dans ATMOS
-		if(photon.loc == ATMOS) scatter(&photon, var, tab, &etatThr
+		if(photon.loc == ATMOS) scatter(&photon, &etatThr
 				#if defined(RANDMWC) || defined(RANDMT)
 				, &configThr
 				#endif
@@ -99,7 +99,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 		syncthreads();
 		
 		// Si le photon est à SURFACE on le met à ABSORBED
-		if(photon.loc == SURFACE) surfac(&photon, var, tab
+		if(photon.loc == SURFACE) surfac(&photon
 				#ifdef TRAJET
 				, idx, evnt
 				#endif
@@ -155,7 +155,7 @@ __global__ void initRandMTEtat(EtatMT* etat, ConfigMT* config)
 }
 
 // Fonction device qui initialise le photon associé à un thread
-__device__ void init(Photon* photon, Variables* var, Tableaux tab
+__device__ void init(Photon* photon
 		#ifdef TRAJET
 		, int idx, Evnt* evnt
 		#endif
@@ -200,7 +200,7 @@ __device__ void init(Photon* photon, Variables* var, Tableaux tab
 }
 
 // Fonction device qui traite les photons dans l'atmosphère en les faisant avancer
-__device__ void move(Photon* photon, Variables* var, Tableaux tab
+__device__ void move(Photon* photon
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif
@@ -249,7 +249,7 @@ __device__ void move(Photon* photon, Variables* var, Tableaux tab
 }
 
 // Fonction device qui traite les photons qui sont encore dans l'atmosphère après "move" : rencontre avec une molécule
-__device__ void scatter(Photon* photon, Variables* var, Tableaux tab
+__device__ void scatter(Photon* photon
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif
@@ -327,7 +327,7 @@ __device__ void scatter(Photon* photon, Variables* var, Tableaux tab
 }
 
 // Fonction device qui traite les photons atteignant le sol
-__device__ void surfac(Photon* photon, Variables* var, Tableaux tab
+__device__ void surfac(Photon* photon
 		#ifdef TRAJET
 		, int idx, Evnt* evnt
 		#endif
