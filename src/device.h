@@ -50,12 +50,12 @@ __global__ void lancementKernel(Variables*, Tableaux
 			       );
 __global__ void initRandCUDA(curandState_t*, unsigned long long);
 __global__ void initRandMTEtat(EtatMT*, ConfigMT*);
-__device__ void init(Photon*
+__device__ void init(Photon*, Variables*, Tableaux
 		#ifdef TRAJET
 		, int, Evnt*
 		#endif
 		    );
-__device__ void move(Photon*, Tableaux
+__device__ void move(Photon*, Variables*, Tableaux
 		#ifdef RANDMWC
 		, unsigned long long*, unsigned int*
 		#endif
@@ -69,7 +69,7 @@ __device__ void move(Photon*, Tableaux
 		, int, Evnt*
 		#endif
 		    );
-__device__ void scatter(Photon*, Tableaux
+__device__ void scatter(Photon*, Variables*, Tableaux
 		#ifdef RANDMWC
 		, unsigned long long*, unsigned int*
 		#endif
