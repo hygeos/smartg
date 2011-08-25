@@ -12,14 +12,14 @@ import pyhdf.SD
 	         # PARAMETRES #
 	        ##############
 
-# Si l'un des fichiers suivant existe deja le prog s'arrête
-nomResultatsHDF = "Resultats"
-nomTemoinHDF = "Temoin"
-# Si l'un des fichiers/dossiers suivants existe deja il est supprimé
-nomDossierGraphes = "analyse_optimisation_avecX"
-nomFichierParam = "opt_avecX_param"
+# Si l'un des fichiers suivant existe deja le prog s'arrete
+pathResultatsHDF = "out_prog/Resultats.hdf"
+pathTemoinHDF = "tmp/Temoin.hdf"
+# Si l'un des fichiers/dossiers suivants existe deja il est supprime
+pathDossierGraphes = "out_scripts/analyse_optimisation_avecX"
+pathFichierParam = "tmp/opt_avecX_param.txt"
 # Si le fichier suivant existe deja on demande s'il faut poursuivre avec ou le supprimer
-nomFichierSauv = "opt_avecX_sauv"
+pathFichierSauv = "tmp/opt_avecX_sauv"
 
 
 	          #############################
@@ -39,7 +39,7 @@ def lancerSimulation(tabTemps,NBPHOTONS,NBLOOP,XBLOCK,YBLOCK,XGRID,YGRID,NBTHETA
 	# si la simulation n'a pas deja ete lancee on la lance
 	if done == 0:
 		# creation du fichier contenant les parametres de la simulation
-		fichierParametres = open("tmp/"+nomFichierParam+".txt", "w")
+		fichierParametres = open(pathFichierParam, "w")
 		fichierParametres.write("NBPHOTONS = " + str(NBPHOTONS) + "\n")
 		fichierParametres.write("NBLOOP = " + str(NBLOOP) + "\n")
 		fichierParametres.write("SEED = -1\n")		
@@ -67,27 +67,26 @@ def lancerSimulation(tabTemps,NBPHOTONS,NBLOOP,XBLOCK,YBLOCK,XGRID,YGRID,NBTHETA
 		fichierParametres.write("DIOPTRE = 1\n")
 		fichierParametres.write("CONPHY = 0.1\n")
 		fichierParametres.write("DIFFF = 0\n")
-		fichierParametres.write("NOMRESULTATSHDF = "+nomResultatsHDF+"\n")
-		fichierParametres.write("NOMTEMOINHDF = "+nomTemoinHDF+"\n")
+		fichierParametres.write("PATHRESULTATSHDF = "+pathResultatsHDF+"\n")
+		fichierParametres.write("PATHTEMOINHDF = "+pathTemoinHDF+"\n")
 		fichierParametres.close()
 		# lancement du programme et calcul du temps
 		start = time()
-		os.system("./Prog tmp/"+nomFichierParam+".txt")
+		os.system("./Prog "+pathFichierParam)
 		temps = time() - start
 		# lecture du fichier Resultats.hdf pour recuperer le nombre de photons traites et le nombre de photons demandes
-		file_hdf = 'out_prog/Resultats.hdf'
-		hdf = pyhdf.SD.SD(file_hdf)
+		hdf = pyhdf.SD.SD(pathResultatsHDF)
 		NBPHOTONS = getattr(hdf,'NBPHOTONS')
 		nbPhotonsTot = getattr(hdf,'nbPhotonsTot')
 		# Suppression des fichiers qui generaient les prochaines simulations
-		os.system("rm -f tmp/"+nomTemoinHDF+".hdf")
-		os.system("rm -f out_prog/"+nomResultatsHDF+".hdf")
-		os.system("rm -f tmp/"+nomFichierParam+".txt")
-		# on adapte le temps pour qu'il corresponde a une simulation à exactement 100% (car le programme depasse un peu les 100%)
+		os.system("rm -f "+pathTemoinHDF)
+		os.system("rm -f "+pathResultatsHDF)
+		os.system("rm -f "+pathFichierParam)
+		# on adapte le temps pour qu'il corresponde a une simulation a exactement 100% (car le programme depasse un peu les 100%)
 		temps = temps*NBPHOTONS/nbPhotonsTot
 		# sauvegarde de la simulation lancee
 		listeSim.append([NBPHOTONS,NBLOOP,XBLOCK,YBLOCK,XGRID,YGRID,NBTHETA,NBPHI,temps])
-		marshal.dump(listeSim, open("tmp/"+nomFichierSauv, 'wb'))
+		marshal.dump(listeSim, open(pathFichierSauv, 'wb'))
 	return temps
 	
 
@@ -96,25 +95,25 @@ def lancerSimulation(tabTemps,NBPHOTONS,NBLOOP,XBLOCK,YBLOCK,XGRID,YGRID,NBTHETA
 	        ############################
 
 # on verifie que les fichiers de sortie n'existent pas deja
-if (os.path.exists("tmp/"+nomTemoinHDF+".hdf") or os.path.exists("out_prog/"+nomResultatsHDF+".hdf")):
-	sys.stdout.write("ERREUR: Un fichier de sortie existe deja (tmp/"+nomTemoinHDF+".hdf out_prog/"+nomResultatsHDF+".hdf)\n")
+if (os.path.exists(pathTemoinHDF) or os.path.exists(pathResultatsHDF)):
+	sys.stdout.write("ERREUR: Un fichier de sortie existe deja ("+pathTemoinHDF+" "+pathResultatsHDF+")\n")
 	sys.exit()
 else:
 	# on regarde s'il existe un fichier de sauvegarde des simulations
-	if os.path.exists("tmp/"+nomFichierSauv):
-		# si c'est le cas on demande à l'utilisateur s'il veut utiliser les simulations sauvegardees ou pas
+	if os.path.exists(pathFichierSauv):
+		# si c'est le cas on demande a l'utilisateur s'il veut utiliser les simulations sauvegardees ou pas
 		cont = 1
 		while cont:
 			sys.stdout.write("Continuer avec les simulations sauvegardees? [Y/n]\n")
 			choice = raw_input().lower()
 			if (choice == '' or choice == 'y' or choice == 'Y' or choice == 'yes' or choice == 'Yes'):
 				# reponse positive: on initialise la liste de simulation avec celle sauvegardee
-				listeSim = marshal.load(open("tmp/"+nomFichierSauv, "rb"))
+				listeSim = marshal.load(open(pathFichierSauv, "rb"))
 				cont = 0
 			elif (choice == 'n' or choice == 'N' or choice == 'no' or choice == 'No'):
 				# reponse negative: on cree une liste vide et on supprime le fichier sauvegarde existent
 				listeSim = []
-				os.system("rm -f tmp/"+nomFichierSauv)
+				os.system("rm -f "+pathFichierSauv)
 				cont = 0
 	# si il n'y a pas de fichier de sauvegarde on cree une liste vide
 	else:
@@ -124,68 +123,13 @@ else:
 	os.system("make clean")
 	os.system("make")
 	# suppression du dossier de sortie existent et creation d'un nouveau dossier de sortie vide
-	os.system("rm -rf out_scripts/"+nomDossierGraphes)
-	os.mkdir("out_scripts/"+nomDossierGraphes)
+	os.system("rm -rf "+pathDossierGraphes)
+	os.mkdir(pathDossierGraphes)
 
 
 	          ###########################
 	         # CREATION DES GRAPHIQUES #
 	        ###########################
-
-#===================Variations NBLOOP===================
-
-XBLOCK = 12
-YBLOCK = 1
-XGRID = 12
-YGRID = 1
-NBTHETA = 180
-NBPHI = 360
-listeNBPHOTONS = range(500000000, 1100000000, 100000000)
-listeNBLOOP = range(1000, 50000, 4000)
-listeNBLOOP.extend([60000, 80000, 100000])
-listePlots = []
-listeLegends = []
-for NBPHOTONS in listeNBPHOTONS:
-	listeGraphe = []
-	for NBLOOP in listeNBLOOP:
-		temps = lancerSimulation(listeSim,NBPHOTONS,NBLOOP,XBLOCK,YBLOCK,XGRID,YGRID,NBTHETA,NBPHI)
-		listeGraphe.append(temps)
-	listePlots.append(plot(listeNBLOOP,listeGraphe, marker='.'))
-	listeLegends.append('NBPHOTONS=' + str(NBPHOTONS/1000000) + 'millions')
-legend(listePlots, listeLegends, loc='best', numpoints=1)
-title("Temps en fonction de NBLOOP pour differents NBPHOTONS")
-xlabel("NBLOOP")
-ylabel("Temps (sec)")
-grid(True)
-savefig("out_scripts/"+nomDossierGraphes+"/variations_NBLOOP.png", dpi=(140))
-figure()
-
-#===================Variations NBLOOP zoom==============
-
-XBLOCK = 16
-YBLOCK = 1
-XGRID = 16
-YGRID = 1
-NBTHETA = 180
-NBPHI = 360
-listeNBPHOTONS = range(100000000, 510000000, 100000000)
-listeNBLOOP = range(1000, 50000, 4000)
-listePlots = []
-listeLegends = []
-for NBPHOTONS in listeNBPHOTONS:
-	listeGraphe = []
-	for NBLOOP in listeNBLOOP:
-		temps = lancerSimulation(listeSim,NBPHOTONS,NBLOOP,XBLOCK,YBLOCK,XGRID,YGRID,NBTHETA,NBPHI)
-		listeGraphe.append(temps)
-	listePlots.append(plot(listeNBLOOP,listeGraphe, marker='.'))
-	listeLegends.append('NBPHOTONS=' + str(NBPHOTONS/1000000) + 'millions')
-legend(listePlots, listeLegends, loc='best', numpoints=1)
-title("Temps en fonction de NBLOOP pour differents NBPHOTONS")
-xlabel("NBLOOP")
-ylabel("Temps (sec)")
-grid(True)
-savefig("out_scripts/"+nomDossierGraphes+"/variations_NBLOOP_zoom.png", dpi=(140))
-figure()
 
 #===================Variations NBPHOTONS================
 
@@ -226,7 +170,7 @@ ylim(0, ymax)
 xlabel("NBPHOTONS")
 ylabel("Temps (sec)")
 grid(True)
-savefig("out_scripts/"+nomDossierGraphes+"/variations_NBPHOTONS.png", dpi=(140))
+savefig(pathDossierGraphes+"/variations_NBPHOTONS.png", dpi=(140))
 figure()
 
 #===================Variations NBPHOTONS zoom===========
@@ -267,7 +211,7 @@ ylim(0, ymax)
 xlabel("NBPHOTONS")
 ylabel("Temps (sec)")
 grid(True)
-savefig("out_scripts/"+nomDossierGraphes+"/variations_NBPHOTONS_zoom.png", dpi=(140))
+savefig(pathDossierGraphes+"/variations_NBPHOTONS_zoom.png", dpi=(140))
 figure()
 
 #===================Variations XBLOCK===================
@@ -294,7 +238,7 @@ title("Temps en fonction de XBLOCK pour differents XGRID\n(NBPHOTONS=1milliard)"
 xlabel("XBLOCK")
 ylabel("Temps (sec)")
 grid(True)
-savefig("out_scripts/"+nomDossierGraphes+"/variations_XBLOCK.png", dpi=(140))
+savefig(pathDossierGraphes+"/variations_XBLOCK.png", dpi=(140))
 figure()
 
 #===================Variations XBLOCK zoom==============
@@ -321,7 +265,7 @@ title("Temps en fonction de XBLOCK pour differents XGRID\n(NBPHOTONS=1milliard)"
 xlabel("XBLOCK")
 ylabel("Temps (sec)")
 grid(True)
-savefig("out_scripts/"+nomDossierGraphes+"/variations_XBLOCK_zoom.png", dpi=(140))
+savefig(pathDossierGraphes+"/variations_XBLOCK_zoom.png", dpi=(140))
 figure()
 
 #===================Variations XGRID====================
@@ -348,7 +292,62 @@ title("Temps en fonction de XGRID pour differents XBLOCK\n(NBPHOTONS=100millions
 xlabel("XGRID")
 ylabel("Temps (sec)")
 grid(True)
-savefig("out_scripts/"+nomDossierGraphes+"/variations_XGRID.png", dpi=(140))
+savefig(pathDossierGraphes+"/variations_XGRID.png", dpi=(140))
+figure()
+
+#===================Variations NBLOOP===================
+
+XBLOCK = 12
+YBLOCK = 1
+XGRID = 12
+YGRID = 1
+NBTHETA = 180
+NBPHI = 360
+listeNBPHOTONS = range(500000000, 1100000000, 100000000)
+listeNBLOOP = range(1000, 50000, 4000)
+listeNBLOOP.extend([60000, 80000, 100000])
+listePlots = []
+listeLegends = []
+for NBPHOTONS in listeNBPHOTONS:
+	listeGraphe = []
+	for NBLOOP in listeNBLOOP:
+		temps = lancerSimulation(listeSim,NBPHOTONS,NBLOOP,XBLOCK,YBLOCK,XGRID,YGRID,NBTHETA,NBPHI)
+		listeGraphe.append(temps)
+	listePlots.append(plot(listeNBLOOP,listeGraphe, marker='.'))
+	listeLegends.append('NBPHOTONS=' + str(NBPHOTONS/1000000) + 'millions')
+legend(listePlots, listeLegends, loc='best', numpoints=1)
+title("Temps en fonction de NBLOOP pour differents NBPHOTONS")
+xlabel("NBLOOP")
+ylabel("Temps (sec)")
+grid(True)
+savefig(pathDossierGraphes+"/variations_NBLOOP.png", dpi=(140))
+figure()
+
+#===================Variations NBLOOP zoom==============
+
+XBLOCK = 16
+YBLOCK = 1
+XGRID = 16
+YGRID = 1
+NBTHETA = 180
+NBPHI = 360
+listeNBPHOTONS = range(100000000, 510000000, 100000000)
+listeNBLOOP = range(1000, 50000, 4000)
+listePlots = []
+listeLegends = []
+for NBPHOTONS in listeNBPHOTONS:
+	listeGraphe = []
+	for NBLOOP in listeNBLOOP:
+		temps = lancerSimulation(listeSim,NBPHOTONS,NBLOOP,XBLOCK,YBLOCK,XGRID,YGRID,NBTHETA,NBPHI)
+		listeGraphe.append(temps)
+	listePlots.append(plot(listeNBLOOP,listeGraphe, marker='.'))
+	listeLegends.append('NBPHOTONS=' + str(NBPHOTONS/1000000) + 'millions')
+legend(listePlots, listeLegends, loc='best', numpoints=1)
+title("Temps en fonction de NBLOOP pour differents NBPHOTONS")
+xlabel("NBLOOP")
+ylabel("Temps (sec)")
+grid(True)
+savefig(pathDossierGraphes+"/variations_NBLOOP_zoom.png", dpi=(140))
 figure()
 
 #===================Variations NBTHETA==================
@@ -378,7 +377,7 @@ title("Temps en fonction de (NBTHETA*NBPHI) pour differents NBPHOTONS")
 xlabel("Nombre de cases")
 ylabel("Temps (sec)")
 grid(True)
-savefig("out_scripts/"+nomDossierGraphes+"/variations_NBTHETA.png", dpi=(140))
+savefig(pathDossierGraphes+"/variations_NBTHETA.png", dpi=(140))
 figure()
 
 #===================Variations NBTHETA zoom=============
@@ -408,7 +407,7 @@ title("Temps en fonction de (NBTHETA*NBPHI) pour differents NBPHOTONS")
 xlabel("Nombre de cases")
 ylabel("Temps (sec)")
 grid(True)
-savefig("out_scripts/"+nomDossierGraphes+"/variations_NBTHETA_zoom.png", dpi=(140))
+savefig(pathDossierGraphes+"/variations_NBTHETA_zoom.png", dpi=(140))
 figure()
 
 

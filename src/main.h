@@ -31,6 +31,6 @@ float ZMAX; //Altitude haute de la couche aerosol [km] (utilise si PROFIL=3)
 float WINDSPEED; //Vitesse du vent [m/s] (utilisee pour le modele de Cox et Munk: si DIOPTRE=1)
 float NH2O; //Indice de refraction relatif air/eau
 float CONPHY; //Concentration en phytoplancton [mg.m-3] (utilise si SUR>=2)
-char PATHRESULTATSHDF[100]; //Nom du fichier de sortie au format hdf
-char PATHTEMOINHDF[100]; //Nom du fichier témoin au format hdf
+char PATHRESULTATSHDF[100]; //Fichier de sortie au format hdf
+char PATHTEMOINHDF[100]; //Fichier témoin au format hdf
 

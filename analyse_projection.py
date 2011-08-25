@@ -10,9 +10,9 @@ from pylab import *
 	        ##############
 
 # Si le fichier suivant n'existe pas le prog s'arrete
-file_hdf = "out_prog/Resultats.hdf"
+path_hdf = "out_prog/Resultats.hdf"
 # Si le dossier suivant existe deja il est supprime puis recree
-dossier_sortie = "out_scripts/analyse_projection"
+path_dossier_sortie = "out_scripts/analyse_projection"
 	
 
 	          #######################
@@ -20,12 +20,12 @@ dossier_sortie = "out_scripts/analyse_projection"
 	        #######################
 
 # verification de l'existence du fichier hdf
-if os.path.exists(file_hdf):
+if os.path.exists(path_hdf):
 	# on vide le dossier de sortie du script
-	os.system("rm -rf "+dossier_sortie)
-	os.mkdir(dossier_sortie)
+	os.system("rm -rf "+path_dossier_sortie)
+	os.mkdir(path_dossier_sortie)
 	# lecture du fichier hdf
-	sd_hdf = pyhdf.SD.SD(file_hdf)
+	sd_hdf = pyhdf.SD.SD(path_hdf)
 	# lecture du nombre de valeurs de phi
 	NBPHI = getattr(sd_hdf,'NBPHI')
 
@@ -48,10 +48,10 @@ if os.path.exists(file_hdf):
 		xlabel("Theta (rad)")
 		ylabel("Eclairement")
 		grid(True)
-		savefig(dossier_sortie+"/analyse_projection_phi="+str(phi)+".png", dpi=(140))
+		savefig(path_dossier_sortie+"/analyse_projection_phi="+str(phi)+".png", dpi=(140))
 		figure()
 else:
-	sys.stdout.write("Pas de fichier "+file_hdf+"\n")
+	sys.stdout.write("Pas de fichier "+path_hdf+"\n")
 	sys.exit()
 
 
@@ -90,7 +90,7 @@ DIFFF = getattr(sd_hdf,'DIFFF')
 PATHRESULTATSHDF = getattr(sd_hdf,'PATHRESULTATSHDF')
 PATHTEMOINHDF = getattr(sd_hdf,'PATHTEMOINHDF')
 # creation du fichier contenant les parametres de la simulation
-fichierParametres = open(dossier_sortie+"/Parametres.txt", "w")
+fichierParametres = open(path_dossier_sortie+"/Parametres.txt", "w")
 fichierParametres.write("NBPHOTONS = " + str(NBPHOTONS) + "\n")
 fichierParametres.write("NBLOOP = " + str(NBLOOP) + "\n")
 fichierParametres.write("SEED = " + str(SEED) + "\n")	

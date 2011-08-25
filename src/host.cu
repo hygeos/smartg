@@ -183,13 +183,9 @@ void initConstantesHost(int argc, char** argv)
 	chercheConstante(argv[1], "CONPHY", s);
 	CONPHY = atof(s);
 	
-	strcpy(s,"");
-	chercheConstante(argv[1], "NOMRESULTATSHDF", s);
-	sprintf(PATHRESULTATSHDF, "out_prog/%s.hdf", s);
+	chercheConstante(argv[1], "PATHRESULTATSHDF", PATHRESULTATSHDF);
 	
-	strcpy(s,"");
-	chercheConstante(argv[1], "NOMTEMOINHDF", s);
-	sprintf(PATHTEMOINHDF, "tmp/%s.hdf", s);
+	chercheConstante(argv[1], "PATHTEMOINHDF", PATHTEMOINHDF);
 
 	free(s);
 }

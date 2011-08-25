@@ -11,11 +11,11 @@ import struct
 	         # PARAMETRES #
 	        ##############
 
-file_fortran_zip = "/home/tristan/Desktop/Progs_existants/Fortran/bin/out.ran=0001.wav=635.ths=70.000.tr=0.0533.ta=0.0000.pi0=0.967.H=002.000.bin.gz"
+path_fortran_zip = "/home/tristan/Desktop/Progs_existants/Fortran/bin/out.ran=0001.wav=635.ths=70.000.tr=0.0533.ta=0.0000.pi0=0.967.H=002.000.bin.gz"
 # Si le fichier suivant n'existe pas le prog s'arrete
-file_cuda = "out_prog/Resultats.hdf"
+path_cuda = "out_prog/Resultats.hdf"
 # Si le dossier suivant existe deja il est supprime puis recree
-dossier_sortie = "out_scripts/analyse_comparaison"
+path_dossier_sortie = "out_scripts/analyse_comparaison"
 
 
 	          #####################
@@ -56,7 +56,7 @@ dt = dtype([
 ])
 
 # lecture du fichier fortran (bin)
-file_fortran_bin = gzip.open(file_fortran_zip)
+file_fortran_bin = gzip.open(path_fortran_zip)
 file_fortran_bin.read(8)
 st = file_fortran_bin.read()
 contenu_fortran = fromstring(st, dtype=dt, count=1)
@@ -75,16 +75,16 @@ file_fortran_bin.close()
 	        ##################
 
 # verification de l'existence du fichier hdf
-if os.path.exists(file_cuda):
+if os.path.exists(path_cuda):
 	# on vide le dossier de sortie du script
-	os.system("rm -rf "+dossier_sortie)
-	os.mkdir(dossier_sortie)
+	os.system("rm -rf "+path_dossier_sortie)
+	os.mkdir(path_dossier_sortie)
 	# lecture du fichier hdf
-	sd_cuda = pyhdf.SD.SD(file_cuda)
+	sd_cuda = pyhdf.SD.SD(path_cuda)
 	# lecture du nombre de valeurs de phi
 	NBPHI_cuda = getattr(sd_cuda,'NBPHI')
 else:
-	sys.stdout.write("Pas de fichier "+file_cuda+"\n")
+	sys.stdout.write("Pas de fichier "+path_cuda+"\n")
 	sys.exit()
 
 
@@ -123,7 +123,7 @@ if (NBPHI_cuda/2) == NBPHI_fortran:
 		xlabel('Theta (rad)')
 		ylabel('Eclairement')
 		grid(True)
-		savefig(dossier_sortie+"/comparaison_fortran_phi="+str(phi)+".png", dpi=(140))
+		savefig(path_dossier_sortie+"/comparaison_fortran_phi="+str(phi)+".png", dpi=(140))
 		figure()
 else:
 	sys.stdout.write("Les tableaux ne font pas la meme taille\n")
@@ -164,7 +164,7 @@ DIFFF = getattr(sd_cuda,'DIFFF')
 PATHRESULTATSHDF = getattr(sd_cuda,'PATHRESULTATSHDF')
 PATHTEMOINHDF = getattr(sd_cuda,'PATHTEMOINHDF')
 # creation du fichier contenant les parametres de la simulation
-fichierParametres = open(dossier_sortie+"/Parametres.txt", "w")
+fichierParametres = open(path_dossier_sortie+"/Parametres.txt", "w")
 fichierParametres.write("NBPHOTONS = " + str(NBPHOTONS) + "\n")
 fichierParametres.write("NBLOOP = " + str(NBLOOP) + "\n")
 fichierParametres.write("SEED = " + str(SEED) + "\n")	

@@ -4,7 +4,7 @@
         ###############################
 
 # Nombre de photons a lancer (unsigned long long) (limite par le tableau du poids des photons en unsigned long long)
-NBPHOTONS = 200000000
+NBPHOTONS = 2000000000
 
 # Nombre de boucles dans le kernel (unsigned int) (limite par watchdog, il faut tuer X)
 NBLOOP = 18000
@@ -95,8 +95,8 @@ CONPHY = 0.1
 DIFFF = 0
 
 # Nom du fichier de sortie
-NOMRESULTATSHDF = Resultats
+PATHRESULTATSHDF = out_prog/Resultats.hdf
 
 # Nom du fichier témoin
-NOMTEMOINHDF = Temoin
+PATHTEMOINHDF = tmp/Temoin.hdf
 
