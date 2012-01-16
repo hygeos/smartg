@@ -9,9 +9,9 @@ IFLAGS = -I /opt/cuda/include
 IFLAGS += -I /opt/NVIDIA_GPU_Computing_SDK/C/common/inc
 IFLAGS += -I /usr/include/hdf/
 
-IIFLAGS = $(wildcard /usr/lib/libdf.a /usr/lib64/hdf/libdf.a)
-IIFLAGS += $(wildcard /usr/lib/libmfhdf.a /usr/lib64/hdf/libmfhdf.a)
-IIFLAGS += -ljpeg
+# IIFLAGS = $(wildcard /usr/lib/libdf.a /usr/lib64/hdf/libdf.a)
+# IIFLAGS += $(wildcard /usr/lib/libmfhdf.a /usr/lib64/hdf/libmfhdf.a)
+IIFLAGS = -ldf -lmfhdf -ljpeg
 
 LFLAGS =
 LFLAGS += -L /opt/NVIDIA_GPU_Computing_SDK/C/common/lib/linux
