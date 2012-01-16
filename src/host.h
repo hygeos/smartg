@@ -6,7 +6,7 @@
 
 int initRandMWC(unsigned long long*, unsigned int*, const unsigned int, const char*, unsigned long long);
 void initConstantesHost(int, char**);
-void chercheConstante(char*, char*, char*);
+void chercheConstante(FILE*, char*, char*);
 void initVariables(Variables**, Variables**);
 void initTableaux(Tableaux*, Tableaux*);
 void initRandMTConfig(ConfigMT*, ConfigMT*, int);

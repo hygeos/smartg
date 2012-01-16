@@ -72,134 +72,151 @@ void initConstantesHost(int argc, char** argv)
 		exit(1);
 	}
 	
+	FILE* parametres = fopen( argv[1], "r" );
+	
+	if( parametres == NULL ){
+		printf("ERREUR: Impossible d'ouvrir le fichier %s\n", argv[1] );
+		exit(1);
+	}
+	
 	char* s = (char*)malloc(100 * sizeof(char));
 
 	strcpy(s,"");
-	chercheConstante(argv[1], "NBPHOTONS", s);
+	chercheConstante( parametres, "NBPHOTONS", s);
 	NBPHOTONS = strtoull(s, NULL, 10);
-
+	
 	strcpy(s,"");
-	chercheConstante(argv[1], "NBLOOP", s);
+	chercheConstante(parametres, "NBLOOP", s);
 	NBLOOP = atoi(s);
 
 	strcpy(s,"");
-	chercheConstante(argv[1], "SEED", s);
+	chercheConstante(parametres, "SEED", s);
 	SEED = atoi(s);
 	if(SEED == -1) SEED = static_cast<int> (time(NULL));
 
 	strcpy(s,"");
-	chercheConstante(argv[1], "XBLOCK", s);
+	chercheConstante(parametres, "XBLOCK", s);
 	XBLOCK= atoi(s);
 
 	strcpy(s,"");
-	chercheConstante(argv[1], "YBLOCK", s);
+	chercheConstante(parametres, "YBLOCK", s);
 	YBLOCK = atoi(s);
 
 	strcpy(s,"");
-	chercheConstante(argv[1], "XGRID", s);
+	chercheConstante(parametres, "XGRID", s);
 	XGRID = atoi(s);
 
 	strcpy(s,"");
-	chercheConstante(argv[1], "YGRID", s);
+	chercheConstante(parametres, "YGRID", s);
 	YGRID = atoi(s);
 
 	strcpy(s,"");
-	chercheConstante(argv[1], "NBTHETA", s);
+	chercheConstante(parametres, "NBTHETA", s);
 	NBTHETA = atoi(s);
 
 	strcpy(s,"");
-	chercheConstante(argv[1], "NBPHI", s);
+	chercheConstante(parametres, "NBPHI", s);
 	NBPHI = atoi(s);
 
 	strcpy(s,"");
-	chercheConstante(argv[1], "NBSTOKES", s);
+	chercheConstante(parametres, "NBSTOKES", s);
 	NBSTOKES = atoi(s);
 
 	strcpy(s,"");
-	chercheConstante(argv[1], "PROFIL", s);
+	chercheConstante(parametres, "PROFIL", s);
 	PROFIL = atoi(s);
 
 	strcpy(s,"");
-	chercheConstante(argv[1], "SIM", s);
+	chercheConstante(parametres, "SIM", s);
 	SIM = atoi(s);
 
 	strcpy(s,"");
-	chercheConstante(argv[1], "SUR", s);
+	chercheConstante(parametres, "SUR", s);
 	SUR = atoi(s);
 
 	strcpy(s,"");
-	chercheConstante(argv[1], "DIOPTRE", s);
+	chercheConstante(parametres, "DIOPTRE", s);
 	DIOPTRE= atoi(s);
 	
 	strcpy(s,"");
-	chercheConstante(argv[1], "DIFFF", s);
+	chercheConstante(parametres, "DIFFF", s);
 	DIFFF = atoi(s);
 	
 	strcpy(s,"");
-	chercheConstante(argv[1], "THSDEG", s);
+	chercheConstante(parametres, "THSDEG", s);
 	THSDEG = atof(s);
 	
 	strcpy(s,"");
-	chercheConstante(argv[1], "LAMBDA", s);
+	chercheConstante(parametres, "LAMBDA", s);
 	LAMBDA = atof(s);
 	
 	strcpy(s,"");
-	chercheConstante(argv[1], "TAURAY", s);
+	chercheConstante(parametres, "TAURAY", s);
 	TAURAY = atof(s);
 	
 	strcpy(s,"");
-	chercheConstante(argv[1], "TAUAER", s);
+	chercheConstante(parametres, "TAUAER", s);
 	TAUAER = atof(s);
 	
 	strcpy(s,"");
-	chercheConstante(argv[1], "W0AER", s);
+	chercheConstante(parametres, "W0AER", s);
 	W0AER = atof(s);
 	
 	strcpy(s,"");
-	chercheConstante(argv[1], "HA", s);
+	chercheConstante(parametres, "LSAAER", s);
+	LSAAER = atof(s);
+	
+	strcpy(s,"");
+	chercheConstante(parametres, "NFAER", s);
+	NFAER = atof(s);
+	
+	strcpy(s,"");
+	chercheConstante(parametres, "HA", s);
 	HA = atof(s);
 	
 	strcpy(s,"");
-	chercheConstante(argv[1], "HR", s);
+	chercheConstante(parametres, "HR", s);
 	HR = atof(s);
 	
 	strcpy(s,"");
-	chercheConstante(argv[1], "ZMIN", s);
+	chercheConstante(parametres, "ZMIN", s);
 	ZMIN = atof(s);
 	
 	strcpy(s,"");
-	chercheConstante(argv[1], "ZMAX", s);
+	chercheConstante(parametres, "ZMAX", s);
 	ZMAX = atof(s);
 	
 	strcpy(s,"");
-	chercheConstante(argv[1], "WINDSPEED", s);
+	chercheConstante(parametres, "WINDSPEED", s);
 	WINDSPEED = atof(s);
 	
 	strcpy(s,"");
-	chercheConstante(argv[1], "NH2O", s);
+	chercheConstante(parametres, "NH2O", s);
 	NH2O = atof(s);
 	
 	strcpy(s,"");
-	chercheConstante(argv[1], "CONPHY", s);
+	chercheConstante(parametres, "CONPHY", s);
 	CONPHY = atof(s);
 	
-	chercheConstante(argv[1], "PATHRESULTATSHDF", PATHRESULTATSHDF);
+	chercheConstante(parametres, "PATHRESULTATSHDF", PATHRESULTATSHDF);
 	
-	chercheConstante(argv[1], "PATHTEMOINHDF", PATHTEMOINHDF);
+	chercheConstante(parametres, "PATHTEMOINHDF", PATHTEMOINHDF);
+	
+	chercheConstante( parametres, "PATHDIFFAER", PATHDIFFAER );
 
+	chercheConstante( parametres, "PATHPROFILATM", PATHPROFILATM );
+	
 	free(s);
+	fclose( parametres );
 }
 
 // Fonction qui cherche nomConstante dans le fichier et met la valeur de la constante dans chaineValeur (en string)
-void chercheConstante(char* nomFichier, char* nomConstante, char* chaineValeur)
+void chercheConstante(FILE* fichier, char* nomConstante, char* chaineValeur)
 {
-	// Ouverture du fichier
-	FILE* fichier = fopen(nomFichier, "r");
-	if(fichier != NULL)
-	{
 		int longueur = strlen(nomConstante);
 		char ligne[100];
 		int motTrouve = 0;
+		
 		// Tant que la constante n'est pas trouvee et qu'on n'est pas à la fin du fichier on lit la ligne
 		while(fgets(ligne, 100, fichier) && !motTrouve)
 		{
@@ -213,7 +230,7 @@ void chercheConstante(char* nomFichier, char* nomConstante, char* chaineValeur)
 				while(*ptr == ' ' || *ptr == '=') ptr++;
 				if (*ptr == '\n')
 				{
-					printf("ERREUR : lecture Parametre.txt");
+					printf("ERREUR : lecture Parametre.txt\n");
 					exit(1);
 				}
 				// On met la chaine de la valeur de la constante dans chaineValeur
@@ -222,18 +239,14 @@ void chercheConstante(char* nomFichier, char* nomConstante, char* chaineValeur)
 				motTrouve = 1;
 			}
 		}
-		fclose(fichier);
+		rewind(fichier);
+		
 		if(motTrouve == 0)
 		{
-			printf("ERREUR : lecture Parametres.txt");
+			printf("ERREUR : lecture Parametres.txt\n");
 			exit(1);
 		}
-	}
-	else
-	{
-		printf("ERREUR : lecture Parametres.txt");
-		exit(1);
-	}
+
 }
 
 // Fonction qui initialise les variables à envoyer dans le kernel
