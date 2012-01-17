@@ -267,6 +267,7 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	// Création des tableaux de generateurs pour la fonction Random MWC
 	tab_H->etat = (unsigned long long*)malloc(XBLOCK * YBLOCK * XGRID * YGRID * sizeof(unsigned long long));
 	cudaMalloc(&(tab_D->etat), XBLOCK * YBLOCK * XGRID * YGRID * sizeof(unsigned long long));
+	
 	tab_H->config = (unsigned int*)malloc(XBLOCK * YBLOCK * XGRID * YGRID * sizeof(unsigned int));
 	cudaMalloc(&(tab_D->config), XBLOCK * YBLOCK * XGRID * YGRID * sizeof(unsigned int));
 	// Initialisation des tableaux host à l'aide du fichier et du seed

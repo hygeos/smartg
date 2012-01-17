@@ -58,7 +58,9 @@ __global__ void lancementKernel(Variables*, Tableaux
 		#endif
 			       );
 __global__ void initRandCUDA(curandState_t*, unsigned long long);
+
 __global__ void initRandMTEtat(EtatMT*, ConfigMT*);
+
 __device__ void init(Photon*
 		#ifdef TRAJET
 		, int, Evnt*
@@ -78,6 +80,7 @@ __device__ void move(Photon*
 		, int, Evnt*
 		#endif
 		    );
+			
 __device__ void scatter(Photon*
 		#ifdef RANDMWC
 		, unsigned long long*, unsigned int*

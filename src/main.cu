@@ -15,11 +15,12 @@
 // Fonction principale
 int main (int argc, char *argv[])
 {
-	// Initialisation des constantes du host (en partie recuperees dans le fichier Parametres.txt)
+	/** Initialisation des constantes du host (en partie recuperees dans le fichier Parametres.txt) **/
 	initConstantesHost(argc, argv);
-	// Initialisation des constantes du device à partir des constantes du host
+
+	/** Initialisation des constantes du device à partir des constantes du host **/
 	initConstantesDevice();
-	
+
 	// S'il existe déjà un fichier nommé NOMRESULTATSHDF (Parametres.txt) on arrête le programme
 	if (fopen(PATHRESULTATSHDF, "rb") != NULL)
 	{
@@ -30,15 +31,17 @@ int main (int argc, char *argv[])
 	// DEBUG : Affichage basique des parametres de la simulation
 	printf("\n%lu - %u - %d - %d - %d - %d - %d - %d\n", NBPHOTONS,NBLOOP,XBLOCK,YBLOCK,XGRID,YGRID,NBTHETA,NBPHI);
 
-	// Regroupement et initialisation des variables a envoyer dans le kernel (structure de variables)
+	/** Regroupement et initialisation des variables a envoyer dans le kernel (structure de variables) **/
 	Variables* var_H; //variables version host
 	Variables* var_D; //variables version device
 	initVariables(&var_H, &var_D);
-	// Regroupement et initialisation des tableaux a envoyer dans le kernel (structure de pointeurs)
+
+	/** Regroupement et initialisation des tableaux a envoyer dans le kernel (structure de pointeurs) **/
 	Tableaux tab_H; //tableaux version host
 	Tableaux tab_D; //tableaux version device
 	initTableaux(&tab_H, &tab_D);
-	// Variables et tableaux qui restent dans le host et se remplissent petit à petit
+
+	/** Variables et tableaux qui restent dans le host et se remplissent petit à petit **/
 	unsigned long long nbPhotonsTot = 0; //nombre total de photons traités
 	#ifdef PROGRESSION
 	unsigned long long nbPhotonsSorTot = 0; //nombre total de photons ressortis
@@ -53,10 +56,21 @@ int main (int argc, char *argv[])
 	cudaMalloc(&tableauRand_D, 100 * sizeof(float));
 	cudaMemset(tableauRand_D, 0, 100 * sizeof(float));
 	#endif
-	
-	// Fonction qui permet de poursuivre la simulation précédente si elle n'est pas terminee
+
+	/** Calcul des modèles utiles à l'algorithme **/
+	// Calcul de faer, modèle de diffusion des aérosols
+	if( TAUAER > 0.0001 ){
+		printf("Prise en compte du modèle aérosol\n");
+		calculFaer( PATHDIFFAER, tab_H, tab_D );
+		// verificationFAER( "./test/FAER_test.txt", tab_H );
+	}
+
+	// Calcul du mélange Molécule/Aérosol dans l'atmosphère en fonction de la couche
+	profilAtm( tab_H, tab_D );
+
+	/** Fonction qui permet de poursuivre la simulation précédente si elle n'est pas terminee **/
 	double tempsPrec = 0.; //temps ecoule de la simulation precedente
-lireHDFTemoin(var_H, var_D, &nbPhotonsTot, tabPhotonsTot, &tempsPrec);
+	lireHDFTemoin(var_H, var_D, &nbPhotonsTot, tabPhotonsTot, &tempsPrec);
 	
 	#ifdef TRAJET
 	// DEBUG : Variables permettant de récupérer le début du trajet d'un photon
@@ -66,7 +80,7 @@ lireHDFTemoin(var_H, var_D, &nbPhotonsTot, tabPhotonsTot, &tempsPrec);
 	initEvnt(evnt_H, evnt_D);
 	#endif
 	
-	// Organisation des threads en blocks de threads et en grids de blocks
+	/** Organisation des threads en blocks de threads et en grids de blocks **/
 	dim3 blockSize(XBLOCK,YBLOCK);
 	dim3 gridSize(XGRID,YGRID);
 	
@@ -74,19 +88,20 @@ lireHDFTemoin(var_H, var_D, &nbPhotonsTot, tabPhotonsTot, &tempsPrec);
 	#ifdef PARAMETRES
 	afficheParametres();
 	#endif
-	
+
+
 	// Variable permettant de savoir si on est passé dans la boucle ou non
 	bool passageBoucle = false;
 	if(nbPhotonsTot < NBPHOTONS) passageBoucle = true;
-	
+
 	// Tant qu'il n'y a pas assez de photons traités on relance le kernel
 	while(nbPhotonsTot < NBPHOTONS)
 	{
-		// Remise à zéro de certaines variables et certains tableaux
+		/** Remise à zéro de certaines variables et certains tableaux **/
 		reinitVariables(var_H, var_D);
 		cudaMemset(tab_D.tabPhotons, 0, NBTHETA * NBPHI * NBSTOKES * sizeof(unsigned long long));
 		
-		// Lancement du kernel
+		/** Lancement du kernel **/
 		lancementKernel<<<gridSize, blockSize>>>(var_D, tab_D			
 				#ifdef TABRAND
 				, tableauRand_D
@@ -98,7 +113,7 @@ lireHDFTemoin(var_H, var_D, &nbPhotonsTot, tabPhotonsTot, &tempsPrec);
 		// Attend que tous les threads avant de faire autre chose
 		cudaThreadSynchronize();
 		
-		// Récupération des variables et d'un tableau envoyés dans le kernel
+		/** Récupération des variables et d'un tableau envoyés dans le kernel **/
 		cudaMemcpy(var_H, var_D, sizeof(Variables), cudaMemcpyDeviceToHost);
 		cudaMemcpy(tab_H.tabPhotons, tab_D.tabPhotons, NBTHETA * NBPHI * NBSTOKES * sizeof(unsigned long long), cudaMemcpyDeviceToHost);
 				
@@ -110,10 +125,10 @@ lireHDFTemoin(var_H, var_D, &nbPhotonsTot, tabPhotonsTot, &tempsPrec);
 		for(int i = 0; i < NBTHETA * NBPHI * NBSTOKES; i++)
 			tabPhotonsTot[i] += tab_H.tabPhotons[i];
 		
-		// Creation d'un fichier témoin pour pouvoir reprendre la simulation en cas d'arrêt
+		/** Creation d'un fichier témoin pour pouvoir reprendre la simulation en cas d'arrêt **/
 		creerHDFTemoin(tabPhotonsTot, nbPhotonsTot, var_H, tempsPrec);
 		
-		// Affichage de l'avancement de la simulation
+		/** Affichage de l'avancement de la simulation **/
 		afficheProgress(nbPhotonsTot, var_H, tempsPrec
 			#ifdef PROGRESSION
 			, nbPhotonsSorTot
@@ -151,16 +166,17 @@ lireHDFTemoin(var_H, var_D, &nbPhotonsTot, tabPhotonsTot, &tempsPrec);
 	afficheTrajet(evnt_H);
 	#endif
 
-	// Création et calcul du tableau final (regroupant le poids de tous les photons ressortis sur une demi-sphère, par unité de surface)
+	/** Création et calcul du tableau final (regroupant le poids de tous les photons ressortis sur une demi-sphère, par unité de surface) **/
 	float tabFinal[NBTHETA * NBPHI]; //tableau final
 	float tabTh[NBTHETA]; //tableau contenant l'angle theta de chaque morceau de sphère
 	float tabPhi[NBPHI]; //tableau contenant l'angle psi de chaque morceau de sphère
 	// Remplissage des 3 tableaux
 	calculTabFinal(tabFinal, tabTh, tabPhi, tabPhotonsTot, nbPhotonsTot);
 
-	// Fonction qui crée le fichier .hdf contenant le résultat final sur la demi-sphère
+	/** Fonction qui crée le fichier .hdf contenant le résultat final sur la demi-sphère **/
 	creerHDFResultats(tabFinal, tabTh, tabPhi, nbPhotonsTot, var_H, tempsPrec);
 
+	/** Libération de la mémoire allouée **/
 	// Libération du groupe de variables envoyé dans le kernel
 	cudaFree(var_D);
 	free(var_H);
@@ -168,6 +184,8 @@ lireHDFTemoin(var_H, var_D, &nbPhotonsTot, tabPhotonsTot, &tempsPrec);
 	freeTableaux(&tab_H, &tab_D);
 	// Libération du tableau du host
 	free(tabPhotonsTot);
+
+
 	// Libération des variables qui récupèrent le trajet d'un photon
 	#ifdef TRAJET
 	cudaFree(evnt_D);
@@ -177,4 +195,5 @@ lireHDFTemoin(var_H, var_D, &nbPhotonsTot, tabPhotonsTot, &tempsPrec);
 	//DEBUG random
 	cudaFree(tableauRand_D);
 	#endif
+
 }

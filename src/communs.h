@@ -6,20 +6,20 @@
 #include <mfhdf.h>
 #include <curand_kernel.h>
 
-/*
-#include <time.h>
+
+// #include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <hdf.h>
-#include <float.h>
+// #include <hdf.h>
+// #include <float.h>
 #include <math.h>
-#include <limits.h>
-#include <string.h>
+// #include <limits.h>
+// #include <string.h>
 //#include <cutil.h>>
 //#include <shrUtils.h
 //#include <shrQATest.h>
 //#include <cutil_inline.h>
-*/
+
 
 	  ////////////////////////////
 	 // CONSTANTES PREDEFINIES //
