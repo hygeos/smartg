@@ -297,6 +297,16 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	// Tableau du poids des photons ressortis
 	tab_H->tabPhotons = (unsigned long long*)malloc(NBTHETA * NBPHI * NBSTOKES * sizeof(unsigned long long));
 	cudaMalloc(&(tab_D->tabPhotons), NBTHETA * NBPHI * NBSTOKES * sizeof(unsigned long long));
+	
+	// Modèle de diffusion des aérosols
+	tab_H->faer = (float*) malloc(5*NFAER*sizeof(float));
+	cudaMalloc( &(tab_D->faer), 5*NFAER*sizeof(float) );
+	
+	// Modèle de l'atmosphère
+	tab_H->tauCouche =  (float*)malloc((NATM+1)*sizeof(float));
+	cudaMalloc( &(tab_D->tauCouche), (NATM+1)*sizeof(float) );
+	tab_H->pMol =  (float*)malloc((NATM+1)*sizeof(float));
+	cudaMalloc( &(tab_D->pMol), (NATM+1)*sizeof(float) );
 }
 
 // Fonction qui initialise en partie les generateurs du random Mersenen Twister
@@ -433,6 +443,10 @@ void afficheParametres()
 	printf("\n");
 	printf("W0AER = %f", W0AER);
 	printf("\n");
+	printf("LSAAER = %u", LSAAER);
+	printf("\n");
+	printf("NFAER = %u", NFAER);
+	printf("\n");
 	printf("PROFIL = %d", PROFIL);
 	printf("\n");
 	printf("HA = %f", HA);
@@ -460,6 +474,10 @@ void afficheParametres()
 	printf("PATHRESULTATSHDF = %s", PATHRESULTATSHDF);
 	printf("\n");
 	printf("PATHTEMOINHDF = %s", PATHTEMOINHDF);
+	printf("\n");
+	printf("PATHDIFFAER = %s", PATHDIFFAER);
+	printf("\n");
+	printf("PATHPROFILATM = %s", PATHPROFILATM);
 	printf("\n");
 }
 
@@ -592,6 +610,10 @@ void creerHDFTemoin(unsigned long long* tabPhotonsTot, unsigned long long nbPhot
 	SDsetattr(sdsTab, "TAURAY", DFNT_FLOAT32, 1, &TAURAY);
 	SDsetattr(sdsTab, "TAUAER", DFNT_FLOAT32, 1, &TAUAER);
 	SDsetattr(sdsTab, "W0AER", DFNT_FLOAT32, 1, &W0AER);
+	
+	SDsetattr(sdsTab, "LSAAER", DFNT_UINT32, 1, &LSAAER);
+	SDsetattr(sdsTab, "NFAER", DFNT_UINT32, 1, &NFAER);
+	
 	SDsetattr(sdsTab, "HA", DFNT_FLOAT32, 1, &HA);
 	SDsetattr(sdsTab, "HR", DFNT_FLOAT32, 1, &HR);
 	SDsetattr(sdsTab, "ZMIN", DFNT_FLOAT32, 1, &ZMIN);
@@ -601,6 +623,8 @@ void creerHDFTemoin(unsigned long long* tabPhotonsTot, unsigned long long nbPhot
 	SDsetattr(sdsTab, "CONPHY", DFNT_FLOAT32, 1, &CONPHY);
 	SDsetattr(sdsTab, "PATHRESULTATSHDF", DFNT_CHAR8, strlen(PATHRESULTATSHDF), PATHRESULTATSHDF);
 	SDsetattr(sdsTab, "PATHTEMOINHDF", DFNT_CHAR8, strlen(PATHTEMOINHDF), PATHTEMOINHDF);
+	SDsetattr(sdsTab, "PATHDIFFAER", DFNT_CHAR8, strlen(PATHDIFFAER), PATHDIFFAER);
+	SDsetattr(sdsTab, "PATHPROFILATM", DFNT_CHAR8, strlen(PATHPROFILATM), PATHPROFILATM);
 	
 	SDsetattr(sdsTab, "nbPhotonsTot", DFNT_FLOAT64, 1, &nbPhotonsTotdouble);
 	SDsetattr(sdsTab, "nbErreursPoids", DFNT_INT32, 1, &(var->erreurpoids));
@@ -771,6 +795,10 @@ void creerHDFResultats(float* tabFinal, float* tabTh, float* tabPhi,
 	SDsetattr(sdFichier, "LAMBDA", DFNT_FLOAT32, 1, &LAMBDA);
 	SDsetattr(sdFichier, "TAURAY", DFNT_FLOAT32, 1, &TAURAY);
 	SDsetattr(sdFichier, "TAUAER", DFNT_FLOAT32, 1, &TAUAER);
+	
+	SDsetattr(sdFichier, "LSAAER", DFNT_UINT32, 1, &LSAAER);
+	SDsetattr(sdFichier, "NFAER", DFNT_UINT32, 1, &NFAER);
+	
 	SDsetattr(sdFichier, "W0AER", DFNT_FLOAT32, 1, &W0AER);
 	SDsetattr(sdFichier, "HA", DFNT_FLOAT32, 1, &HA);
 	SDsetattr(sdFichier, "HR", DFNT_FLOAT32, 1, &HR);
@@ -781,6 +809,8 @@ void creerHDFResultats(float* tabFinal, float* tabTh, float* tabPhi,
 	SDsetattr(sdFichier, "CONPHY", DFNT_FLOAT32, 1, &CONPHY);
 	SDsetattr(sdFichier, "PATHRESULTATSHDF", DFNT_CHAR8, strlen(PATHRESULTATSHDF), PATHRESULTATSHDF);
 	SDsetattr(sdFichier, "PATHTEMOINHDF", DFNT_CHAR8, strlen(PATHTEMOINHDF), PATHTEMOINHDF);
+	SDsetattr(sdFichier, "PATHDIFFAER", DFNT_CHAR8, strlen(PATHDIFFAER), PATHDIFFAER);
+	SDsetattr(sdFichier, "PATHPROFILATM", DFNT_CHAR8, strlen(PATHPROFILATM), PATHPROFILATM);
 	
 	SDsetattr(sdFichier, "nbPhotonsTot", DFNT_FLOAT64, 1, &nbPhotonsTotdouble);
 	SDsetattr(sdFichier, "nbErreursPoids", DFNT_INT32, 1, &(var->erreurpoids));
@@ -857,4 +887,331 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	// Liberation du tableau du poids des photons
 	cudaFree(tab_D->tabPhotons);
 	free(tab_H->tabPhotons);
+	
+	// Libération du modèle de diffusion des aérosols
+	cudaFree(tab_D->faer);
+	free(tab_H->faer);
+	
+	// Libération du modèle atmosphérique
+	cudaFree(tab_D->tauCouche);
+	free(tab_H->tauCouche);
+	cudaFree(tab_D->pMol);
+	free(tab_H->pMol);
 }
+
+/********************/
+// Ajouts Florent
+/********************/
+
+/* Calcul du modèle de diffusion des aérosol */
+void calculFaer( const char* nomFichier, Tableaux tab_H, Tableaux tab_D ){
+	
+	FILE* fichier = fopen(nomFichier, "r");
+
+	float *scum = (float*) malloc(LSAAER*sizeof(*scum));
+	scum[0] = 0;
+	int iang = 0, ipf = 0;
+	float dtheta, pm1, pm2, sin1, sin2;
+	float z, norm;
+
+	/** Allocation de la mémoire des tableaux contenant les données **/
+	float *ang;
+	float *p1, *p2, *p3, *p4;
+	ang = (float*) malloc(LSAAER*sizeof(float));
+	p1 = (float*) malloc(LSAAER*sizeof(float));
+	p2 = (float*) malloc(LSAAER*sizeof(float));
+	p3 = (float*) malloc(LSAAER*sizeof(float));
+	p4 = (float*) malloc(LSAAER*sizeof(float));
+	
+	/** Lecture des données sur le modèle de diffusion des aérosols **/
+	if(fichier == NULL){
+		printf("ERREUR : Ouverture impossible du fichier %s pour la diffusion d'aérosol", nomFichier );
+		exit(1);
+	}
+	
+	else{
+		for(iang=0; iang<LSAAER; iang++){
+			fscanf(fichier, "%f %f %f %f %f", ang+iang,p1+iang,p2+iang,p3+iang,p4+iang );
+			// Conversion en radians
+			ang[iang] = ang[iang]*DEG2RAD;
+		}
+	}
+	
+	if(fclose(fichier) == EOF){
+		printf("ERREUR : Probleme de fermeture du fichier %s", nomFichier);
+	}
+		
+	/** Calcul de scum **/
+	for(iang=1; iang<LSAAER; iang++){
+		
+		dtheta = ang[iang] - ang[iang-1];
+		pm1= p1[iang-1] + p2[iang-1];
+		pm2= p1[iang] + p2[iang];
+		sin1= sin(ang[iang-1]);
+		sin2= sin(ang[iang]);
+		
+		scum[iang] = scum[iang-1] + dtheta*( (sin1*pm1+sin2*pm2)/3 + (sin1*pm2+sin2*pm1)/6 )*DEUXPI; 
+	}
+	
+	// Normalisation
+	for(iang=0; iang<LSAAER; iang++){
+		scum[iang] = scum[iang]/scum[LSAAER-1];
+	}
+	
+	/** Calcul des faer **/
+	for(iang=0; iang<NFAER-1; iang++){
+		z = float(iang)/float(NFAER);
+		
+		while( scum[ipf+1]<z )
+			ipf++;
+		
+		tab_H.faer[iang*5+4] = ((scum[ipf+1]-z)*ang[ipf] + (z-scum[ipf])*ang[ipf+1])/(scum[ipf+1]-scum[ipf]);
+		norm = p1[ipf]+p2[ipf];			// Angle
+		tab_H.faer[iang*5+0] = p1[ipf]/norm;	// I paralèlle
+		tab_H.faer[iang*5+1] = p2[ipf]/norm;	// I perpendiculaire
+		tab_H.faer[iang*5+2] = p3[ipf]/norm;	// u
+		tab_H.faer[iang*5+3] = 0.F;				// v, toujours nul
+	}
+	
+	tab_H.faer[(NFAER-1)*5+4] = PI;
+	tab_H.faer[(NFAER-1)*5+0] = 0.5F+00;
+	tab_H.faer[(NFAER-1)*5+1] = 0.5F+00;
+	tab_H.faer[(NFAER-1)*5+2] =p3[LSAAER-1]/(p1[LSAAER-1]+p2[LSAAER-1]);
+	tab_H.faer[(NFAER-1)*5+3] = 0.F+00;
+	
+	free(scum);
+	free(ang);
+	free(p1);
+	free(p2);
+	free(p3);
+	free(p4);
+	
+	/** Allocation des FAER dans la device memory **/		
+
+	if( cudaMemcpy(tab_D.faer, tab_H.faer, 5*NFAER*sizeof(float), cudaMemcpyHostToDevice) != cudaSuccess ){
+		printf("ERREUR : Mauvaise copie mémoire FAERd\n");
+		exit(1);
+	}
+	
+}
+
+/* Permet de vérifier que le modèle FAER généré est correct */
+void verificationFAER( const char* nomFichier, Tableaux tab){
+
+	FILE* fichier = fopen(nomFichier, "w");
+	int i;
+	
+	fprintf( fichier, "angle\tI//\tIp\n" );
+	
+	for(i=0; i<NFAER; i++){
+		fprintf(fichier, "%f\t%f\t%f\n", tab.faer[i*5+4],tab.faer[i*5+0], tab.faer[i*5+1]);
+	}
+	
+	fclose(fichier);
+
+}
+
+/* Calcul du mélange Molécule/Aérosol dans l'atmosphère en fonction de la couche */
+void profilAtm( Tableaux tab_H, Tableaux tab_D ){
+
+	/** Déclaration des variables **/
+	/*NOTE: différence avec le code fortran: je n'utilise pas int ncouche */
+	
+	float z[NATM+1];		// Altitude à chaque couche
+	float tauMol[NATM+1];	// Epaisseur optique des molécules à chaque couche
+	float tauAer[NATM+1];	// Epaisseur optique des aérosols à chaque couche
+	int i=0;
+	float va=0, vr=0;	// Variables tampons
+	
+	/** Conditions aux limites au sommet de l'atmosphère **/
+	z[0] = 100.0;
+	tauMol[0] = 0.0;
+	tauAer[0] = 0.0;
+	tab_H.tauCouche[0] = 0.0;
+	tab_H.pMol[0] = 0.0;	//Je n'utilise pas la proportion d'aérosols car on l'obtient par 1-PMOL
+
+	/** Cas Particuliers **/
+	
+	// Épaisseur optique moléculaire très faible
+	// On ne considère une seule sous-couche dans laquelle on trouve tous les aérosols
+	if( TAURAY < 0.0001 ){
+		tauMol[1] = 0;
+		tauAer[1] = TAUAER;
+		z[1] = 0;
+		tab_H.tauCouche[1] = tauMol[1] + tauAer[1];
+		tab_H.pMol[1] = 0;
+		return;
+	}
+	
+	// Épaisseur optique aérosol très faible OU Épaisseur optique moléculaire et aérosol très faible
+	// On ne considère une seule sous-couche dans laquelle on trouve toutes les molécules
+	if( (TAUAER < 0.0001) || ((TAUAER < 0.0001)&&(TAURAY < 0.0001)) ){
+		tauMol[1] = TAURAY;
+		tauAer[1] = 0;
+		z[1] = 0;
+		tab_H.tauCouche[1] = tauMol[1] + tauAer[1];
+		tab_H.pMol[1] = 1.0;
+		return;
+	}
+	
+	/** Profil standard avec échelle de hauteur **/
+	if( PROFIL == 0 ){
+		
+		/* Si HA << HR => pas de mélange dans les couches
+		On considere alors une atmosphere divisee en deux sous-couches, la  couche superieure contenant toutes les molecules, la couche inferieure contenant tous les aerosols.
+		*/
+		if( HA < 0.0001 ){
+			tauMol[1] = TAURAY;
+			tauAer[1] = 0;
+			z[1] = 0;
+			tab_H.tauCouche[1] = tauMol[1] + tauAer[1];
+			tab_H.pMol[1] = 1.0;
+			
+			tauMol[2] = 0;
+			tauAer[2] = TAUAER;
+			z[2] = 0.0;
+			tab_H.tauCouche[2] = tab_H.tauCouche[1] + tauMol[2] + tauAer[2];
+			tab_H.pMol[2] = 0.0;
+		}
+		
+		/* Si HA >> HR => pas de mélange dans les couches
+		On considere alors une atmosphere divisee en deux sous-couches, la  couche superieure contenant tous les aérosols, la couche inferieure contenant toutes les molécules.
+		*/
+		else if( HA > 499.99 ){
+			tauMol[1] = 0.0;
+			tauAer[1] = TAUAER;
+			z[1] = 0.0;
+			tab_H.tauCouche[1] = tauMol[1] + tauAer[1];
+			tab_H.pMol[1] = 0.0;
+			
+			tauMol[2] = TAURAY;
+			tauAer[2] = 0.0;
+			z[2] = 0.0;
+			tab_H.tauCouche[2] = tab_H.tauCouche[1] + tauMol[2] + tauAer[2];
+			tab_H.pMol[2] = 1.0;
+		}
+		
+		/* Cas Standard avec deux échelles */
+		else{
+			for( i=0; i<NATM+1; i++){
+				if(i!=0)
+					z[i] = 100.F - float(i)*(100.F/NATM);
+
+				vr = TAURAY*exp( -(z[i]/HR) );
+				va = TAUAER*exp( -(z[i]/HA) );
+				
+				tab_H.tauCouche[i] = va+vr;
+				
+				vr = vr/HR;
+				va = va/HA;
+				vr = vr/(va+vr);
+				tab_H.pMol[i] = vr;
+			}
+			tab_H.tauCouche[0] = 0;
+		}
+	}
+	
+	/** Profil à 2 ou 3 couches **/
+	else if( PROFIL == 3 ){
+
+		float tauRay1;	// Epaisseur optique moleculaire de la couche 1
+		float tauRay2;	// Epaisseur optique moleculaire de la couche 2
+		
+		tauRay1 = TAURAY*exp(-(ZMAX/HR));	// Epaisseur optique moleculaire de la couche la plus haute
+		if( ZMIN < 0.0001 ){
+			tauRay2 = TAURAY*(exp(-(ZMIN/HR))-exp(-(ZMAX/HR)));	// Epaisseur optique moleculaire de la couche la plus basse
+		}
+		
+		else{
+			tauRay2 = TAURAY*(exp(-(ZMIN/HR))-exp(-(ZMAX/HR)));	// Epaisseur optique moleculaire de la couche intermédiaire
+		}
+		
+		/** Calcul des grandeurs utiles aux OS pour la couche la plus haute **/
+		z[1] = -( HR*log(tauRay1/TAURAY) );                                      
+		tauMol[1] = tauRay1;
+		tauAer[1] = 0.F;                                    
+		tab_H.tauCouche[1] = tauMol[1] + tauAer[1];
+		tab_H.pMol[1] = 1.F;
+
+		/** Calcul des grandeurs utiles aux OS pour la deuxieme couche   **/
+		if( ZMAX == ZMIN ){ //Uniquement des aerosols dans la couche intermediaire
+			z[2] = ZMAX; // ou zmin, puisque zmin=zmax
+			tauMol[2] = tauRay1;                                                      
+			tauAer[2] = TAUAER;
+			tab_H.tauCouche[2] = tauMol[2] + tauAer[2];
+			tab_H.pMol[2] = 0.F;                                                      
+		}
+		
+		else{	// Melange homogene d'aerosol et de molecules dans la couche intermediaire
+			z[2] = ZMIN;
+			tauMol[2] = tauRay1+tauRay2;
+			tauAer[2] = TAUAER;
+			tab_H.tauCouche[2] = tauMol[2] + tauAer[2];
+			tab_H.pMol[2] = 0.5F;
+		}
+		
+		/** Calcul des grandeurs utiles aux OS pour la troisieme couche **/
+		z[3] = 0.F;
+		tauMol[3] = TAURAY;
+		tauAer[3] = TAUAER;
+		tab_H.tauCouche[3] = tauMol[3] + tauAer[3];
+		tab_H.pMol[3] = 1.F;
+	}
+	
+	else if( PROFIL == 2 ){
+		
+		//ATTENTION NOTE: pas encore vérifié
+		
+		// Profil utilisateur
+		/* Format du fichier
+		=> Ne pas mettre de ligne vide sur la première
+		=> n	alt		tauMol		tauAer		tauCouche		pAer		pMol
+		*/
+		FILE* profil = fopen( PATHPROFILATM , "r" );
+		float *garbage = NULL;
+		int icouche=0;
+	
+		if(profil == NULL){
+			printf("ERREUR : Ouverture impossible du fichier %s pour la diffusion d'aérosol", PATHPROFILATM );
+			exit(1);
+		}
+	
+		else{
+			i=0;
+			
+			while((fscanf(profil, "%d %f %f %f %f %f %f", &icouche, garbage, garbage, garbage, tab_H.tauCouche+i, garbage, tab_H.pMol+i ) !=EOF) && icouche<=NATM ){
+			i = icouche+1;
+			}
+	}
+	
+		if(fclose(profil) == EOF){
+			printf("ERREUR : Probleme de fermeture du fichier %s", PATHPROFILATM);
+		}
+	}
+	
+	/* Vérification du modèle
+	FILE* fichier = fopen("./test/modele_atm_cuda.txt", "w");
+	
+	fprintf( fichier, "couche\tpropMol\tTauCouche\n" );
+	
+	for(i=0; i<NATM+1; i++){
+		fprintf(fichier, "%d\t%10.8f\t%10.8f\n",i,PMOL[i], TAUCOUCHE[i]);
+	}
+	
+	fclose(fichier);
+	*/
+	
+	/** Envoie des informations dans le device **/
+
+	if( cudaMemcpy(tab_D.tauCouche, tab_H.tauCouche, (NATM+1)*sizeof(float), cudaMemcpyHostToDevice) != cudaSuccess ){
+		printf("ERREUR : Mauvaise copie mémoire TAUCOUCHEd\n");
+		exit(1);
+	}
+	
+	if( cudaMemcpy(tab_D.pMol, tab_H.pMol, (NATM+1)*sizeof(float), cudaMemcpyHostToDevice) != cudaSuccess ){
+		printf("ERREUR : Mauvaise copie mémoire PMOLd\n");
+		exit(1);
+	}
+	
+}
+

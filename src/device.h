@@ -10,7 +10,11 @@ __device__ __constant__ float THSDEGd;
 __device__ __constant__ float LAMBDAd;
 __device__ __constant__ float TAURAYd;
 __device__ __constant__ float TAUAERd;
+__device__ __constant__ float TAUATMd;
 __device__ __constant__ float W0AERd;
+
+__device__ __constant__ unsigned int NFAERd;
+
 __device__ __constant__ float HAd;
 __device__ __constant__ float HRd;
 __device__ __constant__ float ZMINd;
@@ -83,11 +87,13 @@ __device__ void scatter(Photon*
 		, int, Evnt*
 		#endif
 		       );
+			   
 __device__ void surfac(Photon*
 		#ifdef TRAJET
 		, int, Evnt*
 		#endif
 		      );
+			  
 __device__ void exit(Photon* , Variables*, Tableaux, unsigned int*
 		#ifdef PROGRESSION
 		, unsigned int*
@@ -96,6 +102,7 @@ __device__ void exit(Photon* , Variables*, Tableaux, unsigned int*
 		, int, Evnt*
 		#endif
 		    );
+			
 __device__ void calculPsi(Photon*, float*, float);
 __device__ void modifStokes(Photon*, float, float, float);
 __device__ void calculCase(int*, int*, Photon*, Variables*);
@@ -105,4 +112,24 @@ __device__ unsigned int randomMTuint(EtatMT*, ConfigMT*);
 __device__ void atomicAddULL(unsigned long long* address, unsigned int add);
 
 void initConstantesDevice();
+
+/**************************/
+//	Ajouts Florent
+/*************************/
+
+// Détermination de la nouvelle direction du photon lorsqu'il est diffusé par aérosol
+__device__ void scatterAer(Photon* photon, Tableaux tab
+		#ifdef RANDMWC
+		, unsigned long long* , unsigned int* 
+		#endif
+		#ifdef RANDCUDA
+		, curandState_t*
+		#endif
+		#ifdef RANDMT
+		, EtatMT* , ConfigMT*
+		#endif
+		#ifdef TRAJET
+		, int , Evnt*
+		#endif
+		       );
 

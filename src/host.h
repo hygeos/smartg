@@ -25,3 +25,16 @@ void creerHDFTemoin(unsigned long long*, unsigned long long, Variables*, double)
 void lireHDFTemoin(Variables*, Variables*, unsigned long long*, unsigned long long*, double*);
 void creerHDFResultats(float*, float*, float*, unsigned long long, Variables*, double);
 void freeTableaux(Tableaux*, Tableaux*);
+
+/********************/
+//	Ajouts Florent
+/*******************/
+
+// Calcul des paramètres du modèle de diffusion des aérosols
+void calculFaer( const char* nomFichier, Tableaux tab_H, Tableaux tab_D );
+
+// Permet de vérifier que le modèle FAER généré est correct
+void verificationFAER( const char* nomFichier, Tableaux tab_H );
+
+// Calcul du mélange Molécule/Aérosol dans l'atmosphère en fonction de la couche
+void profilAtm( Tableaux tab_H, Tableaux tab_D );

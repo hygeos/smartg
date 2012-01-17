@@ -19,6 +19,10 @@ int DIFFF; //Forcage de la premiere diffusion (0=non, 1=oui) (utilise si SIM=-2)
 int PROFIL; //Type de profil atmospherique
 int SIM; //Type de simulation
 int SUR; //Type de reflexion de la surface
+
+unsigned int LSAAER;	// Nombre d'échantillons pour les angles du modèle de diffusion aérosols
+unsigned int NFAER;
+
 float THSDEG; //Angle zénithal solaire
 float LAMBDA; //Longueur d'onde [nm]
 float TAURAY; //Epaisseur optique moleculaire (Rayleigh)
@@ -31,6 +35,9 @@ float ZMAX; //Altitude haute de la couche aerosol [km] (utilise si PROFIL=3)
 float WINDSPEED; //Vitesse du vent [m/s] (utilisee pour le modele de Cox et Munk: si DIOPTRE=1)
 float NH2O; //Indice de refraction relatif air/eau
 float CONPHY; //Concentration en phytoplancton [mg.m-3] (utilise si SUR>=2)
+
 char PATHRESULTATSHDF[100]; //Fichier de sortie au format hdf
 char PATHTEMOINHDF[100]; //Fichier témoin au format hdf
+char PATHDIFFAER[100];	// Fichier d'entrée des données de diffusion des aérosols
+char PATHPROFILATM[100]; // Profil atmosphérique utilisateur
 

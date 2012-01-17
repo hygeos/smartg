@@ -174,6 +174,10 @@ typedef struct __align__(16)
 {
 	unsigned long long* tabPhotons;
 	
+	float* faer;		// Pointeur vers le modèle de diffusion des aérosols
+	float* tauCouche;	// Pointeur vers l'épaisseur optique de chaque couche du modèle atmosphérique
+	float* pMol;		// Pointeur vers le pourcentage de molécules dans chaque couche du modèle atmosphérique
+	
 	#ifdef RANDMWC
 	unsigned long long* etat;
 	unsigned int* config;

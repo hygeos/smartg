@@ -55,70 +55,149 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 	// Création de variable propres à chaque thread
 	unsigned int iloop;
 	unsigned int nbPhotonsThr = 0; // nombre de photons taités par le thread
+	unsigned int icouche = 0;		// Nombre de recherche de la couche à laquelle appartient un photon donné
+	float propMol = 0;		// Proportion de molécules par rapport aux aérosols dans l'atmosphère
+	float rn = 0;			// nombre random
 	#ifdef PROGRESSION
 	unsigned int nbPhotonsSorThr = 0; // nombre de photons taités par le thread et resortis dans l'espace
 	#endif
 	
 	Photon photon; // On associe une structure de photon au thread
 	photon.loc = NONE; // Initialement le photon n'est nulle part, il doit être initialisé
-	
+
 	// Dans cette boucle on simule le parcours du photon, puis on le réinitialise, ... Le thread lance plusieurs photons
-	for(iloop = 0; iloop < NBLOOPd; iloop++)
-	{
-		// Si le photon est à NONE on l'initialise et on le met à ATMOS
-		if(photon.loc == NONE) init(&photon
-				#ifdef TRAJET
-				, idx, evnt
-				#endif
-					   );
-		// Chaque block attend tous ses threads avant de continuer
-		syncthreads();
-		
-		// Si le photon est à ATMOS on le avancer jusqu'à SURFACE, ou SPACE, ou ATMOS s'il subit une diffusion
-		if(photon.loc == ATMOS) move(&photon, &etatThr
-				#if defined(RANDMWC) || defined(RANDMT)
-				, &configThr
-				#endif
-				#ifdef TRAJET
-				, idx, evnt
-				#endif
-					    );
-		// Chaque block attend tous ses threads avant de continuer
-		syncthreads();
-		
-		// Si le photon est encore à ATMOS il subit une diffusion et reste dans ATMOS
-		if(photon.loc == ATMOS) scatter(&photon, &etatThr
-				#if defined(RANDMWC) || defined(RANDMT)
-				, &configThr
-				#endif
-				#ifdef TRAJET
-				, idx, evnt
-				#endif
-					       );
-		// Chaque block attend tous ses threads avant de continuer
-		syncthreads();
-		
-		// Si le photon est à SURFACE on le met à ABSORBED
-		if(photon.loc == SURFACE) surfac(&photon
-				#ifdef TRAJET
-				, idx, evnt
-				#endif
+	switch( SIMd ){
+
+	case -2:
+		for(iloop = 0; iloop < NBLOOPd; iloop++)
+		{
+
+			// Si le photon est à NONE on l'initialise et on le met à ATMOS
+			if(photon.loc == NONE) init(&photon
+					#ifdef TRAJET
+					, idx, evnt
+					#endif
 						);
-		// Chaque block attend tous ses threads avant de continuer
-		syncthreads();
+			// Chaque block attend tous ses threads avant de continuer
+			syncthreads();
+			
+			// Si le photon est à ATMOS on le avancer jusqu'à SURFACE, ou SPACE, ou ATMOS s'il subit une diffusion
+			if(photon.loc == ATMOS) move(&photon, &etatThr
+					#if defined(RANDMWC) || defined(RANDMT)
+					, &configThr
+					#endif
+					#ifdef TRAJET
+					, idx, evnt
+					#endif
+							);
+			// Chaque block attend tous ses threads avant de continuer
+			syncthreads();
+			
+			// Si le photon est encore à ATMOS il subit une diffusion et reste dans ATMOS
+			if(photon.loc == ATMOS){
+
+			/* Le proton peut:
+				- Être diffusé par une molècule
+				- Être diffusé par un aérosol
+				- Être absorbé par un aérosol
+			*/
+				
+				// Recherche de la couche où se situe le photon
+				icouche=0;
+
+				while( tab.tauCouche[icouche] < (TAUATMd-photon.tau) )
+					icouche=icouche+1;
+
+				propMol = tab.pMol[icouche];
+				
+					// Astuce pour utiliser le rand. NOTE: je n'arrive pas à compiler autrement
+					#ifdef RANDMWC
+					rn=randomMWCfloat(&etatThr,&configThr);
+					#endif
+					#ifdef RANDCUDA
+					rn=curand_uniform(&etatThr);
+					#endif
+					#ifdef RANDMT
+					rn=randomMTfloat(&etatThr, &configThr);
+					#endif
+
+				if( rn < propMol ){
+					// Le photon rencontre une molécule, et donc est diffusé par celle-ci
+					scatter(&photon, &etatThr
+					#if defined(RANDMWC) || defined(RANDMT)
+					, &configThr
+					#endif
+					#ifdef TRAJET
+					, idx, evnt
+					#endif
+							);
+
+				}
+
+				else{	// Le photon rencontre un aérosol
+
+					// Astuce pour utiliser le rand. NOTE: je n'arrive pas à compiler autrement
+					#ifdef RANDMWC
+					rn=randomMWCfloat(&etatThr,&configThr);
+					#endif
+					#ifdef RANDCUDA
+					rn=curand_uniform(&etatThr);
+					#endif
+					#ifdef RANDMT
+					rn=randomMTfloat(&etatThr, &configThr);
+					#endif
+					
+					if( rn < W0AERd )	// Le photon diffuse
+						scatterAer(&photon, tab, &etatThr
+						#if defined(RANDMWC) || defined(RANDMT)
+						, &configThr
+						#endif
+						#ifdef TRAJET
+						, idx, evnt
+						#endif
+								);
+
+
+					else	// sinon il est absorbé
+						photon.loc = ABSORBED;
+			
+				}
+
+			}
+			
+			// Chaque block attend tous ses threads avant de continuer
+			syncthreads();
+			
+			// Si le photon est à SURFACE on le met à ABSORBED
+			if(photon.loc == SURFACE) surfac(&photon
+					#ifdef TRAJET
+					, idx, evnt
+					#endif
+							);
+			// Chaque block attend tous ses threads avant de continuer
+			syncthreads();
+			
+			// Si le photon est dans SPACE ou ABSORBED on récupère ses infos et on le remet à NONE
+			if(photon.loc == ABSORBED || photon.loc == SPACE) exit(&photon, var, tab, &nbPhotonsThr
+					#ifdef PROGRESSION
+					, &nbPhotonsSorThr
+					#endif
+					#ifdef TRAJET
+					, idx, evnt
+					#endif
+										);
+			// Chaque block attend tous ses threads avant de continuer
+			syncthreads();
+		}// Fin boucle for
+		break;
+
+	default:
+		break;
+
 		
-		// Si le photon est dans SPACE ou ABSORBED on récupère ses infos et on le remet à NONE
-		if(photon.loc == ABSORBED || photon.loc == SPACE) exit(&photon, var, tab, &nbPhotonsThr
-				#ifdef PROGRESSION
-				, &nbPhotonsSorThr
-				#endif
-				#ifdef TRAJET
-				, idx, evnt
-				#endif
-								      );
-		// Chaque block attend tous ses threads avant de continuer
-		syncthreads();
-	}
+	} // Fin du switch
+
+	
 	
 	// Après la boucle on rassemble les nombres de photons traités par chaque thread
 	atomicAddULL(&var->nbPhotons, nbPhotonsThr);
@@ -266,18 +345,23 @@ __device__ void scatter(Photon* photon
 {
 	// On détermine la nouvelle direction du photon
 	float cTh, cTh2, sTh, psi, cPsi, sPsi;
+
 	// On prend un cosinus aléatoirement entre -1 et 1, il s'agit du cosinus de l'angle que fait la nouvelle direction avec l'ancienne, on prend le cos aléatoirement pour l'équiprobabilité dans toutes les directons
 	cTh = 2.F * RAND - 1.F; //cosThetaPhoton
 	cTh2 = cTh * cTh; //cosThetaPhotonCarré
 	sTh = sqrtf(1.F - cTh2);//sinThetaPhoton
+
 	// On prend un angle phi aléatoirement entre 0 et 2.PI, il s'agit de l'angle entre le nouveau vecteur projeté dans le plan orthogonal à v et le vecteur u
 	psi = RAND * DEUXPI; //psiPhoton
 	cPsi = __cosf(psi); //cosPsiPhoton
 	sPsi = __sinf(psi); //sinPsiPhoton
+
 	// Modification des nombres de Stokes
 	modifStokes(photon, psi, cPsi, sPsi);
+
 	// Création de 2 vecteurs provisoires w et v
 	float wx, wy, wz, vx, vy, vz;
+
 	// w est le rotationnel entre l'ancien vecteur u et l'ancien vecteur v du photon
 	wx = photon->uy * photon->vz - photon->uz * photon->vy;
 	wy = photon->uz * photon->vx - photon->ux * photon->vz;
@@ -333,8 +417,16 @@ __device__ void surfac(Photon* photon
 		#endif
 		      )
 {
-	// Pour l'instant le sol absorbe tous les photons
-	photon->loc = ABSORBED;
+	
+	switch( SIMd ){
+
+	case -2: // Atmosphère seule, le sol absorbe tous les photons
+		photon->loc = ABSORBED;
+		break;
+
+	default:
+		break;
+	} // Fin du switch
 	
 	#ifdef TRAJET
 	// Récupération d'informations sur le premier photon traité
@@ -604,8 +696,10 @@ void initConstantesDevice()
 	cudaMemcpyToSymbol(SURd, &SUR, sizeof(int));
 	cudaMemcpyToSymbol(DIOPTREd, &DIOPTRE, sizeof(int));
 	cudaMemcpyToSymbol(DIFFFd, &DIFFF, sizeof(int));
-	
-	float THSbis = THSDEG/180*PI; //thetaSolaire en radians
+
+	cudaMemcpyToSymbol(NFAERd, &NFAER, sizeof(unsigned int));
+
+	float THSbis = THSDEG*DEG2RAD; //thetaSolaire en radians
 	cudaMemcpyToSymbol(THSd, &THSbis, sizeof(float));
 
 	float CTHSbis = cosf(THSbis); //cosThetaSolaire
@@ -613,11 +707,116 @@ void initConstantesDevice()
 
 	float STHSbis = sinf(THSbis); //sinThetaSolaire
 	cudaMemcpyToSymbol(STHSd, &STHSbis, sizeof(float));
-
-	float TAUMAXbis = TAURAY / CTHSbis; //tau initial du photon
-	cudaMemcpyToSymbol(TAUMAXd, &TAUMAXbis, sizeof(float));
 	
 	float GAMAbis = DEPO / (2.F-DEPO);
 	cudaMemcpyToSymbol(GAMAd, &GAMAbis, sizeof(float));
+
+	float TAUATM = TAURAY+TAUAER;
+	cudaMemcpyToSymbol(TAUATMd, &TAUATM, sizeof(float));
+
+	float TAUMAXbis = TAUATM / CTHSbis; //tau initial du photon
+	cudaMemcpyToSymbol(TAUMAXd, &TAUMAXbis, sizeof(float));
+
 }
+
+/****************************/
+//	Ajouts Florent
+/***************************/
+
+// Détermination de la nouvelle direction du photon lorsqu'il est diffusé par aérosol
+__device__ void scatterAer(Photon* photon, Tableaux tab
+		#ifdef RANDMWC
+		, unsigned long long* etatThr, unsigned int* configThr
+		#endif
+		#ifdef RANDCUDA
+		, curandState_t* etatThr
+		#endif
+		#ifdef RANDMT
+		, EtatMT* etatThr, ConfigMT* configThr
+		#endif
+		#ifdef TRAJET
+		, int idx, Evnt* evnt
+		#endif
+		       )
+{
+
+	float zang=0;
+	float theta=0;
+	float psi=0;
+	float cPsi, sPsi, cTh, sTh;
+	int iang;
+
+	/** Initialisation aléatoire des paramètres **/
+	zang = RAND*NFAERd;
+	iang = int(zang) + 1;
+	zang = zang - float(iang) + 1.F;
+	theta = tab.faer[iang*5+4]+ zang*( tab.faer[(iang+1)*5+4]-tab.faer[iang*5+4] );	// L'accès à faer[x][y] se fait par faer[y*5+x]
+	psi = RAND*DEUXPI;
+
+	/** Rotation des paramètres de Stokes **/
+	cPsi = __cosf(psi);
+	sPsi = __sinf(psi);
+	cTh = __cosf(theta);
+	sTh = __sinf(theta);
+	
+	modifStokes(photon, psi, cPsi, sPsi);
+
+	/** Création de 2 vecteurs provisoires w et v **/
+	float wx, wy, wz, vx, vy, vz;
+	// w est le rotationnel entre l'ancien vecteur u et l'ancien vecteur v du photon
+	wx = photon->uy * photon->vz - photon->uz * photon->vy;
+	wy = photon->uz * photon->vx - photon->ux * photon->vz;
+	wz = photon->ux * photon->vy - photon->uy * photon->vx;
+
+	// v est le nouveau vecteur v du photon
+	vx = cTh * photon->vx + sTh * ( cPsi * photon->ux + sPsi * wx );
+	vy = cTh * photon->vy + sTh * ( cPsi * photon->uy + sPsi * wy );
+	vz = cTh * photon->vz + sTh * ( cPsi * photon->uz + sPsi * wz );
+
+	// Changement du vecteur u (orthogonal au vecteur vitesse du photon)
+	photon->ux = __fdividef(cTh * vx - photon->vx, sTh);
+	photon->uy = __fdividef(cTh * vy - photon->vy, sTh);
+	photon->uz = __fdividef(cTh * vz - photon->vz, sTh);
+
+	// Changement du vecteur v (vitesse du photon)
+	photon->vx = vx;
+	photon->vy = vy;
+	photon->vz = vz;
+	
+	/** Changement du poids et des nombres de stokes du photon **/
+	float stokes1 = photon->stokes1;
+	float stokes2 = photon->stokes2;
+	float faer1 = tab.faer[iang*5+0];
+	float faer2 = tab.faer[iang*5+1];
+
+	// Calcul du poids après diffusion
+	photon->weight *= __fdividef( 2.0F*(stokes1*faer1+stokes2*faer2) , stokes1+stokes2);
+
+	// Calcul des parametres de Stokes du photon apres diffusion
+	photon->stokes1 = 2.0F*faer1*stokes1;
+	photon->stokes2 = 2.0F*faer2*stokes2;
+	photon->stokes3 *= tab.faer[iang*5+2];
+	photon->stokes4 = 0.F;
+
+	#ifdef TRAJET
+	// Récupération d'informations sur le premier photon traité
+	if(idx == 0)
+	{
+		int i = 0;
+		// On cherche la première action vide du tableau
+		while(evnt[i].action != 0 && i<20) i++;
+		// Et on remplit la première case vide des tableaux (tableaux de 20 cases)
+		if(i <20 )
+		{
+			// "3"représente l'événement "scatter" du photon
+			evnt[i].action = 3;
+			// On récupère le tau et le poids du photon
+			evnt[i].tau = photon->tau;
+			evnt[i].poids = photon->weight;
+		}
+	}
+	#endif
+
+}
+
 
