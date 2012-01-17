@@ -294,17 +294,23 @@ __device__ void move(Photon* photon
 		#endif
 		    )
 {
-	// TO DO
 	// tirage épaisseur optique avec diffusion forcée
-	// p->tau += -LOG(1.F-MersenneTwisterGenerateFloat(pmtState, initialConfig)*(1.F-EXP(-tau_max))) * p->v.z;
+	if( DIFFFd == 1 ){
+		photon->tau += -__logf(1.F-RAND*(1.F-__expf(-TAUMAXd))) * photon->vz;
+		DIFFFd = 0;
+
+		if( SIMd == -2 )
+			photon->weight *= (1.F - __expf(-TAUMAXd));
+	}
 	
-	// Tirage de la nouvelle épaisseur optique du photon sans diffusion forcée
-	photon->tau += -__logf(RAND) * photon->vz;
-	
+	else	// Tirage de la nouvelle épaisseur optique du photon sans diffusion forcée
+		photon->tau += -__logf(RAND) * photon->vz;
+
+
 	// Si tau<0 le photon atteint la surface
 	if(photon->tau < 0.F) photon->loc = SURFACE;
 	// Si tau>TAURAY le photon atteint l'espace
-	else if(photon->tau > TAURAYd) photon->loc = SPACE;
+	else if(photon->tau > TAUATMd) photon->loc = SPACE;
 	// Sinon il a rencontré une molécule, on ne fait rien car il reste dans l'atmosphère, et va être traité par scatter
 	
 	#ifdef TRAJET

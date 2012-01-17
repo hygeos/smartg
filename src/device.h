@@ -33,12 +33,17 @@ __device__ __constant__ int PROFILd;
 __device__ __constant__ int SIMd;
 __device__ __constant__ int SURd;
 __device__ __constant__ int DIOPTREd;
-__device__ __constant__ int DIFFFd;
+__device__ int DIFFFd;
 __device__ __constant__ float THSd; //thetaSolaire_Host en radians
 __device__ __constant__ float STHSd; //sinThetaSolaire_Host
 __device__ __constant__ float CTHSd; //cosThetaSolaire_Host
 __device__ __constant__ float TAUMAXd; //tau initial du photon (Host)
 __device__ __constant__ float GAMAd;
+
+// __device__ float* FAERd;	// Paramètres du modèle de diffusion par aérosols
+// __device__ __constant__ float* TAUCOUCHEd;	// Modèle des couches atmosphèriques
+// __device__ __constant__ float* PMOLd;		// Modèle des couches atmosphèriques
+
 
 	  ///////////////////////
 	 // PROTOTYPES DEVICE //
