@@ -47,7 +47,8 @@
 //6.283 185 307 17F
 #define DEMIPI 1.5707963F
 //1.570 796 326 79F
-
+#define DEG2RAD 0.017453F
+//0.017453293
 // Precision de la recupération des poids des photons
 #define SCALEFACTOR 1000000000
 // Détecte les photons très proches du zenith
@@ -59,6 +60,9 @@
 #define SURFACE		2
 #define ABSORBED	3
 #define NONE		4
+
+// Constante pour le calcul du profil de l'atmosphère (Nombre de couches)
+#define NATM 103
 
 // DEBUG Test des differentes fonctions random
 #ifdef RANDMWC
@@ -101,6 +105,10 @@ extern int SIM;
 extern int SUR;
 extern int DIOPTRE;
 extern int DIFFF;
+
+extern unsigned int LSAAER;
+extern unsigned int NFAER;
+
 extern float THSDEG;
 extern float LAMBDA;
 extern float TAURAY;
@@ -113,8 +121,11 @@ extern float ZMAX;
 extern float WINDSPEED;
 extern float NH2O;
 extern float CONPHY;
+
 extern char PATHRESULTATSHDF[];
 extern char PATHTEMOINHDF[];
+extern char PATHDIFFAER[];
+extern char PATHPROFILATM[];
 
 	  //////////////
 	 // TYPEDEFS //

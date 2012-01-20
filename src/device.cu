@@ -250,7 +250,7 @@ __device__ void init(Photon* photon
 	photon->uz = photon->vx;
 	// Le photon est initialement dans l'atmosphère, et tau peut être vu comme sa hauteur par rapport au sol
 	photon->loc = ATMOS;
-	photon->tau = TAURAYd;
+	photon->tau = TAUATMd;
 	photon->weight = WEIGHTINIT;
 	// Initialisation des paramètres de stokes du photon
 	photon->stokes1 = 0.5F;
@@ -720,14 +720,12 @@ void initConstantesDevice()
 	float TAUATM = TAURAY+TAUAER;
 	cudaMemcpyToSymbol(TAUATMd, &TAUATM, sizeof(float));
 
-	float TAUMAXbis = TAUATM / CTHSbis; //tau initial du photon
-	cudaMemcpyToSymbol(TAUMAXd, &TAUMAXbis, sizeof(float));
+	float TAUMAX = TAUATM / CTHSbis; //tau initial du photon
+	cudaMemcpyToSymbol(TAUMAXd, &TAUMAX, sizeof(float));
 
 }
 
-/****************************/
-//	Ajouts Florent
-/***************************/
+
 
 // Détermination de la nouvelle direction du photon lorsqu'il est diffusé par aérosol
 __device__ void scatterAer(Photon* photon, Tableaux tab

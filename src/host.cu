@@ -79,7 +79,8 @@ void initConstantesHost(int argc, char** argv)
 		exit(1);
 	}
 	
-	char* s = (char*)malloc(100 * sizeof(char));
+	char s[100];
+
 
 	strcpy(s,"");
 	chercheConstante( parametres, "NBPHOTONS", s);
@@ -142,9 +143,14 @@ void initConstantesHost(int argc, char** argv)
 	chercheConstante(parametres, "DIFFF", s);
 	DIFFF = atoi(s);
 	
-	strcpy(s,"");
-	chercheConstante(parametres, "THSDEG", s);
-	THSDEG = atof(s);
+	if( argc>2){ // Il est possible de rentrer theta à la main, utile pour debug et boucle shell
+		THSDEG = atof(argv[2]);
+	}
+	else{
+		strcpy(s,"");
+		chercheConstante(parametres, "THSDEG", s);
+		THSDEG = atof(s);
+	}
 	
 	strcpy(s,"");
 	chercheConstante(parametres, "LAMBDA", s);
@@ -199,6 +205,9 @@ void initConstantesHost(int argc, char** argv)
 	CONPHY = atof(s);
 	
 	chercheConstante(parametres, "PATHRESULTATSHDF", PATHRESULTATSHDF);
+	char detail[256];
+	sprintf(detail,"_tauRay=%f_tauAer=%f_difff=%d_ths=%f.hdf",TAURAY,TAUAER,DIFFF,THSDEG);
+	strcat(PATHRESULTATSHDF,detail);
 	
 	chercheConstante(parametres, "PATHTEMOINHDF", PATHTEMOINHDF);
 	
@@ -206,7 +215,6 @@ void initConstantesHost(int argc, char** argv)
 
 	chercheConstante( parametres, "PATHPROFILATM", PATHPROFILATM );
 	
-	free(s);
 	fclose( parametres );
 }
 
