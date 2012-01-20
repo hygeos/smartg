@@ -754,8 +754,8 @@ __device__ void scatterAer(Photon* photon, Tableaux tab
 
 	/** Initialisation aléatoire des paramètres **/
 	zang = RAND*NFAERd;
-	iang = int(zang) + 1;
-	zang = zang - float(iang) + 1.F;
+	iang = rintf(zang) + 1;
+	zang = zang - iang + 1.F;
 	theta = tab.faer[iang*5+4]+ zang*( tab.faer[(iang+1)*5+4]-tab.faer[iang*5+4] );	// L'accès à faer[x][y] se fait par faer[y*5+x]
 	psi = RAND*DEUXPI;
 
@@ -764,7 +764,7 @@ __device__ void scatterAer(Photon* photon, Tableaux tab
 	sPsi = __sinf(psi);
 	cTh = __cosf(theta);
 	sTh = __sinf(theta);
-	
+
 	modifStokes(photon, psi, cPsi, sPsi);
 
 	/** Création de 2 vecteurs provisoires w et v **/

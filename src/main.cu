@@ -15,6 +15,11 @@
 // Fonction principale
 int main (int argc, char *argv[])
 {
+	cudaDeviceReset();
+
+	/** Variables du main **/
+	cudaError_t cudaErreur;	// Permet de vérifier les allocations mémoires
+
 	/** Initialisation des constantes du host (en partie recuperees dans le fichier Parametres.txt) **/
 	initConstantesHost(argc, argv);
 
@@ -41,32 +46,43 @@ int main (int argc, char *argv[])
 	Tableaux tab_D; //tableaux version device
 	initTableaux(&tab_H, &tab_D);
 
+
 	/** Variables et tableaux qui restent dans le host et se remplissent petit à petit **/
 	unsigned long long nbPhotonsTot = 0; //nombre total de photons traités
+
 	#ifdef PROGRESSION
 	unsigned long long nbPhotonsSorTot = 0; //nombre total de photons ressortis
 	#endif
+
 	unsigned long long* tabPhotonsTot; //tableau du poids total des photons sortis
 	tabPhotonsTot = (unsigned long long*)malloc(NBTHETA * NBPHI * NBSTOKES * sizeof(unsigned long long));
+	if( tabPhotonsTot == NULL ){
+		printf("ERREUR: Problème de malloc de tabPhotonsTot dans le main\n");
+		exit(1);
+	}
 
 	#ifdef TABRAND
 	// DEBUG Recuperations des nombres aleatoires du random en place
 	float tableauRand_H[100] = {0};
 	float* tableauRand_D;
-	cudaMalloc(&tableauRand_D, 100 * sizeof(float));
+	if( cudaMalloc(&tableauRand_D, 100 * sizeof(float) != cudaSuccess){
+		printf("ERREUR: Problème de cudaMalloc de tableauRand_D dans le main\n");
+		exit(1);
+	}
 	cudaMemset(tableauRand_D, 0, 100 * sizeof(float));
 	#endif
 
 	/** Calcul des modèles utiles à l'algorithme **/
 	// Calcul de faer, modèle de diffusion des aérosols
 	if( TAUAER > 0.0001 ){
-		printf("Prise en compte du modèle aérosol\n");
-		calculFaer( PATHDIFFAER, tab_H, tab_D );
-		// verificationFAER( "./test/FAER_test.txt", tab_H );
+		calculFaer( PATHDIFFAER, &tab_H, &tab_D );
+// 		verificationFAER( "./test/FAER_test.txt", tab_H );
+
 	}
 
 	// Calcul du mélange Molécule/Aérosol dans l'atmosphère en fonction de la couche
-	profilAtm( tab_H, tab_D );
+	profilAtm( &tab_H, &tab_D );
+// 	verificationAtm( tab_H );
 
 	/** Fonction qui permet de poursuivre la simulation précédente si elle n'est pas terminee **/
 	double tempsPrec = 0.; //temps ecoule de la simulation precedente
@@ -76,7 +92,11 @@ int main (int argc, char *argv[])
 	// DEBUG : Variables permettant de récupérer le début du trajet d'un photon
 	Evnt evnt_H[20];
 	Evnt* evnt_D;
-	cudaMalloc(&evnt_D, 20 * sizeof(Evnt));
+	if( cudaMalloc(&evnt_D, 20 * sizeof(Evnt)) != cudaSuccess){
+		printf("ERREUR: Problème de cudaMalloc de evnt_D dans le main\n");
+		exit(1);
+	}
+
 	initEvnt(evnt_H, evnt_D);
 	#endif
 	
@@ -110,12 +130,28 @@ int main (int argc, char *argv[])
 				, evnt_D //récupération d'un trajet de photons
 				#endif
 							);
-		// Attend que tous les threads avant de faire autre chose
+		// Attend que tous les threads aient fini avant de faire autre chose
 		cudaThreadSynchronize();
 		
 		/** Récupération des variables et d'un tableau envoyés dans le kernel **/
-		cudaMemcpy(var_H, var_D, sizeof(Variables), cudaMemcpyDeviceToHost);
-		cudaMemcpy(tab_H.tabPhotons, tab_D.tabPhotons, NBTHETA * NBPHI * NBSTOKES * sizeof(unsigned long long), cudaMemcpyDeviceToHost);
+		cudaErreur = cudaMemcpy(var_H, var_D, sizeof(Variables), cudaMemcpyDeviceToHost);
+		if( cudaErreur != cudaSuccess ){
+			printf("#--------------------#\n");
+			printf("# ERREUR: Problème de copie var_D dans le main\n");
+			printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+			printf("# sizeof(*var_D)=%d\tsizeof(*var_H)=%d\tsizeof(*Variables)=%d\n", sizeof(*var_D),sizeof(*var_H),sizeof(Variables));
+			printf("# Adresse pointée par var_D : %p\tAdresse pointée par var_H : %p\n", var_H, var_D);
+			printf("#--------------------#\n");
+			exit(1);
+		}
+
+		cudaErreur = cudaMemcpy(tab_H.tabPhotons, tab_D.tabPhotons, NBTHETA * NBPHI * NBSTOKES * sizeof(unsigned long long), cudaMemcpyDeviceToHost);
+		if( cudaErreur != cudaSuccess ){
+			printf( "ERREUR: Problème de copie tab_H.tabPhotons dans le main\n");
+			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+			exit(1);
+		}
+
 				
 		// On remplit les variables et tableau qui restent dans le host
 		nbPhotonsTot += var_H->nbPhotons;
@@ -126,7 +162,7 @@ int main (int argc, char *argv[])
 			tabPhotonsTot[i] += tab_H.tabPhotons[i];
 		
 		/** Creation d'un fichier témoin pour pouvoir reprendre la simulation en cas d'arrêt **/
-		creerHDFTemoin(tabPhotonsTot, nbPhotonsTot, var_H, tempsPrec);
+		creerHDFTemoin(tabPhotonsTot, nbPhotonsTot,var_H, tempsPrec);
 		
 		/** Affichage de l'avancement de la simulation **/
 		afficheProgress(nbPhotonsTot, var_H, tempsPrec
@@ -145,7 +181,14 @@ int main (int argc, char *argv[])
 			       
 	#ifdef TABRAND
 	// DEBUG Recuperations et affichage des nombres aleatoires du random
-	cudaMemcpy(tableauRand_H, tableauRand_D, 100 * sizeof(float), cudaMemcpyDeviceToHost);
+	cudaErreur = cudaMemcpy(tableauRand_H, tableauRand_D, 100 * sizeof(float), cudaMemcpyDeviceToHost);
+	if( cudaErreur != cudaSuccess ){
+		printf( "ERREUR: Problème de copie tableauRand_D dans le main\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+		exit(1);
+	}
+
+
 	printf("\n=====RAND========================\n");
 	for(int i = 0; i < 10; i++)
 	{
@@ -161,7 +204,13 @@ int main (int argc, char *argv[])
 	
 	#ifdef TRAJET
 	// DEBUG Récupération des variables envoyées dans le kernel
-	cudaMemcpy(evnt_H, evnt_D, 20 * sizeof(Evnt), cudaMemcpyDeviceToHost);
+	cudaErreur = cudaMemcpy(evnt_H, evnt_D, 20 * sizeof(Evnt), cudaMemcpyDeviceToHost);
+	if( cudaErreur != cudaSuccess ){
+		printf( "ERREUR: Problème de copie evnt_D dans le main\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+		exit(1);
+	}
+
 	// Affichage du trajet du premier thread
 	afficheTrajet(evnt_H);
 	#endif
@@ -178,7 +227,13 @@ int main (int argc, char *argv[])
 
 	/** Libération de la mémoire allouée **/
 	// Libération du groupe de variables envoyé dans le kernel
-	cudaFree(var_D);
+	cudaErreur = cudaFree(var_D);
+	if( cudaErreur != cudaSuccess ){
+		printf( "ERREUR: Problème de free de var_D dans le main\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+		exit(1);
+	}
+
 	free(var_H);
 	// Libération des tableaux envoyés dans le kernel
 	freeTableaux(&tab_H, &tab_D);
@@ -188,12 +243,26 @@ int main (int argc, char *argv[])
 
 	// Libération des variables qui récupèrent le trajet d'un photon
 	#ifdef TRAJET
-	cudaFree(evnt_D);
+	cudaErreur = cudaFree(evnt_D);
+	if( cudaErreur != cudaSuccess ){
+		printf( "ERREUR: Problème de free de evnt_D dans le main\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+		exit(1);
+	}
 	#endif
 	
 	#ifdef TABRAND
 	//DEBUG random
-	cudaFree(tableauRand_D);
+	cudaErreur = cudaFree(tableauRand_D);
+	if( cudaErreur != cudaSuccess ){
+		printf( "ERREUR: Problème de copie tableauRand_D dans le main\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+		exit(1);
+	}
 	#endif
+
+	cudaDeviceReset();
+
+	return 0;
 
 }
