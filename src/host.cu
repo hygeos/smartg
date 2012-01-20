@@ -818,98 +818,186 @@ void creerHDFResultats(float* tabFinal, float* tabTh, float* tabPhi,
 	SDsetattr(sdFichier, "nbErreursTheta", DFNT_INT32, 1, &(var->erreurtheta));
 	SDsetattr(sdFichier, "tempsEcoule", DFNT_FLOAT64, 1, &tempsEcouledouble);
 	
-	// Pour chaque phi on ajoute au fichier le tableau représentant le résultat final en fonction de theta
-	for(int iphi = 0; iphi < NBPHI; iphi++)
+	/** 	Création du 1er tableau dans le fichier hdf
+		Valeur de la reflectance pour phi et theta donnés		**/
+	char* nomTab="Valeur de la reflectance pour un phi et theta donnes"; //nom du tableau
+	int nbDimsTab = 2; //nombre de dimensions du tableau
+	int valDimsTab[nbDimsTab]; //valeurs des dimensions du tableau
+	valDimsTab[1] = NBTHETA;
+	valDimsTab[0] = NBPHI;
+	int typeTab = DFNT_FLOAT32; //type des éléments du tableau
+	
+	// Création du tableau
+	int sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
+	int startTab[nbDimsTab]; //début de la lecture du tableau
+	startTab[0]=0;
+	startTab[1]=0;
+	// Ecriture du tableau dans le fichier
+	int status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP)tabFinal);
+	// Vérification du bon fonctionnement de l'écriture
+	if(status)
 	{
-		// Création et remplissage d'un tableau du fichier
-		// tab[ith*2+0] est le résultat final en ith et tab[ith*2+1] est la valeur de theta
-		float* tab;
-		tab = (float*)malloc(2 * NBTHETA * sizeof(float));
-		memset(tab, 0, 2 * NBTHETA * sizeof(float));
-		for(int ith = 0; ith < NBTHETA; ith++)
-		{
-			tab[ith*2+0] = tabFinal[ith*NBPHI+iphi];
-			tab[ith*2+1] = tabTh[ith];
-		}
-		char nomTab[20]; //nom du tableau
-		sprintf(nomTab,"Resultats (iphi = %d)", iphi);
-		int nbDimsTab = 2; //nombre de dimensions du tableau
-		int valDimsTab[nbDimsTab]; //valeurs des dimensions du tableau
-		valDimsTab[0] = NBTHETA;
-		valDimsTab[1] = 2;
-		int typeTab = DFNT_FLOAT32; //type des éléments du tableau
-		// Création du tableau
-		int sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
-		int startTab[nbDimsTab]; //début de la lecture du tableau
-		startTab[0]=0;
-		startTab[1]=0;
-		// Ecriture du tableau dans le fichier
-		int status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP)tab);
-		// Vérification du bon fonctionnement de l'écriture
-		if(status)
-		{
-			printf("\nERREUR : write hdf resultats\n");
-			exit(1);
-		}
-		// Ecriture d'informations sur le tableau
-		char description[20];
-		sprintf(description, "%f", tabPhi[iphi]);
-		SDsetattr(sdsTab, "phi", DFNT_CHAR8, strlen(description), description);
-		
-		// Fermeture du tableau
-		SDendaccess(sdsTab);
-		// Liberation du tableau
-		free(tab);
+		printf("\nERREUR : write hdf resultats\n");
+		exit(1);
 	}
+	// Ecriture d'informations sur le tableau
+// 		char description[20];
+// 		SDsetattr(sdsTab, "phi", DFNT_CHAR8, strlen(description), description);
+	
+	// Fermeture du tableau
+	SDendaccess(sdsTab);
+	
+	/** 	Création du 2ème tableau
+		Valeurs de theta en fonction de l'indice	**/
+	nomTab = "Valeurs de theta echantillonnees";
+	nbDimsTab = 1;
+	int valDimsTab2[nbDimsTab];
+	valDimsTab2[0] = NBTHETA;
+	typeTab = DFNT_FLOAT32;
+	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab2);
+	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab2, (VOIDP)tabTh);
+	// Vérification du bon fonctionnement de l'écriture
+	if(status)
+	{
+		printf("\nERREUR : write hdf resultats - tab Theta\n");
+		exit(1);
+	}
+			
+	// Fermeture du tableau
+	SDendaccess(sdsTab);
+	
+	/** 	Création du 3ème tableau
+		Valeurs de phi en fonction de l'indice	**/
+	nomTab = "Valeurs de phi echantillonnees";
+	nbDimsTab = 1;
+	int valDimsTab3[nbDimsTab];
+	valDimsTab3[0] = NBPHI;
+	typeTab = DFNT_FLOAT32;
+	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab3);
+	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab3, (VOIDP)tabPhi);
+	// Vérification du bon fonctionnement de l'écriture
+	if(status)
+	{
+		printf("\nERREUR : write hdf resultats - tab Phi\n");
+		exit(1);
+	}
+	
+	// Fermeture du tableau
+	SDendaccess(sdsTab);
+	
+
 	// Fermeture du fichier
 	SDend(sdFichier);
+	
 }
 
 // Fonction qui libère les tableaux envoyés dans le kernel
 void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 {
+	
+	cudaError_t erreur;	// Permet de tester le bon déroulement des cudaFree
+	
 	#ifdef RANDMWC
 	// Liberation des tableaux de generateurs du random MWC
-	cudaFree(tab_D->etat);
+	erreur = cudaFree(tab_D->etat);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->etat dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	
 	free(tab_H->etat);
-	cudaFree(tab_D->config);
+	
+	erreur = cudaFree(tab_D->config);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->config dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	
 	free(tab_H->config);
 	#endif
+	
 	#ifdef RANDCUDA
 	// Liberation du tableau de generateurs du random Cuda
-	cudaFree(tab_D->etat);
+	erreur = cudaFree(tab_D->etat);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->etat dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
 	#endif
+	
 	#ifdef RANDMT
 	// Liberation des tableaux de generateurs du random Mersenen Twister
-	cudaFree(tab_D->config);
-	cudaFree(tab_D->etat);
+	erreur = cudaFree(tab_D->config);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->config dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	
+	erreur = cudaFree(tab_D->etat);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->etat dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	
 	free(tab_H->config);
 	#endif
+	
 	// Liberation du tableau du poids des photons
-	cudaFree(tab_D->tabPhotons);
+	erreur = cudaFree(tab_D->tabPhotons);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->tabPhotons dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	
 	free(tab_H->tabPhotons);
 	
 	// Libération du modèle de diffusion des aérosols
-	cudaFree(tab_D->faer);
+	erreur = cudaFree(tab_D->faer);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->faer dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
 	free(tab_H->faer);
 	
 	// Libération du modèle atmosphérique
-	cudaFree(tab_D->tauCouche);
+	erreur = cudaFree(tab_D->tauCouche);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->tauCouche dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	
 	free(tab_H->tauCouche);
-	cudaFree(tab_D->pMol);
+	
+	erreur = cudaFree(tab_D->pMol);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->pMol dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	
 	free(tab_H->pMol);
 }
 
-/********************/
-// Ajouts Florent
-/********************/
 
 /* Calcul du modèle de diffusion des aérosol */
-void calculFaer( const char* nomFichier, Tableaux tab_H, Tableaux tab_D ){
+void calculFaer( const char* nomFichier, Tableaux* tab_H, Tableaux* tab_D ){
 	
 	FILE* fichier = fopen(nomFichier, "r");
 
 	float *scum = (float*) malloc(LSAAER*sizeof(*scum));
+	if( scum==NULL ){
+		printf("ERREUR: Problème de malloc de scum dans calculFaer\n");
+		exit(1);
+	}
+	
 	scum[0] = 0;
 	int iang = 0, ipf = 0;
 	float dtheta, pm1, pm2, sin1, sin2;

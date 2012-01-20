@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 import os
 import sys
 import pyhdf.SD
@@ -10,12 +11,16 @@ import struct
 	          ##############
 	         # PARAMETRES #
 	        ##############
+# Résultats Fortran
+path_fortran_zip = "/home/florent/MC/bin/out.ran=0002.wav=443.ths=70.000.tr=0.0533.ta=0.0000.pi0=0.967.H=002.000.bin.gz"
 
-path_fortran_zip = "/home/tristan/Desktop/Progs_existants/Fortran/bin/out.ran=0001.wav=635.ths=70.000.tr=0.0533.ta=0.0000.pi0=0.967.H=002.000.bin.gz"
+# Nom du fichier hdf à analyser SANS l'extension hdf
+nom_hdf = "Resultats_tauRay=0.053300_tauAer=0.000000_difff=0_ths=70.000000"
+
 # Si le fichier suivant n'existe pas le prog s'arrete
-path_cuda = "out_prog/Resultats.hdf"
+path_cuda = "out_prog/" + nom_hdf + ".hdf"
 # Si le dossier suivant existe deja il est supprime puis recree
-path_dossier_sortie = "out_scripts/analyse_comparaison"
+path_dossier_sortie = "out_scripts/comparaison_" + nom_hdf
 
 
 	          #####################
@@ -83,6 +88,17 @@ if os.path.exists(path_cuda):
 	sd_cuda = pyhdf.SD.SD(path_cuda)
 	# lecture du nombre de valeurs de phi
 	NBPHI_cuda = getattr(sd_cuda,'NBPHI')
+	
+	# Récupération des valeurs de theta
+	name = "Valeurs de theta echantillonnees"
+	hdf_theta = sd_cuda.select(name)
+	theta = hdf_theta.get()
+	
+	# Récupération des valeurs de phi
+	name = "Valeurs de phi echantillonnees"
+	hdf_phi = sd_cuda.select(name)
+	phi = hdf_phi.get()	
+	
 else:
 	sys.stdout.write("Pas de fichier "+path_cuda+"\n")
 	sys.exit()
@@ -96,35 +112,160 @@ else:
 # Fortran :  intervalle=[0,PI]   nombre_de_boites=NBPHI_fortran
 # Cuda :     intervalle=[0,2PI]  nombre_de_boites=NBPHI_cuda
 # On va projeter les resultats du cuda sur [0,PI]
+
 if (NBPHI_cuda/2) == NBPHI_fortran:
-	for iphi in xrange(NBPHI_cuda/2):
+	for iphi in xrange(NBPHI_cuda/48):
+			
 		# initialisation
 		listePlots = []
 		listeLegends = []
+		tab_fortran_bis = []
 		
+		for i in xrange(180):
+			tab_fortran_bis.append(tab_fortran['real_thv_bornes'][i] - tab_fortran['real_thv_bornes'][0]/2)
+			#tab_fortran_bis[i] = tab_fortran['real_thv_bornes'][0]/2 
+		
+		tab_fortran_bis
 		# fortran
-		listePlots.append(plot(tab_fortran['real_thv_bornes'], tab_fortran['real_refl'][0, :, iphi, 0]))
+		#listePlots.append(plot(tab_fortran['real_thv_bornes'][:], tab_fortran['real_refl'][0, :, iphi, 0]))
+		listePlots.append(plot(tab_fortran_bis[:], tab_fortran['real_refl'][0, :, iphi, 0]))
 		listeLegends.append('Fortran')
-		
+		#if iphi == 0:
+			#for i in xrange(180):
+				#print 'theta=' + str(tab_fortran['real_thv_bornes'][i])+ '\tr=' + str(tab_fortran['real_refl'][0, i, iphi, 0]) +'\trbis=' + str(tab_fortran['real_refl'][0, i, iphi+179, 0])
 		# cuda
-		name_1 = 'Resultats (iphi = ' + str(iphi) + ')'
-		sds_cuda_1 = sd_cuda.select(name_1)
-		tab_cuda_1 = sds_cuda_1.get()
-		phi = getattr(sds_cuda_1,'phi')
-		name_2 = "Resultats (iphi = " + str(NBPHI_cuda-iphi-1) + ")"
-		sds_hdf_2 = sd_cuda.select(name_2)
-		tab_cuda_2 = sds_hdf_2.get()
-		listePlots.append(plot(tab_cuda_1[:,1],(tab_cuda_1[:,0]+tab_cuda_2[:,0])/2))
+		name = "Valeur de la reflectance pour un phi et theta donnes"
+		sds_cuda = sd_cuda.select(name)
+		data = sds_cuda.get()
+		
+		
+		#if iphi == 0:
+			#print ('-----------------------')
+			#for i in xrange(180):
+				#print 'theta=' + str(theta[i])+ '\tr=' + str(data[iphi,i])
+
+		listePlots.append(plot(theta[:],(data[iphi,:]+data[NBPHI_cuda-iphi-1,:])/2))
 		listeLegends.append('Cuda')
 		
 		# commun
 		legend(listePlots, listeLegends, loc='best', numpoints=1)
-		title('Comparaison avec le resultat fortran pour phi='+str(phi))
+		title('Comparaison avec le resultat fortran pour phi='+str(phi[iphi]))
 		xlabel('Theta (rad)')
-		ylabel('Eclairement')
+		ylabel('Reflectance')
 		grid(True)
-		savefig(path_dossier_sortie+"/comparaison_fortran_phi="+str(phi)+".png", dpi=(140))
+		savefig(path_dossier_sortie+"/comparaison_fortran_phi="+str(phi[iphi])+".png", dpi=(140))
 		figure()
+		
+	sys.stdout.write("\n")
+		
+		##########################################
+		#	Figures d'analyse plus spcifiques	#
+		########################################
+		
+	# Figure d'évaluation du taux d'erreur - RAPPORT
+	# phi = 0
+	iphi=0
+	listePlots = []
+	listeLegends = []
+	listePlots.append( plot(theta[:], (tab_fortran['real_refl'][0, :, iphi, 0])/data[iphi,:] ) )
+	listeLegends.append('Rapport')
+	#Régression linéaire
+	(ar,br)=polyfit(theta[:],(tab_fortran['real_refl'][0, :, iphi, 0])/data[iphi,:],1)
+	regLin=polyval([ar,br],theta[:])
+	err=sqrt(sum((regLin-(tab_fortran['real_refl'][0, :, iphi, 0])/data[iphi,:])**2)/len(theta))
+	print 'Erreur quadratique moyenne pour phi='+ str(phi[iphi])+' : ' +str(err) + '\n'
+
+	listePlots.append( plot(theta[:], regLin) )
+	listeLegends.append('Regression lineaire y='+str(ar)+'x+'+str(br))
+	legend(listePlots, listeLegends, loc='best', numpoints=1)
+	
+	title("Rapport des resultats Fortran et Cuda pour phi="+str(phi[iphi]))
+	xlabel("Theta (rad)")
+	ylabel("Rapport des reflactances")
+	grid(True)
+	savefig(path_dossier_sortie+"/comp_rapport_reflectance_phi="+str(phi[iphi])+".png", dpi=(140))
+	figure()
+			
+	# phi = 45
+	iphi=NBPHI_cuda/8
+	listePlots = []
+	listeLegends = []
+	listePlots.append( plot(theta[:], (tab_fortran['real_refl'][0, :, iphi, 0])/data[iphi,:] ) )
+	listeLegends.append('Rapport')
+	#Régression linéaire
+	(ar,br)=polyfit(theta[:],(tab_fortran['real_refl'][0, :, iphi, 0])/data[iphi,:],1)
+	regLin=polyval([ar,br],theta[:])
+	err=sqrt(sum((regLin-(tab_fortran['real_refl'][0, :, iphi, 0])/data[iphi,:])**2)/len(theta))
+	print 'Erreur quadratique moyenne pour phi='+ str(phi[iphi])+' : ' +str(err) + '\n'
+
+	listePlots.append( plot(theta[:], regLin) )
+	listeLegends.append('Regression lineaire y='+str(ar)+'x+'+str(br))
+	legend(listePlots, listeLegends, loc='best', numpoints=1)
+
+	plot(theta[:], (tab_fortran['real_refl'][0, :, iphi, 0])/data[iphi,:] )
+	title("Rapport des resultats Fortran et Cuda pour phi="+str(phi[iphi]))
+	xlabel("Theta (rad)")
+	ylabel("Rapport des reflactances")
+	grid(True)
+	savefig(path_dossier_sortie+"/comp_rapport_reflectance_phi="+str(phi[iphi])+".png", dpi=(140))
+	figure()
+	
+	# phi = 90
+	iphi=NBPHI_cuda/4
+	listePlots = []
+	listeLegends = []
+	listePlots.append( plot(theta[:], (tab_fortran['real_refl'][0, :, iphi, 0])/data[iphi,:] ) )
+	listeLegends.append('Rapport')
+	#Régression linéaire
+	(ar,br)=polyfit(theta[:],(tab_fortran['real_refl'][0, :, iphi, 0])/data[iphi,:],1)
+	regLin=polyval([ar,br],theta[:])
+	err=sqrt(sum((regLin-(tab_fortran['real_refl'][0, :, iphi, 0])/data[iphi,:])**2)/len(theta))
+	print 'Erreur quadratique moyenne pour phi='+ str(phi[iphi])+' : ' +str(err) + '\n'
+
+	listePlots.append( plot(theta[:], regLin) )
+	listeLegends.append('Regression lineaire y='+str(ar)+'x+'+str(br))
+	legend(listePlots, listeLegends, loc='best', numpoints=1)
+
+	plot(theta[:], tab_fortran['real_refl'][0, :, iphi, 0]/data[iphi,:] )
+	title("Rapport des resultats Fortran et Cuda pour phi="+str(phi[iphi]))
+	xlabel("Theta (rad)")
+	ylabel("Rapport des reflactances")
+	grid(True)
+	savefig(path_dossier_sortie+"/comp_rapport_reflectance_phi="+str(phi[iphi])+".png", dpi=(140))
+	figure()
+
+	# Figure d'évaluation du taux d'erreur - DIFFERENCE
+	# phi = 0
+	iphi=0
+	plot(theta[:],tab_fortran['real_refl'][0, :, iphi, 0]-data[iphi,:])
+	title("Difference des resultats Fortran et Cuda pour phi="+str(phi[iphi]))
+	xlabel("Theta (rad)")
+	ylabel("Difference des reflactances")
+	grid(True)
+	savefig(path_dossier_sortie+"/comp_difference_reflectance_phi="+str(phi[iphi])+".png", dpi=(140))
+	figure()
+			
+	# phi = 45
+	iphi=NBPHI_cuda/8
+	plot(theta[:],tab_fortran['real_refl'][0, :, iphi, 0]-data[iphi,:])
+	title("Difference des resultats Fortran et Cuda pour phi="+str(phi[iphi]))
+	xlabel("Theta (rad)")
+	ylabel("Difference des reflactances")
+	grid(True)
+	savefig(path_dossier_sortie+"/comp_difference_reflectance_phi="+str(phi[iphi])+".png", dpi=(140))
+	figure()
+	
+	# phi = 90
+	iphi=NBPHI_cuda/4
+	plot(theta[:],tab_fortran['real_refl'][0, :, iphi, 0]-data[iphi,:])
+	title("Difference des resultats Fortran et Cuda pour phi="+str(phi[iphi]))
+	xlabel("Theta (rad)")
+	ylabel("Difference des reflactances")
+	grid(True)
+	savefig(path_dossier_sortie+"/comp_difference_reflectance_phi="+str(phi[iphi])+".png", dpi=(140))
+	figure()
+	
+	
 else:
 	sys.stdout.write("Les tableaux ne font pas la meme taille\n")
 	sys.exit()
