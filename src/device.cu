@@ -53,11 +53,8 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 	#endif
 	
 	// Création de variable propres à chaque thread
-	unsigned int iloop;
-	unsigned int nbPhotonsThr = 0; // nombre de photons taités par le thread
-	unsigned int icouche = 0;		// Nombre de recherche de la couche à laquelle appartient un photon donné
-	float propMol = 0;		// Proportion de molécules par rapport aux aérosols dans l'atmosphère
-	float rn = 0;			// nombre random
+	unsigned long long nbPhotonsThr = 0; // nombre de photons taités par le thread
+	int flagDiff = DIFFFd;
 	#ifdef PROGRESSION
 	unsigned int nbPhotonsSorThr = 0; // nombre de photons taités par le thread et resortis dans l'espace
 	#endif
@@ -65,148 +62,112 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 	Photon photon; // On associe une structure de photon au thread
 	photon.loc = NONE; // Initialement le photon n'est nulle part, il doit être initialisé
 
-	// Dans cette boucle on simule le parcours du photon, puis on le réinitialise, ... Le thread lance plusieurs photons
-	switch( SIMd ){
-
-	case -2:
-		for(iloop = 0; iloop < NBLOOPd; iloop++)
-		{
-
-			// Si le photon est à NONE on l'initialise et on le met à ATMOS
-			if(photon.loc == NONE) init(&photon
-					#ifdef TRAJET
-					, idx, evnt
-					#endif
-						);
-			// Chaque block attend tous ses threads avant de continuer
-			syncthreads();
+	// Dans cette boucle on simule le parcours du photon, puis on le réinitialise,... Le thread lance plusieurs photons
+	for(unsigned int iloop= 0; iloop < NBLOOPd; iloop++)
+	{
+		// Si le photon est à NONE on l'initialise et on le met à ATMOS
+		if(photon.loc == NONE){ init(&photon
+				#ifdef TRAJET
+				, idx, evnt
+				#endif
+					);
+			flagDiff = DIFFFd;
 			
-			// Si le photon est à ATMOS on le avancer jusqu'à SURFACE, ou SPACE, ou ATMOS s'il subit une diffusion
-			if(photon.loc == ATMOS) move(&photon, &etatThr
-					#if defined(RANDMWC) || defined(RANDMT)
-					, &configThr
-					#endif
-					#ifdef TRAJET
-					, idx, evnt
-					#endif
-							);
-			// Chaque block attend tous ses threads avant de continuer
-			syncthreads();
-			
-			// Si le photon est encore à ATMOS il subit une diffusion et reste dans ATMOS
-			if(photon.loc == ATMOS){
-
-			/* Le proton peut:
-				- Être diffusé par une molècule
-				- Être diffusé par un aérosol
-				- Être absorbé par un aérosol
-			*/
-				
-				// Recherche de la couche où se situe le photon
-				icouche=0;
-
-				while( tab.tauCouche[icouche] < (TAUATMd-photon.tau) )
-					icouche=icouche+1;
-
-				propMol = tab.pMol[icouche];
-				
-					// Astuce pour utiliser le rand. NOTE: je n'arrive pas à compiler autrement
-					#ifdef RANDMWC
-					rn=randomMWCfloat(&etatThr,&configThr);
-					#endif
-					#ifdef RANDCUDA
-					rn=curand_uniform(&etatThr);
-					#endif
-					#ifdef RANDMT
-					rn=randomMTfloat(&etatThr, &configThr);
-					#endif
-
-				if( rn < propMol ){
-					// Le photon rencontre une molécule, et donc est diffusé par celle-ci
-					scatter(&photon, &etatThr
-					#if defined(RANDMWC) || defined(RANDMT)
-					, &configThr
-					#endif
-					#ifdef TRAJET
-					, idx, evnt
-					#endif
-							);
-
-				}
-
-				else{	// Le photon rencontre un aérosol
-
-					// Astuce pour utiliser le rand. NOTE: je n'arrive pas à compiler autrement
-					#ifdef RANDMWC
-					rn=randomMWCfloat(&etatThr,&configThr);
-					#endif
-					#ifdef RANDCUDA
-					rn=curand_uniform(&etatThr);
-					#endif
-					#ifdef RANDMT
-					rn=randomMTfloat(&etatThr, &configThr);
-					#endif
-					
-					if( rn < W0AERd )	// Le photon diffuse
-						scatterAer(&photon, tab, &etatThr
-						#if defined(RANDMWC) || defined(RANDMT)
-						, &configThr
-						#endif
-						#ifdef TRAJET
-						, idx, evnt
-						#endif
-								);
-
-
-					else	// sinon il est absorbé
-						photon.loc = ABSORBED;
-			
-				}
-
-			}
-			
-			// Chaque block attend tous ses threads avant de continuer
-			syncthreads();
-			
-			// Si le photon est à SURFACE on le met à ABSORBED
-			if(photon.loc == SURFACE) surfac(&photon
-					#ifdef TRAJET
-					, idx, evnt
-					#endif
-							);
-			// Chaque block attend tous ses threads avant de continuer
-			syncthreads();
-			
-			// Si le photon est dans SPACE ou ABSORBED on récupère ses infos et on le remet à NONE
-			if(photon.loc == ABSORBED || photon.loc == SPACE) exit(&photon, var, tab, &nbPhotonsThr
-					#ifdef PROGRESSION
-					, &nbPhotonsSorThr
-					#endif
-					#ifdef TRAJET
-					, idx, evnt
-					#endif
-										);
-			// Chaque block attend tous ses threads avant de continuer
-			syncthreads();
-		}// Fin boucle for
-		break;
-
-	default:
-		break;
-
+			#ifdef SORTIEINT
+// 			if (iloop!=0)
+// 				printf("init2, iloop=%d\n",iloop);
+			photon.numBoucle = iloop;
+			#endif
+		}
+		// Chaque block attend tous ses threads avant de continuer
+		syncthreads();
 		
-	} // Fin du switch
+		// Si le photon est à ATMOS on le fait avancer jusqu'à SURFACE, ou SPACE, ou ATMOS s'il subit une diffusion
+		if( (photon.loc == ATMOS) && (SIMd==-2 || SIMd==1 || SIMd==2) ) move(&photon, flagDiff, &etatThr
+				#if defined(RANDMWC) || defined(RANDMT)
+				, &configThr
+				#endif
+				#ifdef TRAJET
+				, idx, evnt
+				#endif
+						);
+		// Chaque block attend tous ses threads avant de continuer
+		syncthreads();
+		
+		// Si le photon est encore à ATMOS il subit une diffusion et reste dans ATMOS
+		if( (photon.loc == ATMOS) && (SIMd==-2 || SIMd==1 || SIMd==2))
+			scatterTot(&photon, tab, &etatThr
+			#if defined(RANDMWC) || defined(RANDMT)
+			, &configThr
+			#endif
+			#ifdef TRAJET
+			, idx, evnt
+			#endif
+				);
+		
+		// Chaque block attend tous ses threads avant de continuer
+// 		syncthreads();
+		
+		// Si le photon est à SURFACE on le met à ABSORBED
+		if(photon.loc == SURFACE) surfac(&photon, &etatThr
+				#if defined(RANDMWC) || defined(RANDMT)
+				, &configThr
+				#endif
+				#ifdef TRAJET
+				, idx, evnt
+				#endif
+						);
+		// Chaque block attend tous ses threads avant de continuer
+		syncthreads();
+		
+		// Si le photon est dans SPACE ou ABSORBED on récupère ses infos et on le remet à NONE
+		if(photon.loc == ABSORBED || photon.loc == SPACE){ exit(&photon, var, tab, &nbPhotonsThr
+				#ifdef PROGRESSION
+				, &nbPhotonsSorThr
+				#endif
+				#ifdef TRAJET
+				, idx, evnt
+				#endif
+						);
+									
+			#ifdef SORTIEINT
+			/* On compte le nombre de boucles qu'a effectué un photon pour vérifier qu'il n'y a pas de bug de
+			stationnarité.*/
+			atomicAdd(tab.nbBoucle + (iloop-photon.numBoucle),1);
+			#endif
+		}
+		// Chaque block attend tous ses threads avant de continuer
+		syncthreads();
 
+		//Mise à jour du poids suite à la 1ère diffusion forcée
+		if(flagDiff==1 ){
+			photon.weight *= (1.F - __expf(-TAUMAXd));
+			flagDiff=0;
+		}
+
+	}// Fin boucle for
 	
+	#ifdef SORTIEINT
+	if( photon.numBoucle <NBLOOPd/2 ){
+		atomicAdd(tab.nbBoucle + (NBLOOPd-1-photon.numBoucle),1);
+// 		printf("numBoucle après sorti : %d\n",photon.numBoucle);
+	}
+// 	else
+// 		printf("numBoucle dernier : %d\n",photon.numBoucle);
 	
+	#endif
+
 	// Après la boucle on rassemble les nombres de photons traités par chaque thread
-	atomicAddULL(&var->nbPhotons, nbPhotonsThr);
+	// NOTE: ULL retiré
+	atomicAdd(&var->nbPhotons, nbPhotonsThr);
 	
 	#ifdef PROGRESSION
 	// On rassemble les nombres de photons traités et sortis de chaque thread
-	atomicAddULL(&var->nbPhotonsSor, nbPhotonsSorThr);
+	// NOTE: ULL retiré
+	atomicAdd(&var->nbPhotonsSor, nbPhotonsSorThr);
 	// On incrémente avncement qui compte le nombre d'appels du Kernel
-	atomicAddULL(&var->nbThreads, 1);
+	// NOTE: ULL retiré
+	atomicAdd(&var->nbThreads, 1);
 	#endif
 	
 	// Sauvegarde de l'état du random pour que les nombres ne soient pas identiques à chaque appel du kernel
@@ -281,7 +242,7 @@ __device__ void init(Photon* photon
 }
 
 // Fonction device qui traite les photons dans l'atmosphère en les faisant avancer
-__device__ void move(Photon* photon
+__device__ void move(Photon* photon, int flagDiff
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif
@@ -296,13 +257,10 @@ __device__ void move(Photon* photon
 		#endif
 		    )
 {
-	// tirage épaisseur optique avec diffusion forcée
-	if( DIFFFd == 1 ){
-		photon->tau += -__logf(1.F-RAND*(1.F-__expf(-TAUMAXd))) * photon->vz;
-		DIFFFd = 0;
 
-		if( SIMd == -2 )
-			photon->weight *= (1.F - __expf(-TAUMAXd));
+	// tirage épaisseur optique avec diffusion forcée
+	if( DIFFFd == 1 && flagDiff== 1 && SIMd==-2 ){
+		photon->tau += -__logf(1.F-RAND*(1.F-__expf(-TAUMAXd))) * photon->vz;
 	}
 	
 	else	// Tirage de la nouvelle épaisseur optique du photon sans diffusion forcée
@@ -336,7 +294,7 @@ __device__ void move(Photon* photon
 }
 
 // Fonction device qui traite les photons qui sont encore dans l'atmosphère après "move" : rencontre avec une molécule
-__device__ void scatter(Photon* photon
+__device__ void scatterMol(Photon* photon
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif
@@ -669,20 +627,31 @@ __device__ void exit(Photon* photon, Variables* var, Tableaux tab, unsigned long
 	int loc = photon->loc;
 	// Remise à zéro de la localisation du photon
 	photon->loc = NONE;
+
+	/** Déplacement ici pour (tenter de) corriger le bug **/
+	photon->weight = __fdividef(photon->weight, photon->stokes1 + photon->stokes2);
+
 	// Si le photon est absorbé on ne fait rien d'autre
 	if(loc == ABSORBED)
 	{
 		// nbPhotonsThr est le nombre de photons traités par le thread, on l'incrémente
 		(*nbPhotonsThr)++;
 	}
+
 	// Le photon est sorti dans l'espace, si son poids est anormalement élevé on le compte comme une erreur
 	else if(photon->weight > WEIGHTMAX)
 	{
 		atomicAdd(&var->erreurpoids, 1);
 	}
+
 	// Sinon on traite le photon et on l'ajoute dans le tableau tabPhotons de ce thread
 	else
 	{
+		#ifdef SORTIEINT
+		//Sauvegarde du poids pour debug
+		tab.poids[*nbPhotonsThr] = photon->weight;
+		#endif
+
 		// Création d'un float theta qui sert à modifier les nombres de Stokes
 		float theta = acosf(fmin(1.F, fmax(-1.F, STHSd * photon->vx + CTHSd * photon->vz)));
 		// Si theta = 0 on l'ignore (cas où le photon repart dans la direction solaire)
@@ -694,6 +663,7 @@ __device__ void exit(Photon* photon, Variables* var, Tableaux tab, unsigned long
 		{
 			// Création d'un angle psi qui sert à modifier les nombres de Stokes
 			float psi;
+			int ith=0, iphi=0;
 			// Initialisation de psi
 			calculPsi(photon, &psi, theta);
 			// Modification des nombres de Stokes
@@ -701,16 +671,24 @@ __device__ void exit(Photon* photon, Variables* var, Tableaux tab, unsigned long
 			float sPsi = __sinf(psi);
 			modifStokes(photon, psi, cPsi, sPsi);
 			// On modifie ensuite le poids du photon
-			photon->weight = __fdividef(photon->weight, photon->stokes1 + photon->stokes2);
+// 			photon->weight = __fdividef(photon->weight, photon->stokes1 + photon->stokes2);
 			// Calcul de la case dans laquelle le photon sort
-			int ith, iphi;
 			calculCase(&ith, &iphi, photon, var);
+			
+// 			int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd +
+// 			threadIdx.y);
+// 			if( idx%100 == 0){
+// 				printf("Theta = %f\n",__fdividef(acosf(photon->vz) * NBTHETAd, DEMIPI));
+// 				printf("Case: (%d, %d)\n",ith,iphi);}
 			// Rangement du photon dans sa case, et incrémentation de variables
 			if(((ith >= 0) && (ith < NBTHETAd)) && ((iphi >= 0) && (iphi < NBPHId)))
 			{
 				// Rangement dans le tableau du poids des photons
-				atomicAddULL(tab.tabPhotons+(0 * NBTHETAd * NBPHId + ith * NBPHId + iphi), __float2uint_rn(photon->weight * photon->stokes1 * SCALEFACTOR + 0.5F));
-				atomicAddULL(tab.tabPhotons+(1 * NBTHETAd * NBPHId + ith * NBPHId + iphi), __float2uint_rn(photon->weight * photon->stokes2 * SCALEFACTOR + 0.5F));
+				//NOTE: j'avais enlevé le +0.5F, apparement ca change rien et ça parait plus logique
+				// NOTE: ULL retiré
+				atomicAdd(tab.tabPhotons+(0 * NBTHETAd * NBPHId + ith * NBPHId + iphi), __float2uint_rn(photon->weight * photon->stokes1 * SCALEFACTOR));
+				// NOTE: ULL retiré
+				atomicAdd(tab.tabPhotons+(1 * NBTHETAd * NBPHId + ith * NBPHId + iphi), __float2uint_rn(photon->weight * photon->stokes2 * SCALEFACTOR));
 
 				// Incrémentation du nombre de photons traités par le thread
 				(*nbPhotonsThr)++;
@@ -721,7 +699,9 @@ __device__ void exit(Photon* photon, Variables* var, Tableaux tab, unsigned long
 		
 			}
 			else
-			{
+			{			
+// 				printf("Theta erreur= %f\n",__fdividef(acosf(photon->vz) * NBTHETAd, DEMIPI));
+// 				printf("Case erreur: (%d, %d)\n",ith,iphi);
 				#ifdef PROGRESSION
 				atomicAdd(&var->erreurcase, 1);
 				#endif
@@ -790,8 +770,11 @@ __device__ void calculCase(int* ith, int* iphi, Photon* photon, Variables* var)
 {
 	// vxy est la projection du vecteur vitesse du photon sur (x,y)
 	float vxy = sqrtf(photon->vx * photon->vx + photon->vy * photon->vy);
+
 	// Calcul de la valeur de ithv
-	*ith = __float2int_rd(__fdividef(acosf(photon->vz) * NBTHETAd, DEMIPI));
+	// _rn correspond à round to the nearest integer
+	*ith = __float2int_rn(__fdividef(acosf(photon->vz) * NBTHETAd, DEMIPI));
+
 	// Si le photon ressort très près du zénith on ne peut plus calculer iphi,
 	// on est à l'intersection de toutes les cases du haut
 	if(vxy < VALMIN)
@@ -802,8 +785,8 @@ __device__ void calculCase(int* ith, int* iphi, Photon* photon, Variables* var)
 		if(photon->vy < 0.F) *iphi = NBPHId - 1;
 		else *iphi = 0;
 	}
-	// Sinon on calcule iphi
-	else
+
+	else	// Sinon on calcule iphi
 	{
 		// On place d'abord le photon dans un demi-cercle
 		float cPhiP = __fdividef(photon->vx, vxy); //cosPhiPhoton
@@ -1025,4 +1008,58 @@ __device__ void scatterAer(Photon* photon, Tableaux tab
 
 }
 
+__device__ void scatterTot(Photon* photon, Tableaux tab
+		#ifdef RANDMWC
+		, unsigned long long* etatThr, unsigned int* configThr
+		#endif
+		#ifdef RANDCUDA
+		, curandState_t* etatThr
+		#endif
+		#ifdef RANDMT
+		, EtatMT* etatThr, ConfigMT* configThr
+		#endif
+		#ifdef TRAJET
+		, int idx, Evnt* evnt
+		#endif
+		       )
+{
+	float propMol = 0;	// Proportion de molécules par rapport aux aérosols dans l'atmosphère
+	// Recherche de la couche où se situe le photon
+	float tauBis = TAUATMd-photon->tau;
+	int icouche=1;
+
+	while( tab.tauCouche[icouche] < (tauBis) )
+		icouche++;
+
+	propMol = tab.pMol[icouche];
+
+	if( RAND <= propMol ){
+		// Le photon rencontre une molécule, et donc est diffusé par celle-ci
+		scatterMol(photon, etatThr
+		#if defined(RANDMWC) || defined(RANDMT)
+		, configThr
+		#endif
+		#ifdef TRAJET
+		, idx, evnt
+		#endif
+				);
+	}
+
+	else{	// Le photon rencontre un aérosol
+
+		if( RAND < W0AERd )	// Le photon diffuse
+			scatterAer(photon, tab, etatThr
+			#if defined(RANDMWC) || defined(RANDMT)
+			, configThr
+			#endif
+			#ifdef TRAJET
+			, idx, evnt
+			#endif
+					);
+
+		else	// sinon il est absorbé
+			photon->loc = ABSORBED;
+
+	}
+}
 

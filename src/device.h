@@ -33,7 +33,7 @@ __device__ __constant__ int PROFILd;
 __device__ __constant__ int SIMd;
 __device__ __constant__ int SURd;
 __device__ __constant__ int DIOPTREd;
-__device__ int DIFFFd;
+__device__ __constant__ int DIFFFd;
 __device__ __constant__ float THSd; //thetaSolaire_Host en radians
 __device__ __constant__ float STHSd; //sinThetaSolaire_Host
 __device__ __constant__ float CTHSd; //cosThetaSolaire_Host
@@ -66,7 +66,7 @@ __device__ void init(Photon*
 		, int, Evnt*
 		#endif
 		    );
-__device__ void move(Photon*
+__device__ void move(Photon*, int 
 		#ifdef RANDMWC
 		, unsigned long long*, unsigned int*
 		#endif
@@ -81,7 +81,7 @@ __device__ void move(Photon*
 		#endif
 		    );
 			
-__device__ void scatter(Photon*
+__device__ void scatterMol(Photon*
 		#ifdef RANDMWC
 		, unsigned long long*, unsigned int*
 		#endif
@@ -97,12 +97,21 @@ __device__ void scatter(Photon*
 		       );
 			   
 __device__ void surfac(Photon*
+		#ifdef RANDMWC
+		, unsigned long long* etatThr, unsigned int* configThr
+		#endif
+		#ifdef RANDCUDA
+		, curandState_t* etatThr
+		#endif
+		#ifdef RANDMT
+		, EtatMT* etatThr, ConfigMT* configThr
+		#endif
 		#ifdef TRAJET
 		, int, Evnt*
 		#endif
 		      );
 			  
-__device__ void exit(Photon* , Variables*, Tableaux, unsigned int*
+__device__ void exit(Photon* , Variables*, Tableaux, unsigned long long*
 		#ifdef PROGRESSION
 		, unsigned int*
 		#endif
@@ -121,9 +130,7 @@ __device__ void atomicAddULL(unsigned long long* address, unsigned int add);
 
 void initConstantesDevice();
 
-/**************************/
-//	Ajouts Florent
-/*************************/
+
 
 // Détermination de la nouvelle direction du photon lorsqu'il est diffusé par aérosol
 __device__ void scatterAer(Photon* photon, Tableaux tab
@@ -141,3 +148,17 @@ __device__ void scatterAer(Photon* photon, Tableaux tab
 		#endif
 		       );
 
+__device__ void scatterTot(Photon* photon, Tableaux tab
+		#ifdef RANDMWC
+		, unsigned long long* etatThr, unsigned int* configThr
+		#endif
+		#ifdef RANDCUDA
+		, curandState_t* etatThr
+		#endif
+		#ifdef RANDMT
+		, EtatMT* etatThr, ConfigMT* configThr
+		#endif
+		#ifdef TRAJET
+		, int idx, Evnt* evnt
+		#endif
+		       );

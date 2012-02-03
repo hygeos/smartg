@@ -415,6 +415,42 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	}
 	
 	
+	#ifdef SORTIEINT
+	tab_H->poids =  (float*)malloc(NBLOOP*sizeof(float));
+	if( tab_H->poids == NULL ){
+		printf("ERREUR: Problème de malloc de tab_H->poids dans initTableaux\n");
+		exit(1);
+	}
+	memset(tab_H->poids,0,NBLOOP*sizeof(float) );
+	
+	if( cudaMalloc( &(tab_D->poids), NBLOOP*sizeof(float) ) == cudaErrorMemoryAllocation ){
+		printf("ERREUR: Problème de cudaMalloc de tab_D->poids dans initTableaux\n");
+		exit(1);	
+	}
+	
+	tab_H->nbBoucle =  (unsigned long long*)malloc(NBLOOP*sizeof(*(tab_H->nbBoucle)));
+	if( tab_H->poids == NULL ){
+		printf("ERREUR: Problème de malloc de tab_H->nbBoucle dans initTableaux\n");
+		exit(1);
+	}
+	memset(tab_H->nbBoucle,0,NBLOOP*sizeof(*(tab_H->nbBoucle)) );
+	
+	if( cudaMalloc( &(tab_D->nbBoucle), NBLOOP*sizeof(*(tab_D->nbBoucle)) ) == cudaErrorMemoryAllocation ){
+		printf("ERREUR: Problème de cudaMalloc de tab_D->nbBoucle dans initTableaux\n");
+		exit(1);	
+	}
+	
+	cudaErreur = cudaMemset(tab_D->nbBoucle, 0, NBLOOP*sizeof(*(tab_D->nbBoucle)) );
+	if( cudaErreur != cudaSuccess ){
+		printf("#--------------------#\n");
+		printf("# ERREUR: Problème de cudaMemset tab_D->nbBoucle dans initTableaux\n");
+		printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+		printf("#--------------------#\n");
+		exit(1);
+	}
+	#endif
+	
+	
 }
 
 // Fonction qui initialise en partie les generateurs du random Mersenen Twister
@@ -495,8 +531,10 @@ void calculOmega(float* tabTh, float* tabPhi, float* tabOmega)
 	// Tableau contenant l'angle theta de chaque morceau de sphère
 	memset(tabTh, 0, NBTHETA * sizeof(float));
 	float dth = DEMIPI / NBTHETA;
-	tabTh[0] = dth / 2;
-	for(int ith = 1; ith < NBTHETA; ith++) tabTh[ith] = tabTh[ith-1] + dth;
+	tabTh[0] = 0;
+	for(int ith = 1; ith < NBTHETA; ith++) 
+		tabTh[ith] = tabTh[ith-1] + dth;
+	
 	
 	// Tableau contenant l'angle psi de chaque morceau de sphère
 	memset(tabPhi, 0, NBPHI * sizeof(float));
@@ -510,12 +548,27 @@ void calculOmega(float* tabTh, float* tabPhi, float* tabOmega)
 	memset(tabds, 0, NBTHETA * NBPHI * sizeof(float));
 	for(int ith = 0; ith < NBTHETA; ith++)
 	{
+		if( ith==0 )
+			dth = DEMIPI / (2*NBTHETA);
+		else 
+			dth = DEMIPI / NBTHETA;
+			
 		for(int iphi = 0; iphi < NBPHI; iphi++)
 		{
 			tabds[ith * NBPHI + iphi] = sin(tabTh[ith]) * dth * dphi;
 			sumds += tabds[ith * NBPHI + iphi];
+		
 		}
+		
 	}
+	
+	// La derniere demi boite 89.75->90
+	for(int iphi = 0; iphi < NBPHI; iphi++)
+		{
+			sumds += sin( (DEMIPI+tabTh[NBTHETA-1])/2 ) * dth/2 * dphi;
+		}
+	
+	
 	// Normalisation de l'aire de chaque morceau de sphère
 	memset(tabOmega, 0, NBTHETA * NBPHI * sizeof(float));
 	for(int ith = 0; ith < NBTHETA; ith++)
@@ -529,12 +582,13 @@ void calculTabFinal(float* tabFinal, float* tabTh, float* tabPhi, unsigned long 
 	float tabOmega[NBTHETA * NBPHI]; //tableau contenant l'aire de chaque morceau de sphère
 	// Remplissage des tableaux tabTh, tabPhi, et tabOmega
 	calculOmega(tabTh, tabPhi, tabOmega);
+	
 	// Remplissage du tableau final
-	for(int ith = 0; ith < NBTHETA; ith++)
+	for(int iphi = 0; iphi < NBPHI; iphi++)
 	{
-		for(int iphi = 0; iphi < NBPHI; iphi++)
+		for(int ith = 0; ith < NBTHETA; ith++)
 		{
-			tabFinal[ith*NBPHI+iphi] = (tabPhotonsTot[0*NBPHI*NBTHETA+ith*NBPHI+iphi] + tabPhotonsTot[1*NBPHI*NBTHETA+ith*NBPHI+iphi]) / (2 * nbPhotonsTot * tabOmega[ith*NBPHI+iphi] * SCALEFACTOR * cosf(tabTh[ith]));
+			tabFinal[iphi*NBTHETA+ith] = (tabPhotonsTot[0*NBPHI*NBTHETA+ith*NBPHI+iphi] + tabPhotonsTot[1*NBPHI*NBTHETA+ith*NBPHI+iphi]) / (2 * nbPhotonsTot * tabOmega[ith*NBPHI+iphi] * SCALEFACTOR * cosf(tabTh[ith]));
 		}
 	}
 }
@@ -1129,6 +1183,26 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	}
 	
 	free(tab_H->pMol);
+	
+	#ifdef SORTIEINT
+	free( tab_H->poids );
+	
+	erreur = cudaFree(tab_D->poids);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->poids dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	
+	free( tab_H->nbBoucle );
+	
+	erreur = cudaFree(tab_D->nbBoucle);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->nbBoucle dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	#endif
 }
 
 

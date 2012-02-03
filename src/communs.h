@@ -152,6 +152,10 @@ typedef struct __align__(16)
 	float stokes2;
 	float stokes3;
 	float stokes4;
+	
+	#ifdef SORTIEINT
+	int numBoucle;
+	#endif
 }Photon;
 
 typedef struct __align__(16)
@@ -188,6 +192,11 @@ typedef struct __align__(16)
 	float* faer;		// Pointeur vers le modèle de diffusion des aérosols
 	float* tauCouche;	// Pointeur vers l'épaisseur optique de chaque couche du modèle atmosphérique
 	float* pMol;		// Pointeur vers le pourcentage de molécules dans chaque couche du modèle atmosphérique
+	
+	#ifdef SORTIEINT
+	float* poids;
+	unsigned long long* nbBoucle;
+	#endif
 	
 	#ifdef RANDMWC
 	unsigned long long* etat;

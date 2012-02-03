@@ -33,6 +33,42 @@ int main (int argc, char *argv[])
 		exit(1);
 	}
 
+	#ifdef SORTIEINT
+	// Fichiers de sortie pour le débuggage
+
+	float seuilPds = 0;
+	char detail[256];
+
+	// Fichier où seront stockés les photons avec un poids supérieur à un seuil
+	sprintf(detail,"out_prog/sortie_int/poids/poids_tauRay=%f_tauAer=%f_difff=%d_ths=%f_sim=%d.txt",TAURAY,TAUAER,DIFFF,
+ THSDEG,SIM);
+	FILE* fic_poids = fopen(detail,"w");
+	if( fic_poids == NULL){
+		printf("ERREUR: Impossible d'ouvrir le fichier %s\n", detail);
+		exit(1);
+	}
+
+	// Le nombre total de photons y sera sauvé
+	sprintf(detail,"out_prog/sortie_int/nbre_photons/photons_tauRay=%f_tauAer=%f_difff=%d_ths=%f_sim=%d.txt",TAURAY,
+TAUAER, DIFFF,THSDEG,SIM);
+	FILE* fic_nbre_ph = fopen(detail,"w");
+	if( fic_nbre_ph == NULL){
+		printf("ERREUR: Impossible d'ouvrir le fichier %s\n",detail);
+		exit(1);
+	}
+	
+	int tabNbBoucleTot[NBLOOP];
+	for( int i=0; i<NBLOOP; i++)
+		tabNbBoucleTot[i]=0;
+	sprintf(detail,"out_prog/sortie_int/nbre_boucle/nbBoucle_tauRay=%f_tauAer=%f_difff=%d_ths=%f_sim=%d.txt",TAURAY,
+TAUAER, DIFFF,THSDEG,SIM);
+	FILE* fic_nbre_boucle = fopen(detail,"w");
+	if( fic_nbre_boucle == NULL){
+		printf("ERREUR: Impossible d'ouvrir le fichier %s\n",detail);
+		exit(1);
+	}
+	#endif
+
 	// DEBUG : Affichage basique des parametres de la simulation
 	printf("\n%lu - %u - %d - %d - %d - %d - %d - %d\n", NBPHOTONS,NBLOOP,XBLOCK,YBLOCK,XGRID,YGRID,NBTHETA,NBPHI);
 
@@ -112,26 +148,55 @@ int main (int argc, char *argv[])
 
 	// Variable permettant de savoir si on est passé dans la boucle ou non
 	bool passageBoucle = false;
-	if(nbPhotonsTot < NBPHOTONS) passageBoucle = true;
+	if(nbPhotonsTot < NBPHOTONS) 
+		passageBoucle = true;
 
 	// Tant qu'il n'y a pas assez de photons traités on relance le kernel
 	while(nbPhotonsTot < NBPHOTONS)
 	{
 		/** Remise à zéro de certaines variables et certains tableaux **/
 		reinitVariables(var_H, var_D);
-		cudaMemset(tab_D.tabPhotons, 0, NBTHETA * NBPHI * NBSTOKES * sizeof(unsigned long long));
+		cudaErreur = cudaMemset(tab_D.tabPhotons, 0, NBTHETA * NBPHI * NBSTOKES * sizeof(unsigned long long));
+		if( cudaErreur != cudaSuccess ){
+			printf("#--------------------#\n");
+			printf("# ERREUR: Problème de cudaMemset tab_D.tabPhotons dans le main\n");
+			printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+			printf("#--------------------#\n");
+			exit(1);
+		}
+		
+		#ifdef SORTIEINT
+		cudaErreur = cudaMemset(tab_D.nbBoucle, 0, NBLOOP*sizeof(*(tab_D.nbBoucle)) );
+		if( cudaErreur != cudaSuccess ){
+			printf("#--------------------#\n");
+			printf("# ERREUR: Problème de cudaMemset tab_D->nbBoucle dans le main\n");
+			printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+			printf("#--------------------#\n");
+			exit(1);
+		}
+		#endif
 		
 		/** Lancement du kernel **/
-		lancementKernel<<<gridSize, blockSize>>>(var_D, tab_D			
-				#ifdef TABRAND
-				, tableauRand_D
-				#endif
-				#ifdef TRAJET
-				, evnt_D //récupération d'un trajet de photons
-				#endif
-							);
-		// Attend que tous les threads aient fini avant de faire autre chose
-		cudaThreadSynchronize();
+// 		switch(SIM){
+// 
+// 		case -2:
+			lancementKernel<<<gridSize, blockSize>>>(var_D, tab_D			
+					#ifdef TABRAND
+					, tableauRand_D
+					#endif
+					#ifdef TRAJET
+					, evnt_D //récupération d'un trajet de photons
+					#endif
+								);
+			// Attend que tous les threads aient fini avant de faire autre chose
+			cudaThreadSynchronize();
+	// 		break;
+// 
+// 		default:
+// 			break;
+// 
+// 		
+// 		} // Fin du switch
 		
 		/** Récupération des variables et d'un tableau envoyés dans le kernel **/
 		cudaErreur = cudaMemcpy(var_H, var_D, sizeof(Variables), cudaMemcpyDeviceToHost);
@@ -139,8 +204,9 @@ int main (int argc, char *argv[])
 			printf("#--------------------#\n");
 			printf("# ERREUR: Problème de copie var_D dans le main\n");
 			printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-			printf("# sizeof(*var_D)=%d\tsizeof(*var_H)=%d\tsizeof(*Variables)=%d\n", sizeof(*var_D),sizeof(*var_H),sizeof(Variables));
-			printf("# Adresse pointée par var_D : %p\tAdresse pointée par var_H : %p\n", var_H, var_D);
+// 			printf("# sizeof(*var_D)=%d\tsizeof(*var_H)=%d\tsizeof(*Variables)=%d\n", 
+// sizeof(*var_D),sizeof(*var_H),sizeof(Variables));
+// 			printf("# Adresse pointée par var_D : %p\tAdresse pointée par var_H : %p\n", var_H, var_D);
 			printf("#--------------------#\n");
 			exit(1);
 		}
@@ -152,6 +218,29 @@ int main (int argc, char *argv[])
 			exit(1);
 		}
 
+		#ifdef SORTIEINT
+		cudaErreur = cudaMemcpy(tab_H.poids, tab_D.poids, NBLOOP * sizeof(float), cudaMemcpyDeviceToHost);
+		if( cudaErreur != cudaSuccess ){
+			printf( "ERREUR: Problème de copie tab_H.poids dans le main\n");
+			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+			exit(1);
+		}
+		for(int i=0; i<NBLOOP; i++){
+			if(abs(tab_H.poids[i])>seuilPds)
+				fprintf(fic_poids,"%f\n",tab_H.poids[i]);
+		}
+		
+		cudaErreur = cudaMemcpy(tab_H.nbBoucle, tab_D.nbBoucle, NBLOOP * sizeof(*(tab_D.nbBoucle)),
+cudaMemcpyDeviceToHost);
+		if( cudaErreur != cudaSuccess ){
+			printf( "ERREUR: Problème de copie tab_H.nbBoucle dans le main\n");
+			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+			exit(1);
+		}
+		
+		for(int i = 0; i <NBLOOP; i++)
+			tabNbBoucleTot[i] += tab_H.nbBoucle[i];
+		#endif
 				
 		// On remplit les variables et tableau qui restent dans le host
 		nbPhotonsTot += var_H->nbPhotons;
@@ -215,6 +304,34 @@ int main (int argc, char *argv[])
 	afficheTrajet(evnt_H);
 	#endif
 
+	#ifdef SORTIEINT
+	// Sauvegarde du nombre de photons par boite
+	for(int iphi = 0; iphi < NBPHI; iphi++)
+	{
+		for(int ith = 0; ith < NBTHETA; ith++)
+		{
+			fprintf(fic_nbre_ph,"%llu\t",(tabPhotonsTot[0*NBPHI*NBTHETA+ith*NBPHI+iphi] + tabPhotonsTot[1*NBPHI*NBTHETA+ith*NBPHI+iphi])/2);
+		}
+		fprintf( fic_nbre_ph, "\n" );
+	}
+	
+// 	cudaErreur = cudaMemcpy(tab_H.nbBoucle, tab_D.nbBoucle, NBLOOP * sizeof(float), cudaMemcpyDeviceToHost);
+// 	if( cudaErreur != cudaSuccess ){
+// 		printf( "ERREUR: Problème de copie tab_H.nbBoucle dans le main\n");
+// 		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+// 		exit(1);
+// 	}
+		
+	for( int i = 0; i<NBLOOP; i++ ){
+		fprintf( fic_nbre_boucle, "%d\t%d\n", i+1,tabNbBoucleTot[i] );
+		
+	}
+	
+	fclose(fic_poids);
+	fclose(fic_nbre_ph);
+	fclose(fic_nbre_boucle);
+	#endif
+
 	/** Création et calcul du tableau final (regroupant le poids de tous les photons ressortis sur une demi-sphère, par unité de surface) **/
 	float tabFinal[NBTHETA * NBPHI]; //tableau final
 	float tabTh[NBTHETA]; //tableau contenant l'angle theta de chaque morceau de sphère
@@ -224,17 +341,20 @@ int main (int argc, char *argv[])
 
 	/** Fonction qui crée le fichier .hdf contenant le résultat final sur la demi-sphère **/
 	creerHDFResultats(tabFinal, tabTh, tabPhi, nbPhotonsTot, var_H, tempsPrec);
+	printf(" Fin de l'execution du programme. Resultats stockes dans %s\n",PATHRESULTATSHDF);
 
 	/** Libération de la mémoire allouée **/
 	// Libération du groupe de variables envoyé dans le kernel
-	cudaErreur = cudaFree(var_D);
-	if( cudaErreur != cudaSuccess ){
-		printf( "ERREUR: Problème de free de var_D dans le main\n");
-		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-		exit(1);
-	}
+// 	cudaErreur = cudaFree(var_D);
+// 	if( cudaErreur != cudaSuccess ){
+// 		printf( "ERREUR: Problème de free de var_D dans le main\n");
+// 		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+// 		exit(1);
+// 	}
+// 
+// 	free(var_H);
+	cudaFreeHost(var_H);
 
-	free(var_H);
 	// Libération des tableaux envoyés dans le kernel
 	freeTableaux(&tab_H, &tab_D);
 	// Libération du tableau du host
