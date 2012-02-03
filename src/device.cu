@@ -250,6 +250,8 @@ __device__ void init(Photon* photon
 	photon->uz = photon->vx;
 	// Le photon est initialement dans l'atmosphère, et tau peut être vu comme sa hauteur par rapport au sol
 	photon->loc = ATMOS;
+	if( SIMd == -1 )
+		photon->loc = SURFACE;
 	photon->tau = TAUATMd;
 	photon->weight = WEIGHTINIT;
 	// Initialisation des paramètres de stokes du photon
@@ -418,21 +420,221 @@ __device__ void scatter(Photon* photon
 
 // Fonction device qui traite les photons atteignant le sol
 __device__ void surfac(Photon* photon
+		#ifdef RANDMWC
+		, unsigned long long* etatThr, unsigned int* configThr
+		#endif
+		#ifdef RANDCUDA
+		, curandState_t* etatThr
+		#endif
+		#ifdef RANDMT
+		, EtatMT* etatThr, ConfigMT* configThr
+		#endif
 		#ifdef TRAJET
 		, int idx, Evnt* evnt
 		#endif
 		      )
 {
 	
-	switch( SIMd ){
-
-	case -2: // Atmosphère seule, le sol absorbe tous les photons
+	if( SIMd == -2 || SIMd == 0) // Atmosphère ou océan seuls, la surface absorbe tous les photons
 		photon->loc = ABSORBED;
-		break;
+	
+	else{	// Réflexion sur le dioptre
+		float sig = 0.F;
+		float beta = 0.F;
+		float sBeta = 0.F;
+		float cBeta = 1;
+		if( DIOPTREd == 1 ){
+			sig = sqrtf(0.003F + 0.00512*WINDSPEEDd);
+			beta = atanf( sig*sqrtf(-__logf(RAND)) );
+			sBeta = __sinf( beta );
+			cBeta = __cosf( beta );
+		}
+// 		float beta = atanf( sig*sqrtf(-__logf(RAND)) );// Angle par rapport à la verticale du vecteur normal à
+// une facette de vagues 
+		float alpha = DEUXPI*RAND; //Angle azimutal du vecteur normal a une facette de vagues
+		float theta;		// Angle de deflection polaire de diffusion [rad]
+		float psi;		// Angle azimutal de diffusion [rad]
+		float cTh=0, sTh;
+		float cPsi2, sPsi2, demis2Psi_s3;	//demis2Psi_s3 = 1/2*sin(2Psi)*photon->stokes3
+	
+		float nind=0;
+		float temp=0;
+	
+		float nx, ny, nz;	// Coordonnées du vecteur normal à une facette de vague
+		float s1, s2, s3;
+		
+		float rpar=1.F, rper=1.F;	// Coefficient de reflexion parallèle et perpendiculaire
+		float rpar2=1.F;		// Coefficient de reflexion parallèle au carré
+		float rper2=1.F;		// Coefficient de reflexion perpendiculaire au carré
+		float rat=0;		// Rapport des coefficients de reflexion perpendiculaire et parallèle
+		float ReflTot = 1;	// Flag pour la réflexion totale sur le dioptre
+		float cot=0;		// Cosinus de l'angle de réfraction du photon
+		float ncot, ncTh;	// ncot = nind*cot, ncoi = nind*cTh
+		float tpar, tper;	// 
+		
+		nx = sBeta*__cosf( alpha );
+		ny = sBeta*__sinf( alpha );
+		
+		// Projection de la surface apparente de la facette sur le plan horizontal
+		if( photon->vz > 0.F ){
+			nind = __fdividef(1.F,NH2Od);
+			nz = -cBeta;
+			// Correction bug surface apparente facettes face/dos au photon
+			photon->weight *= __fdividef( abs(nx*photon->vx + ny*photon->vy+ nz*photon->vz),photon->vz) ;
+			// Projection de la surface apparente de la facette sur le plan horizontal
+			photon->weight = __fdividef( photon->weight, cBeta );
+		}
 
-	default:
-		break;
-	} // Fin du switch
+		else{
+			nind = NH2Od;
+			nz = cBeta;
+			// Correction bug surface apparente facettes face/dos au photon
+			photon->weight *= -__fdividef(abs(nx*photon->vx + ny*photon->vy + nz*photon->vz),photon->vz) ;
+			// Projection de la surface apparente de la facette sur le plan horizontal
+			photon->weight = __fdividef( photon->weight, cBeta );
+		}
+		
+		temp = -(nx*photon->vx + ny*photon->vy + nz*photon->vz);
+
+		
+		if (abs(temp) > 1.01F){
+// 			printf("ERREUR dans la fonction surface: variable temp supérieure à 1.01\n");
+// 			printf(" temp = %f\n", temp);
+// 			printf("nx=%f, ny=%f, nz=%f\tvx=%f, vy=%f, vz=%f\n", nx,ny,nz,photon->vx,photon->vy,photon->vz);
+		}
+		
+		theta = acosf( fmin(1.00F-VALMIN, fmax( VALMIN-1.F, temp ) ));
+
+		if(theta >= DEMIPI){
+			nx = -nx;
+			ny = -ny;
+			theta = acosf( temp );
+		}
+
+		// Rotation des paramètres de Stokes
+		cTh = __cosf(theta);
+		sTh = __sinf(theta);
+		s1 = photon->stokes1;
+		s2 = photon->stokes2;
+		s3 = photon->stokes3;
+		
+// 		int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd +
+// 		threadIdx.y);
+// 		if( idx%100 == 0){
+// 			printf( "nx = %f, ny=%f, nz=%f \n",nx,ny,nz );
+// 			printf("cos(theta)=%f\n",cTh);
+// 			printf( "temp=%f\n\n", temp);
+// 		}
+		
+		if( (s1!=s2) || (s3!=0.F) ){
+			
+			temp = __fdividef(nx*photon->ux + ny*photon->uy + nz*photon->uz,sTh);
+			psi = acosf( fmin(1.00F, fmax( -1.F, temp ) ));	
+			
+			if( 	(nx*(photon->uy*photon->vz-photon->uz*photon->vy)+ \
+				ny*(photon->uz*photon->vx-photon->ux*photon->vz) + \
+				nz*(photon->ux*photon->vy-photon->uy*photon->vx) ) <0 ){
+				psi = -psi;
+			}
+			
+		/*psi est l'angle entre le plan de diffusion et le plan de diffusion precedent. Rotation des
+		parametres de Stoke du photon d'apres cet angle.*/
+
+			cPsi2 = __cosf(psi)*__cosf(psi);
+			sPsi2 = __sinf(psi)*__sinf(psi);
+			demis2Psi_s3 = (__fdividef( __sinf(2*psi), 2) )*s3;
+			
+			photon->stokes1 = cPsi2*s1 + sPsi2*s2 + demis2Psi_s3;
+			photon->stokes2 = sPsi2*s1 + cPsi2*s2 - demis2Psi_s3;
+			photon->stokes3 = (__sinf(2*psi))*(s2-s1) + __cosf(2*psi)*s3;
+		}
+
+// 		if( sTh>nind ){	// Cas particulier de la reflexion totale sur le dioptre
+// 			rpar = 1.F;
+// 			rpar2 = 1.F;
+// 			rper = 1.F;
+// 			rper2 = 1.F;
+// 			ReflTot = 1;
+// 		}
+		
+		/*else*/if(sTh<=nind){	// Calcul des coefficients de reflexion ( parallele et perpendiculaire )
+			cot = __cosf( asinf(__fdividef(sTh,nind)) );
+			ncot = nind*cot;
+			ncTh = nind*cTh;
+			rpar = __fdividef(cot - ncTh,cot + ncTh);
+			rpar2 = rpar*rpar;
+			rper = __fdividef(cTh - ncot,cTh + ncot);
+			rper2 = rper*rper;
+			ReflTot = 0;
+			
+			// Rapport de l'intensite speculaire reflechie
+			rat=__fdividef(photon->stokes2*rper2 + photon->stokes1*rpar2,photon->stokes1+photon->stokes2);
+		}
+		
+		if( (ReflTot==1) || (SURd==1) || ( (SURd==3)&&(RAND<rat) ) ){
+			//Nouveau parametre pour le photon apres reflexion speculaire
+			photon->stokes2 *= rper2;
+			photon->stokes1 *= rpar2;
+			photon->stokes4 *= -rpar*rper;
+			photon->stokes3 *= -rpar*rper;
+			
+			photon->vx += 2.F*cTh*nx;
+			photon->vy += 2.F*cTh*ny;
+			photon->vz += 2.F*cTh*nz;
+			photon->ux = __fdividef( nx-cTh*photon->vx,sTh );
+			photon->uy = __fdividef( ny-cTh*photon->vy,sTh );
+			photon->uz = __fdividef( nz-cTh*photon->vz,sTh );
+			
+			// Le photon est renvoyé dans l'atmosphère
+			photon->loc = ATMOS;
+			
+			if (
+			/*(abs( 1.F - sqrtf(photon->ux*photon->ux+photon->uy*photon->uy+photon->uz*photon->uz) )>1.F-06)
+			||*/ (photon->vz<0) ){
+				// Suppression des reflexions multiples
+// 				printf("Absortion du photon\n");
+// 				photon->weight = 0.F;
+				photon->loc = ABSORBED;
+			}
+			
+			if (SURd==1){ /*On pondere le poids du photon par le coefficient de reflexion dans le cas 
+d'une reflexion speculaire sur le dioptre (mirroir parfait)*/
+				photon->weight *= rat;
+			}
+			
+		}
+		
+		else{	// Transmission par le dioptre
+			tpar = __fdividef( 2*cTh,ncTh+ cot);
+			tper = __fdividef( 2*cTh,cTh+ ncot);
+			
+			photon->stokes2 *= tper*tper;
+			photon->stokes1 *= tpar*tpar;
+			photon->stokes3 *= -tpar*tper;
+			photon->stokes4 *= -tpar*tper;
+			
+			alpha = __fdividef(cTh,nind) - cot;
+			photon->vx = __fdividef(photon->vx,nind) + alpha*nx;
+			photon->vy = __fdividef(photon->vy,nind) + alpha*ny;
+			photon->vz = __fdividef(photon->vz,nind) + alpha*nz;
+			photon->ux = __fdividef( nx+cot*photon->vx,sTh )*nind;
+			photon->uy = __fdividef( ny+cot*photon->vy,sTh )*nind;
+			photon->uz = __fdividef( nz+cot*photon->vz,sTh )*nind;
+			
+			// Le photon est renvoyé dans l'atmosphère
+// 			photon->loc = ;
+			
+			/* On pondere le poids du photon par le coefficient de transmission dans le cas d'une reflexion
+			speculaire sur le dioptre plan (ocean diffusant) */
+			if( SURd == 2)
+				photon->weight *= (1-rat);
+			
+		}
+		
+		if( SIMd == -1) // Dioptre seul
+			photon->loc=SPACE;
+		
+	}
 	
 	#ifdef TRAJET
 	// Récupération d'informations sur le premier photon traité
@@ -444,9 +646,9 @@ __device__ void surfac(Photon* photon
 			// Et on remplit la première case vide des tableaux (tableaux de 20 cases)
 		if(i <20 )
 		{
-				// "4"représente l'événement "surface" du photon
+			// "4"représente l'événement "surface" du photon
 			evnt[i].action = 4;
-				// On récupère le tau et le poids du photon
+			// On récupère le tau et le poids du photon
 			evnt[i].tau = photon->tau;
 			evnt[i].poids = photon->weight;
 		}
@@ -455,7 +657,7 @@ __device__ void surfac(Photon* photon
 }
 
 // Fonction device qui traite les photons absorbés ou atteignant l'espace
-__device__ void exit(Photon* photon, Variables* var, Tableaux tab, unsigned int* nbPhotonsThr
+__device__ void exit(Photon* photon, Variables* var, Tableaux tab, unsigned long long* nbPhotonsThr
 		#ifdef PROGRESSION
 		, unsigned int* nbPhotonsSorThr
 		#endif
