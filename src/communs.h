@@ -2,19 +2,20 @@
 	  ////////////////
 	 // LIBRAIRIES //
 	////////////////
+#include <stdio.h>
 
 #include <mfhdf.h>
 #include <curand_kernel.h>
 
 
 // #include <time.h>
-#include <stdio.h>
+
 #include <stdlib.h>
 // #include <hdf.h>
 // #include <float.h>
 #include <math.h>
 // #include <limits.h>
-// #include <string.h>
+#include <string.h>
 //#include <cutil.h>>
 //#include <shrUtils.h
 //#include <shrQATest.h>
@@ -103,7 +104,6 @@ extern int XGRID;
 extern int YGRID;
 extern int NBTHETA;
 extern int NBPHI;
-extern int NBSTOKES;
 extern int PROFIL;
 extern int SIM;
 extern int SUR;
@@ -138,11 +138,11 @@ extern char PATHPROFILATM[];
 
 typedef struct __align__(16)
 {
-	// Vecteur normalisé de la vitesse du photon
+	// Vecteur normalisé de la direction du photon (vitesse)
 	float vx;
 	float vy;
 	float vz;
-	// Vecteur normalisé orthogonal à la vitesse du photon
+	// Vecteur normalisé orthogonal à la vitesse du photon (polarisation)
 	float ux;
 	float uy;
 	float uz;
@@ -188,7 +188,7 @@ typedef struct {
 	unsigned int mt[MT_NN];
 	int iState;
 	unsigned int mti1;
-} EtatMT; // Etat ddu generateur pour la fonction random Mersenne Twister
+} EtatMT; // Etat du generateur pour la fonction random Mersenne Twister
 
 typedef struct __align__(16)
 {
@@ -214,6 +214,7 @@ typedef struct __align__(16)
 	ConfigMT* config;
 	EtatMT* etat;
 	#endif
+	
 }Tableaux; // Regroupement des tableaux envoyés dans le kernel
 
 

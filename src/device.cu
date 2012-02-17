@@ -22,7 +22,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 {
 	// idx est l'indice du thread considéré
 	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
-	
+
 	// Paramètres de la fonction random en mémoire locale
 	#ifdef RANDMWC
 	unsigned long long etatThr;
@@ -938,6 +938,7 @@ void initConstantesDevice()
 	cudaMemcpyToSymbol(TAURAYd, &TAURAY, sizeof(float));
 	cudaMemcpyToSymbol(TAUAERd, &TAUAER, sizeof(float));
 	cudaMemcpyToSymbol(W0AERd, &W0AER, sizeof(float));
+	cudaMemcpyToSymbol(W0LAMd, &W0LAM, sizeof(float));
 	cudaMemcpyToSymbol(HAd, &HA, sizeof(float));
 	cudaMemcpyToSymbol(HRd, &HR, sizeof(float));
 	cudaMemcpyToSymbol(ZMINd, &ZMIN, sizeof(float));
@@ -951,7 +952,6 @@ void initConstantesDevice()
 	cudaMemcpyToSymbol(YGRIDd, &YGRID, sizeof(int));
 	cudaMemcpyToSymbol(NBTHETAd, &NBTHETA, sizeof(int));
 	cudaMemcpyToSymbol(NBPHId, &NBPHI, sizeof(int));
-	cudaMemcpyToSymbol(NBSTOKESd, &NBSTOKES, sizeof(int));
 	cudaMemcpyToSymbol(PROFILd, &PROFIL, sizeof(int));
 	cudaMemcpyToSymbol(SIMd, &SIM, sizeof(int));
 	cudaMemcpyToSymbol(SURd, &SUR, sizeof(int));
@@ -976,7 +976,7 @@ void initConstantesDevice()
 	cudaMemcpyToSymbol(TAUATMd, &TAUATM, sizeof(float));
 
 	float TAUMAX = TAUATM / CTHSbis; //tau initial du photon
-	cudaMemcpyToSymbol(TAUMAXd, &TAUMAX, sizeof(float));
+	cudaMemcpyToSymbol(TAUMAXd, &TAUMAX, sizeof(float));	
 
 }
 
@@ -1063,16 +1063,16 @@ __device__ void scatterAer(Photon* photon, Tableaux tab
 	{
 		int i = 0;
 		// On cherche la première action vide du tableau
-		while(evnt[i].action != 0 && i<20) i++;
+		while(evnt[i].action != 0 && i<NBTRAJET-1) i++;
 		// Et on remplit la première case vide des tableaux (tableaux de 20 cases)
-		if(i <20 )
-		{
+// 		if(i <20 )
+// 		{
 			// "3"représente l'événement "scatter" du photon
 			evnt[i].action = 3;
 			// On récupère le tau et le poids du photon
 			evnt[i].tau = photon->tau;
 			evnt[i].poids = photon->weight;
-		}
+// 		}
 	}
 	#endif
 

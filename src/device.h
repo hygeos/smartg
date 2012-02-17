@@ -27,7 +27,6 @@ __device__ __constant__ int XGRIDd;
 __device__ __constant__ int YGRIDd;
 __device__ __constant__ int NBTHETAd;
 __device__ __constant__ int NBPHId;
-__device__ __constant__ int NBSTOKESd;
 __device__ __constant__ int PROFILd;
 __device__ __constant__ int SIMd;
 __device__ __constant__ int SURd;

@@ -120,10 +120,6 @@ void initConstantesHost(int argc, char** argv)
 	NBPHI = atoi(s);
 
 	strcpy(s,"");
-	chercheConstante(parametres, "NBSTOKES", s);
-	NBSTOKES = atoi(s);
-
-	strcpy(s,"");
 	chercheConstante(parametres, "PROFIL", s);
 	PROFIL = atoi(s);
 
@@ -139,9 +135,13 @@ void initConstantesHost(int argc, char** argv)
 	chercheConstante(parametres, "DIOPTRE", s);
 	DIOPTRE= atoi(s);
 	
-	strcpy(s,"");
-	chercheConstante(parametres, "DIFFF", s);
-	DIFFF = atoi(s);
+
+	if( SIM!=-2 ) DIFFF = 0;
+	else{
+		strcpy(s,"");
+		chercheConstante(parametres, "DIFFF", s);
+		DIFFF = atoi(s);
+	}
 	
 	if( argc>2){ // Il est possible de rentrer theta à la main, utile pour debug et boucle shell
 		THSDEG = atof(argv[2]);
@@ -286,29 +286,59 @@ void chercheConstante(FILE* fichier, char* nomConstante, char* chaineValeur)
 // Fonction qui initialise les variables à envoyer dans le kernel
 void initVariables(Variables** var_H, Variables** var_D)
 {
+	// 	Initialisation de la version host des variables
+	*var_H = (Variables*)malloc(sizeof(Variables));
+	if( var_H == NULL ){
+		printf("#--------------------#\n");
+		printf("ERREUR: Problème de malloc de var_H dans initVariables\n");
+		printf("#--------------------#\n");
+		exit(1);
+	}
+	memset(*var_H, 0, sizeof(Variables));
+	
 	// Initialisation de la version device des variables
 	if( cudaMalloc(var_D, sizeof(Variables)) == cudaErrorMemoryAllocation ){
 		printf("ERREUR: Problème de cudaMalloc de var_D dans initVariables\n");
 		exit(1);
 	}
-	cudaMemset(*(var_D), 0, sizeof(Variables));
-
-	// Initialisation de la version host des variables
-	*var_H = (Variables*)malloc(sizeof(Variables));
-	if( var_H == NULL ){
-		printf("ERREUR: Problème de malloc de var_H dans initVariables\n");
+	
+	cudaError_t err = cudaMemset(*(var_D), 0, sizeof(Variables));
+	if( err != cudaSuccess ){
+		printf("#--------------------#\n");
+		printf("# ERREUR: Problème de cudaMemset var_D dans initVariables\n");
+		printf("# Nature de l'erreur: %s\n",cudaGetErrorString(err) );
+		printf("#--------------------#\n");
 		exit(1);
 	}
-	memset(*var_H, 0, sizeof(Variables));
+	
 
+	
+	// var_H est une variable page-locked accessible par le device
+// 	if( cudaHostAlloc( var_H, sizeof(Variables), cudaHostAllocPortable ) != cudaSuccess ){
+// 		printf("#--------------------#\n");
+// 		printf("ERREUR: Problème d'allocation de var_H dans initVariables\n");
+// 		printf("#--------------------#\n");
+// 		exit(1);
+// 	}
+// 	
+// 	// Un pointeur est associé pour travailler sur le device
+// 	cudaError_t err = cudaHostGetDevicePointer( var_D, *(var_H) ,0); 
+// 	if( err != cudaSuccess ){
+// 		printf("#--------------------#\n");
+// 		printf("ERREUR: Problème de mappage de var_D dans initVariables\n");
+// 		printf("#--------------------#\n");
+// 		exit(1);
+// 	}
 
 }
 
 // Fonction qui initialise les tableaux à envoyer dans le kernel
 void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 {
-	cudaError_t cudaErreur;	// Permet de tester les erreurs d'allocation mémoire
+	
 #ifdef RANDMWC
+	cudaError_t cudaErreur;	// Permet de tester les erreurs d'allocation mémoire
+
 	// Création des tableaux de generateurs pour la fonction Random MWC
 	tab_H->etat = (unsigned long long*)malloc(XBLOCK * YBLOCK * XGRID * YGRID * sizeof(unsigned long long));
 	if( tab_H->etat == NULL ){
@@ -390,13 +420,14 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 #endif
 	
 	// Tableau du poids des photons ressortis
-	tab_H->tabPhotons = (unsigned long long*)malloc(NBTHETA * NBPHI * NBSTOKES * sizeof(unsigned long long));
+	tab_H->tabPhotons = (unsigned long long*)malloc(4*NBTHETA * NBPHI * sizeof(unsigned long long));
 	if( tab_H->tabPhotons == NULL ){
 		printf("ERREUR: Problème de malloc de tab_H->tabPhotons dans initTableaux\n");
 		exit(1);
 	}
 	
-	if( cudaMalloc(&(tab_D->tabPhotons), NBTHETA * NBPHI * NBSTOKES * sizeof(unsigned long long)) == cudaErrorMemoryAllocation ){
+	if( cudaMalloc(&(tab_D->tabPhotons), 4 * NBTHETA * NBPHI * sizeof(unsigned long long)) == cudaErrorMemoryAllocation
+){
 		printf("ERREUR: Problème de cudaMalloc de tab_D->tabPhotons dans initTableaux\n");
 		exit(1);	
 	}
@@ -517,17 +548,19 @@ void initRandMTConfig(ConfigMT* config_H, ConfigMT* config_D, int nbThreads)
 	}
 }
 
+#ifdef TRAJET
 // DEBUG : Initialisation des variables à envoyer dans le kernel pour récupérer le trajet d'un photon
 void initEvnt(Evnt* evnt_H, Evnt* evnt_D)
 {
-	for(int i = 0; i < 20; i++) evnt_H[i].action = 0;
-	cudaError_t erreur = cudaMemcpy(evnt_D, evnt_H, 20 * sizeof(Evnt), cudaMemcpyHostToDevice);
+	for(int i = 0; i < NBTRAJET; i++) evnt_H[i].action = 0;
+	cudaError_t erreur = cudaMemcpy(evnt_D, evnt_H, NBTRAJET * sizeof(Evnt), cudaMemcpyHostToDevice);
 	if( erreur != cudaSuccess ){
 		printf( "ERREUR: Problème de copie evnt_H dans initEvnt\n");
 		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
 		exit(1);
 	}
 }
+#endif
 
 // Fonction qui réinitialise certaines variables avant chaque envoi dans le kernel
 void reinitVariables(Variables* var_H, Variables* var_D)
@@ -627,23 +660,21 @@ void calculOmega(float* tabTh, float* tabPhi, float* tabOmega)
 		{
 			tabds[ith * NBPHI + iphi] = sin(tabTh[ith]) * dth * dphi;
 			sumds += tabds[ith * NBPHI + iphi];
-		
 		}
-		
 	}
 	
 	// La derniere demi boite 89.75->90
 	for(int iphi = 0; iphi < NBPHI; iphi++)
 		{
-			sumds += sin( (DEMIPI+tabTh[NBTHETA-1])/2 ) * dth/2 * dphi;
+			sumds += sin( (DEMIPI+tabTh[NBTHETA-1])/2 ) * (dth/2) * dphi;
 		}
 	
-	
 	// Normalisation de l'aire de chaque morceau de sphère
-	memset(tabOmega, 0, NBTHETA * NBPHI * sizeof(float));
+	memset(tabOmega, 0, NBTHETA * NBPHI * sizeof(*tabOmega));
 	for(int ith = 0; ith < NBTHETA; ith++)
-		for(int iphi = 0; iphi < NBPHI; iphi++)
+		for(int iphi = 0; iphi < NBPHI; iphi++){
 			tabOmega[ith * NBPHI + iphi] = tabds[ith * NBPHI + iphi] / sumds;
+		}
 }
 
 // Fonction qui remplit le tabFinal, tabTh et tabPhi
@@ -658,7 +689,19 @@ void calculTabFinal(float* tabFinal, float* tabTh, float* tabPhi, unsigned long 
 	{
 		for(int ith = 0; ith < NBTHETA; ith++)
 		{
-			tabFinal[iphi*NBTHETA+ith] = (tabPhotonsTot[0*NBPHI*NBTHETA+ith*NBPHI+iphi] + tabPhotonsTot[1*NBPHI*NBTHETA+ith*NBPHI+iphi]) / (2 * nbPhotonsTot * tabOmega[ith*NBPHI+iphi] * SCALEFACTOR * cosf(tabTh[ith]));
+			// Reflectance
+			tabFinal[0*NBTHETA*NBPHI + iphi*NBTHETA+ith] = 
+				(tabPhotonsTot[0*NBPHI*NBTHETA+ith*NBPHI+iphi] + tabPhotonsTot[1*NBPHI*NBTHETA+ith*NBPHI+iphi]) / 
+				(2* nbPhotonsTot * tabOmega[ith*NBPHI+iphi]*SCALEFACTOR * cosf(tabTh[ith]));
+			
+			tabFinal[1*NBTHETA*NBPHI + iphi*NBTHETA+ith] = 
+				(tabPhotonsTot[0*NBPHI*NBTHETA+ith*NBPHI+iphi] - tabPhotonsTot[1*NBPHI*NBTHETA+ith*NBPHI+iphi]) / 
+				(2* nbPhotonsTot * tabOmega[ith*NBPHI+iphi]*SCALEFACTOR * cosf(tabTh[ith]));
+				
+			tabFinal[2*NBTHETA*NBPHI + iphi*NBTHETA+ith] = 
+				(tabPhotonsTot[2*NBPHI*NBTHETA+ith*NBPHI+iphi]) / 
+				(2* nbPhotonsTot * tabOmega[ith*NBPHI+iphi]*SCALEFACTOR * cosf(tabTh[ith]));
+			
 		}
 	}
 }
@@ -684,8 +727,6 @@ void afficheParametres()
 	printf("NBTHETA = %d", NBTHETA);
 	printf("\n");
 	printf("NBPHI = %d", NBPHI);
-	printf("\n");
-	printf("NBSTOKES = %d", NBSTOKES);
 	printf("\n");
 	printf("THSDEG = %f (degrés)", THSDEG);
 	printf("\n");
@@ -782,11 +823,12 @@ void afficheProgress(unsigned long long nbPhotonsTot, Variables* var, double tem
 	#endif
 }
 
+#ifdef TRAJET
 // Fonction qui affiche le début du trajet du premier thread
 void afficheTrajet(Evnt* evnt_H)
 {
 	printf("\nTrajet d'un thread :\n");
-	for(int i = 0; i < 20; i++)
+	for(int i = 0; i < NBTRAJET; i++)
 	{
 		if(evnt_H[i].action == 1)
 			printf("init : ");
@@ -802,11 +844,12 @@ void afficheTrajet(Evnt* evnt_H)
 			exit(1);
 		}
 		else printf("exit : ");
-		printf("tau=%f ", evnt_H[i].tau);
-		printf("poids=%f", evnt_H[i].poids);
+		printf("tau=%10.9f ", evnt_H[i].tau);
+		printf("poids=%10.9f", evnt_H[i].poids);
 		printf("\n");
 	}
 }
+#endif
 
 // Fonction qui crée un fichier .hdf contenant les informations nécessaires à la reprise du programme
 void creerHDFTemoin(unsigned long long* tabPhotonsTot, unsigned long long nbPhotonsTot, Variables* var, double tempsPrec)
@@ -815,21 +858,22 @@ void creerHDFTemoin(unsigned long long* tabPhotonsTot, unsigned long long nbPhot
 	int sdFichier = SDstart(PATHTEMOINHDF, DFACC_CREATE);
 	// Création et remplissage du tableau du fichier (en double car le format hdf n'accepte pas int64)
 	double* tab;
-	tab = (double*)malloc(NBTHETA * NBPHI * NBSTOKES * sizeof(double));
+	tab = (double*)malloc(4*NBTHETA * NBPHI * sizeof(*tab));
+	// 					 nbstk 
 	if( tab==NULL ){
 		printf("ERREUR: Problème de malloc de tab dans creerHDFTemoin\n");
 		exit(1);
 	}
 	
-	memset(tab, 0, NBTHETA * NBPHI * NBSTOKES * sizeof(double));
+	memset(tab, 0, 4 * NBTHETA * NBPHI * sizeof(*tab));
 	// On remplit le tableau en convertissant de unsigned long long a double car le hdf n'accepte pas ull
-	for(int i = 0; i < NBTHETA * NBPHI * NBSTOKES; i++)
+	for(int i = 0; i < 4*NBTHETA * NBPHI; i++)
 		tab[i] = (double)tabPhotonsTot[i];
 	char nomTab[20]; //nom du tableau
 	sprintf(nomTab,"Temoin (%d%%)", (int)(100 * nbPhotonsTot / NBPHOTONS));
 	int nbDimsTab = 1; //nombre de dimensions du tableau
 	int valDimsTab[nbDimsTab]; //valeurs des dimensions du tableau
-	valDimsTab[0] = NBTHETA * NBPHI * NBSTOKES;
+	valDimsTab[0] = 4 * NBTHETA * NBPHI;
 	int typeTab = DFNT_FLOAT64 ; //type des éléments du tableau
 	// Création du tableau
 	int sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
@@ -860,7 +904,6 @@ void creerHDFTemoin(unsigned long long* tabPhotonsTot, unsigned long long nbPhot
 	SDsetattr(sdsTab, "YGRID", DFNT_INT32, 1, &YGRID);
 	SDsetattr(sdsTab, "NBTHETA", DFNT_INT32, 1, &NBTHETA);
 	SDsetattr(sdsTab, "NBPHI", DFNT_INT32, 1, &NBPHI);
-	SDsetattr(sdsTab, "NBSTOKES", DFNT_INT32, 1, &NBSTOKES);
 	SDsetattr(sdsTab, "DIOPTRE", DFNT_INT32, 1, &DIOPTRE);
 	SDsetattr(sdsTab, "DIFFF", DFNT_INT32, 1, &DIFFF);
 	SDsetattr(sdsTab, "PROFIL", DFNT_INT32, 1, &PROFIL);
@@ -871,6 +914,7 @@ void creerHDFTemoin(unsigned long long* tabPhotonsTot, unsigned long long nbPhot
 	SDsetattr(sdsTab, "TAURAY", DFNT_FLOAT32, 1, &TAURAY);
 	SDsetattr(sdsTab, "TAUAER", DFNT_FLOAT32, 1, &TAUAER);
 	SDsetattr(sdsTab, "W0AER", DFNT_FLOAT32, 1, &W0AER);
+	SDsetattr(sdsTab, "W0LAM", DFNT_FLOAT32, 1, &W0LAM);
 	
 	SDsetattr(sdsTab, "LSAAER", DFNT_UINT32, 1, &LSAAER);
 	SDsetattr(sdsTab, "NFAER", DFNT_UINT32, 1, &NFAER);
@@ -891,6 +935,14 @@ void creerHDFTemoin(unsigned long long* tabPhotonsTot, unsigned long long nbPhot
 	SDsetattr(sdsTab, "nbErreursPoids", DFNT_INT32, 1, &(var->erreurpoids));
 	SDsetattr(sdsTab, "nbErreursTheta", DFNT_INT32, 1, &(var->erreurtheta));
 	SDsetattr(sdsTab, "tempsEcoule", DFNT_FLOAT64, 1, &tempsEcouledouble);
+	
+	#ifdef PROGRESSION
+	SDsetattr(sdsTab, "nbThreads", DFNT_UINT32, 1, &(var->nbThreads));
+	SDsetattr(sdsTab, "nbPhotonsSor", DFNT_UINT32, 1, &(var->nbPhotonsSor));
+	SDsetattr(sdsTab, "erreurvxy", DFNT_INT32, 1, &(var->erreurvxy));
+	SDsetattr(sdsTab, "erreurvy", DFNT_INT32, 1, &(var->erreurvy));
+	SDsetattr(sdsTab, "erreurcase", DFNT_INT32, 1, &(var->erreurcase));
+	#endif
 
 	// Fermeture du tableau
 	SDendaccess(sdsTab);
@@ -913,7 +965,6 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		int SEEDrecup[1];
 		int NBTHETArecup[1];
 		int NBPHIrecup[1];
-		int NBSTOKESrecup[1];
 		int DIOPTRErecup[1];
 		int DIFFFrecup[1];
 		int PROFILrecup[1];
@@ -924,6 +975,7 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		float TAURAYrecup[1];
 		float TAUAERrecup[1];
 		float W0AERrecup[1];
+		float W0LAMrecup[1];
 		float HArecup[1];
 		float HRrecup[1];
 		float ZMINrecup[1];
@@ -935,7 +987,6 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "SEED"), (VOIDP)SEEDrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "NBTHETA"), (VOIDP)NBTHETArecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "NBPHI"), (VOIDP)NBPHIrecup);
-		SDreadattr(sdsTab, SDfindattr(sdsTab, "NBSTOKES"), (VOIDP)NBSTOKESrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "DIOPTRE"), (VOIDP)DIOPTRErecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "DIFFF"), (VOIDP)DIFFFrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "PROFIL"), (VOIDP)PROFILrecup);
@@ -946,6 +997,7 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "TAURAY"), (VOIDP)TAURAYrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "TAUAER"), (VOIDP)TAUAERrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "W0AER"), (VOIDP)W0AERrecup);
+		SDreadattr(sdsTab, SDfindattr(sdsTab, "W0LAM"), (VOIDP)W0LAMrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "HA"), (VOIDP)HArecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "HR"), (VOIDP)HRrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "ZMIN"), (VOIDP)ZMINrecup);
@@ -957,7 +1009,6 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		// Si les parametres sont les memes on recupere des informations pour poursuivre la simulation précédente
 		if(NBTHETArecup[0] == NBTHETA
 			&& NBPHIrecup[0] == NBPHI
-			&& NBSTOKESrecup[0] == NBSTOKES
 			&& DIOPTRErecup[0] == DIOPTRE
 			&& DIFFFrecup[0] == DIFFF
 			&& PROFILrecup[0] == PROFIL
@@ -968,6 +1019,7 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 			&& TAURAYrecup[0] == TAURAY
 			&& TAUAERrecup[0] == TAUAER
 			&& W0AERrecup[0] == W0AER
+			&& W0LAMrecup[0] == W0LAM
 			&& HArecup[0] == HA
 			&& HRrecup[0] == HR
 			&& ZMINrecup[0] == ZMIN
@@ -1028,8 +1080,8 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 			int nbDimsTab = 1; //nombre de dimensions du tableau
 			int startTab[nbDimsTab], edgesTab[nbDimsTab]; //debut et fin de la lecture du tableau
 			startTab[0] = 0;
-			edgesTab[0] = NBTHETA * NBPHI * NBSTOKES;
-			double tabPhotonsTotRecup[NBTHETA * NBPHI * NBSTOKES]; //tableau de récuperation en double
+			edgesTab[0] = 4*NBTHETA * NBPHI;
+			double tabPhotonsTotRecup[4*NBTHETA * NBPHI]; //tableau de récuperation en double
 	
 			int status = SDreaddata (sdsTab, startTab, NULL, edgesTab, (VOIDP)tabPhotonsTotRecup);
 			// Vérification du bon fonctionnement de la lecture
@@ -1040,7 +1092,7 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 			}
 	
 			// Conversion en unsigned long long
-			for(int i = 0; i < NBTHETA * NBPHI * NBSTOKES; i++)
+			for(int i = 0; i < 4*NBTHETA * NBPHI; i++)
 			{
 				tabPhotonsTot[i] = (unsigned long long)tabPhotonsTotRecup[i]; //conversion en ull
 			}
@@ -1057,6 +1109,8 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 void creerHDFResultats(float* tabFinal, float* tabTh, float* tabPhi,
 		unsigned long long nbPhotonsTot, Variables* var, double tempsPrec)
 {
+	// Tableau temporaire utile pour la suite
+	float tab[NBPHI*NBTHETA];
 	// Création du fichier de sortie
 	int sdFichier = SDstart(PATHRESULTATSHDF, DFACC_CREATE);
 	if( sdFichier == FAIL ){
@@ -1078,7 +1132,6 @@ void creerHDFResultats(float* tabFinal, float* tabTh, float* tabPhi,
 	SDsetattr(sdFichier, "YGRID", DFNT_INT32, 1, &YGRID);
 	SDsetattr(sdFichier, "NBTHETA", DFNT_INT32, 1, &NBTHETA);
 	SDsetattr(sdFichier, "NBPHI", DFNT_INT32, 1, &NBPHI);
-	SDsetattr(sdFichier, "NBSTOKES", DFNT_INT32, 1, &NBSTOKES);
 	SDsetattr(sdFichier, "DIOPTRE", DFNT_INT32, 1, &DIOPTRE);
 	SDsetattr(sdFichier, "DIFFF", DFNT_INT32, 1, &DIFFF);
 	SDsetattr(sdFichier, "PROFIL", DFNT_INT32, 1, &PROFIL);
@@ -1116,7 +1169,7 @@ void creerHDFResultats(float* tabFinal, float* tabTh, float* tabPhi,
 	char* nomTab="Valeur de la reflectance pour un phi et theta donnes"; //nom du tableau
 	int nbDimsTab = 2; //nombre de dimensions du tableau
 	int valDimsTab[nbDimsTab]; //valeurs des dimensions du tableau
-	valDimsTab[1] = NBTHETA;
+	valDimsTab[1] = NBTHETA;	//colonnes
 	valDimsTab[0] = NBPHI;
 	int typeTab = DFNT_FLOAT32; //type des éléments du tableau
 	
@@ -1130,25 +1183,89 @@ void creerHDFResultats(float* tabFinal, float* tabTh, float* tabPhi,
 	// Vérification du bon fonctionnement de l'écriture
 	if(status)
 	{
-		printf("\nERREUR : write hdf resultats\n");
+		printf("\nERREUR : write hdf resultats reflectance\n");
 		exit(1);
 	}
-	// Ecriture d'informations sur le tableau
-// 		char description[20];
-// 		SDsetattr(sdsTab, "phi", DFNT_CHAR8, strlen(description), description);
 	
 	// Fermeture du tableau
 	SDendaccess(sdsTab);
 	
-	/** 	Création du 2ème tableau
+	/** 	Création du tableau Q dans le fichier hdf
+	Valeur de Q pour phi et theta donnés		**/
+	nomTab="Valeur de Q pour un phi et theta donnes"; //nom du tableau
+	// La plupart des paramètres restent les mêmes, pas besoin de les réinitialisés
+	
+	// Création du tableau
+	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
+	// Ecriture du tableau dans le fichier
+	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP) (tabFinal+NBPHI*NBTHETA) );
+	// Vérification du bon fonctionnement de l'écriture
+	if(status)
+	{
+		printf("\nERREUR : write hdf resultats Q\n");
+		exit(1);
+	}
+	
+	// Fermeture du tableau
+	SDendaccess(sdsTab);
+	
+	/** 	Création du tableau U dans le fichier hdf
+	Valeur de U pour phi et theta donnés		**/
+	nomTab="Valeur de U pour un phi et theta donnes"; //nom du tableau
+	// La plupart des paramètres restent les mêmes, pas besoin de les réinitialisés
+	
+	// Création du tableau
+	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
+	// Ecriture du tableau dans le fichier
+	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP) (tabFinal+2*NBPHI*NBTHETA) );
+	// Vérification du bon fonctionnement de l'écriture
+	if(status)
+	{
+		printf("\nERREUR : write hdf resultats U\n");
+		exit(1);
+	}
+	
+	// Fermeture du tableau
+	SDendaccess(sdsTab);
+	
+	/** 	Création du tableau de lumière polarisée dans le fichier hdf
+	Valeur de la lumière polarisée pour phi et theta donnés		**/
+	nomTab="Valeur de la lumiere polarisee pour un phi et theta donnes"; //nom du tableau
+	// La plupart des paramètres restent les mêmes, pas besoin de les réinitialisés
+	
+	for( int i=0; i<NBPHI*NBTHETA; i++ ){
+		tab[i] = sqrtf( tabFinal[1*NBTHETA*NBPHI+i]*tabFinal[1*NBTHETA*NBPHI+i] +
+						tabFinal[2*NBTHETA*NBPHI+i]*tabFinal[2*NBTHETA*NBPHI+i] );
+	}
+	
+	// Création du tableau
+	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
+	// Ecriture du tableau dans le fichier
+	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP)tab );
+	// Vérification du bon fonctionnement de l'écriture
+	if(status)
+	{
+		printf("\nERREUR : write hdf resultats U\n");
+		exit(1);
+	}
+	
+	// Fermeture du tableau
+	SDendaccess(sdsTab);
+	
+	/** 	Création du tableau theta
 		Valeurs de theta en fonction de l'indice	**/
+	//conversion en degrès de theta pour une meilleure visualisation de la sortie
+	float tabThBis[NBTHETA];
+	for(int i=0; i<NBTHETA; i++)
+		tabThBis[i] = tabTh[i]/DEG2RAD;
+	
 	nomTab = "Valeurs de theta echantillonnees";
 	nbDimsTab = 1;
 	int valDimsTab2[nbDimsTab];
 	valDimsTab2[0] = NBTHETA;
 	typeTab = DFNT_FLOAT32;
 	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab2);
-	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab2, (VOIDP)tabTh);
+	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab2, (VOIDP) tabThBis);
 	// Vérification du bon fonctionnement de l'écriture
 	if(status)
 	{
@@ -1159,15 +1276,19 @@ void creerHDFResultats(float* tabFinal, float* tabTh, float* tabPhi,
 	// Fermeture du tableau
 	SDendaccess(sdsTab);
 	
-	/** 	Création du 3ème tableau
+	/** 	Création du tableau phi
 		Valeurs de phi en fonction de l'indice	**/
+	float tabPhiBis[NBPHI];
+	for(int i=0; i<NBPHI; i++)
+		tabPhiBis[i] = tabPhi[i]/DEG2RAD;
+	
 	nomTab = "Valeurs de phi echantillonnees";
 	nbDimsTab = 1;
 	int valDimsTab3[nbDimsTab];
 	valDimsTab3[0] = NBPHI;
 	typeTab = DFNT_FLOAT32;
 	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab3);
-	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab3, (VOIDP)tabPhi);
+	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab3, (VOIDP)tabPhiBis);
 	// Vérification du bon fonctionnement de l'écriture
 	if(status)
 	{
@@ -1238,6 +1359,7 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	}
 	
 	free(tab_H->config);
+	free(tab_H->etat);
 	#endif
 	
 	// Liberation du tableau du poids des photons

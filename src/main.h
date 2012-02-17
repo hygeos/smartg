@@ -13,7 +13,6 @@ int XGRID; //Longueur de la grid de blocks
 int YGRID; //Hauteur de la grid de blocks
 int NBTHETA; //Nombre de cases du tableau final pour theta (0..PI/2)
 int NBPHI; //Nombre de cases du tableau final pour phi (0..2*PI)
-int NBSTOKES; //Nombre de nombres de Stokes pris en compte
 int DIOPTRE; //Type de dioptre (0=plan, 1=agite)
 int DIFFF; //Forcage de la premiere diffusion (0=non, 1=oui) (utilise si SIM=-2)
 int PROFIL; //Type de profil atmospherique
