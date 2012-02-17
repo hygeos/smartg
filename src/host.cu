@@ -210,10 +210,32 @@ void initConstantesHost(int argc, char** argv)
 	
 	chercheConstante(parametres, "PATHRESULTATSHDF", PATHRESULTATSHDF);
 	char detail[256];
-	sprintf(detail,"_tauRay=%f_tauAer=%f_difff=%d_ths=%f.hdf",TAURAY,TAUAER,DIFFF,THSDEG);
+	if( SIM==1 ){
+		if( DIOPTRE==3 )
+			sprintf(detail,"_atmos_dioptre_lambertien_tauRay=%f_tauAer=%f_ths=%f_ws=%f.hdf",TAURAY,TAUAER,THSDEG,WINDSPEED);
+		else if( DIOPTRE==2 || DIOPTRE==1 )
+			sprintf(detail,"_atmos_dioptre_agitee_tauRay=%f_tauAer=%f_ths=%f_ws=%f.hdf",TAURAY,TAUAER,THSDEG,WINDSPEED);
+		else
+			sprintf(detail,"_atmos_dioptre_plan_tauRay=%f_tauAer=%f_ths=%f_ws=%f.hdf",TAURAY,TAUAER,THSDEG,WINDSPEED);
+	}
+	else if( SIM==-1 ){
+		if( DIOPTRE==3 )
+			sprintf(detail,"_dioptre_lambertien_seul_ths=%f_ws=%f.hdf",THSDEG,WINDSPEED);
+		else if( DIOPTRE==2 || DIOPTRE==1 )
+			sprintf(detail,"_dioptre_agite_seul_ths=%f_ws=%f.hdf",THSDEG,WINDSPEED);
+		else
+			sprintf(detail,"_dioptre_plan_seul_ths=%f_ws=%f.hdf",THSDEG,WINDSPEED);
+	}
+	else if( SIM==-2 )
+		sprintf(detail,"_atmos_seule_tauRay=%f_tauAer=%f_difff=%d_ths=%f.hdf",TAURAY,TAUAER,DIFFF,THSDEG);
+	else
+		sprintf(detail,"_tauRay=%f_tauAer=%f_difff=%d_ths=%f_ws=%f_sim=%d.hdf",TAURAY,TAUAER,DIFFF,THSDEG,
+WINDSPEED,SIM);
+	
 	strcat(PATHRESULTATSHDF,detail);
 	
 	chercheConstante(parametres, "PATHTEMOINHDF", PATHTEMOINHDF);
+	strcat( PATHTEMOINHDF, detail);
 	
 	chercheConstante( parametres, "PATHDIFFAER", PATHDIFFAER );
 
@@ -529,27 +551,71 @@ void reinitVariables(Variables* var_H, Variables* var_D)
 	}
 }
 
+// Fonction qui vérifie l'état des fichiers temoin et résultats
+void verifierFichier(){
+	char command[256];
+	char res_supp;
+	// S'il existe déjà un fichier nommé NOMRESULTATSHDF (Parametres.txt) on arrête le programme
+	FILE* fic;
+	fic = fopen(PATHTEMOINHDF, "rb");
+	if ( fic != NULL)
+	{
+		printf("ATTENTION: Le fichier %s existe deja.\n",PATHTEMOINHDF);
+		printf("Voulez-vous le supprimer? [y/n]\n");
+		res_supp=getchar();
+		if( res_supp=='y' ){
+			sprintf(command,"rm %s",PATHTEMOINHDF);
+			system(command);
+		}
+		else{
+		}
+		getchar();
+		fclose(fic);
+	}
+	
+	
+	fic = fopen(PATHRESULTATSHDF, "rb");
+	if ( fic != NULL)
+	{
+		printf("ATTENTION: Le fichier %s existe deja.\n",PATHRESULTATSHDF);
+		printf("Voulez-vous le supprimer pour continuer? [y/n]\n");
+		res_supp=getchar();
+		if( res_supp=='y' ){
+			sprintf(command,"rm %s",PATHRESULTATSHDF);
+			system(command);
+		}
+		else{
+		}
+		fclose(fic);
+	}
+	
+	
+}
+
 // Fonction qui calcule pour chaque l'aire normalisée de chaque boite, son theta, et son psi, sous forme de 3 tableaux
 void calculOmega(float* tabTh, float* tabPhi, float* tabOmega)
 {
 	// Tableau contenant l'angle theta de chaque morceau de sphère
-	memset(tabTh, 0, NBTHETA * sizeof(float));
+	memset(tabTh, 0, NBTHETA * sizeof(*tabPhi));
 	float dth = DEMIPI / NBTHETA;
 	tabTh[0] = 0;
-	for(int ith = 1; ith < NBTHETA; ith++) 
+	for(int ith = 1; ith < NBTHETA; ith++){
 		tabTh[ith] = tabTh[ith-1] + dth;
-	
+// 		tabTh[ith] = float(ith*0.5*DEG2RAD);
+	}
 	
 	// Tableau contenant l'angle psi de chaque morceau de sphère
-	memset(tabPhi, 0, NBPHI * sizeof(float));
+	memset(tabPhi, 0, NBPHI * sizeof(*tabPhi));
 	float dphi = DEUXPI / NBPHI;
-	tabPhi[0] = dphi / 2;
-	for(int iphi = 1; iphi < NBPHI; iphi++) tabPhi[iphi] = tabPhi[iphi-1] + dphi;
-	
+ 	tabPhi[0] = dphi / 2;
+	for(int iphi = 1; iphi < NBPHI; iphi++){ 
+// 		tabPhi[iphi] = float((iphi+0.5)*DEG2RAD);
+		tabPhi[iphi] = tabPhi[iphi-1] + dphi;
+	}
 	// Tableau contenant l'aire de chaque morceau de sphère
 	float sumds = 0;
 	float tabds[NBTHETA * NBPHI];
-	memset(tabds, 0, NBTHETA * NBPHI * sizeof(float));
+	memset(tabds, 0, NBTHETA * NBPHI * sizeof(*tabds));
 	for(int ith = 0; ith < NBTHETA; ith++)
 	{
 		if( ith==0 )
@@ -654,6 +720,8 @@ void afficheParametres()
 	printf("SUR = %d", SUR);
 	printf("\n");
 	printf("DIOPTRE = %d", DIOPTRE);
+	printf("\n");
+	printf("W0LAM = %f", W0LAM);
 	printf("\n");
 	printf("CONPHY = %f", CONPHY);
 	printf("\n");
@@ -926,6 +994,27 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 			var_H->erreurpoids = nbErreursPoidsRecup[0];//nombre de photons ayant un poids anormalement élevé
 			var_H->erreurtheta = nbErreursThetaRecup[0];//nombre de photons sortant dans la direction solaire
 			
+			#ifdef PROGRESSION
+			unsigned long long nbThreadsRecup[1]; //nombre total de threads lancés
+			unsigned long long nbPhotonsSorRecup[1]; //nombre de photons ressortis pour un appel du Kernel
+			int erreurvxyRecup[1]; //nombre de photons sortant au zénith et donc difficiles à classer
+			int erreurvyRecup[1]; //nombre de photons sortant à phi=0 ou phi=PI et donc difficiles à classer
+			int erreurcaseRecup[1]; // nombre de photons rangé dans une case inexistante
+			
+			SDreadattr(sdsTab, SDfindattr(sdsTab,"nbThreads"), (VOIDP)nbThreadsRecup );
+			SDreadattr(sdsTab, SDfindattr(sdsTab,"nbPhotonsSor"), (VOIDP)nbPhotonsSorRecup );
+			SDreadattr(sdsTab, SDfindattr(sdsTab,"erreurvxy"), (VOIDP)erreurvxyRecup );
+			SDreadattr(sdsTab, SDfindattr(sdsTab,"erreurvy"), (VOIDP)erreurvyRecup );
+			SDreadattr(sdsTab, SDfindattr(sdsTab,"erreurcase"), (VOIDP)erreurcaseRecup );
+			
+			var_H->nbThreads = nbThreadsRecup[0];
+			var_H->nbPhotonsSor = nbPhotonsSorRecup[0];
+			var_H->erreurvxy = erreurvxyRecup[0];
+			var_H->erreurvy = erreurvyRecup[0];
+			var_H->erreurcase = erreurcaseRecup[0];
+			
+			#endif
+			
 			cudaError_t erreur = cudaMemcpy(var_D, var_H, sizeof(Variables), cudaMemcpyHostToDevice);
 			if( erreur != cudaSuccess ){
 				printf( "ERREUR: Problème de copie var_H dans lireHDFTemoin\n");
@@ -1004,6 +1093,7 @@ void creerHDFResultats(float* tabFinal, float* tabTh, float* tabPhi,
 	SDsetattr(sdFichier, "NFAER", DFNT_UINT32, 1, &NFAER);
 	
 	SDsetattr(sdFichier, "W0AER", DFNT_FLOAT32, 1, &W0AER);
+	SDsetattr(sdFichier, "W0LAM", DFNT_FLOAT32, 1, &W0LAM);
 	SDsetattr(sdFichier, "HA", DFNT_FLOAT32, 1, &HA);
 	SDsetattr(sdFichier, "HR", DFNT_FLOAT32, 1, &HR);
 	SDsetattr(sdFichier, "ZMIN", DFNT_FLOAT32, 1, &ZMIN);

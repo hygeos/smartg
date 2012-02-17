@@ -12,8 +12,10 @@ void initVariables(Variables**, Variables**);
 void initTableaux(Tableaux*, Tableaux*);
 
 void initRandMTConfig(ConfigMT*, ConfigMT*, int);
-void initEvnt(Evnt*, Evnt*);
+
 void reinitVariables(Variables*, Variables*);
+
+void verifierFichier();
 
 void calculTabFinal(float*, float*, float*, unsigned long long*, unsigned long long);
 void calculOmega(float*, float*, float*);
@@ -23,7 +25,11 @@ void afficheProgress(unsigned long long, Variables*, double
 		, unsigned long long
 		#endif
 		    );
+			
+#ifdef TRAJET
+void initEvnt(Evnt*, Evnt*);
 void afficheTrajet(Evnt*);
+#endif
 
 void creerHDFTemoin(unsigned long long*, unsigned long long, Variables*, double);
 void lireHDFTemoin(Variables*, Variables*, unsigned long long*, unsigned long long*, double*);
