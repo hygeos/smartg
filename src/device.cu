@@ -259,7 +259,7 @@ __device__ void move(Photon* photon, int flagDiff
 {
 
 	// tirage épaisseur optique avec diffusion forcée
-	if( DIFFFd == 1 && flagDiff== 1 && SIMd==-2 ){
+	if( DIFFFd == 1 && flagDiff== 1 ){
 		photon->tau += -__logf(1.F-RAND*(1.F-__expf(-TAUMAXd))) * photon->vz;
 	}
 	
@@ -268,7 +268,10 @@ __device__ void move(Photon* photon, int flagDiff
 
 
 	// Si tau<0 le photon atteint la surface
-	if(photon->tau < 0.F) photon->loc = SURFACE;
+	if(photon->tau < 0.F){
+		photon->loc = SURFACE;
+		photon->tau = 0.F;
+	}
 	// Si tau>TAURAY le photon atteint l'espace
 	else if(photon->tau > TAUATMd) photon->loc = SPACE;
 	// Sinon il a rencontré une molécule, on ne fait rien car il reste dans l'atmosphère, et va être traité par scatter
@@ -279,16 +282,16 @@ __device__ void move(Photon* photon, int flagDiff
 	{
 		int i = 0;
 		// On cherche la première action vide du tableau
-		while(evnt[i].action != 0 && i<20) i++;
+		while(evnt[i].action != 0 && i<NBTRAJET-1) i++;
 		// Et on remplit la première case vide des tableaux (tableaux de 20 cases)
-		if(i <20 )
-		{
+// 		if(i <20 )
+// 		{
 			// "2"représente l'événement "move" du photon
 			evnt[i].action = 2;
 			// On récupère le tau et le poids du photon
 			evnt[i].tau = photon->tau;
 			evnt[i].poids = photon->weight;
-		}
+// 		}
 	}
 	#endif
 }
@@ -392,28 +395,22 @@ __device__ void surfac(Photon* photon
 		#endif
 		      )
 {
+	float theta;		// Angle de deflection polaire de diffusion [rad]
+	float psi;		// Angle azimutal de diffusion [rad]
+	float phi;
+	float cTh=0, sTh;	//cos et sin de l'angle d'incidence du photon sur le dioptre
+	float cPhi, sPhi;
 	
-	if( SIMd == -2 || SIMd == 0) // Atmosphère ou océan seuls, la surface absorbe tous les photons
+	if( SIMd == -2) // Atmosphère ou océan seuls, la surface absorbe tous les photons
 		photon->loc = ABSORBED;
 	
-	else{	// Réflexion sur le dioptre
+	else if( DIOPTREd !=3 ){	// Réflexion sur le dioptre
 		float sig = 0.F;
-		float beta = 0.F;
+		float beta = 0.F;// Angle par rapport à la verticale du vecteur normal à une facette de vagues 
 		float sBeta = 0.F;
 		float cBeta = 1;
-		if( DIOPTREd == 1 ){
-			sig = sqrtf(0.003F + 0.00512*WINDSPEEDd);
-			beta = atanf( sig*sqrtf(-__logf(RAND)) );
-			sBeta = __sinf( beta );
-			cBeta = __cosf( beta );
-		}
-// 		float beta = atanf( sig*sqrtf(-__logf(RAND)) );// Angle par rapport à la verticale du vecteur normal à
-// une facette de vagues 
+
 		float alpha = DEUXPI*RAND; //Angle azimutal du vecteur normal a une facette de vagues
-		float theta;		// Angle de deflection polaire de diffusion [rad]
-		float psi;		// Angle azimutal de diffusion [rad]
-		float cTh=0, sTh;
-		float cPsi2, sPsi2, demis2Psi_s3;	//demis2Psi_s3 = 1/2*sin(2Psi)*photon->stokes3
 	
 		float nind=0;
 		float temp=0;
@@ -430,17 +427,23 @@ __device__ void surfac(Photon* photon
 		float ncot, ncTh;	// ncot = nind*cot, ncoi = nind*cTh
 		float tpar, tper;	// 
 		
+		if( DIOPTREd == 1 || DIOPTREd==2 ){
+			sig = sqrtf(0.003F + 0.00512*WINDSPEEDd);
+		}
+		beta = atanf( sig*sqrtf(-__logf(RAND)) );
+		sBeta = __sinf( beta );
+		cBeta = __cosf( beta );
+		
 		nx = sBeta*__cosf( alpha );
 		ny = sBeta*__sinf( alpha );
 		
 		// Projection de la surface apparente de la facette sur le plan horizontal
+		
 		if( photon->vz > 0.F ){
 			nind = __fdividef(1.F,NH2Od);
 			nz = -cBeta;
 			// Correction bug surface apparente facettes face/dos au photon
 			photon->weight *= __fdividef( abs(nx*photon->vx + ny*photon->vy+ nz*photon->vz),photon->vz) ;
-			// Projection de la surface apparente de la facette sur le plan horizontal
-			photon->weight = __fdividef( photon->weight, cBeta );
 		}
 
 		else{
@@ -448,75 +451,57 @@ __device__ void surfac(Photon* photon
 			nz = cBeta;
 			// Correction bug surface apparente facettes face/dos au photon
 			photon->weight *= -__fdividef(abs(nx*photon->vx + ny*photon->vy + nz*photon->vz),photon->vz) ;
-			// Projection de la surface apparente de la facette sur le plan horizontal
-			photon->weight = __fdividef( photon->weight, cBeta );
+			
 		}
+		// Projection de la surface apparente de la facette sur le plan horizontal
+		photon->weight = __fdividef( photon->weight, cBeta );
 		
 		temp = -(nx*photon->vx + ny*photon->vy + nz*photon->vz);
-
 		
 		if (abs(temp) > 1.01F){
-// 			printf("ERREUR dans la fonction surface: variable temp supérieure à 1.01\n");
-// 			printf(" temp = %f\n", temp);
-// 			printf("nx=%f, ny=%f, nz=%f\tvx=%f, vy=%f, vz=%f\n", nx,ny,nz,photon->vx,photon->vy,photon->vz);
+			printf("ERREUR dans la fonction surface: variable temp supérieure à 1.01\n");
+			printf(" temp = %f\n", temp);
+			printf("nx=%f, ny=%f, nz=%f\tvx=%f, vy=%f, vz=%f\n", nx,ny,nz,photon->vx,photon->vy,photon->vz);
 		}
 		
-		theta = acosf( fmin(1.00F-VALMIN, fmax( VALMIN-1.F, temp ) ));
+		theta = acosf( fmin(1.00F-VALMIN, fmax( -(1.F-VALMIN), temp ) ));
 
 		if(theta >= DEMIPI){
 			nx = -nx;
 			ny = -ny;
-			theta = acosf( temp );
+			theta = acosf( -(nx*photon->vx + ny*photon->vy + nz*photon->vz) );
 		}
-
-		// Rotation des paramètres de Stokes
+		
 		cTh = __cosf(theta);
 		sTh = __sinf(theta);
+		
+		// Rotation des paramètres de Stokes
 		s1 = photon->stokes1;
 		s2 = photon->stokes2;
 		s3 = photon->stokes3;
-		
-// 		int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd +
-// 		threadIdx.y);
-// 		if( idx%100 == 0){
-// 			printf( "nx = %f, ny=%f, nz=%f \n",nx,ny,nz );
-// 			printf("cos(theta)=%f\n",cTh);
-// 			printf( "temp=%f\n\n", temp);
-// 		}
 		
 		if( (s1!=s2) || (s3!=0.F) ){
 			
 			temp = __fdividef(nx*photon->ux + ny*photon->uy + nz*photon->uz,sTh);
 			psi = acosf( fmin(1.00F, fmax( -1.F, temp ) ));	
 			
-			if( 	(nx*(photon->uy*photon->vz-photon->uz*photon->vy)+ \
+			if( (nx*(photon->uy*photon->vz-photon->uz*photon->vy)+ \
 				ny*(photon->uz*photon->vx-photon->ux*photon->vz) + \
-				nz*(photon->ux*photon->vy-photon->uy*photon->vx) ) <0 ){
+				nz*(photon->ux*photon->vy-photon->uy*photon->vx) ) <0 )
+			{
 				psi = -psi;
 			}
 			
 		/*psi est l'angle entre le plan de diffusion et le plan de diffusion precedent. Rotation des
 		parametres de Stoke du photon d'apres cet angle.*/
-
-			cPsi2 = __cosf(psi)*__cosf(psi);
-			sPsi2 = __sinf(psi)*__sinf(psi);
-			demis2Psi_s3 = (__fdividef( __sinf(2*psi), 2) )*s3;
-			
-			photon->stokes1 = cPsi2*s1 + sPsi2*s2 + demis2Psi_s3;
-			photon->stokes2 = sPsi2*s1 + cPsi2*s2 - demis2Psi_s3;
-			photon->stokes3 = (__sinf(2*psi))*(s2-s1) + __cosf(2*psi)*s3;
+		modifStokes(photon, psi, __cosf(psi), __sinf(psi), 0 );
+		
 		}
 
-// 		if( sTh>nind ){	// Cas particulier de la reflexion totale sur le dioptre
-// 			rpar = 1.F;
-// 			rpar2 = 1.F;
-// 			rper = 1.F;
-// 			rper2 = 1.F;
-// 			ReflTot = 1;
-// 		}
-		
-		/*else*/if(sTh<=nind){	// Calcul des coefficients de reflexion ( parallele et perpendiculaire )
-			cot = __cosf( asinf(__fdividef(sTh,nind)) );
+		if(sTh<=nind){	// Calcul des coefficients de reflexion ( parallele et perpendiculaire )
+// 			cot = __cosf( asinf(__fdividef(sTh,nind)) );
+			temp = __fdividef(sTh,nind);
+			cot = sqrtf( 1.0F - temp*temp );
 			ncot = nind*cot;
 			ncTh = nind*cTh;
 			rpar = __fdividef(cot - ncTh,cot + ncTh);
@@ -545,20 +530,38 @@ __device__ void surfac(Photon* photon
 			
 			// Le photon est renvoyé dans l'atmosphère
 			photon->loc = ATMOS;
-			
-			if (
-			/*(abs( 1.F - sqrtf(photon->ux*photon->ux+photon->uy*photon->uy+photon->uz*photon->uz) )>1.F-06)
-			||*/ (photon->vz<0) ){
+			if((photon->vz<0) && DIOPTREd==2){
 				// Suppression des reflexions multiples
-// 				printf("Absortion du photon\n");
-// 				photon->weight = 0.F;
 				photon->loc = ABSORBED;
 			}
+
+// 			bool cond = ((photon->vz<0) && (DIOPTREd==2));
+// 			photon->loc = ABSORBED*cond + ATMOS*(!cond);
+
+			
+// 			if( abs( 1.F - sqrtf(photon->ux*photon->ux+photon->uy*photon->uy+photon->uz*photon->uz) )>1.E-05){
+// 				photon->weight = 0;
+// 				photon->loc = ABSORBED;
+// 				printf("suppression du photon\n");
+// 				if(RAND<0.1){
+// 				printf("valeur a pb:%10.8f - ux=%10.8f - uy=%10.8f - uz=%10.8f\n",
+// 					   sqrt(photon->ux*photon->ux + photon->uy*photon->uy+photon->uz*photon->uz),photon->ux ,photon->uy, photon->uz);
+// 					   printf("ux2=%10.8f - uy2=%10.8f-uy2=%10.8f\n",
+// 							  photon->ux*photon->ux,photon->uy*photon->uy,photon->uz*photon->uz);
+			
+// 				}
+// 				return;
+// 			}
+			
+
 			
 			if (SURd==1){ /*On pondere le poids du photon par le coefficient de reflexion dans le cas 
 d'une reflexion speculaire sur le dioptre (mirroir parfait)*/
 				photon->weight *= rat;
 			}
+// 			cond = (SURd==1);
+// 			photon->weight = photon->weight*rat*cond + photon->weight*(!cond);
+			
 			
 		}
 		
@@ -594,22 +597,82 @@ d'une reflexion speculaire sur le dioptre (mirroir parfait)*/
 		
 	}
 	
+	else if( DIOPTREd == 3){// Reflexion surface lambertienne
+		
+		float thetab;	// angle de diffusion (entre le vecteur avt et après reflexion)
+		float uxn,vxn,uyn,vyn,uzn,vzn;	// Vecteur du photon après reflexion
+		float cTh2 = RAND;
+		cTh = sqrtf( cTh2 );
+		sTh = sqrtf( 1.0F - cTh2 );
+
+		phi = RAND*DEUXPI;	//angle azimutal
+		cPhi = __cosf(phi);
+		sPhi = __sinf(phi);
+		
+		/** calcul u,v new **/
+		vxn = cPhi*sTh;
+		vyn = sPhi*sTh;
+		vzn = cTh;
+		
+		uxn = cPhi*cTh;
+		uyn = sPhi*cTh;
+		uzn = -sTh;
+		
+		/** Calcul angle Psi **/
+		float temp;
+		// Calcul du produit scalaire V.Vnew
+		temp = photon->vx*vxn + photon->vy*vyn + photon->vz*vzn;
+		thetab = acosf( fmin( fmax(-1,temp),1 ) );
+		if( thetab==0){
+			photon->loc=SPACE;
+			printf("theta nul\n");
+			return;
+		}
+		
+		// (Produit scalaire V.Unew)/sin(theta)
+		temp = __fdividef( photon->vx*uxn + photon->vy*uyn + photon->vz*uzn, __sinf(thetab) );
+		psi = acosf( fmin( fmax(-1,temp),1 ) );	// angle entre le plan (u,v)old et (u,v)new
+		
+		if( (photon->vx*(uyn*vzn-uzn*vyn) + photon->vy*(uzn*vxn-uxn*vzn) + photon->vz*(uxn*vyn-uyn*vxn) ) <0 )
+		{	// test du signe de v.(unew^vnew) (scalaire et vectoriel)
+			psi = -psi;
+		}
+		
+		modifStokes(photon, psi, __cosf(psi) , __sinf(psi), 0 );
+		
+		photon->vx = vxn;
+		photon->vy = vyn;
+		photon->vz = vzn;
+		photon->ux = uxn;
+		photon->uy = uyn;
+		photon->uz = uzn;
+		
+		// Aucun photon n'est absorbés mais on pondère le poids par l'albedo de diffusion de la surface lambertienne.
+		photon->weight *= W0LAMd;
+		
+		if( SIMd == -1) // Dioptre seul
+			photon->loc=SPACE;
+		else
+			photon->loc=ATMOS;
+		
+	}
+	
 	#ifdef TRAJET
 	// Récupération d'informations sur le premier photon traité
 	if(idx == 0)
 	{
 		int i = 0;
-			// On cherche la première action vide du tableau
-		while(evnt[i].action != 0 && i<20) i++;
-			// Et on remplit la première case vide des tableaux (tableaux de 20 cases)
-		if(i <20 )
-		{
+		// On cherche la première action vide du tableau
+		while(evnt[i].action != 0 && i<NBTRAJET-1) i++;
+		// Et on remplit la première case vide des tableaux (tableaux de 20 cases)
+// 		if(i <20 )
+// 		{
 			// "4"représente l'événement "surface" du photon
 			evnt[i].action = 4;
 			// On récupère le tau et le poids du photon
 			evnt[i].tau = photon->tau;
 			evnt[i].poids = photon->weight;
-		}
+// 		}
 	}
 	#endif
 }

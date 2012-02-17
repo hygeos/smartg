@@ -12,9 +12,8 @@ __device__ __constant__ float TAURAYd;
 __device__ __constant__ float TAUAERd;
 __device__ __constant__ float TAUATMd;
 __device__ __constant__ float W0AERd;
-
+__device__ __constant__ float W0LAMd;
 __device__ __constant__ unsigned int NFAERd;
-
 __device__ __constant__ float HAd;
 __device__ __constant__ float HRd;
 __device__ __constant__ float ZMINd;

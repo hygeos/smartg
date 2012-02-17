@@ -169,6 +169,10 @@ void initConstantesHost(int argc, char** argv)
 	W0AER = atof(s);
 	
 	strcpy(s,"");
+	chercheConstante(parametres, "W0LAM", s);
+	W0LAM = atof(s);
+	
+	strcpy(s,"");
 	chercheConstante(parametres, "LSAAER", s);
 	LSAAER = atof(s);
 	

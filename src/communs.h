@@ -114,6 +114,7 @@ extern float LAMBDA;
 extern float TAURAY;
 extern float TAUAER;
 extern float W0AER;
+extern float W0LAM;
 extern float HA;
 extern float HR;
 extern float ZMIN;
