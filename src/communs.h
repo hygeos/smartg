@@ -64,6 +64,10 @@
 // Constante pour le calcul du profil de l'atmosphère (Nombre de couches)
 #define NATM 103
 
+#ifdef TRAJET
+#define NBTRAJET 40	// Nombre de trajet à afficher pour debuggage
+#endif
+
 // DEBUG Test des differentes fonctions random
 #ifdef RANDMWC
 #define RAND randomMWCfloat(etatThr,configThr)

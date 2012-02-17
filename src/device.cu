@@ -70,17 +70,16 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 				#ifdef TRAJET
 				, idx, evnt
 				#endif
+				#ifdef SORTIEINT
+				, iloop
+				#endif
 					);
 			flagDiff = DIFFFd;
 			
-			#ifdef SORTIEINT
-// 			if (iloop!=0)
-// 				printf("init2, iloop=%d\n",iloop);
-			photon.numBoucle = iloop;
-			#endif
 		}
 		// Chaque block attend tous ses threads avant de continuer
 		syncthreads();
+		
 		
 		// Si le photon est à ATMOS on le fait avancer jusqu'à SURFACE, ou SPACE, ou ATMOS s'il subit une diffusion
 		if( (photon.loc == ATMOS) && (SIMd==-2 || SIMd==1 || SIMd==2) ) move(&photon, flagDiff, &etatThr
@@ -144,6 +143,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 			photon.weight *= (1.F - __expf(-TAUMAXd));
 			flagDiff=0;
 		}
+		syncthreads();
 
 	}// Fin boucle for
 	
@@ -199,6 +199,9 @@ __device__ void init(Photon* photon
 		#ifdef TRAJET
 		, int idx, Evnt* evnt
 		#endif
+		#ifdef SORTIEINT
+		, unsigned int iloop
+		#endif
 		    )
 {
 	// Initialisation du vecteur vitesse
@@ -221,22 +224,26 @@ __device__ void init(Photon* photon
 	photon->stokes3 = 0.F;
 	photon->stokes4 = 0.F;
 	
+	#ifdef SORTIEINT
+	photon->numBoucle = iloop;
+	#endif
+	
 	#ifdef TRAJET
 	// Récupération d'informations sur le premier photon traité
 	if(idx == 0)
 	{
 		int i = 0;
 		// On cherche la première action vide du tableau
-		while(evnt[i].action != 0 && i<20) i++;
+		while(evnt[i].action != 0 && i<NBTRAJET-1) i++;
 		// Et on remplit la première case vide des tableaux (tableaux de 20 cases)
-		if(i <20 )
-		{
+// 		if(i <20 )
+// 		{
 			// "1"représente l'événement "initialisation" du photon
 			evnt[i].action = 1;
 			// On récupère le tau et le poids du photon
 			evnt[i].tau = photon->tau;
 			evnt[i].poids = photon->weight;
-		}
+// 		}
 	}
 	#endif
 }
@@ -365,16 +372,16 @@ __device__ void scatterMol(Photon* photon
 	{
 		int i = 0;
 		// On cherche la première action vide du tableau
-		while(evnt[i].action != 0 && i<20) i++;
+		while(evnt[i].action != 0 && i<NBTRAJET-1) i++;
 		// Et on remplit la première case vide des tableaux (tableaux de 20 cases)
-		if(i <20 )
-		{
+// 		if(i <20 )
+// 		{
 			// "3"représente l'événement "scatter" du photon
 			evnt[i].action = 3;
 			// On récupère le tau et le poids du photon
 			evnt[i].tau = photon->tau;
 			evnt[i].poids = photon->weight;
-		}
+// 		}
 	}
 	#endif
 }
