@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
 import os
 import sys
 import pyhdf.SD
@@ -17,9 +16,10 @@ nom_hdf = "Resultats_seed_123456789"
 # Si le fichier suivant n'existe pas le prog s'arrete
 path_hdf = "out_prog/" + nom_hdf + ".hdf"
 # Si le dossier suivant existe deja il est supprime puis recree
-path_dossier_sortie = "out_scripts/analyse_" + nom_hdf
+path_dossier_sortie = "out_scripts/analyse_symetrie" + nom_hdf
 	
-			  #######################
+
+	          #######################
 	         # CREATION GRAPHIQUES #
 	        #######################
 
@@ -33,47 +33,37 @@ if os.path.exists(path_hdf):
 	# lecture du nombre de valeurs de phi
 	NBPHI = getattr(sd_hdf,'NBPHI')
 
-	print 'Le fichier traité est ' + path_hdf
-	print 'Les résultats sont stockés dans ' + path_dossier_sortie
-
-	# Récupération des valeurs de theta
-	name = "Valeurs de theta echantillonnees"
-	hdf_theta = sd_hdf.select(name)
-	theta = hdf_theta.get()
-	
-	# Récupération des valeurs de phi
-	name = "Valeurs de phi echantillonnees"
-	hdf_phi = sd_hdf.select(name)
-	phi = hdf_phi.get()	
-	
-	# pour chaque iphi on cree un graphique
-	sys.stdout.write("Realisation des graphiques en cours\n")
-	# print 'Realisation des graphiques en cours'
-	for iphi in xrange(NBPHI):
-		if int(iphi/10) == 0:
-			sys.stdout.write("...")
-		
-		# lecture du dataset
-		name = "Valeur de la reflectance pour un phi et theta donnes"
-		sds_hdf = sd_hdf.select(name)
-		# recuperation du tableau et de la valeur de phi
-		data = sds_hdf.get()
+	# pour chaque iphi de 0..NBPHI/2-1 on cree un graphique
+	for iphi in xrange(NBPHI/2):
+		# lecture du premier dataset (iphi)
+		name_1 = "Resultats (iphi = " + str(iphi) + ")"
+		sds_hdf_1 = sd_hdf.select(name_1)
+		# recuperation du premier tableau et de la valeur de phi
+		data_1 = sds_hdf_1.get()
+		phi = getattr(sds_hdf_1,'phi')
+		# lecture du deuxieme dataset (NBPHI-iphi-1)
+		name_2 = "Resultats (iphi = " + str(NBPHI-iphi-1) + ")"
+		sds_hdf_2 = sd_hdf.select(name_2)
+		# recuperation du deuxieme tableau
+		data_2 = sds_hdf_2.get()
 		# creation et sauvegarde du graphique
-		plot(theta[:],data[iphi,:])
-		title("Reflectance en fonction de theta pour phi="+str(phi[iphi]))
+		listePlots = []
+		listeLegends = []
+		listePlots.append(plot(data_1[:,1],data_1[:,0]))
+		listeLegends.append('phi')
+		listePlots.append(plot(data_2[:,1],data_2[:,0]))
+		listeLegends.append('2PI-phi')
+		legend(listePlots, listeLegends, loc='best', numpoints=1)
+		title("Comparaison entre les graphes symetriques pour phi="+str(phi))
 		xlabel("Theta (rad)")
-		ylabel("Reflectance")
+		ylabel("Eclairement")
 		grid(True)
-		savefig(path_dossier_sortie+"/analyse_resultats_iphi="+str(phi[iphi])+".png", dpi=(140))
+		savefig(path_dossier_sortie+"/analyse_symetrie_phi="+str(phi)+".png", dpi=(140))
 		figure()
-	
-	sys.stdout.write("\n")
-		
-		
 else:
 	sys.stdout.write("Pas de fichier "+path_hdf+"\n")
 	sys.exit()
-	
+
 
 	          ###############################
 	         # CREATION FICHIER PARAMETRES #
@@ -109,8 +99,7 @@ CONPHY = getattr(sd_hdf,'CONPHY')
 DIFFF = getattr(sd_hdf,'DIFFF')
 PATHRESULTATSHDF = getattr(sd_hdf,'PATHRESULTATSHDF')
 PATHTEMOINHDF = getattr(sd_hdf,'PATHTEMOINHDF')
-
-# Creation du fichier contenant les parametres de la simulation
+# creation du fichier contenant les parametres de la simulation
 fichierParametres = open(path_dossier_sortie+"/Parametres.txt", "w")
 fichierParametres.write("NBPHOTONS = " + str(NBPHOTONS) + "\n")
 fichierParametres.write("NBLOOP = " + str(NBLOOP) + "\n")
