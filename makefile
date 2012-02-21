@@ -2,11 +2,11 @@ CC = nvcc
 EXEC = Prog
 
 #=============Options============#  (en fonction de la carte graphique utilisee)
-CFLAGS = -g -G -arch=sm_11 -O3 -Xptxas -v
-# CFLAGS = -g -G -arch=sm_20 -O3 # -Xptxas -v
-
-IFLAGS = -I /opt/cuda/include
-IFLAGS += -I /opt/NVIDIA_GPU_Computing_SDK/C/common/inc
+# CFLAGS = -g -G -arch=sm_10 -O3 -Xptxas -v
+CFLAGS = -g -G -arch=sm_20 -O3 # -Xptxas -v
+#CFLAGS += -gencode arch=compute_20,code=sm_20
+IFLAGS = -I /usr/local/cuda/include
+IFLAGS += -I /usr/local/NVIDIA_GPU_Computing_SDK/C/common/inc
 IFLAGS += -I /usr/include/hdf/
 
 # IIFLAGS = $(wildcard /usr/lib/libdf.a /usr/lib64/hdf/libdf.a)
@@ -14,24 +14,25 @@ IFLAGS += -I /usr/include/hdf/
 IIFLAGS = -ldf -lmfhdf -ljpeg
 
 LFLAGS =
-LFLAGS += -L /opt/NVIDIA_GPU_Computing_SDK/C/common/lib/linux
-LFLAGS += -L /opt/cuda/lib64
-LFLAGS += -L /opt/cuda/lib
-LFLAGS += -L /opt/cuda/bin
-LFLAGS += -L /opt/NVIDIA_GPU_Computing_SDK/C/lib
+LFLAGS += -L /usr/local/NVIDIA_GPU_Computing_SDK/C/common/lib/linux
+LFLAGS += -L /usr/local/cuda/lib64
+LFLAGS += -L /usr/local/cuda/lib
+LFLAGS += -L /usr/local/cuda/bin
+LFLAGS += -L /usr/local/NVIDIA_GPU_Computing_SDK/C/lib
 LFLAGS += -lcuda -lcudart
 
 #=============Options============#
 DFLAGS =
 DFLAGS += -DPARAMETRES # Affichage des parametres initiaux
 DFLAGS += -DRANDMWC 	# Utilisation du random MWC (Multiply-With-Carry)
-# DFLAGS += -DRANDCUDA	# Utilisation du random CUDA (Fonction fournie par cuda)
+#DFLAGS += -DRANDCUDA	# Utilisation du random CUDA (Fonction fournie par cuda)
 # DFLAGS += -DRANDMT	# Utilisation du random MT (Mersenne Twister)
 
 #=============Debogage===========#
 DFLAGS += -DPROGRESSION # Calcul et affichage de la progression de la simulation
-# DFLAGS += -DTRAJET # Calcul et affichage des premiers evenements d'un threads
+#DFLAGS += -DTRAJET # Calcul et affichage des premiers evenements d'un threads
 # DFLAGS += -DTABRAND # Affichage des premiers nombre aleatoires generes
+#DFLAGS += -DSORTIEINT # Sauvegarde des poids élevés, du nombre de photons par cases
 
 #####################################################################################
 

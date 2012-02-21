@@ -15,11 +15,11 @@ import struct
 	        ##############
 # Résultats Fortran
 path_fortran_zip = \
-"/home/florent/MC/bin/out_dioptre_seul.ran=0622.wav=443.ths=70.000.vent=5.\
-bin.gz"
+"/home/florent/MC/bin/res_corrects/out_atmos_seule.ran=0050.wav=443.ths=30.000.tr=0.0000.ta=0.1000.difff=0001.pi0=0.967.H=002.000.\
+mod=valid_T70.443.bin.gz"
 
 # Nom du fichier hdf à analyser SANS l'extension hdf
-nom_hdf = "test_dioptre_agite_seul_ths=70.000000_ws=5.000000"
+nom_hdf = "hdf_atmos_seule_tauRay=0.000000_tauAer=0.100000_difff=1_ths=30.000000"
 # Chemin complet du hdf cuda
 path_cuda = "../out_prog/Resultats_" + nom_hdf + ".hdf"
 

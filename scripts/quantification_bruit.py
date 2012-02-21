@@ -14,13 +14,13 @@ from pylab import *
 	        ##############
 
 # Nom du fichier hdf à analyser SANS l'extension hdf (A MODIFIER)
-nom_hdf = "atmos_dioptre_agitee_tauRay=0.001000_tauAer=0.000000_ths=70.000000_ws=5.000000"
+nom_hdf = "atmos_seule_tauRay=0.000000_tauAer=0.100000_difff=1_ths=70.000000"
 path_hdf = "../out_prog/Resultats_" + nom_hdf + ".hdf"
 
 # Si le dossier suivant existe deja il est supprime puis recree
 path_dossier_sortie = "../out_scripts/quantification_bruit/quantification_bruit_" + nom_hdf
 
-path_ref = "/home/florent/entree/new_out_SOS_toray_0.001_ths_70_vent_5_MU400.txt"
+path_ref = "/home/florent/entree/new_out_SOS_toaer_0.1_ths_70_T70_443_MU400.txt"
 
 os.system("rm -rf "+ path_dossier_sortie)
 os.system("mkdir -p "+ path_dossier_sortie)

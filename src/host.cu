@@ -214,7 +214,7 @@ void initConstantesHost(int argc, char** argv)
 		if( DIOPTRE==3 )
 			sprintf(detail,"_atmos_dioptre_lambertien_tauRay=%f_tauAer=%f_ths=%f_ws=%f.hdf",TAURAY,TAUAER,THSDEG,WINDSPEED);
 		else if( DIOPTRE==2 || DIOPTRE==1 )
-			sprintf(detail,"_atmos_dioptre_agitee_tauRay=%f_tauAer=%f_ths=%f_ws=%f.hdf",TAURAY,TAUAER,THSDEG,WINDSPEED);
+			sprintf(detail,"_atmos_dioptre_agite_tauRay=%f_tauAer=%f_ths=%f_ws=%f.hdf",TAURAY,TAUAER,THSDEG,WINDSPEED);
 		else
 			sprintf(detail,"_atmos_dioptre_plan_tauRay=%f_tauAer=%f_ths=%f_ws=%f.hdf",TAURAY,TAUAER,THSDEG,WINDSPEED);
 	}
@@ -631,8 +631,9 @@ void calculOmega(float* tabTh, float* tabPhi, float* tabOmega)
 	// Tableau contenant l'angle theta de chaque morceau de sphère
 	memset(tabTh, 0, NBTHETA * sizeof(*tabPhi));
 	float dth = DEMIPI / NBTHETA;
-	tabTh[0] = 0;
-	for(int ith = 1; ith < NBTHETA; ith++){
+	tabTh[0] = dth/4;
+	tabTh[1] = dth;
+	for(int ith = 2; ith < NBTHETA; ith++){
 		tabTh[ith] = tabTh[ith-1] + dth;
 // 		tabTh[ith] = float(ith*0.5*DEG2RAD);
 	}
@@ -695,13 +696,12 @@ void calculTabFinal(float* tabFinal, float* tabTh, float* tabPhi, unsigned long 
 				(2* nbPhotonsTot * tabOmega[ith*NBPHI+iphi]*SCALEFACTOR * cosf(tabTh[ith]));
 			
 			tabFinal[1*NBTHETA*NBPHI + iphi*NBTHETA+ith] = 
-				(tabPhotonsTot[0*NBPHI*NBTHETA+ith*NBPHI+iphi] - tabPhotonsTot[1*NBPHI*NBTHETA+ith*NBPHI+iphi]) / 
+				(float(tabPhotonsTot[0*NBPHI*NBTHETA+ith*NBPHI+iphi]) - float(tabPhotonsTot[1*NBPHI*NBTHETA+ith*NBPHI+iphi])) / 
 				(2* nbPhotonsTot * tabOmega[ith*NBPHI+iphi]*SCALEFACTOR * cosf(tabTh[ith]));
 				
-			tabFinal[2*NBTHETA*NBPHI + iphi*NBTHETA+ith] = 
-				(tabPhotonsTot[2*NBPHI*NBTHETA+ith*NBPHI+iphi]) / 
+			tabFinal[2*NBTHETA*NBPHI + iphi*NBTHETA+ith] = (float(tabPhotonsTot[2*NBPHI*NBTHETA+ith*NBPHI+iphi])) / 
 				(2* nbPhotonsTot * tabOmega[ith*NBPHI+iphi]*SCALEFACTOR * cosf(tabTh[ith]));
-			
+				
 		}
 	}
 }
@@ -1191,7 +1191,7 @@ void creerHDFResultats(float* tabFinal, float* tabTh, float* tabPhi,
 	SDendaccess(sdsTab);
 	
 	/** 	Création du tableau Q dans le fichier hdf
-	Valeur de Q pour phi et theta donnés		**/
+		Valeur de Q pour phi et theta donnés		**/
 	nomTab="Valeur de Q pour un phi et theta donnes"; //nom du tableau
 	// La plupart des paramètres restent les mêmes, pas besoin de les réinitialisés
 	
@@ -1217,7 +1217,7 @@ void creerHDFResultats(float* tabFinal, float* tabTh, float* tabPhi,
 	// Création du tableau
 	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
 	// Ecriture du tableau dans le fichier
-	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP) (tabFinal+2*NBPHI*NBTHETA) );
+	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP) (tabFinal+(2*NBPHI*NBTHETA) ) );
 	// Vérification du bon fonctionnement de l'écriture
 	if(status)
 	{
@@ -1427,7 +1427,7 @@ void calculFaer( const char* nomFichier, Tableaux* tab_H, Tableaux* tab_D ){
 	
 	FILE* fichier = fopen(nomFichier, "r");
 
-	float *scum = (float*) malloc(LSAAER*sizeof(*scum));
+	double *scum = (double*) malloc(LSAAER*sizeof(*scum));
 	if( scum==NULL ){
 		printf("ERREUR: Problème de malloc de scum dans calculFaer\n");
 		exit(1);
@@ -1435,17 +1435,17 @@ void calculFaer( const char* nomFichier, Tableaux* tab_H, Tableaux* tab_D ){
 	
 	scum[0] = 0;
 	int iang = 0, ipf = 0;
-	float dtheta, pm1, pm2, sin1, sin2;
-	float z, norm;
+	double dtheta, pm1, pm2, sin1, sin2;
+	double z, norm;
 
 	/** Allocation de la mémoire des tableaux contenant les données **/
-	float *ang;
-	float *p1, *p2, *p3, *p4;
-	ang = (float*) malloc(LSAAER*sizeof(float));
-	p1 = (float*) malloc(LSAAER*sizeof(float));
-	p2 = (float*) malloc(LSAAER*sizeof(float));
-	p3 = (float*) malloc(LSAAER*sizeof(float));
-	p4 = (float*) malloc(LSAAER*sizeof(float));
+	double *ang;
+	double *p1, *p2, *p3, *p4;
+	ang = (double*) malloc(LSAAER*sizeof(*ang));
+	p1 = (double*) malloc(LSAAER*sizeof(*p1));
+	p2 = (double*) malloc(LSAAER*sizeof(*p2));
+	p3 = (double*) malloc(LSAAER*sizeof(*p3));
+	p4 = (double*) malloc(LSAAER*sizeof(*p4));
 	if( ang==NULL || p1==NULL || p2==NULL || p3==NULL || p4==NULL ){
 		printf("ERREUR: Problème de malloc de ang ou pi dans calculFaer\n");
 		exit(1);
@@ -1459,7 +1459,7 @@ void calculFaer( const char* nomFichier, Tableaux* tab_H, Tableaux* tab_D ){
 	
 	else{
 		for(iang=0; iang<LSAAER; iang++){
-			fscanf(fichier, "%f %f %f %f %f", ang+iang,p1+iang,p2+iang,p3+iang,p4+iang );
+			fscanf(fichier, "%lf\t%lf\t%lf\t%lf\t%lf", ang+iang,p1+iang,p2+iang,p3+iang,p4+iang );
 			// Conversion en radians
 			ang[iang] = ang[iang]*DEG2RAD;
 		}
@@ -1484,27 +1484,30 @@ void calculFaer( const char* nomFichier, Tableaux* tab_H, Tableaux* tab_D ){
 	// Normalisation
 	for(iang=0; iang<LSAAER; iang++){
 		scum[iang] = scum[iang]/scum[LSAAER-1];
+// 		printf("scum[%d]=%10.10lf\n",iang,scum[iang] );
+// 		if( scum[iang] == 1 )
+// 			printf("Egal 1, iang=%d\n",iang);
 	}
 	
 	/** Calcul des faer **/
 	for(iang=0; iang<NFAER-1; iang++){
-		z = float(iang)/float(NFAER);
-		
-		while( scum[ipf+1]<z )
+		z = double(iang+1)/double(NFAER);
+// 		ipf=0;	// NOTE: Surement inutile
+		while( (scum[ipf+1]<z) && ipf<(LSAAER-1) )
 			ipf++;
 		
-		tab_H->faer[iang*5+4] = ((scum[ipf+1]-z)*ang[ipf] + (z-scum[ipf])*ang[ipf+1])/(scum[ipf+1]-scum[ipf]);
+		tab_H->faer[iang*5+4] = float( ((scum[ipf+1]-z)*ang[ipf] + (z-scum[ipf])*ang[ipf+1])/(scum[ipf+1]-scum[ipf]) );
 		norm = p1[ipf]+p2[ipf];			// Angle
-		tab_H->faer[iang*5+0] = p1[ipf]/norm;	// I paralèlle
-		tab_H->faer[iang*5+1] = p2[ipf]/norm;	// I perpendiculaire
-		tab_H->faer[iang*5+2] = p3[ipf]/norm;	// u
-		tab_H->faer[iang*5+3] = 0.F;				// v, toujours nul
+		tab_H->faer[iang*5+0] = float( p1[ipf]/norm );	// I paralèlle
+		tab_H->faer[iang*5+1] = float( p2[ipf]/norm );	// I perpendiculaire
+		tab_H->faer[iang*5+2] = float( p3[ipf]/norm );	// u
+		tab_H->faer[iang*5+3] = 0.F;			// v, toujours nul
 	}
 	
 	tab_H->faer[(NFAER-1)*5+4] = PI;
 	tab_H->faer[(NFAER-1)*5+0] = 0.5F+00;
 	tab_H->faer[(NFAER-1)*5+1] = 0.5F+00;
-	tab_H->faer[(NFAER-1)*5+2] =p3[LSAAER-1]/(p1[LSAAER-1]+p2[LSAAER-1]);
+	tab_H->faer[(NFAER-1)*5+2] = float( p3[LSAAER-1]/(p1[LSAAER-1]+p2[LSAAER-1]) );
 	tab_H->faer[(NFAER-1)*5+3] = 0.F+00;
 	
 	free(scum);
@@ -1547,7 +1550,8 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 	/** Déclaration des variables **/
 	/*NOTE: différence avec le code fortran: je n'utilise pas int ncouche */
 	
-	float z[NATM+1];		// Altitude à chaque couche
+// 	float z[NATM+1];		// Altitude à chaque couche
+	float z;	// Variable représentant l'altitude
 	float tauMol[NATM+1];	// Epaisseur optique des molécules à chaque couche
 	float tauAer[NATM+1];	// Epaisseur optique des aérosols à chaque couche
 	int i=0;
@@ -1555,7 +1559,8 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 	cudaError_t erreur;	// Permet de tester le bon déroulement des opérations mémoires
 	
 	/** Conditions aux limites au sommet de l'atmosphère **/
-	z[0] = 100.0;
+// 	z[0] = 100.0;
+	z = 100.0;
 	tauMol[0] = 0.0;
 	tauAer[0] = 0.0;
 	tab_H->tauCouche[0] = 0.0;
@@ -1569,7 +1574,7 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 		
 		tauMol[1] = 0;
 		tauAer[1] = TAUAER;
-		z[1] = 0;
+// 		z[1] = 0;
 		tab_H->tauCouche[1] = tauMol[1] + tauAer[1];
 		tab_H->pMol[1] = 0;
 		
@@ -1596,7 +1601,7 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 	if( (TAUAER < 0.0001) || ((TAUAER < 0.0001)&&(TAURAY < 0.0001)) ){
 		tauMol[1] = TAURAY;
 		tauAer[1] = 0;
-		z[1] = 0;
+// 		z[1] = 0;
 		tab_H->tauCouche[1] = tauMol[1] + tauAer[1];
 		tab_H->pMol[1] = 1.0;
 		
@@ -1627,13 +1632,13 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 		if( HA < 0.0001 ){
 			tauMol[1] = TAURAY;
 			tauAer[1] = 0;
-			z[1] = 0;
+// 			z[1] = 0;
 			tab_H->tauCouche[1] = tauMol[1] + tauAer[1];
 			tab_H->pMol[1] = 1.0;
 			
 			tauMol[2] = 0;
 			tauAer[2] = TAUAER;
-			z[2] = 0.0;
+// 			z[2] = 0.0;
 			tab_H->tauCouche[2] = tab_H->tauCouche[1] + tauMol[2] + tauAer[2];
 			tab_H->pMol[2] = 0.0;
 		}
@@ -1644,13 +1649,13 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 		else if( HA > 499.99 ){
 			tauMol[1] = 0.0;
 			tauAer[1] = TAUAER;
-			z[1] = 0.0;
+// 			z[1] = 0.0;
 			tab_H->tauCouche[1] = tauMol[1] + tauAer[1];
 			tab_H->pMol[1] = 0.0;
 			
 			tauMol[2] = TAURAY;
 			tauAer[2] = 0.0;
-			z[2] = 0.0;
+// 			z[2] = 0.0;
 			tab_H->tauCouche[2] = tab_H->tauCouche[1] + tauMol[2] + tauAer[2];
 			tab_H->pMol[2] = 1.0;
 		}
@@ -1658,11 +1663,12 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 		/* Cas Standard avec deux échelles */
 		else{
 			for( i=0; i<NATM+1; i++){
-				if(i!=0)
-					z[i] = 100.F - float(i)*(100.F/NATM);
-
-				vr = TAURAY*exp( -(z[i]/HR) );
-				va = TAUAER*exp( -(z[i]/HA) );
+				if(i!=0){
+// 					z[i] = 100.F - float(i)*(100.F/NATM);
+					z = 100.F - float(i)*(100.F/NATM);
+				}
+				vr = TAURAY*exp( -(z/HR) );
+				va = TAUAER*exp( -(z/HA) );
 				
 				tab_H->tauCouche[i] = va+vr;
 				
@@ -1691,7 +1697,7 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 		}
 		
 		/** Calcul des grandeurs utiles aux OS pour la couche la plus haute **/
-		z[1] = -( HR*log(tauRay1/TAURAY) );                                      
+// 		z[1] = -( HR*log(tauRay1/TAURAY) );                                      
 		tauMol[1] = tauRay1;
 		tauAer[1] = 0.F;                                    
 		tab_H->tauCouche[1] = tauMol[1] + tauAer[1];
@@ -1699,7 +1705,7 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 
 		/** Calcul des grandeurs utiles aux OS pour la deuxieme couche   **/
 		if( ZMAX == ZMIN ){ //Uniquement des aerosols dans la couche intermediaire
-			z[2] = ZMAX; // ou zmin, puisque zmin=zmax
+// 			z[2] = ZMAX; // ou zmin, puisque zmin=zmax
 			tauMol[2] = tauRay1;                                                      
 			tauAer[2] = TAUAER;
 			tab_H->tauCouche[2] = tauMol[2] + tauAer[2];
@@ -1707,7 +1713,7 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 		}
 		
 		else{	// Melange homogene d'aerosol et de molecules dans la couche intermediaire
-			z[2] = ZMIN;
+// 			z[2] = ZMIN;
 			tauMol[2] = tauRay1+tauRay2;
 			tauAer[2] = TAUAER;
 			tab_H->tauCouche[2] = tauMol[2] + tauAer[2];
@@ -1715,7 +1721,7 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 		}
 		
 		/** Calcul des grandeurs utiles aux OS pour la troisieme couche **/
-		z[3] = 0.F;
+// 		z[3] = 0.F;
 		tauMol[3] = TAURAY;
 		tauAer[3] = TAUAER;
 		tab_H->tauCouche[3] = tauMol[3] + tauAer[3];
@@ -1767,7 +1773,18 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 			printf( "ERREUR: Problème de copie tab_D->pMol dans profilAtm\n");
 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
 			exit(1);
-		}		
+		}	
+		
+		/** Test utilisation texture memory **/
+// 		textureReference* texRefPtr;
+// 		cudaGetTextureReference(&texRefPtr, "tex_faer");
+/*		cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float>();
+		erreur = cudaBindTexture(&offset_faer, tex_faer, tab_D->tauCouche, channelDesc, (NATM+1)*sizeof(float));
+		if( erreur != cudaSuccess ){
+			printf( "ERREUR: Problème de bindTexture dans profilAtm\n");
+			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+			exit(1);
+		}	*/			  
 	
 }
 

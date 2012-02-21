@@ -63,6 +63,9 @@ __device__ void init(Photon*
 		#ifdef TRAJET
 		, int, Evnt*
 		#endif
+		#ifdef SORTIEINT
+		, unsigned int iloop
+		#endif
 		    );
 __device__ void move(Photon*, int 
 		#ifdef RANDMWC
@@ -116,10 +119,18 @@ __device__ void exit(Photon* , Variables*, Tableaux, unsigned long long*
 		#ifdef TRAJET
 		, int, Evnt*
 		#endif
+		#ifdef SORTIEINT
+		, unsigned int iloop
+		#endif
 		    );
 			
 __device__ void calculPsi(Photon*, float*, float);
-__device__ void modifStokes(Photon*, float, float, float);
+
+/* Modifie les paramètres de stokes
+ * Flag permet de tester (si flag=1) ou non la valeur des paramètres avant modification
+*/
+__device__ void modifStokes(Photon*, float, float, float, int flag);
+
 __device__ void calculCase(int*, int*, Photon*, Variables*);
 __device__ float randomMWCfloat(unsigned long long*,unsigned int*);
 __device__ float randomMTfloat(EtatMT*, ConfigMT*);
@@ -160,3 +171,33 @@ __device__ void scatterTot(Photon* photon, Tableaux tab
 		, int idx, Evnt* evnt
 		#endif
 		       );
+
+__device__ void calculCommunScatter( Photon* photon, float* cTh, Tableaux tab, int icouche
+		#ifdef RANDMWC
+		, unsigned long long* etatThr, unsigned int* configThr
+		#endif
+		#ifdef RANDCUDA
+		, curandState_t* etatThr
+		#endif
+		#ifdef RANDMT
+		, EtatMT* etatThr, ConfigMT* configThr
+		#endif
+		);
+		
+// Cette fonction regroupe les deux diffusions: molécules et aérosols
+__device__ void scatter(Photon* photon, Tableaux tab
+		#ifdef RANDMWC
+		, unsigned long long* etatThr, unsigned int* configThr
+		#endif
+		#ifdef RANDCUDA
+		, curandState_t* etatThr
+		#endif
+		#ifdef RANDMT
+		, EtatMT* etatThr, ConfigMT* configThr
+		#endif
+		#ifdef TRAJET
+		, int idx, Evnt* evnt
+		#endif
+		);
+		
+		

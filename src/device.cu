@@ -103,9 +103,18 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 			, idx, evnt
 			#endif
 				);
+				
+// 			scatter( &photon, tab, &etatThr
+// 			#if defined(RANDMWC) || defined(RANDMT)
+// 			, &configThr
+// 			#endif
+// 			#ifdef TRAJET
+// 			, idx, evnt
+// 			#endif
+// 				);
 		
 		// Chaque block attend tous ses threads avant de continuer
-// 		syncthreads();
+		syncthreads();
 		
 		// Si le photon est à SURFACE on le met à ABSORBED
 		if(photon.loc == SURFACE) surfac(&photon, &etatThr
@@ -120,14 +129,37 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 		syncthreads();
 		
 		// Si le photon est dans SPACE ou ABSORBED on récupère ses infos et on le remet à NONE
-		if(photon.loc == ABSORBED || photon.loc == SPACE){ exit(&photon, var, tab, &nbPhotonsThr
-				#ifdef PROGRESSION
-				, &nbPhotonsSorThr
-				#endif
-				#ifdef TRAJET
-				, idx, evnt
-				#endif
-						);
+		if(photon.loc == ABSORBED || photon.loc == SPACE){ 
+			exit(&photon, var, tab, &nbPhotonsThr
+			#ifdef PROGRESSION
+			, &nbPhotonsSorThr
+			#endif
+			#ifdef TRAJET
+			, idx, evnt
+			#endif
+			#ifdef SORTIEINT
+			, iloop
+			#endif
+			);
+			
+// 			//NOTE: Parti du code ci-dessous en remplacement du simple exit pour coller au mieux au fortran, mais moins au SOS
+// 			if ((photon.loc == ABSORBED) && (photon.weight>WEIGHTMAX))
+// 				(nbPhotonsThr)++;
+// 
+// 			else if(photon.weight <= WEIGHTMAX)
+// 			{
+// 				exit(&photon, var, tab, &nbPhotonsThr
+// 				#ifdef PROGRESSION
+// 				, &nbPhotonsSorThr
+// 				#endif
+// 				#ifdef TRAJET
+// 				, idx, evnt
+// 				#endif
+// 				#ifdef SORTIEINT
+// 				, iloop
+// 				#endif
+// 						);
+// 			}
 									
 			#ifdef SORTIEINT
 			/* On compte le nombre de boucles qu'a effectué un photon pour vérifier qu'il n'y a pas de bug de
@@ -159,15 +191,15 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 
 	// Après la boucle on rassemble les nombres de photons traités par chaque thread
 	// NOTE: ULL retiré
-	atomicAdd(&var->nbPhotons, nbPhotonsThr);
+	atomicAdd(&(var->nbPhotons), nbPhotonsThr);
 	
 	#ifdef PROGRESSION
 	// On rassemble les nombres de photons traités et sortis de chaque thread
 	// NOTE: ULL retiré
-	atomicAdd(&var->nbPhotonsSor, nbPhotonsSorThr);
+	atomicAdd(&(var->nbPhotonsSor), nbPhotonsSorThr);
 	// On incrémente avncement qui compte le nombre d'appels du Kernel
 	// NOTE: ULL retiré
-	atomicAdd(&var->nbThreads, 1);
+	atomicAdd(&(var->nbThreads), 1);
 	#endif
 	
 	// Sauvegarde de l'état du random pour que les nombres ne soient pas identiques à chaque appel du kernel
@@ -216,6 +248,7 @@ __device__ void init(Photon* photon
 	photon->loc = ATMOS;
 	if( SIMd == -1 )
 		photon->loc = SURFACE;
+	
 	photon->tau = TAUATMd;
 	photon->weight = WEIGHTINIT;
 	// Initialisation des paramètres de stokes du photon
@@ -333,8 +366,8 @@ __device__ void scatterMol(Photon* photon
 	sPsi = __sinf(psi); //sinPsiPhoton
 
 	// Modification des nombres de Stokes
-	modifStokes(photon, psi, cPsi, sPsi);
-
+	modifStokes(photon, psi, cPsi, sPsi, 1);
+	
 	// Création de 2 vecteurs provisoires w et v
 	float wx, wy, wz, vx, vy, vz;
 
@@ -359,12 +392,13 @@ __device__ void scatterMol(Photon* photon
 	float stokes1 = photon->stokes1;
 	float stokes2 = photon->stokes2;
 	// Calcul du poids après diffusion
-	photon->weight *= __fdividef(1.5F * ((1.F+GAMAd)*stokes2+((1.F-GAMAd)*cTh2+2.F*GAMAd)*stokes1), (1.F+2.F*GAMAd) * (stokes1+stokes2));
+	photon->weight *=__fdividef(1.5F * ((1.F+GAMAd)*stokes2+((1.F-GAMAd)*cTh2+2.F*GAMAd)*stokes1),(1.F+2.F*GAMAd)*(stokes1+stokes2));
 	// Calcul des parametres de Stokes du photon apres diffusion
 	photon->stokes2 = stokes2 + GAMAd * stokes1;
 	photon->stokes1 = ( (1.F - GAMAd) * cTh2 + GAMAd) * stokes1 + GAMAd * photon->stokes2;
 	photon->stokes3 = (1.F - GAMAd) * cTh * photon->stokes3;
 	photon->stokes4 = (1.F - 3.F * GAMAd) * cTh * photon->stokes4;
+	
 	
 	#ifdef TRAJET
 	// Récupération d'informations sur le premier photon traité
@@ -408,10 +442,11 @@ __device__ void surfac(Photon* photon
 	float cTh=0, sTh;	//cos et sin de l'angle d'incidence du photon sur le dioptre
 	float cPhi, sPhi;
 	
-	if( SIMd == -2) // Atmosphère ou océan seuls, la surface absorbe tous les photons
+	if( SIMd == -2){ // Atmosphère ou océan seuls, la surface absorbe tous les photons
 		photon->loc = ABSORBED;
+	}
 	
-	else if( DIOPTREd !=3 ){	// Réflexion sur le dioptre
+	else if( DIOPTREd !=3 ){	// Réflexion sur le dioptre agité
 		float sig = 0.F;
 		float beta = 0.F;// Angle par rapport à la verticale du vecteur normal à une facette de vagues 
 		float sBeta = 0.F;
@@ -434,12 +469,13 @@ __device__ void surfac(Photon* photon
 		float ncot, ncTh;	// ncot = nind*cot, ncoi = nind*cTh
 		float tpar, tper;	// 
 		
-		if( DIOPTREd == 1 || DIOPTREd==2 ){
+		if( DIOPTREd !=0 ){
 			sig = sqrtf(0.003F + 0.00512*WINDSPEEDd);
+			beta = atanf( sig*sqrtf(-__logf(RAND)) );
+			sBeta = __sinf( beta );
+			cBeta = __cosf( beta );
 		}
-		beta = atanf( sig*sqrtf(-__logf(RAND)) );
-		sBeta = __sinf( beta );
-		cBeta = __cosf( beta );
+
 		
 		nx = sBeta*__cosf( alpha );
 		ny = sBeta*__sinf( alpha );
@@ -692,26 +728,33 @@ __device__ void exit(Photon* photon, Variables* var, Tableaux tab, unsigned long
 		#ifdef TRAJET
 		, int idx, Evnt* evnt
 		#endif
+		#ifdef SORTIEINT
+		, unsigned int iloop
+		#endif
 		    )
 {
 	int loc = photon->loc;
 	// Remise à zéro de la localisation du photon
 	photon->loc = NONE;
-
-	/** Déplacement ici pour (tenter de) corriger le bug **/
-	photon->weight = __fdividef(photon->weight, photon->stokes1 + photon->stokes2);
+	
+	#ifdef SORTIEINT
+	/* On compte le nombre de boucles qu'a effectué un photon pour vérifier qu'il n'y a pas de bug de
+	stationnarité.*/
+	if( (iloop-photon->numBoucle)<NBLOOPd ){
+	atomicAdd(tab.nbBoucle + (iloop-photon->numBoucle),1);
+	}
+	else{
+		printf("Problème dans le comptage des boucles, débordement tableau\n");
+	}
+	#endif
+	
 
 	// Si le photon est absorbé on ne fait rien d'autre
 	if(loc == ABSORBED)
 	{
 		// nbPhotonsThr est le nombre de photons traités par le thread, on l'incrémente
 		(*nbPhotonsThr)++;
-	}
-
-	// Le photon est sorti dans l'espace, si son poids est anormalement élevé on le compte comme une erreur
-	else if(photon->weight > WEIGHTMAX)
-	{
-		atomicAdd(&var->erreurpoids, 1);
+// 		return;
 	}
 
 	// Sinon on traite le photon et on l'ajoute dans le tableau tabPhotons de ce thread
@@ -723,14 +766,18 @@ __device__ void exit(Photon* photon, Variables* var, Tableaux tab, unsigned long
 		#endif
 
 		// Création d'un float theta qui sert à modifier les nombres de Stokes
-		float theta = acosf(fmin(1.F, fmax(-1.F, STHSd * photon->vx + CTHSd * photon->vz)));
+		float theta = acosf(fmin(1.F, fmax(-1.F, STHSd * photon->vx + CTHSd * photon->vz)) );
 		// Si theta = 0 on l'ignore (cas où le photon repart dans la direction solaire)
 		if(theta == 0.F)
 		{
-			atomicAdd(&var->erreurtheta, 1);
+// 			printf("Erreur theta nul\n");
+			atomicAdd(&(var->erreurtheta), 1);
+			// Incrémentation du nombre de photons traités par le thread
+			(*nbPhotonsThr)++;
+			return;
 		}
-		else
-		{
+
+// 		else{
 			// Création d'un angle psi qui sert à modifier les nombres de Stokes
 			float psi;
 			int ith=0, iphi=0;
@@ -739,44 +786,58 @@ __device__ void exit(Photon* photon, Variables* var, Tableaux tab, unsigned long
 			// Modification des nombres de Stokes
 			float cPsi = __cosf(psi);
 			float sPsi = __sinf(psi);
-			modifStokes(photon, psi, cPsi, sPsi);
-			// On modifie ensuite le poids du photon
-// 			photon->weight = __fdividef(photon->weight, photon->stokes1 + photon->stokes2);
-			// Calcul de la case dans laquelle le photon sort
-			calculCase(&ith, &iphi, photon, var);
 			
-// 			int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd +
-// 			threadIdx.y);
-// 			if( idx%100 == 0){
-// 				printf("Theta = %f\n",__fdividef(acosf(photon->vz) * NBTHETAd, DEMIPI));
-// 				printf("Case: (%d, %d)\n",ith,iphi);}
-			// Rangement du photon dans sa case, et incrémentation de variables
-			if(((ith >= 0) && (ith < NBTHETAd)) && ((iphi >= 0) && (iphi < NBPHId)))
+			modifStokes(photon, psi, cPsi, sPsi, 0);
+			
+			// On modifie ensuite le poids du photon
+			photon->weight = __fdividef(photon->weight, photon->stokes1 + photon->stokes2);
+			
+			// si son poids est anormalement élevé on le compte comme une erreur
+			//NOTE: que qd dioptre
+			if( (photon->weight > WEIGHTMAX) && (SIMd!=-2))
 			{
-				// Rangement dans le tableau du poids des photons
-				//NOTE: j'avais enlevé le +0.5F, apparement ca change rien et ça parait plus logique
-				// NOTE: ULL retiré
-				atomicAdd(tab.tabPhotons+(0 * NBTHETAd * NBPHId + ith * NBPHId + iphi), __float2uint_rn(photon->weight * photon->stokes1 * SCALEFACTOR));
-				// NOTE: ULL retiré
-				atomicAdd(tab.tabPhotons+(1 * NBTHETAd * NBPHId + ith * NBPHId + iphi), __float2uint_rn(photon->weight * photon->stokes2 * SCALEFACTOR));
-
+// 				printf("Erreur poids trop eleve\n");
+				atomicAdd(&(var->erreurpoids), 1);
+				return;
+			}
+			
+// 			else{
 				// Incrémentation du nombre de photons traités par le thread
 				(*nbPhotonsThr)++;
-				#ifdef PROGRESSION
-				// Incrémentation du nombre de photons sortis dans l'espace pour ce thread
-				(*nbPhotonsSorThr)++;
-				#endif
+				// Calcul de la case dans laquelle le photon sort
+				calculCase(&ith, &iphi, photon, var);
+				// Rangement du photon dans sa case, et incrémentation de variables
+				if(((ith >= 0) && (ith < NBTHETAd)) && ((iphi >= 0) && (iphi < NBPHId)))
+				{
+					// Rangement dans le tableau du poids des photons
+					//NOTE: j'avais enlevé le +0.5F, apparement ca change rien et ça parait plus logique
+					// NOTE: ULL retiré
+					atomicAdd(tab.tabPhotons+(0 * NBTHETAd * NBPHId + ith * NBPHId + iphi),
+							__float2uint_rn(photon->weight * photon->stokes1 * SCALEFACTOR));
+					// NOTE: ULL retiré
+					atomicAdd(tab.tabPhotons+(1 * NBTHETAd * NBPHId + ith * NBPHId + iphi),
+							__float2uint_rn(photon->weight * photon->stokes2 * SCALEFACTOR));
+
+					atomicAdd(tab.tabPhotons+(2 * NBTHETAd * NBPHId + ith * NBPHId + iphi),
+							__float2uint_rn(photon->weight * photon->stokes3 * SCALEFACTOR));
+							
+					atomicAdd(tab.tabPhotons+(3 * NBTHETAd * NBPHId + ith * NBPHId + iphi),
+							__float2uint_rn(photon->weight * photon->stokes4 * SCALEFACTOR));
 		
-			}
-			else
-			{			
-// 				printf("Theta erreur= %f\n",__fdividef(acosf(photon->vz) * NBTHETAd, DEMIPI));
-// 				printf("Case erreur: (%d, %d)\n",ith,iphi);
-				#ifdef PROGRESSION
-				atomicAdd(&var->erreurcase, 1);
-				#endif
-			}
-		}
+					#ifdef PROGRESSION
+					// Incrémentation du nombre de photons sortis dans l'espace pour ce thread
+					(*nbPhotonsSorThr)++;
+					#endif
+			
+				}
+				else
+				{
+					#ifdef PROGRESSION
+					atomicAdd(&(var->erreurcase), 1);
+					#endif
+				}
+// 			}
+// 		}
 	}
 	
 	#ifdef TRAJET
@@ -784,24 +845,25 @@ __device__ void exit(Photon* photon, Variables* var, Tableaux tab, unsigned long
 	if(idx == 0)
 	{
 		int i = 0;
-			// On cherche la première action vide du tableau
-		while(evnt[i].action != 0 && i<20) i++;
-			// Et on remplit la première case vide des tableaux (tableaux de 20 cases)
-		if(i <20 )
-		{
+		// On cherche la première action vide du tableau
+		while(evnt[i].action != 0 && i<NBTRAJET-1) i++;
+			// Et on remplit la première case vide des tableaux (tableaux de NBTRAJET cases)
+// 		if(i <NBTRAJET )
+// 		{
 				// "5"représente l'événement "exit" du photon
 			evnt[i].action = 5;
 				// On récupère le tau et le poids du photon
 			evnt[i].tau = photon->tau;
 			evnt[i].poids = photon->weight;
-		}
+// 		}
 	}
 	#endif
 }
 
-// Fonction qui traite les photons sortants dans l'espace: changement de poids et de Stokes
+// Calcul du psi pour la nouvelle direction du photon
 __device__ void calculPsi(Photon* photon, float* psi, float theta)
 {
+	float sign;
 	if (theta < 0.0025F)
 	{
 		*psi = acosf(fmin(1.F - VALMIN, fmax(-(1.F - VALMIN), - CTHSd * photon->ux + STHSd * photon->uz)));
@@ -810,25 +872,30 @@ __device__ void calculPsi(Photon* photon, float* psi, float theta)
 	{
 		*psi = acosf(fmin(1.F, fmax(-1.F, __fdividef(STHSd * photon->ux + CTHSd * photon->uz, __sinf(theta)))));
 	}
-	float sign = STHSd * (photon->uy * photon->vz - photon->uz * photon->vy) + CTHSd * (photon->ux * photon->vy - photon->uy * photon->vx);
-	if (sign < 0.F) *psi = -*psi;
+	
+	sign = STHSd * (photon->uy * photon->vz - photon->uz * photon->vy) + CTHSd * (photon->ux * photon->vy - photon->uy * photon->vx);
+	if (sign < 0.F) *psi = -(*psi);
 }
 
-// Fonction qui traite les photons sortants dans l'espace: changement de poids et de Stokes
-__device__ void modifStokes(Photon* photon, float psi, float cPsi, float sPsi)
+// Fonction qui traite les photons sortants dans l'espace: changement de Stokes
+/* Modifie les paramètres de stokes
+* Flag permet de tester (si flag=1) ou non la valeur des paramètres avant modification
+*/
+__device__ void modifStokes(Photon* photon, float psi, float cPsi, float sPsi, int flag)
 {
 	// On modifie les nombres de Stokes grâce à psi
-	if((photon->stokes1 != photon->stokes2) || (photon->stokes3 != 0.F))
+	if( ((photon->stokes1 != photon->stokes2) || (photon->stokes3 != 0.F) ) || (flag==0))
 	{
 		float cPsi2 = cPsi * cPsi;
 		float sPsi2 = sPsi * sPsi;
 		float psi2 = 2.F * psi;
 		float stokes1, stokes2, stokes3;
+		float a, s2Psi;
 		stokes1 = photon->stokes1;
 		stokes2 = photon->stokes2;
 		stokes3 = photon->stokes3;
-		float s2Psi = __sinf(psi2);
-		float a = __fdividef(s2Psi * stokes3, 2.F);
+		s2Psi = __sinf(psi2);
+		a = __fdividef(s2Psi * stokes3, 2.F);
 		photon->stokes1 = cPsi2 * stokes1 + sPsi2 * stokes2 + a;
 		photon->stokes2 = sPsi2 * stokes1 + cPsi2 * stokes2 - a;
 		photon->stokes3 = s2Psi * (stokes2 - stokes1) + __cosf(psi2) * stokes3;
@@ -850,9 +917,10 @@ __device__ void calculCase(int* ith, int* iphi, Photon* photon, Variables* var)
 	if(vxy < VALMIN)
 	{
 		#ifdef PROGRESSION
-		atomicAdd(&var->erreurvxy, 1);
+		atomicAdd(&(var->erreurvxy), 1);
 		#endif
-		if(photon->vy < 0.F) *iphi = NBPHId - 1;
+// 		if(photon->vy < 0.F) *iphi = NBPHId - 1;
+		if(photon->vy < 0.F) *iphi = __float2int_rd( __fdividef(PI*NBPHId, DEUXPI));
 		else *iphi = 0;
 	}
 
@@ -870,9 +938,11 @@ __device__ void calculCase(int* ith, int* iphi, Photon* photon, Variables* var)
 		if(photon->vy < 0.F) *iphi = NBPHId - 1 - *iphi;
 		#ifdef PROGRESSION
 		// Lorsque vy=0 on décide par défaut que le photon reste du côté vy>0
-		if(photon->vy == 0.F) atomicAdd(&var->erreurvy, 1);
+		if(photon->vy == 0.F) atomicAdd(&(var->erreurvy), 1);
 		#endif
 	}
+	
+	
 }
 
 // Fonction random MWC qui renvoit un float de ]0.1] à partir d'un generateur (x+a)
@@ -1006,10 +1076,25 @@ __device__ void scatterAer(Photon* photon, Tableaux tab
 	int iang;
 
 	/** Initialisation aléatoire des paramètres **/
-	zang = RAND*NFAERd;
-	iang = rintf(zang) + 1;
-	zang = zang - iang + 1.F;
-	theta = tab.faer[iang*5+4]+ zang*( tab.faer[(iang+1)*5+4]-tab.faer[iang*5+4] );	// L'accès à faer[x][y] se fait par faer[y*5+x]
+	zang = RAND*(NFAERd-1);
+	iang= __float2int_rd(zang);
+	
+// 	if (iang==NFAERd){
+// // 		printf("Correction de iang\n");
+// 		theta = tab.faer[(NFAERd-1)*5+4];
+// 	}
+// 	printf("zang=%f, iang=%d, zang2=%f\n",zang,iang, zang2);
+	
+// 	if( iang==NFAERd-1){
+// 		theta = tab.faer[(NFAERd-1)*5+4];	// L'accès à faer[x][y] se fait par
+// 																						// faer[y*5+x]
+// 	}
+// 	else{
+		zang = zang - iang;
+	theta = tab.faer[iang*5+4]+ zang*( tab.faer[(iang+1)*5+4]-tab.faer[iang*5+4] );	// L'accès à faer[x][y] se fait par
+//faer[y*5+x]
+// 	}
+
 	psi = RAND*DEUXPI;
 
 	/** Rotation des paramètres de Stokes **/
@@ -1018,7 +1103,7 @@ __device__ void scatterAer(Photon* photon, Tableaux tab
 	cTh = __cosf(theta);
 	sTh = __sinf(theta);
 
-	modifStokes(photon, psi, cPsi, sPsi);
+	modifStokes(photon, psi, cPsi, sPsi, 1);
 
 	/** Création de 2 vecteurs provisoires w et v **/
 	float wx, wy, wz, vx, vy, vz;
@@ -1093,17 +1178,17 @@ __device__ void scatterTot(Photon* photon, Tableaux tab
 		#endif
 		       )
 {
-	float propMol = 0;	// Proportion de molécules par rapport aux aérosols dans l'atmosphère
+// 	float propMol = 0;	// Proportion de molécules par rapport aux aérosols dans l'atmosphère
 	// Recherche de la couche où se situe le photon
 	float tauBis = TAUATMd-photon->tau;
 	int icouche=1;
 
-	while( tab.tauCouche[icouche] < (tauBis) )
+	while( (tab.tauCouche[icouche] < (tauBis)) && icouche<NATM )
 		icouche++;
 
-	propMol = tab.pMol[icouche];
+// 	propMol = tab.pMol[icouche];
 
-	if( RAND <= propMol ){
+	if( RAND <= tab.pMol[icouche]){
 		// Le photon rencontre une molécule, et donc est diffusé par celle-ci
 		scatterMol(photon, etatThr
 		#if defined(RANDMWC) || defined(RANDMT)
@@ -1116,20 +1201,159 @@ __device__ void scatterTot(Photon* photon, Tableaux tab
 	}
 
 	else{	// Le photon rencontre un aérosol
-
-		if( RAND < W0AERd )	// Le photon diffuse
-			scatterAer(photon, tab, etatThr
-			#if defined(RANDMWC) || defined(RANDMT)
-			, configThr
-			#endif
-			#ifdef TRAJET
-			, idx, evnt
-			#endif
-					);
-
-		else	// sinon il est absorbé
-			photon->loc = ABSORBED;
-
+		scatterAer(photon, tab, etatThr
+					#if defined(RANDMWC) || defined(RANDMT)
+					, configThr
+					#endif
+					#ifdef TRAJET
+					, idx, evnt
+					#endif
+							);
+		photon->weight *= W0AERd;
 	}
+}
+
+__device__ void calculCommunScatter( Photon* photon, float* cTh, Tableaux tab, int icouche
+						#ifdef RANDMWC
+						, unsigned long long* etatThr, unsigned int* configThr
+						#endif
+						#ifdef RANDCUDA
+						, curandState_t* etatThr
+						#endif
+						#ifdef RANDMT
+						, EtatMT* etatThr, ConfigMT* configThr
+						#endif
+						){
+
+	float zang=0, theta=0;
+	int iang;
+	float stokes1, stokes2;
+	float cTh2;
+	
+	stokes1 = photon->stokes1;
+	stokes2 = photon->stokes2;
+	
+	if( RAND<=tab.pMol[icouche] ){	// Theta calculé pour la diffusion moléculaire
+		*cTh =  2.F * RAND - 1.F; //cosThetaPhoton
+		cTh2 = (*cTh)*(*cTh);
+		// Calcul du poids après diffusion
+		photon->weight *= __fdividef(1.5F * ((1.F+GAMAd)*stokes2+((1.F-GAMAd)*cTh2+2.F*GAMAd)*stokes1), (1.F+2.F*GAMAd) *
+		(stokes1+stokes2));
+		// Calcul des parametres de Stokes du photon apres diffusion
+		photon->stokes2 += GAMAd * stokes1;
+		photon->stokes1 = ( (1.F - GAMAd) * cTh2 + GAMAd) * stokes1 + GAMAd * photon->stokes2;
+// 		photon->stokes1 = cTh2*stokes1 + GAMAd*( (1-cTh2)*stokes1+stokes2 );
+		photon->stokes3 *= (1.F - GAMAd) * (*cTh);
+		photon->stokes4 = 0.F /*(1.F - 3.F * GAMAd) * (*cTh) * photon->stokes4*/;
+	}
+	
+	else{	// Aérosols
+		zang = RAND*(NFAERd-1);
+		iang= __float2int_rd(zang);
+		
+		zang = zang - iang;
+		theta = tab.faer[iang*5+4]+ zang*( tab.faer[(iang+1)*5+4]-tab.faer[iang*5+4] );	// L'accès à faer[x][y] se fait par
+
+		*cTh = __cosf(theta);
+		
+		/** Changement du poids et des nombres de stokes du photon **/
+		float faer1 = tab.faer[iang*5+0];
+		float faer2 = tab.faer[iang*5+1];
+		
+		// Calcul du poids après diffusion
+		photon->weight *= __fdividef( 2.0F*(stokes1*faer1+stokes2*faer2) , stokes1+stokes2)*W0AERd;
+		
+		// Calcul des parametres de Stokes du photon apres diffusion
+		photon->stokes1 *= 2.0F*faer1;
+		photon->stokes2 *= 2.0F*faer2;
+		photon->stokes3 *= tab.faer[iang*5+2];
+		photon->stokes4 = 0.F;
+	}
+	
+}
+
+__device__ void scatter(Photon* photon, Tableaux tab
+		#ifdef RANDMWC
+		, unsigned long long* etatThr, unsigned int* configThr
+		#endif
+		#ifdef RANDCUDA
+		, curandState_t* etatThr
+		#endif
+		#ifdef RANDMT
+		, EtatMT* etatThr, ConfigMT* configThr
+		#endif
+		#ifdef TRAJET
+		, int idx, Evnt* evnt
+		#endif
+		){
+
+	float tauBis = TAUATMd-photon->tau;
+	int icouche=1;
+	float cTh=0, sTh, psi, cPsi, sPsi;
+	float wx, wy, wz, vx, vy, vz;
+	
+	while( (tab.tauCouche[icouche] < (tauBis)) && icouche<NATM )
+		icouche++;
+	
+	psi = RAND * DEUXPI; //psiPhoton
+	cPsi = __cosf(psi); //cosPsiPhoton
+	sPsi = __sinf(psi); //sinPsiPhoton
+	
+	// Modification des nombres de Stokes
+	modifStokes(photon, psi, cPsi, sPsi, 1);
+	
+	calculCommunScatter( photon, &cTh, tab, icouche
+						#ifdef RANDMWC
+						, etatThr, configThr
+						#endif
+						#ifdef RANDCUDA
+						, etatThr
+						#endif
+						#ifdef RANDMT
+						, etatThr, configThr
+						#endif
+						);
+						
+	sTh = sqrtf(1.F - cTh*cTh);//sinThetaPhoton
+	
+	/** Création de 2 vecteurs provisoires w et v **/
+	// w est le rotationnel entre l'ancien vecteur u et l'ancien vecteur v du photon
+	wx = photon->uy * photon->vz - photon->uz * photon->vy;
+	wy = photon->uz * photon->vx - photon->ux * photon->vz;
+	wz = photon->ux * photon->vy - photon->uy * photon->vx;
+	
+	// v est le nouveau vecteur v du photon
+	vx = cTh * photon->vx + sTh * ( cPsi * photon->ux + sPsi * wx );
+	vy = cTh * photon->vy + sTh * ( cPsi * photon->uy + sPsi * wy );
+	vz = cTh * photon->vz + sTh * ( cPsi * photon->uz + sPsi * wz );
+	
+	// Changement du vecteur u (orthogonal au vecteur vitesse du photon)
+	photon->ux = __fdividef(cTh * vx - photon->vx, sTh);
+	photon->uy = __fdividef(cTh * vy - photon->vy, sTh);
+	photon->uz = __fdividef(cTh * vz - photon->vz, sTh);
+	
+	// Changement du vecteur v (vitesse du photon)
+	photon->vx = vx;
+	photon->vy = vy;
+	photon->vz = vz;
+	
+	#ifdef TRAJET
+	// Récupération d'informations sur le premier photon traité
+	if(idx == 0)
+	{
+		int i = 0;
+		// On cherche la première action vide du tableau
+		while(evnt[i].action != 0 && i<NBTRAJET-1) i++;
+		// Et on remplit la première case vide des tableaux (tableaux de 20 cases)
+		// 		if(i <20 )
+		// 		{
+			// "3"représente l'événement "scatter" du photon
+			evnt[i].action = 3;
+			// On récupère le tau et le poids du photon
+			evnt[i].tau = photon->tau;
+			evnt[i].poids = photon->weight;
+			// 		}
+	}
+	#endif
 }
 

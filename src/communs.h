@@ -132,6 +132,9 @@ extern char PATHTEMOINHDF[];
 extern char PATHDIFFAER[];
 extern char PATHPROFILATM[];
 
+// extern texture<float, cudaTextureType1D, cudaReadModeElementType> tex_faer;
+// extern size_t offset_faer;
+
 	  //////////////
 	 // TYPEDEFS //
 	//////////////

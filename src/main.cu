@@ -246,7 +246,7 @@ cudaMemcpyDeviceToHost);
 		nbPhotonsSorTot += var_H->nbPhotonsSor;
 		#endif
 		
-		for(int i = 0; i < 4*NBTHETA * NBPHI; i++)
+		for(int i = 0; i < 4*NBTHETA*NBPHI; i++)
 			tabPhotonsTot[i] += tab_H.tabPhotons[i];
 		
 		/** Creation d'un fichier témoin pour pouvoir reprendre la simulation en cas d'arrêt **/

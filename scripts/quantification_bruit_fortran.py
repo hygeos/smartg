@@ -15,13 +15,13 @@ import gzip
 	        ##############
 
 # Résultats Fortran
-resultats = "out_atmos_dioptre.ran=0173.wav=443.ths=70.000.tr=0.0010.ta=0.0000.difff=0000.pi0=0.967.H=002.000.vent=05.000"
-path_fortran_zip = "/home/florent/MC/bin/" + resultats + ".bin.gz"
+resultats = "out_atmos_seule.ran=0050.wav=443.ths=30.000.tr=0.0000.ta=0.1000.difff=0001.pi0=0.967.H=002.000.mod=valid_T70.443"
+path_fortran_zip = "/home/florent/MC/bin/res_corrects/" + resultats + ".bin.gz"
 
 # Si le dossier suivant existe deja il est supprime puis recree
 path_dossier_sortie = "../out_scripts/quantification_bruit_fortran/quantification_fortran_" + resultats
 
-path_ref = "/home/florent/entree/new_out_SOS_toray_0.001_ths_70_vent_5_MU400.txt"
+path_ref = "/home/florent/entree/new_out_SOS_toaer_0.1_ths_30_T70_443_MU400.txt"
 
 os.system("rm -rf "+ path_dossier_sortie)
 os.system("mkdir -p "+ path_dossier_sortie)

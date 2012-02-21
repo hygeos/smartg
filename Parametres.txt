@@ -4,10 +4,13 @@
         ###############################
 
 # Nombre de photons a lancer (unsigned long long) (limite par le tableau du poids des photons en unsigned long long)
-NBPHOTONS = 2000000000
+NBPHOTONS = 1000000
 
 # Nombre de boucles dans le kernel (unsigned int) (limite par watchdog, il faut tuer X)
 NBLOOP = 18000
+
+# Angle zenithal solaire en degrés (float)
+THSDEG = 30.
 
 # Graine avec laquelle on initialise les generateurs aleatoires (int)
 	# si SEED est positif on l'utilise comme graine (cela permet d'avoir les memes nombres aleatoires d'une simulation a l'autre, et donc une meme simulation)
@@ -27,17 +30,11 @@ YGRID = 1
 NBTHETA = 180
 NBPHI = 360
 
-# Nombre de nombres de Stokes pris en compte
-NBSTOKES = 2
-
-# Angle zenithal solaire en degrés (float)
-THSDEG = 70.
-
 # Longueur d'onde [nm] (float)
-LAMBDA = 635.
+LAMBDA = 443.
 
 # Epaisseur optique moleculaire (Rayley) (float)
-TAURAY = 0.05330
+TAURAY = 0.0533
 
 # Epaisseur optique aerosol (float)
 TAUAER = 0.0
@@ -45,10 +42,16 @@ TAUAER = 0.0
 # Albedo simple de diffusion des aerosols (float)
 W0AER = 0.966883724738261
 
+# Nombre d'échantillons pour le modèle de diffusion des aérosols (int)
+LSAAER = 72001
+
+#
+NFAER = 1000000
+
 # Type de profil atmospherique
 	# 0 : profil standard avec echelle de hauteur
 	# 3 : profil à 2 ou 3 couches (comme dans les SOS)
-	# 2 : profil utilisateurs
+	# 2 : profil utilisateurs, Attention au bon format -> commencer directement les données sur la 1ère ligne
 PROFIL = 0
 
 # Echelle de hauteur aerosol [km] (utilise si PROFIL=0) (float)
@@ -85,18 +88,28 @@ SUR = 1
 
 # Type de dioptre 
 	# 0=plan
-	# 1=agite
-DIOPTRE = 1
+	# 1=agite avec reflexion multiple
+	# 2=agite sans reflexion multiple
+	# 3=surface lambertienne
+DIOPTRE = 0
+
+# Albedo simple de diffusion de la surface lambertienne (float)
+W0LAM = 0.7
 
 # Concentration en phytoplancton [mg.m-3] (utilise si SUR>=2) (float)
 CONPHY = 0.1
 
-# Forcage de la premiere diffusion (utilise si SIM=-2)
-DIFFF = 0
+# Forcage de la premiere diffusion (utilise si SIM = -2)
+DIFFF = 1
 
-# Nom du fichier de sortie
-PATHRESULTATSHDF = out_prog/Resultats.hdf
+# Nom du fichier de sortie (Le .hdf et les détails de la simulation sont ajoutés par le programme automatiquement)
+PATHRESULTATSHDF = out_prog/Resultats_hdf_new
+# Nom du fichier témoin (Le .hdf et les détails de la simulation sont ajoutés par le programme automatiquement)
+PATHTEMOINHDF = tmp/Temoin_hdf_new
 
-# Nom du fichier témoin
-PATHTEMOINHDF = tmp/Temoin.hdf
+# Chemin du modèle de diffusion aérosol
+PATHDIFFAER = /home/florent/MCCuda/fic/valid_T70.443
+
+# Chemin du modèle atmosphérique utilisateur (utile uniquement si PROFIL = 2)
+PATHPROFILATM = /home/florent/MCCuda/
 
