@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
 import os
 import sys
 import warnings
@@ -9,18 +8,20 @@ import pyhdf.SD
 from pylab import *
 
 
+
 	          ##############
 	         # PARAMETRES #
 	        ##############
 
-# Nom du fichier hdf à analyser SANS l'extension hdf (A MODIFIER)
-nom_hdf = "atmos_seule_tauRay=0.000000_tauAer=0.100000_difff=1_ths=70.000000"
+path_ref = "/home/florent/entree/new_out_SOS_toray_0.001_ths_70_vent_5_WITH_Q_U_LP.txt"
+
+# Nom du fichier hdf à analyser SANS l'extension hdf
+nom_hdf = "new_poids_atmos_dioptre_agite_tauRay=0.001000_tauAer=0.000000_ths=70.000000_ws=5.000000"
 path_hdf = "../out_prog/Resultats_" + nom_hdf + ".hdf"
 
 # Si le dossier suivant existe deja il est supprime puis recree
-path_dossier_sortie = "../out_scripts/quantification_bruit/quantification_bruit_" + nom_hdf
+path_dossier_sortie = "../out_scripts/I/I_CUDA_SOS_" + nom_hdf
 
-path_ref = "/home/florent/entree/new_out_SOS_toaer_0.1_ths_70_T70_443_MU400.txt"
 
 os.system("rm -rf "+ path_dossier_sortie)
 os.system("mkdir -p "+ path_dossier_sortie)
@@ -68,6 +69,9 @@ if os.path.exists(path_ref):
 	
 	for ligne in fic_ref:
 		donnees = ligne.rstrip('\n\r').split("\t")
+		if donnees[0]=='':
+			donnees = donnees[1:]
+		
 		#data_ref[0][0]= float(donnees[0])	
 		#data_ref[0][1]= float(donnees[1])
 		#data_ref[0][2]= float(donnees[2])
@@ -350,8 +354,8 @@ for icouronne in xrange( NBTHETA/(NBTHETA/180*10) ):	# Pour chaque couronne
 			
 
 	print "\n====================:Résultats par couronne:===================="
-	print '==================:Couronne #{0:2d} -{1:3d}->{2:3d} deg==================='.format(ith0/10,ith0*90/NBTHETA,
-(ith0+pas)*90/NBTHETA)
+	print '==================:Couronne #{0:2d} -{1:3d}->{2:3d}
+deg==================='.format(ith0/10,ith0*90/NBTHETA,(ith0+pas)*90/NBTHETA)
 	print 'Moyenne de la différence Ref-Cuda = {0:.4e}'.format(moyDiff)
 	print 'Ecart type de la différence Ref-Cuda = {0:.4e}\n'.format(sigmaDiff)
 

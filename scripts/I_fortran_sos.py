@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
 import os
 import sys
 import warnings
@@ -19,7 +18,7 @@ resultats = "out_atmos_seule.ran=0050.wav=443.ths=30.000.tr=0.0000.ta=0.1000.dif
 path_fortran_zip = "/home/florent/MC/bin/res_corrects/" + resultats + ".bin.gz"
 
 # Si le dossier suivant existe deja il est supprime puis recree
-path_dossier_sortie = "../out_scripts/quantification_bruit_fortran/quantification_fortran_" + resultats
+path_dossier_sortie = "../out_scripts/I/I_FORTRAN_SOS_" + resultats
 
 path_ref = "/home/florent/entree/new_out_SOS_toaer_0.1_ths_30_T70_443_MU400.txt"
 

@@ -8,20 +8,20 @@ import pyhdf.SD
 from pylab import *
 import gzip
 import struct
-import numpy as np
 
 	          ##############
 	         # PARAMETRES #
 	        ##############
-path_ref = "/home/florent/entree/new_out_SOS_toray_0.0533_ths_30_WITH_Q_U_LP.txt"
 	        
+path_ref = "/home/florent/entree/new_out_SOS_toray_0.001_ths_70_vent_5_WITH_Q_U_LP.txt"
+
 # Nom du fichier hdf à analyser SANS l'extension hdf
-nom_hdf = "hdf_atmos_seule_tauRay=0.000000_tauAer=0.100000_difff=1_ths=30.000000"
+nom_hdf = "new_atmos_dioptre_agite_tauRay=0.001000_tauAer=0.000000_ths=70.000000_ws=5.000000"
 # Chemin complet du hdf cuda
 path_cuda = "../out_prog/Resultats_" + nom_hdf + ".hdf"
 
 # Si le dossier suivant existe deja il est supprime puis recree
-path_dossier_sortie = "../out_scripts/lumiere_polarisee/lumiere_polarisee_CUDA_SOS" + nom_hdf
+path_dossier_sortie = "../out_scripts/Q/Q_CUDA_SOS_" + nom_hdf
 
 os.system("rm -rf "+ path_dossier_sortie)
 os.system("mkdir -p "+ path_dossier_sortie)
@@ -51,7 +51,7 @@ if os.path.exists(path_cuda):
 	hdf_phi = sd_cuda.select(name)
 	phi = hdf_phi.get()
 
-	name = "Valeur de la lumiere polarisee pour un phi et theta donnes"
+	name = "Valeur de Q pour un phi et theta donnes"
 	sds_cuda = sd_cuda.select(name)
 	data = sds_cuda.get()		
 	
@@ -75,8 +75,11 @@ if os.path.exists(path_ref):
 		donnees = ligne.rstrip('\n\r').split("\t")
 		#data_ref[0][0]= float(donnees[0])	#phi
 		#data_ref[0][1]= float(donnees[1])	#theta
+		if donnees[0]=='':
+			donnees = donnees[1:]
+			
 		if float(donnees[1]) < 89.6:
-			data_ref[int(float(donnees[0]))][int(2*float(donnees[1]))] = float(donnees[5])
+			data_ref[int(float(donnees[0]))][int(2*float(donnees[1]))] = float(donnees[3])
 			#print 'data_ref[{0}][{1}] = {2}'.format(int(float(donnees[0])),int(2*float(donnees[1])),float(donnees[2]))
 			
 	fic_ref.close()
@@ -141,11 +144,11 @@ for iphi in xrange(0,NBPHI_cuda/2,5):
 	
 	# commun
 	legend(listePlots, listeLegends, loc='best', numpoints=1)
-	title('Comparaison lumiere polarisee SOS - Cuda pour phi='+str(phi[iphi])+" deg")
+	title('Comparaison Q SOS - Cuda pour phi='+str(phi[iphi])+" deg")
 	xlabel('Theta (deg)')
-	ylabel('Lumiere polarisee')
+	ylabel('Q')
 	grid(True)
-	savefig(path_dossier_sortie+"/c_lumiere_polarisee_phi="+str(phi[iphi])+".png", dpi=(140))
+	savefig(path_dossier_sortie+"/c_Q_phi="+str(phi[iphi])+".png", dpi=(140))
 	
 	##########################################
 	#	Figures d'analyse plus spécifiques	#
@@ -167,20 +170,20 @@ for iphi in xrange(0,NBPHI_cuda/2,5):
 	listeLegends.append('Regression lineaire y='+str(ar)+'x+'+str(br))
 	legend(listePlots, listeLegends, loc='best', numpoints=1)
 	
-	title("Rapport lumiere polarisee SOS et Cuda pour phi="+str(phi[iphi])+" deg")
+	title("Rapport Q SOS et Cuda pour phi="+str(phi[iphi])+" deg")
 	xlabel("Theta (deg)")
-	ylabel("Rapport lumiere polarisee")
+	ylabel("Rapport Q")
 	grid(True)
-	savefig(path_dossier_sortie+"/rapport_lumiere_polarisee_phi="+str(phi[iphi])+".png", dpi=(140))
+	savefig(path_dossier_sortie+"/rapport_Q_phi="+str(phi[iphi])+".png", dpi=(140))
 	figure()
 	
 	# Figure d'évaluation du taux d'erreur - DIFFERENCE
 	plot(theta[dep:fin],data_ref[iphi][dep:fin]-(data[iphi,dep:fin]+data[NBPHI_cuda-iphi-1,dep:fin])/2)
-	title("Difference lumiere polarisee SOS - Cuda pour phi="+str(phi[iphi])+" deg")
+	title("Difference Q SOS - Cuda pour phi="+str(phi[iphi])+" deg")
 	xlabel("Theta (deg)")
-	ylabel("Difference lumiere polarisee")
+	ylabel("Difference Q")
 	grid(True)
-	savefig(path_dossier_sortie+"/difference_lumiere_polarisee_phi="+str(phi[iphi])+".png", dpi=(140))
+	savefig(path_dossier_sortie+"/difference_Q_phi="+str(phi[iphi])+".png", dpi=(140))
 
 
 	          ###############################
@@ -217,7 +220,7 @@ PATHRESULTATSHDF = getattr(sd_cuda,'PATHRESULTATSHDF')
 PATHTEMOINHDF = getattr(sd_cuda,'PATHTEMOINHDF')
 # creation du fichier contenant les parametres de la simulation
 fichierParametres = open(path_dossier_sortie+"/Parametres.txt", "w")
-fichierParametres.write("NBPHOTONS = " + str(NBPHOTONS) + "\n")
+fichierParametres.write('NBPHOTONS = {0:.2e}\n'.format(NBPHOTONS))
 fichierParametres.write("NBLOOP = " + str(NBLOOP) + "\n")
 fichierParametres.write("SEED = " + str(SEED) + "\n")	
 fichierParametres.write("XBLOCK = " + str(XBLOCK) + "\n")

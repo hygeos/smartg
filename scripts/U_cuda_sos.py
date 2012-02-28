@@ -8,20 +8,23 @@ import pyhdf.SD
 from pylab import *
 import gzip
 import struct
-import numpy as np
 
 	          ##############
 	         # PARAMETRES #
 	        ##############
-path_ref = "/home/florent/entree/new_out_SOS_toray_0.0533_ths_30_WITH_Q_U_LP.txt"
 	        
+#Resultats SOS
+path_ref = "/home/florent/entree/new_out_SOS_toray_0.001_ths_70_vent_5_WITH_Q_U_LP.txt"
+
+
+
 # Nom du fichier hdf à analyser SANS l'extension hdf
-nom_hdf = "hdf_atmos_seule_tauRay=0.000000_tauAer=0.100000_difff=1_ths=30.000000"
+nom_hdf = "new_atmos_dioptre_agite_tauRay=0.001000_tauAer=0.000000_ths=70.000000_ws=5.000000"
 # Chemin complet du hdf cuda
 path_cuda = "../out_prog/Resultats_" + nom_hdf + ".hdf"
 
 # Si le dossier suivant existe deja il est supprime puis recree
-path_dossier_sortie = "../out_scripts/U/U_CUDA_SOS" + nom_hdf
+path_dossier_sortie = "../out_scripts/U/U_CUDA_SOS_" + nom_hdf
 
 os.system("rm -rf "+ path_dossier_sortie)
 os.system("mkdir -p "+ path_dossier_sortie)
@@ -75,6 +78,9 @@ if os.path.exists(path_ref):
 		donnees = ligne.rstrip('\n\r').split("\t")
 		#data_ref[0][0]= float(donnees[0])	#phi
 		#data_ref[0][1]= float(donnees[1])	#theta
+		if donnees[0]=='':
+			donnees = donnees[1:]
+			
 		if float(donnees[1]) < 89.6:
 			data_ref[int(float(donnees[0]))][int(2*float(donnees[1]))] = float(donnees[4])
 			#print 'data_ref[{0}][{1}] = {2}'.format(int(float(donnees[0])),int(2*float(donnees[1])),float(donnees[2]))
@@ -131,12 +137,11 @@ for iphi in xrange(0,NBPHI_cuda/2,5):
 	listePlots = []
 	listeLegends = []
 	figure()
-	# fortran
-	#listePlots.append(plot(tab_fortran['real_thv_bornes'][dep-1:fin-1], tab_fortran['real_refl'][0, dep-1:fin-1, iphi, 0]))
+	# SOS
 	listePlots.append(plot(theta[dep:fin], data_ref[iphi][dep:fin] ))
 	listeLegends.append('SOS')
 	#cuda
-	listePlots.append(plot(theta[dep:fin],(data[iphi,dep:fin]+data[NBPHI_cuda-iphi-1,dep:fin])/2))
+	listePlots.append(plot(theta[dep:fin],data[iphi,dep:fin]))
 	listeLegends.append('Cuda')
 	
 	# commun
@@ -155,12 +160,11 @@ for iphi in xrange(0,NBPHI_cuda/2,5):
 	figure()
 	listePlots = []
 	listeLegends = []
-	listePlots.append( plot(theta[dep:fin], (data_ref[iphi][dep:fin])/((data[iphi,dep:fin]+data[NBPHI_cuda-iphi-1,dep:fin])/2)
-) )
+	listePlots.append( plot(theta[dep:fin], (data_ref[iphi][dep:fin])/data[iphi,dep:fin]) )
 	listeLegends.append('Rapport SOS/Cuda')
 	
 	#Régression linéaire
-	(ar,br)=polyfit(theta[dep:fin],(data_ref[iphi][dep:fin])/((data[iphi,dep:fin]+data[NBPHI_cuda-iphi-1,dep:fin])/2) ,1)
+	(ar,br)=polyfit(theta[dep:fin],(data_ref[iphi][dep:fin])/data[iphi,dep:fin] ,1)
 	regLin=polyval([ar,br],theta[dep:fin])
 	
 	listePlots.append( plot(theta[dep:fin], regLin) )
@@ -175,7 +179,7 @@ for iphi in xrange(0,NBPHI_cuda/2,5):
 	figure()
 	
 	# Figure d'évaluation du taux d'erreur - DIFFERENCE
-	plot(theta[dep:fin],data_ref[iphi][dep:fin]-(data[iphi,dep:fin]+data[NBPHI_cuda-iphi-1,dep:fin])/2)
+	plot(theta[dep:fin],data_ref[iphi][dep:fin]-data[iphi,dep:fin])
 	title("Difference U SOS - Cuda pour phi="+str(phi[iphi])+" deg")
 	xlabel("Theta (deg)")
 	ylabel("Difference U")
@@ -217,7 +221,7 @@ PATHRESULTATSHDF = getattr(sd_cuda,'PATHRESULTATSHDF')
 PATHTEMOINHDF = getattr(sd_cuda,'PATHTEMOINHDF')
 # creation du fichier contenant les parametres de la simulation
 fichierParametres = open(path_dossier_sortie+"/Parametres.txt", "w")
-fichierParametres.write("NBPHOTONS = " + str(NBPHOTONS) + "\n")
+fichierParametres.write('NBPHOTONS = {0:.2e}\n'.format(NBPHOTONS))
 fichierParametres.write("NBLOOP = " + str(NBLOOP) + "\n")
 fichierParametres.write("SEED = " + str(SEED) + "\n")	
 fichierParametres.write("XBLOCK = " + str(XBLOCK) + "\n")

@@ -15,10 +15,11 @@ import struct
 	        ##############
 # Résultats Fortran
 path_fortran_zip = \
-"/home/florent/MC/bin/out_dioptre_seul.ran=0622.wav=443.ths=70.000.vent=5.bin.gz"
+"/home/florent/MC/bin/out_atmos_dioptre.ran=0173.wav=443.ths=70.000.tr=0.0010.ta=0.0000.difff=0000.pi0=0.967.H=002.000.vent=05.000.\
+bin.gz"
 
 # Nom du fichier hdf à analyser SANS l'extension hdf
-nom_hdf = "dioptre_agite_seul_ths=70.000000_ws=5.000000"
+nom_hdf = "new_fortran_atmos_dioptre_agite_tauRay=0.001000_tauAer=0.000000_ths=70.000000_ws=5.000000"
 # Chemin complet du hdf cuda
 path_cuda = "../out_prog/Resultats_" + nom_hdf + ".hdf"
 
@@ -162,7 +163,7 @@ PATHTEMOINHDF = getattr(sd_cuda,'PATHTEMOINHDF')
 
 # creation du fichier contenant les parametres de la simulation
 sortie = open(path_dossier_sortie+"Statistiques_"+nom_hdf+".txt", "w")
-sortie.write("NBPHOTONS = " + str(NBPHOTONS) + "\n")
+sortie.write('NBPHOTONS = {0:.2e}\n'.format(NBPHOTONS))
 sortie.write("NBLOOP = " + str(NBLOOP) + "\n")
 sortie.write("SEED = " + str(SEED) + "\n")	
 sortie.write("XBLOCK = " + str(XBLOCK) + "\n")
@@ -190,6 +191,11 @@ sortie.write("CONPHY = " + str(CONPHY) + "\n")
 sortie.write("DIFFF = " + str(DIFFF) + "\n")
 sortie.write("PATHRESULTATSHDF = " + str(PATHRESULTATSHDF) + "\n")
 sortie.write("PATHTEMOINHDF = " + str(PATHTEMOINHDF) + "\n")
+
+sortie.write("\n\n##### Paramètres Fortran #####\n")
+sortie.write("Nombres de photons: " + str(tab_fortran['nphotons']) + "\n")
+sortie.write("Germe: " + str(tab_fortran['initgerme']) + "\n")
+sortie.write("\n\n")
 
 
 	          #######################

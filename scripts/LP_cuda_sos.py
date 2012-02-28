@@ -6,81 +6,25 @@ import warnings
 warnings.simplefilter("ignore",DeprecationWarning)
 import pyhdf.SD
 from pylab import *
-import gzip
-import struct
+
+	
 
 	          ##############
 	         # PARAMETRES #
 	        ##############
-# Résultats Fortran
-path_fortran_zip = \
-"/home/florent/MC/bin/res_corrects/out.ran=0003.wav=443.ths=30.000.tr=0.0533.ta=0.0000.difff=0000.pi0=0.967.H=002.000.bin.gz"
-
-
+	        
+path_ref = "/home/florent/entree/new_out_SOS_toray_0.001_ths_70_vent_5_WITH_Q_U_LP.txt"
+	        
 # Nom du fichier hdf à analyser SANS l'extension hdf
-nom_hdf = "hdf_new_atmos_seule_tauRay=0.053300_tauAer=0.000000_difff=1_ths=30.000000"
+nom_hdf = "new_poids_atmos_dioptre_agite_tauRay=0.001000_tauAer=0.000000_ths=70.000000_ws=5.000000"
 # Chemin complet du hdf cuda
 path_cuda = "../out_prog/Resultats_" + nom_hdf + ".hdf"
 
 # Si le dossier suivant existe deja il est supprime puis recree
-path_dossier_sortie = "../out_scripts/U/U_FORTRAN_CUDA_" + nom_hdf
+path_dossier_sortie = "../out_scripts/lumiere_polarisee/lumiere_polarisee_CUDA_SOS_" + nom_hdf
 
 os.system("rm -rf "+ path_dossier_sortie)
 os.system("mkdir -p "+ path_dossier_sortie)
-
-	          #####################
-	         # RESULTATS FORTRAN #
-	        #####################
-
-
-(NSTK,NTHV,NBPHI_fortran,NTYP) = (4, 180, 180, 8)
-dt = dtype([
-('version', float32),
-('nphotons', int64),
-('nthv', int32),
-('nphi', int32),
-('thetas', float32),
-('iprofil', int32),
-('isur', int32),
-('isim', int32),
-('initgerme', int32),
-('idioptre', int32),
-('real_toRay', float32),
-('real_toaer', float32),
-('real_windspeed', float32),
-('real_wl', float32),
-('real_nh2o', float32),
-('real_refl', float32, (NSTK,NTHV,NBPHI_fortran,NTYP)),
-('real_znad', float32, (8*NTYP,)),
-('real_upun', float32),
-('real_upab', float32),
-('real_dnun', float32),
-('real_dnab', float32),
-('real_dnabdirect', float32),
-('real_dnabplus', float32),
-('biais', int64),
-('duree', float32, (3,)),
-('real_thv_bornes', float32, (NTHV,)),
-('pi', float32),
-('real_phi_bornes', float32, (NBPHI_fortran+1,)),
-])
-
-# lecture du fichier fortran (bin)
-file_fortran_bin = gzip.open(path_fortran_zip)
-
-file_fortran_bin.read(8)	#read(8) pour les anciens fichiers de sortie, read(4) pour les nouveaux
-
-st = file_fortran_bin.read()
-contenu_fortran = fromstring(st, dtype=dt, count=1)
-# creation du tableau fortran
-tab_fortran = {}
-for i in dt.names:
-	if prod(shape(contenu_fortran[i])) == 1:
-		tab_fortran[i] = contenu_fortran[i][0]
-	else:
-		tab_fortran[i] = ravel(contenu_fortran[i]).reshape(dt[i].shape, order='F')
-file_fortran_bin.close()
-
 
 	          ##################
 	         # RESULTATS CUDA #
@@ -95,6 +39,7 @@ if os.path.exists(path_cuda):
 	sd_cuda = pyhdf.SD.SD(path_cuda)
 	# lecture du nombre de valeurs de phi
 	NBPHI_cuda = getattr(sd_cuda,'NBPHI')
+	NBTHETA = getattr(sd_cuda,'NBTHETA')
 	
 	# Récupération des valeurs de theta
 	name = "Valeurs de theta echantillonnees"
@@ -106,7 +51,7 @@ if os.path.exists(path_cuda):
 	hdf_phi = sd_cuda.select(name)
 	phi = hdf_phi.get()
 
-	name = "Valeur de U pour un phi et theta donnes"
+	name = "Valeur de la lumiere polarisee pour un phi et theta donnes"
 	sds_cuda = sd_cuda.select(name)
 	data = sds_cuda.get()		
 	
@@ -114,6 +59,45 @@ else:
 	sys.stdout.write("Pas de fichier "+path_cuda+"\n")
 	sys.exit()
 
+################################
+#	SOS
+
+# Récupération des données de références
+if os.path.exists(path_ref):
+	
+	# data_ref[iphi][ith] = lumiere polarisee ( 6eme colonne du fichier )
+	# ith est le num de la ith-ème boite theta. Boites de pas de 0.5 centrées tous les 0.5
+	# iphi est le num de la ith-ème boite phi
+	data_ref = zeros((NBPHI_cuda/2,(NBTHETA)),dtype=float)
+	fic_ref = open(path_ref, "r")
+	
+	for ligne in fic_ref:
+		donnees = ligne.rstrip('\n\r').split("\t")
+		#data_ref[0][0]= float(donnees[0])	#phi
+		#data_ref[0][1]= float(donnees[1])	#theta
+		if donnees[0]=='':
+			donnees = donnees[1:]
+			
+		if float(donnees[1]) < 89.6:
+			data_ref[int(float(donnees[0]))][int(2*float(donnees[1]))] = float(donnees[5])
+			#print 'data_ref[{0}][{1}] = {2}'.format(int(float(donnees[0])),int(2*float(donnees[1])),float(donnees[2]))
+			
+	fic_ref.close()
+
+else:
+	sys.stdout.write("Pas de fichier "+path_ref+"\n")
+	sys.exit()
+
+#figure()
+#plot(theta[20:100], data_ref[0][20:100])
+#title("sos")
+#show()
+
+#figure()
+#plot(theta[20:100], data[0][20:100])
+#title("CUDA")
+#show()
+#sys.exit()
 
 			  ###########################################
 			 # Informations sur le traitement en cours #
@@ -121,7 +105,7 @@ else:
 			
 sys.stdout.write("\n -------------------------------------------------------------------------------\n")
 sys.stdout.write("| Le fichier cuda est " + path_cuda + "\t|\n")
-sys.stdout.write("| Le fichier fortran est " + path_fortran_zip + "\t|\n")
+sys.stdout.write("| Le fichier de référence est " + path_ref + "\t|\n")
 sys.stdout.write("| Les résultats sont stockés dans " + path_dossier_sortie + "\t|\n")
 sys.stdout.write(" -------------------------------------------------------------------------------\n")
 	
@@ -142,80 +126,64 @@ fin = 177	# Indice de fin pour le tracé
 # Cuda :     intervalle=[0,2PI]  nombre_de_boites=NBPHI_cuda
 # On va projeter les resultats du cuda sur [0,PI]
 
+
+
+for iphi in xrange(0,NBPHI_cuda/2,5):
+		
+	# initialisation
+	listePlots = []
+	listeLegends = []
+	figure()
+	# fortran
+	#listePlots.append(plot(tab_fortran['real_thv_bornes'][dep-1:fin-1], tab_fortran['real_refl'][0, dep-1:fin-1, iphi, 0]))
+	listePlots.append(plot(theta[dep:fin], data_ref[iphi][dep:fin] ))
+	listeLegends.append('SOS')
+	#cuda
+	listePlots.append(plot(theta[dep:fin],(data[iphi,dep:fin]+data[NBPHI_cuda-iphi-1,dep:fin])/2))
+	listeLegends.append('Cuda')
 	
-#########################
-# Calcul de la lumiere polarisee du fortran
-fortran_pol = zeros((NBPHI_fortran, NTHV), dtype=float)
-#fortran_pol = [ [0] * NBPHI_fortran ] * (fin-dep)
-
-
-for iphi in xrange(0,NBPHI_fortran):
-	for i in xrange(NTHV):
-		fortran_pol[iphi][i] = tab_fortran['real_refl'][2, i-1, iphi, 0]
-
-if (NBPHI_cuda/2) == NBPHI_fortran:
-	for iphi in xrange(0,NBPHI_cuda/2,5):
-			
-		# initialisation
-		listePlots = []
-		listeLegends = []
-		figure()
-		# fortran
-		#listePlots.append(plot(tab_fortran['real_thv_bornes'][dep-1:fin-1], tab_fortran['real_refl'][0, dep-1:fin-1, iphi, 0]))
-		listePlots.append(plot(theta[dep:fin], fortran_pol[iphi][dep:fin] ))
-		listeLegends.append('Fortran')
-		#cuda
-		listePlots.append(plot(theta[dep:fin],(data[iphi,dep:fin]+data[NBPHI_cuda-iphi-1,dep:fin])/2))
-		listeLegends.append('Cuda')
-		
-		# commun
-		legend(listePlots, listeLegends, loc='best', numpoints=1)
-		title('Comparaison U Fortran - Cuda pour phi='+str(phi[iphi])+" deg")
-		xlabel('Theta (deg)')
-		ylabel('U')
-		grid(True)
-		savefig(path_dossier_sortie+"/c_U_phi="+str(phi[iphi])+".png", dpi=(140))
-		
-		##########################################
-		#	Figures d'analyse plus spécifiques	#
-		########################################
-		
-		# Figure d'évaluation du taux d'erreur - RAPPORT
-		figure()
-		listePlots = []
-		listeLegends = []
-		listePlots.append( plot(theta[dep:fin], (fortran_pol[iphi][dep:fin])/((data[iphi,dep:fin]+data[NBPHI_cuda-iphi-1,dep:fin])/2)
+	# commun
+	legend(listePlots, listeLegends, loc='best', numpoints=1)
+	title('Comparaison lumiere polarisee SOS - Cuda pour phi='+str(phi[iphi])+" deg")
+	xlabel('Theta (deg)')
+	ylabel('Lumiere polarisee')
+	grid(True)
+	savefig(path_dossier_sortie+"/c_lumiere_polarisee_phi="+str(phi[iphi])+".png", dpi=(140))
+	
+	##########################################
+	#	Figures d'analyse plus spécifiques	#
+	########################################
+	
+	# Figure d'évaluation du taux d'erreur - RAPPORT
+	figure()
+	listePlots = []
+	listeLegends = []
+	listePlots.append( plot(theta[dep:fin], (data_ref[iphi][dep:fin])/((data[iphi,dep:fin]+data[NBPHI_cuda-iphi-1,dep:fin])/2)
 ) )
-		listeLegends.append('Rapport Fortran/Cuda')
-		
-		#Régression linéaire
-		(ar,br)=polyfit(theta[dep:fin],(fortran_pol[iphi][dep:fin])/((data[iphi,dep:fin]+data[NBPHI_cuda-iphi-1,dep:fin])/2) ,1)
-		regLin=polyval([ar,br],theta[dep:fin])
-		
-		listePlots.append( plot(theta[dep:fin], regLin) )
-		listeLegends.append('Regression lineaire y='+str(ar)+'x+'+str(br))
-		legend(listePlots, listeLegends, loc='best', numpoints=1)
-		
-		title("Rapport U Fortran et Cuda pour phi="+str(phi[iphi])+" deg")
-		xlabel("Theta (deg)")
-		ylabel("Rapport U")
-		grid(True)
-		savefig(path_dossier_sortie+"/rapport_U_phi="+str(phi[iphi])+".png", dpi=(140))
-		figure()
-		
-		# Figure d'évaluation du taux d'erreur - DIFFERENCE
-		plot(theta[dep:fin],fortran_pol[iphi][dep:fin]-(data[iphi,dep:fin]+data[NBPHI_cuda-iphi-1,dep:fin])/2)
-		title("Difference U Fortran - Cuda pour phi="+str(phi[iphi])+" deg")
-		xlabel("Theta (deg)")
-		ylabel("Difference U")
-		grid(True)
-		savefig(path_dossier_sortie+"/difference_U_phi="+str(phi[iphi])+".png", dpi=(140))
-
+	listeLegends.append('Rapport SOS/Cuda')
 	
+	#Régression linéaire
+	(ar,br)=polyfit(theta[dep:fin],(data_ref[iphi][dep:fin])/((data[iphi,dep:fin]+data[NBPHI_cuda-iphi-1,dep:fin])/2) ,1)
+	regLin=polyval([ar,br],theta[dep:fin])
 	
-else:
-	sys.stdout.write("Les tableaux ne font pas la meme taille\n")
-	sys.exit()
+	listePlots.append( plot(theta[dep:fin], regLin) )
+	listeLegends.append('Regression lineaire y='+str(ar)+'x+'+str(br))
+	legend(listePlots, listeLegends, loc='best', numpoints=1)
+	
+	title("Rapport lumiere polarisee SOS et Cuda pour phi="+str(phi[iphi])+" deg")
+	xlabel("Theta (deg)")
+	ylabel("Rapport lumiere polarisee")
+	grid(True)
+	savefig(path_dossier_sortie+"/rapport_lumiere_polarisee_phi="+str(phi[iphi])+".png", dpi=(140))
+	figure()
+	
+	# Figure d'évaluation du taux d'erreur - DIFFERENCE
+	plot(theta[dep:fin],data_ref[iphi][dep:fin]-(data[iphi,dep:fin]+data[NBPHI_cuda-iphi-1,dep:fin])/2)
+	title("Difference lumiere polarisee SOS - Cuda pour phi="+str(phi[iphi])+" deg")
+	xlabel("Theta (deg)")
+	ylabel("Difference lumiere polarisee")
+	grid(True)
+	savefig(path_dossier_sortie+"/difference_lumiere_polarisee_phi="+str(phi[iphi])+".png", dpi=(140))
 
 
 	          ###############################
@@ -252,7 +220,7 @@ PATHRESULTATSHDF = getattr(sd_cuda,'PATHRESULTATSHDF')
 PATHTEMOINHDF = getattr(sd_cuda,'PATHTEMOINHDF')
 # creation du fichier contenant les parametres de la simulation
 fichierParametres = open(path_dossier_sortie+"/Parametres.txt", "w")
-fichierParametres.write("NBPHOTONS = " + str(NBPHOTONS) + "\n")
+fichierParametres.write('NBPHOTONS = {0:.2e}\n'.format(NBPHOTONS))
 fichierParametres.write("NBLOOP = " + str(NBLOOP) + "\n")
 fichierParametres.write("SEED = " + str(SEED) + "\n")	
 fichierParametres.write("XBLOCK = " + str(XBLOCK) + "\n")
