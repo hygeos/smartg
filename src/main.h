@@ -36,10 +36,10 @@ float WINDSPEED; //Vitesse du vent [m/s] (utilisee pour le modele de Cox et Munk
 float NH2O; //Indice de refraction relatif air/eau
 float CONPHY; //Concentration en phytoplancton [mg.m-3] (utilise si SUR>=2)
 
-char PATHRESULTATSHDF[100]; //Fichier de sortie au format hdf
-char PATHTEMOINHDF[100]; //Fichier témoin au format hdf
-char PATHDIFFAER[100];	// Fichier d'entrée des données de diffusion des aérosols
-char PATHPROFILATM[100]; // Profil atmosphérique utilisateur
+char PATHRESULTATSHDF[256]; //Fichier de sortie au format hdf
+char PATHTEMOINHDF[256]; //Fichier témoin au format hdf
+char PATHDIFFAER[256];	// Fichier d'entrée des données de diffusion des aérosols
+char PATHPROFILATM[256]; // Profil atmosphérique utilisateur
 
 // size_t offset_faer;
 

@@ -26,23 +26,35 @@ int main (int argc, char *argv[])
 
 	/** Initialisation des constantes du host (en partie recuperees dans le fichier Parametres.txt) **/
 	initConstantesHost(argc, argv);
-
+	
 	/** Initialisation des constantes du device à partir des constantes du host **/
 	initConstantesDevice();
 
 	/** Vérification des fichiers **/
 	verifierFichier();
-
+	
 	#ifdef SORTIEINT
 	// Fichiers de sortie pour le débuggage
 
 	float seuilPds = 2;
 	char detail[256];
-
+	int retour;
+	
+// 	mkdir("./sortie_int/",777);
+// 	mkdir("./sortie_int/poids/",777);
+	retour = system("mkdir -p sortie_int/poids/");
+	if(retour!=0)
+		printf("ERREUR: mkdir a echoue\n");
+	
+	retour = system("mkdir -p sortie_int/poids/");
+	if(retour!=0)
+		printf("ERREUR: mkdir a echoue\n");
+	
+	
 	// Fichier où seront stockés les photons avec un poids supérieur à un seuil
-	sprintf(detail,"out_prog/sortie_int/poids/poids_tauRay=%f_tauAer=%f_difff=%d_ths=%f_sim=%d.txt",TAURAY,TAUAER,DIFFF,
+	sprintf(detail,"%s/sortie_int/poids/poids_tauRay=%f_tauAer=%f_difff=%d_ths=%f_sim=%d.txt",PATHRESULTATSHDF,TAURAY,TAUAER,DIFFF,
  THSDEG,SIM);
-	FILE* fic_poids = fopen(detail,"w");
+	FILE* fic_poids = fopen(detail,"w+");
 	if( fic_poids == NULL){
 		printf("ERREUR: Impossible d'ouvrir le fichier %s\n", detail);
 		exit(1);
@@ -60,9 +72,9 @@ int main (int argc, char *argv[])
 	int tabNbBoucleTot[NBLOOP];
 	for( int i=0; i<NBLOOP; i++)
 		tabNbBoucleTot[i]=0;
-	sprintf(detail,"out_prog/sortie_int/nbre_boucle/nbBoucle_tauRay=%f_tauAer=%f_difff=%d_ths=%f_sim=%d.txt",TAURAY,
+	sprintf(detail,"%s/sortie_int/nbre_boucle/nbBoucle_tauRay=%f_tauAer=%f_difff=%d_ths=%f_sim=%d.txt",PATHRESULTATSHDF,TAURAY,
 TAUAER, DIFFF,THSDEG,SIM);
-	FILE* fic_nbre_boucle = fopen(detail,"w");
+	FILE* fic_nbre_boucle = fopen(detail,"w+");
 	if( fic_nbre_boucle == NULL){
 		printf("ERREUR: Impossible d'ouvrir le fichier %s\n",detail);
 		exit(1);
@@ -90,8 +102,8 @@ TAUAER, DIFFF,THSDEG,SIM);
 	unsigned long long nbPhotonsSorTot = 0; //nombre total de photons ressortis
 	#endif
 
-	unsigned long long* tabPhotonsTot; //tableau du poids total des photons sortis
-	tabPhotonsTot = (unsigned long long*)malloc(4*NBTHETA * NBPHI * sizeof(unsigned long long));
+	float* tabPhotonsTot; //tableau du poids total des photons sortis
+	tabPhotonsTot = (float*)malloc(4*NBTHETA * NBPHI * sizeof(*(tabPhotonsTot)));
 	if( tabPhotonsTot == NULL ){
 		printf("ERREUR: Problème de malloc de tabPhotonsTot dans le main\n");
 		exit(1);
@@ -156,7 +168,7 @@ TAUAER, DIFFF,THSDEG,SIM);
 	{
 		/** Remise à zéro de certaines variables et certains tableaux **/
 		reinitVariables(var_H, var_D);
-		cudaErreur = cudaMemset(tab_D.tabPhotons, 0, 4*NBTHETA * NBPHI * sizeof(unsigned long long));
+		cudaErreur = cudaMemset(tab_D.tabPhotons, 0, 4*NBTHETA * NBPHI * sizeof(*(tab_D.tabPhotons)));
 		if( cudaErreur != cudaSuccess ){
 			printf("#--------------------#\n");
 			printf("# ERREUR: Problème de cudaMemset tab_D.tabPhotons dans le main\n");
@@ -207,7 +219,7 @@ TAUAER, DIFFF,THSDEG,SIM);
 			exit(1);
 		}
 
-		cudaErreur = cudaMemcpy(tab_H.tabPhotons, tab_D.tabPhotons, 4*NBTHETA * NBPHI * sizeof(unsigned long long),
+cudaErreur = cudaMemcpy(tab_H.tabPhotons, tab_D.tabPhotons, 4*NBTHETA * NBPHI * sizeof(*(tab_H.tabPhotons)),
 cudaMemcpyDeviceToHost);
 		if( cudaErreur != cudaSuccess ){
 			printf( "ERREUR: Problème de copie tab_H.tabPhotons dans le main\n");
@@ -216,7 +228,7 @@ cudaMemcpyDeviceToHost);
 		}
 
 		#ifdef SORTIEINT
-		cudaErreur = cudaMemcpy(tab_H.poids, tab_D.poids, NBLOOP * sizeof(float), cudaMemcpyDeviceToHost);
+		cudaErreur = cudaMemcpy(tab_H.poids, tab_D.poids, NBLOOP * sizeof(*(tab_H.poids)), cudaMemcpyDeviceToHost);
 		if( cudaErreur != cudaSuccess ){
 			printf( "ERREUR: Problème de copie tab_H.poids dans le main\n");
 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );

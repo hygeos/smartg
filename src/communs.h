@@ -21,6 +21,10 @@
 //#include <shrQATest.h>
 //#include <cutil_inline.h>
 
+#include <sys/stat.h>
+#include <sys/types.h>
+
+
 
 	  ////////////////////////////
 	 // CONSTANTES PREDEFINIES //
@@ -50,8 +54,6 @@
 //1.570 796 326 79F
 #define DEG2RAD 0.017453F
 //0.017453293
-// Precision de la recupération des poids des photons
-#define SCALEFACTOR 1000000000
 // Détecte les photons très proches du zenith
 #define VALMIN 0.000001F
 
@@ -195,7 +197,7 @@ typedef struct {
 
 typedef struct __align__(16)
 {
-	unsigned long long* tabPhotons;
+	float* tabPhotons;
 	
 	float* faer;		// Pointeur vers le modèle de diffusion des aérosols
 	float* tauCouche;	// Pointeur vers l'épaisseur optique de chaque couche du modèle atmosphérique

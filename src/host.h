@@ -7,6 +7,8 @@
 int initRandMWC(unsigned long long*, unsigned int*, const unsigned int, const char*, unsigned long long);
 void initConstantesHost(int, char**);
 void chercheConstante(FILE*, char*, char*);
+void definirNomFichier( char* s );
+void definirSimulation( char* s);
 
 void initVariables(Variables**, Variables**);
 void initTableaux(Tableaux*, Tableaux*);
@@ -17,7 +19,7 @@ void reinitVariables(Variables*, Variables*);
 
 void verifierFichier();
 
-void calculTabFinal(float*, float*, float*, unsigned long long*, unsigned long long);
+void calculTabFinal(float*, float*, float*, float*, unsigned long long);
 void calculOmega(float*, float*, float*);
 void afficheParametres();
 void afficheProgress(unsigned long long, Variables*, double
@@ -31,8 +33,8 @@ void initEvnt(Evnt*, Evnt*);
 void afficheTrajet(Evnt*);
 #endif
 
-void creerHDFTemoin(unsigned long long*, unsigned long long, Variables*, double);
-void lireHDFTemoin(Variables*, Variables*, unsigned long long*, unsigned long long*, double*);
+void creerHDFTemoin(float*, unsigned long long, Variables*, double);
+void lireHDFTemoin(Variables*, Variables*, unsigned long long*, float*, double*);
 void creerHDFResultats(float*, float*, float*, unsigned long long, Variables*, double);
 
 void freeTableaux(Tableaux*, Tableaux*);
