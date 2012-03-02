@@ -81,9 +81,6 @@ path_sos = "/home/florent/MCCuda/validation/" + type_simu + "/" + nom_sos + ".tx
 path_dossier_sortie = \
 "/home/florent/MCCuda/validation/"+type_simu+"/graph_"+date_simu+"/"+type_donnees+"/"+type_donnees+"_FORTRAN_SOS_" + nom_sos
 
-os.system("rm -rf "+ path_dossier_sortie)
-os.system("mkdir -p "+ path_dossier_sortie)
-
 
 ##########################################################
 ##				DONNEES FICHIER FORTRAN					##
@@ -186,7 +183,11 @@ sys.stdout.write("# Le fichier fortran est " + path_fortran + "\n")
 sys.stdout.write("# Les résultats sont stockés dans " + path_dossier_sortie + "\n")
 sys.stdout.write("#-------------------------------------------------------------------------------#\n")
 	
-	
+
+os.system("rm -rf "+ path_dossier_sortie)
+os.system("mkdir -p "+ path_dossier_sortie)
+
+
 ##################################################################################
 ##				CREATION/CHOIX/MODIFICATION DE CERTAINES DONNES					##
 ##################################################################################

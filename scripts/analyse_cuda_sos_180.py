@@ -18,14 +18,13 @@ import struct
 # Paramètres à modifier
 #
 #-----------------------------------------------------------------------------------------------------------------------
-type_simu = "molecules_dioptre_agite"
-date_simu = "28022012"
+type_simu = "molecules_dioptre_plan"
+date_simu = "02032012"
 angle = '70'
 # Nom du fichier Cuda sans extension .hdf
-nom_cuda = "out_CUDA_atmos_dioptre_agite_ths=70.00_tRay=0.0010_tAer=0.0000_ws=5.00"
+nom_cuda = "out_CUDA_atmos_dioptre_plan_ths=70.00_tRay=0.0010_tAer=0.0000"
 # Nom du fichier de sortie SOS sans extension txt
-nom_sos = "out_SOS_atmos_dioptre_agite_tray_0.001_ths_70_vent_5"
-#nom_sos = "out_SOS_atmos_tray_0.0533_taer_0.1_ths_70_T70_443"
+nom_sos = "out_SOS_atmos_dioptre_plan_tray_0.001_ths_70"
 
 # Indices ci-dessus ont été mis en place car ils permettent de rogner la simulation si nécessaire.
 # Les bords peuvent fausser les graphiques.
@@ -80,7 +79,7 @@ print 'C\'est parti pour la simulation de {0}'.format(type_donnees)
 ######################################################
 
 # Nom complet du fichier SOS
-path_sos = "/home/florent/MCCuda/validation/" + type_simu + "/" + nom_sos + ".txt"
+path_sos = "/home/florent/MCCuda/validation/fichier_ref_sos/" + nom_sos + ".txt"
 
 # Nom complet du fichier Cuda
 path_cuda = "/home/florent/MCCuda/validation/"+type_simu+"/simulation_"+date_simu+"/" + nom_cuda + ".hdf"
@@ -89,9 +88,6 @@ path_cuda = "/home/florent/MCCuda/validation/"+type_simu+"/simulation_"+date_sim
 path_dossier_sortie = \
 "/home/florent/MCCuda/validation/"+type_simu+"/graph_"+date_simu+"/"+type_donnees+"/"+type_donnees+"_SOS_CUDA_" + nom_cuda
 
-os.system("rm -rf "+ path_dossier_sortie)
-os.system("mkdir -p "+ path_dossier_sortie)
-
 
 ##########################################################
 ##				DONNEES FICHIER CUDA					##
@@ -99,9 +95,7 @@ os.system("mkdir -p "+ path_dossier_sortie)
 
 # verification de l'existence du fichier CUDA
 if os.path.exists(path_cuda):
-	# on vide le dossier de sortie du script
-	os.system("rm -rf "+path_dossier_sortie)
-	os.mkdir(path_dossier_sortie)
+
 	# lecture du fichier hdf
 	sd_cuda = pyhdf.SD.SD(path_cuda)
 	# lecture du nombre de valeurs de phi
@@ -136,7 +130,7 @@ if os.path.exists(path_sos):
 	# data_sos[iphi][ith] = grandeur
 	# ith est le num de la ith-ème boite theta. Boites de pas de 0.5 centrées tous les 0.5
 	# iphi est le num de la ith-ème boite phi
-	data_sos = zeros((NBPHI_cuda/2,2*(NBTHETA_cuda-1)),dtype=float)
+	data_sos = zeros((NBPHI_cuda,2*(NBTHETA_cuda-1)),dtype=float)
 	fichier_sos = open(path_sos, "r")
 	
 	for ligne in fichier_sos:
@@ -164,6 +158,10 @@ sys.stdout.write("# Les résultats sont stockés dans " + path_dossier_sortie + 
 sys.stdout.write("#-------------------------------------------------------------------------------#\n")
 
 
+os.system("rm -rf "+ path_dossier_sortie)
+os.system("mkdir -p "+ path_dossier_sortie)
+
+
 ##################################################################################
 ##				CREATION/CHOIX/MODIFICATION DE CERTAINES DONNES					##
 ##################################################################################
@@ -173,16 +171,16 @@ sys.stdout.write("#-------------------------------------------------------------
 # Cuda : intervalle=[0,2PI]  nombre_de_boites=NBPHI_cuda
 # On va projeter les resultats du cuda sur [0,PI]
 
-data_cuda = zeros((NBPHI_cuda/2, NBTHETA_cuda), dtype=float)
+data_cuda = zeros((NBPHI_cuda, NBTHETA_cuda), dtype=float)
 
-if choix != 'u':
-	for iphi in xrange(0,NBPHI_cuda/2):
-		for ith in xrange(NBTHETA_cuda):
-			data_cuda[iphi][ith] = (data[iphi,ith]+data[NBPHI_cuda-iphi-1,ith] )/2
+#if choix != 'u':
+	#for iphi in xrange(0,NBPHI_cuda):
+		#for ith in xrange(NBTHETA_cuda):
+			#data_cuda[iphi][ith] = (data[iphi,ith]+data[NBPHI_cuda-iphi-1,ith] )/2
 
 
-else:	# Il ne faut pas moyenner U qui est antisymétrique
-	data_cuda = data[0:NBPHI_cuda,]
+#else:	# Il ne faut pas moyenner U qui est antisymétrique
+data_cuda = data[0:NBPHI_cuda,]
 	
 # Infos en commentaire sur le graph
 commentaire = type_simu + ' - ' + angle
@@ -191,7 +189,7 @@ commentaire = type_simu + ' - ' + angle
 ##				CREATION DES GRAPHIQUES					##
 ##########################################################
 
-for iphi in xrange(0,NBPHI_cuda/2,pas_figure):
+for iphi in xrange(0,NBPHI_cuda,pas_figure):
 	
 	listePlots = []
 	listeLegends = []
@@ -341,21 +339,21 @@ sigmaRapAbs = 0
 
 ##-- Calcul des moyennes --##
 
-for iphi in xrange(NBPHI_cuda/2):
+for iphi in xrange(NBPHI_cuda):
 	for ith in xrange(dep,fin):	# Calcul sur tout l'espace
 		moyDiff += data_sos[iphi][ith]-data_cuda[iphi][ith]
 		moyDiffAbs += abs(data_sos[iphi][ith]-data_cuda[iphi][ith])
 		moyRap += data_sos[iphi][ith]/data_cuda[iphi][ith]
 		moyRapAbs += abs(1-data_sos[iphi][ith]/data_cuda[iphi][ith] )
 
-moyDiff = moyDiff/((fin-dep)*NBPHI_cuda/2)
-moyDiffAbs = moyDiffAbs/((fin-dep)*NBPHI_cuda/2)
-moyRap = moyRap/((fin-dep)*NBPHI_cuda/2)
-moyRapAbs = moyRapAbs/((fin-dep)*NBPHI_cuda/2)
+moyDiff = moyDiff/((fin-dep)*NBPHI_cuda)
+moyDiffAbs = moyDiffAbs/((fin-dep)*NBPHI_cuda)
+moyRap = moyRap/((fin-dep)*NBPHI_cuda)
+moyRapAbs = moyRapAbs/((fin-dep)*NBPHI_cuda)
 	
 ##-- Calcul des écart type --##
 
-for iphi in xrange(NBPHI_cuda/2):
+for iphi in xrange(NBPHI_cuda):
 	for ith in xrange(dep,fin):	# Calcul sur tout l'espace
 		
 		# Calcul des écarts type
@@ -365,10 +363,10 @@ for iphi in xrange(NBPHI_cuda/2):
 		sigmaRapAbs += pow( moyRapAbs - abs(1-data_sos[iphi][ith]/data_cuda[iphi][ith]) ,2.0 )
 
 	
-sigmaDiff = math.sqrt( sigmaDiff/((fin-dep)*NBPHI_cuda/2) )
-sigmaDiffAbs = math.sqrt( sigmaDiffAbs/((fin-dep)*NBPHI_cuda/2) )
-sigmaRap = math.sqrt( sigmaRap/((fin-dep)*NBPHI_cuda/2) )
-sigmaRapAbs = math.sqrt( sigmaRapAbs/((fin-dep)*NBPHI_cuda/2) )
+sigmaDiff = math.sqrt( sigmaDiff/((fin-dep)*NBPHI_cuda) )
+sigmaDiffAbs = math.sqrt( sigmaDiffAbs/((fin-dep)*NBPHI_cuda) )
+sigmaRap = math.sqrt( sigmaRap/((fin-dep)*NBPHI_cuda) )
+sigmaRapAbs = math.sqrt( sigmaRapAbs/((fin-dep)*NBPHI_cuda) )
 
 
 print "\n====================:Résultats:===================="
@@ -423,31 +421,31 @@ for icouronne in xrange( NBTHETA/(NBTHETA/180*10) ):	# Pour chaque couronne
 	
 	##-- Calcul des moyennes --##
 	for ith in xrange(ith0,ith0+pas):
-		for iphi in xrange(NBPHI_cuda/2):
+		for iphi in xrange(NBPHI_cuda):
 			
 			moyDiff += data_sos[iphi][ith]-data_cuda[iphi][ith]
 			moyDiffAbs += abs(data_sos[iphi][ith]-data_cuda[iphi,ith] )
 			moyRap += data_sos[iphi][ith]/data_cuda[iphi,ith]
 			moyRapAbs += abs(1-data_sos[iphi][ith]/data_cuda[iphi,ith] )
 			
-	moyDiff = moyDiff/(pas*NBPHI_cuda/2)
-	moyDiffAbs = moyDiffAbs/(pas*NBPHI_cuda/2)
-	moyRap = moyRap/(pas*NBPHI_cuda/2)
-	moyRapAbs = moyRapAbs/(pas*NBPHI_cuda/2)
+	moyDiff = moyDiff/(pas*NBPHI_cuda)
+	moyDiffAbs = moyDiffAbs/(pas*NBPHI_cuda)
+	moyRap = moyRap/(pas*NBPHI_cuda)
+	moyRapAbs = moyRapAbs/(pas*NBPHI_cuda)
 
 	##-- Calcul des écart type --##
 	for ith in xrange(ith0,ith0+pas):
-		for iphi in xrange(NBPHI_cuda/2):
+		for iphi in xrange(NBPHI_cuda):
 			
 			sigmaDiff += pow( moyDiff - (data_sos[iphi][ith]-data_cuda[iphi,ith] ) ,2.0 )
 			sigmaDiffAbs += pow( moyDiffAbs - abs( data_sos[iphi][ith]-data_cuda[iphi,ith] ),2.0 )
 			sigmaRap += pow( moyRap - ( data_sos[iphi][ith]/data_cuda[iphi,ith]) ,2.0 )
 			sigmaRapAbs += pow( moyRapAbs - abs(1-data_sos[iphi][ith]/data_cuda[iphi,ith] ),2.0 )
 
-	sigmaDiff = math.sqrt( sigmaDiff/(pas*NBPHI_cuda/2) )
-	sigmaDiffAbs = math.sqrt( sigmaDiffAbs/(pas*NBPHI_cuda/2) )
-	sigmaRap = math.sqrt( sigmaRap/(pas*NBPHI_cuda/2) )
-	sigmaRapAbs = math.sqrt( sigmaRapAbs/(pas*NBPHI_cuda/2) )
+	sigmaDiff = math.sqrt( sigmaDiff/(pas*NBPHI_cuda) )
+	sigmaDiffAbs = math.sqrt( sigmaDiffAbs/(pas*NBPHI_cuda) )
+	sigmaRap = math.sqrt( sigmaRap/(pas*NBPHI_cuda) )
+	sigmaRapAbs = math.sqrt( sigmaRapAbs/(pas*NBPHI_cuda) )
 			
 
 	print "\n====================:Résultats par couronne:===================="
