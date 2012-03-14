@@ -66,6 +66,7 @@
 
 // Constante pour le calcul du profil de l'atmosphère (Nombre de couches)
 #define NATM 103
+#define NFAER_c 1000000
 
 #ifdef TRAJET
 #define NBTRAJET 40	// Nombre de trajet à afficher pour debuggage
@@ -133,9 +134,6 @@ extern char PATHRESULTATSHDF[];
 extern char PATHTEMOINHDF[];
 extern char PATHDIFFAER[];
 extern char PATHPROFILATM[];
-
-// extern texture<float, cudaTextureType1D, cudaReadModeElementType> tex_faer;
-// extern size_t offset_faer;
 
 	  //////////////
 	 // TYPEDEFS //

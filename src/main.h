@@ -41,5 +41,4 @@ char PATHTEMOINHDF[256]; //Fichier témoin au format hdf
 char PATHDIFFAER[256];	// Fichier d'entrée des données de diffusion des aérosols
 char PATHPROFILATM[256]; // Profil atmosphérique utilisateur
 
-// size_t offset_faer;
 

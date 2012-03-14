@@ -2,3 +2,7 @@
 out_scripts/
 out_prog/
 tmp/
+validation/
+out_scripts_ANCIEN/
+sortie_int/*
+test/*

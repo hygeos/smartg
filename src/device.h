@@ -81,23 +81,9 @@ __device__ void move(Photon*, int
 		, int, Evnt*
 		#endif
 		    );
-			
-__device__ void scatterMol(Photon*
-		#ifdef RANDMWC
-		, unsigned long long*, unsigned int*
-		#endif
-		#ifdef RANDCUDA
-		, curandState_t*
-		#endif
-		#ifdef RANDMT
-		, EtatMT*, ConfigMT*
-		#endif
-		#ifdef TRAJET
-		, int, Evnt*
-		#endif
-		       );
-			   
-__device__ void surfac(Photon*
+
+  
+__device__ void surfaceAgitee(Photon*
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif
@@ -112,6 +98,23 @@ __device__ void surfac(Photon*
 		#endif
 		      );
 			  
+
+__device__ void surfaceLambertienne(Photon* photon
+		#ifdef RANDMWC
+		, unsigned long long* etatThr, unsigned int* configThr
+		#endif
+		#ifdef RANDCUDA
+		, curandState_t* etatThr
+		#endif
+		#ifdef RANDMT
+		, EtatMT* etatThr, ConfigMT* configThr
+		#endif
+		#ifdef TRAJET
+		, int idx, Evnt* evnt
+		#endif
+		);
+
+
 __device__ void exit(Photon* , Variables*, Tableaux, unsigned long long*
 		#ifdef PROGRESSION
 		, unsigned int*
@@ -142,37 +145,8 @@ void initConstantesDevice();
 
 
 // Détermination de la nouvelle direction du photon lorsqu'il est diffusé par aérosol
-__device__ void scatterAer(Photon* photon, Tableaux tab
-		#ifdef RANDMWC
-		, unsigned long long* , unsigned int* 
-		#endif
-		#ifdef RANDCUDA
-		, curandState_t*
-		#endif
-		#ifdef RANDMT
-		, EtatMT* , ConfigMT*
-		#endif
-		#ifdef TRAJET
-		, int , Evnt*
-		#endif
-		       );
 
-__device__ void scatterTot(Photon* photon, Tableaux tab
-		#ifdef RANDMWC
-		, unsigned long long* etatThr, unsigned int* configThr
-		#endif
-		#ifdef RANDCUDA
-		, curandState_t* etatThr
-		#endif
-		#ifdef RANDMT
-		, EtatMT* etatThr, ConfigMT* configThr
-		#endif
-		#ifdef TRAJET
-		, int idx, Evnt* evnt
-		#endif
-		       );
-
-__device__ void calculCommunScatter( Photon* photon, float* cTh, Tableaux tab, int icouche
+__device__ void calculCommunScatter( Photon* photon, float* cTh, Tableaux tab, float* tabpMol_s, int icouche
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif
@@ -185,7 +159,7 @@ __device__ void calculCommunScatter( Photon* photon, float* cTh, Tableaux tab, i
 		);
 		
 // Cette fonction regroupe les deux diffusions: molécules et aérosols
-__device__ void scatter(Photon* photon, Tableaux tab
+__device__ void scatter(Photon* photon, Tableaux tab , float* tabCouche
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif

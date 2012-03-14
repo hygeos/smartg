@@ -209,8 +209,9 @@ void initConstantesHost(int argc, char** argv)
 	
 	chercheConstante(parametres, "PATHRESULTATSHDF", PATHRESULTATSHDF);
 	// Remplir automatiquement le nom complet du fichier
-	definirNomFichier(s);
-	
+// 	definirNomFichier(s);
+	chercheConstante(parametres, "PATHTEMOINHDF", PATHTEMOINHDF);
+
 	chercheConstante( parametres, "PATHDIFFAER", PATHDIFFAER );
 	
 	chercheConstante( parametres, "PATHPROFILATM", PATHPROFILATM );
@@ -249,7 +250,7 @@ void definirNomFichier( char* s ){
 		else if( DIOPTRE==2 || DIOPTRE==1 )
 			sprintf(s,"out_CUDA_atmos_dioptre_agite_ths=%4.2f_tRay=%4.4f_tAer=%4.4f_ws=%3.2f.hdf",THSDEG,TAURAY,TAUAER,WINDSPEED);
 		else
-			sprintf(s,"out_CUDA_atmos_dioptre_plan_ths=%4.2f_tRay=%4.4f_tAer=%4.4f_ws=%3.2f.hdf",THSDEG,TAURAY,TAUAER,WINDSPEED);
+			sprintf(s,"out_CUDA_atmos_dioptre_plan_ths=%4.2f_tRay=%4.4f_tAer=%4.4f.hdf",THSDEG,TAURAY,TAUAER);
 	}
 	else if( SIM==-1 ){
 		if( DIOPTRE==3 )
@@ -260,9 +261,9 @@ void definirNomFichier( char* s ){
 			sprintf(s,"out_CUDA_dioptre_plan_ths=%4.2f_ws=%3.2f.hdf",THSDEG,WINDSPEED);
 	}
 	else if( SIM==-2 )
-		sprintf(s,"out_CUDA_atmos_ths=%4.2f_tRay=%4.4f_tAer=%4.4f_diff=%d.hdf",THSDEG,TAURAY,TAUAER,DIFFF);
+		sprintf(s,"out_CUDA_atmos_ths=%4.2f_tRay=%4.4f_tAer=%4.4f.hdf",THSDEG,TAURAY,TAUAER);
 	else
-		sprintf(s,"out_CUDA_ths=%4.2f_tRay=%4.4f_tAer=%4.4f_diff=%d_ws=%3.2f_sim=%d.hdf",THSDEG,TAURAY,TAUAER,DIFFF,WINDSPEED,SIM);
+		sprintf(s,"out_CUDA_ths=%4.2f_tRay=%4.4f_tAer=%4.4f_ws=%3.2f_sim=%d.hdf",THSDEG,TAURAY,TAUAER,WINDSPEED,SIM);
 	
 	strcat( PATHTEMOINHDF, s);
 	strcat(PATHRESULTATSHDF,s);
@@ -363,14 +364,14 @@ void chercheConstante(FILE* fichier, char* nomConstante, char* chaineValeur)
 void initVariables(Variables** var_H, Variables** var_D)
 {
 	// 	Initialisation de la version host des variables
-	*var_H = (Variables*)malloc(sizeof(Variables));
-	if( var_H == NULL ){
-		printf("#--------------------#\n");
-		printf("ERREUR: Problème de malloc de var_H dans initVariables\n");
-		printf("#--------------------#\n");
-		exit(1);
-	}
-	memset(*var_H, 0, sizeof(Variables));
+// 	*var_H = (Variables*)malloc(sizeof(Variables));
+// 	if( var_H == NULL ){
+// 		printf("#--------------------#\n");
+// 		printf("ERREUR: Problème de malloc de var_H dans initVariables\n");
+// 		printf("#--------------------#\n");
+// 		exit(1);
+// 	}
+// 	memset(*var_H, 0, sizeof(Variables));
 	
 	// Initialisation de la version device des variables
 	if( cudaMalloc(var_D, sizeof(Variables)) == cudaErrorMemoryAllocation ){
@@ -390,15 +391,15 @@ void initVariables(Variables** var_H, Variables** var_D)
 
 	
 	// var_H est une variable page-locked accessible par le device
-// 	if( cudaHostAlloc( var_H, sizeof(Variables), cudaHostAllocPortable ) != cudaSuccess ){
-// 		printf("#--------------------#\n");
-// 		printf("ERREUR: Problème d'allocation de var_H dans initVariables\n");
-// 		printf("#--------------------#\n");
-// 		exit(1);
-// 	}
-// 	
-// 	// Un pointeur est associé pour travailler sur le device
-// 	cudaError_t err = cudaHostGetDevicePointer( var_D, *(var_H) ,0); 
+	if( cudaHostAlloc( var_H, sizeof(Variables), cudaHostAllocPortable ) != cudaSuccess ){
+		printf("#--------------------#\n");
+		printf("ERREUR: Problème d'allocation de var_H dans initVariables\n");
+		printf("#--------------------#\n");
+		exit(1);
+	}
+	
+	// Un pointeur est associé pour travailler sur le device
+// 	err = cudaHostGetDevicePointer( var_D, *(var_H) ,0); 
 // 	if( err != cudaSuccess ){
 // 		printf("#--------------------#\n");
 // 		printf("ERREUR: Problème de mappage de var_D dans initVariables\n");
@@ -501,12 +502,21 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 		printf("ERREUR: Problème de malloc de tab_H->tabPhotons dans initTableaux\n");
 		exit(1);
 	}
+	memset(tab_H->tabPhotons,0,4*NBTHETA * NBPHI * sizeof(*(tab_H->tabPhotons)) );
 	
-	if( cudaMalloc(&(tab_D->tabPhotons), 4 * NBTHETA * NBPHI * sizeof(*(tab_D->tabPhotons))) == cudaErrorMemoryAllocation
-){
+	if( cudaMalloc(&(tab_D->tabPhotons), 4 * NBTHETA * NBPHI * sizeof(*(tab_D->tabPhotons))) == cudaErrorMemoryAllocation){
 		printf("ERREUR: Problème de cudaMalloc de tab_D->tabPhotons dans initTableaux\n");
 		exit(1);	
 	}
+	
+	cudaErreur = cudaMemset(tab_D->tabPhotons, 0, 4*NBTHETA * NBPHI * sizeof(*(tab_D->tabPhotons)));
+	if( cudaErreur != cudaSuccess ){
+	printf("#--------------------#\n");
+	printf("# ERREUR: Problème de cudaMemset tab_D.tabPhotons dans le initTableaux\n");
+	printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+	printf("#--------------------#\n");
+	exit(1);
+}
 	
 	
 	// Modèle de diffusion des aérosols
@@ -515,7 +525,7 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 		printf("ERREUR: Problème de malloc de tab_H->faer dans initTableaux\n");
 		exit(1);
 	}
-
+	memset(tab_H->faer,0,5 * NFAER*sizeof(float) );
 	
 	if( cudaMalloc(&(tab_D->faer), 5 * NFAER * sizeof(float)) == cudaErrorMemoryAllocation ){
 		printf("ERREUR: Problème de cudaMalloc de tab_D->faer dans initTableaux\n");
@@ -689,13 +699,13 @@ void verifierFichier(){
 	{
 		printf("ATTENTION: Le fichier resultat %s existe deja.\n",PATHRESULTATSHDF);
 		printf("Voulez-vous le supprimer pour continuer? [y/n]\n");
-		res_supp=getchar();
-		if( res_supp=='y' ){
+// 		res_supp=getchar();
+// 		if( res_supp=='y' ){
 			sprintf(command,"rm %s",PATHRESULTATSHDF);
 			system(command);
-		}
-		else{
-		}
+// 		}
+// 		else{
+// 		}
 		fclose(fic);
 	}
 	
@@ -717,7 +727,7 @@ void calculOmega(float* tabTh, float* tabPhi, float* tabOmega)
 	
 	// Tableau contenant l'angle psi de chaque morceau de sphère
 	memset(tabPhi, 0, NBPHI * sizeof(*tabPhi));
-	float dphi = DEUXPI / NBPHI;
+	float dphi = PI / NBPHI;
  	tabPhi[0] = dphi / 2;
 	for(int iphi = 1; iphi < NBPHI; iphi++){ 
 // 		tabPhi[iphi] = float((iphi+0.5)*DEG2RAD);
@@ -786,72 +796,80 @@ void calculTabFinal(float* tabFinal, float* tabTh, float* tabPhi, float* tabPhot
 // Fonction qui affiche les paramètres de la simulation
 void afficheParametres()
 {
+	printf("\n#--------- Paramètres de simulation --------#\n");
+	printf(" NBPHOTONS =\t%1.3e", NBPHOTONS);
 	printf("\n");
-	printf("NBPHOTONS = %lu", NBPHOTONS);
+	printf(" NBTHETA =\t%d", NBTHETA);
 	printf("\n");
-	printf("NBLOOP = %u", NBLOOP);
+	printf(" NBPHI\t=\t%d", NBPHI);
 	printf("\n");
-	printf("SEED = %d", SEED);
+	printf(" THSDEG\t=\t%f (degrés)", THSDEG);
 	printf("\n");
-	printf("XBLOCK = %d", XBLOCK);
+	printf(" LAMBDA\t=\t%f", LAMBDA);
 	printf("\n");
-	printf("YBLOCK = %d", YBLOCK);
+	printf(" CONPHY\t=\t%f", CONPHY);
 	printf("\n");
-	printf("XGRID = %d", XGRID);
+	printf(" DIFFF\t=\t%d", DIFFF);
 	printf("\n");
-	printf("YGRID = %d", YGRID);
+	printf(" SIM\t=\t%d", SIM);
 	printf("\n");
-	printf("NBTHETA = %d", NBTHETA);
+	
+	printf("\n#------- Paramètres de performances --------#\n");
+	printf(" NBLOOP\t=\t%u", NBLOOP);
 	printf("\n");
-	printf("NBPHI = %d", NBPHI);
+	printf(" SEED\t=\t%d", SEED);
 	printf("\n");
-	printf("THSDEG = %f (degrés)", THSDEG);
+	printf(" XBLOCK\t=\t%d", XBLOCK);
 	printf("\n");
-	printf("LAMBDA = %f", LAMBDA);
+	printf(" YBLOCK\t=\t%d", YBLOCK);
 	printf("\n");
-	printf("TAURAY = %f", TAURAY);
+	printf(" XGRID\t=\t%d", XGRID);
 	printf("\n");
-	printf("TAUAER = %f", TAUAER);
+	printf(" YGRID\t=\t%d", YGRID);
 	printf("\n");
-	printf("W0AER = %f", W0AER);
+	
+	printf("\n#--------------- Atmosphère ----------------#\n");
+	printf(" TAURAY\t=\t%f", TAURAY);
 	printf("\n");
-	printf("LSAAER = %u", LSAAER);
+	printf(" TAUAER\t=\t%f", TAUAER);
 	printf("\n");
-	printf("NFAER = %u", NFAER);
+	printf(" W0AER\t=\t%f", W0AER);
 	printf("\n");
-	printf("PROFIL = %d", PROFIL);
+	printf(" LSAAER\t=\t%u", LSAAER);
 	printf("\n");
-	printf("HA = %f", HA);
+	printf(" NFAER\t=\t%u", NFAER);
 	printf("\n");
-	printf("HR = %f", HR);
+	printf(" PROFIL\t=\t%d", PROFIL);
 	printf("\n");
-	printf("ZMIN = %f", ZMIN);
+	printf(" HA\t=\t%f", HA);
 	printf("\n");
-	printf("ZMAX = %f", ZMAX);
+	printf(" HR\t=\t%f", HR);
 	printf("\n");
-	printf("WINDSPEED = %f", WINDSPEED);
+	printf(" ZMIN\t=\t%f", ZMIN);
 	printf("\n");
-	printf("NH2O = %f", NH2O);
+	printf(" ZMAX\t=\t%f", ZMAX);
 	printf("\n");
-	printf("SIM = %d", SIM);
+
+	printf("\n#--------- Contribution du dioptre ---------#\n");
+	printf(" SUR\t=\t%d", SUR);
 	printf("\n");
-	printf("SUR = %d", SUR);
+	printf(" DIOPTRE =\t%d", DIOPTRE);
 	printf("\n");
-	printf("DIOPTRE = %d", DIOPTRE);
+	printf(" W0LAM\t=\t%f", W0LAM);
 	printf("\n");
-	printf("W0LAM = %f", W0LAM);
+	printf(" WINDSPEED =\t%f", WINDSPEED);
 	printf("\n");
-	printf("CONPHY = %f", CONPHY);
+	printf(" NH2O\t=\t%f", NH2O);
 	printf("\n");
-	printf("DIFFF = %d", DIFFF);
+	
+	printf("\n#----------- Chemin des fichiers -----------#\n");
+	printf(" PATHRESULTATSHDF = %s", PATHRESULTATSHDF);
 	printf("\n");
-	printf("PATHRESULTATSHDF = %s", PATHRESULTATSHDF);
+	printf(" PATHTEMOINHDF = %s", PATHTEMOINHDF);
 	printf("\n");
-	printf("PATHTEMOINHDF = %s", PATHTEMOINHDF);
+	printf(" PATHDIFFAER = %s", PATHDIFFAER);
 	printf("\n");
-	printf("PATHDIFFAER = %s", PATHDIFFAER);
-	printf("\n");
-	printf("PATHPROFILATM = %s", PATHPROFILATM);
+	printf(" PATHPROFILATM = %s", PATHPROFILATM);
 	printf("\n");
 }
 
@@ -1583,7 +1601,7 @@ void calculFaer( const char* nomFichier, Tableaux* tab_H, Tableaux* tab_D ){
 	
 	/** Allocation des FAER dans la device memory **/		
 
-	cudaError_t erreur = cudaMemcpy(tab_D->faer, tab_H->faer, 5*NFAER*sizeof(float), cudaMemcpyHostToDevice); 
+	cudaError_t erreur = cudaMemcpy(tab_D->faer, tab_H->faer, 5*NFAER*sizeof(*(tab_H->faer)), cudaMemcpyHostToDevice); 
 	if( erreur != cudaSuccess ){
 		printf( "ERREUR: Problème de copie tab_D->faer dans calculFaer\n");
 		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
