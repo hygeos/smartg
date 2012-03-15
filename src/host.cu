@@ -545,6 +545,20 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 		exit(1);	
 	}
 	
+	//
+	tab_H->z =  (float*)malloc((NATM+1)*sizeof(float));
+	if( tab_H->z == NULL ){
+		printf("ERREUR: Problème de malloc de tab_H->z dans initTableaux\n");
+		exit(1);
+	}
+	memset(tab_H->z,0,(NATM+1)*sizeof(float) );
+	
+	if( cudaMalloc( &(tab_D->z), (NATM+1)*sizeof(float) ) == cudaErrorMemoryAllocation ){
+		printf("ERREUR: Problème de cudaMalloc de tab_D->z dans initTableaux\n");
+		exit(1);	
+	}
+	
+	//
 	tab_H->pMol =  (float*)malloc((NATM+1)*sizeof(float));
 	if( tab_H->pMol == NULL ){
 		printf("ERREUR: Problème de malloc de tab_H->pMol dans initTableaux\n");
@@ -797,7 +811,7 @@ void calculTabFinal(float* tabFinal, float* tabTh, float* tabPhi, float* tabPhot
 void afficheParametres()
 {
 	printf("\n#--------- Paramètres de simulation --------#\n");
-	printf(" NBPHOTONS =\t%1.3e", NBPHOTONS);
+	printf(" NBPHOTONS =\t%u", NBPHOTONS);
 	printf("\n");
 	printf(" NBTHETA =\t%d", NBTHETA);
 	printf("\n");
@@ -1473,6 +1487,16 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	
 	free(tab_H->tauCouche);
 	
+	//
+	erreur = cudaFree(tab_D->z);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->z dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	
+	free(tab_H->z);
+	
 	erreur = cudaFree(tab_D->pMol);
 	if( erreur != cudaSuccess ){
 		printf( "ERREUR: Problème de cudaFree de tab_D->pMol dans freeTableaux\n");
@@ -1633,7 +1657,7 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 	/*NOTE: différence avec le code fortran: je n'utilise pas int ncouche */
 	
 // 	float z[NATM+1];		// Altitude à chaque couche
-	float z;	// Variable représentant l'altitude
+// 	float z;	// Variable représentant l'altitude
 	float tauMol[NATM+1];	// Epaisseur optique des molécules à chaque couche
 	float tauAer[NATM+1];	// Epaisseur optique des aérosols à chaque couche
 	int i=0;
@@ -1642,7 +1666,7 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 	
 	/** Conditions aux limites au sommet de l'atmosphère **/
 // 	z[0] = 100.0;
-	z = 100.0;
+	tab_H->z[0] = HATM;
 	tauMol[0] = 0.0;
 	tauAer[0] = 0.0;
 	tab_H->tauCouche[0] = 0.0;
@@ -1652,38 +1676,46 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 	
 	// Épaisseur optique moléculaire très faible
 	// On ne considère une seule sous-couche dans laquelle on trouve tous les aérosols
-	if( TAURAY < 0.0001 ){
-		
-		tauMol[1] = 0;
-		tauAer[1] = TAUAER;
-// 		z[1] = 0;
-		tab_H->tauCouche[1] = tauMol[1] + tauAer[1];
-		tab_H->pMol[1] = 0;
-		
-		/** Envoie des informations dans le device **/
-		erreur = cudaMemcpy(tab_D->tauCouche, tab_H->tauCouche, (NATM+1)*sizeof(float), cudaMemcpyHostToDevice);
-		if( erreur != cudaSuccess ){
-			printf( "ERREUR: Problème de copie tab_D->tauCouche dans profilAtm\n");
-			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-			exit(1);
-		}
-		
-		erreur = cudaMemcpy(tab_D->pMol, tab_H->pMol, (NATM+1)*sizeof(float), cudaMemcpyHostToDevice);
-		if( erreur != cudaSuccess ){
-			printf( "ERREUR: Problème de copie tab_D->pMol dans profilAtm\n");
-			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-			exit(1);
-		}		
-		
-		return;
-	}
+// 	if( TAURAY < 0.0001 ){
+// 		
+// 		tauMol[1] = 0;
+// 		tauAer[1] = TAUAER;
+// // 		z[1] = 0;
+// 		tab_H->z[1]=0.f;
+// 		tab_H->tauCouche[1] = tauMol[1] + tauAer[1];
+// 		tab_H->pMol[1] = 0;
+// 		
+// 		/** Envoie des informations dans le device **/
+// 		erreur = cudaMemcpy(tab_D->tauCouche, tab_H->tauCouche, (NATM+1)*sizeof(float), cudaMemcpyHostToDevice);
+// 		if( erreur != cudaSuccess ){
+// 			printf( "ERREUR: Problème de copie tab_D->tauCouche dans profilAtm\n");
+// 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+// 			exit(1);
+// 		}
+// 		
+// 		erreur = cudaMemcpy(tab_D->pMol, tab_H->pMol, (NATM+1)*sizeof(float), cudaMemcpyHostToDevice);
+// 		if( erreur != cudaSuccess ){
+// 			printf( "ERREUR: Problème de copie tab_D->pMol dans profilAtm\n");
+// 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+// 			exit(1);
+// 		}
+// 		
+// 		erreur = cudaMemcpy(tab_D->z, tab_H->z, (NATM+1)*sizeof(float), cudaMemcpyHostToDevice);
+// 		if( erreur != cudaSuccess ){
+// 			printf( "ERREUR: Problème de copie tab_D->z dans profilAtm\n");
+// 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+// 			exit(1);
+// 		}	
+// 		return;
+// 	}
 	
 	// Épaisseur optique aérosol très faible OU Épaisseur optique moléculaire et aérosol très faible
 	// On ne considère une seule sous-couche dans laquelle on trouve toutes les molécules
-	if( (TAUAER < 0.0001) || ((TAUAER < 0.0001)&&(TAURAY < 0.0001)) ){
+	if( /*(TAUAER < 0.0001) ||*/ ((TAUAER < 0.0001)&&(TAURAY < 0.0001)) ){
 		tauMol[1] = TAURAY;
 		tauAer[1] = 0;
 // 		z[1] = 0;
+		tab_H->z[1]=0;
 		tab_H->tauCouche[1] = tauMol[1] + tauAer[1];
 		tab_H->pMol[1] = 1.0;
 		
@@ -1702,6 +1734,12 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 			exit(1);
 		}		
 		
+		erreur = cudaMemcpy(tab_D->z, tab_H->z, (NATM+1)*sizeof(float), cudaMemcpyHostToDevice);
+		if( erreur != cudaSuccess ){
+			printf( "ERREUR: Problème de copie tab_D->z dans profilAtm\n");
+			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+			exit(1);
+		}
 		return;
 	}
 	
@@ -1715,12 +1753,14 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 			tauMol[1] = TAURAY;
 			tauAer[1] = 0;
 // 			z[1] = 0;
+			tab_H->z[1]=0.f;
 			tab_H->tauCouche[1] = tauMol[1] + tauAer[1];
 			tab_H->pMol[1] = 1.0;
 			
 			tauMol[2] = 0;
 			tauAer[2] = TAUAER;
 // 			z[2] = 0.0;
+			tab_H->z[2]=0.f;
 			tab_H->tauCouche[2] = tab_H->tauCouche[1] + tauMol[2] + tauAer[2];
 			tab_H->pMol[2] = 0.0;
 		}
@@ -1732,12 +1772,14 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 			tauMol[1] = 0.0;
 			tauAer[1] = TAUAER;
 // 			z[1] = 0.0;
+			tab_H->z[1]=0.f;
 			tab_H->tauCouche[1] = tauMol[1] + tauAer[1];
 			tab_H->pMol[1] = 0.0;
 			
 			tauMol[2] = TAURAY;
 			tauAer[2] = 0.0;
 // 			z[2] = 0.0;
+			tab_H->z[2]=0.f;
 			tab_H->tauCouche[2] = tab_H->tauCouche[1] + tauMol[2] + tauAer[2];
 			tab_H->pMol[2] = 1.0;
 		}
@@ -1747,10 +1789,11 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 			for( i=0; i<NATM+1; i++){
 				if(i!=0){
 // 					z[i] = 100.F - float(i)*(100.F/NATM);
-					z = 100.F - float(i)*(100.F/NATM);
+// 					z = 100.F - float(i)*(100.F/NATM);
+					tab_H->z[i]=100.F - float(i)*(100.F/NATM);
 				}
-				vr = TAURAY*exp( -(z/HR) );
-				va = TAUAER*exp( -(z/HA) );
+				vr = TAURAY*exp( -(tab_H->z[i]/HR) );
+				va = TAUAER*exp( -(tab_H->z[i]/HA) );
 				
 				tab_H->tauCouche[i] = va+vr;
 				
@@ -1779,7 +1822,8 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 		}
 		
 		/** Calcul des grandeurs utiles aux OS pour la couche la plus haute **/
-// 		z[1] = -( HR*log(tauRay1/TAURAY) );                                      
+// 		z[1] = -( HR*log(tauRay1/TAURAY) ); 
+		tab_H->z[1]=-( HR*log(tauRay1/TAURAY) );
 		tauMol[1] = tauRay1;
 		tauAer[1] = 0.F;                                    
 		tab_H->tauCouche[1] = tauMol[1] + tauAer[1];
@@ -1788,6 +1832,7 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 		/** Calcul des grandeurs utiles aux OS pour la deuxieme couche   **/
 		if( ZMAX == ZMIN ){ //Uniquement des aerosols dans la couche intermediaire
 // 			z[2] = ZMAX; // ou zmin, puisque zmin=zmax
+			tab_H->z[2]=ZMAX;
 			tauMol[2] = tauRay1;                                                      
 			tauAer[2] = TAUAER;
 			tab_H->tauCouche[2] = tauMol[2] + tauAer[2];
@@ -1796,6 +1841,7 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 		
 		else{	// Melange homogene d'aerosol et de molecules dans la couche intermediaire
 // 			z[2] = ZMIN;
+			tab_H->z[2]=ZMIN;
 			tauMol[2] = tauRay1+tauRay2;
 			tauAer[2] = TAUAER;
 			tab_H->tauCouche[2] = tauMol[2] + tauAer[2];
@@ -1804,6 +1850,7 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 		
 		/** Calcul des grandeurs utiles aux OS pour la troisieme couche **/
 // 		z[3] = 0.F;
+		tab_H->z[3]=0.f;
 		tauMol[3] = TAURAY;
 		tauAer[3] = TAUAER;
 		tab_H->tauCouche[3] = tauMol[3] + tauAer[3];
@@ -1820,19 +1867,29 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 		=> n	alt		tauMol		tauAer		tauCouche		pAer		pMol
 		*/
 		FILE* profil = fopen( PATHPROFILATM , "r" );
-		float *garbage = NULL;
+		float *garbage;
 		int icouche=0;
+		char ligne[1024];
 	
 		if(profil == NULL){
 			printf("ERREUR : Ouverture impossible du fichier %s pour la diffusion d'aérosol", PATHPROFILATM );
 			exit(1);
 		}
-	
+		
 		else{
-			i=0;
-			
-			while((fscanf(profil, "%d %f %f %f %f %f %f", &icouche, garbage, garbage, garbage, tab_H->tauCouche+i, garbage, tab_H->pMol+i ) !=EOF) && icouche<=NATM ){
-			i = icouche+1;
+			// Passage de la premiere ligne
+// 			fgets(ligne,1024,profil);
+			fscanf(profil, "%d\t%f\t%f\t%f\t%f\t%f\t%f\n", &i, tab_H->z+icouche, garbage, garbage, tab_H->tauCouche+icouche,
+				   garbage,tab_H->pMol+icouche );
+			tab_H->z[0] = 66;
+			// Extraction des informations
+			icouche=0;
+			printf("couche\tz\ttauCouche\tpMol\n");
+			for( icouche=0; icouche<NATM+1; icouche++ ){
+			fscanf(profil, "%d\t%f\t%f\t%f\t%f\t%f\t%f\n", &i, tab_H->z+icouche, garbage, garbage, tab_H->tauCouche+icouche,
+garbage,tab_H->pMol+icouche );
+				
+				printf("%d\t%f\t%f\t%f\n",icouche, tab_H->z[icouche],tab_H->tauCouche[icouche], tab_H->pMol[icouche]);
 			}
 	}
 	
@@ -1857,6 +1914,13 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 			exit(1);
 		}	
 		
+		erreur = cudaMemcpy(tab_D->z, tab_H->z, (NATM+1)*sizeof(float), cudaMemcpyHostToDevice);
+		if( erreur != cudaSuccess ){
+			printf( "ERREUR: Problème de copie tab_D->z dans profilAtm\n");
+			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+			exit(1);
+		}	
+		
 		/** Test utilisation texture memory **/
 // 		textureReference* texRefPtr;
 // 		cudaGetTextureReference(&texRefPtr, "tex_faer");
@@ -1875,10 +1939,10 @@ void verificationAtm( Tableaux tab_H ){
 	// Vérification du modèle
 	FILE* fichier = fopen("./test/modele_atm_cuda.txt", "w+");
 	
-	fprintf( fichier, "couche\tpropMol\tTauCouche\n" );
+	fprintf( fichier, "couche\tz\tpropMol\tTauCouche\n" );
 	
 	for( int i=0; i<NATM+1; i++){
-		fprintf(fichier, "%d\t%10.8f\t%10.8f\n",i,tab_H.pMol[i], tab_H.tauCouche[i]);
+		fprintf(fichier, "%d\t%10.8f\t%10.8f\t%10.8f\n",i,tab_H.z[i],tab_H.pMol[i], tab_H.tauCouche[i]);
 	}
 	
 	fclose(fichier);

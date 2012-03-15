@@ -4,7 +4,7 @@
         ###############################
 
 # Nombre de photons a lancer (unsigned long long) (limite par le tableau du poids des photons en unsigned long long)
-NBPHOTONS = 2000000000
+NBPHOTONS = 500000000
 
 # Nombre de boucles dans le kernel (unsigned int) (limite par watchdog, il faut tuer X)
 NBLOOP = 18000
@@ -18,7 +18,8 @@ THSDEG = 30.
 SEED = -1
 
 # Les threads sont rangés dans des blocks de taille XBLOCK*YBLOCK (limite par watchdog il faut tuer X + limite XBLOCK*YBLOCK =< 256 ou 512)
-XBLOCK = 128
+# Pour l'instant 256 est le plus performant
+XBLOCK = 256
 YBLOCK = 1
 # et les blocks sont eux-même rangés dans un grid de taille XGRID*YGRID (limite par watchdog il faut tuer X + limite XGRID<65535 et YGRID<65535)
 XGRID = 84
@@ -52,7 +53,7 @@ NFAER = 1000000
 	# 0 : profil standard avec echelle de hauteur
 	# 3 : profil à 2 ou 3 couches (comme dans les SOS)
 	# 2 : profil utilisateurs, Attention au bon format -> commencer directement les données sur la 1ère ligne
-PROFIL = 0
+PROFIL = 2
 
 # Echelle de hauteur aerosol [km] (utilise si PROFIL=0) (float)
 HA = 2.0
@@ -100,18 +101,18 @@ W0LAM = 0.7
 CONPHY = 0.1
 
 # Forcage de la premiere diffusion (utilise si SIM = -2)
-DIFFF = 1
+DIFFF = 0
 
 # Chemin du fichier de sortie (Une grande partie du chemin est automatiquement créé afin de simplifier la classification des
 # resultats)
-PATHRESULTATSHDF = test
+PATHRESULTATSHDF = out.hdf
 
 # Chemin du fichier témoin (Le .hdf et les détails de la simulation sont ajoutés par le programme automatiquement)
-# PATHTEMOINHDF = validation/molecules_seules/simulation_27022012/tmp/
+PATHTEMOINHDF = temoin.hdf
 
 # Chemin du modèle de diffusion aérosol
 PATHDIFFAER = /home/florent/MCCuda/fic/valid_T70.443
 
 # Chemin du modèle atmosphérique utilisateur (utile uniquement si PROFIL = 2)
-PATHPROFILATM = /home/florent/MCCuda/
+PATHPROFILATM = /home/florent/MCCuda/profil/molec_new_profil_mol_H8_AER_0_2_443.txt
 

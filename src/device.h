@@ -21,6 +21,7 @@ __device__ __constant__ float ZMAXd;
 __device__ __constant__ float WINDSPEEDd;
 __device__ __constant__ float NH2Od;
 __device__ __constant__ float CONPHYd;
+
 __device__ __constant__ int XBLOCKd;
 __device__ __constant__ int YBLOCKd;
 __device__ __constant__ int XGRIDd;
@@ -35,7 +36,7 @@ __device__ __constant__ int DIFFFd;
 __device__ __constant__ float THSd; //thetaSolaire_Host en radians
 __device__ __constant__ float STHSd; //sinThetaSolaire_Host
 __device__ __constant__ float CTHSd; //cosThetaSolaire_Host
-__device__ __constant__ float TAUMAXd; //tau initial du photon (Host)
+
 __device__ __constant__ float GAMAd;
 
 // __device__ float* FAERd;	// Paramètres du modèle de diffusion par aérosols
@@ -59,7 +60,7 @@ __global__ void initRandCUDA(curandState_t*, unsigned long long);
 
 __global__ void initRandMTEtat(EtatMT*, ConfigMT*);
 
-__device__ void init(Photon*
+__device__ void init(Photon*, Tableaux
 		#ifdef TRAJET
 		, int, Evnt*
 		#endif
@@ -67,7 +68,7 @@ __device__ void init(Photon*
 		, unsigned int iloop
 		#endif
 		    );
-__device__ void move(Photon*, int 
+__device__ void move(Photon*, Tableaux tab, float* tabCouche_s, int flagDiff 
 		#ifdef RANDMWC
 		, unsigned long long*, unsigned int*
 		#endif
@@ -142,11 +143,9 @@ __device__ void atomicAddULL(unsigned long long* address, unsigned int add);
 
 void initConstantesDevice();
 
-
-
 // Détermination de la nouvelle direction du photon lorsqu'il est diffusé par aérosol
 
-__device__ void calculCommunScatter( Photon* photon, float* cTh, Tableaux tab, float* tabpMol_s, int icouche
+__device__ void calculDiffScatter( Photon* photon, float* cTh, Tableaux tab, float* tabpMol_s, int icouche
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif
@@ -174,4 +173,9 @@ __device__ void scatter(Photon* photon, Tableaux tab , float* tabCouche
 		#endif
 		);
 		
-		
+__device__ void impact(Photon* photon, Tableaux tab
+		#ifdef TRAJET
+		, int idx, Evnt* evnt
+		#endif
+		);
+

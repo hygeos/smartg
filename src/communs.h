@@ -68,6 +68,10 @@
 #define NATM 103
 #define NFAER_c 1000000
 
+// Constantes propres au calcul sphérique
+#define RTER 6400
+#define HATM 100
+
 #ifdef TRAJET
 #define NBTRAJET 40	// Nombre de trajet à afficher pour debuggage
 #endif
@@ -149,8 +153,11 @@ typedef struct __align__(16)
 	float ux;
 	float uy;
 	float uz;
+	
 	// Localisation du photon
 	int loc;
+	int locPrec;	// Localisation précédente du photon
+	
 	// Epaisseur Rayleigh du photon
 	float tau;
 	// Poids du photon
@@ -160,6 +167,25 @@ typedef struct __align__(16)
 	float stokes2;
 	float stokes3;
 	float stokes4;
+	
+	// Position cartésienne du photon
+	float x;
+	float y;
+	float z;
+	
+	// Profil vu par le photon
+	float hph[2*NATM+2];
+	float zph[2*NATM+2];
+	float hphz[2*NATM+2];
+	float zphz[2*NATM+2];
+	
+	// Parametres initiaux
+	float taumax0;
+	float zintermax0;
+	float x0;
+	float y0;
+	float z0;
+	int icouche;
 	
 	#ifdef SORTIEINT
 	int numBoucle;
@@ -200,6 +226,7 @@ typedef struct __align__(16)
 	float* faer;		// Pointeur vers le modèle de diffusion des aérosols
 	float* tauCouche;	// Pointeur vers l'épaisseur optique de chaque couche du modèle atmosphérique
 	float* pMol;		// Pointeur vers le pourcentage de molécules dans chaque couche du modèle atmosphérique
+	float* z;			// Altitude de chaque couche
 	
 	#ifdef SORTIEINT
 	float* poids;

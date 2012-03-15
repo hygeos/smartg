@@ -18,11 +18,11 @@ import struct
 # Paramètres à modifier
 #
 #-----------------------------------------------------------------------------------------------------------------------
-type_simu = "molecules_dioptre_agite"
+type_simu = "molecules_seules"
 date_simu = "02032012"
 angle = "30"
 # Nom du fichier Cuda sans extension .hdf
-nom_cuda = "out_CUDA_atmos_dioptre_agite_ths=30.00_tRay=0.2360_tAer=0.0000_ws=5.00"
+nom_cuda = "out"
 # Nom du fichier Fortran sans l'extension .bin.gz
 nom_fortran = "out_FORTRAN.ths=30.000.tr=0.2360.ta=0.0000.ws=5"
 
@@ -75,8 +75,8 @@ print 'C\'est parti pour la simulation de {0}'.format(type_donnees)
 path_fortran = "/home/florent/MCCuda/validation/"+type_simu+"/simulation_"+date_simu+"/"+ nom_fortran+".bin.gz"
 
 # Nom complet du fichier Cuda
-path_cuda = "/home/florent/MCCuda/validation/"+type_simu+"/simulation_"+date_simu+"/" + nom_cuda + ".hdf"
-
+#path_cuda = "/home/florent/MCCuda/validation/"+type_simu+"/simulation_"+date_simu+"/" + nom_cuda + ".hdf"
+path_cuda = "/home/florent/"+nom_cuda".hdf"
 # Si le dossier suivant existe deja il est supprime puis recree
 path_dossier_sortie = \
 "/home/florent/MCCuda/validation/"+type_simu+"/graph_"+date_simu+"/"+type_donnees+"/"+type_donnees+"_FORTRAN_CUDA_" + nom_cuda
