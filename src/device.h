@@ -145,7 +145,7 @@ void initConstantesDevice();
 
 // Détermination de la nouvelle direction du photon lorsqu'il est diffusé par aérosol
 
-__device__ void calculDiffScatter( Photon* photon, float* cTh, Tableaux tab, float* tabpMol_s, int icouche
+__device__ void calculDiffScatter( Photon* photon, float* cTh, Tableaux tab
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif

@@ -209,8 +209,8 @@ void initConstantesHost(int argc, char** argv)
 	
 	chercheConstante(parametres, "PATHRESULTATSHDF", PATHRESULTATSHDF);
 	// Remplir automatiquement le nom complet du fichier
-// 	definirNomFichier(s);
-	chercheConstante(parametres, "PATHTEMOINHDF", PATHTEMOINHDF);
+	definirNomFichier(s);
+// 	chercheConstante(parametres, "PATHTEMOINHDF", PATHTEMOINHDF);
 
 	chercheConstante( parametres, "PATHDIFFAER", PATHDIFFAER );
 	
@@ -713,13 +713,13 @@ void verifierFichier(){
 	{
 		printf("ATTENTION: Le fichier resultat %s existe deja.\n",PATHRESULTATSHDF);
 		printf("Voulez-vous le supprimer pour continuer? [y/n]\n");
-// 		res_supp=getchar();
-// 		if( res_supp=='y' ){
+		res_supp=getchar();
+		if( res_supp=='y' ){
 			sprintf(command,"rm %s",PATHRESULTATSHDF);
 			system(command);
-// 		}
-// 		else{
-// 		}
+		}
+		else{
+		}
 		fclose(fic);
 	}
 	
@@ -827,11 +827,11 @@ void afficheParametres()
 	printf("\n");
 	printf(" SIM\t=\t%d", SIM);
 	printf("\n");
+	printf(" SEED\t=\t%d", SEED);
+	printf("\n");
 	
 	printf("\n#------- Paramètres de performances --------#\n");
 	printf(" NBLOOP\t=\t%u", NBLOOP);
-	printf("\n");
-	printf(" SEED\t=\t%d", SEED);
 	printf("\n");
 	printf(" XBLOCK\t=\t%d", XBLOCK);
 	printf("\n");
@@ -1858,44 +1858,38 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 	}
 	
 	else if( PROFIL == 2 ){
-		
-		//ATTENTION NOTE: bout de code pas encore validé
-		
 		// Profil utilisateur
 		/* Format du fichier
 		=> Ne pas mettre de ligne vide sur la première
 		=> n	alt		tauMol		tauAer		tauCouche		pAer		pMol
 		*/
 		FILE* profil = fopen( PATHPROFILATM , "r" );
-		float *garbage;
+		float garbage;
+		
 		int icouche=0;
 		char ligne[1024];
 	
 		if(profil == NULL){
-			printf("ERREUR : Ouverture impossible du fichier %s pour la diffusion d'aérosol", PATHPROFILATM );
+			printf("ERREUR : Ouverture impossible du fichier %s pour le profil atmosphérique\n", PATHPROFILATM );
 			exit(1);
 		}
 		
 		else{
 			// Passage de la premiere ligne
-// 			fgets(ligne,1024,profil);
-			fscanf(profil, "%d\t%f\t%f\t%f\t%f\t%f\t%f\n", &i, tab_H->z+icouche, garbage, garbage, tab_H->tauCouche+icouche,
-				   garbage,tab_H->pMol+icouche );
-			tab_H->z[0] = 66;
+			fgets(ligne,1024,profil);
+
 			// Extraction des informations
-			icouche=0;
-			printf("couche\tz\ttauCouche\tpMol\n");
 			for( icouche=0; icouche<NATM+1; icouche++ ){
-			fscanf(profil, "%d\t%f\t%f\t%f\t%f\t%f\t%f\n", &i, tab_H->z+icouche, garbage, garbage, tab_H->tauCouche+icouche,
-garbage,tab_H->pMol+icouche );
-				
-				printf("%d\t%f\t%f\t%f\n",icouche, tab_H->z[icouche],tab_H->tauCouche[icouche], tab_H->pMol[icouche]);
+				fscanf(profil, "%d\t%f\t%f\t%f\t%f\t%f\t%f", &i, tab_H->z+icouche, &garbage, &garbage, tab_H->tauCouche+icouche,
+&garbage,tab_H->pMol+icouche );
+			
 			}
-	}
+		}
 	
 		if(fclose(profil) == EOF){
 			printf("ERREUR : Probleme de fermeture du fichier %s", PATHPROFILATM);
 		}
+		
 	}
 	
 	

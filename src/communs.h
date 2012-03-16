@@ -185,7 +185,8 @@ typedef struct __align__(16)
 	float x0;
 	float y0;
 	float z0;
-	int icouche;
+	int couche;
+	int isurface;
 	
 	#ifdef SORTIEINT
 	int numBoucle;

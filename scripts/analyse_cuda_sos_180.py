@@ -79,14 +79,14 @@ print 'C\'est parti pour la simulation de {0}'.format(type_donnees)
 ######################################################
 
 # Nom complet du fichier SOS
-path_sos = "/home/florent/MCCuda/validation/fichier_ref_sos/" + nom_sos + ".txt"
+path_sos = "/home/florent/MCCuda/validation/SPHERIQUE/fichier_ref_sos/" + nom_sos + ".txt"
 
 # Nom complet du fichier Cuda
-path_cuda = "/home/florent/MCCuda/validation/"+type_simu+"/simulation_"+date_simu+"/" + nom_cuda + ".hdf"
+path_cuda = "/home/florent/MCCuda/validation/SPHERIQUE/"+type_simu+"/simulation_"+date_simu+"/" + nom_cuda + ".hdf"
 
 # Si le dossier suivant existe deja il est supprime puis recree
 path_dossier_sortie = \
-"/home/florent/MCCuda/validation/"+type_simu+"/graph_"+date_simu+"/"+type_donnees+"/"+type_donnees+"_SOS_CUDA_" + nom_cuda
+"/home/florent/MCCuda/validation/SPHERIQUE/"+type_simu+"/graph_"+date_simu+"/"+type_donnees+"/"+type_donnees+"_SOS_CUDA_" + nom_cuda
 
 
 ##########################################################

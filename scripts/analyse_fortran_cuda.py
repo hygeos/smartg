@@ -72,14 +72,15 @@ print 'C\'est parti pour la simulation de {0}'.format(type_donnees)
 ######################################################
 
 # Nom complet du fichier Fortran
-path_fortran = "/home/florent/MCCuda/validation/"+type_simu+"/simulation_"+date_simu+"/"+ nom_fortran+".bin.gz"
+path_fortran = "/home/florent/MCCuda/validation/SPHERIQUE/"+type_simu+"/simulation_"+date_simu+"/"+ nom_fortran+".bin.gz"
 
 # Nom complet du fichier Cuda
-path_cuda = "/home/florent/MCCuda/validation/"+type_simu+"/simulation_"+date_simu+"/" + nom_cuda + ".hdf"
+path_cuda = "/home/florent/MCCuda/validation/SPHERIQUE/"+type_simu+"/simulation_"+date_simu+"/" + nom_cuda + ".hdf"
 
 # Si le dossier suivant existe deja il est supprime puis recree
 path_dossier_sortie = \
-"/home/florent/MCCuda/validation/"+type_simu+"/graph_"+date_simu+"/"+type_donnees+"/"+type_donnees+"_FORTRAN_CUDA_" + nom_cuda
+"/home/florent/MCCuda/validation/SPHERIQUE/"+type_simu+"/graph_"+date_simu+"/"+type_donnees+"/"+type_donnees+"_FORTRAN_CUDA_" +\
+nom_cuda
 
 os.system("rm -rf "+ path_dossier_sortie)
 os.system("mkdir -p "+ path_dossier_sortie)

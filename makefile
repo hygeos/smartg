@@ -30,7 +30,7 @@ DFLAGS += -DRANDMWC 	# Utilisation du random MWC (Multiply-With-Carry)
 
 #=============Debogage===========#
 DFLAGS += -DPROGRESSION # Calcul et affichage de la progression de la simulation
-#DFLAGS += -DTRAJET # Calcul et affichage des premiers evenements d'un threads
+DFLAGS += -DTRAJET # Calcul et affichage des premiers evenements d'un threads
 # DFLAGS += -DTABRAND # Affichage des premiers nombre aleatoires generes
 #DFLAGS += -DSORTIEINT # Sauvegarde des poids élevés, du nombre de photons par cases
 

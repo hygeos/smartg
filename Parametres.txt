@@ -4,7 +4,7 @@
         ###############################
 
 # Nombre de photons a lancer (unsigned long long) (limite par le tableau du poids des photons en unsigned long long)
-NBPHOTONS = 500000000
+NBPHOTONS = 300000000
 
 # Nombre de boucles dans le kernel (unsigned int) (limite par watchdog, il faut tuer X)
 NBLOOP = 18000
@@ -92,7 +92,7 @@ SUR = 1
 	# 1=agite avec reflexion multiple
 	# 2=agite sans reflexion multiple
 	# 3=surface lambertienne
-DIOPTRE = 3
+DIOPTRE = 2
 
 # Albedo simple de diffusion de la surface lambertienne (float)
 W0LAM = 0.7
@@ -105,14 +105,14 @@ DIFFF = 0
 
 # Chemin du fichier de sortie (Une grande partie du chemin est automatiquement créé afin de simplifier la classification des
 # resultats)
-PATHRESULTATSHDF = out.hdf
+PATHRESULTATSHDF = validation/SPHERIQUE
 
 # Chemin du fichier témoin (Le .hdf et les détails de la simulation sont ajoutés par le programme automatiquement)
-PATHTEMOINHDF = temoin.hdf
+#PATHTEMOINHDF = validation
 
 # Chemin du modèle de diffusion aérosol
 PATHDIFFAER = /home/florent/MCCuda/fic/valid_T70.443
 
 # Chemin du modèle atmosphérique utilisateur (utile uniquement si PROFIL = 2)
-PATHPROFILATM = /home/florent/MCCuda/profil/molec_new_profil_mol_H8_AER_0_2_443.txt
+PATHPROFILATM = /home/florent/MCCuda/profil/molec_new_profil_mol_H8_AER_0_2_443
 
