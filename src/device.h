@@ -48,7 +48,7 @@ __device__ __constant__ float GAMAd;
 	 // PROTOTYPES DEVICE //
 	///////////////////////
 
-__global__ void lancementKernel(Variables*, Tableaux
+__global__ void lancementKernel(Variables* var, Tableaux tab, Init* init
 		#ifdef TABRAND
 		, float*
 		#endif
@@ -60,7 +60,7 @@ __global__ void initRandCUDA(curandState_t*, unsigned long long);
 
 __global__ void initRandMTEtat(EtatMT*, ConfigMT*);
 
-__device__ void init(Photon*, Tableaux
+__device__ void initPhoton(Photon* ph, Tableaux tab, Init* init, float* hph0_s, float* zph0_s
 		#ifdef TRAJET
 		, int, Evnt*
 		#endif
@@ -68,7 +68,7 @@ __device__ void init(Photon*, Tableaux
 		, unsigned int iloop
 		#endif
 		    );
-__device__ void move(Photon*, Tableaux tab, float* tabCouche_s, int flagDiff 
+__device__ void move(Photon*, Tableaux tab, int flagDiff 
 		#ifdef RANDMWC
 		, unsigned long long*, unsigned int*
 		#endif
@@ -158,7 +158,7 @@ __device__ void calculDiffScatter( Photon* photon, float* cTh, Tableaux tab
 		);
 		
 // Cette fonction regroupe les deux diffusions: molécules et aérosols
-__device__ void scatter(Photon* photon, Tableaux tab , float* tabCouche
+__device__ void scatter(Photon* photon, Tableaux tab
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif

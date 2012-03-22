@@ -87,6 +87,11 @@ int main (int argc, char *argv[])
 	Variables* var_H; //variables version host
 	Variables* var_D; //variables version device
 	initVariables(&var_H, &var_D);
+	
+	/** Définition et initialisation des constantes initiales du photon **/
+	Init* init_H;
+	Init* init_D;
+	initInit(&init_H, &init_D);
 
 	/** Regroupement et initialisation des tableaux a envoyer dans le kernel (structure de pointeurs) **/
 	Tableaux tab_H; //tableaux version host
@@ -129,7 +134,15 @@ int main (int argc, char *argv[])
 	// Calcul du mélange Molécule/Aérosol dans l'atmosphère en fonction de la couche
 	profilAtm( &tab_H, &tab_D );
 	verificationAtm( tab_H );
-
+	
+	/** Calcul du point d'impact du photon **/
+// 	impactInit(init_H, init_D, &tab_H, &tab_D);
+// 	
+// 	printf("Paramètres initiaux du photon: taumax0=%f - zintermax=%f - (%f,%f,%f)\n",
+// 		   init_H->taumax0, init_H->zintermax0, init_H->x0, init_H->y0, init_H->z0 );
+// 	for(int i=0; i<NATM+1; i++)
+// 		printf("zph[%i]=%f - hph[%d]=%e\n",i, tab_H.zph0[i], i ,tab_H.hph0[i] );
+	
 	/** Fonction qui permet de poursuivre la simulation précédente si elle n'est pas terminee **/
 	double tempsPrec = 0.; //temps ecoule de la simulation precedente
 	lireHDFTemoin(var_H, var_D, &nbPhotonsTot, tabPhotonsTot, &tempsPrec);
@@ -166,36 +179,36 @@ int main (int argc, char *argv[])
 	{
 		/** Remise à zéro de certaines variables et certains tableaux **/
 		/** **/
-// 		reinitVariables(var_H, var_D);
-		cudaErreur = cudaMemset(&(var_D->nbPhotons), 0, sizeof(var_D->nbPhotons));
-		if( cudaErreur != cudaSuccess ){
-			printf("#--------------------#\n");
-			printf("# ERREUR: Problème de cudaMemset var_D.nbPhotons dans le main\n");
-			printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-			printf("#--------------------#\n");
-			exit(1);
-		}
-		
-		#ifdef PROGRESSION
-		cudaErreur = cudaMemset(&(var_D->nbPhotonsSor), 0, sizeof(var_D->nbPhotonsSor));
-		if( cudaErreur != cudaSuccess ){
-			printf("#--------------------#\n");
-			printf("# ERREUR: Problème de cudaMemset var_D.nbPhotons dans le main\n");
-			printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-			printf("#--------------------#\n");
-			exit(1);
-		}
-		#endif
-		/** **/
-		
-// 		cudaErreur = cudaMemset(tab_D.tabPhotons, 0, 4*NBTHETA * NBPHI * sizeof(*(tab_D.tabPhotons)));
+		reinitVariables(var_H, var_D);
+// 		cudaErreur = cudaMemset(&(var_D->nbPhotons), 0, sizeof(var_D->nbPhotons));
 // 		if( cudaErreur != cudaSuccess ){
 // 			printf("#--------------------#\n");
-// 			printf("# ERREUR: Problème de cudaMemset tab_D.tabPhotons dans le main\n");
+// 			printf("# ERREUR: Problème de cudaMemset var_D.nbPhotons dans le main\n");
 // 			printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
 // 			printf("#--------------------#\n");
 // 			exit(1);
 // 		}
+		
+// 		#ifdef PROGRESSION
+// 		cudaErreur = cudaMemset(&(var_D->nbPhotonsSor), 0, sizeof(var_D->nbPhotonsSor));
+// 		if( cudaErreur != cudaSuccess ){
+// 			printf("#--------------------#\n");
+// 			printf("# ERREUR: Problème de cudaMemset var_D.nbPhotons dans le main\n");
+// 			printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+// 			printf("#--------------------#\n");
+// 			exit(1);
+// 		}
+// 		#endif
+		/** **/
+		
+		cudaErreur = cudaMemset(tab_D.tabPhotons, 0, 4*NBTHETA * NBPHI * sizeof(*(tab_D.tabPhotons)));
+		if( cudaErreur != cudaSuccess ){
+			printf("#--------------------#\n");
+			printf("# ERREUR: Problème de cudaMemset tab_D.tabPhotons dans le main\n");
+			printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+			printf("#--------------------#\n");
+			exit(1);
+		}
 		
 		#ifdef SORTIEINT
 		cudaErreur = cudaMemset(tab_D.nbBoucle, 0, NBLOOP*sizeof(*(tab_D.nbBoucle)) );
@@ -209,7 +222,7 @@ int main (int argc, char *argv[])
 		#endif
 		
 		/** Lancement du kernel **/
-		lancementKernel<<<gridSize, blockSize>>>(var_D, tab_D			
+		lancementKernel<<<gridSize, blockSize>>>(var_D, tab_D, init_D
 				#ifdef TABRAND
 				, tableauRand_D
 				#endif
@@ -218,7 +231,7 @@ int main (int argc, char *argv[])
 				#endif
 							);
 		// Attend que tous les threads aient fini avant de faire autre chose
-// 		cudaThreadSynchronize();
+		cudaThreadSynchronize();
 		
 		/** Récupération des variables et d'un tableau envoyés dans le kernel **/
 		cudaErreur = cudaMemcpy(var_H, var_D, sizeof(Variables), cudaMemcpyDeviceToHost);
@@ -233,13 +246,13 @@ int main (int argc, char *argv[])
 			exit(1);
 		}
 
-// 		cudaErreur = cudaMemcpy(tab_H.tabPhotons, tab_D.tabPhotons, 4*NBTHETA * NBPHI * sizeof(*(tab_H.tabPhotons)),
-// cudaMemcpyDeviceToHost);
-// 		if( cudaErreur != cudaSuccess ){
-// 			printf( "ERREUR: Problème de copie tab_H.tabPhotons dans le main\n");
-// 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-// 			exit(1);
-// 		}
+		cudaErreur = cudaMemcpy(tab_H.tabPhotons, tab_D.tabPhotons, 4*NBTHETA * NBPHI * sizeof(*(tab_H.tabPhotons)),
+cudaMemcpyDeviceToHost);
+		if( cudaErreur != cudaSuccess ){
+			printf( "ERREUR: Problème de copie tab_H.tabPhotons dans le main\n");
+			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+			exit(1);
+		}
 
 		#ifdef SORTIEINT
 		cudaErreur = cudaMemcpy(tab_H.poids, tab_D.poids, NBLOOP * sizeof(*(tab_H.poids)), cudaMemcpyDeviceToHost);
@@ -271,12 +284,12 @@ cudaMemcpyDeviceToHost);
 		#ifdef PROGRESSION
 		nbPhotonsSorTot += var_H->nbPhotonsSor;
 		#endif
-	/*	
+		
 		for(int i = 0; i < 4*NBTHETA*NBPHI; i++)
 			tabPhotonsTot[i] += tab_H.tabPhotons[i];
-		*/
+		
 		/** Creation d'un fichier témoin pour pouvoir reprendre la simulation en cas d'arrêt **/
-// 		creerHDFTemoin(tabPhotonsTot, nbPhotonsTot,var_H, tempsPrec);
+		creerHDFTemoin(tabPhotonsTot, nbPhotonsTot,var_H, tempsPrec);
 		
 		/** Affichage de l'avancement de la simulation **/
 		afficheProgress(nbPhotonsTot, var_H, tempsPrec
@@ -386,6 +399,16 @@ cudaMemcpyDeviceToHost);
 
 // 	free(var_H);
 	cudaFreeHost(var_H);
+
+	cudaErreur = cudaFree(init_D);
+	if( cudaErreur != cudaSuccess ){
+		printf( "ERREUR: Problème de free de init_D dans le main\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+		exit(1);
+	}
+
+	free(init_H);
+// 	cudaFreeHost(var_H);
 
 	// Libération des tableaux envoyés dans le kernel
 	freeTableaux(&tab_H, &tab_D);

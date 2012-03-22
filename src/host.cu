@@ -409,6 +409,54 @@ void initVariables(Variables** var_H, Variables** var_D)
 
 }
 
+void initInit(Init** init_H, Init** init_D)
+{
+// 		Initialisation de la version host des variables
+	*init_H = (Init*)malloc(sizeof(Init));
+	if( init_H == NULL ){
+	printf("#--------------------#\n");
+	printf("ERREUR: Problème de malloc de init_H dans initInit\n");
+	printf("#--------------------#\n");
+	exit(1);
+   	}
+   	memset(*init_H, 0, sizeof(Init));
+   
+   // Initialisation de la version device des variables
+   if( cudaMalloc(init_D, sizeof(Init)) == cudaErrorMemoryAllocation ){
+	   printf("ERREUR: Problème de cudaMalloc de init_D dans initInit\n");
+	   exit(1);
+   }
+   
+   cudaError_t err = cudaMemset(*(init_D), 0, sizeof(Init));
+   if( err != cudaSuccess ){
+	   printf("#--------------------#\n");
+	   printf("# ERREUR: Problème de cudaMemset init_D dans initInit\n");
+	   printf("# Nature de l'erreur: %s\n",cudaGetErrorString(err) );
+	   printf("#--------------------#\n");
+	   exit(1);
+   }
+   
+   
+   
+//    // var_H est une variable page-locked accessible par le device
+//    if( cudaHostAlloc( var_H, sizeof(Variables), cudaHostAllocPortable ) != cudaSuccess ){
+// 	   printf("#--------------------#\n");
+// 	   printf("ERREUR: Problème d'allocation de var_H dans initVariables\n");
+// 	   printf("#--------------------#\n");
+// 	   exit(1);
+//    }
+   
+   // Un pointeur est associé pour travailler sur le device
+   // 	err = cudaHostGetDevicePointer( var_D, *(var_H) ,0); 
+   // 	if( err != cudaSuccess ){
+   // 		printf("#--------------------#\n");
+   // 		printf("ERREUR: Problème de mappage de var_D dans initVariables\n");
+   // 		printf("#--------------------#\n");
+   // 		exit(1);
+   // 	}
+   
+}
+
 // Fonction qui initialise les tableaux à envoyer dans le kernel
 void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 {
@@ -545,7 +593,7 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 		exit(1);	
 	}
 	
-	//
+	// Altitude des couches
 	tab_H->z =  (float*)malloc((NATM+1)*sizeof(float));
 	if( tab_H->z == NULL ){
 		printf("ERREUR: Problème de malloc de tab_H->z dans initTableaux\n");
@@ -557,6 +605,34 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 		printf("ERREUR: Problème de cudaMalloc de tab_D->z dans initTableaux\n");
 		exit(1);	
 	}
+	
+	// Profil vu par le photon
+	tab_H->zph0 =  (float*)malloc((NATM+1)*sizeof(*(tab_H->zph0)));
+	if( tab_H->zph0 == NULL ){
+		printf("ERREUR: Problème de malloc de tab_H->zph0 dans initTableaux\n");
+		exit(1);
+	}
+	memset(tab_H->zph0,0,(NATM+1)*sizeof(*(tab_H->zph0)) );
+	
+	if( cudaMalloc( &(tab_D->zph0), (NATM+1)*sizeof(*(tab_D->zph0)) ) == cudaErrorMemoryAllocation ){
+		printf("ERREUR: Problème de cudaMalloc de tab_D->zph0 dans initTableaux\n");
+		exit(1);	
+	}
+	
+	tab_H->hph0 =  (float*)malloc((NATM+1)*sizeof(*(tab_H->hph0)));
+	if( tab_H->hph0 == NULL ){
+		printf("ERREUR: Problème de malloc de tab_H->hph0 dans initTableaux\n");
+		exit(1);
+	}
+	memset(tab_H->hph0,0,(NATM+1)*sizeof(*(tab_H->hph0)) );
+	
+	if( cudaMalloc( &(tab_D->hph0), (NATM+1)*sizeof(*(tab_D->hph0)) ) == cudaErrorMemoryAllocation ){
+		printf("ERREUR: Problème de cudaMalloc de tab_D->hph0 dans initTableaux\n");
+		exit(1);	
+	}
+	
+	
+	
 	
 	//
 	tab_H->pMol =  (float*)malloc((NATM+1)*sizeof(float));
@@ -1497,6 +1573,26 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	
 	free(tab_H->z);
 	
+	// Profil vu par la photon
+	erreur = cudaFree(tab_D->zph0);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->zph0 dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	
+	free(tab_H->zph0);
+	
+	erreur = cudaFree(tab_D->hph0);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->hph0 dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	
+	free(tab_H->hph0);
+	
+	//
 	erreur = cudaFree(tab_D->pMol);
 	if( erreur != cudaSuccess ){
 		printf( "ERREUR: Problème de cudaFree de tab_D->pMol dans freeTableaux\n");
@@ -1940,4 +2036,94 @@ void verificationAtm( Tableaux tab_H ){
 	}
 	
 	fclose(fichier);
+}
+
+
+void impactInit(Init* init_H, Init* init_D, Tableaux* tab_H, Tableaux* tab_D){
+	
+	float thss, localh;
+	float rdelta;
+	float xphbis,yphbis,zphbis;	//Coordonnées intermédiaire du photon
+	float rsolfi,rsol1,rsol2;
+	
+	// Correspond aux paramètres initiaux du photon
+	float vx = -sin(THSDEG*DEG2RAD);
+	float vy = 0.f;
+	float vz = -cos(THSDEG*DEG2RAD);
+	
+	/** Calcul du point d'impact **/
+	// 	thss = abs(acosf(abs(vz)));
+	thss = THSDEG*DEG2RAD;
+	
+	rdelta = 4.f*RTER*RTER + 4.f*(tan(thss)*tan(thss)+1.f)*(HATM*HATM+2.f*HATM*RTER);
+	localh = (-2.f*RTER+sqrt(rdelta))/(2.f*(tan(thss)*tan(thss)+1.f));
+	
+	init_H->x0=localh*tan(thss);
+	init_H->y0 = 0.f;
+	init_H->z0 = RTER+localh;	
+	
+	tab_H->zph0[0] = 0.f;
+	tab_H->hph0[0] = 0.f;
+	
+	xphbis = init_H->x0;
+	yphbis = init_H->y0;
+	zphbis = init_H->z0;
+	
+	/** Création hphoton et zphoton, chemin optique entre sommet atmosphère et sol pour la direction d'incidence **/
+	for(int icouche=1; icouche<NATM+1; icouche++){
+		
+		rdelta = 4.f*(vx*xphbis + vy*yphbis + vz*zphbis)*(vx*xphbis + vy*yphbis + vz*zphbis)
+			- 4.f*(xphbis*xphbis + yphbis*yphbis + zphbis*zphbis - (tab_H->z[icouche]+RTER)*(tab_H->z[icouche]+RTER));
+		rsol1 = 0.5f*(-2.f*(vx*xphbis + vy*yphbis + vz*zphbis)+sqrt(rdelta));
+		rsol2 = 0.5f*(-2.f*(vx*xphbis + vy*yphbis + vz*zphbis)-sqrt(rdelta));
+		
+		// Il faut choisir la plus petite distance en faisant attention qu'elle soit positive
+		if(rsol1>0.f){
+			if( rsol2>0.f)
+				rsolfi = fmin(rsol1,rsol2);
+			else
+				rsolfi = rsol1;
+		}
+		else{
+			if( rsol2>0.f )
+				rsolfi=rsol1;
+		}
+		
+		tab_H->zph0[icouche] = tab_H->zph0[icouche-1] + rsolfi;
+		tab_H->hph0[icouche] = tab_H->hph0[icouche-1] + 
+				(abs(tab_H->tauCouche[icouche]-tab_H->tauCouche[icouche-1])*rsolfi)/(abs(tab_H->z[icouche-1]-tab_H->z[icouche]));
+		
+		xphbis+= vx*rsolfi;
+		yphbis+= vy*rsolfi;
+		zphbis+= vz*rsolfi;
+		
+	}
+
+	init_H->taumax0 = tab_H->hph0[NATM];
+	init_H->zintermax0 = tab_H->zph0[NATM];
+
+	/** Envoie des données dans le device **/
+	cudaError_t erreur = cudaMemcpy(init_D, init_H, sizeof(Init), cudaMemcpyHostToDevice);
+	if( erreur != cudaSuccess ){
+		printf("#--------------------#\n");
+		printf("# ERREUR: Problème de copie init_H dans initInit\n");
+		printf("# Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		printf("#--------------------#\n");
+		exit(1);
+	}
+	
+	erreur = cudaMemcpy(tab_D->hph0, tab_H->hph0, (NATM+1)*sizeof(*(tab_H->hph0)), cudaMemcpyHostToDevice);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de copie tab_D->hph0 dans initInit\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	
+	erreur = cudaMemcpy(tab_D->zph0, tab_H->zph0, (NATM+1)*sizeof(*(tab_H->zph0)), cudaMemcpyHostToDevice);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de copie tab_D->zph0 dans initInit\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	
 }

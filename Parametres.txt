@@ -4,10 +4,11 @@
         ###############################
 
 # Nombre de photons a lancer (unsigned long long) (limite par le tableau du poids des photons en unsigned long long)
-NBPHOTONS = 300000000
+NBPHOTONS = 10000000
 
 # Nombre de boucles dans le kernel (unsigned int) (limite par watchdog, il faut tuer X)
-NBLOOP = 18000
+# ancien 18000
+NBLOOP = 5000
 
 # Angle zenithal solaire en degrés (float)
 THSDEG = 30.
@@ -18,11 +19,12 @@ THSDEG = 30.
 SEED = -1
 
 # Les threads sont rangés dans des blocks de taille XBLOCK*YBLOCK (limite par watchdog il faut tuer X + limite XBLOCK*YBLOCK =< 256 ou 512)
-# Pour l'instant 256 est le plus performant
-XBLOCK = 256
+#256 avant
+XBLOCK = 54
 YBLOCK = 1
 # et les blocks sont eux-même rangés dans un grid de taille XGRID*YGRID (limite par watchdog il faut tuer X + limite XGRID<65535 et YGRID<65535)
-XGRID = 84
+#84 avant
+XGRID = 35 
 YGRID = 1
 
 # Le demi-espace dans lequel on récupère les photons est divisé en boites

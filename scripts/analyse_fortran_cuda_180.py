@@ -19,7 +19,7 @@ import struct
 #
 #-----------------------------------------------------------------------------------------------------------------------
 type_simu = "molecules_seules"
-date_simu = "16032012"
+date_simu = "22032012"
 angle = "30"
 # Nom du fichier Cuda sans extension .hdf
 nom_cuda = "out_CUDA_atmos_ths=30.00_tRay=0.0533_tAer=0.0000"

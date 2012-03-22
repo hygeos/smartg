@@ -166,7 +166,7 @@ typedef struct __align__(16)
 	float stokes1;
 	float stokes2;
 	float stokes3;
-	float stokes4;
+// 	float stokes4;
 	
 	// Position cartésienne du photon
 	float x;
@@ -174,17 +174,17 @@ typedef struct __align__(16)
 	float z;
 	
 	// Profil vu par le photon
-	float hph[2*NATM+2];
-	float zph[2*NATM+2];
-	float hphz[2*NATM+2];
-	float zphz[2*NATM+2];
+	float* hph;
+	float* zph;
+// 	float* hphz;
+// 	float* zphz;
 	
 	// Parametres initiaux
-	float taumax0;
-	float zintermax0;
-	float x0;
-	float y0;
-	float z0;
+	float taumax;
+	float zintermax;
+// 	float x0;
+// 	float y0;
+// 	float z0;
 	int couche;
 	int isurface;
 	
@@ -229,6 +229,10 @@ typedef struct __align__(16)
 	float* pMol;		// Pointeur vers le pourcentage de molécules dans chaque couche du modèle atmosphérique
 	float* z;			// Altitude de chaque couche
 	
+	// Profil atmosphérique initial vu par la photon
+	float* hph0;
+	float* zph0;
+	
 	#ifdef SORTIEINT
 	float* poids;
 	unsigned long long* nbBoucle;
@@ -247,6 +251,19 @@ typedef struct __align__(16)
 	#endif
 	
 }Tableaux; // Regroupement des tableaux envoyés dans le kernel
+
+typedef struct __align__(16){
+	
+	// Coordonnées initiales
+	float x0;
+	float y0;
+	float z0;
+	
+	// Tau et z init
+	float taumax0;
+	float zintermax0;
+		
+} Init;
 
 
 typedef struct __align__(16)

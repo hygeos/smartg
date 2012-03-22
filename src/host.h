@@ -11,6 +11,7 @@ void definirNomFichier( char* s );
 void definirSimulation( char* s);
 
 void initVariables(Variables**, Variables**);
+void initInit(Init** init_H, Init** init_D);
 void initTableaux(Tableaux*, Tableaux*);
 
 void initRandMTConfig(ConfigMT*, ConfigMT*, int);
@@ -49,3 +50,6 @@ void verificationFAER( const char* nomFichier, Tableaux tab_H );
 // Calcul du mélange Molécule/Aérosol dans l'atmosphère en fonction de la couche
 void profilAtm( Tableaux* tab_H, Tableaux* tab_D );
 void verificationAtm( Tableaux tab_H );
+
+void impactInit(Init* init_H, Init* init_D, Tableaux* tab_H, Tableaux* tab_D);
+
