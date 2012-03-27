@@ -133,10 +133,10 @@ int main (int argc, char *argv[])
 
 	// Calcul du mélange Molécule/Aérosol dans l'atmosphère en fonction de la couche
 	profilAtm( &tab_H, &tab_D );
-	verificationAtm( tab_H );
+// 	verificationAtm( tab_H );
 	
 	/** Calcul du point d'impact du photon **/
-// 	impactInit(init_H, init_D, &tab_H, &tab_D);
+	impactInit(init_H, init_D, &tab_H, &tab_D);
 // 	
 // 	printf("Paramètres initiaux du photon: taumax0=%f - zintermax=%f - (%f,%f,%f)\n",
 // 		   init_H->taumax0, init_H->zintermax0, init_H->x0, init_H->y0, init_H->z0 );

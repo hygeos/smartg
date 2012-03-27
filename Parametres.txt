@@ -4,11 +4,11 @@
         ###############################
 
 # Nombre de photons a lancer (unsigned long long) (limite par le tableau du poids des photons en unsigned long long)
-NBPHOTONS = 10000000
+NBPHOTONS = 1000000000
 
 # Nombre de boucles dans le kernel (unsigned int) (limite par watchdog, il faut tuer X)
 # ancien 18000
-NBLOOP = 5000
+NBLOOP = 3000
 
 # Angle zenithal solaire en degrés (float)
 THSDEG = 30.

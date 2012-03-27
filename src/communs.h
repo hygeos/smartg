@@ -225,7 +225,7 @@ typedef struct __align__(16)
 	float* tabPhotons;
 	
 	float* faer;		// Pointeur vers le modèle de diffusion des aérosols
-	float* tauCouche;	// Pointeur vers l'épaisseur optique de chaque couche du modèle atmosphérique
+	float* h;	// Pointeur vers l'épaisseur optique de chaque couche du modèle atmosphérique
 	float* pMol;		// Pointeur vers le pourcentage de molécules dans chaque couche du modèle atmosphérique
 	float* z;			// Altitude de chaque couche
 	

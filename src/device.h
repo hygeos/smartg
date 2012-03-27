@@ -68,6 +68,14 @@ __device__ void initPhoton(Photon* ph, Tableaux tab, Init* init, float* hph0_s, 
 		, unsigned int iloop
 		#endif
 		    );
+
+
+__device__ void calculProfil(Photon* ph, Tableaux tab
+		#ifdef TRAJET
+		, int idx
+		#endif
+		);
+
 __device__ void move(Photon*, Tableaux tab, int flagDiff 
 		#ifdef RANDMWC
 		, unsigned long long*, unsigned int*
