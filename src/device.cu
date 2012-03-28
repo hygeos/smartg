@@ -56,7 +56,6 @@ __global__ void lancementKernel(Variables* var, Tableaux tab, Init* init
 	
 	// Création de variable propres à chaque thread
 	unsigned long long nbPhotonsThr = 0; // nombre de photons taités par le thread
-	int flagDiff = DIFFFd;
 	#ifdef PROGRESSION
 	unsigned int nbPhotonsSorThr = 0; // nombre de photons taités par le thread et resortis dans l'espace
 	#endif
@@ -64,34 +63,83 @@ __global__ void lancementKernel(Variables* var, Tableaux tab, Init* init
 	Photon ph; // On associe une structure de photon au thread
 	ph.loc = NONE; // Initialement le photon n'est nulle part, il doit être initialisé
 	
-	/** Utilisation shared memory **/
-	__shared__ float hph0_s[NATM+1];
-	__shared__ float zph0_s[NATM+1];
+	/** Mesure du temps d'execution **/
+	#ifdef TEMPS
+	clock_t start, stop;
+	float time;
+// 	if( idx==0 ){
+// 		
+// 		err = cudaEventCreate(&start);
+// 		if(err!=cudaSuccess){
+// 			printf("ERREUR: Probleme de création de l'event start dans le kernel\n");
+// 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
+// 		}
+// 		
+// 		err = cudaEventCreate(&stop);
+// 		if(err!=cudaSuccess){
+// 			printf("ERREUR: Probleme de création de l'event stop dans le kernel\n");
+// 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
+// 		}
+// 	}
+	#endif
 	
-	for( int i=0; i<NATM+1; i++){
-		hph0_s[i] = tab.hph0[i];
-		zph0_s[i] = tab.zph0[i];
-	}
+	/** Utilisation shared memory **/
+// 	__shared__ float hph0_s[NATM+1];
+// 	__shared__ float zph0_s[NATM+1];
+// 	
+// 	for( int i=0; i<NATM+1; i++){
+// 		hph0_s[i] = tab.hph0[i];
+// 		zph0_s[i] = tab.zph0[i];
+// 	}
 	
 	
 	/** Allocation des tableaux nécessaire au photon **/
 	/* La libération de mémoire s'effectue après la boucle */
 	
-	ph.hph = (float*) malloc((2*NATM+2)*sizeof(float));
-	if( ph.hph == NULL ){
-		printf("ERREUR: Problème de malloc de ph->hph dans init idx(%d)\n",idx);
+// 	ph.hph = (float*) malloc((2*NATM+2)*sizeof(float));
+// 	if( ph.hph == NULL ){
+// 		printf("ERREUR: Problème de malloc de ph->hph dans init idx(%d)\n",idx);
+// 	}
+// 	
+// 	ph.zph = (float*) malloc((2*NATM+2)*sizeof(float));
+// 	if( ph.zph == NULL ){
+// 		printf("ERREUR: Problème de malloc de ph->zph dans init idx(%d)\n",idx);
+// 	}
+
+	//Utilisation de la shared memory -> tableau definis hors de la structure du photon (optimisation mémoire)
+	float* hphoton;
+	float* zphoton;
+	
+	hphoton = (float*) malloc((2*NATM+2)*sizeof(float));
+	zphoton = (float*) malloc((2*NATM+2)*sizeof(float));
+	
+	if( hphoton == NULL ){
+   		printf("ERREUR: Problème de malloc de hphoton dans init idx(%d)\n",idx);
+   	}
+   	if( zphoton == NULL ){
+		printf("ERREUR: Problème de malloc de zphoton dans init idx(%d)\n",idx);
 	}
 	
-	ph.zph = (float*) malloc((2*NATM+2)*sizeof(float));
-	if( ph.zph == NULL ){
-		printf("ERREUR: Problème de malloc de ph->zph dans init idx(%d)\n",idx);
-	}
-   
+	/** Boucle de calcul **/   
 	// Dans cette boucle on simule le parcours du photon, puis on le réinitialise,... Le thread lance plusieurs photons
 	for(unsigned int iloop= 0; iloop < NBLOOPd; iloop++)
 	{
 		// Si le photon est à NONE on l'initialise et on le met à ATMOS
-		if(ph.loc == NONE){initPhoton(&ph, tab, init, hph0_s, zph0_s
+		if(ph.loc == NONE){
+			
+			#ifdef TEMPS
+			if(idx==0){ 
+// 				err = cudaEventRecord( start, 0 );
+// 				if(err!=cudaSuccess){
+// 					printf("ERREUR: Probleme event start record - initPhoton\n");
+// 					printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
+// 				}
+				start = clock();
+			}
+			
+			#endif
+			
+			initPhoton(&ph, tab, init, hphoton, zphoton/*, hph0_s, zph0_s*/
 				#ifdef TRAJET
 				, idx, evnt
 				#endif
@@ -99,15 +147,51 @@ __global__ void lancementKernel(Variables* var, Tableaux tab, Init* init
 				, iloop
 				#endif
 					);
-// 			flagDiff = DIFFFd;
-			
+
+			#ifdef TEMPS
+			if(idx==0){
+// 				err = cudaEventRecord( stop, 0 );
+// 				if(err!=cudaSuccess){
+// 					printf("ERREUR: Probleme event stop record - initPhoton\n");
+// 					printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
+// 				}
+// 				cudaEventSynchronize( stop );
+// 				if(err!=cudaSuccess){
+// 					printf("ERREUR: Probleme event synchronise - initPhoton\n");
+// 					printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
+// 				}
+// 				
+// 				err = cudaEventElapsedTime( &time, start, stop );
+// 				if(err!=cudaSuccess){
+// 					printf("ERREUR: Probleme eventElapsedTime - initPhoton\n");
+// 					printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
+// 				}
+				stop = clock();
+				time = __fdividef((float) (stop-start),CLOCKS_PER_SEC);
+				printf("(1) Temps de initPhoton: %f\n", time);
+			}
+			#endif
+
 		}
 		// Chaque block attend tous ses threads avant de continuer
 		syncthreads();
 		
 		
 		// Si le photon est à ATMOS on le fait avancer jusqu'à SURFACE, ou SPACE, ou ATMOS s'il subit une diffusion
-		if( (ph.loc == ATMOS) /*&& (SIMd==-2 || SIMd==1 || SIMd==2)*/ ){ move(&ph, tab, flagDiff, &etatThr
+		if( (ph.loc == ATMOS) /*&& (SIMd==-2 || SIMd==1 || SIMd==2)*/ ){
+			
+			#ifdef TEMPS
+			if(idx==0){ 
+// 				err = cudaEventRecord( start, 0 );
+// 				if(err!=cudaSuccess){
+// 					printf("ERREUR: Probleme event start record - move\n");
+// 					printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
+// 				}
+				start = clock();
+			}
+			#endif
+			
+			move(&ph, tab, hphoton, zphoton, &etatThr
 				#if defined(RANDMWC) || defined(RANDMT)
 				, &configThr
 				#endif
@@ -115,35 +199,135 @@ __global__ void lancementKernel(Variables* var, Tableaux tab, Init* init
 				, idx, evnt
 				#endif
 						);
-		//NOTE IMPORTANT: scatter est appelé dans move pour respecter le code Fortran!!!!
+						
+			#ifdef TEMPS
+			if(idx==0){
+// 				err = cudaEventRecord( stop, 0 );
+// 				if(err!=cudaSuccess){
+// 					printf("ERREUR: Probleme event stop record - move\n");
+// 					printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
+// 				}
+// 				cudaEventSynchronize( stop );
+// 				if(err!=cudaSuccess){
+// 					printf("ERREUR: Probleme event synchronise - move\n");
+// 					printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
+// 				}
+// 				
+// 				err = cudaEventElapsedTime( &time, start, stop );
+// 				if(err!=cudaSuccess){
+// 					printf("ERREUR: Probleme eventElapsedTime - move\n");
+// 					printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
+// 				}
+				stop = clock();
+				time = __fdividef((float) (stop-start),CLOCKS_PER_SEC);
+				printf("(2) Temps de move: %f\n", time);
+			}
+			#endif
 		}
 		// Chaque block attend tous ses threads avant de continuer
 		syncthreads();
 		
 		// Si le photon est encore à ATMOS il subit une diffusion et reste dans ATMOS
-// 		if( (ph.loc == ATMOS) /*&& (SIMd==-2 || SIMd==1 || SIMd==2)*/){
-// 			scatterTot(&ph, tab, &etatThr
-// 			#if defined(RANDMWC) || defined(RANDMT)
-// 			, &configThr
-// 			#endif
-// 			#ifdef TRAJET
-// 			, idx, evnt
-// 			#endif
-// 				);
+		if( (ph.loc == ATMOS) /*&& (SIMd==-2 || SIMd==1 || SIMd==2)*/){
+	
+			#ifdef TEMPS
+			if(idx==0){ 
+// 				err = cudaEventRecord( start, 0 );
+// 				if(err!=cudaSuccess){
+// 					printf("ERREUR: Probleme event start record - scatter\n");
+// 					printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
+// 				}
+				start = clock();
+			}
+			#endif
+			
+			// Diffusion
+			scatter( &ph, tab, &etatThr
+			#if defined(RANDMWC) || defined(RANDMT)
+			, &configThr
+			#endif
+			#ifdef TRAJET
+			, idx, evnt
+			#endif
+				);
 				
-// 			scatter( &ph, tab, tabCouche_s, &etatThr
-// 			#if defined(RANDMWC) || defined(RANDMT)
-// 			, &configThr
-// 			#endif
-// 			#ifdef TRAJET
-// 			, idx, evnt
-// 			#endif
-// 				);
-// 
-// 		}
+			#ifdef TEMPS
+			if(idx==0){
+// 				err = cudaEventRecord( stop, 0 );
+// 				if(err!=cudaSuccess){
+// 					printf("ERREUR: Probleme event stop record - scatter\n");
+// 					printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
+// 				}
+// 				cudaEventSynchronize( stop );
+// 				if(err!=cudaSuccess){
+// 					printf("ERREUR: Probleme event synchronise - scatter\n");
+// 					printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
+// 				}
+// 				
+// 				err = cudaEventElapsedTime( &time, start, stop );
+// 				if(err!=cudaSuccess){
+// 					printf("ERREUR: Probleme eventElapsedTime - scatter\n");
+// 					printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
+// 				}
+				stop = clock();
+				time = __fdividef((float) (stop-start),CLOCKS_PER_SEC);
+				printf("(3) Temps de scatter: %f\n", time);
+			}
+			#endif
+
+		}
+		// Chaque block attend tous ses threads avant de continuer
+		syncthreads();
+		
+		// Si le photon est encore à ATMOS on calcul le nouveau profil vu par le photon
+		if( (ph.loc == ATMOS) /*&& (SIMd==-2 || SIMd==1 || SIMd==2)*/){
+			
+			#ifdef TEMPS
+			if(idx==0){ 
+// 				err = cudaEventRecord( start, 0 );
+// 				if(err!=cudaSuccess){
+// 					printf("ERREUR: Probleme event start record - calculProfil\n");
+// 					printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
+// 				}
+				start = clock();
+			}
+			#endif
+			
+			// Calcul du nouveau profil vu par le photon
+			calculProfil(&ph, tab, hphoton, zphoton
+			#ifdef TRAJET
+			, idx
+			#endif
+			);
+			
+			#ifdef TEMPS
+			if(idx==0){
+// 				err = cudaEventRecord( stop, 0 );
+// 				if(err!=cudaSuccess){
+// 					printf("ERREUR: Probleme event stop record - calculProfil\n");
+// 					printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
+// 				}
+// 				cudaEventSynchronize( stop );
+// 				if(err!=cudaSuccess){
+// 					printf("ERREUR: Probleme event synchronise - calculProfil\n");
+// 					printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
+// 				}
+// 				
+// 				err = cudaEventElapsedTime( &time, start, stop );
+// 				if(err!=cudaSuccess){
+// 					printf("ERREUR: Probleme eventElapsedTime - calculProfil\n");
+// 					printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
+// 				}
+				stop = clock();
+				time = __fdividef((float) (stop-start),CLOCKS_PER_SEC);
+				printf("(4) Temps de calculProfil: %f\n", time);
+			}
+			#endif
+			
+		}
 		
 		// Chaque block attend tous ses threads avant de continuer
-// 		syncthreads();
+		syncthreads();
 		
 		// Si le photon est à SURFACE on le met à ABSORBED
 		if(ph.loc == SURFACE) {
@@ -205,9 +389,29 @@ __global__ void lancementKernel(Variables* var, Tableaux tab, Init* init
 
 	}// Fin boucle for
 	
+	
+	/** Destruction des opérateurs Event **/
+	#ifdef TEMPS
+// 	if(idx==0){
+// 		err = cudaEventDestroy( start );
+// 		if(err!=cudaSuccess){
+// 			printf("ERREUR: Probleme de destruction de l'event start dans le kernel\n");
+// 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
+// 		}
+// 		
+// 		err = cudaEventDestroy( stop );
+// 		if(err!=cudaSuccess){
+// 			printf("ERREUR: Probleme de destruction de l'event stop dans le kernel\n");
+// 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
+// 		}
+// 	}
+	#endif
+	
 	/** Libération de la mémoire **/
-	free(ph.hph);
-	free(ph.zph);
+// 	free(ph.hph);
+// 	free(ph.zph);
+	free(hphoton);
+	free(zphoton);
 	
 	#ifdef SORTIEINT
 	if( ph.numBoucle <NBLOOPd/2 ){
@@ -256,7 +460,7 @@ __global__ void initRandMTEtat(EtatMT* etat, ConfigMT* config)
 }
 
 // Fonction device qui initialise le photon associé à un thread
-__device__ void initPhoton(Photon* ph, Tableaux tab, Init* init, float* hph0_s, float* zph0_s
+__device__ void initPhoton(Photon* ph, Tableaux tab, Init* init, float* hphoton, float* zphoton/*, float* hph0_s, float* zph0_s*/
 		#ifdef TRAJET
 		, int idx, Evnt* evnt
 		#endif
@@ -284,7 +488,6 @@ __device__ void initPhoton(Photon* ph, Tableaux tab, Init* init, float* hph0_s, 
 	else
 		ph->loc = SURFACE;
 	
-// 	ph->tau = TAUATMd;
 	ph->weight = WEIGHTINIT;
 	// Initialisation des paramètres de stokes du photon
 	ph->stokes1 = 0.5F;
@@ -306,11 +509,14 @@ __device__ void initPhoton(Photon* ph, Tableaux tab, Init* init, float* hph0_s, 
 	ph->zintermax = init->zintermax0;
 	
 	for( int i=0; i<NATM+1; i++){
-		ph->hph[i]=hph0_s[i];
-		ph->zph[i]=zph0_s[i];
-// 		ph->hph[i] = tab.hph0[i];
-// 		ph->zph[i] = tab.zph0[i];
+// 		ph->hph[i]=hph0_s[i];
+// 		ph->zph[i]=zph0_s[i];
+		hphoton[i] = tab.hph0[i];
+		zphoton[i] = tab.zph0[i];
 	}
+	
+// 	memcpy(ph->hph, hph0_s, (NATM+1) * sizeof(float));
+// 	memcpy(ph->zph, zph0_s, (NATM+1) * sizeof(float));
 	
 	
 // 	if( idx==0 )
@@ -333,7 +539,6 @@ __device__ void initPhoton(Photon* ph, Tableaux tab, Init* init, float* hph0_s, 
 			// "1"représente l'événement "initialisation" du photon
 			evnt[i].action = 1;
 			// On récupère le tau et le poids du photon
-			evnt[i].tau = ph->tau;
 			evnt[i].poids = ph->weight;
 // 		}
 	}
@@ -341,14 +546,14 @@ __device__ void initPhoton(Photon* ph, Tableaux tab, Init* init, float* hph0_s, 
 }
 
 // calcul du trajet optique-géométrique devant le photon
-__device__ void calculProfil(Photon* ph, Tableaux tab
+__device__ void calculProfil(Photon* ph, Tableaux tab, float* hphoton, float* zphoton
 		#ifdef TRAJET
 		, int idx
 		#endif
 		)
 {
 	float rdelta1, rdelta2, rdelta3;
-	float rsolfi,rsol1,rsol2,rsol3,rsol4, rsol5,rsol6;
+	float rsolfi,rsol1,/*rsol2,*/rsol3,/*rsol4,*/ rsol5/*,rsol6*/;
 	float rcoeffA, rcoeffB, rcoeffC, rcoeffCbis, rcoeffCter;	// Variable pour optimisation du calcul trajet après diffusion
 	float rsolA, rsolB, rsolC;
 	int icouche, icouchefi, icouchefibis;
@@ -379,7 +584,8 @@ __device__ void calculProfil(Photon* ph, Tableaux tab
 	rsol3 = -800.e+6f;
 	rsol4 = -800.e+6f;
 	
-	rcoeffA= 1.f;
+	rcoeffA= 1.f;/* Attention si rcoeffA n'est plus égal a 1 il faut vérifier le calcul des solutions qui est actuellement
+	optimisé pour rcoeffA =1 */
 	rcoeffB= 2.f*(ph->vx*xphbis + ph->vy*yphbis + ph->vz*zphbis);
 	rcoeffC= xphbis*xphbis + yphbis*yphbis + zphbis*zphbis - regal*regal;
 	rcoeffCbis= xphbis*xphbis + yphbis*yphbis + zphbis*zphbis - rmoins*rmoins;
@@ -387,42 +593,53 @@ __device__ void calculProfil(Photon* ph, Tableaux tab
 	rdelta1 = rcoeffB*rcoeffB - 4.f*rcoeffA*rcoeffC;
 	rdelta2 = rcoeffB*rcoeffB - 4.f*rcoeffA*rcoeffCbis;
 	
-	if( rdelta1 == 0 ){
-		rsol1= __fdividef(-rcoeffB,2.f*rcoeffA);
+// 	if( rdelta1 == 0 ){
+// 		rsol1= __fdividef(-rcoeffB,2.f*rcoeffA);
+// 	}
+	
+// 	if( rdelta2==0 ){
+// 		rsol3= __fdividef(-rcoeffB,2.f*rcoeffA);
+// 	}
+	
+	if( rdelta1 >= 0.f ){
+// 		rsol1= __fdividef(-rcoeffB-sqrtf(rdelta1),2.f*rcoeffA);
+		rsol1= 0.5f*(-rcoeffB-sqrtf(rdelta1));
+		// Calcul repoussé dessous
+// 		if( rsol1<=0 ) rsol2= __fdividef(-rcoeffB+sqrtf(rdelta1),2.f*rcoeffA);
 	}
 	
-	if( rdelta2==0 ){
-		rsol3= __fdividef(-rcoeffB,2.f*rcoeffA);
-	}
-	
-	if( rdelta1 > 0.f ){
-		rsol1= __fdividef(-rcoeffB-sqrtf(rdelta1),2.f*rcoeffA);
-		if( rsol1<=0 ) rsol2= __fdividef(-rcoeffB+sqrtf(rdelta1),2.f*rcoeffA);
-	}
-	
-	if( rdelta2 > 0.f ){
-		rsol3= __fdividef(-rcoeffB-sqrtf(rdelta2),2.f*rcoeffA);
-		if( rsol3<=0 ) rsol4= __fdividef(-rcoeffB+sqrtf(rdelta2),2.f*rcoeffA);
+	if( rdelta2 >= 0.f ){
+// 		rsol3= __fdividef(-rcoeffB-sqrtf(rdelta2),2.f*rcoeffA);
+		rsol3= 0.5f*(-rcoeffB-sqrtf(rdelta2));
+// 		if( rsol3<=0 ) rsol4= __fdividef(-rcoeffB+sqrtf(rdelta2),2.f*rcoeffA);
 	}
 	
 	/* Tous les cas de figure ont été abrordé pour résoudre l'équation du second degré. rsolfi sera la solution positive et
 	plus petite possible */
-	if( rsol1<0.f ){
-		if( rsol2>0.f ) rsolA= rsol2;
+	if( rsol1<=0.f ){	// j'ai changé le < en <=
+// 		rsol2= __fdividef(-rcoeffB+sqrtf(rdelta1),2.f*rcoeffA);
+		rsol1= 0.5f*(-rcoeffB+sqrtf(rdelta1));	// Réutilisation de rsol1 pour limiter l'utilisation de la mémoire
+		
+		if( rsol1>=0.f ) rsolA= rsol1;
 		else 			rsolA= -800.e6f;
 	}
 	else{
-		if( rsol2>0.f ) rsolA= fmin(rsol1,rsol2);
-		else 			rsolA= rsol1;
+// 		if( rsol2>0.f ) rsolA= fmin(rsol1,rsol2);	// par definition, si rsol1 et 2 positifs, rsol1<rsol2
+// 		else 			rsolA= rsol1;
+		rsolA=rsol1;
 	}
 	
-	if( rsol3<0.f ){
-		if( rsol4>0.f ) rsolB= rsol4;
+	if( rsol3<=0.f ){	// j'ai changé le < en <=
+// 		rsol4= __fdividef(-rcoeffB+sqrtf(rdelta2),2.f*rcoeffA);
+		rsol3= 0.5f*(-rcoeffB+sqrtf(rdelta2));// Réutilisation de rsol1 pour limiter l'utilisation de la mémoire
+		
+		if( rsol3>=0.f ) rsolB= rsol3;
 		else 			rsolB= -800.e6f;
 	}
 	else{
-		if( rsol4>0.f ) rsolB= fmin(rsol3,rsol4);
-		else 			rsolB= rsol3;
+// 		if( rsol4>0.f ) rsolB= fmin(rsol3,rsol4);
+// 		else 			rsolB= rsol3;
+		rsolB= rsol3;
 	}
 	
 	if( rsolA>0.f ){
@@ -455,32 +672,32 @@ __device__ void calculProfil(Photon* ph, Tableaux tab
    xphbis+= ph->vx*rsolfi;
    yphbis+= ph->vy*rsolfi;
    zphbis+= ph->vz*rsolfi;
-   ph->hph[0] = 0.f;
-   ph->zph[0] = 0.f;
+   hphoton[0] = 0.f;
+   zphoton[0] = 0.f;
    
    if( icouchefi!=icouche ){
-	   ph->hph[1] = __fdividef(abs(tab.h[icouche]-tab.h[icouchefi])*rsolfi,
+	   hphoton[1] = __fdividef(abs(tab.h[icouche]-tab.h[icouchefi])*rsolfi,
 							   abs(tab.z[icouchefi]-tab.z[icouche]));
    }
    else{
 	   if( icouchefi==0 ){
-		   ph->hph[1] = __fdividef(abs(tab.h[icouchefi+1]-tab.h[icouchefi])*rsolfi,
+		   hphoton[1] = __fdividef(abs(tab.h[icouchefi+1]-tab.h[icouchefi])*rsolfi,
 								   abs(tab.z[icouchefi+1]-tab.z[icouchefi]));
 	   }
 	   else{
-		   ph->hph[1] = __fdividef(abs(tab.h[icouchefi-1]-tab.h[icouchefi])*rsolfi,
+		   hphoton[1] = __fdividef(abs(tab.h[icouchefi-1]-tab.h[icouchefi])*rsolfi,
 								   abs(tab.z[icouchefi-1]-tab.z[icouchefi]));
 	   }
    }
    
-   ph->zph[1]=rsolfi;
+   zphoton[1]=rsolfi;
    
    /* On est à l'interface d'une couche.
    Calcul du chemin optique à parcourir avant de ressortir ou de heurter le sol 
    Il y a 3 possibilités: on est à la couche i, on peut rencontrer i-1, i+1 ou i */
    // 	icompteur = 1;
-   	tointer = ph->hph[1];
-   	zinter = ph->zph[1];
+   	tointer = hphoton[1];
+   	zinter = zphoton[1];
  
 	
 	/** Calcul des autres termes: Boucle while **/
@@ -493,7 +710,7 @@ __device__ void calculProfil(Photon* ph, Tableaux tab
 		
 // 		if(idx==0){
    // 		// Affichage d'informations - Débugage
-   // 		printf("%d:Profil atm: h=%f - z=%f\n",icouchefi,ph->hph[icompteur],ph->zph[icompteur]);
+   // 		printf("%d:Profil atm: h=%f - z=%f\n",icouchefi,hphoton[icompteur],zphoton[icompteur]);
    // 	}
    
 		if( icompteur==(2*NATM+1) ){
@@ -557,7 +774,8 @@ __device__ void calculProfil(Photon* ph, Tableaux tab
 		rsol5 = -800.e+6f;
 		rsol6 = -800.e+6f;
 		
-		rcoeffA= 1.f;
+		rcoeffA= 1.f; /* Attention si rcoeffA n'est plus égal a 1 il faut vérifier le calcul des solutions qui est actuellement
+optimisé pour rcoeffA =1 */
 		rcoeffB= 2.f*(ph->vx*xphbis + ph->vy*yphbis + ph->vz*zphbis);
 		rcoeffC= xphbis*xphbis + yphbis*yphbis + zphbis*zphbis - rplus*rplus;
 		rcoeffCbis= xphbis*xphbis + yphbis*yphbis + zphbis*zphbis - rmoins*rmoins;
@@ -567,69 +785,90 @@ __device__ void calculProfil(Photon* ph, Tableaux tab
 		rdelta2 = rcoeffB*rcoeffB - 4.f*rcoeffA*rcoeffCbis;
 		rdelta3 = rcoeffB*rcoeffB - 4.f*rcoeffA*rcoeffCter;
 		
-		if( rdelta1 == 0.f ){
-			rsol1= __fdividef(-rcoeffB,2.f*rcoeffA);
-		}
-		if( rdelta2==0.f ){
-			rsol3= __fdividef(-rcoeffB,2.f*rcoeffA);
-		}
+		// Le cas egal à zero peut être regroupé avec la suite
+// 		if( rdelta1 == 0.f ){
+// 			rsol1= __fdividef(-rcoeffB,2.f*rcoeffA);
+// 		}
+// 		if( rdelta2==0.f ){
+// 			rsol3= __fdividef(-rcoeffB,2.f*rcoeffA);
+// 		}
 		if( rdelta3==0.f ){
-			rsol5= __fdividef(-rcoeffB,2.f*rcoeffA);
+// 			rsol5= __fdividef(-rcoeffB,2.f*rcoeffA);
+// 			rsol5= 0.5f*(-rcoeffB);
 			rsol5= -800.e+6f; //TODO: Logique? Non?
 		}
 		
-		if( rdelta1 > 0.f ){
+		if( rdelta1 >= 0.f ){
 			rsol1= __fdividef(-rcoeffB-sqrtf(rdelta1),2.f*rcoeffA);
-			if( rsol1<=0.f ) rsol2= __fdividef(-rcoeffB+sqrtf(rdelta1),2.f*rcoeffA);
+// 			rsol1= 0.5f*(-rcoeffB-sqrtf(rdelta1));
+			// Calcul de l'autre solution repoussé plus tard si besoin
+// 			if( rsol1<=0.f ) rsol2= __fdividef(-rcoeffB+sqrtf(rdelta1),2.f*rcoeffA);
 		}
 		
-		if( rdelta2 > 0.f ){
+		if( rdelta2 >= 0.f ){
 			rsol3= __fdividef(-rcoeffB-sqrtf(rdelta2),2.f*rcoeffA);
-			if( rsol3<=0.f ) rsol4= __fdividef(-rcoeffB+sqrtf(rdelta2),2.f*rcoeffA);
+// 			rsol3= 0.5f*(-rcoeffB-sqrtf(rdelta2));
+// 			if( rsol3<=0.f ) rsol4= __fdividef(-rcoeffB+sqrtf(rdelta2),2.f*rcoeffA);
 		}
 		
 		if( rdelta3 > 0.f ){
 			rsol5= __fdividef(-rcoeffB-sqrtf(rdelta3),2.f*rcoeffA);
-			if( rsol5<=0.f ) rsol6= __fdividef(-rcoeffB+sqrtf(rdelta3),2.f*rcoeffA);
+// 			rsol5= 0.5f*(-rcoeffB-sqrtf(rdelta3));
+// 			if( rsol5<=0.f ) rsol6= __fdividef(-rcoeffB+sqrtf(rdelta3),2.f*rcoeffA);
 			
 			if( abs(rsol5)<1e-6 ){
 				rsol5= -800.e+6f;
 				// 					printf("|rsol5|<1e-6 lors du calcul de solution après diffusion\n");
 			}
-			if( abs(rsol6)<1e-6 ){
-				rsol6= -800.e+6f;
-				// 					printf("|rsol6|<1e-6 lors du calcul de solution après diffusion\n");
-			}
+// 			if( abs(rsol6)<1e-6 ){
+// 				rsol6= -800.e+6f;
+// 				// 					printf("|rsol6|<1e-6 lors du calcul de solution après diffusion\n");
+// 			}
 		}
 		
 		/** Calcul des solutions et recherche de la solution **/
 		/* Tous les cas de figure ont été abrordé pour résoudre l'équation du second degré. rsolfi sera la solution positive et
 		plus petite possible */
-		if( rsol1<0.f ){
-			if( rsol2>0.f ) rsolA= rsol2;
+		// Les même modifications que précédement sont effectués donc non expliquées ici
+		if( rsol1<=0.f ){	// j'ai changé le < en <=
+// 			rsol2= __fdividef(-rcoeffB+sqrtf(rdelta1),2.f*rcoeffA);
+			rsol1= 0.5f*(-rcoeffB+sqrtf(rdelta1));
+			
+			if( rsol1>=0.f ) rsolA= rsol1;
 			else 			rsolA= -800.e6f;
 		}
 		else{
-			if( rsol2>0.f ) rsolA= fmin(rsol1,rsol2);
-			else 			rsolA= rsol1;
+			// 		if( rsol2>0.f ) rsolA= fmin(rsol1,rsol2);	// par definition, si rsol1 et 2 positifs, rsol1<rsol2
+			// 		else 			rsolA= rsol1;
+			rsolA=rsol1;
 		}
 		
-		if( rsol3<0.f ){
-			if( rsol4>0.f ) rsolB= rsol4;
+		if( rsol3<=0.f ){
+// 			rsol4= __fdividef(-rcoeffB+sqrtf(rdelta2),2.f*rcoeffA);
+			rsol3= 0.5f*(-rcoeffB+sqrtf(rdelta2));
+			
+			if( rsol3>=0.f ) rsolB= rsol3;
 			else 			rsolB= -800.e6f;
 		}
 		else{
-			if( rsol4>0.f ) rsolB= fmin(rsol3,rsol4);
-			else 			rsolB= rsol3;
+// 			if( rsol4>0.f ) rsolB= fmin(rsol3,rsol4);
+// 			else 			rsolB= rsol3;
+			rsolB= rsol3;
 		}
 		
-		if( rsol5<0.f ){
-			if( rsol6>0.f ) rsolC= rsol6;
+		if( rsol5<=0.f ){
+// 			rsol6= __fdividef(-rcoeffB+sqrtf(rdelta3),2.f*rcoeffA);
+			rsol5= 0.5f*(-rcoeffB+sqrtf(rdelta3));
+			if( abs(rsol5)<1e-6 ){
+				rsol5= -800.e+6f;
+			}
+			if( rsol5>=0.f ) rsolC= rsol5;
 			else 			rsolC= -800.e6f;
 		}
 		else{
-			if( rsol6>0.f ) rsolC= fmin(rsol5,rsol6);
-			else 			rsolC= rsol5;
+// 			if( rsol6>0.f ) rsolC= fmin(rsol5,rsol6);
+// 			else 			rsolC= rsol5;
+			rsolC= rsol5;
 		}
 		
 		// Recherche de la solution minimale
@@ -681,34 +920,34 @@ __device__ void calculProfil(Photon* ph, Tableaux tab
 		
 		icompteur++;
 		if( icouchefi != icouchefibis ){
-			ph->hph[icompteur] = __fdividef(abs(tab.h[icouchefi]-tab.h[icouchefibis])*rsolfi,
-											abs(tab.z[icouchefi]-tab.z[icouchefibis])) + ph->hph[icompteur-1];
+			hphoton[icompteur] = __fdividef(abs(tab.h[icouchefi]-tab.h[icouchefibis])*rsolfi,
+											abs(tab.z[icouchefi]-tab.z[icouchefibis])) + hphoton[icompteur-1];
 		}
 		else{
 				// 				if( idx==0 ){
 			// 					printf("icouchefi = icouchefibis\n");
 			// 				}
 			if( icouchefibis!=0 ){
-				ph->hph[icompteur] = __fdividef(abs(tab.h[icouchefibis]-tab.h[icouchefibis-1])*rsolfi,
-												abs(tab.z[icouchefibis]-tab.z[icouchefibis-1])) + ph->hph[icompteur-1];
+				hphoton[icompteur] = __fdividef(abs(tab.h[icouchefibis]-tab.h[icouchefibis-1])*rsolfi,
+												abs(tab.z[icouchefibis]-tab.z[icouchefibis-1])) + hphoton[icompteur-1];
 			}
 			else{
-				ph->hph[icompteur] = __fdividef(abs(tab.h[icouchefibis]-tab.h[icouchefibis+1])*rsolfi,
-												abs(tab.z[icouchefibis]-tab.z[icouchefibis+1])) + ph->hph[icompteur-1];
+				hphoton[icompteur] = __fdividef(abs(tab.h[icouchefibis]-tab.h[icouchefibis+1])*rsolfi,
+												abs(tab.z[icouchefibis]-tab.z[icouchefibis+1])) + hphoton[icompteur-1];
 			}
 		}
 		
-		ph->zph[icompteur]= ph->zph[icompteur-1]+rsolfi;
-		tointer = ph->hph[icompteur];
-		zinter = ph->zph[icompteur];
+		zphoton[icompteur]= zphoton[icompteur-1]+rsolfi;
+		tointer = hphoton[icompteur];
+		zinter = zphoton[icompteur];
 		icouchefi=icouchefibis;
    
 	}// Fin boucle while
 	
 	/** Sauvegarde constantes **/
 	// On a maintenant icouchefi = 0 ou NATM
-// 	taumaxph= tointer;//ph->hph[icompteur];
-// 	zintermax= zinter; //ph->zph[icompteur];
+// 	taumaxph= tointer;//hphoton[icompteur];
+// 	zintermax= zinter; //zphoton[icompteur];
 
 // 	if( zinter>1000.f )
 // 		printf("zinter: %f, rsolfi:%f\n", zinter, rsolfi);
@@ -722,11 +961,24 @@ __device__ void calculProfil(Photon* ph, Tableaux tab
 // 			printf("taumaxph=%f - zintermax=%f - (%f,%f,%f)\n",taumaxph,zintermax,ph->x,ph->y,ph->z);
 // 			
 // 		}
+
+	/** Sortie **/
+	if( icouchefi==0 ){
+		// Le photon vient de la surface du coup
+		// NOTE: à éventuellement modifier
+		ph->isurface= -1.f;
+		// 		return;
+	}
+	else if( icouchefi==NATM ){
+		// NOTE: à eventuellement modifier
+		ph->isurface= 1.f;
+		// 		return;
+	}
 	
 }
 
 // Fonction device qui traite les photons dans l'atmosphère en les faisant avancer
-__device__ void move(Photon* ph, Tableaux tab, int flagDiff
+__device__ void move(Photon* ph, Tableaux tab, float* hphoton, float* zphoton
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif
@@ -746,7 +998,7 @@ __device__ void move(Photon* ph, Tableaux tab, int flagDiff
 	float rsolfi,rsol1,rsol2/*,rsol3,rsol4*//*, rsol5,rsol6*/;
 // 	float rcoeffA, rcoeffB, rcoeffC, rcoeffCbis/*, rcoeffCter*/;	// Variable pour optimisation du calcul trajet après diffusion
 // 	float rsolA, rsolB/*, rsolC*/;
-	int icouchefi/*, icouchefibis*/;
+// 	int icouchefi/*, icouchefibis*/;
 	int iray; 	// A dégager, utiliser aussi icouche
 	
 	int icouche/*, icompteur*/;
@@ -767,8 +1019,8 @@ __device__ void move(Photon* ph, Tableaux tab, int flagDiff
 // 		if( idx==0 )
 // 			printf("On vient de SURFACE avant le move\n");
 	
-		ph->zph[0] = 0.f;
-		ph->hph[0] = 0.f;
+		zphoton[0] = 0.f;
+		hphoton[0] = 0.f;
 		
 		xphbis = ph->x;
 		yphbis = ph->y;
@@ -786,8 +1038,8 @@ __device__ void move(Photon* ph, Tableaux tab, int flagDiff
 		else{
 			// Calcul du profil vu depuis la surface jusqu'au sommet de l'atmosphere
 			for(icouche = 1; icouche<NATM+1; icouche++){
-				ph->zph[icouche] = 0.f;
-				ph->hph[icouche] = 0.f;
+				zphoton[icouche] = 0.f;
+				hphoton[icouche] = 0.f;
 			}
 			
 			/* Calcul d'intersection entre droite et cercle. Fait pour l'ensemble des cercles concentriques délimitant les couches
@@ -813,17 +1065,17 @@ atmosphériques */
 				}
 				
 				//NOTE attention au NATM+1 ou NATM
-				ph->zph[NATM+1-icouche] = ph->zph[NATM+1-(icouche+1)] + rsolfi;
-				ph->hph[NATM+1-icouche] = ph->hph[NATM+1-(icouche+1)] + 
+				zphoton[NATM+1-icouche] = zphoton[NATM+1-(icouche+1)] + rsolfi;
+				hphoton[NATM+1-icouche] = hphoton[NATM+1-(icouche+1)] + 
 				__fdividef(abs(tab.h[icouche]-tab.h[icouche-1])*rsolfi,abs(tab.z[icouche-1]-tab.z[icouche]));
 				
 				xphbis+=ph->vx*rsolfi;
 				yphbis+=ph->vy*rsolfi;
 				zphbis+=ph->vz*rsolfi;
 				
-				zintermax = ph->zph[NATM+1-icouche];
+				zintermax = zphoton[NATM+1-icouche];
 			}
-			taumaxph = ph->hph[NATM];
+			taumaxph = hphoton[NATM];
 			ph->isurface=-1;
 		}
 	}
@@ -836,46 +1088,27 @@ atmosphériques */
 	
 		taumaxph = ph->taumax;
 		zintermax = ph->zintermax;
-		//NOTE: dans le Fortran initialisation des coordonnées cartésiennes du photon, je pense inutile
-		// Beaucoup de redondance il me semble!!!!!! A vérifier
-// 		for(icouche=0; icouche<NATM+1; icouche++){
-// 			ph->hph[icouche] = ph->hphz[icouche];
-// 			ph->zph[icouche] = ph->zphz[icouche];
-// 		}
 		
 		ph->isurface = 1;
 	}
 	else{
-// 		if( idx==0 )
-// 			printf("On vient de ailleurs avant le move\n");
-		// Définir zintermax et taumaxphoton quand meme
-		//L'utilisation des valeurs initiales est une astuce pour sauver des résultats intermédiaires
+	// Le photon était dans l'atmosphère avant. Il y est resté. Les grandeurs associées à celui-ci sont stokées dans sa structure
 		zintermax = ph->zintermax;
 		taumaxph = ph->taumax;
 	}
 	
-// 	if(idx==0){
-// 		printf("\nParamètres du ph dans le move\n");
-// 		printf("taumaxph=%f - zintermax=%f - (%f,%f,%f), locPrec=%d\n",taumaxph,zintermax,ph->x,ph->y,ph->z, ph->locPrec);
-// 	}
-	
-	// Sauvegarde de zintermax et taumax dans ph->zintermax0 et ph->taumax0 pour le prochain appel de move
+	// Sauvegarde de zintermax et taumax dans ph->zintermax et ph->taumax pour le prochain appel de move
 	ph->zintermax= zintermax; 
 	ph->taumax= taumaxph;
 	
 	// Une fois les calculs effectués, on sauve la position précédente du photon
-// 	ph->locPrec=ph->loc;
+	ph->locPrec=ph->loc;
 	
 	/** Tirage au sort de la profondeur optique à parcourir **/
 	/*  Tirage effectué lors de chaque appel de la fonction */
 	// Pas de diffusion forcée en sphérique
 	
-	// 55
-	
 	tauRdm = -__logf(1.F-RAND);
-// 	tauRdm = 0.2f;
-// 	if( idx==0 )
-// 		printf("tauRdm=%f\n",tauRdm);
 
 	if( (tauRdm<=0.f) || (tauRdm>=taumaxph) ){
 		//Il n'y a pas d'intéraction avec l'atmosphère
@@ -911,7 +1144,7 @@ atmosphériques */
 // 			printf("taumaxph=%f - zintermax=%f - (%f,%f,%f)\n",taumaxph,zintermax,ph->x,ph->y,ph->z);
 // 		}
 	icouche =0;
-	while( (ph->hph[icouche]<tauRdm) ){
+	while( (hphoton[icouche]<tauRdm) ){
 		icouche++;
 		if( icouche==2*NATM+2 ){
 			printf("Arret de calcul couche #1\n");
@@ -919,15 +1152,10 @@ atmosphériques */
 			return;
 		}
 	}
-// 		if( icouche==0){
-// 			printf("Problème icouche=0 / device.cu\n");
-// 		}
-// 		else if( icouche==NATM+1){
-// 			printf("Problème icouche=2*NATM+1 / device.cu\n");
-// 		}
+
 	/** Calcul des coordonnées (x,y,z) du photon **/
-	rra = __fdividef(ph->zph[icouche-1]-ph->zph[icouche],ph->hph[icouche-1]-ph->hph[icouche] );
-	rrb = ph->zph[icouche] - ph->hph[icouche]*rra;
+	rra = __fdividef(zphoton[icouche-1]-zphoton[icouche],hphoton[icouche-1]-hphoton[icouche] );
+	rrb = zphoton[icouche] - hphoton[icouche]*rra;
 	rdist = rra*tauRdm + rrb;
 	
 	rxn = ph->x + ph->vx*rdist;
@@ -944,7 +1172,7 @@ atmosphériques */
 	if( sqrtf(rayon) < RTER ){
 // 			if(idx==0){	//NOTE: on a tjrs locPrec = ATMOS, souvent icouche=1
 // 		printf("Problème métaphysique dans move, rayon<RTER (%f) - locPrec=%d -icouche=%d -hph[icouche]=%f - tauRdm=%f\n",
-// 			   sqrtf(rayon),ph->locPrec,icouche,ph->hph[icouche],tauRdm);
+// 			   sqrtf(rayon),ph->locPrec,icouche,hphoton[icouche],tauRdm);
 // 		printf("taumaxph=%f - zintermax=%f - (%f,%f,%f)\n",taumaxph,zintermax,ph->x,ph->y,ph->z);
 // 			}
 		ph->isurface=1;
@@ -965,58 +1193,11 @@ atmosphériques */
 			return;
 		}
 	}
-// 		if( icouche==0){
-// 			printf("Problème iray=0 / device.cu\n");
-// 		}
-// 		else if( icouche==2*NATM+1){
-// 			printf("Problème icouche=2*NATM+1 / device.cu\n");
-// 		}
 	
 	ph->couche = iray;
-// 	icouche=iray;
-	scatter( ph, tab, etatThr
-				#if defined(RANDMWC) || defined(RANDMT)
-				, configThr
-				#endif
-				#ifdef TRAJET
-				, idx, evnt
-				#endif
-					);
-					
 	
-	/** Le photon a été diffusé: calcul du trajet optique-géométrique devant lui **/
-	calculProfil(ph, tab
-		#ifdef TRAJET
-		, idx
-		#endif
-		);
-	ph->locPrec=ph->loc;
-	
-// 		if(idx==0){
-// 			printf("\nParamètres du ph sortie du move avec interaction\n");
-// 			printf("taumaxph=%f - zintermax=%f - (%f,%f,%f)\n",taumaxph,zintermax,ph->x,ph->y,ph->z);
-// 			
-// 		}
-	icouchefi = ph->couche;
-	if( icouchefi==0 ){
-		// Le photon vient de la surface du coup
-		// NOTE: à éventuellement modifier
-		ph->isurface= -1.f;
-// 		return;
-	}
-	else if( icouchefi==NATM ){
-		// NOTE: à eventuellement modifier
-		ph->isurface= 1.f;
-// 		return;
-	}
-	else{
-		// Il y a eu un problème avant, on sort et on abandonne le photon
-// 		printf("Problème de calcul de icouchefi (%d)\n", icouchefi);
-// 		return;
-	}
-	
-// 	printf("Sortie usuelle: loc=%d\n",ph->loc); // AFFICHE ATMOS, ok
-
+	// On sort maintenant de la fonction et comme le photon reste dans ATMOS, le kernel appelle scatter() et calculProfil()
+				
 	#ifdef TRAJET
 	// Récupération d'informations sur le premier photon traité
 	if(idx == 0)
@@ -1029,7 +1210,6 @@ atmosphériques */
 		// "2"représente l'événement "move" du photon
 		evnt[i].action = 2;
 		// On récupère le tau et le poids du photon
-		evnt[i].tau = ph->tau;
 		evnt[i].poids = ph->weight;
 	}
 	#endif
@@ -1073,7 +1253,6 @@ __device__ void surfaceAgitee(Photon* photon
 				// "4"représente l'événement "surface" du photon
 				evnt[i].action = 4;
 				// On récupère le tau et le poids du photon
-				evnt[i].tau = photon->tau;
 				evnt[i].poids = photon->weight;
 				// 		}
 		}
@@ -1312,7 +1491,6 @@ utilisés, peut peut être être supprimer ici*/
 			// "4"représente l'événement "surface" du photon
 			evnt[i].action = 4;
 			// On récupère le tau et le poids du photon
-			evnt[i].tau = photon->tau;
 			evnt[i].poids = photon->weight;
 // 		}
 	}
@@ -1412,7 +1590,6 @@ __device__ void surfaceLambertienne(Photon* photon
 			// "4"représente l'événement "surface" du photon
 			evnt[i].action = 4;
 			// On récupère le tau et le poids du photon
-			evnt[i].tau = photon->tau;
 			evnt[i].poids = photon->weight;
 			// 		}
 	}
@@ -1539,7 +1716,6 @@ __device__ void exit(Photon* ph, Variables* var, Tableaux tab, unsigned long lon
 				// "5"représente l'événement "exit" du photon
 			evnt[i].action = 5;
 				// On récupère le tau et le poids du photon
-			evnt[i].tau = ph->tau;
 			evnt[i].poids = ph->weight;
 // 		}
 	}
@@ -1813,8 +1989,6 @@ __device__ void scatter(Photon* photon, Tableaux tab
 		#endif
 		){
 
-// 	float tauBis = TAUATMd-photon->tau;
-// 	int icouche=1;
 	float cTh=0, sTh, psi, cPsi, sPsi;
 	float wx, wy, wz, vx, vy, vz;
 	
@@ -1878,7 +2052,6 @@ __device__ void scatter(Photon* photon, Tableaux tab
 			// "3"représente l'événement "scatter" du photon
 			evnt[i].action = 3;
 			// On récupère le tau et le poids du photon
-			evnt[i].tau = photon->tau;
 			evnt[i].poids = photon->weight;
 			// 		}
 	}
@@ -1886,74 +2059,70 @@ __device__ void scatter(Photon* photon, Tableaux tab
 }
 
 
-// Calcul du point d'impact dans l'entrée de l'atmosphère
-__device__ void impact(Photon* ph, Tableaux tab
-			#ifdef TRAJET
-			, int idx, Evnt* evnt
-			#endif
-			){
+// // Calcul du point d'impact dans l'entrée de l'atmosphère
+// __device__ void impact(Photon* ph, Tableaux tab
+// 			#ifdef TRAJET
+// 			, int idx, Evnt* evnt
+// 			#endif
+// 			){
+// 
+// 	float thss, localh;
+// 	float rdelta;
+// 	float xphbis,yphbis,zphbis;	//Coordonnées intermédiaire du photon
+// 	float rsolfi,rsol1,rsol2;
+// 	
+// 	/** Calcul du point d'impact **/
+// // 	thss = abs(acosf(abs(ph->vz)));
+// 	thss = THSDEGd*DEG2RAD;
+// 	
+// 	rdelta = 4.f*RTER*RTER + 4.f*(__tanf(thss)*__tanf(thss)+1.f)*(HATM*HATM+2.f*HATM*RTER);
+// 	localh = __fdividef(-2.f*RTER+sqrtf(rdelta),2.f*(__tanf(thss)*__tanf(thss)+1.f));
+// 	
+// 	ph->x=localh*__tanf(thss);
+// 	ph->y = 0.f;
+// 	ph->z = RTER+localh;	
+// 	
 
-	float thss, localh;
-	float rdelta;
-	float xphbis,yphbis,zphbis;	//Coordonnées intermédiaire du photon
-	float rsolfi,rsol1,rsol2;
-	
-	/** Calcul du point d'impact **/
-// 	thss = abs(acosf(abs(ph->vz)));
-	thss = THSDEGd*DEG2RAD;
-	
-	rdelta = 4.f*RTER*RTER + 4.f*(__tanf(thss)*__tanf(thss)+1.f)*(HATM*HATM+2.f*HATM*RTER);
-	localh = __fdividef(-2.f*RTER+sqrtf(rdelta),2.f*(__tanf(thss)*__tanf(thss)+1.f));
-	
-	ph->x=localh*__tanf(thss);
-	ph->y = 0.f;
-	ph->z = RTER+localh;	
-	
-// 	ph->zphz[0] = 0.f;
-// 	ph->hphz[0] = 0.f;
-	ph->zph[0] = 0.f;
-	ph->hph[0] = 0.f;
-	
-	xphbis = ph->x;
-	yphbis = ph->y;
-	zphbis = ph->z;
-	
-	/** Création hphoton et zphoton, chemin optique entre sommet atmosphère et sol pour la direction d'incidence **/
-	for(int icouche=1; icouche<NATM+1; icouche++){
-		
-		rdelta = 4.f*(ph->vx*xphbis+ph->vy*yphbis+ph->vz*zphbis)*(ph->vx*xphbis+ph->vy*yphbis+ph->vz*zphbis)
-				- 4.f*(xphbis*xphbis + yphbis*yphbis + zphbis*zphbis - (tab.z[icouche]+RTER)*(tab.z[icouche]+RTER));
-		rsol1 = 0.5f*(-2.f*(ph->vx*xphbis+ph->vy*yphbis+ph->vz*zphbis)+sqrtf(rdelta));
-		rsol2 = 0.5f*(-2.f*(ph->vx*xphbis+ph->vy*yphbis+ph->vz*zphbis)-sqrtf(rdelta));
-		
-		// Il faut choisir la plus petite distance en faisant attention qu'elle soit positive
-		if(rsol1>0.f){
-			if( rsol2>0.f)
-				rsolfi = fmin(rsol1,rsol2);
-			else
-				rsolfi = rsol1;
-		}
-		else{
-			if( rsol2>0.f )
-				rsolfi=rsol1;
-		}
-		
-// 		ph->zphz[icouche] = ph->zphz[icouche-1] + rsolfi;
-// 		ph->hphz[icouche] = ph->hphz[icouche-1] + 
-// 					__fdividef(abs(tab.h[icouche]-tab.h[icouche-1])*rsolfi,abs(tab.z[icouche-1]-tab.z[icouche]));
+// 	ph->zph[0] = 0.f;
+// 	ph->hph[0] = 0.f;
+// 	
+// 	xphbis = ph->x;
+// 	yphbis = ph->y;
+// 	zphbis = ph->z;
+// 	
+// 	/** Création hphoton et zphoton, chemin optique entre sommet atmosphère et sol pour la direction d'incidence **/
+// 	for(int icouche=1; icouche<NATM+1; icouche++){
 // 		
-		ph->zph[icouche] = ph->zph[icouche-1] + rsolfi;
-		ph->hph[icouche] = ph->hph[icouche-1] + 
-					__fdividef(abs(tab.h[icouche]-tab.h[icouche-1])*rsolfi,abs(tab.z[icouche-1]-tab.z[icouche]));	
-	
-		xphbis+= ph->vx*rsolfi;
-		yphbis+= ph->vy*rsolfi;
-		zphbis+= ph->vz*rsolfi;
-		
-	}
-	
-		ph->taumax = ph->hph[NATM];
-		ph->zintermax = ph->zph[NATM];
-		
-}
+// 		rdelta = 4.f*(ph->vx*xphbis+ph->vy*yphbis+ph->vz*zphbis)*(ph->vx*xphbis+ph->vy*yphbis+ph->vz*zphbis)
+// 				- 4.f*(xphbis*xphbis + yphbis*yphbis + zphbis*zphbis - (tab.z[icouche]+RTER)*(tab.z[icouche]+RTER));
+// 		rsol1 = 0.5f*(-2.f*(ph->vx*xphbis+ph->vy*yphbis+ph->vz*zphbis)+sqrtf(rdelta));
+// 		rsol2 = 0.5f*(-2.f*(ph->vx*xphbis+ph->vy*yphbis+ph->vz*zphbis)-sqrtf(rdelta));
+// 		
+// 		// Il faut choisir la plus petite distance en faisant attention qu'elle soit positive
+// 		if(rsol1>0.f){
+// 			if( rsol2>0.f)
+// 				rsolfi = fmin(rsol1,rsol2);
+// 			else
+// 				rsolfi = rsol1;
+// 		}
+// 		else{
+// 			if( rsol2>0.f )
+// 				rsolfi=rsol1;
+// 		}
+// 		
+
+// 		ph->zph[icouche] = ph->zph[icouche-1] + rsolfi;
+// 		ph->hph[icouche] = ph->hph[icouche-1] + 
+// 					__fdividef(abs(tab.h[icouche]-tab.h[icouche-1])*rsolfi,abs(tab.z[icouche-1]-tab.z[icouche]));	
+// 	
+// 		xphbis+= ph->vx*rsolfi;
+// 		yphbis+= ph->vy*rsolfi;
+// 		zphbis+= ph->vz*rsolfi;
+// 		
+// 	}
+// 	
+// 		ph->taumax = ph->hph[NATM];
+// 		ph->zintermax = ph->zph[NATM];
+// 		
+// }
 

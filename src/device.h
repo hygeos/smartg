@@ -60,7 +60,7 @@ __global__ void initRandCUDA(curandState_t*, unsigned long long);
 
 __global__ void initRandMTEtat(EtatMT*, ConfigMT*);
 
-__device__ void initPhoton(Photon* ph, Tableaux tab, Init* init, float* hph0_s, float* zph0_s
+__device__ void initPhoton(Photon* ph, Tableaux tab, Init* init, float* hphoton, float* zphoton /*float* hph0_s, float* zph0_s*/
 		#ifdef TRAJET
 		, int, Evnt*
 		#endif
@@ -70,13 +70,13 @@ __device__ void initPhoton(Photon* ph, Tableaux tab, Init* init, float* hph0_s, 
 		    );
 
 
-__device__ void calculProfil(Photon* ph, Tableaux tab
+__device__ void calculProfil(Photon* ph, Tableaux tab, float* hphoton, float* zphoton
 		#ifdef TRAJET
 		, int idx
 		#endif
 		);
 
-__device__ void move(Photon*, Tableaux tab, int flagDiff 
+__device__ void move(Photon*, Tableaux tab, float* hphoton, float* zphoton
 		#ifdef RANDMWC
 		, unsigned long long*, unsigned int*
 		#endif

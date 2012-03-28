@@ -158,8 +158,6 @@ typedef struct __align__(16)
 	int loc;
 	int locPrec;	// Localisation précédente du photon
 	
-	// Epaisseur Rayleigh du photon
-	float tau;
 	// Poids du photon
 	float weight;
 	// Paramètres de stokes du photon
@@ -174,10 +172,8 @@ typedef struct __align__(16)
 	float z;
 	
 	// Profil vu par le photon
-	float* hph;
-	float* zph;
-// 	float* hphz;
-// 	float* zphz;
+// 	float* hph;
+// 	float* zph;
 	
 	// Parametres initiaux
 	float taumax;

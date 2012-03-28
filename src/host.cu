@@ -68,7 +68,7 @@ void initConstantesHost(int argc, char** argv)
 {
 	if(argc < 2)
 	{
-		printf("ERREUR : lecture argv");
+		printf("ERREUR : lecture argv\n");
 		exit(1);
 	}
 	
@@ -544,13 +544,21 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	initRandMTEtat<<<XGRID * YGRID, XBLOCK * YBLOCK>>>(tab_D->etat, tab_D->config);
 #endif
 	
-	// Tableau du poids des photons ressortis
-	tab_H->tabPhotons = (float*)malloc(4*NBTHETA * NBPHI * sizeof(*(tab_H->tabPhotons)));
-	if( tab_H->tabPhotons == NULL ){
-		printf("ERREUR: Problème de malloc de tab_H->tabPhotons dans initTableaux\n");
+	if( cudaHostAlloc( &(tab_H->tabPhotons), 4*NBTHETA * NBPHI * sizeof(*(tab_H->tabPhotons)), cudaHostAllocPortable ) != cudaSuccess
+){
+		printf("#--------------------#\n");
+		printf("ERREUR: Problème d'allocation de tab_H->tabPhotons dans initTableaux\n");
+		printf("#--------------------#\n");
 		exit(1);
 	}
-	memset(tab_H->tabPhotons,0,4*NBTHETA * NBPHI * sizeof(*(tab_H->tabPhotons)) );
+	
+// 	// Tableau du poids des photons ressortis
+// 	tab_H->tabPhotons = (float*)malloc(4*NBTHETA * NBPHI * sizeof(*(tab_H->tabPhotons)));
+// 	if( tab_H->tabPhotons == NULL ){
+// 		printf("ERREUR: Problème de malloc de tab_H->tabPhotons dans initTableaux\n");
+// 		exit(1);
+// 	}
+// 	memset(tab_H->tabPhotons,0,4*NBTHETA * NBPHI * sizeof(*(tab_H->tabPhotons)) );
 	
 	if( cudaMalloc(&(tab_D->tabPhotons), 4 * NBTHETA * NBPHI * sizeof(*(tab_D->tabPhotons))) == cudaErrorMemoryAllocation){
 		printf("ERREUR: Problème de cudaMalloc de tab_D->tabPhotons dans initTableaux\n");
@@ -772,14 +780,14 @@ void verifierFichier(){
 	{
 		printf("ATTENTION: Le fichier temoin %s existe deja.\n",PATHTEMOINHDF);
 		printf("Voulez-vous le supprimer? [y/n]\n");
-		res_supp=getchar();
-		if( res_supp=='y' ){
+// 		res_supp=getchar();
+// 		if( res_supp=='y' ){
 			sprintf(command,"rm %s",PATHTEMOINHDF);
 			system(command);
-		}
-		else{
-		}
-		getchar();
+// 		}
+// 		else{
+// 		}
+// 		getchar();
 		fclose(fic);
 	}
 	
@@ -789,13 +797,13 @@ void verifierFichier(){
 	{
 		printf("ATTENTION: Le fichier resultat %s existe deja.\n",PATHRESULTATSHDF);
 		printf("Voulez-vous le supprimer pour continuer? [y/n]\n");
-		res_supp=getchar();
-		if( res_supp=='y' ){
+// 		res_supp=getchar();
+// 		if( res_supp=='y' ){
 			sprintf(command,"rm %s",PATHRESULTATSHDF);
 			system(command);
-		}
-		else{
-		}
+// 		}
+// 		else{
+// 		}
 		fclose(fic);
 	}
 	
@@ -1542,7 +1550,8 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 		exit(1);
 	}
 	
-	free(tab_H->tabPhotons);
+	cudaFreeHost(tab_H->tabPhotons);
+// 	free(tab_H->tabPhotons);
 	
 	// Libération du modèle de diffusion des aérosols
 	erreur = cudaFree(tab_D->faer);

@@ -18,8 +18,6 @@ int main (int argc, char *argv[])
 	cudaDeviceReset();
 // 	cudaSetDevice(0);
 
-	// Initialisation pour pouvoir utiliser le mappage mémoire host-device
-// 	cudaSetDeviceFlags( cudaDeviceMapHost );
 
 	/** Variables du main **/
 	cudaError_t cudaErreur;	// Permet de vérifier les allocations mémoires
@@ -174,6 +172,23 @@ int main (int argc, char *argv[])
 	if(nbPhotonsTot < NBPHOTONS) 
 		passageBoucle = true;
 	
+	/** Création de stream pour copies asynchrones **/
+// 	cudaStream_t stream1, stream2;
+// 	
+// 	cudaErreur = cudaStreamCreate( &stream1 );
+// 	if( cudaErreur != cudaSuccess ){
+// 		printf("\nERREUR: Problème de création de stream1\n");
+// 		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+// 		exit(1);
+// 	}
+// 	
+// 	cudaErreur = cudaStreamCreate( &stream2 );
+// 	if( cudaErreur != cudaSuccess ){
+// 		printf("\nERREUR: Problème de création de stream2\n");
+// 		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+// 		exit(1);
+// 	}
+	
 	// Tant qu'il n'y a pas assez de photons traités on relance le kernel
 	while(nbPhotonsTot < NBPHOTONS)
 	{
@@ -235,6 +250,7 @@ int main (int argc, char *argv[])
 		
 		/** Récupération des variables et d'un tableau envoyés dans le kernel **/
 		cudaErreur = cudaMemcpy(var_H, var_D, sizeof(Variables), cudaMemcpyDeviceToHost);
+// 		cudaErreur = cudaMemcpyAsync( var_H, var_D, sizeof(Variables),cudaMemcpyDeviceToHost , stream1 );
 		if( cudaErreur != cudaSuccess ){
 			printf("#--------------------#\n");
 			printf("# ERREUR: Problème de copie var_D dans le main\n");
@@ -248,11 +264,27 @@ int main (int argc, char *argv[])
 
 		cudaErreur = cudaMemcpy(tab_H.tabPhotons, tab_D.tabPhotons, 4*NBTHETA * NBPHI * sizeof(*(tab_H.tabPhotons)),
 cudaMemcpyDeviceToHost);
+// 		cudaErreur = cudaMemcpyAsync( tab_H.tabPhotons, tab_D.tabPhotons,4*NBTHETA*NBPHI*sizeof(*(tab_H.tabPhotons)),
+// 										cudaMemcpyDeviceToHost , stream2);
 		if( cudaErreur != cudaSuccess ){
 			printf( "ERREUR: Problème de copie tab_H.tabPhotons dans le main\n");
 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
 			exit(1);
 		}
+		
+// 		cudaErreur = cudaStreamSynchronize ( stream1 );
+// 		if( cudaErreur != cudaSuccess ){
+// 			printf( "ERREUR: Problème de synchronisation stream1 dans le main\n");
+// 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+// 			exit(1);
+// 		}
+// 		
+// 		cudaErreur = cudaStreamSynchronize ( stream2 );
+// 		if( cudaErreur != cudaSuccess ){
+// 			printf( "ERREUR: Problème de synchronisation stream2 dans le main\n");
+// 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+// 			exit(1);
+// 		}
 
 		#ifdef SORTIEINT
 		cudaErreur = cudaMemcpy(tab_H.poids, tab_D.poids, NBLOOP * sizeof(*(tab_H.poids)), cudaMemcpyDeviceToHost);
@@ -329,18 +361,7 @@ cudaMemcpyDeviceToHost);
 	printf("==================================\n");
 	#endif
 	
-	#ifdef TRAJET
-	// DEBUG Récupération des variables envoyées dans le kernel
-	cudaErreur = cudaMemcpy(evnt_H, evnt_D, NBTRAJET * sizeof(Evnt), cudaMemcpyDeviceToHost);
-	if( cudaErreur != cudaSuccess ){
-		printf( "ERREUR: Problème de copie evnt_D dans le main\n");
-		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-		exit(1);
-	}
 
-	// Affichage du trajet du premier thread
-	afficheTrajet(evnt_H);
-	#endif
 
 	#ifdef SORTIEINT
 	// Sauvegarde du nombre de photons par boite (en fait non pas du tout)
@@ -388,6 +409,20 @@ cudaMemcpyDeviceToHost);
 	creerHDFResultats(tabFinal, tabTh, tabPhi, nbPhotonsTot, var_H, tempsPrec);
 	printf(" Fin de l'execution du programme. Resultats stockes dans %s\n",PATHRESULTATSHDF);
 
+	/** Affichage du trajet du photon **/
+	#ifdef TRAJET
+	// DEBUG Récupération des variables envoyées dans le kernel
+	cudaErreur = cudaMemcpy(evnt_H, evnt_D, NBTRAJET * sizeof(Evnt), cudaMemcpyDeviceToHost);
+	if( cudaErreur != cudaSuccess ){
+		printf( "ERREUR: Problème de copie evnt_D dans le main\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+		exit(1);
+	}
+	
+	// Affichage du trajet du premier thread
+	afficheTrajet(evnt_H);
+	#endif
+	
 	/** Libération de la mémoire allouée **/
 	// Libération du groupe de variables envoyé dans le kernel
 	cudaErreur = cudaFree(var_D);
@@ -408,13 +443,26 @@ cudaMemcpyDeviceToHost);
 	}
 
 	free(init_H);
-// 	cudaFreeHost(var_H);
 
 	// Libération des tableaux envoyés dans le kernel
 	freeTableaux(&tab_H, &tab_D);
 	// Libération du tableau du host
 	free(tabPhotonsTot);
 
+	// Libération des streams
+// 	cudaErreur = cudaStreamDestroy( stream1 );
+// 	if( cudaErreur != cudaSuccess ){
+// 		printf( "ERREUR: Problème cudaStreamDestroy(stream1) dans le main\n");
+// 		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+// 		exit(1);
+// 	}
+// 	
+// 	cudaErreur = cudaStreamDestroy( stream2 );
+// 	if( cudaErreur != cudaSuccess ){
+// 		printf( "ERREUR: Problème cudaStreamDestroy(stream2) dans le main\n");
+// 		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+// 		exit(1);
+// 	}
 
 	// Libération des variables qui récupèrent le trajet d'un photon
 	#ifdef TRAJET
