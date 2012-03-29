@@ -70,13 +70,13 @@ __device__ void initPhoton(Photon* ph, Tableaux tab, Init* init, float* hphoton,
 		    );
 
 
-__device__ void calculProfil(Photon* ph, Tableaux tab, float* hphoton, float* zphoton
+__device__ void calculProfil(Photon* ph, Tableaux tab, float* hphoton, float* zphoton/*, float* h_s, float* z_s*/
 		#ifdef TRAJET
 		, int idx
 		#endif
 		);
 
-__device__ void move(Photon*, Tableaux tab, float* hphoton, float* zphoton
+__device__ void move(Photon*, Tableaux tab, float* hphoton, float* zphoton/*, float* h_s, float* z_s*/
 		#ifdef RANDMWC
 		, unsigned long long*, unsigned int*
 		#endif

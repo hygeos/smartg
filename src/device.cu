@@ -67,20 +67,6 @@ __global__ void lancementKernel(Variables* var, Tableaux tab, Init* init
 	#ifdef TEMPS
 	clock_t start, stop;
 	float time;
-// 	if( idx==0 ){
-// 		
-// 		err = cudaEventCreate(&start);
-// 		if(err!=cudaSuccess){
-// 			printf("ERREUR: Probleme de création de l'event start dans le kernel\n");
-// 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
-// 		}
-// 		
-// 		err = cudaEventCreate(&stop);
-// 		if(err!=cudaSuccess){
-// 			printf("ERREUR: Probleme de création de l'event stop dans le kernel\n");
-// 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
-// 		}
-// 	}
 	#endif
 	
 	/** Utilisation shared memory **/
@@ -91,6 +77,26 @@ __global__ void lancementKernel(Variables* var, Tableaux tab, Init* init
 // 		hph0_s[i] = tab.hph0[i];
 // 		zph0_s[i] = tab.zph0[i];
 // 	}
+
+// 	__shared__ float* h_s;
+// 	__shared__ float* z_s;
+// 	
+// 	h_s = (float*) malloc((NATM+1)*sizeof(float));
+// 		if( h_s == NULL ){
+//    		printf("ERREUR: Problème de malloc de h_s dans le kernel idx(%d)\n",idx);
+// 		return;
+//    	}
+//    	
+//    	z_s = (float*) malloc((NATM+1)*sizeof(float));
+//    	if( z_s == NULL ){
+//    		printf("ERREUR: Problème de malloc de z_s dans le kernel idx(%d)\n",idx);
+// 		return;
+//    	}
+//    	
+// 	for( int i=0; i<NATM+1; i++){
+// 		h_s[i] = tab.h[i];
+// 		z_s[i] = tab.z[i];
+// 	}
 	
 	
 	/** Allocation des tableaux nécessaire au photon **/
@@ -99,26 +105,30 @@ __global__ void lancementKernel(Variables* var, Tableaux tab, Init* init
 // 	ph.hph = (float*) malloc((2*NATM+2)*sizeof(float));
 // 	if( ph.hph == NULL ){
 // 		printf("ERREUR: Problème de malloc de ph->hph dans init idx(%d)\n",idx);
+// 		return;
 // 	}
 // 	
 // 	ph.zph = (float*) malloc((2*NATM+2)*sizeof(float));
 // 	if( ph.zph == NULL ){
 // 		printf("ERREUR: Problème de malloc de ph->zph dans init idx(%d)\n",idx);
+// 		return;
 // 	}
-
-	//Utilisation de la shared memory -> tableau definis hors de la structure du photon (optimisation mémoire)
+	
 	float* hphoton;
 	float* zphoton;
 	
 	hphoton = (float*) malloc((2*NATM+2)*sizeof(float));
-	zphoton = (float*) malloc((2*NATM+2)*sizeof(float));
-	
 	if( hphoton == NULL ){
-   		printf("ERREUR: Problème de malloc de hphoton dans init idx(%d)\n",idx);
-   	}
-   	if( zphoton == NULL ){
-		printf("ERREUR: Problème de malloc de zphoton dans init idx(%d)\n",idx);
+		printf("ERREUR: Problème de malloc de hphoton dans le kernel idx(%d)\n",idx);
+		return;
 	}
+	
+	zphoton = (float*) malloc((2*NATM+2)*sizeof(float));
+	if( zphoton == NULL ){
+		printf("ERREUR: Problème de malloc de zphoton dans le kernel idx(%d)\n",idx);
+		return;
+	}
+
 	
 	/** Boucle de calcul **/   
 	// Dans cette boucle on simule le parcours du photon, puis on le réinitialise,... Le thread lance plusieurs photons
@@ -128,12 +138,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab, Init* init
 		if(ph.loc == NONE){
 			
 			#ifdef TEMPS
-			if(idx==0){ 
-// 				err = cudaEventRecord( start, 0 );
-// 				if(err!=cudaSuccess){
-// 					printf("ERREUR: Probleme event start record - initPhoton\n");
-// 					printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
-// 				}
+			if(idx==0){
 				start = clock();
 			}
 			
@@ -150,24 +155,8 @@ __global__ void lancementKernel(Variables* var, Tableaux tab, Init* init
 
 			#ifdef TEMPS
 			if(idx==0){
-// 				err = cudaEventRecord( stop, 0 );
-// 				if(err!=cudaSuccess){
-// 					printf("ERREUR: Probleme event stop record - initPhoton\n");
-// 					printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
-// 				}
-// 				cudaEventSynchronize( stop );
-// 				if(err!=cudaSuccess){
-// 					printf("ERREUR: Probleme event synchronise - initPhoton\n");
-// 					printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
-// 				}
-// 				
-// 				err = cudaEventElapsedTime( &time, start, stop );
-// 				if(err!=cudaSuccess){
-// 					printf("ERREUR: Probleme eventElapsedTime - initPhoton\n");
-// 					printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
-// 				}
 				stop = clock();
-				time = __fdividef((float) (stop-start),CLOCKS_PER_SEC);
+				time = __fdividef((float) (stop-start),__int2float_rn(CLOCKS_PER_SEC));
 				printf("(1) Temps de initPhoton: %f\n", time);
 			}
 			#endif
@@ -181,17 +170,12 @@ __global__ void lancementKernel(Variables* var, Tableaux tab, Init* init
 		if( (ph.loc == ATMOS) /*&& (SIMd==-2 || SIMd==1 || SIMd==2)*/ ){
 			
 			#ifdef TEMPS
-			if(idx==0){ 
-// 				err = cudaEventRecord( start, 0 );
-// 				if(err!=cudaSuccess){
-// 					printf("ERREUR: Probleme event start record - move\n");
-// 					printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
-// 				}
+			if(idx==0){
 				start = clock();
 			}
 			#endif
 			
-			move(&ph, tab, hphoton, zphoton, &etatThr
+			move(&ph, tab,hphoton, zphoton,/* h_s, z_s,*/ &etatThr
 				#if defined(RANDMWC) || defined(RANDMT)
 				, &configThr
 				#endif
@@ -202,24 +186,8 @@ __global__ void lancementKernel(Variables* var, Tableaux tab, Init* init
 						
 			#ifdef TEMPS
 			if(idx==0){
-// 				err = cudaEventRecord( stop, 0 );
-// 				if(err!=cudaSuccess){
-// 					printf("ERREUR: Probleme event stop record - move\n");
-// 					printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
-// 				}
-// 				cudaEventSynchronize( stop );
-// 				if(err!=cudaSuccess){
-// 					printf("ERREUR: Probleme event synchronise - move\n");
-// 					printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
-// 				}
-// 				
-// 				err = cudaEventElapsedTime( &time, start, stop );
-// 				if(err!=cudaSuccess){
-// 					printf("ERREUR: Probleme eventElapsedTime - move\n");
-// 					printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
-// 				}
 				stop = clock();
-				time = __fdividef((float) (stop-start),CLOCKS_PER_SEC);
+				time = __fdividef((float) (stop-start),__int2float_rn(CLOCKS_PER_SEC));
 				printf("(2) Temps de move: %f\n", time);
 			}
 			#endif
@@ -231,12 +199,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab, Init* init
 		if( (ph.loc == ATMOS) /*&& (SIMd==-2 || SIMd==1 || SIMd==2)*/){
 	
 			#ifdef TEMPS
-			if(idx==0){ 
-// 				err = cudaEventRecord( start, 0 );
-// 				if(err!=cudaSuccess){
-// 					printf("ERREUR: Probleme event start record - scatter\n");
-// 					printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
-// 				}
+			if(idx==0){
 				start = clock();
 			}
 			#endif
@@ -253,24 +216,8 @@ __global__ void lancementKernel(Variables* var, Tableaux tab, Init* init
 				
 			#ifdef TEMPS
 			if(idx==0){
-// 				err = cudaEventRecord( stop, 0 );
-// 				if(err!=cudaSuccess){
-// 					printf("ERREUR: Probleme event stop record - scatter\n");
-// 					printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
-// 				}
-// 				cudaEventSynchronize( stop );
-// 				if(err!=cudaSuccess){
-// 					printf("ERREUR: Probleme event synchronise - scatter\n");
-// 					printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
-// 				}
-// 				
-// 				err = cudaEventElapsedTime( &time, start, stop );
-// 				if(err!=cudaSuccess){
-// 					printf("ERREUR: Probleme eventElapsedTime - scatter\n");
-// 					printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
-// 				}
 				stop = clock();
-				time = __fdividef((float) (stop-start),CLOCKS_PER_SEC);
+				time = __fdividef((float) (stop-start),__int2float_rn(CLOCKS_PER_SEC));
 				printf("(3) Temps de scatter: %f\n", time);
 			}
 			#endif
@@ -283,18 +230,13 @@ __global__ void lancementKernel(Variables* var, Tableaux tab, Init* init
 		if( (ph.loc == ATMOS) /*&& (SIMd==-2 || SIMd==1 || SIMd==2)*/){
 			
 			#ifdef TEMPS
-			if(idx==0){ 
-// 				err = cudaEventRecord( start, 0 );
-// 				if(err!=cudaSuccess){
-// 					printf("ERREUR: Probleme event start record - calculProfil\n");
-// 					printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
-// 				}
+			if(idx==0){
 				start = clock();
 			}
 			#endif
 			
 			// Calcul du nouveau profil vu par le photon
-			calculProfil(&ph, tab, hphoton, zphoton
+			calculProfil(&ph, tab, hphoton, zphoton/*, h_s, z_s*/
 			#ifdef TRAJET
 			, idx
 			#endif
@@ -302,24 +244,8 @@ __global__ void lancementKernel(Variables* var, Tableaux tab, Init* init
 			
 			#ifdef TEMPS
 			if(idx==0){
-// 				err = cudaEventRecord( stop, 0 );
-// 				if(err!=cudaSuccess){
-// 					printf("ERREUR: Probleme event stop record - calculProfil\n");
-// 					printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
-// 				}
-// 				cudaEventSynchronize( stop );
-// 				if(err!=cudaSuccess){
-// 					printf("ERREUR: Probleme event synchronise - calculProfil\n");
-// 					printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
-// 				}
-// 				
-// 				err = cudaEventElapsedTime( &time, start, stop );
-// 				if(err!=cudaSuccess){
-// 					printf("ERREUR: Probleme eventElapsedTime - calculProfil\n");
-// 					printf( "Nature de l'erreur: %s\n",cudaGetErrorString(err) );
-// 				}
 				stop = clock();
-				time = __fdividef((float) (stop-start),CLOCKS_PER_SEC);
+				time = __fdividef((float) (stop-start),__int2float_rn(CLOCKS_PER_SEC));
 				printf("(4) Temps de calculProfil: %f\n", time);
 			}
 			#endif
@@ -412,6 +338,8 @@ __global__ void lancementKernel(Variables* var, Tableaux tab, Init* init
 // 	free(ph.zph);
 	free(hphoton);
 	free(zphoton);
+// 	free( h_s );
+// 	free( z_s );
 	
 	#ifdef SORTIEINT
 	if( ph.numBoucle <NBLOOPd/2 ){
@@ -494,12 +422,6 @@ __device__ void initPhoton(Photon* ph, Tableaux tab, Init* init, float* hphoton,
 	ph->stokes2 = 0.5F;
 	ph->stokes3 = 0.F;
 // 	ph->stokes4 = 0.F;
-	
-// 	impact( ph, tab
-// 			#ifdef TRAJET
-// 			, idx, evnt
-// 			#endif
-// 			);
 
 // 	Paramètres initiaux calculés dans impactInit - host.cu
 	ph->x = init->x0;
@@ -546,7 +468,7 @@ __device__ void initPhoton(Photon* ph, Tableaux tab, Init* init, float* hphoton,
 }
 
 // calcul du trajet optique-géométrique devant le photon
-__device__ void calculProfil(Photon* ph, Tableaux tab, float* hphoton, float* zphoton
+__device__ void calculProfil(Photon* ph, Tableaux tab, float* hphoton, float* zphoton/*, float* h_s, float* z_s*/
 		#ifdef TRAJET
 		, int idx
 		#endif
@@ -554,16 +476,22 @@ __device__ void calculProfil(Photon* ph, Tableaux tab, float* hphoton, float* zp
 {
 	float rdelta1, rdelta2, rdelta3;
 	float rsolfi,rsol1,/*rsol2,*/rsol3,/*rsol4,*/ rsol5/*,rsol6*/;
-	float rcoeffA, rcoeffB, rcoeffC, rcoeffCbis, rcoeffCter;	// Variable pour optimisation du calcul trajet après diffusion
+	float /*rcoeffA,*/ rcoeffB, rcoeffC, rcoeffCbis, rcoeffCter;	// Variable pour optimisation du calcul trajet après diffusion
 	float rsolA, rsolB, rsolC;
 	int icouche, icouchefi, icouchefibis;
-	int iray; 	// A dégager, utiliser aussi icouche
 	
 	int icompteur;
-	float tointer, zinter;	// Variable à dégager proprement par la suite proche
+// 	float tointer, zinter;	// Variable à dégager proprement par la suite proche
 	
 	float rayon, rmoins, rplus, regal;
 	float xphbis, yphbis, zphbis;
+	
+	#ifdef TEMPS
+	clock_t start, stop;
+	float time;
+	
+	if(idx==0)	start=clock();
+	#endif
 	
 	/** Calcul des premiers termes **/
 	/** Le photon a été diffusé: calcul du trajet optique-géométrique devant lui **/
@@ -580,18 +508,18 @@ __device__ void calculProfil(Photon* ph, Tableaux tab, float* hphoton, float* zp
 	
 	//Initialisation des solution
 	rsol1 = -800.e+6f;
-	rsol2 = -800.e+6f;
+// 	rsol2 = -800.e+6f;
 	rsol3 = -800.e+6f;
-	rsol4 = -800.e+6f;
+// 	rsol4 = -800.e+6f;
 	
-	rcoeffA= 1.f;/* Attention si rcoeffA n'est plus égal a 1 il faut vérifier le calcul des solutions qui est actuellement
-	optimisé pour rcoeffA =1 */
+// 	rcoeffA= 1.f;/* Attention si rcoeffA n'est plus égal a 1 il faut vérifier le calcul des solutions qui est actuellement
+// 	optimisé pour rcoeffA =1  - Variable rcoeffA inutilisée maintenant*/
 	rcoeffB= 2.f*(ph->vx*xphbis + ph->vy*yphbis + ph->vz*zphbis);
 	rcoeffC= xphbis*xphbis + yphbis*yphbis + zphbis*zphbis - regal*regal;
 	rcoeffCbis= xphbis*xphbis + yphbis*yphbis + zphbis*zphbis - rmoins*rmoins;
 	
-	rdelta1 = rcoeffB*rcoeffB - 4.f*rcoeffA*rcoeffC;
-	rdelta2 = rcoeffB*rcoeffB - 4.f*rcoeffA*rcoeffCbis;
+	rdelta1 = rcoeffB*rcoeffB - 4.f*rcoeffC;
+	rdelta2 = rcoeffB*rcoeffB - 4.f*rcoeffCbis;
 	
 // 	if( rdelta1 == 0 ){
 // 		rsol1= __fdividef(-rcoeffB,2.f*rcoeffA);
@@ -680,13 +608,11 @@ __device__ void calculProfil(Photon* ph, Tableaux tab, float* hphoton, float* zp
 							   abs(tab.z[icouchefi]-tab.z[icouche]));
    }
    else{
-	   if( icouchefi==0 ){
-		   hphoton[1] = __fdividef(abs(tab.h[icouchefi+1]-tab.h[icouchefi])*rsolfi,
-								   abs(tab.z[icouchefi+1]-tab.z[icouchefi]));
+	   if( icouchefi!=0 ){
+		   hphoton[1] = __fdividef(abs(tab.h[icouchefi-1]-tab.h[icouchefi])*rsolfi, abs(tab.z[icouchefi-1]-tab.z[icouchefi]));
 	   }
 	   else{
-		   hphoton[1] = __fdividef(abs(tab.h[icouchefi-1]-tab.h[icouchefi])*rsolfi,
-								   abs(tab.z[icouchefi-1]-tab.z[icouchefi]));
+		   hphoton[1] = __fdividef(abs(tab.h[1]-tab.h[0])*rsolfi, abs(tab.z[1]-tab.z[0]));
 	   }
    }
    
@@ -696,10 +622,17 @@ __device__ void calculProfil(Photon* ph, Tableaux tab, float* hphoton, float* zp
    Calcul du chemin optique à parcourir avant de ressortir ou de heurter le sol 
    Il y a 3 possibilités: on est à la couche i, on peut rencontrer i-1, i+1 ou i */
    // 	icompteur = 1;
-   	tointer = hphoton[1];
-   	zinter = zphoton[1];
+//    	tointer = hphoton[1];
+//    	zinter = zphoton[1];
  
+	#ifdef TEMPS
+	if( idx==0 ){
+	stop=clock();
+	time = (float) __fdividef((stop-start), __int2float_rn(CLOCKS_PER_SEC));
 	
+	printf("(4.1)Temps de début de calculProfil : %f\n",time);
+	}
+	#endif
 	/** Calcul des autres termes: Boucle while **/
 	// Initialisation
 	icompteur = 1;
@@ -712,7 +645,11 @@ __device__ void calculProfil(Photon* ph, Tableaux tab, float* hphoton, float* zp
    // 		// Affichage d'informations - Débugage
    // 		printf("%d:Profil atm: h=%f - z=%f\n",icouchefi,hphoton[icompteur],zphoton[icompteur]);
    // 	}
-   
+		
+		#ifdef TEMPS
+		if(idx==0) start = clock();
+		#endif
+		
 		if( icompteur==(2*NATM+1) ){
 			// 				if(idx==0){
 		printf("Il faut arreter, icompteur trop important - (icouchefi=%d)\n", icouchefi);
@@ -725,65 +662,58 @@ __device__ void calculProfil(Photon* ph, Tableaux tab, float* hphoton, float* zp
 		
 		//Test sur les trois couches possible
 		rayon= xphbis*xphbis + yphbis*yphbis + zphbis*zphbis;
-		if( sqrtf(rayon) < RTER ){
-// 				if(idx==0){
-			printf("Problème métaphysique #2 dans device.cu, rayon<RTER (%f)\n",sqrtf(rayon));
-// 			printf("taumaxph=%f - zintermax=%f - (%f,%f,%f)\n",taumaxph,zintermax,ph->x,ph->y,ph->z);
-// 				}
-// 				ph->isurface=1;
-			ph->loc=NONE;	// NONE ou ABSORBED ???
-			return;
-		}
+		
+		// Ca n'arrive jamais, god bless me
+// 		if( sqrtf(rayon) < RTER ){
+// // 				if(idx==0){
+// 			printf("Problème métaphysique #2 dans device.cu, rayon<RTER (%f)\n",sqrtf(rayon));
+// // 			printf("taumaxph=%f - zintermax=%f - (%f,%f,%f)\n",taumaxph,zintermax,ph->x,ph->y,ph->z);
+// // 				}
+// // 				ph->isurface=1;
+// 			ph->loc=NONE;	// NONE ou ABSORBED ???
+// 			return;
+// 		}
 		
 		// Boucle pour définir les rayons que l'on peut toucher
-		iray=0;
+		// icouchefi peut etre vu comme iray
+		icouchefi=0;
 													// 0.001 ds Fortran
-		while( abs(RTER + tab.z[iray] - sqrtf(rayon))>=0.001f ){
-			iray++;
-			if( iray==NATM+1 ){
+		while( abs(RTER + tab.z[icouchefi] - sqrtf(rayon))>=0.001f ){
+			icouchefi++;
+			if( icouchefi==NATM+1 ){
 // 				printf("Arret couche #3 (rayon=%f - (%f,%f,%f) - calcul:%f - calculTotal=%f)\n", 
-// 					   sqrtf(rayon), xphbis,yphbis,zphbis,RTER-sqrtf(rayon), abs(RTER + tab.z[iray-1]- sqrtf(rayon)) );
+// 					   sqrtf(rayon), xphbis,yphbis,zphbis,RTER-sqrtf(rayon), abs(RTER + tab.z[icouchefi-1]- sqrtf(rayon)) );
 				ph->loc=NONE;
 				return;
 			}
 		}
 		
-		// 			if( iray==0){
-		// 				printf("Problème #2 iray=0 / move\n");
-		// 			}
-		// 			else if( iray==NATM+1){
-		// 				printf("Problème #2 iray=NATM+1 / move\n");
-		// 				ph->loc = NONE;
-		// 				return;
-		// 			}
-		
-		rmoins = RTER + tab.z[iray-1];
-		regal = RTER + tab.z[iray];
-		rplus = RTER + tab.z[iray+1];
-		icouchefi=iray;
+		rmoins = RTER + tab.z[icouchefi-1];
+		regal = RTER + tab.z[icouchefi];
+		rplus = RTER + tab.z[icouchefi+1];
 		
 		// 			if( idx==0){
-		// 				printf("iray=%d, z[iray]=%f, rayon=%f\n",iray,tab.z[iray],sqrtf(rayon));
+		// 				printf("iray=%d, z[iray]=%f, rayon=%f\n",icouchefi,tab.z[icouchefi],sqrtf(rayon));
 		// 			}
 		
 		//Initialisation des solution
 		rsol1 = -800.e+6f;
-		rsol2 = -800.e+6f;
+// 		rsol2 = -800.e+6f;
 		rsol3 = -800.e+6f;
-		rsol4 = -800.e+6f;
+// 		rsol4 = -800.e+6f;
 		rsol5 = -800.e+6f;
-		rsol6 = -800.e+6f;
+// 		rsol6 = -800.e+6f;
 		
-		rcoeffA= 1.f; /* Attention si rcoeffA n'est plus égal a 1 il faut vérifier le calcul des solutions qui est actuellement
-optimisé pour rcoeffA =1 */
+// 		rcoeffA= 1.f; /* Attention si rcoeffA n'est plus égal a 1 il faut vérifier le calcul des solutions qui est actuellement
+// optimisé pour rcoeffA =1 */
 		rcoeffB= 2.f*(ph->vx*xphbis + ph->vy*yphbis + ph->vz*zphbis);
 		rcoeffC= xphbis*xphbis + yphbis*yphbis + zphbis*zphbis - rplus*rplus;
 		rcoeffCbis= xphbis*xphbis + yphbis*yphbis + zphbis*zphbis - rmoins*rmoins;
 		rcoeffCter= xphbis*xphbis + yphbis*yphbis + zphbis*zphbis - regal*regal;
 		
-		rdelta1 = rcoeffB*rcoeffB - 4.f*rcoeffA*rcoeffC;
-		rdelta2 = rcoeffB*rcoeffB - 4.f*rcoeffA*rcoeffCbis;
-		rdelta3 = rcoeffB*rcoeffB - 4.f*rcoeffA*rcoeffCter;
+		rdelta1 = rcoeffB*rcoeffB - 4.f*rcoeffC;
+		rdelta2 = rcoeffB*rcoeffB - 4.f*rcoeffCbis;
+		rdelta3 = rcoeffB*rcoeffB - 4.f*rcoeffCter;
 		
 		// Le cas egal à zero peut être regroupé avec la suite
 // 		if( rdelta1 == 0.f ){
@@ -799,21 +729,21 @@ optimisé pour rcoeffA =1 */
 		}
 		
 		if( rdelta1 >= 0.f ){
-			rsol1= __fdividef(-rcoeffB-sqrtf(rdelta1),2.f*rcoeffA);
-// 			rsol1= 0.5f*(-rcoeffB-sqrtf(rdelta1));
+// 			rsol1= __fdividef(-rcoeffB-sqrtf(rdelta1),2.f*rcoeffA);
+			rsol1= 0.5f*(-rcoeffB-sqrtf(rdelta1));
 			// Calcul de l'autre solution repoussé plus tard si besoin
 // 			if( rsol1<=0.f ) rsol2= __fdividef(-rcoeffB+sqrtf(rdelta1),2.f*rcoeffA);
 		}
 		
 		if( rdelta2 >= 0.f ){
-			rsol3= __fdividef(-rcoeffB-sqrtf(rdelta2),2.f*rcoeffA);
-// 			rsol3= 0.5f*(-rcoeffB-sqrtf(rdelta2));
+// 			rsol3= __fdividef(-rcoeffB-sqrtf(rdelta2),2.f*rcoeffA);
+			rsol3= 0.5f*(-rcoeffB-sqrtf(rdelta2));
 // 			if( rsol3<=0.f ) rsol4= __fdividef(-rcoeffB+sqrtf(rdelta2),2.f*rcoeffA);
 		}
 		
 		if( rdelta3 > 0.f ){
-			rsol5= __fdividef(-rcoeffB-sqrtf(rdelta3),2.f*rcoeffA);
-// 			rsol5= 0.5f*(-rcoeffB-sqrtf(rdelta3));
+// 			rsol5= __fdividef(-rcoeffB-sqrtf(rdelta3),2.f*rcoeffA);
+			rsol5= 0.5f*(-rcoeffB-sqrtf(rdelta3));
 // 			if( rsol5<=0.f ) rsol6= __fdividef(-rcoeffB+sqrtf(rdelta3),2.f*rcoeffA);
 			
 			if( abs(rsol5)<1e-6 ){
@@ -932,28 +862,34 @@ optimisé pour rcoeffA =1 */
 												abs(tab.z[icouchefibis]-tab.z[icouchefibis-1])) + hphoton[icompteur-1];
 			}
 			else{
-				hphoton[icompteur] = __fdividef(abs(tab.h[icouchefibis]-tab.h[icouchefibis+1])*rsolfi,
-												abs(tab.z[icouchefibis]-tab.z[icouchefibis+1])) + hphoton[icompteur-1];
+				hphoton[icompteur] = __fdividef(abs(tab.h[0]-tab.h[1])*rsolfi, abs(tab.z[0]-tab.z[1])) + hphoton[icompteur-1];
 			}
 		}
 		
 		zphoton[icompteur]= zphoton[icompteur-1]+rsolfi;
-		tointer = hphoton[icompteur];
-		zinter = zphoton[icompteur];
+// 		tointer = hphoton[icompteur];
+// 		zinter = zphoton[icompteur];
 		icouchefi=icouchefibis;
+		
+		#ifdef TEMPS
+		if( idx==0 ){
+			stop=clock();
+			time = (float) __fdividef((stop-start), __int2float_rn(CLOCKS_PER_SEC));
+			
+			printf("(4.2)Temps d'une boucle de calculProfil : %f\n",time);
+		}
+		#endif
    
 	}// Fin boucle while
 	
 	/** Sauvegarde constantes **/
 	// On a maintenant icouchefi = 0 ou NATM
-// 	taumaxph= tointer;//hphoton[icompteur];
-// 	zintermax= zinter; //zphoton[icompteur];
 
 // 	if( zinter>1000.f )
 // 		printf("zinter: %f, rsolfi:%f\n", zinter, rsolfi);
 	
-	ph->zintermax= zinter; 
-	ph->taumax= tointer;
+	ph->zintermax= zphoton[icompteur];
+	ph->taumax= hphoton[icompteur];
 	ph->couche = icouchefi;
 	
 // 		if(idx==0){
@@ -974,11 +910,14 @@ optimisé pour rcoeffA =1 */
 		ph->isurface= 1.f;
 		// 		return;
 	}
+	else{
+	printf("MERDE, pourquoi?????\n");
+	}
 	
 }
 
 // Fonction device qui traite les photons dans l'atmosphère en les faisant avancer
-__device__ void move(Photon* ph, Tableaux tab, float* hphoton, float* zphoton
+__device__ void move(Photon* ph, Tableaux tab, float* hphoton, float* zphoton /*, float* h_s, float* z_s*/
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif
@@ -1993,9 +1932,6 @@ __device__ void scatter(Photon* photon, Tableaux tab
 	float wx, wy, wz, vx, vy, vz;
 	
 	photon->locPrec=photon->loc;
-// 	while( (tab.h[icouche] < (tauBis)) && icouche<NATM )
-// 	while( (tabCouche_s[icouche] < (tauBis)) && icouche<NATM )
-// 			icouche++;
 	
 	psi = RAND * DEUXPI; //psiPhoton
 	cPsi = __cosf(psi); //cosPsiPhoton
@@ -2057,72 +1993,4 @@ __device__ void scatter(Photon* photon, Tableaux tab
 	}
 	#endif
 }
-
-
-// // Calcul du point d'impact dans l'entrée de l'atmosphère
-// __device__ void impact(Photon* ph, Tableaux tab
-// 			#ifdef TRAJET
-// 			, int idx, Evnt* evnt
-// 			#endif
-// 			){
-// 
-// 	float thss, localh;
-// 	float rdelta;
-// 	float xphbis,yphbis,zphbis;	//Coordonnées intermédiaire du photon
-// 	float rsolfi,rsol1,rsol2;
-// 	
-// 	/** Calcul du point d'impact **/
-// // 	thss = abs(acosf(abs(ph->vz)));
-// 	thss = THSDEGd*DEG2RAD;
-// 	
-// 	rdelta = 4.f*RTER*RTER + 4.f*(__tanf(thss)*__tanf(thss)+1.f)*(HATM*HATM+2.f*HATM*RTER);
-// 	localh = __fdividef(-2.f*RTER+sqrtf(rdelta),2.f*(__tanf(thss)*__tanf(thss)+1.f));
-// 	
-// 	ph->x=localh*__tanf(thss);
-// 	ph->y = 0.f;
-// 	ph->z = RTER+localh;	
-// 	
-
-// 	ph->zph[0] = 0.f;
-// 	ph->hph[0] = 0.f;
-// 	
-// 	xphbis = ph->x;
-// 	yphbis = ph->y;
-// 	zphbis = ph->z;
-// 	
-// 	/** Création hphoton et zphoton, chemin optique entre sommet atmosphère et sol pour la direction d'incidence **/
-// 	for(int icouche=1; icouche<NATM+1; icouche++){
-// 		
-// 		rdelta = 4.f*(ph->vx*xphbis+ph->vy*yphbis+ph->vz*zphbis)*(ph->vx*xphbis+ph->vy*yphbis+ph->vz*zphbis)
-// 				- 4.f*(xphbis*xphbis + yphbis*yphbis + zphbis*zphbis - (tab.z[icouche]+RTER)*(tab.z[icouche]+RTER));
-// 		rsol1 = 0.5f*(-2.f*(ph->vx*xphbis+ph->vy*yphbis+ph->vz*zphbis)+sqrtf(rdelta));
-// 		rsol2 = 0.5f*(-2.f*(ph->vx*xphbis+ph->vy*yphbis+ph->vz*zphbis)-sqrtf(rdelta));
-// 		
-// 		// Il faut choisir la plus petite distance en faisant attention qu'elle soit positive
-// 		if(rsol1>0.f){
-// 			if( rsol2>0.f)
-// 				rsolfi = fmin(rsol1,rsol2);
-// 			else
-// 				rsolfi = rsol1;
-// 		}
-// 		else{
-// 			if( rsol2>0.f )
-// 				rsolfi=rsol1;
-// 		}
-// 		
-
-// 		ph->zph[icouche] = ph->zph[icouche-1] + rsolfi;
-// 		ph->hph[icouche] = ph->hph[icouche-1] + 
-// 					__fdividef(abs(tab.h[icouche]-tab.h[icouche-1])*rsolfi,abs(tab.z[icouche-1]-tab.z[icouche]));	
-// 	
-// 		xphbis+= ph->vx*rsolfi;
-// 		yphbis+= ph->vy*rsolfi;
-// 		zphbis+= ph->vz*rsolfi;
-// 		
-// 	}
-// 	
-// 		ph->taumax = ph->hph[NATM];
-// 		ph->zintermax = ph->zph[NATM];
-// 		
-// }
 
