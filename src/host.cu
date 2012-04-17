@@ -321,6 +321,49 @@ void definirSimulation( char* s){
 		sprintf(s,"SIM=%d",SIM);
 }
 
+
+// Fonction qui vérifie l'état des fichiers temoin et résultats
+void verifierFichier(){
+	char command[256];
+	char res_supp;
+	// S'il existe déjà un fichier nommé NOMRESULTATSHDF (Parametres.txt) on arrête le programme
+	FILE* fic;
+	fic = fopen(PATHTEMOINHDF, "rb");
+	if ( fic != NULL)
+	{
+		printf("ATTENTION: Le fichier temoin %s existe deja.\n",PATHTEMOINHDF);
+		printf("Voulez-vous le supprimer? [y/n]\n");
+		res_supp=getchar();
+		if( res_supp=='y' ){
+			sprintf(command,"rm %s",PATHTEMOINHDF);
+			system(command);
+		}
+		else{
+		}
+		getchar();
+		fclose(fic);
+	}
+	
+	
+	fic = fopen(PATHRESULTATSHDF, "rb");
+	if ( fic != NULL)
+	{
+		printf("ATTENTION: Le fichier resultat %s existe deja.\n",PATHRESULTATSHDF);
+		printf("Voulez-vous le supprimer pour continuer? [y/n]\n");
+		// 		res_supp=getchar();
+		// 		if( res_supp=='y' ){
+//    sprintf(command,"rm %s",PATHRESULTATSHDF);
+//    system(command);
+   // 		}
+   // 		else{
+	   // 		}
+	   fclose(fic);
+	}
+	
+	
+}
+
+
 // Fonction qui cherche nomConstante dans le fichier et met la valeur de la constante dans chaineValeur (en string)
 void chercheConstante(FILE* fichier, char* nomConstante, char* chaineValeur)
 {
@@ -589,33 +632,33 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	}
 	
 	// Modèle de l'atmosphère
-	tab_H->h =  (float*)malloc((NATM+1)*sizeof(float));
+	tab_H->h =  (double*)malloc((NATM+1)*sizeof(*(tab_H->h)));
 	if( tab_H->h == NULL ){
 		printf("ERREUR: Problème de malloc de tab_H->h dans initTableaux\n");
 		exit(1);
 	}
-	memset(tab_H->h,0,(NATM+1)*sizeof(float) );
+	memset(tab_H->h,0,(NATM+1)*sizeof(*(tab_H->h)) );
 	
-	if( cudaMalloc( &(tab_D->h), (NATM+1)*sizeof(float) ) == cudaErrorMemoryAllocation ){
+	if( cudaMalloc( &(tab_D->h), (NATM+1)*sizeof(*(tab_H->h)) ) == cudaErrorMemoryAllocation ){
 		printf("ERREUR: Problème de cudaMalloc de tab_D->h dans initTableaux\n");
 		exit(1);	
 	}
 	
 	// Altitude des couches
-	tab_H->z =  (float*)malloc((NATM+1)*sizeof(float));
+	tab_H->z =  (double*)malloc((NATM+1)*sizeof(*(tab_H->z)));
 	if( tab_H->z == NULL ){
 		printf("ERREUR: Problème de malloc de tab_H->z dans initTableaux\n");
 		exit(1);
 	}
-	memset(tab_H->z,0,(NATM+1)*sizeof(float) );
+	memset(tab_H->z,0,(NATM+1)*sizeof(*(tab_H->z)) );
 	
-	if( cudaMalloc( &(tab_D->z), (NATM+1)*sizeof(float) ) == cudaErrorMemoryAllocation ){
+	if( cudaMalloc( &(tab_D->z), (NATM+1)*sizeof(*(tab_H->z)) ) == cudaErrorMemoryAllocation ){
 		printf("ERREUR: Problème de cudaMalloc de tab_D->z dans initTableaux\n");
 		exit(1);	
 	}
 	
-	// Profil vu par le photon
-	tab_H->zph0 =  (float*)malloc((NATM+1)*sizeof(*(tab_H->zph0)));
+	// Profil initial vu par le photon
+	tab_H->zph0 =  (double*)malloc((NATM+1)*sizeof(*(tab_H->zph0)));
 	if( tab_H->zph0 == NULL ){
 		printf("ERREUR: Problème de malloc de tab_H->zph0 dans initTableaux\n");
 		exit(1);
@@ -627,7 +670,7 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 		exit(1);	
 	}
 	
-	tab_H->hph0 =  (float*)malloc((NATM+1)*sizeof(*(tab_H->hph0)));
+	tab_H->hph0 =  (double*)malloc((NATM+1)*sizeof(*(tab_H->hph0)));
 	if( tab_H->hph0 == NULL ){
 		printf("ERREUR: Problème de malloc de tab_H->hph0 dans initTableaux\n");
 		exit(1);
@@ -769,46 +812,6 @@ void reinitVariables(Variables* var_H, Variables* var_D)
 	}
 }
 
-// Fonction qui vérifie l'état des fichiers temoin et résultats
-void verifierFichier(){
-	char command[256];
-	char res_supp;
-	// S'il existe déjà un fichier nommé NOMRESULTATSHDF (Parametres.txt) on arrête le programme
-	FILE* fic;
-	fic = fopen(PATHTEMOINHDF, "rb");
-	if ( fic != NULL)
-	{
-		printf("ATTENTION: Le fichier temoin %s existe deja.\n",PATHTEMOINHDF);
-		printf("Voulez-vous le supprimer? [y/n]\n");
-// 		res_supp=getchar();
-// 		if( res_supp=='y' ){
-			sprintf(command,"rm %s",PATHTEMOINHDF);
-			system(command);
-// 		}
-// 		else{
-// 		}
-// 		getchar();
-		fclose(fic);
-	}
-	
-	
-	fic = fopen(PATHRESULTATSHDF, "rb");
-	if ( fic != NULL)
-	{
-		printf("ATTENTION: Le fichier resultat %s existe deja.\n",PATHRESULTATSHDF);
-		printf("Voulez-vous le supprimer pour continuer? [y/n]\n");
-// 		res_supp=getchar();
-// 		if( res_supp=='y' ){
-			sprintf(command,"rm %s",PATHRESULTATSHDF);
-			system(command);
-// 		}
-// 		else{
-// 		}
-		fclose(fic);
-	}
-	
-	
-}
 
 // Fonction qui calcule pour chaque l'aire normalisée de chaque boite, son theta, et son psi, sous forme de 3 tableaux
 void calculOmega(float* tabTh, float* tabPhi, float* tabOmega)
@@ -876,11 +879,11 @@ void calculTabFinal(float* tabFinal, float* tabTh, float* tabPhi, float* tabPhot
 		for(int ith = 0; ith < NBTHETA; ith++)
 		{
 			// Reflectance
-			tabFinal[0*NBTHETA*NBPHI + iphi*NBTHETA+ith] = 
+			tabFinal[0*NBTHETA*NBPHI + iphi*NBTHETA+ith] =
 				(tabPhotonsTot[0*NBPHI*NBTHETA+ith*NBPHI+iphi] + tabPhotonsTot[1*NBPHI*NBTHETA+ith*NBPHI+iphi]) / 
 				(2* nbPhotonsTot * tabOmega[ith*NBPHI+iphi]* cosf(tabTh[ith]));
 			
-			tabFinal[1*NBTHETA*NBPHI + iphi*NBTHETA+ith] = 
+			tabFinal[1*NBTHETA*NBPHI + iphi*NBTHETA+ith] =
 				(tabPhotonsTot[0*NBPHI*NBTHETA+ith*NBPHI+iphi] - tabPhotonsTot[1*NBPHI*NBTHETA+ith*NBPHI+iphi]) / 
 				(2* nbPhotonsTot * tabOmega[ith*NBPHI+iphi] * cosf(tabTh[ith]));
 				
@@ -895,7 +898,7 @@ void calculTabFinal(float* tabFinal, float* tabTh, float* tabPhi, float* tabPhot
 void afficheParametres()
 {
 	printf("\n#--------- Paramètres de simulation --------#\n");
-	printf(" NBPHOTONS =\t%u", NBPHOTONS);
+	printf(" NBPHOTONS =\t%llu", NBPHOTONS);
 	printf("\n");
 	printf(" NBTHETA =\t%d", NBTHETA);
 	printf("\n");
@@ -969,6 +972,14 @@ void afficheParametres()
 	printf("\n");
 	printf(" PATHPROFILATM = %s", PATHPROFILATM);
 	printf("\n");
+	
+	// Calcul la date et l'heure courante
+	time_t dateTime = time(NULL);
+	struct tm* date = localtime(&dateTime);
+	printf("\n  Date de début  : %02u/%02u/%04u %02u:%02u:%02u\n", date->tm_mday, date->tm_mon+1, 1900 + date->tm_year,
+		   date->tm_hour, date->tm_min, date->tm_sec);
+
+	
 }
 
 // Fonction qui affiche la progression de la simulation
@@ -1033,8 +1044,8 @@ void afficheTrajet(Evnt* evnt_H)
 			printf("surf : ");
 		else if(evnt_H[i].action != 5)
 		{
-			printf("\nERREUR : host afficheTrajet\n");
-			exit(1);
+			printf("\nERREUR : host afficheTrajet: Aucun trajet a afficher\n");
+			return;
 		}
 		else printf("exit : ");
 		printf("tau=%10.9f ", evnt_H[i].tau);
@@ -1985,7 +1996,7 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 
 			// Extraction des informations
 			for( icouche=0; icouche<NATM+1; icouche++ ){
-				fscanf(profil, "%d\t%f\t%f\t%f\t%f\t%f\t%f", &i, tab_H->z+icouche, &garbage, &garbage, tab_H->h+icouche,
+				fscanf(profil, "%d\t%lf\t%f\t%f\t%lf\t%f\t%f", &i, tab_H->z+icouche, &garbage, &garbage, tab_H->h+icouche,
 &garbage,tab_H->pMol+icouche );
 			
 			}
@@ -1999,21 +2010,21 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 	
 	
 		/** Envoie des informations dans le device **/
-		erreur = cudaMemcpy(tab_D->h, tab_H->h, (NATM+1)*sizeof(float), cudaMemcpyHostToDevice);
+		erreur = cudaMemcpy(tab_D->h, tab_H->h, (NATM+1)*sizeof(*(tab_H->h)), cudaMemcpyHostToDevice);
 		if( erreur != cudaSuccess ){
 			printf( "ERREUR: Problème de copie tab_D->h dans profilAtm\n");
 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
 			exit(1);
 		}
 		
-		erreur = cudaMemcpy(tab_D->pMol, tab_H->pMol, (NATM+1)*sizeof(float), cudaMemcpyHostToDevice);
+		erreur = cudaMemcpy(tab_D->pMol, tab_H->pMol, (NATM+1)*sizeof(*(tab_H->pMol)), cudaMemcpyHostToDevice);
 		if( erreur != cudaSuccess ){
 			printf( "ERREUR: Problème de copie tab_D->pMol dans profilAtm\n");
 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
 			exit(1);
 		}	
 		
-		erreur = cudaMemcpy(tab_D->z, tab_H->z, (NATM+1)*sizeof(float), cudaMemcpyHostToDevice);
+		erreur = cudaMemcpy(tab_D->z, tab_H->z, (NATM+1)*sizeof(*(tab_H->z)), cudaMemcpyHostToDevice);
 		if( erreur != cudaSuccess ){
 			printf( "ERREUR: Problème de copie tab_D->z dans profilAtm\n");
 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
@@ -2038,11 +2049,13 @@ void verificationAtm( Tableaux tab_H ){
 	// Vérification du modèle
 	FILE* fichier = fopen("./test/modele_atm_cuda.txt", "w+");
 	
-	fprintf( fichier, "couche\tz\tpropMol\tTauCouche\n" );
+	fprintf( fichier, "couche\tz\tpropMol\th\n" );
 	
 	for( int i=0; i<NATM+1; i++){
 		fprintf(fichier, "%d\t%10.8f\t%10.8f\t%10.8f\n",i,tab_H.z[i],tab_H.pMol[i], tab_H.h[i]);
 	}
+	
+	fprintf( fichier, "couche\tz\tpropMol\th\n" );
 	
 	fclose(fichier);
 }
@@ -2050,29 +2063,29 @@ void verificationAtm( Tableaux tab_H ){
 
 void impactInit(Init* init_H, Init* init_D, Tableaux* tab_H, Tableaux* tab_D){
 	
-	float thss, localh;
-	float rdelta;
-	float xphbis,yphbis,zphbis;	//Coordonnées intermédiaire du photon
-	float rsolfi,rsol1,rsol2;
+	double thss, localh;
+	double rdelta;
+	double xphbis,yphbis,zphbis;	//Coordonnées intermédiaire du photon
+	double rsolfi,rsol1,rsol2;
 	
 	// Correspond aux paramètres initiaux du photon
-	float vx = -sin(THSDEG*DEG2RAD);
-	float vy = 0.f;
-	float vz = -cos(THSDEG*DEG2RAD);
+	double vx = -sin(THSDEG*DEG2RAD);
+	double vy = 0.;
+	double vz = -cos(THSDEG*DEG2RAD);
 	
 	/** Calcul du point d'impact **/
 	// 	thss = abs(acosf(abs(vz)));
 	thss = THSDEG*DEG2RAD;
 	
-	rdelta = 4.f*RTER*RTER + 4.f*(tan(thss)*tan(thss)+1.f)*(HATM*HATM+2.f*HATM*RTER);
-	localh = (-2.f*RTER+sqrt(rdelta))/(2.f*(tan(thss)*tan(thss)+1.f));
+	rdelta = 4.*RTER*RTER + 4.*( tan(thss)*tan(thss)+1. )*( HATM*HATM + 2.*HATM*RTER );
+	localh = ( -2.*RTER+sqrt(rdelta) )/( 2.*(tan(thss)*tan(thss)+1.) );
 	
-	init_H->x0=localh*tan(thss);
-	init_H->y0 = 0.f;
-	init_H->z0 = RTER+localh;	
+	init_H->x0 = localh*tan(thss);
+	init_H->y0 = 0.;
+	init_H->z0 = RTER + localh;	
 	
-	tab_H->zph0[0] = 0.f;
-	tab_H->hph0[0] = 0.f;
+	tab_H->zph0[0] = 0.;
+	tab_H->hph0[0] = 0.;
 	
 	xphbis = init_H->x0;
 	yphbis = init_H->y0;
@@ -2081,26 +2094,27 @@ void impactInit(Init* init_H, Init* init_D, Tableaux* tab_H, Tableaux* tab_D){
 	/** Création hphoton et zphoton, chemin optique entre sommet atmosphère et sol pour la direction d'incidence **/
 	for(int icouche=1; icouche<NATM+1; icouche++){
 		
-		rdelta = 4.f*(vx*xphbis + vy*yphbis + vz*zphbis)*(vx*xphbis + vy*yphbis + vz*zphbis)
-			- 4.f*(xphbis*xphbis + yphbis*yphbis + zphbis*zphbis - (tab_H->z[icouche]+RTER)*(tab_H->z[icouche]+RTER));
-		rsol1 = 0.5f*(-2.f*(vx*xphbis + vy*yphbis + vz*zphbis)+sqrt(rdelta));
-		rsol2 = 0.5f*(-2.f*(vx*xphbis + vy*yphbis + vz*zphbis)-sqrt(rdelta));
+		rdelta = 4.*(vx*xphbis + vy*yphbis + vz*zphbis)*(vx*xphbis + vy*yphbis + vz*zphbis)
+			- 4.*(xphbis*xphbis + yphbis*yphbis + zphbis*zphbis - ((double)tab_H->z[icouche]+RTER)*((double)tab_H->z[icouche]+RTER));
+		rsol1 = 0.5*( -2.*(vx*xphbis + vy*yphbis + vz*zphbis) + sqrt(rdelta) );
+		rsol2 = 0.5*( -2.*(vx*xphbis + vy*yphbis + vz*zphbis) - sqrt(rdelta) );
 		
 		// Il faut choisir la plus petite distance en faisant attention qu'elle soit positive
-		if(rsol1>0.f){
-			if( rsol2>0.f)
-				rsolfi = fmin(rsol1,rsol2);
+		if(rsol1>0.){
+			if( rsol2>0.)
+				rsolfi = min(rsol1,rsol2);
 			else
 				rsolfi = rsol1;
 		}
 		else{
-			if( rsol2>0.f )
+			if( rsol2>0. )
 				rsolfi=rsol1;
 		}
 		
 		tab_H->zph0[icouche] = tab_H->zph0[icouche-1] + rsolfi;
 		tab_H->hph0[icouche] = tab_H->hph0[icouche-1] + 
-				(abs(tab_H->h[icouche]-tab_H->h[icouche-1])*rsolfi)/(abs(tab_H->z[icouche-1]-tab_H->z[icouche]));
+				( abs( (double)tab_H->h[icouche] - (double)tab_H->h[icouche-1])*rsolfi )/
+				( abs( (double)tab_H->z[icouche-1] - (double)tab_H->z[icouche]) );
 		
 		xphbis+= vx*rsolfi;
 		yphbis+= vy*rsolfi;

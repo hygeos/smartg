@@ -4,14 +4,15 @@
         ###############################
 
 # Nombre de photons a lancer (unsigned long long) (limite par le tableau du poids des photons en unsigned long long)
-NBPHOTONS = 12000000
+#NBPHOTONS = 1000000000
+NBPHOTONS = 100000000
 
 # Nombre de boucles dans le kernel (unsigned int) (limite par watchdog, il faut tuer X)
 # ancien 18000
-NBLOOP = 7000
+NBLOOP = 100
 
 # Angle zenithal solaire en degrés (float)
-THSDEG = 30.
+THSDEG = 70.
 
 # Graine avec laquelle on initialise les generateurs aleatoires (int)
 	# si SEED est positif on l'utilise comme graine (cela permet d'avoir les memes nombres aleatoires d'une simulation a l'autre, et donc une meme simulation)
@@ -20,11 +21,11 @@ SEED = -1
 
 # Les threads sont rangés dans des blocks de taille XBLOCK*YBLOCK (limite par watchdog il faut tuer X + limite XBLOCK*YBLOCK =< 256 ou 512)
 #256 avant
-XBLOCK = 54
+XBLOCK = 256
 YBLOCK = 1
 # et les blocks sont eux-même rangés dans un grid de taille XGRID*YGRID (limite par watchdog il faut tuer X + limite XGRID<65535 et YGRID<65535)
 #84 avant
-XGRID = 35 
+XGRID =84
 YGRID = 1
 
 # Le demi-espace dans lequel on récupère les photons est divisé en boites
@@ -110,7 +111,7 @@ DIFFF = 0
 PATHRESULTATSHDF = validation/SPHERIQUE
 
 # Chemin du fichier témoin (Le .hdf et les détails de la simulation sont ajoutés par le programme automatiquement)
-#PATHTEMOINHDF = validation
+#PATHTEMOINHDF = validation/SPHERIQUE/
 
 # Chemin du modèle de diffusion aérosol
 PATHDIFFAER = /home/florent/MCCuda/fic/valid_T70.443

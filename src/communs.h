@@ -52,7 +52,7 @@
 //6.283 185 307 17F
 #define DEMIPI 1.5707963F
 //1.570 796 326 79F
-#define DEG2RAD 0.017453F
+#define DEG2RAD 0.017453293F
 //0.017453293
 // Détecte les photons très proches du zenith
 #define VALMIN 0.000001F
@@ -167,17 +167,20 @@ typedef struct __align__(16)
 // 	float stokes4;
 	
 	// Position cartésienne du photon
-	float x;
-	float y;
-	float z;
+	double x;
+	double y;
+	double z;
+// 	float z_p;
 	
 	// Profil vu par le photon
-// 	float* hph;
-// 	float* zph;
+	double hph;
+	double hph_p;	// hphoton de la couche précédente
+	double zph;
+	double zph_p;	// zphoton de la couche précédente
 	
 	// Parametres initiaux
-	float taumax;
-	float zintermax;
+	double taumax;
+	double zintermax;
 // 	float x0;
 // 	float y0;
 // 	float z0;
@@ -221,13 +224,13 @@ typedef struct __align__(16)
 	float* tabPhotons;
 	
 	float* faer;		// Pointeur vers le modèle de diffusion des aérosols
-	float* h;	// Pointeur vers l'épaisseur optique de chaque couche du modèle atmosphérique
+	double* h;	// Pointeur vers l'épaisseur optique de chaque couche du modèle atmosphérique
 	float* pMol;		// Pointeur vers le pourcentage de molécules dans chaque couche du modèle atmosphérique
-	float* z;			// Altitude de chaque couche
+	double* z;			// Altitude de chaque couche
 	
 	// Profil atmosphérique initial vu par la photon
-	float* hph0;
-	float* zph0;
+	double* hph0;
+	double* zph0;
 	
 	#ifdef SORTIEINT
 	float* poids;
@@ -251,13 +254,13 @@ typedef struct __align__(16)
 typedef struct __align__(16){
 	
 	// Coordonnées initiales
-	float x0;
-	float y0;
-	float z0;
+	double x0;
+	double y0;
+	double z0;
 	
 	// Tau et z init
-	float taumax0;
-	float zintermax0;
+	double taumax0;
+	double zintermax0;
 		
 } Init;
 

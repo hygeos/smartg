@@ -15,12 +15,27 @@
 // Fonction principale
 int main (int argc, char *argv[])
 {
-	cudaDeviceReset();
-// 	cudaSetDevice(0);
-
 
 	/** Variables du main **/
 	cudaError_t cudaErreur;	// Permet de vérifier les allocations mémoires
+	
+	/** Initialisation de la carte graphique **/
+	//
+	cudaDeviceReset();
+	// 	cudaSetDevice(0);
+	
+	// Préférer utiliser plus de mémoire cache que de shared memory
+	cudaErreur = cudaFuncSetCacheConfig (lancementKernel,  cudaFuncCachePreferL1);
+	if( cudaErreur != cudaSuccess ){
+		printf("#--------------------#\n");
+		printf("# ERREUR: Problème cuFuncSetCacheConfig dans le main\n");
+		printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+		printf("#--------------------#\n");
+		exit(1);
+	}
+	
+
+
 
 	/** Initialisation des constantes du host (en partie recuperees dans le fichier Parametres.txt) **/
 	initConstantesHost(argc, argv);
@@ -136,10 +151,10 @@ int main (int argc, char *argv[])
 	/** Calcul du point d'impact du photon **/
 	impactInit(init_H, init_D, &tab_H, &tab_D);
 // 	
-// 	printf("Paramètres initiaux du photon: taumax0=%f - zintermax=%f - (%f,%f,%f)\n",
-// 		   init_H->taumax0, init_H->zintermax0, init_H->x0, init_H->y0, init_H->z0 );
+	printf("Paramètres initiaux du photon: taumax0=%lf - zintermax=%lf - (%lf,%lf,%lf)\n",
+		   init_H->taumax0, init_H->zintermax0, init_H->x0, init_H->y0, init_H->z0 );
 // 	for(int i=0; i<NATM+1; i++)
-// 		printf("zph[%i]=%f - hph[%d]=%e\n",i, tab_H.zph0[i], i ,tab_H.hph0[i] );
+// 		printf("zph[%i]=%10.7lf - hph[%d]=%10.7e\n",i, tab_H.zph0[i], i ,tab_H.hph0[i] );
 	
 	/** Fonction qui permet de poursuivre la simulation précédente si elle n'est pas terminee **/
 	double tempsPrec = 0.; //temps ecoule de la simulation precedente

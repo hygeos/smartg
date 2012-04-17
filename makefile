@@ -25,15 +25,15 @@ LFLAGS += -lcuda -lcudart
 DFLAGS =
 DFLAGS += -DPARAMETRES # Affichage des parametres initiaux
 DFLAGS += -DRANDMWC 	# Utilisation du random MWC (Multiply-With-Carry)
-#DFLAGS += -DRANDCUDA	# Utilisation du random CUDA (Fonction fournie par cuda)
+# DFLAGS += -DRANDCUDA	# Utilisation du random CUDA (Fonction fournie par cuda)
 # DFLAGS += -DRANDMT	# Utilisation du random MT (Mersenne Twister)
 
 #=============Debogage===========#
 DFLAGS += -DPROGRESSION # Calcul et affichage de la progression de la simulation
 DFLAGS += -DTRAJET # Calcul et affichage des premiers evenements d'un thread
-DFLAGS += -DTEMPS # Affichage du temps passé dans chaque fonctions pour un thread
+# DFLAGS += -DTEMPS # Affichage du temps passé dans chaque fonctions pour un thread
 # DFLAGS += -DTABRAND # Affichage des premiers nombre aleatoires generes
-#DFLAGS += -DSORTIEINT # Sauvegarde des poids élevés, du nombre de photons par cases
+# DFLAGS += -DSORTIEINT # Sauvegarde des poids élevés, du nombre de photons par cases
 
 #####################################################################################
 
@@ -52,7 +52,7 @@ obj/device.o: src/device.cu src/device.h src/communs.h
 	$(CC) -c $< $(CFLAGS) $(IFLAGS) $(DFLAGS) -o $@
 
 clean:
-	rm -f obj/* src/*~ *~
+	rm -f obj/* src/*~ *~ ./Prog
 
 mrproper: clean
 	rm -rf tmp/* out_prog/* out_scripts/* $(EXEC)

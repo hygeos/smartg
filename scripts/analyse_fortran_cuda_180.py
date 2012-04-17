@@ -19,12 +19,12 @@ import struct
 #
 #-----------------------------------------------------------------------------------------------------------------------
 type_simu = "molecules_seules"
-date_simu = "28032012"
-angle = "30"
+date_simu = "17042012"
+angle = "70"
 # Nom du fichier Cuda sans extension .hdf
-nom_cuda = "out_CUDA_atmos_ths=30.00_tRay=0.0533_tAer=0.0000"
+nom_cuda = "out_CUDA_atmos_ths=70.00_tRay=0.0533_tAer=0.0000"
 # Nom du fichier Fortran sans l'extension .bin.gz
-nom_fortran = "out.ran=7000.wav=443.ths=30.000.tr=0.0533.ta=0.0000.pi0=0.967.H=002.000"
+nom_fortran = "out.ran=7666.wav=443.ths=70.000.tr=0.0533.ta=0.0000.pi0=0.967.H=002.000"
 
 
 # Indices ci-dessus ont été mis en place car ils permettent de rogner la simulation si nécessaire.
@@ -76,6 +76,7 @@ path_fortran = "/home/florent/MCCuda/validation/SPHERIQUE/"+type_simu+"/simulati
 
 # Nom complet du fichier Cuda
 path_cuda = "/home/florent/MCCuda/validation/SPHERIQUE/"+type_simu+"/simulation_"+date_simu+"/" + nom_cuda + ".hdf"
+#path_cuda = "/home/florent/MCCuda/validation/SPHERIQUE/test/"+nom_cuda
 
 # Si le dossier suivant existe deja il est supprime puis recree
 path_dossier_sortie = \
