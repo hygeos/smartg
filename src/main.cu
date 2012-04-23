@@ -125,6 +125,8 @@ int main (int argc, char *argv[])
 		printf("ERREUR: Problème de malloc de tabPhotonsTot dans le main\n");
 		exit(1);
 	}
+	
+	memset(tabPhotonsTot,0,4*NBTHETA*NBPHI*sizeof(*(tabPhotonsTot)));
 
 	#ifdef TABRAND
 	// DEBUG Recuperations des nombres aleatoires du random en place
@@ -150,11 +152,13 @@ int main (int argc, char *argv[])
 	
 	/** Calcul du point d'impact du photon **/
 	impactInit(init_H, init_D, &tab_H, &tab_D);
-// 	
-	printf("Paramètres initiaux du photon: taumax0=%lf - zintermax=%lf - (%lf,%lf,%lf)\n",
+
+	#ifdef DEBUG
+	printf("Paramètres initiaux du photon: taumax0=%lf - zintermax=%lf - (%lf,%lf,%lf)\n",\
 		   init_H->taumax0, init_H->zintermax0, init_H->x0, init_H->y0, init_H->z0 );
-// 	for(int i=0; i<NATM+1; i++)
-// 		printf("zph[%i]=%10.7lf - hph[%d]=%10.7e\n",i, tab_H.zph0[i], i ,tab_H.hph0[i] );
+	for(int i=0; i<NATM+1; i++)
+		printf("zph[%i]=%10.7lf - hph[%d]=%10.7e\n",i, tab_H.zph0[i], i ,tab_H.hph0[i] );
+	#endif
 	
 	/** Fonction qui permet de poursuivre la simulation précédente si elle n'est pas terminee **/
 	double tempsPrec = 0.; //temps ecoule de la simulation precedente
@@ -409,8 +413,8 @@ cudaMemcpyDeviceToHost);
 		exit(1);
 	}
 	
-	for(int i = 0; i < 4*NBTHETA*NBPHI; i++)
-		tabPhotonsTot[i] += tab_H.tabPhotons[i];
+// 	for(int i = 0; i < 4*NBTHETA*NBPHI; i++)
+// 		tabPhotonsTot[i] += tab_H.tabPhotons[i];
 	
 	/** Création et calcul du tableau final (regroupant le poids de tous les photons ressortis sur une demi-sphère, par unité de surface) **/
 	float tabFinal[3*NBTHETA * NBPHI]; //tableau final

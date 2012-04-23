@@ -65,7 +65,7 @@
 #define NONE		4
 
 // Constante pour le calcul du profil de l'atmosphère (Nombre de couches)
-#define NATM 103
+// #define NATM 5
 #define NFAER_c 1000000
 
 // Constantes propres au calcul sphérique
@@ -130,6 +130,7 @@ extern float HA;
 extern float HR;
 extern float ZMIN;
 extern float ZMAX;
+extern int NATM;
 extern float WINDSPEED;
 extern float NH2O;
 extern float CONPHY;
@@ -170,17 +171,10 @@ typedef struct __align__(16)
 	double x;
 	double y;
 	double z;
-// 	float z_p;
-	
-	// Profil vu par le photon
-	double hph;
-	double hph_p;	// hphoton de la couche précédente
-	double zph;
-	double zph_p;	// zphoton de la couche précédente
 	
 	// Parametres initiaux
 	double taumax;
-	double zintermax;
+// 	double zintermax;
 // 	float x0;
 // 	float y0;
 // 	float z0;

@@ -1,93 +1,375 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
 import os
 import sys
+import warnings
+warnings.simplefilter("ignore",DeprecationWarning)
 import pyhdf.SD
 from pylab import *
 import numpy as np
 
 
 # Fichier qui supperpose les résultats de deux résultats Cuda. 
-# A été utilisé pour vérifier que la base pour un résultat normal ou buggé est la même
 
-	          ##############
-	         # PARAMETRES #
-	        ##############
+##################################################
+##				FICHIERS A LIRE					##
+##################################################
 
-# Nom du fichier hdf à analyser SANS l'extension hdf (A MODIFIER)
-nom_hdf1 = "Resultats_ok"
-# Si le fichier suivant n'existe pas le prog s'arrete
-path_hdf1 = "out_prog/test/" + nom_hdf1 + ".hdf"
+#
+# Paramètres à modifier
+#
+#-----------------------------------------------------------------------------------------------------------------------
+type_simu = "molecules_seules"
+date_simu = "20042012"
+angle = "70"
+# Nom du fichier Cuda sans extension .hdf
+nom_cuda1 = "out_CUDA_1e9_atmos_ths=70.00_tRay=0.0533_tAer=0.0000"
+# Nom du fichier Fortran sans l'extension .bin.gz
+nom_cuda2 = "out_CUDA_1e10_atmos_ths=70.00_tRay=0.0533_tAer=0.0000"
 
-# Nom du fichier hdf à analyser SANS l'extension hdf (A MODIFIER)
-nom_hdf2 = "Resultats_bug"
-# Si le fichier suivant n'existe pas le prog s'arrete
-path_hdf2 = "out_prog/test/" + nom_hdf2 + ".hdf"
+
+# Indices ci-dessus ont été mis en place car ils permettent de rogner la simulation si nécessaire.
+# Les bords peuvent fausser les graphiques.
+dep = 3			# Indice de départ pour le tracé
+fin = 177		# Indice de fin pour le tracé
+pas_figure = 5	# Pas en phi pour le tracé des graphiques
+#-----------------------------------------------------------------------------------------------------------------------
+
+
+######################################################
+##				SELECTION DES DONNEES				##
+######################################################
+
+flag=True
+while flag:
+	print '\n\nQuelles donnees voulez-vous tracer?'
+	#print '1:Reflectance\n2:Q\n3:U\n4:Lumiere polarisee'
+	choix = raw_input('i >pour la reflectance\nq >pour Q\nu >pour U\nl >pour la lumiere polarisee\n')
+	
+	if choix == 'i':
+		nom_data_cuda = "Valeurs de la reflectance (I)"
+		type_donnees = "I"
+		flag=False
+	elif choix == 'q':
+		nom_data_cuda = "Valeurs de Q"
+		type_donnees = "Q"
+		flag=False
+	elif choix == 'u':
+		nom_data_cuda = "Valeurs de U"
+		type_donnees = "U"
+		flag=False
+	elif choix == 'l':
+		nom_data_cuda = "Valeurs de la lumiere polarisee (LP)"
+		type_donnees = "LP"
+		flag=False
+	else:
+			print 'Choix incorrect, recommencez'
+			
+print 'C\'est parti pour la simulation de {0}'.format(type_donnees)
+
+
+######################################################
+##				CHEMIN DES FICHIERS					##
+######################################################
+
+# Nom complet du fichier Fortran
+path_cuda1 = "/home/florent/MCCuda/validation/SPHERIQUE/"+type_simu+"/simulation_"+date_simu+"/"+ nom_cuda1+".hdf"
+
+# Nom complet du fichier Cuda
+path_cuda2 = "/home/florent/MCCuda/validation/SPHERIQUE/"+type_simu+"/simulation_"+date_simu+"/" + nom_cuda2 + ".hdf"
+#path_cuda = "/home/florent/MCCuda/validation/SPHERIQUE/test/"+nom_cuda
 
 # Si le dossier suivant existe deja il est supprime puis recree
-path_dossier_sortie = "out_scripts/analyse_comparaison_cudas/"
-#path_dossier_sortie = "out_prog/bug/"
-	
-			  #######################
-	         # CREATION GRAPHIQUES #
-	        #######################
-dep = 4
-fin = 178
-# verification de l'existence du fichier hdf
-if os.path.exists(path_hdf1) and os.path.exists(path_hdf2):
-	# on vide le dossier de sortie du script
-	#os.system("rm -rf "+path_dossier_sortie)
-	#os.mkdir(path_dossier_sortie)
-	# lecture du fichier hdf
-	sd_hdf1 = pyhdf.SD.SD(path_hdf1)
-	sd_hdf2 = pyhdf.SD.SD(path_hdf2)
+path_dossier_sortie = \
+"/home/florent/MCCuda/validation/SPHERIQUE/"+type_simu+"/graph_"+date_simu+"/"+type_donnees+"/"+type_donnees+"_CUDA_CUDA_"+\
+nom_cuda1
 
+
+##########################################################
+##				DONNEES FICHIER CUDA 1					##
+##########################################################
+
+# verification de l'existence du fichier hdf
+if os.path.exists(path_cuda1):
+	
+	# lecture du fichier hdf
+	sd_cuda1 = pyhdf.SD.SD(path_cuda1)
 	# lecture du nombre de valeurs de phi
-	NBPHI = getattr(sd_hdf1,'NBPHI')
+	NBPHI_cuda = getattr(sd_cuda1,'NBPHI')
+	NBTHETA_cuda = getattr(sd_cuda1,'NBTHETA')
 	
 	# Récupération des valeurs de theta
 	name = "Valeurs de theta echantillonnees"
-	hdf_theta = sd_hdf1.select(name)
+	hdf_theta = sd_cuda1.select(name)
 	theta = hdf_theta.get()
 	
 	# Récupération des valeurs de phi
 	name = "Valeurs de phi echantillonnees"
-	hdf_phi = sd_hdf1.select(name)
-	phi = hdf_phi.get()	
+	hdf_phi = sd_cuda1.select(name)
+	phi = hdf_phi.get()
+	
+	sds_cuda1 = sd_cuda1.select(nom_data_cuda)
+	data1 = sds_cuda1.get()		
+	
+else:
+	sys.stdout.write("Pas de fichier "+path_cuda1+"\n")
+	sys.exit()
 
-	iphi=1
+
+##########################################################
+##				DONNEES FICHIER CUDA 2					##
+##########################################################
+
+# verification de l'existence du fichier hdf
+if os.path.exists(path_cuda2):
+
+	# lecture du fichier hdf
+	sd_cuda2 = pyhdf.SD.SD(path_cuda2)
+
+	sds_cuda2 = sd_cuda2.select(nom_data_cuda)
+	data2 = sds_cuda2.get()		
+	
+else:
+	sys.stdout.write("Pas de fichier "+path_cuda+"\n")
+	sys.exit()
+
+
+##############################################################
+##				INFORMATION A L'UTILISATEUR					##
+##############################################################
+
+sys.stdout.write("\n#-------------------------------------------------------------------------------#\n")
+sys.stdout.write("# Fichier cuda1 -> " + path_cuda1 + "\n")
+sys.stdout.write("# Fichier cuda2 -> " + path_cuda2 + "\n")
+sys.stdout.write("# Résultats stockés dans " + path_dossier_sortie + "\n")
+sys.stdout.write("#-------------------------------------------------------------------------------#\n")
+
+
+os.system("rm -rf "+ path_dossier_sortie)
+os.system("mkdir -p "+ path_dossier_sortie)
+
+
+##################################################################################
+##				CREATION/CHOIX/MODIFICATION DE CERTAINES DONNES					##
+##################################################################################
+
+# Sauvegarde de la grandeur désirée
+data_cuda1 = zeros((NBPHI_cuda, NBTHETA_cuda), dtype=float)
+data_cuda2 = zeros((NBPHI_cuda, NBTHETA_cuda), dtype=float)
+
+data_cuda1 = data1[0:NBPHI_cuda,:]
+data_cuda2 = data2[0:NBPHI_cuda,:]
+
+# Infos en commentaire sur le graph
+commentaire = type_simu + ' - ' + angle
+
+
+##########################################################
+##				CREATION DES GRAPHIQUES					##
+##########################################################
+
+for iphi in xrange(0,NBPHI_cuda,pas_figure):
 		
-	# lecture du dataset
+	# initialisation
 	listePlots = []
 	listeLegends = []
-	
-	name = "Valeur de la reflectance pour un phi et theta donnes"
-	sds_hdf1 = sd_hdf1.select(name)
-	# recuperation du tableau
-	data1 = sds_hdf1.get()
-	
-	sds_hdf2 = sd_hdf2.select(name)
-	# recuperation du tableau
-	data2 = sds_hdf2.get()
-	
-	# creation et sauvegarde du graphique
-	data2_masked = np.zeros(180)
-	data2_masked = np.ma.masked_where(data2[iphi,:] > 0.5 , data2[iphi,:])
-
-	listePlots.append(plot(theta[dep:fin], data1[iphi,dep:fin]))
-	listePlots.append(plot(theta[dep:fin], data2_masked[dep:fin]))
-
-	title("Reflectance en fonction de theta pour phi="+str(phi[iphi])+" deg pour un resultat correct et un bug")
-	xlabel("Theta (deg)")
-	ylabel("Reflectance")
-	grid(True)
-	#savefig(path_dossier_sortie+"/analyse_ths=" + sys.argv[1] +".png", dpi=(140))
-	savefig("out_prog/test/analyse_bug.png", dpi=(140))
 	figure()
+	# cuda1
+	listePlots.append( plot(theta[dep:fin],data_cuda1[iphi][dep:fin]) )
+	listeLegends.append('Cuda1')
+	#cuda2
+	listePlots.append( plot(theta[dep:fin],data_cuda2[iphi][dep:fin]) )
+	listeLegends.append('Cuda2')
 	
+	# commun
+	legend(listePlots, listeLegends, loc='best', numpoints=1)
+	title( type_donnees + ' pour comparaison Cuda pour phi='+str(phi[iphi])+' deg' )
+	xlabel( 'Theta (deg)' )
+	ylabel( type_donnees, rotation='horizontal' )
+	figtext(0.25, 0.7, commentaire+" deg", fontdict=None)
+	figtext(0, 0, "Date: "+date_simu+"\nFichier cuda1: "+nom_cuda1+"\nFichier cuda2: "+nom_cuda2, fontdict=None,
+			size='xx-small')
+	grid(True)
+	savefig( path_dossier_sortie+'/c_'+type_donnees+'_Cuda_Cuda_phi='+str(phi[iphi])+'.png', dpi=(140) )
+	
+	##########################################
+	##				RAPPORT					##
+	##########################################
+	
+	figure()
+	listePlots = []
+	listeLegends = []
+	listePlots.append( plot( theta[dep:fin], data_cuda1[iphi][dep:fin]/data_cuda2[iphi][dep:fin] ) )
+	listeLegends.append('Rapport de '+type_donnees+' Cuda1/Cuda2')
+	
+	#Régression linéaire
+	(ar,br) = polyfit( theta[dep:fin], data_cuda1[iphi][dep:fin]/data_cuda2[iphi][dep:fin] ,1 )
+	regLin = polyval( [ar,br],theta[dep:fin] )
+	
+	listePlots.append( plot(theta[dep:fin], regLin) )
+	listeLegends.append( 'Regression lineaire y='+str(ar)+'x+'+str(br) )
+	legend( listePlots, listeLegends, loc='best', numpoints=1 )
+	
+	title( 'Rapport des '+type_donnees+' Cuda_Cuda pour phi='+str(phi[iphi])+' deg' )
+	xlabel( 'Theta (deg)' )
+	ylabel( 'Rapport des '+type_donnees )
+	figtext(0.4, 0.25, commentaire+" deg", fontdict=None)
+	figtext(0, 0, "Date: "+date_simu+"\nFichier cuda1: "+nom_cuda1+"\nFichier cuda2: "+nom_cuda2, fontdict=None,
+			size='xx-small')
+	grid(True)
+	savefig( path_dossier_sortie+'/rapport_'+type_donnees+'_Cuda_Cuda_phi=' +str(phi[iphi])+'.png', dpi=(140) )
+	
+	##########################################
+	##				DIFFERENCE				##
+	##########################################
+	figure()
+	plot( theta[dep:fin], data_cuda1[iphi][dep:fin]-data_cuda2[iphi][dep:fin] )
+	title( 'Difference des '+type_donnees+ ' Cuda1 - Cuda2 pour phi='+str(phi[iphi])+' deg' )
+	xlabel( 'Theta (deg)' )
+	ylabel( 'Difference des '+type_donnees )
+	figtext(0.4, 0.25, commentaire+" deg", fontdict=None)
+	figtext(0, 0, "Date: "+date_simu+"\nFichier cuda1: "+nom_cuda1+"\nFichier cuda2: "+nom_cuda2, fontdict=None,
+			size='xx-small')
+	grid(True)
+	savefig( path_dossier_sortie+'/difference_'+type_donnees+'_Cuda_Cuda_phi='+str(phi[iphi])+'.png', dpi=(140) )
 
-		
-else:
-	sys.stdout.write("Pas de fichier "+path_hdf1 + "ou" +path_hdf2 +"\n")
-	sys.exit()
+
+
+##########################################################
+##				CREATION FICHIER PARAMETRE				##
+##########################################################
+
+# creation du fichier contenant les parametres de la simulation
+fichierSortie = open(path_dossier_sortie+'/Parametres.txt', 'w')
+
+# Récupération des données de Cuda1
+NBPHOTONS = getattr(sd_cuda1,'NBPHOTONS')
+NBLOOP = getattr(sd_cuda1,'NBLOOP')
+SEED = getattr(sd_cuda1,'SEED')
+XBLOCK = getattr(sd_cuda1,'XBLOCK')
+YBLOCK = getattr(sd_cuda1,'YBLOCK')
+XGRID = getattr(sd_cuda1,'XGRID')
+YGRID = getattr(sd_cuda1,'YGRID')
+NBTHETA = getattr(sd_cuda1,'NBTHETA')
+NBPHI = getattr(sd_cuda1,'NBPHI')
+THSDEG = getattr(sd_cuda1,'THSDEG')
+LAMBDA = getattr(sd_cuda1,'LAMBDA')
+TAURAY = getattr(sd_cuda1,'TAURAY')
+TAUAER = getattr(sd_cuda1,'TAUAER')
+W0AER = getattr(sd_cuda1,'W0AER')
+PROFIL = getattr(sd_cuda1,'PROFIL')
+HA = getattr(sd_cuda1,'HA')
+HR = getattr(sd_cuda1,'HR')
+ZMIN = getattr(sd_cuda1,'ZMIN')
+ZMAX = getattr(sd_cuda1,'ZMAX')
+WINDSPEED = getattr(sd_cuda1,'WINDSPEED')
+NH2O = getattr(sd_cuda1,'NH2O')
+SIM = getattr(sd_cuda1,'SIM')
+SUR = getattr(sd_cuda1,'SUR')
+DIOPTRE = getattr(sd_cuda1,'DIOPTRE')
+CONPHY = getattr(sd_cuda1,'CONPHY')
+DIFFF = getattr(sd_cuda1,'DIFFF')
+PATHRESULTATSHDF = getattr(sd_cuda1,'PATHRESULTATSHDF')
+PATHTEMOINHDF = getattr(sd_cuda1,'PATHTEMOINHDF')
+
+fichierSortie.write('\n\n***Paramètres de Cuda1***\n\n')
+
+# Ecriture dans le fichier
+fichierSortie.write('NBPHOTONS = {0:.2e}\n'.format(NBPHOTONS))
+fichierSortie.write("NBLOOP = " + str(NBLOOP) + "\n")
+fichierSortie.write("SEED = " + str(SEED) + "\n")	
+fichierSortie.write("XBLOCK = " + str(XBLOCK) + "\n")
+fichierSortie.write("YBLOCK = " + str(YBLOCK) + "\n")
+fichierSortie.write("XGRID = " + str(XGRID) + "\n")
+fichierSortie.write("YGRID = " + str(YGRID) + "\n")
+fichierSortie.write("NBTHETA = " + str(NBTHETA) + "\n")
+fichierSortie.write("NBPHI = " + str(NBPHI) + "\n")
+fichierSortie.write("THSDEG = " + str(THSDEG) + "\n")
+fichierSortie.write("LAMBDA = " + str(LAMBDA) + "\n")
+fichierSortie.write("TAURAY = " + str(TAURAY) + "\n")
+fichierSortie.write("TAUAER = " + str(TAUAER) + "\n")
+fichierSortie.write("W0AER = " + str(W0AER) + "\n")
+fichierSortie.write("PROFIL = " + str(PROFIL) + "\n")
+fichierSortie.write("HA = " + str(HA) + "\n")
+fichierSortie.write("HR = " + str(HR) + "\n")
+fichierSortie.write("ZMIN = " + str(ZMIN) + "\n")
+fichierSortie.write("ZMAX = " + str(ZMAX) + "\n")
+fichierSortie.write("WINDSPEED = " + str(WINDSPEED) + "\n")
+fichierSortie.write("NH2O = " + str(NH2O) + "\n")
+fichierSortie.write("SIM = " + str(SIM) + "\n")
+fichierSortie.write("SUR = " + str(NBPHOTONS) + "\n")
+fichierSortie.write("DIOPTRE = " + str(DIOPTRE) + "\n")
+fichierSortie.write("CONPHY = " + str(CONPHY) + "\n")
+fichierSortie.write("DIFFF = " + str(DIFFF) + "\n")
+fichierSortie.write("PATHRESULTATSHDF = " + str(PATHRESULTATSHDF) + "\n")
+fichierSortie.write("PATHTEMOINHDF = " + str(PATHTEMOINHDF) + "\n")
+
+
+
+# Récupération des données de Cuda2
+NBPHOTONS = getattr(sd_cuda2,'NBPHOTONS')
+NBLOOP = getattr(sd_cuda2,'NBLOOP')
+SEED = getattr(sd_cuda2,'SEED')
+XBLOCK = getattr(sd_cuda2,'XBLOCK')
+YBLOCK = getattr(sd_cuda2,'YBLOCK')
+XGRID = getattr(sd_cuda2,'XGRID')
+YGRID = getattr(sd_cuda2,'YGRID')
+NBTHETA = getattr(sd_cuda2,'NBTHETA')
+NBPHI = getattr(sd_cuda2,'NBPHI')
+THSDEG = getattr(sd_cuda2,'THSDEG')
+LAMBDA = getattr(sd_cuda2,'LAMBDA')
+TAURAY = getattr(sd_cuda2,'TAURAY')
+TAUAER = getattr(sd_cuda2,'TAUAER')
+W0AER = getattr(sd_cuda2,'W0AER')
+PROFIL = getattr(sd_cuda2,'PROFIL')
+HA = getattr(sd_cuda2,'HA')
+HR = getattr(sd_cuda2,'HR')
+ZMIN = getattr(sd_cuda2,'ZMIN')
+ZMAX = getattr(sd_cuda2,'ZMAX')
+WINDSPEED = getattr(sd_cuda2,'WINDSPEED')
+NH2O = getattr(sd_cuda2,'NH2O')
+SIM = getattr(sd_cuda2,'SIM')
+SUR = getattr(sd_cuda2,'SUR')
+DIOPTRE = getattr(sd_cuda2,'DIOPTRE')
+CONPHY = getattr(sd_cuda2,'CONPHY')
+DIFFF = getattr(sd_cuda2,'DIFFF')
+PATHRESULTATSHDF = getattr(sd_cuda2,'PATHRESULTATSHDF')
+PATHTEMOINHDF = getattr(sd_cuda2,'PATHTEMOINHDF')
+
+fichierSortie.write('\n\n***Paramètres de Cuda2***\n\n')
+
+# Ecriture dans le fichier
+fichierSortie.write('NBPHOTONS = {0:.2e}\n'.format(NBPHOTONS))
+fichierSortie.write("NBLOOP = " + str(NBLOOP) + "\n")
+fichierSortie.write("SEED = " + str(SEED) + "\n")	
+fichierSortie.write("XBLOCK = " + str(XBLOCK) + "\n")
+fichierSortie.write("YBLOCK = " + str(YBLOCK) + "\n")
+fichierSortie.write("XGRID = " + str(XGRID) + "\n")
+fichierSortie.write("YGRID = " + str(YGRID) + "\n")
+fichierSortie.write("NBTHETA = " + str(NBTHETA) + "\n")
+fichierSortie.write("NBPHI = " + str(NBPHI) + "\n")
+fichierSortie.write("THSDEG = " + str(THSDEG) + "\n")
+fichierSortie.write("LAMBDA = " + str(LAMBDA) + "\n")
+fichierSortie.write("TAURAY = " + str(TAURAY) + "\n")
+fichierSortie.write("TAUAER = " + str(TAUAER) + "\n")
+fichierSortie.write("W0AER = " + str(W0AER) + "\n")
+fichierSortie.write("PROFIL = " + str(PROFIL) + "\n")
+fichierSortie.write("HA = " + str(HA) + "\n")
+fichierSortie.write("HR = " + str(HR) + "\n")
+fichierSortie.write("ZMIN = " + str(ZMIN) + "\n")
+fichierSortie.write("ZMAX = " + str(ZMAX) + "\n")
+fichierSortie.write("WINDSPEED = " + str(WINDSPEED) + "\n")
+fichierSortie.write("NH2O = " + str(NH2O) + "\n")
+fichierSortie.write("SIM = " + str(SIM) + "\n")
+fichierSortie.write("SUR = " + str(NBPHOTONS) + "\n")
+fichierSortie.write("DIOPTRE = " + str(DIOPTRE) + "\n")
+fichierSortie.write("CONPHY = " + str(CONPHY) + "\n")
+fichierSortie.write("DIFFF = " + str(DIFFF) + "\n")
+fichierSortie.write("PATHRESULTATSHDF = " + str(PATHRESULTATSHDF) + "\n")
+fichierSortie.write("PATHTEMOINHDF = " + str(PATHTEMOINHDF) + "\n")
+
+fichierSortie.close()
+
+print '################################################'
+print 'Simulation de {0} terminee pour Cuda-Fortran'.format(type_donnees)
+print '################################################'

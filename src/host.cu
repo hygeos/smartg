@@ -196,6 +196,10 @@ void initConstantesHost(int argc, char** argv)
 	ZMAX = atof(s);
 	
 	strcpy(s,"");
+	chercheConstante(parametres, "NATM", s);
+	NATM = atoi(s);
+	
+	strcpy(s,"");
 	chercheConstante(parametres, "WINDSPEED", s);
 	WINDSPEED = atof(s);
 	
@@ -338,8 +342,8 @@ void verifierFichier(){
 			sprintf(command,"rm %s",PATHTEMOINHDF);
 			system(command);
 		}
-		else{
-		}
+// 		else{
+// 		}
 		getchar();
 		fclose(fic);
 	}
@@ -587,21 +591,21 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	initRandMTEtat<<<XGRID * YGRID, XBLOCK * YBLOCK>>>(tab_D->etat, tab_D->config);
 #endif
 	
-	if( cudaHostAlloc( &(tab_H->tabPhotons), 4*NBTHETA * NBPHI * sizeof(*(tab_H->tabPhotons)), cudaHostAllocPortable ) != cudaSuccess
-){
-		printf("#--------------------#\n");
-		printf("ERREUR: Problème d'allocation de tab_H->tabPhotons dans initTableaux\n");
-		printf("#--------------------#\n");
-		exit(1);
-	}
-	
-// 	// Tableau du poids des photons ressortis
-// 	tab_H->tabPhotons = (float*)malloc(4*NBTHETA * NBPHI * sizeof(*(tab_H->tabPhotons)));
-// 	if( tab_H->tabPhotons == NULL ){
-// 		printf("ERREUR: Problème de malloc de tab_H->tabPhotons dans initTableaux\n");
+// 	if( cudaHostAlloc( &(tab_H->tabPhotons), 4*NBTHETA * NBPHI * sizeof(*(tab_H->tabPhotons)), cudaHostAllocPortable ) != cudaSuccess
+// ){
+// 		printf("#--------------------#\n");
+// 		printf("ERREUR: Problème d'allocation de tab_H->tabPhotons dans initTableaux\n");
+// 		printf("#--------------------#\n");
 // 		exit(1);
 // 	}
-// 	memset(tab_H->tabPhotons,0,4*NBTHETA * NBPHI * sizeof(*(tab_H->tabPhotons)) );
+	
+	// Tableau du poids des photons ressortis
+	tab_H->tabPhotons = (float*)malloc(4*NBTHETA * NBPHI * sizeof(*(tab_H->tabPhotons)));
+	if( tab_H->tabPhotons == NULL ){
+		printf("ERREUR: Problème de malloc de tab_H->tabPhotons dans initTableaux\n");
+		exit(1);
+	}
+	memset(tab_H->tabPhotons,0,4*NBTHETA * NBPHI * sizeof(*(tab_H->tabPhotons)) );
 	
 	if( cudaMalloc(&(tab_D->tabPhotons), 4 * NBTHETA * NBPHI * sizeof(*(tab_D->tabPhotons))) == cudaErrorMemoryAllocation){
 		printf("ERREUR: Problème de cudaMalloc de tab_D->tabPhotons dans initTableaux\n");
@@ -883,10 +887,18 @@ void calculTabFinal(float* tabFinal, float* tabTh, float* tabPhi, float* tabPhot
 				(tabPhotonsTot[0*NBPHI*NBTHETA+ith*NBPHI+iphi] + tabPhotonsTot[1*NBPHI*NBTHETA+ith*NBPHI+iphi]) / 
 				(2* nbPhotonsTot * tabOmega[ith*NBPHI+iphi]* cosf(tabTh[ith]));
 			
+			if(tabFinal[0*NBTHETA*NBPHI + iphi*NBTHETA+ith]!=0){
+// 				printf("\nR:tabFinal(iphi=%d,ith=%d)=%f\n",iphi,ith,tabFinal[0*NBTHETA*NBPHI + iphi*NBTHETA+ith]);
+// 				printf("s1=%f, s2=%f, cos(TabTh[ith])=%f, tabOmega[ith*NBPHI+iphi]=%f, nbTot=%llu\n\n",\
+				tabPhotonsTot[0*NBPHI*NBTHETA+ith*NBPHI+iphi], tabPhotonsTot[1*NBPHI*NBTHETA+ith*NBPHI+iphi], cosf(tabTh[ith]),\
+tabOmega[ith*NBPHI+iphi],nbPhotonsTot );
+			}
+			// Q
 			tabFinal[1*NBTHETA*NBPHI + iphi*NBTHETA+ith] =
 				(tabPhotonsTot[0*NBPHI*NBTHETA+ith*NBPHI+iphi] - tabPhotonsTot[1*NBPHI*NBTHETA+ith*NBPHI+iphi]) / 
 				(2* nbPhotonsTot * tabOmega[ith*NBPHI+iphi] * cosf(tabTh[ith]));
-				
+			
+			// U
 			tabFinal[2*NBTHETA*NBPHI + iphi*NBTHETA+ith] = (tabPhotonsTot[2*NBPHI*NBTHETA+ith*NBPHI+iphi]) / 
 				(2* nbPhotonsTot * tabOmega[ith*NBPHI+iphi] * cosf(tabTh[ith]));
 				
@@ -950,7 +962,9 @@ void afficheParametres()
 	printf("\n");
 	printf(" ZMAX\t=\t%f", ZMAX);
 	printf("\n");
-
+	printf(" NATM\t=\t%d", NATM);
+	printf("\n");
+	
 	printf("\n#--------- Contribution du dioptre ---------#\n");
 	printf(" SUR\t=\t%d", SUR);
 	printf("\n");
@@ -1113,6 +1127,7 @@ void creerHDFTemoin(float* tabPhotonsTot, unsigned long long nbPhotonsTot, Varia
 	SDsetattr(sdsTab, "HR", DFNT_FLOAT32, 1, &HR);
 	SDsetattr(sdsTab, "ZMIN", DFNT_FLOAT32, 1, &ZMIN);
 	SDsetattr(sdsTab, "ZMAX", DFNT_FLOAT32, 1, &ZMAX);
+	SDsetattr(sdsTab, "NATM", DFNT_INT32, 1, &NATM);
 	SDsetattr(sdsTab, "WINDSPEED", DFNT_FLOAT32, 1, &WINDSPEED);
 	SDsetattr(sdsTab, "NH2O", DFNT_FLOAT32, 1, &NH2O);
 	SDsetattr(sdsTab, "CONPHY", DFNT_FLOAT32, 1, &CONPHY);
@@ -1170,6 +1185,7 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		float HRrecup[1];
 		float ZMINrecup[1];
 		float ZMAXrecup[1];
+		int NATMrecup[1];
 		float WINDSPEEDrecup[1];
 		float NH2Orecup[1];
 		float CONPHYrecup[1];
@@ -1192,6 +1208,7 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "HR"), (VOIDP)HRrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "ZMIN"), (VOIDP)ZMINrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "ZMAX"), (VOIDP)ZMAXrecup);
+		SDreadattr(sdsTab, SDfindattr(sdsTab, "NATM"), (VOIDP)NATMrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "WINDSPEED"), (VOIDP)WINDSPEEDrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "NH2O"), (VOIDP)NH2Orecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "CONPHY"), (VOIDP)CONPHYrecup);
@@ -1214,6 +1231,7 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 			&& HRrecup[0] == HR
 			&& ZMINrecup[0] == ZMIN
 			&& ZMAXrecup[0] == ZMAX
+			&& NATMrecup[0] == NATM
 			&& WINDSPEEDrecup[0] == WINDSPEED
 			&& NH2Orecup[0] == NH2O
 			&& CONPHYrecup[0] == CONPHY)
@@ -1340,6 +1358,7 @@ void creerHDFResultats(float* tabFinal, float* tabTh, float* tabPhi,unsigned lon
 	SDsetattr(sdFichier, "HR", DFNT_FLOAT32, 1, &HR);
 	SDsetattr(sdFichier, "ZMIN", DFNT_FLOAT32, 1, &ZMIN);
 	SDsetattr(sdFichier, "ZMAX", DFNT_FLOAT32, 1, &ZMAX);
+	SDsetattr(sdFichier, "NATM", DFNT_INT32, 1, &NATM);
 	SDsetattr(sdFichier, "WINDSPEED", DFNT_FLOAT32, 1, &WINDSPEED);
 	SDsetattr(sdFichier, "NH2O", DFNT_FLOAT32, 1, &NH2O);
 	SDsetattr(sdFichier, "CONPHY", DFNT_FLOAT32, 1, &CONPHY);
@@ -1561,8 +1580,8 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 		exit(1);
 	}
 	
-	cudaFreeHost(tab_H->tabPhotons);
-// 	free(tab_H->tabPhotons);
+// 	cudaFreeHost(tab_H->tabPhotons);
+	free(tab_H->tabPhotons);
 	
 	// Libération du modèle de diffusion des aérosols
 	erreur = cudaFree(tab_D->faer);
@@ -2113,8 +2132,8 @@ void impactInit(Init* init_H, Init* init_D, Tableaux* tab_H, Tableaux* tab_D){
 		
 		tab_H->zph0[icouche] = tab_H->zph0[icouche-1] + rsolfi;
 		tab_H->hph0[icouche] = tab_H->hph0[icouche-1] + 
-				( abs( (double)tab_H->h[icouche] - (double)tab_H->h[icouche-1])*rsolfi )/
-				( abs( (double)tab_H->z[icouche-1] - (double)tab_H->z[icouche]) );
+				( abs( tab_H->h[icouche] - tab_H->h[icouche-1])*rsolfi )/
+				( abs( tab_H->z[icouche-1] - tab_H->z[icouche]) );
 		
 		xphbis+= vx*rsolfi;
 		yphbis+= vy*rsolfi;
@@ -2125,6 +2144,7 @@ void impactInit(Init* init_H, Init* init_D, Tableaux* tab_H, Tableaux* tab_D){
 	init_H->taumax0 = tab_H->hph0[NATM];
 	init_H->zintermax0 = tab_H->zph0[NATM];
 
+	
 	/** Envoie des données dans le device **/
 	cudaError_t erreur = cudaMemcpy(init_D, init_H, sizeof(Init), cudaMemcpyHostToDevice);
 	if( erreur != cudaSuccess ){

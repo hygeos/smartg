@@ -18,13 +18,13 @@ import struct
 # Paramètres à modifier
 #
 #-----------------------------------------------------------------------------------------------------------------------
-type_simu = "molecules_seules"
-date_simu = "17042012"
+type_simu = "atmos_seules"
+date_simu = "23042012"
 angle = "70"
 # Nom du fichier Cuda sans extension .hdf
-nom_cuda = "out_CUDA_atmos_ths=70.00_tRay=0.0533_tAer=0.0000"
+nom_cuda = "out_CUDA_atmos_ths=70.00_tRay=0.2360_tAer=0.3000"
 # Nom du fichier Fortran sans l'extension .bin.gz
-nom_fortran = "out.ran=7666.wav=443.ths=70.000.tr=0.0533.ta=0.0000.pi0=0.967.H=002.000"
+nom_fortran = "out.ran=9013.ths=70.000.tr=0.2360.ta=0.3000"
 
 
 # Indices ci-dessus ont été mis en place car ils permettent de rogner la simulation si nécessaire.
