@@ -1,17 +1,36 @@
 
-	  //////////////
-	 // INCLUDES //
-	//////////////
+/**********************************************************
+*	> Includes
+***********************************************************/
 
 #include "communs.h"
 #include "host.h"
 #include "device.h"
 
-	  ////////////////////
-	 // FONCTIONS HOST //
-	////////////////////
 
-// Fonction qui initialise les generateurs du random MWC
+/**********************************************************
+*
+*			host.h
+*
+*	> Initialisation du générateur de nombres aléatoires MWC
+*	> Travail sur les fichiers
+*	> Initialisation des différentes structures
+*	> Calculs de profils
+*	> Fonctions d'affichage
+*	> Calcul pour sauvegarde des résultats finaux
+*	> Fichier hdf (lecture/écriture témoin, écriture résultats)
+*
+***********************************************************/
+
+
+/**********************************************************
+*	> Initialisation du générateur de nombres aléatoires MWC
+***********************************************************/
+
+/* initRandMWC
+* Fonction qui initialise les generateurs du random MWC à partir d'un fichier texte
+*/
+
 int initRandMWC(unsigned long long *etat, unsigned int *config, 
 	     const unsigned int n_rng, const char *safeprimes_file, unsigned long long xinit)
 {
@@ -63,7 +82,56 @@ int initRandMWC(unsigned long long *etat, unsigned int *config,
 	return 0;
 }
 
-// Fonction qui récupère les valeurs des constantes dans Parametres.txt et initialise les constantes du host
+
+/* initRandMTConfig
+* Fonction qui initialise en partie les generateurs du random Mersenen Twister
+*/
+void initRandMTConfig(ConfigMT* config_H, ConfigMT* config_D, int nbThreads)
+{
+	// Ouverture du fichier
+	const char *fname = "MersenneTwister.dat";
+	FILE* fd = fopen(fname, "rb");
+	if(!fd)
+	{
+		printf("ERREUR: ouverture fichier MT");
+		exit(0);
+	}
+	// Lecture et initialisation de la config pour chaque generateur (= pour chaque thread)
+	for(int i = 0; i < nbThreads; i++)
+	{
+		/* Le fichier ne contient que 4096 configs, on reutilise donc les memes configs pour les threads en trop mais les nombres
+		aléatoires restent independants car les etats des threads sont differents */
+		if(i%4096 == 0)
+		{
+			fseek(fd, 0, 0);
+		}
+		if(!fread(config_H+i, sizeof(ConfigMT), 1, fd))
+		{
+			printf("ERREUR: lecture fichier MT");
+			exit(0);
+		}
+	}
+	fclose(fd);
+	srand((unsigned int)SEED);
+	// Creation des seeds aleatoires pour que les threads aient des etats differents
+	for(int i = 0; i < nbThreads; i++) config_H[i].seed = (unsigned int)rand();
+	
+	cudaError_t erreur = cudaMemcpy(config_D, config_H, nbThreads * sizeof(ConfigMT), cudaMemcpyHostToDevice);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de copie config_H dans initRandMTConfig\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+}
+
+
+/**********************************************************
+*	> Travail sur les fichiers
+***********************************************************/
+
+/* initConstantesHost
+* Fonction qui récupère les valeurs des constantes dans le fichier paramètres et initialise les constantes du host
+*/
 void initConstantesHost(int argc, char** argv)
 {
 	if(argc < 2)
@@ -223,6 +291,54 @@ void initConstantesHost(int argc, char** argv)
 	fclose( parametres );
 }
 
+
+/* chercheConstante
+* Fonction qui cherche nomConstante dans le fichier et met la valeur de la constante dans chaineValeur (en string)
+*/
+void chercheConstante(FILE* fichier, char* nomConstante, char* chaineValeur)
+{
+	int longueur = strlen(nomConstante);
+	char ligne[100];
+	int motTrouve = 0;
+	
+	// Tant que la constante n'est pas trouvee et qu'on n'est pas à la fin du fichier on lit la ligne
+	while(fgets(ligne, 100, fichier) && !motTrouve)
+	{
+		// Si le debut de la ligne est nomConstante suivi d'un espace ou un egal on va chercher la valeur
+		if((strncmp(ligne, nomConstante, longueur) == 0) && (ligne[longueur] == ' ' || ligne[longueur] == '='))
+		{
+			char* ptr = ligne; //pointeur du debut de la ligne
+			// on avance jusqu'au prochain espace ou egal
+			while (*ptr != ' ' && *ptr != '=') ptr++;
+			// on avance jusqu'à la valeur de la constante
+			while(*ptr == ' ' || *ptr == '=') ptr++;
+			if (*ptr == '\n')
+			{
+				printf("ERREUR : lecture Parametre.txt\n");
+				exit(1);
+			}
+			// On met la chaine de la valeur de la constante dans chaineValeur
+			strcpy(chaineValeur, ptr);
+			chaineValeur[strlen(chaineValeur)-1] = '\0';
+			motTrouve = 1;
+		}
+	}
+	rewind(fichier);
+	
+	if(motTrouve == 0)
+	{
+		printf("ERREUR : lecture Parametres.txt\n");
+		exit(1);
+	}
+	
+}
+
+
+/* definirNomFichier
+* Le nom du fichier de sorti est créé automatiquement en fonction du type de simulation
+* Il est également stoké dans un dossier en fonction de la date est du type de simulation
+* Le chemin indiqué dans le fichier paramètres est le préfixe du chemin créé ici
+*/
 void definirNomFichier( char* s ){
 	
 	// Type de simulation
@@ -274,6 +390,10 @@ void definirNomFichier( char* s ){
 	
 }
 
+
+/* definirSimulation
+* Défini le type de simulation pour la création du chemin et le nom du fichier résultat
+*/
 void definirSimulation( char* s){
 
 	if( SIM==1 ){
@@ -326,7 +446,10 @@ void definirSimulation( char* s){
 }
 
 
-// Fonction qui vérifie l'état des fichiers temoin et résultats
+/* verifierFichier
+* Fonction qui vérifie l'état des fichiers temoin et résultats
+* Demande à l'utilisateur s'il veut les supprimer ou non
+*/
 void verifierFichier(){
 	char command[256];
 	char res_supp;
@@ -337,14 +460,14 @@ void verifierFichier(){
 	{
 		printf("ATTENTION: Le fichier temoin %s existe deja.\n",PATHTEMOINHDF);
 		printf("Voulez-vous le supprimer? [y/n]\n");
-		res_supp=getchar();
-		if( res_supp=='y' ){
+// 		res_supp=getchar();
+// 		if( res_supp=='y' ){
 			sprintf(command,"rm %s",PATHTEMOINHDF);
 			system(command);
-		}
+// 		}
 // 		else{
 // 		}
-		getchar();
+// 		getchar();
 		fclose(fic);
 	}
 	
@@ -368,57 +491,24 @@ void verifierFichier(){
 }
 
 
-// Fonction qui cherche nomConstante dans le fichier et met la valeur de la constante dans chaineValeur (en string)
-void chercheConstante(FILE* fichier, char* nomConstante, char* chaineValeur)
-{
-		int longueur = strlen(nomConstante);
-		char ligne[100];
-		int motTrouve = 0;
-		
-		// Tant que la constante n'est pas trouvee et qu'on n'est pas à la fin du fichier on lit la ligne
-		while(fgets(ligne, 100, fichier) && !motTrouve)
-		{
-			// Si le debut de la ligne est nomConstante suivi d'un espace ou un egal on va chercher la valeur
-			if((strncmp(ligne, nomConstante, longueur) == 0) && (ligne[longueur] == ' ' || ligne[longueur] == '='))
-			{
-				char* ptr = ligne; //pointeur du debut de la ligne
-				// on avance jusqu'au prochain espace ou egal
-				while (*ptr != ' ' && *ptr != '=') ptr++;
-				// on avance jusqu'à la valeur de la constante
-				while(*ptr == ' ' || *ptr == '=') ptr++;
-				if (*ptr == '\n')
-				{
-					printf("ERREUR : lecture Parametre.txt\n");
-					exit(1);
-				}
-				// On met la chaine de la valeur de la constante dans chaineValeur
-				strcpy(chaineValeur, ptr);
-				chaineValeur[strlen(chaineValeur)-1] = '\0';
-				motTrouve = 1;
-			}
-		}
-		rewind(fichier);
-		
-		if(motTrouve == 0)
-		{
-			printf("ERREUR : lecture Parametres.txt\n");
-			exit(1);
-		}
+/**********************************************************
+*	> Initialisation des différentes structures
+***********************************************************/
 
-}
-
-// Fonction qui initialise les variables à envoyer dans le kernel
+/* initVariables
+* Fonction qui initialise les variables à envoyer dans le kernel.
+*/
 void initVariables(Variables** var_H, Variables** var_D)
 {
 	// 	Initialisation de la version host des variables
-// 	*var_H = (Variables*)malloc(sizeof(Variables));
-// 	if( var_H == NULL ){
-// 		printf("#--------------------#\n");
-// 		printf("ERREUR: Problème de malloc de var_H dans initVariables\n");
-// 		printf("#--------------------#\n");
-// 		exit(1);
-// 	}
-// 	memset(*var_H, 0, sizeof(Variables));
+	*var_H = (Variables*)malloc(sizeof(Variables));
+	if( var_H == NULL ){
+		printf("#--------------------#\n");
+		printf("ERREUR: Problème de malloc de var_H dans initVariables\n");
+		printf("#--------------------#\n");
+		exit(1);
+	}
+	memset(*var_H, 0, sizeof(Variables));
 	
 	// Initialisation de la version device des variables
 	if( cudaMalloc(var_D, sizeof(Variables)) == cudaErrorMemoryAllocation ){
@@ -435,15 +525,14 @@ void initVariables(Variables** var_H, Variables** var_D)
 		exit(1);
 	}
 	
-
 	
 	// var_H est une variable page-locked accessible par le device
-	if( cudaHostAlloc( var_H, sizeof(Variables), cudaHostAllocPortable ) != cudaSuccess ){
-		printf("#--------------------#\n");
-		printf("ERREUR: Problème d'allocation de var_H dans initVariables\n");
-		printf("#--------------------#\n");
-		exit(1);
-	}
+// 	if( cudaHostAlloc( var_H, sizeof(Variables), cudaHostAllocPortable ) != cudaSuccess ){
+// 		printf("#--------------------#\n");
+// 		printf("ERREUR: Problème d'allocation de var_H dans initVariables\n");
+// 		printf("#--------------------#\n");
+// 		exit(1);
+// 	}
 	
 	// Un pointeur est associé pour travailler sur le device
 // 	err = cudaHostGetDevicePointer( var_D, *(var_H) ,0); 
@@ -456,6 +545,37 @@ void initVariables(Variables** var_H, Variables** var_D)
 
 }
 
+
+/* reinitVariables
+* Fonction qui réinitialise certaines variables avant chaque envoi dans le kernel
+*/
+void reinitVariables(Variables* var_H, Variables* var_D)
+{
+	// Le nombre de photons traités pour un appel du Kernel est remis à zéro
+	var_H->nbPhotons = 0;
+	#ifdef PROGRESSION
+	// Le nombre de photons ressortis pour un appel du Kernel est remis à zéro
+	var_H->nbPhotonsSor = 0;
+	#endif
+	// On copie le nouveau var_H dans var_D
+	cudaError_t erreur = cudaMemcpy(var_D, var_H, sizeof(Variables), cudaMemcpyHostToDevice);
+	if( erreur != cudaSuccess ){
+		printf("#--------------------#\n");
+		printf("# ERREUR: Problème de copie var_H dans reinitVariables\n");
+		printf("# Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		printf("# sizeof(*var_D)=%d\tsizeof(*var_H)=%d\tsizeof(*Variables)=%d\n",sizeof(*var_D),sizeof(*var_H),sizeof(Variables));
+		printf("# Adresse de var_D : %p\tAdresse de var_H : %p\n", var_H, var_D);
+		printf("#--------------------#\n");
+		exit(1);
+	}
+}
+
+
+/* initInit
+* Initialisation de la structure Init contenant les paramètres initiaux du photon rentrant dans l'atmosphère.
+* Ces paramètres sont utiles pour une atmosphère sphérique et sont calculés une seule fois dans le host, d'où cette fonction
+* et la structure Init
+*/
 void initInit(Init** init_H, Init** init_D)
 {
 // 		Initialisation de la version host des variables
@@ -504,7 +624,10 @@ void initInit(Init** init_H, Init** init_D)
    
 }
 
-// Fonction qui initialise les tableaux à envoyer dans le kernel
+
+/* initTableaux
+* Fonction qui initialise les tableaux à envoyer dans le kernel par allocation mémoire et memset
+*/
 void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 {
 	
@@ -686,9 +809,6 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 		exit(1);	
 	}
 	
-	
-	
-	
 	//
 	tab_H->pMol =  (float*)malloc((NATM+1)*sizeof(float));
 	if( tab_H->pMol == NULL ){
@@ -742,171 +862,651 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	
 }
 
-// Fonction qui initialise en partie les generateurs du random Mersenen Twister
-void initRandMTConfig(ConfigMT* config_H, ConfigMT* config_D, int nbThreads)
+
+/* freeTableaux
+* Fonction qui libère l'espace mémoire de tous les tableaux alloués
+*/
+void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 {
-	// Ouverture du fichier
-	const char *fname = "MersenneTwister.dat";
-	FILE* fd = fopen(fname, "rb");
-	if(!fd)
-	{
-		printf("ERREUR: ouverture fichier MT");
-		exit(0);
-	}
-	// Lecture et initialisation de la config pour chaque generateur (= pour chaque thread)
-	for(int i = 0; i < nbThreads; i++)
-	{
-		// Le fichier ne contient que 4096 configs, on reutilise donc les memes configs pour les threads en trop mais les nombres aléatoires restent independants car les etats des threads sont differents
-		if(i%4096 == 0)
-		{
-			fseek(fd, 0, 0);
-		}
-		if(!fread(config_H+i, sizeof(ConfigMT), 1, fd))
-		{
-			printf("ERREUR: lecture fichier MT");
-			exit(0);
-		}
-	}
-	fclose(fd);
-	srand((unsigned int)SEED);
-	// Creation des seeds aleatoires pour que les threads aient des etats differents
-	for(int i = 0; i < nbThreads; i++) config_H[i].seed = (unsigned int)rand();
 	
-	cudaError_t erreur = cudaMemcpy(config_D, config_H, nbThreads * sizeof(ConfigMT), cudaMemcpyHostToDevice);
+	cudaError_t erreur;	// Permet de tester le bon déroulement des cudaFree
+	
+	#ifdef RANDMWC
+	// Liberation des tableaux de generateurs du random MWC
+	erreur = cudaFree(tab_D->etat);
 	if( erreur != cudaSuccess ){
-		printf( "ERREUR: Problème de copie config_H dans initRandMTConfig\n");
+		printf( "ERREUR: Problème de cudaFree de tab_D->etat dans freeTableaux\n");
 		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
 		exit(1);
 	}
-}
-
-#ifdef TRAJET
-// DEBUG : Initialisation des variables à envoyer dans le kernel pour récupérer le trajet d'un photon
-void initEvnt(Evnt* evnt_H, Evnt* evnt_D)
-{
-	for(int i = 0; i < NBTRAJET; i++) evnt_H[i].action = 0;
-	cudaError_t erreur = cudaMemcpy(evnt_D, evnt_H, NBTRAJET * sizeof(Evnt), cudaMemcpyHostToDevice);
+	
+	free(tab_H->etat);
+	
+	erreur = cudaFree(tab_D->config);
 	if( erreur != cudaSuccess ){
-		printf( "ERREUR: Problème de copie evnt_H dans initEvnt\n");
+		printf( "ERREUR: Problème de cudaFree de tab_D->config dans freeTableaux\n");
 		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
 		exit(1);
 	}
-}
-#endif
-
-// Fonction qui réinitialise certaines variables avant chaque envoi dans le kernel
-void reinitVariables(Variables* var_H, Variables* var_D)
-{
-	// Le nombre de photons traités pour un appel du Kernel est remis à zéro
-	var_H->nbPhotons = 0;
-	#ifdef PROGRESSION
-	// Le nombre de photons ressortis pour un appel du Kernel est remis à zéro
-	var_H->nbPhotonsSor = 0;
+	
+	free(tab_H->config);
 	#endif
-	// On copie le nouveau var_H dans var_D
-	cudaError_t erreur = cudaMemcpy(var_D, var_H, sizeof(Variables), cudaMemcpyHostToDevice);
+	
+	#ifdef RANDCUDA
+	// Liberation du tableau de generateurs du random Cuda
+	erreur = cudaFree(tab_D->etat);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->etat dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	#endif
+	
+	#ifdef RANDMT
+	// Liberation des tableaux de generateurs du random Mersenen Twister
+	erreur = cudaFree(tab_D->config);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->config dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	
+	erreur = cudaFree(tab_D->etat);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->etat dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	
+	free(tab_H->config);
+	free(tab_H->etat);
+	#endif
+	
+	// Liberation du tableau du poids des photons
+	erreur = cudaFree(tab_D->tabPhotons);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->tabPhotons dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	
+	// 	cudaFreeHost(tab_H->tabPhotons);
+	free(tab_H->tabPhotons);
+	
+	// Libération du modèle de diffusion des aérosols
+	erreur = cudaFree(tab_D->faer);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->faer dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	free(tab_H->faer);
+	
+	// Libération du modèle atmosphérique
+	erreur = cudaFree(tab_D->h);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->h dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	
+	free(tab_H->h);
+	
+	//
+	erreur = cudaFree(tab_D->z);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->z dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	
+	free(tab_H->z);
+	
+	// Profil vu par la photon
+	erreur = cudaFree(tab_D->zph0);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->zph0 dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	
+	free(tab_H->zph0);
+	
+	erreur = cudaFree(tab_D->hph0);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->hph0 dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	
+	free(tab_H->hph0);
+	
+	//
+	erreur = cudaFree(tab_D->pMol);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->pMol dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	
+	free(tab_H->pMol);
+	
+	#ifdef SORTIEINT
+	free( tab_H->poids );
+	
+	erreur = cudaFree(tab_D->poids);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->poids dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	
+	free( tab_H->nbBoucle );
+	
+	erreur = cudaFree(tab_D->nbBoucle);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->nbBoucle dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	#endif
+}
+
+
+/**********************************************************
+*	> Calculs de profils
+***********************************************************/
+
+/* calculFaer
+* Calcul de la fonction de phase des aérosols
+*/
+void calculFaer( const char* nomFichier, Tableaux* tab_H, Tableaux* tab_D ){
+	
+	FILE* fichier = fopen(nomFichier, "r");
+
+	double *scum = (double*) malloc(LSAAER*sizeof(*scum));
+	if( scum==NULL ){
+		printf("ERREUR: Problème de malloc de scum dans calculFaer\n");
+		exit(1);
+	}
+	
+	scum[0] = 0;
+	int iang = 0, ipf = 0;
+	double dtheta, pm1, pm2, sin1, sin2;
+	double z, norm;
+
+	/** Allocation de la mémoire des tableaux contenant les données **/
+	double *ang;
+	double *p1, *p2, *p3, *p4;
+	ang = (double*) malloc(LSAAER*sizeof(*ang));
+	p1 = (double*) malloc(LSAAER*sizeof(*p1));
+	p2 = (double*) malloc(LSAAER*sizeof(*p2));
+	p3 = (double*) malloc(LSAAER*sizeof(*p3));
+	p4 = (double*) malloc(LSAAER*sizeof(*p4));
+	if( ang==NULL || p1==NULL || p2==NULL || p3==NULL || p4==NULL ){
+		printf("ERREUR: Problème de malloc de ang ou pi dans calculFaer\n");
+		exit(1);
+	}
+	
+	/** Lecture des données sur le modèle de diffusion des aérosols **/
+	if(fichier == NULL){
+		printf("ERREUR : Ouverture impossible du fichier %s pour la diffusion d'aérosol", nomFichier );
+		exit(1);
+	}
+	
+	else{
+		for(iang=0; iang<LSAAER; iang++){
+			fscanf(fichier, "%lf\t%lf\t%lf\t%lf\t%lf", ang+iang,p1+iang,p2+iang,p3+iang,p4+iang );
+			// Conversion en radians
+			ang[iang] = ang[iang]*DEG2RAD;
+		}
+	}
+	
+	if(fclose(fichier) == EOF){
+		printf("ERREUR : Probleme de fermeture du fichier %s", nomFichier);
+	}
+		
+	/** Calcul de scum **/
+	for(iang=1; iang<LSAAER; iang++){
+		
+		dtheta = ang[iang] - ang[iang-1];
+		pm1= p1[iang-1] + p2[iang-1];
+		pm2= p1[iang] + p2[iang];
+		sin1= sin(ang[iang-1]);
+		sin2= sin(ang[iang]);
+		
+		scum[iang] = scum[iang-1] + dtheta*( (sin1*pm1+sin2*pm2)/3 + (sin1*pm2+sin2*pm1)/6 )*DEUXPI; 
+	}
+	
+	// Normalisation
+	for(iang=0; iang<LSAAER; iang++){
+		scum[iang] = scum[iang]/scum[LSAAER-1];
+// 		printf("scum[%d]=%10.10lf\n",iang,scum[iang] );
+// 		if( scum[iang] == 1 )
+// 			printf("Egal 1, iang=%d\n",iang);
+	}
+	
+	/** Calcul des faer **/
+	for(iang=0; iang<NFAER-1; iang++){
+		z = double(iang+1)/double(NFAER);
+// 		ipf=0;	// NOTE: Surement inutile
+		while( (scum[ipf+1]<z) && ipf<(LSAAER-1) )
+			ipf++;
+		
+		tab_H->faer[iang*5+4] = float( ((scum[ipf+1]-z)*ang[ipf] + (z-scum[ipf])*ang[ipf+1])/(scum[ipf+1]-scum[ipf]) );
+		norm = p1[ipf]+p2[ipf];			// Angle
+		tab_H->faer[iang*5+0] = float( p1[ipf]/norm );	// I paralèlle
+		tab_H->faer[iang*5+1] = float( p2[ipf]/norm );	// I perpendiculaire
+		tab_H->faer[iang*5+2] = float( p3[ipf]/norm );	// u
+		tab_H->faer[iang*5+3] = 0.F;			// v, toujours nul
+	}
+	
+	tab_H->faer[(NFAER-1)*5+4] = PI;
+	tab_H->faer[(NFAER-1)*5+0] = 0.5F+00;
+	tab_H->faer[(NFAER-1)*5+1] = 0.5F+00;
+	tab_H->faer[(NFAER-1)*5+2] = float( p3[LSAAER-1]/(p1[LSAAER-1]+p2[LSAAER-1]) );
+	tab_H->faer[(NFAER-1)*5+3] = 0.F+00;
+	
+	free(scum);
+	free(ang);
+	free(p1);
+	free(p2);
+	free(p3);
+	free(p4);
+	
+	/** Allocation des FAER dans la device memory **/		
+
+	cudaError_t erreur = cudaMemcpy(tab_D->faer, tab_H->faer, 5*NFAER*sizeof(*(tab_H->faer)), cudaMemcpyHostToDevice); 
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de copie tab_D->faer dans calculFaer\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	
+}
+
+
+/* verificationFAER
+* Sauvegarde la fonction de phase des aérosols calculée dans un fichier
+* Permet de valider le bon calcul de la fonction de phase
+*/
+void verificationFAER( const char* nomFichier, Tableaux tab){
+
+	FILE* fichier = fopen(nomFichier, "w");
+	int i;
+	
+	fprintf( fichier, "angle\tI//\tIp\n" );
+	
+	for(i=0; i<NFAER; i++){
+		fprintf(fichier, "%f\t%f\t%f\n", tab.faer[i*5+4],tab.faer[i*5+0], tab.faer[i*5+1]);
+	}
+	
+	fclose(fichier);
+
+}
+
+
+/* profilAtm
+* Calcul du profil atmosphérique dans l'atmosphère en fonction de la couche
+* Mélange Molécule/Aérosol dans l'atmosphère en fonction de la couche
+*/
+void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
+
+	/** Déclaration des variables **/
+	/*NOTE: différence avec le code fortran: je n'utilise pas int ncouche */
+	
+// 	float z[NATM+1];		// Altitude à chaque couche
+// 	float z;	// Variable représentant l'altitude
+	float tauMol[NATM+1];	// Epaisseur optique des molécules à chaque couche
+	float tauAer[NATM+1];	// Epaisseur optique des aérosols à chaque couche
+	int i=0;
+	float va=0, vr=0;	// Variables tampons
+	cudaError_t erreur;	// Permet de tester le bon déroulement des opérations mémoires
+	
+	/** Conditions aux limites au sommet de l'atmosphère **/
+// 	z[0] = 100.0;
+	tab_H->z[0] = HATM;
+	tauMol[0] = 0.0;
+	tauAer[0] = 0.0;
+	tab_H->h[0] = 0.0;
+	tab_H->pMol[0] = 0.0;	//Je n'utilise pas la proportion d'aérosols car on l'obtient par 1-PMOL
+
+	/** Cas Particuliers **/
+	// Épaisseur optique aérosol très faible OU Épaisseur optique moléculaire et aérosol très faible
+	// On ne considère une seule sous-couche dans laquelle on trouve toutes les molécules
+	if( /*(TAUAER < 0.0001) ||*/ ((TAUAER < 0.0001)&&(TAURAY < 0.0001)) ){
+		tauMol[1] = TAURAY;
+		tauAer[1] = 0;
+// 		z[1] = 0;
+		tab_H->z[1]=0;
+		tab_H->h[1] = tauMol[1] + tauAer[1];
+		tab_H->pMol[1] = 1.0;
+		
+		/** Envoie des informations dans le device **/
+		erreur = cudaMemcpy(tab_D->h, tab_H->h, (NATM+1)*sizeof(float), cudaMemcpyHostToDevice);
+		if( erreur != cudaSuccess ){
+			printf( "ERREUR: Problème de copie tab_D->h dans profilAtm\n");
+			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+			exit(1);
+		}
+		
+		erreur = cudaMemcpy(tab_D->pMol, tab_H->pMol, (NATM+1)*sizeof(float), cudaMemcpyHostToDevice);
+		if( erreur != cudaSuccess ){
+			printf( "ERREUR: Problème de copie tab_D->pMol dans profilAtm\n");
+			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+			exit(1);
+		}		
+		
+		erreur = cudaMemcpy(tab_D->z, tab_H->z, (NATM+1)*sizeof(float), cudaMemcpyHostToDevice);
+		if( erreur != cudaSuccess ){
+			printf( "ERREUR: Problème de copie tab_D->z dans profilAtm\n");
+			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+			exit(1);
+		}
+		return;
+	}
+	
+	/** Profil standard avec échelle de hauteur **/
+	if( PROFIL == 0 ){
+		
+		/* Si HA << HR => pas de mélange dans les couches
+		On considere alors une atmosphere divisee en deux sous-couches, la  couche superieure contenant toutes les molecules, la
+couche inferieure contenant tous les aerosols.
+		*/
+		if( HA < 0.0001 ){
+			tauMol[1] = TAURAY;
+			tauAer[1] = 0;
+// 			z[1] = 0;
+			tab_H->z[1]=0.f;
+			tab_H->h[1] = tauMol[1] + tauAer[1];
+			tab_H->pMol[1] = 1.0;
+			
+			tauMol[2] = 0;
+			tauAer[2] = TAUAER;
+// 			z[2] = 0.0;
+			tab_H->z[2]=0.f;
+			tab_H->h[2] = tab_H->h[1] + tauMol[2] + tauAer[2];
+			tab_H->pMol[2] = 0.0;
+		}
+		
+		/* Si HA >> HR => pas de mélange dans les couches
+		On considere alors une atmosphere divisee en deux sous-couches, la  couche superieure contenant tous les aérosols, la couche
+inferieure contenant toutes les molécules.
+		*/
+		else if( HA > 499.99 ){
+			tauMol[1] = 0.0;
+			tauAer[1] = TAUAER;
+// 			z[1] = 0.0;
+			tab_H->z[1]=0.f;
+			tab_H->h[1] = tauMol[1] + tauAer[1];
+			tab_H->pMol[1] = 0.0;
+			
+			tauMol[2] = TAURAY;
+			tauAer[2] = 0.0;
+// 			z[2] = 0.0;
+			tab_H->z[2]=0.f;
+			tab_H->h[2] = tab_H->h[1] + tauMol[2] + tauAer[2];
+			tab_H->pMol[2] = 1.0;
+		}
+		
+		/* Cas Standard avec deux échelles */
+		else{
+			for( i=0; i<NATM+1; i++){
+				if(i!=0){
+// 					z[i] = 100.F - float(i)*(100.F/NATM);
+// 					z = 100.F - float(i)*(100.F/NATM);
+					tab_H->z[i]=100.F - float(i)*(100.F/NATM);
+				}
+				vr = TAURAY*exp( -(tab_H->z[i]/HR) );
+				va = TAUAER*exp( -(tab_H->z[i]/HA) );
+				
+				tab_H->h[i] = va+vr;
+				
+				vr = vr/HR;
+				va = va/HA;
+				vr = vr/(va+vr);
+				tab_H->pMol[i] = vr;
+			}
+			tab_H->h[0] = 0;
+		}
+	}
+	
+	/** Profil à 2 ou 3 couches **/
+	else if( PROFIL == 3 ){
+
+		float tauRay1;	// Epaisseur optique moleculaire de la couche 1
+		float tauRay2;	// Epaisseur optique moleculaire de la couche 2
+		
+		tauRay1 = TAURAY*exp(-(ZMAX/HR));	// Epaisseur optique moleculaire de la couche la plus haute
+		if( ZMIN < 0.0001 ){
+			tauRay2 = TAURAY*(exp(-(ZMIN/HR))-exp(-(ZMAX/HR)));	// Epaisseur optique moleculaire de la couche la plus basse
+		}
+		
+		else{
+			tauRay2 = TAURAY*(exp(-(ZMIN/HR))-exp(-(ZMAX/HR)));	// Epaisseur optique moleculaire de la couche intermédiaire
+		}
+		
+		/** Calcul des grandeurs utiles aux OS pour la couche la plus haute **/
+// 		z[1] = -( HR*log(tauRay1/TAURAY) ); 
+		tab_H->z[1]=-( HR*log(tauRay1/TAURAY) );
+		tauMol[1] = tauRay1;
+		tauAer[1] = 0.F;                                    
+		tab_H->h[1] = tauMol[1] + tauAer[1];
+		tab_H->pMol[1] = 1.F;
+
+		/** Calcul des grandeurs utiles aux OS pour la deuxieme couche   **/
+		if( ZMAX == ZMIN ){ //Uniquement des aerosols dans la couche intermediaire
+// 			z[2] = ZMAX; // ou zmin, puisque zmin=zmax
+			tab_H->z[2]=ZMAX;
+			tauMol[2] = tauRay1;                                                      
+			tauAer[2] = TAUAER;
+			tab_H->h[2] = tauMol[2] + tauAer[2];
+			tab_H->pMol[2] = 0.F;                                                      
+		}
+		
+		else{	// Melange homogene d'aerosol et de molecules dans la couche intermediaire
+// 			z[2] = ZMIN;
+			tab_H->z[2]=ZMIN;
+			tauMol[2] = tauRay1+tauRay2;
+			tauAer[2] = TAUAER;
+			tab_H->h[2] = tauMol[2] + tauAer[2];
+			tab_H->pMol[2] = 0.5F;
+		}
+		
+		/** Calcul des grandeurs utiles aux OS pour la troisieme couche **/
+// 		z[3] = 0.F;
+		tab_H->z[3]=0.f;
+		tauMol[3] = TAURAY;
+		tauAer[3] = TAUAER;
+		tab_H->h[3] = tauMol[3] + tauAer[3];
+		tab_H->pMol[3] = 1.F;
+	}
+	
+	else if( PROFIL == 2 ){
+		// Profil utilisateur
+		/* Format du fichier
+		=> Ne pas mettre de ligne vide sur la première
+		=> n	alt		tauMol		tauAer		h		pAer		pMol
+		*/
+		FILE* profil = fopen( PATHPROFILATM , "r" );
+		float garbage;
+		
+		int icouche=0;
+		char ligne[1024];
+	
+		if(profil == NULL){
+			printf("ERREUR : Ouverture impossible du fichier %s pour le profil atmosphérique\n", PATHPROFILATM );
+			exit(1);
+		}
+		
+		else{
+			// Passage de la premiere ligne
+			fgets(ligne,1024,profil);
+
+			// Extraction des informations
+			for( icouche=0; icouche<NATM+1; icouche++ ){
+				fscanf(profil, "%d\t%lf\t%f\t%f\t%lf\t%f\t%f", &i, tab_H->z+icouche, &garbage, &garbage, tab_H->h+icouche,
+&garbage,tab_H->pMol+icouche );
+			
+			}
+		}
+	
+		if(fclose(profil) == EOF){
+			printf("ERREUR : Probleme de fermeture du fichier %s", PATHPROFILATM);
+		}
+		
+	}
+	
+	
+		/** Envoie des informations dans le device **/
+		erreur = cudaMemcpy(tab_D->h, tab_H->h, (NATM+1)*sizeof(*(tab_H->h)), cudaMemcpyHostToDevice);
+		if( erreur != cudaSuccess ){
+			printf( "ERREUR: Problème de copie tab_D->h dans profilAtm\n");
+			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+			exit(1);
+		}
+		
+		erreur = cudaMemcpy(tab_D->pMol, tab_H->pMol, (NATM+1)*sizeof(*(tab_H->pMol)), cudaMemcpyHostToDevice);
+		if( erreur != cudaSuccess ){
+			printf( "ERREUR: Problème de copie tab_D->pMol dans profilAtm\n");
+			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+			exit(1);
+		}	
+		
+		erreur = cudaMemcpy(tab_D->z, tab_H->z, (NATM+1)*sizeof(*(tab_H->z)), cudaMemcpyHostToDevice);
+		if( erreur != cudaSuccess ){
+			printf( "ERREUR: Problème de copie tab_D->z dans profilAtm\n");
+			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+			exit(1);
+		}
+	
+}
+
+
+/* verificationAtm
+* Sauvegarde du profil atmosphérique dans un fichier
+* Permet de valider le bon calcul
+*/
+void verificationAtm( Tableaux tab_H ){
+	
+	// Vérification du modèle
+	FILE* fichier = fopen("./test/modele_atm_cuda.txt", "w+");
+	
+	fprintf( fichier, "couche\tz\tpropMol\th\n" );
+	
+	for( int i=0; i<NATM+1; i++){
+		fprintf(fichier, "%d\t%10.8f\t%10.8f\t%10.8f\n",i,tab_H.z[i],tab_H.pMol[i], tab_H.h[i]);
+	}
+	
+	fprintf( fichier, "couche\tz\tpropMol\th\n" );
+	
+	fclose(fichier);
+}
+
+
+/* impactInit
+* Calcul du profil que le photon va rencontrer lors de son premier passage dans l'atmosphère
+* Sauvegarde de ce profil dans tab et sauvegarde des coordonnées initiales du photon dans init
+*/
+void impactInit(Init* init_H, Init* init_D, Tableaux* tab_H, Tableaux* tab_D){
+	
+	double thss, localh;
+	double rdelta;
+	double xphbis,yphbis,zphbis;	//Coordonnées intermédiaire du photon
+	double rsolfi,rsol1,rsol2;
+	
+	// Correspond aux paramètres initiaux du photon
+	double vx = -sin(THSDEG*DEG2RAD);
+	double vy = 0.;
+	double vz = -cos(THSDEG*DEG2RAD);
+	
+	/** Calcul du point d'impact **/
+	// 	thss = abs(acosf(abs(vz)));
+	thss = THSDEG*DEG2RAD;
+	
+	rdelta = 4.*RTER*RTER + 4.*( tan(thss)*tan(thss)+1. )*( HATM*HATM + 2.*HATM*RTER );
+	localh = ( -2.*RTER+sqrt(rdelta) )/( 2.*(tan(thss)*tan(thss)+1.) );
+	
+	init_H->x0 = localh*tan(thss);
+	init_H->y0 = 0.;
+	init_H->z0 = RTER + localh;	
+	
+	tab_H->zph0[0] = 0.;
+	tab_H->hph0[0] = 0.;
+	
+	xphbis = init_H->x0;
+	yphbis = init_H->y0;
+	zphbis = init_H->z0;
+	
+	/** Création hphoton et zphoton, chemin optique entre sommet atmosphère et sol pour la direction d'incidence **/
+	for(int icouche=1; icouche<NATM+1; icouche++){
+		
+		rdelta = 4.*(vx*xphbis + vy*yphbis + vz*zphbis)*(vx*xphbis + vy*yphbis + vz*zphbis)
+			- 4.*(xphbis*xphbis + yphbis*yphbis + zphbis*zphbis - ((double)tab_H->z[icouche]+RTER)*((double)tab_H->z[icouche]+RTER));
+		rsol1 = 0.5*( -2.*(vx*xphbis + vy*yphbis + vz*zphbis) + sqrt(rdelta) );
+		rsol2 = 0.5*( -2.*(vx*xphbis + vy*yphbis + vz*zphbis) - sqrt(rdelta) );
+		
+		// Il faut choisir la plus petite distance en faisant attention qu'elle soit positive
+		if(rsol1>0.){
+			if( rsol2>0.)
+				rsolfi = min(rsol1,rsol2);
+			else
+				rsolfi = rsol1;
+		}
+		else{
+			if( rsol2>0. )
+				rsolfi=rsol1;
+		}
+		
+		tab_H->zph0[icouche] = tab_H->zph0[icouche-1] + rsolfi;
+		tab_H->hph0[icouche] = tab_H->hph0[icouche-1] + 
+				( abs( tab_H->h[icouche] - tab_H->h[icouche-1])*rsolfi )/
+				( abs( tab_H->z[icouche-1] - tab_H->z[icouche]) );
+		
+		xphbis+= vx*rsolfi;
+		yphbis+= vy*rsolfi;
+		zphbis+= vz*rsolfi;
+		
+	}
+
+	init_H->taumax0 = tab_H->hph0[NATM];
+	init_H->zintermax0 = tab_H->zph0[NATM];
+
+	
+	/** Envoie des données dans le device **/
+	cudaError_t erreur = cudaMemcpy(init_D, init_H, sizeof(Init), cudaMemcpyHostToDevice);
 	if( erreur != cudaSuccess ){
 		printf("#--------------------#\n");
-		printf("# ERREUR: Problème de copie var_H dans reinitVariables\n");
+		printf("# ERREUR: Problème de copie init_H dans initInit\n");
 		printf("# Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-		printf("# sizeof(*var_D)=%d\tsizeof(*var_H)=%d\tsizeof(*Variables)=%d\n",sizeof(*var_D),sizeof(*var_H),sizeof(Variables));
-		printf("# Adresse de var_D : %p\tAdresse de var_H : %p\n", var_H, var_D);
 		printf("#--------------------#\n");
 		exit(1);
 	}
+	
+	erreur = cudaMemcpy(tab_D->hph0, tab_H->hph0, (NATM+1)*sizeof(*(tab_H->hph0)), cudaMemcpyHostToDevice);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de copie tab_D->hph0 dans initInit\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	
+	erreur = cudaMemcpy(tab_D->zph0, tab_H->zph0, (NATM+1)*sizeof(*(tab_H->zph0)), cudaMemcpyHostToDevice);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de copie tab_D->zph0 dans initInit\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	
 }
 
 
-// Fonction qui calcule pour chaque l'aire normalisée de chaque boite, son theta, et son psi, sous forme de 3 tableaux
-void calculOmega(float* tabTh, float* tabPhi, float* tabOmega)
-{
-	// Tableau contenant l'angle theta de chaque morceau de sphère
-	memset(tabTh, 0, NBTHETA * sizeof(*tabPhi));
-	float dth = DEMIPI / NBTHETA;
-	tabTh[0] = dth/4;
-	tabTh[1] = dth;
-	for(int ith = 2; ith < NBTHETA; ith++){
-		tabTh[ith] = tabTh[ith-1] + dth;
-// 		tabTh[ith] = float(ith*0.5*DEG2RAD);
-	}
-	
-	// Tableau contenant l'angle psi de chaque morceau de sphère
-	memset(tabPhi, 0, NBPHI * sizeof(*tabPhi));
-	float dphi = PI / NBPHI;
- 	tabPhi[0] = dphi / 2;
-	for(int iphi = 1; iphi < NBPHI; iphi++){ 
-// 		tabPhi[iphi] = float((iphi+0.5)*DEG2RAD);
-		tabPhi[iphi] = tabPhi[iphi-1] + dphi;
-	}
-	// Tableau contenant l'aire de chaque morceau de sphère
-	float sumds = 0;
-	float tabds[NBTHETA * NBPHI];
-	memset(tabds, 0, NBTHETA * NBPHI * sizeof(*tabds));
-	for(int ith = 0; ith < NBTHETA; ith++)
-	{
-		if( ith==0 )
-			dth = DEMIPI / (2*NBTHETA);
-		else 
-			dth = DEMIPI / NBTHETA;
-			
-		for(int iphi = 0; iphi < NBPHI; iphi++)
-		{
-			tabds[ith * NBPHI + iphi] = sin(tabTh[ith]) * dth * dphi;
-			sumds += tabds[ith * NBPHI + iphi];
-		}
-	}
-	
-	// La derniere demi boite 89.75->90
-	for(int iphi = 0; iphi < NBPHI; iphi++)
-		{
-			sumds += sin( (DEMIPI+tabTh[NBTHETA-1])/2 ) * (dth/2) * dphi;
-		}
-	
-	// Normalisation de l'aire de chaque morceau de sphère
-	memset(tabOmega, 0, NBTHETA * NBPHI * sizeof(*tabOmega));
-	for(int ith = 0; ith < NBTHETA; ith++)
-		for(int iphi = 0; iphi < NBPHI; iphi++){
-			tabOmega[ith * NBPHI + iphi] = tabds[ith * NBPHI + iphi] / sumds;
-		}
-}
+/**********************************************************
+*	> Fonctions d'affichage
+***********************************************************/
 
-// Fonction qui remplit le tabFinal, tabTh et tabPhi
-void calculTabFinal(float* tabFinal, float* tabTh, float* tabPhi, float* tabPhotonsTot, unsigned long long nbPhotonsTot)
-{
-	float tabOmega[NBTHETA * NBPHI]; //tableau contenant l'aire de chaque morceau de sphère
-	// Remplissage des tableaux tabTh, tabPhi, et tabOmega
-	calculOmega(tabTh, tabPhi, tabOmega);
-	
-	// Remplissage du tableau final
-	for(int iphi = 0; iphi < NBPHI; iphi++)
-	{
-		for(int ith = 0; ith < NBTHETA; ith++)
-		{
-			// Reflectance
-			tabFinal[0*NBTHETA*NBPHI + iphi*NBTHETA+ith] =
-				(tabPhotonsTot[0*NBPHI*NBTHETA+ith*NBPHI+iphi] + tabPhotonsTot[1*NBPHI*NBTHETA+ith*NBPHI+iphi]) / 
-				(2* nbPhotonsTot * tabOmega[ith*NBPHI+iphi]* cosf(tabTh[ith]));
-			
-			if(tabFinal[0*NBTHETA*NBPHI + iphi*NBTHETA+ith]!=0){
-// 				printf("\nR:tabFinal(iphi=%d,ith=%d)=%f\n",iphi,ith,tabFinal[0*NBTHETA*NBPHI + iphi*NBTHETA+ith]);
-// 				printf("s1=%f, s2=%f, cos(TabTh[ith])=%f, tabOmega[ith*NBPHI+iphi]=%f, nbTot=%llu\n\n",\
-				tabPhotonsTot[0*NBPHI*NBTHETA+ith*NBPHI+iphi], tabPhotonsTot[1*NBPHI*NBTHETA+ith*NBPHI+iphi], cosf(tabTh[ith]),\
-tabOmega[ith*NBPHI+iphi],nbPhotonsTot );
-			}
-			// Q
-			tabFinal[1*NBTHETA*NBPHI + iphi*NBTHETA+ith] =
-				(tabPhotonsTot[0*NBPHI*NBTHETA+ith*NBPHI+iphi] - tabPhotonsTot[1*NBPHI*NBTHETA+ith*NBPHI+iphi]) / 
-				(2* nbPhotonsTot * tabOmega[ith*NBPHI+iphi] * cosf(tabTh[ith]));
-			
-			// U
-			tabFinal[2*NBTHETA*NBPHI + iphi*NBTHETA+ith] = (tabPhotonsTot[2*NBPHI*NBTHETA+ith*NBPHI+iphi]) / 
-				(2* nbPhotonsTot * tabOmega[ith*NBPHI+iphi] * cosf(tabTh[ith]));
-				
-		}
-	}
-}
-
-// Fonction qui affiche les paramètres de la simulation
+/* afficheParametres
+* Affiche les paramètres de la simulation
+*/
 void afficheParametres()
 {
 	printf("\n#--------- Paramètres de simulation --------#\n");
@@ -993,15 +1593,17 @@ void afficheParametres()
 	printf("\n  Date de début  : %02u/%02u/%04u %02u:%02u:%02u\n", date->tm_mday, date->tm_mon+1, 1900 + date->tm_year,
 		   date->tm_hour, date->tm_min, date->tm_sec);
 
-	
 }
 
-// Fonction qui affiche la progression de la simulation
+
+/* afficheProgress
+* Affiche la progression de la simulation
+*/
 void afficheProgress(unsigned long long nbPhotonsTot, Variables* var, double tempsPrec
-		#ifdef PROGRESSION
-		, unsigned long long nbPhotonsSorTot
-		#endif
-		    )
+#ifdef PROGRESSION
+, unsigned long long nbPhotonsSorTot
+#endif
+)
 {
 	// Calcul la date et l'heure courante
 	time_t dateTime = time(NULL);
@@ -1028,21 +1630,41 @@ void afficheProgress(unsigned long long nbPhotonsTot, Variables* var, double tem
 	printf("  Photons pb     : %12d\n", var->erreurpoids + var->erreurtheta);
 	printf("  Temps ecoule   : %d h %2d min %2d sec\n", hEcoulees, minEcoulees, secEcoulees);
 	printf("  Temps restant  : %d h %2d min %2d sec\n", hRestantes, minRestantes, secRestantes);
-	printf("  Date actuelle  : %02u/%02u/%04u %02u:%02u:%02u\n", date->tm_mday, date->tm_mon+1, 1900 + date->tm_year, date->tm_hour, date->tm_min, date->tm_sec);
-	printf(" --------------------------------------\n");
-	
-	#ifdef PROGRESSION
-	printf("%d%% - ", (int)(100*nbPhotonsTot/NBPHOTONS));
-	printf("Temps: %d - ", tempsEcoule);
-	printf("phot sortis: %lu - ", nbPhotonsSorTot);
-	printf("phot traités: %lu - ", nbPhotonsTot);
-	printf("erreur poids/theta/vxy/vy/case: %d/%d/%d/%d/%d", var->erreurpoids, var->erreurtheta, var->erreurvxy, var->erreurvy, var->erreurcase);
-	printf("\n");
-	#endif
+	printf("  Date actuelle  : %02u/%02u/%04u %02u:%02u:%02u\n", date->tm_mday, date->tm_mon+1, 1900 + date->tm_year, date->tm_hour,
+		   date->tm_min, date->tm_sec);
+		   printf(" --------------------------------------\n");
+		   
+		   #ifdef PROGRESSION
+		   printf("%d%% - ", (int)(100*nbPhotonsTot/NBPHOTONS));
+		   printf("Temps: %d - ", tempsEcoule);
+		   printf("phot sortis: %lu - ", nbPhotonsSorTot);
+		   printf("phot traités: %lu - ", nbPhotonsTot);
+		   printf("erreur poids/theta/vxy/vy/case: %d/%d/%d/%d/%d", var->erreurpoids, var->erreurtheta, var->erreurvxy,
+var->erreurvy,		   var->erreurcase);
+		   printf("\n");
+		   #endif
 }
 
+
 #ifdef TRAJET
-// Fonction qui affiche le début du trajet du premier thread
+/* initEvnt
+* Initialisation des variables à envoyer dans le kernel pour récupérer le trajet d'un photon
+*/
+void initEvnt(Evnt* evnt_H, Evnt* evnt_D)
+{
+	for(int i = 0; i < NBTRAJET; i++) evnt_H[i].action = 0;
+	cudaError_t erreur = cudaMemcpy(evnt_D, evnt_H, NBTRAJET * sizeof(Evnt), cudaMemcpyHostToDevice);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de copie evnt_H dans initEvnt\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+}
+
+
+/* afficheTrajet
+* Fonction qui affiche le début du trajet du premier thread
+*/
 void afficheTrajet(Evnt* evnt_H)
 {
 	printf("\nTrajet d'un thread :\n");
@@ -1069,7 +1691,116 @@ void afficheTrajet(Evnt* evnt_H)
 }
 #endif
 
-// Fonction qui crée un fichier .hdf contenant les informations nécessaires à la reprise du programme
+
+/**********************************************************
+*	> Calcul pour sauvegarde des résultats finaux
+***********************************************************/
+
+/* calculOmega
+* Fonction qui calcule l'aire normalisée de chaque boite, son theta, et son psi, sous forme de 3 tableaux
+*/
+void calculOmega(float* tabTh, float* tabPhi, float* tabOmega)
+{
+	// Tableau contenant l'angle theta de chaque morceau de sphère
+	memset(tabTh, 0, NBTHETA * sizeof(*tabPhi));
+	float dth = DEMIPI / NBTHETA;
+	tabTh[0] = dth/4;
+	tabTh[1] = dth;
+	for(int ith = 2; ith < NBTHETA; ith++){
+		tabTh[ith] = tabTh[ith-1] + dth;
+// 		tabTh[ith] = float(ith*0.5*DEG2RAD);
+	}
+	
+	// Tableau contenant l'angle psi de chaque morceau de sphère
+	memset(tabPhi, 0, NBPHI * sizeof(*tabPhi));
+	float dphi = PI / NBPHI;
+ 	tabPhi[0] = dphi / 2;
+	for(int iphi = 1; iphi < NBPHI; iphi++){ 
+// 		tabPhi[iphi] = float((iphi+0.5)*DEG2RAD);
+		tabPhi[iphi] = tabPhi[iphi-1] + dphi;
+	}
+	// Tableau contenant l'aire de chaque morceau de sphère
+	float sumds = 0;
+	float tabds[NBTHETA * NBPHI];
+	memset(tabds, 0, NBTHETA * NBPHI * sizeof(*tabds));
+	for(int ith = 0; ith < NBTHETA; ith++)
+	{
+		if( ith==0 )
+			dth = DEMIPI / (2*NBTHETA);
+		else 
+			dth = DEMIPI / NBTHETA;
+			
+		for(int iphi = 0; iphi < NBPHI; iphi++)
+		{
+			tabds[ith * NBPHI + iphi] = sin(tabTh[ith]) * dth * dphi;
+			sumds += tabds[ith * NBPHI + iphi];
+		}
+	}
+	
+	// La derniere demi boite 89.75->90
+	for(int iphi = 0; iphi < NBPHI; iphi++)
+		{
+			sumds += sin( (DEMIPI+tabTh[NBTHETA-1])/2 ) * (dth/2) * dphi;
+		}
+	
+	// Normalisation de l'aire de chaque morceau de sphère
+	memset(tabOmega, 0, NBTHETA * NBPHI * sizeof(*tabOmega));
+	for(int ith = 0; ith < NBTHETA; ith++)
+		for(int iphi = 0; iphi < NBPHI; iphi++){
+			tabOmega[ith * NBPHI + iphi] = tabds[ith * NBPHI + iphi] / sumds;
+		}
+}
+
+
+/* calculTabFinal
+* Fonction qui remplit le tabFinal correspondant à la reflectance (R), Q et U sur tous l'espace de sorti (dans chaque boite)
+*/
+void calculTabFinal(float* tabFinal, float* tabTh, float* tabPhi, float* tabPhotonsTot, unsigned long long nbPhotonsTot)
+{
+	
+	float tabOmega[NBTHETA * NBPHI]; //tableau contenant l'aire de chaque morceau de sphère
+	// Remplissage des tableaux tabTh, tabPhi, et tabOmega
+	calculOmega(tabTh, tabPhi, tabOmega);
+	
+	// Remplissage du tableau final
+	for(int iphi = 0; iphi < NBPHI; iphi++)
+	{
+		for(int ith = 0; ith < NBTHETA; ith++)
+		{
+			// Reflectance
+			tabFinal[0*NBTHETA*NBPHI + iphi*NBTHETA+ith] =
+				(tabPhotonsTot[0*NBPHI*NBTHETA+ith*NBPHI+iphi] + tabPhotonsTot[1*NBPHI*NBTHETA+ith*NBPHI+iphi]) / 
+				(2* nbPhotonsTot * tabOmega[ith*NBPHI+iphi]* cosf(tabTh[ith]));
+			
+			if(tabFinal[0*NBTHETA*NBPHI + iphi*NBTHETA+ith]!=0){
+// 				printf("\nR:tabFinal(iphi=%d,ith=%d)=%f\n",iphi,ith,tabFinal[0*NBTHETA*NBPHI + iphi*NBTHETA+ith]);
+// 				printf("s1=%f, s2=%f, cos(TabTh[ith])=%f, tabOmega[ith*NBPHI+iphi]=%f, nbTot=%llu\n\n",\
+				tabPhotonsTot[0*NBPHI*NBTHETA+ith*NBPHI+iphi], tabPhotonsTot[1*NBPHI*NBTHETA+ith*NBPHI+iphi], cosf(tabTh[ith]),\
+tabOmega[ith*NBPHI+iphi],nbPhotonsTot );
+			}
+			// Q
+			tabFinal[1*NBTHETA*NBPHI + iphi*NBTHETA+ith] =
+				(tabPhotonsTot[0*NBPHI*NBTHETA+ith*NBPHI+iphi] - tabPhotonsTot[1*NBPHI*NBTHETA+ith*NBPHI+iphi]) / 
+				(2* nbPhotonsTot * tabOmega[ith*NBPHI+iphi] * cosf(tabTh[ith]));
+			
+			// U
+			tabFinal[2*NBTHETA*NBPHI + iphi*NBTHETA+ith] = (tabPhotonsTot[2*NBPHI*NBTHETA+ith*NBPHI+iphi]) / 
+				(2* nbPhotonsTot * tabOmega[ith*NBPHI+iphi] * cosf(tabTh[ith]));
+				
+		}
+	}
+}
+
+
+/**********************************************************
+*	> Fichier hdf (lecture/écriture témoin, écriture résultats)
+***********************************************************/
+
+/* creerHDFTemoin
+* Fonction qui crée un fichier .hdf contenant les informations nécessaires à la reprise du programme
+* //TODO: 	écrire moins régulièrement le témoin (non pas une écriture par appel de kernel)
+*			changer le format (écrire un .bin par exemple) pour éventuellement gagner du temps (calculer le gain éventuel)
+*/
 void creerHDFTemoin(float* tabPhotonsTot, unsigned long long nbPhotonsTot, Variables* var, double tempsPrec)
 {
 	// Création du fichier de sortie
@@ -1155,6 +1886,11 @@ void creerHDFTemoin(float* tabPhotonsTot, unsigned long long nbPhotonsTot, Varia
 	SDend(sdFichier);
 }
 
+
+/* lireHDFTemoin
+* Si un fichier temoin existe et que les paramètres correspondent à la simulation en cours, cette simulation se poursuit à
+* partir de celle sauvée dans le fichier témoin.
+*/
 void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		unsigned long long* nbPhotonsTot, float* tabPhotonsTot, double* tempsEcoule)
 {
@@ -1236,8 +1972,7 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 			&& NH2Orecup[0] == NH2O
 			&& CONPHYrecup[0] == CONPHY)
 		{
-			printf("\nPOURSUITE D'UNE SIMULATION ANTERIEURE\n");
-			if(SEEDrecup[0] == SEED) printf("ATTENTION: Nous recommandons SEED=-1 sinon les nombres aleatoires sont identiques a chaque lancement.\n");
+			
 			// Recuperation du nombre de photons traités et du nombre d'erreurs
 			double nbPhotonsTotDouble[1]; //on récupère d'abord la variable en double
 			unsigned long long nbPhotonsTotRecup[1]; //puis on la passera en unsigned long long
@@ -1247,6 +1982,10 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 	
 			SDreadattr(sdsTab, SDfindattr(sdsTab, "nbPhotonsTot"), (VOIDP)nbPhotonsTotDouble);
 			nbPhotonsTotRecup[0] = (unsigned long long)nbPhotonsTotDouble[0];
+			
+			printf("\nPOURSUITE D'UNE SIMULATION ANTERIEURE AU PHOTON %e\n",nbPhotonsTotDouble[0]);
+			if(SEEDrecup[0] == SEED) printf("ATTENTION: Nous recommandons SEED=-1 sinon les nombres aleatoires sont\
+identiques a chaque lancement.\n");
 			SDreadattr(sdsTab, SDfindattr(sdsTab, "nbErreursPoids"), (VOIDP)nbErreursPoidsRecup);
 			SDreadattr(sdsTab, SDfindattr(sdsTab, "nbErreursTheta"), (VOIDP)nbErreursThetaRecup);
 			SDreadattr(sdsTab, SDfindattr(sdsTab, "tempsEcoule"), (VOIDP)tempsEcouleRecup);
@@ -1312,8 +2051,11 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 	// Fermeture du fichier
 	SDend (sdFichier);
 }
-	
-// Fonction qui crée le fichier .hdf contenant le résultat final pour une demi-sphère
+
+
+/* creerHDFResultats
+* Fonction qui crée le fichier .hdf contenant le résultat final pour une demi-sphère
+*/
 void creerHDFResultats(float* tabFinal, float* tabTh, float* tabPhi,unsigned long long nbPhotonsTot, Variables* var,double tempsPrec)
 {
 	// Tableau temporaire utile pour la suite
@@ -1509,664 +2251,7 @@ void creerHDFResultats(float* tabFinal, float* tabTh, float* tabPhi,unsigned lon
 	// Fermeture du tableau
 	SDendaccess(sdsTab);
 	
-
 	// Fermeture du fichier
 	SDend(sdFichier);
-	
-}
-
-// Fonction qui libère les tableaux envoyés dans le kernel
-void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
-{
-	
-	cudaError_t erreur;	// Permet de tester le bon déroulement des cudaFree
-	
-	#ifdef RANDMWC
-	// Liberation des tableaux de generateurs du random MWC
-	erreur = cudaFree(tab_D->etat);
-	if( erreur != cudaSuccess ){
-		printf( "ERREUR: Problème de cudaFree de tab_D->etat dans freeTableaux\n");
-		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-		exit(1);
-	}
-	
-	free(tab_H->etat);
-	
-	erreur = cudaFree(tab_D->config);
-	if( erreur != cudaSuccess ){
-		printf( "ERREUR: Problème de cudaFree de tab_D->config dans freeTableaux\n");
-		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-		exit(1);
-	}
-	
-	free(tab_H->config);
-	#endif
-	
-	#ifdef RANDCUDA
-	// Liberation du tableau de generateurs du random Cuda
-	erreur = cudaFree(tab_D->etat);
-	if( erreur != cudaSuccess ){
-		printf( "ERREUR: Problème de cudaFree de tab_D->etat dans freeTableaux\n");
-		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-		exit(1);
-	}
-	#endif
-	
-	#ifdef RANDMT
-	// Liberation des tableaux de generateurs du random Mersenen Twister
-	erreur = cudaFree(tab_D->config);
-	if( erreur != cudaSuccess ){
-		printf( "ERREUR: Problème de cudaFree de tab_D->config dans freeTableaux\n");
-		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-		exit(1);
-	}
-	
-	erreur = cudaFree(tab_D->etat);
-	if( erreur != cudaSuccess ){
-		printf( "ERREUR: Problème de cudaFree de tab_D->etat dans freeTableaux\n");
-		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-		exit(1);
-	}
-	
-	free(tab_H->config);
-	free(tab_H->etat);
-	#endif
-	
-	// Liberation du tableau du poids des photons
-	erreur = cudaFree(tab_D->tabPhotons);
-	if( erreur != cudaSuccess ){
-		printf( "ERREUR: Problème de cudaFree de tab_D->tabPhotons dans freeTableaux\n");
-		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-		exit(1);
-	}
-	
-// 	cudaFreeHost(tab_H->tabPhotons);
-	free(tab_H->tabPhotons);
-	
-	// Libération du modèle de diffusion des aérosols
-	erreur = cudaFree(tab_D->faer);
-	if( erreur != cudaSuccess ){
-		printf( "ERREUR: Problème de cudaFree de tab_D->faer dans freeTableaux\n");
-		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-		exit(1);
-	}
-	free(tab_H->faer);
-	
-	// Libération du modèle atmosphérique
-	erreur = cudaFree(tab_D->h);
-	if( erreur != cudaSuccess ){
-		printf( "ERREUR: Problème de cudaFree de tab_D->h dans freeTableaux\n");
-		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-		exit(1);
-	}
-	
-	free(tab_H->h);
-	
-	//
-	erreur = cudaFree(tab_D->z);
-	if( erreur != cudaSuccess ){
-		printf( "ERREUR: Problème de cudaFree de tab_D->z dans freeTableaux\n");
-		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-		exit(1);
-	}
-	
-	free(tab_H->z);
-	
-	// Profil vu par la photon
-	erreur = cudaFree(tab_D->zph0);
-	if( erreur != cudaSuccess ){
-		printf( "ERREUR: Problème de cudaFree de tab_D->zph0 dans freeTableaux\n");
-		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-		exit(1);
-	}
-	
-	free(tab_H->zph0);
-	
-	erreur = cudaFree(tab_D->hph0);
-	if( erreur != cudaSuccess ){
-		printf( "ERREUR: Problème de cudaFree de tab_D->hph0 dans freeTableaux\n");
-		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-		exit(1);
-	}
-	
-	free(tab_H->hph0);
-	
-	//
-	erreur = cudaFree(tab_D->pMol);
-	if( erreur != cudaSuccess ){
-		printf( "ERREUR: Problème de cudaFree de tab_D->pMol dans freeTableaux\n");
-		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-		exit(1);
-	}
-	
-	free(tab_H->pMol);
-	
-	#ifdef SORTIEINT
-	free( tab_H->poids );
-	
-	erreur = cudaFree(tab_D->poids);
-	if( erreur != cudaSuccess ){
-		printf( "ERREUR: Problème de cudaFree de tab_D->poids dans freeTableaux\n");
-		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-		exit(1);
-	}
-	
-	free( tab_H->nbBoucle );
-	
-	erreur = cudaFree(tab_D->nbBoucle);
-	if( erreur != cudaSuccess ){
-		printf( "ERREUR: Problème de cudaFree de tab_D->nbBoucle dans freeTableaux\n");
-		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-		exit(1);
-	}
-	#endif
-}
-
-
-/* Calcul du modèle de diffusion des aérosol */
-void calculFaer( const char* nomFichier, Tableaux* tab_H, Tableaux* tab_D ){
-	
-	FILE* fichier = fopen(nomFichier, "r");
-
-	double *scum = (double*) malloc(LSAAER*sizeof(*scum));
-	if( scum==NULL ){
-		printf("ERREUR: Problème de malloc de scum dans calculFaer\n");
-		exit(1);
-	}
-	
-	scum[0] = 0;
-	int iang = 0, ipf = 0;
-	double dtheta, pm1, pm2, sin1, sin2;
-	double z, norm;
-
-	/** Allocation de la mémoire des tableaux contenant les données **/
-	double *ang;
-	double *p1, *p2, *p3, *p4;
-	ang = (double*) malloc(LSAAER*sizeof(*ang));
-	p1 = (double*) malloc(LSAAER*sizeof(*p1));
-	p2 = (double*) malloc(LSAAER*sizeof(*p2));
-	p3 = (double*) malloc(LSAAER*sizeof(*p3));
-	p4 = (double*) malloc(LSAAER*sizeof(*p4));
-	if( ang==NULL || p1==NULL || p2==NULL || p3==NULL || p4==NULL ){
-		printf("ERREUR: Problème de malloc de ang ou pi dans calculFaer\n");
-		exit(1);
-	}
-	
-	/** Lecture des données sur le modèle de diffusion des aérosols **/
-	if(fichier == NULL){
-		printf("ERREUR : Ouverture impossible du fichier %s pour la diffusion d'aérosol", nomFichier );
-		exit(1);
-	}
-	
-	else{
-		for(iang=0; iang<LSAAER; iang++){
-			fscanf(fichier, "%lf\t%lf\t%lf\t%lf\t%lf", ang+iang,p1+iang,p2+iang,p3+iang,p4+iang );
-			// Conversion en radians
-			ang[iang] = ang[iang]*DEG2RAD;
-		}
-	}
-	
-	if(fclose(fichier) == EOF){
-		printf("ERREUR : Probleme de fermeture du fichier %s", nomFichier);
-	}
-		
-	/** Calcul de scum **/
-	for(iang=1; iang<LSAAER; iang++){
-		
-		dtheta = ang[iang] - ang[iang-1];
-		pm1= p1[iang-1] + p2[iang-1];
-		pm2= p1[iang] + p2[iang];
-		sin1= sin(ang[iang-1]);
-		sin2= sin(ang[iang]);
-		
-		scum[iang] = scum[iang-1] + dtheta*( (sin1*pm1+sin2*pm2)/3 + (sin1*pm2+sin2*pm1)/6 )*DEUXPI; 
-	}
-	
-	// Normalisation
-	for(iang=0; iang<LSAAER; iang++){
-		scum[iang] = scum[iang]/scum[LSAAER-1];
-// 		printf("scum[%d]=%10.10lf\n",iang,scum[iang] );
-// 		if( scum[iang] == 1 )
-// 			printf("Egal 1, iang=%d\n",iang);
-	}
-	
-	/** Calcul des faer **/
-	for(iang=0; iang<NFAER-1; iang++){
-		z = double(iang+1)/double(NFAER);
-// 		ipf=0;	// NOTE: Surement inutile
-		while( (scum[ipf+1]<z) && ipf<(LSAAER-1) )
-			ipf++;
-		
-		tab_H->faer[iang*5+4] = float( ((scum[ipf+1]-z)*ang[ipf] + (z-scum[ipf])*ang[ipf+1])/(scum[ipf+1]-scum[ipf]) );
-		norm = p1[ipf]+p2[ipf];			// Angle
-		tab_H->faer[iang*5+0] = float( p1[ipf]/norm );	// I paralèlle
-		tab_H->faer[iang*5+1] = float( p2[ipf]/norm );	// I perpendiculaire
-		tab_H->faer[iang*5+2] = float( p3[ipf]/norm );	// u
-		tab_H->faer[iang*5+3] = 0.F;			// v, toujours nul
-	}
-	
-	tab_H->faer[(NFAER-1)*5+4] = PI;
-	tab_H->faer[(NFAER-1)*5+0] = 0.5F+00;
-	tab_H->faer[(NFAER-1)*5+1] = 0.5F+00;
-	tab_H->faer[(NFAER-1)*5+2] = float( p3[LSAAER-1]/(p1[LSAAER-1]+p2[LSAAER-1]) );
-	tab_H->faer[(NFAER-1)*5+3] = 0.F+00;
-	
-	free(scum);
-	free(ang);
-	free(p1);
-	free(p2);
-	free(p3);
-	free(p4);
-	
-	/** Allocation des FAER dans la device memory **/		
-
-	cudaError_t erreur = cudaMemcpy(tab_D->faer, tab_H->faer, 5*NFAER*sizeof(*(tab_H->faer)), cudaMemcpyHostToDevice); 
-	if( erreur != cudaSuccess ){
-		printf( "ERREUR: Problème de copie tab_D->faer dans calculFaer\n");
-		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-		exit(1);
-	}
-	
-}
-
-/* Permet de vérifier que le modèle FAER généré est correct */
-void verificationFAER( const char* nomFichier, Tableaux tab){
-
-	FILE* fichier = fopen(nomFichier, "w");
-	int i;
-	
-	fprintf( fichier, "angle\tI//\tIp\n" );
-	
-	for(i=0; i<NFAER; i++){
-		fprintf(fichier, "%f\t%f\t%f\n", tab.faer[i*5+4],tab.faer[i*5+0], tab.faer[i*5+1]);
-	}
-	
-	fclose(fichier);
-
-}
-
-/* Calcul du mélange Molécule/Aérosol dans l'atmosphère en fonction de la couche */
-void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
-
-	/** Déclaration des variables **/
-	/*NOTE: différence avec le code fortran: je n'utilise pas int ncouche */
-	
-// 	float z[NATM+1];		// Altitude à chaque couche
-// 	float z;	// Variable représentant l'altitude
-	float tauMol[NATM+1];	// Epaisseur optique des molécules à chaque couche
-	float tauAer[NATM+1];	// Epaisseur optique des aérosols à chaque couche
-	int i=0;
-	float va=0, vr=0;	// Variables tampons
-	cudaError_t erreur;	// Permet de tester le bon déroulement des opérations mémoires
-	
-	/** Conditions aux limites au sommet de l'atmosphère **/
-// 	z[0] = 100.0;
-	tab_H->z[0] = HATM;
-	tauMol[0] = 0.0;
-	tauAer[0] = 0.0;
-	tab_H->h[0] = 0.0;
-	tab_H->pMol[0] = 0.0;	//Je n'utilise pas la proportion d'aérosols car on l'obtient par 1-PMOL
-
-	/** Cas Particuliers **/
-	
-	// Épaisseur optique moléculaire très faible
-	// On ne considère une seule sous-couche dans laquelle on trouve tous les aérosols
-// 	if( TAURAY < 0.0001 ){
-// 		
-// 		tauMol[1] = 0;
-// 		tauAer[1] = TAUAER;
-// // 		z[1] = 0;
-// 		tab_H->z[1]=0.f;
-// 		tab_H->h[1] = tauMol[1] + tauAer[1];
-// 		tab_H->pMol[1] = 0;
-// 		
-// 		/** Envoie des informations dans le device **/
-// 		erreur = cudaMemcpy(tab_D->h, tab_H->h, (NATM+1)*sizeof(float), cudaMemcpyHostToDevice);
-// 		if( erreur != cudaSuccess ){
-// 			printf( "ERREUR: Problème de copie tab_D->h dans profilAtm\n");
-// 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-// 			exit(1);
-// 		}
-// 		
-// 		erreur = cudaMemcpy(tab_D->pMol, tab_H->pMol, (NATM+1)*sizeof(float), cudaMemcpyHostToDevice);
-// 		if( erreur != cudaSuccess ){
-// 			printf( "ERREUR: Problème de copie tab_D->pMol dans profilAtm\n");
-// 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-// 			exit(1);
-// 		}
-// 		
-// 		erreur = cudaMemcpy(tab_D->z, tab_H->z, (NATM+1)*sizeof(float), cudaMemcpyHostToDevice);
-// 		if( erreur != cudaSuccess ){
-// 			printf( "ERREUR: Problème de copie tab_D->z dans profilAtm\n");
-// 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-// 			exit(1);
-// 		}	
-// 		return;
-// 	}
-	
-	// Épaisseur optique aérosol très faible OU Épaisseur optique moléculaire et aérosol très faible
-	// On ne considère une seule sous-couche dans laquelle on trouve toutes les molécules
-	if( /*(TAUAER < 0.0001) ||*/ ((TAUAER < 0.0001)&&(TAURAY < 0.0001)) ){
-		tauMol[1] = TAURAY;
-		tauAer[1] = 0;
-// 		z[1] = 0;
-		tab_H->z[1]=0;
-		tab_H->h[1] = tauMol[1] + tauAer[1];
-		tab_H->pMol[1] = 1.0;
-		
-		/** Envoie des informations dans le device **/
-		erreur = cudaMemcpy(tab_D->h, tab_H->h, (NATM+1)*sizeof(float), cudaMemcpyHostToDevice);
-		if( erreur != cudaSuccess ){
-			printf( "ERREUR: Problème de copie tab_D->h dans profilAtm\n");
-			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-			exit(1);
-		}
-		
-		erreur = cudaMemcpy(tab_D->pMol, tab_H->pMol, (NATM+1)*sizeof(float), cudaMemcpyHostToDevice);
-		if( erreur != cudaSuccess ){
-			printf( "ERREUR: Problème de copie tab_D->pMol dans profilAtm\n");
-			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-			exit(1);
-		}		
-		
-		erreur = cudaMemcpy(tab_D->z, tab_H->z, (NATM+1)*sizeof(float), cudaMemcpyHostToDevice);
-		if( erreur != cudaSuccess ){
-			printf( "ERREUR: Problème de copie tab_D->z dans profilAtm\n");
-			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-			exit(1);
-		}
-		return;
-	}
-	
-	/** Profil standard avec échelle de hauteur **/
-	if( PROFIL == 0 ){
-		
-		/* Si HA << HR => pas de mélange dans les couches
-		On considere alors une atmosphere divisee en deux sous-couches, la  couche superieure contenant toutes les molecules, la couche inferieure contenant tous les aerosols.
-		*/
-		if( HA < 0.0001 ){
-			tauMol[1] = TAURAY;
-			tauAer[1] = 0;
-// 			z[1] = 0;
-			tab_H->z[1]=0.f;
-			tab_H->h[1] = tauMol[1] + tauAer[1];
-			tab_H->pMol[1] = 1.0;
-			
-			tauMol[2] = 0;
-			tauAer[2] = TAUAER;
-// 			z[2] = 0.0;
-			tab_H->z[2]=0.f;
-			tab_H->h[2] = tab_H->h[1] + tauMol[2] + tauAer[2];
-			tab_H->pMol[2] = 0.0;
-		}
-		
-		/* Si HA >> HR => pas de mélange dans les couches
-		On considere alors une atmosphere divisee en deux sous-couches, la  couche superieure contenant tous les aérosols, la couche inferieure contenant toutes les molécules.
-		*/
-		else if( HA > 499.99 ){
-			tauMol[1] = 0.0;
-			tauAer[1] = TAUAER;
-// 			z[1] = 0.0;
-			tab_H->z[1]=0.f;
-			tab_H->h[1] = tauMol[1] + tauAer[1];
-			tab_H->pMol[1] = 0.0;
-			
-			tauMol[2] = TAURAY;
-			tauAer[2] = 0.0;
-// 			z[2] = 0.0;
-			tab_H->z[2]=0.f;
-			tab_H->h[2] = tab_H->h[1] + tauMol[2] + tauAer[2];
-			tab_H->pMol[2] = 1.0;
-		}
-		
-		/* Cas Standard avec deux échelles */
-		else{
-			for( i=0; i<NATM+1; i++){
-				if(i!=0){
-// 					z[i] = 100.F - float(i)*(100.F/NATM);
-// 					z = 100.F - float(i)*(100.F/NATM);
-					tab_H->z[i]=100.F - float(i)*(100.F/NATM);
-				}
-				vr = TAURAY*exp( -(tab_H->z[i]/HR) );
-				va = TAUAER*exp( -(tab_H->z[i]/HA) );
-				
-				tab_H->h[i] = va+vr;
-				
-				vr = vr/HR;
-				va = va/HA;
-				vr = vr/(va+vr);
-				tab_H->pMol[i] = vr;
-			}
-			tab_H->h[0] = 0;
-		}
-	}
-	
-	/** Profil à 2 ou 3 couches **/
-	else if( PROFIL == 3 ){
-
-		float tauRay1;	// Epaisseur optique moleculaire de la couche 1
-		float tauRay2;	// Epaisseur optique moleculaire de la couche 2
-		
-		tauRay1 = TAURAY*exp(-(ZMAX/HR));	// Epaisseur optique moleculaire de la couche la plus haute
-		if( ZMIN < 0.0001 ){
-			tauRay2 = TAURAY*(exp(-(ZMIN/HR))-exp(-(ZMAX/HR)));	// Epaisseur optique moleculaire de la couche la plus basse
-		}
-		
-		else{
-			tauRay2 = TAURAY*(exp(-(ZMIN/HR))-exp(-(ZMAX/HR)));	// Epaisseur optique moleculaire de la couche intermédiaire
-		}
-		
-		/** Calcul des grandeurs utiles aux OS pour la couche la plus haute **/
-// 		z[1] = -( HR*log(tauRay1/TAURAY) ); 
-		tab_H->z[1]=-( HR*log(tauRay1/TAURAY) );
-		tauMol[1] = tauRay1;
-		tauAer[1] = 0.F;                                    
-		tab_H->h[1] = tauMol[1] + tauAer[1];
-		tab_H->pMol[1] = 1.F;
-
-		/** Calcul des grandeurs utiles aux OS pour la deuxieme couche   **/
-		if( ZMAX == ZMIN ){ //Uniquement des aerosols dans la couche intermediaire
-// 			z[2] = ZMAX; // ou zmin, puisque zmin=zmax
-			tab_H->z[2]=ZMAX;
-			tauMol[2] = tauRay1;                                                      
-			tauAer[2] = TAUAER;
-			tab_H->h[2] = tauMol[2] + tauAer[2];
-			tab_H->pMol[2] = 0.F;                                                      
-		}
-		
-		else{	// Melange homogene d'aerosol et de molecules dans la couche intermediaire
-// 			z[2] = ZMIN;
-			tab_H->z[2]=ZMIN;
-			tauMol[2] = tauRay1+tauRay2;
-			tauAer[2] = TAUAER;
-			tab_H->h[2] = tauMol[2] + tauAer[2];
-			tab_H->pMol[2] = 0.5F;
-		}
-		
-		/** Calcul des grandeurs utiles aux OS pour la troisieme couche **/
-// 		z[3] = 0.F;
-		tab_H->z[3]=0.f;
-		tauMol[3] = TAURAY;
-		tauAer[3] = TAUAER;
-		tab_H->h[3] = tauMol[3] + tauAer[3];
-		tab_H->pMol[3] = 1.F;
-	}
-	
-	else if( PROFIL == 2 ){
-		// Profil utilisateur
-		/* Format du fichier
-		=> Ne pas mettre de ligne vide sur la première
-		=> n	alt		tauMol		tauAer		h		pAer		pMol
-		*/
-		FILE* profil = fopen( PATHPROFILATM , "r" );
-		float garbage;
-		
-		int icouche=0;
-		char ligne[1024];
-	
-		if(profil == NULL){
-			printf("ERREUR : Ouverture impossible du fichier %s pour le profil atmosphérique\n", PATHPROFILATM );
-			exit(1);
-		}
-		
-		else{
-			// Passage de la premiere ligne
-			fgets(ligne,1024,profil);
-
-			// Extraction des informations
-			for( icouche=0; icouche<NATM+1; icouche++ ){
-				fscanf(profil, "%d\t%lf\t%f\t%f\t%lf\t%f\t%f", &i, tab_H->z+icouche, &garbage, &garbage, tab_H->h+icouche,
-&garbage,tab_H->pMol+icouche );
-			
-			}
-		}
-	
-		if(fclose(profil) == EOF){
-			printf("ERREUR : Probleme de fermeture du fichier %s", PATHPROFILATM);
-		}
-		
-	}
-	
-	
-		/** Envoie des informations dans le device **/
-		erreur = cudaMemcpy(tab_D->h, tab_H->h, (NATM+1)*sizeof(*(tab_H->h)), cudaMemcpyHostToDevice);
-		if( erreur != cudaSuccess ){
-			printf( "ERREUR: Problème de copie tab_D->h dans profilAtm\n");
-			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-			exit(1);
-		}
-		
-		erreur = cudaMemcpy(tab_D->pMol, tab_H->pMol, (NATM+1)*sizeof(*(tab_H->pMol)), cudaMemcpyHostToDevice);
-		if( erreur != cudaSuccess ){
-			printf( "ERREUR: Problème de copie tab_D->pMol dans profilAtm\n");
-			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-			exit(1);
-		}	
-		
-		erreur = cudaMemcpy(tab_D->z, tab_H->z, (NATM+1)*sizeof(*(tab_H->z)), cudaMemcpyHostToDevice);
-		if( erreur != cudaSuccess ){
-			printf( "ERREUR: Problème de copie tab_D->z dans profilAtm\n");
-			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-			exit(1);
-		}	
-		
-		/** Test utilisation texture memory **/
-// 		textureReference* texRefPtr;
-// 		cudaGetTextureReference(&texRefPtr, "tex_faer");
-/*		cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float>();
-		erreur = cudaBindTexture(&offset_faer, tex_faer, tab_D->h, channelDesc, (NATM+1)*sizeof(float));
-		if( erreur != cudaSuccess ){
-			printf( "ERREUR: Problème de bindTexture dans profilAtm\n");
-			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-			exit(1);
-		}	*/			  
-	
-}
-
-
-void verificationAtm( Tableaux tab_H ){
-	// Vérification du modèle
-	FILE* fichier = fopen("./test/modele_atm_cuda.txt", "w+");
-	
-	fprintf( fichier, "couche\tz\tpropMol\th\n" );
-	
-	for( int i=0; i<NATM+1; i++){
-		fprintf(fichier, "%d\t%10.8f\t%10.8f\t%10.8f\n",i,tab_H.z[i],tab_H.pMol[i], tab_H.h[i]);
-	}
-	
-	fprintf( fichier, "couche\tz\tpropMol\th\n" );
-	
-	fclose(fichier);
-}
-
-
-void impactInit(Init* init_H, Init* init_D, Tableaux* tab_H, Tableaux* tab_D){
-	
-	double thss, localh;
-	double rdelta;
-	double xphbis,yphbis,zphbis;	//Coordonnées intermédiaire du photon
-	double rsolfi,rsol1,rsol2;
-	
-	// Correspond aux paramètres initiaux du photon
-	double vx = -sin(THSDEG*DEG2RAD);
-	double vy = 0.;
-	double vz = -cos(THSDEG*DEG2RAD);
-	
-	/** Calcul du point d'impact **/
-	// 	thss = abs(acosf(abs(vz)));
-	thss = THSDEG*DEG2RAD;
-	
-	rdelta = 4.*RTER*RTER + 4.*( tan(thss)*tan(thss)+1. )*( HATM*HATM + 2.*HATM*RTER );
-	localh = ( -2.*RTER+sqrt(rdelta) )/( 2.*(tan(thss)*tan(thss)+1.) );
-	
-	init_H->x0 = localh*tan(thss);
-	init_H->y0 = 0.;
-	init_H->z0 = RTER + localh;	
-	
-	tab_H->zph0[0] = 0.;
-	tab_H->hph0[0] = 0.;
-	
-	xphbis = init_H->x0;
-	yphbis = init_H->y0;
-	zphbis = init_H->z0;
-	
-	/** Création hphoton et zphoton, chemin optique entre sommet atmosphère et sol pour la direction d'incidence **/
-	for(int icouche=1; icouche<NATM+1; icouche++){
-		
-		rdelta = 4.*(vx*xphbis + vy*yphbis + vz*zphbis)*(vx*xphbis + vy*yphbis + vz*zphbis)
-			- 4.*(xphbis*xphbis + yphbis*yphbis + zphbis*zphbis - ((double)tab_H->z[icouche]+RTER)*((double)tab_H->z[icouche]+RTER));
-		rsol1 = 0.5*( -2.*(vx*xphbis + vy*yphbis + vz*zphbis) + sqrt(rdelta) );
-		rsol2 = 0.5*( -2.*(vx*xphbis + vy*yphbis + vz*zphbis) - sqrt(rdelta) );
-		
-		// Il faut choisir la plus petite distance en faisant attention qu'elle soit positive
-		if(rsol1>0.){
-			if( rsol2>0.)
-				rsolfi = min(rsol1,rsol2);
-			else
-				rsolfi = rsol1;
-		}
-		else{
-			if( rsol2>0. )
-				rsolfi=rsol1;
-		}
-		
-		tab_H->zph0[icouche] = tab_H->zph0[icouche-1] + rsolfi;
-		tab_H->hph0[icouche] = tab_H->hph0[icouche-1] + 
-				( abs( tab_H->h[icouche] - tab_H->h[icouche-1])*rsolfi )/
-				( abs( tab_H->z[icouche-1] - tab_H->z[icouche]) );
-		
-		xphbis+= vx*rsolfi;
-		yphbis+= vy*rsolfi;
-		zphbis+= vz*rsolfi;
-		
-	}
-
-	init_H->taumax0 = tab_H->hph0[NATM];
-	init_H->zintermax0 = tab_H->zph0[NATM];
-
-	
-	/** Envoie des données dans le device **/
-	cudaError_t erreur = cudaMemcpy(init_D, init_H, sizeof(Init), cudaMemcpyHostToDevice);
-	if( erreur != cudaSuccess ){
-		printf("#--------------------#\n");
-		printf("# ERREUR: Problème de copie init_H dans initInit\n");
-		printf("# Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-		printf("#--------------------#\n");
-		exit(1);
-	}
-	
-	erreur = cudaMemcpy(tab_D->hph0, tab_H->hph0, (NATM+1)*sizeof(*(tab_H->hph0)), cudaMemcpyHostToDevice);
-	if( erreur != cudaSuccess ){
-		printf( "ERREUR: Problème de copie tab_D->hph0 dans initInit\n");
-		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-		exit(1);
-	}
-	
-	erreur = cudaMemcpy(tab_D->zph0, tab_H->zph0, (NATM+1)*sizeof(*(tab_H->zph0)), cudaMemcpyHostToDevice);
-	if( erreur != cudaSuccess ){
-		printf( "ERREUR: Problème de copie tab_D->zph0 dans initInit\n");
-		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-		exit(1);
-	}
 	
 }

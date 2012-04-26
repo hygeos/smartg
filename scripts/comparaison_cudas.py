@@ -19,13 +19,13 @@ import numpy as np
 # Paramètres à modifier
 #
 #-----------------------------------------------------------------------------------------------------------------------
-type_simu = "molecules_seules"
-date_simu = "20042012"
+type_simu = "molecules_dioptre_agite"
+date_simu = "24042012"
 angle = "70"
 # Nom du fichier Cuda sans extension .hdf
-nom_cuda1 = "out_CUDA_1e9_atmos_ths=70.00_tRay=0.0533_tAer=0.0000"
+nom_cuda1 = "out_CUDA_3"
 # Nom du fichier Fortran sans l'extension .bin.gz
-nom_cuda2 = "out_CUDA_1e10_atmos_ths=70.00_tRay=0.0533_tAer=0.0000"
+nom_cuda2 = "out_CUDA_1"
 
 
 # Indices ci-dessus ont été mis en place car ils permettent de rogner la simulation si nécessaire.
@@ -244,6 +244,7 @@ fichierSortie = open(path_dossier_sortie+'/Parametres.txt', 'w')
 
 # Récupération des données de Cuda1
 NBPHOTONS = getattr(sd_cuda1,'NBPHOTONS')
+tempsEcoule = getattr(sd_cuda1,'tempsEcoule')
 NBLOOP = getattr(sd_cuda1,'NBLOOP')
 SEED = getattr(sd_cuda1,'SEED')
 XBLOCK = getattr(sd_cuda1,'XBLOCK')
@@ -276,6 +277,7 @@ fichierSortie.write('\n\n***Paramètres de Cuda1***\n\n')
 
 # Ecriture dans le fichier
 fichierSortie.write('NBPHOTONS = {0:.2e}\n'.format(NBPHOTONS))
+fichierSortie.write('Temps écoulé = {0:.2e}\n'.format(tempsEcoule))
 fichierSortie.write("NBLOOP = " + str(NBLOOP) + "\n")
 fichierSortie.write("SEED = " + str(SEED) + "\n")	
 fichierSortie.write("XBLOCK = " + str(XBLOCK) + "\n")
@@ -308,6 +310,7 @@ fichierSortie.write("PATHTEMOINHDF = " + str(PATHTEMOINHDF) + "\n")
 
 # Récupération des données de Cuda2
 NBPHOTONS = getattr(sd_cuda2,'NBPHOTONS')
+tempsEcoule = getattr(sd_cuda2,'tempsEcoule')
 NBLOOP = getattr(sd_cuda2,'NBLOOP')
 SEED = getattr(sd_cuda2,'SEED')
 XBLOCK = getattr(sd_cuda2,'XBLOCK')
@@ -340,6 +343,7 @@ fichierSortie.write('\n\n***Paramètres de Cuda2***\n\n')
 
 # Ecriture dans le fichier
 fichierSortie.write('NBPHOTONS = {0:.2e}\n'.format(NBPHOTONS))
+fichierSortie.write('Temps écoulé = {0:.2e}\n'.format(tempsEcoule))
 fichierSortie.write("NBLOOP = " + str(NBLOOP) + "\n")
 fichierSortie.write("SEED = " + str(SEED) + "\n")	
 fichierSortie.write("XBLOCK = " + str(XBLOCK) + "\n")

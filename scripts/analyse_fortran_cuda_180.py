@@ -18,14 +18,15 @@ import struct
 # Paramètres à modifier
 #
 #-----------------------------------------------------------------------------------------------------------------------
-type_simu = "atmos_seules"
-date_simu = "23042012"
+type_simu = "molecules_seules"
+date_simu = "26042012"
 angle = "70"
 # Nom du fichier Cuda sans extension .hdf
-nom_cuda = "out_CUDA_atmos_ths=70.00_tRay=0.2360_tAer=0.3000"
-# Nom du fichier Fortran sans l'extension .bin.gz
-nom_fortran = "out.ran=9013.ths=70.000.tr=0.2360.ta=0.3000"
+#nom_cuda = "out_CUDA_atmos_dioptre_agite_ths=70.00_tRay=0.0533_tAer=0.0000_ws=5.00"
+nom_cuda = "out_CUDA_atmos_ths=70.00_tRay=0.0533_tAer=0.0000"
 
+# Nom du fichier Fortran sans l'extension .bin.gz
+nom_fortran = "out.ran=9010.ths=70.000.tr=0.0533.ta=0.0000"
 
 # Indices ci-dessus ont été mis en place car ils permettent de rogner la simulation si nécessaire.
 # Les bords peuvent fausser les graphiques.
@@ -245,9 +246,20 @@ data_cuda = data[0:NBPHI_cuda,:]
 # Infos en commentaire sur le graph
 commentaire = type_simu + ' - ' + angle
 
+
+
 ##########################################################
 ##				CREATION DES GRAPHIQUES					##
 ##########################################################
+
+#---------------------------------------------------------
+
+# Calcul pour l'ergonomie des graphiques
+max_data = max(data_cuda[0:NBPHI_cuda-pas_figure+1,dep:fin].max(),data_fortran[0:NBPHI_cuda-pas_figure+1,dep:fin].max())
+min_data = min(data_cuda[0:NBPHI_cuda-pas_figure+1,dep:fin].min(),data_fortran[0:NBPHI_cuda-pas_figure+1,dep:fin].min())
+
+max_diff = (data_fortran[0:NBPHI_cuda-pas_figure+1,dep:fin]-data_cuda[0:NBPHI_cuda-pas_figure+1,dep:fin]).max()
+#---------------------------------------------------------
 
 if (NBPHI_cuda) == NBPHI_fortran:
 	for iphi in xrange(0,NBPHI_cuda,pas_figure):
@@ -269,6 +281,7 @@ if (NBPHI_cuda) == NBPHI_fortran:
 		title( type_donnees + ' pour Cuda et Fortran pour phi='+str(phi[iphi])+' deg' )
 		xlabel( 'Theta (deg)' )
 		ylabel( type_donnees, rotation='horizontal' )
+		#axis([0,theta[fin],0.99*min_data, 1.01*max_data])
 		figtext(0.25, 0.7, commentaire+" deg", fontdict=None)
 		figtext(0, 0, "Date: "+date_simu+"\nFichier cuda: "+nom_cuda+"\nFichier fortran: "+nom_fortran, fontdict=None,
 				size='xx-small')
@@ -293,6 +306,8 @@ if (NBPHI_cuda) == NBPHI_fortran:
 		listeLegends.append( 'Regression lineaire y='+str(ar)+'x+'+str(br) )
 		legend( listePlots, listeLegends, loc='best', numpoints=1 )
 		
+		max_rapport = (abs(data_fortran[iphi,dep:fin]/data_cuda[iphi,dep:fin])).max()
+		axis([0,theta[fin],2-1.01*max_rapport, 1.01*max_rapport])
 		title( 'Rapport des '+type_donnees+' Fortran_Cuda pour phi='+str(phi[iphi])+' deg' )
 		xlabel( 'Theta (deg)' )
 		ylabel( 'Rapport des '+type_donnees )
@@ -307,6 +322,9 @@ if (NBPHI_cuda) == NBPHI_fortran:
 		##########################################
 		figure()
 		plot( theta[dep:fin], data_fortran[iphi][dep:fin]-data_cuda[iphi][dep:fin] )
+		
+		max_diff = (abs(data_fortran[iphi,dep:fin]-data_cuda[iphi,dep:fin])).max()
+		axis([0,theta[fin],-1.01*max_diff, 1.01*max_diff])
 		title( 'Difference des '+type_donnees+ ' Fortran - Cuda pour phi='+str(phi[iphi])+' deg' )
 		xlabel( 'Theta (deg)' )
 		ylabel( 'Difference des '+type_donnees )

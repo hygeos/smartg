@@ -4,11 +4,11 @@
         ###############################
 
 # Nombre de photons a lancer (unsigned long long) (limite par le tableau du poids des photons en unsigned long long)
-NBPHOTONS = 1000000000
+NBPHOTONS = 300000000
 
 # Nombre de boucles dans le kernel (unsigned int) (limite par watchdog, il faut tuer X)
 # ancien 18000
-NBLOOP = 9000
+NBLOOP = 4000
 
 # Angle zenithal solaire en degrés (float)
 THSDEG = 70.
@@ -37,10 +37,10 @@ NBPHI = 180
 LAMBDA = 443.
 
 # Epaisseur optique moleculaire (Rayley) (float)
-TAURAY = 0.236
+TAURAY = 0.0533
 
 # Epaisseur optique aerosol (float)
-TAUAER = 0.3
+TAUAER = 0.0
 
 # Albedo simple de diffusion des aerosols (float)
 W0AER = 0.966883724738261
@@ -97,7 +97,7 @@ SUR = 1
 	# 1=agite avec reflexion multiple
 	# 2=agite sans reflexion multiple
 	# 3=surface lambertienne
-DIOPTRE = 2
+DIOPTRE = 0
 
 # Albedo simple de diffusion de la surface lambertienne (float)
 W0LAM = 0.7
@@ -119,4 +119,5 @@ PATHRESULTATSHDF = validation/SPHERIQUE
 PATHDIFFAER = /home/florent/MCCuda/fic/valid_T70.443
 
 # Chemin du modèle atmosphérique utilisateur (utile uniquement si PROFIL = 2)
-PATHPROFILATM = /home/florent/MCCuda/profil/molec_H8_0.236_AER_0_2km_0.3
+#PATHPROFILATM = /home/florent/MCCuda/profil/molec_H8_0.236_AER_0_2km_0.3
+PATHPROFILATM = /home/florent/MCCuda/profil/molec_new_profil_mol_H8_AER_0_2_443

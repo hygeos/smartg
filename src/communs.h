@@ -1,34 +1,37 @@
 
-	  ////////////////
-	 // LIBRAIRIES //
-	////////////////
-#include <stdio.h>
+#ifndef COMMUNS_H
+#define COMMUNS_H
+/**********************************************************
+*
+*			communs.h
+*
+*	> Include librairies
+*	> Déclaration des constantes
+*	> Variables externes fichier host
+*	> Définition des structures
+*
+***********************************************************/
 
+
+/**********************************************************
+*	> Include
+***********************************************************/
+
+#include <stdio.h>
 #include <mfhdf.h>
 #include <curand_kernel.h>
 
-
-// #include <time.h>
-
 #include <stdlib.h>
-// #include <hdf.h>
-// #include <float.h>
 #include <math.h>
-// #include <limits.h>
 #include <string.h>
-//#include <cutil.h>>
-//#include <shrUtils.h
-//#include <shrQATest.h>
-//#include <cutil_inline.h>
 
 #include <sys/stat.h>
 #include <sys/types.h>
 
 
-
-	  ////////////////////////////
-	 // CONSTANTES PREDEFINIES //
-	////////////////////////////
+/**********************************************************
+*	> Constantes
+***********************************************************/
 
 // Constantes pour la fonction random Mersenne Twister
 #define MT_MM 9
@@ -41,11 +44,19 @@
 #define MT_SHIFTC 15
 #define MT_SHIFT1 18
 
+/* Lié au photon */
 // Poids initial du photon
 #define WEIGHTINIT 1.F
 // Au dela du poids WEIGHTMAX le photon est considéré comme une erreur
 #define WEIGHTMAX 50.F
+// Détecte les photons très proches du zenith
+#define VALMIN 0.000001F
+
+
 #define DEPO 0.0279F
+
+
+/* Mathématiques */
 #define PI 3.1415927F
 //3.141 592 653 589F
 #define DEUXPI 6.2831853F
@@ -54,29 +65,36 @@
 //1.570 796 326 79F
 #define DEG2RAD 0.017453293F
 //0.017453293
-// Détecte les photons très proches du zenith
-#define VALMIN 0.000001F
 
-// Localisation du photon
+
+/* Localisation du photon */
 #define SPACE		0
 #define ATMOS		1
 #define SURFACE		2
 #define ABSORBED	3
 #define NONE		4
 
-// Constante pour le calcul du profil de l'atmosphère (Nombre de couches)
+
+/* Constante pour le calcul du profil de l'atmosphère (Nombre de couches) */
 // #define NATM 5
+
+
+/* Constante pour le calcul de la fonction de phase des aérosols */
 #define NFAER_c 1000000
 
-// Constantes propres au calcul sphérique
+
+/* Constantes propres au calcul sphérique */
 #define RTER 6400
 #define HATM 100
 
+
+/* Option d'affichage des trajets */
 #ifdef TRAJET
 #define NBTRAJET 40	// Nombre de trajet à afficher pour debuggage
 #endif
 
-// DEBUG Test des differentes fonctions random
+
+/* Test des differentes fonctions random */
 #ifdef RANDMWC
 #define RAND randomMWCfloat(etatThr,configThr)
 #endif
@@ -87,20 +105,10 @@
 #define RAND randomMTfloat(etatThr, configThr)
 #endif
 
-// DEBUG Test des differentes fonctions random
-#ifdef RANDMWC
-#define RANDDEBUG randomMWCfloat(&etatThr,&configThr)
-#endif
-#ifdef RANDCUDA
-#define RANDDEBUG curand_uniform(&etatThr)
-#endif
-#ifdef RANDMT
-#define RANDDEBUG randomMTfloat(&etatThr, &configThr)
-#endif
 
-	  /////////////////////////////
-	 // CONSTANTES FICHIER HOST //
-	/////////////////////////////
+/**********************************************************
+*	> Variables externes fichier host
+***********************************************************/
 
 extern unsigned long long NBPHOTONS;
 extern unsigned int NBLOOP;
@@ -140,9 +148,14 @@ extern char PATHTEMOINHDF[];
 extern char PATHDIFFAER[];
 extern char PATHPROFILATM[];
 
-	  //////////////
-	 // TYPEDEFS //
-	//////////////
+
+/**********************************************************
+*	> Définition des structures
+***********************************************************/
+
+/* Photon
+* Contient toutes les informations sur le photon lors de son parcours dans l'atmosphère
+*/
 
 typedef struct __align__(16)
 {
@@ -157,10 +170,11 @@ typedef struct __align__(16)
 	
 	// Localisation du photon
 	int loc;
-	int locPrec;	// Localisation précédente du photon
+	int locPrec;
 	
 	// Poids du photon
 	float weight;
+	
 	// Paramètres de stokes du photon
 	float stokes1;
 	float stokes2;
@@ -172,59 +186,81 @@ typedef struct __align__(16)
 	double y;
 	double z;
 	
-	// Parametres initiaux
+	
 	double taumax;
-// 	double zintermax;
-// 	float x0;
-// 	float y0;
-// 	float z0;
+	
+	// Paramètres pour une atmosphère sphérique
 	int couche;
-	int isurface;
 	
 	#ifdef SORTIEINT
 	int numBoucle;
 	#endif
+	
 }Photon;
+
+
+/* Variables
+* Contient toutes les variables qui sont renvoyées dans le host depuis le device suite
+* à l'execution d'un kernel
+*/
 
 typedef struct __align__(16)
 {
-	unsigned long long nbPhotons; //nombre de photons traités pour un appel du Kernel
-	int erreurpoids; //nombre de photons ayant un poids anormalement élevé
-	int erreurtheta; //nombre de photons ignorés (sortant dans la direction solaire)
+	unsigned long long nbPhotons;	// Nombre de photons traités pour un appel du Kernel
+	int erreurpoids;				// Nombre de photons ayant un poids anormalement élevé
+	int erreurtheta;				// Nombre de photons ignorés (sortant dans la direction solaire)
+	
 	#ifdef PROGRESSION
-	unsigned long long nbThreads; //nombre total de threads lancés
-	unsigned long long nbPhotonsSor; //nombre de photons ressortis pour un appel du Kernel
-	int erreurvxy; //nombre de photons sortant au zénith et donc difficiles à classer
-	int erreurvy; //nombre de photons sortant à phi=0 ou phi=PI et donc difficiles à classer
-	int erreurcase; // nombre de photons rangé dans une case inexistante
+	unsigned long long nbThreads;	// Nombre total de threads lancés
+	unsigned long long nbPhotonsSor;// Nombre de photons ressortis pour un appel du Kernel
+	int erreurvxy;					// Nombre de photons sortant au zénith et donc difficiles à classer
+	int erreurvy;					// Nombre de photons sortant à phi=0 ou phi=PI et donc difficiles à classer
+	int erreurcase;					// Nombre de photons rangé dans une case inexistante
 	#endif
-}Variables; //Regroupement des variables envoyées dans le kernel
+	
+}Variables;
+
+
+/* ConfigMT
+* Paramètres pour la fonction random Mersenne Twister
+*/
 
 typedef struct {
 	unsigned int matrix_a;
 	unsigned int mask_b;
 	unsigned int mask_c;
 	unsigned int seed;
-} ConfigMT; // Parametres pour la fonction random Mersenne Twister
+} ConfigMT;
+
+
+/* EtatMT
+* Etat du générateur pour la fonction random Mersenne Twister
+*/
 
 typedef struct {
 	unsigned int mt[MT_NN];
 	int iState;
 	unsigned int mti1;
-} EtatMT; // Etat du generateur pour la fonction random Mersenne Twister
+} EtatMT;
+
+
+/* Tableaux
+* Ensemble des tableaux envoyés par le host dans le device
+* tabPhotons est également modifié par le kernel pour sauver les paramètres de stokes du photon sorti dans l'espace
+*/
 
 typedef struct __align__(16)
 {
-	float* tabPhotons;
+	float* tabPhotons;		// Tableau contenant l'ensemble des paramètres de stokes des photons sortis dans l'espace
 	
-	float* faer;		// Pointeur vers le modèle de diffusion des aérosols
-	double* h;	// Pointeur vers l'épaisseur optique de chaque couche du modèle atmosphérique
-	float* pMol;		// Pointeur vers le pourcentage de molécules dans chaque couche du modèle atmosphérique
-	double* z;			// Altitude de chaque couche
+	float* faer;			// Pointeur vers le modèle de diffusion des aérosols
+	double* h;				// Pointeur vers l'épaisseur optique de chaque couches du modèle atmosphérique
+	float* pMol;			// Pointeur vers la proportion de molécules dans chaque couches du modèle atmosphérique
+	double* z;				// Altitude de chaque couches
 	
-	// Profil atmosphérique initial vu par la photon
-	double* hph0;
-	double* zph0;
+	/* Profil atmosphérique initial vu par la photon */
+	double* hph0;			// Epaisseur optique vue devant le photon
+	double* zph0;			// Altitude correspondante
 	
 	#ifdef SORTIEINT
 	float* poids;
@@ -243,26 +279,37 @@ typedef struct __align__(16)
 	EtatMT* etat;
 	#endif
 	
-}Tableaux; // Regroupement des tableaux envoyés dans le kernel
+}Tableaux;
+
+
+/* Init
+* Paramètres initiaux du photon lors du premier impact avec l'atmosphère
+* Les calculs sont effectués dans host.cu une seule fois
+*/
 
 typedef struct __align__(16){
 	
-	// Coordonnées initiales
+	/* Coordonnées initiales */
 	double x0;
 	double y0;
 	double z0;
 	
-	// Tau et z init
-	double taumax0;
-	double zintermax0;
-		
+	/* Paramètres liés au profil initial vu par le photon */
+	double taumax0;		// Valeur maximale de l'épaisseur optique parcourue par le photon qui conduira à une 1ère intéraction
+	double zintermax0;	// Distance entre le photon et une des extrémités de l'atmosphère dans le cas où il n'y as pas d'intéractoin
+
 } Init;
 
+
+/* Evnt
+* DEBUG permet de recuperer des infos sur certains photons
+*/
 
 typedef struct __align__(16)
 {
 	int action;
 	float tau;
 	float poids;
-}Evnt; // DEBUG permet de recuperer des infos sur certains photons
+}Evnt;
 
+#endif	// COMMUNS_H
