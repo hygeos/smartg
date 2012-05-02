@@ -15,11 +15,9 @@
 // Fonction principale
 int main (int argc, char *argv[])
 {
-
-	/** Variables du main **/
-	cudaError_t cudaErreur;	// Permet de vérifier les allocations mémoires
-	
 	/** Initialisation de la carte graphique **/
+	cudaError_t cudaErreur;	// Permet de vérifier les allocations mémoire
+	
 	//
 	cudaDeviceReset();
 	
@@ -33,89 +31,33 @@ int main (int argc, char *argv[])
 		exit(1);
 	}
 	
-
+	
 	/** Initialisation des constantes du host (en partie recuperees dans le fichier Parametres.txt) **/
+	
 	initConstantesHost(argc, argv);
 	
-	/** Initialisation des constantes du device à partir des constantes du host **/
-	initConstantesDevice();
-
-	/** Vérification des fichiers **/
-	verifierFichier();
 	
-	#ifdef SORTIEINT
-	// Fichiers de sortie pour le débuggage
-
-	float seuilPds = 2;
-	char detail[256];
-	int retour;
+	/** Variables du main **/
 	
-// 	mkdir("./sortie_int/",777);
-// 	mkdir("./sortie_int/poids/",777);
-	retour = system("mkdir -p sortie_int/poids/");
-	if(retour!=0)
-		printf("ERREUR: mkdir a echoue\n");
+	double tempsPrec = 0.; 	//temps ecoule de la simulation precedente
 	
-	retour = system("mkdir -p sortie_int/nbre_boucle/");
-	if(retour!=0)
-		printf("ERREUR: mkdir a echoue\n");
-	
-	
-	// Fichier où seront stockés les photons avec un poids supérieur à un seuil
-	sprintf(detail,"sortie_int/poids/poids_tauRay=%f_tauAer=%f_difff=%d_ths=%f_sim=%d.txt",TAURAY,TAUAER,DIFFF,
- THSDEG,SIM);
-	FILE* fic_poids = fopen(detail,"w+");
-	if( fic_poids == NULL){
-		printf("ERREUR: Impossible d'ouvrir le fichier %s\n", detail);
-		exit(1);
-	}
-
-	// Le nombre total de photons y sera sauvé (en fait non pas du tout)
-// 	sprintf(detail,"out_prog/sortie_int/nbre_photons/photons_tauRay=%f_tauAer=%f_difff=%d_ths=%f_sim=%d.txt",TAURAY,
-// TAUAER, DIFFF,THSDEG,SIM);
-// 	FILE* fic_nbre_ph = fopen(detail,"w");
-// 	if( fic_nbre_ph == NULL){
-// 		printf("ERREUR: Impossible d'ouvrir le fichier %s\n",detail);
-// 		exit(1);
-// 	}
-// 	
-	int tabNbBoucleTot[NBLOOP];
-	for( int i=0; i<NBLOOP; i++)
-		tabNbBoucleTot[i]=0;
-	sprintf(detail,"sortie_int/nbre_boucle/nbBoucle_tauRay=%f_tauAer=%f_difff=%d_ths=%f_sim=%d.txt",TAURAY,TAUAER, DIFFF,THSDEG,SIM);
-	FILE* fic_nbre_boucle = fopen(detail,"w+");
-	if( fic_nbre_boucle == NULL){
-		printf("ERREUR: Impossible d'ouvrir le fichier %s\n",detail);
-		exit(1);
-	}
-	#endif
-
-	// DEBUG : Affichage basique des parametres de la simulation
-	printf("\n%lu - %u - %d - %d - %d - %d - %d - %d\n", NBPHOTONS,NBLOOP,XBLOCK,YBLOCK,XGRID,YGRID,NBTHETA,NBPHI);
-
-	/** Regroupement et initialisation des variables a envoyer dans le kernel (structure de variables) **/
+	// Regroupement et initialisation des variables a envoyer dans le kernel (structure de variables)
 	Variables* var_H; //variables version host
 	Variables* var_D; //variables version device
 	initVariables(&var_H, &var_D);
 	
-	/** Définition et initialisation des constantes initiales du photon **/
-	Init* init_H;
-	Init* init_D;
-	initInit(&init_H, &init_D);
-
-	/** Regroupement et initialisation des tableaux a envoyer dans le kernel (structure de pointeurs) **/
+	// Regroupement et initialisation des tableaux a envoyer dans le kernel (structure de pointeurs)
 	Tableaux tab_H; //tableaux version host
 	Tableaux tab_D; //tableaux version device
 	initTableaux(&tab_H, &tab_D);
-
-
-	/** Variables et tableaux qui restent dans le host et se remplissent petit à petit **/
+	
+	// Variables et tableaux qui restent dans le host et se remplissent petit à petit
 	unsigned long long nbPhotonsTot = 0; //nombre total de photons traités
-
+	
 	#ifdef PROGRESSION
 	unsigned long long nbPhotonsSorTot = 0; //nombre total de photons ressortis
 	#endif
-
+	
 	float* tabPhotonsTot; //tableau du poids total des photons sortis
 	tabPhotonsTot = (float*)malloc(4*NBTHETA * NBPHI * sizeof(*(tabPhotonsTot)));
 	if( tabPhotonsTot == NULL ){
@@ -124,7 +66,14 @@ int main (int argc, char *argv[])
 	}
 	
 	memset(tabPhotonsTot,0,4*NBTHETA*NBPHI*sizeof(*(tabPhotonsTot)));
-
+	
+	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
+	// Définition et initialisation des constantes initiales du photon
+	Init* init_H;
+	Init* init_D;
+	initInit(&init_H, &init_D);
+	#endif
+	
 	#ifdef TABRAND
 	// DEBUG Recuperations des nombres aleatoires du random en place
 	float tableauRand_H[100] = {0};
@@ -135,7 +84,23 @@ int main (int argc, char *argv[])
 	}
 	cudaMemset(tableauRand_D, 0, 100 * sizeof(float));
 	#endif
+	
+	
+	/** Initialisation des constantes du device à partir des constantes du host **/
+	
+	initConstantesDevice();
 
+	
+	/** Vérification des fichiers **/
+	verifierFichier();
+	
+	
+	#ifdef PARAMETRES
+	/** Affichage des paramètres de la simulation **/
+	afficheParametres();
+	#endif
+	
+	
 	/** Calcul des modèles utiles à l'algorithme **/
 	// Calcul de faer, modèle de diffusion des aérosols
 	if( TAUAER > 0 ){
@@ -147,7 +112,10 @@ int main (int argc, char *argv[])
 	profilAtm( &tab_H, &tab_D );
 // 	verificationAtm( tab_H );
 	
-	/** Calcul du point d'impact du photon **/
+	
+	/** Séparation du code pour atmosphère sphérique ou parallèle **/
+	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
+	// Calcul du point d'impact du photon
 	impactInit(init_H, init_D, &tab_H, &tab_D);
 
 	#ifdef DEBUG
@@ -157,8 +125,10 @@ int main (int argc, char *argv[])
 		printf("zph[%i]=%10.7lf - hph[%d]=%10.7e\n",i, tab_H.zph0[i], i ,tab_H.hph0[i] );
 	#endif
 	
+	#endif /* Fin de la spécification atmosphère sphérique */
+	
+	
 	/** Fonction qui permet de poursuivre la simulation précédente si elle n'est pas terminee **/
-	double tempsPrec = 0.; //temps ecoule de la simulation precedente
 	lireHDFTemoin(var_H, var_D, &nbPhotonsTot, tabPhotonsTot, &tempsPrec);
 	
 	#ifdef TRAJET
@@ -176,11 +146,6 @@ int main (int argc, char *argv[])
 	/** Organisation des threads en blocks de threads et en grids de blocks **/
 	dim3 blockSize(XBLOCK,YBLOCK);
 	dim3 gridSize(XGRID,YGRID);
-	
-	// Affichage des paramètres de la simulation
-	#ifdef PARAMETRES
-	afficheParametres();
-	#endif
 
 
 	// Variable permettant de savoir si on est passé dans la boucle ou non
@@ -241,19 +206,12 @@ int main (int argc, char *argv[])
 			exit(1);
 		}
 		
-		#ifdef SORTIEINT
-		cudaErreur = cudaMemset(tab_D.nbBoucle, 0, NBLOOP*sizeof(*(tab_D.nbBoucle)) );
-		if( cudaErreur != cudaSuccess ){
-			printf("#--------------------#\n");
-			printf("# ERREUR: Problème de cudaMemset tab_D->nbBoucle dans le main\n");
-			printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-			printf("#--------------------#\n");
-			exit(1);
-		}
-		#endif
 		
 		/** Lancement du kernel **/
-		lancementKernel<<<gridSize, blockSize>>>(var_D, tab_D, init_D
+		lancementKernel<<<gridSize, blockSize>>>(var_D, tab_D
+				#ifdef SPHERIQUE
+				, init_D
+				#endif
 				#ifdef TABRAND
 				, tableauRand_D
 				#endif
@@ -302,29 +260,6 @@ cudaMemcpyDeviceToHost);
 // 			exit(1);
 // 		}
 
-		#ifdef SORTIEINT
-		cudaErreur = cudaMemcpy(tab_H.poids, tab_D.poids, NBLOOP * sizeof(*(tab_H.poids)), cudaMemcpyDeviceToHost);
-		if( cudaErreur != cudaSuccess ){
-			printf( "ERREUR: Problème de copie tab_H.poids dans le main\n");
-			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-			exit(1);
-		}
-		for(int i=0; i<NBLOOP; i++){
-			if(abs(tab_H.poids[i])>seuilPds)
-				fprintf(fic_poids,"%f\n",tab_H.poids[i]);
-		}
-		
-		cudaErreur = cudaMemcpy(tab_H.nbBoucle, tab_D.nbBoucle, NBLOOP * sizeof(*(tab_D.nbBoucle)),
-cudaMemcpyDeviceToHost);
-		if( cudaErreur != cudaSuccess ){
-			printf( "ERREUR: Problème de copie tab_H.nbBoucle dans le main\n");
-			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-			exit(1);
-		}
-		
-		for(int i = 0; i <NBLOOP; i++)
-			tabNbBoucleTot[i] += tab_H.nbBoucle[i];
-		#endif
 				
 		// On remplit les variables et tableau qui restent dans le host
 		nbPhotonsTot += var_H->nbPhotons;
@@ -376,30 +311,6 @@ cudaMemcpyDeviceToHost);
 	}
 	printf("==================================\n");
 	#endif
-	
-
-
-	#ifdef SORTIEINT
-	// Sauvegarde du nombre de photons par boite (en fait non pas du tout)
-// 	for(int iphi = 0; iphi < NBPHI; iphi++)
-// 	{
-// 		for(int ith = 0; ith < NBTHETA; ith++)
-// 		{
-// 			fprintf(fic_nbre_ph,"%llu\t",(tabPhotonsTot[0*NBPHI*NBTHETA+ith*NBPHI+iphi] +
-// tabPhotonsTot[1*NBPHI*NBTHETA+ith*NBPHI+iphi])/2);
-// 		}
-// 		fprintf( fic_nbre_ph, "\n" );
-// 	}
-	
-	for( int i = 0; i<NBLOOP; i++ ){
-		fprintf( fic_nbre_boucle, "%d\t%d\n", i+1,tabNbBoucleTot[i] );
-		
-	}
-	
-	fclose(fic_poids);
-// 	fclose(fic_nbre_ph);
-	fclose(fic_nbre_boucle);
-	#endif
 
 
 	cudaErreur = cudaMemcpy(tab_H.tabPhotons, tab_D.tabPhotons, 4*NBTHETA * NBPHI * sizeof(*(tab_H.tabPhotons)),
@@ -410,8 +321,6 @@ cudaMemcpyDeviceToHost);
 		exit(1);
 	}
 	
-// 	for(int i = 0; i < 4*NBTHETA*NBPHI; i++)
-// 		tabPhotonsTot[i] += tab_H.tabPhotons[i];
 	
 	/** Création et calcul du tableau final (regroupant le poids de tous les photons ressortis sur une demi-sphère, par unité de surface) **/
 	float tabFinal[3*NBTHETA * NBPHI]; //tableau final
@@ -451,6 +360,8 @@ cudaMemcpyDeviceToHost);
 	free(var_H);
 // 	cudaFreeHost(var_H);
 
+
+	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
 	cudaErreur = cudaFree(init_D);
 	if( cudaErreur != cudaSuccess ){
 		printf( "ERREUR: Problème de free de init_D dans le main\n");
@@ -459,13 +370,15 @@ cudaMemcpyDeviceToHost);
 	}
 
 	free(init_H);
-
+	#endif
+	
+	
 	// Libération des tableaux envoyés dans le kernel
 	freeTableaux(&tab_H, &tab_D);
 	// Libération du tableau du host
 	free(tabPhotonsTot);
 
-	// Libération des streams
+	/** Libération des streams **/
 // 	cudaErreur = cudaStreamDestroy( stream1 );
 // 	if( cudaErreur != cudaSuccess ){
 // 		printf( "ERREUR: Problème cudaStreamDestroy(stream1) dans le main\n");
@@ -479,6 +392,7 @@ cudaMemcpyDeviceToHost);
 // 		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
 // 		exit(1);
 // 	}
+
 
 	// Libération des variables qui récupèrent le trajet d'un photon
 	#ifdef TRAJET

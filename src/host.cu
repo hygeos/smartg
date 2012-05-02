@@ -464,14 +464,12 @@ void verifierFichier(){
 	{
 		printf("ATTENTION: Le fichier temoin %s existe deja.\n",PATHTEMOINHDF);
 		printf("Voulez-vous le supprimer? [y/n]\n");
-// 		res_supp=getchar();
-// 		if( res_supp=='y' ){
-// 			sprintf(command,"rm %s",PATHTEMOINHDF);
-// 			system(command);
-// 		}
-// 		else{
-// 		}
-// 		getchar();
+		res_supp=getchar();
+		if( res_supp=='y' ){
+			sprintf(command,"rm %s",PATHTEMOINHDF);
+			system(command);
+		}
+		getchar();
 		fclose(fic);
 	}
 	
@@ -486,8 +484,6 @@ void verifierFichier(){
 //    sprintf(command,"rm %s",PATHRESULTATSHDF);
 //    system(command);
    // 		}
-   // 		else{
-	   // 		}
 	   fclose(fic);
 	}
 	
@@ -575,6 +571,7 @@ void reinitVariables(Variables* var_H, Variables* var_D)
 }
 
 
+#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
 /* initInit
 * Initialisation de la structure Init contenant les paramètres initiaux du photon rentrant dans l'atmosphère.
 * Ces paramètres sont utiles pour une atmosphère sphérique et sont calculés une seule fois dans le host, d'où cette fonction
@@ -627,6 +624,7 @@ void initInit(Init** init_H, Init** init_D)
    // 	}
    
 }
+#endif
 
 
 /* initTableaux
@@ -634,10 +632,9 @@ void initInit(Init** init_H, Init** init_D)
 */
 void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 {
-	
-#ifdef RANDMWC
 	cudaError_t cudaErreur;	// Permet de tester les erreurs d'allocation mémoire
-
+	
+	#ifdef RANDMWC	
 	// Création des tableaux de generateurs pour la fonction Random MWC
 	tab_H->etat = (unsigned long long*)malloc(XBLOCK * YBLOCK * XGRID * YGRID * sizeof(unsigned long long));
 	if( tab_H->etat == NULL ){
@@ -678,17 +675,20 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
 		exit(1);
 	}
-#endif
-#ifdef RANDCUDA
+	#endif
+	
+	#ifdef RANDCUDA
 	// Création du tableau de generateurs (=etat+config) pour la fonction Random Cuda
 	if( cudaMalloc(&(tab_D->etat), XBLOCK * YBLOCK * XGRID * YGRID * sizeof(curandState_t)) == cudaErrorMemoryAllocation ){
 		printf("ERREUR: Problème de cudaMalloc de tab_D->etat dans initTableaux\n");
 		exit(1);	
 	}
+	
 	// Initialisation du tableau dans une fonction du kernel
 	initRandCUDA<<<XGRID * YGRID, XBLOCK * YBLOCK>>>(tab_D->etat, (unsigned long long)SEED);
-#endif
-#ifdef RANDMT
+	#endif
+	
+	#ifdef RANDMT
 	// Création des tableaux de generateurs pour la fonction Random Mersenne Twister
 	if( cudaMalloc(&(tab_D->config), XBLOCK * YBLOCK * XGRID * YGRID * sizeof(ConfigMT)) == cudaErrorMemoryAllocation ){
 		printf("ERREUR: Problème de cudaMalloc de tab_D->config dans initTableaux\n");
@@ -716,15 +716,14 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	initRandMTConfig(tab_H->config, tab_D->config, XBLOCK * YBLOCK * XGRID * YGRID);
 	// Initialisation du tableau des etats dans le kernel
 	initRandMTEtat<<<XGRID * YGRID, XBLOCK * YBLOCK>>>(tab_D->etat, tab_D->config);
-#endif
+	#endif
 	
-// 	if( cudaHostAlloc( &(tab_H->tabPhotons), 4*NBTHETA * NBPHI * sizeof(*(tab_H->tabPhotons)), cudaHostAllocPortable ) != cudaSuccess
-// ){
-// 		printf("#--------------------#\n");
-// 		printf("ERREUR: Problème d'allocation de tab_H->tabPhotons dans initTableaux\n");
-// 		printf("#--------------------#\n");
-// 		exit(1);
-// 	}
+	//if( cudaHostAlloc( &(tab_H->tabPhotons), 4*NBTHETA*NBPHI*sizeof(*(tab_H->tabPhotons)), cudaHostAllocPortable ) !=cudaSuccess){
+	// 		printf("#--------------------#\n");
+	// 		printf("ERREUR: Problème d'allocation de tab_H->tabPhotons dans initTableaux\n");
+	// 		printf("#--------------------#\n");
+	// 		exit(1);
+	// 	}
 	
 	// Tableau du poids des photons ressortis
 	tab_H->tabPhotons = (float*)malloc(4*NBTHETA * NBPHI * sizeof(*(tab_H->tabPhotons)));
@@ -763,6 +762,7 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	}
 	
 	/** Modèle de l'atmosphère **/
+	// Epaisseur optique par couche
 	tab_H->h =  (float*)malloc((NATM+1)*sizeof(*(tab_H->h)));
 	if( tab_H->h == NULL ){
 		printf("ERREUR: Problème de malloc de tab_H->h dans initTableaux\n");
@@ -772,19 +772,6 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	
 	if( cudaMalloc( &(tab_D->h), (NATM+1)*sizeof(*(tab_H->h)) ) == cudaErrorMemoryAllocation ){
 		printf("ERREUR: Problème de cudaMalloc de tab_D->h dans initTableaux\n");
-		exit(1);	
-	}
-	
-	// Altitude des couches
-	tab_H->z =  (float*)malloc((NATM+1)*sizeof(*(tab_H->z)));
-	if( tab_H->z == NULL ){
-		printf("ERREUR: Problème de malloc de tab_H->z dans initTableaux\n");
-		exit(1);
-	}
-	memset(tab_H->z,0,(NATM+1)*sizeof(*(tab_H->z)) );
-	
-	if( cudaMalloc( &(tab_D->z), (NATM+1)*sizeof(*(tab_H->z)) ) == cudaErrorMemoryAllocation ){
-		printf("ERREUR: Problème de cudaMalloc de tab_D->z dans initTableaux\n");
 		exit(1);	
 	}
 	
@@ -801,6 +788,20 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 		exit(1);	
 	}
 	
+	// Altitude des couches
+	tab_H->z =  (float*)malloc((NATM+1)*sizeof(*(tab_H->z)));
+	if( tab_H->z == NULL ){
+		printf("ERREUR: Problème de malloc de tab_H->z dans initTableaux\n");
+		exit(1);
+	}
+	memset(tab_H->z,0,(NATM+1)*sizeof(*(tab_H->z)) );
+	
+	if( cudaMalloc( &(tab_D->z), (NATM+1)*sizeof(*(tab_H->z)) ) == cudaErrorMemoryAllocation ){
+		printf("ERREUR: Problème de cudaMalloc de tab_D->z dans initTableaux\n");
+		exit(1);	
+	}
+	
+	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
 	/** Profil initial vu par le photon **/
 	tab_H->zph0 =  (float*)malloc((NATM+1)*sizeof(*(tab_H->zph0)));
 	if( tab_H->zph0 == NULL ){
@@ -825,44 +826,7 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 		printf("ERREUR: Problème de cudaMalloc de tab_D->hph0 dans initTableaux\n");
 		exit(1);	
 	}
-	
-	
-	#ifdef SORTIEINT
-	tab_H->poids =  (float*)malloc(NBLOOP*sizeof(float));
-	if( tab_H->poids == NULL ){
-		printf("ERREUR: Problème de malloc de tab_H->poids dans initTableaux\n");
-		exit(1);
-	}
-	memset(tab_H->poids,0,NBLOOP*sizeof(float) );
-	
-	if( cudaMalloc( &(tab_D->poids), NBLOOP*sizeof(float) ) == cudaErrorMemoryAllocation ){
-		printf("ERREUR: Problème de cudaMalloc de tab_D->poids dans initTableaux\n");
-		exit(1);	
-	}
-	cudaMemset(tab_D->poids,0,NBLOOP*sizeof(float));
-	
-	tab_H->nbBoucle =  (unsigned long long*)malloc(NBLOOP*sizeof(*(tab_H->nbBoucle)));
-	if( tab_H->poids == NULL ){
-		printf("ERREUR: Problème de malloc de tab_H->nbBoucle dans initTableaux\n");
-		exit(1);
-	}
-	memset(tab_H->nbBoucle,0,NBLOOP*sizeof(*(tab_H->nbBoucle)) );
-	
-	if( cudaMalloc( &(tab_D->nbBoucle), NBLOOP*sizeof(*(tab_D->nbBoucle)) ) == cudaErrorMemoryAllocation ){
-		printf("ERREUR: Problème de cudaMalloc de tab_D->nbBoucle dans initTableaux\n");
-		exit(1);	
-	}
-	
-	cudaErreur = cudaMemset(tab_D->nbBoucle, 0, NBLOOP*sizeof(*(tab_D->nbBoucle)) );
-	if( cudaErreur != cudaSuccess ){
-		printf("#--------------------#\n");
-		printf("# ERREUR: Problème de cudaMemset tab_D->nbBoucle dans initTableaux\n");
-		printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-		printf("#--------------------#\n");
-		exit(1);
-	}
 	#endif
-	
 	
 }
 
@@ -957,6 +921,16 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	free(tab_H->h);
 	
 	//
+	erreur = cudaFree(tab_D->pMol);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->pMol dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	
+	free(tab_H->pMol);
+	
+	//
 	erreur = cudaFree(tab_D->z);
 	if( erreur != cudaSuccess ){
 		printf( "ERREUR: Problème de cudaFree de tab_D->z dans freeTableaux\n");
@@ -966,7 +940,9 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	
 	free(tab_H->z);
 	
-	// Profil vu par la photon
+	/** Séparation du code pour atmosphère sphérique ou parallèle **/
+	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
+	// Profil initial vu par la photon
 	erreur = cudaFree(tab_D->zph0);
 	if( erreur != cudaSuccess ){
 		printf( "ERREUR: Problème de cudaFree de tab_D->zph0 dans freeTableaux\n");
@@ -985,35 +961,8 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	
 	free(tab_H->hph0);
 	
-	//
-	erreur = cudaFree(tab_D->pMol);
-	if( erreur != cudaSuccess ){
-		printf( "ERREUR: Problème de cudaFree de tab_D->pMol dans freeTableaux\n");
-		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-		exit(1);
-	}
-	
-	free(tab_H->pMol);
-	
-	#ifdef SORTIEINT
-	free( tab_H->poids );
-	
-	erreur = cudaFree(tab_D->poids);
-	if( erreur != cudaSuccess ){
-		printf( "ERREUR: Problème de cudaFree de tab_D->poids dans freeTableaux\n");
-		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-		exit(1);
-	}
-	
-	free( tab_H->nbBoucle );
-	
-	erreur = cudaFree(tab_D->nbBoucle);
-	if( erreur != cudaSuccess ){
-		printf( "ERREUR: Problème de cudaFree de tab_D->nbBoucle dans freeTableaux\n");
-		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-		exit(1);
-	}
 	#endif
+	
 }
 
 
@@ -1159,8 +1108,6 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 	/** Déclaration des variables **/
 	/*NOTE: différence avec le code fortran: je n'utilise pas int ncouche */
 	
-// 	float z[NATM+1];		// Altitude à chaque couche
-// 	float z;	// Variable représentant l'altitude
 	float tauMol[NATM+1];	// Epaisseur optique des molécules à chaque couche
 	float tauAer[NATM+1];	// Epaisseur optique des aérosols à chaque couche
 	int i=0;
@@ -1168,7 +1115,6 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 	cudaError_t erreur;	// Permet de tester le bon déroulement des opérations mémoires
 	
 	/** Conditions aux limites au sommet de l'atmosphère **/
-// 	z[0] = 100.0;
 	tab_H->z[0] = HATM;
 	tauMol[0] = 0.0;
 	tauAer[0] = 0.0;
@@ -1181,7 +1127,6 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 	if( /*(TAUAER < 0.0001) ||*/ ((TAUAER < 0.0001)&&(TAURAY < 0.0001)) ){
 		tauMol[1] = TAURAY;
 		tauAer[1] = 0;
-// 		z[1] = 0;
 		tab_H->z[1]=0;
 		tab_H->h[1] = tauMol[1] + tauAer[1];
 		tab_H->pMol[1] = 1.0;
@@ -1220,14 +1165,12 @@ couche inferieure contenant tous les aerosols.
 		if( HA < 0.0001 ){
 			tauMol[1] = TAURAY;
 			tauAer[1] = 0;
-// 			z[1] = 0;
 			tab_H->z[1]=0.f;
 			tab_H->h[1] = tauMol[1] + tauAer[1];
 			tab_H->pMol[1] = 1.0;
 			
 			tauMol[2] = 0;
 			tauAer[2] = TAUAER;
-// 			z[2] = 0.0;
 			tab_H->z[2]=0.f;
 			tab_H->h[2] = tab_H->h[1] + tauMol[2] + tauAer[2];
 			tab_H->pMol[2] = 0.0;
@@ -1240,14 +1183,12 @@ inferieure contenant toutes les molécules.
 		else if( HA > 499.99 ){
 			tauMol[1] = 0.0;
 			tauAer[1] = TAUAER;
-// 			z[1] = 0.0;
 			tab_H->z[1]=0.f;
 			tab_H->h[1] = tauMol[1] + tauAer[1];
 			tab_H->pMol[1] = 0.0;
 			
 			tauMol[2] = TAURAY;
 			tauAer[2] = 0.0;
-// 			z[2] = 0.0;
 			tab_H->z[2]=0.f;
 			tab_H->h[2] = tab_H->h[1] + tauMol[2] + tauAer[2];
 			tab_H->pMol[2] = 1.0;
@@ -1257,8 +1198,6 @@ inferieure contenant toutes les molécules.
 		else{
 			for( i=0; i<NATM+1; i++){
 				if(i!=0){
-// 					z[i] = 100.F - float(i)*(100.F/NATM);
-// 					z = 100.F - float(i)*(100.F/NATM);
 					tab_H->z[i]=100.F - float(i)*(100.F/NATM);
 				}
 				vr = TAURAY*exp( -(tab_H->z[i]/HR) );
@@ -1291,7 +1230,6 @@ inferieure contenant toutes les molécules.
 		}
 		
 		/** Calcul des grandeurs utiles aux OS pour la couche la plus haute **/
-// 		z[1] = -( HR*log(tauRay1/TAURAY) ); 
 		tab_H->z[1]=-( HR*log(tauRay1/TAURAY) );
 		tauMol[1] = tauRay1;
 		tauAer[1] = 0.F;                                    
@@ -1300,7 +1238,6 @@ inferieure contenant toutes les molécules.
 
 		/** Calcul des grandeurs utiles aux OS pour la deuxieme couche   **/
 		if( ZMAX == ZMIN ){ //Uniquement des aerosols dans la couche intermediaire
-// 			z[2] = ZMAX; // ou zmin, puisque zmin=zmax
 			tab_H->z[2]=ZMAX;
 			tauMol[2] = tauRay1;                                                      
 			tauAer[2] = TAUAER;
@@ -1309,7 +1246,6 @@ inferieure contenant toutes les molécules.
 		}
 		
 		else{	// Melange homogene d'aerosol et de molecules dans la couche intermediaire
-// 			z[2] = ZMIN;
 			tab_H->z[2]=ZMIN;
 			tauMol[2] = tauRay1+tauRay2;
 			tauAer[2] = TAUAER;
@@ -1318,7 +1254,6 @@ inferieure contenant toutes les molécules.
 		}
 		
 		/** Calcul des grandeurs utiles aux OS pour la troisieme couche **/
-// 		z[3] = 0.F;
 		tab_H->z[3]=0.f;
 		tauMol[3] = TAURAY;
 		tauAer[3] = TAUAER;
@@ -1407,6 +1342,8 @@ void verificationAtm( Tableaux tab_H ){
 	fclose(fichier);
 }
 
+/** Séparation du code pour atmosphère sphérique ou parallèle **/
+#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
 
 /* impactInit
 * Calcul du profil que le photon va rencontrer lors de son premier passage dans l'atmosphère
@@ -1502,6 +1439,7 @@ void impactInit(Init* init_H, Init* init_D, Tableaux* tab_H, Tableaux* tab_D){
 	}
 	
 }
+#endif
 
 
 /**********************************************************
@@ -1546,6 +1484,16 @@ void afficheParametres()
 	printf("\n");
 	
 	printf("\n#--------------- Atmosphère ----------------#\n");
+	
+	#ifdef SPHERIQUE
+	printf(" Géométrie de l'atmosphère: \tSphérique");
+	printf("\n");
+	#endif
+	#ifndef SPHERIQUE
+	printf(" Géométrie de l'atmosphère: \tParallèle");
+	printf("\n");
+	#endif
+	
 	printf(" TAURAY\t=\t%f", TAURAY);
 	printf("\n");
 	printf(" TAUAER\t=\t%f", TAUAER);
@@ -1714,7 +1662,6 @@ void calculOmega(float* tabTh, float* tabPhi, float* tabOmega)
 	tabTh[1] = dth;
 	for(int ith = 2; ith < NBTHETA; ith++){
 		tabTh[ith] = tabTh[ith-1] + dth;
-// 		tabTh[ith] = float(ith*0.5*DEG2RAD);
 	}
 	
 	// Tableau contenant l'angle psi de chaque morceau de sphère
@@ -1722,7 +1669,6 @@ void calculOmega(float* tabTh, float* tabPhi, float* tabOmega)
 	float dphi = PI / NBPHI;
  	tabPhi[0] = dphi / 2;
 	for(int iphi = 1; iphi < NBPHI; iphi++){ 
-// 		tabPhi[iphi] = float((iphi+0.5)*DEG2RAD);
 		tabPhi[iphi] = tabPhi[iphi-1] + dphi;
 	}
 	// Tableau contenant l'aire de chaque morceau de sphère
@@ -1778,12 +1724,6 @@ void calculTabFinal(float* tabFinal, float* tabTh, float* tabPhi, float* tabPhot
 				(tabPhotonsTot[0*NBPHI*NBTHETA+ith*NBPHI+iphi] + tabPhotonsTot[1*NBPHI*NBTHETA+ith*NBPHI+iphi]) / 
 				(2* nbPhotonsTot * tabOmega[ith*NBPHI+iphi]* cosf(tabTh[ith]));
 			
-			if(tabFinal[0*NBTHETA*NBPHI + iphi*NBTHETA+ith]!=0){
-// 				printf("\nR:tabFinal(iphi=%d,ith=%d)=%f\n",iphi,ith,tabFinal[0*NBTHETA*NBPHI + iphi*NBTHETA+ith]);
-// 				printf("s1=%f, s2=%f, cos(TabTh[ith])=%f, tabOmega[ith*NBPHI+iphi]=%f, nbTot=%llu\n\n",\
-				tabPhotonsTot[0*NBPHI*NBTHETA+ith*NBPHI+iphi], tabPhotonsTot[1*NBPHI*NBTHETA+ith*NBPHI+iphi], cosf(tabTh[ith]),\
-tabOmega[ith*NBPHI+iphi],nbPhotonsTot );
-			}
 			// Q
 			tabFinal[1*NBTHETA*NBPHI + iphi*NBTHETA+ith] =
 				(tabPhotonsTot[0*NBPHI*NBTHETA+ith*NBPHI+iphi] - tabPhotonsTot[1*NBPHI*NBTHETA+ith*NBPHI+iphi]) / 

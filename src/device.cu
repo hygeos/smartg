@@ -29,7 +29,10 @@
 * Il peut être important de rappeler que le kernel lance tous les threads mais effectue des calculs similaires. La boucle de la
 * fonction va donc être effectuée pour chaque thread du block de la grille
 */
-__global__ void lancementKernel(Variables* var, Tableaux tab, Init* init
+__global__ void lancementKernel(Variables* var, Tableaux tab
+		#ifdef SPHERIQUE
+		, Init* init
+		#endif
 		#ifdef TABRAND
 		, float* tableauRand
 		#endif
@@ -72,6 +75,11 @@ __global__ void lancementKernel(Variables* var, Tableaux tab, Init* init
 	
 	// Création de variable propres à chaque thread
 	unsigned long long nbPhotonsThr = 0; 	// Nombre de photons traités par le thread
+	
+	#ifndef SPHERIQUE
+	int flagDiff = DIFFFd;
+	#endif
+	
 	#ifdef PROGRESSION
 	unsigned int nbPhotonsSorThr = 0; 		// Nombre de photons traités par le thread et ressortis dans l'espace
 	#endif
@@ -100,12 +108,12 @@ __global__ void lancementKernel(Variables* var, Tableaux tab, Init* init
 			
 			#endif
 			
-			initPhoton(&ph, tab, init/*, hph0_s, zph0_s*/
+			initPhoton(&ph, tab/*, hph0_s, zph0_s*/
+				#ifdef SPHERIQUE
+				, init
+				#endif
 				#ifdef TRAJET
 				, idx, evnt
-				#endif
-				#ifdef SORTIEINT
-				, iloop
 				#endif
 					);
 
@@ -116,7 +124,11 @@ __global__ void lancementKernel(Variables* var, Tableaux tab, Init* init
 				printf("(1) Temps de initPhoton: %f\n", time);
 			}
 			#endif
-
+			
+			#ifndef SPHERIQUE
+			flagDiff = DIFFFd;
+			#endif
+			
 		}
 		// Chaque block attend tous ses threads avant de continuer
 		syncthreads();
@@ -131,7 +143,14 @@ __global__ void lancementKernel(Variables* var, Tableaux tab, Init* init
 			}
 			#endif
 			
-			move(&ph, tab, init, &etatThr
+			move(&ph, tab 
+				#ifndef SPHERIQUE
+				,flagDiff
+				#endif
+				#ifdef SPHERIQUE
+				, init
+				#endif
+				, &etatThr
 				#if defined(RANDMWC) || defined(RANDMT)
 				, &configThr
 				#endif
@@ -226,33 +245,22 @@ __global__ void lancementKernel(Variables* var, Tableaux tab, Init* init
 						#ifdef TRAJET
 						, idx, evnt
 						#endif
-						#ifdef SORTIEINT
-						, iloop
-						#endif
 						);
 		}
 		syncthreads();
 		
 
+		#ifndef SPHERIQUE	/* Code spécifique à une atmosphère parallèle */
 		//Mise à jour du poids suite à la 1ère diffusion forcée
-// 		if(flagDiff==1 ){
-// 			ph.weight *= (1.F - __expf(-ph.taumax0));
-// 			flagDiff=0;
-// 		}
-// 		syncthreads();
+		if(flagDiff==1 ){
+			ph.weight *= (1.F - __expf(-TAUMAXd));
+			flagDiff=0;
+		}
+		syncthreads();
+		#endif
 
 	}// Fin boucle for
 	
-	
-	#ifdef SORTIEINT
-	if( ph.numBoucle < NBLOOPd/2 ){
-		atomicAdd(tab.nbBoucle + (NBLOOPd-1-ph.numBoucle),1);
-// 		printf("numBoucle après sorti : %d\n",ph.numBoucle);
-	}
-// 	else
-// 		printf("numBoucle dernier : %d\n",ph.numBoucle);
-	
-	#endif
 
 	// Après la boucle on rassemble les nombres de photons traités par chaque thread
 	atomicAdd(&(var->nbPhotons), nbPhotonsThr);
@@ -277,17 +285,15 @@ __global__ void lancementKernel(Variables* var, Tableaux tab, Init* init
 /* initPhoton
 * Initialise le photon dans son état initial avant l'entrée dans l'atmosphère
 */
-__device__ void initPhoton(Photon* ph, Tableaux tab, Init* init/*, float* hph0_s, float* zph0_s*/
+__device__ void initPhoton(Photon* ph, Tableaux tab /*, float* hph0_s, float* zph0_s*/
+		#ifdef SPHERIQUE
+		, Init* init
+		#endif
 		#ifdef TRAJET
 		, int idx, Evnt* evnt
 		#endif
-		#ifdef SORTIEINT
-		, unsigned int iloop
-		#endif
 		    )
 {	
-	ph->locPrec=ph->loc;
-	
 	// Initialisation du vecteur vitesse
 	ph->vx = - STHSd;
 	ph->vy = 0.F;
@@ -311,17 +317,23 @@ __device__ void initPhoton(Photon* ph, Tableaux tab, Init* init/*, float* hph0_s
 	ph->stokes3 = 0.F;
 // 	ph->stokes4 = 0.F;
 
+
+	/** Séparation du code pour atmosphère sphérique ou parallèle **/
+	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
+	ph->locPrec=NONE;
+	
 // 	Paramètres initiaux calculés dans impactInit - host.cu
 	ph->x = init->x0;
 	ph->y = init->y0;
 	ph->z = init->z0;
 	ph->couche=0;	// Sommet de l'atmosphère
 	ph->rayon = sqrt(ph->x*ph->x + ph->y*ph->y + ph->z*ph->z );
-	
-	
-	#ifdef SORTIEINT
-	ph->numBoucle = iloop;
 	#endif
+	
+	#ifndef SPHERIQUE	/* Code spécifique à une atmosphère en plan parallèle */
+	ph->tau = TAUATMd;
+	#endif
+	
 	
 	#ifdef TRAJET
 	// Récupération d'informations sur le premier photon traité
@@ -342,10 +354,16 @@ __device__ void initPhoton(Photon* ph, Tableaux tab, Init* init/*, float* hph0_s
 
 /* move
 * Effectue le déplacement du photon dans l'atmosphère
-* Pour l'atmosphère sphèrique, l'algorithme est basé sur la formule de pythagore généralisé
+* Pour l'atmosphère sphèrique, l'algorithme est basé sur la formule de pythagore généralisée.
 * Modification des coordonnées position du photon
 */
-__device__ void move(Photon* ph, Tableaux tab, Init *init
+__device__ void move(Photon* ph, Tableaux tab
+		#ifndef SPHERIQUE
+		,int flagDiff
+		#endif
+		#ifdef SPHERIQUE
+		, Init* init
+		#endif
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif
@@ -360,6 +378,9 @@ __device__ void move(Photon* ph, Tableaux tab, Init *init
 		#endif
 		    )
 {
+	
+	/** Séparation du code pour atmosphère sphérique ou parallèle **/
+	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
 	double rsolfi=666;
 	double delta;
 	
@@ -893,6 +914,23 @@ rsolfi=%15.12lf - tauRdm= %lf - hph_p= %15.12lf - hph= %15.12lf - zph_p= %15.12l
 	
 	// On sort maintenant de la fonction et comme le photon reste dans ATMOS, le kernel appelle scatter()
 
+	#endif	/* Fin de la partie atmosphère sphérique */
+
+
+	#ifndef SPHERIQUE	/* Code spécifique à une atmosphère en plan parallèle */
+	ph->tau += -__logf( flagDiff + RAND*(1.F +(__expf(-TAUMAXd)-2)*flagDiff))*ph->vz;
+	
+	
+	// Si tau<0 le photon atteint la surface
+	if(ph->tau < 0.F){
+		ph->loc = SURFACE;
+		ph->tau = 0.F;
+	}
+	// Si tau>TAURAY le photon atteint l'espace
+	else if(ph->tau > TAUATMd) ph->loc = SPACE;
+	// Sinon on ne fait rien car il reste dans l'atmosphère, et va être traité par scatter
+	#endif
+	
 	#ifdef TRAJET
 	// Récupération d'informations sur le premier photon traité
 	if(idx == 0)
@@ -932,6 +970,7 @@ __device__ void scatter(Photon* ph, Tableaux tab
 	
 	float cTh=0, sTh, psi, cPsi, sPsi;
 	float wx, wy, wz, vx, vy, vz;
+	
 	
 	psi = RAND * DEUXPI; //psiPhoton
 	cPsi = __cosf(psi); //cosPsiPhoton
@@ -1017,7 +1056,24 @@ __device__ void calculDiffScatter( Photon* photon, float* cTh, Tableaux tab
 	int iang;
 	float stokes1, stokes2;
 	float cTh2;
-	float prop_aer= 1.f-tab.pMol[photon->couche];
+	int icouche;
+
+	
+	/** Séparation du code pour atmosphère sphérique ou parallèle **/
+	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
+	icouche = photon->couche;
+	#endif
+	
+	#ifndef SPHERIQUE	/* Code spécifique à une atmosphère en plan parallèle */
+	float tauBis = TAUATMd-photon->tau;
+	icouche = 1;
+	
+	while( (tab.h[icouche] < (tauBis)) && icouche<NATMd ){
+		icouche++;
+	}
+	#endif
+	
+	float prop_aer= 1.f-tab.pMol[icouche];
 	
 	stokes1 = photon->stokes1;
 	stokes2 = photon->stokes2;
@@ -1083,8 +1139,6 @@ __device__ void surfaceAgitee(Photon* ph
 		#endif
 			){
 	
-	ph->locPrec=ph->loc;
-	
 	if( SIMd == -2){ // Atmosphère ou océan seuls, la surface absorbe tous les photons
 		ph->loc = ABSORBED;
 		
@@ -1109,27 +1163,21 @@ __device__ void surfaceAgitee(Photon* ph
 		return;
 	}
 	
-	
-	/** Calcul du theta impact et phi impact **/
-	//NOTE: Dans le code Fortran, ce calcul est effectué dans atmos
-	float thetaimp, phiimp;
-	float temp;
-	
 	// Réflexion sur le dioptre agité
 	float theta;	// Angle de deflection polaire de diffusion [rad]
 	float psi;		// Angle azimutal de diffusion [rad]
 	float cTh, sTh;	//cos et sin de l'angle d'incidence du photon sur le dioptre
-	float icp, isp, ict, ist;	// Sinus et cosinus de l'angle d'impact
 	
 	float sig = 0.F;
 	float beta = 0.F;// Angle par rapport à la verticale du vecteur normal à une facette de vagues 
 	float sBeta;
 	float cBeta;
-
+	
 	float alpha = DEUXPI*RAND; //Angle azimutal du vecteur normal a une facette de vagues
-
+	
 	float nind;
-
+	float temp;
+	
 	float nx, ny, nz;	// Coordonnées du vecteur normal à une facette de vague
 	float s1, s2, s3;
 	
@@ -1137,43 +1185,56 @@ __device__ void surfaceAgitee(Photon* ph
 	float rpar2;		// Coefficient de reflexion parallèle au carré
 	float rper2;		// Coefficient de reflexion perpendiculaire au carré
 	float rat;		// Rapport des coefficients de reflexion perpendiculaire et parallèle
-// 		float ReflTot;	// Flag pour la réflexion totale sur le dioptre
+	// 		float ReflTot;	// Flag pour la réflexion totale sur le dioptre
 	float cot;		// Cosinus de l'angle de réfraction du photon
 	float ncot, ncTh;	// ncot = nind*cot, ncoi = nind*cTh
-// 		float tpar, tper;	// 
+	// float tpar, tper;	//
 	
+	
+	/** Séparation du code pour atmosphère sphérique ou parallèle **/
+	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
+	
+	/** Calcul du theta impact et phi impact **/
+	//NOTE: Dans le code Fortran, ce calcul est effectué dans atmos
+	float icp, isp, ict, ist;	// Sinus et cosinus de l'angle d'impact
+	float thetaimp, phiimp;
 	float vxn, vyn, vzn, uxn, uyn, uzn;
+	
 	double temp_d;
+	
+	ph->locPrec=ph->loc;
+	
+	
 	/** Calcul de l'angle entre l'axe z et la normale au point d'impact **/
 	//NOTE: le float pour les calculs suivant fait une erreur de 2.3% par exemple (theta_float=0.001196 / theta_double=0.0011691
 	if( ph->z > 0. ){
-// 		temp = __fdividef(ph->z,RTER);
+		// 		temp = __fdividef(ph->z,RTER);
 		temp_d = ph->z/RTER;
-// 		if(temp>1.f){
-		if(temp_d>1){
-			thetaimp= 0.f;
-		}
-		else{
-// 			thetaimp= acosf( temp );
-			thetaimp= acos( temp_d );
-		}
-		
-		if(ph->x >= 0.) thetaimp = -thetaimp;
-		
-// 		printf("Test : sqrt(x**2+y**2)=%16.14f\n",sqrtf(ph->x*ph->x + ph->y*ph->y));
-		if( sqrtf(ph->x*ph->x + ph->y*ph->y)<1.e-6 ){/*NOTE En fortran ce test est à 1.e-8, relativement au double
-			utilisés, peut peut être être supprimer ici*/
-// 			printf("Test : sqrt(x**2+y**2)=%f\n",sqrtf(ph->x*ph->x + ph->y*ph->y));
-			phiimp = 0.f;
-		}
-		else{
-// 			printf("calcul phiimp ^_^ : double: %20.17lf , %20.17lf - float:%20.17f , %20.17f\n",\
-// 			ph->x/sqrt(ph->x*ph->x + ph->y*ph->y), acos(ph->x/sqrt(ph->x*ph->x + ph->y*ph->y)),\
-// 			__fdividef(ph->x, sqrtf(ph->x*ph->x + ph->y*ph->y)), acosf( __fdividef(ph->x, sqrtf(ph->x*ph->x + ph->y*ph->y))) );
-// 			phiimp = acosf( __fdividef(ph->x, sqrtf(ph->x*ph->x + ph->y*ph->y)) );
-			phiimp = acos( ph->x/sqrt(ph->x*ph->x + ph->y*ph->y) );
-			if( ph->y < 0.f ) phiimp = -phiimp;
-		}
+		// 		if(temp>1.f){
+   if(temp_d>1){
+	   thetaimp= 0.f;
+   }
+   else{
+	   // 			thetaimp= acosf( temp );
+	   thetaimp= acos( temp_d );
+   }
+   
+   if(ph->x >= 0.) thetaimp = -thetaimp;
+   
+   // 	printf("Test : sqrt(x**2+y**2)=%16.14f\n",sqrtf(ph->x*ph->x + ph->y*ph->y));
+   if( sqrtf(ph->x*ph->x + ph->y*ph->y)<1.e-6 ){/*NOTE En fortran ce test est à 1.e-8, relativement au double
+	   utilisés, peut peut être être supprimer ici*/
+	   // 			printf("Test : sqrt(x**2+y**2)=%f\n",sqrtf(ph->x*ph->x + ph->y*ph->y));
+	   phiimp = 0.f;
+	   }
+	   else{
+		   // printf("calcul phiimp ^_^ : double: %20.17lf , %20.17lf - float:%20.17f , %20.17f\n",\
+		   // ph->x/sqrt(ph->x*ph->x + ph->y*ph->y), acos(ph->x/sqrt(ph->x*ph->x + ph->y*ph->y)),\
+		   // __fdividef(ph->x, sqrtf(ph->x*ph->x + ph->y*ph->y)), acosf( __fdividef(ph->x, sqrtf(ph->x*ph->x +ph->y*ph->y))) );
+		   // phiimp = acosf( __fdividef(ph->x, sqrtf(ph->x*ph->x + ph->y*ph->y)) );
+		   phiimp = acos( ph->x/sqrt(ph->x*ph->x + ph->y*ph->y) );
+		   if( ph->y < 0.f ) phiimp = -phiimp;
+	   }
 	}
 	else{
 		// Photon considéré comme perdu
@@ -1181,9 +1242,9 @@ __device__ void surfaceAgitee(Photon* ph
 		return;
 	}
 	
-// 	if(idx==0)
-// 		printf("thetaimp=%16.14f - phiimp=%16.14f - (%lf,%lf,%lf)\n",\
-// 		thetaimp, phiimp, ph->x, ph->y, ph->z);
+	// 	if(idx==0)
+	// 		printf("thetaimp=%16.14f - phiimp=%16.14f - (%lf,%lf,%lf)\n",\
+	// 		thetaimp, phiimp, ph->x, ph->y, ph->z);
 	
 	
 	/** Il faut exprimer Vx,y,z et Ux,y,z dans le repère de la normale au point d'impact **/
@@ -1191,7 +1252,7 @@ __device__ void surfaceAgitee(Photon* ph
 	isp = sinf(phiimp);
 	ict = cosf(thetaimp);
 	ist = sinf(thetaimp);
-
+	
 	vxn= ict*icp*ph->vx - ict*isp*ph->vy + ist*ph->vz;
 	vyn= isp*ph->vx + icp*ph->vy;
 	vzn= -icp*ist*ph->vx + ist*isp*ph->vy + ict*ph->vz;
@@ -1206,6 +1267,7 @@ __device__ void surfaceAgitee(Photon* ph
 	ph->ux = uxn;
 	ph->uy = uyn;
 	ph->uz = uzn;
+	#endif	/* Fin de la séparation atmosphère sphérique */
 	
 	/** **/
 	
@@ -1299,14 +1361,13 @@ __device__ void surfaceAgitee(Photon* ph
 		rpar2 = rpar*rpar;
 		rper2 = rper*rper;
 	}
-
-	
+/*	
 	if( isnan(cot)!=0 ){
 		printf("cot = %f - temp=%f - nind=%f - sTh=%f - cTh=%f - theta=%f\n",\
 		cot,temp, nind, sTh,cTh, theta);
 		ph->loc=NONE;
 		return;
-	}
+	}*/
 	
 	// Rapport de l'intensite speculaire reflechie
 // 	rat = __fdividef(ph->stokes2*rper2 + ph->stokes1*rpar2,ph->stokes1+ph->stokes2)*test_s;
@@ -1407,6 +1468,8 @@ __device__ void surfaceAgitee(Photon* ph
 	if( SIMd == -1) // Dioptre seul
 		ph->loc=SPACE;
 	
+	
+	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
 	/** Retour dans le repère d'origine **/
 	
 	icp = cosf(-phiimp);
@@ -1428,6 +1491,7 @@ __device__ void surfaceAgitee(Photon* ph
 	ph->ux = uxn;
 	ph->uy = uyn;
 	ph->uz = uzn;
+	#endif
 
 	#ifdef TRAJET
 	// Récupération d'informations sur le premier photon traité
@@ -1467,8 +1531,6 @@ __device__ void surfaceLambertienne(Photon* ph
 						#endif
 						){
 	
-	ph->locPrec=ph->loc;
-	
 	if( SIMd == -2){ // Atmosphère ou océan seuls, la surface absorbe tous les photons
 		ph->loc = ABSORBED;
 	}
@@ -1485,6 +1547,12 @@ __device__ void surfaceLambertienne(Photon* ph
 	float sPhi = __sinf(phi);
 	
 	float psi;
+	
+	/** Séparation du code pour atmosphère sphérique ou parallèle **/
+	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
+	ph->locPrec=ph->loc;
+	#endif
+	
 	
 	/** calcul u,v new **/
 	vxn = cPhi*sTh;
@@ -1563,28 +1631,11 @@ __device__ void exit(Photon* ph, Variables* var, Tableaux tab, unsigned long lon
 		#ifdef TRAJET
 		, int idx, Evnt* evnt
 		#endif
-		#ifdef SORTIEINT
-		, unsigned int iloop
-		#endif
 		    )
 {
-// 	if( idx==0 )
-// 		printf("Entree dans exit - weight=%f - vz= %f\n",ph->weight, ph->vz);
-	
-// 	ph->locPrec=ph->loc;
 	// Remise à zéro de la localisation du photon
 	ph->loc = NONE;
 	
-	#ifdef SORTIEINT
-	/* On compte le nombre de boucles qu'a effectué un photon pour vérifier qu'il n'y a pas de bug de
-	stationnarité.*/
-	if( (iloop-ph->numBoucle)<NBLOOPd ){
-	atomicAdd(tab.nbBoucle + (iloop-ph->numBoucle),1);
-	}
-	else{
-		printf("Problème dans le comptage des boucles, débordement tableau\n");
-	}
-	#endif
 
 // si son poids est anormalement élevé on le compte comme une erreur. Test effectué uniquement en présence de dioptre
 	if( (ph->weight > WEIGHTMAX) && (SIMd!=-2)){
@@ -1595,17 +1646,15 @@ __device__ void exit(Photon* ph, Variables* var, Tableaux tab, unsigned long lon
 	
 	
 	// Sinon on traite le photon et on l'ajoute dans le tableau tabPhotons de ce thread
-	#ifdef SORTIEINT
-	//Sauvegarde du poids pour debug
-	tab.poids[*nbPhotonsThr] = ph->weight;
-	#endif
-
 	// Incrémentation du nombre de photons traités par le thread
 	(*nbPhotonsThr)++;
 	
+	/** Séparation du code pour atmosphère sphérique ou parallèle **/
+	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
 	if( ph->vz<=0.f ){
 		return;
 	}
+	#endif
 	
 	// Création d'un float theta qui sert à modifier les nombres de Stokes
 	float theta = acosf(fmin(1.F, fmax(-1.F, STHSd * ph->vx + CTHSd * ph->vz)) );
@@ -1629,6 +1678,13 @@ __device__ void exit(Photon* ph, Variables* var, Tableaux tab, unsigned long lon
 	float cPsi = __cosf(psi);
 	float sPsi = __sinf(psi);
 	modifStokes(ph, psi, cPsi, sPsi, 0);
+	
+	#ifndef SPHERIQUE
+	/** A garder ou pas ? **/
+	// Modification de U
+	if( ph->vy<0.f )
+		ph->stokes3 = -ph->stokes3;
+	#endif
 	
 	// On modifie ensuite le poids du photon
 	ph->weight = __fdividef(ph->weight, ph->stokes1 + ph->stokes2);
@@ -1698,12 +1754,10 @@ __device__ void modifStokes(Photon* photon, float psi, float cPsi, float sPsi, i
 		stokes2 = photon->stokes2;
 		stokes3 = photon->stokes3;
 		s2Psi = __sinf(psi2);
-		a = __fdividef(s2Psi * stokes3, 2.F);
+		a = 0.5f*s2Psi*stokes3;
 		photon->stokes1 = cPsi2 * stokes1 + sPsi2 * stokes2 + a;
 		photon->stokes2 = sPsi2 * stokes1 + cPsi2 * stokes2 - a;
 		photon->stokes3 = s2Psi * (stokes2 - stokes1) + __cosf(psi2) * stokes3;
-// 		printf("Modif stokes:s1=%f - s2=%f - (s1-s2)=%f\n",stokes1,stokes2,stokes1-stokes2);
-// 		printf("ph->loc=%d - s2Psi=%f - s3=%f - s2Psi*(s1-s2)=%f\n",photon->loc,s2Psi,photon->stokes3,s2Psi * (stokes1-stokes2));
 	}
 }
 
@@ -1714,13 +1768,13 @@ __device__ void modifStokes(Photon* photon, float psi, float cPsi, float sPsi, i
 __device__ void calculPsi(Photon* photon, float* psi, float theta)
 {
 	float sign;
-	if (theta < 0.05F)
+	if (theta >= 0.05F)
 	{
-		*psi = acosf(fmin(1.F - VALMIN, fmax(-(1.F - VALMIN), - CTHSd * photon->ux + STHSd * photon->uz)));
+		*psi = acosf(fmin(1.F, fmax(-1.F, __fdividef(STHSd * photon->ux + CTHSd * photon->uz, __sinf(theta)))));
 	}
 	else
 	{
-		*psi = acosf(fmin(1.F, fmax(-1.F, __fdividef(STHSd * photon->ux + CTHSd * photon->uz, __sinf(theta)))));
+		*psi = acosf(fmin(1.F - VALMIN, fmax(-(1.F - VALMIN), - CTHSd * photon->ux + STHSd * photon->uz)));
 	}
 	
 	sign = STHSd * (photon->uy * photon->vz - photon->uz * photon->vy) + CTHSd * (photon->ux * photon->vy - photon->uy * photon->vx);
@@ -1830,9 +1884,13 @@ void initConstantesDevice()
 	float GAMAbis = DEPO / (2.F-DEPO);
 	cudaMemcpyToSymbol(GAMAd, &GAMAbis, sizeof(float));
 	
+	#ifndef SPHERIQUE
 	float TAUATM = TAURAY+TAUAER;
 	cudaMemcpyToSymbol(TAUATMd, &TAUATM, sizeof(float));
 	
+	float TAUMAX = TAUATM / CTHSbis; //tau initial du photon
+	cudaMemcpyToSymbol(TAUMAXd, &TAUMAX, sizeof(float));
+	#endif
 }
 
 

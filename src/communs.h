@@ -166,7 +166,6 @@ typedef struct __align__(16)
 	
 	// Localisation du photon
 	int loc;
-	int locPrec;
 	
 	// Poids du photon
 	float weight;
@@ -176,6 +175,11 @@ typedef struct __align__(16)
 	float stokes2;
 	float stokes3;
 // 	float stokes4;
+	
+	
+	/** Séparation du code pour atmosphère sphérique ou parallèle **/
+	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
+	int locPrec;
 	
 	// Position cartésienne du photon
 	double x;
@@ -187,12 +191,14 @@ typedef struct __align__(16)
 	
 	// Paramètres pour une atmosphère sphérique
 	int couche;
-	
-	#ifdef SORTIEINT
-	int numBoucle;
 	#endif
 	
-}Photon;
+	/* Code spécifique à une atmosphère en plan parallèle */
+	#ifndef SPHERIQUE
+	float tau;
+	#endif
+	
+}	Photon;
 
 
 /* Variables
@@ -254,14 +260,13 @@ typedef struct __align__(16)
 	float* pMol;			// Pointeur vers la proportion de molécules dans chaque couches du modèle atmosphérique
 	float* z;				// Altitude de chaque couches
 	
+	/** Séparation du code pour atmosphère sphérique ou parallèle **/
+	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
 	/* Profil atmosphérique initial vu par la photon */
 	float* hph0;			// Epaisseur optique vue devant le photon
 	float* zph0;			// Altitude correspondante
-	
-	#ifdef SORTIEINT
-	float* poids;
-	unsigned long long* nbBoucle;
 	#endif
+	
 	
 	#ifdef RANDMWC
 	unsigned long long* etat;
@@ -278,6 +283,7 @@ typedef struct __align__(16)
 }Tableaux;
 
 
+#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
 /* Init
 * Paramètres initiaux du photon lors du premier impact avec l'atmosphère
 * Les calculs sont effectués dans host.cu une seule fois
@@ -295,7 +301,7 @@ typedef struct __align__(16){
 	float zintermax0;	// Distance entre le photon et une des extrémités de l'atmosphère dans le cas où il n'y as pas d'intéractoin
 
 } Init;
-
+#endif
 
 /* Evnt
 * DEBUG permet de recuperer des infos sur certains photons

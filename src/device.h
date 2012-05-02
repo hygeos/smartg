@@ -25,7 +25,10 @@ __device__ __constant__ float THSDEGd;
 __device__ __constant__ float LAMBDAd;
 __device__ __constant__ float TAURAYd;
 __device__ __constant__ float TAUAERd;
+#ifndef SPHERIQUE
 __device__ __constant__ float TAUATMd;
+__device__ __constant__ float TAUMAXd;	//tau initial du photon (Host)
+#endif
 __device__ __constant__ float W0AERd;
 __device__ __constant__ float W0LAMd;
 __device__ __constant__ unsigned int NFAERd;
@@ -72,7 +75,10 @@ __device__ __constant__ float GAMAd;
 * Il peut être important de rappeler que le kernel lance tous les threads mais effectue des calculs similaires. La boucle de la
 * fonction va donc être effectuée pour chaque thread du block de la grille
 */
-__global__ void lancementKernel(Variables* var, Tableaux tab, Init* init
+__global__ void lancementKernel(Variables* var, Tableaux tab
+		#ifdef SPHERIQUE
+		, Init* init
+		#endif
 		#ifdef TABRAND
 		, float*
 		#endif
@@ -89,12 +95,12 @@ __global__ void lancementKernel(Variables* var, Tableaux tab, Init* init
 /* initPhoton
 * Initialise le photon dans son état initial avant l'entrée dans l'atmosphère
 */
-__device__ void initPhoton(Photon* ph, Tableaux tab, Init* init
+__device__ void initPhoton(Photon* ph, Tableaux tab
+		#ifdef SPHERIQUE
+		, Init* init
+		#endif
 		#ifdef TRAJET
 		, int, Evnt*
-		#endif
-		#ifdef SORTIEINT
-		, unsigned int iloop
 		#endif
 		    );
 
@@ -104,7 +110,13 @@ __device__ void initPhoton(Photon* ph, Tableaux tab, Init* init
 * Pour l'atmosphère sphèrique, l'algorithme est basé sur la formule de pythagore généralisé
 * Modification des coordonnées position du photon
 */
-__device__ void move(Photon*, Tableaux tab, Init* init
+__device__ void move(Photon*, Tableaux tab
+		#ifndef SPHERIQUE
+		,int flagDiff
+		#endif
+		#ifdef SPHERIQUE
+		, Init* init
+		#endif
 		#ifdef RANDMWC
 		, unsigned long long*, unsigned int*
 		#endif
@@ -206,9 +218,6 @@ __device__ void exit(Photon* , Variables*, Tableaux, unsigned long long*
 		#endif
 		#ifdef TRAJET
 		, int, Evnt*
-		#endif
-		#ifdef SORTIEINT
-		, unsigned int iloop
 		#endif
 		    );
 

@@ -55,7 +55,7 @@ NFAER = 1000000
 	# 0 : profil standard avec echelle de hauteur
 	# 3 : profil à 2 ou 3 couches (comme dans les SOS)
 	# 2 : profil utilisateurs, Attention au bon format -> commencer directement les données sur la 1ère ligne
-PROFIL = 2
+PROFIL = 0
 
 # Echelle de hauteur aerosol [km] (utilise si PROFIL=0) (float)
 HA = 2.0
@@ -87,7 +87,7 @@ NH2O = 1.33
 	# 0 pour ocean
 	# 1 pour atmosphere et dioptre
 	# 2 pour atmosphere dioptre et ocean
-SIM =1
+SIM =-2
 
 # Type de reflexion de la surface (pour l'instant implémentation uniquement du cas 1)
 	# 1 pour reflexion speculaire sur le dioptre
@@ -109,11 +109,11 @@ W0LAM = 0.7
 CONPHY = 0.1
 
 # Forcage de la premiere diffusion (utilise si SIM = -2)
-DIFFF = 0
+DIFFF = 1
 
-# Chemin du fichier de sortie (Une grande partie du chemin est automatiquement créé afin de simplifier la classification des
-# resultats)
-PATHRESULTATSHDF = validation/SPHERIQUE
+# Chemin du fichier de sortie, sans le dernier '/' (Une grande partie du chemin est automatiquement créé afin de simplifier la
+# classification des resultats)
+PATHRESULTATSHDF = validation/PARALLELE
 
 # Chemin du fichier témoin (Le .hdf et les détails de la simulation sont ajoutés par le programme automatiquement)
 #PATHTEMOINHDF = validation/SPHERIQUE/
