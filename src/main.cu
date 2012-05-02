@@ -22,7 +22,6 @@ int main (int argc, char *argv[])
 	/** Initialisation de la carte graphique **/
 	//
 	cudaDeviceReset();
-	// 	cudaSetDevice(0);
 	
 	// Préférer utiliser plus de mémoire cache que de shared memory
 	cudaErreur = cudaFuncSetCacheConfig (lancementKernel,  cudaFuncCachePreferL1);
@@ -152,10 +151,10 @@ int main (int argc, char *argv[])
 	impactInit(init_H, init_D, &tab_H, &tab_D);
 
 	#ifdef DEBUG
-// 	printf("Paramètres initiaux du photon: taumax0=%lf - zintermax=%lf - (%lf,%lf,%lf)\n",\
+	printf("Paramètres initiaux du photon: taumax0=%lf - zintermax=%lf - (%lf,%lf,%lf)\n",\
 		   init_H->taumax0, init_H->zintermax0, init_H->x0, init_H->y0, init_H->z0 );
-// 	for(int i=0; i<NATM+1; i++)
-// 		printf("zph[%i]=%10.7lf - hph[%d]=%10.7e\n",i, tab_H.zph0[i], i ,tab_H.hph0[i] );
+	for(int i=0; i<NATM+1; i++)
+		printf("zph[%i]=%10.7lf - hph[%d]=%10.7e\n",i, tab_H.zph0[i], i ,tab_H.hph0[i] );
 	#endif
 	
 	/** Fonction qui permet de poursuivre la simulation précédente si elle n'est pas terminee **/

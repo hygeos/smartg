@@ -75,17 +75,12 @@
 #define NONE		4
 
 
-/* Constante pour le calcul du profil de l'atmosphère (Nombre de couches) */
-// #define NATM 5
-
-
 /* Constante pour le calcul de la fonction de phase des aérosols */
 #define NFAER_c 1000000
 
 
 /* Constantes propres au calcul sphérique */
 #define RTER 6400
-#define HATM 100
 
 
 /* Option d'affichage des trajets */
@@ -139,6 +134,7 @@ extern float HR;
 extern float ZMIN;
 extern float ZMAX;
 extern int NATM;
+extern int HATM;
 extern float WINDSPEED;
 extern float NH2O;
 extern float CONPHY;
@@ -185,7 +181,7 @@ typedef struct __align__(16)
 	double x;
 	double y;
 	double z;
-	
+	double rayon;
 	
 	double taumax;
 	
@@ -254,13 +250,13 @@ typedef struct __align__(16)
 	float* tabPhotons;		// Tableau contenant l'ensemble des paramètres de stokes des photons sortis dans l'espace
 	
 	float* faer;			// Pointeur vers le modèle de diffusion des aérosols
-	double* h;				// Pointeur vers l'épaisseur optique de chaque couches du modèle atmosphérique
+	float* h;				// Pointeur vers l'épaisseur optique de chaque couches du modèle atmosphérique
 	float* pMol;			// Pointeur vers la proportion de molécules dans chaque couches du modèle atmosphérique
-	double* z;				// Altitude de chaque couches
+	float* z;				// Altitude de chaque couches
 	
 	/* Profil atmosphérique initial vu par la photon */
-	double* hph0;			// Epaisseur optique vue devant le photon
-	double* zph0;			// Altitude correspondante
+	float* hph0;			// Epaisseur optique vue devant le photon
+	float* zph0;			// Altitude correspondante
 	
 	#ifdef SORTIEINT
 	float* poids;
@@ -295,8 +291,8 @@ typedef struct __align__(16){
 	double z0;
 	
 	/* Paramètres liés au profil initial vu par le photon */
-	double taumax0;		// Valeur maximale de l'épaisseur optique parcourue par le photon qui conduira à une 1ère intéraction
-	double zintermax0;	// Distance entre le photon et une des extrémités de l'atmosphère dans le cas où il n'y as pas d'intéractoin
+	float taumax0;		// Valeur maximale de l'épaisseur optique parcourue par le photon qui conduira à une 1ère intéraction
+	float zintermax0;	// Distance entre le photon et une des extrémités de l'atmosphère dans le cas où il n'y as pas d'intéractoin
 
 } Init;
 

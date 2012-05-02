@@ -33,6 +33,7 @@ float HR; //Echelle de hauteur moleculaire [km]
 float ZMIN; //Altitude basse de la couche aerosol [km] (utilise si PROFIL=3)
 float ZMAX; //Altitude haute de la couche aerosol [km] (utilise si PROFIL=3)
 int NATM; //Altitude haute de la couche aerosol [km] (utilise si PROFIL=3)
+int HATM; //Altitude haute de la couche aerosol [km] (utilise si PROFIL=3)
 float WINDSPEED; //Vitesse du vent [m/s] (utilisee pour le modele de Cox et Munk: si DIOPTRE=1)
 float NH2O; //Indice de refraction relatif air/eau
 float CONPHY; //Concentration en phytoplancton [mg.m-3] (utilise si SUR>=2)

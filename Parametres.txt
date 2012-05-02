@@ -4,11 +4,11 @@
         ###############################
 
 # Nombre de photons a lancer (unsigned long long) (limite par le tableau du poids des photons en unsigned long long)
-NBPHOTONS = 300000000
+NBPHOTONS = 1000000000
 
 # Nombre de boucles dans le kernel (unsigned int) (limite par watchdog, il faut tuer X)
 # ancien 18000
-NBLOOP = 4000
+NBLOOP = 18000
 
 # Angle zenithal solaire en degrés (float)
 THSDEG = 70.
@@ -69,8 +69,11 @@ ZMIN = 0.
 # Altitude haute de la couche aerosol [km] (utilise si PROFIL=3) (float)
 ZMAX = 1.
 
-# Nombre de couche (en partant de zero sans le compter
+# Nombre de couche ( indiquer le nombre de bornes (cad nbcouche+1) )
 NATM=103
+
+# Altitude max de l'atmosphère
+HATM=100
 
 # Vitesse du vent [m/s] (utilise si idioptre=1) (modele de Cox et Munk) (float)
 WINDSPEED = 5.0
@@ -84,7 +87,7 @@ NH2O = 1.33
 	# 0 pour ocean
 	# 1 pour atmosphere et dioptre
 	# 2 pour atmosphere dioptre et ocean
-SIM =-2
+SIM =1
 
 # Type de reflexion de la surface (pour l'instant implémentation uniquement du cas 1)
 	# 1 pour reflexion speculaire sur le dioptre
@@ -97,7 +100,7 @@ SUR = 1
 	# 1=agite avec reflexion multiple
 	# 2=agite sans reflexion multiple
 	# 3=surface lambertienne
-DIOPTRE = 0
+DIOPTRE = 1
 
 # Albedo simple de diffusion de la surface lambertienne (float)
 W0LAM = 0.7

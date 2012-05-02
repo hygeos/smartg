@@ -18,15 +18,16 @@ import struct
 # Paramètres à modifier
 #
 #-----------------------------------------------------------------------------------------------------------------------
-type_simu = "molecules_seules"
-date_simu = "26042012"
+type_simu = "atmos_seule"
+date_simu = "25042012"
 angle = "70"
 # Nom du fichier Cuda sans extension .hdf
 #nom_cuda = "out_CUDA_atmos_dioptre_agite_ths=70.00_tRay=0.0533_tAer=0.0000_ws=5.00"
-nom_cuda = "out_CUDA_atmos_ths=70.00_tRay=0.0533_tAer=0.0000"
+nom_cuda = "out_CUDA_atmos_ths=70.00_tRay=0.2360_tAer=0.3000"
 
 # Nom du fichier Fortran sans l'extension .bin.gz
-nom_fortran = "out.ran=9010.ths=70.000.tr=0.0533.ta=0.0000"
+#nom_fortran = "out.ran=9010.ths=70.000.tr=0.0533.ta=0.0000"
+nom_fortran = "out.ran=9013.wav=443.ths=70.000.tr=0.2360.ta=0.3000.pi0=0.967.H=002.000.mod=valid_T70.443"
 
 # Indices ci-dessus ont été mis en place car ils permettent de rogner la simulation si nécessaire.
 # Les bords peuvent fausser les graphiques.
@@ -77,12 +78,15 @@ path_fortran = "/home/florent/MCCuda/validation/SPHERIQUE/"+type_simu+"/simulati
 
 # Nom complet du fichier Cuda
 path_cuda = "/home/florent/MCCuda/validation/SPHERIQUE/"+type_simu+"/simulation_"+date_simu+"/" + nom_cuda + ".hdf"
-#path_cuda = "/home/florent/MCCuda/validation/SPHERIQUE/test/"+nom_cuda
+#path_cuda = "/home/florent/MCCuda/Jojo/ztop_25km/"+type_simu+"/simulation_"+date_simu+"/" + nom_cuda + ".hdf"
 
 # Si le dossier suivant existe deja il est supprime puis recree
 path_dossier_sortie = \
 "/home/florent/MCCuda/validation/SPHERIQUE/"+type_simu+"/graph_"+date_simu+"/"+type_donnees+"/"+type_donnees+"_FORTRAN_CUDA_"+\
 nom_cuda
+#path_dossier_sortie = \
+#"/home/florent/MCCuda/Jojo/ztop_25km/"+type_simu+"/graph_"+date_simu+"/"+type_donnees+"/"+type_donnees+"_FORTRAN_CUDA_"+\
+#nom_cuda
 
 
 ##########################################################

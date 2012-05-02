@@ -85,35 +85,6 @@ __global__ void lancementKernel(Variables* var, Tableaux tab, Init* init
 	float time;
 	#endif
 	
-	/** Utilisation shared memory **/
-// 	__shared__ float hph0_s[NATMd+1];
-// 	__shared__ float zph0_s[NATMd+1];
-// 	
-// 	for( int i=0; i<NATMd+1; i++){
-// 		hph0_s[i] = tab.hph0[i];
-// 		zph0_s[i] = tab.zph0[i];
-// 	}
-
-// 	__shared__ float* h_s;
-// 	__shared__ float* z_s;
-// 	
-// 	h_s = (float*) malloc((NATMd+1)*sizeof(float));
-// 		if( h_s == NULL ){
-//    		printf("ERREUR: Problème de malloc de h_s dans le kernel idx(%d)\n",idx);
-// 		return;
-//    	}
-//    	
-//    	z_s = (float*) malloc((NATMd+1)*sizeof(float));
-//    	if( z_s == NULL ){
-//    		printf("ERREUR: Problème de malloc de z_s dans le kernel idx(%d)\n",idx);
-// 		return;
-//    	}
-//    	
-// 	for( int i=0; i<NATMd+1; i++){
-// 		h_s[i] = tab.h[i];
-// 		z_s[i] = tab.z[i];
-// 	}
-	
 	
 	/** Boucle de calcul **/   
 	// Dans cette boucle on simule le parcours du photon, puis on le réinitialise,... Le thread lance plusieurs photons
@@ -160,7 +131,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab, Init* init
 			}
 			#endif
 			
-			move(&ph, tab, init,/* h_s, z_s,*/ &etatThr
+			move(&ph, tab, init, &etatThr
 				#if defined(RANDMWC) || defined(RANDMT)
 				, &configThr
 				#endif
@@ -273,10 +244,6 @@ __global__ void lancementKernel(Variables* var, Tableaux tab, Init* init
 	}// Fin boucle for
 	
 	
-	/** Libération de la mémoire **/
-// 	free( h_s );
-// 	free( z_s );
-	
 	#ifdef SORTIEINT
 	if( ph.numBoucle < NBLOOPd/2 ){
 		atomicAdd(tab.nbBoucle + (NBLOOPd-1-ph.numBoucle),1);
@@ -318,15 +285,14 @@ __device__ void initPhoton(Photon* ph, Tableaux tab, Init* init/*, float* hph0_s
 		, unsigned int iloop
 		#endif
 		    )
-{
-// 	if( idx==0 )
-// 		printf("Entree dans init - locPrec= %d\n",ph->locPrec);
-	
+{	
 	ph->locPrec=ph->loc;
+	
 	// Initialisation du vecteur vitesse
 	ph->vx = - STHSd;
 	ph->vy = 0.F;
 	ph->vz = - CTHSd;
+	
 	// Initialisation du vecteur orthogonal au vecteur vitesse
 	ph->ux = -ph->vz;
 	ph->uy = 0.F;
@@ -350,9 +316,8 @@ __device__ void initPhoton(Photon* ph, Tableaux tab, Init* init/*, float* hph0_s
 	ph->y = init->y0;
 	ph->z = init->z0;
 	ph->couche=0;	// Sommet de l'atmosphère
+	ph->rayon = sqrt(ph->x*ph->x + ph->y*ph->y + ph->z*ph->z );
 	
-// 	if( idx==0 )
-// 		printf("Sortie de init -tomax0=%f\tzintermax0=%f\t(x0,y0,z0)=(%f,%f,%f)\n", ph->taumax,ph->zintermax,ph->x,ph->y,ph->z);
 	
 	#ifdef SORTIEINT
 	ph->numBoucle = iloop;
@@ -366,13 +331,10 @@ __device__ void initPhoton(Photon* ph, Tableaux tab, Init* init/*, float* hph0_s
 		// On cherche la première action vide du tableau
 		while(evnt[i].action != 0 && i<NBTRAJET-1) i++;
 		// Et on remplit la première case vide des tableaux (tableaux de 20 cases)
-// 		if(i <20 )
-// 		{
 			// "1"représente l'événement "initialisation" du photon
 			evnt[i].action = 1;
 			// On récupère le tau et le poids du photon
 			evnt[i].poids = ph->weight;
-// 		}
 	}
 	#endif
 }
@@ -383,7 +345,7 @@ __device__ void initPhoton(Photon* ph, Tableaux tab, Init* init/*, float* hph0_s
 * Pour l'atmosphère sphèrique, l'algorithme est basé sur la formule de pythagore généralisé
 * Modification des coordonnées position du photon
 */
-__device__ void move(Photon* ph, Tableaux tab, Init *init/* , float* h_s, float* z_s*/
+__device__ void move(Photon* ph, Tableaux tab, Init *init
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif
@@ -398,45 +360,49 @@ __device__ void move(Photon* ph, Tableaux tab, Init *init/* , float* h_s, float*
 		#endif
 		    )
 {
-	double vx_d, vy_d, vz_d;
 	double rsolfi=666;
-	
 	double delta;
-	double rsol1,rsol2;
 	
-	int icouchefi = 0;
-	int icompteur = 0;
-	double zintermax = 0;
-	
-	double tauRdm;	// Epaisseur optique aléatoire tirée
-	double rra, rrb, rdist;
-	double rayon2;
-	double rayon;
-	
-	double rxn, ryn, rzn;	// Essayer de les dégager ensuite
+	float tauRdm;	// Epaisseur optique aléatoire tirée
 	
 	// Permet la sauvegarde du profil parcouru par le photon
-	double zph = 0;
-	double zph_p = 0;
-	double hph = 0;
-	double hph_p = 0;
+	float zph = 0.f;
+	float zph_p = 0.f;
+	float hph = 0.f;
+	float hph_p = 0.f;
 	
-	int flagSortie = 0;		// Indique si le photon va sortir sans interaction dans l'atmosphère
-	
-	double vzn;				// projeté de vz sur l'axe defini par le photon et le centre de la terre
+	float vzn;				// projeté de vz sur l'axe defini par le photon et le centre de la terre
 	double sinth;			// Sinus de l'angle entre z' et Vz'
 	double costh;			// Cosinus de l'angle entre z' et Vz'
 	double ztangentielle;
+	
+	
+	double rayon2;
+	double rayon;
+	int icouchefi = 0;
+	int icompteur = 0;
 	int coucheTangentielle = 666;
 	int sens;			// Sens=1 si le photon monte, sens=-1 si il descend. Il est initialisé à 1 pour gagner du temps
 	int icoucheTemp; 		// Couche suivante que le photon va toucher
+	int flagSortie = 0;		// Indique si le photon va sortir sans interaction dans l'atmosphère
 	
+	float rra, rdist;
+	
+	#ifdef DEBUG
+	double rsol1,rsol2;
+	#endif
+	
+	/** Mesure du temps d'execution **/
+	#ifdef TEMPS
+	clock_t start, stop;
+	float time;
+	#endif
 	
 	/** Tirage au sort de la profondeur optique à parcourir **/
 	/*  Tirage effectué lors de chaque appel de la fonction */
 	// Pas de diffusion forcée en sphérique
 	
-	tauRdm = -log(1.F-RAND);
+	tauRdm = -logf(1.F-RAND);
 // 	tauRdm=0.5;
 	
 	if( tauRdm == 0. ){
@@ -448,8 +414,13 @@ __device__ void move(Photon* ph, Tableaux tab, Init *init/* , float* h_s, float*
 
 
 	/** Calcul puis déduction de la couche du photon **/
+	#ifdef TEMPS
+	if(idx==0){
+		start = clock();
+	}
+	#endif
 	
-	if( (ph->locPrec==NONE) && (flagSortie!=1) ){
+	if( ph->locPrec==NONE ){
 		/* Le photon vient de l'espace et rentre pour la première fois dans l'atmosphère
 		*/
 		
@@ -462,8 +433,8 @@ __device__ void move(Photon* ph, Tableaux tab, Init *init/* , float* h_s, float*
 			zph=tab.zph0[NATMd]; /* Pour retrouver le zintermax ensuite. Cette valeur signifie que le photon a traversé toute
 									l'atmosphère */
 		}
-		
-		
+
+
 		while( (hph < tauRdm) && (flagSortie!=1) ){
 		/* Le photon vient du sommet de l'atmosphère - On parcourt le profil initial calculé dans impact.
 		*/
@@ -486,7 +457,16 @@ __device__ void move(Photon* ph, Tableaux tab, Init *init/* , float* h_s, float*
 			
 			icompteur++;
 		}
+		
+		#ifdef TEMPS
+		if(idx==0){
+			stop = clock();
+			time = __fdividef((float) (stop-start),__int2float_rn(CLOCKS_PER_SEC));
+			printf("(2.1) Temps de move pour une 1ère intéraction: %f\n", time);
+		}
+		#endif
 	}
+	
 
 
 	else if( ((ph->locPrec==ATMOS)||(ph->locPrec==SURFACE)) ){
@@ -500,63 +480,47 @@ __device__ void move(Photon* ph, Tableaux tab, Init *init/* , float* h_s, float*
 		/* Il faut abandonner le photon si ce test est positif
 		* Il signifie que sur une surface agitée, le photon peut être réfléchi mais toujours se diriger vers la surface
 		*/
-		if( (ph->locPrec==SURFACE)&&
-			( sqrt( (ph->x+ph->vx)*(ph->x+ph->vx) + (ph->y+ph->vy)*(ph->y+ph->vy) + (ph->z+ph->vz)*(ph->z+ph->vz))<RTER ) ){
-//    			printf("pb#1 - Z=(%lf, %lf, %lf) - V=(%lf, %lf, %lf)\n",\
-			ph->x, ph->y, ph->z, ph->vx, ph->vy, ph->vz);
-			ph->loc=ABSORBED;
-			return;
-		}
+// 		if( (ph->locPrec==SURFACE)&&
+// 			( sqrtf( (ph->x+ph->vx)*(ph->x+ph->vx) + (ph->y+ph->vy)*(ph->y+ph->vy) + (ph->z+ph->vz)*(ph->z+ph->vz))<RTER ) ){
+// //    			printf("pb#1 - Z=(%lf, %lf, %lf) - V=(%lf, %lf, %lf)\n",\
+// 			ph->x, ph->y, ph->z, ph->vx, ph->vy, ph->vz);
+// 			ph->loc=ABSORBED;
+// 			return;
+// 		}
 		
 		/** Changement de repère **/
 		/* calcul du nouveau z', axe passant par le centre de la terre et le photon
 		* Cette axe permet de définir une projection de vz donnant la direction locale du photon
 		*/
-		rayon2= ph->x*ph->x + ph->y*ph->y + ph->z*ph->z;
-		rayon = sqrt(rayon2);
 		
-		if( (rayon < RTER) || (rayon>RTER+HATM) ){
-			if( (rayon-RTER)<1.e-4 ){
-			// Ce test apparait lorsqu'il y a la surface. Le rayon n'est pas égal à RTER, surement à cause d'erreur de calcul du GPU
-				rayon=RTER;
-				rayon2=RTER*RTER;
-			}
-			else{
-				printf("MetaProblème #1.1:rayon=%20.16lf ( %20.16lf , %20.16lf , %20.16lf ) - couche=%d - locPrec=%d\n",\
-				rayon,ph->x, ph->y, ph->z,ph->couche, ph->locPrec);
-				ph->loc = NONE;
-				return;
-			}
-		}
-		
+		rayon = ph->rayon;
+		rayon2 = rayon*rayon;
+
 		// Calcul du Vz' par rapport à z'. Son signe donne la direction du photon
-		// Vz'=vzn= V.Z/|Z|
-		vx_d = (double)ph->vx;
-		vy_d = (double)ph->vy;
-		vz_d = (double)ph->vz;
-		
-		vzn = (vx_d*ph->x + vy_d*ph->y + vz_d*ph->z )/rayon;		
+		// Vz'=vzn= V.Z/|Z|		
+		vzn = __fdividef( ph->vx*ph->x + ph->vy*ph->y + ph->vz*ph->z ,rayon);
 		
 		if((vzn<0)&&(ph->locPrec==SURFACE)){
-			// Problème du à des imprécisions de calculs je pense
+			// Problème du à des imprécisions de calculs je pense ,également à la surface agitée
 // 			printf("pb#2 vzn= %lf - Z=(%lf, %lf, %lf) - V=(%lf, %lf, %lf) - test=%d\n",\
 			vzn, ph->x, ph->y, ph->z, vx_d, vy_d, vz_d, flagTest);
 			ph->loc=ABSORBED;
 			return;
 		}
-		
-		
+
+
 		/* Calcul costh= Vz'/|Vz| */
 		costh = vzn;
 		
-		
-		if( abs(costh)>1 ){
+		if( abs(costh)>1.f ){
+			#ifdef DEBUG
 			printf("PROBLEME costh (%20.19lf)\n",costh);
+			#endif
 			ph->loc=NONE;
 			return;
 		}
 		
-		sinth = sqrt(1-costh*costh);	// Le signe n'importe pas car on prend le carré ou la valeur absolu pour ztangentielle
+		sinth = sqrt(1.-costh*costh);	// Le signe n'importe pas car on prend le carré ou la valeur absolu pour ztangentielle
 
 
 		/** Initialisation des paramètres du photon : couche et sens de propagation dans l'atmosphère **/
@@ -605,7 +569,6 @@ __device__ void move(Photon* ph, Tableaux tab, Init *init/* , float* h_s, float*
 		* une couche donnée.
 		*/
 		
-		
 		// Si le photon arrive dans la couche tangentielle, il change de sens de propagation
 		if( (icoucheTemp==coucheTangentielle)&&(sens==-1) ){
 			// Le photon va remonter dans les couches
@@ -617,7 +580,8 @@ __device__ void move(Photon* ph, Tableaux tab, Init *init/* , float* h_s, float*
 		// L'équivalent est icouchefi = icoucheTemp; if( sens== +1) icouchefi--;
 		bool test_sens = (sens==1);
 		icouchefi = icoucheTemp - test_sens;
-
+// 		icouchefi = icoucheTemp - sens;
+		
 		if( icouchefi<0 ){
 			/* Cela signifie que le photon est à la limite de l'atmosphère mais qu'il va sortir car il remonte l'atmosphère
 			* On le force donc à sortir en le mettant dans l'espace
@@ -659,48 +623,41 @@ sinth= %20.19lf - sens=%d\n",\
 		*/
 		rsolfi= 0.5*( -2*rayon*costh + sens*sqrt(delta));
 		
-		#ifdef DEBUG
+		
 		if( rsolfi<0 ){
+			#ifdef DEBUG
 			rsol1=0.5*( -2*rayon*costh + sqrt(delta));
 			rsol2=0.5*( -2*rayon*costh - sqrt(delta));
 			printf("OUPS: rsolfi #1=%lf, (%lf,%lf) - vzn=%lf - sens=%d - locPrec=%d\n\t\
 costh= %16.15lf - rayon= %16.12lf - delta= %16.10lf - icoucheTemp=%d - icouchefi=%d\n",\
 			rsolfi,rsol1,rsol2, vzn, sens, ph->locPrec, costh, rayon, delta, icoucheTemp, icouchefi);
+			#endif
 			ph->loc=NONE;
 			return;
 		}
-		#endif
 
 
 		// Calcul des paramètres du profil du photon au cours de son parcours
 		if( icouchefi!=icoucheTemp ){
-			hph = /*__fdividef*/( abs( /*(double)*/tab.h[icoucheTemp] - /*(double)*/tab.h[icouchefi] )*rsolfi)/
-									( abs( /*(double)*/tab.z[icouchefi] -/* (double)*/tab.z[icoucheTemp]) );
+			hph = __fdividef( abs(tab.h[icoucheTemp] - tab.h[icouchefi])*rsolfi, abs(tab.z[icouchefi] - tab.z[icoucheTemp]) );
 		}
 		else{
 			if( icouchefi==0 ){
-				if( icouchefi==NATMd ){
-					printf("OUPS: icouchefi=NATM => débordement tableau");
-					ph->loc=NONE;
-					return;
-				}
-				hph =/*__fdividef*/ ( abs( tab.h[icouchefi+1] - tab.h[icouchefi])*rsolfi )/
-				( abs( tab.z[icouchefi+1] - tab.z[icouchefi]) );
+				hph = __fdividef( abs(tab.h[1] - tab.h[0])*rsolfi, abs(tab.z[1] - tab.z[0]) );
 			}
 			else{
-				hph = /*__fdividef*/( abs(tab.h[icouchefi-1] - tab.h[icouchefi])*rsolfi)/
-				( abs( tab.z[icouchefi-1] - tab.z[icouchefi]) );
+				hph = __fdividef( abs(tab.h[icouchefi-1] - tab.h[icouchefi])*rsolfi, abs(tab.z[icouchefi-1] - tab.z[icouchefi]) );
 			}
 		}
 
-		zph=rsolfi/* + zph_p*/;
+		zph=rsolfi;
 
 		#ifdef DEBUG
 // 		if( idx==0 ){
 // 			printf("(%d)Profil: rsolfi=%lf - rdelta=%lf - sens=%d - icoucheTemp=%d - icouchefi=%d - icoucheTan=%d\n\t\
-// rayon=%lf - vzn=%lf - hph=%lf - zph=%lf - tauRdm=%lf\n",\
+// rayon=%lf - vzn=%lf - hph=%lf - zph=%lf - tauRdm=%f - taumax0=%f - locPrec=%d\n",\
 // 			icompteur, rsolfi, delta, sens, icoucheTemp, icouchefi, coucheTangentielle,\
-// 			rayon, vzn, hph, zph, tauRdm);
+// 			rayon, vzn, hph, zph, tauRdm, init->taumax0, ph->locPrec);
 // 		}
 		#endif
 
@@ -710,12 +667,7 @@ costh= %16.15lf - rayon= %16.12lf - delta= %16.10lf - icoucheTemp=%d - icouchefi
 		/** Calcul du profil total **/
 		// Calcul jusqu'à sortir ou intéragir
 		
-		while( (hph < tauRdm) && (flagSortie!=1)){
-			
-			if( flagSortie==1 ){
-				printf("Boule");
-				break;
-			}
+		while( (hph < tauRdm) ){
 			
 			icompteur++;
 			
@@ -729,6 +681,7 @@ costh= %16.15lf - rayon= %16.12lf - delta= %16.10lf - icoucheTemp=%d - icouchefi
 
 			// Mise à jour de la couche que va toucher le photon (c'est icouchefi)
 			icouchefi = icoucheTemp - sens;
+			
 			if( (icouchefi==coucheTangentielle)&&(sens==-1) ){
 				// Le photon va remonter dans les couches
 				sens=1;
@@ -752,17 +705,17 @@ sinth= %20.19lf - sens=%d\n",\
 			// Calcul de la solution avec astuce
 			rsolfi= 0.5*( -2*rayon*costh + sens*sqrt(delta));
 			
-			#ifdef DEBUG
 			if( rsolfi<0 ){
 				// Problème, c'est un rayon
+				#ifdef DEBUG
 				rsol1=0.5*( -2*rayon*costh + sqrt(delta));
 				rsol2=0.5*( -2*rayon*costh - sqrt(delta));
 				printf("OUPS: rsolfi #2=%lf, (%lf,%lf) - vzn=%lf - sens=%d - costh=%lf - rayon=%lf - delta=%lf\n",\
 				rsolfi,rsol1,rsol2, vzn, sens, costh, rayon, delta);
+				#endif
 				ph->loc=NONE;
 				return;
 			}
-			#endif
 			
 			// Calcul des grandeurs du profil
 			hph_p = hph;
@@ -784,17 +737,16 @@ sinth= %20.19lf - sens=%d\n",\
 			
 			// Valeur de la couche actuelle
 			if( icouchefi!=icoucheTemp ){
-				hph = /*__fdividef*/( abs( /*(double)*/tab.h[icoucheTemp] - /*(double)*/tab.h[icouchefi] )*(rsolfi-zph_p))/
-										( abs( /*(double)*/tab.z[icouchefi] -/* (double)*/tab.z[icoucheTemp]) ) + hph_p;
+				hph += __fdividef( 	abs(tab.h[icoucheTemp] - tab.h[icouchefi])*(rsolfi-zph_p), 
+									abs(tab.z[icouchefi] - tab.z[icoucheTemp]) );
 			}
 			else{
 				if( icouchefi==0 ){
-					hph =/*__fdividef*/ ( abs(/*(double)*/tab.h[icouchefi+1] -/*(double)*/tab.h[icouchefi])*(rsolfi-zph_p))/
-											( abs( /*(double)*/tab.z[icouchefi+1] - /*(double)*/tab.z[icouchefi]) ) + hph_p;
+					hph += __fdividef( 	abs(tab.h[1] - tab.h[0])*(rsolfi-zph_p) , abs(tab.z[1]- tab.z[0]) );
 				}
 				else{
-					hph = /*__fdividef*/( abs(/*(double)*/tab.h[icouchefi-1] -/*(double)*/tab.h[icouchefi])*(rsolfi-zph_p))/
-											( abs( /*(double)*/tab.z[icouchefi-1] - /*(double)*/tab.z[icouchefi]) ) + hph_p;
+					hph += __fdividef( 	abs(tab.h[icouchefi-1] - tab.h[icouchefi])*(rsolfi-zph_p),
+										abs(tab.z[icouchefi-1] - tab.z[icouchefi]) );
 				}
 			}
 
@@ -805,9 +757,9 @@ sinth= %20.19lf - sens=%d\n",\
 // 				rsol1=0.5*( -2*rayon*costh + sqrt(delta));
 // 				rsol2=0.5*( -2*rayon*costh - sqrt(delta));
 // 				printf("(%d)Profil: rsolfi=%lf - rdelta=%lf - sens=%d - icoucheTemp=%d - icouchefi=%d - icoucheTan=%d\n\t\
-// rayon= %lf - vzn= %lf - hph=%lf - zph=%lf - tauRdm=%lf\n",\
+// rayon= %lf - vzn= %lf - hph=%lf - zph=%lf - tauRdm=%f - locPrec=%d\n",\
 // 				icompteur, rsolfi, delta, sens, icoucheTemp, icouchefi, coucheTangentielle,\
-// 				rayon, vzn, hph, zph, tauRdm);
+// 				rayon, vzn, hph, zph, tauRdm, ph->locPrec);
 // 			}
 			#endif
 
@@ -825,38 +777,62 @@ sinth= %20.19lf - sens=%d\n",\
 			#endif
 		
 		}// Fin while
+		
+		#ifdef TEMPS
+		if(idx==0){
+			stop = clock();
+			time = __fdividef((float) (stop-start),__int2float_rn(CLOCKS_PER_SEC));
+			printf("(2.2) Temps de move pour une intéraction quelconque: %f\n", time);
+		}
+		#endif
 
 	}// Fin de si photon provenant de l'atmosphere ou la surface
 
-
-	/** Sauvegarde de quelques paramètres **/
-	zintermax= zph;
-
+	
+	/** Actualisation des coordonnées du photon **/
+	/* Calcul des nouvelles coordonnées (x,y,z) du photon
+	* Si le photon va intéragir dans l'atmosphère:
+	* 		Interpolation linéaire entre les bornes de la couche car le trajet au sein de la couche est rectiligne
+	* 		la 2ème ligne peut être remplacée pour la compréhension par rrb = zph - hph*rra; rdist = rra*tauRdm + rrb; mais les 
+	* 		performances sont légérement réduites.
+	* Sinon
+	*		La distance parcourue correspond à la traversée de l'atmosphère, représentée par zph
+	*/
+	
+	if( flagSortie==0 ){
+	rra = __fdividef( zph_p - zph , hph_p - hph );
+	rdist = rra*( tauRdm-hph ) + zph;
+	}
+	else{
+		rdist = zph;
+	}
+	
+	// Test de réduction du temps de calcul > Inefficace
+	// rdist = (1-flagSortie)*( __fdividef( zph_p - zph , hph_p - hph )*( tauRdm-hph ) + zph ) + flagSortie*zph ;
+	// rdist = (1-flagSortie)*( rra*( tauRdm-hph ) + zph ) + flagSortie*zph ;
+	
+	ph->x = ph->x + ph->vx*rdist;
+	ph->y = ph->y + ph->vy*rdist;
+	ph->z = ph->z + ph->vz*rdist;
+	
 
 	/** Sortie sans intéraction **/
-	vx_d = (double)ph->vx;
-	vy_d = (double)ph->vy;
-	vz_d = (double)ph->vz;
-
 	if( flagSortie==1 ){
 		// Il n'y a pas eu d'intéraction avec l'atmosphère
-
-		ph->x+= vx_d*zintermax;
-		ph->y+= vy_d*zintermax;
-		ph->z+= vz_d*zintermax;
 		
-		if( sens==1 ){
-			ph->loc = SPACE;
-		}
-		else{
+		if(sens==-1){
 			ph->loc = SURFACE;
 			ph->couche = NATMd;
+			ph->rayon = RTER;
+		}
+		else{
+			ph->loc = SPACE;
 		}
 		
 		#ifdef DEBUG
 // 		if(idx==0){
-// 		printf("Sortie sans inter: rayon=%20.16lf, (%16.12lf,%16.12lf,%20.16lf), hph=%lf, zph=%lf, zintermax=%lf, locPrec=%d\n",\
-// 		sqrt(ph->x*ph->x + ph->y*ph->y + ph->z*ph->z),ph->x,ph->y,ph->z,hph, zph, zintermax, ph->locPrec);
+// 		printf("Sortie sans inter: rayon=%20.16lf, (%16.12lf,%16.12lf,%20.16lf), hph=%lf, zph=%lf, locPrec=%d\n",\
+// 		sqrt(ph->x*ph->x + ph->y*ph->y + ph->z*ph->z),ph->x,ph->y,ph->z,hph, zph, ph->locPrec);
 // 		}
 		#endif
 
@@ -865,46 +841,40 @@ sinth= %20.19lf - sens=%d\n",\
 
 
 	/** Sorti avec intéraction **/
-	/* Calcul des nouvelles coordonnées (x,y,z) du photon
-	* Interpolation linéaire entre les bornes de la couche car le trajet au sein de la couche est rectiligne
-	*/
-	rra = /*__fdividef(*/ ( zph_p - zph )/( hph_p - hph );
-	rrb = zph - hph*rra;
-	rdist = rra*tauRdm + rrb;
-	
-	rxn = ph->x + vx_d*rdist;
-	ryn = ph->y + vy_d*rdist;
-	rzn = ph->z + vz_d*rdist;
-	
-	ph->x = rxn;
-	ph->y = ryn;
-	ph->z = rzn;
-
-
 	// Calcul du rayon
 	rayon2 = ph->x*ph->x + ph->y*ph->y + ph->z*ph->z;
 	rayon = sqrt(rayon2);
 
-	#ifdef DEBUG
-	if( (rayon < RTER)||(rayon>RTER+HATM) ){
+	
+	if((rayon < RTER)/* || (rayon>RTER+HATMd)*/){
+		if( (rayon-RTER)<1.e-4 ){
+			// Ce test apparait lorsqu'il y a la surface. Le rayon n'est pas égal à RTER, surement à cause d'erreur de calcul du GPU
+			rayon=RTER;
+			ph->loc=SURFACE;
+			#ifdef DEBUG
+			printf("MetaProblème #2: Correction du rayon\n");
+			#endif
+		}
+		else{
+			#ifdef DEBUG
 			printf("MetaProblème #2: rayon=%20.16lf - (%lf,%lf,%lf) - icouchefi=%d - icompteur=%d -locPrec=%d\n\t\
 rsolfi=%15.12lf - tauRdm= %lf - hph_p= %15.12lf - hph= %15.12lf - zph_p= %15.12lf - zph= %15.12lf\n",\
-rayon,ph->x, ph->y,ph->z, icouchefi, icompteur,ph->locPrec,\
-rsolfi,tauRdm, hph_p, hph, zph_p, zph);	
+			rayon,ph->x, ph->y,ph->z, icouchefi, icompteur,ph->locPrec,\
+			rsolfi,tauRdm, hph_p, hph, zph_p, zph);
+			#endif
 			ph->loc = NONE;
 			return;
+		}
 	}
-	#endif
-
 
 	// Boucle pour définir entre quels rayons est le photon
 	icoucheTemp = 0;
-	while( (RTER+(double)tab.z[icoucheTemp])>rayon ){ 
+	while((RTER+(double)tab.z[icoucheTemp])>rayon){
 		icoucheTemp++;
 		#ifdef DEBUG
 		if (icoucheTemp==NATMd+1){
 			printf("Arret de calcul couche #2 (rayon=%f)\n", rayon);
-			ph->loc = NONE;
+			ph->loc=NONE;
 			return;
 		}
 		#endif
@@ -918,6 +888,7 @@ rsolfi,tauRdm, hph_p, hph, zph_p, zph);
 	#endif
 
 	ph->couche = icoucheTemp;
+	ph->rayon = rayon;
 	ph->locPrec=ATMOS;
 	
 	// On sort maintenant de la fonction et comme le photon reste dans ATMOS, le kernel appelle scatter()
@@ -961,8 +932,6 @@ __device__ void scatter(Photon* ph, Tableaux tab
 	
 	float cTh=0, sTh, psi, cPsi, sPsi;
 	float wx, wy, wz, vx, vy, vz;
-	
-	ph->locPrec=ph->loc;
 	
 	psi = RAND * DEUXPI; //psiPhoton
 	cPsi = __cosf(psi); //cosPsiPhoton
@@ -1830,6 +1799,7 @@ void initConstantesDevice()
 	cudaMemcpyToSymbol(ZMINd, &ZMIN, sizeof(float));
 	cudaMemcpyToSymbol(ZMAXd, &ZMAX, sizeof(float));
 	cudaMemcpyToSymbol(NATMd, &NATM, sizeof(int));
+	cudaMemcpyToSymbol(HATMd, &HATM, sizeof(int));
 	
 	cudaMemcpyToSymbol(WINDSPEEDd, &WINDSPEED, sizeof(float));
 	cudaMemcpyToSymbol(NH2Od, &NH2O, sizeof(float));

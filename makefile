@@ -34,8 +34,8 @@ DFLAGS += -DTRAJET # Calcul et affichage des premiers evenements d'un thread
 # DFLAGS += -DTEMPS # Affichage du temps passé dans chaque fonctions pour un thread
 # DFLAGS += -DTABRAND # Affichage des premiers nombre aleatoires generes
 # DFLAGS += -DSORTIEINT # Sauvegarde des poids élevés, du nombre de photons par cases
-DFLAGS += -DDEBUG # Ajout de tests intermédiaires utilisés lors du débugage
-
+# DFLAGS += -DDEBUG # Ajout de tests intermédiaires utilisés lors du débugage
+DFLAGS += -DSPHERIQUE # Pour utiliser une atmosphère sphérique
 #####################################################################################
 
 all: $(EXEC)
