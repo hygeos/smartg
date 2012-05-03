@@ -108,9 +108,9 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 			
 			#endif
 			
-			initPhoton(&ph, tab/*, hph0_s, zph0_s*/
+			initPhoton(&ph/*, hph0_s, zph0_s*/
 				#ifdef SPHERIQUE
-				, init
+				, tab, init
 				#endif
 				#ifdef TRAJET
 				, idx, evnt
@@ -143,12 +143,15 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 			}
 			#endif
 			
-			move(&ph, tab 
+			move(&ph
 				#ifndef SPHERIQUE
 				,flagDiff
 				#endif
 				#ifdef SPHERIQUE
-				, init
+				, tab, init
+				#endif
+				#ifdef DEBUG
+				, var
 				#endif
 				, &etatThr
 				#if defined(RANDMWC) || defined(RANDMT)
@@ -230,10 +233,9 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 		
 		// Gain de tps
 		if(ph.loc == ABSORBED){
-// 			ph.locPrec = ABSORBED;
 			ph.loc = NONE;
 			nbPhotonsThr++;
-			
+
 		}
 		syncthreads();
 		
@@ -285,9 +287,9 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 /* initPhoton
 * Initialise le photon dans son état initial avant l'entrée dans l'atmosphère
 */
-__device__ void initPhoton(Photon* ph, Tableaux tab /*, float* hph0_s, float* zph0_s*/
+__device__ void initPhoton(Photon* ph/*, float* hph0_s, float* zph0_s*/
 		#ifdef SPHERIQUE
-		, Init* init
+		, Tableaux tab, Init* init
 		#endif
 		#ifdef TRAJET
 		, int idx, Evnt* evnt
@@ -357,12 +359,15 @@ __device__ void initPhoton(Photon* ph, Tableaux tab /*, float* hph0_s, float* zp
 * Pour l'atmosphère sphèrique, l'algorithme est basé sur la formule de pythagore généralisée.
 * Modification des coordonnées position du photon
 */
-__device__ void move(Photon* ph, Tableaux tab
+__device__ void move(Photon* ph
 		#ifndef SPHERIQUE
 		,int flagDiff
 		#endif
 		#ifdef SPHERIQUE
-		, Init* init
+		, Tableaux tab, Init* init
+		#endif
+		#ifdef DEBUG
+		, Variables* var
 		#endif
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
@@ -381,8 +386,8 @@ __device__ void move(Photon* ph, Tableaux tab
 	
 	/** Séparation du code pour atmosphère sphérique ou parallèle **/
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
-	double rsolfi=666;
-	double delta;
+	float rsolfi=666;
+	float delta;
 	
 	float tauRdm;	// Epaisseur optique aléatoire tirée
 	
@@ -393,13 +398,13 @@ __device__ void move(Photon* ph, Tableaux tab
 	float hph_p = 0.f;
 	
 	float vzn;				// projeté de vz sur l'axe defini par le photon et le centre de la terre
-	double sinth;			// Sinus de l'angle entre z' et Vz'
-	double costh;			// Cosinus de l'angle entre z' et Vz'
-	double ztangentielle;
+	float sinth;			// Sinus de l'angle entre z' et Vz'
+	float costh;			// Cosinus de l'angle entre z' et Vz'
+	float ztangentielle;
 	
 	
-	double rayon2;
-	double rayon;
+	float rayon2;
+	float rayon;
 	int icouchefi = 0;
 	int icompteur = 0;
 	int coucheTangentielle = 666;
@@ -487,7 +492,6 @@ __device__ void move(Photon* ph, Tableaux tab
 		}
 		#endif
 	}
-	
 
 
 	else if( ((ph->locPrec==ATMOS)||(ph->locPrec==SURFACE)) ){
@@ -521,7 +525,7 @@ __device__ void move(Photon* ph, Tableaux tab
 		// Vz'=vzn= V.Z/|Z|		
 		vzn = __fdividef( ph->vx*ph->x + ph->vy*ph->y + ph->vz*ph->z ,rayon);
 		
-		if((vzn<0)&&(ph->locPrec==SURFACE)){
+		if((vzn<0.f)&&(ph->locPrec==SURFACE)){
 			// Problème du à des imprécisions de calculs je pense ,également à la surface agitée
 // 			printf("pb#2 vzn= %lf - Z=(%lf, %lf, %lf) - V=(%lf, %lf, %lf) - test=%d\n",\
 			vzn, ph->x, ph->y, ph->z, vx_d, vy_d, vz_d, flagTest);
@@ -541,7 +545,7 @@ __device__ void move(Photon* ph, Tableaux tab
 			return;
 		}
 		
-		sinth = sqrt(1.-costh*costh);	// Le signe n'importe pas car on prend le carré ou la valeur absolu pour ztangentielle
+		sinth = sqrtf(1.f-costh*costh);	// Le signe n'importe pas car on prend le carré ou la valeur absolu pour ztangentielle
 
 
 		/** Initialisation des paramètres du photon : couche et sens de propagation dans l'atmosphère **/
@@ -555,7 +559,7 @@ __device__ void move(Photon* ph, Tableaux tab
 		// On choisit que par défaut le photon monte, ceci pour éviter un test
 		sens = 1;
 		
-		if(vzn<0){
+		if(vzn<0.f){
 		// Le photon descend
 			sens = -1;
 			
@@ -568,7 +572,7 @@ __device__ void move(Photon* ph, Tableaux tab
 			// Puis recherche de la couche correspondante
 			if( ztangentielle>RTER ){
 				coucheTangentielle = 0;
-				while( (RTER+(double)tab.z[coucheTangentielle])>ztangentielle){ 
+				while( (RTER+tab.z[coucheTangentielle])>ztangentielle){ 
 					coucheTangentielle++;
 					#ifdef DEBUG
 					if( coucheTangentielle==(NATMd+1) ){
@@ -601,7 +605,6 @@ __device__ void move(Photon* ph, Tableaux tab
 		// L'équivalent est icouchefi = icoucheTemp; if( sens== +1) icouchefi--;
 		bool test_sens = (sens==1);
 		icouchefi = icoucheTemp - test_sens;
-// 		icouchefi = icoucheTemp - sens;
 		
 		if( icouchefi<0 ){
 			/* Cela signifie que le photon est à la limite de l'atmosphère mais qu'il va sortir car il remonte l'atmosphère
@@ -624,17 +627,20 @@ __device__ void move(Photon* ph, Tableaux tab
 		
 		/** Premier calcul **/
 		// Déterminant de l'équation déduite du pythagore généralisé
-		delta = 4*( ((double)tab.z[icouchefi]+RTER)*((double)tab.z[icouchefi]+RTER) - rayon2*sinth*sinth);
+		delta = 4.f*( (tab.z[icouchefi]+RTER)*(tab.z[icouchefi]+RTER) - rayon2*sinth*sinth);
 		
-		#ifdef DEBUG
+		
 		if(delta<0){
+			#ifdef DEBUG
 				printf("OUPS rdelta #1=%lf - icoucheTemp=%d - tab.z[icoucheTemp]= %16.13lf - rayon= %17.13lf - rayon2=%20.16lf\n\t\
 sinth= %20.19lf - sens=%d\n",\
 				delta, icoucheTemp, tab.z[icoucheTemp], rayon, rayon2, sinth, sens);
+			atomicAdd(&(var->erreurpoids), 1);
+			#endif
 			ph->loc=NONE;
 			return;
 		}
-		#endif
+		
 
 		/* Calcul de la solution avec astuce
 		* Sens indique si le photon monte ou descends, et la solution se déduit de ce signe. Un dessin permet de s'en convaincre
@@ -642,17 +648,22 @@ sinth= %20.19lf - sens=%d\n",\
 		* Si il descend dans les couches, costh<0, il faut prendre la plus petite solution
 		* Si il monte dans les couches avec costh<0, il faut prendre la plus grande solution
 		*/
-		rsolfi= 0.5*( -2*rayon*costh + sens*sqrt(delta));
+		rsolfi= 0.5f*( -2.f*rayon*costh + sens*sqrtf(delta));
 		
+		if( abs(rsolfi) < 5e-3f ){
+			rsolfi=0.f;
+		}
 		
-		if( rsolfi<0 ){
+		if( rsolfi<0.f ){
 			#ifdef DEBUG
 			rsol1=0.5*( -2*rayon*costh + sqrt(delta));
 			rsol2=0.5*( -2*rayon*costh - sqrt(delta));
 			printf("OUPS: rsolfi #1=%lf, (%lf,%lf) - vzn=%lf - sens=%d - locPrec=%d\n\t\
 costh= %16.15lf - rayon= %16.12lf - delta= %16.10lf - icoucheTemp=%d - icouchefi=%d\n",\
 			rsolfi,rsol1,rsol2, vzn, sens, ph->locPrec, costh, rayon, delta, icoucheTemp, icouchefi);
+			atomicAdd(&(var->erreurpoids), 1);
 			#endif
+			
 			ph->loc=NONE;
 			return;
 		}
@@ -711,28 +722,32 @@ costh= %16.15lf - rayon= %16.12lf - delta= %16.10lf - icoucheTemp=%d - icouchefi
 
 
 			// Solution de l'équation issue de pythagore généralisé
-			delta = 4*( ((double)tab.z[icouchefi]+RTER)*((double)tab.z[icouchefi]+RTER) - rayon2*sinth*sinth);
+			delta = 4.f*( (tab.z[icouchefi]+RTER)*(tab.z[icouchefi]+RTER) - rayon2*sinth*sinth);
 			
-			#ifdef DEBUG
+			
 			if(delta<0){
+				#ifdef DEBUG
 				printf("OUPS delta #2=%lf - icouchefi=%d - tab.z[icouchefi]= %16.13lf - rayon= %17.13lf - rayon2= %20.16lf\n\t\
 sinth= %20.19lf - sens=%d\n",\
 				delta, icouchefi, tab.z[icouchefi], rayon, rayon2, sinth, sens);
+				atomicAdd(&(var->erreurpoids), 1);
+				#endif
 				ph->loc=NONE;
 				return;
 			}
-			#endif
+			
 			
 			// Calcul de la solution avec astuce
-			rsolfi= 0.5*( -2*rayon*costh + sens*sqrt(delta));
+			rsolfi= 0.5f*( -2.f*rayon*costh + sens*sqrtf(delta));
 			
-			if( rsolfi<0 ){
+			if( rsolfi<0.f ){
 				// Problème, c'est un rayon
 				#ifdef DEBUG
 				rsol1=0.5*( -2*rayon*costh + sqrt(delta));
 				rsol2=0.5*( -2*rayon*costh - sqrt(delta));
 				printf("OUPS: rsolfi #2=%lf, (%lf,%lf) - vzn=%lf - sens=%d - costh=%lf - rayon=%lf - delta=%lf\n",\
 				rsolfi,rsol1,rsol2, vzn, sens, costh, rayon, delta);
+				atomicAdd(&(var->erreurpoids), 1);
 				#endif
 				ph->loc=NONE;
 				return;
@@ -864,11 +879,11 @@ sinth= %20.19lf - sens=%d\n",\
 	/** Sorti avec intéraction **/
 	// Calcul du rayon
 	rayon2 = ph->x*ph->x + ph->y*ph->y + ph->z*ph->z;
-	rayon = sqrt(rayon2);
+	rayon = sqrtf(rayon2);
 
 	
 	if((rayon < RTER)/* || (rayon>RTER+HATMd)*/){
-		if( (rayon-RTER)<1.e-4 ){
+		if( (rayon-RTER)<1.e-4f ){
 			// Ce test apparait lorsqu'il y a la surface. Le rayon n'est pas égal à RTER, surement à cause d'erreur de calcul du GPU
 			rayon=RTER;
 			ph->loc=SURFACE;
@@ -890,7 +905,7 @@ rsolfi=%15.12lf - tauRdm= %lf - hph_p= %15.12lf - hph= %15.12lf - zph_p= %15.12l
 
 	// Boucle pour définir entre quels rayons est le photon
 	icoucheTemp = 0;
-	while((RTER+(double)tab.z[icoucheTemp])>rayon){
+	while((RTER+tab.z[icoucheTemp])>rayon){
 		icoucheTemp++;
 		#ifdef DEBUG
 		if (icoucheTemp==NATMd+1){
@@ -917,8 +932,8 @@ rsolfi=%15.12lf - tauRdm= %lf - hph_p= %15.12lf - hph= %15.12lf - zph_p= %15.12l
 	#endif	/* Fin de la partie atmosphère sphérique */
 
 
-	#ifndef SPHERIQUE	/* Code spécifique à une atmosphère en plan parallèle */
-	ph->tau += -__logf( flagDiff + RAND*(1.F +(__expf(-TAUMAXd)-2)*flagDiff))*ph->vz;
+	#ifndef SPHERIQUE	/* Code spécifique à une atmosphère parallèle */
+	ph->tau += -__logf( flagDiff + RAND*(1.F +(__expf(-TAUMAXd)-2.f)*flagDiff))*ph->vz;
 	
 	
 	// Si tau<0 le photon atteint la surface
@@ -968,7 +983,7 @@ __device__ void scatter(Photon* ph, Tableaux tab
 			#endif
 			){
 	
-	float cTh=0, sTh, psi, cPsi, sPsi;
+	float cTh=0.f, sTh, psi, cPsi, sPsi;
 	float wx, wy, wz, vx, vy, vz;
 	
 	
@@ -1040,7 +1055,7 @@ __device__ void scatter(Photon* ph, Tableaux tab
 * Pour l'optimisation du programme, il est possible d'effectuer un travail de réduction au maximum de cette fonction. L'idée est
 * de calculer et d'utiliser la fonction de phase moléculaire
 */
-__device__ void calculDiffScatter( Photon* photon, float* cTh, Tableaux tab
+__device__ void calculDiffScatter( Photon* ph, float* cTh, Tableaux tab
 			#ifdef RANDMWC
 			, unsigned long long* etatThr, unsigned int* configThr
 			#endif
@@ -1057,15 +1072,16 @@ __device__ void calculDiffScatter( Photon* photon, float* cTh, Tableaux tab
 	float stokes1, stokes2;
 	float cTh2;
 	int icouche;
-
+	float prop_aer;
+	float rra, tau;
 	
 	/** Séparation du code pour atmosphère sphérique ou parallèle **/
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
-	icouche = photon->couche;
+	icouche = ph->couche;
 	#endif
 	
 	#ifndef SPHERIQUE	/* Code spécifique à une atmosphère en plan parallèle */
-	float tauBis = TAUATMd-photon->tau;
+	float tauBis = TAUATMd-ph->tau;
 	icouche = 1;
 	
 	while( (tab.h[icouche] < (tauBis)) && icouche<NATMd ){
@@ -1073,10 +1089,26 @@ __device__ void calculDiffScatter( Photon* photon, float* cTh, Tableaux tab
 	}
 	#endif
 	
-	float prop_aer= 1.f-tab.pMol[icouche];
+	/** Interpolation linéaire pour connaitre la proportion d'aérosols à l'endroit où se situe le photon **/
+// 	if(icouche==0){
+// 		printf("icouche=0 pour le calcul de proportion d'aérosols\n");
+// 		prop_aer = 1.f - tab.pMol[icouche];
+// 	}
+// 	else{
+// 		rra = __fdividef( tab.pMol[icouche] - tab.pMol[icouche-1] , tab.h[icouche] -tab.h[icouche-1] );
+// 		#ifdef SPHERIQUE
+// 		prop_aer = 1.f - ( rra*(ph->z - tab.z[icouche]) + tab.pMol[icouche] );
+// 		#endif
+// 		#ifndef SPHERIQUE
+// 		prop_aer = 1.f - ( rra*(ph->tau - tab.h[icouche]) + tab.pMol[icouche] );
+// 		#endif
+// 	}
+
+	prop_aer = 1.f - tab.pMol[icouche];
 	
-	stokes1 = photon->stokes1;
-	stokes2 = photon->stokes2;
+	
+	stokes1 = ph->stokes1;
+	stokes2 = ph->stokes2;
 	
 	if( prop_aer<RAND ){
 		// Theta calculé pour la diffusion moléculaire
@@ -1084,12 +1116,12 @@ __device__ void calculDiffScatter( Photon* photon, float* cTh, Tableaux tab
 		cTh2 = (*cTh)*(*cTh);
 
 		// Calcul du poids après diffusion
-		photon->weight *= __fdividef(1.5F * ((1.F+GAMAd)*stokes2+((1.F-GAMAd)*cTh2+2.F*GAMAd)*stokes1), (1.F+2.F*GAMAd) *
+		ph->weight *= __fdividef(1.5F * ((1.F+GAMAd)*stokes2+((1.F-GAMAd)*cTh2+2.F*GAMAd)*stokes1), (1.F+2.F*GAMAd) *
 		(stokes1+stokes2));
 		// Calcul des parametres de Stokes du photon apres diffusion
-		photon->stokes2 += GAMAd * stokes1;
-		photon->stokes1 = ( (1.F - GAMAd) * cTh2 + GAMAd) * stokes1 + GAMAd * photon->stokes2;
-		photon->stokes3 *= (1.F - GAMAd) * (*cTh);
+		ph->stokes2 += GAMAd * stokes1;
+		ph->stokes1 = ( (1.F - GAMAd) * cTh2 + GAMAd) * stokes1 + GAMAd * ph->stokes2;
+		ph->stokes3 *= (1.F - GAMAd) * (*cTh);
 		// 		photon->stokes4 = 0.F /*(1.F - 3.F * GAMAd) * (*cTh) * photon->stokes4*/;
 	}
 	else{
@@ -1108,12 +1140,12 @@ __device__ void calculDiffScatter( Photon* photon, float* cTh, Tableaux tab
 		float faer2 = tab.faer[iang*5+1];
 		
 		// Calcul du poids après diffusion
-		photon->weight *= __fdividef( 2.0F*(stokes1*faer1+stokes2*faer2) , stokes1+stokes2)*W0AERd;
+		ph->weight *= __fdividef( 2.0F*(stokes1*faer1+stokes2*faer2) , stokes1+stokes2)*W0AERd;
 		
 		// Calcul des parametres de Stokes du photon apres diffusion
-		photon->stokes1 *= 2.0F*faer1;
-		photon->stokes2 *= 2.0F*faer2;
-		photon->stokes3 *= tab.faer[iang*5+2];
+		ph->stokes1 *= 2.0F*faer1;
+		ph->stokes2 *= 2.0F*faer2;
+		ph->stokes3 *= tab.faer[iang*5+2];
 		// 		photon->stokes4 = 0.F;
 	}
 	
@@ -1327,19 +1359,21 @@ __device__ void surfaceAgitee(Photon* ph
 	modifStokes(ph, psi, __cosf(psi), __sinf(psi), 0 );
 	
 	}
-	
+	/**  **/
 // 	bool test_s = (sTh<=nind);
 // 	temp = __fdividef(sTh,nind);
-// 	cot = test_s*sqrtf( 1.0F - temp*temp ) + 0*!test_s;
-
+// 	cot = sqrtf( 1.0F - temp*temp )*test_s;
 // 	ncot = nind*cot;
 // 	ncTh = nind*cTh;
 // 	rpar = __fdividef(cot - ncTh,cot + ncTh)*test_s + 1.F*(!test_s);
 // 	rpar2 = rpar*rpar;
 // 	rper = __fdividef(cTh - ncot,cTh + ncot)*test_s + 1.F*(!test_s);
 // 	rper2 = rper*rper;
-// 		ReflTot = !(test_s);
+// // 		ReflTot = !(test_s);
+// Rapport de l'intensite speculaire reflechie
+// rat = __fdividef(photon->stokes1*rper2 + photon->stokes2*rpar2,photon->stokes1+photon->stokes2)*test_s;
 
+	/*****************/
 	if( sTh<=nind){
 		temp = __fdividef(sTh,nind);
 		cot = sqrtf( 1.0F - temp*temp );
@@ -1679,6 +1713,9 @@ __device__ void exit(Photon* ph, Variables* var, Tableaux tab, unsigned long lon
 	float sPsi = __sinf(psi);
 	modifStokes(ph, psi, cPsi, sPsi, 0);
 	
+	// Calcul de la case dans laquelle le photon sort
+	calculCase(&ith, &iphi, ph, var);
+	
 	#ifndef SPHERIQUE
 	/** A garder ou pas ? **/
 	// Modification de U
@@ -1689,8 +1726,7 @@ __device__ void exit(Photon* ph, Variables* var, Tableaux tab, unsigned long lon
 	// On modifie ensuite le poids du photon
 	ph->weight = __fdividef(ph->weight, ph->stokes1 + ph->stokes2);
 	
-	// Calcul de la case dans laquelle le photon sort
-	calculCase(&ith, &iphi, ph, var);
+
 	// Rangement du photon dans sa case, et incrémentation de variables
 	if(((ith >= 0) && (ith < NBTHETAd)) && ((iphi >= 0) && (iphi < NBPHId)))
 	{
@@ -1737,7 +1773,8 @@ __device__ void exit(Photon* ph, Variables* var, Tableaux tab, unsigned long lon
 }
 
 
-/* Modifie les paramètres de stokes
+/* modifStokes
+* Modifie les paramètres de stokes
 * Flag permet de tester (si flag=1) ou non la valeur des paramètres avant modification
 */
 __device__ void modifStokes(Photon* photon, float psi, float cPsi, float sPsi, int flag)
@@ -1822,8 +1859,10 @@ __device__ void calculCase(int* ith, int* iphi, Photon* photon, Variables* var)
 		#ifdef PROGRESSION
 		atomicAdd(&(var->erreurvxy), 1);
 		#endif
-		/*if(photon->vy < 0.F) *iphi = NBPHId - 1;
-		else*/ *iphi = 0;
+// 		/*if(photon->vy < 0.F) *iphi = NBPHId - 1;
+// 		else*/ *iphi = 0;
+		if(photon->vy >= 0.F)  *iphi = 0;
+		else *iphi = NBPHId - 1;
 // 		return;
 	}
 	

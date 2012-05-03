@@ -95,9 +95,9 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 /* initPhoton
 * Initialise le photon dans son état initial avant l'entrée dans l'atmosphère
 */
-__device__ void initPhoton(Photon* ph, Tableaux tab
+__device__ void initPhoton(Photon* ph
 		#ifdef SPHERIQUE
-		, Init* init
+		, Tableaux tab, Init* init
 		#endif
 		#ifdef TRAJET
 		, int, Evnt*
@@ -110,12 +110,15 @@ __device__ void initPhoton(Photon* ph, Tableaux tab
 * Pour l'atmosphère sphèrique, l'algorithme est basé sur la formule de pythagore généralisé
 * Modification des coordonnées position du photon
 */
-__device__ void move(Photon*, Tableaux tab
+__device__ void move(Photon*
 		#ifndef SPHERIQUE
 		,int flagDiff
 		#endif
 		#ifdef SPHERIQUE
-		, Init* init
+		, Tableaux tab, Init* init
+		#endif
+		#ifdef DEBUG
+		, Variables* var
 		#endif
 		#ifdef RANDMWC
 		, unsigned long long*, unsigned int*

@@ -33,7 +33,6 @@ int main (int argc, char *argv[])
 	
 	
 	/** Initialisation des constantes du host (en partie recuperees dans le fichier Parametres.txt) **/
-	
 	initConstantesHost(argc, argv);
 	
 	
@@ -67,6 +66,12 @@ int main (int argc, char *argv[])
 	
 	memset(tabPhotonsTot,0,4*NBTHETA*NBPHI*sizeof(*(tabPhotonsTot)));
 	
+	// Variables permettant le calcul du résultat final
+	float tabFinal[3*NBTHETA * NBPHI];	 /* tableau final: 3 dimensions pour R=stokes1+stokes2(dim0) , Q=stokes1-stokes2(dim1) et
+											U=stokes3(dim2) */
+	float tabTh[NBTHETA]; //tableau contenant l'angle theta de chaque morceau de sphère
+	float tabPhi[NBPHI]; //tableau contenant l'angle psi de chaque morceau de sphère
+	
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
 	// Définition et initialisation des constantes initiales du photon
 	Init* init_H;
@@ -87,12 +92,13 @@ int main (int argc, char *argv[])
 	
 	
 	/** Initialisation des constantes du device à partir des constantes du host **/
-	
 	initConstantesDevice();
-
 	
-	/** Vérification des fichiers **/
+
+	#ifdef TEMOIN
+	/** Vérification de l'existence ou non d'un fichier témoin **/
 	verifierFichier();
+	#endif
 	
 	
 	#ifdef PARAMETRES
@@ -110,7 +116,7 @@ int main (int argc, char *argv[])
 
 	// Calcul du mélange Molécule/Aérosol dans l'atmosphère en fonction de la couche
 	profilAtm( &tab_H, &tab_D );
-// 	verificationAtm( tab_H );
+	verificationAtm( tab_H );
 	
 	
 	/** Séparation du code pour atmosphère sphérique ou parallèle **/
@@ -121,15 +127,18 @@ int main (int argc, char *argv[])
 	#ifdef DEBUG
 	printf("Paramètres initiaux du photon: taumax0=%lf - zintermax=%lf - (%lf,%lf,%lf)\n",\
 		   init_H->taumax0, init_H->zintermax0, init_H->x0, init_H->y0, init_H->z0 );
-	for(int i=0; i<NATM+1; i++)
-		printf("zph[%i]=%10.7lf - hph[%d]=%10.7e\n",i, tab_H.zph0[i], i ,tab_H.hph0[i] );
+// 	for(int i=0; i<NATM+1; i++)
+// 		printf("zph0[%d]=%10.7f - hph0[%d]=%10.7f\n",i, tab_H.zph0[i], i ,tab_H.hph0[i] );
 	#endif
 	
 	#endif /* Fin de la spécification atmosphère sphérique */
 	
 	
 	/** Fonction qui permet de poursuivre la simulation précédente si elle n'est pas terminee **/
+	#ifdef TEMOIN
 	lireHDFTemoin(var_H, var_D, &nbPhotonsTot, tabPhotonsTot, &tempsPrec);
+	#endif
+	
 	
 	#ifdef TRAJET
 	// DEBUG : Variables permettant de récupérer le début du trajet d'un photon
@@ -153,49 +162,35 @@ int main (int argc, char *argv[])
 	if(nbPhotonsTot < NBPHOTONS) 
 		passageBoucle = true;
 	
-	/** Création de stream pour copies asynchrones **/
-// 	cudaStream_t stream1, stream2;
-// 	
-// 	cudaErreur = cudaStreamCreate( &stream1 );
-// 	if( cudaErreur != cudaSuccess ){
-// 		printf("\nERREUR: Problème de création de stream1\n");
-// 		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-// 		exit(1);
-// 	}
-// 	
-// 	cudaErreur = cudaStreamCreate( &stream2 );
-// 	if( cudaErreur != cudaSuccess ){
-// 		printf("\nERREUR: Problème de création de stream2\n");
-// 		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-// 		exit(1);
-// 	}
 	
 	// Tant qu'il n'y a pas assez de photons traités on relance le kernel
 	while(nbPhotonsTot < NBPHOTONS)
 	{
 		/** Remise à zéro de certaines variables et certains tableaux **/
-		/** **/
-		reinitVariables(var_H, var_D);
-// 		cudaErreur = cudaMemset(&(var_D->nbPhotons), 0, sizeof(var_D->nbPhotons));
-// 		if( cudaErreur != cudaSuccess ){
-// 			printf("#--------------------#\n");
-// 			printf("# ERREUR: Problème de cudaMemset var_D.nbPhotons dans le main\n");
-// 			printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-// 			printf("#--------------------#\n");
-// 			exit(1);
-// 		}
+// 		reinitVariables(var_H, var_D);
+		cudaErreur = cudaMemset(&(var_D->nbPhotons), 0, sizeof(var_D->nbPhotons));
+		if( cudaErreur != cudaSuccess ){
+			printf("#--------------------#\n");
+			printf("# ERREUR: Problème de cudaMemset var_D.nbPhotons dans le main\n");
+			printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+			printf("#--------------------#\n");
+			exit(1);
+		}
 		
-// 		#ifdef PROGRESSION
-// 		cudaErreur = cudaMemset(&(var_D->nbPhotonsSor), 0, sizeof(var_D->nbPhotonsSor));
-// 		if( cudaErreur != cudaSuccess ){
-// 			printf("#--------------------#\n");
-// 			printf("# ERREUR: Problème de cudaMemset var_D.nbPhotons dans le main\n");
-// 			printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-// 			printf("#--------------------#\n");
-// 			exit(1);
-// 		}
-// 		#endif
-		/** **/
+		#ifdef PROGRESSION
+		cudaErreur = cudaMemset(&(var_D->nbPhotonsSor), 0, sizeof(var_D->nbPhotonsSor));
+		if( cudaErreur != cudaSuccess ){
+			printf("#--------------------#\n");
+			printf("# ERREUR: Problème de cudaMemset var_D.nbPhotons dans le main\n");
+			printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+			printf("#--------------------#\n");
+			exit(1);
+		}
+		#endif
+		
+		
+		#ifdef TEMOIN
+		/** Réinitialisation des données de la simulation **/
 		
 		cudaErreur = cudaMemset(tab_D.tabPhotons, 0, 4*NBTHETA * NBPHI * sizeof(*(tab_D.tabPhotons)));
 		if( cudaErreur != cudaSuccess ){
@@ -205,6 +200,7 @@ int main (int argc, char *argv[])
 			printf("#--------------------#\n");
 			exit(1);
 		}
+		#endif
 		
 		
 		/** Lancement du kernel **/
@@ -220,7 +216,7 @@ int main (int argc, char *argv[])
 				#endif
 							);
 		// Attend que tous les threads aient fini avant de faire autre chose
-		cudaThreadSynchronize();
+// 		cudaThreadSynchronize();
 		
 		/** Récupération des variables et d'un tableau envoyés dans le kernel **/
 		cudaErreur = cudaMemcpy(var_H, var_D, sizeof(Variables), cudaMemcpyDeviceToHost);
@@ -236,31 +232,23 @@ int main (int argc, char *argv[])
 			exit(1);
 		}
 
+		#ifdef TEMOIN
 		cudaErreur = cudaMemcpy(tab_H.tabPhotons, tab_D.tabPhotons, 4*NBTHETA * NBPHI * sizeof(*(tab_H.tabPhotons)),
 cudaMemcpyDeviceToHost);
-// 		cudaErreur = cudaMemcpyAsync( tab_H.tabPhotons, tab_D.tabPhotons,4*NBTHETA*NBPHI*sizeof(*(tab_H.tabPhotons)),
-// 										cudaMemcpyDeviceToHost , stream2);
 		if( cudaErreur != cudaSuccess ){
 			printf( "ERREUR: Problème de copie tab_H.tabPhotons dans le main\n");
 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
 			exit(1);
 		}
 		
-// 		cudaErreur = cudaStreamSynchronize ( stream1 );
-// 		if( cudaErreur != cudaSuccess ){
-// 			printf( "ERREUR: Problème de synchronisation stream1 dans le main\n");
-// 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-// 			exit(1);
-// 		}
-// 		
-// 		cudaErreur = cudaStreamSynchronize ( stream2 );
-// 		if( cudaErreur != cudaSuccess ){
-// 			printf( "ERREUR: Problème de synchronisation stream2 dans le main\n");
-// 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-// 			exit(1);
-// 		}
+		/** Creation d'un fichier témoin pour pouvoir reprendre la simulation en cas d'arrêt **/
+		for(int i = 0; i < 4*NBTHETA*NBPHI; i++)
+			tabPhotonsTot[i] += tab_H.tabPhotons[i];
+		
+		creerHDFTemoin(tabPhotonsTot, nbPhotonsTot,var_H, tempsPrec);
+		#endif
 
-				
+
 		// On remplit les variables et tableau qui restent dans le host
 		nbPhotonsTot += var_H->nbPhotons;
 		
@@ -268,18 +256,13 @@ cudaMemcpyDeviceToHost);
 		nbPhotonsSorTot += var_H->nbPhotonsSor;
 		#endif
 		
-		for(int i = 0; i < 4*NBTHETA*NBPHI; i++)
-			tabPhotonsTot[i] += tab_H.tabPhotons[i];
-		
-		/** Creation d'un fichier témoin pour pouvoir reprendre la simulation en cas d'arrêt **/
-		creerHDFTemoin(tabPhotonsTot, nbPhotonsTot,var_H, tempsPrec);
 		
 		/** Affichage de l'avancement de la simulation **/
 		afficheProgress(nbPhotonsTot, var_H, tempsPrec
 			#ifdef PROGRESSION
 			, nbPhotonsSorTot
 			#endif
-			       );
+			);
 	}
 	
 	// Si on n'est pas passé dans la boucle on affiche quand-même l'avancement de la simulation
@@ -288,7 +271,23 @@ cudaMemcpyDeviceToHost);
 					, nbPhotonsSorTot
 					#endif
 					  );
-			       
+	
+	
+	#ifndef TEMOIN
+	/** Récupération des données du device vers le host **/
+	cudaErreur = cudaMemcpy(tab_H.tabPhotons, tab_D.tabPhotons, 4*NBTHETA * NBPHI * sizeof(*(tab_H.tabPhotons)),
+cudaMemcpyDeviceToHost);
+	if( cudaErreur != cudaSuccess ){
+		printf( "ERREUR: Problème de copie tab_H.tabPhotons dans le main\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+		exit(1);
+	}
+	
+	for(int i = 0; i < 4*NBTHETA*NBPHI; i++)
+		tabPhotonsTot[i] += tab_H.tabPhotons[i];
+	#endif
+	
+	
 	#ifdef TABRAND
 	// DEBUG Recuperations et affichage des nombres aleatoires du random
 	cudaErreur = cudaMemcpy(tableauRand_H, tableauRand_D, 100 * sizeof(float), cudaMemcpyDeviceToHost);
@@ -311,32 +310,22 @@ cudaMemcpyDeviceToHost);
 	}
 	printf("==================================\n");
 	#endif
-
-
-	cudaErreur = cudaMemcpy(tab_H.tabPhotons, tab_D.tabPhotons, 4*NBTHETA * NBPHI * sizeof(*(tab_H.tabPhotons)),
-cudaMemcpyDeviceToHost);
-	if( cudaErreur != cudaSuccess ){
-		printf( "ERREUR: Problème de copie tab_H.tabPhotons dans le main\n");
-		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-		exit(1);
-	}
 	
 	
-	/** Création et calcul du tableau final (regroupant le poids de tous les photons ressortis sur une demi-sphère, par unité de surface) **/
-	float tabFinal[3*NBTHETA * NBPHI]; //tableau final
-	/* 3 dimensions pour R=stokes1+stokes2(dim0) , Q=stokes1-stokes2(dim1) et U=stokes3(dim2) */
-	float tabTh[NBTHETA]; //tableau contenant l'angle theta de chaque morceau de sphère
-	float tabPhi[NBPHI]; //tableau contenant l'angle psi de chaque morceau de sphère
+	/** Création et calcul du tableau final (regroupant le poids de tous les photons ressortis sur une demi-sphère, par unité de
+surface) **/	
 	// Remplissage des 3 tableaux
 	calculTabFinal(tabFinal, tabTh, tabPhi, tabPhotonsTot, nbPhotonsTot);
 
+	
 	/** Fonction qui crée le fichier .hdf contenant le résultat final sur la demi-sphère **/
 	creerHDFResultats(tabFinal, tabTh, tabPhi, nbPhotonsTot, var_H, tempsPrec);
 	printf(" Fin de l'execution du programme. Resultats stockes dans %s\n",PATHRESULTATSHDF);
 
-	/** Affichage du trajet du photon **/
+	
 	#ifdef TRAJET
-	// DEBUG Récupération des variables envoyées dans le kernel
+	/** Affichage du trajet du photon **/
+	// Récupération des variables envoyées dans le kernel
 	cudaErreur = cudaMemcpy(evnt_H, evnt_D, NBTRAJET * sizeof(Evnt), cudaMemcpyDeviceToHost);
 	if( cudaErreur != cudaSuccess ){
 		printf( "ERREUR: Problème de copie evnt_D dans le main\n");
@@ -360,7 +349,6 @@ cudaMemcpyDeviceToHost);
 	free(var_H);
 // 	cudaFreeHost(var_H);
 
-
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
 	cudaErreur = cudaFree(init_D);
 	if( cudaErreur != cudaSuccess ){
@@ -372,27 +360,10 @@ cudaMemcpyDeviceToHost);
 	free(init_H);
 	#endif
 	
-	
 	// Libération des tableaux envoyés dans le kernel
 	freeTableaux(&tab_H, &tab_D);
 	// Libération du tableau du host
 	free(tabPhotonsTot);
-
-	/** Libération des streams **/
-// 	cudaErreur = cudaStreamDestroy( stream1 );
-// 	if( cudaErreur != cudaSuccess ){
-// 		printf( "ERREUR: Problème cudaStreamDestroy(stream1) dans le main\n");
-// 		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-// 		exit(1);
-// 	}
-// 	
-// 	cudaErreur = cudaStreamDestroy( stream2 );
-// 	if( cudaErreur != cudaSuccess ){
-// 		printf( "ERREUR: Problème cudaStreamDestroy(stream2) dans le main\n");
-// 		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-// 		exit(1);
-// 	}
-
 
 	// Libération des variables qui récupèrent le trajet d'un photon
 	#ifdef TRAJET

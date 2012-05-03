@@ -182,12 +182,12 @@ typedef struct __align__(16)
 	int locPrec;
 	
 	// Position cartésienne du photon
-	double x;
-	double y;
-	double z;
-	double rayon;
+	float x;
+	float y;
+	float z;
+	float rayon;
 	
-	double taumax;
+	float taumax;
 	
 	// Paramètres pour une atmosphère sphérique
 	int couche;
@@ -258,10 +258,12 @@ typedef struct __align__(16)
 	float* faer;			// Pointeur vers le modèle de diffusion des aérosols
 	float* h;				// Pointeur vers l'épaisseur optique de chaque couches du modèle atmosphérique
 	float* pMol;			// Pointeur vers la proportion de molécules dans chaque couches du modèle atmosphérique
-	float* z;				// Altitude de chaque couches
 	
 	/** Séparation du code pour atmosphère sphérique ou parallèle **/
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
+	
+	float* z;				// Altitude de chaque couches
+	
 	/* Profil atmosphérique initial vu par la photon */
 	float* hph0;			// Epaisseur optique vue devant le photon
 	float* zph0;			// Altitude correspondante
@@ -292,9 +294,9 @@ typedef struct __align__(16)
 typedef struct __align__(16){
 	
 	/* Coordonnées initiales */
-	double x0;
-	double y0;
-	double z0;
+	float x0;
+	float y0;
+	float z0;
 	
 	/* Paramètres liés au profil initial vu par le photon */
 	float taumax0;		// Valeur maximale de l'épaisseur optique parcourue par le photon qui conduira à une 1ère intéraction

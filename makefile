@@ -23,18 +23,19 @@ LFLAGS += -lcuda -lcudart
 
 #=============Options============#
 DFLAGS =
-DFLAGS += -DPARAMETRES # Affichage des parametres initiaux
+DFLAGS += -DPARAMETRES 	# Affichage des parametres initiaux
 DFLAGS += -DRANDMWC 	# Utilisation du random MWC (Multiply-With-Carry)
 # DFLAGS += -DRANDCUDA	# Utilisation du random CUDA (Fonction fournie par cuda)
 # DFLAGS += -DRANDMT	# Utilisation du random MT (Mersenne Twister)
 
 #=============Debogage===========#
 DFLAGS += -DPROGRESSION # Calcul et affichage de la progression de la simulation
-DFLAGS += -DTRAJET # Calcul et affichage des premiers evenements d'un thread
-# DFLAGS += -DTEMPS # Affichage du temps passé dans chaque fonctions pour un thread
-# DFLAGS += -DTABRAND # Affichage des premiers nombre aleatoires generes
-# DFLAGS += -DDEBUG # Ajout de tests intermédiaires utilisés lors du débugage
-# DFLAGS += -DSPHERIQUE # Pour utiliser une atmosphère sphérique
+# DFLAGS += -DTEMOIN	# Création d'un fichier témoin lorsque ce flag est activé
+# DFLAGS += -DTRAJET 	# Calcul et affichage des premiers evenements d'un thread
+# DFLAGS += -DTEMPS 	# Affichage du temps passé dans chaque fonctions pour un thread
+# DFLAGS += -DTABRAND 	# Affichage des premiers nombre aleatoires generes
+# DFLAGS += -DDEBUG 	# Ajout de tests intermédiaires utilisés lors du débugage
+DFLAGS += -DSPHERIQUE	# Pour utiliser une atmosphère sphérique
 #####################################################################################
 
 all: $(EXEC)
