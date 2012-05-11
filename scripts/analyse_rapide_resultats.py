@@ -13,64 +13,120 @@ from pylab import *
 	         # PARAMETRES #
 	        ##############
 
-# Nom du fichier hdf à analyser SANS l'extension hdf (A MODIFIER)
-nom_hdf = "Resultats_test_tauRay=0.053300_tauAer=0.100000_difff=0_ths=30.000000_sim=-1"
-# a commenter si pas besoin
-#nom_hdf = nom_hdf + sys.argv[1] + ".000000"
+#
+# Paramètres à modifier
+#
+#-----------------------------------------------------------------------------------------------------------------------
+type_simu = "SIM_0"
+date_simu = "11052012"
+angle = "30"
+geometrie = "PARALLELE"		#Géométrie de l'atmosphère
 
-# Si le fichier suivant n'existe pas le prog s'arrete
-path_hdf = "../out_prog/" + nom_hdf + ".hdf"
+# Nom du fichier Cuda sans extension .hdf
+nom_cuda = "out_CUDA_ths=30.00_tRay=0.0533_tAer=0.0000_ws=5.00_sim=0"
+
+# Indices ci-dessus ont été mis en place car ils permettent de rogner la simulation si nécessaire.
+# Les bords peuvent fausser les graphiques.
+dep = 3			# Indice de départ pour le tracé
+fin = 177		# Indice de fin pour le tracé
+pas_figure = 20	# Pas en phi pour le tracé des graphiques
+#-----------------------------------------------------------------------------------------------------------------------
+
+
+######################################################
+##				CHEMIN DES FICHIERS					##
+######################################################
+
+# Nom complet du fichier Cuda
+path_cuda = "/home/florent/MCCuda/validation/"+geometrie+"/"+type_simu+"/simulation_"+date_simu+"/" + nom_cuda + ".hdf"
+
 # Si le dossier suivant existe deja il est supprime puis recree
-path_dossier_sortie = "../out_scripts/analyse_rapide/"
-	
-			  #######################
-	         # CREATION GRAPHIQUES #
-	        #######################
+path_dossier_sortie = \
+"/home/florent/MCCuda/validation/"+geometrie+"/"+type_simu+"/graph_"+date_simu+"/analyse_rapide/"+"CUDA_rapide"+nom_cuda
+
+
+##########################################################
+##				DONNEES FICHIER CUDA					##
+##########################################################
 
 # verification de l'existence du fichier hdf
-if os.path.exists(path_hdf):
-	# on vide le dossier de sortie du script
-	#os.system("rm -rf "+path_dossier_sortie)
-	#os.mkdir(path_dossier_sortie)
-	# lecture du fichier hdf
-	sd_hdf = pyhdf.SD.SD(path_hdf)
-	# lecture du nombre de valeurs de phi
-	NBPHI = getattr(sd_hdf,'NBPHI')
+if os.path.exists(path_cuda):
 
-	sys.stdout.write(" ----------------------------------------------------------------\n")
-	sys.stdout.write("| Le fichier traité est " + path_hdf + "\t|\n")
-	sys.stdout.write("| Les résultats sont stockés dans " + path_dossier_sortie + "\t|\n")
-	sys.stdout.write(" ----------------------------------------------------------------\n")
-	
+	# lecture du fichier hdf
+	sd_cuda = pyhdf.SD.SD(path_cuda)
+	# lecture du nombre de valeurs de phi
+	NBPHI_cuda = getattr(sd_cuda,'NBPHI')
+	NBTHETA_cuda = getattr(sd_cuda,'NBTHETA')
+
 	# Récupération des valeurs de theta
 	name = "Valeurs de theta echantillonnees"
-	hdf_theta = sd_hdf.select(name)
+	hdf_theta = sd_cuda.select(name)
 	theta = hdf_theta.get()
-	
+
 	# Récupération des valeurs de phi
 	name = "Valeurs de phi echantillonnees"
-	hdf_phi = sd_hdf.select(name)
-	phi = hdf_phi.get()	
+	hdf_phi = sd_cuda.select(name)
+	phi = hdf_phi.get()
 
-	iphi=1
-		
-	# lecture du dataset
-	name = "Valeur de la reflectance pour un phi et theta donnes"
-	sds_hdf = sd_hdf.select(name)
-	# recuperation du tableau et de la valeur de phi
-	data = sds_hdf.get()
-	# creation et sauvegarde du graphique
-	plot(theta[0:179],data[iphi,0:179])
-	title("Reflectance en fonction de theta pour phi="+str(phi[iphi])+" deg")
-	xlabel("Theta (deg)")
-	ylabel("Reflectance")
-	grid(True)
-	#savefig(path_dossier_sortie+"/analyse_ths=" + sys.argv[1] +".png", dpi=(140))
-	savefig(path_dossier_sortie + nom_hdf +"_analyse.png", dpi=(140))
-	figure()
-	
+	sds_cuda = sd_cuda.select("Valeurs de la reflectance (I)")
+	data = sds_cuda.get()		
 
-		
 else:
-	sys.stdout.write("Pas de fichier "+path_hdf+"\n")
+	sys.stdout.write("Pas de fichier "+path_cuda+"\n")
 	sys.exit()
+
+
+##############################################################
+##				INFORMATION A L'UTILISATEUR					##
+##############################################################
+
+sys.stdout.write("\n#-------------------------------------------------------------------------------#\n")
+sys.stdout.write("# Le fichier cuda est " + path_cuda + "\n")
+sys.stdout.write("# Les résultats sont stockés dans " + path_dossier_sortie + "\n")
+sys.stdout.write("#-------------------------------------------------------------------------------#\n")
+
+
+os.system("rm -rf "+ path_dossier_sortie)
+os.system("mkdir -p "+ path_dossier_sortie)
+
+
+##################################################################################
+##				CREATION/CHOIX/MODIFICATION DE CERTAINES DONNES					##
+##################################################################################
+
+# Sauvegarde de la grandeur désirée
+data_cuda = zeros((NBPHI_cuda, NBTHETA_cuda), dtype=float)
+
+data_cuda = data[0:NBPHI_cuda,:]
+
+# Infos en commentaire sur le graph
+commentaire = type_simu + ' - ' + angle
+
+
+##########################################################
+##				CREATION DES GRAPHIQUES					##
+##########################################################
+
+#---------------------------------------------------------
+
+# Calcul pour l'ergonomie des graphiques
+max_data = data_cuda[0:NBPHI_cuda-pas_figure+1,dep:fin].max()
+min_data = data_cuda[0:NBPHI_cuda-pas_figure+1,dep:fin].min()
+
+#---------------------------------------------------------
+
+for iphi in xrange(0,NBPHI_cuda,pas_figure):
+	
+	# initialisation
+	figure()
+	#cuda
+	plot(theta[dep:fin],data_cuda[iphi][dep:fin])
+	title( 'Analyse rapide pour Cuda pour phi='+str(phi[iphi])+' deg' )
+	xlabel( 'Theta (deg)' )
+	ylabel( 'I', rotation='horizontal' )
+	#axis([0,theta[fin],0.99*min_data, 1.01*max_data])
+	figtext(0.25, 0.7, commentaire+" deg", fontdict=None)
+	figtext(0, 0, "Date: "+date_simu+"\nFichier cuda: "+nom_cuda, fontdict=None,size='xx-small')
+	grid(True)
+	savefig( path_dossier_sortie+'/analyse_rapide_Cuda_phi='+str(phi[iphi])+'.png', dpi=(140) )
+

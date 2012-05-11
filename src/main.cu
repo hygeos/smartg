@@ -116,7 +116,7 @@ int main (int argc, char *argv[])
 
 	// Calcul du mélange Molécule/Aérosol dans l'atmosphère en fonction de la couche
 	profilAtm( &tab_H, &tab_D );
-	verificationAtm( tab_H );
+// 	verificationAtm( tab_H );
 	
 	
 	/** Séparation du code pour atmosphère sphérique ou parallèle **/

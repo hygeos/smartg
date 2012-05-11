@@ -18,16 +18,18 @@ import struct
 # Paramètres à modifier
 #
 #-----------------------------------------------------------------------------------------------------------------------
-type_simu = "molecules_seules"
-date_simu = "02052012"
-angle = "70"
+type_simu = "atmos_seule"
+date_simu = "10052012"
+angle = "30"
+geometrie = "PARALLELE"		#Géométrie de l'atmosphère
+
 # Nom du fichier Cuda sans extension .hdf
 #nom_cuda = "out_CUDA_atmos_dioptre_agite_ths=70.00_tRay=0.0533_tAer=0.0000_ws=5.00"
-nom_cuda = "out_CUDA_atmos_ths=70.00_tRay=0.0533_tAer=0.0000"
+nom_cuda = "out_CUDA_atmos_ths=30.00_tRay=0.0533_tAer=0.1000_NATM=1000"
 
 # Nom du fichier Fortran sans l'extension .bin.gz
-nom_fortran = "out.wav=443.ths=70.000.tr=0.0533.ta=0.0000"
-#nom_fortran = "out.ran=9013.wav=443.ths=70.000.tr=0.2360.ta=0.3000.pi0=0.967.H=002.000.mod=valid_T70.443"
+#nom_fortran = "out.ran=1000.wav=443.ths=70.000.tr=0.0533.ta=0.1000.pi0=0.967.H=002.000.mod=valid_T70.443"
+nom_fortran = "out.ran=7543.wav=443.ths=30.000.tr=0.0533.ta=0.1000.difff=0000.pi0=0.967.H=002.000.mod=pf.txt"
 
 # Indices ci-dessus ont été mis en place car ils permettent de rogner la simulation si nécessaire.
 # Les bords peuvent fausser les graphiques.
@@ -74,19 +76,15 @@ print 'C\'est parti pour la simulation de {0}'.format(type_donnees)
 ######################################################
 
 # Nom complet du fichier Fortran
-path_fortran = "/home/florent/MCCuda/validation/SPHERIQUE/"+type_simu+"/simulation_"+date_simu+"/"+ nom_fortran+".bin.gz"
+path_fortran = "/home/florent/MCCuda/validation/"+geometrie+"/"+type_simu+"/simulation_"+date_simu+"/"+ nom_fortran+".bin.gz"
 
 # Nom complet du fichier Cuda
-path_cuda = "/home/florent/MCCuda/validation/SPHERIQUE/"+type_simu+"/simulation_"+date_simu+"/" + nom_cuda + ".hdf"
-#path_cuda = "/home/florent/MCCuda/Jojo/ztop_25km/"+type_simu+"/simulation_"+date_simu+"/" + nom_cuda + ".hdf"
+path_cuda = "/home/florent/MCCuda/validation/"+geometrie+"/"+type_simu+"/simulation_"+date_simu+"/" + nom_cuda + ".hdf"
 
 # Si le dossier suivant existe deja il est supprime puis recree
 path_dossier_sortie = \
-"/home/florent/MCCuda/validation/SPHERIQUE/"+type_simu+"/graph_"+date_simu+"/"+type_donnees+"/"+type_donnees+"_FORTRAN_CUDA_"+\
+"/home/florent/MCCuda/validation/"+geometrie+"/"+type_simu+"/graph_"+date_simu+"/"+type_donnees+"/"+type_donnees+"_FORTRAN_CUDA_"+\
 nom_cuda
-#path_dossier_sortie = \
-#"/home/florent/MCCuda/Jojo/ztop_25km/"+type_simu+"/graph_"+date_simu+"/"+type_donnees+"/"+type_donnees+"_FORTRAN_CUDA_"+\
-#nom_cuda
 
 
 ##########################################################

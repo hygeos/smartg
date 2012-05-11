@@ -18,13 +18,15 @@ import struct
 # Paramètres à modifier
 #
 #-----------------------------------------------------------------------------------------------------------------------
-type_simu = "aerosols_seuls"
-date_simu = "27022012"
-angle = "30"
+type_simu = "atmos_seule"
+date_simu = "04052012"
+angle = '30'
+geometrie = "PARALLELE"		#Géométrie de l'atmosphère
+
 # Nom du fichier sos sans extension .hdf
-nom_sos = "out_SOS_atmos_tray_0.0_taer_0.1_ths_30_T70_443"
+nom_sos = "out_SOS_toray_0.0533_toaer_0.1_T70"
 # Nom du fichier Fortran sans l'extension .bin.gz
-nom_fortran = "out_FORTRAN_jojo.ran=7384.wav=443.ths=30.000.tr=0.0000.ta=0.1000.difff=0001.pi0=0.967.H=002.000.mod=valid_T70.443"
+nom_fortran = "out.ran=7543.wav=443.ths=30.000.tr=0.0533.ta=0.1000.difff=0000.pi0=0.967.H=002.000.mod=pf.txt"
 
 
 # Indices ci-dessus ont été mis en place car ils permettent de rogner la simulation si nécessaire.
@@ -71,15 +73,15 @@ print 'C\'est parti pour la simulation de {0}'.format(type_donnees)
 ##				CHEMIN DES FICHIERS					##
 ######################################################
 
-# Nom complet du fichier Fortran
-path_fortran = "/home/florent/MCCuda/validation/SPHERIQUE/"+type_simu+"/simulation_"+date_simu+"/"+ nom_fortran+".bin.gz"
-
 # Nom complet du fichier SOS
-path_sos = "/home/florent/MCCuda/validation/SPHERIQUE/" + type_simu + "/" + nom_sos + ".txt"
+path_sos = "/home/florent/MCCuda/validation/fichier_ref_sos/" + nom_sos + ".txt"
+
+# Nom complet du fichier Fortran
+path_fortran = "/home/florent/MCCuda/validation/"+geometrie+"/"+type_simu+"/simulation_"+date_simu+"/"+ nom_fortran+".bin.gz"
 
 # Si le dossier suivant existe deja il est supprime puis recree
 path_dossier_sortie = \
-"/home/florent/MCCuda/validation/SPHERIQUE/"+type_simu+"/graph_"+date_simu+"/"+type_donnees+"/"+type_donnees+"_FORTRAN_SOS_" +
+"/home/florent/MCCuda/validation/"+geometrie+"/"+type_simu+"/graph_"+date_simu+"/"+type_donnees+"/"+type_donnees+"_FORTRAN_SOS_" + \
 nom_sos
 
 
@@ -289,14 +291,14 @@ for iphi in xrange(0,NBPHI_fortran,pas_figure):
 	##				DIFFERENCE				##
 	##########################################
 	figure()
-	plot( theta[dep:fin], data_fortran[iphi][dep:fin]-data_sos[iphi][dep:fin] )
-	title( 'Difference des '+type_donnees+ ' Fortran - SOS pour phi='+str(phi[iphi])+' deg' )
+	plot( theta[dep:fin], data_sos[iphi][dep:fin]-data_fortran[iphi][dep:fin] )
+	title( 'Difference des '+type_donnees+ ' SOS - Fortran pour phi='+str(phi[iphi])+' deg' )
 	xlabel( 'Theta (deg)' )
 	ylabel( 'Difference des '+type_donnees )
 	figtext(0.4, 0.25, commentaire+" deg", fontdict=None)
 	figtext(0, 0, "Date: "+date_simu+"\nFichier SOS: "+nom_sos+"\nFichier fortran: "+nom_fortran, fontdict=None, size='xx-small')
 	grid(True)
-	savefig( path_dossier_sortie+'/difference_'+type_donnees+'_Fortran_SOS_phi='+str(phi[iphi])+'.png', dpi=(140) )
+	savefig( path_dossier_sortie+'/difference_'+type_donnees+'_SOS_Fortran_phi='+str(phi[iphi])+'.png', dpi=(140) )
 
 
 ##########################################################

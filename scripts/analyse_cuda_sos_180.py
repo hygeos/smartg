@@ -18,13 +18,16 @@ import struct
 # Paramètres à modifier
 #
 #-----------------------------------------------------------------------------------------------------------------------
-type_simu = "molecules_dioptre_plan"
-date_simu = "02032012"
-angle = '70'
-# Nom du fichier Cuda sans extension .hdf
-nom_cuda = "out_CUDA_atmos_dioptre_plan_ths=70.00_tRay=0.0010_tAer=0.0000"
+type_simu = "atmos_seule"
+date_simu = "10052012"
+angle = '30'
+geometrie = "PARALLELE"		#Géométrie de l'atmosphère
+
 # Nom du fichier de sortie SOS sans extension txt
-nom_sos = "out_SOS_atmos_dioptre_plan_tray_0.001_ths_70"
+nom_sos = "out_SOS_toray_0.0533_toaer_0.1_T70"
+
+# Nom du fichier Cuda sans extension .hdf
+nom_cuda = "out_CUDA_atmos_ths=30.00_tRay=0.0533_tAer=0.1000_NATM=1000"
 
 # Indices ci-dessus ont été mis en place car ils permettent de rogner la simulation si nécessaire.
 # Les bords peuvent fausser les graphiques.
@@ -79,14 +82,15 @@ print 'C\'est parti pour la simulation de {0}'.format(type_donnees)
 ######################################################
 
 # Nom complet du fichier SOS
-path_sos = "/home/florent/MCCuda/validation/SPHERIQUE/fichier_ref_sos/" + nom_sos + ".txt"
+path_sos = "/home/florent/MCCuda/validation/fichier_ref_sos/" + nom_sos + ".txt"
 
 # Nom complet du fichier Cuda
-path_cuda = "/home/florent/MCCuda/validation/SPHERIQUE/"+type_simu+"/simulation_"+date_simu+"/" + nom_cuda + ".hdf"
+path_cuda = "/home/florent/MCCuda/validation/"+geometrie+"/"+type_simu+"/simulation_"+date_simu+"/" + nom_cuda + ".hdf"
 
 # Si le dossier suivant existe deja il est supprime puis recree
 path_dossier_sortie = \
-"/home/florent/MCCuda/validation/SPHERIQUE/"+type_simu+"/graph_"+date_simu+"/"+type_donnees+"/"+type_donnees+"_SOS_CUDA_" + nom_cuda
+"/home/florent/MCCuda/validation/"+geometrie+"/"+type_simu+"/graph_"+date_simu+"/"+type_donnees+"/"+type_donnees+"_SOS_CUDA_" + \
+nom_cuda
 
 
 ##########################################################

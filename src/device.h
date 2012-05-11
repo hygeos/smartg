@@ -30,8 +30,10 @@ __device__ __constant__ float TAUATMd;
 __device__ __constant__ float TAUMAXd;	//tau initial du photon (Host)
 #endif
 __device__ __constant__ float W0AERd;
+__device__ __constant__ float W0OCEd;
 __device__ __constant__ float W0LAMd;
 __device__ __constant__ unsigned int NFAERd;
+__device__ __constant__ unsigned int NFOCEd;
 __device__ __constant__ float HAd;
 __device__ __constant__ float HRd;
 __device__ __constant__ float ZMINd;
@@ -110,12 +112,12 @@ __device__ void initPhoton(Photon* ph
 * Pour l'atmosphère sphèrique, l'algorithme est basé sur la formule de pythagore généralisé
 * Modification des coordonnées position du photon
 */
-__device__ void move(Photon*
+__device__ void move(Photon*, Tableaux tab
 		#ifndef SPHERIQUE
 		,int flagDiff
 		#endif
 		#ifdef SPHERIQUE
-		, Tableaux tab, Init* init
+		, Init* init
 		#endif
 		#ifdef DEBUG
 		, Variables* var
@@ -139,7 +141,7 @@ __device__ void move(Photon*
 * Diffusion du photon par une molécule ou un aérosol
 * Modification des paramètres de stokes et des vecteurs U et V du photon (polarisation, vitesse)
 */
-__device__ void scatter(Photon* photon, Tableaux tab
+__device__ void scatter(Photon* photon, float* faer
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif
@@ -160,7 +162,7 @@ __device__ void scatter(Photon* photon, Tableaux tab
 * Pour l'optimisation du programme, il est possible d'effectuer un travail de réduction au maximum de cette fonction. L'idée est
 * de calculer et d'utiliser la fonction de phase moléculaire
 */
-__device__ void calculDiffScatter( Photon* photon, float* cTh, Tableaux tab
+__device__ void calculDiffScatter( Photon* photon, float* cTh, float* faer
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif

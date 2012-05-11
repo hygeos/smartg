@@ -124,6 +124,12 @@ void calculFaer( const char* nomFichier, Tableaux* tab_H, Tableaux* tab_D );
 void verificationFAER( const char* nomFichier, Tableaux tab_H );
 
 
+/* calculFoce
+* Calcul de la fonction de phase dans l'océan
+*/
+// void calculFoce( const char* nomFichier, Tableaux* tab_H, Tableaux* tab_D );
+
+
 /* profilAtm
 * Calcul du profil atmosphérique dans l'atmosphère en fonction de la couche
 * Mélange Molécule/Aérosol dans l'atmosphère en fonction de la couche
@@ -136,6 +142,7 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D );
 * Permet de valider le bon calcul
 */
 void verificationAtm( Tableaux tab_H );
+
 
 /** Séparation du code pour atmosphère sphérique ou parallèle **/
 #ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */

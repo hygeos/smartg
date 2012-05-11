@@ -49,6 +49,8 @@
 #define WEIGHTINIT 1.F
 // Au dela du poids WEIGHTMAX le photon est considéré comme une erreur
 #define WEIGHTMAX 50.F
+
+#define WEIGHTMIN 0.000001F
 // Détecte les photons très proches du zenith
 #define VALMIN 0.000001F
 
@@ -73,6 +75,7 @@
 #define SURFACE		2
 #define ABSORBED	3
 #define NONE		4
+#define OCEAN		5
 
 
 /* Constante pour le calcul de la fonction de phase des aérosols */
@@ -123,12 +126,16 @@ extern int DIFFF;
 extern unsigned int LSAAER;
 extern unsigned int NFAER;
 
+extern unsigned int LSAOCE;
+extern unsigned int NFOCE;
+
 extern float THSDEG;
 extern float LAMBDA;
 extern float TAURAY;
 extern float TAUAER;
 extern float W0AER;
 extern float W0LAM;
+extern float W0OCE;
 extern float HA;
 extern float HR;
 extern float ZMIN;
@@ -176,6 +183,12 @@ typedef struct __align__(16)
 	float stokes3;
 // 	float stokes4;
 	
+	// Paramètres pour une atmosphère sphérique
+	int couche;
+	float prop_aer;		// Proportion d'aérosols par rapport aux molécules à l'endroit où se situe le photon
+	
+	float z;	// En plan parallèle, z représente le tau parcouru
+	
 	
 	/** Séparation du code pour atmosphère sphérique ou parallèle **/
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
@@ -184,18 +197,10 @@ typedef struct __align__(16)
 	// Position cartésienne du photon
 	float x;
 	float y;
-	float z;
+
 	float rayon;
-	
 	float taumax;
 	
-	// Paramètres pour une atmosphère sphérique
-	int couche;
-	#endif
-	
-	/* Code spécifique à une atmosphère en plan parallèle */
-	#ifndef SPHERIQUE
-	float tau;
 	#endif
 	
 }	Photon;

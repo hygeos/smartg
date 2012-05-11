@@ -248,6 +248,14 @@ void initConstantesHost(int argc, char** argv)
 	NFAER = atof(s);
 	
 	strcpy(s,"");
+	chercheConstante(parametres, "LSAOCE", s);
+	LSAOCE = atof(s);
+	
+	strcpy(s,"");
+	chercheConstante(parametres, "NFOCE", s);
+	NFOCE = atof(s);
+	
+	strcpy(s,"");
 	chercheConstante(parametres, "HA", s);
 	HA = atof(s);
 	
@@ -446,7 +454,7 @@ void definirSimulation( char* s){
 	}
 	
 	else
-		sprintf(s,"SIM=%d",SIM);
+		sprintf(s,"SIM_%d",SIM);
 }
 
 
@@ -1019,7 +1027,7 @@ void calculFaer( const char* nomFichier, Tableaux* tab_H, Tableaux* tab_D ){
 	
 	else{
 		for(iang=0; iang<LSAAER; iang++){
-			fscanf(fichier, "%lf\t%lf\t%lf\t%lf\t%lf", ang+iang,p1+iang,p2+iang,p3+iang,p4+iang );
+			fscanf(fichier, "%lf\t%lf\t%lf\t%lf\t%lf", ang+iang,p2+iang,p1+iang,p3+iang,p4+iang );
 			// Conversion en radians
 			ang[iang] = ang[iang]*DEG2RAD;
 		}
@@ -1107,6 +1115,14 @@ void verificationFAER( const char* nomFichier, Tableaux tab){
 	fclose(fichier);
 
 }
+
+
+/* calculFoce
+* Calcul de la fonction de phase dans l'océan
+*/
+// void calculFoce( const char* nomFichier, Tableaux* tab_H, Tableaux* tab_D ){
+// 
+// }
 
 
 /* profilAtm
@@ -1570,6 +1586,10 @@ void afficheParametres()
 	printf("\n");
 	printf(" NFAER\t=\t%u", NFAER);
 	printf("\n");
+	printf(" LSAOCE\t=\t%u", LSAOCE);
+	printf("\n");
+	printf(" NFOCE\t=\t%u", NFOCE);
+	printf("\n");
 	printf(" PROFIL\t=\t%d", PROFIL);
 	printf("\n");
 	printf(" HA\t=\t%f", HA);
@@ -1865,6 +1885,8 @@ void creerHDFTemoin(float* tabPhotonsTot, unsigned long long nbPhotonsTot, Varia
 	
 	SDsetattr(sdsTab, "LSAAER", DFNT_UINT32, 1, &LSAAER);
 	SDsetattr(sdsTab, "NFAER", DFNT_UINT32, 1, &NFAER);
+	SDsetattr(sdsTab, "LSAOCE", DFNT_UINT32, 1, &LSAOCE);
+	SDsetattr(sdsTab, "NFOCE", DFNT_UINT32, 1, &NFOCE);
 	
 	SDsetattr(sdsTab, "HA", DFNT_FLOAT32, 1, &HA);
 	SDsetattr(sdsTab, "HR", DFNT_FLOAT32, 1, &HR);
@@ -2109,6 +2131,8 @@ void creerHDFResultats(float* tabFinal, float* tabTh, float* tabPhi,unsigned lon
 	
 	SDsetattr(sdFichier, "LSAAER", DFNT_UINT32, 1, &LSAAER);
 	SDsetattr(sdFichier, "NFAER", DFNT_UINT32, 1, &NFAER);
+	SDsetattr(sdFichier, "LSAOCE", DFNT_UINT32, 1, &LSAOCE);
+	SDsetattr(sdFichier, "NFOCE", DFNT_UINT32, 1, &NFOCE);
 	
 	SDsetattr(sdFichier, "W0AER", DFNT_FLOAT32, 1, &W0AER);
 	SDsetattr(sdFichier, "W0LAM", DFNT_FLOAT32, 1, &W0LAM);
