@@ -28,9 +28,8 @@ geometrie = "SPHERIQUE"		#Géométrie de l'atmosphère
 nom_cuda = "out_CUDA_atmos_dioptre_agite_ths=70.00_tRay=0.2360_tAer=0.0000_ws=5.00"
 
 # Nom du fichier Fortran sans l'extension .bin.gz
-# nom_fortran = "out.ran=9701.atmos.surface.vent5.ths=70.000.tr=0.0533.ta=0.0000"
-# nom_fortran = "out.ran=4000.wav=443.ths=70.000.tr=0.2360.ta=0.0000.pi0=0.967.H=002.000.vent=05.000"
-nom_fortran = "out.ran=9701.atmos.surface.vent5.ths=70.000.tr=0.0533.ta=0.0000"
+#nom_fortran = "out.ran=1000.wav=443.ths=70.000.tr=0.0533.ta=0.1000.pi0=0.967.H=002.000.mod=valid_T70.443"
+nom_fortran = "out.ran=0600.wav=443.ths=30.000.tr=0.0533.ta=0.0000.pi0=0.967.H=002.000"
 
 # Indices ci-dessus ont été mis en place car ils permettent de rogner la simulation si nécessaire.
 # Les bords peuvent fausser les graphiques.

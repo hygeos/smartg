@@ -135,8 +135,8 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 		syncthreads();
 		
 		
-		// Si le photon est à ATMOS, il évolue dans l'atmosphère
-		if( (ph.loc == ATMOS)/* || (ph.loc == OCEAN)*/ ){
+		// Si le photon est à ATMOS on le fait avancer jusqu'à SURFACE, ou SPACE, ou ATMOS s'il subit une diffusion
+		if( (ph.loc == ATMOS) || (ph.loc == OCEAN) ){
 			
 			#ifdef TEMPS
 			if(idx==0){
@@ -175,7 +175,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 		syncthreads();
 		
 		// Si le photon est encore à ATMOS il subit une diffusion et reste dans ATMOS
-		if( (ph.loc == ATMOS) /*|| (ph.loc == OCEAN)*/ ){
+		if( (ph.loc == ATMOS) || (ph.loc == OCEAN) ){
 	
 			#ifdef TEMPS
 			if(idx==0){
@@ -184,7 +184,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 			#endif
 			
 			// Diffusion
-			scatter( &ph, tab.faer, &etatThr
+			scatter( &ph, tab.faer, tab.foce, tab.pf, &etatThr
 			#if defined(RANDMWC) || defined(RANDMT)
 			, &configThr
 			#endif
@@ -308,7 +308,10 @@ __device__ void initPhoton(Photon* ph
 	ph->uz = ph->vx;
 	
 	// Le photon est initialement dans l'atmosphère, et tau peut être vu comme sa hauteur par rapport au sol
-	if( SIMd!=-1)
+	if( SIMd==0 ){
+		ph->loc=OCEAN;
+	}
+	else if( SIMd!=-1)
 		ph->loc = ATMOS;
 	else
 		ph->loc = SURFACE;
@@ -878,10 +881,24 @@ rsolfi=%15.12lf - tauRdm= %lf - hph_p= %15.12lf - hph= %15.12lf - zph_p= %15.12l
 	#ifndef SPHERIQUE	/* Code spécifique à une atmosphère parallèle */
 	float tauBis;
 	
-	// Tirage de l'épaisseur optique
-	ph->z += -__logf( flagDiff + RAND*(1.F +(__expf(-TAUMAXd)-2.f)*flagDiff))*ph->vz;
-
-
+	if( ph->loc==ATMOS ){
+		ph->z += -__logf( flagDiff + RAND*(1.F +(__expf(-TAUMAXd)-2.f)*flagDiff))*ph->vz;
+	}
+	else{
+		ph->z += -logf(1.f - RAND)*ph->vz;
+		if( ph->z < 0.f ){
+			ph->loc = OCEAN;
+		}
+		else{
+			ph->z = 0.F;
+			ph->loc = SURFACE;
+			if( SIMd==0 ){
+				ph->loc=ABSORBED;
+			}
+		}
+		return;
+	}
+	
 	// Si tau<0 le photon atteint la surface
 	if(ph->z < 0.F){
 		ph->loc = SURFACE;
@@ -952,7 +969,7 @@ rsolfi=%15.12lf - tauRdm= %lf - hph_p= %15.12lf - hph= %15.12lf - zph_p= %15.12l
 * Diffusion du photon par une molécule ou un aérosol
 * Modification des paramètres de stokes et des vecteurs U et V du photon (polarisation, vitesse)
 */
-__device__ void scatter( Photon* ph, float* faer
+__device__ void scatter( Photon* ph, float* faer, float* foce, float* pf
 			#ifdef RANDMWC
 			, unsigned long long* etatThr, unsigned int* configThr
 			#endif
@@ -982,7 +999,7 @@ __device__ void scatter( Photon* ph, float* faer
 	 * L'idée à termes est de réduire au maximum cette fonction, en calculant également la fonction de phase pour les
 	 * molécules, à la manière des aérosols.
 	*/
-	calculDiffScatter( ph, &cTh, faer
+	calculDiffScatter( ph, &cTh, faer, foce, pf
 			#ifdef RANDMWC
 			, etatThr, configThr
 				#endif
@@ -1041,7 +1058,7 @@ __device__ void scatter( Photon* ph, float* faer
 * Pour l'optimisation du programme, il est possible d'effectuer un travail de réduction au maximum de cette fonction. L'idée est
 * de calculer et d'utiliser la fonction de phase moléculaire.
 */
-__device__ void calculDiffScatter( Photon* ph, float* cTh, float* faer
+__device__ void calculDiffScatter( Photon* ph, float* cTh, float* faer, float* foce, float* pf
 			#ifdef RANDMWC
 			, unsigned long long* etatThr, unsigned int* configThr
 			#endif
@@ -1063,6 +1080,7 @@ __device__ void calculDiffScatter( Photon* ph, float* cTh, float* faer
 	stokes1 = ph->stokes1;
 	stokes2 = ph->stokes2;
 	
+	if(ph->loc!=OCEAN){
 	if( prop_aer<RAND ){
 		// Theta calculé pour la diffusion moléculaire
 		*cTh =  2.F * RAND - 1.F; // cosThetaPhoton
@@ -1101,6 +1119,43 @@ __device__ void calculDiffScatter( Photon* ph, float* cTh, float* faer
 		ph->stokes3 *= faer[iang*5+2];
 // 		photon->stokes4 = 0.F;
 	}
+	}
+	else{	/* Photon dans l'océan */
+		float p1, p2, p3/*, p4*/;
+		bool up = ( (ph->vz>0.f)||(ph->weight>10.f) );
+		
+		if( up ){
+			zang = RAND*(NFOCEd-1);
+			iang = __float2int_rd(zang);
+			zang = zang - iang;
+			/* L'accès à foce[x][y] se fait par foce[y*5+x] */
+			theta = foce[iang*5+4]+ zang*( foce[(iang+1)*5+4]-foce[iang*5+4] );
+			p1 = foce[iang*5+0];
+			p2 = foce[iang*5+1];
+			p3 = foce[iang*5+2];
+// 			p4 = foce[iang*5+3];
+		}
+		else{
+			theta = acosf(2.f*RAND-1.f);
+			iang = __float2int_rd(theta);
+			p1 = pf[iang*5+0];
+			p2 = pf[iang*5+1];
+			p3 = pf[iang*5+2];
+// 			p4 = pf[iang*5+3];
+		}
+
+		ph->weight *= 2.0f*__fdividef( (stokes1*p1+stokes2*p2) , stokes1+stokes2)*W0OCEd;
+		ph->stokes1 *= p1;
+		ph->stokes2 *= p2;
+		ph->stokes3 *= p3*ph->stokes3;
+		
+		if( ph->weight < WEIGHTMIN ){
+			ph->loc = ABSORBED;
+			return;
+		}
+	
+	}
+
 }
 
 
@@ -1165,10 +1220,10 @@ __device__ void surfaceAgitee(Photon* ph
 	float rpar, rper;	// Coefficient de reflexion parallèle et perpendiculaire
 	float rpar2;		// Coefficient de reflexion parallèle au carré
 	float rper2;		// Coefficient de reflexion perpendiculaire au carré
-	float rat;		// Rapport des coefficients de reflexion perpendiculaire et parallèle
-// 	float ReflTot;			// Flag pour la réflexion totale sur le dioptre
-	float cot;		// Cosinus de l'angle de réfraction du photon
-	float ncot, ncTh;		// ncot = nind*cot, ncoi = nind*cTh
+	float rat;			// Rapport des coefficients de reflexion perpendiculaire et parallèle
+	float ReflTot;	// Flag pour la réflexion totale sur le dioptre
+	float cot;			// Cosinus de l'angle de réfraction du photon
+	float ncot, ncTh;	// ncot = nind*cot, ncoi = nind*cTh
 	// float tpar, tper;	//
 	
 	
@@ -1299,7 +1354,7 @@ __device__ void surfaceAgitee(Photon* ph
 		rpar2 = rpar*rpar;
 		rper2 = rper*rper;
 		rat = __fdividef(ph->stokes1*rper2 + ph->stokes2*rpar2,ph->stokes1+ph->stokes2);
-// 		ReflTot = 0;
+		ReflTot = 0;
 	}
 	else{
 		cot = 0.f;
@@ -1307,17 +1362,109 @@ __device__ void surfaceAgitee(Photon* ph
 		rper = 1.f;
 		ncot = nind*cot;
 		rat=0;
-		rpar2 = 1.f;
-		rper2 = 1.f;
-// 		ReflTot = 1;
+		rpar2 = rpar*rpar;
+		rper2 = rper*rper;
+		ReflTot = 1;
 	}
+/*	
+	if( isnan(cot)!=0 ){
+		printf("cot = %f - temp=%f - nind=%f - sTh=%f - cTh=%f - theta=%f\n",\
+		cot,temp, nind, sTh,cTh, theta);
+		ph->loc=NONE;
+		return;
+	}*/
+	
+	// Rapport de l'intensite speculaire reflechie
+// 	rat = __fdividef(ph->stokes2*rper2 + ph->stokes1*rpar2,ph->stokes1+ph->stokes2)*test_s;
 
+	
+// 		float coeffper, coeffpar;
+	
+// 		if( (ReflTot==1) || (SURd==1) || ( (SURd==3)&&(RAND<rat) ) ){
+		//Nouveau parametre pour le photon apres reflexion speculaire
+		ph->stokes1 *= rper2;
+		ph->stokes2 *= rpar2;
+// 		ph->stokes4 *= -rpar*rper;
+		ph->stokes3 *= -rpar*rper;
+
+// 			coeffper = rper;
+// 			coeffpar = rpar;
+		
+		if( (isnan(ph->stokes1)!=0)||(isnan(ph->stokes2)!=0)){
+			printf("Problème NaN#1.2 - s1=%f - s2=%f\n", ph->stokes1, ph->stokes2);
+			ph->loc=NONE;
+			return;
+		}
+		
+		ph->vx += 2.F*cTh*nx;
+		ph->vy += 2.F*cTh*ny;
+		ph->vz += 2.F*cTh*nz;
+		ph->ux = __fdividef( nx-cTh*ph->vx,sTh );
+		ph->uy = __fdividef( ny-cTh*ph->vy,sTh );
+		ph->uz = __fdividef( nz-cTh*ph->vz,sTh );
+		
+		// Le photon est renvoyé dans l'atmosphère
+		ph->loc = ATMOS;
+		
+		// Suppression des reflexions multiples
+		if((ph->vz<0) && (DIOPTREd==2)){
+			ph->loc = ABSORBED;
+		}
+// 			bool cond = ((ph->vz<0) && (DIOPTREd==2));
+// 			ph->loc = ABSORBED*cond + ATMOS*(!cond);
+
+
+// 			if( abs( 1.F - sqrtf(ph->ux*ph->ux+ph->uy*ph->uy+ph->uz*ph->uz) )>1.E-05){
+// 				ph->weight = 0;
+// 				ph->loc = ABSORBED;
+// 				printf("suppression du photon\n");
+// 				if(RAND<0.1){
+// 				printf("valeur a pb:%10.8f - ux=%10.8f - uy=%10.8f - uz=%10.8f\n",
+// 					   sqrt(ph->ux*ph->ux + ph->uy*ph->uy+ph->uz*ph->uz),ph->ux ,ph->uy, ph->uz);
+// 					   printf("ux2=%10.8f - uy2=%10.8f-uy2=%10.8f\n",
+// 							  ph->ux*ph->ux,ph->uy*ph->uy,ph->uz*ph->uz);
+		
+// 				}
+// 				return;
+// 			}
 		
 		//if (SURd==1){ /*On pondere le poids du photon par le coefficient de reflexion dans le cas 
 		// d'une reflexion speculaire sur le dioptre (mirroir parfait)*/
 		ph->weight *= rat;
 		// 			}
-
+		
+// 		}
+	
+// 		else{	// Transmission par le dioptre	//NOTE: Inutile pour le moment
+// 			
+// // 			tpar = __fdividef( 2*cTh,ncTh+ cot);
+// // 			tper = __fdividef( 2*cTh,cTh+ ncot);
+// // 			
+// // 			ph->stokes2 *= tper*tper;
+// // 			ph->stokes1 *= tpar*tpar;
+// // 			ph->stokes3 *= -tpar*tper;
+// // 			ph->stokes4 *= -tpar*tper;
+// 			
+// 			coeffpar = __fdividef( 2*cTh,ncTh+ cot);
+// 			coeffper = __fdividef( 2*cTh,cTh+ ncot);
+// 			
+// 			alpha = __fdividef(cTh,nind) - cot;
+// 			ph->vx = __fdividef(ph->vx,nind) + alpha*nx;
+// 			ph->vy = __fdividef(ph->vy,nind) + alpha*ny;
+// 			ph->vz = __fdividef(ph->vz,nind) + alpha*nz;
+// 			ph->ux = __fdividef( nx+cot*ph->vx,sTh )*nind;
+// 			ph->uy = __fdividef( ny+cot*ph->vy,sTh )*nind;
+// 			ph->uz = __fdividef( nz+cot*ph->vz,sTh )*nind;
+// 			
+// 			// Le photon est renvoyé dans l'atmosphère
+// // 			ph->loc = ;
+// 			
+// 			/* On pondere le poids du photon par le coefficient de transmission dans le cas d'une reflexion
+// 			speculaire sur le dioptre plan (ocean diffusant) */
+// 			if( SURd == 2)
+// 				ph->weight *= (1-rat);
+// 			
+// 		}
 	
 	if( SIMd == -1) // Dioptre seul
 		ph->loc=SPACE;
@@ -1704,8 +1851,11 @@ void initConstantesDevice()
 	cudaMemcpyToSymbol(LAMBDAd, &LAMBDA, sizeof(float));
 	cudaMemcpyToSymbol(TAURAYd, &TAURAY, sizeof(float));
 	cudaMemcpyToSymbol(TAUAERd, &TAUAER, sizeof(float));
+	
 	cudaMemcpyToSymbol(W0AERd, &W0AER, sizeof(float));
 	cudaMemcpyToSymbol(W0LAMd, &W0LAM, sizeof(float));
+	cudaMemcpyToSymbol(W0OCEd, &W0OCE, sizeof(float));
+	
 	cudaMemcpyToSymbol(HAd, &HA, sizeof(float));
 	cudaMemcpyToSymbol(HRd, &HR, sizeof(float));
 	cudaMemcpyToSymbol(ZMINd, &ZMIN, sizeof(float));
@@ -1729,10 +1879,8 @@ void initConstantesDevice()
 	cudaMemcpyToSymbol(DIFFFd, &DIFFF, sizeof(int));
 	
 	cudaMemcpyToSymbol(NFAERd, &NFAER, sizeof(unsigned int));
-// 	cudaMemcpyToSymbol(NFOCEd, &NFOCE, sizeof(unsigned int));
-	
-// 	cudaMemcpyToSymbol(W0LAMd, &W0LAM, sizeof(float));
-	
+	cudaMemcpyToSymbol(NFOCEd, &NFOCE, sizeof(unsigned int));
+		
 	float THSbis = THSDEG*DEG2RAD; //thetaSolaire en radians
 	cudaMemcpyToSymbol(THSd, &THSbis, sizeof(float));
 	

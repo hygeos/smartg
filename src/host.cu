@@ -724,7 +724,7 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	exit(1);
 	}
 	
-	
+	/** Modèle de diffusion **/
 	// Modèle de diffusion des aérosols
 	tab_H->faer = (float*)malloc(5 * NFAER * sizeof(float));
 	if( tab_H->faer == NULL ){
@@ -735,6 +735,32 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	
 	if( cudaMalloc(&(tab_D->faer), 5 * NFAER * sizeof(float)) != cudaSuccess ){
 		printf("ERREUR: Problème de cudaMalloc de tab_D->faer dans initTableaux\n");
+		exit(1);	
+	}
+	
+	// Modèle de diffusion dans l'océan
+	tab_H->foce = (float*)malloc(5 * NFOCE * sizeof(float));
+	if( tab_H->foce == NULL ){
+		printf("ERREUR: Problème de malloc de tab_H->foce dans initTableaux\n");
+		exit(1);
+	}
+	memset(tab_H->foce,0,5 * NFOCE*sizeof(float) );
+	
+	if( cudaMalloc(&(tab_D->foce), 5 * NFOCE * sizeof(float)) != cudaSuccess ){
+		printf("ERREUR: Problème de cudaMalloc de tab_D->foce dans initTableaux\n");
+		exit(1);	
+	}
+	
+	// Modèle de diffusion dans l'océan - pf
+	tab_H->pf = (float*)malloc(4 * LSAOCE * sizeof(float));
+	if( tab_H->pf == NULL ){
+		printf("ERREUR: Problème de malloc de tab_H->pf dans initTableaux\n");
+		exit(1);
+	}
+	memset(tab_H->pf,0,4 * LSAOCE*sizeof(float) );
+	
+	if( cudaMalloc(&(tab_D->pf), 4 * LSAOCE * sizeof(float)) != cudaSuccess ){
+		printf("ERREUR: Problème de cudaMalloc de tab_D->pf dans initTableaux\n");
 		exit(1);	
 	}
 	
@@ -880,6 +906,7 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	// 	cudaFreeHost(tab_H->tabPhotons);
 	free(tab_H->tabPhotons);
 	
+	/** Modèles de diffusion **/
 	// Libération du modèle de diffusion des aérosols
 	erreur = cudaFree(tab_D->faer);
 	if( erreur != cudaSuccess ){
@@ -889,6 +916,16 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	}
 	free(tab_H->faer);
 	
+	// Diffusion dans l'océan
+	erreur = cudaFree(tab_D->foce);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->foce dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	free(tab_H->foce);
+	
+	/** Profil amosphèrique **/	
 	// Libération du modèle atmosphérique
 	erreur = cudaFree(tab_D->h);
 	if( erreur != cudaSuccess ){
@@ -1073,6 +1110,289 @@ void verificationFAER( const char* nomFichier, Tableaux tab){
 	
 	fclose(fichier);
 
+}
+
+
+/* calculFoce
+* Calcul de la fonction de phase dans l'océan
+*/
+void calculFoce( Tableaux* tab_H, Tableaux* tab_D ){
+
+	/** Déclaration **/
+	// Données utiles pour le calcul
+	double lamb0[NWAV]={350., 360., 370., 380., 390., 400., 410., 420., 430., 440., 450., 460., 470., 480., 490., 500., 510., 520.,
+						530., 540., 550., 560., 570., 580., 590., 600., 610., 620., 630., 640., 650., 660., 670., 680., 690., 700.};
+	
+	double xi[NWAV] = { 0.1100, 0.1100, 0.1100, 0.1100, 0.1100, 0.1100, 0.1125, 0.1126, 0.1078, 0.1041, 0.0971, 0.0896,
+						0.0823, 0.0746, 0.0690, 0.0636, 0.0578, 0.0498, 0.0467, 0.0440, 0.0410, 0.0390, 0.0360, 0.0330,
+						0.0325, 0.0340, 0.0360, 0.0385, 0.0420, 0.0440, 0.0450, 0.0475, 0.0515, 0.0505, 0.0390, 0.0300 } ;
+	
+	double e[NWAV] = {	0.668, 0.668, 0.668, 0.668, 0.668, 0.668, 0.680, 0.693, 0.707, 0.707, 0.701, 0.700,0.703,
+						0.703, 0.702, 0.700, 0.690, 0.680, 0.670, 0.660, 0.650, 0.640, 0.623, 0.610, 0.618,0.626, 
+						0.634, 0.642, 0.653, 0.663, 0.672, 0.682, 0.695, 0.693, 0.640, 0.600 } ;
+
+	double kw[NWAV] = { 0.0209, 0.0209, 0.0209, 0.0209, 0.0209, 0.0209, 0.0196, 0.0183, 0.0171, 0.0168, 0.0168, 0.0173,
+						0.0175, 0.0194, 0.0217, 0.0271, 0.0384, 0.0490, 0.0518, 0.0568, 0.0640, 0.0717, 0.0807, 0.1070,
+						0.1570, 0.2530, 0.2960, 0.3100, 0.3200, 0.3300, 0.3500, 0.4050, 0.4300, 0.4500, 0.5000, 0.6500 } ;
+
+	double ah20[NWAV] = {	 0.0171, 0.0171, 0.0171, 0.0171, 0.0171, 0.0171, 0.0162, 0.0153, 0.0144, 0.0145, 0.0145, 0.0156,
+							0.0156, 0.0176, 0.0196, 0.0257, 0.0357, 0.0477, 0.0507, 0.0558, 0.0638, 0.0708, 0.0799, 0.1080,
+							0.1570, 0.2440, 0.2890, 0.3090, 0.3190, 0.3290, 0.3490, 0.4000, 0.4300, 0.4500, 0.5000, 0.6500 } ;
+	
+	double bh20[NWAV] = { 	0.0076, 0.0076, 0.0076, 0.0076, 0.0076, 0.0076, 0.0068, 0.0061, 0.0055, 0.0049, 0.0045, 0.0041,
+							0.0037, 0.0034, 0.0031, 0.0029, 0.0026, 0.0024, 0.0022, 0.0021, 0.0019, 0.0018, 0.0017, 0.0016,
+							0.0015, 0.0014, 0.0013, 0.0012, 0.0011, 0.0010, 0.0010, 0.0008, 0.0008, 0.0007, 0.0007, 0.0007 } ;
+	
+	int ilambda, iang, ipf;
+	double a0, b0, a1, b1, a2, b2;	// Coefficients d'absorption et de diffusion
+	double bb1, g1, g2;				// Coefficients liés à la fonction Henyey greenstein
+	
+	double rat1, rat2;				// Utilisé pour la troncature de la fonction de phase
+	double extoce;			//
+	double btot;
+	
+	double dtheta;
+	double pm1, pm2;				// Variable intermédiaire de calcul
+	double sin1, sin2;				// Variable intermédiaire de calcul
+	
+	double z, norm;
+	
+	double* scum;
+	scum = (double*) malloc(NFOCE*sizeof(*scum));
+	if( scum==NULL){
+		printf("Probleme d'allocation de scum dans calculFoce\n");
+		exit(1);
+	}
+	
+	double* ang;
+	ang = (double*) malloc(NFOCE*sizeof(*ang));
+	if( ang==NULL){
+		printf("Probleme d'allocation de ang dans calculFoce\n");
+		exit(1);
+	}
+	
+// 	double* pf = (double*) malloc(4*LSAOCE*sizeof(*pf));
+// 	/* pf[iang + i] donne accès aux nombre de stokes i+1 pour l'indice d'angle iang */
+// 	if( pf==NULL){
+// 		printf("Probleme d'allocation de pf dans calculFoce\n");
+// 		exit(1);
+// 	}
+	
+	double* pf0 = (double*) malloc(4*LSAOCE*sizeof(*pf0));
+	/* pf0[iang + i] donne accès aux nombre de stokes i+1 pour l'indice d'angle iang */
+	if( pf0==NULL){
+		printf("Probleme d'allocation de pf0 dans calculFoce\n");
+		exit(1);
+	}
+	
+	double* pf1 = (double*) malloc(4*LSAOCE*sizeof(*pf1));
+	/* pf1[iang + i] donne accès aux nombre de stokes i+1 pour l'indice d'angle iang */
+	if( pf1==NULL){
+		printf("Probleme d'allocation de pf1 dans calculFoce\n");
+		exit(1);
+	}
+	
+	double* pf2 = (double*) malloc(4*LSAOCE*sizeof(*pf2));
+	/* pf2[iang + i] donne accès aux nombre de stokes i+1 pour l'indice d'angle iang */
+	if( pf2==NULL){
+		printf("Probleme d'allocation de pf2 dans calculFoce\n");
+		exit(1);
+	}
+	
+	/** Calculs **/
+	ilambda = int( (LAMBDA - lamb0[0])/10 );
+	if( ilambda < 0 ){
+		printf("Lambda est out of range");
+		exit(1);
+	}
+	ilambda = min( ilambda, NWAV-1 );
+	
+	// Coefficients pour l'eau
+	a0 = ah20[ilambda];
+	b0 = bh20[ilambda];
+	
+	// Coefficients d'absorption et de diffusion pour le phytoplancton
+	a1 = (xi[ilambda]*a0)/(kw[ilambda])*pow(CONPHY,e[ilambda]);
+	b1 = 0.3*pow(CONPHY,0.62);
+
+	// Backscatterring part
+	bb1 = 0.002 + 0.02*( 0.5-0.25*log10(CONPHY)*(550/LAMBDA) );
+	g1 = 1 - (2*bb1)/(bb1 + 0.414);
+	
+	// Coefficients pour les 2ème particules
+	a2 = 0;
+	b2 = 0;
+	g2 = 0.9;
+	
+	
+	/* 	Hereafter, we define h2o, part1 and part2 phase function.  They can be
+		d here by other means (Mie scattering) provided that:
+		1) A value is given for every degree angle
+		2) The P.F. spherical integral is 4 PI (i.e., the mean value for the
+			two first terms sum is 1)
+		3) The first term is for perpend. polarisation, the second for parallel */
+	for( iang=0; iang<LSAOCE; iang++ ){
+		ang[iang] = double(iang)*DEG2RAD;
+	
+		/** Fonction de phase **/
+		/* Pour l'eau
+		* Ici on suppose que le facteur de dépolarisation est nul
+		*/
+		pf0[iang*4 + 0] = 0.75;
+		pf0[iang*4 + 1] = 0.75*cos(ang[iang])*cos(ang[iang]);
+		pf0[iang*4 + 2] = 0.75*cos(ang[iang]);
+		pf0[iang*4 + 3] = 0.;
+		
+		
+		/* Pour les deux autres particules */
+		pf1[iang*4 + 0] = henyeyGreenstein( g1, ang[iang] )/2;
+		pf1[iang*4 + 1] = pf1[iang*4 + 0];
+		pf1[iang*4 + 2] = 0.;
+		pf1[iang*4 + 3] = 0.;
+		
+		pf2[iang*4 + 0] = henyeyGreenstein( g2, ang[iang] )/2;
+		pf2[iang*4 + 1] = pf2[iang*4 + 0];
+		pf2[iang*4 + 2] = 0.;
+		pf2[iang*4 + 3] = 0.;
+	}
+	
+	
+	/* We truncate the henhey greenstein phase functions
+	* This is done by giving a constant value equal to that of 5 degree to all angles smaller than 5 degrees.
+	* We adjust the scattering coefficient accordingly */
+	
+	rat1 = 1. + henyeyGreenstein( g1, ang[5])*( 1.-cos(ang[5]))/2. 
+				- 0.5*( 1. -g1*g1 )/g1*( 1./(1.-g1) - pow(1.+g1*g1 - 2.*g1*cos(ang[5]),-0.5) );
+
+	rat2 = 1. + henyeyGreenstein( g2, ang[5])*( 1.-cos(ang[5]))/2. 
+				- 0.5*( 1. -g2*g2 )/g2*( 1./(1.-g2) - pow(1.+g2*g2 - 2.*g2*cos(ang[5]),-0.5) );
+	
+	
+	for( iang=0; iang<5; iang++ ){
+		pf1[iang*4 + 0] = pf1[5*4 + 0]/rat1;
+		pf1[iang*4 + 1] = pf1[iang*4 + 0];
+		pf2[iang*4 + 0] = pf2[5*4 + 0]/rat2;
+		pf2[iang*4 + 1] = pf2[iang*4 + 0];
+	}
+	for( iang=5; iang<LSAOCE; iang++ ){
+		pf1[iang*4 + 0] = pf1[iang*4 + 0]/rat1;
+		pf1[iang*4 + 1] = pf1[iang*4 + 0];
+		pf2[iang*4 + 0] = pf2[5*4 + 0]/rat2;
+		pf2[iang*4 + 1] = pf2[iang*4 + 0];
+	}
+	
+	b1 *= rat1;
+	b2 *= rat2;
+	
+	
+	/** Coefficients d'extinction et scattering albedo globaux **/
+	extoce = a0 + b0 + a1 + b1 + a2 + b2;
+	btot = b0 + b1 + b2;
+	W0OCE = btot/extoce;
+	
+	/** Calcul de la fonction de phase globale de diffusion **/
+	for( iang=0; iang<LSAOCE ; iang++ ){
+		tab_H->pf[iang*4 + 0] = (float) (b0*pf0[iang*4 + 0] + b1*pf1[iang*4 + 0] + b2*pf2[iang*4 + 0])/btot;
+		tab_H->pf[iang*4 + 1] = (float) (b0*pf0[iang*4 + 1] + b1*pf1[iang*4 + 1] + b2*pf2[iang*4 + 1])/btot;
+		tab_H->pf[iang*4 + 2] = (float) (b0*pf0[iang*4 + 2] + b1*pf1[iang*4 + 2] + b2*pf2[iang*4 + 2])/btot;
+		tab_H->pf[iang*4 + 3] = (float) (b0*pf0[iang*4 + 3] + b1*pf1[iang*4 + 3] + b2*pf2[iang*4 + 3])/btot;
+	}
+	
+	/* scum est une fonction s'accroissant entre 0 et 1 telle que d(scum)/dthe
+	* est proportiennelle a la luminance diffusee entre THE et THE+dthe
+	*/
+	scum[0] = 0;
+	for( iang = 1; iang<LSAOCE; iang++ ){
+		dtheta = ang[iang] - ang[iang-1];
+		pm1 = tab_H->pf[(iang-1)*4 + 0] + tab_H->pf[(iang-1)*4 + 1];
+		pm2 = tab_H->pf[iang*4 + 0] + tab_H->pf[iang*4 + 1];
+		sin1 = sin(ang[iang-1]);
+		sin2 = sin(ang[iang]);
+		scum[iang] = scum[iang-1] + dtheta*(( sin1*pm1+sin2*pm2 )/3 + (sin1*pm2+sin2*pm1)/6.)*DEUXPI;
+	}
+	
+	if( abs(scum[LSAOCE-1]-4*PI)>0.1 ){
+		printf("ERREUR lors de la dérivation de la foncion de phase océanique, scum = %lf\n", scum[LSAOCE-1]);
+		exit(1);		
+	}
+	
+	for( iang = 0; iang<LSAOCE; iang++ ){
+		scum[iang] = scum[iang]/scum[LSAOCE-1];
+	}
+	
+	/* foce gives NFOCE angles increasing from 0 to 180, and distributed according to the statistic scum
+	*/
+	ipf = 0;
+	for( iang = 0; iang<NFOCE-1; iang++ ){
+		z = double(iang)/double(NFOCE);
+		while( scum[ipf+1]<z )
+			ipf++;
+		tab_H->foce[iang*5 + 4] = (float) ( (scum[ipf+1]-z)*ang[ipf] + (z-scum[ipf])*ang[ipf+1] )/(scum[ipf+1]-scum[ipf]);
+		norm = tab_H->pf[ipf*4 + 0] + tab_H->pf[ipf*4 + 1];
+		tab_H->foce[iang*5 + 0] = (float) tab_H->pf[ipf*4 + 0]/norm;
+		tab_H->foce[iang*5 + 1] = (float) tab_H->pf[ipf*4 + 1]/norm;
+		tab_H->foce[iang*5 + 2] = (float) tab_H->pf[ipf*4 + 2]/norm;
+		tab_H->foce[iang*5 + 3] = (float) tab_H->pf[ipf*4 + 3]/norm;
+	}
+	
+	tab_H->foce[(NFOCE-1)*5 + 4] = PI;
+	tab_H->foce[(NFOCE-1)*5 + 0] = 0.5f;
+	tab_H->foce[(NFOCE-1)*5 + 1] = 0.5f;
+	tab_H->foce[(NFOCE-1)*5 + 2] = (float) tab_H->pf[(LSAOCE-1)*4 + 2]/(tab_H->pf[(LSAOCE-1)*4 + 0]+tab_H->pf[(LSAOCE-1)*4 + 1]);
+	tab_H->foce[(NFOCE-1)*5 + 3] = 0.f;
+	
+	/** Transfert de foce dans le device **/
+	cudaError_t erreur = cudaMemcpy(tab_D->foce, tab_H->foce, 5*NFOCE*sizeof(*(tab_H->foce)), cudaMemcpyHostToDevice); 
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de copie tab_D->foce dans calculFoce\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	
+	erreur = cudaMemcpy(tab_D->pf, tab_H->pf, 4*LSAOCE*sizeof(*(tab_H->pf)), cudaMemcpyHostToDevice); 
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de copie tab_D->pf dans calculFoce\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	
+	
+	/** Libération de la mémoire allouée **/
+	free( scum );
+	free( ang );
+// 	free( pf );
+	free( pf0 );
+	free( pf1 );
+	free( pf2 );
+}
+
+
+/* henyeyGreenstein
+* 
+*/
+double henyeyGreenstein( double asym, double angle ){
+
+	return  (1 - asym*asym)/pow(1 + asym*asym - 2*asym*cos(angle),1.5);
+}
+
+
+/* verificationFoce
+* Sauvegarde la fonction de phase dans l'océan calculée dans un fichier
+* Permet de valider le bon calcul de la fonction de phase
+*/
+void verificationFoce( const char* nomFichier, Tableaux tab){
+	
+	FILE* fichier = fopen(nomFichier, "w");
+	int i;
+	
+	fprintf( fichier, "angle\tI//\tIp\n" );
+	
+	for(i=0; i<NFOCE; i++){
+		fprintf(fichier, "%f\t%20.16f\t%20.16f\n", tab.foce[i*5+4],tab.foce[i*5+0], tab.foce[i*5+1]);
+	}
+	
+	fclose(fichier);
+	
 }
 
 

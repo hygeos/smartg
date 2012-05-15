@@ -91,10 +91,6 @@ int main (int argc, char *argv[])
 	cudaMemset(tableauRand_D, 0, 100 * sizeof(float));
 	#endif
 	
-	
-	/** Initialisation des constantes du device à partir des constantes du host **/
-	initConstantesDevice();
-	
 
 	#ifdef TEMOIN
 	/** Vérification de l'existence ou non d'un fichier témoin **/
@@ -114,10 +110,20 @@ int main (int argc, char *argv[])
 		calculFaer( PATHDIFFAER, &tab_H, &tab_D );
 // 		verificationFAER( "./test/FAER_test.txt", tab_H );
 	}
+	
+	// Calcul de foce, modèle de diffusion dans l'océan
+	if( SIM==0 || SIM==2 ){
+		calculFoce( &tab_H, &tab_D );
+		verificationFoce( "./test/Foce_test.txt", tab_H );
+	}
 
 	// Calcul du mélange Molécule/Aérosol dans l'atmosphère en fonction de la couche
 	profilAtm( &tab_H, &tab_D );
 // 	verificationAtm( tab_H );
+	
+	
+	/** Initialisation des constantes du device à partir des constantes du host **/
+	initConstantesDevice();
 	
 	
 	/** Séparation du code pour atmosphère sphérique ou parallèle **/

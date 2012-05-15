@@ -126,6 +126,25 @@ void calculFaer( const char* nomFichier, Tableaux* tab_H, Tableaux* tab_D );
 void verificationFAER( const char* nomFichier, Tableaux tab_H );
 
 
+/* calculFoce
+* Calcul de la fonction de phase dans l'océan
+*/
+void calculFoce( Tableaux* tab_H, Tableaux* tab_D );
+
+
+/* henyeyGreenstein
+* 
+*/
+double henyeyGreenstein( double asym, double angle );
+
+
+/* verificationFoce
+* Sauvegarde la fonction de phase dans l'océan calculée dans un fichier
+* Permet de valider le bon calcul de la fonction de phase
+*/
+void verificationFoce( const char* nomFichier, Tableaux tab);
+
+
 /* profilAtm
 * Calcul du profil atmosphérique dans l'atmosphère en fonction de la couche
 * Mélange Molécule/Aérosol dans l'atmosphère en fonction de la couche

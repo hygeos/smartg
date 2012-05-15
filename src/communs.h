@@ -79,6 +79,8 @@
 /* Paramètres pour l'océan */
 #define DEPO 0.0279F
 
+/* Pour le calcul de la fonction de phase dans l'océan*/
+#define NWAV	36
 
 /* Constantes propres au calcul sphérique */
 #define RTER 6400
@@ -255,6 +257,8 @@ typedef struct __align__(16)
 	float* tabPhotons;		// Tableau contenant l'ensemble des paramètres de stokes des photons sortis dans l'espace
 	
 	float* faer;			// Pointeur vers le modèle de diffusion des aérosols
+	float* foce;			// Pointeur vers le modèle de diffusion dans l'océan
+	float* pf;				// Pointeur vers le modèle de diffusion dans l'océan
 	float* h;				// Pointeur vers l'épaisseur optique de chaque couches du modèle atmosphérique
 	float* pMol;			// Pointeur vers la proportion de molécules dans chaque couches du modèle atmosphérique
 	
