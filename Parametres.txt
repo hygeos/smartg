@@ -4,7 +4,7 @@
 
 
 # Nombre de photons a lancer (unsigned long long) (limite par le tableau du poids des photons en unsigned long long)
-NBPHOTONS = 1000000000
+NBPHOTONS = 100000000
 
 # Nombre de boucles dans le kernel (unsigned int) (limite par watchdog, il faut tuer X)
 NBLOOP = 18000
@@ -51,10 +51,10 @@ LSAAER = 72001
 NFAER = 1000000
 
 #
-LSAOCE = 181
+LSAOCE = 72001
 
 #
-NFOCE = 10000
+NFOCE = 10000000
 
 # Type de profil atmospherique
 	# 0 : profil standard avec echelle de hauteur
@@ -89,16 +89,17 @@ NH2O = 1.33
 # Type de simulation
 	# -2 pour atmosphere seule
 	# -1 pour dioptre seul
-	# 0 pour ocean
+	# 0 pour ocean et dioptre
 	# 1 pour atmosphere et dioptre
 	# 2 pour atmosphere dioptre et ocean
-SIM = 1
+	# 3 pour ocean seul
+SIM = 3
 
 # Type de reflexion de la surface (pour l'instant implémentation uniquement du cas 1)
 	# 1 pour reflexion speculaire sur le dioptre
 	# 2 pour reflexion diffuse de l'ocean
 	# 3 pour les deux
-SUR = 1
+SUR = 2
 
 # Type de dioptre 
 	# 0=plan

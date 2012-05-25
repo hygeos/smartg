@@ -751,18 +751,6 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 		exit(1);	
 	}
 	
-	// Modèle de diffusion dans l'océan - pf
-	tab_H->pf = (float*)malloc(4 * LSAOCE * sizeof(float));
-	if( tab_H->pf == NULL ){
-		printf("ERREUR: Problème de malloc de tab_H->pf dans initTableaux\n");
-		exit(1);
-	}
-	memset(tab_H->pf,0,4 * LSAOCE*sizeof(float) );
-	
-	if( cudaMalloc(&(tab_D->pf), 4 * LSAOCE * sizeof(float)) != cudaSuccess ){
-		printf("ERREUR: Problème de cudaMalloc de tab_D->pf dans initTableaux\n");
-		exit(1);	
-	}
 	
 	/** Modèle de l'atmosphère **/
 	// Epaisseur optique par couche
@@ -1120,42 +1108,86 @@ void calculFoce( Tableaux* tab_H, Tableaux* tab_D ){
 
 	/** Déclaration **/
 	// Données utiles pour le calcul
-	double lamb0[NWAV]={350., 360., 370., 380., 390., 400., 410., 420., 430., 440., 450., 460., 470., 480., 490., 500., 510., 520.,
-						530., 540., 550., 560., 570., 580., 590., 600., 610., 620., 630., 640., 650., 660., 670., 680., 690., 700.};
+	double lamb0[NWAV]={350., 355., 360., 365, 370., 375, 380., 385, 390., 395, 400., 405, 410., 415, 420., 425, 430., 435, 440.,
+						445, 450., 455, 460., 465, 470., 475, 480., 485, 490., 495, 500., 505, 510., 515, 520., 525, 
+						530., 535, 540., 545, 550., 555, 560., 565, 570., 575, 580., 585, 590., 595, 600., 605, 610., 615, 620.,
+						625, 630., 635, 640., 645, 650., 655, 660., 665, 670., 675, 680., 685, 690., 695, 700.};
 	
-	double xi[NWAV] = { 0.1100, 0.1100, 0.1100, 0.1100, 0.1100, 0.1100, 0.1125, 0.1126, 0.1078, 0.1041, 0.0971, 0.0896,
-						0.0823, 0.0746, 0.0690, 0.0636, 0.0578, 0.0498, 0.0467, 0.0440, 0.0410, 0.0390, 0.0360, 0.0330,
-						0.0325, 0.0340, 0.0360, 0.0385, 0.0420, 0.0440, 0.0450, 0.0475, 0.0515, 0.0505, 0.0390, 0.0300 } ;
-	
-	double e[NWAV] = {	0.668, 0.668, 0.668, 0.668, 0.668, 0.668, 0.680, 0.693, 0.707, 0.707, 0.701, 0.700,0.703,
-						0.703, 0.702, 0.700, 0.690, 0.680, 0.670, 0.660, 0.650, 0.640, 0.623, 0.610, 0.618,0.626, 
-						0.634, 0.642, 0.653, 0.663, 0.672, 0.682, 0.695, 0.693, 0.640, 0.600 } ;
+	double ah2o[NWAV]={	0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.01137, 0.00941, 0.00851, 0.00813, 0.00663, 0.0053, 0.00473, 
+						0.00444, 0.00454, 0.00478, 0.00495, 0.0053,	0.00635, 0.00751, 0.00922, 0.00962, 0.00979, 
+						0.01011, 0.0106, 0.0114, 0.0127, 0.0136, 0.015, 0.0173, 0.0204, 0.0256, 0.0325, 0.0396, 
+						0.0409, 0.0417, 0.0434, 0.0452, 0.0474, 0.0511, 0.0565, 0.0596, 0.0619, 0.0642, 0.0695, 
+						0.0772, 0.0896, 0.11, 0.1351, 0.1672, 0.2224, 0.2577, 0.2644, 0.2678, 0.2755, 0.2834, 
+						0.2916, 0.3012, 0.3108, 0.325, 0.34, 0.371, 0.41, 0.429 , 0.439, 0.448, 0.465, 0.486,
+						0.516, 0.559, 0.624 };
+						
+	// double bh2o[NWAV]={	0.0121, 0.0113, 0.0107, 0.0099, 0.0095, 0.0089, 0.0085, 0.0081, 0.0077, 0.0072, 
+						//~ 0.0069, 0.0065, 0.0062, 0.0059, 0.0056, 0.0054, 0.0051, 0.0049, 0.0047, 0.0044, 
+						//~ 0.0043, 0.0040, 0.0039, 0.0037, 0.0035, 0.0034, 0.0033, 0.0031, 0.0030, 0.0029, 
+						//~ 0.0027, 0.0026, 0.0025, 0.0024, 0.0023, 0.0022, 0.0021, 0.0021, 0.002 , 0.0019, 
+						//~ 0.0018, 0.0018, 0.0017, 0.0017, 0.0016, 0.0015, 0.0015, 0.0014, 0.0014, 0.0013, 
+						//~ 0.0013, 0.0013, 0.0012, 0.0012, 0.0011, 0.0011, 0.0011, 0.001 , 0.001 , 0.001, 
+						//~ 0.0009, 0.0009, 0.0009, 0.0009, 0.0008, 0.0008, 0.0008, 0.0008, 0.0007, 0.0007, 0.0007 };
+     //
+     double A_bricaud95[NWAV]={0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 
+							  0.0263, 0.0285, 0.0313, 0.03375, 0.0356, 0.03655, 0.0386, 0.0397, 0.0403, 0.03865, 
+							  0.0371, 0.0356, 0.035, 0.0341, 0.0332, 0.0315, 0.0301, 0.02875, 0.0274, 0.02535, 
+							  0.023, 0.0204, 0.018, 0.01595, 0.0143, 0.01285, 0.0117, 0.0106, 0.0097, 0.0088 , 
+							  0.008, 0.007, 0.0062, 0.0056, 0.0053, 0.0052, 0.0053, 0.0055, 0.0056, 0.0056 , 
+							  0.0054, 0.0055, 0.0057, 0.0061, 0.0065, 0.00675, 0.0071, 0.00745, 0.0077, 0.00795, 
+							  0.0083, 0.0092, 0.0115, 0.01525, 0.0189, 0.0201, 0.0182, 0.01345, 0.0083, 0.0049, 0.003 };
 
-	double kw[NWAV] = { 0.0209, 0.0209, 0.0209, 0.0209, 0.0209, 0.0209, 0.0196, 0.0183, 0.0171, 0.0168, 0.0168, 0.0173,
-						0.0175, 0.0194, 0.0217, 0.0271, 0.0384, 0.0490, 0.0518, 0.0568, 0.0640, 0.0717, 0.0807, 0.1070,
-						0.1570, 0.2530, 0.2960, 0.3100, 0.3200, 0.3300, 0.3500, 0.4050, 0.4300, 0.4500, 0.5000, 0.6500 } ;
+	double B_bricaud95[NWAV]={0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 
+							  0.282, 0.2815, 0.283 , 0.292 , 0.299 , 0.3145, 0.314 , 0.326 , 0.332 , 0.3515, 
+							  0.359, 0.3665, 0.365 , 0.3685, 0.368 , 0.3765, 0.377 , 0.3745, 0.361 , 0.345 , 
+							  0.321, 0.294, 0.26  , 0.2305, 0.196 , 0.1675, 0.139 , 0.114 , 0.09  , 0.0695, 
+							  0.052, 0.0315, 0.016 , 0.0085, 0.005 , 0.02  , 0.035 , 0.053 , 0.073 , 0.0905, 
+							  0.092, 0.084, 0.071 , 0.0645, 0.064 , 0.0725, 0.078 , 0.086 , 0.098 , 0.116 , 
+							  0.124, 0.123, 0.121 , 0.134 , 0.149 , 0.158 , 0.155 , 0.131 , 0.086 , 0.0285, -0.034 };
+							  
+	double ee[NWAV]={0.77800, 0.76700, 0.75600, 0.73700, 0.72000, 0.70000, 0.68500, 0.67300, 0.67000, 0.66000,
+					  0.64358, 0.64776, 0.65175, 0.65555, 0.65917, 0.66259, 0.66583, 0.66889, 0.67175, 0.67443,
+					  0.67692, 0.67923, 0.68134, 0.68327, 0.68501, 0.68657, 0.68794, 0.68903, 0.68955, 0.68947,
+					  0.68880, 0.68753, 0.68567, 0.68320, 0.68015, 0.67649, 0.67224, 0.66739, 0.66195, 0.65591,
+					  0.64927, 0.64204, 0.64000, 0.63000, 0.62300, 0.61500, 0.61000, 0.61400, 0.61800, 0.62200,
+					  0.62600, 0.63000, 0.63400, 0.63800, 0.64200, 0.64700, 0.65300, 0.65800, 0.66300, 0.66700,
+					  0.67200, 0.67700, 0.68200, 0.68700, 0.69500, 0.69700, 0.69300, 0.66500, 0.64000,0.62000,0.60000 };
 
-	double ah20[NWAV] = {	 0.0171, 0.0171, 0.0171, 0.0171, 0.0171, 0.0171, 0.0162, 0.0153, 0.0144, 0.0145, 0.0145, 0.0156,
-							0.0156, 0.0176, 0.0196, 0.0257, 0.0357, 0.0477, 0.0507, 0.0558, 0.0638, 0.0708, 0.0799, 0.1080,
-							0.1570, 0.2440, 0.2890, 0.3090, 0.3190, 0.3290, 0.3490, 0.4000, 0.4300, 0.4500, 0.5000, 0.6500 } ;
+	double Chi[NWAV]={0.15300, 0.14900, 0.14400, 0.14000, 0.13600, 0.13100, 0.12700, 0.12300, 0.11900, 0.11800,
+					  0.11748, 0.12066, 0.12259, 0.12326, 0.12269, 0.12086, 0.11779, 0.11372, 0.10963, 0.10560,
+					  0.10165, 0.09776, 0.09393, 0.09018, 0.08649, 0.08287, 0.07932, 0.07584, 0.07242, 0.06907,
+					  0.06579, 0.06257, 0.05943, 0.05635, 0.05341, 0.05072, 0.04829, 0.04611, 0.04419, 0.04253,
+					  0.04111, 0.03996, 0.03900, 0.03750, 0.03600, 0.03400, 0.03300, 0.03280, 0.03250, 0.03300,
+					  0.03400, 0.03500, 0.03600, 0.03750, 0.03850, 0.04000, 0.04200, 0.04300, 0.04400, 0.04450,
+					  0.04500, 0.04600, 0.04750, 0.04900, 0.05150, 0.05200, 0.05050, 0.04400, 0.03900,0.03400,0.03000 };
 	
-	double bh20[NWAV] = { 	0.0076, 0.0076, 0.0076, 0.0076, 0.0076, 0.0076, 0.0068, 0.0061, 0.0055, 0.0049, 0.0045, 0.0041,
-							0.0037, 0.0034, 0.0031, 0.0029, 0.0026, 0.0024, 0.0022, 0.0021, 0.0019, 0.0018, 0.0017, 0.0016,
-							0.0015, 0.0014, 0.0013, 0.0012, 0.0011, 0.0010, 0.0010, 0.0008, 0.0008, 0.0007, 0.0007, 0.0007 } ;
+	double Kw[NWAV]={0.02710, 0.02380, 0.02160, 0.01880, 0.01770, 0.01595, 0.01510, 0.01376, 0.01271, 0.01208,
+					  0.01042, 0.00890, 0.00812, 0.00765, 0.00758, 0.00768, 0.00770, 0.00792, 0.00885, 0.00990,
+					  0.01148, 0.01182, 0.01188, 0.01211, 0.01251, 0.01320, 0.01444, 0.01526, 0.01660, 0.01885,
+					  0.02188, 0.02701, 0.03385, 0.04090, 0.04214, 0.04287, 0.04454, 0.04630, 0.04846, 0.05212,
+					  0.05746, 0.06053, 0.06280, 0.06507, 0.07034, 0.07801, 0.09038, 0.11076, 0.13584, 0.16792,
+					  0.22310, 0.25838, 0.26506, 0.26843, 0.27612, 0.28400, 0.29218, 0.30176, 0.31134, 0.32553,
+					  0.34052, 0.37150, 0.41048, 0.42947, 0.43946, 0.44844, 0.46543, 0.48642, 0.51640,0.55939,0.62438 };
+	
 	
 	int ilambda, iang, ipf;
 	double a0, b0, a1, b1, a2, b2;	// Coefficients d'absorption et de diffusion
+	double r1;
+	double anap440, anap, aphi;
 	double bb1, g1, g2;				// Coefficients liés à la fonction Henyey greenstein
 	
-	double rat1, rat2;				// Utilisé pour la troncature de la fonction de phase
+	double integ_ff;
+	double rat1;				// Utilisé pour la troncature de la fonction de phase
 	double extoce;			//
-	double btot;
+	double atot, btot;
+	double Kd;
 	
+	double delta;
 	double dtheta;
 	double pm1, pm2;				// Variable intermédiaire de calcul
 	double sin1, sin2;				// Variable intermédiaire de calcul
 	
-	double z, norm;
+	double z, norm, v;
 	
 	double* scum;
 	scum = (double*) malloc(NFOCE*sizeof(*scum));
@@ -1171,12 +1203,12 @@ void calculFoce( Tableaux* tab_H, Tableaux* tab_D ){
 		exit(1);
 	}
 	
-// 	double* pf = (double*) malloc(4*LSAOCE*sizeof(*pf));
-// 	/* pf[iang + i] donne accès aux nombre de stokes i+1 pour l'indice d'angle iang */
-// 	if( pf==NULL){
-// 		printf("Probleme d'allocation de pf dans calculFoce\n");
-// 		exit(1);
-// 	}
+	double* pf = (double*) malloc(4*LSAOCE*sizeof(*pf));
+ 	/* pf[iang + i] donne accès aux nombre de stokes i+1 pour l'indice d'angle iang */
+ 	if( pf==NULL){
+		printf("Probleme d'allocation de pf dans calculFoce\n");
+		exit(1);
+ 	}
 	
 	double* pf0 = (double*) malloc(4*LSAOCE*sizeof(*pf0));
 	/* pf0[iang + i] donne accès aux nombre de stokes i+1 pour l'indice d'angle iang */
@@ -1200,7 +1232,7 @@ void calculFoce( Tableaux* tab_H, Tableaux* tab_D ){
 	}
 	
 	/** Calculs **/
-	ilambda = int( (LAMBDA - lamb0[0])/10 );
+	ilambda = int( (LAMBDA - lamb0[0])/(lamb0[1]-lamb0[0]) );
 	if( ilambda < 0 ){
 		printf("Lambda est out of range");
 		exit(1);
@@ -1208,15 +1240,26 @@ void calculFoce( Tableaux* tab_H, Tableaux* tab_D ){
 	ilambda = min( ilambda, NWAV-1 );
 	
 	// Coefficients pour l'eau
-	a0 = ah20[ilambda];
-	b0 = bh20[ilambda];
-	
-	// Coefficients d'absorption et de diffusion pour le phytoplancton
-	a1 = (xi[ilambda]*a0)/(kw[ilambda])*pow(CONPHY,e[ilambda]);
-	b1 = 0.3*pow(CONPHY,0.62);
+	a0 = ah2o[ilambda];
+	b0 = 19.3e-4*pow(LAMBDA/550.,-4.3);
 
+	// Coefficients d'absorption et de diffusion pour le phytoplancton
+	anap440 = 0.0124*pow(CONPHY,0.724);
+	anap = anap440*exp( -0.011*(LAMBDA-440) );
+	aphi = A_bricaud95[ilambda]*pow( CONPHY,1.-B_bricaud95[ilambda] );
+	a1 = anap + aphi;
+	b1 = 0.416*pow( CONPHY,0.766 )*550/LAMBDA;
+	
 	// Backscatterring part
-	bb1 = 0.002 + 0.02*( 0.5-0.25*log10(CONPHY)*(550/LAMBDA) );
+	if( CONPHY<2 ){
+		v = 0.5*( log10(CONPHY) - 0.3 );
+	}
+	else{
+		v = 0;
+	}
+
+	bb1 = 0.002 + 0.01*( 0.5-0.25*log10(CONPHY))*pow(LAMBDA/550,v);
+	r1 = (bb1 - 0.002)/0.028;
 	g1 = 1 - (2*bb1)/(bb1 + 0.414);
 	
 	// Coefficients pour les 2ème particules
@@ -1232,8 +1275,11 @@ void calculFoce( Tableaux* tab_H, Tableaux* tab_D ){
 			two first terms sum is 1)
 		3) The first term is for perpend. polarisation, the second for parallel */
 	for( iang=0; iang<LSAOCE; iang++ ){
-		ang[iang] = double(iang)*DEG2RAD;
+		ang[iang] = 180*double(iang)/double(LSAOCE-1)*DEG2RAD;
+	}
 	
+	for( iang=0; iang<LSAOCE; iang++ ){
+
 		/** Fonction de phase **/
 		/* Pour l'eau
 		* Ici on suppose que le facteur de dépolarisation est nul
@@ -1242,10 +1288,17 @@ void calculFoce( Tableaux* tab_H, Tableaux* tab_D ){
 		pf0[iang*4 + 1] = 0.75*cos(ang[iang])*cos(ang[iang]);
 		pf0[iang*4 + 2] = 0.75*cos(ang[iang]);
 		pf0[iang*4 + 3] = 0.;
-		
+
 		
 		/* Pour les deux autres particules */
-		pf1[iang*4 + 0] = henyeyGreenstein( g1, ang[iang] )/2;
+		if( iang>=ANGTRONC ){
+			pf1[iang*4 + 0]=0.5*(r1*fournierForand(ang[iang],1.117,3.695) +(1-r1)*fournierForand(ang[iang],1.05,3.259));
+		}
+		else{
+			pf1[iang*4 + 0] = 0.5*(r1*fournierForand(ang[ANGTRONC],1.117,3.695)
+				+ (1-r1)*fournierForand(ang[ANGTRONC],1.05,3.259));
+		}
+		
 		pf1[iang*4 + 1] = pf1[iang*4 + 0];
 		pf1[iang*4 + 2] = 0.;
 		pf1[iang*4 + 3] = 0.;
@@ -1256,46 +1309,46 @@ void calculFoce( Tableaux* tab_H, Tableaux* tab_D ){
 		pf2[iang*4 + 3] = 0.;
 	}
 	
-	
-	/* We truncate the henhey greenstein phase functions
-	* This is done by giving a constant value equal to that of 5 degree to all angles smaller than 5 degrees.
-	* We adjust the scattering coefficient accordingly */
-	
-	rat1 = 1. + henyeyGreenstein( g1, ang[5])*( 1.-cos(ang[5]))/2. 
-				- 0.5*( 1. -g1*g1 )/g1*( 1./(1.-g1) - pow(1.+g1*g1 - 2.*g1*cos(ang[5]),-0.5) );
-
-	rat2 = 1. + henyeyGreenstein( g2, ang[5])*( 1.-cos(ang[5]))/2. 
-				- 0.5*( 1. -g2*g2 )/g2*( 1./(1.-g2) - pow(1.+g2*g2 - 2.*g2*cos(ang[5]),-0.5) );
-	
-	
-	for( iang=0; iang<5; iang++ ){
-		pf1[iang*4 + 0] = pf1[5*4 + 0]/rat1;
-		pf1[iang*4 + 1] = pf1[iang*4 + 0];
-		pf2[iang*4 + 0] = pf2[5*4 + 0]/rat2;
-		pf2[iang*4 + 1] = pf2[iang*4 + 0];
+	/** Renormalisation après troncature de la fonction de phase **/
+	integ_ff = 0;
+	for( iang=1; iang<LSAOCE; iang++ ){
+		dtheta = ang[iang] - ang[iang-1];
+		pm1 = pf1[(iang-1)*4 + 0] + pf1[(iang-1)*4 + 1];
+		pm2 = pf1[iang*4 + 0] + pf1[iang*4 + 1];
+		sin1 = sin(ang[iang-1]);
+		sin2 = sin(ang[iang]);
+		integ_ff = integ_ff + dtheta*( (sin1*pm1+sin2*pm2)/3. + (sin1*pm2+sin2*pm1)/6. );
 	}
-	for( iang=5; iang<LSAOCE; iang++ ){
-		pf1[iang*4 + 0] = pf1[iang*4 + 0]/rat1;
-		pf1[iang*4 + 1] = pf1[iang*4 + 0];
-		pf2[iang*4 + 0] = pf2[5*4 + 0]/rat2;
-		pf2[iang*4 + 1] = pf2[iang*4 + 0];
+	
+	rat1 = integ_ff/2;
+	
+	for( iang=0; iang<LSAOCE; iang++ ){
+		pf1[iang*4 + 0] *= 1/rat1;
+		pf1[iang*4 + 1] *= 1/rat1;
 	}
 	
 	b1 *= rat1;
-	b2 *= rat2;
 	
 	
 	/** Coefficients d'extinction et scattering albedo globaux **/
-	extoce = a0 + b0 + a1 + b1 + a2 + b2;
 	btot = b0 + b1 + b2;
+	atot = a0 + a1 + a2;
+	//~ printf("total abs=%lf\n",atot);
+	
+	/** Absorption totale déduite du coefficient d'atténuation de Morel **/
+	Kd = Kw[ilambda] + Chi[ilambda]*pow(CONPHY,ee[ilambda]);
+	delta = (0.256*(b0+b1/rat1+b2))*(0.256*(b0+b1/rat1+b2)) + 4*Kd*Kd;
+	atot = 0.5*(-0.256*(b0+b1/rat1+b2) + sqrt(delta));
+	
+	extoce = atot + btot;
 	W0OCE = btot/extoce;
 	
 	/** Calcul de la fonction de phase globale de diffusion **/
 	for( iang=0; iang<LSAOCE ; iang++ ){
-		tab_H->pf[iang*4 + 0] = (float) (b0*pf0[iang*4 + 0] + b1*pf1[iang*4 + 0] + b2*pf2[iang*4 + 0])/btot;
-		tab_H->pf[iang*4 + 1] = (float) (b0*pf0[iang*4 + 1] + b1*pf1[iang*4 + 1] + b2*pf2[iang*4 + 1])/btot;
-		tab_H->pf[iang*4 + 2] = (float) (b0*pf0[iang*4 + 2] + b1*pf1[iang*4 + 2] + b2*pf2[iang*4 + 2])/btot;
-		tab_H->pf[iang*4 + 3] = (float) (b0*pf0[iang*4 + 3] + b1*pf1[iang*4 + 3] + b2*pf2[iang*4 + 3])/btot;
+		pf[iang*4 + 0] = (b0*pf0[iang*4 + 0] + b1*pf1[iang*4 + 0] + b2*pf2[iang*4 + 0])/btot;
+		pf[iang*4 + 1] = (b0*pf0[iang*4 + 1] + b1*pf1[iang*4 + 1] + b2*pf2[iang*4 + 1])/btot;
+		pf[iang*4 + 2] = (b0*pf0[iang*4 + 2] + b1*pf1[iang*4 + 2] + b2*pf2[iang*4 + 2])/btot;
+		pf[iang*4 + 3] = (b0*pf0[iang*4 + 3] + b1*pf1[iang*4 + 3] + b2*pf2[iang*4 + 3])/btot;
 	}
 	
 	/* scum est une fonction s'accroissant entre 0 et 1 telle que d(scum)/dthe
@@ -1304,8 +1357,8 @@ void calculFoce( Tableaux* tab_H, Tableaux* tab_D ){
 	scum[0] = 0;
 	for( iang = 1; iang<LSAOCE; iang++ ){
 		dtheta = ang[iang] - ang[iang-1];
-		pm1 = tab_H->pf[(iang-1)*4 + 0] + tab_H->pf[(iang-1)*4 + 1];
-		pm2 = tab_H->pf[iang*4 + 0] + tab_H->pf[iang*4 + 1];
+		pm1 = pf[(iang-1)*4 + 0] + pf[(iang-1)*4 + 1];
+		pm2 = pf[iang*4 + 0] + pf[iang*4 + 1];
 		sin1 = sin(ang[iang-1]);
 		sin2 = sin(ang[iang]);
 		scum[iang] = scum[iang-1] + dtheta*(( sin1*pm1+sin2*pm2 )/3 + (sin1*pm2+sin2*pm1)/6.)*DEUXPI;
@@ -1328,17 +1381,17 @@ void calculFoce( Tableaux* tab_H, Tableaux* tab_D ){
 		while( scum[ipf+1]<z )
 			ipf++;
 		tab_H->foce[iang*5 + 4] = (float) ( (scum[ipf+1]-z)*ang[ipf] + (z-scum[ipf])*ang[ipf+1] )/(scum[ipf+1]-scum[ipf]);
-		norm = tab_H->pf[ipf*4 + 0] + tab_H->pf[ipf*4 + 1];
-		tab_H->foce[iang*5 + 0] = (float) tab_H->pf[ipf*4 + 0]/norm;
-		tab_H->foce[iang*5 + 1] = (float) tab_H->pf[ipf*4 + 1]/norm;
-		tab_H->foce[iang*5 + 2] = (float) tab_H->pf[ipf*4 + 2]/norm;
-		tab_H->foce[iang*5 + 3] = (float) tab_H->pf[ipf*4 + 3]/norm;
+		norm = pf[ipf*4 + 0] + pf[ipf*4 + 1];
+		tab_H->foce[iang*5 + 0] = (float) pf[ipf*4 + 0]/norm;
+		tab_H->foce[iang*5 + 1] = (float) pf[ipf*4 + 1]/norm;
+		tab_H->foce[iang*5 + 2] = (float) pf[ipf*4 + 2]/norm;
+		tab_H->foce[iang*5 + 3] = (float) pf[ipf*4 + 3]/norm;
 	}
 	
 	tab_H->foce[(NFOCE-1)*5 + 4] = PI;
 	tab_H->foce[(NFOCE-1)*5 + 0] = 0.5f;
 	tab_H->foce[(NFOCE-1)*5 + 1] = 0.5f;
-	tab_H->foce[(NFOCE-1)*5 + 2] = (float) tab_H->pf[(LSAOCE-1)*4 + 2]/(tab_H->pf[(LSAOCE-1)*4 + 0]+tab_H->pf[(LSAOCE-1)*4 + 1]);
+	tab_H->foce[(NFOCE-1)*5 + 2] = (float) pf[(LSAOCE-1)*4 + 2]/(pf[(LSAOCE-1)*4 + 0]+pf[(LSAOCE-1)*4 + 1]);
 	tab_H->foce[(NFOCE-1)*5 + 3] = 0.f;
 	
 	/** Transfert de foce dans le device **/
@@ -1349,18 +1402,11 @@ void calculFoce( Tableaux* tab_H, Tableaux* tab_D ){
 		exit(1);
 	}
 	
-	erreur = cudaMemcpy(tab_D->pf, tab_H->pf, 4*LSAOCE*sizeof(*(tab_H->pf)), cudaMemcpyHostToDevice); 
-	if( erreur != cudaSuccess ){
-		printf( "ERREUR: Problème de copie tab_D->pf dans calculFoce\n");
-		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-		exit(1);
-	}
-	
 	
 	/** Libération de la mémoire allouée **/
 	free( scum );
 	free( ang );
-// 	free( pf );
+	free( pf );
 	free( pf0 );
 	free( pf1 );
 	free( pf2 );
@@ -1373,6 +1419,28 @@ void calculFoce( Tableaux* tab_H, Tableaux* tab_D ){
 double henyeyGreenstein( double asym, double angle ){
 
 	return  (1 - asym*asym)/pow(1 + asym*asym - 2*asym*cos(angle),1.5);
+}
+
+
+/* fournierForand
+ * 
+ */
+ double fournierForand(double ang, double n, double mu){
+
+	double v;
+	double delta, delta180;
+	double res;
+	
+	v = (3-mu)/2;
+	delta = 4/( 3*(n-1)*(n-1) )*sin(ang/2)*sin(ang/2);
+	delta180 = 4/( 3*(n-1)*(n-1) )*sin(PI/2)*sin(PI/2);
+
+	res = 1/( 4*PI*(1-delta)*(1-delta)*pow(delta,v) )*( v*(1-delta) - (1-pow(delta,v)) +
+		( delta*(1-pow(delta,v)) - v*(1-delta) )*1/(sin(ang/2)*sin(ang/2)) )
+		+ (1-pow(delta180,v))/(16*PI*(delta180-1)*pow(delta180,v)) * (3*cos(ang)*cos(ang) - 1);
+	res *= 4*PI;
+	
+	return res;
 }
 
 

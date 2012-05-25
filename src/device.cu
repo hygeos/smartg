@@ -184,7 +184,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 			#endif
 			
 			// Diffusion
-			scatter( &ph, tab.faer, tab.foce, tab.pf, &etatThr
+			scatter( &ph, tab.faer, tab.foce, &etatThr
 			#if defined(RANDMWC) || defined(RANDMT)
 			, &configThr
 			#endif
@@ -308,13 +308,13 @@ __device__ void initPhoton(Photon* ph
 	ph->uz = ph->vx;
 	
 	// Le photon est initialement dans l'atmosphère, et tau peut être vu comme sa hauteur par rapport au sol
-	if( SIMd==0 ){
+	if( SIMd==3 ){
 		ph->loc=OCEAN;
 	}
-	else if( SIMd!=-1)
-		ph->loc = ATMOS;
-	else
+	else if( SIMd==-1 || SIMd==0 )
 		ph->loc = SURFACE;
+	else
+		ph->loc = ATMOS;
 	
 	ph->weight = WEIGHTINIT;
 	
@@ -338,8 +338,9 @@ __device__ void initPhoton(Photon* ph
 	
 	#ifndef SPHERIQUE	/* Code spécifique à une atmosphère en plan parallèle */
 	ph->z = TAUATMd;
-	if( SIMd==0 )
+	if( (SIMd==0) || (SIMd==3) ){
 		ph->z = 0.f;
+	}
 	#endif
 	
 	
@@ -892,10 +893,27 @@ rsolfi=%15.12lf - tauRdm= %lf - hph_p= %15.12lf - hph= %15.12lf - zph_p= %15.12l
 		else{
 			ph->z = 0.F;
 			ph->loc = SURFACE;
-			if( SIMd==0 ){
-				ph->loc=ABSORBED;
+			if( SIMd==3 ){
+				ph->loc=SPACE;
 			}
 		}
+			
+		#ifdef TRAJET
+		// Récupération d'informations sur le premier photon traité
+		if(idx == 0)
+		{
+			int i = 0;
+			// On cherche la première action vide du tableau
+			while(evnt[i].action != 0 && i<NBTRAJET-1) i++;
+			// Et on remplit la première case vide des tableaux (tableaux de 20 cases)
+			// "2"représente l'événement "move" du photon
+			evnt[i].action = 2;
+			// On récupère le tau et le poids du photon
+			evnt[i].poids = ph->weight;
+			evnt[i].tau = ph->z;
+		}
+		#endif
+		
 		return;
 	}
 	
@@ -969,7 +987,7 @@ rsolfi=%15.12lf - tauRdm= %lf - hph_p= %15.12lf - hph= %15.12lf - zph_p= %15.12l
 * Diffusion du photon par une molécule ou un aérosol
 * Modification des paramètres de stokes et des vecteurs U et V du photon (polarisation, vitesse)
 */
-__device__ void scatter( Photon* ph, float* faer, float* foce, float* pf
+__device__ void scatter( Photon* ph, float* faer, float* foce
 			#ifdef RANDMWC
 			, unsigned long long* etatThr, unsigned int* configThr
 			#endif
@@ -999,7 +1017,7 @@ __device__ void scatter( Photon* ph, float* faer, float* foce, float* pf
 	 * L'idée à termes est de réduire au maximum cette fonction, en calculant également la fonction de phase pour les
 	 * molécules, à la manière des aérosols.
 	*/
-	calculDiffScatter( ph, &cTh, faer, foce, pf
+	calculDiffScatter( ph, &cTh, faer, foce
 			#ifdef RANDMWC
 			, etatThr, configThr
 				#endif
@@ -1023,7 +1041,7 @@ __device__ void scatter( Photon* ph, float* faer, float* foce, float* pf
 	vx = cTh * ph->vx + sTh * ( cPsi * ph->ux + sPsi * wx );
 	vy = cTh * ph->vy + sTh * ( cPsi * ph->uy + sPsi * wy );
 	vz = cTh * ph->vz + sTh * ( cPsi * ph->uz + sPsi * wz );
-	
+
 	// Changement du vecteur u (orthogonal au vecteur vitesse du photon)
 	ph->ux = __fdividef(cTh * vx - ph->vx, sTh);
 	ph->uy = __fdividef(cTh * vy - ph->vy, sTh);
@@ -1058,7 +1076,7 @@ __device__ void scatter( Photon* ph, float* faer, float* foce, float* pf
 * Pour l'optimisation du programme, il est possible d'effectuer un travail de réduction au maximum de cette fonction. L'idée est
 * de calculer et d'utiliser la fonction de phase moléculaire.
 */
-__device__ void calculDiffScatter( Photon* ph, float* cTh, float* faer, float* foce, float* pf
+__device__ void calculDiffScatter( Photon* ph, float* cTh, float* faer, float* foce
 			#ifdef RANDMWC
 			, unsigned long long* etatThr, unsigned int* configThr
 			#endif
@@ -1121,39 +1139,43 @@ __device__ void calculDiffScatter( Photon* ph, float* cTh, float* faer, float* f
 	}
 	}
 	else{	/* Photon dans l'océan */
-		float p1, p2, p3/*, p4*/;
-		bool up = ( (ph->vz>0.f)||(ph->weight>10.f) );
+		float p1, p2, p3, p4;
+		float u, v;
 		
-		if( up ){
-			zang = RAND*(NFOCEd-1);
-			iang = __float2int_rd(zang);
-			zang = zang - iang;
-			/* L'accès à foce[x][y] se fait par foce[y*5+x] */
-			theta = foce[iang*5+4]+ zang*( foce[(iang+1)*5+4]-foce[iang*5+4] );
-			p1 = foce[iang*5+0];
-			p2 = foce[iang*5+1];
-			p3 = foce[iang*5+2];
-// 			p4 = foce[iang*5+3];
-		}
-		else{
-			theta = acosf(2.f*RAND-1.f);
-			iang = __float2int_rd(theta);
-			p1 = pf[iang*5+0];
-			p2 = pf[iang*5+1];
-			p3 = pf[iang*5+2];
-// 			p4 = pf[iang*5+3];
-		}
+		zang = RAND*(NFOCEd-2);
+		iang = __float2int_rd(zang);
+		zang = zang - iang;
+		/* L'accès à foce[x][y] se fait par foce[y*5+x] */
+		theta = foce[iang*5+4]+ zang*( foce[(iang+1)*5+4]-foce[iang*5+4] );
+		
+		p1 = foce[iang*5+0];
+		p2 = foce[iang*5+1];
+		p3 = foce[iang*5+2];
+		p4 = foce[iang*5+3];
 
-		ph->weight *= 2.0f*__fdividef( (stokes1*p1+stokes2*p2) , stokes1+stokes2)*W0OCEd;
-		ph->stokes1 *= p1;
-		ph->stokes2 *= p2;
-		ph->stokes3 *= p3*ph->stokes3;
+		ph->weight  *= 2.0f*__fdividef( (stokes1*p1+stokes2*p2) , stokes1+stokes2)*W0OCEd;
+		ph->stokes1 *= 2.0f*p1;
+		ph->stokes2 *= 2.0f*p2;
+		u = ph->stokes3;
+		v = ph->stokes4;
+		ph->stokes3 = p3*u + p4*v;
+		ph->stokes4 = -p4*u + p3*v;
 		
+		/**  **/
 		if( ph->weight < WEIGHTMIN ){
-			ph->loc = ABSORBED;
+			ph->loc=ABSORBED;
 			return;
 		}
-	
+		
+		/** Roulette russe **/
+		// if( ph->weight < WEIGHTRR ){
+			// if( RAND < __fdividef(ph->weight,WEIGHTRR) ){
+				// ph->weight = WEIGHTRR;
+			// }
+			// else{
+				// ph->loc = ABSORBED;
+			// }
+		// }
 	}
 
 }
@@ -1224,7 +1246,7 @@ __device__ void surfaceAgitee(Photon* ph
 	float ReflTot;	// Flag pour la réflexion totale sur le dioptre
 	float cot;			// Cosinus de l'angle de réfraction du photon
 	float ncot, ncTh;	// ncot = nind*cot, ncoi = nind*cTh
-	// float tpar, tper;	//
+	float tpar, tper;	//
 	
 	
 	/** Séparation du code pour atmosphère sphérique ou parallèle **/
@@ -1353,7 +1375,8 @@ __device__ void surfaceAgitee(Photon* ph
 		rper = __fdividef(cTh - ncot,cTh + ncot);
 		rpar2 = rpar*rpar;
 		rper2 = rper*rper;
-		rat = __fdividef(ph->stokes1*rper2 + ph->stokes2*rpar2,ph->stokes1+ph->stokes2);
+		// rat = __fdividef(ph->stokes1*rper2 + ph->stokes2*rpar2,ph->stokes1+ph->stokes2);
+		rat = __fdividef(ph->stokes2*rper2 + ph->stokes1*rpar2,ph->stokes1+ph->stokes2);
 		ReflTot = 0;
 	}
 	else{
@@ -1366,35 +1389,25 @@ __device__ void surfaceAgitee(Photon* ph
 		rper2 = rper*rper;
 		ReflTot = 1;
 	}
-/*	
-	if( isnan(cot)!=0 ){
-		printf("cot = %f - temp=%f - nind=%f - sTh=%f - cTh=%f - theta=%f\n",\
-		cot,temp, nind, sTh,cTh, theta);
-		ph->loc=NONE;
-		return;
-	}*/
-	
-	// Rapport de l'intensite speculaire reflechie
-// 	rat = __fdividef(ph->stokes2*rper2 + ph->stokes1*rpar2,ph->stokes1+ph->stokes2)*test_s;
 
 	
 // 		float coeffper, coeffpar;
 	
-// 		if( (ReflTot==1) || (SURd==1) || ( (SURd==3)&&(RAND<rat) ) ){
+	if( (ReflTot==1) || (SURd==1) || ( (SURd==3)&&(RAND<rat) ) ){
 		//Nouveau parametre pour le photon apres reflexion speculaire
 		ph->stokes1 *= rper2;
 		ph->stokes2 *= rpar2;
-// 		ph->stokes4 *= -rpar*rper;
+		ph->stokes4 *= -rpar*rper;
 		ph->stokes3 *= -rpar*rper;
 
 // 			coeffper = rper;
 // 			coeffpar = rpar;
 		
-		if( (isnan(ph->stokes1)!=0)||(isnan(ph->stokes2)!=0)){
-			printf("Problème NaN#1.2 - s1=%f - s2=%f\n", ph->stokes1, ph->stokes2);
-			ph->loc=NONE;
-			return;
-		}
+		// if( (isnan(ph->stokes1)!=0)||(isnan(ph->stokes2)!=0)){
+			// printf("Problème NaN#1.2 - s1=%f - s2=%f\n", ph->stokes1, ph->stokes2);
+			// ph->loc=NONE;
+			// return;
+		// }
 		
 		ph->vx += 2.F*cTh*nx;
 		ph->vy += 2.F*cTh*ny;
@@ -1403,68 +1416,68 @@ __device__ void surfaceAgitee(Photon* ph
 		ph->uy = __fdividef( ny-cTh*ph->vy,sTh );
 		ph->uz = __fdividef( nz-cTh*ph->vz,sTh );
 		
-		// Le photon est renvoyé dans l'atmosphère
-		ph->loc = ATMOS;
 		
 		// Suppression des reflexions multiples
-		if((ph->vz<0) && (DIOPTREd==2)){
-			ph->loc = ABSORBED;
+		// if((ph->vz<0) && (DIOPTREd==2)){
+			// ph->loc = ABSORBED;
+		// }
+
+
+		// if( abs( 1.F - sqrtf(ph->ux*ph->ux+ph->uy*ph->uy+ph->uz*ph->uz) )>1.E-05){
+			// ph->weight = 0;
+			// ph->loc = ABSORBED;
+			// printf("suppression du photon\n");
+			// if(RAND<0.1){
+			// printf("valeur a pb:%10.8f - ux=%10.8f - uy=%10.8f - uz=%10.8f\n",
+				   // sqrt(ph->ux*ph->ux + ph->uy*ph->uy+ph->uz*ph->uz),ph->ux ,ph->uy, ph->uz);
+				   // printf("ux2=%10.8f - uy2=%10.8f-uy2=%10.8f\n",
+						  // ph->ux*ph->ux,ph->uy*ph->uy,ph->uz*ph->uz);
+			// }
+			// return;
+		// }
+		
+		if( SURd==1 ){ /*On pondere le poids du photon par le coefficient de reflexion dans le cas 
+			// d'une reflexion speculaire sur le dioptre (mirroir parfait)*/
+			ph->weight *= rat;
 		}
-// 			bool cond = ((ph->vz<0) && (DIOPTREd==2));
-// 			ph->loc = ABSORBED*cond + ATMOS*(!cond);
+		
+		if( SIMd==-1 || SIMd==0 || SIMd==3 ){
+			ph->loc = SPACE;
+		}
+		else{
+			ph->loc = ATMOS;
+		}
+	}
 
+	else{	// Transmission par le dioptre
+		tpar = __fdividef( 2*cTh,ncTh+ cot);
+		tper = __fdividef( 2*cTh,cTh+ ncot);
+		
+		ph->stokes2 *= tper*tper;
+		ph->stokes1 *= tpar*tpar;
+		ph->stokes3 *= -tpar*tper;
+		ph->stokes4 *= -tpar*tper;
+		
+		// coeffpar = __fdividef( 2*cTh,ncTh+ cot);
+		// coeffper = __fdividef( 2*cTh,cTh+ ncot);
+		
+		alpha  = __fdividef(cTh,nind) - cot;
+		ph->vx = __fdividef(ph->vx,nind) + alpha*nx;
+		ph->vy = __fdividef(ph->vy,nind) + alpha*ny;
+		ph->vz = __fdividef(ph->vz,nind) + alpha*nz;
+		ph->ux = __fdividef( nx+cot*ph->vx,sTh )*nind;
+		ph->uy = __fdividef( ny+cot*ph->vy,sTh )*nind;
+		ph->uz = __fdividef( nz+cot*ph->vz,sTh )*nind;
+		
+		// Le photon est renvoyé dans l'atmosphère
+		ph->loc = OCEAN;
+		
+		/* On pondere le poids du photon par le coefficient de transmission dans le cas d'une reflexion
+		speculaire sur le dioptre plan (ocean diffusant) */
+		if( SURd == 2)
+			ph->weight *= (1-rat);
 
-// 			if( abs( 1.F - sqrtf(ph->ux*ph->ux+ph->uy*ph->uy+ph->uz*ph->uz) )>1.E-05){
-// 				ph->weight = 0;
-// 				ph->loc = ABSORBED;
-// 				printf("suppression du photon\n");
-// 				if(RAND<0.1){
-// 				printf("valeur a pb:%10.8f - ux=%10.8f - uy=%10.8f - uz=%10.8f\n",
-// 					   sqrt(ph->ux*ph->ux + ph->uy*ph->uy+ph->uz*ph->uz),ph->ux ,ph->uy, ph->uz);
-// 					   printf("ux2=%10.8f - uy2=%10.8f-uy2=%10.8f\n",
-// 							  ph->ux*ph->ux,ph->uy*ph->uy,ph->uz*ph->uz);
-		
-// 				}
-// 				return;
-// 			}
-		
-		//if (SURd==1){ /*On pondere le poids du photon par le coefficient de reflexion dans le cas 
-		// d'une reflexion speculaire sur le dioptre (mirroir parfait)*/
-		ph->weight *= rat;
-		// 			}
-		
-// 		}
-	
-// 		else{	// Transmission par le dioptre	//NOTE: Inutile pour le moment
-// 			
-// // 			tpar = __fdividef( 2*cTh,ncTh+ cot);
-// // 			tper = __fdividef( 2*cTh,cTh+ ncot);
-// // 			
-// // 			ph->stokes2 *= tper*tper;
-// // 			ph->stokes1 *= tpar*tpar;
-// // 			ph->stokes3 *= -tpar*tper;
-// // 			ph->stokes4 *= -tpar*tper;
-// 			
-// 			coeffpar = __fdividef( 2*cTh,ncTh+ cot);
-// 			coeffper = __fdividef( 2*cTh,cTh+ ncot);
-// 			
-// 			alpha = __fdividef(cTh,nind) - cot;
-// 			ph->vx = __fdividef(ph->vx,nind) + alpha*nx;
-// 			ph->vy = __fdividef(ph->vy,nind) + alpha*ny;
-// 			ph->vz = __fdividef(ph->vz,nind) + alpha*nz;
-// 			ph->ux = __fdividef( nx+cot*ph->vx,sTh )*nind;
-// 			ph->uy = __fdividef( ny+cot*ph->vy,sTh )*nind;
-// 			ph->uz = __fdividef( nz+cot*ph->vz,sTh )*nind;
-// 			
-// 			// Le photon est renvoyé dans l'atmosphère
-// // 			ph->loc = ;
-// 			
-// 			/* On pondere le poids du photon par le coefficient de transmission dans le cas d'une reflexion
-// 			speculaire sur le dioptre plan (ocean diffusant) */
-// 			if( SURd == 2)
-// 				ph->weight *= (1-rat);
-// 			
-// 		}
+	}
 	
 	if( SIMd == -1) // Dioptre seul
 		ph->loc=SPACE;
@@ -1548,6 +1561,7 @@ __device__ void surfaceLambertienne(Photon* ph
 	
 	/** Séparation du code pour atmosphère sphérique ou parallèle **/
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
+	
 	ph->locPrec=ph->loc;
 	#endif
 	
@@ -1598,6 +1612,13 @@ __device__ void surfaceLambertienne(Photon* ph
 	ph->loc = SPACE*test_s + ATMOS*(!test_s);
 	
 	}
+	
+	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
+	/** Retour dans le repère d'origine **/
+	
+	#endif
+	
+	
 	#ifdef TRAJET
 	// Récupération d'informations sur le premier photon traité
 	if(idx == 0)
@@ -1632,7 +1653,7 @@ __device__ void exit(Photon* ph, Variables* var, Tableaux tab, unsigned long lon
 	// Remise à zéro de la localisation du photon
 	ph->loc = NONE;
 	
-
+	
 // si son poids est anormalement élevé on le compte comme une erreur. Test effectué uniquement en présence de dioptre
 	if( (ph->weight > WEIGHTMAX) && (SIMd!=-2)){
 		atomicAdd(&(var->erreurpoids), 1);
@@ -1682,13 +1703,12 @@ __device__ void exit(Photon* ph, Variables* var, Tableaux tab, unsigned long lon
 	if( ph->vy<0.f )
 		ph->stokes3 = -ph->stokes3;
 	
-	if( ph->vx>0 )
+	if( ph->vx > 0.f )
 		ph->stokes3 = -ph->stokes3;
 	
 	float s1 = ph->stokes1;
 	ph->stokes1= ph->stokes2;
 	ph->stokes2= s1;
-	
 	ph->stokes3 = -ph->stokes3;
 	
 	

@@ -141,7 +141,7 @@ __device__ void move(Photon*, Tableaux tab
 * Diffusion du photon par une molécule ou un aérosol
 * Modification des paramètres de stokes et des vecteurs U et V du photon (polarisation, vitesse)
 */
-__device__ void scatter(Photon* photon, float* faer, float* foce, float* pf
+__device__ void scatter(Photon* photon, float* faer, float* foce
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif
@@ -162,7 +162,7 @@ __device__ void scatter(Photon* photon, float* faer, float* foce, float* pf
 * Pour l'optimisation du programme, il est possible d'effectuer un travail de réduction au maximum de cette fonction. L'idée est
 * de calculer et d'utiliser la fonction de phase moléculaire
 */
-__device__ void calculDiffScatter( Photon* photon, float* cTh, float* faer, float* foce, float* pf
+__device__ void calculDiffScatter( Photon* photon, float* cTh, float* faer, float* foce
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif

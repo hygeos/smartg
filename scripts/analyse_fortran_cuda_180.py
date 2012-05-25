@@ -18,18 +18,18 @@ import struct
 # Paramètres à modifier
 #
 #-----------------------------------------------------------------------------------------------------------------------
-type_simu = "molecules_dioptre_agite"
+type_simu = "SIM_3"
 date_simu = "25052012"
-angle = "70"
-geometrie = "SPHERIQUE"		#Géométrie de l'atmosphère
+angle = "30"
+geometrie = "PARALLELE"		#Géométrie de l'atmosphère
 
 # Nom du fichier Cuda sans extension .hdf
-# nom_cuda = "out_CUDA_atmos_dioptre_agite_ths=70.00_tRay=0.2360_tAer=0.0000_ws=5.00"
-nom_cuda = "out_CUDA_atmos_dioptre_agite_ths=70.00_tRay=0.2360_tAer=0.0000_ws=5.00"
+# nom_cuda = "out_CUDA_ths=30.00_tRay=0.0533_tAer=0.0000_ws=5.00_sim=0"
+nom_cuda = "out_CUDA_ths=30.00_tRay=0.0533_tAer=0.0000_ws=5.00_sim=3"
 
 # Nom du fichier Fortran sans l'extension .bin.gz
-#nom_fortran = "out.ran=1000.wav=443.ths=70.000.tr=0.0533.ta=0.1000.pi0=0.967.H=002.000.mod=valid_T70.443"
-nom_fortran = "out.ran=0600.wav=443.ths=30.000.tr=0.0533.ta=0.0000.pi0=0.967.H=002.000"
+# nom_fortran = "out.ran=8882.wav=443.ths=30.000.tr=0.0533.ta=0.0000.pi0=0.967.H=002.000.vent=05.000"
+nom_fortran = "out.ran=8880.wav=443.ths=30.000.tr=0.0533.ta=0.0000.pi0=0.967.H=002.000.vent=05.000"
 
 # Indices ci-dessus ont été mis en place car ils permettent de rogner la simulation si nécessaire.
 # Les bords peuvent fausser les graphiques.
@@ -76,7 +76,7 @@ print 'C\'est parti pour la simulation de {0}'.format(type_donnees)
 ######################################################
 
 # Nom complet du fichier Fortran
-path_fortran = "/home/florent/MCCuda/validation/"+geometrie+"/"+type_simu+"/simulation_"+date_simu+"/"+ nom_fortran+".bin.gz"
+path_fortran = "/home/florent/MCCuda/validation/"+geometrie+"/"+type_simu+"/"+ nom_fortran+".bin.gz"
 
 # Nom complet du fichier Cuda
 path_cuda = "/home/florent/MCCuda/validation/"+geometrie+"/"+type_simu+"/simulation_"+date_simu+"/" + nom_cuda + ".hdf"

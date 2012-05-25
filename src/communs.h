@@ -49,12 +49,12 @@
 // Poids initial du photon
 #define WEIGHTINIT 1.F
 // Au dela du poids WEIGHTMAX le photon est considéré comme une erreur
-#define WEIGHTMAX 50.F
+#define WEIGHTMAX 100000.F
 
-#define WEIGHTMIN 0.000001F
+#define WEIGHTRR 1.F
 // Détecte les photons très proches du zenith
 #define VALMIN 0.000001F
-
+#define WEIGHTMIN 1.e-9f
 
 /* Mathématiques */
 #define PI 3.1415927F
@@ -80,7 +80,9 @@
 #define DEPO 0.0279F
 
 /* Pour le calcul de la fonction de phase dans l'océan*/
-#define NWAV	36
+#define NWAV	71
+
+#define ANGTRONC 1999
 
 /* Constantes propres au calcul sphérique */
 #define RTER 6400
@@ -181,7 +183,7 @@ typedef struct __align__(16)
 	float stokes1;
 	float stokes2;
 	float stokes3;
-// 	float stokes4;
+	float stokes4;
 	
 	// Paramètres pour une atmosphère sphérique
 	int couche;
@@ -258,7 +260,6 @@ typedef struct __align__(16)
 	
 	float* faer;			// Pointeur vers le modèle de diffusion des aérosols
 	float* foce;			// Pointeur vers le modèle de diffusion dans l'océan
-	float* pf;				// Pointeur vers le modèle de diffusion dans l'océan
 	float* h;				// Pointeur vers l'épaisseur optique de chaque couches du modèle atmosphérique
 	float* pMol;			// Pointeur vers la proportion de molécules dans chaque couches du modèle atmosphérique
 	

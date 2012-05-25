@@ -138,6 +138,12 @@ void calculFoce( Tableaux* tab_H, Tableaux* tab_D );
 double henyeyGreenstein( double asym, double angle );
 
 
+/* fournierForand
+ * 
+ */
+ double fournierForand(double ang, double n, double mu);
+ 
+ 
 /* verificationFoce
 * Sauvegarde la fonction de phase dans l'océan calculée dans un fichier
 * Permet de valider le bon calcul de la fonction de phase
