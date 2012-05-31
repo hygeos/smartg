@@ -4,7 +4,7 @@
 
 
 # Nombre de photons a lancer (unsigned long long) (limite par le tableau du poids des photons en unsigned long long)
-NBPHOTONS = 100000000
+NBPHOTONS = 100000000000
 
 # Nombre de boucles dans le kernel (unsigned int) (limite par watchdog, il faut tuer X)
 NBLOOP = 18000
@@ -99,7 +99,7 @@ SIM = 3
 	# 1 pour reflexion speculaire sur le dioptre
 	# 2 pour reflexion diffuse de l'ocean
 	# 3 pour les deux
-SUR = 2
+SUR = 3
 
 # Type de dioptre 
 	# 0=plan

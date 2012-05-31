@@ -9,6 +9,7 @@ from pylab import *
 import gzip
 import struct
 
+rc('font', family='serif')
 
 ##################################################
 ##				FICHIERS A LIRE					##
@@ -19,16 +20,16 @@ import struct
 #
 #-----------------------------------------------------------------------------------------------------------------------
 type_simu = "SIM_3"
-date_simu = "25052012"
+date_simu = "31052012"
 angle = "30"
 geometrie = "PARALLELE"		#Géométrie de l'atmosphère
 
 # Nom du fichier Cuda sans extension .hdf
-# nom_cuda = "out_CUDA_ths=30.00_tRay=0.0533_tAer=0.0000_ws=5.00_sim=0"
+# nom_cuda = "out_CUDA_ths=30.00_tRay=0.0533_tAer=0.0000_ws=5.00_sim=0_nbph=5e10"
 nom_cuda = "out_CUDA_ths=30.00_tRay=0.0533_tAer=0.0000_ws=5.00_sim=3"
 
 # Nom du fichier Fortran sans l'extension .bin.gz
-# nom_fortran = "out.ran=8882.wav=443.ths=30.000.tr=0.0533.ta=0.0000.pi0=0.967.H=002.000.vent=05.000"
+# nom_fortran = "out.ran=9210.wav=443.ths=30.000.tr=0.0533.ta=0.0000.pi0=0.967.H=002.000.vent=05.000"
 nom_fortran = "out.ran=8880.wav=443.ths=30.000.tr=0.0533.ta=0.0000.pi0=0.967.H=002.000.vent=05.000"
 
 # Indices ci-dessus ont été mis en place car ils permettent de rogner la simulation si nécessaire.
@@ -262,6 +263,53 @@ min_data = min(data_cuda[0:NBPHI_cuda-pas_figure+1,dep:fin].min(),data_fortran[0
 
 max_diff = (data_fortran[0:NBPHI_cuda-pas_figure+1,dep:fin]-data_cuda[0:NBPHI_cuda-pas_figure+1,dep:fin]).max()
 #---------------------------------------------------------
+
+
+# Création de la figure récapitulative
+rc('text', usetex=True)
+
+Ymax1 = max(data_cuda[0,:].max(),data_cuda[179,:].max(),data_cuda[89,:].max())
+Ymax2 = max(data_fortran[0,2:].max(),data_fortran[179,2:].max(),data_fortran[89,2:].max())
+Ymax = max(Ymax1, Ymax2)
+
+Ymin1 = min(data_cuda[0,:].min(),data_cuda[179,:].min(),data_cuda[89,:].min())
+Ymin2 = min(data_fortran[0,:].min(),data_fortran[179,:].min(),data_fortran[89,:].min())
+Ymin = min(Ymin1, Ymin2)
+
+subplot(1, 3, 1)
+subplots_adjust(wspace=0)
+theta_inv = theta[::-1]
+data_fortran_phi0_inv = data_fortran[0][::-1]
+data_cuda_phi0_inv = data_cuda[0][::-1]
+plot(theta_inv[:178], data_fortran_phi0_inv[:178],label='Fortran')	# Plot pour phi=0
+plot(theta_inv[:178],data_cuda_phi0_inv[:178],label='Cuda')
+axis(xmin=90, xmax=0, ymin=1*Ymin, ymax=1*Ymax)
+xlabel(r'$\theta_v$ ($\phi=%.1f$)' % (phi[0]))
+grid()
+
+subplot(1, 3, 2)
+subplots_adjust(wspace=0)
+plot(theta[2:], data_fortran[179][2:],label='Fortran')	# Plot pour phi=0
+plot(theta[2:],data_cuda[179][2:],label='Cuda')
+axis(xmin=0, xmax=90, ymin=1*Ymin, ymax=1*Ymax)
+xlabel(r'$\theta_v$ ($\phi=%.1f$)' % (phi[179]))
+grid()
+
+subplot(1, 3, 3)
+subplots_adjust(wspace=0)
+plot(theta[2:], data_fortran[89][2:],label='Fortran')	# Plot pour phi=0
+plot(theta[2:],data_cuda[89][2:],label='Cuda')
+axis(xmin=0, xmax=90, ymin=1*Ymin, ymax=1*Ymax)
+xlabel(r'$\theta_v$ ($\phi=%.1f$)' % (phi[89]))
+grid()
+
+legend()
+
+savefig( path_dossier_sortie+'/global_'+type_donnees+'_Fortran_Cuda.png', dpi=(140) )
+
+##########
+rc('text', usetex=False)
+
 
 if (NBPHI_cuda) == NBPHI_fortran:
 	for iphi in xrange(0,NBPHI_cuda,pas_figure):

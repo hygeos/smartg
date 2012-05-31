@@ -54,7 +54,7 @@
 #define WEIGHTRR 1.F
 // Détecte les photons très proches du zenith
 #define VALMIN 0.000001F
-#define WEIGHTMIN 1.e-9f
+#define WEIGHTMIN 1.e-5f
 
 /* Mathématiques */
 #define PI 3.1415927F

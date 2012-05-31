@@ -210,7 +210,6 @@ void initConstantesHost(int argc, char** argv)
 		DIFFF = atoi(s);
 	}
 	
-	
 	strcpy(s,"");
 	chercheConstante(parametres, "THSDEG", s);
 	THSDEG = atof(s);
@@ -477,12 +476,14 @@ void verifierFichier(){
 		printf("Voulez-vous le supprimer? [y/n]\n");
 		while(1){
 			res_supp=getchar();
+			getchar();
 			if( res_supp=='y' ){
 				sprintf(command,"rm %s",PATHTEMOINHDF);
 				system(command);
 				break;
 			}
 			else if( res_supp=='n' ){
+				printf("Comme vous voudrez\n");
 				break;
 			}
 			else{

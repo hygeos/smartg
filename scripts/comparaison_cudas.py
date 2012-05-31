@@ -29,7 +29,6 @@ nom_cuda1 = "out_CUDA_atmos_dioptre_agite_ths=30.00_tRay=0.0533_tAer=0.0000_ws=5
 # Nom du fichier Fortran sans l'extension .bin.gz
 nom_cuda2 = "out_CUDA_atmos_dioptre_agite_ths=30.00_tRay=0.0533_tAer=0.0000_ws=5.00"
 
-
 # Indices ci-dessus ont été mis en place car ils permettent de rogner la simulation si nécessaire.
 # Les bords peuvent fausser les graphiques.
 dep = 3			# Indice de départ pour le tracé
@@ -79,7 +78,6 @@ path_cuda1 = "/home/florent/MCCuda/validation/"+geometrie+"/"+type_simu+"/simula
 
 # Nom complet du fichier Cuda
 path_cuda2 = "/home/florent/MCCuda/validation/"+geometrie+"/"+type_simu+"/simulation_"+date_simu+"/" + nom_cuda2 + ".hdf"
-#path_cuda = "/home/florent/MCCuda/validation/SPHERIQUE/test/"+nom_cuda
 
 # Si le dossier suivant existe deja il est supprime puis recree
 path_dossier_sortie = \
@@ -132,7 +130,7 @@ if os.path.exists(path_cuda2):
 	data2 = sds_cuda2.get()		
 	
 else:
-	sys.stdout.write("Pas de fichier "+path_cuda+"\n")
+	sys.stdout.write("Pas de fichier "+path_cuda2+"\n")
 	sys.exit()
 
 
