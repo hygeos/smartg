@@ -19,18 +19,16 @@ rc('font', family='serif')
 # Paramètres à modifier
 #
 #-----------------------------------------------------------------------------------------------------------------------
-type_simu = "SIM_3"
-date_simu = "31052012"
+type_simu = "molecules_dioptre_agite"
+date_simu = "05062012"
 angle = "30"
 geometrie = "PARALLELE"		#Géométrie de l'atmosphère
 
 # Nom du fichier Cuda sans extension .hdf
-# nom_cuda = "out_CUDA_ths=30.00_tRay=0.0533_tAer=0.0000_ws=5.00_sim=0_nbph=5e10"
-nom_cuda = "out_CUDA_ths=30.00_tRay=0.0533_tAer=0.0000_ws=5.00_sim=3"
+nom_cuda = "out_CUDA_atmos_dioptre_agite_ths=30.00_tRay=0.0533_tAer=0.0000_ws=5.00"
 
 # Nom du fichier Fortran sans l'extension .bin.gz
-# nom_fortran = "out.ran=9210.wav=443.ths=30.000.tr=0.0533.ta=0.0000.pi0=0.967.H=002.000.vent=05.000"
-nom_fortran = "out.ran=8880.wav=443.ths=30.000.tr=0.0533.ta=0.0000.pi0=0.967.H=002.000.vent=05.000"
+nom_fortran = "out.ran=8880.wav=443.ths=30.000.tr=0.0533.ta=0.0000.pi0=0.967.H=002.000.vent=05.000_sauv"
 
 # Indices ci-dessus ont été mis en place car ils permettent de rogner la simulation si nécessaire.
 # Les bords peuvent fausser les graphiques.

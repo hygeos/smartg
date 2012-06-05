@@ -49,7 +49,7 @@
 // Poids initial du photon
 #define WEIGHTINIT 1.F
 // Au dela du poids WEIGHTMAX le photon est considéré comme une erreur
-#define WEIGHTMAX 100000.F
+#define WEIGHTMAX 50.F
 
 #define WEIGHTRR 1.F
 // Détecte les photons très proches du zenith
@@ -183,7 +183,7 @@ typedef struct __align__(16)
 	float stokes1;
 	float stokes2;
 	float stokes3;
-	float stokes4;
+	// float stokes4;
 	
 	// Paramètres pour une atmosphère sphérique
 	int couche;

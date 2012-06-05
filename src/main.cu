@@ -235,7 +235,6 @@ int main (int argc, char *argv[])
 			exit(1);
 		}
 
-
 		// On remplit les variables et tableau qui restent dans le host
 		nbPhotonsTot += var_H->nbPhotons;
 		

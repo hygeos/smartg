@@ -4,13 +4,13 @@
 
 
 # Nombre de photons a lancer (unsigned long long) (limite par le tableau du poids des photons en unsigned long long)
-NBPHOTONS = 100000000000
+NBPHOTONS = 1000000000
 
 # Nombre de boucles dans le kernel (unsigned int) (limite par watchdog, il faut tuer X)
-NBLOOP = 18000
+NBLOOP = 9000
 
 # Angle zenithal solaire en degrés (float)
-THSDEG = 70.
+THSDEG = 30.
 
 # Graine avec laquelle on initialise les generateurs aleatoires (int)
 	# si SEED est positif on l'utilise comme graine (cela permet d'avoir les memes nombres aleatoires d'une simulation a l'autre, et donc une meme simulation)
@@ -19,7 +19,7 @@ SEED = -1
 
 # Les threads sont rangés dans des blocks de taille XBLOCK*YBLOCK (limite par watchdog il faut tuer X + limite XBLOCK*YBLOCK =< 256 ou 512)
 # XBLOCK doit être un multiple de 32
-XBLOCK = 128
+XBLOCK = 256
 YBLOCK = 1
 
 # et les blocks sont eux-même rangés dans un grid de taille XGRID*YGRID (limite par watchdog il faut tuer X + limite XGRID<65535 et YGRID<65535)
@@ -36,7 +36,7 @@ NBPHI = 180
 LAMBDA = 443.
 
 # Epaisseur optique moleculaire (Rayley) (float)
-TAURAY = 0.236
+TAURAY = 0.0533
 
 # Epaisseur optique aerosol (float)
 TAUAER = 0.
@@ -60,7 +60,7 @@ NFOCE = 10000000
 	# 0 : profil standard avec echelle de hauteur
 	# 3 : profil à 2 ou 3 couches (comme dans les SOS)
 	# 2 : profil utilisateurs, Attention au bon format -> commencer les données sur la 2ème ligne à la couche 0
-PROFIL = 2
+PROFIL = 0
 
 # Echelle de hauteur aerosol [km] (utilise si PROFIL=0) (float)
 HA = 2.0
@@ -93,13 +93,13 @@ NH2O = 1.33
 	# 1 pour atmosphere et dioptre
 	# 2 pour atmosphere dioptre et ocean
 	# 3 pour ocean seul
-SIM = 3
+SIM = 1
 
 # Type de reflexion de la surface (pour l'instant implémentation uniquement du cas 1)
 	# 1 pour reflexion speculaire sur le dioptre
 	# 2 pour reflexion diffuse de l'ocean
 	# 3 pour les deux
-SUR = 3
+SUR = 1
 
 # Type de dioptre 
 	# 0=plan
@@ -120,7 +120,7 @@ DIFFF = 0
 # Chemin du fichier de sortie, sans le dernier '/'
 # Si le flag NOMAUTO est activé, une grande partie du chemin est automatiquement créé afin de simplifier la classification des
 # resultats
-PATHRESULTATSHDF = validation/SPHERIQUE
+PATHRESULTATSHDF = validation/PARALLELE
 
 # Chemin du fichier témoin (Le .hdf et les détails de la simulation sont ajoutés par le programme automatiquement)
 #PATHTEMOINHDF = validation/SPHERIQUE/

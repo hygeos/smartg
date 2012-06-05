@@ -1141,8 +1141,8 @@ __device__ void calculDiffScatter( Photon* ph, float* cTh, float* faer, float* f
 	}
 	}
 	else{	/* Photon dans l'océan */
-		float p1, p2, p3, p4;
-		float u, v;
+		float p1, p2, p3;
+		float u;
 		
 		zang = RAND*(NFOCEd-2);
 		iang = __float2int_rd(zang);
@@ -1156,16 +1156,13 @@ __device__ void calculDiffScatter( Photon* ph, float* cTh, float* faer, float* f
 		p2 = foce[iang*5+0];
 		p1 = foce[iang*5+1];
 		p3 = foce[iang*5+2];
-		p4 = foce[iang*5+3];
 		
 
 		ph->weight  *= 2.0f*__fdividef( (stokes1*p1+stokes2*p2) , stokes1+stokes2)*W0OCEd;
 		ph->stokes1 *= 2.0f*p1;
 		ph->stokes2 *= 2.0f*p2;
 		u = ph->stokes3;
-		v = ph->stokes4;
-		ph->stokes3 = p3*u + p4*v;
-		ph->stokes4 = -p4*u + p3*v;
+		ph->stokes3 = p3*u;
 		
 		
 		/**  **/
@@ -1183,6 +1180,7 @@ __device__ void calculDiffScatter( Photon* ph, float* cTh, float* faer, float* f
 				ph->loc = ABSORBED;
 			}
 		}
+		
 	}
 
 }
@@ -1332,11 +1330,6 @@ __device__ void surfaceAgitee(Photon* ph
 	ny = sBeta*__sinf( alpha );
 	
 	// Projection de la surface apparente de la facette sur le plan horizontal		
-	// float signvz = __fdividef(abs( ph->vz), ph->vz);
-	// bool testn = ( ph->vz > 0.F );
-	// nind = testn*__fdividef(1.F,NH2Od) + !testn*NH2Od;
-	// nz = -signvz*cBeta;
-	// ph->weight *= -__fdividef(abs(nx*ph->vx + ny*ph->vy + nz*ph->vz),ph->vz*nz);
 	if( ph->vz > 0 ){
 		nind = __fdividef(1.f,NH2Od);
 		nz = -cBeta;
@@ -1382,10 +1375,10 @@ __device__ void surfaceAgitee(Photon* ph
 	
 	}
 
-	ncTh = nind*cTh;
 	if( sTh<=nind){
 		temp = __fdividef(sTh,nind);
 		cot = sqrtf( 1.0F - temp*temp );
+		ncTh = nind*cTh;
 		ncot = nind*cot;
 		rpar = __fdividef(cot - ncTh,cot + ncTh);
 		rper = __fdividef(cTh - ncot,cTh + ncot);
@@ -1406,7 +1399,7 @@ __device__ void surfaceAgitee(Photon* ph
 
 	
 	if( (ReflTot==1) || (SURd==1) || ( (SURd==3)&&(RAND<rat) ) ){
-		//Nouveau parametre pour le photon apres reflexion speculaire
+		//Nouveau parametre pour le photon apres reflexion
 		
 		// Le photon change de milieu
 		if(ph->vz<0){
@@ -1429,7 +1422,6 @@ __device__ void surfaceAgitee(Photon* ph
 		
 		ph->stokes1 *= rper2;
 		ph->stokes2 *= rpar2;
-		ph->stokes4 *= -rpar*rper;
 		ph->stokes3 *= -rpar*rper;
 		
 		ph->vx += 2.F*cTh*nx;
@@ -1441,17 +1433,17 @@ __device__ void surfaceAgitee(Photon* ph
 		
 		
 		// Suppression des reflexions multiples
-		// if( (ph->vz<0) && (DIOPTREd==2) && (SIMd!=0 && SIMd!=2 && SIMd!=3) ){
-			// ph->loc = ABSORBED;
-		// }
+		if( (ph->vz<0) && (DIOPTREd==2) && (SIMd!=0 && SIMd!=2 && SIMd!=3) ){
+			ph->loc = ABSORBED;
+		}
 		
 		if( SURd==1 ){ /*On pondere le poids du photon par le coefficient de reflexion dans le cas 
 			// d'une reflexion speculaire sur le dioptre (mirroir parfait)*/
 			ph->weight *= rat;
-		}	
+		}
 	}
 	else{	// Transmission par le dioptre
-		
+
 		// Le photon change de milieu
 		if(ph->vz<0){
 			if( SIMd==-1 || SIMd==1 ){
@@ -1476,7 +1468,6 @@ __device__ void surfaceAgitee(Photon* ph
 		ph->stokes2 *= tpar*tpar;
 		ph->stokes1 *= tper*tper;
 		ph->stokes3 *= -tpar*tper;
-		ph->stokes4 *= -tpar*tper;
 		
 		
 		alpha  = __fdividef(cTh,nind) - cot;
