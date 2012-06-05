@@ -39,7 +39,7 @@ int initRandMWC(unsigned long long *etat, unsigned int *config,
 	unsigned int fora,tmp1,tmp2;
 	if (strlen(safeprimes_file) == 0)
 	{
-        	// Try to find it in the local directory
+        // Try to find it in the local directory
 		safeprimes_file = "MWC.txt";
 	}
 	fp = fopen(safeprimes_file, "r");
@@ -210,14 +210,10 @@ void initConstantesHost(int argc, char** argv)
 		DIFFF = atoi(s);
 	}
 	
-	if( argc>2){ // Il est possible de rentrer theta à la main, utile pour debug et boucle shell
-		THSDEG = atof(argv[2]);
-	}
-	else{
-		strcpy(s,"");
-		chercheConstante(parametres, "THSDEG", s);
-		THSDEG = atof(s);
-	}
+	
+	strcpy(s,"");
+	chercheConstante(parametres, "THSDEG", s);
+	THSDEG = atof(s);
 	
 	strcpy(s,"");
 	chercheConstante(parametres, "LAMBDA", s);
@@ -292,9 +288,15 @@ void initConstantesHost(int argc, char** argv)
 	CONPHY = atof(s);
 	
 	chercheConstante(parametres, "PATHRESULTATSHDF", PATHRESULTATSHDF);
-	// Remplir automatiquement le nom complet du fichier
+	
+	#if !defined(NOMAUTO) && defined(TEMOIN)
+	chercheConstante(parametres, "PATHTEMOINHDF", PATHTEMOINHDF);
+	#endif
+	
+	#ifdef NOMAUTO
+// 	Remplir automatiquement le nom complet du fichier
 	definirNomFichier(s);
-// 	chercheConstante(parametres, "PATHTEMOINHDF", PATHTEMOINHDF);
+	#endif
 
 	chercheConstante( parametres, "PATHDIFFAER", PATHDIFFAER );
 	
@@ -339,13 +341,13 @@ void chercheConstante(FILE* fichier, char* nomConstante, char* chaineValeur)
 	
 	if(motTrouve == 0)
 	{
-		printf("ERREUR : lecture Parametres.txt\n");
+		printf("ERREUR : lecture fichier paramètres - Constante manquante: %s\n",nomConstante);
 		exit(1);
 	}
-	
 }
 
 
+#ifdef NOMAUTO
 /* definirNomFichier
 * Le nom du fichier de sorti est créé automatiquement en fonction du type de simulation
 * Il est également stoké dans un dossier en fonction de la date est du type de simulation
@@ -456,6 +458,7 @@ void definirSimulation( char* s){
 	else
 		sprintf(s,"SIM_%d",SIM);
 }
+#endif
 
 
 /* verifierFichier
@@ -472,19 +475,23 @@ void verifierFichier(){
 	{
 		printf("ATTENTION: Le fichier temoin %s existe deja.\n",PATHTEMOINHDF);
 		printf("Voulez-vous le supprimer? [y/n]\n");
-		while( (res_supp!='y')||(res_supp!='n') ){
+		while(1){
 			res_supp=getchar();
 			if( res_supp=='y' ){
 				sprintf(command,"rm %s",PATHTEMOINHDF);
 				system(command);
+				break;
 			}
-			else if( res_supp=='n' ){}
+			else if( res_supp=='n' ){
+				break;
+			}
 			else{
 				printf("Retapez votre choix SVP.\n");
 			}
-			fclose(fic);
+			
 		}
 	}
+	fclose(fic);
 	
 // 	getchar();
 
@@ -524,7 +531,7 @@ void initVariables(Variables** var_H, Variables** var_D)
 	}
 	memset(*var_H, 0, sizeof(Variables));
 	
-	// Initialisation de la version device des variables
+	//	Initialisation de la version device des variables
 	if( cudaMalloc(var_D, sizeof(Variables)) == cudaErrorMemoryAllocation ){
 		printf("ERREUR: Problème de cudaMalloc de var_D dans initVariables\n");
 		exit(1);
@@ -538,24 +545,6 @@ void initVariables(Variables** var_H, Variables** var_D)
 		printf("#--------------------#\n");
 		exit(1);
 	}
-	
-	
-	// var_H est une variable page-locked accessible par le device
-// 	if( cudaHostAlloc( var_H, sizeof(Variables), cudaHostAllocPortable ) != cudaSuccess ){
-// 		printf("#--------------------#\n");
-// 		printf("ERREUR: Problème d'allocation de var_H dans initVariables\n");
-// 		printf("#--------------------#\n");
-// 		exit(1);
-// 	}
-	
-	// Un pointeur est associé pour travailler sur le device
-// 	err = cudaHostGetDevicePointer( var_D, *(var_H) ,0); 
-// 	if( err != cudaSuccess ){
-// 		printf("#--------------------#\n");
-// 		printf("ERREUR: Problème de mappage de var_D dans initVariables\n");
-// 		printf("#--------------------#\n");
-// 		exit(1);
-// 	}
 
 }
 
@@ -593,50 +582,31 @@ void reinitVariables(Variables* var_H, Variables* var_D)
 */
 void initInit(Init** init_H, Init** init_D)
 {
-// 		Initialisation de la version host des variables
+	// 	Initialisation de la version host des variables
 	*init_H = (Init*)malloc(sizeof(Init));
 	if( init_H == NULL ){
 	printf("#--------------------#\n");
 	printf("ERREUR: Problème de malloc de init_H dans initInit\n");
 	printf("#--------------------#\n");
 	exit(1);
-   	}
-   	memset(*init_H, 0, sizeof(Init));
+	}
+	memset(*init_H, 0, sizeof(Init));
    
-   // Initialisation de la version device des variables
-   if( cudaMalloc(init_D, sizeof(Init)) == cudaErrorMemoryAllocation ){
+	//	Initialisation de la version device des variables
+	if( cudaMalloc(init_D, sizeof(Init)) == cudaErrorMemoryAllocation ){
 	   printf("ERREUR: Problème de cudaMalloc de init_D dans initInit\n");
 	   exit(1);
-   }
-   
-   cudaError_t err = cudaMemset(*(init_D), 0, sizeof(Init));
-   if( err != cudaSuccess ){
+	}
+
+	cudaError_t err = cudaMemset(*(init_D), 0, sizeof(Init));
+	if( err != cudaSuccess ){
 	   printf("#--------------------#\n");
 	   printf("# ERREUR: Problème de cudaMemset init_D dans initInit\n");
 	   printf("# Nature de l'erreur: %s\n",cudaGetErrorString(err) );
 	   printf("#--------------------#\n");
 	   exit(1);
-   }
-   
-   
-   
-//    // var_H est une variable page-locked accessible par le device
-//    if( cudaHostAlloc( var_H, sizeof(Variables), cudaHostAllocPortable ) != cudaSuccess ){
-// 	   printf("#--------------------#\n");
-// 	   printf("ERREUR: Problème d'allocation de var_H dans initVariables\n");
-// 	   printf("#--------------------#\n");
-// 	   exit(1);
-//    }
-   
-   // Un pointeur est associé pour travailler sur le device
-   // 	err = cudaHostGetDevicePointer( var_D, *(var_H) ,0); 
-   // 	if( err != cudaSuccess ){
-   // 		printf("#--------------------#\n");
-   // 		printf("ERREUR: Problème de mappage de var_D dans initVariables\n");
-   // 		printf("#--------------------#\n");
-   // 		exit(1);
-   // 	}
-   
+	}
+
 }
 #endif
 
@@ -731,13 +701,6 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	// Initialisation du tableau des etats dans le kernel
 	initRandMTEtat<<<XGRID * YGRID, XBLOCK * YBLOCK>>>(tab_D->etat, tab_D->config);
 	#endif
-	
-	//if( cudaHostAlloc( &(tab_H->tabPhotons), 4*NBTHETA*NBPHI*sizeof(*(tab_H->tabPhotons)), cudaHostAllocPortable ) !=cudaSuccess){
-	// 		printf("#--------------------#\n");
-	// 		printf("ERREUR: Problème d'allocation de tab_H->tabPhotons dans initTableaux\n");
-	// 		printf("#--------------------#\n");
-	// 		exit(1);
-	// 	}
 	
 	// Tableau du poids des photons ressortis
 	tab_H->tabPhotons = (float*)malloc(4*NBTHETA * NBPHI * sizeof(*(tab_H->tabPhotons)));
@@ -1052,15 +1015,11 @@ void calculFaer( const char* nomFichier, Tableaux* tab_H, Tableaux* tab_D ){
 	// Normalisation
 	for(iang=0; iang<LSAAER; iang++){
 		scum[iang] = scum[iang]/scum[LSAAER-1];
-// 		printf("scum[%d]=%10.10lf\n",iang,scum[iang] );
-// 		if( scum[iang] == 1 )
-// 			printf("Egal 1, iang=%d\n",iang);
 	}
 	
 	/** Calcul des faer **/
 	for(iang=0; iang<NFAER-1; iang++){
 		z = double(iang+1)/double(NFAER);
-// 		ipf=0;	// NOTE: Surement inutile
 		while( (scum[ipf+1]<z) && ipf<(LSAAER-1) )
 			ipf++;
 		
@@ -1117,14 +1076,6 @@ void verificationFAER( const char* nomFichier, Tableaux tab){
 }
 
 
-/* calculFoce
-* Calcul de la fonction de phase dans l'océan
-*/
-// void calculFoce( const char* nomFichier, Tableaux* tab_H, Tableaux* tab_D ){
-// 
-// }
-
-
 /* profilAtm
 * Calcul du profil atmosphérique dans l'atmosphère en fonction de la couche
 * Mélange Molécule/Aérosol dans l'atmosphère en fonction de la couche
@@ -1132,15 +1083,14 @@ void verificationFAER( const char* nomFichier, Tableaux tab){
 void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 
 	/** Déclaration des variables **/
-	/*NOTE: différence avec le code fortran: je n'utilise pas int ncouche */
 	
 	float tauMol[NATM+1];	// Epaisseur optique des molécules à chaque couche
 	float tauAer[NATM+1];	// Epaisseur optique des aérosols à chaque couche
 	int i=0;
-	float va=0, vr=0;	// Variables tampons
-	cudaError_t erreur;	// Permet de tester le bon déroulement des opérations mémoires
+	float va=0, vr=0;		// Variables tampons
+	cudaError_t erreur;		// Permet de tester le bon déroulement des opérations mémoires
 	#ifndef SPHERIQUE
-	float z;	// Variable représentant l'altitude
+	float z;				// Variable représentant l'altitude
 	z = HATM;
 	#endif
 	
@@ -1451,7 +1401,7 @@ void impactInit(Init* init_H, Init* init_D, Tableaux* tab_H, Tableaux* tab_D){
 	rdelta = 4.*RTER*RTER + 4.*( tan(thss)*tan(thss)+1. )*( HATM*HATM + 2.*HATM*RTER );
 	localh = ( -2.*RTER+sqrt(rdelta) )/( 2.*(tan(thss)*tan(thss)+1.) );
 	
-	init_H->x0 = (float)localh*tan(thss);
+	init_H->x0 = (float) localh*tan(thss);
 	init_H->y0 = 0.f;
 	init_H->z0 = (float) RTER + localh;	
 	
@@ -1672,17 +1622,17 @@ void afficheProgress(unsigned long long nbPhotonsTot, Variables* var, double tem
 	printf("  Temps restant  : %d h %2d min %2d sec\n", hRestantes, minRestantes, secRestantes);
 	printf("  Date actuelle  : %02u/%02u/%04u %02u:%02u:%02u\n", date->tm_mday, date->tm_mon+1, 1900 + date->tm_year, date->tm_hour,
 		   date->tm_min, date->tm_sec);
-		   printf(" --------------------------------------\n");
-		   
-		   #ifdef PROGRESSION
-		   printf("%d%% - ", (int)(100*nbPhotonsTot/NBPHOTONS));
-		   printf("Temps: %d - ", tempsEcoule);
-		   printf("phot sortis: %lu - ", nbPhotonsSorTot);
-		   printf("phot traités: %lu - ", nbPhotonsTot);
-		   printf("erreur poids/theta/vxy/vy/case: %d/%d/%d/%d/%d", var->erreurpoids, var->erreurtheta, var->erreurvxy,
-var->erreurvy,		   var->erreurcase);
-		   printf("\n");
-		   #endif
+	printf(" --------------------------------------\n");
+   
+	#ifdef PROGRESSION
+	printf("%d%% - ", (int)(100*nbPhotonsTot/NBPHOTONS));
+	printf("Temps: %d - ", tempsEcoule);
+	printf("phot sortis: %lu - ", nbPhotonsSorTot);
+	printf("phot traités: %lu - ", nbPhotonsTot);
+	printf("erreur poids/theta/vxy/vy/case: %d/%d/%d/%d/%d", var->erreurpoids, var->erreurtheta, var->erreurvxy,
+		var->erreurvy, var->erreurcase);
+	printf("\n");
+	#endif
 }
 
 
@@ -2066,21 +2016,14 @@ identiques a chaque lancement.\n");
 			int startTab[nbDimsTab], edgesTab[nbDimsTab]; //debut et fin de la lecture du tableau
 			startTab[0] = 0;
 			edgesTab[0] = 4*NBTHETA * NBPHI;
-// 			float tabPhotonsTotRecup[4*NBTHETA * NBPHI]; //tableau de récuperation en float
 	
-			int status = SDreaddata (sdsTab, startTab, NULL, edgesTab, (VOIDP)tabPhotonsTot/*Recup*/);
+			int status = SDreaddata (sdsTab, startTab, NULL, edgesTab, (VOIDP)tabPhotonsTot);
 			// Vérification du bon fonctionnement de la lecture
 			if(status)
 			{
 				printf("\nERREUR : read hdf temoin\n");
 				exit(1);
 			}
-	
-			// Sauvegarde
-// 			for(int i = 0; i < 4*NBTHETA * NBPHI; i++)
-// 			{
-// 				tabPhotonsTot[i] = tabPhotonsTotRecup[i];
-// 			}
 			
 		}
 		// Fermeture du tableau
@@ -2227,7 +2170,6 @@ void creerHDFResultats(float* tabFinal, float* tabTh, float* tabPhi,unsigned lon
 	for(int i = 0; i < NBTHETA*NBPHI; i++){
 		tab[i] = sqrtf( tabFinal[1*NBTHETA*NBPHI+i]*tabFinal[1*NBTHETA*NBPHI+i] +
 						tabFinal[2*NBTHETA*NBPHI+i]*tabFinal[2*NBTHETA*NBPHI+i] );
-		// 	printf("[%d]\tQ= %17.17f\tU= %17.17f\tLP=%17.17f\n",i,tabFinal[1*NBTHETA*NBPHI+i],tabFinal[2*NBTHETA*NBPHI+i],tab[i]);
 	}
 	
 	// Création du tableau

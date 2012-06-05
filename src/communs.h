@@ -1,6 +1,7 @@
 
 #ifndef COMMUNS_H
 #define COMMUNS_H
+
 /**********************************************************
 *
 *			communs.h
@@ -55,9 +56,6 @@
 #define VALMIN 0.000001F
 
 
-#define DEPO 0.0279F
-
-
 /* Mathématiques */
 #define PI 3.1415927F
 //3.141 592 653 589F
@@ -78,8 +76,8 @@
 #define OCEAN		5
 
 
-/* Constante pour le calcul de la fonction de phase des aérosols */
-#define NFAER_c 1000000
+/* Paramètres pour l'océan */
+#define DEPO 0.0279F
 
 
 /* Constantes propres au calcul sphérique */
@@ -210,7 +208,6 @@ typedef struct __align__(16)
 * Contient toutes les variables qui sont renvoyées dans le host depuis le device suite
 * à l'execution d'un kernel
 */
-
 typedef struct __align__(16)
 {
 	unsigned long long nbPhotons;	// Nombre de photons traités pour un appel du Kernel
@@ -231,7 +228,6 @@ typedef struct __align__(16)
 /* ConfigMT
 * Paramètres pour la fonction random Mersenne Twister
 */
-
 typedef struct {
 	unsigned int matrix_a;
 	unsigned int mask_b;
@@ -243,7 +239,6 @@ typedef struct {
 /* EtatMT
 * Etat du générateur pour la fonction random Mersenne Twister
 */
-
 typedef struct {
 	unsigned int mt[MT_NN];
 	int iState;
@@ -255,7 +250,6 @@ typedef struct {
 * Ensemble des tableaux envoyés par le host dans le device
 * tabPhotons est également modifié par le kernel pour sauver les paramètres de stokes du photon sorti dans l'espace
 */
-
 typedef struct __align__(16)
 {
 	float* tabPhotons;		// Tableau contenant l'ensemble des paramètres de stokes des photons sortis dans l'espace
@@ -295,7 +289,6 @@ typedef struct __align__(16)
 * Paramètres initiaux du photon lors du premier impact avec l'atmosphère
 * Les calculs sont effectués dans host.cu une seule fois
 */
-
 typedef struct __align__(16){
 	
 	/* Coordonnées initiales */
@@ -313,12 +306,12 @@ typedef struct __align__(16){
 /* Evnt
 * DEBUG permet de recuperer des infos sur certains photons
 */
-
 typedef struct __align__(16)
 {
 	int action;
 	float tau;
 	float poids;
 }Evnt;
+
 
 #endif	// COMMUNS_H

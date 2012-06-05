@@ -1,16 +1,17 @@
 
-	  //////////////
-	 // INCLUDES //
-	//////////////
+/**********************************************************
+*	> Includes
+***********************************************************/
 
 #include "main.h"
 #include "communs.h"
 #include "device.h"
 #include "host.h"
 
-	  ///////////////////
-	 // FONCTION MAIN //
-	///////////////////
+
+/**********************************************************
+*	> Fonction main
+***********************************************************/
 
 // Fonction principale
 int main (int argc, char *argv[])
@@ -220,18 +221,18 @@ int main (int argc, char *argv[])
 		
 		/** Récupération des variables et d'un tableau envoyés dans le kernel **/
 		cudaErreur = cudaMemcpy(var_H, var_D, sizeof(Variables), cudaMemcpyDeviceToHost);
-// 		cudaErreur = cudaMemcpyAsync( var_H, var_D, sizeof(Variables),cudaMemcpyDeviceToHost , stream1 );
 		if( cudaErreur != cudaSuccess ){
 			printf("#--------------------#\n");
 			printf("# ERREUR: Problème de copie var_D dans le main\n");
 			printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-// 			printf("#	sizeof(*var_D)=%d\tsizeof(*var_H)=%d\tsizeof(*Variables)=%d\n",
-// 					sizeof(*var_D),sizeof(*var_H),sizeof(Variables));
-// 			printf("# Adresse pointée par var_D : %p\tAdresse pointée par var_H : %p\n", var_H, var_D);
 			printf("#--------------------#\n");
 			exit(1);
 		}
 
+
+		// On remplit les variables et tableau qui restent dans le host
+		nbPhotonsTot += var_H->nbPhotons;
+		
 		#ifdef TEMOIN
 		cudaErreur = cudaMemcpy(tab_H.tabPhotons, tab_D.tabPhotons, 4*NBTHETA * NBPHI * sizeof(*(tab_H.tabPhotons)),
 cudaMemcpyDeviceToHost);
@@ -248,9 +249,6 @@ cudaMemcpyDeviceToHost);
 		creerHDFTemoin(tabPhotonsTot, nbPhotonsTot,var_H, tempsPrec);
 		#endif
 
-
-		// On remplit les variables et tableau qui restent dans le host
-		nbPhotonsTot += var_H->nbPhotons;
 		
 		#ifdef PROGRESSION
 		nbPhotonsSorTot += var_H->nbPhotonsSor;
@@ -312,8 +310,9 @@ cudaMemcpyDeviceToHost);
 	#endif
 	
 	
-	/** Création et calcul du tableau final (regroupant le poids de tous les photons ressortis sur une demi-sphère, par unité de
-surface) **/	
+	/** Création et calcul du tableau final (regroupant le poids de tous les photons ressortis sur une demi-sphère,
+	 * par unité de surface) 
+	**/	
 	// Remplissage des 3 tableaux
 	calculTabFinal(tabFinal, tabTh, tabPhi, tabPhotonsTot, nbPhotonsTot);
 
@@ -347,7 +346,6 @@ surface) **/
 	}
 
 	free(var_H);
-// 	cudaFreeHost(var_H);
 
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
 	cudaErreur = cudaFree(init_D);

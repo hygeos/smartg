@@ -20,12 +20,14 @@ import numpy as np
 #
 #-----------------------------------------------------------------------------------------------------------------------
 type_simu = "molecules_dioptre_agite"
-date_simu = "24042012"
-angle = "70"
+date_simu = "16052012"
+angle = "30"
+geometrie = "SPHERIQUE"		#Géométrie de l'atmosphère
+
 # Nom du fichier Cuda sans extension .hdf
-nom_cuda1 = "out_CUDA_3"
+nom_cuda1 = "out_CUDA_atmos_dioptre_agite_ths=30.00_tRay=0.0533_tAer=0.0000_ws=5.00_v1.2"
 # Nom du fichier Fortran sans l'extension .bin.gz
-nom_cuda2 = "out_CUDA_1"
+nom_cuda2 = "out_CUDA_atmos_dioptre_agite_ths=30.00_tRay=0.0533_tAer=0.0000_ws=5.00"
 
 
 # Indices ci-dessus ont été mis en place car ils permettent de rogner la simulation si nécessaire.
@@ -73,15 +75,15 @@ print 'C\'est parti pour la simulation de {0}'.format(type_donnees)
 ######################################################
 
 # Nom complet du fichier Fortran
-path_cuda1 = "/home/florent/MCCuda/validation/SPHERIQUE/"+type_simu+"/simulation_"+date_simu+"/"+ nom_cuda1+".hdf"
+path_cuda1 = "/home/florent/MCCuda/validation/"+geometrie+"/"+type_simu+"/simulation_"+date_simu+"/"+ nom_cuda1+".hdf"
 
 # Nom complet du fichier Cuda
-path_cuda2 = "/home/florent/MCCuda/validation/SPHERIQUE/"+type_simu+"/simulation_"+date_simu+"/" + nom_cuda2 + ".hdf"
+path_cuda2 = "/home/florent/MCCuda/validation/"+geometrie+"/"+type_simu+"/simulation_"+date_simu+"/" + nom_cuda2 + ".hdf"
 #path_cuda = "/home/florent/MCCuda/validation/SPHERIQUE/test/"+nom_cuda
 
 # Si le dossier suivant existe deja il est supprime puis recree
 path_dossier_sortie = \
-"/home/florent/MCCuda/validation/SPHERIQUE/"+type_simu+"/graph_"+date_simu+"/"+type_donnees+"/"+type_donnees+"_CUDA_CUDA_"+\
+"/home/florent/MCCuda/validation/"+geometrie+"/"+type_simu+"/graph_"+date_simu+"/"+type_donnees+"/"+type_donnees+"_CUDA_CUDA_"+\
 nom_cuda1
 
 

@@ -49,6 +49,7 @@ void initConstantesHost(int, char**);
 void chercheConstante(FILE* fichier, char* nomConstante, char* chaineValeur);
 
 
+#ifdef NOMAUTO
 /* definirNomFichier
 * Le nom du fichier de sorti est créé automatiquement en fonction du type de simulation
 * Il est également stoké dans un dossier en fonction de la date est du type de simulation
@@ -61,6 +62,7 @@ void definirNomFichier( char* s );
 * Défini le type de simulation pour la création du chemin et le nom du fichier résultat
 */
 void definirSimulation( char* s);
+#endif
 
 
 /* verifierFichier
@@ -122,12 +124,6 @@ void calculFaer( const char* nomFichier, Tableaux* tab_H, Tableaux* tab_D );
 * Permet de valider le bon calcul de la fonction de phase
 */
 void verificationFAER( const char* nomFichier, Tableaux tab_H );
-
-
-/* calculFoce
-* Calcul de la fonction de phase dans l'océan
-*/
-// void calculFoce( const char* nomFichier, Tableaux* tab_H, Tableaux* tab_D );
 
 
 /* profilAtm

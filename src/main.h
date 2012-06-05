@@ -1,23 +1,27 @@
 
-	  /////////////////////////////
-	 // CONSTANTES FICHIER HOST //
-	/////////////////////////////
+/**********************************************************
+*
+*			main.h
+*
+*	> Définition des variables externes
+*
+***********************************************************/
 
 // Creation des constantes du host (parametres de la 
 unsigned long long NBPHOTONS; //Nombre de photons a lancer
 unsigned int NBLOOP; //Nombre de boucles dans le kernel
-int SEED; //Graine pour les fonctions random, si SEED=-1 on choisit une graine aléatoirement
-int XBLOCK; //Longueur du bloc de threads
-int YBLOCK; //Hauteur du block de threads
-int XGRID; //Longueur de la grid de blocks
-int YGRID; //Hauteur de la grid de blocks
-int NBTHETA; //Nombre de cases du tableau final pour theta (0..PI/2)
-int NBPHI; //Nombre de cases du tableau final pour phi (0..2*PI)
-int DIOPTRE; //Type de dioptre (0=plan, 1=agite)
-int DIFFF; //Forcage de la premiere diffusion (0=non, 1=oui) (utilise si SIM=-2)
-int PROFIL; //Type de profil atmospherique
-int SIM; //Type de simulation
-int SUR; //Type de reflexion de la surface
+int SEED; 		//Graine pour les fonctions random, si SEED=-1 on choisit une graine aléatoirement
+int XBLOCK; 	//Longueur du bloc de threads
+int YBLOCK; 	//Hauteur du block de threads
+int XGRID; 		//Longueur de la grid de blocks
+int YGRID; 		//Hauteur de la grid de blocks
+int NBTHETA; 	//Nombre de cases du tableau final pour theta (0..PI/2)
+int NBPHI; 		//Nombre de cases du tableau final pour phi (0..2*PI)
+int DIOPTRE; 	//Type de dioptre (0=plan, 1=agite)
+int DIFFF; 		//Forcage de la premiere diffusion (0=non, 1=oui) (utilise si SIM=-2)
+int PROFIL; 	//Type de profil atmospherique
+int SIM; 		//Type de simulation
+int SUR; 		//Type de reflexion de la surface
 
 unsigned int LSAAER;	// Nombre d'échantillons pour les angles du modèle de diffusion aérosols
 unsigned int NFAER;

@@ -1,17 +1,16 @@
+##############################################################
+##				PARAMETRES DE LA SIMULATION					##
+##############################################################
 
-          ###############################
-         # PARAMETRES DE LA SIMULATION #
-        ###############################
 
 # Nombre de photons a lancer (unsigned long long) (limite par le tableau du poids des photons en unsigned long long)
-NBPHOTONS = 500000000
+NBPHOTONS = 10000000000
 
 # Nombre de boucles dans le kernel (unsigned int) (limite par watchdog, il faut tuer X)
-# ancien 18000
 NBLOOP = 18000
 
 # Angle zenithal solaire en degrés (float)
-THSDEG = 30.
+THSDEG = 70.
 
 # Graine avec laquelle on initialise les generateurs aleatoires (int)
 	# si SEED est positif on l'utilise comme graine (cela permet d'avoir les memes nombres aleatoires d'une simulation a l'autre, et donc une meme simulation)
@@ -19,12 +18,12 @@ THSDEG = 30.
 SEED = -1
 
 # Les threads sont rangés dans des blocks de taille XBLOCK*YBLOCK (limite par watchdog il faut tuer X + limite XBLOCK*YBLOCK =< 256 ou 512)
-#256 avant
-XBLOCK = 256
+# XBLOCK doit être un multiple de 32
+XBLOCK = 128
 YBLOCK = 1
+
 # et les blocks sont eux-même rangés dans un grid de taille XGRID*YGRID (limite par watchdog il faut tuer X + limite XGRID<65535 et YGRID<65535)
-#84 avant
-XGRID =84
+XGRID = 84
 YGRID = 1
 
 # Le demi-espace dans lequel on récupère les photons est divisé en boites
@@ -37,10 +36,10 @@ NBPHI = 180
 LAMBDA = 443.
 
 # Epaisseur optique moleculaire (Rayley) (float)
-TAURAY = 0.0533
+TAURAY = 0.236
 
 # Epaisseur optique aerosol (float)
-TAUAER = 0.0
+TAUAER = 0.
 
 # Albedo simple de diffusion des aerosols (float)
 W0AER = 0.966883724738261
@@ -61,7 +60,7 @@ NFOCE = 10000
 	# 0 : profil standard avec echelle de hauteur
 	# 3 : profil à 2 ou 3 couches (comme dans les SOS)
 	# 2 : profil utilisateurs, Attention au bon format -> commencer les données sur la 2ème ligne à la couche 0
-PROFIL = 0
+PROFIL = 2
 
 # Echelle de hauteur aerosol [km] (utilise si PROFIL=0) (float)
 HA = 2.0
@@ -76,7 +75,7 @@ ZMIN = 0.
 ZMAX = 1.
 
 # Nombre de couche ( indiquer le nombre de bornes (cad nbcouche+1) )
-NATM=100
+NATM=103
 
 # Altitude max de l'atmosphère
 HATM=100
@@ -93,7 +92,7 @@ NH2O = 1.33
 	# 0 pour ocean
 	# 1 pour atmosphere et dioptre
 	# 2 pour atmosphere dioptre et ocean
-SIM =0
+SIM = 1
 
 # Type de reflexion de la surface (pour l'instant implémentation uniquement du cas 1)
 	# 1 pour reflexion speculaire sur le dioptre
@@ -106,7 +105,7 @@ SUR = 1
 	# 1=agite avec reflexion multiple
 	# 2=agite sans reflexion multiple
 	# 3=surface lambertienne
-DIOPTRE = 0
+DIOPTRE = 2
 
 # Albedo simple de diffusion de la surface lambertienne (float)
 W0LAM = 0.7
@@ -115,11 +114,12 @@ W0LAM = 0.7
 CONPHY = 0.1
 
 # Forcage de la premiere diffusion (utilise si SIM = -2)
-DIFFF = 1
+DIFFF = 0
 
-# Chemin du fichier de sortie, sans le dernier '/' (Une grande partie du chemin est automatiquement créé afin de simplifier la
-# classification des resultats)
-PATHRESULTATSHDF = validation/PARALLELE
+# Chemin du fichier de sortie, sans le dernier '/'
+# Si le flag NOMAUTO est activé, une grande partie du chemin est automatiquement créé afin de simplifier la classification des
+# resultats
+PATHRESULTATSHDF = validation/SPHERIQUE
 
 # Chemin du fichier témoin (Le .hdf et les détails de la simulation sont ajoutés par le programme automatiquement)
 #PATHTEMOINHDF = validation/SPHERIQUE/
