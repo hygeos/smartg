@@ -45,6 +45,7 @@
 #define MT_SHIFTC 15
 #define MT_SHIFT1 18
 
+
 /* Lié au photon */
 // Poids initial du photon
 #define WEIGHTINIT 1.F
@@ -55,6 +56,7 @@
 // Détecte les photons très proches du zenith
 #define VALMIN 0.000001F
 #define WEIGHTMIN 1.e-5f
+
 
 /* Mathématiques */
 #define PI 3.1415927F
@@ -78,6 +80,7 @@
 
 /* Paramètres pour l'océan */
 #define DEPO 0.0279F
+#define NFOCE_c = 10000000
 
 /* Pour le calcul de la fonction de phase dans l'océan*/
 #define NWAV	71

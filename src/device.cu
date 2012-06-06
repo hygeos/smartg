@@ -987,7 +987,7 @@ rsolfi=%15.12lf - tauRdm= %lf - hph_p= %15.12lf - hph= %15.12lf - zph_p= %15.12l
 * Diffusion du photon par une molécule ou un aérosol
 * Modification des paramètres de stokes et des vecteurs U et V du photon (polarisation, vitesse)
 */
-__device__ void scatter( Photon* ph, float* faer, float* foce
+__device__ void scatter( Photon* ph, const float* __restrict__ faer, const float* __restrict__ foce
 			#ifdef RANDMWC
 			, unsigned long long* etatThr, unsigned int* configThr
 			#endif
@@ -1077,7 +1077,7 @@ __device__ void scatter( Photon* ph, float* faer, float* foce
 * Pour l'optimisation du programme, il est possible d'effectuer un travail de réduction au maximum de cette fonction. L'idée est
 * de calculer et d'utiliser la fonction de phase moléculaire.
 */
-__device__ void calculDiffScatter( Photon* ph, float* cTh, float* faer, float* foce
+__device__ void calculDiffScatter( Photon* ph, float* cTh, const float* __restrict__ faer, const float* __restrict__ foce
 			#ifdef RANDMWC
 			, unsigned long long* etatThr, unsigned int* configThr
 			#endif
