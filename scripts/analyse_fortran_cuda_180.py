@@ -19,16 +19,17 @@ rc('font', family='serif')
 # Paramètres à modifier
 #
 #-----------------------------------------------------------------------------------------------------------------------
-type_simu = "molecules_dioptre_agite"
-date_simu = "05062012"
+type_simu = "dioptre_agite"
+com= "surface agitée - 30 deg"
+date_simu = "21062012"
 angle = "30"
 geometrie = "PARALLELE"		#Géométrie de l'atmosphère
 
 # Nom du fichier Cuda sans extension .hdf
-nom_cuda = "out_CUDA_atmos_dioptre_agite_ths=30.00_tRay=0.0533_tAer=0.0000_ws=5.00"
+nom_cuda = "out_CUDA_dioptre_agite_ths=30.00_ws=5.00"
 
 # Nom du fichier Fortran sans l'extension .bin.gz
-nom_fortran = "out.ran=8880.wav=443.ths=30.000.tr=0.0533.ta=0.0000.pi0=0.967.H=002.000.vent=05.000_sauv"
+nom_fortran = "out_FORTRAN.ths=30.000.ws=5"
 
 # Indices ci-dessus ont été mis en place car ils permettent de rogner la simulation si nécessaire.
 # Les bords peuvent fausser les graphiques.
@@ -303,10 +304,14 @@ grid()
 
 legend()
 
-savefig( path_dossier_sortie+'/global_'+type_donnees+'_Fortran_Cuda.png', dpi=(140) )
 
+
+figtext(0.25, 0.7, com, fontdict=None)
+
+savefig( path_dossier_sortie+'/global_'+type_donnees+'_Fortran_Cuda.png', dpi=(140) )
 ##########
 rc('text', usetex=False)
+
 
 
 if (NBPHI_cuda) == NBPHI_fortran:

@@ -7,7 +7,7 @@
 #include "host.h"
 #include "device.h"
 
-__constant__ float foce_c[5*10000000];
+// __constant__ float foce_c[5*10000000];
 /**********************************************************
 *
 *			host.h
@@ -1326,7 +1326,6 @@ void calculFoce( Tableaux* tab_H, Tableaux* tab_D ){
 	/** Coefficients d'extinction et scattering albedo globaux **/
 	btot = b0 + b1 + b2;
 	atot = a0 + a1 + a2;
-	//~ printf("total abs=%lf\n",atot);
 	
 	/** Absorption totale déduite du coefficient d'atténuation de Morel **/
 	Kd = Kw[ilambda] + Chi[ilambda]*pow(CONPHY,ee[ilambda]);
@@ -1373,22 +1372,22 @@ void calculFoce( Tableaux* tab_H, Tableaux* tab_D ){
 		z = double(iang)/double(NFOCE);
 		while( scum[ipf+1]<z )
 			ipf++;
-		/*tab_H->*/foce_c[iang*5 + 4] = (float) ( (scum[ipf+1]-z)*ang[ipf] + (z-scum[ipf])*ang[ipf+1] )/(scum[ipf+1]-scum[ipf]);
+		tab_H->foce[iang*5 + 4] = (float) ( (scum[ipf+1]-z)*ang[ipf] + (z-scum[ipf])*ang[ipf+1] )/(scum[ipf+1]-scum[ipf]);
 		norm = pf[ipf*4 + 0] + pf[ipf*4 + 1];
-		/*tab_H->*/foce_c[iang*5 + 0] = (float) pf[ipf*4 + 0]/norm;
-		/*tab_H->*/foce_c[iang*5 + 1] = (float) pf[ipf*4 + 1]/norm;
-		/*tab_H->*/foce_c[iang*5 + 2] = (float) pf[ipf*4 + 2]/norm;
-		/*tab_H->*/foce_c[iang*5 + 3] = (float) pf[ipf*4 + 3]/norm;
+		tab_H->foce[iang*5 + 0] = (float) pf[ipf*4 + 0]/norm;
+		tab_H->foce[iang*5 + 1] = (float) pf[ipf*4 + 1]/norm;
+		tab_H->foce[iang*5 + 2] = (float) pf[ipf*4 + 2]/norm;
+		tab_H->foce[iang*5 + 3] = (float) pf[ipf*4 + 3]/norm;
 	}
 	
-	/*tab_H->*/foce_c[(NFOCE-1)*5 + 4] = PI;
-	/*tab_H->*/foce_c[(NFOCE-1)*5 + 0] = 0.5f;
-	/*tab_H->*/foce_c[(NFOCE-1)*5 + 1] = 0.5f;
-	/*tab_H->*/foce_c[(NFOCE-1)*5 + 2] = (float) pf[(LSAOCE-1)*4 + 2]/(pf[(LSAOCE-1)*4 + 0]+pf[(LSAOCE-1)*4 + 1]);
-	/*tab_H->*/foce_c[(NFOCE-1)*5 + 3] = 0.f;
+	tab_H->foce[(NFOCE-1)*5 + 4] = PI;
+	tab_H->foce[(NFOCE-1)*5 + 0] = 0.5f;
+	tab_H->foce[(NFOCE-1)*5 + 1] = 0.5f;
+	tab_H->foce[(NFOCE-1)*5 + 2] = (float) pf[(LSAOCE-1)*4 + 2]/(pf[(LSAOCE-1)*4 + 0]+pf[(LSAOCE-1)*4 + 1]);
+	tab_H->foce[(NFOCE-1)*5 + 3] = 0.f;
 	
 	/** Transfert de foce dans le device **/
-	cudaError_t erreur = cudaMemcpy(tab_D->foce, /*tab_H->*/foce_c, 5*NFOCE*sizeof(*(/*tab_H->*/foce_c)), cudaMemcpyHostToDevice); 
+	cudaError_t erreur = cudaMemcpy(tab_D->foce, tab_H->foce, 5*NFOCE*sizeof(*(tab_H->foce)), cudaMemcpyHostToDevice); 
 	if( erreur != cudaSuccess ){
 		printf( "ERREUR: Problème de copie tab_D->foce dans calculFoce\n");
 		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );

@@ -3,8 +3,9 @@ EXEC = Prog
 
 #=============Options============#  (en fonction de la carte graphique utilisee)
 # CFLAGS = -g -G -arch=sm_10 -O3 -Xptxas -v
-CFLAGS = -g -G -arch=sm_20 -O3 # -Xptxas -v
-#CFLAGS += -gencode arch=compute_20,code=sm_20
+CFLAGS = -g -G -arch=sm_20 -O3 #-Xptxas -v
+# CFLAGS += -gencode arch=compute_20,code=sm_20
+# CFLAGS += -m64
 IFLAGS = -I /usr/local/cuda/include
 IFLAGS += -I /usr/local/NVIDIA_GPU_Computing_SDK/C/common/inc
 IFLAGS += -I /usr/include/hdf/

@@ -114,7 +114,7 @@ int main (int argc, char *argv[])
 	// Calcul de foce, modèle de diffusion dans l'océan
 	if( SIM==0 || SIM==2 || SIM==3 ){
 		calculFoce( &tab_H, &tab_D );
-		verificationFoce( "./test/Foce_test.txt", tab_H );
+// 		verificationFoce( "./test/Foce_test.txt", tab_H );
 	}
 
 	// Calcul du mélange Molécule/Aérosol dans l'atmosphère en fonction de la couche

@@ -4,10 +4,10 @@
 
 
 # Nombre de photons a lancer (unsigned long long) (limite par le tableau du poids des photons en unsigned long long)
-NBPHOTONS = 1000000000
+NBPHOTONS = 10000000000
 
 # Nombre de boucles dans le kernel (unsigned int) (limite par watchdog, il faut tuer X)
-NBLOOP = 9000
+NBLOOP = 18000
 
 # Angle zenithal solaire en degrés (float)
 THSDEG = 30.
@@ -19,6 +19,7 @@ SEED = -1
 
 # Les threads sont rangés dans des blocks de taille XBLOCK*YBLOCK (limite par watchdog il faut tuer X + limite XBLOCK*YBLOCK =< 256 ou 512)
 # XBLOCK doit être un multiple de 32
+# à laisser à 256 (tests d'optimisation effectues)
 XBLOCK = 256
 YBLOCK = 1
 
@@ -93,7 +94,7 @@ NH2O = 1.33
 	# 1 pour atmosphere et dioptre
 	# 2 pour atmosphere dioptre et ocean
 	# 3 pour ocean seul
-SIM = 1
+SIM = -1
 
 # Type de reflexion de la surface (pour l'instant implémentation uniquement du cas 1)
 	# 1 pour reflexion speculaire sur le dioptre

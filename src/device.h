@@ -97,7 +97,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 /* initPhoton
 * Initialise le photon dans son état initial avant l'entrée dans l'atmosphère
 */
-__device__ void initPhoton(Photon* ph
+__device__ void initPhoton(Photon* ph/*, float* z*/
 		#ifdef SPHERIQUE
 		, Tableaux tab, Init* init
 		#endif
@@ -112,15 +112,12 @@ __device__ void initPhoton(Photon* ph
 * Pour l'atmosphère sphèrique, l'algorithme est basé sur la formule de pythagore généralisé
 * Modification des coordonnées position du photon
 */
-__device__ void move(Photon*, Tableaux tab
+__device__ void move(Photon*/*, float* z*/
 		#ifndef SPHERIQUE
-		,int flagDiff
+		,int flagDiff, float* h, float* pMol
 		#endif
 		#ifdef SPHERIQUE
-		, Init* init
-		#endif
-		#ifdef DEBUG
-		, Variables* var
+		, Tableaux tab, Init* init
 		#endif
 		#ifdef RANDMWC
 		, unsigned long long*, unsigned int*
@@ -141,7 +138,7 @@ __device__ void move(Photon*, Tableaux tab
 * Diffusion du photon par une molécule ou un aérosol
 * Modification des paramètres de stokes et des vecteurs U et V du photon (polarisation, vitesse)
 */
-__device__ void scatter(Photon* photon, const float* __restrict__ faer, const float* __restrict__ foce
+__device__ void scatter(Photon* photon, float* faer, float* foce
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif
@@ -153,24 +150,6 @@ __device__ void scatter(Photon* photon, const float* __restrict__ faer, const fl
 		#endif
 		#ifdef TRAJET
 		, int idx, Evnt* evnt
-		#endif
-		);
-
-
-/* calculDiffScatter
-* Regroupe l'ensemble des calculs propre à la diffusion moléculaire ou par les aérosols.
-* Pour l'optimisation du programme, il est possible d'effectuer un travail de réduction au maximum de cette fonction. L'idée est
-* de calculer et d'utiliser la fonction de phase moléculaire
-*/
-__device__ void calculDiffScatter( Photon* photon, float* cTh, const float* __restrict__ faer, const float* __restrict__ foce
-		#ifdef RANDMWC
-		, unsigned long long* etatThr, unsigned int* configThr
-		#endif
-		#ifdef RANDCUDA
-		, curandState_t* etatThr
-		#endif
-		#ifdef RANDMT
-		, EtatMT* etatThr, ConfigMT* configThr
 		#endif
 		);
 
@@ -217,9 +196,9 @@ __device__ void surfaceLambertienne(Photon* photon
 /* exit
 * Sauve les paramètres des photons sortis dans l'espace dans la boite correspondant à la direction de sortie
 */
-__device__ void exit(Photon* , Variables*, Tableaux, unsigned long long*
+__device__ void exit(Photon* , Tableaux, unsigned long long*
 		#ifdef PROGRESSION
-		, unsigned int*
+		, unsigned int*, Variables*
 		#endif
 		#ifdef TRAJET
 		, int, Evnt*
@@ -243,7 +222,11 @@ __device__ void calculPsi(Photon*, float*, float);
 * Fonction qui calcule la position (ith, iphi) du photon dans le tableau de sortie
 * La position correspond à une boite contenu dans l'espace de sortie
 */
-__device__ void calculCase(int*, int*, Photon*, Variables*);
+__device__ void calculCase(int*, int*, Photon*
+				#ifdef PROGRESSION
+				, Variables* var
+				#endif 
+					);
 
 
 /**********************************************************
@@ -261,22 +244,19 @@ void initConstantesDevice();
 *	> Fonctions liées au générateur aléatoire
 ***********************************************************/
 
+#ifdef RANDCUDA
 /* initRandCUDA
 * Fonction qui initialise les generateurs du random cuda
 */
 __global__ void initRandCUDA(curandState_t*, unsigned long long);
+#endif
 
 
+#ifdef RANDMT
 /* initRandMTEtat
 * Fonction qui initialise l'etat des generateurs du random Mersenne Twister (generateur = etat + config)
 */
 __global__ void initRandMTEtat(EtatMT*, ConfigMT*);
-
-
-/* randomMWCfloat
-* Fonction random MWC qui renvoit un float de ]0.1] à partir d'un generateur (x+a)
-*/
-__device__ float randomMWCfloat(unsigned long long*,unsigned int*);
 
 
 /* randomMTfloat
@@ -289,6 +269,15 @@ __device__ float randomMTfloat(EtatMT*, ConfigMT*);
 * Fonction random Mersenne Twister qui renvoit un uint à partir d'un generateur (etat+config)
 */
 __device__ unsigned int randomMTuint(EtatMT*, ConfigMT*);
+#endif
+
+
+#ifdef RANDMWC
+/* randomMWCfloat
+* Fonction random MWC qui renvoit un float de ]0.1] à partir d'un generateur (x+a)
+*/
+__device__ float randomMWCfloat(unsigned long long*,unsigned int*);
+#endif
 
 
 #endif	// DEVICE_H

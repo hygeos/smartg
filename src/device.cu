@@ -28,6 +28,7 @@
 * Les fonctions de plus bas niveau sont appelées en fonction de la localisation du photon
 * Il peut être important de rappeler que le kernel lance tous les threads mais effectue des calculs similaires. La boucle de la
 * fonction va donc être effectuée pour chaque thread du block de la grille
+* A TESTER: Regarder pour effectuer une réduction de l'atomicAdd
 */
 __global__ void lancementKernel(Variables* var, Tableaux tab
 		#ifdef SPHERIQUE
@@ -87,6 +88,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 	
 	Photon ph; 		// On associe une structure de photon au thread
 	ph.loc = NONE;	// Initialement le photon n'est nulle part, il doit être initialisé
+// 	float z;
 	
 	/** Mesure du temps d'execution **/
 	#ifdef TEMPS
@@ -109,7 +111,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 			
 			#endif
 			
-			initPhoton(&ph
+			initPhoton(&ph/*, &z*/
 				#ifdef SPHERIQUE
 				, tab, init
 				#endif
@@ -144,15 +146,12 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 			}
 			#endif
 			
-			move(&ph, tab
+			move(&ph/*, &z*/
 				#ifndef SPHERIQUE
-				,flagDiff
+				,flagDiff, tab.h, tab.pMol
 				#endif
 				#ifdef SPHERIQUE
-				, init
-				#endif
-				#ifdef DEBUG
-				, var
+				, tab, init
 				#endif
 				, &etatThr
 				#if defined(RANDMWC) || defined(RANDMT)
@@ -208,7 +207,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 		// Si le photon est à SURFACE
 		if(ph.loc == SURFACE){
 			
-			if( DIOPTREd!=3 )
+// 			if( DIOPTREd!=3 )
 				surfaceAgitee(&ph, &etatThr
 					#if defined(RANDMWC) || defined(RANDMT)
 					, &configThr
@@ -218,15 +217,15 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 					#endif
 						);
 						
-			else
-				surfaceLambertienne(&ph, &etatThr
-					#if defined(RANDMWC) || defined(RANDMT)
-					, &configThr
-					#endif
-					#ifdef TRAJET
-					, idx, evnt
-					#endif
-						);
+// 			else
+// 				surfaceLambertienne(&ph, &etatThr
+// 					#if defined(RANDMWC) || defined(RANDMT)
+// 					, &configThr
+// 					#endif
+// 					#ifdef TRAJET
+// 					, idx, evnt
+// 					#endif
+// 						);
 		}
 		// Chaque block attend tous ses threads avant de continuer
 		syncthreads();
@@ -241,9 +240,9 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 		syncthreads();
 		
 		if(ph.loc == SPACE){
-			exit(&ph, var, tab, &nbPhotonsThr
+			exit(&ph, tab, &nbPhotonsThr
 						#ifdef PROGRESSION
-						, &nbPhotonsSorThr
+						, &nbPhotonsSorThr, var
 						#endif
 						#ifdef TRAJET
 						, idx, evnt
@@ -266,7 +265,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 	
 
 	// Après la boucle on rassemble les nombres de photons traités par chaque thread
-	atomicAdd(&(var->nbPhotons), nbPhotonsThr);
+	atomicAdd( &(var->nbPhotons), nbPhotonsThr );
 	
 	#ifdef PROGRESSION
 	// On rassemble les nombres de photons traités et sortis de chaque thread
@@ -288,7 +287,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 /* initPhoton
 * Initialise le photon dans son état initial avant l'entrée dans l'atmosphère
 */
-__device__ void initPhoton(Photon* ph
+__device__ void initPhoton(Photon* ph/*, float* z*/
 		#ifdef SPHERIQUE
 		, Tableaux tab, Init* init
 		#endif
@@ -307,12 +306,32 @@ __device__ void initPhoton(Photon* ph
 	ph->uy = 0.F;
 	ph->uz = ph->vx;
 	
+	/** Séparation du code pour atmosphère sphérique ou parallèle **/
+	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
+	ph->locPrec=NONE;
+	
+	// 	Paramètres initiaux calculés dans impactInit - host.cu
+	ph->x = init->x0;
+	ph->y = init->y0;
+	ph->z = init->z0;
+	ph->couche=0;	// Sommet de l'atmosphère
+	ph->rayon = sqrtf(ph->x*ph->x + ph->y*ph->y + ph->z*ph->z );
+	#endif
+	
+	#ifndef SPHERIQUE	/* Code spécifique à une atmosphère en plan parallèle */
+	ph->z = TAUATMd;
+	#endif
+	
 	// Le photon est initialement dans l'atmosphère, et tau peut être vu comme sa hauteur par rapport au sol
 	if( SIMd==3 ){
 		ph->loc=OCEAN;
 	}
-	else if( SIMd==-1 || SIMd==0 )
+	else if( SIMd==-1 || SIMd==0 ){
 		ph->loc = SURFACE;
+		#ifndef SPHERIQUE
+		ph->z = 0.f;
+		#endif
+	}
 	else
 		ph->loc = ATMOS;
 	
@@ -323,25 +342,6 @@ __device__ void initPhoton(Photon* ph
 	ph->stokes2 = 0.5F;
 	ph->stokes3 = 0.F;
 
-
-	/** Séparation du code pour atmosphère sphérique ou parallèle **/
-	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
-	ph->locPrec=NONE;
-	
-// 	Paramètres initiaux calculés dans impactInit - host.cu
-	ph->x = init->x0;
-	ph->y = init->y0;
-	ph->z = init->z0;
-	ph->couche=0;	// Sommet de l'atmosphère
-	ph->rayon = sqrtf(ph->x*ph->x + ph->y*ph->y + ph->z*ph->z );
-	#endif
-	
-	#ifndef SPHERIQUE	/* Code spécifique à une atmosphère en plan parallèle */
-	ph->z = TAUATMd;
-	if( (SIMd==0) || (SIMd==3) ){
-		ph->z = 0.f;
-	}
-	#endif
 	
 	
 	#ifdef TRAJET
@@ -367,15 +367,12 @@ __device__ void initPhoton(Photon* ph
 * Pour l'atmosphère sphèrique, l'algorithme est basé sur la formule de pythagore généralisée.
 * Modification des coordonnées position du photon
 */
-__device__ void move(Photon* ph, Tableaux tab
+__device__ void move(Photon* ph/*, float* z*/
 		#ifndef SPHERIQUE
-		,int flagDiff
+		,int flagDiff, float* h, float* pMol
 		#endif
 		#ifdef SPHERIQUE
-		, Init* init
-		#endif
-		#ifdef DEBUG
-		, Variables* var
+		, Tableaux tab, Init* init
 		#endif
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
@@ -632,7 +629,6 @@ __device__ void move(Photon* ph, Tableaux tab
 				printf("OUPS rdelta #1=%lf - icoucheTemp=%d - tab.z[icoucheTemp]= %16.13lf - rayon= %17.13lf - rayon2=%20.16lf\n\t\
 sinth= %20.19lf - sens=%d\n",\
 				delta, icoucheTemp, tab.z[icoucheTemp], rayon, rayon2, sinth, sens);
-			atomicAdd(&(var->erreurpoids), 1);
 			#endif
 			ph->loc=NONE;
 			return;
@@ -882,40 +878,40 @@ rsolfi=%15.12lf - tauRdm= %lf - hph_p= %15.12lf - hph= %15.12lf - zph_p= %15.12l
 	#ifndef SPHERIQUE	/* Code spécifique à une atmosphère parallèle */
 	float tauBis;
 	
-	if( ph->loc==ATMOS ){
+// 	if( ph->loc==ATMOS ){
 		ph->z += -__logf( flagDiff + RAND*(1.F +(__expf(-TAUMAXd)-2.f)*flagDiff))*ph->vz;
-	}
-	else{
-		ph->z += -logf(1.f - RAND)*ph->vz;
-		if( ph->z < 0.f ){
-			ph->loc = OCEAN;
-		}
-		else{
-			ph->z = 0.F;
-			ph->loc = SURFACE;
-			if( SIMd==3 ){
-				ph->loc=SPACE;
-			}
-		}
-			
-		#ifdef TRAJET
-		// Récupération d'informations sur le premier photon traité
-		if(idx == 0)
-		{
-			int i = 0;
-			// On cherche la première action vide du tableau
-			while(evnt[i].action != 0 && i<NBTRAJET-1) i++;
-			// Et on remplit la première case vide des tableaux (tableaux de 20 cases)
-			// "2"représente l'événement "move" du photon
-			evnt[i].action = 2;
-			// On récupère le tau et le poids du photon
-			evnt[i].poids = ph->weight;
-			evnt[i].tau = ph->z;
-		}
-		#endif
-		
-		return;
-	}
+// 	}
+// 	else{
+// 		ph->z += -logf(1.f - RAND)*ph->vz;
+// 		if( ph->z < 0.f ){
+// 			ph->loc = OCEAN;
+// 		}
+// 		else{
+// 			ph->z = 0.F;
+// 			ph->loc = SURFACE;
+// 			if( SIMd==3 ){
+// 				ph->loc=SPACE;
+// 			}
+// 		}
+// 			
+// 		#ifdef TRAJET
+// 		// Récupération d'informations sur le premier photon traité
+// 		if(idx == 0)
+// 		{
+// 			int i = 0;
+// 			// On cherche la première action vide du tableau
+// 			while(evnt[i].action != 0 && i<NBTRAJET-1) i++;
+// 			// Et on remplit la première case vide des tableaux (tableaux de 20 cases)
+// 			// "2"représente l'événement "move" du photon
+// 			evnt[i].action = 2;
+// 			// On récupère le tau et le poids du photon
+// 			evnt[i].poids = ph->weight;
+// 			evnt[i].tau = ph->z;
+// 		}
+// 		#endif
+// 		
+// 		return;
+// 	}
 	
 	// Si tau<0 le photon atteint la surface
 	if(ph->z < 0.F){
@@ -928,6 +924,17 @@ rsolfi=%15.12lf - tauRdm= %lf - hph_p= %15.12lf - hph= %15.12lf - zph_p= %15.12l
 		ph->loc = SPACE;
 		return;
 	}
+	/////
+// 	if(/*ph->*/*z < 0.F){
+// 		ph->loc = SURFACE;
+// 		/*ph->*/*z = 0.F;
+// 		return;
+// 	}
+// 	// Si tau>TAURAY le photon atteint l'espace
+// 	else if(/*ph->*/*z > TAUATMd){
+// 		ph->loc = SPACE;
+// 		return;
+// 	}
 	
 	// Sinon il reste dans l'atmosphère, et va être traité par scatter
 	
@@ -935,7 +942,7 @@ rsolfi=%15.12lf - tauRdm= %lf - hph_p= %15.12lf - hph= %15.12lf - zph_p= %15.12l
 	tauBis = TAUATMd-ph->z;
 	icouche = 1;
 	
-	while( (tab.h[icouche] < (tauBis))&&(icouche<NATMd) ){
+	while( (h[icouche] < (tauBis))&&(icouche<NATMd) ){
 		icouche++;
 	}
 	
@@ -946,23 +953,29 @@ rsolfi=%15.12lf - tauRdm= %lf - hph_p= %15.12lf - hph= %15.12lf - zph_p= %15.12l
 	icouche = ph->couche;
 	
 	// Calcul sans interpolation
+	#ifdef SPHERIQUE
 	ph->prop_aer = 1.f - tab.pMol[icouche];
+	#endif
+	#ifndef SPHERIQUE
+	ph->prop_aer = 1.f - pMol[icouche];
+	#endif
 	
 	// Calcul avec interpolation linéaire
-	/*if(icouche==0){
-   		printf("ph->couche=0 pour le calcul de proportion d'aérosols\n");
-   		ph->prop_aer = 1.f - tab.pMol[icouche];
-   	}
-	else{
-		rra = __fdividef( tab.pMol[icouche] - tab.pMol[icouche-1] , tab.h[icouche] - tab.h[icouche-1] );
-		#ifdef SPHERIQUE
-		ph->prop_aer = 1.f - ( rra*(ph->rayon - RTER - tab.h[icouche]) + tab.pMol[icouche] );
-		#endif
-		#ifndef SPHERIQUE
-		ph->prop_aer = 1.f - ( rra*(tauBis - tab.h[icouche]) + tab.pMol[icouche] );
-		#endif
-	}
-	*/
+// 	if(icouche==0){
+//    		printf("ph->couche=0 pour le calcul de proportion d'aérosols\n");
+//    		ph->prop_aer = 1.f - pMol[icouche];
+//    	}
+// 	else{
+// 		#ifdef SPHERIQUE
+// 		rra = __fdividef( tab.pMol[icouche] - tab.pMol[icouche-1] , tab.h[icouche] - tab.h[icouche-1] );
+// 		ph->prop_aer = 1.f - ( rra*(ph->rayon - RTER - tab.h[icouche]) + tab.pMol[icouche] );
+// 		#endif
+// 		#ifndef SPHERIQUE
+// 		rra = __fdividef( pMol[icouche] - pMol[icouche-1] , h[icouche] - h[icouche-1] );
+// 		ph->prop_aer = 1.f - ( rra*(tauBis - h[icouche]) + pMol[icouche] );
+// 		#endif
+// 	}
+	
 
 	
 	#ifdef TRAJET
@@ -987,7 +1000,7 @@ rsolfi=%15.12lf - tauRdm= %lf - hph_p= %15.12lf - hph= %15.12lf - zph_p= %15.12l
 * Diffusion du photon par une molécule ou un aérosol
 * Modification des paramètres de stokes et des vecteurs U et V du photon (polarisation, vitesse)
 */
-__device__ void scatter( Photon* ph, const float* __restrict__ faer, const float* __restrict__ foce
+__device__ void scatter( Photon* ph, float* faer, float* foce
 			#ifdef RANDMWC
 			, unsigned long long* etatThr, unsigned int* configThr
 			#endif
@@ -1005,7 +1018,6 @@ __device__ void scatter( Photon* ph, const float* __restrict__ faer, const float
 	float cTh=0.f, sTh, psi, cPsi, sPsi;
 	float wx, wy, wz, vx, vy, vz;
 	
-	
 	psi = RAND * DEUXPI;	//psiPhoton
 	cPsi = __cosf(psi);		//cosPsiPhoton
 	sPsi = __sinf(psi);		//sinPsiPhoton
@@ -1014,39 +1026,146 @@ __device__ void scatter( Photon* ph, const float* __restrict__ faer, const float
 	// Modification des nombres de Stokes
 	modifStokes(ph, psi, cPsi, sPsi, 1);
 	
-	/* Les calculs qui différent pour les aérosols et les molécules sont regroupés dans cette fonction.
+	/* Les calculs qui différent pour les aérosols et les molécules sont regroupés dans cette partie.
 	 * L'idée à termes est de réduire au maximum cette fonction, en calculant également la fonction de phase pour les
 	 * molécules, à la manière des aérosols.
 	*/
-	calculDiffScatter( ph, &cTh, faer, foce
-			#ifdef RANDMWC
-			, etatThr, configThr
-				#endif
-			#ifdef RANDCUDA
-			, etatThr
-			#endif
-			#ifdef RANDMT
-			, etatThr, configThr
-			#endif
-			);
+
+	float zang=0.f, theta=0.f;
+	int iang;
+	float stokes1, stokes2;
+	float cTh2;
+	float prop_aer = ph->prop_aer;
+	
+	stokes1 = ph->stokes1;
+	stokes2 = ph->stokes2;
+	
+	
+	///////// Possible de mettre dans une fonction séparée, mais attention aux performances /////////
+	///////// Faire également attention à bien passer le pointeur de cTh et le modifier dans la fonction /////////
+	if(ph->loc!=OCEAN){
+		
+		if( prop_aer<RAND ){
+			// Theta calculé pour la diffusion moléculaire
+			cTh =  2.F * RAND - 1.F; // cosThetaPhoton
+			cTh2 = (cTh)*(cTh);
+			
+			// Calcul du poids après diffusion
+			ph->weight *= __fdividef(1.5F * ((1.F+GAMAd)*stokes1+((1.F-GAMAd)*cTh2+2.F*GAMAd)*stokes2), (1.F+2.F*GAMAd) *
+			(stokes1+stokes2));
+			// Calcul des parametres de Stokes du photon apres diffusion
+			ph->stokes1 += GAMAd * stokes2;
+			ph->stokes2 = ( (1.F - GAMAd) * cTh2 + GAMAd) * stokes2 + GAMAd * ph->stokes1;
+			ph->stokes3 *= (1.F - GAMAd) * (cTh);
+		}
+		else{
+			// Aérosols
+			zang = RAND*(NFAERd-1);
+			iang= __float2int_rd(zang);
+			
+			zang = zang - iang;
+			/* L'accès à faer[x][y] se fait par faer[y*5+x] */
+			theta = faer[iang*5+4]+ zang*( faer[(iang+1)*5+4]-faer[iang*5+4] );
+			
+			cTh = __cosf(theta);
+			
+			/** Changement du poids et des nombres de stokes du photon **/
+			float faer1 = faer[iang*5+0];
+			float faer2 = faer[iang*5+1];
+			
+			// Calcul du poids après diffusion
+			ph->weight *= __fdividef( 2.0F*(stokes1*faer1+stokes2*faer2) , stokes1+stokes2)*W0AERd;
+			
+			// Calcul des parametres de Stokes du photon apres diffusion
+			ph->stokes1 *= faer1;
+			ph->stokes2 *= faer2;
+			ph->stokes3 *= faer[iang*5+2];
+			// 		photon->stokes4 = 0.F;
+		}
+	}
+	else{	/* Photon dans l'océan */
+		float p1, p2, p3;
+		float u;
+		
+		zang = RAND*(NFOCEd-2);
+		iang = __float2int_rd(zang);
+		zang = zang - iang;
+		/* L'accès à foce[x][y] se fait par foce[y*5+x] */
+		theta = foce[iang*5+4]+ zang*( foce[(iang+1)*5+4]-foce[iang*5+4] );
+		
+		cTh = __cosf(theta);
+		
+		// p1 et p2 sont inversés par cohérence étant donné que le code Fortran d'origine interverti stoke1 et stoke2
+		p2 = foce[iang*5+0];
+		p1 = foce[iang*5+1];
+		p3 = foce[iang*5+2];
+		
+	
+		ph->weight  *= 2.0f*__fdividef( (stokes1*p1+stokes2*p2) , stokes1+stokes2)*W0OCEd;
+		ph->stokes1 *= 2.0f*p1;
+		ph->stokes2 *= 2.0f*p2;
+		u = ph->stokes3;
+		ph->stokes3 = p3*u;
+		
+		
+		/**  **/
+		// if( ph->weight < WEIGHTMIN ){
+		// ph->loc=ABSORBED;
+		// return;
+	// }
+	
+	/** Roulette russe **/
+	if( ph->weight < WEIGHTRR ){
+		if( RAND < __fdividef(ph->weight,WEIGHTRR) ){
+			ph->weight = WEIGHTRR;
+		}
+		else{
+				ph->loc = ABSORBED;
+			}
+		}
+		
+	}
+   
+   ////////// Fin séparation ////////////
 	
 	sTh = sqrtf(1.F - cTh*cTh);	// sinThetaPhoton
 	
 	/** Création de 2 vecteurs provisoires w et v **/
+	float vx_s, vy_s, vz_s, ux_s, uy_s, uz_s;	// Parametres du photon sauves pour optimisation
+	vx_s = ph->vx;
+	vy_s = ph->vy;
+	vz_s = ph->vz;
+	ux_s = ph->ux;
+	uy_s = ph->uy;
+	uz_s = ph->uz;
 	// w est le rotationnel entre l'ancien vecteur u et l'ancien vecteur v du photon
-	wx = ph->uy * ph->vz - ph->uz * ph->vy;
-	wy = ph->uz * ph->vx - ph->ux * ph->vz;
-	wz = ph->ux * ph->vy - ph->uy * ph->vx;
-	
+	wx = uy_s * vz_s - uz_s * vy_s;
+	wy = uz_s * vx_s -ux_s * vz_s;
+	wz = ux_s * vy_s - uy_s * vx_s;
 	// v est le nouveau vecteur v du photon
-	vx = cTh * ph->vx + sTh * ( cPsi * ph->ux + sPsi * wx );
-	vy = cTh * ph->vy + sTh * ( cPsi * ph->uy + sPsi * wy );
-	vz = cTh * ph->vz + sTh * ( cPsi * ph->uz + sPsi * wz );
-
+	vx = cTh * vx_s + sTh * ( cPsi * ux_s + sPsi * wx );
+	vy = cTh * vy_s + sTh * ( cPsi * uy_s + sPsi * wy );
+	vz = cTh * vz_s + sTh * ( cPsi * uz_s + sPsi * wz );
 	// Changement du vecteur u (orthogonal au vecteur vitesse du photon)
-	ph->ux = __fdividef(cTh * vx - ph->vx, sTh);
-	ph->uy = __fdividef(cTh * vy - ph->vy, sTh);
-	ph->uz = __fdividef(cTh * vz - ph->vz, sTh);
+	ph->ux = __fdividef(cTh * vx - vx_s, sTh);
+	ph->uy = __fdividef(cTh * vy - vy_s, sTh);
+	ph->uz = __fdividef(cTh * vz - vz_s, sTh);
+	
+	/////
+	// w est le rotationnel entre l'ancien vecteur u et l'ancien vecteur v du photon
+// 	wx = ph->uy * ph->vz - ph->uz * ph->vy;
+// 	wy = ph->uz * ph->vx - ph->ux * ph->vz;
+// 	wz = ph->ux * ph->vy - ph->uy * ph->vx;
+// 	
+// 	// v est le nouveau vecteur v du photon
+// 	vx = cTh * ph->vx + sTh * ( cPsi * ph->ux + sPsi * wx );
+// 	vy = cTh * ph->vy + sTh * ( cPsi * ph->uy + sPsi * wy );
+// 	vz = cTh * ph->vz + sTh * ( cPsi * ph->uz + sPsi * wz );
+// 
+// 	// Changement du vecteur u (orthogonal au vecteur vitesse du photon)
+// 	ph->ux = __fdividef(cTh * vx - ph->vx, sTh);
+// 	ph->uy = __fdividef(cTh * vy - ph->vy, sTh);
+// 	ph->uz = __fdividef(cTh * vz - ph->vz, sTh);
 	
 	// Changement du vecteur v (vitesse du photon)
 	ph->vx = vx;
@@ -1069,120 +1188,6 @@ __device__ void scatter( Photon* ph, const float* __restrict__ faer, const float
 		evnt[i].tau = ph->z;
 	}
 	#endif
-}
-
-
-/* calculDiffScatter
-* Regroupe l'ensemble des calculs propre à la diffusion moléculaire ou par les aérosols.
-* Pour l'optimisation du programme, il est possible d'effectuer un travail de réduction au maximum de cette fonction. L'idée est
-* de calculer et d'utiliser la fonction de phase moléculaire.
-*/
-__device__ void calculDiffScatter( Photon* ph, float* cTh, const float* __restrict__ faer, const float* __restrict__ foce
-			#ifdef RANDMWC
-			, unsigned long long* etatThr, unsigned int* configThr
-			#endif
-			#ifdef RANDCUDA
-			, curandState_t* etatThr
-			#endif
-			#ifdef RANDMT
-			, EtatMT* etatThr, ConfigMT* configThr
-			#endif
-			){
-
-	float zang=0.f, theta=0.f;
-	int iang;
-	float stokes1, stokes2;
-	float cTh2;
-	float prop_aer = ph->prop_aer;
-	
-	
-	stokes1 = ph->stokes1;
-	stokes2 = ph->stokes2;
-	
-	
-	if(ph->loc!=OCEAN){
-	if( prop_aer<RAND ){
-		// Theta calculé pour la diffusion moléculaire
-		*cTh =  2.F * RAND - 1.F; // cosThetaPhoton
-		cTh2 = (*cTh)*(*cTh);
-
-		// Calcul du poids après diffusion
-		ph->weight *= __fdividef(1.5F * ((1.F+GAMAd)*stokes1+((1.F-GAMAd)*cTh2+2.F*GAMAd)*stokes2), (1.F+2.F*GAMAd) *
-		(stokes1+stokes2));
-		// Calcul des parametres de Stokes du photon apres diffusion
-		ph->stokes1 += GAMAd * stokes2;
-		ph->stokes2 = ( (1.F - GAMAd) * cTh2 + GAMAd) * stokes2 + GAMAd * ph->stokes1;
-		ph->stokes3 *= (1.F - GAMAd) * (*cTh);
-// 		photon->stokes4 = 0.F /*(1.F - 3.F * GAMAd) * (*cTh) * photon->stokes4*/;
-	}
-	else{
-		// Aérosols
-		zang = RAND*(NFAERd-1);
-		iang= __float2int_rd(zang);
-		
-		zang = zang - iang;
-		/* L'accès à faer[x][y] se fait par faer[y*5+x] */
-		theta = faer[iang*5+4]+ zang*( faer[(iang+1)*5+4]-faer[iang*5+4] );
-		
-		*cTh = __cosf(theta);
-		
-		/** Changement du poids et des nombres de stokes du photon **/
-		float faer1 = faer[iang*5+0];
-		float faer2 = faer[iang*5+1];
-		
-		// Calcul du poids après diffusion
-		ph->weight *= __fdividef( 2.0F*(stokes1*faer1+stokes2*faer2) , stokes1+stokes2)*W0AERd;
-		
-		// Calcul des parametres de Stokes du photon apres diffusion
-		ph->stokes1 *= faer1;
-		ph->stokes2 *= faer2;
-		ph->stokes3 *= faer[iang*5+2];
-// 		photon->stokes4 = 0.F;
-	}
-	}
-	else{	/* Photon dans l'océan */
-		float p1, p2, p3;
-		float u;
-		
-		zang = RAND*(NFOCEd-2);
-		iang = __float2int_rd(zang);
-		zang = zang - iang;
-		/* L'accès à foce[x][y] se fait par foce[y*5+x] */
-		theta = foce[iang*5+4]+ zang*( foce[(iang+1)*5+4]-foce[iang*5+4] );
-		
-		*cTh = __cosf(theta);
-		
-		// p1 et p2 sont inversés par cohérence étant donné que le code Fortran d'origine interverti stoke1 et stoke2
-		p2 = foce[iang*5+0];
-		p1 = foce[iang*5+1];
-		p3 = foce[iang*5+2];
-		
-
-		ph->weight  *= 2.0f*__fdividef( (stokes1*p1+stokes2*p2) , stokes1+stokes2)*W0OCEd;
-		ph->stokes1 *= 2.0f*p1;
-		ph->stokes2 *= 2.0f*p2;
-		u = ph->stokes3;
-		ph->stokes3 = p3*u;
-		
-		
-		/**  **/
-		// if( ph->weight < WEIGHTMIN ){
-			// ph->loc=ABSORBED;
-			// return;
-		// }
-		
-		/** Roulette russe **/
-		if( ph->weight < WEIGHTRR ){
-			if( RAND < __fdividef(ph->weight,WEIGHTRR) ){
-				ph->weight = WEIGHTRR;
-			}
-			else{
-				ph->loc = ABSORBED;
-			}
-		}
-		
-	}
-
 }
 
 
@@ -1333,12 +1338,13 @@ __device__ void surfaceAgitee(Photon* ph
 	if( ph->vz > 0 ){
 		nind = __fdividef(1.f,NH2Od);
 		nz = -cBeta;
+		ph->weight *= __fdividef( abs(nx*ph->vx + ny*ph->vy + nz*ph->vz), ph->vz*cBeta);
 	}
 	else{
 		nind = NH2Od;
 		nz = cBeta;
+		ph->weight *= -__fdividef( abs(nx*ph->vx + ny*ph->vy + nz*ph->vz), ph->vz*cBeta );
 	}
-	ph->weight *= __fdividef( abs(nx*ph->vx + ny*ph->vy + nz*ph->vz), abs(ph->vz)*cBeta );
 	
 	
 	temp = -(nx*ph->vx + ny*ph->vy + nz*ph->vz);
@@ -1443,7 +1449,6 @@ __device__ void surfaceAgitee(Photon* ph
 		}
 	}
 	else{	// Transmission par le dioptre
-
 		// Le photon change de milieu
 		if(ph->vz<0){
 			if( SIMd==-1 || SIMd==1 ){
@@ -1483,7 +1488,6 @@ __device__ void surfaceAgitee(Photon* ph
 		speculaire sur le dioptre plan (ocean diffusant) */
 		if( SURd == 2)
 			ph->weight *= (1-rat);
-
 	}
 	
 	
@@ -1645,9 +1649,9 @@ __device__ void surfaceLambertienne(Photon* ph
 /* exit
 * Sauve les paramètres des photons sortis dans l'espace dans la boite correspondant à la direction de sortie
 */
-__device__ void exit(Photon* ph, Variables* var, Tableaux tab, unsigned long long* nbPhotonsThr
+__device__ void exit(Photon* ph, Tableaux tab, unsigned long long* nbPhotonsThr
 		#ifdef PROGRESSION
-		, unsigned int* nbPhotonsSorThr
+		, unsigned int* nbPhotonsSorThr, Variables* var
 		#endif
 		#ifdef TRAJET
 		, int idx, Evnt* evnt
@@ -1660,7 +1664,9 @@ __device__ void exit(Photon* ph, Variables* var, Tableaux tab, unsigned long lon
 	
 // si son poids est anormalement élevé on le compte comme une erreur. Test effectué uniquement en présence de dioptre
 	if( (ph->weight > WEIGHTMAX) && (SIMd!=-2)){
+		#ifdef PROGRESSION
 		atomicAdd(&(var->erreurpoids), 1);
+		#endif
 		return;
 	}
 	
@@ -1684,8 +1690,9 @@ __device__ void exit(Photon* ph, Variables* var, Tableaux tab, unsigned long lon
 	// Si theta = 0 on l'ignore (cas où le photon repart dans la direction solaire)
 	if(theta == 0.F)
 	{
+		#ifdef PROGRESSION
 		atomicAdd(&(var->erreurtheta), 1);
-		// Incrémentation du nombre de photons traités par le thread
+		#endif
 		return;
 	}
 
@@ -1701,7 +1708,11 @@ __device__ void exit(Photon* ph, Variables* var, Tableaux tab, unsigned long lon
 	modifStokes(ph, psi, cPsi, sPsi, 0);
 	
 	// Calcul de la case dans laquelle le photon sort
-	calculCase(&ith, &iphi, ph, var);
+	calculCase(&ith, &iphi, ph 
+			   #ifdef PROGRESSION
+			   , var
+			   #endif
+			   );
 	
 	/** Modification des paramètres de stokes pour la compatibilité avec le code SOS **/
 	if( ph->vy<0.f )
@@ -1813,7 +1824,11 @@ __device__ void calculPsi(Photon* photon, float* psi, float theta)
 * Fonction qui calcule la position (ith, iphi) du photon dans le tableau de sortie
 * La position correspond à une boite contenu dans l'espace de sortie
 */
-__device__ void calculCase(int* ith, int* iphi, Photon* photon, Variables* var)
+__device__ void calculCase(int* ith, int* iphi, Photon* photon
+			#ifdef PROGRESSION
+			, Variables* var
+			#endif 
+			)
 {
 	// vxy est la projection du vecteur vitesse du photon sur (x,y)
 	float vxy = sqrtf(photon->vx * photon->vx + photon->vy * photon->vy);
@@ -1931,6 +1946,7 @@ void initConstantesDevice()
 *	> Fonctions liées au générateur aléatoire
 ***********************************************************/
 
+#ifdef RANDCUDA
 /* initRandCUDA
 * Fonction qui initialise les generateurs du random cuda
 */
@@ -1940,8 +1956,10 @@ __global__ void initRandCUDA(curandState_t* etat, unsigned long long seed)
 	int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
 	curand_init(seed, idx, 0, etat+idx);
 }
+#endif
 
 
+#ifdef RANDMT
 /* initRandMTEtat
 * Fonction qui initialise l'etat des generateurs du random Mersenne Twister (generateur = etat + config)
 */
@@ -1954,17 +1972,6 @@ __global__ void initRandMTEtat(EtatMT* etat, ConfigMT* config)
 		etat[idx].mt[i] = (1812433253U * (etat[idx].mt[i - 1] ^ (etat[idx].mt[i - 1] >> 30)) + i) & MT_WMASK;
 	etat[idx].iState = 0;
 	etat[idx].mti1 = etat[idx].mt[0];
-}
-
-
-/* randomMWCfloat
-* Fonction random MWC qui renvoit un float de ]0.1] à partir d'un generateur (x+a)
-*/
-__device__ float randomMWCfloat(unsigned long long* x,unsigned int* a)
-{
-	//Generate a random number (0,1]
-	*x=(*x&0xffffffffull)*(*a)+(*x>>32);
-	return __fdividef(__uint2float_rz((unsigned int)(*x)) + 1.0f,(float)0x100000000);
 }
 
 
@@ -2010,4 +2017,18 @@ __device__ unsigned int randomMTuint(EtatMT* etat, ConfigMT* config)
 	x ^= (x >> MT_SHIFT1);
 	return x;
 }
+#endif
 
+
+#ifdef RANDMWC
+/* randomMWCfloat
+* Fonction random MWC qui renvoit un float de ]0.1] à partir d'un generateur (x+a)
+*/
+__device__ float randomMWCfloat(unsigned long long* x,unsigned int* a)
+{
+	//Generate a random number (0,1]
+	*x=(*x&0xffffffffull)*(*a)+(*x>>32);
+	return __fdividef(__uint2float_rz((unsigned int)(*x)) + 1.0f,(float)0x100000000);
+}
+
+#endif
