@@ -91,11 +91,9 @@ int main (int argc, char *argv[])
 	cudaMemset(tableauRand_D, 0, 100 * sizeof(float));
 	#endif
 	
-
-	#ifdef TEMOIN
+	
 	/** Vérification de l'existence ou non d'un fichier témoin **/
 	verifierFichier();
-	#endif
 	
 	
 	#ifdef PARAMETRES
@@ -142,9 +140,7 @@ int main (int argc, char *argv[])
 	
 	
 	/** Fonction qui permet de poursuivre la simulation précédente si elle n'est pas terminee **/
-	#ifdef TEMOIN
 	lireHDFTemoin(var_H, var_D, &nbPhotonsTot, tabPhotonsTot, &tempsPrec);
-	#endif
 	
 	
 	#ifdef TRAJET
@@ -196,7 +192,6 @@ int main (int argc, char *argv[])
 		#endif
 		
 		
-		#ifdef TEMOIN
 		/** Réinitialisation des données de la simulation **/
 		
 		cudaErreur = cudaMemset(tab_D.tabPhotons, 0, 4*NBTHETA * NBPHI * sizeof(*(tab_D.tabPhotons)));
@@ -207,7 +202,6 @@ int main (int argc, char *argv[])
 			printf("#--------------------#\n");
 			exit(1);
 		}
-		#endif
 		
 		
 		/** Lancement du kernel **/
@@ -238,7 +232,9 @@ int main (int argc, char *argv[])
 		// On remplit les variables et tableau qui restent dans le host
 		nbPhotonsTot += var_H->nbPhotons;
 		
-		#ifdef TEMOIN
+		/** Copie des informations du device pour la création du fichier témoin **/
+		/* Il a été remarqué que sans cette copie et remise à zéro du tableau tab_D.tabPhotons, des erreurs apparaissent si les
+valeurs stockées sont élevées. Ceci doit venir du fait que l'on somme une grosse valeur à une plus faible */
 		cudaErreur = cudaMemcpy(tab_H.tabPhotons, tab_D.tabPhotons, 4*NBTHETA * NBPHI * sizeof(*(tab_H.tabPhotons)),
 cudaMemcpyDeviceToHost);
 		if( cudaErreur != cudaSuccess ){
@@ -252,7 +248,6 @@ cudaMemcpyDeviceToHost);
 			tabPhotonsTot[i] += tab_H.tabPhotons[i];
 		
 		creerHDFTemoin(tabPhotonsTot, nbPhotonsTot,var_H, tempsPrec);
-		#endif
 
 		
 		#ifdef PROGRESSION
@@ -274,21 +269,6 @@ cudaMemcpyDeviceToHost);
 					, nbPhotonsSorTot
 					#endif
 					  );
-	
-	
-	#ifndef TEMOIN
-	/** Récupération des données du device vers le host **/
-	cudaErreur = cudaMemcpy(tab_H.tabPhotons, tab_D.tabPhotons, 4*NBTHETA * NBPHI * sizeof(*(tab_H.tabPhotons)),
-cudaMemcpyDeviceToHost);
-	if( cudaErreur != cudaSuccess ){
-		printf( "ERREUR: Problème de copie tab_H.tabPhotons dans le main\n");
-		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-		exit(1);
-	}
-	
-	for(int i = 0; i < 4*NBTHETA*NBPHI; i++)
-		tabPhotonsTot[i] += tab_H.tabPhotons[i];
-	#endif
 	
 	
 	#ifdef TABRAND

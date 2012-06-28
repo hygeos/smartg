@@ -31,7 +31,6 @@ DFLAGS += -DRANDMWC 	# Utilisation du random MWC (Multiply-With-Carry)
 
 #=============Debogage===========#
 DFLAGS += -DPROGRESSION # Calcul et affichage de la progression de la simulation
-# DFLAGS += -DTEMOIN	# Création d'un fichier témoin lorsque ce flag est activé
 DFLAGS += -DNOMAUTO	# Créer automatiquement le nom du fichier résultat
 # DFLAGS += -DTRAJET 	# Calcul et affichage des premiers evenements d'un thread
 # DFLAGS += -DTEMPS 	# Affichage du temps passé dans chaque fonctions pour un thread

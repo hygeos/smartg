@@ -7,7 +7,9 @@
 NBPHOTONS = 10000000000
 
 # Nombre de boucles dans le kernel (unsigned int) (limite par watchdog, il faut tuer X)
-NBLOOP = 18000
+# Ne pas mettre NBLOOP à une valeur trop importante, ce qui conduit à des erreurs dans le résultats de sorti
+# Si les résultats manquent de "lissage" pour les valeurs importantes de réflectance, réduire ce chiffre, relancer et comparer
+NBLOOP = 5000
 
 # Angle zenithal solaire en degrés (float)
 THSDEG = 30.
@@ -24,7 +26,7 @@ XBLOCK = 256
 YBLOCK = 1
 
 # et les blocks sont eux-même rangés dans un grid de taille XGRID*YGRID (limite par watchdog il faut tuer X + limite XGRID<65535 et YGRID<65535)
-XGRID = 84
+XGRID = 256
 YGRID = 1
 
 # Le demi-espace dans lequel on récupère les photons est divisé en boites

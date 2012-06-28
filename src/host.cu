@@ -288,7 +288,7 @@ void initConstantesHost(int argc, char** argv)
 	
 	chercheConstante(parametres, "PATHRESULTATSHDF", PATHRESULTATSHDF);
 	
-	#if !defined(NOMAUTO) && defined(TEMOIN)
+	#ifndef NOMAUTO
 	chercheConstante(parametres, "PATHTEMOINHDF", PATHTEMOINHDF);
 	#endif
 	
@@ -491,8 +491,9 @@ void verifierFichier(){
 			}
 			
 		}
+		fclose(fic);
 	}
-	fclose(fic);
+	
 	
 // 	getchar();
 

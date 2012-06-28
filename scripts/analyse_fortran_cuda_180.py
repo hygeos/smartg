@@ -21,7 +21,7 @@ rc('font', family='serif')
 #-----------------------------------------------------------------------------------------------------------------------
 type_simu = "dioptre_agite"
 com= "surface agitée - 30 deg"
-date_simu = "21062012"
+date_simu = "28062012"
 angle = "30"
 geometrie = "PARALLELE"		#Géométrie de l'atmosphère
 
