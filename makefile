@@ -1,4 +1,4 @@
-CC = nvcc
+CC = /usr/local/cuda/bin/nvcc
 EXEC = Prog
 
 #=============Options============#  (en fonction de la carte graphique utilisee)
@@ -39,7 +39,7 @@ DFLAGS += -DNOMAUTO	# Créer automatiquement le nom du fichier résultat
 # DFLAGS += -DSPHERIQUE	# Pour utiliser une atmosphère sphérique
 #####################################################################################
 
-all: $(EXEC)
+all: init $(EXEC)
 
 $(EXEC): obj/main.o obj/host.o obj/device.o
 	$(CC) $^ $(IFLAGS) $(IIFLAGS) $(LFLAGS) -o $(EXEC)
@@ -53,8 +53,11 @@ obj/host.o: src/host.cu src/host.h src/communs.h src/device.h
 obj/device.o: src/device.cu src/device.h src/communs.h
 	$(CC) -c $< $(CFLAGS) $(IFLAGS) $(DFLAGS) -o $@
 
+init:
+	mkdir -p obj
+
 clean:
-	rm -f obj/* src/*~ *~ ./Prog
+	rm -f obj/* src/*~ *~ $(EXEC)
 
 mrproper: clean
 	rm -rf tmp/* out_prog/* out_scripts/* $(EXEC)
