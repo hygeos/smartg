@@ -58,8 +58,8 @@ int main (int argc, char *argv[])
 	unsigned long long nbPhotonsSorTot = 0; //nombre total de photons ressortis
 	#endif
 	
-	float* tabPhotonsTot; //tableau du poids total des photons sortis
-	tabPhotonsTot = (float*)malloc(4*NBTHETA * NBPHI * sizeof(*(tabPhotonsTot)));
+	double* tabPhotonsTot; //tableau du poids total des photons sortis
+	tabPhotonsTot = (double*)malloc(4*NBTHETA * NBPHI * sizeof(*(tabPhotonsTot)));
 	if( tabPhotonsTot == NULL ){
 		printf("ERREUR: Problème de malloc de tabPhotonsTot dans le main\n");
 		exit(1);
@@ -68,10 +68,10 @@ int main (int argc, char *argv[])
 	memset(tabPhotonsTot,0,4*NBTHETA*NBPHI*sizeof(*(tabPhotonsTot)));
 	
 	// Variables permettant le calcul du résultat final
-	float tabFinal[3*NBTHETA * NBPHI];	 /* tableau final: 3 dimensions pour R=stokes1+stokes2(dim0) , Q=stokes1-stokes2(dim1) et
+	double tabFinal[3*NBTHETA * NBPHI];	 /* tableau final: 3 dimensions pour R=stokes1+stokes2(dim0) , Q=stokes1-stokes2(dim1) et
 											U=stokes3(dim2) */
-	float tabTh[NBTHETA]; //tableau contenant l'angle theta de chaque morceau de sphère
-	float tabPhi[NBPHI]; //tableau contenant l'angle psi de chaque morceau de sphère
+	double tabTh[NBTHETA]; //tableau contenant l'angle theta de chaque morceau de sphère
+	double tabPhi[NBPHI]; //tableau contenant l'angle psi de chaque morceau de sphère
 	
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
 	// Définition et initialisation des constantes initiales du photon
@@ -245,7 +245,7 @@ cudaMemcpyDeviceToHost);
 		
 		/** Creation d'un fichier témoin pour pouvoir reprendre la simulation en cas d'arrêt **/
 		for(int i = 0; i < 4*NBTHETA*NBPHI; i++)
-			tabPhotonsTot[i] += tab_H.tabPhotons[i];
+			tabPhotonsTot[i] += (double) tab_H.tabPhotons[i];
 		
 		creerHDFTemoin(tabPhotonsTot, nbPhotonsTot,var_H, tempsPrec);
 
@@ -346,7 +346,7 @@ cudaMemcpyDeviceToHost);
 	// Libération des tableaux envoyés dans le kernel
 	freeTableaux(&tab_H, &tab_D);
 	// Libération du tableau du host
-	free(tabPhotonsTot);
+	free( tabPhotonsTot );
 
 	// Libération des variables qui récupèrent le trajet d'un photon
 	#ifdef TRAJET

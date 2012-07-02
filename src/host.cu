@@ -2070,11 +2070,11 @@ void afficheTrajet(Evnt* evnt_H)
 /* calculOmega
 * Fonction qui calcule l'aire normalisée de chaque boite, son theta, et son psi, sous forme de 3 tableaux
 */
-void calculOmega(float* tabTh, float* tabPhi, float* tabOmega)
+void calculOmega(double* tabTh, double* tabPhi, double* tabOmega)
 {
 	// Tableau contenant l'angle theta de chaque morceau de sphère
 	memset(tabTh, 0, NBTHETA * sizeof(*tabPhi));
-	float dth = DEMIPI / NBTHETA;
+	double dth = DEMIPI / NBTHETA;
 	tabTh[0] = dth/4;
 	tabTh[1] = dth;
 	for(int ith = 2; ith < NBTHETA; ith++){
@@ -2083,14 +2083,14 @@ void calculOmega(float* tabTh, float* tabPhi, float* tabOmega)
 	
 	// Tableau contenant l'angle psi de chaque morceau de sphère
 	memset(tabPhi, 0, NBPHI * sizeof(*tabPhi));
-	float dphi = PI / NBPHI;
+	double dphi = PI / NBPHI;
  	tabPhi[0] = dphi / 2;
 	for(int iphi = 1; iphi < NBPHI; iphi++){ 
 		tabPhi[iphi] = tabPhi[iphi-1] + dphi;
 	}
 	// Tableau contenant l'aire de chaque morceau de sphère
-	float sumds = 0;
-	float tabds[NBTHETA * NBPHI];
+	double sumds = 0;
+	double tabds[NBTHETA * NBPHI];
 	memset(tabds, 0, NBTHETA * NBPHI * sizeof(*tabds));
 	for(int ith = 0; ith < NBTHETA; ith++)
 	{
@@ -2124,10 +2124,10 @@ void calculOmega(float* tabTh, float* tabPhi, float* tabOmega)
 /* calculTabFinal
 * Fonction qui remplit le tabFinal correspondant à la reflectance (R), Q et U sur tous l'espace de sorti (dans chaque boite)
 */
-void calculTabFinal(float* tabFinal, float* tabTh, float* tabPhi, float* tabPhotonsTot, unsigned long long nbPhotonsTot)
+void calculTabFinal(double* tabFinal, double* tabTh, double* tabPhi, double* tabPhotonsTot, unsigned long long nbPhotonsTot)
 {
 	
-	float tabOmega[NBTHETA * NBPHI]; //tableau contenant l'aire de chaque morceau de sphère
+	double tabOmega[NBTHETA * NBPHI]; //tableau contenant l'aire de chaque morceau de sphère
 	// Remplissage des tableaux tabTh, tabPhi, et tabOmega
 	calculOmega(tabTh, tabPhi, tabOmega);
 	
@@ -2139,16 +2139,16 @@ void calculTabFinal(float* tabFinal, float* tabTh, float* tabPhi, float* tabPhot
 			// Reflectance
 			tabFinal[0*NBTHETA*NBPHI + iphi*NBTHETA+ith] =
 				(tabPhotonsTot[0*NBPHI*NBTHETA+ith*NBPHI+iphi] + tabPhotonsTot[1*NBPHI*NBTHETA+ith*NBPHI+iphi]) / 
-				(2* nbPhotonsTot * tabOmega[ith*NBPHI+iphi]* cosf(tabTh[ith]));
+				(2* nbPhotonsTot * tabOmega[ith*NBPHI+iphi]* cos(tabTh[ith]));
 			
 			// Q
 			tabFinal[1*NBTHETA*NBPHI + iphi*NBTHETA+ith] =
 				(tabPhotonsTot[0*NBPHI*NBTHETA+ith*NBPHI+iphi] - tabPhotonsTot[1*NBPHI*NBTHETA+ith*NBPHI+iphi]) / 
-				(2* nbPhotonsTot * tabOmega[ith*NBPHI+iphi] * cosf(tabTh[ith]));
+				(2* nbPhotonsTot * tabOmega[ith*NBPHI+iphi] * cos(tabTh[ith]));
 			
 			// U
 			tabFinal[2*NBTHETA*NBPHI + iphi*NBTHETA+ith] = (tabPhotonsTot[2*NBPHI*NBTHETA+ith*NBPHI+iphi]) / 
-				(2* nbPhotonsTot * tabOmega[ith*NBPHI+iphi] * cosf(tabTh[ith]));
+				(2* nbPhotonsTot * tabOmega[ith*NBPHI+iphi] * cos(tabTh[ith]));
 				
 		}
 	}
@@ -2164,7 +2164,7 @@ void calculTabFinal(float* tabFinal, float* tabTh, float* tabPhi, float* tabPhot
 * //TODO: 	écrire moins régulièrement le témoin (non pas une écriture par appel de kernel)
 *			changer le format (écrire un .bin par exemple) pour éventuellement gagner du temps (calculer le gain éventuel)
 */
-void creerHDFTemoin(float* tabPhotonsTot, unsigned long long nbPhotonsTot, Variables* var, double tempsPrec)
+void creerHDFTemoin(double* tabPhotonsTot, unsigned long long nbPhotonsTot, Variables* var, double tempsPrec)
 {
 	// Création du fichier de sortie
 	int sdFichier = SDstart(PATHTEMOINHDF, DFACC_CREATE);
@@ -2174,7 +2174,7 @@ void creerHDFTemoin(float* tabPhotonsTot, unsigned long long nbPhotonsTot, Varia
 	int nbDimsTab = 1; //nombre de dimensions du tableau
 	int valDimsTab[nbDimsTab]; //valeurs des dimensions du tableau
 	valDimsTab[0] = 4 * NBTHETA * NBPHI;
-	int typeTab = DFNT_FLOAT32 ; //type des éléments du tableau
+	int typeTab = DFNT_FLOAT64 ; //type des éléments du tableau
 	// Création du tableau
 	int sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
 	int startTab[nbDimsTab]; //début de la lecture du tableau
@@ -2258,7 +2258,7 @@ void creerHDFTemoin(float* tabPhotonsTot, unsigned long long nbPhotonsTot, Varia
 * partir de celle sauvée dans le fichier témoin.
 */
 void lireHDFTemoin(Variables* var_H, Variables* var_D,
-		unsigned long long* nbPhotonsTot, float* tabPhotonsTot, double* tempsEcoule)
+		unsigned long long* nbPhotonsTot, double* tabPhotonsTot, double* tempsEcoule)
 {
 	// Ouverture du fichier temoin
 	int sdFichier = SDstart(PATHTEMOINHDF, DFACC_READ);
@@ -2418,10 +2418,11 @@ identiques a chaque lancement.\n");
 /* creerHDFResultats
 * Fonction qui crée le fichier .hdf contenant le résultat final pour une demi-sphère
 */
-void creerHDFResultats(float* tabFinal, float* tabTh, float* tabPhi,unsigned long long nbPhotonsTot, Variables* var,double tempsPrec)
+void creerHDFResultats(double* tabFinal, double* tabTh, double* tabPhi,unsigned long long nbPhotonsTot, Variables* var,double
+tempsPrec)
 {
 	// Tableau temporaire utile pour la suite
-	float tab[NBPHI*NBTHETA];
+	double tab[NBPHI*NBTHETA];
 	// Création du fichier de sortie
 	int sdFichier = SDstart(PATHRESULTATSHDF, DFACC_CREATE);
 	if( sdFichier == FAIL ){
@@ -2486,7 +2487,7 @@ void creerHDFResultats(float* tabFinal, float* tabTh, float* tabPhi,unsigned lon
 	int valDimsTab[nbDimsTab]; //valeurs des dimensions du tableau
 	valDimsTab[1] = NBTHETA;	//colonnes
 	valDimsTab[0] = NBPHI;
-	int typeTab = DFNT_FLOAT32; //type des éléments du tableau
+	int typeTab = DFNT_FLOAT64; //type des éléments du tableau
 	
 	// Création du tableau
 	int sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
@@ -2549,7 +2550,7 @@ void creerHDFResultats(float* tabFinal, float* tabTh, float* tabPhi,unsigned lon
 	// La plupart des paramètres restent les mêmes, pas besoin de les réinitialiser
 	
 	for(int i = 0; i < NBTHETA*NBPHI; i++){
-		tab[i] = sqrtf( tabFinal[1*NBTHETA*NBPHI+i]*tabFinal[1*NBTHETA*NBPHI+i] +
+		tab[i] = sqrt( tabFinal[1*NBTHETA*NBPHI+i]*tabFinal[1*NBTHETA*NBPHI+i] +
 						tabFinal[2*NBTHETA*NBPHI+i]*tabFinal[2*NBTHETA*NBPHI+i] );
 	}
 	

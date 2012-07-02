@@ -215,13 +215,13 @@ void afficheTrajet(Evnt*);
 /* calculOmega
 * Fonction qui calcule l'aire normalisée de chaque boite, son theta, et son psi, sous forme de 3 tableaux
 */
-void calculOmega(float* tabTh, float* tabPhi, float* tabOmega);
+void calculOmega(double* tabTh, double* tabPhi, double* tabOmega);
 
 
 /* calculTabFinal
 * Fonction qui remplit le tabFinal correspondant à la reflectance (R), Q et U sur tous l'espace de sorti (dans chaque boite)
 */
-void calculTabFinal(float*, float*, float*, float*, unsigned long long);
+void calculTabFinal(double*, double*, double*, double*, unsigned long long);
 
 
 /**********************************************************
@@ -233,20 +233,20 @@ void calculTabFinal(float*, float*, float*, float*, unsigned long long);
 * //TODO: 	écrire moins régulièrement le témoin (non pas une écriture par appel de kernel)
 *			changer le format (écrire un .bin par exemple) pour éventuellement gagner du temps (calculer le gain éventuel)
 */
-void creerHDFTemoin(float*, unsigned long long, Variables*, double);
+void creerHDFTemoin(double*, unsigned long long, Variables*, double);
 
 
 /* lireHDFTemoin
 * Si un fichier temoin existe et que les paramètres correspondent à la simulation en cours, cette simulation se poursuit à
 * partir de celle sauvée dans le fichier témoin.
 */
-void lireHDFTemoin(Variables*, Variables*, unsigned long long*, float*, double*);
+void lireHDFTemoin(Variables*, Variables*, unsigned long long*, double*, double*);
 
 
 /* creerHDFResultats
 * Fonction qui crée le fichier .hdf contenant le résultat final pour une demi-sphère
 */
-void creerHDFResultats(float*, float*, float*, unsigned long long, Variables*, double);
+void creerHDFResultats(double*, double*, double*, unsigned long long, Variables*, double);
 
 
 #endif	// HOST_H

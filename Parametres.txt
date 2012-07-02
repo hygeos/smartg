@@ -4,7 +4,7 @@
 
 
 # Nombre de photons a lancer (unsigned long long) (limite par le tableau du poids des photons en unsigned long long)
-NBPHOTONS = 10000000000
+NBPHOTONS = 5000000000
 
 # Nombre de boucles dans le kernel (unsigned int) (limite par watchdog, il faut tuer X)
 # Ne pas mettre NBLOOP à une valeur trop importante, ce qui conduit à des erreurs dans le résultats de sorti
