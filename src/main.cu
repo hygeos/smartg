@@ -37,6 +37,15 @@ int main (int argc, char *argv[])
 	initConstantesHost(argc, argv);
 	
 	
+	/** Vérification que le code compilé est compatible avec la simulation demandée **/
+	#ifndef FLAGOCEAN
+	if( SIM==0 || SIM==2 || SIM==3 ){
+		printf("Veuillez compiler avec le flag FLAGOCEAN afin d'utiliser ce milieu \n");
+		exit(1);
+	}
+	#endif
+	
+	
 	/** Variables du main **/
 	
 	double tempsPrec = 0.; 	//temps ecoule de la simulation precedente
@@ -110,10 +119,12 @@ int main (int argc, char *argv[])
 	}
 	
 	// Calcul de foce, modèle de diffusion dans l'océan
+	#ifdef FLAGOCEAN
 	if( SIM==0 || SIM==2 || SIM==3 ){
 		calculFoce( &tab_H, &tab_D );
 // 		verificationFoce( "./test/Foce_test.txt", tab_H );
 	}
+	#endif
 
 	// Calcul du mélange Molécule/Aérosol dans l'atmosphère en fonction de la couche
 	profilAtm( &tab_H, &tab_D );

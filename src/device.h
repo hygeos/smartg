@@ -112,7 +112,7 @@ __device__ void initPhoton(Photon* ph/*, float* z*/
 * Pour l'atmosphère sphèrique, l'algorithme est basé sur la formule de pythagore généralisé
 * Modification des coordonnées position du photon
 */
-__device__ void move(Photon*/*, float* z*/
+__device__ void move(Photon*
 		#ifndef SPHERIQUE
 		,int flagDiff, float* h, float* pMol
 		#endif
@@ -138,7 +138,10 @@ __device__ void move(Photon*/*, float* z*/
 * Diffusion du photon par une molécule ou un aérosol
 * Modification des paramètres de stokes et des vecteurs U et V du photon (polarisation, vitesse)
 */
-__device__ void scatter(Photon* photon, float* faer, float* foce
+__device__ void scatter(Photon* photon, float* faer
+		#ifdef FLAGOCEAN
+		, float* foce
+		#endif
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif

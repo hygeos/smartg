@@ -19,17 +19,23 @@ rc('font', family='serif')
 # Paramètres à modifier
 #
 #-----------------------------------------------------------------------------------------------------------------------
-type_simu = "dioptre_agite"
-com= "surface agitée - 30 deg"
-date_simu = "28062012"
+type_simu = "total"
+com= "total - 30"
+date_simu = "04072012"
 angle = "30"
 geometrie = "PARALLELE"		#Géométrie de l'atmosphère
 
 # Nom du fichier Cuda sans extension .hdf
-nom_cuda = "out_CUDA_dioptre_agite_ths=30.00_ws=5.00"
+nom_cuda = "out_CUDA_ths=30.00_tRay=0.0533_tAer=0.0000_ws=5.00_sim=2" # tout 30
+#nom_cuda = "out_CUDA_ths=30.00_tRay=0.0533_tAer=0.0000_ws=5.00_sim=0" # surface_ocean 30
+#nom_cuda = "out_CUDA_atmos_ths=30.00_tRay=0.0533_tAer=0.0000" # mol seules 30
+#nom_cuda = "out_CUDA_atmos_dioptre_agite_ths=30.00_tRay=0.0533_tAer=0.0000_ws=5.00" # mol dioptre 30
 
 # Nom du fichier Fortran sans l'extension .bin.gz
-nom_fortran = "out_FORTRAN.ths=30.000.ws=5"
+nom_fortran = "out.ran=9223.wav=443.ths=30.000.tr=0.0533.ta=0.0000.pi0=0.967.H=002.000.vent=05.000" # tout 30
+#nom_fortran = "out.ran=9210.wav=443.ths=30.000.tr=0.0533.ta=0.0000.pi0=0.967.H=002.000.vent=05.000" # surface_ocean 30
+#nom_fortran = "out_FORTRAN.ths=30.000.tr=0.0533.ta=0.0000" # molecules_seules 30
+#nom_fortran = "out.ran=9203.wav=443.ths=30.000.tr=0.0533.ta=0.0000.pi0=0.967.H=002.000.vent=05.000" # molecules_dioptre_agite 30
 
 # Indices ci-dessus ont été mis en place car ils permettent de rogner la simulation si nécessaire.
 # Les bords peuvent fausser les graphiques.
@@ -453,7 +459,7 @@ fichierSortie.write("ZMAX = " + str(ZMAX) + "\n")
 fichierSortie.write("WINDSPEED = " + str(WINDSPEED) + "\n")
 fichierSortie.write("NH2O = " + str(NH2O) + "\n")
 fichierSortie.write("SIM = " + str(SIM) + "\n")
-fichierSortie.write("SUR = " + str(NBPHOTONS) + "\n")
+fichierSortie.write("SUR = " + str(SUR) + "\n")
 fichierSortie.write("DIOPTRE = " + str(DIOPTRE) + "\n")
 fichierSortie.write("CONPHY = " + str(CONPHY) + "\n")
 fichierSortie.write("DIFFF = " + str(DIFFF) + "\n")

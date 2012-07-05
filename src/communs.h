@@ -262,7 +262,11 @@ typedef struct __align__(16)
 	float* tabPhotons;		// Tableau contenant l'ensemble des paramètres de stokes des photons sortis dans l'espace
 	
 	float* faer;			// Pointeur vers le modèle de diffusion des aérosols
+	
+	#ifdef FLAGOCEAN
 	float* foce;			// Pointeur vers le modèle de diffusion dans l'océan
+	#endif
+	
 	float* h;				// Pointeur vers l'épaisseur optique de chaque couches du modèle atmosphérique
 	float* pMol;			// Pointeur vers la proportion de molécules dans chaque couches du modèle atmosphérique
 	

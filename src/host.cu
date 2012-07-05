@@ -454,7 +454,19 @@ void definirSimulation( char* s){
 			sprintf(s,"atmos_seule");
 	}
 	
-	else
+	else if( SIM==0 ){
+		sprintf(s,"surface_ocean");
+	}
+	
+	else if( SIM==3 ){
+		sprintf(s,"ocean_seul");
+	}
+	
+	else if( SIM==2 ){
+		sprintf(s,"total");
+	}
+	
+	else 
 		sprintf(s,"SIM_%d",SIM);
 }
 #endif
@@ -483,7 +495,6 @@ void verifierFichier(){
 				break;
 			}
 			else if( res_supp=='n' ){
-				printf("Comme vous voudrez\n");
 				break;
 			}
 			else{
@@ -740,6 +751,7 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 		exit(1);	
 	}
 	
+	#ifdef FLAGOCEAN
 	// Modèle de diffusion dans l'océan
 	tab_H->foce = (float*)malloc(5 * NFOCE * sizeof(float));
 	if( tab_H->foce == NULL ){
@@ -752,6 +764,7 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 		printf("ERREUR: Problème de cudaMalloc de tab_D->foce dans initTableaux\n");
 		exit(1);	
 	}
+	#endif
 	
 	
 	/** Modèle de l'atmosphère **/
@@ -906,6 +919,7 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	}
 	free(tab_H->faer);
 	
+	#ifdef FLAGOCEAN
 	// Diffusion dans l'océan
 	erreur = cudaFree(tab_D->foce);
 	if( erreur != cudaSuccess ){
@@ -914,6 +928,8 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 		exit(1);
 	}
 	free(tab_H->foce);
+	#endif
+	
 	
 	/** Profil amosphèrique **/	
 	// Libération du modèle atmosphérique
@@ -1103,6 +1119,7 @@ void verificationFAER( const char* nomFichier, Tableaux tab){
 }
 
 
+#ifdef FLAGOCEAN
 /* calculFoce
 * Calcul de la fonction de phase dans l'océan
 */
@@ -1455,7 +1472,7 @@ void verificationFoce( const char* nomFichier, Tableaux tab){
 	fclose(fichier);
 	
 }
-
+#endif
 
 /* profilAtm
 * Calcul du profil atmosphérique dans l'atmosphère en fonction de la couche
@@ -1600,7 +1617,7 @@ inferieure contenant toutes les molécules.
 	}
 	
 	/** Profil à 2 ou 3 couches **/
-	else if( PROFIL == 3 ){
+	else if( PROFIL == 1 ){
 
 		float tauRay1;	// Epaisseur optique moleculaire de la couche 1
 		float tauRay2;	// Epaisseur optique moleculaire de la couche 2
@@ -1657,7 +1674,6 @@ inferieure contenant toutes les molécules.
 	else if( PROFIL == 2 ){
 		// Profil utilisateur
 		/* Format du fichier
-		=> Ne pas mettre de ligne vide sur la première
 		=> n	alt		tauMol		tauAer		h		pAer		pMol
 		*/
 		FILE* profil = fopen( PATHPROFILATM , "r" );
@@ -1875,11 +1891,20 @@ void afficheParametres()
 	printf("\n");
 	printf(" LAMBDA\t=\t%f", LAMBDA);
 	printf("\n");
-	printf(" CONPHY\t=\t%f", CONPHY);
-	printf("\n");
-	printf(" DIFFF\t=\t%d", DIFFF);
-	printf("\n");
 	printf(" SIM\t=\t%d", SIM);
+		if( SIM==-2 )
+			printf("\t(Atmosphère seule)");
+		if( SIM==-1 )
+			printf("\t(Dioptre seul)");
+		if( SIM==0 )
+			printf("\t(Océan et Surface)");
+		if( SIM==1 )
+			printf("\t(Atmosphère et Surface)");
+		if( SIM==2 )
+			printf("\t(Atmosphère, Dioptre et Océan)");
+		if( SIM==3 )
+			printf("\t(Océan seul)");
+		
 	printf("\n");
 	printf(" SEED\t=\t%d", SEED);
 	printf("\n");
@@ -1896,57 +1921,76 @@ void afficheParametres()
 	printf(" YGRID\t=\t%d", YGRID);
 	printf("\n");
 	
+	
 	printf("\n#--------------- Atmosphère ----------------#\n");
+	if( SIM==-2 || SIM==1 || SIM==2 ){
+		#ifdef SPHERIQUE
+		printf(" Géométrie de l'atmosphère: \tSphérique");
+		printf("\n");
+		#endif
+		#ifndef SPHERIQUE
+		printf(" Géométrie de l'atmosphère: \tParallèle");
+		printf("\n");
+		#endif
+		
+		printf(" TAURAY\t=\t%f", TAURAY);
+		printf("\n");
+		printf(" TAUAER\t=\t%f", TAUAER);
+		printf("\n");
+		printf(" W0AER\t=\t%f", W0AER);
+		printf("\n");
+		printf(" LSAAER\t=\t%u", LSAAER);
+		printf("\n");
+		printf(" NFAER\t=\t%u", NFAER);
+		printf("\n");
+		printf(" PROFIL\t=\t%d", PROFIL);
+		printf("\n");
+		printf(" HA\t=\t%f", HA);
+		printf("\n");
+		printf(" HR\t=\t%f", HR);
+		printf("\n");
+		printf(" ZMIN\t=\t%f", ZMIN);
+		printf("\n");
+		printf(" ZMAX\t=\t%f", ZMAX);
+		printf("\n");
+		printf(" NATM\t=\t%d", NATM);
+		printf("\n");
+		printf(" HATM\t=\t%d", HATM);
+		printf("\n");
+		printf(" DIFFF\t=\t%d", DIFFF);
+		printf("\n");
+	}
+	else{
+		printf("\tPas de contribution de l'atmosphère\n");
+	}
 	
-	#ifdef SPHERIQUE
-	printf(" Géométrie de l'atmosphère: \tSphérique");
-	printf("\n");
-	#endif
-	#ifndef SPHERIQUE
-	printf(" Géométrie de l'atmosphère: \tParallèle");
-	printf("\n");
-	#endif
 	
-	printf(" TAURAY\t=\t%f", TAURAY);
-	printf("\n");
-	printf(" TAUAER\t=\t%f", TAUAER);
-	printf("\n");
-	printf(" W0AER\t=\t%f", W0AER);
-	printf("\n");
-	printf(" LSAAER\t=\t%u", LSAAER);
-	printf("\n");
-	printf(" NFAER\t=\t%u", NFAER);
-	printf("\n");
+	printf("\n#--------- Contribution du dioptre ---------#\n");
+	if( SIM==-1 || SIM==0 || SIM==1 || SIM==2 ){
+		printf(" SUR\t=\t%d", SUR);
+		printf("\n");
+		printf(" DIOPTRE =\t%d", DIOPTRE);
+		printf("\n");
+		printf(" W0LAM\t=\t%f", W0LAM);
+		printf("\n");
+		printf(" WINDSPEED =\t%f", WINDSPEED);
+		printf("\n");
+	}
+	else{
+		printf("\tPas de dioptre\n");
+	}
+	
+	#ifdef FLAGOCEAN
+	printf("\n#----------------- Océan ------------------#\n");
 	printf(" LSAOCE\t=\t%u", LSAOCE);
 	printf("\n");
 	printf(" NFOCE\t=\t%u", NFOCE);
 	printf("\n");
-	printf(" PROFIL\t=\t%d", PROFIL);
-	printf("\n");
-	printf(" HA\t=\t%f", HA);
-	printf("\n");
-	printf(" HR\t=\t%f", HR);
-	printf("\n");
-	printf(" ZMIN\t=\t%f", ZMIN);
-	printf("\n");
-	printf(" ZMAX\t=\t%f", ZMAX);
-	printf("\n");
-	printf(" NATM\t=\t%d", NATM);
-	printf("\n");
-	printf(" HATM\t=\t%d", HATM);
-	printf("\n");
-	
-	printf("\n#--------- Contribution du dioptre ---------#\n");
-	printf(" SUR\t=\t%d", SUR);
-	printf("\n");
-	printf(" DIOPTRE =\t%d", DIOPTRE);
-	printf("\n");
-	printf(" W0LAM\t=\t%f", W0LAM);
-	printf("\n");
-	printf(" WINDSPEED =\t%f", WINDSPEED);
+	printf(" CONPHY\t=\t%f", CONPHY);
 	printf("\n");
 	printf(" NH2O\t=\t%f", NH2O);
 	printf("\n");
+	#endif
 	
 	printf("\n#----------- Chemin des fichiers -----------#\n");
 	printf(" PATHRESULTATSHDF = %s", PATHRESULTATSHDF);

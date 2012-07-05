@@ -22,21 +22,26 @@ LFLAGS += -L /usr/local/cuda/bin
 LFLAGS += -L /usr/local/NVIDIA_GPU_Computing_SDK/C/lib
 LFLAGS += -lcuda -lcudart
 
-#=============Options============#
+#===== Caractéristiques majeures =====#
 DFLAGS =
+# DFLAGS += -DSPHERIQUE	# Pour utiliser une atmosphère sphérique
+DFLAGS += -DFLAGOCEAN	# À utiliser si l'océan fait parti de la simulation
+DFLAGS += -DNOMAUTO	# Créer automatiquement le nom du fichier résultat
+
+
+#============== Options ===============#
 DFLAGS += -DPARAMETRES 	# Affichage des parametres initiaux
 DFLAGS += -DRANDMWC 	# Utilisation du random MWC (Multiply-With-Carry)
 # DFLAGS += -DRANDCUDA	# Utilisation du random CUDA (Fonction fournie par cuda)
 # DFLAGS += -DRANDMT	# Utilisation du random MT (Mersenne Twister)
 
-#=============Debogage===========#
+
+#============== Debogage ==============#
 DFLAGS += -DPROGRESSION # Calcul et affichage de la progression de la simulation
-DFLAGS += -DNOMAUTO	# Créer automatiquement le nom du fichier résultat
 # DFLAGS += -DTRAJET 	# Calcul et affichage des premiers evenements d'un thread
 # DFLAGS += -DTEMPS 	# Affichage du temps passé dans chaque fonctions pour un thread
 # DFLAGS += -DTABRAND 	# Affichage des premiers nombre aleatoires generes
 # DFLAGS += -DDEBUG 	# Ajout de tests intermédiaires utilisés lors du débugage
-# DFLAGS += -DSPHERIQUE	# Pour utiliser une atmosphère sphérique
 #####################################################################################
 
 all: init $(EXEC)
