@@ -140,7 +140,9 @@ extern float TAURAY;
 extern float TAUAER;
 extern float W0AER;
 extern float W0LAM;
+#ifdef FLAGOCEAN
 extern float W0OCE;
+#endif
 extern float HA;
 extern float HR;
 extern float ZMIN;

@@ -33,7 +33,9 @@ float LAMBDA;	//Longueur d'onde [nm]
 float TAURAY;	//Epaisseur optique moleculaire (Rayleigh)
 float TAUAER;	//Epaisseur optique aerosol
 float W0AER;	//Albedo simple de diffusion des aerosols
+#ifdef FLAGOCEAN
 float W0OCE;	//Albedo simple de diffusion dans l'ocean
+#endif
 float W0LAM;	//Albedo simple de diffusion de la surface lambertienne
 float HA;		//Echelle de hauteur aerosol [km] (utilise si PROFIL=0)
 float HR;		//Echelle de hauteur moleculaire [km]
