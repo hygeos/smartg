@@ -282,9 +282,11 @@ void initConstantesHost(int argc, char** argv)
 	chercheConstante(parametres, "NH2O", s);
 	NH2O = atof(s);
 	
+    #ifdef FLAGOCEAN
 	strcpy(s,"");
 	chercheConstante(parametres, "CONPHY", s);
 	CONPHY = atof(s);
+    #endif
 	
 	chercheConstante(parametres, "PATHRESULTATSHDF", PATHRESULTATSHDF);
 	
@@ -2271,7 +2273,9 @@ void creerHDFTemoin(double* tabPhotonsTot, unsigned long long nbPhotonsTot, Vari
 	SDsetattr(sdsTab, "HATM", DFNT_INT32, 1, &HATM);
 	SDsetattr(sdsTab, "WINDSPEED", DFNT_FLOAT32, 1, &WINDSPEED);
 	SDsetattr(sdsTab, "NH2O", DFNT_FLOAT32, 1, &NH2O);
+    #ifdef FLAGOCEAN
 	SDsetattr(sdsTab, "CONPHY", DFNT_FLOAT32, 1, &CONPHY);
+    #endif
 	SDsetattr(sdsTab, "PATHRESULTATSHDF", DFNT_CHAR8, strlen(PATHRESULTATSHDF), PATHRESULTATSHDF);
 	SDsetattr(sdsTab, "PATHTEMOINHDF", DFNT_CHAR8, strlen(PATHTEMOINHDF), PATHTEMOINHDF);
 	SDsetattr(sdsTab, "PATHDIFFAER", DFNT_CHAR8, strlen(PATHDIFFAER), PATHDIFFAER);
@@ -2335,7 +2339,9 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		int HATMrecup[1];
 		float WINDSPEEDrecup[1];
 		float NH2Orecup[1];
+        #ifdef FLAGOCEAN
 		float CONPHYrecup[1];
+        #endif
 		
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "SEED"), (VOIDP)SEEDrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "NBTHETA"), (VOIDP)NBTHETArecup);
@@ -2359,7 +2365,9 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "HATM"), (VOIDP)HATMrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "WINDSPEED"), (VOIDP)WINDSPEEDrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "NH2O"), (VOIDP)NH2Orecup);
+        #ifdef FLAGOCEAN
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "CONPHY"), (VOIDP)CONPHYrecup);
+        #endif
 		
 		// Si les parametres sont les memes on recupere des informations pour poursuivre la simulation précédente
 		if(NBTHETArecup[0] == NBTHETA
@@ -2383,7 +2391,10 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 			&& HATMrecup[0] == HATM
 			&& WINDSPEEDrecup[0] == WINDSPEED
 			&& NH2Orecup[0] == NH2O
-			&& CONPHYrecup[0] == CONPHY)
+            #ifdef FLAGOCEAN
+			&& CONPHYrecup[0] == CONPHY
+            #endif
+            )
 		{
 			
 			// Recuperation du nombre de photons traités et du nombre d'erreurs
@@ -2513,7 +2524,9 @@ tempsPrec)
 	SDsetattr(sdFichier, "HATM", DFNT_INT32, 1, &HATM);
 	SDsetattr(sdFichier, "WINDSPEED", DFNT_FLOAT32, 1, &WINDSPEED);
 	SDsetattr(sdFichier, "NH2O", DFNT_FLOAT32, 1, &NH2O);
+    #ifdef FLAGOCEAN
 	SDsetattr(sdFichier, "CONPHY", DFNT_FLOAT32, 1, &CONPHY);
+    #endif
 	SDsetattr(sdFichier, "PATHRESULTATSHDF", DFNT_CHAR8, strlen(PATHRESULTATSHDF), PATHRESULTATSHDF);
 	SDsetattr(sdFichier, "PATHTEMOINHDF", DFNT_CHAR8, strlen(PATHTEMOINHDF), PATHTEMOINHDF);
 	SDsetattr(sdFichier, "PATHDIFFAER", DFNT_CHAR8, strlen(PATHDIFFAER), PATHDIFFAER);

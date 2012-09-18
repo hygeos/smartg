@@ -1968,6 +1968,7 @@ void initConstantesDevice()
 	cudaMemcpyToSymbol(W0LAMd, &W0LAM, sizeof(float));
     #ifdef FLAGOCEAN
 	cudaMemcpyToSymbol(W0OCEd, &W0OCE, sizeof(float));
+	cudaMemcpyToSymbol(CONPHYd, &CONPHY, sizeof(float));
     #endif
 	
 	cudaMemcpyToSymbol(HAd, &HA, sizeof(float));
@@ -1979,7 +1980,6 @@ void initConstantesDevice()
 	
 	cudaMemcpyToSymbol(WINDSPEEDd, &WINDSPEED, sizeof(float));
 	cudaMemcpyToSymbol(NH2Od, &NH2O, sizeof(float));
-	cudaMemcpyToSymbol(CONPHYd, &CONPHY, sizeof(float));
 	cudaMemcpyToSymbol(XBLOCKd, &XBLOCK, sizeof(int));
 	cudaMemcpyToSymbol(YBLOCKd, &YBLOCK, sizeof(int));
 	cudaMemcpyToSymbol(XGRIDd, &XGRID, sizeof(int));

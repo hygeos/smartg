@@ -32,6 +32,7 @@ __device__ __constant__ float TAUMAXd;	//tau initial du photon (Host)
 __device__ __constant__ float W0AERd;
 #ifdef FLAGOCEAN
 __device__ __constant__ float W0OCEd;
+__device__ __constant__ float CONPHYd;
 #endif
 __device__ __constant__ float W0LAMd;
 __device__ __constant__ unsigned int NFAERd;
@@ -44,7 +45,6 @@ __device__ __constant__ int NATMd;
 __device__ __constant__ int HATMd;
 __device__ __constant__ float WINDSPEEDd;
 __device__ __constant__ float NH2Od;
-__device__ __constant__ float CONPHYd;
 
 __device__ __constant__ int XBLOCKd;
 __device__ __constant__ int YBLOCKd;

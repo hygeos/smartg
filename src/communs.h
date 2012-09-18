@@ -142,6 +142,7 @@ extern float W0AER;
 extern float W0LAM;
 #ifdef FLAGOCEAN
 extern float W0OCE;
+extern float CONPHY;
 #endif
 extern float HA;
 extern float HR;
@@ -151,7 +152,6 @@ extern int NATM;
 extern int HATM;
 extern float WINDSPEED;
 extern float NH2O;
-extern float CONPHY;
 
 extern char PATHRESULTATSHDF[];
 extern char PATHTEMOINHDF[];

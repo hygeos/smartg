@@ -45,7 +45,9 @@ int NATM;		//Altitude haute de la couche aerosol [km] (utilise si PROFIL=3)
 int HATM;		//Altitude haute de la couche aerosol [km] (utilise si PROFIL=3)
 float WINDSPEED;	//Vitesse du vent [m/s] (utilisee pour le modele de Cox et Munk: si DIOPTRE=1)
 float NH2O;		//Indice de refraction relatif air/eau
+#ifdef FLAGOCEAN
 float CONPHY;	//Concentration en phytoplancton [mg.m-3] (utilise si SUR>=2)
+#endif
 
 char PATHRESULTATSHDF[256]; //Fichier de sortie au format hdf
 char PATHTEMOINHDF[256]; //Fichier témoin au format hdf
