@@ -1,4 +1,4 @@
-CC = /usr/local/cuda/bin/nvcc
+CC = /opt/cuda42/cuda/bin/nvcc
 EXEC = mccuda
 
 #=============Options============#  (en fonction de la carte graphique utilisee)
@@ -6,20 +6,15 @@ EXEC = mccuda
 CFLAGS = -g -G -arch=sm_20 -O3 # --ptxas-options=-v
 # CFLAGS += -gencode arch=compute_20,code=sm_20
 # CFLAGS += -m64
-IFLAGS = -I /usr/local/cuda/include
-IFLAGS += -I /usr/local/NVIDIA_GPU_Computing_SDK/C/common/inc
-IFLAGS += -I /usr/include/hdf/
+IFLAGS = -I /opt/cuda42/cuda/include
 
 # IIFLAGS = $(wildcard /usr/lib/libdf.a /usr/lib64/hdf/libdf.a)
 # IIFLAGS += $(wildcard /usr/lib/libmfhdf.a /usr/lib64/hdf/libmfhdf.a)
 IIFLAGS = -ldf -lmfhdf -ljpeg
 
 LFLAGS =
-LFLAGS += -L /usr/local/NVIDIA_GPU_Computing_SDK/C/common/lib/linux
-LFLAGS += -L /usr/local/cuda/lib64
-LFLAGS += -L /usr/local/cuda/lib
-LFLAGS += -L /usr/local/cuda/bin
-LFLAGS += -L /usr/local/NVIDIA_GPU_Computing_SDK/C/lib
+LFLAGS += -L /opt/cuda42/lib64
+LFLAGS += -L /opt/cuda42/lib
 LFLAGS += -lcuda -lcudart
 
 #===== Caractéristiques majeures =====#
