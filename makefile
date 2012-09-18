@@ -1,5 +1,5 @@
 CC = /usr/local/cuda/bin/nvcc
-EXEC = Prog
+EXEC = mccuda
 
 #=============Options============#  (en fonction de la carte graphique utilisee)
 # CFLAGS = -g -G -arch=sm_10 -O3 -Xptxas -v

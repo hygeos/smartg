@@ -28,7 +28,7 @@ W0AER = 0.966883724738261
 # Nom absolu du fichier de la matrice de phase des aérosol
 	# Données commencant sur la première ligne
 	# %lf\t%lf\t%lf\t%lf\t%lf => Correspondant à angle	p2	p1	p3	p4
-PATHDIFFAER = /home/florent/MCCuda/fic/valid_T70.443
+PATHDIFFAER = fic/valid_T70.443
 
 # Type de simulation
 	# -2 pour atmosphere seule
@@ -53,7 +53,7 @@ PROFIL = 0
 	# Le format du fichier doit être le suivant 
 	# I	ALT		hmol(I)		haer(I)		H(I)		XDEL(I)		YDEL(I)  => Première ligne indicative, pas de données dessus
 	# %d\t%f\t%f\t%f\t%f\t%f\t%f  => Format pour toutes les autres lignes
-PATHPROFILATM = /home/florent/MCCuda/profil/molec_new_profil_mol_H8_AER_0_2_443
+PATHPROFILATM = profil/molec_new_profil_mol_H8_AER_0_2_443
 
 # Echelle de hauteur aerosol [km] (utilise si PROFIL=0) (float)
 HA = 2.0
@@ -131,10 +131,12 @@ LSAOCE = 72001
 NFOCE = 10000000
 
 
-# Chemin du fichier de sortie, sans le dernier '/'
-# Si le flag NOMAUTO est activé, une grande partie du chemin est automatiquement créé afin de simplifier la classification des
-# resultats
-PATHRESULTATSHDF = validation/PARALLELE
+# Chemin des fichiers de sortie et témoin
+# Si le flag NOMAUTO est activé, le nom du fichier de sortie et du fichier
+# témoin sont générés automatiquement avec comme racine PATHRESULTATSHDF
+# Si le flag NOMAUTO est désactivé: PATHRESULTATSHDF est le fichier de sortie
+# et PATHTEMOINHDF est le fichier témoin
+PATHRESULTATSHDF = validation/PARALLELE/
 
 # Chemin du fichier témoin (Le .hdf et les détails de la simulation sont ajoutés par le programme automatiquement)
 #PATHTEMOINHDF = validation/SPHERIQUE/
