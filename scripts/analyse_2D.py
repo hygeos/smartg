@@ -1,13 +1,24 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+
+'''
+Script de visualisation des résultats
+'''
+
+
 import os
 import sys
 import warnings
 warnings.simplefilter("ignore",DeprecationWarning)
 import pyhdf.SD
 import numpy as np
-from matplotlib.pyplot import *
+from pylab import savefig, show, figure
+from optparse import OptionParser
+from matplotlib.transforms import Affine2D
+import mpl_toolkits.axisartist.floating_axes as floating_axes
+from matplotlib.projections import PolarAxes
+from mpl_toolkits.axisartist.grid_finder import FixedLocator, DictFormatter
 
 #----------------------------------------------------------------------------
 # axes semi polaires
@@ -80,167 +91,131 @@ def setup_axes3(fig, rect):
     return ax1, aux_ax
 #----------------------------------------------------------------------------
 
-
-	          ##############
-	         # PARAMETRES #
-	        ##############
-
-#
-# Paramètres à modifier
-#
-#-----------------------------------------------------------------------------------------------------------------------
-type_simu = "molecules_seules"
-#type_simu = "total"
-date_simu = "12092012"
-angle = "30"
-ths=30.
-geometrie = "PARALLELE"		#Géométrie de l'atmosphère
-
-# Nom du fichier Cuda sans extension .hdf
-nom_cuda = "out_CUDA_atmos_ths=30.00_tRay=0.0533_tAer=0.0000"
-#nom_cuda = "out_CUDA_ths=30.00_tRay=0.0533_tAer=0.5000_ws=5.00_sim=2"
-#nom_cuda = "out_CUDA_ths=30.00_tRay=0.0533_tAer=0.0000_ws=5.00_sim=0"
-
-# Indices ci-dessus ont été mis en place car ils permettent de rogner la simulation si nécessaire.
-# Les bords peuvent fausser les graphiques.
-dep = 3			# Indice de départ pour le tracé
-fin = 177		# Indice de fin pour le tracé
-pas_figure = 20	# Pas en phi pour le tracé des graphiques
-#-----------------------------------------------------------------------------------------------------------------------
+def main():
 
 
-######################################################
-##				CHEMIN DES FICHIERS					##
-######################################################
+    ######################################################
+    ##                PARSE OPTIONS                     ##
+    ######################################################
 
-# Nom complet du fichier Cuda
-path_cuda = "/home/did/RTC/MCCuda/validation/"+geometrie+"/"+type_simu+"/simulation_"+date_simu+"/" + nom_cuda + ".hdf"
+    parser = OptionParser(usage='%prog [options] hdf_file')
+    parser.add_option('-s', '--savefile',
+            dest='filename',
+            help='output file name',
+            )
+    (options, args) = parser.parse_args()
+    if len(args) != 1:
+        parser.print_usage()
+        exit(1)
 
-# Si le dossier suivant existe deja il est supprime puis recree
-path_dossier_sortie = \
-"/home/did/RTC/MCCuda/validation/"+geometrie+"/"+type_simu+"/graph_"+date_simu+"/analyse_rapide/"+"CUDA_rapide"+nom_cuda
-
-
-##########################################################
-##				DONNEES FICHIER CUDA					##
-##########################################################
-
-# verification de l'existence du fichier hdf
-if os.path.exists(path_cuda):
-
-	# lecture du fichier hdf
-	sd_cuda = pyhdf.SD.SD(path_cuda)
-	# lecture du nombre de valeurs de phi
-	NBPHI_cuda = getattr(sd_cuda,'NBPHI')
-	NBTHETA_cuda = getattr(sd_cuda,'NBTHETA')
-
-	# Récupération des valeurs de theta
-	name = "Valeurs de theta echantillonnees"
-	hdf_theta = sd_cuda.select(name)
-	theta = hdf_theta.get()
-
-	# Récupération des valeurs de phi
-	name = "Valeurs de phi echantillonnees"
-	hdf_phi = sd_cuda.select(name)
-	phi = hdf_phi.get()
-
-	sds_cuda = sd_cuda.select("Valeurs de la reflectance (I)")
-	dataI = sds_cuda.get()		
-	sds_cuda = sd_cuda.select("Valeurs de Q")
-	dataQ = sds_cuda.get()		
-	sds_cuda = sd_cuda.select("Valeurs de U")
-	dataU = sds_cuda.get()		
-
-else:
-	sys.stdout.write("Pas de fichier "+path_cuda+"\n")
-	sys.exit()
+    path_cuda = args[0]
 
 
-##############################################################
-##				INFORMATION A L'UTILISATEUR					##
-##############################################################
+    ##########################################################
+    ##                DONNEES FICHIER CUDA                  ##
+    ##########################################################
 
-sys.stdout.write("\n#-------------------------------------------------------------------------------#\n")
-sys.stdout.write("# Le fichier cuda est " + path_cuda + "\n")
-sys.stdout.write("# Les résultats sont stockés dans " + path_dossier_sortie + "\n")
-sys.stdout.write("#-------------------------------------------------------------------------------#\n")
+    # verification de l'existence du fichier hdf
+    if os.path.exists(path_cuda):
 
+        # lecture du fichier hdf
+        sd_cuda = pyhdf.SD.SD(path_cuda)
+        # lecture du nombre de valeurs de phi
+        NBPHI_cuda = getattr(sd_cuda,'NBPHI')
+        NBTHETA_cuda = getattr(sd_cuda,'NBTHETA')
 
-os.system("rm -rf "+ path_dossier_sortie)
-os.system("mkdir -p "+ path_dossier_sortie)
+        # Récupération des valeurs de theta
+        name = "Valeurs de theta echantillonnees"
+        hdf_theta = sd_cuda.select(name)
+        theta = hdf_theta.get()
 
+        # Récupération des valeurs de phi
+        name = "Valeurs de phi echantillonnees"
+        hdf_phi = sd_cuda.select(name)
+        phi = hdf_phi.get()
 
-##################################################################################
-##				CREATION/CHOIX/MODIFICATION DE CERTAINES DONNES					##
-##################################################################################
+        sds_cuda = sd_cuda.select("Valeurs de la reflectance (I)")
+        dataI = sds_cuda.get()
+        sds_cuda = sd_cuda.select("Valeurs de Q")
+        dataQ = sds_cuda.get()
+        sds_cuda = sd_cuda.select("Valeurs de U")
+        dataU = sds_cuda.get()
 
-# Sauvegarde de la grandeur désirée
-data_cudaI = np.zeros((NBPHI_cuda, NBTHETA_cuda), dtype=float)
-data_cudaI = dataI[0:NBPHI_cuda,:]
-data_cudaQ = np.zeros((NBPHI_cuda, NBTHETA_cuda), dtype=float)
-data_cudaQ = dataQ[0:NBPHI_cuda,:]
-data_cudaU = np.zeros((NBPHI_cuda, NBTHETA_cuda), dtype=float)
-data_cudaU = dataU[0:NBPHI_cuda,:]
-data_cudaIP = np.sqrt(data_cudaQ*data_cudaQ + data_cudaU*data_cudaU)
-
-
-#---------------------------------------------------------
-
-# Calcul pour l'ergonomie des graphiques
-VI = np.linspace(0.,0.2,50) # levels des contours
-VIt = np.linspace(0.,0.2,6) # ticks des color bars associees
-VQ = np.linspace(-0.2,0.2,50)
-VQt = np.linspace(-0.2,0.2,5)
-VU = np.linspace(-0.2,0.2,50)
-VUt = np.linspace(-0.2,0.2,5)
-VIP = np.linspace(0.,0.2,50)
-VIPt = np.linspace(0.,0.2,5)
-
-##########################################################
-##				CREATION DES GRAPHIQUES	2D				##
-##########################################################
-
-from matplotlib.transforms import Affine2D
-import mpl_toolkits.axisartist.floating_axes as floating_axes
-
-from matplotlib.projections import PolarAxes
-from mpl_toolkits.axisartist.grid_finder import FixedLocator, DictFormatter
-
-# grille 2D des angles
-r , t = np.meshgrid(theta,phi)
+    else:
+        sys.stdout.write("Pas de fichier "+path_cuda+"\n")
+        sys.exit()
 
 
-fig = figure(1, figsize=(9, 9))
-fig.subplots_adjust(wspace=0.3, left=0.05, right=0.95)
 
-ax3, aux_ax3 = setup_axes3(fig, 221)
-cax3 = aux_ax3.contourf(t,r,data_cudaI,VI)
-ax3.set_title("I",weight='bold',position=(0.25,1.0))
-cb3=fig.colorbar(cax3,orientation='horizontal',ticks=VIt)
-cb3.set_label("Reflectance")
+    ##################################################################################
+    ##              CREATION/CHOIX/MODIFICATION DE CERTAINES DONNES                 ##
+    ##################################################################################
 
-ax3, aux_ax3 = setup_axes3(fig, 222)
-cax3 = aux_ax3.contourf(t,r,data_cudaQ,VQ)
-ax3.set_title("Q",weight='bold',position=(0.25,1.0))
-cb3=fig.colorbar(cax3,orientation='horizontal',ticks=VQt)
-#cb3.set_label("Reflectance")
-
-ax3, aux_ax3 = setup_axes3(fig, 223)
-cax3 = aux_ax3.contourf(t,r,data_cudaU,VU)
-ax3.set_title("U",weight='bold',position=(0.25,1.0))
-cb3=fig.colorbar(cax3,orientation='horizontal',ticks=VUt)
-#cb3.set_label("Reflectance")
-
-ax3, aux_ax3 = setup_axes3(fig, 224)
-cax3 = aux_ax3.contourf(t,r,data_cudaIP,VIP)
-ax3.scatter(ths,20,marker='*',color='#ffffff',s=80)
-
-ax3.set_title("IP",weight='bold',position=(0.25,1.0))
-cb3=fig.colorbar(cax3,orientation='horizontal',ticks=VIPt)
-cb3.set_label("Polarized Reflectance")
+    # Sauvegarde de la grandeur désirée
+    data_cudaI = np.zeros((NBPHI_cuda, NBTHETA_cuda), dtype=float)
+    data_cudaI = dataI[0:NBPHI_cuda,:]
+    data_cudaQ = np.zeros((NBPHI_cuda, NBTHETA_cuda), dtype=float)
+    data_cudaQ = dataQ[0:NBPHI_cuda,:]
+    data_cudaU = np.zeros((NBPHI_cuda, NBTHETA_cuda), dtype=float)
+    data_cudaU = dataU[0:NBPHI_cuda,:]
+    data_cudaIP = np.sqrt(data_cudaQ*data_cudaQ + data_cudaU*data_cudaU)
 
 
-#show()
-savefig( path_dossier_sortie+'/analyse_Cuda_2D_test.png'  )
+    #---------------------------------------------------------
+
+    # Calcul pour l'ergonomie des graphiques
+    VI = np.linspace(0.,0.2,50) # levels des contours
+    VIt = np.linspace(0.,0.2,6) # ticks des color bars associees
+    VQ = np.linspace(-0.2,0.2,50)
+    VQt = np.linspace(-0.2,0.2,5)
+    VU = np.linspace(-0.2,0.2,50)
+    VUt = np.linspace(-0.2,0.2,5)
+    VIP = np.linspace(0.,0.2,50)
+    VIPt = np.linspace(0.,0.2,5)
+
+    ##########################################################
+    ##              CREATION DES GRAPHIQUES 2D              ##
+    ##########################################################
+
+    # grille 2D des angles
+    r , t = np.meshgrid(theta,phi)
 
 
+    fig = figure(1, figsize=(9, 9))
+    fig.subplots_adjust(wspace=0.3, left=0.05, right=0.95)
+
+    ax3, aux_ax3 = setup_axes3(fig, 221)
+    cax3 = aux_ax3.contourf(t,r,data_cudaI,VI)
+    ax3.set_title("I",weight='bold',position=(0.25,1.0))
+    cb3=fig.colorbar(cax3,orientation='horizontal',ticks=VIt)
+    cb3.set_label("Reflectance")
+
+    ax3, aux_ax3 = setup_axes3(fig, 222)
+    cax3 = aux_ax3.contourf(t,r,data_cudaQ,VQ)
+    ax3.set_title("Q",weight='bold',position=(0.25,1.0))
+    cb3=fig.colorbar(cax3,orientation='horizontal',ticks=VQt)
+    #cb3.set_label("Reflectance")
+
+    ax3, aux_ax3 = setup_axes3(fig, 223)
+    cax3 = aux_ax3.contourf(t,r,data_cudaU,VU)
+    ax3.set_title("U",weight='bold',position=(0.25,1.0))
+    cb3=fig.colorbar(cax3,orientation='horizontal',ticks=VUt)
+    #cb3.set_label("Reflectance")
+
+    ax3, aux_ax3 = setup_axes3(fig, 224)
+    cax3 = aux_ax3.contourf(t,r,data_cudaIP,VIP)
+    # ax3.scatter(ths,20,marker='*',color='#ffffff',s=80)
+
+    ax3.set_title("IP",weight='bold',position=(0.25,1.0))
+    cb3=fig.colorbar(cax3,orientation='horizontal',ticks=VIPt)
+    cb3.set_label("Polarized Reflectance")
+
+
+    if options.filename == None:
+        show()
+    else:
+        savefig(options.filename)
+
+
+if __name__ == '__main__':
+    main()
