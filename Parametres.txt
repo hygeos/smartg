@@ -136,10 +136,10 @@ NFOCE = 10000000
 # témoin sont générés automatiquement avec comme racine PATHRESULTATSHDF
 # Si le flag NOMAUTO est désactivé: PATHRESULTATSHDF est le fichier de sortie
 # et PATHTEMOINHDF est le fichier témoin
-PATHRESULTATSHDF = validation/PARALLELE/
+PATHRESULTATSHDF = resultats/PARALLELE/
 
 # Chemin du fichier témoin (Le .hdf et les détails de la simulation sont ajoutés par le programme automatiquement)
-#PATHTEMOINHDF = validation/SPHERIQUE/
+#PATHTEMOINHDF = ...
 
 
 ###
