@@ -8,7 +8,7 @@
 #_______________________#
 
 # Nombre de photons a lancer (unsigned long long) (limite par le tableau du poids des photons en unsigned long long)
-NBPHOTONS = 3000000000
+NBPHOTONS = 1000000000
 
 # Angle zenithal solaire en degrés (float)
 THSDEG = 30.
@@ -37,7 +37,7 @@ PATHDIFFAER = fic/valid_T70.443
 	# 1 pour atmosphere et dioptre
 	# 2 pour atmosphere dioptre et ocean (pas validé)
 	# 3 pour ocean seul
-SIM = 1
+SIM = -2
 
 # Forcage de la premiere diffusion (utilise si SIM = -2)
 DIFFF = 0
@@ -68,7 +68,7 @@ ZMIN = 0.
 ZMAX = 1.
 
 # Nombre de couche+1
-NATM=103
+NATM=3
 
 # Altitude max de l'atmosphère
 HATM=100
@@ -85,10 +85,10 @@ SUR = 3
 	# 1 = agite avec reflexion multiple
 	# 2 = agite sans reflexion multiple
 	# 3 = surface lambertienne (uniquement sans océan)
-DIOPTRE = 2
+DIOPTRE = 3
 
 # Albedo simple de diffusion de la surface lambertienne (float)
-W0LAM = 0.7
+W0LAM = 0.0
 
 # Vitesse du vent [m/s] (utilise si idioptre=1) (modele de Cox et Munk) (float)
 WINDSPEED = 5.0
