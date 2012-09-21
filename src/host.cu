@@ -89,7 +89,7 @@ int initRandMWC(unsigned long long *etat, unsigned int *config,
 void initRandMTConfig(ConfigMT* config_H, ConfigMT* config_D, int nbThreads)
 {
 	// Ouverture du fichier
-	const char *fname = "MersenneTwister.dat";
+	const char *fname = "auxdata/MT/MersenneTwister.dat";
 	FILE* fd = fopen(fname, "rb");
 	if(!fd)
 	{
@@ -658,7 +658,7 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	}
 	
 	// Initialisation des tableaux host à l'aide du fichier et du seed
-	initRandMWC(tab_H->etat, tab_H->config, XBLOCK * YBLOCK * XGRID * YGRID, "MWC.txt", (unsigned long long)SEED);
+	initRandMWC(tab_H->etat, tab_H->config, XBLOCK * YBLOCK * XGRID * YGRID, "auxdata/MWC/MWC.txt", (unsigned long long)SEED);
 	
 	// Copie dans les tableaux device
 	cudaErreur = cudaMemcpy(tab_D->etat, tab_H->etat, XBLOCK * YBLOCK * XGRID * YGRID * sizeof(unsigned long long), cudaMemcpyHostToDevice);
