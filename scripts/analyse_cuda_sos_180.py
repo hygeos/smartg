@@ -46,34 +46,34 @@ while flag:
     print '\n\nQuelles donnees voulez-vous tracer?'
     #print '1:Reflectance\n2:Q\n3:U\n4:Lumiere polarisee'
     choix = raw_input('i >pour la reflectance\nq >pour Q\nu >pour U\nl >pour la lumiere polarisee\n')
-    
+
     if choix == 'i':
         nom_data_cuda = "Valeurs de la reflectance (I)"
         colonne_donnee_sos = 2
         type_donnees = "I"
         flag=False
-        
+
     elif choix == 'q':
         nom_data_cuda = "Valeurs de Q"
         colonne_donnee_sos = 3
         type_donnees = "Q"
         flag=False
-        
+
     elif choix == 'u':
         nom_data_cuda = "Valeurs de U"
         colonne_donnee_sos = 4
         type_donnees = "U"
         flag=False
-        
+
     elif choix == 'l':
         nom_data_cuda = "Valeurs de la lumiere polarisee (LP)"
         colonne_donnee_sos = 5
         type_donnees = "LP"
         flag=False
-        
+
     else:
             print 'Choix incorrect, recommencez'
-            
+
 print 'C\'est parti pour la simulation de {0}'.format(type_donnees)
 
 
@@ -82,14 +82,14 @@ print 'C\'est parti pour la simulation de {0}'.format(type_donnees)
 ######################################################
 
 # Nom complet du fichier SOS
-path_sos = "/home/did/RTC/MCCuda/validation/" + nom_sos + ".txt"
+path_sos = "validation/" + nom_sos + ".txt"
 
 # Nom complet du fichier Cuda
-path_cuda = "/home/did/RTC/MCCuda/validation/"+geometrie+"/"+type_simu+"/simulation_"+date_simu+"/" + nom_cuda + ".hdf"
+path_cuda = "resultats/"+geometrie+"/"+type_simu+"/simulation_"+date_simu+"/" + nom_cuda + ".hdf"
 
 # Si le dossier suivant existe deja il est supprime puis recree
 path_dossier_sortie = \
-"/home/did/RTC/MCCuda/validation/"+geometrie+"/"+type_simu+"/graph_"+date_simu+"/"+type_donnees+"/"+type_donnees+"_SOS_CUDA_" + \
+"resultats/"+geometrie+"/"+type_simu+"/graph_"+date_simu+"/"+type_donnees+"/"+type_donnees+"_SOS_CUDA_" + \
 nom_cuda
 
 
@@ -105,20 +105,20 @@ if os.path.exists(path_cuda):
     # lecture du nombre de valeurs de phi
     NBPHI_cuda = getattr(sd_cuda,'NBPHI')
     NBTHETA_cuda = getattr(sd_cuda,'NBTHETA')
-    
+
     # Récupération des valeurs de theta
     name = "Valeurs de theta echantillonnees"
     hdf_theta = sd_cuda.select(name)
     theta = hdf_theta.get()
-    
+
     # Récupération des valeurs de phi
     name = "Valeurs de phi echantillonnees"
     hdf_phi = sd_cuda.select(name)
     phi = hdf_phi.get()
 
     sds_cuda = sd_cuda.select(nom_data_cuda)
-    data = sds_cuda.get()        
-    
+    data = sds_cuda.get()
+
 else:
     sys.stdout.write("Pas de fichier "+path_cuda+"\n")
     sys.exit()
@@ -130,23 +130,23 @@ else:
 
 # verification de l'existence du fichier SOS
 if os.path.exists(path_sos):
-    
+
     # data_sos[iphi][ith] = grandeur
     # ith est le num de la ith-ème boite theta. Boites de pas de 0.5 centrées tous les 0.5
     # iphi est le num de la ith-ème boite phi
     data_sos = zeros((NBPHI_cuda,2*(NBTHETA_cuda-1)),dtype=float)
     fichier_sos = open(path_sos, "r")
-    
+
     for ligne in fichier_sos:
         donnees = ligne.rstrip('\n\r').split("\t")        # Lecture
         if donnees[0]=='':
             donnees = donnees[1:]                        # Suppression des possibles tabulations en début de ligne
-        
+
         if float(donnees[1]) < 89.6:
             data_sos[int(float(donnees[0]))][int(2*float(donnees[1]))] = float(donnees[colonne_donnee_sos])
-        
+
     fichier_sos.close()
-        
+
 else:
     sys.stdout.write("Pas de fichier "+path_sos+"\n")
     sys.exit()
@@ -185,7 +185,7 @@ data_cuda = zeros((NBPHI_cuda, NBTHETA_cuda), dtype=float)
 
 #else:    # Il ne faut pas moyenner U qui est antisymétrique
 data_cuda = data[0:NBPHI_cuda,]
-    
+
 # Infos en commentaire sur le graph
 commentaire = type_simu + ' - ' + angle
 
@@ -194,14 +194,14 @@ commentaire = type_simu + ' - ' + angle
 ##########################################################
 
 for iphi in xrange(0,NBPHI_cuda,pas_figure):
-    
+
     figure()
     # Référence
     plot(theta[dep:fin], data_sos[iphi][dep:fin],label='SOS')
-    
+
     # Cuda
     plot(theta[dep:fin], data_cuda[iphi][dep:fin],label='CUDA')
-    
+
     # commun
     legend(loc='best')
     title( type_donnees + ' pour Cuda et SOS pour phi='+str(phi[iphi])+' deg' )
