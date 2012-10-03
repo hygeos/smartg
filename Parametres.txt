@@ -14,10 +14,10 @@ NBPHOTONS = 1e9
 THSDEG = 30.
 
 # Longueur d'onde [nm] (float)
-LAMBDA = 443.
+LAMBDA = 665.
 
 # Epaisseur optique moleculaire (Rayley) (float)
-TAURAY = 0.0533
+TAURAY = 0.04546
 
 # Epaisseur optique aerosol (float)
 TAUAER = 0.
@@ -53,7 +53,7 @@ PROFIL = 0
 	# Le format du fichier doit être le suivant 
 	# I	ALT		hmol(I)		haer(I)		H(I)		XDEL(I)		YDEL(I)  => Première ligne indicative, pas de données dessus
 	# %d\t%f\t%f\t%f\t%f\t%f\t%f  => Format pour toutes les autres lignes
-PATHPROFILATM = profil/molec_new_profil_mol_H8_AER_0_2_443
+PATHPROFILATM = profil/new_665nm_aot0.00_O3mls_100layers.dat
 
 # Echelle de hauteur aerosol [km] (utilise si PROFIL=0) (float)
 HA = 2.0
@@ -68,7 +68,7 @@ ZMIN = 0.
 ZMAX = 1.
 
 # Nombre de couche+1
-NATM=3
+NATM=100
 
 # Altitude max de l'atmosphère
 HATM=100

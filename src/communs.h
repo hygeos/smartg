@@ -153,6 +153,7 @@ extern float THSDEG;
 extern float LAMBDA;
 extern float TAURAY;
 extern float TAUAER;
+extern float TAUATM;
 extern float W0AER;
 extern float W0LAM;
 #ifdef FLAGOCEAN
@@ -288,6 +289,9 @@ typedef struct __align__(16)
 	
 	float* h;				// Pointeur vers l'épaisseur optique de chaque couches du modèle atmosphérique
 	float* pMol;			// Pointeur vers la proportion de molécules dans chaque couches du modèle atmosphérique
+    #ifdef OZONE
+    float* abs;             // Pointeur vers la proportion d'absorbant dans chaque couches du modèle atmosphérique
+    #endif
 	
 	/** Séparation du code pour atmosphère sphérique ou parallèle **/
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */

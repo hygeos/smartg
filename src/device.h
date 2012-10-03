@@ -118,6 +118,9 @@ __device__ void move(Photon*
 		#ifndef SPHERIQUE
 		,int flagDiff, float* h, float* pMol
 		#endif
+        #if !defined(SPHERIQUE) && defined(OZONE)
+        , float *abs
+        #endif
 		#ifdef SPHERIQUE
 		, Tableaux tab, Init* init
 		#endif

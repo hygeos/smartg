@@ -32,6 +32,7 @@ float THSDEG;	//Angle zénithal solaire
 float LAMBDA;	//Longueur d'onde [nm]
 float TAURAY;	//Epaisseur optique moleculaire (Rayleigh)
 float TAUAER;	//Epaisseur optique aerosol
+float TAUATM;
 float W0AER;	//Albedo simple de diffusion des aerosols
 #ifdef FLAGOCEAN
 float W0OCE;	//Albedo simple de diffusion dans l'ocean

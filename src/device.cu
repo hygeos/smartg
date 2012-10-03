@@ -204,11 +204,14 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 				start = clock();
 			}
 			#endif
-			
+		
 			move(&ph
 				#ifndef SPHERIQUE
 				,flagDiff, tab.h, tab.pMol
 				#endif
+                #if !defined(SPHERIQUE) && defined(OZONE)
+                , tab.abs
+                #endif
 				#ifdef SPHERIQUE
 				, tab, init
 				#endif
@@ -391,6 +394,7 @@ __device__ void initPhoton(Photon* ph/*, float* z*/
 	#endif
 	
 	#ifndef SPHERIQUE	/* Code spécifique à une atmosphère en plan parallèle */
+//	ph->z = TAUATMd;
 	ph->z = TAUATMd;
 	#endif
 	
@@ -445,6 +449,9 @@ __device__ void move(Photon* ph
 		#ifndef SPHERIQUE
 		,int flagDiff, float* h, float* pMol
 		#endif
+        #if !defined(SPHERIQUE) && defined(OZONE)
+        , float *abs
+        #endif
 		#ifdef SPHERIQUE
 		, Tableaux tab, Init* init
 		#endif
@@ -956,7 +963,8 @@ rsolfi=%15.12lf - tauRdm= %lf - hph_p= %15.12lf - hph= %15.12lf - zph_p= %15.12l
 	float tauBis;
 	
 	#ifndef FLAGOCEAN
-	ph->z += -__logf( flagDiff + RAND*(1.F +(__expf(-TAUMAXd)-2.f)*flagDiff))*ph->vz;
+//	ph->z += -__logf( flagDiff + RAND*(1.F +(__expf(-TAUMAXd)-2.f)*flagDiff))*ph->vz;
+	ph->z += -logf(1.f - RAND)*ph->vz;
 	#endif
 	
 	#ifdef FLAGOCEAN
@@ -992,7 +1000,7 @@ rsolfi=%15.12lf - tauRdm= %lf - hph_p= %15.12lf - hph= %15.12lf - zph_p= %15.12l
 		return;
 	}
 	#endif
-	
+
 	// Si tau<0 le photon atteint la surface
 	if(ph->z < 0.F){
 		ph->loc = SURFACE;
@@ -1001,6 +1009,7 @@ rsolfi=%15.12lf - tauRdm= %lf - hph_p= %15.12lf - hph= %15.12lf - zph_p= %15.12l
 	}
 	// Si tau>TAURAY le photon atteint l'espace
 	else if( ph->z > TAUATMd ){
+//	else if( ph->z > h[NATMd] ){
 		ph->loc = SPACE;
 		return;
 	}
@@ -1009,6 +1018,7 @@ rsolfi=%15.12lf - tauRdm= %lf - hph_p= %15.12lf - hph= %15.12lf - zph_p= %15.12l
 	
 	// Calcul de la couche dans laquelle se trouve le photon
 	tauBis = TAUATMd-ph->z;
+//	tauBis = h[NATMd]-ph->z;
 	icouche = 1;
 	
 	while( (h[icouche] < (tauBis))&&(icouche<NATMd) ){
@@ -1024,11 +1034,16 @@ rsolfi=%15.12lf - tauRdm= %lf - hph_p= %15.12lf - hph= %15.12lf - zph_p= %15.12l
 	// Calcul sans interpolation
 	#ifdef SPHERIQUE
 	ph->prop_aer = 1.f - tab.pMol[icouche];
+    #endif
+    #if defined(SPHERIQUE) && defined(OZONE)
+    ph->weight = ph->weight * (1.f - tab.abs[icouche]);
 	#endif
 	#ifndef SPHERIQUE
 	ph->prop_aer = 1.f - pMol[icouche];
+    #endif
+    #if !defined(SPHERIQUE) && defined(OZONE)
+    ph->weight = ph->weight * (1.f - abs[icouche]);
 	#endif
-	
 	// Calcul avec interpolation linéaire
 // 	if(icouche==0){
 //    		printf("ph->couche=0 pour le calcul de proportion d'aérosols\n");
@@ -2080,7 +2095,7 @@ void initConstantesDevice()
 	cudaMemcpyToSymbol(GAMAd, &GAMAbis, sizeof(float));
 	
 	#ifndef SPHERIQUE
-	float TAUATM = TAURAY+TAUAER;
+//	float TAUATM = TAURAY+TAUAER;
 	cudaMemcpyToSymbol(TAUATMd, &TAUATM, sizeof(float));
 	
 	float TAUMAX = TAUATM / CTHSbis; //tau initial du photon
