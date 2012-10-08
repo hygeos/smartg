@@ -402,11 +402,11 @@ __device__ void move(Photon* ph
 		#endif
 		    )
 {
-	float rra;
 	int icouche;
 	
 	/** Séparation du code pour atmosphère sphérique ou parallèle **/
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
+	float rra;
 	float rsolfi = 0.f;
 	float delta;
 	
@@ -1549,12 +1549,6 @@ __device__ void surfaceLambertienne(Photon* ph
 						, int idx, Evnt* evnt
 						#endif
 						){
-	
-	if( SIMd == -2){ 	// Atmosphère ou océan seuls, la surface absorbe tous les photons
-		ph->loc = ABSORBED;
-	}
-	
-	else{
 	float thetab;	// angle de diffusion (entre le vecteur avt et après reflexion)
 	float uxn,vxn,uyn,vyn,uzn,vzn;	// Vecteur du photon après reflexion
 	float cTh2 = RAND;
@@ -1566,13 +1560,22 @@ __device__ void surfaceLambertienne(Photon* ph
 	float sPhi = __sinf(phi);
 	
 	float psi;
+
+    #ifdef SPHERIQUE
+	float icp, isp, ict, ist;	// Sinus et cosinus de l'angle d'impact
+    #endif
 	
+
+	
+	if( SIMd == -2){ 	// Atmosphère ou océan seuls, la surface absorbe tous les photons
+		ph->loc = ABSORBED;
+	}
+	
+	else {
 	/** Séparation du code pour atmosphère sphérique ou parallèle **/
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
 	/** Calcul du theta impact et phi impact **/
 	//NOTE: Dans le code Fortran, ce calcul est effectué dans atmos
-	float icp, isp, ict, ist;	// Sinus et cosinus de l'angle d'impact
-	float vxn, vyn, vzn, uxn, uyn, uzn;
 	
 	ph->locPrec = ph->loc;
 	
