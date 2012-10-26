@@ -10,6 +10,47 @@
 *
 ***********************************************************/
 
+/*************************************************************/
+/*************************************************************/
+/*          MENTION LICENCE POUR RNGs                        */
+/*************************************************************/
+/*         Philox 4x32 7                                     */
+/*
+Copyright 2010-2011, D. E. Shaw Research.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+* Redistributions of source code must retain the above copyright
+  notice, this list of conditions, and the following disclaimer.
+
+* Redistributions in binary form must reproduce the above copyright
+  notice, this list of conditions, and the following disclaimer in the
+  documentation and/or other materials provided with the distribution.
+
+* Neither the name of D. E. Shaw Research nor the names of its
+  contributors may be used to endorse or promote products derived from
+  this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+/***************************************************************/
+/*          FIN LICENCES RNGs                                  */
+/***************************************************************/
+
+
 
 /**********************************************************
 *	> Includes
@@ -52,8 +93,8 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 	configThr = tab.config[idx];
 	etatThr = tab.etat[idx];
 	#endif
-	#ifdef RANDCUDA
-	curandState_t etatThr;
+	#if defined(RANDCUDA) || defined (RANDCURANDSOBOL32) || defined (RANDCURANDSCRAMBLEDSOBOL32)
+        curandSTATE etatThr;
 	etatThr = tab.etat[idx];
 	#endif
 	#ifdef RANDMT
@@ -62,6 +103,20 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 	configThr = tab.config[idx];
 	etatThr = tab.etat[idx];
 	#endif
+        #ifdef RANDPHILOX4x32_7
+        //la clef se defini par l'identifiant global (unique) du thread...
+        //...et par la clef utilisateur ou clef par defaut
+        //ce systeme garanti l'existence de 2^32 generateurs differents par run et...
+        //...la possiblite de reemployer les memes sequences a partir de la meme clef utilisateur
+        //(plus d'infos dans "communs.h")
+        philox4x32_key_t configThr = {{idx, tab.config}};
+        //le compteur se defini par trois mots choisis au hasard (il parait)...
+        //...et un compteur definissant le nombre d'appel au generateur
+        //ce systeme garanti l'existence de 2^32 nombres distincts pouvant etre genere par thread,...
+        //...et ce sur l'ensemble du process (et non pas 2^32 par thread par appel au kernel)
+        //(plus d'infos dans "communs.h")
+        philox4x32_ctr_t etatThr = {{tab.etat[idx], 0xf00dcafe, 0xdeadbeef, 0xbeeff00d}};
+        #endif
 
 	#ifdef TABRAND
 	// DEBUG Recuperation des nombres aleatoires generes par la fonction random utilisée
@@ -158,7 +213,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 				, tab, init
 				#endif
 				, &etatThr
-				#if defined(RANDMWC) || defined(RANDMT)
+				#if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
 				, &configThr
 				#endif
 				#ifdef TRAJET
@@ -196,7 +251,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 			, tab.foce
 			#endif
 			, &etatThr
-			#if defined(RANDMWC) || defined(RANDMT)
+			#if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
 			, &configThr
 			#endif
 			#ifdef TRAJET
@@ -221,7 +276,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 			
 			if( DIOPTREd!=3 )
 				surfaceAgitee(&ph, &etatThr
-					#if defined(RANDMWC) || defined(RANDMT)
+					#if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
 					, &configThr
 					#endif
 					#ifdef TRAJET
@@ -231,7 +286,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 						
 			else
 				surfaceLambertienne(&ph, &etatThr
-					#if defined(RANDMWC) || defined(RANDMT)
+                                        #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
 					, &configThr
 					#endif
 					#ifdef TRAJET
@@ -287,8 +342,13 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 	atomicAdd(&(var->nbThreads), 1);
 	#endif
 	
+        #ifdef RANDPHILOX4x32_7
+	// Sauvegarde de l'état du random pour que les nombres ne soient pas identiques à chaque appel du kernel
+	tab.etat[idx] = etatThr[0];
+        #else
 	// Sauvegarde de l'état du random pour que les nombres ne soient pas identiques à chaque appel du kernel
 	tab.etat[idx] = etatThr;
+        #endif
 }
 
 
@@ -391,11 +451,14 @@ __device__ void move(Photon* ph
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif
-		#ifdef RANDCUDA
-		, curandState_t* etatThr
-		#endif
+		#if defined(RANDCUDA) || defined (RANDCURANDSOBOL32) || defined (RANDCURANDSCRAMBLEDSOBOL32)
+                , curandSTATE* etatThr
+                #endif
 		#ifdef RANDMT
 		, EtatMT* etatThr, ConfigMT* configThr
+		#endif
+		#ifdef RANDPHILOX4x32_7
+                , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr
 		#endif
 		#ifdef TRAJET
 		, int idx, Evnt* evnt
@@ -1013,12 +1076,15 @@ __device__ void scatter( Photon* ph, float* faer
 			#ifdef RANDMWC
 			, unsigned long long* etatThr, unsigned int* configThr
 			#endif
-			#ifdef RANDCUDA
-			, curandState_t* etatThr
-			#endif
+			#if defined(RANDCUDA) || defined (RANDCURANDSOBOL32) || defined (RANDCURANDSCRAMBLEDSOBOL32)
+                        , curandSTATE* etatThr
+                        #endif
 			#ifdef RANDMT
 			, EtatMT* etatThr, ConfigMT* configThr
 			#endif
+                        #ifdef RANDPHILOX4x32_7
+                        , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr
+                        #endif
 			#ifdef TRAJET
 			, int idx, Evnt* evnt
 			#endif
@@ -1201,11 +1267,14 @@ __device__ void surfaceAgitee(Photon* ph
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif
-		#ifdef RANDCUDA
-		, curandState_t* etatThr
-		#endif
+		#if defined(RANDCUDA) || defined (RANDCURANDSOBOL32) || defined (RANDCURANDSCRAMBLEDSOBOL32)
+                , curandSTATE* etatThr
+                #endif
 		#ifdef RANDMT
 		, EtatMT* etatThr, ConfigMT* configThr
+		#endif
+		#ifdef RANDPHILOX4x32_7
+                , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr
 		#endif
 		#ifdef TRAJET
 		, int idx, Evnt* evnt
@@ -1539,12 +1608,15 @@ __device__ void surfaceLambertienne(Photon* ph
 						#ifdef RANDMWC
 						, unsigned long long* etatThr, unsigned int* configThr
 						#endif
-						#ifdef RANDCUDA
-						, curandState_t* etatThr
+                                                #if defined(RANDCUDA) || defined (RANDCURANDSOBOL32) || defined (RANDCURANDSCRAMBLEDSOBOL32)
+                                                , curandSTATE* etatThr
 						#endif
 						#ifdef RANDMT
 						, EtatMT* etatThr, ConfigMT* configThr
 						#endif
+                                                #ifdef RANDPHILOX4x32_7
+                                                , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr
+                                                #endif
 						#ifdef TRAJET
 						, int idx, Evnt* evnt
 						#endif
@@ -2035,6 +2107,30 @@ __global__ void initRandCUDA(curandState_t* etat, unsigned long long seed)
 	curand_init(seed, idx, 0, etat+idx);
 }
 #endif
+#if defined(RANDCURANDSOBOL32) || defined (RANDCURANDSCRAMBLEDSOBOL32)
+/* initRandCUDANDQRNGs
+* Fonction qui initialise le generateur (scrambled) sobol 32 de curand
+*/
+__global__ void initRandCUDANDQRNGs
+(
+    curandSTATE* etat,
+    curandDirectionVectors32_t *rngDirections
+)
+{
+    // Pour chaque thread on initialise son generateur avec le meme seed mais un idx different
+    unsigned int gID = threadIdx.x + blockDim.x * (threadIdx.y + blockDim.y * (blockIdx.x + blockIdx.y * gridDim.x));
+    curand_init(
+        //seule 20000 dimensions sont disponibles... le % permet de ne pas planter ici en segfault, mais...
+        //...attention a la pertinence des resultats ici, si on depasse les 20000 threads !
+        rngDirections[gID % 20000],
+        #ifdef RANDCURANDSCRAMBLEDSOBOL32
+        3, //aucune indication sur la pertinence de cette valeur...
+        #endif
+        /*0*/gID,
+        etat+gID
+               );
+}
+#endif
 
 
 #ifdef RANDMT
@@ -2110,3 +2206,42 @@ __device__ float randomMWCfloat(unsigned long long* x,unsigned int* a)
 }
 
 #endif
+
+#ifdef RANDPHILOX4x32_7
+/* initPhilox4x32_7Compteur
+* Fonction qui initialise la partie variable du compteur des philox
+*/
+__global__ void initPhilox4x32_7Compteur(unsigned int* tab, unsigned int compteurInit)
+{
+    unsigned int gID = threadIdx.x + blockDim.x * (threadIdx.y + blockDim.y * (blockIdx.x + blockIdx.y * gridDim.x));
+
+    tab[gID] = compteurInit;
+}
+
+/* randomPhilox4x32_7float
+* Fonction random Philox-4x32-7 qui renvoit un float dans ]0;1]
+*/
+__device__ float randomPhilox4x32_7float(philox4x32_ctr_t* ctr, philox4x32_key_t* key)
+{
+    //Recuperation d'un unsigned int pour retourner un float dans ]0;1]
+    return __fdividef(__uint2float_rz(randomPhilox4x32_7uint(ctr, key)) + 1.0f, 4294967296.0f);
+}
+
+/* randomPhilox4x32_7uint
+* Fonction random Philox-4x32-7 qui renvoit un uint à partir d'un generateur (etat+config)
+* TODO A noter que 4 valeurs sont en fait generees, un seul uint peut etre renvoye, donc 3 sont perdus
+* En pratique les valeurs generees sont des int32. Il y a donc une conversion vers uint32 de realisee
+*/
+__device__ unsigned int randomPhilox4x32_7uint(philox4x32_ctr_t* ctr, philox4x32_key_t* key)
+{
+    //variable de retour
+    philox4x32_ctr_t res;
+    //generation de 4 int32
+    res = philox4x32_R(7, *ctr, *key);
+    //increment du premier mot de 32bits du compteurs
+    (*ctr).v[0]++;
+    //conversion d'un des mots generes sous forme d'unsigned int
+    return (unsigned int) res[0];
+}
+#endif
+

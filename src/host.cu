@@ -489,8 +489,8 @@ void verifierFichier(){
 		printf("ATTENTION: Le fichier temoin %s existe deja.\n",PATHTEMOINHDF);
 		printf("Voulez-vous le supprimer? [y/n]\n");
 		while(1){
-			res_supp=getchar();
-			getchar();
+ 			res_supp=getchar();
+ 			getchar();
 			if( res_supp=='y' ){
 				sprintf(command,"rm %s",PATHTEMOINHDF);
 				system(command);
@@ -676,15 +676,36 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	}
 	#endif
 	
-	#ifdef RANDCUDA
+        #if defined(RANDCUDA) || defined (RANDCURANDSOBOL32) || defined (RANDCURANDSCRAMBLEDSOBOL32)
 	// Création du tableau de generateurs (=etat+config) pour la fonction Random Cuda
-	if( cudaMalloc(&(tab_D->etat), XBLOCK * YBLOCK * XGRID * YGRID * sizeof(curandState_t)) == cudaErrorMemoryAllocation ){
+	if( cudaMalloc(&(tab_D->etat), XBLOCK * YBLOCK * XGRID * YGRID * sizeof(curandSTATE)) == cudaErrorMemoryAllocation ){
 		printf("ERREUR: Problème de cudaMalloc de tab_D->etat dans initTableaux\n");
 		exit(1);	
 	}
 	
 	// Initialisation du tableau dans une fonction du kernel
+        #if defined(RANDCUDA)
 	initRandCUDA<<<XGRID * YGRID, XBLOCK * YBLOCK>>>(tab_D->etat, (unsigned long long)SEED);
+        #else
+        unsigned long long NbThreads = XGRID * YGRID * XBLOCK * YBLOCK;
+        unsigned long long NbDimensions = NbThreads > 20000 ? 20000 : NbThreads;
+        curandDirectionVectors32_t *d_qrngDirections = 0;
+        cudaErreur = cudaMalloc((void **)&d_qrngDirections, NbDimensions*sizeof(curandDirectionVectors32_t));
+        if( cudaErreur != cudaSuccess ){
+            printf( "ERREUR: Problème d'allocation de d_qrngDirections\n");
+            printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+            exit(1);
+        }
+        curandDirectionVectors32_t *h_rngDirections;
+        curandGetDirectionVectors32(&h_rngDirections, CURAND_SCRAMBLED_DIRECTION_VECTORS_32_JOEKUO6);
+        cudaErreur = cudaMemcpy(d_qrngDirections, h_rngDirections, NbDimensions*sizeof(curandDirectionVectors32_t), cudaMemcpyHostToDevice);
+        if( cudaErreur != cudaSuccess ){
+            printf( "ERREUR: Problème de copie h_rngDirections dans d_qrngDirections\n");
+            printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+            exit(1);
+        }
+        initRandCUDANDQRNGs<<< dim3(XGRID,YGRID,1), dim3(XBLOCK,YBLOCK,1)>>>(tab_D->etat, d_qrngDirections);
+        #endif
 	#endif
 	
 	#ifdef RANDMT
@@ -716,6 +737,20 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	// Initialisation du tableau des etats dans le kernel
 	initRandMTEtat<<<XGRID * YGRID, XBLOCK * YBLOCK>>>(tab_D->etat, tab_D->config);
 	#endif
+
+        #ifdef RANDPHILOX4x32_7
+        //Memset de deux valeurs pour la creation des generateurs philox
+        unsigned int compteur_init = 0;
+        unsigned int clef_utilisateur = (unsigned int) SEED; /*LDS: eventuellement la conversion ici change la graine mais c'est sans reelle importance il me semble*/
+        tab_D->config = clef_utilisateur;
+        cudaErreur = cudaMalloc((void**)&(tab_D->etat), sizeof(unsigned int)* XBLOCK * YBLOCK * XGRID * YGRID);
+        if( cudaErreur != cudaSuccess){
+            printf("ERREUR: Problème de cudaMalloc de tab_D->etat dans initTableaux\n");
+            printf("\t->detail de l'erreur : %s\n", cudaGetErrorString(cudaErreur));
+            exit(1);
+        }
+        initPhilox4x32_7Compteur<<<dim3(XGRID,YGRID,1), dim3(XBLOCK,YBLOCK,1)>>>(tab_D->etat, compteur_init);
+        #endif
 	
 	// Tableau du poids des photons ressortis
 	tab_H->tabPhotons = (float*)malloc(4*NBTHETA * NBPHI * sizeof(*(tab_H->tabPhotons)));
@@ -870,7 +905,7 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	free(tab_H->config);
 	#endif
 	
-	#ifdef RANDCUDA
+        #if defined(RANDCUDA) || defined (RANDCURANDSOBOL32) || defined (RANDCURANDSCRAMBLEDSOBOL32)
 	// Liberation du tableau de generateurs du random Cuda
 	erreur = cudaFree(tab_D->etat);
 	if( erreur != cudaSuccess ){
@@ -900,6 +935,16 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	free(tab_H->etat);
 	#endif
 	
+        #ifdef RANDPHILOX4x32_7
+	// Liberation du tableaux de compteurs des philox
+	erreur = cudaFree(tab_D->etat);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->config dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	#endif
+
 	// Liberation du tableau du poids des photons
 	erreur = cudaFree(tab_D->tabPhotons);
 	if( erreur != cudaSuccess ){

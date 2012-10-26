@@ -8,6 +8,29 @@
 #include "device.h"
 #include "host.h"
 
+#ifdef RANDPHILOX4x32_7
+//Cette partie est necessitee par les generateurs "1,2,3" pour leur version 64bits.
+//Le Philox ne nous interesse pas en 64bits mais a moins de revoir tous les includes fournis avec le Philox (!),
+//on est plutot contraint de rajouter ces trois lignes...
+#ifndef __STDC_CONSTANT_MACROS
+#define __STDC_CONSTANT_MACROS
+#endif
+#endif
+
+#ifdef _PERF
+#include "perfo.h"
+static SPerf* perfPrint;
+static SPerf* perfInitG;
+static SPerf* perfKernel;
+static SPerf* perfMemcpyH2DVar;
+static SPerf* perfMemcpyH2DTab;
+static SPerf* perfMemcpyD2HVar;
+static SPerf* perfMemcpyD2HTab;
+static SPerf* perfCreateWitness;
+static SPerf* perfFree;
+static SPerf* perfCreateFinalTab;
+#endif
+
 
 /**********************************************************
 *	> Fonction main
@@ -32,7 +55,30 @@ int main (int argc, char *argv[])
 		exit(1);
 	}
 	
-	
+#ifdef _PERF
+        perfPrint = NULL;
+        perfInitG = NULL;
+        perfKernel = NULL;
+        perfMemcpyH2DVar = NULL;
+        perfMemcpyH2DTab = NULL;
+        perfMemcpyD2HVar = NULL;
+        perfMemcpyD2HTab = NULL;
+        perfCreateWitness = NULL;
+        perfCreateFinalTab = NULL;
+        perfFree = NULL;
+//         perfPrint = CreateSPerf("Affichage");
+        perfInitG = CreateSPerf("Init Totale");
+        perfKernel = CreateSPerf("Kernel");
+        perfMemcpyH2DVar = CreateSPerf("Copie Host vers Device (variables)");
+        perfMemcpyH2DTab = CreateSPerf("Copie Host vers Device (tableaux)");
+        perfMemcpyD2HVar = CreateSPerf("Copie Device vers Host (variables)");
+        perfMemcpyD2HTab = CreateSPerf("Copie Device vers Host (tableaux)");
+        perfCreateWitness = CreateSPerf("Creation du fichier temoin (calcul + ecriture)");
+        perfCreateFinalTab = CreateSPerf("Creation du fichier final (calcul + ecriture)");
+        perfFree = CreateSPerf("Liberation de la memoire");
+        StartProcessing(perfInitG);
+#endif
+
 	/** Initialisation des constantes du host (en partie recuperees dans le fichier Parametres.txt) **/
 	initConstantesHost(argc, argv);
 	
@@ -89,6 +135,11 @@ int main (int argc, char *argv[])
 	initInit(&init_H, &init_D);
 	#endif
 	
+#ifdef _PERF
+    StopProcessing(perfInitG);
+    GetElapsedTime(perfInitG);
+#endif
+
 	#ifdef TABRAND
 	// DEBUG Recuperations des nombres aleatoires du random en place
 	float tableauRand_H[100] = {0};
@@ -104,19 +155,24 @@ int main (int argc, char *argv[])
 	/** Vérification de l'existence ou non d'un fichier témoin **/
 	verifierFichier();
 	
-	
 	#ifdef PARAMETRES
 	/** Affichage des paramètres de la simulation **/
 	afficheParametres();
 	#endif
 	
-	
+#ifdef _PERF
+        StartProcessing(perfInitG);
+#endif
 	/** Calcul des modèles utiles à l'algorithme **/
 	// Calcul de faer, modèle de diffusion des aérosols
 	if( TAUAER > 0 ){
 		calculFaer( PATHDIFFAER, &tab_H, &tab_D );
 // 		verificationFAER( "./test/FAER_test.txt", tab_H );
-	}
+        }
+#ifdef _PERF
+                StopProcessing(perfInitG);
+                GetElapsedTime(perfInitG);
+#endif
 	
 	// Calcul de foce, modèle de diffusion dans l'océan
 	#ifdef FLAGOCEAN
@@ -126,14 +182,23 @@ int main (int argc, char *argv[])
 	}
 	#endif
 
+#ifdef _PERF
+        StartProcessing(perfInitG);
+#endif
 	// Calcul du mélange Molécule/Aérosol dans l'atmosphère en fonction de la couche
 	profilAtm( &tab_H, &tab_D );
 // 	verificationAtm( tab_H );
+#ifdef _PERF
+        StopProcessing(perfInitG);
+        GetElapsedTime(perfInitG);
+#endif
 	
 	
 	/** Initialisation des constantes du device à partir des constantes du host **/
+#ifdef _PERF
+        StartProcessing(perfInitG);
+#endif
 	initConstantesDevice();
-	
 	
 	/** Séparation du code pour atmosphère sphérique ou parallèle **/
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
@@ -150,6 +215,11 @@ int main (int argc, char *argv[])
 	#endif /* Fin de la spécification atmosphère sphérique */
 	
 	
+#ifdef _PERF
+    StopProcessing(perfInitG);
+    GetElapsedTime(perfInitG);
+#endif
+
 	/** Fonction qui permet de poursuivre la simulation précédente si elle n'est pas terminee **/
 	lireHDFTemoin(var_H, var_D, &nbPhotonsTot, tabPhotonsTot, &tempsPrec);
 	
@@ -176,11 +246,13 @@ int main (int argc, char *argv[])
 	if(nbPhotonsTot < NBPHOTONS) 
 		passageBoucle = true;
 	
-	
 	// Tant qu'il n'y a pas assez de photons traités on relance le kernel
 	while(nbPhotonsTot < NBPHOTONS)
 	{
 		/** Remise à zéro de certaines variables et certains tableaux **/
+#ifdef _PERF
+        StartProcessing(perfMemcpyH2DVar);
+#endif
 // 		reinitVariables(var_H, var_D);
 		cudaErreur = cudaMemset(&(var_D->nbPhotons), 0, sizeof(var_D->nbPhotons));
 		if( cudaErreur != cudaSuccess ){
@@ -190,7 +262,10 @@ int main (int argc, char *argv[])
 			printf("#--------------------#\n");
 			exit(1);
 		}
-		
+#ifdef _PERF
+        StopProcessing(perfMemcpyH2DVar);
+        GetElapsedTime(perfMemcpyH2DVar);
+#endif
 		#ifdef PROGRESSION
 		cudaErreur = cudaMemset(&(var_D->nbPhotonsSor), 0, sizeof(var_D->nbPhotonsSor));
 		if( cudaErreur != cudaSuccess ){
@@ -204,7 +279,9 @@ int main (int argc, char *argv[])
 		
 		
 		/** Réinitialisation des données de la simulation **/
-		
+#ifdef _PERF
+                StartProcessing(perfMemcpyH2DTab);
+#endif
 		cudaErreur = cudaMemset(tab_D.tabPhotons, 0, 4*NBTHETA * NBPHI * sizeof(*(tab_D.tabPhotons)));
 		if( cudaErreur != cudaSuccess ){
 			printf("#--------------------#\n");
@@ -212,9 +289,15 @@ int main (int argc, char *argv[])
 			printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
 			printf("#--------------------#\n");
 			exit(1);
-		}
+                }
+#ifdef _PERF
+                StopProcessing(perfMemcpyH2DTab);
+                GetElapsedTime(perfMemcpyH2DTab);
+#endif
 		
-		
+#ifdef _PERF
+                StartProcessing(perfKernel);
+#endif
 		/** Lancement du kernel **/
 		lancementKernel<<<gridSize, blockSize>>>(var_D, tab_D
 				#ifdef SPHERIQUE
@@ -229,7 +312,15 @@ int main (int argc, char *argv[])
 							);
 		// Attend que tous les threads aient fini avant de faire autre chose
 // 		cudaThreadSynchronize();
+#ifdef _PERF
+                cudaThreadSynchronize();
+                StopProcessing(perfKernel);
+                GetElapsedTime(perfKernel);
+#endif
 		
+#ifdef _PERF
+                StartProcessing(perfMemcpyD2HVar);
+#endif
 		/** Récupération des variables et d'un tableau envoyés dans le kernel **/
 		cudaErreur = cudaMemcpy(var_H, var_D, sizeof(Variables), cudaMemcpyDeviceToHost);
 		if( cudaErreur != cudaSuccess ){
@@ -238,11 +329,18 @@ int main (int argc, char *argv[])
 			printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
 			printf("#--------------------#\n");
 			exit(1);
-		}
+                }
+#ifdef _PERF
+                        StopProcessing(perfMemcpyD2HVar);
+                        GetElapsedTime(perfMemcpyD2HVar);
+#endif
 
 		// On remplit les variables et tableau qui restent dans le host
 		nbPhotonsTot += var_H->nbPhotons;
-		
+
+#ifdef _PERF
+                StartProcessing(perfMemcpyD2HTab);
+#endif
 		/** Copie des informations du device pour la création du fichier témoin **/
 		/* Il a été remarqué que sans cette copie et remise à zéro du tableau tab_D.tabPhotons, des erreurs apparaissent si les
 valeurs stockées sont élevées. Ceci doit venir du fait que l'on somme une grosse valeur à une plus faible */
@@ -253,13 +351,23 @@ cudaMemcpyDeviceToHost);
 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
 			exit(1);
 		}
-		
+#ifdef _PERF
+                        StopProcessing(perfMemcpyD2HTab);
+                        GetElapsedTime(perfMemcpyD2HTab);
+#endif
+
+#ifdef _PERF
+                StartProcessing(perfCreateWitness);
+#endif
 		/** Creation d'un fichier témoin pour pouvoir reprendre la simulation en cas d'arrêt **/
 		for(int i = 0; i < 4*NBTHETA*NBPHI; i++)
 			tabPhotonsTot[i] += (double) tab_H.tabPhotons[i];
 		
 		creerHDFTemoin(tabPhotonsTot, nbPhotonsTot,var_H, tempsPrec);
-
+#ifdef _PERF
+                        StopProcessing(perfCreateWitness);
+                        GetElapsedTime(perfCreateWitness);
+#endif
 		
 		#ifdef PROGRESSION
 		nbPhotonsSorTot += var_H->nbPhotonsSor;
@@ -306,6 +414,9 @@ cudaMemcpyDeviceToHost);
 	#endif
 	
 	
+#ifdef _PERF
+        StartProcessing(perfCreateFinalTab);
+#endif
 	/** Création et calcul du tableau final (regroupant le poids de tous les photons ressortis sur une demi-sphère,
 	 * par unité de surface) 
 	**/	
@@ -315,8 +426,11 @@ cudaMemcpyDeviceToHost);
 	
 	/** Fonction qui crée le fichier .hdf contenant le résultat final sur la demi-sphère **/
 	creerHDFResultats(tabFinal, tabTh, tabPhi, nbPhotonsTot, var_H, tempsPrec);
+#ifdef _PERF
+        StopProcessing(perfCreateFinalTab);
+        GetElapsedTime(perfCreateFinalTab);
+#endif
 	printf(" Fin de l'execution du programme. Resultats stockes dans %s\n",PATHRESULTATSHDF);
-
 	
 	#ifdef TRAJET
 	/** Affichage du trajet du photon **/
@@ -331,7 +445,10 @@ cudaMemcpyDeviceToHost);
 	// Affichage du trajet du premier thread
 	afficheTrajet(evnt_H);
 	#endif
-	
+
+#ifdef _PERF
+        StartProcessing(perfFree);
+#endif
 	/** Libération de la mémoire allouée **/
 	// Libération du groupe de variables envoyé dans le kernel
 	cudaErreur = cudaFree(var_D);
@@ -378,6 +495,44 @@ cudaMemcpyDeviceToHost);
 		exit(1);
 	}
 	#endif
+#ifdef _PERF
+        StopProcessing(perfFree);
+        GetElapsedTime(perfFree);
+#endif
+
+#ifdef _PERF
+        if ( perfPrint != NULL )
+            printf("\n %s...%u us", GetName(perfPrint), GetTotalElapsedTime(perfPrint));
+        if ( perfInitG != NULL )
+            printf("\n %s...%u us", GetName(perfInitG), GetTotalElapsedTime(perfInitG));
+        if ( perfKernel != NULL )
+            printf("\n %s...%u us", GetName(perfKernel), GetTotalElapsedTime(perfKernel));
+        if ( perfMemcpyH2DVar != NULL )
+            printf("\n %s...%u us", GetName(perfMemcpyH2DVar), GetTotalElapsedTime(perfMemcpyH2DVar));
+        if ( perfMemcpyH2DTab != NULL )
+            printf("\n %s...%u us", GetName(perfMemcpyH2DTab), GetTotalElapsedTime(perfMemcpyH2DTab));
+        if ( perfMemcpyD2HVar != NULL )
+            printf("\n %s...%u us", GetName(perfMemcpyD2HVar), GetTotalElapsedTime(perfMemcpyD2HVar));
+        if ( perfMemcpyD2HTab != NULL )
+            printf("\n %s...%u us", GetName(perfMemcpyD2HTab), GetTotalElapsedTime(perfMemcpyD2HTab));
+        if ( perfCreateWitness != NULL )
+            printf("\n %s...%u us", GetName(perfCreateWitness), GetTotalElapsedTime(perfCreateWitness));
+        if ( perfCreateFinalTab != NULL )
+            printf("\n %s...%u us", GetName(perfCreateFinalTab), GetTotalElapsedTime(perfCreateFinalTab));
+        if ( perfFree != NULL )
+            printf("\n %s...%u us", GetName(perfFree), GetTotalElapsedTime(perfFree));
+        DeleteSPerf(perfPrint);
+        DeleteSPerf(perfInitG);
+        DeleteSPerf(perfKernel);
+        DeleteSPerf(perfMemcpyH2DVar);
+        DeleteSPerf(perfMemcpyH2DTab);
+        DeleteSPerf(perfMemcpyD2HVar);
+        DeleteSPerf(perfMemcpyD2HTab);
+        DeleteSPerf(perfCreateWitness);
+        DeleteSPerf(perfCreateFinalTab);
+        DeleteSPerf(perfFree);
+        printf("\n");
+#endif
 
 	return 0;
 

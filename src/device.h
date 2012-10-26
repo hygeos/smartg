@@ -124,12 +124,15 @@ __device__ void move(Photon*
 		#ifdef RANDMWC
 		, unsigned long long*, unsigned int*
 		#endif
-		#ifdef RANDCUDA
-		, curandState_t*
-		#endif
+		#if defined(RANDCUDA) || defined (RANDCURANDSOBOL32) || defined (RANDCURANDSCRAMBLEDSOBOL32)
+                , curandSTATE* etatThr
+                #endif
 		#ifdef RANDMT
 		, EtatMT*, ConfigMT*
-		#endif
+                #endif
+                #ifdef RANDPHILOX4x32_7
+                , philox4x32_ctr_t*, philox4x32_key_t*
+                #endif
 		#ifdef TRAJET
 		, int, Evnt*
 		#endif
@@ -147,11 +150,14 @@ __device__ void scatter(Photon* photon, float* faer
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif
-		#ifdef RANDCUDA
-		, curandState_t* etatThr
-		#endif
+		#if defined(RANDCUDA) || defined (RANDCURANDSOBOL32) || defined (RANDCURANDSCRAMBLEDSOBOL32)
+                , curandSTATE* etatThr
+                #endif
 		#ifdef RANDMT
 		, EtatMT* etatThr, ConfigMT* configThr
+		#endif
+		#ifdef RANDPHILOX4x32_7
+                , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr
 		#endif
 		#ifdef TRAJET
 		, int idx, Evnt* evnt
@@ -167,11 +173,14 @@ __device__ void surfaceAgitee(Photon*
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif
-		#ifdef RANDCUDA
-		, curandState_t* etatThr
-		#endif
+                #if defined(RANDCUDA) || defined (RANDCURANDSOBOL32) || defined (RANDCURANDSCRAMBLEDSOBOL32)
+                , curandSTATE* etatThr
+                #endif
 		#ifdef RANDMT
 		, EtatMT* etatThr, ConfigMT* configThr
+		#endif
+		#ifdef RANDPHILOX4x32_7
+                , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr
 		#endif
 		#ifdef TRAJET
 		, int, Evnt*
@@ -186,11 +195,14 @@ __device__ void surfaceLambertienne(Photon* photon
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif
-		#ifdef RANDCUDA
-		, curandState_t* etatThr
-		#endif
+                #if defined(RANDCUDA) || defined (RANDCURANDSOBOL32) || defined (RANDCURANDSCRAMBLEDSOBOL32)
+                , curandSTATE* etatThr
+                #endif
 		#ifdef RANDMT
 		, EtatMT* etatThr, ConfigMT* configThr
+		#endif
+		#ifdef RANDPHILOX4x32_7
+                , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr
 		#endif
 		#ifdef TRAJET
 		, int idx, Evnt* evnt
@@ -255,7 +267,12 @@ void initConstantesDevice();
 */
 __global__ void initRandCUDA(curandState_t*, unsigned long long);
 #endif
-
+#if defined(RANDCURANDSOBOL32) || defined (RANDCURANDSCRAMBLEDSOBOL32)
+/* initRandCUDANDQRNGs
+* Fonction qui initialise le generateur (scrambled) sobol 32 de curand
+*/
+__global__ void initRandCUDANDQRNGs(curandSTATE* etat, curandDirectionVectors32_t *rngDirections);
+#endif
 
 #ifdef RANDMT
 /* initRandMTEtat
@@ -284,5 +301,23 @@ __device__ unsigned int randomMTuint(EtatMT*, ConfigMT*);
 __device__ float randomMWCfloat(unsigned long long*,unsigned int*);
 #endif
 
+#ifdef RANDPHILOX4x32_7
+/* initPhilox4x32_7Compteur
+* Fonction qui initialise la partie variable du compteur des philox
+*/
+__global__ void initPhilox4x32_7Compteur(unsigned int*, unsigned int);
 
-#endif	// DEVICE_H
+/* randomPhilox4x32_7float
+* Fonction random Philox-4x32-7 qui renvoit un float de ]0.1] à partir d'un generateur (etat+config)
+*/
+__device__ float randomPhilox4x32_7float(philox4x32_ctr_t*, philox4x32_key_t*);
+
+/* randomPhilox4x32_7uint
+* Fonction random Philox-4x32-7 qui renvoit un uint à partir d'un generateur (etat+config)
+* TODO A noter que 4 valeurs sont en fait generees, un seul uint peut etre renvoye, donc 3 sont perdus
+* En pratique les valeurs generees sont des int32. Il y a donc une conversion vers uint32 de realisee
+*/
+__device__ unsigned int randomPhilox4x32_7uint(philox4x32_ctr_t*, philox4x32_key_t*);
+#endif
+
+#endif // DEVICE_H

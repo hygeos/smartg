@@ -29,6 +29,9 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#ifdef RANDPHILOX4x32_7
+#include "philox.h"
+#endif
 
 /**********************************************************
 *	> Constantes
@@ -98,16 +101,28 @@
 
 
 /* Test des differentes fonctions random */
+#if defined(RANDCUDA)
+typedef curandState_t curandSTATE;
+#endif
+#if defined(RANDCURANDSOBOL32)
+typedef curandStateSobol32_t curandSTATE;
+#endif
+#if defined(RANDCURANDSCRAMBLEDSOBOL32)
+typedef curandStateScrambledSobol32_t curandSTATE;
+#endif
 #ifdef RANDMWC
 #define RAND randomMWCfloat(etatThr,configThr)
 #endif
-#ifdef RANDCUDA
+#if defined(RANDCUDA) || defined (RANDCURANDSOBOL32) || defined (RANDCURANDSCRAMBLEDSOBOL32)
 #define RAND curand_uniform(etatThr)
+// #define RAND randomXorwowFake(etatThr)
 #endif
 #ifdef RANDMT
 #define RAND randomMTfloat(etatThr, configThr)
 #endif
-
+#ifdef RANDPHILOX4x32_7
+#define RAND randomPhilox4x32_7float(etatThr, configThr)
+#endif
 
 /**********************************************************
 *	> Variables externes fichier host
@@ -287,13 +302,49 @@ typedef struct __align__(16)
 	unsigned long long* etat;
 	unsigned int* config;
 	#endif
-	#ifdef RANDCUDA
-	curandState_t* etat;
+        #if defined(RANDCUDA) || defined (RANDCURANDSOBOL32) || defined (RANDCURANDSCRAMBLEDSOBOL32)
+        curandSTATE* etat;
 	#endif
 	#ifdef RANDMT
 	ConfigMT* config;
 	EtatMT* etat;
-	#endif
+        #endif
+        #ifdef RANDPHILOX4x32_7
+        /**********************/
+        //parametres generaux :
+        /**********************/
+        //         philox4x32_ctr_t* PhiloxCompteurs; /*etat*/
+        //!< ...il s'agit de 4 compteurs de 32bits.
+        //!< ...trois sont fixes. Le 4eme evolue.
+        //!< ...chaque generateur possede donc 2^32 valeurs (4milliards).
+        //!< ...si on lance 10^11 photons necessitant 10^3 valeurs cela fait 10^14 nombres a generer
+        //!< ...si l'on considere 256x256=65,536 (config. minimale supposee) threads (=generateurs)...
+        //!< ...cela fait 1milliard de nombres a generer par thread. Valeur qui decroit considerablement si...
+        //!< ...on augmente le nombre de threads.
+        //         philox4x32_key_t* PhiloxClefs; /*config*/
+        //!< ...il s'agit de deux clefs de 32bits.
+        //!< ...la premiere sera utilisee pour stocker l'identifiant unique de chaque thread.
+        //!< ...a partir de la, la valeur de la seconde clef importe peu,...
+        //!< ...en supposant la seconde clef fixe, on obtient 2^32 generateurs differents.
+        //!< ...cela represente par exemple une configuration de 1,024 x 4,194,304 et semble raisonnable
+        //!< ...on utilisera la seconde clef (a priori) pour stocker celle desiree par l'utilisateur
+        //!< ...de cette facon, en prenant deux fois la meme clef utilisateur on aura bien deux fois les memes sequences
+        /**************************/
+        //parametres minimalistes :
+        /**************************/
+        /*Compte tenu des precisions ci-dessus on peut se contenter de parametres minimalistes*/
+        /*Eventuellement, le philox4x32 etant tres souple, on pourrait revoir les choses*/
+        /*Le tout est de posseder suffisament de generateurs differents pour en attribuer un a chaque thread,
+        tout en garantissant par generateur suffisament de valeurs pouvant etre crees,
+        et si possible s'assurer de pouvoir simplement reproduire la meme sequence grace a la "graine" de l'utilisateur*/
+        unsigned int *etat; /*compteur*/
+        //!< ...la partie du compteur qui varie (a conserver entre deux appels au kernel principal)
+        //!< ...si un jour l'appel a la generation d'un nombre devait se faire autant de fois pour chaque threads,...
+        //!< ...i.e en dehors des methodes de la "moulinette", alors on pourrait ne conserver qu'un scalaire pour 'etat'
+        //!< ...cela simplifierait egalement l'initialisation (pas de memset a faire, juste UNE valeur a fixer).
+        unsigned int config; /*clef*/
+        //!< ...la partie de la clef fixee par l'utilisateur
+        #endif
 	
 }Tableaux;
 
