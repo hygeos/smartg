@@ -1863,16 +1863,13 @@ __device__ void exit(Photon* ph, Tableaux tab, unsigned long long* nbPhotonsThr
 			   );
 	
 	/** Modification des paramètres de stokes pour la compatibilité avec le code SOS **/
-	if( ph->vy<0.f )
-		ph->stokes3 = -ph->stokes3;
-	
-	if( ph->vx > 0.f )
-		ph->stokes3 = -ph->stokes3;
+  	if( ph->vy<0.f )
+  		ph->stokes3 = -ph->stokes3;
 	
 	float s1 = ph->stokes1;
 	ph->stokes1= ph->stokes2;
 	ph->stokes2= s1;
-	ph->stokes3 = -ph->stokes3;
+//	ph->stokes3 = -ph->stokes3;
 	
 	
 	// On modifie ensuite le poids du photon
