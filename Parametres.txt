@@ -134,9 +134,6 @@ NFOCE = 10000000
 # Chemin du fichiers de sortie et témoin
 PATHRESULTATSHDF = resultat/out.hdf
 
-# Chemin du fichier témoin
-PATHTEMOINHDF = resultat/out.hdf.temoin
-
 
 ###
 ## Paramètres de la carte graphique  ##

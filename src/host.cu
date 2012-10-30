@@ -289,8 +289,10 @@ void initConstantesHost(int argc, char** argv)
     #endif
 	
 	chercheConstante(parametres, "PATHRESULTATSHDF", PATHRESULTATSHDF);
-	
-	chercheConstante(parametres, "PATHTEMOINHDF", PATHTEMOINHDF);
+    
+    // nom du fichier témoin
+    strcpy(PATHTEMOINHDF, PATHRESULTATSHDF);
+    strcat(PATHTEMOINHDF, ".temoin");
 	
 	chercheConstante( parametres, "PATHDIFFAER", PATHDIFFAER );
 	
