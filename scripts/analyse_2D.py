@@ -114,6 +114,11 @@ def main():
             action="store_true", default=False,
             help='choose polarization ratio instead of polarized reflectance',
             )
+    parser.add_option('-e', '--error',
+            dest='error',
+            type='float',
+            help='choose relative error instead of polarized reflectance',
+            )
     (options, args) = parser.parse_args()
     if len(args) != 1:
         parser.print_usage()
@@ -151,6 +156,9 @@ def main():
         dataQ = sds_cuda.get()
         sds_cuda = sd_cuda.select("Valeurs de U")
         dataU = sds_cuda.get()
+        sds_cuda = sd_cuda.select("Nb de photons")
+        dataN = sds_cuda.get()
+
 
     else:
         sys.stdout.write("Pas de fichier "+path_cuda+"\n")
@@ -171,14 +179,20 @@ def main():
     data_cudaU = dataU[0:NBPHI_cuda,:]
     data_cudaIP = np.sqrt(data_cudaQ*data_cudaQ + data_cudaU*data_cudaU)
     data_cudaPR = data_cudaIP/data_cudaI * 100
+    data_cudaN = np.zeros((NBPHI_cuda, NBTHETA_cuda), dtype=float)
+    data_cudaN = 100./ np.sqrt(dataN[0:NBPHI_cuda,:])
 
 
     #---------------------------------------------------------
     if options.rmax == None:
-        #max=np.max(data_cudaI)
         max=0.1
     else:
         max=options.rmax
+
+    if options.error == None:
+        maxe=1.0
+    else:
+        maxe=options.error
 
     # Calcul pour l'ergonomie des graphiques
     VI = np.linspace(0.,max,50) # levels des contours
@@ -191,6 +205,8 @@ def main():
     VIPt = np.linspace(0.,max,6)
     VPR = np.linspace(0.,100,50)
     VPRt = np.linspace(0.,100,6)
+    VN = np.linspace(0.,maxe,50)
+    VNt = np.linspace(0.,maxe,6)
 
     ##########################################################
     ##              CREATION DES GRAPHIQUES 2D              ##
@@ -224,16 +240,21 @@ def main():
     ax3, aux_ax3 = setup_axes3(fig, 224)
     # ax3.scatter(ths,20,marker='*',color='#ffffff',s=80)
 
-    if options.percent == False:
-      cax3 = aux_ax3.contourf(t,r,data_cudaIP,VIP)
-      ax3.set_title("IP",weight='bold',position=(0.25,1.0))
-      cb3=fig.colorbar(cax3,orientation='horizontal',ticks=VIPt)
-      cb3.set_label("Polarized Reflectance")
-    else:
+    if (options.percent == True) and (options.error == None):
       cax3 = aux_ax3.contourf(t,r,data_cudaPR,VPR)
       ax3.set_title("P[%]",weight='bold',position=(0.25,1.0))
       cb3=fig.colorbar(cax3,orientation='horizontal',ticks=VPRt)
       cb3.set_label("Polarization Ratio")
+    if options.percent == False and options.error >= 0.:
+      cax3 = aux_ax3.contourf(t,r,data_cudaN,VN)
+      ax3.set_title(r"$\Delta$ [%]",weight='bold',position=(0.25,1.0))
+      cb3=fig.colorbar(cax3,orientation='horizontal',ticks=VNt)
+      cb3.set_label("Relative Error")
+    if options.percent == False and options.error == None:
+      cax3 = aux_ax3.contourf(t,r,data_cudaIP,VIP)
+      ax3.set_title("IP",weight='bold',position=(0.25,1.0))
+      cb3=fig.colorbar(cax3,orientation='horizontal',ticks=VIPt)
+      cb3.set_label("Polarized Reflectance")
 
 
     if options.filename == None:
