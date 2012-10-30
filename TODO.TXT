@@ -15,3 +15,5 @@
 * mutualisation de la diffusion molécule et aérosols
 
 * calcul des albédos semi-hémisphériques à la surface et TOA
+
+* indiquer dans le fichier de sortie si on est en SPH ou PP
