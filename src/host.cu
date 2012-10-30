@@ -2110,6 +2110,9 @@ void calculTabFinal(double* tabFinal, double* tabTh, double* tabPhi, double* tab
 			tabFinal[2*NBTHETA*NBPHI + iphi*NBTHETA+ith] = (tabPhotonsTot[2*NBPHI*NBTHETA+ith*NBPHI+iphi]) / 
 				(2* nbPhotonsTot * tabOmega[ith*NBPHI+iphi] * cos(tabTh[ith]));
 				
+			// N
+			tabFinal[3*NBTHETA*NBPHI + iphi*NBTHETA+ith] = (tabPhotonsTot[3*NBPHI*NBTHETA+ith*NBPHI+iphi])  ;
+				
 		}
 	}
 }
@@ -2510,6 +2513,25 @@ tempsPrec)
 	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
 	// Ecriture du tableau dans le fichier
 	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP) (tabFinal+2*NBPHI*NBTHETA) );
+	// Vérification du bon fonctionnement de l'écriture
+	if(status)
+	{
+		printf("\nERREUR : write hdf resultats U\n");
+		exit(1);
+	}
+	
+	// Fermeture du tableau
+	SDendaccess(sdsTab);
+
+	/** 	Création du tableau N dans le fichier hdf
+	Valeur de N pour phi et theta donnés		**/
+	nomTab="Nb de photons"; //nom du tableau
+	// La plupart des paramètres restent les mêmes, pas besoin de les réinitialiser
+	
+	// Création du tableau
+	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
+	// Ecriture du tableau dans le fichier
+	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP) (tabFinal+3*NBPHI*NBTHETA) );
 	// Vérification du bon fonctionnement de l'écriture
 	if(status)
 	{

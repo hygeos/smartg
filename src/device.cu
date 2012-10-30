@@ -1886,7 +1886,7 @@ __device__ void exit(Photon* ph, Tableaux tab, unsigned long long* nbPhotonsThr
 
 		atomicAdd(tab.tabPhotons+(2 * NBTHETAd * NBPHId + ith * NBPHId + iphi), ph->weight * ph->stokes3);
 				
-// 		atomicAdd(tab.tabPhotons+(3 * NBTHETAd * NBPHId + ith * NBPHId + iphi), ph->weight * ph->stokes4);
+   		atomicAdd(tab.tabPhotons+(3 * NBTHETAd * NBPHId + ith * NBPHId + iphi), 1.);
 
 		#ifdef PROGRESSION
 		// Incrémentation du nombre de photons sortis dans l'espace pour ce thread
