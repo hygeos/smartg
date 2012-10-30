@@ -49,9 +49,9 @@ float NH2O;		//Indice de refraction relatif air/eau
 float CONPHY;	//Concentration en phytoplancton [mg.m-3] (utilise si SUR>=2)
 #endif
 
-char PATHRESULTATSHDF[256]; //Fichier de sortie au format hdf
-char PATHTEMOINHDF[256]; //Fichier témoin au format hdf
-char PATHDIFFAER[256];	// Fichier d'entrée des données de diffusion des aérosols
-char PATHPROFILATM[256]; // Profil atmosphérique utilisateur
+char PATHRESULTATSHDF[1024]; //Fichier de sortie au format hdf
+char PATHTEMOINHDF[1024]; //Fichier témoin au format hdf
+char PATHDIFFAER[1024];	// Fichier d'entrée des données de diffusion des aérosols
+char PATHPROFILATM[1024]; // Profil atmosphérique utilisateur
 
 
