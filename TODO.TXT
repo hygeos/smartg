@@ -1,0 +1,15 @@
+
+--- TODO ---
+
+* rajouter en sortie le nombre de photons dans chaque boite
+  -> nécessite un tableau supplémentaire et une opération atomique dans le
+  kernel
+
+* rajouter un test sur la saturation des float dans le kernel
+  -> pour les N (N=10 par ex.) dernières itérations du kernel (NBLOOP), stoker
+  lors de exitup pour chaque case du tableau de poids le rapport entre la
+  dernière valeur ajoutée au tableau de poids et la valeur totale. Si ce
+  rapport est trop élevé il y a risque de saturation des float du tableau de
+  poids
+
+* mutualisation de la diffusion molécule et aérosols
