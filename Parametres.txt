@@ -131,15 +131,11 @@ LSAOCE = 72001
 NFOCE = 10000000
 
 
-# Chemin des fichiers de sortie et témoin
-# Si le flag NOMAUTO est activé, le nom du fichier de sortie et du fichier
-# témoin sont générés automatiquement avec comme racine PATHRESULTATSHDF
-# Si le flag NOMAUTO est désactivé: PATHRESULTATSHDF est le fichier de sortie
-# et PATHTEMOINHDF est le fichier témoin
-PATHRESULTATSHDF = resultats/PARALLELE/
+# Chemin du fichiers de sortie et témoin
+PATHRESULTATSHDF = resultat/out.hdf
 
-# Chemin du fichier témoin (Le .hdf et les détails de la simulation sont ajoutés par le programme automatiquement)
-#PATHTEMOINHDF = ...
+# Chemin du fichier témoin
+PATHTEMOINHDF = resultat/out.hdf.temoin
 
 
 ###

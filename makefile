@@ -33,7 +33,6 @@ LFLAGS += -L ${CUDA_LIB} -lcuda -lcudart -lcurand
 DFLAGS =
 # DFLAGS += -DSPHERIQUE	# Pour utiliser une atmosphère sphérique
 DFLAGS += -DFLAGOCEAN	# À utiliser si l'océan fait parti de la simulation
-DFLAGS += -DNOMAUTO	# Créer automatiquement le nom du fichier résultat
 
 
 #============== Options ===============#

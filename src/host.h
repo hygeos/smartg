@@ -49,21 +49,6 @@ void initConstantesHost(int, char**);
 void chercheConstante(FILE* fichier, char* nomConstante, char* chaineValeur);
 
 
-#ifdef NOMAUTO
-/* definirNomFichier
-* Le nom du fichier de sorti est créé automatiquement en fonction du type de simulation
-* Il est également stoké dans un dossier en fonction de la date est du type de simulation
-* Le chemin indiqué dans le fichier paramètres est le préfixe du chemin créé ici
-*/
-void definirNomFichier( char* s );
-
-
-/* definirSimulation
-* Défini le type de simulation pour la création du chemin et le nom du fichier résultat
-*/
-void definirSimulation( char* s);
-#endif
-
 
 /* verifierFichier
 * Fonction qui vérifie l'état des fichiers temoin et résultats

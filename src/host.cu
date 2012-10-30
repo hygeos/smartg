@@ -290,15 +290,8 @@ void initConstantesHost(int argc, char** argv)
 	
 	chercheConstante(parametres, "PATHRESULTATSHDF", PATHRESULTATSHDF);
 	
-	#ifndef NOMAUTO
 	chercheConstante(parametres, "PATHTEMOINHDF", PATHTEMOINHDF);
-	#endif
 	
-	#ifdef NOMAUTO
-// 	Remplir automatiquement le nom complet du fichier
-	definirNomFichier(s);
-	#endif
-
 	chercheConstante( parametres, "PATHDIFFAER", PATHDIFFAER );
 	
 	chercheConstante( parametres, "PATHPROFILATM", PATHPROFILATM );
@@ -346,132 +339,6 @@ void chercheConstante(FILE* fichier, char* nomConstante, char* chaineValeur)
 		exit(1);
 	}
 }
-
-
-#ifdef NOMAUTO
-/* definirNomFichier
-* Le nom du fichier de sorti est créé automatiquement en fonction du type de simulation
-* Il est également stoké dans un dossier en fonction de la date est du type de simulation
-* Le chemin indiqué dans le fichier paramètres est le préfixe du chemin créé ici
-*/
-void definirNomFichier( char* s ){
-	
-	// Type de simulation
-	definirSimulation(s);
-	sprintf(PATHRESULTATSHDF,"%s/%s",PATHRESULTATSHDF,s);
-	
-	// Date de la simulation
-	time_t dateTime = time(NULL);
-	struct tm* date = localtime(&dateTime);
-	sprintf(PATHRESULTATSHDF,"%s/simulation_%02u%02u%04u/",PATHRESULTATSHDF,date->tm_mday, date->tm_mon+1, 1900 + date->tm_year);
-	
-	// Création du dossier de stockage du résultat
-	strcpy(s,"mkdir -p ");
-	strcat(s,PATHRESULTATSHDF);
-	system(s);
-	
-	// Création du dossier de stockage du temoin
-	strcpy(PATHTEMOINHDF,PATHRESULTATSHDF);
-	strcat(PATHTEMOINHDF,"tmp/");
-	strcpy(s,"mkdir -p ");
-	strcat(s,PATHTEMOINHDF);
-	system(s);
-	strcat(PATHTEMOINHDF,"tmp_");
-
-	// Nom du fichier de sortie le plus compréhensible et utile possible
-	if( SIM==1 ){
-		if( DIOPTRE==3 )
-		sprintf(s,"out_CUDA_atmos_dioptre_lambertien_ths=%4.2f_tRay=%4.4f_tAer=%4.4f_ws=%3.2f.hdf",THSDEG,TAURAY,TAUAER,WINDSPEED);
-		else if( DIOPTRE==2 || DIOPTRE==1 )
-			sprintf(s,"out_CUDA_atmos_dioptre_agite_ths=%4.2f_tRay=%4.4f_tAer=%4.4f_ws=%3.2f.hdf",THSDEG,TAURAY,TAUAER,WINDSPEED);
-		else
-			sprintf(s,"out_CUDA_atmos_dioptre_plan_ths=%4.2f_tRay=%4.4f_tAer=%4.4f.hdf",THSDEG,TAURAY,TAUAER);
-	}
-	else if( SIM==-1 ){
-		if( DIOPTRE==3 )
-			sprintf(s,"out_CUDA_dioptre_lambertien_ths=%4.2f_ws=%3.2f.hdf",THSDEG,WINDSPEED);
-		else if( DIOPTRE==2 || DIOPTRE==1 )
-			sprintf(s,"out_CUDA_dioptre_agite_ths=%4.2f_ws=%3.2f.hdf",THSDEG,WINDSPEED);
-		else
-			sprintf(s,"out_CUDA_dioptre_plan_ths=%4.2f_ws=%3.2f.hdf",THSDEG,WINDSPEED);
-	}
-	else if( SIM==-2 )
-		sprintf(s,"out_CUDA_atmos_ths=%4.2f_tRay=%4.4f_tAer=%4.4f.hdf",THSDEG,TAURAY,TAUAER);
-	else
-		sprintf(s,"out_CUDA_ths=%4.2f_tRay=%4.4f_tAer=%4.4f_ws=%3.2f_sim=%d.hdf",THSDEG,TAURAY,TAUAER,WINDSPEED,SIM);
-	
-	strcat( PATHTEMOINHDF, s);
-	strcat(PATHRESULTATSHDF,s);
-	
-}
-
-
-/* definirSimulation
-* Défini le type de simulation pour la création du chemin et le nom du fichier résultat
-*/
-void definirSimulation( char* s){
-
-	if( SIM==1 ){
-		if( TAUAER==0 && TAURAY!=0){
-			if( DIOPTRE==3 )
-				sprintf(s,"molecules_dioptre_lambertien");
-			else if( DIOPTRE==2 || DIOPTRE==1 )
-				sprintf(s,"molecules_dioptre_agite");
-			else
-				sprintf(s,"molecules_dioptre_plan");
-		}
-		else if( TAUAER!=0 && TAURAY==0){
-			if( DIOPTRE==3 )
-				sprintf(s,"aerosols_dioptre_lambertien");
-			else if( DIOPTRE==2 || DIOPTRE==1 )
-				sprintf(s,"aerosols_dioptre_agite");
-			else
-				sprintf(s,"aerosols_dioptre_plan");
-		}
-		else{
-			if( DIOPTRE==3 )
-				sprintf(s,"atmos_dioptre_lambertien");
-			else if( DIOPTRE==2 || DIOPTRE==1 )
-				sprintf(s,"atmos_dioptre_agite");
-			else
-				sprintf(s,"atmos_dioptre_plan");
-		}
-	}
-	
-	else if( SIM==-1 ){
-		if( DIOPTRE==3 )
-			sprintf(s,"dioptre_lambertien");
-		else if( DIOPTRE==2 || DIOPTRE==1 )
-			sprintf(s,"dioptre_agite");
-		else
-			sprintf(s,"dioptre_plan");
-	}
-	
-	else if( SIM==-2 ){
-		if( TAUAER==0 && TAURAY!=0)
-			sprintf(s,"molecules_seules");
-		else if( TAURAY==0 && TAUAER!=0)
-			sprintf(s,"aerosols_seuls");
-		else
-			sprintf(s,"atmos_seule");
-	}
-	
-	else if( SIM==0 ){
-		sprintf(s,"surface_ocean");
-	}
-	
-	else if( SIM==3 ){
-		sprintf(s,"ocean_seul");
-	}
-	
-	else if( SIM==2 ){
-		sprintf(s,"total");
-	}
-	
-	else 
-		sprintf(s,"SIM_%d",SIM);
-}
-#endif
 
 
 /* verifierFichier
@@ -2259,6 +2126,10 @@ void creerHDFTemoin(double* tabPhotonsTot, unsigned long long nbPhotonsTot, Vari
 {
 	// Création du fichier de sortie
 	int sdFichier = SDstart(PATHTEMOINHDF, DFACC_CREATE);
+    if (sdFichier == FAIL) {
+        printf("ERREUR : création fichier témoin (%s)\n", PATHTEMOINHDF);
+        exit(1);
+    }
 	
 	char nomTab[20]; //nom du tableau
 	sprintf(nomTab,"Temoin (%d%%)", (int)(100 * nbPhotonsTot / NBPHOTONS));
@@ -2273,9 +2144,9 @@ void creerHDFTemoin(double* tabPhotonsTot, unsigned long long nbPhotonsTot, Vari
 	// Ecriture du tableau dans le fichier
 	int status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP)tabPhotonsTot);
 	// Vérification du bon fonctionnement de l'écriture
-	if(status)
+	if (status)
 	{
-		printf("\nERREUR : write hdf temoin\n");
+		printf("\nERREUR : write hdf temoin (%s)\n", sdFichier);
 		exit(1);
 	}
 	
@@ -2523,10 +2394,11 @@ tempsPrec)
 {
 	// Tableau temporaire utile pour la suite
 	double tab[NBPHI*NBTHETA];
+
 	// Création du fichier de sortie
 	int sdFichier = SDstart(PATHRESULTATSHDF, DFACC_CREATE);
-	if( sdFichier == FAIL ){
-		printf("ERREUR: Erreur d'ouverture du fichier HDF : %s\nFin du programme\n", PATHRESULTATSHDF);
+	if (sdFichier == FAIL) {
+		printf("ERREUR: création du fichier HDF : %s\n", PATHRESULTATSHDF);
 		exit(1);
 	}
 	
