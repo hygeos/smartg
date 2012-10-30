@@ -13,3 +13,5 @@
   poids
 
 * mutualisation de la diffusion molécule et aérosols
+
+* calcul des albédos semi-hémisphériques à la surface et TOA
