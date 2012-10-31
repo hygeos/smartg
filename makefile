@@ -61,13 +61,7 @@ all: init $(EXEC)
 $(EXEC): obj/main.o obj/host.o obj/device.o
 	$(CC) $^ $(IFLAGS) $(LFLAGS) -o $(EXEC)
 
-obj/main.o: src/main.cu src/main.h src/communs.h src/host.h src/device.h
-	$(CC) -c $< $(CFLAGS) $(IFLAGS) $(DFLAGS) -o $@
-
-obj/host.o: src/host.cu src/host.h src/communs.h src/device.h
-	$(CC) -c $< $(CFLAGS) $(IFLAGS) $(DFLAGS) -o $@
-
-obj/device.o: src/device.cu src/device.h src/communs.h
+obj/%.o: src/%.cu
 	$(CC) -c $< $(CFLAGS) $(IFLAGS) $(DFLAGS) -o $@
 
 init:
