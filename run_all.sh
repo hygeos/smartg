@@ -1,5 +1,7 @@
 #!/bin/bash
 
+rm resultat/*temoin
+
 echo
 echo "--- Compilation en mode plan parallèle ---"
 echo
