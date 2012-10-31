@@ -16,4 +16,7 @@
 
 * calcul des albédos semi-hémisphériques à la surface et TOA
 
-* indiquer dans le fichier de sortie si on est en SPH ou PP
+* [OK] indiquer dans le fichier de sortie si on est en SPH ou PP
+
+* avoir la même fonction pour la création du témoin et du résultat ?
+

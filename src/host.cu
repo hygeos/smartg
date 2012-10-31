@@ -2160,6 +2160,11 @@ void creerHDFTemoin(double* tabPhotonsTot, unsigned long long nbPhotonsTot, Vari
 	double nbPhotonsTotdouble = (double)nbPhotonsTot; // on convertit en double car le hdf n'accepte pas ull
 	double tempsEcouledouble = tempsPrec + (double)(clock() / CLOCKS_PER_SEC);
 	
+    #ifdef SPHERIQUE
+	SDsetattr(sdsTab, "MODE", DFNT_CHAR8, 2, "SP");
+    #else
+	SDsetattr(sdsTab, "MODE", DFNT_CHAR8, 2, "PP");
+    #endif
 	SDsetattr(sdsTab, "NBPHOTONS", DFNT_FLOAT64, 1, &NBPHOTONSdouble);
 	SDsetattr(sdsTab, "NBLOOP", DFNT_UINT32, 1, &NBLOOP);
 	SDsetattr(sdsTab, "SEED", DFNT_UINT32, 1, &SEED);
@@ -2260,6 +2265,7 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		int HATMrecup[1];
 		float WINDSPEEDrecup[1];
 		float NH2Orecup[1];
+        char MODErecup[2];
         #ifdef FLAGOCEAN
 		float CONPHYrecup[1];
         #endif
@@ -2286,6 +2292,7 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "HATM"), (VOIDP)HATMrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "WINDSPEED"), (VOIDP)WINDSPEEDrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "NH2O"), (VOIDP)NH2Orecup);
+		SDreadattr(sdsTab, SDfindattr(sdsTab, "MODE"), (VOIDP)MODErecup);
         #ifdef FLAGOCEAN
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "CONPHY"), (VOIDP)CONPHYrecup);
         #endif
@@ -2312,6 +2319,11 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 			&& HATMrecup[0] == HATM
 			&& WINDSPEEDrecup[0] == WINDSPEED
 			&& NH2Orecup[0] == NH2O
+            #ifdef SPHERIQUE
+			&& (strcmp(MODErecup, "SP") == 0)
+            #else
+			&& (strcmp(MODErecup, "PP") == 0)
+            #endif
             #ifdef FLAGOCEAN
 			&& CONPHYrecup[0] == CONPHY
             #endif
@@ -2412,6 +2424,11 @@ tempsPrec)
 	double nbPhotonsTotdouble = (double)nbPhotonsTot;
 	double tempsEcouledouble = tempsPrec + (double)(clock() / CLOCKS_PER_SEC);
 
+    #ifdef SPHERIQUE
+	SDsetattr(sdFichier, "MODE", DFNT_CHAR8, 2, "SP");
+    #else
+	SDsetattr(sdFichier, "MODE", DFNT_CHAR8, 2, "PP");
+    #endif
 	SDsetattr(sdFichier, "NBPHOTONS", DFNT_FLOAT64, 1, &NBPHOTONSdouble);
 	SDsetattr(sdFichier, "NBLOOP", DFNT_UINT32, 1, &NBLOOP);
 	SDsetattr(sdFichier, "SEED", DFNT_UINT32, 1, &SEED);
