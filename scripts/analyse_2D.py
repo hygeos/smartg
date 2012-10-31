@@ -13,6 +13,7 @@ import warnings
 warnings.simplefilter("ignore",DeprecationWarning)
 import pyhdf.SD
 import numpy as np
+np.seterr(invalid='ignore', divide='ignore') # ignore division by zero errors
 from pylab import savefig, show, figure
 from optparse import OptionParser
 from matplotlib.transforms import Affine2D
