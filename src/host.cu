@@ -1101,7 +1101,7 @@ void calculFoce( Tableaux* tab_H, Tableaux* tab_D ){
 	double a0, b0, a1, b1, a2, b2;	// Coefficients d'absorption et de diffusion
 	double r1;
 	double anap440, anap, aphi;
-	double bb1, g1, g2;				// Coefficients liés à la fonction Henyey greenstein
+	double bb1, g2;				// Coefficients liés à la fonction Henyey greenstein
 	
 	double integ_ff;
 	double rat1;				// Utilisé pour la troncature de la fonction de phase
@@ -1187,7 +1187,7 @@ void calculFoce( Tableaux* tab_H, Tableaux* tab_D ){
 
 	bb1 = 0.002 + 0.01*( 0.5-0.25*log10(CONPHY))*pow(LAMBDA/550,v);
 	r1 = (bb1 - 0.002)/0.028;
-	g1 = 1 - (2*bb1)/(bb1 + 0.414);
+	// g1 = 1 - (2*bb1)/(bb1 + 0.414);
 	
 	// Coefficients pour les 2ème particules
 	a2 = 0;
