@@ -10,8 +10,57 @@ echo
 echo "--- Compilation en mode sphérique ---"
 echo
 make clean
-make SPH=yes EXEC=mccuda-sph
+make SPH=yes EXEC=mccuda-sp
 
 
+echo
+echo "--- Lancement des simulations tests ---"
+echo
+echo "--- 1/6 --- Plan Parallele-Rayleigh-Sol_noir ---"
+echo
+./mccuda-pp resultat/PP-Rayleigh-Sol_noir-1e9_photons.inp > resultat/PP-Rayleigh-Sol_noir-1e9_photons.out
+python scripts/analyse_2D.py -r 0.4 -p -s resultat/PP-Rayleigh-Sol_noir-1e9_photons.png resultat/PP-Rayleigh-Sol_noir-1e9_photons.hdf
+echo "--- 2/6 --- Plan Parallele-Rayleigh-Aerosol-Sol_noir ---"
+echo
+./mccuda-pp resultat/PP-Rayleigh-Aerosol-Sol_noir-1e9_photons.inp > resultat/PP-Rayleigh-Aerosol-Sol_noir-1e9_photons.out
+python scripts/analyse_2D.py -r 0.4 -p -s resultat/PP-Rayleigh-Aerosol-Sol_noir-1e9_photons.png resultat/PP-Rayleigh-Aerosol-Sol_noir-1e9_photons.hdf
+echo "--- 3/6 --- Plan Parallele-Rayleigh-Aerosol-Glitter ---"
+echo
+./mccuda-pp resultat/PP-Rayleigh-Aerosol-Glitter-1e9_photons.inp > resultat/PP-Rayleigh-Aerosol-Glitter-1e9_photons.out
+python scripts/analyse_2D.py -r 0.4 -p -s resultat/PP-Rayleigh-Aerosol-Glitter-1e9_photons.png resultat/PP-Rayleigh-Aerosol-Glitter-1e9_photons.hdf
+echo "--- 4/6 --- Spherique-Rayleigh-Sol_noir ---"
+echo
+./mccuda-sp resultat/SP-Rayleigh-Sol_noir-1e9_photons.inp > resultat/SP-Rayleigh-Sol_noir-1e9_photons.out
+python scripts/analyse_2D.py -r 0.4 -p -s resultat/SP-Rayleigh-Sol_noir-1e9_photons.png resultat/SP-Rayleigh-Sol_noir-1e9_photons.hdf
+echo "--- 5/6 --- Spherique-Rayleigh-Aerosol-Sol_noir ---"
+echo
+./mccuda-sp resultat/SP-Rayleigh-Aerosol-Sol_noir-1e9_photons.inp > resultat/SP-Rayleigh-Aerosol-Sol_noir-1e9_photons.out
+python scripts/analyse_2D.py -r 0.4 -p -s resultat/SP-Rayleigh-Aerosol-Sol_noir-1e9_photons.png resultat/SP-Rayleigh-Aerosol-Sol_noir-1e9_photons.hdf
+echo "--- 6/6 --- Spherique-Rayleigh-Aerosol-Glitter ---"
+echo
+./mccuda-sp resultat/SP-Rayleigh-Aerosol-Glitter-1e9_photons.inp > resultat/SP-Rayleigh-Aerosol-Glitter-1e9_photons.out
+python scripts/analyse_2D.py -r 0.4 -p -s resultat/SP-Rayleigh-Aerosol-Glitter-1e9_photons.png resultat/SP-Rayleigh-Aerosol-Glitter-1e9_photons.hdf
+echo "--- Simulations tests effectuees, sorties dans : resultat --- "
 
+
+#mv  resultat/PP-Rayleigh-Sol_noir-1e9_photons.hdf resultat/PP-Rayleigh-Sol_noir-1e9_photons.reference.hdf
+#mv  resultat/PP-Rayleigh-Sol_noir-1e9_photons.out resultat/PP-Rayleigh-Sol_noir-1e9_photons.reference.out
+#mv  resultat/PP-Rayleigh-Sol_noir-1e9_photons.png resultat/PP-Rayleigh-Sol_noir-1e9_photons.reference.png
+#mv  resultat/PP-Rayleigh-Aerosol-Sol_noir-1e9_photons.hdf resultat/PP-Rayleigh-Aerosol-Sol_noir-1e9_photons.reference.hdf
+#mv  resultat/PP-Rayleigh-Aerosol-Sol_noir-1e9_photons.out resultat/PP-Rayleigh-Aerosol-Sol_noir-1e9_photons.reference.out
+#mv  resultat/PP-Rayleigh-Aerosol-Sol_noir-1e9_photons.png resultat/PP-Rayleigh-Aerosol-Sol_noir-1e9_photons.reference.png
+#mv  resultat/PP-Rayleigh-Aerosol-Glitter-1e9_photons.hdf resultat/PP-Rayleigh-Aerosol-Glitter-1e9_photons.reference.hdf
+#mv  resultat/PP-Rayleigh-Aerosol-Glitter-1e9_photons.out resultat/PP-Rayleigh-Aerosol-Glitter-1e9_photons.reference.out
+#mv  resultat/PP-Rayleigh-Aerosol-Glitter-1e9_photons.png resultat/PP-Rayleigh-Aerosol-Glitter-1e9_photons.reference.png
+#mv  resultat/SP-Rayleigh-Sol_noir-1e9_photons.hdf resultat/SP-Rayleigh-Sol_noir-1e9_photons.reference.hdf
+#mv  resultat/SP-Rayleigh-Sol_noir-1e9_photons.out resultat/SP-Rayleigh-Sol_noir-1e9_photons.reference.out
+#mv  resultat/SP-Rayleigh-Sol_noir-1e9_photons.png resultat/SP-Rayleigh-Sol_noir-1e9_photons.reference.png
+#mv  resultat/SP-Rayleigh-Aerosol-Sol_noir-1e9_photons.hdf resultat/SP-Rayleigh-Aerosol-Sol_noir-1e9_photons.reference.hdf
+#mv  resultat/SP-Rayleigh-Aerosol-Sol_noir-1e9_photons.out resultat/SP-Rayleigh-Aerosol-Sol_noir-1e9_photons.reference.out
+#mv  resultat/SP-Rayleigh-Aerosol-Sol_noir-1e9_photons.png resultat/SP-Rayleigh-Aerosol-Sol_noir-1e9_photons.reference.png
+#mv  resultat/SP-Rayleigh-Aerosol-Glitter-1e9_photons.hdf resultat/SP-Rayleigh-Aerosol-Glitter-1e9_photons.reference.hdf
+#mv  resultat/SP-Rayleigh-Aerosol-Glitter-1e9_photons.out resultat/SP-Rayleigh-Aerosol-Glitter-1e9_photons.reference.out
+#mv  resultat/SP-Rayleigh-Aerosol-Glitter-1e9_photons.png resultat/SP-Rayleigh-Aerosol-Glitter-1e9_photons.reference.png
+
+rm  resultat/*temoin
 
