@@ -20,22 +20,27 @@ echo "--- 1/6 --- Plan Parallele-Rayleigh-Sol_noir ---"
 echo
 ./mccuda-pp resultat/PP-Rayleigh-Sol_noir-1e9_photons.inp > resultat/PP-Rayleigh-Sol_noir-1e9_photons.out
 python scripts/analyse_2D.py -r 0.4 -p -s resultat/PP-Rayleigh-Sol_noir-1e9_photons.png resultat/PP-Rayleigh-Sol_noir-1e9_photons.hdf
+echo
 echo "--- 2/6 --- Plan Parallele-Rayleigh-Aerosol-Sol_noir ---"
 echo
 ./mccuda-pp resultat/PP-Rayleigh-Aerosol-Sol_noir-1e9_photons.inp > resultat/PP-Rayleigh-Aerosol-Sol_noir-1e9_photons.out
 python scripts/analyse_2D.py -r 0.4 -p -s resultat/PP-Rayleigh-Aerosol-Sol_noir-1e9_photons.png resultat/PP-Rayleigh-Aerosol-Sol_noir-1e9_photons.hdf
+echo
 echo "--- 3/6 --- Plan Parallele-Rayleigh-Aerosol-Glitter ---"
 echo
 ./mccuda-pp resultat/PP-Rayleigh-Aerosol-Glitter-1e9_photons.inp > resultat/PP-Rayleigh-Aerosol-Glitter-1e9_photons.out
 python scripts/analyse_2D.py -r 0.4 -p -s resultat/PP-Rayleigh-Aerosol-Glitter-1e9_photons.png resultat/PP-Rayleigh-Aerosol-Glitter-1e9_photons.hdf
+echo
 echo "--- 4/6 --- Spherique-Rayleigh-Sol_noir ---"
 echo
 ./mccuda-sp resultat/SP-Rayleigh-Sol_noir-1e9_photons.inp > resultat/SP-Rayleigh-Sol_noir-1e9_photons.out
 python scripts/analyse_2D.py -r 0.4 -p -s resultat/SP-Rayleigh-Sol_noir-1e9_photons.png resultat/SP-Rayleigh-Sol_noir-1e9_photons.hdf
+echo
 echo "--- 5/6 --- Spherique-Rayleigh-Aerosol-Sol_noir ---"
 echo
 ./mccuda-sp resultat/SP-Rayleigh-Aerosol-Sol_noir-1e9_photons.inp > resultat/SP-Rayleigh-Aerosol-Sol_noir-1e9_photons.out
 python scripts/analyse_2D.py -r 0.4 -p -s resultat/SP-Rayleigh-Aerosol-Sol_noir-1e9_photons.png resultat/SP-Rayleigh-Aerosol-Sol_noir-1e9_photons.hdf
+echo
 echo "--- 6/6 --- Spherique-Rayleigh-Aerosol-Glitter ---"
 echo
 ./mccuda-sp resultat/SP-Rayleigh-Aerosol-Glitter-1e9_photons.inp > resultat/SP-Rayleigh-Aerosol-Glitter-1e9_photons.out
