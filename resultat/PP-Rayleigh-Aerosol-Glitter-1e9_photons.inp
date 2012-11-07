@@ -68,7 +68,7 @@ ZMIN = 0.
 ZMAX = 1.
 
 # Nombre de couche+1
-NATM=3
+NATM=103
 
 # Altitude max de l'atmosphère
 HATM=100
