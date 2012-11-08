@@ -293,6 +293,10 @@ void initConstantesHost(int argc, char** argv)
     // nom du fichier témoin
     strcpy(PATHTEMOINHDF, PATHRESULTATSHDF);
     strcat(PATHTEMOINHDF, ".temoin");
+
+	strcpy(s,"");
+	chercheConstante(parametres, "WRITE_PERIOD", s);
+    WRITE_PERIOD = atoi(s);
 	
 	chercheConstante( parametres, "PATHDIFFAER", PATHDIFFAER );
 	
@@ -2124,8 +2128,6 @@ void calculTabFinal(double* tabFinal, double* tabTh, double* tabPhi, double* tab
 
 /* creerHDFTemoin
 * Fonction qui crée un fichier .hdf contenant les informations nécessaires à la reprise du programme
-* //TODO: 	écrire moins régulièrement le témoin (non pas une écriture par appel de kernel)
-*			changer le format (écrire un .bin par exemple) pour éventuellement gagner du temps (calculer le gain éventuel)
 */
 void creerHDFTemoin(double* tabPhotonsTot, unsigned long long nbPhotonsTot, Variables* var, double tempsPrec)
 {

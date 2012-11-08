@@ -41,6 +41,8 @@ int main (int argc, char *argv[])
 {
 	/** Initialisation de la carte graphique **/
 	cudaError_t cudaErreur;	// Permet de vérifier les allocations mémoire
+    long int time_current;
+    long int time_lastwrite = 0;
 	
 	//
 	cudaDeviceReset();
@@ -365,7 +367,12 @@ cudaMemcpyDeviceToHost);
 		for(int i = 0; i < 4*NBTHETA*NBPHI; i++)
 			tabPhotonsTot[i] += (double) tab_H.tabPhotons[i];
 		
-		creerHDFTemoin(tabPhotonsTot, nbPhotonsTot,var_H, tempsPrec);
+        time_current = clock() / CLOCKS_PER_SEC;
+		if ((WRITE_PERIOD > 0) && ((time_current - time_lastwrite > 60*WRITE_PERIOD) || (time_lastwrite == 0))) {
+            printf("== WRITING WITNESS FILE ==\n"); // FIXME
+            creerHDFTemoin(tabPhotonsTot, nbPhotonsTot,var_H, tempsPrec);
+            time_lastwrite = time_current;
+        }
 #ifdef _PERF
                         StopProcessing(perfCreateWitness);
                         GetElapsedTime(perfCreateWitness);

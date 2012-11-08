@@ -134,6 +134,9 @@ NFOCE = 10000000
 # Chemin du fichiers de sortie et témoin
 PATHRESULTATSHDF = resultat/out.hdf
 
+# Période d'écriture du fichier témoin en min (-1 pour désactiver)
+WRITE_PERIOD = 5
+
 
 ###
 ## Paramètres de la carte graphique  ##

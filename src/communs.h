@@ -173,6 +173,8 @@ extern char PATHTEMOINHDF[];
 extern char PATHDIFFAER[];
 extern char PATHPROFILATM[];
 
+extern int WRITE_PERIOD;
+
 
 /**********************************************************
 *	> Définition des structures
