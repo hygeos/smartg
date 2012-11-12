@@ -2054,8 +2054,9 @@ void calculOmega(double* tabTh, double* tabPhi, double* tabOmega)
 	}
 	// Tableau contenant l'aire de chaque morceau de sphère
 	double sumds = 0;
-	double tabds[NBTHETA * NBPHI];
-	memset(tabds, 0, NBTHETA * NBPHI * sizeof(*tabds));
+	double *tabds;
+    tabds = (double*)malloc(NBTHETA * NBPHI * sizeof(double));
+	memset(tabds, 0, NBTHETA * NBPHI * sizeof(double));
 	for(int ith = 0; ith < NBTHETA; ith++)
 	{
 		if( ith==0 )
@@ -2082,6 +2083,8 @@ void calculOmega(double* tabTh, double* tabPhi, double* tabOmega)
 		for(int iphi = 0; iphi < NBPHI; iphi++){
 			tabOmega[ith * NBPHI + iphi] = tabds[ith * NBPHI + iphi] / sumds;
 		}
+    
+    free(tabds);
 }
 
 
@@ -2091,7 +2094,8 @@ void calculOmega(double* tabTh, double* tabPhi, double* tabOmega)
 void calculTabFinal(double* tabFinal, double* tabTh, double* tabPhi, double* tabPhotonsTot, unsigned long long nbPhotonsTot)
 {
 	
-	double tabOmega[NBTHETA * NBPHI]; //tableau contenant l'aire de chaque morceau de sphère
+	double *tabOmega;
+    tabOmega = (double*)malloc(NBTHETA * NBPHI * sizeof(double));
 	// Remplissage des tableaux tabTh, tabPhi, et tabOmega
 	calculOmega(tabTh, tabPhi, tabOmega);
 	
@@ -2119,6 +2123,7 @@ void calculTabFinal(double* tabFinal, double* tabTh, double* tabPhi, double* tab
 				
 		}
 	}
+    free(tabOmega);
 }
 
 
@@ -2412,7 +2417,8 @@ void creerHDFResultats(double* tabFinal, double* tabTh, double* tabPhi,unsigned 
 tempsPrec)
 {
 	// Tableau temporaire utile pour la suite
-	double tab[NBPHI*NBTHETA];
+	double *tab;
+    tab = (double*)malloc(NBPHI*NBTHETA*sizeof(double));
 
 	// Création du fichier de sortie
 	int sdFichier = SDstart(PATHRESULTATSHDF, DFACC_CREATE);
@@ -2636,4 +2642,5 @@ tempsPrec)
 	// Fermeture du fichier
 	SDend(sdFichier);
 	
+    free(tab);
 }

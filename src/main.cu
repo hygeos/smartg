@@ -125,12 +125,15 @@ int main (int argc, char *argv[])
 	memset(tabPhotonsTot,0,4*NBTHETA*NBPHI*sizeof(*(tabPhotonsTot)));
 	
 	// Variables permettant le calcul du résultat final
-	double tabFinal[4*NBTHETA * NBPHI];	 /* tableau final: 4 dimensions pour R=stokes1+stokes2(dim0) , Q=stokes1-stokes2(dim1) ,
-											U=stokes3(dim2)  et Nbphoton(dim4) */
-//	double tabFinal[3*NBTHETA * NBPHI];	 /* tableau final: 3 dimensions pour R=stokes1+stokes2(dim0) , Q=stokes1-stokes2(dim1) et
-//											U=stokes3(dim2) */
-	double tabTh[NBTHETA]; //tableau contenant l'angle theta de chaque morceau de sphère
-	double tabPhi[NBPHI]; //tableau contenant l'angle psi de chaque morceau de sphère
+    double *tabFinal;   // tableau final: 4 dimensions pour
+                        // R=stokes1+stokes2(dim0) , Q=stokes1-stokes2(dim1),
+                        // U=stokes3(dim2)  et Nbphoton(dim4)
+    tabFinal = (double*)malloc(4*NBTHETA*NBPHI*sizeof(double));
+
+	double *tabTh;
+    tabTh = (double*)malloc(NBTHETA*sizeof(double));
+	double *tabPhi;
+    tabPhi = (double*)malloc(NBPHI*sizeof(double));
 	
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
 	// Définition et initialisation des constantes initiales du photon
@@ -157,7 +160,7 @@ int main (int argc, char *argv[])
 	
 	
 	/** Vérification de l'existence ou non d'un fichier témoin **/
-	verifierFichier();
+    verifierFichier();
 	
 	#ifdef PARAMETRES
 	/** Affichage des paramètres de la simulation **/
@@ -468,6 +471,9 @@ cudaMemcpyDeviceToHost);
 	}
 
 	free(var_H);
+    free(tabFinal);
+    free(tabPhi);
+    free(tabTh);
 
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
 	cudaErreur = cudaFree(init_D);
