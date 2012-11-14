@@ -134,6 +134,9 @@ NFOCE = 10000000
 # Chemin du fichiers de sortie et témoin
 PATHRESULTATSHDF = resultat/PP-Rayleigh-Sol_noir-1e9_photons.hdf
 
+# Période d'écriture du fichier témoin en min (-1 pour désactiver)
+WRITE_PERIOD = 5
+
 
 ###
 ## Paramètres de la carte graphique  ##
