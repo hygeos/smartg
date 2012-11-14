@@ -2595,7 +2595,8 @@ tempsPrec)
 	/** 	Création du tableau theta
 		Valeurs de theta en fonction de l'indice	**/
 	//conversion en degrès de theta pour une meilleure visualisation de la sortie
-	float tabThBis[NBTHETA];
+	float *tabThBis;
+    tabThBis = (float*)malloc(NBTHETA*sizeof(float));
 	for(int i=0; i<NBTHETA; i++)
 		tabThBis[i] = tabTh[i]/DEG2RAD;
 	
@@ -2614,11 +2615,13 @@ tempsPrec)
 	}
 			
 	// Fermeture du tableau
+    free(tabThBis);
 	SDendaccess(sdsTab);
 	
 	/** 	Création du tableau phi
 		Valeurs de phi en fonction de l'indice	**/
-	float tabPhiBis[NBPHI];
+	float *tabPhiBis;
+    tabPhiBis = (float*)malloc(NBPHI*sizeof(float));
 	for(int i=0; i<NBPHI; i++)
 		tabPhiBis[i] = tabPhi[i]/DEG2RAD;
 	
@@ -2637,6 +2640,7 @@ tempsPrec)
 	}
 	
 	// Fermeture du tableau
+    free(tabPhiBis);
 	SDendaccess(sdsTab);
 	
 	// Fermeture du fichier
