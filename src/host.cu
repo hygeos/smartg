@@ -148,10 +148,12 @@ void initConstantesHost(int argc, char** argv)
 	}
 	
 	char s[256];
+    double dbl;
 
 	strcpy(s,"");
 	chercheConstante( parametres, "NBPHOTONS", s);
-	NBPHOTONS = strtoull(s, NULL, 10);
+    dbl = atof(s);
+    NBPHOTONS = (unsigned long long)dbl;
 	
 	strcpy(s,"");
 	chercheConstante(parametres, "NBLOOP", s);

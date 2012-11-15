@@ -8,7 +8,7 @@
 #_______________________#
 
 # Nombre de photons a lancer (unsigned long long) (limite par le tableau du poids des photons en unsigned long long)
-NBPHOTONS = 1000000000
+NBPHOTONS = 1e9
 
 # Angle zenithal solaire en degrés (float)
 THSDEG = 30.
