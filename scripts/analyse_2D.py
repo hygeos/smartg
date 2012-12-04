@@ -12,6 +12,8 @@ import sys
 import warnings
 warnings.simplefilter("ignore",DeprecationWarning)
 import pyhdf.SD
+import matplotlib
+#matplotlib.use('Agg')
 import numpy as np
 np.seterr(invalid='ignore', divide='ignore') # ignore division by zero errors
 from pylab import savefig, show, figure
@@ -48,7 +50,7 @@ def setup_axes3(fig, rect):
     angle_ticks2 = [(0, r"$0$"),
                    (30, r"$30$"),
                    (60, r"$60$"),
-                   (90, r"$90$"),]
+                   (90, r"$90$")]
     grid_locator2 = FixedLocator([v for v, s in angle_ticks2])
     tick_formatter2 = DictFormatter(dict(angle_ticks2))
 
@@ -100,7 +102,7 @@ def main():
     ##                PARSE OPTIONS                     ##
     ######################################################
 
-    parser = OptionParser(usage='%prog [options] hdf_file')
+    parser = OptionParser(usage='%prog [options] hdf_file [hdf_file2]')
     parser.add_option('-s', '--savefile',
             dest='filename',
             help='output file name',
@@ -112,20 +114,23 @@ def main():
             )
     parser.add_option('-p', '--percent',
             dest='percent',
-            action="store_true", default=False,
-            help='choose polarization ratio instead of polarized reflectance',
+            type='float',
+            help='choose polarization ratio instead of polarized reflectance and maximum PR for color scale',
             )
     parser.add_option('-e', '--error',
             dest='error',
             type='float',
-            help='choose relative error instead of polarized reflectance',
+            help='choose relative error instead of polarized reflectance and maximum error for color scale',
             )
     (options, args) = parser.parse_args()
-    if len(args) != 1:
+    if len(args) != 1 and len(args) != 2:
         parser.print_usage()
         exit(1)
 
     path_cuda = args[0]
+
+    if len(args) == 2 :
+         path_cuda2 = args[1]
 
 
     ##########################################################
@@ -140,6 +145,7 @@ def main():
         # lecture du nombre de valeurs de phi
         NBPHI_cuda = getattr(sd_cuda,'NBPHI')
         NBTHETA_cuda = getattr(sd_cuda,'NBTHETA')
+        thetas = getattr(sd_cuda,'THSDEG')
 
         # Récupération des valeurs de theta
         name = "Valeurs de theta echantillonnees"
@@ -165,6 +171,25 @@ def main():
         sys.stdout.write("Pas de fichier "+path_cuda+"\n")
         sys.exit()
 
+    if len(args) == 2 :
+     if os.path.exists(path_cuda2):
+        sd_cuda = pyhdf.SD.SD(path_cuda2)
+        # lecture du nombre de valeurs de phi
+        NBPHI_cuda2 = getattr(sd_cuda,'NBPHI')
+        NBTHETA_cuda2 = getattr(sd_cuda,'NBTHETA')
+        sds_cuda = sd_cuda.select("Valeurs de la reflectance (I)")
+        dataI2 = sds_cuda.get()
+        sds_cuda = sd_cuda.select("Valeurs de Q")
+        dataQ2 = sds_cuda.get()
+        sds_cuda = sd_cuda.select("Valeurs de U")
+        dataU2 = sds_cuda.get()
+        sds_cuda = sd_cuda.select("Nb de photons")
+        dataN2 = sds_cuda.get()
+
+     else:
+        sys.stdout.write("Pas de fichier "+path_cuda2+"\n")
+        sys.exit()
+
 
 
     ##################################################################################
@@ -183,6 +208,21 @@ def main():
     data_cudaN = np.zeros((NBPHI_cuda, NBTHETA_cuda), dtype=float)
     data_cudaN = 100./ np.sqrt(dataN[0:NBPHI_cuda,:])
 
+    if len(args) == 2 :
+      if NBPHI_cuda==NBPHI_cuda2 and NBTHETA_cuda==NBTHETA_cuda2 :
+        data_cudaI2 = np.zeros((NBPHI_cuda, NBTHETA_cuda), dtype=float)
+        data_cudaI2 = dataI2[0:NBPHI_cuda,:]
+        data_cudaQ2 = np.zeros((NBPHI_cuda, NBTHETA_cuda), dtype=float)
+        data_cudaQ2 = dataQ2[0:NBPHI_cuda,:]
+        data_cudaU2 = np.zeros((NBPHI_cuda, NBTHETA_cuda), dtype=float)
+        data_cudaU2 = dataU2[0:NBPHI_cuda,:]
+        data_cudaIP2 = np.sqrt(data_cudaQ2*data_cudaQ2 + data_cudaU2*data_cudaU2)
+        data_cudaPR2 = data_cudaIP2/data_cudaI2 * 100
+        data_cudaN2 = np.zeros((NBPHI_cuda, NBTHETA_cuda), dtype=float)
+        data_cudaN2 = 100./ np.sqrt(dataN2[0:NBPHI_cuda,:])
+      else:
+        sys.stdout.write("Dimensions incompatibles entre "+path_cuda+"et " +path_cuda2 +"\n")
+       
 
     #---------------------------------------------------------
     if options.rmax == None:
@@ -195,17 +235,35 @@ def main():
     else:
         maxe=options.error
 
+    if options.percent == None:
+        maxp=100.0
+    else:
+        maxp=options.percent
+
     # Calcul pour l'ergonomie des graphiques
-    VI = np.linspace(0.,max,50) # levels des contours
-    VIt = np.linspace(0.,max,6) # ticks des color bars associees
+    if len(args) == 2:
+      VI = np.linspace(-max,max,50) # levels des contours
+      VIt = np.linspace(-max,max,6) # ticks des color bars associees
+    else:
+      VI = np.linspace(0.,max,50) # levels des contours
+      VIt = np.linspace(0.,max,6) # ticks des color bars associees
     VQ = np.linspace(-max,max,50)
     VQt = np.linspace(-max,max,5)
     VU = np.linspace(-max,max,50)
     VUt = np.linspace(-max,max,5)
-    VIP = np.linspace(0.,max,50)
-    VIPt = np.linspace(0.,max,6)
-    VPR = np.linspace(0.,100,50)
-    VPRt = np.linspace(0.,100,6)
+    if len(args) == 2:
+      VIP = np.linspace(-max,max,50)
+      VIPt = np.linspace(-max,max,6)
+    else:
+      VIP = np.linspace(0.,max,50)
+      VIPt = np.linspace(0.,max,6)
+    if len(args) == 2:
+      VPR = np.linspace(-maxp,maxp,50)
+      VPRt = np.linspace(-maxp,maxp,6)
+    else:
+      VPR = np.linspace(0.,maxp,50)
+      VPRt = np.linspace(0.,maxp,6)
+
     VN = np.linspace(0.,maxe,50)
     VNt = np.linspace(0.,maxe,6)
 
@@ -221,39 +279,59 @@ def main():
     fig.subplots_adjust(wspace=0.3, left=0.05, right=0.95)
 
     ax3, aux_ax3 = setup_axes3(fig, 221)
-    cax3 = aux_ax3.contourf(t,r,data_cudaI,VI)
-    ax3.set_title("I",weight='bold',position=(0.25,1.0))
+    if len(args)==2:
+        cax3 = aux_ax3.contourf(t,r,data_cudaI-data_cudaI2,VI)
+        ax3.set_title("I1-I2",weight='bold',position=(0.25,1.0))
+    else:
+        cax3 = aux_ax3.contourf(t,r,data_cudaI,VI)
+        ax3.set_title("I",weight='bold',position=(0.25,1.0))
     cb3=fig.colorbar(cax3,orientation='horizontal',ticks=VIt)
     cb3.set_label("Reflectance")
 
     ax3, aux_ax3 = setup_axes3(fig, 222)
-    cax3 = aux_ax3.contourf(t,r,data_cudaQ,VQ)
-    ax3.set_title("Q",weight='bold',position=(0.25,1.0))
+    if len(args)==2:
+        cax3 = aux_ax3.contourf(t,r,data_cudaQ-data_cudaQ2,VQ)
+        ax3.set_title("Q1-Q2",weight='bold',position=(0.25,1.0))
+    else:
+        cax3 = aux_ax3.contourf(t,r,data_cudaQ,VQ)
+        ax3.set_title("Q",weight='bold',position=(0.25,1.0))
     cb3=fig.colorbar(cax3,orientation='horizontal',ticks=VQt)
     #cb3.set_label("Reflectance")
 
     ax3, aux_ax3 = setup_axes3(fig, 223)
-    cax3 = aux_ax3.contourf(t,r,data_cudaU,VU)
-    ax3.set_title("U",weight='bold',position=(0.25,1.0))
+    if len(args)==2:
+        cax3 = aux_ax3.contourf(t,r,data_cudaU-data_cudaU2,VU)
+        ax3.set_title("U1-U2",weight='bold',position=(0.25,1.0))
+    else:
+        cax3 = aux_ax3.contourf(t,r,data_cudaU,VU)
+        ax3.set_title("U",weight='bold',position=(0.25,1.0))
     cb3=fig.colorbar(cax3,orientation='horizontal',ticks=VUt)
     #cb3.set_label("Reflectance")
 
     ax3, aux_ax3 = setup_axes3(fig, 224)
     # ax3.scatter(ths,20,marker='*',color='#ffffff',s=80)
 
-    if (options.percent == True) and (options.error == None):
-      cax3 = aux_ax3.contourf(t,r,data_cudaPR,VPR)
-      ax3.set_title("P[%]",weight='bold',position=(0.25,1.0))
+    if (options.percent >= 0.) and (options.error == None):
+      if len(args)==2:
+        cax3 = aux_ax3.contourf(t,r,data_cudaPR-data_cudaPR2,VPR)
+        ax3.set_title("P1-P2[%]",weight='bold',position=(0.25,1.0))
+      else:
+        cax3 = aux_ax3.contourf(t,r,data_cudaPR,VPR)
+        ax3.set_title("P[%]",weight='bold',position=(0.25,1.0))
       cb3=fig.colorbar(cax3,orientation='horizontal',ticks=VPRt)
       cb3.set_label("Polarization Ratio")
-    if options.percent == False and options.error >= 0.:
+    if options.percent == None and options.error >= 0.:
       cax3 = aux_ax3.contourf(t,r,data_cudaN,VN)
       ax3.set_title(r"$\Delta$ [%]",weight='bold',position=(0.25,1.0))
       cb3=fig.colorbar(cax3,orientation='horizontal',ticks=VNt)
       cb3.set_label("Relative Error")
-    if options.percent == False and options.error == None:
-      cax3 = aux_ax3.contourf(t,r,data_cudaIP,VIP)
-      ax3.set_title("IP",weight='bold',position=(0.25,1.0))
+    if options.percent == None  and options.error == None:
+      if len(args)==2:
+        cax3 = aux_ax3.contourf(t,r,data_cudaIP-data_cudaIP2,VIP)
+        ax3.set_title("IP1-IP2",weight='bold',position=(0.25,1.0))
+      else:
+        cax3 = aux_ax3.contourf(t,r,data_cudaIP,VIP)
+        ax3.set_title("IP",weight='bold',position=(0.25,1.0))
       cb3=fig.colorbar(cax3,orientation='horizontal',ticks=VIPt)
       cb3.set_label("Polarized Reflectance")
 
