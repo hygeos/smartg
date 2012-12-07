@@ -280,6 +280,7 @@ typedef struct {
 typedef struct __align__(16)
 {
 	float* tabPhotons;		// Tableau contenant l'ensemble des paramètres de stokes des photons sortis dans l'espace
+	float* tabPhotonsDown;		// Tableau contenant l'ensemble des paramètres de stokes des photons descendant arrivant à la surface 
 	
 	float* faer;			// Pointeur vers le modèle de diffusion des aérosols
 	

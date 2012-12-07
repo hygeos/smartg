@@ -649,6 +649,27 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	exit(1);
 	}
 	
+	tab_H->tabPhotonsDown = (float*)malloc(4*NBTHETA * NBPHI * sizeof(*(tab_H->tabPhotonsDown)));
+	if( tab_H->tabPhotonsDown == NULL ){
+		printf("ERREUR: Problème de malloc de tab_H->tabPhotonsDown dans initTableaux\n");
+		exit(1);
+	}
+	memset(tab_H->tabPhotonsDown,0,4*NBTHETA * NBPHI * sizeof(*(tab_H->tabPhotonsDown)) );
+	
+	if( cudaMalloc(&(tab_D->tabPhotonsDown), 4 * NBTHETA * NBPHI * sizeof(*(tab_D->tabPhotonsDown))) != cudaSuccess){
+		printf("ERREUR: Problème de cudaMalloc de tab_D->tabPhotonsDown dans initTableaux\n");
+		exit(1);	
+	}
+	
+	cudaErreur = cudaMemset(tab_D->tabPhotonsDown, 0, 4*NBTHETA * NBPHI * sizeof(*(tab_D->tabPhotonsDown)));
+	if( cudaErreur != cudaSuccess ){
+	printf("#--------------------#\n");
+	printf("# ERREUR: Problème de cudaMemset tab_D.tabPhotonsDown dans le initTableaux\n");
+	printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+	printf("#--------------------#\n");
+	exit(1);
+	}
+	
 	/** Modèle de diffusion **/
 	// Modèle de diffusion des aérosols
 	tab_H->faer = (float*)malloc(5 * NFAER * sizeof(float));
@@ -2224,7 +2245,7 @@ void calculTabFinal(double* tabFinal, double* tabTh, double* tabPhi, double* tab
 /* creerHDFTemoin
 * Fonction qui crée un fichier .hdf contenant les informations nécessaires à la reprise du programme
 */
-void creerHDFTemoin(double* tabPhotonsTot, unsigned long long nbPhotonsTot, Variables* var, double tempsPrec)
+void creerHDFTemoin(double* tabPhotonsTot, double* tabPhotonsTotDown, unsigned long long nbPhotonsTot, Variables* var, double tempsPrec)
 {
 	// Création du fichier de sortie
 	int sdFichier = SDstart(PATHTEMOINHDF, DFACC_CREATE);
@@ -2251,6 +2272,8 @@ void creerHDFTemoin(double* tabPhotonsTot, unsigned long long nbPhotonsTot, Vari
 		printf("\nERREUR : write hdf temoin (%s)\n", sdFichier);
 		exit(1);
 	}
+
+
 	
 	// Ecriture de toutes les informations sur la simulation : paramètres, nbphotons, nbErreurs, tempsEcoule
 	double NBPHOTONSdouble = (double)NBPHOTONS; // on convertit en double car le hdf n'accepte pas ull
@@ -2319,6 +2342,16 @@ void creerHDFTemoin(double* tabPhotonsTot, unsigned long long nbPhotonsTot, Vari
 
 	// Fermeture du tableau
 	SDendaccess(sdsTab);
+    // flux descendant
+	sprintf(nomTab,"Temoin down(%d%%)", (int)(100 * nbPhotonsTot / NBPHOTONS));
+	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
+	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP)tabPhotonsTotDown);
+	if (status)
+	{
+		printf("\nERREUR : write hdf temoin (%s)\n", sdFichier);
+		exit(1);
+	}
+	SDendaccess(sdsTab);
 	// Fermeture du fichier
 	SDend(sdFichier);
 }
@@ -2329,7 +2362,7 @@ void creerHDFTemoin(double* tabPhotonsTot, unsigned long long nbPhotonsTot, Vari
 * partir de celle sauvée dans le fichier témoin.
 */
 void lireHDFTemoin(Variables* var_H, Variables* var_D,
-		unsigned long long* nbPhotonsTot, double* tabPhotonsTot, double* tempsEcoule)
+		unsigned long long* nbPhotonsTot, double* tabPhotonsTot, double* tabPhotonsTotDown, double* tempsEcoule)
 {
 	// Ouverture du fichier temoin
 	int sdFichier = SDstart(PATHTEMOINHDF, DFACC_READ);
@@ -2490,7 +2523,17 @@ identiques a chaque lancement.\n");
 				printf("\nERREUR : read hdf temoin\n");
 				exit(1);
 			}
-			
+            SDendaccess (sdsTab);
+            // flux descendant
+            sdsIndex = 1;
+            sdsTab = SDselect (sdFichier, sdsIndex);
+            status = SDreaddata (sdsTab, startTab, NULL, edgesTab, (VOIDP)tabPhotonsTotDown);
+			if(status)
+			{
+				printf("\nERREUR : read hdf temoin down\n");
+				exit(1);
+			}
+
 		}
 		// Fermeture du tableau
 		SDendaccess (sdsTab);
@@ -2503,7 +2546,7 @@ identiques a chaque lancement.\n");
 /* creerHDFResultats
 * Fonction qui crée le fichier .hdf contenant le résultat final pour une demi-sphère
 */
-void creerHDFResultats(double* tabFinal, double* tabTh, double* tabPhi,unsigned long long nbPhotonsTot, Variables* var,double
+void creerHDFResultats(double* tabFinal,double* tabFinalDown,  double* tabTh, double* tabPhi,unsigned long long nbPhotonsTot, Variables* var,double
 tempsPrec)
 {
 	// Tableau temporaire utile pour la suite
@@ -2628,6 +2671,67 @@ tempsPrec)
 	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
 	// Ecriture du tableau dans le fichier
 	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP) (tabFinal+2*NBPHI*NBTHETA) );
+	// Vérification du bon fonctionnement de l'écriture
+	if(status)
+	{
+		printf("\nERREUR : write hdf resultats U\n");
+		exit(1);
+	}
+	
+	// Fermeture du tableau
+	SDendaccess(sdsTab);
+
+    // flux descendant
+	nomTab="Valeurs de la reflectance (I) (flux descendant)"; //nom du tableau
+	nbDimsTab = 2; //nombre de dimensions du tableau
+	valDimsTab[1] = NBTHETA;	//colonnes
+	valDimsTab[0] = NBPHI;
+	typeTab = DFNT_FLOAT64; //type des éléments du tableau
+	
+	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
+	startTab[nbDimsTab]; //début de la lecture du tableau
+	startTab[0]=0;
+	startTab[1]=0;
+	// Ecriture du tableau dans le fichier
+	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP)tabFinalDown);
+	// Vérification du bon fonctionnement de l'écriture
+	if(status)
+	{
+		printf("\nERREUR : write hdf resultats reflectance\n");
+		exit(1);
+	}
+	
+	// Fermeture du tableau
+	SDendaccess(sdsTab);
+	
+	/** 	Création du tableau Q dans le fichier hdf
+		Valeur de Q pour phi et theta donnés		**/
+	nomTab="Valeurs de Q (flux descendant)"; //nom du tableau
+	// La plupart des paramètres restent les mêmes, pas besoin de les réinitialiser
+	
+	// Création du tableau
+	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
+	// Ecriture du tableau dans le fichier
+	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP) (tabFinalDown+NBPHI*NBTHETA) );
+	// Vérification du bon fonctionnement de l'écriture
+	if(status)
+	{
+		printf("\nERREUR : write hdf resultats Q\n");
+		exit(1);
+	}
+	
+	// Fermeture du tableau
+	SDendaccess(sdsTab);
+	
+	/** 	Création du tableau U dans le fichier hdf
+	Valeur de U pour phi et theta donnés		**/
+	nomTab="Valeurs de U (flux descendant)"; //nom du tableau
+	// La plupart des paramètres restent les mêmes, pas besoin de les réinitialiser
+	
+	// Création du tableau
+	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
+	// Ecriture du tableau dans le fichier
+	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP) (tabFinalDown+2*NBPHI*NBTHETA) );
 	// Vérification du bon fonctionnement de l'écriture
 	if(status)
 	{

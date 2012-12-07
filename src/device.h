@@ -225,6 +225,18 @@ __device__ void exit(Photon* , Tableaux, unsigned long long*
 		#endif
 		    );
 
+/* exitDown
+* Sauve les paramètres des photons touchant la surface
+*/
+__device__ void exitDown(Photon* , Tableaux, unsigned long long*
+		#ifdef PROGRESSION
+		, unsigned int*, Variables*
+		#endif
+		#ifdef TRAJET
+		, int, Evnt*
+		#endif
+		    );
+
 
 /* Modifie les paramètres de stokes
 * Flag permet de tester (si flag=1) ou non la valeur des paramètres avant modification
