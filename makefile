@@ -61,7 +61,7 @@ endif
 
 all: init $(EXEC)
 
-$(EXEC): obj/main.o obj/host.o obj/device.o
+$(EXEC): obj/main.o obj/host.o obj/device.o obj/checkGPUcontext.o
 	$(CC) $^ $(IFLAGS) $(LFLAGS) -o $(EXEC)
 
 obj/%.o: src/%.cu

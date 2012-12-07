@@ -7,6 +7,7 @@
 #include "communs.h"
 #include "device.h"
 #include "host.h"
+#include "checkGPUcontext.h"
 
 #ifdef RANDPHILOX4x32_7
 //Cette partie est necessitee par les generateurs "1,2,3" pour leur version 64bits.
@@ -39,24 +40,10 @@ static SPerf* perfCreateFinalTab;
 // Fonction principale
 int main (int argc, char *argv[])
 {
-	/** Initialisation de la carte graphique **/
-	cudaError_t cudaErreur;	// Permet de vérifier les allocations mémoire
-    long int time_current;
-    long int time_lastwrite = 0;
-	
-	//
-	cudaDeviceReset();
-	
-	// Préférer utiliser plus de mémoire cache que de shared memory
-	cudaErreur = cudaFuncSetCacheConfig (lancementKernel,  cudaFuncCachePreferL1);
-	if( cudaErreur != cudaSuccess ){
-		printf("#--------------------#\n");
-		printf("# ERREUR: Problème cuFuncSetCacheConfig dans le main\n");
-		printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-		printf("#--------------------#\n");
-		exit(1);
-	}
-	
+        /** Initialisation des timers **/
+        long int time_current;
+        long int time_lastwrite = 0;
+
 #ifdef _PERF
         perfPrint = NULL;
         perfInitG = NULL;
@@ -81,6 +68,28 @@ int main (int argc, char *argv[])
         StartProcessing(perfInitG);
 #endif
 
+	/** Initialisation de la carte graphique **/
+	cudaError_t cudaErreur;	// Permet de vérifier les allocations mémoire
+	
+        // Verification de l'environnement GPU
+        if ( CheckGPUContext() != MCCUDA_OK ){
+            printf("\n!!MCCUDA Erreur!! main : erreur au sein de CheckGPUContext()\n");
+            exit(1);
+        }
+
+	//
+	cudaDeviceReset();
+	
+	// Préférer utiliser plus de mémoire cache que de shared memory
+	cudaErreur = cudaFuncSetCacheConfig (lancementKernel,  cudaFuncCachePreferL1);
+	if( cudaErreur != cudaSuccess ){
+		printf("#--------------------#\n");
+		printf("# ERREUR: Problème cuFuncSetCacheConfig dans le main\n");
+		printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+		printf("#--------------------#\n");
+		exit(1);
+	}
+	
 	/** Initialisation des constantes du host (en partie recuperees dans le fichier Parametres.txt) **/
 	initConstantesHost(argc, argv);
 	

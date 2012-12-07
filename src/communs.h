@@ -36,6 +36,11 @@
 /**********************************************************
 *	> Constantes
 ***********************************************************/
+// Codes retours des methode du projet MCCUDA
+typedef int CrMCCUDA;
+#define MCCUDA_OK                                           0
+#define MCCUDA_KO                                           1
+#define MCCUDA_ENVIRONNEMENT_GPU_NON_COMPATIBLE             2
 
 // Constantes pour la fonction random Mersenne Twister
 #define MT_MM 9
