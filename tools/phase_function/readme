@@ -1,0 +1,12 @@
+Compilation
+gfortran phase.f -o phase
+
+Execution
+./phase<ResultGRANU.txt
+
+ResultGRANU.txt est le fichier obtenu avec les SOS
+pour le modèle de Shettle and Fenn, troposphérique, avec RH=70%
+et lambda=443nm  (T70)
+
+
+output (input pour Monte Carlo): pf.txt
