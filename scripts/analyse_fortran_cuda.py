@@ -11,22 +11,28 @@ from os.path import basename
 
 
 ##################################################
-##              FICHIERS A LIRE                 ##
+##              PARAMETRES                      ##
 ##################################################
 
-#
-# Paramètres à modifier
-#
-#-----------------------------------------------------------------------------------------------------------------------
+case = 1
 
-path_fortran = '/home/dom/LIVRAISON/livraison_sport_mc/MC-1/bin/out.ran=0101.wav=443.ths=30.000.tr=0.2360.ta=0.1000.pi0=0.967.H=002.000.mod=valid_T70.443.bin.gz'
-path_cuda = '../resultat/SP-Rayleigh-Aerosol-Sol_noir-1e9_photons.hdf'
+if case == 1:
+    # premier cas test: rayleigh, aerosols, sol noir
+    path_fortran = '../validation/out.ran=0101.wav=443.ths=30.000.tr=0.2360.ta=0.1000.pi0=0.967.H=002.000.mod=valid_T70.443.bin.gz'
+    path_cuda = '../resultat/SP-Rayleigh-Aerosol-Sol_noir-1e9_photons.hdf'
+    type_simu = 'rayleigh_aerosols_sol_noir'
 
-path_dossier_sortie = '../validation-fortran-cuda/'
+elif case == 2:
+    # deuxieme cas test: rayleigh, aerosols, glitter
+    path_fortran = '../validation/out.ran=0102.wav=443.ths=30.000.tr=0.2360.ta=0.1000.pi0=0.967.H=002.000.mod=valid_T70.443.bin.gz'
+    path_cuda = '../resultat/SP-Rayleigh-Aerosol-Glitter-1e9_photons.hdf'
+    type_simu = 'rayleigh_aerosols_glitter'
 
+else:
+    print 'Invalid case'
+    sys.exit(1)
 
-type_simu = "rayleigh_aerosols_sol_noir"
-date_simu = "28022012"
+path_dossier_sortie = '../validation-fortran-cuda/' + type_simu
 angle = "30"
 
 
@@ -34,7 +40,7 @@ angle = "30"
 # Les bords peuvent fausser les graphiques.
 dep = 3         # Indice de départ pour le tracé
 fin = 177       # Indice de fin pour le tracé
-pas_figure = 5  # Pas en phi pour le tracé des graphiques
+pas_figure = 15  # Pas en phi pour le tracé des graphiques
 
 choix = 'i'
 
@@ -49,19 +55,15 @@ choix = 'i'
 if choix == 'i':
     nom_data_cuda = "Valeurs de la reflectance (I)"
     type_donnees = "I"
-    flag=False
 elif choix == 'q':
     nom_data_cuda = "Valeurs de Q"
     type_donnees = "Q"
-    flag=False
 elif choix == 'u':
     nom_data_cuda = "Valeurs de U"
     type_donnees = "U"
-    flag=False
 elif choix == 'l':
     nom_data_cuda = "Valeurs de la lumiere polarisee (LP)"
     type_donnees = "LP"
-    flag=False
 else:
     print 'Erreur choix'
 
@@ -239,26 +241,19 @@ commentaire = type_simu + ' - ' + angle
 
 if (NBPHI_cuda) == NBPHI_fortran:
     for iphi in xrange(0,NBPHI_cuda,pas_figure):
+        print 'iphi = %d/%d' % (iphi, NBPHI_cuda)
 
-        # initialisation
-        listePlots = []
-        listeLegends = []
         figure()
-        # fortran
-        #listePlots.append(plot(tab_fortran['real_thv_bornes'][dep-1:fin-1], tab_fortran['real_refl'][0, dep-1:fin-1, iphi, 0]))
-        listePlots.append( plot(theta[dep:fin], data_fortran[iphi][dep:fin]) )
-        listeLegends.append('Fortran')
-        #cuda
-        listePlots.append( plot(theta[dep:fin],data_cuda[iphi][dep:fin]) )
-        listeLegends.append('Cuda')
+        plot(theta[dep:fin], data_fortran[iphi][dep:fin], label='Fortran')
+        plot(theta[dep:fin],data_cuda[iphi][dep:fin], label='Cuda')
 
         # commun
-        legend(listePlots, listeLegends, loc='best', numpoints=1)
+        legend(loc='best')
         title( type_donnees + ' pour Cuda et Fortran pour phi='+str(phi[iphi])+' deg' )
         xlabel( 'Theta (deg)' )
         ylabel( type_donnees, rotation='horizontal' )
         figtext(0.25, 0.7, commentaire+" deg", fontdict=None)
-        figtext(0, 0, "Date: "+date_simu+"\nFichier cuda: "+nom_cuda+"\nFichier fortran: "+nom_fortran, fontdict=None,
+        figtext(0, 0, "\nFichier cuda: "+nom_cuda+"\nFichier fortran: "+nom_fortran, fontdict=None,
                 size='xx-small')
         grid(True)
         savefig( path_dossier_sortie+'/c_'+type_donnees+'_Fortran_Cuda_phi='+str(phi[iphi])+'.png', dpi=(140) )
@@ -268,24 +263,20 @@ if (NBPHI_cuda) == NBPHI_fortran:
         ##########################################
 
         figure()
-        listePlots = []
-        listeLegends = []
-        listePlots.append( plot( theta[dep:fin], data_fortran[iphi][dep:fin]/data_cuda[iphi][dep:fin] ) )
-        listeLegends.append('Rapport de '+type_donnees+' Fortran/Cuda')
+        plot(theta[dep:fin], data_fortran[iphi][dep:fin]/data_cuda[iphi][dep:fin], label='Rapport de '+type_donnees+' Fortran/Cuda')
 
         #Régression linéaire
         (ar,br) = polyfit( theta[dep:fin], data_fortran[iphi][dep:fin]/data_cuda[iphi][dep:fin] ,1 )
         regLin = polyval( [ar,br],theta[dep:fin] )
 
-        listePlots.append( plot(theta[dep:fin], regLin) )
-        listeLegends.append( 'Regression lineaire y='+str(ar)+'x+'+str(br) )
-        legend( listePlots, listeLegends, loc='best', numpoints=1 )
+        plot(theta[dep:fin], regLin, label= 'Regression lineaire y='+str(ar)+'x+'+str(br))
+        legend(loc='best')
 
         title( 'Rapport des '+type_donnees+' Fortran_Cuda pour phi='+str(phi[iphi])+' deg' )
         xlabel( 'Theta (deg)' )
         ylabel( 'Rapport des '+type_donnees )
         figtext(0.4, 0.25, commentaire+" deg", fontdict=None)
-        figtext(0, 0, "Date: "+date_simu+"\nFichier cuda: "+nom_cuda+"\nFichier fortran: "+nom_fortran, fontdict=None,
+        figtext(0, 0, "\nFichier cuda: "+nom_cuda+"\nFichier fortran: "+nom_fortran, fontdict=None,
                 size='xx-small')
         grid(True)
         savefig( path_dossier_sortie+'/rapport_'+type_donnees+'_Fortran_Cuda_phi=' +str(phi[iphi])+'.png', dpi=(140) )
@@ -299,7 +290,7 @@ if (NBPHI_cuda) == NBPHI_fortran:
         xlabel( 'Theta (deg)' )
         ylabel( 'Difference des '+type_donnees )
         figtext(0.4, 0.25, commentaire+" deg", fontdict=None)
-        figtext(0, 0, "Date: "+date_simu+"\nFichier cuda: "+nom_cuda+"\nFichier fortran: "+nom_fortran, fontdict=None,
+        figtext(0, 0, "\nFichier cuda: "+nom_cuda+"\nFichier fortran: "+nom_fortran, fontdict=None,
                 size='xx-small')
         grid(True)
         savefig( path_dossier_sortie+'/difference_'+type_donnees+'_Fortran_Cuda_phi='+str(phi[iphi])+'.png', dpi=(140) )
@@ -314,7 +305,7 @@ else:
 ##########################################################
 
 # creation du fichier contenant les parametres de la simulation
-fichierSortie = open(path_dossier_sortie+'/Parametres.txt', 'w')
+fichierSortie = open(path_dossier_sortie+'/Statistics.txt', 'w')
 
 # Récupération des données
 NBPHOTONS = getattr(sd_cuda,'NBPHOTONS')
