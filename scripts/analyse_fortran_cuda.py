@@ -7,7 +7,7 @@ warnings.simplefilter("ignore",DeprecationWarning)
 import pyhdf.SD
 from pylab import *
 import gzip
-import struct
+from os.path import basename
 
 
 ##################################################
@@ -18,13 +18,16 @@ import struct
 # Paramètres à modifier
 #
 #-----------------------------------------------------------------------------------------------------------------------
-type_simu = "molecules_dioptre_agite"
+
+path_fortran = '/home/dom/LIVRAISON/livraison_sport_mc/MC-1/bin/out.ran=0101.wav=443.ths=30.000.tr=0.2360.ta=0.1000.pi0=0.967.H=002.000.mod=valid_T70.443.bin.gz'
+path_cuda = '../resultat/SP-Rayleigh-Aerosol-Sol_noir-1e9_photons.hdf'
+
+path_dossier_sortie = '../validation-fortran-cuda/'
+
+
+type_simu = "rayleigh_aerosols_sol_noir"
 date_simu = "28022012"
 angle = "30"
-# Nom du fichier Cuda sans extension .hdf
-nom_cuda = "good_ray_ozone_profil"
-# Nom du fichier Fortran sans l'extension .bin.gz
-nom_fortran = "out.ran=7660.wav=665.ths=30.000.tr=0.0455.ta=0.0000.difff=0000.pi0=0.967.H=002.000"
 
 
 # Indices ci-dessus ont été mis en place car ils permettent de rogner la simulation si nécessaire.
@@ -32,62 +35,39 @@ nom_fortran = "out.ran=7660.wav=665.ths=30.000.tr=0.0455.ta=0.0000.difff=0000.pi
 dep = 3			# Indice de départ pour le tracé
 fin = 177		# Indice de fin pour le tracé
 pas_figure = 5	# Pas en phi pour le tracé des graphiques
+
+choix = 'i'
+
 #-----------------------------------------------------------------------------------------------------------------------
 
 
 ######################################################
-##				SELECTION DES DONNEES				##
+##                 INITIALISATIONS                  ##
 ######################################################
 
-flag=True
-while flag:
-	print '\n\nQuelles donnees voulez-vous tracer?'
-	#print '1:Reflectance\n2:Q\n3:U\n4:Lumiere polarisee'
-	choix = raw_input('i >pour la reflectance\nq >pour Q\nu >pour U\nl >pour la lumiere polarisee\n')
 
-	if choix == 'i':
-		nom_data_cuda = "Valeurs de la reflectance (I)"
-		type_donnees = "I"
-		flag=False
-	elif choix == 'q':
-		nom_data_cuda = "Valeurs de Q"
-		type_donnees = "Q"
-		flag=False
-	elif choix == 'u':
-		nom_data_cuda = "Valeurs de U"
-		type_donnees = "U"
-		flag=False
-	elif choix == 'l':
-		nom_data_cuda = "Valeurs de la lumiere polarisee (LP)"
-		type_donnees = "LP"
-		flag=False
-	else:
-		print 'Choix incorrect, recommencez'
-	
-print 'C\'est parti pour la simulation de {0}'.format(type_donnees)
+if choix == 'i':
+    nom_data_cuda = "Valeurs de la reflectance (I)"
+    type_donnees = "I"
+    flag=False
+elif choix == 'q':
+    nom_data_cuda = "Valeurs de Q"
+    type_donnees = "Q"
+    flag=False
+elif choix == 'u':
+    nom_data_cuda = "Valeurs de U"
+    type_donnees = "U"
+    flag=False
+elif choix == 'l':
+    nom_data_cuda = "Valeurs de la lumiere polarisee (LP)"
+    type_donnees = "LP"
+    flag=False
+else:
+    print 'Erreur choix'
 
 
-######################################################
-##				CHEMIN DES FICHIERS					##
-######################################################
-
-# Nom complet du fichier Fortran
-#path_fortran = "/home/florent/MCCuda/validation/SPHERIQUE/"+type_simu+"/simulation_"+date_simu+"/"+ nom_fortran+".bin.gz"
-path_fortran = "/home/dom/SPORT_MC/MC-1/out/O3/"+ nom_fortran+".bin.gz"
-
-# Nom complet du fichier Cuda
-#path_cuda = "/home/florent/MCCuda/validation/SPHERIQUE/"+type_simu+"/simulation_"+date_simu+"/" + nom_cuda + ".hdf"
-path_cuda = "/home/dom/SPORT_MC/MC-1/out/O3/" + nom_cuda + ".hdf"
-
-# Si le dossier suivant existe deja il est supprime puis recree
-#path_dossier_sortie = \
-#"/home/florent/MCCuda/validation/SPHERIQUE/"+type_simu+"/graph_"+date_simu+"/"+type_donnees+"/"+type_donnees+"_FORTRAN_CUDA_" +\
-#nom_cuda
-
-
-path_dossier_sortie = \
-"/home/dom/validation/essai"
-
+nom_fortran = basename(path_fortran).replace('.bin.gz', '')
+nom_cuda = basename(path_cuda).replace('.bin.gz', '')
 
 
 os.system("rm -rf "+ path_dossier_sortie)

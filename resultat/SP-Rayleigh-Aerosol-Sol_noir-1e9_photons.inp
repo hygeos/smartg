@@ -8,7 +8,7 @@
 #_______________________#
 
 # Nombre de photons a lancer (unsigned long long) (limite par le tableau du poids des photons en unsigned long long)
-NBPHOTONS = 1000000000
+NBPHOTONS = 1e10
 
 # Angle zenithal solaire en degrés (float)
 THSDEG = 30.
@@ -17,10 +17,10 @@ THSDEG = 30.
 LAMBDA = 443.
 
 # Epaisseur optique moleculaire (Rayley) (float)
-TAURAY = 0.0533
+TAURAY = 0.236
 
 # Epaisseur optique aerosol (float)
-TAUAER = 0.2
+TAUAER = 0.1
 
 # Albedo simple de diffusion des aerosols (float)
 W0AER = 0.966883724738261
