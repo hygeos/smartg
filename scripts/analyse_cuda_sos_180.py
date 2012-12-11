@@ -6,91 +6,71 @@ import warnings
 warnings.simplefilter("ignore",DeprecationWarning)
 import pyhdf.SD
 from pylab import *
-import gzip
-import struct
+from os.path import basename
 
 
 ##################################################
-##                FICHIERS A LIRE                    ##
+##                PARAMETRES                    ##
 ##################################################
 
 #
 # Paramètres à modifier
 #
 #-----------------------------------------------------------------------------------------------------------------------
-type_simu = "molecules_seules"
-date_simu = "21092012"
+
 angle = '30'
-geometrie = "PARALLELE"        #Géométrie de l'atmosphère
+type_simu = "molecules_seules"
 
-# Nom du fichier de sortie SOS sans extension txt
-nom_sos = "SOS-ths_30-tauray_0.0533-rho_0.0-PP-UP"
+path_sos = '../validation/SOS-ths_30-tauray_0.0533-rho_0.0-PP-UP.txt'
+path_cuda = "../resultat/PP-Rayleigh-Sol_noir-1e9_photons.hdf"
 
-# Nom du fichier Cuda sans extension .hdf
-nom_cuda = "out_CUDA_atmos_ths=30.00_tRay=0.0533_tAer=0.0000"
+# Si le dossier suivant existe deja il est supprime puis recree
+path_dossier_sortie = '../validation-cuda-sos-PP'
+
 
 # Indices ci-dessus ont été mis en place car ils permettent de rogner la simulation si nécessaire.
 # Les bords peuvent fausser les graphiques.
 dep = 3            # Indice de départ pour le tracé
-fin = 177        # Indice de fin pour le tracé
-pas_figure = 5    # Pas en phi pour le tracé des graphiques
+fin = 177         # Indice de fin pour le tracé
+pas_figure = 5   # Pas en phi pour le tracé des graphiques
+
+choix = 'i'
+
 #-----------------------------------------------------------------------------------------------------------------------
 
 
 ######################################################
-##                SELECTION DES DONNEES                ##
+##                INITIALISATIONS                   ##
 ######################################################
 
-flag=True
-while flag:
-    print '\n\nQuelles donnees voulez-vous tracer?'
-    #print '1:Reflectance\n2:Q\n3:U\n4:Lumiere polarisee'
-    choix = raw_input('i >pour la reflectance\nq >pour Q\nu >pour U\nl >pour la lumiere polarisee\n')
 
-    if choix == 'i':
-        nom_data_cuda = "Valeurs de la reflectance (I)"
-        colonne_donnee_sos = 2
-        type_donnees = "I"
-        flag=False
-
-    elif choix == 'q':
-        nom_data_cuda = "Valeurs de Q"
-        colonne_donnee_sos = 3
-        type_donnees = "Q"
-        flag=False
-
-    elif choix == 'u':
-        nom_data_cuda = "Valeurs de U"
-        colonne_donnee_sos = 4
-        type_donnees = "U"
-        flag=False
-
-    elif choix == 'l':
-        nom_data_cuda = "Valeurs de la lumiere polarisee (LP)"
-        colonne_donnee_sos = 5
-        type_donnees = "LP"
-        flag=False
-
-    else:
-            print 'Choix incorrect, recommencez'
-
-print 'C\'est parti pour la simulation de {0}'.format(type_donnees)
+nom_sos = basename(path_sos).replace('.txt', '')
+nom_cuda = basename(path_cuda).replace('.hdf', '')
 
 
-######################################################
-##                CHEMIN DES FICHIERS                    ##
-######################################################
+if choix == 'i':
+    nom_data_cuda = "Valeurs de la reflectance (I)"
+    colonne_donnee_sos = 2
+    type_donnees = "I"
 
-# Nom complet du fichier SOS
-path_sos = "validation/" + nom_sos + ".txt"
+elif choix == 'q':
+    nom_data_cuda = "Valeurs de Q"
+    colonne_donnee_sos = 3
+    type_donnees = "Q"
 
-# Nom complet du fichier Cuda
-path_cuda = "resultats/"+geometrie+"/"+type_simu+"/simulation_"+date_simu+"/" + nom_cuda + ".hdf"
+elif choix == 'u':
+    nom_data_cuda = "Valeurs de U"
+    colonne_donnee_sos = 4
+    type_donnees = "U"
 
-# Si le dossier suivant existe deja il est supprime puis recree
-path_dossier_sortie = \
-"resultats/"+geometrie+"/"+type_simu+"/graph_"+date_simu+"/"+type_donnees+"/"+type_donnees+"_SOS_CUDA_" + \
-nom_cuda
+elif choix == 'l':
+    nom_data_cuda = "Valeurs de la lumiere polarisee (LP)"
+    colonne_donnee_sos = 5
+    type_donnees = "LP"
+
+else:
+    print 'Erreur choix'
+
 
 
 ##########################################################
@@ -194,6 +174,7 @@ commentaire = type_simu + ' - ' + angle
 ##########################################################
 
 for iphi in xrange(0,NBPHI_cuda,pas_figure):
+    print 'iphi = %d/%d' % (iphi, NBPHI_cuda)
 
     figure()
     # Référence
@@ -208,7 +189,7 @@ for iphi in xrange(0,NBPHI_cuda,pas_figure):
     xlabel( 'Theta (deg)' )
     ylabel( type_donnees, rotation='horizontal' )
     figtext(0.25, 0.7, commentaire+" deg", fontdict=None)
-    figtext(0, 0, "Date: "+date_simu+"\nFichier SOS: "+nom_sos+"\nFichier cuda: "+nom_cuda, fontdict=None, size='xx-small')
+    figtext(0, 0, "\nFichier SOS: "+nom_sos+"\nFichier cuda: "+nom_cuda, fontdict=None, size='xx-small')
     grid(True)
     savefig( path_dossier_sortie+'/c_'+type_donnees+'_SOS_Cuda_phi='+str(phi[iphi])+'.png', dpi=(140) )
     
@@ -228,7 +209,7 @@ for iphi in xrange(0,NBPHI_cuda,pas_figure):
     xlabel( 'Theta (deg)' )
     ylabel( 'Rapport des '+type_donnees )
     figtext(0.4, 0.25, commentaire+" deg", fontdict=None)
-    figtext(0, 0, "Date: "+date_simu+"\nFichier SOS: "+nom_sos+"\nFichier cuda: "+nom_cuda, fontdict=None, size='xx-small')
+    figtext(0, 0, "\nFichier SOS: "+nom_sos+"\nFichier cuda: "+nom_cuda, fontdict=None, size='xx-small')
     grid(True)
     savefig( path_dossier_sortie+'/rapport_'+type_donnees+'_SOS_Cuda_phi=' +str(phi[iphi])+'.png', dpi=(140) )
 
@@ -241,7 +222,7 @@ for iphi in xrange(0,NBPHI_cuda,pas_figure):
     xlabel( 'Theta (deg)' )
     ylabel( 'Difference des '+type_donnees )
     figtext(0.4, 0.25, commentaire+" deg", fontdict=None)
-    figtext(0, 0, "Date: "+date_simu+"\nFichier SOS: "+nom_sos+"\nFichier cuda: "+nom_cuda, fontdict=None, size='xx-small')
+    figtext(0, 0, "\nFichier SOS: "+nom_sos+"\nFichier cuda: "+nom_cuda, fontdict=None, size='xx-small')
     grid(True)
     savefig( path_dossier_sortie+'/difference_'+type_donnees+'_SOS_Cuda_phi='+str(phi[iphi])+'.png', dpi=(140) )
 
