@@ -19,7 +19,7 @@ case = 1
 if case == 1:
     # premier cas test: rayleigh, aerosols, sol noir
     path_fortran = '../validation/out.ran=0101.wav=443.ths=30.000.tr=0.2360.ta=0.1000.pi0=0.967.H=002.000.mod=valid_T70.443.bin.gz'
-    path_cuda = '../resultat/SP-Rayleigh-Aerosol-Sol_noir-1e9_photons.hdf'
+    path_cuda = '../resultat/SP-Rayleigh-Aerosol-Sol_noir-1e10_photons.hdf'
     type_simu = 'rayleigh_aerosols_sol_noir'
 
 elif case == 2:
@@ -32,7 +32,6 @@ else:
     print 'Invalid case'
     sys.exit(1)
 
-path_dossier_sortie = '../validation-fortran-cuda/' + type_simu
 angle = "30"
 
 
@@ -42,7 +41,9 @@ dep = 3         # Indice de départ pour le tracé
 fin = 177       # Indice de fin pour le tracé
 pas_figure = 15  # Pas en phi pour le tracé des graphiques
 
-choix = 'i'
+type_donnees = 'I' # I, Q, U, LP
+
+path_dossier_sortie = '../validation-fortran-cuda/' + type_simu + '/' + type_donnees
 
 #-----------------------------------------------------------------------------------------------------------------------
 
@@ -52,20 +53,16 @@ choix = 'i'
 ######################################################
 
 
-if choix == 'i':
+if type_donnees == 'I':
     nom_data_cuda = "Valeurs de la reflectance (I)"
-    type_donnees = "I"
-elif choix == 'q':
+elif type_donnees == 'Q':
     nom_data_cuda = "Valeurs de Q"
-    type_donnees = "Q"
-elif choix == 'u':
+elif type_donnees == 'U':
     nom_data_cuda = "Valeurs de U"
-    type_donnees = "U"
-elif choix == 'l':
+elif type_donnees == 'LP':
     nom_data_cuda = "Valeurs de la lumiere polarisee (LP)"
-    type_donnees = "LP"
 else:
-    print 'Erreur choix'
+    print 'Erreur type donnees'
 
 
 nom_fortran = basename(path_fortran).replace('.bin.gz', '')
@@ -195,22 +192,22 @@ data_cuda = zeros((NBPHI_cuda, NBTHETA_cuda), dtype=float)
 # pour comparer les mêmes boites, il faut prendre l'indice i en Cuda et l'indice i-1 en Fortran. La ième boite Cuda correspond à la
 # ième-1 boite en Fortran
 
-if choix=='i':
+if type_donnees=='I':
     for iphi in xrange(0,NBPHI_fortran):
         for ith in xrange(NTHV):
             data_fortran[iphi][ith] = tab_fortran['real_refl'][0, ith-1, iphi, 0]
 
-elif choix=='q':
+elif type_donnees=='Q':
     for iphi in xrange(0,NBPHI_fortran):
         for i in xrange(NTHV):
             data_fortran[iphi][i] = tab_fortran['real_refl'][1, i-1, iphi, 0]
 
-elif choix=='u':
+elif type_donnees=='U':
     for iphi in xrange(0,NBPHI_fortran):
         for i in xrange(NTHV):
             data_fortran[iphi][i] = tab_fortran['real_refl'][2, i-1, iphi, 0]
 
-elif choix=='l':
+elif type_donnees=='LLP':
     for iphi in xrange(0,NBPHI_fortran):
         for i in xrange(NTHV):
             data_fortran[iphi][i]=math.sqrt(pow(tab_fortran['real_refl'][1,i-1,iphi,0],2)+
@@ -222,7 +219,7 @@ elif choix=='l':
 # Cuda :     intervalle=[0,2PI]  nombre_de_boites=NBPHI_cuda
 # On va projeter les resultats du cuda sur [0,PI]
 
-if choix != 'u':
+if type_donnees != 'U':
     for iphi in xrange(0,NBPHI_cuda):
         for ith in xrange(NBTHETA_cuda):
             data_cuda[iphi][ith] = (data[iphi,ith])
@@ -332,7 +329,10 @@ NH2O = getattr(sd_cuda,'NH2O')
 SIM = getattr(sd_cuda,'SIM')
 SUR = getattr(sd_cuda,'SUR')
 DIOPTRE = getattr(sd_cuda,'DIOPTRE')
-CONPHY = getattr(sd_cuda,'CONPHY')
+if 'CONPHY' in sd_cuda.attributes():
+    CONPHY = getattr(sd_cuda,'CONPHY')
+else:
+    CONPHY = None
 DIFFF = getattr(sd_cuda,'DIFFF')
 PATHRESULTATSHDF = getattr(sd_cuda,'PATHRESULTATSHDF')
 PATHTEMOINHDF = getattr(sd_cuda,'PATHTEMOINHDF')
