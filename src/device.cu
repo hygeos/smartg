@@ -320,12 +320,14 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 		
 
 		#ifndef SPHERIQUE	/* Code spécifique à une atmosphère parallèle */
+		#ifndef FLAGOCEAN
 		//Mise à jour du poids suite à la 1ère diffusion forcée
 		if(flagDiff==1 ){
 			ph.weight *= (1.F - __expf(-TAUMAXd));
 			flagDiff=0;
 		}
 		syncthreads();
+		#endif
 		#endif
 
 	}// Fin boucle for

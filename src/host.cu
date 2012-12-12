@@ -210,6 +210,12 @@ void initConstantesHost(int argc, char** argv)
 		strcpy(s,"");
 		chercheConstante(parametres, "DIFFF", s);
 		DIFFF = atoi(s);
+        #ifdef FLAGOCEAN
+        if (DIFFF) {
+            printf("Error, can not use forced scattering with OCEAN flag\n");
+            exit(1);
+        }
+        #endif
 	}
 	
 	strcpy(s,"");

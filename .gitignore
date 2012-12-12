@@ -1,1 +1,4 @@
 *~
+resultat/*.hdf
+resultat/*.out
+resultat/*.png

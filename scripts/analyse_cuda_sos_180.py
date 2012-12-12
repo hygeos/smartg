@@ -24,17 +24,18 @@ type_simu = "molecules_seules"
 path_sos = '../validation/SOS-ths_30-tauray_0.0533-rho_0.0-PP-UP.txt'
 path_cuda = "../resultat/PP-Rayleigh-Sol_noir-1e9_photons.hdf"
 
-# Si le dossier suivant existe deja il est supprime puis recree
-path_dossier_sortie = '../validation-cuda-sos-PP'
-
 
 # Indices ci-dessus ont été mis en place car ils permettent de rogner la simulation si nécessaire.
 # Les bords peuvent fausser les graphiques.
 dep = 3            # Indice de départ pour le tracé
 fin = 177         # Indice de fin pour le tracé
-pas_figure = 5   # Pas en phi pour le tracé des graphiques
+pas_figure = 15   # Pas en phi pour le tracé des graphiques
 
-choix = 'i'
+type_donnees = "I" # I, Q, U, LP
+
+# Si le dossier suivant existe deja il est supprime puis recree
+path_dossier_sortie = '../validation-cuda-sos-PP/' + type_donnees
+
 
 #-----------------------------------------------------------------------------------------------------------------------
 
@@ -48,28 +49,24 @@ nom_sos = basename(path_sos).replace('.txt', '')
 nom_cuda = basename(path_cuda).replace('.hdf', '')
 
 
-if choix == 'i':
+if type_donnees == 'I':
     nom_data_cuda = "Valeurs de la reflectance (I)"
     colonne_donnee_sos = 2
-    type_donnees = "I"
 
-elif choix == 'q':
+elif type_donnees == 'Q':
     nom_data_cuda = "Valeurs de Q"
     colonne_donnee_sos = 3
-    type_donnees = "Q"
 
-elif choix == 'u':
+elif type_donnees == 'U':
     nom_data_cuda = "Valeurs de U"
     colonne_donnee_sos = 4
-    type_donnees = "U"
 
-elif choix == 'l':
+elif type_donnees == 'LP':
     nom_data_cuda = "Valeurs de la lumiere polarisee (LP)"
     colonne_donnee_sos = 5
-    type_donnees = "LP"
 
 else:
-    print 'Erreur choix'
+    print 'Erreur type_donnees'
 
 
 
@@ -259,7 +256,10 @@ NH2O = getattr(sd_cuda,'NH2O')
 SIM = getattr(sd_cuda,'SIM')
 SUR = getattr(sd_cuda,'SUR')
 DIOPTRE = getattr(sd_cuda,'DIOPTRE')
-CONPHY = getattr(sd_cuda,'CONPHY')
+if 'CONPHY' in sd_cuda.attributes():
+    CONPHY = getattr(sd_cuda,'CONPHY')
+else:
+    CONPHY = None
 DIFFF = getattr(sd_cuda,'DIFFF')
 PATHRESULTATSHDF = getattr(sd_cuda,'PATHRESULTATSHDF')
 PATHTEMOINHDF = getattr(sd_cuda,'PATHTEMOINHDF')

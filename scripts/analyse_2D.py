@@ -13,7 +13,7 @@ import warnings
 warnings.simplefilter("ignore",DeprecationWarning)
 import pyhdf.SD
 import matplotlib
-#matplotlib.use('Agg')
+matplotlib.use('Agg')
 import numpy as np
 np.seterr(invalid='ignore', divide='ignore') # ignore division by zero errors
 from pylab import savefig, show, figure
