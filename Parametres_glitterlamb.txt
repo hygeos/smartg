@@ -139,8 +139,9 @@ NFOCE = 10000000
 #PATHRESULTATSHDF = resultats/PARALLELE/ozone/
 PATHRESULTATSHDF = resultats/PARALLELE/glitterlamb/
 
-# Chemin du fichier témoin (Le .hdf et les détails de la simulation sont ajoutés par le programme automatiquement)
-#PATHTEMOINHDF = ...
+
+# Période d'écriture du fichier témoin en min (-1 pour désactiver)
+WRITE_PERIOD = -1
 
 
 ###
