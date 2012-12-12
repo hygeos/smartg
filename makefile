@@ -17,7 +17,9 @@ JPEG_INC=${JPEG_HOME}/include/
 
 CC = ${CUDA_BIN}/nvcc
 EXEC = mccuda
-SPH=no  # switch spherical/plane parallel
+
+# switch spherical/plane parallel
+SPH=no
 
 
 #=============Options============#  (en fonction de la carte graphique utilisee)
