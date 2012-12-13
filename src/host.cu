@@ -1520,14 +1520,14 @@ inferieure contenant toutes les molécules.
 				
 				#ifdef SPHERIQUE
 				if(i!=0){
-					tab_H->z[i]=100.F - float(i)*(100.F/NATM);
+					tab_H->z[i]=HATM - float(i)*(HATM/NATM);
 				}
 				vr = TAURAY*exp( -(tab_H->z[i]/HR) );
 				va = TAUAER*exp( -(tab_H->z[i]/HA) );
 				#endif
 				#ifndef SPHERIQUE
 				if(i!=0){
-					z = 100.F - float(i)*(100.F/NATM);
+					z = HATM - float(i)*(HATM/NATM);
 				}
 				vr = TAURAY*exp( -(z/HR) );
 				va = TAUAER*exp( -(z/HA) );
