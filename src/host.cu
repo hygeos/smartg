@@ -274,7 +274,7 @@ void initConstantesHost(int argc, char** argv)
 	
 	strcpy(s,"");
 	chercheConstante(parametres, "HATM", s);
-	HATM = atoi(s);
+	HATM = atof(s);
 	
 	strcpy(s,"");
 	chercheConstante(parametres, "WINDSPEED", s);
@@ -1986,7 +1986,7 @@ void afficheParametres()
 		printf("\n");
 		printf(" NATM\t=\t%d", NATM);
 		printf("\n");
-		printf(" HATM\t=\t%d", HATM);
+		printf(" HATM\t=\t%f", HATM);
 		printf("\n");
 		printf(" DIFFF\t=\t%d", DIFFF);
 		printf("\n");
@@ -2316,7 +2316,7 @@ void creerHDFTemoin(double* tabPhotonsTot, double* tabPhotonsTotDown, unsigned l
 	SDsetattr(sdsTab, "ZMIN", DFNT_FLOAT32, 1, &ZMIN);
 	SDsetattr(sdsTab, "ZMAX", DFNT_FLOAT32, 1, &ZMAX);
 	SDsetattr(sdsTab, "NATM", DFNT_INT32, 1, &NATM);
-	SDsetattr(sdsTab, "HATM", DFNT_INT32, 1, &HATM);
+	SDsetattr(sdsTab, "HATM", DFNT_FLOAT32, 1, &HATM);
 	SDsetattr(sdsTab, "WINDSPEED", DFNT_FLOAT32, 1, &WINDSPEED);
 	SDsetattr(sdsTab, "NH2O", DFNT_FLOAT32, 1, &NH2O);
     #ifdef FLAGOCEAN
@@ -2392,7 +2392,7 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		float ZMINrecup[1];
 		float ZMAXrecup[1];
 		int NATMrecup[1];
-		int HATMrecup[1];
+		float HATMrecup[1];
 		float WINDSPEEDrecup[1];
 		float NH2Orecup[1];
         char MODErecup[2];
@@ -2601,7 +2601,7 @@ tempsPrec)
 	SDsetattr(sdFichier, "ZMIN", DFNT_FLOAT32, 1, &ZMIN);
 	SDsetattr(sdFichier, "ZMAX", DFNT_FLOAT32, 1, &ZMAX);
 	SDsetattr(sdFichier, "NATM", DFNT_INT32, 1, &NATM);
-	SDsetattr(sdFichier, "HATM", DFNT_INT32, 1, &HATM);
+	SDsetattr(sdFichier, "HATM", DFNT_FLOAT32, 1, &HATM);
 	SDsetattr(sdFichier, "WINDSPEED", DFNT_FLOAT32, 1, &WINDSPEED);
 	SDsetattr(sdFichier, "NH2O", DFNT_FLOAT32, 1, &NH2O);
     #ifdef FLAGOCEAN

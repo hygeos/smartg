@@ -42,7 +42,7 @@ __device__ __constant__ float HRd;
 __device__ __constant__ float ZMINd;
 __device__ __constant__ float ZMAXd;
 __device__ __constant__ int NATMd;
-__device__ __constant__ int HATMd;
+//__device__ __constant__ int HATMd;
 __device__ __constant__ float WINDSPEEDd;
 __device__ __constant__ float NH2Od;
 
