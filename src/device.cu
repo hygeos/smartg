@@ -2050,7 +2050,7 @@ void initConstantesDevice()
 	cudaMemcpyToSymbol(ZMINd, &ZMIN, sizeof(float));
 	cudaMemcpyToSymbol(ZMAXd, &ZMAX, sizeof(float));
 	cudaMemcpyToSymbol(NATMd, &NATM, sizeof(int));
-	cudaMemcpyToSymbol(HATMd, &HATM, sizeof(int));
+//	cudaMemcpyToSymbol(HATMd, &HATM, sizeof(int));
 	
 	cudaMemcpyToSymbol(WINDSPEEDd, &WINDSPEED, sizeof(float));
 	cudaMemcpyToSymbol(NH2Od, &NH2O, sizeof(float));

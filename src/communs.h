@@ -169,7 +169,7 @@ extern float HR;
 extern float ZMIN;
 extern float ZMAX;
 extern int NATM;
-extern int HATM;
+extern float HATM;
 extern float WINDSPEED;
 extern float NH2O;
 
