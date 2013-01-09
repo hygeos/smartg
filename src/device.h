@@ -118,6 +118,9 @@ __device__ void move(Photon*
 		#ifndef SPHERIQUE
 		,int flagDiff, float* h, float* pMol
 		#endif
+        #if !defined(SPHERIQUE) && defined(OZONE)
+        , float *abs
+        #endif
 		#ifdef SPHERIQUE
 		, Tableaux tab, Init* init
 		#endif
@@ -214,6 +217,18 @@ __device__ void surfaceLambertienne(Photon* photon
 * Sauve les paramètres des photons sortis dans l'espace dans la boite correspondant à la direction de sortie
 */
 __device__ void exit(Photon* , Tableaux, unsigned long long*
+		#ifdef PROGRESSION
+		, unsigned int*, Variables*
+		#endif
+		#ifdef TRAJET
+		, int, Evnt*
+		#endif
+		    );
+
+/* exitDown
+* Sauve les paramètres des photons touchant la surface
+*/
+__device__ void exitDown(Photon* , Tableaux, unsigned long long*
 		#ifdef PROGRESSION
 		, unsigned int*, Variables*
 		#endif

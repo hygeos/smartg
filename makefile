@@ -38,6 +38,8 @@ ifeq ("$(SPH)","yes")
 	DFLAGS += -DSPHERIQUE	# atmosphère sphérique
 endif
 # DFLAGS += -DFLAGOCEAN	# À utiliser si l'océan fait parti de la simulation
+# DFLAGS += -DOZONE # flag absorption
+# DFLAGS += -DGLITTERLAMB
 
 
 #============== Options ===============#

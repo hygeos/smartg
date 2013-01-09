@@ -133,11 +133,25 @@ int main (int argc, char *argv[])
 	
 	memset(tabPhotonsTot,0,4*NBTHETA*NBPHI*sizeof(*(tabPhotonsTot)));
 	
+	double* tabPhotonsTotDown; //tableau du poids total des photons sortis
+	tabPhotonsTotDown = (double*)malloc(4*NBTHETA * NBPHI * sizeof(*(tabPhotonsTotDown)));
+	if( tabPhotonsTotDown == NULL ){
+		printf("ERREUR: Problème de malloc de tabPhotonsTotDown dans le main\n");
+		exit(1);
+	}
+	
+	memset(tabPhotonsTotDown,0,4*NBTHETA*NBPHI*sizeof(*(tabPhotonsTotDown)));
+	
 	// Variables permettant le calcul du résultat final
     double *tabFinal;   // tableau final: 4 dimensions pour
                         // R=stokes1+stokes2(dim0) , Q=stokes1-stokes2(dim1),
                         // U=stokes3(dim2)  et Nbphoton(dim4)
     tabFinal = (double*)malloc(4*NBTHETA*NBPHI*sizeof(double));
+
+    double *tabFinalDown;   // tableau final: 4 dimensions pour
+                        // R=stokes1+stokes2(dim0) , Q=stokes1-stokes2(dim1),
+                        // U=stokes3(dim2)  et Nbphoton(dim4)
+    tabFinalDown = (double*)malloc(4*NBTHETA*NBPHI*sizeof(double));
 
 	double *tabTh;
     tabTh = (double*)malloc(NBTHETA*sizeof(double));
@@ -237,7 +251,7 @@ int main (int argc, char *argv[])
 #endif
 
 	/** Fonction qui permet de poursuivre la simulation précédente si elle n'est pas terminee **/
-	lireHDFTemoin(var_H, var_D, &nbPhotonsTot, tabPhotonsTot, &tempsPrec);
+	lireHDFTemoin(var_H, var_D, &nbPhotonsTot, tabPhotonsTot, tabPhotonsTotDown, &tempsPrec);
 	
 	
 	#ifdef TRAJET
@@ -306,6 +320,15 @@ int main (int argc, char *argv[])
 			printf("#--------------------#\n");
 			exit(1);
                 }
+
+		cudaErreur = cudaMemset(tab_D.tabPhotonsDown, 0, 4*NBTHETA * NBPHI * sizeof(*(tab_D.tabPhotonsDown)));
+		if( cudaErreur != cudaSuccess ){
+			printf("#--------------------#\n");
+			printf("# ERREUR: Problème de cudaMemset tab_D.tabPhotonsDown dans le main\n");
+			printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+			printf("#--------------------#\n");
+			exit(1);
+                }
 #ifdef _PERF
                 StopProcessing(perfMemcpyH2DTab);
                 GetElapsedTime(perfMemcpyH2DTab);
@@ -367,6 +390,14 @@ cudaMemcpyDeviceToHost);
 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
 			exit(1);
 		}
+
+		cudaErreur = cudaMemcpy(tab_H.tabPhotonsDown, tab_D.tabPhotonsDown, 4*NBTHETA * NBPHI * sizeof(*(tab_H.tabPhotonsDown)),
+cudaMemcpyDeviceToHost);
+		if( cudaErreur != cudaSuccess ){
+			printf( "ERREUR: Problème de copie tab_H.tabPhotonsDown dans le main\n");
+			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+			exit(1);
+        }
 #ifdef _PERF
                         StopProcessing(perfMemcpyD2HTab);
                         GetElapsedTime(perfMemcpyD2HTab);
@@ -376,13 +407,15 @@ cudaMemcpyDeviceToHost);
                 StartProcessing(perfCreateWitness);
 #endif
 		/** Creation d'un fichier témoin pour pouvoir reprendre la simulation en cas d'arrêt **/
-		for(int i = 0; i < 4*NBTHETA*NBPHI; i++)
+		for(int i = 0; i < 4*NBTHETA*NBPHI; i++) {
 			tabPhotonsTot[i] += (double) tab_H.tabPhotons[i];
+			tabPhotonsTotDown[i] += (double) tab_H.tabPhotonsDown[i];
+        }
 		
         time_current = clock() / CLOCKS_PER_SEC;
 		if ((WRITE_PERIOD > 0) && ((time_current - time_lastwrite > 60*WRITE_PERIOD) || (time_lastwrite == 0))) {
             printf("== WRITING WITNESS FILE ==\n"); // FIXME
-            creerHDFTemoin(tabPhotonsTot, nbPhotonsTot,var_H, tempsPrec);
+            creerHDFTemoin(tabPhotonsTot, tabPhotonsTotDown, nbPhotonsTot,var_H, tempsPrec);
             time_lastwrite = time_current;
         }
 #ifdef _PERF
@@ -443,10 +476,12 @@ cudaMemcpyDeviceToHost);
 	**/	
 	// Remplissage des 3 tableaux
 	calculTabFinal(tabFinal, tabTh, tabPhi, tabPhotonsTot, nbPhotonsTot);
+	calculTabFinal(tabFinalDown, tabTh, tabPhi, tabPhotonsTotDown, nbPhotonsTot);
 
 	
 	/** Fonction qui crée le fichier .hdf contenant le résultat final sur la demi-sphère **/
-	creerHDFResultats(tabFinal, tabTh, tabPhi, nbPhotonsTot, var_H, tempsPrec);
+//	creerHDFResultats(tabFinal, tabTh, tabPhi, nbPhotonsTot, var_H, tempsPrec);
+	creerHDFResultats(tabFinal, tabFinalDown, tabTh, tabPhi, nbPhotonsTot, var_H, tempsPrec);
 #ifdef _PERF
         StopProcessing(perfCreateFinalTab);
         GetElapsedTime(perfCreateFinalTab);
@@ -481,6 +516,7 @@ cudaMemcpyDeviceToHost);
 
 	free(var_H);
     free(tabFinal);
+    free(tabFinalDown);
     free(tabPhi);
     free(tabTh);
 
@@ -499,6 +535,7 @@ cudaMemcpyDeviceToHost);
 	freeTableaux(&tab_H, &tab_D);
 	// Libération du tableau du host
 	free( tabPhotonsTot );
+	free( tabPhotonsTotDown );
 
 	// Libération des variables qui récupèrent le trajet d'un photon
 	#ifdef TRAJET

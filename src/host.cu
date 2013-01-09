@@ -655,6 +655,27 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	exit(1);
 	}
 	
+	tab_H->tabPhotonsDown = (float*)malloc(4*NBTHETA * NBPHI * sizeof(*(tab_H->tabPhotonsDown)));
+	if( tab_H->tabPhotonsDown == NULL ){
+		printf("ERREUR: Problème de malloc de tab_H->tabPhotonsDown dans initTableaux\n");
+		exit(1);
+	}
+	memset(tab_H->tabPhotonsDown,0,4*NBTHETA * NBPHI * sizeof(*(tab_H->tabPhotonsDown)) );
+	
+	if( cudaMalloc(&(tab_D->tabPhotonsDown), 4 * NBTHETA * NBPHI * sizeof(*(tab_D->tabPhotonsDown))) != cudaSuccess){
+		printf("ERREUR: Problème de cudaMalloc de tab_D->tabPhotonsDown dans initTableaux\n");
+		exit(1);	
+	}
+	
+	cudaErreur = cudaMemset(tab_D->tabPhotonsDown, 0, 4*NBTHETA * NBPHI * sizeof(*(tab_D->tabPhotonsDown)));
+	if( cudaErreur != cudaSuccess ){
+	printf("#--------------------#\n");
+	printf("# ERREUR: Problème de cudaMemset tab_D.tabPhotonsDown dans le initTableaux\n");
+	printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+	printf("#--------------------#\n");
+	exit(1);
+	}
+	
 	/** Modèle de diffusion **/
 	// Modèle de diffusion des aérosols
 	tab_H->faer = (float*)malloc(5 * NFAER * sizeof(float));
@@ -711,6 +732,21 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 		printf("ERREUR: Problème de cudaMalloc de tab_D->pMol dans initTableaux\n");
 		exit(1);	
 	}
+
+    //
+    #ifdef OZONE
+	tab_H->abs =  (float*)malloc((NATM+1)*sizeof(float));
+	if( tab_H->abs == NULL ){
+		printf("ERREUR: Problème de malloc de tab_H->abs dans initTableaux\n");
+		exit(1);
+	}
+	memset(tab_H->abs,0,(NATM+1)*sizeof(float) );
+	
+	if( cudaMalloc( &(tab_D->abs), (NATM+1)*sizeof(float) ) != cudaSuccess ){
+		printf("ERREUR: Problème de cudaMalloc de tab_D->abs dans initTableaux\n");
+		exit(1);	
+	}
+    #endif
 	
 	
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
@@ -880,6 +916,17 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	
 	free(tab_H->pMol);
 	
+	//
+    #ifdef OZONE
+	erreur = cudaFree(tab_D->abs);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->abs dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	
+	free(tab_H->abs);
+    #endif
 	
 	/** Séparation du code pour atmosphère sphérique ou parallèle **/
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
@@ -1455,6 +1502,16 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
 			exit(1);
 		}		
+        
+        #ifdef OZONE
+        erreur = cudaMemcpy(tab_D->abs, tab_H->abs, (NATM+1)*sizeof(*(tab_H->abs)), cudaMemcpyHostToDevice);
+        if( erreur != cudaSuccess ){
+            printf( "ERREUR: Problème de copie tab_D->abs dans initInit\n");
+            printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+            exit(1);
+        }
+        #endif
+	
 		
 		#ifdef SPHERIQUE
 		erreur = cudaMemcpy(tab_D->z, tab_H->z, (NATM+1)*sizeof(*(tab_H->z)), cudaMemcpyHostToDevice);
@@ -1474,6 +1531,7 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 		On considere alors une atmosphere divisee en deux sous-couches, la  couche superieure contenant toutes les molecules, la
 couche inferieure contenant tous les aerosols.
 		*/
+        TAUATM = TAUAER + TAURAY;
 		if( HA < 0.0001 ){
 			tauMol[1] = TAURAY;
 			tauAer[1] = 0;
@@ -1482,6 +1540,9 @@ couche inferieure contenant tous les aerosols.
 			#endif
 			tab_H->h[1] = tauMol[1] + tauAer[1];
 			tab_H->pMol[1] = 1.0;
+            #ifdef OZONE
+            tab_H->abs[1] = 0.0;
+			#endif
 			
 			tauMol[2] = 0;
 			tauAer[2] = TAUAER;
@@ -1490,6 +1551,9 @@ couche inferieure contenant tous les aerosols.
 			#endif
 			tab_H->h[2] = tab_H->h[1] + tauMol[2] + tauAer[2];
 			tab_H->pMol[2] = 0.0;
+            #ifdef OZONE
+            tab_H->abs[2] = 0.0;
+			#endif
 		}
 		
 		/* Si HA >> HR => pas de mélange dans les couches
@@ -1504,6 +1568,9 @@ inferieure contenant toutes les molécules.
 			#endif
 			tab_H->h[1] = tauMol[1] + tauAer[1];
 			tab_H->pMol[1] = 0.0;
+            #ifdef OZONE
+            tab_H->abs[1] = 0.0;
+			#endif
 			
 			tauMol[2] = TAURAY;
 			tauAer[2] = 0.0;
@@ -1512,6 +1579,9 @@ inferieure contenant toutes les molécules.
 			#endif
 			tab_H->h[2] = tab_H->h[1] + tauMol[2] + tauAer[2];
 			tab_H->pMol[2] = 1.0;
+            #ifdef OZONE
+            tab_H->abs[2] = 0.0;
+			#endif
 		}
 		
 		/* Cas Standard avec deux échelles */
@@ -1539,6 +1609,9 @@ inferieure contenant toutes les molécules.
 				va = va/HA;
 				vr = vr/(va+vr);
 				tab_H->pMol[i] = vr;
+                #ifdef OZONE
+                tab_H->abs[i] = 0.0;
+				#endif
 			}
 			tab_H->h[0] = 0;
 		}
@@ -1549,6 +1622,8 @@ inferieure contenant toutes les molécules.
 
 		float tauRay1;	// Epaisseur optique moleculaire de la couche 1
 		float tauRay2;	// Epaisseur optique moleculaire de la couche 2
+
+        TAUATM = TAURAY + TAUAER;
 		
 		tauRay1 = TAURAY*exp(-(ZMAX/HR));	// Epaisseur optique moleculaire de la couche la plus haute
 		if( ZMIN < 0.0001 ){
@@ -1567,6 +1642,9 @@ inferieure contenant toutes les molécules.
 		tauAer[1] = 0.F;                                    
 		tab_H->h[1] = tauMol[1] + tauAer[1];
 		tab_H->pMol[1] = 1.F;
+        #ifdef OZONE
+        tab_H->abs[1] = 0.0;
+		#endif
 
 		/** Calcul des grandeurs utiles aux OS pour la deuxieme couche   **/
 		if( ZMAX == ZMIN ){ //Uniquement des aerosols dans la couche intermediaire
@@ -1577,6 +1655,9 @@ inferieure contenant toutes les molécules.
 			tauAer[2] = TAUAER;
 			tab_H->h[2] = tauMol[2] + tauAer[2];
 			tab_H->pMol[2] = 0.F;                                                      
+            #ifdef OZONE
+            tab_H->abs[2] = 0.0;
+			#endif
 		}
 		
 		else{	// Melange homogene d'aerosol et de molecules dans la couche intermediaire
@@ -1587,6 +1668,9 @@ inferieure contenant toutes les molécules.
 			tauAer[2] = TAUAER;
 			tab_H->h[2] = tauMol[2] + tauAer[2];
 			tab_H->pMol[2] = 0.5F;
+            #ifdef OZONE
+            tab_H->abs[2] = 0.0;
+			#endif
 		}
 		
 		/** Calcul des grandeurs utiles aux OS pour la troisieme couche **/
@@ -1597,6 +1681,9 @@ inferieure contenant toutes les molécules.
 		tauAer[3] = TAUAER;
 		tab_H->h[3] = tauMol[3] + tauAer[3];
 		tab_H->pMol[3] = 1.F;
+        #ifdef OZONE
+        tab_H->abs[3] = 0.0;
+		#endif
 	}
 	
 	else if( PROFIL == 2 ){
@@ -1620,17 +1707,31 @@ inferieure contenant toutes les molécules.
 			fgets(ligne,1024,profil);
 
 			// Extraction des informations
-			#ifdef SPHERIQUE
+			#if defined(SPHERIQUE) && !defined(OZONE)
 			for( icouche=0; icouche<NATM+1; icouche++ ){
 				fscanf(profil, "%d\t%f\t%f\t%f\t%f\t%f\t%f", &i, tab_H->z+icouche, &garbage, &garbage, tab_H->h+icouche,
-&garbage,tab_H->pMol+icouche );
+&garbage,tab_H->pMol+icouche);
 			}
 			#endif
-			#ifndef SPHERIQUE
+			#if defined(SPHERIQUE) && defined(OZONE)
+			for( icouche=0; icouche<NATM+1; icouche++ ){
+				fscanf(profil, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f", &i, tab_H->z+icouche, &garbage, &garbage, tab_H->h+icouche,
+&garbage,tab_H->pMol+icouche, tab_H->abs+icouche );
+			}
+            #endif
+			#if !defined(SPHERIQUE) && !defined(OZONE)
 			for( icouche=0; icouche<NATM+1; icouche++ ){
 				fscanf(profil, "%d\t%f\t%f\t%f\t%f\t%f\t%f", &i, &garbage, &garbage, &garbage, tab_H->h+icouche,
 					   &garbage,tab_H->pMol+icouche );
 			}
+            TAUATM = tab_H->h[NATM];
+			#endif
+			#if !defined(SPHERIQUE) && defined(OZONE)
+			for( icouche=0; icouche<NATM+1; icouche++ ){
+				fscanf(profil, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f", &i, &garbage, &garbage, &garbage, tab_H->h+icouche,
+					   &garbage,tab_H->pMol+icouche, tab_H->abs+icouche );
+			}
+            TAUATM = tab_H->h[NATM];
 			#endif
 		}
 	
@@ -1655,6 +1756,15 @@ inferieure contenant toutes les molécules.
 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
 			exit(1);
 		}	
+
+        #ifdef OZONE
+        erreur = cudaMemcpy(tab_D->abs, tab_H->abs, (NATM+1)*sizeof(*(tab_H->abs)), cudaMemcpyHostToDevice);
+        if( erreur != cudaSuccess ){
+            printf( "ERREUR: Problème de copie tab_D->abs dans profilAtm\n");
+            printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+            exit(1);
+        }
+        #endif
 		
 		#ifdef SPHERIQUE
 		erreur = cudaMemcpy(tab_D->z, tab_H->z, (NATM+1)*sizeof(*(tab_H->z)), cudaMemcpyHostToDevice);
@@ -1794,7 +1904,6 @@ void impactInit(Init* init_H, Init* init_D, Tableaux* tab_H, Tableaux* tab_D){
 		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
 		exit(1);
 	}
-	
 }
 #endif
 
@@ -2142,7 +2251,7 @@ void calculTabFinal(double* tabFinal, double* tabTh, double* tabPhi, double* tab
 /* creerHDFTemoin
 * Fonction qui crée un fichier .hdf contenant les informations nécessaires à la reprise du programme
 */
-void creerHDFTemoin(double* tabPhotonsTot, unsigned long long nbPhotonsTot, Variables* var, double tempsPrec)
+void creerHDFTemoin(double* tabPhotonsTot, double* tabPhotonsTotDown, unsigned long long nbPhotonsTot, Variables* var, double tempsPrec)
 {
 	// Création du fichier de sortie
 	int sdFichier = SDstart(PATHTEMOINHDF, DFACC_CREATE);
@@ -2169,6 +2278,8 @@ void creerHDFTemoin(double* tabPhotonsTot, unsigned long long nbPhotonsTot, Vari
 		printf("\nERREUR : write hdf temoin (%s)\n", sdFichier);
 		exit(1);
 	}
+
+
 	
 	// Ecriture de toutes les informations sur la simulation : paramètres, nbphotons, nbErreurs, tempsEcoule
 	double NBPHOTONSdouble = (double)NBPHOTONS; // on convertit en double car le hdf n'accepte pas ull
@@ -2237,6 +2348,16 @@ void creerHDFTemoin(double* tabPhotonsTot, unsigned long long nbPhotonsTot, Vari
 
 	// Fermeture du tableau
 	SDendaccess(sdsTab);
+    // flux descendant
+	sprintf(nomTab,"Temoin down(%d%%)", (int)(100 * nbPhotonsTot / NBPHOTONS));
+	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
+	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP)tabPhotonsTotDown);
+	if (status)
+	{
+		printf("\nERREUR : write hdf temoin (%s)\n", sdFichier);
+		exit(1);
+	}
+	SDendaccess(sdsTab);
 	// Fermeture du fichier
 	SDend(sdFichier);
 }
@@ -2247,7 +2368,7 @@ void creerHDFTemoin(double* tabPhotonsTot, unsigned long long nbPhotonsTot, Vari
 * partir de celle sauvée dans le fichier témoin.
 */
 void lireHDFTemoin(Variables* var_H, Variables* var_D,
-		unsigned long long* nbPhotonsTot, double* tabPhotonsTot, double* tempsEcoule)
+		unsigned long long* nbPhotonsTot, double* tabPhotonsTot, double* tabPhotonsTotDown, double* tempsEcoule)
 {
 	// Ouverture du fichier temoin
 	int sdFichier = SDstart(PATHTEMOINHDF, DFACC_READ);
@@ -2408,7 +2529,17 @@ identiques a chaque lancement.\n");
 				printf("\nERREUR : read hdf temoin\n");
 				exit(1);
 			}
-			
+            SDendaccess (sdsTab);
+            // flux descendant
+            sdsIndex = 1;
+            sdsTab = SDselect (sdFichier, sdsIndex);
+            status = SDreaddata (sdsTab, startTab, NULL, edgesTab, (VOIDP)tabPhotonsTotDown);
+			if(status)
+			{
+				printf("\nERREUR : read hdf temoin down\n");
+				exit(1);
+			}
+
 		}
 		// Fermeture du tableau
 		SDendaccess (sdsTab);
@@ -2421,7 +2552,7 @@ identiques a chaque lancement.\n");
 /* creerHDFResultats
 * Fonction qui crée le fichier .hdf contenant le résultat final pour une demi-sphère
 */
-void creerHDFResultats(double* tabFinal, double* tabTh, double* tabPhi,unsigned long long nbPhotonsTot, Variables* var,double
+void creerHDFResultats(double* tabFinal,double* tabFinalDown,  double* tabTh, double* tabPhi,unsigned long long nbPhotonsTot, Variables* var,double
 tempsPrec)
 {
 	// Tableau temporaire utile pour la suite
@@ -2546,6 +2677,67 @@ tempsPrec)
 	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
 	// Ecriture du tableau dans le fichier
 	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP) (tabFinal+2*NBPHI*NBTHETA) );
+	// Vérification du bon fonctionnement de l'écriture
+	if(status)
+	{
+		printf("\nERREUR : write hdf resultats U\n");
+		exit(1);
+	}
+	
+	// Fermeture du tableau
+	SDendaccess(sdsTab);
+
+    // flux descendant
+	nomTab="Valeurs de la reflectance (I) (flux descendant)"; //nom du tableau
+	nbDimsTab = 2; //nombre de dimensions du tableau
+	valDimsTab[1] = NBTHETA;	//colonnes
+	valDimsTab[0] = NBPHI;
+	typeTab = DFNT_FLOAT64; //type des éléments du tableau
+	
+	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
+	startTab[nbDimsTab]; //début de la lecture du tableau
+	startTab[0]=0;
+	startTab[1]=0;
+	// Ecriture du tableau dans le fichier
+	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP)tabFinalDown);
+	// Vérification du bon fonctionnement de l'écriture
+	if(status)
+	{
+		printf("\nERREUR : write hdf resultats reflectance\n");
+		exit(1);
+	}
+	
+	// Fermeture du tableau
+	SDendaccess(sdsTab);
+	
+	/** 	Création du tableau Q dans le fichier hdf
+		Valeur de Q pour phi et theta donnés		**/
+	nomTab="Valeurs de Q (flux descendant)"; //nom du tableau
+	// La plupart des paramètres restent les mêmes, pas besoin de les réinitialiser
+	
+	// Création du tableau
+	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
+	// Ecriture du tableau dans le fichier
+	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP) (tabFinalDown+NBPHI*NBTHETA) );
+	// Vérification du bon fonctionnement de l'écriture
+	if(status)
+	{
+		printf("\nERREUR : write hdf resultats Q\n");
+		exit(1);
+	}
+	
+	// Fermeture du tableau
+	SDendaccess(sdsTab);
+	
+	/** 	Création du tableau U dans le fichier hdf
+	Valeur de U pour phi et theta donnés		**/
+	nomTab="Valeurs de U (flux descendant)"; //nom du tableau
+	// La plupart des paramètres restent les mêmes, pas besoin de les réinitialiser
+	
+	// Création du tableau
+	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
+	// Ecriture du tableau dans le fichier
+	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP) (tabFinalDown+2*NBPHI*NBTHETA) );
 	// Vérification du bon fonctionnement de l'écriture
 	if(status)
 	{
