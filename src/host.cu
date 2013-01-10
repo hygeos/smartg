@@ -2572,9 +2572,9 @@ tempsPrec)
 	double tempsEcouledouble = tempsPrec + (double)(clock() / CLOCKS_PER_SEC);
 
     #ifdef SPHERIQUE
-	SDsetattr(sdFichier, "MODE", DFNT_CHAR8, 2, "SP");
+	SDsetattr(sdFichier, "MODE", DFNT_CHAR8, 2, "SSA");
     #else
-	SDsetattr(sdFichier, "MODE", DFNT_CHAR8, 2, "PP");
+	SDsetattr(sdFichier, "MODE", DFNT_CHAR8, 2, "PPA");
     #endif
 	SDsetattr(sdFichier, "NBPHOTONS", DFNT_FLOAT64, 1, &NBPHOTONSdouble);
 	SDsetattr(sdFichier, "NBLOOP", DFNT_UINT32, 1, &NBLOOP);
@@ -2590,7 +2590,7 @@ tempsPrec)
 	SDsetattr(sdFichier, "PROFIL", DFNT_INT32, 1, &PROFIL);
 	SDsetattr(sdFichier, "SIM", DFNT_INT32, 1, &SIM);
 	SDsetattr(sdFichier, "SUR", DFNT_INT32, 1, &SUR);
-	SDsetattr(sdFichier, "THSDEG", DFNT_FLOAT32, 1, &THSDEG);
+	SDsetattr(sdFichier, "VZA (deg.)", DFNT_FLOAT32, 1, &THSDEG);
 	SDsetattr(sdFichier, "LAMBDA", DFNT_FLOAT32, 1, &LAMBDA);
 	SDsetattr(sdFichier, "TAURAY", DFNT_FLOAT32, 1, &TAURAY);
 	SDsetattr(sdFichier, "TAUAER", DFNT_FLOAT32, 1, &TAUAER);
@@ -2625,7 +2625,8 @@ tempsPrec)
 	
 	/** 	Création du 1er tableau dans le fichier hdf
 		Valeur de la reflectance pour phi et theta donnés		**/
-	char* nomTab="Valeurs de la reflectance (I)"; //nom du tableau
+//	char* nomTab="Valeurs de la reflectance (I)"; //nom du tableau
+	char* nomTab="I_up (TOA)"; //nom du tableau
 	int nbDimsTab = 2; //nombre de dimensions du tableau
 	int valDimsTab[nbDimsTab]; //valeurs des dimensions du tableau
 	valDimsTab[1] = NBTHETA;	//colonnes
@@ -2651,7 +2652,8 @@ tempsPrec)
 	
 	/** 	Création du tableau Q dans le fichier hdf
 		Valeur de Q pour phi et theta donnés		**/
-	nomTab="Valeurs de Q"; //nom du tableau
+//	nomTab="Valeurs de Q"; //nom du tableau
+	nomTab="Q_up (TOA)"; //nom du tableau
 	// La plupart des paramètres restent les mêmes, pas besoin de les réinitialiser
 	
 	// Création du tableau
@@ -2670,7 +2672,8 @@ tempsPrec)
 	
 	/** 	Création du tableau U dans le fichier hdf
 	Valeur de U pour phi et theta donnés		**/
-	nomTab="Valeurs de U"; //nom du tableau
+//	nomTab="Valeurs de U"; //nom du tableau
+	nomTab="U_up (TOA)"; //nom du tableau
 	// La plupart des paramètres restent les mêmes, pas besoin de les réinitialiser
 	
 	// Création du tableau
@@ -2687,8 +2690,34 @@ tempsPrec)
 	// Fermeture du tableau
 	SDendaccess(sdsTab);
 
+	/** 	Création du tableau de lumière polarisée dans le fichier hdf
+	Valeur de la lumière polarisée pour phi et theta donnés		**/
+//	nomTab="Valeurs de la lumiere polarisee (LP)"; //nom du tableau
+	nomTab="LP_up (TOA)"; //nom du tableau
+	// La plupart des paramètres restent les mêmes, pas besoin de les réinitialiser
+	
+	for(int i = 0; i < NBTHETA*NBPHI; i++){
+		tab[i] = sqrt( tabFinal[1*NBTHETA*NBPHI+i]*tabFinal[1*NBTHETA*NBPHI+i] +
+						tabFinal[2*NBTHETA*NBPHI+i]*tabFinal[2*NBTHETA*NBPHI+i] );
+	}
+	
+	// Création du tableau
+	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
+	// Ecriture du tableau dans le fichier
+	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP) tab );
+	// Vérification du bon fonctionnement de l'écriture
+	if(status)
+	{
+		printf("\nERREUR : write hdf resultats lumiere polarisee\n");
+		exit(1);
+	}
+	
+	// Fermeture du tableau
+	SDendaccess(sdsTab);
+
     // flux descendant
-	nomTab="Valeurs de la reflectance (I) (flux descendant)"; //nom du tableau
+//	nomTab="Valeurs de la reflectance (I) (flux descendant)"; //nom du tableau
+	nomTab="I_down (0+)"; //nom du tableau
 	nbDimsTab = 2; //nombre de dimensions du tableau
 	valDimsTab[1] = NBTHETA;	//colonnes
 	valDimsTab[0] = NBPHI;
@@ -2712,7 +2741,8 @@ tempsPrec)
 	
 	/** 	Création du tableau Q dans le fichier hdf
 		Valeur de Q pour phi et theta donnés		**/
-	nomTab="Valeurs de Q (flux descendant)"; //nom du tableau
+//	nomTab="Valeurs de Q (flux descendant)"; //nom du tableau
+	nomTab="Q_down (0+)"; //nom du tableau
 	// La plupart des paramètres restent les mêmes, pas besoin de les réinitialiser
 	
 	// Création du tableau
@@ -2731,7 +2761,8 @@ tempsPrec)
 	
 	/** 	Création du tableau U dans le fichier hdf
 	Valeur de U pour phi et theta donnés		**/
-	nomTab="Valeurs de U (flux descendant)"; //nom du tableau
+//	nomTab="Valeurs de U (flux descendant)"; //nom du tableau
+	nomTab="U_down (0+)"; //nom du tableau
 	// La plupart des paramètres restent les mêmes, pas besoin de les réinitialiser
 	
 	// Création du tableau
@@ -2750,7 +2781,8 @@ tempsPrec)
 
 	/** 	Création du tableau N dans le fichier hdf
 	Valeur de N pour phi et theta donnés		**/
-	nomTab="Nb de photons"; //nom du tableau
+//	nomTab="Nb de photons"; //nom du tableau
+	nomTab="Numbers of photons"; //nom du tableau
 	// La plupart des paramètres restent les mêmes, pas besoin de les réinitialiser
 	
 	// Création du tableau
@@ -2767,29 +2799,6 @@ tempsPrec)
 	// Fermeture du tableau
 	SDendaccess(sdsTab);
 	
-	/** 	Création du tableau de lumière polarisée dans le fichier hdf
-	Valeur de la lumière polarisée pour phi et theta donnés		**/
-	nomTab="Valeurs de la lumiere polarisee (LP)"; //nom du tableau
-	// La plupart des paramètres restent les mêmes, pas besoin de les réinitialiser
-	
-	for(int i = 0; i < NBTHETA*NBPHI; i++){
-		tab[i] = sqrt( tabFinal[1*NBTHETA*NBPHI+i]*tabFinal[1*NBTHETA*NBPHI+i] +
-						tabFinal[2*NBTHETA*NBPHI+i]*tabFinal[2*NBTHETA*NBPHI+i] );
-	}
-	
-	// Création du tableau
-	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
-	// Ecriture du tableau dans le fichier
-	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP) tab );
-	// Vérification du bon fonctionnement de l'écriture
-	if(status)
-	{
-		printf("\nERREUR : write hdf resultats lumiere polarisee\n");
-		exit(1);
-	}
-	
-	// Fermeture du tableau
-	SDendaccess(sdsTab);
 	
 	
 	/** 	Création du tableau theta
@@ -2800,7 +2809,8 @@ tempsPrec)
 	for(int i=0; i<NBTHETA; i++)
 		tabThBis[i] = tabTh[i]/DEG2RAD;
 	
-	nomTab = "Valeurs de theta echantillonnees";
+//	nomTab = "Valeurs de theta echantillonnees";
+	nomTab = "Zenith angles";
 	nbDimsTab = 1;
 	int valDimsTab2[nbDimsTab];
 	valDimsTab2[0] = NBTHETA;
@@ -2825,7 +2835,8 @@ tempsPrec)
 	for(int i=0; i<NBPHI; i++)
 		tabPhiBis[i] = tabPhi[i]/DEG2RAD;
 	
-	nomTab = "Valeurs de phi echantillonnees";
+//	nomTab = "Valeurs de phi echantillonnees";
+	nomTab = "Azimut angles";
 	nbDimsTab = 1;
 	int valDimsTab3[nbDimsTab];
 	valDimsTab3[0] = NBPHI;

@@ -2593,7 +2593,7 @@ __device__ void exitDown(Photon* ph, Tableaux tab, unsigned long long* nbPhotons
 	/** Séparation du code pour atmosphère sphérique ou parallèle **/
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
 	// Il ne faut pas prendre les photons sortant de la demi-sphère de l'atmosphère vers le bas
-	if( ph->vz<=0.f ){
+	if( ph->vz>=0.f ){
 		return;
 	}
 	#endif
