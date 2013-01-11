@@ -986,6 +986,8 @@ void calculFaer( const char* nomFichier, Tableaux* tab_H, Tableaux* tab_D ){
 	int iang = 0, ipf = 0;
 	double dtheta, pm1, pm2, sin1, sin2;
 	double z, norm;
+    char buffer[1024];
+    char *ptr;
 
 	/** Allocation de la mémoire des tableaux contenant les données **/
 	double *ang;
@@ -1008,7 +1010,23 @@ void calculFaer( const char* nomFichier, Tableaux* tab_H, Tableaux* tab_D ){
 	
 	else{
 		for(iang=0; iang<LSAAER; iang++){
-			fscanf(fichier, "%lf\t%lf\t%lf\t%lf\t%lf", ang+iang,p2+iang,p1+iang,p3+iang,p4+iang );
+            fgets(buffer, 1024, fichier);
+            ptr = buffer;
+            while ((*ptr == ' ') || (*ptr == '\t')) ptr++;
+            *(ang+iang) = atof(ptr);
+            while ((*ptr != ' ') && (*ptr != '\t')) ptr++;
+            while ((*ptr == ' ') || (*ptr == '\t')) ptr++;
+            *(p2+iang) = atof(ptr);
+            while ((*ptr != ' ') && (*ptr != '\t')) ptr++;
+            while ((*ptr == ' ') || (*ptr == '\t')) ptr++;
+            *(p1+iang) = atof(ptr);
+            while ((*ptr != ' ') && (*ptr != '\t')) ptr++;
+            while ((*ptr == ' ') || (*ptr == '\t')) ptr++;
+            *(p3+iang) = atof(ptr);
+            while ((*ptr != ' ') && (*ptr != '\t')) ptr++;
+            while ((*ptr == ' ') || (*ptr == '\t')) ptr++;
+            *(p4+iang) = atof(ptr);
+            
 			// Conversion en radians
 			ang[iang] = ang[iang]*DEG2RAD;
 		}
