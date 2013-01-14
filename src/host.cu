@@ -1011,6 +1011,17 @@ void calculFaer( const char* nomFichier, Tableaux* tab_H, Tableaux* tab_D ){
 	else{
 		for(iang=0; iang<LSAAER; iang++){
             fgets(buffer, 1024, fichier);
+
+            // replace all occurences of 'D' by 'E'
+            // (compatibility with fortran output)
+            ptr = buffer;
+            do {
+                ptr = strchr(ptr, 'D');
+                if (ptr != NULL) {
+                    *ptr = 'E';
+                }
+            } while(ptr != NULL);
+
             ptr = buffer;
             while ((*ptr == ' ') || (*ptr == '\t')) ptr++;
             *(ang+iang) = atof(ptr);
