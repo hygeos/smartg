@@ -13,7 +13,7 @@ import warnings
 warnings.simplefilter("ignore",DeprecationWarning)
 import pyhdf.SD
 import matplotlib
-matplotlib.use('Agg')
+#matplotlib.use('Agg')
 import numpy as np
 np.seterr(invalid='ignore', divide='ignore') # ignore division by zero errors
 from pylab import savefig, show, figure
@@ -145,25 +145,25 @@ def main():
         # lecture du nombre de valeurs de phi
         NBPHI_cuda = getattr(sd_cuda,'NBPHI')
         NBTHETA_cuda = getattr(sd_cuda,'NBTHETA')
-        thetas = getattr(sd_cuda,'THSDEG')
+        thetas = getattr(sd_cuda,'VZA (deg.)')
 
         # Récupération des valeurs de theta
-        name = "Valeurs de theta echantillonnees"
+        name = "Zenith angles"
         hdf_theta = sd_cuda.select(name)
         theta = hdf_theta.get()
 
         # Récupération des valeurs de phi
-        name = "Valeurs de phi echantillonnees"
+        name = "Azimut angles"
         hdf_phi = sd_cuda.select(name)
         phi = hdf_phi.get()
 
-        sds_cuda = sd_cuda.select("Valeurs de la reflectance (I)")
+        sds_cuda = sd_cuda.select("I_up (TOA)")
         dataI = sds_cuda.get()
-        sds_cuda = sd_cuda.select("Valeurs de Q")
+        sds_cuda = sd_cuda.select("Q_up (TOA)")
         dataQ = sds_cuda.get()
-        sds_cuda = sd_cuda.select("Valeurs de U")
+        sds_cuda = sd_cuda.select("U_up (TOA)")
         dataU = sds_cuda.get()
-        sds_cuda = sd_cuda.select("Nb de photons")
+        sds_cuda = sd_cuda.select("Numbers of photons")
         dataN = sds_cuda.get()
 
 
@@ -177,13 +177,13 @@ def main():
         # lecture du nombre de valeurs de phi
         NBPHI_cuda2 = getattr(sd_cuda,'NBPHI')
         NBTHETA_cuda2 = getattr(sd_cuda,'NBTHETA')
-        sds_cuda = sd_cuda.select("Valeurs de la reflectance (I)")
+        sds_cuda = sd_cuda.select("I_up (TOA)")
         dataI2 = sds_cuda.get()
-        sds_cuda = sd_cuda.select("Valeurs de Q")
+        sds_cuda = sd_cuda.select("Q_up (TOA)")
         dataQ2 = sds_cuda.get()
-        sds_cuda = sd_cuda.select("Valeurs de U")
+        sds_cuda = sd_cuda.select("U_up (TOA)")
         dataU2 = sds_cuda.get()
-        sds_cuda = sd_cuda.select("Nb de photons")
+        sds_cuda = sd_cuda.select("Numbers of photons")
         dataN2 = sds_cuda.get()
 
      else:
