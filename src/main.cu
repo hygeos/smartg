@@ -595,6 +595,8 @@ cudaMemcpyDeviceToHost);
         printf("\n");
 #endif
 
+        //
+        cudaDeviceReset();
 	return 0;
 
 }
