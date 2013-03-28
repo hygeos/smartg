@@ -98,8 +98,8 @@ c#########################################################
         somU=somU+delta(k)*P1(k,i)
         end do
         write(6,100) (real(i)-1.)/400.,somP,somQ,somU
-        write(1,100) (real(i)-1.)/400.,(somP+somQ)/2.,
-     &  (somP-somQ)/2.,somU,somZ
+        write(1,100) (real(i)-1.)/400.,(somP+somQ),
+     &  (somP-somQ),somU,somZ
         end do
 
 100     format(E18.8,2x,D20.11,2x,D20.11,2x,D20.11,2x,D20.11)
