@@ -56,7 +56,6 @@ __device__ __constant__ int PROFILd;
 __device__ __constant__ int SIMd;
 __device__ __constant__ int SURd;
 __device__ __constant__ int DIOPTREd;
-__device__ __constant__ int DIFFFd;
 __device__ __constant__ float THSd;		//thetaSolaire_Host en radians
 __device__ __constant__ float STHSd;	//sinThetaSolaire_Host
 __device__ __constant__ float CTHSd;	//cosThetaSolaire_Host
@@ -116,7 +115,7 @@ __device__ void initPhoton(Photon* ph/*, float* z*/
 */
 __device__ void move(Photon*
 		#ifndef SPHERIQUE
-		,int flagDiff, float* h, float* pMol
+		, float* h, float* pMol
 		#endif
         #if !defined(SPHERIQUE) && defined(OZONE)
         , float *abs

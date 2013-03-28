@@ -39,9 +39,6 @@ PATHDIFFAER = fic/valid_T70.443
 	# 3 pour ocean seul
 SIM = 1
 
-# Forcage de la premiere diffusion (utilise si SIM = -2)
-DIFFF = 0
-
 
 # Type de profil atmospherique
 	# 0 : profil standard avec echelle de hauteur

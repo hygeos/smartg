@@ -333,7 +333,6 @@ if 'CONPHY' in sd_cuda.attributes():
     CONPHY = getattr(sd_cuda,'CONPHY')
 else:
     CONPHY = None
-DIFFF = getattr(sd_cuda,'DIFFF')
 PATHRESULTATSHDF = getattr(sd_cuda,'PATHRESULTATSHDF')
 PATHTEMOINHDF = getattr(sd_cuda,'PATHTEMOINHDF')
 
@@ -363,7 +362,6 @@ fichierSortie.write("SIM = " + str(SIM) + "\n")
 fichierSortie.write("SUR = " + str(SUR) + "\n")
 fichierSortie.write("DIOPTRE = " + str(DIOPTRE) + "\n")
 fichierSortie.write("CONPHY = " + str(CONPHY) + "\n")
-fichierSortie.write("DIFFF = " + str(DIFFF) + "\n")
 fichierSortie.write("PATHRESULTATSHDF = " + str(PATHRESULTATSHDF) + "\n")
 fichierSortie.write("PATHTEMOINHDF = " + str(PATHTEMOINHDF) + "\n")
 

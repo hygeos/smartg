@@ -146,7 +146,6 @@ extern int PROFIL;
 extern int SIM;
 extern int SUR;
 extern int DIOPTRE;
-extern int DIFFF;
 
 extern unsigned int LSAAER;
 extern unsigned int NFAER;

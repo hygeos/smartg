@@ -132,11 +132,6 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 	// Création de variable propres à chaque thread
 	unsigned long long nbPhotonsThr = 0; 	// Nombre de photons traités par le thread
 	
-	#ifndef SPHERIQUE
-	// Il n'y a pas de diffusion forcée pour une géométrie sphérique
-	int flagDiff = DIFFFd;
-	#endif
-	
 	#ifdef PROGRESSION
 	unsigned int nbPhotonsSorThr = 0; 		// Nombre de photons traités par le thread et ressortis dans l'espace
 	#endif
@@ -183,10 +178,6 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 			}
 			#endif
 			
-			#ifndef SPHERIQUE
-			flagDiff = DIFFFd;
-			#endif
-			
 		}
 		// Chaque block attend tous ses threads avant de continuer
 		syncthreads();
@@ -207,7 +198,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 		
 			move(&ph
 				#ifndef SPHERIQUE
-				,flagDiff, tab.h, tab.pMol
+				, tab.h, tab.pMol
 				#endif
                 #if !defined(SPHERIQUE) && defined(OZONE)
                 , tab.abs
@@ -328,18 +319,6 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 						);
 		}
 		syncthreads();
-		
-
-		#ifndef SPHERIQUE	/* Code spécifique à une atmosphère parallèle */
-		#ifndef FLAGOCEAN
-		//Mise à jour du poids suite à la 1ère diffusion forcée
-		if(flagDiff==1 ){
-			ph.weight *= (1.F - __expf(-TAUMAXd));
-			flagDiff=0;
-		}
-		syncthreads();
-		#endif
-		#endif
 
 	}// Fin boucle for
 	
@@ -457,7 +436,7 @@ __device__ void initPhoton(Photon* ph/*, float* z*/
 */
 __device__ void move(Photon* ph
 		#ifndef SPHERIQUE
-		,int flagDiff, float* h, float* pMol
+		, float* h, float* pMol
 		#endif
         #if !defined(SPHERIQUE) && defined(OZONE)
         , float *abs
@@ -973,7 +952,6 @@ rsolfi=%15.12lf - tauRdm= %lf - hph_p= %15.12lf - hph= %15.12lf - zph_p= %15.12l
 	float tauBis;
 	
 	#ifndef FLAGOCEAN
-//	ph->z += -__logf( flagDiff + RAND*(1.F +(__expf(-TAUMAXd)-2.f)*flagDiff))*ph->vz;
 	ph->z += -logf(1.f - RAND)*ph->vz;
 	#endif
 	
@@ -2840,7 +2818,6 @@ void initConstantesDevice()
 	cudaMemcpyToSymbol(SIMd, &SIM, sizeof(int));
 	cudaMemcpyToSymbol(SURd, &SUR, sizeof(int));
 	cudaMemcpyToSymbol(DIOPTREd, &DIOPTRE, sizeof(int));
-	cudaMemcpyToSymbol(DIFFFd, &DIFFF, sizeof(int));
 	
 	cudaMemcpyToSymbol(NFAERd, &NFAER, sizeof(unsigned int));
 	cudaMemcpyToSymbol(NFOCEd, &NFOCE, sizeof(unsigned int));

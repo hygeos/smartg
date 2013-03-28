@@ -18,7 +18,6 @@ int YGRID; 		//Hauteur de la grid de blocks
 int NBTHETA; 	//Nombre de cases du tableau final pour theta (0..PI/2)
 int NBPHI; 		//Nombre de cases du tableau final pour phi (0..2*PI)
 int DIOPTRE; 	//Type de dioptre (0=plan, 1=agite)
-int DIFFF; 		//Forcage de la premiere diffusion (0=non, 1=oui) (utilise si SIM=-2)
 int PROFIL; 	//Type de profil atmospherique
 int SIM; 		//Type de simulation
 int SUR; 		//Type de reflexion de la surface

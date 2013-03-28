@@ -204,20 +204,6 @@ void initConstantesHost(int argc, char** argv)
 	chercheConstante(parametres, "DIOPTRE", s);
 	DIOPTRE= atoi(s);
 	
-
-	if( SIM!=-2 ) DIFFF = 0;
-	else{
-		strcpy(s,"");
-		chercheConstante(parametres, "DIFFF", s);
-		DIFFF = atoi(s);
-        #ifdef FLAGOCEAN
-        if (DIFFF) {
-            printf("Error, can not use forced scattering with OCEAN flag\n");
-            exit(1);
-        }
-        #endif
-	}
-	
 	strcpy(s,"");
 	chercheConstante(parametres, "THSDEG", s);
 	THSDEG = atof(s);
@@ -2023,8 +2009,6 @@ void afficheParametres()
 		printf("\n");
 		printf(" HATM\t=\t%f", HATM);
 		printf("\n");
-		printf(" DIFFF\t=\t%d", DIFFF);
-		printf("\n");
 	}
 	else{
 		printf("\tPas de contribution de l'atmosphère\n");
@@ -2330,7 +2314,6 @@ void creerHDFTemoin(double* tabPhotonsTot, double* tabPhotonsTotDown, unsigned l
 	SDsetattr(sdsTab, "NBTHETA", DFNT_INT32, 1, &NBTHETA);
 	SDsetattr(sdsTab, "NBPHI", DFNT_INT32, 1, &NBPHI);
 	SDsetattr(sdsTab, "DIOPTRE", DFNT_INT32, 1, &DIOPTRE);
-	SDsetattr(sdsTab, "DIFFF", DFNT_INT32, 1, &DIFFF);
 	SDsetattr(sdsTab, "PROFIL", DFNT_INT32, 1, &PROFIL);
 	SDsetattr(sdsTab, "SIM", DFNT_INT32, 1, &SIM);
 	SDsetattr(sdsTab, "SUR", DFNT_INT32, 1, &SUR);
@@ -2412,7 +2395,6 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		int NBTHETArecup[1];
 		int NBPHIrecup[1];
 		int DIOPTRErecup[1];
-		int DIFFFrecup[1];
 		int PROFILrecup[1];
 		int SIMrecup[1];
 		int SURrecup[1];
@@ -2439,7 +2421,6 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "NBTHETA"), (VOIDP)NBTHETArecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "NBPHI"), (VOIDP)NBPHIrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "DIOPTRE"), (VOIDP)DIOPTRErecup);
-		SDreadattr(sdsTab, SDfindattr(sdsTab, "DIFFF"), (VOIDP)DIFFFrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "PROFIL"), (VOIDP)PROFILrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "SIM"), (VOIDP)SIMrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "SUR"), (VOIDP)SURrecup);
@@ -2466,7 +2447,6 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		if(NBTHETArecup[0] == NBTHETA
 			&& NBPHIrecup[0] == NBPHI
 			&& DIOPTRErecup[0] == DIOPTRE
-			&& DIFFFrecup[0] == DIFFF
 			&& PROFILrecup[0] == PROFIL
 			&& SIMrecup[0] == SIM
 			&& SURrecup[0] == SUR
@@ -2615,7 +2595,6 @@ tempsPrec)
 	SDsetattr(sdFichier, "NBTHETA", DFNT_INT32, 1, &NBTHETA);
 	SDsetattr(sdFichier, "NBPHI", DFNT_INT32, 1, &NBPHI);
 	SDsetattr(sdFichier, "DIOPTRE", DFNT_INT32, 1, &DIOPTRE);
-	SDsetattr(sdFichier, "DIFFF", DFNT_INT32, 1, &DIFFF);
 	SDsetattr(sdFichier, "PROFIL", DFNT_INT32, 1, &PROFIL);
 	SDsetattr(sdFichier, "SIM", DFNT_INT32, 1, &SIM);
 	SDsetattr(sdFichier, "SUR", DFNT_INT32, 1, &SUR);
