@@ -15,12 +15,13 @@ import pyhdf.SD
 #matplotlib.use('Agg')
 import numpy as np
 np.seterr(invalid='ignore', divide='ignore') # ignore division by zero errors
-from pylab import savefig, show, figure, plot, subplot, ylim
+from pylab import savefig, show, figure, plot, subplot
 from optparse import OptionParser
 from matplotlib.transforms import Affine2D
 import mpl_toolkits.axisartist.floating_axes as floating_axes
 from matplotlib.projections import PolarAxes
 from mpl_toolkits.axisartist.grid_finder import FixedLocator, DictFormatter
+from  mpl_toolkits.axisartist.grid_helper_curvelinear import GridHelperCurveLinear
 import subprocess
 
 #----------------------------------------------------------------------------
@@ -95,6 +96,57 @@ def setup_axes3(fig, rect):
     return ax1, aux_ax
 #----------------------------------------------------------------------------
 
+#----------------------------------------------------------------------------
+# plot 2D 
+#----------------------------------------------------------------------------
+def plot_2D_parameter(fig, rect, theta , phi, data, Vdata, max, Vdatat=None, title=None, label=None, iphi0=-1, sub=None) :
+
+    '''
+    Contour and eventually transect of 2D parameter (theta,phi)
+    fig : destiantion figure
+    rect: string 'ABC' soecifiying position in the plot grid (see matplotlib multiple plots)
+    theta: 1D vector for zenith angles
+    phi: 1D vector for azimut angles
+    data: 2D vector parameter
+    Vdata: 1D parameter of iso-contour values
+    max : maximum value of parameter for color scale
+    Vdatat: keyword for optional ticks value of the colorbar (if not set: no colorbar added)
+    tit : keyword of plot title (default no title)
+    lab : keyword of colorbar title (default no label)
+    iphi0: keyword of the value of the azimut angle for the transect plot (default : iphi0 < 0, no transect)
+    sub : keyword for the position of the transect plot (similar type as rect)
+    '''
+
+    # grille 2D des angles
+    r , t = np.meshgrid(theta,phi)
+    NN = len(phi)
+    ticks = np.array([-90,-75,-60,-30,0,30,60,75,90])
+
+    ax3, aux_ax3 = setup_axes3(fig, rect)
+    if iphi0 >= 0 : ax = subplot(sub)
+    cax3 = aux_ax3.contourf(t,r,data,Vdata)
+    if title != None : ax3.set_title(title,weight='bold',position=(0.15,0.9))
+    if iphi0 >= 0 :
+          vertex0 = np.array([[0,0],[phi[iphi0],90]])
+          vertex1 = np.array([[0,0],[phi[NN-1-iphi0],90]])
+          aux_ax3.plot(vertex0[:,0],vertex0[:,1],'w')
+          aux_ax3.plot(vertex1[:,0],vertex1[:,1],'w--')
+          ax.plot(theta,data[iphi0,:],'k-')
+          ax.plot(-theta,data[NN-1-iphi0,:],'k--')
+          if data.min() < 0  : 
+              ax.set_ylim(-max,max)
+          else :
+              ax.set_ylim(0,max)
+          ax.set_xlim(-90,90)
+          ax.set_xticks(ticks)
+          ax.grid=True
+
+    if Vdatat != None :
+        cb3=fig.colorbar(cax3,orientation='horizontal',ticks=Vdatat)
+        if label != None  : cb3.set_label(label)
+
+#----------------------------------------------------------------------------
+
 def main():
 
 
@@ -114,7 +166,7 @@ def main():
         + '-s --savefile : output graphics file name\n'
         + '-r --rmax : maximum reflectance for color scale\n'
         + '-p --percent : choose Polarization Ratio (default polarized reflectance) and set maximum PR for color scale\n'
-        + '-t --transect : Add a transect below 2D plot for a given azimuth Phi0 \n'
+        + '-t --transect : Add a transect below 2D plot for the closest azimuth to phi0 \n'
         + '-e --error : choose relative error instead of polarized reflectance and maximum error for color scale\n')
 
     parser.add_option('-d','--down',
@@ -155,7 +207,7 @@ def main():
     parser.add_option('-t', '--transect',
             dest='phi0',
             type='float',
-            help = '-t --transect : Add a transect below 2D plot for a given azimuth Phi0 \n'
+            help = '-t --transect : Add a transect below 2D plot for the closest azimuth to phi0 \n'
             )
     parser.add_option('-e', '--error',
             dest='error',
@@ -483,110 +535,59 @@ def main():
     #---------------------------------------------------------
     #   Creation
     #---------------------------------------------------------
-    # grille 2D des angles
-    r , t = np.meshgrid(theta,phi)
 
     fig = figure(1, figsize=(9, 9))
-    fig.subplots_adjust(wspace=0.3, left=0.05, right=0.95)
+    fig.subplots_adjust(wspace=0.3, hspace=0.3, left=0.05, right=0.95)
+    #fig.subplots_adjust(wspace=0.3, left=0.05, right=0.95)
+
+    sub =  [423,424,427,428]
+
+    r , t = np.meshgrid(theta,phi)
 
     if options.phi0 != None :
         rect = [421,422,425,426]
-        sub =  [423,424,427,428]
-        iphi0=10
+        iphi0 = (np.abs(phi-options.phi0)).argmin()
     else:
         rect = [221,222,223,224]
+        iphi0 = -1
 
-    ax3, aux_ax3 = setup_axes3(fig, rect[0])
-    if options.phi0 != None : subplot(sub[0])
+    # first quarter
     if (len(args)==2) | (options.diff==True):
-        cax3 = aux_ax3.contourf(t,r,data_cudaI-data_cudaI2,VI)
-        ax3.set_title("I1-I2",weight='bold',position=(0.25,1.0))
-        if options.phi0 != None :
-          plot(theta,data_cudaI[iphi0,:]-data_cudaI2[10,:])
-          ylim(-max,max)
+         plot_2D_parameter(fig, rect[0], theta , phi, data_cudaI-data_cudaI2, VI,  max, Vdatat=VIt,title='I1-I2', iphi0=iphi0, sub=sub[0])
     else:
-        cax3 = aux_ax3.contourf(t,r,data_cudaI,VI)
-        ax3.set_title("I",weight='bold',position=(0.25,1.0))
-        if options.phi0 != None :
-          plot(theta,data_cudaI[iphi0,:])
-          ylim(0,max)
-    cb3=fig.colorbar(cax3,orientation='horizontal',ticks=VIt)
-    #cb3.set_label("Reflectance")
+         plot_2D_parameter(fig, rect[0], theta , phi, data_cudaI, VI,  max, Vdatat=VIt,title='I', iphi0=iphi0, sub=sub[0])
 
 
-    ax3, aux_ax3 = setup_axes3(fig, rect[1])
-    if options.phi0 != None : subplot(sub[1])
+    # 2nd quarter
     if (len(args)==2) | (options.diff==True):
-        cax3 = aux_ax3.contourf(t,r,data_cudaQ-data_cudaQ2,VQ)
-        ax3.set_title("Q1-Q2",weight='bold',position=(0.25,1.0))
-        if options.phi0 != None :
-          plot(theta,data_cudaQ[iphi0,:]-data_cudaQ2[10,:])
-          ylim(-max,max)
+         plot_2D_parameter(fig, rect[1], theta , phi, data_cudaQ-data_cudaQ2, VQ,  max, Vdatat=VQt,title='Q1-Q2', iphi0=iphi0, sub=sub[1])
     else:
-        cax3 = aux_ax3.contourf(t,r,data_cudaQ,VQ)
-        ax3.set_title("Q",weight='bold',position=(0.25,1.0))
-        if options.phi0 != None :
-          plot(theta,data_cudaQ[iphi0,:])
-          ylim(0,max)
-    cb3=fig.colorbar(cax3,orientation='horizontal',ticks=VQt)
-    #cb3.set_label("Reflectance")
+         plot_2D_parameter(fig, rect[1], theta , phi, data_cudaQ,  VQ, max, Vdatat=VQt,  title='Q', iphi0=iphi0, sub=sub[1])
 
-    ax3, aux_ax3 = setup_axes3(fig, rect[2])
-    if options.phi0 != None : subplot(sub[2])
+    # 3rd quarter
     if (len(args)==2) | (options.diff==True):
-        cax3 = aux_ax3.contourf(t,r,data_cudaU-data_cudaU2,VU)
-        ax3.set_title("U1-U2",weight='bold',position=(0.25,1.0))
-        if options.phi0 != None :
-          plot(theta,data_cudaU[iphi0,:]-data_cudaU2[10,:])
-          ylim(-max,max)
+         plot_2D_parameter(fig, rect[2], theta , phi, data_cudaU-data_cudaU2, VU,  max, Vdatat=VUt,title='U1-U2', label='Reflectance', iphi0=iphi0, sub=sub[2])
     else:
-        cax3 = aux_ax3.contourf(t,r,data_cudaU,VU)
-        ax3.set_title("U",weight='bold',position=(0.25,1.0))
-        if options.phi0 != None :
-          plot(theta,data_cudaU[iphi0,:])
-          ylim(0,max)
-    cb3=fig.colorbar(cax3,orientation='horizontal',ticks=VUt)
-    cb3.set_label("Reflectance")
+         plot_2D_parameter(fig, rect[2], theta , phi, data_cudaU,  VU, max, Vdatat=VUt,  title='U', label='Reflectance', iphi0=iphi0, sub=sub[2])
 
-    ax3, aux_ax3 = setup_axes3(fig, rect[3])
-    if options.phi0 != None : subplot(sub[3])
-    # ax3.scatter(ths,20,marker='*',color='#ffffff',s=80)
-
+    # 4th quarter
+    # Polarization ratio
     if (options.percent >= 0.) and (options.error == None):
       if (len(args)==2) | (options.diff==True):
-        cax3 = aux_ax3.contourf(t,r,data_cudaPR-data_cudaPR2,VPR)
-        ax3.set_title("P1-P2[%]",weight='bold',position=(0.25,1.0))
-        if options.phi0 != None :
-          plot(theta,data_cudaPR[iphi0,:]-data_cudaPR2[10,:])
-          ylim(-maxp,maxp)
+         plot_2D_parameter(fig, rect[3], theta , phi, data_cudaPR-data_cudaPR2, VPR,  maxp, Vdatat=VPRt,title='P1-P2[%]', label='Polarization Ratio', iphi0=iphi0, sub=sub[3])
       else:
-        cax3 = aux_ax3.contourf(t,r,data_cudaPR,VPR)
-        ax3.set_title("P[%]",weight='bold',position=(0.25,1.0))
-        if options.phi0 != None :
-          plot(theta,data_cudaPR[iphi0,:])
-          ylim(0,maxp)
-      cb3=fig.colorbar(cax3,orientation='horizontal',ticks=VPRt)
-      cb3.set_label("Polarization Ratio")
+         plot_2D_parameter(fig, rect[3], theta , phi, data_cudaPR, VPR,  maxp, Vdatat=VPRt,title='P[%]', label='Polarization Ratio', iphi0=iphi0, sub=sub[3])
+
+    # or Error
     if options.percent == None and options.error >= 0.:
-      cax3 = aux_ax3.contourf(t,r,data_cudaN,VN)
-      ax3.set_title(r"$\Delta$ [%]",weight='bold',position=(0.25,1.0))
-      cb3=fig.colorbar(cax3,orientation='horizontal',ticks=VNt)
-      cb3.set_label("Relative Error")
+         plot_2D_parameter(fig, rect[3], theta , phi, data_cudaN, VN,  maxe, Vdatat=VNt,title=r"$\Delta$ [%]", label='Relative Error', iphi0=iphi0, sub=sub[3])
+
+    # or Polaried reflectance
     if options.percent == None  and options.error == None:
       if (len(args)==2) | (options.diff==True):
-        cax3 = aux_ax3.contourf(t,r,data_cudaIP-data_cudaIP2,VIP)
-        ax3.set_title("IP1-IP2",weight='bold',position=(0.25,1.0))
-        if options.phi0 != None :
-          plot(theta,data_cudaIP[iphi0,:]-data_cudaIP2[10,:])
-          ylim(-max,max)
+         plot_2D_parameter(fig, rect[3], theta , phi, data_cudaIP-data_cudaIP2, VIP,  max, Vdatat=VIPt,title='IP1-IP2', label='Polarized Reflectance', iphi0=iphi0, sub=sub[3])
       else:
-        cax3 = aux_ax3.contourf(t,r,data_cudaIP,VIP)
-        ax3.set_title("IP",weight='bold',position=(0.25,1.0))
-        if options.phi0 != None :
-          plot(theta,data_cudaIP[iphi0,:])
-          ylim(0,max)
-      cb3=fig.colorbar(cax3,orientation='horizontal',ticks=VIPt)
-      cb3.set_label("Polarized Reflectance")
+         plot_2D_parameter(fig, rect[3], theta , phi, data_cudaIP, VIP,  max, Vdatat=VIPt,title='IP', label='Polarized Reflectance', iphi0=iphi0, sub=sub[3])
 
 
     if options.filename == None:
