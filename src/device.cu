@@ -1102,7 +1102,8 @@ __device__ void scatter( Photon* ph, float* faer
 	
 	
 	// Modification des nombres de Stokes
-	modifStokes(ph, psi, cPsi, sPsi, 1);
+    rotateStokes(ph->stokes1, ph->stokes2, ph->stokes3, psi,
+            &ph->stokes1, &ph->stokes2, &ph->stokes3);
 	
 	/* Les calculs qui différent pour les aérosols et les molécules sont regroupés dans cette partie.
 	 * L'idée à termes est de réduire au maximum cette fonction, en calculant également la fonction de phase pour les
@@ -1449,9 +1450,10 @@ __device__ void surfaceAgitee(Photon* ph
 			psi = -psi;
 		}
 
-	/*psi est l'angle entre le plan de diffusion et le plan de diffusion precedent. Rotation des
-	parametres de Stoke du photon d'apres cet angle.*/
-	modifStokes(ph, psi, __cosf(psi), __sinf(psi), 0 );
+        /*psi est l'angle entre le plan de diffusion et le plan de diffusion precedent. Rotation des
+        parametres de Stoke du photon d'apres cet angle.*/
+        rotateStokes(ph->stokes1, ph->stokes2, ph->stokes3, psi,
+                &ph->stokes1, &ph->stokes2, &ph->stokes3);
 	}
 
 	if( sTh<=nind){
@@ -1621,7 +1623,8 @@ __device__ void surfaceAgitee(Photon* ph
 		psi = -psi;
 		}
 		
-		modifStokes(ph, psi, __cosf(psi) , __sinf(psi), 0 );
+        rotateStokes(ph->stokes1, ph->stokes2, ph->stokes3, psi,
+                &ph->stokes1, &ph->stokes2, &ph->stokes3);
 		
 		ph->vx = vxn;
 		ph->vy = vyn;
@@ -1830,7 +1833,8 @@ __device__ void surfaceLambertienne(Photon* ph
 		psi = -psi;
 	}
 	
-	modifStokes(ph, psi, __cosf(psi) , __sinf(psi), 0 );
+    rotateStokes(ph->stokes1, ph->stokes2, ph->stokes3, psi,
+            &ph->stokes1, &ph->stokes2, &ph->stokes3);
 	
 	ph->vx = vxn;
 	ph->vy = vyn;
@@ -1954,7 +1958,8 @@ __device__ void exit(Photon* ph, Tableaux tab, unsigned long long* nbPhotonsThr
 	// Modification des nombres de Stokes
 	float cPsi = __cosf(psi);
 	float sPsi = __sinf(psi);
-	modifStokes(ph, psi, cPsi, sPsi, 0);
+    rotateStokes(ph->stokes1, ph->stokes2, ph->stokes3, psi,
+            &ph->stokes1, &ph->stokes2, &ph->stokes3);
 	
 	// Calcul de la case dans laquelle le photon sort
 	calculCase(&ith, &iphi, ph 
@@ -2154,30 +2159,31 @@ __device__ void exitDown(Photon* ph, Tableaux tab, unsigned long long* nbPhotons
 	#endif
 }
 
-/* modifStokes
-* Modifie les paramètres de stokes
-* Flag permet de tester (si flag=1) ou non la valeur des paramètres avant modification
-*/
-__device__ void modifStokes(Photon* photon, float psi, float cPsi, float sPsi, int flag)
+
+
+//
+// Rotation of the stokes parameters by an angle psi between the incidence and
+// the emergence planes
+// input: 3 stokes parameters s1, s2, s3
+//        rotation angle psi in radians
+// output: 3 rotated stokes parameters s1r, s2r, s3r
+//
+__device__ void rotateStokes(float s1, float s2, float s3, float psi,
+        float *s1r, float *s2r, float *s3r)
 {
-	// On modifie les nombres de Stokes grâce à psi
-	if( ((photon->stokes1 != photon->stokes2) || (photon->stokes3 != 0.F) ) || (flag==0))
-	{
-		float cPsi2 = cPsi * cPsi;
-		float sPsi2 = sPsi * sPsi;
-		float psi2 = 2.F*psi;
-		float stokes1, stokes2, stokes3;
-		float a, s2Psi;
-		stokes1 = photon->stokes1;
-		stokes2 = photon->stokes2;
-		stokes3 = photon->stokes3;
-		s2Psi = __sinf(psi2);
-		a = 0.5f*s2Psi*stokes3;
-		photon->stokes1 = cPsi2 * stokes1 + sPsi2 * stokes2 - a;
-		photon->stokes2 = sPsi2 * stokes1 + cPsi2 * stokes2 + a;
-		photon->stokes3 = s2Psi * (stokes1 - stokes2) + __cosf(psi2) * stokes3;
-	}
+    float cPsi = __cosf(psi);
+    float sPsi = __sinf(psi);
+    float cPsi2 = cPsi * cPsi;
+    float sPsi2 = sPsi * sPsi;
+    float twopsi = 2.F*psi;
+    float a, s2Psi;
+    s2Psi = __sinf(twopsi);
+    a = 0.5f*s2Psi*s3;
+    *s1r = cPsi2 * s1 + sPsi2 * s2 - a;
+    *s2r = sPsi2 * s1 + cPsi2 * s2 + a;
+    *s3r = s2Psi * (s1 - s2) + __cosf(twopsi) * s3;
 }
+
 
 
 /* calculPsi

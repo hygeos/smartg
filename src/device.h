@@ -237,10 +237,9 @@ __device__ void exitDown(Photon* , Tableaux, unsigned long long*
 		    );
 
 
-/* Modifie les paramètres de stokes
-* Flag permet de tester (si flag=1) ou non la valeur des paramètres avant modification
-*/
-__device__ void modifStokes(Photon*, float, float, float, int flag);
+// rotation of the stokes parameters by an angle psi
+__device__ void rotateStokes(float s1, float s2, float s3, float psi,
+        float *s1r, float *s2r, float *s3r);
 
 
 /* calculPsi
