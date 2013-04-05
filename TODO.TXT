@@ -20,3 +20,6 @@
 
 * avoir la même fonction pour la création du témoin et du résultat ?
 
+* Retirer les photons sans interactions dans le calcul de la luminances descendante à la surface
+Eventuellement repenser le calcul de ExitDown, passer a une fonction Count appelable a la surface ou dans l'espace
+

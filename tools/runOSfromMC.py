@@ -246,6 +246,7 @@ def main():
         NBPHI_cuda = getattr(sd_cuda,'NBPHI')
         NBTHETA_cuda = getattr(sd_cuda,'NBTHETA')
         thetas = getattr(sd_cuda,'VZA (deg.)')
+        mus = np.cos(thetas * np.pi / 180.)
         TAURAY = getattr(sd_cuda,'TAURAY')
         TAUAER = getattr(sd_cuda,'TAUAER')
         WINDSPEED = getattr(sd_cuda,'WINDSPEED')
@@ -264,7 +265,11 @@ def main():
         name = "Azimut angles"
         hdf_phi = sd_cuda.select(name)
         phi = hdf_phi.get()
-        Dphi = (phi[1] - phi[0]) / 2.
+        # ATTENTION version uniquement valide pour SOS trafiqué permettant des pas en phi de 0.5 deg
+        Dphi = phi[1] - phi[0] 
+
+        # Vrai pour SOS_V5.1 officiel
+        #Dphi = (phi[1] - phi[0]) / 2.
 
         if options.down == True  :
             sds_cuda = sd_cuda.select("I_down (0+)")
@@ -379,7 +384,7 @@ def main():
     # Parametres des SOS
     #---------------------------------------------------------
     # ecritue du fichier d'angle utilisateur pour OS V5.1
-    fname = "./MC_angle_%i.txt" % NBTHETA_cuda
+    fname = "MC_angle_%i.txt" % NBTHETA_cuda
     fangle = open(fname,"w")
     for i in range(NBTHETA_cuda) :
         fangle.write("%9.5f\n" % theta[i])
@@ -449,14 +454,12 @@ def main():
        -SURF.Log "+thisDir+"/tmp_Surface.Log -SURF.File DEFAULT \
          -SURF.Type "+SURF_TYPE+" -SURF.Alb "+W0LAM+" -SURF.Ind "+NH2O+" \
          -SURF.Glitter.Wind "+WINDSPEED+" \
-	   -AER.Model "+SOS_AER_MODEL+" -AER.Tronca 0 \
+	   -AER.Model "+SOS_AER_MODEL+" -AER.Tronca 1 \
          -AER.SF.Model "+SOS_AER_SF_MODEL+" -AER.SF.RH "+SOS_AER_RH
 
-      b = subprocess.call("echo " + cmd + " > ./cmd",shell=True) 
-      b = subprocess.call("cat ./runOS_template.ksh ./cmd > ./tmp.ksh",shell=True) 
-      b = subprocess.call("chmod +x ./tmp.ksh",shell=True) 
-      b = subprocess.call("./tmp.ksh",shell=True) 
-      #b = subprocess.call("rm tmp* cmd",shell=True)
+      b = subprocess.call("echo " + cmd + " > ./cmd ; cat runOS_template.ksh cmd > tmp.ksh; chmod +x tmp.ksh",shell=True) 
+      print ' SOS command file ready : type ./tmp.ksh to run SOS \n'
+      sys.exit(1)
 
     #---------------------------------------------------------
     # Recuperation des SOS
@@ -465,6 +468,7 @@ def main():
     I_sos = np.zeros((NBPHI_cuda,NBTHETA_cuda),dtype=float)
     Q_sos = np.zeros((NBPHI_cuda,NBTHETA_cuda),dtype=float)
     U_sos = np.zeros((NBPHI_cuda,NBTHETA_cuda),dtype=float)
+
 
     if options.down == False :
        fichier_sos = open(thisDir+"/SOS_Up.txt", "r")
@@ -485,10 +489,10 @@ def main():
     I_sos = I_sos[OK].reshape((-1,NBTHETA_cuda))  
     Q_sos = Q_sos[OK].reshape((-1,NBTHETA_cuda)) 
     U_sos = U_sos[OK].reshape((-1,NBTHETA_cuda))
-    # retournement de Phi, convention OS
-    I_sos = I_sos[::-1,:]
-    Q_sos = Q_sos[::-1,:]
-    U_sos = U_sos[::-1,:]
+    # retournement de Phi, convention OS et normalisation par mus
+    I_sos = I_sos[::-1,:]/mus
+    Q_sos = Q_sos[::-1,:]/mus
+    U_sos = U_sos[::-1,:]/mus
 
     ##########################################################
     ##              CREATION DES GRAPHIQUES 2D              ##
@@ -559,20 +563,20 @@ def main():
         rect = [221,222,223,224]
         iphi0 = -1
 
-    # first quarter
+    # first quarter I
     if (len(args)==2) | (options.diff==True):
          plot_2D_parameter(fig, rect[0], theta , phi, data_cudaI-data_cudaI2, VI, Vdatat=VIt,title='I1-I2', iphi0=iphi0, sub=sub[0])
     else:
          plot_2D_parameter(fig, rect[0], theta , phi, data_cudaI, VI,  Vdatat=VIt,title='I', iphi0=iphi0, sub=sub[0])
 
 
-    # 2nd quarter
+    # 2nd quarter Q
     if (len(args)==2) | (options.diff==True):
          plot_2D_parameter(fig, rect[1], theta , phi, data_cudaQ-data_cudaQ2, VQ,  Vdatat=VQt,title='Q1-Q2', iphi0=iphi0, sub=sub[1])
     else:
          plot_2D_parameter(fig, rect[1], theta , phi, data_cudaQ,  VQ, Vdatat=VQt,  title='Q', iphi0=iphi0, sub=sub[1])
 
-    # 3rd quarter
+    # 3rd quarter U
     if (len(args)==2) | (options.diff==True):
          plot_2D_parameter(fig, rect[2], theta , phi, data_cudaU-data_cudaU2, VU,  Vdatat=VUt,title='U1-U2', label='Reflectance', iphi0=iphi0, sub=sub[2])
     else:
@@ -590,7 +594,7 @@ def main():
     if options.percent == None and options.error >= 0.:
          plot_2D_parameter(fig, rect[3], theta , phi, data_cudaN, VN,  Vdatat=VNt,title=r"$\Delta$ [%]", label='Relative Error', iphi0=iphi0, sub=sub[3])
 
-    # or Polaried reflectance
+    # or Polarized reflectance
     if options.percent == None  and options.error == None:
       if (len(args)==2) | (options.diff==True):
          plot_2D_parameter(fig, rect[3], theta , phi, data_cudaIP-data_cudaIP2, VIP,  Vdatat=VIPt,title='IP1-IP2', label='Polarized Reflectance', iphi0=iphi0, sub=sub[3])
