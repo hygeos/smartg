@@ -281,6 +281,10 @@ void initConstantesHost(int argc, char** argv)
 	chercheConstante(parametres, "CONPHY", s);
 	CONPHY = atof(s);
     #endif
+
+	strcpy(s,"");
+	chercheConstante(parametres, "OUTPUT_LAYERS", s);
+	OUTPUT_LAYERS = atoi(s);
 	
 	chercheConstante(parametres, "PATHRESULTATSHDF", PATHRESULTATSHDF);
     

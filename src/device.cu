@@ -264,17 +264,19 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 		}
 		// Chaque block attend tous ses threads avant de continuer
 		syncthreads();
+
+        countPhoton(&ph, tab, &nbPhotonsThr
+                    #ifdef PROGRESSION
+                    , &nbPhotonsSorThr, var
+                    #endif
+                    #ifdef TRAJET
+                    , idx, evnt
+                    #endif
+                    );
+        syncthreads();
 		
 		// Si le photon est à SURFACE
 		if(ph.loc == SURFACE){
-			exitDown(&ph, tab, &nbPhotonsThr
-						#ifdef PROGRESSION
-						, &nbPhotonsSorThr, var
-						#endif
-						#ifdef TRAJET
-						, idx, evnt
-						#endif
-						);
 			
 			if( DIOPTREd!=3 )
 				surfaceAgitee(&ph, &etatThr
@@ -308,17 +310,6 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 		}
 		syncthreads();
 		
-		if(ph.loc == SPACE){
-			exit(&ph, tab, &nbPhotonsThr
-						#ifdef PROGRESSION
-						, &nbPhotonsSorThr, var
-						#endif
-						#ifdef TRAJET
-						, idx, evnt
-						#endif
-						);
-		}
-		syncthreads();
 
 	}// Fin boucle for
 	
@@ -1899,10 +1890,10 @@ __device__ void surfaceLambertienne(Photon* ph
 }
 
 
-/* exit
-* Sauve les paramètres des photons sortis dans l'espace dans la boite correspondant à la direction de sortie
+/* countPhoton
+ * (previously known as "exit" or "exitUp")
 */
-__device__ void exit(Photon* ph, Tableaux tab, unsigned long long* nbPhotonsThr
+__device__ void countPhoton(Photon* ph, Tableaux tab, unsigned long long* nbPhotonsThr
 		#ifdef PROGRESSION
 		, unsigned int* nbPhotonsSorThr, Variables* var
 		#endif
@@ -1911,9 +1902,13 @@ __device__ void exit(Photon* ph, Tableaux tab, unsigned long long* nbPhotonsThr
 		#endif
 		    )
 {
-	// Remise à zéro de la localisation du photon
-	ph->loc = NONE;
-	
+
+    if ((ph->loc != SPACE) && (ph->loc != SURFACE)) {
+        return;
+    }
+    if ((ph->loc == SURFACE) && ((OUTPUT_LAYERSd & OUTPUT_BOA_DOWN_0P) == 0)) {
+        return;
+    }
 	
 // si son poids est anormalement élevé on le compte comme une erreur. Test effectué uniquement en présence de dioptre
 	if( (ph->weight > WEIGHTMAX) && (SIMd!=-2)){
@@ -1922,22 +1917,40 @@ __device__ void exit(Photon* ph, Tableaux tab, unsigned long long* nbPhotonsThr
 		#endif
 		return;
 	}
+
+    float *tabCount; // pointer to the "counting" array:
+                     // may be TOA, or BOA down, and so on
 	
-	/* Sinon on traite le photon et on l'ajoute dans le tableau tabPhotons de ce thread
-	 * Incrémentation du nombre de photons traités par le thread
-	*/
-	(*nbPhotonsThr)++;
+    if (ph->loc == SPACE) {
+
+        // Remise à zéro de la localisation du photon
+        ph->loc = NONE;
+
+        /* Sinon on traite le photon et on l'ajoute dans le tableau tabPhotons de ce thread
+         * Incrémentation du nombre de photons traités par le thread
+        */
+        (*nbPhotonsThr)++;
+
+        tabCount = tab.tabPhotons;
+    } else {
+
+        // SURFACE
+        tabCount = tab.tabPhotonsDown;
+
+    }
 	
 	
-	/** Séparation du code pour atmosphère sphérique ou parallèle **/
-	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
-	// Il ne faut pas prendre les photons sortant de la demi-sphère de l'atmosphère vers le bas
-	if( ph->vz<=0.f ){
+	#ifdef SPHERIQUE
+	if((ph->vz<=0.f) && (ph->loc == SPACE)) {
+        // do not count the downward photons leaving atmosphere
+		return;
+	}
+	if((ph->vz>=0.f) && (ph->loc == SURFACE)) {
+        // do not count the upward photons reaching surface
 		return;
 	}
 	#endif
 	
-	// Création d'un float theta qui sert à modifier les nombres de Stokes
 	float theta = acosf(fmin(1.F, fmax(-1.F, 0.f * ph->vx + 1.f * ph->vz)) );
 	
 	// Si theta = 0 on l'ignore (cas où le photon repart dans la direction solaire)
@@ -1949,17 +1962,15 @@ __device__ void exit(Photon* ph, Tableaux tab, unsigned long long* nbPhotonsThr
 		return;
 	}
 
-	// Création d'un angle psi qui sert à modifier les nombres de Stokes
 	float psi;
 	int ith=0, iphi=0;
 	// Initialisation de psi
 	calculPsi(ph, &psi, theta);
 	
-	// Modification des nombres de Stokes
-	float cPsi = __cosf(psi);
-	float sPsi = __sinf(psi);
+	// Rotation of stokes parameters
+    float s1, s2, s3;
     rotateStokes(ph->stokes1, ph->stokes2, ph->stokes3, psi,
-            &ph->stokes1, &ph->stokes2, &ph->stokes3);
+            &s1, &s2, &s3);
 	
 	// Calcul de la case dans laquelle le photon sort
 	calculCase(&ith, &iphi, ph 
@@ -1968,35 +1979,35 @@ __device__ void exit(Photon* ph, Tableaux tab, unsigned long long* nbPhotonsThr
 			   #endif
 			   );
 	
-	/** Modification des paramètres de stokes pour la compatibilité avec le code SOS **/
+    // modify stokes parameters for OS code compatibility
   	if( ph->vy<0.f )
-  		ph->stokes3 = -ph->stokes3;
+  		s3 = -s3;
 	
-	float s1 = ph->stokes1;
-	ph->stokes1= ph->stokes2;
-	ph->stokes2= s1;
-//	ph->stokes3 = -ph->stokes3;
+	float tmp = s1;
+	s1 = s2;
+	s2 = tmp;
 	
 	
-	// On modifie ensuite le poids du photon
-	ph->weight = __fdividef(ph->weight, ph->stokes1 + ph->stokes2);
+	ph->weight = __fdividef(ph->weight, s1 + s2);
 	
 	// Rangement du photon dans sa case, et incrémentation de variables
 	if(((ith >= 0) && (ith < NBTHETAd)) && ((iphi >= 0) && (iphi < NBPHId)))
 	{
 		// Rangement dans le tableau des paramètres pondérés du photon
 
-		atomicAdd(tab.tabPhotons+(0 * NBTHETAd * NBPHId + ith * NBPHId + iphi), ph->weight * ph->stokes1);
+		atomicAdd(tabCount+(0 * NBTHETAd * NBPHId + ith * NBPHId + iphi), ph->weight * s1);
 
-		atomicAdd(tab.tabPhotons+(1 * NBTHETAd * NBPHId + ith * NBPHId + iphi), ph->weight * ph->stokes2);
+		atomicAdd(tabCount+(1 * NBTHETAd * NBPHId + ith * NBPHId + iphi), ph->weight * s2);
 
-		atomicAdd(tab.tabPhotons+(2 * NBTHETAd * NBPHId + ith * NBPHId + iphi), ph->weight * ph->stokes3);
+		atomicAdd(tabCount+(2 * NBTHETAd * NBPHId + ith * NBPHId + iphi), ph->weight * s3);
 				
-   		atomicAdd(tab.tabPhotons+(3 * NBTHETAd * NBPHId + ith * NBPHId + iphi), 1.);
+   		atomicAdd(tabCount+(3 * NBTHETAd * NBPHId + ith * NBPHId + iphi), 1.);
 
 		#ifdef PROGRESSION
 		// Incrémentation du nombre de photons sortis dans l'espace pour ce thread
-		(*nbPhotonsSorThr)++;
+        if (ph->loc == NONE) {
+            (*nbPhotonsSorThr)++;
+        }
 		#endif
 
 	}
@@ -2024,140 +2035,6 @@ __device__ void exit(Photon* ph, Tableaux tab, unsigned long long* nbPhotonsThr
 	#endif
 }
 
-
-/* exitDown
-* Sauve les paramètres des photons touchant la surface
-*/
-__device__ void exitDown(Photon* ph, Tableaux tab, unsigned long long* nbPhotonsThr
-		#ifdef PROGRESSION
-		, unsigned int* nbPhotonsSorThr, Variables* var
-		#endif
-		#ifdef TRAJET
-		, int idx, Evnt* evnt
-		#endif
-		    )
-{
-	
-// si son poids est anormalement élevé on le compte comme une erreur. Test effectué uniquement en présence de dioptre
-	if( (ph->weight > WEIGHTMAX) && (SIMd!=-2)){
-		#ifdef PROGRESSION
-		atomicAdd(&(var->erreurpoids), 1);
-		#endif
-		return;
-	}
-	
-	/* Sinon on traite le photon et on l'ajoute dans le tableau tabPhotons de ce thread
-	 * Incrémentation du nombre de photons traités par le thread
-	*/
-//	(*nbPhotonsThr)++;
-	
-	
-	/** Séparation du code pour atmosphère sphérique ou parallèle **/
-	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
-	// Il ne faut pas prendre les photons sortant de la demi-sphère de l'atmosphère vers le bas
-	if( ph->vz>=0.f ){
-		return;
-	}
-	#endif
-	
-	// Création d'un float theta qui sert à modifier les nombres de Stokes
-	float theta = acosf(fmin(1.F, fmax(-1.F, 0.f * ph->vx + 1.f * fabsf(ph->vz))) );
-	
-	// Si theta = 0 on l'ignore (cas où le photon repart dans la direction solaire)
-	if(theta == 0.F)
-	{
-		#ifdef PROGRESSION
-		atomicAdd(&(var->erreurtheta), 1);
-		#endif
-		return;
-	}
-
-	// Création d'un angle psi qui sert à modifier les nombres de Stokes
-	float psi;
-	int ith=0, iphi=0;
-	// Initialisation de psi
-	calculPsi(ph, &psi, theta);
-	
-	// Modification des nombres de Stokes
-	float cPsi = __cosf(psi);
-	float sPsi = __sinf(psi);
-	// On modifie les nombres de Stokes grâce à psi
-    float stokes1 = ph->stokes1, stokes2 = ph->stokes2, stokes3 = ph->stokes3;
-	if( ((ph->stokes1 != ph->stokes2) || (ph->stokes3 != 0.F) ))
-	{
-		float cPsi2 = cPsi * cPsi;
-		float sPsi2 = sPsi * sPsi;
-		float psi2 = 2.F*psi;
-        float st1 = ph->stokes1, st2 = ph->stokes2, st3 = ph->stokes3;
-		float a, s2Psi;
-		s2Psi = __sinf(psi2);
-		a = 0.5f*s2Psi*st3;
-		stokes1 = cPsi2 * st1 + sPsi2 * st2 - a;
-		stokes2 = sPsi2 * st1 + cPsi2 * st2 + a;
-		stokes3 = s2Psi * (st1 - st2) + __cosf(psi2) * st3;
-	}
-	
-	// Calcul de la case dans laquelle le photon sort
-	calculCase(&ith, &iphi, ph 
-			   #ifdef PROGRESSION
-			   , var
-			   #endif
-			   );
-	
-	/** Modification des paramètres de stokes pour la compatibilité avec le code SOS **/
-  	if( ph->vy<0.f )
-  		stokes3 = -stokes3;
-	
-	float s1 = stokes1;
-	stokes1= stokes2;
-	stokes2= s1;
-	
-	
-	// On modifie ensuite le poids du photon
-	float weight = __fdividef(ph->weight, stokes1 + stokes2);
-	
-	// Rangement du photon dans sa case, et incrémentation de variables
-	if(((ith >= 0) && (ith < NBTHETAd)) && ((iphi >= 0) && (iphi < NBPHId)))
-	{
-		// Rangement dans le tableau des paramètres pondérés du photon
-
-		atomicAdd(tab.tabPhotonsDown+(0 * NBTHETAd * NBPHId + ith * NBPHId + iphi), weight * stokes1);
-
-		atomicAdd(tab.tabPhotonsDown+(1 * NBTHETAd * NBPHId + ith * NBPHId + iphi), weight * stokes2);
-
-		atomicAdd(tab.tabPhotonsDown+(2 * NBTHETAd * NBPHId + ith * NBPHId + iphi), weight * stokes3);
-				
-   		atomicAdd(tab.tabPhotonsDown+(3 * NBTHETAd * NBPHId + ith * NBPHId + iphi), 1.);
-
-//		#ifdef PROGRESSION
-//		// Incrémentation du nombre de photons sortis dans l'espace pour ce thread
-//		(*nbPhotonsSorThr)++;
-//		#endif
-
-	}
-	else
-	{
-		#ifdef PROGRESSION
-		atomicAdd(&(var->erreurcase), 1);
-		#endif
-	}
-
-	#ifdef TRAJET
-	// Récupération d'informations sur le premier photon traité
-	if(idx == 0)
-	{
-		int i = 0;
-		// On cherche la première action vide du tableau
-		while(evnt[i].action != 0 && i<NBTRAJET-1) i++;
-		// Et on remplit la première case vide des tableaux (tableaux de NBTRAJET cases)
-		// "5"représente l'événement "exit" du photon
-		evnt[i].action = 5;
-		// On récupère le tau et le poids du photon
-		evnt[i].poids = ph->weight;
-		evnt[i].tau = ph->z;
-	}
-	#endif
-}
 
 
 
@@ -2283,6 +2160,8 @@ void initConstantesDevice()
 	cudaMemcpyToSymbol(W0OCEd, &W0OCE, sizeof(float));
 	cudaMemcpyToSymbol(CONPHYd, &CONPHY, sizeof(float));
     #endif
+
+	cudaMemcpyToSymbol(OUTPUT_LAYERSd, &OUTPUT_LAYERS, sizeof(unsigned int));
 	
 	cudaMemcpyToSymbol(HAd, &HA, sizeof(float));
 	cudaMemcpyToSymbol(HRd, &HR, sizeof(float));

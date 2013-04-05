@@ -140,6 +140,11 @@ PATHRESULTATSHDF = resultats/PARALLELE/glitterlamb/
 # Période d'écriture du fichier témoin en min (-1 pour désactiver)
 WRITE_PERIOD = -1
 
+# Output layers (binary flags)
+# 1 -> BOA (0+) downward
+OUTPUT_LAYERS    0
+
+
 
 ###
 ## Paramètres de la carte graphique  ##

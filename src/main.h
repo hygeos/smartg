@@ -49,6 +49,8 @@ float NH2O;		//Indice de refraction relatif air/eau
 float CONPHY;	//Concentration en phytoplancton [mg.m-3] (utilise si SUR>=2)
 #endif
 
+unsigned int OUTPUT_LAYERS;
+
 char PATHRESULTATSHDF[1024]; //Fichier de sortie au format hdf
 char PATHTEMOINHDF[1024]; //Fichier témoin au format hdf
 char PATHDIFFAER[1024];	// Fichier d'entrée des données de diffusion des aérosols

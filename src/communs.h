@@ -86,6 +86,10 @@ typedef int CrMCCUDA;
 #define OCEAN		5
 
 
+// bitmasks for output
+#define OUTPUT_BOA_DOWN_0P   1 // downward radiance at BOA above surface (0+)
+
+
 /* Paramètres pour l'océan */
 #define DEPO 0.0279F
 #define NFOCE_c = 10000000
@@ -164,6 +168,7 @@ extern float W0LAM;
 extern float W0OCE;
 extern float CONPHY;
 #endif
+extern unsigned int OUTPUT_LAYERS;
 extern float HA;
 extern float HR;
 extern float ZMIN;
