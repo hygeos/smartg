@@ -3,7 +3,7 @@ CUDA_HOME=/opt/cuda50/
 # CUDA_HOME=/home/gpubti/Loic/PROJETS/gpubti/zone_try/QPEC_MEDICIS/MEDICIS/BIBEXT/XEON/CUDA_V4.0.13
 CUDA_BIN=${CUDA_HOME}/bin/
 CUDA_LIB=${CUDA_HOME}/lib64/
-CUDA_INC=${CUDA_HOME}/inc/
+CUDA_INC=${CUDA_HOME}/include/
 
 # HDF_HOME=/home/gpubti/Loic/PROJETS/gpubti/zone_try/QPEC_MEDICIS/MEDICIS/BIBEXT/XEON/HDF_V4.2r5
 HDF_HOME=
@@ -25,12 +25,12 @@ SPH=no
 #=============Options============#  (en fonction de la carte graphique utilisee)
 CFLAGS=-O3 -maxrregcount=32 -use_fast_math -Xptxas=-v -D_CUDA -arch=sm_20
 
-IFLAGS = -I ${CUDA_INC} -I ${HDF_INC} -I ${JPEG_INC} -I ./src/incRNGs/Random123/
+IFLAGS = -I ${CUDA_INC} -I ${HDF_INC} -I ${JPEG_INC} -I ./src/incRNGs/Random123/ 
 
 LFLAGS =
 LFLAGS += -L ${HDF_LIB} -ldf -lmfhdf
 LFLAGS += -L ${JPEG_LIB} -ljpeg
-LFLAGS += -L ${CUDA_LIB} -lcuda -lcudart -lcurand
+LFLAGS += -L ${CUDA_LIB} -lcuda -lcudart -lcurand -L /usr/lib64/nvidia/
 
 #===== Caractéristiques majeures =====#
 DFLAGS =

@@ -150,7 +150,7 @@ def plot_2D_parameter(fig, rect, theta , phi, data, Vdata, Vdatat=None, title=No
           ax.grid=True
 
     if Vdatat != None :
-        cb3=fig.colorbar(cax3,orientation='horizontal',ticks=Vdatat)
+        cb3=fig.colorbar(cax3,orientation='horizontal',ticks=Vdatat,extend='both')
         if label != None  : cb3.set_label(label)
 
 #----------------------------------------------------------------------------
@@ -412,8 +412,10 @@ def main():
     else : 
        SURF_TYPE = '1'
 
-    #b = subprocess.call("pwd",shell=True) 
-    thisDir = "/home/did/RTC/MCCuda/tools"
+    process = subprocess.Popen("pwd",shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    # wait for the process to terminate
+    out, err = process.communicate()
+    thisDir = out.rstrip()
 
     if options.compute == True : 
       if (options.aerosol != 'U80') & (options.aerosol != 'M80') : 
@@ -458,6 +460,10 @@ def main():
          -AER.SF.Model "+SOS_AER_SF_MODEL+" -AER.SF.RH "+SOS_AER_RH
 
       b = subprocess.call("echo " + cmd + " > ./cmd ; cat runOS_template.ksh cmd > tmp.ksh; chmod +x tmp.ksh",shell=True) 
+      print ' ........................................................................................'
+      print ' WARNING compute : beta version with home version of SOS V5.1 allowing phi step of 0.5 deg'
+      print ' version available here : /home/did/RTC/SOS_V5.1; set RACINE and SOS_RACINE accordingly'
+      print ' ........................................................................................\n'
       print ' SOS command file ready : type ./tmp.ksh to run SOS \n'
       sys.exit(1)
 
