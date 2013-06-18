@@ -83,9 +83,6 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 		#ifdef SPHERIQUE
 		, Init* init
 		#endif
-		#ifdef TABRAND
-		, float*
-		#endif
 			       );
 
 

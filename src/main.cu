@@ -170,17 +170,6 @@ int main (int argc, char *argv[])
     GetElapsedTime(perfInitG);
 #endif
 
-	#ifdef TABRAND
-	// DEBUG Recuperations des nombres aleatoires du random en place
-	float tableauRand_H[100] = {0};
-	float* tableauRand_D;
-	if( cudaMalloc(&tableauRand_D, 100 * sizeof(float)) != cudaSuccess){
-		printf("ERREUR: Problème de cudaMalloc de tableauRand_D dans le main\n");
-		exit(1);
-	}
-	cudaMemset(tableauRand_D, 0, 100 * sizeof(float));
-	#endif
-	
 	
 	/** Vérification de l'existence ou non d'un fichier témoin **/
     verifierFichier();
@@ -330,9 +319,6 @@ int main (int argc, char *argv[])
 				#ifdef SPHERIQUE
 				, init_D
 				#endif
-				#ifdef TABRAND
-				, tableauRand_D
-				#endif
 							);
 		// Attend que tous les threads aient fini avant de faire autre chose
 // 		cudaThreadSynchronize();
@@ -429,30 +415,6 @@ cudaMemcpyDeviceToHost);
 					  );
 	
 	
-	#ifdef TABRAND
-	// DEBUG Recuperations et affichage des nombres aleatoires du random
-	cudaErreur = cudaMemcpy(tableauRand_H, tableauRand_D, 100 * sizeof(float), cudaMemcpyDeviceToHost);
-	if( cudaErreur != cudaSuccess ){
-		printf( "ERREUR: Problème de copie tableauRand_D dans le main\n");
-		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-		exit(1);
-	}
-
-
-	printf("\n=====RAND========================\n");
-	for(int i = 0; i < 10; i++)
-	{
-		printf("thread%d : ", i%5);
-		for(int j = 0; j < 10; j++)
-		{
-			printf("%f - ", tableauRand_H[i*10+j]);
-		}
-		printf("\n");
-	}
-	printf("==================================\n");
-	#endif
-	
-	
 #ifdef _PERF
         StartProcessing(perfCreateFinalTab);
 #endif
@@ -510,15 +472,6 @@ cudaMemcpyDeviceToHost);
 	free( tabPhotonsTotDown );
 
 	
-	#ifdef TABRAND
-	//DEBUG random
-	cudaErreur = cudaFree(tableauRand_D);
-	if( cudaErreur != cudaSuccess ){
-		printf( "ERREUR: Problème de free tableauRand_D dans le main\n");
-		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-		exit(1);
-	}
-	#endif
 #ifdef _PERF
         StopProcessing(perfFree);
         GetElapsedTime(perfFree);

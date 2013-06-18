@@ -75,9 +75,6 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 		#ifdef SPHERIQUE
 		, Init* init
 		#endif
-		#ifdef TABRAND
-		, float* tableauRand
-		#endif
 			       )
 {
 	// idx est l'indice du thread considéré
@@ -115,16 +112,6 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
         philox4x32_ctr_t etatThr = {{tab.etat[idx], 0xf00dcafe, 0xdeadbeef, 0xbeeff00d}};
         #endif
 
-	#ifdef TABRAND
-	// DEBUG Recuperation des nombres aleatoires generes par la fonction random utilisée
-	if(idx < 5)
-		if(tableauRand[50] == 0.f)
-		{
-			int k = 0;
-			if(tableauRand[0] != 0.f) k = 50;
-			for(int j = 0; j < 10; j++) tableauRand[k+idx*10+j] = RANDDEBUG;
-		}
-	#endif
 	
 	// Création de variable propres à chaque thread
 	unsigned long long nbPhotonsThr = 0; 	// Nombre de photons traités par le thread
