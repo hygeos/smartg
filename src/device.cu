@@ -124,11 +124,6 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 	ph.loc = NONE;	// Initialement le photon n'est nulle part, il doit être initialisé
 // 	float z;
 	
-	/** Mesure du temps d'execution **/
-	#ifdef TEMPS
-	clock_t start, stop;
-	float time;
-	#endif
 	
 	
 	/** Boucle de calcul **/   
@@ -138,26 +133,11 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 		// Si le photon est à NONE on l'initialise et on le met à la localisation correspondant à la simulaiton en cours
 		if(ph.loc == NONE){
 			
-			#ifdef TEMPS
-			if(idx==0){
-				start = clock();
-			}
-			
-			#endif
-			
 			initPhoton(&ph/*, &z*/
 				#ifdef SPHERIQUE
 				, tab, init
 				#endif
 					);
-
-			#ifdef TEMPS
-			if(idx==0){
-				stop = clock();
-				time = __fdividef((float) (stop-start),__int2float_rn(CLOCKS_PER_SEC));
-				printf("(1) Temps de initPhoton: %f\n", time);
-			}
-			#endif
 			
 		}
 		// Chaque block attend tous ses threads avant de continuer
@@ -171,12 +151,6 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 			#endif
 			){
 			
-			#ifdef TEMPS
-			if(idx==0){
-				start = clock();
-			}
-			#endif
-		
 			move(&ph
 				#ifndef SPHERIQUE
 				, tab.h, tab.pMol
@@ -193,13 +167,6 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 				#endif
 						);
 						
-			#ifdef TEMPS
-			if(idx==0){
-				stop = clock();
-				time = __fdividef((float) (stop-start),__int2float_rn(CLOCKS_PER_SEC));
-				printf("(2) Temps de move: %f\n", time);
-			}
-			#endif
 		}
 		// Chaque block attend tous ses threads avant de continuer
 		syncthreads();
@@ -211,12 +178,6 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 			#endif
 			){
 	
-			#ifdef TEMPS
-			if(idx==0){
-				start = clock();
-			}
-			#endif
-			
 			// Diffusion
 			scatter( &ph, tab.faer
 			#ifdef FLAGOCEAN
@@ -227,14 +188,6 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 			, &configThr
 			#endif
 				);
-				
-			#ifdef TEMPS
-			if(idx==0){
-				stop = clock();
-				time = __fdividef((float) (stop-start),__int2float_rn(CLOCKS_PER_SEC));
-				printf("(3) Temps de scatter: %f\n", time);
-			}
-			#endif
 
 		}
 		// Chaque block attend tous ses threads avant de continuer
@@ -433,11 +386,6 @@ __device__ void move(Photon* ph
 	double rsol1,rsol2;
 	#endif
 	
-	/** Mesure du temps d'execution **/
-	#ifdef TEMPS
-	clock_t start, stop;
-	float time;
-	#endif
 	
 	/** Tirage au sort de la profondeur optique à parcourir **/
 	/*  Tirage effectué lors de chaque appel de la fonction */
@@ -455,11 +403,6 @@ __device__ void move(Photon* ph
 
 
 	/** Calcul puis déduction de la couche du photon **/
-	#ifdef TEMPS
-	if(idx==0){
-		start = clock();
-	}
-	#endif
 	
 	if( ph->locPrec==NONE ){
 		/* Le photon vient de l'espace et rentre pour la première fois dans l'atmosphère
@@ -499,13 +442,6 @@ __device__ void move(Photon* ph
 			icompteur++;
 		}
 		
-		#ifdef TEMPS
-		if(idx==0){
-			stop = clock();
-			time = __fdividef((float) (stop-start),__int2float_rn(CLOCKS_PER_SEC));
-			printf("(2.1) Temps de move pour une 1ère intéraction: %f\n", time);
-		}
-		#endif
 	}
 
 
@@ -779,14 +715,6 @@ sinth= %20.19lf - sens=%d\n",\
 			#endif
 		
 		}// Fin while
-		
-		#ifdef TEMPS
-		if(idx==0){
-			stop = clock();
-			time = __fdividef((float) (stop-start),__int2float_rn(CLOCKS_PER_SEC));
-			printf("(2.2) Temps de move pour une intéraction quelconque: %f\n", time);
-		}
-		#endif
 
 	}// Fin de si photon provenant de l'atmosphere ou la surface
 

@@ -54,7 +54,6 @@ DFLAGS += -DRANDCUDA				# Utilisation du random CUDA (Fonction fournie par cuda)
 
 #============== Debogage ==============#
 DFLAGS += -DPROGRESSION # Calcul et affichage de la progression de la simulation
-# DFLAGS += -DTEMPS 	# Affichage du temps passé dans chaque fonctions pour un thread
 # DFLAGS += -DDEBUG 	# Ajout de tests intermédiaires utilisés lors du débugage
 ifeq ("$(PERFO_TIMER)","ON")
 DFLAGS += -D_PERF
