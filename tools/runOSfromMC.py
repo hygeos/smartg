@@ -99,7 +99,7 @@ def setup_axes3(fig, rect):
 #----------------------------------------------------------------------------
 # plot 2D 
 #----------------------------------------------------------------------------
-def plot_2D_parameter(fig, rect, theta , phi, data, Vdata, Vdatat=None, title=None, label=None, iphi0=-1, sub=None, method='pcolormesh') :
+def plot_2D_parameter(fig, rect, theta , phi, data, Vdata, Vdatat=None, title=None, label=None, iphi0=-1, sub=None, points=None, method='pcolormesh') :
 
     '''
     Contour and eventually transect of 2D parameter (theta,phi)
@@ -114,6 +114,7 @@ def plot_2D_parameter(fig, rect, theta , phi, data, Vdata, Vdatat=None, title=No
     lab : keyword of colorbar title (default no label)
     iphi0: keyword of the value of the azimut angle for the transect plot (default : iphi0 < 0, no transect)
     sub : keyword for the position of the transect plot (similar type as rect)
+    points : keyword for the data added to the transect coming from an additional txt file (array with phi, theta and data columns)
     method : keyword for choosing plotting method (contour/pcolormesh)
     '''
 
@@ -148,6 +149,17 @@ def plot_2D_parameter(fig, rect, theta , phi, data, Vdata, Vdatat=None, title=No
           ax.set_xlim(-90,90)
           ax.set_xticks(ticks)
           ax.grid=True
+          if points != None :
+              phi_txt = points[:,0]
+              theta_txt = points[:,1]
+              data_txt = points[:,2]
+              i=0
+
+              for p in phi_txt : 
+                  if p >=90 : sign=-1
+                  else : sign=1
+                  ax.plot(theta_txt[i]*sign,data_txt[i],'*', ms=7, alpha=0.7, mfc='red')
+                  i+=1
 
     if Vdatat != None :
         cb3=fig.colorbar(cax3,orientation='horizontal',ticks=Vdatat,extend='both')
@@ -170,11 +182,12 @@ def main():
         + '-S --ShowSOS : Plot SOS result (default MC hdf file)\n'
         + '-D --DiffSOS : Plot differences between MC and SOS result\n'
         + '-c --computeSOS : compute SOS result (default False: start from ./SOS_Up.txt and ./SOS_Down.txt files)\n'
-        + '-a --aerosol : aerosol model (mandatory if -c is chosen), should be U80 or M80\n'
+        + '-a --aerosol : aerosol model (mandatory if -c is chosen), should be U80 or M80 or 0 (forcing no aerosol)\n'
         + '-s --savefile : output graphics file name\n'
         + '-r --rmax : maximum reflectance for color scale\n'
         + '-p --percent : choose Polarization Ratio (default polarized reflectance) and set maximum PR for color scale\n'
         + '-t --transect : Add a transect below 2D plot for the closest azimuth to phi0 \n'
+        + '-P --points : optional filename containing data points to be added to the transect, format txt file with columns (phi theta I Q U)\n'
         + '-e --error : choose relative error instead of polarized reflectance and maximum error for color scale\n')
 
     parser.add_option('-d','--down',
@@ -200,7 +213,7 @@ def main():
     parser.add_option('-a', '--aerosol',
             dest='aerosol',
             type='string',
-            help='-a aerosol model (mandatory if -c is chosen), should be U80 or M80\n'
+            help='-a aerosol model (mandatory if -c is chosen), should be U80 or M80 or 0 (forcing no aerosol)\n'
             )
     parser.add_option('-r', '--rmax',
             type='float',
@@ -216,6 +229,10 @@ def main():
             dest='phi0',
             type='float',
             help = '-t --transect : Add a transect below 2D plot for the closest azimuth to phi0 \n'
+            )
+    parser.add_option('-P', '--points',
+            dest='points',
+            help = '-P --points : optional filename containing data points to be added to the transect, format txt file with columns (phi theta I Q U)\n'
             )
     parser.add_option('-e', '--error',
             dest='error',
@@ -418,7 +435,7 @@ def main():
     thisDir = out.rstrip()
 
     if options.compute == True : 
-      if (options.aerosol != 'U80') & (options.aerosol != 'M80') : 
+      if (options.aerosol != 'U80') & (options.aerosol != 'M80') & (options.aerosol != '0') : 
          parser.print_usage()
          exit(1)
       if options.aerosol == 'U80' :
@@ -429,6 +446,11 @@ def main():
          SOS_AER_MODEL = '2'
          SOS_AER_SF_MODEL = '3'
          SOS_AER_RH = '80.'
+      if options.aerosol == '0' :
+         SOS_AER_MODEL = '2'
+         SOS_AER_SF_MODEL = '3'
+         SOS_AER_RH = '80.'
+         TAUAER = '0.'
 
       #---------------------------------------------------------
       # lancement des SOS
@@ -471,34 +493,60 @@ def main():
     # Recuperation des SOS
     #---------------------------------------------------------
 
-    I_sos = np.zeros((NBPHI_cuda,NBTHETA_cuda),dtype=float)
-    Q_sos = np.zeros((NBPHI_cuda,NBTHETA_cuda),dtype=float)
-    U_sos = np.zeros((NBPHI_cuda,NBTHETA_cuda),dtype=float)
+    if (options.sos==True) | (options.diff==True):
+      I_sos = np.zeros((NBPHI_cuda,NBTHETA_cuda),dtype=float)
+      Q_sos = np.zeros((NBPHI_cuda,NBTHETA_cuda),dtype=float)
+      U_sos = np.zeros((NBPHI_cuda,NBTHETA_cuda),dtype=float)
 
 
-    if options.down == False :
-       fichier_sos = open(thisDir+"/SOS_Up.txt", "r")
-    else :
-       fichier_sos = open(thisDir+"/SOS_Down.txt", "r")
+      if options.down == False :
+         fichier_sos = open(thisDir+"/SOS_Up.txt", "r")
+      else :
+         fichier_sos = open(thisDir+"/SOS_Down.txt", "r")
 
-    data=np.loadtxt(fichier_sos,comments="#")
-    I_sos = data[:,2]
-    Q_sos = data[:,3]
-    U_sos = data[:,4] 
+      data=np.loadtxt(fichier_sos,comments="#")
+      I_sos = data[:,2]
+      Q_sos = data[:,3]
+      U_sos = data[:,4] 
 
-    # Pour les OS le Dphi lance est 2 fois plus petit que pour Cuda afin d'avoir des valeurs de Phi qui coincident
-    # De plus les 0S couvrent la gamme 0 - 360 et il nous faut uniquement une demi espace
-    # NPhi(OS) = 4 * Nphi(MC) + 1
-    phiAll = data[:,0].reshape(-1)
-    OK = np.where(( (phiAll.astype(int) % int(2*Dphi)) == int(Dphi) )  & (phiAll < 180) )
+      # Pour les OS le Dphi lance est 2 fois plus petit que pour Cuda afin d'avoir des valeurs de Phi qui coincident
+      # De plus les 0S couvrent la gamme 0 - 360 et il nous faut uniquement une demi espace
+      # NPhi(OS) = 4 * Nphi(MC) + 1
+      phiAll = data[:,0].reshape(-1)
+      OK = np.where(( (phiAll.astype(int) % int(2*Dphi)) == int(Dphi) )  & (phiAll < 180) )
 
-    I_sos = I_sos[OK].reshape((-1,NBTHETA_cuda))  
-    Q_sos = Q_sos[OK].reshape((-1,NBTHETA_cuda)) 
-    U_sos = U_sos[OK].reshape((-1,NBTHETA_cuda))
-    # retournement de Phi, convention OS et normalisation par mus
-    I_sos = I_sos[::-1,:]/mus
-    Q_sos = Q_sos[::-1,:]/mus
-    U_sos = U_sos[::-1,:]/mus
+      I_sos = I_sos[OK].reshape((-1,NBTHETA_cuda))  
+      Q_sos = Q_sos[OK].reshape((-1,NBTHETA_cuda)) 
+      U_sos = U_sos[OK].reshape((-1,NBTHETA_cuda))
+      # retournement de Phi, convention OS et normalisation par mus
+      I_sos = I_sos[::-1,:]/mus
+      Q_sos = Q_sos[::-1,:]/mus
+      U_sos = U_sos[::-1,:]/mus
+
+    #---------------------------------------------------------
+    # Recuperation d eventuels points de simulation venant d un fichier txt (comme libradtran par exemple)
+    ###
+    # pour l'instant un transect seulement
+    # format: phi theta I Q U
+    # pas de difference possible
+    ###
+    #---------------------------------------------------------
+
+    if (options.points != None) :
+      fichier_txt = open(options.points, "r")
+      data=np.loadtxt(fichier_txt,comments="#")
+      #data=np.array(data)
+      ang = data[:,0:2]
+      I_txt = data[:,2].reshape((-1,1))
+      Q_txt = data[:,3].reshape((-1,1))
+      U_txt = data[:,4].reshape((-1,1)) 
+      IP_txt = np.sqrt(Q_txt*Q_txt + U_txt*U_txt)
+      PR_txt = IP_txt/I_txt * 100
+      I_txt = np.concatenate((ang,I_txt),axis=1)
+      Q_txt = np.concatenate((ang,Q_txt),axis=1)
+      U_txt = np.concatenate((ang,U_txt),axis=1)
+      IP_txt = np.concatenate((ang,IP_txt),axis=1)
+      PR_txt = np.concatenate((ang,PR_txt),axis=1)
 
     ##########################################################
     ##              CREATION DES GRAPHIQUES 2D              ##
@@ -565,6 +613,7 @@ def main():
     if options.phi0 != None :
         rect = [421,422,425,426]
         iphi0 = (np.abs(phi-options.phi0)).argmin()
+
     else:
         rect = [221,222,223,224]
         iphi0 = -1
@@ -573,20 +622,23 @@ def main():
     if (len(args)==2) | (options.diff==True):
          plot_2D_parameter(fig, rect[0], theta , phi, data_cudaI-data_cudaI2, VI, Vdatat=VIt,title='I1-I2', iphi0=iphi0, sub=sub[0])
     else:
-         plot_2D_parameter(fig, rect[0], theta , phi, data_cudaI, VI,  Vdatat=VIt,title='I', iphi0=iphi0, sub=sub[0])
+        if options.points != None : plot_2D_parameter(fig, rect[0], theta , phi, data_cudaI, VI,  Vdatat=VIt,title='I', iphi0=iphi0, sub=sub[0], points=I_txt)
+        else : plot_2D_parameter(fig, rect[0], theta , phi, data_cudaI, VI,  Vdatat=VIt,title='I', iphi0=iphi0, sub=sub[0])
 
 
     # 2nd quarter Q
     if (len(args)==2) | (options.diff==True):
          plot_2D_parameter(fig, rect[1], theta , phi, data_cudaQ-data_cudaQ2, VQ,  Vdatat=VQt,title='Q1-Q2', iphi0=iphi0, sub=sub[1])
     else:
-         plot_2D_parameter(fig, rect[1], theta , phi, data_cudaQ,  VQ, Vdatat=VQt,  title='Q', iphi0=iphi0, sub=sub[1])
+        if options.points != None : plot_2D_parameter(fig, rect[1], theta , phi, data_cudaQ,  VQ, Vdatat=VQt,  title='Q', iphi0=iphi0, sub=sub[1], points=Q_txt)
+        else :  plot_2D_parameter(fig, rect[1], theta , phi, data_cudaQ,  VQ, Vdatat=VQt,  title='Q', iphi0=iphi0, sub=sub[1])
 
     # 3rd quarter U
     if (len(args)==2) | (options.diff==True):
          plot_2D_parameter(fig, rect[2], theta , phi, data_cudaU-data_cudaU2, VU,  Vdatat=VUt,title='U1-U2', label='Reflectance', iphi0=iphi0, sub=sub[2])
     else:
-         plot_2D_parameter(fig, rect[2], theta , phi, data_cudaU,  VU, Vdatat=VUt,  title='U', label='Reflectance', iphi0=iphi0, sub=sub[2])
+        if options.points != None : plot_2D_parameter(fig, rect[2], theta , phi, data_cudaU,  VU, Vdatat=VUt,  title='U', label='Reflectance', iphi0=iphi0, sub=sub[2], points=U_txt)
+        else : plot_2D_parameter(fig, rect[2], theta , phi, data_cudaU,  VU, Vdatat=VUt,  title='U', label='Reflectance', iphi0=iphi0, sub=sub[2])
 
     # 4th quarter
     # Polarization ratio
@@ -594,7 +646,8 @@ def main():
       if (len(args)==2) | (options.diff==True):
          plot_2D_parameter(fig, rect[3], theta , phi, data_cudaPR-data_cudaPR2, VPR,  Vdatat=VPRt,title='P1-P2[%]', label='Polarization Ratio', iphi0=iphi0, sub=sub[3])
       else:
-         plot_2D_parameter(fig, rect[3], theta , phi, data_cudaPR, VPR,  Vdatat=VPRt,title='P[%]', label='Polarization Ratio', iphi0=iphi0, sub=sub[3])
+         if options.points != None : plot_2D_parameter(fig, rect[3], theta , phi, data_cudaPR, VPR,  Vdatat=VPRt,title='P[%]', label='Polarization Ratio', iphi0=iphi0, sub=sub[3], points=PR_txt)
+         else : plot_2D_parameter(fig, rect[3], theta , phi, data_cudaPR, VPR,  Vdatat=VPRt,title='P[%]', label='Polarization Ratio', iphi0=iphi0, sub=sub[3])
 
     # or Error
     if options.percent == None and options.error >= 0.:
@@ -605,7 +658,8 @@ def main():
       if (len(args)==2) | (options.diff==True):
          plot_2D_parameter(fig, rect[3], theta , phi, data_cudaIP-data_cudaIP2, VIP,  Vdatat=VIPt,title='IP1-IP2', label='Polarized Reflectance', iphi0=iphi0, sub=sub[3])
       else:
-         plot_2D_parameter(fig, rect[3], theta , phi, data_cudaIP, VIP, Vdatat=VIPt,title='IP', label='Polarized Reflectance', iphi0=iphi0, sub=sub[3])
+         if options.points != None : plot_2D_parameter(fig, rect[3], theta , phi, data_cudaIP, VIP, Vdatat=VIPt,title='IP', label='Polarized Reflectance', iphi0=iphi0, sub=sub[3], points=IP_txt)
+         else : plot_2D_parameter(fig, rect[3], theta , phi, data_cudaIP, VIP, Vdatat=VIPt,title='IP', label='Polarized Reflectance', iphi0=iphi0, sub=sub[3])
 
 
     if options.filename == None:
