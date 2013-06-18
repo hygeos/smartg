@@ -140,46 +140,55 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 					);
 			
 		}
-		// Chaque block attend tous ses threads avant de continuer
 		syncthreads();
 		
 		
-		// Si le photon est à ATMOS on le fait avancer jusqu'à SURFACE, ou SPACE, ou ATMOS s'il subit une diffusion
+        //
+		// Deplacement
+        //
+        // -> Si OCEAN ou ATMOS
 		if( (ph.loc == ATMOS)
 			#ifdef FLAGOCEAN
 			|| (ph.loc == OCEAN)
 			#endif
 			){
+
+            #ifdef SPHERIQUE
+            if (ph.loc == ATMOS)
+                move_sp(&ph, tab, init
+                        , &etatThr
+                        #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
+                        , &configThr
+                        #endif
+                                );
+            else 
+            #endif
+                move_pp(&ph, tab.h, tab.pMol
+                        #ifdef OZONE
+                        , tab.abs
+                        #endif
+                        , &etatThr
+                        #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
+                        , &configThr
+                        #endif
+                                );
 			
-			move(&ph
-				#ifndef SPHERIQUE
-				, tab.h, tab.pMol
-				#endif
-                #if !defined(SPHERIQUE) && defined(OZONE)
-                , tab.abs
-                #endif
-				#ifdef SPHERIQUE
-				, tab, init
-				#endif
-				, &etatThr
-				#if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
-				, &configThr
-				#endif
-						);
 						
 		}
-		// Chaque block attend tous ses threads avant de continuer
 		syncthreads();
+
 		
-		// Si le photon est encore à ATMOS il subit une diffusion et reste dans ATMOS
+        //
+		// Diffusion
+        //
+        // -> dans ATMOS ou OCEAN
 		if( (ph.loc == ATMOS)
 			#ifdef FLAGOCEAN
 			|| (ph.loc == OCEAN)
 			#endif
 			){
 	
-			// Diffusion
-			scatter( &ph, tab.faer
+			scatter(&ph, tab.faer
 			#ifdef FLAGOCEAN
 			, tab.foce
 			#endif
@@ -190,7 +199,6 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 				);
 
 		}
-		// Chaque block attend tous ses threads avant de continuer
 		syncthreads();
 
         countPhoton(&ph, tab, &nbPhotonsThr
@@ -200,7 +208,10 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
                     );
         syncthreads();
 		
-		// Si le photon est à SURFACE
+
+        //
+		// Surface
+        //
 		if(ph.loc == SURFACE){
 			
 			if( DIOPTREd!=3 )
@@ -217,11 +228,9 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 					#endif
 						);
 		}
-		// Chaque block attend tous ses threads avant de continuer
 		syncthreads();
 		
-		// Si le photon est dans SPACE ou ABSORBED on récupère ses infos et on le remet à NONE
-		
+
 		if(ph.loc == ABSORBED){
 			ph.loc = NONE;
 			nbPhotonsThr++;
@@ -229,8 +238,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 		}
 		syncthreads();
 		
-
-	}// Fin boucle for
+	}
 	
 
 	// Après la boucle on rassemble les nombres de photons traités par chaque thread
@@ -277,39 +285,64 @@ __device__ void initPhoton(Photon* ph/*, float* z*/
 	ph->uy = 0.F;
 	ph->uz = ph->vx;
 	
-	/** Séparation du code pour atmosphère sphérique ou parallèle **/
-	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
-	ph->locPrec=NONE;
+
+    #ifdef SPHERIQUE
+    ph->locPrec = NONE;
+    #endif
+
 	
-	// 	Paramètres initiaux calculés dans impactInit - host.cu
-	ph->x = init->x0;
-	ph->y = init->y0;
-	ph->z = init->z0;
-	ph->couche=0;	// Sommet de l'atmosphère
-	ph->rayon = sqrtf(ph->x*ph->x + ph->y*ph->y + ph->z*ph->z );
-	#endif
-	
-	#ifndef SPHERIQUE	/* Code spécifique à une atmosphère en plan parallèle */
-//	ph->z = TAUATMd;
-	ph->z = TAUATMd;
-	#endif
-	
-	// Le photon est initialement dans l'atmosphère, et tau peut être vu comme sa hauteur par rapport au sol
-	if( SIMd==-1 || SIMd==0 ){
+    if ((SIMd == -2) || (SIMd == 1) || (SIMd == 2)) {
+
+        //
+        // Initialisation du photon au sommet de l'atmosphère
+        //
+
+        #ifdef SPHERIQUE
+
+        // 	Paramètres initiaux calculés dans impactInit - host.cu
+        ph->x = init->x0;
+        ph->y = init->y0;
+        ph->z = init->z0;
+        ph->couche=0;	// Sommet de l'atmosphère
+        ph->rayon = sqrtf(ph->x*ph->x + ph->y*ph->y + ph->z*ph->z );
+        #endif
+
+        ph->tau = TAUATMd;
+        ph->loc = ATMOS;
+
+    } else if ((SIMd == -1) || (SIMd == 0)) {
+        
+        //
+        // Initialisation du photon à la surface
+        //
+
+        #ifdef SPHERIQUE
+        ph->x = 0.;
+        ph->y = 0.;
+		ph->z = RTER;
+        #endif
+
+		ph->tau = 0.f;
 		ph->loc = SURFACE;
-		#ifndef SPHERIQUE
-		ph->z = 0.f;
-		#endif
-	}
-	else
-		ph->loc = ATMOS;
-	
+
 	#ifdef FLAGOCEAN
-	if( SIMd==3 ){
-		ph->loc=OCEAN;
-	}
-	#endif
+    } else if (SIMd == 3) {
+
+        //
+        // Initialisation du photon dans l'océan
+        //
+        #ifdef SPHERIQUE
+        ph->x = 0.;
+        ph->y = 0.;
+        ph->z = RTER;
+        #endif
+
+        ph->tau = 0.;
+        ph->loc = OCEAN;
+    #endif
+    } else ph->loc = NONE;
 	
+
 	ph->weight = WEIGHTINIT;
 	
 	// Initialisation des paramètres de stokes du photon
@@ -320,39 +353,24 @@ __device__ void initPhoton(Photon* ph/*, float* z*/
 }
 
 
-/* move
-* Effectue le déplacement du photon dans l'atmosphère
-* Pour l'atmosphère sphèrique, l'algorithme est basé sur la formule de pythagore généralisée.
-* Modification des coordonnées position du photon
-*/
-__device__ void move(Photon* ph
-		#ifndef SPHERIQUE
-		, float* h, float* pMol
-		#endif
-        #if !defined(SPHERIQUE) && defined(OZONE)
-        , float *abs
-        #endif
-		#ifdef SPHERIQUE
-		, Tableaux tab, Init* init
-		#endif
+
+#ifdef SPHERIQUE
+__device__ void move_sp(Photon* ph, Tableaux tab, Init* init
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif
 		#if defined(RANDCUDA) || defined (RANDCURANDSOBOL32) || defined (RANDCURANDSCRAMBLEDSOBOL32)
                 , curandSTATE* etatThr
-                #endif
+        #endif
 		#ifdef RANDMT
 		, EtatMT* etatThr, ConfigMT* configThr
 		#endif
 		#ifdef RANDPHILOX4x32_7
                 , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr
 		#endif
-		    )
-{
-	int icouche;
-	
-	/** Séparation du code pour atmosphère sphérique ou parallèle **/
-	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
+		    ) {
+
+
 	float rra;
 	float rsolfi = 0.f;
 	float delta;
@@ -381,6 +399,7 @@ __device__ void move(Photon* ph
 	int flagSortie = 0;		// Indique si le photon va sortir sans interaction dans l'atmosphère
 	
 	float rdist;
+    int icouche;
 	
 	#ifdef DEBUG
 	double rsol1,rsol2;
@@ -805,99 +824,89 @@ rsolfi=%15.12lf - tauRdm= %lf - hph_p= %15.12lf - hph= %15.12lf - zph_p= %15.12l
 	ph->couche = icouche;
 	ph->rayon = rayon;
 	ph->locPrec=ATMOS;
-	
-	// On sort maintenant de la fonction et comme le photon reste dans ATMOS, le kernel appelle scatter()
 
-	#endif	/* Fin de la partie atmosphère sphérique */
+    
+	ph->prop_aer = 1.f - tab.pMol[ph->couche];
 
-
-	#ifndef SPHERIQUE	/* Code spécifique à une atmosphère parallèle */
-	float tauBis;
-	
-	#ifndef FLAGOCEAN
-	ph->z += -logf(1.f - RAND)*ph->vz;
-	#endif
-	
-	#ifdef FLAGOCEAN
-	ph->z += -logf(1.f - RAND)*ph->vz;
-	if( ph->loc!=ATMOS ){
-		if( ph->z < 0.f ){
-			ph->loc = OCEAN;
-		}
-		else{
-			ph->z = 0.F;
-			ph->loc = SURFACE;
-			if( SIMd==3 ){
-				ph->loc=SPACE;
-			}
-		}
-			
-		
-		return;
-	}
-	#endif
-
-	// Si tau<0 le photon atteint la surface
-	if(ph->z < 0.F){
-		ph->loc = SURFACE;
-		ph->z = 0.F;
-		return;
-	}
-	// Si tau>TAURAY le photon atteint l'espace
-	else if( ph->z > TAUATMd ){
-//	else if( ph->z > h[NATMd] ){
-		ph->loc = SPACE;
-		return;
-	}
-	
-	// Sinon il reste dans l'atmosphère, et va être traité par scatter
-	
-	// Calcul de la couche dans laquelle se trouve le photon
-	tauBis = TAUATMd-ph->z;
-//	tauBis = h[NATMd]-ph->z;
-	icouche = 1;
-	
-	while( (h[icouche] < (tauBis))&&(icouche<NATMd) ){
-		icouche++;
-	}
-	
-	ph->couche = icouche;
-	#endif
-	
-	/** Interpolation linéaire pour connaitre la proportion d'aérosols à l'endroit où se situe le photon **/
-	icouche = ph->couche;
-	
-	// Calcul sans interpolation
-	#ifdef SPHERIQUE
-	ph->prop_aer = 1.f - tab.pMol[icouche];
+    #ifdef OZONE
+    ph->weight = ph->weight * (1.f - tab.abs[ph->couche]);
     #endif
-    #if defined(SPHERIQUE) && defined(OZONE)
-    ph->weight = ph->weight * (1.f - tab.abs[icouche]);
-	#endif
-	#ifndef SPHERIQUE
-	ph->prop_aer = 1.f - pMol[icouche];
-    #endif
-    #if !defined(SPHERIQUE) && defined(OZONE)
-    ph->weight = ph->weight * (1.f - abs[icouche]);
-	#endif
-	// Calcul avec interpolation linéaire
-// 	if(icouche==0){
-//    		printf("ph->couche=0 pour le calcul de proportion d'aérosols\n");
-//    		ph->prop_aer = 1.f - pMol[icouche];
-//    	}
-// 	else{
-// 		#ifdef SPHERIQUE
-// 		rra = __fdividef( tab.pMol[icouche] - tab.pMol[icouche-1] , tab.h[icouche] - tab.h[icouche-1] );
-// 		ph->prop_aer = 1.f - ( rra*(ph->rayon - RTER - tab.h[icouche]) + tab.pMol[icouche] );
-// 		#endif
-// 		#ifndef SPHERIQUE
-// 		rra = __fdividef( pMol[icouche] - pMol[icouche-1] , h[icouche] - h[icouche-1] );
-// 		ph->prop_aer = 1.f - ( rra*(tauBis - h[icouche]) + pMol[icouche] );
-// 		#endif
-// 	}
-	
-	
+
 }
+#endif
+
+
+__device__ void move_pp(Photon* ph, float* h, float* pMol
+        #ifdef OZONE
+        , float *abs
+        #endif
+		#ifdef RANDMWC
+		, unsigned long long* etatThr, unsigned int* configThr
+		#endif
+		#if defined(RANDCUDA) || defined (RANDCURANDSOBOL32) || defined (RANDCURANDSCRAMBLEDSOBOL32)
+                , curandSTATE* etatThr
+                #endif
+		#ifdef RANDMT
+		, EtatMT* etatThr, ConfigMT* configThr
+		#endif
+		#ifdef RANDPHILOX4x32_7
+                , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr
+		#endif
+		    ) {
+
+	ph->tau += -logf(1.f - RAND)*ph->vz;
+
+	#ifdef FLAGOCEAN
+	if ((ph->loc == OCEAN) && (ph->tau >= 0)) {
+
+        ph->tau = 0.F;
+        ph->loc = SURFACE;
+        if (SIMd == 3){
+            ph->loc = SPACE;
+        }
+	}
+	#endif
+
+    #ifndef SPHERIQUE
+	float tauBis;
+    int icouche;
+	
+    if (ph->loc == ATMOS) {
+
+        // Si tau<0 le photon atteint la surface
+        if(ph->tau < 0.F){
+            ph->loc = SURFACE;
+            ph->tau = 0.F;
+            return;
+        }
+        // Si tau>TAURAY le photon atteint l'espace
+        else if( ph->tau > TAUATMd ){
+            ph->loc = SPACE;
+            return;
+        }
+        
+        // Sinon il reste dans l'atmosphère, et va subit une nouvelle diffusion
+        
+        // Calcul de la couche dans laquelle se trouve le photon
+        tauBis = TAUATMd - ph->tau;
+        icouche = 1;
+        
+        while ((h[icouche] < (tauBis)) && (icouche < NATMd)) {
+            icouche++;
+        }
+        
+        ph->couche = icouche;
+
+        ph->prop_aer = 1.f - pMol[ph->couche];
+
+        #ifdef OZONE
+        ph->weight = ph->weight * (1.f - abs[ph->couche]);
+        #endif
+    }
+    #endif
+
+}
+
 
 
 /* scatter
@@ -930,7 +939,7 @@ __device__ void scatter( Photon* ph, float* faer
 	sPsi = __sinf(psi);		//sinPsiPhoton
 	
 	
-	// Modification des nombres de Stokes
+	// Rotation des paramètres de stokes
     rotateStokes(ph->stokes1, ph->stokes2, ph->stokes3, psi,
             &ph->stokes1, &ph->stokes2, &ph->stokes3);
 	
@@ -1005,7 +1014,7 @@ __device__ void scatter( Photon* ph, float* faer
 		zang = RAND*(NFOCEd-2);
 		iang = __float2int_rd(zang);
 		zang = zang - iang;
-		/* L'accès à foce[x][y] se fait par foce[y*5+x] */
+
 		theta = foce[iang*5+4]+ zang*( foce[(iang+1)*5+4]-foce[iang*5+4] );
 		
 		cTh = __cosf(theta);
@@ -1944,11 +1953,11 @@ void initConstantesDevice()
 	
 	float GAMAbis = DEPO / (2.F-DEPO);
 	cudaMemcpyToSymbol(GAMAd, &GAMAbis, sizeof(float));
-	
-	#ifndef SPHERIQUE
-//	float TAUATM = TAURAY+TAUAER;
+
 	cudaMemcpyToSymbol(TAUATMd, &TAUATM, sizeof(float));
 	
+	#ifndef SPHERIQUE
+
 	float TAUMAX = TAUATM / CTHSbis; //tau initial du photon
 	cudaMemcpyToSymbol(TAUMAXd, &TAUMAX, sizeof(float));
 	#endif

@@ -77,6 +77,7 @@ typedef int CrMCCUDA;
 //0.017453293
 
 
+
 /* Localisation du photon */
 #define SPACE		0
 #define ATMOS		1
@@ -215,16 +216,19 @@ typedef struct __align__(16)
 	int couche;
 	float prop_aer;		// Proportion d'aérosols par rapport aux molécules à l'endroit où se situe le photon
 	
-	float z;	// En plan parallèle, z représente le tau parcouru
+
+	float tau;	// localisation en epaisseur optique
+                // atmosphère: valeurs positives
+                // océan: valeurs négatives
 	
 	
-	/** Séparation du code pour atmosphère sphérique ou parallèle **/
-	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
+	#ifdef SPHERIQUE
 	int locPrec;
 	
 	// Position cartésienne du photon
 	float x;
 	float y;
+	float z;
 
 	float rayon;
 	float taumax;

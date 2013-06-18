@@ -25,8 +25,8 @@ __device__ __constant__ float THSDEGd;
 __device__ __constant__ float LAMBDAd;
 __device__ __constant__ float TAURAYd;
 __device__ __constant__ float TAUAERd;
-#ifndef SPHERIQUE
 __device__ __constant__ float TAUATMd;
+#ifndef SPHERIQUE
 __device__ __constant__ float TAUMAXd;	//tau initial du photon (Host)
 #endif
 __device__ __constant__ float W0AERd;
@@ -100,21 +100,30 @@ __device__ void initPhoton(Photon* ph/*, float* z*/
 		    );
 
 
-/* move
-* Effectue le déplacement du photon dans l'atmosphère
-* Pour l'atmosphère sphèrique, l'algorithme est basé sur la formule de pythagore généralisé
-* Modification des coordonnées position du photon
-*/
-__device__ void move(Photon*
-		#ifndef SPHERIQUE
-		, float* h, float* pMol
+// move, version sphérique
+#ifdef SPHERIQUE
+__device__ void move_sp(Photon*, Tableaux tab, Init* init
+		#ifdef RANDMWC
+		, unsigned long long*, unsigned int*
 		#endif
-        #if !defined(SPHERIQUE) && defined(OZONE)
+		#if defined(RANDCUDA) || defined (RANDCURANDSOBOL32) || defined (RANDCURANDSCRAMBLEDSOBOL32)
+                , curandSTATE* etatThr
+                #endif
+		#ifdef RANDMT
+		, EtatMT*, ConfigMT*
+                #endif
+                #ifdef RANDPHILOX4x32_7
+                , philox4x32_ctr_t*, philox4x32_key_t*
+                #endif
+		    );
+#endif
+
+
+// move, version plan parallèle
+__device__ void move_pp(Photon*, float* h, float* pMol
+        #ifdef OZONE
         , float *abs
         #endif
-		#ifdef SPHERIQUE
-		, Tableaux tab, Init* init
-		#endif
 		#ifdef RANDMWC
 		, unsigned long long*, unsigned int*
 		#endif
