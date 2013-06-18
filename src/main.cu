@@ -254,18 +254,6 @@ int main (int argc, char *argv[])
 	lireHDFTemoin(var_H, var_D, &nbPhotonsTot, tabPhotonsTot, tabPhotonsTotDown, &tempsPrec);
 	
 	
-	#ifdef TRAJET
-	// DEBUG : Variables permettant de récupérer le début du trajet d'un photon
-	Evnt evnt_H[NBTRAJET];
-	Evnt* evnt_D;
-	if( cudaMalloc(&evnt_D, NBTRAJET* sizeof(Evnt)) != cudaSuccess){
-		printf("ERREUR: Problème de cudaMalloc de evnt_D dans le main\n");
-		exit(1);
-	}
-
-	initEvnt(evnt_H, evnt_D);
-	#endif
-	
 	/** Organisation des threads en blocks de threads et en grids de blocks **/
 	dim3 blockSize(XBLOCK,YBLOCK);
 	dim3 gridSize(XGRID,YGRID);
@@ -344,9 +332,6 @@ int main (int argc, char *argv[])
 				#endif
 				#ifdef TABRAND
 				, tableauRand_D
-				#endif
-				#ifdef TRAJET
-				, evnt_D //récupération d'un trajet de photons
 				#endif
 							);
 		// Attend que tous les threads aient fini avant de faire autre chose
@@ -488,19 +473,6 @@ cudaMemcpyDeviceToHost);
 #endif
 	printf(" Fin de l'execution du programme. Resultats stockes dans %s\n",PATHRESULTATSHDF);
 	
-	#ifdef TRAJET
-	/** Affichage du trajet du photon **/
-	// Récupération des variables envoyées dans le kernel
-	cudaErreur = cudaMemcpy(evnt_H, evnt_D, NBTRAJET * sizeof(Evnt), cudaMemcpyDeviceToHost);
-	if( cudaErreur != cudaSuccess ){
-		printf( "ERREUR: Problème de copie evnt_D dans le main\n");
-		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-		exit(1);
-	}
-	
-	// Affichage du trajet du premier thread
-	afficheTrajet(evnt_H);
-	#endif
 
 #ifdef _PERF
         StartProcessing(perfFree);
@@ -537,15 +509,6 @@ cudaMemcpyDeviceToHost);
 	free( tabPhotonsTot );
 	free( tabPhotonsTotDown );
 
-	// Libération des variables qui récupèrent le trajet d'un photon
-	#ifdef TRAJET
-	cudaErreur = cudaFree(evnt_D);
-	if( cudaErreur != cudaSuccess ){
-		printf( "ERREUR: Problème de free de evnt_D dans le main\n");
-		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-		exit(1);
-	}
-	#endif
 	
 	#ifdef TABRAND
 	//DEBUG random

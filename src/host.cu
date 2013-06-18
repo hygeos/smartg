@@ -2115,50 +2115,6 @@ void afficheProgress(unsigned long long nbPhotonsTot, Variables* var, double tem
 }
 
 
-#ifdef TRAJET
-/* initEvnt
-* Initialisation des variables à envoyer dans le kernel pour récupérer le trajet d'un photon
-*/
-void initEvnt(Evnt* evnt_H, Evnt* evnt_D)
-{
-	for(int i = 0; i < NBTRAJET; i++) evnt_H[i].action = 0;
-	cudaError_t erreur = cudaMemcpy(evnt_D, evnt_H, NBTRAJET * sizeof(Evnt), cudaMemcpyHostToDevice);
-	if( erreur != cudaSuccess ){
-		printf( "ERREUR: Problème de copie evnt_H dans initEvnt\n");
-		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-		exit(1);
-	}
-}
-
-
-/* afficheTrajet
-* Fonction qui affiche le début du trajet du premier thread
-*/
-void afficheTrajet(Evnt* evnt_H)
-{
-	printf("\nTrajet d'un thread :\n");
-	for(int i = 0; i < NBTRAJET; i++)
-	{
-		if(evnt_H[i].action == 1)
-			printf("init : ");
-		else if(evnt_H[i].action == 2)
-			printf("move : ");
-		else if(evnt_H[i].action == 3)
-			printf("scat : ");
-		else if(evnt_H[i].action == 4)
-			printf("surf : ");
-		else if(evnt_H[i].action != 5)
-		{
-			printf("\nERREUR : host afficheTrajet: Aucun trajet a afficher\n");
-			return;
-		}
-		else printf("exit : ");
-		printf("tau=%10.9f ", evnt_H[i].tau);
-		printf("poids=%10.9f", evnt_H[i].poids);
-		printf("\n");
-	}
-}
-#endif
 
 
 /**********************************************************

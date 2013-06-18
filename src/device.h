@@ -86,9 +86,6 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 		#ifdef TABRAND
 		, float*
 		#endif
-		#ifdef TRAJET
-		, Evnt*
-		#endif
 			       );
 
 
@@ -102,9 +99,6 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 __device__ void initPhoton(Photon* ph/*, float* z*/
 		#ifdef SPHERIQUE
 		, Tableaux tab, Init* init
-		#endif
-		#ifdef TRAJET
-		, int, Evnt*
 		#endif
 		    );
 
@@ -136,9 +130,6 @@ __device__ void move(Photon*
                 #ifdef RANDPHILOX4x32_7
                 , philox4x32_ctr_t*, philox4x32_key_t*
                 #endif
-		#ifdef TRAJET
-		, int, Evnt*
-		#endif
 		    );
 
 
@@ -162,9 +153,6 @@ __device__ void scatter(Photon* photon, float* faer
 		#ifdef RANDPHILOX4x32_7
                 , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr
 		#endif
-		#ifdef TRAJET
-		, int idx, Evnt* evnt
-		#endif
 		);
 
 
@@ -185,9 +173,6 @@ __device__ void surfaceAgitee(Photon*
 		#ifdef RANDPHILOX4x32_7
                 , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr
 		#endif
-		#ifdef TRAJET
-		, int, Evnt*
-		#endif
 		      );
 
 
@@ -207,9 +192,6 @@ __device__ void surfaceLambertienne(Photon* photon
 		#ifdef RANDPHILOX4x32_7
                 , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr
 		#endif
-		#ifdef TRAJET
-		, int idx, Evnt* evnt
-		#endif
 		);
 
 
@@ -219,9 +201,6 @@ __device__ void surfaceLambertienne(Photon* photon
 __device__ void countPhoton(Photon* , Tableaux, unsigned long long*
 		#ifdef PROGRESSION
 		, unsigned int*, Variables*
-		#endif
-		#ifdef TRAJET
-		, int, Evnt*
 		#endif
 		    );
 

@@ -179,19 +179,6 @@ void afficheProgress(unsigned long long, Variables*, double
 		);
 
 
-#ifdef TRAJET
-/* initEvnt
-* Initialisation des variables à envoyer dans le kernel pour récupérer le trajet d'un photon
-*/
-void initEvnt(Evnt*, Evnt*);
-
-
-/* afficheTrajet
-* Fonction qui affiche le début du trajet du premier thread
-*/
-void afficheTrajet(Evnt*);
-#endif
-
 
 /**********************************************************
 *	> Calcul pour sauvegarde des résultats finaux

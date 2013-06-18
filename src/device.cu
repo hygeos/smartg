@@ -78,9 +78,6 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 		#ifdef TABRAND
 		, float* tableauRand
 		#endif
-		#ifdef TRAJET
-		, Evnt* evnt
-		#endif
 			       )
 {
 	// idx est l'indice du thread considéré
@@ -165,9 +162,6 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 				#ifdef SPHERIQUE
 				, tab, init
 				#endif
-				#ifdef TRAJET
-				, idx, evnt
-				#endif
 					);
 
 			#ifdef TEMPS
@@ -210,9 +204,6 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 				#if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
 				, &configThr
 				#endif
-				#ifdef TRAJET
-				, idx, evnt
-				#endif
 						);
 						
 			#ifdef TEMPS
@@ -248,9 +239,6 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 			#if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
 			, &configThr
 			#endif
-			#ifdef TRAJET
-			, idx, evnt
-			#endif
 				);
 				
 			#ifdef TEMPS
@@ -269,9 +257,6 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
                     #ifdef PROGRESSION
                     , &nbPhotonsSorThr, var
                     #endif
-                    #ifdef TRAJET
-                    , idx, evnt
-                    #endif
                     );
         syncthreads();
 		
@@ -283,18 +268,12 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 					#if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
 					, &configThr
 					#endif
-					#ifdef TRAJET
-					, idx, evnt
-					#endif
 						);
 						
 			else
 				surfaceLambertienne(&ph, &etatThr
                                         #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
 					, &configThr
-					#endif
-					#ifdef TRAJET
-					, idx, evnt
 					#endif
 						);
 		}
@@ -345,9 +324,6 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 __device__ void initPhoton(Photon* ph/*, float* z*/
 		#ifdef SPHERIQUE
 		, Tableaux tab, Init* init
-		#endif
-		#ifdef TRAJET
-		, int idx, Evnt* evnt
 		#endif
 		    )
 {
@@ -401,22 +377,6 @@ __device__ void initPhoton(Photon* ph/*, float* z*/
 	ph->stokes2 = 0.5F;
 	ph->stokes3 = 0.F;
 
-	
-	#ifdef TRAJET
-	// Récupération d'informations sur le premier photon traité
-	if(idx == 0)
-	{
-		int i = 0;
-		// On cherche la première action vide du tableau
-		while(evnt[i].action != 0 && i<NBTRAJET-1) i++;
-		// Et on remplit la première case vide des tableaux (tableaux de 20 cases)
-		// "1"représente l'événement "initialisation" du photon
-		evnt[i].action = 1;
-		// On récupère le tau et le poids du photon
-		evnt[i].poids = ph->weight;
-		evnt[i].tau = ph->z;
-	}
-	#endif
 }
 
 
@@ -446,9 +406,6 @@ __device__ void move(Photon* ph
 		#endif
 		#ifdef RANDPHILOX4x32_7
                 , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr
-		#endif
-		#ifdef TRAJET
-		, int idx, Evnt* evnt
 		#endif
 		    )
 {
@@ -960,21 +917,6 @@ rsolfi=%15.12lf - tauRdm= %lf - hph_p= %15.12lf - hph= %15.12lf - zph_p= %15.12l
 			}
 		}
 			
-		#ifdef TRAJET
-		// Récupération d'informations sur le premier photon traité
-		if(idx == 0)
-		{
-			int i = 0;
-			// On cherche la première action vide du tableau
-			while(evnt[i].action != 0 && i<NBTRAJET-1) i++;
-			// Et on remplit la première case vide des tableaux (tableaux de 20 cases)
-			// "2"représente l'événement "move" du photon
-			evnt[i].action = 2;
-			// On récupère le tau et le poids du photon
-			evnt[i].poids = ph->weight;
-			evnt[i].tau = ph->z;
-		}
-		#endif
 		
 		return;
 	}
@@ -1039,23 +981,7 @@ rsolfi=%15.12lf - tauRdm= %lf - hph_p= %15.12lf - hph= %15.12lf - zph_p= %15.12l
 // 		#endif
 // 	}
 	
-
 	
-	#ifdef TRAJET
-	// Récupération d'informations sur le premier photon traité
-	if(idx == 0)
-	{
-		int i = 0;
-		// On cherche la première action vide du tableau
-		while(evnt[i].action != 0 && i<NBTRAJET-1) i++;
-		// Et on remplit la première case vide des tableaux (tableaux de 20 cases)
-		// "2"représente l'événement "move" du photon
-		evnt[i].action = 2;
-		// On récupère le tau et le poids du photon
-		evnt[i].poids = ph->weight;
-		evnt[i].tau = ph->z;
-	}
-	#endif
 }
 
 
@@ -1079,9 +1005,6 @@ __device__ void scatter( Photon* ph, float* faer
                         #ifdef RANDPHILOX4x32_7
                         , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr
                         #endif
-			#ifdef TRAJET
-			, int idx, Evnt* evnt
-			#endif
 			){
 
 	float cTh=0.f, sTh, psi, cPsi, sPsi;
@@ -1236,22 +1159,6 @@ __device__ void scatter( Photon* ph, float* faer
 	ph->vy = vy;
 	ph->vz = vz;
 
-	
-	#ifdef TRAJET
-	// Récupération d'informations sur le premier photon traité
-	if(idx == 0)
-	{
-	   int i = 0;
-	   // On cherche la première action vide du tableau
-	   while(evnt[i].action != 0 && i<NBTRAJET-1) i++;
-	   // Et on remplit la première case vide des tableaux (tableaux de 20 cases)
-		// "3"représente l'événement "scatter" du photon
-		evnt[i].action = 3;
-		// On récupère le tau et le poids du photon
-		evnt[i].poids = ph->weight;
-		evnt[i].tau = ph->z;
-	}
-	#endif
 }
 
 
@@ -1271,29 +1178,10 @@ __device__ void surfaceAgitee(Photon* ph
 		#ifdef RANDPHILOX4x32_7
                 , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr
 		#endif
-		#ifdef TRAJET
-		, int idx, Evnt* evnt
-		#endif
 			){
 	
 	if( SIMd == -2){ // Atmosphère , la surface absorbe tous les photons
 		ph->loc = ABSORBED;
-		
-		#ifdef TRAJET
-		// Récupération d'informations sur le premier photon traité
-		if(idx == 0)
-		{
-			int i = 0;
-			// On cherche la première action vide du tableau
-			while(evnt[i].action != 0 && i<NBTRAJET-1) i++;
-			// Et on remplit la première case vide des tableaux (tableaux de 20 cases)
-			// "4"représente l'événement "surface" du photon
-			evnt[i].action = 4;
-			// On récupère le tau et le poids du photon
-			evnt[i].poids = ph->weight;
-			evnt[i].tau = ph->z;
-		}
-		#endif
 		
 		return;
 	}
@@ -1652,22 +1540,6 @@ __device__ void surfaceAgitee(Photon* ph
 	ph->uy = uyn;
 	ph->uz = uzn;
 	#endif
-
-	#ifdef TRAJET
-	// Récupération d'informations sur le premier photon traité
-	if(idx == 0)
-	{
-		int i = 0;
-		// On cherche la première action vide du tableau
-		while(evnt[i].action != 0 && i<NBTRAJET-1) i++;
-		// Et on remplit la première case vide des tableaux (tableaux de 20 cases)
-		// "4"représente l'événement "surface" du photon
-		evnt[i].action = 4;
-		// On récupère le tau et le poids du photon
-		evnt[i].poids = ph->weight;
-		evnt[i].tau = ph->z;
-	}
-	#endif
 }
 
 
@@ -1688,9 +1560,6 @@ __device__ void surfaceLambertienne(Photon* ph
                                                 #ifdef RANDPHILOX4x32_7
                                                 , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr
                                                 #endif
-						#ifdef TRAJET
-						, int idx, Evnt* evnt
-						#endif
 						){
 	
 	if( SIMd == -2){ 	// Atmosphère ou océan seuls, la surface absorbe tous les photons
@@ -1786,9 +1655,6 @@ __device__ void surfaceLambertienne(Photon* ph
 			#if defined(RANDMWC) || defined(RANDMT)
 			, configThr
 			#endif
-			#ifdef TRAJET
-			, idx, evnt
-			#endif
 			);
 	
 	if( ph->loc==SURFACE){
@@ -1866,22 +1732,6 @@ __device__ void surfaceLambertienne(Photon* ph
 	#endif
 	
 	
-	#ifdef TRAJET
-	// Récupération d'informations sur le premier photon traité
-	if(idx == 0)
-	{
-		int i = 0;
-		// On cherche la première action vide du tableau
-		while(evnt[i].action != 0 && i<NBTRAJET-1) i++;
-		// Et on remplit la première case vide des tableaux (tableaux de 20 cases)
-		// "4"représente l'événement "surface" du photon
-		evnt[i].action = 4;
-		// On récupère le tau et le poids du photon
-		evnt[i].poids = ph->weight;
-		evnt[i].tau = ph->z;
-	}
-	#endif
-	
 	#ifdef GLITTERLAMB
 	ph->loc=SURFACE;
 	
@@ -1896,9 +1746,6 @@ __device__ void surfaceLambertienne(Photon* ph
 __device__ void countPhoton(Photon* ph, Tableaux tab, unsigned long long* nbPhotonsThr
 		#ifdef PROGRESSION
 		, unsigned int* nbPhotonsSorThr, Variables* var
-		#endif
-		#ifdef TRAJET
-		, int idx, Evnt* evnt
 		#endif
 		    )
 {
@@ -2018,21 +1865,6 @@ __device__ void countPhoton(Photon* ph, Tableaux tab, unsigned long long* nbPhot
 		#endif
 	}
 
-	#ifdef TRAJET
-	// Récupération d'informations sur le premier photon traité
-	if(idx == 0)
-	{
-		int i = 0;
-		// On cherche la première action vide du tableau
-		while(evnt[i].action != 0 && i<NBTRAJET-1) i++;
-		// Et on remplit la première case vide des tableaux (tableaux de NBTRAJET cases)
-		// "5"représente l'événement "exit" du photon
-		evnt[i].action = 5;
-		// On récupère le tau et le poids du photon
-		evnt[i].poids = ph->weight;
-		evnt[i].tau = ph->z;
-	}
-	#endif
 }
 
 

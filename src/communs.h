@@ -103,12 +103,6 @@ typedef int CrMCCUDA;
 #define RTER 6400
 
 
-/* Option d'affichage des trajets */
-#ifdef TRAJET
-#define NBTRAJET 40	// Nombre de trajet à afficher pour debuggage
-#endif
-
-
 /* Test des differentes fonctions random */
 #if defined(RANDCUDA)
 typedef curandState_t curandSTATE;
