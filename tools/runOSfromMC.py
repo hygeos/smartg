@@ -148,7 +148,7 @@ def plot_2D_parameter(fig, rect, theta , phi, data, Vdata, Vdatat=None, title=No
           ax.set_ylim(Vdata[0],Vdata[-1])
           ax.set_xlim(-90,90)
           ax.set_xticks(ticks)
-          ax.grid=True
+          ax.grid(True)
           if points != None :
               phi_txt = points[:,0]
               theta_txt = points[:,1]
