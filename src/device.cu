@@ -1166,16 +1166,14 @@ __device__ void surfaceAgitee(Photon* ph
    
 		if(ph->x >= 0.f) ist = -ist;
 		
-		if( sqrtf(ph->x*ph->x + ph->y*ph->y)<1.e-6 ){
-			/*NOTE En fortran ce test est à 1.e-8, relativement au double utilisés, peut peut être être supprimer ici*/
-			icp = 1.f;
-		}
-		else{
-			icp = __fdividef(ph->x,sqrtf(ph->x*ph->x + ph->y*ph->y));
-			isp = sqrtf( 1.f - icp*icp );
-			
-			if( ph->y < 0.f ) isp = -isp;
-	   }
+        icp = __fdividef(ph->x,sqrtf(ph->x*ph->x + ph->y*ph->y));
+        isp = sqrtf( 1.f - icp*icp );
+        if (isnan(isp)) { // avoid numerical instabilities where x,y are close to zero (or icp>1)
+            icp = 1.F;
+            isp = 0.F;
+        }
+        
+        if( ph->y < 0.f ) isp = -isp;
 	}
 	else{
 		// Photon considéré comme perdu
