@@ -1756,19 +1756,18 @@ __device__ void countPhoton(Photon* ph, Tableaux tab, unsigned long long* nbPhot
 	s1 = s2;
 	s2 = tmp;
 	
-	
-	ph->weight = __fdividef(ph->weight, s1 + s2);
-	
+    float weight = __fdividef(ph->weight, s1 + s2);
+
 	// Rangement du photon dans sa case, et incrémentation de variables
 	if(((ith >= 0) && (ith < NBTHETAd)) && ((iphi >= 0) && (iphi < NBPHId)))
 	{
 		// Rangement dans le tableau des paramètres pondérés du photon
 
-		atomicAdd(tabCount+(0 * NBTHETAd * NBPHId + ith * NBPHId + iphi), ph->weight * s1);
+		atomicAdd(tabCount+(0 * NBTHETAd * NBPHId + ith * NBPHId + iphi), weight * s1);
 
-		atomicAdd(tabCount+(1 * NBTHETAd * NBPHId + ith * NBPHId + iphi), ph->weight * s2);
+		atomicAdd(tabCount+(1 * NBTHETAd * NBPHId + ith * NBPHId + iphi), weight * s2);
 
-		atomicAdd(tabCount+(2 * NBTHETAd * NBPHId + ith * NBPHId + iphi), ph->weight * s3);
+		atomicAdd(tabCount+(2 * NBTHETAd * NBPHId + ith * NBPHId + iphi), weight * s3);
 				
    		atomicAdd(tabCount+(3 * NBTHETAd * NBPHId + ith * NBPHId + iphi), 1.);
 
