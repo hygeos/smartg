@@ -164,9 +164,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
             else 
             #endif
                 move_pp(&ph, tab.h, tab.pMol
-                        #ifdef OZONE
                         , tab.abs
-                        #endif
                         , &etatThr
                         #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
                         , &configThr
@@ -828,18 +826,14 @@ rsolfi=%15.12lf - tauRdm= %lf - hph_p= %15.12lf - hph= %15.12lf - zph_p= %15.12l
     
 	ph->prop_aer = 1.f - tab.pMol[ph->couche];
 
-    #ifdef OZONE
     ph->weight = ph->weight * (1.f - tab.abs[ph->couche]);
-    #endif
 
 }
 #endif
 
 
 __device__ void move_pp(Photon* ph, float* h, float* pMol
-        #ifdef OZONE
         , float *abs
-        #endif
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif
@@ -899,9 +893,7 @@ __device__ void move_pp(Photon* ph, float* h, float* pMol
 
         ph->prop_aer = 1.f - pMol[ph->couche];
 
-        #ifdef OZONE
         ph->weight = ph->weight * (1.f - abs[ph->couche]);
-        #endif
     }
     #endif
 

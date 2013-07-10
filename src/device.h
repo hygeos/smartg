@@ -121,9 +121,7 @@ __device__ void move_sp(Photon*, Tableaux tab, Init* init
 
 // move, version plan parallèle
 __device__ void move_pp(Photon*, float* h, float* pMol
-        #ifdef OZONE
         , float *abs
-        #endif
 		#ifdef RANDMWC
 		, unsigned long long*, unsigned int*
 		#endif

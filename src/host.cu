@@ -724,7 +724,6 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	}
 
     //
-    #ifdef OZONE
 	tab_H->abs =  (float*)malloc((NATM+1)*sizeof(float));
 	if( tab_H->abs == NULL ){
 		printf("ERREUR: Problème de malloc de tab_H->abs dans initTableaux\n");
@@ -736,7 +735,6 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 		printf("ERREUR: Problème de cudaMalloc de tab_D->abs dans initTableaux\n");
 		exit(1);	
 	}
-    #endif
 	
 	
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
@@ -907,7 +905,6 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	free(tab_H->pMol);
 	
 	//
-    #ifdef OZONE
 	erreur = cudaFree(tab_D->abs);
 	if( erreur != cudaSuccess ){
 		printf( "ERREUR: Problème de cudaFree de tab_D->abs dans freeTableaux\n");
@@ -916,7 +913,6 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	}
 	
 	free(tab_H->abs);
-    #endif
 	
 	/** Séparation du code pour atmosphère sphérique ou parallèle **/
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
@@ -1522,14 +1518,12 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 			exit(1);
 		}		
         
-        #ifdef OZONE
         erreur = cudaMemcpy(tab_D->abs, tab_H->abs, (NATM+1)*sizeof(*(tab_H->abs)), cudaMemcpyHostToDevice);
         if( erreur != cudaSuccess ){
             printf( "ERREUR: Problème de copie tab_D->abs dans initInit\n");
             printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
             exit(1);
         }
-        #endif
 	
 		
 		#ifdef SPHERIQUE
@@ -1559,9 +1553,7 @@ couche inferieure contenant tous les aerosols.
 			#endif
 			tab_H->h[1] = tauMol[1] + tauAer[1];
 			tab_H->pMol[1] = 1.0;
-            #ifdef OZONE
             tab_H->abs[1] = 0.0;
-			#endif
 			
 			tauMol[2] = 0;
 			tauAer[2] = TAUAER;
@@ -1570,9 +1562,7 @@ couche inferieure contenant tous les aerosols.
 			#endif
 			tab_H->h[2] = tab_H->h[1] + tauMol[2] + tauAer[2];
 			tab_H->pMol[2] = 0.0;
-            #ifdef OZONE
             tab_H->abs[2] = 0.0;
-			#endif
 		}
 		
 		/* Si HA >> HR => pas de mélange dans les couches
@@ -1587,9 +1577,7 @@ inferieure contenant toutes les molécules.
 			#endif
 			tab_H->h[1] = tauMol[1] + tauAer[1];
 			tab_H->pMol[1] = 0.0;
-            #ifdef OZONE
             tab_H->abs[1] = 0.0;
-			#endif
 			
 			tauMol[2] = TAURAY;
 			tauAer[2] = 0.0;
@@ -1598,9 +1586,7 @@ inferieure contenant toutes les molécules.
 			#endif
 			tab_H->h[2] = tab_H->h[1] + tauMol[2] + tauAer[2];
 			tab_H->pMol[2] = 1.0;
-            #ifdef OZONE
             tab_H->abs[2] = 0.0;
-			#endif
 		}
 		
 		/* Cas Standard avec deux échelles */
@@ -1628,9 +1614,7 @@ inferieure contenant toutes les molécules.
 				va = va/HA;
 				vr = vr/(va+vr);
 				tab_H->pMol[i] = vr;
-                #ifdef OZONE
                 tab_H->abs[i] = 0.0;
-				#endif
 			}
 			tab_H->h[0] = 0;
 		}
@@ -1661,9 +1645,7 @@ inferieure contenant toutes les molécules.
 		tauAer[1] = 0.F;                                    
 		tab_H->h[1] = tauMol[1] + tauAer[1];
 		tab_H->pMol[1] = 1.F;
-        #ifdef OZONE
         tab_H->abs[1] = 0.0;
-		#endif
 
 		/** Calcul des grandeurs utiles aux OS pour la deuxieme couche   **/
 		if( ZMAX == ZMIN ){ //Uniquement des aerosols dans la couche intermediaire
@@ -1674,9 +1656,7 @@ inferieure contenant toutes les molécules.
 			tauAer[2] = TAUAER;
 			tab_H->h[2] = tauMol[2] + tauAer[2];
 			tab_H->pMol[2] = 0.F;                                                      
-            #ifdef OZONE
             tab_H->abs[2] = 0.0;
-			#endif
 		}
 		
 		else{	// Melange homogene d'aerosol et de molecules dans la couche intermediaire
@@ -1687,9 +1667,7 @@ inferieure contenant toutes les molécules.
 			tauAer[2] = TAUAER;
 			tab_H->h[2] = tauMol[2] + tauAer[2];
 			tab_H->pMol[2] = 0.5F;
-            #ifdef OZONE
             tab_H->abs[2] = 0.0;
-			#endif
 		}
 		
 		/** Calcul des grandeurs utiles aux OS pour la troisieme couche **/
@@ -1700,9 +1678,7 @@ inferieure contenant toutes les molécules.
 		tauAer[3] = TAUAER;
 		tab_H->h[3] = tauMol[3] + tauAer[3];
 		tab_H->pMol[3] = 1.F;
-        #ifdef OZONE
         tab_H->abs[3] = 0.0;
-		#endif
 	}
 	
 	else if( PROFIL == 2 ){
@@ -1726,26 +1702,13 @@ inferieure contenant toutes les molécules.
 			fgets(ligne,1024,profil);
 
 			// Extraction des informations
-			#if defined(SPHERIQUE) && !defined(OZONE)
-			for( icouche=0; icouche<NATM+1; icouche++ ){
-				fscanf(profil, "%d\t%f\t%f\t%f\t%f\t%f\t%f", &i, tab_H->z+icouche, &garbage, &garbage, tab_H->h+icouche,
-&garbage,tab_H->pMol+icouche);
-			}
-			#endif
-			#if defined(SPHERIQUE) && defined(OZONE)
+			#if defined(SPHERIQUE) 
 			for( icouche=0; icouche<NATM+1; icouche++ ){
 				fscanf(profil, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f", &i, tab_H->z+icouche, &garbage, &garbage, tab_H->h+icouche,
 &garbage,tab_H->pMol+icouche, tab_H->abs+icouche );
 			}
             #endif
-			#if !defined(SPHERIQUE) && !defined(OZONE)
-			for( icouche=0; icouche<NATM+1; icouche++ ){
-				fscanf(profil, "%d\t%f\t%f\t%f\t%f\t%f\t%f", &i, &garbage, &garbage, &garbage, tab_H->h+icouche,
-					   &garbage,tab_H->pMol+icouche );
-			}
-            TAUATM = tab_H->h[NATM];
-			#endif
-			#if !defined(SPHERIQUE) && defined(OZONE)
+			#if !defined(SPHERIQUE) 
 			for( icouche=0; icouche<NATM+1; icouche++ ){
 				fscanf(profil, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f", &i, &garbage, &garbage, &garbage, tab_H->h+icouche,
 					   &garbage,tab_H->pMol+icouche, tab_H->abs+icouche );
@@ -1776,14 +1739,12 @@ inferieure contenant toutes les molécules.
 			exit(1);
 		}	
 
-        #ifdef OZONE
         erreur = cudaMemcpy(tab_D->abs, tab_H->abs, (NATM+1)*sizeof(*(tab_H->abs)), cudaMemcpyHostToDevice);
         if( erreur != cudaSuccess ){
             printf( "ERREUR: Problème de copie tab_D->abs dans profilAtm\n");
             printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
             exit(1);
         }
-        #endif
 		
 		#ifdef SPHERIQUE
 		erreur = cudaMemcpy(tab_D->z, tab_H->z, (NATM+1)*sizeof(*(tab_H->z)), cudaMemcpyHostToDevice);
