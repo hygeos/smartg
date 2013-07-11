@@ -82,6 +82,7 @@ SUR = 1
 	# 1 = agite avec reflexion multiple
 	# 2 = agite sans reflexion multiple
 	# 3 = surface lambertienne (uniquement sans océan)
+	# 4 = glitter + surface lambertienne (2 en reflexion + 3 pour transmission) - Use SUR=3 in this case
 DIOPTRE = 2
 
 # Albedo simple de diffusion de la surface lambertienne (float)

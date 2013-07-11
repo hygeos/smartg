@@ -1291,9 +1291,9 @@ __device__ void surfaceAgitee(Photon* ph
 			else{
 				ph->loc = OCEAN;
 			}
-			#ifdef GLITTERLAMB
+            if (DIOPTREd==4){
 			ph->loc=SURFACE;
-			#endif
+            }
 		}
 		
 		
@@ -1313,7 +1313,10 @@ __device__ void surfaceAgitee(Photon* ph
 		if( (ph->vz<0) && (DIOPTREd==2) && (SIMd!=0 && SIMd!=2 && SIMd!=3) ){
 			ph->loc = ABSORBED;
 		}
-		
+	        if( (ph->vz<0) && (DIOPTREd==4) && (SIMd!=0 && SIMd!=2 && SIMd!=3) ){
+                ph->loc = ABSORBED;
+            }
+
 		if( SURd==1 ){ /*On pondere le poids du photon par le coefficient de reflexion dans le cas 
 			d'une reflexion speculaire sur le dioptre (mirroir parfait)*/
 			ph->weight *= rat;
@@ -1322,7 +1325,7 @@ __device__ void surfaceAgitee(Photon* ph
 	}
 	else{	// Transmission par le dioptre
 		
-		#ifndef GLITTERLAMB
+        if (DIOPTREd!=4){
 		// Le photon change de milieu
 		if(ph->vz<0){
 			if( SIMd==-1 || SIMd==1 ){
@@ -1331,9 +1334,6 @@ __device__ void surfaceAgitee(Photon* ph
 			else{
 				ph->loc = OCEAN;
 			}
-// 			#ifdef GLITTERLAMB
-// 			ph->loc=SURFACE;
-// 			#endif
 		}
 		else{
 			if( SIMd==-1 || SIMd==0 ){
@@ -1364,9 +1364,10 @@ __device__ void surfaceAgitee(Photon* ph
 		/* On pondere le poids du photon par le coefficient de transmission dans le cas d'une transmission forcee */
 		if( SURd == 2)
 			ph->weight *= (1-rat);
-		#endif /* du ifndef GLITTERLAMB*/
-		
-		#ifdef GLITTERLAMB
+        }   // fin du if (DIOPTRE<4)		
+
+
+        if (DIOPTREd==4){    
 		if(ph->vz<0){
 			if( SIMd==-1 || SIMd==0 ){
 				ph->loc = SPACE;
@@ -1429,7 +1430,7 @@ __device__ void surfaceAgitee(Photon* ph
 		// Aucun photon n'est absorbés mais on pondère le poids par l'albedo de diffusion de la surface lambertienne.
 		ph->weight *= __fdividef( W0LAMd, 1-rat );
 		
-		#endif /* du ifdef GLITTERLAMB*/
+    } // fin du if (DIOPTRE==4)
 	}
 	
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
@@ -1564,15 +1565,6 @@ __device__ void surfaceLambertienne(Photon* ph
 	ph->uz = uzn;
 	#endif
 	
-	#ifdef GLITTERLAMB
-	surfaceAgitee(ph, etatThr
-			#if defined(RANDMWC) || defined(RANDMT)
-			, configThr
-			#endif
-			);
-	
-	if( ph->loc==SURFACE){
-	#endif
 	
 	
 	/** calcul u,v new **/
@@ -1617,11 +1609,11 @@ __device__ void surfaceLambertienne(Photon* ph
 	// Aucun photon n'est absorbés mais on pondère le poids par l'albedo de diffusion de la surface lambertienne.
 	ph->weight *= W0LAMd;
 
-	#ifndef GLITTERLAMB
+    if (DIOPTREd!=4){
 	// Si le dioptre est seul, le photon est mis dans l'espace
 	bool test_s = ( SIMd == -1);
 	ph->loc = SPACE*test_s + ATMOS*(!test_s);
-	#endif
+    }
 	
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
 	/** Retour dans le repère d'origine **/
@@ -1646,11 +1638,8 @@ __device__ void surfaceLambertienne(Photon* ph
 	#endif
 	
 	
-	#ifdef GLITTERLAMB
-	ph->loc=SURFACE;
 	
-	}
-	#endif
+//	}
 }
 
 
