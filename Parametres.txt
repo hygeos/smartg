@@ -16,7 +16,7 @@ THSDEG = 30.
 # Longueur d'onde [nm] (float)
 LAMBDA = 665.
 
-# Epaisseur optique moleculaire (Rayley) (float)
+# Epaisseur optique moleculaire (Rayleigh) (float)
 TAURAY = 0.04546
 
 # Epaisseur optique aerosol (float)
@@ -35,7 +35,7 @@ PATHDIFFAER = fic/pf_M80_665nm.txt
 	# -1 pour dioptre seul
 	# 0 pour ocean et dioptre
 	# 1 pour atmosphere et dioptre
-	# 2 pour atmosphere dioptre et ocean (pas validé)
+	# 2 pour atmosphere dioptre et ocean
 	# 3 pour ocean seul
 SIM = 1
 

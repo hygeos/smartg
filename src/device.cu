@@ -405,13 +405,11 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
 	
 	
 	/** Tirage au sort de la profondeur optique à parcourir **/
-	/*  Tirage effectué lors de chaque appel de la fonction */
-	// Pas de diffusion forcée en sphérique
 	
 	tauRdm = -logf(1.F-RAND);
 	
 	if( tauRdm == 0. ){
-		/* Le photon ne bouge pas mais il faut tout de même considéré le fait qu'il a subit un déplacement "nul"
+		/* Le photon ne bouge pas mais il faut tout de même considérer le fait qu'il a subi un déplacement "nul"
 		 * Il va quand même intéragir.
 		*/
 		ph->locPrec = ATMOS;
@@ -1499,12 +1497,6 @@ __device__ void surfaceLambertienne(Photon* ph
     #endif
 	
 
-	
-//	if( SIMd == -2){ 	// Atmosphère ou océan seuls, la surface absorbe tous les photons
-//		ph->loc = ABSORBED;
-//	}
-//	
-//	else {
 	/** Séparation du code pour atmosphère sphérique ou parallèle **/
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
 	/** Calcul du theta impact et phi impact **/
@@ -1636,10 +1628,6 @@ __device__ void surfaceLambertienne(Photon* ph
 	ph->uy = uyn;
 	ph->uz = uzn;
 	#endif
-	
-	
-	
-//	}
 }
 
 

@@ -1,16 +1,13 @@
 # CUDA_HOME=/opt/cuda42/cuda/
 CUDA_HOME=/opt/cuda50/
-# CUDA_HOME=/home/gpubti/Loic/PROJETS/gpubti/zone_try/QPEC_MEDICIS/MEDICIS/BIBEXT/XEON/CUDA_V4.0.13
 CUDA_BIN=${CUDA_HOME}/bin/
 CUDA_LIB=${CUDA_HOME}/lib64/
 CUDA_INC=${CUDA_HOME}/include/
 
-# HDF_HOME=/home/gpubti/Loic/PROJETS/gpubti/zone_try/QPEC_MEDICIS/MEDICIS/BIBEXT/XEON/HDF_V4.2r5
 HDF_HOME=
 HDF_LIB=${HDF_HOME}/lib/
 HDF_INC=${HDF_HOME}/include/
 
-# JPEG_HOME=/home/gpubti/Loic/PROJETS/gpubti/zone_try/QPEC_MEDICIS/MEDICIS/BIBEXT/XEON/JPEG_V6b
 JPEG_HOME=
 JPEG_LIB=${JPEG_HOME}/lib/
 JPEG_INC=${JPEG_HOME}/include/

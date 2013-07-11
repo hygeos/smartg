@@ -1835,7 +1835,7 @@ void impactInit(Init* init_H, Init* init_D, Tableaux* tab_H, Tableaux* tab_D){
 		rsol1 = 0.5*( -2.*(vx*xphbis + vy*yphbis + vz*zphbis) + sqrt(rdelta) );
 		rsol2 = 0.5*( -2.*(vx*xphbis + vy*yphbis + vz*zphbis) - sqrt(rdelta) );
 		
-		// Il faut choisir la plus petite distance en faisant attention qu'elle soit positive
+		// solution : la plus petite distance positive
 		if(rsol1>0.){
 			if( rsol2>0.)
 				rsolfi = min(rsol1,rsol2);
