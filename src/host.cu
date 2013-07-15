@@ -280,6 +280,13 @@ void initConstantesHost(int argc, char** argv)
 	strcpy(s,"");
 	chercheConstante(parametres, "CONPHY", s);
 	CONPHY = atof(s);
+    chercheConstante(parametres, "atot", s);
+    atot = atof(s);
+	strcpy(s,"");
+    chercheConstante(parametres, "btot", s);
+    btot = atof(s);
+	chercheConstante( parametres, "PATHDIFFOCE", PATHDIFFOCE );
+
     #endif
 
 	strcpy(s,"");
@@ -682,6 +689,7 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	
 	#ifdef FLAGOCEAN
 	// Modèle de diffusion dans l'océan
+    printf("%d\n",5*NFOCE*sizeof(float));
 	tab_H->foce = (float*)malloc(5 * NFOCE * sizeof(float));
 	if( tab_H->foce == NULL ){
 		printf("ERREUR: Problème de malloc de tab_H->foce dans initTableaux\n");
@@ -958,13 +966,14 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 /* calculFaer
 * Calcul de la fonction de phase des aérosols
 */
-void calculFaer( const char* nomFichier, Tableaux* tab_H, Tableaux* tab_D ){
+//void calculFaer( const char* nomFichier, Tableaux* tab_H, Tableaux* tab_D ){
+void calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, int nf){
 	
 	FILE* fichier = fopen(nomFichier, "r");
 
-	double *scum = (double*) malloc(LSAAER*sizeof(*scum));
+	double *scum = (double*) malloc(lsa*sizeof(*scum));
 	if( scum==NULL ){
-		printf("ERREUR: Problème de malloc de scum dans calculFaer\n");
+		printf("ERREUR: Problème de malloc de scum dans calculF\n");
 		exit(1);
 	}
 	
@@ -978,11 +987,11 @@ void calculFaer( const char* nomFichier, Tableaux* tab_H, Tableaux* tab_D ){
 	/** Allocation de la mémoire des tableaux contenant les données **/
 	double *ang;
 	double *p1, *p2, *p3, *p4;
-	ang = (double*) malloc(LSAAER*sizeof(*ang));
-	p1 = (double*) malloc(LSAAER*sizeof(*p1));
-	p2 = (double*) malloc(LSAAER*sizeof(*p2));
-	p3 = (double*) malloc(LSAAER*sizeof(*p3));
-	p4 = (double*) malloc(LSAAER*sizeof(*p4));
+	ang = (double*) malloc(lsa*sizeof(*ang));
+	p1 = (double*) malloc(lsa*sizeof(*p1));
+	p2 = (double*) malloc(lsa*sizeof(*p2));
+	p3 = (double*) malloc(lsa*sizeof(*p3));
+	p4 = (double*) malloc(lsa*sizeof(*p4));
 	if( ang==NULL || p1==NULL || p2==NULL || p3==NULL || p4==NULL ){
 		printf("ERREUR: Problème de malloc de ang ou pi dans calculFaer\n");
 		exit(1);
@@ -995,7 +1004,7 @@ void calculFaer( const char* nomFichier, Tableaux* tab_H, Tableaux* tab_D ){
 	}
 	
 	else{
-		for(iang=0; iang<LSAAER; iang++){
+		for(iang=0; iang<lsa; iang++){
             fgets(buffer, 1024, fichier);
 
             // replace all occurences of 'D' by 'E'
@@ -1034,7 +1043,7 @@ void calculFaer( const char* nomFichier, Tableaux* tab_H, Tableaux* tab_D ){
 	}
 		
 	/** Calcul de scum **/
-	for(iang=1; iang<LSAAER; iang++){
+	for(iang=1; iang<lsa; iang++){
 		
 		dtheta = ang[iang] - ang[iang-1];
 		pm1= p1[iang-1] + p2[iang-1];
@@ -1046,29 +1055,29 @@ void calculFaer( const char* nomFichier, Tableaux* tab_H, Tableaux* tab_D ){
 	}
 	
 	// Normalisation
-	for(iang=0; iang<LSAAER; iang++){
-		scum[iang] = scum[iang]/scum[LSAAER-1];
+	for(iang=0; iang<lsa; iang++){
+		scum[iang] = scum[iang]/scum[lsa-1];
 	}
 	
 	/** Calcul des faer **/
-	for(iang=0; iang<NFAER-1; iang++){
-		z = double(iang+1)/double(NFAER);
-		while( (scum[ipf+1]<z) && ipf<(LSAAER-1) )
+	for(iang=0; iang<nf-1; iang++){
+		z = double(iang+1)/double(nf);
+		while( (scum[ipf+1]<z) )
 			ipf++;
 		
-		tab_H->faer[iang*5+4] = float( ((scum[ipf+1]-z)*ang[ipf] + (z-scum[ipf])*ang[ipf+1])/(scum[ipf+1]-scum[ipf]) );
+		phase_H[iang*5+4] = float( ((scum[ipf+1]-z)*ang[ipf] + (z-scum[ipf])*ang[ipf+1])/(scum[ipf+1]-scum[ipf]) );
 		norm = p1[ipf]+p2[ipf];			// Angle
-		tab_H->faer[iang*5+0] = float( p1[ipf]/norm );	// I paralèlle
-		tab_H->faer[iang*5+1] = float( p2[ipf]/norm );	// I perpendiculaire
-		tab_H->faer[iang*5+2] = float( p3[ipf]/norm );	// u
-		tab_H->faer[iang*5+3] = 0.F;			// v, toujours nul
+		phase_H[iang*5+0] = float( p1[ipf]/norm );	// I paralèlle
+		phase_H[iang*5+1] = float( p2[ipf]/norm );	// I perpendiculaire
+		phase_H[iang*5+2] = float( p3[ipf]/norm );	// u
+		phase_H[iang*5+3] = 0.F;			// v, toujours nul
 	}
 	
-	tab_H->faer[(NFAER-1)*5+4] = PI;
-	tab_H->faer[(NFAER-1)*5+0] = 0.5F+00;
-	tab_H->faer[(NFAER-1)*5+1] = 0.5F+00;
-	tab_H->faer[(NFAER-1)*5+2] = float( p3[LSAAER-1]/(p1[LSAAER-1]+p2[LSAAER-1]) );
-	tab_H->faer[(NFAER-1)*5+3] = 0.F+00;
+	phase_H[(nf-1)*5+4] = PI;
+	phase_H[(nf-1)*5+0] = 0.5F+00;
+	phase_H[(nf-1)*5+1] = 0.5F+00;
+	phase_H[(nf-1)*5+2] = float( p3[lsa-1]/(p1[lsa-1]+p2[lsa-1]) );
+	phase_H[(nf-1)*5+3] = 0.F+00;
 	
 	free(scum);
 	free(ang);
@@ -1079,9 +1088,9 @@ void calculFaer( const char* nomFichier, Tableaux* tab_H, Tableaux* tab_D ){
 	
 	/** Allocation des FAER dans la device memory **/		
 
-	cudaError_t erreur = cudaMemcpy(tab_D->faer, tab_H->faer, 5*NFAER*sizeof(*(tab_H->faer)), cudaMemcpyHostToDevice); 
+	cudaError_t erreur = cudaMemcpy(phase_D, phase_H, 5*nf*sizeof(float), cudaMemcpyHostToDevice); 
 	if( erreur != cudaSuccess ){
-		printf( "ERREUR: Problème de copie tab_D->faer dans calculFaer\n");
+		printf( "ERREUR: Problème de copie phase_D dans calculF\n");
 		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
 		exit(1);
 	}
@@ -1322,6 +1331,7 @@ void calculFoce( Tableaux* tab_H, Tableaux* tab_D ){
 	}
 	
 	rat1 = integ_ff/2;
+
 	
 	for( iang=0; iang<LSAOCE; iang++ ){
 		pf1[iang*4 + 0] *= 1/rat1;
@@ -1339,7 +1349,8 @@ void calculFoce( Tableaux* tab_H, Tableaux* tab_D ){
 	Kd = Kw[ilambda] + Chi[ilambda]*pow(CONPHY,ee[ilambda]);
 	delta = (0.256*(b0+b1/rat1+b2))*(0.256*(b0+b1/rat1+b2)) + 4*Kd*Kd;
 	atot = 0.5*(-0.256*(b0+b1/rat1+b2) + sqrt(delta));
-	
+
+    printf("atot = %f btot = %f\n",atot, btot);
 	extoce = atot + btot;
 	W0OCE = btot/extoce;
 	
@@ -1349,6 +1360,7 @@ void calculFoce( Tableaux* tab_H, Tableaux* tab_D ){
 		pf[iang*4 + 1] = (b0*pf0[iang*4 + 1] + b1*pf1[iang*4 + 1] + b2*pf2[iang*4 + 1])/btot;
 		pf[iang*4 + 2] = (b0*pf0[iang*4 + 2] + b1*pf1[iang*4 + 2] + b2*pf2[iang*4 + 2])/btot;
 		pf[iang*4 + 3] = (b0*pf0[iang*4 + 3] + b1*pf1[iang*4 + 3] + b2*pf2[iang*4 + 3])/btot;
+//    printf("%f %f %f %f %f\n",ang[iang]*180/M_PI, pf[iang*4 + 1] ,pf[iang*4 + 0] ,pf[iang*4 + 2] ,pf[iang*4 + 3]);
 	}
 	
 	/* scum est une fonction s'accroissant entre 0 et 1 telle que d(scum)/dthe
@@ -1376,31 +1388,61 @@ void calculFoce( Tableaux* tab_H, Tableaux* tab_D ){
 	/* foce gives NFOCE angles increasing from 0 to 180, and distributed according to the statistic scum
 	*/
 	ipf = 0;
+    float seuil = 1e-5;
 	for( iang = 0; iang<NFOCE-1; iang++ ){
 		z = double(iang)/double(NFOCE);
+//		z = double(iang+1)/double(NFOCE); // correction
 		while( scum[ipf+1]<z )
 			ipf++;
-		tab_H->foce[iang*5 + 4] = (float) ( (scum[ipf+1]-z)*ang[ipf] + (z-scum[ipf])*ang[ipf+1] )/(scum[ipf+1]-scum[ipf]);
+//		tab_H->foce[iang*5 + 4] = (float) ( (scum[ipf+1]-z)*ang[ipf] + (z-scum[ipf])*ang[ipf+1] )/(scum[ipf+1]-scum[ipf]);
+//        printf("%f %f %f\n",tab_H->foce[iang*5 + 0], (float) pf[ipf*4 + 0]/norm,fabs(tab_H->foce[iang*5 + 0]-(float) pf[ipf*4 + 0]/norm));;
+		if (fabs(tab_H->foce[iang*5 + 4] - (float) ( (scum[ipf+1]-z)*ang[ipf] + (z-scum[ipf])*ang[ipf+1] )/(scum[ipf+1]-scum[ipf])) > seuil)
+            printf("tab_H->foce[%d*5 + 4] = %f <> %f\n",iang, tab_H->foce[iang*5 + 4], (float) ( (scum[ipf+1]-z)*ang[ipf] + (z-scum[ipf])*ang[ipf+1] )/(scum[ipf+1]-scum[ipf]));
 		norm = pf[ipf*4 + 0] + pf[ipf*4 + 1];
-		tab_H->foce[iang*5 + 0] = (float) pf[ipf*4 + 0]/norm;
-		tab_H->foce[iang*5 + 1] = (float) pf[ipf*4 + 1]/norm;
-		tab_H->foce[iang*5 + 2] = (float) pf[ipf*4 + 2]/norm;
-		tab_H->foce[iang*5 + 3] = (float) pf[ipf*4 + 3]/norm;
+//		tab_H->foce[iang*5 + 0] = (float) pf[ipf*4 + 0]/norm;
+        float tt = (float)(pf[ipf*4 + 0]/norm);
+        if (fabsf(tab_H->foce[iang*5 + 0] - tt) > seuil)
+            printf("tab_H->foce[%d*5 + 0] = %f <> %f\n", iang, tab_H->foce[iang*5 + 0], tt);
+//		tab_H->foce[iang*5 + 1] = (float) pf[ipf*4 + 1]/norm;
+        if (fabs(tab_H->foce[iang*5 + 1] - (float) pf[ipf*4 + 1]/norm) > seuil)
+            printf("tab_H->foce[%d*5 + 1] = %f <> %f\n", iang, tab_H->foce[iang*5 + 1], (float) pf[ipf*4 + 1]/norm);
+//		tab_H->foce[iang*5 + 2] = (float) pf[ipf*4 + 2]/norm;
+        if (fabs(tab_H->foce[iang*5 + 2] - (float) pf[ipf*4 + 2]/norm) > seuil)
+            printf("tab_H->foce[%d*5 + 2] = %f <> %f\n", iang, tab_H->foce[iang*5 + 2], (float) pf[ipf*4 + 2]/norm);
+//		tab_H->foce[iang*5 + 3] = (float) pf[ipf*4 + 3]/norm;
+        if (fabs(tab_H->foce[iang*5 + 3] - (float) pf[ipf*4 + 3]/norm) > seuil)
+            printf("tab_H->foce[%d*5 + 3] = %f <> %f\n", iang, tab_H->foce[iang*5 + 3], (float) pf[ipf*4 + 3]/norm);
+//        printf("%f %f %f %f %f\n",(float) pf[ipf*4 + 0]/norm,
+//                                (float) pf[ipf*4 + 1]/norm ,
+//                                (float) pf[ipf*4 + 2]/norm ,
+//                                (float) pf[ipf*4 + 3]/norm,
+//                (float) ( (scum[ipf+1]-z)*ang[ipf] + (z-scum[ipf])*ang[ipf+1] )/(scum[ipf+1]-scum[ipf]));
+                                    
 	}
 	
-	tab_H->foce[(NFOCE-1)*5 + 4] = PI;
-	tab_H->foce[(NFOCE-1)*5 + 0] = 0.5f;
-	tab_H->foce[(NFOCE-1)*5 + 1] = 0.5f;
-	tab_H->foce[(NFOCE-1)*5 + 2] = (float) pf[(LSAOCE-1)*4 + 2]/(pf[(LSAOCE-1)*4 + 0]+pf[(LSAOCE-1)*4 + 1]);
-	tab_H->foce[(NFOCE-1)*5 + 3] = 0.f;
+//	tab_H->foce[(NFOCE-1)*5 + 4] = PI;
+    if (tab_H->foce[(NFOCE-1)*5 + 4] != PI) 
+        printf("tab_H->foce[(NFOCE-1)*5 + 4] = %f <> PI\n", tab_H->foce[(NFOCE-1)*5 + 4]);
+//	tab_H->foce[(NFOCE-1)*5 + 0] = 0.5f;
+    if (tab_H->foce[(NFOCE-1)*5 + 0] != 0.5f)
+        printf("tab_H->foce[(NFOCE-1)*5 + 0] = %f <> 0.5f\n", tab_H->foce[(NFOCE-1)*5 + 0]);
+//	tab_H->foce[(NFOCE-1)*5 + 1] = 0.5f;
+    if (tab_H->foce[(NFOCE-1)*5 + 1] != 0.5f)
+        printf("tab_H->foce[(NFOCE-1)*5 + 1] = %f <> 0.5f\n", tab_H->foce[(NFOCE-1)*5 + 1]);
+//	tab_H->foce[(NFOCE-1)*5 + 2] = (float) pf[(LSAOCE-1)*4 + 2]/(pf[(LSAOCE-1)*4 + 0]+pf[(LSAOCE-1)*4 + 1]);
+    if (fabs(tab_H->foce[(NFOCE-1)*5 + 2] - (float) pf[(LSAOCE-1)*4 + 2]/(pf[(LSAOCE-1)*4 + 0]+pf[(LSAOCE-1)*4 + 1])) > seuil)
+        printf("tab_H->foce[(NFOCE-1)*5 + 2] = %f <> %f\n",tab_H->foce[(NFOCE-1)*5 + 2], (float) pf[(LSAOCE-1)*4 + 2]/(pf[(LSAOCE-1)*4 + 0]+pf[(LSAOCE-1)*4 + 1]));
+//	tab_H->foce[(NFOCE-1)*5 + 3] = 0.f;
+    if (tab_H->foce[(NFOCE-1)*5 + 3] != 0.f)
+        printf("tab_H->foce[(NFOCE-1)*5 + 3] = %f <> 0.f\n", tab_H->foce[(NFOCE-1)*5 + 3]);
 	
 	/** Transfert de foce dans le device **/
-	cudaError_t erreur = cudaMemcpy(tab_D->foce, tab_H->foce, 5*NFOCE*sizeof(*(tab_H->foce)), cudaMemcpyHostToDevice); 
-	if( erreur != cudaSuccess ){
-		printf( "ERREUR: Problème de copie tab_D->foce dans calculFoce\n");
-		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-		exit(1);
-	}
+//	cudaError_t erreur = cudaMemcpy(tab_D->foce, tab_H->foce, 5*NFOCE*sizeof(*(tab_H->foce)), cudaMemcpyHostToDevice); 
+//	if( erreur != cudaSuccess ){
+//		printf( "ERREUR: Problème de copie tab_D->foce dans calculFoce\n");
+//		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+//		exit(1);
+//	}
 	
 	
 	/** Libération de la mémoire allouée **/

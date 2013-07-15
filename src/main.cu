@@ -185,7 +185,7 @@ int main (int argc, char *argv[])
 	/** Calcul des modèles utiles à l'algorithme **/
 	// Calcul de faer, modèle de diffusion des aérosols
 	if( TAUAER > 0 ){
-		calculFaer( PATHDIFFAER, &tab_H, &tab_D );
+		calculF( PATHDIFFAER, tab_H.faer, tab_D.faer, LSAAER, NFAER);
 // 		verificationFAER( "./test/FAER_test.txt", tab_H );
         }
 #ifdef _PERF
@@ -196,7 +196,11 @@ int main (int argc, char *argv[])
 	// Calcul de foce, modèle de diffusion dans l'océan
 	#ifdef FLAGOCEAN
 	if( SIM==0 || SIM==2 || SIM==3 ){
-		calculFoce( &tab_H, &tab_D );
+		calculF( PATHDIFFOCE, tab_H.foce, tab_D.foce, LSAOCE, NFOCE);
+        
+        float extoce = atot + btot;
+        W0OCE = btot/extoce;
+//		calculFoce( &tab_H, &tab_D );
 // 		verificationFoce( "./test/Foce_test.txt", tab_H );
 	}
 	#endif

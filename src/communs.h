@@ -162,6 +162,8 @@ extern float W0LAM;
 #ifdef FLAGOCEAN
 extern float W0OCE;
 extern float CONPHY;
+extern float atot, btot;
+extern char PATHDIFFOCE[];
 #endif
 extern unsigned int OUTPUT_LAYERS;
 extern float HA;
