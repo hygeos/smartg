@@ -134,8 +134,7 @@ NFOCE = 10000000
 # témoin sont générés automatiquement avec comme racine PATHRESULTATSHDF
 # Si le flag NOMAUTO est désactivé: PATHRESULTATSHDF est le fichier de sortie
 # et PATHTEMOINHDF est le fichier témoin
-#PATHRESULTATSHDF = resultats/PARALLELE/ozone/
-PATHRESULTATSHDF = resultats/PARALLELE/glitterlamb/
+PATHRESULTATSHDF = resultat/out.hdf
 
 
 # Période d'écriture du fichier témoin en min (-1 pour désactiver)
@@ -167,4 +166,3 @@ YGRID = 1
 # Si les résultats manquent de "lissage" pour les valeurs importantes de réflectance, réduire ce chiffre, relancer et comparer
 # Une valeur de 5000 semble satisfaisante
 NBLOOP = 5000
-#NBLOOP = 500000

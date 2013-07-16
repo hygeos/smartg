@@ -18,7 +18,7 @@ Dépendances:
 2) Usage
    -----
 
-mccuda <fichier parametres>
+SMART-G <fichier parametres>
 
 Voir le fichier exemple Parametres.txt
 

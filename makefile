@@ -13,10 +13,8 @@ JPEG_LIB=${JPEG_HOME}/lib/
 JPEG_INC=${JPEG_HOME}/include/
 
 CC = ${CUDA_BIN}/nvcc
-EXEC = mccuda
-
-# switch spherical/plane parallel
-SPH=no
+EXEC = SMART-G
+SPH=no  # switch spherical/plane parallel
 
 
 #=============Options============#  (en fonction de la carte graphique utilisee)
@@ -34,7 +32,7 @@ DFLAGS =
 ifeq ("$(SPH)","yes")
 	DFLAGS += -DSPHERIQUE	# atmosphère sphérique
 endif
-# DFLAGS += -DFLAGOCEAN	# À utiliser si l'océan fait partie de la simulation
+DFLAGS += -DFLAGOCEAN
 
 
 #============== Options ===============#
