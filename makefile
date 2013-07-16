@@ -30,7 +30,7 @@ IFLAGS = -I ${CUDA_INC} -I ${HDF_INC} -I ${JPEG_INC} -I ./src/incRNGs/Random123/
 LFLAGS =
 LFLAGS += -L ${HDF_LIB} -ldf -lmfhdf
 LFLAGS += -L ${JPEG_LIB} -ljpeg
-LFLAGS += -L ${CUDA_LIB} -lcuda -lcudart -lcurand -L /usr/lib64/nvidia/
+LFLAGS += -L ${CUDA_LIB} -lcuda -lcudart -lcurand -L /usr/lib64/nvidia/ -L /usr/lib64/nvidia-304xx/
 
 #===== Caractéristiques majeures =====#
 DFLAGS =
