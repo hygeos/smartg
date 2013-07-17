@@ -1,0 +1,102 @@
+CHANGELOG v1.3
+
+Ajout de fonctionnalités
+
+- ajout de la diffusion dans l'océan (couplage océan-atmosphère)
+        * Ajout des types de simulation suivants (paramètre SIM)
+                # 0 pour ocean et dioptre
+                # 2 pour atmosphere dioptre et ocean
+                # 3 pour ocean seul
+        * La diffusion dans l'océan se fait toujours en mode parallèle, même
+          quand la diffusion dans l'atmosphère se fait en mode sphérique. Dans
+          ce cas, on considère que le photon ressort de l'océan à l'endroit où
+          il est entré.
+        * La prise en compte de la diffusion dans l'océan est activée par le
+          flag de compilation FLAGOCEAN (actif par défaut). Ce flag n'a pas été
+          supprimé car il entraine une lègère diminution des performances
+          (~15%) dans les cas sans diffusion dans l'océan.
+        * Ajout des paramètres suivants dans le fichier paramètres:
+           -> coefficient d'absorption totale ATOT
+           -> coefficient de diffusion totale BTOT
+           -> nom du fichier PATHDIFFOCE contenant la fonction de phase totale
+              pour la diffusion dans l'océan. Ce fichier contient les colonnes
+              suivantes : angle de diffusion en degrés, I+Q, I-Q, U, V. Ce
+              fichier contient LSAOCE lignes (LSAOCE est spécifié dans le
+              fichier Paramètre)
+        * ajout d'un script python tools/water_model.py permettant de calculer
+          une fonction de phase et les coefficients d'absorption et de
+          diffusion pour une longueur d'onde et une concentration en
+          chlorophylle données.
+
+- Sortie  du champ de rayonnement descendant "bottom of atmosphere" (BOA)
+  (résultat équivalent à resultDown.txt des OS)
+  -> ajout optionnel des datasets pour le champ de rayonnement en bas de
+     l'atmosphère: I_down (0+), Q_down (0+), U_down (0+)
+  Rem: lorsqu'on ajoute le calcul du rayonnement BOA, le calcul est dans la
+  plupart des cas significativement ralenti, car tous les photons n'ayant pas
+  subi de diffusion dans l'atmosphère seront comptés dans la même case (c'est
+  le glitter). Comme le comptage se fait de manière atomique, ceci aboutit à un
+  ralentissement important. Ce ralentissement pourrait être évité en ne
+  comptant pas les photons n'ayant pas diffusé dans l'atmosphère, et en
+  rajoutant leur contribution a posteriori, de manière analytique.
+
+- ajout de la prise en compte du Glitter + surface lambertienne combinés (pour
+  comparaison avec les OS)
+  La prise en compte de ce type de surface se fait à l'aide de la variable
+  DIOPTRE = 4 dans le fichier paramètres. Comme pour une surface lambertienne
+  classique, l'albédo est ajusté par la variable W0LAM.
+
+- ajout de la prise en compte de l'absorption monochromatique
+  (exemple: ozone) - prise en compte du profil vertical de l’épaisseur optique des absorbants
+  Ajout d'une colonne (coefficient d'absorption) dans le profil vertical, qui
+  peut être nulle pour désactiver la prise en compte de l'absorption.
+
+
+
+Corrections de bugs
+
+
+- correction d'un bug dans la fonction surfaceAgitee en mode spherique.
+  Un test (présence du pixel aux coordonnées (x=0,y=0) était réalisé de manière
+  incorrecte et pouvait aboutir dans certains cas à des valeurs nan qui
+  dégradaient les résultats. Ceci était vrai en particulier pour le glitter,
+  qui par définition impacte le sol aux coordonnées (0,0). De plus, la variable
+  isp n'était pas initialisée correctement, ce qui aboutissait à des erreurs.
+
+- variable HATM (épaisseur de l'atmosphère): cette variable était par endroits
+  hardcodée, ce qui aboutissait à des erreurs si on spécifiait une valeur
+  différente de 100km
+
+
+Améliorations
+
+- modifications dans le format des fichiers de sortie (le format de fichier
+  reste hdf4)
+    Modification d'attributs:
+        * le mode de calcul est SSA/PPA au lieu de SP/PP
+        * l'angle zénithal solaire est "VZA (deg.)" au lieu de "THSDEG"
+    Modifications des datasets de sortie
+        * "Valeurs de la reflectance (I)" -> "I_up (TOA)"
+        * "Valeurs de Q" -> "Q_up (TOA)"
+        * "Valeurs de U" -> "U_up (TOA)"
+        * "Valeurs de la lumiere polarisee (LP)" -> "LP_up (TOA)"
+        * "Valeurs de theta echantillonnees" -> "Zenith angles"
+        * "Valeurs de phi echantillonnees" -> "Azimut angles"
+
+- modification du format de la fonction de phase aérosols. On stocke:
+        P1 = I+Q
+        P2 = I-Q
+        P3 = U
+        au lieu de
+        P1 = (I+Q)/2
+        P2 = (I-Q)/2
+        P3 = U
+  Adaptation de l'outil phase.f et des fichiers exemple.
+
+- suppression de l'option de diffusion forcée, qui n'était pas utile dans la
+  grande majorité des cas.
+
+- réorganisation interne du code pour permettre la prise en compte de la
+  diffusion dans l'océan et la sortie BOA
+
+- suppression des flags de compilation inutilisés : TRAJET, TEMPS et TABRAND
