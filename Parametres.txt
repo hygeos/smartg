@@ -96,8 +96,8 @@ WINDSPEED = 5.0
 NH2O = 1.33
 
 # Concentration en phytoplancton [mg.m-3] (utilise si SUR>=2) (float)
-atot = 0.0692371317613
-btot = 0.145538713561
+ATOT = 0.0692371317613
+BTOT = 0.145538713561
 PATHDIFFOCE = fic/pf_ocean_1.0_443nm.txt
 
 

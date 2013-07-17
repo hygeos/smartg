@@ -278,11 +278,11 @@ void initConstantesHost(int argc, char** argv)
 	
     #ifdef FLAGOCEAN
 	strcpy(s,"");
-    chercheConstante(parametres, "atot", s);
-    atot = atof(s);
+    chercheConstante(parametres, "ATOT", s);
+    ATOT = atof(s);
 	strcpy(s,"");
-    chercheConstante(parametres, "btot", s);
-    btot = atof(s);
+    chercheConstante(parametres, "BTOT", s);
+    BTOT = atof(s);
 	chercheConstante( parametres, "PATHDIFFOCE", PATHDIFFOCE );
 
     #endif
@@ -1098,8 +1098,8 @@ float calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa,
 		exit(1);
 	}
 #ifdef FLAGOCEAN
-    float extoce = atot + btot;
-    return  btot/extoce;
+    float extoce = ATOT + BTOT;
+    return  BTOT/extoce;
 #else
     return 0;
 #endif
@@ -1663,7 +1663,7 @@ void afficheParametres()
 	printf("\n");
 	printf(" NFOCE\t=\t%u", NFOCE);
 	printf("\n");
-    printf(" atot\t=\t%f \n btot\t=\t%f\n", atot, btot);
+    printf(" ATOT\t=\t%f \n BTOT\t=\t%f\n", ATOT, BTOT);
 	printf(" NH2O\t=\t%f", NH2O);
 	printf("\n");
 	#endif
@@ -1921,8 +1921,8 @@ void creerHDFTemoin(double* tabPhotonsTot, double* tabPhotonsTotDown, unsigned l
 	SDsetattr(sdsTab, "WINDSPEED", DFNT_FLOAT32, 1, &WINDSPEED);
 	SDsetattr(sdsTab, "NH2O", DFNT_FLOAT32, 1, &NH2O);
     #ifdef FLAGOCEAN
-    SDsetattr(sdsTab, "atot", DFNT_FLOAT32, 1, &atot);
-    SDsetattr(sdsTab, "btot", DFNT_FLOAT32, 1, &btot);
+    SDsetattr(sdsTab, "ATOT", DFNT_FLOAT32, 1, &ATOT);
+    SDsetattr(sdsTab, "BTOT", DFNT_FLOAT32, 1, &BTOT);
     SDsetattr(sdsTab, "PATHDIFFOCE", DFNT_CHAR8, strlen(PATHDIFFOCE), PATHDIFFOCE);
     #endif
 	SDsetattr(sdsTab, "PATHRESULTATSHDF", DFNT_CHAR8, strlen(PATHRESULTATSHDF), PATHRESULTATSHDF);
@@ -2025,8 +2025,8 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "NH2O"), (VOIDP)NH2Orecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "MODE"), (VOIDP)MODErecup);
         #ifdef FLAGOCEAN
-        SDreadattr(sdsTab, SDfindattr(sdsTab, "atot"), &atotrecup);
-        SDreadattr(sdsTab, SDfindattr(sdsTab, "btot"), &btotrecup);
+        SDreadattr(sdsTab, SDfindattr(sdsTab, "ATOT"), &atotrecup);
+        SDreadattr(sdsTab, SDfindattr(sdsTab, "BTOT"), &btotrecup);
         #endif
 		
 		// Si les parametres sont les memes on recupere des informations pour poursuivre la simulation précédente
@@ -2056,8 +2056,8 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 			&& (strcmp(MODErecup, "PP") == 0)
             #endif
             #ifdef FLAGOCEAN
-            && (atotrecup == atot)
-            && (btotrecup = btot)
+            && (atotrecup == ATOT)
+            && (btotrecup = BTOT)
             #endif
             )
 		{
@@ -2206,8 +2206,8 @@ tempsPrec)
 	SDsetattr(sdFichier, "WINDSPEED", DFNT_FLOAT32, 1, &WINDSPEED);
 	SDsetattr(sdFichier, "NH2O", DFNT_FLOAT32, 1, &NH2O);
     #ifdef FLAGOCEAN
-    SDsetattr(sdFichier, "atot", DFNT_FLOAT32, 1, &atot);
-    SDsetattr(sdFichier, "btot", DFNT_FLOAT32, 1, &btot);
+    SDsetattr(sdFichier, "ATOT", DFNT_FLOAT32, 1, &ATOT);
+    SDsetattr(sdFichier, "BTOT", DFNT_FLOAT32, 1, &BTOT);
     SDsetattr(sdFichier, "PATHDIFFOCE", DFNT_CHAR8, strlen(PATHDIFFOCE), PATHDIFFOCE);
     #endif
 	SDsetattr(sdFichier, "PATHRESULTATSHDF", DFNT_CHAR8, strlen(PATHRESULTATSHDF), PATHRESULTATSHDF);

@@ -161,7 +161,7 @@ extern float W0AER;
 extern float W0LAM;
 #ifdef FLAGOCEAN
 extern float W0OCE;
-extern float atot, btot;
+extern float ATOT, BTOT;
 extern char PATHDIFFOCE[];
 #endif
 extern unsigned int OUTPUT_LAYERS;
