@@ -196,7 +196,9 @@ int main (int argc, char *argv[])
 	// Calcul de foce, modèle de diffusion dans l'océan
 	#ifdef FLAGOCEAN
 	if( SIM==0 || SIM==2 || SIM==3 ){
-		W0OCE = calculF( PATHDIFFOCE, tab_H.foce, tab_D.foce, LSAOCE, NFOCE);
+		calculF( PATHDIFFOCE, tab_H.foce, tab_D.foce, LSAOCE, NFOCE);
+        float extoce = ATOT + BTOT;
+        W0OCE = BTOT/extoce;
 	}
 	#endif
 

@@ -101,7 +101,7 @@ void freeTableaux(Tableaux*, Tableaux*);
 /* calculFaer
 * Calcul de la fonction de phase des aérosols
 */
-float calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, int nf);
+void calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, int nf);
 
 
 /* verificationFAER

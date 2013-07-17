@@ -963,8 +963,7 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 /* calculFaer
 * Calcul de la fonction de phase des aérosols
 */
-//void calculFaer( const char* nomFichier, Tableaux* tab_H, Tableaux* tab_D ){
-float calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, int nf){
+void calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, int nf){
 	
 	FILE* fichier = fopen(nomFichier, "r");
 
@@ -1097,12 +1096,6 @@ float calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa,
 		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
 		exit(1);
 	}
-#ifdef FLAGOCEAN
-    float extoce = ATOT + BTOT;
-    return  BTOT/extoce;
-#else
-    return 0;
-#endif
 	
 }
 
