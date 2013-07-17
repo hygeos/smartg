@@ -46,7 +46,6 @@ float HATM;		//Altitude haute de la couche aerosol [km] (utilise si PROFIL=3)
 float WINDSPEED;	//Vitesse du vent [m/s] (utilisee pour le modele de Cox et Munk: si DIOPTRE=1)
 float NH2O;		//Indice de refraction relatif air/eau
 #ifdef FLAGOCEAN
-float CONPHY;	//Concentration en phytoplancton [mg.m-3] (utilise si SUR>=2)
 float atot, btot;
 char PATHDIFFOCE[1024];
 #endif

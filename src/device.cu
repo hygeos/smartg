@@ -1880,7 +1880,6 @@ void initConstantesDevice()
 	cudaMemcpyToSymbol(W0LAMd, &W0LAM, sizeof(float));
     #ifdef FLAGOCEAN
 	cudaMemcpyToSymbol(W0OCEd, &W0OCE, sizeof(float));
-	cudaMemcpyToSymbol(CONPHYd, &CONPHY, sizeof(float));
     #endif
 
 	cudaMemcpyToSymbol(OUTPUT_LAYERSd, &OUTPUT_LAYERS, sizeof(unsigned int));

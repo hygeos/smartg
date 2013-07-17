@@ -278,8 +278,6 @@ void initConstantesHost(int argc, char** argv)
 	
     #ifdef FLAGOCEAN
 	strcpy(s,"");
-	chercheConstante(parametres, "CONPHY", s);
-	CONPHY = atof(s);
     chercheConstante(parametres, "atot", s);
     atot = atof(s);
 	strcpy(s,"");
@@ -689,7 +687,6 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	
 	#ifdef FLAGOCEAN
 	// Modèle de diffusion dans l'océan
-    printf("%d\n",5*NFOCE*sizeof(float));
 	tab_H->foce = (float*)malloc(5 * NFOCE * sizeof(float));
 	if( tab_H->foce == NULL ){
 		printf("ERREUR: Problème de malloc de tab_H->foce dans initTableaux\n");
@@ -967,7 +964,7 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 * Calcul de la fonction de phase des aérosols
 */
 //void calculFaer( const char* nomFichier, Tableaux* tab_H, Tableaux* tab_D ){
-void calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, int nf){
+float calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, int nf){
 	
 	FILE* fichier = fopen(nomFichier, "r");
 
@@ -1004,6 +1001,12 @@ void calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, 
 	}
 	
 	else{
+        char c = getc(fichier);
+        while(c=='#') {
+            while((c=getc(fichier))!='\n');
+            c = getc(fichier);
+        }
+        fseek(fichier, -1, SEEK_CUR);
 		for(iang=0; iang<lsa; iang++){
             fgets(buffer, 1024, fichier);
 
@@ -1094,6 +1097,12 @@ void calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, 
 		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
 		exit(1);
 	}
+#ifdef FLAGOCEAN
+    float extoce = atot + btot;
+    return  btot/extoce;
+#else
+    return 0;
+#endif
 	
 }
 
@@ -1116,395 +1125,6 @@ void verificationFAER( const char* nomFichier, Tableaux tab){
 	fclose(fichier);
 
 }
-
-
-#ifdef FLAGOCEAN
-/* calculFoce
-* Calcul de la fonction de phase dans l'océan
-*/
-void calculFoce( Tableaux* tab_H, Tableaux* tab_D ){
-
-	/** Déclaration **/
-	// Données utiles pour le calcul
-	double lamb0[NWAV]={350., 355., 360., 365, 370., 375, 380., 385, 390., 395, 400., 405, 410., 415, 420., 425, 430., 435, 440.,
-						445, 450., 455, 460., 465, 470., 475, 480., 485, 490., 495, 500., 505, 510., 515, 520., 525, 
-						530., 535, 540., 545, 550., 555, 560., 565, 570., 575, 580., 585, 590., 595, 600., 605, 610., 615, 620.,
-						625, 630., 635, 640., 645, 650., 655, 660., 665, 670., 675, 680., 685, 690., 695, 700.};
-
-	double ah2o[NWAV]={	0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.01137, 0.00941, 0.00851, 0.00813, 0.00663, 0.0053, 0.00473, 
-						0.00444, 0.00454, 0.00478, 0.00495, 0.0053,	0.00635, 0.00751, 0.00922, 0.00962, 0.00979, 
-						0.01011, 0.0106, 0.0114, 0.0127, 0.0136, 0.015, 0.0173, 0.0204, 0.0256, 0.0325, 0.0396, 
-						0.0409, 0.0417, 0.0434, 0.0452, 0.0474, 0.0511, 0.0565, 0.0596, 0.0619, 0.0642, 0.0695, 
-						0.0772, 0.0896, 0.11, 0.1351, 0.1672, 0.2224, 0.2577, 0.2644, 0.2678, 0.2755, 0.2834, 
-						0.2916, 0.3012, 0.3108, 0.325, 0.34, 0.371, 0.41, 0.429 , 0.439, 0.448, 0.465, 0.486,
-						0.516, 0.559, 0.624 };
-
-     double A_bricaud95[NWAV]={0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 
-							  0.0263, 0.0285, 0.0313, 0.03375, 0.0356, 0.03655, 0.0386, 0.0397, 0.0403, 0.03865, 
-							  0.0371, 0.0356, 0.035, 0.0341, 0.0332, 0.0315, 0.0301, 0.02875, 0.0274, 0.02535, 
-							  0.023, 0.0204, 0.018, 0.01595, 0.0143, 0.01285, 0.0117, 0.0106, 0.0097, 0.0088 , 
-							  0.008, 0.007, 0.0062, 0.0056, 0.0053, 0.0052, 0.0053, 0.0055, 0.0056, 0.0056 , 
-							  0.0054, 0.0055, 0.0057, 0.0061, 0.0065, 0.00675, 0.0071, 0.00745, 0.0077, 0.00795, 
-							  0.0083, 0.0092, 0.0115, 0.01525, 0.0189, 0.0201, 0.0182, 0.01345, 0.0083, 0.0049, 0.003 };
-
-	double B_bricaud95[NWAV]={0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 
-							  0.282, 0.2815, 0.283 , 0.292 , 0.299 , 0.3145, 0.314 , 0.326 , 0.332 , 0.3515, 
-							  0.359, 0.3665, 0.365 , 0.3685, 0.368 , 0.3765, 0.377 , 0.3745, 0.361 , 0.345 , 
-							  0.321, 0.294, 0.26  , 0.2305, 0.196 , 0.1675, 0.139 , 0.114 , 0.09  , 0.0695, 
-							  0.052, 0.0315, 0.016 , 0.0085, 0.005 , 0.02  , 0.035 , 0.053 , 0.073 , 0.0905, 
-							  0.092, 0.084, 0.071 , 0.0645, 0.064 , 0.0725, 0.078 , 0.086 , 0.098 , 0.116 , 
-							  0.124, 0.123, 0.121 , 0.134 , 0.149 , 0.158 , 0.155 , 0.131 , 0.086 , 0.0285, -0.034 };
-
-	double ee[NWAV]={0.77800, 0.76700, 0.75600, 0.73700, 0.72000, 0.70000, 0.68500, 0.67300, 0.67000, 0.66000,
-					  0.64358, 0.64776, 0.65175, 0.65555, 0.65917, 0.66259, 0.66583, 0.66889, 0.67175, 0.67443,
-					  0.67692, 0.67923, 0.68134, 0.68327, 0.68501, 0.68657, 0.68794, 0.68903, 0.68955, 0.68947,
-					  0.68880, 0.68753, 0.68567, 0.68320, 0.68015, 0.67649, 0.67224, 0.66739, 0.66195, 0.65591,
-					  0.64927, 0.64204, 0.64000, 0.63000, 0.62300, 0.61500, 0.61000, 0.61400, 0.61800, 0.62200,
-					  0.62600, 0.63000, 0.63400, 0.63800, 0.64200, 0.64700, 0.65300, 0.65800, 0.66300, 0.66700,
-					  0.67200, 0.67700, 0.68200, 0.68700, 0.69500, 0.69700, 0.69300, 0.66500, 0.64000,0.62000,0.60000 };
-
-	double Chi[NWAV]={0.15300, 0.14900, 0.14400, 0.14000, 0.13600, 0.13100, 0.12700, 0.12300, 0.11900, 0.11800,
-					  0.11748, 0.12066, 0.12259, 0.12326, 0.12269, 0.12086, 0.11779, 0.11372, 0.10963, 0.10560,
-					  0.10165, 0.09776, 0.09393, 0.09018, 0.08649, 0.08287, 0.07932, 0.07584, 0.07242, 0.06907,
-					  0.06579, 0.06257, 0.05943, 0.05635, 0.05341, 0.05072, 0.04829, 0.04611, 0.04419, 0.04253,
-					  0.04111, 0.03996, 0.03900, 0.03750, 0.03600, 0.03400, 0.03300, 0.03280, 0.03250, 0.03300,
-					  0.03400, 0.03500, 0.03600, 0.03750, 0.03850, 0.04000, 0.04200, 0.04300, 0.04400, 0.04450,
-					  0.04500, 0.04600, 0.04750, 0.04900, 0.05150, 0.05200, 0.05050, 0.04400, 0.03900,0.03400,0.03000 };
-
-	double Kw[NWAV]={0.02710, 0.02380, 0.02160, 0.01880, 0.01770, 0.01595, 0.01510, 0.01376, 0.01271, 0.01208,
-					  0.01042, 0.00890, 0.00812, 0.00765, 0.00758, 0.00768, 0.00770, 0.00792, 0.00885, 0.00990,
-					  0.01148, 0.01182, 0.01188, 0.01211, 0.01251, 0.01320, 0.01444, 0.01526, 0.01660, 0.01885,
-					  0.02188, 0.02701, 0.03385, 0.04090, 0.04214, 0.04287, 0.04454, 0.04630, 0.04846, 0.05212,
-					  0.05746, 0.06053, 0.06280, 0.06507, 0.07034, 0.07801, 0.09038, 0.11076, 0.13584, 0.16792,
-					  0.22310, 0.25838, 0.26506, 0.26843, 0.27612, 0.28400, 0.29218, 0.30176, 0.31134, 0.32553,
-					  0.34052, 0.37150, 0.41048, 0.42947, 0.43946, 0.44844, 0.46543, 0.48642, 0.51640,0.55939,0.62438 };
-
-
-	int ilambda, iang, ipf;
-	double a0, b0, a1, b1, a2, b2;	// Coefficients d'absorption et de diffusion
-	double r1;
-	double anap440, anap, aphi;
-	double bb1, g2;				// Coefficients liés à la fonction Henyey greenstein
-	
-	double integ_ff;
-	double rat1;				// Utilisé pour la troncature de la fonction de phase
-	double extoce;			//
-	double atot, btot;
-	double Kd;
-	
-	double delta;
-	double dtheta;
-	double pm1, pm2;				// Variable intermédiaire de calcul
-	double sin1, sin2;				// Variable intermédiaire de calcul
-	
-	double z, norm, v;
-	
-	double* scum;
-	scum = (double*) malloc(NFOCE*sizeof(*scum));
-	if( scum==NULL){
-		printf("Probleme d'allocation de scum dans calculFoce\n");
-		exit(1);
-	}
-	
-	double* ang;
-	ang = (double*) malloc(NFOCE*sizeof(*ang));
-	if( ang==NULL){
-		printf("Probleme d'allocation de ang dans calculFoce\n");
-		exit(1);
-	}
-	
-	double* pf = (double*) malloc(4*LSAOCE*sizeof(*pf));
- 	/* pf[iang + i] donne accès aux nombre de stokes i+1 pour l'indice d'angle iang */
- 	if( pf==NULL){
-		printf("Probleme d'allocation de pf dans calculFoce\n");
-		exit(1);
- 	}
-	
-	double* pf0 = (double*) malloc(4*LSAOCE*sizeof(*pf0));
-	/* pf0[iang + i] donne accès aux nombre de stokes i+1 pour l'indice d'angle iang */
-	if( pf0==NULL){
-		printf("Probleme d'allocation de pf0 dans calculFoce\n");
-		exit(1);
-	}
-	
-	double* pf1 = (double*) malloc(4*LSAOCE*sizeof(*pf1));
-	/* pf1[iang + i] donne accès aux nombre de stokes i+1 pour l'indice d'angle iang */
-	if( pf1==NULL){
-		printf("Probleme d'allocation de pf1 dans calculFoce\n");
-		exit(1);
-	}
-	
-	double* pf2 = (double*) malloc(4*LSAOCE*sizeof(*pf2));
-	/* pf2[iang + i] donne accès aux nombre de stokes i+1 pour l'indice d'angle iang */
-	if( pf2==NULL){
-		printf("Probleme d'allocation de pf2 dans calculFoce\n");
-		exit(1);
-	}
-	
-	/** Calculs **/
-	ilambda = int( (LAMBDA - lamb0[0])/(lamb0[1]-lamb0[0]) );
-	if( ilambda < 0 ){
-		printf("Lambda est out of range");
-		exit(1);
-	}
-	ilambda = min( ilambda, NWAV-1 );
-	
-	// Coefficients pour l'eau
-	a0 = ah2o[ilambda];
-	b0 = 19.3e-4*pow(LAMBDA/550.,-4.3);
-
-	// Coefficients d'absorption et de diffusion pour le phytoplancton
-	anap440 = 0.0124*pow(CONPHY,0.724);
-	anap = anap440*exp( -0.011*(LAMBDA-440) );
-	aphi = A_bricaud95[ilambda]*pow( CONPHY,1.-B_bricaud95[ilambda] );
-	a1 = anap + aphi;
-	b1 = 0.416*pow( CONPHY,0.766 )*550/LAMBDA;
-	
-	// Backscatterring part
-	if( CONPHY<2 ){
-		v = 0.5*( log10(CONPHY) - 0.3 );
-	}
-	else{
-		v = 0;
-	}
-
-	bb1 = 0.002 + 0.01*( 0.5-0.25*log10(CONPHY))*pow(LAMBDA/550,v);
-	r1 = (bb1 - 0.002)/0.028;
-	// g1 = 1 - (2*bb1)/(bb1 + 0.414);
-	
-	// Coefficients pour les 2ème particules
-	a2 = 0;
-	b2 = 0;
-	g2 = 0.9;
-	
-	
-	/* 	Hereafter, we define h2o, part1 and part2 phase function.  They can be
-		d here by other means (Mie scattering) provided that:
-		1) A value is given for every degree angle
-		2) The P.F. spherical integral is 4 PI (i.e., the mean value for the
-			two first terms sum is 1)
-		3) The first term is for perpend. polarisation, the second for parallel */
-	for( iang=0; iang<LSAOCE; iang++ ){
-		ang[iang] = 180*double(iang)/double(LSAOCE-1)*DEG2RAD;
-	}
-	
-	for( iang=0; iang<LSAOCE; iang++ ){
-
-		/** Fonction de phase **/
-		/* Pour l'eau
-		* Ici on suppose que le facteur de dépolarisation est nul
-		*/
-		pf0[iang*4 + 0] = 0.75;
-		pf0[iang*4 + 1] = 0.75*cos(ang[iang])*cos(ang[iang]);
-		pf0[iang*4 + 2] = 0.75*cos(ang[iang]);
-		pf0[iang*4 + 3] = 0.;
-
-		
-		/* Pour les deux autres particules */
-		if( iang>=ANGTRONC ){
-			pf1[iang*4 + 0]=0.5*(r1*fournierForand(ang[iang],1.117,3.695) +(1-r1)*fournierForand(ang[iang],1.05,3.259));
-		}
-		else{
-			pf1[iang*4 + 0] = 0.5*(r1*fournierForand(ang[ANGTRONC],1.117,3.695)
-				+ (1-r1)*fournierForand(ang[ANGTRONC],1.05,3.259));
-		}
-		
-		pf1[iang*4 + 1] = pf1[iang*4 + 0];
-		pf1[iang*4 + 2] = 0.;
-		pf1[iang*4 + 3] = 0.;
-		
-		pf2[iang*4 + 0] = henyeyGreenstein( g2, ang[iang] )/2;
-		pf2[iang*4 + 1] = pf2[iang*4 + 0];
-		pf2[iang*4 + 2] = 0.;
-		pf2[iang*4 + 3] = 0.;
-	}
-	
-	/** Renormalisation après troncature de la fonction de phase **/
-	integ_ff = 0;
-	for( iang=1; iang<LSAOCE; iang++ ){
-		dtheta = ang[iang] - ang[iang-1];
-		pm1 = pf1[(iang-1)*4 + 0] + pf1[(iang-1)*4 + 1];
-		pm2 = pf1[iang*4 + 0] + pf1[iang*4 + 1];
-		sin1 = sin(ang[iang-1]);
-		sin2 = sin(ang[iang]);
-		integ_ff = integ_ff + dtheta*( (sin1*pm1+sin2*pm2)/3. + (sin1*pm2+sin2*pm1)/6. );
-	}
-	
-	rat1 = integ_ff/2;
-
-	
-	for( iang=0; iang<LSAOCE; iang++ ){
-		pf1[iang*4 + 0] *= 1/rat1;
-		pf1[iang*4 + 1] *= 1/rat1;
-	}
-	
-	b1 *= rat1;
-	
-	
-	/** Coefficients d'extinction et scattering albedo globaux **/
-	btot = b0 + b1 + b2;
-	atot = a0 + a1 + a2;
-	
-	/** Absorption totale déduite du coefficient d'atténuation de Morel **/
-	Kd = Kw[ilambda] + Chi[ilambda]*pow(CONPHY,ee[ilambda]);
-	delta = (0.256*(b0+b1/rat1+b2))*(0.256*(b0+b1/rat1+b2)) + 4*Kd*Kd;
-	atot = 0.5*(-0.256*(b0+b1/rat1+b2) + sqrt(delta));
-
-    printf("atot = %f btot = %f\n",atot, btot);
-	extoce = atot + btot;
-	W0OCE = btot/extoce;
-	
-	/** Calcul de la fonction de phase globale de diffusion **/
-	for( iang=0; iang<LSAOCE ; iang++ ){
-		pf[iang*4 + 0] = (b0*pf0[iang*4 + 0] + b1*pf1[iang*4 + 0] + b2*pf2[iang*4 + 0])/btot;
-		pf[iang*4 + 1] = (b0*pf0[iang*4 + 1] + b1*pf1[iang*4 + 1] + b2*pf2[iang*4 + 1])/btot;
-		pf[iang*4 + 2] = (b0*pf0[iang*4 + 2] + b1*pf1[iang*4 + 2] + b2*pf2[iang*4 + 2])/btot;
-		pf[iang*4 + 3] = (b0*pf0[iang*4 + 3] + b1*pf1[iang*4 + 3] + b2*pf2[iang*4 + 3])/btot;
-//    printf("%f %f %f %f %f\n",ang[iang]*180/M_PI, pf[iang*4 + 1] ,pf[iang*4 + 0] ,pf[iang*4 + 2] ,pf[iang*4 + 3]);
-	}
-	
-	/* scum est une fonction s'accroissant entre 0 et 1 telle que d(scum)/dthe
-	* est proportiennelle a la luminance diffusee entre THE et THE+dthe
-	*/
-	scum[0] = 0;
-	for( iang = 1; iang<LSAOCE; iang++ ){
-		dtheta = ang[iang] - ang[iang-1];
-		pm1 = pf[(iang-1)*4 + 0] + pf[(iang-1)*4 + 1];
-		pm2 = pf[iang*4 + 0] + pf[iang*4 + 1];
-		sin1 = sin(ang[iang-1]);
-		sin2 = sin(ang[iang]);
-		scum[iang] = scum[iang-1] + dtheta*(( sin1*pm1+sin2*pm2 )/3 + (sin1*pm2+sin2*pm1)/6.)*DEUXPI;
-	}
-	
-	if( abs(scum[LSAOCE-1]-4*PI)>0.1 ){
-		printf("ERREUR lors de la dérivation de la foncion de phase océanique, scum = %lf\n", scum[LSAOCE-1]);
-		exit(1);		
-	}
-	
-	for( iang = 0; iang<LSAOCE; iang++ ){
-		scum[iang] = scum[iang]/scum[LSAOCE-1];
-	}
-	
-	/* foce gives NFOCE angles increasing from 0 to 180, and distributed according to the statistic scum
-	*/
-	ipf = 0;
-    float seuil = 1e-5;
-	for( iang = 0; iang<NFOCE-1; iang++ ){
-		z = double(iang)/double(NFOCE);
-//		z = double(iang+1)/double(NFOCE); // correction
-		while( scum[ipf+1]<z )
-			ipf++;
-//		tab_H->foce[iang*5 + 4] = (float) ( (scum[ipf+1]-z)*ang[ipf] + (z-scum[ipf])*ang[ipf+1] )/(scum[ipf+1]-scum[ipf]);
-//        printf("%f %f %f\n",tab_H->foce[iang*5 + 0], (float) pf[ipf*4 + 0]/norm,fabs(tab_H->foce[iang*5 + 0]-(float) pf[ipf*4 + 0]/norm));;
-		if (fabs(tab_H->foce[iang*5 + 4] - (float) ( (scum[ipf+1]-z)*ang[ipf] + (z-scum[ipf])*ang[ipf+1] )/(scum[ipf+1]-scum[ipf])) > seuil)
-            printf("tab_H->foce[%d*5 + 4] = %f <> %f\n",iang, tab_H->foce[iang*5 + 4], (float) ( (scum[ipf+1]-z)*ang[ipf] + (z-scum[ipf])*ang[ipf+1] )/(scum[ipf+1]-scum[ipf]));
-		norm = pf[ipf*4 + 0] + pf[ipf*4 + 1];
-//		tab_H->foce[iang*5 + 0] = (float) pf[ipf*4 + 0]/norm;
-        float tt = (float)(pf[ipf*4 + 0]/norm);
-        if (fabsf(tab_H->foce[iang*5 + 0] - tt) > seuil)
-            printf("tab_H->foce[%d*5 + 0] = %f <> %f\n", iang, tab_H->foce[iang*5 + 0], tt);
-//		tab_H->foce[iang*5 + 1] = (float) pf[ipf*4 + 1]/norm;
-        if (fabs(tab_H->foce[iang*5 + 1] - (float) pf[ipf*4 + 1]/norm) > seuil)
-            printf("tab_H->foce[%d*5 + 1] = %f <> %f\n", iang, tab_H->foce[iang*5 + 1], (float) pf[ipf*4 + 1]/norm);
-//		tab_H->foce[iang*5 + 2] = (float) pf[ipf*4 + 2]/norm;
-        if (fabs(tab_H->foce[iang*5 + 2] - (float) pf[ipf*4 + 2]/norm) > seuil)
-            printf("tab_H->foce[%d*5 + 2] = %f <> %f\n", iang, tab_H->foce[iang*5 + 2], (float) pf[ipf*4 + 2]/norm);
-//		tab_H->foce[iang*5 + 3] = (float) pf[ipf*4 + 3]/norm;
-        if (fabs(tab_H->foce[iang*5 + 3] - (float) pf[ipf*4 + 3]/norm) > seuil)
-            printf("tab_H->foce[%d*5 + 3] = %f <> %f\n", iang, tab_H->foce[iang*5 + 3], (float) pf[ipf*4 + 3]/norm);
-//        printf("%f %f %f %f %f\n",(float) pf[ipf*4 + 0]/norm,
-//                                (float) pf[ipf*4 + 1]/norm ,
-//                                (float) pf[ipf*4 + 2]/norm ,
-//                                (float) pf[ipf*4 + 3]/norm,
-//                (float) ( (scum[ipf+1]-z)*ang[ipf] + (z-scum[ipf])*ang[ipf+1] )/(scum[ipf+1]-scum[ipf]));
-                                    
-	}
-	
-//	tab_H->foce[(NFOCE-1)*5 + 4] = PI;
-    if (tab_H->foce[(NFOCE-1)*5 + 4] != PI) 
-        printf("tab_H->foce[(NFOCE-1)*5 + 4] = %f <> PI\n", tab_H->foce[(NFOCE-1)*5 + 4]);
-//	tab_H->foce[(NFOCE-1)*5 + 0] = 0.5f;
-    if (tab_H->foce[(NFOCE-1)*5 + 0] != 0.5f)
-        printf("tab_H->foce[(NFOCE-1)*5 + 0] = %f <> 0.5f\n", tab_H->foce[(NFOCE-1)*5 + 0]);
-//	tab_H->foce[(NFOCE-1)*5 + 1] = 0.5f;
-    if (tab_H->foce[(NFOCE-1)*5 + 1] != 0.5f)
-        printf("tab_H->foce[(NFOCE-1)*5 + 1] = %f <> 0.5f\n", tab_H->foce[(NFOCE-1)*5 + 1]);
-//	tab_H->foce[(NFOCE-1)*5 + 2] = (float) pf[(LSAOCE-1)*4 + 2]/(pf[(LSAOCE-1)*4 + 0]+pf[(LSAOCE-1)*4 + 1]);
-    if (fabs(tab_H->foce[(NFOCE-1)*5 + 2] - (float) pf[(LSAOCE-1)*4 + 2]/(pf[(LSAOCE-1)*4 + 0]+pf[(LSAOCE-1)*4 + 1])) > seuil)
-        printf("tab_H->foce[(NFOCE-1)*5 + 2] = %f <> %f\n",tab_H->foce[(NFOCE-1)*5 + 2], (float) pf[(LSAOCE-1)*4 + 2]/(pf[(LSAOCE-1)*4 + 0]+pf[(LSAOCE-1)*4 + 1]));
-//	tab_H->foce[(NFOCE-1)*5 + 3] = 0.f;
-    if (tab_H->foce[(NFOCE-1)*5 + 3] != 0.f)
-        printf("tab_H->foce[(NFOCE-1)*5 + 3] = %f <> 0.f\n", tab_H->foce[(NFOCE-1)*5 + 3]);
-	
-	/** Transfert de foce dans le device **/
-//	cudaError_t erreur = cudaMemcpy(tab_D->foce, tab_H->foce, 5*NFOCE*sizeof(*(tab_H->foce)), cudaMemcpyHostToDevice); 
-//	if( erreur != cudaSuccess ){
-//		printf( "ERREUR: Problème de copie tab_D->foce dans calculFoce\n");
-//		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-//		exit(1);
-//	}
-	
-	
-	/** Libération de la mémoire allouée **/
-	free( scum );
-	free( ang );
-	free( pf );
-	free( pf0 );
-	free( pf1 );
-	free( pf2 );
-}
-
-
-/* henyeyGreenstein
-* 
-*/
-double henyeyGreenstein( double asym, double angle ){
-
-	return  (1 - asym*asym)/pow(1 + asym*asym - 2*asym*cos(angle),1.5);
-}
-
-
-/* fournierForand
- * 
- */
- double fournierForand(double ang, double n, double mu){
-
-	double v;
-	double delta, delta180;
-	double res;
-	
-	v = (3-mu)/2;
-	delta = 4/( 3*(n-1)*(n-1) )*sin(ang/2)*sin(ang/2);
-	delta180 = 4/( 3*(n-1)*(n-1) )*sin(PI/2)*sin(PI/2);
-
-	res = 1/( 4*PI*(1-delta)*(1-delta)*pow(delta,v) )*( v*(1-delta) - (1-pow(delta,v)) +
-		( delta*(1-pow(delta,v)) - v*(1-delta) )*1/(sin(ang/2)*sin(ang/2)) )
-		+ (1-pow(delta180,v))/(16*PI*(delta180-1)*pow(delta180,v)) * (3*cos(ang)*cos(ang) - 1);
-	res *= 4*PI;
-	
-	return res;
-}
-
-
-/* verificationFoce
-* Sauvegarde la fonction de phase dans l'océan calculée dans un fichier
-* Permet de valider le bon calcul de la fonction de phase
-*/
-void verificationFoce( const char* nomFichier, Tableaux tab){
-	
-	FILE* fichier = fopen(nomFichier, "w");
-	int i;
-	
-	fprintf( fichier, "angle\tI//\tIp\n" );
-	
-	for(i=0; i<NFOCE; i++){
-		fprintf(fichier, "%f\t%20.16f\t%20.16f\n", tab.foce[i*5+4],tab.foce[i*5+0], tab.foce[i*5+1]);
-	}
-	
-	fclose(fichier);
-	
-}
-#endif
 
 /* profilAtm
 * Calcul du profil atmosphérique dans l'atmosphère en fonction de la couche
@@ -2043,8 +1663,7 @@ void afficheParametres()
 	printf("\n");
 	printf(" NFOCE\t=\t%u", NFOCE);
 	printf("\n");
-	printf(" CONPHY\t=\t%f", CONPHY);
-	printf("\n");
+    printf(" atot\t=\t%f \n btot\t=\t%f\n", atot, btot);
 	printf(" NH2O\t=\t%f", NH2O);
 	printf("\n");
 	#endif
@@ -2058,6 +1677,7 @@ void afficheParametres()
 	printf("\n");
 	printf(" PATHPROFILATM = %s", PATHPROFILATM);
 	printf("\n");
+    printf(" PATHDIFFOCE = %s\n", PATHDIFFOCE);
 	
 	// Calcul la date et l'heure courante
 	time_t dateTime = time(NULL);
@@ -2301,7 +1921,9 @@ void creerHDFTemoin(double* tabPhotonsTot, double* tabPhotonsTotDown, unsigned l
 	SDsetattr(sdsTab, "WINDSPEED", DFNT_FLOAT32, 1, &WINDSPEED);
 	SDsetattr(sdsTab, "NH2O", DFNT_FLOAT32, 1, &NH2O);
     #ifdef FLAGOCEAN
-	SDsetattr(sdsTab, "CONPHY", DFNT_FLOAT32, 1, &CONPHY);
+    SDsetattr(sdsTab, "atot", DFNT_FLOAT32, 1, &atot);
+    SDsetattr(sdsTab, "btot", DFNT_FLOAT32, 1, &btot);
+    SDsetattr(sdsTab, "PATHDIFFOCE", DFNT_CHAR8, strlen(PATHDIFFOCE), PATHDIFFOCE);
     #endif
 	SDsetattr(sdsTab, "PATHRESULTATSHDF", DFNT_CHAR8, strlen(PATHRESULTATSHDF), PATHRESULTATSHDF);
 	SDsetattr(sdsTab, "PATHTEMOINHDF", DFNT_CHAR8, strlen(PATHTEMOINHDF), PATHTEMOINHDF);
@@ -2377,7 +1999,7 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		float NH2Orecup[1];
         char MODErecup[2];
         #ifdef FLAGOCEAN
-		float CONPHYrecup[1];
+        float atotrecup, btotrecup;
         #endif
 		
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "SEED"), (VOIDP)SEEDrecup);
@@ -2403,7 +2025,8 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "NH2O"), (VOIDP)NH2Orecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "MODE"), (VOIDP)MODErecup);
         #ifdef FLAGOCEAN
-		SDreadattr(sdsTab, SDfindattr(sdsTab, "CONPHY"), (VOIDP)CONPHYrecup);
+        SDreadattr(sdsTab, SDfindattr(sdsTab, "atot"), &atotrecup);
+        SDreadattr(sdsTab, SDfindattr(sdsTab, "btot"), &btotrecup);
         #endif
 		
 		// Si les parametres sont les memes on recupere des informations pour poursuivre la simulation précédente
@@ -2433,7 +2056,8 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 			&& (strcmp(MODErecup, "PP") == 0)
             #endif
             #ifdef FLAGOCEAN
-			&& CONPHYrecup[0] == CONPHY
+            && (atotrecup == atot)
+            && (btotrecup = btot)
             #endif
             )
 		{
@@ -2582,7 +2206,9 @@ tempsPrec)
 	SDsetattr(sdFichier, "WINDSPEED", DFNT_FLOAT32, 1, &WINDSPEED);
 	SDsetattr(sdFichier, "NH2O", DFNT_FLOAT32, 1, &NH2O);
     #ifdef FLAGOCEAN
-	SDsetattr(sdFichier, "CONPHY", DFNT_FLOAT32, 1, &CONPHY);
+    SDsetattr(sdFichier, "atot", DFNT_FLOAT32, 1, &atot);
+    SDsetattr(sdFichier, "btot", DFNT_FLOAT32, 1, &btot);
+    SDsetattr(sdFichier, "PATHDIFFOCE", DFNT_CHAR8, strlen(PATHDIFFOCE), PATHDIFFOCE);
     #endif
 	SDsetattr(sdFichier, "PATHRESULTATSHDF", DFNT_CHAR8, strlen(PATHRESULTATSHDF), PATHRESULTATSHDF);
 	SDsetattr(sdFichier, "PATHTEMOINHDF", DFNT_CHAR8, strlen(PATHTEMOINHDF), PATHTEMOINHDF);

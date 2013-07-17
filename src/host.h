@@ -101,7 +101,7 @@ void freeTableaux(Tableaux*, Tableaux*);
 /* calculFaer
 * Calcul de la fonction de phase des aérosols
 */
-void calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, int nf);
+float calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, int nf);
 
 
 /* verificationFAER
@@ -109,31 +109,6 @@ void calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, 
 * Permet de valider le bon calcul de la fonction de phase
 */
 void verificationFAER( const char* nomFichier, Tableaux tab_H );
-
-
-/* calculFoce
-* Calcul de la fonction de phase dans l'océan
-*/
-void calculFoce( Tableaux* tab_H, Tableaux* tab_D );
-
-
-/* henyeyGreenstein
-* 
-*/
-double henyeyGreenstein( double asym, double angle );
-
-
-/* fournierForand
- * 
- */
- double fournierForand(double ang, double n, double mu);
- 
- 
-/* verificationFoce
-* Sauvegarde la fonction de phase dans l'océan calculée dans un fichier
-* Permet de valider le bon calcul de la fonction de phase
-*/
-void verificationFoce( const char* nomFichier, Tableaux tab);
 
 
 /* profilAtm

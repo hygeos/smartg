@@ -161,7 +161,6 @@ extern float W0AER;
 extern float W0LAM;
 #ifdef FLAGOCEAN
 extern float W0OCE;
-extern float CONPHY;
 extern float atot, btot;
 extern char PATHDIFFOCE[];
 #endif
