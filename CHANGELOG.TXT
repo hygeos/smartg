@@ -43,11 +43,12 @@ Ajout de fonctionnalités
 - ajout de la prise en compte du Glitter + surface lambertienne combinés (pour
   comparaison avec les OS)
   La prise en compte de ce type de surface se fait à l'aide de la variable
-  DIOPTRE = 4 dans le fichier paramètres. Comme pour une surface lambertienne
+  DIOPTRE = 4 dans le fichier paramètres. Pour cette simulation, SUR doit être égal à 3. Comme pour une surface lambertienne
   classique, l'albédo est ajusté par la variable W0LAM.
 
 - ajout de la prise en compte de l'absorption monochromatique
-  (exemple: ozone) - prise en compte du profil vertical de l’épaisseur optique des absorbants
+  (exemple: ozone) - prise en compte du profil vertical de l’épaisseur optique des absorbants.
+  Uniquement dans le cas d'un profil utilisateur (PROFIL = 2).
   Ajout d'une colonne (coefficient d'absorption) dans le profil vertical, qui
   peut être nulle pour désactiver la prise en compte de l'absorption.
 
