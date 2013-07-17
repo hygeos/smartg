@@ -97,19 +97,21 @@ def main():
     #
     # read the arguments
     #
-    if len(argv) != 4:
-        print 'Arguments: water_model.py chl wl NANG'
+    if len(argv) != 5:
+        print 'Arguments: water_model.py chl wl NANG tronc_ang'
         print 'where:'
         print '    chl is the chlorophyll concentration in mg/m3'
         print '    wl is the wavelength in nm'
         print '    NANG is the number if angles for the phase function'
+        print '    tronc_ang is the truncation angle in degrees'
         print
-        print 'Example: water_model.py 0.1 500 72001 phase_function.txt'
+        print 'Example: water_model.py 0.1 500 72001 5.'
         exit(1)
 
     chl = float(argv[1])
     wl = float(argv[2])
     NANG = int(argv[3])
+    ang_trunc = float(argv[4])
 
     #
     # wavelength index
@@ -160,7 +162,7 @@ def main():
     pf0[:,3] = 0.
 
     # particles (troncature)
-    itronc = 1999
+    itronc = int(NANG * ang_trunc/180.)
     pf1 = zeros((NANG, 4), dtype='float64') # pure water phase function
     pf1[itronc:,0] = 0.5*(r1*fournierForand(ang[itronc:],1.117,3.695) +(1-r1)*fournierForand(ang[itronc:],1.05,3.259))
     pf1[:itronc,0] = 0.5*(r1*fournierForand(ang[itronc ],1.117,3.695) +(1-r1)*fournierForand(ang[itronc ],1.05,3.259))
@@ -207,7 +209,7 @@ def main():
     print '# wavelength: {}'.format(wl)
     print '# total absorption coefficient: {}'.format(atot)
     print '# total scattering coefficient: {}'.format(btot)
-    print '# truncating at {} deg'.format(ang[itronc]*180/pi)
+    print '# truncating at {} deg'.format(ang_trunc*180/pi)
     for i in xrange(NANG):
         print '{:.6f} {:.6f} {:.6f} {:.6f} {:.6f}'.format(
                 ang[i] * 180/pi,
