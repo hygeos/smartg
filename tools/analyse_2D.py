@@ -12,12 +12,50 @@ import sys
 import warnings
 warnings.simplefilter("ignore",DeprecationWarning)
 import pyhdf.SD
+from optparse import OptionParser
+
+######################################################
+##                PARSE OPTIONS                     ##
+######################################################
+# NOTE: before importing matplotlib, to switch to agg backend if savefile is
+# selected
+
+parser = OptionParser(usage='%prog [options] hdf_file [hdf_file2]')
+parser.add_option('-s', '--savefile',
+        dest='filename',
+        help='output file name',
+        )
+parser.add_option('-r', '--rmax',
+        type='float',
+        dest='rmax',
+        help='maximum reflectance for color scale',
+        )
+parser.add_option('-p', '--percent',
+        dest='percent',
+        type='float',
+        help='choose polarization ratio instead of polarized reflectance and maximum PR for color scale',
+        )
+parser.add_option('-e', '--error',
+        dest='error',
+        type='float',
+        help='choose relative error instead of polarized reflectance and maximum error for color scale',
+        )
+(options, args) = parser.parse_args()
+if len(args) != 1 and len(args) != 2:
+    parser.print_usage()
+    exit(1)
+
+path_cuda = args[0]
+
+if len(args) == 2 :
+     path_cuda2 = args[1]
+
 import matplotlib
-#matplotlib.use('Agg')
+if options.filename != None:
+    matplotlib.use('Agg')
 import numpy as np
 np.seterr(invalid='ignore', divide='ignore') # ignore division by zero errors
 from pylab import savefig, show, figure
-from optparse import OptionParser
 from matplotlib.transforms import Affine2D
 import mpl_toolkits.axisartist.floating_axes as floating_axes
 from matplotlib.projections import PolarAxes
@@ -97,40 +135,6 @@ def setup_axes3(fig, rect):
 
 def main():
 
-
-    ######################################################
-    ##                PARSE OPTIONS                     ##
-    ######################################################
-
-    parser = OptionParser(usage='%prog [options] hdf_file [hdf_file2]')
-    parser.add_option('-s', '--savefile',
-            dest='filename',
-            help='output file name',
-            )
-    parser.add_option('-r', '--rmax',
-            type='float',
-            dest='rmax',
-            help='maximum reflectance for color scale',
-            )
-    parser.add_option('-p', '--percent',
-            dest='percent',
-            type='float',
-            help='choose polarization ratio instead of polarized reflectance and maximum PR for color scale',
-            )
-    parser.add_option('-e', '--error',
-            dest='error',
-            type='float',
-            help='choose relative error instead of polarized reflectance and maximum error for color scale',
-            )
-    (options, args) = parser.parse_args()
-    if len(args) != 1 and len(args) != 2:
-        parser.print_usage()
-        exit(1)
-
-    path_cuda = args[0]
-
-    if len(args) == 2 :
-         path_cuda2 = args[1]
 
 
     ##########################################################
