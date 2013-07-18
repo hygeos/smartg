@@ -16,7 +16,7 @@ THSDEG = 30.
 # Longueur d'onde [nm] (float)
 LAMBDA = 443.
 
-# Epaisseur optique moleculaire (Rayley) (float)
+# Epaisseur optique moleculaire (Rayleigh) (float)
 TAURAY = 0.0533
 
 # Epaisseur optique aerosol (float)
@@ -28,14 +28,14 @@ W0AER = 0.966883724738261
 # Nom absolu du fichier de la matrice de phase des aérosol
 	# Données commencant sur la première ligne
 	# %lf\t%lf\t%lf\t%lf\t%lf => Correspondant à angle	p2	p1	p3	p4
-PATHDIFFAER = fic/valid_T70.443
+PATHDIFFAER = fic/pf_T70_443nm.txt
 
 # Type de simulation
 	# -2 pour atmosphere seule
 	# -1 pour dioptre seul
 	# 0 pour ocean et dioptre
 	# 1 pour atmosphere et dioptre
-	# 2 pour atmosphere dioptre et ocean (pas validé)
+	# 2 pour atmosphere dioptre et ocean
 	# 3 pour ocean seul
 SIM = 1
 
@@ -48,9 +48,9 @@ PROFIL = 0
 
 # Nom absolu du fichier du profil vertical atmosphérique utilisateur (utile uniquement si PROFIL = 2)
 	# Le format du fichier doit être le suivant 
-	# I	ALT		hmol(I)		haer(I)		H(I)		XDEL(I)		YDEL(I)  => Première ligne indicative, pas de données dessus
-	# %d\t%f\t%f\t%f\t%f\t%f\t%f  => Format pour toutes les autres lignes
-PATHPROFILATM = profil/molec_new_profil_mol_H8_AER_0_2_443
+	# I	ALT		hmol(I)		haer(I)		H(I)		XDEL(I)		YDEL(I)  ZABS(I) => Première ligne indicative, pas de données dessus
+	# %d\t%f\t%f\t%f\t%f\t%f\t%f\t%f  => Format pour toutes les autres lignes
+PATHPROFILATM = profil/665nm_aot0.09622_O3mls_100layers.dat
 
 # Echelle de hauteur aerosol [km] (utilise si PROFIL=0) (float)
 HA = 2.0
@@ -82,6 +82,7 @@ SUR = 3
 	# 1 = agite avec reflexion multiple
 	# 2 = agite sans reflexion multiple
 	# 3 = surface lambertienne (uniquement sans océan)
+	# 4 = glitter + surface lambertienne (2 en reflexion + 3 pour transmission) - Use SUR=3 in this case
 DIOPTRE = 2
 
 # Albedo simple de diffusion de la surface lambertienne (float)
@@ -94,8 +95,11 @@ WINDSPEED = 5.0
 # Indice de refraction relatif air/eau (float)
 NH2O = 1.33
 
-# Concentration en phytoplancton [mg.m-3] (utilise si SUR>=2) (float)
-CONPHY = 0.1
+# Coefficients d'absorption et de diffusion totaux de l'eau
+# et fonction de phase totale pour la diffusion dans l'eau
+ATOT = 0.0692371317613
+BTOT = 0.145538713561
+PATHDIFFOCE = fic/pf_ocean_1.0_443nm.txt
 
 
 

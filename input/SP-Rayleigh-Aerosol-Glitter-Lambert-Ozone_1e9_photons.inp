@@ -96,7 +96,9 @@ WINDSPEED = 5.0
 NH2O = 1.33
 
 # Concentration en phytoplancton [mg.m-3] (utilise si SUR>=2) (float)
-CONPHY = 0.1
+ATOT = 0.0692371317613
+BTOT = 0.145538713561
+PATHDIFFOCE = fic/pf_ocean_1.0_443nm.txt
 
 
 
@@ -129,20 +131,21 @@ LSAOCE = 72001
 NFOCE = 10000000
 
 
-# Chemin des fichiers de sortie et témoin
-# Si le flag NOMAUTO est activé, le nom du fichier de sortie et du fichier
-# témoin sont générés automatiquement avec comme racine PATHRESULTATSHDF
-# Si le flag NOMAUTO est désactivé: PATHRESULTATSHDF est le fichier de sortie
-# et PATHTEMOINHDF est le fichier témoin
-PATHRESULTATSHDF = resultat/SP-Rayleigh-Aerosol-Glitter-Lambert-Ozone_1e9_photons.hdf
 
+###
+## Controle des sorties ##
+#_______________________#
+
+
+# Chemin du fichiers de sortie et témoin
+PATHRESULTATSHDF = resultat/SP-Rayleigh-Aerosol-Glitter-Lambert-Ozone_1e9_photons.hdf
 
 # Période d'écriture du fichier témoin en min (-1 pour désactiver)
 WRITE_PERIOD = -1
 
 # Output layers (binary flags)
 # 1 -> BOA (0+) downward
-OUTPUT_LAYERS    0
+OUTPUT_LAYERS    1
 
 
 
