@@ -1619,7 +1619,9 @@ void afficheParametres()
 	printf("\n");
 	printf(" PATHPROFILATM = %s", PATHPROFILATM);
 	printf("\n");
+    #ifdef FLAGOCEAN
     printf(" PATHDIFFOCE = %s\n", PATHDIFFOCE);
+    #endif
 	
 	// Calcul la date et l'heure courante
 	time_t dateTime = time(NULL);
