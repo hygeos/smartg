@@ -186,7 +186,6 @@ int main (int argc, char *argv[])
 	// Calcul de faer, modèle de diffusion des aérosols
 	if( TAUAER > 0 ){
 		calculF( PATHDIFFAER, tab_H.faer, tab_D.faer, LSAAER, NFAER);
-// 		verificationFAER( "./test/FAER_test.txt", tab_H );
         }
 #ifdef _PERF
                 StopProcessing(perfInitG);
@@ -207,7 +206,6 @@ int main (int argc, char *argv[])
 #endif
 	// Calcul du mélange Molécule/Aérosol dans l'atmosphère en fonction de la couche
 	profilAtm( &tab_H, &tab_D );
-// 	verificationAtm( tab_H );
 #ifdef _PERF
         StopProcessing(perfInitG);
         GetElapsedTime(perfInitG);

@@ -1100,25 +1100,6 @@ void calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, 
 }
 
 
-/* verificationFAER
-* Sauvegarde la fonction de phase des aérosols calculée dans un fichier
-* Permet de valider le bon calcul de la fonction de phase
-*/
-void verificationFAER( const char* nomFichier, Tableaux tab){
-
-	FILE* fichier = fopen(nomFichier, "w");
-	int i;
-	
-	fprintf( fichier, "angle\tI//\tIp\n" );
-	
-	for(i=0; i<NFAER; i++){
-		fprintf(fichier, "%f\t%f\t%f\n", tab.faer[i*5+4],tab.faer[i*5+0], tab.faer[i*5+1]);
-	}
-	
-	fclose(fichier);
-
-}
-
 /* profilAtm
 * Calcul du profil atmosphérique dans l'atmosphère en fonction de la couche
 * Mélange Molécule/Aérosol dans l'atmosphère en fonction de la couche
@@ -1412,38 +1393,6 @@ inferieure contenant toutes les molécules.
 	
 }
 
-
-/* verificationAtm
-* Sauvegarde du profil atmosphérique dans un fichier
-* Permet de valider le bon calcul
-*/
-void verificationAtm( Tableaux tab_H ){
-	
-	// Vérification du modèle
-	FILE* fichier = fopen("./test/modele_atm_cuda.txt", "w+");
-	
-	#ifdef SPHERIQUE
-	fprintf( fichier, "couche\tz\tpropMol\th\n" );
-	
-	for( int i=0; i<NATM+1; i++){
-		fprintf(fichier, "%d\t%10.8f\t%10.8f\t%10.8f\n",i,tab_H.z[i],tab_H.pMol[i], tab_H.h[i]);
-	}
-	
-	fprintf( fichier, "couche\tz\tpropMol\th\n" );
-	#endif
-	
-	#ifndef SPHERIQUE
-	fprintf( fichier, "couche\tpropMol\th\n" );
-	
-	for( int i=0; i<NATM+1; i++){
-		fprintf(fichier, "%d\t%10.8f\t%10.8f\n",i,tab_H.pMol[i], tab_H.h[i]);
-	}
-	
-	fprintf( fichier, "couche\tpropMol\th\n" );
-	#endif
-	
-	fclose(fichier);
-}
 
 /** Séparation du code pour atmosphère sphérique ou parallèle **/
 #ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */

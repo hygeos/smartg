@@ -104,12 +104,6 @@ void freeTableaux(Tableaux*, Tableaux*);
 void calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, int nf);
 
 
-/* verificationFAER
-* Sauvegarde la fonction de phase des aérosols calculée dans un fichier
-* Permet de valider le bon calcul de la fonction de phase
-*/
-void verificationFAER( const char* nomFichier, Tableaux tab_H );
-
 
 /* profilAtm
 * Calcul du profil atmosphérique dans l'atmosphère en fonction de la couche
@@ -117,12 +111,6 @@ void verificationFAER( const char* nomFichier, Tableaux tab_H );
 */
 void profilAtm( Tableaux* tab_H, Tableaux* tab_D );
 
-
-/* verificationAtm
-* Sauvegarde du profil atmosphérique dans un fichier
-* Permet de valider le bon calcul
-*/
-void verificationAtm( Tableaux tab_H );
 
 
 /** Séparation du code pour atmosphère sphérique ou parallèle **/
