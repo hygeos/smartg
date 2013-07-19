@@ -110,7 +110,7 @@ PATHDIFFOCE = fic/pf_ocean_1.0_443nm.txt
 # si SEED est positif on l'utilise comme graine (cela permet d'avoir les memes nombres aleatoires d'une simulation a l'autre, et
 # donc une meme simulation)
 # si SEED=-1 on crée une graine aleatoirement (donc toutes les simulations sont differentes les unes des autres)
-SEED = -1
+SEED = 31
 
 # Le demi-espace dans lequel on récupère les photons est divisé en boites
 # theta parcourt 0..PI
