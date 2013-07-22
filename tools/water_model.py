@@ -209,7 +209,7 @@ def main():
     print '# wavelength: {}'.format(wl)
     print '# total absorption coefficient: {}'.format(atot)
     print '# total scattering coefficient: {}'.format(btot)
-    print '# truncating at {} deg'.format(ang_trunc*180/pi)
+    print '# truncating at {} deg'.format(ang_trunc)
     for i in xrange(NANG):
         print '{:.6f} {:.6f} {:.6f} {:.6f} {:.6f}'.format(
                 ang[i] * 180/pi,
