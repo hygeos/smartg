@@ -972,7 +972,7 @@ __device__ void scatter( Photon* ph, float* faer
 		}
 		else{
 			// Aérosols
-			zang = RAND*(NFAERd-1);
+			zang = RAND*(NFAERd-2);
 			iang= __float2int_rd(zang);
 			
 			zang = zang - iang;
