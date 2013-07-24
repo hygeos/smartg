@@ -1448,7 +1448,7 @@ void impactInit(Init* init_H, Init* init_D, Tableaux* tab_H, Tableaux* tab_D){
 		}
 		else{
 			if( rsol2>0. )
-				rsolfi=rsol1;
+				rsolfi=rsol2;
 		}
 		
 		tab_H->zph0[icouche] = tab_H->zph0[icouche-1] + (float)rsolfi;
