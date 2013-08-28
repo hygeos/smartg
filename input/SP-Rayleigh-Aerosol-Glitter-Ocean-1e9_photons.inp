@@ -37,7 +37,7 @@ PATHDIFFAER = fic/pf_T70_443nm.txt
 	# 1 pour atmosphere et dioptre
 	# 2 pour atmosphere dioptre et ocean
 	# 3 pour ocean seul
-SIM = 1
+SIM = 2
 
 
 # Type de profil atmospherique
