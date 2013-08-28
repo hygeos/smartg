@@ -75,7 +75,7 @@ HATM=100
 	# 1 pour reflexion forcee sur le dioptre
 	# 2 transmission forcee
 	# 3 reflexion et transmission
-SUR = 1
+SUR = 3
 
 # Type de dioptre 
 	# 0 = plan
