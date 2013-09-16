@@ -386,7 +386,7 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
 	float costh;			// Cosinus de l'angle entre z' et Vz'
 	float ztangentielle;	//Altitude tangentielle du photon (distance minimale entre sa trajectoire et le centre 
 							// de la terre
-	int coucheTangentielle = 666;	// Initialisation arbitraire
+	int coucheTangentielle = -999;
 
 	float rayon2;			// Rayon au carré
 	float rayon;

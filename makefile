@@ -14,7 +14,7 @@ JPEG_INC=${JPEG_HOME}/include/
 
 CC = ${CUDA_BIN}/nvcc
 EXEC = SMART-G
-SPH=no  # switch spherical/plane parallel
+SPH=yes
 
 
 #=============Options============#  (en fonction de la carte graphique utilisee)
