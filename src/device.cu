@@ -1670,6 +1670,13 @@ __device__ void countPhoton(Photon* ph, Tableaux tab, unsigned long long* nbPhot
         (*nbPhotonsThr)++;
 
         tabCount = tab.tabPhotons;
+
+        #ifdef SPHERIQUE
+        if(ph->vz<=0.f) {
+            // do not count the downward photons leaving atmosphere
+            return;
+        }
+        #endif
     } else {
 
         // SURFACE
@@ -1679,10 +1686,6 @@ __device__ void countPhoton(Photon* ph, Tableaux tab, unsigned long long* nbPhot
 	
 	
 	#ifdef SPHERIQUE
-	if((ph->vz<=0.f) && (ph->loc == SPACE)) {
-        // do not count the downward photons leaving atmosphere
-		return;
-	}
 	if((ph->vz>=0.f) && (ph->loc == SURFACE)) {
         // do not count the upward photons reaching surface
 		return;
