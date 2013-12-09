@@ -8,7 +8,7 @@
 #_______________________#
 
 # Nombre de photons a lancer (unsigned long long) (limite par le tableau du poids des photons en unsigned long long)
-NBPHOTONS = 1e10
+NBPHOTONS = 1e9
 
 # Angle zenithal solaire en degrés (float)
 THSDEG = 30.
@@ -139,7 +139,7 @@ NFOCE = 10000000
 
 
 # Chemin du fichiers de sortie et témoin
-PATHRESULTATSHDF = resultat/SP-Rayleigh-Aerosol-Sol_noir-1e10_photons.hdf
+PATHRESULTATSHDF = resultat/SP-Rayleigh-Aerosol-Sol_noir-1e9_photons.hdf
 
 # Période d'écriture du fichier témoin en min (-1 pour désactiver)
 WRITE_PERIOD = 5
