@@ -182,7 +182,7 @@ def main():
         + '-S --ShowSOS : Plot SOS result (default MC hdf file)\n'
         + '-D --DiffSOS : Plot differences between MC and SOS result\n'
         + '-c --computeSOS : compute SOS result (default False: start from ./SOS_Up.txt and ./SOS_Down.txt files)\n'
-        + '-a --aerosol : aerosol model (mandatory if -c is chosen), should be U80 or M80 or 0 (forcing no aerosol)\n'
+        + '-a --aerosol : aerosol model (mandatory if -c is chosen), should be U80 or M80 or T70 or 0 (forcing no aerosol)\n'
         + '-s --savefile : output graphics file name\n'
         + '-r --rmax : maximum reflectance for color scale\n'
         + '-p --percent : choose Polarization Ratio (default polarized reflectance) and set maximum PR for color scale\n'
@@ -213,7 +213,7 @@ def main():
     parser.add_option('-a', '--aerosol',
             dest='aerosol',
             type='string',
-            help='-a aerosol model (mandatory if -c is chosen), should be U80 or M80 or 0 (forcing no aerosol)\n'
+            help='-a aerosol model (mandatory if -c is chosen), should be U80 or M80 or T70 or 0 (forcing no aerosol)\n'
             )
     parser.add_option('-r', '--rmax',
             type='float',
@@ -269,6 +269,7 @@ def main():
         WINDSPEED = getattr(sd_cuda,'WINDSPEED')
         W0LAM = getattr(sd_cuda,'W0LAM')
         HR = getattr(sd_cuda,'HR')
+        HA = getattr(sd_cuda,'HA')
         LAMBDA = getattr(sd_cuda,'LAMBDA')
         NH2O = getattr(sd_cuda,'NH2O')
         SIM = getattr(sd_cuda,'SIM')
@@ -283,10 +284,10 @@ def main():
         hdf_phi = sd_cuda.select(name)
         phi = hdf_phi.get()
         # ATTENTION version uniquement valide pour SOS trafiqué permettant des pas en phi de 0.5 deg
-        Dphi = phi[1] - phi[0] 
+        #Dphi = phi[1] - phi[0] 
 
         # Vrai pour SOS_V5.1 officiel
-        #Dphi = (phi[1] - phi[0]) / 2.
+        Dphi = (phi[1] - phi[0]) / 2.
 
         if options.down == True  :
             sds_cuda = sd_cuda.select("I_down (0+)")
@@ -417,10 +418,11 @@ def main():
     NH2O = "%.2f" % NH2O
     WINDSPEED = "%.1f" % WINDSPEED
     HR = "%.1f" % HR
+    HA = "%.1f" % HA
 
     ### !! ###
-    ZMIN='0'
-    ZMAX='1'
+    ZMIN='0.'
+    ZMAX='1.'
     ### !! ###
 
     if SIM == -2 : # Black surface
@@ -435,7 +437,7 @@ def main():
     thisDir = out.rstrip()
 
     if options.compute == True : 
-      if (options.aerosol != 'U80') & (options.aerosol != 'M80') & (options.aerosol != '0') : 
+      if (options.aerosol != 'U80') & (options.aerosol != 'M80') & (options.aerosol != 'T70') & (options.aerosol != '0') : 
          parser.print_usage()
          exit(1)
       if options.aerosol == 'U80' :
@@ -446,6 +448,10 @@ def main():
          SOS_AER_MODEL = '2'
          SOS_AER_SF_MODEL = '3'
          SOS_AER_RH = '80.'
+      if options.aerosol == 'T70' :
+         SOS_AER_MODEL = '2'
+         SOS_AER_SF_MODEL = '1'
+         SOS_AER_RH = '70.'
       if options.aerosol == '0' :
          SOS_AER_MODEL = '2'
          SOS_AER_SF_MODEL = '3'
@@ -455,7 +461,9 @@ def main():
       #---------------------------------------------------------
       # lancement des SOS
       #---------------------------------------------------------
-      cmd = "$RACINE/exe/main_SOS.ksh -SOS.Wa "+LAMBDA+"	\
+      cmd0 = "export SOS_RESULT=$RACINE/SOS_TEST\n" + "export dirSUNGLINT=$SOS_RESULT/SURFACE/GLITTER\n"+ "export SOS_RACINE_FIC=$RACINE/fic\n"+ "export dirMIE=$SOS_RESULT/MIE\n"+ "export dirLOG=$SOS_RESULT/LOG\n"+ "export dirRESULTS=$SOS_RESULT/SOS\n"
+
+      cmd = "ksh $RACINE/exe/main_SOS.ksh -SOS.Wa "+LAMBDA+"	\
          -ANG.Rad.NbGauss 40    -ANG.Rad.ResFile "+thisDir+"/tmp_SOS_UsedAngles.txt \
          -ANG.Rad.UserAngFile "+thisDir+"/"+fname +"\
 	   -ANG.Aer.NbGauss 40 \
@@ -470,8 +478,8 @@ def main():
 	   -SOS.Trans "+thisDir+"/tmp_SOS_transm.txt \
        -SOS.MDF 0.0279 \
 	   -AP.MOT "+TAURAY+" -AP.HR "+HR+" \
-         -AP.Type 2	\
-         -AP.AerLayer.Zmin "+ZMIN+" -AP.AerLayer.Zmax "+ZMAX+" \
+         -AP.Type 1	\
+         -AP.AerHS.HA "+HA+" \
        -AP.ResFile "+thisDir+"/tmp_Profile.txt -AP.Log "+thisDir+"/tmp_Profile.Log \
 	   -AER.Waref "+LAMBDA+" -AER.AOTref "+TAUAER+" \
 	   -AER.ResFile "+thisDir+"/tmp_Aerosols.txt -AER.Log "+thisDir+"/tmp_Aerosols.Log -AER.MieLog 0 \
@@ -481,7 +489,11 @@ def main():
 	   -AER.Model "+SOS_AER_MODEL+" -AER.Tronca 1 \
          -AER.SF.Model "+SOS_AER_SF_MODEL+" -AER.SF.RH "+SOS_AER_RH
 
-      b = subprocess.call("echo " + cmd + " > ./cmd ; cat runOS_template.ksh cmd > tmp.ksh; chmod +x tmp.ksh",shell=True) 
+      fp=open("./tmp.ksh","w")
+      fp.write(cmd0)
+      fp.write(cmd)
+      fp.write("\n")
+      #b = subprocess.call("echo " + cmd + " > ./cmd ; cat runOS_template.ksh cmd > tmp.ksh; chmod +x tmp.ksh",shell=True) 
       print ' ........................................................................................'
       print ' WARNING compute : beta version with home version of SOS V5.1 allowing phi step of 0.5 deg'
       print ' version available here : /home/did/RTC/SOS_V5.1; set RACINE and SOS_RACINE accordingly'
