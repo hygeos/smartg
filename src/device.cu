@@ -1647,6 +1647,11 @@ __device__ void countPhoton(Photon* ph, Tableaux tab, unsigned long long* nbPhot
     if ((ph->loc == SURFACE) && ((OUTPUT_LAYERSd & OUTPUT_BOA_DOWN_0P) == 0)) {
         return;
     }
+
+//  On ne compte pas les photons directement transmis
+    if ((ph->weight == WEIGHTINIT) && (ph->stokes1 == ph->stokes2) && (ph->stokes3 == 0.f)) {
+    return;
+    }
 	
 // si son poids est anormalement élevé on le compte comme une erreur. Test effectué uniquement en présence de dioptre
 	if( (ph->weight > WEIGHTMAX) && (SIMd!=-2)){
