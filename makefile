@@ -14,7 +14,7 @@ JPEG_INC=${JPEG_HOME}/include/
 
 CC = ${CUDA_BIN}/nvcc
 EXEC = SMART-G
-SPH=yes
+SPH=no
 
 
 #=============Options============#  (en fonction de la carte graphique utilisee)
@@ -38,11 +38,11 @@ DFLAGS += -DFLAGOCEAN
 #============== Options ===============#
 DFLAGS += -DPARAMETRES 				# Affichage des parametres initiaux
 # DFLAGS += -DRANDMWC 				# Utilisation du random MWC (Multiply-With-Carry)
-DFLAGS += -DRANDCUDA				# Utilisation du random CUDA (Fonction fournie par cuda)
+# DFLAGS += -DRANDCUDA				# Utilisation du random CUDA (Fonction fournie par cuda)
 # DFLAGS += -DRANDCURANDSOBOL32			# Utilisation du random CUDA (Fonction fournie par cuda)
 # DFLAGS += -DRANDCURANDSCRAMBLEDSOBOL32	# Utilisation du random CUDA (Fonction fournie par cuda)
 # DFLAGS += -DRANDMT				# Utilisation du random MT (Mersenne Twister)
-# DFLAGS += -DRANDPHILOX4x32_7			# Utilisation du random Philox-4x32-7
+DFLAGS += -DRANDPHILOX4x32_7			# Utilisation du random Philox-4x32-7
 
 
 #============== Debogage ==============#
