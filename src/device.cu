@@ -1568,28 +1568,14 @@ __device__ void surfaceLambertienne(Photon* ph
 	uyn = sPhi*cTh;
 	uzn = -sTh;
 	
-	/** Calcul angle Psi **/
-	float temp;
-	// Calcul du produit scalaire V.Vnew
-	temp = ph->vx*vxn + ph->vy*vyn + ph->vz*vzn;
-	thetab = acosf( fmin( fmax(-1.f,temp),1.f ) );
-	if( thetab==0 ){
-		ph->loc=SPACE;
-		printf("theta nul\n");
-		return;
-	}
-	
-	// (Produit scalaire V.Unew)/sin(theta)
-	temp = __fdividef( ph->vx*uxn + ph->vy*uyn + ph->vz*uzn, __sinf(thetab) );
-	psi = acosf( fmin( fmax(-1.f,temp),1.f ) );	// angle entre le plan (u,v)old et (u,v)new
-	
-	if( (ph->vx*(uyn*vzn-uzn*vyn) + ph->vy*(uzn*vxn-uxn*vzn) + ph->vz*(uxn*vyn-uyn*vxn) ) <0 )
-	{	// test du signe de v.(unew^vnew) (scalaire et vectoriel)
-		psi = -psi;
-	}
-	
-    rotateStokes(ph->stokes1, ph->stokes2, ph->stokes3, psi,
-            &ph->stokes1, &ph->stokes2, &ph->stokes3);
+
+	// Depolarisation du Photon
+	float norm;
+	norm     = ph->stokes1 + ph->stokes2;
+	ph->stokes1 = 0.5 * norm;
+	ph->stokes2 = 0.5 * norm;
+       	ph->stokes3 = 0.0;
+
 	
 	ph->vx = vxn;
 	ph->vy = vyn;
