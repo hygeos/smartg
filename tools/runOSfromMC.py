@@ -12,17 +12,108 @@ import sys
 import warnings
 warnings.simplefilter("ignore",DeprecationWarning)
 import pyhdf.SD
-#matplotlib.use('Agg')
+from optparse import OptionParser
+import subprocess
+
+
+
+
+######################################################
+##                PARSE OPTIONS                     ##
+######################################################
+
+parser = OptionParser(usage='%prog [options] hdf_file [hdf_file2]'
+        + ' Polar Plots of MC output hdf file, eventually run and display SOS results\n'    
+        + ' In case of a second hdf file, differences between MC file 1 and MC file 2 are plotted\n'
+        + ' Options ...\n'
+        + '-d --down : downward radiance at BOA (default upward TOA)\n'
+        + '-S --ShowSOS : Plot SOS result (default MC hdf file)\n'
+        + '-D --DiffSOS : Plot differences between MC and SOS result\n'
+        + '-R --Relative : Plot relative differences in percent instead of absolute\n'
+        + '-c --computeSOS : compute SOS result (default False: start from ./SOS_Up.txt and ./SOS_Down.txt files)\n'
+        + '-a --aerosol : aerosol model (mandatory if -c is chosen), should be U80 or M80 or T70 or 0 (forcing no aerosol)\n'
+        + '-s --savefile : output graphics file name\n'
+        + '-r --rmax : maximum reflectance for color scale, in percent in case of relative differences see -R option\n'
+        + '-p --percent : choose Polarization Ratio (default polarized reflectance) and set maximum PR for color scale\n'
+        + '-t --transect : Add a transect below 2D plot for the closest azimuth to phi0 \n'
+        + '-P --points : optional filename containing data points to be added to the transect, format txt file with columns (phi theta I Q U)\n'
+        + '-e --error : choose relative error instead of polarized reflectance and maximum error for color scale\n')
+
+parser.add_option('-d','--down',
+            dest='down',
+            action="store_true", default=False,
+            help =  '-d downward radiance at BOA (default upward TOA)\n')
+parser.add_option('-S','--ShowSOS',
+            dest='sos',
+            action="store_true", default=False,
+            help =  '-S Draw SOS result (default MC hdf file)\n')
+parser.add_option('-D','--DiffSOS',
+            dest='diff',
+            action="store_true", default=False,
+            help =  '-D --DiffSOS : Plot differences between MC and SOS result\n')
+parser.add_option('-R','--Relative',
+            dest='rel',
+            action="store_true", default=False,
+            help =  '-R --Relative : Plot relative differences in percent instead of absolute\n')
+parser.add_option('-c','--compute',
+            dest='compute',
+            action="store_true", default=False,
+            help =  '-c compute SOS result (default False start from ./SOS_Up.txt and ./SOS_Down.txt files)\n')
+parser.add_option('-s', '--savefile',
+            dest='filename',
+            help='-s output graphics file name\n'
+            )
+parser.add_option('-a', '--aerosol',
+            dest='aerosol',
+            type='string',
+            help='-a aerosol model (mandatory if -c is chosen), should be U80 or M80 or T70 or 0 (forcing no aerosol)\n'
+            )
+parser.add_option('-r', '--rmax',
+            type='float',
+            dest='rmax',
+            help='-r maximum reflectance for color scale, in percent in case of relative differences see -R option'
+            )
+parser.add_option('-p', '--percent',
+            dest='percent',
+            type='float',
+            help='-p choose Polarization Ratio (default polarized reflectance) and maximum PR for color scale (default 100)\n'
+            )
+parser.add_option('-t', '--transect',
+            dest='phi0',
+            type='float',
+            help = '-t --transect : Add a transect below 2D plot for the closest azimuth to phi0 \n'
+            )
+parser.add_option('-P', '--points',
+            dest='points',
+            help = '-P --points : optional filename containing data points to be added to the transect, format txt file with columns (phi theta I Q U)\n'
+            )
+parser.add_option('-e', '--error',
+            dest='error',
+            type='float',
+            help='-e choose relative error instead of polarized reflectance and maximum error for color scale\n'
+            )
+(options, args) = parser.parse_args()
+if len(args) != 1 and len(args) != 2:
+        parser.print_usage()
+        exit(1)
+
+path_cuda = args[0]
+
+if len(args) == 2 :
+         path_cuda2 = args[1]
+
+
+import matplotlib
+if options.filename != None:
+    matplotlib.use('Agg')
+from pylab import savefig, show, figure, plot, subplot, cm
 import numpy as np
 np.seterr(invalid='ignore', divide='ignore') # ignore division by zero errors
-from pylab import savefig, show, figure, plot, subplot, cm
-from optparse import OptionParser
 from matplotlib.transforms import Affine2D
 import mpl_toolkits.axisartist.floating_axes as floating_axes
 from matplotlib.projections import PolarAxes
 from mpl_toolkits.axisartist.grid_finder import FixedLocator, DictFormatter
-from  mpl_toolkits.axisartist.grid_helper_curvelinear import GridHelperCurveLinear
-import subprocess
+#from  mpl_toolkits.axisartist.grid_helper_curvelinear import GridHelperCurveLinear
 
 #----------------------------------------------------------------------------
 # axes semi polaires
@@ -166,90 +257,7 @@ def plot_2D_parameter(fig, rect, theta , phi, data, Vdata, Vdatat=None, title=No
         if label != None  : cb3.set_label(label)
 
 #----------------------------------------------------------------------------
-
 def main():
-
-
-    ######################################################
-    ##                PARSE OPTIONS                     ##
-    ######################################################
-
-    parser = OptionParser(usage='%prog [options] hdf_file [hdf_file2]'
-        + ' Polar Plots of MC output hdf file, eventually run and display SOS results\n'    
-        + ' In case of a second hdf file, differences between MC file 1 and MC file 2 are plotted\n'
-        + ' Options ...\n'
-        + '-d --down : downward radiance at BOA (default upward TOA)\n'
-        + '-S --ShowSOS : Plot SOS result (default MC hdf file)\n'
-        + '-D --DiffSOS : Plot differences between MC and SOS result\n'
-        + '-c --computeSOS : compute SOS result (default False: start from ./SOS_Up.txt and ./SOS_Down.txt files)\n'
-        + '-a --aerosol : aerosol model (mandatory if -c is chosen), should be U80 or M80 or T70 or 0 (forcing no aerosol)\n'
-        + '-s --savefile : output graphics file name\n'
-        + '-r --rmax : maximum reflectance for color scale\n'
-        + '-p --percent : choose Polarization Ratio (default polarized reflectance) and set maximum PR for color scale\n'
-        + '-t --transect : Add a transect below 2D plot for the closest azimuth to phi0 \n'
-        + '-P --points : optional filename containing data points to be added to the transect, format txt file with columns (phi theta I Q U)\n'
-        + '-e --error : choose relative error instead of polarized reflectance and maximum error for color scale\n')
-
-    parser.add_option('-d','--down',
-            dest='down',
-            action="store_true", default=False,
-            help =  '-d downward radiance at BOA (default upward TOA)\n')
-    parser.add_option('-S','--ShowSOS',
-            dest='sos',
-            action="store_true", default=False,
-            help =  '-S Draw SOS result (default MC hdf file)\n')
-    parser.add_option('-D','--DiffSOS',
-            dest='diff',
-            action="store_true", default=False,
-            help =  '-D --DiffSOS : Plot differences between MC and SOS result\n')
-    parser.add_option('-c','--compute',
-            dest='compute',
-            action="store_true", default=False,
-            help =  '-c compute SOS result (default False start from ./SOS_Up.txt and ./SOS_Down.txt files)\n')
-    parser.add_option('-s', '--savefile',
-            dest='filename',
-            help='-s output graphics file name\n'
-            )
-    parser.add_option('-a', '--aerosol',
-            dest='aerosol',
-            type='string',
-            help='-a aerosol model (mandatory if -c is chosen), should be U80 or M80 or T70 or 0 (forcing no aerosol)\n'
-            )
-    parser.add_option('-r', '--rmax',
-            type='float',
-            dest='rmax',
-            help='-r maximum reflectance for color scale'
-            )
-    parser.add_option('-p', '--percent',
-            dest='percent',
-            type='float',
-            help='-p choose Polarization Ratio (default polarized reflectance) and maximum PR for color scale (default 100)\n'
-            )
-    parser.add_option('-t', '--transect',
-            dest='phi0',
-            type='float',
-            help = '-t --transect : Add a transect below 2D plot for the closest azimuth to phi0 \n'
-            )
-    parser.add_option('-P', '--points',
-            dest='points',
-            help = '-P --points : optional filename containing data points to be added to the transect, format txt file with columns (phi theta I Q U)\n'
-            )
-    parser.add_option('-e', '--error',
-            dest='error',
-            type='float',
-            help='-e choose relative error instead of polarized reflectance and maximum error for color scale\n'
-            )
-    (options, args) = parser.parse_args()
-    if len(args) != 1 and len(args) != 2:
-        parser.print_usage()
-        exit(1)
-
-    path_cuda = args[0]
-
-    if len(args) == 2 :
-         path_cuda2 = args[1]
-
-
     ##########################################################
     ##                DONNEES FICHIER CUDA                  ##
     ##########################################################
@@ -273,6 +281,7 @@ def main():
         LAMBDA = getattr(sd_cuda,'LAMBDA')
         NH2O = getattr(sd_cuda,'NH2O')
         SIM = getattr(sd_cuda,'SIM')
+        DIOPTRE = getattr(sd_cuda,'DIOPTRE')
 
         # Récupération des valeurs de theta
         name = "Zenith angles"
@@ -425,11 +434,19 @@ def main():
     ZMAX='1.'
     ### !! ###
 
-    if SIM == -2 : # Black surface
+    if SIM == -2 : # Black surface and no dioptre
        SURF_TYPE = '0'
        W0LAM = '0.00'
-    else : 
+    if (SIM == 1) & (DIOPTRE == 0) : # Atmosphere + Black flat sea surface
+       SURF_TYPE = '2'
+       W0LAM = '0.00'
+    if (SIM == 1) & (DIOPTRE == 3) : # Atmosphere + Lambertian surface
+       SURF_TYPE = '0'
+    if (SIM == 1) & (DIOPTRE == 4) : #  Atmosphere + Lambertian surface + Wind roughened sea surface
        SURF_TYPE = '1'
+    if (SIM == 1) & ( (DIOPTRE == 1) | (DIOPTRE == 2)) : # Atmosphere + Black wind roughened sea surface
+       SURF_TYPE = '1'
+       W0LAM = '0.00'
 
     process = subprocess.Popen("pwd",shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
     # wait for the process to terminate
@@ -495,8 +512,7 @@ def main():
       fp.write("\n")
       #b = subprocess.call("echo " + cmd + " > ./cmd ; cat runOS_template.ksh cmd > tmp.ksh; chmod +x tmp.ksh",shell=True) 
       print ' ........................................................................................'
-      print ' WARNING compute : beta version with home version of SOS V5.1 allowing phi step of 0.5 deg'
-      print ' version available here : /home/did/RTC/SOS_V5.1; set RACINE and SOS_RACINE accordingly'
+      print ' SOS version available here : /home/did/RTC/SOS_V5.1; set RACINE and SOS_RACINE accordingly'
       print ' ........................................................................................\n'
       print ' SOS command file ready : type ./tmp.ksh to run SOS \n'
       sys.exit(1)
@@ -632,7 +648,11 @@ def main():
 
     # first quarter I
     if (len(args)==2) | (options.diff==True):
-         plot_2D_parameter(fig, rect[0], theta , phi, data_cudaI-data_cudaI2, VI, Vdatat=VIt,title='I1-I2', iphi0=iphi0, sub=sub[0])
+         if options.rel==True :
+            #plot_2D_parameter(fig, rect[0], theta , phi, (data_cudaI-data_cudaI2)/data_cudaI2*100, VI, Vdatat=VIt,title='(I1-I2)/I2[%]', iphi0=iphi0, sub=sub[0],points=I_txt)
+            plot_2D_parameter(fig, rect[0], theta , phi, (data_cudaI-data_cudaI2)/data_cudaI2*100, VI, Vdatat=VIt,title='(I1-I2)/I2[%]', iphi0=iphi0, sub=sub[0])
+         else :
+            plot_2D_parameter(fig, rect[0], theta , phi, data_cudaI-data_cudaI2, VI, Vdatat=VIt,title='I1-I2', iphi0=iphi0, sub=sub[0])
     else:
         if options.points != None : plot_2D_parameter(fig, rect[0], theta , phi, data_cudaI, VI,  Vdatat=VIt,title='I', iphi0=iphi0, sub=sub[0], points=I_txt)
         else : plot_2D_parameter(fig, rect[0], theta , phi, data_cudaI, VI,  Vdatat=VIt,title='I', iphi0=iphi0, sub=sub[0])
@@ -640,14 +660,20 @@ def main():
 
     # 2nd quarter Q
     if (len(args)==2) | (options.diff==True):
-         plot_2D_parameter(fig, rect[1], theta , phi, data_cudaQ-data_cudaQ2, VQ,  Vdatat=VQt,title='Q1-Q2', iphi0=iphi0, sub=sub[1])
+         if options.rel==True :
+            plot_2D_parameter(fig, rect[1], theta , phi, (data_cudaQ-data_cudaQ2)/data_cudaQ2*100, VQ, Vdatat=VQt,title='(Q1-Q2)/Q2[%]', iphi0=iphi0, sub=sub[1])
+         else :
+            plot_2D_parameter(fig, rect[1], theta , phi, data_cudaQ-data_cudaQ2, VQ,  Vdatat=VQt,title='Q1-Q2', iphi0=iphi0, sub=sub[1])
     else:
         if options.points != None : plot_2D_parameter(fig, rect[1], theta , phi, data_cudaQ,  VQ, Vdatat=VQt,  title='Q', iphi0=iphi0, sub=sub[1], points=Q_txt)
         else :  plot_2D_parameter(fig, rect[1], theta , phi, data_cudaQ,  VQ, Vdatat=VQt,  title='Q', iphi0=iphi0, sub=sub[1])
 
     # 3rd quarter U
     if (len(args)==2) | (options.diff==True):
-         plot_2D_parameter(fig, rect[2], theta , phi, data_cudaU-data_cudaU2, VU,  Vdatat=VUt,title='U1-U2', label='Reflectance', iphi0=iphi0, sub=sub[2])
+         if options.rel==True :
+            plot_2D_parameter(fig, rect[2], theta , phi, (data_cudaU-data_cudaU2)/data_cudaU2*100, VU, Vdatat=VUt,title='(U1-U2)/U2[%]', iphi0=iphi0, sub=sub[2])
+         else :
+            plot_2D_parameter(fig, rect[2], theta , phi, data_cudaU-data_cudaU2, VU,  Vdatat=VUt,title='U1-U2', label='Reflectance', iphi0=iphi0, sub=sub[2])
     else:
         if options.points != None : plot_2D_parameter(fig, rect[2], theta , phi, data_cudaU,  VU, Vdatat=VUt,  title='U', label='Reflectance', iphi0=iphi0, sub=sub[2], points=U_txt)
         else : plot_2D_parameter(fig, rect[2], theta , phi, data_cudaU,  VU, Vdatat=VUt,  title='U', label='Reflectance', iphi0=iphi0, sub=sub[2])
@@ -656,7 +682,10 @@ def main():
     # Polarization ratio
     if (options.percent >= 0.) and (options.error == None):
       if (len(args)==2) | (options.diff==True):
-         plot_2D_parameter(fig, rect[3], theta , phi, data_cudaPR-data_cudaPR2, VPR,  Vdatat=VPRt,title='P1-P2[%]', label='Polarization Ratio', iphi0=iphi0, sub=sub[3])
+         if options.rel==True :
+            plot_2D_parameter(fig, rect[3], theta , phi, (data_cudaPR-data_cudaPR2)/data_cudaPR2*100, VPR, Vdatat=VPRt,title='(P1-P2)/P2[%]', iphi0=iphi0, sub=sub[3])
+         else :
+            plot_2D_parameter(fig, rect[3], theta , phi, data_cudaPR-data_cudaPR2, VPR,  Vdatat=VPRt,title='P1-P2[%]', label='Polarization Ratio', iphi0=iphi0, sub=sub[3])
       else:
          if options.points != None : plot_2D_parameter(fig, rect[3], theta , phi, data_cudaPR, VPR,  Vdatat=VPRt,title='P[%]', label='Polarization Ratio', iphi0=iphi0, sub=sub[3], points=PR_txt)
          else : plot_2D_parameter(fig, rect[3], theta , phi, data_cudaPR, VPR,  Vdatat=VPRt,title='P[%]', label='Polarization Ratio', iphi0=iphi0, sub=sub[3])
@@ -668,7 +697,10 @@ def main():
     # or Polarized reflectance
     if options.percent == None  and options.error == None:
       if (len(args)==2) | (options.diff==True):
-         plot_2D_parameter(fig, rect[3], theta , phi, data_cudaIP-data_cudaIP2, VIP,  Vdatat=VIPt,title='IP1-IP2', label='Polarized Reflectance', iphi0=iphi0, sub=sub[3])
+         if options.rel==True :
+            plot_2D_parameter(fig, rect[3], theta , phi, (data_cudaIP-data_cudaIP2)/data_cudaIP2*100, VIP, Vdatat=VIPt,title='(IP1-IP2)/IP2[%]', iphi0=iphi0, sub=sub[3])
+         else :
+            plot_2D_parameter(fig, rect[3], theta , phi, data_cudaIP-data_cudaIP2, VIP,  Vdatat=VIPt,title='IP1-IP2', label='Polarized Reflectance', iphi0=iphi0, sub=sub[3])
       else:
          if options.points != None : plot_2D_parameter(fig, rect[3], theta , phi, data_cudaIP, VIP, Vdatat=VIPt,title='IP', label='Polarized Reflectance', iphi0=iphi0, sub=sub[3], points=IP_txt)
          else : plot_2D_parameter(fig, rect[3], theta , phi, data_cudaIP, VIP, Vdatat=VIPt,title='IP', label='Polarized Reflectance', iphi0=iphi0, sub=sub[3])
