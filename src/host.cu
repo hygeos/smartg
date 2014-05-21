@@ -205,8 +205,8 @@ void initConstantesHost(int argc, char** argv)
 	DIOPTRE= atoi(s);
 	
 	strcpy(s,"");
-	chercheConstante(parametres, "THSDEG", s);
-	THSDEG = atof(s);
+	chercheConstante(parametres, "THVDEG", s);
+	THVDEG = atof(s);
 	
 	strcpy(s,"");
 	chercheConstante(parametres, "LAMBDA", s);
@@ -1403,24 +1403,24 @@ inferieure contenant toutes les molécules.
 */
 void impactInit(Init* init_H, Init* init_D, Tableaux* tab_H, Tableaux* tab_D){
 	
-	double thss, localh;
+	double thv, localh;
 	double rdelta;
 	double xphbis,yphbis,zphbis;	//Coordonnées intermédiaire du photon
 	double rsolfi,rsol1,rsol2;
 	
 	// Correspond aux paramètres initiaux du photon
-	double vx = -sin(THSDEG*DEG2RAD);
+	double vx = -sin(THVDEG*DEG2RAD);
 	double vy = 0.;
-	double vz = -cos(THSDEG*DEG2RAD);
+	double vz = -cos(THVDEG*DEG2RAD);
 	
 	/** Calcul du point d'impact **/
-	// 	thss = abs(acosf(abs(vz)));
-	thss = THSDEG*DEG2RAD;
+	// 	thv = abs(acosf(abs(vz)));
+	thv = THVDEG*DEG2RAD;
 	
-	rdelta = 4.*RTER*RTER + 4.*( tan(thss)*tan(thss)+1. )*( HATM*HATM + 2.*HATM*RTER );
-	localh = ( -2.*RTER+sqrt(rdelta) )/( 2.*(tan(thss)*tan(thss)+1.) );
+	rdelta = 4.*RTER*RTER + 4.*( tan(thv)*tan(thv)+1. )*( HATM*HATM + 2.*HATM*RTER );
+	localh = ( -2.*RTER+sqrt(rdelta) )/( 2.*(tan(thv)*tan(thv)+1.) );
 	
-	init_H->x0 = (float) localh*tan(thss);
+	init_H->x0 = (float) localh*tan(thv);
 	init_H->y0 = 0.f;
 	init_H->z0 = (float) RTER + localh;	
 	
@@ -1508,7 +1508,7 @@ void afficheParametres()
 	printf("\n");
 	printf(" NBPHI\t=\t%d", NBPHI);
 	printf("\n");
-	printf(" THSDEG\t=\t%f (degrés)", THSDEG);
+	printf(" THVDEG\t=\t%f (degrés)", THVDEG);
 	printf("\n");
 	printf(" LAMBDA\t=\t%f", LAMBDA);
 	printf("\n");
@@ -1844,7 +1844,7 @@ void creerHDFTemoin(double* tabPhotonsTot, double* tabPhotonsTotDown, unsigned l
 	SDsetattr(sdsTab, "PROFIL", DFNT_INT32, 1, &PROFIL);
 	SDsetattr(sdsTab, "SIM", DFNT_INT32, 1, &SIM);
 	SDsetattr(sdsTab, "SUR", DFNT_INT32, 1, &SUR);
-	SDsetattr(sdsTab, "THSDEG", DFNT_FLOAT32, 1, &THSDEG);
+	SDsetattr(sdsTab, "THVDEG", DFNT_FLOAT32, 1, &THVDEG);
 	SDsetattr(sdsTab, "LAMBDA", DFNT_FLOAT32, 1, &LAMBDA);
 	SDsetattr(sdsTab, "TAURAY", DFNT_FLOAT32, 1, &TAURAY);
 	SDsetattr(sdsTab, "TAUAER", DFNT_FLOAT32, 1, &TAUAER);
@@ -1927,7 +1927,7 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		int PROFILrecup[1];
 		int SIMrecup[1];
 		int SURrecup[1];
-		float THSDEGrecup[1];
+		float THVDEGrecup[1];
 		float LAMBDArecup[1];
 		float TAURAYrecup[1];
 		float TAUAERrecup[1];
@@ -1953,7 +1953,7 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "PROFIL"), (VOIDP)PROFILrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "SIM"), (VOIDP)SIMrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "SUR"), (VOIDP)SURrecup);
-		SDreadattr(sdsTab, SDfindattr(sdsTab, "THSDEG"), (VOIDP)THSDEGrecup);
+		SDreadattr(sdsTab, SDfindattr(sdsTab, "THVDEG"), (VOIDP)THVDEGrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "LAMBDA"), (VOIDP)LAMBDArecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "TAURAY"), (VOIDP)TAURAYrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "TAUAER"), (VOIDP)TAUAERrecup);
@@ -1980,7 +1980,7 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 			&& PROFILrecup[0] == PROFIL
 			&& SIMrecup[0] == SIM
 			&& SURrecup[0] == SUR
-			&& THSDEGrecup[0] == THSDEG
+			&& THVDEGrecup[0] == THVDEG
 			&& LAMBDArecup[0] == LAMBDA
 			&& TAURAYrecup[0] == TAURAY
 			&& TAUAERrecup[0] == TAUAER
@@ -2024,7 +2024,7 @@ identiques a chaque lancement.\n");
 			SDreadattr(sdsTab, SDfindattr(sdsTab, "tempsEcoule"), (VOIDP)tempsEcouleRecup);
 	
 			var_H->erreurpoids = nbErreursPoidsRecup[0];//nombre de photons ayant un poids anormalement élevé
-			var_H->erreurtheta = nbErreursThetaRecup[0];//nombre de photons sortant dans la direction solaire
+			var_H->erreurtheta = nbErreursThetaRecup[0];//nombre de photons sortant dans la direction de visée
 			
 			#ifdef PROGRESSION
 			unsigned long long nbThreadsRecup[1]; //nombre total de threads lancés
@@ -2129,7 +2129,7 @@ tempsPrec)
 	SDsetattr(sdFichier, "PROFIL", DFNT_INT32, 1, &PROFIL);
 	SDsetattr(sdFichier, "SIM", DFNT_INT32, 1, &SIM);
 	SDsetattr(sdFichier, "SUR", DFNT_INT32, 1, &SUR);
-	SDsetattr(sdFichier, "VZA (deg.)", DFNT_FLOAT32, 1, &THSDEG);
+	SDsetattr(sdFichier, "VZA (deg.)", DFNT_FLOAT32, 1, &THVDEG);
 	SDsetattr(sdFichier, "LAMBDA", DFNT_FLOAT32, 1, &LAMBDA);
 	SDsetattr(sdFichier, "TAURAY", DFNT_FLOAT32, 1, &TAURAY);
 	SDsetattr(sdFichier, "TAUAER", DFNT_FLOAT32, 1, &TAUAER);

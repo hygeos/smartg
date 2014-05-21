@@ -27,7 +27,7 @@ unsigned int NFAER;
 unsigned int LSAOCE;	// Nombre d'échantillons pour les angles du modèle de diffusion aérosols
 unsigned int NFOCE;
 
-float THSDEG;	//Angle zénithal solaire
+float THVDEG;	//Angle zénithal de visée
 float LAMBDA;	//Longueur d'onde [nm]
 float TAURAY;	//Epaisseur optique moleculaire (Rayleigh)
 float TAUAER;	//Epaisseur optique aerosol

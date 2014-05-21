@@ -21,7 +21,7 @@
 
 __device__ __constant__ unsigned long long NBPHOTONSd;
 __device__ __constant__ unsigned int NBLOOPd;
-__device__ __constant__ float THSDEGd;
+__device__ __constant__ float THVDEGd;
 __device__ __constant__ float LAMBDAd;
 __device__ __constant__ float TAURAYd;
 __device__ __constant__ float TAUAERd;
@@ -56,9 +56,9 @@ __device__ __constant__ int PROFILd;
 __device__ __constant__ int SIMd;
 __device__ __constant__ int SURd;
 __device__ __constant__ int DIOPTREd;
-__device__ __constant__ float THSd;		//thetaSolaire_Host en radians
-__device__ __constant__ float STHSd;	//sinThetaSolaire_Host
-__device__ __constant__ float CTHSd;	//cosThetaSolaire_Host
+__device__ __constant__ float THVd;		//thetaView_Host in radians
+__device__ __constant__ float STHVd;	//sinThetaView_Host
+__device__ __constant__ float CTHVd;	//cosThetaView_Host
 
 __device__ __constant__ float GAMAd;
 

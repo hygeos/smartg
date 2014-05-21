@@ -10,8 +10,8 @@
 # Nombre de photons a lancer (unsigned long long) (limite par le tableau du poids des photons en unsigned long long)
 NBPHOTONS = 1e9
 
-# Angle zenithal solaire en degrés (float)
-THSDEG = 30.
+# Angle zenithal de visée en degrés (float)
+THVDEG = 30.
 
 # Longueur d'onde [nm] (float)
 LAMBDA = 555.

@@ -152,7 +152,7 @@ extern unsigned int NFAER;
 extern unsigned int LSAOCE;
 extern unsigned int NFOCE;
 
-extern float THSDEG;
+extern float THVDEG;
 extern float LAMBDA;
 extern float TAURAY;
 extern float TAUAER;
@@ -247,7 +247,7 @@ typedef struct __align__(16)
 {
 	unsigned long long nbPhotons;	// Nombre de photons traités pour un appel du Kernel
 	int erreurpoids;				// Nombre de photons ayant un poids anormalement élevé
-	int erreurtheta;				// Nombre de photons ignorés (sortant dans la direction solaire)
+	int erreurtheta;				// Nombre de photons ignorés (sortant dans la direction de visée)
 	
 	#ifdef PROGRESSION
 	unsigned long long nbThreads;	// Nombre total de threads lancés

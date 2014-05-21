@@ -313,7 +313,6 @@ def main():
     #cb3.set_label("Reflectance")
 
     ax3, aux_ax3 = setup_axes3(fig, 224)
-    # ax3.scatter(ths,20,marker='*',color='#ffffff',s=80)
 
     if (options.percent >= 0.) and (options.error == None):
       if len(args)==2:

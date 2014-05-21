@@ -274,9 +274,9 @@ __device__ void initPhoton(Photon* ph/*, float* z*/
 		    )
 {
 	// Initialisation du vecteur vitesse
-	ph->vx = - STHSd;
+	ph->vx = - STHVd;
 	ph->vy = 0.F;
-	ph->vz = - CTHSd;
+	ph->vz = - CTHVd;
 	
 	// Initialisation du vecteur orthogonal au vecteur vitesse
 	ph->ux = -ph->vz;
@@ -1685,7 +1685,7 @@ __device__ void countPhoton(Photon* ph, Tableaux tab, unsigned long long* nbPhot
 	
 	float theta = acosf(fmin(1.F, fmax(-1.F, 0.f * ph->vx + 1.f * ph->vz)) );
 	
-	// Si theta = 0 on l'ignore (cas où le photon repart dans la direction solaire)
+	// Si theta = 0 on l'ignore (cas où le photon repart dans la direction de visée)
 	if(theta == 0.F)
 	{
 		#ifdef PROGRESSION
@@ -1865,7 +1865,7 @@ void initConstantesDevice()
 {
 	cudaMemcpyToSymbol(NBPHOTONSd, &NBPHOTONS, sizeof(unsigned long long));
 	cudaMemcpyToSymbol(NBLOOPd, &NBLOOP, sizeof(unsigned int));
-	cudaMemcpyToSymbol(THSDEGd, &THSDEG, sizeof(float));
+	cudaMemcpyToSymbol(THVDEGd, &THVDEG, sizeof(float));
 	cudaMemcpyToSymbol(LAMBDAd, &LAMBDA, sizeof(float));
 	cudaMemcpyToSymbol(TAURAYd, &TAURAY, sizeof(float));
 	cudaMemcpyToSymbol(TAUAERd, &TAUAER, sizeof(float));
@@ -1901,14 +1901,14 @@ void initConstantesDevice()
 	cudaMemcpyToSymbol(NFAERd, &NFAER, sizeof(unsigned int));
 	cudaMemcpyToSymbol(NFOCEd, &NFOCE, sizeof(unsigned int));
 		
-	float THSbis = THSDEG*DEG2RAD; //thetaSolaire en radians
-	cudaMemcpyToSymbol(THSd, &THSbis, sizeof(float));
+	float THVRAD = THVDEG*DEG2RAD; //thetaView in radians
+	cudaMemcpyToSymbol(THVd, &THVRAD, sizeof(float));
 	
-	float CTHSbis = cos(THSbis); //cosThetaSolaire
-	cudaMemcpyToSymbol(CTHSd, &CTHSbis, sizeof(float));
+	float CTHV = cos(THVRAD); //cosThetaView
+	cudaMemcpyToSymbol(CTHVd, &CTHV, sizeof(float));
 	
-	float STHSbis = sin(THSbis); //sinThetaSolaire
-	cudaMemcpyToSymbol(STHSd, &STHSbis, sizeof(float));
+	float STHV = sin(THVRAD); //sinThetaView
+	cudaMemcpyToSymbol(STHVd, &STHV, sizeof(float));
 	
 	float GAMAbis = DEPO / (2.F-DEPO);
 	cudaMemcpyToSymbol(GAMAd, &GAMAbis, sizeof(float));
@@ -1917,7 +1917,7 @@ void initConstantesDevice()
 	
 	#ifndef SPHERIQUE
 
-	float TAUMAX = TAUATM / CTHSbis; //tau initial du photon
+	float TAUMAX = TAUATM / CTHV; //tau initial du photon
 	cudaMemcpyToSymbol(TAUMAXd, &TAUMAX, sizeof(float));
 	#endif
 }
