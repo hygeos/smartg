@@ -1,5 +1,20 @@
-CHANGELOG v1.3
+#####################
+# SMART-G CHANGELOG #
+#####################
 
+
+
+v1.3.1
+======
+
+- removed direct signal at 0+ (was leading to a problem of performance)
+- [BUGFIX] lambertian surface: photons must be depolarized
+- rename THS -> THV in parameters and source code
+- [BUGFIX] error in countPhotons
+
+
+v1.3
+====
 
 -- New features --
 
