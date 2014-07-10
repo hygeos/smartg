@@ -12,7 +12,8 @@ import sys
 import warnings
 warnings.simplefilter("ignore",DeprecationWarning)
 import pyhdf.SD
-from optparse import OptionParser
+from optparse import OptionParser, Option, OptionValueError
+from copy import copy
 import subprocess
 
 
@@ -21,8 +22,33 @@ import subprocess
 ######################################################
 ##                PARSE OPTIONS                     ##
 ######################################################
-
-parser = OptionParser(usage='%prog [options] hdf_file [hdf_file2]'
+def check_tuple2(option, opt, value):
+    try:
+        if len(value.split(','))!=2 :
+            raise OptionValueError(
+            "option %s: invalid tuple value int,float: %r" % (opt, value))
+        else : return (int(value.split(',')[0]),float(value.split(',')[1]))
+    except ValueError:
+        raise OptionValueError(
+            "option %s: invalid tuple value int,float: %r" % (opt, value))
+            
+def check_tuple3(option, opt, value):
+    try:
+        if len(value.split(','))!=3 :
+            raise OptionValueError(
+            "option %s: invalid tuple value string float,float: %r" % (opt, value))
+        else : return (value.split(',')[0],float(value.split(',')[1]),float(value.split(',')[2]))
+    except ValueError:
+        raise OptionValueError(
+            "option %s: invalid tuple value string,float,float: %r" % (opt, value))  
+            
+class MyOption (Option):
+    TYPES = Option.TYPES + ("tuple2","tuple3",)
+    TYPE_CHECKER = copy(Option.TYPE_CHECKER)
+    TYPE_CHECKER["tuple2"] = check_tuple2
+    TYPE_CHECKER["tuple3"] = check_tuple3
+    
+parser = OptionParser(option_class=MyOption,usage='%prog [options] hdf_file [hdf_file2]'
         + ' Polar Plots of MC output hdf file, eventually run and display SOS results\n'    
         + ' In case of a second hdf file, differences between MC file 1 and MC file 2 are plotted\n'
         + ' Options ...\n'
@@ -35,9 +61,11 @@ parser = OptionParser(usage='%prog [options] hdf_file [hdf_file2]'
         + '-s --savefile : output graphics file name\n'
         + '-r --rmax : maximum reflectance for color scale, in percent in case of relative differences see -R option\n'
         + '-p --percent : choose Polarization Ratio (default polarized reflectance) and set maximum PR for color scale\n'
-        + '-t --transect : Add a transect below 2D plot for the closest azimuth to phi0 \n'
+        + '-t --transect : Add a transect below 2D plot for the closest azimuth to phi0 or theta0 in case of the list option activated\n'
         + '-P --points : optional filename containing data points to be added to the transect, format txt file with columns (phi theta I Q U)\n'
-        + '-e --error : choose relative error instead of polarized reflectance and maximum error for color scale\n')
+        + '-e --error : choose relative error instead of polarized reflectance and maximum error for color scale\n'
+        + '-l --list : the hdf_file argument is replaced by a file contaning a list of input filenames AND (the int and float separated by a comma x,y given in this option specify first,\n\t\tthe dimension number to be taken as constant in 2D plots :\n\t\t0 : theta\n\t\t1 : phi\n\t\t2 : other\n \t and second,\n \t\t its value'
+        + '-o --other : string for the 3 dimension ex LAMBDA , WINDSPEED and 2 floats for inf and sup separated by commas; in case of -list option\n')
 
 parser.add_option('-d','--down',
             dest='down',
@@ -81,7 +109,7 @@ parser.add_option('-p', '--percent',
 parser.add_option('-t', '--transect',
             dest='phi0',
             type='float',
-            help = '-t --transect : Add a transect below 2D plot for the closest azimuth to phi0 \n'
+            help = '-t --transect : Add a transect below 2D plot for the closest azimuth to phi0 or theta0 in case of the list option activated \n'
             )
 parser.add_option('-P', '--points',
             dest='points',
@@ -92,21 +120,34 @@ parser.add_option('-e', '--error',
             type='float',
             help='-e choose relative error instead of polarized reflectance and maximum error for color scale\n'
             )
+parser.add_option('-o', '--others',
+            dest='others',
+            type='tuple3',
+            help='-o : string for the 3 dimension ex LAMBDA , WINDSPEED and 2 floats for inf and sup separated by commas; in case of -list option\n'
+            )
+parser.add_option('-l', '--list',
+            dest='list',
+            type='tuple2',
+            help='-l the hdf_file argument is replaced by a file contaning a list of input filenames AND (the int and float separated by a comma x,y given in this option specify first,\n\t\tthe dimension number to be taken as constant in 2D plots :\n\t\t0 : theta\n\t\t1 : phi\n\t\t2 : other\n \t and second,\n \t\t its value'
+            )
 (options, args) = parser.parse_args()
 if len(args) != 1 and len(args) != 2:
         parser.print_usage()
         exit(1)
 
 path_cuda = args[0]
+if options.list == None:
+        path_cuda = args[0]
+else:
+        path_cudal = open(args[0],"r").readlines()
 
 if len(args) == 2 :
          path_cuda2 = args[1]
 
-
 import matplotlib
 if options.filename != None:
     matplotlib.use('Agg')
-from pylab import savefig, show, figure, plot, subplot, cm
+from pylab import savefig, show, figure, subplot, cm
 import numpy as np
 np.seterr(invalid='ignore', divide='ignore') # ignore division by zero errors
 from matplotlib.transforms import Affine2D
@@ -118,7 +159,7 @@ from mpl_toolkits.axisartist.grid_finder import FixedLocator, DictFormatter
 #----------------------------------------------------------------------------
 # axes semi polaires
 #----------------------------------------------------------------------------
-def setup_axes3(fig, rect):
+def setup_axes3(fig, rect, options=None):
     """
     Sometimes, things like axis_direction need to be adjusted.
     """
@@ -130,6 +171,7 @@ def setup_axes3(fig, rect):
     tr_scale = Affine2D().scale(np.pi/180., 1.)
 
     tr = tr_rotate + tr_scale + PolarAxes.PolarTransform()
+
     angle_ticks1 = [(0, r"$0$"),
                    (45, r"$45$"),
                    (90, r"$90$"),
@@ -138,11 +180,20 @@ def setup_axes3(fig, rect):
                    
     grid_locator1 = FixedLocator([v for v, s in angle_ticks1])
     tick_formatter1 = DictFormatter(dict(angle_ticks1))
-
-    angle_ticks2 = [(0, r"$0$"),
+    
+    if options==None :
+        angle_ticks2 = [(0, r"$0$"),
                    (30, r"$30$"),
                    (60, r"$60$"),
                    (90, r"$90$")]
+
+    else :
+       ti=np.linspace(options.others[1],options.others[2],num=4,endpoint=True)
+       angle_ticks2 = [(0, r"$%.0f$"%ti[0]),
+                   (30, r"$%.0f$"%ti[1]),
+                   (60, r"$%.0f$"%ti[2]),
+                   (90, r"$%.0f$"%ti[3])]
+       
     grid_locator2 = FixedLocator([v for v, s in angle_ticks2])
     tick_formatter2 = DictFormatter(dict(angle_ticks2))
 
@@ -163,15 +214,23 @@ def setup_axes3(fig, rect):
     # adjust axis
     ax1.axis["left"].set_axis_direction("bottom")
     ax1.axis["right"].set_axis_direction("top")
-
     ax1.axis["bottom"].set_visible(False)
     ax1.axis["top"].set_axis_direction("bottom")
     ax1.axis["top"].toggle(ticklabels=True, label=True)
     ax1.axis["top"].major_ticklabels.set_axis_direction("top")
     ax1.axis["top"].label.set_axis_direction("top")
-
-    ax1.axis["left"].label.set_text(r"$\theta_{v}$")
-    ax1.axis["top"].label.set_text(r"$\phi$")
+    
+    if options==None:
+        ax1.axis["left"].label.set_text(r"$\theta_{s}$")
+        ax1.axis["top"].label.set_text(r"$\phi$")
+        
+    else :
+        if options.others[0]=='LAMBDA':
+           ax1.axis["left"].label.set_text(r"$\lambda (nm)$")
+        else :
+           ax1.axis["left"].label.set_text(options.others[0])
+        if options.list[0]==1 : ax1.axis["top"].label.set_text(r"$\theta_{s}$")
+        else : ax1.axis["top"].label.set_text(r"$\phi$")
     ax1.grid(True)
 
 
@@ -190,7 +249,7 @@ def setup_axes3(fig, rect):
 #----------------------------------------------------------------------------
 # plot 2D 
 #----------------------------------------------------------------------------
-def plot_2D_parameter(fig, rect, theta , phi, data, Vdata, Vdatat=None, title=None, label=None, iphi0=-1, sub=None, points=None, method='pcolormesh') :
+def plot_2D_parameter(fig, rect, theta , phi, data, Vdata, Vdatat=None, title=None, label=None, iphi0=-1, sub=None, points=None, method='pcolormesh', options=None) :
 
     '''
     Contour and eventually transect of 2D parameter (theta,phi)
@@ -207,37 +266,52 @@ def plot_2D_parameter(fig, rect, theta , phi, data, Vdata, Vdatat=None, title=No
     sub : keyword for the position of the transect plot (similar type as rect)
     points : keyword for the data added to the transect coming from an additional txt file (array with phi, theta and data columns)
     method : keyword for choosing plotting method (contour/pcolormesh)
+    other :  keyword for specifying that phi is representing another parameter
     '''
 
     # grille 2D des angles
     r , t = np.meshgrid(theta,phi)
     NN = len(phi)
-    ticks = np.array([-90,-75,-60,-30,0,30,60,75,90])
+    if options==None : 
+        ticks = np.array([-90,-75,-60,-30,0,30,60,75,90])
+        ax3, aux_ax3 = setup_axes3(fig, rect)
+    else : 
+        if options.list[0]==2: ticks = np.array([-90,-75,-60,-30,0,30,60,75,90])
+        else: ticks = np.linspace(options.others[1],options.others[2],num=4,endpoint=True)
+        ax3, aux_ax3 = setup_axes3(fig, rect, options=options)
 
-
-    ax3, aux_ax3 = setup_axes3(fig, rect)
     if iphi0 >= 0 : ax = subplot(sub)
     cmap = cm.jet
     cmap.set_under('black')
     cmap.set_over('white')
     cmap.set_bad('0.5') # grey 50%
     masked_data = np.ma.masked_where(np.isnan(data) | np.isinf(data), data)
-
     if method == 'contour':
         cax3 = aux_ax3.contourf(t,r,masked_data,Vdata, cmap=cmap)
     else:
         cax3 = aux_ax3.pcolormesh(t,r,masked_data ,cmap=cmap, vmin=Vdata[0], vmax=Vdata[-1])
-
+       
     if title != None : ax3.set_title(title,weight='bold',position=(0.15,0.9))
     if iphi0 >= 0 :
           vertex0 = np.array([[0,0],[phi[iphi0],90]])
           vertex1 = np.array([[0,0],[phi[NN-1-iphi0],90]])
           aux_ax3.plot(vertex0[:,0],vertex0[:,1],'w')
-          aux_ax3.plot(vertex1[:,0],vertex1[:,1],'w--')
-          ax.plot(theta,data[iphi0,:],'k-')
-          ax.plot(-theta,data[NN-1-iphi0,:],'k--')
+          if options==None:
+              aux_ax3.plot(vertex1[:,0],vertex1[:,1],'w--')
+              ax.plot(theta,data[iphi0,:],'k-')
+              ax.plot(-theta,data[NN-1-iphi0,:],'k--')
+              ax.set_xlim(-90,90)
+          else :
+              if options.list[0]==2 :
+                  aux_ax3.plot(vertex1[:,0],vertex1[:,1],'w--')
+                  ax.plot(theta,data[iphi0,:],'k-')
+                  ax.plot(-theta,data[NN-1-iphi0,:],'k--')
+                  ax.set_xlim(-90,90)
+              else: 
+                  ax.plot(theta/90.*(options.others[2]-options.others[1])+ options.others[1],data[iphi0,:],'k-+')
+                  ax.set_xlim(options.others[1],options.others[2])
+              
           ax.set_ylim(Vdata[0],Vdata[-1])
-          ax.set_xlim(-90,90)
           ax.set_xticks(ticks)
           ax.grid(True)
           if points != None :
@@ -262,9 +336,15 @@ def main():
     ##                DONNEES FICHIER CUDA                  ##
     ##########################################################
 
+    # if a list of inputs files check only existence of the first
+    if options.list != None :
+        path_cuda = path_cudal[0].rstrip()
+        NL = len(path_cudal)
+    else :
+        path_cuda = args[0]
+    
     # verification de l'existence du fichier hdf
     if os.path.exists(path_cuda):
-
         # lecture du fichier hdf
         sd_cuda = pyhdf.SD.SD(path_cuda)
         # lecture du nombre de valeurs de phi
@@ -282,6 +362,7 @@ def main():
         NH2O = getattr(sd_cuda,'NH2O')
         SIM = getattr(sd_cuda,'SIM')
         DIOPTRE = getattr(sd_cuda,'DIOPTRE')
+        MODE = getattr(sd_cuda,'MODE')
 
         # Récupération des valeurs de theta
         name = "Zenith angles"
@@ -335,8 +416,8 @@ def main():
             dataQ2 = sds_cuda.get()
             sds_cuda = sd_cuda.select("U_down (0+)")
             dataU2 = sds_cuda.get()
-            sds_cuda = sd_cuda.select("Numbers of photons")
-            dataN2 = sds_cuda.get()
+            #sds_cuda = sd_cuda.select("Numbers of photons")
+            #dataN2 = sds_cuda.get()
         else :
             sds_cuda = sd_cuda.select("I_up (TOA)")
             dataI2 = sds_cuda.get()
@@ -344,14 +425,47 @@ def main():
             dataQ2 = sds_cuda.get()
             sds_cuda = sd_cuda.select("U_up (TOA)")
             dataU2 = sds_cuda.get()
-            sds_cuda = sd_cuda.select("Numbers of photons")
-            dataN2 = sds_cuda.get()
+            #sds_cuda = sd_cuda.select("Numbers of photons")
+            #dataN2 = sds_cuda.get()
 
      else:
         sys.stdout.write("Pas de fichier "+path_cuda2+"\n")
         sys.exit()
 
-
+    # if a list of inputs files read SDS of remaining files
+    if options.list != None :
+        # close first file
+        sd_cuda.end()
+        
+        # build the 3D array containing all SDS
+        dataI = np.zeros((NL,NBPHI_cuda,NBTHETA_cuda), dtype=np.float32)
+        dataQ = np.zeros((NL,NBPHI_cuda,NBTHETA_cuda), dtype=np.float32)
+        dataU = np.zeros((NL,NBPHI_cuda,NBTHETA_cuda), dtype=np.float32)
+        dataN = np.zeros((NL,NBPHI_cuda,NBTHETA_cuda), dtype=np.float32)
+        other = []
+        # loop on input files
+        for i in range(NL):
+            sd_cuda = pyhdf.SD.SD(path_cudal[i].rstrip())
+            other.append(getattr(sd_cuda,options.others[0]))
+            if options.down == True  :
+                sds_cuda = sd_cuda.select("I_down (0+)")
+                dataI[i,:,:] = sds_cuda.get()
+                sds_cuda = sd_cuda.select("Q_down (0+)")
+                dataQ[i,:,:] = sds_cuda.get()
+                sds_cuda = sd_cuda.select("U_down (0+)")
+                dataU[i,:,:] = sds_cuda.get()
+                sds_cuda = sd_cuda.select("Numbers of photons")
+                dataN[i,:,:] = sds_cuda.get()
+            else :
+                sds_cuda = sd_cuda.select("I_up (TOA)")
+                dataI[i,:,:] = sds_cuda.get()
+                sds_cuda = sd_cuda.select("Q_up (TOA)")
+                dataQ[i,:,:] = sds_cuda.get()
+                sds_cuda = sd_cuda.select("U_up (TOA)")
+                dataU[i,:,:] = sds_cuda.get()
+                sds_cuda = sd_cuda.select("Numbers of photons")
+                dataN[i,:,:] = sds_cuda.get()
+            sd_cuda.end()
 
     ##################################################################################
     ##              CREATION/CHOIX/MODIFICATION DE CERTAINES DONNES                 ##
@@ -360,16 +474,58 @@ def main():
     #---------------------------------------------------------
     # Sauvegarde de la grandeur désirée
     #---------------------------------------------------------
-    data_cudaI = np.zeros((NBPHI_cuda, NBTHETA_cuda), dtype=float)
-    data_cudaI = dataI[0:NBPHI_cuda,:]
-    data_cudaQ = np.zeros((NBPHI_cuda, NBTHETA_cuda), dtype=float)
-    data_cudaQ = dataQ[0:NBPHI_cuda,:]
-    data_cudaU = np.zeros((NBPHI_cuda, NBTHETA_cuda), dtype=float)
-    data_cudaU = dataU[0:NBPHI_cuda,:]
-    data_cudaIP = np.sqrt(data_cudaQ*data_cudaQ + data_cudaU*data_cudaU)
-    data_cudaPR = data_cudaIP/data_cudaI * 100
-    data_cudaN = np.zeros((NBPHI_cuda, NBTHETA_cuda), dtype=float)
-    data_cudaN = 100./ np.sqrt(dataN[0:NBPHI_cuda,:])
+    # if a list of inputs files read SDS of remaining files
+    if options.list != None :
+        
+        if options.list[0]==0:
+            ith1 = (np.abs(theta-options.list[1])).argmin() 
+            data_cudaI = np.zeros((NL,NBPHI_cuda), dtype=float)
+            data_cudaI = dataI[0:NL,:,ith1]
+            data_cudaQ = np.zeros((NL, NBPHI_cuda), dtype=float)
+            data_cudaQ = dataQ[0:NL,:,ith1]
+            data_cudaU = np.zeros((NL, NBPHI_cuda), dtype=float)
+            data_cudaU = dataU[0:NL,:,ith1]
+            data_cudaIP = np.sqrt(data_cudaQ*data_cudaQ + data_cudaU*data_cudaU)
+            data_cudaPR = data_cudaIP/data_cudaI * 100
+            data_cudaN = np.zeros((NL, NBPHI_cuda), dtype=float)
+            data_cudaN = 100./ np.sqrt(dataN[0:NL,:,ith1])
+            
+        if options.list[0]==1:
+            iphi1 = (np.abs(phi-options.list[1])).argmin() 
+            data_cudaI = np.zeros((NL,NBTHETA_cuda), dtype=float)
+            data_cudaI = dataI[0:NL,iphi1,:]
+            data_cudaQ = np.zeros((NL, NBTHETA_cuda), dtype=float)
+            data_cudaQ = dataQ[0:NL,iphi1,:]
+            data_cudaU = np.zeros((NL, NBTHETA_cuda), dtype=float)
+            data_cudaU = dataU[0:NL,iphi1,:]
+            data_cudaIP = np.sqrt(data_cudaQ*data_cudaQ + data_cudaU*data_cudaU)
+            data_cudaPR = data_cudaIP/data_cudaI * 100
+            data_cudaN = np.zeros((NL, NBTHETA_cuda), dtype=float)
+            data_cudaN = 100./ np.sqrt(dataN[0:NL,iphi1,:])
+            
+        if options.list[0]==2:
+            io1 = (np.abs(np.array(other)-options.list[1])).argmin() 
+            data_cudaI = np.zeros((NBPHI_cuda,NBTHETA_cuda), dtype=float)
+            data_cudaI = dataI[io1,:,:]
+            data_cudaQ = np.zeros((NBPHI_cuda,NBTHETA_cuda), dtype=float)
+            data_cudaQ = dataQ[io1,:,:]
+            data_cudaU = np.zeros((NBPHI_cuda,NBTHETA_cuda), dtype=float)
+            data_cudaU = dataU[io1,:,:]
+            data_cudaIP = np.sqrt(data_cudaQ*data_cudaQ + data_cudaU*data_cudaU)
+            data_cudaPR = data_cudaIP/data_cudaI * 100
+            data_cudaN = np.zeros((NBPHI_cuda,NBTHETA_cuda), dtype=float)
+            data_cudaN = 100./ np.sqrt(dataN[io1,:,:])
+    else:  
+        data_cudaI = np.zeros((NBPHI_cuda, NBTHETA_cuda), dtype=float)
+        data_cudaI = dataI[0:NBPHI_cuda,:]
+        data_cudaQ = np.zeros((NBPHI_cuda, NBTHETA_cuda), dtype=float)
+        data_cudaQ = dataQ[0:NBPHI_cuda,:]
+        data_cudaU = np.zeros((NBPHI_cuda, NBTHETA_cuda), dtype=float)
+        data_cudaU = dataU[0:NBPHI_cuda,:]
+        data_cudaIP = np.sqrt(data_cudaQ*data_cudaQ + data_cudaU*data_cudaU)
+        data_cudaPR = data_cudaIP/data_cudaI * 100
+        data_cudaN = np.zeros((NBPHI_cuda, NBTHETA_cuda), dtype=float)
+        data_cudaN = 100./ np.sqrt(dataN[0:NBPHI_cuda,:])
 
     if len(args) == 2 :
       if NBPHI_cuda==NBPHI_cuda2 and NBTHETA_cuda==NBTHETA_cuda2 :
@@ -430,8 +586,8 @@ def main():
     HA = "%.1f" % HA
 
     ### !! ###
-    ZMIN='0.'
-    ZMAX='1.'
+    #ZMIN='0.'
+    #ZMAX='1.'
     ### !! ###
 
     if SIM == -2 : # Black surface and no dioptre
@@ -630,32 +786,79 @@ def main():
     #   Creation
     #---------------------------------------------------------
 
+    
+    
     fig = figure(1, figsize=(9, 9))
+    fig.text(.5,.95, r"$\theta_{v}=%.2f$" %float(thetas),fontsize='14', ha='center')
+    fig.text(.5,.85, "Geometry : %s" %MODE,fontsize='14', ha='center')
+    
+    # if a list of inputs files read SDS of remaining files
+    # substitute theta to phi
+    # other dimension replace theta, so scale other limits to match the interval 0,90 for plotting
+    if options.list != None :
+        other=np.array(other)
+        
+        if options.list[0]==0 :
+            fig.text(.5,.90, r"$\theta_{s}=%.2f$" %theta[ith1],fontsize='14', ha='center')
+            other = (other-options.others[1])/(options.others[2]-options.others[1])* 90.
+        if options.list[0]==1 :
+            fig.text(.5,.90, r"$\phi=%.2f$" %phi[iphi1],fontsize='14', ha='center')
+            other = (other-options.others[1])/(options.others[2]-options.others[1])* 90.
+        if options.list[0]==2 :
+            if options.others[0]=='LAMBDA':     
+                fig.text(.5,.90, r"$\lambda=%.2f nm$"%other[io1],fontsize='14', ha='center')
+            else:
+                fig.text(.5,.90, options.others[0]+"$=%.2f$"%other[io1],fontsize='14', ha='center')
+            other = (other-options.others[1])/(options.others[2]-options.others[1])* 90.
+            
+    else:
+        fig.text(.5,.90, r"$\lambda=%.2f nm$"%(float(LAMBDA)*1e3),fontsize='14', ha='center')
     fig.subplots_adjust(wspace=0.3, hspace=0.3, left=0.05, right=0.95)
     #fig.subplots_adjust(wspace=0.3, left=0.05, right=0.95)
 
     sub =  [423,424,427,428]
 
-    r , t = np.meshgrid(theta,phi)
+    #r , t = np.meshgrid(theta,phi)
 
     if options.phi0 != None :
-        rect = [421,422,425,426]
-        iphi0 = (np.abs(phi-options.phi0)).argmin()
+        rect = [421,422,425,426] 
+        
+        if options.list != None : 
+            if options.list[0]==0 : 
+                iphi0 = (np.abs(phi-options.phi0)).argmin()
+                fig.text(.5,.80, r"$\phi^{0}=%.2f$"%phi[iphi0],fontsize='14', ha='center')
+            if options.list[0]==1 : 
+                iphi0 = (np.abs(theta-options.phi0)).argmin()
+                fig.text(.5,.80, r"$\theta_{s}^{0}=%.2f$"%theta[iphi0],fontsize='14', ha='center')
+            if options.list[0]==2 : 
+                iphi0 = (np.abs(phi-options.phi0)).argmin()
+                fig.text(.5,.80, r"$\phi^{0}=%.2f$"%phi[iphi0],fontsize='14', ha='center')
+        else :
+            iphi0 = (np.abs(phi-options.phi0)).argmin()
 
     else:
         rect = [221,222,223,224]
         iphi0 = -1
+        
+
 
     # first quarter I
     if (len(args)==2) | (options.diff==True):
-         if options.rel==True :
-            #plot_2D_parameter(fig, rect[0], theta , phi, (data_cudaI-data_cudaI2)/data_cudaI2*100, VI, Vdatat=VIt,title='(I1-I2)/I2[%]', iphi0=iphi0, sub=sub[0],points=I_txt)
+        if options.rel==True :
             plot_2D_parameter(fig, rect[0], theta , phi, (data_cudaI-data_cudaI2)/data_cudaI2*100, VI, Vdatat=VIt,title='(I1-I2)/I2[%]', iphi0=iphi0, sub=sub[0])
-         else :
+        else :
             plot_2D_parameter(fig, rect[0], theta , phi, data_cudaI-data_cudaI2, VI, Vdatat=VIt,title='I1-I2', iphi0=iphi0, sub=sub[0])
     else:
         if options.points != None : plot_2D_parameter(fig, rect[0], theta , phi, data_cudaI, VI,  Vdatat=VIt,title='I', iphi0=iphi0, sub=sub[0], points=I_txt)
-        else : plot_2D_parameter(fig, rect[0], theta , phi, data_cudaI, VI,  Vdatat=VIt,title='I', iphi0=iphi0, sub=sub[0])
+        else : 
+            if options.list == None :
+                 plot_2D_parameter(fig, rect[0], theta , phi, data_cudaI, VI,  Vdatat=VIt,title='I', iphi0=iphi0, sub=sub[0])
+            else : 
+                 if options.list[0]==0 : plot_2D_parameter(fig, rect[0], other, phi, data_cudaI.transpose(), VI,  Vdatat=VIt,title='I', iphi0=iphi0, sub=sub[0],options=options)
+                 if options.list[0]==1 : plot_2D_parameter(fig, rect[0], other, theta, data_cudaI.transpose(), VI,  Vdatat=VIt,title='I', iphi0=iphi0, sub=sub[0],options=options)
+                 if options.list[0]==2 : plot_2D_parameter(fig, rect[0], theta, phi, data_cudaI, VI,  Vdatat=VIt,title='I', iphi0=iphi0, sub=sub[0])
+                 
+                 
 
 
     # 2nd quarter Q
@@ -666,7 +869,15 @@ def main():
             plot_2D_parameter(fig, rect[1], theta , phi, data_cudaQ-data_cudaQ2, VQ,  Vdatat=VQt,title='Q1-Q2', iphi0=iphi0, sub=sub[1])
     else:
         if options.points != None : plot_2D_parameter(fig, rect[1], theta , phi, data_cudaQ,  VQ, Vdatat=VQt,  title='Q', iphi0=iphi0, sub=sub[1], points=Q_txt)
-        else :  plot_2D_parameter(fig, rect[1], theta , phi, data_cudaQ,  VQ, Vdatat=VQt,  title='Q', iphi0=iphi0, sub=sub[1])
+        else :  
+            if options.list == None :
+                plot_2D_parameter(fig, rect[1], theta , phi, data_cudaQ,  VQ, Vdatat=VQt,  title='Q', iphi0=iphi0, sub=sub[1])
+            else :
+               if options.list[0]==0 : plot_2D_parameter(fig, rect[1], other, phi, data_cudaQ.transpose(), VQ,  Vdatat=VQt,title='Q', iphi0=iphi0, sub=sub[1],options=options)
+               if options.list[0]==1 : plot_2D_parameter(fig, rect[1], other, theta, data_cudaQ.transpose(), VQ,  Vdatat=VQt,title='Q', iphi0=iphi0, sub=sub[1],options=options)
+               if options.list[0]==2 : plot_2D_parameter(fig, rect[1], theta, phi, data_cudaQ, VQ,  Vdatat=VQt,title='Q', iphi0=iphi0, sub=sub[1])
+                        
+                        
 
     # 3rd quarter U
     if (len(args)==2) | (options.diff==True):
@@ -676,7 +887,13 @@ def main():
             plot_2D_parameter(fig, rect[2], theta , phi, data_cudaU-data_cudaU2, VU,  Vdatat=VUt,title='U1-U2', label='Reflectance', iphi0=iphi0, sub=sub[2])
     else:
         if options.points != None : plot_2D_parameter(fig, rect[2], theta , phi, data_cudaU,  VU, Vdatat=VUt,  title='U', label='Reflectance', iphi0=iphi0, sub=sub[2], points=U_txt)
-        else : plot_2D_parameter(fig, rect[2], theta , phi, data_cudaU,  VU, Vdatat=VUt,  title='U', label='Reflectance', iphi0=iphi0, sub=sub[2])
+        else : 
+            if options.list == None :
+                plot_2D_parameter(fig, rect[2], theta , phi, data_cudaU,  VU, Vdatat=VUt,  title='U', label='Reflectance', iphi0=iphi0, sub=sub[2])
+            else :
+                if options.list[0]==0 : plot_2D_parameter(fig, rect[2], other, phi, data_cudaU.transpose(), VU,  Vdatat=VUt,title='U', iphi0=iphi0, sub=sub[2],options=options)
+                if options.list[0]==1 : plot_2D_parameter(fig, rect[2], other, theta, data_cudaU.transpose(), VU,  Vdatat=VUt,title='U', iphi0=iphi0, sub=sub[2],options=options)
+                if options.list[0]==2 : plot_2D_parameter(fig, rect[2], theta, phi, data_cudaU, VU,  Vdatat=VUt,title='U', iphi0=iphi0, sub=sub[2])
 
     # 4th quarter
     # Polarization ratio
@@ -688,11 +905,22 @@ def main():
             plot_2D_parameter(fig, rect[3], theta , phi, data_cudaPR-data_cudaPR2, VPR,  Vdatat=VPRt,title='P1-P2[%]', label='Polarization Ratio', iphi0=iphi0, sub=sub[3])
       else:
          if options.points != None : plot_2D_parameter(fig, rect[3], theta , phi, data_cudaPR, VPR,  Vdatat=VPRt,title='P[%]', label='Polarization Ratio', iphi0=iphi0, sub=sub[3], points=PR_txt)
-         else : plot_2D_parameter(fig, rect[3], theta , phi, data_cudaPR, VPR,  Vdatat=VPRt,title='P[%]', label='Polarization Ratio', iphi0=iphi0, sub=sub[3])
+         else : 
+             if options.list == None :
+                 plot_2D_parameter(fig, rect[3], theta , phi, data_cudaPR, VPR,  Vdatat=VPRt,title='P[%]', label='Polarization Ratio', iphi0=iphi0, sub=sub[3])
+             else :
+                 if options.list[0]==0 : plot_2D_parameter(fig, rect[3], other, phi, data_cudaPR.transpose(), VPR,  Vdatat=VPRt,title='P[%]', label='Polarization Ratio',iphi0=iphi0, sub=sub[3],options=options)
+                 if options.list[0]==1 : plot_2D_parameter(fig, rect[3], other, theta, data_cudaPR.transpose(), VPR,  Vdatat=VPRt,title='P[%]',label='Polarization Ratio', iphi0=iphi0, sub=sub[3],options=options)
+                 if options.list[0]==2 : plot_2D_parameter(fig, rect[3], theta, phi, data_cudaPR, VPR,  Vdatat=VPRt,title='P[%]',label='Polarization Ratio', iphi0=iphi0, sub=sub[3])
 
     # or Error
     if options.percent == None and options.error >= 0.:
-         plot_2D_parameter(fig, rect[3], theta , phi, data_cudaN, VN,  Vdatat=VNt,title=r"$\Delta$ [%]", label='Relative Error', iphi0=iphi0, sub=sub[3])
+         if options.list == None :
+             plot_2D_parameter(fig, rect[3], theta , phi, data_cudaN, VN,  Vdatat=VNt,title=r"$\Delta$ [%]", label='Relative Error', iphi0=iphi0, sub=sub[3])
+         else :
+             if options.list[0]==0 : plot_2D_parameter(fig, rect[3], other, phi, data_cudaN.transpose(), VN,  Vdatat=VNt,title=r"$\Delta$ [%]", label='Relative Error',iphi0=iphi0, sub=sub[3],options=options)
+             if options.list[0]==1 : plot_2D_parameter(fig, rect[3], other, theta, data_cudaN.transpose(), VN,  Vdatat=VNt,title=r"$\Delta$ [%]",label='Relative Error', iphi0=iphi0, sub=sub[3],options=options)
+             if options.list[0]==2 : plot_2D_parameter(fig, rect[3], theta, phi, data_cudaN, VN,  Vdatat=VNt,title=r"$\Delta$ [%]",label='Relative Error', iphi0=iphi0, sub=sub[3])
 
     # or Polarized reflectance
     if options.percent == None  and options.error == None:
@@ -703,8 +931,13 @@ def main():
             plot_2D_parameter(fig, rect[3], theta , phi, data_cudaIP-data_cudaIP2, VIP,  Vdatat=VIPt,title='IP1-IP2', label='Polarized Reflectance', iphi0=iphi0, sub=sub[3])
       else:
          if options.points != None : plot_2D_parameter(fig, rect[3], theta , phi, data_cudaIP, VIP, Vdatat=VIPt,title='IP', label='Polarized Reflectance', iphi0=iphi0, sub=sub[3], points=IP_txt)
-         else : plot_2D_parameter(fig, rect[3], theta , phi, data_cudaIP, VIP, Vdatat=VIPt,title='IP', label='Polarized Reflectance', iphi0=iphi0, sub=sub[3])
-
+         else : 
+             if options.list == None :
+                 plot_2D_parameter(fig, rect[3], theta , phi, data_cudaIP, VIP, Vdatat=VIPt,title='IP', label='Polarized Reflectance', iphi0=iphi0, sub=sub[3])
+             else :
+                 if options.list[0]==0 : plot_2D_parameter(fig, rect[3], other, phi, data_cudaIP.transpose(), VIP,  Vdatat=VIPt,title='IP', label='Polarized Reflectance',iphi0=iphi0, sub=sub[3],options=options)
+                 if options.list[0]==1 : plot_2D_parameter(fig, rect[3], other, theta, data_cudaIP.transpose(), VIP,  Vdatat=VIPt,title='IP',label='Polarized Reflectance', iphi0=iphi0, sub=sub[3],options=options)
+                 if options.list[0]==2 : plot_2D_parameter(fig, rect[3], theta, phi, data_cudaIP, VIP,  Vdatat=VIPt,title='IP',label='Polarized Reflectance', iphi0=iphi0, sub=sub[3])
 
     if options.filename == None:
         show()
