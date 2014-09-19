@@ -64,8 +64,10 @@ parser = OptionParser(option_class=MyOption,usage='%prog [options] hdf_file [hdf
         + '-t --transect : Add a transect below 2D plot for the closest azimuth to phi0 or theta0 in case of the list option activated\n'
         + '-P --points : optional filename containing data points to be added to the transect, format txt file with columns (phi theta I Q U)\n'
         + '-e --error : choose relative error instead of polarized reflectance and maximum error for color scale\n'
-        + '-l --list : the hdf_file argument is replaced by a file contaning a list of input filenames AND (the int and float separated by a comma x,y given in this option specify first,\n\t\tthe dimension number to be taken as constant in 2D plots :\n\t\t0 : theta\n\t\t1 : phi\n\t\t2 : other\n \t and second,\n \t\t its value'
-        + '-o --other : string for the 3 dimension ex LAMBDA , WINDSPEED and 2 floats for inf and sup separated by commas; in case of -list option\n')
+        + '-l --list : the hdf_file argument is replaced by a file contaning a list of input filenames (the int and float separated by a comma x,y given in this option specify first,\n\t\tthe dimension number to be taken as constant in 2D plots :\n\t\t0 : theta\n\t\t1 : phi\n\t\t2 : other\n \t and second,\n \t\t its value\n'
+        + '-o --other : string for the 3 dimension ex LAMBDA , WINDSPEED and 2 floats for inf and sup separated by commas; in case of -list option\n'
+        + '\nexamples : ---------\n\n\tpython runOSfromMC.py -p 100 -r 0.5 -t 0 out.hdf : polar plot(theta,phi) of the Stokes parameters and reflectance scaled to 0.5 \n\tand polarization ratio scale to 100 percent and transect of azimuth 0 plottted under polar plots\n\n'
+        + "\tpython runOSfromMC.py -o LAMBDA,400,700 -l 0,60 list.txt : polar plot(lambda,phi) of the Stokes parameters with the list of simulations output files in the txt file lits.txt\n, where the 3rd dimension is the varying 'LAMBDA' parameter plotted between 400 and 700 and the SZA beeing taken constant at 60 deg. ")
 
 parser.add_option('-d','--down',
             dest='down',
@@ -123,12 +125,12 @@ parser.add_option('-e', '--error',
 parser.add_option('-o', '--others',
             dest='others',
             type='tuple3',
-            help='-o : string for the 3 dimension ex LAMBDA , WINDSPEED and 2 floats for inf and sup separated by commas; in case of -list option\n'
+            help='-o : string for the 3rd dimension ex LAMBDA , WINDSPEED and 2 floats for inf and sup separated by commas; in case of -list option\n'
             )
 parser.add_option('-l', '--list',
             dest='list',
             type='tuple2',
-            help='-l the hdf_file argument is replaced by a file contaning a list of input filenames AND (the int and float separated by a comma x,y given in this option specify first,\n\t\tthe dimension number to be taken as constant in 2D plots :\n\t\t0 : theta\n\t\t1 : phi\n\t\t2 : other\n \t and second,\n \t\t its value'
+            help='-l the hdf_file argument is replaced by a file contaning a list of input filenames (the int and float separated by a comma x,y given in this option specify first,\n\t\tthe dimension number to be taken as constant in 2D plots :\n\t\t0 : theta\n\t\t1 : phi\n\t\t2 : other\n \t and second,\n \t\t its value'
             )
 (options, args) = parser.parse_args()
 if len(args) != 1 and len(args) != 2:
@@ -567,10 +569,11 @@ def main():
     # Parametres des SOS
     #---------------------------------------------------------
     # ecritue du fichier d'angle utilisateur pour OS V5.1
-    fname = "MC_angle_%i.txt" % NBTHETA_cuda
-    fangle = open(fname,"w")
-    for i in range(NBTHETA_cuda) :
-        fangle.write("%9.5f\n" % theta[i])
+    if options.sos == True or options.compute==True:
+       fname = "MC_angle_%i.txt" % NBTHETA_cuda
+       fangle = open(fname,"w")
+       for i in range(NBTHETA_cuda) :
+           fangle.write("%9.5f\n" % theta[i])
 
     #------------------------------------
     # conversion en string pour passge au ksh
