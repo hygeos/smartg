@@ -4,6 +4,13 @@
 
 
 
+
+v1.3.2
+======
+
+- improvement of the visualization tool, renamed tools/analyze/smartg_analyze.py
+
+
 v1.3.1
 ======
 
