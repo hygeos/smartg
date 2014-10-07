@@ -1614,7 +1614,19 @@ void afficheParametres()
 	else{
 		printf("\tPas de dioptre\n");
 	}
-	
+   
+    printf("\n#--------- Contribution de l'environnement -----#\n");
+	if( ENV==0){
+		printf(" ENV_SIZE\t=\t%.1f (km)", ENV_SIZE);
+		printf("\n");
+		printf(" X0 =\t%.1f (km)", X0);
+		printf(" Y0 =\t%.1f (km)", Y0);
+		printf("\n");
+	}
+	else{
+		printf("\tPas d'effet d'environnement\n");
+	}
+
 	#ifdef FLAGOCEAN
 	printf("\n#----------------- Océan ------------------#\n");
 	printf(" LSAOCE\t=\t%u", LSAOCE);
@@ -1860,6 +1872,10 @@ void creerHDFTemoin(double* tabPhotonsTot, double* tabPhotonsTotDown, unsigned l
 	SDsetattr(sdsTab, "PROFIL", DFNT_INT32, 1, &PROFIL);
 	SDsetattr(sdsTab, "SIM", DFNT_INT32, 1, &SIM);
 	SDsetattr(sdsTab, "SUR", DFNT_INT32, 1, &SUR);
+	SDsetattr(sdsTab, "ENV", DFNT_INT32, 1, &ENV);
+	SDsetattr(sdsTab, "ENV_SIZE", DFNT_FLOAT32, 1, &ENV_SIZE);
+	SDsetattr(sdsTab, "X0", DFNT_FLOAT32, 1, &X0);
+	SDsetattr(sdsTab, "Y0", DFNT_FLOAT32, 1, &Y0);
 	SDsetattr(sdsTab, "THVDEG", DFNT_FLOAT32, 1, &THVDEG);
 	SDsetattr(sdsTab, "LAMBDA", DFNT_FLOAT32, 1, &LAMBDA);
 	SDsetattr(sdsTab, "TAURAY", DFNT_FLOAT32, 1, &TAURAY);
@@ -1940,6 +1956,7 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		int NBTHETArecup[1];
 		int NBPHIrecup[1];
 		int DIOPTRErecup[1];
+		int ENVrecup[1];
 		int PROFILrecup[1];
 		int SIMrecup[1];
 		int SURrecup[1];
@@ -1953,6 +1970,9 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		float HRrecup[1];
 		float ZMINrecup[1];
 		float ZMAXrecup[1];
+		float ENV_SIZErecup[1];
+		float X0recup[1];
+		float Y0recup[1];
 		int NATMrecup[1];
 		float HATMrecup[1];
 		float WINDSPEEDrecup[1];
@@ -1966,6 +1986,7 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "NBTHETA"), (VOIDP)NBTHETArecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "NBPHI"), (VOIDP)NBPHIrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "DIOPTRE"), (VOIDP)DIOPTRErecup);
+		SDreadattr(sdsTab, SDfindattr(sdsTab, "ENV"), (VOIDP)ENVrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "PROFIL"), (VOIDP)PROFILrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "SIM"), (VOIDP)SIMrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "SUR"), (VOIDP)SURrecup);
@@ -1975,6 +1996,9 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "TAUAER"), (VOIDP)TAUAERrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "W0AER"), (VOIDP)W0AERrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "W0LAM"), (VOIDP)W0LAMrecup);
+		SDreadattr(sdsTab, SDfindattr(sdsTab, "ENV_SIZE"), (VOIDP)ENV_SIZErecup);
+		SDreadattr(sdsTab, SDfindattr(sdsTab, "X0"), (VOIDP)X0recup);
+		SDreadattr(sdsTab, SDfindattr(sdsTab, "Y0"), (VOIDP)Y0recup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "HA"), (VOIDP)HArecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "HR"), (VOIDP)HRrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "ZMIN"), (VOIDP)ZMINrecup);
@@ -1993,6 +2017,7 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		if(NBTHETArecup[0] == NBTHETA
 			&& NBPHIrecup[0] == NBPHI
 			&& DIOPTRErecup[0] == DIOPTRE
+			&& ENVrecup[0] == ENV
 			&& PROFILrecup[0] == PROFIL
 			&& SIMrecup[0] == SIM
 			&& SURrecup[0] == SUR
@@ -2002,6 +2027,9 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 			&& TAUAERrecup[0] == TAUAER
 			&& W0AERrecup[0] == W0AER
 			&& W0LAMrecup[0] == W0LAM
+			&& ENV_SIZErecup[0] == ENV_SIZE
+			&& X0recup[0] == X0
+			&& Y0recup[0] == Y0
 			&& HArecup[0] == HA
 			&& HRrecup[0] == HR
 			&& ZMINrecup[0] == ZMIN
@@ -2142,6 +2170,7 @@ tempsPrec)
 	SDsetattr(sdFichier, "NBTHETA", DFNT_INT32, 1, &NBTHETA);
 	SDsetattr(sdFichier, "NBPHI", DFNT_INT32, 1, &NBPHI);
 	SDsetattr(sdFichier, "DIOPTRE", DFNT_INT32, 1, &DIOPTRE);
+	SDsetattr(sdFichier, "ENV", DFNT_INT32, 1, &ENV);
 	SDsetattr(sdFichier, "PROFIL", DFNT_INT32, 1, &PROFIL);
 	SDsetattr(sdFichier, "SIM", DFNT_INT32, 1, &SIM);
 	SDsetattr(sdFichier, "SUR", DFNT_INT32, 1, &SUR);
@@ -2157,6 +2186,9 @@ tempsPrec)
 	
 	SDsetattr(sdFichier, "W0AER", DFNT_FLOAT32, 1, &W0AER);
 	SDsetattr(sdFichier, "W0LAM", DFNT_FLOAT32, 1, &W0LAM);
+	SDsetattr(sdFichier, "ENV_SIZE", DFNT_FLOAT32, 1, &ENV_SIZE);
+	SDsetattr(sdFichier, "X0", DFNT_FLOAT32, 1, &X0);
+	SDsetattr(sdFichier, "Y0", DFNT_FLOAT32, 1, &Y0);
 	SDsetattr(sdFichier, "HA", DFNT_FLOAT32, 1, &HA);
 	SDsetattr(sdFichier, "HR", DFNT_FLOAT32, 1, &HR);
 	SDsetattr(sdFichier, "ZMIN", DFNT_FLOAT32, 1, &ZMIN);
