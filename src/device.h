@@ -56,6 +56,10 @@ __device__ __constant__ int PROFILd;
 __device__ __constant__ int SIMd;
 __device__ __constant__ int SURd;
 __device__ __constant__ int DIOPTREd;
+__device__ __constant__ int ENVd;
+__device__ __constant__ float ENV_SIZEd;		// Size of target in km
+__device__ __constant__ float X0d;		// position of the target in x (km)
+__device__ __constant__ float Y0d;		// position of the target in y (km)
 __device__ __constant__ float THVd;		//thetaView_Host in radians
 __device__ __constant__ float STHVd;	//sinThetaView_Host
 __device__ __constant__ float CTHVd;	//cosThetaView_Host

@@ -21,6 +21,7 @@ int DIOPTRE; 	//Type de dioptre (0=plan, 1=agite)
 int PROFIL; 	//Type de profil atmospherique
 int SIM; 		//Type de simulation
 int SUR; 		//Type de reflexion de la surface
+int ENV;        //Effet d'environnement(=0 pas d effet)
 
 unsigned int LSAAER;	// Nombre d'échantillons pour les angles du modèle de diffusion aérosols
 unsigned int NFAER;
@@ -45,6 +46,9 @@ int NATM;		//Altitude haute de la couche aerosol [km] (utilise si PROFIL=3)
 float HATM;		//Altitude haute de la couche aerosol [km] (utilise si PROFIL=3)
 float WINDSPEED;	//Vitesse du vent [m/s] (utilisee pour le modele de Cox et Munk: si DIOPTRE=1)
 float NH2O;		//Indice de refraction relatif air/eau
+float ENV_SIZE; // Taille de la cible en km
+float X0; // Position de la cible en x km
+float Y0; // Position de la cible en y km
 #ifdef FLAGOCEAN
 float ATOT, BTOT;
 char PATHDIFFOCE[1024];

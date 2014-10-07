@@ -203,6 +203,10 @@ void initConstantesHost(int argc, char** argv)
 	strcpy(s,"");
 	chercheConstante(parametres, "DIOPTRE", s);
 	DIOPTRE= atoi(s);
+
+	strcpy(s,"");
+	chercheConstante(parametres, "ENV", s);
+	ENV= atoi(s);
 	
 	strcpy(s,"");
 	chercheConstante(parametres, "THVDEG", s);
@@ -223,6 +227,18 @@ void initConstantesHost(int argc, char** argv)
 	strcpy(s,"");
 	chercheConstante(parametres, "W0AER", s);
 	W0AER = atof(s);
+	
+	strcpy(s,"");
+	chercheConstante(parametres, "ENV_SIZE", s);
+	ENV_SIZE = atof(s);
+	
+	strcpy(s,"");
+	chercheConstante(parametres, "X0", s);
+	X0 = atof(s);
+	
+	strcpy(s,"");
+	chercheConstante(parametres, "Y0", s);
+	Y0 = atof(s);
 	
 	strcpy(s,"");
 	chercheConstante(parametres, "W0LAM", s);

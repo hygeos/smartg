@@ -191,10 +191,10 @@ def setup_axes3(fig, rect, options=None):
 
     else :
        ti=np.linspace(options.others[1],options.others[2],num=4,endpoint=True)
-       angle_ticks2 = [(0, r"$%.0f$"%ti[0]),
-                   (30, r"$%.0f$"%ti[1]),
-                   (60, r"$%.0f$"%ti[2]),
-                   (90, r"$%.0f$"%ti[3])]
+       angle_ticks2 = [(0, r"$%.1f$"%ti[0]),
+                   (30, r"$%.1f$"%ti[1]),
+                   (60, r"$%.1f$"%ti[2]),
+                   (90, r"$%.1f$"%ti[3])]
        
     grid_locator2 = FixedLocator([v for v, s in angle_ticks2])
     tick_formatter2 = DictFormatter(dict(angle_ticks2))

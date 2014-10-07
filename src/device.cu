@@ -211,7 +211,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 		// Surface
         //
 		if(ph.loc == SURFACE){
-			
+           if( ENVd==0 ) { // si pas d effet d environnement	
 			if( DIOPTREd!=3 )
 				surfaceAgitee(&ph, &etatThr
 					#if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
@@ -225,6 +225,28 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 					, &configThr
 					#endif
 						);
+           }
+
+           else {
+                float dis=0;
+                #ifdef SPHERIQUE
+                dis = sqrtf((ph.x-X0d)*(ph.x-X0d) +(ph.y-Y0d)*(ph.y-Y0d));
+                #endif
+                if( dis > ENV_SIZEd) {
+				     surfaceLambertienne(&ph, &etatThr
+                                        #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
+					 , &configThr
+					      #endif
+						);
+                }
+                else {
+				     surfaceAgitee(&ph, &etatThr
+					        #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
+					 , &configThr
+					        #endif
+						);
+                }
+           }
 		}
 		syncthreads();
 		
@@ -1613,6 +1635,7 @@ __device__ void surfaceLambertienne(Photon* ph
 	ph->ux = uxn;
 	ph->uy = uyn;
 	ph->uz = uzn;
+
 	#endif
 }
 
@@ -1897,7 +1920,11 @@ void initConstantesDevice()
 	cudaMemcpyToSymbol(SIMd, &SIM, sizeof(int));
 	cudaMemcpyToSymbol(SURd, &SUR, sizeof(int));
 	cudaMemcpyToSymbol(DIOPTREd, &DIOPTRE, sizeof(int));
+	cudaMemcpyToSymbol(ENVd, &ENV, sizeof(int));
 	
+	cudaMemcpyToSymbol(ENV_SIZEd, &ENV_SIZE, sizeof(float));
+	cudaMemcpyToSymbol(X0d, &X0, sizeof(float));
+	cudaMemcpyToSymbol(Y0d, &Y0, sizeof(float));
 	cudaMemcpyToSymbol(NFAERd, &NFAER, sizeof(unsigned int));
 	cudaMemcpyToSymbol(NFOCEd, &NFOCE, sizeof(unsigned int));
 		

@@ -145,6 +145,7 @@ extern int PROFIL;
 extern int SIM;
 extern int SUR;
 extern int DIOPTRE;
+extern int ENV;
 
 extern unsigned int LSAAER;
 extern unsigned int NFAER;
@@ -159,6 +160,9 @@ extern float TAUAER;
 extern float TAUATM;
 extern float W0AER;
 extern float W0LAM;
+extern float ENV_SIZE;
+extern float X0;
+extern float Y0;
 #ifdef FLAGOCEAN
 extern float W0OCE;
 extern float ATOT, BTOT;

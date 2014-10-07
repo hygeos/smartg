@@ -191,7 +191,7 @@ def parseGridSpec (gridSpec):
 
 ####################################################################################################################################
  
-parser = OptionParser(usage='%prog [options] file_in_atm\n Type %prog -h for help\n')
+parser = OptionParser(usage='%prog [options] file_in_atm file_in_crsO3\n Type %prog -h for help\n')
 parser.add_option('-n','--noabs',
             dest='noabs',
             action='store_true',
@@ -257,7 +257,7 @@ parser.add_option('-H', '--Ha',
             help='Aerosol Scale Height (km), default 1. km' 
             )
 (options, args) = parser.parse_args()
-if len(args) != 1 :
+if len(args) != 2 :
    parser.print_usage()
    exit(1)
 if options.zcol==None :  ss=0
@@ -282,7 +282,7 @@ data=np.loadtxt(args[0],comments="#")
 ####
 # SIGMA = (C0 + C1*(T-T0) + C2*(T-T0)^2) * 1.E-20 cm^2
 T0 = 273.15 #in K
-crs=np.loadtxt("crs_O3_UBremen_cf.dat",comments="#")
+crs=np.loadtxt(args[1],comments="#")
 
 
 if ss<0 or so >=data.shape[1] :
