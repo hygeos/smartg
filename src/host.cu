@@ -1616,7 +1616,7 @@ void afficheParametres()
 	}
    
     printf("\n#--------- Contribution de l'environnement -----#\n");
-	if( ENV==0){
+	if( ENV!=0){
 		printf(" ENV_SIZE\t=\t%.1f (km)", ENV_SIZE);
 		printf("\n");
 		printf(" X0 =\t%.1f (km)", X0);

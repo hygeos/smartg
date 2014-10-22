@@ -251,7 +251,7 @@ def setup_axes3(fig, rect, options=None):
 #----------------------------------------------------------------------------
 # plot 2D 
 #----------------------------------------------------------------------------
-def plot_2D_parameter(fig, rect, theta , phi, data, Vdata, Vdatat=None, title=None, label=None, iphi0=-1, sub=None, points=None, method='pcolormesh', options=None) :
+def plot_2D_parameter(fig, rect, theta , phi, data, Vdata, Vdatat=None, title=None, label=None, iphi0=-1, sub=None, points=None, method='contour', options=None) :
 
     '''
     Contour and eventually transect of 2D parameter (theta,phi)
