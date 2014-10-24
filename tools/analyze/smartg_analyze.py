@@ -132,6 +132,11 @@ parser.add_option('-l', '--list',
             type='tuple2',
             help='-l the hdf_file argument is replaced by a file contaning a list of input filenames (the int and float separated by a comma x,y given in this option specify first,\n\t\tthe dimension number to be taken as constant in 2D plots :\n\t\t0 : theta\n\t\t1 : phi\n\t\t2 : other\n \t and second,\n \t\t its value'
             )
+parser.add_option('-Q', '--QU',
+            dest='QU',
+            action="store_true", default=False,
+            help='-Show Q and U also'
+            )
 (options, args) = parser.parse_args()
 if len(args) != 1 and len(args) != 2:
         parser.print_usage()
@@ -251,7 +256,7 @@ def setup_axes3(fig, rect, options=None):
 #----------------------------------------------------------------------------
 # plot 2D 
 #----------------------------------------------------------------------------
-def plot_2D_parameter(fig, rect, theta , phi, data, Vdata, Vdatat=None, title=None, label=None, iphi0=-1, sub=None, points=None, method='contour', options=None) :
+def plot_2D_parameter(fig, rect, theta , phi, data, Vdata, Vdatat=None, title=None, label=None, iphi0=-1, sub=None, points=None, method='pcolormesh', options=None) :
 
     '''
     Contour and eventually transect of 2D parameter (theta,phi)
@@ -790,8 +795,11 @@ def main():
     #---------------------------------------------------------
 
     
-    
-    fig = figure(1, figsize=(9, 9))
+    if options.QU==True:
+        fig = figure(1, figsize=(9, 9))
+    else:
+        fig = figure(1, figsize=(9, 4.5))
+        
     fig.text(.5,.95, r"$\theta_{v}=%.2f$" %float(thetas),fontsize='14', ha='center')
     fig.text(.5,.85, "Geometry : %s" %MODE,fontsize='14', ha='center')
     
@@ -819,12 +827,18 @@ def main():
     fig.subplots_adjust(wspace=0.3, hspace=0.3, left=0.05, right=0.95)
     #fig.subplots_adjust(wspace=0.3, left=0.05, right=0.95)
 
-    sub =  [423,424,427,428]
+    if options.QU==True:
+        sub =  [423,424,427,428]
+    else:
+        sub =  [223,0,0,224]
 
     #r , t = np.meshgrid(theta,phi)
 
     if options.phi0 != None :
-        rect = [421,422,425,426] 
+        if options.QU==True:
+            rect = [421,422,425,426] 
+        else:
+            rect = [221,0,0,222]
         
         if options.list != None : 
             if options.list[0]==0 : 
@@ -840,7 +854,10 @@ def main():
             iphi0 = (np.abs(phi-options.phi0)).argmin()
 
     else:
-        rect = [221,222,223,224]
+        if options.QU==True:
+            rect = [221,222,223,224]
+        else:
+            rect = [121,0,0,122]
         iphi0 = -1
         
 
@@ -863,40 +880,40 @@ def main():
                  
                  
 
-
-    # 2nd quarter Q
-    if (len(args)==2) | (options.diff==True):
-         if options.rel==True :
-            plot_2D_parameter(fig, rect[1], theta , phi, (data_cudaQ-data_cudaQ2)/data_cudaQ2*100, VQ, Vdatat=VQt,title='(Q1-Q2)/Q2[%]', iphi0=iphi0, sub=sub[1])
-         else :
-            plot_2D_parameter(fig, rect[1], theta , phi, data_cudaQ-data_cudaQ2, VQ,  Vdatat=VQt,title='Q1-Q2', iphi0=iphi0, sub=sub[1])
-    else:
-        if options.points != None : plot_2D_parameter(fig, rect[1], theta , phi, data_cudaQ,  VQ, Vdatat=VQt,  title='Q', iphi0=iphi0, sub=sub[1], points=Q_txt)
-        else :  
-            if options.list == None :
-                plot_2D_parameter(fig, rect[1], theta , phi, data_cudaQ,  VQ, Vdatat=VQt,  title='Q', iphi0=iphi0, sub=sub[1])
-            else :
-               if options.list[0]==0 : plot_2D_parameter(fig, rect[1], other, phi, data_cudaQ.transpose(), VQ,  Vdatat=VQt,title='Q', iphi0=iphi0, sub=sub[1],options=options)
-               if options.list[0]==1 : plot_2D_parameter(fig, rect[1], other, theta, data_cudaQ.transpose(), VQ,  Vdatat=VQt,title='Q', iphi0=iphi0, sub=sub[1],options=options)
-               if options.list[0]==2 : plot_2D_parameter(fig, rect[1], theta, phi, data_cudaQ, VQ,  Vdatat=VQt,title='Q', iphi0=iphi0, sub=sub[1])
-                        
-                        
-
-    # 3rd quarter U
-    if (len(args)==2) | (options.diff==True):
-         if options.rel==True :
-            plot_2D_parameter(fig, rect[2], theta , phi, (data_cudaU-data_cudaU2)/data_cudaU2*100, VU, Vdatat=VUt,title='(U1-U2)/U2[%]', iphi0=iphi0, sub=sub[2])
-         else :
-            plot_2D_parameter(fig, rect[2], theta , phi, data_cudaU-data_cudaU2, VU,  Vdatat=VUt,title='U1-U2', label='Reflectance', iphi0=iphi0, sub=sub[2])
-    else:
-        if options.points != None : plot_2D_parameter(fig, rect[2], theta , phi, data_cudaU,  VU, Vdatat=VUt,  title='U', label='Reflectance', iphi0=iphi0, sub=sub[2], points=U_txt)
-        else : 
-            if options.list == None :
-                plot_2D_parameter(fig, rect[2], theta , phi, data_cudaU,  VU, Vdatat=VUt,  title='U', label='Reflectance', iphi0=iphi0, sub=sub[2])
-            else :
-                if options.list[0]==0 : plot_2D_parameter(fig, rect[2], other, phi, data_cudaU.transpose(), VU,  Vdatat=VUt,title='U', iphi0=iphi0, sub=sub[2],options=options)
-                if options.list[0]==1 : plot_2D_parameter(fig, rect[2], other, theta, data_cudaU.transpose(), VU,  Vdatat=VUt,title='U', iphi0=iphi0, sub=sub[2],options=options)
-                if options.list[0]==2 : plot_2D_parameter(fig, rect[2], theta, phi, data_cudaU, VU,  Vdatat=VUt,title='U', iphi0=iphi0, sub=sub[2])
+    if options.QU==True:
+        # 2nd quarter Q
+        if (len(args)==2) | (options.diff==True):
+             if options.rel==True :
+                plot_2D_parameter(fig, rect[1], theta , phi, (data_cudaQ-data_cudaQ2)/data_cudaQ2*100, VQ, Vdatat=VQt,title='(Q1-Q2)/Q2[%]', iphi0=iphi0, sub=sub[1])
+             else :
+                plot_2D_parameter(fig, rect[1], theta , phi, data_cudaQ-data_cudaQ2, VQ,  Vdatat=VQt,title='Q1-Q2', iphi0=iphi0, sub=sub[1])
+        else:
+            if options.points != None : plot_2D_parameter(fig, rect[1], theta , phi, data_cudaQ,  VQ, Vdatat=VQt,  title='Q', iphi0=iphi0, sub=sub[1], points=Q_txt)
+            else :  
+                if options.list == None :
+                    plot_2D_parameter(fig, rect[1], theta , phi, data_cudaQ,  VQ, Vdatat=VQt,  title='Q', iphi0=iphi0, sub=sub[1])
+                else :
+                   if options.list[0]==0 : plot_2D_parameter(fig, rect[1], other, phi, data_cudaQ.transpose(), VQ,  Vdatat=VQt,title='Q', iphi0=iphi0, sub=sub[1],options=options)
+                   if options.list[0]==1 : plot_2D_parameter(fig, rect[1], other, theta, data_cudaQ.transpose(), VQ,  Vdatat=VQt,title='Q', iphi0=iphi0, sub=sub[1],options=options)
+                   if options.list[0]==2 : plot_2D_parameter(fig, rect[1], theta, phi, data_cudaQ, VQ,  Vdatat=VQt,title='Q', iphi0=iphi0, sub=sub[1])
+                            
+                            
+    
+        # 3rd quarter U
+        if (len(args)==2) | (options.diff==True):
+             if options.rel==True :
+                plot_2D_parameter(fig, rect[2], theta , phi, (data_cudaU-data_cudaU2)/data_cudaU2*100, VU, Vdatat=VUt,title='(U1-U2)/U2[%]', iphi0=iphi0, sub=sub[2])
+             else :
+                plot_2D_parameter(fig, rect[2], theta , phi, data_cudaU-data_cudaU2, VU,  Vdatat=VUt,title='U1-U2', label='Reflectance', iphi0=iphi0, sub=sub[2])
+        else:
+            if options.points != None : plot_2D_parameter(fig, rect[2], theta , phi, data_cudaU,  VU, Vdatat=VUt,  title='U', label='Reflectance', iphi0=iphi0, sub=sub[2], points=U_txt)
+            else : 
+                if options.list == None :
+                    plot_2D_parameter(fig, rect[2], theta , phi, data_cudaU,  VU, Vdatat=VUt,  title='U', label='Reflectance', iphi0=iphi0, sub=sub[2])
+                else :
+                    if options.list[0]==0 : plot_2D_parameter(fig, rect[2], other, phi, data_cudaU.transpose(), VU,  Vdatat=VUt,title='U', iphi0=iphi0, sub=sub[2],options=options)
+                    if options.list[0]==1 : plot_2D_parameter(fig, rect[2], other, theta, data_cudaU.transpose(), VU,  Vdatat=VUt,title='U', iphi0=iphi0, sub=sub[2],options=options)
+                    if options.list[0]==2 : plot_2D_parameter(fig, rect[2], theta, phi, data_cudaU, VU,  Vdatat=VUt,title='U', iphi0=iphi0, sub=sub[2])
 
     # 4th quarter
     # Polarization ratio

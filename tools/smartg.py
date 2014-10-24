@@ -2,61 +2,21 @@
 import subprocess
 import sys
 sys.path.append("profile")
+sys.path.append("water")
 import numpy as np
 import pyhdf.SD
 #from prosail import run_prosail
 from profil import profil,readREPTRAN
+from water_spm_model import iop
 
 ####################################
 install_dir = "/home/did/RTC/SMART-G/"
-#afgl_name= install_dir + "tools/profile/afglms.dat"
-#o3_name= install_dir + "tools/profile/crs_O3_UBremen_cf.dat"
 output_dir = install_dir + "resultat/"
-profil_name = output_dir + "profil.tmp"
-#output_name= output_dir + "ENV-%s_%i_%.0f_thv-%s_AOT-%s_HA-%s_%s_X0%.1f.hdf"
-#param_name= output_dir + "MyParametre.txt"
-####################################
-## Water model
-#CHL= 1. # mg/l
-#LSAOCE=72001 # nb d'angles de mla fonction de phase de sortie
-#ANG_TRUNC=5. # angle de troncature de la fonction de phase
-#
-## Vegetation model
-## Fixed in prosail, reflectance at nadir for thetas=45 deg, for LAI=2
-#
-## Aerosols
-#
-## Example for the simulation of MERIS bands
-##
-##geo_list=['sp','pp']
-#abs_flag_list =["","--noabs"]
-#albedo_list=[0.7]
-#dioptre_list=[3]
-#thv_list=[25]
-#HA_list=[1.]
-##X0_list=[-25.,-11.5,-10.5,-9.5,-8.5,-5,0.,5.,8.5,9.5,10.5,11.5,25.]
-#X0_list=[0.,9.5]
-#Y0=0.
-#ENV_SIZE=10.
-#ENV=1
-##HA_list=[0.1,1.,3.]
-#AOT_list=[0.2]
-#geo_list=['sp']
-##abs_flag_list =[""]
-## lambda ref of MERIS as in Reference Model
-#lam_ref=np.array([412.5,442.5,490.,510.,560.,620.,665.,681.25,708.75,753.75,761.875,778.75,865.,885.,900.])
-#index_BOUVET_ATBD = np.array([1,2,3,4,5,6,7,8,12,13])
-##lam_list=lam_ref[index_BOUVET_ATBD-1]
-#lam_list=[600.]
 
-
-#def runProfil(grid=grid,lat=lat,reptran=None,reptran_band=None, AOT=0., w=w, HA=HA):
-#    return
 
 class Job(object):
     def __init__(self,install_dir):
         self.install_dir=install_dir
-        self.outlist=[]
         self.dict={'NBPHOTONS':1e7,'THVDEG':0.,'LAMBDA':443.,'TAURAY':0.23541,'TAUAER':0.,'W0AER':1.,\
                     'PATHDIFFAER':'/home/did/RTC/SMART-G/fic/pf_M80_443nm.txt','SIM':-2,'PROFIL':0,'PATHPROFILATM':'/home/did/RTC/SMART-G/profil/443nm_aot0.10540_O3mls_100layers.dat',\
                     'HA':1.,'HR':8.,'ZMIN':0.,'ZMAX':1.,'NATM':20,'HATM':100.,'SUR':1,'DIOPTRE':2,'W0LAM':0.,\
@@ -234,17 +194,18 @@ NBLOOP = {NBLOOP}
     def setParams(self,**kwargs):
         self.dict.update(kwargs)
     
-    def run(self,reptran=None):
+    def run(self,options,reptran=None):
         outlist=[]
         if reptran!=None: 
             outname='/home/did/RTC/SMART-G/resultat/out-'+reptran.filename+'-'+reptran.band_name
             for i in range(reptran.nband):
-                fname='/home/did/RTC/SMART-G/resultat/out-'+reptran.filename+'-'+reptran.band_name+'-%iof%i'%(i+1,reptran.nband)
-                self.setParams(LAMBDA=reptran.awvl[i],PATHPROFILATM=self.profilenamelist[i],PATHRESULTATSHDF=fname)            
+                fname='/home/did/RTC/SMART-G/resultat/o-'+reptran.filename+'-'+reptran.band_name+'-%iof%i'%(i+1,reptran.nband)
+                self.setParams(LAMBDA=reptran.awvl[i],PATHPROFILATM=self.profilenamelist[i],PATHRESULTATSHDF=fname,\
+                        PATHDIFFOCE=self.iopnamelist[i],ATOT=self.atotlist[i],BTOT=self.btotlist[i]) 
                 fo=open(output_dir+"MyParametre%i.txt"%i,"w")
                 fo.write(self.str_Parametre.format(**self.dict))
                 fo.close()
-                cmd="/home/did/RTC/SMART-G/SMART-G " + output_dir+"MyParametre%i.txt"%i
+                cmd="/home/did/RTC/SMART-G/SMART-G-" + options.geo + " " + output_dir+"MyParametre%i.txt"%i
                 subprocess.call(cmd,shell=True)
                 outlist.append(fname)
                 iband,w,weight,extra,crs_source=reptran.getwvl_param(i)
@@ -292,30 +253,44 @@ NBLOOP = {NBLOOP}
         else :
             if self.dict["PROFIL"]!=0 : 
                 self.setParams(PATHPROFILATM=self.profilenamelist[0])
+            self.setParams(PATHDIFFOCE=self.iopnamelist[0],ATOT=self.atotlist[0],BTOT=self.btotlist[0],LAMBDA=options.w)
             fo=open(output_dir+"MyParametre.txt","w") 
             fo.write(self.str_Parametre.format(**self.dict))
             fo.close()
-            cmd="/home/did/RTC/SMART-G/SMART-G " + output_dir+"MyParametre.txt"
+            cmd="/home/did/RTC/SMART-G/SMART-G-" + options.geo + " " + output_dir+"MyParametre.txt"
             subprocess.call(cmd,shell=True)
-            outlist.append(self.dict["PATHRESULTATSHDF"])
-        self.outlist=outlist
+            outname=self.dict["PATHRESULTATSHDF"]
+        self.outname=outname
             
     def setProfile(self,profile):
         self.dict.update(NATM=profile.natm,HATM=profile.hatm,PROFIL=2)
         self.profilenamelist=profile.namelist
+    
+    def setIop(self,iop):
+        self.atotlist=iop.atotlist
+        self.btotlist=iop.btotlist
+        self.iopnamelist=iop.namelist
                 
 class Profile(object):  
     def __init__(self,install_dir,atmfile):
         self.install_dir=install_dir
         self.args=[self.install_dir+'tools/profile/'+ atmfile ,self.install_dir+'tools/profile/crs_O3_UBremen_cf.dat']
-        self.options=Options()
         
-    def run(self):
-        self.natm,self.hatm,self.namelist = profil(self.options,self.args) 
-      
+    def run(self,options):
+        self.natm,self.hatm,self.namelist = profil(options,self.args) 
+ 
+class Iop(object):  
+    def __init__(self,install_dir):
+        self.install_dir=install_dir
+        
+    def run(self,options):
+        self.atotlist,self.btotlist,self.namelist = iop(options)
+        
 class Options():
     def  __init__(self):
-        self.dict={'aer':0.,'grid':None,'lat':45.,'w':550.,'noabs':False,'rep':None,'channel':None}
+        self.dict={'geo':'pp','aer':0.,'grid':None,'lat':45.,'w':550.,'noabs':False,'rep':None,'channel':None,\
+                'SPM':1.,'NANG':72001,'ang_trunc':5.,'gamma':0.5,'alpha':1.,'nbp':1.15}
+        self.geo=self.dict["geo"]
         self.aer=self.dict["aer"]
         self.grid=self.dict["grid"]
         self.lat=self.dict["lat"]
@@ -323,9 +298,16 @@ class Options():
         self.noabs=self.dict["noabs"]
         self.rep=self.dict["rep"]
         self.channel=self.dict["channel"]
+        self.SPM=self.dict["SPM"]
+        self.NANG=self.dict["NANG"]
+        self.ang_trunc=self.dict["ang_trunc"]
+        self.gamma=self.dict["gamma"]
+        self.alpha=self.dict["alpha"]
+        self.nbp=self.dict["nbp"]
         
     def setOptions(self,**kwargs):
         self.dict.update(kwargs)
+        self.geo=self.dict["geo"]
         self.aer=self.dict["aer"]
         self.grid=self.dict["grid"]
         self.lat=self.dict["lat"]
@@ -333,69 +315,53 @@ class Options():
         self.noabs=self.dict["noabs"]
         self.rep=self.dict["rep"]
         self.channel=self.dict["channel"]
+        self.SPM=self.dict["SPM"]
+        self.NANG=self.dict["NANG"]
+        self.ang_trunc=self.dict["ang_trunc"]
+        self.gamma=self.dict["gamma"]
+        self.alpha=self.dict["alpha"]
+        self.nbp=self.dict["nbp"]
 
+         
 
 def main():   
 #    reptran_filename='reptran_solar_envisat'
 #    reptran_bandname='envisat_meris_ch09'
-    reptran_filename='reptran_solar_msg'
-    reptran_bandname='msg1_seviri_ch008'
+#    reptran_filename='reptran_solar_msg'
+    reptran_filename='reptran_solar_sentinel'
+#    reptran_band_list=[('msg1_seviri_ch006',0.05),('msg1_seviri_ch008',0.4),('msg1_seviri_ch016',0.3)]
+    reptran_band_list=[('sentinel3_olci_b15',0.2)]
+#    reptran_band_list=[('msg1_seviri_ch016',0.2)]
+    reptran=readREPTRAN(reptran_filename)
     grid='100[25]25[5]10[1]0'
     atmfile='afglt.dat'
-    myjob=Job(install_dir)
-    myprofile=Profile(install_dir,atmfile)
-    myprofile.options.setOptions(grid=grid,rep=reptran_filename,channel=reptran_bandname,aer=0.1)
-    myprofile.run()
-    myjob.setProfile(myprofile)
-    myjob.setParams(SIM=2,THVDEG=60.,SUR=3,DIOPTRE=2,WINDSPEED=2.,W0LAM=0.3,ENV=1,ENV_SIZE=10000.,X0=9995.)
-    myjob.setParams(ATOT=0.6,BTOT=1.8,PATHDIFFOCE='/home/did/RTC/SMART-G/fic/pf_ocean_1_700nm.txt')
-    reptran=readREPTRAN(reptran_filename)
-    Nint,Rint=reptran.selectBand(reptran.Bandname2Band(reptran_bandname))
- 
-    myjob.run(reptran=reptran)
-    outname=install_dir+'resultat/out-'+ reptran_filename+'-'+reptran_bandname
-    cmd='cp %s %s'%(myjob.outlist[0],outname)
-    subprocess.call(cmd,shell=True)
-    for i in range(len(myjob.outlist)):
-        iband,w,weight,extra,crs_source=reptran.getwvl_param(i)
-        sd=pyhdf.SD.SD(myjob.outlist[i])
-        sds = sd.select("I_up (TOA)")
-        dataI = sds.get()
-        if i==0:
-            Isum=np.zeros_like(dataI)
-            Qsum=np.zeros_like(dataI)
-            Usum=np.zeros_like(dataI)
-            Nsum=np.zeros_like(dataI)
-            norm=0.
-        sds = sd.select("Q_up (TOA)")
-        dataQ = sds.get()
-        sds = sd.select("U_up (TOA)")
-        dataU = sds.get()
-        sds = sd.select("Numbers of photons")
-        dataN = sds.get()
-        sd.end()
-        Isum+=dataI*weight*extra
-        Qsum+=dataQ*weight*extra
-        Usum+=dataU*weight*extra
-        Nsum+=dataN*weight*extra
-        norm+=weight*extra
-    Isum/=norm
-    Qsum/=norm
-    Usum/=norm
-    Nsum/=norm
-    sd = pyhdf.SD.SD(outname,pyhdf.SD.SDC.WRITE)
-    sds = sd.select("I_up (TOA)")
-    sds[:]=Isum
-    sds.endaccess()
-    sds = sd.select("Q_up (TOA)")
-    sds[:]=Qsum
-    sds.endaccess()
-    sds = sd.select("U_up (TOA)")
-    sds[:]=Usum
-    sds.endaccess()
-    sds = sd.select("Numbers of photons")
-    sds[:]=Nsum
-    sds.endaccess()
+    
+    for reptran_bandname,W0LAM in reptran_band_list:
+        reptran.selectBand(reptran.Bandname2Band(reptran_bandname)) 
+        myjob=Job(install_dir)
+        myjob.setParams(SIM=2,THVDEG=65.,SUR=3,DIOPTRE=0,WINDSPEED=2.,W0LAM=W0LAM,ENV=0,ENV_SIZE=10000.,X0=9995.)
+        myjob.setParams(PATHDIFFAER='/home/did/RTC/SMART-G/fic/pf_M80_665nm.txt',NBPHOTONS=1e8,NBTHETA=30,NBPHI=30)
+        
+        myoptions=Options()
+        myoptions.setOptions(grid=grid,w=750.,aer=0.,SPM=100.) 
+#        myoptions.setOptions(grid=grid,rep=reptran_filename,channel=reptran_bandname,aer=0.0,SPM=100.,geo='sp')
+        
+        
+        myprofile=Profile(install_dir,atmfile)
+        myprofile.run(myoptions)
+        
+        myiop=Iop(install_dir)
+        myiop.run(myoptions)
+        
+        myjob.setProfile(myprofile)
+        myjob.setIop(myiop)
+        
+
+
+#        myjob.run(myoptions,reptran=reptran)
+        myjob.run(myoptions)
+#    output_name= output_dir + "ENV-%s_%i_%.0f_thv-%s_AOT-%s_HA-%s_%s_X0%.1f.hdf"
+        print myjob.outname
         
 
 if __name__ == '__main__':

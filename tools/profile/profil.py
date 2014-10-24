@@ -385,7 +385,7 @@ def profil(options,args):
         for iint in np.arange(Nint): # pour chaque bande interne de la correlated_k (1 fichier de sortie par lambda)
             iband,w,weight,extra,crs_source=reptran.getwvl_param(iint)# on recupere les parametres de la bande: numero,lambda,poids,irradiance solaire, et tableau des gaz absorbants 
             datamol[:]=0.
-            fname="/home/did/RTC/SMART-G/profil/pro-"+filename+'-'+reptran_bandname+'-%iof%i'%(iint+1,Nint)
+            fname="/home/did/RTC/SMART-G/profil/p-"+filename+'-'+reptran_bandname+'-%iof%i'%(iint+1,Nint)
             outfile=open(fname,'w')
             for ig in np.arange(Nmol): # pour chaque gaz 
                 if crs_source[ig]==1: # si le gaz est absorbant a cette lambda
