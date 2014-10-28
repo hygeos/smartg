@@ -6,6 +6,120 @@ from scipy.interpolate import interp1d
 from scipy.constants import codata
 import netCDF4
 from scipy.ndimage import map_coordinates
+install_dir='/home/did/RTC/SMART-G/'
+
+class readOPAC(object):
+    def __init__(self,filename):
+        self.species=['inso','waso','soot','ssam','sscm','minm','miam','micm','mitr','suso','minm_spheroids',\
+                    'miam_spheroids','micm_spheroids','mitr_spheroids']
+        self.filename=filename
+        self.scalingfact=1.
+        self._readStandardAerosolFile()  
+                    
+    def _readStandardAerosolFile(self):
+        self.scamatlist=[]
+        indir='/home/did/RTC/libRadtran-2.0/libRadtran-2.0-beta/data/aerosol/OPAC/'
+        fname=indir+'standard_aerosol_files/'+self.filename
+        data=np.loadtxt(fname)
+        self.zopac=data[:,0] 
+        self.densities=data[:,1:]
+        for line in open(fname,'r').readlines():
+            if line.startswith("z(km)",2,7):
+                break
+        self.aspecies=line.split()[2:]
+        self.ispecies=[]
+        for species in self.aspecies:
+            self.ispecies.append(self.species.index(species))
+            self.scamatlist.append(ScaMat(species))   
+            
+    def regrid(self,znew):
+        N=len(self.aspecies)
+        M=len(znew)
+        tmp=np.zeros((M,N),np.float32)
+        for k in range(N):
+            f=interp1d(self.zopac,self.densities[:,k],bounds_error=False,fill_value=0.)
+            tmp[:,k]=f(znew)
+        self.densities=tmp
+        self.zopac=znew
+        
+    def calcOpt(self,T,h2o,w):
+        rh=h2o/vapor_pressure(T)*100
+        M=len(self.zopac)
+        self.dtau_tot=np.zeros((M),np.float32)
+        self.ssa_tot=np.zeros((M),np.float32)
+        k=0
+        for scamat in self.scamatlist:
+            if scamat.nrh>1:
+                for m in range(M):
+                    if m==0:
+                        dz=0.
+                        dtau=0.
+                        dssa=1.
+                    else:
+                        rho=scamat.rho[0,:]
+                        tab=np.squeeze(scamat.ext)
+                        ext=interp2(scamat.wlgrid,scamat.rhgrid,tab,w*1.e-3,rh[m])
+                        tab=np.squeeze(scamat.ssa)
+                        ssa=interp2(scamat.wlgrid,scamat.rhgrid,tab,w*1.e-3,rh[m])
+                        f=interp1d(scamat.rhgrid,rho,bounds_error=False,fill_value=0.)
+                        ext*=f(rh[m])/f(50.)*self.densities[m,k]
+                        dz = self.zopac[m-1]-self.zopac[m]                       
+                        dtau = dz * ext * self.scalingfact
+                        dssa = dtau*ssa
+                    self.dtau_tot[m]+=dtau 
+                    self.ssa_tot[m]+=dssa
+            else:  
+                for m in range(M):
+                    if m==0:
+                        dz=0.
+                        dtau=0.
+                        dssa=1.
+                    else:
+                        tab=np.squeeze(scamat.ext)
+                        f=interp1d(scamat.wlgrid,tab,bounds_error=False,fill_value=0.)                       
+                        ext=f(w*1e-3)
+                        tab=np.squeeze(scamat.ssa)
+                        f=interp1d(scamat.wlgrid,tab,bounds_error=False,fill_value=0.)                       
+                        ssa=f(w*1e-3) 
+                        ext*=self.densities[m,k]
+                        dz = self.zopac[m-1]-self.zopac[m]                       
+                        dtau = dz * ext * self.scalingfact
+                        dssa = dtau*ssa
+                    self.dtau_tot[m]+=dtau
+                    self.ssa_tot[m]+=dssa
+            k=k+1
+        for m in range(M-1):
+            if self.dtau_tot[m+1]>0: self.ssa_tot[m+1]/=self.dtau_tot[m+1]
+
+        self.tau_tot=np.sum(self.dtau_tot)
+        
+    def setTauref(self,T,h2o,tauref,wref):
+        self.calcOpt(T,h2o,wref)
+        self.scalingfact=tauref/self.tau_tot
+        
+               
+              
+class ScaMat(object):
+    def __init__(self,species):
+        self.species=species
+        self._readScaMatFile()
+        
+    def _readScaMatFile(self):
+        indir='/home/did/RTC/libRadtran-2.0/libRadtran-2.0-beta/data/aerosol/OPAC/'
+        if not 'spheroids' in self.species :
+            fname=indir+'optprop/'+self.species+'.mie.cdf'
+        else:
+            fname=indir+'optprop/'+self.species+'.tmatrix.cdf'
+        nc=netCDF4.Dataset(fname)
+        self.wlgrid=nc.variables["wavelen"][:]
+        self.rhgrid=nc.variables["hum"][:]
+        self.nrh=len(self.rhgrid)
+        self.thgrid=nc.variables["theta"][:]
+        self.phase=nc.variables["phase"][:]
+        self.nth=nc.variables["ntheta"][:]
+        self.ext=nc.variables["ext"][:]
+        self.ssa=nc.variables["ssa"][:]
+        self.rho=nc.variables["rho"][:]
 
 class readREPTRAN(object): # Read the channels reptran cdf file, either a list of sensor channels or a full solar coarse medium or fine grid
     def __init__(self,filename):
@@ -68,6 +182,14 @@ class readCRS(object):
         self.t_ref=nc.variables['t_ref'][:]
         self.t_pert=nc.variables['t_pert'][:]
         self.vmrs=nc.variables['vmrs'][:]
+        
+def vapor_pressure(T):
+    T0=273.15
+    A=T0/T
+    Avogadro = codata.value('Avogadro constant')
+    M_H2O=18.015
+    mh2o=M_H2O/Avogadro
+    return A*np.exp(18.916758 - A * (14.845878 + A*2.4918766))/mh2o/1.e6
 
 def interp3(x, y, z, v, xi, yi, zi, **kwargs):
     """Sample a 3D array "v" with pixel corner locations at "x","y","z" at the
@@ -355,16 +477,32 @@ def profil(options,args):
         n2=f(znew)*airnew
         z=znew
         air=airnew
-    #-------------------------------------------
+
+                     
+    
     M=len(z) # Final number of layer
-    datamol = np.zeros(M, np.float)
-    datao3  = np.zeros(M, np.float)
+    datamol  = np.zeros(M, np.float)
+    datao3   = np.zeros(M, np.float)
     datamol  = np.zeros(M, np.float)
     dataray  = np.zeros(M, np.float)
     dataaer  = np.zeros(M, np.float)
-    Ha = 1. # Hauteur d'echelle des aerosols en km
+    ssaaer   = np.ones(M, np.float)
+    if options.Ha == None:
+        Ha = 1.
+    else:
+        Ha=options.Ha # Hauteur d'echelle des aerosols en km
     xh2o=h2o/air # h2o vmr
     namelist=[] # list of profiles generated
+    
+#    -------------------------------------------
+    # test OPAC
+    if options.opac != None:
+        aer=readOPAC(options.opac+'.dat')
+        aer.regrid(z)
+        aer.setTauref(T,h2o,options.aot,options.wref)
+    else:
+        dataaer = options.aot * np.exp(-z/Ha)   
+    #
     #-------------------------------------------
     if (options.rep!=None and  options.channel!=None):
         Nmol=8
@@ -384,6 +522,9 @@ def profil(options,args):
     
         for iint in np.arange(Nint): # pour chaque bande interne de la correlated_k (1 fichier de sortie par lambda)
             iband,w,weight,extra,crs_source=reptran.getwvl_param(iint)# on recupere les parametres de la bande: numero,lambda,poids,irradiance solaire, et tableau des gaz absorbants 
+            if options.opac !=None:
+                 aer.calcOpt(T,h2o,w)
+         
             datamol[:]=0.
             fname="/home/did/RTC/SMART-G/profil/p-"+filename+'-'+reptran_bandname+'-%iof%i'%(iint+1,Nint)
             outfile=open(fname,'w')
@@ -402,7 +543,7 @@ def profil(options,args):
     
             outstr= "# I   ALT               hmol(I)         haer(I)         H(I)            XDEL(I)         YDEL(I)         percent_abs  LAM=  %7.2f nm, WEIGHT= %7.5f, E0=%9.3f, Rint=%8.3f\n" % (w,weight,extra,Rint)
             outfile.write(outstr)
-            print "# I   ALT               hmol(I)         haer(I)         H(I)            XDEL(I)         YDEL(I)         percent_abs  abs LAM=  %7.2f nm, WEIGHT= %7.5f, E0=%9.3f, Rint=%8.3f" % (w,weight,extra,Rint)
+            print "# I   ALT               hmol(I)         haer(I)         H(I)            XDEL(I)         YDEL(I)       XSSA(I)     percent_abs  abs LAM=  %7.2f nm, WEIGHT= %7.5f, E0=%9.3f, Rint=%8.3f" % (w,weight,extra,Rint)
             for m in range(M):
                 #### Chappuis bands
                 # SIGMA = (C0 + C1*(T-T0) + C2*(T-T0)^2) * 1.E-20 cm^2
@@ -410,16 +551,23 @@ def profil(options,args):
                 datao3[m] =  np.interp(w,crs_chappuis[:,0],crs_chappuis[:,1]) + np.interp(w,crs_chappuis[:,0],crs_chappuis[:,2])*(T[m]-T0) + \
                             np.interp(w,crs_chappuis[:,0],crs_chappuis[:,3])*(T[m]-T0)**2
                 datao3[m] *= o3[m]* 1e-15 # calcul de Chapuis avec LUT en 10^(-20) cm2, passage en km-1 
-                dataray[m] =  rod(w*1e-3,co2[m]/air[m]*1e6,lat,z[m]*1e3,P[m])
-                dataaer[m] = options.aer * np.exp(-z[m]/Ha)
+                dataray[m] =  rod(w*1e-3,co2[m]/air[m]*1e6,lat,z[m]*1e3,P[m])                
+                       
+                if options.opac !=None:
+                    ssaaer[m]=aer.ssa_tot[m]
+                    if options.Ha==None:
+                        dataaer[m] = np.sum(aer.dtau_tot[:m+1])
+                    else:
+                        dataaer[m] = aer.tau_tot * np.exp(-z[m]/options.Ha)
+
                 if m==0 : 
                     dz=0.
                     hg=0.
                     taur_prec=0.
                     taua_prec=0.
                     st0= "%d\t" % m
-                    st1= "%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (0., 0., 0. , 0., 1., 0., 0.)
-                    st2= "%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (0., 0., 0. , 0., 1., 0.)
+                    st1= "%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (0., 0., 0. , 0., 1., 1., 0., 0.)
+                    st2= "%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (0., 0., 0. , 0., 1., 0.)
                     print ''.join(st0),'%7.2f\t' % z[m],''.join(st1)
                     outstr=  ''.join(st0)+'%7.2f\t' % z[m]+''.join(st2)+'\n'
                     outfile.write(outstr)
@@ -439,8 +587,9 @@ def profil(options,args):
                     ydel = taur/(tau*(1-abs))
                     hg += taug
                     htot = dataray[m]+dataaer[m]+hg
+                    xssa=ssaaer[m]
                     st0= "%d\t" % m
-                    st1= "%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (dataray[m], dataaer[m], htot , xdel, ydel, abs, taug)
+                    st1= "%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (dataray[m], dataaer[m], htot , xdel, ydel, xssa, abs, taug)
                     st2= "%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (dataray[m], dataaer[m], htot , xdel, ydel, abs)
                     print ''.join(st0),'%7.2f\t' % z[m],''.join(st1)
                     outstr= ''.join(st0)+'%7.2f\t' % z[m]+''.join(st2)+'\n'
@@ -451,9 +600,11 @@ def profil(options,args):
         fname="/home/did/RTC/SMART-G/profil/profil.tmp"
         outfile=open(fname,"w")
         w=options.w
-        outstr= "# I   ALT               hmol(I)         haer(I)         H(I)            XDEL(I)         YDEL(I)         percent_abs  LAM=  %7.2f nm\n" % w
+        if options.opac !=None:
+            aer.calcOpt(T,h2o,w)
+        outstr= "# I   ALT               hmol(I)         haer(I)         H(I)            XDEL(I)         YDEL(I)        percent_abs  LAM=  %7.2f nm\n" % w
         outfile.write(outstr)
-        print "# I   ALT               hmol(I)         haer(I)         H(I)            XDEL(I)         YDEL(I)         percent_abs  abs LAM=  %7.2f nm" % w
+        print "# I   ALT               hmol(I)         haer(I)         H(I)            XDEL(I)         YDEL(I)        XSSA(I)   percent_abs  abs LAM=  %7.2f nm" % w
         for m in range(M):
             #### Chappuis bands
             # SIGMA = (C0 + C1*(T-T0) + C2*(T-T0)^2) * 1.E-20 cm^2
@@ -462,14 +613,21 @@ def profil(options,args):
                         np.interp(w,crs_chappuis[:,0],crs_chappuis[:,3])*(T[m]-T0)**2
             datao3[m] *= o3[m]* 1e-15 # calcul de Chapuis avec LUT en 10^(-20) cm2, passage en km-1 
             dataray[m] =  rod(w*1e-3,co2[m]/air[m]*1e6,lat,z[m]*1e3,P[m])
-            dataaer[m] = options.aer * np.exp(-z[m]/Ha)
+            
+            if options.opac !=None:
+                ssaaer[m]=aer.ssa_tot[m]
+                if options.Ha==None:
+                    dataaer[m] = np.sum(aer.dtau_tot[:m+1])
+                else:
+                    dataaer[m] = aer.tau_tot * np.exp(-z[m]/options.Ha)
+                    
             if m==0 : 
                 dz=0.
                 hg=0.
                 taur_prec=0.
                 taua_prec=0.
                 st0= "%d\t" % m
-                st1= "%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (0., 0., 0. , 0., 1., 0., 0.)
+                st1= "%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (0., 0., 0. , 0., 1., 1., 0., 0.)
                 st2= "%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (0., 0., 0. , 0., 1., 0.)
                 print ''.join(st0),'%7.2f\t' % z[m],''.join(st1)
                 outstr=  ''.join(st0)+'%7.2f\t' % z[m]+''.join(st2)+'\n'
@@ -490,8 +648,9 @@ def profil(options,args):
                 ydel = taur/(tau*(1-abs))
                 hg += taug
                 htot = dataray[m]+dataaer[m]+hg
+                xssa=ssaaer[m]
                 st0= "%d\t" % m
-                st1= "%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (dataray[m], dataaer[m], htot , xdel, ydel, abs, taug)
+                st1= "%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (dataray[m], dataaer[m], htot , xdel, ydel, xssa, abs, taug)
                 st2= "%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (dataray[m], dataaer[m], htot , xdel, ydel, abs)
                 print ''.join(st0),'%7.2f\t' % z[m],''.join(st1)
                 outstr= ''.join(st0)+'%7.2f\t' % z[m]+''.join(st2)+'\n'
@@ -515,6 +674,12 @@ if __name__ == '__main__':
                 default=550.,
                 help='wavelength (nm), default 550 nm' 
                 )
+    parser.add_option('-W', '--Wavel_ref',
+                dest='wref',
+                type='float',
+                default=550.,
+                help='wavelength (nm) reference for aerosol optical properties, default 550 nm' 
+                )
     parser.add_option('-l', '--lat',
                 dest='lat',
                 type='float',
@@ -526,15 +691,28 @@ if __name__ == '__main__':
                 help='vertical grid format : start[step]Z1[step1].....[stepN]stop (km) with start>stop' 
                 )
     parser.add_option('-A', '--AOT',
-                dest='aer',
+                dest='aot',
                 type='float',
                 default=0.,
-                help='Aerosol Optical Thickness , default 0. (no aerosols)' 
+                help='Aerosol Optical Thickness at the current wavelength , default 0. (no aerosols)' 
+                )
+    parser.add_option('-H', '--Ha',
+                dest='Ha',
+                type='float',
+                default=1.,
+                help='Set the aerosol scale height in km, replace in other vertical profile, default 1.' 
+                )
+    parser.add_option('-O', '--OPAC',
+                dest='opac',
+                type='string',
+                help='name of the aerosol model from OPAC\n' \
+                      +'    antarctic,continental_average,continetal_clean,continental_polluted\n'  \
+                      +'    desert, desert_nonspherical,maritime_clean,maritime_polluted,maritime_tropical,urban\n'
                 )
     parser.add_option('-R', '--REPTRAN',
                 dest='rep',
                 type='string',
-                help='REPTRAN molecular absorption file' 
+                help='REPTRAN molecular absorption file: see %s/tools/profile/channel_list.txt for channel list'%install_dir 
                 )
     parser.add_option('-C', '--CHANNEL',
                 dest='channel',

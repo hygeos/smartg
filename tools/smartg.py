@@ -274,7 +274,8 @@ NBLOOP = {NBLOOP}
 class Profile(object):  
     def __init__(self,install_dir,atmfile):
         self.install_dir=install_dir
-        self.args=[self.install_dir+'tools/profile/'+ atmfile ,self.install_dir+'tools/profile/crs_O3_UBremen_cf.dat']
+        self.atmfile=atmfile
+        self.args=[self.install_dir+'tools/profile/'+ atmfile+'.dat' ,self.install_dir+'tools/profile/crs_O3_UBremen_cf.dat']
         
     def run(self,options):
         self.natm,self.hatm,self.namelist = profil(options,self.args) 
@@ -322,7 +323,26 @@ class Options():
         self.alpha=self.dict["alpha"]
         self.nbp=self.dict["nbp"]
 
-         
+def outname(job,profile,options):
+    if job.dict["ENV"]==0:
+        strENV='ENV0'
+    else:
+        strENV='ENV1-%i-X%.1f-Y%.1f'%(job.dict["ENV_SIZE"],job.dict["X0"],job.dict["Y0"])
+    
+    if options.rep!=None:
+        strCHA=options.channel
+    else:
+        strCHA='%.2f'%options.w
+        
+    strBASE='SIM%i_DIO%i'%(job.dict["SIM"],job.dict["DIOPTRE"])
+    strVIEW='THV%.1f'%(job.dict["THVDEG"])
+    strATM= profile.atmfile
+    if options.aer >0.:
+        strAER='AOT%.2f'%options.aer
+    else:
+        strAER=''
+    name=strBASE+'-'+strENV+'-'+strCHA+'-'+strVIEW+'-'+strATM+'-'+strAER+'-'+options.geo+'.hdf'
+    return name     
 
 def main():   
 #    reptran_filename='reptran_solar_envisat'
@@ -330,22 +350,22 @@ def main():
 #    reptran_filename='reptran_solar_msg'
     reptran_filename='reptran_solar_sentinel'
 #    reptran_band_list=[('msg1_seviri_ch006',0.05),('msg1_seviri_ch008',0.4),('msg1_seviri_ch016',0.3)]
-    reptran_band_list=[('sentinel3_olci_b15',0.2)]
-#    reptran_band_list=[('msg1_seviri_ch016',0.2)]
+    reptran_band_list=[('sentinel3_olci_b02',0.5)]
+#    reptran_band_list=[('msg1_seviri_ch008',0.3)]
     reptran=readREPTRAN(reptran_filename)
     grid='100[25]25[5]10[1]0'
-    atmfile='afglt.dat'
+    atmfile='afglt'
+    output_dir=install_dir + 'resultat/Robert/'
     
     for reptran_bandname,W0LAM in reptran_band_list:
         reptran.selectBand(reptran.Bandname2Band(reptran_bandname)) 
         myjob=Job(install_dir)
-        myjob.setParams(SIM=2,THVDEG=65.,SUR=3,DIOPTRE=0,WINDSPEED=2.,W0LAM=W0LAM,ENV=0,ENV_SIZE=10000.,X0=9995.)
+        myjob.setParams(SIM=2,THVDEG=45.,SUR=3,DIOPTRE=2,WINDSPEED=5.,W0LAM=W0LAM,ENV=0,ENV_SIZE=10000.,X0=9995.)
         myjob.setParams(PATHDIFFAER='/home/did/RTC/SMART-G/fic/pf_M80_665nm.txt',NBPHOTONS=1e8,NBTHETA=30,NBPHI=30)
         
         myoptions=Options()
-        myoptions.setOptions(grid=grid,w=750.,aer=0.,SPM=100.) 
-#        myoptions.setOptions(grid=grid,rep=reptran_filename,channel=reptran_bandname,aer=0.0,SPM=100.,geo='sp')
-        
+#        myoptions.setOptions(grid=grid,w=750.,aer=0.,SPM=100.) 
+        myoptions.setOptions(grid=grid,rep=reptran_filename,channel=reptran_bandname,aer=0.2,SPM=1.,geo='sp')
         
         myprofile=Profile(install_dir,atmfile)
         myprofile.run(myoptions)
@@ -355,31 +375,15 @@ def main():
         
         myjob.setProfile(myprofile)
         myjob.setIop(myiop)
-        
-
-
-#        myjob.run(myoptions,reptran=reptran)
-        myjob.run(myoptions)
-#    output_name= output_dir + "ENV-%s_%i_%.0f_thv-%s_AOT-%s_HA-%s_%s_X0%.1f.hdf"
-        print myjob.outname
-        
+  
+        myjob.run(myoptions,reptran=reptran)
+#        myjob.run(myoptions)
+        cmd="mv %s %s"%(myjob.outname,output_dir+outname(myjob,myprofile,myoptions))
+        print '#--------------------------------------------------------------------------------------------------------#'
+        print cmd
+        print '#--------------------------------------------------------------------------------------------------------#'
+        subprocess.call(cmd,shell=True)
 
 if __name__ == '__main__':
     main()
-#    fp=open(param_name,"w")
-#    fp.write(str_Parametre.format(PROFIL_NAME=profil_name,OUTPUT_NAME=output_name%(abs_flag,dioptre_list[0],lam,thv_list[0],AOT_list[0],HA,geo_list[0],X0),THV=thv_list[0],DIOPTRE=dioptre_list[0],ALBEDO=albedo_list[0],LAMBDA=lam,TAUAER=AOT_list[0],HA=HA,ENV=ENV,ENV_SIZE=ENV_SIZE,Y0=Y0,X0=X0))
-#    fp.close()
 
-
-#for abs_flag in abs_flag_list:
-# for HA in HA_list:
-#  for X0 in X0_list:
-#    for lam in lam_list:
-#      cmd="python %s/tools/profile/profil.py %s -w %f -g '100[10]50[5]10[1]0' --lat 45 -A %f -H %f %s %s> %s" % (install_dir,abs_flag,lam,AOT_list[0],HA,afgl_name,o3_name,profil_name)
-#      print cmd
-#      b = subprocess.call(cmd,shell=True) 
-#      fp=open(param_name,"w")
-#      fp.write(str_Parametre.format(PROFIL_NAME=profil_name,OUTPUT_NAME=output_name%(abs_flag,dioptre_list[0],lam,thv_list[0],AOT_list[0],HA,geo_list[0],X0),THV=thv_list[0],DIOPTRE=dioptre_list[0],ALBEDO=albedo_list[0],LAMBDA=lam,TAUAER=AOT_list[0],HA=HA,ENV=ENV,ENV_SIZE=ENV_SIZE,Y0=Y0,X0=X0))
-#      fp.close()
-#      cmd="/home/did/RTC/SMART-G/SMART-G-" + geo_list[0] +" " + param_name
-#      b = subprocess.call(cmd,shell=True)
