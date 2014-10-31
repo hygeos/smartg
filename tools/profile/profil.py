@@ -21,18 +21,18 @@ class readOPAC(object):
         indir='/home/did/RTC/libRadtran-2.0/libRadtran-2.0-beta/data/aerosol/OPAC/'
         fname=indir+'standard_aerosol_files/'+self.filename
         data=np.loadtxt(fname)
-        self.zopac=data[:,0] 
-        self.densities=data[:,1:]
+        self.zopac=data[:,0] # altitudes du fichier de melange de composantes
+        self.densities=data[:,1:] # profil vertical concentration massique (g/m3) des differentes composantes du modele
         for line in open(fname,'r').readlines():
             if line.startswith("z(km)",2,7):
                 break
-        self.aspecies=line.split()[2:]
+        self.aspecies=line.split()[2:] # lecture des nom des differentes composantes du modele
         self.ispecies=[]
-        for species in self.aspecies:
+        for species in self.aspecies:   # pour chaque composante on lit les proporites de diffusion de la LUT Scamat
             self.ispecies.append(self.species.index(species))
             self.scamatlist.append(ScaMat(species))   
             
-    def regrid(self,znew):
+    def regrid(self,znew): # reeechantillonage vertical des concentrations massiques
         N=len(self.aspecies)
         M=len(znew)
         tmp=np.zeros((M,N),np.float32)
@@ -41,63 +41,150 @@ class readOPAC(object):
             tmp[:,k]=f(znew)
         self.densities=tmp
         self.zopac=znew
-        
-    def calcOpt(self,T,h2o,w):
-        rh=h2o/vapor_pressure(T)*100
+    
+    def calcTau(self,T,h2o,w): # calcul des propritees optiques du melange en fonction de l'alitude et aussi integrees sur la verticale
+        rh=h2o/vapor_pressure(T)*100 # calcul du profil vertical de RH
         M=len(self.zopac)
-        self.dtau_tot=np.zeros((M),np.float32)
-        self.ssa_tot=np.zeros((M),np.float32)
+        self.dtau_tot=np.zeros(M,np.float32)
         k=0
-        for scamat in self.scamatlist:
-            if scamat.nrh>1:
+        for scamat in self.scamatlist: 
+            if scamat.nrh>1: # si les prorietes de la composante dependent de RH (donc de Z)
+                rho=scamat.rho[0,:] # lecture du prfil de densite
+                tabext=np.squeeze(scamat.ext) # tableau de la section efficace de diffusion (en km-1/(g/m3)) donnes pour RH=50%
+                frho=interp1d(scamat.rhgrid,rho,bounds_error=False,fill_value=0.) # interpolation de la densite en fonction de RH
                 for m in range(M):
                     if m==0:
                         dz=0.
                         dtau=0.
-                        dssa=1.
                     else:
-                        rho=scamat.rho[0,:]
-                        tab=np.squeeze(scamat.ext)
-                        ext=interp2(scamat.wlgrid,scamat.rhgrid,tab,w*1.e-3,rh[m])
-                        tab=np.squeeze(scamat.ssa)
-                        ssa=interp2(scamat.wlgrid,scamat.rhgrid,tab,w*1.e-3,rh[m])
-                        f=interp1d(scamat.rhgrid,rho,bounds_error=False,fill_value=0.)
-                        ext*=f(rh[m])/f(50.)*self.densities[m,k]
+                        ext0=interp2(scamat.wlgrid,scamat.rhgrid,tabext,w*1.e-3,rh[m]) # interpolation pour la longueur d'onde et la RH du niveau en cours
+                        ext=ext0*frho(rh[m])/frho(50.)*self.densities[m,k] # calcul du coefficient de diffusion et ajustement pour RH du niveau
                         dz = self.zopac[m-1]-self.zopac[m]                       
-                        dtau = dz * ext * self.scalingfact
-                        dssa = dtau*ssa
-                    self.dtau_tot[m]+=dtau 
-                    self.ssa_tot[m]+=dssa
-            else:  
+                        dtau = dz * ext * self.scalingfact # calcul de l'epaisseur optique du niveau, eventuellement mise a l'echelle                 
+                    self.dtau_tot[m]+=dtau #somme sur les composantes
+                    
+            else:  # idem mais rien de depend de RH pour cette composante
+                tab=np.squeeze(scamat.ext)
+                fext=interp1d(scamat.wlgrid,tab,bounds_error=False,fill_value=0.)                       
+                ext=fext(w*1e-3)                
                 for m in range(M):
                     if m==0:
                         dz=0.
                         dtau=0.
-                        dssa=1.
-                    else:
-                        tab=np.squeeze(scamat.ext)
-                        f=interp1d(scamat.wlgrid,tab,bounds_error=False,fill_value=0.)                       
-                        ext=f(w*1e-3)
-                        tab=np.squeeze(scamat.ssa)
-                        f=interp1d(scamat.wlgrid,tab,bounds_error=False,fill_value=0.)                       
-                        ssa=f(w*1e-3) 
+                    else:                                                       
                         ext*=self.densities[m,k]
                         dz = self.zopac[m-1]-self.zopac[m]                       
                         dtau = dz * ext * self.scalingfact
-                        dssa = dtau*ssa
                     self.dtau_tot[m]+=dtau
-                    self.ssa_tot[m]+=dssa
+            
             k=k+1
-        for m in range(M-1):
-            if self.dtau_tot[m+1]>0: self.ssa_tot[m+1]/=self.dtau_tot[m+1]
 
         self.tau_tot=np.sum(self.dtau_tot)
         
-    def setTauref(self,T,h2o,tauref,wref):
-        self.calcOpt(T,h2o,wref)
-        self.scalingfact=tauref/self.tau_tot
+    def calcOpt(self,T,h2o,w): # calcul des propritees optiques du melange en fonction de l'alitude et aussi integrees sur la verticale
+        rh=h2o/vapor_pressure(T)*100 # calcul du profil vertical de RH
+        M=len(self.zopac)
+        MMAX=3000 # Nb de polynome de Legendre au total
+        self.dtau_tot=np.zeros(M,np.float32)
+        self.ssa_tot=np.zeros(M,np.float32)
+        self.pmom_tot=np.zeros((M,4,MMAX),np.float64)
+        norm=np.zeros(M,np.float32)
+        k=0
+        for scamat in self.scamatlist:
+            fiw=interp1d(scamat.wlgrid,np.arange(len(scamat.wlgrid))) # function to locate wavelength index in grid (float)
+            iw=fiw(w*1e-3) # floating walength index 
+            if scamat.nrh>1: # si les prorietes de la composante dependent de RH (donc de Z)
+                fir=interp1d(scamat.rhgrid,np.arange(len(scamat.rhgrid))) # function to locate RH index in grid 
+                rho=scamat.rho[0,:] # lecture du prfil de densite
+                tabext=np.squeeze(scamat.ext) # tableau de la section efficace de diffusion (en km-1/(g/m3)) donnes pour RH=50%
+                frho=interp1d(scamat.rhgrid,rho,bounds_error=False,fill_value=0.) # interpolation de la densite en fonction de RH
+                for m in range(M):
+                    ir=fir(rh[m]) # floating rh index
+                    if m==0:
+                        dz=0.
+                        dtau=0.
+                        dssa=1.
+                        dp=[0.,0.,0.,0.]
+                        nmax=[0,0,0,0]
+                        ext=0.
+                    else:
+                        ext0=interp2(scamat.wlgrid,scamat.rhgrid,tabext,w*1.e-3,rh[m]) # interpolation pour la longueur d'onde et la RH du niveau en cours
+                        tabssa=np.squeeze(scamat.ssa) # tableau des albedo de diffusion simple 
+                        ssa=interp2(scamat.wlgrid,scamat.rhgrid,tabssa,w*1.e-3,rh[m]) # interpolation pour la longueur d'onde et la RH du niveau en cours
+                        ext=ext0*frho(rh[m])/frho(50.)*self.densities[m,k] # calcul du coefficient de diffusion et ajustement pour RH du niveau
+                        dz = self.zopac[m-1]-self.zopac[m]                       
+                        dtau = dz * ext * self.scalingfact # calcul de l'epaisseur optique du niveau, eventuellement mise a l'echelle
+                        dssa = dtau*ssa # ssa pondere par l'epsaissuer optique
+                        norm[m]+=dssa                   
+                        for n in range(4): # pour chaque element de la matrice de Stokes independant (4 pour Mie) 
+                            nmax=scamat.nmom[int(iw),int(ir),n]
+                            dp[n]= scamat.pmom[int(iw),int(ir),n,:nmax]*dssa # plus proche voisin pour pmom pondere par ssa et tau de la composante
+                    self.dtau_tot[m]+=dtau #somme sur les composantes
+                    self.ssa_tot[m]+=dssa #moyenne pondere par l'epassieur optique pour ssa
+                    for n in range(4):
+                        nmax=scamat.nmom[int(iw),int(ir),n]
+                        self.pmom_tot[m,n,:nmax]+=dp[n]
+                    
+            else:  # idem mais rien de depend de RH pour cette composante
+                tabext=np.squeeze(scamat.ext)
+                fext=interp1d(scamat.wlgrid,tabext,bounds_error=False,fill_value=0.)                       
+                ext0=fext(w*1e-3)
+                tabssa=np.squeeze(scamat.ssa)
+                fssa=interp1d(scamat.wlgrid,tabssa,bounds_error=False,fill_value=0.)                       
+                ssa=fssa(w*1e-3)
+                nmom=np.squeeze(scamat.nmom)
+                pmom=np.squeeze(scamat.pmom)
+                
+                for m in range(M):
+                    if m==0:
+                        dz=0.
+                        dtau=0.
+                        dssa=1.
+                        dp=[0.,0.,0.,0.]
+                        nmax=[0,0,0,0]
+                        ext=0.
+                    else:                                                       
+                        ext=ext0*self.densities[m,k]
+                        dz = self.zopac[m-1]-self.zopac[m]                       
+                        dtau = dz * ext * self.scalingfact
+                        dssa = dtau*ssa
+                        norm[m]+=dssa
+                        for n in range(4): # pour chaque element de la matrice de Stokes independant (4 pour Mie) 
+                            nmax=nmom[int(iw),n]
+                            dp[n]= pmom[int(iw),n,:nmax]*dssa # plus proche voisin pour pmom pondere par ssa et tau de la composante
+
+                    self.dtau_tot[m]+=dtau
+                    self.ssa_tot[m]+=dssa
+                    for n in range(4):
+                        nmax=nmom[int(iw),n]
+                        self.pmom_tot[m,n,:nmax]+=dp[n]
+            
+            k=k+1
+        for m in range(M-1):
+            if self.dtau_tot[m+1]>1e-8: 
+                self.ssa_tot[m+1]/=self.dtau_tot[m+1]
+            else:
+                self.ssa_tot[m+1]=1.
+            for n in range(4):  
+                if norm[m]>0: self.pmom_tot[m,n,:]/=norm[m]
+
+        self.tau_tot=np.sum(self.dtau_tot)
+        self.MMAX=MMAX
         
-               
+    def setTauref(self,T,h2o,tauref,wref): # On fixe l'AOT a une valeur pour une longueur d'onde de reference
+        self.calcTau(T,h2o,wref) # calcul de l'AOT a la longueur d'onde de reference
+        self.scalingfact=tauref/self.tau_tot # calcul du facteur d'echelle        
+     
+    def calcPha(self,w,NTHETA=7201): # calcul des matrices de phases
+        self.NTHETA=NTHETA
+        M=len(self.zopac)
+        Leg=Legendres(self.MMAX,NTHETA)
+        for m in range(M-1): 
+            theta,pha=Mom2Pha(self.pmom_tot[m,:,:],Leg)
+            f=open("/home/did/RTC/SMART-G/fic/pf_%s_%inm_layer-%i.txt"%(self.filename[:-4],w,m),'w')
+            for j in range(NTHETA):
+                f.write("%18.8E"%theta[j] + "  %20.11E  %20.11E  %20.11E  %20.11E\n"%tuple(pha[:,j]))
+            f.close()
               
 class ScaMat(object):
     def __init__(self,species):
@@ -116,11 +203,57 @@ class ScaMat(object):
         self.nrh=len(self.rhgrid)
         self.thgrid=nc.variables["theta"][:]
         self.phase=nc.variables["phase"][:]
+        self.pmom=nc.variables["pmom"][:]
         self.nth=nc.variables["ntheta"][:]
+        self.nmom=nc.variables["nmom"][:]
         self.ext=nc.variables["ext"][:]
         self.ssa=nc.variables["ssa"][:]
         self.rho=nc.variables["rho"][:]
 
+class Legendres(object):
+    def __init__(self,nterm,ntheta):
+        mu=np.linspace(0.,np.pi,ntheta,endpoint=True,dtype=np.float64)
+        mu=np.cos(mu)
+        un64=np.ones_like(mu)
+        zero64=np.ones_like(mu)
+        self.p1=np.zeros((nterm+1,ntheta),np.float64)
+        self.p2=np.zeros((nterm+1,ntheta),np.float64)
+        self.p1[0,:]=un64
+        self.p1[1,:]=mu
+        self.p2[0,:]=zero64
+        self.p2[1,:]=zero64
+        self.p2[2,:]=un64 * 3. * (1.-mu*mu)/(2. *np.sqrt(6.* un64))
+        for k in range(nterm):
+            dk=np.float64(k)
+            if k>=1:
+                self.p1[k+1,:]= ((2.*dk+1.) * mu * self.p1[k,:] - dk * self.p1[k-1,:] ) / (dk+1)
+            if k>=2:
+                PAR1=(2.*dk+1.)/np.sqrt((dk+3.*un64)*(dk-1.))
+                PAR2=mu*self.p2[k,:]
+                PAR3=(np.sqrt((dk+2.*un64)*(dk-2.)))/(2.*dk+1.)
+                PAR4=self.p2[k-1,:]
+                self.p2[k+1,:]=PAR1*(PAR2-PAR3*PAR4)
+        self.mu=mu
+        self.ntheta=ntheta
+        self.nterm=nterm
+        
+def Mom2Pha(Mom,Leg):
+    sumP=np.zeros_like(Leg.mu)
+    sumQ=np.zeros_like(Leg.mu)
+    sumU=np.zeros_like(Leg.mu)
+    sumZ=np.zeros_like(Leg.mu)
+    pha=np.zeros((4,Leg.ntheta),np.float64)
+    for k in range(Leg.nterm):
+        sumP=sumP+Mom[0,k]*Leg.p1[k,:]
+        sumQ=sumQ+Mom[1,k]*Leg.p2[k,:]
+        sumU=sumU+Mom[2,k]*Leg.p1[k,:]
+    pha[0,:]=sumP+sumQ
+    pha[1,:]=sumP-sumQ
+    pha[2,:]=sumU
+    pha[3,:]=sumZ
+    return np.arccos(Leg.mu)/np.pi*180.,pha
+    
+    
 class readREPTRAN(object): # Read the channels reptran cdf file, either a list of sensor channels or a full solar coarse medium or fine grid
     def __init__(self,filename):
         self.filename=filename
@@ -524,7 +657,7 @@ def profil(options,args):
             iband,w,weight,extra,crs_source=reptran.getwvl_param(iint)# on recupere les parametres de la bande: numero,lambda,poids,irradiance solaire, et tableau des gaz absorbants 
             if options.opac !=None:
                  aer.calcOpt(T,h2o,w)
-         
+                 if options.phase : aer.calcPha(w,options.NSCAER)
             datamol[:]=0.
             fname="/home/did/RTC/SMART-G/profil/p-"+filename+'-'+reptran_bandname+'-%iof%i'%(iint+1,Nint)
             outfile=open(fname,'w')
@@ -541,7 +674,7 @@ def profil(options,args):
                         datamol += interp2(crs_mol.t_pert,crs_mol.pressure,np.squeeze(tab),dT,P*100) * densmol[:,ig] * 1e-11  # interpolation dans la LUT d'absorption en fonction de
                                           # pression, ecart en temperature et mutiplication par la densite, calcul de reptran avec LUT en 10^(-20) m2, passage en km-1 
     
-            outstr= "# I   ALT               hmol(I)         haer(I)         H(I)            XDEL(I)         YDEL(I)         percent_abs  LAM=  %7.2f nm, WEIGHT= %7.5f, E0=%9.3f, Rint=%8.3f\n" % (w,weight,extra,Rint)
+            outstr= "# I   ALT               hmol(I)         haer(I)         H(I)            XDEL(I)         YDEL(I)     XSSA(I)     percent_abs  LAM=  %7.2f nm, WEIGHT= %7.5f, E0=%9.3f, Rint=%8.3f\n" % (w,weight,extra,Rint)
             outfile.write(outstr)
             print "# I   ALT               hmol(I)         haer(I)         H(I)            XDEL(I)         YDEL(I)       XSSA(I)     percent_abs  abs LAM=  %7.2f nm, WEIGHT= %7.5f, E0=%9.3f, Rint=%8.3f" % (w,weight,extra,Rint)
             for m in range(M):
@@ -567,7 +700,7 @@ def profil(options,args):
                     taua_prec=0.
                     st0= "%d\t" % m
                     st1= "%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (0., 0., 0. , 0., 1., 1., 0., 0.)
-                    st2= "%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (0., 0., 0. , 0., 1., 0.)
+                    st2= "%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (0., 0., 0. , 0., 1., 1., 0.)
                     print ''.join(st0),'%7.2f\t' % z[m],''.join(st1)
                     outstr=  ''.join(st0)+'%7.2f\t' % z[m]+''.join(st2)+'\n'
                     outfile.write(outstr)
@@ -589,8 +722,8 @@ def profil(options,args):
                     htot = dataray[m]+dataaer[m]+hg
                     xssa=ssaaer[m]
                     st0= "%d\t" % m
-                    st1= "%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (dataray[m], dataaer[m], htot , xdel, ydel, xssa, abs, taug)
-                    st2= "%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (dataray[m], dataaer[m], htot , xdel, ydel, abs)
+                    st1= "%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (dataray[m], dataaer[m], htot , xdel, ydel, xssa, abs, taug)
+                    st2= "%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (dataray[m], dataaer[m], htot , xdel, ydel, xssa, abs)
                     print ''.join(st0),'%7.2f\t' % z[m],''.join(st1)
                     outstr= ''.join(st0)+'%7.2f\t' % z[m]+''.join(st2)+'\n'
                     outfile.write(outstr)
@@ -602,7 +735,8 @@ def profil(options,args):
         w=options.w
         if options.opac !=None:
             aer.calcOpt(T,h2o,w)
-        outstr= "# I   ALT               hmol(I)         haer(I)         H(I)            XDEL(I)         YDEL(I)        percent_abs  LAM=  %7.2f nm\n" % w
+            if options.phase : aer.calcPha(w,options.NSCAER)
+        outstr= "# I   ALT               hmol(I)         haer(I)         H(I)            XDEL(I)         YDEL(I)     XSSA(I)    percent_abs  LAM=  %7.2f nm\n" % w
         outfile.write(outstr)
         print "# I   ALT               hmol(I)         haer(I)         H(I)            XDEL(I)         YDEL(I)        XSSA(I)   percent_abs  abs LAM=  %7.2f nm" % w
         for m in range(M):
@@ -628,7 +762,7 @@ def profil(options,args):
                 taua_prec=0.
                 st0= "%d\t" % m
                 st1= "%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (0., 0., 0. , 0., 1., 1., 0., 0.)
-                st2= "%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (0., 0., 0. , 0., 1., 0.)
+                st2= "%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (0., 0., 0. , 0., 1., 1., 0.)
                 print ''.join(st0),'%7.2f\t' % z[m],''.join(st1)
                 outstr=  ''.join(st0)+'%7.2f\t' % z[m]+''.join(st2)+'\n'
                 outfile.write(outstr)
@@ -651,7 +785,7 @@ def profil(options,args):
                 xssa=ssaaer[m]
                 st0= "%d\t" % m
                 st1= "%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (dataray[m], dataaer[m], htot , xdel, ydel, xssa, abs, taug)
-                st2= "%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (dataray[m], dataaer[m], htot , xdel, ydel, abs)
+                st2= "%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (dataray[m], dataaer[m], htot , xdel, ydel, xssa, abs)
                 print ''.join(st0),'%7.2f\t' % z[m],''.join(st1)
                 outstr= ''.join(st0)+'%7.2f\t' % z[m]+''.join(st2)+'\n'
                 outfile.write(outstr)
@@ -708,6 +842,17 @@ if __name__ == '__main__':
                 help='name of the aerosol model from OPAC\n' \
                       +'    antarctic,continental_average,continetal_clean,continental_polluted\n'  \
                       +'    desert, desert_nonspherical,maritime_clean,maritime_polluted,maritime_tropical,urban\n'
+                )
+    parser.add_option('-N', '--NSCAER',
+                dest='NSCAER',
+                type='int',
+                help='number of scattering angles of the aerosol phase matrix, if options P is chosen\n'
+                )
+    parser.add_option('-p','--phase',
+                dest='phase',
+                action='store_true',
+                default=False,
+                help='Phase matrix computation (could slow down the process depending on NSCAER'
                 )
     parser.add_option('-R', '--REPTRAN',
                 dest='rep',

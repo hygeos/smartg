@@ -38,7 +38,7 @@ def iop(options):
 
     SPM: suspended particulate matter in g/m3
     w: wavelength in nm
-    NANG: number of angles for Phase function
+    NSCOCE: number of angles for Phase function
     ang_trunc : truncature angle for Fournier Forand Phase function
     gamma: is the spectral dependency of the particulate backscattering
     alpha: parameter for CDOM absorption
@@ -60,7 +60,7 @@ def iop(options):
     
     for w in wl:    
         SPM=options.SPM
-        NANG=options.NANG
+        NSCOCE=options.NSCOCE
         ang_trunc=options.ang_trunc
         nbp=options.nbp
         gamma=options.gamma
@@ -82,18 +82,18 @@ def iop(options):
         #
         # phase function
         #
-        ang = pi * arange(NANG, dtype='float64')/(NANG-1)    # angle in radians
+        ang = pi * arange(NSCOCE, dtype='float64')/(NSCOCE-1)    # angle in radians
     
         # pure water
-        pf0 = zeros((NANG, 4), dtype='float64') # pure water phase function
+        pf0 = zeros((NSCOCE, 4), dtype='float64') # pure water phase function
         pf0[:,0] = 0.75
         pf0[:,1] = 0.75 * cos(ang)**2
         pf0[:,2] = 0.75 * cos(ang)
         pf0[:,3] = 0.
     
         # particles (troncature)
-        itronc = int(NANG * ang_trunc/180.)
-        pf1 = zeros((NANG, 4), dtype='float64') # pure water phase function
+        itronc = int(NSCOCE * ang_trunc/180.)
+        pf1 = zeros((NSCOCE, 4), dtype='float64') # pure water phase function
         # assuming that the slope of Junge power law mu and slope of spectral dependence of scattering is mu=3+gamma
         pf1[itronc:,0] = 0.5*fournierForand(ang[itronc:],nbp,3.+gamma)
         pf1[:itronc,0] = 0.5*fournierForand(ang[itronc ],nbp,3.+gamma) 
@@ -104,7 +104,7 @@ def iop(options):
         # normalization after truncation
         integ_ff = 0.
         integ_ff_back = 0.
-        for iang in xrange(1, NANG):
+        for iang in xrange(1, NSCOCE):
             dtheta = ang[iang] - ang[iang-1]
             pm1 = pf1[iang-1,0] + pf1[iang-1,1]
             pm2 = pf1[iang,0] + pf1[iang,1]
@@ -143,7 +143,7 @@ def iop(options):
         fo.write('# total absorption coefficient: {}\n'.format(atot))
         fo.write('# total scattering coefficient: {}\n'.format(btot))
         fo.write('# truncating at {} deg\n'.format(ang_trunc))
-        for i in xrange(NANG):
+        for i in xrange(NSCOCE):
             fo.write('{:.6f} {:.6f} {:.6f} {:.6f} {:.6f}\n'.format(
                     ang[i] * 180/pi,
                     pf[i,0],
@@ -173,8 +173,8 @@ if __name__ == '__main__':
                 default=550.,
                 help='wavelength (nm), default 550 nm' 
                 )
-    parser.add_option('-N', '--NANG',
-                dest='NANG',
+    parser.add_option('-N', '--NSCOCE',
+                dest='NSCOCE',
                 type='int',
                 default=72001,
                 help='Number of output angles of the phase function' 

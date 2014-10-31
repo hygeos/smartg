@@ -144,7 +144,7 @@ __device__ void move_pp(Photon*, float* h, float* pMol
 * Diffusion du photon par une molécule ou un aérosol
 * Modification des paramètres de stokes et des vecteurs U et V du photon (polarisation, vitesse)
 */
-__device__ void scatter(Photon* photon, float* faer
+__device__ void scatter(Photon* photon, float* faer, float* ssa
 		#ifdef FLAGOCEAN
 		, float* foce
 		#endif

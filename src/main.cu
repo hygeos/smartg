@@ -184,9 +184,9 @@ int main (int argc, char *argv[])
 #endif
 	/** Calcul des modèles utiles à l'algorithme **/
 	// Calcul de faer, modèle de diffusion des aérosols
-	if( TAUAER > 0 ){
+	if( TAUAER > 0 | PROFIL == 2){
 		calculF( PATHDIFFAER, tab_H.faer, tab_D.faer, LSAAER, NFAER);
-        }
+     }
 #ifdef _PERF
                 StopProcessing(perfInitG);
                 GetElapsedTime(perfInitG);

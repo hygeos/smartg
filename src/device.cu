@@ -186,7 +186,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 			#endif
 			){
 	
-			scatter(&ph, tab.faer
+			scatter(&ph, tab.faer, tab.ssa
 			#ifdef FLAGOCEAN
 			, tab.foce
 			#endif
@@ -870,6 +870,7 @@ __device__ void move_pp(Photon* ph, float* h, float* pMol
 
 	ph->tau += -logf(1.f - RAND)*ph->vz;
 
+
 	#ifdef FLAGOCEAN
 	if ((ph->loc == OCEAN) && (ph->tau >= 0)) {
 
@@ -893,7 +894,7 @@ __device__ void move_pp(Photon* ph, float* h, float* pMol
             ph->tau = 0.F;
             return;
         }
-        // Si tau>TAURAY le photon atteint l'espace
+        // Si tau>TAUATM le photon atteint l'espace
         else if( ph->tau > TAUATMd ){
             ph->loc = SPACE;
             return;
@@ -914,6 +915,7 @@ __device__ void move_pp(Photon* ph, float* h, float* pMol
         ph->prop_aer = 1.f - pMol[ph->couche];
 
         ph->weight = ph->weight * (1.f - abs[ph->couche]);
+
     }
     #endif
 
@@ -925,7 +927,7 @@ __device__ void move_pp(Photon* ph, float* h, float* pMol
 * Diffusion du photon par une molécule ou un aérosol
 * Modification des paramètres de stokes et des vecteurs U et V du photon (polarisation, vitesse)
 */
-__device__ void scatter( Photon* ph, float* faer
+__device__ void scatter( Photon* ph, float* faer, float* ssa 
 			#ifdef FLAGOCEAN
 			, float* foce
 			#endif
@@ -1008,7 +1010,7 @@ __device__ void scatter( Photon* ph, float* faer
 			float faer2 = faer[iang*5+1];
 			
 			// Calcul du poids après diffusion
-			ph->weight *= __fdividef( 2.0F*(stokes1*faer1+stokes2*faer2) , stokes1+stokes2)*W0AERd;
+			ph->weight *= __fdividef( 2.0F*(stokes1*faer1+stokes2*faer2) , stokes1+stokes2)*ssa[ph->couche];
 			
 			// Calcul des parametres de Stokes du photon apres diffusion
 			ph->stokes1 *= faer1;
@@ -1094,6 +1096,13 @@ __device__ void scatter( Photon* ph, float* faer
 	ph->vx = vx;
 	ph->vy = vy;
 	ph->vz = vz;
+
+    // renormalisation
+    float norm;
+    norm=sqrtf(ph->vx*ph->vx+ph->vy*ph->vy+ph->vz*ph->vz);
+    ph->vx/=norm;
+    ph->vy/=norm;
+    ph->vz/=norm;
 
 }
 

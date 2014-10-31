@@ -24,6 +24,9 @@ class Job(object):
                     'ENV':0,'ENV_SIZE':10.,'X0':0.,'Y0':0.,'SEED':-1,'NBTHETA':45,'NBPHI':45,'LSAAER':72001,\
                     'NFAER':1000000,'LSAOCE':72001,'NFOCE':10000000,'PATHRESULTATSHDF':'/home/did/RTC/SMART-G/resultat/out.hdf',\
                     'WRITE_PERIOD':-1,'OUTPUT_LAYERS':0,'XBLOCK':256,'YBLOCK':1,'XGRID':256,'YGRID':1,'NBLOOP':5000}
+        self.atotlist=[self.dict["ATOT"]]
+        self.btotlist=[self.dict["BTOT"]]
+        self.iopnamelist=[self.dict["PATHDIFFOCE"]]
         self.str_Parametre="""
 # Nombre de photons a lancer (unsigned long long) (limite par le tableau du poids des photons en unsigned long long)
 NBPHOTONS = {NBPHOTONS}
@@ -122,6 +125,7 @@ PATHDIFFOCE = {PATHDIFFOCE}
 # ENV_SIZE rayon de la cible en km
 # X0 decalage en km entre la coordonnee X du centre de la cible et le point visee
 # Y0 decalage en km entre la coordonnee Y du centre de la cible et le point visee
+# !! l environnement est lambertien avec un albedo W0LAM
 ENV= {ENV}
 ENV_SIZE= {ENV_SIZE}
 X0= {X0}
@@ -193,7 +197,7 @@ NBLOOP = {NBLOOP}
     
     def setParams(self,**kwargs):
         self.dict.update(kwargs)
-    
+        
     def run(self,options,reptran=None):
         outlist=[]
         if reptran!=None: 
@@ -201,7 +205,7 @@ NBLOOP = {NBLOOP}
             for i in range(reptran.nband):
                 fname='/home/did/RTC/SMART-G/resultat/o-'+reptran.filename+'-'+reptran.band_name+'-%iof%i'%(i+1,reptran.nband)
                 self.setParams(LAMBDA=reptran.awvl[i],PATHPROFILATM=self.profilenamelist[i],PATHRESULTATSHDF=fname,\
-                        PATHDIFFOCE=self.iopnamelist[i],ATOT=self.atotlist[i],BTOT=self.btotlist[i]) 
+                        PATHDIFFOCE=self.iopnamelist[i],ATOT=self.atotlist[i],BTOT=self.btotlist[i])
                 fo=open(output_dir+"MyParametre%i.txt"%i,"w")
                 fo.write(self.str_Parametre.format(**self.dict))
                 fo.close()
@@ -263,13 +267,14 @@ NBLOOP = {NBLOOP}
         self.outname=outname
             
     def setProfile(self,profile):
-        self.dict.update(NATM=profile.natm,HATM=profile.hatm,PROFIL=2)
+        self.dict.update(NATM=profile.natm,HATM=profile.hatm,PROFIL=2,LSAAER=profile.NSCAER)
         self.profilenamelist=profile.namelist
     
     def setIop(self,iop):
         self.atotlist=iop.atotlist
         self.btotlist=iop.btotlist
         self.iopnamelist=iop.namelist
+        self.dict.update(LSAOCE=iop.NSCOCE)
                 
 class Profile(object):  
     def __init__(self,install_dir,atmfile):
@@ -278,7 +283,8 @@ class Profile(object):
         self.args=[self.install_dir+'tools/profile/'+ atmfile+'.dat' ,self.install_dir+'tools/profile/crs_O3_UBremen_cf.dat']
         
     def run(self,options):
-        self.natm,self.hatm,self.namelist = profil(options,self.args) 
+        self.natm,self.hatm,self.namelist = profil(options,self.args)
+        self.NSCAER=options.NSCAER
  
 class Iop(object):  
     def __init__(self,install_dir):
@@ -286,13 +292,16 @@ class Iop(object):
         
     def run(self,options):
         self.atotlist,self.btotlist,self.namelist = iop(options)
+        self.NSCOCE=options.NSCOCE
         
 class Options():
     def  __init__(self):
-        self.dict={'geo':'pp','aer':0.,'grid':None,'lat':45.,'w':550.,'noabs':False,'rep':None,'channel':None,\
-                'SPM':1.,'NANG':72001,'ang_trunc':5.,'gamma':0.5,'alpha':1.,'nbp':1.15}
+        self.dict={'geo':'pp','aot':0.,'phase':False,'grid':None,'lat':45.,'w':550.,'noabs':False,'rep':None,'channel':None,\
+                'SPM':1.,'NSCAER':72001,'NSCOCE':72001,'ang_trunc':5.,'gamma':0.5,'alpha':1.,'nbp':1.15,\
+                'opac':None,'wref':550.,'Ha':1.}
         self.geo=self.dict["geo"]
-        self.aer=self.dict["aer"]
+        self.aot=self.dict["aot"]
+        self.phase=self.dict["phase"]
         self.grid=self.dict["grid"]
         self.lat=self.dict["lat"]
         self.w=self.dict["w"]
@@ -300,16 +309,21 @@ class Options():
         self.rep=self.dict["rep"]
         self.channel=self.dict["channel"]
         self.SPM=self.dict["SPM"]
-        self.NANG=self.dict["NANG"]
+        self.NSCAER=self.dict["NSCAER"]
+        self.NSCOCE=self.dict["NSCOCE"]
         self.ang_trunc=self.dict["ang_trunc"]
         self.gamma=self.dict["gamma"]
         self.alpha=self.dict["alpha"]
         self.nbp=self.dict["nbp"]
+        self.opac=self.dict["opac"]
+        self.wref=self.dict["wref"]
+        self.Ha=self.dict["Ha"]
         
     def setOptions(self,**kwargs):
         self.dict.update(kwargs)
         self.geo=self.dict["geo"]
-        self.aer=self.dict["aer"]
+        self.aot=self.dict["aot"]
+        self.phase=self.dict["phase"]
         self.grid=self.dict["grid"]
         self.lat=self.dict["lat"]
         self.w=self.dict["w"]
@@ -317,72 +331,152 @@ class Options():
         self.rep=self.dict["rep"]
         self.channel=self.dict["channel"]
         self.SPM=self.dict["SPM"]
-        self.NANG=self.dict["NANG"]
+        self.NSCAER=self.dict["NSCAER"]
+        self.NSCOCE=self.dict["NSCOCE"]
         self.ang_trunc=self.dict["ang_trunc"]
         self.gamma=self.dict["gamma"]
         self.alpha=self.dict["alpha"]
         self.nbp=self.dict["nbp"]
+        self.opac=self.dict["opac"]
+        self.wref=self.dict["wref"]
+        self.Ha=self.dict["Ha"]
 
 def outname(job,profile,options):
-    if job.dict["ENV"]==0:
-        strENV='ENV0'
+    if job.dict["SIM"] in [-2,3]:
+        strBASE='SIM%i'%job.dict["SIM"]
     else:
-        strENV='ENV1-%i-X%.1f-Y%.1f'%(job.dict["ENV_SIZE"],job.dict["X0"],job.dict["Y0"])
+        strBASE='SIM%i_DI%i'%(job.dict["SIM"],job.dict["DIOPTRE"])
+    if job.dict["ENV"]==0 or (job.dict["SIM"] not in [1,2]):
+        strENV=''
+    else:
+        strENV='ENV%.1f-%i-X%.1f-Y%.1f'%(job.dict["W0LAM"],job.dict["ENV_SIZE"],job.dict["X0"],job.dict["Y0"])
     
     if options.rep!=None:
         strCHA=options.channel
     else:
         strCHA='%.2f'%options.w
-        
-    strBASE='SIM%i_DIO%i'%(job.dict["SIM"],job.dict["DIOPTRE"])
+    
     strVIEW='THV%.1f'%(job.dict["THVDEG"])
     strATM= profile.atmfile
-    if options.aer >0.:
-        strAER='AOT%.2f'%options.aer
+    strAER=''
+    if options.aot >0.:
+        if options.opac!=None:
+            strAER+=options.opac+'-'
+        strAER+='AOT%.2f'%options.aot
+    if job.dict["SIM"] in [0,2,3]:
+        strOCE='SPM%.1f'%options.SPM
     else:
-        strAER=''
-    name=strBASE+'-'+strENV+'-'+strCHA+'-'+strVIEW+'-'+strATM+'-'+strAER+'-'+options.geo+'.hdf'
+        strOCE=''
+    name=strBASE+'-'+strENV+'-'+strCHA+'-'+strVIEW+'-'+strATM+'-'+strAER+'-'+strOCE+'-'+options.geo+'.hdf'
     return name     
 
 def main():   
-#    reptran_filename='reptran_solar_envisat'
-#    reptran_bandname='envisat_meris_ch09'
+
+
+###########################################################################################################################################################
+#   EXAMPLE 1
 #    reptran_filename='reptran_solar_msg'
-    reptran_filename='reptran_solar_sentinel'
-#    reptran_band_list=[('msg1_seviri_ch006',0.05),('msg1_seviri_ch008',0.4),('msg1_seviri_ch016',0.3)]
-    reptran_band_list=[('sentinel3_olci_b02',0.5)]
-#    reptran_band_list=[('msg1_seviri_ch008',0.3)]
-    reptran=readREPTRAN(reptran_filename)
-    grid='100[25]25[5]10[1]0'
-    atmfile='afglt'
-    output_dir=install_dir + 'resultat/Robert/'
+#    reptran_band_list=['msg1_seviri_ch008']
+#    grid='100[75]25[5]10[1]0' # see profil.py help
+#    atmfile='afglt'
+#    aerosol_model='maritime_polluted'
+#    output_dir=install_dir + 'resultat/'
+#    lam_phase=804.
+#    layer_phase=10
+#    
+#    # Atmospheric Profile Preparation:
+#    # starts with standard atmosphere name
+#    myprofile=Profile(install_dir,atmfile)
+#    # OPTIONS
+#    myoptions=Options()
+#    #---------
+#    # Atmospheric Profile Preparation:
+#    # Needs wavelength (monochromatic or Reptran parametrization), standard atmosphere name and eventually new vertical grid
+#    # Needs aerosol AOT and eventually OPAC aerosol model name and reference wavelength for AOT, with optionnaly Phase MAtrix computation
+#    #
+#    # Example : We compute first scattering matrices (quite long) for further use: depends on atmopsheric profile wavelength and aerosol model
+#    # we are using REPTRAN so read th correlated K parameters into the appropriate structure, 
+#    # !! set aot>0 but its value has no importance for phase matrix computation
+#    reptran=readREPTRAN(reptran_filename)
+#    #---------    
+#    for reptran_bandname in reptran_band_list:
+#        reptran.selectBand(reptran.Bandname2Band(reptran_bandname)) 
+#        myoptions.setOptions(grid=grid,aot=0.2,opac=aerosol_model,phase=True,NSCAER=721,rep=reptran_filename,channel=reptran_bandname)
+#        # run the profile computation with selected options (see profil.py for help)
+#        myprofile.run(myoptions)
+#        
+#    # Example : We then continue to set up the profile depending on AOT, including gaseous absorption,no more phase matrices computation
+#    #---------          
+#    for reptran_bandname in reptran_band_list:
+#        reptran.selectBand(reptran.Bandname2Band(reptran_bandname)) 
+#        myoptions.setOptions(wref=550.,aot=0.2,rep=reptran_filename,channel=reptran_bandname,noabs=False,phase=False) 
+#        myprofile.run(myoptions)
+#        
+#        
+#    # Optionnaly Introduce the IOp of ocean 
+#    # Set the corresponding options (see water_spm_model.py for help)
+#        myiop=Iop(install_dir)
+#        myoptions.setOptions(SPM=1.,NSCOCE=72001)
+#        myiop.run(myoptions)
+#        
+#     # Finally fir each time a simulation is launched, initiate a Job and set basic Parameters of the simulation 
+#     # Don't forget to link the job with the vertical profil and ocean iop's
+#        myjob=Job(install_dir)
+#        myjob.setParams(SIM=2,THVDEG=65.,SUR=3,DIOPTRE=2,WINDSPEED=5.,NBPHOTONS=1e8,NBTHETA=30,NBPHI=30)
+#        myjob.setProfile(myprofile)
+#        myjob.setIop(myiop)
+#     # You have to manually set the aerosol phase matrix to use for the job run (TODO : update smart-g for automatic set up)
+#        myjob.setParams(PATHDIFFAER='/home/did/RTC/SMART-G/fic/pf_'+aerosol_model+'_%inm_layer-%i.txt'%(lam_phase,layer_phase)) 
+#
+#     # launch the job, !! you have to pass the reptran structure as a keyword if needed
+#        myjob.run(myoptions,reptran=reptran)
+#        
+#        
+#     # build the output filename depending on parametres and options and move it to the output directory 
+#        cmd="mv %s %s"%(myjob.outname,output_dir+outname(myjob,myprofile,myoptions))
+#        print '#--------------------------------------------------------------------------------------------------------#'
+#        print cmd
+#        print '#--------------------------------------------------------------------------------------------------------#'
+#        subprocess.call(cmd,shell=True)
+###########################################################################################################################################################
+        
+###########################################################################################################################################################
+#   EXAMPLE 2
+    grid='100[75]25[5]10[1]0' # see profil.py help
+    atmfile='afglms'
+    aerosol_model='urban'
+    output_dir=install_dir + 'resultat/'
+    lam_phase=1020.
+    layer_phase=10
     
-    for reptran_bandname,W0LAM in reptran_band_list:
-        reptran.selectBand(reptran.Bandname2Band(reptran_bandname)) 
-        myjob=Job(install_dir)
-        myjob.setParams(SIM=2,THVDEG=45.,SUR=3,DIOPTRE=2,WINDSPEED=5.,W0LAM=W0LAM,ENV=0,ENV_SIZE=10000.,X0=9995.)
-        myjob.setParams(PATHDIFFAER='/home/did/RTC/SMART-G/fic/pf_M80_665nm.txt',NBPHOTONS=1e8,NBTHETA=30,NBPHI=30)
-        
-        myoptions=Options()
-#        myoptions.setOptions(grid=grid,w=750.,aer=0.,SPM=100.) 
-        myoptions.setOptions(grid=grid,rep=reptran_filename,channel=reptran_bandname,aer=0.2,SPM=1.,geo='sp')
-        
-        myprofile=Profile(install_dir,atmfile)
-        myprofile.run(myoptions)
-        
-        myiop=Iop(install_dir)
-        myiop.run(myoptions)
-        
-        myjob.setProfile(myprofile)
-        myjob.setIop(myiop)
-  
-        myjob.run(myoptions,reptran=reptran)
-#        myjob.run(myoptions)
+    myprofile=Profile(install_dir,atmfile)
+    myoptions=Options()
+    #---------    
+    myoptions.setOptions(wref=550.,w=lam_phase,grid=grid,aot=0.5,opac=aerosol_model,phase=False,NSCAER=7201,geo='sp')
+    myprofile.run(myoptions)
+    #---------     
+    myjob=Job(install_dir)
+    myjob.setParams(SIM=2,THVDEG=65.,SUR=3,DIOPTRE=2,WINDSPEED=5.,W0LAM=0.7,\
+                NBPHOTONS=1e8,NBTHETA=30,NBPHI=30)
+    myjob.setParams(PATHDIFFAER='/home/did/RTC/SMART-G/fic/pf_'+aerosol_model+'_%inm_layer-%i.txt'%(lam_phase,layer_phase)) 
+    myjob.setProfile(myprofile)  
+    
+    myjob.run(myoptions)        
+    cmd="mv %s %s"%(myjob.outname,output_dir+outname(myjob,myprofile,myoptions))
+    print '#--------------------------------------------------------------------------------------------------------#'
+    print cmd
+    print '#--------------------------------------------------------------------------------------------------------#'
+    subprocess.call(cmd,shell=True)
+    
+    for dist in np.linspace(-9.9,9.9,num=10):
+        myjob.setParams(ENV=1,ENV_SIZE=10.,X0=dist)
+        myjob.run(myoptions)        
         cmd="mv %s %s"%(myjob.outname,output_dir+outname(myjob,myprofile,myoptions))
         print '#--------------------------------------------------------------------------------------------------------#'
         print cmd
         print '#--------------------------------------------------------------------------------------------------------#'
         subprocess.call(cmd,shell=True)
+###########################################################################################################################################################
 
 if __name__ == '__main__':
     main()

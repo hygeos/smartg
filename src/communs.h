@@ -302,6 +302,7 @@ typedef struct __align__(16)
 	
 	float* h;				// Pointeur vers l'épaisseur optique de chaque couches du modèle atmosphérique
 	float* pMol;			// Pointeur vers la proportion de molécules dans chaque couches du modèle atmosphérique
+	float* ssa;			    // Pointeur vers l'albedo de diffusion simple des aerosols dans chaque couches du modèle atmosphérique
     float* abs;             // Pointeur vers la proportion d'absorbant dans chaque couches du modèle atmosphérique
 	
 	/** Séparation du code pour atmosphère sphérique ou parallèle **/
