@@ -964,7 +964,7 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa
 
 	float zang=0.f, theta=0.f;
 	int iang;
-	float stokes1, stokes2;
+	float stokes1, stokes2, norm;
 	float cTh2;
 	float prop_aer = ph->prop_aer;
 	
@@ -1046,14 +1046,9 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa
 		ph->stokes2 *= 2.0f*p2;
 		u = ph->stokes3;
 		ph->stokes3 = p3*u;
+
 		
 		
-		/**  **/
-		// if( ph->weight < WEIGHTMIN ){
-		// ph->loc=ABSORBED;
-		// return;
-	// }
-	
 	/** Roulette russe **/
 	if( ph->weight < WEIGHTRR ){
 		if( RAND < __fdividef(ph->weight,WEIGHTRR) ){
@@ -1098,11 +1093,21 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa
 	ph->vz = vz;
 
     // renormalisation
-    float norm;
+    //TestDR
+    norm=ph->stokes1+ph->stokes2;
+    ph->stokes1/=norm;
+    ph->stokes2/=norm;
+    ph->stokes3/=norm;
     norm=sqrtf(ph->vx*ph->vx+ph->vy*ph->vy+ph->vz*ph->vz);
     ph->vx/=norm;
     ph->vy/=norm;
     ph->vz/=norm;
+    norm=sqrtf(ph->ux*ph->ux+ph->uy*ph->uy+ph->uz*ph->uz);
+    ph->ux/=norm;
+    ph->uy/=norm;
+    ph->uz/=norm;
+    //TestDR
+
 
 }
 
@@ -1678,6 +1683,7 @@ __device__ void countPhoton(Photon* ph, Tableaux tab, unsigned long long* nbPhot
 		#endif
 		return;
 	}
+
 
     float *tabCount; // pointer to the "counting" array:
                      // may be TOA, or BOA down, and so on

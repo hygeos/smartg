@@ -367,7 +367,9 @@ def outname(job,profile,options):
         strOCE='SPM%.1f'%options.SPM
     else:
         strOCE=''
-    name=strBASE+'-'+strENV+'-'+strCHA+'-'+strVIEW+'-'+strATM+'-'+strAER+'-'+strOCE+'-'+options.geo+'.hdf'
+    strNOABS=''
+    if options.noabs : strNOABS='noabs'
+    name=strBASE+'-'+strENV+'-'+strCHA+'-'+strVIEW+'-'+strATM+'-'+strAER+'-'+strOCE+'-'+options.geo+strNOABS+'.hdf'
     return name     
 
 def main():   
@@ -375,107 +377,130 @@ def main():
 
 ###########################################################################################################################################################
 #   EXAMPLE 1
-#    reptran_filename='reptran_solar_msg'
-#    reptran_band_list=['msg1_seviri_ch008']
-#    grid='100[75]25[5]10[1]0' # see profil.py help
-#    atmfile='afglt'
-#    aerosol_model='maritime_polluted'
-#    output_dir=install_dir + 'resultat/'
-#    lam_phase=804.
-#    layer_phase=10
-#    
-#    # Atmospheric Profile Preparation:
-#    # starts with standard atmosphere name
-#    myprofile=Profile(install_dir,atmfile)
-#    # OPTIONS
-#    myoptions=Options()
-#    #---------
-#    # Atmospheric Profile Preparation:
-#    # Needs wavelength (monochromatic or Reptran parametrization), standard atmosphere name and eventually new vertical grid
-#    # Needs aerosol AOT and eventually OPAC aerosol model name and reference wavelength for AOT, with optionnaly Phase MAtrix computation
-#    #
-#    # Example : We compute first scattering matrices (quite long) for further use: depends on atmopsheric profile wavelength and aerosol model
-#    # we are using REPTRAN so read th correlated K parameters into the appropriate structure, 
-#    # !! set aot>0 but its value has no importance for phase matrix computation
-#    reptran=readREPTRAN(reptran_filename)
-#    #---------    
-#    for reptran_bandname in reptran_band_list:
-#        reptran.selectBand(reptran.Bandname2Band(reptran_bandname)) 
-#        myoptions.setOptions(grid=grid,aot=0.2,opac=aerosol_model,phase=True,NSCAER=721,rep=reptran_filename,channel=reptran_bandname)
-#        # run the profile computation with selected options (see profil.py for help)
-#        myprofile.run(myoptions)
-#        
-#    # Example : We then continue to set up the profile depending on AOT, including gaseous absorption,no more phase matrices computation
-#    #---------          
-#    for reptran_bandname in reptran_band_list:
-#        reptran.selectBand(reptran.Bandname2Band(reptran_bandname)) 
-#        myoptions.setOptions(wref=550.,aot=0.2,rep=reptran_filename,channel=reptran_bandname,noabs=False,phase=False) 
-#        myprofile.run(myoptions)
-#        
-#        
-#    # Optionnaly Introduce the IOp of ocean 
-#    # Set the corresponding options (see water_spm_model.py for help)
-#        myiop=Iop(install_dir)
-#        myoptions.setOptions(SPM=1.,NSCOCE=72001)
-#        myiop.run(myoptions)
-#        
-#     # Finally fir each time a simulation is launched, initiate a Job and set basic Parameters of the simulation 
-#     # Don't forget to link the job with the vertical profil and ocean iop's
-#        myjob=Job(install_dir)
-#        myjob.setParams(SIM=2,THVDEG=65.,SUR=3,DIOPTRE=2,WINDSPEED=5.,NBPHOTONS=1e8,NBTHETA=30,NBPHI=30)
-#        myjob.setProfile(myprofile)
-#        myjob.setIop(myiop)
-#     # You have to manually set the aerosol phase matrix to use for the job run (TODO : update smart-g for automatic set up)
-#        myjob.setParams(PATHDIFFAER='/home/did/RTC/SMART-G/fic/pf_'+aerosol_model+'_%inm_layer-%i.txt'%(lam_phase,layer_phase)) 
-#
-#     # launch the job, !! you have to pass the reptran structure as a keyword if needed
-#        myjob.run(myoptions,reptran=reptran)
-#        
-#        
-#     # build the output filename depending on parametres and options and move it to the output directory 
-#        cmd="mv %s %s"%(myjob.outname,output_dir+outname(myjob,myprofile,myoptions))
-#        print '#--------------------------------------------------------------------------------------------------------#'
-#        print cmd
-#        print '#--------------------------------------------------------------------------------------------------------#'
-#        subprocess.call(cmd,shell=True)
-###########################################################################################################################################################
-        
-###########################################################################################################################################################
-#   EXAMPLE 2
+    reptran_filename='reptran_solar_msg'
+    reptran_band_list=[('msg1_seviri_ch008',0.4)]
     grid='100[75]25[5]10[1]0' # see profil.py help
-    atmfile='afglms'
-    aerosol_model='urban'
+    atmfile='afglt'
+    aerosol_model='maritime_polluted'
     output_dir=install_dir + 'resultat/'
-    lam_phase=1020.
-    layer_phase=10
+    lam_phase_index=0
+    layer_phase=13
     
+    # Atmospheric Profile Preparation:
+    # starts with standard atmosphere name
     myprofile=Profile(install_dir,atmfile)
+    # OPTIONS
     myoptions=Options()
+    #---------
+    # Atmospheric Profile Preparation:
+    # Needs wavelength (monochromatic or Reptran parametrization), standard atmosphere name and eventually new vertical grid
+    # Needs aerosol AOT and eventually OPAC aerosol model name and reference wavelength for AOT, with optionnaly Phase MAtrix computation
+    #
+    # Example : We compute first scattering matrices (quite long) for further use: depends on atmopsheric profile wavelength and aerosol model
+    # we are using REPTRAN so read th correlated K parameters into the appropriate structure, 
+    # !! set aot>0 but its value has no importance for phase matrix computation
+    reptran=readREPTRAN(reptran_filename)
     #---------    
-    myoptions.setOptions(wref=550.,w=lam_phase,grid=grid,aot=0.5,opac=aerosol_model,phase=False,NSCAER=7201,geo='sp')
-    myprofile.run(myoptions)
-    #---------     
-    myjob=Job(install_dir)
-    myjob.setParams(SIM=2,THVDEG=65.,SUR=3,DIOPTRE=2,WINDSPEED=5.,W0LAM=0.7,\
-                NBPHOTONS=1e8,NBTHETA=30,NBPHI=30)
-    myjob.setParams(PATHDIFFAER='/home/did/RTC/SMART-G/fic/pf_'+aerosol_model+'_%inm_layer-%i.txt'%(lam_phase,layer_phase)) 
-    myjob.setProfile(myprofile)  
-    
-    myjob.run(myoptions)        
-    cmd="mv %s %s"%(myjob.outname,output_dir+outname(myjob,myprofile,myoptions))
-    print '#--------------------------------------------------------------------------------------------------------#'
-    print cmd
-    print '#--------------------------------------------------------------------------------------------------------#'
-    subprocess.call(cmd,shell=True)
-    
-    for dist in np.linspace(-9.9,9.9,num=10):
-        myjob.setParams(ENV=1,ENV_SIZE=10.,X0=dist)
-        myjob.run(myoptions)        
+    for reptran_bandname,W0LAM in reptran_band_list:
+        reptran.selectBand(reptran.Bandname2Band(reptran_bandname)) 
+        lam_phase=reptran.awvl[lam_phase_index]
+        myoptions.setOptions(grid=grid,aot=0.2,opac=aerosol_model,phase=True,NSCAER=7201,rep=reptran_filename,channel=reptran_bandname)
+        # run the profile computation with selected options (see profil.py for help)
+        myprofile.run(myoptions)
+        
+    # Example : We then continue to set up the profile depending on AOT, including gaseous absorption,no more phase matrices computation
+    #---------          
+    for reptran_bandname,W0LAM in reptran_band_list:
+        reptran.selectBand(reptran.Bandname2Band(reptran_bandname)) 
+        myoptions.setOptions(geo='sp',wref=550.,aot=0.2,rep=reptran_filename,channel=reptran_bandname,noabs=True,phase=False) 
+        myprofile.run(myoptions)
+        
+        
+    # Optionnaly Introduce the IOp of ocean 
+    # Set the corresponding options (see water_spm_model.py for help)
+        myiop=Iop(install_dir)
+        myoptions.setOptions(SPM=1.,NSCOCE=72001)
+        myiop.run(myoptions)
+        
+     # Finally fir each time a simulation is launched, initiate a Job and set basic Parameters of the simulation 
+     # Don't forget to link the job with the vertical profil and ocean iop's
+        myjob=Job(install_dir)
+        myjob.setParams(SIM=2,THVDEG=65.,SUR=3,DIOPTRE=2,WINDSPEED=5.,NBPHOTONS=1e8,NBTHETA=30,NBPHI=30)
+        myjob.setProfile(myprofile)
+        myjob.setIop(myiop)
+     # You have to manually set the aerosol phase matrix to use for the job run (TODO : update smart-g for automatic set up)
+        myjob.setParams(PATHDIFFAER='/home/did/RTC/SMART-G/fic/pf_'+aerosol_model+'_%inm_layer-%i.txt'%(lam_phase,layer_phase)) 
+
+     # launch the job, !! you have to pass the reptran structure as a keyword if needed
+        myjob.run(myoptions,reptran=reptran)
+        
+        
+     # build the output filename depending on parametres and options and move it to the output directory 
         cmd="mv %s %s"%(myjob.outname,output_dir+outname(myjob,myprofile,myoptions))
         print '#--------------------------------------------------------------------------------------------------------#'
         print cmd
         print '#--------------------------------------------------------------------------------------------------------#'
         subprocess.call(cmd,shell=True)
+        
+        flist=[]
+        for dist in np.linspace(-1.1,9.9,num=1):
+       # for dist in np.linspace(-9.9,9.9,num=10):
+            myjob.setParams(W0LAM=W0LAM,ENV=1,ENV_SIZE=10.,X0=dist)
+            myjob.run(myoptions,reptran=reptran)
+            oname=output_dir+outname(myjob,myprofile,myoptions) 
+            flist.append(oname)
+            cmd="mv %s %s"%(myjob.outname,oname)
+            print '#--------------------------------------------------------------------------------------------------------#'
+            print cmd
+            print '#--------------------------------------------------------------------------------------------------------#'
+            subprocess.call(cmd,shell=True)
+        fo=open("list.txt",'w')
+        for f in flist : fo.write('%s\n'%f)
+        fo.close()
+###########################################################################################################################################################
+        
+###########################################################################################################################################################
+#   EXAMPLE 2
+#    grid='100[75]25[5]10[1]0' # see profil.py help
+#    atmfile='afglms'
+#    aerosol_model='urban'
+#    output_dir=install_dir + 'resultat/'
+#    lam_phase=1020.
+#    layer_phase=10
+#    
+#    myprofile=Profile(install_dir,atmfile)
+#    myoptions=Options()
+#    #---------    
+#    myoptions.setOptions(wref=550.,w=lam_phase,grid=grid,aot=0.5,opac=aerosol_model,phase=False,NSCAER=7201,geo='sp')
+#    myprofile.run(myoptions)
+#    #---------     
+#    myjob=Job(install_dir)
+#    myjob.setParams(SIM=1,THVDEG=65.,SUR=3,DIOPTRE=2,WINDSPEED=5.,W0LAM=0.7,\
+#                NBPHOTONS=1e8,NBTHETA=30,NBPHI=30)
+#    myjob.setParams(PATHDIFFAER='/home/did/RTC/SMART-G/fic/pf_'+aerosol_model+'_%inm_layer-%i.txt'%(lam_phase,layer_phase)) 
+#    myjob.setProfile(myprofile)  
+#    
+#    myjob.run(myoptions)        
+#    cmd="mv %s %s"%(myjob.outname,output_dir+outname(myjob,myprofile,myoptions))
+#    print '#--------------------------------------------------------------------------------------------------------#'
+#    print cmd
+#    print '#--------------------------------------------------------------------------------------------------------#'
+#    subprocess.call(cmd,shell=True)
+#    
+#    flist=[]
+#    for dist in np.linspace(-9.9,9.9,num=2):
+#        myjob.setParams(ENV=1,ENV_SIZE=10.,X0=dist)
+#        myjob.run(myoptions)
+#        oname=output_dir+outname(myjob,myprofile,myoptions) 
+#        flist.append(oname)
+#        cmd="mv %s %s"%(myjob.outname,oname)
+#        print '#--------------------------------------------------------------------------------------------------------#'
+#        print cmd
+#        print '#--------------------------------------------------------------------------------------------------------#'
+#        subprocess.call(cmd,shell=True)
+#    fo=open("list.txt",'w')
+#    for f in flist : fo.write('%s\n'%f)
+#    fo.close()
 ###########################################################################################################################################################
 
 if __name__ == '__main__':
