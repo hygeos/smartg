@@ -6,6 +6,7 @@ from scipy.interpolate import interp1d
 from scipy.constants import codata
 import netCDF4
 from scipy.ndimage import map_coordinates
+from scipy.integrate import simps
 install_dir='/home/did/RTC/SMART-G/'
 
 class readOPAC(object):
@@ -18,7 +19,8 @@ class readOPAC(object):
                     
     def _readStandardAerosolFile(self):
         self.scamatlist=[]
-        indir='/home/did/RTC/libRadtran-2.0/libRadtran-2.0-beta/data/aerosol/OPAC/'
+#        indir='/home/did/RTC/libRadtran-2.0/libRadtran-2.0-beta/data/aerosol/OPAC/'
+        indir='/home/did/RTC/SMART-G/tools/profile/'
         fname=indir+'standard_aerosol_files/'+self.filename
         data=np.loadtxt(fname)
         self.zopac=data[:,0] # altitudes du fichier de melange de composantes
@@ -66,13 +68,13 @@ class readOPAC(object):
             else:  # idem mais rien de depend de RH pour cette composante
                 tab=np.squeeze(scamat.ext)
                 fext=interp1d(scamat.wlgrid,tab,bounds_error=False,fill_value=0.)                       
-                ext=fext(w*1e-3)                
+                ext0=fext(w*1e-3)                
                 for m in range(M):
                     if m==0:
                         dz=0.
                         dtau=0.
                     else:                                                       
-                        ext*=self.densities[m,k]
+                        ext=ext0*self.densities[m,k]
                         dz = self.zopac[m-1]-self.zopac[m]                       
                         dtau = dz * ext * self.scalingfact
                     self.dtau_tot[m]+=dtau
@@ -84,7 +86,7 @@ class readOPAC(object):
     def calcOpt(self,T,h2o,w): # calcul des propritees optiques du melange en fonction de l'alitude et aussi integrees sur la verticale
         rh=h2o/vapor_pressure(T)*100 # calcul du profil vertical de RH
         M=len(self.zopac)
-        MMAX=3000 # Nb de polynome de Legendre au total
+        MMAX=5000 # Nb de polynome de Legendre au total
         self.dtau_tot=np.zeros(M,np.float32)
         self.ssa_tot=np.zeros(M,np.float32)
         self.pmom_tot=np.zeros((M,4,MMAX),np.float64)
@@ -92,10 +94,10 @@ class readOPAC(object):
         k=0
         for scamat in self.scamatlist:
             fiw=interp1d(scamat.wlgrid,np.arange(len(scamat.wlgrid))) # function to locate wavelength index in grid (float)
-            iw=fiw(w*1e-3) # floating walength index 
+            iw=fiw(w*1e-3) # floating wavelength index 
             if scamat.nrh>1: # si les prorietes de la composante dependent de RH (donc de Z)
                 fir=interp1d(scamat.rhgrid,np.arange(len(scamat.rhgrid))) # function to locate RH index in grid 
-                rho=scamat.rho[0,:] # lecture du prfil de densite
+                rho=scamat.rho[0,:] # lecture du profil de densite
                 tabext=np.squeeze(scamat.ext) # tableau de la section efficace de diffusion (en km-1/(g/m3)) donnes pour RH=50%
                 frho=interp1d(scamat.rhgrid,rho,bounds_error=False,fill_value=0.) # interpolation de la densite en fonction de RH
                 for m in range(M):
@@ -159,14 +161,23 @@ class readOPAC(object):
                         nmax=nmom[int(iw),n]
                         self.pmom_tot[m,n,:nmax]+=dp[n]
             
-            k=k+1
-        for m in range(M-1):
-            if self.dtau_tot[m+1]>1e-8: 
-                self.ssa_tot[m+1]/=self.dtau_tot[m+1]
+            k=k+1 # each component
+            
+        for m in range(M):
+            if m==0:
+                self.ssa_tot[m]=1.
+                for n in range(4):
+                    self.pmom_tot[m,n,:]=0.
             else:
-                self.ssa_tot[m+1]=1.
-            for n in range(4):  
-                if norm[m]>0: self.pmom_tot[m,n,:]/=norm[m]
+                if (self.dtau_tot[m]>1e-8 and norm[m] > 1e-8): 
+                    self.ssa_tot[m]/=self.dtau_tot[m]
+                    for n in range(4):  
+                        self.pmom_tot[m,n,:]/=norm[m]
+                else:
+                    self.ssa_tot[m]=1.
+                    for n in range(4):
+                        self.pmom_tot[m,n,:]=0.
+
 
         self.tau_tot=np.sum(self.dtau_tot)
         self.MMAX=MMAX
@@ -179,12 +190,37 @@ class readOPAC(object):
         self.NTHETA=NTHETA
         M=len(self.zopac)
         Leg=Legendres(self.MMAX,NTHETA)
-        for m in range(M-1): 
+        for m in range(M): 
+#        for m in range(M-1): 
             theta,pha=Mom2Pha(self.pmom_tot[m,:,:],Leg)
             f=open("/home/did/RTC/SMART-G/fic/pf_%s_%inm_layer-%i.txt"%(self.filename[:-4],w,m),'w')
             for j in range(NTHETA):
                 f.write("%18.8E"%theta[j] + "  %20.11E  %20.11E  %20.11E  %20.11E\n"%tuple(pha[:,j]))
             f.close()
+            
+class Gas(object):
+    def __init__(self,z,dens):
+        self.z=z
+        self.dens=dens
+        self.scalingfact=1.
+        self.initcol= self.calcColumn()
+        
+    def calcColumn(self):
+        return simps(self.dens,-self.z) * 1e5 
+
+    def setColumn(self,DU=None, Dens=None):
+        if DU != None : self.scalingfact = 2.69e16 * DU / self.calcColumn() 
+        if Dens !=None: self.scalingfact = Dens / self.calcColumn()
+            
+    def getDU(self):
+#        return self.initcol * self.scalingfact / 2.69e16
+        return self.calcColumn() / 2.69e16 * self.scalingfact
+        
+    def regrid(self,znew):
+        f=interp1d(self.z,self.dens,kind='quadratic')
+        self.dens=f(znew)
+        self.z=znew
+           
               
 class ScaMat(object):
     def __init__(self,species):
@@ -580,6 +616,8 @@ def profil(options,args):
     # lecture du fichier crs de l'ozone dans les bandes de Chappuis
     crs_chappuis=np.loadtxt(args[1],comments="#")
 
+    go3=Gas(z,o3)
+    go3.setColumn(DU=options.o3)
     #-------------------------------------------
     # optionnal regrid
     if options.grid !=None :
@@ -610,8 +648,9 @@ def profil(options,args):
         n2=f(znew)*airnew
         z=znew
         air=airnew
-
-                     
+        
+        go3.regrid(znew)
+                
     
     M=len(z) # Final number of layer
     datamol  = np.zeros(M, np.float)
@@ -621,7 +660,7 @@ def profil(options,args):
     dataaer  = np.zeros(M, np.float)
     ssaaer   = np.ones(M, np.float)
     if options.Ha == None:
-        Ha = 1.
+        if options.opac==None : Ha = 1.
     else:
         Ha=options.Ha # Hauteur d'echelle des aerosols en km
     xh2o=h2o/air # h2o vmr
@@ -633,6 +672,7 @@ def profil(options,args):
         aer=readOPAC(options.opac+'.dat')
         aer.regrid(z)
         aer.setTauref(T,h2o,options.aot,options.wref)
+        aer.calcTau(T,h2o,options.wref)
     else:
         dataaer = options.aot * np.exp(-z/Ha)   
     #
@@ -642,7 +682,7 @@ def profil(options,args):
         densmol  = np.zeros((M, Nmol), np.float)
         densmol[:,0]=h2o
         densmol[:,1]=co2
-        densmol[:,2]=o3
+        densmol[:,2]=go3.dens*go3.scalingfact
         densmol[:,3]=n2o
         densmol[:,4]=co
         densmol[:,5]=ch4
@@ -681,9 +721,10 @@ def profil(options,args):
                 #### Chappuis bands
                 # SIGMA = (C0 + C1*(T-T0) + C2*(T-T0)^2) * 1.E-20 cm^2
                 T0 = 273.15 #in K
+            
                 datao3[m] =  np.interp(w,crs_chappuis[:,0],crs_chappuis[:,1]) + np.interp(w,crs_chappuis[:,0],crs_chappuis[:,2])*(T[m]-T0) + \
                             np.interp(w,crs_chappuis[:,0],crs_chappuis[:,3])*(T[m]-T0)**2
-                datao3[m] *= o3[m]* 1e-15 # calcul de Chapuis avec LUT en 10^(-20) cm2, passage en km-1 
+                datao3[m] *= go3.dens[m]*go3.scalingfact * 1e-15 # calcul de Chapuis avec LUT en 10^(-20) cm2, passage en km-1 
                 dataray[m] =  rod(w*1e-3,co2[m]/air[m]*1e6,lat,z[m]*1e3,P[m])                
                        
                 if options.opac !=None:
@@ -745,7 +786,7 @@ def profil(options,args):
             T0 = 273.15 #in K
             datao3[m] =  np.interp(w,crs_chappuis[:,0],crs_chappuis[:,1]) + np.interp(w,crs_chappuis[:,0],crs_chappuis[:,2])*(T[m]-T0) + \
                         np.interp(w,crs_chappuis[:,0],crs_chappuis[:,3])*(T[m]-T0)**2
-            datao3[m] *= o3[m]* 1e-15 # calcul de Chapuis avec LUT en 10^(-20) cm2, passage en km-1 
+            datao3[m] *= go3.dens[m]*go3.scalingfact * 1e-15 # calcul de Chapuis avec LUT en 10^(-20) cm2, passage en km-1 
             dataray[m] =  rod(w*1e-3,co2[m]/air[m]*1e6,lat,z[m]*1e3,P[m])
             
             if options.opac !=None:
@@ -802,6 +843,12 @@ if __name__ == '__main__':
                 default=False,
                 help='no gaseous absorption'
                 )
+    parser.add_option('-o','--o3',
+                dest='o3',
+                type='float',
+                default=None,
+                help='Ozone vertical column in Dobson units ,default: atmospheric profile value'
+                )
     parser.add_option('-w', '--wavel',
                 dest='w',
                 type='float',
@@ -833,15 +880,16 @@ if __name__ == '__main__':
     parser.add_option('-H', '--Ha',
                 dest='Ha',
                 type='float',
-                default=1.,
-                help='Set the aerosol scale height in km, replace in other vertical profile, default 1.' 
+                default=None,
+                help='Set the aerosol scale height in km, replace in other vertical profile, default None' 
                 )
     parser.add_option('-O', '--OPAC',
                 dest='opac',
                 type='string',
                 help='name of the aerosol model from OPAC\n' \
                       +'    antarctic,continental_average,continetal_clean,continental_polluted\n'  \
-                      +'    desert, desert_nonspherical,maritime_clean,maritime_polluted,maritime_tropical,urban\n'
+                      +'    desert, desert_nonspherical,maritime_clean,maritime_polluted,maritime_tropical,urban\n' \
+                      +'    and eventually a user defined aerosol model in the tools/profile/standard_aerosol_files/ directory\n'
                 )
     parser.add_option('-N', '--NSCAER',
                 dest='NSCAER',

@@ -145,8 +145,12 @@ if len(args) != 1 and len(args) != 2:
 path_cuda = args[0]
 if options.list == None:
         path_cuda = args[0]
+        if len(args) == 2 :
+           path_cuda2 = args[1]
 else:
         path_cudal = open(args[0],"r").readlines()
+        if len(args) == 2 :
+           path_cudal2 = open(args[1],"r").readlines()
 
 if len(args) == 2 :
          path_cuda2 = args[1]
@@ -253,6 +257,8 @@ def setup_axes3(fig, rect, options=None):
     return ax1, aux_ax
 #----------------------------------------------------------------------------
 
+
+
 #----------------------------------------------------------------------------
 # plot 2D 
 #----------------------------------------------------------------------------
@@ -338,6 +344,51 @@ def plot_2D_parameter(fig, rect, theta , phi, data, Vdata, Vdatat=None, title=No
         if label != None  : cb3.set_label(label)
 
 #----------------------------------------------------------------------------
+def setXYZ(theta,phi,other,options,data,data2,SYM='I'):
+            
+    if options.list == None :
+        XX = theta
+        YY = phi
+        Z = data
+        opt=None
+        if (data2!=None) | (options.diff==True):
+            Z2 = data2
+    else:
+        if options.list[0]==0 :
+            opt=options
+            XX = other
+            YY = phi
+            Z = data.transpose()
+            if (data2!=None) | (options.diff==True): Z2 = data2.transpose()
+   
+        if options.list[0]==1 :
+            opt=options
+            XX = other
+            YY = theta
+            Z = data.transpose()
+            if (data2!=None) | (options.diff==True): Z2 = data2.transpose()
+        if options.list[0]==2 :
+            opt=None
+            XX = theta
+            YY = phi
+            Z = data
+            if (data2!=None) | (options.diff==True): Z2 = data2
+
+    if (data2!=None) | (options.diff==True):
+        if options.rel==True :
+            ZZ = (Z-Z2)/Z2*100
+            TITLE='({}1-{}2)/{}2[%]'.format(SYM,SYM,SYM)
+        else:
+            ZZ = Z-Z2
+            TITLE='{}1-{}2'.format(SYM,SYM)
+    else: 
+        ZZ = Z
+        TITLE='{}'.format(SYM)
+    
+    return XX,YY,ZZ,TITLE,opt
+
+
+#----------------------------------------------------------------------------
 def main():
     ##########################################################
     ##                DONNEES FICHIER CUDA                  ##
@@ -346,9 +397,13 @@ def main():
     # if a list of inputs files check only existence of the first
     if options.list != None :
         path_cuda = path_cudal[0].rstrip()
+        if len(args) == 2 :
+           path_cuda2 = path_cudal2[0].rstrip()
         NL = len(path_cudal)
     else :
         path_cuda = args[0]
+        if len(args) == 2 :
+            path_cuda2 = args[1]
     
     # verification de l'existence du fichier hdf
     if os.path.exists(path_cuda):
@@ -423,8 +478,8 @@ def main():
             dataQ2 = sds_cuda.get()
             sds_cuda = sd_cuda.select("U_down (0+)")
             dataU2 = sds_cuda.get()
-            #sds_cuda = sd_cuda.select("Numbers of photons")
-            #dataN2 = sds_cuda.get()
+            sds_cuda = sd_cuda.select("Numbers of photons")
+            dataN2 = sds_cuda.get()
         else :
             sds_cuda = sd_cuda.select("I_up (TOA)")
             dataI2 = sds_cuda.get()
@@ -432,8 +487,8 @@ def main():
             dataQ2 = sds_cuda.get()
             sds_cuda = sd_cuda.select("U_up (TOA)")
             dataU2 = sds_cuda.get()
-            #sds_cuda = sd_cuda.select("Numbers of photons")
-            #dataN2 = sds_cuda.get()
+            sds_cuda = sd_cuda.select("Numbers of photons")
+            dataN2 = sds_cuda.get()
 
      else:
         sys.stdout.write("Pas de fichier "+path_cuda2+"\n")
@@ -474,6 +529,36 @@ def main():
                 dataN[i,:,:] = sds_cuda.get()
             sd_cuda.end()
 
+        if len(args)==2:
+        # build the 3D array containing all SDS
+            dataI2 = np.zeros((NL,NBPHI_cuda,NBTHETA_cuda), dtype=np.float32)
+            dataQ2 = np.zeros((NL,NBPHI_cuda,NBTHETA_cuda), dtype=np.float32)
+            dataU2 = np.zeros((NL,NBPHI_cuda,NBTHETA_cuda), dtype=np.float32)
+            dataN2 = np.zeros((NL,NBPHI_cuda,NBTHETA_cuda), dtype=np.float32)
+            other = []
+            # loop on input files
+            for i in range(NL):
+                sd_cuda = pyhdf.SD.SD(path_cudal2[i].rstrip())
+                other.append(getattr(sd_cuda,options.others[0]))
+                if options.down == True  :
+                    sds_cuda = sd_cuda.select("I_down (0+)")
+                    dataI2[i,:,:] = sds_cuda.get()
+                    sds_cuda = sd_cuda.select("Q_down (0+)")
+                    dataQ2[i,:,:] = sds_cuda.get()
+                    sds_cuda = sd_cuda.select("U_down (0+)")
+                    dataU2[i,:,:] = sds_cuda.get()
+                    sds_cuda = sd_cuda.select("Numbers of photons")
+                    dataN2[i,:,:] = sds_cuda.get()
+                else :
+                    sds_cuda = sd_cuda.select("I_up (TOA)")
+                    dataI2[i,:,:] = sds_cuda.get()
+                    sds_cuda = sd_cuda.select("Q_up (TOA)")
+                    dataQ2[i,:,:] = sds_cuda.get()
+                    sds_cuda = sd_cuda.select("U_up (TOA)")
+                    dataU2[i,:,:] = sds_cuda.get()
+                    sds_cuda = sd_cuda.select("Numbers of photons")
+                    dataN2[i,:,:] = sds_cuda.get()
+                sd_cuda.end()
     ##################################################################################
     ##              CREATION/CHOIX/MODIFICATION DE CERTAINES DONNES                 ##
     ##################################################################################
@@ -496,6 +581,17 @@ def main():
             data_cudaPR = data_cudaIP/data_cudaI * 100
             data_cudaN = np.zeros((NL, NBPHI_cuda), dtype=float)
             data_cudaN = 100./ np.sqrt(dataN[0:NL,:,ith1])
+            if len(args)==2:
+                data_cudaI2 = np.zeros((NL,NBPHI_cuda), dtype=float)
+                data_cudaI2 = dataI2[0:NL,:,ith1]
+                data_cudaQ2 = np.zeros((NL, NBPHI_cuda), dtype=float)
+                data_cudaQ2 = dataQ2[0:NL,:,ith1]
+                data_cudaU2 = np.zeros((NL, NBPHI_cuda), dtype=float)
+                data_cudaU2 = dataU2[0:NL,:,ith1]
+                data_cudaIP2 = np.sqrt(data_cudaQ2*data_cudaQ2 + data_cudaU2*data_cudaU2)
+                data_cudaPR2 = data_cudaIP2/data_cudaI2 * 100
+                data_cudaN2  = np.zeros((NL, NBPHI_cuda), dtype=float)
+                data_cudaN2  = 100./ np.sqrt(dataN2[0:NL,:,ith1])
             
         if options.list[0]==1:
             iphi1 = (np.abs(phi-options.list[1])).argmin() 
@@ -509,6 +605,17 @@ def main():
             data_cudaPR = data_cudaIP/data_cudaI * 100
             data_cudaN = np.zeros((NL, NBTHETA_cuda), dtype=float)
             data_cudaN = 100./ np.sqrt(dataN[0:NL,iphi1,:])
+            if len(args)==2:
+                data_cudaI2 = np.zeros((NL,NBTHETA_cuda), dtype=float)
+                data_cudaI2 = dataI2[0:NL,iphi1,:]
+                data_cudaQ2 = np.zeros((NL, NBTHETA_cuda), dtype=float)
+                data_cudaQ2 = dataQ2[0:NL,iphi1,:]
+                data_cudaU2 = np.zeros((NL, NBTHETA_cuda), dtype=float)
+                data_cudaU2 = dataU2[0:NL,iphi1,:]
+                data_cudaIP2 = np.sqrt(data_cudaQ2*data_cudaQ2 + data_cudaU2*data_cudaU2)
+                data_cudaPR2 = data_cudaIP2/data_cudaI2 * 100
+                data_cudaN2  = np.zeros((NL, NBPHI_cuda), dtype=float)
+                data_cudaN2  = 100./ np.sqrt(dataN2[0:NL,iphi1,:])
             
         if options.list[0]==2:
             io1 = (np.abs(np.array(other)-options.list[1])).argmin() 
@@ -522,6 +629,17 @@ def main():
             data_cudaPR = data_cudaIP/data_cudaI * 100
             data_cudaN = np.zeros((NBPHI_cuda,NBTHETA_cuda), dtype=float)
             data_cudaN = 100./ np.sqrt(dataN[io1,:,:])
+            if len(args)==2:
+                data_cudaI2 = np.zeros((NBPHI_cuda,NBTHETA_cuda), dtype=float)
+                data_cudaI2 = dataI2[io1,:,:]
+                data_cudaQ2 = np.zeros((NBPHI_cuda,NBTHETA_cuda), dtype=float)
+                data_cudaQ2 = dataQ2[io1,:,:]
+                data_cudaU2 = np.zeros((NBPHI_cuda,NBTHETA_cuda), dtype=float)
+                data_cudaU2 = dataU2[io1,:,:]
+                data_cudaIP2 = np.sqrt(data_cudaQ2*data_cudaQ2 + data_cudaU2*data_cudaU2)
+                data_cudaPR2 = data_cudaIP2/data_cudaI2 * 100
+                data_cudaN2  = np.zeros((NL, NBPHI_cuda), dtype=float)
+                data_cudaN2  = 100./ np.sqrt(dataN2[io1,:,:])
     else:  
         data_cudaI = np.zeros((NBPHI_cuda, NBTHETA_cuda), dtype=float)
         data_cudaI = dataI[0:NBPHI_cuda,:]
@@ -534,18 +652,18 @@ def main():
         data_cudaN = np.zeros((NBPHI_cuda, NBTHETA_cuda), dtype=float)
         data_cudaN = 100./ np.sqrt(dataN[0:NBPHI_cuda,:])
 
-    if len(args) == 2 :
-      if NBPHI_cuda==NBPHI_cuda2 and NBTHETA_cuda==NBTHETA_cuda2 :
-        data_cudaI2 = np.zeros((NBPHI_cuda, NBTHETA_cuda), dtype=float)
-        data_cudaI2 = dataI2[0:NBPHI_cuda,:]
-        data_cudaQ2 = np.zeros((NBPHI_cuda, NBTHETA_cuda), dtype=float)
-        data_cudaQ2 = dataQ2[0:NBPHI_cuda,:]
-        data_cudaU2 = np.zeros((NBPHI_cuda, NBTHETA_cuda), dtype=float)
-        data_cudaU2 = dataU2[0:NBPHI_cuda,:]
-        data_cudaIP2 = np.sqrt(data_cudaQ2*data_cudaQ2 + data_cudaU2*data_cudaU2)
-        data_cudaPR2 = data_cudaIP2/data_cudaI2 * 100
-      else:
-        sys.stdout.write("Dimensions incompatibles entre "+path_cuda+"et " +path_cuda2 +"\n")
+        if len(args) == 2 :
+          if NBPHI_cuda==NBPHI_cuda2 and NBTHETA_cuda==NBTHETA_cuda2 :
+            data_cudaI2 = np.zeros((NBPHI_cuda, NBTHETA_cuda), dtype=float)
+            data_cudaI2 = dataI2[0:NBPHI_cuda,:]
+            data_cudaQ2 = np.zeros((NBPHI_cuda, NBTHETA_cuda), dtype=float)
+            data_cudaQ2 = dataQ2[0:NBPHI_cuda,:]
+            data_cudaU2 = np.zeros((NBPHI_cuda, NBTHETA_cuda), dtype=float)
+            data_cudaU2 = dataU2[0:NBPHI_cuda,:]
+            data_cudaIP2 = np.sqrt(data_cudaQ2*data_cudaQ2 + data_cudaU2*data_cudaU2)
+            data_cudaPR2 = data_cudaIP2/data_cudaI2 * 100
+          else:
+            sys.stdout.write("Dimensions incompatibles entre "+path_cuda+"et " +path_cuda2 +"\n")
        
 
     #---------------------------------------------------------
@@ -769,9 +887,13 @@ def main():
     else:
       VPR = np.linspace(0.,maxp,50)
       VPRt = np.linspace(0.,maxp,6)
-
-    VN = np.linspace(0.,maxe,50)
-    VNt = np.linspace(0.,maxe,6)
+    if (len(args)==2) | (options.diff==True):
+      VN = np.linspace(-maxe,maxe,50)
+      VNt = np.linspace(-maxe,maxe,6)
+    else:
+      VN = np.linspace(0.,maxe,50)
+      VNt = np.linspace(0.,maxe,6)
+        
 
     #---------------------------------------------------------
     #choix des tableaux a tracer
@@ -860,104 +982,140 @@ def main():
             rect = [121,0,0,122]
         iphi0 = -1
         
-
+        
+    if options.points == None :
+        I_txt = None
+        Q_txt = None
+        U_txt = None
+        IP_txt = None
+        PR_txt = None
+        
+    if options.list == None :
+        other = None
+        
+    if len(args)==1:
+        data_cudaI2=None
+        data_cudaQ2=None
+        data_cudaU2=None
+        data_cudaIP2=None
+        data_cudaPR2=None
+        data_cudaN2=None
+        
+        
+    # first quarter I
+        
+    XX,YY,ZZ,TITLE,opt = setXYZ(theta,phi,other,options,data_cudaI,data_cudaI2,SYM='I')       
+    lab=''
+    if options.QU==False :
+        lab='Reflectance'
+       
+    plot_2D_parameter(fig, rect[0], XX , YY, ZZ, VI, Vdatat=VIt,title=TITLE, iphi0=iphi0, sub=sub[0], options=opt, points=I_txt, label=lab) 
+                
 
     # first quarter I
-    if (len(args)==2) | (options.diff==True):
-        if options.rel==True :
-            plot_2D_parameter(fig, rect[0], theta , phi, (data_cudaI-data_cudaI2)/data_cudaI2*100, VI, Vdatat=VIt,title='(I1-I2)/I2[%]', iphi0=iphi0, sub=sub[0])
-        else :
-            plot_2D_parameter(fig, rect[0], theta , phi, data_cudaI-data_cudaI2, VI, Vdatat=VIt,title='I1-I2', iphi0=iphi0, sub=sub[0])
-    else:
-        if options.points != None : plot_2D_parameter(fig, rect[0], theta , phi, data_cudaI, VI,  Vdatat=VIt,title='I', iphi0=iphi0, sub=sub[0], points=I_txt)
-        else : 
-            if options.list == None :
-                 plot_2D_parameter(fig, rect[0], theta , phi, data_cudaI, VI,  Vdatat=VIt,title='I', iphi0=iphi0, sub=sub[0])
-            else : 
-                 if options.list[0]==0 : plot_2D_parameter(fig, rect[0], other, phi, data_cudaI.transpose(), VI,  Vdatat=VIt,title='I', iphi0=iphi0, sub=sub[0],options=options)
-                 if options.list[0]==1 : plot_2D_parameter(fig, rect[0], other, theta, data_cudaI.transpose(), VI,  Vdatat=VIt,title='I', iphi0=iphi0, sub=sub[0],options=options)
-                 if options.list[0]==2 : plot_2D_parameter(fig, rect[0], theta, phi, data_cudaI, VI,  Vdatat=VIt,title='I', iphi0=iphi0, sub=sub[0])
+#    if (len(args)==2) | (options.diff==True):
+#        if options.rel==True : plot_2D_parameter(fig, rect[0], theta , phi, (data_cudaI-data_cudaI2)/data_cudaI2*100, VI, Vdatat=VIt,title='(I1-I2)/I2[%]', iphi0=iphi0, sub=sub[0])
+#        else :
+#            if options.QU==True : plot_2D_parameter(fig, rect[0], theta , phi, data_cudaI-data_cudaI2, VI, Vdatat=VIt,title='I1-I2', iphi0=iphi0, sub=sub[0])
+#            else : plot_2D_parameter(fig, rect[0], theta , phi, data_cudaI-data_cudaI2, VI, Vdatat=VIt,title='I1-I2', label='Reflectance', iphi0=iphi0, sub=sub[0])
+#    else:
+#        if options.points != None : 
+#            if options.QU==True : plot_2D_parameter(fig, rect[0], theta , phi, data_cudaI, VI,  Vdatat=VIt,title='I', iphi0=iphi0, sub=sub[0], points=I_txt)
+#            else : plot_2D_parameter(fig, rect[0], theta , phi, data_cudaI, VI,  Vdatat=VIt,title='I', label='Reflectance',iphi0=iphi0, sub=sub[0], points=I_txt)
+#        else : 
+#            if options.list == None :
+#                if options.QU==True : plot_2D_parameter(fig, rect[0], theta , phi, data_cudaI, VI,  Vdatat=VIt,title='I', iphi0=iphi0, sub=sub[0])
+#                else: plot_2D_parameter(fig, rect[0], theta , phi, data_cudaI, VI,  Vdatat=VIt,title='I',label='Reflectance', iphi0=iphi0, sub=sub[0]) 
+#            else : 
+#                 if options.list[0]==0 : plot_2D_parameter(fig, rect[0], other, phi, data_cudaI.transpose(), VI,  Vdatat=VIt,title='I', iphi0=iphi0, sub=sub[0],options=options)
+#                 if options.list[0]==1 : plot_2D_parameter(fig, rect[0], other, theta, data_cudaI.transpose(), VI,  Vdatat=VIt,title='I', iphi0=iphi0, sub=sub[0],options=options)
+#                 if options.list[0]==2 : plot_2D_parameter(fig, rect[0], theta, phi, data_cudaI, VI,  Vdatat=VIt,title='I', iphi0=iphi0, sub=sub[0])
                  
                  
 
     if options.QU==True:
         # 2nd quarter Q
-        if (len(args)==2) | (options.diff==True):
-             if options.rel==True :
-                plot_2D_parameter(fig, rect[1], theta , phi, (data_cudaQ-data_cudaQ2)/data_cudaQ2*100, VQ, Vdatat=VQt,title='(Q1-Q2)/Q2[%]', iphi0=iphi0, sub=sub[1])
-             else :
-                plot_2D_parameter(fig, rect[1], theta , phi, data_cudaQ-data_cudaQ2, VQ,  Vdatat=VQt,title='Q1-Q2', iphi0=iphi0, sub=sub[1])
-        else:
-            if options.points != None : plot_2D_parameter(fig, rect[1], theta , phi, data_cudaQ,  VQ, Vdatat=VQt,  title='Q', iphi0=iphi0, sub=sub[1], points=Q_txt)
-            else :  
-                if options.list == None :
-                    plot_2D_parameter(fig, rect[1], theta , phi, data_cudaQ,  VQ, Vdatat=VQt,  title='Q', iphi0=iphi0, sub=sub[1])
-                else :
-                   if options.list[0]==0 : plot_2D_parameter(fig, rect[1], other, phi, data_cudaQ.transpose(), VQ,  Vdatat=VQt,title='Q', iphi0=iphi0, sub=sub[1],options=options)
-                   if options.list[0]==1 : plot_2D_parameter(fig, rect[1], other, theta, data_cudaQ.transpose(), VQ,  Vdatat=VQt,title='Q', iphi0=iphi0, sub=sub[1],options=options)
-                   if options.list[0]==2 : plot_2D_parameter(fig, rect[1], theta, phi, data_cudaQ, VQ,  Vdatat=VQt,title='Q', iphi0=iphi0, sub=sub[1])
-                            
+        XX,YY,ZZ,TITLE,opt = setXYZ(theta,phi,other,options,data_cudaQ,data_cudaQ2,SYM='Q')
+        lab=''
+        plot_2D_parameter(fig, rect[1], XX , YY, ZZ, VQ, Vdatat=VQt,title=TITLE, iphi0=iphi0, sub=sub[1], options=opt, points=Q_txt, label=lab)
+            
+#        if (len(args)==2) | (options.diff==True):
+#             if options.rel==True : plot_2D_parameter(fig, rect[1], theta , phi, (data_cudaQ-data_cudaQ2)/data_cudaQ2*100, VQ, Vdatat=VQt,title='(Q1-Q2)/Q2[%]', iphi0=iphi0, sub=sub[1])
+#             else : plot_2D_parameter(fig, rect[1], theta , phi, data_cudaQ-data_cudaQ2, VQ,  Vdatat=VQt,title='Q1-Q2', iphi0=iphi0, sub=sub[1])
+#        else:
+#            if options.points != None : plot_2D_parameter(fig, rect[1], theta , phi, data_cudaQ,  VQ, Vdatat=VQt,  title='Q', iphi0=iphi0, sub=sub[1], points=Q_txt)
+#            else :  
+#                if options.list == None : plot_2D_parameter(fig, rect[1], theta , phi, data_cudaQ,  VQ, Vdatat=VQt,  title='Q', iphi0=iphi0, sub=sub[1])
+#                else :
+#                   if options.list[0]==0 : plot_2D_parameter(fig, rect[1], other, phi, data_cudaQ.transpose(), VQ,  Vdatat=VQt,title='Q', iphi0=iphi0, sub=sub[1],options=options)
+#                   if options.list[0]==1 : plot_2D_parameter(fig, rect[1], other, theta, data_cudaQ.transpose(), VQ,  Vdatat=VQt,title='Q', iphi0=iphi0, sub=sub[1],options=options)
+#                   if options.list[0]==2 : plot_2D_parameter(fig, rect[1], theta, phi, data_cudaQ, VQ,  Vdatat=VQt,title='Q', iphi0=iphi0, sub=sub[1])
+#                            
                             
     
         # 3rd quarter U
-        if (len(args)==2) | (options.diff==True):
-             if options.rel==True :
-                plot_2D_parameter(fig, rect[2], theta , phi, (data_cudaU-data_cudaU2)/data_cudaU2*100, VU, Vdatat=VUt,title='(U1-U2)/U2[%]', iphi0=iphi0, sub=sub[2])
-             else :
-                plot_2D_parameter(fig, rect[2], theta , phi, data_cudaU-data_cudaU2, VU,  Vdatat=VUt,title='U1-U2', label='Reflectance', iphi0=iphi0, sub=sub[2])
-        else:
-            if options.points != None : plot_2D_parameter(fig, rect[2], theta , phi, data_cudaU,  VU, Vdatat=VUt,  title='U', label='Reflectance', iphi0=iphi0, sub=sub[2], points=U_txt)
-            else : 
-                if options.list == None :
-                    plot_2D_parameter(fig, rect[2], theta , phi, data_cudaU,  VU, Vdatat=VUt,  title='U', label='Reflectance', iphi0=iphi0, sub=sub[2])
-                else :
-                    if options.list[0]==0 : plot_2D_parameter(fig, rect[2], other, phi, data_cudaU.transpose(), VU,  Vdatat=VUt,title='U', iphi0=iphi0, sub=sub[2],options=options)
-                    if options.list[0]==1 : plot_2D_parameter(fig, rect[2], other, theta, data_cudaU.transpose(), VU,  Vdatat=VUt,title='U', iphi0=iphi0, sub=sub[2],options=options)
-                    if options.list[0]==2 : plot_2D_parameter(fig, rect[2], theta, phi, data_cudaU, VU,  Vdatat=VUt,title='U', iphi0=iphi0, sub=sub[2])
+        XX,YY,ZZ,TITLE,opt = setXYZ(theta,phi,other,options,data_cudaU,data_cudaU2,SYM='U')
+        lab='Reflectance'
+        plot_2D_parameter(fig, rect[2], XX , YY, ZZ, VU, Vdatat=VUt,title=TITLE, iphi0=iphi0, sub=sub[2], options=opt, points=U_txt, label=lab)
+        
+#        if (len(args)==2) | (options.diff==True):
+#             if options.rel==True : plot_2D_parameter(fig, rect[2], theta , phi, (data_cudaU-data_cudaU2)/data_cudaU2*100, VU, Vdatat=VUt,title='(U1-U2)/U2[%]', iphi0=iphi0, sub=sub[2])
+#             else : plot_2D_parameter(fig, rect[2], theta , phi, data_cudaU-data_cudaU2, VU,  Vdatat=VUt,title='U1-U2', label='Reflectance', iphi0=iphi0, sub=sub[2])
+#        else:
+#            if options.points != None : plot_2D_parameter(fig, rect[2], theta , phi, data_cudaU,  VU, Vdatat=VUt,  title='U', label='Reflectance', iphi0=iphi0, sub=sub[2], points=U_txt)
+#            else : 
+#                if options.list == None : plot_2D_parameter(fig, rect[2], theta , phi, data_cudaU,  VU, Vdatat=VUt,  title='U', label='Reflectance', iphi0=iphi0, sub=sub[2])
+#                else :
+#                    if options.list[0]==0 : plot_2D_parameter(fig, rect[2], other, phi, data_cudaU.transpose(), VU,  Vdatat=VUt,title='U', iphi0=iphi0, sub=sub[2],options=options)
+#                    if options.list[0]==1 : plot_2D_parameter(fig, rect[2], other, theta, data_cudaU.transpose(), VU,  Vdatat=VUt,title='U', iphi0=iphi0, sub=sub[2],options=options)
+#                    if options.list[0]==2 : plot_2D_parameter(fig, rect[2], theta, phi, data_cudaU, VU,  Vdatat=VUt,title='U', iphi0=iphi0, sub=sub[2])
 
     # 4th quarter
-    # Polarization ratio
+    # Polarization ratio   
     if (options.percent >= 0.) and (options.error == None):
-      if (len(args)==2) | (options.diff==True):
-         if options.rel==True :
-            plot_2D_parameter(fig, rect[3], theta , phi, (data_cudaPR-data_cudaPR2)/data_cudaPR2*100, VPR, Vdatat=VPRt,title='(P1-P2)/P2[%]', iphi0=iphi0, sub=sub[3])
-         else :
-            plot_2D_parameter(fig, rect[3], theta , phi, data_cudaPR-data_cudaPR2, VPR,  Vdatat=VPRt,title='P1-P2[%]', label='Polarization Ratio', iphi0=iphi0, sub=sub[3])
-      else:
-         if options.points != None : plot_2D_parameter(fig, rect[3], theta , phi, data_cudaPR, VPR,  Vdatat=VPRt,title='P[%]', label='Polarization Ratio', iphi0=iphi0, sub=sub[3], points=PR_txt)
-         else : 
-             if options.list == None :
-                 plot_2D_parameter(fig, rect[3], theta , phi, data_cudaPR, VPR,  Vdatat=VPRt,title='P[%]', label='Polarization Ratio', iphi0=iphi0, sub=sub[3])
-             else :
-                 if options.list[0]==0 : plot_2D_parameter(fig, rect[3], other, phi, data_cudaPR.transpose(), VPR,  Vdatat=VPRt,title='P[%]', label='Polarization Ratio',iphi0=iphi0, sub=sub[3],options=options)
-                 if options.list[0]==1 : plot_2D_parameter(fig, rect[3], other, theta, data_cudaPR.transpose(), VPR,  Vdatat=VPRt,title='P[%]',label='Polarization Ratio', iphi0=iphi0, sub=sub[3],options=options)
-                 if options.list[0]==2 : plot_2D_parameter(fig, rect[3], theta, phi, data_cudaPR, VPR,  Vdatat=VPRt,title='P[%]',label='Polarization Ratio', iphi0=iphi0, sub=sub[3])
-
-    # or Error
+        XX,YY,ZZ,TITLE,opt = setXYZ(theta,phi,other,options,data_cudaPR,data_cudaPR2,SYM='P')
+        lab='Polarization Ratio'
+        plot_2D_parameter(fig, rect[3], XX , YY, ZZ, VPR, Vdatat=VPRt,title=TITLE, iphi0=iphi0, sub=sub[3], options=opt, points=PR_txt, label=lab) 
+        
+#      if (len(args)==2) | (options.diff==True):
+#         if options.rel==True : plot_2D_parameter(fig, rect[3], theta , phi, (data_cudaPR-data_cudaPR2)/data_cudaPR2*100, VPR, Vdatat=VPRt,title='(P1-P2)/P2[%]', iphi0=iphi0, sub=sub[3])
+#         else : plot_2D_parameter(fig, rect[3], theta , phi, data_cudaPR-data_cudaPR2, VPR,  Vdatat=VPRt,title='P1-P2[%]', label='Polarization Ratio', iphi0=iphi0, sub=sub[3])
+#      else:
+#         if options.points != None : plot_2D_parameter(fig, rect[3], theta , phi, data_cudaPR, VPR,  Vdatat=VPRt,title='P[%]', label='Polarization Ratio', iphi0=iphi0, sub=sub[3], points=PR_txt)
+#         else : 
+#             if options.list == None : plot_2D_parameter(fig, rect[3], theta , phi, data_cudaPR, VPR,  Vdatat=VPRt,title='P[%]', label='Polarization Ratio', iphi0=iphi0, sub=sub[3])
+#             else :
+#                 if options.list[0]==0 : plot_2D_parameter(fig, rect[3], other, phi, data_cudaPR.transpose(), VPR,  Vdatat=VPRt,title='P[%]', label='Polarization Ratio',iphi0=iphi0, sub=sub[3],options=options)
+#                 if options.list[0]==1 : plot_2D_parameter(fig, rect[3], other, theta, data_cudaPR.transpose(), VPR,  Vdatat=VPRt,title='P[%]',label='Polarization Ratio', iphi0=iphi0, sub=sub[3],options=options)
+#                 if options.list[0]==2 : plot_2D_parameter(fig, rect[3], theta, phi, data_cudaPR, VPR,  Vdatat=VPRt,title='P[%]',label='Polarization Ratio', iphi0=iphi0, sub=sub[3])
+#
+#    # or Error
     if options.percent == None and options.error >= 0.:
-         if options.list == None :
-             plot_2D_parameter(fig, rect[3], theta , phi, data_cudaN, VN,  Vdatat=VNt,title=r"$\Delta$ [%]", label='Relative Error', iphi0=iphi0, sub=sub[3])
-         else :
-             if options.list[0]==0 : plot_2D_parameter(fig, rect[3], other, phi, data_cudaN.transpose(), VN,  Vdatat=VNt,title=r"$\Delta$ [%]", label='Relative Error',iphi0=iphi0, sub=sub[3],options=options)
-             if options.list[0]==1 : plot_2D_parameter(fig, rect[3], other, theta, data_cudaN.transpose(), VN,  Vdatat=VNt,title=r"$\Delta$ [%]",label='Relative Error', iphi0=iphi0, sub=sub[3],options=options)
-             if options.list[0]==2 : plot_2D_parameter(fig, rect[3], theta, phi, data_cudaN, VN,  Vdatat=VNt,title=r"$\Delta$ [%]",label='Relative Error', iphi0=iphi0, sub=sub[3])
-
-    # or Polarized reflectance
+        XX,YY,ZZ,TITLE,opt = setXYZ(theta,phi,other,options,data_cudaN,data_cudaN2,SYM=r"$\Delta$")
+        lab='Relative Error'
+        plot_2D_parameter(fig, rect[3], XX , YY, ZZ, VN, Vdatat=VNt,title=TITLE, iphi0=iphi0, sub=sub[3], options=opt, points=None, label=lab)
+#         if options.list == None : plot_2D_parameter(fig, rect[3], theta , phi, data_cudaN, VN,  Vdatat=VNt,title=r"$\Delta$ [%]", label='Relative Error', iphi0=iphi0, sub=sub[3])
+#         else :
+#             if options.list[0]==0 : plot_2D_parameter(fig, rect[3], other, phi, data_cudaN.transpose(), VN,  Vdatat=VNt,title=r"$\Delta$ [%]", label='Relative Error',iphi0=iphi0, sub=sub[3],options=options)
+#             if options.list[0]==1 : plot_2D_parameter(fig, rect[3], other, theta, data_cudaN.transpose(), VN,  Vdatat=VNt,title=r"$\Delta$ [%]",label='Relative Error', iphi0=iphi0, sub=sub[3],options=options)
+#             if options.list[0]==2 : plot_2D_parameter(fig, rect[3], theta, phi, data_cudaN, VN,  Vdatat=VNt,title=r"$\Delta$ [%]",label='Relative Error', iphi0=iphi0, sub=sub[3])
+#
+#    # or Polarized reflectance
     if options.percent == None  and options.error == None:
-      if (len(args)==2) | (options.diff==True):
-         if options.rel==True :
-            plot_2D_parameter(fig, rect[3], theta , phi, (data_cudaIP-data_cudaIP2)/data_cudaIP2*100, VIP, Vdatat=VIPt,title='(IP1-IP2)/IP2[%]', iphi0=iphi0, sub=sub[3])
-         else :
-            plot_2D_parameter(fig, rect[3], theta , phi, data_cudaIP-data_cudaIP2, VIP,  Vdatat=VIPt,title='IP1-IP2', label='Polarized Reflectance', iphi0=iphi0, sub=sub[3])
-      else:
-         if options.points != None : plot_2D_parameter(fig, rect[3], theta , phi, data_cudaIP, VIP, Vdatat=VIPt,title='IP', label='Polarized Reflectance', iphi0=iphi0, sub=sub[3], points=IP_txt)
-         else : 
-             if options.list == None :
-                 plot_2D_parameter(fig, rect[3], theta , phi, data_cudaIP, VIP, Vdatat=VIPt,title='IP', label='Polarized Reflectance', iphi0=iphi0, sub=sub[3])
-             else :
-                 if options.list[0]==0 : plot_2D_parameter(fig, rect[3], other, phi, data_cudaIP.transpose(), VIP,  Vdatat=VIPt,title='IP', label='Polarized Reflectance',iphi0=iphi0, sub=sub[3],options=options)
-                 if options.list[0]==1 : plot_2D_parameter(fig, rect[3], other, theta, data_cudaIP.transpose(), VIP,  Vdatat=VIPt,title='IP',label='Polarized Reflectance', iphi0=iphi0, sub=sub[3],options=options)
-                 if options.list[0]==2 : plot_2D_parameter(fig, rect[3], theta, phi, data_cudaIP, VIP,  Vdatat=VIPt,title='IP',label='Polarized Reflectance', iphi0=iphi0, sub=sub[3])
+        XX,YY,ZZ,TITLE,opt = setXYZ(theta,phi,other,options,data_cudaIP,data_cudaIP2,SYM='IP')
+        lab='Polarized Reflectance'
+        plot_2D_parameter(fig, rect[3], XX , YY, ZZ, VIP, Vdatat=VIPt,title=TITLE, iphi0=iphi0, sub=sub[3], options=opt, points=IP_txt, label=lab)
+#      if (len(args)==2) | (options.diff==True):
+#         if options.rel==True : plot_2D_parameter(fig, rect[3], theta , phi, (data_cudaIP-data_cudaIP2)/data_cudaIP2*100, VIP, Vdatat=VIPt,title='(IP1-IP2)/IP2[%]', iphi0=iphi0, sub=sub[3])
+#         else : plot_2D_parameter(fig, rect[3], theta , phi, data_cudaIP-data_cudaIP2, VIP,  Vdatat=VIPt,title='IP1-IP2', label='Polarized Reflectance', iphi0=iphi0, sub=sub[3])
+#      else:
+#         if options.points != None : plot_2D_parameter(fig, rect[3], theta , phi, data_cudaIP, VIP, Vdatat=VIPt,title='IP', label='Polarized Reflectance', iphi0=iphi0, sub=sub[3], points=IP_txt)
+#         else : 
+#             if options.list == None : plot_2D_parameter(fig, rect[3], theta , phi, data_cudaIP, VIP, Vdatat=VIPt,title='IP', label='Polarized Reflectance', iphi0=iphi0, sub=sub[3])
+#             else :
+#                 if options.list[0]==0 : plot_2D_parameter(fig, rect[3], other, phi, data_cudaIP.transpose(), VIP,  Vdatat=VIPt,title='IP', label='Polarized Reflectance',iphi0=iphi0, sub=sub[3],options=options)
+#                 if options.list[0]==1 : plot_2D_parameter(fig, rect[3], other, theta, data_cudaIP.transpose(), VIP,  Vdatat=VIPt,title='IP',label='Polarized Reflectance', iphi0=iphi0, sub=sub[3],options=options)
+#                 if options.list[0]==2 : plot_2D_parameter(fig, rect[3], theta, phi, data_cudaIP, VIP,  Vdatat=VIPt,title='IP',label='Polarized Reflectance', iphi0=iphi0, sub=sub[3])
 
     if options.filename == None:
         show()
