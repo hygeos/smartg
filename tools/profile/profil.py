@@ -217,7 +217,7 @@ class Gas(object):
         return self.calcColumn() / 2.69e16 * self.scalingfact
         
     def regrid(self,znew):
-        f=interp1d(self.z,self.dens,kind='quadratic')
+        f=interp1d(self.z,self.dens,kind='linear')
         self.dens=f(znew)
         self.z=znew
            
@@ -887,14 +887,15 @@ if __name__ == '__main__':
                 dest='opac',
                 type='string',
                 help='name of the aerosol model from OPAC\n' \
-                      +'    antarctic,continental_average,continetal_clean,continental_polluted\n'  \
+                      +'    antarctic,continental_average,continental_clean,continental_polluted\n'  \
                       +'    desert, desert_nonspherical,maritime_clean,maritime_polluted,maritime_tropical,urban\n' \
                       +'    and eventually a user defined aerosol model in the tools/profile/standard_aerosol_files/ directory\n'
                 )
     parser.add_option('-N', '--NSCAER',
                 dest='NSCAER',
                 type='int',
-                help='number of scattering angles of the aerosol phase matrix, if options P is chosen\n'
+                default=1800,
+                help='number of scattering angles of the aerosol phase matrix, if options P is chosen, default:1800\n'
                 )
     parser.add_option('-p','--phase',
                 dest='phase',
