@@ -320,7 +320,10 @@ void initConstantesHost(int argc, char** argv)
 	chercheConstante( parametres, "PATHDIFFAER", PATHDIFFAER );
 	
 	chercheConstante( parametres, "PATHPROFILATM", PATHPROFILATM );
-	
+
+	chercheConstante( parametres, "DEVICE", s);
+    DEVICE = atoi(s);
+
 	fclose( parametres );
 }
 

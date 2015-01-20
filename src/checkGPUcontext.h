@@ -29,14 +29,10 @@ static  int nGpuArchCoresPerSM[] = { -1, 8, 32 };
 * verifie la presence d'un environnement GPU conforme
 * le cas echeant, affiche les attributs de la carte
 */
-extern CrMCCUDA CheckGPUContext();
+int CheckGPUContext(int);
 
+int select_device(int);
 
-/* getGPUErrorString
-* recuperation du message d'erreur GPU,
-* la methode cudaGetErrorString est "enroulee" ici
-* (getGPUErrorString pourrait etre enrichie)
-*/
-extern const char* GetGPUErrorString( cudaError_t CodeRetourGPU );
+void message_end(int);
 
 #endif

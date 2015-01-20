@@ -141,6 +141,7 @@ extern int XBLOCK;
 extern int YBLOCK;
 extern int XGRID;
 extern int YGRID;
+extern int DEVICE;
 extern int NBTHETA;
 extern int NBPHI;
 extern int PROFIL;

@@ -15,6 +15,7 @@ int XBLOCK; 	//Longueur du bloc de threads
 int YBLOCK; 	//Hauteur du block de threads
 int XGRID; 		//Longueur de la grid de blocks
 int YGRID; 		//Hauteur de la grid de blocks
+int DEVICE;     //numéro du device utilisé
 int NBTHETA; 	//Nombre de cases du tableau final pour theta (0..PI/2)
 int NBPHI; 		//Nombre de cases du tableau final pour phi (0..2*PI)
 int DIOPTRE; 	//Type de dioptre (0=plan, 1=agite)

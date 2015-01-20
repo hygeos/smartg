@@ -68,11 +68,16 @@ int main (int argc, char *argv[])
         StartProcessing(perfInitG);
 #endif
 
+	/** Initialisation des constantes du host (en partie recuperees dans le fichier Parametres.txt) **/
+	initConstantesHost(argc, argv);
+	
+
 	/** Initialisation de la carte graphique **/
 	cudaError_t cudaErreur;	// Permet de vérifier les allocations mémoire
 	
         // Verification de l'environnement GPU
-        if ( CheckGPUContext() != MCCUDA_OK ){
+        DEVICE = CheckGPUContext(DEVICE);
+        if (DEVICE < 0){
             printf("\n!!MCCUDA Erreur!! main : erreur au sein de CheckGPUContext()\n");
             exit(1);
         }
@@ -89,10 +94,6 @@ int main (int argc, char *argv[])
 		printf("#--------------------#\n");
 		exit(1);
 	}
-	
-	/** Initialisation des constantes du host (en partie recuperees dans le fichier Parametres.txt) **/
-	initConstantesHost(argc, argv);
-	
 	
 	/** Vérification que le code compilé est compatible avec la simulation demandée **/
 	#ifndef FLAGOCEAN
@@ -509,6 +510,8 @@ cudaMemcpyDeviceToHost);
         DeleteSPerf(perfFree);
         printf("\n");
 #endif
+
+    message_end(DEVICE);
 
         //
         cudaDeviceReset();

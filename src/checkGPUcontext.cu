@@ -24,8 +24,8 @@
 /* PrintDevicesProperties
 * affiche les proprietes des cartes installees
 */
+#ifdef DEBUG
 static CrMCCUDA PrintDevicesProperties(){
-    CrMCCUDA    CodeRetour      = MCCUDA_KO;
     cudaError_t CodeRetourGPU;
 
     int dCount;
@@ -36,10 +36,9 @@ static CrMCCUDA PrintDevicesProperties(){
     CodeRetourGPU = cudaGetDeviceCount( &dCount );
     if ( CodeRetourGPU != cudaSuccess ){
         #ifdef DEBUG
-            printf("!!MCCUDA Erreur!! >> checkGPUcontext::PrintDevicesProperties() => erreur cudaGetDeviceCount = %s", GetGPUErrorString(CodeRetourGPU));
+            printf("!!MCCUDA Erreur!! >> checkGPUcontext::PrintDevicesProperties() => erreur cudaGetDeviceCount = %s", cudaGetErrorString(CodeRetourGPU));
         #endif
-        CodeRetour = MCCUDA_KO;
-        goto ERREUR;
+        return MCCUDA_KO;
     }
 
     if (dCount == 1){
@@ -47,17 +46,15 @@ static CrMCCUDA PrintDevicesProperties(){
         CodeRetourGPU = cudaGetDeviceProperties( &deviceProp, 0 );
         if ( CodeRetourGPU != cudaSuccess ){
             #ifdef DEBUG
-                printf("!!MCCUDA Erreur!! >> checkGPUcontext::PrintDevicesProperties() => erreur cudaGetDeviceProperties = %s", GetGPUErrorString(CodeRetourGPU));
+                printf("!!MCCUDA Erreur!! >> checkGPUcontext::PrintDevicesProperties() => erreur cudaGetDeviceProperties = %s", cudaGetErrorString(CodeRetourGPU));
             #endif
-            CodeRetour = MCCUDA_KO;
-            goto ERREUR;
+            return MCCUDA_KO;
         }
         if (deviceProp.major == 9999){
             #ifdef DEBUG
                 printf("!!MCCUDA Erreur!! >> checkGPUcontext::PrintDevicesProperties() => Pas de carte graphique disponible (seul le mode emulation est possible)");
             #endif
-            CodeRetour = MCCUDA_ENVIRONNEMENT_GPU_NON_COMPATIBLE;
-            goto ERREUR;
+            return MCCUDA_ENVIRONNEMENT_GPU_NON_COMPATIBLE;
         }
     }
 
@@ -67,10 +64,9 @@ static CrMCCUDA PrintDevicesProperties(){
         CodeRetourGPU = cudaGetDeviceProperties( &deviceProp, device );
         if ( CodeRetourGPU != cudaSuccess ){
             #ifdef DEBUG
-                printf("!!MCCUDA Erreur!! >> checkGPUcontext::PrintDevicesProperties() => erreur cudaGetDeviceProperties = %s", GetGPUErrorString(CodeRetourGPU));
+                printf("!!MCCUDA Erreur!! >> checkGPUcontext::PrintDevicesProperties() => erreur cudaGetDeviceProperties = %s", cudaGetErrorString(CodeRetourGPU));
             #endif
-            CodeRetour = MCCUDA_KO;
-            goto ERREUR;
+            return MCCUDA_KO;
         }
 
         printf( "\n%d - name:                    %s\n" ,device ,deviceProp.name );
@@ -121,10 +117,9 @@ static CrMCCUDA PrintDevicesProperties(){
     }
     printf("\n\n\n");
 
-    CodeRetour = MCCUDA_OK;
-    ERREUR:
-            return CodeRetour;
+    return MCCUDA_OK;
 }
+#endif
 
 
 /**********************************************************
@@ -134,129 +129,104 @@ static CrMCCUDA PrintDevicesProperties(){
 /* CheckGPUContext
 * verifie la presence d'un environnement GPU conforme
 * le cas echeant, affiche les attributs de la carte
+* success: return id of attributed device
+* failure: returns -1
 */
-extern CrMCCUDA CheckGPUContext(){
-    CrMCCUDA    CodeRetour      = MCCUDA_KO;
+int CheckGPUContext(int device_selected){
+    
+#ifdef DEBUG
+    PrintDevicesProperties();
+#endif
+
     cudaError_t CodeRetourGPU;
 
     int     deviceCount =   0;
     int     device      =   0;
-    struct  cudaDeviceProp properties;
 
     // Verifie qu'aucune erreur n'est anterieure
     CodeRetourGPU = cudaGetLastError();
     if ( CodeRetourGPU != cudaSuccess ){
         #ifdef DEBUG
-            printf("!!MCCUDA Erreur!! >> checkGPUcontext::CheckGPUContext() => erreur GPU anterieure a la procedure = %s", GetGPUErrorString(CodeRetourGPU));
+            printf("!!MCCUDA Erreur!! >> checkGPUcontext::CheckGPUContext() => erreur GPU anterieure a la procedure = %s", cudaGetErrorString(CodeRetourGPU));
         #endif
-        CodeRetour = MCCUDA_KO;
-        goto ERREUR;
+        return -1;
     }
 
     // Verification de la disponibilite de l'environnement GPU
     CodeRetourGPU = cudaGetDeviceCount(&deviceCount);
     if ( CodeRetourGPU != cudaSuccess ){
         #ifdef DEBUG
-            printf("!!MCCUDA Erreur!! >> checkGPUcontext::CheckGPUContext() => erreur cudaGetDeviceCount = %s", GetGPUErrorString(CodeRetourGPU));
+            printf("!!MCCUDA Erreur!! >> checkGPUcontext::CheckGPUContext() => erreur cudaGetDeviceCount = %s", cudaGetErrorString(CodeRetourGPU));
         #endif
-        CodeRetour = MCCUDA_KO;
-        goto ERREUR;
-    }
-    if (deviceCount == 1){
-        //dans ce cas soit il n'y a qu'une seule carte disponible soit il n'y en a aucune (mode emulation)
-        CodeRetourGPU = cudaGetDeviceProperties(&properties, 0);
-        if ( CodeRetourGPU != cudaSuccess ){
-            #ifdef DEBUG
-                printf("!!MCCUDA Erreur!! >> checkGPUcontext::CheckGPUContext() => erreur cudaGetDeviceProperties = %s", GetGPUErrorString(CodeRetourGPU));
-            #endif
-            CodeRetour = MCCUDA_KO;
-            goto ERREUR;
-        }
-        if ( properties.major == 9999 ){
-            //mode emulation seulement
-            #ifdef DEBUG
-                printf("!!MCCUDA Erreur!! >> checkGPUcontext::CheckGPUContext() => mode emulation non accepte");
-            #endif
-            CodeRetour = MCCUDA_ENVIRONNEMENT_GPU_NON_COMPATIBLE;
-            goto ERREUR;
-        }
-        else{
-            #ifdef DEBUG
-            CodeRetour = PrintDevicesProperties();
-            if ( CodeRetour != MCCUDA_OK ){
-                goto ERREUR;
-            }
-            #endif
-        }
-    }
-    else{
-        //affiche les proprietes des devices installes
-        #ifdef DEBUG
-        CodeRetour = PrintDevicesProperties();
-        if ( CodeRetour != MCCUDA_OK ){
-            return CodeRetour;
-        }
-        #endif
+        return -1;
     }
 
-    // Association manuelle MCCUDA avec un contexte GPU
-    // -> si plusieurs devives sont presents, et le device #0 n'est pas compatible
-    // on tente "d'accrocher" le device suivant
-    cudaGetDeviceCount( &deviceCount );
+    if (device_selected >= 0) {
+        // we want a specific device
+        if (select_device(device_selected)) {
+            return -1;
+        }
 
-    for(device=0;device<deviceCount;device++){
-        //On force la creation du contexte ce device
-        CodeRetourGPU = cudaSetDevice(device);
+        return device_selected;
 
-        //On teste la validite du context
-        CodeRetourGPU = cudaFree(0);
-
-        //Si le test reussit: on a un device valide
-        if (CodeRetourGPU == cudaSuccess){
-            //On recupere les  proprietes du device
-            CodeRetourGPU = cudaGetDeviceProperties( &properties, device );
-
-            //on verifie qu'on a pas un device en mode emu
-            if( (properties.major != 9999 ) ){
-                //on initialise tout et on return
-                // => si les caracteristiques du device devaient etre recuperees dans une structure,
-                //    il faudrait le faire ici
-                CodeRetour = MCCUDA_OK;
-                goto QUITTER;
+    } else {
+        printf("Selecting device...\n");
+        // select the first available device
+        for (device=0;device<deviceCount;device++) {
+            if (select_device(device)) {
+                continue;
+            } else {
+                break;
             }
         }
-        //Sinon on libère le contexte avant de boucler
-        else{
-            cudaDeviceReset();
-        }
-    }
-    //si on sort ici, c'est qu'on a pas reussi a initialiser un device
-    //en effet, le seul test effectue dans la boucle a ce jour ( (deviceProp.major != 9999) )
-    //pourrait etre enrichi (test de la double precision, test du nombre de coeurs etc.), aussi,
-    //les cartes "valides" pourraient ne pas resister a ces tests.
-    #ifdef DEBUG
-    printf("!!MCCUDA Erreur!! >> checkGPUcontext::CheckGPUContext() : Impossible d'initialiser un device CUDA valide :\n");
-    if(CodeRetourGPU != cudaSuccess){
-        printf("!!MCCUDA Erreur!! >> checkGPUcontext::CheckGPUContext() => cudaLastError    = %s\n", cudaGetErrorString(CodeRetourGPU));
-    }else{
-        printf("!!MCCUDA Erreur!! >> checkGPUcontext::CheckGPUContext() => (des gpus ont ete trouves mais aucun n'est valide, les criteres de selections ne sont pas passes avec succes)\n");
-    }
-    #endif
-    CodeRetour = MCCUDA_ENVIRONNEMENT_GPU_NON_COMPATIBLE;
-    goto ERREUR;
 
-    ERREUR:
-            return CodeRetour;
-    QUITTER:
-            return CodeRetour;
+        return device;
+    }
 }
 
-/* getGPUErrorString
-* recuperation du message d'erreur GPU,
-* la methode cudaGetErrorString est "enroulee" ici
-* (getGPUErrorString pourrait etre enrichie)
-*/
-extern const char* GetGPUErrorString( cudaError_t CodeRetourGPU )
-{
-    return cudaGetErrorString(CodeRetourGPU);
+
+// switch to a device
+// return 0 on success, 1 on failure
+int select_device(int device) {
+    struct  cudaDeviceProp properties;
+
+    if (cudaGetDeviceProperties(&properties, device)) {
+        printf("Error in cudaGetDeviceProperties (device %d)\n", device);
+        cudaDeviceReset();
+        return 1;
+    }
+    printf("Device %d, '%s' ", device, properties.name);
+    if( properties.major == 9999  ) {
+        printf("[incompatible, emulation mode]\n");
+        return 1;
+    }
+    if (cudaSetDevice(device) != cudaSuccess) {
+        printf("Error in cudaSetDevice (device %d)\n", device);
+        cudaDeviceReset();
+        return 1;
+    }
+    if (cudaFree(0) != cudaSuccess) {
+        printf("[busy]\n");
+        cudaDeviceReset();
+        return 1;
+    }
+
+    printf("[OK]\n");
+
+    return 0;
+}
+
+// display which device has been used
+void message_end(int device) {
+
+    struct cudaDeviceProp deviceProp;
+
+    if (cudaGetDeviceProperties( &deviceProp, device) == cudaSuccess) {
+
+        printf("Done (used device %d, '%s')", device, deviceProp.name);
+
+    } else {
+        printf("Done (used device %d)", device);
+
+    }
 }

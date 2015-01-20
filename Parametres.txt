@@ -1,6 +1,6 @@
 
 # Nombre de photons a lancer (unsigned long long) (limite par le tableau du poids des photons en unsigned long long)
-NBPHOTONS = 1e7
+NBPHOTONS = 1e11
 
 # Angle zenithal de visée en degrés (float)
 THVDEG = 60.0
@@ -164,3 +164,5 @@ YGRID = 1
 # Une valeur de 5000 semble satisfaisante
 NBLOOP = 5000 
         
+# device selection (-1 to select the 1st available device)
+DEVICE  -1
