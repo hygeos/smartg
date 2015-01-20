@@ -20,7 +20,9 @@
 
 #include <stdio.h>
 #include <mfhdf.h>
+#if defined(RANDCUDA) || defined (RANDCURANDSOBOL32) || defined (RANDCURANDSCRAMBLEDSOBOL32)
 #include <curand_kernel.h>
+#endif
 
 #include <stdlib.h>
 #include <math.h>

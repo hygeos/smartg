@@ -1,5 +1,4 @@
-# CUDA_HOME=/opt/cuda42/cuda/
-CUDA_HOME=/opt/cuda50/
+CUDA_HOME=/opt/cuda65/
 CUDA_BIN=${CUDA_HOME}/bin/
 CUDA_LIB=${CUDA_HOME}/lib64/
 CUDA_INC=${CUDA_HOME}/include/
