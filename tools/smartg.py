@@ -1,4 +1,8 @@
-# encoding:utf-8
+#!/usr/bin/env python
+# encoding: utf-8
+
+
+
 import subprocess
 import sys
 sys.path.append("profile")
@@ -293,55 +297,33 @@ class Iop(object):
     def run(self,options):
         self.atotlist,self.btotlist,self.namelist = iop(options)
         self.NSCOCE=options.NSCOCE
-        
-class Options():
+
+class Options(object):
     def  __init__(self):
-        self.dict={'geo':'pp','aot':0.,'phase':False,'grid':None,'lat':45.,'w':550.,'noabs':False,'o3':None,'rep':None,'channel':None,\
-                'SPM':1.,'NSCAER':72001,'NSCOCE':72001,'ang_trunc':5.,'gamma':0.5,'alpha':1.,'nbp':1.15,\
-                'opac':None,'wref':550.,'Ha':1.}
-        self.geo=self.dict["geo"]
-        self.aot=self.dict["aot"]
-        self.phase=self.dict["phase"]
-        self.grid=self.dict["grid"]
-        self.lat=self.dict["lat"]
-        self.w=self.dict["w"]
-        self.noabs=self.dict["noabs"]
-        self.o3=self.dict["o3"]
-        self.rep=self.dict["rep"]
-        self.channel=self.dict["channel"]
-        self.SPM=self.dict["SPM"]
-        self.NSCAER=self.dict["NSCAER"]
-        self.NSCOCE=self.dict["NSCOCE"]
-        self.ang_trunc=self.dict["ang_trunc"]
-        self.gamma=self.dict["gamma"]
-        self.alpha=self.dict["alpha"]
-        self.nbp=self.dict["nbp"]
-        self.opac=self.dict["opac"]
-        self.wref=self.dict["wref"]
-        self.Ha=self.dict["Ha"]
-        
+        # default options
+        self.__dict__ = {
+                'geo':'pp',
+                'aot':0.,
+                'phase':False,
+                'grid':None,
+                'lat':45.,
+                'w':550.,
+                'noabs':False,
+                'o3':None,
+                'rep':None,
+                'channel':None,
+                'SPM':1.,
+                'NSCAER':72001,
+                'NSCOCE':72001,
+                'ang_trunc':5.,
+                'gamma':0.5,
+                'alpha':1.,
+                'nbp':1.15,
+                'opac':None,
+                'wref':550.,
+                'Ha':1.}
     def setOptions(self,**kwargs):
-        self.dict.update(kwargs)
-        self.geo=self.dict["geo"]
-        self.aot=self.dict["aot"]
-        self.phase=self.dict["phase"]
-        self.grid=self.dict["grid"]
-        self.lat=self.dict["lat"]
-        self.w=self.dict["w"]
-        self.noabs=self.dict["noabs"]
-        self.o3=self.dict["o3"]
-        self.rep=self.dict["rep"]
-        self.channel=self.dict["channel"]
-        self.SPM=self.dict["SPM"]
-        self.NSCAER=self.dict["NSCAER"]
-        self.NSCOCE=self.dict["NSCOCE"]
-        self.ang_trunc=self.dict["ang_trunc"]
-        self.gamma=self.dict["gamma"]
-        self.alpha=self.dict["alpha"]
-        self.nbp=self.dict["nbp"]
-        self.opac=self.dict["opac"]
-        self.wref=self.dict["wref"]
-        self.Ha=self.dict["Ha"]
+        self.__dict__.update(kwargs)
 
 def outname(job,profile,options):
     if job.dict["SIM"] in [-2,3]:
