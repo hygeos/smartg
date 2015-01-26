@@ -1,4 +1,10 @@
+#!/usr/bin/env python
+# encoding: utf-8
+
+
+
 import os
+from os.path import join, dirname, exists, realpath, basename
 from string  import count,split
 import numpy as np
 from optparse import OptionParser
@@ -7,25 +13,57 @@ from scipy.constants import codata
 import netCDF4
 from scipy.ndimage import map_coordinates
 from scipy.integrate import simps
-install_dir='/home/did/RTC/SMART-G/'
+import tempfile
 
-class readOPAC(object):
-    def __init__(self,filename):
-        self.species=['inso','waso','soot','ssam','sscm','minm','miam','micm','mitr','suso','minm_spheroids',\
-                    'miam_spheroids','micm_spheroids','mitr_spheroids']
-        self.filename=filename
+dir_libradtran = '/home/applis/libRadtran-2.0-beta/'
+dir_libradtran_reptran =  join(dir_libradtran, 'data/correlated_k/reptran/')
+dir_libradtran_opac =  join(dir_libradtran, 'data/aerosol/OPAC/')
+dir_libradtran_atmmod = join(dir_libradtran, 'data/atmmod/')
+dir_libradtran_crs = join(dir_libradtran, 'data/crs/')
+
+
+class AeroOPAC(object):
+    '''
+    Initialize the Aerosol OPAC model
+
+    Args:
+        filename: name of the aerosol file. If no directory is specified,
+                  assume directory <libradtran>/data/aerosol/OPAC/standard_aerosol_files
+        tau: optical thickness at wavelength wref
+        wref: reference wavelength (nm) for aot
+        layer_phase: the layer index at which the phase function is chosen
+    '''
+    def __init__(self, filename, tau, wref, layer_phase=None):
+
+        self.__tau = tau
+        self.__wref = wref
+        self.__layer_phase = layer_phase
+
+        if dirname(filename) == '':
+            self.filename = join(dir_libradtran_opac, 'standard_aerosol_files', filename)
+        else:
+            self.filename = filename
+        if not filename.endswith('.dat'):
+            self.filename += '.dat'
+
+        self.basename = basename(self.filename)
+        if self.basename.endswith('.dat'):
+            self.basename = self.basename[:-4]
+
+        assert exists(self.filename), '{} does not exist'.format(self.filename)
+
         self.scalingfact=1.
-        self._readStandardAerosolFile()  
-                    
+        self._readStandardAerosolFile()
+
     def _readStandardAerosolFile(self):
+        self.species=['inso','waso','soot','ssam','sscm','minm','miam',
+                      'micm','mitr','suso','minm_spheroids',
+                      'miam_spheroids','micm_spheroids','mitr_spheroids']
         self.scamatlist=[]
-#        indir='/home/did/RTC/libRadtran-2.0/libRadtran-2.0-beta/data/aerosol/OPAC/'
-        indir='/home/did/RTC/SMART-G/tools/profile/'
-        fname=indir+'standard_aerosol_files/'+self.filename
-        data=np.loadtxt(fname)
+        data=np.loadtxt(self.filename)
         self.zopac=data[:,0] # altitudes du fichier de melange de composantes
         self.densities=data[:,1:] # profil vertical concentration massique (g/m3) des differentes composantes du modele
-        for line in open(fname,'r').readlines():
+        for line in open(self.filename,'r').readlines():
             if line.startswith("z(km)",2,7):
                 break
         self.aspecies=line.split()[2:] # lecture des nom des differentes composantes du modele
@@ -33,8 +71,20 @@ class readOPAC(object):
         for species in self.aspecies:   # pour chaque composante on lit les proporites de diffusion de la LUT Scamat
             self.ispecies.append(self.species.index(species))
             self.scamatlist.append(ScaMat(species))   
-            
-    def regrid(self,znew): # reeechantillonage vertical des concentrations massiques
+
+    def init(self, z, T, h2o):
+        '''
+        Initialize the model using height profile, temperature and h2o conc.
+        '''
+        self.regrid(z)
+        self.setTauref(T, h2o, self.__tau, self.__wref)
+        self.__T = T
+        self.__h2o = h2o
+
+    def regrid(self,znew):
+        '''
+        reechantillonage vertical des concentrations massiques
+        '''
         N=len(self.aspecies)
         M=len(znew)
         tmp=np.zeros((M,N),np.float32)
@@ -43,7 +93,7 @@ class readOPAC(object):
             tmp[:,k]=f(znew)
         self.densities=tmp
         self.zopac=znew
-    
+
     def calcTau(self,T,h2o,w): # calcul des propritees optiques du melange en fonction de l'alitude et aussi integrees sur la verticale
         rh=h2o/vapor_pressure(T)*100 # calcul du profil vertical de RH
         M=len(self.zopac)
@@ -61,10 +111,10 @@ class readOPAC(object):
                     else:
                         ext0=interp2(scamat.wlgrid,scamat.rhgrid,tabext,w*1.e-3,rh[m]) # interpolation pour la longueur d'onde et la RH du niveau en cours
                         ext=ext0*frho(rh[m])/frho(50.)*self.densities[m,k] # calcul du coefficient de diffusion et ajustement pour RH du niveau
-                        dz = self.zopac[m-1]-self.zopac[m]                       
-                        dtau = dz * ext * self.scalingfact # calcul de l'epaisseur optique du niveau, eventuellement mise a l'echelle                 
+                        dz = self.zopac[m-1]-self.zopac[m]
+                        dtau = dz * ext * self.scalingfact # calcul de l'epaisseur optique du niveau, eventuellement mise a l'echelle
                     self.dtau_tot[m]+=dtau #somme sur les composantes
-                    
+
             else:  # idem mais rien de depend de RH pour cette composante
                 tab=np.squeeze(scamat.ext)
                 fext=interp1d(scamat.wlgrid,tab,bounds_error=False,fill_value=0.)                       
@@ -78,12 +128,20 @@ class readOPAC(object):
                         dz = self.zopac[m-1]-self.zopac[m]                       
                         dtau = dz * ext * self.scalingfact
                     self.dtau_tot[m]+=dtau
-            
+
             k=k+1
 
         self.tau_tot=np.sum(self.dtau_tot)
-        
-    def calcOpt(self,T,h2o,w): # calcul des propritees optiques du melange en fonction de l'alitude et aussi integrees sur la verticale
+
+    def calc(self,w):
+        '''
+        calcul des propritees optiques du melange en fonction de l'alitude et
+        aussi integrees sur la verticale à la longueur d'onde w (nm)
+        retourne le profil d'épaisseur optique intégrée et le profil de ssa
+        '''
+        h2o = self.__h2o
+        T = self.__T
+
         rh=h2o/vapor_pressure(T)*100 # calcul du profil vertical de RH
         M=len(self.zopac)
         MMAX=5000 # Nb de polynome de Legendre au total
@@ -126,7 +184,7 @@ class readOPAC(object):
                     for n in range(4):
                         nmax=scamat.nmom[int(iw),int(ir),n]
                         self.pmom_tot[m,n,:nmax]+=dp[n]
-                    
+
             else:  # idem mais rien de depend de RH pour cette composante
                 tabext=np.squeeze(scamat.ext)
                 fext=interp1d(scamat.wlgrid,tabext,bounds_error=False,fill_value=0.)                       
@@ -136,8 +194,8 @@ class readOPAC(object):
                 ssa=fssa(w*1e-3)
                 nmom=np.squeeze(scamat.nmom)
                 pmom=np.squeeze(scamat.pmom)
-                
-                for m in range(M):
+
+                for m in xrange(M):
                     if m==0:
                         dz=0.
                         dtau=0.
@@ -160,10 +218,10 @@ class readOPAC(object):
                     for n in range(4):
                         nmax=nmom[int(iw),n]
                         self.pmom_tot[m,n,:nmax]+=dp[n]
-            
+
             k=k+1 # each component
-            
-        for m in range(M):
+
+        for m in xrange(M):
             if m==0:
                 self.ssa_tot[m]=1.
                 for n in range(4):
@@ -181,58 +239,108 @@ class readOPAC(object):
 
         self.tau_tot=np.sum(self.dtau_tot)
         self.MMAX=MMAX
-        
+
+        dataaer  = np.zeros(M, np.float)
+        for m in xrange(M):
+            dataaer[m] = np.sum(self.dtau_tot[:m+1])
+
+        return (dataaer, self.ssa_tot)
+
+
     def setTauref(self,T,h2o,tauref,wref): # On fixe l'AOT a une valeur pour une longueur d'onde de reference
         self.calcTau(T,h2o,wref) # calcul de l'AOT a la longueur d'onde de reference
         self.scalingfact=tauref/self.tau_tot # calcul du facteur d'echelle        
-     
-    def calcPha(self,w,NTHETA=7201): # calcul des matrices de phases
+
+    def calcPha(self, w, pattern, dir, NTHETA=7201):
+        '''
+        calculate and write phase matrices for each layer
+        Arguments:
+            w: wavelength in nm
+            NTHETA: number of angles
+            dir: location of the output file
+            pattern: output file pattern, formatted by the aerosol specie,
+                     the wavelength and the layer
+        Returns: the list of files generated
+        '''
         self.NTHETA=NTHETA
         M=len(self.zopac)
         Leg=Legendres(self.MMAX,NTHETA)
-        for m in range(M): 
-#        for m in range(M-1): 
+        ret = []
+
+        for m in range(M):
+
+            output = join(dir, pattern%(basename(self.filename[:-4]),w,m))
+            ret.append(output)
+            if exists(output):
+                print '{} exists!'.format(output)
+                continue
             theta,pha=Mom2Pha(self.pmom_tot[m,:,:],Leg)
-            f=open("/home/did/RTC/SMART-G/fic/pf_%s_%inm_layer-%i.txt"%(self.filename[:-4],w,m),'w')
+            if not exists(dirname(output)):
+                # create output directory if necessary
+                os.makedirs(dirname(output))
+
+            f=open(output,'w')
             for j in range(NTHETA):
                 f.write("%18.8E"%theta[j] + "  %20.11E  %20.11E  %20.11E  %20.11E\n"%tuple(pha[:,j]))
             f.close()
-            
+        return ret
+
+    def phase(self, wl, dir, pattern='pf_%s_%inm_layer-%i.txt'):
+        '''
+        creates the phase function corresponding to layer_phase
+        and returns the corresponding file name
+
+        wl is the wavelength in nm
+        dir: directory for storing the phase function files
+        pattern: output file pattern, formatted by the aerosol specie,
+                 the wavelength and the layer
+                 default: 'pf_%s_%inm_layer-%i.txt'
+        '''
+        if self.__layer_phase is None:
+            return None
+
+        ret = self.calcPha(wl, pattern, dir)
+
+        return ret[self.__layer_phase]
+
+    def __str__(self):
+        return 'AER={base}-AOT={aot}'.format(base=self.basename, aot=self.__tau)
+
+
 class Gas(object):
     def __init__(self,z,dens):
         self.z=z
         self.dens=dens
         self.scalingfact=1.
         self.initcol= self.calcColumn()
-        
+
     def calcColumn(self):
         return simps(self.dens,-self.z) * 1e5 
 
     def setColumn(self,DU=None, Dens=None):
         if DU != None : self.scalingfact = 2.69e16 * DU / self.calcColumn() 
         if Dens !=None: self.scalingfact = Dens / self.calcColumn()
-            
+
     def getDU(self):
 #        return self.initcol * self.scalingfact / 2.69e16
         return self.calcColumn() / 2.69e16 * self.scalingfact
-        
+
     def regrid(self,znew):
         f=interp1d(self.z,self.dens,kind='linear')
         self.dens=f(znew)
         self.z=znew
-           
-              
+
+
 class ScaMat(object):
     def __init__(self,species):
         self.species=species
         self._readScaMatFile()
-        
+
     def _readScaMatFile(self):
-        indir='/home/did/RTC/libRadtran-2.0/libRadtran-2.0-beta/data/aerosol/OPAC/'
         if not 'spheroids' in self.species :
-            fname=indir+'optprop/'+self.species+'.mie.cdf'
+            fname=join(dir_libradtran_opac, 'optprop', self.species+'.mie.cdf')
         else:
-            fname=indir+'optprop/'+self.species+'.tmatrix.cdf'
+            fname=join(dir_libradtran_opac, 'optprop', self.species+'.tmatrix.cdf')
         nc=netCDF4.Dataset(fname)
         self.wlgrid=nc.variables["wavelen"][:]
         self.rhgrid=nc.variables["hum"][:]
@@ -288,51 +396,164 @@ def Mom2Pha(Mom,Leg):
     pha[2,:]=sumU
     pha[3,:]=sumZ
     return np.arccos(Leg.mu)/np.pi*180.,pha
-    
-    
-class readREPTRAN(object): # Read the channels reptran cdf file, either a list of sensor channels or a full solar coarse medium or fine grid
-    def __init__(self,filename):
-        self.filename=filename
-        self._readFileGeneral()
-        self.band=0
+
+class REPTRAN_IBAND(object):
+    '''
+    REPTRAN internal band
+
+    Arguments:
+        band: REPTRAN_BAND object
+        index: band index
+        iband: internal band index
+    '''
+    def __init__(self, band, index, iband):
+
+        self.band = band     # parent REPTRAN_BAND
+        self.index = index   # internal band index
+        self.iband = iband   # internal band number
+        self.w = band.awvl[index]  # band wavelength
+        self.weight =  band.awvl_weight[index]  # weight
+        self.extra = band.aextra[index]  # solar irradiance
+        self.crs_source = band.across_section_source[index,:]  # table of absorbing gases
         self.species=['H2O','CO2','O3','N2O','CO','CH4','O2','N2']
+        self.filename = band.filename
+
+    def calc_profile(self, T, P, xh2o, densmol):
+        '''
+        calculate a gaseous absorption profile for this internal band
+        using temperature T and pressure P, and profile of molecular density of
+        various gases stored in densmol
+            densmol has shape (Nlayer_atmo, Ngas)
+            densmol[:,0]=h2o
+            densmol[:,1]=co2
+            densmol[:,2]=go3.dens*go3.scalingfact
+            densmol[:,3]=n2o
+            densmol[:,4]=co
+            densmol[:,5]=ch4
+            densmol[:,6]=o2
+            densmol[:,7]=n2
+        '''
+        Nmol = 8
+        M = len(T)
+        datamol = np.zeros(M, np.float)
+
+        assert densmol.shape[1] == Nmol
+        assert len(T) == len(P)
+        assert len(T) == densmol.shape[0]
+
+        # for each gas
+        for ig in np.arange(Nmol):
+
+            # si le gaz est absorbant a cette lambda
+            if self.crs_source[ig]==1:
+
+                # on recupere la LUT d'absorption
+                crs_filename = self.filename[:-4] + '.lookup.' + self.species[ig]
+                crs_mol = readCRS(crs_filename, self.iband)
+
+                # interpolation du profil vertical de temperature de reference dans les LUT
+                f=interp1d(crs_mol.pressure,crs_mol.t_ref)
+
+                # ecart en temperature par rapport au profil de reference (ou P de reference est en Pa et P AFGL en hPa)
+                dT = T - f(P*100)
+
+                if ig == 0 :  # si h2o
+                    # interpolation dans la LUT d'absorption en fonction de
+                    # pression, ecart en temperature et vmr de h2o et mutiplication par la densite,
+                    # calcul de reptran avec LUT en 10^(-20) m2, passage en km-1
+                    datamol += interp3(crs_mol.t_pert,crs_mol.vmrs,crs_mol.pressure,crs_mol.xsec,dT,xh2o,P*100) * densmol[:,ig] * 1e-11
+                else:
+                    tab = crs_mol.xsec
+                    # interpolation dans la LUT d'absorption en fonction de
+                    # pression, ecart en temperature et mutiplication par la densite,
+                    # calcul de reptran avec LUT en 10^(-20) m2, passage en km-1 
+                    datamol += interp2(crs_mol.t_pert,crs_mol.pressure,np.squeeze(tab),dT,P*100) * densmol[:,ig] * 1e-11
+
+        return datamol
+
+
+class REPTRAN_BAND(object):
+    def __init__(self, reptran, band):
+
+        self.band = band
+        self.nband = reptran.nwvl_in_band[self.band] # the number of internal bands (representative bands) in this channel
+        self._iband = reptran.iwvl[:self.nband,self.band] # the indices of the internal bands within the wavelength grid for this channel
+        self.awvl = reptran.wvl[self._iband-1] # the corresponsing wavelenghts of the internal bands
+        self.awvl_weight = reptran.iwvl_weight[:self.nband,self.band] # the weights of the internal bands for this channel
+        self.aextra = reptran.extra[self._iband-1] # the extra terrestrial solar irradiance of the internal bands for this channel
+        self.across_section_source = reptran.cross_section_source[self._iband-1] # the source of absorption by species of the internal bands for this channel
+        self.name = reptran.band_names[band]
+        self.filename = reptran.filename
+
+        # the wavelength integral (width) of this channel
+        self.Rint = reptran.wvl_integral[self.band]
+
+    def iband(self, index):
+        '''
+        returns internal band by its number (starting at zero)
+        '''
+        return REPTRAN_IBAND(self, index, self._iband[index])
+
+    def ibands(self):
+        '''
+        iterate over each internal band
+        '''
+        for i in xrange(self.nband):
+            yield self.iband(i)
+
+class REPTRAN(object):
+    '''
+    REPTRAN correlated-k file
+    if provided without a directory, assuming dir_libradtran_reptran
+    '''
+
+    def __init__(self,filename):
+        if dirname(filename) == '':
+            self.filename = join(dir_libradtran_reptran, filename)
+        else:
+            self.filename = filename
+
+        if not self.filename.endswith('.cdf'):
+            self.filename += '.cdf'
+
+        self._readFileGeneral()
 
     def _readFileGeneral(self):
-        indir = '/home/did/RTC/REPTRAN/data/correlated_k/reptran/'
-        nc=netCDF4.Dataset(indir+self.filename+'.cdf')
-        self.wvl=nc.variables['wvl'][:] # the wavelength grid
-        self.extra=nc.variables['extra'][:] # the extra terrestrial solar irradiance for the walength grid
-        self.wvl_integral=nc.variables['wvl_integral'][:] # the wavelength integral (width) of each sensor channel
-        self.nwvl_in_band=nc.variables['nwvl_in_band'][:] # the number of internal bands (representative bands) in each sensor channel
-        self.band_names=nc.variables['band_name'][:] # the name of the sensor channel
-        self.iwvl=nc.variables['iwvl'][:] # the indices of the internal bands within the wavelength grid for each sensor channel
-        self.iwvl_weight=nc.variables['iwvl_weight'][:] # the weight associated to each internal band
-        self.cross_section_source=nc.variables['cross_section_source'][:] # for each internal band, the list of species that participated to the absorption computation 
-                                                                            # (1: abs, 0 : no abs)
-    def selectBand(self,band): # select a particular sensor channel by its number (from 0)
-        self.band=band
-        self.nband=self.nwvl_in_band[self.band] # the number of internal bands (representative bands) in this channel
-        self.iband=self.iwvl[:self.nband,self.band] # the indices of the internal bands within the wavelength grid for this channel
-        self.awvl=self.wvl[self.iband-1] # the corresponsing wavelenghts of the internal bands
-        self.awvl_weight=self.iwvl_weight[:self.nband,self.band] # the weights of the internal bands for this channel
-        self.aextra=self.extra[self.iband-1] # the extra terrestrial solar irradiance of the internal bands for this channel
-        self.across_section_source=self.cross_section_source[self.iband-1] # the source of absorption by species of the internal bands for this channel
-        self.band_name=self.band_names[band,:].tostring().replace(" ","")
-        return self.nband,self.wvl_integral[self.band]
-        
-    def Bandname2Band(self,bandname):
-        l=[]
-        for k in range(len(self.wvl_integral)):
-            l.append(self.band_names[k,:].tostring().replace(" ",""))
-        return l.index(bandname)
-        
+        nc = netCDF4.Dataset(self.filename)
+        self.wvl = nc.variables['wvl'][:] # the wavelength grid
+        self.extra = nc.variables['extra'][:] # the extra terrestrial solar irradiance for the walength grid
+        self.wvl_integral = nc.variables['wvl_integral'][:] # the wavelength integral (width) of each sensor channel
+        self.nwvl_in_band = nc.variables['nwvl_in_band'][:] # the number of internal bands (representative bands) in each sensor channel
+        self.iwvl = nc.variables['iwvl'][:] # the indices of the internal bands within the wavelength grid for each sensor channel
+        self.iwvl_weight = nc.variables['iwvl_weight'][:] # the weight associated to each internal band
+        self.cross_section_source = nc.variables['cross_section_source'][:] # for each internal band, the list of species that participated to the absorption computation 
 
-    def getwvl_param(self,i): # for a particular internal band, after selecting a sensor channel, get the idex number,wavelegnth,weight an extratreterial solar irradiance 
-        return  self.iband[i],self.awvl[i], self.awvl_weight[i],self.aextra[i],self.across_section_source[i,:]
+        self.band_names = []
+        for bname in nc.variables['band_name'][:]:  # the names of the sensor channels
+            self.band_names.append(bname.tostring().replace(' ', ''))
 
-    def getabs_param(self,ispecies,i): #for a particular internal band, after selecting a sensor channel, and for a particular specie, get the absorption cross section LUT
-        crs=readCRS(self.filename+'.lookup.'+self.species[ispecies],self.iband[i])
-        return crs
+    def nbands(self):
+        '''
+        number of bands
+        '''
+        return len(self.wvl_integral)
+
+    def band(self, band_):
+        '''
+        returns a REPTRAN_BAND
+        band can be defined either by an integer, or a string
+        '''
+        if isinstance(band_, str):
+            return self.band(self.band_names.index(band_))
+        else:
+            return REPTRAN_BAND(self, band_)
+
+    def bands(self):
+        '''
+        iterates over all bands
+        '''
+        for i in xrange(self.nbands()):
+            yield self.band(i)
 
 
 class readCRS(object):
@@ -341,8 +562,7 @@ class readCRS(object):
         self._readFileGeneral(iband)
 
     def _readFileGeneral(self,iband):
-        indir = '/home/did/RTC/REPTRAN/data/correlated_k/reptran/'
-        nc=netCDF4.Dataset(indir+self.filename+'.cdf')
+        nc=netCDF4.Dataset(join(dir_libradtran_reptran, self.filename+'.cdf'))
         self.wvl_index=nc.variables['wvl_index'][:]
         ii=list(self.wvl_index).index(iband)
         dat=nc.variables['xsec'][:]
@@ -351,7 +571,7 @@ class readCRS(object):
         self.t_ref=nc.variables['t_ref'][:]
         self.t_pert=nc.variables['t_pert'][:]
         self.vmrs=nc.variables['vmrs'][:]
-        
+
 def vapor_pressure(T):
     T0=273.15
     A=T0/T
@@ -426,87 +646,98 @@ def rho(F) :
 def FF(rho):
     return (6+3*rho)/(6-7*rho)
 
-# gravity acceleration at the ground
-# lat : deg
-
 def g0(lat) : 
+    ''' gravity acceleration at the ground
+        lat : deg
+    '''
     return 980.6160 * (1. - 0.0026372 * np.cos(2*lat*np.pi/180.) + 0.0000059 * np.cos(2*lat*np.pi/180.)**2)
 
-# gravity acceleration at altitude z
-# lat : deg
-# z : m
 def g(lat,z) :
+    ''' gravity acceleration at altitude z
+        lat : deg
+        z : m
+    '''
     return g0(lat) - (3.085462 * 1.e-4 + 2.27 * 1.e-7 * np.cos(2*lat*np.pi/180.)) * z \
             + (7.254 * 1e-11 + 1e-13 * np.cos(2*lat*np.pi/180.)) * z**2  \
             - (1.517 * 1e-17 + 6 * 1e-20 * np.cos(2*lat*np.pi/180.)) * z**3
 
-# effective mass weighted altitude from US statndard
-# z : m
 def zc(z) :
+    ''' effective mass weighted altitude from US statndard
+        z : m
+    '''
     return 0.73737 * z + 5517.56
 
-# depolarisation factor of N2
-# lam : um
 def FN2(lam) : 
+    ''' depolarisation factor of N2
+        lam : um
+    '''
     return 1.034 + 3.17 *1e-4 *lam**(-2)
 
-# depolarisation factor of O2
-# lam : um
 def FO2(lam) : 
+    ''' depolarisation factor of O2
+        lam : um
+    '''
     return 1.096 + 1.385 *1e-3 *lam**(-2) + 1.448 *1e-4 *lam**(-4)
 
-# depolarisation factor of air for 360 ppm CO2
 def Fair360(lam) : 
+    ''' depolarisation factor of air for 360 ppm CO2
+    '''
     return (78.084 * FN2(lam) + 20.946 * FO2(lam) +0.934 + 0.036 *1.15)/(78.084+20.946+0.934+0.036)
 
 def PR(theta,rho):
     gam=rho/(2-rho)
     return 1/4./np.pi * 3/(4*(1+2*gam)) * ((1-gam)*np.cos(theta*np.pi/180.)**2 + (1+3*gam))
 
-# depolarisation factor of air for CO2
-# lam : um
-# co2 : ppm
 def Fair(lam,co2) : 
+    ''' depolarisation factor of air for CO2
+        lam : um
+        co2 : ppm
+    '''
     return (78.084 * FN2(lam) + 20.946 * FO2(lam) + 0.934 + co2*1e-4 *1.15)/(78.084+20.946+0.934+co2*1e-4)
 
-# molecular volume
-# co2 : ppm
 def ma(co2):
+    ''' molecular volume
+        co2 : ppm
+    '''
     return 15.0556 * co2*1e-6 + 28.9595
 
-# index of refraction of dry air  (300 ppm CO2)
-# lam : um
 def n300(lam):
+    ''' index of refraction of dry air  (300 ppm CO2)
+        lam : um
+    '''
     return 1e-8 * ( 8060.51 + 2480990/(132.274 - lam**(-2)) + 17455.7/(39.32957 - lam**(-2))) + 1.
 
-# index of refraction odf dry air
-# lam : um
-# co2 : ppm
 def n(lam,co2):
+    ''' index of refraction odf dry air
+        lam : um
+        co2 : ppm
+    '''
     return (n300(lam)-1) * (1 + 0.54*(co2*1e-6 - 0.0003)) + 1.
 
-# Rayleigh cross section
-# lam : um
-# co2 : ppm
 def raycrs(lam,co2):
+    ''' Rayleigh cross section
+        lam : um
+        co2 : ppm
+    '''
     Avogadro = codata.value('Avogadro constant')
     Ns = Avogadro/22.4141 * 273.15/288.15 * 1e-3
     nn2 = n(lam,co2)**2
     return 24*np.pi**3 * (nn2-1)**2 /(lam*1e-4)**4/Ns**2/(nn2+2)**2 * Fair(lam,co2)
 
-# Rayleigh optical depth
-# lam : um
-# co2 : ppm
-# lat : deg
-# z : m
-# P : hPa
 def rod(lam,co2,lat,z,P):
+    ''' Rayleigh optical depth
+        lam : um
+        co2 : ppm
+        lat : deg
+        z : m
+        P : hPa
+    '''
     Avogadro = codata.value('Avogadro constant')
     return raycrs(lam,co2) * P*1e3 * Avogadro/ma(co2) /g(lat,z)
 
 ####################################################################################################################################
 
-def change_altitude_grid (zOld, gridSpec):
+def change_altitude_grid(zOld, gridSpec):
         """ Setup a new altitude grid and interpolate profiles to new grid. """
         zFirst, zLast =  zOld[0], zOld[-1]
         #specs = re.split ('[-\s:,]+',gridSpec)
@@ -588,225 +819,198 @@ def parseGridSpec (gridSpec):
 
 ####################################################################################################################################
 
-def profil(options,args):
+class Profile(object):
+    '''
+    Initialize profile generator
+    Arguments:
+        - atm_filename AFGL atmosphere file
+          if provided without a directory, use default directory dir_libradtran_atmmod
+        - aer: Aerosol object which provides the aerosol profile and phase
+          function.
+          if None, AOT=0.
+        - grid: custom grid. Can be provided as an array of altitudes or a gridSpec (string)
+          default value: None (use default grid)
+        - lat: latitude (for Rayleigh optical depth calculation, default=45.)
+        - O3: total ozone column (Dobson units), or None to use atmospheric
+          profile value (default)
+    '''
+    def __init__(self, atm_filename, aer=None, grid=None,
+                lat=45., O3=None):
 
-    if options.lat==None :  lat=45.
-    else : lat=options.lat
+        crs_filename = join(dir_libradtran_crs, 'crs_O3_UBremen_cf.dat')
+        ch4_filename = join(dir_libradtran_atmmod, 'afglus_ch4_vmr.dat')
+        co_filename = join(dir_libradtran_atmmod, 'afglus_co_vmr.dat')
+        n2o_filename = join(dir_libradtran_atmmod, 'afglus_n2o_vmr.dat')
+        n2_filename = join(dir_libradtran_atmmod, 'afglus_n2_vmr.dat')
 
-    # lecture du fichier atmosphere AFGL
-    data=np.loadtxt(args[0],comments="#")
-    z=data[:,0] # en km
-    P=data[:,1] # en hPa
-    T=data[:,2] # en K
-    air=data[:,3] # Air density en cm-3
-    o3=data[:,4] # Ozone density en cm-3
-    o2=data[:,5] # O2 density en cm-3
-    h2o=data[:,6] # H2O density en cm-3
-    co2=data[:,7] # CO2 density en cm-3
-    no2=data[:,8] # NO2 density en cm-3
-    # lecture des fichiers US Standard atmosphere pour les autres gaz
-    datach4=np.loadtxt('/home/did/RTC/SMART-G/tools/profile/afglus_ch4_vmr.dat',comments="#")
-    ch4=datach4[:,1] * air # CH4 density en cm-3
-    dataco=np.loadtxt('/home/did/RTC/SMART-G/tools/profile/afglus_co_vmr.dat',comments="#")
-    co=dataco[:,1] * air # CO density en cm-3
-    datan2o=np.loadtxt('/home/did/RTC/SMART-G/tools/profile/afglus_n2o_vmr.dat',comments="#")
-    n2o=datan2o[:,1] * air # N2O density en cm-3
-    datan2=np.loadtxt('/home/did/RTC/SMART-G/tools/profile/afglus_n2_vmr.dat',comments="#")
-    n2=datan2[:,1] * air # N2 density en cm-3
-    # lecture du fichier crs de l'ozone dans les bandes de Chappuis
-    crs_chappuis=np.loadtxt(args[1],comments="#")
+        if dirname(atm_filename) == '':
+            atm_filename = join(dir_libradtran_atmmod, atm_filename)
+        if (not exists(atm_filename)) and (not atm_filename.endswith('.dat')):
+            atm_filename += '.dat'
 
-    go3=Gas(z,o3)
-    go3.setColumn(DU=options.o3)
-    #-------------------------------------------
-    # optionnal regrid
-    if options.grid !=None :
-        znew= change_altitude_grid(z,options.grid)
-        f=interp1d(z,P)
-        P=f(znew)
-        f=interp1d(z,T)
-        T=f(znew)
-        f=interp1d(z,air)
-        airnew=f(znew)
-        f=interp1d(z,o3)
-        o3=f(znew)
-        f=interp1d(z,o2)
-        o2=f(znew)
-        f=interp1d(z,h2o)
-        h2o=f(znew)
-        f=interp1d(z,co2)
-        co2=f(znew)
-        f=interp1d(z,no2)
-        no2=f(znew)
-        f=interp1d(z,ch4/air)
-        ch4=f(znew)*airnew
-        f=interp1d(z,co/air)
-        co=f(znew)*airnew
-        f=interp1d(z,n2o/air)
-        n2o=f(znew)*airnew
-        f=interp1d(z,n2/air)
-        n2=f(znew)*airnew
-        z=znew
-        air=airnew
-        
-        go3.regrid(znew)
-                
-    
-    M=len(z) # Final number of layer
-    datamol  = np.zeros(M, np.float)
-    datao3   = np.zeros(M, np.float)
-    datamol  = np.zeros(M, np.float)
-    dataray  = np.zeros(M, np.float)
-    dataaer  = np.zeros(M, np.float)
-    ssaaer   = np.ones(M, np.float)
-    if options.Ha == None:
-        if options.opac==None : Ha = 1.
-    else:
-        Ha=options.Ha # Hauteur d'echelle des aerosols en km
-    xh2o=h2o/air # h2o vmr
-    namelist=[] # list of profiles generated
-    
-#    -------------------------------------------
-    # test OPAC
-    if options.opac != None:
-        aer=readOPAC(options.opac+'.dat')
-        aer.regrid(z)
-        aer.setTauref(T,h2o,options.aot,options.wref)
-        aer.calcTau(T,h2o,options.wref)
-    else:
-        dataaer = options.aot * np.exp(-z/Ha)   
-    #
-    #-------------------------------------------
-    if (options.rep!=None and  options.channel!=None):
-        Nmol=8
-        densmol  = np.zeros((M, Nmol), np.float)
-        densmol[:,0]=h2o
-        densmol[:,1]=co2
-        densmol[:,2]=go3.dens*go3.scalingfact
-        densmol[:,3]=n2o
-        densmol[:,4]=co
-        densmol[:,5]=ch4
-        densmol[:,6]=o2
-        densmol[:,7]=n2
-        filename=options.rep
-        reptran_bandname=options.channel
-        reptran=readREPTRAN(filename)
-        Nint,Rint = reptran.selectBand(reptran.Bandname2Band(reptran_bandname)) # selection d'une bande en particulier dans le fichier reptran, lecture du nombre de bandes internes et de l'integrale en nm de la bande
-    
-        for iint in np.arange(Nint): # pour chaque bande interne de la correlated_k (1 fichier de sortie par lambda)
-            iband,w,weight,extra,crs_source=reptran.getwvl_param(iint)# on recupere les parametres de la bande: numero,lambda,poids,irradiance solaire, et tableau des gaz absorbants 
-            if options.opac !=None:
-                 aer.calcOpt(T,h2o,w)
-                 if options.phase : aer.calcPha(w,options.NSCAER)
-            datamol[:]=0.
-            fname="/home/did/RTC/SMART-G/profil/p-"+filename+'-'+reptran_bandname+'-%iof%i'%(iint+1,Nint)
-            outfile=open(fname,'w')
-            for ig in np.arange(Nmol): # pour chaque gaz 
-                if crs_source[ig]==1: # si le gaz est absorbant a cette lambda
-                    crs_mol=reptran.getabs_param(ig,iint) # on recupere la LUT d'absorption
-                    f=interp1d(crs_mol.pressure,crs_mol.t_ref) #interpolation du profil vertical de temperature de reference dans les LUT
-                    dT = T - f(P*100) # ecart en temperature par rapport au profil de reference (ou P de reference est en Pa et P AFGL en hPa)
-                    if ig==0 :# si h2o
-                        datamol += interp3(crs_mol.t_pert,crs_mol.vmrs,crs_mol.pressure,crs_mol.xsec,dT,xh2o,P*100) * densmol[:,ig] * 1e-11# interpolation dans la LUT d'absorption en fonction de
-                                          # pression, ecart en temperature et vmr de h2o et mutiplication par la densite, calcul de reptran avec LUT en 10^(-20) m2, passage en km-1
-                    else:
-                        tab=crs_mol.xsec
-                        datamol += interp2(crs_mol.t_pert,crs_mol.pressure,np.squeeze(tab),dT,P*100) * densmol[:,ig] * 1e-11  # interpolation dans la LUT d'absorption en fonction de
-                                          # pression, ecart en temperature et mutiplication par la densite, calcul de reptran avec LUT en 10^(-20) m2, passage en km-1 
-    
-            outstr= "# I   ALT               hmol(I)         haer(I)         H(I)            XDEL(I)         YDEL(I)     XSSA(I)     percent_abs  LAM=  %7.2f nm, WEIGHT= %7.5f, E0=%9.3f, Rint=%8.3f\n" % (w,weight,extra,Rint)
-            outfile.write(outstr)
-            print "# I   ALT               hmol(I)         haer(I)         H(I)            XDEL(I)         YDEL(I)       XSSA(I)     percent_abs  abs LAM=  %7.2f nm, WEIGHT= %7.5f, E0=%9.3f, Rint=%8.3f" % (w,weight,extra,Rint)
-            for m in range(M):
-                #### Chappuis bands
-                # SIGMA = (C0 + C1*(T-T0) + C2*(T-T0)^2) * 1.E-20 cm^2
-                T0 = 273.15 #in K
-            
-                datao3[m] =  np.interp(w,crs_chappuis[:,0],crs_chappuis[:,1]) + np.interp(w,crs_chappuis[:,0],crs_chappuis[:,2])*(T[m]-T0) + \
-                            np.interp(w,crs_chappuis[:,0],crs_chappuis[:,3])*(T[m]-T0)**2
-                datao3[m] *= go3.dens[m]*go3.scalingfact * 1e-15 # calcul de Chapuis avec LUT en 10^(-20) cm2, passage en km-1 
-                dataray[m] =  rod(w*1e-3,co2[m]/air[m]*1e6,lat,z[m]*1e3,P[m])                
-                       
-                if options.opac !=None:
-                    ssaaer[m]=aer.ssa_tot[m]
-                    if options.Ha==None:
-                        dataaer[m] = np.sum(aer.dtau_tot[:m+1])
-                    else:
-                        dataaer[m] = aer.tau_tot * np.exp(-z[m]/options.Ha)
+        self.basename = basename(atm_filename)
+        if self.basename.endswith('.dat'):
+            self.basename = self.basename[:-4]
 
-                if m==0 : 
-                    dz=0.
-                    hg=0.
-                    taur_prec=0.
-                    taua_prec=0.
-                    st0= "%d\t" % m
-                    st1= "%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (0., 0., 0. , 0., 1., 1., 0., 0.)
-                    st2= "%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (0., 0., 0. , 0., 1., 1., 0.)
-                    print ''.join(st0),'%7.2f\t' % z[m],''.join(st1)
-                    outstr=  ''.join(st0)+'%7.2f\t' % z[m]+''.join(st2)+'\n'
-                    outfile.write(outstr)
-                else : 
-                    dz = z[m-1]-z[m]
-                    taur = dataray[m] - taur_prec
-                    taur_prec = dataray[m]
-                    taua = dataaer[m] - taua_prec
-                    taua_prec = dataaer[m]
-                    taug = datao3[m]*dz
-                    taug += datamol[m]*dz
-                    if options.noabs==True:
-                        taug=0.
-                    tau = taur+taua+taug
-                    abs = taug/tau
-                    xdel = taua/(tau*(1-abs))
-                    ydel = taur/(tau*(1-abs))
-                    hg += taug
-                    htot = dataray[m]+dataaer[m]+hg
-                    xssa=ssaaer[m]
-                    st0= "%d\t" % m
-                    st1= "%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (dataray[m], dataaer[m], htot , xdel, ydel, xssa, abs, taug)
-                    st2= "%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (dataray[m], dataaer[m], htot , xdel, ydel, xssa, abs)
-                    print ''.join(st0),'%7.2f\t' % z[m],''.join(st1)
-                    outstr= ''.join(st0)+'%7.2f\t' % z[m]+''.join(st2)+'\n'
-                    outfile.write(outstr)
-            namelist.append(fname)
-                    #-------------------------------------------
-    else : 
-        fname="/home/did/RTC/SMART-G/profil/profil.tmp"
-        outfile=open(fname,"w")
-        w=options.w
-        if options.opac !=None:
-            aer.calcOpt(T,h2o,w)
-            if options.phase : aer.calcPha(w,options.NSCAER)
-        outstr= "# I   ALT               hmol(I)         haer(I)         H(I)            XDEL(I)         YDEL(I)     XSSA(I)    percent_abs  LAM=  %7.2f nm\n" % w
-        outfile.write(outstr)
-        print "# I   ALT               hmol(I)         haer(I)         H(I)            XDEL(I)         YDEL(I)        XSSA(I)   percent_abs  abs LAM=  %7.2f nm" % w
-        for m in range(M):
+        # lecture du fichier atmosphere AFGL
+        data = np.loadtxt(atm_filename, comments="#")
+        z = data[:,0] # en km
+        self.P = data[:,1] # en hPa
+        self.T = data[:,2] # en K
+        self.air = data[:,3] # Air density en cm-3
+        o3 = data[:,4] # Ozone density en cm-3
+        self.o2 = data[:,5] # O2 density en cm-3
+        self.h2o = data[:,6] # H2O density en cm-3
+        self.co2 = data[:,7] # CO2 density en cm-3
+        no2 = data[:,8] # NO2 density en cm-3
+
+        # lecture des fichiers US Standard atmosphere pour les autres gaz
+        datach4 = np.loadtxt(ch4_filename, comments="#")
+        self.ch4=datach4[:,1] * self.air # CH4 density en cm-3
+        dataco = np.loadtxt(co_filename, comments="#")
+        self.co=dataco[:,1] * self.air # CO density en cm-3
+        datan2o = np.loadtxt(n2o_filename, comments="#")
+        self.n2o=datan2o[:,1] * self.air # N2O density en cm-3
+        datan2 = np.loadtxt(n2_filename, comments="#")
+        self.n2=datan2[:,1] * self.air # N2 density en cm-3
+
+        # lecture du fichier crs de l'ozone dans les bandes de Chappuis
+        self.crs_chappuis = np.loadtxt(crs_filename, comments="#")
+
+        self.go3 = Gas(z,o3)
+        self.go3.setColumn(DU=O3)
+
+        #-------------------------------------------
+        # optionnal regrid
+        if grid != None:
+            if isinstance(grid, str):
+                znew = change_altitude_grid(z, grid)
+            else:
+                znew = grid
+
+            self.P = interp1d(z, self.P)(znew)
+            self.T = interp1d(z, self.T)(znew)
+            airnew = interp1d(z, self.air)(znew)
+            o3 = interp1d(z, o3)(znew)
+            self.o2 = interp1d(z, self.o2)(znew)
+            self.h2o = interp1d(z, self.h2o)(znew)
+            self.co2 = interp1d(z, self.co2)(znew)
+            no2 = interp1d(z, no2)(znew)
+            self.ch4 = interp1d(z, self.ch4/self.air)(znew)*airnew
+            self.co = interp1d(z, self.co/self.air)(znew)*airnew
+            self.n2o = interp1d(z, self.n2o/self.air)(znew)*airnew
+            self.n2 = interp1d(z, self.n2/self.air)(znew)*airnew
+            z = znew
+            self.air = airnew
+
+            self.go3.regrid(znew)
+
+        self.z = z
+        self.lat = lat
+        self.O3 = O3
+
+        self.aer = aer
+        if self.aer is not None:
+            self.aer.init(z, self.T, self.h2o)
+
+    def calc(self, w, output_file=None, dir=None):
+        '''
+        Profile calculation at a monochromatic wavelength w (nm)
+        Produce file output_file.
+
+        w can be either:
+            - a wavelength in nm (float)
+            - a REPTRAN_IBAND object
+        if output_file is None, use a default file name in
+        directory dir.
+
+        returns: profile filename
+        '''
+
+        #
+        # Initialization
+        #
+        use_reptran = isinstance(w, REPTRAN_IBAND)
+        if output_file is None:
+            assert dir is not None
+            # generate a unique file name
+            output_file = tempfile.mktemp(dir=dir,
+                    prefix='profile_', suffix='.tmp')
+
+        if exists(output_file):
+            print 'File {} exists!'.format(output_file)
+            return output_file
+
+        if not exists(dirname(output_file)):
+            os.makedirs(dirname(output_file))
+
+        z = self.z
+        M = len(z)  # Final number of layer
+        if use_reptran:
+            wl = w.w
+        else:
+            wl = w
+        if self.aer is not None:
+            dataaer, ssaaer = self.aer.calc(wl)
+        else:
+            dataaer = np.zeros(M, np.float)
+            ssaaer = np.zeros(M, np.float)
+
+
+        if use_reptran:
+            Nmol = 8
+            densmol = np.zeros((M, Nmol), np.float)
+            densmol[:,0] = self.h2o
+            densmol[:,1] = self.co2
+            densmol[:,2] = self.go3.dens*self.go3.scalingfact
+            densmol[:,3] = self.n2o
+            densmol[:,4] = self.co
+            densmol[:,5] = self.ch4
+            densmol[:,6] = self.o2
+            densmol[:,7] = self.n2
+            xh2o = self.h2o/self.air   # h2o vmr
+            datamol = w.calc_profile(self.T, self.P, xh2o, densmol)
+        else:
+            datamol = np.zeros(M, np.float)
+
+
+        # profiles of o3 and Rayleigh
+        datao3  = np.zeros(M, np.float)
+        dataray = np.zeros(M, np.float)
+        for m in xrange(M):
+
             #### Chappuis bands
             # SIGMA = (C0 + C1*(T-T0) + C2*(T-T0)^2) * 1.E-20 cm^2
-            T0 = 273.15 #in K
-            datao3[m] =  np.interp(w,crs_chappuis[:,0],crs_chappuis[:,1]) + np.interp(w,crs_chappuis[:,0],crs_chappuis[:,2])*(T[m]-T0) + \
-                        np.interp(w,crs_chappuis[:,0],crs_chappuis[:,3])*(T[m]-T0)**2
-            datao3[m] *= go3.dens[m]*go3.scalingfact * 1e-15 # calcul de Chapuis avec LUT en 10^(-20) cm2, passage en km-1 
-            dataray[m] =  rod(w*1e-3,co2[m]/air[m]*1e6,lat,z[m]*1e3,P[m])
-            
-            if options.opac !=None:
-                ssaaer[m]=aer.ssa_tot[m]
-                if options.Ha==None:
-                    dataaer[m] = np.sum(aer.dtau_tot[:m+1])
-                else:
-                    dataaer[m] = aer.tau_tot * np.exp(-z[m]/options.Ha)
-                    
+            T0 = 273.15  # in K
+
+            datao3[m] =  np.interp(wl,self.crs_chappuis[:,0],self.crs_chappuis[:,1]) \
+                       + np.interp(wl,self.crs_chappuis[:,0],self.crs_chappuis[:,2])*(self.T[m]-T0) \
+                       + np.interp(wl,self.crs_chappuis[:,0],self.crs_chappuis[:,3])*(self.T[m]-T0)**2
+            # calcul de Chapuis avec LUT en 10^(-20) cm2, passage en km-1 
+            datao3[m] *= self.go3.dens[m] * self.go3.scalingfact * 1e-15
+
+            dataray[m] = rod(wl*1e-3, self.co2[m]/self.air[m]*1e6, self.lat, z[m]*1e3, self.P[m])
+
+
+        # write header
+        fp = open(output_file, 'w')
+        outstr = "# I   ALT               hmol(I)         haer(I)         H(I)            "
+        outstr += "XDEL(I)         YDEL(I)     XSSA(I)     percent_abs       LAM=  %7.2f nm" % (wl)
+        if use_reptran:
+            outstr += ', WEIGHT= %7.5f, E0=%9.3f, Rint=%8.3f\n' % (w.weight, w.extra, w.band.Rint)
+        # print outstr
+        fp.write(outstr)
+
+        # write profile
+        for m in xrange(M):
+
             if m==0 : 
                 dz=0.
                 hg=0.
                 taur_prec=0.
                 taua_prec=0.
-                st0= "%d\t" % m
-                st1= "%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (0., 0., 0. , 0., 1., 1., 0., 0.)
-                st2= "%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (0., 0., 0. , 0., 1., 1., 0.)
-                print ''.join(st0),'%7.2f\t' % z[m],''.join(st1)
-                outstr=  ''.join(st0)+'%7.2f\t' % z[m]+''.join(st2)+'\n'
-                outfile.write(outstr)
+                outstr = "%d\t%7.2f\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (
+                        m, z[m], 0., 0., 0. , 0., 1., 1., 0.)
             else : 
                 dz = z[m-1]-z[m]
                 taur = dataray[m] - taur_prec
@@ -815,8 +1019,6 @@ def profil(options,args):
                 taua_prec = dataaer[m]
                 taug = datao3[m]*dz
                 taug += datamol[m]*dz
-                if options.noabs==True:
-                    taug=0.
                 tau = taur+taua+taug
                 abs = taug/tau
                 xdel = taua/(tau*(1-abs))
@@ -824,19 +1026,34 @@ def profil(options,args):
                 hg += taug
                 htot = dataray[m]+dataaer[m]+hg
                 xssa=ssaaer[m]
-                st0= "%d\t" % m
-                st1= "%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (dataray[m], dataaer[m], htot , xdel, ydel, xssa, abs, taug)
-                st2= "%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (dataray[m], dataaer[m], htot , xdel, ydel, xssa, abs)
-                print ''.join(st0),'%7.2f\t' % z[m],''.join(st1)
-                outstr= ''.join(st0)+'%7.2f\t' % z[m]+''.join(st2)+'\n'
-                outfile.write(outstr)
-        namelist.append(fname)
-                #-------------------------------------------
-    return M-1,z[0],namelist # return number of layers, altitute of TOA and list of profiles generated
-    
-if __name__ == '__main__':
+                outstr = "%d\t%7.2f\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (
+                        m, z[m], dataray[m], dataaer[m], htot , xdel, ydel, xssa, abs)
+
+            # print outstr
+            fp.write('\n' + outstr)
+
+        print 'write', output_file
+
+        return output_file
+
+    def __str__(self):
+        '''
+        returns a string class descriptor
+        (for building a default file name)
+        '''
+        S = 'ATM={atmfile}-O3={O3}'.format(atmfile=self.basename, O3=self.O3)
+
+        if self.aer is not None:
+            S += '-{}'.format(str(self.aer))
+
+        return S
+
+
+
+
+def main():
     ####################################################################################################################################     
-    parser = OptionParser(usage='%prog [options] file_in_atm file_in_crsO3\n Type %prog -h for help\n')
+    parser = OptionParser(usage='%prog [options] file_in_atm\nfile_in_atm: see {}\nType %prog -h for help\n'.format(dir_libradtran_atmmod))
     parser.add_option('-n','--noabs',
                 dest='noabs',
                 action='store_true',
@@ -859,12 +1076,13 @@ if __name__ == '__main__':
                 dest='wref',
                 type='float',
                 default=550.,
-                help='wavelength (nm) reference for aerosol optical properties, default 550 nm' 
+                help='wavelength (nm) reference for aerosol optical properties, default %default nm' 
                 )
     parser.add_option('-l', '--lat',
                 dest='lat',
                 type='float',
-                help='latitude (deg)' 
+                default=45.,
+                help='latitude (deg), default %default' 
                 )
     parser.add_option('-g', '--grid',
                 dest='grid',
@@ -876,12 +1094,6 @@ if __name__ == '__main__':
                 type='float',
                 default=0.,
                 help='Aerosol Optical Thickness at the current wavelength , default 0. (no aerosols)' 
-                )
-    parser.add_option('-H', '--Ha',
-                dest='Ha',
-                type='float',
-                default=None,
-                help='Set the aerosol scale height in km, replace in other vertical profile, default None' 
                 )
     parser.add_option('-O', '--OPAC',
                 dest='opac',
@@ -906,16 +1118,55 @@ if __name__ == '__main__':
     parser.add_option('-R', '--REPTRAN',
                 dest='rep',
                 type='string',
-                help='REPTRAN molecular absorption file: see %s/tools/profile/channel_list.txt for channel list'%install_dir 
+                help='REPTRAN molecular absorption file: see {} for channel list'.format(join(dir_libradtran_reptran, 'channel_list.txt'))
                 )
     parser.add_option('-C', '--CHANNEL',
                 dest='channel',
                 type='string',
                 help='Sensor channel name (use with REPTRAN)' 
                 )
-                
+
     (options, args) = parser.parse_args()
-    if len(args) != 2 :
+    if len(args) != 1 :
         parser.print_usage()
         exit(1)
-    profil(options,args)
+
+    atm_filename = args[0]
+    if options.aot > 0.:
+        aer = AeroOPAC(options.opac, options.aot, options.wref)
+    else:
+        aer = None
+
+    Profile(atm_filename, grid=options.grid, aerosol=aer).calc(options.w)
+
+
+def example1():
+    '''
+    basic example without aerosols
+    no gaseous absorption
+    '''
+    Profile('afglt.dat', O3=0.).calc(500.)
+
+def example2():
+    '''
+    using a custom grid , O3 absorption using default values, and aerosols
+    '''
+    Profile('afglt.dat',
+            grid='100[75]25[5]10[1]0',
+            aerosol=AeroOPAC('maritime_polluted', 0.4, 550.)
+            ).calc(500.)
+
+def example3():
+    '''
+    using reptran without aerosols
+    also write phase functions
+    '''
+    aer = AeroOPAC('desert', 0.4, 550.)
+    pro = Profile('afglt.dat', aerosol=aer)
+    for iband in REPTRAN('reptran_solar_sentinel.cdf').band('sentinel3_slstr_b4').ibands():
+        print pro.calc(iband)
+        aer.calcPha(iband.w)
+
+
+if __name__ == '__main__':
+    main()

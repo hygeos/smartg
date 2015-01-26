@@ -9,6 +9,8 @@ Calculate the ocean water absorption, scattering coefficients and phase
 function using the wavelength and the chlorophyll concentration
 '''
 
+# TODO: convert to other formt (see SPM model)
+
 
 from numpy import sin, cos, pi, array, exp
 from numpy import arange, zeros, log10, sqrt

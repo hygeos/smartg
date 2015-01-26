@@ -19,7 +19,7 @@ PATHDIFFAER = /home/did/RTC/SMART-G/fic/pf_urban_1020nm_layer-13.txt
 	# 3 pour ocean seul
 SIM = -2
 
-# Nom absolu du fichier du profil vertical atmosphérique utilisateur (utile uniquement si PROFIL = 2)
+# Nom absolu du fichier du profil vertical atmosphérique utilisateur
 	# Le format du fichier doit être le suivant 
 	# I	ALT		hmol(I)		haer(I)		H(I)		XDEL(I)		YDEL(I)  XSSA(I)  ZABS(I) => Première ligne indicative, pas de données dessus
 	# %d	%f	%f	%f	%f	%f	%f	%f  %f=> Format pour toutes les autres lignes
