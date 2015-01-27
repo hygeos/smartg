@@ -334,11 +334,11 @@ void initConstantesHost(int argc, char** argv)
 void chercheConstante(FILE* fichier, const char* nomConstante, char* chaineValeur)
 {
 	int longueur = strlen(nomConstante);
-	char ligne[100];
+	char ligne[2048];
 	int motTrouve = 0;
 	
 	// Tant que la constante n'est pas trouvee et qu'on n'est pas à la fin du fichier on lit la ligne
-	while(fgets(ligne, 100, fichier) && !motTrouve)
+	while(fgets(ligne, 2048, fichier) && !motTrouve)
 	{
 		// Si le debut de la ligne est nomConstante suivi d'un espace ou un egal on va chercher la valeur
 		if((strncmp(ligne, nomConstante, longueur) == 0) && (ligne[longueur] == ' ' || ligne[longueur] == '='))
