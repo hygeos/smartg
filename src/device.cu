@@ -1516,7 +1516,6 @@ __device__ void surfaceLambertienne(Photon* ph
 		return;
 	}
 	
-	float thetab;	// angle de diffusion (entre le vecteur avt et après reflexion)
 	float uxn,vxn,uyn,vyn,uzn,vzn;	// Vecteur du photon après reflexion
 	float cTh2 = RAND;
 	float cTh = sqrtf( cTh2 );
@@ -1526,8 +1525,6 @@ __device__ void surfaceLambertienne(Photon* ph
 	float cPhi = __cosf(phi);
 	float sPhi = __sinf(phi);
 	
-	float psi;
-
     #ifdef SPHERIQUE
 	float icp, isp, ict, ist;	// Sinus et cosinus de l'angle d'impact
     #endif

@@ -331,7 +331,7 @@ void initConstantesHost(int argc, char** argv)
 /* chercheConstante
 * Fonction qui cherche nomConstante dans le fichier et met la valeur de la constante dans chaineValeur (en string)
 */
-void chercheConstante(FILE* fichier, char* nomConstante, char* chaineValeur)
+void chercheConstante(FILE* fichier, const char* nomConstante, char* chaineValeur)
 {
 	int longueur = strlen(nomConstante);
 	char ligne[100];
@@ -1878,7 +1878,7 @@ void creerHDFTemoin(double* tabPhotonsTot, double* tabPhotonsTotDown, unsigned l
         exit(1);
     }
 	
-	char nomTab[20]; //nom du tableau
+	char nomTab[256]; //nom du tableau
 	sprintf(nomTab,"Temoin (%d%%)", (int)(100 * nbPhotonsTot / NBPHOTONS));
 	int nbDimsTab = 1; //nombre de dimensions du tableau
 	int valDimsTab[nbDimsTab]; //valeurs des dimensions du tableau
@@ -2191,6 +2191,7 @@ tempsPrec)
 {
 	// Tableau temporaire utile pour la suite
 	double *tab;
+    char nomTab[256];
     tab = (double*)malloc(NBPHI*NBTHETA*sizeof(double));
 
 	// Création du fichier de sortie
@@ -2264,8 +2265,7 @@ tempsPrec)
 	
 	/** 	Création du 1er tableau dans le fichier hdf
 		Valeur de la reflectance pour phi et theta donnés		**/
-//	char* nomTab="Valeurs de la reflectance (I)"; //nom du tableau
-	char* nomTab="I_up (TOA)"; //nom du tableau
+    sprintf(nomTab, "I_up (TOA)");
 	int nbDimsTab = 2; //nombre de dimensions du tableau
 	int valDimsTab[nbDimsTab]; //valeurs des dimensions du tableau
 	valDimsTab[1] = NBTHETA;	//colonnes
@@ -2291,8 +2291,7 @@ tempsPrec)
 	
 	/** 	Création du tableau Q dans le fichier hdf
 		Valeur de Q pour phi et theta donnés		**/
-//	nomTab="Valeurs de Q"; //nom du tableau
-	nomTab="Q_up (TOA)"; //nom du tableau
+    sprintf(nomTab, "Q_up (TOA)");
 	// La plupart des paramètres restent les mêmes, pas besoin de les réinitialiser
 	
 	// Création du tableau
@@ -2311,8 +2310,7 @@ tempsPrec)
 	
 	/** 	Création du tableau U dans le fichier hdf
 	Valeur de U pour phi et theta donnés		**/
-//	nomTab="Valeurs de U"; //nom du tableau
-	nomTab="U_up (TOA)"; //nom du tableau
+    sprintf(nomTab, "U_up (TOA)");
 	// La plupart des paramètres restent les mêmes, pas besoin de les réinitialiser
 	
 	// Création du tableau
@@ -2331,8 +2329,7 @@ tempsPrec)
 
 	/** 	Création du tableau de lumière polarisée dans le fichier hdf
 	Valeur de la lumière polarisée pour phi et theta donnés		**/
-//	nomTab="Valeurs de la lumiere polarisee (LP)"; //nom du tableau
-	nomTab="LP_up (TOA)"; //nom du tableau
+    sprintf(nomTab, "LP_up (TOA)");
 	// La plupart des paramètres restent les mêmes, pas besoin de les réinitialiser
 	
 	for(int i = 0; i < NBTHETA*NBPHI; i++){
@@ -2355,15 +2352,13 @@ tempsPrec)
 	SDendaccess(sdsTab);
 
     // flux descendant
-//	nomTab="Valeurs de la reflectance (I) (flux descendant)"; //nom du tableau
-	nomTab="I_down (0+)"; //nom du tableau
+    sprintf(nomTab, "I_down (0+)");
 	nbDimsTab = 2; //nombre de dimensions du tableau
 	valDimsTab[1] = NBTHETA;	//colonnes
 	valDimsTab[0] = NBPHI;
 	typeTab = DFNT_FLOAT64; //type des éléments du tableau
 	
 	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
-	startTab[nbDimsTab]; //début de la lecture du tableau
 	startTab[0]=0;
 	startTab[1]=0;
 	// Ecriture du tableau dans le fichier
@@ -2380,8 +2375,7 @@ tempsPrec)
 	
 	/** 	Création du tableau Q dans le fichier hdf
 		Valeur de Q pour phi et theta donnés		**/
-//	nomTab="Valeurs de Q (flux descendant)"; //nom du tableau
-	nomTab="Q_down (0+)"; //nom du tableau
+    sprintf(nomTab, "Q_down (0+)");
 	// La plupart des paramètres restent les mêmes, pas besoin de les réinitialiser
 	
 	// Création du tableau
@@ -2400,8 +2394,7 @@ tempsPrec)
 	
 	/** 	Création du tableau U dans le fichier hdf
 	Valeur de U pour phi et theta donnés		**/
-//	nomTab="Valeurs de U (flux descendant)"; //nom du tableau
-	nomTab="U_down (0+)"; //nom du tableau
+    sprintf(nomTab, "U_down (0+)");
 	// La plupart des paramètres restent les mêmes, pas besoin de les réinitialiser
 	
 	// Création du tableau
@@ -2420,8 +2413,7 @@ tempsPrec)
 
 	/** 	Création du tableau N dans le fichier hdf
 	Valeur de N pour phi et theta donnés		**/
-//	nomTab="Nb de photons"; //nom du tableau
-	nomTab="Numbers of photons"; //nom du tableau
+    sprintf(nomTab, "Numbers of photons");
 	// La plupart des paramètres restent les mêmes, pas besoin de les réinitialiser
 	
 	// Création du tableau
@@ -2448,8 +2440,7 @@ tempsPrec)
 	for(int i=0; i<NBTHETA; i++)
 		tabThBis[i] = tabTh[i]/DEG2RAD;
 	
-//	nomTab = "Valeurs de theta echantillonnees";
-	nomTab = "Zenith angles";
+    sprintf(nomTab, "Zenith angles");
 	nbDimsTab = 1;
 	int valDimsTab2[nbDimsTab];
 	valDimsTab2[0] = NBTHETA;
@@ -2474,8 +2465,7 @@ tempsPrec)
 	for(int i=0; i<NBPHI; i++)
 		tabPhiBis[i] = tabPhi[i]/DEG2RAD;
 	
-//	nomTab = "Valeurs de phi echantillonnees";
-	nomTab = "Azimut angles";
+    sprintf(nomTab, "Azimut angles");
 	nbDimsTab = 1;
 	int valDimsTab3[nbDimsTab];
 	valDimsTab3[0] = NBPHI;

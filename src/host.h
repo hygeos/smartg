@@ -46,7 +46,7 @@ void initConstantesHost(int, char**);
 /* chercheConstante
 * Fonction qui cherche nomConstante dans le fichier et met la valeur de la constante dans chaineValeur (en string)
 */
-void chercheConstante(FILE* fichier, char* nomConstante, char* chaineValeur);
+void chercheConstante(FILE* fichier, const char* nomConstante, char* chaineValeur);
 
 
 
