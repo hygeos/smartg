@@ -1104,24 +1104,29 @@ void calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, 
 	}
 	
 	/** Calcul des faer **/
-	for(iang=0; iang<nf-1; iang++){
+//	for(iang=0; iang<nf-1; iang++){
+		for(iang=0; iang<nf; iang++){
 		z = double(iang+1)/double(nf);
 		while( (scum[ipf+1]<z) )
 			ipf++;
 		
-		phase_H[iang*5+4] = float( ((scum[ipf+1]-z)*ang[ipf] + (z-scum[ipf])*ang[ipf+1])/(scum[ipf+1]-scum[ipf]) );
-		norm = p1[ipf]+p2[ipf];			// Angle
-		phase_H[iang*5+0] = float( p1[ipf]/norm );	// I paralèlle
-		phase_H[iang*5+1] = float( p2[ipf]/norm );	// I perpendiculaire
-		phase_H[iang*5+2] = float( p3[ipf]/norm );	// u
-		phase_H[iang*5+3] = 0.F;			// v, toujours nul
+			phase_H[iang*5+4] = float( ((scum[ipf+1]-z)*ang[ipf] + (z-scum[ipf])*ang[ipf+1])/(scum[ipf+1]-scum[ipf]) );
+//		norm = p1[ipf]+p2[ipf];			// Angle
+//		phase_H[iang*5+0] = float( p1[ipf]/norm );	// I paralèlle
+//		phase_H[iang*5+1] = float( p2[ipf]/norm );	// I perpendiculaire
+//		phase_H[iang*5+2] = float( p3[ipf]/norm );	// u
+//		phase_H[iang*5+3] = 0.F;			// v, toujours nul
+			phase_H[iang*5+0] = float( p1[ipf] );	// I paralèlle
+			phase_H[iang*5+1] = float( p2[ipf] );	// I perpendiculaire
+			phase_H[iang*5+2] = float( p3[ipf] );	// u
+			phase_H[iang*5+3] = 0.F;	       	// v, toujours nul
 	}
 	
-	phase_H[(nf-1)*5+4] = PI;
-	phase_H[(nf-1)*5+0] = 0.5F+00;
-	phase_H[(nf-1)*5+1] = 0.5F+00;
-	phase_H[(nf-1)*5+2] = float( p3[lsa-1]/(p1[lsa-1]+p2[lsa-1]) );
-	phase_H[(nf-1)*5+3] = 0.F+00;
+//	phase_H[(nf-1)*5+4] = PI;
+//	phase_H[(nf-1)*5+0] = 0.5F+00;
+//	phase_H[(nf-1)*5+1] = 0.5F+00;
+//	phase_H[(nf-1)*5+2] = float( p3[lsa-1]/(p1[lsa-1]+p2[lsa-1]) );
+//	phase_H[(nf-1)*5+3] = 0.F+00;
 	
 	free(scum);
 	free(ang);

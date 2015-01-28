@@ -979,44 +979,114 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa
 	if(ph->loc!=OCEAN){
 	#endif
 		if( prop_aer<RAND ){
+
+			// Get Teta (see Wang et al., 2012)
+			float b = (RAND - 4.0 * ALPHAd - BETAd) / (2.0 * ALPHAd);
+			float expo = 1./2.;
+			float base = ACUBEd + b*b;
+			float tmp  = pow(base, expo);
+			expo = 1./3.;
+			base = -b + tmp;
+			float u = pow(base,expo);
+			cTh     = u - Ad / u;  						       
+
+			if (cTh < -1.0) cTh = -1.0;
+			if (cTh >  1.0) cTh =  1.0;
+			cTh2 = cTh * cTh;
+			
+			/////////////
+			//  Get Phi
+
+			// Biased sampling scheme for phi
+			psi = RAND * DEUXPI;	//psiPhoton
+			cPsi = __cosf(psi);	//cosPsiPhoton
+			sPsi = __sinf(psi);     //sinPsiPhoton		
+
 			// Theta calculé pour la diffusion moléculaire
-			cTh =  2.F * RAND - 1.F; // cosThetaPhoton
-			cTh2 = (cTh)*(cTh);
+			//cTh =  2.F * RAND - 1.F; // cosThetaPhoton
+			//cTh2 = (cTh)*(cTh);
 			
 			// Calcul du poids après diffusion
-			ph->weight *= __fdividef(1.5F * ((1.F+GAMAd)*stokes1+((1.F-GAMAd)*cTh2+2.F*GAMAd)*stokes2), (1.F+2.F*GAMAd) *
-			(stokes1+stokes2));
+		//	ph->weight *= __fdividef(1.5F * ((1.F+GAMAd)*stokes1+((1.F-GAMAd)*cTh2+2.F*GAMAd)*stokes2), (1.F+2.F*GAMAd) *
+		//	(stokes1+stokes2));
 			// Calcul des parametres de Stokes du photon apres diffusion
-			ph->stokes1 += GAMAd * stokes2;
-			ph->stokes2 = ( (1.F - GAMAd) * cTh2 + GAMAd) * stokes2 + GAMAd * ph->stokes1;
-// 			ph->stokes2 += GAMAd * stokes1;
-// 			ph->stokes1 = ( (1.F - GAMAd) * cTh2 + GAMAd) * stokes1 + GAMAd * ph->stokes2;
+		//	ph->stokes1 += GAMAd * stokes2;
+		//	ph->stokes2 = ( (1.F - GAMAd) * cTh2 + GAMAd) * stokes2 + GAMAd * ph->stokes1;
+
 			
-			ph->stokes3 *= (1.F - GAMAd) * (cTh);
+			//ph->stokes3 *= (1.F - GAMAd) * (cTh);
+			// Rotation des paramètres de stokes
+			rotateStokes(ph->stokes1, ph->stokes2, ph->stokes3, psi,
+				     &ph->stokes1, &ph->stokes2, &ph->stokes3);
+
+			// Calcul des parametres de Stokes du photon apres diffusion
+			float cross_term;
+			stokes1 = ph->stokes1;
+			stokes2 = ph->stokes2;
+			cross_term  = DELTA_PRIMd * (stokes1 + stokes2);
+//			ph->stokes1 = 3./2. * (  DELTAd * cTh2 * stokes1 + cross_term );
+//			ph->stokes2 = 3./2. * (  DELTAd        * stokes2 + cross_term );
+// J'intervertis composante parallele et perpendiculaire pour retrouve même signe pour U et Q qu'avant
+			ph->stokes1 = 3./2. * (  DELTAd  * stokes1 + cross_term );
+			ph->stokes2 = 3./2. * (  DELTAd  * cTh2 * stokes2 + cross_term );			
+			ph->stokes3 = 3./2. * (  DELTAd * cTh  * ph->stokes3 );
+			// bias sampling scheme
+			float phase_func;
+			phase_func = 3./4. * DELTAd * (cTh2+1.0) + 3.0 * DELTA_PRIMd;
+			ph->stokes1 /= phase_func;  
+			ph->stokes2 /= phase_func;  
+			ph->stokes3 /= phase_func;     		
+
+
+
+
 		}
 		else{
 			// Aérosols
 			zang = RAND*(NFAERd-2);
 			iang= __float2int_rd(zang);
-			
 			zang = zang - iang;
 			/* L'accès à faer[x][y] se fait par faer[y*5+x] */
 			theta = faer[iang*5+4]+ zang*( faer[(iang+1)*5+4]-faer[iang*5+4] );
-			
 			cTh = __cosf(theta);
+
+
+			//////////////
+			//  Get Phi
+
+			// biased sampling scheme for phi
+			psi = RAND * DEUXPI;	//psiPhoton
+			cPsi = __cosf(psi);	//cosPsiPhoton
+			sPsi = __sinf(psi);     //sinPsiPhoton		
+			// Rotation des paramètres de stokes
+			rotateStokes(ph->stokes1, ph->stokes2, ph->stokes3, psi,
+				     &ph->stokes1, &ph->stokes2, &ph->stokes3);
+
+			// Calcul des parametres de Stokes du photon apres diffusion
+			ph->stokes1 *= faer[iang*5+0];
+			ph->stokes2 *= faer[iang*5+1];
+			ph->stokes3 *= faer[iang*5+2];
+
+			float debias;
+			debias = __fdividef( 2., faer[iang*5+0] + faer[iang*5+1] );
+			ph->stokes1 *= debias;  
+			ph->stokes2 *= debias;  
+			ph->stokes3 *= debias;  
+
+			ph->weight *= ssa[ph->couche];
 			
 			/** Changement du poids et des nombres de stokes du photon **/
-			float faer1 = faer[iang*5+0];
-			float faer2 = faer[iang*5+1];
+//			float faer1 = faer[iang*5+0];
+//			float faer2 = faer[iang*5+1];
 			
 			// Calcul du poids après diffusion
-			ph->weight *= __fdividef( 2.0F*(stokes1*faer1+stokes2*faer2) , stokes1+stokes2)*ssa[ph->couche];
+//			ph->weight *= __fdividef( 2.0F*(stokes1*faer1+stokes2*faer2) , stokes1+stokes2)*ssa[ph->couche];
 			
 			// Calcul des parametres de Stokes du photon apres diffusion
-			ph->stokes1 *= faer1;
-			ph->stokes2 *= faer2;
-			ph->stokes3 *= faer[iang*5+2];
-			// 		photon->stokes4 = 0.F;
+//			ph->stokes1 *= faer1;
+//			ph->stokes2 *= faer2;
+//			ph->stokes3 *= faer[iang*5+2];
+
 		}
 		
 	#ifdef FLAGOCEAN
@@ -1094,10 +1164,10 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa
 
     // renormalisation
     //TestDR
-    norm=ph->stokes1+ph->stokes2;
-    ph->stokes1/=norm;
-    ph->stokes2/=norm;
-    ph->stokes3/=norm;
+//    norm=ph->stokes1+ph->stokes2;
+//    ph->stokes1/=norm;
+ //   ph->stokes2/=norm;
+ //   ph->stokes3/=norm;
     norm=sqrtf(ph->vx*ph->vx+ph->vy*ph->vy+ph->vz*ph->vz);
     ph->vx/=norm;
     ph->vy/=norm;
@@ -1241,12 +1311,14 @@ __device__ void surfaceAgitee(Photon* ph
 	if( ph->vz > 0 ){
 		nind = __fdividef(1.f,NH2Od);
 		nz = -cBeta;
-		ph->weight *= __fdividef( abs(nx*ph->vx + ny*ph->vy + nz*ph->vz), ph->vz*cBeta);
+//		ph->weight *= __fdividef( abs(nx*ph->vx + ny*ph->vy + nz*ph->vz), ph->vz*cBeta);
+// suppression pour nouvelle méthode diffusion/reflexion:Mathieu
 	}
 	else{
 		nind = NH2Od;
 		nz = cBeta;
-		ph->weight *= -__fdividef( abs(nx*ph->vx + ny*ph->vy + nz*ph->vz), ph->vz*cBeta );
+//		ph->weight *= -__fdividef( abs(nx*ph->vx + ny*ph->vy + nz*ph->vz), ph->vz*cBeta );
+        // suppression nouvelle methode
 	}
 	
 	
@@ -1262,6 +1334,28 @@ __device__ void surfaceAgitee(Photon* ph
 
 	cTh = __cosf(theta);
 	sTh = __sinf(theta);
+
+
+    // Projection de la surface apparente de la facette sur le plan horizontal      
+    if( ph->vz > 0 ){
+        // eau -> air
+        // Correction bug surface apparente facettes face/dos au photon
+        ph->weight *= __fdividef( abs(cTh), ph->vz);
+       // Projection de la surface apparente de la facette sur le plan horizonthal
+       ph->weight /= cBeta;
+
+                     }
+    else{
+         // air -> eau
+         // Correction bug surface apparente facettes face/dos au photon
+         ph->weight *= - __fdividef( abs(cTh), ph->vz);
+         // Projection de la surface apparente de la facette sur le plan horizonthal
+         ph->weight /= cBeta;
+         }
+
+
+
+
 
 	// Rotation des paramètres de Stokes
 	s1 = ph->stokes1;
@@ -1351,10 +1445,14 @@ __device__ void surfaceAgitee(Photon* ph
                 ph->loc = ABSORBED;
             }
 
-		if( SURd==1 ){ /*On pondere le poids du photon par le coefficient de reflexion dans le cas 
-			d'une reflexion speculaire sur le dioptre (mirroir parfait)*/
-			ph->weight *= rat;
-		}
+//		if( SURd==1 ){ /*On pondere le poids du photon par le coefficient de reflexion dans le cas 
+//			d'une reflexion speculaire sur le dioptre (mirroir parfait)*/
+//			ph->weight *= rat;
+//		}
+
+		if (SURd==3) {
+			ph->weight /= rat;
+				}
 		
 	}
 	else{	// Transmission par le dioptre
@@ -1396,12 +1494,18 @@ __device__ void surfaceAgitee(Photon* ph
 
 		
 		/* On pondere le poids du photon par le coefficient de transmission dans le cas d'une transmission forcee */
-		if( SURd == 2)
-			ph->weight *= (1-rat);
+//  Modif on supprime cette pondération (nouvelle méthode cf collins et mat)
+//		if( SURd == 2)
+//			ph->weight *= (1-rat);
+//      mais on rajoute cela
+        if ( SURd == 3) 
+            ph->weight /= (1-rat);
         }   // fin du if (DIOPTRE<4)		
 
 
-        if (DIOPTREd==4){    
+        if (DIOPTREd==4){
+//  changement du poids (nouvelle mméthode, cf collins et mat). Est ce à faire ici ou à la fin          
+        ph->weight /= (1-rat);
 		if(ph->vz<0){
 			if( SIMd==-1 || SIMd==0 ){
 				ph->loc = SPACE;
@@ -1462,7 +1566,9 @@ __device__ void surfaceAgitee(Photon* ph
 		ph->uz = uzn;
 		
 		// Aucun photon n'est absorbés mais on pondère le poids par l'albedo de diffusion de la surface lambertienne.
-		ph->weight *= __fdividef( W0LAMd, 1-rat );
+        // modif ici à faire pour suivre nouvelle méthode (Collins et Mat)
+//		ph->weight *= __fdividef( W0LAMd, 1-rat );
+		ph->weight *=  W0LAMd;
 		
     } // fin du if (DIOPTRE==4)
 	}
@@ -1674,12 +1780,12 @@ __device__ void countPhoton(Photon* ph, Tableaux tab, unsigned long long* nbPhot
     }
 	
 // si son poids est anormalement élevé on le compte comme une erreur. Test effectué uniquement en présence de dioptre
-	if( (ph->weight > WEIGHTMAX) && (SIMd!=-2)){
-		#ifdef PROGRESSION
-		atomicAdd(&(var->erreurpoids), 1);
-		#endif
-		return;
-	}
+//	if( (ph->weight > WEIGHTMAX) && (SIMd!=-2)){
+//		#ifdef PROGRESSION
+//		atomicAdd(&(var->erreurpoids), 1);
+//		#endif
+//		return;
+//	}
 
 
     float *tabCount; // pointer to the "counting" array:
@@ -1754,7 +1860,12 @@ __device__ void countPhoton(Photon* ph, Tableaux tab, unsigned long long* nbPhot
 	s1 = s2;
 	s2 = tmp;
 	
-    float weight = __fdividef(ph->weight, s1 + s2);
+//    float weight = __fdividef(ph->weight, s1 + s2);
+
+	float weight = ph->weight;//*att_factor * __fdividef(StackPos->weight, s1 + s2);
+
+
+
 
 	// Rangement du photon dans sa case, et incrémentation de variables
 	if(((ith >= 0) && (ith < NBTHETAd)) && ((iphi >= 0) && (iphi < NBPHId)))
@@ -1951,6 +2062,19 @@ void initConstantesDevice()
 	
 	float GAMAbis = DEPO / (2.F-DEPO);
 	cudaMemcpyToSymbol(GAMAd, &GAMAbis, sizeof(float));
+	float DELTAbis      = (1.0 - GAMAbis) / (1.0 + 2.0*GAMAbis);
+	float DELTA_PRIMbis = GAMAbis / (1.0 + 2.0*GAMAbis);
+	float BETAbis  = 3./2. * DELTA_PRIMbis;
+	float ALPHAbis = 1./8. * DELTAbis;
+	float Abis     = 1. + BETAbis / (3.0 * ALPHAbis);
+	float ACUBEbis = Abis * Abis* Abis;
+	cudaMemcpyToSymbol(BETAd, &BETAbis, sizeof(float));
+	cudaMemcpyToSymbol(ALPHAd, &ALPHAbis, sizeof(float));
+	cudaMemcpyToSymbol(Ad, &Abis, sizeof(float));
+	cudaMemcpyToSymbol(ACUBEd, &ACUBEbis, sizeof(float));
+ 	cudaMemcpyToSymbol(DELTAd, &DELTAbis, sizeof(float));
+	cudaMemcpyToSymbol(DELTA_PRIMd, &DELTA_PRIMbis, sizeof(float));
+
 
 	cudaMemcpyToSymbol(TAUATMd, &TAUATM, sizeof(float));
 	
