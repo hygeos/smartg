@@ -94,7 +94,6 @@ typedef int CrMCCUDA;
 
 
 /* Paramètres pour l'océan */
-#define DEPO 0.0279F
 #define NFOCE_c = 10000000
 
 /* Pour le calcul de la fonction de phase dans l'océan*/
@@ -168,6 +167,7 @@ extern float X0;
 extern float Y0;
 #ifdef FLAGOCEAN
 extern float W0OCE;
+extern float DEPO;  // depolarization factor
 extern float ATOT, BTOT;
 extern char PATHDIFFOCE[];
 #endif

@@ -241,6 +241,10 @@ void initConstantesHost(int argc, char** argv)
 	Y0 = atof(s);
 	
 	strcpy(s,"");
+	chercheConstante(parametres, "DEPO", s);
+	DEPO = atof(s);
+	
+	strcpy(s,"");
 	chercheConstante(parametres, "W0LAM", s);
 	W0LAM = atof(s);
 	

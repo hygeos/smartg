@@ -37,6 +37,7 @@ float TAUATM;
 float W0AER;	//Albedo simple de diffusion des aerosols
 #ifdef FLAGOCEAN
 float W0OCE;	//Albedo simple de diffusion dans l'ocean
+float DEPO;     //Facteur de depolarisation de l'eau
 #endif
 float W0LAM;	//Albedo simple de diffusion de la surface lambertienne
 float HA;		//Echelle de hauteur aerosol [km] (utilise si PROFIL=0)

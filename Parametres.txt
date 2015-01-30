@@ -1,6 +1,6 @@
 
 # Nombre de photons a lancer (unsigned long long) (limite par le tableau du poids des photons en unsigned long long)
-NBPHOTONS = 1e11
+NBPHOTONS = 1e9
 
 # Angle zenithal de visée en degrés (float)
 THVDEG = 60.0
@@ -90,6 +90,9 @@ ATOT = 0.05
 BTOT = 0.1
 PATHDIFFOCE = /home/did/RTC/SMART-G/fic/pf_ocean_1.0_443nm.txt
 
+# Coefficient de dépolarisation
+DEPO = 0.0279
+
 # Effet d environnement
 # 0 pas d effet
 # 1 effet d environnement de type cible circulaire
@@ -135,7 +138,8 @@ NFOCE = 10000000
 #_______________________#        
 
 # Chemin du fichiers de sortie et témoin
-PATHRESULTATSHDF=/home/did/RTC/SMART-G/resultat/out1.hdf
+PATHRESULTATSHDF=resultat/out.hdf
+
 # Période d'écriture du fichier témoin en min (-1 pour désactiver)
 WRITE_PERIOD = -1
 
