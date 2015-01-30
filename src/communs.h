@@ -155,7 +155,6 @@ extern unsigned int LSAOCE;
 extern unsigned int NFOCE;
 
 extern float THVDEG;
-extern float LAMBDA;
 extern float TAURAY;
 extern float TAUAER;
 extern float TAUATM;

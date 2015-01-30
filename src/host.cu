@@ -209,10 +209,6 @@ void initConstantesHost(int argc, char** argv)
 	THVDEG = atof(s);
 	
 	strcpy(s,"");
-	chercheConstante(parametres, "LAMBDA", s);
-	LAMBDA = atof(s);
-	
-	strcpy(s,"");
 	chercheConstante(parametres, "TAURAY", s);
 	TAURAY = atof(s);
 	
@@ -1405,8 +1401,6 @@ void afficheParametres()
 	printf("\n");
 	printf(" THVDEG\t=\t%f (degrés)", THVDEG);
 	printf("\n");
-	printf(" LAMBDA\t=\t%f", LAMBDA);
-	printf("\n");
 	printf(" SIM\t=\t%d", SIM);
 		if( SIM==-2 )
 			printf("\t(Atmosphère seule)");
@@ -1745,7 +1739,6 @@ void creerHDFTemoin(double* tabPhotonsTot, double* tabPhotonsTotDown, unsigned l
 	SDsetattr(sdsTab, "X0", DFNT_FLOAT32, 1, &X0);
 	SDsetattr(sdsTab, "Y0", DFNT_FLOAT32, 1, &Y0);
 	SDsetattr(sdsTab, "THVDEG", DFNT_FLOAT32, 1, &THVDEG);
-	SDsetattr(sdsTab, "LAMBDA", DFNT_FLOAT32, 1, &LAMBDA);
 	SDsetattr(sdsTab, "TAURAY", DFNT_FLOAT32, 1, &TAURAY);
 	SDsetattr(sdsTab, "TAUAER", DFNT_FLOAT32, 1, &TAUAER);
 	SDsetattr(sdsTab, "W0AER", DFNT_FLOAT32, 1, &W0AER);
@@ -1824,7 +1817,6 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		int SIMrecup[1];
 		int SURrecup[1];
 		float THVDEGrecup[1];
-		float LAMBDArecup[1];
 		float TAURAYrecup[1];
 		float TAUAERrecup[1];
 		float W0AERrecup[1];
@@ -1849,7 +1841,6 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "SIM"), (VOIDP)SIMrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "SUR"), (VOIDP)SURrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "THVDEG"), (VOIDP)THVDEGrecup);
-		SDreadattr(sdsTab, SDfindattr(sdsTab, "LAMBDA"), (VOIDP)LAMBDArecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "TAURAY"), (VOIDP)TAURAYrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "TAUAER"), (VOIDP)TAUAERrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "W0AER"), (VOIDP)W0AERrecup);
@@ -1875,7 +1866,6 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 			&& SIMrecup[0] == SIM
 			&& SURrecup[0] == SUR
 			&& THVDEGrecup[0] == THVDEG
-			&& LAMBDArecup[0] == LAMBDA
 			&& TAURAYrecup[0] == TAURAY
 			&& TAUAERrecup[0] == TAUAER
 			&& W0AERrecup[0] == W0AER
@@ -2024,7 +2014,6 @@ tempsPrec)
 	SDsetattr(sdFichier, "SIM", DFNT_INT32, 1, &SIM);
 	SDsetattr(sdFichier, "SUR", DFNT_INT32, 1, &SUR);
 	SDsetattr(sdFichier, "VZA (deg.)", DFNT_FLOAT32, 1, &THVDEG);
-	SDsetattr(sdFichier, "LAMBDA", DFNT_FLOAT32, 1, &LAMBDA);
 	SDsetattr(sdFichier, "TAURAY", DFNT_FLOAT32, 1, &TAURAY);
 	SDsetattr(sdFichier, "TAUAER", DFNT_FLOAT32, 1, &TAUAER);
 	

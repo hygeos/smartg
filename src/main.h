@@ -29,7 +29,6 @@ unsigned int LSAOCE;	// Nombre d'échantillons pour les angles du modèle de dif
 unsigned int NFOCE;
 
 float THVDEG;	//Angle zénithal de visée
-float LAMBDA;	//Longueur d'onde [nm]
 float TAURAY;	//Epaisseur optique moleculaire (Rayleigh)
 float TAUAER;	//Epaisseur optique aerosol
 float TAUATM;

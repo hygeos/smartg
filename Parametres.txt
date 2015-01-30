@@ -5,9 +5,6 @@ NBPHOTONS = 1e9
 # Angle zenithal de visée en degrés (float)
 THVDEG = 60.0
 
-# Longueur d'onde [nm] (float)
-LAMBDA = 1020.0
-
 # Epaisseur optique moleculaire (Rayleigh) (float)
 TAURAY = 1.0
 
