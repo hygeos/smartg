@@ -11,9 +11,6 @@ TAURAY = 1.0
 # Epaisseur optique aerosol (float)
 TAUAER = 0.
 
-# Albedo simple de diffusion des aerosols (float)
-W0AER = 0.90
-
 # Nom absolu du fichier de la matrice de phase des aérosol
 	# Données commencant sur la première ligne
 	# %lf	%lf	%lf	%lf	%lf => Correspondant à angle	p2	p1	p3	p4

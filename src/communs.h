@@ -158,7 +158,6 @@ extern float THVDEG;
 extern float TAURAY;
 extern float TAUAER;
 extern float TAUATM;
-extern float W0AER;
 extern float W0LAM;
 extern float ENV_SIZE;
 extern float X0;

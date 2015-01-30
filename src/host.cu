@@ -217,10 +217,6 @@ void initConstantesHost(int argc, char** argv)
 	TAUAER = atof(s);
 	
 	strcpy(s,"");
-	chercheConstante(parametres, "W0AER", s);
-	W0AER = atof(s);
-	
-	strcpy(s,"");
 	chercheConstante(parametres, "ENV_SIZE", s);
 	ENV_SIZE = atof(s);
 	
@@ -1447,8 +1443,6 @@ void afficheParametres()
 		printf("\n");
 		printf(" TAUAER\t=\t%f", TAUAER);
 		printf("\n");
-		printf(" W0AER\t=\t%f", W0AER);
-		printf("\n");
 		printf(" LSAAER\t=\t%u", LSAAER);
 		printf("\n");
 		printf(" NFAER\t=\t%u", NFAER);
@@ -1741,7 +1735,6 @@ void creerHDFTemoin(double* tabPhotonsTot, double* tabPhotonsTotDown, unsigned l
 	SDsetattr(sdsTab, "THVDEG", DFNT_FLOAT32, 1, &THVDEG);
 	SDsetattr(sdsTab, "TAURAY", DFNT_FLOAT32, 1, &TAURAY);
 	SDsetattr(sdsTab, "TAUAER", DFNT_FLOAT32, 1, &TAUAER);
-	SDsetattr(sdsTab, "W0AER", DFNT_FLOAT32, 1, &W0AER);
 	SDsetattr(sdsTab, "W0LAM", DFNT_FLOAT32, 1, &W0LAM);
 	
 	SDsetattr(sdsTab, "LSAAER", DFNT_UINT32, 1, &LSAAER);
@@ -1819,7 +1812,6 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		float THVDEGrecup[1];
 		float TAURAYrecup[1];
 		float TAUAERrecup[1];
-		float W0AERrecup[1];
 		float W0LAMrecup[1];
 		float ENV_SIZErecup[1];
 		float X0recup[1];
@@ -1843,7 +1835,6 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "THVDEG"), (VOIDP)THVDEGrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "TAURAY"), (VOIDP)TAURAYrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "TAUAER"), (VOIDP)TAUAERrecup);
-		SDreadattr(sdsTab, SDfindattr(sdsTab, "W0AER"), (VOIDP)W0AERrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "W0LAM"), (VOIDP)W0LAMrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "ENV_SIZE"), (VOIDP)ENV_SIZErecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "X0"), (VOIDP)X0recup);
@@ -1868,7 +1859,6 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 			&& THVDEGrecup[0] == THVDEG
 			&& TAURAYrecup[0] == TAURAY
 			&& TAUAERrecup[0] == TAUAER
-			&& W0AERrecup[0] == W0AER
 			&& W0LAMrecup[0] == W0LAM
 			&& ENV_SIZErecup[0] == ENV_SIZE
 			&& X0recup[0] == X0
@@ -2022,7 +2012,6 @@ tempsPrec)
 	SDsetattr(sdFichier, "LSAOCE", DFNT_UINT32, 1, &LSAOCE);
 	SDsetattr(sdFichier, "NFOCE", DFNT_UINT32, 1, &NFOCE);
 	
-	SDsetattr(sdFichier, "W0AER", DFNT_FLOAT32, 1, &W0AER);
 	SDsetattr(sdFichier, "W0LAM", DFNT_FLOAT32, 1, &W0LAM);
 	SDsetattr(sdFichier, "ENV_SIZE", DFNT_FLOAT32, 1, &ENV_SIZE);
 	SDsetattr(sdFichier, "X0", DFNT_FLOAT32, 1, &X0);

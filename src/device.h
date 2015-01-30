@@ -28,7 +28,6 @@ __device__ __constant__ float TAUATMd;
 #ifndef SPHERIQUE
 __device__ __constant__ float TAUMAXd;	//tau initial du photon (Host)
 #endif
-__device__ __constant__ float W0AERd;
 #ifdef FLAGOCEAN
 __device__ __constant__ float W0OCEd;
 __device__ __constant__ float DEPOd;
