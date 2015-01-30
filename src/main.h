@@ -39,10 +39,6 @@ float W0OCE;	//Albedo simple de diffusion dans l'ocean
 float DEPO;     //Facteur de depolarisation de l'eau
 #endif
 float W0LAM;	//Albedo simple de diffusion de la surface lambertienne
-float HA;		//Echelle de hauteur aerosol [km] (utilise si PROFIL=0)
-float HR;		//Echelle de hauteur moleculaire [km]
-float ZMIN;		//Altitude basse de la couche aerosol [km] (utilise si PROFIL=3)
-float ZMAX;		//Altitude haute de la couche aerosol [km] (utilise si PROFIL=3)
 int NATM;		//Altitude haute de la couche aerosol [km] (utilise si PROFIL=3)
 float HATM;		//Altitude haute de la couche aerosol [km] (utilise si PROFIL=3)
 float WINDSPEED;	//Vitesse du vent [m/s] (utilisee pour le modele de Cox et Munk: si DIOPTRE=1)

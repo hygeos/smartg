@@ -171,10 +171,6 @@ extern float ATOT, BTOT;
 extern char PATHDIFFOCE[];
 #endif
 extern unsigned int OUTPUT_LAYERS;
-extern float HA;
-extern float HR;
-extern float ZMIN;
-extern float ZMAX;
 extern int NATM;
 extern float HATM;
 extern float WINDSPEED;

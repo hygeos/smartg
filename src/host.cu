@@ -261,22 +261,6 @@ void initConstantesHost(int argc, char** argv)
 	NFOCE = atof(s);
 	
 	strcpy(s,"");
-	chercheConstante(parametres, "HA", s);
-	HA = atof(s);
-	
-	strcpy(s,"");
-	chercheConstante(parametres, "HR", s);
-	HR = atof(s);
-	
-	strcpy(s,"");
-	chercheConstante(parametres, "ZMIN", s);
-	ZMIN = atof(s);
-	
-	strcpy(s,"");
-	chercheConstante(parametres, "ZMAX", s);
-	ZMAX = atof(s);
-	
-	strcpy(s,"");
 	chercheConstante(parametres, "NATM", s);
 	NATM = atoi(s);
 	
@@ -1475,14 +1459,6 @@ void afficheParametres()
 		printf("\n");
 		printf(" NFAER\t=\t%u", NFAER);
 		printf("\n");
-		printf(" HA\t=\t%f", HA);
-		printf("\n");
-		printf(" HR\t=\t%f", HR);
-		printf("\n");
-		printf(" ZMIN\t=\t%f", ZMIN);
-		printf("\n");
-		printf(" ZMAX\t=\t%f", ZMAX);
-		printf("\n");
 		printf(" NATM\t=\t%d", NATM);
 		printf("\n");
 		printf(" HATM\t=\t%f", HATM);
@@ -1780,10 +1756,6 @@ void creerHDFTemoin(double* tabPhotonsTot, double* tabPhotonsTotDown, unsigned l
 	SDsetattr(sdsTab, "LSAOCE", DFNT_UINT32, 1, &LSAOCE);
 	SDsetattr(sdsTab, "NFOCE", DFNT_UINT32, 1, &NFOCE);
 	
-	SDsetattr(sdsTab, "HA", DFNT_FLOAT32, 1, &HA);
-	SDsetattr(sdsTab, "HR", DFNT_FLOAT32, 1, &HR);
-	SDsetattr(sdsTab, "ZMIN", DFNT_FLOAT32, 1, &ZMIN);
-	SDsetattr(sdsTab, "ZMAX", DFNT_FLOAT32, 1, &ZMAX);
 	SDsetattr(sdsTab, "NATM", DFNT_INT32, 1, &NATM);
 	SDsetattr(sdsTab, "HATM", DFNT_FLOAT32, 1, &HATM);
 	SDsetattr(sdsTab, "WINDSPEED", DFNT_FLOAT32, 1, &WINDSPEED);
@@ -1857,10 +1829,6 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		float TAUAERrecup[1];
 		float W0AERrecup[1];
 		float W0LAMrecup[1];
-		float HArecup[1];
-		float HRrecup[1];
-		float ZMINrecup[1];
-		float ZMAXrecup[1];
 		float ENV_SIZErecup[1];
 		float X0recup[1];
 		float Y0recup[1];
@@ -1889,10 +1857,6 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "ENV_SIZE"), (VOIDP)ENV_SIZErecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "X0"), (VOIDP)X0recup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "Y0"), (VOIDP)Y0recup);
-		SDreadattr(sdsTab, SDfindattr(sdsTab, "HA"), (VOIDP)HArecup);
-		SDreadattr(sdsTab, SDfindattr(sdsTab, "HR"), (VOIDP)HRrecup);
-		SDreadattr(sdsTab, SDfindattr(sdsTab, "ZMIN"), (VOIDP)ZMINrecup);
-		SDreadattr(sdsTab, SDfindattr(sdsTab, "ZMAX"), (VOIDP)ZMAXrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "NATM"), (VOIDP)NATMrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "HATM"), (VOIDP)HATMrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "WINDSPEED"), (VOIDP)WINDSPEEDrecup);
@@ -1919,10 +1883,6 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 			&& ENV_SIZErecup[0] == ENV_SIZE
 			&& X0recup[0] == X0
 			&& Y0recup[0] == Y0
-			&& HArecup[0] == HA
-			&& HRrecup[0] == HR
-			&& ZMINrecup[0] == ZMIN
-			&& ZMAXrecup[0] == ZMAX
 			&& NATMrecup[0] == NATM
 			&& HATMrecup[0] == HATM
 			&& WINDSPEEDrecup[0] == WINDSPEED
@@ -2078,10 +2038,6 @@ tempsPrec)
 	SDsetattr(sdFichier, "ENV_SIZE", DFNT_FLOAT32, 1, &ENV_SIZE);
 	SDsetattr(sdFichier, "X0", DFNT_FLOAT32, 1, &X0);
 	SDsetattr(sdFichier, "Y0", DFNT_FLOAT32, 1, &Y0);
-	SDsetattr(sdFichier, "HA", DFNT_FLOAT32, 1, &HA);
-	SDsetattr(sdFichier, "HR", DFNT_FLOAT32, 1, &HR);
-	SDsetattr(sdFichier, "ZMIN", DFNT_FLOAT32, 1, &ZMIN);
-	SDsetattr(sdFichier, "ZMAX", DFNT_FLOAT32, 1, &ZMAX);
 	SDsetattr(sdFichier, "NATM", DFNT_INT32, 1, &NATM);
 	SDsetattr(sdFichier, "HATM", DFNT_FLOAT32, 1, &HATM);
 	SDsetattr(sdFichier, "WINDSPEED", DFNT_FLOAT32, 1, &WINDSPEED);

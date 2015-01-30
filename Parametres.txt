@@ -37,18 +37,6 @@ SIM = -2
 	# %d	%f	%f	%f	%f	%f	%f	%f  %f=> Format pour toutes les autres lignes
 PATHPROFILATM = /home/did/RTC/SMART-G/profil/profil.tmp
 
-# Echelle de hauteur aerosol [km] (utilise si PROFIL=0) (float)
-HA = 1.0
-
-# Echelle de hauteur moleculaire [km] (float)
-HR = 8.0
-
-# Altitude basse de la couche aerosol [km] (utilise si PROFIL=3) (float)
-ZMIN = 0.0
-
-# Altitude haute de la couche aerosol [km] (utilise si PROFIL=3) (float)
-ZMAX = 1.0
-
 # Nombre de couche+1
 NATM=14
 

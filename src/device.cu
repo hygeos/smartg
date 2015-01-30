@@ -2025,12 +2025,7 @@ void initConstantesDevice()
 
 	cudaMemcpyToSymbol(OUTPUT_LAYERSd, &OUTPUT_LAYERS, sizeof(unsigned int));
 	
-	cudaMemcpyToSymbol(HAd, &HA, sizeof(float));
-	cudaMemcpyToSymbol(HRd, &HR, sizeof(float));
-	cudaMemcpyToSymbol(ZMINd, &ZMIN, sizeof(float));
-	cudaMemcpyToSymbol(ZMAXd, &ZMAX, sizeof(float));
 	cudaMemcpyToSymbol(NATMd, &NATM, sizeof(int));
-//	cudaMemcpyToSymbol(HATMd, &HATM, sizeof(int));
 	
 	cudaMemcpyToSymbol(WINDSPEEDd, &WINDSPEED, sizeof(float));
 	cudaMemcpyToSymbol(NH2Od, &NH2O, sizeof(float));
