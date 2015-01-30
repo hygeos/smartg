@@ -69,9 +69,14 @@ clean:
 mrproper: clean
 	rm -rf tmp/* out_prog/* out_scripts/* $(EXEC)
 	
-#=============Debogage===========#
 suppr:
 	rm -f out_prog/Resultats.hdf tmp/Temoin.hdf
 	
 rebuild: suppr clean all
 
+both:
+	@echo
+	@echo making SMART-G-PP _and_ SMART-G-SP
+	@echo
+	$(MAKE) clean all SPH=yes EXEC=SMART-G-SP
+	$(MAKE) clean all SPH=no EXEC=SMART-G-PP
