@@ -143,7 +143,6 @@ extern int YGRID;
 extern int DEVICE;
 extern int NBTHETA;
 extern int NBPHI;
-extern int PROFIL;
 extern int SIM;
 extern int SUR;
 extern int DIOPTRE;

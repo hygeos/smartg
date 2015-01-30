@@ -2040,7 +2040,6 @@ void initConstantesDevice()
 	cudaMemcpyToSymbol(YGRIDd, &YGRID, sizeof(int));
 	cudaMemcpyToSymbol(NBTHETAd, &NBTHETA, sizeof(int));
 	cudaMemcpyToSymbol(NBPHId, &NBPHI, sizeof(int));
-	cudaMemcpyToSymbol(PROFILd, &PROFIL, sizeof(int));
 	cudaMemcpyToSymbol(SIMd, &SIM, sizeof(int));
 	cudaMemcpyToSymbol(SURd, &SUR, sizeof(int));
 	cudaMemcpyToSymbol(DIOPTREd, &DIOPTRE, sizeof(int));

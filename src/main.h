@@ -19,7 +19,6 @@ int DEVICE;     //numéro du device utilisé
 int NBTHETA; 	//Nombre de cases du tableau final pour theta (0..PI/2)
 int NBPHI; 		//Nombre de cases du tableau final pour phi (0..2*PI)
 int DIOPTRE; 	//Type de dioptre (0=plan, 1=agite)
-int PROFIL; 	//Type de profil atmospherique
 int SIM; 		//Type de simulation
 int SUR; 		//Type de reflexion de la surface
 int ENV;        //Effet d'environnement(=0 pas d effet)

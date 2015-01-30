@@ -189,10 +189,6 @@ void initConstantesHost(int argc, char** argv)
 	NBPHI = atoi(s);
 
 	strcpy(s,"");
-	chercheConstante(parametres, "PROFIL", s);
-	PROFIL = atoi(s);
-
-	strcpy(s,"");
 	chercheConstante(parametres, "SIM", s);
 	SIM = atoi(s);
 
@@ -1022,7 +1018,7 @@ void calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, 
 	scum[0] = 0;
 	int iang = 0, ipf = 0;
 	double dtheta, pm1, pm2, sin1, sin2;
-	double z, norm;
+	double z;
     char buffer[1024];
     char *ptr;
 
@@ -1162,12 +1158,7 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 	float tauMol[NATM+1];	// Epaisseur optique des molécules à chaque couche
 	float tauAer[NATM+1];	// Epaisseur optique des aérosols à chaque couche
 	int i=0;
-	float va=0, vr=0;		// Variables tampons
 	cudaError_t erreur;		// Permet de tester le bon déroulement des opérations mémoires
-	#ifndef SPHERIQUE
-	float z;				// Variable représentant l'altitude
-	z = HATM;
-	#endif
 	
 	/** Conditions aux limites au sommet de l'atmosphère **/
 	#ifdef SPHERIQUE
@@ -1232,200 +1223,45 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 		return;
 	}
 	
-	/** Profil standard avec échelle de hauteur **/
-	if( PROFIL == 0 ){
-		
-		/* Si HA << HR => pas de mélange dans les couches
-		On considere alors une atmosphere divisee en deux sous-couches, la  couche superieure contenant toutes les molecules, la
-couche inferieure contenant tous les aerosols.
-		*/
-        TAUATM = TAUAER + TAURAY;
-		if( HA < 0.0001 ){
-			tauMol[1] = TAURAY;
-			tauAer[1] = 0;
-			#ifdef SPHERIQUE
-			tab_H->z[1]=0.f;
-			#endif
-			tab_H->h[1] = tauMol[1] + tauAer[1];
-			tab_H->pMol[1] = 1.0;
-            tab_H->abs[1] = 0.0;
-            tab_H->ssa[1] = 1.0;
-			
-			tauMol[2] = 0;
-			tauAer[2] = TAUAER;
-			#ifdef SPHERIQUE
-			tab_H->z[2]=0.f;
-			#endif
-			tab_H->h[2] = tab_H->h[1] + tauMol[2] + tauAer[2];
-			tab_H->pMol[2] = 0.0;
-            tab_H->abs[2] = 0.0;
-            tab_H->ssa[2] = 1.0;
-		}
-		
-		/* Si HA >> HR => pas de mélange dans les couches
-		On considere alors une atmosphere divisee en deux sous-couches, la  couche superieure contenant tous les aérosols, la couche
-inferieure contenant toutes les molécules.
-		*/
-		else if( HA > 499.99 ){
-			tauMol[1] = 0.0;
-			tauAer[1] = TAUAER;
-			#ifdef SPHERIQUE
-			tab_H->z[1]=0.f;
-			#endif
-			tab_H->h[1] = tauMol[1] + tauAer[1];
-			tab_H->pMol[1] = 0.0;
-            tab_H->abs[1] = 0.0;
-            tab_H->ssa[1] = 1.0;
-			
-			tauMol[2] = TAURAY;
-			tauAer[2] = 0.0;
-			#ifdef SPHERIQUE
-			tab_H->z[2]=0.f;
-			#endif
-			tab_H->h[2] = tab_H->h[1] + tauMol[2] + tauAer[2];
-			tab_H->pMol[2] = 1.0;
-            tab_H->abs[2] = 0.0;
-            tab_H->ssa[2] = 1.0;
-		}
-		
-		/* Cas Standard avec deux échelles */
-		else{
-			for( i=0; i<NATM+1; i++){
-				
-				#ifdef SPHERIQUE
-				if(i!=0){
-					tab_H->z[i]=HATM - float(i)*(HATM/NATM);
-				}
-				vr = TAURAY*exp( -(tab_H->z[i]/HR) );
-				va = TAUAER*exp( -(tab_H->z[i]/HA) );
-				#endif
-				#ifndef SPHERIQUE
-				if(i!=0){
-					z = HATM - float(i)*(HATM/NATM);
-				}
-				vr = TAURAY*exp( -(z/HR) );
-				va = TAUAER*exp( -(z/HA) );
-				#endif
-				
-				tab_H->h[i] = va+vr;
-				
-				vr = vr/HR;
-				va = va/HA;
-				vr = vr/(va+vr);
-				tab_H->pMol[i] = vr;
-                tab_H->abs[i] = 0.0;
-                tab_H->ssa[i] = 1.0;
-			}
-			tab_H->h[0] = 0;
-		}
-	}
-	
-	/** Profil à 2 ou 3 couches **/
-	else if( PROFIL == 1 ){
+    // Profil utilisateur
+    /* Format du fichier
+    => n	alt		tauMol		tauAer		h		pAer		pMol
+    */
+    FILE* profil = fopen( PATHPROFILATM , "r" );
+    float garbage;
+    
+    int icouche=0;
+    char ligne[1024];
 
-		float tauRay1;	// Epaisseur optique moleculaire de la couche 1
-		float tauRay2;	// Epaisseur optique moleculaire de la couche 2
+    if(profil == NULL){
+        printf("ERREUR : Ouverture impossible du fichier %s pour le profil atmosphérique\n", PATHPROFILATM );
+        exit(1);
+    }
+    
+    else{
+        // Passage de la premiere ligne
+        fgets(ligne,1024,profil);
 
-        TAUATM = TAURAY + TAUAER;
-		
-		tauRay1 = TAURAY*exp(-(ZMAX/HR));	// Epaisseur optique moleculaire de la couche la plus haute
-		if( ZMIN < 0.0001 ){
-			tauRay2 = TAURAY*(exp(-(ZMIN/HR))-exp(-(ZMAX/HR)));	// Epaisseur optique moleculaire de la couche la plus basse
-		}
-		
-		else{
-			tauRay2 = TAURAY*(exp(-(ZMIN/HR))-exp(-(ZMAX/HR)));	// Epaisseur optique moleculaire de la couche intermédiaire
-		}
-		
-		/** Calcul des grandeurs utiles aux OS pour la couche la plus haute **/
-		#ifdef SPHERIQUE
-		tab_H->z[1]=-( HR*log(tauRay1/TAURAY) );
-		#endif
-		tauMol[1] = tauRay1;
-		tauAer[1] = 0.F;                                    
-		tab_H->h[1] = tauMol[1] + tauAer[1];
-		tab_H->pMol[1] = 1.F;
-        tab_H->abs[1] = 0.0;
-        tab_H->ssa[1] = 1.0;
-
-		/** Calcul des grandeurs utiles aux OS pour la deuxieme couche   **/
-		if( ZMAX == ZMIN ){ //Uniquement des aerosols dans la couche intermediaire
-			#ifdef SPHERIQUE
-			tab_H->z[2]=ZMAX;
-			#endif
-			tauMol[2] = tauRay1;                                                      
-			tauAer[2] = TAUAER;
-			tab_H->h[2] = tauMol[2] + tauAer[2];
-			tab_H->pMol[2] = 0.F;                                                      
-            tab_H->abs[2] = 0.0;
-            tab_H->ssa[2] = 1.0;
-		}
-		
-		else{	// Melange homogene d'aerosol et de molecules dans la couche intermediaire
-			#ifdef SPHERIQUE
-			tab_H->z[2]=ZMIN;
-			#endif
-			tauMol[2] = tauRay1+tauRay2;
-			tauAer[2] = TAUAER;
-			tab_H->h[2] = tauMol[2] + tauAer[2];
-			tab_H->pMol[2] = 0.5F;
-            tab_H->abs[2] = 0.0;
-            tab_H->ssa[2] = 1.0;
-		}
-		
-		/** Calcul des grandeurs utiles aux OS pour la troisieme couche **/
-		#ifdef SPHERIQUE
-		tab_H->z[3]=0.f;
-		#endif
-		tauMol[3] = TAURAY;
-		tauAer[3] = TAUAER;
-		tab_H->h[3] = tauMol[3] + tauAer[3];
-		tab_H->pMol[3] = 1.F;
-        tab_H->abs[3] = 0.0;
-        tab_H->ssa[3] = 1.0;
-	}
-	
-	else if( PROFIL == 2 ){
-		// Profil utilisateur
-		/* Format du fichier
-		=> n	alt		tauMol		tauAer		h		pAer		pMol
-		*/
-		FILE* profil = fopen( PATHPROFILATM , "r" );
-		float garbage;
-		
-		int icouche=0;
-		char ligne[1024];
-	
-		if(profil == NULL){
-			printf("ERREUR : Ouverture impossible du fichier %s pour le profil atmosphérique\n", PATHPROFILATM );
-			exit(1);
-		}
-		
-		else{
-			// Passage de la premiere ligne
-			fgets(ligne,1024,profil);
-
-			// Extraction des informations
-			#if defined(SPHERIQUE) 
-			for( icouche=0; icouche<NATM+1; icouche++ ){
-				fscanf(profil, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f", &i, tab_H->z+icouche, &garbage, &garbage, tab_H->h+icouche,
-                       &garbage,tab_H->pMol+icouche, tab_H->ssa+icouche, tab_H->abs+icouche );
-			}
-            #endif
-			#if !defined(SPHERIQUE) 
-			for( icouche=0; icouche<NATM+1; icouche++ ){
-				fscanf(profil, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f", &i, &garbage, &garbage, &garbage, tab_H->h+icouche,
-					   &garbage,tab_H->pMol+icouche, tab_H->ssa+icouche, tab_H->abs+icouche );
-			}
-            TAUATM = tab_H->h[NATM];
-			#endif
-		}
+        // Extraction des informations
+        #if defined(SPHERIQUE) 
+        for( icouche=0; icouche<NATM+1; icouche++ ){
+            fscanf(profil, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f", &i, tab_H->z+icouche, &garbage, &garbage, tab_H->h+icouche,
+                   &garbage,tab_H->pMol+icouche, tab_H->ssa+icouche, tab_H->abs+icouche );
+        }
+        #endif
+        #if !defined(SPHERIQUE) 
+        for( icouche=0; icouche<NATM+1; icouche++ ){
+            fscanf(profil, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f", &i, &garbage, &garbage, &garbage, tab_H->h+icouche,
+                   &garbage,tab_H->pMol+icouche, tab_H->ssa+icouche, tab_H->abs+icouche );
+        }
+        TAUATM = tab_H->h[NATM];
+        #endif
+    }
 	
 		if(fclose(profil) == EOF){
 			printf("ERREUR : Probleme de fermeture du fichier %s", PATHPROFILATM);
 		}
 		
-	}
 	
 	
 		/** Envoie des informations dans le device **/
@@ -1638,8 +1474,6 @@ void afficheParametres()
 		printf(" LSAAER\t=\t%u", LSAAER);
 		printf("\n");
 		printf(" NFAER\t=\t%u", NFAER);
-		printf("\n");
-		printf(" PROFIL\t=\t%d", PROFIL);
 		printf("\n");
 		printf(" HA\t=\t%f", HA);
 		printf("\n");
@@ -1928,7 +1762,6 @@ void creerHDFTemoin(double* tabPhotonsTot, double* tabPhotonsTotDown, unsigned l
 	SDsetattr(sdsTab, "NBTHETA", DFNT_INT32, 1, &NBTHETA);
 	SDsetattr(sdsTab, "NBPHI", DFNT_INT32, 1, &NBPHI);
 	SDsetattr(sdsTab, "DIOPTRE", DFNT_INT32, 1, &DIOPTRE);
-	SDsetattr(sdsTab, "PROFIL", DFNT_INT32, 1, &PROFIL);
 	SDsetattr(sdsTab, "SIM", DFNT_INT32, 1, &SIM);
 	SDsetattr(sdsTab, "SUR", DFNT_INT32, 1, &SUR);
 	SDsetattr(sdsTab, "ENV", DFNT_INT32, 1, &ENV);
@@ -2016,7 +1849,6 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		int NBPHIrecup[1];
 		int DIOPTRErecup[1];
 		int ENVrecup[1];
-		int PROFILrecup[1];
 		int SIMrecup[1];
 		int SURrecup[1];
 		float THVDEGrecup[1];
@@ -2046,7 +1878,6 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "NBPHI"), (VOIDP)NBPHIrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "DIOPTRE"), (VOIDP)DIOPTRErecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "ENV"), (VOIDP)ENVrecup);
-		SDreadattr(sdsTab, SDfindattr(sdsTab, "PROFIL"), (VOIDP)PROFILrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "SIM"), (VOIDP)SIMrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "SUR"), (VOIDP)SURrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "THVDEG"), (VOIDP)THVDEGrecup);
@@ -2077,7 +1908,6 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 			&& NBPHIrecup[0] == NBPHI
 			&& DIOPTRErecup[0] == DIOPTRE
 			&& ENVrecup[0] == ENV
-			&& PROFILrecup[0] == PROFIL
 			&& SIMrecup[0] == SIM
 			&& SURrecup[0] == SUR
 			&& THVDEGrecup[0] == THVDEG
@@ -2231,7 +2061,6 @@ tempsPrec)
 	SDsetattr(sdFichier, "NBPHI", DFNT_INT32, 1, &NBPHI);
 	SDsetattr(sdFichier, "DIOPTRE", DFNT_INT32, 1, &DIOPTRE);
 	SDsetattr(sdFichier, "ENV", DFNT_INT32, 1, &ENV);
-	SDsetattr(sdFichier, "PROFIL", DFNT_INT32, 1, &PROFIL);
 	SDsetattr(sdFichier, "SIM", DFNT_INT32, 1, &SIM);
 	SDsetattr(sdFichier, "SUR", DFNT_INT32, 1, &SUR);
 	SDsetattr(sdFichier, "VZA (deg.)", DFNT_FLOAT32, 1, &THVDEG);
