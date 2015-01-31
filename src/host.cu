@@ -209,14 +209,6 @@ void initConstantesHost(int argc, char** argv)
 	THVDEG = atof(s);
 	
 	strcpy(s,"");
-	chercheConstante(parametres, "TAURAY", s);
-	TAURAY = atof(s);
-	
-	strcpy(s,"");
-	chercheConstante(parametres, "TAUAER", s);
-	TAUAER = atof(s);
-	
-	strcpy(s,"");
 	chercheConstante(parametres, "ENV_SIZE", s);
 	ENV_SIZE = atof(s);
 	
@@ -1131,8 +1123,6 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 
 	/** Déclaration des variables **/
 	
-	float tauMol[NATM+1];	// Epaisseur optique des molécules à chaque couche
-	float tauAer[NATM+1];	// Epaisseur optique des aérosols à chaque couche
 	int i=0;
 	cudaError_t erreur;		// Permet de tester le bon déroulement des opérations mémoires
 	
@@ -1140,65 +1130,9 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 	#ifdef SPHERIQUE
 	tab_H->z[0] = HATM;
 	#endif
-	tauMol[0] = 0.0;
-	tauAer[0] = 0.0;
 	tab_H->h[0] = 0.0;
 	tab_H->pMol[0] = 0.0;	//Je n'utilise pas la proportion d'aérosols car on l'obtient par 1-PMOL
 
-	/** Cas Particuliers **/
-	// Épaisseur optique aérosol très faible OU Épaisseur optique moléculaire et aérosol très faible
-	// On ne considère une seule sous-couche dans laquelle on trouve toutes les molécules
-	if( /*(TAUAER < 0.0001) ||*/ ((TAUAER < 0.0001)&&(TAURAY < 0.0001)) ){
-		tauMol[1] = TAURAY;
-		tauAer[1] = 0;
-		#ifdef SPHERIQUE
-		tab_H->z[1]=0;
-		#endif
-		tab_H->h[1] = tauMol[1] + tauAer[1];
-		tab_H->pMol[1] = 1.0;
-		
-		/** Envoie des informations dans le device **/
-		erreur = cudaMemcpy(tab_D->h, tab_H->h, (NATM+1)*sizeof(*(tab_H->h)), cudaMemcpyHostToDevice);
-		if( erreur != cudaSuccess ){
-			printf( "ERREUR: Problème de copie tab_D->h dans profilAtm\n");
-			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-			exit(1);
-		}
-		
-		erreur = cudaMemcpy(tab_D->pMol, tab_H->pMol, (NATM+1)*sizeof(*(tab_H->pMol)), cudaMemcpyHostToDevice);
-		if( erreur != cudaSuccess ){
-			printf( "ERREUR: Problème de copie tab_D->pMol dans profilAtm\n");
-			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-			exit(1);
-		}		
-        
-        erreur = cudaMemcpy(tab_D->abs, tab_H->abs, (NATM+1)*sizeof(*(tab_H->abs)), cudaMemcpyHostToDevice);
-        if( erreur != cudaSuccess ){
-            printf( "ERREUR: Problème de copie tab_D->abs dans initInit\n");
-            printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-            exit(1);
-        }
-	
-       // 
-        erreur = cudaMemcpy(tab_D->ssa, tab_H->ssa, (NATM+1)*sizeof(*(tab_H->ssa)), cudaMemcpyHostToDevice);
-        if( erreur != cudaSuccess ){
-            printf( "ERREUR: Problème de copie tab_D->ssa dans initInit\n");
-            printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-            exit(1);
-        }
-	
-		
-		#ifdef SPHERIQUE
-		erreur = cudaMemcpy(tab_D->z, tab_H->z, (NATM+1)*sizeof(*(tab_H->z)), cudaMemcpyHostToDevice);
-		if( erreur != cudaSuccess ){
-			printf( "ERREUR: Problème de copie tab_D->z dans profilAtm\n");
-			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-			exit(1);
-		}
-		#endif
-		return;
-	}
-	
     // Profil utilisateur
     /* Format du fichier
     => n	alt		tauMol		tauAer		h		pAer		pMol
@@ -1439,10 +1373,6 @@ void afficheParametres()
 		printf("\n");
 		#endif
 		
-		printf(" TAURAY\t=\t%f", TAURAY);
-		printf("\n");
-		printf(" TAUAER\t=\t%f", TAUAER);
-		printf("\n");
 		printf(" LSAAER\t=\t%u", LSAAER);
 		printf("\n");
 		printf(" NFAER\t=\t%u", NFAER);
@@ -1733,8 +1663,6 @@ void creerHDFTemoin(double* tabPhotonsTot, double* tabPhotonsTotDown, unsigned l
 	SDsetattr(sdsTab, "X0", DFNT_FLOAT32, 1, &X0);
 	SDsetattr(sdsTab, "Y0", DFNT_FLOAT32, 1, &Y0);
 	SDsetattr(sdsTab, "THVDEG", DFNT_FLOAT32, 1, &THVDEG);
-	SDsetattr(sdsTab, "TAURAY", DFNT_FLOAT32, 1, &TAURAY);
-	SDsetattr(sdsTab, "TAUAER", DFNT_FLOAT32, 1, &TAUAER);
 	SDsetattr(sdsTab, "W0LAM", DFNT_FLOAT32, 1, &W0LAM);
 	
 	SDsetattr(sdsTab, "LSAAER", DFNT_UINT32, 1, &LSAAER);
@@ -1810,8 +1738,6 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		int SIMrecup[1];
 		int SURrecup[1];
 		float THVDEGrecup[1];
-		float TAURAYrecup[1];
-		float TAUAERrecup[1];
 		float W0LAMrecup[1];
 		float ENV_SIZErecup[1];
 		float X0recup[1];
@@ -1833,8 +1759,6 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "SIM"), (VOIDP)SIMrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "SUR"), (VOIDP)SURrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "THVDEG"), (VOIDP)THVDEGrecup);
-		SDreadattr(sdsTab, SDfindattr(sdsTab, "TAURAY"), (VOIDP)TAURAYrecup);
-		SDreadattr(sdsTab, SDfindattr(sdsTab, "TAUAER"), (VOIDP)TAUAERrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "W0LAM"), (VOIDP)W0LAMrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "ENV_SIZE"), (VOIDP)ENV_SIZErecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "X0"), (VOIDP)X0recup);
@@ -1857,8 +1781,6 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 			&& SIMrecup[0] == SIM
 			&& SURrecup[0] == SUR
 			&& THVDEGrecup[0] == THVDEG
-			&& TAURAYrecup[0] == TAURAY
-			&& TAUAERrecup[0] == TAUAER
 			&& W0LAMrecup[0] == W0LAM
 			&& ENV_SIZErecup[0] == ENV_SIZE
 			&& X0recup[0] == X0
@@ -2004,8 +1926,6 @@ tempsPrec)
 	SDsetattr(sdFichier, "SIM", DFNT_INT32, 1, &SIM);
 	SDsetattr(sdFichier, "SUR", DFNT_INT32, 1, &SUR);
 	SDsetattr(sdFichier, "VZA (deg.)", DFNT_FLOAT32, 1, &THVDEG);
-	SDsetattr(sdFichier, "TAURAY", DFNT_FLOAT32, 1, &TAURAY);
-	SDsetattr(sdFichier, "TAUAER", DFNT_FLOAT32, 1, &TAUAER);
 	
 	SDsetattr(sdFichier, "LSAAER", DFNT_UINT32, 1, &LSAAER);
 	SDsetattr(sdFichier, "NFAER", DFNT_UINT32, 1, &NFAER);

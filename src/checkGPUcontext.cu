@@ -223,10 +223,10 @@ void message_end(int device) {
 
     if (cudaGetDeviceProperties( &deviceProp, device) == cudaSuccess) {
 
-        printf("Done (used device %d, '%s')", device, deviceProp.name);
+        printf("Done (used device %d, '%s')\n", device, deviceProp.name);
 
     } else {
-        printf("Done (used device %d)", device);
+        printf("Done (used device %d)\n", device);
 
     }
 }

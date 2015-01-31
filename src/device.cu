@@ -2012,8 +2012,6 @@ void initConstantesDevice()
 	cudaMemcpyToSymbol(NBPHOTONSd, &NBPHOTONS, sizeof(unsigned long long));
 	cudaMemcpyToSymbol(NBLOOPd, &NBLOOP, sizeof(unsigned int));
 	cudaMemcpyToSymbol(THVDEGd, &THVDEG, sizeof(float));
-	cudaMemcpyToSymbol(TAURAYd, &TAURAY, sizeof(float));
-	cudaMemcpyToSymbol(TAUAERd, &TAUAER, sizeof(float));
 	
 	cudaMemcpyToSymbol(W0LAMd, &W0LAM, sizeof(float));
     #ifdef FLAGOCEAN

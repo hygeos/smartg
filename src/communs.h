@@ -155,8 +155,6 @@ extern unsigned int LSAOCE;
 extern unsigned int NFOCE;
 
 extern float THVDEG;
-extern float TAURAY;
-extern float TAUAER;
 extern float TAUATM;
 extern float W0LAM;
 extern float ENV_SIZE;

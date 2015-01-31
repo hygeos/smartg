@@ -5,12 +5,6 @@ NBPHOTONS = 1e9
 # Angle zenithal de visée en degrés (float)
 THVDEG = 60.0
 
-# Epaisseur optique moleculaire (Rayleigh) (float)
-TAURAY = 1.0
-
-# Epaisseur optique aerosol (float)
-TAUAER = 0.
-
 # Nom absolu du fichier de la matrice de phase des aérosol
 	# Données commencant sur la première ligne
 	# %lf	%lf	%lf	%lf	%lf => Correspondant à angle	p2	p1	p3	p4
