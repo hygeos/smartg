@@ -50,6 +50,12 @@ void chercheConstante(FILE* fichier, const char* nomConstante, char* chaineValeu
 
 
 
+void init_profile(int *NATM, float *HATM, char *PATHPROFILATM);
+
+int count_lines(char *PATHDIFF);
+
+
+
 /* verifierFichier
 * Fonction qui vérifie l'état des fichiers temoin et résultats
 * Demande à l'utilisateur s'il veut les supprimer ou non

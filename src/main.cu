@@ -70,6 +70,14 @@ int main (int argc, char *argv[])
 
 	/** Initialisation des constantes du host (en partie recuperees dans le fichier Parametres.txt) **/
 	initConstantesHost(argc, argv);
+
+
+    // read NATM and HATM in profile
+    init_profile(&NATM, &HATM, PATHPROFILATM);
+
+    // read LSAAER and LSAOCE
+    LSAAER = count_lines(PATHDIFFAER);
+    LSAOCE = count_lines(PATHDIFFOCE);
 	
 
 	/** Initialisation de la carte graphique **/
@@ -216,7 +224,7 @@ int main (int argc, char *argv[])
         StartProcessing(perfInitG);
 #endif
 	initConstantesDevice();
-	
+
 	/** Séparation du code pour atmosphère sphérique ou parallèle **/
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
 	// Calcul du point d'impact du photon

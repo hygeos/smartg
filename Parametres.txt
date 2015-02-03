@@ -25,12 +25,6 @@ SIM = -2
 	# %d	%f	%f	%f	%f	%f	%f	%f  %f=> Format pour toutes les autres lignes
 PATHPROFILATM = /home/did/RTC/SMART-G/profil/profil.tmp
 
-# Nombre de couche+1
-NATM=14
-
-# Altitude max de l'atmosphère
-HATM=100.0
-
 # Type de reflexion de la surface
 	# 1 pour reflexion forcee sur le dioptre
 	# 2 transmission forcee
@@ -91,16 +85,10 @@ SEED = -1
 NBTHETA = 30
 NBPHI = 30
 
-# Nombre d'échantillons pour la matrice de phase des aérosols (int)
-LSAAER = 7201
-
-# 
+# number of samples for the inversion of the aerosol phase function
 NFAER = 1000000
 
-#
-LSAOCE = 72001
-
-#
+# number of samples for the inversion of the ocean phase function
 NFOCE = 10000000 
 
 ###

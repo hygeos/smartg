@@ -35,7 +35,6 @@ __device__ __constant__ float W0LAMd;
 __device__ __constant__ unsigned int NFAERd;
 __device__ __constant__ unsigned int NFOCEd;
 __device__ __constant__ int NATMd;
-//__device__ __constant__ int HATMd;
 __device__ __constant__ float WINDSPEEDd;
 __device__ __constant__ float NH2Od;
 

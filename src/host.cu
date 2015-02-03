@@ -229,28 +229,12 @@ void initConstantesHost(int argc, char** argv)
 	W0LAM = atof(s);
 	
 	strcpy(s,"");
-	chercheConstante(parametres, "LSAAER", s);
-	LSAAER = atof(s);
-	
-	strcpy(s,"");
 	chercheConstante(parametres, "NFAER", s);
 	NFAER = atof(s);
 	
 	strcpy(s,"");
-	chercheConstante(parametres, "LSAOCE", s);
-	LSAOCE = atof(s);
-	
-	strcpy(s,"");
 	chercheConstante(parametres, "NFOCE", s);
 	NFOCE = atof(s);
-	
-	strcpy(s,"");
-	chercheConstante(parametres, "NATM", s);
-	NATM = atoi(s);
-	
-	strcpy(s,"");
-	chercheConstante(parametres, "HATM", s);
-	HATM = atof(s);
 	
 	strcpy(s,"");
 	chercheConstante(parametres, "WINDSPEED", s);
@@ -335,6 +319,69 @@ void chercheConstante(FILE* fichier, const char* nomConstante, char* chaineValeu
 		exit(1);
 	}
 }
+
+
+
+void init_profile(int *NATM, float *HATM, char *PATHPROFILATM) {
+    //
+    // reads the number of layers (more precisely, number of interfaces =
+    // nlayers+1) in the atmosphere profile, and the height of the top layer
+    //
+
+    printf("Read %s\n", PATHPROFILATM);
+
+    FILE* fp;
+    int c, i;
+    float H;
+    char buffer[2048];
+    *HATM = -1;
+
+    fp = fopen(PATHPROFILATM, "r");
+
+    if (fp == NULL) {
+        printf("ERROR: Cannot open profile '%s'\n", PATHPROFILATM);
+        exit(1);
+    }
+
+    // skip first line
+    fgets(buffer, 2048, fp);
+    *NATM = 0;
+
+    // read first layer
+    while(1) {
+        if (fgets(buffer, 2048, fp) == NULL) break;
+        c = sscanf(buffer, "%d\t%f\t", &i, &H);
+        if (c != 2) break;
+        if (*HATM < 0) *HATM = H;
+        *NATM += 1;
+    }
+
+    fclose(fp);
+}
+
+int count_lines(char *PATHDIFF) {
+    //
+    // count the number of lines in a file
+    //
+
+    FILE *fp;
+    int c = 0;
+    char buffer[2048];
+    fp = fopen(PATHDIFF, "r");
+    if (fp == NULL) {
+        printf("ERROR: cannot open file '%s'\n", PATHDIFF);
+        exit(1);
+    }
+    while (1) {
+        if (fgets(buffer, 2048, fp) == NULL) break;
+        if (buffer[0] == '\n') break;
+        c++;
+    }
+    fclose(fp);
+
+    return c;
+}
+
 
 
 /* verifierFichier
