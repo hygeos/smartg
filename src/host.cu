@@ -302,7 +302,8 @@ void chercheConstante(FILE* fichier, const char* nomConstante, char* chaineValeu
 			while(*ptr == ' ' || *ptr == '=') ptr++;
 			if (*ptr == '\n')
 			{
-				printf("ERREUR : lecture Parametre.txt\n");
+				printf("ERROR when reading keyword %s in parameter file. Line is:\n", nomConstante);
+                printf("%s\n", ligne);
 				exit(1);
 			}
 			// On met la chaine de la valeur de la constante dans chaineValeur
@@ -363,6 +364,10 @@ int count_lines(char *PATHDIFF) {
     //
     // count the number of lines in a file
     //
+
+    if (strcmp(PATHDIFF, "None") == 0) {
+        return 0;
+    }
 
     FILE *fp;
     int c = 0;
@@ -1021,7 +1026,12 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 * Calcul de la fonction de phase des aérosols
 */
 void calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, int nf){
-	
+
+    // not necessary when file name is "None"
+    if (strcmp(nomFichier, "None") == 0) {
+        return;
+    }
+
 	FILE* fichier = fopen(nomFichier, "r");
 
 	double *scum = (double*) malloc(lsa*sizeof(*scum));
