@@ -73,7 +73,14 @@ int main (int argc, char *argv[])
 
 
     // read NATM and HATM in profile
-    init_profile(&NATM, &HATM, PATHPROFILATM);
+    // (if simulation includes atmosphere)
+    if ((SIM == -2) || (SIM == 1) || (SIM == 2)) {
+        init_profile(&NATM, &HATM, PATHPROFILATM);
+    } else {
+        HATM = 0;
+        NATM = 0;
+    }
+
 
     // read LSAAER and LSAOCE
     LSAAER = count_lines(PATHDIFFAER);
@@ -211,8 +218,10 @@ int main (int argc, char *argv[])
 #ifdef _PERF
         StartProcessing(perfInitG);
 #endif
-	// Calcul du mélange Molécule/Aérosol dans l'atmosphère en fonction de la couche
-	profilAtm( &tab_H, &tab_D );
+    if ((SIM == -2) || (SIM == 1) || (SIM == 2)) {
+        // Read atmospheric profile
+        profilAtm(&tab_H, &tab_D);
+    }
 #ifdef _PERF
         StopProcessing(perfInitG);
         GetElapsedTime(perfInitG);
