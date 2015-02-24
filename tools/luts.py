@@ -73,10 +73,13 @@ class LUT(object):
     (80,)
     '''
 
-    def __init__(self, data, axes=None, names=None, desc=None, attrs={}):
+    def __init__(self, data, axes=None, names=None, desc=None, attrs=None):
         self.data = data
         self.desc = desc
-        self.attrs = attrs
+        if attrs is None:
+            self.attrs = {}
+        else:
+            self.attrs = attrs
         self.ndim = self.data.ndim
         self.shape = data.shape
 
