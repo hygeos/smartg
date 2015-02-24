@@ -521,24 +521,24 @@ def test_ozone_lut():
     '''
     from itertools import product
 
-    list_TOC = [350., 400., 450.]   # ozone column in DU
+    list_TCO = [350., 400., 450.]   # ozone column in DU
     list_AOT = [0.05, 0.1, 0.4]     # aerosol optical thickness
 
     luts = []
-    for TOC, AOT in product(list_TOC, list_AOT):
+    for TCO, AOT in product(list_TCO, list_AOT):
 
         aer = AeroOPAC('maritime_clean', AOT, 550., layer_phase=5)
-        pro = Profile('afglms', aer=aer, O3=TOC)
+        pro = Profile('afglms', aer=aer, O3=TCO)
 
         res = smartg('SMART-G-PP', wl=490., atm=pro, NBTHETA=50)
 
         lut = read_lut_hdf(res, 'I_up (TOA)', ['Azimut angles', 'Zenith angles'])
-        lut.attrs.update({'TOC':TOC, 'AOT': AOT})
+        lut.attrs.update({'TCO':TCO, 'AOT': AOT})
         luts.append(lut)
 
-    merged = merge(luts, ['TOC', 'AOT'])
+    merged = merge(luts, ['TCO', 'AOT'])
     merged.print_info()
-    merged.save(join(dir_output, 'test_ozone.lut'))
+    merged.save(join(dir_output, 'test_ozone.hdf'))
 
 
 if __name__ == '__main__':
