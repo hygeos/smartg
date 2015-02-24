@@ -43,7 +43,9 @@ def smartg(exe, wl, output=None, dir=dir_output,
 
     Arguments:
         - exe: smart-g executable
-        - wl: can be a wavelength in nm (float)
+        - wl: wavelength in nm (float)
+             used for phase functions calculation (always)
+             and profile calculation (if iband is None)
         - iband: a REPTRAN_BAND object describing the internal band
             default None (no reptran mode)
         - output: the name of the file to create. If None (default),
@@ -114,6 +116,7 @@ def smartg(exe, wl, output=None, dir=dir_output,
     #
     D = {
             'NBPHOTONS': str(int(NBPHOTONS)),
+            'LAMBDA': wl,
             'THVDEG': THVDEG,
             'DEPO': DEPO,
             'SEED': SEED,
@@ -183,6 +186,8 @@ def smartg(exe, wl, output=None, dir=dir_output,
     # ocean parameters
     #
     if water is not None:
+        # TODO: if iband is provided, use iband wavelength to calculate
+        # atot and btot, and wl to calculate the phase function
         atot, btot, file_phase = water.calc(wl, dir_phase_water)
         D.update(ATOT=atot, BTOT=btot, PATHDIFFOCE=file_phase)
     else:
@@ -225,6 +230,9 @@ def command_file_template(dict):
 
         # Angle zenithal de visée en degrés (float)
         THVDEG = {THVDEG}
+
+        # Longueur d'onde [nm] (float)
+        LAMBDA = {LAMBDA}
 
         # Nom absolu du fichier de la matrice de phase des aérosol
             # Données commencant sur la première ligne
