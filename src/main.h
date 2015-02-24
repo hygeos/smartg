@@ -29,6 +29,7 @@ unsigned int LSAOCE;	// Nombre d'échantillons pour les angles du modèle de dif
 unsigned int NFOCE;
 
 float THVDEG;	//Angle zénithal de visée
+float LAMBDA;	//Longueur d'onde [nm]
 float TAUATM;
 #ifdef FLAGOCEAN
 float W0OCE;	//Albedo simple de diffusion dans l'ocean

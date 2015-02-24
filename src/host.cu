@@ -209,6 +209,9 @@ void initConstantesHost(int argc, char** argv)
 	THVDEG = atof(s);
 	
 	strcpy(s,"");
+	chercheConstante(parametres, "LAMBDA", s);
+	LAMBDA = atof(s);
+
 	chercheConstante(parametres, "ENV_SIZE", s);
 	ENV_SIZE = atof(s);
 	
@@ -1388,6 +1391,8 @@ void afficheParametres()
 	printf("\n");
 	printf(" THVDEG\t=\t%f (degrés)", THVDEG);
 	printf("\n");
+	printf(" LAMBDA\t=\t%f", LAMBDA);
+	printf("\n");
 	printf(" SIM\t=\t%d", SIM);
 		if( SIM==-2 )
 			printf("\t(Atmosphère seule)");
@@ -1720,6 +1725,7 @@ void creerHDFTemoin(double* tabPhotonsTot, double* tabPhotonsTotDown, unsigned l
 	SDsetattr(sdsTab, "X0", DFNT_FLOAT32, 1, &X0);
 	SDsetattr(sdsTab, "Y0", DFNT_FLOAT32, 1, &Y0);
 	SDsetattr(sdsTab, "THVDEG", DFNT_FLOAT32, 1, &THVDEG);
+	SDsetattr(sdsTab, "LAMBDA", DFNT_FLOAT32, 1, &LAMBDA);
 	SDsetattr(sdsTab, "W0LAM", DFNT_FLOAT32, 1, &W0LAM);
 	
 	SDsetattr(sdsTab, "LSAAER", DFNT_UINT32, 1, &LSAAER);
@@ -1795,6 +1801,7 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		int SIMrecup[1];
 		int SURrecup[1];
 		float THVDEGrecup[1];
+		float LAMBDArecup[1];
 		float W0LAMrecup[1];
 		float ENV_SIZErecup[1];
 		float X0recup[1];
@@ -1816,6 +1823,7 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "SIM"), (VOIDP)SIMrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "SUR"), (VOIDP)SURrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "THVDEG"), (VOIDP)THVDEGrecup);
+		SDreadattr(sdsTab, SDfindattr(sdsTab, "LAMBDA"), (VOIDP)LAMBDArecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "W0LAM"), (VOIDP)W0LAMrecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "ENV_SIZE"), (VOIDP)ENV_SIZErecup);
 		SDreadattr(sdsTab, SDfindattr(sdsTab, "X0"), (VOIDP)X0recup);
@@ -1838,6 +1846,7 @@ void lireHDFTemoin(Variables* var_H, Variables* var_D,
 			&& SIMrecup[0] == SIM
 			&& SURrecup[0] == SUR
 			&& THVDEGrecup[0] == THVDEG
+			&& LAMBDArecup[0] == LAMBDA
 			&& W0LAMrecup[0] == W0LAM
 			&& ENV_SIZErecup[0] == ENV_SIZE
 			&& X0recup[0] == X0
@@ -1983,6 +1992,7 @@ tempsPrec)
 	SDsetattr(sdFichier, "SIM", DFNT_INT32, 1, &SIM);
 	SDsetattr(sdFichier, "SUR", DFNT_INT32, 1, &SUR);
 	SDsetattr(sdFichier, "VZA (deg.)", DFNT_FLOAT32, 1, &THVDEG);
+	SDsetattr(sdFichier, "LAMBDA", DFNT_FLOAT32, 1, &LAMBDA);
 	
 	SDsetattr(sdFichier, "LSAAER", DFNT_UINT32, 1, &LSAAER);
 	SDsetattr(sdFichier, "NFAER", DFNT_UINT32, 1, &NFAER);

@@ -22,6 +22,7 @@
 __device__ __constant__ unsigned long long NBPHOTONSd;
 __device__ __constant__ unsigned int NBLOOPd;
 __device__ __constant__ float THVDEGd;
+__device__ __constant__ float LAMBDAd;
 __device__ __constant__ float TAUATMd;
 #ifndef SPHERIQUE
 __device__ __constant__ float TAUMAXd;	//tau initial du photon (Host)
