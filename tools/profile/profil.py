@@ -838,11 +838,13 @@ class Profile(object):
         - lat: latitude (for Rayleigh optical depth calculation, default=45.)
         - O3: total ozone column (Dobson units), or None to use atmospheric
           profile value (default)
+        - NO2: activate ON2 absorption (default True)
     '''
     def __init__(self, atm_filename, aer=None, grid=None,
-                lat=45., O3=None):
+                lat=45., O3=None, NO2=True):
 
-        crs_filename = join(dir_libradtran_crs, 'crs_O3_UBremen_cf.dat')
+        crs_O3_filename = join(dir_libradtran_crs, 'crs_O3_UBremen_cf.dat')
+        crs_NO2_filename = join(dir_libradtran_crs, 'crs_NO2_UBremen_cf.dat')
         ch4_filename = join(dir_libradtran_atmmod, 'afglus_ch4_vmr.dat')
         co_filename = join(dir_libradtran_atmmod, 'afglus_co_vmr.dat')
         n2o_filename = join(dir_libradtran_atmmod, 'afglus_n2o_vmr.dat')
@@ -867,7 +869,7 @@ class Profile(object):
         self.o2 = data[:,5] # O2 density en cm-3
         self.h2o = data[:,6] # H2O density en cm-3
         self.co2 = data[:,7] # CO2 density en cm-3
-        no2 = data[:,8] # NO2 density en cm-3
+        self.no2 = data[:,8] # NO2 density en cm-3
 
         # lecture des fichiers US Standard atmosphere pour les autres gaz
         datach4 = np.loadtxt(ch4_filename, comments="#")
@@ -880,7 +882,8 @@ class Profile(object):
         self.n2=datan2[:,1] * self.air # N2 density en cm-3
 
         # lecture du fichier crs de l'ozone dans les bandes de Chappuis
-        self.crs_chappuis = np.loadtxt(crs_filename, comments="#")
+        self.crs_chappuis = np.loadtxt(crs_O3_filename, comments="#")
+        self.crs_no2 = np.loadtxt(crs_NO2_filename, comments="#")
 
         self.go3 = Gas(z,o3)
         self.go3.setColumn(DU=O3)
@@ -900,7 +903,7 @@ class Profile(object):
             self.o2 = interp1d(z, self.o2)(znew)
             self.h2o = interp1d(z, self.h2o)(znew)
             self.co2 = interp1d(z, self.co2)(znew)
-            no2 = interp1d(z, no2)(znew)
+            self.no2 = interp1d(z, self.no2)(znew)
             self.ch4 = interp1d(z, self.ch4/self.air)(znew)*airnew
             self.co = interp1d(z, self.co/self.air)(znew)*airnew
             self.n2o = interp1d(z, self.n2o/self.air)(znew)*airnew
@@ -913,6 +916,7 @@ class Profile(object):
         self.z = z
         self.lat = lat
         self.O3 = O3
+        self.NO2 = NO2
 
         self.aer = aer
         if self.aer is not None:
@@ -981,6 +985,7 @@ class Profile(object):
 
         # profiles of o3 and Rayleigh
         datao3  = np.zeros(M, np.float)
+        datano2  = np.zeros(M, np.float)
         dataray = np.zeros(M, np.float)
         for m in xrange(M):
 
@@ -994,7 +999,15 @@ class Profile(object):
             # calcul de Chapuis avec LUT en 10^(-20) cm2, passage en km-1 
             datao3[m] *= self.go3.dens[m] * self.go3.scalingfact * 1e-15
 
+            if self.NO2:
+                datano2[m] =  np.interp(wl,self.crs_no2[:,0],self.crs_no2[:,1]) \
+                            + np.interp(wl,self.crs_no2[:,0],self.crs_no2[:,2])*(self.T[m]-T0) \
+                            + np.interp(wl,self.crs_no2[:,0],self.crs_no2[:,3])*(self.T[m]-T0)**2
+                datano2[m] *= self.no2[m] * 1e-15
+
             dataray[m] = rod(wl*1e-3, self.co2[m]/self.air[m]*1e6, self.lat, z[m]*1e3, self.P[m])
+
+        datano2[datano2 < 0] = 0.
 
 
         # write header
@@ -1022,8 +1035,7 @@ class Profile(object):
                 taur_prec = dataray[m]
                 taua = dataaer[m] - taua_prec
                 taua_prec = dataaer[m]
-                taug = datao3[m]*dz
-                taug += datamol[m]*dz
+                taug = (datao3[m] + datano2[m] + datamol[m])*dz
                 tau = taur+taua+taug
                 abs = taug/tau
                 xdel = taua/(tau*(1-abs))
