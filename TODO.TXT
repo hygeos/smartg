@@ -1,6 +1,8 @@
 
 --- TODO ---
 
+* XDEL et YDEL sont redondants
+
 * rajouter la prise en compte de l'albédo non isotrope
 
 * smartg.py: calculer atot et btot à la longueur d'onde de la bande interne

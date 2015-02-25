@@ -922,9 +922,9 @@ class Profile(object):
         if self.aer is not None:
             self.aer.init(z, self.T, self.h2o)
 
-    def calc(self, w, output_file=None, dir=None):
+    def write(self, w, output_file=None, dir=None):
         '''
-        Profile calculation at a monochromatic wavelength w (nm)
+        write a profile at a monochromatic wavelength w (nm)
         Produce file output_file.
 
         w can be either:
@@ -935,11 +935,17 @@ class Profile(object):
 
         returns: profile filename
         '''
-
         #
         # Initialization
         #
         use_reptran = isinstance(w, REPTRAN_IBAND)
+        z = self.z
+        M = len(z)  # Final number of layer
+        if use_reptran:
+            wl = w.w
+        else:
+            wl = w
+
         if output_file is None:
             assert dir is not None
             # generate a unique file name
@@ -953,6 +959,50 @@ class Profile(object):
         if not exists(dirname(output_file)):
             os.makedirs(dirname(output_file))
 
+        # calculate the profile
+        pro = self.calc(w)
+
+        # write the header
+        fp = open(output_file, 'w')
+        outstr = "# I   ALT               hmol(I)         haer(I)         H(I)            "
+        outstr += "XDEL(I)         YDEL(I)     XSSA(I)     percent_abs       LAM=  %7.2f nm" % (wl)
+        if use_reptran:
+            outstr += ', WEIGHT= %7.5f, E0=%9.3f, Rint=%8.3f\n' % (w.weight, w.extra, w.band.Rint)
+        # print outstr
+        fp.write(outstr)
+
+        for m in xrange(M):
+            outstr = "%d\t%7.2f\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % tuple(pro[m])
+
+            # print outstr
+            fp.write('\n' + outstr)
+
+        print 'write', output_file
+
+        return output_file
+
+
+    def calc(self, w):
+        '''
+        Profile calculation at a monochromatic wavelength w (nm)
+        Returns a numpy structured array
+
+        w can be either:
+            - a wavelength in nm (float)
+            - a REPTRAN_IBAND object
+
+        returns: a structured array with records 
+        (I,ALT,hmol,haer,H,XDEL,YDEL,XSSA,percent_abs)
+        containing the profile, which can be accessed like
+                profile['ALT'][0]  # altitude of top layer
+                profile['hmol']    # the whole profile of Rayleigh optical thickness
+        '''
+
+        #
+        # Initialization
+        #
+        use_reptran = isinstance(w, REPTRAN_IBAND)
+
         z = self.z
         M = len(z)  # Final number of layer
         if use_reptran:
@@ -964,7 +1014,6 @@ class Profile(object):
         else:
             dataaer = np.zeros(M, np.float)
             ssaaer = np.zeros(M, np.float)
-
 
         if use_reptran:
             Nmol = 8
@@ -1010,16 +1059,18 @@ class Profile(object):
         datano2[datano2 < 0] = 0.
 
 
-        # write header
-        fp = open(output_file, 'w')
-        outstr = "# I   ALT               hmol(I)         haer(I)         H(I)            "
-        outstr += "XDEL(I)         YDEL(I)     XSSA(I)     percent_abs       LAM=  %7.2f nm" % (wl)
-        if use_reptran:
-            outstr += ', WEIGHT= %7.5f, E0=%9.3f, Rint=%8.3f\n' % (w.weight, w.extra, w.band.Rint)
-        # print outstr
-        fp.write(outstr)
+        # create the profile
+        profile = np.zeros(M, dtype=[('I', int),
+                                     ('ALT', float),
+                                     ('hmol', float),
+                                     ('haer', float), 
+                                     ('H', float), 
+                                     ('XDEL', float), 
+                                     ('YDEL', float), 
+                                     ('XSSA', float), 
+                                     ('percent_abs', float), 
+                                     ])
 
-        # write profile
         for m in xrange(M):
 
             if m==0 : 
@@ -1027,8 +1078,7 @@ class Profile(object):
                 hg=0.
                 taur_prec=0.
                 taua_prec=0.
-                outstr = "%d\t%7.2f\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (
-                        m, z[m], 0., 0., 0. , 0., 1., 1., 0.)
+                profile[m] = (m, z[m], 0., 0., 0. , 0., 1., 1., 0.)
             else : 
                 dz = z[m-1]-z[m]
                 taur = dataray[m] - taur_prec
@@ -1043,15 +1093,9 @@ class Profile(object):
                 hg += taug
                 htot = dataray[m]+dataaer[m]+hg
                 xssa=ssaaer[m]
-                outstr = "%d\t%7.2f\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t" % (
-                        m, z[m], dataray[m], dataaer[m], htot , xdel, ydel, xssa, abs)
+                profile[m] = (m, z[m], dataray[m], dataaer[m], htot , xdel, ydel, xssa, abs)
 
-            # print outstr
-            fp.write('\n' + outstr)
-
-        print 'write', output_file
-
-        return output_file
+        return profile
 
     def __str__(self):
         '''
@@ -1162,7 +1206,7 @@ def example1():
     basic example without aerosols
     no gaseous absorption
     '''
-    Profile('afglt.dat', O3=0.).calc(500., dir='tmp/')
+    Profile('afglt.dat', O3=0.).write(500., dir='tmp/')
 
 def example2():
     '''
@@ -1171,7 +1215,7 @@ def example2():
     Profile('afglt.dat',
             grid='100[75]25[5]10[1]0',
             aer=AeroOPAC('maritime_polluted', 0.4, 550.)
-            ).calc(500., dir='tmp/')
+            ).write(500., dir='tmp/')
 
 def example3():
     '''
@@ -1186,7 +1230,7 @@ def example3():
     band = rep.band('sentinel3_slstr_b4')
     for iband in band.ibands():
         print '* Band', iband.w
-        pro.calc(iband, dir='tmp/')
+        pro.write(iband, dir='tmp/')
         avg_wvl = np.mean(iband.band.awvl)  # average wavelength of the iband
         phase = aer.phase(avg_wvl, dir='tmp/')
         print 'phase function', phase

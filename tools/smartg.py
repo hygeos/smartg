@@ -160,9 +160,9 @@ def smartg(exe, wl, output=None, dir=dir_output,
     if atm is not None:
         # write the profile
         if iband is None:
-            file_profile = atm.calc(wl, dir=dir_profiles)
+            file_profile = atm.write(wl, dir=dir_profiles)
         else:
-            file_profile = atm.calc(iband, dir=dir_profiles)
+            file_profile = atm.write(iband, dir=dir_profiles)
         D.update(PATHPROFILATM=file_profile)
 
         # aerosols
