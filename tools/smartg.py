@@ -56,7 +56,7 @@ def smartg(exe, wl, output=None, dir=dir_output,
           automatically choose a filename.
         - atm: Profile object
             default None (no atmosphere)
-        - surf: Surface parameters (dictionary)
+        - surf: Surface object
             default None (no surface)
         - water: Iop object, providing options relative to the ocean surface
             default None (no ocean)

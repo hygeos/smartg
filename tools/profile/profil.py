@@ -266,13 +266,14 @@ class AeroOPAC(object):
         M=len(self.zopac)
         Leg=Legendres(self.MMAX,NTHETA)
         ret = []
+        list_skipped = []   # list of files skipped because existing
 
         for m in range(M):
 
             output = join(dir, pattern%(basename(self.filename[:-4]),w,m))
             ret.append(output)
             if exists(output):
-                print '{} exists!'.format(output)
+                list_skipped.append(output)
                 continue
             theta,pha=Mom2Pha(self.pmom_tot[m,:,:],Leg)
             if not exists(dirname(output)):
@@ -283,6 +284,10 @@ class AeroOPAC(object):
             for j in range(NTHETA):
                 f.write("%18.8E"%theta[j] + "  %20.11E  %20.11E  %20.11E  %20.11E\n"%tuple(pha[:,j]))
             f.close()
+
+        if len(list_skipped) > 0:
+            print 'INFO: skipping {} and {} other files'.format(list_skipped[0], len(list_skipped)-1)
+
         return ret
 
     def phase(self, wl, dir, pattern='pf_%s_%inm_layer-%i.txt'):
@@ -1145,7 +1150,7 @@ def example1():
     basic example without aerosols
     no gaseous absorption
     '''
-    Profile('afglt.dat', O3=0.).calc(500.)
+    Profile('afglt.dat', O3=0.).calc(500., dir='tmp/')
 
 def example2():
     '''
@@ -1153,20 +1158,27 @@ def example2():
     '''
     Profile('afglt.dat',
             grid='100[75]25[5]10[1]0',
-            aerosol=AeroOPAC('maritime_polluted', 0.4, 550.)
-            ).calc(500.)
+            aer=AeroOPAC('maritime_polluted', 0.4, 550.)
+            ).calc(500., dir='tmp/')
 
 def example3():
     '''
     using reptran without aerosols
     also write phase functions
     '''
-    aer = AeroOPAC('desert', 0.4, 550.)
-    pro = Profile('afglt.dat', aerosol=aer)
-    for iband in REPTRAN('reptran_solar_sentinel.cdf').band('sentinel3_slstr_b4').ibands():
-        print pro.calc(iband)
-        aer.calcPha(iband.w)
+    aer = AeroOPAC('desert', 0.4, 550., layer_phase=0)
+    pro = Profile('afglt.dat', aer=aer)
+    rep = REPTRAN('reptran_solar_sentinel.cdf')
+    for band in rep.band_names:
+        print band
+    band = rep.band('sentinel3_slstr_b4')
+    for iband in band.ibands():
+        print '* Band', iband.w
+        pro.calc(iband, dir='tmp/')
+        avg_wvl = np.mean(iband.band.awvl)  # average wavelength of the iband
+        phase = aer.phase(avg_wvl, dir='tmp/')
+        print 'phase function', phase
 
 
 if __name__ == '__main__':
-    main()
+    example3()

@@ -1,7 +1,15 @@
 
 --- TODO ---
 
-* rajouter en sortie le nombre de photons dans chaque boite
+* rajouter la prise en compte de l'albédo non isotrope
+
+* smartg.py: calculer atot et btot à la longueur d'onde de la bande interne
+  d'absorption
+
+* écrire le contenu du fichier profil dans le fichier de sortie
+  + faire de même pour les fonctions de phase ?
+
+* [OK] rajouter en sortie le nombre de photons dans chaque boite
   -> nécessite un tableau supplémentaire et une opération atomique dans le
   kernel
 
