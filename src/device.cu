@@ -1812,8 +1812,11 @@ __device__ void countPhoton(Photon* ph, Tableaux tab, unsigned long long* nbPhot
     } else {
 
         // SURFACE
-        tabCount = tab.tabPhotonsDown;
-
+        if (ph->vz < 0) {
+            tabCount = tab.tabPhotonsDown;
+        } else {
+            return;
+        }
     }
 	
 	
