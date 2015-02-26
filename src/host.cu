@@ -328,8 +328,9 @@ void chercheConstante(FILE* fichier, const char* nomConstante, char* chaineValeu
 
 void init_profile(int *NATM, float *HATM, char *PATHPROFILATM) {
     //
-    // reads the number of layers (more precisely, number of interfaces =
-    // nlayers+1) in the atmosphere profile, and the height of the top layer
+    // reads the number of layers NATM in the atmosphere profile, and the
+    // height of the top layer
+    // the profile file contains NATM+1 interfaces from 0 to NATM
     //
 
     printf("Read %s\n", PATHPROFILATM);
@@ -349,7 +350,7 @@ void init_profile(int *NATM, float *HATM, char *PATHPROFILATM) {
 
     // skip first line
     fgets(buffer, 2048, fp);
-    *NATM = 0;
+    *NATM = -1;
 
     // read first layer
     while(1) {
