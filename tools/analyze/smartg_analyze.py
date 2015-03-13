@@ -53,10 +53,7 @@ parser = OptionParser(option_class=MyOption,usage='%prog [options] hdf_file [hdf
         + ' In case of a second hdf file, differences between MC file 1 and MC file 2 are plotted\n'
         + ' Options ...\n'
         + '-d --down : downward radiance at BOA (default upward TOA)\n'
-        + '-S --ShowSOS : Plot SOS result (default MC hdf file)\n'
-        + '-D --DiffSOS : Plot differences between MC and SOS result\n'
         + '-R --Relative : Plot relative differences in percent instead of absolute\n'
-        + '-c --computeSOS : compute SOS result (default False: start from ./SOS_Up.txt and ./SOS_Down.txt files)\n'
         + '-a --aerosol : aerosol model (mandatory if -c is chosen), should be U80 or M80 or T70 or 0 (forcing no aerosol)\n'
         + '-s --savefile : output graphics file name\n'
         + '-r --rmax : maximum reflectance for color scale, in percent in case of relative differences see -R option\n'
@@ -73,22 +70,10 @@ parser.add_option('-d','--down',
             dest='down',
             action="store_true", default=False,
             help =  '-d downward radiance at BOA (default upward TOA)\n')
-parser.add_option('-S','--ShowSOS',
-            dest='sos',
-            action="store_true", default=False,
-            help =  '-S Draw SOS result (default MC hdf file)\n')
-parser.add_option('-D','--DiffSOS',
-            dest='diff',
-            action="store_true", default=False,
-            help =  '-D --DiffSOS : Plot differences between MC and SOS result\n')
 parser.add_option('-R','--Relative',
             dest='rel',
             action="store_true", default=False,
             help =  '-R --Relative : Plot relative differences in percent instead of absolute\n')
-parser.add_option('-c','--compute',
-            dest='compute',
-            action="store_true", default=False,
-            help =  '-c compute SOS result (default False start from ./SOS_Up.txt and ./SOS_Down.txt files)\n')
 parser.add_option('-s', '--savefile',
             dest='filename',
             help='-s output graphics file name\n'
@@ -351,7 +336,7 @@ def setXYZ(theta,phi,other,options,data,data2,SYM='I'):
         YY = phi
         Z = data
         opt=None
-        if (data2!=None) | (options.diff==True):
+        if (data2!=None) :
             Z2 = data2
     else:
         if options.list[0]==0 :
@@ -359,22 +344,22 @@ def setXYZ(theta,phi,other,options,data,data2,SYM='I'):
             XX = other
             YY = phi
             Z = data.transpose()
-            if (data2!=None) | (options.diff==True): Z2 = data2.transpose()
+            if (data2!=None) : Z2 = data2.transpose()
    
         if options.list[0]==1 :
             opt=options
             XX = other
             YY = theta
             Z = data.transpose()
-            if (data2!=None) | (options.diff==True): Z2 = data2.transpose()
+            if (data2!=None) : Z2 = data2.transpose()
         if options.list[0]==2 :
             opt=None
             XX = theta
             YY = phi
             Z = data
-            if (data2!=None) | (options.diff==True): Z2 = data2
+            if (data2!=None) : Z2 = data2
 
-    if (data2!=None) | (options.diff==True):
+    if (data2!=None) :
         if options.rel==True :
             ZZ = (Z-Z2)/Z2*100
             TITLE='({}1-{}2)/{}2[%]'.format(SYM,SYM,SYM)
@@ -414,12 +399,8 @@ def main():
         NBTHETA_cuda = getattr(sd_cuda,'NBTHETA')
         thetas = getattr(sd_cuda,'VZA (deg.)')
         mus = np.cos(thetas * np.pi / 180.)
-        TAURAY = getattr(sd_cuda,'TAURAY')
-        TAUAER = getattr(sd_cuda,'TAUAER')
         WINDSPEED = getattr(sd_cuda,'WINDSPEED')
         W0LAM = getattr(sd_cuda,'W0LAM')
-        HR = getattr(sd_cuda,'HR')
-        HA = getattr(sd_cuda,'HA')
         LAMBDA = getattr(sd_cuda,'LAMBDA')
         NH2O = getattr(sd_cuda,'NH2O')
         SIM = getattr(sd_cuda,'SIM')
@@ -682,157 +663,6 @@ def main():
     else:
         maxp=options.percent
 
-    if options.diff == True:
-        options.sos = False
-    ##########################################################
-    ##              PARAMETRAGE ET RUN DES SOS              ##
-    ##########################################################
-
-    #---------------------------------------------------------
-    # Parametres des SOS
-    #---------------------------------------------------------
-    # ecritue du fichier d'angle utilisateur pour OS V5.1
-    if options.sos == True or options.compute==True:
-       fname = "MC_angle_%i.txt" % NBTHETA_cuda
-       fangle = open(fname,"w")
-       for i in range(NBTHETA_cuda) :
-           fangle.write("%9.5f\n" % theta[i])
-
-    #------------------------------------
-    # conversion en string pour passge au ksh
-    LAMBDA = "%.3f" % (LAMBDA/1000.)
-    Dphi_s = "%4i" % Dphi
-    thetas = "%.2f" % thetas
-    TAURAY = "%.5f" % TAURAY
-    TAUAER = "%.5f" % TAUAER
-    W0LAM = "%.2f" % W0LAM
-    NH2O = "%.2f" % NH2O
-    WINDSPEED = "%.1f" % WINDSPEED
-    HR = "%.1f" % HR
-    HA = "%.1f" % HA
-
-    ### !! ###
-    #ZMIN='0.'
-    #ZMAX='1.'
-    ### !! ###
-
-    if SIM == -2 : # Black surface and no dioptre
-       SURF_TYPE = '0'
-       W0LAM = '0.00'
-    if (SIM == 1) & (DIOPTRE == 0) : # Atmosphere + Black flat sea surface
-       SURF_TYPE = '2'
-       W0LAM = '0.00'
-    if (SIM == 1) & (DIOPTRE == 3) : # Atmosphere + Lambertian surface
-       SURF_TYPE = '0'
-    if (SIM == 1) & (DIOPTRE == 4) : #  Atmosphere + Lambertian surface + Wind roughened sea surface
-       SURF_TYPE = '1'
-    if (SIM == 1) & ( (DIOPTRE == 1) | (DIOPTRE == 2)) : # Atmosphere + Black wind roughened sea surface
-       SURF_TYPE = '1'
-       W0LAM = '0.00'
-
-    process = subprocess.Popen("pwd",shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-    # wait for the process to terminate
-    out, err = process.communicate()
-    thisDir = out.rstrip()
-
-    if options.compute == True : 
-      if (options.aerosol != 'U80') & (options.aerosol != 'M80') & (options.aerosol != 'T70') & (options.aerosol != '0') : 
-         parser.print_usage()
-         exit(1)
-      if options.aerosol == 'U80' :
-         SOS_AER_MODEL = '2'
-         SOS_AER_SF_MODEL = '2'
-         SOS_AER_RH = '80.'
-      if options.aerosol == 'M80' :
-         SOS_AER_MODEL = '2'
-         SOS_AER_SF_MODEL = '3'
-         SOS_AER_RH = '80.'
-      if options.aerosol == 'T70' :
-         SOS_AER_MODEL = '2'
-         SOS_AER_SF_MODEL = '1'
-         SOS_AER_RH = '70.'
-      if options.aerosol == '0' :
-         SOS_AER_MODEL = '2'
-         SOS_AER_SF_MODEL = '3'
-         SOS_AER_RH = '80.'
-         TAUAER = '0.'
-
-      #---------------------------------------------------------
-      # lancement des SOS
-      #---------------------------------------------------------
-      cmd0 = "export SOS_RESULT=$RACINE/SOS_TEST\n" + "export dirSUNGLINT=$SOS_RESULT/SURFACE/GLITTER\n"+ "export SOS_RACINE_FIC=$RACINE/fic\n"+ "export dirMIE=$SOS_RESULT/MIE\n"+ "export dirLOG=$SOS_RESULT/LOG\n"+ "export dirRESULTS=$SOS_RESULT/SOS\n"
-
-      cmd = "ksh $RACINE/exe/main_SOS.ksh -SOS.Wa "+LAMBDA+"	\
-         -ANG.Rad.NbGauss 40    -ANG.Rad.ResFile "+thisDir+"/tmp_SOS_UsedAngles.txt \
-         -ANG.Rad.UserAngFile "+thisDir+"/"+fname +"\
-	   -ANG.Aer.NbGauss 40 \
-         -ANG.Log "+thisDir+"/tmp_Angles.Log \
-         -ANG.Aer.ResFile "+thisDir+"/tmp_AER_UsedAngles.txt \
-         -ANG.Thetas "+thetas+" -SOS.View 2 -SOS.View.Dphi "+Dphi_s+"  \
-         -SOS.IGmax 30 \
-       -SOS.ResFileUp.UserAng "+thisDir+"/SOS_Up.txt  -SOS.ResFileDown.UserAng "+thisDir+"/SOS_Down.txt \
-         -SOS.ResBin "+thisDir+"/tmp_SOS_Result.bin \
-         -SOS.ResFileUp "+thisDir+"/tmp_Up.txt -SOS.ResFileDown "+thisDir+"/tmp_Down.txt -SOS.Log "+thisDir+"/tmp_SOS.log\
-	   -SOS.Config "+thisDir+"/tmp_SOS_config.txt \
-	   -SOS.Trans "+thisDir+"/tmp_SOS_transm.txt \
-       -SOS.MDF 0.0279 \
-	   -AP.MOT "+TAURAY+" -AP.HR "+HR+" \
-         -AP.Type 1	\
-         -AP.AerHS.HA "+HA+" \
-       -AP.ResFile "+thisDir+"/tmp_Profile.txt -AP.Log "+thisDir+"/tmp_Profile.Log \
-	   -AER.Waref "+LAMBDA+" -AER.AOTref "+TAUAER+" \
-	   -AER.ResFile "+thisDir+"/tmp_Aerosols.txt -AER.Log "+thisDir+"/tmp_Aerosols.Log -AER.MieLog 0 \
-       -SURF.Log "+thisDir+"/tmp_Surface.Log -SURF.File DEFAULT \
-         -SURF.Type "+SURF_TYPE+" -SURF.Alb "+W0LAM+" -SURF.Ind "+NH2O+" \
-         -SURF.Glitter.Wind "+WINDSPEED+" \
-	   -AER.Model "+SOS_AER_MODEL+" -AER.Tronca 1 \
-         -AER.SF.Model "+SOS_AER_SF_MODEL+" -AER.SF.RH "+SOS_AER_RH
-
-      fp=open("./tmp.ksh","w")
-      fp.write(cmd0)
-      fp.write(cmd)
-      fp.write("\n")
-      #b = subprocess.call("echo " + cmd + " > ./cmd ; cat runOS_template.ksh cmd > tmp.ksh; chmod +x tmp.ksh",shell=True) 
-      print ' ........................................................................................'
-      print ' SOS version available here : /home/did/RTC/SOS_V5.1; set RACINE and SOS_RACINE accordingly'
-      print ' ........................................................................................\n'
-      print ' SOS command file ready : type ./tmp.ksh to run SOS \n'
-      sys.exit(1)
-
-    #---------------------------------------------------------
-    # Recuperation des SOS
-    #---------------------------------------------------------
-
-    if (options.sos==True) | (options.diff==True):
-      I_sos = np.zeros((NBPHI_cuda,NBTHETA_cuda),dtype=float)
-      Q_sos = np.zeros((NBPHI_cuda,NBTHETA_cuda),dtype=float)
-      U_sos = np.zeros((NBPHI_cuda,NBTHETA_cuda),dtype=float)
-
-
-      if options.down == False :
-         fichier_sos = open(thisDir+"/SOS_Up.txt", "r")
-      else :
-         fichier_sos = open(thisDir+"/SOS_Down.txt", "r")
-
-      data=np.loadtxt(fichier_sos,comments="#")
-      I_sos = data[:,2]
-      Q_sos = data[:,3]
-      U_sos = data[:,4] 
-
-      # Pour les OS le Dphi lance est 2 fois plus petit que pour Cuda afin d'avoir des valeurs de Phi qui coincident
-      # De plus les 0S couvrent la gamme 0 - 360 et il nous faut uniquement une demi espace
-      # NPhi(OS) = 4 * Nphi(MC) + 1
-      phiAll = data[:,0].reshape(-1)
-      OK = np.where(( (phiAll.astype(int) % int(2*Dphi)) == int(Dphi) )  & (phiAll < 180) )
-
-      I_sos = I_sos[OK].reshape((-1,NBTHETA_cuda))  
-      Q_sos = Q_sos[OK].reshape((-1,NBTHETA_cuda)) 
-      U_sos = U_sos[OK].reshape((-1,NBTHETA_cuda))
-      # retournement de Phi, convention OS et normalisation par mus
-      I_sos = I_sos[::-1,:]/mus
-      Q_sos = Q_sos[::-1,:]/mus
-      U_sos = U_sos[::-1,:]/mus
-
     #---------------------------------------------------------
     # Recuperation d eventuels points de simulation venant d un fichier txt (comme libradtran par exemple)
     ###
@@ -865,7 +695,7 @@ def main():
     #---------------------------------------------------------
     # Calcul pour l'ergonomie des graphiques 2D
     #---------------------------------------------------------
-    if (len(args)==2) | (options.diff==True):
+    if (len(args)==2) :
       VI = np.linspace(-max,max,50) # levels des contours
       VIt = np.linspace(-max,max,6) # ticks des color bars associees
     else:
@@ -875,19 +705,19 @@ def main():
     VQt = np.linspace(-max,max,5)
     VU = np.linspace(-max,max,50)
     VUt = np.linspace(-max,max,5)
-    if (len(args)==2) | (options.diff==True):
+    if (len(args)==2) :
       VIP = np.linspace(-max,max,50)
       VIPt = np.linspace(-max,max,6)
     else:
       VIP = np.linspace(0.,max,50)
       VIPt = np.linspace(0.,max,6)
-    if (len(args)==2) | (options.diff==True):
+    if (len(args)==2) :
       VPR = np.linspace(-maxp,maxp,50)
       VPRt = np.linspace(-maxp,maxp,6)
     else:
       VPR = np.linspace(0.,maxp,50)
       VPRt = np.linspace(0.,maxp,6)
-    if (len(args)==2) | (options.diff==True):
+    if (len(args)==2) :
       VN = np.linspace(-maxe,maxe,50)
       VNt = np.linspace(-maxe,maxe,6)
     else:
@@ -898,19 +728,6 @@ def main():
     #---------------------------------------------------------
     #choix des tableaux a tracer
     #---------------------------------------------------------
-    if options.sos==True :
-        data_cudaI = I_sos
-        data_cudaQ = Q_sos
-        data_cudaU = U_sos
-        data_cudaIP = np.sqrt(data_cudaQ*data_cudaQ + data_cudaU*data_cudaU)
-        data_cudaPR = data_cudaIP/data_cudaI * 100
-    if options.diff==True :
-        data_cudaI2 = I_sos
-        data_cudaQ2 = Q_sos
-        data_cudaU2 = U_sos
-        data_cudaIP2 = np.sqrt(data_cudaQ2*data_cudaQ2 + data_cudaU2*data_cudaU2)
-        data_cudaPR2 = data_cudaIP2/data_cudaI2 * 100
-
 
     #---------------------------------------------------------
     #   Creation
@@ -945,7 +762,7 @@ def main():
             other = (other-options.others[1])/(options.others[2]-options.others[1])* 90.
             
     else:
-        fig.text(.5,.90, r"$\lambda=%.2f nm$"%(float(LAMBDA)*1e3),fontsize='14', ha='center')
+        fig.text(.5,.90, r"$\lambda=%.2f nm$"%(float(LAMBDA)),fontsize='14', ha='center')
     fig.subplots_adjust(wspace=0.3, hspace=0.3, left=0.05, right=0.95)
     #fig.subplots_adjust(wspace=0.3, left=0.05, right=0.95)
 
@@ -1012,63 +829,18 @@ def main():
     plot_2D_parameter(fig, rect[0], XX , YY, ZZ, VI, Vdatat=VIt,title=TITLE, iphi0=iphi0, sub=sub[0], options=opt, points=I_txt, label=lab) 
                 
 
-    # first quarter I
-#    if (len(args)==2) | (options.diff==True):
-#        if options.rel==True : plot_2D_parameter(fig, rect[0], theta , phi, (data_cudaI-data_cudaI2)/data_cudaI2*100, VI, Vdatat=VIt,title='(I1-I2)/I2[%]', iphi0=iphi0, sub=sub[0])
-#        else :
-#            if options.QU==True : plot_2D_parameter(fig, rect[0], theta , phi, data_cudaI-data_cudaI2, VI, Vdatat=VIt,title='I1-I2', iphi0=iphi0, sub=sub[0])
-#            else : plot_2D_parameter(fig, rect[0], theta , phi, data_cudaI-data_cudaI2, VI, Vdatat=VIt,title='I1-I2', label='Reflectance', iphi0=iphi0, sub=sub[0])
-#    else:
-#        if options.points != None : 
-#            if options.QU==True : plot_2D_parameter(fig, rect[0], theta , phi, data_cudaI, VI,  Vdatat=VIt,title='I', iphi0=iphi0, sub=sub[0], points=I_txt)
-#            else : plot_2D_parameter(fig, rect[0], theta , phi, data_cudaI, VI,  Vdatat=VIt,title='I', label='Reflectance',iphi0=iphi0, sub=sub[0], points=I_txt)
-#        else : 
-#            if options.list == None :
-#                if options.QU==True : plot_2D_parameter(fig, rect[0], theta , phi, data_cudaI, VI,  Vdatat=VIt,title='I', iphi0=iphi0, sub=sub[0])
-#                else: plot_2D_parameter(fig, rect[0], theta , phi, data_cudaI, VI,  Vdatat=VIt,title='I',label='Reflectance', iphi0=iphi0, sub=sub[0]) 
-#            else : 
-#                 if options.list[0]==0 : plot_2D_parameter(fig, rect[0], other, phi, data_cudaI.transpose(), VI,  Vdatat=VIt,title='I', iphi0=iphi0, sub=sub[0],options=options)
-#                 if options.list[0]==1 : plot_2D_parameter(fig, rect[0], other, theta, data_cudaI.transpose(), VI,  Vdatat=VIt,title='I', iphi0=iphi0, sub=sub[0],options=options)
-#                 if options.list[0]==2 : plot_2D_parameter(fig, rect[0], theta, phi, data_cudaI, VI,  Vdatat=VIt,title='I', iphi0=iphi0, sub=sub[0])
-                 
-                 
-
     if options.QU==True:
         # 2nd quarter Q
         XX,YY,ZZ,TITLE,opt = setXYZ(theta,phi,other,options,data_cudaQ,data_cudaQ2,SYM='Q')
         lab=''
         plot_2D_parameter(fig, rect[1], XX , YY, ZZ, VQ, Vdatat=VQt,title=TITLE, iphi0=iphi0, sub=sub[1], options=opt, points=Q_txt, label=lab)
             
-#        if (len(args)==2) | (options.diff==True):
-#             if options.rel==True : plot_2D_parameter(fig, rect[1], theta , phi, (data_cudaQ-data_cudaQ2)/data_cudaQ2*100, VQ, Vdatat=VQt,title='(Q1-Q2)/Q2[%]', iphi0=iphi0, sub=sub[1])
-#             else : plot_2D_parameter(fig, rect[1], theta , phi, data_cudaQ-data_cudaQ2, VQ,  Vdatat=VQt,title='Q1-Q2', iphi0=iphi0, sub=sub[1])
-#        else:
-#            if options.points != None : plot_2D_parameter(fig, rect[1], theta , phi, data_cudaQ,  VQ, Vdatat=VQt,  title='Q', iphi0=iphi0, sub=sub[1], points=Q_txt)
-#            else :  
-#                if options.list == None : plot_2D_parameter(fig, rect[1], theta , phi, data_cudaQ,  VQ, Vdatat=VQt,  title='Q', iphi0=iphi0, sub=sub[1])
-#                else :
-#                   if options.list[0]==0 : plot_2D_parameter(fig, rect[1], other, phi, data_cudaQ.transpose(), VQ,  Vdatat=VQt,title='Q', iphi0=iphi0, sub=sub[1],options=options)
-#                   if options.list[0]==1 : plot_2D_parameter(fig, rect[1], other, theta, data_cudaQ.transpose(), VQ,  Vdatat=VQt,title='Q', iphi0=iphi0, sub=sub[1],options=options)
-#                   if options.list[0]==2 : plot_2D_parameter(fig, rect[1], theta, phi, data_cudaQ, VQ,  Vdatat=VQt,title='Q', iphi0=iphi0, sub=sub[1])
-#                            
-                            
     
         # 3rd quarter U
         XX,YY,ZZ,TITLE,opt = setXYZ(theta,phi,other,options,data_cudaU,data_cudaU2,SYM='U')
         lab='Reflectance'
         plot_2D_parameter(fig, rect[2], XX , YY, ZZ, VU, Vdatat=VUt,title=TITLE, iphi0=iphi0, sub=sub[2], options=opt, points=U_txt, label=lab)
         
-#        if (len(args)==2) | (options.diff==True):
-#             if options.rel==True : plot_2D_parameter(fig, rect[2], theta , phi, (data_cudaU-data_cudaU2)/data_cudaU2*100, VU, Vdatat=VUt,title='(U1-U2)/U2[%]', iphi0=iphi0, sub=sub[2])
-#             else : plot_2D_parameter(fig, rect[2], theta , phi, data_cudaU-data_cudaU2, VU,  Vdatat=VUt,title='U1-U2', label='Reflectance', iphi0=iphi0, sub=sub[2])
-#        else:
-#            if options.points != None : plot_2D_parameter(fig, rect[2], theta , phi, data_cudaU,  VU, Vdatat=VUt,  title='U', label='Reflectance', iphi0=iphi0, sub=sub[2], points=U_txt)
-#            else : 
-#                if options.list == None : plot_2D_parameter(fig, rect[2], theta , phi, data_cudaU,  VU, Vdatat=VUt,  title='U', label='Reflectance', iphi0=iphi0, sub=sub[2])
-#                else :
-#                    if options.list[0]==0 : plot_2D_parameter(fig, rect[2], other, phi, data_cudaU.transpose(), VU,  Vdatat=VUt,title='U', iphi0=iphi0, sub=sub[2],options=options)
-#                    if options.list[0]==1 : plot_2D_parameter(fig, rect[2], other, theta, data_cudaU.transpose(), VU,  Vdatat=VUt,title='U', iphi0=iphi0, sub=sub[2],options=options)
-#                    if options.list[0]==2 : plot_2D_parameter(fig, rect[2], theta, phi, data_cudaU, VU,  Vdatat=VUt,title='U', iphi0=iphi0, sub=sub[2])
 
     # 4th quarter
     # Polarization ratio   
@@ -1077,45 +849,18 @@ def main():
         lab='Polarization Ratio'
         plot_2D_parameter(fig, rect[3], XX , YY, ZZ, VPR, Vdatat=VPRt,title=TITLE, iphi0=iphi0, sub=sub[3], options=opt, points=PR_txt, label=lab) 
         
-#      if (len(args)==2) | (options.diff==True):
-#         if options.rel==True : plot_2D_parameter(fig, rect[3], theta , phi, (data_cudaPR-data_cudaPR2)/data_cudaPR2*100, VPR, Vdatat=VPRt,title='(P1-P2)/P2[%]', iphi0=iphi0, sub=sub[3])
-#         else : plot_2D_parameter(fig, rect[3], theta , phi, data_cudaPR-data_cudaPR2, VPR,  Vdatat=VPRt,title='P1-P2[%]', label='Polarization Ratio', iphi0=iphi0, sub=sub[3])
-#      else:
-#         if options.points != None : plot_2D_parameter(fig, rect[3], theta , phi, data_cudaPR, VPR,  Vdatat=VPRt,title='P[%]', label='Polarization Ratio', iphi0=iphi0, sub=sub[3], points=PR_txt)
-#         else : 
-#             if options.list == None : plot_2D_parameter(fig, rect[3], theta , phi, data_cudaPR, VPR,  Vdatat=VPRt,title='P[%]', label='Polarization Ratio', iphi0=iphi0, sub=sub[3])
-#             else :
-#                 if options.list[0]==0 : plot_2D_parameter(fig, rect[3], other, phi, data_cudaPR.transpose(), VPR,  Vdatat=VPRt,title='P[%]', label='Polarization Ratio',iphi0=iphi0, sub=sub[3],options=options)
-#                 if options.list[0]==1 : plot_2D_parameter(fig, rect[3], other, theta, data_cudaPR.transpose(), VPR,  Vdatat=VPRt,title='P[%]',label='Polarization Ratio', iphi0=iphi0, sub=sub[3],options=options)
-#                 if options.list[0]==2 : plot_2D_parameter(fig, rect[3], theta, phi, data_cudaPR, VPR,  Vdatat=VPRt,title='P[%]',label='Polarization Ratio', iphi0=iphi0, sub=sub[3])
 #
 #    # or Error
     if options.percent == None and options.error >= 0.:
         XX,YY,ZZ,TITLE,opt = setXYZ(theta,phi,other,options,data_cudaN,data_cudaN2,SYM=r"$\Delta$")
         lab='Relative Error'
         plot_2D_parameter(fig, rect[3], XX , YY, ZZ, VN, Vdatat=VNt,title=TITLE, iphi0=iphi0, sub=sub[3], options=opt, points=None, label=lab)
-#         if options.list == None : plot_2D_parameter(fig, rect[3], theta , phi, data_cudaN, VN,  Vdatat=VNt,title=r"$\Delta$ [%]", label='Relative Error', iphi0=iphi0, sub=sub[3])
-#         else :
-#             if options.list[0]==0 : plot_2D_parameter(fig, rect[3], other, phi, data_cudaN.transpose(), VN,  Vdatat=VNt,title=r"$\Delta$ [%]", label='Relative Error',iphi0=iphi0, sub=sub[3],options=options)
-#             if options.list[0]==1 : plot_2D_parameter(fig, rect[3], other, theta, data_cudaN.transpose(), VN,  Vdatat=VNt,title=r"$\Delta$ [%]",label='Relative Error', iphi0=iphi0, sub=sub[3],options=options)
-#             if options.list[0]==2 : plot_2D_parameter(fig, rect[3], theta, phi, data_cudaN, VN,  Vdatat=VNt,title=r"$\Delta$ [%]",label='Relative Error', iphi0=iphi0, sub=sub[3])
 #
 #    # or Polarized reflectance
     if options.percent == None  and options.error == None:
         XX,YY,ZZ,TITLE,opt = setXYZ(theta,phi,other,options,data_cudaIP,data_cudaIP2,SYM='IP')
         lab='Polarized Reflectance'
         plot_2D_parameter(fig, rect[3], XX , YY, ZZ, VIP, Vdatat=VIPt,title=TITLE, iphi0=iphi0, sub=sub[3], options=opt, points=IP_txt, label=lab)
-#      if (len(args)==2) | (options.diff==True):
-#         if options.rel==True : plot_2D_parameter(fig, rect[3], theta , phi, (data_cudaIP-data_cudaIP2)/data_cudaIP2*100, VIP, Vdatat=VIPt,title='(IP1-IP2)/IP2[%]', iphi0=iphi0, sub=sub[3])
-#         else : plot_2D_parameter(fig, rect[3], theta , phi, data_cudaIP-data_cudaIP2, VIP,  Vdatat=VIPt,title='IP1-IP2', label='Polarized Reflectance', iphi0=iphi0, sub=sub[3])
-#      else:
-#         if options.points != None : plot_2D_parameter(fig, rect[3], theta , phi, data_cudaIP, VIP, Vdatat=VIPt,title='IP', label='Polarized Reflectance', iphi0=iphi0, sub=sub[3], points=IP_txt)
-#         else : 
-#             if options.list == None : plot_2D_parameter(fig, rect[3], theta , phi, data_cudaIP, VIP, Vdatat=VIPt,title='IP', label='Polarized Reflectance', iphi0=iphi0, sub=sub[3])
-#             else :
-#                 if options.list[0]==0 : plot_2D_parameter(fig, rect[3], other, phi, data_cudaIP.transpose(), VIP,  Vdatat=VIPt,title='IP', label='Polarized Reflectance',iphi0=iphi0, sub=sub[3],options=options)
-#                 if options.list[0]==1 : plot_2D_parameter(fig, rect[3], other, theta, data_cudaIP.transpose(), VIP,  Vdatat=VIPt,title='IP',label='Polarized Reflectance', iphi0=iphi0, sub=sub[3],options=options)
-#                 if options.list[0]==2 : plot_2D_parameter(fig, rect[3], theta, phi, data_cudaIP, VIP,  Vdatat=VIPt,title='IP',label='Polarized Reflectance', iphi0=iphi0, sub=sub[3])
 
     if options.filename == None:
         show()
