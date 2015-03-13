@@ -74,6 +74,11 @@ suppr:
 	
 rebuild: suppr clean all
 
+sp:
+	$(MAKE) SPH=yes EXEC=SMART-G-SP
+pp:
+	$(MAKE) SPH=no EXEC=SMART-G-PP
+
 both:
 	@echo
 	@echo making SMART-G-PP _and_ SMART-G-SP
