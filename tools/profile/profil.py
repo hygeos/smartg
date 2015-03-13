@@ -967,7 +967,7 @@ class Profile(object):
         outstr = "# I   ALT               hmol(I)         haer(I)         H(I)            "
         outstr += "XDEL(I)         YDEL(I)     XSSA(I)     percent_abs       LAM=  %7.2f nm" % (wl)
         if use_reptran:
-            outstr += ', WEIGHT= %7.5f, E0=%9.3f, Rint=%8.3f\n' % (w.weight, w.extra, w.band.Rint)
+            outstr += ', WEIGHT= %7.5f, E0=%9.3f, Rint=%8.3f' % (w.weight, w.extra, w.band.Rint)
         # print outstr
         fp.write(outstr)
 
