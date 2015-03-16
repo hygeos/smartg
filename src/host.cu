@@ -366,7 +366,7 @@ void init_profile(int *NATM, float *HATM, char *PATHPROFILATM) {
 
 int count_lines(char *PATHDIFF) {
     //
-    // count the number of lines in a file
+    // count the number of uncommented lines in a file
     //
 
     if (strcmp(PATHDIFF, "None") == 0) {
@@ -384,6 +384,7 @@ int count_lines(char *PATHDIFF) {
     while (1) {
         if (fgets(buffer, 2048, fp) == NULL) break;
         if (buffer[0] == '\n') break;
+        if (buffer[0] == '#') continue;
         c++;
     }
     fclose(fp);
