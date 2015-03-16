@@ -1102,23 +1102,34 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa
 		theta = foce[iang*5+4]+ zang*( foce[(iang+1)*5+4]-foce[iang*5+4] );
 		
 		cTh = __cosf(theta);
-		
-		// p1 et p2 sont inversés par cohérence étant donné que le code Fortran d'origine interverti stoke1 et stoke2
-		p2 = foce[iang*5+0];
-		p1 = foce[iang*5+1];
-// 		p1 = foce[iang*5+0];
-// 		p2 = foce[iang*5+1];
-		p3 = foce[iang*5+2];
+
+        // TODO: We must check if we need to invert p1 and p2
+
+        //////////////
+        //  Get Phi
+
+        // biased sampling scheme for phi
+        psi = RAND * DEUXPI;	//psiPhoton
+        cPsi = __cosf(psi);	//cosPsiPhoton
+        sPsi = __sinf(psi);     //sinPsiPhoton
+        // Rotation des paramètres de stokes
+        rotateStokes(ph->stokes1, ph->stokes2, ph->stokes3, psi,
+                &ph->stokes1, &ph->stokes2, &ph->stokes3);
 
 
-		ph->weight  *= 2.0f*__fdividef( (stokes1*p1+stokes2*p2) , stokes1+stokes2)*W0OCEd;
-		ph->stokes1 *= 2.0f*p1;
-		ph->stokes2 *= 2.0f*p2;
-		u = ph->stokes3;
-		ph->stokes3 = p3*u;
+        // Calcul des parametres de Stokes du photon apres diffusion
+        ph->stokes1 *= foce[iang*5+0];
+        ph->stokes2 *= foce[iang*5+1];
+        ph->stokes3 *= foce[iang*5+2];
 
-		
-		
+        float debias;
+        debias = __fdividef( 2., foce[iang*5+0] + foce[iang*5+1] );
+        ph->stokes1 *= debias;
+        ph->stokes2 *= debias;
+        ph->stokes3 *= debias;
+
+        ph->weight  *= W0OCEd;
+
 	/** Roulette russe **/
 	if( ph->weight < WEIGHTRR ){
 		if( RAND < __fdividef(ph->weight,WEIGHTRR) ){
