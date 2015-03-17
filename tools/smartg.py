@@ -422,36 +422,46 @@ def reptran_merge(files, ibands, output=None):
     print 'Merging {} files into {}'.format(len(files), output)
 
     hdf_out = SD(output, SDC.WRITE|SDC.CREATE)
-    for dataset in [
-            "I_up (TOA)",
-            "Q_up (TOA)",
-            "U_up (TOA)",
-            "Numbers of photons"]:
-        S, norm = 0., 0.
-        for i in xrange(len(files)):
+    hdf_ref = SD(files[0])
+    for dataset in hdf_ref.datasets():
 
-            file = files[i]
-            iband = ibands[i]
+        sdsref = hdf_ref.select(dataset)
+        rank = sdsref.info()[1]
+        shape = sdsref.info()[2]
+        dtype  = sdsref.info()[3]
+        if rank < 2:
+            # axis: write the axis as-is
+            S = sdsref.get()
+        else:
+            # average all files
+            S, norm = 0., 0.
+            for i in xrange(len(files)):
 
-            hdf = SD(file)
-            data = hdf.select(dataset).get()
-            hdf.end()
+                file = files[i]
+                iband = ibands[i]
 
-            S += data * iband.weight * iband.extra
-            norm += iband.weight * iband.extra
+                hdf = SD(file)
+                data = hdf.select(dataset).get()
+                hdf.end()
 
-        S /= norm
-        S = S.astype(data.dtype)
+                S += data * iband.weight * iband.extra
+                norm += iband.weight * iband.extra
 
-        # write dataset
-        dtype = {
-                np.dtype('float32'): SDC.FLOAT32,
-                np.dtype('float64'): SDC.FLOAT64,
-                }[S.dtype]
-        sds = hdf_out.create(dataset, dtype, S.shape)
+            S /= norm
+            S = S.astype(data.dtype)
+
+        # write the dataset
+        sds = hdf_out.create(dataset, dtype, shape)
         sds.setcompress(SDC.COMP_DEFLATE, 9)
         sds[:] = S[:]
+        # copy sds attributes from first file
+        for a in sdsref.attributes().keys():
+            setattr(sds, a, sdsref.attributes()[a])
         sds.endaccess()
+
+    # copy global attributes from first file
+    for a in hdf_ref.attributes():
+        setattr(hdf_out, a, hdf_ref.attributes()[a])
 
     hdf_out.end()
 
