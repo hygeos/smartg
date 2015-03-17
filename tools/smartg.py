@@ -216,7 +216,9 @@ def smartg(exe, wl, output=None, dir=dir_output,
         exe = join(dir_install, exe)
     assert exists(exe)
     cmd = '{} {}'.format(exe, cmdfile)
-    subprocess.call(cmd, shell=True)
+    ret = subprocess.call(cmd, shell=True)
+    if ret:
+        raise Exception('Error in SMART-G')
 
     return output
 
