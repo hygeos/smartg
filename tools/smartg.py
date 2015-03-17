@@ -389,7 +389,7 @@ class Environment(object):
                 }
 
     def __str__(self):
-        return 'ENV={ENV_SIZE}-X={X0:.1f}-Y={X0:.1f}'.format(self.dict)
+        return 'ENV={ENV_SIZE}-X={X0:.1f}-Y={Y0:.1f}'.format(**self.dict)
 
 
 def reptran_merge(files, ibands, output=None):
