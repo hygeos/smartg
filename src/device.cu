@@ -1461,7 +1461,7 @@ __device__ void surfaceAgitee(Photon* ph
 //			ph->weight *= rat;
 //		}
 
-		if (SURd==3) {
+		if (SURd==3 && ReflTot==0) {
 			ph->weight /= rat;
 				}
 		
