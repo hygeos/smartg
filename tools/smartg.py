@@ -52,6 +52,11 @@ def smartg(exe, wl, output=None, dir=dir_output,
           automatically choose a filename in directory dir
         - dir: directory for automatic filename if output=None
         - overwrite: if True, remove output file first if it exists
+                     if False, raise an exception with attribute filename
+                     example:  try:
+                                   out = smartg(...)
+                               except Exception, e:
+                                   out = e.filename
         - cmdfile: the name of the command file to use. If None (default),
           automatically choose a filename.
         - atm: Profile object
@@ -104,7 +109,9 @@ def smartg(exe, wl, output=None, dir=dir_output,
         if overwrite:
             remove(output)
         else:
-            raise Exception('File {} exists'.format(output))
+            ex = Exception('File {} exists'.format(output))
+            setattr(ex, 'filename', output)
+            raise ex
 
     if not exists(dirname(output)):
         makedirs(dirname(output))
