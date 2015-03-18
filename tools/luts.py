@@ -427,8 +427,8 @@ def read_lut_hdf(filename, dataset, axnames=None):
             assert axnames == dimensions, 'Error in dimensions, expected {}, found {}'.format(axnames, dimensions)
 
     # load axes
-    for dataset in axnames:
-        sds = hdf.select(dataset)
+    for d in axnames:
+        sds = hdf.select(d)
         (sdsname, rank, shp, dtype, nattr) = sds.info()
 
         assert rank == 1
