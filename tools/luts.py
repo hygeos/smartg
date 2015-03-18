@@ -441,7 +441,12 @@ def read_lut_hdf(filename, dataset, axnames=None):
     for i in xrange(data.ndim):
         assert len(axes[i]) == data.shape[i]
 
-    return LUT(data, axes=axes, names=names, desc=dataset)
+    # read global attributes
+    attrs = {}
+    for a in hdf.attributes():
+        attrs.update({a: hdf.attributes()[a]})
+
+    return LUT(data, axes=axes, names=names, desc=dataset, attrs=attrs)
 
 
 if __name__ == '__main__':
