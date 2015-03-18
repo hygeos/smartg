@@ -212,6 +212,107 @@ class LUT(object):
 
         return result
 
+    def check_compatible(self, other):
+        '''
+        if other is a LUT, check that it is 'compatible' to self (ie, they have
+        same axes and metadata), and return its data
+        otherwise return other as-is
+        '''
+
+        if isinstance(other, LUT):
+
+            # check that axes are all equal
+            assert all(map(lambda x, y: all(x==y), self.axes, other.axes))
+
+            # check that names are all equal
+            assert self.names == other.names
+
+            # same for desc...
+            assert self.desc == other.desc
+
+            # and for attrs...
+            assert self.attrs == other.attrs
+
+            return other.data
+
+        else:
+            return other
+
+    def __add__(self, other):
+        '''
+        sum of two LUTs
+        '''
+        otherdata = self.check_compatible(other)
+
+        return LUT(self.data + otherdata,
+                axes=self.axes,
+                names=self.names,
+                desc=self.desc,
+                attrs=self.attrs)
+
+    def __radd__(self, other):
+        return self.__add__(other)
+
+    def __sub__(self, other):
+        '''
+        difference between two LUTs
+        '''
+        otherdata = self.check_compatible(other)
+
+        return LUT(self.data - otherdata,
+                axes=self.axes,
+                names=self.names,
+                desc=self.desc,
+                attrs=self.attrs)
+
+    def __rsub__(self, other):
+        '''
+        difference between two LUTs
+        '''
+        otherdata = self.check_compatible(other)
+
+        return LUT(otherdata - self.data,
+                axes=self.axes,
+                names=self.names,
+                desc=self.desc,
+                attrs=self.attrs)
+
+    def __mul__(self, other):
+        '''
+        multiply a LUT
+        '''
+        otherdata = self.check_compatible(other)
+
+        return LUT(self.data * otherdata,
+                axes=self.axes,
+                names=self.names,
+                desc=self.desc,
+                attrs=self.attrs)
+
+    def __rmul__(self, other):
+        return self.__mul__(other)
+
+    def __div__(self, other):
+        '''
+        divide a LUT
+        '''
+        otherdata = self.check_compatible(other)
+
+        return LUT(self.data / otherdata,
+                axes=self.axes,
+                names=self.names,
+                desc=self.desc,
+                attrs=self.attrs)
+
+    def __rdiv__(self, other):
+        otherdata = self.check_compatible(other)
+
+        return LUT(otherdata / self.data,
+                axes=self.axes,
+                names=self.names,
+                desc=self.desc,
+                attrs=self.attrs)
+
     def save(self, filename):
         '''
         save a LUT in a HDF file
