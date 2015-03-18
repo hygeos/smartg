@@ -33,7 +33,7 @@ def smartg(exe, wl, output=None, dir=dir_output,
            overwrite=False,
            cmdfile=None, iband=None,
            atm=None, surf=None, water=None, env=None,
-           NBPHOTONS=1e9, DEPO=0.0279, THVDEG=0., SEED=-1,
+           NBPHOTONS=1e8, DEPO=0.0279, THVDEG=0., SEED=-1,
            NBTHETA=45, NBPHI=45,
            NFAER=1000000, NFOCE=10000000, WRITE_PERIOD=-1,
            OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
@@ -479,14 +479,14 @@ def test_rayleigh():
     '''
     Basic Rayleigh example
     '''
-    print smartg('SMART-G-PP', wl=500., NBPHOTONS=1e9, atm=Profile('afglt'))
+    return smartg('SMART-G-PP', wl=500., NBPHOTONS=1e9, atm=Profile('afglt'))
 
 
 def test_kokhanovsky():
     '''
     Just Rayleigh : kokhanovsky test case
     '''
-    print smartg('SMART-G-PP', wl=500., DEPO=0., NBPHOTONS=1e9,
+    return smartg('SMART-G-PP', wl=500., DEPO=0., NBPHOTONS=1e9,
             atm=Profile('afglt', grid='100[75]25[5]10[1]0'),
             output=join(dir_output, 'example_kokhanovsky.hdf'))
 
@@ -495,46 +495,47 @@ def test_rayleigh_aerosols():
     '''
     with aerosols
     '''
-    aer = AeroOPAC('maritime_clean', 0.4, 550., layer_phase=5)
+    aer = AeroOPAC('maritime_clean', 0.4, 550., layer_phase=-1)
     pro = Profile('afglms', aer=aer)
 
-    smartg('SMART-G-PP', wl=490., atm=pro)
+    return smartg('SMART-G-PP', wl=490., atm=pro, NBPHOTONS=1e9)
 
 
 def test_atm_surf():
-    smartg('SMART-G-PP', 490.,
+    return smartg('SMART-G-PP', 490., NBPHOTONS=1e9,
             output=join(dir_output, 'test_atm_surf.hdf'),
             atm=Profile('afglms'),
-            surf=Surface(SUR=1, DIOPTRE=2, W0LAM=0., WINDSPEED=5.))
+            surf=Surface(SUR=1, DIOPTRE=2, W0LAM=1., WINDSPEED=5.))
 
 
 def test_atm_surf_ocean():
-    smartg('SMART-G-PP', 490., NBPHOTONS=1e8,
+    return smartg('SMART-G-PP', 490., NBPHOTONS=1e9,
             atm=Profile('afglms'),
             surf=Surface(SUR=1, DIOPTRE=2, W0LAM=0., WINDSPEED=5.),
             water=WaterModelSPM(SPM=1.))
 
 
 def test_surf_ocean():
-    smartg('SMART-G-PP', 490., THVDEG=30., NBPHOTONS=1e8,
+    return smartg('SMART-G-PP', 490., THVDEG=30., NBPHOTONS=2e6,
             surf=Surface(SUR=3, DIOPTRE=2, W0LAM=0., WINDSPEED=5.),
             water=WaterModelSPM(SPM=1.))
 
 
 def test_ocean():
-    smartg('SMART-G-PP', 560., THVDEG=30.,
-            water=WaterModelSPM(SPM=1.))
+    return smartg('SMART-G-PP', 560., THVDEG=30.,
+            water=WaterModelSPM(SPM=1.), NBPHOTONS=5e6)
 
 
 def test_reptran():
     '''
     using reptran
     '''
-    aer = AeroOPAC('maritime_polluted', 0.4, 550., layer_phase=13)
+    aer = AeroOPAC('maritime_polluted', 0.4, 550., layer_phase=-1)
     pro = Profile('afglms.dat', aer=aer, grid='100[75]25[5]10[1]0')
     files, ibands = [], []
     for iband in REPTRAN('reptran_solar_msg').band('msg1_seviri_ch008').ibands():
         f = smartg('SMART-G-PP', wl=np.mean(iband.band.awvl),
+                NBPHOTONS=5e8,
                 iband=iband, atm=pro)
         files.append(f)
         ibands.append(iband)
@@ -557,7 +558,7 @@ def test_ozone_lut():
         aer = AeroOPAC('maritime_clean', AOT, 550., layer_phase=5)
         pro = Profile('afglms', aer=aer, O3=TCO)
 
-        res = smartg('SMART-G-PP', wl=490., atm=pro, NBTHETA=50)
+        res = smartg('SMART-G-PP', wl=490., atm=pro, NBTHETA=50, NBPHOTONS=5e6)
 
         lut = read_lut_hdf(res, 'I_up (TOA)', ['Azimut angles', 'Zenith angles'])
         lut.attrs.update({'TCO':TCO, 'AOT': AOT})
@@ -569,5 +570,13 @@ def test_ozone_lut():
 
 
 if __name__ == '__main__':
-    test_rayleigh_aerosols()
+    test_rayleigh()
+    # test_kokhanovsky()
+    # test_rayleigh_aerosols()
+    # test_atm_surf()
+    # test_atm_surf_ocean()
+    # test_surf_ocean()
+    # test_ocean()
+    # test_reptran()
+    # test_ozone_lut()
 
