@@ -841,7 +841,7 @@ class Profile(object):
         - NO2: activate ON2 absorption (default True)
     '''
     def __init__(self, atm_filename, aer=None, grid=None,
-                lat=45., O3=None, NO2=True):
+                lat=45., O3=None, NO2=True, verbose=False):
 
         crs_O3_filename = join(dir_libradtran_crs, 'crs_O3_UBremen_cf.dat')
         crs_NO2_filename = join(dir_libradtran_crs, 'crs_NO2_UBremen_cf.dat')
@@ -922,6 +922,8 @@ class Profile(object):
         if self.aer is not None:
             self.aer.init(z, self.T, self.h2o)
 
+        self.verbose = verbose
+
     def write(self, w, output_file=None, dir=None):
         '''
         write a profile at a monochromatic wavelength w (nm)
@@ -953,7 +955,7 @@ class Profile(object):
                     prefix='profile_', suffix='.tmp')
 
         if exists(output_file):
-            print 'File {} exists!'.format(output_file)
+            if self.verbose: print 'File {} exists!'.format(output_file)
             return output_file
 
         if not exists(dirname(output_file)):
@@ -977,7 +979,7 @@ class Profile(object):
             # print outstr
             fp.write('\n' + outstr)
 
-        print 'write', output_file
+        if self.verbose: print 'write', output_file
 
         return output_file
 
