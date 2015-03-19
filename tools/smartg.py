@@ -29,17 +29,9 @@ dir_output = dir_tmp
 
 
 
-def smartg(exe, wl, output=None, dir=dir_output,
-           overwrite=False,
-           cmdfile=None, iband=None,
-           atm=None, surf=None, water=None, env=None,
-           NBPHOTONS=1e8, DEPO=0.0279, THVDEG=0., SEED=-1,
-           NBTHETA=45, NBPHI=45,
-           NFAER=1000000, NFOCE=10000000, WRITE_PERIOD=-1,
-           OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
-           NBLOOP=5000):
+class Smartg(object):
     '''
-    Run a SMART-G job, returns the result file
+    Run a SMART-G job
 
     Arguments:
         - exe: smart-g executable
@@ -52,11 +44,8 @@ def smartg(exe, wl, output=None, dir=dir_output,
           automatically choose a filename in directory dir
         - dir: directory for automatic filename if output=None
         - overwrite: if True, remove output file first if it exists
-                     if False, raise an exception with attribute filename
-                     example:  try:
-                                   out = smartg(...)
-                               except Exception, e:
-                                   out = e.filename
+        - skip_existing: skip existing file if overwrite is False
+                         otherwise (False, default), raise an Exception
         - cmdfile: the name of the command file to use. If None (default),
           automatically choose a filename.
         - atm: Profile object
@@ -69,165 +58,201 @@ def smartg(exe, wl, output=None, dir=dir_output,
             default None (no environment effect)
         The other acuments (NBPHOTONS, THVDEG, etc) are passed directly to the
         command file.
+
+    Attributes:
+        - output: the name of the result file
     '''
-    #
-    # initialization
-    #
-
-    if cmdfile is None:
-        cmdfile = tempfile.mktemp(suffix='.txt',
-                prefix='smartg_command_',
-                dir=dir_cmdfiles)
-
-    assert isinstance(wl, float)
-    assert (iband is None) or isinstance(iband, REPTRAN_IBAND)
-
-    if output is None:
+    def __init__(self, exe, wl, output=None, dir=dir_output,
+           overwrite=False, skip_existing=False,
+           cmdfile=None, iband=None,
+           atm=None, surf=None, water=None, env=None,
+           NBPHOTONS=1e8, DEPO=0.0279, THVDEG=0., SEED=-1,
+           NBTHETA=45, NBPHI=45,
+           NFAER=1000000, NFOCE=10000000, WRITE_PERIOD=-1,
+           OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
+           NBLOOP=5000):
         #
-        # default file name
+        # initialization
         #
-        assert dir is not None
-        list_filename = [exe]   # executable
 
-        if iband is None:
-            list_filename.append('WL={:.2f}'.format(wl))
+        if cmdfile is None:
+            cmdfile = tempfile.mktemp(suffix='.txt',
+                    prefix='smartg_command_',
+                    dir=dir_cmdfiles)
+
+        assert isinstance(wl, float)
+        assert (iband is None) or isinstance(iband, REPTRAN_IBAND)
+
+        if output is None:
+            #
+            # default file name
+            #
+            assert dir is not None
+            list_filename = [exe]   # executable
+
+            if iband is None:
+                list_filename.append('WL={:.2f}'.format(wl))
+            else:
+                list_filename.append('WL={:.2f}'.format(iband.w))
+
+            list_filename.append('THV={:.1f}'.format(THVDEG))
+
+            if atm is not None: list_filename.append(str(atm))
+            if surf is not None: list_filename.append(str(surf))
+            if water is not None: list_filename.append(str(water))
+            if env is not None: list_filename.append(str(env))
+
+            filename = '_'.join(list_filename)
+            filename = join(dir, filename + '.hdf')
+            output = filename
+
+        self.output = output
+
+        if exists(output):
+            if overwrite:
+                remove(output)
+            else:
+                if skip_existing:
+                    return
+                else:
+                    raise Exception('File {} exists'.format(output))
+
+        if not exists(dirname(output)):
+            makedirs(dirname(output))
+        if not exists(dirname(cmdfile)):
+            makedirs(dirname(cmdfile))
+
+        #
+        # make dictionary of parameters
+        #
+        D = {
+                'NBPHOTONS': str(int(NBPHOTONS)),
+                'LAMBDA': wl,
+                'THVDEG': THVDEG,
+                'DEPO': DEPO,
+                'SEED': SEED,
+                'NBTHETA': NBTHETA,
+                'NBPHI': NBPHI,
+                'NFAER': NFAER,
+                'NFOCE': NFOCE,
+                'WRITE_PERIOD': WRITE_PERIOD,
+                'OUTPUT_LAYERS': OUTPUT_LAYERS,
+                'XBLOCK': XBLOCK,
+                'YBLOCK': 1,
+                'XGRID': XGRID,
+                'YGRID': 1,
+                'NBLOOP': NBLOOP,
+                }
+
+        # determine SIM
+        if (atm is not None) and (surf is None) and (water is None):
+            SIM = -2  # atmosphere only
+        elif (atm is None) and (surf is not None) and (water is None):
+            SIM = -1  # surface only
+        elif (atm is None) and (surf is not None) and (water is not None):
+            SIM = 0  # ocean + dioptre
+        elif (atm is not None) and (surf is not None) and (water is None):
+            SIM = 1  # atmosphere + dioptre
+        elif (atm is not None) and (surf is not None) and (water is not None):
+            SIM = 2  # atmosphere + dioptre + ocean
+        elif (atm is None) and (surf is None) and (water is not None):
+            SIM = 3  # ocean only
         else:
-            list_filename.append('WL={:.2f}'.format(iband.w))
+            raise Exception('Error in SIM')
 
-        list_filename.append('THV={:.1f}'.format(THVDEG))
+        D.update(SIM=SIM)
 
-        if atm is not None: list_filename.append(str(atm))
-        if surf is not None: list_filename.append(str(surf))
-        if water is not None: list_filename.append(str(water))
-        if env is not None: list_filename.append(str(env))
+        # output file
+        D.update(PATHRESULTATSHDF=output)
 
-        filename = '_'.join(list_filename)
-        filename = join(dir, filename + '.hdf')
-        output = filename
+        #
+        # atmosphere
+        #
+        if atm is not None:
+            # write the profile
+            if iband is None:
+                file_profile = atm.write(wl, dir=dir_profiles)
+            else:
+                file_profile = atm.write(iband, dir=dir_profiles)
+            D.update(PATHPROFILATM=file_profile)
 
-    if exists(output):
-        if overwrite:
-            remove(output)
-        else:
-            ex = Exception('File {} exists'.format(output))
-            setattr(ex, 'filename', output)
-            raise ex
-
-    if not exists(dirname(output)):
-        makedirs(dirname(output))
-    if not exists(dirname(cmdfile)):
-        makedirs(dirname(cmdfile))
-
-    #
-    # make dictionary of parameters
-    #
-    D = {
-            'NBPHOTONS': str(int(NBPHOTONS)),
-            'LAMBDA': wl,
-            'THVDEG': THVDEG,
-            'DEPO': DEPO,
-            'SEED': SEED,
-            'NBTHETA': NBTHETA,
-            'NBPHI': NBPHI,
-            'NFAER': NFAER,
-            'NFOCE': NFOCE,
-            'WRITE_PERIOD': WRITE_PERIOD,
-            'OUTPUT_LAYERS': OUTPUT_LAYERS,
-            'XBLOCK': XBLOCK,
-            'YBLOCK': 1,
-            'XGRID': XGRID,
-            'YGRID': 1,
-            'NBLOOP': NBLOOP,
-            }
-
-    # determine SIM
-    if (atm is not None) and (surf is None) and (water is None):
-        SIM = -2  # atmosphere only
-    elif (atm is None) and (surf is not None) and (water is None):
-        SIM = -1  # surface only
-    elif (atm is None) and (surf is not None) and (water is not None):
-        SIM = 0  # ocean + dioptre
-    elif (atm is not None) and (surf is not None) and (water is None):
-        SIM = 1  # atmosphere + dioptre
-    elif (atm is not None) and (surf is not None) and (water is not None):
-        SIM = 2  # atmosphere + dioptre + ocean
-    elif (atm is None) and (surf is None) and (water is not None):
-        SIM = 3  # ocean only
-    else:
-        raise Exception('Error in SIM')
-
-    D.update(SIM=SIM)
-
-    # output file
-    D.update(PATHRESULTATSHDF=output)
-
-    #
-    # atmosphere
-    #
-    if atm is not None:
-        # write the profile
-        if iband is None:
-            file_profile = atm.write(wl, dir=dir_profiles)
-        else:
-            file_profile = atm.write(iband, dir=dir_profiles)
-        D.update(PATHPROFILATM=file_profile)
-
-        # aerosols
-        if atm.aer is None:
+            # aerosols
+            if atm.aer is None:
+                D.update(PATHDIFFAER='None')
+            else:
+                D.update(PATHDIFFAER=atm.aer.phase(wl, dir_phase_aero))
+        else:  # no atmosphere
             D.update(PATHDIFFAER='None')
+            D.update(PATHPROFILATM='None')
+
+        #
+        # surface
+        #
+        if surf is None:
+            # default surface parameters
+            surf = Surface()
+        D.update(surf.dict)
+
+        #
+        # ocean parameters
+        #
+        if water is not None:
+            # TODO: if iband is provided, use iband wavelength to calculate
+            # atot and btot, and wl to calculate the phase function
+            atot, btot, file_phase = water.calc(wl, dir_phase_water)
+            D.update(ATOT=atot, BTOT=btot, PATHDIFFOCE=file_phase)
         else:
-            D.update(PATHDIFFAER=atm.aer.phase(wl, dir_phase_aero))
-    else:  # no atmosphere
-        D.update(PATHDIFFAER='None')
-        D.update(PATHPROFILATM='None')
+            # use default water values
+            D.update(ATOT=0., BTOT=0., PATHDIFFOCE='None')
 
-    #
-    # surface
-    #
-    if surf is None:
-        # default surface parameters
-        surf = Surface()
-    D.update(surf.dict)
+        #
+        # environment effect
+        #
+        if env is None:
+            # default values (no environment effect)
+            env = Environment()
+        D.update(env.dict)
 
-    #
-    # ocean parameters
-    #
-    if water is not None:
-        # TODO: if iband is provided, use iband wavelength to calculate
-        # atot and btot, and wl to calculate the phase function
-        atot, btot, file_phase = water.calc(wl, dir_phase_water)
-        D.update(ATOT=atot, BTOT=btot, PATHDIFFOCE=file_phase)
-    else:
-        # use default water values
-        D.update(ATOT=0., BTOT=0., PATHDIFFOCE='None')
+        #
+        # write the command file
+        #
+        fo = open(cmdfile, "w")
+        fo.write(command_file_template(D))
+        fo.close()
 
-    #
-    # environment effect
-    #
-    if env is None:
-        # default values (no environment effect)
-        env = Environment()
-    D.update(env.dict)
+        #
+        # run smart-g
+        #
+        if dirname(exe) == '':
+            exe = join(dir_install, exe)
+        assert exists(exe)
+        cmd = '{} {}'.format(exe, cmdfile)
+        ret = subprocess.call(cmd, shell=True)
+        if ret:
+            raise Exception('Error in SMART-G')
 
-    #
-    # write the command file
-    #
-    fo = open(cmdfile, "w")
-    fo.write(command_file_template(D))
-    fo.close()
 
-    #
-    # run smart-g
-    #
-    if dirname(exe) == '':
-        exe = join(dir_install, exe)
-    assert exists(exe)
-    cmd = '{} {}'.format(exe, cmdfile)
-    ret = subprocess.call(cmd, shell=True)
-    if ret:
-        raise Exception('Error in SMART-G')
+    def read(self, dataset=None):
+        '''
+        read SMARTG result as a LUT (if dataset is provided) or MLUT (default)
+        '''
+        if dataset is not None:
+            return read_lut_hdf(self.output, dataset, ['Azimut angles', 'Zenith angles'])
+        else:
+            return read_mlut_hdf(self.output, axnames=['Azimut angles', 'Zenith angles'])
 
-    return output
+
+    def view(self, QU=False):
+        '''
+        visualization of a smartg result
+
+        Options:
+            QU: show Q and U also (default, False)
+        '''
+        from smartg_view import smartg_view
+
+        smartg_view(self.read(), QU=QU)
+
 
 def command_file_template(dict):
     '''
@@ -475,28 +500,18 @@ def reptran_merge(files, ibands, output=None):
     return output
 
 
-def smartg_read(filename, dataset=None):
-    '''
-    read SMARTG result as a LUT (if dataset is provided) or MLUT (default)
-    '''
-    if dataset is not None:
-        return read_lut_hdf(filename, dataset, ['Azimut angles', 'Zenith angles'])
-    else:
-        return read_mlut_hdf(filename, axnames=['Azimut angles', 'Zenith angles'])
-
-
 def test_rayleigh():
     '''
     Basic Rayleigh example
     '''
-    return smartg('SMART-G-PP', wl=500., NBPHOTONS=1e9, atm=Profile('afglt'))
+    return Smartg('SMART-G-PP', wl=500., NBPHOTONS=1e9, atm=Profile('afglt'))
 
 
 def test_kokhanovsky():
     '''
     Just Rayleigh : kokhanovsky test case
     '''
-    return smartg('SMART-G-PP', wl=500., DEPO=0., NBPHOTONS=1e9,
+    return Smartg('SMART-G-PP', wl=500., DEPO=0., NBPHOTONS=1e9,
             atm=Profile('afglt', grid='100[75]25[5]10[1]0'),
             output=join(dir_output, 'example_kokhanovsky.hdf'))
 
@@ -508,31 +523,31 @@ def test_rayleigh_aerosols():
     aer = AeroOPAC('maritime_clean', 0.4, 550., layer_phase=-1)
     pro = Profile('afglms', aer=aer)
 
-    return smartg('SMART-G-PP', wl=490., atm=pro, NBPHOTONS=1e9)
+    return Smartg('SMART-G-PP', wl=490., atm=pro, NBPHOTONS=1e9)
 
 
 def test_atm_surf():
-    return smartg('SMART-G-PP', 490., NBPHOTONS=1e9,
+    return Smartg('SMART-G-PP', 490., NBPHOTONS=1e9,
             output=join(dir_output, 'test_atm_surf.hdf'),
             atm=Profile('afglms'),
             surf=Surface(SUR=1, DIOPTRE=2, W0LAM=1., WINDSPEED=5.))
 
 
 def test_atm_surf_ocean():
-    return smartg('SMART-G-PP', 490., NBPHOTONS=1e9,
+    return Smartg('SMART-G-PP', 490., NBPHOTONS=1e9,
             atm=Profile('afglms'),
             surf=Surface(SUR=1, DIOPTRE=2, W0LAM=0., WINDSPEED=5.),
             water=WaterModelSPM(SPM=1.))
 
 
 def test_surf_ocean():
-    return smartg('SMART-G-PP', 490., THVDEG=30., NBPHOTONS=2e6,
+    return Smartg('SMART-G-PP', 490., THVDEG=30., NBPHOTONS=2e6,
             surf=Surface(SUR=3, DIOPTRE=2, W0LAM=0., WINDSPEED=5.),
             water=WaterModelSPM(SPM=1.))
 
 
 def test_ocean():
-    return smartg('SMART-G-PP', 560., THVDEG=30.,
+    return Smartg('SMART-G-PP', 560., THVDEG=30.,
             water=WaterModelSPM(SPM=1.), NBPHOTONS=5e6)
 
 
@@ -544,10 +559,10 @@ def test_reptran():
     pro = Profile('afglms.dat', aer=aer, grid='100[75]25[5]10[1]0')
     files, ibands = [], []
     for iband in REPTRAN('reptran_solar_msg').band('msg1_seviri_ch008').ibands():
-        f = smartg('SMART-G-PP', wl=np.mean(iband.band.awvl),
+        job = Smartg('SMART-G-PP', wl=np.mean(iband.band.awvl),
                 NBPHOTONS=5e8,
                 iband=iband, atm=pro)
-        files.append(f)
+        files.append(job.output)
         ibands.append(iband)
 
     reptran_merge(files, ibands)
@@ -568,9 +583,9 @@ def test_ozone_lut():
         aer = AeroOPAC('maritime_clean', AOT, 550., layer_phase=5)
         pro = Profile('afglms', aer=aer, O3=TCO)
 
-        res = smartg('SMART-G-PP', wl=490., atm=pro, NBTHETA=50, NBPHOTONS=5e6)
+        job = Smartg('SMART-G-PP', wl=490., atm=pro, NBTHETA=50, NBPHOTONS=5e6)
 
-        lut = smartg_read(res, 'I_up (TOA)')
+        lut = job.read('I_up (TOA)')
         lut.attrs.update({'TCO':TCO, 'AOT': AOT})
         luts.append(lut)
 

@@ -200,10 +200,14 @@ def semi_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
         ax_polar.set_title(lut.desc, weight='bold', position=(0.15,0.9))
 
 
-def smartg_view(mlut):
+def smartg_view(mlut, QU=False):
     '''
-    visualization of a smartg file
+    visualization of a smartg MLUT
+
+    Options:
+        QU: show Q and U also
     '''
+
     I = mlut['I_up (TOA)']
     Q = mlut['Q_up (TOA)']
     U = mlut['U_up (TOA)']
@@ -217,10 +221,15 @@ def smartg_view(mlut):
     PR = 100*IP/I
     PR.desc = 'Pol. ratio. (%)'
 
-    fig = figure(figsize=(9, 9))
-    semi_polar(I,  0, rect='421', sub='423', fig=fig)
-    semi_polar(Q,  0, rect='422', sub='424', fig=fig)
-    semi_polar(U,  0, rect='425', sub='427', fig=fig)
-    semi_polar(PR, 0, rect='426', sub='428', fig=fig)
-
+    if QU:
+        fig = figure(figsize=(9, 9))
+        semi_polar(I,  0, rect='421', sub='423', fig=fig)
+        semi_polar(Q,  0, rect='422', sub='424', fig=fig)
+        semi_polar(U,  0, rect='425', sub='427', fig=fig)
+        semi_polar(PR, 0, rect='426', sub='428', fig=fig)
+    else:
+        # show only I and PR
+        fig = figure(figsize=(9, 4.5))
+        semi_polar(I,  0, rect='221', sub='223', fig=fig)
+        semi_polar(PR, 0, rect='222', sub='224', fig=fig)
 
