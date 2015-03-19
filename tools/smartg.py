@@ -475,6 +475,28 @@ def reptran_merge(files, ibands, output=None):
     return output
 
 
+def smartg_read(filename, dataset=None):
+    '''
+    read SMARTG result as a LUT, including all 2D datasets (I, Q, U, N) as a dimension 'PARAM'
+    '''
+    hdf = SD(filename)
+    if dataset is None:
+        datasets = hdf.datasets().keys()
+        LUTS = []
+        for d in xrange(len(datasets)):
+            (sdsname, rank, shp, dtype, nattr) = hdf.select(d).info()
+            if rank != 2: continue
+
+            L = read_lut_hdf(filename, sdsname, ['Azimut angles', 'Zenith angles'])
+            L.attrs['PARAM'] = sdsname
+            LUTS.append(L)
+
+        return merge(LUTS, ['PARAM'])
+
+    else:
+        return read_lut_hdf(filename, dataset, ['Azimut angles', 'Zenith angles'])
+
+
 def test_rayleigh():
     '''
     Basic Rayleigh example
