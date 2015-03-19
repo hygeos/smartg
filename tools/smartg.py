@@ -12,7 +12,7 @@ from os.path import dirname, realpath, join, exists, basename
 from os import makedirs, remove
 import textwrap
 import tempfile
-from luts import read_lut_hdf, merge
+from luts import merge, read_lut_hdf, read_mlut_hdf
 
 
 #
@@ -477,24 +477,12 @@ def reptran_merge(files, ibands, output=None):
 
 def smartg_read(filename, dataset=None):
     '''
-    read SMARTG result as a LUT, including all 2D datasets (I, Q, U, N) as a dimension 'PARAM'
+    read SMARTG result as a LUT (if dataset is provided) or MLUT (default)
     '''
-    hdf = SD(filename)
-    if dataset is None:
-        datasets = hdf.datasets().keys()
-        LUTS = []
-        for d in xrange(len(datasets)):
-            (sdsname, rank, shp, dtype, nattr) = hdf.select(d).info()
-            if rank != 2: continue
-
-            L = read_lut_hdf(filename, sdsname, ['Azimut angles', 'Zenith angles'])
-            L.attrs['PARAM'] = sdsname
-            LUTS.append(L)
-
-        return merge(LUTS, ['PARAM'])
-
-    else:
+    if dataset is not None:
         return read_lut_hdf(filename, dataset, ['Azimut angles', 'Zenith angles'])
+    else:
+        return read_mlut_hdf(filename, axnames=['Azimut angles', 'Zenith angles'])
 
 
 def test_rayleigh():
@@ -582,7 +570,7 @@ def test_ozone_lut():
 
         res = smartg('SMART-G-PP', wl=490., atm=pro, NBTHETA=50, NBPHOTONS=5e6)
 
-        lut = read_lut_hdf(res, 'I_up (TOA)', ['Azimut angles', 'Zenith angles'])
+        lut = smartg_read(res, 'I_up (TOA)')
         lut.attrs.update({'TCO':TCO, 'AOT': AOT})
         luts.append(lut)
 
