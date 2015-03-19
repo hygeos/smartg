@@ -200,16 +200,13 @@ def semi_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
         ax_polar.set_title(lut.desc, weight='bold', position=(0.15,0.9))
 
 
-def smartg_view(lut):
+def smartg_view(mlut):
     '''
     visualization of a smartg file
     '''
-    I = lut.sub[Idx('I_up (TOA)', 'PARAM'),:,:]
-    I.desc = 'I_up (TOA)'
-    Q = lut.sub[Idx('Q_up (TOA)', 'PARAM'),:,:]
-    Q.desc = 'Q_up (TOA)'
-    U = lut.sub[Idx('U_up (TOA)', 'PARAM'),:,:]
-    U.desc = 'U_up (TOA)'
+    I = mlut['I_up (TOA)']
+    Q = mlut['Q_up (TOA)']
+    U = mlut['U_up (TOA)']
 
     # polarized reflectance
     IP = Q*Q + U*U
@@ -217,13 +214,13 @@ def smartg_view(lut):
     IP.desc = 'Pol. ref.'
 
     # polarization ratio
-    PR = IP/I
-    PR.desc = 'Pol. ratio.'
+    PR = 100*IP/I
+    PR.desc = 'Pol. ratio. (%)'
 
     fig = figure(figsize=(9, 9))
-    semi_polar(I,  0, rect=421, sub=423, fig=fig)
-    semi_polar(Q,  0, rect=422, sub=424, fig=fig)
-    semi_polar(U,  0, rect=425, sub=427, fig=fig)
-    semi_polar(PR, 0, rect=426, sub=428, fig=fig)
+    semi_polar(I,  0, rect='421', sub='423', fig=fig)
+    semi_polar(Q,  0, rect='422', sub='424', fig=fig)
+    semi_polar(U,  0, rect='425', sub='427', fig=fig)
+    semi_polar(PR, 0, rect='426', sub='428', fig=fig)
 
 
