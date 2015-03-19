@@ -14,6 +14,8 @@ Provides:
 import numpy as np
 from pyhdf.SD import SD, SDC
 from scipy.interpolate import interp1d
+from os.path import exists
+from os import remove
 
 
 class LUT(object):
@@ -105,17 +107,21 @@ class LUT(object):
             self.names = names
             assert len(names) == self.ndim
 
-    def print_info(self):
-        print 'LUT dimensions:'
+    def print_info(self, prepend=''):
+        if self.desc is None:
+            print prepend+'LUT dimensions:'
+        else:
+            print prepend+'LUT dimensions ({}):'.format(self.desc)
+
         for i in xrange(self.data.ndim):
             if self.names[i] is None:
                 name = 'NoName'
             else:
                 name = self.names[i]
             if self.axes[i] is None:
-                print '  Dim {} ({}): No axis attached'.format(i, name)
+                print prepend+'  Dim {} ({}): No axis attached'.format(i, name)
             else:
-                print '  Dim {} ({}): {} values betweeen {} and {}'.format(
+                print prepend+'  Dim {} ({}): {} values betweeen {} and {}'.format(
                         i, name,
                         len(self.axes[i]),
                         self.axes[i][0],
@@ -237,7 +243,7 @@ class LUT(object):
             return other.data, desc
 
         else:
-            return other, None
+            return other, self.desc
 
     def __add__(self, other):
         '''
@@ -335,7 +341,7 @@ class LUT(object):
             name = self.names[i]
             ax = self.axes[i]
             if name is None:
-                raise Exception('LUTS.save() requires named axes')
+                raise Exception('LUT.save() requires named axes')
             if name in hdf.datasets():
                 sds = hdf.select(name)
                 rank = sds.info()[1]
@@ -432,27 +438,24 @@ class Idx(object):
         '''
         Return the floating point index of the values in the axis
         '''
-        if isinstance(axis, list):
-            # list axis: find value in axis
-            res = axis.index(self.value)
-        else:
-            # axis is scalar or ndarray: interpolate
-            res = interp1d(axis, np.arange(len(axis)))(self.value)
+        # axis is scalar or ndarray: interpolate
+        res = interp1d(axis, np.arange(len(axis)))(self.value)
 
-            if self.round:
-                if isinstance(res, np.ndarray):
-                    res = res.round().astype(int)
-                else:
-                    res = round(res)
+        if self.round:
+            if isinstance(res, np.ndarray):
+                res = res.round().astype(int)
+            else:
+                res = round(res)
+
         return res
 
 
 def merge(luts, axes):
     '''
-    Merge several LUTs, return the merged LUT
+    Merge several LUTs or MLUTs, return the merged LUT or MLUT
 
     Arguments:
-        - luts is a list of LUT objects
+        - luts is a list of LUT or MLUT objects
         - axes is a list of axes names to merge
           these names should be present in each LUT attribute
 
@@ -478,6 +481,14 @@ def merge(luts, axes):
     >>> Lmerged.shape
     (2, 2, 4, 5)
     '''
+    # merge MLUT
+    if isinstance(luts[0], MLUT):
+        M = []
+        for p in luts[0].params:
+            merged = merge(map(lambda m: m[p], luts), axes)
+            M.append(merged)
+        return MLUT(M)
+
     # verify lut axis and desc compatibility
     for lut in luts:
         for i in xrange(lut.ndim):
@@ -529,9 +540,8 @@ def merge(luts, axes):
 
     # convert list dimensions to ndarray if all elements are numeric
     for i in xrange(N):
-        if isinstance(newaxes[i], list) \
-                and np.all(map(lambda x: isinstance(x, (int, float)), newaxes[i])):
-            newaxes[i] = np.array(newaxes[i])
+        assert np.all(map(lambda x: isinstance(x, (int, float)), newaxes[i]))
+        newaxes[i] = np.array(newaxes[i])
 
     # new axes: append old axes
     newaxes += luts[0].axes
@@ -544,6 +554,120 @@ def merge(luts, axes):
             break
 
     return LUT(newdata, axes=newaxes, names=newnames, attrs=newattrs, desc=desc)
+
+
+class MLUT(object):
+    '''
+    A class to manage multiple Look-up tables (a list of LUTs)
+    '''
+    def __init__(self, luts):
+        self.params = []
+        self.luts = []
+        for lut in luts:
+            assert lut.desc is not None, 'please provide a desc'
+            assert lut.desc not in self.params, 'lut.desc is not unique'
+            self.params.append(lut.desc)
+            self.luts.append(lut)
+
+    def save(self, filename, overwrite=False):
+        '''
+        save a MLUT in a hdf file
+        '''
+        if exists(filename):
+            if overwrite:
+                remove(filename)
+            else:
+                ex = Exception('File {} exists'.format(filename))
+                setattr(ex, 'filename', filename)
+                raise ex
+
+        for p in self.params:
+            self.__getitem__(p).save(filename)
+
+    def check_compatible(self, other):
+        '''
+        check that self is compatible with other for binary operation
+        '''
+        if isinstance(other, MLUT):
+            assert (self.params == other.params)
+            return other.luts
+        else:
+            return [other]*len(self.params)
+
+    def __add__(self, other):
+        otherlut = self.check_compatible(other)
+        return MLUT(map(lambda x,y: x+y, self.luts, otherlut))
+
+    def __radd__(self, other):
+        return self+other
+
+    def __sub__(self, other):
+        otherlut = self.check_compatible(other)
+        return MLUT(map(lambda x,y: x-y, self.luts, otherlut))
+
+    def __rsub__(self, other):
+        otherlut = self.check_compatible(other)
+        return MLUT(map(lambda x,y: x-y, otherlut, self.luts))
+
+    def __mul__(self, other):
+        otherlut = self.check_compatible(other)
+        return MLUT(map(lambda x,y: x*y, self.luts, otherlut))
+
+    def __rmul__(self, other):
+        return self*other
+
+    def __div__(self, other):
+        otherlut = self.check_compatible(other)
+        return MLUT(map(lambda x,y: x/y, self.luts, otherlut))
+
+    def __rdiv__(self, other):
+        otherlut = self.check_compatible(other)
+        return MLUT(map(lambda x,y: x/y, otherlut, self.luts))
+
+    def print_info(self):
+        print 'MLUT has {} parameters:'.format(len(self.params))
+        for n in self.params:
+            i = self.params.index(n)
+            self.luts[i].print_info('  ')
+
+    def __getitem__(self, key):
+        if not key in self.params:
+            raise Exception('{} is not present in MLUT'.format(key))
+        i = self.params.index(key)
+        return self.luts[i]
+
+
+def read_mlut_hdf(filename, datasets=None, axnames=None):
+    '''
+    read datasets in filename, and return them as a LUTS
+    datasets: list of datasets to read (default None, read all datasets having
+    an attribute 'dimensions' or being compatible with axnames)
+    axnames: override the attribute dimensions
+    '''
+    hdf = SD(filename)
+
+    shape = []
+    if axnames is not None:
+        for d in axnames:
+            (sdsname, rank, shp, dtype, nattr) = hdf.select(d).info()
+            assert rank == 1
+            shape.append(shp)
+
+    if datasets is None:
+        datasets = []
+        for d in xrange(len(hdf.datasets())):
+            sds = hdf.select(d)
+            (sdsname, rank, shp, dtype, nattr) = sds.info()
+
+            if ((axnames is not None) and (shape == shp)) or ('dimensions' in sds.attributes()):
+                datasets.append(sdsname)
+
+    luts = []
+    for d in datasets:
+        lut = read_lut_hdf(filename, d, axnames)
+        luts.append(lut)
+
+    return MLUT(luts)
 
 
 def read_lut_hdf(filename, dataset, axnames=None):
