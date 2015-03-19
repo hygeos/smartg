@@ -69,7 +69,7 @@ class LUT(object):
 
     In Idx, the values can optionally be passed using keyword notation.
     In this case, there is a verification that the argument corresponds to the right axis name.
-    >>> P[:, Idx(P0=1013.)].shape   # returns the (shape of) standard vertical pressure profile
+    >>> P[:, Idx(1013., 'P0')].shape   # returns the (shape of) standard vertical pressure profile
     (80,)
     '''
 
@@ -377,6 +377,8 @@ class Idx(object):
     Calculate the indices of values by interpolation in a LUT axis
     The index method is typically called when indexing a dimension of a LUT
     object by a Idx object.
+    The round attribute (boolean) indicates whether the resulting index should
+    be rounded to the closest integer.
 
     Example: find the float index of 35. in an array [0, 10, ..., 100]
     >>> Idx(35.).index(np.linspace(0, 100, 11))
@@ -388,23 +390,32 @@ class Idx(object):
 
     Optionally, the name of the parameter can be provided as a keyword
     argument.
-    Example: Idx(a=3.) instead of Idx(3.)
+    Example: Idx(3., 'a') instead of Idx(3.)
     This allows verifying that the parameter is used in the right axis.
     '''
-    def __init__(self, value=None, **kwargs):
+    def __init__(self, value, name=None, round=False):
         if value is not None:
             self.value = value
-            self.name = None
-        else:
-            assert len(kwargs) == 1, 'Idx: Invalid parameters'
-            self.name = kwargs.keys()[0]
-            self.value = kwargs[self.name]
+            self.name = name
+            self.round = round
 
     def index(self, axis):
         '''
         Return the floating point index of the values in the axis
         '''
-        return interp1d(axis, np.arange(len(axis)))(self.value)
+        if isinstance(axis, list):
+            # list axis: find value in axis
+            res = axis.index(self.value)
+        else:
+            # axis is scalar or ndarray: interpolate
+            res = interp1d(axis, np.arange(len(axis)))(self.value)
+
+            if self.round:
+                if isinstance(res, np.ndarray):
+                    res = res.round().astype(int)
+                else:
+                    res = round(res)
+        return res
 
 
 def merge(luts, axes):
