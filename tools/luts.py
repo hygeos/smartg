@@ -82,6 +82,7 @@ class LUT(object):
             self.attrs = attrs
         self.ndim = self.data.ndim
         self.shape = data.shape
+        self.sub = Subsetter(self)
 
         # check axes
         if axes is None:
@@ -222,32 +223,32 @@ class LUT(object):
         if isinstance(other, LUT):
 
             # check that axes are all equal
-            assert all(map(lambda x, y: all(x==y), self.axes, other.axes))
+            assert np.all(map(lambda x, y: np.all([x==y]), self.axes, other.axes))
 
             # check that names are all equal
             assert self.names == other.names
 
             # same for desc...
-            assert self.desc == other.desc
+            if self.desc == other.desc:
+                desc = self.desc
+            else:
+                desc = None
 
-            # and for attrs...
-            assert self.attrs == other.attrs
-
-            return other.data
+            return other.data, desc
 
         else:
-            return other
+            return other, None
 
     def __add__(self, other):
         '''
         sum of two LUTs
         '''
-        otherdata = self.check_compatible(other)
+        otherdata, desc = self.check_compatible(other)
 
         return LUT(self.data + otherdata,
                 axes=self.axes,
                 names=self.names,
-                desc=self.desc,
+                desc=desc,
                 attrs=self.attrs)
 
     def __radd__(self, other):
@@ -257,36 +258,36 @@ class LUT(object):
         '''
         difference between two LUTs
         '''
-        otherdata = self.check_compatible(other)
+        otherdata, desc = self.check_compatible(other)
 
         return LUT(self.data - otherdata,
                 axes=self.axes,
                 names=self.names,
-                desc=self.desc,
+                desc=desc,
                 attrs=self.attrs)
 
     def __rsub__(self, other):
         '''
         difference between two LUTs
         '''
-        otherdata = self.check_compatible(other)
+        otherdata, desc = self.check_compatible(other)
 
         return LUT(otherdata - self.data,
                 axes=self.axes,
                 names=self.names,
-                desc=self.desc,
+                desc=desc,
                 attrs=self.attrs)
 
     def __mul__(self, other):
         '''
         multiply a LUT
         '''
-        otherdata = self.check_compatible(other)
+        otherdata, desc = self.check_compatible(other)
 
         return LUT(self.data * otherdata,
                 axes=self.axes,
                 names=self.names,
-                desc=self.desc,
+                desc=desc,
                 attrs=self.attrs)
 
     def __rmul__(self, other):
@@ -296,21 +297,21 @@ class LUT(object):
         '''
         divide a LUT
         '''
-        otherdata = self.check_compatible(other)
+        otherdata, desc = self.check_compatible(other)
 
         return LUT(self.data / otherdata,
                 axes=self.axes,
                 names=self.names,
-                desc=self.desc,
+                desc=desc,
                 attrs=self.attrs)
 
     def __rdiv__(self, other):
-        otherdata = self.check_compatible(other)
+        otherdata, desc = self.check_compatible(other)
 
         return LUT(otherdata / self.data,
                 axes=self.axes,
                 names=self.names,
-                desc=self.desc,
+                desc=desc,
                 attrs=self.attrs)
 
     def save(self, filename):
@@ -370,6 +371,34 @@ class LUT(object):
         sds.endaccess()
 
         hdf.end()
+
+
+class Subsetter(object):
+    '''
+    A conveniency class to use the syntax like:
+    LUT.sub[:,:,0]
+    for subsetting LUTs
+    '''
+    def __init__(self, LUT):
+        self.LUT = LUT
+
+    def __getitem__(self, keys):
+        '''
+        subset parent LUT
+        '''
+        axes = []
+        names = []
+        attrs = self.LUT.attrs
+        desc = self.LUT.desc
+
+        for i in xrange(self.LUT.ndim):
+            if keys[i] == slice(None):
+                axes.append(self.LUT.axes[i])
+                names.append(self.LUT.names[i])
+
+        data = self.LUT.__getitem__(keys)
+
+        return LUT(data, axes=axes, names=names, attrs=attrs, desc=desc)
 
 
 class Idx(object):
@@ -458,21 +487,18 @@ def merge(luts, axes):
                 assert (a1 == a2).all()
             else:
                 assert a1 == a2
-        assert lut.desc == luts[0].desc
 
     # determine the new axes from the attributes of all luts
     N = len(axes)
     newaxes = []
     for _ in xrange(N):
-        newaxes.append(set())
+        newaxes.append([])
     for lut in luts:
         for i in xrange(N):
             a = axes[i]
             value = lut.attrs[a]
-            newaxes[i].add(value)
-    for i in xrange(N):
-        # sort the new axes
-        newaxes[i] = sorted(newaxes[i])
+            if not value in newaxes[i]:
+                newaxes[i].append(value)
 
     new_shape = tuple(map(len, newaxes))
     new_shape += lut.shape
@@ -494,16 +520,30 @@ def merge(luts, axes):
     newattrs = {}
     for a, v in luts[0].attrs.items():
         if not a in axes:
-            newattrs[a] = v
             # any attribute in the new LUT should be identical in all the
             # merged luts
             for lut in luts:
-                assert lut.attrs[a] == v, 'Cannot merge attribute {}'.format(a)
+                if lut.attrs[a] != v:   # this attribute cannot be merged
+                    continue
+            newattrs[a] = v
+
+    # convert list dimensions to ndarray if all elements are numeric
+    for i in xrange(N):
+        if isinstance(newaxes[i], list) \
+                and np.all(map(lambda x: isinstance(x, (int, float)), newaxes[i])):
+            newaxes[i] = np.array(newaxes[i])
 
     # new axes: append old axes
     newaxes += luts[0].axes
 
-    return LUT(newdata, axes=newaxes, names=newnames, attrs=newattrs, desc=luts[0].desc)
+    # include desc only if it is the same for all merged LUTS
+    desc = luts[0].desc
+    for lut in luts:
+        if lut.desc != desc:
+            desc = None
+            break
+
+    return LUT(newdata, axes=newaxes, names=newnames, attrs=newattrs, desc=desc)
 
 
 def read_lut_hdf(filename, dataset, axnames=None):
