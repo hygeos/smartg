@@ -46,7 +46,7 @@ class LUT(object):
     >>> data = np.arange(10)**2
     >>> L = LUT(data)
     >>> L[1], L[-1], L[::2]    # standard indexing is possible
-    (1.0, 81.0, array([  0.,   4.,  16.,  36.,  64.]))
+    (1, 81, array([ 0,  4, 16, 36, 64]))
     >>> L[1.5]    # Indexing with a float: interpolation
     2.5
     >>> L[np.array([[0.5, 1.5], [2.5, 9.]])]    # interpolate several values at once
@@ -109,9 +109,9 @@ class LUT(object):
 
     def print_info(self, prepend=''):
         if self.desc is None:
-            print prepend+'LUT dimensions:'
+            print prepend+'LUT dimensions ({}):'.format(self.data.dtype)
         else:
-            print prepend+'LUT dimensions ({}):'.format(self.desc)
+            print prepend+'LUT dimensions ({}, {}):'.format(self.desc, self.data.dtype)
 
         for i in xrange(self.data.ndim):
             if self.names[i] is None:
@@ -145,7 +145,7 @@ class LUT(object):
               >>> LUT(np.zeros((2, 2)))[:]
               Traceback (most recent call last):
               ...
-              Exception: Incorrect number of dimensions in __geitem__
+              Exception: Incorrect number of dimensions in __getitem__
 
         Returns: a scalar or ndarray
         '''
@@ -156,7 +156,7 @@ class LUT(object):
         N = len(keys)
 
         if N != self.ndim:
-            raise Exception('Incorrect number of dimensions in __geitem__')
+            raise Exception('Incorrect number of dimensions in __getitem__')
 
         # determine the interpolation axes
         # and for those axes, determine the lower index (inf) and the weight
@@ -203,7 +203,7 @@ class LUT(object):
             # coefficient attributed to the current item
             # and adjust the indices
             # for the interpolated dimensions
-            coef = 1.
+            coef = 1
             for i in xrange(n):
                 # bb is the ith bit in b (0 or 1)
                 bb = ((1<<i)&b)>>i
