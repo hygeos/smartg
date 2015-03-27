@@ -688,6 +688,7 @@ def read_lut_hdf(filename, dataset, axnames=None):
         data = sds.get()
         if 'dimensions' in sds.attributes():
             dimensions = sds.attributes()['dimensions'].split(',')
+            dimensions = map(lambda x: x.strip(), dimensions)
     else:
         print 'dataset "{}" not available.'.format(dataset)
         print '{} contains the following datasets:'.format(filename)
