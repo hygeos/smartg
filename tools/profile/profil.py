@@ -779,46 +779,50 @@ def change_altitude_grid(zOld, gridSpec):
 ####################################################################################################################################
 def parseGridSpec (gridSpec):
     """ Set up (altitude) grid specified in format 'start[step1]stop1[step2]stop' or similar. """
+
     # get indices of left and right brackets
     lp = [];  rp = []
     for i in xrange(len(gridSpec)):
         if   (gridSpec[i]=='['):  lp.append(i)
         elif (gridSpec[i]==']'):  rp.append(i)
         else:                     pass
-    if len(lp)==len(rp):
-        gridStart = [];  gridStop = [];  gridStep = []
-        for i in xrange(len(lp)):
-            if i>0:  start=rp[i-1]+1
-            else:    start=0
-            if i<len(lp)-1: stop=lp[i+1]
-            else:           stop=len(gridSpec)
-
-            try:
-                gridStart.append(float(gridSpec[start:lp[i]]))
-            except ValueError:
-                print 'cannot parse grid start specification\nstring not a number!'
-                raise SystemExit
-            try:
-                gridStep.append(float(gridSpec[lp[i]+1:rp[i]]))
-            except ValueError:
-                print 'cannot parse grid step specification\nstring not a number!'
-                raise SystemExit
-            try:
-                gridStop.append(float(gridSpec[rp[i]+1:stop]))
-            except ValueError:
-                print 'cannot parse grid stop specification\nstring not a number!'
-                raise SystemExit
-            if i==0:
-                if gridStop[0]<=gridStart[0]: newGrid = gridStart[0]+gridStop[0] - (np.arange(gridStop[0], gridStart[0]+gridStep[0], gridStep[0]))
-                if gridStop[0]>=gridStart[0]: newGrid = np.arange(gridStart[0], gridStop[0]+gridStep[0], gridStep[0])
-            if i>0:
-                if gridStop[i]<=gridStart[i]: newGrid = np.concatenate((newGrid[:-1],gridStart[i]+gridStop[i]- (np.arange(gridStop[i], gridStart[i]+gridStep[i], gridStep[i]))))
-                if gridStop[i]>=gridStart[i]: newGrid = np.concatenate((newGrid[:-1],np.arange(gridStart[i], gridStop[i]+gridStep[i], gridStep[i])))
-    else:
+    if len(lp) != len(rp):
         print 'cannot parse grid specification\nnumber of opening and closing braces differs!\nUse format start[step]stop'
         raise SystemExit
-    # set up new altitude grid
-    return newGrid
+
+    # parse
+    gridStart = [];  gridStop = [];  gridStep = []
+    for i in xrange(len(lp)):
+        if i>0:  start=rp[i-1]+1
+        else:    start=0
+        if i<len(lp)-1: stop=lp[i+1]
+        else:           stop=len(gridSpec)
+
+        try:
+            gridStart.append(float(gridSpec[start:lp[i]]))
+        except ValueError:
+            print 'cannot parse grid start specification\nstring not a number!'
+            raise SystemExit
+        try:
+            gridStep.append(float(gridSpec[lp[i]+1:rp[i]]))
+        except ValueError:
+            print 'cannot parse grid step specification\nstring not a number!'
+            raise SystemExit
+        try:
+            gridStop.append(float(gridSpec[rp[i]+1:stop]))
+        except ValueError:
+            print 'cannot parse grid stop specification\nstring not a number!'
+            raise SystemExit
+
+    # create the new grid (piecewise linspace)
+    newGrid = []
+    for i in xrange(len(lp)):
+        n = int(round(abs((gridStop[i] - gridStart[i])/gridStep[i])))
+        endpoint = (i == len(lp)-1)
+        if endpoint: n += 1
+        newGrid.extend(list(np.linspace(gridStart[i], gridStop[i], n, endpoint=endpoint)))
+
+    return np.array(newGrid)
 
 
 
