@@ -948,14 +948,6 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa
 	float cTh=0.f, sTh, psi, cPsi, sPsi;
 	float wx, wy, wz, vx, vy, vz;
 	
-	psi = RAND * DEUXPI;	//psiPhoton
-	cPsi = __cosf(psi);		//cosPsiPhoton
-	sPsi = __sinf(psi);		//sinPsiPhoton
-	
-	
-	// Rotation des paramètres de stokes
-    rotateStokes(ph->stokes1, ph->stokes2, ph->stokes3, psi,
-            &ph->stokes1, &ph->stokes2, &ph->stokes3);
 	
 	/* Les calculs qui différent pour les aérosols et les molécules sont regroupés dans cette partie.
 	 * L'idée à termes est de réduire au maximum cette fonction, en calculant également la fonction de phase pour les
