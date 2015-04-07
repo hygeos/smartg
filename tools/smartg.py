@@ -396,6 +396,21 @@ def command_file_template(dict):
 class Surface(object):
     '''
     Stores the smartg parameters relative to the surface
+
+    Parameters:
+        SUR: Type de reflexion de la surface
+            # 1 pour reflexion forcee sur le dioptre
+            # 2 transmission forcee
+            # 3 reflexion et transmission
+        DIOPTRE: Type de dioptre 
+            # 0 = plan
+            # 1 = agite avec reflexion multiple
+            # 2 = agite sans reflexion multiple
+            # 3 = surface lambertienne (uniquement sans océan)
+            # 4 = glitter + surface lambertienne (2 en reflexion + 3 pour transmission) - Use SUR=3 in this case
+        WOLAM: Albedo simple de diffusion de la surface lambertienne (float)
+        WINDSPEED: Vitesse du vent [m/s] (utilise si idioptre=1) (modele de Cox et Munk) (float)
+        NH2O: Indice de refraction relatif air/eau (float)
     '''
     def __init__(self, SUR=1, DIOPTRE=2, W0LAM=0., WINDSPEED=5., NH2O=1.33):
         self.dict = {
@@ -406,7 +421,7 @@ class Surface(object):
                 'NH2O': NH2O,
                 }
     def __str__(self):
-        return 'SUR={SUR}-DI={DIOPTRE}-W0={W0LAM}'.format(**self.dict)
+        return 'SUR={SUR}-DI={DIOPTRE}-W0={W0LAM}-WIND={WINDSPEED}'.format(**self.dict)
 
 class Environment(object):
     '''
