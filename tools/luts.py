@@ -480,6 +480,13 @@ def merge(luts, axes):
     >>> Lmerged = merge([L1, L2, L3, L4], ['A', 'B'])
     >>> Lmerged.shape
     (2, 2, 4, 5)
+
+    Merge two MLUTS using attribute to LUT promotion
+    >>> M1 = MLUT([LUT(np.arange(10), desc='a', attrs={'b':1})])
+    >>> M1.promote_attr('b')  # attribute 'b' is converted to a scalar LUT
+    >>> M2 = MLUT([LUT(np.arange(10), desc='a', attrs={'b':2})])
+    >>> M2.promote_attr('b')
+    >>> merged = merge([M1, M2], ['b'])   # merged params a and b
     '''
     # merge MLUT
     if isinstance(luts[0], MLUT):
@@ -524,7 +531,7 @@ def merge(luts, axes):
             index += (newaxes[i].index(lut.attrs[a]),)
         index += (None,)
 
-        newdata[index] = lut.data[:]
+        newdata[index] = lut.data
 
     # determine new names and attributes
     newnames = axes + luts[0].names
@@ -568,6 +575,17 @@ class MLUT(object):
             assert lut.desc not in self.params, 'lut.desc is not unique'
             self.params.append(lut.desc)
             self.luts.append(lut)
+
+    def promote_attr(self, attr):
+        '''
+        create a new LUT within the MLUT, using a specified attribute attr
+        '''
+        assert isinstance(attr, str)
+        L = self.luts[0]
+        assert attr in L.attrs
+
+        self.params.append(attr)
+        self.luts.append(LUT(np.array(L.attrs[attr]), desc=attr, attrs=L.attrs))
 
     def save(self, filename, overwrite=False):
         '''
@@ -639,7 +657,7 @@ class MLUT(object):
 
 def read_mlut_hdf(filename, datasets=None, axnames=None):
     '''
-    read datasets in filename, and return them as a LUTS
+    read datasets in filename, and return them as a MLUT
     datasets: list of datasets to read (default None, read all datasets having
     an attribute 'dimensions' or being compatible with axnames)
     axnames: override the attribute dimensions
