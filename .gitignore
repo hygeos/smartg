@@ -1,4 +1,4 @@
 *~
-resultat/*.hdf
-resultat/*.out
-resultat/*.png
+*.pyc
+*.hdf
+*.png
