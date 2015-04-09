@@ -43,6 +43,7 @@ float NH2O;		//Indice de refraction relatif air/eau
 float ENV_SIZE; // Taille de la cible en km
 float X0; // Position de la cible en x km
 float Y0; // Position de la cible en y km
+float TRANSDIR; // Direct transmission Sun-surface
 #ifdef FLAGOCEAN
 float ATOT, BTOT;
 char PATHDIFFOCE[1024];

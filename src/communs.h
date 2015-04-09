@@ -175,6 +175,7 @@ extern int NATM;
 extern float HATM;
 extern float WINDSPEED;
 extern float NH2O;
+extern float TRANSDIR;
 
 extern char PATHRESULTATSHDF[];
 extern char PATHTEMOINHDF[];

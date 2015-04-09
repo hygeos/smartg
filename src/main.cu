@@ -79,6 +79,7 @@ int main (int argc, char *argv[])
     } else {
         HATM = 0;
         NATM = 0;
+        TRANSDIR=1.;
     }
 
 
@@ -255,6 +256,7 @@ int main (int argc, char *argv[])
     if ((SIM == -2) || (SIM == 1) || (SIM == 2)) {
         // Read atmospheric profile
         profilAtm(&tab_H, &tab_D);
+        TRANSDIR = exp(-TAUATM/cos(THVDEG*PI/180.));
     }
 #ifdef _PERF
         StopProcessing(perfInitG);
@@ -272,6 +274,7 @@ int main (int argc, char *argv[])
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
 	// Calcul du point d'impact du photon
 	impactInit(init_H, init_D, &tab_H, &tab_D);
+    TRANSDIR = exp(-init_H->taumax0);
 
 	#ifdef DEBUG
 	printf("Paramètres initiaux du photon: taumax0=%lf - zintermax=%lf - (%lf,%lf,%lf)\n",\
