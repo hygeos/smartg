@@ -13,7 +13,7 @@ from seawater_scattering_Zhang2009 import swscat
 from water_absorption import a_w
 from optparse import OptionParser
 from os.path import exists, join, dirname
-from os import makedirs
+from os import makedirs, remove
 
 install_dir='/home/did/RTC/SMART-G/'
 
@@ -44,14 +44,16 @@ class WaterModelSPM(object):
         gamma: is the spectral dependency of the particulate backscattering
         alpha: parameter for CDOM absorption
         nbp: refractive index of particles (relative to water)
+        overwrite: overwrite output files if existing
     '''
-    def __init__(self, SPM, NSCOCE=72001, ang_trunc=5., gamma=0.5, alpha=1., nbp=1.15):
+    def __init__(self, SPM, NSCOCE=72001, ang_trunc=5., gamma=0.5, alpha=1., nbp=1.15, overwrite=False):
         self.__SPM = SPM
         self.__NSCOCE = NSCOCE
         self.__ang_trunc = ang_trunc
         self.__gamma = gamma
         self.__alpha = alpha
         self.__nbp = nbp
+        self.__overwrite = overwrite
 
     def __name_phase(self, directory, wl):
         '''
@@ -144,6 +146,10 @@ class WaterModelSPM(object):
         file_phase = self.__name_phase(dir_phase, w)
         if not exists(dirname(file_phase)):
             makedirs(dirname(file_phase))
+        if exists(file_phase) and self.__overwrite:
+            print 'INFO: overwriting {}'.format(file_phase)
+            remove(file_phase)
+
         if not exists(file_phase):
             fo = open(file_phase, 'w')
             fo.write('# SPM concentration: {}\n'.format(SPM))
@@ -161,10 +167,10 @@ class WaterModelSPM(object):
                         ))
             fo.close()
         else:
-            print '{} exists'.format(file_phase)
+            print 'INFO: skipping {}'.format(file_phase)
 
         return atot, btot, file_phase
-    
+
     def __str__(self):
         return 'SPM={}'.format(self.__SPM)
 
