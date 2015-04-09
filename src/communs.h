@@ -91,6 +91,9 @@ typedef int CrMCCUDA;
 
 // bitmasks for output
 #define OUTPUT_BOA_DOWN_0P   1 // downward radiance at BOA above surface (0+)
+#define OUTPUT_BOA_DOWN_0M   2 // downward radiance at BOA below surface (0-)
+#define OUTPUT_BOA_UP_0P   4 // upward radiance at BOA above surface (0+)
+#define OUTPUT_BOA_UP_0M   8 // upward radiance at BOA below surface (0-)
 
 
 /* Paramètres pour l'océan */
@@ -222,9 +225,9 @@ typedef struct __align__(16)
                 // océan: valeurs négatives
 	
 	
-	#ifdef SPHERIQUE
-	int locPrec;
 	
+	#ifdef SPHERIQUE
+	int locPrec; // previous localisation
 	// Position cartésienne du photon
 	float x;
 	float y;
@@ -287,7 +290,10 @@ typedef struct {
 typedef struct __align__(16)
 {
 	float* tabPhotons;		// Tableau contenant l'ensemble des paramètres de stokes des photons sortis dans l'espace
-	float* tabPhotonsDown;		// Tableau contenant l'ensemble des paramètres de stokes des photons descendant arrivant à la surface 
+	float* tabPhotonsDown0P;		// Tableau contenant l'ensemble des paramètres de stokes des photons descendant arrivant à la surface 
+	float* tabPhotonsDown0M;		// Tableau contenant l'ensemble des paramètres de stokes des photons descendant partant de la surface 
+	float* tabPhotonsUp0P;		// Tableau contenant l'ensemble des paramètres de stokes des photons ascendant partant de la surface 
+	float* tabPhotonsUp0M;		// Tableau contenant l'ensemble des paramètres de stokes des photons asscendant arrivant à la surface 
 	
 	float* faer;			// Pointeur vers le modèle de diffusion des aérosols
 	

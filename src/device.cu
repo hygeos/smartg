@@ -211,6 +211,14 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 		// Surface
         //
 		if(ph.loc == SURFACE){
+           // Eventually evaluate Downward 0+ and Upward 0- radiance
+           countInterface(&ph, tab.tabPhotonsDown0P, tab.tabPhotonsUp0M
+           //if((OUTPUT_LAYERSd & OUTPUT_BOA_DOWN_0P)==1 || (OUTPUT_LAYERSd & OUTPUT_BOA_UP_0M)==2) countInterface(&ph, tab.tabPhotonsDown0P, tab.tabPhotonsUp0M
+                    #ifdef PROGRESSION
+                    , var
+                    #endif
+                    );
+
            if( ENVd==0 ) { // si pas d effet d environnement	
 			if( DIOPTREd!=3 )
 				surfaceAgitee(&ph, &etatThr
@@ -247,6 +255,13 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 						);
                 }
            }
+           // Eventually evaluate Downward 0- and Upward 0+ radiance
+           countInterface(&ph, tab.tabPhotonsDown0M, tab.tabPhotonsUp0P
+           //if((OUTPUT_LAYERSd & OUTPUT_BOA_DOWN_0M)==4 || (OUTPUT_LAYERSd & OUTPUT_BOA_UP_0P)==8) countInterface(&ph, tab.tabPhotonsUp0P, tab.tabPhotonsDown0M
+                    #ifdef PROGRESSION
+                    , var
+                    #endif
+                    );
 		}
 		syncthreads();
 		
@@ -1164,11 +1179,6 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa
 	ph->vz = vz;
 
     // renormalisation
-    //TestDR
-//    norm=ph->stokes1+ph->stokes2;
-//    ph->stokes1/=norm;
- //   ph->stokes2/=norm;
- //   ph->stokes3/=norm;
     norm=sqrtf(ph->vx*ph->vx+ph->vy*ph->vy+ph->vz*ph->vz);
     ph->vx/=norm;
     ph->vy/=norm;
@@ -1177,7 +1187,6 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa
     ph->ux/=norm;
     ph->uy/=norm;
     ph->uz/=norm;
-    //TestDR
 
 
 }
@@ -1338,25 +1347,11 @@ __device__ void surfaceAgitee(Photon* ph
 
 
     // Projection de la surface apparente de la facette sur le plan horizontal      
-    if( ph->vz > 0 ){
-        // eau -> air
-        // Correction bug surface apparente facettes face/dos au photon
-        ph->weight *= __fdividef( abs(cTh), ph->vz);
-       // Projection de la surface apparente de la facette sur le plan horizonthal
-       ph->weight /= cBeta;
+    // pour avoir une surface unite equivalente pour toute les pentes de vague
+    ph->weight /= cBeta;
 
-                     }
-    else{
-         // air -> eau
-         // Correction bug surface apparente facettes face/dos au photon
-         ph->weight *= - __fdividef( abs(cTh), ph->vz);
-         // Projection de la surface apparente de la facette sur le plan horizonthal
-         ph->weight /= cBeta;
-         }
-
-
-
-
+    // Incident angle cosine factor for incident irradiance  onto the facet conversion
+    ph->weight *= __fdividef(abs(cTh), abs(ph->vz));
 
 	// Rotation des paramètres de Stokes
 	s1 = ph->stokes1;
@@ -1768,12 +1763,13 @@ __device__ void countPhoton(Photon* ph, Tableaux tab, unsigned long long* nbPhot
 		    )
 {
 
-    if ((ph->loc != SPACE) && (ph->loc != SURFACE)) {
+    if (ph->loc != SPACE) return; 
+    /*if ((ph->loc != SPACE) && (ph->loc != SURFACE)) {
         return;
     }
     if ((ph->loc == SURFACE) && ((OUTPUT_LAYERSd & OUTPUT_BOA_DOWN_0P) == 0)) {
         return;
-    }
+    }*/
 
 //  On ne compte pas les photons directement transmis
     if ((ph->weight == WEIGHTINIT) && (ph->stokes1 == ph->stokes2) && (ph->stokes3 == 0.f)) {
@@ -1813,11 +1809,11 @@ __device__ void countPhoton(Photon* ph, Tableaux tab, unsigned long long* nbPhot
     } else {
 
         // SURFACE
-        if (ph->vz < 0) {
-            tabCount = tab.tabPhotonsDown;
-        } else {
-            return;
-        }
+        //if (ph->vz < 0) {
+         //   tabCount = tab.tabPhotonsDown0P;
+        //} else {
+         //   return;
+       // }
     }
 	
 	
@@ -1902,6 +1898,79 @@ __device__ void countPhoton(Photon* ph, Tableaux tab, unsigned long long* nbPhot
 }
 
 
+/* countInterface
+*/
+__device__ void countInterface(Photon* ph, float* tab1, float* tab2
+//__device__ void countInterface(Photon* ph, Tableaux tab
+    #ifdef PROGRESSION
+    ,Variables* var
+    #endif
+    )
+{
+
+//  On ne compte pas les photons directement transmis ou absorbes
+    if ((ph->weight == WEIGHTINIT) && (ph->stokes1 == ph->stokes2) && (ph->stokes3 == 0.f) || (ph->loc == ABSORBED)) {
+    return;
+    }
+	
+    float *tabCount; // pointer to the "counting" array:
+	
+    if (ph->vz < 0) {
+        tabCount = tab1;
+        }
+    else {
+        tabCount = tab2;
+    } 
+	
+	
+	float theta = acosf(fmin(1.F, fmax(-1.F, 0.f * ph->vx + 1.f * ph->vz)) );
+	
+	float psi;
+	int ith=0, iphi=0;
+	// Initialisation de psi
+	calculPsi(ph, &psi, theta);
+	
+	// Rotation of stokes parameters
+    float s1, s2, s3;
+    rotateStokes(ph->stokes1, ph->stokes2, ph->stokes3, psi,
+            &s1, &s2, &s3);
+	
+	// Calcul de la case dans laquelle le photon sort
+	calculCase(&ith, &iphi, ph 
+			   #ifdef PROGRESSION
+			   , var
+			   #endif
+			   );
+	
+    // modify stokes parameters for OS code compatibility
+  	if( ph->vy<0.f )
+  		s3 = -s3;
+	
+	float tmp = s1;
+	s1 = s2;
+	s2 = tmp;
+	
+
+	float weight = ph->weight;
+
+
+	// Rangement du photon dans sa case, et incrémentation de variables
+	if(((ith >= 0) && (ith < NBTHETAd)) && ((iphi >= 0) && (iphi < NBPHId)))
+	{
+		// Rangement dans le tableau des paramètres pondérés du photon
+
+		atomicAdd(tabCount+(0 * NBTHETAd * NBPHId + ith * NBPHId + iphi), weight * s1);
+
+		atomicAdd(tabCount+(1 * NBTHETAd * NBPHId + ith * NBPHId + iphi), weight * s2);
+
+		atomicAdd(tabCount+(2 * NBTHETAd * NBPHId + ith * NBPHId + iphi), weight * s3);
+				
+   		atomicAdd(tabCount+(3 * NBTHETAd * NBPHId + ith * NBPHId + iphi), 1.);
+
+
+	}
+
+}
 
 
 //

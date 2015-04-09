@@ -174,21 +174,21 @@ void calculTabFinal(double*, double*, double*, double*, unsigned long long);
 * //TODO: 	écrire moins régulièrement le témoin (non pas une écriture par appel de kernel)
 *			changer le format (écrire un .bin par exemple) pour éventuellement gagner du temps (calculer le gain éventuel)
 */
-void creerHDFTemoin(double*, double*, unsigned long long, Variables*, double);
+//void creerHDFTemoin(double*, double*, unsigned long long, Variables*, double);
 
 
 /* lireHDFTemoin
 * Si un fichier temoin existe et que les paramètres correspondent à la simulation en cours, cette simulation se poursuit à
 * partir de celle sauvée dans le fichier témoin.
 */
-void lireHDFTemoin(Variables*, Variables*, unsigned long long*, double*, double*, double*);
+//void lireHDFTemoin(Variables*, Variables*, unsigned long long*, double*, double*, double*);
 
 
 /* creerHDFResultats
 * Fonction qui crée le fichier .hdf contenant le résultat final pour une demi-sphère
 */
 //void creerHDFResultats(double*, double*, double*, unsigned long long, Variables*, double);
-void creerHDFResultats(double*, double*, double*, double*, unsigned long long, Variables*, double);
+void creerHDFResultats(double*, double*, double*, double*, double*, double*, double*, unsigned long long, Variables*, double);
 
 
 #endif	// HOST_H

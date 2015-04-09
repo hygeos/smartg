@@ -209,6 +209,14 @@ __device__ void countPhoton(Photon* , Tableaux, unsigned long long*
 		#endif
 		    );
 
+/* count interface radiances*/
+__device__ void countInterface(Photon* , float*, float* 
+//__device__ void countInterface(Photon* , Tableaux 
+		#ifdef PROGRESSION
+		, Variables*
+		#endif
+		    );
+
 
 // rotation of the stokes parameters by an angle psi
 __device__ void rotateStokes(float s1, float s2, float s3, float psi,
