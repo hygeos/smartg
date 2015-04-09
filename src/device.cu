@@ -255,7 +255,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
                 }
            }
            // Eventually evaluate Downward 0- and Upward 0+ radiance
-           if(OUTPUT_LAYERSd & (OUTPUT_BOA_DOWN_0M + OUTPUT_BOA_UP_0P )) countInterface(&ph, tab.tabPhotonsUp0P, tab.tabPhotonsDown0M
+           if(OUTPUT_LAYERSd & (OUTPUT_BOA_UP_0P + OUTPUT_BOA_DOWN_0M )) countInterface(&ph, tab.tabPhotonsUp0P, tab.tabPhotonsDown0M
                     #ifdef PROGRESSION
                     , var
                     #endif
