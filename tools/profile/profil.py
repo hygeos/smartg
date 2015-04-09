@@ -32,12 +32,14 @@ class AeroOPAC(object):
         tau: optical thickness at wavelength wref
         wref: reference wavelength (nm) for aot
         layer_phase: the layer index at which the phase function is chosen
+        overwrite: recalculate and overwrite phase functions
     '''
-    def __init__(self, filename, tau, wref, layer_phase=None):
+    def __init__(self, filename, tau, wref, layer_phase=None, overwrite=False):
 
         self.__tau = tau
         self.__wref = wref
         self.__layer_phase = layer_phase
+        self.overwrite = overwrite
 
         if dirname(filename) == '':
             self.filename = join(dir_libradtran_opac, 'standard_aerosol_files', filename)
@@ -267,14 +269,19 @@ class AeroOPAC(object):
         Leg=Legendres(self.MMAX,NTHETA)
         ret = []
         list_skipped = []   # list of files skipped because existing
+        list_overwritten = []   # list of files overwritten
 
         for m in range(M):
 
             output = join(dir, pattern%(basename(self.filename[:-4]),w,m))
             ret.append(output)
             if exists(output):
-                list_skipped.append(output)
-                continue
+                if self.overwrite:
+                    os.remove(output)
+                    list_overwritten.append(output)
+                else:
+                    list_skipped.append(output)
+                    continue
             theta,pha=Mom2Pha(self.pmom_tot[m,:,:],Leg)
             if not exists(dirname(output)):
                 # create output directory if necessary
@@ -287,6 +294,8 @@ class AeroOPAC(object):
 
         if len(list_skipped) > 0:
             print 'INFO: skipping {} and {} other files'.format(list_skipped[0], len(list_skipped)-1)
+        if len(list_overwritten) > 0:
+            print 'INFO: overwritten {} and {} other files'.format(list_overwritten[0], len(list_overwritten)-1)
 
         return ret
 
@@ -845,7 +854,7 @@ class Profile(object):
         - NO2: activate ON2 absorption (default True)
     '''
     def __init__(self, atm_filename, aer=None, grid=None,
-                lat=45., O3=None, NO2=True, verbose=False):
+                lat=45., O3=None, NO2=True, verbose=False, overwrite=False):
 
         crs_O3_filename = join(dir_libradtran_crs, 'crs_O3_UBremen_cf.dat')
         crs_NO2_filename = join(dir_libradtran_crs, 'crs_NO2_UBremen_cf.dat')
@@ -927,6 +936,7 @@ class Profile(object):
             self.aer.init(z, self.T, self.h2o)
 
         self.verbose = verbose
+        self.overwrite = overwrite
 
     def write(self, w, output_file=None, dir=None):
         '''
@@ -959,8 +969,12 @@ class Profile(object):
                     prefix='profile_', suffix='.tmp')
 
         if exists(output_file):
-            if self.verbose: print 'File {} exists!'.format(output_file)
-            return output_file
+            if self.overwrite:
+                os.remove(output_file)
+                if self.verbose: print 'Removed {}'.format(output_file)
+            else:
+                if self.verbose: print 'File {} exists!'.format(output_file)
+                return output_file
 
         if not exists(dirname(output_file)):
             os.makedirs(dirname(output_file))
