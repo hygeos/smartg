@@ -212,8 +212,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
         //
 		if(ph.loc == SURFACE){
            // Eventually evaluate Downward 0+ and Upward 0- radiance
-           countInterface(&ph, tab.tabPhotonsDown0P, tab.tabPhotonsUp0M
-           //if((OUTPUT_LAYERSd & OUTPUT_BOA_DOWN_0P)==1 || (OUTPUT_LAYERSd & OUTPUT_BOA_UP_0M)==2) countInterface(&ph, tab.tabPhotonsDown0P, tab.tabPhotonsUp0M
+           if(OUTPUT_LAYERSd & (OUTPUT_BOA_DOWN_0P + OUTPUT_BOA_UP_0M )) countInterface(&ph, tab.tabPhotonsDown0P, tab.tabPhotonsUp0M
                     #ifdef PROGRESSION
                     , var
                     #endif
@@ -256,8 +255,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
                 }
            }
            // Eventually evaluate Downward 0- and Upward 0+ radiance
-           countInterface(&ph, tab.tabPhotonsDown0M, tab.tabPhotonsUp0P
-           //if((OUTPUT_LAYERSd & OUTPUT_BOA_DOWN_0M)==4 || (OUTPUT_LAYERSd & OUTPUT_BOA_UP_0P)==8) countInterface(&ph, tab.tabPhotonsUp0P, tab.tabPhotonsDown0M
+           if(OUTPUT_LAYERSd & (OUTPUT_BOA_DOWN_0M + OUTPUT_BOA_UP_0P )) countInterface(&ph, tab.tabPhotonsUp0P, tab.tabPhotonsDown0M
                     #ifdef PROGRESSION
                     , var
                     #endif
@@ -1226,7 +1224,8 @@ __device__ void surfaceAgitee(Photon* ph
 	float sBeta;
 	float cBeta;
 	
-	float alpha = DEUXPI*RAND;	//Angle azimutal du vecteur normal a une facette de vagues
+	float alpha ;	//Angle azimutal du vecteur normal a une facette de vagues
+	//float alpha = DEUXPI*RAND;	//Angle azimutal du vecteur normal a une facette de vagues
 	
 	float nind;
 	float temp;
@@ -1308,50 +1307,78 @@ __device__ void surfaceAgitee(Photon* ph
 	/** **/
 	
 	if( DIOPTREd !=0 ){
-		sig = sqrtf(0.003F + 0.00512f *WINDSPEEDd);
-		beta = atanf( sig*sqrtf(-__logf(RAND)) );
-	}
-	sBeta = __sinf( beta );
-	cBeta = __cosf( beta );
+        theta = DEMIPI;
+        while(theta>=DEMIPI){
+           alpha = DEUXPI * RAND;
+		   sig = sqrtf(0.003F + 0.00512f *WINDSPEEDd);
+		   beta = atanf( sig*sqrtf(-__logf(RAND)) );
+	       sBeta = __sinf( beta );
+	       cBeta = __cosf( beta );
+	       nx = sBeta*__cosf( alpha );
+	       ny = sBeta*__sinf( alpha );
 	
-	nx = sBeta*__cosf( alpha );
-	ny = sBeta*__sinf( alpha );
-	
-	// Projection de la surface apparente de la facette sur le plan horizontal		
-	if( ph->vz > 0 ){
-		nind = __fdividef(1.f,NH2Od);
-		nz = -cBeta;
-//		ph->weight *= __fdividef( abs(nx*ph->vx + ny*ph->vy + nz*ph->vz), ph->vz*cBeta);
-// suppression pour nouvelle méthode diffusion/reflexion:Mathieu
+	       // Projection de la surface apparente de la facette sur le plan horizontal		
+	       if( ph->vz > 0 ){
+		       nind = __fdividef(1.f,NH2Od);
+		       nz = -cBeta;
+	       }
+	       else{
+		       nind = NH2Od;
+		       nz = cBeta;
+	       }
+	       temp = -(nx*ph->vx + ny*ph->vy + nz*ph->vz);
+	       theta = acosf( fmin(1.00F-VALMIN, fmax( -(1.F-VALMIN), temp ) ));
+        }
 	}
-	else{
-		nind = NH2Od;
-		nz = cBeta;
-//		ph->weight *= -__fdividef( abs(nx*ph->vx + ny*ph->vy + nz*ph->vz), ph->vz*cBeta );
-        // suppression nouvelle methode
-	}
+    else{
+        beta = 0;
+        alpha = DEUXPI * RAND;
+	    sBeta = __sinf( beta );
+	    cBeta = __cosf( beta );
+	    nx = sBeta*__cosf( alpha );
+	    ny = sBeta*__sinf( alpha );
 	
-	
-	temp = -(nx*ph->vx + ny*ph->vy + nz*ph->vz);
-
-	theta = acosf( fmin(1.00F-VALMIN, fmax( -(1.F-VALMIN), temp ) ));
-
-	if(theta >= DEMIPI){
-		nx = -nx;
-		ny = -ny;
-		theta = acosf( -(nx*ph->vx + ny*ph->vy + nz*ph->vz) );
-	}
+	    // Projection de la surface apparente de la facette sur le plan horizontal		
+	    if( ph->vz > 0 ){
+		    nind = __fdividef(1.f,NH2Od);
+		    nz = -cBeta;
+	    }
+	    else{
+		    nind = NH2Od;
+		    nz = cBeta;
+	    }
+	    temp = -(nx*ph->vx + ny*ph->vy + nz*ph->vz);
+	    theta = acosf( fmin(1.00F-VALMIN, fmax( -(1.F-VALMIN), temp ) ));
+    }
 
 	cTh = __cosf(theta);
 	sTh = __sinf(theta);
-
 
     // Projection de la surface apparente de la facette sur le plan horizontal      
     // pour avoir une surface unite equivalente pour toute les pentes de vague
     ph->weight /= cBeta;
 
     // Incident angle cosine factor for incident irradiance  onto the facet conversion
-    ph->weight *= __fdividef(abs(cTh), abs(ph->vz));
+    ph->weight *= abs(cTh);
+
+    // Compute the A factor (Plass  and Kattawar, 1975.) for normalizing the probability of a oblique
+    // downward photon to strike a given slope
+    // DR essai simple 
+    float Anorm;
+    float slopeA=0.004;
+    float theta_thres;
+    theta_thres = 86. - WINDSPEEDd; // between 1 and 15 m/s
+    float avz = abs(ph->vz);
+    float aavz = acosf(avz)*360./DEUXPI;
+    if(aavz > theta_thres){
+       Anorm = avz + slopeA * (aavz - theta_thres);
+    }
+    else{
+       Anorm = avz;
+    }
+
+    ph->weight *= __fdividef(1., Anorm);
+
 
 	// Rotation des paramètres de Stokes
 	s1 = ph->stokes1;
@@ -1440,17 +1467,15 @@ __device__ void surfaceAgitee(Photon* ph
 	        if( (ph->vz<0) && (DIOPTREd==4) && (SIMd!=0 && SIMd!=2 && SIMd!=3) ){
                 ph->loc = ABSORBED;
             }
-
 //		if( SURd==1 ){ /*On pondere le poids du photon par le coefficient de reflexion dans le cas 
 //			d'une reflexion speculaire sur le dioptre (mirroir parfait)*/
 //			ph->weight *= rat;
 //		}
-
 		if (SURd==3 && ReflTot==0) {
 			ph->weight /= rat;
 				}
-		
 	}
+
 	else{	// Transmission par le dioptre
 		
         if (DIOPTREd!=4){
@@ -1566,8 +1591,8 @@ __device__ void surfaceAgitee(Photon* ph
 //		ph->weight *= __fdividef( W0LAMd, 1-rat );
 		ph->weight *=  W0LAMd;
 		
-    } // fin du if (DIOPTRE==4)
-	}
+        } // fin du if (DIOPTRE==4)
+	} // transmission
 	
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
 	/** Retour dans le repère d'origine **/
