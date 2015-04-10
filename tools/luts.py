@@ -140,6 +140,7 @@ class LUT(object):
             - basic indexing and slicing, and advanced indexing (indexing with
               an ndarray of int or bool) can still be used
               (see http://docs.scipy.org/doc/numpy/reference/arrays.indexing.html)
+            - if arrays are passed as arguments, they must all have the same shape
             - Unlike ndarrays, the number of dimensions in keys should be
               identical to the dimension of the LUT
               >>> LUT(np.zeros((2, 2)))[:]
@@ -158,6 +159,32 @@ class LUT(object):
         if N != self.ndim:
             raise Exception('Incorrect number of dimensions in __getitem__')
 
+
+        # convert the Idx keys to float indices
+        for i in xrange(N):
+            k = keys[i]
+            if isinstance(k, Idx):
+                # k is an Idx instance
+                # convert it to float indices for the current axis
+                if k.name not in [None, self.names[i]]:
+                    msg = 'Error, wrong parameter passed at position {}, expected {}, got {}'
+                    raise Exception(msg.format(i, self.names[i], k.name))
+                keys[i] = k.index(self.axes[i])
+
+        # determine the dimensions of the result (for broadcasting coef)
+        dims_array = None
+        dims_result = []
+        for i in xrange(N):
+            k = keys[i]
+            if isinstance(k, np.ndarray):
+                if dims_array is None:
+                    dims_array = k.shape
+                    dims_result.extend([slice(None)]*k.ndim)
+                else:
+                    assert dims_array == k.shape, 'LUTS.__getitem__: all arrays must have same shape ({} != {})'.format(str(dims_array), str(k.shape))
+            else:
+                dims_result.append(None)
+
         # determine the interpolation axes
         # and for those axes, determine the lower index (inf) and the weight
         # (x) between lower and upper index
@@ -167,31 +194,25 @@ class LUT(object):
         for i in xrange(N):
             k = keys[i]
 
-            # convert Idx keys
-            if isinstance(k, Idx):
-                # k is an Idx instance
-                # convert it to float indices for the current axis
-                if k.name not in [None, self.names[i]]:
-                    msg = 'Error, wrong parameter passed at position {}, expected {}, got {}'
-                    raise Exception(msg.format(i, self.names[i], k.name))
-                k = k.index(self.axes[i])
-                keys[i] = k
-
             # floating-point indices should be interpolated
             interpolate = False
             if isinstance(k, np.ndarray) and (k.dtype in [np.dtype('float')]):
                 interpolate = True
                 inf = k.astype('int')
                 inf[inf == self.data.shape[i]-1] -= 1
+                x = k-inf
+                if k.ndim > 0:
+                    x = x.__getitem__(dims_result)
             elif isinstance(k, float):
                 interpolate = True
                 inf = int(k)
                 if inf == self.data.shape[i]-1:
                     inf -= 1
+                x = k-inf
             if interpolate:
                 # current axis needs interpolation
                 inf_list.append(inf)
-                x_list.append(k-inf)
+                x_list.append(x)
                 interpolate_axis.append(i)
 
         # loop over the 2^n bracketing elements
