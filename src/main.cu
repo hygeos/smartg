@@ -192,7 +192,6 @@ int main (int argc, char *argv[])
 	}
 	
 	memset(tabPhotonsTotUp0P,0,4*NBTHETA*NBPHI*sizeof(*(tabPhotonsTotUp0P)));
->>>>>>> dev
 	
 	// Variables permettant le calcul du résultat final
     double *tabFinal;   // tableau final: 4 dimensions pour
@@ -358,7 +357,7 @@ int main (int argc, char *argv[])
 			exit(1);
                 }
 
-		cudaErreur = cudaMemset(tab_D.tabPhotonsDown0P, 0, 4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_D.tabPhotonsDown)));
+		cudaErreur = cudaMemset(tab_D.tabPhotonsDown0P, 0, 4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_D.tabPhotonsDown0P)));
 		if( cudaErreur != cudaSuccess ){
 			printf("#--------------------#\n");
 			printf("# ERREUR: Problème de cudaMemset tab_D.tabPhotonsDown0P dans le main\n");
@@ -449,17 +448,17 @@ cudaMemcpyDeviceToHost);
 			exit(1);
 		}
 
-		cudaErreur = cudaMemcpy(tab_H.tabPhotonsDown, tab_D.tabPhotonsDown, 4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_H.tabPhotonsDown)),
+		cudaErreur = cudaMemcpy(tab_H.tabPhotonsDown0M, tab_D.tabPhotonsDown0P, 4*NBTHETA * NBPHI * sizeof(*(tab_H.tabPhotonsDown0P)),
 cudaMemcpyDeviceToHost);
 		if( cudaErreur != cudaSuccess ){
-			printf( "ERREUR: Problème de copie tab_H.tabPhotonsDown0P dans le main\n");
+			printf( "ERREUR: Problème de copie tab_H.tabPhotonsDown0MPdans le main\n");
 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
 			exit(1);
 		}
 
 		cudaErreur = cudaMemcpy(tab_H.tabPhotonsDown0M, tab_D.tabPhotonsDown0M, 4*NBTHETA * NBPHI * sizeof(*(tab_H.tabPhotonsDown0M)),
->>>>>>> dev
 cudaMemcpyDeviceToHost);
+
 		if( cudaErreur != cudaSuccess ){
 			printf( "ERREUR: Problème de copie tab_H.tabPhotonsDown0M dans le main\n");
 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );

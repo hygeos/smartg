@@ -147,7 +147,6 @@ extern int DEVICE;
 extern int NBTHETA;
 extern int NBPHI;
 extern int NLAM;
-extern int PROFIL;
 extern int SIM;
 extern int SUR;
 extern int DIOPTRE;

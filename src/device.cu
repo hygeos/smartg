@@ -1198,7 +1198,8 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa
 			}
 		}
 		
-	}
+	 }
+    }
 	#endif
    ////////// Fin séparation ////////////
 	
@@ -1280,7 +1281,6 @@ __device__ void surfaceAgitee(Photon* ph
 	float cBeta;
 	
 	float alpha ;	//Angle azimutal du vecteur normal a une facette de vagues
-	//float alpha = DEUXPI*RAND;	//Angle azimutal du vecteur normal a une facette de vagues
 	
 	float nind;
 	float temp;
@@ -2011,7 +2011,7 @@ __device__ void countInterface(Photon* ph, float* tab1, float* tab2
 	float theta = acosf(fmin(1.F, fmax(-1.F, 0.f * ph->vx + 1.f * ph->vz)) );
 	
 	float psi;
-	int ith=0, iphi=0;
+	int ith=0, iphi=0, il=0;
 	// Initialisation de psi
 	calculPsi(ph, &psi, theta);
 	
@@ -2021,7 +2021,7 @@ __device__ void countInterface(Photon* ph, float* tab1, float* tab2
             &s1, &s2, &s3);
 	
 	// Calcul de la case dans laquelle le photon sort
-	calculCase(&ith, &iphi, ph 
+	calculCase(&ith, &iphi, &il, ph 
 			   #ifdef PROGRESSION
 			   , var
 			   #endif
@@ -2199,7 +2199,6 @@ void initConstantesDevice()
 	cudaMemcpyToSymbol(NBTHETAd, &NBTHETA, sizeof(int));
 	cudaMemcpyToSymbol(NBPHId, &NBPHI, sizeof(int));
 	cudaMemcpyToSymbol(NLAMd, &NLAM, sizeof(int));
-	cudaMemcpyToSymbol(PROFILd, &PROFIL, sizeof(int));
 	cudaMemcpyToSymbol(SIMd, &SIM, sizeof(int));
 	cudaMemcpyToSymbol(SURd, &SUR, sizeof(int));
 	cudaMemcpyToSymbol(DIOPTREd, &DIOPTRE, sizeof(int));

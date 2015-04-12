@@ -6,12 +6,14 @@ NBPHOTONS = 1e9
 THVDEG = 60.0
 
 # Longueur d'onde [nm] (float)
-LAMBDA = 1020.0
+LAMBDA = 550.0
+NLAM = 6
+DLAM = 50.
 
 # Nom absolu du fichier de la matrice de phase des aérosol
 	# Données commencant sur la première ligne
 	# %lf	%lf	%lf	%lf	%lf => Correspondant à angle	p2	p1	p3	p4
-PATHDIFFAER = /home/did/RTC/SMART-G/fic/pf_urban_1020nm_layer-13.txt
+PATHDIFFAER = /home/did/RTC/SMART-G/fic/pf_urban_550nm_layer-13.txt
 
 # Type de simulation
 	# -2 pour atmosphere seule
@@ -55,7 +57,7 @@ NH2O = 1.33
 # et fonction de phase totale pour la diffusion dans l'eau
 ATOT = 0.05
 BTOT = 0.1
-PATHDIFFOCE = /home/did/RTC/SMART-G/fic/pf_ocean_1.0_443nm.txt
+PATHDIFFOCE = /home/did/RTC/SMART-G/fic/pf_ocean-spm_1.00_560nm.txt
 
 # Coefficient de dépolarisation
 DEPO = 0.0279

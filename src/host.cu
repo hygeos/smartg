@@ -703,39 +703,19 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	exit(1);
 	}
 	
-	tab_H->tabPhotonsDown0P = (float*)malloc(4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_H->tabPhotonsDown)));
-	if( tab_H->tabPhotonsDown == NULL ){
+	tab_H->tabPhotonsDown0P = (float*)malloc(4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_H->tabPhotonsDown0P)));
+	if( tab_H->tabPhotonsDown0P == NULL ){
 		printf("ERREUR: Problème de malloc de tab_H->tabPhotonsDown dans initTableaux\n");
 		exit(1);
 	}
-	memset(tab_H->tabPhotonsDown,0,4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_H->tabPhotonsDown)) );
+	memset(tab_H->tabPhotonsDown0P,0,4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_H->tabPhotonsDown0P)) );
 	
-	if( cudaMalloc(&(tab_D->tabPhotonsDown), 4 * NBTHETA * NBPHI * NLAM * sizeof(*(tab_D->tabPhotonsDown))) != cudaSuccess){
+	if( cudaMalloc(&(tab_D->tabPhotonsDown0P), 4 * NBTHETA * NBPHI * NLAM * sizeof(*(tab_D->tabPhotonsDown0P))) != cudaSuccess){
 
 		printf("ERREUR: Problème de cudaMalloc de tab_D->tabPhotonsDown dans initTableaux\n");
 		exit(1);	
 	}
 	
-	tab_H->tabPhotonsDown0P = (float*)malloc(4*NBTHETA * NBPHI * sizeof(*(tab_H->tabPhotonsDown0P)));
-	if( tab_H->tabPhotonsDown0P == NULL ){
-		printf("ERREUR: Problème de malloc de tab_H->tabPhotonsDown0P dans initTableaux\n");
-		exit(1);
-	}
-	memset(tab_H->tabPhotonsDown0P,0,4*NBTHETA * NBPHI * sizeof(*(tab_H->tabPhotonsDown0P)) );
-	
-	if( cudaMalloc(&(tab_D->tabPhotonsDown0P), 4 * NBTHETA * NBPHI * sizeof(*(tab_D->tabPhotonsDown0P))) != cudaSuccess){
-		printf("ERREUR: Problème de cudaMalloc de tab_D->tabPhotonsDown0P dans initTableaux\n");
-		exit(1);	
-	}
-	
-	cudaErreur = cudaMemset(tab_D->tabPhotonsDown0P, 0, 4*NBTHETA * NBPHI * sizeof(*(tab_D->tabPhotonsDown0P)));
-	if( cudaErreur != cudaSuccess ){
-	printf("#--------------------#\n");
-	printf("# ERREUR: Problème de cudaMemset tab_D.tabPhotonsDown0P dans le initTableaux\n");
-	printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-	printf("#--------------------#\n");
-	exit(1);
-	}
 	
 	tab_H->tabPhotonsDown0M = (float*)malloc(4*NBTHETA * NBPHI * sizeof(*(tab_H->tabPhotonsDown0M)));
 	if( tab_H->tabPhotonsDown0M == NULL ){
@@ -792,7 +772,6 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	}
 	
 	cudaErreur = cudaMemset(tab_D->tabPhotonsUp0M, 0, 4*NBTHETA * NBPHI * sizeof(*(tab_D->tabPhotonsUp0M)));
->>>>>>> dev
 	if( cudaErreur != cudaSuccess ){
 	printf("#--------------------#\n");
 	printf("# ERREUR: Problème de cudaMemset tab_D.tabPhotonsUp0M dans le initTableaux\n");
@@ -1790,7 +1769,7 @@ tempsPrec)
 	// Tableau temporaire utile pour la suite
 	double *tab;
     tab = (double*)malloc(NBPHI*NBTHETA*NLAM*sizeof(double));
-    char nomTab[256];
+    //char nomTab[256];
 
 	// Création du fichier de sortie
 	int sdFichier = SDstart(PATHRESULTATSHDF, DFACC_CREATE);
@@ -2007,7 +1986,6 @@ tempsPrec)
 	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
 	startTab[0]=0;
 	startTab[1]=0;
->>>>>>> dev
 	// Ecriture du tableau dans le fichier
 	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP)tabFinalUp0P);
 	// Vérification du bon fonctionnement de l'écriture
@@ -2051,7 +2029,7 @@ tempsPrec)
 	// Création du tableau
 	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
 	// Ecriture du tableau dans le fichier
-	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP) (tabFinalDown0P+NBPHI*NBTHETA) );
+	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP) (tabFinalDown0P+NBPHI*NBTHETA*NLAM) );
 	// Vérification du bon fonctionnement de l'écriture
 	if(status)
 	{
@@ -2086,7 +2064,7 @@ tempsPrec)
 	// Création du tableau
 	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
 	// Ecriture du tableau dans le fichier
-	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP) (tabFinalDown+NBPHI*NBTHETA*NLAM) );
+	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP) (tabFinalUp0P+NBPHI*NBTHETA) );
 	// Vérification du bon fonctionnement de l'écriture
 	if(status)
 	{
@@ -2124,7 +2102,7 @@ tempsPrec)
 	// Création du tableau
 	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
 	// Ecriture du tableau dans le fichier
-	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP) (tabFinalDown0P+2*NBPHI*NBTHETA) );
+	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP) (tabFinalDown0P+2*NBPHI*NBTHETA*NLAM) );
 	// Vérification du bon fonctionnement de l'écriture
 	if(status)
 	{
@@ -2141,7 +2119,7 @@ tempsPrec)
 	// Création du tableau
 	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
 	// Ecriture du tableau dans le fichier
-	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP) (tabFinalDown+2*NBPHI*NBTHETA*NLAM) );
+	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP) (tabFinalDown0M+2*NBPHI*NBTHETA) );
 	// Vérification du bon fonctionnement de l'écriture
 	if(status)
 	{
