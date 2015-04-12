@@ -142,13 +142,20 @@ int main (int argc, char *argv[])
 	#endif
 	
 	double* tabPhotonsTot; //tableau du poids total des photons sortis
-	tabPhotonsTot = (double*)malloc(4*NBTHETA * NBPHI * sizeof(*(tabPhotonsTot)));
+	tabPhotonsTot = (double*)malloc(4*NBTHETA * NBPHI * NLAM * sizeof(*(tabPhotonsTot)));
 	if( tabPhotonsTot == NULL ){
 		printf("ERREUR: Problème de malloc de tabPhotonsTot dans le main\n");
 		exit(1);
 	}
 	
-	memset(tabPhotonsTot,0,4*NBTHETA*NBPHI*sizeof(*(tabPhotonsTot)));
+	memset(tabPhotonsTot,0,4*NBTHETA*NBPHI*NLAM*sizeof(*(tabPhotonsTot)));
+	
+	double* tabPhotonsTotDown; //tableau du poids total des photons sortis
+	tabPhotonsTotDown = (double*)malloc(4*NBTHETA * NBPHI * NLAM * sizeof(*(tabPhotonsTotDown)));
+	if( tabPhotonsTotDown == NULL ){
+		printf("ERREUR: Problème de malloc de tabPhotonsTotDown dans le main\n");
+		exit(1);
+	}
 	
 	double* tabPhotonsTotDown0P; //tableau du poids total des photons sortis
 	tabPhotonsTotDown0P = (double*)malloc(4*NBTHETA * NBPHI * sizeof(*(tabPhotonsTotDown0P)));
@@ -185,17 +192,18 @@ int main (int argc, char *argv[])
 	}
 	
 	memset(tabPhotonsTotUp0P,0,4*NBTHETA*NBPHI*sizeof(*(tabPhotonsTotUp0P)));
+>>>>>>> dev
 	
 	// Variables permettant le calcul du résultat final
     double *tabFinal;   // tableau final: 4 dimensions pour
                         // R=stokes1+stokes2(dim0) , Q=stokes1-stokes2(dim1),
                         // U=stokes3(dim2)  et Nbphoton(dim4)
-    tabFinal = (double*)malloc(4*NBTHETA*NBPHI*sizeof(double));
+    tabFinal = (double*)malloc(4*NBTHETA*NBPHI*NLAM*sizeof(double));
 
     double *tabFinalDown0P;   // tableau final: 4 dimensions pour
                         // R=stokes1+stokes2(dim0) , Q=stokes1-stokes2(dim1),
                         // U=stokes3(dim2)  et Nbphoton(dim4)
-    tabFinalDown0P = (double*)malloc(4*NBTHETA*NBPHI*sizeof(double));
+    tabFinalDown0P = (double*)malloc(4*NBTHETA*NBPHI*NLAM*sizeof(double));
 
     double *tabFinalDown0M; 
     tabFinalDown0M = (double*)malloc(4*NBTHETA*NBPHI*sizeof(double));
@@ -341,7 +349,7 @@ int main (int argc, char *argv[])
 #ifdef _PERF
                 StartProcessing(perfMemcpyH2DTab);
 #endif
-		cudaErreur = cudaMemset(tab_D.tabPhotons, 0, 4*NBTHETA * NBPHI * sizeof(*(tab_D.tabPhotons)));
+		cudaErreur = cudaMemset(tab_D.tabPhotons, 0, 4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_D.tabPhotons)));
 		if( cudaErreur != cudaSuccess ){
 			printf("#--------------------#\n");
 			printf("# ERREUR: Problème de cudaMemset tab_D.tabPhotons dans le main\n");
@@ -350,7 +358,7 @@ int main (int argc, char *argv[])
 			exit(1);
                 }
 
-		cudaErreur = cudaMemset(tab_D.tabPhotonsDown0P, 0, 4*NBTHETA * NBPHI * sizeof(*(tab_D.tabPhotonsDown0P)));
+		cudaErreur = cudaMemset(tab_D.tabPhotonsDown0P, 0, 4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_D.tabPhotonsDown)));
 		if( cudaErreur != cudaSuccess ){
 			printf("#--------------------#\n");
 			printf("# ERREUR: Problème de cudaMemset tab_D.tabPhotonsDown0P dans le main\n");
@@ -433,7 +441,7 @@ int main (int argc, char *argv[])
 		/** Copie des informations du device pour la création du fichier témoin **/
 		/* Il a été remarqué que sans cette copie et remise à zéro du tableau tab_D.tabPhotons, des erreurs apparaissent si les
 valeurs stockées sont élevées. Ceci doit venir du fait que l'on somme une grosse valeur à une plus faible */
-		cudaErreur = cudaMemcpy(tab_H.tabPhotons, tab_D.tabPhotons, 4*NBTHETA * NBPHI * sizeof(*(tab_H.tabPhotons)),
+		cudaErreur = cudaMemcpy(tab_H.tabPhotons, tab_D.tabPhotons, 4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_H.tabPhotons)),
 cudaMemcpyDeviceToHost);
 		if( cudaErreur != cudaSuccess ){
 			printf( "ERREUR: Problème de copie tab_H.tabPhotons dans le main\n");
@@ -441,7 +449,7 @@ cudaMemcpyDeviceToHost);
 			exit(1);
 		}
 
-		cudaErreur = cudaMemcpy(tab_H.tabPhotonsDown0P, tab_D.tabPhotonsDown0P, 4*NBTHETA * NBPHI * sizeof(*(tab_H.tabPhotonsDown0P)),
+		cudaErreur = cudaMemcpy(tab_H.tabPhotonsDown, tab_D.tabPhotonsDown, 4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_H.tabPhotonsDown)),
 cudaMemcpyDeviceToHost);
 		if( cudaErreur != cudaSuccess ){
 			printf( "ERREUR: Problème de copie tab_H.tabPhotonsDown0P dans le main\n");
@@ -450,6 +458,7 @@ cudaMemcpyDeviceToHost);
 		}
 
 		cudaErreur = cudaMemcpy(tab_H.tabPhotonsDown0M, tab_D.tabPhotonsDown0M, 4*NBTHETA * NBPHI * sizeof(*(tab_H.tabPhotonsDown0M)),
+>>>>>>> dev
 cudaMemcpyDeviceToHost);
 		if( cudaErreur != cudaSuccess ){
 			printf( "ERREUR: Problème de copie tab_H.tabPhotonsDown0M dans le main\n");
@@ -481,7 +490,7 @@ cudaMemcpyDeviceToHost);
                 StartProcessing(perfCreateWitness);
 #endif
 		/** Creation d'un fichier témoin pour pouvoir reprendre la simulation en cas d'arrêt **/
-		for(int i = 0; i < 4*NBTHETA*NBPHI; i++) {
+		for(int i = 0; i < 4*NBTHETA*NBPHI*NLAM; i++) {
 			tabPhotonsTot[i] += (double) tab_H.tabPhotons[i];
 			tabPhotonsTotDown0P[i] += (double) tab_H.tabPhotonsDown0P[i];
 			tabPhotonsTotDown0M[i] += (double) tab_H.tabPhotonsDown0M[i];

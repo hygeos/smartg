@@ -23,6 +23,9 @@ __device__ __constant__ unsigned long long NBPHOTONSd;
 __device__ __constant__ unsigned int NBLOOPd;
 __device__ __constant__ float THVDEGd;
 __device__ __constant__ float LAMBDAd;
+__device__ __constant__ float DLAMd;
+__device__ __constant__ float TAURAYd;
+__device__ __constant__ float TAUAERd;
 __device__ __constant__ float TAUATMd;
 #ifndef SPHERIQUE
 __device__ __constant__ float TAUMAXd;	//tau initial du photon (Host)
@@ -45,6 +48,8 @@ __device__ __constant__ int XGRIDd;
 __device__ __constant__ int YGRIDd;
 __device__ __constant__ int NBTHETAd;
 __device__ __constant__ int NBPHId;
+__device__ __constant__ int NLAMd;
+__device__ __constant__ int PROFILd;
 __device__ __constant__ int SIMd;
 __device__ __constant__ int SURd;
 __device__ __constant__ int DIOPTREd;
@@ -98,6 +103,18 @@ __device__ void initPhoton(Photon* ph/*, float* z*/
 		#ifdef SPHERIQUE
 		, Tableaux tab, Init* init
 		#endif
+		#ifdef RANDMWC
+		, unsigned long long*, unsigned int*
+		#endif
+		#if defined(RANDCUDA) || defined (RANDCURANDSOBOL32) || defined (RANDCURANDSCRAMBLEDSOBOL32)
+                , curandSTATE* etatThr
+                #endif
+		#ifdef RANDMT
+		, EtatMT*, ConfigMT*
+                #endif
+                #ifdef RANDPHILOX4x32_7
+                , philox4x32_ctr_t*, philox4x32_key_t*
+                #endif
 		    );
 
 
@@ -233,7 +250,7 @@ __device__ void calculPsi(Photon*, float*, float);
 * Fonction qui calcule la position (ith, iphi) du photon dans le tableau de sortie
 * La position correspond à une boite contenu dans l'espace de sortie
 */
-__device__ void calculCase(int*, int*, Photon*
+__device__ void calculCase(int*, int*, int*, Photon*
 				#ifdef PROGRESSION
 				, Variables* var
 				#endif 

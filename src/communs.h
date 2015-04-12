@@ -146,6 +146,8 @@ extern int YGRID;
 extern int DEVICE;
 extern int NBTHETA;
 extern int NBPHI;
+extern int NLAM;
+extern int PROFIL;
 extern int SIM;
 extern int SUR;
 extern int DIOPTRE;
@@ -159,6 +161,9 @@ extern unsigned int NFOCE;
 
 extern float THVDEG;
 extern float LAMBDA;
+extern float DLAM;
+extern float TAURAY;
+extern float TAUAER;
 extern float TAUATM;
 extern float W0LAM;
 extern float ENV_SIZE;
@@ -209,6 +214,9 @@ typedef struct __align__(16)
 	
 	// Poids du photon
 	float weight;
+	
+	// longueur d onde du photon
+	float wavel;
 	
 	// Paramètres de stokes du photon
 	float stokes1;

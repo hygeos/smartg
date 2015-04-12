@@ -137,6 +137,10 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 				#ifdef SPHERIQUE
 				, tab, init
 				#endif
+			    , &etatThr
+			    #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
+			    , &configThr
+			    #endif
 					);
 			
 		}
@@ -306,6 +310,18 @@ __device__ void initPhoton(Photon* ph/*, float* z*/
 		#ifdef SPHERIQUE
 		, Tableaux tab, Init* init
 		#endif
+		#ifdef RANDMWC
+		, unsigned long long* etatThr, unsigned int* configThr
+		#endif
+		#if defined(RANDCUDA) || defined (RANDCURANDSOBOL32) || defined (RANDCURANDSCRAMBLEDSOBOL32)
+                , curandSTATE* etatThr
+        #endif
+		#ifdef RANDMT
+		, EtatMT* etatThr, ConfigMT* configThr
+		#endif
+		#ifdef RANDPHILOX4x32_7
+                , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr
+		#endif
 		    )
 {
 	// Initialisation du vecteur vitesse
@@ -318,6 +334,9 @@ __device__ void initPhoton(Photon* ph/*, float* z*/
 	ph->uy = 0.F;
 	ph->uz = ph->vx;
 	
+    // Initialisation de la longueur d onde
+    ph->wavel = LAMBDAd; //mono chromatique
+    //ph->wavel = (RAND - 0.5F) * DLAMd + LAMBDAd; // uniforme sur l intervalle DLAM 
 
     #ifdef SPHERIQUE
     ph->locPrec = NONE;
@@ -340,7 +359,9 @@ __device__ void initPhoton(Photon* ph/*, float* z*/
         ph->rayon = sqrtf(ph->x*ph->x + ph->y*ph->y + ph->z*ph->z );
         #endif
 
-        ph->tau = TAUATMd;
+        // !! DEV
+        // Uniquement pour le Rayleigh pur
+        ph->tau = TAUATMd * pow(ph->wavel/LAMBDAd,-4.0F);
         ph->loc = ATMOS;
 
     } else if ((SIMd == -1) || (SIMd == 0)) {
@@ -382,6 +403,7 @@ __device__ void initPhoton(Photon* ph/*, float* z*/
 	ph->stokes1 = 0.5F;
 	ph->stokes2 = 0.5F;
 	ph->stokes3 = 0.F;
+
 
 }
 
@@ -907,6 +929,7 @@ __device__ void move_pp(Photon* ph, float* h, float* pMol
             ph->tau = 0.F;
             return;
         }
+        // Si tau>TAURAY le photon atteint l'espace
         // Si tau>TAUATM le photon atteint l'espace
         else if( ph->tau > TAUATMd ){
             ph->loc = SPACE;
@@ -916,7 +939,7 @@ __device__ void move_pp(Photon* ph, float* h, float* pMol
         // Sinon il reste dans l'atmosphère, et va subit une nouvelle diffusion
         
         // Calcul de la couche dans laquelle se trouve le photon
-        tauBis = TAUATMd - ph->tau;
+        tauBis = TAUATMd * pow(ph->wavel/LAMBDAd,-4.0F) - ph->tau;
         icouche = 1;
         
         while ((h[icouche] < (tauBis)) && (icouche < NATMd)) {
@@ -1015,9 +1038,6 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa
 		//	ph->weight *= __fdividef(1.5F * ((1.F+GAMAd)*stokes1+((1.F-GAMAd)*cTh2+2.F*GAMAd)*stokes2), (1.F+2.F*GAMAd) *
 		//	(stokes1+stokes2));
 			// Calcul des parametres de Stokes du photon apres diffusion
-		//	ph->stokes1 += GAMAd * stokes2;
-		//	ph->stokes2 = ( (1.F - GAMAd) * cTh2 + GAMAd) * stokes2 + GAMAd * ph->stokes1;
-
 			
 			//ph->stokes3 *= (1.F - GAMAd) * (cTh);
 			// Rotation des paramètres de stokes
@@ -1097,6 +1117,33 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa
 	#ifdef FLAGOCEAN
 	}
 	else{	/* Photon dans l'océan */
+		float p1, p2, p3;
+		float u, prop_raman, new_wavel;
+
+      // we fix the proportion of Raman to 2% at 488 nm, !! DEV
+      prop_raman = 0.98 ; // Raman scattering  
+      //prop_raman = 0.02 * pow ((1.e7/ph->wavel-3400.)/(1.e7/488.-3400.),5); // Raman scattering  
+
+	  if(prop_raman <RAND ){
+        // diffusion Raman
+		cTh =  2.F * RAND - 1.F; // cosThetaPhoton
+		cTh2 = (cTh)*(cTh);
+			
+		// Calcul du poids après diffusion
+		ph->weight *= __fdividef(1.5F * (stokes1+(cTh2+2.F)*stokes2), (stokes1+stokes2));
+		// Calcul des parametres de Stokes du photon apres diffusion
+		ph->stokes2 =  cTh2  * stokes2 ;
+		ph->stokes3 *= cTh;
+        
+
+        // Changement de longueur d onde
+        new_wavel  = 22.94 + 0.83 * (ph->wavel) + 0.0007 * (ph->wavel)*(ph->wavel);
+        ph->weight /= new_wavel/ph->wavel;
+        ph->wavel = new_wavel;
+
+		}
+	  else{
+        // diffusion elastique
 		
 		zang = RAND*(NFOCEd-2);
 		iang = __float2int_rd(zang);
@@ -1133,6 +1180,14 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa
 
         ph->weight  *= W0OCEd;
 
+		
+		
+		/**  **/
+		// if( ph->weight < WEIGHTMIN ){
+		// ph->loc=ABSORBED;
+		// return;
+	// }
+	
 	/** Roulette russe **/
 	if( ph->weight < WEIGHTRR ){
 		if( RAND < __fdividef(ph->weight,WEIGHTRR) ){
@@ -1861,7 +1916,7 @@ __device__ void countPhoton(Photon* ph, Tableaux tab, unsigned long long* nbPhot
 	}
 
 	float psi;
-	int ith=0, iphi=0;
+	int ith=0, iphi=0, il=0;
 	// Initialisation de psi
 	calculPsi(ph, &psi, theta);
 	
@@ -1871,7 +1926,7 @@ __device__ void countPhoton(Photon* ph, Tableaux tab, unsigned long long* nbPhot
             &s1, &s2, &s3);
 	
 	// Calcul de la case dans laquelle le photon sort
-	calculCase(&ith, &iphi, ph 
+	calculCase(&ith, &iphi, &il, ph 
 			   #ifdef PROGRESSION
 			   , var
 			   #endif
@@ -1893,17 +1948,22 @@ __device__ void countPhoton(Photon* ph, Tableaux tab, unsigned long long* nbPhot
 
 
 	// Rangement du photon dans sa case, et incrémentation de variables
-	if(((ith >= 0) && (ith < NBTHETAd)) && ((iphi >= 0) && (iphi < NBPHId)))
+	if(((ith >= 0) && (ith < NBTHETAd)) && ((iphi >= 0) && (iphi < NBPHId)) && (il >= 0) && (il < NLAMd))
 	{
 		// Rangement dans le tableau des paramètres pondérés du photon
 
-		atomicAdd(tabCount+(0 * NBTHETAd * NBPHId + ith * NBPHId + iphi), weight * s1);
+		atomicAdd(tabCount+(0 * NBTHETAd * NBPHId * NLAMd + il * NBTHETAd * NBPHId + ith * NBPHId  + iphi), weight * s1);
+		atomicAdd(tabCount+(1 * NBTHETAd * NBPHId * NLAMd + il * NBTHETAd * NBPHId + ith * NBPHId  + iphi), weight * s2);
+		atomicAdd(tabCount+(2 * NBTHETAd * NBPHId * NLAMd + il * NBTHETAd * NBPHId + ith * NBPHId  + iphi), weight * s3);
+		atomicAdd(tabCount+(3 * NBTHETAd * NBPHId * NLAMd + il * NBTHETAd * NBPHId + ith * NBPHId  + iphi), 1.);
+
+		/*atomicAdd(tabCount+(0 * NBTHETAd * NBPHId + ith * NBPHId + iphi), weight * s1);
 
 		atomicAdd(tabCount+(1 * NBTHETAd * NBPHId + ith * NBPHId + iphi), weight * s2);
 
 		atomicAdd(tabCount+(2 * NBTHETAd * NBPHId + ith * NBPHId + iphi), weight * s3);
 				
-   		atomicAdd(tabCount+(3 * NBTHETAd * NBPHId + ith * NBPHId + iphi), 1.);
+   		atomicAdd(tabCount+(3 * NBTHETAd * NBPHId + ith * NBPHId + iphi), 1.); */
 
 		#ifdef PROGRESSION
 		// Incrémentation du nombre de photons sortis dans l'espace pour ce thread
@@ -2044,10 +2104,10 @@ __device__ void calculPsi(Photon* photon, float* psi, float theta)
 
 
 /* calculCase
-* Fonction qui calcule la position (ith, iphi) du photon dans le tableau de sortie
+* Fonction qui calcule la position (ith, iphi) et l'indice spectral (il) du photon dans le tableau de sortie
 * La position correspond à une boite contenu dans l'espace de sortie
 */
-__device__ void calculCase(int* ith, int* iphi, Photon* photon
+__device__ void calculCase(int* ith, int* iphi, int* il, Photon* photon
 			#ifdef PROGRESSION
 			, Variables* var
 			#endif 
@@ -2059,6 +2119,11 @@ __device__ void calculCase(int* ith, int* iphi, Photon* photon
 	// Calcul de la valeur de ithv
 	// _rn correspond à round to the nearest integer
 	*ith = __float2int_rn(__fdividef(acosf(fabsf(photon->vz)) * NBTHETAd, DEMIPI));
+
+	// Calcul de la valeur de ithv
+	// _rn correspond à round to the nearest integer
+    float dl =__fdividef(DLAMd,NLAMd);
+	*il = __float2int_rd(__fdividef(photon->wavel - LAMBDAd + DLAMd/2.,dl));
 
 	/* Si le photon ressort très près du zénith on ne peut plus calculer iphi,
 	 on est à l'intersection de toutes les cases du haut */
@@ -2111,6 +2176,9 @@ void initConstantesDevice()
 	cudaMemcpyToSymbol(NBLOOPd, &NBLOOP, sizeof(unsigned int));
 	cudaMemcpyToSymbol(THVDEGd, &THVDEG, sizeof(float));
 	cudaMemcpyToSymbol(LAMBDAd, &LAMBDA, sizeof(float));
+	cudaMemcpyToSymbol(DLAMd, &DLAM, sizeof(float));
+	cudaMemcpyToSymbol(TAURAYd, &TAURAY, sizeof(float));
+	cudaMemcpyToSymbol(TAUAERd, &TAUAER, sizeof(float));
 	
 	cudaMemcpyToSymbol(W0LAMd, &W0LAM, sizeof(float));
     #ifdef FLAGOCEAN
@@ -2130,6 +2198,8 @@ void initConstantesDevice()
 	cudaMemcpyToSymbol(YGRIDd, &YGRID, sizeof(int));
 	cudaMemcpyToSymbol(NBTHETAd, &NBTHETA, sizeof(int));
 	cudaMemcpyToSymbol(NBPHId, &NBPHI, sizeof(int));
+	cudaMemcpyToSymbol(NLAMd, &NLAM, sizeof(int));
+	cudaMemcpyToSymbol(PROFILd, &PROFIL, sizeof(int));
 	cudaMemcpyToSymbol(SIMd, &SIM, sizeof(int));
 	cudaMemcpyToSymbol(SURd, &SUR, sizeof(int));
 	cudaMemcpyToSymbol(DIOPTREd, &DIOPTRE, sizeof(int));

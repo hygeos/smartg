@@ -29,7 +29,11 @@ unsigned int LSAOCE;	// Nombre d'échantillons pour les angles du modèle de dif
 unsigned int NFOCE;
 
 float THVDEG;	//Angle zénithal de visée
-float LAMBDA;	//Longueur d'onde [nm]
+float LAMBDA;	//Longueur d'onde centrale [nm]
+int NLAM;       // Nb de longueur d'onde
+float DLAM;     // Delta lambda
+float TAURAY;	//Epaisseur optique moleculaire (Rayleigh)
+float TAUAER;	//Epaisseur optique aerosol
 float TAUATM;
 #ifdef FLAGOCEAN
 float W0OCE;	//Albedo simple de diffusion dans l'ocean
