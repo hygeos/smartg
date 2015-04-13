@@ -151,14 +151,14 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 		// Deplacement
         //
         // -> Si OCEAN ou ATMOS
-		if( (ph.loc == ATMOS)
+		if( (ph.loc == ATMOS || ph.loc == TOA)
 			#ifdef FLAGOCEAN
 			|| (ph.loc == OCEAN)
 			#endif
 			){
 
             #ifdef SPHERIQUE
-            if (ph.loc == ATMOS)
+            if (ph.loc == ATMOS || ph.loc == TOA)
                 move_sp(&ph, tab, init
                         , &etatThr
                         #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
@@ -324,6 +324,7 @@ __device__ void initPhoton(Photon* ph/*, float* z*/
 		#endif
 		    )
 {
+	int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
 	// Initialisation du vecteur vitesse
 	ph->vx = - STHVd;
 	ph->vy = 0.F;
@@ -335,8 +336,13 @@ __device__ void initPhoton(Photon* ph/*, float* z*/
 	ph->uz = ph->vx;
 	
     // Initialisation de la longueur d onde
-    ph->wavel = LAMBDAd; //mono chromatique
     //ph->wavel = (RAND - 0.5F) * DLAMd + LAMBDAd; // uniforme sur l intervalle DLAM 
+    ph->wavel = LAMBDAd; //mono chromatique
+    //float dl =__fdividef(DLAMd,NLAMd);
+	//ph->ilam = __float2int_rd(__fdividef(ph->wavel - LAMBDAd + DLAMd/2.,dl));
+	ph->ilam = __float2uint_rz(RAND * NLAMd);
+    //ph->ilam= idx%NLAMd;
+    //ph->ilam= 1;
 
     #ifdef SPHERIQUE
     ph->locPrec = NONE;
@@ -359,10 +365,8 @@ __device__ void initPhoton(Photon* ph/*, float* z*/
         ph->rayon = sqrtf(ph->x*ph->x + ph->y*ph->y + ph->z*ph->z );
         #endif
 
-        // !! DEV
-        // Uniquement pour le Rayleigh pur
-        ph->tau = TAUATMd * pow(ph->wavel/LAMBDAd,-4.0F);
-        ph->loc = ATMOS;
+        // !! DEV on ne calucle pas d ep optique ici
+        ph->loc = TOA;
 
     } else if ((SIMd == -1) || (SIMd == 0)) {
         
@@ -461,6 +465,10 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
 	#endif
 	
 	
+    if (ph->loc == TOA){
+        ph->tau = tab.h[NATMd + ph->ilam*(NATMd+1)]; 
+        ph->loc = ATMOS;
+    }
 	/** Tirage au sort de la profondeur optique à parcourir **/
 	
 	tauRdm = -logf(1.F-RAND);
@@ -484,7 +492,8 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
 		sens = -1;
 		
 		// Si tauRdm est plus élevé que Taumax, le photon va directement heurter la surface
-		if( tauRdm >= (init->taumax0) ){
+		//if( tauRdm >= (init->taumax0[ph->ilam]) ){
+		if( tauRdm >= (tab.hph0[NATMd + ph->ilam*(NATMd+1)]) ){
 			flagSortie = 1;
 			zph=tab.zph0[NATMd]; /* Pour retrouver le zintermax ensuite. Cette valeur signifie que le photon a traversé toute
 									l'atmosphère */
@@ -508,7 +517,8 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
 			hph_p = hph;
 			zph_p = zph;
 			
-			hph = tab.hph0[icompteur];
+			hph = tab.hph0[icompteur+ph->ilam*(NATMd+1)];
+			//hph = tab.hph0[icompteur];
 			zph = tab.zph0[icompteur];
 			
 			icompteur++;
@@ -678,14 +688,15 @@ icoucheTemp, icouchefi);
 
 		// Calcul des paramètres du profil du photon au cours de son parcours
 		if( icouchefi!=icoucheTemp ){
-			hph = __fdividef( abs(tab.h[icoucheTemp] - tab.h[icouchefi])*rsolfi, abs(tab.z[icouchefi] - tab.z[icoucheTemp]) );
+			hph = __fdividef( abs(tab.h[icoucheTemp+ph->ilam*(NATMd+1)] - tab.h[icouchefi+ph->ilam*(NATMd+1)])*rsolfi, abs(tab.z[icouchefi] - tab.z[icoucheTemp]) );
+			//hph = __fdividef( abs(tab.h[icoucheTemp] - tab.h[icouchefi])*rsolfi, abs(tab.z[icouchefi] - tab.z[icoucheTemp]) );
 		}
 		else{
 			if( icouchefi==0 ){
-				hph = __fdividef( abs(tab.h[1] - tab.h[0])*rsolfi, abs(tab.z[1] - tab.z[0]) );
+				hph = __fdividef( abs(tab.h[1+ph->ilam*(NATMd+1)] - tab.h[0+ph->ilam*(NATMd+1)])*rsolfi, abs(tab.z[1] - tab.z[0]) );
 			}
 			else{
-				hph = __fdividef( abs(tab.h[icouchefi-1] - tab.h[icouchefi])*rsolfi, abs(tab.z[icouchefi-1] - tab.z[icouchefi]) );
+				hph = __fdividef( abs(tab.h[icouchefi-1+ph->ilam*(NATMd+1)] - tab.h[icouchefi+ph->ilam*(NATMd+1)])*rsolfi, abs(tab.z[icouchefi-1] - tab.z[icouchefi]) );
 			}
 		}
 
@@ -757,15 +768,15 @@ sinth= %20.19lf - sens=%d\n",\
 			
 			// Valeur de la couche actuelle
 			if( icouchefi!=icoucheTemp ){
-				hph += __fdividef( 	abs(tab.h[icoucheTemp] - tab.h[icouchefi])*(rsolfi-zph_p), 
+				hph += __fdividef( 	abs(tab.h[icoucheTemp+ph->ilam*(NATMd+1)] - tab.h[icouchefi+ph->ilam*(NATMd+1)])*(rsolfi-zph_p), 
 									abs(tab.z[icouchefi] - tab.z[icoucheTemp]) );
 			}
 			else{
 				if( icouchefi==0 ){
-					hph += __fdividef( 	abs(tab.h[1] - tab.h[0])*(rsolfi-zph_p) , abs(tab.z[1]- tab.z[0]) );
+					hph += __fdividef( 	abs(tab.h[1+ph->ilam*(NATMd+1)] - tab.h[0+ph->ilam*(NATMd+1)])*(rsolfi-zph_p) , abs(tab.z[1]- tab.z[0]) );
 				}
 				else{
-					hph += __fdividef( 	abs(tab.h[icouchefi-1] - tab.h[icouchefi])*(rsolfi-zph_p),
+					hph += __fdividef( 	abs(tab.h[icouchefi-1+ph->ilam*(NATMd+1)] - tab.h[icouchefi+ph->ilam*(NATMd+1)])*(rsolfi-zph_p),
 										abs(tab.z[icouchefi-1] - tab.z[icouchefi]) );
 				}
 			}
@@ -879,9 +890,9 @@ rsolfi=%15.12lf - tauRdm= %lf - hph_p= %15.12lf - hph= %15.12lf - zph_p= %15.12l
 	ph->locPrec=ATMOS;
 
     
-	ph->prop_aer = 1.f - tab.pMol[ph->couche];
+	ph->prop_aer = 1.f - tab.pMol[ph->couche+ph->ilam*(NATMd+1)];
 
-    ph->weight = ph->weight * (1.f - tab.abs[ph->couche]);
+    ph->weight = ph->weight * (1.f - tab.abs[ph->couche+ph->ilam*(NATMd+1)]);
 
 }
 #endif
@@ -902,6 +913,11 @@ __device__ void move_pp(Photon* ph, float* h, float* pMol
                 , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr
 		#endif
 		    ) {
+
+    if (ph->loc == TOA){
+        ph->tau = h[NATMd + ph->ilam*(NATMd+1)]; 
+        ph->loc = ATMOS;
+    }
 
 	ph->tau += -logf(1.f - RAND)*ph->vz;
 
@@ -929,9 +945,9 @@ __device__ void move_pp(Photon* ph, float* h, float* pMol
             ph->tau = 0.F;
             return;
         }
-        // Si tau>TAURAY le photon atteint l'espace
         // Si tau>TAUATM le photon atteint l'espace
-        else if( ph->tau > TAUATMd ){
+        else if( ph->tau > h[NATMd + ph->ilam *(NATMd+1)] ){
+        //else if( ph->tau > TAUATMd ){
             ph->loc = SPACE;
             return;
         }
@@ -939,18 +955,19 @@ __device__ void move_pp(Photon* ph, float* h, float* pMol
         // Sinon il reste dans l'atmosphère, et va subit une nouvelle diffusion
         
         // Calcul de la couche dans laquelle se trouve le photon
-        tauBis = TAUATMd * pow(ph->wavel/LAMBDAd,-4.0F) - ph->tau;
+        // tauBis = TAUATMd * pow(ph->wavel/LAMBDAd,-4.0F) - ph->tau;
+        tauBis =  h[NATMd + ph->ilam *(NATMd+1)] - ph->tau;
         icouche = 1;
         
-        while ((h[icouche] < (tauBis)) && (icouche < NATMd)) {
+        while ((h[icouche+ ph->ilam *(NATMd+1)] < (tauBis)) && (icouche < NATMd)) {
             icouche++;
         }
         
         ph->couche = icouche;
 
-        ph->prop_aer = 1.f - pMol[ph->couche];
+        ph->prop_aer = 1.f - pMol[ph->couche+ph->ilam*(NATMd+1)];
 
-        ph->weight = ph->weight * (1.f - abs[ph->couche]);
+        ph->weight = ph->weight * (1.f - abs[ph->couche+ph->ilam*(NATMd+1)]);
 
     }
     #endif
@@ -2116,8 +2133,9 @@ __device__ void calculCase(int* ith, int* iphi, int* il, Photon* photon
 
 	// Calcul de la valeur de il
 	// _rn correspond à round to the nearest integer
-    float dl =__fdividef(DLAMd,NLAMd);
-	*il = __float2int_rd(__fdividef(photon->wavel - LAMBDAd + DLAMd/2.,dl));
+    //float dl =__fdividef(DLAMd,NLAMd);
+	//*il = __float2int_rd(__fdividef(photon->wavel - LAMBDAd + DLAMd/2.,dl));
+    *il = photon->ilam;
 
 	/* Si le photon ressort très près du zénith on ne peut plus calculer iphi,
 	 on est à l'intersection de toutes les cases du haut */

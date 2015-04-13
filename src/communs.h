@@ -87,6 +87,7 @@ typedef int CrMCCUDA;
 #define ABSORBED	3
 #define NONE		4
 #define OCEAN		5
+#define TOA	    	6
 
 
 // bitmasks for output
@@ -215,7 +216,8 @@ typedef struct __align__(16)
 	float weight;
 	
 	// longueur d onde du photon
-	float wavel;
+	float wavel; // for Raman
+    int ilam; // wavelength index
 	
 	// Paramètres de stokes du photon
 	float stokes1;
@@ -389,8 +391,8 @@ typedef struct __align__(16){
 	float z0;
 	
 	/* Paramètres liés au profil initial vu par le photon */
-	float taumax0;		// Valeur maximale de l'épaisseur optique parcourue par le photon qui conduira à une 1ère intéraction
-	float zintermax0;	// Distance entre le photon et une des extrémités de l'atmosphère dans le cas où il n'y as pas d'intéractoin
+	//float* taumax0;		// Valeur maximale de l'épaisseur optique parcourue par le photon qui conduira à une 1ère intéraction
+	//float zintermax0;	// Distance entre le photon et une des extrémités de l'atmosphère dans le cas où il n'y as pas d'intéractoin
 
 } Init;
 #endif

@@ -812,53 +812,53 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	
 	/** Modèle de l'atmosphère **/
 	// Epaisseur optique par couche
-	tab_H->h =  (float*)malloc((NATM+1)*sizeof(*(tab_H->h)));
+	tab_H->h =  (float*)malloc((NATM+1)*NLAM*sizeof(*(tab_H->h)));
 	if( tab_H->h == NULL ){
 		printf("ERREUR: Problème de malloc de tab_H->h dans initTableaux\n");
 		exit(1);
 	}
-	memset(tab_H->h,0,(NATM+1)*sizeof(*(tab_H->h)) );
+	memset(tab_H->h,0,(NATM+1)*NLAM*sizeof(*(tab_H->h)) );
 	
-	if( cudaMalloc( &(tab_D->h), (NATM+1)*sizeof(*(tab_H->h)) ) != cudaSuccess ){
+	if( cudaMalloc( &(tab_D->h), (NATM+1)*NLAM*sizeof(*(tab_H->h)) ) != cudaSuccess ){
 		printf("ERREUR: Problème de cudaMalloc de tab_D->h dans initTableaux\n");
 		exit(1);	
 	}
 	
 	// Proportion moléculaire par couche
-	tab_H->pMol =  (float*)malloc((NATM+1)*sizeof(float));
+	tab_H->pMol =  (float*)malloc((NATM+1)*NLAM*sizeof(float));
 	if( tab_H->pMol == NULL ){
 		printf("ERREUR: Problème de malloc de tab_H->pMol dans initTableaux\n");
 		exit(1);
 	}
-	memset(tab_H->pMol,0,(NATM+1)*sizeof(float) );
+	memset(tab_H->pMol,0,(NATM+1)*NLAM*sizeof(float) );
 	
-	if( cudaMalloc( &(tab_D->pMol), (NATM+1)*sizeof(float) ) != cudaSuccess ){
+	if( cudaMalloc( &(tab_D->pMol), (NATM+1)*NLAM*sizeof(float) ) != cudaSuccess ){
 		printf("ERREUR: Problème de cudaMalloc de tab_D->pMol dans initTableaux\n");
 		exit(1);	
 	}
 
     //
-	tab_H->abs =  (float*)malloc((NATM+1)*sizeof(float));
+	tab_H->abs =  (float*)malloc((NATM+1)*NLAM*sizeof(float));
 	if( tab_H->abs == NULL ){
 		printf("ERREUR: Problème de malloc de tab_H->abs dans initTableaux\n");
 		exit(1);
 	}
-	memset(tab_H->abs,0,(NATM+1)*sizeof(float) );
+	memset(tab_H->abs,0,(NATM+1)*NLAM*sizeof(float) );
 	
-	if( cudaMalloc( &(tab_D->abs), (NATM+1)*sizeof(float) ) != cudaSuccess ){
+	if( cudaMalloc( &(tab_D->abs), (NATM+1)*NLAM*sizeof(float) ) != cudaSuccess ){
 		printf("ERREUR: Problème de cudaMalloc de tab_D->abs dans initTableaux\n");
 		exit(1);	
 	}
 	
     //
-	tab_H->ssa =  (float*)malloc((NATM+1)*sizeof(float));
+	tab_H->ssa =  (float*)malloc((NATM+1)*NLAM*sizeof(float));
 	if( tab_H->ssa == NULL ){
 		printf("ERREUR: Problème de malloc de tab_H->ssa dans initTableaux\n");
 		exit(1);
 	}
-	memset(tab_H->ssa,0,(NATM+1)*sizeof(float) );
+	memset(tab_H->ssa,0,(NATM+1)*NLAM*sizeof(float) );
 	
-	if( cudaMalloc( &(tab_D->ssa), (NATM+1)*sizeof(float) ) != cudaSuccess ){
+	if( cudaMalloc( &(tab_D->ssa), (NATM+1)*NLAM*sizeof(float) ) != cudaSuccess ){
 		printf("ERREUR: Problème de cudaMalloc de tab_D->ssa dans initTableaux\n");
 		exit(1);	
 	}
@@ -892,14 +892,14 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 		exit(1);	
 	}
 	
-	tab_H->hph0 =  (float*)malloc((NATM+1)*sizeof(*(tab_H->hph0)));
+	tab_H->hph0 =  (float*)malloc((NATM+1)*NLAM*sizeof(*(tab_H->hph0)));
 	if( tab_H->hph0 == NULL ){
 		printf("ERREUR: Problème de malloc de tab_H->hph0 dans initTableaux\n");
 		exit(1);
 	}
-	memset(tab_H->hph0,0,(NATM+1)*sizeof(*(tab_H->hph0)) );
+	memset(tab_H->hph0,0,(NATM+1)*NLAM*sizeof(*(tab_H->hph0)) );
 	
-	if( cudaMalloc( &(tab_D->hph0), (NATM+1)*sizeof(*(tab_D->hph0)) ) != cudaSuccess ){
+	if( cudaMalloc( &(tab_D->hph0), (NATM+1)*NLAM*sizeof(*(tab_D->hph0)) ) != cudaSuccess ){
 		printf("ERREUR: Problème de cudaMalloc de tab_D->hph0 dans initTableaux\n");
 		exit(1);	
 	}
@@ -1250,15 +1250,17 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 
 	/** Déclaration des variables **/
 	
-	int i=0;
+	int i=0, ilam;
 	cudaError_t erreur;		// Permet de tester le bon déroulement des opérations mémoires
 	
 	/** Conditions aux limites au sommet de l'atmosphère **/
 	#ifdef SPHERIQUE
 	tab_H->z[0] = HATM;
 	#endif
-	tab_H->h[0] = 0.0;
-	tab_H->pMol[0] = 0.0;	//Je n'utilise pas la proportion d'aérosols car on l'obtient par 1-PMOL
+	for( ilam=0;ilam<NLAM;ilam++) {
+        tab_H->h[0 + ilam * (NATM+1)] = 0.;
+        tab_H->pMol[0 + ilam * (NATM+1)] = 0.;
+      }
 
     // Profil utilisateur
     /* Format du fichier
@@ -1281,15 +1283,23 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 
         // Extraction des informations
         #if defined(SPHERIQUE) 
-        for( icouche=0; icouche<NATM+1; icouche++ ){
-            fscanf(profil, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f", &i, tab_H->z+icouche, &garbage, &garbage, tab_H->h+icouche,
-                   &garbage,tab_H->pMol+icouche, tab_H->ssa+icouche, tab_H->abs+icouche );
+        for( ilam=0; ilam<NLAM; ilam++){
+         for( icouche=0; icouche<NATM+1; icouche++ ){
+            fscanf(profil, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f", &i, tab_H->z+icouche, &garbage, &garbage, tab_H->h+icouche+ilam*(NATM+1),
+                   &garbage,tab_H->pMol+icouche+ilam*(NATM+1), tab_H->ssa+icouche+ilam*(NATM+1), tab_H->abs+icouche+ilam*(NATM+1) );
+         }
         }
         #endif
         #if !defined(SPHERIQUE) 
-        for( icouche=0; icouche<NATM+1; icouche++ ){
+        /*for( icouche=0; icouche<NATM+1; icouche++ ){
             fscanf(profil, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f", &i, &garbage, &garbage, &garbage, tab_H->h+icouche,
                    &garbage,tab_H->pMol+icouche, tab_H->ssa+icouche, tab_H->abs+icouche );
+        }*/
+        for( ilam=0; ilam<NLAM; ilam++){
+         for( icouche=0; icouche<NATM+1; icouche++ ){
+            fscanf(profil, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f", &i, &garbage, &garbage, &garbage, tab_H->h+icouche+ilam*(NATM+1),
+                   &garbage,tab_H->pMol+icouche+ilam*(NATM+1), tab_H->ssa+icouche+ilam*(NATM+1), tab_H->abs+icouche+ilam*(NATM+1) );
+         }
         }
         TAUATM = tab_H->h[NATM];
         #endif
@@ -1302,28 +1312,28 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 	
 	
 		/** Envoie des informations dans le device **/
-		erreur = cudaMemcpy(tab_D->h, tab_H->h, (NATM+1)*sizeof(*(tab_H->h)), cudaMemcpyHostToDevice);
+		erreur = cudaMemcpy(tab_D->h, tab_H->h, (NATM+1)*NLAM*sizeof(*(tab_H->h)), cudaMemcpyHostToDevice);
 		if( erreur != cudaSuccess ){
 			printf( "ERREUR: Problème de copie tab_D->h dans profilAtm\n");
 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
 			exit(1);
 		}
 		
-		erreur = cudaMemcpy(tab_D->pMol, tab_H->pMol, (NATM+1)*sizeof(*(tab_H->pMol)), cudaMemcpyHostToDevice);
+		erreur = cudaMemcpy(tab_D->pMol, tab_H->pMol, (NATM+1)*NLAM*sizeof(*(tab_H->pMol)), cudaMemcpyHostToDevice);
 		if( erreur != cudaSuccess ){
 			printf( "ERREUR: Problème de copie tab_D->pMol dans profilAtm\n");
 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
 			exit(1);
 		}	
 
-        erreur = cudaMemcpy(tab_D->abs, tab_H->abs, (NATM+1)*sizeof(*(tab_H->abs)), cudaMemcpyHostToDevice);
+        erreur = cudaMemcpy(tab_D->abs, tab_H->abs, (NATM+1)*NLAM*sizeof(*(tab_H->abs)), cudaMemcpyHostToDevice);
         if( erreur != cudaSuccess ){
             printf( "ERREUR: Problème de copie tab_D->abs dans profilAtm\n");
             printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
             exit(1);
         }
 
-        erreur = cudaMemcpy(tab_D->ssa, tab_H->ssa, (NATM+1)*sizeof(*(tab_H->ssa)), cudaMemcpyHostToDevice);
+        erreur = cudaMemcpy(tab_D->ssa, tab_H->ssa, (NATM+1)*NLAM*sizeof(*(tab_H->ssa)), cudaMemcpyHostToDevice);
         if( erreur != cudaSuccess ){
             printf( "ERREUR: Problème de copie tab_D->ssa dans profilAtm\n");
             printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
@@ -1361,6 +1371,8 @@ void impactInit(Init* init_H, Init* init_D, Tableaux* tab_H, Tableaux* tab_D){
 	double vy = 0.;
 	double vz = -cos(THVDEG*DEG2RAD);
 	
+    int ilam;
+
 	/** Calcul du point d'impact **/
 	// 	thv = abs(acosf(abs(vz)));
 	thv = THVDEG*DEG2RAD;
@@ -1373,7 +1385,9 @@ void impactInit(Init* init_H, Init* init_D, Tableaux* tab_H, Tableaux* tab_D){
 	init_H->z0 = (float) RTER + localh;	
 	
 	tab_H->zph0[0] = 0.;
-	tab_H->hph0[0] = 0.;
+	for(ilam=0; ilam<NLAM; ilam++){
+	   tab_H->hph0[0 + ilam*(NATM+1)] = 0.;
+    }
 	
 	xphbis = init_H->x0;
 	yphbis = init_H->y0;
@@ -1400,8 +1414,10 @@ void impactInit(Init* init_H, Init* init_D, Tableaux* tab_H, Tableaux* tab_D){
 		}
 		
 		tab_H->zph0[icouche] = tab_H->zph0[icouche-1] + (float)rsolfi;
-		tab_H->hph0[icouche] = tab_H->hph0[icouche-1] + 
-				( abs( tab_H->h[icouche] - tab_H->h[icouche-1])*rsolfi )/( abs( tab_H->z[icouche-1] - tab_H->z[icouche]) );
+	    for(ilam=0; ilam<NLAM; ilam++){
+		    tab_H->hph0[icouche + ilam*(NATM+1)] = tab_H->hph0[icouche-1+ ilam*(NATM+1)] + 
+				( abs( tab_H->h[icouche+ ilam*(NATM+1)] - tab_H->h[icouche-1+ ilam*(NATM+1)])*rsolfi )/( abs( tab_H->z[icouche-1] - tab_H->z[icouche]) );
+        }
 		
 		xphbis+= vx*rsolfi;
 		yphbis+= vy*rsolfi;
@@ -1409,8 +1425,10 @@ void impactInit(Init* init_H, Init* init_D, Tableaux* tab_H, Tableaux* tab_D){
 		
 	}
 
-	init_H->taumax0 = tab_H->hph0[NATM];
-	init_H->zintermax0 = tab_H->zph0[NATM];
+	//for(ilam=0; ilam<NLAM; ilam++){
+	//    init_H->taumax0[ilam] = tab_H->hph0[NATM + ilam*(NATM+1)];
+    //}
+	//init_H->zintermax0 = tab_H->zph0[NATM];
 
 	
 	/** Envoie des données dans le device **/
@@ -1423,7 +1441,7 @@ void impactInit(Init* init_H, Init* init_D, Tableaux* tab_H, Tableaux* tab_D){
 		exit(1);
 	}
 	
-	erreur = cudaMemcpy(tab_D->hph0, tab_H->hph0, (NATM+1)*sizeof(*(tab_H->hph0)), cudaMemcpyHostToDevice);
+	erreur = cudaMemcpy(tab_D->hph0, tab_H->hph0, (NATM+1)*NLAM*sizeof(*(tab_H->hph0)), cudaMemcpyHostToDevice);
 	if( erreur != cudaSuccess ){
 		printf( "ERREUR: Problème de copie tab_D->hph0 dans initInit\n");
 		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );

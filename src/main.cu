@@ -250,8 +250,9 @@ int main (int argc, char *argv[])
 #endif
     if ((SIM == -2) || (SIM == 1) || (SIM == 2)) {
         // Read atmospheric profile
+        int ilam=0;
         profilAtm(&tab_H, &tab_D);
-        TRANSDIR = exp(-TAUATM/cos(THVDEG*PI/180.));
+        TRANSDIR = exp(-tab_H.h[NATM+ilam*(NATM+1)]/cos(THVDEG*PI/180.));
     }
 #ifdef _PERF
         StopProcessing(perfInitG);
@@ -268,12 +269,14 @@ int main (int argc, char *argv[])
 	/** Séparation du code pour atmosphère sphérique ou parallèle **/
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
 	// Calcul du point d'impact du photon
+    int ilam=0;
 	impactInit(init_H, init_D, &tab_H, &tab_D);
-    TRANSDIR = exp(-init_H->taumax0);
+    TRANSDIR = exp(-tab_H.hph0[NATM+ilam*(NATM+1)]);
 
 	#ifdef DEBUG
 	printf("Paramètres initiaux du photon: taumax0=%lf - zintermax=%lf - (%lf,%lf,%lf)\n",\
-		   init_H->taumax0, init_H->zintermax0, init_H->x0, init_H->y0, init_H->z0 );
+		   tab_H->hph0[NATM+1], tab_H->zph0[NATM+1], init_H->x0, init_H->y0, init_H->z0 );
+//		   init_H->taumax0, init_H->zintermax0, init_H->x0, init_H->y0, init_H->z0 );
 // 	for(int i=0; i<NATM+1; i++)
 // 		printf("zph0[%d]=%10.7f - hph0[%d]=%10.7f\n",i, tab_H.zph0[i], i ,tab_H.hph0[i] );
 	#endif
