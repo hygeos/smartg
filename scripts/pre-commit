@@ -1,0 +1,10 @@
+#!/bin/sh
+
+# Avoid notebooks with data
+matches=$(git diff --cached --name-only -S'"data": {' -- *.ipynb)
+if [ "$matches" != "" ]
+then
+    echo "You are trying to commit a notebook containing data."
+    exit 1
+fi
+
