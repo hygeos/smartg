@@ -1,14 +1,14 @@
 
 # Nombre de photons a lancer (unsigned long long) (limite par le tableau du poids des photons en unsigned long long)
-NBPHOTONS = 1e9
+NBPHOTONS = 1e8
 
 # Angle zenithal de visée en degrés (float)
-THVDEG = 60.0
+THVDEG = 20.0
 
 # Longueur d'onde [nm] (float)
 LAMBDA = 550.0
-NLAM = 6
-DLAM = 50.
+NLAM = 30
+DLAM = 300.
 
 # Nom absolu du fichier de la matrice de phase des aérosol
 	# Données commencant sur la première ligne
@@ -22,7 +22,7 @@ PATHDIFFAER = /home/did/RTC/SMART-G/fic/pf_urban_550nm_layer-13.txt
 	# 1 pour atmosphere et dioptre
 	# 2 pour atmosphere dioptre et ocean
 	# 3 pour ocean seul
-SIM = -2
+SIM = 2
 
 # Nom absolu du fichier du profil vertical atmosphérique utilisateur
 	# Le format du fichier doit être le suivant 
@@ -69,7 +69,7 @@ DEPO = 0.0279
 # X0 decalage en km entre la coordonnee X du centre de la cible et le point visee
 # Y0 decalage en km entre la coordonnee Y du centre de la cible et le point visee
 # !! l environnement est lambertien avec un albedo W0LAM
-ENV= 1
+ENV= 0
 ENV_SIZE= 10.0
 X0= 9.9
 Y0= 0.0
@@ -108,7 +108,7 @@ WRITE_PERIOD = -1
 
 # Output layers (binary flags)
 # 1 -> BOA (0+) downward
-OUTPUT_LAYERS    0     
+OUTPUT_LAYERS =  15     
 
 ###
 ## Paramètres de la carte graphique  ##

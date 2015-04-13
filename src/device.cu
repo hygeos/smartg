@@ -1117,11 +1117,10 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa
 	#ifdef FLAGOCEAN
 	}
 	else{	/* Photon dans l'océan */
-		float p1, p2, p3;
-		float u, prop_raman, new_wavel;
+		float prop_raman, new_wavel;
 
       // we fix the proportion of Raman to 2% at 488 nm, !! DEV
-      prop_raman = 0.98 ; // Raman scattering  
+      prop_raman = 1.00 ; // Raman scattering  
       //prop_raman = 0.02 * pow ((1.e7/ph->wavel-3400.)/(1.e7/488.-3400.),5); // Raman scattering  
 
 	  if(prop_raman <RAND ){
@@ -2040,18 +2039,13 @@ __device__ void countInterface(Photon* ph, float* tab1, float* tab2
 
 
 	// Rangement du photon dans sa case, et incrémentation de variables
-	if(((ith >= 0) && (ith < NBTHETAd)) && ((iphi >= 0) && (iphi < NBPHId)))
+	if(((ith >= 0) && (ith < NBTHETAd)) && ((iphi >= 0) && (iphi < NBPHId)) && (il >= 0) && (il < NLAMd))
 	{
 		// Rangement dans le tableau des paramètres pondérés du photon
-
-		atomicAdd(tabCount+(0 * NBTHETAd * NBPHId + ith * NBPHId + iphi), weight * s1);
-
-		atomicAdd(tabCount+(1 * NBTHETAd * NBPHId + ith * NBPHId + iphi), weight * s2);
-
-		atomicAdd(tabCount+(2 * NBTHETAd * NBPHId + ith * NBPHId + iphi), weight * s3);
-				
-   		atomicAdd(tabCount+(3 * NBTHETAd * NBPHId + ith * NBPHId + iphi), 1.);
-
+		atomicAdd(tabCount+(0 * NBTHETAd * NBPHId * NLAMd + il * NBTHETAd * NBPHId + ith * NBPHId  + iphi), weight * s1);
+		atomicAdd(tabCount+(1 * NBTHETAd * NBPHId * NLAMd + il * NBTHETAd * NBPHId + ith * NBPHId  + iphi), weight * s2);
+		atomicAdd(tabCount+(2 * NBTHETAd * NBPHId * NLAMd + il * NBTHETAd * NBPHId + ith * NBPHId  + iphi), weight * s3);
+		atomicAdd(tabCount+(3 * NBTHETAd * NBPHId * NLAMd + il * NBTHETAd * NBPHId + ith * NBPHId  + iphi), 1.);
 
 	}
 
@@ -2120,7 +2114,7 @@ __device__ void calculCase(int* ith, int* iphi, int* il, Photon* photon
 	// _rn correspond à round to the nearest integer
 	*ith = __float2int_rn(__fdividef(acosf(fabsf(photon->vz)) * NBTHETAd, DEMIPI));
 
-	// Calcul de la valeur de ithv
+	// Calcul de la valeur de il
 	// _rn correspond à round to the nearest integer
     float dl =__fdividef(DLAMd,NLAMd);
 	*il = __float2int_rd(__fdividef(photon->wavel - LAMBDAd + DLAMd/2.,dl));
