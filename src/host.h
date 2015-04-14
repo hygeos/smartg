@@ -55,14 +55,6 @@ void init_profile(int *NATM, float *HATM, int *NLAM, char *PATHPROFILATM);
 int count_lines(char *PATHDIFF);
 
 
-
-/* verifierFichier
-* Fonction qui vérifie l'état des fichiers temoin et résultats
-* Demande à l'utilisateur s'il veut les supprimer ou non
-*/
-void verifierFichier();
-
-
 /**********************************************************
 *	> Initialisation des différentes structures
 ***********************************************************/
@@ -162,7 +154,7 @@ void calculOmega(double* tabTh, double* tabPhi, double* tabOmega);
 /* calculTabFinal
 * Fonction qui remplit le tabFinal correspondant à la reflectance (R), Q et U sur tous l'espace de sorti (dans chaque boite)
 */
-void calculTabFinal(double*, double*, double*, double*, unsigned long long);
+void calculTabFinal(double*, double*, double*, double*, unsigned long long, unsigned long long*);
 
 
 /**********************************************************

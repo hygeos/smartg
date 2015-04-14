@@ -1268,14 +1268,16 @@ def example4():
     also write phase functions
     '''
     aer = AeroOPAC('desert', 0.1, 550., layer_phase=0)
+    phase = aer.phase(550.,dir='tmp')
+    print 'phase function', phase
     pro = Profile('afglt.dat', aer=aer, grid='100[75]25[5]5[1]0',)
-    rep = REPTRAN('reptran_solar_fine.cdf')
+    rep = REPTRAN('reptran_solar_coarse.cdf')
     sampling = 10
     L = rep.band_names
     for i in range(0,len(L),sampling):
         band = rep.band(L[i])
-        if band.awvl[-1] < 759. : continue
-        if band.awvl[0] > 767. : break
+        if band.awvl[-1] < 380. : continue
+        if band.awvl[0] > 700. : break
         print '--- Band', L[i]
         for iband in band.ibands():
             wi = iband.band.awvl[iband.index] # wvl of intrenal band

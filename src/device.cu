@@ -1854,65 +1854,42 @@ __device__ void countPhoton(Photon* ph, Tableaux tab, unsigned long long* nbPhot
 {
 
     if (ph->loc != SPACE) return; 
-    /*if ((ph->loc != SPACE) && (ph->loc != SURFACE)) {
-        return;
-    }
-    if ((ph->loc == SURFACE) && ((OUTPUT_LAYERSd & OUTPUT_BOA_DOWN_0P) == 0)) {
-        return;
-    }*/
 
 //  On ne compte pas les photons directement transmis
     if ((ph->weight == WEIGHTINIT) && (ph->stokes1 == ph->stokes2) && (ph->stokes3 == 0.f)) {
     return;
     }
 	
-// si son poids est anormalement élevé on le compte comme une erreur. Test effectué uniquement en présence de dioptre
-//	if( (ph->weight > WEIGHTMAX) && (SIMd!=-2)){
-//		#ifdef PROGRESSION
-//		atomicAdd(&(var->erreurpoids), 1);
-//		#endif
-//		return;
-//	}
-
-
     float *tabCount; // pointer to the "counting" array:
                      // may be TOA, or BOA down, and so on
-	
-    if (ph->loc == SPACE) {
 
-        // Remise à zéro de la localisation du photon
-        ph->loc = NONE;
+	unsigned long long *nbCount; // counter for each NLAM interval 
 
-        /* Sinon on traite le photon et on l'ajoute dans le tableau tabPhotons de ce thread
-         * Incrémentation du nombre de photons traités par le thread
-        */
-        (*nbPhotonsThr)++;
+    // Remise à zéro de la localisation du photon
+    ph->loc = NONE;
 
-        tabCount = tab.tabPhotons;
+    // Incrémentation du nombre de photons traités par le thread
+    (*nbPhotonsThr)++;
+	// And count them for each NLAM interval
+    nbCount = tab.nbPhotonsInter;
+    atomicAdd(nbCount+ph->ilam, 1);
 
-        #ifdef SPHERIQUE
-        if(ph->vz<=0.f) {
-            // do not count the downward photons leaving atmosphere
-            return;
-        }
-        #endif
-    } else {
+    tabCount = tab.tabPhotons;
 
-        // SURFACE
-        //if (ph->vz < 0) {
-         //   tabCount = tab.tabPhotonsDown0P;
-        //} else {
-         //   return;
-       // }
+    #ifdef SPHERIQUE
+    if(ph->vz<=0.f) {
+         // do not count the downward photons leaving atmosphere
+         return;
     }
+    #endif
+
 	
-	
-	#ifdef SPHERIQUE
+	/*#ifdef SPHERIQUE
 	if((ph->vz>=0.f) && (ph->loc == SURFACE)) {
         // do not count the upward photons reaching surface
 		return;
 	}
-	#endif
+	#endif*/
 	
 	float theta = acosf(fmin(1.F, fmax(-1.F, 0.f * ph->vx + 1.f * ph->vz)) );
 	
@@ -1950,11 +1927,8 @@ __device__ void countPhoton(Photon* ph, Tableaux tab, unsigned long long* nbPhot
 	s1 = s2;
 	s2 = tmp;
 	
-//    float weight = __fdividef(ph->weight, s1 + s2);
 
-	float weight = ph->weight;//*att_factor * __fdividef(StackPos->weight, s1 + s2);
-
-
+	float weight = ph->weight;
 
 
 	// Rangement du photon dans sa case, et incrémentation de variables
@@ -1966,14 +1940,6 @@ __device__ void countPhoton(Photon* ph, Tableaux tab, unsigned long long* nbPhot
 		atomicAdd(tabCount+(1 * NBTHETAd * NBPHId * NLAMd + il * NBTHETAd * NBPHId + ith * NBPHId  + iphi), weight * s2);
 		atomicAdd(tabCount+(2 * NBTHETAd * NBPHId * NLAMd + il * NBTHETAd * NBPHId + ith * NBPHId  + iphi), weight * s3);
 		atomicAdd(tabCount+(3 * NBTHETAd * NBPHId * NLAMd + il * NBTHETAd * NBPHId + ith * NBPHId  + iphi), 1.);
-
-		/*atomicAdd(tabCount+(0 * NBTHETAd * NBPHId + ith * NBPHId + iphi), weight * s1);
-
-		atomicAdd(tabCount+(1 * NBTHETAd * NBPHId + ith * NBPHId + iphi), weight * s2);
-
-		atomicAdd(tabCount+(2 * NBTHETAd * NBPHId + ith * NBPHId + iphi), weight * s3);
-				
-   		atomicAdd(tabCount+(3 * NBTHETAd * NBPHId + ith * NBPHId + iphi), 1.); */
 
 		#ifdef PROGRESSION
 		// Incrémentation du nombre de photons sortis dans l'espace pour ce thread

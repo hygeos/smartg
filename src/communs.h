@@ -302,6 +302,7 @@ typedef struct __align__(16)
 	float* tabPhotonsDown0M;		// Tableau contenant l'ensemble des paramètres de stokes des photons descendant partant de la surface 
 	float* tabPhotonsUp0P;		// Tableau contenant l'ensemble des paramètres de stokes des photons ascendant partant de la surface 
 	float* tabPhotonsUp0M;		// Tableau contenant l'ensemble des paramètres de stokes des photons asscendant arrivant à la surface 
+	unsigned long long* nbPhotonsInter;		// Tableau contenant le nb de photons injecte par interval NLAM 
 	
 	float* faer;			// Pointeur vers le modèle de diffusion des aérosols
 	

@@ -133,6 +133,13 @@ int main (int argc, char *argv[])
 	
 	// Variables et tableaux qui restent dans le host et se remplissent petit à petit
 	unsigned long long nbPhotonsTot = 0; //nombre total de photons traités
+	unsigned long long* nbPhotonsTotInter = 0; //nombre total de photons traités par interval
+	nbPhotonsTotInter = (unsigned long long*)malloc(NLAM * sizeof(*(nbPhotonsTotInter)));
+	if( nbPhotonsTotInter == NULL ){
+		printf("ERREUR: Problème de malloc de nbPhotonsTotInter dans le main\n");
+		exit(1);
+	}
+	memset(nbPhotonsTotInter,0,NLAM*sizeof(*(nbPhotonsTotInter)));
 	
 	#ifdef PROGRESSION
 	unsigned long long nbPhotonsSorTot = 0; //nombre total de photons ressortis
@@ -214,9 +221,6 @@ int main (int argc, char *argv[])
 #endif
 
 	
-	/** Vérification de l'existence ou non d'un fichier témoin **/
-    //verifierFichier();
-	
 	#ifdef PARAMETRES
 	/** Affichage des paramètres de la simulation **/
 	afficheParametres();
@@ -286,9 +290,6 @@ int main (int argc, char *argv[])
     GetElapsedTime(perfInitG);
 #endif
 
-	/** Fonction qui permet de poursuivre la simulation précédente si elle n'est pas terminee **/
-	//lireHDFTemoin(var_H, var_D, &nbPhotonsTot, tabPhotonsTot, tabPhotonsTotDown0P, &tempsPrec);
-	
 	
 	/** Organisation des threads en blocks de threads et en grids de blocks **/
 	dim3 blockSize(XBLOCK,YBLOCK);
@@ -436,6 +437,19 @@ cudaMemcpyDeviceToHost);
 			exit(1);
 		}
 
+		cudaErreur = cudaMemcpy(tab_H.nbPhotonsInter, tab_D.nbPhotonsInter, NLAM * sizeof(*(tab_H.nbPhotonsInter)),
+cudaMemcpyDeviceToHost);
+		if( cudaErreur != cudaSuccess ){
+			printf( "ERREUR: Problème de copie tab_H.nbPhotonsInter dans le main\n");
+			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+			exit(1);
+		}
+        for(int ilam=0; ilam<NLAM; ilam++){
+		   nbPhotonsTotInter[ilam] += tab_H.nbPhotonsInter[ilam];
+           //printf("%d %d %d\n",ilam,nbPhotonsTotInter[ilam],tab_H.nbPhotonsInter[ilam]);
+        }
+        //printf("------");
+
 		cudaErreur = cudaMemcpy(tab_H.tabPhotonsDown0P, tab_D.tabPhotonsDown0P, 4*NBTHETA * NBPHI * NLAM *sizeof(*(tab_H.tabPhotonsDown0P)),
 cudaMemcpyDeviceToHost);
 		if( cudaErreur != cudaSuccess ){
@@ -518,17 +532,13 @@ cudaMemcpyDeviceToHost);
 	/** Création et calcul du tableau final (regroupant le poids de tous les photons ressortis sur une demi-sphère,
 	 * par unité de surface) 
 	**/	
-	// Remplissage des 3 tableaux
-	calculTabFinal(tabFinal, tabTh, tabPhi, tabPhotonsTot, nbPhotonsTot);
-	calculTabFinal(tabFinalDown0P, tabTh, tabPhi, tabPhotonsTotDown0P, nbPhotonsTot);
-	calculTabFinal(tabFinalDown0M, tabTh, tabPhi, tabPhotonsTotDown0M, nbPhotonsTot);
-	calculTabFinal(tabFinalUp0P, tabTh, tabPhi, tabPhotonsTotUp0P, nbPhotonsTot);
-	calculTabFinal(tabFinalUp0M, tabTh, tabPhi, tabPhotonsTotUp0M, nbPhotonsTot);
+	calculTabFinal(tabFinal, tabTh, tabPhi, tabPhotonsTot, nbPhotonsTot, nbPhotonsTotInter);
+	calculTabFinal(tabFinalDown0P, tabTh, tabPhi, tabPhotonsTotDown0P, nbPhotonsTot,nbPhotonsTotInter);
+	calculTabFinal(tabFinalDown0M, tabTh, tabPhi, tabPhotonsTotDown0M, nbPhotonsTot,nbPhotonsTotInter);
+	calculTabFinal(tabFinalUp0P, tabTh, tabPhi, tabPhotonsTotUp0P, nbPhotonsTot,nbPhotonsTotInter);
+	calculTabFinal(tabFinalUp0M, tabTh, tabPhi, tabPhotonsTotUp0M, nbPhotonsTot,nbPhotonsTotInter);
 
 	
-	/** Fonction qui crée le fichier .hdf contenant le résultat final sur la demi-sphère **/
-//	creerHDFResultats(tabFinal, tabTh, tabPhi, nbPhotonsTot, var_H, tempsPrec);
-//	creerHDFResultats(tabFinal, tabFinalDown0P, tabTh, tabPhi, nbPhotonsTot, var_H, tempsPrec);
 	creerHDFResultats(tabFinal, tabFinalDown0P, tabFinalDown0M, tabFinalUp0P, tabFinalUp0M, tabTh, tabPhi, nbPhotonsTot, var_H, tempsPrec);
 #ifdef _PERF
         StopProcessing(perfCreateFinalTab);

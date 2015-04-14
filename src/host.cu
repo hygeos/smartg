@@ -397,60 +397,6 @@ int count_lines(char *PATHDIFF) {
 }
 
 
-
-/* verifierFichier
-* Fonction qui vérifie l'état des fichiers temoin et résultats
-* Demande à l'utilisateur s'il veut les supprimer ou non
-*/
-void verifierFichier(){
-	char command[256];
-	char res_supp='n';
-	// S'il existe déjà un fichier nommé NOMRESULTATSHDF (Parametres.txt) on arrête le programme
-	FILE* fic;
-	fic = fopen(PATHTEMOINHDF, "rb");
-	if ( fic != NULL)
-	{
-		printf("ATTENTION: Le fichier temoin %s existe deja.\n",PATHTEMOINHDF);
-		printf("Voulez-vous le supprimer? [y/n]\n");
-		while(1){
- 			res_supp=getchar();
- 			getchar();
-			if( res_supp=='y' ){
-				sprintf(command,"rm %s",PATHTEMOINHDF);
-				system(command);
-				break;
-			}
-			else if( res_supp=='n' ){
-				break;
-			}
-			else{
-				printf("Retapez votre choix SVP.\n");
-			}
-			
-		}
-		fclose(fic);
-	}
-	
-	
-// 	getchar();
-
-// 	fic = fopen(PATHRESULTATSHDF, "rb");
-// 	if ( fic != NULL)
-// 	{
-// 		printf("ATTENTION: Le fichier resultat %s existe deja.\n",PATHRESULTATSHDF);
-// 		printf("Voulez-vous le supprimer pour continuer? [y/n]\n");
-		// 		res_supp=getchar();
-		// 		if( res_supp=='y' ){
-//    sprintf(command,"rm %s",PATHRESULTATSHDF);
-//    system(command);
-   // 		}
-// 	   fclose(fic);
-// 	}
-	
-	
-}
-
-
 /**********************************************************
 *	> Initialisation des différentes structures
 ***********************************************************/
@@ -688,7 +634,7 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 		printf("ERREUR: Problème de cudaMalloc de tab_D->tabPhotons dans initTableaux\n");
 		exit(1);	
 	}
-	
+
 	cudaErreur = cudaMemset(tab_D->tabPhotons, 0, 4*NBTHETA * NBPHI * NLAM *  sizeof(*(tab_D->tabPhotons)));
 	if( cudaErreur != cudaSuccess ){
 	printf("#--------------------#\n");
@@ -698,6 +644,30 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	exit(1);
 	}
 	
+	// Tableau du nombre des photons injectes par interval NLAM
+	tab_H->nbPhotonsInter = (unsigned long long*)malloc(NLAM * sizeof(*(tab_H->nbPhotonsInter)));
+	if( tab_H->nbPhotonsInter == NULL ){
+		printf("ERREUR: Problème de malloc de tab_H->nbPhotonsInter dans initTableaux\n");
+		exit(1);
+	}
+	memset(tab_H->nbPhotonsInter,0,NLAM * sizeof(*(tab_H->nbPhotonsInter)) );
+	
+	if( cudaMalloc(&(tab_D->nbPhotonsInter), NLAM * sizeof(*(tab_D->nbPhotonsInter))) != cudaSuccess){
+		printf("ERREUR: Problème de cudaMalloc de tab_D->nbPhotonsInter dans initTableaux\n");
+		exit(1);	
+	}
+
+	cudaErreur = cudaMemset(tab_D->nbPhotonsInter, 0,  NLAM * sizeof(*(tab_D->nbPhotonsInter)));
+	if( cudaErreur != cudaSuccess ){
+	printf("#--------------------#\n");
+	printf("# ERREUR: Problème de cudaMemset tab_D.nbPhotonsInter dans le initTableaux\n");
+	printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+	printf("#--------------------#\n");
+	exit(1);
+	}
+	
+	
+	// Weight Table of the descending  photons above the surface
 	tab_H->tabPhotonsDown0P = (float*)malloc(4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_H->tabPhotonsDown0P)));
 	if( tab_H->tabPhotonsDown0P == NULL ){
 		printf("ERREUR: Problème de malloc de tab_H->tabPhotonsDown dans initTableaux\n");
@@ -710,8 +680,18 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 		printf("ERREUR: Problème de cudaMalloc de tab_D->tabPhotonsDown dans initTableaux\n");
 		exit(1);	
 	}
+
+	cudaErreur = cudaMemset(tab_D->tabPhotonsDown0P, 0, 4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_D->tabPhotonsDown0P)));
+	if( cudaErreur != cudaSuccess ){
+	printf("#--------------------#\n");
+	printf("# ERREUR: Problème de cudaMemset tab_D.tabPhotonsDown0P dans le initTableaux\n");
+	printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+	printf("#--------------------#\n");
+	exit(1);
+	}
 	
 	
+	// Weight Table of the descending  photons below the surface
 	tab_H->tabPhotonsDown0M = (float*)malloc(4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_H->tabPhotonsDown0M)));
 	if( tab_H->tabPhotonsDown0M == NULL ){
 		printf("ERREUR: Problème de malloc de tab_H->tabPhotonsDown0M dans initTableaux\n");
@@ -733,6 +713,8 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	exit(1);
 	}
 	
+
+	// Weight Table of the ascending  photons above the surface
 	tab_H->tabPhotonsUp0P = (float*)malloc(4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_H->tabPhotonsUp0P)));
 	if( tab_H->tabPhotonsUp0P == NULL ){
 		printf("ERREUR: Problème de malloc de tab_H->tabPhotonsUp0P dans initTableaux\n");
@@ -754,6 +736,8 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	exit(1);
 	}
 	
+
+	// Weight Table of the ascending  photons below the surface
 	tab_H->tabPhotonsUp0M = (float*)malloc(4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_H->tabPhotonsUp0M)));
 	if( tab_H->tabPhotonsUp0M == NULL ){
 		printf("ERREUR: Problème de malloc de tab_H->tabPhotonsUp0M dans initTableaux\n");
@@ -775,6 +759,7 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	exit(1);
 	}
 	
+
 	/** Modèle de diffusion **/
 	// Modèle de diffusion des aérosols
 	tab_H->faer = (float*)malloc(5 * NFAER * sizeof(float));
@@ -979,9 +964,17 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
 		exit(1);
 	}
-	
 	// 	cudaFreeHost(tab_H->tabPhotons);
 	free(tab_H->tabPhotons);
+	
+	erreur = cudaFree(tab_D->nbPhotonsInter);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->nbPhotonsInter dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	// 	cudaFreeHost(tab_H->nbPhotonsInter);
+	free(tab_H->nbPhotonsInter);
 	
 	/** Modèles de diffusion **/
 	// Libération du modèle de diffusion des aérosols
@@ -1705,10 +1698,11 @@ void calculOmega(double* tabTh, double* tabPhi, double* tabOmega)
 /* calculTabFinal
 * Fonction qui remplit le tabFinal correspondant à la reflectance (R), Q et U sur tous l'espace de sorti (dans chaque boite)
 */
-void calculTabFinal(double* tabFinal, double* tabTh, double* tabPhi, double* tabPhotonsTot, unsigned long long nbPhotonsTot)
+void calculTabFinal(double* tabFinal, double* tabTh, double* tabPhi, double* tabPhotonsTot, unsigned long long nbPhotonsTot,
+                   unsigned long long* nbPhotonsTotInter)
 {
 	
-    double norm;
+    double norm, normInter;
 	double *tabOmega;
     tabOmega = (double*)malloc(NBTHETA * NBPHI * sizeof(double));
 	// Remplissage des tableaux tabTh, tabPhi, et tabOmega
@@ -1719,43 +1713,23 @@ void calculTabFinal(double* tabFinal, double* tabTh, double* tabPhi, double* tab
 	{
 		for(int ith = 0; ith < NBTHETA; ith++)
 		{
-            /*
-			// Reflectance
-			tabFinal[0*NBTHETA*NBPHI + iphi*NBTHETA+ith] =
-				(tabPhotonsTot[0*NBPHI*NBTHETA+ith*NBPHI+iphi] + tabPhotonsTot[1*NBPHI*NBTHETA+ith*NBPHI+iphi]) / 
-				(2* nbPhotonsTot * tabOmega[ith*NBPHI+iphi]* cos(tabTh[ith]));
-			
-			// Q
-			tabFinal[1*NBTHETA*NBPHI + iphi*NBTHETA+ith] =
-				(tabPhotonsTot[0*NBPHI*NBTHETA+ith*NBPHI+iphi] - tabPhotonsTot[1*NBPHI*NBTHETA+ith*NBPHI+iphi]) / 
-				(2* nbPhotonsTot * tabOmega[ith*NBPHI+iphi] * cos(tabTh[ith]));
-			
-			// U
-			tabFinal[2*NBTHETA*NBPHI + iphi*NBTHETA+ith] = (tabPhotonsTot[2*NBPHI*NBTHETA+ith*NBPHI+iphi]) / 
-				(2* nbPhotonsTot * tabOmega[ith*NBPHI+iphi] * cos(tabTh[ith]));
-				
-			// N
-			tabFinal[3*NBTHETA*NBPHI + iphi*NBTHETA+ith] = (tabPhotonsTot[3*NBPHI*NBTHETA+ith*NBPHI+iphi])  ;
-
-            */
-
-            norm = 2.0 * nbPhotonsTot * tabOmega[ith*NBPHI+iphi] * cos(tabTh[ith]);
-            //norm = 2.0 * nbPhotonsTot * tabOmega[ith*NBPHI+iphi] * cos(tabTh[ith])/NLAM;
+            norm = 2.0 * tabOmega[ith*NBPHI+iphi] * cos(tabTh[ith]);
 
             for(int i=0;i<NLAM;i++){
+               normInter = norm * nbPhotonsTotInter[i];
 			  // Reflectance
 			          tabFinal[0*NBTHETA*NBPHI*NLAM + i*NBTHETA*NBPHI + iphi*NBTHETA + ith] =
 				(tabPhotonsTot[0*NBPHI*NBTHETA*NLAM + i*NBTHETA*NBPHI + ith*NBPHI    + iphi] +
-				 tabPhotonsTot[1*NBPHI*NBTHETA*NLAM + i*NBTHETA*NBPHI + ith*NBPHI    + iphi]) / norm;
+				 tabPhotonsTot[1*NBPHI*NBTHETA*NLAM + i*NBTHETA*NBPHI + ith*NBPHI    + iphi]) / normInter;
 			
 			  // Q
 			          tabFinal[1*NBTHETA*NBPHI*NLAM + i*NBTHETA*NBPHI + iphi*NBTHETA + ith] =
 				(tabPhotonsTot[0*NBPHI*NBTHETA*NLAM + i*NBTHETA*NBPHI + ith*NBPHI    + iphi] -
-				 tabPhotonsTot[1*NBPHI*NBTHETA*NLAM + i*NBTHETA*NBPHI + ith*NBPHI    + iphi]) / norm;
+				 tabPhotonsTot[1*NBPHI*NBTHETA*NLAM + i*NBTHETA*NBPHI + ith*NBPHI    + iphi]) / normInter;
 			
 			  // U
 			          tabFinal[2*NBTHETA*NBPHI*NLAM + i*NBTHETA*NBPHI + iphi*NBTHETA + ith] =
-                (tabPhotonsTot[2*NBPHI*NBTHETA*NLAM + i*NBTHETA*NBPHI + ith*NBPHI    + iphi]) / norm;
+                (tabPhotonsTot[2*NBPHI*NBTHETA*NLAM + i*NBTHETA*NBPHI + ith*NBPHI    + iphi]) / normInter;
 				
 			  // N
 			          tabFinal[3*NBTHETA*NBPHI*NLAM + i*NBTHETA*NBPHI + iphi*NBTHETA + ith] =
