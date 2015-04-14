@@ -161,7 +161,6 @@ extern unsigned int NFOCE;
 
 extern float THVDEG;
 extern float LAMBDA;
-extern float DLAM;
 extern float TAURAY;
 extern float TAUAER;
 extern float TAUATM;
@@ -187,7 +186,6 @@ extern char PATHTEMOINHDF[];
 extern char PATHDIFFAER[];
 extern char PATHPROFILATM[];
 
-extern int WRITE_PERIOD;
 
 
 /**********************************************************

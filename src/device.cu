@@ -324,7 +324,6 @@ __device__ void initPhoton(Photon* ph/*, float* z*/
 		#endif
 		    )
 {
-	int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
 	// Initialisation du vecteur vitesse
 	ph->vx = - STHVd;
 	ph->vy = 0.F;
@@ -336,13 +335,8 @@ __device__ void initPhoton(Photon* ph/*, float* z*/
 	ph->uz = ph->vx;
 	
     // Initialisation de la longueur d onde
-    //ph->wavel = (RAND - 0.5F) * DLAMd + LAMBDAd; // uniforme sur l intervalle DLAM 
     ph->wavel = LAMBDAd; //mono chromatique
-    //float dl =__fdividef(DLAMd,NLAMd);
-	//ph->ilam = __float2int_rd(__fdividef(ph->wavel - LAMBDAd + DLAMd/2.,dl));
 	ph->ilam = __float2uint_rz(RAND * NLAMd);
-    //ph->ilam= idx%NLAMd;
-    //ph->ilam= 1;
 
     #ifdef SPHERIQUE
     ph->locPrec = NONE;
@@ -2133,8 +2127,6 @@ __device__ void calculCase(int* ith, int* iphi, int* il, Photon* photon
 
 	// Calcul de la valeur de il
 	// _rn correspond à round to the nearest integer
-    //float dl =__fdividef(DLAMd,NLAMd);
-	//*il = __float2int_rd(__fdividef(photon->wavel - LAMBDAd + DLAMd/2.,dl));
     *il = photon->ilam;
 
 	/* Si le photon ressort très près du zénith on ne peut plus calculer iphi,
@@ -2188,7 +2180,6 @@ void initConstantesDevice()
 	cudaMemcpyToSymbol(NBLOOPd, &NBLOOP, sizeof(unsigned int));
 	cudaMemcpyToSymbol(THVDEGd, &THVDEG, sizeof(float));
 	cudaMemcpyToSymbol(LAMBDAd, &LAMBDA, sizeof(float));
-	cudaMemcpyToSymbol(DLAMd, &DLAM, sizeof(float));
 	cudaMemcpyToSymbol(TAURAYd, &TAURAY, sizeof(float));
 	cudaMemcpyToSymbol(TAUAERd, &TAUAER, sizeof(float));
 	

@@ -1002,7 +1002,8 @@ class Profile(object):
 
             # print outstr
             fp.write('\n' + outstr)
-
+        
+        fp.write('\n')
         if self.verbose: print 'write', output_file
 
         return output_file
@@ -1245,7 +1246,7 @@ def example2():
 
 def example3():
     '''
-    using reptran without aerosols
+    using reptran with aerosols
     also write phase functions
     '''
     aer = AeroOPAC('desert', 0.4, 550., layer_phase=0)
@@ -1260,7 +1261,29 @@ def example3():
         avg_wvl = np.mean(iband.band.awvl)  # average wavelength of the iband
         phase = aer.phase(avg_wvl, dir='tmp/')
         print 'phase function', phase
+        
+def example4():
+    '''
+    using reptran for PAR
+    also write phase functions
+    '''
+    aer = AeroOPAC('desert', 0.1, 550., layer_phase=0)
+    pro = Profile('afglt.dat', aer=aer, grid='100[75]25[5]5[1]0',)
+    rep = REPTRAN('reptran_solar_fine.cdf')
+    sampling = 10
+    L = rep.band_names
+    for i in range(0,len(L),sampling):
+        band = rep.band(L[i])
+        if band.awvl[-1] < 759. : continue
+        if band.awvl[0] > 767. : break
+        print '--- Band', L[i]
+        for iband in band.ibands():
+            wi = iband.band.awvl[iband.index] # wvl of intrenal band
+            print '* Band', iband.index, iband.iband, wi
+            pro.write(iband, output_file ='tmp/profil_O2_%s-%dof%d.txt'%(L[i],iband.index+1,iband.band.nband))
+#            phase = aer.phase(avg_wvl, dir='tmp/')
+#            print 'phase function', phase
 
 
 if __name__ == '__main__':
-    example3()
+    example4()

@@ -213,14 +213,6 @@ void initConstantesHost(int argc, char** argv)
 	LAMBDA = atof(s);
 
     strcpy(s,"");
-    chercheConstante(parametres, "NLAM", s);
-    NLAM = atoi(s);
-	
-    strcpy(s,"");
-    chercheConstante(parametres, "DLAM", s);
-    DLAM = atof(s);
-
-    strcpy(s,"");
 	chercheConstante(parametres, "ENV_SIZE", s);
 	ENV_SIZE = atof(s);
 	
@@ -277,10 +269,6 @@ void initConstantesHost(int argc, char** argv)
     strcpy(PATHTEMOINHDF, PATHRESULTATSHDF);
     strcat(PATHTEMOINHDF, ".temoin");
 
-	strcpy(s,"");
-	chercheConstante(parametres, "WRITE_PERIOD", s);
-    WRITE_PERIOD = atoi(s);
-	
 	chercheConstante( parametres, "PATHDIFFAER", PATHDIFFAER );
 	
 	chercheConstante( parametres, "PATHPROFILATM", PATHPROFILATM );
@@ -335,20 +323,21 @@ void chercheConstante(FILE* fichier, const char* nomConstante, char* chaineValeu
 
 
 
-void init_profile(int *NATM, float *HATM, char *PATHPROFILATM) {
+void init_profile(int *NATM, float *HATM, int *NLAM, char *PATHPROFILATM) {
     //
     // reads the number of layers NATM in the atmosphere profile, and the
     // height of the top layer
     // the profile file contains NATM+1 interfaces from 0 to NATM
-    //
+    // Eventually reads the number of consecutive profiles NLAM
 
     printf("Read %s\n", PATHPROFILATM);
 
     FILE* fp;
-    int c, i;
+    int c, i, read_first=1;
     float H;
     char buffer[2048];
     *HATM = -1;
+    *NLAM = 1;
 
     fp = fopen(PATHPROFILATM, "r");
 
@@ -364,10 +353,16 @@ void init_profile(int *NATM, float *HATM, char *PATHPROFILATM) {
     // read first layer
     while(1) {
         if (fgets(buffer, 2048, fp) == NULL) break;
+        if (buffer[0] == '#') {
+            *NLAM += 1;
+            read_first = 0;
+            continue;
+        }
+
         c = sscanf(buffer, "%d\t%f\t", &i, &H);
         if (c != 2) break;
         if (*HATM < 0) *HATM = H;
-        *NATM += 1;
+        if (read_first) *NATM += 1;
     }
 
     fclose(fp);
@@ -1278,26 +1273,24 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
     }
     
     else{
-        // Passage de la premiere ligne
-        fgets(ligne,1024,profil);
 
         // Extraction des informations
         #if defined(SPHERIQUE) 
         for( ilam=0; ilam<NLAM; ilam++){
+         // skip comment line
+         fgets(ligne,1024,profil);
          for( icouche=0; icouche<NATM+1; icouche++ ){
-            fscanf(profil, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f", &i, tab_H->z+icouche, &garbage, &garbage, tab_H->h+icouche+ilam*(NATM+1),
+            fscanf(profil, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", &i, tab_H->z+icouche, &garbage, &garbage, tab_H->h+icouche+ilam*(NATM+1),
                    &garbage,tab_H->pMol+icouche+ilam*(NATM+1), tab_H->ssa+icouche+ilam*(NATM+1), tab_H->abs+icouche+ilam*(NATM+1) );
          }
         }
         #endif
         #if !defined(SPHERIQUE) 
-        /*for( icouche=0; icouche<NATM+1; icouche++ ){
-            fscanf(profil, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f", &i, &garbage, &garbage, &garbage, tab_H->h+icouche,
-                   &garbage,tab_H->pMol+icouche, tab_H->ssa+icouche, tab_H->abs+icouche );
-        }*/
         for( ilam=0; ilam<NLAM; ilam++){
+         // skip comment line
+         fgets(ligne,1024,profil);
          for( icouche=0; icouche<NATM+1; icouche++ ){
-            fscanf(profil, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f", &i, &garbage, &garbage, &garbage, tab_H->h+icouche+ilam*(NATM+1),
+            fscanf(profil, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", &i, &garbage, &garbage, &garbage, tab_H->h+icouche+ilam*(NATM+1),
                    &garbage,tab_H->pMol+icouche+ilam*(NATM+1), tab_H->ssa+icouche+ilam*(NATM+1), tab_H->abs+icouche+ilam*(NATM+1) );
          }
         }
@@ -1479,8 +1472,6 @@ void afficheParametres()
 	printf(" LAMBDA\t=\t%f", LAMBDA);
 	printf("\n");
 	printf(" NLAM\t=\t%d", NLAM);
-	printf("\n");
-	printf(" DLAM\t=\t%f", DLAM);
 	printf("\n");
 	printf(" SIM\t=\t%d", SIM);
 		if( SIM==-2 )
@@ -1822,7 +1813,6 @@ tempsPrec)
 	SDsetattr(sdFichier, "VZA (deg.)", DFNT_FLOAT32, 1, &THVDEG);
 	SDsetattr(sdFichier, "LAMBDA", DFNT_FLOAT32, 1, &LAMBDA);
 	SDsetattr(sdFichier, "NLAM", DFNT_INT32, 1, &NLAM);
-	SDsetattr(sdFichier, "DLAM", DFNT_FLOAT32, 1, &DLAM);
 	SDsetattr(sdFichier, "TAURAY", DFNT_FLOAT32, 1, &TAURAY);
 	SDsetattr(sdFichier, "TAUAER", DFNT_FLOAT32, 1, &TAUAER);
 	
@@ -2267,7 +2257,7 @@ tempsPrec)
 	double* tabLamBis;
     tabLamBis = (double *)malloc(NLAM * sizeof(*(tabLamBis)));
 	for(int i=0; i<NLAM; i++)
-		tabLamBis[i] = (i+0.5)*DLAM/NLAM + LAMBDA - DLAM/2.;
+		tabLamBis[i] = i;
 
 	sprintf(nomTab, "Valeurs de Lambda");
 	nbDimsTab = 1;

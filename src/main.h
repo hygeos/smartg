@@ -31,7 +31,6 @@ unsigned int NFOCE;
 float THVDEG;	//Angle zénithal de visée
 float LAMBDA;	//Longueur d'onde centrale [nm]
 int NLAM;       // Nb de longueur d'onde
-float DLAM;     // Delta lambda
 float TAURAY;	//Epaisseur optique moleculaire (Rayleigh)
 float TAUAER;	//Epaisseur optique aerosol
 float TAUATM;
@@ -60,5 +59,4 @@ char PATHTEMOINHDF[1024]; //Fichier témoin au format hdf
 char PATHDIFFAER[1024];	// Fichier d'entrée des données de diffusion des aérosols
 char PATHPROFILATM[1024]; // Profil atmosphérique utilisateur
 
-int WRITE_PERIOD;
 

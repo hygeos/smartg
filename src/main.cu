@@ -40,9 +40,6 @@ static SPerf* perfCreateFinalTab;
 // Fonction principale
 int main (int argc, char *argv[])
 {
-        /** Initialisation des timers **/
-        long int time_current;
-        long int time_lastwrite = 0;
 
 #ifdef _PERF
         perfPrint = NULL;
@@ -75,7 +72,7 @@ int main (int argc, char *argv[])
     // read NATM and HATM in profile
     // (if simulation includes atmosphere)
     if ((SIM == -2) || (SIM == 1) || (SIM == 2)) {
-        init_profile(&NATM, &HATM, PATHPROFILATM);
+        init_profile(&NATM, &HATM, &NLAM, PATHPROFILATM);
     } else {
         HATM = 0;
         NATM = 0;
@@ -218,7 +215,7 @@ int main (int argc, char *argv[])
 
 	
 	/** Vérification de l'existence ou non d'un fichier témoin **/
-    verifierFichier();
+    //verifierFichier();
 	
 	#ifdef PARAMETRES
 	/** Affichage des paramètres de la simulation **/
@@ -488,12 +485,7 @@ cudaMemcpyDeviceToHost);
 			tabPhotonsTotUp0M[i] += (double) tab_H.tabPhotonsUp0M[i];
         }
 		
-        time_current = clock() / CLOCKS_PER_SEC;
-		if ((WRITE_PERIOD > 0) && ((time_current - time_lastwrite > 60*WRITE_PERIOD) || (time_lastwrite == 0))) {
-            printf("== WRITING WITNESS FILE ==\n"); // FIXME
-            //creerHDFTemoin(tabPhotonsTot, tabPhotonsTotDown0P, nbPhotonsTot,var_H, tempsPrec);
-            time_lastwrite = time_current;
-        }
+
 #ifdef _PERF
                         StopProcessing(perfCreateWitness);
                         GetElapsedTime(perfCreateWitness);

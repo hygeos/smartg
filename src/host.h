@@ -50,7 +50,7 @@ void chercheConstante(FILE* fichier, const char* nomConstante, char* chaineValeu
 
 
 
-void init_profile(int *NATM, float *HATM, char *PATHPROFILATM);
+void init_profile(int *NATM, float *HATM, int *NLAM, char *PATHPROFILATM);
 
 int count_lines(char *PATHDIFF);
 
