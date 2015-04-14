@@ -1084,8 +1084,6 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa
 	#ifdef FLAGOCEAN
 	}
 	else{	/* Photon dans l'océan */
-		float p1, p2, p3;
-		float u;
 		
 		zang = RAND*(NFOCEd-2);
 		iang = __float2int_rd(zang);
