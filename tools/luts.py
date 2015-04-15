@@ -109,9 +109,9 @@ class LUT(object):
 
     def print_info(self, prepend=''):
         if self.desc is None:
-            print prepend+'LUT dimensions ({}):'.format(self.data.dtype)
+            print prepend+'LUT ({}):'.format(self.data.dtype)
         else:
-            print prepend+'LUT dimensions ({}, {}):'.format(self.desc, self.data.dtype)
+            print prepend+'LUT "{}" ({}):'.format(self.desc, self.data.dtype)
 
         for i in xrange(self.data.ndim):
             if self.names[i] is None:
@@ -665,9 +665,27 @@ class MLUT(object):
 
     def print_info(self):
         print 'MLUT has {} parameters:'.format(len(self.params))
-        for n in self.params:
-            i = self.params.index(n)
-            self.luts[i].print_info('  ')
+        axes = []
+        for param in self.params:
+            i = self.params.index(param)
+            lut = self.luts[i]
+            print '  "{}": type {}, dimensions {}'.format(param,
+                    lut.data.dtype, lut.names)
+            for i in xrange(len(lut.names)):
+                name = lut.names[i]
+                if name is None:
+                    name = 'NoName'
+                ax = lut.axes[i]
+                if ax is None:
+                    S = '  "{}": No axis attached'.format(name)
+                else:
+                    S = '  "{}": {} values between {} and {}'.format(
+                            name, len(ax), ax[0], ax[-1])
+                if not S in axes:
+                    axes.append(S)
+        print 'Dimensions:'
+        for a in axes:
+            print a
 
     def __getitem__(self, key):
         if not key in self.params:
