@@ -2,19 +2,14 @@
 # vim:fileencoding=utf-8
 
 
-
-
 '''
 Calculate the ocean water absorption, scattering coefficients and phase
 function using the wavelength and the chlorophyll concentration
 '''
 
-# TODO: convert to other formt (see SPM model)
-
-
+from phase_functions import fournierForand, PhaseFunction
 from numpy import sin, cos, pi, array, exp
 from numpy import arange, zeros, log10, sqrt
-from sys import argv
 
 
 wl_1 = array([350., 355., 360., 365., 370., 375., 380., 385., 390., 395.,
@@ -74,155 +69,144 @@ Kw = array([0.02710, 0.02380, 0.02160, 0.01880, 0.01770, 0.01595, 0.01510, 0.013
           0.34052, 0.37150, 0.41048, 0.42947, 0.43946, 0.44844, 0.46543, 0.48642, 0.51640,0.55939,0.62438])
 
 
-def fournierForand(ang, n, mu):
+
+class IOP_MM(object):
     '''
-    Fournier-Forand phase function
+    IOP model after Morel and Maritorena (2001)
+
+    Parameters:
+        chl: chlorophyll concentration (mg/m3)
+        NANG: number if angles for the phase function
+        ang_trunc: truncation angle in degrees
     '''
-    v = (3-mu)/2
-    delta = 4/( 3*(n-1)*(n-1) )*sin(ang/2)*sin(ang/2)
-    delta180 = 4/( 3*(n-1)*(n-1) )*sin(pi/2)*sin(pi/2)
+    def __init__(self, chl, ang_trunc=5., NANG=72001):
+        self.chl = chl
+        self.trunc = ang_trunc
+        self.NANG = NANG
 
-    res = 1/( 4*pi*(1-delta)*(1-delta)*(delta**v) )*( v*(1-delta) - (1-(delta**v)) + ( delta*(1-(delta**v)) - v*(1-delta) )*1/(sin(ang/2)*sin(ang/2)) ) + (1-(delta180**v))/(16*pi*(delta180-1)*(delta180**v)) * (3*cos(ang)*cos(ang) - 1)
-    res *= 4*pi
+    def calc(self, wl):
+        '''
+        Calculate atot, btot and phase function
 
-    return res
+        Arguments:
+            wl: wavelength in nm
 
-def henyeyGreenstein(asym, angle):
-    '''
-    Henyey-Greenstein phase function
-    '''
-    return (1 - asym*asym)/((1 + asym*asym - 2*asym*cos(angle))**1.5)
+        Returns (atot, btot, phase) where:
+            * atot is the total absorption coefficient
+            * btot is the total scattering coefficient
+            * phase is the PhaseFunction object
+        '''
 
+        chl = self.chl
+        NANG = self.NANG
+        ang_trunc = self.trunc
 
-def main():
+        #
+        # wavelength index
+        #
+        if (wl < wl_1[0]) or (wl > wl_1[-1]):
+            raise Exception('Error, wavelength {} is out of range ({}, {})'.format(wl, wl_1[0], wl_1[-1]))
+        i1 = int((wl - wl_1[0])/(wl_1[1] - wl_1[0]))
 
-    #
-    # read the arguments
-    #
-    if len(argv) != 5:
-        print 'Arguments: water_model.py chl wl NANG tronc_ang'
-        print 'where:'
-        print '    chl is the chlorophyll concentration in mg/m3'
-        print '    wl is the wavelength in nm'
-        print '    NANG is the number if angles for the phase function'
-        print '    tronc_ang is the truncation angle in degrees'
-        print
-        print 'Example: water_model.py 0.1 500 72001 5.'
-        exit(1)
+        #
+        # pure water coefficients
+        #
+        a0 = ah2o[i1]
+        b0 = 19.3e-4*((wl_1[i1]/550.)**-4.3)
 
-    chl = float(argv[1])
-    wl = float(argv[2])
-    NANG = int(argv[3])
-    ang_trunc = float(argv[4])
-
-    #
-    # wavelength index
-    #
-    if (wl < wl_1[0]) or (wl > wl_1[-1]):
-        print 'Error, wavelength {} is out of range ({}, {})'.format(wl, wl_1[0], wl_1[-1])
-        exit(1)
-    i1 = int((wl - wl_1[0])/(wl_1[1] - wl_1[0]))
-
-
-    #
-    # pure water coefficients
-    #
-    a0 = ah2o[i1]
-    b0 = 19.3e-4*((wl_1[i1]/550.)**-4.3)
+        #
+        # phytoplankton
+        #
+        anap440 = 0.0124*(chl**0.724)
+        anap = anap440*exp(-0.011*(wl-440.) )
+        aphi = A_bricaud95[i1]*(chl**(1.-B_bricaud95[i1]))
+        a1 = anap + aphi
+        b1 = 0.416*(chl**0.766)*550./wl
 
 
-    #
-    # phytoplankton
-    #
-    anap440 = 0.0124*(chl**0.724)
-    anap = anap440*exp(-0.011*(wl-440.) )
-    aphi = A_bricaud95[i1]*(chl**(1.-B_bricaud95[i1]))
-    a1 = anap + aphi
-    b1 = 0.416*(chl**0.766)*550./wl
+        #
+        # backscattering coefficient
+        #
+        if chl < 2:
+            v = 0.5*(log10(chl) - 0.3)
+        else:
+            v = 0
+        bb1 = 0.002 + 0.01*( 0.5-0.25*log10(chl))*((wl/550)**v)
+        r1 = (bb1 - 0.002)/0.028
+
+        #
+        # phase function
+        #
+        ang = pi * arange(NANG, dtype='float64')/(NANG-1)    # angle in radians
+
+        # pure water
+        pf0 = zeros((NANG, 4), dtype='float64') # pure water phase function
+        pf0[:,0] = 0.75
+        pf0[:,1] = 0.75 * cos(ang)**2
+        pf0[:,2] = 0.75 * cos(ang)
+        pf0[:,3] = 0.
+
+        # particles (troncature)
+        itronc = int(NANG * ang_trunc/180.)
+        pf1 = zeros((NANG, 4), dtype='float64') # pure water phase function
+        pf1[itronc:,0] = 0.5*(r1*fournierForand(ang[itronc:],1.117,3.695) +(1-r1)*fournierForand(ang[itronc:],1.05,3.259))
+        pf1[:itronc,0] = 0.5*(r1*fournierForand(ang[itronc ],1.117,3.695) +(1-r1)*fournierForand(ang[itronc ],1.05,3.259))
+        pf1[:,1] = pf1[:,0]
+        pf1[:,2] = 0.
+        pf1[:,3] = 0.
+
+        # normalization after truncation
+        integ_ff = 0
+        for iang in xrange(1, NANG):
+            dtheta = ang[iang] - ang[iang-1]
+            pm1 = pf1[iang-1,0] + pf1[iang-1,1]
+            pm2 = pf1[iang,0] + pf1[iang,1]
+            sin1 = sin(ang[iang-1])
+            sin2 = sin(ang[iang])
+            integ_ff += dtheta*((sin1*pm1+sin2*pm2)/3. + (sin1*pm2+sin2*pm1)/6.)
+        rat1 = integ_ff/2.
+        pf1 *= 1/rat1
+        b1 *= rat1
+
+        #
+        # total coefficients
+        #
+        btot = b0 + b1
+
+        if False:
+            # 1) absorption calculated from individual absorption coefficients (Bricaud et al)
+            atot = a0 + a1
+        else:
+            # 2) absorption deduced from Morel's total attenuation and Kirk's formula
+            Kd = Kw[i1] + Chi[i1]*(chl**ee[i1])
+            delta = (0.256*(b0+b1/rat1))*(0.256*(b0+b1/rat1)) + 4*Kd*Kd
+            atot = 0.5*(-0.256*(b0+b1/rat1) + sqrt(delta))
+
+        # total scattering function
+        pf = (b0*pf0 + b1*pf1)/btot
 
 
-    #
-    # backscattering coefficient
-    #
-    if chl < 2:
-        v = 0.5*(log10(chl) - 0.3)
-    else:
-        v = 0
-    bb1 = 0.002 + 0.01*( 0.5-0.25*log10(chl))*((wl/550)**v)
-    r1 = (bb1 - 0.002)/0.028
+        #
+        # display results
+        #
+        header = [
+                '# chlorophyll concentration: {}'.format(chl),
+                '# wavelength: {}'.format(wl),
+                '# total absorption coefficient: {}'.format(atot),
+                '# total scattering coefficient: {}'.format(btot),
+                '# truncating at {} deg'.format(ang_trunc),
+                ]
 
-    #
-    # phase function
-    #
-    ang = pi * arange(NANG, dtype='float64')/(NANG-1)    # angle in radians
+        phase = PhaseFunction(ang, pf, header)
 
-    # pure water
-    pf0 = zeros((NANG, 4), dtype='float64') # pure water phase function
-    pf0[:,0] = 0.75
-    pf0[:,1] = 0.75 * cos(ang)**2
-    pf0[:,2] = 0.75 * cos(ang)
-    pf0[:,3] = 0.
+        return atot, btot, phase
 
-    # particles (troncature)
-    itronc = int(NANG * ang_trunc/180.)
-    pf1 = zeros((NANG, 4), dtype='float64') # pure water phase function
-    pf1[itronc:,0] = 0.5*(r1*fournierForand(ang[itronc:],1.117,3.695) +(1-r1)*fournierForand(ang[itronc:],1.05,3.259))
-    pf1[:itronc,0] = 0.5*(r1*fournierForand(ang[itronc ],1.117,3.695) +(1-r1)*fournierForand(ang[itronc ],1.05,3.259))
-    pf1[:,1] = pf1[:,0]
-    pf1[:,2] = 0.
-    pf1[:,3] = 0.
-
-    # normalization after truncation
-    integ_ff = 0
-    for iang in xrange(1, NANG):
-        dtheta = ang[iang] - ang[iang-1]
-        pm1 = pf1[iang-1,0] + pf1[iang-1,1]
-        pm2 = pf1[iang,0] + pf1[iang,1]
-        sin1 = sin(ang[iang-1])
-        sin2 = sin(ang[iang])
-        integ_ff += dtheta*((sin1*pm1+sin2*pm2)/3. + (sin1*pm2+sin2*pm1)/6.)
-    rat1 = integ_ff/2.
-    pf1 *= 1/rat1
-    b1 *= rat1
-
-
-    #
-    # total coefficients
-    #
-    btot = b0 + b1
-
-    if False:
-        # 1) absorption calculated from individual absorption coefficients (Bricaud et al)
-        atot = a0 + a1
-    else:
-        # 2) absorption deduced from Morel's total attenuation and Kirk's formula
-        Kd = Kw[i1] + Chi[i1]*(chl**ee[i1])
-        delta = (0.256*(b0+b1/rat1))*(0.256*(b0+b1/rat1)) + 4*Kd*Kd
-        atot = 0.5*(-0.256*(b0+b1/rat1) + sqrt(delta))
-
-    # total scattering function
-    pf = (b0*pf0 + b1*pf1)/btot
-
-
-    #
-    # display results
-    #
-    print '# chlorophyll concentration: {}'.format(chl)
-    print '# wavelength: {}'.format(wl)
-    print '# total absorption coefficient: {}'.format(atot)
-    print '# total scattering coefficient: {}'.format(btot)
-    print '# truncating at {} deg'.format(ang_trunc)
-    for i in xrange(NANG):
-        print '{:.6f} {:.6f} {:.6f} {:.6f} {:.6f}'.format(
-                ang[i] * 180/pi,
-                pf[i,0],
-                pf[i,1],
-                pf[i,2],
-                pf[i,3],
-                )
-
+    def __str__(self):
+        return 'CHL={}'.format(self.chl)
 
 
 
 if __name__ == '__main__':
-    main()
+
+    mod = IOP_MM(0.1)
+    print mod.calc(500.)

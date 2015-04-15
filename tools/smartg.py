@@ -7,7 +7,8 @@ import subprocess
 import numpy as np
 from pyhdf.SD import SD, SDC
 from profile.profil import AeroOPAC, Profile, REPTRAN, REPTRAN_IBAND
-from water.water_spm_model import WaterModelSPM
+from water.iop_spm import IOP_SPM
+from water.iop_mm import IOP_MM
 from os.path import dirname, realpath, join, exists, basename
 from os import makedirs, remove
 import textwrap
@@ -19,13 +20,13 @@ from luts import merge, read_lut_hdf, read_mlut_hdf
 # set up default directories
 #
 dir_install = dirname(dirname(realpath(__file__)))    # base smartg directory is one directory above here
-dir_data = join(dir_install, 'data/')   # directory for storing profiles, phase functions, etc.
-dir_phase_water = join(dir_data, 'phase_water/')
+dir_data = join(dir_install, 'data/')   # directory for storing persistent data
 dir_phase_aero = join(dir_data, 'phase_aerosols/')
 dir_tmp = join(dir_install, 'tmp/')
+dir_phase_water = join(dir_tmp, 'phase_water/')
 dir_cmdfiles = join(dir_tmp, 'command_files/')
 dir_profiles = join(dir_tmp, 'profiles/')
-dir_output = dir_tmp
+dir_output = join(dir_tmp, 'results')
 
 
 
@@ -199,7 +200,10 @@ class Smartg(object):
         if water is not None:
             # TODO: if iband is provided, use iband wavelength to calculate
             # atot and btot, and wl to calculate the phase function
-            atot, btot, file_phase = water.calc(wl, dir_phase_water)
+            atot, btot, phase = water.calc(wl)
+            file_phase = tempfile.mktemp(dir=dir_phase_water,
+                    prefix='pf_ocean_', suffix='.tmp')
+            phase.write(file_phase)
             D.update(ATOT=atot, BTOT=btot, PATHDIFFOCE=file_phase)
         else:
             # use default water values
@@ -552,18 +556,18 @@ def test_atm_surf_ocean():
     return Smartg('SMART-G-PP', 490., NBPHOTONS=1e9,
             atm=Profile('afglms'),
             surf=Surface(SUR=1, DIOPTRE=2, W0LAM=0., WINDSPEED=5.),
-            water=WaterModelSPM(SPM=1.))
+            water=IOP_SPM(SPM=1.))
 
 
 def test_surf_ocean():
     return Smartg('SMART-G-PP', 490., THVDEG=30., NBPHOTONS=2e6,
             surf=Surface(SUR=3, DIOPTRE=2, W0LAM=0., WINDSPEED=5.),
-            water=WaterModelSPM(SPM=1.))
+            water=IOP_SPM(SPM=1.))
 
 
 def test_ocean():
     return Smartg('SMART-G-PP', 560., THVDEG=30.,
-            water=WaterModelSPM(SPM=1.), NBPHOTONS=5e6)
+            water=IOP_MM(1.), NBPHOTONS=5e6)
 
 
 def test_reptran():
