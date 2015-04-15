@@ -14,6 +14,7 @@ import netCDF4
 from scipy.ndimage import map_coordinates
 from scipy.integrate import simps
 import tempfile
+from glob import glob
 
 dir_libradtran = '/home/applis/libRadtran-2.0-beta/'
 dir_libradtran_reptran =  join(dir_libradtran, 'data/correlated_k/reptran/')
@@ -56,6 +57,11 @@ class AeroOPAC(object):
 
         self.scalingfact=1.
         self._readStandardAerosolFile()
+
+    @staticmethod
+    def listStandardAerosolFiles():
+        files = glob(join(dir_libradtran_opac, 'standard_aerosol_files', '*.dat'))
+        return map(lambda x: basename(x)[:-4], files)
 
     def _readStandardAerosolFile(self):
         self.species=['inso','waso','soot','ssam','sscm','minm','miam',
