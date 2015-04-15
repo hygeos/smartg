@@ -125,10 +125,9 @@ class WaterModelSPM(object):
                 integ_ff_back += dtheta*((sin1*pm1+sin2*pm2)/3. + (sin1*pm2+sin2*pm1)/6.)
         rat1 = integ_ff/2.
         pf1 *= 1/rat1
-        bbp *= rat1
 
         # Backscattering ratio of particles
-        Bp   = integ_ff_back/integ_ff 
+        Bp   = integ_ff_back/integ_ff
         # Scattering coefficient of particles
         bp   = bbp/Bp
 
