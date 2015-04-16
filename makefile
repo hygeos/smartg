@@ -12,8 +12,9 @@ JPEG_LIB=${JPEG_HOME}/lib/
 JPEG_INC=${JPEG_HOME}/include/
 
 CC = ${CUDA_BIN}/nvcc
-EXEC = SMART-G
-SPH=no
+
+EXEC_PP = SMART-G-PP
+EXEC_SP = SMART-G-SP
 
 
 #=============Options============#  (en fonction de la carte graphique utilisee)
@@ -25,12 +26,6 @@ LFLAGS =
 LFLAGS += -L ${HDF_LIB} -ldf -lmfhdf
 LFLAGS += -L ${JPEG_LIB} -ljpeg
 LFLAGS += -L ${CUDA_LIB} -lcuda -lcudart -lcurand -L /usr/lib64/nvidia/ -L /usr/lib64/nvidia-304xx/
-
-#===== Caractéristiques majeures =====#
-DFLAGS =
-ifeq ("$(SPH)","yes")
-	DFLAGS += -DSPHERIQUE	# atmosphère sphérique
-endif
 
 
 #============== Options ===============#
@@ -51,36 +46,36 @@ DFLAGS += -D_PERF
 endif
 #####################################################################################
 
-all: init $(EXEC)
+all: pp sp
 
-$(EXEC): obj/main.o obj/host.o obj/device.o obj/checkGPUcontext.o
-	$(CC) $^ $(IFLAGS) $(LFLAGS) -o $(EXEC)
+$(EXEC_PP): obj/pp/main.o obj/pp/host.o obj/pp/device.o obj/pp/checkGPUcontext.o
+	$(CC) $^ $(IFLAGS) $(LFLAGS) -o $(EXEC_PP)
 
-obj/%.o: src/%.cu
+$(EXEC_SP): obj/sp/main.o obj/sp/host.o obj/sp/device.o obj/sp/checkGPUcontext.o
+	$(CC) $^ $(IFLAGS) $(LFLAGS) -o $(EXEC_SP)
+
+obj/pp/%.o: src/%.cu
 	$(CC) -c $< $(CFLAGS) $(IFLAGS) $(DFLAGS) -o $@
 
-init:
-	mkdir -p obj
+obj/sp/%.o: src/%.cu
+	$(CC) -c $< $(CFLAGS) $(IFLAGS) $(DFLAGS) -DSPHERIQUE -o $@
+
+init_pp:
+	@echo
+	@echo MAKING PP...
+	@mkdir -p obj/pp
+
+init_sp:
+	@echo
+	@echo MAKING SP...
+	@mkdir -p obj/sp
 
 clean:
-	rm -f obj/* src/*~ *~ $(EXEC)
+	rm -f obj/pp/* obj/sp/* src/*~ *~ $(EXEC_PP) $(EXEC_SP)
 
-mrproper: clean
-	rm -rf tmp/* out_prog/* out_scripts/* $(EXEC)
-	
-suppr:
-	rm -f out_prog/Resultats.hdf tmp/Temoin.hdf
-	
-rebuild: suppr clean all
+rebuild: clean all
 
-sp:
-	$(MAKE) SPH=yes EXEC=SMART-G-SP
-pp:
-	$(MAKE) SPH=no EXEC=SMART-G-PP
+sp: init_sp $(EXEC_SP)
 
-both:
-	@echo
-	@echo making SMART-G-PP _and_ SMART-G-SP
-	@echo
-	$(MAKE) clean all SPH=yes EXEC=SMART-G-SP
-	$(MAKE) clean all SPH=no EXEC=SMART-G-PP
+pp: init_pp $(EXEC_PP)
+
