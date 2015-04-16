@@ -34,13 +34,9 @@ int NLAM;       // Nb de longueur d'onde
 float TAURAY;	//Epaisseur optique moleculaire (Rayleigh)
 float TAUAER;	//Epaisseur optique aerosol
 float TAUATM;
-#ifdef FLAGOCEAN
-float W0OCE;	//Albedo simple de diffusion dans l'ocean
 float DEPO;     //Facteur de depolarisation de l'eau
-#endif
-float W0LAM;	//Albedo simple de diffusion de la surface lambertienne
-int NATM;		//Altitude haute de la couche aerosol [km] (utilise si PROFIL=3)
-float HATM;		//Altitude haute de la couche aerosol [km] (utilise si PROFIL=3)
+int NATM;		//Nb of atmospheric layers 
+float HATM;		//Altitude of TOA (km)
 float WINDSPEED;	//Vitesse du vent [m/s] (utilisee pour le modele de Cox et Munk: si DIOPTRE=1)
 float NH2O;		//Indice de refraction relatif air/eau
 float ENV_SIZE; // Taille de la cible en km
@@ -48,15 +44,16 @@ float X0; // Position de la cible en x km
 float Y0; // Position de la cible en y km
 float TRANSDIR; // Direct transmission Sun-surface
 #ifdef FLAGOCEAN
-float ATOT, BTOT;
+int NOCE;		// Nb of oceanic layers
 char PATHDIFFOCE[1024];
+char PATHPROFILOCE[1024]; // Profil  oceanique utilisateur
 #endif
 
 unsigned int OUTPUT_LAYERS;
 
 char PATHRESULTATSHDF[1024]; //Fichier de sortie au format hdf
-char PATHTEMOINHDF[1024]; //Fichier témoin au format hdf
 char PATHDIFFAER[1024];	// Fichier d'entrée des données de diffusion des aérosols
 char PATHPROFILATM[1024]; // Profil atmosphérique utilisateur
+char PATHALB[1024]; // Profil albedo utilisateur
 
 

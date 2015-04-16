@@ -50,7 +50,10 @@ void chercheConstante(FILE* fichier, const char* nomConstante, char* chaineValeu
 
 
 
-void init_profile(int *NATM, float *HATM, int *NLAM, char *PATHPROFILATM);
+void init_profileATM(int *NATM, float *HATM, int *NLAM, char *PATHPROFILATM);
+#ifdef FLAGOCEAN
+void init_profileOCE(int *NOCE, int *NLAM, char *PATHPROFILOCE);
+#endif
 
 int count_lines(char *PATHDIFF);
 
@@ -101,7 +104,12 @@ void freeTableaux(Tableaux*, Tableaux*);
 */
 void calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, int nf);
 
+/* Read spectral albedo (for surface or seafloor)*/
+void profilAlb( Tableaux* tab_H, Tableaux* tab_D );
 
+/* profilOce*/
+/* Read ocean extinction coefficient and single scattering albedo for ocean*/
+void profilOce( Tableaux* tab_H, Tableaux* tab_D );
 
 /* profilAtm
 * Calcul du profil atmosphérique dans l'atmosphère en fonction de la couche

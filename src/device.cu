@@ -169,6 +169,9 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
             #endif
                 move_pp(&ph, tab.h, tab.pMol
                         , tab.abs
+			            #ifdef FLAGOCEAN
+                        , tab.ho
+			            #endif 
                         , &etatThr
                         #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
                         , &configThr
@@ -193,6 +196,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 			scatter(&ph, tab.faer, tab.ssa
 			#ifdef FLAGOCEAN
 			, tab.foce
+            , tab.sso
 			#endif
 			, &etatThr
 			#if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
@@ -212,11 +216,12 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 		
 
         //
-		// Surface
+		// Reflection
         //
+        // -> in SURFACE
 		if(ph.loc == SURFACE){
            // Eventually evaluate Downward 0+ and Upward 0- radiance
-           if(OUTPUT_LAYERSd & (OUTPUT_BOA_DOWN_0P + OUTPUT_BOA_UP_0M )) countInterface(&ph, tab.tabPhotonsDown0P, tab.tabPhotonsUp0M
+           if(OUTPUT_LAYERSd & (OUTPUT_BOA_DOWN_0P_UP_0M )) countInterface(&ph, tab.tabPhotonsDown0P, tab.tabPhotonsUp0M
                     #ifdef PROGRESSION
                     , var
                     #endif
@@ -224,14 +229,15 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 
            if( ENVd==0 ) { // si pas d effet d environnement	
 			if( DIOPTREd!=3 )
-				surfaceAgitee(&ph, &etatThr
+				surfaceAgitee(&ph, tab.alb, &etatThr
 					#if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
 					, &configThr
 					#endif
 						);
 						
 			else
-				surfaceLambertienne(&ph, &etatThr
+				surfaceLambertienne(&ph, tab.alb, &etatThr
+				//surfaceLambertienne(&ph,  &etatThr
                                         #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
 					, &configThr
 					#endif
@@ -244,14 +250,15 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
                 dis = sqrtf((ph.x-X0d)*(ph.x-X0d) +(ph.y-Y0d)*(ph.y-Y0d));
                 #endif
                 if( dis > ENV_SIZEd) {
-				     surfaceLambertienne(&ph, &etatThr
+				     surfaceLambertienne(&ph, tab.alb, &etatThr
+				     //surfaceLambertienne(&ph, &etatThr
                                         #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
 					 , &configThr
 					      #endif
 						);
                 }
                 else {
-				     surfaceAgitee(&ph, &etatThr
+				     surfaceAgitee(&ph, tab.alb, &etatThr
 					        #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
 					 , &configThr
 					        #endif
@@ -259,7 +266,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
                 }
            }
            // Eventually evaluate Downward 0- and Upward 0+ radiance
-           if(OUTPUT_LAYERSd & (OUTPUT_BOA_UP_0P + OUTPUT_BOA_DOWN_0M )) countInterface(&ph, tab.tabPhotonsUp0P, tab.tabPhotonsDown0M
+           if(OUTPUT_LAYERSd & (OUTPUT_BOA_DOWN_0M_UP_0P )) countInterface(&ph, tab.tabPhotonsDown0M, tab.tabPhotonsUp0P
                     #ifdef PROGRESSION
                     , var
                     #endif
@@ -267,6 +274,19 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 		}
 		syncthreads();
 		
+        //
+		// Reflection
+        //
+        // -> in SEAFLOOR
+		if(ph.loc == SEAFLOOR){
+		     surfaceLambertienne(&ph, tab.alb, &etatThr
+		     //surfaceLambertienne(&ph, &etatThr
+                                    #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
+			 , &configThr
+			      #endif
+			);
+        }
+		syncthreads();
 
 		if(ph.loc == ABSORBED){
 			ph.loc = NONE;
@@ -894,6 +914,9 @@ rsolfi=%15.12lf - tauRdm= %lf - hph_p= %15.12lf - hph= %15.12lf - zph_p= %15.12l
 
 __device__ void move_pp(Photon* ph, float* h, float* pMol
         , float *abs
+	    #ifdef FLAGOCEAN
+        , float* ho
+	    #endif 
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif
@@ -916,21 +939,39 @@ __device__ void move_pp(Photon* ph, float* h, float* pMol
 	ph->tau += -logf(1.f - RAND)*ph->vz;
 
 
-	#ifdef FLAGOCEAN
-	if ((ph->loc == OCEAN) && (ph->tau >= 0)) {
+	float tauBis;
+    int icouche;
 
-        ph->tau = 0.F;
-        ph->loc = SURFACE;
-        if (SIMd == 3){
-            ph->loc = SPACE;
+	#ifdef FLAGOCEAN
+	if (ph->loc == OCEAN){  
+        if (ph->tau >= 0) {
+           ph->tau = 0.F;
+           ph->loc = SURFACE;
+           if (SIMd == 3){
+              ph->loc = SPACE;
+           }
+           return;
         }
+        // Si tau<TAUOCEAN le photon atteint le fond 
+        else if( ph->tau < ho[NOCEd + ph->ilam *(NOCEd+1)] ){
+            ph->loc = SEAFLOOR;
+            ph->tau = ho[NOCEd + ph->ilam *(NOCEd+1)];
+            return;
+        }
+
+        // Calcul de la couche dans laquelle se trouve le photon
+        tauBis =  ho[NOCEd + ph->ilam *(NOCEd+1)] - ph->tau;
+        icouche = 1;
+        
+        while ((ho[icouche+ ph->ilam *(NOCEd+1)] > (tauBis)) && (icouche < NOCEd)) {
+            icouche++;
+        }
+        ph->couche = icouche;
 	}
 	#endif
 
-    #ifndef SPHERIQUE
-	float tauBis;
-    int icouche;
 	
+    #ifndef SPHERIQUE
     if (ph->loc == ATMOS) {
 
         // Si tau<0 le photon atteint la surface
@@ -949,7 +990,6 @@ __device__ void move_pp(Photon* ph, float* h, float* pMol
         // Sinon il reste dans l'atmosphère, et va subit une nouvelle diffusion
         
         // Calcul de la couche dans laquelle se trouve le photon
-        // tauBis = TAUATMd * pow(ph->wavel/LAMBDAd,-4.0F) - ph->tau;
         tauBis =  h[NATMd + ph->ilam *(NATMd+1)] - ph->tau;
         icouche = 1;
         
@@ -977,6 +1017,7 @@ __device__ void move_pp(Photon* ph, float* h, float* pMol
 __device__ void scatter( Photon* ph, float* faer, float* ssa 
 			#ifdef FLAGOCEAN
 			, float* foce
+            , float* sso
 			#endif
 			#ifdef RANDMWC
 			, unsigned long long* etatThr, unsigned int* configThr
@@ -1041,16 +1082,8 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa
 			cPsi = __cosf(psi);	//cosPsiPhoton
 			sPsi = __sinf(psi);     //sinPsiPhoton		
 
-			// Theta calculé pour la diffusion moléculaire
-			//cTh =  2.F * RAND - 1.F; // cosThetaPhoton
-			//cTh2 = (cTh)*(cTh);
-			
-			// Calcul du poids après diffusion
-		//	ph->weight *= __fdividef(1.5F * ((1.F+GAMAd)*stokes1+((1.F-GAMAd)*cTh2+2.F*GAMAd)*stokes2), (1.F+2.F*GAMAd) *
-		//	(stokes1+stokes2));
 			// Calcul des parametres de Stokes du photon apres diffusion
 			
-			//ph->stokes3 *= (1.F - GAMAd) * (cTh);
 			// Rotation des paramètres de stokes
 			rotateStokes(ph->stokes1, ph->stokes2, ph->stokes3, psi,
 				     &ph->stokes1, &ph->stokes2, &ph->stokes3);
@@ -1060,9 +1093,6 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa
 			stokes1 = ph->stokes1;
 			stokes2 = ph->stokes2;
 			cross_term  = DELTA_PRIMd * (stokes1 + stokes2);
-//			ph->stokes1 = 3./2. * (  DELTAd * cTh2 * stokes1 + cross_term );
-//			ph->stokes2 = 3./2. * (  DELTAd        * stokes2 + cross_term );
-// J'intervertis composante parallele et perpendiculaire pour retrouve même signe pour U et Q qu'avant
 			ph->stokes1 = 3./2. * (  DELTAd  * stokes1 + cross_term );
 			ph->stokes2 = 3./2. * (  DELTAd  * cTh2 * stokes2 + cross_term );			
 			ph->stokes3 = 3./2. * (  DELTAd * cTh  * ph->stokes3 );
@@ -1072,8 +1102,6 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa
 			ph->stokes1 /= phase_func;  
 			ph->stokes2 /= phase_func;  
 			ph->stokes3 /= phase_func;     		
-
-
 
 
 		}
@@ -1109,20 +1137,8 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa
 			ph->stokes2 *= debias;  
 			ph->stokes3 *= debias;  
 
-			ph->weight *= ssa[ph->couche];
+			ph->weight *= ssa[ph->couche+ph->ilam*(NATMd+1)];
 			
-			/** Changement du poids et des nombres de stokes du photon **/
-//			float faer1 = faer[iang*5+0];
-//			float faer2 = faer[iang*5+1];
-			
-			// Calcul du poids après diffusion
-//			ph->weight *= __fdividef( 2.0F*(stokes1*faer1+stokes2*faer2) , stokes1+stokes2)*ssa[ph->couche];
-			
-			// Calcul des parametres de Stokes du photon apres diffusion
-//			ph->stokes1 *= faer1;
-//			ph->stokes2 *= faer2;
-//			ph->stokes3 *= faer[iang*5+2];
-
 		}
 		
 	#ifdef FLAGOCEAN
@@ -1163,8 +1179,6 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa
 		
 		cTh = __cosf(theta);
 
-        // TODO: We must check if we need to invert p1 and p2
-
         //////////////
         //  Get Phi
 
@@ -1188,16 +1202,9 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa
         ph->stokes2 *= debias;
         ph->stokes3 *= debias;
 
-        ph->weight  *= W0OCEd;
+		ph->weight *= sso[ph->couche+ph->ilam*(NOCEd+1)];
+	 } // elastic scattering
 
-		
-		
-		/**  **/
-		// if( ph->weight < WEIGHTMIN ){
-		// ph->loc=ABSORBED;
-		// return;
-	// }
-	
 	/** Roulette russe **/
 	if( ph->weight < WEIGHTRR ){
 		if( RAND < __fdividef(ph->weight,WEIGHTRR) ){
@@ -1208,8 +1215,7 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa
 			}
 		}
 		
-	 }
-    }
+    } //photon in ocean
 	#endif
    ////////// Fin séparation ////////////
 	
@@ -1259,7 +1265,7 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa
 /* surfaceAgitee
 * Reflexion sur une surface agitée ou plane en fonction de la valeur de DIOPTRE
 */
-__device__ void surfaceAgitee(Photon* ph
+__device__ void surfaceAgitee(Photon* ph, float* alb
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif
@@ -1276,7 +1282,6 @@ __device__ void surfaceAgitee(Photon* ph
 	
 	if( SIMd == -2){ // Atmosphère , la surface absorbe tous les photons
 		ph->loc = ABSORBED;
-		
 		return;
 	}
 	
@@ -1653,8 +1658,7 @@ __device__ void surfaceAgitee(Photon* ph
 		
 		// Aucun photon n'est absorbés mais on pondère le poids par l'albedo de diffusion de la surface lambertienne.
         // modif ici à faire pour suivre nouvelle méthode (Collins et Mat)
-//		ph->weight *= __fdividef( W0LAMd, 1-rat );
-		ph->weight *=  W0LAMd;
+		ph->weight *=  alb[1+ph->ilam*2];
 		
         } // fin du if (DIOPTRE==4)
 	} // transmission
@@ -1688,7 +1692,7 @@ __device__ void surfaceAgitee(Photon* ph
 /* surfaceLambertienne
 * Reflexion sur une surface lambertienne
 */
-__device__ void surfaceLambertienne(Photon* ph
+__device__ void surfaceLambertienne(Photon* ph, float* alb
 						#ifdef RANDMWC
 						, unsigned long long* etatThr, unsigned int* configThr
 						#endif
@@ -1725,8 +1729,9 @@ __device__ void surfaceLambertienne(Photon* ph
 	/** Séparation du code pour atmosphère sphérique ou parallèle **/
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
 	/** Calcul du theta impact et phi impact **/
-	//NOTE: Dans le code Fortran, ce calcul est effectué dans atmos
 	
+    if (ph->loc != SEAFLOOR){
+
 	ph->locPrec = ph->loc;
 	
 	
@@ -1780,8 +1785,10 @@ __device__ void surfaceLambertienne(Photon* ph
 	ph->ux = uxn;
 	ph->uy = uyn;
 	ph->uz = uzn;
-	#endif
+
+    } // photon not seafloor
 	
+	#endif
 	
 	
 	/** calcul u,v new **/
@@ -1796,10 +1803,10 @@ __device__ void surfaceLambertienne(Photon* ph
 
 	// Depolarisation du Photon
 	float norm;
-	norm     = ph->stokes1 + ph->stokes2;
+	norm = ph->stokes1 + ph->stokes2;
 	ph->stokes1 = 0.5 * norm;
 	ph->stokes2 = 0.5 * norm;
-       	ph->stokes3 = 0.0;
+    ph->stokes3 = 0.0;
 
 	
 	ph->vx = vxn;
@@ -1809,38 +1816,47 @@ __device__ void surfaceLambertienne(Photon* ph
 	ph->uy = uyn;
 	ph->uz = uzn;
 	
-	// Aucun photon n'est absorbés mais on pondère le poids par l'albedo de diffusion de la surface lambertienne.
-	ph->weight *= W0LAMd;
 
-    if (DIOPTREd!=4){
-	// Si le dioptre est seul, le photon est mis dans l'espace
-	bool test_s = ( SIMd == -1);
-	ph->loc = SPACE*test_s + ATMOS*(!test_s);
+    if (DIOPTREd!=4 && (ph->loc == SURFACE)){
+	  // Si le dioptre est seul, le photon est mis dans l'espace
+	  bool test_s = ( SIMd == -1);
+	  ph->loc = SPACE*test_s + ATMOS*(!test_s);
     }
 	
-	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
-	/** Retour dans le repère d'origine **/
-	// Re-projection vers le repères de direction de photon. L'angle à prendre pour la projection est -angleImpact
-	isp = -isp;
-	ist = -ist;
-	
-	vxn= ict*icp*ph->vx - ict*isp*ph->vy + ist*ph->vz;
-	vyn= isp*ph->vx + icp*ph->vy;
-	vzn= -icp*ist*ph->vx + ist*isp*ph->vy + ict*ph->vz;
-	
-	uxn= ict*icp*ph->ux - ict*isp*ph->uy + ist*ph->uz;
-	uyn= isp*ph->ux + icp*ph->uy;
-	uzn= -icp*ist*ph->ux + ist*isp*ph->uy + ict*ph->uz;
-	
-	ph->vx = vxn;
-	ph->vy = vyn;
-	ph->vz = vzn;
-	ph->ux = uxn;
-	ph->uy = uyn;
-	ph->uz = uzn;
+    if (ph->loc != SEAFLOOR){
 
+	  ph->weight *= alb[0+ph->ilam*2];
+
+	  #ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
+	  /** Retour dans le repère d'origine **/
+	  // Re-projection vers le repères de direction de photon. L'angle à prendre pour la projection est -angleImpact
+	  isp = -isp;
+	  ist = -ist;
+	
+	  vxn= ict*icp*ph->vx - ict*isp*ph->vy + ist*ph->vz;
+	  vyn= isp*ph->vx + icp*ph->vy;
+	  vzn= -icp*ist*ph->vx + ist*isp*ph->vy + ict*ph->vz;
+	
+	  uxn= ict*icp*ph->ux - ict*isp*ph->uy + ist*ph->uz;
+	  uyn= isp*ph->ux + icp*ph->uy;
+	  uzn= -icp*ist*ph->ux + ist*isp*ph->uy + ict*ph->uz;
+	
+	  ph->vx = vxn;
+	  ph->vy = vyn;
+	  ph->vz = vzn;
+	  ph->ux = uxn;
+	  ph->uy = uyn;
+	  ph->uz = uzn;
 	#endif
+    } // not seafloor 
+
+    else {
+	  ph->weight *= alb[1+ph->ilam*2];
+      ph->loc = OCEAN;
+    }
+    
 }
+
 
 
 /* countPhoton
@@ -2149,11 +2165,10 @@ void initConstantesDevice()
 	cudaMemcpyToSymbol(TAURAYd, &TAURAY, sizeof(float));
 	cudaMemcpyToSymbol(TAUAERd, &TAUAER, sizeof(float));
 	
-	cudaMemcpyToSymbol(W0LAMd, &W0LAM, sizeof(float));
     #ifdef FLAGOCEAN
-	cudaMemcpyToSymbol(W0OCEd, &W0OCE, sizeof(float));
-	cudaMemcpyToSymbol(DEPOd, &DEPO, sizeof(float));
+	cudaMemcpyToSymbol(NOCEd, &NOCE, sizeof(int));
     #endif
+	cudaMemcpyToSymbol(DEPOd, &DEPO, sizeof(float));
 
 	cudaMemcpyToSymbol(OUTPUT_LAYERSd, &OUTPUT_LAYERS, sizeof(unsigned int));
 	

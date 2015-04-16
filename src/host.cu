@@ -229,10 +229,6 @@ void initConstantesHost(int argc, char** argv)
 	DEPO = atof(s);
 	
 	strcpy(s,"");
-	chercheConstante(parametres, "W0LAM", s);
-	W0LAM = atof(s);
-	
-	strcpy(s,"");
 	chercheConstante(parametres, "NFAER", s);
 	NFAER = atof(s);
 	
@@ -249,13 +245,8 @@ void initConstantesHost(int argc, char** argv)
 	NH2O = atof(s);
 	
     #ifdef FLAGOCEAN
-	strcpy(s,"");
-    chercheConstante(parametres, "ATOT", s);
-    ATOT = atof(s);
-	strcpy(s,"");
-    chercheConstante(parametres, "BTOT", s);
-    BTOT = atof(s);
 	chercheConstante( parametres, "PATHDIFFOCE", PATHDIFFOCE );
+	chercheConstante( parametres, "PATHPROFILOCE", PATHPROFILOCE );
 
     #endif
 
@@ -265,13 +256,11 @@ void initConstantesHost(int argc, char** argv)
 	
 	chercheConstante(parametres, "PATHRESULTATSHDF", PATHRESULTATSHDF);
     
-    // nom du fichier témoin
-    strcpy(PATHTEMOINHDF, PATHRESULTATSHDF);
-    strcat(PATHTEMOINHDF, ".temoin");
-
 	chercheConstante( parametres, "PATHDIFFAER", PATHDIFFAER );
 	
 	chercheConstante( parametres, "PATHPROFILATM", PATHPROFILATM );
+
+	chercheConstante( parametres, "PATHALB", PATHALB );
 
 	chercheConstante( parametres, "DEVICE", s);
     DEVICE = atoi(s);
@@ -323,7 +312,7 @@ void chercheConstante(FILE* fichier, const char* nomConstante, char* chaineValeu
 
 
 
-void init_profile(int *NATM, float *HATM, int *NLAM, char *PATHPROFILATM) {
+void init_profileATM(int *NATM, float *HATM, int *NLAM, char *PATHPROFILATM) {
     //
     // reads the number of layers NATM in the atmosphere profile, and the
     // height of the top layer
@@ -367,6 +356,50 @@ void init_profile(int *NATM, float *HATM, int *NLAM, char *PATHPROFILATM) {
 
     fclose(fp);
 }
+
+#ifdef FLAGOCEAN
+void init_profileOCE(int *NOCE, int *NLAM, char *PATHPROFILOCE) {
+    //
+    // reads the number of layers NOCE in the ocean profile
+    // the profile file contains NOCE+1 interfaces from 0 to NOCE
+    // Eventually reads the number of consecutive profiles NLAM
+
+    printf("Read %s\n", PATHPROFILOCE);
+
+    FILE* fp;
+    int c, i, read_first=1;
+    float H;
+    char buffer[2048];
+    *NLAM = 1;
+
+    fp = fopen(PATHPROFILOCE, "r");
+
+    if (fp == NULL) {
+        printf("ERROR: Cannot open profile '%s'\n", PATHPROFILOCE);
+        exit(1);
+    }
+
+    // skip first line
+    fgets(buffer, 2048, fp);
+    *NOCE = -1;
+
+    // read first layer
+    while(1) {
+        if (fgets(buffer, 2048, fp) == NULL) break;
+        if (buffer[0] == '#') {
+            *NLAM += 1;
+            read_first = 0;
+            continue;
+        }
+
+        c = sscanf(buffer, "%d\t%f\t", &i, &H);
+        if (c != 2) break;
+        if (read_first) *NOCE += 1;
+    }
+
+    fclose(fp);
+}
+#endif
 
 int count_lines(char *PATHDIFF) {
     //
@@ -775,7 +808,8 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	}
 	
 	#ifdef FLAGOCEAN
-	// Modèle de diffusion dans l'océan
+	/** Modèle de l'ocean **/
+	// Fonction de phase 
 	tab_H->foce = (float*)malloc(5 * NFOCE * sizeof(float));
 	if( tab_H->foce == NULL ){
 		printf("ERREUR: Problème de malloc de tab_H->foce dans initTableaux\n");
@@ -787,6 +821,33 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 		printf("ERREUR: Problème de cudaMalloc de tab_D->foce dans initTableaux\n");
 		exit(1);	
 	}
+
+	// Epaisseur optique par couche
+	tab_H->ho =  (float*)malloc((NOCE+1)*NLAM*sizeof(*(tab_H->ho)));
+	if( tab_H->ho == NULL ){
+		printf("ERREUR: Problème de malloc de tab_H->ho dans initTableaux\n");
+		exit(1);
+	}
+	memset(tab_H->ho,0,(NOCE+1)*NLAM*sizeof(*(tab_H->ho)) );
+	
+	if( cudaMalloc( &(tab_D->ho), (NOCE+1)*NLAM*sizeof(*(tab_H->ho)) ) != cudaSuccess ){
+		printf("ERREUR: Problème de cudaMalloc de tab_D->ho dans initTableaux\n");
+		exit(1);	
+	}
+
+    // SSA 
+	tab_H->sso =  (float*)malloc((NOCE+1)*NLAM*sizeof(float));
+	if( tab_H->sso == NULL ){
+		printf("ERREUR: Problème de malloc de tab_H->sso dans initTableaux\n");
+		exit(1);
+	}
+	memset(tab_H->sso,0,(NOCE+1)*NLAM*sizeof(float) );
+	
+	if( cudaMalloc( &(tab_D->sso), (NOCE+1)*NLAM*sizeof(float) ) != cudaSuccess ){
+		printf("ERREUR: Problème de cudaMalloc de tab_D->sso dans initTableaux\n");
+		exit(1);	
+	}
+	
 	#endif
 	
 	
@@ -884,6 +945,19 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 		exit(1);	
 	}
 	#endif
+
+    // Spectral albedo
+	tab_H->alb =  (float*)malloc(2*NLAM*sizeof(*(tab_H->alb)));
+	if( tab_H->alb == NULL ){
+		printf("ERREUR: Problème de malloc de tab_H->alb dans initTableaux\n");
+		exit(1);
+	}
+	memset(tab_H->alb,0,2*NLAM*sizeof(*(tab_H->alb)) );
+	
+	if( cudaMalloc( &(tab_D->alb), 2*NLAM*sizeof(*(tab_D->alb)) ) != cudaSuccess ){
+		printf("ERREUR: Problème de cudaMalloc de tab_D->alb dans initTableaux\n");
+		exit(1);	
+	}
 	
 }
 
@@ -987,6 +1061,7 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	free(tab_H->faer);
 	
 	#ifdef FLAGOCEAN
+	// Libération du modèle ocean
 	// Diffusion dans l'océan
 	erreur = cudaFree(tab_D->foce);
 	if( erreur != cudaSuccess ){
@@ -995,6 +1070,24 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 		exit(1);
 	}
 	free(tab_H->foce);
+
+	erreur = cudaFree(tab_D->ho);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->ho dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	
+	free(tab_H->ho);
+	
+	erreur = cudaFree(tab_D->sso);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->sso dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	
+	free(tab_H->sso);
 	#endif
 	
 	
@@ -1073,6 +1166,15 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	
 	#endif
 	
+	//
+	erreur = cudaFree(tab_D->alb);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->alb dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	
+	free(tab_H->alb);
 }
 
 
@@ -1229,6 +1331,99 @@ void calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, 
 	
 }
 
+/* Read spectral albedo (for surface ,seafloor and sea reflectance)*/
+void profilAlb( Tableaux* tab_H, Tableaux* tab_D ){
+    int ilam;
+    // Profil utilisateur
+    /* Format du fichier
+    => alb_surface alb_sea(floor) 
+    */
+    FILE* profil = fopen( PATHALB , "r" );
+    char ligne[1024];
+	cudaError_t erreur;		// Permet de tester le bon déroulement des opérations mémoires
+
+    if(profil == NULL){
+        printf("ERREUR : Ouverture impossible du fichier %s pour le profil albedo\n", PATHALB );
+        exit(1);
+    }
+
+    else{
+        for( ilam=0; ilam<NLAM; ilam++){
+           // skip comment line
+           fgets(ligne,1024,profil);
+           fscanf(profil, "%f\t%f\n", tab_H->alb+0+ilam*2,tab_H->alb+1+ilam*2);
+        }
+    }
+
+	if(fclose(profil) == EOF){
+		printf("ERREUR : Probleme de fermeture du fichier %s", PATHALB);
+	}
+
+	erreur = cudaMemcpy(tab_D->alb, tab_H->alb, 2*NLAM*sizeof(*(tab_H->alb)), cudaMemcpyHostToDevice);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de copie tab_D->alb dans profilAlb\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+}
+
+
+#ifdef FLAGOCEAN
+/* Read ocean extinction coefficient and single scattering albedo for ocean*/
+void profilOce( Tableaux* tab_H, Tableaux* tab_D ){
+    int ilam;
+    int icouche=0;
+    float garbage;
+    int i;
+    // Profil utilisateur
+    /* Format du fichier
+    => n	alt		ho		sso	
+    */
+    FILE* profil = fopen( PATHPROFILOCE , "r" );
+    char ligne[1024];
+	cudaError_t erreur;		// Permet de tester le bon déroulement des opérations mémoires
+
+	for( ilam=0;ilam<NLAM;ilam++) {
+        tab_H->ho[0 + ilam * (NOCE+1)] = 0.;
+        tab_H->sso[0 + ilam * (NOCE+1)] = 1.;
+    }
+
+    if(profil == NULL){
+        printf("ERREUR : Ouverture impossible du fichier %s pour le profil oceanique\n", PATHPROFILOCE );
+        exit(1);
+    }
+
+    else{
+        for( ilam=0; ilam<NLAM; ilam++){
+           // skip comment line
+           fgets(ligne,1024,profil);
+           for( icouche=0; icouche<NOCE+1; icouche++ ){
+              fscanf(profil, "%d\t%f\t%f\t%f\n", &i, &garbage, tab_H->ho+icouche+ilam*(NOCE+1), tab_H->sso+icouche+ilam*(NOCE+1));
+              //printf("%d\t%f\t%f\t%f\n", i, garbage, tab_H->ho[icouche+ilam*(NOCE+1)], tab_H->sso[icouche+ilam*(NOCE+1)]);
+           }
+        }
+    }
+
+	if(fclose(profil) == EOF){
+		printf("ERREUR : Probleme de fermeture du fichier %s", PATHPROFILOCE);
+	}
+
+	erreur = cudaMemcpy(tab_D->ho, tab_H->ho, (NOCE+1)*NLAM*sizeof(*(tab_H->ho)), cudaMemcpyHostToDevice);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de copie tab_D->ho dans profilOce\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	erreur = cudaMemcpy(tab_D->sso, tab_H->sso, (NOCE+1)*NLAM*sizeof(*(tab_H->sso)), cudaMemcpyHostToDevice);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de copie tab_D->sso dans profilOce\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+}
+#endif
+
+
 
 /* profilAtm
 * Calcul du profil atmosphérique dans l'atmosphère en fonction de la couche
@@ -1264,6 +1459,9 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
         printf("ERREUR : Ouverture impossible du fichier %s pour le profil atmosphérique\n", PATHPROFILATM );
         exit(1);
     }
+
+		
+		
     
     else{
 
@@ -1360,7 +1558,6 @@ void impactInit(Init* init_H, Init* init_D, Tableaux* tab_H, Tableaux* tab_D){
     int ilam;
 
 	/** Calcul du point d'impact **/
-	// 	thv = abs(acosf(abs(vz)));
 	thv = THVDEG*DEG2RAD;
 	
 	rdelta = 4.*RTER*RTER + 4.*( tan(thv)*tan(thv)+1. )*( HATM*HATM + 2.*HATM*RTER );
@@ -1528,8 +1725,6 @@ void afficheParametres()
 		printf("\n");
 		printf(" DIOPTRE =\t%d", DIOPTRE);
 		printf("\n");
-		printf(" W0LAM\t=\t%f", W0LAM);
-		printf("\n");
 		printf(" WINDSPEED =\t%f", WINDSPEED);
 		printf("\n");
 	}
@@ -1555,22 +1750,25 @@ void afficheParametres()
 	printf("\n");
 	printf(" NFOCE\t=\t%u", NFOCE);
 	printf("\n");
-    printf(" ATOT\t=\t%f \n BTOT\t=\t%f\n", ATOT, BTOT);
 	printf(" NH2O\t=\t%f", NH2O);
+	printf("\n");
+	printf(" NOCE\t=\t%d", NOCE);
 	printf("\n");
 	#endif
 	
 	printf("\n#----------- Chemin des fichiers -----------#\n");
 	printf(" PATHRESULTATSHDF = %s", PATHRESULTATSHDF);
 	printf("\n");
-	printf(" PATHTEMOINHDF = %s", PATHTEMOINHDF);
-	printf("\n");
 	printf(" PATHDIFFAER = %s", PATHDIFFAER);
 	printf("\n");
 	printf(" PATHPROFILATM = %s", PATHPROFILATM);
 	printf("\n");
+	printf(" PATHALB = %s", PATHALB);
+	printf("\n");
     #ifdef FLAGOCEAN
     printf(" PATHDIFFOCE = %s\n", PATHDIFFOCE);
+	printf(" PATHPROFILOCE = %s", PATHPROFILOCE);
+	printf("\n");
     #endif
 	
 	// Calcul la date et l'heure courante
@@ -1795,7 +1993,6 @@ tempsPrec)
 	SDsetattr(sdFichier, "LSAOCE", DFNT_UINT32, 1, &LSAOCE);
 	SDsetattr(sdFichier, "NFOCE", DFNT_UINT32, 1, &NFOCE);
 	
-	SDsetattr(sdFichier, "W0LAM", DFNT_FLOAT32, 1, &W0LAM);
 	SDsetattr(sdFichier, "ENV_SIZE", DFNT_FLOAT32, 1, &ENV_SIZE);
 	SDsetattr(sdFichier, "X0", DFNT_FLOAT32, 1, &X0);
 	SDsetattr(sdFichier, "Y0", DFNT_FLOAT32, 1, &Y0);
@@ -1805,14 +2002,14 @@ tempsPrec)
 	SDsetattr(sdFichier, "NH2O", DFNT_FLOAT32, 1, &NH2O);
 	SDsetattr(sdFichier, "TRANSDIR", DFNT_FLOAT32, 1, &TRANSDIR);
     #ifdef FLAGOCEAN
-    SDsetattr(sdFichier, "ATOT", DFNT_FLOAT32, 1, &ATOT);
-    SDsetattr(sdFichier, "BTOT", DFNT_FLOAT32, 1, &BTOT);
+	SDsetattr(sdFichier, "NOCE", DFNT_INT32, 1, &NOCE);
     SDsetattr(sdFichier, "PATHDIFFOCE", DFNT_CHAR8, strlen(PATHDIFFOCE), PATHDIFFOCE);
+    SDsetattr(sdFichier, "PATHPROFILOCE", DFNT_CHAR8, strlen(PATHPROFILOCE), PATHPROFILOCE);
     #endif
 	SDsetattr(sdFichier, "PATHRESULTATSHDF", DFNT_CHAR8, strlen(PATHRESULTATSHDF), PATHRESULTATSHDF);
-	SDsetattr(sdFichier, "PATHTEMOINHDF", DFNT_CHAR8, strlen(PATHTEMOINHDF), PATHTEMOINHDF);
 	SDsetattr(sdFichier, "PATHDIFFAER", DFNT_CHAR8, strlen(PATHDIFFAER), PATHDIFFAER);
 	SDsetattr(sdFichier, "PATHPROFILATM", DFNT_CHAR8, strlen(PATHPROFILATM), PATHPROFILATM);
+	SDsetattr(sdFichier, "PATHALB", DFNT_CHAR8, strlen(PATHALB), PATHALB);
 	
 	SDsetattr(sdFichier, "nbPhotonsTot", DFNT_FLOAT64, 1, &nbPhotonsTotdouble);
 	SDsetattr(sdFichier, "nbErreursPoids", DFNT_INT32, 1, &(var->erreurpoids));

@@ -88,13 +88,12 @@ typedef int CrMCCUDA;
 #define NONE		4
 #define OCEAN		5
 #define TOA	    	6
+#define SEAFLOOR   	7
 
 
 // bitmasks for output
-#define OUTPUT_BOA_DOWN_0P   1 // downward radiance at BOA above surface (0+)
-#define OUTPUT_BOA_DOWN_0M   2 // downward radiance at BOA below surface (0-)
-#define OUTPUT_BOA_UP_0P   4 // upward radiance at BOA above surface (0+)
-#define OUTPUT_BOA_UP_0M   8 // upward radiance at BOA below surface (0-)
+#define OUTPUT_BOA_DOWN_0P_UP_0M   1 // downward radiance at BOA above surface (0+) and upward radiance at BOA below surface (0-)
+#define OUTPUT_BOA_DOWN_0M_UP_0P   2 // downward radiance at BOA below surface (0-) and upward radiance at BOA above surface (0+)
 
 
 /* Paramètres pour l'océan */
@@ -164,15 +163,14 @@ extern float LAMBDA;
 extern float TAURAY;
 extern float TAUAER;
 extern float TAUATM;
-extern float W0LAM;
 extern float ENV_SIZE;
 extern float X0;
 extern float Y0;
 #ifdef FLAGOCEAN
-extern float W0OCE;
 extern float DEPO;  // depolarization factor
-extern float ATOT, BTOT;
 extern char PATHDIFFOCE[];
+extern char PATHPROFILOCE[];
+extern int NOCE;
 #endif
 extern unsigned int OUTPUT_LAYERS;
 extern int NATM;
@@ -182,9 +180,9 @@ extern float NH2O;
 extern float TRANSDIR;
 
 extern char PATHRESULTATSHDF[];
-extern char PATHTEMOINHDF[];
 extern char PATHDIFFAER[];
 extern char PATHPROFILATM[];
+extern char PATHALB[];
 
 
 
@@ -308,12 +306,15 @@ typedef struct __align__(16)
 	
 	#ifdef FLAGOCEAN
 	float* foce;			// Pointeur vers le modèle de diffusion dans l'océan
+	float* ho;				// Pointeur vers l'épaisseur optique de chaque couches du modele oceanique
+    float* sso;             // Pointeur vers le profil de l albedo de diffusion simple dans l'ocean
 	#endif
 	
 	float* h;				// Pointeur vers l'épaisseur optique de chaque couches du modèle atmosphérique
 	float* pMol;			// Pointeur vers la proportion de molécules dans chaque couches du modèle atmosphérique
 	float* ssa;			    // Pointeur vers l'albedo de diffusion simple des aerosols dans chaque couches du modèle atmosphérique
     float* abs;             // Pointeur vers la proportion d'absorbant dans chaque couches du modèle atmosphérique
+    float* alb;             // Pointeur vers l albedo de la surface lambertienne
 	
 	/** Séparation du code pour atmosphère sphérique ou parallèle **/
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */

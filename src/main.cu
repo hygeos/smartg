@@ -68,15 +68,24 @@ int main (int argc, char *argv[])
 	/** Initialisation des constantes du host (en partie recuperees dans le fichier Parametres.txt) **/
 	initConstantesHost(argc, argv);
 
+    NLAM=1;
 
-    // read NATM and HATM in profile
+    // read NATM and HATM in profileAtm
     // (if simulation includes atmosphere)
     if ((SIM == -2) || (SIM == 1) || (SIM == 2)) {
-        init_profile(&NATM, &HATM, &NLAM, PATHPROFILATM);
+        init_profileATM(&NATM, &HATM, &NLAM, PATHPROFILATM);
     } else {
         HATM = 0;
         NATM = 0;
         TRANSDIR=1.;
+    }
+
+    // read NOCE  in profileOce
+    // (if simulation includes ocean)
+    if ((SIM == 0) || (SIM == 2) || (SIM == 3)) {
+        init_profileOCE(&NOCE,  &NLAM, PATHPROFILOCE);
+    } else {
+        NOCE = 0;
     }
 
 
@@ -241,10 +250,14 @@ int main (int argc, char *argv[])
 	#ifdef FLAGOCEAN
 	if( SIM==0 || SIM==2 || SIM==3 ){
 		calculF( PATHDIFFOCE, tab_H.foce, tab_D.foce, LSAOCE, NFOCE);
-        float extoce = ATOT + BTOT;
-        W0OCE = BTOT/extoce;
+        profilOce(&tab_H, &tab_D);
 	}
 	#endif
+
+   // Reading spectral albedo (surface or seafllor)
+	if( SIM!=-2 ){
+        profilAlb(&tab_H, &tab_D);
+    }
 
 #ifdef _PERF
         StartProcessing(perfInitG);

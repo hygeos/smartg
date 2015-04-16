@@ -32,6 +32,7 @@ __device__ __constant__ float TAUMAXd;	//tau initial du photon (Host)
 #ifdef FLAGOCEAN
 __device__ __constant__ float W0OCEd;
 __device__ __constant__ float DEPOd;
+__device__ __constant__ int NOCEd;
 #endif
 __device__ __constant__ unsigned int OUTPUT_LAYERSd;
 __device__ __constant__ float W0LAMd;
@@ -139,6 +140,9 @@ __device__ void move_sp(Photon*, Tableaux tab, Init* init
 // move, version plan parallèle
 __device__ void move_pp(Photon*, float* h, float* pMol
         , float *abs
+	    #ifdef FLAGOCEAN
+        , float* ho
+	    #endif 
 		#ifdef RANDMWC
 		, unsigned long long*, unsigned int*
 		#endif
@@ -161,6 +165,7 @@ __device__ void move_pp(Photon*, float* h, float* pMol
 __device__ void scatter(Photon* photon, float* faer, float* ssa
 		#ifdef FLAGOCEAN
 		, float* foce
+		, float* sso
 		#endif
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
@@ -181,7 +186,7 @@ __device__ void scatter(Photon* photon, float* faer, float* ssa
 * Reflexion sur une surface agitée ou plane en fonction de la valeur de DIOPTRE
 * //TODO: transmission vers l'océan et/ou reflexion totale
 */
-__device__ void surfaceAgitee(Photon*
+__device__ void surfaceAgitee(Photon*, float* alb
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif
@@ -200,7 +205,7 @@ __device__ void surfaceAgitee(Photon*
 /* surfaceLambertienne
 * Reflexion sur une surface lambertienne
 */
-__device__ void surfaceLambertienne(Photon* photon
+__device__ void surfaceLambertienne(Photon* , float* alb
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif
