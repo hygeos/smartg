@@ -43,11 +43,9 @@ float ENV_SIZE; // Taille de la cible en km
 float X0; // Position de la cible en x km
 float Y0; // Position de la cible en y km
 float TRANSDIR; // Direct transmission Sun-surface
-#ifdef FLAGOCEAN
 int NOCE;		// Nb of oceanic layers
 char PATHDIFFOCE[1024];
 char PATHPROFILOCE[1024]; // Profil  oceanique utilisateur
-#endif
 
 unsigned int OUTPUT_LAYERS;
 

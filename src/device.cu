@@ -151,11 +151,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 		// Deplacement
         //
         // -> Si OCEAN ou ATMOS
-		if( (ph.loc == ATMOS || ph.loc == TOA)
-			#ifdef FLAGOCEAN
-			|| (ph.loc == OCEAN)
-			#endif
-			){
+		if( (ph.loc == ATMOS || ph.loc == TOA) || (ph.loc == OCEAN)){
 
             #ifdef SPHERIQUE
             if (ph.loc == ATMOS || ph.loc == TOA)
@@ -167,12 +163,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
                                 );
             else 
             #endif
-                move_pp(&ph, tab.h, tab.pMol
-                        , tab.abs
-			            #ifdef FLAGOCEAN
-                        , tab.ho
-			            #endif 
-                        , &etatThr
+                move_pp(&ph, tab.h, tab.pMol , tab.abs , tab.ho , &etatThr
                         #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
                         , &configThr
                         #endif
@@ -187,18 +178,9 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 		// Diffusion
         //
         // -> dans ATMOS ou OCEAN
-		if( (ph.loc == ATMOS)
-			#ifdef FLAGOCEAN
-			|| (ph.loc == OCEAN)
-			#endif
-			){
+		if( (ph.loc == ATMOS) || (ph.loc == OCEAN)){
 	
-			scatter(&ph, tab.faer, tab.ssa
-			#ifdef FLAGOCEAN
-			, tab.foce
-            , tab.sso
-			#endif
-			, &etatThr
+			scatter(&ph, tab.faer, tab.ssa , tab.foce , tab.sso , &etatThr
 			#if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
 			, &configThr
 			#endif
@@ -397,7 +379,6 @@ __device__ void initPhoton(Photon* ph/*, float* z*/
 		ph->tau = 0.f;
 		ph->loc = SURFACE;
 
-	#ifdef FLAGOCEAN
     } else if (SIMd == 3) {
 
         //
@@ -411,7 +392,6 @@ __device__ void initPhoton(Photon* ph/*, float* z*/
 
         ph->tau = 0.;
         ph->loc = OCEAN;
-    #endif
     } else ph->loc = NONE;
 	
 
@@ -912,11 +892,7 @@ rsolfi=%15.12lf - tauRdm= %lf - hph_p= %15.12lf - hph= %15.12lf - zph_p= %15.12l
 #endif
 
 
-__device__ void move_pp(Photon* ph, float* h, float* pMol
-        , float *abs
-	    #ifdef FLAGOCEAN
-        , float* ho
-	    #endif 
+__device__ void move_pp(Photon* ph, float* h, float* pMol , float *abs , float* ho
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif
@@ -942,7 +918,6 @@ __device__ void move_pp(Photon* ph, float* h, float* pMol
 	float tauBis;
     int icouche;
 
-	#ifdef FLAGOCEAN
 	if (ph->loc == OCEAN){  
         if (ph->tau >= 0) {
            ph->tau = 0.F;
@@ -962,13 +937,12 @@ __device__ void move_pp(Photon* ph, float* h, float* pMol
         // Calcul de la couche dans laquelle se trouve le photon
         tauBis =  ho[NOCEd + ph->ilam *(NOCEd+1)] - ph->tau;
         icouche = 1;
-        
+
         while ((ho[icouche+ ph->ilam *(NOCEd+1)] > (tauBis)) && (icouche < NOCEd)) {
             icouche++;
         }
         ph->couche = icouche;
 	}
-	#endif
 
 	
     #ifndef SPHERIQUE
@@ -1014,11 +988,7 @@ __device__ void move_pp(Photon* ph, float* h, float* pMol
 * Diffusion du photon par une molécule ou un aérosol
 * Modification des paramètres de stokes et des vecteurs U et V du photon (polarisation, vitesse)
 */
-__device__ void scatter( Photon* ph, float* faer, float* ssa 
-			#ifdef FLAGOCEAN
-			, float* foce
-            , float* sso
-			#endif
+__device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , float* sso
 			#ifdef RANDMWC
 			, unsigned long long* etatThr, unsigned int* configThr
 			#endif
@@ -1055,9 +1025,7 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa
 	///////// Possible de mettre dans une fonction séparée, mais attention aux performances /////////
 	///////// Faire également attention à bien passer le pointeur de cTh et le modifier dans la fonction /////////
 	
-	#ifdef FLAGOCEAN
 	if(ph->loc!=OCEAN){
-	#endif
 		if( prop_aer<RAND ){
 
 			// Get Teta (see Wang et al., 2012)
@@ -1141,7 +1109,6 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa
 			
 		}
 		
-	#ifdef FLAGOCEAN
 	}
 	else{	/* Photon dans l'océan */
 		float prop_raman, new_wavel;
@@ -1216,7 +1183,6 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa
 		}
 		
     } //photon in ocean
-	#endif
    ////////// Fin séparation ////////////
 	
 	sTh = sqrtf(1.F - cTh*cTh);	// sinThetaPhoton
@@ -2090,9 +2056,7 @@ void initConstantesDevice()
 	cudaMemcpyToSymbol(TAURAYd, &TAURAY, sizeof(float));
 	cudaMemcpyToSymbol(TAUAERd, &TAUAER, sizeof(float));
 	
-    #ifdef FLAGOCEAN
 	cudaMemcpyToSymbol(NOCEd, &NOCE, sizeof(int));
-    #endif
 	cudaMemcpyToSymbol(DEPOd, &DEPO, sizeof(float));
 
 	cudaMemcpyToSymbol(OUTPUT_LAYERSd, &OUTPUT_LAYERS, sizeof(unsigned int));

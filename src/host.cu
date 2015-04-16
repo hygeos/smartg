@@ -244,11 +244,8 @@ void initConstantesHost(int argc, char** argv)
 	chercheConstante(parametres, "NH2O", s);
 	NH2O = atof(s);
 	
-    #ifdef FLAGOCEAN
 	chercheConstante( parametres, "PATHDIFFOCE", PATHDIFFOCE );
 	chercheConstante( parametres, "PATHPROFILOCE", PATHPROFILOCE );
-
-    #endif
 
 	strcpy(s,"");
 	chercheConstante(parametres, "OUTPUT_LAYERS", s);
@@ -357,7 +354,6 @@ void init_profileATM(int *NATM, float *HATM, int *NLAM, char *PATHPROFILATM) {
     fclose(fp);
 }
 
-#ifdef FLAGOCEAN
 void init_profileOCE(int *NOCE, int *NLAM, char *PATHPROFILOCE) {
     //
     // reads the number of layers NOCE in the ocean profile
@@ -399,7 +395,6 @@ void init_profileOCE(int *NOCE, int *NLAM, char *PATHPROFILOCE) {
 
     fclose(fp);
 }
-#endif
 
 int count_lines(char *PATHDIFF) {
     //
@@ -807,7 +802,6 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 		exit(1);	
 	}
 	
-	#ifdef FLAGOCEAN
 	/** Modèle de l'ocean **/
 	// Fonction de phase 
 	tab_H->foce = (float*)malloc(5 * NFOCE * sizeof(float));
@@ -848,7 +842,6 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 		exit(1);	
 	}
 	
-	#endif
 	
 	
 	/** Modèle de l'atmosphère **/
@@ -1060,7 +1053,6 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	}
 	free(tab_H->faer);
 	
-	#ifdef FLAGOCEAN
 	// Libération du modèle ocean
 	// Diffusion dans l'océan
 	erreur = cudaFree(tab_D->foce);
@@ -1088,8 +1080,6 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	}
 	
 	free(tab_H->sso);
-	#endif
-	
 	
 	/** Profil amosphèrique **/	
 	// Libération du modèle atmosphérique
@@ -1368,7 +1358,6 @@ void profilAlb( Tableaux* tab_H, Tableaux* tab_D ){
 }
 
 
-#ifdef FLAGOCEAN
 /* Read ocean extinction coefficient and single scattering albedo for ocean*/
 void profilOce( Tableaux* tab_H, Tableaux* tab_D ){
     int ilam;
@@ -1421,8 +1410,6 @@ void profilOce( Tableaux* tab_H, Tableaux* tab_D ){
 		exit(1);
 	}
 }
-#endif
-
 
 
 /* profilAtm
@@ -1744,7 +1731,6 @@ void afficheParametres()
 		printf("\tPas d'effet d'environnement\n");
 	}
 
-	#ifdef FLAGOCEAN
 	printf("\n#----------------- Océan ------------------#\n");
 	printf(" LSAOCE\t=\t%u", LSAOCE);
 	printf("\n");
@@ -1754,7 +1740,6 @@ void afficheParametres()
 	printf("\n");
 	printf(" NOCE\t=\t%d", NOCE);
 	printf("\n");
-	#endif
 	
 	printf("\n#----------- Chemin des fichiers -----------#\n");
 	printf(" PATHRESULTATSHDF = %s", PATHRESULTATSHDF);
@@ -1765,11 +1750,9 @@ void afficheParametres()
 	printf("\n");
 	printf(" PATHALB = %s", PATHALB);
 	printf("\n");
-    #ifdef FLAGOCEAN
     printf(" PATHDIFFOCE = %s\n", PATHDIFFOCE);
 	printf(" PATHPROFILOCE = %s", PATHPROFILOCE);
 	printf("\n");
-    #endif
 	
 	// Calcul la date et l'heure courante
 	time_t dateTime = time(NULL);
@@ -1998,11 +1981,9 @@ void creerHDFResultats(double* tabFinal,double* tabFinalDown0P, double* tabFinal
 	SDsetattr(sdFichier, "WINDSPEED", DFNT_FLOAT32, 1, &WINDSPEED);
 	SDsetattr(sdFichier, "NH2O", DFNT_FLOAT32, 1, &NH2O);
 	SDsetattr(sdFichier, "TRANSDIR", DFNT_FLOAT32, 1, &TRANSDIR);
-    #ifdef FLAGOCEAN
 	SDsetattr(sdFichier, "NOCE", DFNT_INT32, 1, &NOCE);
     SDsetattr(sdFichier, "PATHDIFFOCE", DFNT_CHAR8, strlen(PATHDIFFOCE), PATHDIFFOCE);
     SDsetattr(sdFichier, "PATHPROFILOCE", DFNT_CHAR8, strlen(PATHPROFILOCE), PATHPROFILOCE);
-    #endif
 	SDsetattr(sdFichier, "PATHRESULTATSHDF", DFNT_CHAR8, strlen(PATHRESULTATSHDF), PATHRESULTATSHDF);
 	SDsetattr(sdFichier, "PATHDIFFAER", DFNT_CHAR8, strlen(PATHDIFFAER), PATHDIFFAER);
 	SDsetattr(sdFichier, "PATHPROFILATM", DFNT_CHAR8, strlen(PATHPROFILATM), PATHPROFILATM);

@@ -31,7 +31,6 @@ DFLAGS =
 ifeq ("$(SPH)","yes")
 	DFLAGS += -DSPHERIQUE	# atmosphère sphérique
 endif
-DFLAGS += -DFLAGOCEAN
 
 
 #============== Options ===============#

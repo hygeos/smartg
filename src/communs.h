@@ -166,12 +166,10 @@ extern float TAUATM;
 extern float ENV_SIZE;
 extern float X0;
 extern float Y0;
-#ifdef FLAGOCEAN
 extern float DEPO;  // depolarization factor
 extern char PATHDIFFOCE[];
 extern char PATHPROFILOCE[];
 extern int NOCE;
-#endif
 extern unsigned int OUTPUT_LAYERS;
 extern int NATM;
 extern float HATM;
@@ -304,11 +302,9 @@ typedef struct __align__(16)
 	
 	float* faer;			// Pointeur vers le modèle de diffusion des aérosols
 	
-	#ifdef FLAGOCEAN
 	float* foce;			// Pointeur vers le modèle de diffusion dans l'océan
 	float* ho;				// Pointeur vers l'épaisseur optique de chaque couches du modele oceanique
     float* sso;             // Pointeur vers le profil de l albedo de diffusion simple dans l'ocean
-	#endif
 	
 	float* h;				// Pointeur vers l'épaisseur optique de chaque couches du modèle atmosphérique
 	float* pMol;			// Pointeur vers la proportion de molécules dans chaque couches du modèle atmosphérique

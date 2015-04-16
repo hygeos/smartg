@@ -29,11 +29,9 @@ __device__ __constant__ float TAUATMd;
 #ifndef SPHERIQUE
 __device__ __constant__ float TAUMAXd;	//tau initial du photon (Host)
 #endif
-#ifdef FLAGOCEAN
 __device__ __constant__ float W0OCEd;
 __device__ __constant__ float DEPOd;
 __device__ __constant__ int NOCEd;
-#endif
 __device__ __constant__ unsigned int OUTPUT_LAYERSd;
 __device__ __constant__ float W0LAMd;
 __device__ __constant__ unsigned int NFAERd;
@@ -138,11 +136,7 @@ __device__ void move_sp(Photon*, Tableaux tab, Init* init
 
 
 // move, version plan parallèle
-__device__ void move_pp(Photon*, float* h, float* pMol
-        , float *abs
-	    #ifdef FLAGOCEAN
-        , float* ho
-	    #endif 
+__device__ void move_pp(Photon*, float* h, float* pMol , float *abs , float* ho
 		#ifdef RANDMWC
 		, unsigned long long*, unsigned int*
 		#endif
@@ -162,11 +156,7 @@ __device__ void move_pp(Photon*, float* h, float* pMol
 * Diffusion du photon par une molécule ou un aérosol
 * Modification des paramètres de stokes et des vecteurs U et V du photon (polarisation, vitesse)
 */
-__device__ void scatter(Photon* photon, float* faer, float* ssa
-		#ifdef FLAGOCEAN
-		, float* foce
-		, float* sso
-		#endif
+__device__ void scatter(Photon* photon, float* faer, float* ssa , float* foce , float* sso
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif

@@ -51,9 +51,7 @@ void chercheConstante(FILE* fichier, const char* nomConstante, char* chaineValeu
 
 
 void init_profileATM(int *NATM, float *HATM, int *NLAM, char *PATHPROFILATM);
-#ifdef FLAGOCEAN
 void init_profileOCE(int *NOCE, int *NLAM, char *PATHPROFILOCE);
-#endif
 
 int count_lines(char *PATHDIFF);
 
