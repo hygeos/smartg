@@ -1,17 +1,17 @@
 ################ SIMULATION #####################
 # Number of "Photons" to inject (unsigned long long)
-NBPHOTONS = 1e9
+NBPHOTONS = 1e8
 
 # View Zenith Angle in degree (float)
-THVDEG = 37.0
+THVDEG = 30.0
 
 # Eventually wavelenghth (nm) (just for information purposes, not used in the simulation) 
 LAMBDA = 550.0
 
-# Number of output azimut angle boxes for 0 to PI
-NBPHI = 90
-# Number of output zenith angle boxes for 0 to PI
-NBTHETA = 90
+# Number of output azimut angle boxes from 0 to PI
+NBPHI = 30
+# Number of output zenith angle boxes from 0 to PI
+NBTHETA = 45
 
 # Simulation type
 	# -2 Atmosphere only
@@ -20,7 +20,7 @@ NBTHETA = 90
 	#  1 Atmosphere and dioptre
 	#  2 Atmosphere, dioptre and ocean
 	#  3 Ocean only
-SIM = -1
+SIM = 2
 
 # Dioptre type
 	# 0 = plan
@@ -29,17 +29,17 @@ SIM = -1
 	# 3 = lambertian reflector (LAND)
 DIOPTRE = 2
 
-# Reflection type on the dioptre
+# Processes at the surface dioptre
 	# 1 Forced reflection
 	# 2 Forced transmission
 	# 3 Reflection and transmission
-SUR = 1
+SUR = 3
 
 # Output layers as a binary flag 
     # 0  TOA always present
     # 1  Add BOA (0+) downward and BOA (0-) upward
     # 2  Add BOA (0+) upward and BOA (0-) downward
-OUTPUT_LAYERS =  2     
+OUTPUT_LAYERS =  3     
 
 # Absolute name of output file 
 PATHRESULTATSHDF=resultat/out.hdf
@@ -55,7 +55,7 @@ DEPO = 0.0279
 
 # Absolute name of file containing the vertical profile of atmosphere
 	# Format 
-PATHPROFILATM = /home/did/RTC/SMART-G/profil/profil.atm.base
+PATHPROFILATM = /home/did/RTC/SMART-G/profil/profil.atm.base10
 
 # Absolute name of file containing the atmospheric phase matrix 
 	# Format 
@@ -64,10 +64,10 @@ PATHDIFFAER = /home/did/RTC/SMART-G/fic/pf_maritime_clean_750nm.txt
 ################ SURFACE #####################
 # Absolute name of file containing the Land and Seafloor lambertian albedo 
 	# Format 
-PATHALB = /home/did/RTC/SMART-G/profil/alb.base
+PATHALB = /home/did/RTC/SMART-G/profil/alb.base10
 
 # Windspeed (m/s) (if DIOPTRE = 1,2 or 4)
-WINDSPEED = 1.0
+WINDSPEED = 5.0
 
 # Relatibve refarctive index air/water
 NH2O = 1.33
@@ -88,7 +88,7 @@ Y0= 0.0
 ################ OCEAN   #####################
 # Absolute name of file containing the Vertical profile of Ocean optical depth and single scattering albedo
 	# Format 
-PATHPROFILOCE = /home/did/RTC/SMART-G/profil/profil.oce.base
+PATHPROFILOCE = /home/did/RTC/SMART-G/profil/profil.oce.base10
 # Absolute name of file containing the Ocean phase function 
 	# Format 
 PATHDIFFOCE = /home/did/RTC/SMART-G/fic/pf_ocean-spm_1.00_560nm.txt

@@ -216,6 +216,8 @@ int main (int argc, char *argv[])
     tabTh = (double*)malloc(NBTHETA*sizeof(double));
 	double *tabPhi;
     tabPhi = (double*)malloc(NBPHI*sizeof(double));
+	double *tabTransDir;
+    tabTransDir = (double*)malloc(NLAM*sizeof(double));
 	
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
 	// Définition et initialisation des constantes initiales du photon
@@ -266,7 +268,9 @@ int main (int argc, char *argv[])
         // Read atmospheric profile
         int ilam=0;
         profilAtm(&tab_H, &tab_D);
-        TRANSDIR = exp(-tab_H.h[NATM+ilam*(NATM+1)]/cos(THVDEG*PI/180.));
+        for(ilam=0; ilam<NLAM; ilam++){
+           tabTransDir[ilam] = exp(-tab_H.h[NATM+ilam*(NATM+1)]/cos(THVDEG*PI/180.));
+        }
     }
 #ifdef _PERF
         StopProcessing(perfInitG);
@@ -285,7 +289,9 @@ int main (int argc, char *argv[])
 	// Calcul du point d'impact du photon
     int ilam=0;
 	impactInit(init_H, init_D, &tab_H, &tab_D);
-    TRANSDIR = exp(-tab_H.hph0[NATM+ilam*(NATM+1)]);
+    for(ilam=0; ilam<NLAM; ilam++){
+       tabTransDir[ilam] = exp(-tab_H.hph0[NATM+ilam*(NATM+1)]);
+    }
 
 	#ifdef DEBUG
 	printf("Paramètres initiaux du photon: taumax0=%lf - zintermax=%lf - (%lf,%lf,%lf)\n",\
@@ -552,7 +558,7 @@ cudaMemcpyDeviceToHost);
 	calculTabFinal(tabFinalUp0M, tabTh, tabPhi, tabPhotonsTotUp0M, nbPhotonsTot,nbPhotonsTotInter);
 
 	
-	creerHDFResultats(tabFinal, tabFinalDown0P, tabFinalDown0M, tabFinalUp0P, tabFinalUp0M, tabTh, tabPhi, nbPhotonsTot, var_H, tempsPrec);
+	creerHDFResultats(tabFinal, tabFinalDown0P, tabFinalDown0M, tabFinalUp0P, tabFinalUp0M, tabTh, tabPhi, tabTransDir, nbPhotonsTot, var_H, tempsPrec);
 #ifdef _PERF
         StopProcessing(perfCreateFinalTab);
         GetElapsedTime(perfCreateFinalTab);
@@ -578,6 +584,7 @@ cudaMemcpyDeviceToHost);
     free(tabFinalDown0M);
     free(tabFinalUp0P);
     free(tabFinalUp0M);
+    free(tabTransDir);
     free(tabPhi);
     free(tabTh);
 

@@ -172,7 +172,8 @@ void calculTabFinal(double*, double*, double*, double*, unsigned long long, unsi
 /* creerHDFResultats
 * Fonction qui crée le fichier .hdf contenant le résultat final pour une demi-sphère
 */
-void creerHDFResultats(double*, double*, double*, double*, double*, double*, double*, unsigned long long, Variables*, double);
+//void creerHDFResultats(double*, double*, double*, double*, double*, double*, double*, unsigned long long, Variables*, double);
+void creerHDFResultats(double*, double*, double*, double*, double*, double*, double*, double*, unsigned long long, Variables*, double);
 
 
 #endif	// HOST_H

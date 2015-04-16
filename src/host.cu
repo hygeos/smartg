@@ -1944,12 +1944,9 @@ void calculTabFinal(double* tabFinal, double* tabTh, double* tabPhi, double* tab
 /* creerHDFResultats
 * Fonction qui crée le fichier .hdf contenant le résultat final pour une demi-sphère
 */
-void creerHDFResultats(double* tabFinal,double* tabFinalDown0P, double* tabFinalDown0M,double* tabFinalUp0P,double* tabFinalUp0M, double* tabTh, double* tabPhi,unsigned long long nbPhotonsTot, Variables* var,double
-tempsPrec)
+void creerHDFResultats(double* tabFinal,double* tabFinalDown0P, double* tabFinalDown0M,double* tabFinalUp0P,double* tabFinalUp0M, 
+                       double* tabTh, double* tabPhi, double* tabTransDir, unsigned long long nbPhotonsTot, Variables* var, double tempsPrec)
 {
-	// Tableau temporaire utile pour la suite
-	double *tab;
-    tab = (double*)malloc(NBPHI*NBTHETA*NLAM*sizeof(double));
     char nomTab[256];
 
 	// Création du fichier de sortie
@@ -2018,8 +2015,6 @@ tempsPrec)
 	
 	/** 	Création du 1er tableau dans le fichier hdf
 		Valeur de la reflectance pour phi et theta donnés		**/
-//	char* nomTab="Valeurs de la reflectance (I)"; //nom du tableau
-	//char* nomTab="I_up (TOA)"; //nom du tableau
     int nbDimsTab=3;
     sprintf(nomTab, "I_up (TOA)");
 	int valDimsTab[nbDimsTab]; //valeurs des dimensions du tableau
@@ -2078,30 +2073,6 @@ tempsPrec)
 	if(status)
 	{
 		printf("\nERREUR : write hdf resultats U\n");
-		exit(1);
-	}
-	
-	// Fermeture du tableau
-	SDendaccess(sdsTab);
-
-	/** 	Création du tableau de lumière polarisée dans le fichier hdf
-	Valeur de la lumière polarisée pour phi et theta donnés		**/
-    sprintf(nomTab, "LP_up (TOA)");
-	// La plupart des paramètres restent les mêmes, pas besoin de les réinitialiser
-	
-	for(int i = 0; i < NBTHETA*NBPHI*NLAM; i++){
-		tab[i] = sqrt( tabFinal[1*NBTHETA*NBPHI*NLAM+i]*tabFinal[1*NBTHETA*NBPHI*NLAM+i] +
-						tabFinal[2*NBTHETA*NBPHI*NLAM+i]*tabFinal[2*NBTHETA*NBPHI*NLAM+i] );
-	}
-	
-	// Création du tableau
-	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
-	// Ecriture du tableau dans le fichier
-	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP) tab );
-	// Vérification du bon fonctionnement de l'écriture
-	if(status)
-	{
-		printf("\nERREUR : write hdf resultats lumiere polarisee\n");
 		exit(1);
 	}
 	
@@ -2422,31 +2393,25 @@ tempsPrec)
     free(tabPhiBis);
 	SDendaccess(sdsTab);
 	
-	/** 	Création du tableau lambda
-		Valeurs de lambda en fonction de l'indice	**/
+		/*Direct Transmission	**/
 	
-	double* tabLamBis;
-    tabLamBis = (double *)malloc(NLAM * sizeof(*(tabLamBis)));
-	for(int i=0; i<NLAM; i++)
-		tabLamBis[i] = i;
-
-	sprintf(nomTab, "Valeurs de Lambda");
+	sprintf(nomTab, "Direct Transmission");
 	nbDimsTab = 1;
-
 	int valDimsTab4[nbDimsTab];
 	valDimsTab4[0] = NLAM;
-
 	typeTab = DFNT_FLOAT64;
 	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab4);
-	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab4, (VOIDP) tabLamBis);
+	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab4, (VOIDP) tabTransDir);
 	// Vérification du bon fonctionnement de l'écriture
 	if(status)
 	{
-		printf("\nERREUR : write hdf resultats - tab Lam\n");
+		printf("\nERREUR : write hdf resultats - tab TransDir\n");
 		exit(1);
 	}
+
+	// Fermeture du tableau
+	//SDendaccess(sdsTab);
 	// Fermeture du fichier
 	SDend(sdFichier);
 	
-    free(tab);
 }
