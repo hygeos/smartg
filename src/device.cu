@@ -1512,9 +1512,6 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 			else{
 				ph->loc = OCEAN;
 			}
-            if (DIOPTREd==4){
-			ph->loc=SURFACE;
-            }
 		}
 		
 		
@@ -1534,9 +1531,7 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 		if( (ph->vz<0) && (DIOPTREd==2) && (SIMd!=0 && SIMd!=2 && SIMd!=3) ){
 			ph->loc = ABSORBED;
 		}
-	        if( (ph->vz<0) && (DIOPTREd==4) && (SIMd!=0 && SIMd!=2 && SIMd!=3) ){
-                ph->loc = ABSORBED;
-            }
+
 //		if( SURd==1 ){ /*On pondere le poids du photon par le coefficient de reflexion dans le cas 
 //			d'une reflexion speculaire sur le dioptre (mirroir parfait)*/
 //			ph->weight *= rat;
@@ -1544,11 +1539,10 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 		if (SURd==3 && ReflTot==0) {
 			ph->weight /= rat;
 				}
-	}
+	} // Reflection
 
 	else{	// Transmission par le dioptre
 		
-        if (DIOPTREd!=4){
 		// Le photon change de milieu
 		if(ph->vz<0){
 			if( SIMd==-1 || SIMd==1 ){
@@ -1591,77 +1585,8 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 //      mais on rajoute cela
         if ( SURd == 3) 
             ph->weight /= (1-rat);
-        }   // fin du if (DIOPTRE<4)		
 
-
-        if (DIOPTREd==4){
-//  changement du poids (nouvelle mméthode, cf collins et mat). Est ce à faire ici ou à la fin          
-        ph->weight /= (1-rat);
-		if(ph->vz<0){
-			if( SIMd==-1 || SIMd==0 ){
-				ph->loc = SPACE;
-			}
-			else{
-				ph->loc = ATMOS;
-			}
-		}
-		// Réflexion lambertienne
-		
-		float thetab;	// angle de diffusion (entre le vecteur avt et après reflexion)
-		float uxn,vxn,uyn,vyn,uzn,vzn;	// Vecteur du photon après reflexion
-		float cTh2 = RAND;
-		float cTh = sqrtf( cTh2 );
-		float sTh = sqrtf( 1.0F - cTh2 );
-		
-		float phi = RAND*DEUXPI;	//angle azimutal
-		float cPhi = __cosf(phi);
-		float sPhi = __sinf(phi);
-		
-		/** calcul u,v new **/
-		vxn = cPhi*sTh;
-		vyn = sPhi*sTh;
-		vzn = cTh;
-		
-		uxn = cPhi*cTh;
-		uyn = sPhi*cTh;
-		uzn = -sTh;
-		
-		/** Calcul angle Psi **/
-		float temp;
-		// Calcul du produit scalaire V.Vnew
-		temp = ph->vx*vxn + ph->vy*vyn + ph->vz*vzn;
-		thetab = acosf( fmin( fmax(-1.f,temp),1.f ) );
-		if( thetab==0 ){
-			ph->loc=NONE;
-// 			printf("theta nul\n");
-			return;
-		}
-		
-		// (Produit scalaire V.Unew)/sin(theta)
-		temp = __fdividef( ph->vx*uxn + ph->vy*uyn + ph->vz*uzn, __sinf(thetab) );
-		psi = acosf( fmin( fmax(-1.f,temp),1.f ) );	// angle entre le plan (u,v)old et (u,v)new
-		
-		if( (ph->vx*(uyn*vzn-uzn*vyn) + ph->vy*(uzn*vxn-uxn*vzn) + ph->vz*(uxn*vyn-uyn*vxn) ) <0 )
-		{	// test du signe de v.(unew^vnew) (scalaire et vectoriel)
-		psi = -psi;
-		}
-		
-        rotateStokes(ph->stokes1, ph->stokes2, ph->stokes3, psi,
-                &ph->stokes1, &ph->stokes2, &ph->stokes3);
-		
-		ph->vx = vxn;
-		ph->vy = vyn;
-		ph->vz = vzn;
-		ph->ux = uxn;
-		ph->uy = uyn;
-		ph->uz = uzn;
-		
-		// Aucun photon n'est absorbés mais on pondère le poids par l'albedo de diffusion de la surface lambertienne.
-        // modif ici à faire pour suivre nouvelle méthode (Collins et Mat)
-		ph->weight *=  alb[1+ph->ilam*2];
-		
-        } // fin du if (DIOPTRE==4)
-	} // transmission
+	} // Transmission
 	
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
 	/** Retour dans le repère d'origine **/
