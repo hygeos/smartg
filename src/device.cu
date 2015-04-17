@@ -1079,7 +1079,8 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
 			iang= __float2int_rd(zang);
 			zang = zang - iang;
 			/* L'accès à faer[x][y] se fait par faer[y*5+x] */
-			theta = faer[iang*5+4]+ zang*( faer[(iang+1)*5+4]-faer[iang*5+4] );
+			theta = faer[ph->ilam*NFAERd*5+iang*5+4]+ zang*( faer[ph->ilam*NFAERd*5+(iang+1)*5+4]-faer[ph->ilam*NFAERd*5+iang*5+4] );
+			//theta = faer[iang*5+4]+ zang*( faer[(iang+1)*5+4]-faer[iang*5+4] );
 			cTh = __cosf(theta);
 
 
@@ -1095,12 +1096,12 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
 				     &ph->stokes1, &ph->stokes2, &ph->stokes3);
 
 			// Calcul des parametres de Stokes du photon apres diffusion
-			ph->stokes1 *= faer[iang*5+0];
-			ph->stokes2 *= faer[iang*5+1];
-			ph->stokes3 *= faer[iang*5+2];
+			ph->stokes1 *= faer[ph->ilam*NFAERd*5+iang*5+0];
+			ph->stokes2 *= faer[ph->ilam*NFAERd*5+iang*5+1];
+			ph->stokes3 *= faer[ph->ilam*NFAERd*5+iang*5+2];
 
 			float debias;
-			debias = __fdividef( 2., faer[iang*5+0] + faer[iang*5+1] );
+			debias = __fdividef( 2., faer[ph->ilam*NFAERd*5+iang*5+0] + faer[ph->ilam*NFAERd*5+iang*5+1] );
 			ph->stokes1 *= debias;  
 			ph->stokes2 *= debias;  
 			ph->stokes3 *= debias;  
@@ -1142,7 +1143,7 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
 		iang = __float2int_rd(zang);
 		zang = zang - iang;
 
-		theta = foce[iang*5+4]+ zang*( foce[(iang+1)*5+4]-foce[iang*5+4] );
+		theta = foce[ph->ilam*NFOCEd*5+iang*5+4]+ zang*( foce[ph->ilam*NFOCEd*5+(iang+1)*5+4]-foce[ph->ilam*NFOCEd*5+iang*5+4] );
 		
 		cTh = __cosf(theta);
 
@@ -1159,12 +1160,12 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
 
 
         // Calcul des parametres de Stokes du photon apres diffusion
-        ph->stokes1 *= foce[iang*5+0];
-        ph->stokes2 *= foce[iang*5+1];
-        ph->stokes3 *= foce[iang*5+2];
+        ph->stokes1 *= foce[ph->ilam*NFOCEd*5+iang*5+0];
+        ph->stokes2 *= foce[ph->ilam*NFOCEd*5+iang*5+1];
+        ph->stokes3 *= foce[ph->ilam*NFOCEd*5+iang*5+2];
 
         float debias;
-        debias = __fdividef( 2., foce[iang*5+0] + foce[iang*5+1] );
+        debias = __fdividef( 2., foce[ph->ilam*NFOCEd*5+iang*5+0] + foce[ph->ilam*NFOCEd*5+iang*5+1] );
         ph->stokes1 *= debias;
         ph->stokes2 *= debias;
         ph->stokes3 *= debias;

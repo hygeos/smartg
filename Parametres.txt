@@ -1,6 +1,6 @@
 ################ SIMULATION #####################
 # Number of "Photons" to inject (unsigned long long)
-NBPHOTONS = 1e8
+NBPHOTONS = 1e9
 
 # View Zenith Angle in degree (float)
 THVDEG = 30.0
@@ -59,7 +59,8 @@ PATHPROFILATM = /home/did/RTC/SMART-G/profil/profil.atm.base10
 
 # Absolute name of file containing the atmospheric phase matrix 
 	# Format 
-PATHDIFFAER = /home/did/RTC/SMART-G/fic/pf_maritime_clean_750nm.txt
+PATHDIFFAER = /home/did/RTC/SMART-G/profil/pathdiffaer.base10
+#PATHDIFFAER = /home/did/RTC/SMART-G/fic/pf_maritime_clean_750nm.txt
 
 ################ SURFACE #####################
 # Absolute name of file containing the Land and Seafloor lambertian albedo 
@@ -91,7 +92,8 @@ Y0= 0.0
 PATHPROFILOCE = /home/did/RTC/SMART-G/profil/profil.oce.base10
 # Absolute name of file containing the Ocean phase function 
 	# Format 
-PATHDIFFOCE = /home/did/RTC/SMART-G/fic/pf_ocean-spm_1.00_560nm.txt
+#PATHDIFFOCE = /home/did/RTC/SMART-G/fic/pf_ocean-spm_1.00_560nm.txt
+PATHDIFFOCE = /home/did/RTC/SMART-G/profil/pathdiffoce.base10
 
 ################ PARAMETERS   #####################
 
@@ -99,7 +101,7 @@ PATHDIFFOCE = /home/did/RTC/SMART-G/fic/pf_ocean-spm_1.00_560nm.txt
 NFAER = 1000000
 
 # number of samples for the computation of the Cumulative Distribution Function of the ocean phase matrix
-NFOCE = 10000000 
+NFOCE = 1000000 
 
 # LOOP number in the kernel for each thread
 NBLOOP = 5000 

@@ -7,7 +7,6 @@
 #include "host.h"
 #include "device.h"
 
-// __constant__ float foce_c[5*10000000];
 /**********************************************************
 *
 *			host.h
@@ -392,6 +391,35 @@ void init_profileOCE(int *NOCE, int *NLAM, char *PATHPROFILOCE) {
         if (c != 2) break;
         if (read_first) *NOCE += 1;
     }
+
+    fclose(fp);
+}
+
+void get_diff(char* chaineValeur, int ilam, char *PATHDIFFAER) {
+    //
+    // reads the number of angles in the ilamth  phase function (PF)
+
+    FILE* fp;
+    int count=0;
+    char buffer[2048];
+
+    fp = fopen(PATHDIFFAER, "r");
+
+    if (fp == NULL) {
+        printf("ERROR: Cannot open profile '%s'\n", PATHDIFFAER);
+        exit(1);
+    }
+
+    while(count < ilam){
+        if (fgets(buffer, 2048, fp) == NULL) break;
+        count++;
+    }
+
+    fgets(buffer, 2048, fp) ;
+	char* ptr = buffer; //pointeur du debut de la ligne
+	while(*ptr == '\n') ptr++;
+	strcpy(chaineValeur, ptr);
+	chaineValeur[strlen(chaineValeur)-1] = '\0';
 
     fclose(fp);
 }
@@ -790,28 +818,31 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 
 	/** Modèle de diffusion **/
 	// Modèle de diffusion des aérosols
-	tab_H->faer = (float*)malloc(5 * NFAER * sizeof(float));
+	tab_H->faer = (float*)malloc(5 * NFAER *  NLAM * sizeof(float));
+	//tab_H->faer = (float*)malloc(5 * NFAER * sizeof(float));
 	if( tab_H->faer == NULL ){
 		printf("ERREUR: Problème de malloc de tab_H->faer dans initTableaux\n");
 		exit(1);
 	}
-	memset(tab_H->faer,0,5 * NFAER*sizeof(float) );
+	memset(tab_H->faer,0,5 * NFAER* NLAM * sizeof(float) );
+	//memset(tab_H->faer,0,5 * NFAER*sizeof(float) );
 	
-	if( cudaMalloc(&(tab_D->faer), 5 * NFAER * sizeof(float)) != cudaSuccess ){
+	//if( cudaMalloc(&(tab_D->faer), 5 * NFAER * sizeof(float)) != cudaSuccess ){
+	if( cudaMalloc(&(tab_D->faer), 5 * NFAER * NLAM * sizeof(float)) != cudaSuccess ){
 		printf("ERREUR: Problème de cudaMalloc de tab_D->faer dans initTableaux\n");
 		exit(1);	
 	}
 	
 	/** Modèle de l'ocean **/
 	// Fonction de phase 
-	tab_H->foce = (float*)malloc(5 * NFOCE * sizeof(float));
+	tab_H->foce = (float*)malloc(5 * NFOCE * NLAM *sizeof(float));
 	if( tab_H->foce == NULL ){
 		printf("ERREUR: Problème de malloc de tab_H->foce dans initTableaux\n");
 		exit(1);
 	}
-	memset(tab_H->foce,0,5 * NFOCE*sizeof(float) );
+	memset(tab_H->foce,0,5 * NFOCE*NLAM *sizeof(float) );
 	
-	if( cudaMalloc(&(tab_D->foce), 5 * NFOCE * sizeof(float)) != cudaSuccess ){
+	if( cudaMalloc(&(tab_D->foce), 5 * NFOCE * NLAM *sizeof(float)) != cudaSuccess ){
 		printf("ERREUR: Problème de cudaMalloc de tab_D->foce dans initTableaux\n");
 		exit(1);	
 	}
@@ -1172,17 +1203,16 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 *	> Calculs de profils
 ***********************************************************/
 
-/* calculFaer
-* Calcul de la fonction de phase des aérosols
+/* calculF
+* Compute CDF of scattering phase matrices
 */
-void calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, int nf){
+void calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, int nf, int ilam){
 
     // not necessary when file name is "None"
     if (strcmp(nomFichier, "None") == 0) {
         return;
     }
 
-	FILE* fichier = fopen(nomFichier, "r");
 
 	double *scum = (double*) malloc(lsa*sizeof(*scum));
 	if( scum==NULL ){
@@ -1200,7 +1230,7 @@ void calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, 
 	/** Allocation de la mémoire des tableaux contenant les données **/
 	double *ang;
 	double *p1, *p2, *p3, *p4;
-	ang = (double*) malloc(lsa*sizeof(*ang));
+	ang =(double*) malloc(lsa*sizeof(*ang));
 	p1 = (double*) malloc(lsa*sizeof(*p1));
 	p2 = (double*) malloc(lsa*sizeof(*p2));
 	p3 = (double*) malloc(lsa*sizeof(*p3));
@@ -1211,12 +1241,14 @@ void calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, 
 	}
 	
 	/** Lecture des données sur le modèle de diffusion des aérosols **/
+	FILE* fichier = fopen(nomFichier, "r");
 	if(fichier == NULL){
 		printf("ERREUR : Ouverture impossible du fichier %s pour la diffusion d'aérosol", nomFichier );
 		exit(1);
 	}
 	
 	else{
+        printf("reading %s\n",nomFichier);
         char c = getc(fichier);
         while(c=='#') {
             while((c=getc(fichier))!='\n');
@@ -1285,23 +1317,17 @@ void calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, 
 		while( (scum[ipf+1]<z) )
 			ipf++;
 		
-			phase_H[iang*5+4] = float( ((scum[ipf+1]-z)*ang[ipf] + (z-scum[ipf])*ang[ipf+1])/(scum[ipf+1]-scum[ipf]) );
+			phase_H[ilam*5*nf+iang*5+4] = float( ((scum[ipf+1]-z)*ang[ipf] + (z-scum[ipf])*ang[ipf+1])/(scum[ipf+1]-scum[ipf]) );
 //		norm = p1[ipf]+p2[ipf];			// Angle
 //		phase_H[iang*5+0] = float( p1[ipf]/norm );	// I paralèlle
 //		phase_H[iang*5+1] = float( p2[ipf]/norm );	// I perpendiculaire
 //		phase_H[iang*5+2] = float( p3[ipf]/norm );	// u
 //		phase_H[iang*5+3] = 0.F;			// v, toujours nul
-			phase_H[iang*5+0] = float( p1[ipf] );	// I paralèlle
-			phase_H[iang*5+1] = float( p2[ipf] );	// I perpendiculaire
-			phase_H[iang*5+2] = float( p3[ipf] );	// u
-			phase_H[iang*5+3] = 0.F;	       	// v, toujours nul
+			phase_H[ilam*5*nf+iang*5+0] = float( p1[ipf] );	// I paralèlle
+			phase_H[ilam*5*nf+iang*5+1] = float( p2[ipf] );	// I perpendiculaire
+			phase_H[ilam*5*nf+iang*5+2] = float( p3[ipf] );	// u
+			phase_H[ilam*5*nf+iang*5+3] = 0.F;	       	// v, toujours nul
 	}
-	
-//	phase_H[(nf-1)*5+4] = PI;
-//	phase_H[(nf-1)*5+0] = 0.5F+00;
-//	phase_H[(nf-1)*5+1] = 0.5F+00;
-//	phase_H[(nf-1)*5+2] = float( p3[lsa-1]/(p1[lsa-1]+p2[lsa-1]) );
-//	phase_H[(nf-1)*5+3] = 0.F+00;
 	
 	free(scum);
 	free(ang);
@@ -1312,7 +1338,7 @@ void calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, 
 	
 	/** Allocation des FAER dans la device memory **/		
 
-	cudaError_t erreur = cudaMemcpy(phase_D, phase_H, 5*nf*sizeof(float), cudaMemcpyHostToDevice); 
+	cudaError_t erreur = cudaMemcpy(phase_D, phase_H, 5*nf*NLAM*sizeof(float), cudaMemcpyHostToDevice); 
 	if( erreur != cudaSuccess ){
 		printf( "ERREUR: Problème de copie phase_D dans calculF\n");
 		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );

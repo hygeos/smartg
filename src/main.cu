@@ -89,9 +89,6 @@ int main (int argc, char *argv[])
     }
 
 
-    // read LSAAER and LSAOCE
-    LSAAER = count_lines(PATHDIFFAER);
-    LSAOCE = count_lines(PATHDIFFOCE);
 	
 
 	/** Initialisation de la carte graphique **/
@@ -120,6 +117,8 @@ int main (int argc, char *argv[])
 	/** Variables du main **/
 	
 	double tempsPrec = 0.; 	//temps ecoule de la simulation precedente
+    unsigned int ilam;
+    char PATHDIFF[1024];
 	
 	// Regroupement et initialisation des variables a envoyer dans le kernel (structure de variables)
 	Variables* var_H; //variables version host
@@ -232,8 +231,6 @@ int main (int argc, char *argv[])
         StartProcessing(perfInitG);
 #endif
 	/** Calcul des modèles utiles à l'algorithme **/
-	// Calcul de faer, modèle de diffusion des aérosols
-    calculF( PATHDIFFAER, tab_H.faer, tab_D.faer, LSAAER, NFAER);
 #ifdef _PERF
                 StopProcessing(perfInitG);
                 GetElapsedTime(perfInitG);
@@ -241,11 +238,17 @@ int main (int argc, char *argv[])
 	
 	// Calcul de foce, modèle de diffusion dans l'océan
 	if( SIM==0 || SIM==2 || SIM==3 ){
-		calculF( PATHDIFFOCE, tab_H.foce, tab_D.foce, LSAOCE, NFOCE);
+        // Read oceanic profile
         profilOce(&tab_H, &tab_D);
+        for(ilam=0; ilam< NLAM; ilam++){
+	       // Calcul de foce, modèle de diffusion de l ocean 
+           get_diff(PATHDIFF,  ilam, PATHDIFFOCE);
+           LSAOCE = count_lines(PATHDIFF);
+		   calculF(PATHDIFF, tab_H.foce, tab_D.foce, LSAOCE, NFOCE, ilam);
+        }
 	}
 
-   // Reading spectral albedo (surface or seafllor)
+   // Reading spectral albedo (surface or seafloor)
 	if( SIM!=-2 ){
         profilAlb(&tab_H, &tab_D);
     }
@@ -255,9 +258,13 @@ int main (int argc, char *argv[])
 #endif
     if ((SIM == -2) || (SIM == 1) || (SIM == 2)) {
         // Read atmospheric profile
-        int ilam=0;
         profilAtm(&tab_H, &tab_D);
-        for(ilam=0; ilam<NLAM; ilam++){
+        for(ilam=0; ilam< NLAM; ilam++){
+	       // Calcul de faer, modèle de diffusion des aérosols
+           get_diff(PATHDIFF,  ilam, PATHDIFFAER);
+           LSAAER = count_lines(PATHDIFF);
+           calculF(PATHDIFF, tab_H.faer, tab_D.faer, LSAAER, NFAER, ilam);
+           // compute direct transmission
            tabTransDir[ilam] = exp(-tab_H.h[NATM+ilam*(NATM+1)]/cos(THVDEG*PI/180.));
         }
     }
@@ -276,7 +283,6 @@ int main (int argc, char *argv[])
 	/** Séparation du code pour atmosphère sphérique ou parallèle **/
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
 	// Calcul du point d'impact du photon
-    int ilam=0;
 	impactInit(init_H, init_D, &tab_H, &tab_D);
     for(ilam=0; ilam<NLAM; ilam++){
        tabTransDir[ilam] = exp(-tab_H.hph0[NATM+ilam*(NATM+1)]);
@@ -285,9 +291,6 @@ int main (int argc, char *argv[])
 	#ifdef DEBUG
 	printf("Paramètres initiaux du photon: taumax0=%lf - zintermax=%lf - (%lf,%lf,%lf)\n",\
 		   tab_H->hph0[NATM+1], tab_H->zph0[NATM+1], init_H->x0, init_H->y0, init_H->z0 );
-//		   init_H->taumax0, init_H->zintermax0, init_H->x0, init_H->y0, init_H->z0 );
-// 	for(int i=0; i<NATM+1; i++)
-// 		printf("zph0[%d]=%10.7f - hph0[%d]=%10.7f\n",i, tab_H.zph0[i], i ,tab_H.hph0[i] );
 	#endif
 	
 	#endif /* Fin de la spécification atmosphère sphérique */
