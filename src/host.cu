@@ -1924,14 +1924,38 @@ void calculTabFinal(double* tabFinal, double* tabTh, double* tabPhi, double* tab
 
 
 
+//
+// write a single sds name in open hdf file sd
+//
+void write_sds(int sd, const char* name, int ndims, int *dims, int type, void* values) {
+
+    int start[ndims];
+    int sds, i, status;
+
+    // create sds
+    sds = SDcreate(sd, name, type, ndims, dims);
+    for (i=0 ; i<ndims ; i++) {
+        start[i]=0;
+    }
+
+    // write in sds
+    status = SDwritedata(sds, start, NULL, dims, (VOIDP)values);
+    if(status) {
+        printf("\nError writing sds %s\n", name);
+        exit(1);
+    }
+
+    // close sds
+    SDendaccess(sds);
+}
+
+
 /* creerHDFResultats
 * Fonction qui crée le fichier .hdf contenant le résultat final pour une demi-sphère
 */
 void creerHDFResultats(double* tabFinal,double* tabFinalDown0P, double* tabFinalDown0M,double* tabFinalUp0P,double* tabFinalUp0M, 
                        double* tabTh, double* tabPhi, double* tabTransDir, unsigned long long nbPhotonsTot, Variables* var, double tempsPrec)
 {
-    char nomTab[256];
-
 	// Création du fichier de sortie
 	int sdFichier = SDstart(PATHRESULTATSHDF, DFACC_CREATE);
 	if (sdFichier == FAIL) {
@@ -1994,405 +2018,69 @@ void creerHDFResultats(double* tabFinal,double* tabFinalDown0P, double* tabFinal
 	SDsetattr(sdFichier, "nbErreursTheta", DFNT_INT32, 1, &(var->erreurtheta));
 	SDsetattr(sdFichier, "tempsEcoule", DFNT_FLOAT64, 1, &tempsEcouledouble);
 	
-	/** 	Création du 1er tableau dans le fichier hdf
-		Valeur de la reflectance pour phi et theta donnés		**/
-    int nbDimsTab=3;
-    sprintf(nomTab, "I_up (TOA)");
-	int valDimsTab[nbDimsTab]; //valeurs des dimensions du tableau
-	valDimsTab[2] = NBTHETA;	//colonnes
-	valDimsTab[1] = NBPHI;
-	valDimsTab[0] = NLAM;
-	int typeTab = DFNT_FLOAT64; //type des éléments du tableau
 	
-	// Création du tableau
-	int sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
-	int startTab[nbDimsTab]; //début de la lecture du tableau
-	startTab[0]=0;
-	startTab[1]=0;
-    startTab[2]=0;
-	// Ecriture du tableau dans le fichier
-	int status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP)tabFinal);
-	// Vérification du bon fonctionnement de l'écriture
-	if(status)
-	{
-		printf("\nERREUR : write hdf resultats reflectance\n");
-		exit(1);
-	}
-	
-	// Fermeture du tableau
-	SDendaccess(sdsTab);
-	
-	/** 	Création du tableau Q dans le fichier hdf
-		Valeur de Q pour phi et theta donnés		**/
-    sprintf(nomTab, "Q_up (TOA)");
-	// La plupart des paramètres restent les mêmes, pas besoin de les réinitialiser
-	
-	// Création du tableau
-	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
-	// Ecriture du tableau dans le fichier
-	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP) (tabFinal+NBPHI*NBTHETA*NLAM) );
-	// Vérification du bon fonctionnement de l'écriture
-	if(status)
-	{
-		printf("\nERREUR : write hdf resultats Q\n");
-		exit(1);
-	}
-	
-	// Fermeture du tableau
-	SDendaccess(sdsTab);
-	
-	/** 	Création du tableau U dans le fichier hdf
-	Valeur de U pour phi et theta donnés		**/
-    sprintf(nomTab, "U_up (TOA)");
-	// La plupart des paramètres restent les mêmes, pas besoin de les réinitialiser
-	
-	// Création du tableau
-	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
-	// Ecriture du tableau dans le fichier
-	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP) (tabFinal+2*NBPHI*NBTHETA*NLAM) );
-	// Vérification du bon fonctionnement de l'écriture
-	if(status)
-	{
-		printf("\nERREUR : write hdf resultats U\n");
-		exit(1);
-	}
-	
-	// Fermeture du tableau
-	SDendaccess(sdsTab);
+    //
+    // write datasets
+    //
+    int ndims=3;
+    int dims[ndims];
+    dims[2] = NBTHETA;
+    dims[1] = NBPHI;
+    dims[0] = NLAM;
 
-    // flux descendant 0+
-    sprintf(nomTab, "I_down (0+)");
-	nbDimsTab = 3; //nombre de dimensions du tableau
-	valDimsTab[2] = NBTHETA;	//colonnes
-	valDimsTab[1] = NBPHI;
-	valDimsTab[0] = NLAM;
-	typeTab = DFNT_FLOAT64; //type des éléments du tableau
-	
-	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
-	startTab[0]=0;
-	startTab[1]=0;
-	startTab[2]=0;
-	// Ecriture du tableau dans le fichier
-	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP)tabFinalDown0P);
-	// Vérification du bon fonctionnement de l'écriture
-	if(status)
-	{
-		printf("\nERREUR : write hdf resultats reflectance\n");
-		exit(1);
-	}
-	
-	// Fermeture du tableau
-	SDendaccess(sdsTab);
-	
-    // flux descendant 0-
-    sprintf(nomTab, "I_down (0-)");
-	nbDimsTab = 3; //nombre de dimensions du tableau
-	valDimsTab[2] = NBTHETA;	//colonnes
-	valDimsTab[1] = NBPHI;
-	valDimsTab[0] = NLAM;
-	typeTab = DFNT_FLOAT64; //type des éléments du tableau
-	
-	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
-	startTab[0]=0;
-	startTab[1]=0;
-	startTab[2]=0;
-	// Ecriture du tableau dans le fichier
-	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP)tabFinalDown0M);
-	// Vérification du bon fonctionnement de l'écriture
-	if(status)
-	{
-		printf("\nERREUR : write hdf resultats reflectance\n");
-		exit(1);
-	}
-	
-	// Fermeture du tableau
-	SDendaccess(sdsTab);
+    write_sds(sdFichier, "I_up (TOA)", ndims, dims, DFNT_FLOAT64, (VOIDP)(tabFinal));
+    write_sds(sdFichier, "Q_up (TOA)", ndims, dims, DFNT_FLOAT64, (VOIDP)(tabFinal+NBPHI*NBTHETA*NLAM));
+    write_sds(sdFichier, "U_up (TOA)", ndims, dims, DFNT_FLOAT64, (VOIDP)(tabFinal+2*NBPHI*NBTHETA*NLAM));
 
-    // flux ascendant 0+
-    sprintf(nomTab, "I_up (0+)");
-	nbDimsTab = 3; //nombre de dimensions du tableau
-	valDimsTab[2] = NBTHETA;	//colonnes
-	valDimsTab[1] = NBPHI;
-	valDimsTab[0] = NLAM;
-	typeTab = DFNT_FLOAT64; //type des éléments du tableau
-	
-	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
-	startTab[0]=0;
-	startTab[1]=0;
-	startTab[2]=0;
-	// Ecriture du tableau dans le fichier
-	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP)tabFinalUp0P);
-	// Vérification du bon fonctionnement de l'écriture
-	if(status)
-	{
-		printf("\nERREUR : write hdf resultats reflectance\n");
-		exit(1);
-	}
-	
-	// Fermeture du tableau
-	SDendaccess(sdsTab);
-	
-    // flux asscendant 0-
-    sprintf(nomTab, "I_up (0-)");
-	nbDimsTab = 3; //nombre de dimensions du tableau
-	valDimsTab[2] = NBTHETA;	//colonnes
-	valDimsTab[1] = NBPHI;
-	valDimsTab[0] = NLAM;
-	typeTab = DFNT_FLOAT64; //type des éléments du tableau
-	
-	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
-	startTab[0]=0;
-	startTab[1]=0;
-	startTab[2]=0;
-	// Ecriture du tableau dans le fichier
-	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP)tabFinalUp0M);
-	// Vérification du bon fonctionnement de l'écriture
-	if(status)
-	{
-		printf("\nERREUR : write hdf resultats reflectance\n");
-		exit(1);
-	}
-	
-	// Fermeture du tableau
-	SDendaccess(sdsTab);
+    if (OUTPUT_LAYERS & OUTPUT_BOA_DOWN_0P_UP_0M) {
+        write_sds(sdFichier, "I_down (0+)", ndims, dims, DFNT_FLOAT64, (VOIDP)(tabFinalDown0P));
+        write_sds(sdFichier, "Q_down (0+)", ndims, dims, DFNT_FLOAT64, (VOIDP)(tabFinalDown0P+NBPHI*NBTHETA*NLAM));
+        write_sds(sdFichier, "U_down (0+)", ndims, dims, DFNT_FLOAT64, (VOIDP)(tabFinalDown0P+2*NBPHI*NBTHETA*NLAM));
 
+        write_sds(sdFichier, "I_up (0-)", ndims, dims, DFNT_FLOAT64, (VOIDP)(tabFinalUp0M));
+        write_sds(sdFichier, "Q_up (0-)", ndims, dims, DFNT_FLOAT64, (VOIDP)(tabFinalUp0M+NBPHI*NBTHETA*NLAM));
+        write_sds(sdFichier, "U_up (0-)", ndims, dims, DFNT_FLOAT64, (VOIDP)(tabFinalUp0M+2*NBPHI*NBTHETA*NLAM));
+    }
 
-	/** 	Création du tableau Q dans le fichier hdf
-		Valeur de Q pour phi et theta donnés		**/
-    sprintf(nomTab, "Q_down (0+)");
-	// La plupart des paramètres restent les mêmes, pas besoin de les réinitialiser
-	
-	// Création du tableau
-	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
-	// Ecriture du tableau dans le fichier
-	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP) (tabFinalDown0P+NBPHI*NBTHETA*NLAM) );
-	// Vérification du bon fonctionnement de l'écriture
-	if(status)
-	{
-		printf("\nERREUR : write hdf resultats Q\n");
-		exit(1);
-	}
-	
-	// Fermeture du tableau
-	SDendaccess(sdsTab);
-	
+    if (OUTPUT_LAYERS & OUTPUT_BOA_DOWN_0M_UP_0P) {
+        write_sds(sdFichier, "I_down (0-)", ndims, dims, DFNT_FLOAT64, (VOIDP)(tabFinalDown0M));
+        write_sds(sdFichier, "Q_down (0-)", ndims, dims, DFNT_FLOAT64, (VOIDP)(tabFinalDown0M+NBPHI*NBTHETA*NLAM));
+        write_sds(sdFichier, "U_down (0-)", ndims, dims, DFNT_FLOAT64, (VOIDP)(tabFinalDown0M+2*NBPHI*NBTHETA*NLAM));
 
-    sprintf(nomTab, "Q_down (0-)");
-	// La plupart des paramètres restent les mêmes, pas besoin de les réinitialiser
-	
-	// Création du tableau
-	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
-	// Ecriture du tableau dans le fichier
-	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP) (tabFinalDown0M+NBPHI*NBTHETA*NLAM) );
-	// Vérification du bon fonctionnement de l'écriture
-	if(status)
-	{
-		printf("\nERREUR : write hdf resultats Q\n");
-		exit(1);
-	}
-	
-	// Fermeture du tableau
-	SDendaccess(sdsTab);
-	
-    sprintf(nomTab, "Q_up (0+)");
-	// La plupart des paramètres restent les mêmes, pas besoin de les réinitialiser
-	
-	// Création du tableau
-	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
-	// Ecriture du tableau dans le fichier
-	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP) (tabFinalUp0P+NBPHI*NBTHETA*NLAM) );
-	// Vérification du bon fonctionnement de l'écriture
-	if(status)
-	{
-		printf("\nERREUR : write hdf resultats Q\n");
-		exit(1);
-	}
-	
-	// Fermeture du tableau
-	SDendaccess(sdsTab);
-	
+        write_sds(sdFichier, "I_up (0+)", ndims, dims, DFNT_FLOAT64, (VOIDP)(tabFinalUp0P));
+        write_sds(sdFichier, "Q_up (0+)", ndims, dims, DFNT_FLOAT64, (VOIDP)(tabFinalUp0P+NBPHI*NBTHETA*NLAM));
+        write_sds(sdFichier, "U_up (0+)", ndims, dims, DFNT_FLOAT64, (VOIDP)(tabFinalUp0P+2*NBPHI*NBTHETA*NLAM));
+    }
 
-    sprintf(nomTab, "Q_up (0-)");
-	// La plupart des paramètres restent les mêmes, pas besoin de les réinitialiser
-	
-	// Création du tableau
-	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
-	// Ecriture du tableau dans le fichier
-	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP) (tabFinalUp0M+NBPHI*NBTHETA*NLAM) );
-	// Vérification du bon fonctionnement de l'écriture
-	if(status)
-	{
-		printf("\nERREUR : write hdf resultats Q\n");
-		exit(1);
-	}
-	
-	// Fermeture du tableau
-	SDendaccess(sdsTab);
-	
+    // Number of photons
+    write_sds(sdFichier, "Numbers of photons", ndims, dims, DFNT_FLOAT64,
+            (VOIDP)(tabFinal+3*NBPHI*NBTHETA*NLAM));
 
-	/** 	Création du tableau U dans le fichier hdf
-	Valeur de U pour phi et theta donnés		**/
-    sprintf(nomTab, "U_down (0+)");
-	// La plupart des paramètres restent les mêmes, pas besoin de les réinitialiser
-	
-	// Création du tableau
-	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
-	// Ecriture du tableau dans le fichier
-	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP) (tabFinalDown0P+2*NBPHI*NBTHETA*NLAM) );
-	// Vérification du bon fonctionnement de l'écriture
-	if(status)
-	{
-		printf("\nERREUR : write hdf resultats U\n");
-		exit(1);
-	}
-	
-	// Fermeture du tableau
-	SDendaccess(sdsTab);
-
-    sprintf(nomTab, "U_down (0-)");
-	// La plupart des paramètres restent les mêmes, pas besoin de les réinitialiser
-	
-	// Création du tableau
-	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
-	// Ecriture du tableau dans le fichier
-	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP) (tabFinalDown0M+2*NBPHI*NBTHETA*NLAM) );
-	// Vérification du bon fonctionnement de l'écriture
-	if(status)
-	{
-		printf("\nERREUR : write hdf resultats U\n");
-		exit(1);
-	}
-	
-	// Fermeture du tableau
-	SDendaccess(sdsTab);
-
-    sprintf(nomTab, "U_up (0+)");
-	// La plupart des paramètres restent les mêmes, pas besoin de les réinitialiser
-	
-	// Création du tableau
-	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
-	// Ecriture du tableau dans le fichier
-	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP) (tabFinalUp0P+2*NBPHI*NBTHETA*NLAM) );
-	// Vérification du bon fonctionnement de l'écriture
-	if(status)
-	{
-		printf("\nERREUR : write hdf resultats U\n");
-		exit(1);
-	}
-	
-	// Fermeture du tableau
-	SDendaccess(sdsTab);
-
-    sprintf(nomTab, "U_up (0-)");
-	// La plupart des paramètres restent les mêmes, pas besoin de les réinitialiser
-	
-	// Création du tableau
-	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
-	// Ecriture du tableau dans le fichier
-	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP) (tabFinalUp0M+2*NBPHI*NBTHETA*NLAM) );
-	// Vérification du bon fonctionnement de l'écriture
-	if(status)
-	{
-		printf("\nERREUR : write hdf resultats U\n");
-		exit(1);
-	}
-	
-	// Fermeture du tableau
-	SDendaccess(sdsTab);
-
-
-
-	/** 	Création du tableau N dans le fichier hdf
-	Valeur de N pour phi et theta donnés		**/
-    sprintf(nomTab, "Numbers of photons");
-	// La plupart des paramètres restent les mêmes, pas besoin de les réinitialiser
-	
-	// Création du tableau
-	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab);
-	// Ecriture du tableau dans le fichier
-	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab, (VOIDP) (tabFinal+3*NBPHI*NBTHETA*NLAM) );
-	// Vérification du bon fonctionnement de l'écriture
-	if(status)
-	{
-		printf("\nERREUR : write hdf resultats U\n");
-		exit(1);
-	}
-	
-	// Fermeture du tableau
-	SDendaccess(sdsTab);
-	
-
-	
-	/** 	Création du tableau theta
-		Valeurs de theta en fonction de l'indice	**/
-	//conversion en degrès de theta pour une meilleure visualisation de la sortie
-	float *tabThBis;
+    // theta in degrees
+    float *tabThBis;
     tabThBis = (float*)malloc(NBTHETA*sizeof(float));
-	for(int i=0; i<NBTHETA; i++)
-		tabThBis[i] = tabTh[i]/DEG2RAD;
-	
-    sprintf(nomTab, "Zenith angles");
-	nbDimsTab = 1;
-	int valDimsTab2[nbDimsTab];
-	valDimsTab2[0] = NBTHETA;
-	typeTab = DFNT_FLOAT32;
-	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab2);
-	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab2, (VOIDP) tabThBis);
-	// Vérification du bon fonctionnement de l'écriture
-	if(status)
-	{
-		printf("\nERREUR : write hdf resultats - tab Theta\n");
-		exit(1);
-	}
-			
-	// Fermeture du tableau
+    for(int i=0; i<NBTHETA; i++) {
+        tabThBis[i] = tabTh[i]/DEG2RAD;
+    }
+    dims[0] = NBTHETA;
+    write_sds(sdFichier, "Zenith angles", 1, dims, DFNT_FLOAT32, (VOIDP)tabThBis);
     free(tabThBis);
-	SDendaccess(sdsTab);
-	
-	/** 	Création du tableau phi
-		Valeurs de phi en fonction de l'indice	**/
-	float *tabPhiBis;
-    tabPhiBis = (float*)malloc(NBPHI*sizeof(float));
-	for(int i=0; i<NBPHI; i++)
-		tabPhiBis[i] = tabPhi[i]/DEG2RAD;
-	
-    sprintf(nomTab, "Azimut angles");
-	nbDimsTab = 1;
-	int valDimsTab3[nbDimsTab];
-	valDimsTab3[0] = NBPHI;
-	typeTab = DFNT_FLOAT32;
-	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab3);
-	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab3, (VOIDP)tabPhiBis);
-	// Vérification du bon fonctionnement de l'écriture
-	if(status)
-	{
-		printf("\nERREUR : write hdf resultats - tab Phi\n");
-		exit(1);
-	}
-	
-	// Fermeture du tableau
-    free(tabPhiBis);
-	SDendaccess(sdsTab);
-	
-		/*Direct Transmission	**/
-	
-	sprintf(nomTab, "Direct Transmission");
-	nbDimsTab = 1;
-	int valDimsTab4[nbDimsTab];
-	valDimsTab4[0] = NLAM;
-	typeTab = DFNT_FLOAT64;
-	sdsTab = SDcreate(sdFichier, nomTab, typeTab, nbDimsTab, valDimsTab4);
-	status = SDwritedata(sdsTab, startTab, NULL, valDimsTab4, (VOIDP) tabTransDir);
-	// Vérification du bon fonctionnement de l'écriture
-	if(status)
-	{
-		printf("\nERREUR : write hdf resultats - tab TransDir\n");
-		exit(1);
-	}
 
-	// Fermeture du tableau
-	//SDendaccess(sdsTab);
-	// Fermeture du fichier
-	SDend(sdFichier);
-	
+    // phi in degrees
+    float *tabPhiBis;
+    tabPhiBis = (float*)malloc(NBPHI*sizeof(float));
+    for(int i=0; i<NBPHI; i++) {
+        tabPhiBis[i] = tabPhi[i]/DEG2RAD;
+    }
+    dims[0] = NBPHI;
+    write_sds(sdFichier, "Azimut angles", 1, dims, DFNT_FLOAT32, (VOIDP)tabPhiBis);
+    free(tabPhiBis);
+
+    // Direct Transmission
+    dims[0] = NLAM;
+    write_sds(sdFichier, "Direct Transmission", 1, dims, DFNT_FLOAT64, (VOIDP)tabTransDir);
+
+    // closes hdf file
+    SDend(sdFichier);
+
 }
