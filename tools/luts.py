@@ -762,6 +762,11 @@ def read_lut_hdf(filename, dataset, axnames=None):
 
     # load axes
     for d in axnames:
+        if not d in hdf.datasets():
+            axes.append(None)
+            names.append(d)
+            continue
+
         sds = hdf.select(d)
         (sdsname, rank, shp, dtype, nattr) = sds.info()
 
@@ -773,7 +778,7 @@ def read_lut_hdf(filename, dataset, axnames=None):
 
     assert data.ndim == len(axes)
     for i in xrange(data.ndim):
-        assert len(axes[i]) == data.shape[i]
+        assert (axes[i] is None) or (len(axes[i]) == data.shape[i])
 
     # read global attributes
     attrs = {}
