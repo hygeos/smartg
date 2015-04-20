@@ -1958,7 +1958,7 @@ void calculTabFinal(double* tabFinal, double* tabTh, double* tabPhi, double* tab
 //
 // write a single sds name in open hdf file sd
 //
-void write_sds(int sd, const char* name, int ndims, int *dims, int type, void* values) {
+void write_sds(int sd, const char* name, int ndims, int *dims, int type, char *dim_names, void* values) {
 
     int start[ndims];
     int sds, i, status;
@@ -1974,6 +1974,11 @@ void write_sds(int sd, const char* name, int ndims, int *dims, int type, void* v
     if(status) {
         printf("\nError writing sds %s\n", name);
         exit(1);
+    }
+
+    // write "dimensions" attribute
+    if (dim_names != NULL) {
+        SDsetattr(sds, "dimensions", DFNT_CHAR8, strlen(dim_names), dim_names);
     }
 
     // close sds
@@ -2000,9 +2005,9 @@ void creerHDFResultats(double* tabFinal,double* tabFinalDown0P, double* tabFinal
 	double tempsEcouledouble = tempsPrec + (double)(clock() / CLOCKS_PER_SEC);
 
     #ifdef SPHERIQUE
-	SDsetattr(sdFichier, "MODE", DFNT_CHAR8, 2, "SSA");
+	SDsetattr(sdFichier, "MODE", DFNT_CHAR8, 3, "SSA");
     #else
-	SDsetattr(sdFichier, "MODE", DFNT_CHAR8, 2, "PPA");
+	SDsetattr(sdFichier, "MODE", DFNT_CHAR8, 3, "PPA");
     #endif
 	SDsetattr(sdFichier, "NBPHOTONS", DFNT_FLOAT64, 1, &NBPHOTONSdouble);
 	SDsetattr(sdFichier, "NBLOOP", DFNT_UINT32, 1, &NBLOOP);
@@ -2053,39 +2058,49 @@ void creerHDFResultats(double* tabFinal,double* tabFinalDown0P, double* tabFinal
     //
     // write datasets
     //
-    int ndims=3;
-    int dims[ndims];
-    dims[2] = NBTHETA;
-    dims[1] = NBPHI;
-    dims[0] = NLAM;
+    int dims[10];
+    int ndims;
+    char dim_names[2048];
+    if (NLAM == 1) {
+        ndims=2;
+        dims[1] = NBTHETA;
+        dims[0] = NBPHI;
+        strncpy(dim_names, "Azimut angles, Zenith angles", 2048);
+    } else {
+        ndims=3;
+        dims[2] = NBTHETA;
+        dims[1] = NBPHI;
+        dims[0] = NLAM;
+        strncpy(dim_names, "LAMBDA, Azimut angles, Zenith angles", 2048);
+    }
 
-    write_sds(sdFichier, "I_up (TOA)", ndims, dims, DFNT_FLOAT64, (VOIDP)(tabFinal));
-    write_sds(sdFichier, "Q_up (TOA)", ndims, dims, DFNT_FLOAT64, (VOIDP)(tabFinal+NBPHI*NBTHETA*NLAM));
-    write_sds(sdFichier, "U_up (TOA)", ndims, dims, DFNT_FLOAT64, (VOIDP)(tabFinal+2*NBPHI*NBTHETA*NLAM));
+    write_sds(sdFichier, "I_up (TOA)", ndims, dims, DFNT_FLOAT64, dim_names, (VOIDP)(tabFinal));
+    write_sds(sdFichier, "Q_up (TOA)", ndims, dims, DFNT_FLOAT64, dim_names, (VOIDP)(tabFinal+NBPHI*NBTHETA*NLAM));
+    write_sds(sdFichier, "U_up (TOA)", ndims, dims, DFNT_FLOAT64, dim_names, (VOIDP)(tabFinal+2*NBPHI*NBTHETA*NLAM));
 
     if (OUTPUT_LAYERS & OUTPUT_BOA_DOWN_0P_UP_0M) {
-        write_sds(sdFichier, "I_down (0+)", ndims, dims, DFNT_FLOAT64, (VOIDP)(tabFinalDown0P));
-        write_sds(sdFichier, "Q_down (0+)", ndims, dims, DFNT_FLOAT64, (VOIDP)(tabFinalDown0P+NBPHI*NBTHETA*NLAM));
-        write_sds(sdFichier, "U_down (0+)", ndims, dims, DFNT_FLOAT64, (VOIDP)(tabFinalDown0P+2*NBPHI*NBTHETA*NLAM));
+        write_sds(sdFichier, "I_down (0+)", ndims, dims, DFNT_FLOAT64, dim_names, (VOIDP)(tabFinalDown0P));
+        write_sds(sdFichier, "Q_down (0+)", ndims, dims, DFNT_FLOAT64, dim_names, (VOIDP)(tabFinalDown0P+NBPHI*NBTHETA*NLAM));
+        write_sds(sdFichier, "U_down (0+)", ndims, dims, DFNT_FLOAT64, dim_names, (VOIDP)(tabFinalDown0P+2*NBPHI*NBTHETA*NLAM));
 
-        write_sds(sdFichier, "I_up (0-)", ndims, dims, DFNT_FLOAT64, (VOIDP)(tabFinalUp0M));
-        write_sds(sdFichier, "Q_up (0-)", ndims, dims, DFNT_FLOAT64, (VOIDP)(tabFinalUp0M+NBPHI*NBTHETA*NLAM));
-        write_sds(sdFichier, "U_up (0-)", ndims, dims, DFNT_FLOAT64, (VOIDP)(tabFinalUp0M+2*NBPHI*NBTHETA*NLAM));
+        write_sds(sdFichier, "I_up (0-)", ndims, dims, DFNT_FLOAT64, dim_names, (VOIDP)(tabFinalUp0M));
+        write_sds(sdFichier, "Q_up (0-)", ndims, dims, DFNT_FLOAT64, dim_names, (VOIDP)(tabFinalUp0M+NBPHI*NBTHETA*NLAM));
+        write_sds(sdFichier, "U_up (0-)", ndims, dims, DFNT_FLOAT64, dim_names, (VOIDP)(tabFinalUp0M+2*NBPHI*NBTHETA*NLAM));
     }
 
     if (OUTPUT_LAYERS & OUTPUT_BOA_DOWN_0M_UP_0P) {
-        write_sds(sdFichier, "I_down (0-)", ndims, dims, DFNT_FLOAT64, (VOIDP)(tabFinalDown0M));
-        write_sds(sdFichier, "Q_down (0-)", ndims, dims, DFNT_FLOAT64, (VOIDP)(tabFinalDown0M+NBPHI*NBTHETA*NLAM));
-        write_sds(sdFichier, "U_down (0-)", ndims, dims, DFNT_FLOAT64, (VOIDP)(tabFinalDown0M+2*NBPHI*NBTHETA*NLAM));
+        write_sds(sdFichier, "I_down (0-)", ndims, dims, DFNT_FLOAT64, dim_names, (VOIDP)(tabFinalDown0M));
+        write_sds(sdFichier, "Q_down (0-)", ndims, dims, DFNT_FLOAT64, dim_names, (VOIDP)(tabFinalDown0M+NBPHI*NBTHETA*NLAM));
+        write_sds(sdFichier, "U_down (0-)", ndims, dims, DFNT_FLOAT64, dim_names, (VOIDP)(tabFinalDown0M+2*NBPHI*NBTHETA*NLAM));
 
-        write_sds(sdFichier, "I_up (0+)", ndims, dims, DFNT_FLOAT64, (VOIDP)(tabFinalUp0P));
-        write_sds(sdFichier, "Q_up (0+)", ndims, dims, DFNT_FLOAT64, (VOIDP)(tabFinalUp0P+NBPHI*NBTHETA*NLAM));
-        write_sds(sdFichier, "U_up (0+)", ndims, dims, DFNT_FLOAT64, (VOIDP)(tabFinalUp0P+2*NBPHI*NBTHETA*NLAM));
+        write_sds(sdFichier, "I_up (0+)", ndims, dims, DFNT_FLOAT64, dim_names, (VOIDP)(tabFinalUp0P));
+        write_sds(sdFichier, "Q_up (0+)", ndims, dims, DFNT_FLOAT64, dim_names, (VOIDP)(tabFinalUp0P+NBPHI*NBTHETA*NLAM));
+        write_sds(sdFichier, "U_up (0+)", ndims, dims, DFNT_FLOAT64, dim_names, (VOIDP)(tabFinalUp0P+2*NBPHI*NBTHETA*NLAM));
     }
 
     // Number of photons
     write_sds(sdFichier, "Numbers of photons", ndims, dims, DFNT_FLOAT64,
-            (VOIDP)(tabFinal+3*NBPHI*NBTHETA*NLAM));
+            dim_names, (VOIDP)(tabFinal+3*NBPHI*NBTHETA*NLAM));
 
     // theta in degrees
     float *tabThBis;
@@ -2094,7 +2109,7 @@ void creerHDFResultats(double* tabFinal,double* tabFinalDown0P, double* tabFinal
         tabThBis[i] = tabTh[i]/DEG2RAD;
     }
     dims[0] = NBTHETA;
-    write_sds(sdFichier, "Zenith angles", 1, dims, DFNT_FLOAT32, (VOIDP)tabThBis);
+    write_sds(sdFichier, "Zenith angles", 1, dims, DFNT_FLOAT32, NULL, (VOIDP)tabThBis);
     free(tabThBis);
 
     // phi in degrees
@@ -2104,12 +2119,12 @@ void creerHDFResultats(double* tabFinal,double* tabFinalDown0P, double* tabFinal
         tabPhiBis[i] = tabPhi[i]/DEG2RAD;
     }
     dims[0] = NBPHI;
-    write_sds(sdFichier, "Azimut angles", 1, dims, DFNT_FLOAT32, (VOIDP)tabPhiBis);
+    write_sds(sdFichier, "Azimut angles", 1, dims, DFNT_FLOAT32, NULL, (VOIDP)tabPhiBis);
     free(tabPhiBis);
 
     // Direct Transmission
     dims[0] = NLAM;
-    write_sds(sdFichier, "Direct Transmission", 1, dims, DFNT_FLOAT64, (VOIDP)tabTransDir);
+    write_sds(sdFichier, "Direct Transmission", 1, dims, DFNT_FLOAT64, NULL, (VOIDP)tabTransDir);
 
     // closes hdf file
     SDend(sdFichier);
