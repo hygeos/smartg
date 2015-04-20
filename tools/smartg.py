@@ -9,7 +9,7 @@ from pyhdf.SD import SD, SDC
 from profile.profil import AeroOPAC, Profile, REPTRAN, REPTRAN_IBAND
 from water.iop_spm import IOP_SPM
 from water.iop_mm import IOP_MM
-from os.path import dirname, realpath, join, exists, basename
+from os.path import dirname, realpath, join, exists, basename, isdir
 from os import makedirs, remove
 import textwrap
 import tempfile
@@ -23,10 +23,13 @@ dir_install = dirname(dirname(realpath(__file__)))    # base smartg directory is
 dir_data = join(dir_install, 'auxdata/')   # directory for storing persistent data
 dir_phase_aero = join(dir_data, 'phase_aerosols/')
 dir_tmp = join(dir_install, 'tmp/')
+dir_list_pf_aer = join(dir_tmp, 'list_pf_aer/')
+dir_list_pf_oce = join(dir_tmp, 'list_pf_oce/')
 dir_phase_water = join(dir_tmp, 'phase_water/')
 dir_albedo = join(dir_tmp, 'albedo/')
 dir_cmdfiles = join(dir_tmp, 'command_files/')
-dir_profiles = join(dir_tmp, 'profiles/')
+dir_profil_aer = join(dir_tmp, 'profile_aer/')
+dir_profil_oce = join(dir_tmp, 'profile_oce/')
 dir_output = join(dir_tmp, 'results')
 
 
@@ -119,10 +122,8 @@ class Smartg(object):
                 else:
                     raise Exception('File {} exists'.format(output))
 
-        if not exists(dirname(output)):
-            makedirs(dirname(output))
-        if not exists(dirname(cmdfile)):
-            makedirs(dirname(cmdfile))
+        ensure_dir_exists(output)
+        ensure_dir_exists(cmdfile)
 
         #
         # make dictionary of parameters
@@ -173,9 +174,9 @@ class Smartg(object):
         if atm is not None:
             # write the profile
             if iband is None:
-                file_profile = atm.write(wl, dir=dir_profiles)
+                file_profile = atm.write(wl, dir=dir_profil_aer)
             else:
-                file_profile = atm.write(iband, dir=dir_profiles)
+                file_profile = atm.write(iband, dir=dir_profil_aer)
             D.update(PATHPROFILATM=file_profile)
 
             # aerosols
@@ -185,7 +186,8 @@ class Smartg(object):
                 phase_aer = atm.aer.phase(wl, dir_phase_aero, NTHETA=1000)
 
                 # write list of phase functions
-                file_list_pf_aer = tempfile.mktemp(dir=dir_tmp, prefix='list_pf_aer_')
+                file_list_pf_aer = tempfile.mktemp(dir=dir_list_pf_aer, prefix='list_pf_aer_')
+                ensure_dir_exists(dir_list_pf_aer)
                 with open(file_list_pf_aer, 'w') as f:
                     f.write(phase_aer + '\n')
 
@@ -219,12 +221,14 @@ class Smartg(object):
             phase.write(file_phase)
 
             # write list of phase functions
-            file_list_pf_ocean = tempfile.mktemp(dir=dir_tmp, prefix='list_pf_ocean_')
+            file_list_pf_ocean = tempfile.mktemp(dir=dir_list_pf_oce, prefix='list_pf_ocean_')
+            ensure_dir_exists(dir_list_pf_oce)
             with open(file_list_pf_ocean, 'w') as f:
                 f.write(file_phase + '\n')
 
             # write the ocean profile
-            profil_oce = tempfile.mktemp(dir=dir_tmp, prefix='profil_oce_')
+            profil_oce = tempfile.mktemp(dir=dir_profil_oce, prefix='profil_oce_')
+            ensure_dir_exists(dir_profil_oce)
             with open(profil_oce, 'w') as f:
                 f.write('# I   DEPTH    H(I)    SSA(I)\n')
                 f.write('0 0. 0. 1.\n')
@@ -244,8 +248,7 @@ class Smartg(object):
         # write the albedo file
         #
         file_alb = tempfile.mktemp(dir=dir_albedo, prefix='albedo_')
-        if not exists(dirname(file_alb)):
-            makedirs(dirname(file_alb))
+        ensure_dir_exists(dir_albedo)
         if 'SURFALB' in D:
             surf_alb = D['SURFALB']
         else:
@@ -300,6 +303,15 @@ class Smartg(object):
         from smartg_view import smartg_view
 
         smartg_view(self.read(), QU=QU)
+
+
+def ensure_dir_exists(file_or_dir):
+    if isdir(file_or_dir):
+        dir_name = file_or_dir
+    else:
+        dir_name = dirname(file_or_dir)
+    if not exists(dir_name):
+        makedirs(dir_name)
 
 
 def command_file_template(dict):
