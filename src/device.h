@@ -97,9 +97,9 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 /* initPhoton
 * Initialise le photon dans son état initial avant l'entrée dans l'atmosphère
 */
-__device__ void initPhoton(Photon* ph/*, float* z*/
+__device__ void initPhoton(Photon* ph, Tableaux tab
 		#ifdef SPHERIQUE
-		, Tableaux tab, Init* init
+		, Init* init
 		#endif
 		#ifdef RANDMWC
 		, unsigned long long*, unsigned int*

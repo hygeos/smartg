@@ -133,9 +133,9 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 		// Si le photon est à NONE on l'initialise et on le met à la localisation correspondant à la simulaiton en cours
 		if(ph.loc == NONE){
 			
-			initPhoton(&ph/*, &z*/
+			initPhoton(&ph, tab
 				#ifdef SPHERIQUE
-				, tab, init
+				, init
 				#endif
 			    , &etatThr
 			    #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
@@ -308,9 +308,9 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 /* initPhoton
 * Initialise le photon dans son état initial avant l'entrée dans l'atmosphère
 */
-__device__ void initPhoton(Photon* ph/*, float* z*/
+__device__ void initPhoton(Photon* ph, Tableaux tab
 		#ifdef SPHERIQUE
-		, Tableaux tab, Init* init
+		,  Init* init
 		#endif
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
@@ -339,6 +339,7 @@ __device__ void initPhoton(Photon* ph/*, float* z*/
     // Initialisation de la longueur d onde
     ph->wavel = LAMBDAd; //mono chromatique
 	ph->ilam = __float2uint_rz(RAND * NLAMd);
+    atomicAdd(tab.nbPhotonsInter+ph->ilam, 1);
 
     #ifdef SPHERIQUE
     ph->locPrec = NONE;
@@ -1112,30 +1113,62 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
 		
 	}
 	else{	/* Photon dans l'océan */
-		float prop_raman, new_wavel;
+	  float prop_raman, new_wavel;
 
       // we fix the proportion of Raman to 2% at 488 nm, !! DEV
-      prop_raman = 1.00 ; // Raman scattering  
-      //prop_raman = 0.02 * pow ((1.e7/ph->wavel-3400.)/(1.e7/488.-3400.),5); // Raman scattering  
+      prop_raman = 0.02 * pow ((1.e7/ph->wavel-3400.)/(1.e7/488.-3400.),5); // Raman scattering to pure water scattering ratio
 
 	  if(prop_raman <RAND ){
-        // diffusion Raman
-		cTh =  2.F * RAND - 1.F; // cosThetaPhoton
-		cTh2 = (cTh)*(cTh);
+            // diffusion Raman
+            // Phase function similar to Rayleigh
+		    // Get Teta (see Wang et al., 2012)
+			float b = (RAND - 4.0 * ALPHAd - BETAd) / (2.0 * ALPHAd);
+			float expo = 1./2.;
+			float base = ACUBEd + b*b;
+			float tmp  = pow(base, expo);
+			expo = 1./3.;
+			base = -b + tmp;
+			float u = pow(base,expo);
+			cTh     = u - Ad / u;  						       
+
+			if (cTh < -1.0) cTh = -1.0;
+			if (cTh >  1.0) cTh =  1.0;
+			cTh2 = cTh * cTh;
 			
-		// Calcul du poids après diffusion
-		ph->weight *= __fdividef(1.5F * (stokes1+(cTh2+2.F)*stokes2), (stokes1+stokes2));
-		// Calcul des parametres de Stokes du photon apres diffusion
-		ph->stokes2 =  cTh2  * stokes2 ;
-		ph->stokes3 *= cTh;
-        
+			/////////////
+			//  Get Phi
+			// Biased sampling scheme for phi
+			psi = RAND * DEUXPI;	//psiPhoton
+			cPsi = __cosf(psi);	//cosPsiPhoton
+			sPsi = __sinf(psi);     //sinPsiPhoton		
 
-        // Changement de longueur d onde
-        new_wavel  = 22.94 + 0.83 * (ph->wavel) + 0.0007 * (ph->wavel)*(ph->wavel);
-        ph->weight /= new_wavel/ph->wavel;
-        ph->wavel = new_wavel;
+			// Calcul des parametres de Stokes du photon apres diffusion
+			
+			// Rotation des paramètres de stokes
+			rotateStokes(ph->stokes1, ph->stokes2, ph->stokes3, psi,
+				     &ph->stokes1, &ph->stokes2, &ph->stokes3);
 
+			// Calcul des parametres de Stokes du photon apres diffusion
+			float cross_term;
+			stokes1 = ph->stokes1;
+			stokes2 = ph->stokes2;
+			cross_term  = DELTA_PRIMd * (stokes1 + stokes2);
+			ph->stokes1 = 3./2. * (  DELTAd  * stokes1 + cross_term );
+			ph->stokes2 = 3./2. * (  DELTAd  * cTh2 * stokes2 + cross_term );			
+			ph->stokes3 = 3./2. * (  DELTAd * cTh  * ph->stokes3 );
+			// bias sampling scheme
+			float phase_func;
+			phase_func = 3./4. * DELTAd * (cTh2+1.0) + 3.0 * DELTA_PRIMd;
+			ph->stokes1 /= phase_func;  
+			ph->stokes2 /= phase_func;  
+			ph->stokes3 /= phase_func;     		
+
+            // Changement de longueur d onde
+            new_wavel  = 22.94 + 0.83 * (ph->wavel) + 0.0007 * (ph->wavel)*(ph->wavel);
+            ph->weight /= new_wavel/ph->wavel;
+            ph->wavel = new_wavel;
 		}
+
 	  else{
         // diffusion elastique
 		
@@ -1771,7 +1804,7 @@ __device__ void countPhoton(Photon* ph, Tableaux tab, unsigned long long* nbPhot
     float *tabCount; // pointer to the "counting" array:
                      // may be TOA, or BOA down, and so on
 
-	unsigned long long *nbCount; // counter for each NLAM interval 
+	//unsigned long long *nbCount; // counter for each NLAM interval 
 
     // Remise à zéro de la localisation du photon
     ph->loc = NONE;
@@ -1779,8 +1812,8 @@ __device__ void countPhoton(Photon* ph, Tableaux tab, unsigned long long* nbPhot
     // Incrémentation du nombre de photons traités par le thread
     (*nbPhotonsThr)++;
 	// And count them for each NLAM interval
-    nbCount = tab.nbPhotonsInter;
-    atomicAdd(nbCount+ph->ilam, 1);
+    //nbCount = tab.nbPhotonsInter;
+    //atomicAdd(nbCount+ph->ilam, 1);
 
     tabCount = tab.tabPhotons;
 

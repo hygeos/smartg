@@ -305,7 +305,7 @@ class AeroOPAC(object):
 
         return ret
 
-    def phase(self, wl, dir, pattern='pf_%s_%inm_layer-%i.txt'):
+    def phase(self, wl, dir, pattern='pf_%s_%inm_layer-%i.txt',NTHETA=7201):
         '''
         creates the phase function corresponding to layer_phase
         and returns the corresponding file name
@@ -319,7 +319,7 @@ class AeroOPAC(object):
         if self.__layer_phase is None:
             return None
 
-        ret = self.calcPha(wl, pattern, dir)
+        ret = self.calcPha(wl, pattern, dir,NTHETA=NTHETA)
 
         return ret[self.__layer_phase]
 
@@ -1267,9 +1267,7 @@ def example4():
     using reptran for PAR
     also write phase functions
     '''
-    aer = AeroOPAC('desert', 0.1, 550., layer_phase=0)
-    phase = aer.phase(550.,dir='tmp')
-    print 'phase function', phase
+    aer = AeroOPAC('desert', 0.1, 550., layer_phase=-1)
     pro = Profile('afglt.dat', aer=aer, grid='100[75]25[5]5[1]0',)
     rep = REPTRAN('reptran_solar_coarse.cdf')
     sampling = 10
@@ -1280,10 +1278,10 @@ def example4():
         if band.awvl[0] > 700. : break
         print '--- Band', L[i]
         for iband in band.ibands():
-            wi = iband.band.awvl[iband.index] # wvl of intrenal band
+            wi = iband.band.awvl[iband.index] # wvl of internal band
             print '* Band', iband.index, iband.iband, wi
-            pro.write(iband, output_file ='tmp/profil_O2_%s-%dof%d.txt'%(L[i],iband.index+1,iband.band.nband))
-#            phase = aer.phase(avg_wvl, dir='tmp/')
+            pro.write(iband, output_file ='tmp/profil_PAR_%s-%dof%d.txt'%(L[i],iband.index+1,iband.band.nband))
+#            phase = aer.phase(wi, dir='tmp/',NTHETA=721)
 #            print 'phase function', phase
 
 
