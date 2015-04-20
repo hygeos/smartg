@@ -310,6 +310,9 @@ typedef struct __align__(16)
 	float* ho;				// Pointeur vers l'épaisseur optique de chaque couches du modele oceanique
     float* sso;             // Pointeur vers le profil de l albedo de diffusion simple dans l'ocean
     int* ipo;                // pointer to the vertical profile of ocean phase function index
+    // garbage
+    float *depth;
+
 
 	
 	float* h;				// Pointeur vers l'épaisseur optique de chaque couches du modèle atmosphérique
@@ -319,11 +322,19 @@ typedef struct __align__(16)
     int* ip;                // pointer to the vertical profile of atmospheric phase function index
     float* alb;             // Pointeur vers l albedo de la surface lambertienne
 
-	float* z;				// Altitude de chaque couches
+
+    //garbage
+    float *hmol;
+    float *haer;
+    float *xdel;
+
 	/** Séparation du code pour atmosphère sphérique ou parallèle **/
 
-	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
-	
+    float* z;
+
+    #ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
+
+					// Altitude de chaque couches
 
 	
 	/* Profil atmosphérique initial vu par la photon */

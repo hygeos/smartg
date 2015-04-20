@@ -268,6 +268,7 @@ void initConstantesHost(int argc, char** argv)
 /* chercheConstante
 * Fonction qui cherche nomConstante dans le fichier et met la valeur de la constante dans chaineValeur (en string)
 */
+
 void chercheConstante(FILE* fichier, const char* nomConstante, char* chaineValeur)
 {
 	int longueur = strlen(nomConstante);
@@ -712,10 +713,10 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 		exit(1);
 	}
 	memset(tab_H->nbPhotonsInter,0,NLAM * sizeof(*(tab_H->nbPhotonsInter)) );
-	
+
 	if( cudaMalloc(&(tab_D->nbPhotonsInter), NLAM * sizeof(*(tab_D->nbPhotonsInter))) != cudaSuccess){
 		printf("ERREUR: Problème de cudaMalloc de tab_D->nbPhotonsInter dans initTableaux\n");
-		exit(1);	
+		exit(1);
 	}
 
 	cudaErreur = cudaMemset(tab_D->nbPhotonsInter, 0,  NLAM * sizeof(*(tab_D->nbPhotonsInter)));
@@ -726,8 +727,8 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	printf("#--------------------#\n");
 	exit(1);
 	}
-	
-	
+
+
 	// Weight Table of the descending  photons above the surface
 	tab_H->tabPhotonsDown0P = (float*)malloc(4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_H->tabPhotonsDown0P)));
 	if( tab_H->tabPhotonsDown0P == NULL ){
@@ -751,7 +752,7 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	exit(1);
 	}
 	
-	
+
 	// Weight Table of the descending  photons below the surface
 	tab_H->tabPhotonsDown0M = (float*)malloc(4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_H->tabPhotonsDown0M)));
 	if( tab_H->tabPhotonsDown0M == NULL ){
@@ -759,12 +760,12 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 		exit(1);
 	}
 	memset(tab_H->tabPhotonsDown0M,0,4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_H->tabPhotonsDown0M)) );
-	
+
 	if( cudaMalloc(&(tab_D->tabPhotonsDown0M), 4 * NBTHETA * NBPHI * NLAM * sizeof(*(tab_D->tabPhotonsDown0M))) != cudaSuccess){
 		printf("ERREUR: Problème de cudaMalloc de tab_D->tabPhotonsDown0M dans initTableaux\n");
-		exit(1);	
+		exit(1);
 	}
-	
+
 	cudaErreur = cudaMemset(tab_D->tabPhotonsDown0M, 0, 4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_D->tabPhotonsDown0M)));
 	if( cudaErreur != cudaSuccess ){
 	printf("#--------------------#\n");
@@ -773,7 +774,7 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	printf("#--------------------#\n");
 	exit(1);
 	}
-	
+
 
 	// Weight Table of the ascending  photons above the surface
 	tab_H->tabPhotonsUp0P = (float*)malloc(4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_H->tabPhotonsUp0P)));
@@ -782,12 +783,12 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 		exit(1);
 	}
 	memset(tab_H->tabPhotonsUp0P,0,4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_H->tabPhotonsUp0P)) );
-	
+
 	if( cudaMalloc(&(tab_D->tabPhotonsUp0P), 4 * NBTHETA * NBPHI * NLAM * sizeof(*(tab_D->tabPhotonsUp0P))) != cudaSuccess){
 		printf("ERREUR: Problème de cudaMalloc de tab_D->tabPhotonsUp0P dans initTableaux\n");
-		exit(1);	
+		exit(1);
 	}
-	
+
 	cudaErreur = cudaMemset(tab_D->tabPhotonsUp0P, 0, 4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_D->tabPhotonsUp0P)));
 	if( cudaErreur != cudaSuccess ){
 	printf("#--------------------#\n");
@@ -796,7 +797,7 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	printf("#--------------------#\n");
 	exit(1);
 	}
-	
+
 
 	// Weight Table of the ascending  photons below the surface
 	tab_H->tabPhotonsUp0M = (float*)malloc(4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_H->tabPhotonsUp0M)));
@@ -805,12 +806,12 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 		exit(1);
 	}
 	memset(tab_H->tabPhotonsUp0M,0,4*NBTHETA * NBPHI * sizeof(*(tab_H->tabPhotonsUp0M)) );
-	
+
 	if( cudaMalloc(&(tab_D->tabPhotonsUp0M), 4 * NBTHETA * NBPHI * NLAM * sizeof(*(tab_D->tabPhotonsUp0M))) != cudaSuccess){
 		printf("ERREUR: Problème de cudaMalloc de tab_D->tabPhotonsUp0M dans initTableaux\n");
-		exit(1);	
+		exit(1);
 	}
-	
+
 	cudaErreur = cudaMemset(tab_D->tabPhotonsUp0M, 0, 4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_D->tabPhotonsUp0M)));
 	if( cudaErreur != cudaSuccess ){
 	printf("#--------------------#\n");
@@ -839,8 +840,11 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	}
 	
 	/** Modèle de l'ocean **/
+
 	// Fonction de phase 
+
 	tab_H->foce = (float*)malloc(5 * NFOCE * NPHAOCE *sizeof(float));
+
 	if( tab_H->foce == NULL ){
 		printf("ERREUR: Problème de malloc de tab_H->foce dans initTableaux\n");
 		exit(1);
@@ -859,26 +863,34 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 		exit(1);
 	}
 	memset(tab_H->ho,0,(NOCE+1)*NLAM*sizeof(*(tab_H->ho)) );
-	
+
 	if( cudaMalloc( &(tab_D->ho), (NOCE+1)*NLAM*sizeof(*(tab_H->ho)) ) != cudaSuccess ){
 		printf("ERREUR: Problème de cudaMalloc de tab_D->ho dans initTableaux\n");
-		exit(1);	
+		exit(1);
 	}
 
-    // SSA 
+    // SSA
 	tab_H->sso =  (float*)malloc((NOCE+1)*NLAM*sizeof(float));
 	if( tab_H->sso == NULL ){
 		printf("ERREUR: Problème de malloc de tab_H->sso dans initTableaux\n");
 		exit(1);
 	}
 	memset(tab_H->sso,0,(NOCE+1)*NLAM*sizeof(float) );
-	
+
 	if( cudaMalloc( &(tab_D->sso), (NOCE+1)*NLAM*sizeof(float) ) != cudaSuccess ){
 		printf("ERREUR: Problème de cudaMalloc de tab_D->sso dans initTableaux\n");
-		exit(1);	
+		exit(1);
 	}
-	
-	
+
+	//garbage
+	tab_H->depth=  (float*)malloc((NOCE+1)*sizeof(float));
+	if( tab_H->depth == NULL ){
+		printf("ERREUR: Problème de malloc de tab_H->sso dans initTableaux\n");
+		exit(1);
+	}
+	memset(tab_H->depth,0,(NOCE+1)*sizeof(float) );
+
+
 	
 	/** Modèle de l'atmosphère **/
 	// Epaisseur optique par couche
@@ -933,7 +945,7 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 		exit(1);	
 	}
 	
-    //
+
 	tab_H->ip =  (int*)malloc((NATM+1)*NLAM*sizeof(int));
 	if( tab_H->ip == NULL ){
 		printf("ERREUR: Problème de malloc de tab_H->ip dans initTableaux\n");
@@ -960,23 +972,61 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	}
 	
 	
+
+	
+	//variable garbage
+
+	//hmol
+    tab_H->hmol =  (float*)malloc((NATM+1)*NLAM*sizeof(float));
+    	if( tab_H->hmol == NULL ){
+    		printf("ERREUR: Problème de malloc de tab_H->hmol dans initTableaux\n");
+    		exit(1);
+    	}
+    memset(tab_H->hmol,0,(NATM+1)*NLAM*sizeof(float) );
+
+    //haer
+    tab_H->haer=  (float*)malloc((NATM+1)*NLAM*sizeof(float));
+    	if( tab_H->haer == NULL ){
+    		printf("ERREUR: Problème de malloc de tab_H->haer dans initTableaux\n");
+    		exit(1);
+    	}
+    memset(tab_H->haer,0,(NATM+1)*NLAM*sizeof(float) );
+
+    //xdel
+    tab_H->xdel =  (float*)malloc((NATM+1)*NLAM*sizeof(float));
+    	if( tab_H->xdel == NULL ){
+    		printf("ERREUR: Problème de malloc de tab_H->xdel dans initTableaux\n");
+    		exit(1);
+    	}
+    memset(tab_H->xdel,0,(NATM+1)*NLAM*sizeof(float) );
+
+
+
+	//test
+
 	// Altitude des couches
+
 		tab_H->z =  (float*)malloc((NATM+1)*sizeof(*(tab_H->z)));
-		if( tab_H->z == NULL ){
-			printf("ERREUR: Problème de malloc de tab_H->z dans initTableaux\n");
-			exit(1);
-		}
+				if( tab_H->z == NULL ){
+					printf("ERREUR: Problème de malloc de tab_H->z dans initTableaux\n");
+					exit(1);
+				}
 		memset(tab_H->z,0,(NATM+1)*sizeof(*(tab_H->z)) );
 
 		if( cudaMalloc( &(tab_D->z), (NATM+1)*sizeof(*(tab_H->z)) ) != cudaSuccess ){
-			printf("ERREUR: Problème de cudaMalloc de tab_D->z dans initTableaux\n");
-			exit(1);
-		}
+					printf("ERREUR: Problème de cudaMalloc de tab_D->z dans initTableaux\n");
+					exit(1);
+				}
+
 
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
-	
-	
-	
+
+
+
+
+
+
+
 	/** Profil initial vu par le photon **/
 	tab_H->zph0 =  (float*)malloc((NATM+1)*sizeof(*(tab_H->zph0)));
 	if( tab_H->zph0 == NULL ){
@@ -1013,9 +1063,10 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	
 	if( cudaMalloc( &(tab_D->alb), 2*NLAM*sizeof(*(tab_D->alb)) ) != cudaSuccess ){
 		printf("ERREUR: Problème de cudaMalloc de tab_D->alb dans initTableaux\n");
-		exit(1);	
+		exit(1);
 	}
-	
+
+
 }
 
 
@@ -1106,7 +1157,7 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	}
 	// 	cudaFreeHost(tab_H->nbPhotonsInter);
 	free(tab_H->nbPhotonsInter);
-	
+
 	/** Modèles de diffusion **/
 	// Libération du modèle de diffusion des aérosols
 	erreur = cudaFree(tab_D->faer);
@@ -1133,9 +1184,9 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
 		exit(1);
 	}
-	
+
 	free(tab_H->ho);
-	
+
 	erreur = cudaFree(tab_D->sso);
 	if( erreur != cudaSuccess ){
 		printf( "ERREUR: Problème de cudaFree de tab_D->sso dans freeTableaux\n");
@@ -1186,6 +1237,7 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	
 	free(tab_H->ssa);
 	
+
 	//
 	erreur = cudaFree(tab_D->ip);
 	if( erreur != cudaSuccess ){
@@ -1206,21 +1258,40 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	
 	free(tab_H->ipo);
 
-	// Altitude des couches
-		erreur = cudaFree(tab_D->z);
-		if( erreur != cudaSuccess ){
-			printf( "ERREUR: Problème de cudaFree de tab_D->z dans freeTableaux\n");
-			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-			exit(1);
-		}
 
-		free(tab_H->z);
+
+	/** Séparation du code pour atmosphère sphérique ou parallèle **/
+	/* Code spécifique à une atmosphère sphérique */
+	
+
+
+	// Altitude des couches
+	erreur = cudaFree(tab_D->z);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->z dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+
+	free(tab_H->z);
+
+
+    //garbage
+	free(tab_H->hmol);
+	free(tab_H->haer);
+	free(tab_H->xdel);
+	free(tab_H->depth);
+
+
 
 
 	/** Séparation du code pour atmosphère sphérique ou parallèle **/
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
-	
-	
+
+	//test
+
+
+
 	// Profil initial vu par la photon
 	erreur = cudaFree(tab_D->zph0);
 	if( erreur != cudaSuccess ){
@@ -1249,8 +1320,12 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
 		exit(1);
 	}
-	
+
 	free(tab_H->alb);
+
+
+
+
 }
 
 
@@ -1261,7 +1336,9 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 /* calculF
 * Compute CDF of scattering phase matrices
 */
-void calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, int nf, int ip){
+
+void calculF( const char* nomFichier, float* phase_H, float* phase_D ,int mlsa,int lsa, int nf,int ip, double *phase){
+
 
     // ip is the number of the phase function
     // not necessary when file name is "None"
@@ -1284,13 +1361,20 @@ void calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, 
     char *ptr;
 
 	/** Allocation de la mémoire des tableaux contenant les données **/
-	double *ang;
+
+
+    double *ang;
 	double *p1, *p2, *p3, *p4;
-	ang =(double*) malloc(lsa*sizeof(*ang));
-	p1 = (double*) malloc(lsa*sizeof(*p1));
-	p2 = (double*) malloc(lsa*sizeof(*p2));
-	p3 = (double*) malloc(lsa*sizeof(*p3));
-	p4 = (double*) malloc(lsa*sizeof(*p4));
+
+
+
+	ang =&phase[0+(mlsa*5*ip)];
+	p1 = &phase[mlsa*2+(mlsa*5*ip)];
+	p2 = &phase[mlsa+(mlsa*5*ip)];
+	p3 = &phase[mlsa*3+(mlsa*5*ip)];
+	p4 = &phase[mlsa*4+(mlsa*5*ip)];
+
+
 	if( ang==NULL || p1==NULL || p2==NULL || p3==NULL || p4==NULL ){
 		printf("ERREUR: Problème de malloc de ang ou pi dans calculFaer\n");
 		exit(1);
@@ -1311,7 +1395,7 @@ void calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, 
             c = getc(fichier);
         }
         fseek(fichier, -1, SEEK_CUR);
-		for(iang=0; iang<lsa; iang++){
+		for(iang=0; iang<mlsa; iang++){
             fgets(buffer, 1024, fichier);
 
             // replace all occurences of 'D' by 'E'
@@ -1323,36 +1407,50 @@ void calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, 
                     *ptr = 'E';
                 }
             } while(ptr != NULL);
-
-            ptr = buffer;
-            while ((*ptr == ' ') || (*ptr == '\t')) ptr++;
-            *(ang+iang) = atof(ptr);
-            while ((*ptr != ' ') && (*ptr != '\t')) ptr++;
-            while ((*ptr == ' ') || (*ptr == '\t')) ptr++;
-            *(p2+iang) = atof(ptr);
-            while ((*ptr != ' ') && (*ptr != '\t')) ptr++;
-            while ((*ptr == ' ') || (*ptr == '\t')) ptr++;
-            *(p1+iang) = atof(ptr);
-            while ((*ptr != ' ') && (*ptr != '\t')) ptr++;
-            while ((*ptr == ' ') || (*ptr == '\t')) ptr++;
-            *(p3+iang) = atof(ptr);
-            while ((*ptr != ' ') && (*ptr != '\t')) ptr++;
-            while ((*ptr == ' ') || (*ptr == '\t')) ptr++;
-            *(p4+iang) = atof(ptr);
             
-			// Conversion en radians
-			ang[iang] = ang[iang]*DEG2RAD;
+            if(iang<lsa){
+					ptr = buffer;
+					while ((*ptr == ' ') || (*ptr == '\t')) ptr++;
+					*(ang+iang) = atof(ptr);
+					while ((*ptr != ' ') && (*ptr != '\t')) ptr++;
+					while ((*ptr == ' ') || (*ptr == '\t')) ptr++;
+					*(p2+iang) = atof(ptr);
+					while ((*ptr != ' ') && (*ptr != '\t')) ptr++;
+					while ((*ptr == ' ') || (*ptr == '\t')) ptr++;
+					*(p1+iang) = atof(ptr);
+					while ((*ptr != ' ') && (*ptr != '\t')) ptr++;
+					while ((*ptr == ' ') || (*ptr == '\t')) ptr++;
+					*(p3+iang) = atof(ptr);
+					while ((*ptr != ' ') && (*ptr != '\t')) ptr++;
+					while ((*ptr == ' ') || (*ptr == '\t')) ptr++;
+					*(p4+iang) = atof(ptr);
+
+
+
+					// Conversion en radians
+					ang[iang] = ang[iang]*DEG2RAD;
+            		}
+            else{
+					*(ang+iang)=  0.0/0.0;
+					*(p2+iang) =  0.0/0.0;
+					*(p1+iang) =  0.0/0.0;
+					*(p3+iang) =  0.0/0.0;
+					*(p4+iang) =  0.0/0.0;
+            }
+
 		}
 	}
 	
+
+
 	if(fclose(fichier) == EOF){
 		printf("ERREUR : Probleme de fermeture du fichier %s", nomFichier);
 	}
 		
-	/** Calcul de scum **/
+	/* Calcul de scum */
 	for(iang=1; iang<lsa; iang++){
 		
-		dtheta = ang[iang] - ang[iang-1];
+		dtheta = (ang[iang] - ang[iang-1]);
 		pm1= p1[iang-1] + p2[iang-1];
 		pm2= p1[iang] + p2[iang];
 		sin1= sin(ang[iang-1]);
@@ -1366,7 +1464,7 @@ void calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, 
 		scum[iang] = scum[iang]/scum[lsa-1];
 	}
 	
-	/** Calcul des faer **/
+	/* Calcul des faer */
 //	for(iang=0; iang<nf-1; iang++){
 	for(iang=0; iang<nf; iang++){
 		z = double(iang+1)/double(nf);
@@ -1379,19 +1477,38 @@ void calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, 
 //		phase_H[iang*5+1] = float( p2[ipf]/norm );	// I perpendiculaire
 //		phase_H[iang*5+2] = float( p3[ipf]/norm );	// u
 //		phase_H[iang*5+3] = 0.F;			// v, toujours nul
+
 			phase_H[ip*5*nf+iang*5+0] = float( p1[ipf] );	// I paralèlle
 			phase_H[ip*5*nf+iang*5+1] = float( p2[ipf] );	// I perpendiculaire
 			phase_H[ip*5*nf+iang*5+2] = float( p3[ipf] );	// u
 			phase_H[ip*5*nf+iang*5+3] = 0.F;	       	// v, toujours nul
+
 	}
 	
 	free(scum);
-	free(ang);
-	free(p1);
-	free(p2);
-	free(p3);
-	free(p4);
-	
+	//free(ang);
+	//free(p1);
+	//free(p2);
+	//free(p3);
+	//free(p4);
+
+	for(iang=0; iang<lsa; iang++){
+		ang[iang] = ang[iang]/DEG2RAD;
+
+	}
+
+
+	printf("fin de la lecture\n");
+
+
+	/* Allocation des FAER dans la device memory **/
+
+	cudaError_t erreur = cudaMemcpy(phase_D, phase_H, 5*nf*NLAM*sizeof(float), cudaMemcpyHostToDevice);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de copie phase_D dans calculF\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
 	
 }
 
@@ -1400,7 +1517,7 @@ void profilAlb( Tableaux* tab_H, Tableaux* tab_D ){
     int ilam;
     // Profil utilisateur
     /* Format du fichier
-    => alb_surface alb_sea(floor) 
+    => alb_surface alb_sea(floor)
     */
     FILE* profil = fopen( PATHALB , "r" );
     char ligne[1024];
@@ -1454,10 +1571,10 @@ void profilOce( Tableaux* tab_H, Tableaux* tab_D ){
     int nscanf;
     int icouche=0;
     float garbage;
-    int i;
+
     // Profil utilisateur
     /* Format du fichier
-    => n	alt		ho		sso	
+    => n	alt		ho		sso
     */
     FILE* profil = fopen( PATHPROFILOCE , "r" );
     char buffer[4096];
@@ -1473,19 +1590,21 @@ void profilOce( Tableaux* tab_H, Tableaux* tab_D ){
         exit(1);
     } else {
         for( ilam=0; ilam<NLAM; ilam++){
+
             // skip comment line
             fgets(buffer,4096,profil);
             for( icouche=0; icouche<NOCE+1; icouche++ ){
                 fgets(buffer,4096,profil);
-                nscanf = sscanf(buffer, "%d\t%f\t%f\t%f\t%d\n", &i, &garbage, tab_H->ho+icouche+ilam*(NOCE+1), tab_H->sso+icouche+ilam*(NOCE+1), tab_H->ipo+icouche+ilam*(NOCE+1));
-
+                nscanf = sscanf(buffer, "%d\t%f\t%f\t%f\t%d\n", &garbage, tab_H->depth+icouche, tab_H->ho+icouche+ilam*(NOCE+1), tab_H->sso+icouche+ilam*(NOCE+1), tab_H->ipo+icouche+ilam*(NOCE+1));
                 if (nscanf != 5) {
                     printf("Error while parsing profile '%s'\n", PATHDIFFOCE);
                     exit(1);
                 }
             }
+
         }
     }
+
 
 	if(fclose(profil) == EOF){
 		printf("ERREUR : Probleme de fermeture du fichier %s", PATHPROFILOCE);
@@ -1517,17 +1636,20 @@ void profilOce( Tableaux* tab_H, Tableaux* tab_D ){
 * Calcul du profil atmosphérique dans l'atmosphère en fonction de la couche
 * Mélange Molécule/Aérosol dans l'atmosphère en fonction de la couche
 */
-void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
+void profilAtm( Tableaux* tab_H, Tableaux* tab_D){
 
 	/** Déclaration des variables **/
+
 	
-	int i=0, ilam, nscanf;
+	int  ilam, nscanf;
 	cudaError_t erreur;		// Permet de tester le bon déroulement des opérations mémoires
     char buffer[4096];
 	
+
 	/** Conditions aux limites au sommet de l'atmosphère **/
+
 	#ifdef SPHERIQUE
-	tab_H->z[0] = HATM;
+    tab_H->z[0] = HATM;
 	#endif
 	for( ilam=0;ilam<NLAM;ilam++) {
         tab_H->h[0 + ilam * (NATM+1)] = 0.;
@@ -1539,46 +1661,62 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
     => n	alt		tauMol		tauAer		h		pAer		pMol
     */
     FILE* profil = fopen( PATHPROFILATM , "r" );
-    float garbage;
-    
+    float garbage/*,hmol,haer,xdel*/;
+
+
     int icouche=0;
+
 
     if(profil == NULL){
         printf("ERREUR : Ouverture impossible du fichier %s pour le profil atmosphérique\n", PATHPROFILATM );
         exit(1);
     }
 
-		
-		
-    
+
+
+
     else{
 
         // Extraction des informations
 
+
+
         for( ilam=0; ilam<NLAM; ilam++){
             // skip comment line
-            fgets(buffer, 4096, profil);
+            fgets(buffer,4096,profil);
             for( icouche=0; icouche<NATM+1; icouche++ ){
                 fgets(buffer, 4096, profil);
-                nscanf = sscanf(buffer, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%d\n", &i, tab_H->z+icouche, &garbage, &garbage, tab_H->h+icouche+ilam*(NATM+1),
-                        &garbage,tab_H->pMol+icouche+ilam*(NATM+1), tab_H->ssa+icouche+ilam*(NATM+1), tab_H->abs+icouche+ilam*(NATM+1) , tab_H->ip+icouche+ilam*(NATM+1) );
+                nscanf = sscanf(buffer, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%d\n",
+                        &garbage, tab_H->z+icouche, tab_H->hmol+icouche+ilam*(NATM+1), tab_H->haer+icouche+ilam*(NATM+1), tab_H->h+icouche+ilam*(NATM+1),
+                        tab_H->xdel+icouche+ilam*(NATM+1),tab_H->pMol+icouche+ilam*(NATM+1), tab_H->ssa+icouche+ilam*(NATM+1), tab_H->abs+icouche+ilam*(NATM+1), tab_H->ip+icouche+ilam*(NATM+1));
+
+
                 if (nscanf != 10) {
                     printf("Error while parsing profile '%s'\n", PATHPROFILATM);
                     exit(1);
                 }
             }
         }
-		#if !defined(SPHERIQUE)
-        TAUATM = tab_H->h[NATM];
+
+
+
+
+
+        #if !defined(SPHERIQUE)
+         TAUATM = tab_H->h[NATM];
         #endif
-    }
-	
+
+        }
+
+
+
+
 		if(fclose(profil) == EOF){
 			printf("ERREUR : Probleme de fermeture du fichier %s", PATHPROFILATM);
 		}
-		
-	
-	
+
+
+
 		/** Envoie des informations dans le device **/
 		erreur = cudaMemcpy(tab_D->h, tab_H->h, (NATM+1)*NLAM*sizeof(*(tab_H->h)), cudaMemcpyHostToDevice);
 		if( erreur != cudaSuccess ){
@@ -1586,13 +1724,13 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
 			exit(1);
 		}
-		
+
 		erreur = cudaMemcpy(tab_D->pMol, tab_H->pMol, (NATM+1)*NLAM*sizeof(*(tab_H->pMol)), cudaMemcpyHostToDevice);
 		if( erreur != cudaSuccess ){
 			printf( "ERREUR: Problème de copie tab_D->pMol dans profilAtm\n");
 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
 			exit(1);
-		}	
+		}
 
         erreur = cudaMemcpy(tab_D->abs, tab_H->abs, (NATM+1)*NLAM*sizeof(*(tab_H->abs)), cudaMemcpyHostToDevice);
         if( erreur != cudaSuccess ){
@@ -1608,6 +1746,7 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
             exit(1);
         }
 
+
         erreur = cudaMemcpy(tab_D->ip, tab_H->ip, (NATM+1)*NLAM*sizeof(*(tab_H->ip)), cudaMemcpyHostToDevice);
         if( erreur != cudaSuccess ){
             printf( "ERREUR: Problème de copie tab_D->ip dans profilAtm\n");
@@ -1615,13 +1754,13 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
             exit(1);
         }
 
+
 		erreur = cudaMemcpy(tab_D->z, tab_H->z, (NATM+1)*sizeof(*(tab_H->z)), cudaMemcpyHostToDevice);
 		if( erreur != cudaSuccess ){
 			printf( "ERREUR: Problème de copie tab_D->z dans profilAtm\n");
 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
 			exit(1);
 		}
-
 
 }
 
@@ -1698,7 +1837,7 @@ void impactInit(Init* init_H, Init* init_D, Tableaux* tab_H, Tableaux* tab_D){
 		#ifdef SPHERIQUE
 		tab_H->zph0[icouche] = tab_H->zph0[icouche-1] + (float)rsolfi;
 	    for(ilam=0; ilam<NLAM; ilam++){
-		    tab_H->hph0[icouche + ilam*(NATM+1)] = tab_H->hph0[icouche-1+ ilam*(NATM+1)] + 
+		    tab_H->hph0[icouche + ilam*(NATM+1)] = tab_H->hph0[icouche-1+ ilam*(NATM+1)] +
 				( abs( tab_H->h[icouche+ ilam*(NATM+1)] - tab_H->h[icouche-1+ ilam*(NATM+1)])*rsolfi )/( abs( tab_H->z[icouche-1] - tab_H->z[icouche]) );
         }
 		#endif
@@ -2078,8 +2217,12 @@ void write_sds(int sd, const char* name, int ndims, int *dims, int type, char *d
 /* creerHDFResultats
 * Fonction qui crée le fichier .hdf contenant le résultat final pour une demi-sphère
 */
-void creerHDFResultats(double* tabFinal,double* tabFinalDown0P, double* tabFinalDown0M,double* tabFinalUp0P,double* tabFinalUp0M, 
-                       double* tabTh, double* tabPhi, double* tabTransDir, unsigned long long nbPhotonsTot, Variables* var, double tempsPrec)
+
+void creerHDFResultats(double* tabFinal,double* tabFinalDown0P, double* tabFinalDown0M,double* tabFinalUp0P,double* tabFinalUp0M,
+                       double* tabTh, double* tabPhi, double* tabTransDir, unsigned long long nbPhotonsTot,
+                       Variables* var, double tempsPrec,int mlsaoce,int mlsaaer,double *phaseAtm,double *phaseOc,Tableaux tab_H)
+
+
 {
 	// Création du fichier de sortie
 	int sdFichier = SDstart(PATHRESULTATSHDF, DFACC_CREATE);
@@ -2122,6 +2265,10 @@ void creerHDFResultats(double* tabFinal,double* tabFinalDown0P, double* tabFinal
 	SDsetattr(sdFichier, "LSAOCE", DFNT_UINT32, 1, &LSAOCE);
 	SDsetattr(sdFichier, "NFOCE", DFNT_UINT32, 1, &NFOCE);
 	
+	SDsetattr(sdFichier, "NPHAAER", DFNT_UINT32, 1, &NPHAAER);
+	SDsetattr(sdFichier, "NPHAOCE", DFNT_UINT32, 1, &NPHAOCE);
+
+
 	SDsetattr(sdFichier, "ENV_SIZE", DFNT_FLOAT32, 1, &ENV_SIZE);
 	SDsetattr(sdFichier, "X0", DFNT_FLOAT32, 1, &X0);
 	SDsetattr(sdFichier, "Y0", DFNT_FLOAT32, 1, &Y0);
@@ -2143,6 +2290,7 @@ void creerHDFResultats(double* tabFinal,double* tabFinalDown0P, double* tabFinal
 	SDsetattr(sdFichier, "nbErreursTheta", DFNT_INT32, 1, &(var->erreurtheta));
 	SDsetattr(sdFichier, "tempsEcoule", DFNT_FLOAT64, 1, &tempsEcouledouble);
 	
+
 	
     //
     // write datasets
@@ -2215,7 +2363,80 @@ void creerHDFResultats(double* tabFinal,double* tabFinalDown0P, double* tabFinal
     dims[0] = NLAM;
     write_sds(sdFichier, "Direct Transmission", 1, dims, DFNT_FLOAT64, NULL, (VOIDP)tabTransDir);
 
+
+
+
+    ndims=3;
+    if ((SIM == -2) || (SIM == 1) || (SIM == 2)) {
+    	dims[0] = NPHAAER;
+    	dims[1]=5;
+    	dims[2] = mlsaaer;
+
+    	write_sds(sdFichier, "phaseAtm", ndims, dims, DFNT_FLOAT64,NULL, (VOIDP)(phaseAtm));
+    	free(phaseAtm);
+    	dims[0]=NLAM;
+		dims[1]=NATM+1;
+		dims[2]=9;
+
+		float *profAtm= (float*)malloc((NLAM*9*(NATM+1))*sizeof(float));
+
+		for(int ilam=0;ilam<NLAM;ilam++) {
+			 for(int icouche=0; icouche<NATM+1; icouche++ ){
+				 profAtm[ilam*9*NLAM+icouche*9+0]=tab_H.z[icouche];
+				 profAtm[ilam*9*NLAM+icouche*9+1]=tab_H.hmol[icouche+ilam*(NATM+1)];
+				 profAtm[ilam*9*NLAM+icouche*9+2]=tab_H.haer[icouche+ilam*(NATM+1)];
+				 profAtm[ilam*9*NLAM+icouche*9+3]=tab_H.h[icouche+ilam*(NATM+1)];
+				 profAtm[ilam*9*NLAM+icouche*9+4]=tab_H.xdel[icouche+ilam*(NATM+1)];
+				 profAtm[ilam*9*NLAM+icouche*9+5]=tab_H.pMol[icouche+ilam*(NATM+1)];
+				 profAtm[ilam*9*NLAM+icouche*9+6]=tab_H.ssa[icouche+ilam*(NATM+1)];
+				 profAtm[ilam*9*NLAM+icouche*9+7]=tab_H.abs[icouche+ilam*(NATM+1)] ;
+				 profAtm[ilam*9*NLAM+icouche*9+8]=tab_H.ip[icouche+ilam*(NATM+1)];
+
+			 }
+		}
+
+		write_sds(sdFichier, "profileAtm", ndims, dims, DFNT_FLOAT32,NULL, (VOIDP)(profAtm));
+		free(profAtm);
+
+
+    }
+
+    if( SIM==0 || SIM==2 || SIM==3 ){
+    	dims[0] = NPHAOCE;
+    	dims[1]=5;
+    	dims[2] = mlsaoce;
+		write_sds(sdFichier, "phaseOc", ndims, dims, DFNT_FLOAT64,NULL, (VOIDP)(phaseOc));
+		free(phaseOc);
+		dims[0]=NLAM;
+		dims[1]=NOCE+1;
+		dims[2]=4;
+
+
+		float *profOc= (float*)malloc((4*NLAM*(NOCE+1))*sizeof(float));
+
+
+		for( int ilam=0;ilam<NLAM;ilam++) {
+			for( int icouche=0; icouche<NOCE+1; icouche++ ){
+					profOc[ilam*4*NLAM+icouche*4+0]=tab_H.depth[icouche];
+					profOc[ilam*4*NLAM+icouche*4+1]=tab_H.ho[icouche+ilam*(NATM+1)];
+					profOc[ilam*4*NLAM+icouche*4+2]=tab_H.sso[icouche+ilam*(NATM+1)];
+					profOc[ilam*4*NLAM+icouche*4+3]=(float)tab_H.ipo[icouche+ilam*(NATM+1)];
+					}
+				}
+
+		write_sds(sdFichier, "profileOc", ndims, dims, DFNT_FLOAT32,NULL, (VOIDP)(profOc));
+
+
+		free(profOc);
+    }
+
+
+
+
     // closes hdf file
     SDend(sdFichier);
 
 }
+
+
+

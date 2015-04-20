@@ -101,20 +101,21 @@ void freeTableaux(Tableaux*, Tableaux*);
 /* calculFaer
 * Compute CDF of scattering phase matrices
 */
-void calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, int nf, int ip);
+
+void calculF( const char* nomFichier, float* phase_H, float* phase_D ,int mlsa,int lsa, int nf, int ip,double* phase);
 
 /* Read spectral albedo (for surface or seafloor)*/
 void profilAlb( Tableaux* tab_H, Tableaux* tab_D );
 
 /* profilOce*/
 /* Read ocean extinction coefficient and single scattering albedo for ocean*/
-void profilOce( Tableaux* tab_H, Tableaux* tab_D );
+void profilOce( Tableaux* tab_H, Tableaux* tab_D);
 
 /* profilAtm
 * Calcul du profil atmosphérique dans l'atmosphère en fonction de la couche
 * Mélange Molécule/Aérosol dans l'atmosphère en fonction de la couche
 */
-void profilAtm( Tableaux* tab_H, Tableaux* tab_D );
+void profilAtm( Tableaux* tab_H, Tableaux* tab_D);
 
 
 
@@ -171,8 +172,11 @@ void calculTabFinal(double*, double*, double*, double*, unsigned long long, unsi
 /* creerHDFResultats
 * Fonction qui crée le fichier .hdf contenant le résultat final pour une demi-sphère
 */
+
 //void creerHDFResultats(double*, double*, double*, double*, double*, double*, double*, unsigned long long, Variables*, double);
-void creerHDFResultats(double*, double*, double*, double*, double*, double*, double*, double*, unsigned long long, Variables*, double);
+void creerHDFResultats(double*, double*, double*, double*, double*, double*, double*, double*, unsigned long long, Variables*, double,int,int,double*,double*,Tableaux);
+
+
 
 
 #endif	// HOST_H

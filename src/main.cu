@@ -119,7 +119,7 @@ int main (int argc, char *argv[])
 	/** Variables du main **/
 	
 	double tempsPrec = 0.; 	//temps ecoule de la simulation precedente
-    int ilam, ip;
+    int /*ilam,*/ ip;
     //unsigned int ilam, ip;
     char PATHDIFF[1024];
 	
@@ -205,12 +205,21 @@ int main (int argc, char *argv[])
     double *tabFinalUp0M; 
     tabFinalUp0M = (double*)malloc(4*NBTHETA*NBPHI*NLAM*sizeof(double));
 
+
+    double *phaseatm;// parametre de la fonction de phase atm
+    double *phaseoc; //Parametres de la fonction de phase ocean
+    int MLSAOCE,MLSAAER;
+
+
 	double *tabTh;
     tabTh = (double*)malloc(NBTHETA*sizeof(double));
 	double *tabPhi;
     tabPhi = (double*)malloc(NBPHI*sizeof(double));
 	double *tabTransDir;
     tabTransDir = (double*)malloc(NLAM*sizeof(double));
+
+
+
 	
 	/* Code spécifique à une atmosphère sphérique */
 	// Définition et initialisation des constantes initiales du photon
@@ -230,25 +239,50 @@ int main (int argc, char *argv[])
 	afficheParametres();
 	#endif
 	
+
+
+
 #ifdef _PERF
         StartProcessing(perfInitG);
 #endif
-	/** Calcul des modèles utiles à l'algorithme **/
+
+
 #ifdef _PERF
                 StopProcessing(perfInitG);
                 GetElapsedTime(perfInitG);
 #endif
 	
+
+
+
+
 	// Calcul de foce, modèle de diffusion dans l'océan
 	if( SIM==0 || SIM==2 || SIM==3 ){
+
+
+    MLSAOCE=0;
+    //recupere le nombre de ligne max
+		for(ip=0;ip<NPHAOCE;ip++){
+			get_diff(PATHDIFF,  ip, PATHDIFFOCE);
+			if (ip==0)
+				MLSAOCE = count_lines(PATHDIFF);
+			else if (count_lines(PATHDIFF)>MLSAOCE)
+		    	MLSAOCE = count_lines(PATHDIFF);
+		}
+
+		phaseoc= (double*)malloc(NPHAOCE*5*MLSAOCE*sizeof(double));
+
+
         // Read oceanic profile
         profilOce(&tab_H, &tab_D);
         for(ip=0; ip< NPHAOCE; ip++){
 	       // Calcul de foce, modèle de diffusion de l ocean 
            get_diff(PATHDIFF,  ip, PATHDIFFOCE);
            LSAOCE = count_lines(PATHDIFF);
-		   calculF(PATHDIFF, tab_H.foce, tab_D.foce, LSAOCE, NFOCE, ip);
+		   calculF(PATHDIFF, tab_H.foce, tab_D.foce,MLSAOCE,LSAOCE, NFOCE, ip,phaseoc);
         }
+
+
 	    /** Copy of Phase Matrix into device memory **/		
 	    cudaError_t erreur = cudaMemcpy(tab_D.foce, tab_H.foce, 5*NFOCE*NPHAOCE*sizeof(float), cudaMemcpyHostToDevice); 
 	    if( erreur != cudaSuccess ){
@@ -256,29 +290,52 @@ int main (int argc, char *argv[])
 		  printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
 		  exit(1);
 	    }
+
 	}
+
+
+
+
 
    // Reading spectral albedo (surface or seafloor)
 	if( SIM!=-2 ){
         profilAlb(&tab_H, &tab_D);
     }
 
+
+
 #ifdef _PERF
         StartProcessing(perfInitG);
 #endif
+
+
     if ((SIM == -2) || (SIM == 1) || (SIM == 2)) {
         // Read atmospheric profile
+
+    	MLSAAER=0;
+    	//recupere le nombre de ligne max
+    	for(ip=0;ip<NPHAAER;ip++){
+    		get_diff(PATHDIFF,  ip, PATHDIFFAER);
+    		if (ip==0)
+    			MLSAAER = count_lines(PATHDIFF);
+    		else if (count_lines(PATHDIFF)>MLSAAER)
+    			MLSAAER = count_lines(PATHDIFF);
+    	}
+
+
+    	phaseatm= (double*)malloc(NPHAAER*5*MLSAAER*sizeof(double));
         profilAtm(&tab_H, &tab_D);
-        for(ilam=0; ilam< NLAM; ilam++){
-           // compute direct transmission
-           tabTransDir[ilam] = exp(-tab_H.h[NATM+ilam*(NATM+1)]/cos(THVDEG*PI/180.));
-        }
+
+
         for(ip=0; ip< NPHAAER; ip++){
 	       // Calcul de faer, modèle de diffusion des aérosols
            get_diff(PATHDIFF,  ip, PATHDIFFAER);
            LSAAER = count_lines(PATHDIFF);
-           calculF(PATHDIFF, tab_H.faer, tab_D.faer, LSAAER, NFAER, ip);
+           calculF(PATHDIFF, tab_H.faer, tab_D.faer,MLSAAER,LSAAER, NFAER, ip,phaseatm);
         }
+
+
+
 	    /** Copy of Phase Matrix into device memory **/		
 	    cudaError_t erreur = cudaMemcpy(tab_D.faer, tab_H.faer, 5*NFAER*NPHAAER*sizeof(float), cudaMemcpyHostToDevice); 
 	    if( erreur != cudaSuccess ){
@@ -286,7 +343,10 @@ int main (int argc, char *argv[])
 		  printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
 		  exit(1);
 	    }
+
     }
+
+
 #ifdef _PERF
         StopProcessing(perfInitG);
         GetElapsedTime(perfInitG);
@@ -576,7 +636,10 @@ cudaMemcpyDeviceToHost);
 	calculTabFinal(tabFinalUp0M, tabTh, tabPhi, tabPhotonsTotUp0M, nbPhotonsTot,nbPhotonsTotInter);
 
 	
-	creerHDFResultats(tabFinal, tabFinalDown0P, tabFinalDown0M, tabFinalUp0P, tabFinalUp0M, tabTh, tabPhi, tabTransDir, nbPhotonsTot, var_H, tempsPrec);
+
+	creerHDFResultats(tabFinal, tabFinalDown0P, tabFinalDown0M, tabFinalUp0P, tabFinalUp0M, tabTh, tabPhi, tabTransDir, nbPhotonsTot, var_H, tempsPrec,MLSAOCE,MLSAAER,phaseatm,phaseoc,tab_H);
+
+
 #ifdef _PERF
         StopProcessing(perfCreateFinalTab);
         GetElapsedTime(perfCreateFinalTab);
@@ -621,12 +684,13 @@ cudaMemcpyDeviceToHost);
 	freeTableaux(&tab_H, &tab_D);
 	// Libération du tableau du host
 	free( tabPhotonsTot );
+
 	free( tabPhotonsTotDown0P );
 	free( tabPhotonsTotDown0M );
 	free( tabPhotonsTotUp0P );
 	free( tabPhotonsTotUp0M );
 
-	
+
 #ifdef _PERF
         StopProcessing(perfFree);
         GetElapsedTime(perfFree);
@@ -646,7 +710,6 @@ cudaMemcpyDeviceToHost);
         if ( perfMemcpyD2HVar != NULL )
             printf("\n %s...%u us", GetName(perfMemcpyD2HVar), GetTotalElapsedTime(perfMemcpyD2HVar));
         if ( perfMemcpyD2HTab != NULL )
-            printf("\n %s...%u us", GetName(perfMemcpyD2HTab), GetTotalElapsedTime(perfMemcpyD2HTab));
         if ( perfCreateWitness != NULL )
             printf("\n %s...%u us", GetName(perfCreateWitness), GetTotalElapsedTime(perfCreateWitness));
         if ( perfCreateFinalTab != NULL )
