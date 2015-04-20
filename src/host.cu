@@ -327,7 +327,7 @@ void init_profileATM(int *NATM, float *HATM, int *NLAM, char *PATHPROFILATM) {
     fp = fopen(PATHPROFILATM, "r");
 
     if (fp == NULL) {
-        printf("ERROR: Cannot open profile '%s'\n", PATHPROFILATM);
+        printf("ERROR: Cannot open atmospheric profile '%s'\n", PATHPROFILATM);
         exit(1);
     }
 
@@ -370,7 +370,7 @@ void init_profileOCE(int *NOCE, int *NLAM, char *PATHPROFILOCE) {
     fp = fopen(PATHPROFILOCE, "r");
 
     if (fp == NULL) {
-        printf("ERROR: Cannot open profile '%s'\n", PATHPROFILOCE);
+        printf("ERROR: Cannot open ocean profile '%s'\n", PATHPROFILOCE);
         exit(1);
     }
 
@@ -403,10 +403,15 @@ void get_diff(char* chaineValeur, int ilam, char *PATHDIFFAER) {
     int count=0;
     char buffer[2048];
 
+    if (strcmp(PATHDIFFAER, "None") == 0) {
+        strcpy(chaineValeur, "None");
+        return;
+    }
+
     fp = fopen(PATHDIFFAER, "r");
 
     if (fp == NULL) {
-        printf("ERROR: Cannot open profile '%s'\n", PATHDIFFAER);
+        printf("ERROR: Cannot open phase function '%s'\n", PATHDIFFAER);
         exit(1);
     }
 
