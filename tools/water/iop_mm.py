@@ -78,11 +78,13 @@ class IOP_MM(object):
         chl: chlorophyll concentration (mg/m3)
         NANG: number if angles for the phase function
         ang_trunc: truncation angle in degrees
+        ALB: albedo of the sea floor
     '''
-    def __init__(self, chl, ang_trunc=5., NANG=72001):
+    def __init__(self, chl, ang_trunc=5., NANG=72001, ALB=0.):
         self.chl = chl
         self.trunc = ang_trunc
         self.NANG = NANG
+        self.alb = ALB
 
     def calc(self, wl):
         '''

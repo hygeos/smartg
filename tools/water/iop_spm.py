@@ -25,14 +25,17 @@ class IOP_SPM(object):
         gamma: is the spectral dependency of the particulate backscattering
         alpha: parameter for CDOM absorption
         nbp: refractive index of particles (relative to water)
+        ALB: albedo of the sea floor
     '''
-    def __init__(self, SPM, NSCOCE=72001, ang_trunc=5., gamma=0.5, alpha=1., nbp=1.15):
+    def __init__(self, SPM, NSCOCE=72001, ang_trunc=5., gamma=0.5,
+            alpha=1., nbp=1.15, ALB=0.):
         self.__SPM = SPM
         self.__NSCOCE = NSCOCE
         self.__ang_trunc = ang_trunc
         self.__gamma = gamma
         self.__alpha = alpha
         self.__nbp = nbp
+        self.alb = ALB
 
     def calc(self, w):
         '''

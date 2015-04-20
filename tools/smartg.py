@@ -24,6 +24,7 @@ dir_data = join(dir_install, 'auxdata/')   # directory for storing persistent da
 dir_phase_aero = join(dir_data, 'phase_aerosols/')
 dir_tmp = join(dir_install, 'tmp/')
 dir_phase_water = join(dir_tmp, 'phase_water/')
+dir_albedo = join(dir_tmp, 'albedo/')
 dir_cmdfiles = join(dir_tmp, 'command_files/')
 dir_profiles = join(dir_tmp, 'profiles/')
 dir_output = join(dir_tmp, 'results')
@@ -181,7 +182,14 @@ class Smartg(object):
             if atm.aer is None:
                 D.update(PATHDIFFAER='None')
             else:
-                D.update(PATHDIFFAER=atm.aer.phase(wl, dir_phase_aero))
+                phase_aer = atm.aer.phase(wl, dir_phase_aero, NTHETA=1000)
+
+                # write list of phase functions
+                file_list_pf_aer = tempfile.mktemp(dir=dir_tmp, prefix='list_pf_aer_')
+                with open(file_list_pf_aer, 'w') as f:
+                    f.write(phase_aer + '\n')
+
+                D.update(PATHDIFFAER=file_list_pf_aer)
         else:  # no atmosphere
             D.update(PATHDIFFAER='None')
             D.update(PATHPROFILATM='None')
@@ -191,23 +199,38 @@ class Smartg(object):
         #
         if surf is None:
             # default surface parameters
-            surf = Surface()
+            surf = FlatSurface()
         D.update(surf.dict)
 
         #
-        # ocean parameters
+        # ocean profile
         #
-        if water is not None:
+        if water is None:
+            # use default water values
+            D.update(PATHPROFILOCE='None', PATHDIFFOCE='None')
+        else:
             # TODO: if iband is provided, use iband wavelength to calculate
             # atot and btot, and wl to calculate the phase function
+
+            # TODO: update this
+            # write phase function
             atot, btot, phase = water.calc(wl)
-            file_phase = tempfile.mktemp(dir=dir_phase_water,
-                    prefix='pf_ocean_', suffix='.tmp')
+            file_phase = tempfile.mktemp(dir=dir_phase_water, prefix='pf_ocean_')
             phase.write(file_phase)
-            D.update(ATOT=atot, BTOT=btot, PATHDIFFOCE=file_phase)
-        else:
-            # use default water values
-            D.update(ATOT=0., BTOT=0., PATHDIFFOCE='None')
+
+            # write list of phase functions
+            file_list_pf_ocean = tempfile.mktemp(dir=dir_tmp, prefix='list_pf_ocean_')
+            with open(file_list_pf_ocean, 'w') as f:
+                f.write(file_phase + '\n')
+
+            # write the ocean profile
+            profil_oce = tempfile.mktemp(dir=dir_tmp, prefix='profil_oce_')
+            with open(profil_oce, 'w') as f:
+                f.write('# I   DEPTH    H(I)    SSA(I)\n')
+                f.write('0 0. 0. 1.\n')
+                f.write('1 1000. -1.e10 {}\n'.format(btot/(atot+btot)))
+
+            D.update(PATHPROFILOCE=profil_oce, PATHDIFFOCE=file_list_pf_ocean)
 
         #
         # environment effect
@@ -216,6 +239,27 @@ class Smartg(object):
             # default values (no environment effect)
             env = Environment()
         D.update(env.dict)
+
+        #
+        # write the albedo file
+        #
+        file_alb = tempfile.mktemp(dir=dir_albedo, prefix='albedo_')
+        if not exists(dirname(file_alb)):
+            makedirs(dirname(file_alb))
+        if 'SURFALB' in D:
+            surf_alb = D['SURFALB']
+        else:
+            surf_alb = -999.
+        if water is None:
+            seafloor_alb = -999.
+        else:
+            seafloor_alb = water.alb
+
+        with open(file_alb, 'w') as f:
+            f.write('# Surface_alb Seafloor_alb\n')
+            f.write('{} {}\n'.format(surf_alb, seafloor_alb))
+
+        D.update(PATHALB=file_alb)
 
         #
         # write the command file
@@ -241,9 +285,9 @@ class Smartg(object):
         read SMARTG result as a LUT (if dataset is provided) or MLUT (default)
         '''
         if dataset is not None:
-            return read_lut_hdf(self.output, dataset, ['Azimut angles', 'Zenith angles'])
+            return read_lut_hdf(self.output, dataset)
         else:
-            return read_mlut_hdf(self.output, axnames=['Azimut angles', 'Zenith angles'])
+            return read_mlut_hdf(self.output)
 
 
     def view(self, QU=False):
@@ -263,180 +307,202 @@ def command_file_template(dict):
     returns the content of the command file based on dict
     '''
     return textwrap.dedent("""
-        # Nombre de photons a lancer (unsigned long long) (limite par le tableau du poids des photons en unsigned long long)
+        ################ SIMULATION #####################
+        # Number of "Photons" to inject (unsigned long long)
         NBPHOTONS = {NBPHOTONS}
 
-        # Angle zenithal de visée en degrés (float)
+        # View Zenith Angle in degree (float)
         THVDEG = {THVDEG}
 
-        # Longueur d'onde [nm] (float)
+        # Eventually wavelenghth (nm) (just for information purposes, not used in the simulation) 
         LAMBDA = {LAMBDA}
 
-        # Nom absolu du fichier de la matrice de phase des aérosol
-            # Données commencant sur la première ligne
-            # %lf\t%lf\t%lf\t%lf\t%lf => Correspondant à angle	p2	p1	p3	p4
-        PATHDIFFAER = {PATHDIFFAER}
+        # Number of output azimut angle boxes from 0 to PI
+        NBPHI = {NBPHI}
+        # Number of output zenith angle boxes from 0 to PI
+        NBTHETA = {NBTHETA}
 
-        # Type de simulation
-            # -2 pour atmosphere seule
-            # -1 pour dioptre seul
-            # 0 pour ocean et dioptre
-            # 1 pour atmosphere et dioptre
-            # 2 pour atmosphere dioptre et ocean
-            # 3 pour ocean seul
+        # Simulation type
+            # -2 Atmosphere only
+            # -1 Dioptre only
+            #  0 Ocean and dioptre
+            #  1 Atmosphere and dioptre
+            #  2 Atmosphere, dioptre and ocean
+            #  3 Ocean only
         SIM = {SIM}
 
-        # Nom absolu du fichier du profil vertical atmosphérique utilisateur
-            # Le format du fichier doit être le suivant 
-            # I	ALT		hmol(I)		haer(I)		H(I)		XDEL(I)		YDEL(I)  ZABS(I) => Première ligne indicative, pas de données dessus
-            # %d\t%f\t%f\t%f\t%f\t%f\t%f\t%f  => Format pour toutes les autres lignes
-        PATHPROFILATM = {PATHPROFILATM}
-
-        # Type de reflexion de la surface
-            # 1 pour reflexion forcee sur le dioptre
-            # 2 transmission forcee
-            # 3 reflexion et transmission
-        SUR = {SUR}
-
-        # Type de dioptre 
+        # Dioptre type
             # 0 = plan
-            # 1 = agite avec reflexion multiple
-            # 2 = agite sans reflexion multiple
-            # 3 = surface lambertienne (uniquement sans océan)
-            # 4 = glitter + surface lambertienne (2 en reflexion + 3 pour transmission) - Use SUR=3 in this case
+            # 1 = roughened sea surface with multiple reflections
+            # 2 = roughened sea surface without multiple reflections
+            # 3 = lambertian reflector (LAND)
         DIOPTRE = {DIOPTRE}
 
-        # Albedo simple de diffusion de la surface lambertienne (float)
-        W0LAM = {W0LAM}
+        # Processes at the surface dioptre
+            # 1 Forced reflection
+            # 2 Forced transmission
+            # 3 Reflection and transmission
+        SUR = {SUR}
 
-        # Vitesse du vent [m/s] (utilise si idioptre=1) (modele de Cox et Munk) (float)
-        WINDSPEED = {WINDSPEED}
+        # Output layers as a binary flag 
+            # 0  TOA always present
+            # 1  Add BOA (0+) downward and BOA (0-) upward
+            # 2  Add BOA (0+) upward and BOA (0-) downward
+        OUTPUT_LAYERS = {OUTPUT_LAYERS}
 
-        # Indice de refraction relatif air/eau (float)
-        NH2O = {NH2O}
-
-        # Coefficients d'absorption et de diffusion totaux de l'eau
-        # et fonction de phase totale pour la diffusion dans l'eau
-        ATOT = {ATOT}
-        BTOT = {BTOT}
-        PATHDIFFOCE = {PATHDIFFOCE}
-
-        # Coefficient de dépolarisation
-        DEPO = {DEPO}
-
-        # Effet d environnement
-        # 0 pas d effet
-        # 1 effet d environnement de type cible circulaire
-        # ENV_SIZE rayon de la cible en km
-        # X0 decalage en km entre la coordonnee X du centre de la cible et le point visee
-        # Y0 decalage en km entre la coordonnee Y du centre de la cible et le point visee
-        # !! l environnement est lambertien avec un albedo W0LAM
-        ENV= {ENV}
-        ENV_SIZE= {ENV_SIZE}
-        X0= {X0}
-        Y0= {Y0}
-
-        ###
-        ## Paramètres autres de la simulation ##
-        #_____________________________________#
-
-        # Graine avec laquelle on initialise les generateurs aleatoires (int)
-        # si SEED est positif on l'utilise comme graine (cela permet d'avoir les memes nombres aleatoires d'une simulation a l'autre, et
-        # donc une meme simulation)
-        # si SEED=-1 on crée une graine aleatoirement (donc toutes les simulations sont differentes les unes des autres)
-        SEED = {SEED}
-
-        # Le demi-espace dans lequel on récupère les photons est divisé en boites
-        # theta parcourt 0..PI
-        # phi parcourt 0..PI
-        NBTHETA = {NBTHETA}
-        NBPHI = {NBPHI}
-
-        # number of samples for the inversion of the aerosol phase function
-        NFAER = {NFAER}
-
-        # number of samples for the inversion of the ocean phase function
-        NFOCE = {NFOCE} 
-
-        ###
-        ## Controle des sorties ##
-        #_______________________#        
-
-        # Chemin du fichiers de sortie et témoin
+        # Absolute name of output file 
         PATHRESULTATSHDF = {PATHRESULTATSHDF}
 
-        # Période d'écriture du fichier témoin en min (-1 pour désactiver)
-        WRITE_PERIOD = {WRITE_PERIOD}
+        # SEED for random number series
+            # SEED > 0 Random series generated from this SEED (allow to redo the same simulation)
+            # SEED =-1 A SEED is randomly generated
+        SEED = {SEED}
 
-        # Output layers (binary flags)
-        # 1 -> BOA (0+) downward
-        OUTPUT_LAYERS    {OUTPUT_LAYERS}     
+        ################ ATMOSPHERE #####################
+        # Depolarization coefficient of air
+        DEPO = {DEPO}
 
-        ###
-        ## Paramètres de la carte graphique  ##
-        #____________________________________#
+        # Absolute name of file containing the vertical profile of atmosphere
+            # Format 
+        PATHPROFILATM = {PATHPROFILATM}
 
-        # Les threads sont rangés dans des blocks de taille XBLOCK*YBLOCK (limite par watchdog il faut tuer X + limite XBLOCK*YBLOCK =< 256
-        #ou 512)
-        # XBLOCK doit être un multiple de 32
-        # à laisser à 256 (tests d'optimisation effectues)
+        # Absolute name of file containing the atmospheric phase matrix 
+            # Format 
+        PATHDIFFAER = {PATHDIFFAER}
+
+        ################ SURFACE #####################
+        # Absolute name of file containing the Land and Seafloor lambertian albedo 
+            # Format 
+        PATHALB = {PATHALB}
+
+        # Windspeed (m/s) (if DIOPTRE = 1,2 or 4)
+        WINDSPEED = {WINDSPEED}
+
+        # Relatibve refarctive index air/water
+        NH2O = {NH2O}
+
+        #_______________ Environement effects _____________________#
+
+        # Environment effects (circular target surrrounded by environment)
+          # 0  No effect (target horizontally homogeneous)
+          # 1  Effect included
+        ENV = {ENV}
+        # Target radius (km)
+        ENV_SIZE= {ENV_SIZE}
+        # X0 horizontal shift (in km) in X direction between the center of the target and the point on Earth viewed
+        X0= {X0}
+        # Y0 horizontal shift (in km) in Y direction between the center of the target and the point on Earth viewed
+        Y0= {Y0}
+
+        ################ OCEAN   #####################
+        # Absolute name of file containing the Vertical profile of Ocean optical depth and single scattering albedo
+            # Format 
+        PATHPROFILOCE = {PATHPROFILOCE}
+        # Absolute name of file containing the Ocean phase function 
+            # Format 
+        PATHDIFFOCE = {PATHDIFFOCE}
+
+        ################ PARAMETERS   #####################
+
+        # number of samples for the computation of the Cumulative Distribution Function of the aerosol phase matrix
+        NFAER = 1000000
+
+        # number of samples for the computation of the Cumulative Distribution Function of the ocean phase matrix
+        NFOCE = 1000000
+
+        # LOOP number in the kernel for each thread
+        NBLOOP = 5000 
+
+        #_______________ GPU _____________________#
+
+        # Threads organized as BLOCKS of size XBLOCK*YBLOCK, with XBLOCK a multiple of 32
         XBLOCK = {XBLOCK} 
         YBLOCK = {YBLOCK} 
 
         # et les blocks sont eux-même rangés dans un grid de taille XGRID*YGRID (limite par watchdog il faut tuer X + limite XGRID<65535 et YGRID<65535)
+        # BLOCKS organized as GRID of size XGRID*YGRID with XGRID<65535 and YGRID<65535
         XGRID = {XGRID} 
         YGRID = {YGRID} 
 
-        # Nombre de boucles dans le kernel (unsigned int) (limite par watchdog, il faut tuer X)
-        # Ne pas mettre NBLOOP à une valeur trop importante, ce qui conduit à des erreurs dans le résultats de sorti
-        # Si les résultats manquent de lissage pour les valeurs importantes de réflectance, réduire ce chiffre, relancer et comparer
-        # Une valeur de 5000 semble satisfaisante
-        NBLOOP = {NBLOOP} 
-
-        DEVICE = -1
+        # Device selection (-1 to select the 1st available device)
+        DEVICE  -1
     """).format(**dict)
 
 
-class Surface(object):
+class FlatSurface(object):
     '''
-    Stores the smartg parameters relative to the surface
+    Definition of a flat sea surface
 
-    Parameters:
-        SUR: Type de reflexion de la surface
-            # 1 pour reflexion forcee sur le dioptre
-            # 2 transmission forcee
-            # 3 reflexion et transmission
-        DIOPTRE: Type de dioptre 
-            # 0 = plan
-            # 1 = agite avec reflexion multiple
-            # 2 = agite sans reflexion multiple
-            # 3 = surface lambertienne (uniquement sans océan)
-            # 4 = glitter + surface lambertienne (2 en reflexion + 3 pour transmission) - Use SUR=3 in this case
-        WOLAM: Albedo simple de diffusion de la surface lambertienne (float)
-        WINDSPEED: Vitesse du vent [m/s] (utilise si idioptre=1) (modele de Cox et Munk) (float)
-        NH2O: Indice de refraction relatif air/eau (float)
+    Arguments:
+        SUR: Processes at the surface dioptre
+            # 1 Forced reflection
+            # 2 Forced transmission
+            # 3 Reflection and transmission
+        NH2O: Relative refarctive index air/water
     '''
-    def __init__(self, SUR=1, DIOPTRE=2, W0LAM=0., WINDSPEED=5., NH2O=1.33):
+    def __init__(self, SUR=3, NH2O=1.33):
         self.dict = {
                 'SUR': SUR,
-                'DIOPTRE': DIOPTRE,
-                'W0LAM': W0LAM,
-                'WINDSPEED': WINDSPEED,
+                'DIOPTRE': 0,
+                'WINDSPEED': -999.,
                 'NH2O': NH2O,
                 }
     def __str__(self):
-        return 'SUR={SUR}-DI={DIOPTRE}-W0={W0LAM}-WIND={WINDSPEED}'.format(**self.dict)
+        return 'FLATSURF-SUR={SUR}'.format(**self.dict)
+
+class RoughSurface(object):
+    '''
+    Definition of a roughened sea surface
+
+    Arguments:
+        MULT: include multiple reflections at the surface
+              (True => DIOPTRE=1 ; False => DIOPTRE=2)
+        WIND: wind speed (m/s)
+        SUR: Processes at the surface dioptre
+            # 1 Forced reflection
+            # 2 Forced transmission
+            # 3 Reflection and transmission
+        NH2O: Relative refarctive index air/water
+    '''
+    def __init__(self, MULT=False, WIND=5., SUR=3, NH2O=1.33):
+        self.dict = {
+                'SUR': SUR,
+                'DIOPTRE': {True:1, False:2}[MULT],
+                'WINDSPEED': WIND,
+                'NH2O': NH2O,
+                }
+    def __str__(self):
+        return 'ROUGHSUR={SUR}-WIND={WINDSPEED}-DI={DIOPTRE}'.format(**self.dict)
+
+
+class LambSurface(object):
+    '''
+    Definition of a lambertian reflector
+
+    ALB: Albedo of the reflector
+    '''
+    def __init__(self, ALB=0.5):
+        self.dict = {
+                'SUR': 1,
+                'DIOPTRE': 3,
+                'SURFALB': ALB,
+                'WINDSPEED': -999.,
+                'NH2O': -999.,
+                }
+    def __str__(self):
+        return 'LAMBSUR-ALB={ALB}'.format(**self.dict)
 
 class Environment(object):
     '''
     Stores the smartg parameters relative the the environment effect
     '''
-    def __init__(self, ENV=0, ENV_SIZE=0., X0=0., Y0=0.):
+    def __init__(self, ENV=0, ENV_SIZE=0., X0=0., Y0=0., ALB=0.5):
         self.dict = {
                 'ENV': ENV,
                 'ENV_SIZE': ENV_SIZE,
                 'X0': X0,
                 'Y0': Y0,
+                'SURFALB': ALB,
                 }
 
     def __str__(self):
@@ -523,7 +589,7 @@ def test_rayleigh():
     '''
     Basic Rayleigh example
     '''
-    return Smartg('SMART-G-PP', wl=500., NBPHOTONS=1e9, atm=Profile('afglt'))
+    return Smartg('SMART-G-PP', wl=500., NBPHOTONS=1e9, atm=Profile('afglt'), overwrite=True)
 
 
 def test_kokhanovsky():
@@ -546,22 +612,26 @@ def test_rayleigh_aerosols():
 
 
 def test_atm_surf():
+    # lambertian surface of albedo 10%
     return Smartg('SMART-G-PP', 490., NBPHOTONS=1e9,
             output=join(dir_output, 'test_atm_surf.hdf'),
             atm=Profile('afglms'),
-            surf=Surface(SUR=1, DIOPTRE=2, W0LAM=1., WINDSPEED=5.))
+            surf=LambSurface(ALB=0.1),
+            overwrite=True)
 
 
 def test_atm_surf_ocean():
-    return Smartg('SMART-G-PP', 490., NBPHOTONS=1e9,
-            atm=Profile('afglms'),
-            surf=Surface(SUR=1, DIOPTRE=2, W0LAM=0., WINDSPEED=5.),
-            water=IOP_SPM(SPM=1.))
+    return Smartg('SMART-G-PP', 490., NBPHOTONS=1e7,
+            atm=Profile('afglms', aer=AeroOPAC('maritime_clean', 0.2, 550, layer_phase=-1)),
+            surf=RoughSurface(),
+            NBTHETA=30,
+            water=IOP_MM(chl=1., NANG=1000),
+            overwrite=True)
 
 
 def test_surf_ocean():
     return Smartg('SMART-G-PP', 490., THVDEG=30., NBPHOTONS=2e6,
-            surf=Surface(SUR=3, DIOPTRE=2, W0LAM=0., WINDSPEED=5.),
+            surf=RoughSurface(),
             water=IOP_SPM(SPM=1.))
 
 
@@ -615,12 +685,12 @@ def test_ozone_lut():
 
 if __name__ == '__main__':
     test_rayleigh()
-    # test_kokhanovsky()
-    # test_rayleigh_aerosols()
-    # test_atm_surf()
-    # test_atm_surf_ocean()
-    # test_surf_ocean()
-    # test_ocean()
-    # test_reptran()
-    # test_ozone_lut()
+    test_kokhanovsky()
+    test_rayleigh_aerosols()
+    test_atm_surf()
+    test_atm_surf_ocean()
+    test_surf_ocean()
+    test_ocean()
+    test_reptran()
+    test_ozone_lut()
 
