@@ -230,9 +230,9 @@ class Smartg(object):
             profil_oce = tempfile.mktemp(dir=dir_profil_oce, prefix='profil_oce_')
             ensure_dir_exists(dir_profil_oce)
             with open(profil_oce, 'w') as f:
-                f.write('# I   DEPTH    H(I)    SSA(I)\n')
-                f.write('0 0. 0. 1.\n')
-                f.write('1 1000. -1.e10 {}\n'.format(btot/(atot+btot)))
+                f.write('# I   DEPTH    H(I)    SSA(I)  IPHA\n')
+                f.write('0 0. 0. 1. 0\n')
+                f.write('1 1000. -1.e10 {} 0\n'.format(btot/(atot+btot)))
 
             D.update(PATHPROFILOCE=profil_oce, PATHDIFFOCE=file_list_pf_ocean)
 
