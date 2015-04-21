@@ -146,6 +146,10 @@ class Smartg(object):
                 'NBLOOP': NBLOOP,
                 }
 
+        # we use a separate disctionary to store the default parameters
+        # which should not override the specified ones
+        Ddef = {}
+
         # determine SIM
         if (atm is not None) and (surf is None) and (water is None):
             SIM = -2  # atmosphere only
@@ -180,7 +184,7 @@ class Smartg(object):
 
             # aerosols
             if atm.aer is None:
-                D.update(PATHDIFFAER='None')
+                Ddef.update(PATHDIFFAER='None')
             else:
                 phase_aer = atm.aer.phase(wl, dir_phase_aero, NTHETA=1000)
 
@@ -192,8 +196,8 @@ class Smartg(object):
 
                 D.update(PATHDIFFAER=file_list_pf_aer)
         else:  # no atmosphere
-            D.update(PATHDIFFAER='None')
-            D.update(PATHPROFILATM='None')
+            Ddef.update(PATHDIFFAER='None')
+            Ddef.update(PATHPROFILATM='None')
 
         #
         # surface
@@ -201,14 +205,17 @@ class Smartg(object):
         if surf is None:
             # default surface parameters
             surf = FlatSurface()
-        D.update(surf.dict)
+            Ddef.update(surf.dict)
+        else:
+            D.update(surf.dict)
+
 
         #
         # ocean profile
         #
         if water is None:
             # use default water values
-            D.update(PATHPROFILOCE='None', PATHDIFFOCE='None')
+            Ddef.update(PATHPROFILOCE='None', PATHDIFFOCE='None')
         else:
             # TODO: if iband is provided, use iband wavelength to calculate
             # atot and btot, and wl to calculate the phase function
@@ -241,7 +248,16 @@ class Smartg(object):
         if env is None:
             # default values (no environment effect)
             env = Environment()
-        D.update(env.dict)
+            Ddef.update(env.dict)
+        else:
+            D.update(env.dict)
+
+        #
+        # update the dictionary with the default parameters
+        #
+        for k, v in Ddef.items():
+            if not k in D:
+                D.update({k: v})
 
         #
         # write the albedo file
@@ -501,7 +517,7 @@ class LambSurface(object):
                 'NH2O': -999.,
                 }
     def __str__(self):
-        return 'LAMBSUR-ALB={ALB}'.format(**self.dict)
+        return 'LAMBSUR-ALB={SURFALB}'.format(**self.dict)
 
 class Environment(object):
     '''
