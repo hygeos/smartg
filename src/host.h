@@ -101,7 +101,7 @@ void freeTableaux(Tableaux*, Tableaux*);
 /* calculFaer
 * Compute CDF of scattering phase matrices
 */
-void calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, int nf, int ilam);
+void calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, int nf, int ip);
 
 /* Read spectral albedo (for surface or seafloor)*/
 void profilAlb( Tableaux* tab_H, Tableaux* tab_D );

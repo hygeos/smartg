@@ -180,7 +180,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
         // -> dans ATMOS ou OCEAN
 		if( (ph.loc == ATMOS) || (ph.loc == OCEAN)){
 	
-			scatter(&ph, tab.faer, tab.ssa , tab.foce , tab.sso , &etatThr
+			scatter(&ph, tab.faer, tab.ssa , tab.foce , tab.sso, tab.ip , &etatThr
 			#if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
 			, &configThr
 			#endif
@@ -989,7 +989,7 @@ __device__ void move_pp(Photon* ph, float* h, float* pMol , float *abs , float* 
 * Diffusion du photon par une molécule ou un aérosol
 * Modification des paramètres de stokes et des vecteurs U et V du photon (polarisation, vitesse)
 */
-__device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , float* sso
+__device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , float* sso, int* ip
 			#ifdef RANDMWC
 			, unsigned long long* etatThr, unsigned int* configThr
 			#endif
@@ -1014,7 +1014,9 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
 	*/
 
 	float zang=0.f, theta=0.f;
-	int iang;
+	int iang ;
+    int ilay = ph->couche + ph->ilam*(NATMd+1); // layer index
+    int ipha  = ip[ilay]; // phase function index
 	float stokes1, stokes2, norm;
 	float cTh2;
 	float prop_aer = ph->prop_aer;
@@ -1080,7 +1082,7 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
 			iang= __float2int_rd(zang);
 			zang = zang - iang;
 			/* L'accès à faer[x][y] se fait par faer[y*5+x] */
-			theta = faer[ph->ilam*NFAERd*5+iang*5+4]+ zang*( faer[ph->ilam*NFAERd*5+(iang+1)*5+4]-faer[ph->ilam*NFAERd*5+iang*5+4] );
+			theta = faer[ipha*NFAERd*5+iang*5+4]+ zang*( faer[ipha*NFAERd*5+(iang+1)*5+4]-faer[ipha*NFAERd*5+iang*5+4] );
 			//theta = faer[iang*5+4]+ zang*( faer[(iang+1)*5+4]-faer[iang*5+4] );
 			cTh = __cosf(theta);
 
@@ -1097,17 +1099,17 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
 				     &ph->stokes1, &ph->stokes2, &ph->stokes3);
 
 			// Calcul des parametres de Stokes du photon apres diffusion
-			ph->stokes1 *= faer[ph->ilam*NFAERd*5+iang*5+0];
-			ph->stokes2 *= faer[ph->ilam*NFAERd*5+iang*5+1];
-			ph->stokes3 *= faer[ph->ilam*NFAERd*5+iang*5+2];
+			ph->stokes1 *= faer[ipha*NFAERd*5+iang*5+0];
+			ph->stokes2 *= faer[ipha*NFAERd*5+iang*5+1];
+			ph->stokes3 *= faer[ipha*NFAERd*5+iang*5+2];
 
 			float debias;
-			debias = __fdividef( 2., faer[ph->ilam*NFAERd*5+iang*5+0] + faer[ph->ilam*NFAERd*5+iang*5+1] );
+			debias = __fdividef( 2., faer[ipha*NFAERd*5+iang*5+0] + faer[ipha*NFAERd*5+iang*5+1] );
 			ph->stokes1 *= debias;  
 			ph->stokes2 *= debias;  
 			ph->stokes3 *= debias;  
 
-			ph->weight *= ssa[ph->couche+ph->ilam*(NATMd+1)];
+			ph->weight *= ssa[ipha];
 			
 		}
 		

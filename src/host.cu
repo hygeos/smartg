@@ -823,17 +823,17 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 
 	/** Modèle de diffusion **/
 	// Modèle de diffusion des aérosols
-	tab_H->faer = (float*)malloc(5 * NFAER *  NLAM * sizeof(float));
+	tab_H->faer = (float*)malloc(5 * NFAER *  NPHAAER * sizeof(float));
 	//tab_H->faer = (float*)malloc(5 * NFAER * sizeof(float));
 	if( tab_H->faer == NULL ){
 		printf("ERREUR: Problème de malloc de tab_H->faer dans initTableaux\n");
 		exit(1);
 	}
-	memset(tab_H->faer,0,5 * NFAER* NLAM * sizeof(float) );
+	memset(tab_H->faer,0,5 * NFAER* NPHAAER * sizeof(float) );
 	//memset(tab_H->faer,0,5 * NFAER*sizeof(float) );
 	
 	//if( cudaMalloc(&(tab_D->faer), 5 * NFAER * sizeof(float)) != cudaSuccess ){
-	if( cudaMalloc(&(tab_D->faer), 5 * NFAER * NLAM * sizeof(float)) != cudaSuccess ){
+	if( cudaMalloc(&(tab_D->faer), 5 * NFAER * NPHAAER * sizeof(float)) != cudaSuccess ){
 		printf("ERREUR: Problème de cudaMalloc de tab_D->faer dans initTableaux\n");
 		exit(1);	
 	}
@@ -930,6 +930,19 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	
 	if( cudaMalloc( &(tab_D->ssa), (NATM+1)*NLAM*sizeof(float) ) != cudaSuccess ){
 		printf("ERREUR: Problème de cudaMalloc de tab_D->ssa dans initTableaux\n");
+		exit(1);	
+	}
+	
+    //
+	tab_H->ip =  (int*)malloc((NATM+1)*NLAM*sizeof(int));
+	if( tab_H->ip == NULL ){
+		printf("ERREUR: Problème de malloc de tab_H->ip dans initTableaux\n");
+		exit(1);
+	}
+	memset(tab_H->ip,0,(NATM+1)*NLAM*sizeof(int) );
+	
+	if( cudaMalloc( &(tab_D->ip), (NATM+1)*NLAM*sizeof(int) ) != cudaSuccess ){
+		printf("ERREUR: Problème de cudaMalloc de tab_D->ip dans initTableaux\n");
 		exit(1);	
 	}
 	
@@ -1158,6 +1171,16 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	
 	free(tab_H->ssa);
 	
+	//
+	erreur = cudaFree(tab_D->ip);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->ip dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	
+	free(tab_H->ip);
+	
 	/** Séparation du code pour atmosphère sphérique ou parallèle **/
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
 	
@@ -1211,8 +1234,9 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 /* calculF
 * Compute CDF of scattering phase matrices
 */
-void calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, int nf, int ilam){
+void calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, int nf, int ip){
 
+    // ip is the number of the phase function
     // not necessary when file name is "None"
     if (strcmp(nomFichier, "None") == 0) {
         return;
@@ -1317,21 +1341,21 @@ void calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, 
 	
 	/** Calcul des faer **/
 //	for(iang=0; iang<nf-1; iang++){
-		for(iang=0; iang<nf; iang++){
+	for(iang=0; iang<nf; iang++){
 		z = double(iang+1)/double(nf);
 		while( (scum[ipf+1]<z) )
 			ipf++;
 		
-			phase_H[ilam*5*nf+iang*5+4] = float( ((scum[ipf+1]-z)*ang[ipf] + (z-scum[ipf])*ang[ipf+1])/(scum[ipf+1]-scum[ipf]) );
+			phase_H[ip*5*nf+iang*5+4] = float( ((scum[ipf+1]-z)*ang[ipf] + (z-scum[ipf])*ang[ipf+1])/(scum[ipf+1]-scum[ipf]) );
 //		norm = p1[ipf]+p2[ipf];			// Angle
 //		phase_H[iang*5+0] = float( p1[ipf]/norm );	// I paralèlle
 //		phase_H[iang*5+1] = float( p2[ipf]/norm );	// I perpendiculaire
 //		phase_H[iang*5+2] = float( p3[ipf]/norm );	// u
 //		phase_H[iang*5+3] = 0.F;			// v, toujours nul
-			phase_H[ilam*5*nf+iang*5+0] = float( p1[ipf] );	// I paralèlle
-			phase_H[ilam*5*nf+iang*5+1] = float( p2[ipf] );	// I perpendiculaire
-			phase_H[ilam*5*nf+iang*5+2] = float( p3[ipf] );	// u
-			phase_H[ilam*5*nf+iang*5+3] = 0.F;	       	// v, toujours nul
+			phase_H[ip*5*nf+iang*5+0] = float( p1[ipf] );	// I paralèlle
+			phase_H[ip*5*nf+iang*5+1] = float( p2[ipf] );	// I perpendiculaire
+			phase_H[ip*5*nf+iang*5+2] = float( p3[ipf] );	// u
+			phase_H[ip*5*nf+iang*5+3] = 0.F;	       	// v, toujours nul
 	}
 	
 	free(scum);
@@ -1341,14 +1365,6 @@ void calculF( const char* nomFichier, float* phase_H, float* phase_D , int lsa, 
 	free(p3);
 	free(p4);
 	
-	/** Allocation des FAER dans la device memory **/		
-
-	cudaError_t erreur = cudaMemcpy(phase_D, phase_H, 5*nf*NLAM*sizeof(float), cudaMemcpyHostToDevice); 
-	if( erreur != cudaSuccess ){
-		printf( "ERREUR: Problème de copie phase_D dans calculF\n");
-		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-		exit(1);
-	}
 	
 }
 
@@ -1491,6 +1507,7 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
          for( icouche=0; icouche<NATM+1; icouche++ ){
             fscanf(profil, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", &i, tab_H->z+icouche, &garbage, &garbage, tab_H->h+icouche+ilam*(NATM+1),
                    &garbage,tab_H->pMol+icouche+ilam*(NATM+1), tab_H->ssa+icouche+ilam*(NATM+1), tab_H->abs+icouche+ilam*(NATM+1) );
+                   tab_H->ip[icouche+ilam*(NATM+1)]=0;
          }
         }
         #endif
@@ -1501,6 +1518,7 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
          for( icouche=0; icouche<NATM+1; icouche++ ){
             fscanf(profil, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", &i, &garbage, &garbage, &garbage, tab_H->h+icouche+ilam*(NATM+1),
                    &garbage,tab_H->pMol+icouche+ilam*(NATM+1), tab_H->ssa+icouche+ilam*(NATM+1), tab_H->abs+icouche+ilam*(NATM+1) );
+                   tab_H->ip[icouche+ilam*(NATM+1)]=0;
          }
         }
         TAUATM = tab_H->h[NATM];
@@ -1541,6 +1559,14 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
             printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
             exit(1);
         }
+
+        erreur = cudaMemcpy(tab_D->ip, tab_H->ip, (NATM+1)*NLAM*sizeof(*(tab_H->ip)), cudaMemcpyHostToDevice);
+        if( erreur != cudaSuccess ){
+            printf( "ERREUR: Problème de copie tab_D->ip dans profilAtm\n");
+            printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+            exit(1);
+        }
+
 
 		#ifdef SPHERIQUE
 		erreur = cudaMemcpy(tab_D->z, tab_H->z, (NATM+1)*sizeof(*(tab_H->z)), cudaMemcpyHostToDevice);

@@ -93,10 +93,10 @@ PATHDIFFOCE = auxdata/samples/list_pf_ocean.txt
 ################ PARAMETERS   #####################
 
 # number of samples for the computation of the Cumulative Distribution Function of the aerosol phase matrix
-NFAER = 1000000
+NFAER = 10000
 
 # number of samples for the computation of the Cumulative Distribution Function of the ocean phase matrix
-NFOCE = 1000000 
+NFOCE = 10000 
 
 # LOOP number in the kernel for each thread
 NBLOOP = 5000 

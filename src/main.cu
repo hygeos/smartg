@@ -117,7 +117,8 @@ int main (int argc, char *argv[])
 	/** Variables du main **/
 	
 	double tempsPrec = 0.; 	//temps ecoule de la simulation precedente
-    unsigned int ilam;
+    int ilam, ip;
+    //unsigned int ilam, ip;
     char PATHDIFF[1024];
 	
 	// Regroupement et initialisation des variables a envoyer dans le kernel (structure de variables)
@@ -257,16 +258,29 @@ int main (int argc, char *argv[])
         StartProcessing(perfInitG);
 #endif
     if ((SIM == -2) || (SIM == 1) || (SIM == 2)) {
+        int ii;
         // Read atmospheric profile
         profilAtm(&tab_H, &tab_D);
         for(ilam=0; ilam< NLAM; ilam++){
-	       // Calcul de faer, modèle de diffusion des aérosols
-           get_diff(PATHDIFF,  ilam, PATHDIFFAER);
-           LSAAER = count_lines(PATHDIFF);
-           calculF(PATHDIFF, tab_H.faer, tab_D.faer, LSAAER, NFAER, ilam);
            // compute direct transmission
            tabTransDir[ilam] = exp(-tab_H.h[NATM+ilam*(NATM+1)]/cos(THVDEG*PI/180.));
         }
+        NPHAAER = count_lines(PATHDIFFAER);
+        printf("%d\n",NPHAAER);
+        for(ip=0; ip< NPHAAER; ip++){
+	       // Calcul de faer, modèle de diffusion des aérosols
+           get_diff(PATHDIFF,  ip, PATHDIFFAER);
+           LSAAER = count_lines(PATHDIFF);
+           calculF(PATHDIFF, tab_H.faer, tab_D.faer, LSAAER, NFAER, ip);
+           for(ii=0; ii<NFAER; ii++) printf("%d %f\n",ii,tab_H.faer[0+ii*5]);
+        }
+	    /** Copy of Phase Matrix into device memory **/		
+	    cudaError_t erreur = cudaMemcpy(tab_D.faer, tab_H.faer, 5*NFAER*NPHAAER*sizeof(float), cudaMemcpyHostToDevice); 
+	    if( erreur != cudaSuccess ){
+		  printf( "ERREUR: Problème de copie tab_D.faer dans main\n");
+		  printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		  exit(1);
+	    }
     }
 #ifdef _PERF
         StopProcessing(perfInitG);

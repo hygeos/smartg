@@ -147,6 +147,7 @@ extern int DEVICE;
 extern int NBTHETA;
 extern int NBPHI;
 extern int NLAM;
+extern int NPHAAER;
 extern int SIM;
 extern int SUR;
 extern int DIOPTRE;
@@ -310,6 +311,7 @@ typedef struct __align__(16)
 	float* pMol;			// Pointeur vers la proportion de molécules dans chaque couches du modèle atmosphérique
 	float* ssa;			    // Pointeur vers l'albedo de diffusion simple des aerosols dans chaque couches du modèle atmosphérique
     float* abs;             // Pointeur vers la proportion d'absorbant dans chaque couches du modèle atmosphérique
+    int* ip;                // pointer to the vertical profile of phase function index
     float* alb;             // Pointeur vers l albedo de la surface lambertienne
 	
 	/** Séparation du code pour atmosphère sphérique ou parallèle **/

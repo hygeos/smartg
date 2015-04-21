@@ -1267,10 +1267,10 @@ def example4():
     using reptran for PAR
     also write phase functions
     '''
-    aer = AeroOPAC('desert', 0.1, 550., layer_phase=-1)
-    pro = Profile('afglt.dat', aer=aer, grid='100[75]25[5]5[1]0',)
+    aer = AeroOPAC('maritime_clean', 0.1, 550., layer_phase=-1)
+    pro = Profile('afglss.dat', aer=aer, grid='100[25]25[5]5[1]0',)
     rep = REPTRAN('reptran_solar_coarse.cdf')
-    sampling = 10
+    sampling = 1
     L = rep.band_names
     for i in range(0,len(L),sampling):
         band = rep.band(L[i])
@@ -1281,7 +1281,8 @@ def example4():
             wi = iband.band.awvl[iband.index] # wvl of internal band
             print '* Band', iband.index, iband.iband, wi
             pro.write(iband, output_file ='tmp/profil_PAR_%s-%dof%d.txt'%(L[i],iband.index+1,iband.band.nband))
-#            phase = aer.phase(wi, dir='tmp/',NTHETA=721)
+            # aer.calc(wi)
+            # aer.phase(wi, dir='tmp/',NTHETA=721)
 #            print 'phase function', phase
 
 
