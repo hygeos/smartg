@@ -1898,6 +1898,7 @@ __device__ void countPhoton(Photon* ph, Tableaux tab, unsigned long long* nbPhot
 	{
 		#ifdef PROGRESSION
 		atomicAdd(&(var->erreurcase), 1);
+        printf("%d %d %d %g %g %g\n",ith,iphi,il,ph->vx,ph->vy,ph->vz);
 		#endif
 	}
 
@@ -2034,10 +2035,11 @@ __device__ void calculCase(int* ith, int* iphi, int* il, Photon* photon
 
 	// Calcul de la valeur de ithv
 	// _rn correspond à round to the nearest integer
-	*ith = __float2int_rn(__fdividef(acosf(fabsf(photon->vz)) * NBTHETAd, DEMIPI));
+	*ith = __float2int_rd(__fdividef(acosf(fabsf(photon->vz)) * NBTHETAd, DEMIPI));
+	//*ith = __float2int_rn(__fdividef(acosf(fabsf(photon->vz)) * NBTHETAd, DEMIPI));
 
 	// Calcul de la valeur de il
-	// _rn correspond à round to the nearest integer
+    // DEV!!
     *il = photon->ilam;
 
 	/* Si le photon ressort très près du zénith on ne peut plus calculer iphi,

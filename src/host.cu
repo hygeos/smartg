@@ -1927,32 +1927,36 @@ void afficheProgress(unsigned long long nbPhotonsTot, Variables* var, double tem
 */
 void calculOmega(double* tabTh, double* tabPhi, double* tabOmega)
 {
-	// Tableau contenant l'angle theta de chaque morceau de sphère
+    // Zenith angles of the center of the output angular boxes
 	memset(tabTh, 0, NBTHETA * sizeof(*tabPhi));
 	double dth = DEMIPI / NBTHETA;
-	tabTh[0] = dth/4;
-	tabTh[1] = dth;
-	for(int ith = 2; ith < NBTHETA; ith++){
+	tabTh[0] = dth / 2.;
+	for(int ith = 1; ith < NBTHETA; ith++){
+	//tabTh[0] = dth/4;
+	//tabTh[1] = dth;
+	//for(int ith = 2; ith < NBTHETA; ith++){
 		tabTh[ith] = tabTh[ith-1] + dth;
 	}
 	
-	// Tableau contenant l'angle psi de chaque morceau de sphère
+    // Azimut angles of the center of the output angular boxes
 	memset(tabPhi, 0, NBPHI * sizeof(*tabPhi));
 	double dphi = PI / NBPHI;
- 	tabPhi[0] = dphi / 2;
+ 	tabPhi[0] = dphi / 2.;
 	for(int iphi = 1; iphi < NBPHI; iphi++){ 
 		tabPhi[iphi] = tabPhi[iphi-1] + dphi;
 	}
-	// Tableau contenant l'aire de chaque morceau de sphère
+
+	// Solid angles of the output angular boxes 
 	double sumds = 0;
 	double *tabds;
     tabds = (double*)malloc(NBTHETA * NBPHI * sizeof(double));
 	memset(tabds, 0, NBTHETA * NBPHI * sizeof(double));
+
 	for(int ith = 0; ith < NBTHETA; ith++)
 	{
-		if( ith==0 )
-			dth = DEMIPI / (2*NBTHETA);
-		else 
+		//if( ith==0 )
+		//	dth = DEMIPI / (2*NBTHETA);
+		//else 
 			dth = DEMIPI / NBTHETA;
 			
 		for(int iphi = 0; iphi < NBPHI; iphi++)
@@ -1962,11 +1966,10 @@ void calculOmega(double* tabTh, double* tabPhi, double* tabOmega)
 		}
 	}
 	
-	// La derniere demi boite 89.75->90
-	for(int iphi = 0; iphi < NBPHI; iphi++)
+	/*for(int iphi = 0; iphi < NBPHI; iphi++)
 		{
 			sumds += sin( (DEMIPI+tabTh[NBTHETA-1])/2 ) * (dth/2) * dphi;
-		}
+		}*/
 	
 	// Normalisation de l'aire de chaque morceau de sphère
 	memset(tabOmega, 0, NBTHETA * NBPHI * sizeof(*tabOmega));
