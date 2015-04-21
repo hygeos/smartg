@@ -32,6 +32,7 @@ float THVDEG;	//Angle zénithal de visée
 float LAMBDA;	//Longueur d'onde centrale [nm]
 int NLAM;       // Nb de longueur d'onde
 int NPHAAER;    // Nb of atmospheric (aerosols and clouds) phase matrices 
+int NPHAOCE;    // Nb of oceanic phase matrices 
 float TAURAY;	//Epaisseur optique moleculaire (Rayleigh)
 float TAUAER;	//Epaisseur optique aerosol
 float TAUATM;

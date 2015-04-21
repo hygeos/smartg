@@ -1,6 +1,6 @@
 ################ SIMULATION #####################
 # Number of "Photons" to inject (unsigned long long)
-NBPHOTONS = 1e8
+NBPHOTONS = 1e9
 
 # View Zenith Angle in degree (float)
 THVDEG = 30.0
@@ -9,9 +9,9 @@ THVDEG = 30.0
 LAMBDA = 550.0
 
 # Number of output azimut angle boxes from 0 to PI
-NBPHI = 30
+NBPHI = 90
 # Number of output zenith angle boxes from 0 to PI
-NBTHETA = 45
+NBTHETA = 90
 
 # Simulation type
 	# -2 Atmosphere only
@@ -53,7 +53,7 @@ SEED = -1
 # Depolarization coefficient of air
 DEPO = 0.0279
 
-# Absolute name of file containing the vertical profile of atmosphere
+# Absolute name of file containing the vertical profile of atmosphere (optical depths.., single scattering albedo  ,absorption %, and phase function number
 PATHPROFILATM = auxdata/samples/profil.atm.base
 
 # file containing the list of atmospheric phase matrix files
@@ -96,7 +96,7 @@ PATHDIFFOCE = auxdata/samples/list_pf_ocean.txt
 NFAER = 10000
 
 # number of samples for the computation of the Cumulative Distribution Function of the ocean phase matrix
-NFOCE = 10000 
+NFOCE = 10000
 
 # LOOP number in the kernel for each thread
 NBLOOP = 5000 

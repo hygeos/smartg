@@ -48,6 +48,7 @@ __device__ __constant__ int NBTHETAd;
 __device__ __constant__ int NBPHId;
 __device__ __constant__ int NLAMd;
 __device__ __constant__ int NPHAAERd;
+__device__ __constant__ int NPHAOCEd;
 __device__ __constant__ int PROFILd;
 __device__ __constant__ int SIMd;
 __device__ __constant__ int SURd;
@@ -157,7 +158,7 @@ __device__ void move_pp(Photon*, float* h, float* pMol , float *abs , float* ho
 * Diffusion du photon par une molécule ou un aérosol
 * Modification des paramètres de stokes et des vecteurs U et V du photon (polarisation, vitesse)
 */
-__device__ void scatter(Photon* photon, float* faer, float* ssa , float* foce , float* sso, int* ip
+__device__ void scatter(Photon* photon, float* faer, float* ssa , float* foce , float* sso, int* ip, int* ipo
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif

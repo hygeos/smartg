@@ -840,14 +840,14 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	
 	/** Modèle de l'ocean **/
 	// Fonction de phase 
-	tab_H->foce = (float*)malloc(5 * NFOCE * NLAM *sizeof(float));
+	tab_H->foce = (float*)malloc(5 * NFOCE * NPHAOCE *sizeof(float));
 	if( tab_H->foce == NULL ){
 		printf("ERREUR: Problème de malloc de tab_H->foce dans initTableaux\n");
 		exit(1);
 	}
-	memset(tab_H->foce,0,5 * NFOCE*NLAM *sizeof(float) );
+	memset(tab_H->foce,0,5 * NFOCE*NPHAOCE *sizeof(float) );
 	
-	if( cudaMalloc(&(tab_D->foce), 5 * NFOCE * NLAM *sizeof(float)) != cudaSuccess ){
+	if( cudaMalloc(&(tab_D->foce), 5 * NFOCE * NPHAOCE *sizeof(float)) != cudaSuccess ){
 		printf("ERREUR: Problème de cudaMalloc de tab_D->foce dans initTableaux\n");
 		exit(1);	
 	}
@@ -943,6 +943,19 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	
 	if( cudaMalloc( &(tab_D->ip), (NATM+1)*NLAM*sizeof(int) ) != cudaSuccess ){
 		printf("ERREUR: Problème de cudaMalloc de tab_D->ip dans initTableaux\n");
+		exit(1);	
+	}
+	
+    //
+	tab_H->ipo =  (int*)malloc((NOCE+1)*NLAM*sizeof(int));
+	if( tab_H->ipo == NULL ){
+		printf("ERREUR: Problème de malloc de tab_H->ipo dans initTableaux\n");
+		exit(1);
+	}
+	memset(tab_H->ipo,0,(NOCE+1)*NLAM*sizeof(int) );
+	
+	if( cudaMalloc( &(tab_D->ipo), (NOCE+1)*NLAM*sizeof(int) ) != cudaSuccess ){
+		printf("ERREUR: Problème de cudaMalloc de tab_D->ipo dans initTableaux\n");
 		exit(1);	
 	}
 	
@@ -1181,6 +1194,16 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	
 	free(tab_H->ip);
 	
+	//
+	erreur = cudaFree(tab_D->ipo);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->ipo dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+	
+	free(tab_H->ipo);
+
 	/** Séparation du code pour atmosphère sphérique ou parallèle **/
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
 	
@@ -1434,8 +1457,7 @@ void profilOce( Tableaux* tab_H, Tableaux* tab_D ){
            // skip comment line
            fgets(ligne,1024,profil);
            for( icouche=0; icouche<NOCE+1; icouche++ ){
-              fscanf(profil, "%d\t%f\t%f\t%f\n", &i, &garbage, tab_H->ho+icouche+ilam*(NOCE+1), tab_H->sso+icouche+ilam*(NOCE+1));
-              //printf("%d\t%f\t%f\t%f\n", i, garbage, tab_H->ho[icouche+ilam*(NOCE+1)], tab_H->sso[icouche+ilam*(NOCE+1)]);
+              fscanf(profil, "%d\t%f\t%f\t%f\t%d\n", &i, &garbage, tab_H->ho+icouche+ilam*(NOCE+1), tab_H->sso+icouche+ilam*(NOCE+1), tab_H->ipo+icouche+ilam*(NOCE+1));
            }
         }
     }
@@ -1456,6 +1478,13 @@ void profilOce( Tableaux* tab_H, Tableaux* tab_D ){
 		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
 		exit(1);
 	}
+    erreur = cudaMemcpy(tab_D->ipo, tab_H->ipo, (NOCE+1)*NLAM*sizeof(*(tab_H->ipo)), cudaMemcpyHostToDevice);
+    if( erreur != cudaSuccess ){
+        printf( "ERREUR: Problème de copie tab_D->ipo dans profilOce\n");
+        printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+        exit(1);
+    }
+
 }
 
 
@@ -1505,9 +1534,8 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
          // skip comment line
          fgets(ligne,1024,profil);
          for( icouche=0; icouche<NATM+1; icouche++ ){
-            fscanf(profil, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", &i, tab_H->z+icouche, &garbage, &garbage, tab_H->h+icouche+ilam*(NATM+1),
-                   &garbage,tab_H->pMol+icouche+ilam*(NATM+1), tab_H->ssa+icouche+ilam*(NATM+1), tab_H->abs+icouche+ilam*(NATM+1) );
-                   tab_H->ip[icouche+ilam*(NATM+1)]=0;
+            fscanf(profil, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%d\n", &i, tab_H->z+icouche, &garbage, &garbage, tab_H->h+icouche+ilam*(NATM+1),
+                   &garbage,tab_H->pMol+icouche+ilam*(NATM+1), tab_H->ssa+icouche+ilam*(NATM+1), tab_H->abs+icouche+ilam*(NATM+1), tab_H->ip+icouche+ilam*(NATM+1) );
          }
         }
         #endif
@@ -1516,9 +1544,8 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
          // skip comment line
          fgets(ligne,1024,profil);
          for( icouche=0; icouche<NATM+1; icouche++ ){
-            fscanf(profil, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", &i, &garbage, &garbage, &garbage, tab_H->h+icouche+ilam*(NATM+1),
-                   &garbage,tab_H->pMol+icouche+ilam*(NATM+1), tab_H->ssa+icouche+ilam*(NATM+1), tab_H->abs+icouche+ilam*(NATM+1) );
-                   tab_H->ip[icouche+ilam*(NATM+1)]=0;
+            fscanf(profil, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%d\n", &i, &garbage, &garbage, &garbage, tab_H->h+icouche+ilam*(NATM+1),
+                   &garbage,tab_H->pMol+icouche+ilam*(NATM+1), tab_H->ssa+icouche+ilam*(NATM+1), tab_H->abs+icouche+ilam*(NATM+1) , tab_H->ip+icouche+ilam*(NATM+1) );
          }
         }
         TAUATM = tab_H->h[NATM];
@@ -1566,6 +1593,7 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
             printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
             exit(1);
         }
+
 
 
 		#ifdef SPHERIQUE

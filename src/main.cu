@@ -74,6 +74,7 @@ int main (int argc, char *argv[])
     // (if simulation includes atmosphere)
     if ((SIM == -2) || (SIM == 1) || (SIM == 2)) {
         init_profileATM(&NATM, &HATM, &NLAM, PATHPROFILATM);
+        NPHAAER = count_lines(PATHDIFFAER);
     } else {
         HATM = 0;
         NATM = 0;
@@ -84,6 +85,7 @@ int main (int argc, char *argv[])
     // (if simulation includes ocean)
     if ((SIM == 0) || (SIM == 2) || (SIM == 3)) {
         init_profileOCE(&NOCE,  &NLAM, PATHPROFILOCE);
+        NPHAOCE = count_lines(PATHDIFFOCE);
     } else {
         NOCE = 0;
     }
@@ -241,12 +243,19 @@ int main (int argc, char *argv[])
 	if( SIM==0 || SIM==2 || SIM==3 ){
         // Read oceanic profile
         profilOce(&tab_H, &tab_D);
-        for(ilam=0; ilam< NLAM; ilam++){
+        for(ip=0; ip< NPHAOCE; ip++){
 	       // Calcul de foce, modèle de diffusion de l ocean 
-           get_diff(PATHDIFF,  ilam, PATHDIFFOCE);
+           get_diff(PATHDIFF,  ip, PATHDIFFOCE);
            LSAOCE = count_lines(PATHDIFF);
-		   calculF(PATHDIFF, tab_H.foce, tab_D.foce, LSAOCE, NFOCE, ilam);
+		   calculF(PATHDIFF, tab_H.foce, tab_D.foce, LSAOCE, NFOCE, ip);
         }
+	    /** Copy of Phase Matrix into device memory **/		
+	    cudaError_t erreur = cudaMemcpy(tab_D.foce, tab_H.foce, 5*NFOCE*NPHAOCE*sizeof(float), cudaMemcpyHostToDevice); 
+	    if( erreur != cudaSuccess ){
+		  printf( "ERREUR: Problème de copie tab_D.foce dans main\n");
+		  printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		  exit(1);
+	    }
 	}
 
    // Reading spectral albedo (surface or seafloor)
@@ -258,21 +267,17 @@ int main (int argc, char *argv[])
         StartProcessing(perfInitG);
 #endif
     if ((SIM == -2) || (SIM == 1) || (SIM == 2)) {
-        int ii;
         // Read atmospheric profile
         profilAtm(&tab_H, &tab_D);
         for(ilam=0; ilam< NLAM; ilam++){
            // compute direct transmission
            tabTransDir[ilam] = exp(-tab_H.h[NATM+ilam*(NATM+1)]/cos(THVDEG*PI/180.));
         }
-        NPHAAER = count_lines(PATHDIFFAER);
-        printf("%d\n",NPHAAER);
         for(ip=0; ip< NPHAAER; ip++){
 	       // Calcul de faer, modèle de diffusion des aérosols
            get_diff(PATHDIFF,  ip, PATHDIFFAER);
            LSAAER = count_lines(PATHDIFF);
            calculF(PATHDIFF, tab_H.faer, tab_D.faer, LSAAER, NFAER, ip);
-           for(ii=0; ii<NFAER; ii++) printf("%d %f\n",ii,tab_H.faer[0+ii*5]);
         }
 	    /** Copy of Phase Matrix into device memory **/		
 	    cudaError_t erreur = cudaMemcpy(tab_D.faer, tab_H.faer, 5*NFAER*NPHAAER*sizeof(float), cudaMemcpyHostToDevice); 

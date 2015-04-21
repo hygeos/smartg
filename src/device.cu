@@ -180,7 +180,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
         // -> dans ATMOS ou OCEAN
 		if( (ph.loc == ATMOS) || (ph.loc == OCEAN)){
 	
-			scatter(&ph, tab.faer, tab.ssa , tab.foce , tab.sso, tab.ip , &etatThr
+			scatter(&ph, tab.faer, tab.ssa , tab.foce , tab.sso, tab.ip, tab.ipo, &etatThr
 			#if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
 			, &configThr
 			#endif
@@ -989,7 +989,7 @@ __device__ void move_pp(Photon* ph, float* h, float* pMol , float *abs , float* 
 * Diffusion du photon par une molécule ou un aérosol
 * Modification des paramètres de stokes et des vecteurs U et V du photon (polarisation, vitesse)
 */
-__device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , float* sso, int* ip
+__device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , float* sso, int* ip, int* ipo
 			#ifdef RANDMWC
 			, unsigned long long* etatThr, unsigned int* configThr
 			#endif
@@ -1014,9 +1014,7 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
 	*/
 
 	float zang=0.f, theta=0.f;
-	int iang ;
-    int ilay = ph->couche + ph->ilam*(NATMd+1); // layer index
-    int ipha  = ip[ilay]; // phase function index
+	int iang, ilay, ipha;
 	float stokes1, stokes2, norm;
 	float cTh2;
 	float prop_aer = ph->prop_aer;
@@ -1029,6 +1027,8 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
 	///////// Faire également attention à bien passer le pointeur de cTh et le modifier dans la fonction /////////
 	
 	if(ph->loc!=OCEAN){
+        ilay = ph->couche + ph->ilam*(NATMd+1); // atm layer index
+        ipha  = ip[ilay]; // atm phase function index
 		if( prop_aer<RAND ){
 
 			// Get Teta (see Wang et al., 2012)
@@ -1086,7 +1086,6 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
 			//theta = faer[iang*5+4]+ zang*( faer[(iang+1)*5+4]-faer[iang*5+4] );
 			cTh = __cosf(theta);
 
-
 			//////////////
 			//  Get Phi
 
@@ -1109,18 +1108,20 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
 			ph->stokes2 *= debias;  
 			ph->stokes3 *= debias;  
 
-			ph->weight *= ssa[ipha];
+			ph->weight *= ssa[ilay];
 			
 		}
 		
 	}
 	else{	/* Photon dans l'océan */
-	  float prop_raman, new_wavel;
+	    float prop_raman, new_wavel;
+        ilay = ph->couche + ph->ilam*(NOCEd+1); // oce layer index
+        ipha  = ipo[ilay]; // oce phase function index
 
-      // we fix the proportion of Raman to 2% at 488 nm, !! DEV
-      prop_raman = 0.02 * pow ((1.e7/ph->wavel-3400.)/(1.e7/488.-3400.),5); // Raman scattering to pure water scattering ratio
+        // we fix the proportion of Raman to 2% at 488 nm, !! DEV
+        prop_raman = 0.02 * pow ((1.e7/ph->wavel-3400.)/(1.e7/488.-3400.),5); // Raman scattering to pure water scattering ratio
 
-	  if(prop_raman <RAND ){
+	    if(prop_raman <RAND ){
             // diffusion Raman
             // Phase function similar to Rayleigh
 		    // Get Teta (see Wang et al., 2012)
@@ -1169,16 +1170,16 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
             new_wavel  = 22.94 + 0.83 * (ph->wavel) + 0.0007 * (ph->wavel)*(ph->wavel);
             ph->weight /= new_wavel/ph->wavel;
             ph->wavel = new_wavel;
-		}
+		  }
 
 	  else{
-        // diffusion elastique
+          // diffusion elastique
 		
 		zang = RAND*(NFOCEd-2);
 		iang = __float2int_rd(zang);
 		zang = zang - iang;
 
-		theta = foce[ph->ilam*NFOCEd*5+iang*5+4]+ zang*( foce[ph->ilam*NFOCEd*5+(iang+1)*5+4]-foce[ph->ilam*NFOCEd*5+iang*5+4] );
+		theta = foce[ipha*NFOCEd*5+iang*5+4]+ zang*( foce[ipha*NFOCEd*5+(iang+1)*5+4]-foce[ipha*NFOCEd*5+iang*5+4] );
 		
 		cTh = __cosf(theta);
 
@@ -1195,17 +1196,18 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
 
 
         // Calcul des parametres de Stokes du photon apres diffusion
-        ph->stokes1 *= foce[ph->ilam*NFOCEd*5+iang*5+0];
-        ph->stokes2 *= foce[ph->ilam*NFOCEd*5+iang*5+1];
-        ph->stokes3 *= foce[ph->ilam*NFOCEd*5+iang*5+2];
+        ph->stokes1 *= foce[ipha*NFOCEd*5+iang*5+0];
+        ph->stokes2 *= foce[ipha*NFOCEd*5+iang*5+1];
+        ph->stokes3 *= foce[ipha*NFOCEd*5+iang*5+2];
 
         float debias;
-        debias = __fdividef( 2., foce[ph->ilam*NFOCEd*5+iang*5+0] + foce[ph->ilam*NFOCEd*5+iang*5+1] );
+        debias = __fdividef( 2., foce[ipha*NFOCEd*5+iang*5+0] + foce[ipha*NFOCEd*5+iang*5+1] );
         ph->stokes1 *= debias;
         ph->stokes2 *= debias;
         ph->stokes3 *= debias;
 
-		ph->weight *= sso[ph->couche+ph->ilam*(NOCEd+1)];
+		ph->weight *= sso[ilay];
+
 	 } // elastic scattering
 
 	/** Roulette russe **/
