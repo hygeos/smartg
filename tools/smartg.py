@@ -20,12 +20,11 @@ from luts import merge, read_lut_hdf, read_mlut_hdf
 # set up default directories
 #
 dir_install = dirname(dirname(realpath(__file__)))    # base smartg directory is one directory above here
-dir_data = join(dir_install, 'auxdata/')   # directory for storing persistent data
-dir_phase_aero = join(dir_data, 'phase_aerosols/')
 dir_tmp = join(dir_install, 'tmp/')
 dir_list_pf_aer = join(dir_tmp, 'list_pf_aer/')
 dir_list_pf_oce = join(dir_tmp, 'list_pf_oce/')
 dir_phase_water = join(dir_tmp, 'phase_water/')
+dir_phase_aero = join(dir_tmp, 'phase_aerosols/')
 dir_albedo = join(dir_tmp, 'albedo/')
 dir_cmdfiles = join(dir_tmp, 'command_files/')
 dir_profil_aer = join(dir_tmp, 'profile_aer/')
