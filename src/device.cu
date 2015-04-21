@@ -1114,12 +1114,12 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
 		
 	}
 	else{	/* Photon dans l'océan */
-	    float prop_raman, new_wavel;
+	    float prop_raman=0., new_wavel;
         ilay = ph->couche + ph->ilam*(NOCEd+1); // oce layer index
         ipha  = ipo[ilay]; // oce phase function index
 
         // we fix the proportion of Raman to 2% at 488 nm, !! DEV
-        prop_raman = 0.02 * pow ((1.e7/ph->wavel-3400.)/(1.e7/488.-3400.),5); // Raman scattering to pure water scattering ratio
+        //prop_raman = 0.02 * pow ((1.e7/ph->wavel-3400.)/(1.e7/488.-3400.),5); // Raman scattering to pure water scattering ratio
 
 	    if(prop_raman <RAND ){
             // diffusion Raman
