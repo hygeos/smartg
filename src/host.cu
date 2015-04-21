@@ -1431,6 +1431,7 @@ void profilAlb( Tableaux* tab_H, Tableaux* tab_D ){
 /* Read ocean extinction coefficient and single scattering albedo for ocean*/
 void profilOce( Tableaux* tab_H, Tableaux* tab_D ){
     int ilam;
+    int nscanf;
     int icouche=0;
     float garbage;
     int i;
@@ -1439,7 +1440,7 @@ void profilOce( Tableaux* tab_H, Tableaux* tab_D ){
     => n	alt		ho		sso	
     */
     FILE* profil = fopen( PATHPROFILOCE , "r" );
-    char ligne[1024];
+    char buffer[4096];
 	cudaError_t erreur;		// Permet de tester le bon déroulement des opérations mémoires
 
 	for( ilam=0;ilam<NLAM;ilam++) {
@@ -1450,15 +1451,19 @@ void profilOce( Tableaux* tab_H, Tableaux* tab_D ){
     if(profil == NULL){
         printf("ERREUR : Ouverture impossible du fichier %s pour le profil oceanique\n", PATHPROFILOCE );
         exit(1);
-    }
-
-    else{
+    } else {
         for( ilam=0; ilam<NLAM; ilam++){
-           // skip comment line
-           fgets(ligne,1024,profil);
-           for( icouche=0; icouche<NOCE+1; icouche++ ){
-              fscanf(profil, "%d\t%f\t%f\t%f\t%d\n", &i, &garbage, tab_H->ho+icouche+ilam*(NOCE+1), tab_H->sso+icouche+ilam*(NOCE+1), tab_H->ipo+icouche+ilam*(NOCE+1));
-           }
+            // skip comment line
+            fgets(buffer,4096,profil);
+            for( icouche=0; icouche<NOCE+1; icouche++ ){
+                fgets(buffer,4096,profil);
+                nscanf = sscanf(buffer, "%d\t%f\t%f\t%f\t%d\n", &i, &garbage, tab_H->ho+icouche+ilam*(NOCE+1), tab_H->sso+icouche+ilam*(NOCE+1), tab_H->ipo+icouche+ilam*(NOCE+1));
+
+                if (nscanf != 5) {
+                    printf("Error while parsing profile '%s'\n", PATHDIFFOCE);
+                    exit(1);
+                }
+            }
         }
     }
 
@@ -1496,8 +1501,9 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
 
 	/** Déclaration des variables **/
 	
-	int i=0, ilam;
+	int i=0, ilam, nscanf;
 	cudaError_t erreur;		// Permet de tester le bon déroulement des opérations mémoires
+    char buffer[4096];
 	
 	/** Conditions aux limites au sommet de l'atmosphère **/
 	#ifdef SPHERIQUE
@@ -1516,7 +1522,6 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
     float garbage;
     
     int icouche=0;
-    char ligne[1024];
 
     if(profil == NULL){
         printf("ERREUR : Ouverture impossible du fichier %s pour le profil atmosphérique\n", PATHPROFILATM );
@@ -1531,22 +1536,35 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
         // Extraction des informations
         #if defined(SPHERIQUE) 
         for( ilam=0; ilam<NLAM; ilam++){
-         // skip comment line
-         fgets(ligne,1024,profil);
-         for( icouche=0; icouche<NATM+1; icouche++ ){
-            fscanf(profil, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%d\n", &i, tab_H->z+icouche, &garbage, &garbage, tab_H->h+icouche+ilam*(NATM+1),
-                   &garbage,tab_H->pMol+icouche+ilam*(NATM+1), tab_H->ssa+icouche+ilam*(NATM+1), tab_H->abs+icouche+ilam*(NATM+1), tab_H->ip+icouche+ilam*(NATM+1) );
-         }
+            // skip comment line
+            fgets(buffer,4096,profil);
+            for( icouche=0; icouche<NATM+1; icouche++ ){
+                fgets(buffer, 4096, profil);
+                nscanf = sscanf(buffer, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%d\n",
+                        &i, tab_H->z+icouche, &garbage, &garbage, tab_H->h+icouche+ilam*(NATM+1),
+                        &garbage,tab_H->pMol+icouche+ilam*(NATM+1), tab_H->ssa+icouche+ilam*(NATM+1), tab_H->abs+icouche+ilam*(NATM+1), tab_H->ip+icouche+ilam*(NATM+1));
+
+                if (nscanf != 10) {
+                    printf("Error while parsing profile '%s'\n", PATHPROFILATM);
+                    exit(1);
+                }
+            }
         }
         #endif
         #if !defined(SPHERIQUE) 
         for( ilam=0; ilam<NLAM; ilam++){
-         // skip comment line
-         fgets(ligne,1024,profil);
-         for( icouche=0; icouche<NATM+1; icouche++ ){
-            fscanf(profil, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%d\n", &i, &garbage, &garbage, &garbage, tab_H->h+icouche+ilam*(NATM+1),
-                   &garbage,tab_H->pMol+icouche+ilam*(NATM+1), tab_H->ssa+icouche+ilam*(NATM+1), tab_H->abs+icouche+ilam*(NATM+1) , tab_H->ip+icouche+ilam*(NATM+1) );
-         }
+            // skip comment line
+            fgets(buffer, 4096, profil);
+            for( icouche=0; icouche<NATM+1; icouche++ ){
+                fgets(buffer, 4096, profil);
+                nscanf = sscanf(buffer, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%d\n", &i, &garbage, &garbage, &garbage, tab_H->h+icouche+ilam*(NATM+1),
+                        &garbage,tab_H->pMol+icouche+ilam*(NATM+1), tab_H->ssa+icouche+ilam*(NATM+1), tab_H->abs+icouche+ilam*(NATM+1) , tab_H->ip+icouche+ilam*(NATM+1) );
+
+                if (nscanf != 10) {
+                    printf("Error while parsing profile '%s'\n", PATHPROFILATM);
+                    exit(1);
+                }
+            }
         }
         TAUATM = tab_H->h[NATM];
         #endif
