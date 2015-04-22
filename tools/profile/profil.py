@@ -35,7 +35,7 @@ class AeroOPAC(object):
         layer_phase: the layer index at which the phase function is chosen
         overwrite: recalculate and overwrite phase functions
     '''
-    def __init__(self, filename, tau, wref, layer_phase=None, overwrite=False):
+    def __init__(self, filename, tau, wref, layer_phase=None, overwrite=True):
 
         self.__tau = tau
         self.__wref = wref
@@ -259,59 +259,14 @@ class AeroOPAC(object):
         self.calcTau(T,h2o,wref) # calcul de l'AOT a la longueur d'onde de reference
         self.scalingfact=tauref/self.tau_tot # calcul du facteur d'echelle        
 
-    def calcPha(self, w, pattern, dir, NTHETA=7201):
-        '''
-        calculate and write phase matrices for each layer
-        Arguments:
-            w: wavelength in nm
-            NTHETA: number of angles
-            dir: location of the output file
-            pattern: output file pattern, formatted by the aerosol specie,
-                     the wavelength and the layer
-        Returns: the list of files generated
-        '''
-        self.NTHETA=NTHETA
-        M=len(self.zopac)
-        Leg=Legendres(self.MMAX,NTHETA)
-        ret = []
-        list_skipped = []   # list of files skipped because existing
-        list_overwritten = []   # list of files overwritten
-
-        for m in range(M):
-
-            output = join(dir, pattern%(basename(self.filename[:-4]),w,m))
-            ret.append(output)
-            if exists(output):
-                if self.overwrite:
-                    os.remove(output)
-                    list_overwritten.append(output)
-                else:
-                    list_skipped.append(output)
-                    continue
-            theta,pha=Mom2Pha(self.pmom_tot[m,:,:],Leg)
-            if not exists(dirname(output)):
-                # create output directory if necessary
-                os.makedirs(dirname(output))
-
-            f=open(output,'w')
-            for j in range(NTHETA):
-                f.write("%18.8E"%theta[j] + "  %20.11E  %20.11E  %20.11E  %20.11E\n"%tuple(pha[:,j]))
-            f.close()
-
-        if len(list_skipped) > 0:
-            print 'INFO: skipping {} and {} other files'.format(list_skipped[0], len(list_skipped)-1)
-        if len(list_overwritten) > 0:
-            print 'INFO: overwritten {} and {} other files'.format(list_overwritten[0], len(list_overwritten)-1)
-
-        return ret
-
     def phase(self, wl, dir, pattern='pf_%s_%inm_layer-%i.txt',NTHETA=7201):
         '''
-        creates the phase function corresponding to layer_phase
+        creates the phase matrix corresponding to layer_phase
         and returns the corresponding file name
 
         wl is the wavelength in nm
-        dir: directory for storing the phase function files
+        dir: directory for storing the output file
+        NTHETA: number of angles
         pattern: output file pattern, formatted by the aerosol specie,
                  the wavelength and the layer
                  default: 'pf_%s_%inm_layer-%i.txt'
@@ -319,9 +274,31 @@ class AeroOPAC(object):
         if self.__layer_phase is None:
             return None
 
-        ret = self.calcPha(wl, pattern, dir,NTHETA=NTHETA)
+        self.NTHETA=NTHETA
+        M=len(self.zopac)
+        Leg=Legendres(self.MMAX,NTHETA)
 
-        return ret[self.__layer_phase]
+        m = range(M)[self.__layer_phase]
+
+        output = join(dir, pattern%(basename(self.filename[:-4]),wl,m))
+        if exists(output):
+            if self.overwrite:
+                os.remove(output)
+                print 'INFO: overwriting {}'.format(output)
+            else:
+                print 'INFO: skipping {}'.format(output)
+
+        theta,pha=Mom2Pha(self.pmom_tot[m,:,:],Leg)
+        if not exists(dirname(output)):
+            # create output directory if necessary
+            os.makedirs(dirname(output))
+
+        with open(output,'w') as f:
+            for j in range(NTHETA):
+                f.write("%18.8E"%theta[j] + "  %20.11E  %20.11E  %20.11E  %20.11E\n"%tuple(pha[:,j]))
+            f.close()
+
+        return output
 
     def __str__(self):
         return 'AER={base}-AOT={aot}'.format(base=self.basename, aot=self.__tau)
