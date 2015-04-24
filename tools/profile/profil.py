@@ -4,7 +4,7 @@
 
 
 import os
-from os.path import join, dirname, exists, realpath, basename
+from os.path import join, dirname, exists, basename
 from string  import count,split
 import numpy as np
 from optparse import OptionParser
@@ -14,6 +14,7 @@ import netCDF4
 from scipy.ndimage import map_coordinates
 from scipy.integrate import simps
 import tempfile
+from phase_functions import PhaseFunction
 from glob import glob
 
 dir_libradtran = '/home/applis/libRadtran-2.0-beta/'
@@ -32,14 +33,12 @@ class AeroOPAC(object):
                   assume directory <libradtran>/data/aerosol/OPAC/standard_aerosol_files
         tau: optical thickness at wavelength wref
         wref: reference wavelength (nm) for aot
-        layer_phase: the layer index at which the phase function is chosen
         overwrite: recalculate and overwrite phase functions
     '''
-    def __init__(self, filename, tau, wref, layer_phase=None, overwrite=True):
+    def __init__(self, filename, tau, wref, overwrite=True):
 
         self.__tau = tau
         self.__wref = wref
-        self.__layer_phase = layer_phase
         self.overwrite = overwrite
 
         if dirname(filename) == '':
@@ -84,6 +83,7 @@ class AeroOPAC(object):
         '''
         Initialize the model using height profile, temperature and h2o conc.
         '''
+        self.scalingfact = 1.
         self.regrid(z)
         self.setTauref(T, h2o, self.__tau, self.__wref)
         self.__T = T
@@ -93,6 +93,7 @@ class AeroOPAC(object):
         '''
         reechantillonage vertical des concentrations massiques
         '''
+        self.z = znew
         N=len(self.aspecies)
         M=len(znew)
         tmp=np.zeros((M,N),np.float32)
@@ -259,10 +260,9 @@ class AeroOPAC(object):
         self.calcTau(T,h2o,wref) # calcul de l'AOT a la longueur d'onde de reference
         self.scalingfact=tauref/self.tau_tot # calcul du facteur d'echelle        
 
-    def phase(self, wl, dir, pattern='pf_%s_%inm_layer-%i.txt',NTHETA=7201):
+    def phase(self, wl, NTHETA=7201):
         '''
-        creates the phase matrix corresponding to layer_phase
-        and returns the corresponding file name
+        returns the phase matrix for all layers
 
         wl is the wavelength in nm
         dir: directory for storing the output file
@@ -271,34 +271,15 @@ class AeroOPAC(object):
                  the wavelength and the layer
                  default: 'pf_%s_%inm_layer-%i.txt'
         '''
-        if self.__layer_phase is None:
-            return None
-
-        self.NTHETA=NTHETA
         M=len(self.zopac)
         Leg=Legendres(self.MMAX,NTHETA)
+        phases = []
 
-        m = range(M)[self.__layer_phase]
+        for m in range(1, M):   # not the top boundary
+            theta, pha = Mom2Pha(self.pmom_tot[m,:,:],Leg)
+            phases.append(PhaseFunction(theta, pha, degrees=True))
 
-        output = join(dir, pattern%(basename(self.filename[:-4]),wl,m))
-        if exists(output):
-            if self.overwrite:
-                os.remove(output)
-                print 'INFO: overwriting {}'.format(output)
-            else:
-                print 'INFO: skipping {}'.format(output)
-
-        theta,pha=Mom2Pha(self.pmom_tot[m,:,:],Leg)
-        if not exists(dirname(output)):
-            # create output directory if necessary
-            os.makedirs(dirname(output))
-
-        with open(output,'w') as f:
-            for j in range(NTHETA):
-                f.write("%18.8E"%theta[j] + "  %20.11E  %20.11E  %20.11E  %20.11E\n"%tuple(pha[:,j]))
-            f.close()
-
-        return output
+        return phases
 
     def __str__(self):
         return 'AER={base}-AOT={aot}'.format(base=self.basename, aot=self.__tau)
@@ -383,15 +364,15 @@ def Mom2Pha(Mom,Leg):
     sumQ=np.zeros_like(Leg.mu)
     sumU=np.zeros_like(Leg.mu)
     sumZ=np.zeros_like(Leg.mu)
-    pha=np.zeros((4,Leg.ntheta),np.float64)
+    pha=np.zeros((Leg.ntheta, 4),np.float64)
     for k in range(Leg.nterm):
         sumP=sumP+Mom[0,k]*Leg.p1[k,:]
         sumQ=sumQ+Mom[1,k]*Leg.p2[k,:]
         sumU=sumU+Mom[2,k]*Leg.p1[k,:]
-    pha[0,:]=sumP+sumQ
-    pha[1,:]=sumP-sumQ
-    pha[2,:]=sumU
-    pha[3,:]=sumZ
+    pha[:,0]=sumP+sumQ
+    pha[:,1]=sumP-sumQ
+    pha[:,2]=sumU
+    pha[:,3]=sumZ
     return np.arccos(Leg.mu)/np.pi*180.,pha
 
 class REPTRAN_IBAND(object):
@@ -829,15 +810,25 @@ class Profile(object):
         - aer: Aerosol object which provides the aerosol profile and phase
           function.
           if None, AOT=0.
-        - grid: custom grid. Can be provided as an array of altitudes or a gridSpec (string)
+        - grid: custom grid. Can be provided as an array of decreasing altitudes or a gridSpec (string)
           default value: None (use default grid)
+        - pfgrid: phase function grid, the grid over which the phase function is calculated
+          can be provided as an array of decreasing altitudes or a gridspec
+          default value: [100, 0]
+        - pfwav: a list of wavelengths over which the phase functions are calculated
+          default: None (all wavelengths)
         - lat: latitude (for Rayleigh optical depth calculation, default=45.)
         - O3: total ozone column (Dobson units), or None to use atmospheric
           profile value (default)
         - NO2: activate ON2 absorption (default True)
     '''
     def __init__(self, atm_filename, aer=None, grid=None,
+                pfgrid=[100., 0.], pfwav=None,
                 lat=45., O3=None, NO2=True, verbose=False, overwrite=False):
+
+        self.atm_filename = atm_filename
+        self.pfwav = pfwav
+        self.pfgrid = pfgrid
 
         crs_O3_filename = join(dir_libradtran_crs, 'crs_O3_UBremen_cf.dat')
         crs_NO2_filename = join(dir_libradtran_crs, 'crs_NO2_UBremen_cf.dat')
@@ -921,92 +912,152 @@ class Profile(object):
         self.verbose = verbose
         self.overwrite = overwrite
 
-    def write(self, w, output_file=None, dir=None):
+    def write(self, wl, dir_profile, dir_phases, dir_list_phases):
         '''
-        write a profile at a monochromatic wavelength w (nm)
-        Produce file output_file.
+        Write profiles and phase functions at bands wl (list)
 
-        w can be either:
-            - a wavelength in nm (float)
-            - a REPTRAN_IBAND object
-        if output_file is None, use a default file name in
-        directory dir.
-
-        returns: profile filename
+        returns a tuple (profiles, phases) where
+        - profiles is the filename containing the concatenated profiles
+        - phase is a file containing the list pf phase functions
         '''
-        #
-        # Initialization
-        #
-        use_reptran = isinstance(w, REPTRAN_IBAND)
-        z = self.z
-        M = len(z)  # Final number of layer
-        if use_reptran:
-            wl = w.w
+        # convert to list if wl is a scalar
+        if isinstance(wl, (float, int)):
+            wl = [wl]
+
+        profiles, phases = self.calc_bands(wl)
+
+        header = "# I ALT   hmol(I) haer(I)  H(I)  "
+        header += "XDEL(I)  YDEL(I)  XSSA(I)  percent_abs  IPHA  LAM={} nm\n"
+
+        # write the profiles
+        file_profiles = tempfile.mktemp(dir=dir_profile, prefix='profil_aer_')
+        fp = open(file_profiles, 'w')
+        for i, pro in enumerate(profiles):
+            fp.write(header.format(wl[i]))
+            for m in xrange(len(pro)):
+                line = "%d\t%7.2f\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%d\n" % tuple(pro[m])
+                fp.write(line)
+        fp.close()
+
+        # write the phase functions
+        # and list of phase functions
+        file_list_phases = tempfile.mktemp(dir=dir_list_phases, prefix='list_phases_')
+        fp = open(file_list_phases, 'w')
+        for phase in phases:
+            file_phase = tempfile.mktemp(dir=dir_phases, prefix='pf_')
+            phase.write(file_phase)
+            fp.write(file_phase+'\n')
+        fp.close()
+
+        return file_profiles, file_list_phases
+
+    def calc_phase(self, wl):
+        '''
+        calculate phase functions for bands self.pfwav and coarse profile self.pfgrid
+        returns a list pf phase functions, and an array of indices (z, wl) that give the
+        index of the phase function associated with each layer and each band of the find grids
+
+        -> create a new profile at a grid pfgrid (coarse grid) and for bands pfwav
+        '''
+
+        if self.aer is None:
+            return [], np.zeros((len(self.z), len(wl)), dtype='i')
+
+        if self.pfwav is None:
+            pfwav = wl
         else:
-            wl = w
+            pfwav = self.pfwav
 
-        if output_file is None:
-            assert dir is not None
-            # generate a unique file name
-            output_file = tempfile.mktemp(dir=dir,
-                    prefix='profile_', suffix='.tmp')
+        pro = Profile(self.atm_filename, aer=self.aer, grid=self.pfgrid,
+                lat=self.lat, O3=self.O3, NO2=self.NO2, verbose=self.verbose, overwrite=self.overwrite)
 
-        if exists(output_file):
-            if self.overwrite:
-                os.remove(output_file)
-                if self.verbose: print 'Removed {}'.format(output_file)
-            else:
-                if self.verbose: print 'File {} exists!'.format(output_file)
-                return output_file
+        phases = []  # list of the phase matrices
 
-        if not exists(dirname(output_file)):
-            os.makedirs(dirname(output_file))
+        # indices of the phase matrices for each layer and each band of the main profile
+        indices = np.zeros((len(self.z), len(wl)), dtype='i')
 
-        # calculate the profile
-        pro = self.calc(w)
+        # calculate the indices of pfwav in wl
+        ind_wl = []
+        for w in wl:
+            ind_wl.append(np.abs(w - np.array(pfwav)).argmin())
 
-        # write the header
-        fp = open(output_file, 'w')
-        outstr = "# I ALT   hmol(I) haer(I)  H(I)  "
-        outstr += "XDEL(I)  YDEL(I)  XSSA(I)  percent_abs  IPHA  LAM=  %7.2f nm" % (wl)
-        if use_reptran:
-            outstr += ', WEIGHT= %7.5f, E0=%9.3f, Rint=%8.3f' % (w.weight, w.extra, w.band.Rint)
-        # print outstr
-        fp.write(outstr)
+        # calculate the indices of z in pfgrid
+        # we select the index of the pfgrid layer immediately lower than the value of z
+        # (without the 1st element)
+        ind_z = (np.searchsorted(-np.array(self.pfgrid[1:]), -np.array(self.z)))
+        ind_z[ind_z<0] = 0
+        ind_z[ind_z > len(self.pfgrid)-2] = len(self.pfgrid)-2
 
-        for m in xrange(M):
-            # TODO: allow for multiple phase functions
-            outstr = "%d\t%7.2f\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t%11.5E\t0" % tuple(pro[m])
+        # fill the 2D array indices
+        max = 0
+        band_index_current = 0
+        for i in xrange(len(wl)):
+            if ind_wl[i] > band_index_current:
+                band_index_current = ind_wl[i]
+                max += ind_z.max()+1
+            indices[:,i] = ind_z[:] + max
 
-            # print outstr
-            fp.write('\n' + outstr)
 
-        fp.write('\n')
-        if self.verbose: print 'write', output_file
+        for w in pfwav:
+            if self.verbose:
+                print 'Computing phase functions at {} nm'.format(w)
+            pro.calc(w)
+            pf = pro.aer.phase(w)
+            phases.extend(pf)
 
-        return output_file
+        if self.verbose:
+            print 'Computed {} phase function'.format(len(phases))
+            print '  {} layers: {} within {}'.format(len(self.pfgrid)-1, self.pfgrid, self.z)
+            print '  {} bands: {} within {}'.format(len(pfwav), pfwav, wl)
+            print '  indices:'
+            print indices
 
+        return phases, indices
+
+    def calc_bands(self, wl):
+        '''
+        Profile calculation at bands w
+        w is a list of bands (list of floats)
+        returns a list of profiles and a list of corresponding phase functions
+
+        a profile is a structured array with records:
+        (I,ALT,hmol,haer,H,XDEL,YDEL,XSSA,percent_abs)
+        '''
+
+        # calculate the phase functions
+        phases, indices = self.calc_phase(wl)
+
+        # calculate the profiles
+        profiles = []
+        for i in xrange(len(wl)):
+            pro = self.calc(wl[i])
+
+            # setup the phase functions indices in profile
+            pro['IPHA'] = indices[:,i]
+
+            profiles.append(pro)
+
+        return profiles, phases
 
     def calc(self, w):
         '''
-        Profile calculation at a monochromatic wavelength w (nm)
-        Returns a numpy structured array
+        Profile calculation at a monochromatic band w
 
-        w can be either:
-            - a wavelength in nm (float)
-            - a REPTRAN_IBAND object
+        returns the profile at this band, a structured array with records:
+        (I,ALT,hmol,haer,H,XDEL,YDEL,XSSA,percent_abs, IPHA)
 
-        returns: a structured array with records 
-        (I,ALT,hmol,haer,H,XDEL,YDEL,XSSA,percent_abs)
-        containing the profile, which can be accessed like
-                profile['ALT'][0]  # altitude of top layer
-                profile['hmol']    # the whole profile of Rayleigh optical thickness
         '''
+        assert not isinstance(w, REPTRAN_IBAND), 'please review profil.calc for use with REPTRAN objects'
+        assert isinstance(w, (int, float))
 
         #
         # Initialization
         #
         use_reptran = isinstance(w, REPTRAN_IBAND)
+
+        if (self.aer is not None) and (list(self.z) != list(self.aer.z)):
+            # re-initialize aer if necessary
+            self.aer.init(self.z, self.T, self.h2o)
 
         z = self.z
         M = len(z)  # Final number of layer
@@ -1074,6 +1125,7 @@ class Profile(object):
                                      ('YDEL', float), 
                                      ('XSSA', float), 
                                      ('percent_abs', float), 
+                                     ('IPHA', int), 
                                      ])
 
         for m in xrange(M):
@@ -1083,7 +1135,7 @@ class Profile(object):
                 hg=0.
                 taur_prec=0.
                 taua_prec=0.
-                profile[m] = (m, z[m], 0., 0., 0. , 0., 1., 1., 0.)
+                profile[m] = (m, z[m], 0., 0., 0. , 0., 1., 1., 0., 0)
             else : 
                 dz = z[m-1]-z[m]
                 taur = dataray[m] - taur_prec
@@ -1098,7 +1150,7 @@ class Profile(object):
                 hg += taug
                 htot = dataray[m]+dataaer[m]+hg
                 xssa=ssaaer[m]
-                profile[m] = (m, z[m], dataray[m], dataaer[m], htot , xdel, ydel, xssa, abs)
+                profile[m] = (m, z[m], dataray[m], dataaer[m], htot , xdel, ydel, xssa, abs, 0)
 
         return profile
 
@@ -1227,7 +1279,7 @@ def example3():
     using reptran with aerosols
     also write phase functions
     '''
-    aer = AeroOPAC('desert', 0.4, 550., layer_phase=0)
+    aer = AeroOPAC('desert', 0.4, 550.)
     pro = Profile('afglt.dat', aer=aer)
     rep = REPTRAN('reptran_solar_sentinel.cdf')
     for band in rep.band_names:
@@ -1245,7 +1297,7 @@ def example4():
     using reptran for PAR
     also write phase functions
     '''
-    aer = AeroOPAC('maritime_clean', 0.1, 550., layer_phase=-1)
+    aer = AeroOPAC('maritime_clean', 0.1, 550.)
     pro = Profile('afglss.dat', aer=aer, grid='100[25]25[5]5[1]0',)
     rep = REPTRAN('reptran_solar_coarse.cdf')
     sampling = 1

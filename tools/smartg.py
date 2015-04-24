@@ -40,8 +40,9 @@ class Smartg(object):
     Arguments:
         - exe: smart-g executable
         - wl: wavelength in nm (float)
-             used for phase functions calculation (always)
-             and profile calculation (if iband is None)
+              or a list of wavelengths, or an array
+              used for phase functions calculation (always)
+              and profile calculation (if iband is None)   # FIXME
         - iband: a REPTRAN_BAND object describing the internal band
             default None (no reptran mode)
         - output: the name of the file to create. If None (default),
@@ -84,7 +85,7 @@ class Smartg(object):
                     prefix='smartg_command_',
                     dir=dir_cmdfiles)
 
-        assert isinstance(wl, float)
+        assert isinstance(wl, (float, list, np.ndarray))
         assert (iband is None) or isinstance(iband, REPTRAN_IBAND)
 
         if output is None:
@@ -95,7 +96,7 @@ class Smartg(object):
             list_filename = [exe]   # executable
 
             if iband is None:
-                list_filename.append('WL={:.2f}'.format(wl))
+                pass
             else:
                 list_filename.append('WL={:.2f}'.format(iband.w))
 
@@ -177,24 +178,19 @@ class Smartg(object):
         if atm is not None:
             # write the profile
             if iband is None:
-                file_profile = atm.write(wl, dir=dir_profil_aer)
+                ensure_dir_exists(dir_profil_aer)
+                ensure_dir_exists(dir_phase_aero)
+                ensure_dir_exists(dir_list_pf_aer)
+                file_profile, file_list_pf_aer = atm.write(wl,
+                            dir_profile=dir_profil_aer,
+                            dir_phases=dir_phase_aero,
+                            dir_list_phases=dir_list_pf_aer,
+                            )
+                D.update(PATHDIFFAER=file_list_pf_aer)
             else:
                 file_profile = atm.write(iband, dir=dir_profil_aer)
             D.update(PATHPROFILATM=file_profile)
 
-            # aerosols
-            if atm.aer is None:
-                Ddef.update(PATHDIFFAER='None')
-            else:
-                phase_aer = atm.aer.phase(wl, dir_phase_aero, NTHETA=1000)
-
-                # write list of phase functions
-                file_list_pf_aer = tempfile.mktemp(dir=dir_list_pf_aer, prefix='list_pf_aer_')
-                ensure_dir_exists(dir_list_pf_aer)
-                with open(file_list_pf_aer, 'w') as f:
-                    f.write(phase_aer + '\n')
-
-                D.update(PATHDIFFAER=file_list_pf_aer)
         else:  # no atmosphere
             Ddef.update(PATHDIFFAER='None')
             Ddef.update(PATHPROFILATM='None')
@@ -217,28 +213,35 @@ class Smartg(object):
             # use default water values
             Ddef.update(PATHPROFILOCE='None', PATHDIFFOCE='None')
         else:
-            # TODO: if iband is provided, use iband wavelength to calculate
-            # atot and btot, and wl to calculate the phase function
-
-            # TODO: update this
-            # write phase function
-            atot, btot, phase = water.calc(wl)
-            file_phase = tempfile.mktemp(dir=dir_phase_water, prefix='pf_ocean_')
-            phase.write(file_phase)
-
-            # write list of phase functions
+            # open list of phase functions
             file_list_pf_ocean = tempfile.mktemp(dir=dir_list_pf_oce, prefix='list_pf_ocean_')
             ensure_dir_exists(dir_list_pf_oce)
-            with open(file_list_pf_ocean, 'w') as f:
-                f.write(file_phase + '\n')
+            fp = open(file_list_pf_ocean, 'w')
 
-            # write the ocean profile
+            # open profile file
             profil_oce = tempfile.mktemp(dir=dir_profil_oce, prefix='profil_oce_')
             ensure_dir_exists(dir_profil_oce)
-            with open(profil_oce, 'w') as f:
+            f = open(profil_oce, 'w')
+
+            if isinstance(wl, (float, int)):
+                wl_list = [wl]
+            else:
+                wl_list = wl
+
+            for i, w in enumerate(wl_list):
+                atot, btot, phase = water.calc(w)
+                file_phase = tempfile.mktemp(dir=dir_phase_water, prefix='pf_ocean_')
+
+                phase.write(file_phase)
+
+                fp.write(file_phase + '\n')
+
                 f.write('# I   DEPTH    H(I)    SSA(I)  IPHA\n')
                 f.write('0 0. 0. 1. 0\n')
-                f.write('1 1000. -1.e10 {} 0\n'.format(btot/(atot+btot)))
+                f.write('1 1000. -1.e10 {} {}\n'.format(btot/(atot+btot), i))
+
+            fp.close()
+            f.close()
 
             D.update(PATHPROFILOCE=profil_oce, PATHDIFFOCE=file_list_pf_ocean)
 
@@ -632,7 +635,7 @@ def test_rayleigh_aerosols():
     '''
     with aerosols
     '''
-    aer = AeroOPAC('maritime_clean', 0.4, 550., layer_phase=-1)
+    aer = AeroOPAC('maritime_clean', 0.4, 550.)
     pro = Profile('afglms', aer=aer)
 
     return Smartg('SMART-G-PP', wl=490., atm=pro, NBPHOTONS=1e9)
@@ -649,7 +652,7 @@ def test_atm_surf():
 
 def test_atm_surf_ocean():
     return Smartg('SMART-G-PP', 490., NBPHOTONS=1e7,
-            atm=Profile('afglms', aer=AeroOPAC('maritime_clean', 0.2, 550, layer_phase=-1)),
+            atm=Profile('afglms', aer=AeroOPAC('maritime_clean', 0.2, 550)),
             surf=RoughSurface(),
             NBTHETA=30,
             water=IOP_MM(chl=1., NANG=1000),
@@ -671,7 +674,7 @@ def test_reptran():
     '''
     using reptran
     '''
-    aer = AeroOPAC('maritime_polluted', 0.4, 550., layer_phase=-1)
+    aer = AeroOPAC('maritime_polluted', 0.4, 550.)
     pro = Profile('afglms.dat', aer=aer, grid='100[75]25[5]10[1]0')
     files, ibands = [], []
     for iband in REPTRAN('reptran_solar_msg').band('msg1_seviri_ch008').ibands():
@@ -696,7 +699,7 @@ def test_ozone_lut():
     luts = []
     for TCO, AOT in product(list_TCO, list_AOT):
 
-        aer = AeroOPAC('maritime_clean', AOT, 550., layer_phase=5)
+        aer = AeroOPAC('maritime_clean', AOT, 550.)
         pro = Profile('afglms', aer=aer, O3=TCO)
 
         job = Smartg('SMART-G-PP', wl=490., atm=pro, NBTHETA=50, NBPHOTONS=5e6)
@@ -710,6 +713,24 @@ def test_ozone_lut():
     merged.save(join(dir_output, 'test_ozone.hdf'))
 
 
+def test_multispectral():
+    '''
+    process multiple bands at once
+    '''
+
+    pro = Profile('afglt',
+            grid=[100, 75, 50, 30, 20, 10, 5, 1, 0.],  # optional, otherwise use default grid
+            pfgrid=[100, 20, 0.],   # optional, otherwise use a single band 100-0
+            pfwav=[400, 500, 600], # optional, otherwise phase functions are calculated at all bands
+            aer=AeroOPAC('maritime_clean', 0.3, 550.))
+
+    Smartg('SMART-G-PP', wl = np.linspace(400, 600, 10.),
+            atm=pro,
+            surf=RoughSurface(),
+            water=IOP_SPM(1.),
+            overwrite=True)
+
+
 if __name__ == '__main__':
     test_rayleigh()
     test_kokhanovsky()
@@ -718,6 +739,6 @@ if __name__ == '__main__':
     test_atm_surf_ocean()
     test_surf_ocean()
     test_ocean()
-    test_reptran()
+    # test_reptran()
     test_ozone_lut()
-
+    test_multispectral()
