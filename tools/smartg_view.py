@@ -200,7 +200,7 @@ def semi_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
         ax_polar.set_title(lut.desc, weight='bold', position=(0.15,0.9))
 
 
-def smartg_view(mlut, QU=False):
+def smartg_view(mlut, QU=False, field='up (TOA)'):
     '''
     visualization of a smartg MLUT
 
@@ -208,9 +208,9 @@ def smartg_view(mlut, QU=False):
         QU: show Q and U also
     '''
 
-    I = mlut['I_up (TOA)']
-    Q = mlut['Q_up (TOA)']
-    U = mlut['U_up (TOA)']
+    I = mlut['I_' + field]
+    Q = mlut['Q_' + field]
+    U = mlut['U_' + field]
 
     # polarized reflectance
     IP = Q*Q + U*U
@@ -226,10 +226,10 @@ def smartg_view(mlut, QU=False):
         semi_polar(I,  0, rect='421', sub='423', fig=fig)
         semi_polar(Q,  0, rect='422', sub='424', fig=fig)
         semi_polar(U,  0, rect='425', sub='427', fig=fig)
-        semi_polar(PR, 0, rect='426', sub='428', fig=fig)
+        semi_polar(PR, 0, rect='426', sub='428', fig=fig, vmin=0, vmax=100)
     else:
         # show only I and PR
         fig = figure(figsize=(9, 4.5))
         semi_polar(I,  0, rect='221', sub='223', fig=fig)
-        semi_polar(PR, 0, rect='222', sub='224', fig=fig)
+        semi_polar(PR, 0, rect='222', sub='224', fig=fig, vmin=0, vmax=100)
 

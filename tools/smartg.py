@@ -311,7 +311,7 @@ class Smartg(object):
             return read_mlut_hdf(self.output)
 
 
-    def view(self, QU=False):
+    def view(self, QU=False, field='up (TOA)'):
         '''
         visualization of a smartg result
 
@@ -320,7 +320,7 @@ class Smartg(object):
         '''
         from smartg_view import smartg_view
 
-        smartg_view(self.read(), QU=QU)
+        smartg_view(self.read(), QU=QU, field=field)
 
 
 def ensure_dir_exists(file_or_dir):
