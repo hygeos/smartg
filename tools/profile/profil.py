@@ -77,7 +77,7 @@ class AeroOPAC(object):
         self.ispecies=[]
         for species in self.aspecies:   # pour chaque composante on lit les proporites de diffusion de la LUT Scamat
             self.ispecies.append(self.species.index(species))
-            self.scamatlist.append(ScaMat(species))   
+            self.scamatlist.append(ScaMat(species+'.mie'))   
 
     def init(self, z, T, h2o):
         '''
@@ -157,6 +157,7 @@ class AeroOPAC(object):
         self.dtau_tot=np.zeros(M,np.float32)
         self.ssa_tot=np.zeros(M,np.float32)
         self.pmom_tot=np.zeros((M,4,MMAX),np.float64)
+
         norm=np.zeros(M,np.float32)
         k=0
         for scamat in self.scamatlist:
@@ -283,7 +284,276 @@ class AeroOPAC(object):
 
     def __str__(self):
         return 'AER={base}-AOT={aot}'.format(base=self.basename, aot=self.__tau)
+        
 
+class CloudOPAC(object):
+    '''
+    Initialize the Cloud OPAC model
+
+    Args:
+        basename: string for naming the "mixture"
+        components: list of tuple of the cloud profile:
+            tuple (species name, concentration, reff, zmin, zmax)
+        tau: optical thickness at wavelength wref
+        wref: reference wavelength (nm) for aot
+        overwrite: recalculate and overwrite phase functions
+    '''
+    def __init__(self, basename, components, tau, wref,layer_phase=None, overwrite=False):
+
+        self.__tau = tau
+        self.__wref = wref
+        self.basename = basename
+        self.__layer_phase = layer_phase
+        self.components = components
+        self.overwrite = overwrite
+
+        self.scalingfact=1.
+        self._readStandardOPACComponent()
+
+    @staticmethod
+    def listStandardOPACComponents():
+        files = glob(join(dir_libradtran_opac, 'optprop/', '*.cdf'))
+        return map(lambda x: basename(x)[:-4], files)
+
+    def _readStandardOPACComponent(self):
+        ZOPACmax=35. # km
+        dZOPAC=0.1 # km
+        NOPAC=int(ZOPACmax/dZOPAC+1)
+        #self.species=listStandardOPACComponents()
+        self.scamatlist=[]
+        self.aspecies = []
+        self.zopac=np.linspace(ZOPACmax,0.,num=NOPAC,endpoint=True)
+        self.densities=np.zeros((NOPAC,len(self.components)),dtype=float)
+        self.reff=np.zeros(len(self.components),dtype=float)
+        dp=np.empty_like(self.zopac,dtype=float)
+        for k in range(len(self.components)):
+            component = self.components[k]
+            species=component[0]
+            self.aspecies.append(species)
+            self.scamatlist.append(ScaMat(species))
+            dp[:]=component[1] #concentration
+            self.reff[k]=component[2] # reff
+            ic=np.where(self.zopac<component[3])
+            dp[ic]=0.
+            ic=np.where(self.zopac>=component[4])
+            dp[ic]=0.
+            self.densities[:,k]=dp
+
+
+    def init(self, z):
+        '''
+        Initialize the model using height profile
+        '''
+        self.regrid(z)
+        self.setTauref(self.__tau, self.__wref)
+
+    def regrid(self,znew):
+        '''
+        reechantillonage vertical des concentrations massiques
+        '''
+        N=len(self.aspecies)
+        M=len(znew)
+        tmp=np.zeros((M,N),np.float32)
+        for k in range(N):
+            f=interp1d(self.zopac,self.densities[:,k],bounds_error=False,fill_value=0.)
+            tmp[:,k]=f(znew)
+        self.densities=tmp
+        self.zopac=znew
+
+    def calcTau(self,w): # calcul des propritees optiques du melange en fonction de l'alitude et aussi integrees sur la verticale
+        M=len(self.zopac)
+        self.dtau_tot=np.zeros(M,np.float32)
+        k=0
+        for scamat in self.scamatlist: 
+
+            tab=np.squeeze(scamat.ext)
+            if len(scamat.reffgrid)>1: # if the optical properties depnds on reff
+                ext0=interp2(scamat.wlgrid,scamat.reffgrid,tab,w*1e-3,self.reff[k])
+            else:
+                fext=interp1d(scamat.wlgrid,tab,bounds_error=False,fill_value=0.)                       
+                ext0=fext(w*1e-3)                
+            for m in range(M):
+                if m==0:
+                    dz=0.
+                    dtau=0.
+                else:                                                       
+                    ext=ext0*self.densities[m,k]
+                    dz = self.zopac[m-1]-self.zopac[m]                       
+                    dtau = dz * ext * self.scalingfact
+                self.dtau_tot[m]+=dtau
+
+            k=k+1
+
+        self.tau_tot=np.sum(self.dtau_tot)
+
+    def calc(self,w):
+        '''
+        calcul des propritees optiques du melange en fonction de l'alitude et
+        aussi integrees sur la verticale à la longueur d'onde w (nm)
+        retourne le profil d'épaisseur optique intégrée et le profil de ssa
+        '''
+
+        M=len(self.zopac)
+        MMAX=5000 # Nb de polynome de Legendre au total
+        self.dtau_tot=np.zeros(M,np.float32)
+        self.ssa_tot=np.zeros(M,np.float32)
+        self.pmom_tot=np.zeros((M,4,MMAX),np.float64)
+        norm=np.zeros(M,np.float32)
+        k=0
+        for scamat in self.scamatlist:
+            # NMAX we test the MAx number of Legendre polynomials coeffcient in PMOM
+            NMAX2 = scamat.pmom.shape[-1]
+            fiw=interp1d(scamat.wlgrid,np.arange(len(scamat.wlgrid))) # function to locate wavelength index in grid (float)
+            iw=fiw(w*1e-3) # floating wavelength index 
+            
+            tabext=np.squeeze(scamat.ext)
+            tabssa=np.squeeze(scamat.ssa)
+            if len(scamat.reffgrid)>1: 
+                ext0=interp2(scamat.wlgrid,scamat.reffgrid,tabext,w*1e-3,self.reff[k])
+                ssa=interp2(scamat.wlgrid,scamat.reffgrid,tabssa,w*1e-3,self.reff[k])
+                fir=interp1d(scamat.reffgrid,np.arange(len(scamat.reffgrid)))
+                ir=int(fir(self.reff[k])) # nearest neighbour interpolation for reff on phase function
+                nmom=np.squeeze(scamat.nmom[:,ir])
+                pmom=np.squeeze(scamat.pmom[:,ir,:,:])
+            else:
+                fext=interp1d(scamat.wlgrid,tabext,bounds_error=False,fill_value=0.)                       
+                ext0=fext(w*1e-3)
+                fssa=interp1d(scamat.wlgrid,tabssa,bounds_error=False,fill_value=0.)                       
+                ssa=fssa(w*1e-3)
+                nmom=np.squeeze(scamat.nmom)
+                pmom=np.squeeze(scamat.pmom)
+
+            for m in xrange(M):
+                if m==0:
+                    dz=0.
+                    dtau=0.
+                    dssa=1.
+                    dp=[0.,0.,0.,0.]
+                    nmax=[0,0,0,0]
+                    ext=0.
+                else:                                                       
+                    ext=ext0*self.densities[m,k]
+                    dz = self.zopac[m-1]-self.zopac[m]                       
+                    dtau = dz * ext * self.scalingfact
+                    dssa = dtau*ssa
+                    norm[m]+=dssa
+                    for n in range(4): # pour chaque element de la matrice de Stokes independant (4 pour Mie) 
+                        if nmom.ndim==2:
+                            nmax=nmom[int(iw),n]
+                        else:
+                            nmax=nmom[int(iw)]
+                        nmax=min(NMAX2,nmax)
+                        dp[n]= pmom[int(iw),n,:nmax]*dssa # plus proche voisin pour pmom pondere par ssa et tau de la composante
+                
+                self.dtau_tot[m]+=dtau
+                self.ssa_tot[m]+=dssa
+                for n in range(4):
+                    if nmom.ndim==2:
+                        nmax=nmom[int(iw),n]
+                    else:
+                        nmax=nmom[int(iw)]
+                    nmax=min(NMAX2,nmax)
+                    self.pmom_tot[m,n,:nmax]+=dp[n]
+
+            k=k+1 # each component
+
+        for m in xrange(M):
+            if m==0:
+                self.ssa_tot[m]=1.
+                for n in range(4):
+                    self.pmom_tot[m,n,:]=0.
+            else:
+                if (self.dtau_tot[m]>1e-8 and norm[m] > 1e-8): 
+                    self.ssa_tot[m]/=self.dtau_tot[m]
+                    for n in range(4):  
+                        self.pmom_tot[m,n,:]/=norm[m]
+                else:
+                    self.ssa_tot[m]=1.
+                    for n in range(4):
+                        self.pmom_tot[m,n,:]=0.
+
+
+        self.tau_tot=np.sum(self.dtau_tot)
+        self.MMAX=MMAX
+
+        dataaer  = np.zeros(M, np.float)
+        for m in xrange(M):
+            dataaer[m] = np.sum(self.dtau_tot[:m+1])
+
+        return (dataaer, self.ssa_tot)
+
+
+    def setTauref(self,tauref,wref): # On fixe l'AOT a une valeur pour une longueur d'onde de reference
+        self.calcTau(wref) # calcul de l'AOT a la longueur d'onde de reference
+        self.scalingfact=tauref/self.tau_tot # calcul du facteur d'echelle        
+
+    def calcPha(self, w, pattern, dir, NTHETA=7201):
+        '''
+        calculate and write phase matrices for each layer
+        Arguments:
+            w: wavelength in nm
+            NTHETA: number of angles
+            dir: location of the output file
+            pattern: output file pattern, formatted by the aerosol specie,
+                     the wavelength and the layer
+        Returns: the list of files generated
+        '''
+        self.NTHETA=NTHETA
+        M=len(self.zopac)
+        Leg=Legendres(self.MMAX,NTHETA)
+        ret = []
+        list_skipped = []   # list of files skipped because existing
+        list_overwritten = []   # list of files overwritten
+
+        for m in range(M):
+
+            output = join(dir, pattern%(self.basename,w,m))
+            ret.append(output)
+            if exists(output):
+                if self.overwrite:
+                    os.remove(output)
+                    list_overwritten.append(output)
+                else:
+                    list_skipped.append(output)
+                    continue
+            theta,pha=Mom2Pha(self.pmom_tot[m,:,:],Leg)
+            if not exists(dirname(output)):
+                # create output directory if necessary
+                os.makedirs(dirname(output))
+
+            f=open(output,'w')
+            for j in range(NTHETA):
+                f.write("%18.8E"%theta[j] + "  %20.11E  %20.11E  %20.11E  %20.11E\n"%tuple(pha[:,j]))
+            f.close()
+
+        if len(list_skipped) > 0:
+            print 'INFO: skipping {} and {} other files'.format(list_skipped[0], len(list_skipped)-1)
+        if len(list_overwritten) > 0:
+            print 'INFO: overwritten {} and {} other files'.format(list_overwritten[0], len(list_overwritten)-1)
+
+        return ret
+
+    def phase(self, wl, dir, pattern='pf_%s_%inm_layer-%i.txt',NTHETA=7201):
+        '''
+        creates the phase function corresponding to layer_phase
+        and returns the corresponding file name
+
+        wl is the wavelength in nm
+        dir: directory for storing the phase function files
+        pattern: output file pattern, formatted by the aerosol specie,
+                 the wavelength and the layer
+                 default: 'pf_%s_%inm_layer-%i.txt'
+        '''
+        if self.__layer_phase is None:
+            return None
+
+        ret = self.calcPha(wl, pattern, dir,NTHETA=NTHETA)
+
+        return ret[self.__layer_phase]
+
+    def __str__(self):
+        return 'CLO={base}-AOT={aot}'.format(base=self.basename, aot=self.__tau)
+        
 
 class Gas(object):
     def __init__(self,z,dens):
@@ -315,14 +585,11 @@ class ScaMat(object):
         self._readScaMatFile()
 
     def _readScaMatFile(self):
-        if not 'spheroids' in self.species :
-            fname=join(dir_libradtran_opac, 'optprop', self.species+'.mie.cdf')
-        else:
-            fname=join(dir_libradtran_opac, 'optprop', self.species+'.tmatrix.cdf')
+   
+        fname=join(dir_libradtran_opac, 'optprop', self.species+'.cdf')
         nc=netCDF4.Dataset(fname)
         self.wlgrid=nc.variables["wavelen"][:]
-        self.rhgrid=nc.variables["hum"][:]
-        self.nrh=len(self.rhgrid)
+        
         self.thgrid=nc.variables["theta"][:]
         self.phase=nc.variables["phase"][:]
         self.pmom=nc.variables["pmom"][:]
@@ -330,7 +597,18 @@ class ScaMat(object):
         self.nmom=nc.variables["nmom"][:]
         self.ext=nc.variables["ext"][:]
         self.ssa=nc.variables["ssa"][:]
-        self.rho=nc.variables["rho"][:]
+        self.rho=nc.variables["rho"][:] 
+        if u'reff' in nc.variables.keys(): 
+            self.reffgrid=nc.variables["reff"][:]
+        else :
+            self.reffgrid=[1]
+        if u'hum' in nc.variables.keys(): 
+            self.rhgrid=nc.variables["hum"][:]
+            self.nrh=len(self.rhgrid)
+        else:
+            self.rhgrid=1
+            self.nrh=[1]
+            
 
 class Legendres(object):
     def __init__(self,nterm,ntheta):
@@ -822,7 +1100,7 @@ class Profile(object):
           profile value (default)
         - NO2: activate ON2 absorption (default True)
     '''
-    def __init__(self, atm_filename, aer=None, grid=None,
+    def __init__(self, atm_filename, aer=None, grid=None, cloud=None,
                 pfgrid=[100., 0.], pfwav=None,
                 lat=45., O3=None, NO2=True, verbose=False, overwrite=False):
 
@@ -908,6 +1186,10 @@ class Profile(object):
         self.aer = aer
         if self.aer is not None:
             self.aer.init(z, self.T, self.h2o)
+                    
+        self.cloud = cloud            
+        if self.cloud is not None:
+            self.cloud.init(z)
 
         self.verbose = verbose
         self.overwrite = overwrite
@@ -1065,11 +1347,18 @@ class Profile(object):
             wl = w.w
         else:
             wl = w
+            
         if self.aer is not None:
             dataaer, ssaaer = self.aer.calc(wl)
         else:
             dataaer = np.zeros(M, np.float)
             ssaaer = np.zeros(M, np.float)
+            
+        if self.cloud is not None:
+            dataclo, ssaclo = self.cloud.calc(wl)
+        else:
+            dataclo = np.zeros(M, np.float)
+            ssaclo = np.zeros(M, np.float)
 
         if use_reptran:
             Nmol = 8
@@ -1133,8 +1422,9 @@ class Profile(object):
             if m==0 : 
                 dz=0.
                 hg=0.
-                taur_prec=0.
-                taua_prec=0.
+                taur_prec=0. #rayleigh
+                taua_prec=0. #aerosols
+                tauc_prec=0. #clouds
                 profile[m] = (m, z[m], 0., 0., 0. , 0., 1., 1., 0., 0)
             else : 
                 dz = z[m-1]-z[m]
@@ -1142,15 +1432,24 @@ class Profile(object):
                 taur_prec = dataray[m]
                 taua = dataaer[m] - taua_prec
                 taua_prec = dataaer[m]
+                tauc = dataclo[m] - tauc_prec
+                tauc_prec = dataclo[m]
                 taug = (datao3[m] + datano2[m] + datamol[m])*dz
-                tau = taur+taua+taug
+                # tau = taur+taua+taug
+                tau = taur+taua+tauc+taug
                 abs = taug/tau
-                xdel = taua/(tau*(1-abs))
+                # xdel = taua/(tau*(1-abs))
+                xdel = (taua+tauc)/(tau*(1-abs))
                 ydel = taur/(tau*(1-abs))
                 hg += taug
-                htot = dataray[m]+dataaer[m]+hg
-                xssa=ssaaer[m]
-                profile[m] = (m, z[m], dataray[m], dataaer[m], htot , xdel, ydel, xssa, abs, 0)
+                # htot = dataray[m]+dataaer[m]+hg
+                htot = dataray[m]+dataaer[m]+dataclo[m]+hg
+                # xssa=ssaaer[m]
+                if ((taua+tauc) <=0):
+                    xssa=1.
+                else:
+                    xssa=(ssaaer[m]*taua+ssaclo[m]*tauc)/(taua+tauc)
+                profile[m] = (m, z[m], dataray[m], dataaer[m]+dataclo[m], htot , xdel, ydel, xssa, abs, 0)
 
         return profile
 
@@ -1163,6 +1462,9 @@ class Profile(object):
 
         if self.aer is not None:
             S += '-{}'.format(str(self.aer))
+            
+        if self.cloud is not None:
+            S += '-{}'.format(str(self.cloud))
 
         return S
 
@@ -1294,13 +1596,20 @@ def example3():
         
 def example4():
     '''
-    using reptran for PAR
+    using reptran with aerosols and clouds for PAR
     also write phase functions
     '''
-    aer = AeroOPAC('maritime_clean', 0.1, 550.)
-    pro = Profile('afglss.dat', aer=aer, grid='100[25]25[5]5[1]0',)
+    wref=550.
+    aer = AeroOPAC('maritime_clean', 0.1, wref)
+
+    # Cumulus Maritime (OPAC)
+    # 1 layer : water cloud mie, relative concentration = 1, reff=12.68 between 2 and 3 km
+    # total OT of 50 at reference wavelength
+    cloud = CloudOPAC('CUMA',[('wc.sol.mie',1.,12.68,2.,3.)], 50., wref) 
+
+    pro = Profile('afglss.dat', aer=aer, cloud=cloud, grid='100[25]25[5]5[1]0',)
     rep = REPTRAN('reptran_solar_coarse.cdf')
-    sampling = 1
+    sampling = 100
     L = rep.band_names
     for i in range(0,len(L),sampling):
         band = rep.band(L[i])
