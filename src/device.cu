@@ -1898,7 +1898,6 @@ __device__ void countPhoton(Photon* ph, Tableaux tab, unsigned long long* nbPhot
 	{
 		#ifdef PROGRESSION
 		atomicAdd(&(var->erreurcase), 1);
-        printf("%d %d %d %g %g %g\n",ith,iphi,il,ph->vx,ph->vy,ph->vz);
 		#endif
 	}
 

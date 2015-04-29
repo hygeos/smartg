@@ -347,6 +347,16 @@ int main (int argc, char *argv[])
 			printf("#--------------------#\n");
 			exit(1);
 		}
+
+		cudaErreur = cudaMemset(tab_D.nbPhotonsInter, 0, NLAM * sizeof(*(tab_D.nbPhotonsInter)));
+		if( cudaErreur != cudaSuccess ){
+			printf("#--------------------#\n");
+			printf("# ERREUR: Problème de cudaMemset var_D.nbPhotons dans le main\n");
+			printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+			printf("#--------------------#\n");
+			exit(1);
+        }
+
 #ifdef _PERF
         StopProcessing(perfMemcpyH2DVar);
         GetElapsedTime(perfMemcpyH2DVar);

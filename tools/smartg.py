@@ -435,13 +435,13 @@ def command_file_template(dict):
         ################ PARAMETERS   #####################
 
         # number of samples for the computation of the Cumulative Distribution Function of the aerosol phase matrix
-        NFAER = 1000000
+        NFAER = {NFAER}
 
         # number of samples for the computation of the Cumulative Distribution Function of the ocean phase matrix
-        NFOCE = 1000000
+        NFOCE = {NFOCE}
 
         # LOOP number in the kernel for each thread
-        NBLOOP = 5000 
+        NBLOOP = {NBLOOP} 
 
         #_______________ GPU _____________________#
 

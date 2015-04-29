@@ -1605,9 +1605,9 @@ def example4():
     # Cumulus Maritime (OPAC)
     # 1 layer : water cloud mie, relative concentration = 1, reff=12.68 between 2 and 3 km
     # total OT of 50 at reference wavelength
-    cloud = CloudOPAC('CUMA',[('wc.sol.mie',1.,12.68,2.,3.)], 50., wref) 
+    cloud = CloudOPAC('CUMA',[('wc.sol.mie',1.,12.68,2.,3.)], 5., wref)
 
-    pro = Profile('afglss.dat', aer=aer, cloud=cloud, grid='100[25]25[5]5[1]0',)
+    pro = Profile('afglss.dat', aer=aer, cloud=cloud, grid='100[25]25[5]5[1]0')
     rep = REPTRAN('reptran_solar_coarse.cdf')
     sampling = 100
     L = rep.band_names
