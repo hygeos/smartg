@@ -86,9 +86,7 @@ __device__ __constant__ float ACUBEd;
 * fonction va donc être effectuée pour chaque thread du block de la grille
 */
 __global__ void lancementKernel(Variables* var, Tableaux tab
-		#ifdef SPHERIQUE
 		, Init* init
-		#endif
 			       );
 
 
@@ -100,9 +98,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 * Initialise le photon dans son état initial avant l'entrée dans l'atmosphère
 */
 __device__ void initPhoton(Photon* ph, Tableaux tab
-		#ifdef SPHERIQUE
 		, Init* init
-		#endif
 		#ifdef RANDMWC
 		, unsigned long long*, unsigned int*
 		#endif
@@ -138,7 +134,7 @@ __device__ void move_sp(Photon*, Tableaux tab, Init* init
 
 
 // move, version plan parallèle
-__device__ void move_pp(Photon*, float* h, float* pMol , float *abs , float* ho
+__device__ void move_pp(Photon*,float*z, float* h, float* pMol , float *abs , float* ho
 		#ifdef RANDMWC
 		, unsigned long long*, unsigned int*
 		#endif

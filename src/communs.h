@@ -232,12 +232,14 @@ typedef struct __align__(16)
 	
 	
 	
-	#ifdef SPHERIQUE
+
 	int locPrec; // previous localisation
 	// Position cartésienne du photon
 	float x;
 	float y;
 	float z;
+
+	#ifdef SPHERIQUE
 
 	float rayon;
 	float taumax;
@@ -316,11 +318,13 @@ typedef struct __align__(16)
     float* abs;             // Pointeur vers la proportion d'absorbant dans chaque couches du modèle atmosphérique
     int* ip;                // pointer to the vertical profile of atmospheric phase function index
     float* alb;             // Pointeur vers l albedo de la surface lambertienne
-	
+
+	float* z;				// Altitude de chaque couches
 	/** Séparation du code pour atmosphère sphérique ou parallèle **/
+
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
 	
-	float* z;				// Altitude de chaque couches
+
 	
 	/* Profil atmosphérique initial vu par la photon */
 	float* hph0;			// Epaisseur optique vue devant le photon
@@ -379,7 +383,7 @@ typedef struct __align__(16)
 }Tableaux;
 
 
-#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
+/* Code spécifique à une atmosphère sphérique */
 /* Init
 * Paramètres initiaux du photon lors du premier impact avec l'atmosphère
 * Les calculs sont effectués dans host.cu une seule fois
@@ -396,7 +400,7 @@ typedef struct __align__(16){
 	//float zintermax0;	// Distance entre le photon et une des extrémités de l'atmosphère dans le cas où il n'y as pas d'intéractoin
 
 } Init;
-#endif
+
 
 /* Evnt
 * DEBUG permet de recuperer des infos sur certains photons

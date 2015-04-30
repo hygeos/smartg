@@ -58,6 +58,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "communs.h"
 #include "device.h"
+#include <math.h>
 
 
 /**********************************************************
@@ -72,9 +73,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 * A TESTER: Regarder pour effectuer une réduction de l'atomicAdd
 */
 __global__ void lancementKernel(Variables* var, Tableaux tab
-		#ifdef SPHERIQUE
 		, Init* init
-		#endif
 			       )
 {
 	// idx est l'indice du thread considéré
@@ -134,9 +133,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 		if(ph.loc == NONE){
 			
 			initPhoton(&ph, tab
-				#ifdef SPHERIQUE
 				, init
-				#endif
 			    , &etatThr
 			    #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
 			    , &configThr
@@ -144,14 +141,14 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 					);
 			
 		}
-		syncthreads();
 		
-		
+
         //
 		// Deplacement
         //
         // -> Si OCEAN ou ATMOS
 		if( (ph.loc == ATMOS || ph.loc == TOA) || (ph.loc == OCEAN)){
+
 
             #ifdef SPHERIQUE
             if (ph.loc == ATMOS || ph.loc == TOA)
@@ -163,13 +160,15 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
                                 );
             else 
             #endif
-                move_pp(&ph, tab.h, tab.pMol , tab.abs , tab.ho , &etatThr
+               move_pp(&ph,tab.z, tab.h, tab.pMol , tab.abs , tab.ho, &etatThr
                         #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
                         , &configThr
                         #endif
                                 );
-			
-						
+
+
+
+
 		}
 		syncthreads();
 
@@ -228,9 +227,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 
            else {
                 float dis=0;
-                #ifdef SPHERIQUE
                 dis = sqrtf((ph.x-X0d)*(ph.x-X0d) +(ph.y-Y0d)*(ph.y-Y0d));
-                #endif
                 if( dis > ENV_SIZEd) {
 				     surfaceLambertienne(&ph, tab.alb, &etatThr
 				     //surfaceLambertienne(&ph, &etatThr
@@ -309,9 +306,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 * Initialise le photon dans son état initial avant l'entrée dans l'atmosphère
 */
 __device__ void initPhoton(Photon* ph, Tableaux tab
-		#ifdef SPHERIQUE
 		,  Init* init
-		#endif
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif
@@ -341,24 +336,24 @@ __device__ void initPhoton(Photon* ph, Tableaux tab
 	ph->ilam = __float2uint_rz(RAND * NLAMd);
     atomicAdd(tab.nbPhotonsInter+ph->ilam, 1);
 
-    #ifdef SPHERIQUE
     ph->locPrec = NONE;
-    #endif
 
-	
+
+
     if ((SIMd == -2) || (SIMd == 1) || (SIMd == 2)) {
 
         //
         // Initialisation du photon au sommet de l'atmosphère
         //
 
-        #ifdef SPHERIQUE
 
         // 	Paramètres initiaux calculés dans impactInit - host.cu
         ph->x = init->x0;
         ph->y = init->y0;
         ph->z = init->z0;
         ph->couche=0;	// Sommet de l'atmosphère
+
+        #ifdef SPHERIQUE
         ph->rayon = sqrtf(ph->x*ph->x + ph->y*ph->y + ph->z*ph->z );
         #endif
 
@@ -370,11 +365,12 @@ __device__ void initPhoton(Photon* ph, Tableaux tab
         //
         // Initialisation du photon à la surface
         //
-
-        #ifdef SPHERIQUE
         ph->x = 0.;
         ph->y = 0.;
-		ph->z = RTER;
+        #ifdef SPHERIQUE
+        ph->z = RTER;
+        #else
+		ph->z = 0;
         #endif
 
 		ph->tau = 0.f;
@@ -385,10 +381,12 @@ __device__ void initPhoton(Photon* ph, Tableaux tab
         //
         // Initialisation du photon dans l'océan
         //
-        #ifdef SPHERIQUE
         ph->x = 0.;
         ph->y = 0.;
+        #ifdef SPHERIQUE
         ph->z = RTER;
+        #else
+		ph->z = 0;
         #endif
 
         ph->tau = 0.;
@@ -402,6 +400,7 @@ __device__ void initPhoton(Photon* ph, Tableaux tab
 	ph->stokes1 = 0.5F;
 	ph->stokes2 = 0.5F;
 	ph->stokes3 = 0.F;
+
 
 
 }
@@ -467,7 +466,9 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
 	/** Tirage au sort de la profondeur optique à parcourir **/
 	
 	tauRdm = -logf(1.F-RAND);
-	
+
+
+
 	if( tauRdm == 0. ){
 		/* Le photon ne bouge pas mais il faut tout de même considérer le fait qu'il a subi un déplacement "nul"
 		 * Il va quand même intéragir.
@@ -570,6 +571,7 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
 		* en couches
 		*/
 		icoucheTemp = ph->couche;
+
 		
 		// On choisit que par défaut le photon monte, ceci pour éviter un test
 		sens = 1;
@@ -814,11 +816,12 @@ sinth= %20.19lf - sens=%d\n",\
 	else{
 		rdist = zph;
 	}
-	
+
+
 	ph->x = ph->x + ph->vx*rdist;
 	ph->y = ph->y + ph->vy*rdist;
 	ph->z = ph->z + ph->vz*rdist;
-	
+
 
 	/** Sortie sans intéraction **/
 	if( flagSortie==1 ){
@@ -889,11 +892,13 @@ rsolfi=%15.12lf - tauRdm= %lf - hph_p= %15.12lf - hph= %15.12lf - zph_p= %15.12l
 
     ph->weight = ph->weight * (1.f - tab.abs[ph->couche+ph->ilam*(NATMd+1)]);
 
+
+
 }
 #endif
 
 
-__device__ void move_pp(Photon* ph, float* h, float* pMol , float *abs , float* ho
+__device__ void move_pp(Photon* ph,float*z, float* h, float* pMol , float *abs , float* ho
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif
@@ -908,12 +913,16 @@ __device__ void move_pp(Photon* ph, float* h, float* pMol , float *abs , float* 
 		#endif
 		    ) {
 
+
+	float Dsca=0.f, dsca=0.f;
+
     if (ph->loc == TOA){
         ph->tau = h[NATMd + ph->ilam*(NATMd+1)]; 
         ph->loc = ATMOS;
     }
 
 	ph->tau += -logf(1.f - RAND)*ph->vz;
+
 
 
 	float tauBis;
@@ -943,10 +952,13 @@ __device__ void move_pp(Photon* ph, float* h, float* pMol , float *abs , float* 
             icouche++;
         }
         ph->couche = icouche;
+
+
+
 	}
 
-	
-    #ifndef SPHERIQUE
+
+
     if (ph->loc == ATMOS) {
 
         // Si tau<0 le photon atteint la surface
@@ -979,7 +991,24 @@ __device__ void move_pp(Photon* ph, float* h, float* pMol , float *abs , float* 
         ph->weight = ph->weight * (1.f - abs[ph->couche+ph->ilam*(NATMd+1)]);
 
     }
-    #endif
+
+
+
+        float phz,rdist;
+        Dsca= fabs(h[icouche] - h[icouche-1]) ;
+        dsca= fabs(tauBis - h[icouche-1]) ;
+
+
+
+
+        //calcul de la nouvelle altitude du photon
+        phz=z[icouche-1]+(dsca/Dsca)*(z[icouche]-z[icouche-1]);
+
+
+            rdist=(phz-ph->z)/ph->vz;
+            ph->z = phz;
+            ph->x = ph->x + ph->vx*rdist;
+
 
 }
 

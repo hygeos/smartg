@@ -212,12 +212,12 @@ int main (int argc, char *argv[])
 	double *tabTransDir;
     tabTransDir = (double*)malloc(NLAM*sizeof(double));
 	
-	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
+	/* Code spécifique à une atmosphère sphérique */
 	// Définition et initialisation des constantes initiales du photon
 	Init* init_H;
 	Init* init_D;
 	initInit(&init_H, &init_D);
-	#endif
+
 	
 #ifdef _PERF
     StopProcessing(perfInitG);
@@ -300,9 +300,10 @@ int main (int argc, char *argv[])
 	initConstantesDevice();
 
 	/** Séparation du code pour atmosphère sphérique ou parallèle **/
-	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
+	/* Code spécifique à une atmosphère sphérique */
 	// Calcul du point d'impact du photon
 	impactInit(init_H, init_D, &tab_H, &tab_D);
+	#ifdef SPHERIQUE
     for(ilam=0; ilam<NLAM; ilam++){
        tabTransDir[ilam] = exp(-tab_H.hph0[NATM+ilam*(NATM+1)]);
     }
@@ -430,11 +431,7 @@ int main (int argc, char *argv[])
                 StartProcessing(perfKernel);
 #endif
 		/** Lancement du kernel **/
-		lancementKernel<<<gridSize, blockSize>>>(var_D, tab_D
-				#ifdef SPHERIQUE
-				, init_D
-				#endif
-							);
+		lancementKernel<<<gridSize, blockSize>>>(var_D, tab_D,init_D);
 		// Attend que tous les threads aient fini avant de faire autre chose
 // 		cudaThreadSynchronize();
 #ifdef _PERF
@@ -609,7 +606,7 @@ cudaMemcpyDeviceToHost);
     free(tabPhi);
     free(tabTh);
 
-	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
+		/* Code spécifique à une atmosphère sphérique */
 	cudaErreur = cudaFree(init_D);
 	if( cudaErreur != cudaSuccess ){
 		printf( "ERREUR: Problème de free de init_D dans le main\n");
@@ -618,7 +615,7 @@ cudaMemcpyDeviceToHost);
 	}
 
 	free(init_H);
-	#endif
+
 	
 	// Libération des tableaux envoyés dans le kernel
 	freeTableaux(&tab_H, &tab_D);

@@ -73,14 +73,14 @@ void initVariables(Variables**, Variables**);
 void reinitVariables(Variables*, Variables*);
 
 /** Séparation du code pour atmosphère sphérique ou parallèle **/
-#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
+	/* Code spécifique à une atmosphère sphérique */
 /* initInit
 * Initialisation de la structure Init contenant les paramètres initiaux du photon rentrant dans l'atmosphère.
 * Ces paramètres sont utiles pour une atmosphère sphérique et sont calculés une seule fois dans le host, d'où cette fonction
 * et la structure Init
 */
 void initInit(Init** init_H, Init** init_D);
-#endif
+
 
 /* initTableaux
 * Fonction qui initialise les tableaux à envoyer dans le kernel par allocation mémoire et memset
@@ -119,13 +119,13 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D );
 
 
 /** Séparation du code pour atmosphère sphérique ou parallèle **/
-#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
+	/* Code spécifique à une atmosphère sphérique */
 /* impactInit
 * Calcul du profil que le photon va rencontrer lors de son premier passage dans l'atmosphère
 * Sauvegarde de ce profil dans tab et sauvegarde des coordonnées initiales du photon dans init
 */
 void impactInit(Init* init_H, Init* init_D, Tableaux* tab_H, Tableaux* tab_D);
-#endif
+
 
 /**********************************************************
 *	> Fonctions d'affichage

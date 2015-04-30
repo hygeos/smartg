@@ -520,7 +520,7 @@ void reinitVariables(Variables* var_H, Variables* var_D)
 }
 
 
-#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
+	/* Code spécifique à une atmosphère sphérique */
 /* initInit
 * Initialisation de la structure Init contenant les paramètres initiaux du photon rentrant dans l'atmosphère.
 * Ces paramètres sont utiles pour une atmosphère sphérique et sont calculés une seule fois dans le host, d'où cette fonction
@@ -554,7 +554,7 @@ void initInit(Init** init_H, Init** init_D)
 	}
 
 }
-#endif
+
 
 
 /* initTableaux
@@ -960,20 +960,22 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	}
 	
 	
+	// Altitude des couches
+		tab_H->z =  (float*)malloc((NATM+1)*sizeof(*(tab_H->z)));
+		if( tab_H->z == NULL ){
+			printf("ERREUR: Problème de malloc de tab_H->z dans initTableaux\n");
+			exit(1);
+		}
+		memset(tab_H->z,0,(NATM+1)*sizeof(*(tab_H->z)) );
+
+		if( cudaMalloc( &(tab_D->z), (NATM+1)*sizeof(*(tab_H->z)) ) != cudaSuccess ){
+			printf("ERREUR: Problème de cudaMalloc de tab_D->z dans initTableaux\n");
+			exit(1);
+		}
+
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
 	
-	// Altitude des couches
-	tab_H->z =  (float*)malloc((NATM+1)*sizeof(*(tab_H->z)));
-	if( tab_H->z == NULL ){
-		printf("ERREUR: Problème de malloc de tab_H->z dans initTableaux\n");
-		exit(1);
-	}
-	memset(tab_H->z,0,(NATM+1)*sizeof(*(tab_H->z)) );
 	
-	if( cudaMalloc( &(tab_D->z), (NATM+1)*sizeof(*(tab_H->z)) ) != cudaSuccess ){
-		printf("ERREUR: Problème de cudaMalloc de tab_D->z dans initTableaux\n");
-		exit(1);	
-	}
 	
 	/** Profil initial vu par le photon **/
 	tab_H->zph0 =  (float*)malloc((NATM+1)*sizeof(*(tab_H->zph0)));
@@ -1204,18 +1206,20 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	
 	free(tab_H->ipo);
 
+	// Altitude des couches
+		erreur = cudaFree(tab_D->z);
+		if( erreur != cudaSuccess ){
+			printf( "ERREUR: Problème de cudaFree de tab_D->z dans freeTableaux\n");
+			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+			exit(1);
+		}
+
+		free(tab_H->z);
+
+
 	/** Séparation du code pour atmosphère sphérique ou parallèle **/
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
 	
-	// Altitude des couches
-	erreur = cudaFree(tab_D->z);
-	if( erreur != cudaSuccess ){
-		printf( "ERREUR: Problème de cudaFree de tab_D->z dans freeTableaux\n");
-		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-		exit(1);
-	}
-	
-	free(tab_H->z);
 	
 	// Profil initial vu par la photon
 	erreur = cudaFree(tab_D->zph0);
@@ -1550,38 +1554,21 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
     else{
 
         // Extraction des informations
-        #if defined(SPHERIQUE) 
-        for( ilam=0; ilam<NLAM; ilam++){
-            // skip comment line
-            fgets(buffer,4096,profil);
-            for( icouche=0; icouche<NATM+1; icouche++ ){
-                fgets(buffer, 4096, profil);
-                nscanf = sscanf(buffer, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%d\n",
-                        &i, tab_H->z+icouche, &garbage, &garbage, tab_H->h+icouche+ilam*(NATM+1),
-                        &garbage,tab_H->pMol+icouche+ilam*(NATM+1), tab_H->ssa+icouche+ilam*(NATM+1), tab_H->abs+icouche+ilam*(NATM+1), tab_H->ip+icouche+ilam*(NATM+1));
 
-                if (nscanf != 10) {
-                    printf("Error while parsing profile '%s'\n", PATHPROFILATM);
-                    exit(1);
-                }
-            }
-        }
-        #endif
-        #if !defined(SPHERIQUE) 
         for( ilam=0; ilam<NLAM; ilam++){
             // skip comment line
             fgets(buffer, 4096, profil);
             for( icouche=0; icouche<NATM+1; icouche++ ){
                 fgets(buffer, 4096, profil);
-                nscanf = sscanf(buffer, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%d\n", &i, &garbage, &garbage, &garbage, tab_H->h+icouche+ilam*(NATM+1),
+                nscanf = sscanf(buffer, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%d\n", &i, tab_H->z+icouche, &garbage, &garbage, tab_H->h+icouche+ilam*(NATM+1),
                         &garbage,tab_H->pMol+icouche+ilam*(NATM+1), tab_H->ssa+icouche+ilam*(NATM+1), tab_H->abs+icouche+ilam*(NATM+1) , tab_H->ip+icouche+ilam*(NATM+1) );
-
                 if (nscanf != 10) {
                     printf("Error while parsing profile '%s'\n", PATHPROFILATM);
                     exit(1);
                 }
             }
         }
+		#if !defined(SPHERIQUE)
         TAUATM = tab_H->h[NATM];
         #endif
     }
@@ -1628,22 +1615,19 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D ){
             exit(1);
         }
 
-
-
-		#ifdef SPHERIQUE
 		erreur = cudaMemcpy(tab_D->z, tab_H->z, (NATM+1)*sizeof(*(tab_H->z)), cudaMemcpyHostToDevice);
 		if( erreur != cudaSuccess ){
 			printf( "ERREUR: Problème de copie tab_D->z dans profilAtm\n");
 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
 			exit(1);
 		}
-		#endif
-	
+
+
 }
 
 
 /** Séparation du code pour atmosphère sphérique ou parallèle **/
-#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
+	/* Code spécifique à une atmosphère sphérique */
 
 /* impactInit
 * Calcul du profil que le photon va rencontrer lors de son premier passage dans l'atmosphère
@@ -1661,7 +1645,9 @@ void impactInit(Init* init_H, Init* init_D, Tableaux* tab_H, Tableaux* tab_D){
 	double vy = 0.;
 	double vz = -cos(THVDEG*DEG2RAD);
 	
+	#ifdef SPHERIQUE
     int ilam;
+	#endif
 
 	/** Calcul du point d'impact **/
 	thv = THVDEG*DEG2RAD;
@@ -1671,12 +1657,19 @@ void impactInit(Init* init_H, Init* init_D, Tableaux* tab_H, Tableaux* tab_D){
 	
 	init_H->x0 = (float) localh*tan(thv);
 	init_H->y0 = 0.f;
-	init_H->z0 = (float) RTER + localh;	
 	
+	init_H->z0 =
+			#ifdef SPHERIQUE
+			(float) RTER
+			#endif
+			+ localh;
+
+	#ifdef SPHERIQUE
 	tab_H->zph0[0] = 0.;
 	for(ilam=0; ilam<NLAM; ilam++){
 	   tab_H->hph0[0 + ilam*(NATM+1)] = 0.;
     }
+	#endif
 	
 	xphbis = init_H->x0;
 	yphbis = init_H->y0;
@@ -1701,12 +1694,14 @@ void impactInit(Init* init_H, Init* init_D, Tableaux* tab_H, Tableaux* tab_D){
 			if( rsol2>0. )
 				rsolfi=rsol2;
 		}
-		
+
+		#ifdef SPHERIQUE
 		tab_H->zph0[icouche] = tab_H->zph0[icouche-1] + (float)rsolfi;
 	    for(ilam=0; ilam<NLAM; ilam++){
 		    tab_H->hph0[icouche + ilam*(NATM+1)] = tab_H->hph0[icouche-1+ ilam*(NATM+1)] + 
 				( abs( tab_H->h[icouche+ ilam*(NATM+1)] - tab_H->h[icouche-1+ ilam*(NATM+1)])*rsolfi )/( abs( tab_H->z[icouche-1] - tab_H->z[icouche]) );
         }
+		#endif
 		
 		xphbis+= vx*rsolfi;
 		yphbis+= vy*rsolfi;
@@ -1730,6 +1725,7 @@ void impactInit(Init* init_H, Init* init_D, Tableaux* tab_H, Tableaux* tab_D){
 		exit(1);
 	}
 	
+	#ifdef SPHERIQUE
 	erreur = cudaMemcpy(tab_D->hph0, tab_H->hph0, (NATM+1)*NLAM*sizeof(*(tab_H->hph0)), cudaMemcpyHostToDevice);
 	if( erreur != cudaSuccess ){
 		printf( "ERREUR: Problème de copie tab_D->hph0 dans initInit\n");
@@ -1737,14 +1733,16 @@ void impactInit(Init* init_H, Init* init_D, Tableaux* tab_H, Tableaux* tab_D){
 		exit(1);
 	}
 	
+
 	erreur = cudaMemcpy(tab_D->zph0, tab_H->zph0, (NATM+1)*sizeof(*(tab_H->zph0)), cudaMemcpyHostToDevice);
 	if( erreur != cudaSuccess ){
 		printf( "ERREUR: Problème de copie tab_D->zph0 dans initInit\n");
 		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
 		exit(1);
 	}
+	#endif
 }
-#endif
+
 
 
 /**********************************************************
