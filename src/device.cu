@@ -1114,7 +1114,7 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
 		
 	}
 	else{	/* Photon dans l'océan */
-	    float prop_raman=0., new_wavel;
+	    float prop_raman=1., new_wavel;
         ilay = ph->couche + ph->ilam*(NOCEd+1); // oce layer index
         ipha  = ipo[ilay]; // oce phase function index
 
