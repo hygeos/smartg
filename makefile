@@ -44,6 +44,9 @@ DFLAGS += -DPROGRESSION # Calcul et affichage de la progression de la simulation
 ifeq ("$(PERFO_TIMER)","ON")
 DFLAGS += -D_PERF
 endif
+
+MAKE_LOG = make.log
+
 #####################################################################################
 
 all: pp sp
@@ -62,20 +65,26 @@ obj/sp/%.o: src/%.cu
 
 init_pp:
 	@echo
-	@echo MAKING PP...
+	@echo '#' MAKING $(EXEC_PP)... \(logging status to $(MAKE_LOG)\)
 	@mkdir -p obj/pp
 
 init_sp:
 	@echo
-	@echo MAKING SP...
+	@echo '#' MAKING $(EXEC_SP)... \(logging status to $(MAKE_LOG)\)
 	@mkdir -p obj/sp
 
 clean:
-	rm -f obj/pp/* obj/sp/* src/*~ *~ $(EXEC_PP) $(EXEC_SP)
+	rm -f obj/pp/* obj/sp/* src/*~ *~ $(EXEC_PP) $(EXEC_SP) $(MAKE_LOG)
 
 rebuild: clean all
 
 sp: init_sp $(EXEC_SP)
+	@echo '--------------------------' >> $(MAKE_LOG)
+	@echo $(EXEC_SP): HEAD is `git rev-parse HEAD` \(`date`\) >> $(MAKE_LOG)
+	@git diff src/ >> $(MAKE_LOG)
 
 pp: init_pp $(EXEC_PP)
+	@echo '--------------------------' >> $(MAKE_LOG)
+	@echo $(EXEC_PP): HEAD is `git rev-parse HEAD` \(`date`\) >> $(MAKE_LOG)
+	@git diff src/ >> $(MAKE_LOG)
 
