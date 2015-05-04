@@ -788,6 +788,23 @@ def read_lut_hdf(filename, dataset, axnames=None):
     return LUT(data, axes=axes, names=names, desc=dataset, attrs=attrs)
 
 
+def plot1d(lut):
+    '''
+    plot a 1-dimension LUT
+    '''
+    assert lut.ndim == 1, 'plot1d works only for 1-dim array'
+
+    from pylab import plot, xlabel, ylabel, grid
+    x = lut.axes[0]
+    y = lut.data
+    plot(x, y)
+    if lut.names[0] is not None:
+        xlabel(lut.names[0])
+    if lut.desc is not None:
+        ylabel(lut.desc)
+    grid()
+
+
 if __name__ == '__main__':
     import doctest
     doctest.testmod()
