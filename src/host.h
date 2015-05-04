@@ -109,13 +109,13 @@ void profilAlb( Tableaux* tab_H, Tableaux* tab_D );
 
 /* profilOce*/
 /* Read ocean extinction coefficient and single scattering albedo for ocean*/
-void profilOce( Tableaux* tab_H, Tableaux* tab_D);
+void profilOce( Tableaux* tab_H, Tableaux* tab_D,float *);
 
 /* profilAtm
 * Calcul du profil atmosphérique dans l'atmosphère en fonction de la couche
 * Mélange Molécule/Aérosol dans l'atmosphère en fonction de la couche
 */
-void profilAtm( Tableaux* tab_H, Tableaux* tab_D);
+void profilAtm( Tableaux* tab_H, Tableaux* tab_D,float *);
 
 
 
@@ -174,7 +174,8 @@ void calculTabFinal(double*, double*, double*, double*, unsigned long long, unsi
 */
 
 //void creerHDFResultats(double*, double*, double*, double*, double*, double*, double*, unsigned long long, Variables*, double);
-void creerHDFResultats(double*, double*, double*, double*, double*, double*, double*, double*, unsigned long long, Variables*, double,int,int,double*,double*,Tableaux);
+
+void creerHDFResultats(double*, double*, double*, double*, double*, double*, double*, double*, unsigned long long, Variables*, double,int,int,double*,double*,Tableaux,float*);
 
 
 

@@ -68,7 +68,7 @@ int main (int argc, char *argv[])
 	/** Initialisation des constantes du host (en partie recuperees dans le fichier Parametres.txt) **/
 	initConstantesHost(argc, argv);
 
-    NLAM=1;
+    NLAM=0;
 
     // read NATM and HATM in profileAtm
     // (if simulation includes atmosphere)
@@ -84,7 +84,17 @@ int main (int argc, char *argv[])
     // read NOCE  in profileOce
     // (if simulation includes ocean)
     if ((SIM == 0) || (SIM == 2) || (SIM == 3)) {
-        init_profileOCE(&NOCE,  &NLAM, PATHPROFILOCE);
+    	if (NLAM==0)
+    		init_profileOCE(&NOCE,  &NLAM, PATHPROFILOCE);
+    	else{
+    		int OLDNLAM=NLAM;
+    		init_profileOCE(&NOCE,  &NLAM, PATHPROFILOCE);
+    		if (OLDNLAM!=NLAM){
+    			printf( "ERREUR: Nombre de longueurs d'ondes différents\n");
+    			exit(1);
+    		}
+
+    		}
         NPHAOCE = count_lines(PATHDIFFOCE);
     } else {
         NOCE = 0;
@@ -119,7 +129,7 @@ int main (int argc, char *argv[])
 	/** Variables du main **/
 	
 	double tempsPrec = 0.; 	//temps ecoule de la simulation precedente
-    int /*ilam,*/ ip;
+    int ilam, ip;
     //unsigned int ilam, ip;
     char PATHDIFF[1024];
 	
@@ -210,6 +220,12 @@ int main (int argc, char *argv[])
     double *phaseoc; //Parametres de la fonction de phase ocean
     int MLSAOCE,MLSAAER;
 
+    float *lambda; //tableau de longueur d'onde
+    lambda=(float*)malloc(NLAM*sizeof(float));
+
+
+
+
 
 	double *tabTh;
     tabTh = (double*)malloc(NBTHETA*sizeof(double));
@@ -217,7 +233,6 @@ int main (int argc, char *argv[])
     tabPhi = (double*)malloc(NBPHI*sizeof(double));
 	double *tabTransDir;
     tabTransDir = (double*)malloc(NLAM*sizeof(double));
-
 
 
 	
@@ -274,8 +289,11 @@ int main (int argc, char *argv[])
 
 
         // Read oceanic profile
-        profilOce(&tab_H, &tab_D);
+
+        profilOce(&tab_H, &tab_D,lambda);
+
         for(ip=0; ip< NPHAOCE; ip++){
+
 	       // Calcul de foce, modèle de diffusion de l ocean 
            get_diff(PATHDIFF,  ip, PATHDIFFOCE);
            LSAOCE = count_lines(PATHDIFF);
@@ -323,18 +341,35 @@ int main (int argc, char *argv[])
     	}
 
 
+
     	phaseatm= (double*)malloc(NPHAAER*5*MLSAAER*sizeof(double));
-        profilAtm(&tab_H, &tab_D);
+    	if (lambda[0]==NULL){
+    		profilAtm(&tab_H, &tab_D,lambda);
+
+    	}
+    	else
+    		{
+
+    			float* lambdaold;
+    			lambdaold=(float*)malloc(NLAM*sizeof(float));
+    			memcpy( lambdaold, lambda, NLAM * sizeof(float) );
+    			profilAtm(&tab_H, &tab_D,lambda);
+    			for(ilam=0;ilam<NLAM;ilam++){
+
+    				if(lambdaold[ilam]!=lambda[ilam]){
+    					printf("Error les valeurs lambda sont différentes\n");
+    				}
+    			}
+    		free(lambdaold);
+    		}
+
 
 
         for(ip=0; ip< NPHAAER; ip++){
+
 	       // Calcul de faer, modèle de diffusion des aérosols
            get_diff(PATHDIFF,  ip, PATHDIFFAER);
            LSAAER = count_lines(PATHDIFF);
-           calculF(PATHDIFF, tab_H.faer, tab_D.faer,MLSAAER,LSAAER, NFAER, ip,phaseatm);
-        }
-
-
 
 	    /** Copy of Phase Matrix into device memory **/		
 	    cudaError_t erreur = cudaMemcpy(tab_D.faer, tab_H.faer, 5*NFAER*NPHAAER*sizeof(float), cudaMemcpyHostToDevice); 
@@ -343,6 +378,12 @@ int main (int argc, char *argv[])
 		  printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
 		  exit(1);
 	    }
+
+		calculF(PATHDIFF, tab_H.faer, tab_D.faer,MLSAAER,LSAAER, NFAER, ip,phaseatm);
+           // compute direct transmission
+           tabTransDir[ip] = exp(-tab_H.h[NATM+ip*(NATM+1)]/cos(THVDEG*PI/180.));
+        }
+
 
     }
 
@@ -637,7 +678,8 @@ cudaMemcpyDeviceToHost);
 
 	
 
-	creerHDFResultats(tabFinal, tabFinalDown0P, tabFinalDown0M, tabFinalUp0P, tabFinalUp0M, tabTh, tabPhi, tabTransDir, nbPhotonsTot, var_H, tempsPrec,MLSAOCE,MLSAAER,phaseatm,phaseoc,tab_H);
+
+	creerHDFResultats(tabFinal, tabFinalDown0P, tabFinalDown0M, tabFinalUp0P, tabFinalUp0M, tabTh, tabPhi, tabTransDir, nbPhotonsTot, var_H, tempsPrec,MLSAOCE,MLSAAER,phaseatm,phaseoc,tab_H,lambda);
 
 
 #ifdef _PERF
@@ -668,6 +710,8 @@ cudaMemcpyDeviceToHost);
     free(tabTransDir);
     free(tabPhi);
     free(tabTh);
+    free(lambda);
+
 
 		/* Code spécifique à une atmosphère sphérique */
 	cudaErreur = cudaFree(init_D);

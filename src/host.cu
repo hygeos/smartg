@@ -388,13 +388,16 @@ void init_profileOCE(int *NOCE, int *NLAM, char *PATHPROFILOCE) {
             continue;
         }
 
+
         c = sscanf(buffer, "%d\t%f\t", &i, &H);
         if (c != 2) break;
         if (read_first) *NOCE += 1;
     }
 
     fclose(fp);
-}
+	}
+
+
 
 void get_diff(char* chaineValeur, int ilam, char *PATHDIFFAER) {
     //
@@ -1566,7 +1569,7 @@ void profilAlb( Tableaux* tab_H, Tableaux* tab_D ){
 
 
 /* Read ocean extinction coefficient and single scattering albedo for ocean*/
-void profilOce( Tableaux* tab_H, Tableaux* tab_D ){
+void profilOce( Tableaux* tab_H, Tableaux* tab_D,float *lambda ){
     int ilam;
     int nscanf;
     int icouche=0;
@@ -1591,8 +1594,10 @@ void profilOce( Tableaux* tab_H, Tableaux* tab_D ){
     } else {
         for( ilam=0; ilam<NLAM; ilam++){
 
+
             // skip comment line
             fgets(buffer,4096,profil);
+			lambda[ilam]=atof(strstr (buffer, "LAM=")+7);
             for( icouche=0; icouche<NOCE+1; icouche++ ){
                 fgets(buffer,4096,profil);
                 nscanf = sscanf(buffer, "%d\t%f\t%f\t%f\t%d\n", &garbage, tab_H->depth+icouche, tab_H->ho+icouche+ilam*(NOCE+1), tab_H->sso+icouche+ilam*(NOCE+1), tab_H->ipo+icouche+ilam*(NOCE+1));
@@ -1636,7 +1641,7 @@ void profilOce( Tableaux* tab_H, Tableaux* tab_D ){
 * Calcul du profil atmosphérique dans l'atmosphère en fonction de la couche
 * Mélange Molécule/Aérosol dans l'atmosphère en fonction de la couche
 */
-void profilAtm( Tableaux* tab_H, Tableaux* tab_D){
+void profilAtm( Tableaux* tab_H, Tableaux* tab_D,float* lambda){
 
 	/** Déclaration des variables **/
 
@@ -1682,8 +1687,10 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D){
 
 
         for( ilam=0; ilam<NLAM; ilam++){
+
             // skip comment line
             fgets(buffer,4096,profil);
+			lambda[ilam]=atof(strstr (buffer, "LAM=")+7);
             for( icouche=0; icouche<NATM+1; icouche++ ){
                 fgets(buffer, 4096, profil);
                 nscanf = sscanf(buffer, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%d\n",
@@ -2220,7 +2227,7 @@ void write_sds(int sd, const char* name, int ndims, int *dims, int type, char *d
 
 void creerHDFResultats(double* tabFinal,double* tabFinalDown0P, double* tabFinalDown0M,double* tabFinalUp0P,double* tabFinalUp0M,
                        double* tabTh, double* tabPhi, double* tabTransDir, unsigned long long nbPhotonsTot,
-                       Variables* var, double tempsPrec,int mlsaoce,int mlsaaer,double *phaseAtm,double *phaseOc,Tableaux tab_H)
+                       Variables* var, double tempsPrec,int mlsaoce,int mlsaaer,double *phaseAtm,double *phaseOc,Tableaux tab_H,float *lambda)
 
 
 {
@@ -2396,7 +2403,9 @@ void creerHDFResultats(double* tabFinal,double* tabFinalDown0P, double* tabFinal
 		}
 
 		write_sds(sdFichier, "profileAtm", ndims, dims, DFNT_FLOAT32,NULL, (VOIDP)(profAtm));
+
 		free(profAtm);
+
 
 
     }
@@ -2428,7 +2437,14 @@ void creerHDFResultats(double* tabFinal,double* tabFinalDown0P, double* tabFinal
 
 
 		free(profOc);
+
     }
+
+    write_sds(sdFichier, "lambda", 1, dims, DFNT_FLOAT32,NULL, (VOIDP)lambda);
+
+
+
+
 
 
 
