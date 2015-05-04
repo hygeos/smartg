@@ -2,7 +2,7 @@
 # encoding: utf-8
 
 
-from numpy import sin, cos, pi
+from numpy import sin, cos, pi, allclose
 from os.path import exists, dirname
 from os import makedirs, remove
 
@@ -26,6 +26,14 @@ def fournierForand(ang, n, mu):
 
     return res
 
+def fournierForandB(n, mu):
+    '''
+    backscatter fraction of the Fournier-Forand phase function
+    '''
+    d90 = 4./(3.*(n-1.)**2)*(sin(pi/4.)**2)
+    v = (3.-mu)/2.
+    B   = 1 - (1 - d90**(v+1) - 0.5*(1-d90**v))/((1-d90)*d90**v)
+    return B
 
 def henyeyGreenstein(angle, g):
     '''
@@ -51,12 +59,14 @@ class PhaseFunction(object):
         degrees: angle is in degrees instead of radians
 
     '''
-    def __init__(self, ang, phase, header=[], degrees=False):
+    def __init__(self, ang, phase, header=[], degrees=False, coef_trunc=1.):
         self.ang = ang
+        self.coef_trunc = 1.
         self.phase = phase
         self.header = header
         self.N = ang.shape[0]
         self.degrees = degrees
+        self.coef_trunc = coef_trunc
         assert phase.shape == (self.N, 4)
 
     def write(self, filename, overwrite=False):
@@ -100,6 +110,49 @@ class PhaseFunction(object):
                     ))
         fo.close()
 
+    def check_compatible(self, other):
+        assert self.N == other.N
+        assert self.degrees == other.degrees
+        assert allclose(self.ang, other.ang)
+
+    def __add__(self, other):
+        if isinstance(other, PhaseFunction):
+            self.check_compatible(other)
+            return PhaseFunction(self.ang, self.phase+other.phase,
+                    header=self.header+other.header, degrees=self.degrees,
+                    coef_trunc=None)
+        else:
+            raise Exception('Error')
+
+    def __rmul__(self, other):
+        if isinstance(other, float):
+            return PhaseFunction(self.ang, self.phase*other,
+                    header=self.header, degrees=self.degrees,
+                    coef_trunc=None)
+        elif isinstance(other, PhaseFunction):
+            self.check_compatible(other)
+            return PhaseFunction(self.ang, self.phase*other.phase,
+                    header=self.header+other.header, degrees=self.degrees,
+                    coef_trunc=None)
+        else:
+            raise Exception('Error')
+
+    def __div__(self, other):
+        if isinstance(other, float):
+            return PhaseFunction(self.ang, self.phase/other,
+                    header=self.header, degrees=self.degrees,
+                    coef_trunc=None)
+        else:
+            raise Exception('Error')
+
+    def plot(self):
+        from pylab import semilogy, grid
+        ang = self.ang
+        if self.degrees:
+            semilogy(ang, self.phase[:,0]+self.phase[:,1])
+        else:
+            semilogy(ang*180.3/pi, self.phase[:,0]+self.phase[:,1])
+        grid()
 
 def test():
     from pylab import show, semilogy, grid
