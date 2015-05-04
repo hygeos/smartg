@@ -21,6 +21,9 @@ class IOP(object):
         if isinstance(wl, (float, int)):
             wl = [wl]
 
+        if (self.last is not None) and (self.last[0] == wl):
+            return (self.last[1], self.last[2])
+
         iops, phases = self.calc_bands(wl)
 
         # write the profiles
@@ -40,6 +43,8 @@ class IOP(object):
             p.write(file_phase)
             fp.write(file_phase+'\n')
         fp.close()
+
+        self.last = (wl, profil_oce, file_list_pf_ocean)
 
         return profil_oce, file_list_pf_ocean
 

@@ -1107,6 +1107,7 @@ class Profile(object):
         self.atm_filename = atm_filename
         self.pfwav = pfwav
         self.pfgrid = pfgrid
+        self.last = None   # last parameters to avoid recalculation when possible
 
         crs_O3_filename = join(dir_libradtran_crs, 'crs_O3_UBremen_cf.dat')
         crs_NO2_filename = join(dir_libradtran_crs, 'crs_NO2_UBremen_cf.dat')
@@ -1206,6 +1207,9 @@ class Profile(object):
         if isinstance(wl, (float, int)):
             wl = [wl]
 
+        if (self.last is not None) and (self.last[0] == wl):
+            return (self.last[1], self.last[2])
+
         profiles, phases = self.calc_bands(wl)
 
         header = "# I ALT   hmol(I) haer(I)  H(I)  "
@@ -1230,6 +1234,8 @@ class Profile(object):
             phase.write(file_phase)
             fp.write(file_phase+'\n')
         fp.close()
+
+        self.last = (wl, file_profiles, file_list_phases)
 
         return file_profiles, file_list_phases
 

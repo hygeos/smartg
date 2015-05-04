@@ -40,6 +40,8 @@ class IOP_SPM(IOP):
         self.alb = ALB
         self.pfwav=pfwav
         self.verbose = verbose
+        self.last = None   # last parameters (wl, profil, phases) , to avoid
+                           # reprocessing wavelengths that have been calxculated already
 
     def calc(self, w, skip_phase=False):
         '''
