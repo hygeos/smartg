@@ -1330,7 +1330,7 @@ class Profile(object):
 
         '''
         assert not isinstance(w, REPTRAN_IBAND), 'please review profil.calc for use with REPTRAN objects'
-        assert isinstance(w, (int, float))
+        assert isinstance(w, (int, float, np.float32))
 
         #
         # Initialization
