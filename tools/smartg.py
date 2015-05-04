@@ -213,35 +213,11 @@ class Smartg(object):
             # use default water values
             Ddef.update(PATHPROFILOCE='None', PATHDIFFOCE='None')
         else:
-            # open list of phase functions
-            file_list_pf_ocean = tempfile.mktemp(dir=dir_list_pf_oce, prefix='list_pf_ocean_')
             ensure_dir_exists(dir_list_pf_oce)
-            fp = open(file_list_pf_ocean, 'w')
-
-            # open profile file
-            profil_oce = tempfile.mktemp(dir=dir_profil_oce, prefix='profil_oce_')
             ensure_dir_exists(dir_profil_oce)
-            f = open(profil_oce, 'w')
-
-            if isinstance(wl, (float, int)):
-                wl_list = [wl]
-            else:
-                wl_list = wl
-
-            for i, w in enumerate(wl_list):
-                atot, btot, phase = water.calc(w)
-                file_phase = tempfile.mktemp(dir=dir_phase_water, prefix='pf_ocean_')
-
-                phase.write(file_phase)
-
-                fp.write(file_phase + '\n')
-
-                f.write('# I   DEPTH    H(I)    SSA(I)  IPHA\n')
-                f.write('0 0. 0. 1. 0\n')
-                f.write('1 1000. -1.e10 {} {}\n'.format(btot/(atot+btot), i))
-
-            fp.close()
-            f.close()
+            ensure_dir_exists(dir_phase_water)
+            profil_oce, file_list_pf_ocean = water.write(wl, dir_profile=dir_profil_oce,
+                    dir_phases=dir_phase_water, dir_list_phases=dir_list_pf_oce)
 
             D.update(PATHPROFILOCE=profil_oce, PATHDIFFOCE=file_list_pf_ocean)
 
@@ -662,7 +638,7 @@ def test_atm_surf_ocean():
 def test_surf_ocean():
     return Smartg('SMART-G-PP', 490., THVDEG=30., NBPHOTONS=2e6,
             surf=RoughSurface(),
-            water=IOP_SPM(SPM=1.))
+            water=IOP_MM(1., pfwav=[400.]))
 
 
 def test_ocean():
@@ -727,7 +703,7 @@ def test_multispectral():
     Smartg('SMART-G-PP', wl = np.linspace(400, 600, 10.),
             atm=pro,
             surf=RoughSurface(),
-            water=IOP_SPM(1.),
+            water=IOP_SPM(1., pfwav=[500.]),
             overwrite=True)
 
 

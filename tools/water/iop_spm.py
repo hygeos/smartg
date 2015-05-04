@@ -10,11 +10,12 @@ from numpy import sin, cos, pi, exp
 from numpy import arange, zeros, log10
 from seawater_scattering_Zhang2009 import swscat
 from water_absorption import a_w
-from phase_functions import fournierForand, PhaseFunction
+from phase_functions import fournierForand, PhaseFunction, fournierForandB
+from iop import IOP
 
 
 
-class IOP_SPM(object):
+class IOP_SPM(IOP):
     '''
     Initialize the IOP model (SPM dominated waters)
 
@@ -26,9 +27,10 @@ class IOP_SPM(object):
         alpha: parameter for CDOM absorption
         nbp: refractive index of particles (relative to water)
         ALB: albedo of the sea floor
+        pfwav: list of arrays at which the phase functions are calculated
     '''
     def __init__(self, SPM, NSCOCE=72001, ang_trunc=5., gamma=0.5,
-            alpha=1., nbp=1.15, ALB=0.):
+            alpha=1., nbp=1.15, ALB=0., pfwav=None, verbose=False):
         self.__SPM = SPM
         self.__NSCOCE = NSCOCE
         self.__ang_trunc = ang_trunc
@@ -36,10 +38,12 @@ class IOP_SPM(object):
         self.__alpha = alpha
         self.__nbp = nbp
         self.alb = ALB
+        self.pfwav=pfwav
+        self.verbose = verbose
 
-    def calc(self, w):
+    def calc(self, w, skip_phase=False):
         '''
-        Calculate atot, btot and phase function
+        Calculate atot, btot and phase function (monochromatic)
 
         Arguments:
             w: wavelength in nm
@@ -69,69 +73,59 @@ class IOP_SPM(object):
         # pure sea water absorption
         aw = a_w(w)
 
-        #
-        # phase function
-        #
-        ang = pi * arange(NSCOCE, dtype='float64')/(NSCOCE-1)    # angle in radians
-
-        # pure water
-        pf0 = zeros((NSCOCE, 4), dtype='float64') # pure water phase function
-        pf0[:,0] = 0.75
-        pf0[:,1] = 0.75 * cos(ang)**2
-        pf0[:,2] = 0.75 * cos(ang)
-        pf0[:,3] = 0.
-
-        # particles (troncature)
-        itronc = int(NSCOCE * ang_trunc/180.)
-        pf1 = zeros((NSCOCE, 4), dtype='float64') # pure water phase function
-        # assuming that the slope of Junge power law mu and slope of spectral dependence of scattering is mu=3+gamma
-        pf1[itronc:,0] = 0.5*fournierForand(ang[itronc:],nbp,3.+gamma)
-        pf1[:itronc,0] = 0.5*fournierForand(ang[itronc ],nbp,3.+gamma) 
-        pf1[:,1] = pf1[:,0]
-        pf1[:,2] = 0.
-        pf1[:,3] = 0.
-
-        # normalization after truncation
-        integ_ff = 0.
-        integ_ff_back = 0.
-        for iang in xrange(1, NSCOCE):
-            dtheta = ang[iang] - ang[iang-1]
-            pm1 = pf1[iang-1,0] + pf1[iang-1,1]
-            pm2 = pf1[iang,0] + pf1[iang,1]
-            sin1 = sin(ang[iang-1])
-            sin2 = sin(ang[iang])
-            integ_ff += dtheta*((sin1*pm1+sin2*pm2)/3. + (sin1*pm2+sin2*pm1)/6.)
-            if ang[iang]>pi/2. :
-                integ_ff_back += dtheta*((sin1*pm1+sin2*pm2)/3. + (sin1*pm2+sin2*pm1)/6.)
-        rat1 = integ_ff/2.
-        pf1 *= 1/rat1
-
-        # Backscattering ratio of particles
-        Bp   = integ_ff_back/integ_ff
+        # Backscattering ratio of particles (non-troncated)
+        Bp = fournierForandB(nbp, 3.+gamma)
         # Scattering coefficient of particles
         bp   = bbp/Bp
+
 
         #
         # total absorption
         atot = aCDM + aw
 
-        # total scattering
-        btot = bw + bp
+        if skip_phase:
+            P0, P1 = None, None
+        else:
+            #
+            # phase function
+            #
+            ang = pi * arange(NSCOCE, dtype='float64')/(NSCOCE-1)    # angle in radians
 
-        # total scattering function
-        pf = (bw*pf0 + bp*pf1)/btot
+            # pure water
+            pf0 = zeros((NSCOCE, 4), dtype='float64') # pure water phase function
+            pf0[:,0] = 0.75
+            pf0[:,1] = 0.75 * cos(ang)**2
+            pf0[:,2] = 0.75 * cos(ang)
+            pf0[:,3] = 0.
+            P0 = PhaseFunction(ang, pf0, degrees=False)
 
-        # create phase function object
-        header = [
-                '# SPM concentration: {}'.format(SPM),
-                '# wavelength: {}'.format(w),
-                '# total absorption coefficient: {}'.format(atot),
-                '# total scattering coefficient: {}'.format(btot),
-                '# truncating at {} deg'.format(ang_trunc),
-                ]
-        phase = PhaseFunction(ang, pf, header)
+            # particles (troncature)
+            itronc = int(NSCOCE * ang_trunc/180.)
+            pf1 = zeros((NSCOCE, 4), dtype='float64') # pure water phase function
+            # assuming that the slope of Junge power law mu and slope of spectral dependence of scattering is mu=3+gamma
+            pf1[itronc:,0] = 0.5*fournierForand(ang[itronc:],nbp,3.+gamma)
+            pf1[:itronc,0] = 0.5*fournierForand(ang[itronc ],nbp,3.+gamma) 
+            pf1[:,1] = pf1[:,0]
+            pf1[:,2] = 0.
+            pf1[:,3] = 0.
 
-        return atot, btot, phase
+            # normalization after truncation
+            integ_ff = 0.
+            integ_ff_back = 0.
+            for iang in xrange(1, NSCOCE):
+                dtheta = ang[iang] - ang[iang-1]
+                pm1 = pf1[iang-1,0] + pf1[iang-1,1]
+                pm2 = pf1[iang,0] + pf1[iang,1]
+                sin1 = sin(ang[iang-1])
+                sin2 = sin(ang[iang])
+                integ_ff += dtheta*((sin1*pm1+sin2*pm2)/3. + (sin1*pm2+sin2*pm1)/6.)
+                if ang[iang]>pi/2. :
+                    integ_ff_back += dtheta*((sin1*pm1+sin2*pm2)/3. + (sin1*pm2+sin2*pm1)/6.)
+            rat1 = integ_ff/2.
+            pf1 *= 1/rat1
+            P1 = PhaseFunction(ang, pf1, degrees=False, coef_trunc=rat1)
+
+        return atot, [(bw, P0), (bp, P1)]
 
     def __str__(self):
         return 'SPM={}'.format(self.__SPM)

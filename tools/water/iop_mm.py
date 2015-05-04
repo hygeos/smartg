@@ -8,8 +8,10 @@ function using the wavelength and the chlorophyll concentration
 '''
 
 from phase_functions import fournierForand, PhaseFunction
+from iop import IOP
 from numpy import sin, cos, pi, array, exp
 from numpy import arange, zeros, log10, sqrt
+import numpy as np
 
 
 wl_1 = array([350., 355., 360., 365., 370., 375., 380., 385., 390., 395.,
@@ -70,7 +72,7 @@ Kw = array([0.02710, 0.02380, 0.02160, 0.01880, 0.01770, 0.01595, 0.01510, 0.013
 
 
 
-class IOP_MM(object):
+class IOP_MM(IOP):
     '''
     IOP model after Morel and Maritorena (2001)
 
@@ -79,26 +81,29 @@ class IOP_MM(object):
         NANG: number if angles for the phase function
         ang_trunc: truncation angle in degrees
         ALB: albedo of the sea floor
+        pfwav: list of arrays at which the phase functions are calculated
     '''
-    def __init__(self, chl, ang_trunc=5., NANG=72001, ALB=0.):
+    def __init__(self, chl, ang_trunc=5., NANG=72001, ALB=0., pfwav=None, verbose=False):
         self.chl = chl
         self.trunc = ang_trunc
         self.NANG = NANG
         self.alb = ALB
+        self.pfwav=pfwav
+        self.verbose = verbose
 
-    def calc(self, wl):
+
+    def calc(self, wl, skip_phase=False):
         '''
-        Calculate atot, btot and phase function
+        Calculate atot, btot and phase function (monochromatic)
 
         Arguments:
             wl: wavelength in nm
 
-        Returns (atot, btot, phase) where:
+        Returns (atot, [(b0, P0), (b1, P1), ...]) where:
             * atot is the total absorption coefficient
-            * btot is the total scattering coefficient
-            * phase is the PhaseFunction object
+            * bi is the scattering coefficient (without truncation) of the ith component
+            * Pi is the phase function of the ith component
         '''
-
         chl = self.chl
         NANG = self.NANG
         ang_trunc = self.trunc
@@ -133,42 +138,8 @@ class IOP_MM(object):
             v = 0.5*(log10(chl) - 0.3)
         else:
             v = 0
-        bb1 = 0.002 + 0.01*( 0.5-0.25*log10(chl))*((wl/550)**v)
+        bb1 = 0.002 + 0.01*( 0.5-0.25*log10(chl))*((wl/550.)**v)
         r1 = (bb1 - 0.002)/0.028
-
-        #
-        # phase function
-        #
-        ang = pi * arange(NANG, dtype='float64')/(NANG-1)    # angle in radians
-
-        # pure water
-        pf0 = zeros((NANG, 4), dtype='float64') # pure water phase function
-        pf0[:,0] = 0.75
-        pf0[:,1] = 0.75 * cos(ang)**2
-        pf0[:,2] = 0.75 * cos(ang)
-        pf0[:,3] = 0.
-
-        # particles (troncature)
-        itronc = int(NANG * ang_trunc/180.)
-        pf1 = zeros((NANG, 4), dtype='float64') # pure water phase function
-        pf1[itronc:,0] = 0.5*(r1*fournierForand(ang[itronc:],1.117,3.695) +(1-r1)*fournierForand(ang[itronc:],1.05,3.259))
-        pf1[:itronc,0] = 0.5*(r1*fournierForand(ang[itronc ],1.117,3.695) +(1-r1)*fournierForand(ang[itronc ],1.05,3.259))
-        pf1[:,1] = pf1[:,0]
-        pf1[:,2] = 0.
-        pf1[:,3] = 0.
-
-        # normalization after truncation
-        integ_ff = 0
-        for iang in xrange(1, NANG):
-            dtheta = ang[iang] - ang[iang-1]
-            pm1 = pf1[iang-1,0] + pf1[iang-1,1]
-            pm2 = pf1[iang,0] + pf1[iang,1]
-            sin1 = sin(ang[iang-1])
-            sin2 = sin(ang[iang])
-            integ_ff += dtheta*((sin1*pm1+sin2*pm2)/3. + (sin1*pm2+sin2*pm1)/6.)
-        rat1 = integ_ff/2.
-        pf1 *= 1/rat1
-        b1 *= rat1
 
         #
         # total coefficients
@@ -181,27 +152,51 @@ class IOP_MM(object):
         else:
             # 2) absorption deduced from Morel's total attenuation and Kirk's formula
             Kd = Kw[i1] + Chi[i1]*(chl**ee[i1])
-            delta = (0.256*(b0+b1/rat1))*(0.256*(b0+b1/rat1)) + 4*Kd*Kd
-            atot = 0.5*(-0.256*(b0+b1/rat1) + sqrt(delta))
-
-        # total scattering function
-        pf = (b0*pf0 + b1*pf1)/btot
-
+            delta = (0.256*btot)**2 + 4*Kd*Kd
+            atot = 0.5*(-0.256*btot + sqrt(delta))
 
         #
-        # display results
+        # phase function
         #
-        header = [
-                '# chlorophyll concentration: {}'.format(chl),
-                '# wavelength: {}'.format(wl),
-                '# total absorption coefficient: {}'.format(atot),
-                '# total scattering coefficient: {}'.format(btot),
-                '# truncating at {} deg'.format(ang_trunc),
-                ]
+        if skip_phase:
+            P0, P1 = None, None
+        else:
+            # TODO: truncation can be made faster and shared
 
-        phase = PhaseFunction(ang, pf, header)
+            ang = pi * arange(NANG, dtype='float64')/(NANG-1)    # angle in radians
 
-        return atot, btot, phase
+            # pure water
+            pf0 = zeros((NANG, 4), dtype='float64') # pure water phase function
+            pf0[:,0] = 0.75
+            pf0[:,1] = 0.75 * cos(ang)**2
+            pf0[:,2] = 0.75 * cos(ang)
+            pf0[:,3] = 0.
+            P0 = PhaseFunction(ang, pf0, degrees=False)
+
+            # particles (troncature)
+            itronc = int(NANG * ang_trunc/180.)
+            pf1 = zeros((NANG, 4), dtype='float64') # pure water phase function
+            pf1[itronc:,0] = 0.5*(r1*fournierForand(ang[itronc:],1.117,3.695) +(1-r1)*fournierForand(ang[itronc:],1.05,3.259))
+            pf1[:itronc,0] = 0.5*(r1*fournierForand(ang[itronc ],1.117,3.695) +(1-r1)*fournierForand(ang[itronc ],1.05,3.259))
+            pf1[:,1] = pf1[:,0]
+            pf1[:,2] = 0.
+            pf1[:,3] = 0.
+
+            # normalization after truncation
+            integ_ff = 0
+            for iang in xrange(1, NANG):
+                dtheta = ang[iang] - ang[iang-1]
+                pm1 = pf1[iang-1,0] + pf1[iang-1,1]
+                pm2 = pf1[iang,0] + pf1[iang,1]
+                sin1 = sin(ang[iang-1])
+                sin2 = sin(ang[iang])
+                integ_ff += dtheta*((sin1*pm1+sin2*pm2)/3. + (sin1*pm2+sin2*pm1)/6.)
+            rat1 = integ_ff/2.
+            pf1 *= 1/rat1
+
+            P1 = PhaseFunction(ang, pf1, degrees=False, coef_trunc=rat1)
+
+        return atot, [(b0, P0), (b1, P1)]
 
     def __str__(self):
         return 'CHL={}'.format(self.chl)
@@ -210,5 +205,6 @@ class IOP_MM(object):
 
 if __name__ == '__main__':
 
-    mod = IOP_MM(0.1)
-    print mod.calc(500.)
+    mod = IOP_MM(0.1, pfwav=[400, 500, 600.])
+    # print mod.calc(500.)
+    print mod.calc_bands(np.linspace(412, 650, 10))

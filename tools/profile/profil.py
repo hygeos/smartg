@@ -1258,7 +1258,7 @@ class Profile(object):
         # indices of the phase matrices for each layer and each band of the main profile
         indices = np.zeros((len(self.z), len(wl)), dtype='i')
 
-        # calculate the indices of pfwav in wl
+        # calculate the indices of wl in pfwav
         ind_wl = []
         for w in wl:
             ind_wl.append(np.abs(w - np.array(pfwav)).argmin())
