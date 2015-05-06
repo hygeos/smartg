@@ -1315,6 +1315,7 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 	float cot;			// Cosinus de l'angle de réfraction du photon
 	float ncot, ncTh;	// ncot = nind*cot, ncoi = nind*cTh
 	float tpar, tper;	//
+    float geo_trans_factor;
 	
 	
 	/** Séparation du code pour atmosphère sphérique ou parallèle **/
@@ -1499,6 +1500,7 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 	
 	if( (ReflTot==1) || (SURd==1) || ( (SURd==3)&&(RAND<rat) ) ){
 		//Nouveau parametre pour le photon apres reflexion
+        // Zhao et al 2014, JQSRT
 
 		// Le photon reste dans son milieu précédent
 		if(ph->vz<0){
@@ -1519,6 +1521,7 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 		}
 		
 		
+        // Zhao 1/rat * M with M Muller Reflection Matrix, here R = M*rat
 		ph->stokes1 *= rper2;
 		ph->stokes2 *= rpar2;
 		ph->stokes3 *= -rpar*rper;
@@ -1565,13 +1568,16 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 			}
 		}
 		
+        geo_trans_factor = nind * cot/cTh;
 		tpar = __fdividef( 2*cTh,ncTh+ cot);
 		tper = __fdividef( 2*cTh,cTh+ ncot);
 		
-		ph->stokes2 *= tpar*tpar;
-		ph->stokes1 *= tper*tper;
-		ph->stokes3 *= -tpar*tper;
-		
+		//ph->stokes2 *= tpar*tpar;
+		//ph->stokes1 *= tper*tper;
+		//ph->stokes3 *= -tpar*tper;
+		ph->stokes2 *= tpar*tpar*geo_trans_factor;
+		ph->stokes1 *= tper*tper*geo_trans_factor;
+		ph->stokes3 *= -tpar*tper*geo_trans_factor;
 		
 		alpha  = __fdividef(cTh,nind) - cot;
 		ph->vx = __fdividef(ph->vx,nind) + alpha*nx;
