@@ -251,7 +251,8 @@ void initConstantesHost(int argc, char** argv)
 	OUTPUT_LAYERS = atoi(s);
 	
 	chercheConstante(parametres, "PATHRESULTATSHDF", PATHRESULTATSHDF);
-    
+
+
 	chercheConstante( parametres, "PATHDIFFAER", PATHDIFFAER );
 	
 	chercheConstante( parametres, "PATHPROFILATM", PATHPROFILATM );
@@ -688,26 +689,7 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
         #endif
 	
 	// Tableau du poids des photons ressortis
-	tab_H->tabPhotons = (float*)malloc(4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_H->tabPhotons)));
-	if( tab_H->tabPhotons == NULL ){
-		printf("ERREUR: Problème de malloc de tab_H->tabPhotons dans initTableaux\n");
-		exit(1);
-	}
-	memset(tab_H->tabPhotons,0,4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_H->tabPhotons)) );
-	
-	if( cudaMalloc(&(tab_D->tabPhotons), 4 * NBTHETA * NBPHI * NLAM * sizeof(*(tab_D->tabPhotons))) != cudaSuccess){
-		printf("ERREUR: Problème de cudaMalloc de tab_D->tabPhotons dans initTableaux\n");
-		exit(1);	
-	}
 
-	cudaErreur = cudaMemset(tab_D->tabPhotons, 0, 4*NBTHETA * NBPHI * NLAM *  sizeof(*(tab_D->tabPhotons)));
-	if( cudaErreur != cudaSuccess ){
-	printf("#--------------------#\n");
-	printf("# ERREUR: Problème de cudaMemset tab_D.tabPhotons dans le initTableaux\n");
-	printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-	printf("#--------------------#\n");
-	exit(1);
-	}
 	
 	// Tableau du nombre des photons injectes par interval NLAM
 	tab_H->nbPhotonsInter = (unsigned long long*)malloc(NLAM * sizeof(*(tab_H->nbPhotonsInter)));
@@ -733,97 +715,36 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 
 
 	// Weight Table of the descending  photons above the surface
-	tab_H->tabPhotonsDown0P = (float*)malloc(4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_H->tabPhotonsDown0P)));
-	if( tab_H->tabPhotonsDown0P == NULL ){
-		printf("ERREUR: Problème de malloc de tab_H->tabPhotonsDown dans initTableaux\n");
-		exit(1);
-	}
-	memset(tab_H->tabPhotonsDown0P,0,4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_H->tabPhotonsDown0P)) );
-	
-	if( cudaMalloc(&(tab_D->tabPhotonsDown0P), 4 * NBTHETA * NBPHI * NLAM * sizeof(*(tab_D->tabPhotonsDown0P))) != cudaSuccess){
-
-		printf("ERREUR: Problème de cudaMalloc de tab_D->tabPhotonsDown dans initTableaux\n");
-		exit(1);	
-	}
-
-	cudaErreur = cudaMemset(tab_D->tabPhotonsDown0P, 0, 4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_D->tabPhotonsDown0P)));
-	if( cudaErreur != cudaSuccess ){
-	printf("#--------------------#\n");
-	printf("# ERREUR: Problème de cudaMemset tab_D.tabPhotonsDown0P dans le initTableaux\n");
-	printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-	printf("#--------------------#\n");
-	exit(1);
-	}
 	
 
-	// Weight Table of the descending  photons below the surface
-	tab_H->tabPhotonsDown0M = (float*)malloc(4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_H->tabPhotonsDown0M)));
-	if( tab_H->tabPhotonsDown0M == NULL ){
-		printf("ERREUR: Problème de malloc de tab_H->tabPhotonsDown0M dans initTableaux\n");
-		exit(1);
-	}
-	memset(tab_H->tabPhotonsDown0M,0,4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_H->tabPhotonsDown0M)) );
+	//fusion des tableaux
 
-	if( cudaMalloc(&(tab_D->tabPhotonsDown0M), 4 * NBTHETA * NBPHI * NLAM * sizeof(*(tab_D->tabPhotonsDown0M))) != cudaSuccess){
-		printf("ERREUR: Problème de cudaMalloc de tab_D->tabPhotonsDown0M dans initTableaux\n");
-		exit(1);
-	}
+		// Tableau du poids des photons ressortis
+			tab_H->tabPhotonsEvents = (float*)malloc(NEVENT*4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_H->tabPhotonsEvents)));
+			if( tab_H->tabPhotonsEvents == NULL ){
+				printf("ERREUR: Problème de malloc de tab_H->tabPhotonEvent dans initTableaux\n");
+				exit(1);
+			}
+			memset(tab_H->tabPhotonsEvents,0,NEVENT*4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_H->tabPhotonsEvents)) );
 
-	cudaErreur = cudaMemset(tab_D->tabPhotonsDown0M, 0, 4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_D->tabPhotonsDown0M)));
-	if( cudaErreur != cudaSuccess ){
-	printf("#--------------------#\n");
-	printf("# ERREUR: Problème de cudaMemset tab_D.tabPhotonsDown0M dans le initTableaux\n");
-	printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-	printf("#--------------------#\n");
-	exit(1);
-	}
+			if( cudaMalloc(&(tab_D->tabPhotonsEvents), NEVENT*4 * NBTHETA * NBPHI * NLAM * sizeof(*(tab_D->tabPhotonsEvents))) != cudaSuccess){
+				printf("ERREUR: Problème de cudaMalloc de tab_D->tabPhotonsEvents dans initTableaux\n");
+				exit(1);
+			}
 
+			cudaErreur = cudaMemset(tab_D->tabPhotonsEvents, 0, NEVENT*4*NBTHETA * NBPHI * NLAM *  sizeof(*(tab_D->tabPhotonsEvents)));
+			if( cudaErreur != cudaSuccess ){
+			printf("#--------------------#\n");
+			printf("# ERREUR: Problème de cudaMemset tab_D.tabPhotonsEvents dans le initTableaux\n");
+			printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+			printf("#--------------------#\n");
+			exit(1);
+			}
 
-	// Weight Table of the ascending  photons above the surface
-	tab_H->tabPhotonsUp0P = (float*)malloc(4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_H->tabPhotonsUp0P)));
-	if( tab_H->tabPhotonsUp0P == NULL ){
-		printf("ERREUR: Problème de malloc de tab_H->tabPhotonsUp0P dans initTableaux\n");
-		exit(1);
-	}
-	memset(tab_H->tabPhotonsUp0P,0,4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_H->tabPhotonsUp0P)) );
-
-	if( cudaMalloc(&(tab_D->tabPhotonsUp0P), 4 * NBTHETA * NBPHI * NLAM * sizeof(*(tab_D->tabPhotonsUp0P))) != cudaSuccess){
-		printf("ERREUR: Problème de cudaMalloc de tab_D->tabPhotonsUp0P dans initTableaux\n");
-		exit(1);
-	}
-
-	cudaErreur = cudaMemset(tab_D->tabPhotonsUp0P, 0, 4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_D->tabPhotonsUp0P)));
-	if( cudaErreur != cudaSuccess ){
-	printf("#--------------------#\n");
-	printf("# ERREUR: Problème de cudaMemset tab_D.tabPhotonsUp0P dans le initTableaux\n");
-	printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-	printf("#--------------------#\n");
-	exit(1);
-	}
+		//fusion des tableaux
 
 
-	// Weight Table of the ascending  photons below the surface
-	tab_H->tabPhotonsUp0M = (float*)malloc(4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_H->tabPhotonsUp0M)));
-	if( tab_H->tabPhotonsUp0M == NULL ){
-		printf("ERREUR: Problème de malloc de tab_H->tabPhotonsUp0M dans initTableaux\n");
-		exit(1);
-	}
-	memset(tab_H->tabPhotonsUp0M,0,4*NBTHETA * NBPHI * sizeof(*(tab_H->tabPhotonsUp0M)) );
 
-	if( cudaMalloc(&(tab_D->tabPhotonsUp0M), 4 * NBTHETA * NBPHI * NLAM * sizeof(*(tab_D->tabPhotonsUp0M))) != cudaSuccess){
-		printf("ERREUR: Problème de cudaMalloc de tab_D->tabPhotonsUp0M dans initTableaux\n");
-		exit(1);
-	}
-
-	cudaErreur = cudaMemset(tab_D->tabPhotonsUp0M, 0, 4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_D->tabPhotonsUp0M)));
-	if( cudaErreur != cudaSuccess ){
-	printf("#--------------------#\n");
-	printf("# ERREUR: Problème de cudaMemset tab_D.tabPhotonsUp0M dans le initTableaux\n");
-	printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-	printf("#--------------------#\n");
-	exit(1);
-	}
-	
 
 	/** Modèle de diffusion **/
 	// Modèle de diffusion des aérosols
@@ -1143,15 +1064,8 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	#endif
 
 	// Liberation du tableau du poids des photons
-	erreur = cudaFree(tab_D->tabPhotons);
-	if( erreur != cudaSuccess ){
-		printf( "ERREUR: Problème de cudaFree de tab_D->tabPhotons dans freeTableaux\n");
-		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-		exit(1);
-	}
-	// 	cudaFreeHost(tab_H->tabPhotons);
-	free(tab_H->tabPhotons);
 	
+
 	erreur = cudaFree(tab_D->nbPhotonsInter);
 	if( erreur != cudaSuccess ){
 		printf( "ERREUR: Problème de cudaFree de tab_D->nbPhotonsInter dans freeTableaux\n");
@@ -1284,6 +1198,20 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	free(tab_H->haer);
 	free(tab_H->xdel);
 	free(tab_H->depth);
+
+
+
+	//fusion des tableaux
+	erreur = cudaFree(tab_D->tabPhotonsEvents);
+	if( erreur != cudaSuccess ){
+		printf( "ERREUR: Problème de cudaFree de tab_D->tabPhotonsEvents dans freeTableaux\n");
+		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		exit(1);
+	}
+
+	free(tab_H->tabPhotonsEvents);
+	//fusion des tableaux
+
 
 
 
@@ -2190,6 +2118,7 @@ void calculTabFinal(double* tabFinal, double* tabTh, double* tabPhi, double* tab
 
 
 
+
 //
 // write a single sds name in open hdf file sd
 //
@@ -2225,19 +2154,21 @@ void write_sds(int sd, const char* name, int ndims, int *dims, int type, char *d
 * Fonction qui crée le fichier .hdf contenant le résultat final pour une demi-sphère
 */
 
-void creerHDFResultats(double* tabFinal,double* tabFinalDown0P, double* tabFinalDown0M,double* tabFinalUp0P,double* tabFinalUp0M,
-                       double* tabTh, double* tabPhi, double* tabTransDir, unsigned long long nbPhotonsTot,
+
+
+void creerHDFResultats(double* tabFinal,double* tabTh, double* tabPhi, double* tabTransDir, unsigned long long nbPhotonsTot,
                        Variables* var, double tempsPrec,int mlsaoce,int mlsaaer,double *phaseAtm,double *phaseOc,Tableaux tab_H,float *lambda)
+
 
 
 {
 	// Création du fichier de sortie
 	int sdFichier = SDstart(PATHRESULTATSHDF, DFACC_CREATE);
 	if (sdFichier == FAIL) {
-		printf("ERREUR: création du fichier HDF : %s\n", PATHRESULTATSHDF);
+		printf("ERREUR: création du fichier HDF : %s\n",PATHRESULTATSHDF);
 		exit(1);
 	}
-	
+
 	// Ecriture des informations sur la simulation : paramètres, nbphotons, nbErreurs, tempsEcoule
 	double NBPHOTONSdouble = (double)NBPHOTONS;
 	double nbPhotonsTotdouble = (double)nbPhotonsTot;
@@ -2266,14 +2197,16 @@ void creerHDFResultats(double* tabFinal,double* tabFinalDown0P, double* tabFinal
 	SDsetattr(sdFichier, "NLAM", DFNT_INT32, 1, &NLAM);
 	SDsetattr(sdFichier, "TAURAY", DFNT_FLOAT32, 1, &TAURAY);
 	SDsetattr(sdFichier, "TAUAER", DFNT_FLOAT32, 1, &TAUAER);
-	
+
 	SDsetattr(sdFichier, "LSAAER", DFNT_UINT32, 1, &LSAAER);
 	SDsetattr(sdFichier, "NFAER", DFNT_UINT32, 1, &NFAER);
 	SDsetattr(sdFichier, "LSAOCE", DFNT_UINT32, 1, &LSAOCE);
 	SDsetattr(sdFichier, "NFOCE", DFNT_UINT32, 1, &NFOCE);
+
 	
 	SDsetattr(sdFichier, "NPHAAER", DFNT_UINT32, 1, &NPHAAER);
 	SDsetattr(sdFichier, "NPHAOCE", DFNT_UINT32, 1, &NPHAOCE);
+
 
 
 	SDsetattr(sdFichier, "ENV_SIZE", DFNT_FLOAT32, 1, &ENV_SIZE);
@@ -2287,18 +2220,20 @@ void creerHDFResultats(double* tabFinal,double* tabFinalDown0P, double* tabFinal
 	SDsetattr(sdFichier, "NOCE", DFNT_INT32, 1, &NOCE);
     SDsetattr(sdFichier, "PATHDIFFOCE", DFNT_CHAR8, strlen(PATHDIFFOCE), PATHDIFFOCE);
     SDsetattr(sdFichier, "PATHPROFILOCE", DFNT_CHAR8, strlen(PATHPROFILOCE), PATHPROFILOCE);
-	SDsetattr(sdFichier, "PATHRESULTATSHDF", DFNT_CHAR8, strlen(PATHRESULTATSHDF), PATHRESULTATSHDF);
+    SDsetattr(sdFichier, "PATHRESULTATSHDF", DFNT_CHAR8, strlen(PATHRESULTATSHDF), PATHRESULTATSHDF);
 	SDsetattr(sdFichier, "PATHDIFFAER", DFNT_CHAR8, strlen(PATHDIFFAER), PATHDIFFAER);
 	SDsetattr(sdFichier, "PATHPROFILATM", DFNT_CHAR8, strlen(PATHPROFILATM), PATHPROFILATM);
 	SDsetattr(sdFichier, "PATHALB", DFNT_CHAR8, strlen(PATHALB), PATHALB);
-	
+
 	SDsetattr(sdFichier, "nbPhotonsTot", DFNT_FLOAT64, 1, &nbPhotonsTotdouble);
 	SDsetattr(sdFichier, "nbErreursPoids", DFNT_INT32, 1, &(var->erreurpoids));
 	SDsetattr(sdFichier, "nbErreursTheta", DFNT_INT32, 1, &(var->erreurtheta));
 	SDsetattr(sdFichier, "tempsEcoule", DFNT_FLOAT64, 1, &tempsEcouledouble);
-	
 
-	
+
+
+
+
     //
     // write datasets
     //
@@ -2322,25 +2257,28 @@ void creerHDFResultats(double* tabFinal,double* tabFinalDown0P, double* tabFinal
     write_sds(sdFichier, "Q_up (TOA)", ndims, dims, DFNT_FLOAT64, dim_names, (VOIDP)(tabFinal+NBPHI*NBTHETA*NLAM));
     write_sds(sdFichier, "U_up (TOA)", ndims, dims, DFNT_FLOAT64, dim_names, (VOIDP)(tabFinal+2*NBPHI*NBTHETA*NLAM));
 
-    if (OUTPUT_LAYERS & OUTPUT_BOA_DOWN_0P_UP_0M) {
-        write_sds(sdFichier, "I_down (0+)", ndims, dims, DFNT_FLOAT64, dim_names, (VOIDP)(tabFinalDown0P));
-        write_sds(sdFichier, "Q_down (0+)", ndims, dims, DFNT_FLOAT64, dim_names, (VOIDP)(tabFinalDown0P+NBPHI*NBTHETA*NLAM));
-        write_sds(sdFichier, "U_down (0+)", ndims, dims, DFNT_FLOAT64, dim_names, (VOIDP)(tabFinalDown0P+2*NBPHI*NBTHETA*NLAM));
 
-        write_sds(sdFichier, "I_up (0-)", ndims, dims, DFNT_FLOAT64, dim_names, (VOIDP)(tabFinalUp0M));
-        write_sds(sdFichier, "Q_up (0-)", ndims, dims, DFNT_FLOAT64, dim_names, (VOIDP)(tabFinalUp0M+NBPHI*NBTHETA*NLAM));
-        write_sds(sdFichier, "U_up (0-)", ndims, dims, DFNT_FLOAT64, dim_names, (VOIDP)(tabFinalUp0M+2*NBPHI*NBTHETA*NLAM));
-    }
 
-    if (OUTPUT_LAYERS & OUTPUT_BOA_DOWN_0M_UP_0P) {
-        write_sds(sdFichier, "I_down (0-)", ndims, dims, DFNT_FLOAT64, dim_names, (VOIDP)(tabFinalDown0M));
-        write_sds(sdFichier, "Q_down (0-)", ndims, dims, DFNT_FLOAT64, dim_names, (VOIDP)(tabFinalDown0M+NBPHI*NBTHETA*NLAM));
-        write_sds(sdFichier, "U_down (0-)", ndims, dims, DFNT_FLOAT64, dim_names, (VOIDP)(tabFinalDown0M+2*NBPHI*NBTHETA*NLAM));
+        if (OUTPUT_LAYERS & OUTPUT_BOA_DOWN_0P_UP_0M) {
+            write_sds(sdFichier, "I_down (0+)", ndims, dims, DFNT_FLOAT64,NULL, (VOIDP)(tabFinal+DOWN0P*4*NBPHI*NBTHETA*NLAM));
+            write_sds(sdFichier, "Q_down (0+)", ndims, dims, DFNT_FLOAT64,NULL, (VOIDP)(tabFinal+(DOWN0P*4+1)*NBPHI*NBTHETA*NLAM));
+            write_sds(sdFichier, "U_down (0+)", ndims, dims, DFNT_FLOAT64,NULL, (VOIDP)(tabFinal+(DOWN0P*4+2)*NBPHI*NBTHETA*NLAM));
 
-        write_sds(sdFichier, "I_up (0+)", ndims, dims, DFNT_FLOAT64, dim_names, (VOIDP)(tabFinalUp0P));
-        write_sds(sdFichier, "Q_up (0+)", ndims, dims, DFNT_FLOAT64, dim_names, (VOIDP)(tabFinalUp0P+NBPHI*NBTHETA*NLAM));
-        write_sds(sdFichier, "U_up (0+)", ndims, dims, DFNT_FLOAT64, dim_names, (VOIDP)(tabFinalUp0P+2*NBPHI*NBTHETA*NLAM));
-    }
+            write_sds(sdFichier, "I_up (0-)", ndims, dims, DFNT_FLOAT64,NULL, (VOIDP)(tabFinal+DOWN0M*4*NBPHI*NBTHETA*NLAM));
+            write_sds(sdFichier, "Q_up (0-)", ndims, dims, DFNT_FLOAT64,NULL, (VOIDP)(tabFinal+(DOWN0M*4+1)*NBPHI*NBTHETA*NLAM));
+            write_sds(sdFichier, "U_up (0-)", ndims, dims, DFNT_FLOAT64,NULL, (VOIDP)(tabFinal+(DOWN0M*4+2)*NBPHI*NBTHETA*NLAM));
+        }
+
+        if (OUTPUT_LAYERS & OUTPUT_BOA_DOWN_0M_UP_0P) {
+            write_sds(sdFichier, "I_down (0-)", ndims, dims, DFNT_FLOAT64,NULL, (VOIDP)(tabFinal+UP0P*4*NBPHI*NBTHETA*NLAM));
+            write_sds(sdFichier, "Q_down (0-)", ndims, dims, DFNT_FLOAT64,NULL, (VOIDP)(tabFinal+(UP0P*4+1)*NBPHI*NBTHETA*NLAM));
+            write_sds(sdFichier, "U_down (0-)", ndims, dims, DFNT_FLOAT64,NULL, (VOIDP)(tabFinal+(UP0P*4+2)*NBPHI*NBTHETA*NLAM));
+
+            write_sds(sdFichier, "I_up (0+)", ndims, dims, DFNT_FLOAT64,NULL, (VOIDP)(tabFinal+UP0M*4*NBPHI*NBTHETA*NLAM));
+            write_sds(sdFichier, "Q_up (0+)", ndims, dims, DFNT_FLOAT64,NULL, (VOIDP)(tabFinal+(UP0M*4+1)*NBPHI*NBTHETA*NLAM));
+            write_sds(sdFichier, "U_up (0+)", ndims, dims, DFNT_FLOAT64,NULL, (VOIDP)(tabFinal+(UP0M*4+2)*NBPHI*NBTHETA*NLAM));
+        }
+
 
     // Number of photons
     write_sds(sdFichier, "Numbers of photons", ndims, dims, DFNT_FLOAT64,
@@ -2375,6 +2313,7 @@ void creerHDFResultats(double* tabFinal,double* tabFinalDown0P, double* tabFinal
 
     ndims=3;
     if ((SIM == -2) || (SIM == 1) || (SIM == 2)) {
+
     	dims[0] = NPHAAER;
     	dims[1]=5;
     	dims[2] = mlsaaer;
@@ -2443,16 +2382,9 @@ void creerHDFResultats(double* tabFinal,double* tabFinalDown0P, double* tabFinal
     write_sds(sdFichier, "lambda", 1, dims, DFNT_FLOAT32,NULL, (VOIDP)lambda);
 
 
-
-
-
-
-
-
     // closes hdf file
     SDend(sdFichier);
 
 }
-
-
+//fusion des tableaux
 

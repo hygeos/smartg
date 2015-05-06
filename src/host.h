@@ -165,6 +165,7 @@ void calculOmega(double* tabTh, double* tabPhi, double* tabOmega);
 void calculTabFinal(double*, double*, double*, double*, unsigned long long, unsigned long long*);
 
 
+
 /**********************************************************
 *	> Fichier hdf (ecriture résultats)
 ***********************************************************/
@@ -175,7 +176,8 @@ void calculTabFinal(double*, double*, double*, double*, unsigned long long, unsi
 
 //void creerHDFResultats(double*, double*, double*, double*, double*, double*, double*, unsigned long long, Variables*, double);
 
-void creerHDFResultats(double*, double*, double*, double*, double*, double*, double*, double*, unsigned long long, Variables*, double,int,int,double*,double*,Tableaux,float*);
+void creerHDFResultats(double*, double*, double*, double*, unsigned long long, Variables*, double,int,int,double*,double*,Tableaux,float*);
+
 
 
 

@@ -90,6 +90,19 @@ typedef int CrMCCUDA;
 #define TOA	    	6
 #define SEAFLOOR   	7
 
+/* Nombre d'evenements*/
+#define NEVENT  5
+
+//fusion des tableaux
+/*Evenement de comptage*/
+
+#define DOWN0P	1
+#define DOWN0M	2
+#define UP0P	3
+#define UP0M	4
+//fusion des tableaux
+
+
 
 // bitmasks for output
 #define OUTPUT_BOA_DOWN_0P_UP_0M   1 // downward radiance at BOA above surface (0+) and upward radiance at BOA below surface (0-)
@@ -183,6 +196,9 @@ extern char PATHRESULTATSHDF[];
 extern char PATHDIFFAER[];
 extern char PATHPROFILATM[];
 extern char PATHALB[];
+
+
+
 
 
 
@@ -297,13 +313,15 @@ typedef struct {
 */
 typedef struct __align__(16)
 {
-	float* tabPhotons;		// Tableau contenant l'ensemble des paramètres de stokes des photons sortis dans l'espace
-	float* tabPhotonsDown0P;		// Tableau contenant l'ensemble des paramètres de stokes des photons descendant arrivant à la surface 
-	float* tabPhotonsDown0M;		// Tableau contenant l'ensemble des paramètres de stokes des photons descendant partant de la surface 
-	float* tabPhotonsUp0P;		// Tableau contenant l'ensemble des paramètres de stokes des photons ascendant partant de la surface 
-	float* tabPhotonsUp0M;		// Tableau contenant l'ensemble des paramètres de stokes des photons asscendant arrivant à la surface 
+
 	unsigned long long* nbPhotonsInter;		// Tableau contenant le nb de photons injecte par interval NLAM 
 	
+
+
+	float* tabPhotonsEvents;		//Tableau contenant l'ensemble des paramètres de stokes de tous les photons (évènements confondus)
+
+
+
 	float* faer;			// Pointeur vers le modèle de diffusion des aérosols
 	
 	float* foce;			// Pointeur vers le modèle de diffusion dans l'océan

@@ -202,7 +202,16 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
         // -> in SURFACE
 		if(ph.loc == SURFACE){
            // Eventually evaluate Downward 0+ and Upward 0- radiance
-           if(OUTPUT_LAYERSd & (OUTPUT_BOA_DOWN_0P_UP_0M )) countInterface(&ph, tab.tabPhotonsDown0P, tab.tabPhotonsUp0M
+
+		//fusion des tableaux
+		float *tabPhotonsEventsDown0P=&tab.tabPhotonsEvents[DOWN0P*4*NBTHETAd * NBPHId * NLAMd];
+		float *tabPhotonsEventsUp0M=&tab.tabPhotonsEvents[DOWN0M*4*NBTHETAd * NBPHId * NLAMd];
+		float *tabPhotonsEventsDown0M=&tab.tabPhotonsEvents[UP0P*4*NBTHETAd * NBPHId * NLAMd];
+		float *tabPhotonsEventsUp0P=&tab.tabPhotonsEvents[UP0M*4*NBTHETAd * NBPHId * NLAMd];
+		//fusion des tableaux
+
+
+		if(OUTPUT_LAYERSd & (OUTPUT_BOA_DOWN_0P_UP_0M )) countInterface(&ph, tabPhotonsEventsDown0P, tabPhotonsEventsUp0M
                     #ifdef PROGRESSION
                     , var
                     #endif
@@ -245,9 +254,10 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
                 }
            }
            // Eventually evaluate Downward 0- and Upward 0+ radiance
-           if(OUTPUT_LAYERSd & (OUTPUT_BOA_DOWN_0M_UP_0P )) countInterface(&ph, tab.tabPhotonsDown0M, tab.tabPhotonsUp0P
+
+           if(OUTPUT_LAYERSd & (OUTPUT_BOA_DOWN_0M_UP_0P )) countInterface(&ph,tabPhotonsEventsDown0M,tabPhotonsEventsUp0P
                     #ifdef PROGRESSION
-                    , var
+                    ,var
                     #endif
                     );
 		}
@@ -1854,7 +1864,8 @@ __device__ void countPhoton(Photon* ph, Tableaux tab, unsigned long long* nbPhot
     //nbCount = tab.nbPhotonsInter;
     //atomicAdd(nbCount+ph->ilam, 1);
 
-    tabCount = tab.tabPhotons;
+
+    tabCount=tab.tabPhotonsEvents;
 
     #ifdef SPHERIQUE
     if(ph->vz<=0.f) {

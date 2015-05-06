@@ -141,6 +141,7 @@ int main (int argc, char *argv[])
 	// Regroupement et initialisation des tableaux a envoyer dans le kernel (structure de pointeurs)
 	Tableaux tab_H; //tableaux version host
 	Tableaux tab_D; //tableaux version device
+
 	initTableaux(&tab_H, &tab_D);
 	
 	// Variables et tableaux qui restent dans le host et se remplissent petit à petit
@@ -153,72 +154,46 @@ int main (int argc, char *argv[])
 	}
 	memset(nbPhotonsTotInter,0,NLAM*sizeof(*(nbPhotonsTotInter)));
 	
+
+
 	#ifdef PROGRESSION
 	unsigned long long nbPhotonsSorTot = 0; //nombre total de photons ressortis
 	#endif
 	
-	double* tabPhotonsTot; //tableau du poids total des photons sortis
-	tabPhotonsTot = (double*)malloc(4*NBTHETA * NBPHI * NLAM * sizeof(*(tabPhotonsTot)));
-	if( tabPhotonsTot == NULL ){
-		printf("ERREUR: Problème de malloc de tabPhotonsTot dans le main\n");
-		exit(1);
-	}
-	memset(tabPhotonsTot,0,4*NBTHETA*NBPHI*NLAM*sizeof(*(tabPhotonsTot)));
-	
-	double* tabPhotonsTotDown0P; //tableau du poids total des photons sortis
-	tabPhotonsTotDown0P = (double*)malloc(4*NBTHETA * NBPHI  * NLAM *sizeof(*(tabPhotonsTotDown0P)));
-	if( tabPhotonsTotDown0P == NULL ){
-		printf("ERREUR: Problème de malloc de tabPhotonsTotDown0P dans le main\n");
-		exit(1);
-	}
-	memset(tabPhotonsTotDown0P,0,4*NBTHETA*NBPHI*NLAM*sizeof(*(tabPhotonsTotDown0P)));
-	
-	double* tabPhotonsTotDown0M; //tableau du poids total des photons sortis
-	tabPhotonsTotDown0M = (double*)malloc(4*NBTHETA * NBPHI * NLAM *sizeof(*(tabPhotonsTotDown0M)));
-	if( tabPhotonsTotDown0M == NULL ){
-		printf("ERREUR: Problème de malloc de tabPhotonsTotDown0M dans le main\n");
-		exit(1);
-	}
-	memset(tabPhotonsTotDown0M,0,4*NBTHETA*NBPHI*NLAM*sizeof(*(tabPhotonsTotDown0M)));
-	
-	double* tabPhotonsTotUp0M; //tableau du poids total des photons sortis
-	tabPhotonsTotUp0M = (double*)malloc(4*NBTHETA * NBPHI * NLAM *sizeof(*(tabPhotonsTotUp0M)));
-	if( tabPhotonsTotUp0M == NULL ){
-		printf("ERREUR: Problème de malloc de tabPhotonsTotUp0M dans le main\n");
-		exit(1);
-	}
-	memset(tabPhotonsTotUp0M,0,4*NBTHETA*NBPHI*NLAM*sizeof(*(tabPhotonsTotUp0M)));
-	
-	double* tabPhotonsTotUp0P; //tableau du poids total des photons sortis
-	tabPhotonsTotUp0P = (double*)malloc(4*NBTHETA * NBPHI * NLAM *sizeof(*(tabPhotonsTotUp0P)));
-	if( tabPhotonsTotUp0P == NULL ){
-		printf("ERREUR: Problème de malloc de tabPhotonsTotUp0P dans le main\n");
-		exit(1);
-	}
-	memset(tabPhotonsTotUp0P,0,4*NBTHETA*NBPHI*NLAM*sizeof(*(tabPhotonsTotUp0P)));
-	
+
+
+
+	//fusion des tableaux
+	double* tabPhotonsEvents; //tableau du poids total des photons sortis
+		tabPhotonsEvents = (double*)malloc(NEVENT*4*NBTHETA * NBPHI * NLAM *sizeof(*(tabPhotonsEvents)));
+		if( tabPhotonsEvents == NULL ){
+			printf("ERREUR: Problème de malloc de tabPhotonsEvents dans le main\n");
+			exit(1);
+		}
+		memset(tabPhotonsEvents,0,NEVENT*4*NBTHETA*NBPHI*NLAM*sizeof(*(tabPhotonsEvents)));
+
+	double *tabFinalEvent;
+	tabFinalEvent = (double*)malloc(NEVENT*4*NBTHETA*NBPHI*NLAM*sizeof(double));
+	//fusion des tableaux
+
+
 	// Variables permettant le calcul du résultat final
-    double *tabFinal;   // tableau final: 4 dimensions pour
+       // tableau final: 4 dimensions pour
                         // R=stokes1+stokes2(dim0) , Q=stokes1-stokes2(dim1),
                         // U=stokes3(dim2)  et Nbphoton(dim4)
-    tabFinal = (double*)malloc(4*NBTHETA*NBPHI*NLAM*sizeof(double));
 
-    double *tabFinalDown0P;   // tableau final: 4 dimensions pour
+
+      // tableau final: 4 dimensions pour
                         // R=stokes1+stokes2(dim0) , Q=stokes1-stokes2(dim1),
                         // U=stokes3(dim2)  et Nbphoton(dim4)
-    tabFinalDown0P = (double*)malloc(4*NBTHETA*NBPHI*NLAM*sizeof(double));
 
-    double *tabFinalDown0M; 
-    tabFinalDown0M = (double*)malloc(4*NBTHETA*NBPHI*NLAM*sizeof(double));
-    double *tabFinalUp0P; 
-    tabFinalUp0P = (double*)malloc(4*NBTHETA*NBPHI*NLAM*sizeof(double));
-    double *tabFinalUp0M; 
-    tabFinalUp0M = (double*)malloc(4*NBTHETA*NBPHI*NLAM*sizeof(double));
+
 
 
     double *phaseatm;// parametre de la fonction de phase atm
     double *phaseoc; //Parametres de la fonction de phase ocean
     int MLSAOCE,MLSAAER;
+
 
     float *lambda; //tableau de longueur d'onde
     lambda=(float*)malloc(NLAM*sizeof(float));
@@ -285,7 +260,9 @@ int main (int argc, char *argv[])
 		    	MLSAOCE = count_lines(PATHDIFF);
 		}
 
+
 		phaseoc= (double*)malloc(NPHAOCE*5*MLSAOCE*sizeof(double));
+
 
 
         // Read oceanic profile
@@ -297,7 +274,9 @@ int main (int argc, char *argv[])
 	       // Calcul de foce, modèle de diffusion de l ocean 
            get_diff(PATHDIFF,  ip, PATHDIFFOCE);
            LSAOCE = count_lines(PATHDIFF);
+
 		   calculF(PATHDIFF, tab_H.foce, tab_D.foce,MLSAOCE,LSAOCE, NFOCE, ip,phaseoc);
+
         }
 
 
@@ -342,6 +321,7 @@ int main (int argc, char *argv[])
 
 
 
+
     	phaseatm= (double*)malloc(NPHAAER*5*MLSAAER*sizeof(double));
     	if (lambda[0]==NULL){
     		profilAtm(&tab_H, &tab_D,lambda);
@@ -371,6 +351,7 @@ int main (int argc, char *argv[])
            get_diff(PATHDIFF,  ip, PATHDIFFAER);
            LSAAER = count_lines(PATHDIFF);
 
+
 	    /** Copy of Phase Matrix into device memory **/		
 	    cudaError_t erreur = cudaMemcpy(tab_D.faer, tab_H.faer, 5*NFAER*NPHAAER*sizeof(float), cudaMemcpyHostToDevice); 
 	    if( erreur != cudaSuccess ){
@@ -380,6 +361,7 @@ int main (int argc, char *argv[])
 	    }
 
 		calculF(PATHDIFF, tab_H.faer, tab_D.faer,MLSAAER,LSAAER, NFAER, ip,phaseatm);
+
            // compute direct transmission
            tabTransDir[ip] = exp(-tab_H.h[NATM+ip*(NATM+1)]/cos(THVDEG*PI/180.));
         }
@@ -479,50 +461,21 @@ int main (int argc, char *argv[])
 #ifdef _PERF
                 StartProcessing(perfMemcpyH2DTab);
 #endif
-		cudaErreur = cudaMemset(tab_D.tabPhotons, 0, 4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_D.tabPhotons)));
-		if( cudaErreur != cudaSuccess ){
-			printf("#--------------------#\n");
-			printf("# ERREUR: Problème de cudaMemset tab_D.tabPhotons dans le main\n");
-			printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-			printf("#--------------------#\n");
-			exit(1);
-                }
 
-		cudaErreur = cudaMemset(tab_D.tabPhotonsDown0P, 0, 4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_D.tabPhotonsDown0P)));
-		if( cudaErreur != cudaSuccess ){
-			printf("#--------------------#\n");
-			printf("# ERREUR: Problème de cudaMemset tab_D.tabPhotonsDown0P dans le main\n");
-			printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-			printf("#--------------------#\n");
-			exit(1);
-                }
 
-		cudaErreur = cudaMemset(tab_D.tabPhotonsDown0M, 0, 4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_D.tabPhotonsDown0M)));
-		if( cudaErreur != cudaSuccess ){
-			printf("#--------------------#\n");
-			printf("# ERREUR: Problème de cudaMemset tab_D.tabPhotonsDown0M dans le main\n");
-			printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-			printf("#--------------------#\n");
-			exit(1);
-                }
 
-		cudaErreur = cudaMemset(tab_D.tabPhotonsUp0P, 0, 4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_D.tabPhotonsUp0P)));
+		//fusion tableaux
+		cudaErreur = cudaMemset(tab_D.tabPhotonsEvents, 0, NEVENT*4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_D.tabPhotonsEvents)));
 		if( cudaErreur != cudaSuccess ){
 			printf("#--------------------#\n");
-			printf("# ERREUR: Problème de cudaMemset tab_D.tabPhotonsUp0P dans le main\n");
+			printf("# ERREUR: Problème de cudaMemset tab_D.tabPhotonsEvents dans le main\n");
 			printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
 			printf("#--------------------#\n");
 			exit(1);
                 }
+		//fusion tableaux
 
-		cudaErreur = cudaMemset(tab_D.tabPhotonsUp0M, 0, 4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_D.tabPhotonsUp0M)));
-		if( cudaErreur != cudaSuccess ){
-			printf("#--------------------#\n");
-			printf("# ERREUR: Problème de cudaMemset tab_D.tabPhotonsUp0M dans le main\n");
-			printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-			printf("#--------------------#\n");
-			exit(1);
-                }
+
 #ifdef _PERF
                 StopProcessing(perfMemcpyH2DTab);
                 GetElapsedTime(perfMemcpyH2DTab);
@@ -567,13 +520,7 @@ int main (int argc, char *argv[])
 		/** Copie des informations du device pour la création du fichier témoin **/
 		/* Il a été remarqué que sans cette copie et remise à zéro du tableau tab_D.tabPhotons, des erreurs apparaissent si les
 valeurs stockées sont élevées. Ceci doit venir du fait que l'on somme une grosse valeur à une plus faible */
-		cudaErreur = cudaMemcpy(tab_H.tabPhotons, tab_D.tabPhotons, 4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_H.tabPhotons)),
-cudaMemcpyDeviceToHost);
-		if( cudaErreur != cudaSuccess ){
-			printf( "ERREUR: Problème de copie tab_H.tabPhotons dans le main\n");
-			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-			exit(1);
-		}
+
 
 		cudaErreur = cudaMemcpy(tab_H.nbPhotonsInter, tab_D.nbPhotonsInter, NLAM * sizeof(*(tab_H.nbPhotonsInter)),
 cudaMemcpyDeviceToHost);
@@ -588,38 +535,18 @@ cudaMemcpyDeviceToHost);
         }
         //printf("------");
 
-		cudaErreur = cudaMemcpy(tab_H.tabPhotonsDown0P, tab_D.tabPhotonsDown0P, 4*NBTHETA * NBPHI * NLAM *sizeof(*(tab_H.tabPhotonsDown0P)),
+
+
+		//fusion tableaux
+		cudaErreur = cudaMemcpy(tab_H.tabPhotonsEvents, tab_D.tabPhotonsEvents, NEVENT*4*NBTHETA * NBPHI * NLAM *sizeof(*(tab_H.tabPhotonsEvents)),
 cudaMemcpyDeviceToHost);
 		if( cudaErreur != cudaSuccess ){
-			printf( "ERREUR: Problème de copie tab_H.tabPhotonsDown0P dans le main\n");
-			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-			exit(1);
-		}
-
-		cudaErreur = cudaMemcpy(tab_H.tabPhotonsDown0M, tab_D.tabPhotonsDown0M, 4*NBTHETA * NBPHI * NLAM *sizeof(*(tab_H.tabPhotonsDown0M)),
-cudaMemcpyDeviceToHost);
-
-		if( cudaErreur != cudaSuccess ){
-			printf( "ERREUR: Problème de copie tab_H.tabPhotonsDown0M dans le main\n");
-			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-			exit(1);
-		}
-
-		cudaErreur = cudaMemcpy(tab_H.tabPhotonsUp0P, tab_D.tabPhotonsUp0P, 4*NBTHETA * NBPHI * NLAM *sizeof(*(tab_H.tabPhotonsUp0P)),
-cudaMemcpyDeviceToHost);
-		if( cudaErreur != cudaSuccess ){
-			printf( "ERREUR: Problème de copie tab_H.tabPhotonsUp0P dans le main\n");
-			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
-			exit(1);
-		}
-
-		cudaErreur = cudaMemcpy(tab_H.tabPhotonsUp0M, tab_D.tabPhotonsUp0M, 4*NBTHETA * NBPHI * NLAM *sizeof(*(tab_H.tabPhotonsUp0M)),
-cudaMemcpyDeviceToHost);
-		if( cudaErreur != cudaSuccess ){
-			printf( "ERREUR: Problème de copie tab_H.tabPhotonsUp0M dans le main\n");
+			printf( "ERREUR: Problème de copie tab_H.tabPhotonsEvents dans le main\n");
 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
 			exit(1);
         }
+		//fusion tableaux
+
 #ifdef _PERF
                         StopProcessing(perfMemcpyD2HTab);
                         GetElapsedTime(perfMemcpyD2HTab);
@@ -629,14 +556,21 @@ cudaMemcpyDeviceToHost);
                 StartProcessing(perfCreateWitness);
 #endif
 		/** Creation d'un fichier témoin pour pouvoir reprendre la simulation en cas d'arrêt **/
-		for(int i = 0; i < 4*NBTHETA*NBPHI*NLAM; i++) {
-			tabPhotonsTot[i] += (double) tab_H.tabPhotons[i];
-			tabPhotonsTotDown0P[i] += (double) tab_H.tabPhotonsDown0P[i];
-			tabPhotonsTotDown0M[i] += (double) tab_H.tabPhotonsDown0M[i];
-			tabPhotonsTotUp0P[i] += (double) tab_H.tabPhotonsUp0P[i];
-			tabPhotonsTotUp0M[i] += (double) tab_H.tabPhotonsUp0M[i];
+
+
+		//fusion des tableaux
+
+        for(int i = 0; i < 4*NBTHETA*NBPHI*NLAM; i++) {
+            tabPhotonsEvents[i] += (double) tab_H.tabPhotonsEvents[i];
+            tabPhotonsEvents[i+DOWN0P*4*NBTHETA*NBPHI*NLAM] += (double) tab_H.tabPhotonsEvents[i+DOWN0P*4*NBTHETA*NBPHI*NLAM];
+            tabPhotonsEvents[i+DOWN0M*4*NBTHETA*NBPHI*NLAM] += (double) tab_H.tabPhotonsEvents[i+DOWN0M*4*NBTHETA*NBPHI*NLAM];
+            tabPhotonsEvents[i+UP0P*4*NBTHETA*NBPHI*NLAM] += (double) tab_H.tabPhotonsEvents[i+UP0P*4*NBTHETA*NBPHI*NLAM];
+            tabPhotonsEvents[i+UP0M*4*NBTHETA*NBPHI*NLAM] += (double) tab_H.tabPhotonsEvents[i+UP0M*4*NBTHETA*NBPHI*NLAM];
         }
-		
+
+        //fusion des tableaux
+
+
 
 #ifdef _PERF
                         StopProcessing(perfCreateWitness);
@@ -670,17 +604,16 @@ cudaMemcpyDeviceToHost);
 	/** Création et calcul du tableau final (regroupant le poids de tous les photons ressortis sur une demi-sphère,
 	 * par unité de surface) 
 	**/	
-	calculTabFinal(tabFinal, tabTh, tabPhi, tabPhotonsTot, nbPhotonsTot, nbPhotonsTotInter);
-	calculTabFinal(tabFinalDown0P, tabTh, tabPhi, tabPhotonsTotDown0P, nbPhotonsTot,nbPhotonsTotInter);
-	calculTabFinal(tabFinalDown0M, tabTh, tabPhi, tabPhotonsTotDown0M, nbPhotonsTot,nbPhotonsTotInter);
-	calculTabFinal(tabFinalUp0P, tabTh, tabPhi, tabPhotonsTotUp0P, nbPhotonsTot,nbPhotonsTotInter);
-	calculTabFinal(tabFinalUp0M, tabTh, tabPhi, tabPhotonsTotUp0M, nbPhotonsTot,nbPhotonsTotInter);
-
-	
 
 
-	creerHDFResultats(tabFinal, tabFinalDown0P, tabFinalDown0M, tabFinalUp0P, tabFinalUp0M, tabTh, tabPhi, tabTransDir, nbPhotonsTot, var_H, tempsPrec,MLSAOCE,MLSAAER,phaseatm,phaseoc,tab_H,lambda);
+	//fusion des tableaux
+	for (int k=0;k<NEVENT;k++)
+		calculTabFinal(&tabFinalEvent[k*4*NBTHETA*NBPHI*NLAM], tabTh, tabPhi, &tabPhotonsEvents[k*4*NBTHETA*NBPHI*NLAM], nbPhotonsTot, nbPhotonsTotInter);
+	//fusion des tableaux
 
+
+	creerHDFResultats(tabFinalEvent, tabTh, tabPhi, tabTransDir, nbPhotonsTot, var_H, tempsPrec,MLSAOCE,MLSAAER,phaseatm,phaseoc,tab_H,lambda);
+	//fusion des tableaux
 
 #ifdef _PERF
         StopProcessing(perfCreateFinalTab);
@@ -702,18 +635,15 @@ cudaMemcpyDeviceToHost);
 	}
 
 	free(var_H);
-    free(tabFinal);
-    free(tabFinalDown0P);
-    free(tabFinalDown0M);
-    free(tabFinalUp0P);
-    free(tabFinalUp0M);
     free(tabTransDir);
     free(tabPhi);
     free(tabTh);
     free(lambda);
 
 
-		/* Code spécifique à une atmosphère sphérique */
+
+
+	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
 	cudaErreur = cudaFree(init_D);
 	if( cudaErreur != cudaSuccess ){
 		printf( "ERREUR: Problème de free de init_D dans le main\n");
@@ -722,17 +652,13 @@ cudaMemcpyDeviceToHost);
 	}
 
 	free(init_H);
+	#endif
 
 	
 	// Libération des tableaux envoyés dans le kernel
 	freeTableaux(&tab_H, &tab_D);
 	// Libération du tableau du host
-	free( tabPhotonsTot );
-
-	free( tabPhotonsTotDown0P );
-	free( tabPhotonsTotDown0M );
-	free( tabPhotonsTotUp0P );
-	free( tabPhotonsTotUp0M );
+	free( tabPhotonsEvents);
 
 
 #ifdef _PERF
