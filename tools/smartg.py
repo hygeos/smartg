@@ -6,7 +6,7 @@
 import subprocess
 import numpy as np
 from pyhdf.SD import SD, SDC
-from profile.profil import AeroOPAC, Profile, REPTRAN, REPTRAN_IBAND
+from profile.profil import AeroOPAC, Profile, REPTRAN, REPTRAN_IBAND, CloudOPAC
 from water.iop_spm import IOP_SPM
 from water.iop_mm import IOP_MM
 from os.path import dirname, realpath, join, exists, basename, isdir
