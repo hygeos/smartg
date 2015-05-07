@@ -61,7 +61,6 @@ class PhaseFunction(object):
     '''
     def __init__(self, ang, phase, header=[], degrees=False, coef_trunc=1.):
         self.ang = ang
-        self.coef_trunc = 1.
         self.phase = phase
         self.header = header
         self.N = ang.shape[0]
@@ -120,6 +119,23 @@ class PhaseFunction(object):
             self.check_compatible(other)
             return PhaseFunction(self.ang, self.phase+other.phase,
                     header=self.header+other.header, degrees=self.degrees,
+                    coef_trunc=None)
+        elif isinstance(other, float):
+            return PhaseFunction(self.ang, self.phase+other,
+                    header=self.header+other.header, degrees=self.degrees,
+                    coef_trunc=None)
+        else:
+            raise Exception('Error')
+
+    def __radd__(self, other):
+        if isinstance(other, PhaseFunction):
+            self.check_compatible(other)
+            return PhaseFunction(self.ang, self.phase+other.phase,
+                    header=self.header+other.header, degrees=self.degrees,
+                    coef_trunc=None)
+        elif isinstance(other, float):
+            return PhaseFunction(self.ang, self.phase+other,
+                    header=self.header, degrees=self.degrees,
                     coef_trunc=None)
         else:
             raise Exception('Error')
