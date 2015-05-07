@@ -21,7 +21,7 @@ class IOP_SPM(IOP):
 
     Arguments:
         SPM: suspended particulate matter in g/m3
-        NSCOCE: number of angles for Phase function
+        NANG: number of angles for Phase function
         ang_trunc : truncature angle for Fournier Forand Phase function
         gamma: is the spectral dependency of the particulate backscattering
         alpha: parameter for CDOM absorption
@@ -29,10 +29,10 @@ class IOP_SPM(IOP):
         ALB: albedo of the sea floor
         pfwav: list of arrays at which the phase functions are calculated
     '''
-    def __init__(self, SPM, NSCOCE=72001, ang_trunc=5., gamma=0.5,
+    def __init__(self, SPM, NANG=72001, ang_trunc=5., gamma=0.5,
             alpha=1., nbp=1.15, ALB=0., pfwav=None, verbose=False):
         self.__SPM = SPM
-        self.__NSCOCE = NSCOCE
+        self.__NANG = NANG
         self.__ang_trunc = ang_trunc
         self.__gamma = gamma
         self.__alpha = alpha
@@ -56,7 +56,7 @@ class IOP_SPM(IOP):
             * phase is the PhaseFunction object
         '''
         SPM = self.__SPM
-        NSCOCE = self.__NSCOCE
+        NANG = self.__NANG
         ang_trunc = self.__ang_trunc
         nbp = self.__nbp
         gamma = self.__gamma
@@ -91,10 +91,10 @@ class IOP_SPM(IOP):
             #
             # phase function
             #
-            ang = pi * arange(NSCOCE, dtype='float64')/(NSCOCE-1)    # angle in radians
+            ang = pi * arange(NANG, dtype='float64')/(NANG-1)    # angle in radians
 
             # pure water
-            pf0 = zeros((NSCOCE, 4), dtype='float64') # pure water phase function
+            pf0 = zeros((NANG, 4), dtype='float64') # pure water phase function
             pf0[:,0] = 0.75
             pf0[:,1] = 0.75 * cos(ang)**2
             pf0[:,2] = 0.75 * cos(ang)
@@ -102,8 +102,8 @@ class IOP_SPM(IOP):
             P0 = PhaseFunction(ang, pf0, degrees=False)
 
             # particles (troncature)
-            itronc = int(NSCOCE * ang_trunc/180.)
-            pf1 = zeros((NSCOCE, 4), dtype='float64') # pure water phase function
+            itronc = int(NANG * ang_trunc/180.)
+            pf1 = zeros((NANG, 4), dtype='float64') # pure water phase function
             # assuming that the slope of Junge power law mu and slope of spectral dependence of scattering is mu=3+gamma
             pf1[itronc:,0] = 0.5*fournierForand(ang[itronc:],nbp,3.+gamma)
             pf1[:itronc,0] = 0.5*fournierForand(ang[itronc ],nbp,3.+gamma) 
@@ -114,7 +114,7 @@ class IOP_SPM(IOP):
             # normalization after truncation
             integ_ff = 0.
             integ_ff_back = 0.
-            for iang in xrange(1, NSCOCE):
+            for iang in xrange(1, NANG):
                 dtheta = ang[iang] - ang[iang-1]
                 pm1 = pf1[iang-1,0] + pf1[iang-1,1]
                 pm2 = pf1[iang,0] + pf1[iang,1]
