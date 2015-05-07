@@ -298,12 +298,11 @@ class CloudOPAC(object):
         wref: reference wavelength (nm) for aot
         overwrite: recalculate and overwrite phase functions
     '''
-    def __init__(self, basename, components, tau, wref,layer_phase=None, overwrite=False):
+    def __init__(self, basename, components, tau, wref, overwrite=False):
 
         self.__tau = tau
         self.__wref = wref
         self.basename = basename
-        self.__layer_phase = layer_phase
         self.components = components
         self.overwrite = overwrite
 
