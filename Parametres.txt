@@ -5,8 +5,6 @@ NBPHOTONS = 1e9
 # View Zenith Angle in degree (float)
 THVDEG = 30.0
 
-# Eventually wavelenghth (nm) (just for information purposes, not used in the simulation) 
-LAMBDA = 550.0
 
 # Number of output azimut angle boxes from 0 to PI
 NBPHI = 90

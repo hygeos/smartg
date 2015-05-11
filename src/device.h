@@ -22,7 +22,6 @@
 __device__ __constant__ unsigned long long NBPHOTONSd;
 __device__ __constant__ unsigned int NBLOOPd;
 __device__ __constant__ float THVDEGd;
-__device__ __constant__ float LAMBDAd;
 __device__ __constant__ float TAURAYd;
 __device__ __constant__ float TAUAERd;
 __device__ __constant__ float TAUATMd;

@@ -174,7 +174,6 @@ extern unsigned int LSAOCE;
 extern unsigned int NFOCE;
 
 extern float THVDEG;
-extern float LAMBDA;
 extern float TAURAY;
 extern float TAUAER;
 extern float TAUATM;
@@ -346,6 +345,7 @@ typedef struct __align__(16)
     float *haer;
     float *xdel;
 
+    float* lambda;
 	/** Séparation du code pour atmosphère sphérique ou parallèle **/
 
     float* z;

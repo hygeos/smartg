@@ -195,13 +195,6 @@ int main (int argc, char *argv[])
     int MLSAOCE,MLSAAER;
 
 
-    float *lambda; //tableau de longueur d'onde
-    lambda=(float*)malloc(NLAM*sizeof(float));
-
-
-
-
-
 	double *tabTh;
     tabTh = (double*)malloc(NBTHETA*sizeof(double));
 	double *tabPhi;
@@ -267,7 +260,7 @@ int main (int argc, char *argv[])
 
         // Read oceanic profile
 
-        profilOce(&tab_H, &tab_D,lambda);
+        profilOce(&tab_H, &tab_D);
 
         for(ip=0; ip< NPHAOCE; ip++){
 
@@ -323,25 +316,26 @@ int main (int argc, char *argv[])
 
 
     	phaseatm= (double*)malloc(NPHAAER*5*MLSAAER*sizeof(double));
-    	if (lambda[0]==NULL){
-    		profilAtm(&tab_H, &tab_D,lambda);
-
-    	}
+        if (tab_H.lambda[0]==NULL){
+           profilAtm(&tab_H, &tab_D);
+        }
     	else
     		{
 
     			float* lambdaold;
     			lambdaold=(float*)malloc(NLAM*sizeof(float));
-    			memcpy( lambdaold, lambda, NLAM * sizeof(float) );
-    			profilAtm(&tab_H, &tab_D,lambda);
+                memcpy( lambdaold, tab_H.lambda, NLAM * sizeof(float) );
+                profilAtm(&tab_H, &tab_D);
     			for(ilam=0;ilam<NLAM;ilam++){
-
-    				if(lambdaold[ilam]!=lambda[ilam]){
-    					printf("Error les valeurs lambda sont différentes\n");
+                   if(lambdaold[ilam]!=tab_H.lambda[ilam]){
+                      printf("Error les valeurs lambda sont différentes\n");
     				}
     			}
     		free(lambdaold);
     		}
+
+
+
 
 
 
@@ -368,6 +362,16 @@ int main (int argc, char *argv[])
 
 
     }
+
+	/** Copy of LAMBDA into device memory **/
+
+    cudaError_t erreur = cudaMemcpy(tab_D.lambda, tab_H.lambda, NLAM*sizeof(float), cudaMemcpyHostToDevice);
+    if( erreur != cudaSuccess ){
+	  printf( "ERREUR: Problème de copie tab_D.lambda dans main\n");
+	  printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+	  exit(1);
+    }
+
 
 
 #ifdef _PERF
@@ -464,7 +468,7 @@ int main (int argc, char *argv[])
 
 
 
-		//fusion tableaux
+
 		cudaErreur = cudaMemset(tab_D.tabPhotonsEvents, 0, NEVENT*4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_D.tabPhotonsEvents)));
 		if( cudaErreur != cudaSuccess ){
 			printf("#--------------------#\n");
@@ -473,7 +477,7 @@ int main (int argc, char *argv[])
 			printf("#--------------------#\n");
 			exit(1);
                 }
-		//fusion tableaux
+
 
 
 #ifdef _PERF
@@ -537,7 +541,7 @@ cudaMemcpyDeviceToHost);
 
 
 
-		//fusion tableaux
+
 		cudaErreur = cudaMemcpy(tab_H.tabPhotonsEvents, tab_D.tabPhotonsEvents, NEVENT*4*NBTHETA * NBPHI * NLAM *sizeof(*(tab_H.tabPhotonsEvents)),
 cudaMemcpyDeviceToHost);
 		if( cudaErreur != cudaSuccess ){
@@ -545,7 +549,7 @@ cudaMemcpyDeviceToHost);
 			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
 			exit(1);
         }
-		//fusion tableaux
+
 
 #ifdef _PERF
                         StopProcessing(perfMemcpyD2HTab);
@@ -612,7 +616,7 @@ cudaMemcpyDeviceToHost);
 	//fusion des tableaux
 
 
-	creerHDFResultats(tabFinalEvent, tabTh, tabPhi, tabTransDir, nbPhotonsTot, var_H, tempsPrec,MLSAOCE,MLSAAER,phaseatm,phaseoc,tab_H,lambda);
+	creerHDFResultats(tabFinalEvent, tabTh, tabPhi, tabTransDir, nbPhotonsTot, var_H, tempsPrec,MLSAOCE,MLSAAER,phaseatm,phaseoc,tab_H);
 	//fusion des tableaux
 
 #ifdef _PERF
@@ -638,7 +642,7 @@ cudaMemcpyDeviceToHost);
     free(tabTransDir);
     free(tabPhi);
     free(tabTh);
-    free(lambda);
+
 
 
 

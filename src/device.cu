@@ -342,8 +342,9 @@ __device__ void initPhoton(Photon* ph, Tableaux tab
 	ph->uz = ph->vx;
 	
     // Initialisation de la longueur d onde
-    ph->wavel = LAMBDAd; //mono chromatique
+     //mono chromatique
 	ph->ilam = __float2uint_rz(RAND * NLAMd);
+	ph->wavel = tab.lambda[ph->ilam];
     atomicAdd(tab.nbPhotonsInter+ph->ilam, 1);
 
     ph->locPrec = NONE;
@@ -2137,7 +2138,6 @@ void initConstantesDevice()
 	cudaMemcpyToSymbol(NBPHOTONSd, &NBPHOTONS, sizeof(unsigned long long));
 	cudaMemcpyToSymbol(NBLOOPd, &NBLOOP, sizeof(unsigned int));
 	cudaMemcpyToSymbol(THVDEGd, &THVDEG, sizeof(float));
-	cudaMemcpyToSymbol(LAMBDAd, &LAMBDA, sizeof(float));
 	cudaMemcpyToSymbol(TAURAYd, &TAURAY, sizeof(float));
 	cudaMemcpyToSymbol(TAUAERd, &TAUAER, sizeof(float));
 	

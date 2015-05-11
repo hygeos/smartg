@@ -206,10 +206,6 @@ void initConstantesHost(int argc, char** argv)
 	strcpy(s,"");
 	chercheConstante(parametres, "THVDEG", s);
 	THVDEG = atof(s);
-	
-	strcpy(s,"");
-	chercheConstante(parametres, "LAMBDA", s);
-	LAMBDA = atof(s);
 
     strcpy(s,"");
 	chercheConstante(parametres, "ENV_SIZE", s);
@@ -717,7 +713,7 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	// Weight Table of the descending  photons above the surface
 	
 
-	//fusion des tableaux
+
 
 		// Tableau du poids des photons ressortis
 			tab_H->tabPhotonsEvents = (float*)malloc(NEVENT*4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_H->tabPhotonsEvents)));
@@ -741,7 +737,7 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 			exit(1);
 			}
 
-		//fusion des tableaux
+
 
 
 
@@ -925,6 +921,19 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
     memset(tab_H->xdel,0,(NATM+1)*NLAM*sizeof(float) );
 
 
+    //lambda
+    tab_H->lambda =  (float*)malloc(NLAM*sizeof(float));
+    if( tab_H->lambda == NULL ){
+          printf("ERREUR: Problème de malloc de tab_H->lambda dans initTableaux\n");
+          exit(1);
+    }
+
+        memset(tab_H->lambda,0,NLAM*sizeof(float));
+
+        if( cudaMalloc( &(tab_D->lambda), NLAM*sizeof(float) ) != cudaSuccess ){
+           printf("ERREUR: Problème de cudaMalloc de tab_D->lambda dans initTableaux\n");
+           exit(1);
+        }
 
 	//test
 
@@ -1174,6 +1183,17 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	}
 	
 	free(tab_H->ipo);
+
+
+
+	erreur = cudaFree(tab_D->lambda);
+		if( erreur != cudaSuccess ){
+			printf( "ERREUR: Problème de cudaFree de tab_D->lambda dans freeTableaux\n");
+			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+			exit(1);
+		}
+
+	free(tab_H->lambda);
 
 
 
@@ -1497,7 +1517,7 @@ void profilAlb( Tableaux* tab_H, Tableaux* tab_D ){
 
 
 /* Read ocean extinction coefficient and single scattering albedo for ocean*/
-void profilOce( Tableaux* tab_H, Tableaux* tab_D,float *lambda ){
+void profilOce( Tableaux* tab_H, Tableaux* tab_D){
     int ilam;
     int nscanf;
     int icouche=0;
@@ -1525,7 +1545,7 @@ void profilOce( Tableaux* tab_H, Tableaux* tab_D,float *lambda ){
 
             // skip comment line
             fgets(buffer,4096,profil);
-			lambda[ilam]=atof(strstr (buffer, "LAM=")+7);
+			tab_H->lambda[ilam]=atof(strstr (buffer, "LAM=")+7);
             for( icouche=0; icouche<NOCE+1; icouche++ ){
                 fgets(buffer,4096,profil);
                 nscanf = sscanf(buffer, "%d\t%f\t%f\t%f\t%d\n", &garbage, tab_H->depth+icouche, tab_H->ho+icouche+ilam*(NOCE+1), tab_H->sso+icouche+ilam*(NOCE+1), tab_H->ipo+icouche+ilam*(NOCE+1));
@@ -1561,6 +1581,12 @@ void profilOce( Tableaux* tab_H, Tableaux* tab_D,float *lambda ){
         printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
         exit(1);
     }
+    erreur = cudaMemcpy(tab_D->lambda, tab_H->lambda, NLAM*sizeof(*(tab_H->lambda)), cudaMemcpyHostToDevice);
+        if( erreur != cudaSuccess ){
+            printf( "ERREUR: Problème de copie tab_D->lambda dans profilOce\n");
+            printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+            exit(1);
+        }
 
 }
 
@@ -1569,7 +1595,7 @@ void profilOce( Tableaux* tab_H, Tableaux* tab_D,float *lambda ){
 * Calcul du profil atmosphérique dans l'atmosphère en fonction de la couche
 * Mélange Molécule/Aérosol dans l'atmosphère en fonction de la couche
 */
-void profilAtm( Tableaux* tab_H, Tableaux* tab_D,float* lambda){
+void profilAtm( Tableaux* tab_H, Tableaux* tab_D){
 
 	/** Déclaration des variables **/
 
@@ -1618,7 +1644,7 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D,float* lambda){
 
             // skip comment line
             fgets(buffer,4096,profil);
-			lambda[ilam]=atof(strstr (buffer, "LAM=")+7);
+            tab_H->lambda[ilam]=atof(strstr (buffer, "LAM=")+7);
             for( icouche=0; icouche<NATM+1; icouche++ ){
                 fgets(buffer, 4096, profil);
                 nscanf = sscanf(buffer, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%d\n",
@@ -1697,6 +1723,13 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D,float* lambda){
 			exit(1);
 		}
 
+
+		erreur = cudaMemcpy(tab_D->lambda, tab_H->lambda, NLAM*sizeof(*(tab_H->lambda)), cudaMemcpyHostToDevice);
+		if( erreur != cudaSuccess ){
+			printf( "ERREUR: Problème de copie tab_D->lambda dans profilAtm\n");
+			printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+			exit(1);
+		}
 }
 
 
@@ -1836,8 +1869,6 @@ void afficheParametres()
 	printf(" NBPHI\t=\t%d", NBPHI);
 	printf("\n");
 	printf(" THVDEG\t=\t%f (degrés)", THVDEG);
-	printf("\n");
-	printf(" LAMBDA\t=\t%f", LAMBDA);
 	printf("\n");
 	printf(" NLAM\t=\t%d", NLAM);
 	printf("\n");
@@ -2157,7 +2188,7 @@ void write_sds(int sd, const char* name, int ndims, int *dims, int type, char *d
 
 
 void creerHDFResultats(double* tabFinal,double* tabTh, double* tabPhi, double* tabTransDir, unsigned long long nbPhotonsTot,
-                       Variables* var, double tempsPrec,int mlsaoce,int mlsaaer,double *phaseAtm,double *phaseOc,Tableaux tab_H,float *lambda)
+                       Variables* var, double tempsPrec,int mlsaoce,int mlsaaer,double *phaseAtm,double *phaseOc,Tableaux tab_H)
 
 
 
@@ -2193,7 +2224,6 @@ void creerHDFResultats(double* tabFinal,double* tabTh, double* tabPhi, double* t
 	SDsetattr(sdFichier, "SIM", DFNT_INT32, 1, &SIM);
 	SDsetattr(sdFichier, "SUR", DFNT_INT32, 1, &SUR);
 	SDsetattr(sdFichier, "VZA (deg.)", DFNT_FLOAT32, 1, &THVDEG);
-	SDsetattr(sdFichier, "LAMBDA", DFNT_FLOAT32, 1, &LAMBDA);
 	SDsetattr(sdFichier, "NLAM", DFNT_INT32, 1, &NLAM);
 	SDsetattr(sdFichier, "TAURAY", DFNT_FLOAT32, 1, &TAURAY);
 	SDsetattr(sdFichier, "TAUAER", DFNT_FLOAT32, 1, &TAUAER);
@@ -2379,7 +2409,7 @@ void creerHDFResultats(double* tabFinal,double* tabTh, double* tabPhi, double* t
 
     }
 
-    write_sds(sdFichier, "lambda", 1, dims, DFNT_FLOAT32,NULL, (VOIDP)lambda);
+    write_sds(sdFichier, "lambda", 1, dims, DFNT_FLOAT32,NULL, (VOIDP)tab_H.lambda);
 
 
     // closes hdf file

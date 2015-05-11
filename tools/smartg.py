@@ -137,7 +137,6 @@ class Smartg(object):
         #
         D = {
                 'NBPHOTONS': str(int(NBPHOTONS)),
-                'LAMBDA': 0.,  # FIXME
                 'THVDEG': THVDEG,
                 'DEPO': DEPO,
                 'SEED': SEED,
@@ -341,9 +340,6 @@ def command_file_template(dict):
 
         # View Zenith Angle in degree (float)
         THVDEG = {THVDEG}
-
-        # Eventually wavelenghth (nm) (just for information purposes, not used in the simulation) 
-        LAMBDA = {LAMBDA}
 
         # Number of output azimut angle boxes from 0 to PI
         NBPHI = {NBPHI}
