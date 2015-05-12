@@ -9,6 +9,7 @@ from string  import count,split
 import numpy as np
 from optparse import OptionParser
 from scipy.interpolate import interp1d
+from scipy.integrate import romberg
 from scipy.constants import codata
 import netCDF4
 from scipy.ndimage import map_coordinates
@@ -102,7 +103,8 @@ class AeroOPAC(object):
         M=len(znew)
         self.dens = np.zeros((M,N),np.float32)
         for k in range(N):
-            self.dens[:,k] = abs(trapzinterp(self.densities[:,k], self.zopac, znew))
+            self.dens[:,k] = trapzinterp(self.densities[:,k], self.zopac, znew)
+
 
     def calcTau(self,T,h2o,w): # calcul des propritees optiques du melange en fonction de l'alitude et aussi integrees sur la verticale
         rh=h2o/vapor_pressure(T)*100 # calcul du profil vertical de RH
@@ -360,7 +362,7 @@ class CloudOPAC(object):
         M=len(znew)
         self.dens = np.zeros((M,N),np.float32)
         for k in range(N):
-            self.dens[:,k] = np.abs(trapzinterp(self.densities[:,k], self.zopac, znew))
+            self.dens[:,k] = trapzinterp(self.densities[:,k], self.zopac, znew)
 
     def calcTau(self,w): # calcul des propritees optiques du melange en fonction de l'alitude et aussi integrees sur la verticale
         M=len(self.z)
@@ -547,10 +549,25 @@ def trapzinterp(y, x, xnew):
         yy = np.insert(yy, 0, ynew[i])
         yy = np.append(yy, ynew[i+1])
 
-        integ = np.append(integ, np.trapz(yy, x=xx))
+        integ = np.append(integ, np.trapz(yy, x=xx)/(xnew[i+1] - xnew[i]))
 
     return integ
 
+
+def trapzinterp_alternate(y, x, xnew):
+    '''
+    alternate implementation of trapzinterp
+    slower but simpler
+    '''
+
+    f = interp1d(x, y, bounds_error=False, fill_value=0.)
+
+    integ = [f(xnew[0])]
+
+    for i in xrange(len(xnew)-1):
+        integ.append(romberg(f, a=xnew[i], b=xnew[i+1])/(xnew[i+1] - xnew[i]))
+
+    return np.array(integ)
 
 
 
@@ -1159,8 +1176,8 @@ class Profile(object):
             else:
                 znew = grid
 
-            self.P = trapzinterp(self.P, z, znew)
-            self.T = trapzinterp(self.T, z, znew)
+            self.P = interp1d(z, self.P)(znew)
+            self.T = interp1d(z, self.T)(znew)
             airnew = trapzinterp(self.air, z, znew)
             o3 = trapzinterp(o3, z, znew)
             self.o2 = trapzinterp(self.o2, z, znew)
