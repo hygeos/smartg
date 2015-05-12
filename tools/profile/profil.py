@@ -90,9 +90,9 @@ class AeroOPAC(object):
         '''
         self.scalingfact = 1.
         self.regrid(z)
-        self.setTauref(T, h2o, self.__tau, self.__wref)
         self.__T = T
         self.__h2o = h2o
+        self.setTauref(self.__tau, self.__wref)
 
     def regrid(self,znew):
         '''
@@ -106,7 +106,11 @@ class AeroOPAC(object):
             self.dens[:,k] = trapzinterp(self.densities[:,k], self.zopac, znew)
 
 
-    def calcTau(self,T,h2o,w): # calcul des propritees optiques du melange en fonction de l'alitude et aussi integrees sur la verticale
+    def calcTau(self,w): # calcul des propritees optiques du melange en fonction de l'alitude et aussi integrees sur la verticale
+
+        T = self.__T
+        h2o = self.__h2o
+
         rh=h2o/vapor_pressure(T)*100 # calcul du profil vertical de RH
         M=len(self.z)
         self.dtau_tot=np.zeros(M,np.float32)
@@ -263,8 +267,8 @@ class AeroOPAC(object):
         return (dataaer, self.dtau_tot, self.ssa_tot)
 
 
-    def setTauref(self,T,h2o,tauref,wref): # On fixe l'AOT a une valeur pour une longueur d'onde de reference
-        self.calcTau(T,h2o,wref) # calcul de l'AOT a la longueur d'onde de reference
+    def setTauref(self,tauref,wref): # On fixe l'AOT a une valeur pour une longueur d'onde de reference
+        self.calcTau(wref) # calcul de l'AOT a la longueur d'onde de reference
         self.scalingfact=tauref/self.tau_tot # calcul du facteur d'echelle        
 
     def phase(self, wl, NTHETA=7201):
