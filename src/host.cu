@@ -1400,6 +1400,7 @@ void profilAlb( Tableaux* tab_H, Tableaux* tab_D ){
     */
     FILE* profil = fopen( PATHALB , "r" );
     char ligne[1024];
+    int n, err;
 	cudaError_t erreur;		// Permet de tester le bon déroulement des opérations mémoires
 
     if(profil == NULL){
@@ -1407,11 +1408,26 @@ void profilAlb( Tableaux* tab_H, Tableaux* tab_D ){
         exit(1);
     }
 
-    else{
+    else {
+        // skip header
+        fgets(ligne,1024,profil);
+
         for( ilam=0; ilam<NLAM; ilam++){
-           // skip comment line
-           fgets(ligne,1024,profil);
-           fscanf(profil, "%f\t%f\n", tab_H->alb+0+ilam*2,tab_H->alb+1+ilam*2);
+            err = 0;
+
+            // read 1 line
+            if (fgets(ligne,1024,profil) == NULL) {
+                err += 1;
+            }
+            n = sscanf(ligne, "%f %f\n",
+                    tab_H->alb+0+ilam*2,tab_H->alb+1+ilam*2);
+
+            if (n != 2) { err += 1; }
+
+            if (err) {
+                printf("Error, failed reading %d bands in albedo file '%s'\n", NLAM, PATHALB);
+                exit(1);
+            }
         }
     }
 

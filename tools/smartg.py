@@ -88,6 +88,11 @@ class Smartg(object):
         assert isinstance(wl, (float, list, np.ndarray))
         assert (iband is None) or isinstance(iband, REPTRAN_IBAND)
 
+        if isinstance(wl, (list, np.ndarray)):
+            nlam = len(wl)
+        else:
+            nlam = 1
+
         if output is None:
             #
             # default file name
@@ -130,7 +135,7 @@ class Smartg(object):
         #
         D = {
                 'NBPHOTONS': str(int(NBPHOTONS)),
-                'LAMBDA': wl,
+                'LAMBDA': 0.,  # FIXME
                 'THVDEG': THVDEG,
                 'DEPO': DEPO,
                 'SEED': SEED,
@@ -254,7 +259,9 @@ class Smartg(object):
 
         with open(file_alb, 'w') as f:
             f.write('# Surface_alb Seafloor_alb\n')
-            f.write('{} {}\n'.format(surf_alb, seafloor_alb))
+            for i in xrange(nlam):
+                # FIXME: implement spectral albedo
+                f.write('{} {}\n'.format(surf_alb, seafloor_alb))
 
         D.update(PATHALB=file_alb)
 
