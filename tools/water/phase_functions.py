@@ -100,7 +100,7 @@ class PhaseFunction(object):
             ang = self.ang[i]
             if not self.degrees:
                 ang *= 180./pi
-            fo.write('{:7.2E} {:11.5E} {:11.5E} {:11.5E} {:11.5E}\n'.format(
+            fo.write('{:11.5E} {:11.5E} {:11.5E} {:11.5E} {:11.5E}\n'.format(
                     ang,
                     self.phase[i,0],
                     self.phase[i,1],
