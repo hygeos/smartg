@@ -325,28 +325,24 @@ class CloudOPAC(object):
         return map(lambda x: basename(x)[:-4], files)
 
     def _readStandardOPACComponent(self):
-        ZOPACmax=35. # km
-        dZOPAC=0.1 # km
-        NOPAC=int(ZOPACmax/dZOPAC+1)
-        #self.species=listStandardOPACComponents()
         self.scamatlist=[]
         self.aspecies = []
-        self.zopac=np.linspace(ZOPACmax,0.,num=NOPAC,endpoint=True)
-        self.densities=np.zeros((NOPAC,len(self.components)),dtype=float)
-        self.reff=np.zeros(len(self.components),dtype=float)
-        dp=np.empty_like(self.zopac,dtype=float)
+        self.reff = np.zeros(len(self.components),dtype=float)
+
+        # FIXME
+        # the following is only valid for 1 component
+        # => need to properly deal with multiple components
+        assert len(self.components) == 1, 'Not implemented for multiple components'
+
         for k in range(len(self.components)):
             component = self.components[k]
-            species=component[0]
+            (species, conc, reff, zmin, zmax) = component
+            self.reff[k] = reff
             self.aspecies.append(species)
             self.scamatlist.append(ScaMat(species))
-            dp[:]=component[1] #concentration
-            self.reff[k]=component[2] # reff
-            ic=np.where(self.zopac<component[3])
-            dp[ic]=0.
-            ic=np.where(self.zopac>=component[4])
-            dp[ic]=0.
-            self.densities[:,k]=dp
+
+            self.zopac = np.array([zmax, zmax, zmin, zmin, 0.], dtype='f')
+            self.densities = np.array([  0., conc, conc,   0., 0.], dtype='f').reshape((5,1))
 
 
     def init(self, z):
