@@ -51,7 +51,7 @@ class Smartg(object):
         - overwrite: if True, remove output file first if it exists
         - skip_existing: skip existing file if overwrite is False
                          otherwise (False, default), raise an Exception
-        - cmdfile: the name of the command file to use. If None (default),
+        - cmdfile: the name of the command file to write. If None (default),
           automatically choose a filename.
         - atm: Profile object
             default None (no atmosphere)
@@ -66,6 +66,7 @@ class Smartg(object):
 
     Attributes:
         - output: the name of the result file
+        - cmdfile: name of the command file
     '''
     def __init__(self, exe, wl, output=None, dir=dir_output,
            overwrite=False, skip_existing=False,
@@ -84,6 +85,7 @@ class Smartg(object):
             cmdfile = tempfile.mktemp(suffix='.txt',
                     prefix='smartg_command_',
                     dir=dir_cmdfiles)
+        self.cmdfile = cmdfile
 
         assert isinstance(wl, (float, list, np.ndarray))
         assert (iband is None) or isinstance(iband, REPTRAN_IBAND)
