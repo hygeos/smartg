@@ -193,7 +193,10 @@ class Smartg(object):
                             dir_phases=dir_phase_aero,
                             dir_list_phases=dir_list_pf_aer,
                             )
+                #!!!!! DR !!!!!
                 D.update(PATHDIFFAER=file_list_pf_aer)
+                #D.update(PATHDIFFAER='/home/did/RTC/SMART-G/fic/CUMA/list_opac_cumuma.txt')
+
             else:
                 file_profile = atm.write(iband, dir=dir_profil_aer)
             D.update(PATHPROFILATM=file_profile)
@@ -220,10 +223,20 @@ class Smartg(object):
             # use default water values
             Ddef.update(PATHPROFILOCE='None', PATHDIFFOCE='None')
         else:
+            # convert to list if wl is a scalar
+            if isinstance(wl, (float, int, REPTRAN_IBAND)):
+                wa = [wl]
+            else:
+                wa = wl
+            use_reptran = isinstance(wa[0], REPTRAN_IBAND)
+            if use_reptran:
+                wal = map(lambda x:x.w, wa)
+            else:
+                wal = wa
             ensure_dir_exists(dir_list_pf_oce)
             ensure_dir_exists(dir_profil_oce)
             ensure_dir_exists(dir_phase_water)
-            profil_oce, file_list_pf_ocean = water.write(wl, dir_profile=dir_profil_oce,
+            profil_oce, file_list_pf_ocean = water.write(wal, dir_profile=dir_profil_oce,
                     dir_phases=dir_phase_water, dir_list_phases=dir_list_pf_oce)
 
             D.update(PATHPROFILOCE=profil_oce, PATHDIFFOCE=file_list_pf_ocean)

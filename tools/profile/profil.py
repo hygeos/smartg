@@ -1209,22 +1209,29 @@ class Profile(object):
         self.verbose = verbose
         self.overwrite = overwrite
 
-    def write(self, wl, dir_profile, dir_phases, dir_list_phases):
+    def write(self, w, dir_profile, dir_phases, dir_list_phases):
         '''
-        Write profiles and phase functions at bands wl (list)
+        Write profiles and phase functions at bands w (list)
 
         returns a tuple (profiles, phases) where
         - profiles is the filename containing the concatenated profiles
         - phase is a file containing the list pf phase functions
         '''
         # convert to list if wl is a scalar
-        if isinstance(wl, (float, int)):
-            wl = [wl]
+        if isinstance(w, (float, int, REPTRAN_IBAND)):
+            w = [w]
+
+        use_reptran = isinstance(w[0], REPTRAN_IBAND)
+        if use_reptran:
+            wl = map(lambda x:x.w, w)
+        else:
+            wl = w
 
         if (self.last is not None) and (self.last[0] == list(wl)):
             return (self.last[1], self.last[2])
 
-        profiles, phases = self.calc_bands(wl)
+        if use_reptran : profiles, phases = self.calc_bands(w)
+        else : profiles, phases = self.calc_bands(wl)
 
         header = "# I ALT   hmol(I) haer(I)  H(I)  "
         header += "XDEL(I)  YDEL(I)  XSSA(I)  percent_abs  IPHA  LAM={} nm\n"
@@ -1253,15 +1260,24 @@ class Profile(object):
 
         return file_profiles, file_list_phases
 
-    def calc_phase(self, wl):
+    def calc_phase(self, w):
         '''
         calculate phase functions for bands self.pfwav and coarse profile self.pfgrid
-        returns a list pf phase functions, and an array of indices (z, wl) that give the
+        returns a list pf phase functions, and an array of indices (z, w) that give the
         index of the phase function associated with each layer and each band of the find grids
 
         -> create a new profile at a grid pfgrid (coarse grid) and for bands pfwav
         '''
 
+        # convert to list if wl is a scalar
+        if isinstance(w, (float, int, REPTRAN_IBAND)):
+            w = [w]
+
+        use_reptran = isinstance(w[0], REPTRAN_IBAND)
+        if use_reptran:
+            wl = map(lambda x:x.w, w)
+        else:
+            wl = w
         # indices of the phase matrices for each layer and each band of the main profile
         indices = np.zeros((len(self.z), len(wl)), dtype='i')
 
@@ -1280,8 +1296,8 @@ class Profile(object):
 
         # calculate the indices of wl in pfwav
         ind_wl = []
-        for w in wl:
-            ind_wl.append(np.abs(w - np.array(pfwav)).argmin())
+        for wav in wl:
+            ind_wl.append(np.abs(wav - np.array(pfwav)).argmin())
 
         # calculate the indices of z in pfgrid
         # we select the index of the pfgrid layer immediately lower than the value of z
@@ -1345,7 +1361,7 @@ class Profile(object):
 
         return phases, indices
 
-    def calc_bands(self, wl):
+    def calc_bands(self, w):
         '''
         Profile calculation at bands w
         w is a list of bands (list of floats)
@@ -1354,6 +1370,14 @@ class Profile(object):
         a profile is a structured array with records:
         (I,ALT,hmol,haer,H,XDEL,YDEL,XSSA,percent_abs)
         '''
+        # convert to list if wl is a scalar
+        if isinstance(w, (float, int, REPTRAN_IBAND)):
+            w = [w]
+        use_reptran = isinstance(w[0], REPTRAN_IBAND)
+        if use_reptran:
+            wl = map(lambda x:x.w, w)
+        else:
+            wl = w
 
         # calculate the phase functions
         phases, indices = self.calc_phase(wl)
@@ -1361,7 +1385,9 @@ class Profile(object):
         # calculate the profiles
         profiles = []
         for i in xrange(len(wl)):
-            pro = self.calc(wl[i])
+            if use_reptran : 
+                pro = self.calc(w[i])
+            else : pro  = self.calc(wl[i])
 
             # setup the phase functions indices in profile
             pro['IPHA'] = indices[:,i]
@@ -1378,13 +1404,11 @@ class Profile(object):
         (I,ALT,hmol,haer,H,XDEL,YDEL,XSSA,percent_abs, IPHA)
 
         '''
-        assert not isinstance(w, REPTRAN_IBAND), 'please review profil.calc for use with REPTRAN objects'
-        assert isinstance(w, (int, float, np.float32))
-
-        #
-        # Initialization
-        #
         use_reptran = isinstance(w, REPTRAN_IBAND)
+        if use_reptran:
+            wl = w.w
+        else:
+            wl = w
 
         if (self.aer is not None) and (list(self.z) != list(self.aer.z)):
             # re-initialize aer if necessary
@@ -1396,10 +1420,6 @@ class Profile(object):
 
         z = self.z
         M = len(z)  # Final number of layer
-        if use_reptran:
-            wl = w.w
-        else:
-            wl = w
 
         if self.aer is not None:
             dataaer, _, ssaaer = self.aer.calc(wl)
@@ -1672,7 +1692,7 @@ def example4():
         for iband in band.ibands():
             wi = iband.band.awvl[iband.index] # wvl of internal band
             print '* Band', iband.index, iband.iband, wi
-            pro.write(iband, output_file ='tmp/profil_PAR_%s-%dof%d.txt'%(L[i],iband.index+1,iband.band.nband))
+            pro.write(iband,'./','./','./')
             # aer.calc(wi)
             # aer.phase(wi, dir='tmp/',NTHETA=721)
 #            print 'phase function', phase
