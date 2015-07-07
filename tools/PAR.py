@@ -131,8 +131,59 @@ def Int(wi, wb, ex, we, dl, M=None, field=None, lim=[400.,700.]):
     Qavg = Q/norm
         
     return E, Eavg, Q, Qavg
+
+
+def SpecInt(wi, wb, ex, we, dl, M=None, field=None, lim=[400.,700.]):
+    '''
+    all input vectors have same length, coming from REPTRAN
+    wi : input wavelengths of internal bands (nm)
+    wb : input wavelengths of bands (nm)
+    ex : input extra-terrestrial irradiances at internal bands (W m-2 nm-1)
+    we : input weights of internal bands
+    dl : input bandwidths of bands (nm)
+    M  : optional LUT or MLUT with 3D (lambda,phi,theta) or 1D (lambda) radiative field to spectrally integrate
+    lim: spectral boundaries for integration
     
-    
+    returns
+    spectrally integrated intensity
+    '''
+    ok=np.where((wb.data >=lim[0]) & (wb.data <lim[1]))[0]
+    if (M != None) :
+        if (field != None) :
+            L = M[field]
+            tab = L.data
+        else :
+            tab = M.data
+
+        if tab.ndim == 3 :
+            R = np.rollaxis(tab,0,3)
+            E = LUT(sum(R[:,:,ok] * we.data[ok] * dl.data[ok], axis=2), \
+                axes=[L.axes[1], L.axes[2]], desc=L.desc, \
+                names=[L.names[1], L.names[2]], attrs={'LAMBDA':lim[0]})
+        else:
+            E = sum(tab[ok] * we.data[ok] * dl.data[ok])
+    else:
+        E = sum(we.data[ok] * dl.data[ok])
+
+    norm = sum(we.data[ok] * dl.data[ok])
+    Eavg = E/norm
+
+    return E, Eavg
+
+
+def SpecInt2(wi, wb, ex, we, dl, M=None, field=None, Irradiance=False):
+    Eavg=[] 
+    wu = np.unique(wb.data)
+    for linf in wu:
+    #for linf in np.linspace(lim[0],lim[1]-DL,endpoint=True,num=(lim[1]-lim[0])/DL):
+        E1,E2 = SpecInt(wi, wb, ex, we, dl, M=M, field=field,lim=[linf,linf+1e-5])
+        if Irradiance :
+            Eavg.append(Irr(E2))
+        else:
+            Eavg.append(E2)
+    Mavg = merge(Eavg, ['LAMBDA'])
+    return  Mavg
+
 def Int2(wi, wb, ex, we, dl, M=None, field=None, lim=[400.,700.], DL=1., Irradiance=False):
     l=[]
     Qavg=[]
