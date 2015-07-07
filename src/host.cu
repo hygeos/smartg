@@ -2207,6 +2207,7 @@ void creerHDFResultats(double* tabFinal,double* tabTh, double* tabPhi, double* t
 
 
 {
+
 	// Création du fichier de sortie
 	int sdFichier = SDstart(PATHRESULTATSHDF, DFACC_CREATE);
 	if (sdFichier == FAIL) {
@@ -2276,8 +2277,6 @@ void creerHDFResultats(double* tabFinal,double* tabTh, double* tabPhi, double* t
 
 
 
-
-
     //
     // write datasets
     //
@@ -2297,10 +2296,11 @@ void creerHDFResultats(double* tabFinal,double* tabTh, double* tabPhi, double* t
         strncpy(dim_names, "LAMBDA, Azimut angles, Zenith angles", 2048);
     }
 
+
+
     write_sds(sdFichier, "I_up (TOA)", ndims, dims, DFNT_FLOAT64, dim_names, (VOIDP)(tabFinal));
     write_sds(sdFichier, "Q_up (TOA)", ndims, dims, DFNT_FLOAT64, dim_names, (VOIDP)(tabFinal+NBPHI*NBTHETA*NLAM));
     write_sds(sdFichier, "U_up (TOA)", ndims, dims, DFNT_FLOAT64, dim_names, (VOIDP)(tabFinal+2*NBPHI*NBTHETA*NLAM));
-
 
 
         if (OUTPUT_LAYERS & OUTPUT_BOA_DOWN_0P_UP_0M) {
@@ -2312,7 +2312,6 @@ void creerHDFResultats(double* tabFinal,double* tabTh, double* tabPhi, double* t
             write_sds(sdFichier, "Q_up (0-)", ndims, dims, DFNT_FLOAT64,NULL, (VOIDP)(tabFinal+(DOWN0M*4+1)*NBPHI*NBTHETA*NLAM));
             write_sds(sdFichier, "U_up (0-)", ndims, dims, DFNT_FLOAT64,NULL, (VOIDP)(tabFinal+(DOWN0M*4+2)*NBPHI*NBTHETA*NLAM));
         }
-
         if (OUTPUT_LAYERS & OUTPUT_BOA_DOWN_0M_UP_0P) {
             write_sds(sdFichier, "I_down (0-)", ndims, dims, DFNT_FLOAT64,NULL, (VOIDP)(tabFinal+UP0P*4*NBPHI*NBTHETA*NLAM));
             write_sds(sdFichier, "Q_down (0-)", ndims, dims, DFNT_FLOAT64,NULL, (VOIDP)(tabFinal+(UP0P*4+1)*NBPHI*NBTHETA*NLAM));
@@ -2322,7 +2321,6 @@ void creerHDFResultats(double* tabFinal,double* tabTh, double* tabPhi, double* t
             write_sds(sdFichier, "Q_up (0+)", ndims, dims, DFNT_FLOAT64,NULL, (VOIDP)(tabFinal+(UP0M*4+1)*NBPHI*NBTHETA*NLAM));
             write_sds(sdFichier, "U_up (0+)", ndims, dims, DFNT_FLOAT64,NULL, (VOIDP)(tabFinal+(UP0M*4+2)*NBPHI*NBTHETA*NLAM));
         }
-
 
     // Number of photons
     write_sds(sdFichier, "Numbers of photons", ndims, dims, DFNT_FLOAT64,
@@ -2351,7 +2349,6 @@ void creerHDFResultats(double* tabFinal,double* tabTh, double* tabPhi, double* t
     // Direct Transmission
     dims[0] = NLAM;
     write_sds(sdFichier, "Direct Transmission", 1, dims, DFNT_FLOAT64, NULL, (VOIDP)tabTransDir);
-
 
 
 
@@ -2392,7 +2389,6 @@ void creerHDFResultats(double* tabFinal,double* tabTh, double* tabPhi, double* t
 
 
     }
-
     if(NPHAOCE > 0){
     	dims[0] = NPHAOCE;
     	dims[1]=5;
@@ -2403,16 +2399,15 @@ void creerHDFResultats(double* tabFinal,double* tabTh, double* tabPhi, double* t
 		dims[1]=NOCE+1;
 		dims[2]=4;
 
-
 		float *profOc= (float*)malloc((4*NLAM*(NOCE+1))*sizeof(float));
 
 
 		for( int ilam=0;ilam<NLAM;ilam++) {
 			for( int icouche=0; icouche<NOCE+1; icouche++ ){
 					profOc[ilam*4*NLAM+icouche*4+0]=tab_H.depth[icouche];
-					profOc[ilam*4*NLAM+icouche*4+1]=tab_H.ho[icouche+ilam*(NATM+1)];
-					profOc[ilam*4*NLAM+icouche*4+2]=tab_H.sso[icouche+ilam*(NATM+1)];
-					profOc[ilam*4*NLAM+icouche*4+3]=(float)tab_H.ipo[icouche+ilam*(NATM+1)];
+					profOc[ilam*4*NLAM+icouche*4+1]=tab_H.ho[icouche+ilam*(NOCE+1)];
+					profOc[ilam*4*NLAM+icouche*4+2]=tab_H.sso[icouche+ilam*(NOCE+1)];
+					profOc[ilam*4*NLAM+icouche*4+3]=(float)tab_H.ipo[icouche+ilam*(NOCE+1)];
 					}
 				}
 
