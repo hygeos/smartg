@@ -1522,6 +1522,7 @@ void profilOce( Tableaux* tab_H, Tableaux* tab_D){
     int nscanf;
     int icouche=0;
     float garbage;
+    char *ptr;
 
     // Profil utilisateur
     /* Format du fichier
@@ -1542,10 +1543,18 @@ void profilOce( Tableaux* tab_H, Tableaux* tab_D){
     } else {
         for( ilam=0; ilam<NLAM; ilam++){
 
-
             // skip comment line
             fgets(buffer,4096,profil);
-			tab_H->lambda[ilam]=atof(strstr (buffer, "LAM=")+7);
+
+            // read wavelength
+            ptr = strstr(buffer, "LAM=");
+            if ((ptr != NULL) && (abs(tab_H->lambda[ilam]) < 1e-5)) {
+                ptr += 4;
+                while (*ptr == ' ') ptr++;
+
+                tab_H->lambda[ilam]=atof(ptr);
+            }
+
             for( icouche=0; icouche<NOCE+1; icouche++ ){
                 fgets(buffer,4096,profil);
                 nscanf = sscanf(buffer, "%d\t%f\t%f\t%f\t%d\n", &garbage, tab_H->depth+icouche, tab_H->ho+icouche+ilam*(NOCE+1), tab_H->sso+icouche+ilam*(NOCE+1), tab_H->ipo+icouche+ilam*(NOCE+1));
@@ -1603,6 +1612,7 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D){
 	int  ilam, nscanf;
 	cudaError_t erreur;		// Permet de tester le bon déroulement des opérations mémoires
     char buffer[4096];
+    char *ptr;
 	
 
 	/** Conditions aux limites au sommet de l'atmosphère **/
@@ -1632,19 +1642,23 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D){
     }
 
 
-
-
     else{
-
-        // Extraction des informations
-
-
 
         for( ilam=0; ilam<NLAM; ilam++){
 
             // skip comment line
             fgets(buffer,4096,profil);
-            tab_H->lambda[ilam]=atof(strstr (buffer, "LAM=")+7);
+
+            // read wavelength
+            ptr = strstr(buffer, "LAM=");
+            if ((ptr != NULL) && (abs(tab_H->lambda[ilam]) < 1e-5)) {
+                ptr += 4;
+                while (*ptr == ' ') ptr++;
+
+                tab_H->lambda[ilam]=atof(ptr);
+            }
+
+
             for( icouche=0; icouche<NATM+1; icouche++ ){
                 fgets(buffer, 4096, profil);
                 nscanf = sscanf(buffer, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%d\n",
@@ -2342,7 +2356,7 @@ void creerHDFResultats(double* tabFinal,double* tabTh, double* tabPhi, double* t
 
 
     ndims=3;
-    if ((SIM == -2) || (SIM == 1) || (SIM == 2)) {
+    if (NPHAAER > 0) {
 
     	dims[0] = NPHAAER;
     	dims[1]=5;
@@ -2379,7 +2393,7 @@ void creerHDFResultats(double* tabFinal,double* tabTh, double* tabPhi, double* t
 
     }
 
-    if( SIM==0 || SIM==2 || SIM==3 ){
+    if(NPHAOCE > 0){
     	dims[0] = NPHAOCE;
     	dims[1]=5;
     	dims[2] = mlsaoce;
@@ -2409,7 +2423,11 @@ void creerHDFResultats(double* tabFinal,double* tabTh, double* tabPhi, double* t
 
     }
 
-    write_sds(sdFichier, "lambda", 1, dims, DFNT_FLOAT32,NULL, (VOIDP)tab_H.lambda);
+    if (NLAM > 1) {
+        write_sds(sdFichier, "LAMBDA", 1, dims, DFNT_FLOAT32,NULL, (VOIDP)tab_H.lambda);
+    } else {
+        SDsetattr(sdFichier, "LAMBDA", DFNT_FLOAT32, 1, tab_H.lambda);
+    }
 
 
     // closes hdf file
