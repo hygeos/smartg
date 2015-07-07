@@ -36,7 +36,7 @@ def SpherIrr(R):
         Tab[iphi] =  simps(R[iphi,:], -mu)
     return 2 * simps(Tab, phi*np.pi/180.) / np.pi  
     
-def ReadREPTRAN_bands(repname, LMIN=None, LMAX=None, SAMPLING=1, FULL=False):
+def ReadREPTRAN_bands(repname, BAND=None, LMIN=None, LMAX=None, SAMPLING=100000, FULL=False):
     rep = REPTRAN(repname+'.cdf')
     L = rep.band_names
     wi_l=[]
@@ -48,7 +48,11 @@ def ReadREPTRAN_bands(repname, LMIN=None, LMAX=None, SAMPLING=1, FULL=False):
     ni_l=[]
     ib_l=[]
     if FULL :band_l=[]
-    for i in range(0,len(L),SAMPLING):
+    if BAND==None:
+        istart=0
+    else:
+        istart=rep.band(BAND).band
+    for i in range(istart,len(L),SAMPLING):
         band = rep.band(L[i])
         if LMIN != None:
             if band.awvl[0] < LMIN : continue
