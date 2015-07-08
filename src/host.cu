@@ -2354,13 +2354,15 @@ void creerHDFResultats(double* tabFinal,double* tabTh, double* tabPhi, double* t
 
     ndims=3;
     if (NPHAAER > 0) {
-
     	dims[0] = NPHAAER;
     	dims[1]=5;
     	dims[2] = mlsaaer;
 
     	write_sds(sdFichier, "phaseAtm", ndims, dims, DFNT_FLOAT64,NULL, (VOIDP)(phaseAtm));
     	free(phaseAtm);
+    }
+
+	if (strcmp(PATHPROFILATM,"None")!=0){
     	dims[0]=NLAM;
 		dims[1]=NATM+1;
 		dims[2]=9;
@@ -2369,15 +2371,15 @@ void creerHDFResultats(double* tabFinal,double* tabTh, double* tabPhi, double* t
 
 		for(int ilam=0;ilam<NLAM;ilam++) {
 			 for(int icouche=0; icouche<NATM+1; icouche++ ){
-				 profAtm[ilam*9*NLAM+icouche*9+0]=tab_H.z[icouche];
-				 profAtm[ilam*9*NLAM+icouche*9+1]=tab_H.hmol[icouche+ilam*(NATM+1)];
-				 profAtm[ilam*9*NLAM+icouche*9+2]=tab_H.haer[icouche+ilam*(NATM+1)];
-				 profAtm[ilam*9*NLAM+icouche*9+3]=tab_H.h[icouche+ilam*(NATM+1)];
-				 profAtm[ilam*9*NLAM+icouche*9+4]=tab_H.xdel[icouche+ilam*(NATM+1)];
-				 profAtm[ilam*9*NLAM+icouche*9+5]=tab_H.pMol[icouche+ilam*(NATM+1)];
-				 profAtm[ilam*9*NLAM+icouche*9+6]=tab_H.ssa[icouche+ilam*(NATM+1)];
-				 profAtm[ilam*9*NLAM+icouche*9+7]=tab_H.abs[icouche+ilam*(NATM+1)] ;
-				 profAtm[ilam*9*NLAM+icouche*9+8]=tab_H.ip[icouche+ilam*(NATM+1)];
+				 profAtm[ilam*9*(NATM+1)+icouche*9+0]=tab_H.z[icouche];
+				 profAtm[ilam*9*(NATM+1)+icouche*9+1]=tab_H.hmol[icouche+ilam*(NATM+1)];
+				 profAtm[ilam*9*(NATM+1)+icouche*9+2]=tab_H.haer[icouche+ilam*(NATM+1)];
+				 profAtm[ilam*9*(NATM+1)+icouche*9+3]=tab_H.h[icouche+ilam*(NATM+1)];
+				 profAtm[ilam*9*(NATM+1)+icouche*9+4]=tab_H.xdel[icouche+ilam*(NATM+1)];
+				 profAtm[ilam*9*(NATM+1)+icouche*9+5]=tab_H.pMol[icouche+ilam*(NATM+1)];
+				 profAtm[ilam*9*(NATM+1)+icouche*9+6]=tab_H.ssa[icouche+ilam*(NATM+1)];
+				 profAtm[ilam*9*(NATM+1)+icouche*9+7]=tab_H.abs[icouche+ilam*(NATM+1)];
+				 profAtm[ilam*9*(NATM+1)+icouche*9+8]=tab_H.ip[icouche+ilam*(NATM+1)];
 
 			 }
 		}
@@ -2389,34 +2391,39 @@ void creerHDFResultats(double* tabFinal,double* tabTh, double* tabPhi, double* t
 
 
     }
-    if(NPHAOCE > 0){
+
+	if(NPHAOCE > 0){
+
     	dims[0] = NPHAOCE;
     	dims[1]=5;
     	dims[2] = mlsaoce;
 		write_sds(sdFichier, "phaseOc", ndims, dims, DFNT_FLOAT64,NULL, (VOIDP)(phaseOc));
 		free(phaseOc);
-		dims[0]=NLAM;
+    }
+
+
+    if (strcmp(PATHPROFILOCE,"None")!=0){
+        dims[0]=NLAM;
 		dims[1]=NOCE+1;
 		dims[2]=4;
 
-		float *profOc= (float*)malloc((4*NLAM*(NOCE+1))*sizeof(float));
 
 
+        float *profOc= (float*)malloc((4*NLAM*(NOCE+1))*sizeof(float));
 		for( int ilam=0;ilam<NLAM;ilam++) {
 			for( int icouche=0; icouche<NOCE+1; icouche++ ){
-					profOc[ilam*4*NLAM+icouche*4+0]=tab_H.depth[icouche];
-					profOc[ilam*4*NLAM+icouche*4+1]=tab_H.ho[icouche+ilam*(NOCE+1)];
-					profOc[ilam*4*NLAM+icouche*4+2]=tab_H.sso[icouche+ilam*(NOCE+1)];
-					profOc[ilam*4*NLAM+icouche*4+3]=(float)tab_H.ipo[icouche+ilam*(NOCE+1)];
+					profOc[ilam*4*(NOCE+1)+icouche*4+0]=tab_H.depth[icouche];
+					profOc[ilam*4*(NOCE+1)+1+icouche*4+1]=tab_H.ho[icouche+ilam*(NOCE+1)];
+					profOc[ilam*4*(NOCE+1)+icouche*4+2]=tab_H.sso[icouche+ilam*(NOCE+1)];
+					profOc[ilam*4*(NOCE+1)+icouche*4+3]=(float)tab_H.ipo[icouche+ilam*(NOCE+1)];
 					}
 				}
-
 		write_sds(sdFichier, "profileOc", ndims, dims, DFNT_FLOAT32,NULL, (VOIDP)(profOc));
-
 
 		free(profOc);
 
     }
+
 
     if (NLAM > 1) {
         write_sds(sdFichier, "LAMBDA", 1, dims, DFNT_FLOAT32,NULL, (VOIDP)tab_H.lambda);
