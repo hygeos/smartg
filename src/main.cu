@@ -273,8 +273,8 @@ int main (int argc, char *argv[])
         }
 
 
-	    /** Copy of Phase Matrix into device memory **/		
-	    cudaError_t erreur = cudaMemcpy(tab_D.foce, tab_H.foce, 5*NFOCE*NPHAOCE*sizeof(float), cudaMemcpyHostToDevice); 
+	    /** Copy of Phase Matrix into device memory **/
+	    cudaError_t erreur = cudaMemcpy(tab_D.foce, tab_H.foce, 5*NFOCE*NPHAOCE*sizeof(float), cudaMemcpyHostToDevice);
 	    if( erreur != cudaSuccess ){
 		  printf( "ERREUR: Problème de copie tab_D.foce dans main\n");
 		  printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
@@ -346,13 +346,7 @@ int main (int argc, char *argv[])
            LSAAER = count_lines(PATHDIFF);
 
 
-	    /** Copy of Phase Matrix into device memory **/		
-	    cudaError_t erreur = cudaMemcpy(tab_D.faer, tab_H.faer, 5*NFAER*NPHAAER*sizeof(float), cudaMemcpyHostToDevice); 
-	    if( erreur != cudaSuccess ){
-		  printf( "ERREUR: Problème de copie tab_D.faer dans main\n");
-		  printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-		  exit(1);
-	    }
+
 
 		calculF(PATHDIFF, tab_H.faer, tab_D.faer,MLSAAER,LSAAER, NFAER, ip,phaseatm);
 
@@ -360,6 +354,13 @@ int main (int argc, char *argv[])
            tabTransDir[ip] = exp(-tab_H.h[NATM+ip*(NATM+1)]/cos(THVDEG*PI/180.));
         }
 
+	    /** Copy of Phase Matrix into device memory **/
+	    cudaError_t erreur = cudaMemcpy(tab_D.faer, tab_H.faer, 5*NFAER*NPHAAER*sizeof(float), cudaMemcpyHostToDevice);
+	    if( erreur != cudaSuccess ){
+		  printf( "ERREUR: Problème de copie tab_D.faer dans main\n");
+		  printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
+		  exit(1);
+	    }
 
     }
 

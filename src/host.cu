@@ -1319,17 +1319,14 @@ void calculF( const char* nomFichier, float* phase_H, float* phase_D ,int mlsa,i
 
 
 
-	ang =&phase[0+(mlsa*5*ip)];
-	p1 = &phase[mlsa*2+(mlsa*5*ip)];
-	p2 = &phase[mlsa+(mlsa*5*ip)];
-	p3 = &phase[mlsa*3+(mlsa*5*ip)];
-	p4 = &phase[mlsa*4+(mlsa*5*ip)];
+	ang =&phase[ip*mlsa*5+mlsa*0];
+	p2 = &phase[ip*mlsa*5+mlsa*1];
+	p1 = &phase[ip*mlsa*5+mlsa*2];
+	p3 = &phase[ip*mlsa*5+mlsa*3];
+	p4 = &phase[ip*mlsa*5+mlsa*4];
 
 
-	if( ang==NULL || p1==NULL || p2==NULL || p3==NULL || p4==NULL ){
-		printf("ERREUR: Problème de malloc de ang ou pi dans calculFaer\n");
-		exit(1);
-	}
+
 	
 	/** Lecture des données sur le modèle de diffusion des aérosols **/
 	FILE* fichier = fopen(nomFichier, "r");
@@ -1449,17 +1446,6 @@ void calculF( const char* nomFichier, float* phase_H, float* phase_D ,int mlsa,i
 	}
 
 
-	printf("fin de la lecture\n");
-
-
-	/* Allocation des FAER dans la device memory **/
-
-	cudaError_t erreur = cudaMemcpy(phase_D, phase_H, 5*nf*NLAM*sizeof(float), cudaMemcpyHostToDevice);
-	if( erreur != cudaSuccess ){
-		printf( "ERREUR: Problème de copie phase_D dans calculF\n");
-		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
-		exit(1);
-	}
 	
 }
 
