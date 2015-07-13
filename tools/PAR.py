@@ -175,12 +175,17 @@ def SpecInt(wi, wb, ex, we, dl, M=None, field=None, lim=[400.,700.]):
     return E, Eavg
 
 
-def SpecInt2(wi, wb, ex, we, dl, M=None, field=None, Irradiance=False):
+def SpecInt2(wi, wb, ex, we, dl, M=None, field=None, Irradiance=False, lim=None, DL=None):
     Eavg=[] 
-    wu = np.unique(wb.data)
+    if DL == None:
+        wu = np.unique(wb.data)
+        DL = 1e-5
+    else:
+        if lim == None:
+            lim = [wi.data.min(),wi.data.max()]
+        wu = np.linspace(lim[0],lim[1]-DL,endpoint=True,num=(lim[1]-lim[0])/DL)
     for linf in wu:
-    #for linf in np.linspace(lim[0],lim[1]-DL,endpoint=True,num=(lim[1]-lim[0])/DL):
-        E1,E2 = SpecInt(wi, wb, ex, we, dl, M=M, field=field,lim=[linf,linf+1e-5])
+        E1,E2 = SpecInt(wi, wb, ex, we, dl, M=M, field=field,lim=[linf,linf+DL])
         if Irradiance :
             Eavg.append(Irr(E2))
         else:

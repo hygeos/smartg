@@ -1520,7 +1520,8 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 		cot = sqrtf( 1.0F - temp*temp );
 		ncTh = nind*cTh;
 		ncot = nind*cot;
-		rpar = __fdividef(cot - ncTh,cot + ncTh);
+		rpar = __fdividef(ncTh - cot,cot + ncTh); // DR Mobley 2015 sign convention
+		//rpar = __fdividef(cot - ncTh,cot + ncTh); // DR Mobley 2015 opposite sign convention
 		rper = __fdividef(cTh - ncot,cTh + ncot);
 		rpar2 = rpar*rpar;
 		rper2 = rper*rper;
@@ -1564,7 +1565,8 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
         // Zhao 1/rat * M with M Muller Reflection Matrix, here R = M*rat
 		ph->stokes1 *= rper2;
 		ph->stokes2 *= rpar2;
-		ph->stokes3 *= -rpar*rper;
+		ph->stokes3 *= rpar*rper; //DR Mobley 2015 sign convention
+		//ph->stokes3 *= -rpar*rper; DR Mobley 2015 opposite sign convention
 		
 		ph->vx += 2.F*cTh*nx;
 		ph->vy += 2.F*cTh*ny;
@@ -1608,7 +1610,8 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 			}
 		}
 		
-        geo_trans_factor = nind * cot/cTh;
+        geo_trans_factor = nind*nind*nind * cot/cTh; // DR Mobley 2015 OK -> see comment Diffuse Stokes vector transmission factor
+        // DR attention Mobley 2015 geo_trans_factor = nind * cot/cTh;
 		tpar = __fdividef( 2*cTh,ncTh+ cot);
 		tper = __fdividef( 2*cTh,cTh+ ncot);
 		
@@ -1617,7 +1620,8 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 		//ph->stokes3 *= -tpar*tper;
 		ph->stokes2 *= tpar*tpar*geo_trans_factor;
 		ph->stokes1 *= tper*tper*geo_trans_factor;
-		ph->stokes3 *= -tpar*tper*geo_trans_factor;
+		ph->stokes3 *= tpar*tper*geo_trans_factor; //DR positive factor Mobley 2015
+		//DR !!! MObley 2015 tpar and tper definite positive !!!! ph->stokes3 *= -tpar*tper*geo_trans_factor;
 		
 		alpha  = __fdividef(cTh,nind) - cot;
 		ph->vx = __fdividef(ph->vx,nind) + alpha*nx;
