@@ -2290,22 +2290,22 @@ void creerHDFResultats(double* tabFinal,double* tabTh, double* tabPhi, double* t
 
 
         if (OUTPUT_LAYERS & OUTPUT_BOA_DOWN_0P_UP_0M) {
-            write_sds(sdFichier, "I_down (0+)", ndims, dims, DFNT_FLOAT64,NULL, (VOIDP)(tabFinal+DOWN0P*4*NBPHI*NBTHETA*NLAM));
-            write_sds(sdFichier, "Q_down (0+)", ndims, dims, DFNT_FLOAT64,NULL, (VOIDP)(tabFinal+(DOWN0P*4+1)*NBPHI*NBTHETA*NLAM));
-            write_sds(sdFichier, "U_down (0+)", ndims, dims, DFNT_FLOAT64,NULL, (VOIDP)(tabFinal+(DOWN0P*4+2)*NBPHI*NBTHETA*NLAM));
+            write_sds(sdFichier, "I_down (0+)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+DOWN0P*4*NBPHI*NBTHETA*NLAM));
+            write_sds(sdFichier, "Q_down (0+)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+(DOWN0P*4+1)*NBPHI*NBTHETA*NLAM));
+            write_sds(sdFichier, "U_down (0+)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+(DOWN0P*4+2)*NBPHI*NBTHETA*NLAM));
 
-            write_sds(sdFichier, "I_up (0-)", ndims, dims, DFNT_FLOAT64,NULL, (VOIDP)(tabFinal+DOWN0M*4*NBPHI*NBTHETA*NLAM));
-            write_sds(sdFichier, "Q_up (0-)", ndims, dims, DFNT_FLOAT64,NULL, (VOIDP)(tabFinal+(DOWN0M*4+1)*NBPHI*NBTHETA*NLAM));
-            write_sds(sdFichier, "U_up (0-)", ndims, dims, DFNT_FLOAT64,NULL, (VOIDP)(tabFinal+(DOWN0M*4+2)*NBPHI*NBTHETA*NLAM));
+            write_sds(sdFichier, "I_up (0-)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+DOWN0M*4*NBPHI*NBTHETA*NLAM));
+            write_sds(sdFichier, "Q_up (0-)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+(DOWN0M*4+1)*NBPHI*NBTHETA*NLAM));
+            write_sds(sdFichier, "U_up (0-)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+(DOWN0M*4+2)*NBPHI*NBTHETA*NLAM));
         }
         if (OUTPUT_LAYERS & OUTPUT_BOA_DOWN_0M_UP_0P) {
-            write_sds(sdFichier, "I_down (0-)", ndims, dims, DFNT_FLOAT64,NULL, (VOIDP)(tabFinal+UP0P*4*NBPHI*NBTHETA*NLAM));
-            write_sds(sdFichier, "Q_down (0-)", ndims, dims, DFNT_FLOAT64,NULL, (VOIDP)(tabFinal+(UP0P*4+1)*NBPHI*NBTHETA*NLAM));
-            write_sds(sdFichier, "U_down (0-)", ndims, dims, DFNT_FLOAT64,NULL, (VOIDP)(tabFinal+(UP0P*4+2)*NBPHI*NBTHETA*NLAM));
+            write_sds(sdFichier, "I_down (0-)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+UP0P*4*NBPHI*NBTHETA*NLAM));
+            write_sds(sdFichier, "Q_down (0-)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+(UP0P*4+1)*NBPHI*NBTHETA*NLAM));
+            write_sds(sdFichier, "U_down (0-)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+(UP0P*4+2)*NBPHI*NBTHETA*NLAM));
 
-            write_sds(sdFichier, "I_up (0+)", ndims, dims, DFNT_FLOAT64,NULL, (VOIDP)(tabFinal+UP0M*4*NBPHI*NBTHETA*NLAM));
-            write_sds(sdFichier, "Q_up (0+)", ndims, dims, DFNT_FLOAT64,NULL, (VOIDP)(tabFinal+(UP0M*4+1)*NBPHI*NBTHETA*NLAM));
-            write_sds(sdFichier, "U_up (0+)", ndims, dims, DFNT_FLOAT64,NULL, (VOIDP)(tabFinal+(UP0M*4+2)*NBPHI*NBTHETA*NLAM));
+            write_sds(sdFichier, "I_up (0+)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+UP0M*4*NBPHI*NBTHETA*NLAM));
+            write_sds(sdFichier, "Q_up (0+)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+(UP0M*4+1)*NBPHI*NBTHETA*NLAM));
+            write_sds(sdFichier, "U_up (0+)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+(UP0M*4+2)*NBPHI*NBTHETA*NLAM));
         }
 
     // Number of photons
