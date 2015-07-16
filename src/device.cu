@@ -1559,8 +1559,6 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 
 	
 	if( (ReflTot==1) || (SURd==1) || ( (SURd==3)&&(RAND<rat) ) ){
-        // Reflection (total internal, forced or randomly selected)
-        // DR (Xun 2014)
 
 		// photon location is the same
 		if(ph->vz<0){
