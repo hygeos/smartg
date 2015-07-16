@@ -335,6 +335,7 @@ __device__ void initPhoton(Photon* ph, Tableaux tab
 	ph->vx = - STHVd;
 	ph->vy = 0.F;
 	ph->vz = - CTHVd;
+
 	
 	// Initialisation du vecteur orthogonal au vecteur vitesse
 	ph->ux = -ph->vz;
@@ -411,8 +412,6 @@ __device__ void initPhoton(Photon* ph, Tableaux tab
 	ph->stokes1 = 0.5F;
 	ph->stokes2 = 0.5F;
 	ph->stokes3 = 0.F;
-
-
 
 }
 
@@ -925,7 +924,8 @@ __device__ void move_pp(Photon* ph,float*z, float* h, float* pMol , float *abs ,
 		    ) {
 
 
-	float Dsca=0.f, dsca=0.f;
+	float Dsca=0.f, dsca=0.f, tau_init;
+    tau_init = ph->tau;
 
     if (ph->loc == TOA){
         ph->tau = h[NATMd + ph->ilam*(NATMd+1)]; 
@@ -942,6 +942,7 @@ __device__ void move_pp(Photon* ph,float*z, float* h, float* pMol , float *abs ,
 	if (ph->loc == OCEAN){  
         if (ph->tau >= 0) {
            ph->tau = 0.F;
+           ph->dtau= - tau_init;
            ph->loc = SURFACE;
            if (SIMd == 3){
               ph->loc = SPACE;
@@ -952,6 +953,7 @@ __device__ void move_pp(Photon* ph,float*z, float* h, float* pMol , float *abs ,
         else if( ph->tau < ho[NOCEd + ph->ilam *(NOCEd+1)] ){
             ph->loc = SEAFLOOR;
             ph->tau = ho[NOCEd + ph->ilam *(NOCEd+1)];
+            ph->dtau = ph->tau-tau_init;
             return;
         }
 
@@ -963,6 +965,7 @@ __device__ void move_pp(Photon* ph,float*z, float* h, float* pMol , float *abs ,
             icouche++;
         }
         ph->couche = icouche;
+        ph->dtau = ph->tau - tau_init;
 
 
 
@@ -976,7 +979,8 @@ __device__ void move_pp(Photon* ph,float*z, float* h, float* pMol , float *abs ,
         if(ph->tau < 0.F){
             ph->loc = SURFACE;
             ph->tau = 0.F;
-            return;
+            ph->dtau = -tau_init;
+        return;
         }
         // Si tau>TAUATM le photon atteint l'espace
         else if( ph->tau > h[NATMd + ph->ilam *(NATMd+1)] ){
@@ -1000,6 +1004,8 @@ __device__ void move_pp(Photon* ph,float*z, float* h, float* pMol , float *abs ,
         ph->prop_aer = 1.f - pMol[ph->couche+ph->ilam*(NATMd+1)];
 
         ph->weight = ph->weight * (1.f - abs[ph->couche+ph->ilam*(NATMd+1)]);
+
+        ph->dtau = ph->tau - tau_init;
 
     }
 
@@ -1347,7 +1353,7 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 	float nx, ny, nz;	// Coordonnées du vecteur normal à une facette de vague
 	float s1, s2, s3;
 	
-	float rpar, rper;	// Coefficient de reflexion parallèle et perpendiculaire
+	float rpar, rper, rparper;	// Coefficient de reflexion parallèle et perpendiculaire
 	float rpar2;		// Coefficient de reflexion parallèle au carré
 	float rper2;		// Coefficient de reflexion perpendiculaire au carré
 	float rat;			// Rapport des coefficients de reflexion perpendiculaire et parallèle
@@ -1423,6 +1429,7 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 	
 	if( DIOPTREd !=0 ){
         theta = DEMIPI;
+        // DR Rejection method to exclude unphysical slopes (incident angle theta >=PI/2)
         while(theta>=DEMIPI){
            alpha = DEUXPI * RAND;
 		   sig = sqrtf(0.003F + 0.00512f *WINDSPEEDd);
@@ -1432,7 +1439,9 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 	       nx = sBeta*__cosf( alpha );
 	       ny = sBeta*__sinf( alpha );
 	
-	       // Projection de la surface apparente de la facette sur le plan horizontal		
+	       // Projection de la surface apparente de la facette sur le plan horizontal
+           // compute relative index of refraction
+           // DR a: air, b: water , Mobley 2015 nind = nba = nb/na
 	       if( ph->vz > 0 ){
 		       nind = __fdividef(1.f,NH2Od);
 		       nz = -cBeta;
@@ -1469,16 +1478,19 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 	cTh = __cosf(theta);
 	sTh = __sinf(theta);
 
-    // Projection de la surface apparente de la facette sur le plan horizontal      
+    // DR Projection de la surface apparente de la facette sur le plan horizontal      
     // pour avoir une surface unite equivalente pour toute les pentes de vague
     ph->weight /= cBeta;
 
-    // Incident angle cosine factor for incident irradiance  onto the facet conversion
+    // DR Incident angle cosine factor for incident irradiance  onto the facet conversion
     ph->weight *= abs(cTh);
 
-    // Compute the A factor (Plass  and Kattawar, 1975.) for normalizing the probability of a oblique
+    // DR Compute the A factor (Plass  and Kattawar, 1975.) for normalizing the probability of a oblique
     // downward photon to strike a given slope
-    // DR essai simple 
+    // A(vz) = Sum_0_pi/2 Sum_0_2pi PDF_C&M(theta,phi) cBeta cTh dtheta dphi, with theta<Pi/2
+    // Model A factor with a simple linear fit that represents the departure from 1./vz,
+    // slope is constant and threshold depends on windspeed. Below threshold on theta, all slopes
+    // are possible and thus A=1/vz
     float Anorm;
     float slopeA=0.004;
     float theta_thres;
@@ -1495,7 +1507,7 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
     ph->weight *= __fdividef(1., Anorm);
 
 
-	// Rotation des paramètres de Stokes
+	// Rotation of Stokes parameters
 	s1 = ph->stokes1;
 	s2 = ph->stokes2;
 	s3 = ph->stokes3;
@@ -1525,25 +1537,32 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 		rper = __fdividef(cTh - ncot,cTh + ncot);
 		rpar2 = rpar*rpar;
 		rper2 = rper*rper;
-		rat = __fdividef(ph->stokes1*rper2 + ph->stokes2*rpar2,ph->stokes1+ph->stokes2);
+        rparper = rpar * rper;
+        // DR rat is the energetic reflection factor used to normalize the R and T matrix (see Xun 2014)
+		rat =  __fdividef(ph->stokes1*rper2 + ph->stokes2*rpar2,ph->stokes1+ph->stokes2);
+		//rat = 0.5 * (rper2 + rpar2); // DR see Xun 2014, eq 15 strange ....
 		ReflTot = 0;
 	}
 	else{
 		cot = 0.f;
 		rpar = 1.f;
 		rper = 1.f;
-		rat = 0.f;
+        rat = 0.f;
+        // DR rat is normalizing the relection matrix
+		//rat = 1.f;
 		rpar2 = rpar*rpar;
 		rper2 = rper*rper;
+        rparper = __fdividef(2.*sTh*sTh*sTh*sTh, 1.-(1.+nind * nind)*cTh*cTh) - 1.; // DR !! Mobley 2015
+        //rparper=1.f;
 		ReflTot = 1;
 	}
 
 	
 	if( (ReflTot==1) || (SURd==1) || ( (SURd==3)&&(RAND<rat) ) ){
-		//Nouveau parametre pour le photon apres reflexion
-        // Zhao et al 2014, JQSRT
+        // Reflection (total internal, forced or randomly selected)
+        // DR (Xun 2014)
 
-		// Le photon reste dans son milieu précédent
+		// photon location is the same
 		if(ph->vz<0){
 			if( SIMd==-1 || SIMd==0 ){
 				ph->loc = SPACE;
@@ -1562,11 +1581,10 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 		}
 		
 		
-        // Zhao 1/rat * M with M Muller Reflection Matrix, here R = M*rat
 		ph->stokes1 *= rper2;
 		ph->stokes2 *= rpar2;
-		ph->stokes3 *= rpar*rper; //DR Mobley 2015 sign convention
-		//ph->stokes3 *= -rpar*rper; DR Mobley 2015 opposite sign convention
+		ph->stokes3 *= rparper; // DR Mobley 2015 sign convention
+		// DR ph->stokes3 *= -rpar*rper; Mobley 2015 opposite sign convention
 		
 		ph->vx += 2.F*cTh*nx;
 		ph->vy += 2.F*cTh*ny;
@@ -1575,24 +1593,28 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 		ph->uy = __fdividef( ny-cTh*ph->vy,sTh );
 		ph->uz = __fdividef( nz-cTh*ph->vz,sTh );
 		
-		
+	    // DR !!!!!!!!!!!!!!!!!!!!!!!	
 		// Suppression des reflexions multiples
 		if( (ph->vz<0) && (DIOPTREd==2) && (SIMd!=0 && SIMd!=2 && SIMd!=3) ){
 			ph->loc = ABSORBED;
 		}
+	    // DR !!!!!!!!!!!!!!!!!!!!!!!	
 
-//		if( SURd==1 ){ /*On pondere le poids du photon par le coefficient de reflexion dans le cas 
-//			d'une reflexion speculaire sur le dioptre (mirroir parfait)*/
-//			ph->weight *= rat;
-//		}
+        // DR Normalization of the reflexion matrix
+        // the reflection coefficient is taken into account:
+        // once in the random selection (Rand < rat)
+        // once in the reflection matrix multiplication
+        // so we normalize by rat (Xun 2014).
+        // Not to be applied for forced reflection
 		if (SURd==3 && ReflTot==0) {
 			ph->weight /= rat;
-				}
+			}
+
 	} // Reflection
 
-	else{	// Transmission par le dioptre
+	else{	// Transmission
 		
-		// Le photon change de milieu
+		// Photon location changes
 		if(ph->vz<0){
 			if( SIMd==-1 || SIMd==1 ){
 				ph->loc = ABSORBED;
@@ -1610,14 +1632,10 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 			}
 		}
 		
-        geo_trans_factor = nind*nind*nind * cot/cTh; // DR Mobley 2015 OK -> see comment Diffuse Stokes vector transmission factor
-        // DR attention Mobley 2015 geo_trans_factor = nind * cot/cTh;
+        geo_trans_factor = nind* cot/cTh; // DR Mobley 2015 OK -> see comment MC Transmission, see Xun 2014
 		tpar = __fdividef( 2*cTh,ncTh+ cot);
 		tper = __fdividef( 2*cTh,cTh+ ncot);
 		
-		//ph->stokes2 *= tpar*tpar;
-		//ph->stokes1 *= tper*tper;
-		//ph->stokes3 *= -tpar*tper;
 		ph->stokes2 *= tpar*tpar*geo_trans_factor;
 		ph->stokes1 *= tper*tper*geo_trans_factor;
 		ph->stokes3 *= tpar*tper*geo_trans_factor; //DR positive factor Mobley 2015
@@ -1632,11 +1650,12 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 		ph->uz = __fdividef( nz+cot*ph->vz,sTh )*nind;
 
 		
-		/* On pondere le poids du photon par le coefficient de transmission dans le cas d'une transmission forcee */
-//  Modif on supprime cette pondération (nouvelle méthode cf collins et mat)
-//		if( SURd == 2)
-//			ph->weight *= (1-rat);
-//      mais on rajoute cela
+        // DR Normalization of the transmission matrix
+        // the transmission coefficient is taken into account:
+        // once in the random selection (Rand > rat)
+        // once in the transmission matrix multiplication
+        // so we normalize by (1-rat) (Xun 2014).
+        // Not to be applied for forced transmission
         if ( SURd == 3) 
             ph->weight /= (1-rat);
 
@@ -1965,8 +1984,8 @@ __device__ void countInterface(Photon* ph, float* tab1, float* tab2
     )
 {
 
-//  On ne compte pas les photons directement transmis ou absorbes
-    if ((ph->weight == WEIGHTINIT) && (ph->stokes1 == ph->stokes2) && (ph->stokes3 == 0.f) || (ph->loc == ABSORBED)) {
+//  On ne compte pas les photons directement transmis ou absorbes ou les photons n ayant pas bouges
+    if ((ph->weight == WEIGHTINIT) && (ph->stokes1 == ph->stokes2) && (ph->stokes3 == 0.f) || (ph->loc == ABSORBED) || (ph->dtau==0.f)) {
     return;
     }
 	

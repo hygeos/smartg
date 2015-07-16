@@ -21,7 +21,7 @@ def Irr(R):
     mu  = np.cos(the*np.pi/180.)
     Tab = np.zeros(len(phi),dtype=float)
     for iphi in range(len(phi)):
-        Tab[iphi] =  simps(mu *  R[iphi,:], -mu)
+        Tab[iphi] =   simps(mu *  R[iphi,:], - mu)
     return 2 * simps(Tab, phi*np.pi/180.) / np.pi  
     
 def SpherIrr(R):

@@ -244,7 +244,7 @@ typedef struct __align__(16)
 	float tau;	// localisation en epaisseur optique
                 // atmosphère: valeurs positives
                 // océan: valeurs négatives
-	
+    float dtau; // DR tau icrement in move	
 	
 	
 
