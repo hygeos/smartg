@@ -407,6 +407,7 @@ __device__ void initPhoton(Photon* ph, Tableaux tab
 	
 
 	ph->weight = WEIGHTINIT;
+    ph->dtau = 0.1;
 	
 	// Initialisation des paramètres de stokes du photon
 	ph->stokes1 = 0.5F;
@@ -468,6 +469,8 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
 	double rsol1,rsol2;
 	#endif
 	
+    float ray_init;
+    ray_init = ph->rayon;
 	
     if (ph->loc == TOA){
         ph->tau = tab.h[NATMd + ph->ilam*(NATMd+1)]; 
@@ -484,6 +487,7 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
 		 * Il va quand même intéragir.
 		*/
 		ph->locPrec = ATMOS;
+        ph->dtau=0.;
 		return;
 	}
 
@@ -841,6 +845,7 @@ sinth= %20.19lf - sens=%d\n",\
 			ph->loc = SURFACE;
 			ph->couche = NATMd;
 			ph->rayon = RTER;
+            ph->dtau = RTER - ray_init;
 		}
 		else{
 			ph->loc = SPACE;
@@ -863,6 +868,7 @@ sinth= %20.19lf - sens=%d\n",\
 			*/
 			rayon=RTER;
 			ph->loc=SURFACE;
+            ph->dtau = RTER - ray_init;
 			#ifdef DEBUG
 			printf("MetaProblème #2: Correction du rayon\n");
 			#endif
@@ -895,6 +901,7 @@ rsolfi=%15.12lf - tauRdm= %lf - hph_p= %15.12lf - hph= %15.12lf - zph_p= %15.12l
 
 	ph->couche = icouche;
 	ph->rayon = rayon;
+    ph->dtau = rayon - ray_init;
 	ph->locPrec=ATMOS;
 
     
@@ -1426,20 +1433,36 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 	#endif	/* Fin de la séparation atmosphère sphérique */
 	
 	/** **/
-	
+    // DR Estimation of the probability P of interaction of the photon with zentih angle theta with a facet of slope beta and azimut alpha	
+    // DR P_alpha_beta : Probability of occurence of a given azimuth and slope
+    // DR P_alpha_beta = P_Cox_Munk(beta) * P(alpha | beta), conditional probability, for normal incidence, independent variables and P(alpha|beta)=P(alpha)=1/2pi
+    // DR following Plass75:
+    // DR Pfacet : Probability of occurence of a facet
+    // DR Pfacet = projected area of the facet divided by unit area of the possible interaction surface * P_alpha_beta
+    // DR Pfacet = P_alpha_beta / cos(beta)
+    // DR for non normal incident angle, the probability of interaction between the photon and the facet is proportional to the surface of the facet seen by the photon so
+    // DR that is cosine of incident angle of photon on the facet theta_inc=f(alpha,beta,theta)
+    // DR P # Pfacet * cos(theta_inc) for cos(theta_inc) >0
+    // DR P = 0 for cos(theta_inc)<=0
+    // DR for having a true probability, one has to normalize this to 1. The A normalization factor depends on theta and is the sum on all alpha and beta with the condition
+    // DR cos(theta_inc)>0 (visible facet)
+    // DR A = Sum_0_2pi Sumr_0_pi/2 P_alpha_beta /cos(beta) cos(theta_inc) dalpha dbeta
+    // DR Finally P = 1/A * P_alpha_beta  /cos(beta) cos(theta_inc)
 	if( DIOPTREd !=0 ){
         theta = DEMIPI;
-        // DR Rejection method to exclude unphysical slopes (incident angle theta >=PI/2)
+        // DR Computation of P_alpha_beta = P_Cox_Munk(beta) * P(alpha | beta)
+        // DR we draw beta first according to Cox_Munk isotropic and then draw alpha, conditional probability
+        // DR rejection method: to exclude unphysical azimuth (leading to incident angle theta >=PI/2)
+        // DR we continue until acceptable value for alpha
+		sig = sqrtf(0.003F + 0.00512f *WINDSPEEDd);
+		beta = atanf( sig*sqrtf(-__logf(RAND)) );
         while(theta>=DEMIPI){
            alpha = DEUXPI * RAND;
-		   sig = sqrtf(0.003F + 0.00512f *WINDSPEEDd);
-		   beta = atanf( sig*sqrtf(-__logf(RAND)) );
 	       sBeta = __sinf( beta );
 	       cBeta = __cosf( beta );
 	       nx = sBeta*__cosf( alpha );
 	       ny = sBeta*__sinf( alpha );
 	
-	       // Projection de la surface apparente de la facette sur le plan horizontal
            // compute relative index of refraction
            // DR a: air, b: water , Mobley 2015 nind = nba = nb/na
 	       if( ph->vz > 0 ){
@@ -1462,7 +1485,6 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 	    nx = sBeta*__cosf( alpha );
 	    ny = sBeta*__sinf( alpha );
 	
-	    // Projection de la surface apparente de la facette sur le plan horizontal		
 	    if( ph->vz > 0 ){
 		    nind = __fdividef(1.f,NH2Od);
 		    nz = -cBeta;
@@ -1478,18 +1500,17 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 	cTh = __cosf(theta);
 	sTh = __sinf(theta);
 
-    // DR Projection de la surface apparente de la facette sur le plan horizontal      
-    // pour avoir une surface unite equivalente pour toute les pentes de vague
-    ph->weight /= cBeta;
-
-    // DR Incident angle cosine factor for incident irradiance  onto the facet conversion
-    ph->weight *= abs(cTh);
-
-    // DR Compute the A factor (Plass  and Kattawar, 1975.) for normalizing the probability of a oblique
-    // downward photon to strike a given slope
-    // A(vz) = Sum_0_pi/2 Sum_0_2pi PDF_C&M(theta,phi) cBeta cTh dtheta dphi, with theta<Pi/2
-    // Model A factor with a simple linear fit that represents the departure from 1./vz,
-    // slope is constant and threshold depends on windspeed. Below threshold on theta, all slopes
+    // Anorm factor modelled with a simple linear fit that represents the departure from vz,
+    // (Anorm-vz)
+    // ^                                               +
+    // |                                              + 
+    // |                                             + 
+    // |                                            + 
+    // |                                           + 
+    // ++++++++++++++++++++++++++++++++++++++++++++--------> (theta)
+    // 0                                          |        90
+    //                                        Theta_thres=f(Windspeed)
+    // The slope of the model is constant=0.004 and threshold depends on windspeed. Below threshold on theta, all slopes
     // are possible and thus A=1/vz
     float Anorm;
     float slopeA=0.004;
@@ -1504,8 +1525,8 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
        Anorm = avz;
     }
 
-    ph->weight *= __fdividef(1., Anorm);
-
+    // DR probability of slope interaction with photon corection factor, biased sampling correction of pure Cox_Munk probability function
+    ph->weight *= __fdividef(abs(cTh), cBeta * Anorm);
 
 	// Rotation of Stokes parameters
 	s1 = ph->stokes1;
@@ -1521,8 +1542,6 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 			psi = -psi;
 		}
 
-        /*psi est l'angle entre le plan de diffusion et le plan de diffusion precedent. Rotation des
-        parametres de Stoke du photon d'apres cet angle.*/
         rotateStokes(ph->stokes1, ph->stokes2, ph->stokes3, psi,
                 &ph->stokes1, &ph->stokes2, &ph->stokes3);
 	}
@@ -1532,8 +1551,7 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 		cot = sqrtf( 1.0F - temp*temp );
 		ncTh = nind*cTh;
 		ncot = nind*cot;
-		rpar = __fdividef(ncTh - cot,cot + ncTh); // DR Mobley 2015 sign convention
-		//rpar = __fdividef(cot - ncTh,cot + ncTh); // DR Mobley 2015 opposite sign convention
+		rpar = __fdividef(ncTh - cot,ncTh  + cot); // DR Mobley 2015 sign convention
 		rper = __fdividef(cTh - ncot,cTh + ncot);
 		rpar2 = rpar*rpar;
 		rper2 = rper*rper;
@@ -1547,13 +1565,11 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 		cot = 0.f;
 		rpar = 1.f;
 		rper = 1.f;
-        rat = 0.f;
+        rat = 1.f;
         // DR rat is normalizing the relection matrix
-		//rat = 1.f;
 		rpar2 = rpar*rpar;
 		rper2 = rper*rper;
         rparper = __fdividef(2.*sTh*sTh*sTh*sTh, 1.-(1.+nind * nind)*cTh*cTh) - 1.; // DR !! Mobley 2015
-        //rparper=1.f;
 		ReflTot = 1;
 	}
 
@@ -1582,7 +1598,6 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 		ph->stokes1 *= rper2;
 		ph->stokes2 *= rpar2;
 		ph->stokes3 *= rparper; // DR Mobley 2015 sign convention
-		// DR ph->stokes3 *= -rpar*rper; Mobley 2015 opposite sign convention
 		
 		ph->vx += 2.F*cTh*nx;
 		ph->vy += 2.F*cTh*ny;
@@ -1599,11 +1614,11 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 	    // DR !!!!!!!!!!!!!!!!!!!!!!!	
 
         // DR Normalization of the reflexion matrix
-        // the reflection coefficient is taken into account:
-        // once in the random selection (Rand < rat)
-        // once in the reflection matrix multiplication
-        // so we normalize by rat (Xun 2014).
-        // Not to be applied for forced reflection
+        // DR the reflection coefficient is taken into account:
+        // DR once in the random selection (Rand < rat)
+        // DR once in the reflection matrix multiplication
+        // DR so twice and thus we normalize by rat (Xun 2014).
+        // DR not to be applied for forced reflection (SUR=1 or total reflection) where there is no random selection
 		if (SURd==3 && ReflTot==0) {
 			ph->weight /= rat;
 			}
@@ -1630,14 +1645,13 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 			}
 		}
 		
-        geo_trans_factor = nind* cot/cTh; // DR Mobley 2015 OK -> see comment MC Transmission, see Xun 2014
+        geo_trans_factor = nind* cot/cTh; // DR Mobley 2015 OK , see Xun 2014
 		tpar = __fdividef( 2*cTh,ncTh+ cot);
 		tper = __fdividef( 2*cTh,cTh+ ncot);
 		
 		ph->stokes2 *= tpar*tpar*geo_trans_factor;
 		ph->stokes1 *= tper*tper*geo_trans_factor;
 		ph->stokes3 *= tpar*tper*geo_trans_factor; //DR positive factor Mobley 2015
-		//DR !!! MObley 2015 tpar and tper definite positive !!!! ph->stokes3 *= -tpar*tper*geo_trans_factor;
 		
 		alpha  = __fdividef(cTh,nind) - cot;
 		ph->vx = __fdividef(ph->vx,nind) + alpha*nx;
@@ -1653,7 +1667,7 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
         // once in the random selection (Rand > rat)
         // once in the transmission matrix multiplication
         // so we normalize by (1-rat) (Xun 2014).
-        // Not to be applied for forced transmission
+        // Not to be applied for forced transmission (SUR=2)
         if ( SURd == 3) 
             ph->weight /= (1-rat);
 
@@ -1993,7 +2007,7 @@ __device__ void countInterface(Photon* ph, float* tab1, float* tab2
         tabCount = tab1;
         }
     else {
-        tabCount = tab2;
+         tabCount = tab2;
     } 
 	
 	
