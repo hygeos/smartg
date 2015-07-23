@@ -1524,9 +1524,9 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
     // The slope of the model is constant=0.004 and threshold depends on windspeed. Below threshold on theta, all slopes
     // are possible and thus A=1/vz
     float Anorm;
-    float slopeA=0.004;
+    float slopeA=0.00377;
     float theta_thres;
-    theta_thres = 86. - WINDSPEEDd; // between 1 and 15 m/s
+    theta_thres = 83.46 - WINDSPEEDd; // between 1 and 15 m/s
     float avz = abs(ph->vz);
     float aavz = acosf(avz)*360./DEUXPI;
     if(aavz > theta_thres){
