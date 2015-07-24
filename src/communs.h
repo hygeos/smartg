@@ -87,21 +87,17 @@ typedef int CrMCCUDA;
 #define ABSORBED	3
 #define NONE		4
 #define OCEAN		5
-#define TOA	    	6
 #define SEAFLOOR   	7
 
-/* Nombre d'evenements*/
-#define NEVENT  5
+// Number of output levels
+#define NLVL  5
 
-//fusion des tableaux
-/*Evenement de comptage*/
-
+// indexing of the output levels
+#define UPTOA   0
 #define DOWN0P	1
 #define DOWN0M	2
 #define UP0P	3
 #define UP0M	4
-//fusion des tableaux
-
 
 
 // bitmasks for output
@@ -317,7 +313,7 @@ typedef struct __align__(16)
 	
 
 
-	float* tabPhotonsEvents;		//Tableau contenant l'ensemble des paramètres de stokes de tous les photons (évènements confondus)
+	float* tabPhotons;		//Tableau contenant l'ensemble des paramètres de stokes de tous les photons (évènements confondus)
 
 
 

@@ -716,22 +716,22 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 
 
 		// Tableau du poids des photons ressortis
-			tab_H->tabPhotonsEvents = (float*)malloc(NEVENT*4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_H->tabPhotonsEvents)));
-			if( tab_H->tabPhotonsEvents == NULL ){
-				printf("ERREUR: Problème de malloc de tab_H->tabPhotonEvent dans initTableaux\n");
+			tab_H->tabPhotons = (float*)malloc(NLVL*4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_H->tabPhotons)));
+			if( tab_H->tabPhotons == NULL ){
+				printf("ERREUR: Problème de malloc de tab_H->tabPhoton dans initTableaux\n");
 				exit(1);
 			}
-			memset(tab_H->tabPhotonsEvents,0,NEVENT*4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_H->tabPhotonsEvents)) );
+			memset(tab_H->tabPhotons, 0, NLVL*4*NBTHETA * NBPHI * NLAM * sizeof(*(tab_H->tabPhotons)) );
 
-			if( cudaMalloc(&(tab_D->tabPhotonsEvents), NEVENT*4 * NBTHETA * NBPHI * NLAM * sizeof(*(tab_D->tabPhotonsEvents))) != cudaSuccess){
-				printf("ERREUR: Problème de cudaMalloc de tab_D->tabPhotonsEvents dans initTableaux\n");
+			if( cudaMalloc(&(tab_D->tabPhotons), NLVL*4 * NBTHETA * NBPHI * NLAM * sizeof(*(tab_D->tabPhotons))) != cudaSuccess){
+				printf("ERREUR: Problème de cudaMalloc de tab_D->tabPhotons dans initTableaux\n");
 				exit(1);
 			}
 
-			cudaErreur = cudaMemset(tab_D->tabPhotonsEvents, 0, NEVENT*4*NBTHETA * NBPHI * NLAM *  sizeof(*(tab_D->tabPhotonsEvents)));
+			cudaErreur = cudaMemset(tab_D->tabPhotons, 0, NLVL*4*NBTHETA * NBPHI * NLAM *  sizeof(*(tab_D->tabPhotons)));
 			if( cudaErreur != cudaSuccess ){
 			printf("#--------------------#\n");
-			printf("# ERREUR: Problème de cudaMemset tab_D.tabPhotonsEvents dans le initTableaux\n");
+			printf("# ERREUR: Problème de cudaMemset tab_D.tabPhotons dans le initTableaux\n");
 			printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
 			printf("#--------------------#\n");
 			exit(1);
@@ -1222,14 +1222,14 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 
 
 	//fusion des tableaux
-	erreur = cudaFree(tab_D->tabPhotonsEvents);
+	erreur = cudaFree(tab_D->tabPhotons);
 	if( erreur != cudaSuccess ){
-		printf( "ERREUR: Problème de cudaFree de tab_D->tabPhotonsEvents dans freeTableaux\n");
+		printf( "ERREUR: Problème de cudaFree de tab_D->tabPhotons dans freeTableaux\n");
 		printf( "Nature de l'erreur: %s\n",cudaGetErrorString(erreur) );
 		exit(1);
 	}
 
-	free(tab_H->tabPhotonsEvents);
+	free(tab_H->tabPhotons);
 	//fusion des tableaux
 
 
@@ -2296,21 +2296,21 @@ void creerHDFResultats(double* tabFinal,double* tabTh, double* tabPhi, double* t
             write_sds(sdFichier, "U_down (0+)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+(DOWN0P*4+2)*NBPHI*NBTHETA*NLAM));
             write_sds(sdFichier, "N_down (0+)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+(DOWN0P*4+3)*NBPHI*NBTHETA*NLAM));
 
-            write_sds(sdFichier, "I_up (0-)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+DOWN0M*4*NBPHI*NBTHETA*NLAM));
-            write_sds(sdFichier, "Q_up (0-)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+(DOWN0M*4+1)*NBPHI*NBTHETA*NLAM));
-            write_sds(sdFichier, "U_up (0-)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+(DOWN0M*4+2)*NBPHI*NBTHETA*NLAM));
-            write_sds(sdFichier, "N_up (0-)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+(DOWN0M*4+3)*NBPHI*NBTHETA*NLAM));
+            write_sds(sdFichier, "I_up (0-)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+UP0M*4*NBPHI*NBTHETA*NLAM));
+            write_sds(sdFichier, "Q_up (0-)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+(UP0M*4+1)*NBPHI*NBTHETA*NLAM));
+            write_sds(sdFichier, "U_up (0-)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+(UP0M*4+2)*NBPHI*NBTHETA*NLAM));
+            write_sds(sdFichier, "N_up (0-)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+(UP0M*4+3)*NBPHI*NBTHETA*NLAM));
         }
         if (OUTPUT_LAYERS & OUTPUT_BOA_DOWN_0M_UP_0P) {
-            write_sds(sdFichier, "I_down (0-)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+UP0P*4*NBPHI*NBTHETA*NLAM));
-            write_sds(sdFichier, "Q_down (0-)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+(UP0P*4+1)*NBPHI*NBTHETA*NLAM));
-            write_sds(sdFichier, "U_down (0-)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+(UP0P*4+2)*NBPHI*NBTHETA*NLAM));
-            write_sds(sdFichier, "N_down (0-)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+(UP0P*4+3)*NBPHI*NBTHETA*NLAM));
+            write_sds(sdFichier, "I_down (0-)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+DOWN0M*4*NBPHI*NBTHETA*NLAM));
+            write_sds(sdFichier, "Q_down (0-)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+(DOWN0M*4+1)*NBPHI*NBTHETA*NLAM));
+            write_sds(sdFichier, "U_down (0-)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+(DOWN0M*4+2)*NBPHI*NBTHETA*NLAM));
+            write_sds(sdFichier, "N_down (0-)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+(DOWN0M*4+3)*NBPHI*NBTHETA*NLAM));
 
-            write_sds(sdFichier, "I_up (0+)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+UP0M*4*NBPHI*NBTHETA*NLAM));
-            write_sds(sdFichier, "Q_up (0+)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+(UP0M*4+1)*NBPHI*NBTHETA*NLAM));
-            write_sds(sdFichier, "U_up (0+)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+(UP0M*4+2)*NBPHI*NBTHETA*NLAM));
-            write_sds(sdFichier, "N_up (0+)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+(UP0M*4+3)*NBPHI*NBTHETA*NLAM));
+            write_sds(sdFichier, "I_up (0+)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+UP0P*4*NBPHI*NBTHETA*NLAM));
+            write_sds(sdFichier, "Q_up (0+)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+(UP0P*4+1)*NBPHI*NBTHETA*NLAM));
+            write_sds(sdFichier, "U_up (0+)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+(UP0P*4+2)*NBPHI*NBTHETA*NLAM));
+            write_sds(sdFichier, "N_up (0+)", ndims, dims, DFNT_FLOAT64,dim_names, (VOIDP)(tabFinal+(UP0P*4+3)*NBPHI*NBTHETA*NLAM));
         }
 
 

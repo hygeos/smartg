@@ -78,6 +78,8 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 {
 	// idx est l'indice du thread considéré
 	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+    int loc_prev;
+    int count_level;
 
 	// Paramètres de la fonction random en mémoire locale
 	#ifdef RANDMWC
@@ -147,11 +149,11 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 		// Deplacement
         //
         // -> Si OCEAN ou ATMOS
-		if( (ph.loc == ATMOS || ph.loc == TOA) || (ph.loc == OCEAN)){
-
+        loc_prev = ph.loc;
+		if( (ph.loc == ATMOS) || (ph.loc == OCEAN)){
 
             #ifdef SPHERIQUE
-            if (ph.loc == ATMOS || ph.loc == TOA)
+            if (ph.loc == ATMOS)
                 move_sp(&ph, tab, init
                         , &etatThr
                         #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
@@ -165,11 +167,39 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
                         , &configThr
                         #endif
                                 );
-
-
-
-
 		}
+
+        //
+        // count after move:
+        // count the photons in space and reaching surface from above or below
+        //
+        count_level = -1;
+        if (ph.loc == SPACE) {
+            count_level = UPTOA;
+
+            // increment the photon counter
+            // (for this thread)
+            nbPhotonsThr++;
+
+            #ifdef PROGRESSION
+            nbPhotonsSorThr++;
+            #endif
+
+            // reset the photon location (always)
+            ph.loc = NONE;
+        } else if (ph.loc == SURFACE) {
+            if ((loc_prev == ATMOS) || (loc_prev == SPACE)) count_level = DOWN0P;
+            if (loc_prev == OCEAN) count_level = UP0M;
+        }
+
+        // count the photons
+        countPhoton(&ph, tab, count_level
+                #ifdef PROGRESSION
+                , &nbPhotonsSorThr, var
+                #endif
+                );
+
+
 		syncthreads();
 
 		
@@ -188,34 +218,14 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 		}
 		syncthreads();
 
-        countPhoton(&ph, tab, &nbPhotonsThr
-                    #ifdef PROGRESSION
-                    , &nbPhotonsSorThr, var
-                    #endif
-                    );
-        syncthreads();
-		
 
         //
 		// Reflection
         //
         // -> in SURFACE
+        loc_prev = ph.loc;
 		if(ph.loc == SURFACE){
            // Eventually evaluate Downward 0+ and Upward 0- radiance
-
-		//fusion des tableaux
-		float *tabPhotonsEventsDown0P=&tab.tabPhotonsEvents[DOWN0P*4*NBTHETAd * NBPHId * NLAMd];
-		float *tabPhotonsEventsUp0M=&tab.tabPhotonsEvents[DOWN0M*4*NBTHETAd * NBPHId * NLAMd];
-		float *tabPhotonsEventsDown0M=&tab.tabPhotonsEvents[UP0P*4*NBTHETAd * NBPHId * NLAMd];
-		float *tabPhotonsEventsUp0P=&tab.tabPhotonsEvents[UP0M*4*NBTHETAd * NBPHId * NLAMd];
-		//fusion des tableaux
-
-
-		if(OUTPUT_LAYERSd & (OUTPUT_BOA_DOWN_0P_UP_0M )) countInterface(&ph, tabPhotonsEventsDown0P, tabPhotonsEventsUp0M
-                    #ifdef PROGRESSION
-                    , var
-                    #endif
-                    );
 
            if( ENVd==0 ) { // si pas d effet d environnement	
 			if( DIOPTREd!=3 )
@@ -227,7 +237,6 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 						
 			else
 				surfaceLambertienne(&ph, tab.alb, &etatThr
-				//surfaceLambertienne(&ph,  &etatThr
                                         #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
 					, &configThr
 					#endif
@@ -239,7 +248,6 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
                 dis = sqrtf((ph.x-X0d)*(ph.x-X0d) +(ph.y-Y0d)*(ph.y-Y0d));
                 if( dis > ENV_SIZEd) {
 				     surfaceLambertienne(&ph, tab.alb, &etatThr
-				     //surfaceLambertienne(&ph, &etatThr
                                         #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
 					 , &configThr
 					      #endif
@@ -253,13 +261,6 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 						);
                 }
            }
-           // Eventually evaluate Downward 0- and Upward 0+ radiance
-
-           if(OUTPUT_LAYERSd & (OUTPUT_BOA_DOWN_0M_UP_0P )) countInterface(&ph,tabPhotonsEventsDown0M,tabPhotonsEventsUp0P
-                    #ifdef PROGRESSION
-                    ,var
-                    #endif
-                    );
 		}
 		syncthreads();
 		
@@ -269,7 +270,6 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
         // -> in SEAFLOOR
 		if(ph.loc == SEAFLOOR){
 		     surfaceLambertienne(&ph, tab.alb, &etatThr
-		     //surfaceLambertienne(&ph, &etatThr
                                     #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
 			 , &configThr
 			      #endif
@@ -277,10 +277,27 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
         }
 		syncthreads();
 
+
+        //
+        // count after surface:
+        // count the photons leaving the surface towards the ocean or atmosphere
+        //
+        count_level = -1;
+        if (loc_prev == SURFACE) {
+            if (ph.loc == ATMOS) count_level = UP0P;
+            if (ph.loc == OCEAN) count_level = DOWN0M;
+        }
+        countPhoton(&ph, tab, count_level
+                #ifdef PROGRESSION
+                , &nbPhotonsSorThr, var
+                #endif
+                );
+
+
+
 		if(ph.loc == ABSORBED){
 			ph.loc = NONE;
 			nbPhotonsThr++;
-
 		}
 		syncthreads();
 		
@@ -370,7 +387,8 @@ __device__ void initPhoton(Photon* ph, Tableaux tab
         #endif
 
         // !! DEV on ne calucle pas d ep optique ici
-        ph->loc = TOA;
+        ph->loc = ATMOS;
+        ph->tau = tab.h[NATMd + ph->ilam*(NATMd+1)]; 
 
     } else if ((SIMd == -1) || (SIMd == 0)) {
         
@@ -471,13 +489,8 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
 	
     float ray_init;
     ray_init = ph->rayon;
-	
-    if (ph->loc == TOA){
-        ph->tau = tab.h[NATMd + ph->ilam*(NATMd+1)]; 
-        ph->loc = ATMOS;
-    }
+
 	/** Tirage au sort de la profondeur optique à parcourir **/
-	
 	tauRdm = -logf(1.F-RAND);
 
 
@@ -934,13 +947,7 @@ __device__ void move_pp(Photon* ph,float*z, float* h, float* pMol , float *abs ,
 	float Dsca=0.f, dsca=0.f, tau_init;
     tau_init = ph->tau;
 
-    if (ph->loc == TOA){
-        ph->tau = h[NATMd + ph->ilam*(NATMd+1)]; 
-        ph->loc = ATMOS;
-    }
-
 	ph->tau += -logf(1.f - RAND)*ph->vz;
-
 
 
 	float tauBis;
@@ -1593,7 +1600,13 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 				ph->loc = OCEAN;
 			}
 		}
-		
+
+        // test for multiple reflexion
+        // after reflexion, vz doesn't change sign
+        // in this case, the photon stays at the surface
+        if (ph->vz * (ph->vz+2.F*cTh*nz) > 0) {
+            ph->loc = SURFACE;
+        }
 		
 		ph->stokes1 *= rper2;
 		ph->stokes2 *= rpar2;
@@ -1644,6 +1657,15 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 				ph->loc = ATMOS;
 			}
 		}
+
+        // test for "multiple transmission"
+        // after transmission, the sign of vz changes
+        // in this case, the photon stays at the surface
+        // (this should only happen when the photon crosses the water-air
+        // interface, not the air-water interface)
+        if (ph->vz * (ph->vz+2.F*cTh*nz) > 0) {
+            ph->loc = SURFACE;
+        }
 		
         geo_trans_factor = nind* cot/cTh; // DR Mobley 2015 OK , see Xun 2014
 		tpar = __fdividef( 2*cTh,ncTh+ cot);
@@ -1869,40 +1891,28 @@ __device__ void surfaceLambertienne(Photon* ph, float* alb
 
 
 
-/* countPhoton
- * (previously known as "exit" or "exitUp")
-*/
-__device__ void countPhoton(Photon* ph, Tableaux tab, unsigned long long* nbPhotonsThr
+__device__ void countPhoton(Photon* ph,
+        Tableaux tab,
+        int count_level
 		#ifdef PROGRESSION
-		, unsigned int* nbPhotonsSorThr, Variables* var
+		, unsigned int* nbPhotonsSorThr, Variables* var   // TODO: remove nbPhotonsSorThr
 		#endif
-		    )
-{
+		    ) {
 
-    if (ph->loc != SPACE) return; 
-
-//  On ne compte pas les photons directement transmis
-    if ((ph->weight == WEIGHTINIT) && (ph->stokes1 == ph->stokes2) && (ph->stokes3 == 0.f)) {
-    return;
+    if (count_level < 0) {
+        // don't count anything
+        return;
     }
-	
+
+    // don't count the photons directly transmitted
+    if ((ph->weight == WEIGHTINIT) && (ph->stokes1 == ph->stokes2) && (ph->stokes3 == 0.f)) {
+        return;
+    }
+
     float *tabCount; // pointer to the "counting" array:
                      // may be TOA, or BOA down, and so on
 
-	//unsigned long long *nbCount; // counter for each NLAM interval 
-
-    // Remise à zéro de la localisation du photon
-    ph->loc = NONE;
-
-    // Incrémentation du nombre de photons traités par le thread
-    (*nbPhotonsThr)++;
-	// And count them for each NLAM interval
-    //nbCount = tab.nbPhotonsInter;
-    //atomicAdd(nbCount+ph->ilam, 1);
-
-
-    tabCount=tab.tabPhotonsEvents;
-
+    float theta = acosf(fmin(1.F, fmax(-1.F, 0.f * ph->vx + 1.f * ph->vz)));
     #ifdef SPHERIQUE
     if(ph->vz<=0.f) {
          // do not count the downward photons leaving atmosphere
@@ -1910,17 +1920,8 @@ __device__ void countPhoton(Photon* ph, Tableaux tab, unsigned long long* nbPhot
     }
     #endif
 
-	
-	/*#ifdef SPHERIQUE
-	if((ph->vz>=0.f) && (ph->loc == SURFACE)) {
-        // do not count the upward photons reaching surface
-		return;
-	}
-	#endif*/
-	
-	float theta = acosf(fmin(1.F, fmax(-1.F, 0.f * ph->vx + 1.f * ph->vz)) );
-	
-	// Si theta = 0 on l'ignore (cas où le photon repart dans la direction de visée)
+    // Si theta = 0 on l'ignore
+    // (cas où le photon repart dans la direction de visée)
 	if(theta == 0.F)
 	{
 		#ifdef PROGRESSION
@@ -1961,20 +1962,14 @@ __device__ void countPhoton(Photon* ph, Tableaux tab, unsigned long long* nbPhot
 	// Rangement du photon dans sa case, et incrémentation de variables
 	if(((ith >= 0) && (ith < NBTHETAd)) && ((iphi >= 0) && (iphi < NBPHId)) && (il >= 0) && (il < NLAMd))
 	{
-		// Rangement dans le tableau des paramètres pondérés du photon
+        // select the appropriate level (count_level)
+        tabCount = tab.tabPhotons + count_level*4*NBTHETAd*NBPHId*NLAMd;
 
-		atomicAdd(tabCount+(0 * NBTHETAd * NBPHId * NLAMd + il * NBTHETAd * NBPHId + ith * NBPHId  + iphi), weight * s1);
-		atomicAdd(tabCount+(1 * NBTHETAd * NBPHId * NLAMd + il * NBTHETAd * NBPHId + ith * NBPHId  + iphi), weight * s2);
-		atomicAdd(tabCount+(2 * NBTHETAd * NBPHId * NLAMd + il * NBTHETAd * NBPHId + ith * NBPHId  + iphi), weight * s3);
-		atomicAdd(tabCount+(3 * NBTHETAd * NBPHId * NLAMd + il * NBTHETAd * NBPHId + ith * NBPHId  + iphi), 1.);
-
-		#ifdef PROGRESSION
-		// Incrémentation du nombre de photons sortis dans l'espace pour ce thread
-        if (ph->loc == NONE) {
-            (*nbPhotonsSorThr)++;
-        }
-		#endif
-
+        // count in that level
+        atomicAdd(tabCount+(0 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), weight * s1);
+        atomicAdd(tabCount+(1 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), weight * s2);
+        atomicAdd(tabCount+(2 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), weight * s3);
+        atomicAdd(tabCount+(3 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), 1.);
 	}
 	else
 	{
@@ -1985,75 +1980,6 @@ __device__ void countPhoton(Photon* ph, Tableaux tab, unsigned long long* nbPhot
 
 }
 
-
-/* countInterface
-*/
-__device__ void countInterface(Photon* ph, float* tab1, float* tab2
-//__device__ void countInterface(Photon* ph, Tableaux tab
-    #ifdef PROGRESSION
-    ,Variables* var
-    #endif
-    )
-{
-
-//  On ne compte pas les photons directement transmis ou absorbes ou les photons n ayant pas bouges
-    if ((ph->weight == WEIGHTINIT) && (ph->stokes1 == ph->stokes2) && (ph->stokes3 == 0.f) || (ph->loc == ABSORBED) || (ph->dtau==0.f)) {
-    return;
-    }
-	
-    float *tabCount; // pointer to the "counting" array:
-	
-    if (ph->vz < 0) {
-        tabCount = tab1;
-        }
-    else {
-         tabCount = tab2;
-    } 
-	
-	
-	float theta = acosf(fmin(1.F, fmax(-1.F, 0.f * ph->vx + 1.f * ph->vz)) );
-	
-	float psi;
-	int ith=0, iphi=0, il=0;
-	// Initialisation de psi
-	calculPsi(ph, &psi, theta);
-	
-	// Rotation of stokes parameters
-    float s1, s2, s3;
-    rotateStokes(ph->stokes1, ph->stokes2, ph->stokes3, psi,
-            &s1, &s2, &s3);
-	
-	// Calcul de la case dans laquelle le photon sort
-	calculCase(&ith, &iphi, &il, ph 
-			   #ifdef PROGRESSION
-			   , var
-			   #endif
-			   );
-	
-    // modify stokes parameters for OS code compatibility
-  	if( ph->vy<0.f )
-  		s3 = -s3;
-	
-	float tmp = s1;
-	s1 = s2;
-	s2 = tmp;
-	
-
-	float weight = ph->weight;
-
-
-	// Rangement du photon dans sa case, et incrémentation de variables
-	if(((ith >= 0) && (ith < NBTHETAd)) && ((iphi >= 0) && (iphi < NBPHId)) && (il >= 0) && (il < NLAMd))
-	{
-		// Rangement dans le tableau des paramètres pondérés du photon
-		atomicAdd(tabCount+(0 * NBTHETAd * NBPHId * NLAMd + il * NBTHETAd * NBPHId + ith * NBPHId  + iphi), weight * s1);
-		atomicAdd(tabCount+(1 * NBTHETAd * NBPHId * NLAMd + il * NBTHETAd * NBPHId + ith * NBPHId  + iphi), weight * s2);
-		atomicAdd(tabCount+(2 * NBTHETAd * NBPHId * NLAMd + il * NBTHETAd * NBPHId + ith * NBPHId  + iphi), weight * s3);
-		atomicAdd(tabCount+(3 * NBTHETAd * NBPHId * NLAMd + il * NBTHETAd * NBPHId + ith * NBPHId  + iphi), 1.);
-
-	}
-
-}
 
 
 //

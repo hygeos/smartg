@@ -211,19 +211,12 @@ __device__ void surfaceLambertienne(Photon* , float* alb
 /* exit
 * Sauve les paramètres des photons sortis dans l'espace dans la boite correspondant à la direction de sortie
 */
-__device__ void countPhoton(Photon* , Tableaux, unsigned long long*
+__device__ void countPhoton(Photon* , Tableaux, int
 		#ifdef PROGRESSION
 		, unsigned int*, Variables*
 		#endif
 		    );
 
-/* count interface radiances*/
-__device__ void countInterface(Photon* , float*, float* 
-//__device__ void countInterface(Photon* , Tableaux 
-		#ifdef PROGRESSION
-		, Variables*
-		#endif
-		    );
 
 
 // rotation of the stokes parameters by an angle psi
