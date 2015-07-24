@@ -80,6 +80,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
     int loc_prev;
     int count_level;
+    int this_thread_active = 1;
 
 	// Paramètres de la fonction random en mémoire locale
 	#ifdef RANDMWC
@@ -123,16 +124,22 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 	
 	Photon ph; 		// On associe une structure de photon au thread
 	ph.loc = NONE;	// Initialement le photon n'est nulle part, il doit être initialisé
-// 	float z;
 	
 	
-	
-	/** Boucle de calcul **/   
-	// Dans cette boucle on simule le parcours du photon, puis on le réinitialise,... Le thread lance plusieurs photons
-	for(unsigned int iloop= 0; iloop < NBLOOPd; iloop++)
-	{
+    atomicAdd(&(var->nThreadsActive), 1);
+
+    //
+    // main loop
+    //
+    while (var->nThreadsActive > 0) {
+
+        if ((var->nbPhotons > NBLOOPd) && this_thread_active) {
+            this_thread_active = 0;
+            atomicAdd(&(var->nThreadsActive), -1);
+        }
+
 		// Si le photon est à NONE on l'initialise et on le met à la localisation correspondant à la simulaiton en cours
-		if(ph.loc == NONE){
+		if((ph.loc == NONE) && this_thread_active){
 			
 			initPhoton(&ph, tab
 				, init
@@ -301,11 +308,18 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 		}
 		syncthreads();
 		
+
+        // from time to time, transfer the per-thread photon counter to the
+        // global counter
+        if (nbPhotonsThr % 100 == 0) {
+            atomicAdd(&(var->nbPhotons), nbPhotonsThr);
+            nbPhotonsThr = 0;
+        }
 	}
 	
 
 	// Après la boucle on rassemble les nombres de photons traités par chaque thread
-	atomicAdd( &(var->nbPhotons), nbPhotonsThr );
+	atomicAdd(&(var->nbPhotons), nbPhotonsThr);
 	
 	#ifdef PROGRESSION
 	// On rassemble les nombres de photons traités et sortis de chaque thread

@@ -503,6 +503,7 @@ void reinitVariables(Variables* var_H, Variables* var_D)
 {
 	// Le nombre de photons traités pour un appel du Kernel est remis à zéro
 	var_H->nbPhotons = 0;
+	var_H->nThreadsActive = 0;
 	#ifdef PROGRESSION
 	// Le nombre de photons ressortis pour un appel du Kernel est remis à zéro
 	var_H->nbPhotonsSor = 0;

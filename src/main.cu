@@ -446,6 +446,15 @@ int main (int argc, char *argv[])
 			exit(1);
         }
 
+		cudaErreur = cudaMemset(&(var_D->nThreadsActive), 0, sizeof(var_D->nThreadsActive));
+		if( cudaErreur != cudaSuccess ){
+			printf("#--------------------#\n");
+			printf("# ERREUR: Problème de cudaMemset var_D.nThreadsActive dans le main\n");
+			printf("# Nature de l'erreur: %s\n",cudaGetErrorString(cudaErreur) );
+			printf("#--------------------#\n");
+			exit(1);
+        }
+
 #ifdef _PERF
         StopProcessing(perfMemcpyH2DVar);
         GetElapsedTime(perfMemcpyH2DVar);

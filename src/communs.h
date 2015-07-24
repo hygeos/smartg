@@ -267,6 +267,7 @@ typedef struct __align__(16)
 typedef struct __align__(16)
 {
 	unsigned long long nbPhotons;	// Nombre de photons traités pour un appel du Kernel
+    unsigned int nThreadsActive;    // Number of active threads
 	int erreurpoids;				// Nombre de photons ayant un poids anormalement élevé
 	int erreurtheta;				// Nombre de photons ignorés (sortant dans la direction de visée)
 	
