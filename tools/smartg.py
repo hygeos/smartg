@@ -357,8 +357,7 @@ def command_file_template(dict):
 
         # Dioptre type
             # 0 = plan
-            # 1 = roughened sea surface with multiple reflections
-            # 2 = roughened sea surface without multiple reflections
+            # 1 = roughened sea surface
             # 3 = lambertian reflector (LAND)
         DIOPTRE = {DIOPTRE}
 
@@ -399,7 +398,7 @@ def command_file_template(dict):
             # Format 
         PATHALB = {PATHALB}
 
-        # Windspeed (m/s) (if DIOPTRE = 1,2 or 4)
+        # Windspeed (m/s) (if DIOPTRE = 1 or 4)
         WINDSPEED = {WINDSPEED}
 
         # Relatibve refarctive index air/water
@@ -479,8 +478,6 @@ class RoughSurface(object):
     Definition of a roughened sea surface
 
     Arguments:
-        MULT: include multiple reflections at the surface
-              (True => DIOPTRE=1 ; False => DIOPTRE=2)
         WIND: wind speed (m/s)
         SUR: Processes at the surface dioptre
             # 1 Forced reflection
@@ -488,10 +485,10 @@ class RoughSurface(object):
             # 3 Reflection and transmission
         NH2O: Relative refarctive index air/water
     '''
-    def __init__(self, MULT=False, WIND=5., SUR=3, NH2O=1.33):
+    def __init__(self, WIND=5., SUR=3, NH2O=1.33):
         self.dict = {
                 'SUR': SUR,
-                'DIOPTRE': {True:1, False:2}[MULT],
+                'DIOPTRE': 1,
                 'WINDSPEED': WIND,
                 'NH2O': NH2O,
                 }

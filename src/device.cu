@@ -1609,12 +1609,6 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 		ph->uy = __fdividef( ny-cTh*ph->vy,sTh );
 		ph->uz = __fdividef( nz-cTh*ph->vz,sTh );
 		
-	    // DR !!!!!!!!!!!!!!!!!!!!!!!	
-		// Suppression des reflexions multiples
-		if( (ph->vz<0) && (DIOPTREd==2) && (SIMd!=0 && SIMd!=2 && SIMd!=3) ){
-			ph->loc = ABSORBED;
-		}
-	    // DR !!!!!!!!!!!!!!!!!!!!!!!	
 
         // DR Normalization of the reflexion matrix
         // DR the reflection coefficient is taken into account:
