@@ -81,13 +81,14 @@ typedef int CrMCCUDA;
 
 
 /* Localisation du photon */
-#define SPACE		0
-#define ATMOS		1
-#define SURFACE		2
-#define ABSORBED	3
-#define NONE		4
-#define OCEAN		5
-#define SEAFLOOR   	7
+#define SPACE       0
+#define ATMOS       1
+#define SURF0P      2   // surface (air side)
+#define SURF0M      3   // surface (water side)
+#define ABSORBED    4
+#define NONE        5
+#define OCEAN       6
+#define SEAFLOOR    7
 
 // Number of output levels
 #define NLVL  5

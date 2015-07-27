@@ -194,7 +194,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 
             // reset the photon location (always)
             ph.loc = NONE;
-        } else if (ph.loc == SURFACE) {
+        } else if ((ph.loc == SURF0M) || (ph.loc == SURF0P)) {
             if ((loc_prev == ATMOS) || (loc_prev == SPACE)) count_level = DOWN0P;
             if (loc_prev == OCEAN) count_level = UP0M;
         }
@@ -231,7 +231,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
         //
         // -> in SURFACE
         loc_prev = ph.loc;
-		if(ph.loc == SURFACE){
+        if ((ph.loc == SURF0M) || (ph.loc == SURF0P)){
            // Eventually evaluate Downward 0+ and Upward 0- radiance
 
            if( ENVd==0 ) { // si pas d effet d environnement	
@@ -290,7 +290,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
         // count the photons leaving the surface towards the ocean or atmosphere
         //
         count_level = -1;
-        if (loc_prev == SURFACE) {
+        if ((loc_prev == SURF0M) || (loc_prev == SURF0P)) {
             if ((ph.loc == ATMOS) || (ph.loc == SPACE)) count_level = UP0P;
             if (ph.loc == OCEAN) count_level = DOWN0M;
         }
@@ -407,7 +407,7 @@ __device__ void initPhoton(Photon* ph, Tableaux tab
     } else if ((SIMd == -1) || (SIMd == 0) || (SIMd == 3)) {
 
         //
-        // Initialisation du photon à la surface
+        // Initialisation du photon à la surface ou dans l'océan
         //
         ph->x = 0.;
         ph->y = 0.;
@@ -422,7 +422,7 @@ __device__ void initPhoton(Photon* ph, Tableaux tab
         if (SIMd == 3) {
             ph->loc = OCEAN;
         } else {
-            ph->loc = SURFACE;
+            ph->loc = SURF0P;
         }
 
     } else ph->loc = NONE;
@@ -954,7 +954,7 @@ __device__ void move_pp(Photon* ph,float*z, float* h, float* pMol , float *abs ,
 	if (ph->loc == OCEAN){  
         if (ph->tau >= 0) {
            ph->tau = 0.F;
-           ph->loc = SURFACE;
+           ph->loc = SURF0M;
            if (SIMd == 3){
               ph->loc = SPACE;
            }
@@ -984,7 +984,7 @@ __device__ void move_pp(Photon* ph,float*z, float* h, float* pMol , float *abs ,
 
         // Si tau<0 le photon atteint la surface
         if(ph->tau < 0.F){
-            ph->loc = SURFACE;
+            ph->loc = SURF0P;
             ph->tau = 0.F;
         return;
         }
@@ -1462,7 +1462,7 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 	
            // compute relative index of refraction
            // DR a: air, b: water , Mobley 2015 nind = nba = nb/na
-	       if( ph->vz > 0 ){
+	       if (ph->loc == SURF0M) {
 		       nind = __fdividef(1.f,NH2Od);
 		       nz = -cBeta;
 	       }
@@ -1482,7 +1482,7 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 	    nx = sBeta*__cosf( alpha );
 	    ny = sBeta*__sinf( alpha );
 	
-	    if( ph->vz > 0 ){
+        if (ph->loc == SURF0M) {
 		    nind = __fdividef(1.f,NH2Od);
 		    nz = -cBeta;
 	    }
@@ -1573,30 +1573,6 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 	
 	if( (ReflTot==1) || (SURd==1) || ( (SURd==3)&&(RAND<rat) ) ){
 
-		// photon location is the same
-		if(ph->vz<0){
-			if( SIMd==-1 || SIMd==0 ){
-				ph->loc = SPACE;
-			}
-			else{
-				ph->loc = ATMOS;
-			}
-		}
-		else{
-			if( SIMd==1 ){
-				ph->loc = ABSORBED;
-			}
-			else{
-				ph->loc = OCEAN;
-			}
-		}
-
-        // test for multiple reflexion
-        // after reflexion, vz doesn't change sign
-        // in this case, the photon stays at the surface
-        if (ph->vz * (ph->vz+2.F*cTh*nz) > 0) {
-            ph->loc = SURFACE;
-        }
 		
 		ph->stokes1 *= rper2;
 		ph->stokes2 *= rpar2;
@@ -1620,36 +1596,36 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 			ph->weight /= rat;
 			}
 
+
+
+        //
+        // photon next location
+        //
+        if (ph->loc == SURF0P) {
+            if (ph->vz > 0) {  // avoid multiple reflexion above the surface
+                // SURF0P becomes ATM or SPACE
+                if( SIMd==-1 || SIMd==0 ){
+                    ph->loc = SPACE;
+                } else{
+                    ph->loc = ATMOS;
+                }
+            } // else, no change of location
+        } else {
+            if (ph->vz < 0) {  // avoid multiple reflexion under the surface
+                // SURF0M becomes OCEAN or ABSORBED
+                if( SIMd==1 ){
+                    ph->loc = ABSORBED;
+                } else{
+                    ph->loc = OCEAN;
+                }
+            } // else, no change of location
+        }
+
+
 	} // Reflection
 
 	else{	// Transmission
-		
-		// Photon location changes
-		if(ph->vz<0){
-			if( SIMd==-1 || SIMd==1 ){
-				ph->loc = ABSORBED;
-			}
-			else{
-				ph->loc = OCEAN;
-			}
-		}
-		else{
-			if( SIMd==-1 || SIMd==0 ){
-				ph->loc = SPACE;
-			}
-			else{
-				ph->loc = ATMOS;
-			}
-		}
 
-        // test for "multiple transmission"
-        // after transmission, the sign of vz changes
-        // in this case, the photon stays at the surface
-        // (this should only happen when the photon crosses the water-air
-        // interface, not the air-water interface)
-        if (ph->vz * (ph->vz+2.F*cTh*nz) > 0) {
-            ph->loc = SURFACE;
-        }
 		
         geo_trans_factor = nind* cot/cTh; // DR Mobley 2015 OK , see Xun 2014
 		tpar = __fdividef( 2*cTh,ncTh+ cot);
@@ -1677,8 +1653,38 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
         if ( SURd == 3) 
             ph->weight /= (1-rat);
 
+        //
+        // photon next location
+        //
+        if (ph->loc == SURF0M) {
+            if (ph->vz > 0) {
+                // SURF0P becomes ATM or SPACE
+                if( SIMd==-1 || SIMd==0 ){
+                    ph->loc = SPACE;
+                } else{
+                    ph->loc = ATMOS;
+                }
+            } else {
+                // multiple transmissions (vz<0 after water->air transmission)
+                ph->loc = SURF0P;
+            }
+        } else {
+            if (ph->vz < 0) {  // avoid multiple reflexion under the surface
+                // SURF0M becomes OCEAN or ABSORBED
+                if( SIMd==-1 || SIMd==1 ){
+                    ph->loc = ABSORBED;
+                } else{
+                    ph->loc = OCEAN;
+                }
+            } else {
+                // multiple transmissions (vz<0 after water->air transmission)
+                // (for symmetry, but should not happen)
+                ph->loc = SURF0P;
+            }
+        }
+
 	} // Transmission
-	
+
 	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
 	/** Retour dans le repère d'origine **/
 	
@@ -1833,7 +1839,7 @@ __device__ void surfaceLambertienne(Photon* ph, float* alb
 	ph->uz = uzn;
 	
 
-    if (DIOPTREd!=4 && (ph->loc == SURFACE)){
+    if (DIOPTREd!=4 && ((ph->loc == SURF0M) || (ph->loc == SURF0P))){
 	  // Si le dioptre est seul, le photon est mis dans l'espace
 	  bool test_s = ( SIMd == -1);
 	  ph->loc = SPACE*test_s + ATMOS*(!test_s);
