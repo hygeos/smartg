@@ -202,7 +202,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
         // count the photons
         countPhoton(&ph, tab, count_level
                 #ifdef PROGRESSION
-                , &nbPhotonsSorThr, var
+                , var
                 #endif
                 );
 
@@ -296,7 +296,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
         }
         countPhoton(&ph, tab, count_level
                 #ifdef PROGRESSION
-                , &nbPhotonsSorThr, var
+                , var
                 #endif
                 );
 
@@ -1885,7 +1885,7 @@ __device__ void countPhoton(Photon* ph,
         Tableaux tab,
         int count_level
 		#ifdef PROGRESSION
-		, unsigned int* nbPhotonsSorThr, Variables* var   // TODO: remove nbPhotonsSorThr
+		, Variables* var   // TODO: remove nbPhotonsSorThr
 		#endif
 		    ) {
 

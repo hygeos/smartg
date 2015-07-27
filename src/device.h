@@ -213,7 +213,7 @@ __device__ void surfaceLambertienne(Photon* , float* alb
 */
 __device__ void countPhoton(Photon* , Tableaux, int
 		#ifdef PROGRESSION
-		, unsigned int*, Variables*
+		, Variables*
 		#endif
 		    );
 
