@@ -429,7 +429,6 @@ __device__ void initPhoton(Photon* ph, Tableaux tab
 	
 
 	ph->weight = WEIGHTINIT;
-    ph->dtau = 0.1;
 	
 	// Initialisation des paramètres de stokes du photon
 	ph->stokes1 = 0.5F;
@@ -504,7 +503,6 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
 		 * Il va quand même intéragir.
 		*/
 		ph->locPrec = ATMOS;
-        ph->dtau=0.;
 		return;
 	}
 
@@ -862,7 +860,6 @@ sinth= %20.19lf - sens=%d\n",\
 			ph->loc = SURFACE;
 			ph->couche = NATMd;
 			ph->rayon = RTER;
-            ph->dtau = RTER - ray_init;
 		}
 		else{
 			ph->loc = SPACE;
@@ -885,7 +882,6 @@ sinth= %20.19lf - sens=%d\n",\
 			*/
 			rayon=RTER;
 			ph->loc=SURFACE;
-            ph->dtau = RTER - ray_init;
 			#ifdef DEBUG
 			printf("MetaProblème #2: Correction du rayon\n");
 			#endif
@@ -918,7 +914,6 @@ rsolfi=%15.12lf - tauRdm= %lf - hph_p= %15.12lf - hph= %15.12lf - zph_p= %15.12l
 
 	ph->couche = icouche;
 	ph->rayon = rayon;
-    ph->dtau = rayon - ray_init;
 	ph->locPrec=ATMOS;
 
     
@@ -960,7 +955,6 @@ __device__ void move_pp(Photon* ph,float*z, float* h, float* pMol , float *abs ,
 	if (ph->loc == OCEAN){  
         if (ph->tau >= 0) {
            ph->tau = 0.F;
-           ph->dtau= - tau_init;
            ph->loc = SURFACE;
            if (SIMd == 3){
               ph->loc = SPACE;
@@ -971,7 +965,6 @@ __device__ void move_pp(Photon* ph,float*z, float* h, float* pMol , float *abs ,
         else if( ph->tau < ho[NOCEd + ph->ilam *(NOCEd+1)] ){
             ph->loc = SEAFLOOR;
             ph->tau = ho[NOCEd + ph->ilam *(NOCEd+1)];
-            ph->dtau = ph->tau-tau_init;
             return;
         }
 
@@ -983,11 +976,8 @@ __device__ void move_pp(Photon* ph,float*z, float* h, float* pMol , float *abs ,
             icouche++;
         }
         ph->couche = icouche;
-        ph->dtau = ph->tau - tau_init;
 
-
-
-	}
+    }
 
 
 
@@ -997,7 +987,6 @@ __device__ void move_pp(Photon* ph,float*z, float* h, float* pMol , float *abs ,
         if(ph->tau < 0.F){
             ph->loc = SURFACE;
             ph->tau = 0.F;
-            ph->dtau = -tau_init;
         return;
         }
         // Si tau>TAUATM le photon atteint l'espace
@@ -1022,8 +1011,6 @@ __device__ void move_pp(Photon* ph,float*z, float* h, float* pMol , float *abs ,
         ph->prop_aer = 1.f - pMol[ph->couche+ph->ilam*(NATMd+1)];
 
         ph->weight = ph->weight * (1.f - abs[ph->couche+ph->ilam*(NATMd+1)]);
-
-        ph->dtau = ph->tau - tau_init;
 
     }
 
