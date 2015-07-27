@@ -291,7 +291,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
         //
         count_level = -1;
         if (loc_prev == SURFACE) {
-            if (ph.loc == ATMOS) count_level = UP0P;
+            if ((ph.loc == ATMOS) || (ph.loc == SPACE)) count_level = UP0P;
             if (ph.loc == OCEAN) count_level = DOWN0M;
         }
         countPhoton(&ph, tab, count_level
@@ -404,8 +404,8 @@ __device__ void initPhoton(Photon* ph, Tableaux tab
         ph->loc = ATMOS;
         ph->tau = tab.h[NATMd + ph->ilam*(NATMd+1)]; 
 
-    } else if ((SIMd == -1) || (SIMd == 0)) {
-        
+    } else if ((SIMd == -1) || (SIMd == 0) || (SIMd == 3)) {
+
         //
         // Initialisation du photon à la surface
         //
@@ -414,27 +414,17 @@ __device__ void initPhoton(Photon* ph, Tableaux tab
         #ifdef SPHERIQUE
         ph->z = RTER;
         #else
-		ph->z = 0;
+        ph->z = 0;
         #endif
 
-		ph->tau = 0.f;
-		ph->loc = SURFACE;
+        ph->tau = 0.f;
 
-    } else if (SIMd == 3) {
+        if (SIMd == 3) {
+            ph->loc = OCEAN;
+        } else {
+            ph->loc = SURFACE;
+        }
 
-        //
-        // Initialisation du photon dans l'océan
-        //
-        ph->x = 0.;
-        ph->y = 0.;
-        #ifdef SPHERIQUE
-        ph->z = RTER;
-        #else
-		ph->z = 0;
-        #endif
-
-        ph->tau = 0.;
-        ph->loc = OCEAN;
     } else ph->loc = NONE;
 	
 
