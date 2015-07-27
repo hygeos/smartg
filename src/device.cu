@@ -943,8 +943,7 @@ __device__ void move_pp(Photon* ph,float*z, float* h, float* pMol , float *abs ,
 		    ) {
 
 
-	float Dsca=0.f, dsca=0.f, tau_init;
-    tau_init = ph->tau;
+	float Dsca=0.f, dsca=0.f;
 
 	ph->tau += -logf(1.f - RAND)*ph->vz;
 
