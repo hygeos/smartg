@@ -952,7 +952,7 @@ __device__ void move_pp(Photon* ph,float*z, float* h, float* pMol , float *abs ,
     int icouche;
 
 	if (ph->loc == OCEAN){  
-        if (ph->tau >= 0) {
+        if (ph->tau > 0) {
            ph->tau = 0.F;
            ph->loc = SURF0M;
            if (SIMd == 3){
