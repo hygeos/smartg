@@ -310,7 +310,7 @@ class Smartg(object):
             options=['-DRANDPHILOX4x32_7','-DSPHERIQUE']
 
 	    # load device.cu
-        src_device = open("/home/Younes/SMARTGY/src/device_bis.cu").read()
+        src_device = open("/home/Younes/SMARTG/src/device.cu").read()
 
 	    # compilation du kernel
         
@@ -320,8 +320,9 @@ class Smartg(object):
 		        no_extern_c=True,
 		         cache_dir='/tmp/',
 		        include_dirs=[
-		            '/home/Younes/SMARTG/src/incRNGs/Random123/',
-		            '/home/Younes/SMARTGY/src/',
+                    '/home/Younes/SMARTG/src/',
+                    '/home/Younes/SMARTG/src/incRNGs/Random123/'
+		            
 		            ])
 
         
