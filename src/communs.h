@@ -280,6 +280,18 @@ typedef struct __align__(16)
 }Variables;
 
 
+typedef struct __align__(16)
+{
+	//garbage
+	    float *depth;
+	    float *hmol;
+	    float *haer;
+	    float *xdel;
+
+}Garbages;
+
+
+
 /* ConfigMT
 * Paramètres pour la fonction random Mersenne Twister
 */
@@ -323,7 +335,7 @@ typedef struct __align__(16)
     float* sso;             // Pointeur vers le profil de l albedo de diffusion simple dans l'ocean
     int* ipo;                // pointer to the vertical profile of ocean phase function index
     // garbage
-    float *depth;
+
 
 
 	
@@ -335,10 +347,7 @@ typedef struct __align__(16)
     float* alb;             // Pointeur vers l albedo de la surface lambertienne
 
 
-    //garbage
-    float *hmol;
-    float *haer;
-    float *xdel;
+
 
     float* lambda;
 	/** Séparation du code pour atmosphère sphérique ou parallèle **/

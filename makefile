@@ -1,4 +1,4 @@
-CUDA_HOME=/opt/cuda65/
+CUDA_HOME=/usr/local/cuda/
 CUDA_BIN=${CUDA_HOME}/bin/
 CUDA_LIB=${CUDA_HOME}/lib64/
 CUDA_INC=${CUDA_HOME}/include/

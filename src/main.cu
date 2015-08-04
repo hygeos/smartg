@@ -141,8 +141,10 @@ int main (int argc, char *argv[])
 	// Regroupement et initialisation des tableaux a envoyer dans le kernel (structure de pointeurs)
 	Tableaux tab_H; //tableaux version host
 	Tableaux tab_D; //tableaux version device
-
 	initTableaux(&tab_H, &tab_D);
+
+	Garbages Garb;
+	initGarbages(&Garb);
 	
 	// Variables et tableaux qui restent dans le host et se remplissent petit à petit
 	unsigned long long nbPhotonsTot = 0; //nombre total de photons traités
@@ -210,6 +212,27 @@ int main (int argc, char *argv[])
 	Init* init_D;
 	initInit(&init_H, &init_D);
 
+	/////////////////////////////////::
+
+
+
+	/*//Create temporary MyStruct object on host and allocate memory to its member "a" on device
+	Tableaux data_Temps;
+	data_Temps.lambda = data_H->lambda;
+	//allocation on the device memory
+
+	//Copy host data to temp
+	cudaMemcpy(data_Temps.lambda, data_H->lambda,5*sizeof(float), cudaMemcpyHostToDevice);
+
+	//Memory allocation for the device MyStruct
+	cudaMalloc(&data_D, sizeof(Tableaux));
+	cudaErreur = cudaMemset(data_D->lambda, 0,5*sizeof(float));
+	//Copy actual object to device
+	cudaMemcpy(data_D, &data_Temps, sizeof(Tableaux) , cudaMemcpyHostToDevice);*/
+
+
+
+
 	
 #ifdef _PERF
     StopProcessing(perfInitG);
@@ -260,7 +283,7 @@ int main (int argc, char *argv[])
 
         // Read oceanic profile
 
-        profilOce(&tab_H, &tab_D);
+        profilOce(&tab_H, &tab_D,&Garb);
 
         for(ip=0; ip< NPHAOCE; ip++){
 
@@ -317,7 +340,7 @@ int main (int argc, char *argv[])
 
     	phaseatm= (double*)malloc(NPHAAER*5*MLSAAER*sizeof(double));
         if (tab_H.lambda[0]==NULL){
-           profilAtm(&tab_H, &tab_D);
+           profilAtm(&tab_H, &tab_D,&Garb);
         }
     	else
     		{
@@ -325,7 +348,7 @@ int main (int argc, char *argv[])
     			float* lambdaold;
     			lambdaold=(float*)malloc(NLAM*sizeof(float));
                 memcpy( lambdaold, tab_H.lambda, NLAM * sizeof(float) );
-                profilAtm(&tab_H, &tab_D);
+                profilAtm(&tab_H, &tab_D,&Garb);
     			for(ilam=0;ilam<NLAM;ilam++){
                    if(lambdaold[ilam]!=tab_H.lambda[ilam]){
                       printf("Error les valeurs lambda sont différentes\n");
@@ -339,12 +362,14 @@ int main (int argc, char *argv[])
 
 
 
+
+
+
         for(ip=0; ip< NPHAAER; ip++){
 
 	       // Calcul de faer, modèle de diffusion des aérosols
            get_diff(PATHDIFF,  ip, PATHDIFFAER);
            LSAAER = count_lines(PATHDIFF);
-
 
 
 
@@ -499,7 +524,10 @@ int main (int argc, char *argv[])
                 StartProcessing(perfKernel);
 #endif
 		/** Lancement du kernel **/
-		lancementKernel<<<gridSize, blockSize>>>(var_D, tab_D,init_D);
+        lancementKernel<<<gridSize, blockSize>>>(var_D, tab_D,init_D);
+        //test<<<gridSize, blockSize>>>(data_D);
+
+
 		// Attend que tous les threads aient fini avant de faire autre chose
 // 		cudaThreadSynchronize();
 #ifdef _PERF
@@ -619,6 +647,8 @@ cudaMemcpyDeviceToHost);
 	 * par unité de surface) 
 	**/	
 
+    printf("dans le main\t%d\n",var_H->nbPhotons);
+
 
 	//fusion des tableaux
 	for (int k=0;k<NLVL;k++)
@@ -626,7 +656,7 @@ cudaMemcpyDeviceToHost);
 	//fusion des tableaux
 
 
-	creerHDFResultats(tabFinal, tabTh, tabPhi, tabTransDir, nbPhotonsTot, var_H, tempsPrec,MLSAOCE,MLSAAER,phaseatm,phaseoc,tab_H);
+	creerHDFResultats(tabFinal, tabTh, tabPhi, tabTransDir, nbPhotonsTot, var_H, tempsPrec,MLSAOCE,MLSAAER,phaseatm,phaseoc,tab_H,Garb);
 	//fusion des tableaux
 
 #ifdef _PERF
@@ -671,6 +701,7 @@ cudaMemcpyDeviceToHost);
 	
 	// Libération des tableaux envoyés dans le kernel
 	freeTableaux(&tab_H, &tab_D);
+	freeGarbages(&Garb);
 	// Libération du tableau du host
 	free( tabPhotons);
 

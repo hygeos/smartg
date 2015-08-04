@@ -72,7 +72,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 * fonction va donc être effectuée pour chaque thread du block de la grille
 * A TESTER: Regarder pour effectuer une réduction de l'atomicAdd
 */
-__global__ void lancementKernel(Variables* var, Tableaux tab
+
+
+
+__device__ void launchKernel(Variables* var, Tableaux tab
 		, Init* init
 			       )
 {
@@ -81,6 +84,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
     int loc_prev;
     int count_level;
     int this_thread_active = 1;
+
 
 	// Paramètres de la fonction random en mémoire locale
 	#ifdef RANDMWC
@@ -234,14 +238,15 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
         if ((ph.loc == SURF0M) || (ph.loc == SURF0P)){
            // Eventually evaluate Downward 0+ and Upward 0- radiance
 
-           if( ENVd==0 ) { // si pas d effet d environnement	
+
+           if( ENVd==0 ) { // si pas d effet d environnement
 			if( DIOPTREd!=3 )
 				surfaceAgitee(&ph, tab.alb, &etatThr
 					#if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
 					, &configThr
 					#endif
 						);
-						
+
 			else
 				surfaceLambertienne(&ph, tab.alb, &etatThr
                                         #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
@@ -270,7 +275,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
            }
 		}
 		syncthreads();
-		
+
         //
 		// Reflection
         //
@@ -307,6 +312,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 			nbPhotonsThr++;
 		}
 		syncthreads();
+
 		
 
         // from time to time, transfer the per-thread photon counter to the
@@ -315,12 +321,14 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
             atomicAdd(&(var->nbPhotons), nbPhotonsThr);
             nbPhotonsThr = 0;
         }
+
 	}
-	
+
 
 	// Après la boucle on rassemble les nombres de photons traités par chaque thread
+
 	atomicAdd(&(var->nbPhotons), nbPhotonsThr);
-	
+
 	#ifdef PROGRESSION
 	// On rassemble les nombres de photons traités et sortis de chaque thread
 	atomicAdd(&(var->nbPhotonsSor), nbPhotonsSorThr);
@@ -328,7 +336,7 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 	// On incrémente avncement qui compte le nombre d'appels du Kernel
 	atomicAdd(&(var->nbThreads), 1);
 	#endif
-	
+
         #ifdef RANDPHILOX4x32_7
 	// Sauvegarde de l'état du random pour que les nombres ne soient pas identiques à chaque appel du kernel
 	tab.etat[idx] = etatThr[0];
@@ -336,6 +344,8 @@ __global__ void lancementKernel(Variables* var, Tableaux tab
 	// Sauvegarde de l'état du random pour que les nombres ne soient pas identiques à chaque appel du kernel
 	tab.etat[idx] = etatThr;
         #endif
+
+
 }
 
 
@@ -490,8 +500,10 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
 	double rsol1,rsol2;
 	#endif
 	
+
     float ray_init;
     ray_init = ph->rayon;
+
 
 	/** Tirage au sort de la profondeur optique à parcourir **/
 	tauRdm = -logf(1.F-RAND);
@@ -618,7 +630,7 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
 			// Puis recherche de la couche correspondante
 			if( ztangentielle>RTER ){
 				coucheTangentielle = 0;
-				while( (RTER+tab.z[coucheTangentielle])>ztangentielle){ 
+				while( (RTER+tab.z[coucheTangentielle])>ztangentielle){
 					coucheTangentielle++;
 					#ifdef DEBUG
 					if( coucheTangentielle==(NATMd+1) ){
@@ -794,7 +806,7 @@ sinth= %20.19lf - sens=%d\n",\
 			
 			// Valeur de la couche actuelle
 			if( icouchefi!=icoucheTemp ){
-				hph += __fdividef( 	abs(tab.h[icoucheTemp+ph->ilam*(NATMd+1)] - tab.h[icouchefi+ph->ilam*(NATMd+1)])*(rsolfi-zph_p), 
+				hph += __fdividef( 	abs(tab.h[icoucheTemp+ph->ilam*(NATMd+1)] - tab.h[icouchefi+ph->ilam*(NATMd+1)])*(rsolfi-zph_p),
 									abs(tab.z[icouchefi] - tab.z[icoucheTemp]) );
 			}
 			else{
@@ -2308,3 +2320,18 @@ __device__ unsigned int randomPhilox4x32_7uint(philox4x32_ctr_t* ctr, philox4x32
 }
 #endif
 
+__global__ void lancementKernel(Variables* var, Tableaux tab
+		, Init* init
+		)
+{
+    launchKernel(var,tab,init
+            );
+}
+
+extern "C" {
+    __global__ void lancementKernelPy(Variables* var, Tableaux *tab
+	, Init* init
+    ) {
+        launchKernel(var, *tab,init);
+    }
+}

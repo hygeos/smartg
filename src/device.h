@@ -87,6 +87,11 @@ __device__ __constant__ float ACUBEd;
 __global__ void lancementKernel(Variables* var, Tableaux tab
 		, Init* init
 			       );
+extern "C" {
+__global__ void lancementKernelPy(Variables* var, Tableaux *tab, Init* init);
+}
+
+__device__ void launchKernel(Variables* var, Tableaux tab, Init* init);
 
 
 /**********************************************************

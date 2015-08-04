@@ -557,6 +557,48 @@ void initInit(Init** init_H, Init** init_D)
 
 }
 
+void initGarbages(Garbages* Garb){
+
+	//garbage
+	Garb->depth=  (float*)malloc((NOCE+1)*sizeof(float));
+	if( Garb->depth == NULL ){
+		printf("ERREUR: Problème de malloc de Garb->depth dans initTableaux\n");
+		exit(1);
+	}
+	memset(Garb->depth,0,(NOCE+1)*sizeof(float) );
+
+
+	Garb->hmol =  (float*)malloc((NATM+1)*NLAM*sizeof(float));
+		if( Garb->hmol == NULL ){
+			printf("ERREUR: Problème de malloc de Garb->hmol dans initTableaux\n");
+			exit(1);
+		}
+	memset(Garb->hmol,0,(NATM+1)*NLAM*sizeof(float) );
+
+	Garb->haer=  (float*)malloc((NATM+1)*NLAM*sizeof(float));
+		if( Garb->haer == NULL ){
+			printf("ERREUR: Problème de malloc de Garb->haer dans initTableaux\n");
+			exit(1);
+		}
+	memset(Garb->haer,0,(NATM+1)*NLAM*sizeof(float) );
+
+	Garb->xdel =  (float*)malloc((NATM+1)*NLAM*sizeof(float));
+		if( Garb->xdel == NULL ){
+			printf("ERREUR: Problème de malloc de Garb->xdel dans initTableaux\n");
+			exit(1);
+		}
+	memset(Garb->xdel,0,(NATM+1)*NLAM*sizeof(float) );
+
+
+}
+
+
+void freeGarbages(Garbages* Garb){
+	free(Garb->hmol);
+	free(Garb->haer);
+	free(Garb->xdel);
+	free(Garb->depth);
+}
 
 
 /* initTableaux
@@ -803,13 +845,7 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 		exit(1);
 	}
 
-	//garbage
-	tab_H->depth=  (float*)malloc((NOCE+1)*sizeof(float));
-	if( tab_H->depth == NULL ){
-		printf("ERREUR: Problème de malloc de tab_H->sso dans initTableaux\n");
-		exit(1);
-	}
-	memset(tab_H->depth,0,(NOCE+1)*sizeof(float) );
+
 
 
 	
@@ -892,34 +928,6 @@ void initTableaux(Tableaux* tab_H, Tableaux* tab_D)
 		exit(1);	
 	}
 	
-	
-
-	
-	//variable garbage
-
-	//hmol
-    tab_H->hmol =  (float*)malloc((NATM+1)*NLAM*sizeof(float));
-    	if( tab_H->hmol == NULL ){
-    		printf("ERREUR: Problème de malloc de tab_H->hmol dans initTableaux\n");
-    		exit(1);
-    	}
-    memset(tab_H->hmol,0,(NATM+1)*NLAM*sizeof(float) );
-
-    //haer
-    tab_H->haer=  (float*)malloc((NATM+1)*NLAM*sizeof(float));
-    	if( tab_H->haer == NULL ){
-    		printf("ERREUR: Problème de malloc de tab_H->haer dans initTableaux\n");
-    		exit(1);
-    	}
-    memset(tab_H->haer,0,(NATM+1)*NLAM*sizeof(float) );
-
-    //xdel
-    tab_H->xdel =  (float*)malloc((NATM+1)*NLAM*sizeof(float));
-    	if( tab_H->xdel == NULL ){
-    		printf("ERREUR: Problème de malloc de tab_H->xdel dans initTableaux\n");
-    		exit(1);
-    	}
-    memset(tab_H->xdel,0,(NATM+1)*NLAM*sizeof(float) );
 
 
     //lambda
@@ -1133,7 +1141,7 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	}
 	
 	free(tab_H->h);
-	
+
 	//
 	erreur = cudaFree(tab_D->pMol);
 	if( erreur != cudaSuccess ){
@@ -1143,7 +1151,7 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	}
 	
 	free(tab_H->pMol);
-	
+
 	//
 	erreur = cudaFree(tab_D->abs);
 	if( erreur != cudaSuccess ){
@@ -1153,7 +1161,7 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	}
 	
 	free(tab_H->abs);
-	
+
 	//
 	erreur = cudaFree(tab_D->ssa);
 	if( erreur != cudaSuccess ){
@@ -1163,7 +1171,7 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	}
 	
 	free(tab_H->ssa);
-	
+
 
 	//
 	erreur = cudaFree(tab_D->ip);
@@ -1174,7 +1182,7 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	}
 	
 	free(tab_H->ip);
-	
+
 	//
 	erreur = cudaFree(tab_D->ipo);
 	if( erreur != cudaSuccess ){
@@ -1214,11 +1222,7 @@ void freeTableaux(Tableaux* tab_H, Tableaux* tab_D)
 	free(tab_H->z);
 
 
-    //garbage
-	free(tab_H->hmol);
-	free(tab_H->haer);
-	free(tab_H->xdel);
-	free(tab_H->depth);
+
 
 
 
@@ -1504,7 +1508,7 @@ void profilAlb( Tableaux* tab_H, Tableaux* tab_D ){
 
 
 /* Read ocean extinction coefficient and single scattering albedo for ocean*/
-void profilOce( Tableaux* tab_H, Tableaux* tab_D){
+void profilOce( Tableaux* tab_H, Tableaux* tab_D,Garbages* Garb){
     int ilam;
     int nscanf;
     int icouche=0;
@@ -1544,7 +1548,7 @@ void profilOce( Tableaux* tab_H, Tableaux* tab_D){
 
             for( icouche=0; icouche<NOCE+1; icouche++ ){
                 fgets(buffer,4096,profil);
-                nscanf = sscanf(buffer, "%d\t%f\t%f\t%f\t%d\n", &garbage, tab_H->depth+icouche, tab_H->ho+icouche+ilam*(NOCE+1), tab_H->sso+icouche+ilam*(NOCE+1), tab_H->ipo+icouche+ilam*(NOCE+1));
+                nscanf = sscanf(buffer, "%d\t%f\t%f\t%f\t%d\n", &garbage, Garb->depth+icouche, tab_H->ho+icouche+ilam*(NOCE+1), tab_H->sso+icouche+ilam*(NOCE+1), tab_H->ipo+icouche+ilam*(NOCE+1));
                 if (nscanf != 5) {
                     printf("Error while parsing profile '%s'\n", PATHDIFFOCE);
                     exit(1);
@@ -1591,7 +1595,7 @@ void profilOce( Tableaux* tab_H, Tableaux* tab_D){
 * Calcul du profil atmosphérique dans l'atmosphère en fonction de la couche
 * Mélange Molécule/Aérosol dans l'atmosphère en fonction de la couche
 */
-void profilAtm( Tableaux* tab_H, Tableaux* tab_D){
+void profilAtm( Tableaux* tab_H, Tableaux* tab_D,Garbages *Garb){
 
 	/** Déclaration des variables **/
 
@@ -1649,8 +1653,8 @@ void profilAtm( Tableaux* tab_H, Tableaux* tab_D){
             for( icouche=0; icouche<NATM+1; icouche++ ){
                 fgets(buffer, 4096, profil);
                 nscanf = sscanf(buffer, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%d\n",
-                        &garbage, tab_H->z+icouche, tab_H->hmol+icouche+ilam*(NATM+1), tab_H->haer+icouche+ilam*(NATM+1), tab_H->h+icouche+ilam*(NATM+1),
-                        tab_H->xdel+icouche+ilam*(NATM+1),tab_H->pMol+icouche+ilam*(NATM+1), tab_H->ssa+icouche+ilam*(NATM+1), tab_H->abs+icouche+ilam*(NATM+1), tab_H->ip+icouche+ilam*(NATM+1));
+                        &garbage, tab_H->z+icouche, Garb->hmol+icouche+ilam*(NATM+1), Garb->haer+icouche+ilam*(NATM+1), tab_H->h+icouche+ilam*(NATM+1),
+                        Garb->xdel+icouche+ilam*(NATM+1),tab_H->pMol+icouche+ilam*(NATM+1), tab_H->ssa+icouche+ilam*(NATM+1), tab_H->abs+icouche+ilam*(NATM+1), tab_H->ip+icouche+ilam*(NATM+1));
 
 
                 if (nscanf != 10) {
@@ -2189,7 +2193,7 @@ void write_sds(int sd, const char* name, int ndims, int *dims, int type, char *d
 
 
 void creerHDFResultats(double* tabFinal,double* tabTh, double* tabPhi, double* tabTransDir, unsigned long long nbPhotonsTot,
-                       Variables* var, double tempsPrec,int mlsaoce,int mlsaaer,double *phaseAtm,double *phaseOc,Tableaux tab_H)
+                       Variables* var, double tempsPrec,int mlsaoce,int mlsaaer,double *phaseAtm,double *phaseOc,Tableaux tab_H,Garbages Garb)
 
 
 
@@ -2283,8 +2287,6 @@ void creerHDFResultats(double* tabFinal,double* tabTh, double* tabPhi, double* t
         strncpy(dim_names, "LAMBDA, Azimut angles, Zenith angles", 2048);
     }
 
-
-
     write_sds(sdFichier, "I_up (TOA)", ndims, dims, DFNT_FLOAT64, dim_names, (VOIDP)(tabFinal));
     write_sds(sdFichier, "Q_up (TOA)", ndims, dims, DFNT_FLOAT64, dim_names, (VOIDP)(tabFinal+NBPHI*NBTHETA*NLAM));
     write_sds(sdFichier, "U_up (TOA)", ndims, dims, DFNT_FLOAT64, dim_names, (VOIDP)(tabFinal+2*NBPHI*NBTHETA*NLAM));
@@ -2361,10 +2363,10 @@ void creerHDFResultats(double* tabFinal,double* tabTh, double* tabPhi, double* t
 		for(int ilam=0;ilam<NLAM;ilam++) {
 			 for(int icouche=0; icouche<NATM+1; icouche++ ){
 				 profAtm[ilam*9*(NATM+1)+icouche*9+0]=tab_H.z[icouche];
-				 profAtm[ilam*9*(NATM+1)+icouche*9+1]=tab_H.hmol[icouche+ilam*(NATM+1)];
-				 profAtm[ilam*9*(NATM+1)+icouche*9+2]=tab_H.haer[icouche+ilam*(NATM+1)];
+				 profAtm[ilam*9*(NATM+1)+icouche*9+1]=Garb.hmol[icouche+ilam*(NATM+1)];
+				 profAtm[ilam*9*(NATM+1)+icouche*9+2]=Garb.haer[icouche+ilam*(NATM+1)];
 				 profAtm[ilam*9*(NATM+1)+icouche*9+3]=tab_H.h[icouche+ilam*(NATM+1)];
-				 profAtm[ilam*9*(NATM+1)+icouche*9+4]=tab_H.xdel[icouche+ilam*(NATM+1)];
+				 profAtm[ilam*9*(NATM+1)+icouche*9+4]=Garb.xdel[icouche+ilam*(NATM+1)];
 				 profAtm[ilam*9*(NATM+1)+icouche*9+5]=tab_H.pMol[icouche+ilam*(NATM+1)];
 				 profAtm[ilam*9*(NATM+1)+icouche*9+6]=tab_H.ssa[icouche+ilam*(NATM+1)];
 				 profAtm[ilam*9*(NATM+1)+icouche*9+7]=tab_H.abs[icouche+ilam*(NATM+1)];
@@ -2401,7 +2403,7 @@ void creerHDFResultats(double* tabFinal,double* tabTh, double* tabPhi, double* t
         float *profOc= (float*)malloc((4*NLAM*(NOCE+1))*sizeof(float));
 		for( int ilam=0;ilam<NLAM;ilam++) {
 			for( int icouche=0; icouche<NOCE+1; icouche++ ){
-					profOc[ilam*4*(NOCE+1)+icouche*4+0]=tab_H.depth[icouche];
+					profOc[ilam*4*(NOCE+1)+icouche*4+0]=Garb.depth[icouche];
 					profOc[ilam*4*(NOCE+1)+1+icouche*4+1]=tab_H.ho[icouche+ilam*(NOCE+1)];
 					profOc[ilam*4*(NOCE+1)+icouche*4+2]=tab_H.sso[icouche+ilam*(NOCE+1)];
 					profOc[ilam*4*(NOCE+1)+icouche*4+3]=(float)tab_H.ipo[icouche+ilam*(NOCE+1)];

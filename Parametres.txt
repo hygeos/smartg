@@ -97,7 +97,7 @@ NFAER = 10000
 NFOCE = 10000
 
 # LOOP number in the kernel for each thread
-NBLOOP = 5000 
+NBLOOP = 100000000
 
 #_______________ GPU _____________________#
 
