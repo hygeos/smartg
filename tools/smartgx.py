@@ -315,7 +315,7 @@ class Smartg(object):
 	    # compilation du kernel
         
         mod = SourceModule(src_device,
-		        nvcc='/opt/cuda65/bin/nvcc',
+		        nvcc='/usr/local/cuda/bin/nvcc',
 		        options=options,
 		        no_extern_c=True,
 		         cache_dir='/tmp/',
@@ -518,9 +518,9 @@ class Smartg(object):
             #afficheProgress(nbPhotonsTot,NBPHOTONS,tempsPrec,Var,options,nbPhotonsSorTot)
 	    
             if nbPhotonsTot>NBPHOTONS:
-	            p.update(NBPHOTONS, 'running')
+	        p.update(NBPHOTONS,afficheProgress(nbPhotonsTot,NBPHOTONS,tempsPrec,Var,options,nbPhotonsSorTot))
             else:
-                p.update(nbPhotonsTot, 'running')
+                p.update(nbPhotonsTot,afficheProgress(nbPhotonsTot,NBPHOTONS,tempsPrec,Var,options,nbPhotonsSorTot))
 	    
 
         # Si on n'est pas passé dans la boucle on affiche quand-même l'avancement de la simulation
@@ -539,7 +539,7 @@ class Smartg(object):
 
         #stockage dans un fichier HDF
         self.output=creerHDFResultats(tabFinalEvent,NBPHI,NBTHETA,tabTh,tabPhi,nlam,tabPhotonsTot)
-
+	p.finish('traitement termine :'+afficheProgress(nbPhotonsTot,NBPHOTONS,tempsPrec,Var,options,nbPhotonsSorTot))
 	
 
     def read(self, dataset=None):
@@ -1098,7 +1098,7 @@ def afficheProgress(nbPhotonsTot,NBPHOTONS,tempsPrec,var,options,nbPhotonsSorTot
     date=time.localtime()
 
 
-	# Calcul du temps ecoule et restant
+    # Calcul du temps ecoule et restant
     tempsProg = time.clock()
     tempsTot = tempsProg + tempsPrec
     tempsEcoule = tempsTot
@@ -1112,63 +1112,68 @@ def afficheProgress(nbPhotonsTot,NBPHOTONS,tempsPrec,var,options,nbPhotonsSorTot
     hRestantes = tempsRestant / 3600
     minRestantes = (tempsRestant%3600) / 60
     secRestantes = tempsRestant%60
-	# Calcul du pourcentage de photons traités
+    # Calcul du pourcentage de photons traités
     pourcent = (100 * nbPhotonsTot / NBPHOTONS);
-	# Affichage
-    print '--------------------------------------\n'
-    print 'Photons lances : %12lu (%3d%%)' % (nbPhotonsTot,pourcent)
-    print 'Temps ecoule   : %d h %2d min %2d sec' % (hEcoulees, minEcoulees, secEcoulees)
-    print 'Temps restant  : %d h %2d min %2d sec' % (hRestantes, minRestantes, secRestantes)
-    print 'Date actuelle  : %02u/%02u/%04u %02u:%02u:%02u' % (date.tm_mday, date.tm_mon, date.tm_year, date.tm_hour,date.tm_min, date.tm_sec)
-    print '--------------------------------------\n'
+    # Affichage
+    chaine = ''
+    #chaine += '--------------------------------------\n'
+    chaine += 'Photons lances : %e (%3d%%)' % (nbPhotonsTot,pourcent)
+    '''
+    chaine += 'Temps ecoule   : %d h %2d min %2d sec' % (hEcoulees, minEcoulees, secEcoulees)
+    chaine += 'Temps restant  : %d h %2d min %2d sec' % (hRestantes, minRestantes, secRestantes)
+    chaine += 'Date actuelle  : %02u/%02u/%04u %02u:%02u:%02u' % (date.tm_mday, date.tm_mon, date.tm_year, date.tm_hour,date.tm_min, date.tm_sec)
+    chaine += '--------------------------------------\n'
+    '''
     if '-DPROGRESSION' in options:
-        print '%d%% -Temps: %d - phot sortis: %lu - phot traités: %lu erreur poids/theta/vxy/vy/case: %d/%d/%d/%d/%d' % ((100*nbPhotonsTot/NBPHOTONS),tempsEcoule,nbPhotonsSorTot,nbPhotonsTot,var.erreurpoids, var.erreurtheta, var.erreurvxy,var.erreurvy, var.erreurcase);
+        print ' - phot sortis: %e ' % (nbPhotonsSorTot);
+
+    return chaine
 
 
 def calculF(phases,N,SIM):
-        nmax,n,imax=0,0,0
-        phasesAtmm=[]
-        for idx,phase in enumerate(phases):
-           if phase.N>nmax:
-               imax,nmax=idx,phase.N
-           n+=1
-        phase_H=np.zeros(5*n*N,dtype=np.float32)
-        for idx,phase in enumerate(phases):
-             if idx!=imax:
-                 phase.ang.resize(nmax)
-                 phase.phase.resize(nmax,4)
-             tmp=np.append(phase.ang,phase.phase)
-             phasesAtmm=np.append(phasesAtmm,tmp)
-             scum = np.zeros(phase.N)
-             #conversion en gradiant
-	     if(SIM == -2 or SIM == 1 or SIM == 2):
-             	phase.ang*=0.017453293
-             for iang in xrange(1,phase.N):
-                dtheta=phase.ang[iang]-phase.ang[iang-1]
-                pm1= phase.phase[iang-1,1] + phase.phase[iang-1,0]
-                pm2= phase.phase[iang,1] + phase.phase[iang,0]
-                sin1= np.sin(phase.ang[iang-1])
-                sin2= np.sin(phase.ang[iang])
-                scum[iang] = scum[iang-1] + dtheta*( (sin1*pm1+sin2*pm2)/3 + (sin1*pm2+sin2*pm1)/6 )*6.2831853;
+    nmax,n,imax=0,0,0
+    phasesAtmm=[]
+    for idx,phase in enumerate(phases):
+        if phase.N>nmax:
+            imax,nmax=idx,phase.N
+        n+=1
+    phase_H=np.zeros(5*n*N,dtype=np.float32)
+    for idx,phase in enumerate(phases):
+        if idx!=imax:
+            phase.ang.resize(nmax)
+            phase.phase.resize(nmax,4)
+        tmp=np.append(phase.ang,phase.phase)
+        phasesAtmm=np.append(phasesAtmm,tmp)
+        scum = np.zeros(phase.N)
+        #conversion en gradiant
+        if(SIM == -2 or SIM == 1 or SIM == 2):
+            phase.ang*=0.017453293
+        for iang in xrange(1,phase.N):
+            dtheta=phase.ang[iang]-phase.ang[iang-1]
+            pm1= phase.phase[iang-1,1] + phase.phase[iang-1,0]
+            pm2= phase.phase[iang,1] + phase.phase[iang,0]
+            sin1= np.sin(phase.ang[iang-1])
+            sin2= np.sin(phase.ang[iang])
+            scum[iang] = scum[iang-1] + dtheta*( (sin1*pm1+sin2*pm2)/3 + (sin1*pm2+sin2*pm1)/6 )*6.2831853;
 
-              #normalisation
-             for iang in xrange(0,phase.N):
-                 scum[iang] /= scum[phase.N-1]
-             #calcul des faer
-             ipf=0
-             for iang in xrange(0,N):
-                z=np.float64(iang+1)/np.float64(N)
-                while scum[ipf+1]<z:
-                    ipf +=1
+          #normalisation
+        for iang in xrange(0,phase.N):
+            scum[iang] /= scum[phase.N-1]
+         #calcul des faer
+        ipf=0
+        for iang in xrange(0,N):
+            z=np.float64(iang+1)/np.float64(N)
+            while scum[ipf+1]<z:
+                ipf +=1
 
-                phase_H[idx*5*N+iang*5+4] = np.float32( ((scum[ipf+1]-z)*phase.ang[ipf] + (z-scum[ipf])*phase.ang[ipf+1])/(scum[ipf+1]-scum[ipf]) )
-                phase_H[idx*5*N+iang*5+0] = np.float32( phase.phase[ipf,1])
-                phase_H[idx*5*N+iang*5+1] = np.float32( phase.phase[ipf,0])
-                phase_H[idx*5*N+iang*5+2] = np.float32( phase.phase[ipf,2])
-                phase_H[idx*5*N+iang*5+3] = np.float32(0)
+            phase_H[idx*5*N+iang*5+4] = np.float32( ((scum[ipf+1]-z)*phase.ang[ipf] + (z-scum[ipf])*phase.ang[ipf+1])/(scum[ipf+1]-scum[ipf]) )
+            phase_H[idx*5*N+iang*5+0] = np.float32( phase.phase[ipf,1])
+            phase_H[idx*5*N+iang*5+1] = np.float32( phase.phase[ipf,0])
+            phase_H[idx*5*N+iang*5+2] = np.float32( phase.phase[ipf,2])
+            phase_H[idx*5*N+iang*5+3] = np.float32(0)
 
 
-        return phase_H,phasesAtmm,n,imax
+    return phase_H,phasesAtmm,n,imax
 
 
 def test_rayleigh():
