@@ -67,7 +67,7 @@ class Smartg(object):
            NBTHETA=45, NBPHI=45,
            NFAER=10000, NFOCE=10000, WRITE_PERIOD=-1,
            OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
-           NBLOOP=5000):
+           NBLOOP=1e8):
         #
         # initialization
         #
@@ -139,7 +139,9 @@ class Smartg(object):
             if isinstance(wl, (float, int, REPTRAN_IBAND)):
                 wl = [wl]
             profilesAtm, phasesAtm = atm.calc_bands(wl)
-            for key in profilesAtm[0].dtype.names:
+            nprofilesAtm['ALT']=profilesAtm[0]['ALT']
+            keys=[x for x in profilesAtm[0].dtype.names if x != 'ALT']
+            for key in keys:
                 nprofilesAtm[key] = []
                 for profile in profilesAtm:
                     nprofilesAtm[key] = np.append(nprofilesAtm[key], profile[key])
@@ -257,7 +259,7 @@ class Smartg(object):
         if(SIM == 0 or SIM == 2 or SIM == 3):
             NOCE = 1
             if phasesOc != []:
-                foce, phasesOcm, NPHAOCE, imax = calculF(phasesOc, NFOCE, SIM)
+                foce, phasesOcm, NPHAOCE, imax = calculF(phasesOc, NFOCE, None)
             else:
                 foce, NPHAOCE, imax, phasesOcm = [0], 0, 0, [0]
         else:
@@ -269,7 +271,7 @@ class Smartg(object):
             HATM = nprofilesAtm['ALT'][0]
 
             if phasesAtm != []:
-                faer, phasesAtmm, NPHAAER, imax = calculF(phasesAtm, NFAER, SIM)
+                faer, phasesAtmm, NPHAAER, imax = calculF(phasesAtm, NFAER, 'ATM')
                 
             else:
                 faer, NPHAAER, imax, phasesAtmm = [0], 0, 0, [0]
@@ -295,7 +297,7 @@ class Smartg(object):
     
 
         tmp = [(np.uint64, '*nbPhotonsInter', np.zeros(nlam, dtype=np.uint64)),
-               (np.float32, '*tabPhotonsEvents', np.zeros(NLAY*4*NBTHETA * NBPHI * nlam, dtype=np.float32)),
+               (np.float32, '*tabPhotons', np.zeros(NLAY*4*NBTHETA * NBPHI * nlam, dtype=np.float32)),
                (np.float32, '*faer', faer),
                (np.float32, '*foce', foce),
                (np.float32, '*ho', nprofilesOc['HO']),
@@ -318,7 +320,7 @@ class Smartg(object):
 
         Tableau = GPUStruct(tmp)
 
-        tmp = [(np.uint32, 'nbPhotons', 0), (np.int32, 'erreurpoids', 0), (np.int32, 'erreurtheta', 0)]
+        tmp = [(np.uint64, 'nbPhotons', 0),(np.int32, 'nThreadsActive', 0), (np.int32, 'erreurpoids', 0), (np.int32, 'erreurtheta', 0)]
         if '-DPROGRESSION' in options:
             tmp2 = [(np.uint64, 'nbThreads', 0), (np.uint64, 'nbPhotonsSor', 0), (np.uint32, 'erreurvxy', 0), (np.int32, 'erreurvy', 0), (np.int32, 'erreurcase', 0)]
             tmp += tmp2
@@ -405,7 +407,7 @@ class Smartg(object):
         while(nbPhotonsTot < NBPHOTONS):
 
             #remise à zero de certaines variables de certains tableaux
-            Tableau.tabPhotonsEvents = np.zeros(NLAY*4*NBTHETA * NBPHI * nlam, dtype=np.float32)
+            Tableau.tabPhotons = np.zeros(NLAY*4*NBTHETA * NBPHI * nlam, dtype=np.float32)
             Tableau.nbPhotonsInter = np.zeros(nlam, dtype=np.int32)
             Var.nbPhotons = np.uint32(0)
             if '-DPROGRESSION' in options:
@@ -424,7 +426,7 @@ class Smartg(object):
             nbPhotonsTot += Var.nbPhotons
 
             #Creation d'un fichier témoin pour pouvoir reprendre la simulation en cas d'arrêt
-            tabPhotonsTot = [x + y for x, y in zip(tabPhotonsTot, Tableau.tabPhotonsEvents)]
+            tabPhotonsTot = [x + y for x, y in zip(tabPhotonsTot, Tableau.tabPhotons)]
             for ilam in xrange(0, nlam):
                 nbPhotonsTotInter[ilam] += Tableau.nbPhotonsInter[ilam]
 
@@ -642,10 +644,10 @@ class RoughSurface(object):
             # 3 Reflection and transmission
         NH2O: Relative refarctive index air/water
     '''
-    def __init__(self, MULT=False, WIND=5., SUR=3, NH2O=1.33):
+    def __init__(self, WIND=5., SUR=3, NH2O=1.33):
         self.dict = {
                 'SUR': np.array([SUR], dtype=np.int32),
-                'DIOPTRE': {True: np.array([1], dtype=np.int32), False: np.array([2], dtype=np.int32)}[MULT],
+                'DIOPTRE': np.array([1], dtype=np.int32),
                 'WINDSPEED': np.array([WIND], dtype=np.float32),
                 'NH2O': np.array([NH2O], dtype=np.float32),
                 }
@@ -891,10 +893,9 @@ def calculOmega(tabTh, tabPhi, tabOmega, NBTHETA, NBPHI):
 
 
 
-
 def calculTabFinal(tabFinal, tabTh, tabPhi, tabPhotonsTot, nbPhotonsTot, nbPhotonsTotInter, NBTHETA, NBPHI, NLAM):
 
-    tabOmega = np.zeros(NBTHETA * NBPHI,dtype=np.float32)
+    tabOmega = np.zeros(NBTHETA * NBPHI,dtype=np.float64)
     calculOmega(tabTh, tabPhi, tabOmega,NBTHETA,NBPHI)
     
     # Remplissage du tableau final
@@ -911,8 +912,6 @@ def calculTabFinal(tabFinal, tabTh, tabPhi, tabPhotonsTot, nbPhotonsTot, nbPhoto
                 tabFinal[2*NBTHETA*NBPHI*NLAM + i*NBTHETA*NBPHI + iphi*NBTHETA + ith] = (tabPhotonsTot[2*NBPHI*NBTHETA*NLAM + i*NBTHETA*NBPHI + ith*NBPHI + iphi]) / normInter
                 # N
                 tabFinal[3*NBTHETA*NBPHI*NLAM + i*NBTHETA*NBPHI + iphi*NBTHETA + ith] = (tabPhotonsTot[3*NBPHI*NBTHETA*NLAM + i*NBTHETA*NBPHI + ith*NBPHI + iphi])
-
-
 
 
 
@@ -1038,7 +1037,7 @@ def afficheProgress(nbPhotonsTot, NBPHOTONS, tempsPrec, var, options, nbPhotonsS
     return chaine
 
 
-def calculF(phases, N, SIM):
+def calculF(phases, N, TYPE):
     nmax, n, imax=0, 0, 0
     phasesAtmm = []
     for idx, phase in enumerate(phases):
@@ -1054,8 +1053,8 @@ def calculF(phases, N, SIM):
         phasesAtmm = np.append(phasesAtmm, tmp)
         scum = np.zeros(phase.N)
         #conversion en gradiant
-        if(SIM == -2 or SIM == 1 or SIM == 2):
-            phase.ang*=0.017453293
+        if TYPE=='ATM':
+            phase.ang*=(0.017453293)
         for iang in xrange(1, phase.N):
             dtheta = phase.ang[iang]-phase.ang[iang-1]
             pm1 = phase.phase[iang-1, 1] + phase.phase[iang-1, 0]
@@ -1063,7 +1062,6 @@ def calculF(phases, N, SIM):
             sin1 = np.sin(phase.ang[iang-1])
             sin2 = np.sin(phase.ang[iang])
             scum[iang] = scum[iang-1] + dtheta*( (sin1*pm1+sin2*pm2)/3 + (sin1*pm2+sin2*pm1)/6 )*6.2831853;
-
           #normalisation
         for iang in xrange(0, phase.N):
             scum[iang] /= scum[phase.N-1]
@@ -1106,37 +1104,33 @@ def test_rayleigh_aerosols():
     aer = AeroOPAC('maritime_clean', 0.4, 550.)
     pro = Profile('afglms', aer=aer)
 
-    return Smartg('SMART-G-PP', wl=np.linspace(400, 600, 10.), atm=pro, NBPHOTONS=1e9)
-
+    return Smartg('SMART-G-PP', wl=490., atm=pro, NBPHOTONS=1e9)
 
 def test_atm_surf():
     # lambertian surface of albedo 10%
     return Smartg('SMART-G-PP', 490., NBPHOTONS=1e9,
-            output = join(dir_output, 'test_atm_surf.hdf'),
             atm = Profile('afglms'),
-            surf = LambSurface(ALB=0.1),
-            overwrite =True)
+            surf = LambSurface(ALB=0.1))
 
 
 def test_atm_surf_ocean():
-    return Smartg('SMART-G-PP', wl=np.linspace(400, 600, 10.), NBPHOTONS=1e7,
+    return Smartg('SMART-G-PP', 490., NBPHOTONS=1e7,
             atm=Profile('afglms', aer=AeroOPAC('maritime_clean', 0.2, 550)),
             surf=RoughSurface(),
             NBTHETA=30,
-            water=IOP_MM(chl=1., NANG=1000),
-            overwrite=True)
+            water=IOP_MM(chl=1., NANG=1000))
 
 
 def test_surf_ocean():
-    return Smartg('SMART-G-SP',490., THVDEG=30., NBPHOTONS=2e6,
+    return Smartg('SMART-G-PP',490., THVDEG=30., NBPHOTONS=2e6,
             surf=RoughSurface(),
             water=IOP_MM(1., pfwav=[400.]))
 
 
 
 def test_ocean():
-    return Smartg('SMART-G-PP', wl=np.linspace(400, 600, 10.), THVDEG=30.,
-            water=IOP_MM(chl=1.,pfwav=[400,500]), NBPHOTONS=5e6)
+    return Smartg('SMART-G-PP', wl=400., THVDEG=30.,
+            water=IOP_MM(chl=1.), NBPHOTONS=5e6)
 
 
 def test_reptran():
@@ -1198,6 +1192,7 @@ def test_multispectral():
              surf=RoughSurface(),
              water=IOP_SPM(1.))
 
+
 if __name__ == '__main__':
     #test_rayleigh()
     #test_kokhanovsky()
@@ -1205,7 +1200,7 @@ if __name__ == '__main__':
     #test_atm_surf()
     #test_atm_surf_ocean()
     #test_surf_ocean()
-    #test_ocean()
+    test_ocean()
     #test_reptran()
     #test_ozone_lut()
-    test_multispectral()
+    #test_multispectral()
