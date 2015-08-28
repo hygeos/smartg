@@ -1,9 +1,6 @@
 #!/usr/bin/env python
 # encoding: utf-8
 
-# ipython notebook --no-browser --ip='*'
-
-#import des modules en cuda
 import pycuda.driver as cuda
 import pycuda.autoinit
 import pycuda.gpuarray as gpuarray
@@ -44,6 +41,9 @@ class Smartg(object):
               or a list of wavelengths, or an array
               used for phase functions calculation (always)
               and profile calculation (if iband is None)   # FIXME
+        - pp:
+            True: use plane parallel geometry (default)
+            False: use spherical shell geometry
         - iband: a REPTRAN_BAND object describing the internal band
             default None (no reptran mode)
         - atm: Profile object
@@ -54,20 +54,18 @@ class Smartg(object):
             default None (no ocean)
         - env: environment effect parameters (dictionary)
             default None (no environment effect)
-        The other acuments (NBPHOTONS, THVDEG, etc) are passed directly to the
-        command file.
 
     Attributes:
         - output: the name of the result file
-        - cmdfile: name of the command file
     '''
-    def __init__(self, exe, wl, output=None,
-           iband=None,atm=None, surf=None, water=None, env=None,
+    def __init__(self, wl, pp=True,
+           iband=None, atm=None, surf=None, water=None, env=None,
            NBPHOTONS=1e9, DEPO=0.0279, THVDEG=0., SEED=-1,
            NBTHETA=45, NBPHI=45,
-           NFAER=10000, NFOCE=10000, WRITE_PERIOD=-1,
+           NFAER=10000, NFOCE=10000,
            OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
            NBLOOP=1e8):
+
         #
         # initialization
         #
@@ -94,7 +92,6 @@ class Smartg(object):
                 'NBPHI': np.array([NBPHI], dtype=np.int32),
                 'NFAER': np.array([NFAER], dtype=np.uint32),
                 'NFOCE': np.array([NFOCE], dtype=np.uint32),
-                'WRITE_PERIOD': WRITE_PERIOD,
                 'OUTPUT_LAYERS': np.array([OUTPUT_LAYERS], dtype=np.uint32),
                 'XBLOCK': np.array([XBLOCK], dtype=np.int32),
                 'YBLOCK': np.array([1], dtype=np.int32),
@@ -127,8 +124,6 @@ class Smartg(object):
             raise Exception('Error in SIM')
 
         D.update(SIM=np.array([SIM], dtype=np.int32))
-        # output file
-        D.update(PATHRESULTATSHDF=output)
 
         #
         # atmosphere
@@ -230,18 +225,12 @@ class Smartg(object):
             albedo[2*i+1] = seafloor_alb
 
         #
-        # write the command file
+        # compilation
         #
-        ################################################################
-
-     
-        exe = str(exe)
-
-        #options=['-DRANDPHILOX4x32_7','-DPARAMETRES','-DPROGRESSION']
-        if exe == 'SMART-G-PP':
-            options = ['-DRANDPHILOX4x32_7']
-        elif exe == 'SMART-G-SP':
-            options = ['-DRANDPHILOX4x32_7', '-DSPHERIQUE']
+        options = ['-DRANDPHILOX4x32_7']
+        # options.extend(['-DPARAMETRES','-DPROGRESSION'])
+        if not pp:
+            options.append('-DSPHERIQUE')
 
         # load device.cu
         src_device = open(dir_kernel+'device.cu').read()
