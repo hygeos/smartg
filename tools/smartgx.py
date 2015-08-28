@@ -1,25 +1,26 @@
 #!/usr/bin/env python
 # encoding: utf-8
 
+
+'''
+SMART-G
+Speed-up Monte Carlo Advanced Radiative Transfer Code using GPU
+'''
+
+
 import pycuda.driver as cuda
 import pycuda.autoinit
-import pycuda.gpuarray as gpuarray
 from pycuda.compiler import SourceModule
 import numpy as np
-from sys import path
 from gpustruct import GPUStruct
 import time
-from time import sleep
-import subprocess
-import numpy as np
+from numpy import pi
 from pyhdf.SD import SD, SDC
 from profile.profil import AeroOPAC, Profile, REPTRAN, REPTRAN_IBAND, CloudOPAC
 from water.iop_spm import IOP_SPM
 from water.iop_mm import IOP_MM
-from os.path import dirname, realpath, join, exists, basename, isdir
-from os import makedirs, remove
+from os.path import dirname, realpath, join, basename
 import textwrap
-import tempfile
 from progress import Progress
 from luts import merge, read_lut_hdf, read_mlut_hdf, LUT, MLUT
 
@@ -64,11 +65,14 @@ class Smartg(object):
            NBTHETA=45, NBPHI=45,
            NFAER=10000, NFOCE=10000,
            OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
-           NBLOOP=1e8):
+           NBLOOP=None):
 
         #
         # initialization
         #
+
+        if NBLOOP is None:
+            NBLOOP = NBPHOTONS/30
 
         NLAY = 5
 
@@ -142,7 +146,7 @@ class Smartg(object):
                     nprofilesAtm[key] = np.append(nprofilesAtm[key], profile[key])
 
             D.update(LAMBDA=wl)
-        else:  
+        else:
             # no atmosphere
             Ddef.update(PATHDIFFAER='None')
             Ddef.update(PATHPROFILATM='None')
@@ -457,15 +461,6 @@ class Smartg(object):
         from smartg_view import smartg_view
 
         smartg_view(self.output, QU=QU, field=field)
-
-
-def ensure_dir_exists(file_or_dir):
-    if isdir(file_or_dir):
-        dir_name = file_or_dir
-    else:
-        dir_name = dirname(file_or_dir)
-    if not exists(dir_name):
-        makedirs(dir_name)
 
 
 def command_file_template(dict):
@@ -853,7 +848,7 @@ def calculOmega(tabTh, tabPhi, tabOmega, NBTHETA, NBPHI):
         tabTh[ith] = tabTh[ith-1] + dth
 
     # Azimut angles of the center of the output angular boxes
-    dphi = 3.1415927 / NBPHI
+    dphi = pi/NBPHI
     tabPhi[0] = dphi / 2.
     for iphi in xrange(1, NBPHI):
         tabPhi[iphi] = tabPhi[iphi-1] + dphi
@@ -861,7 +856,7 @@ def calculOmega(tabTh, tabPhi, tabOmega, NBTHETA, NBPHI):
     # Solid angles of the output angular boxes
     sumds = 0
     for ith in xrange(0, NBTHETA):
-        dth = 1.5707963 / NBTHETA
+        dth = pi/(2*NBTHETA)
         for iphi in xrange(0, NBPHI):
             tabds[ith * NBPHI + iphi] = np.sin(tabTh[ith]) * dth * dphi;
             sumds += tabds[ith * NBPHI + iphi]
@@ -1068,7 +1063,7 @@ def test_rayleigh():
     '''
     Basic Rayleigh example
     '''
-    return Smartg('SMART-G-PP', wl=400., NBPHOTONS=1e9, atm=Profile('afglt'))
+    return Smartg(wl=400., NBPHOTONS=1e9, atm=Profile('afglt'))
 
 def test_kokhanovsky():
     '''
@@ -1176,13 +1171,13 @@ def test_multispectral():
 
 
 if __name__ == '__main__':
-    #test_rayleigh()
-    #test_kokhanovsky()
-    #test_rayleigh_aerosols()
-    #test_atm_surf()
-    #test_atm_surf_ocean()
-    #test_surf_ocean()
-    test_ocean()
-    #test_reptran()
-    #test_ozone_lut()
-    #test_multispectral()
+    test_rayleigh()
+    # test_kokhanovsky()
+    # test_rayleigh_aerosols()
+    # test_atm_surf()
+    # test_atm_surf_ocean()
+    # test_surf_ocean()
+    # test_ocean()
+    # test_reptran()
+    # test_ozone_lut()
+    # test_multispectral()
