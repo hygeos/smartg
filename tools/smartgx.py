@@ -276,7 +276,6 @@ class Smartg(object):
 
         if '-DSPHERIQUE' in options:
             TAUATM = nprofilesAtm['H'][NATM];
-        if '-DSPHERIQUE' in options:
             tabTransDir = np.zeros(nlam,dtype=np.float64)
             for ilam in xrange(0, nlam):
                 tabTransDir[ilam] = np.exp(-hph0[NATM+ilam*(NATM+1)]);
@@ -316,9 +315,9 @@ class Smartg(object):
         Var = GPUStruct(tmp)
         Init = GPUStruct([(np.float32, 'x0', x0), (np.float32, 'y0', y0), (np.float32, 'z0', z0)])
 
-        #initialisation des constantes
+        # initialisation des constantes
         D['NBPHOTONS'] = np.array([D['NBPHOTONS']], dtype=np.int_)
-        THV = D['THVDEG']*0.017453293
+        THV = D['THVDEG']*np.pi/180.
         STHV = np.array([np.sin(THV)], dtype=np.float32)
         CTHV = np.array([np.cos(THV)], dtype=np.float32)
         GAMAbis = D['DEPO'] / (2-D['DEPO'])
@@ -353,21 +352,18 @@ class Smartg(object):
 
 
 
-        #transfert des constantes dans le device
-        for key in D.keys():
-            if key in ('NBPHOTONS', 'NBLOOP', 'THVDEG', 'DEPO', 'WINDSPEED',
+        # transfert des constantes dans le device
+        for key in ('NBPHOTONS', 'NBLOOP', 'THVDEG', 'DEPO', 'WINDSPEED',
                        'THV', 'GAMA', 'XBLOCK', 'YBLOCK', 'XGRID', 'YGRID',
                        'STHV', 'CTHV', 'NLAM', 'NOCE', 'SIM', 'NATM', 'BETA',
                        'ALPHA', 'ACUBE', 'A', 'DELTA', 'NFAER',
                        'NBTHETA', 'NBPHI', 'OUTPUT_LAYERS',
                        'SUR', 'DIOPTRE', 'ENV', 'ENV_SIZE',
                        'NH2O', 'X0', 'Y0', 'DELTA_PRIM', 'NFOCE', 'NFAER'):
-                exec("a,_=mod.get_global('%sd')"%key)
-                cuda.memcpy_htod(a, D[key])
+            a,_ = mod.get_global('%sd'%key)
+            cuda.memcpy_htod(a, D[key])
 
-        
-        
-        #execution du kernel
+        # execution du kernel
         tempsPrec = 0
         nbPhotonsTot = 0
         nbPhotonsTotInter = np.zeros(nlam, dtype=np.uint64)
@@ -386,13 +382,10 @@ class Smartg(object):
         #    nbPhotonsSorTot += Var.nbPhotonsSor;
         #    afficheProgress(nbPhotonsTot, NBPHOTONS, tempsPrec, Var, options, nbPhotonsSorTot)
         
-        passageBoucle = False;
-        if(nbPhotonsTot < NBPHOTONS):
-            passageBoucle = True;
-    
-        ########################
-        #########BOUCLE#########
-        ########################
+
+        #
+        # main loop
+        #
         while(nbPhotonsTot < NBPHOTONS):
 
             #remise à zero de certaines variables de certains tableaux
