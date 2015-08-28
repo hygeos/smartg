@@ -12,10 +12,8 @@ import pycuda.driver as cuda
 import pycuda.autoinit
 from pycuda.compiler import SourceModule
 
-
-
-
 import numpy as np
+from smartg import Smartg, RoughSurface, LambSurface, FlatSurface, Environment
 from gpustruct import GPUStruct
 import time
 from numpy import pi
@@ -27,7 +25,6 @@ from os.path import dirname, realpath, join, basename
 import textwrap
 from progress import Progress
 from luts import merge, read_lut_hdf, read_mlut_hdf, LUT, MLUT
-import cfaer
 
 
 # set up default directories
@@ -150,7 +147,7 @@ class Smartg(object):
         #
         # atmosphere
         #
-        
+
         nprofilesAtm = {}
         if atm is not None:
             # write the profile
@@ -241,7 +238,7 @@ class Smartg(object):
         # FIXME: implement spectral albedo
             albedo[2*i] = surf_alb
             albedo[2*i+1] = seafloor_alb
-            
+
 
         #
         # compilation
@@ -299,7 +296,7 @@ class Smartg(object):
             tabTransDir = np.zeros(nlam,dtype=np.float64)
             for ilam in xrange(0, nlam):
                 tabTransDir[ilam] = np.exp(-hph0[NATM+ilam*(NATM+1)])
- 
+
         #write the input variable in data structure 
         tmp = []
 
@@ -330,7 +327,7 @@ class Smartg(object):
         if '-DPROGRESSION' in options:
             tmp2 = [(np.uint64, 'nbThreads', 0), (np.uint64, 'nbPhotonsSor', 0), (np.uint32, 'erreurvxy', 0), (np.int32, 'erreurvy', 0), (np.int32, 'erreurcase', 0)]
             tmp += tmp2
-        
+
         Var = GPUStruct(tmp)
 
         Init = GPUStruct([(np.float32, 'x0', x0), (np.float32, 'y0', y0), (np.float32, 'z0', z0)])
@@ -352,7 +349,17 @@ class Smartg(object):
         ALPHAbis = 1./8. * DELTAbis
         Abis = 1. + BETAbis / (3.0 * ALPHAbis)
         ACUBEbis = Abis * Abis* Abis
-
+        if surf != None:
+            D['SUR'] = np.array(D['SUR'], dtype=np.int32)           
+            D['DIOPTRE'] = np.array(D['DIOPTRE'], dtype=np.int32)
+            D['WINDSPEED'] = np.array(D['WINDSPEED'], dtype=np.float32)
+            D['NH2O'] = np.array(D['NH2O'], dtype=np.float32) 
+        if env != None:
+            D['ENV'] = np.array(D['ENV'], dtype=np.int32)
+            D['ENV_SIZE'] = np.array(D['ENV_SIZE'], dtype=np.float32)
+            D['X0'] = np.array(D['X0'], dtype=np.float32)
+            D['Y0'] = np.array(D['Y0'], dtype=np.float32)
+               
 
         #dictionary update
         D.update(NATM=np.array([NATM], dtype=np.int32))
@@ -368,6 +375,8 @@ class Smartg(object):
         D.update(ALPHA=ALPHAbis)
         D.update(A=Abis)
         D.update(ACUBE=ACUBEbis)
+
+            
 
         # transfert des constantes dans le device
         for key in ('NBPHOTONS', 'NBLOOP', 'THVDEG', 'DEPO', 'WINDSPEED',
@@ -387,7 +396,7 @@ class Smartg(object):
         nbPhotonsSorTot = 0
         tabPhotonsTot = np.zeros(NLEV*4*NBTHETA * NBPHI * nlam, dtype=np.float32)
         p = Progress(NBPHOTONS)
-       
+
         passageBoucle = False
         if(nbPhotonsTot < NBPHOTONS):
             passageBoucle = True
@@ -419,22 +428,21 @@ class Smartg(object):
 
             nbPhotonsTot += Var.nbPhotons
 
-            
             #tabPhotonsTot = [x + y for x, y in zip(tabPhotonsTot, Tableau.tabPhotons)]
             tabPhotonsTot+=Tableau.tabPhotons
-            
+
             for ilam in xrange(0, nlam):
                 nbPhotonsTotInter[ilam] += Tableau.nbPhotonsInter[ilam]
 
             if '-DPROGRESSION' in options:
                 nbPhotonsSorTot += Var.nbPhotonsSor;
             #afficheProgress(nbPhotonsTot, NBPHOTONS, tempsPrec, Var, options, nbPhotonsSorTot)
-            
+
             if nbPhotonsTot > NBPHOTONS:
                 p.update(NBPHOTONS, afficheProgress(nbPhotonsTot, NBPHOTONS, tempsPrec, Var, options, nbPhotonsSorTot))
             else:
                 p.update(nbPhotonsTot, afficheProgress(nbPhotonsTot, NBPHOTONS, tempsPrec, Var, options, nbPhotonsSorTot))
-            
+
         # Si on n'est pas passé dans la boucle on affiche quand-même l'avancement de la simulation
         #if(passageBoucle == False):
             #afficheProgress(nbPhotonsTot, NBPHOTONS, tempsPrec, Var, options, nbPhotonsSorTot)
@@ -444,11 +452,8 @@ class Smartg(object):
         tabTh = np.zeros(NBTHETA, dtype=np.float64)
         tabPhi = np.zeros(NBPHI, dtype=np.float64)
 
-
-
 	#Création et calcul du tableau final (regroupant le poids de tous les photons ressortis sur une demi-sphère,
-	#par unité de surface) 
-		
+	#par unité de surface)
 
         for k in xrange(0, 5):
             calculTabFinal(tabFinalEvent[k*4*NBTHETA*NBPHI*nlam:(k+1)*4*NBTHETA*NBPHI*nlam], tabTh, tabPhi, tabPhotonsTot[k*4*NBTHETA*NBPHI*nlam:(k+1)*4*NBTHETA*NBPHI*nlam], nbPhotonsTot, nbPhotonsTotInter, NBTHETA, NBPHI, nlam)
@@ -456,7 +461,7 @@ class Smartg(object):
         #stockage des resultats dans une MLUT
         self.output = creerMLUTsResultats(tabFinalEvent, NBPHI, NBTHETA, tabTh, tabPhi, nlam, tabPhotonsTot,nbPhotonsTot,D,nprofilesAtm,nprofilesOc,faer,foce)
         p.finish('traitement termine :'+afficheProgress(nbPhotonsTot, NBPHOTONS, tempsPrec, Var, options, nbPhotonsSorTot))
-
+  
     def view(self, QU=False, field='up (TOA)'):
         '''
         visualization of a smartg result
@@ -467,85 +472,6 @@ class Smartg(object):
         from smartg_view import smartg_view
 
         smartg_view(self.output, QU=QU, field=field)
-
-class FlatSurface(object):
-    '''
-    Definition of a flat sea surface
-
-    Arguments:
-        SUR: Processes at the surface dioptre
-            # 1 Forced reflection
-            # 2 Forced transmission
-            # 3 Reflection and transmission
-        NH2O: Relative refarctive index air/water
-    '''
-    def __init__(self, SUR=3, NH2O=1.33):
-        self.dict = {
-                'SUR': np.array([SUR], dtype=np.int32),
-                'DIOPTRE': np.array([0], dtype=np.int32),
-                'WINDSPEED': np.array([-999.], dtype=np.float32),
-                'NH2O': np.array([NH2O], dtype=np.float32),
-                }
-    def __str__(self):
-        return 'FLATSURF-SUR={SUR}'.format(**self.dict)
-
-class RoughSurface(object):
-    '''
-    Definition of a roughened sea surface
-
-    Arguments:
-        MULT: include multiple reflections at the surface
-              (True => DIOPTRE=1 ; False => DIOPTRE=2)
-        WIND: wind speed (m/s)
-        SUR: Processes at the surface dioptre
-            # 1 Forced reflection
-            # 2 Forced transmission
-            # 3 Reflection and transmission
-        NH2O: Relative refarctive index air/water
-    '''
-    def __init__(self, WIND=5., SUR=3, NH2O=1.33):
-        self.dict = {
-                'SUR': np.array([SUR], dtype=np.int32),
-                'DIOPTRE': np.array([1], dtype=np.int32),
-                'WINDSPEED': np.array([WIND], dtype=np.float32),
-                'NH2O': np.array([NH2O], dtype=np.float32),
-                }
-    def __str__(self):
-        return 'ROUGHSUR={SUR}-WIND={WINDSPEED}-DI={DIOPTRE}'.format(**self.dict)
-
-
-class LambSurface(object):
-    '''
-    Definition of a lambertian reflector
-
-    ALB: Albedo of the reflector
-    '''
-    def __init__(self, ALB=0.5):
-        self.dict = {
-                'SUR': np.array([1], dtype=np.int32),
-                'DIOPTRE': np.array([3], dtype=np.int32),
-                'SURFALB': ALB,
-                'WINDSPEED': np.array([-999.], dtype=np.float32),
-                'NH2O': np.array([-999.], dtype=np.float32),
-                }
-    def __str__(self):
-        return 'LAMBSUR-ALB={SURFALB}'.format(**self.dict)
-
-class Environment(object):
-    '''
-    Stores the smartg parameters relative the the environment effect
-    '''
-    def __init__(self, ENV=0, ENV_SIZE=0., X0=0., Y0=0., ALB=0.5):
-        self.dict = {
-                'ENV': np.array([ENV], dtype=np.int),
-                'ENV_SIZE': np.array([ENV_SIZE], dtype=np.float32),
-                'X0': np.array([X0], dtype=np.float32),
-                'Y0': np.array([Y0], dtype=np.float32),
-                'SURFALB': ALB,
-                }
-
-    def __str__(self):
-        return 'ENV={ENV_SIZE}-X={X0:.1f}-Y={Y0:.1f}'.format(**self.dict)
 
 
 def reptran_merge(files, ibands, output=None):
@@ -1005,9 +931,6 @@ def calculF(phases, N, TYPE):
             phase_H[base_index+2] = np.float32( phase.phase[ipf, 2])
             phase_H[base_index+3] = np.float32(0)
 
-
-        #cfaer.hw(idx,N,scum,phase.phase[:,1],phase.phase[:,0],phase.phase[:,2],phase.ang,phase_H)
-      
     return phase_H, phasesAtmm, n, imax
 
 def test_rayleigh():
