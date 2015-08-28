@@ -154,8 +154,8 @@ class Smartg(object):
             if isinstance(wl, (float, int, REPTRAN_IBAND)):
                 wl = [wl]
             profilesAtm, phasesAtm = atm.calc_bands(wl)
-            nprofilesAtm['ALT']=profilesAtm[0]['ALT']
-            keys=[x for x in profilesAtm[0].dtype.names if x != 'ALT']
+            nprofilesAtm['ALT'] = profilesAtm[0]['ALT']
+            keys = [x for x in profilesAtm[0].dtype.names if x != 'ALT']
             for key in keys:
                 nprofilesAtm[key] = []
                 for profile in profilesAtm:
@@ -202,7 +202,7 @@ class Smartg(object):
                 nprofilesOc['HO'][ilam*2+1] = -1.e10
                 nprofilesOc['SSO'][ilam*2+1] = profilesOc[ilam][1]/(profilesOc[ilam][1]+profilesOc[ilam][0])
                 nprofilesOc['IPO'][ilam*2+1] = profilesOc[ilam][2]
-              #parametrer les indices
+                # parametrer les indices
         #
         # environment effect
         #
@@ -232,13 +232,11 @@ class Smartg(object):
         else:
             seafloor_alb = water.alb
 
-
         albedo = np.zeros(2*nlam)
         for i in xrange(nlam):
         # FIXME: implement spectral albedo
             albedo[2*i] = surf_alb
             albedo[2*i+1] = seafloor_alb
-
 
         #
         # compilation
@@ -338,56 +336,8 @@ class Smartg(object):
         Init.copy_to_gpu()
 
         #initialisation des constantes
-        D['NBPHOTONS'] = np.array([D['NBPHOTONS']], dtype=np.int_)
-        THV = D['THVDEG']*np.pi/180.
-        STHV = np.array([np.sin(THV)], dtype=np.float32)
-        CTHV = np.array([np.cos(THV)], dtype=np.float32)
-        GAMAbis = D['DEPO'] / (2-D['DEPO'])
-        DELTAbis = (1.0 - GAMAbis) / (1.0 + 2.0*GAMAbis)
-        DELTA_PRIMbis = GAMAbis / (1.0 + 2.0*GAMAbis)
-        BETAbis  = 3./2. * DELTA_PRIMbis
-        ALPHAbis = 1./8. * DELTAbis
-        Abis = 1. + BETAbis / (3.0 * ALPHAbis)
-        ACUBEbis = Abis * Abis* Abis
-        if surf != None:
-            D['SUR'] = np.array(D['SUR'], dtype=np.int32)           
-            D['DIOPTRE'] = np.array(D['DIOPTRE'], dtype=np.int32)
-            D['WINDSPEED'] = np.array(D['WINDSPEED'], dtype=np.float32)
-            D['NH2O'] = np.array(D['NH2O'], dtype=np.float32) 
-        if env != None:
-            D['ENV'] = np.array(D['ENV'], dtype=np.int32)
-            D['ENV_SIZE'] = np.array(D['ENV_SIZE'], dtype=np.float32)
-            D['X0'] = np.array(D['X0'], dtype=np.float32)
-            D['Y0'] = np.array(D['Y0'], dtype=np.float32)
-               
+        InitConstantes(D,surf,env,NATM,NOCE,HATM,mod)
 
-        #dictionary update
-        D.update(NATM=np.array([NATM], dtype=np.int32))
-        D.update(NOCE=np.array([NOCE], dtype=np.int32))
-        D.update(HATM=np.array([HATM], dtype=np.float32))
-        D.update(THV=THV)
-        D.update(STHV=STHV)
-        D.update(CTHV=CTHV)
-        D.update(GAMA=GAMAbis)
-        D.update(DELTA=DELTAbis)
-        D.update(DELTA_PRIM=DELTA_PRIMbis)
-        D.update(BETA=BETAbis)
-        D.update(ALPHA=ALPHAbis)
-        D.update(A=Abis)
-        D.update(ACUBE=ACUBEbis)
-
-            
-
-        # transfert des constantes dans le device
-        for key in ('NBPHOTONS', 'NBLOOP', 'THVDEG', 'DEPO', 'WINDSPEED',
-                       'THV', 'GAMA', 'XBLOCK', 'YBLOCK', 'XGRID', 'YGRID',
-                       'STHV', 'CTHV', 'NLAM', 'NOCE', 'SIM', 'NATM', 'BETA',
-                       'ALPHA', 'ACUBE', 'A', 'DELTA', 'NFAER',
-                       'NBTHETA', 'NBPHI', 'OUTPUT_LAYERS',
-                       'SUR', 'DIOPTRE', 'ENV', 'ENV_SIZE',
-                       'NH2O', 'X0', 'Y0', 'DELTA_PRIM', 'NFOCE', 'NFAER'):
-            a,_ = mod.get_global('%sd'%key)
-            cuda.memcpy_htod(a, D[key])
 
         # execution du kernel
         tempsPrec = 0
@@ -404,31 +354,31 @@ class Smartg(object):
         ########################
         #########BOUCLE#########
         ########################
-        skipTableau = ['faer','foce','ho','sso','ipo','h','pMol','ssa','abs','ip','alb','lambda','z']
-        skipVar = ['erreurtheta','erreurpoids','nThreadsActive','nbThreads','erreurvxy','erreurvy','erreurcase']
+        skipTableau = ['faer', 'foce', 'ho', 'sso', 'ipo', 'h', 'pMol', 'ssa', 'abs', 'ip', 'alb', 'lambda', 'z']
+        skipVar = ['erreurtheta', 'erreurpoids', 'nThreadsActive', 'nbThreads', 'erreurvxy', 'erreurvy', 'erreurcase']
         while(nbPhotonsTot < NBPHOTONS):
-            #remise à zero de certaines variables de certains tableaux
+            # remise à zero de certaines variables de certains tableaux
             Tableau.tabPhotons = np.zeros(NLEV*4*NBTHETA * NBPHI * nlam, dtype=np.float32)
-            #fixer l'indice dans un parametre
+            # fixer l'indice dans un parametre
             Tableau.nbPhotonsInter = np.zeros(nlam, dtype=np.int32)
             Var.nbPhotons = np.uint32(0)
             if '-DPROGRESSION' in options:
                 Var.nbPhotonsSor = np.uint32(0)
 
-            #transfert des données dans le GPU
+            # transfert des données dans le GPU
             Tableau.copy_to_gpu(skipTableau)
             Var.copy_to_gpu(skipVar)
             
-            #lancement du kernel
+            # lancement du kernel
             kern(Var.get_ptr(), Tableau.get_ptr(), Init.get_ptr(), block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
 
-            #recuperation des résultats /copy host -> device
+            # recuperation des résultats /copy host -> device
             Tableau.copy_from_gpu(skipTableau)
             Var.copy_from_gpu(skipVar)
 
             nbPhotonsTot += Var.nbPhotons
 
-            #tabPhotonsTot = [x + y for x, y in zip(tabPhotonsTot, Tableau.tabPhotons)]
+            # tabPhotonsTot = [x + y for x, y in zip(tabPhotonsTot, Tableau.tabPhotons)]
             tabPhotonsTot+=Tableau.tabPhotons
 
             for ilam in xrange(0, nlam):
@@ -436,7 +386,7 @@ class Smartg(object):
 
             if '-DPROGRESSION' in options:
                 nbPhotonsSorTot += Var.nbPhotonsSor;
-            #afficheProgress(nbPhotonsTot, NBPHOTONS, tempsPrec, Var, options, nbPhotonsSorTot)
+            # afficheProgress(nbPhotonsTot, NBPHOTONS, tempsPrec, Var, options, nbPhotonsSorTot)
 
             if nbPhotonsTot > NBPHOTONS:
                 p.update(NBPHOTONS, afficheProgress(nbPhotonsTot, NBPHOTONS, tempsPrec, Var, options, nbPhotonsSorTot))
@@ -444,21 +394,21 @@ class Smartg(object):
                 p.update(nbPhotonsTot, afficheProgress(nbPhotonsTot, NBPHOTONS, tempsPrec, Var, options, nbPhotonsSorTot))
 
         # Si on n'est pas passé dans la boucle on affiche quand-même l'avancement de la simulation
-        #if(passageBoucle == False):
+        # if(passageBoucle == False):
             #afficheProgress(nbPhotonsTot, NBPHOTONS, tempsPrec, Var, options, nbPhotonsSorTot)
        
-        #finalisation
+        # finalisation
         tabFinalEvent = np.zeros(NLEV*4*NBTHETA*NBPHI*nlam, dtype=np.float64)
         tabTh = np.zeros(NBTHETA, dtype=np.float64)
         tabPhi = np.zeros(NBPHI, dtype=np.float64)
 
-	#Création et calcul du tableau final (regroupant le poids de tous les photons ressortis sur une demi-sphère,
-	#par unité de surface)
+	# Création et calcul du tableau final (regroupant le poids de tous les photons ressortis sur une demi-sphère,
+	# par unité de surface)
 
         for k in xrange(0, 5):
             calculTabFinal(tabFinalEvent[k*4*NBTHETA*NBPHI*nlam:(k+1)*4*NBTHETA*NBPHI*nlam], tabTh, tabPhi, tabPhotonsTot[k*4*NBTHETA*NBPHI*nlam:(k+1)*4*NBTHETA*NBPHI*nlam], nbPhotonsTot, nbPhotonsTotInter, NBTHETA, NBPHI, nlam)
 
-        #stockage des resultats dans une MLUT
+        # stockage des resultats dans une MLUT
         self.output = creerMLUTsResultats(tabFinalEvent, NBPHI, NBTHETA, tabTh, tabPhi, nlam, tabPhotonsTot,nbPhotonsTot,D,nprofilesAtm,nprofilesOc,faer,foce)
         p.finish('traitement termine :'+afficheProgress(nbPhotonsTot, NBPHOTONS, tempsPrec, Var, options, nbPhotonsSorTot))
   
@@ -553,7 +503,7 @@ def reptran_merge(files, ibands, output=None):
 ##################################################
 ##################################################
 def creerMLUTsResultats(tabFinal, NBPHI, NBTHETA, tabTh, tabPhi, NLAM,tabPhotonsTot,nbPhotonsTot,D,nprofilesAtm,nprofilesOc,phasesAtmm,phasesOcm):
-    #creation de la lookup table specifique a tabFinal
+    # creation de la lookup table specifique a tabFinal
 
 
     tabThBis = np.round(tabTh/0.017453293)
@@ -564,7 +514,7 @@ def creerMLUTsResultats(tabFinal, NBPHI, NBTHETA, tabTh, tabPhi, NLAM,tabPhotons
 
     luts = []
 
-    #ecriture des données de sorties
+    # ecriture des données de sorties
     for i in xrange(0, 4):
         if NLAM == 1:
             a = tabFinal[i*NBPHI*NBTHETA*NLAM:(i+1)*NBPHI*NBTHETA*NLAM]
@@ -634,7 +584,7 @@ def creerMLUTsResultats(tabFinal, NBPHI, NBTHETA, tabTh, tabPhi, NLAM,tabPhotons
     
     Res = MLUT(luts)
 
-    #ecriture des profiles
+    # ecriture des profiles
     if D['SIM'][0]==-2 or D['SIM'][0]==1 or D['SIM'][0]==2:
         luts = []
         keys=nprofilesAtm.keys()
@@ -658,7 +608,7 @@ def creerMLUTsResultats(tabFinal, NBPHI, NBTHETA, tabTh, tabPhi, NLAM,tabPhotons
 
     
            
-    #HDF.save('test2.hdf', overwrite=True)
+    # HDF.save('test2.hdf', overwrite=True)
     return Res
 
 def impactInit(HATM, NATM, NLAM, ALT, H, THVDEG, options):
@@ -716,8 +666,8 @@ def impactInit(HATM, NATM, NLAM, ALT, H, THVDEG, options):
     return x0, y0, z0, zph0, hph0
 
 def calculOmega(tabTh, tabPhi, tabOmega, NBTHETA, NBPHI):
-    #calculOmega
-    #Fonction qui calcule l'aire normalisée de chaque boite, son theta, et son psi, sous forme de 3 tableaux
+    # calculOmega
+    # Fonction qui calcule l'aire normalisée de chaque boite, son theta, et son psi, sous forme de 3 tableaux
     tabds = np.zeros(NBTHETA * NBPHI, dtype=np.float64)
     # Zenith angles of the center of the output angular boxes
     dth = 1.5707963 / NBTHETA
@@ -845,7 +795,7 @@ def afficheParametres(D, options):
 ######################################################
 ######################################################
 
-#nbPhotonsTot, var, tempsPrec
+# nbPhotonsTot, var, tempsPrec
 def afficheProgress(nbPhotonsTot, NBPHOTONS, tempsPrec, var, options, nbPhotonsSorTot):
     #Calcul la date et l'heure courante
     date = time.localtime()
@@ -902,7 +852,7 @@ def calculF(phases, N, TYPE):
         tmp = np.append(phase.ang, phase.phase)
         phasesAtmm = np.append(phasesAtmm, tmp)
         scum = np.zeros(phase.N)
-        #conversion en gradiant
+        # conversion en gradiant
         if TYPE=='ATM':
             phase.ang*=(0.017453293)
         for iang in xrange(1, phase.N):
@@ -912,10 +862,10 @@ def calculF(phases, N, TYPE):
             sin1 = np.sin(phase.ang[iang-1])
             sin2 = np.sin(phase.ang[iang])
             scum[iang] = scum[iang-1] + dtheta*( (sin1*pm1+sin2*pm2)/3 + (sin1*pm2+sin2*pm1)/6 )*6.2831853;
-          #normalisation
+        # normalisation
         for iang in xrange(0, phase.N):
             scum[iang] /= scum[phase.N-1]
-         #calcul des faer
+        # calcul des faer
 
         ipf = 0
         converted_N = np.float64(N)
@@ -1040,6 +990,56 @@ def test_multispectral():
              atm=pro,
              surf=RoughSurface(),
              water=IOP_SPM(1.))
+
+
+def InitConstantes(D,surf,env,NATM,NOCE,HATM,mod):
+
+    D['NBPHOTONS'] = np.array([D['NBPHOTONS']], dtype=np.int_)
+    THV = D['THVDEG']*np.pi/180.
+    STHV = np.array([np.sin(THV)], dtype=np.float32)
+    CTHV = np.array([np.cos(THV)], dtype=np.float32)
+    GAMAbis = D['DEPO'] / (2-D['DEPO'])
+    DELTAbis = (1.0 - GAMAbis) / (1.0 + 2.0 *GAMAbis)
+    DELTA_PRIMbis = GAMAbis / (1.0 + 2.0*GAMAbis)
+    BETAbis  = 3./2. * DELTA_PRIMbis
+    ALPHAbis = 1./8. * DELTAbis
+    Abis = 1. + BETAbis / (3.0 * ALPHAbis)
+    ACUBEbis = Abis * Abis* Abis
+    if surf != None:
+        D['SUR'] = np.array(D['SUR'], dtype=np.int32)
+        D['DIOPTRE'] = np.array(D['DIOPTRE'], dtype=np.int32)
+        D['WINDSPEED'] = np.array(D['WINDSPEED'], dtype=np.float32)
+        D['NH2O'] = np.array(D['NH2O'], dtype=np.float32)
+    if env != None:
+        D['ENV'] = np.array(D['ENV'], dtype=np.int32)
+        D['ENV_SIZE'] = np.array(D['ENV_SIZE'], dtype=np.float32)
+        D['X0'] = np.array(D['X0'], dtype=np.float32)
+        D['Y0'] = np.array(D['Y0'], dtype=np.float32)
+    # dictionary update
+    D.update(NATM=np.array([NATM], dtype=np.int32))
+    D.update(NOCE=np.array([NOCE], dtype=np.int32))
+    D.update(HATM=np.array([HATM], dtype=np.float32))
+    D.update(THV=THV)
+    D.update(STHV=STHV)
+    D.update(CTHV=CTHV)
+    D.update(GAMA=GAMAbis)
+    D.update(DELTA=DELTAbis)
+    D.update(DELTA_PRIM=DELTA_PRIMbis)
+    D.update(BETA=BETAbis)
+    D.update(ALPHA=ALPHAbis)
+    D.update(A=Abis)
+    D.update(ACUBE=ACUBEbis)
+
+    # transfert des constantes dans le device
+    for key in ('NBPHOTONS', 'NBLOOP', 'THVDEG', 'DEPO', 'WINDSPEED',
+                   'THV', 'GAMA', 'XBLOCK', 'YBLOCK', 'XGRID', 'YGRID',
+                   'STHV', 'CTHV', 'NLAM', 'NOCE', 'SIM', 'NATM', 'BETA',
+                   'ALPHA', 'ACUBE', 'A', 'DELTA', 'NFAER',
+                   'NBTHETA', 'NBPHI', 'OUTPUT_LAYERS',
+                   'SUR', 'DIOPTRE', 'ENV', 'ENV_SIZE',
+                   'NH2O', 'X0', 'Y0', 'DELTA_PRIM', 'NFOCE', 'NFAER'):
+        a,_ = mod.get_global('%sd'%key)
+        cuda.memcpy_htod(a, D[key])
 
 if __name__ == '__main__':
     test_rayleigh()
