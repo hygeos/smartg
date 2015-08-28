@@ -296,44 +296,7 @@ class Smartg(object):
                 tabTransDir[ilam] = np.exp(-hph0[NATM+ilam*(NATM+1)])
 
         #write the input variable in data structure 
-        tmp = []
-
-        tmp = [(np.uint64, '*nbPhotonsInter', np.zeros(nlam, dtype=np.uint64)),
-               (np.float32, '*tabPhotons', np.zeros(NLEV*4*NBTHETA * NBPHI * nlam, dtype=np.float32)),
-               (np.float32, '*faer', faer),
-               (np.float32, '*foce', foce),
-               (np.float32, '*ho', nprofilesOc['HO']),
-               (np.float32, '*sso', nprofilesOc['SSO']),
-               (np.int32, '*ipo', nprofilesOc['IPO']),
-               (np.float32, '*h', nprofilesAtm['H']),
-               (np.float32, '*pMol', nprofilesAtm['YDEL']),
-               (np.float32, '*ssa', nprofilesAtm['XSSA']),
-               (np.float32, '*abs', nprofilesAtm['percent_abs']),
-               (np.int32, '*ip', nprofilesAtm['IPHA']),
-               (np.float32, '*alb', albedo),
-               (np.float32, '*lambda', wl),
-               (np.float32, '*z', nprofilesAtm['ALT'])]
-        if '-DSPHERIQUE' in options:
-            tmp += [(np.float32, '*hph0', hph0), (np.float32, '*zph0', zph0)]
-
-        if '-DRANDPHILOX4x32_7' in options:
-            tmp += [(np.uint32, '*etat', np.zeros(XBLOCK*1*XGRID*1, dtype=np.uint32)), (np.uint32, 'config', 0)]
-
-        Tableau = GPUStruct(tmp)
-
-        tmp = [(np.uint64, 'nbPhotons', 0),(np.int32, 'nThreadsActive', 0), (np.int32, 'erreurpoids', 0), (np.int32, 'erreurtheta', 0)]
-        if '-DPROGRESSION' in options:
-            tmp2 = [(np.uint64, 'nbThreads', 0), (np.uint64, 'nbPhotonsSor', 0), (np.uint32, 'erreurvxy', 0), (np.int32, 'erreurvy', 0), (np.int32, 'erreurcase', 0)]
-            tmp += tmp2
-
-        Var = GPUStruct(tmp)
-
-        Init = GPUStruct([(np.float32, 'x0', x0), (np.float32, 'y0', y0), (np.float32, 'z0', z0)])
-
-        #transfert des structures de donnees dans le device
-        Var.copy_to_gpu(['nbPhotons'])
-        Tableau.copy_to_gpu(['tabPhotons','nbPhotonsInter'])
-        Init.copy_to_gpu()
+        Tableau,Var,Init=InitSD(nprofilesAtm,nprofilesOc,nlam,NLEV,NBTHETA,NBPHI,faer,foce,albedo,wl,hph0,zph0,x0,y0,z0,XBLOCK,XGRID,options)
 
         #initialisation des constantes
         InitConstantes(D,surf,env,NATM,NOCE,HATM,mod)
@@ -1040,6 +1003,41 @@ def InitConstantes(D,surf,env,NATM,NOCE,HATM,mod):
                    'NH2O', 'X0', 'Y0', 'DELTA_PRIM', 'NFOCE', 'NFAER'):
         a,_ = mod.get_global('%sd'%key)
         cuda.memcpy_htod(a, D[key])
+
+def InitSD(nprofilesAtm,nprofilesOc,nlam,NLEV,NBTHETA,NBPHI,faer,foce,albedo,wl,hph0,zph0,x0,y0,z0,XBLOCK,XGRID,options):
+    tmp = []
+    tmp = [(np.uint64, '*nbPhotonsInter', np.zeros(nlam, dtype=np.uint64)),
+           (np.float32, '*tabPhotons', np.zeros(NLEV*4*NBTHETA * NBPHI * nlam, dtype=np.float32)),
+           (np.float32, '*faer', faer),
+           (np.float32, '*foce', foce),
+           (np.float32, '*ho', nprofilesOc['HO']),
+           (np.float32, '*sso', nprofilesOc['SSO']),
+           (np.int32, '*ipo', nprofilesOc['IPO']),
+           (np.float32, '*h', nprofilesAtm['H']),
+           (np.float32, '*pMol', nprofilesAtm['YDEL']),
+           (np.float32, '*ssa', nprofilesAtm['XSSA']),
+           (np.float32, '*abs', nprofilesAtm['percent_abs']),
+           (np.int32, '*ip', nprofilesAtm['IPHA']),
+           (np.float32, '*alb', albedo),
+           (np.float32, '*lambda', wl),
+           (np.float32, '*z', nprofilesAtm['ALT'])]
+    if '-DSPHERIQUE' in options:
+        tmp += [(np.float32, '*hph0', hph0), (np.float32, '*zph0', zph0)]
+    if '-DRANDPHILOX4x32_7' in options:
+        tmp += [(np.uint32, '*etat', np.zeros(XBLOCK*1*XGRID*1, dtype=np.uint32)), (np.uint32, 'config', 0)]
+    Tableau = GPUStruct(tmp)
+    tmp = [(np.uint64, 'nbPhotons', 0),(np.int32, 'nThreadsActive', 0), (np.int32, 'erreurpoids', 0), (np.int32, 'erreurtheta', 0)]
+    if '-DPROGRESSION' in options:
+        tmp2 = [(np.uint64, 'nbThreads', 0), (np.uint64, 'nbPhotonsSor', 0), (np.uint32, 'erreurvxy', 0), (np.int32, 'erreurvy', 0), (np.int32, 'erreurcase', 0)]
+        tmp += tmp2
+    Var = GPUStruct(tmp)
+    Init = GPUStruct([(np.float32, 'x0', x0), (np.float32, 'y0', y0), (np.float32, 'z0', z0)])
+    #transfert des structures de donnees dans le device
+    Var.copy_to_gpu(['nbPhotons'])
+    Tableau.copy_to_gpu(['tabPhotons','nbPhotonsInter'])
+    Init.copy_to_gpu()
+
+    return Tableau,Var,Init
 
 if __name__ == '__main__':
     test_rayleigh()
