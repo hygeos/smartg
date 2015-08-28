@@ -391,9 +391,9 @@ __device__ void initPhoton(Photon* ph, Tableaux tab
 
 
         // 	Paramètres initiaux calculés dans impactInit - host.cu
-        ph->x = init->x0;
-        ph->y = init->y0;
-        ph->z = init->z0;
+        ph->x = 0;
+        ph->y = 0;
+        ph->z = tab.z[NATMd + ph->ilam*(NATMd+1)];
         ph->couche=0;	// Sommet de l'atmosphère
 
         #ifdef SPHERIQUE
