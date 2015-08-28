@@ -1029,6 +1029,7 @@ __device__ void move_pp(Photon* ph,float*z, float* h, float* pMol , float *abs ,
             rdist=(phz-ph->z)/ph->vz;
             ph->z = phz;
             ph->x = ph->x + ph->vx*rdist;
+            ph->y = ph->y + ph->vy*rdist;
 
 
 }
