@@ -678,6 +678,9 @@ def calculTabFinal(tabFinal, tabTh, tabPhi, tabPhotonsTot, nbPhotonsTot, nbPhoto
                 # N
                 tabFinal[3*NBTHETA*NBPHI*NLAM + i*NBTHETA*NBPHI + iphi*NBTHETA + ith] = (tabPhotonsTot[3*NBPHI*NBTHETA*NLAM + i*NBTHETA*NBPHI + ith*NBPHI + iphi])
 
+
+
+
 ######################################################
 ######################################################
 ######################################################
@@ -881,6 +884,22 @@ def test_multispectral():
 
 def InitConstantes(D,surf,env,NATM,NOCE,HATM,mod):
 
+     """
+    Initialize the constants in python and send them to the device memory
+
+    Arguments:
+
+        - D: Dictionary containing all the parameters required to launch the simulation by the kernel
+        - surf : surf: Surface object
+        - env : environment effect parameters (dictionary)
+        - NATM : Number of layers of the atmosphere
+        - NOCE : Number of layers of the ocean
+        - HATM : Altitude of the Top of Atmosphere
+        - mod : PyCUDA module compiling the kernel
+
+    """
+
+
     D['NBPHOTONS'] = np.array([D['NBPHOTONS']], dtype=np.int_)
     THV = D['THVDEG']*np.pi/180.
     STHV = np.array([np.sin(THV)], dtype=np.float32)
@@ -892,6 +911,7 @@ def InitConstantes(D,surf,env,NATM,NOCE,HATM,mod):
     ALPHAbis = 1./8. * DELTAbis
     Abis = 1. + BETAbis / (3.0 * ALPHAbis)
     ACUBEbis = Abis * Abis* Abis
+
     if surf != None:
         D['SUR'] = np.array(D['SUR'], dtype=np.int32)
         D['DIOPTRE'] = np.array(D['DIOPTRE'], dtype=np.int32)
@@ -903,6 +923,7 @@ def InitConstantes(D,surf,env,NATM,NOCE,HATM,mod):
         D['X0'] = np.array(D['X0'], dtype=np.float32)
         D['Y0'] = np.array(D['Y0'], dtype=np.float32)
     # dictionary update
+
     D.update(NATM=np.array([NATM], dtype=np.int32))
     D.update(NOCE=np.array([NOCE], dtype=np.int32))
     D.update(HATM=np.array([HATM], dtype=np.float32))
@@ -917,7 +938,7 @@ def InitConstantes(D,surf,env,NATM,NOCE,HATM,mod):
     D.update(A=Abis)
     D.update(ACUBE=ACUBEbis)
 
-    # transfert des constantes dans le device
+    # copy the constants into the device memory
     for key in ('NBPHOTONS', 'NBLOOP', 'THVDEG', 'DEPO', 'WINDSPEED',
                    'THV', 'GAMA', 'XBLOCK', 'YBLOCK', 'XGRID', 'YGRID',
                    'STHV', 'CTHV', 'NLAM', 'NOCE', 'SIM', 'NATM', 'BETA',
@@ -928,7 +949,34 @@ def InitConstantes(D,surf,env,NATM,NOCE,HATM,mod):
         a,_ = mod.get_global('%sd'%key)
         cuda.memcpy_htod(a, D[key])
 
-def InitSD(nprofilesAtm,nprofilesOc,nlam,NLEV,NBTHETA,NBPHI,faer,foce,albedo,wl,hph0,zph0,x0,y0,z0,XBLOCK,XGRID,options):
+def InitSD(nprofilesAtm, nprofilesOc, nlam,
+           NLEV, NBTHETA, NBPHI, faer, foce,
+           albedo, wl, hph0, zph0, x0, y0, z0,
+           XBLOCK, XGRID, options):
+
+    """
+    Initialize the principles data structures in python and send them the device memory
+
+    Arguments:
+
+        - nprofilesAtm: Atmospheric profile
+        - nprofilesOc : Oceanic profile
+        - nlam: Number of wavelet length
+        - NLEV : Number of output levels
+        - NBTHETA : Number of intervals in zenith
+        - NBPHI : Number of intervals in azimuth angle
+        - faer : Compute CDF of scattering phase matrices (Atmosphere)
+        - foce : Compute CDF of scattering phase matrices (Ocean)
+        - albedo : Spectral Albedo
+        - wl: wavelet length
+        - hph0 : Optical thickness seen in front of the photon
+        - zph0 : Corresponding Altitude
+        - (x0,y0,z0) : Initial coordinates of the photon
+        - XBLOCK: Block Size
+        - XGRID : Grid Size
+        - options: compilation options
+
+    """
     tmp = []
     tmp = [(np.uint64, '*nbPhotonsInter', np.zeros(nlam, dtype=np.uint64)),
            (np.float32, '*tabPhotons', np.zeros(NLEV*4*NBTHETA * NBPHI * nlam, dtype=np.float32)),
@@ -945,18 +993,22 @@ def InitSD(nprofilesAtm,nprofilesOc,nlam,NLEV,NBTHETA,NBPHI,faer,foce,albedo,wl,
            (np.float32, '*alb', albedo),
            (np.float32, '*lambda', wl),
            (np.float32, '*z', nprofilesAtm['ALT'])]
+
     if '-DSPHERIQUE' in options:
         tmp += [(np.float32, '*hph0', hph0), (np.float32, '*zph0', zph0)]
     if '-DRANDPHILOX4x32_7' in options:
         tmp += [(np.uint32, '*etat', np.zeros(XBLOCK*1*XGRID*1, dtype=np.uint32)), (np.uint32, 'config', 0)]
+
+
     Tableau = GPUStruct(tmp)
+
     tmp = [(np.uint64, 'nbPhotons', 0),(np.int32, 'nThreadsActive', 0), (np.int32, 'erreurpoids', 0), (np.int32, 'erreurtheta', 0)]
     if '-DPROGRESSION' in options:
         tmp2 = [(np.uint64, 'nbThreads', 0), (np.uint64, 'nbPhotonsSor', 0), (np.uint32, 'erreurvxy', 0), (np.int32, 'erreurvy', 0), (np.int32, 'erreurcase', 0)]
         tmp += tmp2
     Var = GPUStruct(tmp)
     Init = GPUStruct([(np.float32, 'x0', x0), (np.float32, 'y0', y0), (np.float32, 'z0', z0)])
-    #transfert des structures de donnees dans le device
+    # copy the data to the GPU
     Var.copy_to_gpu(['nbPhotons'])
     Tableau.copy_to_gpu(['tabPhotons','nbPhotonsInter'])
     Init.copy_to_gpu()
