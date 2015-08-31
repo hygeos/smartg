@@ -162,24 +162,8 @@ class Smartg(object):
         #
         # ocean profile
         #
-        nprofilesOc = {}
-        nprofilesOc['HO'], nprofilesOc['SSO'], nprofilesOc['IPO'] = np.zeros(nlam*2, dtype=np.float32), np.zeros(nlam*2, dtype=np.float32), np.zeros(nlam*2, dtype=np.float32)
-        if water is None:
-            # use default water values
-            nprofilesOc['HO'], nprofilesOc['SSO'], nprofilesOc['IPO'] = [0], [0], [0]
-        else:
-            if isinstance(wl, (float, int, REPTRAN_IBAND)):
-                wl = [wl]
-            D.update(LAMBDA=wl)
-            profilesOc, phasesOc = water.calc_bands(wl)
-            for ilam in xrange(0, nlam):
-                nprofilesOc['HO'][ilam*2] = 0
-                nprofilesOc['SSO'][ilam*2] = 1
-                nprofilesOc['IPO'][ilam*2] = 0
-                nprofilesOc['HO'][ilam*2+1] = -1.e10
-                nprofilesOc['SSO'][ilam*2+1] = profilesOc[ilam][1]/(profilesOc[ilam][1]+profilesOc[ilam][0])
-                nprofilesOc['IPO'][ilam*2+1] = profilesOc[ilam][2]
-                # parametrer les indices
+        nprofilesOc, phasesOc, NOCE = get_profOc(wl, water, D, nlam)
+        print 'ceci est un test'
         #
         # environment effect
         #
@@ -238,17 +222,16 @@ class Smartg(object):
 
 	#computation of the phase function
         if(SIM == 0 or SIM == 2 or SIM == 3):
-            NOCE = 1
+            print phasesOc
             if phasesOc != []:
                 foce, phasesOcm, NPHAOCE, imax = calculF(phasesOc, NFOCE, None)
             else:
                 foce, NPHAOCE, imax, phasesOcm = [0], 0, 0, [0]
         else:
             foce,phasesOcm = [0],[0]
-            NOCE = 0
 
         if(SIM == -2 or SIM == 1 or SIM == 2):
-
+            print phasesAtm
             if phasesAtm != []:
                 faer, phasesAtmm, NPHAAER, imax = calculF(phasesAtm, NFAER, 'ATM')
                 
@@ -995,8 +978,8 @@ def get_profAtm(wl, atm, D):
     """
     get the atmospheric profile, the altitude of the top of Atmosphere, the number of layers of the atmosphere
     - wl : wavelet length
-    - phaseAtm : Atmospheric phase function
-    - profilAtm : Atmospheric profile
+    - phasesAtm : Atmospheric phase functions
+    - profilesAtm : Atmospheric profiles
     - atm : Profile object
             default None (no atmosphere)
     - nprofilesAtm : List of atmospheric profiles set contiguously
@@ -1023,8 +1006,7 @@ def get_profAtm(wl, atm, D):
         HATM = nprofilesAtm['ALT'][0]
     else:
         # no atmosphere
-        Ddef.update(PATHDIFFAER='None')
-        Ddef.update(PATHPROFILATM='None')
+        phasesAtm = []
         nprofilesAtm['H'] = [0]
         nprofilesAtm['YDEL'] = [0]
         nprofilesAtm['XSSA'] = [0]
@@ -1036,6 +1018,43 @@ def get_profAtm(wl, atm, D):
 
     return nprofilesAtm, phasesAtm, NATM, HATM
 
+def get_profOc(wl, water, D, nlam):
+
+    """
+    get the oceanic profile, the altitude of the top of Atmosphere, the number of layers of the atmosphere
+
+    - wl : wavelet length
+    - phasesOc : Oceanic phase functions
+    - profilesOc : Oceanic profiles
+    - water : Profile object
+            default None (no atmosphere)
+    - nprofilesOc : List of oceanic profiles set contiguously
+    - D: Dictionary containing all the parameters required to launch the simulation by the kernel
+    - NOCE : Number of layers of the ocean
+    - nlam : Number of wavelet length
+    """
+
+    nprofilesOc = {}
+    nprofilesOc['HO'], nprofilesOc['SSO'], nprofilesOc['IPO'] = np.zeros(nlam*2, dtype=np.float32), np.zeros(nlam*2, dtype=np.float32), np.zeros(nlam*2, dtype=np.float32)
+    if water is None:
+            # use default water values
+        nprofilesOc['HO'], nprofilesOc['SSO'], nprofilesOc['IPO'],phasesOc = [0], [0], [0], []
+        NOCE = 0
+    else:
+        if isinstance(wl, (float, int, REPTRAN_IBAND)):
+            wl = [wl]
+        D.update(LAMBDA=wl)
+        profilesOc, phasesOc = water.calc_bands(wl)
+        for ilam in xrange(0, nlam):
+            nprofilesOc['HO'][ilam*2] = 0
+            nprofilesOc['SSO'][ilam*2] = 1
+            nprofilesOc['IPO'][ilam*2] = 0
+            nprofilesOc['HO'][ilam*2+1] = -1.e10
+            nprofilesOc['SSO'][ilam*2+1] = profilesOc[ilam][1]/(profilesOc[ilam][1]+profilesOc[ilam][0])
+            nprofilesOc['IPO'][ilam*2+1] = profilesOc[ilam][2]
+            # parametrer les indices
+        NOCE = 1
+    return nprofilesOc, phasesOc, NOCE
 
 
 
