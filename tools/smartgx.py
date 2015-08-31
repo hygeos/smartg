@@ -148,30 +148,7 @@ class Smartg(object):
         # atmosphere
         #
 
-        nprofilesAtm = {}
-        if atm is not None:
-            # write the profile
-            if isinstance(wl, (float, int, REPTRAN_IBAND)):
-                wl = [wl]
-            profilesAtm, phasesAtm = atm.calc_bands(wl)
-            nprofilesAtm['ALT'] = profilesAtm[0]['ALT']
-            keys = [x for x in profilesAtm[0].dtype.names if x != 'ALT']
-            for key in keys:
-                nprofilesAtm[key] = []
-                for profile in profilesAtm:
-                    nprofilesAtm[key] = np.append(nprofilesAtm[key], profile[key])
-            D.update(LAMBDA=wl)
-        else:
-            # no atmosphere
-            Ddef.update(PATHDIFFAER='None')
-            Ddef.update(PATHPROFILATM='None')
-            nprofilesAtm['H'] = [0]
-            nprofilesAtm['YDEL'] = [0]
-            nprofilesAtm['XSSA'] = [0]
-            nprofilesAtm['percent_abs'] = [0]
-            nprofilesAtm['IPHA'] = [0]
-            nprofilesAtm['ALT'] = [0]
-
+        nprofilesAtm, phasesAtm, NATM, HATM = get_profAtm(wl,atm,D)
         #
         # surface
         #
@@ -271,8 +248,6 @@ class Smartg(object):
             NOCE = 0
 
         if(SIM == -2 or SIM == 1 or SIM == 2):
-            NATM = len(profilesAtm[0])-1
-            HATM = nprofilesAtm['ALT'][0]
 
             if phasesAtm != []:
                 faer, phasesAtmm, NPHAAER, imax = calculF(phasesAtm, NFAER, 'ATM')
@@ -282,8 +257,7 @@ class Smartg(object):
                   
         else:
             faer,phasesAtmm = [0],[0]
-            NATM = 0
-            HATM = 0
+
         
         #computation of the point of impact
         x0, y0, z0, zph0, hph0 = 0, 0, 0, [], []
@@ -884,18 +858,18 @@ def test_multispectral():
 
 def InitConstantes(D,surf,env,NATM,NOCE,HATM,mod):
 
-     """
+    """
     Initialize the constants in python and send them to the device memory
 
     Arguments:
 
-        - D: Dictionary containing all the parameters required to launch the simulation by the kernel
-        - surf : surf: Surface object
-        - env : environment effect parameters (dictionary)
-        - NATM : Number of layers of the atmosphere
-        - NOCE : Number of layers of the ocean
-        - HATM : Altitude of the Top of Atmosphere
-        - mod : PyCUDA module compiling the kernel
+    - D: Dictionary containing all the parameters required to launch the simulation by the kernel
+    - surf : surf: Surface object
+    - env : environment effect parameters (dictionary)
+    - NATM : Number of layers of the atmosphere
+    - NOCE : Number of layers of the ocean
+    - HATM : Altitude of the Top of Atmosphere
+    - mod : PyCUDA module compiling the kernel
 
     """
 
@@ -965,8 +939,8 @@ def InitSD(nprofilesAtm, nprofilesOc, nlam,
         - NLEV : Number of output levels
         - NBTHETA : Number of intervals in zenith
         - NBPHI : Number of intervals in azimuth angle
-        - faer : Compute CDF of scattering phase matrices (Atmosphere)
-        - foce : Compute CDF of scattering phase matrices (Ocean)
+        - faer : CDF of scattering phase matrices (Atmosphere)
+        - foce : CDF of scattering phase matrices (Ocean)
         - albedo : Spectral Albedo
         - wl: wavelet length
         - hph0 : Optical thickness seen in front of the photon
@@ -1014,6 +988,57 @@ def InitSD(nprofilesAtm, nprofilesOc, nlam,
     Init.copy_to_gpu()
 
     return Tableau,Var,Init
+
+
+def get_profAtm(wl, atm, D):
+
+    """
+    get the atmospheric profile, the altitude of the top of Atmosphere, the number of layers of the atmosphere
+    - wl : wavelet length
+    - phaseAtm : Atmospheric phase function
+    - profilAtm : Atmospheric profile
+    - atm : Profile object
+            default None (no atmosphere)
+    - nprofilesAtm : List of atmospheric profiles set contiguously
+    - D: Dictionary containing all the parameters required to launch the simulation by the kernel
+    - NATM : Number of layers of the atmosphere
+    - HATM : Altitude of the Top of Atmosphere
+    """
+    nprofilesAtm = {}
+    if atm is not None:
+        # write the profile
+        if isinstance(wl, (float, int, REPTRAN_IBAND)):
+            wl = [wl]
+        profilesAtm, phasesAtm = atm.calc_bands(wl)
+        # the altitude is get only by the first atmospheric profile
+        nprofilesAtm['ALT'] = profilesAtm[0]['ALT']
+        # remove the key Altitude from the list of keys
+        keys = [x for x in profilesAtm[0].dtype.names if x != 'ALT']
+        for key in keys:
+            nprofilesAtm[key] = []
+            for profile in profilesAtm:
+                nprofilesAtm[key] = np.append(nprofilesAtm[key], profile[key])
+        D.update(LAMBDA=wl)
+        NATM = len(profilesAtm[0])-1
+        HATM = nprofilesAtm['ALT'][0]
+    else:
+        # no atmosphere
+        Ddef.update(PATHDIFFAER='None')
+        Ddef.update(PATHPROFILATM='None')
+        nprofilesAtm['H'] = [0]
+        nprofilesAtm['YDEL'] = [0]
+        nprofilesAtm['XSSA'] = [0]
+        nprofilesAtm['percent_abs'] = [0]
+        nprofilesAtm['IPHA'] = [0]
+        nprofilesAtm['ALT'] = [0]
+        NATM = 0
+        HATM = 0
+
+    return nprofilesAtm, phasesAtm, NATM, HATM
+
+
+
+
 
 if __name__ == '__main__':
     test_rayleigh()
