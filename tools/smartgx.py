@@ -239,64 +239,17 @@ class Smartg(object):
 
         # write the input variables into data structures
         Tableau,Var,Init=InitSD(nprofilesAtm, nprofilesOc, nlam,
-                                NLVL, NBTHETA, NBPHI, faer, foce,
+                                NLVL, NPSTK, NBTHETA, NBPHI, faer, foce,
                                 albedo, wl, hph0, zph0, x0, y0, z0,
                                 XBLOCK, XGRID, options)
 
         # initialization of the constants
         InitConstantes(D,surf,env,NATM,NOCE,HATM,mod)
 
-        tempsPrec = 0
-        nbPhotonsTot = 0
-        nbPhotonsTotInter = np.zeros(nlam, dtype=np.uint64)
-        nbPhotonsSorTot = 0
-        tabPhotonsTot = np.zeros(NLVL*NPSTK*NBTHETA * NBPHI * nlam, dtype=np.float32)
-        p = Progress(NBPHOTONS)
-
-        passageBoucle = False
-        if(nbPhotonsTot < NBPHOTONS):
-            passageBoucle = True
-        # to do fix
-        ########################
-        #########BOUCLE#########
-        ########################
-        skipTableau = ['faer', 'foce', 'ho', 'sso', 'ipo', 'h', 'pMol', 'ssa', 'abs', 'ip', 'alb', 'lambda', 'z']
-        skipVar = ['erreurtheta', 'erreurpoids', 'nThreadsActive', 'nbThreads', 'erreurvxy', 'erreurvy', 'erreurcase']
-        while(nbPhotonsTot < NBPHOTONS):
-            # reset some arrays
-            Tableau.tabPhotons = np.zeros(NLVL*NPSTK*NBTHETA * NBPHI * nlam, dtype=np.float32)
-            # fixer l'indice dans un parametre
-            Tableau.nbPhotonsInter = np.zeros(nlam, dtype=np.int32)
-            Var.nbPhotons = np.uint32(0)
-            if '-DPROGRESSION' in options:
-                Var.nbPhotonsSor = np.uint32(0)
-
-            # transfert the data from the host to the device
-            Tableau.copy_to_gpu(skipTableau)
-            Var.copy_to_gpu(skipVar)
-            
-            # kernel launch
-            kern(Var.get_ptr(), Tableau.get_ptr(), Init.get_ptr(), block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
-
-            # transfert the result from the device to the host
-            Tableau.copy_from_gpu(skipTableau)
-            Var.copy_from_gpu(skipVar)
-
-            nbPhotonsTot += Var.nbPhotons
-
-            tabPhotonsTot+=Tableau.tabPhotons
-
-            for ilam in xrange(0, nlam):
-                nbPhotonsTotInter[ilam] += Tableau.nbPhotonsInter[ilam]
-
-            if '-DPROGRESSION' in options:
-                nbPhotonsSorTot += Var.nbPhotonsSor;
-
-            if nbPhotonsTot > NBPHOTONS:
-                p.update(NBPHOTONS, afficheProgress(nbPhotonsTot, NBPHOTONS, tempsPrec, Var, options, nbPhotonsSorTot))
-            else:
-                p.update(nbPhotonsTot, afficheProgress(nbPhotonsTot, NBPHOTONS, tempsPrec, Var, options, nbPhotonsSorTot))
-
+        # Loop and kernel call
+        nbPhotonsTot, nbPhotonsTotInter , nbPhotonsTotInter, nbPhotonsSorTot, tabPhotonsTot, p = loop_kernel(NBPHOTONS, Tableau, Var, Init,
+                                                                                                          NLVL, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
+                                                                                                          nlam, options, kern)
         # compute the final result
         tabFinalEvent = np.zeros(NLVL*NPSTK*NBTHETA*NBPHI*nlam, dtype=np.float64)
         tabTh = np.zeros(NBTHETA, dtype=np.float64)
@@ -312,7 +265,7 @@ class Smartg(object):
 
         # stockage des resultats dans une MLUT
         self.output = creerMLUTsResultats(tabFinalEvent, NBPHI, NBTHETA, tabTh, tabPhi, nlam, tabPhotonsTot,nbPhotonsTot,D,nprofilesAtm,nprofilesOc,faer,foce)
-        p.finish('traitement termine :'+afficheProgress(nbPhotonsTot, NBPHOTONS, tempsPrec, Var, options, nbPhotonsSorTot))
+        p.finish('traitement termine :' + afficheProgress(nbPhotonsTot, NBPHOTONS, options, nbPhotonsSorTot))
   
     def view(self, QU=False, field='up (TOA)'):
         '''
@@ -609,50 +562,27 @@ def calculTabFinal(tabFinal, tabTh, tabPhi, tabPhotonsTot, nbPhotonsTot, nbPhoto
             for i in xrange(0, NLAM):
                 normInter = norm * nbPhotonsTotInter[i]
                 # Reflectance
-                tabFinal[0*NBTHETA*NBPHI*NLAM+i*NBTHETA*NBPHI+iphi*NBTHETA+ith] = (tabPhotonsTot[0*NBPHI*NBTHETA*NLAM+i*NBTHETA*NBPHI+ith*NBPHI+iphi] + tabPhotonsTot[1*NBPHI*NBTHETA*NLAM+i*NBTHETA*NBPHI+ith*NBPHI+iphi])/ normInter
+                tabFinal[0 * NBTHETA * NBPHI * NLAM+i * NBTHETA * NBPHI + iphi * NBTHETA + ith] = (tabPhotonsTot[0 * NBPHI * NBTHETA * NLAM + i * NBTHETA * NBPHI + ith * NBPHI + iphi]  + tabPhotonsTot[1 * NBPHI * NBTHETA * NLAM+i * NBTHETA * NBPHI+ith * NBPHI + iphi]) / normInter
                 # Q
-                tabFinal[1*NBTHETA*NBPHI*NLAM + i*NBTHETA*NBPHI + iphi*NBTHETA + ith]  = (tabPhotonsTot[0*NBPHI*NBTHETA*NLAM + i*NBTHETA*NBPHI + ith*NBPHI + iphi]-tabPhotonsTot[1*NBPHI*NBTHETA*NLAM+i*NBTHETA*NBPHI + ith*NBPHI + iphi])/normInter
+                tabFinal[1 * NBTHETA * NBPHI * NLAM + i * NBTHETA * NBPHI + iphi * NBTHETA + ith]  = (tabPhotonsTot[0 * NBPHI * NBTHETA * NLAM + i * NBTHETA * NBPHI + ith * NBPHI + iphi] - tabPhotonsTot[1 * NBPHI * NBTHETA * NLAM + i * NBTHETA * NBPHI + ith * NBPHI + iphi]) / normInter
                 # U
-                tabFinal[2*NBTHETA*NBPHI*NLAM + i*NBTHETA*NBPHI + iphi*NBTHETA + ith] = (tabPhotonsTot[2*NBPHI*NBTHETA*NLAM + i*NBTHETA*NBPHI + ith*NBPHI + iphi]) / normInter
+                tabFinal[2 * NBTHETA * NBPHI * NLAM + i * NBTHETA * NBPHI + iphi * NBTHETA + ith] = (tabPhotonsTot[2 * NBPHI * NBTHETA * NLAM + i * NBTHETA * NBPHI + ith * NBPHI + iphi]) / normInter
                 # N
-                tabFinal[3*NBTHETA*NBPHI*NLAM + i*NBTHETA*NBPHI + iphi*NBTHETA + ith] = (tabPhotonsTot[3*NBPHI*NBTHETA*NLAM + i*NBTHETA*NBPHI + ith*NBPHI + iphi])
+                tabFinal[3 * NBTHETA * NBPHI * NLAM + i * NBTHETA * NBPHI + iphi * NBTHETA + ith] = (tabPhotonsTot[3 * NBPHI * NBTHETA * NLAM + i * NBTHETA * NBPHI + ith * NBPHI + iphi])
 
 ######################################################
 ######################################################
 ######################################################
 
 # nbPhotonsTot, var, tempsPrec
-def afficheProgress(nbPhotonsTot, NBPHOTONS, tempsPrec, var, options, nbPhotonsSorTot):
-    # Calcul la date et l'heure courante
-    date = time.localtime()
+def afficheProgress(nbPhotonsTot, NBPHOTONS, options, nbPhotonsSorTot):
 
-
-    # Calcul du temps ecoule et restant
-    tempsProg = time.clock()
-    tempsTot = tempsProg + tempsPrec
-    tempsEcoule = tempsTot
-    hEcoulees = tempsEcoule / 3600
-    minEcoulees = (tempsEcoule%3600) / 60
-    secEcoulees = tempsEcoule%60
-
-    tempsRestant = (tempsTot * (NBPHOTONS / nbPhotonsTot - 1.))
-    if tempsRestant < 0:
-        tempsRestant = 0
-    hRestantes = tempsRestant / 3600
-    minRestantes = (tempsRestant%3600) / 60
-    secRestantes = tempsRestant%60
     # Calcul du pourcentage de photons traités
     pourcent = (100 * nbPhotonsTot / NBPHOTONS);
     # Affichage
     chaine = ''
-    # chaine += '--------------------------------------\n'
     chaine += 'Photons lances : %e (%3d%%)' % (nbPhotonsTot, pourcent)
-    '''
-    chaine += 'Temps ecoule   : %d h %2d min %2d sec' % (hEcoulees, minEcoulees, secEcoulees)
-    chaine += 'Temps restant  : %d h %2d min %2d sec' % (hRestantes, minRestantes, secRestantes)
-    chaine += 'Date actuelle  : %02u/%02u/%04u %02u:%02u:%02u' % (date.tm_mday, date.tm_mon, date.tm_year, date.tm_hour,date.tm_min, date.tm_sec)
-    chaine += '--------------------------------------\n'
-    '''
+
     if '-DPROGRESSION' in options:
         chaine += ' - phot sortis: %e ' % (nbPhotonsSorTot);
 
@@ -669,6 +599,7 @@ def calculF(phases, N, TYPE):
     * N : Number of discrete values of the phase function
     * TYPE : OCEAN / ATMOSPHERE
     --------------------------------------------------
+    Returns :
     * idx  : corresponding to a function phase
     * imax : index of the function phase containing the maximal number of angles describing the phase function
     * nmax : maximal number of angles describing the phase function (equivalent to MLSAAER and MLSAOCE in the old version)
@@ -901,9 +832,9 @@ def InitConstantes(D,surf,env,NATM,NOCE,HATM,mod):
         cuda.memcpy_htod(a, D[key])
 
 def InitSD(nprofilesAtm, nprofilesOc, nlam,
-           NLVL, NBTHETA, NBPHI, faer, foce,
-           albedo, wl, hph0, zph0, x0, y0, z0,
-           XBLOCK, XGRID, options):
+           NLVL, NPSTK, NBTHETA, NBPHI, faer,
+           foce, albedo, wl, hph0, zph0, x0, y0,
+           z0,XBLOCK, XGRID, options):
 
     """
     Initialize the principles data structures in python and send them the device memory
@@ -914,6 +845,7 @@ def InitSD(nprofilesAtm, nprofilesOc, nlam,
         - nprofilesOc : Oceanic profile
         - nlam: Number of wavelet length
         - NLVL : Number of output levels
+        - NPSTK : Number of stockes parameter
         - NBTHETA : Number of intervals in zenith
         - NBPHI : Number of intervals in azimuth angle
         - faer : CDF of scattering phase matrices (Atmosphere)
@@ -929,44 +861,46 @@ def InitSD(nprofilesAtm, nprofilesOc, nlam,
 
     -----------------------------------------------------------
 
-    List of attributes for each classes GPUStruct:
+    Returns the following GPUStruct Class:
         * Tableau : Class containing the arrays sent to the device
-        - nbPhotonsInter : number of photons injected by interval of nlam
-        - tabPhotons :  stockes parameters of all photons
-        - faer : cumulative distribution of the phase functions related to the aerosol
-        - foce : cumulative distribution of the phase functions related to the ocean
-        - ho : optical thickness of each layer of the ocean model
-        - sso : albedo of simple diffusion in ocean
-        - ipo : vertical profile of ocean phase function index
-        - h : optical thickness of each layer of the atmospheric model
-        - pMol : proportion of molecules in each layer of atmospheric model
-        - ssa : albedo of simple diffusion of the aerosols in each layer of the atmospheric model
-        - abs : proportion of absorbent in each layer of the atmospheric model
-        - lambda : wavelet lenghts
-        - z : altitudes level in the atmosphere
-        optional:
-        if SPHERIQUE FLAG
-        - hph0 : optical thickness seen in front of the photon
-        - zph0 : corresponding altitude
-        if DRANDPHILOX4x32_7 FLAG
-        - etat : related to the generation of random number
-        - config : related to the generation of random number
+            Attributes :
+            - nbPhotonsInter : number of photons injected by interval of nlam
+            - tabPhotons :  stockes parameters of all photons
+            - faer : cumulative distribution of the phase functions related to the aerosol
+            - foce : cumulative distribution of the phase functions related to the ocean
+            - ho : optical thickness of each layer of the ocean model
+            - sso : albedo of simple diffusion in ocean
+            - ipo : vertical profile of ocean phase function index
+            - h : optical thickness of each layer of the atmospheric model
+            - pMol : proportion of molecules in each layer of atmospheric model
+            - ssa : albedo of simple diffusion of the aerosols in each layer of the atmospheric model
+            - abs : proportion of absorbent in each layer of the atmospheric model
+            - lambda : wavelet lenghts
+            - z : altitudes level in the atmosphere
+            optional:
+            if SPHERIQUE FLAG
+            - hph0 : optical thickness seen in front of the photon
+            - zph0 : corresponding altitude
+            if DRANDPHILOX4x32_7 FLAG
+            - etat : related to the generation of random number
+            - config : related to the generation of random number
 
         * Var : Class containing the variables sent to the device
-        - nbPhotons : Number of photons processed during a kernel call
-        - nThreadsActive : Number of active threads
-        - erreurpoids : Number of photons having a weight abnormally high
-        - erreurtheta : Number of photons ignored
-        if PROGRESSION FLAG
-        - nbThreads : Total number of thread launched
-        - nbPhotonsSor : number of photons reaching the space during a kernel call
-        - erreurvxy : number of outgoing photons in the zenith
-        - erreurvy : number of outgoing photons
-        - erreurcase : number of photons stored in a non existing box
+            Attributes :
+            - nbPhotons : Number of photons processed during a kernel call
+            - nThreadsActive : Number of active threads
+            - erreurpoids : Number of photons having a weight abnormally high
+            - erreurtheta : Number of photons ignored
+            if PROGRESSION FLAG
+            - nbThreads : Total number of thread launched
+            - nbPhotonsSor : number of photons reaching the space during a kernel call
+            - erreurvxy : number of outgoing photons in the zenith
+            - erreurvy : number of outgoing photons
+            - erreurcase : number of photons stored in a non existing box
 
         * Init : Class containing the initial parameters of the photon
-
-    -----------------------------------------------------------
+            Attributes :
+            x0,y0,z0 : carthesian coordinates of the photon at the initialization
 
     """
     tmp = []
@@ -1012,13 +946,16 @@ def get_profAtm(wl, atm, D):
 
     """
     get the atmospheric profile, the altitude of the top of Atmosphere, the number of layers of the atmosphere
+
+    Arguments :
     - wl : wavelet length
-    - phasesAtm : Atmospheric phase functions
-    - profilesAtm : Atmospheric profiles
     - atm : Profile object
-            default None (no atmosphere)
-    - nprofilesAtm : List of atmospheric profiles set contiguously
+         default None (no atmosphere)
     - D: Dictionary containing all the parameters required to launch the simulation by the kernel
+    -----------------------------------------------------------------------------------------------------------
+    Returns :
+    - phasesAtm : Atmospheric phase functions
+    - nprofilesAtm : List of atmospheric profiles set contiguously
     - NATM : Number of layers of the atmosphere
     - HATM : Altitude of the Top of Atmosphere
     """
@@ -1057,16 +994,18 @@ def get_profOc(wl, water, D, nlam):
 
     """
     get the oceanic profile, the altitude of the top of Atmosphere, the number of layers of the atmosphere
-
+    Arguments :
     - wl : wavelet length
-    - phasesOc : Oceanic phase functions
-    - profilesOc : Oceanic profiles
     - water : Profile object
             default None (no atmosphere)
-    - nprofilesOc : List of oceanic profiles set contiguously
     - D: Dictionary containing all the parameters required to launch the simulation by the kernel
-    - NOCE : Number of layers of the ocean
     - nlam : Number of wavelet length
+    -------------------------------------------------------------------------------------------------------
+    Returns :
+    - phasesOc : Oceanic phase functions
+    - nprofilesOc : List of oceanic profiles set contiguously
+    - NOCE : Number of layers of the ocean
+
     """
 
     nprofilesOc = {}
@@ -1090,6 +1029,86 @@ def get_profOc(wl, water, D, nlam):
             # parametrer les indices
         NOCE = 1
     return nprofilesOc, phasesOc, NOCE
+
+
+def loop_kernel(NBPHOTONS, Tableau, Var, Init, NLVL,
+                NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
+                nlam, options , kern):
+    """
+    launch the kernel several time until the targeted number of photons injected is reached
+
+    Arguments:
+    - NBPHOTONS : Number of photons injected
+    - Tableau : Class containing the arrays sent to the device
+    - Var : Class containing the variables sent to the device
+    - Init : Class containing the initial parameters of the photon
+    - NLVL : Number of output levels
+    - NPSTK : Number of stockes parameter
+    - BLOCK : Block dimension
+    - XGRID : Grid dimension
+    - NBTHETA : Number of intervals in zenith
+    - nlam : Number of wavelet length
+    - options : compilation options
+    - kern : kernel launching the transfert radiative simulation
+    --------------------------------------------------------------
+    Returns :
+    - nbPhotonsTot : Total number of photons processed
+    - nbPhotonsTotInter : Total number of photons processed by interval
+    - nbPhotonsSorTot : Total number of outgoing photons
+    - tabPhotonsTot : Total weight of all outgoing photons
+    - p : progression bar
+
+    """
+
+    # Initialize of the parameters
+    nbPhotonsTot = 0
+    nbPhotonsTotInter = np.zeros(nlam, dtype=np.uint64)
+    nbPhotonsSorTot = 0
+    tabPhotonsTot = np.zeros(NLVL*NPSTK*NBTHETA * NBPHI * nlam, dtype=np.float32)
+
+    # Initialize the progress bar
+    p = Progress(NBPHOTONS)
+
+    # skip List used to avoid transfering arrays already sent into the device
+    skipTableau = ['faer', 'foce', 'ho', 'sso', 'ipo', 'h', 'pMol', 'ssa', 'abs', 'ip', 'alb', 'lambda', 'z']
+    skipVar = ['erreurtheta', 'erreurpoids', 'nThreadsActive', 'nbThreads', 'erreurvxy', 'erreurvy', 'erreurcase']
+
+    while(nbPhotonsTot < NBPHOTONS):
+
+        Tableau.tabPhotons = np.zeros(NLVL*NPSTK*NBTHETA * NBPHI * nlam, dtype=np.float32)
+        Tableau.nbPhotonsInter = np.zeros(nlam, dtype=np.int32)
+        Var.nbPhotons = np.uint32(0)
+        if '-DPROGRESSION' in options:
+            Var.nbPhotonsSor = np.uint32(0)
+
+            # transfert the data from the host to the device
+        Tableau.copy_to_gpu(skipTableau)
+        Var.copy_to_gpu(skipVar)
+
+        # kernel launch
+        kern(Var.get_ptr(), Tableau.get_ptr(), Init.get_ptr(), block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
+
+        # transfert the result from the device to the host
+        Tableau.copy_from_gpu(skipTableau)
+        Var.copy_from_gpu(skipVar)
+
+        #get the results
+        nbPhotonsTot += Var.nbPhotons
+        tabPhotonsTot+=Tableau.tabPhotons
+
+        for ilam in xrange(0, nlam):
+            nbPhotonsTotInter[ilam] += Tableau.nbPhotonsInter[ilam]
+
+        if '-DPROGRESSION' in options:
+            nbPhotonsSorTot += Var.nbPhotonsSor;
+
+        if nbPhotonsTot > NBPHOTONS:
+            p.update(NBPHOTONS, afficheProgress(nbPhotonsTot, NBPHOTONS, options, nbPhotonsSorTot))
+        else:
+            p.update(nbPhotonsTot, afficheProgress(nbPhotonsTot, NBPHOTONS, options, nbPhotonsSorTot))
+
+    return nbPhotonsTot, nbPhotonsTotInter , nbPhotonsTotInter, nbPhotonsSorTot, tabPhotonsTot, p
+
 
 if __name__ == '__main__':
 
