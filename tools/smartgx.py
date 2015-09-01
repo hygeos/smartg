@@ -76,6 +76,7 @@ class Smartg(object):
         if NBLOOP is None:
             NBLOOP = NBPHOTONS/30
 
+        # number of output levels
         NLVL = 5
 
         # number of Stockes parameters
@@ -134,7 +135,7 @@ class Smartg(object):
 
         #
         # atmosphere
-        #
+        # get the phase function and the atmospheric profile
 
         nprofilesAtm, phasesAtm, NATM, HATM = get_profAtm(wl,atm,D)
         #
@@ -149,7 +150,7 @@ class Smartg(object):
 
         #
         # ocean profile
-        #
+        # get the phase function and oceanic profile
         nprofilesOc, phasesOc, NOCE = get_profOc(wl, water, D, nlam)
         #
         # environment effect
@@ -186,9 +187,15 @@ class Smartg(object):
             albedo[2*i] = surf_alb
             albedo[2*i+1] = seafloor_alb
 
-        #
-        # compilation
-        #
+        """
+        compilation option
+        list of compilation flag :
+            - DRANDPHILOX4x32_7 : Utilisation du random Philox-4x32-7
+            - DPROGRESSION : Calcul et affichage de la progression de la simulation
+            - DSPHERIQUE : Calcul en sphérique
+            - DDEBUG : Ajout de tests intermédiaires utilisés lors du débugage
+        """
+
         options = ['-DRANDPHILOX4x32_7']
         # options.extend(['-DPARAMETRES','-DPROGRESSION'])
         if not pp:
@@ -235,10 +242,14 @@ class Smartg(object):
             TAUATM = nprofilesAtm['H'][NATM];
             tabTransDir = np.zeros(nlam,dtype=np.float64)
             for ilam in xrange(0, nlam):
-                tabTransDir[ilam] = np.exp(-hph0[NATM+ilam*(NATM+1)])
+                tabTransDir[ilam] = np.exp(-hph0[NATM + ilam * (NATM + 1)])
+
+            if '-DDEBUG' in options:
+                print ("Paramètres initiaux du photon: taumax0=%lf - zintermax=%lf - (%lf,%lf,%lf)\n" %
+		       hph0[NATM+1], zph0[NATM+1], x0, y0, z0)
 
         # write the input variables into data structures
-        Tableau,Var,Init=InitSD(nprofilesAtm, nprofilesOc, nlam,
+        Tableau, Var, Init = InitSD(nprofilesAtm, nprofilesOc, nlam,
                                 NLVL, NPSTK, NBTHETA, NBPHI, faer, foce,
                                 albedo, wl, hph0, zph0, x0, y0, z0,
                                 XBLOCK, XGRID, options)
