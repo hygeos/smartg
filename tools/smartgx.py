@@ -12,6 +12,7 @@ import pycuda.driver as cuda
 import pycuda.autoinit
 from pycuda.compiler import SourceModule
 
+
 import numpy as np
 from smartg import Smartg, RoughSurface, LambSurface, FlatSurface, Environment
 from gpustruct import GPUStruct
@@ -29,26 +30,10 @@ from luts import merge, read_lut_hdf, read_mlut_hdf, LUT, MLUT
 
 # set up default directories
 #
-dir_install = dirname(dirname(realpath(__file__)))    # base smartg directory is one directory above here
+# base smartg directory is one directory above here
+dir_install = dirname(dirname(realpath(__file__)))
 dir_kernel = join(dir_install, 'src/')
 
-#perf = open('perf_python', 'w')
-
-def timeit(func):
-    '''
-    Compute the time elapsed in a function and write the result in the file perf_python
-    '''
-    def newfunc(*args, **kwargs):
-        startTime = time.time()
-        func(*args, **kwargs)
-        elapsedTime = time.time() - startTime
-        #perf.write('function [{}] \t {} \t ms\n'.format(
-        #    func.__name__, int(elapsedTime * 1000)))
-        print('function [{}] \t {} \t ms\n'.format(
-            func.__name__, int(elapsedTime * 1000)))
-    return newfunc
-
-#@timeit
 class Smartg(object):
     '''
     Run a SMART-G job
@@ -163,7 +148,6 @@ class Smartg(object):
         # ocean profile
         #
         nprofilesOc, phasesOc, NOCE = get_profOc(wl, water, D, nlam)
-        print 'ceci est un test'
         #
         # environment effect
         #
@@ -210,7 +194,7 @@ class Smartg(object):
         # load device.cu
         src_device = open(dir_kernel+'device.cu').read()
 
-        # compilation du kernel
+        # kernel compilation
         mod = SourceModule(src_device,
                            nvcc='/usr/local/cuda/bin/nvcc',
                            options=options,
@@ -220,9 +204,8 @@ class Smartg(object):
         # get the kernel
         kern = mod.get_function('lancementKernelPy')
 
-	#computation of the phase function
+	# computation of the phase function
         if(SIM == 0 or SIM == 2 or SIM == 3):
-            print phasesOc
             if phasesOc != []:
                 foce, phasesOcm, NPHAOCE, imax = calculF(phasesOc, NFOCE, None)
             else:
@@ -231,7 +214,6 @@ class Smartg(object):
             foce,phasesOcm = [0],[0]
 
         if(SIM == -2 or SIM == 1 or SIM == 2):
-            print phasesAtm
             if phasesAtm != []:
                 faer, phasesAtmm, NPHAAER, imax = calculF(phasesAtm, NFAER, 'ATM')
                 
@@ -242,7 +224,7 @@ class Smartg(object):
             faer,phasesAtmm = [0],[0]
 
         
-        #computation of the point of impact
+        # computation of the impact point
         x0, y0, z0, zph0, hph0 = 0, 0, 0, [], []
         x0, y0, z0, zph0, hph0 = impactInit(HATM, NATM, nlam, nprofilesAtm['ALT'], nprofilesAtm['H'], THVDEG, options)
 
@@ -252,14 +234,15 @@ class Smartg(object):
             for ilam in xrange(0, nlam):
                 tabTransDir[ilam] = np.exp(-hph0[NATM+ilam*(NATM+1)])
 
-        #write the input variable in data structure 
-        Tableau,Var,Init=InitSD(nprofilesAtm,nprofilesOc,nlam,NLEV,NBTHETA,NBPHI,faer,foce,albedo,wl,hph0,zph0,x0,y0,z0,XBLOCK,XGRID,options)
+        # write the input variables into data structures
+        Tableau,Var,Init=InitSD(nprofilesAtm, nprofilesOc, nlam,
+                                NLEV, NBTHETA, NBPHI, faer, foce,
+                                albedo, wl, hph0, zph0, x0, y0, z0,
+                                XBLOCK, XGRID, options)
 
-        #initialisation des constantes
+        # initialization of the constants
         InitConstantes(D,surf,env,NATM,NOCE,HATM,mod)
 
-
-        # execution du kernel
         tempsPrec = 0
         nbPhotonsTot = 0
         nbPhotonsTotInter = np.zeros(nlam, dtype=np.uint64)
@@ -270,14 +253,14 @@ class Smartg(object):
         passageBoucle = False
         if(nbPhotonsTot < NBPHOTONS):
             passageBoucle = True
-        #to do fix
+        # to do fix
         ########################
         #########BOUCLE#########
         ########################
         skipTableau = ['faer', 'foce', 'ho', 'sso', 'ipo', 'h', 'pMol', 'ssa', 'abs', 'ip', 'alb', 'lambda', 'z']
         skipVar = ['erreurtheta', 'erreurpoids', 'nThreadsActive', 'nbThreads', 'erreurvxy', 'erreurvy', 'erreurcase']
         while(nbPhotonsTot < NBPHOTONS):
-            # remise à zero de certaines variables de certains tableaux
+            # reset some arrays
             Tableau.tabPhotons = np.zeros(NLEV*4*NBTHETA * NBPHI * nlam, dtype=np.float32)
             # fixer l'indice dans un parametre
             Tableau.nbPhotonsInter = np.zeros(nlam, dtype=np.int32)
@@ -285,20 +268,19 @@ class Smartg(object):
             if '-DPROGRESSION' in options:
                 Var.nbPhotonsSor = np.uint32(0)
 
-            # transfert des données dans le GPU
+            # transfert the data from the host to the device
             Tableau.copy_to_gpu(skipTableau)
             Var.copy_to_gpu(skipVar)
             
-            # lancement du kernel
+            # kernel launch
             kern(Var.get_ptr(), Tableau.get_ptr(), Init.get_ptr(), block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
 
-            # recuperation des résultats /copy host -> device
+            # transfert the result from the device to the host
             Tableau.copy_from_gpu(skipTableau)
             Var.copy_from_gpu(skipVar)
 
             nbPhotonsTot += Var.nbPhotons
 
-            # tabPhotonsTot = [x + y for x, y in zip(tabPhotonsTot, Tableau.tabPhotons)]
             tabPhotonsTot+=Tableau.tabPhotons
 
             for ilam in xrange(0, nlam):
@@ -306,18 +288,13 @@ class Smartg(object):
 
             if '-DPROGRESSION' in options:
                 nbPhotonsSorTot += Var.nbPhotonsSor;
-            # afficheProgress(nbPhotonsTot, NBPHOTONS, tempsPrec, Var, options, nbPhotonsSorTot)
 
             if nbPhotonsTot > NBPHOTONS:
                 p.update(NBPHOTONS, afficheProgress(nbPhotonsTot, NBPHOTONS, tempsPrec, Var, options, nbPhotonsSorTot))
             else:
                 p.update(nbPhotonsTot, afficheProgress(nbPhotonsTot, NBPHOTONS, tempsPrec, Var, options, nbPhotonsSorTot))
 
-        # Si on n'est pas passé dans la boucle on affiche quand-même l'avancement de la simulation
-        # if(passageBoucle == False):
-            #afficheProgress(nbPhotonsTot, NBPHOTONS, tempsPrec, Var, options, nbPhotonsSorTot)
-       
-        # finalisation
+        # compute the final result
         tabFinalEvent = np.zeros(NLEV*4*NBTHETA*NBPHI*nlam, dtype=np.float64)
         tabTh = np.zeros(NBTHETA, dtype=np.float64)
         tabPhi = np.zeros(NBPHI, dtype=np.float64)
@@ -526,19 +503,16 @@ def creerMLUTsResultats(tabFinal, NBPHI, NBTHETA, tabTh, tabPhi, NLAM,tabPhotons
             luts.append(c)
         profOc = MLUT(luts)
 
-    
-           
-    # HDF.save('test2.hdf', overwrite=True)
     return Res
 
 def impactInit(HATM, NATM, NLAM, ALT, H, THVDEG, options):
 
-    vx = -np.sin(THVDEG*0.017453293)
+    vx = -np.sin(THVDEG * np.pi / 180)
     vy = 0.
-    vz = -np.cos(THVDEG*0.017453293)
+    vz = -np.cos(THVDEG * np.pi /180)
     # Calcul du point d'impact
     
-    thv = THVDEG*0.017453293
+    thv = THVDEG * np.pi / 180
     
     rdelta = 4*6400*6400 + 4*(np.tan(thv)*np.tan(thv)+1)*(HATM*HATM+2*HATM*6400)
     localh = (-2.*6400+np.sqrt(rdelta) )/(2.*(np.tan(thv)*np.tan(thv)+1.))
@@ -558,7 +532,9 @@ def impactInit(HATM, NATM, NLAM, ALT, H, THVDEG, options):
     zphbis = z0;
     
     for icouche in xrange(1, NATM+1):
-        rdelta = 4.*(vx*xphbis + vy*yphbis + vz*zphbis)*(vx*xphbis + vy*yphbis + vz*zphbis)- 4.*(xphbis*xphbis + yphbis*yphbis + zphbis*zphbis-(ALT[icouche]+6400)*(ALT[icouche]+6400));
+        rdelta = 4. * (vx * xphbis + vy * yphbis + vz * zphbis) * (vx * xphbis + vy * yphbis
+                    + vz * zphbis) - 4. * (xphbis * xphbis + yphbis * yphbis
+                    + zphbis * zphbis - (ALT[icouche] + 6400) * (ALT[icouche] + 6400))
         rsol1 = 0.5*(-2*(vx*xphbis + vy*yphbis + vz*zphbis) + np.sqrt(rdelta))
         rsol2 = 0.5*(-2*(vx*xphbis + vy*yphbis + vz*zphbis) - np.sqrt(rdelta))
 
@@ -590,7 +566,7 @@ def calculOmega(tabTh, tabPhi, tabOmega, NBTHETA, NBPHI):
     # Fonction qui calcule l'aire normalisée de chaque boite, son theta, et son psi, sous forme de 3 tableaux
     tabds = np.zeros(NBTHETA * NBPHI, dtype=np.float64)
     # Zenith angles of the center of the output angular boxes
-    dth = 1.5707963 / NBTHETA
+    dth = np.pi / 2 / NBTHETA
     tabTh[0] = dth / 2.
 
     for ith in xrange(1, NBTHETA):
@@ -616,7 +592,7 @@ def calculOmega(tabTh, tabPhi, tabOmega, NBTHETA, NBPHI):
             tabOmega[ith * NBPHI + iphi] = tabds[ith * NBPHI + iphi] / sumds
 
 def calculTabFinal(tabFinal, tabTh, tabPhi, tabPhotonsTot, nbPhotonsTot, nbPhotonsTotInter, NBTHETA, NBPHI, NLAM):
-    #Fonction qui remplit le tabFinal correspondant à la reflectance (R), Q et U sur tous l'espace de sorti (dans chaque boite)
+    # Fonction qui remplit le tabFinal correspondant à la reflectance (R), Q et U sur tous l'espace de sorti (dans chaque boite)
     tabOmega = np.zeros(NBTHETA * NBPHI,dtype=np.float64)
     calculOmega(tabTh, tabPhi, tabOmega,NBTHETA,NBPHI)
     
@@ -635,16 +611,13 @@ def calculTabFinal(tabFinal, tabTh, tabPhi, tabPhotonsTot, nbPhotonsTot, nbPhoto
                 # N
                 tabFinal[3*NBTHETA*NBPHI*NLAM + i*NBTHETA*NBPHI + iphi*NBTHETA + ith] = (tabPhotonsTot[3*NBPHI*NBTHETA*NLAM + i*NBTHETA*NBPHI + ith*NBPHI + iphi])
 
-
-
-
 ######################################################
 ######################################################
 ######################################################
 
 # nbPhotonsTot, var, tempsPrec
 def afficheProgress(nbPhotonsTot, NBPHOTONS, tempsPrec, var, options, nbPhotonsSorTot):
-    #Calcul la date et l'heure courante
+    # Calcul la date et l'heure courante
     date = time.localtime()
 
 
@@ -666,7 +639,7 @@ def afficheProgress(nbPhotonsTot, NBPHOTONS, tempsPrec, var, options, nbPhotonsS
     pourcent = (100 * nbPhotonsTot / NBPHOTONS);
     # Affichage
     chaine = ''
-    #chaine += '--------------------------------------\n'
+    # chaine += '--------------------------------------\n'
     chaine += 'Photons lances : %e (%3d%%)' % (nbPhotonsTot, pourcent)
     '''
     chaine += 'Temps ecoule   : %d h %2d min %2d sec' % (hEcoulees, minEcoulees, secEcoulees)
@@ -682,33 +655,48 @@ def afficheProgress(nbPhotonsTot, NBPHOTONS, tempsPrec, var, options, nbPhotonsS
 
 def calculF(phases, N, TYPE):
 
-    # calculF
-    # Compute CDF of scattering phase matrices
+    """
+    Compute CDF of scattering phase matrices
 
+    Arguments :
+    * phases : list of phase functions
+    * N : Number of discrete values of the phase function
+    * TYPE : OCEAN / ATMOSPHERE
+    --------------------------------------------------
+    * idx  : corresponding to a function phase
+    * imax : index of the function phase containing the maximal number of angles describing the phase function
+    * nmax : maximal number of angles describing the phase function (equivalent to MLSAAER and MLSAOCE in the old version)
+    * phases_list : list of phase function set contiguously
+    * phase_H : cumulative distribution of the phase functions
+    """
     nmax, n, imax=0, 0, 0
-    phasesAtmm = []
+    phases_list = []
+    # define the number of phases functions and the maximal number of angles describing each of them
     for idx, phase in enumerate(phases):
         if phase.N>nmax:
             imax, nmax = idx, phase.N
         n += 1
+    # Initialize the cumulative distribution function
     phase_H = np.zeros(5*n*N, dtype=np.float32)
+
     for idx, phase in enumerate(phases):
         if idx != imax:
+            # resizing the attributes of the phase object following the nmax
             phase.ang.resize(nmax)
             phase.phase.resize(nmax, 4)
         tmp = np.append(phase.ang, phase.phase)
-        phasesAtmm = np.append(phasesAtmm, tmp)
+        phases_list = np.append(phasesAtmm, tmp)
         scum = np.zeros(phase.N)
         # conversion en gradiant
         if TYPE=='ATM':
-            phase.ang*=(0.017453293)
+            phase.ang*=(np.pi / 180)
         for iang in xrange(1, phase.N):
-            dtheta = phase.ang[iang]-phase.ang[iang-1]
+            dtheta = phase.ang[iang] - phase.ang[iang-1]
             pm1 = phase.phase[iang-1, 1] + phase.phase[iang-1, 0]
             pm2 = phase.phase[iang, 1] + phase.phase[iang, 0]
             sin1 = np.sin(phase.ang[iang-1])
             sin2 = np.sin(phase.ang[iang])
-            scum[iang] = scum[iang-1] + dtheta*( (sin1*pm1+sin2*pm2)/3 + (sin1*pm2+sin2*pm1)/6 )*6.2831853;
+            scum[iang] = scum[iang-1] + dtheta*((sin1 * pm1 + sin2 * pm2) / 3 + (sin1 * pm2 + sin2 * pm1) / 6)*(np.pi * 2);
         # normalisation
         for iang in xrange(0, phase.N):
             scum[iang] /= scum[phase.N-1]
@@ -728,7 +716,7 @@ def calculF(phases, N, TYPE):
             phase_H[base_index+2] = np.float32( phase.phase[ipf, 2])
             phase_H[base_index+3] = np.float32(0)
 
-    return phase_H, phasesAtmm, n, imax
+    return phase_H, phases_list, n, imax
 
 def test_rayleigh():
     '''
@@ -1060,6 +1048,7 @@ def get_profOc(wl, water, D, nlam):
 
 
 if __name__ == '__main__':
+
     test_rayleigh()
     # test_kokhanovsky()
     # test_rayleigh_aerosols()
