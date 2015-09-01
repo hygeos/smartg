@@ -76,7 +76,10 @@ class Smartg(object):
         if NBLOOP is None:
             NBLOOP = NBPHOTONS/30
 
-        NLEV = 5
+        NLVL = 5
+
+        # number of Stockes parameters
+        NPSTK = 4
 
         assert isinstance(wl, (float, list, np.ndarray))
         assert (iband is None) or isinstance(iband, REPTRAN_IBAND)
@@ -236,7 +239,7 @@ class Smartg(object):
 
         # write the input variables into data structures
         Tableau,Var,Init=InitSD(nprofilesAtm, nprofilesOc, nlam,
-                                NLEV, NBTHETA, NBPHI, faer, foce,
+                                NLVL, NBTHETA, NBPHI, faer, foce,
                                 albedo, wl, hph0, zph0, x0, y0, z0,
                                 XBLOCK, XGRID, options)
 
@@ -247,7 +250,7 @@ class Smartg(object):
         nbPhotonsTot = 0
         nbPhotonsTotInter = np.zeros(nlam, dtype=np.uint64)
         nbPhotonsSorTot = 0
-        tabPhotonsTot = np.zeros(NLEV*4*NBTHETA * NBPHI * nlam, dtype=np.float32)
+        tabPhotonsTot = np.zeros(NLVL*NPSTK*NBTHETA * NBPHI * nlam, dtype=np.float32)
         p = Progress(NBPHOTONS)
 
         passageBoucle = False
@@ -261,7 +264,7 @@ class Smartg(object):
         skipVar = ['erreurtheta', 'erreurpoids', 'nThreadsActive', 'nbThreads', 'erreurvxy', 'erreurvy', 'erreurcase']
         while(nbPhotonsTot < NBPHOTONS):
             # reset some arrays
-            Tableau.tabPhotons = np.zeros(NLEV*4*NBTHETA * NBPHI * nlam, dtype=np.float32)
+            Tableau.tabPhotons = np.zeros(NLVL*NPSTK*NBTHETA * NBPHI * nlam, dtype=np.float32)
             # fixer l'indice dans un parametre
             Tableau.nbPhotonsInter = np.zeros(nlam, dtype=np.int32)
             Var.nbPhotons = np.uint32(0)
@@ -295,7 +298,7 @@ class Smartg(object):
                 p.update(nbPhotonsTot, afficheProgress(nbPhotonsTot, NBPHOTONS, tempsPrec, Var, options, nbPhotonsSorTot))
 
         # compute the final result
-        tabFinalEvent = np.zeros(NLEV*4*NBTHETA*NBPHI*nlam, dtype=np.float64)
+        tabFinalEvent = np.zeros(NLVL*NPSTK*NBTHETA*NBPHI*nlam, dtype=np.float64)
         tabTh = np.zeros(NBTHETA, dtype=np.float64)
         tabPhi = np.zeros(NBPHI, dtype=np.float64)
 
@@ -303,7 +306,9 @@ class Smartg(object):
 	# par unité de surface)
 
         for k in xrange(0, 5):
-            calculTabFinal(tabFinalEvent[k*4*NBTHETA*NBPHI*nlam:(k+1)*4*NBTHETA*NBPHI*nlam], tabTh, tabPhi, tabPhotonsTot[k*4*NBTHETA*NBPHI*nlam:(k+1)*4*NBTHETA*NBPHI*nlam], nbPhotonsTot, nbPhotonsTotInter, NBTHETA, NBPHI, nlam)
+            calculTabFinal(tabFinalEvent[k * NPSTK * NBTHETA * NBPHI * nlam : (k+1) * NPSTK * NBTHETA * NBPHI * nlam],
+                           tabTh, tabPhi, tabPhotonsTot[k * NPSTK * NBTHETA * NBPHI * nlam : (k+1) * NPSTK * NBTHETA * NBPHI * nlam],
+                           nbPhotonsTot, nbPhotonsTotInter, NBTHETA, NBPHI, nlam)
 
         # stockage des resultats dans une MLUT
         self.output = creerMLUTsResultats(tabFinalEvent, NBPHI, NBTHETA, tabTh, tabPhi, nlam, tabPhotonsTot,nbPhotonsTot,D,nprofilesAtm,nprofilesOc,faer,foce)
@@ -403,8 +408,9 @@ def creerMLUTsResultats(tabFinal, NBPHI, NBTHETA, tabTh, tabPhi, NLAM,tabPhotons
     # creation de la lookup table specifique a tabFinal
 
 
-    tabThBis = np.round(tabTh/0.017453293)
-    tabPhiBis = np.round(tabPhi/0.017453293)
+    tabThBis = np.round(tabTh/(np.pi / 180))
+    tabPhiBis = np.round(tabPhi/(np.pi / 180))
+
     wl = np.arange(NLAM)
 
     label = ['I_up (TOA)', 'Q_up (TOA)', 'U_up (TOA)','N_up (TOA)']
@@ -895,7 +901,7 @@ def InitConstantes(D,surf,env,NATM,NOCE,HATM,mod):
         cuda.memcpy_htod(a, D[key])
 
 def InitSD(nprofilesAtm, nprofilesOc, nlam,
-           NLEV, NBTHETA, NBPHI, faer, foce,
+           NLVL, NBTHETA, NBPHI, faer, foce,
            albedo, wl, hph0, zph0, x0, y0, z0,
            XBLOCK, XGRID, options):
 
@@ -907,7 +913,7 @@ def InitSD(nprofilesAtm, nprofilesOc, nlam,
         - nprofilesAtm: Atmospheric profile
         - nprofilesOc : Oceanic profile
         - nlam: Number of wavelet length
-        - NLEV : Number of output levels
+        - NLVL : Number of output levels
         - NBTHETA : Number of intervals in zenith
         - NBPHI : Number of intervals in azimuth angle
         - faer : CDF of scattering phase matrices (Atmosphere)
@@ -921,10 +927,51 @@ def InitSD(nprofilesAtm, nprofilesOc, nlam,
         - XGRID : Grid Size
         - options: compilation options
 
+    -----------------------------------------------------------
+
+    List of attributes for each classes GPUStruct:
+        * Tableau : Class containing the arrays sent to the device
+        - nbPhotonsInter : number of photons injected by interval of nlam
+        - tabPhotons :  stockes parameters of all photons
+        - faer : cumulative distribution of the phase functions related to the aerosol
+        - foce : cumulative distribution of the phase functions related to the ocean
+        - ho : optical thickness of each layer of the ocean model
+        - sso : albedo of simple diffusion in ocean
+        - ipo : vertical profile of ocean phase function index
+        - h : optical thickness of each layer of the atmospheric model
+        - pMol : proportion of molecules in each layer of atmospheric model
+        - ssa : albedo of simple diffusion of the aerosols in each layer of the atmospheric model
+        - abs : proportion of absorbent in each layer of the atmospheric model
+        - lambda : wavelet lenghts
+        - z : altitudes level in the atmosphere
+        optional:
+        if SPHERIQUE FLAG
+        - hph0 : optical thickness seen in front of the photon
+        - zph0 : corresponding altitude
+        if DRANDPHILOX4x32_7 FLAG
+        - etat : related to the generation of random number
+        - config : related to the generation of random number
+
+        * Var : Class containing the variables sent to the device
+        - nbPhotons : Number of photons processed during a kernel call
+        - nThreadsActive : Number of active threads
+        - erreurpoids : Number of photons having a weight abnormally high
+        - erreurtheta : Number of photons ignored
+        if PROGRESSION FLAG
+        - nbThreads : Total number of thread launched
+        - nbPhotonsSor : number of photons reaching the space during a kernel call
+        - erreurvxy : number of outgoing photons in the zenith
+        - erreurvy : number of outgoing photons
+        - erreurcase : number of photons stored in a non existing box
+
+        * Init : Class containing the initial parameters of the photon
+
+    -----------------------------------------------------------
+
     """
     tmp = []
     tmp = [(np.uint64, '*nbPhotonsInter', np.zeros(nlam, dtype=np.uint64)),
-           (np.float32, '*tabPhotons', np.zeros(NLEV*4*NBTHETA * NBPHI * nlam, dtype=np.float32)),
+           (np.float32, '*tabPhotons', np.zeros(NLVL * NPSTK * NBTHETA * NBPHI * nlam, dtype=np.float32)),
            (np.float32, '*faer', faer),
            (np.float32, '*foce', foce),
            (np.float32, '*ho', nprofilesOc['HO']),
@@ -1043,9 +1090,6 @@ def get_profOc(wl, water, D, nlam):
             # parametrer les indices
         NOCE = 1
     return nprofilesOc, phasesOc, NOCE
-
-
-
 
 if __name__ == '__main__':
 
