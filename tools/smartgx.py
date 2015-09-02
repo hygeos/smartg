@@ -275,7 +275,7 @@ class Smartg(object):
                            nbPhotonsTot, nbPhotonsTotInter, NBTHETA, NBPHI, nlam)
 
         # stockage des resultats dans une MLUT
-        self.output = creerMLUTsResultats(tabFinalEvent, NBPHI, NBTHETA, tabTh, tabPhi, nlam, tabPhotonsTot,nbPhotonsTot,D,nprofilesAtm,nprofilesOc,faer,foce)
+        self.output = creerMLUTsResultats(tabFinalEvent, NBPHI, NBTHETA, tabTh, tabPhi, nlam, tabPhotonsTot,nbPhotonsTot,D,nprofilesAtm,nprofilesOc)
         p.finish('traitement termine :' + afficheProgress(nbPhotonsTot, NBPHOTONS, options, nbPhotonsSorTot))
   
     def view(self, QU=False, field='up (TOA)'):
@@ -365,17 +365,32 @@ def reptran_merge(files, ibands, output=None):
 
     return output
 
-##################################################
-##################################################
-##################################################
-def creerMLUTsResultats(tabFinal, NBPHI, NBTHETA, tabTh, tabPhi, NLAM,tabPhotonsTot,nbPhotonsTot,D,nprofilesAtm,nprofilesOc,phasesAtmm,phasesOcm):
-    # creation de la lookup table specifique a tabFinal
+def creerMLUTsResultats(tabFinal, NBPHI, NBTHETA, tabTh, tabPhi, NLAM,tabPhotonsTot,nbPhotonsTot,D,nprofilesAtm,nprofilesOc):
+    """
+    store the result in a MLUT
+    Arguments :
+        - tabTh : Zenith angles
+        - tabPhi : Azimutal angles
+        - tabFinal : R, Q, U of all outgoing photons
+        - NBPHI : Number of intervals in azimuth angle
+        - NBTHETA : Number of intervals in zenith
+        - NLAM : Number of wavelet length
+        - tabPhotonsTot : Total weight of all outgoing photons
+        - nbPhotonsTot : Total number of photons processed
+        - D : Dictionary containing all the parameters required to launch the simulation by the kernel
+        - nprofilesAtm : List of atmospheric profiles set contiguously
+        - nprofilesOc : List of oceanic profiles set contiguously
+    Returns :
+        - Res : MLUT corresponding to the final result
 
+    """
 
+    # theta in degrees
     tabThBis = np.round(tabTh/(np.pi / 180))
+    # phi in degrees
     tabPhiBis = np.round(tabPhi/(np.pi / 180))
 
-    wl = np.arange(NLAM)
+    nbwl = np.arange(NLAM)
 
     label = ['I_up (TOA)', 'Q_up (TOA)', 'U_up (TOA)','N_up (TOA)']
 
@@ -391,7 +406,7 @@ def creerMLUTsResultats(tabFinal, NBPHI, NBTHETA, tabTh, tabPhi, NLAM,tabPhotons
         else:
             a = tabFinal[i*NBPHI*NBTHETA*NLAM:(i+1)*NBPHI*NBTHETA*NLAM]
             a.resize(NLAM, NBPHI, NBTHETA)
-            b = LUT(a, axes=[wl, tabPhiBis, tabThBis], names=['Wavelet length', 'Azimut angles', 'Zenith angles'], desc=label[i])
+            b = LUT(a, axes=[nbwl, tabPhiBis, tabThBis], names=['Wavelet length', 'Azimut angles', 'Zenith angles'], desc=label[i])
             luts.append(b)
    
     if D['OUTPUT_LAYERS'][0] == 1:
@@ -405,7 +420,7 @@ def creerMLUTsResultats(tabFinal, NBPHI, NBTHETA, tabTh, tabPhi, NLAM,tabPhotons
             else:
                 a = tabFinal[(4+i)*NBPHI*NBTHETA*NLAM:((4+i+1))*NBPHI*NBTHETA*NLAM]
                 a.resize(NLAM, NBPHI, NBTHETA)
-                b = LUT(a, axes=[wl, tabPhiBis, tabThBis], names=['Wavelet length', 'Azimut angles', 'Zenith angles'], desc=label[i])
+                b = LUT(a, axes=[nbwl, tabPhiBis, tabThBis], names=['Wavelet length', 'Azimut angles', 'Zenith angles'], desc=label[i])
                 luts.append(b)
 
         label = ['I_up (0-)', 'Q_up (0-)', 'U_up (0-)','N_up (0-)']
@@ -418,7 +433,7 @@ def creerMLUTsResultats(tabFinal, NBPHI, NBTHETA, tabTh, tabPhi, NLAM,tabPhotons
             else:
                 a = tabFinal[(4*4+i)*NBPHI*NBTHETA*NLAM:(4*4+i+1)*NBPHI*NBTHETA*NLAM]
                 a.resize(NLAM, NBPHI, NBTHETA)
-                b = LUT(a, axes=[wl, tabPhiBis, tabThBis], names=['Wavelet length', 'Azimut angles', 'Zenith angles'], desc=label[i])
+                b = LUT(a, axes=[nbwl, tabPhiBis, tabThBis], names=['Wavelet length', 'Azimut angles', 'Zenith angles'], desc=label[i])
                 luts.append(b)
 
     if D['OUTPUT_LAYERS'][0] == 2:
@@ -432,7 +447,7 @@ def creerMLUTsResultats(tabFinal, NBPHI, NBTHETA, tabTh, tabPhi, NLAM,tabPhotons
             else:
                 a = tabFinal[(2*4+i)*NBPHI*NBTHETA*NLAM:((2*4+i+1))*NBPHI*NBTHETA*NLAM]
                 a.resize(NLAM, NBPHI, NBTHETA)
-                b = LUT(a, axes=[wl, tabPhiBis, tabThBis], names=['Wavelet length', 'Azimut angles', 'Zenith angles'], desc=label[i])
+                b = LUT(a, axes=[nbwl, tabPhiBis, tabThBis], names=['Wavelet length', 'Azimut angles', 'Zenith angles'], desc=label[i])
                 luts.append(b)
 
         label = ['I_up (0+)', 'Q_up (0+)', 'U_up (0+)','N_up (0+)']
@@ -445,13 +460,13 @@ def creerMLUTsResultats(tabFinal, NBPHI, NBTHETA, tabTh, tabPhi, NLAM,tabPhotons
             else:
                 a = tabFinal[(3*4+i)*NBPHI*NBTHETA*NLAM:(3*4+i+1)*NBPHI*NBTHETA*NLAM]
                 a.resize(NLAM, NBPHI, NBTHETA)
-                b = LUT(a, axes=[wl, tabPhiBis, tabThBis], names=['Wavelet length', 'Azimut angles', 'Zenith angles'], desc=label[i])
+                b = LUT(a, axes=[nbwl, tabPhiBis, tabThBis], names=['Wavelet length', 'Azimut angles', 'Zenith angles'], desc=label[i])
                 luts.append(b)
 
     
     Res = MLUT(luts)
 
-    # ecriture des profiles
+    # ecriture des profiles Atmosphériques
     if D['SIM'][0]==-2 or D['SIM'][0]==1 or D['SIM'][0]==2:
         luts = []
         keys=nprofilesAtm.keys()
@@ -462,7 +477,7 @@ def creerMLUTsResultats(tabFinal, NBPHI, NBTHETA, tabTh, tabPhi, NLAM,tabPhotons
             luts.append(c)
         profAtm = MLUT(luts)
 
- 
+    # ecriture des profiles Océaniques
     if D['SIM'][0]==0 or D['SIM'][0]==2 or D['SIM'][0]==3:
         luts = []
         keys=nprofilesOc.keys()
@@ -476,7 +491,24 @@ def creerMLUTsResultats(tabFinal, NBPHI, NBTHETA, tabTh, tabPhi, NLAM,tabPhotons
     return Res
 
 def impactInit(HATM, NATM, NLAM, ALT, H, THVDEG, options):
+    """
+    Calcul du profil que le photon va rencontrer lors de son premier passage dans l'atmosphère
+    Sauvegarde de ce profil dans tab et sauvegarde des coordonnées initiales du photon dans init
 
+    Arguments :
+        - HATM : Altitude of the Top of Atmosphere
+        - NATM : Number of layers of the atmosphere
+        - NLAM : Number of wavelet length
+        - ALT : Altitude of the atmosphere
+        - H : optical thickness of each layer in the atmosphere
+        - THVDEG : View Zenith Angle in degree
+        - options : compilation options
+
+    Returns :
+        - (x0, y0, z0) : carthesian coordinates
+        - hph0 : Optical thickness seen in front of the photon
+        - zph0 : Corresponding Altitude
+    """
     vx = -np.sin(THVDEG * np.pi / 180)
     vy = 0.
     vz = -np.cos(THVDEG * np.pi /180)
@@ -484,29 +516,29 @@ def impactInit(HATM, NATM, NLAM, ALT, H, THVDEG, options):
     
     thv = THVDEG * np.pi / 180
     
-    rdelta = 4*6400*6400 + 4*(np.tan(thv)*np.tan(thv)+1)*(HATM*HATM+2*HATM*6400)
-    localh = (-2.*6400+np.sqrt(rdelta) )/(2.*(np.tan(thv)*np.tan(thv)+1.))
+    rdelta = 4 * 6400 * 6400 + 4 * (np.tan(thv) * np.tan(thv) + 1) * (HATM * HATM + 2 * HATM * 6400)
+    localh = (-2. * 6400 + np.sqrt(rdelta) )/(2. * (np.tan(thv) * np.tan(thv) + 1.))
 
-    x0 = localh*np.tan(thv)
+    x0 = localh * np.tan(thv)
     y0 = 0
     z0 = localh
     zph0, hph0 = [], []
 
     if '-DSPHERIQUE' in options:
         z0 += 6400
-        zph0 = np.zeros((NATM+1), dtype=np.float32)
-        hph0 = np.zeros((NATM+1)*NLAM, dtype=np.float32)
+        zph0 = np.zeros((NATM + 1), dtype=np.float32)
+        hph0 = np.zeros((NATM + 1)*NLAM, dtype=np.float32)
 
     xphbis = x0;
     yphbis = y0;
     zphbis = z0;
     
-    for icouche in xrange(1, NATM+1):
+    for icouche in xrange(1, NATM + 1):
         rdelta = 4. * (vx * xphbis + vy * yphbis + vz * zphbis) * (vx * xphbis + vy * yphbis
                     + vz * zphbis) - 4. * (xphbis * xphbis + yphbis * yphbis
                     + zphbis * zphbis - (ALT[icouche] + 6400) * (ALT[icouche] + 6400))
-        rsol1 = 0.5*(-2*(vx*xphbis + vy*yphbis + vz*zphbis) + np.sqrt(rdelta))
-        rsol2 = 0.5*(-2*(vx*xphbis + vy*yphbis + vz*zphbis) - np.sqrt(rdelta))
+        rsol1 = 0.5 * (-2 * (vx * xphbis + vy * yphbis + vz * zphbis) + np.sqrt(rdelta))
+        rsol2 = 0.5 * (-2 * (vx * xphbis + vy * yphbis + vz * zphbis) - np.sqrt(rdelta))
 
         # solution : la plus petite distance positive
         if rsol1 > 0:
@@ -521,8 +553,8 @@ def impactInit(HATM, NATM, NLAM, ALT, H, THVDEG, options):
         if '-DSPHERIQUE' in options:
             zph0[icouche] = zph0[icouche-1] + np.float32(rsolfi)
             for ilam in xrange(0, NLAM):
-                hph0[icouche + ilam*(NATM+1)] = hph0[icouche-1+ ilam*(NATM+1)] + (abs(H[icouche+ ilam*(NATM+1)] - H[icouche-1+ ilam*(NATM+1)])*rsolfi )/(abs(ALT[icouche-1] - ALT[icouche]));
-
+                hph0[icouche + ilam * (NATM + 1)] = hph0[icouche - 1 + ilam * (NATM + 1)] + (abs(H[icouche + ilam * (NATM + 1)]
+                                                    - H[icouche - 1+ ilam * (NATM + 1)]) * rsolfi )/(abs(ALT[icouche - 1] - ALT[icouche]));
 
                 xphbis += vx*rsolfi;
                 yphbis += vy*rsolfi;
@@ -532,26 +564,38 @@ def impactInit(HATM, NATM, NLAM, ALT, H, THVDEG, options):
     return x0, y0, z0, zph0, hph0
 
 def calculOmega(tabTh, tabPhi, tabOmega, NBTHETA, NBPHI):
-    # calculOmega
-    # Fonction qui calcule l'aire normalisée de chaque boite, son theta, et son psi, sous forme de 3 tableaux
+
+    """
+    compute the normalized area of each box, its theta , its psi in the form of 3 arrays
+
+    Arguments :
+        - tabTh : Zenith angles
+        - tabPhi : Azimutal angles
+        - NBTHETA : Number of intervals in zenith
+        - NBPHI : Number of intervals in azimuth angle
+        - tabOmega : Solid angle
+
+    """
+
+
     tabds = np.zeros(NBTHETA * NBPHI, dtype=np.float64)
     # Zenith angles of the center of the output angular boxes
     dth = np.pi / 2 / NBTHETA
     tabTh[0] = dth / 2.
 
     for ith in xrange(1, NBTHETA):
-        tabTh[ith] = tabTh[ith-1] + dth
+        tabTh[ith] = tabTh[ith - 1] + dth
 
     # Azimut angles of the center of the output angular boxes
     dphi = pi/NBPHI
     tabPhi[0] = dphi / 2.
     for iphi in xrange(1, NBPHI):
-        tabPhi[iphi] = tabPhi[iphi-1] + dphi
+        tabPhi[iphi] = tabPhi[iphi - 1] + dphi
 
     # Solid angles of the output angular boxes
     sumds = 0
     for ith in xrange(0, NBTHETA):
-        dth = pi/(2*NBTHETA)
+        dth = pi/(2 * NBTHETA)
         for iphi in xrange(0, NBPHI):
             tabds[ith * NBPHI + iphi] = np.sin(tabTh[ith]) * dth * dphi;
             sumds += tabds[ith * NBPHI + iphi]
@@ -561,19 +605,36 @@ def calculOmega(tabTh, tabPhi, tabOmega, NBTHETA, NBPHI):
         for iphi in xrange(0, NBPHI):
             tabOmega[ith * NBPHI + iphi] = tabds[ith * NBPHI + iphi] / sumds
 
+
+
 def calculTabFinal(tabFinal, tabTh, tabPhi, tabPhotonsTot, nbPhotonsTot, nbPhotonsTotInter, NBTHETA, NBPHI, NLAM):
+    """
+    compute the tabFinal corresponding to R, Q, U of all outgoing photons
+
+    Arguments:
+        - tabFinal : R, Q, U of all outgoing photons
+        - tabTh : Zenith angles
+        - tabPhi : Azimutal angles
+        - tabPhotonsTot : Total weight of all outgoing photons
+        - nbPhotonsTot : Total number of photons processed
+        - nbPhotonsTotInter : Total number of photons processed by interval
+        - NBTHETA : Number of intervals in zenith
+        - NBPHI : Number of intervals in azimuth angle
+        - NLAM  : Number of wavelet length
+
+    """
     # Fonction qui remplit le tabFinal correspondant à la reflectance (R), Q et U sur tous l'espace de sorti (dans chaque boite)
-    tabOmega = np.zeros(NBTHETA * NBPHI,dtype=np.float64)
-    calculOmega(tabTh, tabPhi, tabOmega,NBTHETA,NBPHI)
+    tabOmega = np.zeros(NBTHETA * NBPHI, dtype=np.float64)
+    calculOmega(tabTh, tabPhi, tabOmega, NBTHETA, NBPHI)
     
     # Remplissage du tableau final
     for iphi in xrange(0, NBPHI):
         for ith in xrange(0, NBTHETA):
-            norm = 2.0 * tabOmega[ith*NBPHI+iphi] * np.cos(tabTh[ith])
+            norm = 2.0 * tabOmega[ith * NBPHI + iphi] * np.cos(tabTh[ith])
             for i in xrange(0, NLAM):
                 normInter = norm * nbPhotonsTotInter[i]
                 # Reflectance
-                tabFinal[0 * NBTHETA * NBPHI * NLAM+i * NBTHETA * NBPHI + iphi * NBTHETA + ith] = (tabPhotonsTot[0 * NBPHI * NBTHETA * NLAM + i * NBTHETA * NBPHI + ith * NBPHI + iphi]  + tabPhotonsTot[1 * NBPHI * NBTHETA * NLAM+i * NBTHETA * NBPHI+ith * NBPHI + iphi]) / normInter
+                tabFinal[0 * NBTHETA * NBPHI * NLAM + i * NBTHETA * NBPHI + iphi * NBTHETA + ith] = (tabPhotonsTot[0 * NBPHI * NBTHETA * NLAM + i * NBTHETA * NBPHI + ith * NBPHI + iphi]  + tabPhotonsTot[1 * NBPHI * NBTHETA * NLAM+i * NBTHETA * NBPHI+ith * NBPHI + iphi]) / normInter
                 # Q
                 tabFinal[1 * NBTHETA * NBPHI * NLAM + i * NBTHETA * NBPHI + iphi * NBTHETA + ith]  = (tabPhotonsTot[0 * NBPHI * NBTHETA * NLAM + i * NBTHETA * NBPHI + ith * NBPHI + iphi] - tabPhotonsTot[1 * NBPHI * NBTHETA * NLAM + i * NBTHETA * NBPHI + ith * NBPHI + iphi]) / normInter
                 # U
@@ -581,12 +642,21 @@ def calculTabFinal(tabFinal, tabTh, tabPhi, tabPhotonsTot, nbPhotonsTot, nbPhoto
                 # N
                 tabFinal[3 * NBTHETA * NBPHI * NLAM + i * NBTHETA * NBPHI + iphi * NBTHETA + ith] = (tabPhotonsTot[3 * NBPHI * NBTHETA * NLAM + i * NBTHETA * NBPHI + ith * NBPHI + iphi])
 
-######################################################
-######################################################
-######################################################
 
-# nbPhotonsTot, var, tempsPrec
 def afficheProgress(nbPhotonsTot, NBPHOTONS, options, nbPhotonsSorTot):
+    """
+    function showing the progression of the radiative transfert simulation
+
+    Arguments :
+        - nbPhotonsTot : Total number of photons processed
+        - NBPHOTONS : Number of photons injected
+        - options : compilation options
+        - nbPhotonsSorTot : Total number of outgoing photons
+    ----------------------------------------------------
+    Returns :
+        - chaine : string containing the information concerning the progression
+
+    """
 
     # Calcul du pourcentage de photons traités
     pourcent = (100 * nbPhotonsTot / NBPHOTONS);
@@ -606,16 +676,17 @@ def calculF(phases, N, TYPE):
     Compute CDF of scattering phase matrices
 
     Arguments :
-    * phases : list of phase functions
-    * N : Number of discrete values of the phase function
-    * TYPE : OCEAN / ATMOSPHERE
+        - phases : list of phase functions
+        - N : Number of discrete values of the phase function
+        - TYPE : OCEAN / ATMOSPHERE
     --------------------------------------------------
     Returns :
-    * idx  : corresponding to a function phase
-    * imax : index of the function phase containing the maximal number of angles describing the phase function
-    * nmax : maximal number of angles describing the phase function (equivalent to MLSAAER and MLSAOCE in the old version)
-    * phases_list : list of phase function set contiguously
-    * phase_H : cumulative distribution of the phase functions
+        - idx  : corresponding to a function phase
+        - imax : index of the function phase containing the maximal number of angles describing the phase function
+        - nmax : maximal number of angles describing the phase function (equivalent to MLSAAER and MLSAOCE in the old version)
+        - phases_list : list of phase function set contiguously
+        - phase_H : cumulative distribution of the phase functions
+
     """
     nmax, n, imax=0, 0, 0
     phases_list = []
@@ -782,13 +853,13 @@ def InitConstantes(D,surf,env,NATM,NOCE,HATM,mod):
 
     Arguments:
 
-    - D: Dictionary containing all the parameters required to launch the simulation by the kernel
-    - surf : surf: Surface object
-    - env : environment effect parameters (dictionary)
-    - NATM : Number of layers of the atmosphere
-    - NOCE : Number of layers of the ocean
-    - HATM : Altitude of the Top of Atmosphere
-    - mod : PyCUDA module compiling the kernel
+        - D: Dictionary containing all the parameters required to launch the simulation by the kernel
+        - surf : surf: Surface object
+        - env : environment effect parameters (dictionary)
+        - NATM : Number of layers of the atmosphere
+        - NOCE : Number of layers of the ocean
+        - HATM : Altitude of the Top of Atmosphere
+        - mod : PyCUDA module compiling the kernel
 
     """
 
@@ -875,43 +946,43 @@ def InitSD(nprofilesAtm, nprofilesOc, nlam,
     Returns the following GPUStruct Class:
         * Tableau : Class containing the arrays sent to the device
             Attributes :
-            - nbPhotonsInter : number of photons injected by interval of nlam
-            - tabPhotons :  stockes parameters of all photons
-            - faer : cumulative distribution of the phase functions related to the aerosol
-            - foce : cumulative distribution of the phase functions related to the ocean
-            - ho : optical thickness of each layer of the ocean model
-            - sso : albedo of simple diffusion in ocean
-            - ipo : vertical profile of ocean phase function index
-            - h : optical thickness of each layer of the atmospheric model
-            - pMol : proportion of molecules in each layer of atmospheric model
-            - ssa : albedo of simple diffusion of the aerosols in each layer of the atmospheric model
-            - abs : proportion of absorbent in each layer of the atmospheric model
-            - lambda : wavelet lenghts
-            - z : altitudes level in the atmosphere
+                - nbPhotonsInter : number of photons injected by interval of nlam
+                - tabPhotons :  stockes parameters of all photons
+                - faer : cumulative distribution of the phase functions related to the aerosol
+                - foce : cumulative distribution of the phase functions related to the ocean
+                - ho : optical thickness of each layer of the ocean model
+                - sso : albedo of simple diffusion in ocean
+                - ipo : vertical profile of ocean phase function index
+                - h : optical thickness of each layer of the atmospheric model
+                - pMol : proportion of molecules in each layer of atmospheric model
+                - ssa : albedo of simple diffusion of the aerosols in each layer of the atmospheric model
+                - abs : proportion of absorbent in each layer of the atmospheric model
+                - lambda : wavelet lenghts
+                - z : altitudes level in the atmosphere
             optional:
             if SPHERIQUE FLAG
-            - hph0 : optical thickness seen in front of the photon
-            - zph0 : corresponding altitude
+                - hph0 : optical thickness seen in front of the photon
+                - zph0 : corresponding altitude
             if DRANDPHILOX4x32_7 FLAG
-            - etat : related to the generation of random number
-            - config : related to the generation of random number
+                - etat : related to the generation of random number
+                - config : related to the generation of random number
 
         * Var : Class containing the variables sent to the device
             Attributes :
-            - nbPhotons : Number of photons processed during a kernel call
-            - nThreadsActive : Number of active threads
-            - erreurpoids : Number of photons having a weight abnormally high
-            - erreurtheta : Number of photons ignored
+                - nbPhotons : Number of photons processed during a kernel call
+                - nThreadsActive : Number of active threads
+                - erreurpoids : Number of photons having a weight abnormally high
+                - erreurtheta : Number of photons ignored
             if PROGRESSION FLAG
-            - nbThreads : Total number of thread launched
-            - nbPhotonsSor : number of photons reaching the space during a kernel call
-            - erreurvxy : number of outgoing photons in the zenith
-            - erreurvy : number of outgoing photons
-            - erreurcase : number of photons stored in a non existing box
+                - nbThreads : Total number of thread launched
+                - nbPhotonsSor : number of photons reaching the space during a kernel call
+                - erreurvxy : number of outgoing photons in the zenith
+                - erreurvy : number of outgoing photons
+                - erreurcase : number of photons stored in a non existing box
 
         * Init : Class containing the initial parameters of the photon
             Attributes :
-            x0,y0,z0 : carthesian coordinates of the photon at the initialization
+                - x0,y0,z0 : carthesian coordinates of the photon at the initialization
 
     """
     tmp = []
@@ -959,16 +1030,17 @@ def get_profAtm(wl, atm, D):
     get the atmospheric profile, the altitude of the top of Atmosphere, the number of layers of the atmosphere
 
     Arguments :
-    - wl : wavelet length
-    - atm : Profile object
+        - wl : wavelet length
+        - atm : Profile object
          default None (no atmosphere)
-    - D: Dictionary containing all the parameters required to launch the simulation by the kernel
+        - D: Dictionary containing all the parameters required to launch the simulation by the kernel
     -----------------------------------------------------------------------------------------------------------
     Returns :
-    - phasesAtm : Atmospheric phase functions
-    - nprofilesAtm : List of atmospheric profiles set contiguously
-    - NATM : Number of layers of the atmosphere
-    - HATM : Altitude of the Top of Atmosphere
+        - phasesAtm : Atmospheric phase functions
+        - nprofilesAtm : List of atmospheric profiles set contiguously
+        - NATM : Number of layers of the atmosphere
+        - HATM : Altitude of the Top of Atmosphere
+
     """
     nprofilesAtm = {}
     if atm is not None:
@@ -1006,16 +1078,16 @@ def get_profOc(wl, water, D, nlam):
     """
     get the oceanic profile, the altitude of the top of Atmosphere, the number of layers of the atmosphere
     Arguments :
-    - wl : wavelet length
-    - water : Profile object
+        - wl : wavelet length
+        - water : Profile object
             default None (no atmosphere)
-    - D: Dictionary containing all the parameters required to launch the simulation by the kernel
-    - nlam : Number of wavelet length
+        - D : Dictionary containing all the parameters required to launch the simulation by the kernel
+        - nlam : Number of wavelet length
     -------------------------------------------------------------------------------------------------------
     Returns :
-    - phasesOc : Oceanic phase functions
-    - nprofilesOc : List of oceanic profiles set contiguously
-    - NOCE : Number of layers of the ocean
+        - phasesOc : Oceanic phase functions
+        - nprofilesOc : List of oceanic profiles set contiguously
+        - NOCE : Number of layers of the ocean
 
     """
 
@@ -1049,25 +1121,25 @@ def loop_kernel(NBPHOTONS, Tableau, Var, Init, NLVL,
     launch the kernel several time until the targeted number of photons injected is reached
 
     Arguments:
-    - NBPHOTONS : Number of photons injected
-    - Tableau : Class containing the arrays sent to the device
-    - Var : Class containing the variables sent to the device
-    - Init : Class containing the initial parameters of the photon
-    - NLVL : Number of output levels
-    - NPSTK : Number of stockes parameter
-    - BLOCK : Block dimension
-    - XGRID : Grid dimension
-    - NBTHETA : Number of intervals in zenith
-    - nlam : Number of wavelet length
-    - options : compilation options
-    - kern : kernel launching the transfert radiative simulation
+        - NBPHOTONS : Number of photons injected
+        - Tableau : Class containing the arrays sent to the device
+        - Var : Class containing the variables sent to the device
+        - Init : Class containing the initial parameters of the photon
+        - NLVL : Number of output levels
+        - NPSTK : Number of stockes parameter
+        - BLOCK : Block dimension
+        - XGRID : Grid dimension
+        - NBTHETA : Number of intervals in zenith
+        - nlam : Number of wavelet length
+        - options : compilation options
+        - kern : kernel launching the transfert radiative simulation
     --------------------------------------------------------------
     Returns :
-    - nbPhotonsTot : Total number of photons processed
-    - nbPhotonsTotInter : Total number of photons processed by interval
-    - nbPhotonsSorTot : Total number of outgoing photons
-    - tabPhotonsTot : Total weight of all outgoing photons
-    - p : progression bar
+        - nbPhotonsTot : Total number of photons processed
+        - nbPhotonsTotInter : Total number of photons processed by interval
+        - nbPhotonsSorTot : Total number of outgoing photons
+        - tabPhotonsTot : Total weight of all outgoing photons
+        - p : progression bar
 
     """
 
