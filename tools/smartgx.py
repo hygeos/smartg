@@ -983,6 +983,16 @@ def InitSD(nprofilesAtm, nprofilesOc, nlam,
         * Init : Class containing the initial parameters of the photon
             Attributes :
                 - x0,y0,z0 : carthesian coordinates of the photon at the initialization
+        -----------------------------------------------------------------------------------
+        NB : When calling the class GPUStruct, it is important to consider the following elements:
+             the structure in python has to be exactly the same as the structure in C ie:
+            - the number of attributes as to be the same
+            - the types of attributes have to be the same
+            - the order of the attributes declared has to be the same
+            the kernel has to take pointers as arguments in CUDA and python
+
+        The guideline of this class is defined in the program GPUStruct.py with an example
+
 
     """
     tmp = []
