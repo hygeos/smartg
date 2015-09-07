@@ -78,9 +78,11 @@ class Smartg(object):
             NBLOOP = NBPHOTONS/30
 
         # number of output levels
+        # warning! should be identical to the value defined in communs.h
         NLVL = 5
 
         # number of Stockes parameters
+        # warning! still hardcoded in device.cu (FIXME)
         NPSTK = 4
 
         assert isinstance(wl, (float, list, np.ndarray))
@@ -272,7 +274,7 @@ class Smartg(object):
                            nbPhotonsTot, nbPhotonsTotInter, NBTHETA, NBPHI, NLAM)
 
         # stockage des resultats dans une MLUT
-        self.output = creerMLUTsResultats(tabFinalEvent, NBPHI, NBTHETA, tabTh, tabPhi, NLAM, tabPhotonsTot,nbPhotonsTot,D,nprofilesAtm,nprofilesOc)
+        self.output = creerMLUTsResultats(tabFinalEvent, NBPHI, NBTHETA, tabTh, tabPhi, wl, NLAM, tabPhotonsTot,nbPhotonsTot,D,nprofilesAtm,nprofilesOc)
         p.finish('traitement termine :' + afficheProgress(nbPhotonsTot, NBPHOTONS, options, nbPhotonsSorTot))
   
     def view(self, QU=False, field='up (TOA)'):
@@ -362,16 +364,16 @@ def reptran_merge(files, ibands, output=None):
 
     return output
 
-def creerMLUTsResultats(tabFinal, NBPHI, NBTHETA, tabTh, tabPhi, NLAM,tabPhotonsTot,nbPhotonsTot,D,nprofilesAtm,nprofilesOc):
+def creerMLUTsResultats(tabFinal, NBPHI, NBTHETA, tabTh, tabPhi, wl, NLAM, tabPhotonsTot,nbPhotonsTot,D,nprofilesAtm,nprofilesOc):
     """
     store the result in a MLUT
     Arguments :
-        - tabTh : Zenith angles
-        - tabPhi : Azimutal angles
+        - tabTh : Zenith angles in rad
+        - tabPhi : Azimutal angles in rad
         - tabFinal : R, Q, U of all outgoing photons
         - NBPHI : Number of intervals in azimuth angle
         - NBTHETA : Number of intervals in zenith
-        - NLAM : Number of wavelet length
+        - wl: list of wavelengths in nm
         - tabPhotonsTot : Total weight of all outgoing photons
         - nbPhotonsTot : Total number of photons processed
         - D : Dictionary containing all the parameters required to launch the simulation by the kernel
@@ -382,29 +384,29 @@ def creerMLUTsResultats(tabFinal, NBPHI, NBTHETA, tabTh, tabPhi, NLAM,tabPhotons
 
     """
 
-    # theta in degrees
-    tabThBis = tabTh*180./np.pi
-    # phi in degrees
-    tabPhiBis = tabPhi*180./np.pi
+    m = MLUT()
 
-    nbwl = np.arange(NLAM)
+    # add axes
+    axnames = ['Azimut angles', 'Zenith angles']
+    m.add_axis('Zenith angles', tabTh*180./np.pi)
+    m.add_axis('Azimut angles', tabPhi*180./np.pi)
+    if NLAM > 1:
+        m.add_axis('Wavelength', wl)
+        axnames.insert(0, 'Wavelength')
 
     label = ['I_up (TOA)', 'Q_up (TOA)', 'U_up (TOA)','N_up (TOA)']
 
-    luts = []
-
     # ecriture des données de sorties
+    # TODO: use variables DOWN0P, DOWN0M, etc..
     for i in xrange(0, 4):
         if NLAM == 1:
             a = tabFinal[i*NBPHI*NBTHETA*NLAM:(i+1)*NBPHI*NBTHETA*NLAM]
             a.resize(NBPHI, NBTHETA)
-            b =  LUT(a, axes=[tabPhiBis, tabThBis], names=['Azimut angles', 'Zenith angles'], desc=label[i])
-            luts.append(b)
+            m.add_dataset(label[i], a, axnames)
         else:
             a = tabFinal[i*NBPHI*NBTHETA*NLAM:(i+1)*NBPHI*NBTHETA*NLAM]
             a.resize(NLAM, NBPHI, NBTHETA)
-            b = LUT(a, axes=[nbwl, tabPhiBis, tabThBis], names=['Wavelet length', 'Azimut angles', 'Zenith angles'], desc=label[i])
-            luts.append(b)
+            m.add_dataset(label[i], a, axnames)
    
     if D['OUTPUT_LAYERS'][0] == 1:
         label = ['I_down (0+)', 'Q_down (0+)', 'U_down (0+)','N_down (0+)']
@@ -412,26 +414,22 @@ def creerMLUTsResultats(tabFinal, NBPHI, NBTHETA, tabTh, tabPhi, NLAM,tabPhotons
             if NLAM == 1:
                 a = tabFinal[(4+i)*NBPHI*NBTHETA*NLAM:(4+i+1)*NBPHI*NBTHETA*NLAM]
                 a.resize(NBPHI, NBTHETA)
-                b =  LUT(a, axes=[tabPhiBis, tabThBis], names=['Azimut angles', 'Zenith angles'], desc=label[i])
-                luts.append(b)
+                m.add_dataset(label[i], a, axnames)
             else:
                 a = tabFinal[(4+i)*NBPHI*NBTHETA*NLAM:((4+i+1))*NBPHI*NBTHETA*NLAM]
                 a.resize(NLAM, NBPHI, NBTHETA)
-                b = LUT(a, axes=[nbwl, tabPhiBis, tabThBis], names=['Wavelet length', 'Azimut angles', 'Zenith angles'], desc=label[i])
-                luts.append(b)
+                m.add_dataset(label[i], a, axnames)
 
         label = ['I_up (0-)', 'Q_up (0-)', 'U_up (0-)','N_up (0-)']
         for i in xrange(0, 4):
             if NLAM == 1:
                 a = tabFinal[(4*4+i)*NBPHI*NBTHETA*NLAM:(4*4+i+1)*NBPHI*NBTHETA*NLAM]
                 a.resize(NBPHI, NBTHETA)
-                b =  LUT(a, axes=[tabPhiBis, tabThBis], names=['Azimut angles', 'Zenith angles'], desc=label[i])
-                luts.append(b)
+                m.add_dataset(label[i], a, axnames)
             else:
                 a = tabFinal[(4*4+i)*NBPHI*NBTHETA*NLAM:(4*4+i+1)*NBPHI*NBTHETA*NLAM]
                 a.resize(NLAM, NBPHI, NBTHETA)
-                b = LUT(a, axes=[nbwl, tabPhiBis, tabThBis], names=['Wavelet length', 'Azimut angles', 'Zenith angles'], desc=label[i])
-                luts.append(b)
+                m.add_dataset(label[i], a, axnames)
 
     if D['OUTPUT_LAYERS'][0] == 2:
         label = ['I_down (0-)', 'Q_down (0-)', 'U_down (0-)','N_down (0-)']
@@ -439,53 +437,47 @@ def creerMLUTsResultats(tabFinal, NBPHI, NBTHETA, tabTh, tabPhi, NLAM,tabPhotons
             if NLAM == 1:
                 a = tabFinal[(2*4+i)*NBPHI*NBTHETA*NLAM:(2*4+i+1)*NBPHI*NBTHETA*NLAM]
                 a.resize(NBPHI, NBTHETA)
-                b =  LUT(a, axes=[tabPhiBis, tabThBis], names=['Azimut angles', 'Zenith angles'], desc=label[i])
-                luts.append(b)
+                m.add_dataset(label[i], a, axnames)
             else:
                 a = tabFinal[(2*4+i)*NBPHI*NBTHETA*NLAM:((2*4+i+1))*NBPHI*NBTHETA*NLAM]
                 a.resize(NLAM, NBPHI, NBTHETA)
-                b = LUT(a, axes=[nbwl, tabPhiBis, tabThBis], names=['Wavelet length', 'Azimut angles', 'Zenith angles'], desc=label[i])
-                luts.append(b)
+                m.add_dataset(label[i], a, axnames)
 
         label = ['I_up (0+)', 'Q_up (0+)', 'U_up (0+)','N_up (0+)']
         for i in xrange(0, 4):
             if NLAM == 1:
                 a = tabFinal[(3*4+i)*NBPHI*NBTHETA*NLAM:(3*4+i+1)*NBPHI*NBTHETA*NLAM]
                 a.resize(NBPHI, NBTHETA)
-                b =  LUT(a, axes=[tabPhiBis, tabThBis], names=['Azimut angles', 'Zenith angles'], desc=label[i])
-                luts.append(b)
+                m.add_dataset(label[i], a, axnames)
             else:
                 a = tabFinal[(3*4+i)*NBPHI*NBTHETA*NLAM:(3*4+i+1)*NBPHI*NBTHETA*NLAM]
                 a.resize(NLAM, NBPHI, NBTHETA)
-                b = LUT(a, axes=[nbwl, tabPhiBis, tabThBis], names=['Wavelet length', 'Azimut angles', 'Zenith angles'], desc=label[i])
-                luts.append(b)
-
-    
-    Res = MLUT(luts)
+                m.add_dataset(label[i], a, axnames)
 
     # ecriture des profiles Atmosphériques
-    if D['SIM'][0]==-2 or D['SIM'][0]==1 or D['SIM'][0]==2:
-        luts = []
-        keys=nprofilesAtm.keys()
-        for key in keys:
-            a=nprofilesAtm[key]
-            b=np.resize(a,(NLAM,D['NATM']+1))
-            c=LUT(b, desc=key)
-            luts.append(c)
-        profAtm = MLUT(luts)
+    # (FIXME)
+    #if D['SIM'][0]==-2 or D['SIM'][0]==1 or D['SIM'][0]==2:
+    #    luts = []
+    #    keys=nprofilesAtm.keys()
+    #    for key in keys:
+    #        a=nprofilesAtm[key]
+    #        b=np.resize(a,(NLAM,D['NATM']+1))
+    #        c=LUT(b, desc=key)
+    #        luts.append(c)
+    #    profAtm = MLUT(luts)
 
-    # ecriture des profiles Océaniques
-    if D['SIM'][0]==0 or D['SIM'][0]==2 or D['SIM'][0]==3:
-        luts = []
-        keys=nprofilesOc.keys()
-        for key in keys:
-            a=nprofilesOc[key]
-            b=np.resize(a,(NLAM,D['NOCE']+1))
-            c=LUT(b, desc=key)
-            luts.append(c)
-        profOc = MLUT(luts)
+    ## ecriture des profiles Océaniques
+    #if D['SIM'][0]==0 or D['SIM'][0]==2 or D['SIM'][0]==3:
+    #    luts = []
+    #    keys=nprofilesOc.keys()
+    #    for key in keys:
+    #        a=nprofilesOc[key]
+    #        b=np.resize(a,(NLAM,D['NOCE']+1))
+    #        c=LUT(b, desc=key)
+    #        luts.append(c)
+    #    profOc = MLUT(luts)
 
-    return Res
+    return m
 
 def impactInit(HATM, NATM, NLAM, ALT, H, THVDEG, options):
     """
