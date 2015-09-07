@@ -22,6 +22,7 @@ from pyhdf.SD import SD, SDC
 from profile.profil import AeroOPAC, Profile, REPTRAN, REPTRAN_IBAND, CloudOPAC
 from water.iop_spm import IOP_SPM
 from water.iop_mm import IOP_MM
+from water.phase_functions import PhaseFunction
 from os.path import dirname, realpath, join, basename
 import textwrap
 from progress import Progress
@@ -86,13 +87,10 @@ class Smartg(object):
         assert (iband is None) or isinstance(iband, REPTRAN_IBAND)
 
         if isinstance(wl, (list, np.ndarray)):
-            nlam = len(wl)
+            NLAM = len(wl)
         else:
-            nlam = 1
+            NLAM = 1
 
-        #
-        # make dictionary of parameters
-        #
         D = {
                 'NBPHOTONS': str(int(NBPHOTONS)),
                 'THVDEG': np.array([THVDEG], dtype=np.float32),
@@ -108,7 +106,7 @@ class Smartg(object):
                 'XGRID': np.array([XGRID], dtype=np.int32),
                 'YGRID': np.array([1], dtype=np.int32),
                 'NBLOOP': np.array([NBLOOP], dtype=np.uint32),
-                'NLAM': np.array([nlam], dtype=np.int32),
+                'NLAM': np.array([NLAM], dtype=np.int32),
                 }
 
         # we use a separate disctionary to store the default parameters
@@ -151,7 +149,7 @@ class Smartg(object):
         #
         # ocean profile
         # get the phase function and oceanic profile
-        nprofilesOc, phasesOc, NOCE = get_profOc(wl, water, D, nlam)
+        nprofilesOc, phasesOc, NOCE = get_profOc(wl, water, D, NLAM)
         #
         # environment effect
         #
@@ -181,8 +179,8 @@ class Smartg(object):
         else:
             seafloor_alb = water.alb
 
-        albedo = np.zeros(2*nlam)
-        for i in xrange(nlam):
+        albedo = np.zeros(2*NLAM)
+        for i in xrange(NLAM):
         # FIXME: implement spectral albedo
             albedo[2*i] = surf_alb
             albedo[2*i+1] = seafloor_alb
@@ -196,7 +194,7 @@ class Smartg(object):
             - DDEBUG : Ajout de tests intermédiaires utilisés lors du débugage
         """
 
-        options = ['-DRANDPHILOX4x32_7']
+        options = ['-DRANDPHILOX4x32_7','-DPROGRESSION']
         # options.extend(['-DPARAMETRES','-DPROGRESSION'])
         if not pp:
             options.append('-DSPHERIQUE')
@@ -217,31 +215,30 @@ class Smartg(object):
 	# computation of the phase function
         if(SIM == 0 or SIM == 2 or SIM == 3):
             if phasesOc != []:
-                foce, phasesOcm, NPHAOCE, imax = calculF(phasesOc, NFOCE, None)
+                foce, phasesOcm, NPHAOCE, imax = calculF(phasesOc, NFOCE)
             else:
                 foce, NPHAOCE, imax, phasesOcm = [0], 0, 0, [0]
         else:
-            foce,phasesOcm = [0],[0]
+            foce, phasesOcm = [0], [0]
 
         if(SIM == -2 or SIM == 1 or SIM == 2):
             if phasesAtm != []:
-                faer, phasesAtmm, NPHAAER, imax = calculF(phasesAtm, NFAER, 'ATM')
+                faer, phasesAtmm, NPHAAER, imax = calculF(phasesAtm, NFAER)
                 
             else:
                 faer, NPHAAER, imax, phasesAtmm = [0], 0, 0, [0]
                   
         else:
-            faer,phasesAtmm = [0],[0]
+            faer, phasesAtmm = [0], [0]
 
         
         # computation of the impact point
-        x0, y0, z0, zph0, hph0 = 0, 0, 0, [], []
-        x0, y0, z0, zph0, hph0 = impactInit(HATM, NATM, nlam, nprofilesAtm['ALT'], nprofilesAtm['H'], THVDEG, options)
+        x0, y0, z0, zph0, hph0 = impactInit(HATM, NATM, NLAM, nprofilesAtm['ALT'], nprofilesAtm['H'], THVDEG, options)
 
         if '-DSPHERIQUE' in options:
             TAUATM = nprofilesAtm['H'][NATM];
-            tabTransDir = np.zeros(nlam,dtype=np.float64)
-            for ilam in xrange(0, nlam):
+            tabTransDir = np.zeros(NLAM,dtype=np.float64)
+            for ilam in xrange(0, NLAM):
                 tabTransDir[ilam] = np.exp(-hph0[NATM + ilam * (NATM + 1)])
 
             if '-DDEBUG' in options:
@@ -249,20 +246,20 @@ class Smartg(object):
 		       hph0[NATM+1], zph0[NATM+1], x0, y0, z0)
 
         # write the input variables into data structures
-        Tableau, Var, Init = InitSD(nprofilesAtm, nprofilesOc, nlam,
+        Tableau, Var, Init = InitSD(nprofilesAtm, nprofilesOc, NLAM,
                                 NLVL, NPSTK, NBTHETA, NBPHI, faer, foce,
                                 albedo, wl, hph0, zph0, x0, y0, z0,
                                 XBLOCK, XGRID, options)
 
         # initialization of the constants
-        InitConstantes(D,surf,env,NATM,NOCE,HATM,mod)
+        InitConstantes(D, surf, env, NATM, NOCE, HATM, mod)
 
         # Loop and kernel call
         nbPhotonsTot, nbPhotonsTotInter , nbPhotonsTotInter, nbPhotonsSorTot, tabPhotonsTot, p = loop_kernel(NBPHOTONS, Tableau, Var, Init,
                                                                                                           NLVL, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
-                                                                                                          nlam, options, kern)
+                                                                                                          NLAM, options, kern)
         # compute the final result
-        tabFinalEvent = np.zeros(NLVL*NPSTK*NBTHETA*NBPHI*nlam, dtype=np.float64)
+        tabFinalEvent = np.zeros(NLVL*NPSTK*NBTHETA*NBPHI*NLAM, dtype=np.float64)
         tabTh = np.zeros(NBTHETA, dtype=np.float64)
         tabPhi = np.zeros(NBPHI, dtype=np.float64)
 
@@ -270,8 +267,8 @@ class Smartg(object):
 	# par unité de surface)
 
         for k in xrange(0, 5):
-            calculTabFinal(tabFinalEvent[k * NPSTK * NBTHETA * NBPHI * nlam : (k+1) * NPSTK * NBTHETA * NBPHI * nlam],
-                           tabTh, tabPhi, tabPhotonsTot[k * NPSTK * NBTHETA * NBPHI * nlam : (k+1) * NPSTK * NBTHETA * NBPHI * nlam],
+            calculTabFinal(tabFinalEvent[k*NPSTK*NBTHETA*NBPHI*nlam:(k+1)*NPSTK*NBTHETA*NBPHI*nlam],
+                           tabTh, tabPhi, tabPhotonsTot[k*NPSTK*NBTHETA*NBPHI*nlam:(k+1)*NPSTK*NBTHETA*NBPHI* nlam],
                            nbPhotonsTot, nbPhotonsTotInter, NBTHETA, NBPHI, nlam)
 
         # stockage des resultats dans une MLUT
@@ -670,7 +667,7 @@ def afficheProgress(nbPhotonsTot, NBPHOTONS, options, nbPhotonsSorTot):
     return chaine
 
 
-def calculF(phases, N, TYPE):
+def calculF(phases, N):
 
     """
     Compute CDF of scattering phase matrices
@@ -678,7 +675,6 @@ def calculF(phases, N, TYPE):
     Arguments :
         - phases : list of phase functions
         - N : Number of discrete values of the phase function
-        - TYPE : OCEAN / ATMOSPHERE
     --------------------------------------------------
     Returns :
         - idx  : corresponding to a function phase
@@ -686,6 +682,9 @@ def calculF(phases, N, TYPE):
         - nmax : maximal number of angles describing the phase function (equivalent to MLSAAER and MLSAOCE in the old version)
         - phases_list : list of phase function set contiguously
         - phase_H : cumulative distribution of the phase functions
+
+    NB : le programme smartg.py écrit les fonctions de phases dans des fichiers et convertit les angles en degrees si ces derniers sont en radians
+    Ici la fonction calculF recupere les angles et verifie si ces derniers sont en degres et les convertit en radians
 
     """
     nmax, n, imax=0, 0, 0
@@ -697,29 +696,31 @@ def calculF(phases, N, TYPE):
         n += 1
     # Initialize the cumulative distribution function
     phase_H = np.zeros(5*n*N, dtype=np.float32)
-
     for idx, phase in enumerate(phases):
         if idx != imax:
             # resizing the attributes of the phase object following the nmax
             phase.ang.resize(nmax)
             phase.phase.resize(nmax, 4)
         tmp = np.append(phase.ang, phase.phase)
-        phases_list = np.append(phasesAtmm, tmp)
+        phases_list = np.append(phases_list, tmp)
         scum = np.zeros(phase.N)
         # conversion en gradiant
-        if TYPE=='ATM':
-            phase.ang*=(np.pi / 180)
-        for iang in xrange(1, phase.N):
-            dtheta = phase.ang[iang] - phase.ang[iang-1]
-            pm1 = phase.phase[iang-1, 1] + phase.phase[iang-1, 0]
-            pm2 = phase.phase[iang, 1] + phase.phase[iang, 0]
-            sin1 = np.sin(phase.ang[iang-1])
-            sin2 = np.sin(phase.ang[iang])
-            scum[iang] = scum[iang-1] + dtheta*((sin1 * pm1 + sin2 * pm2) / 3 + (sin1 * pm2 + sin2 * pm1) / 6)*(np.pi * 2);
-        # normalisation
-        for iang in xrange(0, phase.N):
-            scum[iang] /= scum[phase.N-1]
-        # calcul des faer
+        if phase.degrees == True:
+           angles = phase.ang_in_rad()
+           # un biais apparait lorsque la ligne ci-dessous est mise en commentaire dans le test rayleigh + aerosols ???
+           # l'attribut ang de l'objet phase n'est pourtant utilisé que dans cette fonction
+           phase.ang = phase.ang_in_rad()
+        else:
+           angles = phase.ang
+
+        scum = [0]
+        dtheta = np.diff(angles)
+        pm = phase.phase[:, 1] + phase.phase[:, 0]
+        sin = np.sin(angles)
+        tmp = dtheta * ((sin[:-1] * pm[:-1] + sin[1:] * pm[1:]) / 3. +  (sin[:-1] * pm[1:] + sin[1:] * pm[:-1])/6. )* np.pi * 2.
+        scum = np.append(scum,tmp)
+        scum = np.cumsum(scum)
+        scum /= scum[phase.N-1]
 
         ipf = 0
         converted_N = np.float64(N)
@@ -734,6 +735,7 @@ def calculF(phases, N, TYPE):
             phase_H[base_index+1] = np.float32( phase.phase[ipf, 0])
             phase_H[base_index+2] = np.float32( phase.phase[ipf, 2])
             phase_H[base_index+3] = np.float32(0)
+
 
     return phase_H, phases_list, n, imax
 
@@ -757,7 +759,7 @@ def test_rayleigh_aerosols():
     aer = AeroOPAC('maritime_clean', 0.4, 550.)
     pro = Profile('afglms', aer=aer)
 
-    return Smartg('SMART-G-PP', wl=490., atm=pro, NBPHOTONS=1e9)
+    return Smartg(wl=490., atm=pro, NBPHOTONS=1e9)
 
 def test_atm_surf():
     # lambertian surface of albedo 10%
@@ -782,8 +784,8 @@ def test_surf_ocean():
 
 
 def test_ocean():
-    return Smartg('SMART-G-PP', 560., THVDEG=30.,
-            water=IOP_MM(1.), NBPHOTONS=5e6)
+    return Smartg(wl=560., THVDEG=30.,
+            water=IOP_SPM(100.), NBPHOTONS=5e6)
 
 
 def test_reptran():
@@ -1121,6 +1123,7 @@ def get_profOc(wl, water, D, nlam):
             nprofilesOc['IPO'][ilam*2+1] = profilesOc[ilam][2]
             # parametrer les indices
         NOCE = 1
+
     return nprofilesOc, phasesOc, NOCE
 
 
@@ -1185,7 +1188,7 @@ def loop_kernel(NBPHOTONS, Tableau, Var, Init, NLVL,
         Tableau.copy_from_gpu(skipTableau)
         Var.copy_from_gpu(skipVar)
 
-        #get the results
+        # get the results
         nbPhotonsTot += Var.nbPhotons
         tabPhotonsTot+=Tableau.tabPhotons
 
@@ -1195,6 +1198,7 @@ def loop_kernel(NBPHOTONS, Tableau, Var, Init, NLVL,
         if '-DPROGRESSION' in options:
             nbPhotonsSorTot += Var.nbPhotonsSor;
 
+        # update of the progression Bar
         if nbPhotonsTot > NBPHOTONS:
             p.update(NBPHOTONS, afficheProgress(nbPhotonsTot, NBPHOTONS, options, nbPhotonsSorTot))
         else:
@@ -1203,15 +1207,90 @@ def loop_kernel(NBPHOTONS, Tableau, Var, Init, NLVL,
     return nbPhotonsTot, nbPhotonsTotInter , nbPhotonsTotInter, nbPhotonsSorTot, tabPhotonsTot, p
 
 
+def impactInit(HATM, NATM, NLAM, ALT, H, THVDEG, options):
+    """
+    Calcul du profil que le photon va rencontrer lors de son premier passage dans l'atmosphère
+    Sauvegarde de ce profil dans tab et sauvegarde des coordonnées initiales du photon dans init
+
+    Arguments :
+        - HATM : Altitude of the Top of Atmosphere
+        - NATM : Number of layers of the atmosphere
+        - NLAM : Number of wavelet length
+        - ALT : Altitude of the atmosphere
+        - H : optical thickness of each layer in the atmosphere
+        - THVDEG : View Zenith Angle in degree
+        - options : compilation options
+
+    Returns :
+        - (x0, y0, z0) : carthesian coordinates
+        - hph0 : Optical thickness seen in front of the photon
+        - zph0 : Corresponding Altitude
+    """
+    vx = -np.sin(THVDEG * np.pi / 180)
+    vy = 0.
+    vz = -np.cos(THVDEG * np.pi / 180)
+    # Calcul du point d'impact
+
+    thv = THVDEG * np.pi / 180
+
+    rdelta = 4 * 6400 * 6400 + 4 * (np.tan(thv) * np.tan(thv) + 1) * (HATM * HATM + 2 * HATM * 6400)
+    localh = (-2. * 6400 + np.sqrt(rdelta) )/(2. * (np.tan(thv) * np.tan(thv) + 1.))
+
+    x0 = localh * np.tan(thv)
+    y0 = 0
+    z0 = localh
+    zph0, hph0 = [], []
+
+    if '-DSPHERIQUE' in options:
+        z0 += 6400
+        zph0 = np.zeros((NATM + 1), dtype=np.float32)
+        hph0 = np.zeros((NATM + 1)*NLAM, dtype=np.float32)
+
+    xphbis = x0;
+    yphbis = y0;
+    zphbis = z0;
+
+    for icouche in xrange(1, NATM + 1):
+        rdelta = 4. * (vx * xphbis + vy * yphbis + vz * zphbis) * (vx * xphbis + vy * yphbis
+                    + vz * zphbis) - 4. * (xphbis * xphbis + yphbis * yphbis
+                    + zphbis * zphbis - (ALT[icouche] + 6400) * (ALT[icouche] + 6400))
+        rsol1 = 0.5 * (-2 * (vx * xphbis + vy * yphbis + vz * zphbis) + np.sqrt(rdelta))
+        rsol2 = 0.5 * (-2 * (vx * xphbis + vy * yphbis + vz * zphbis) - np.sqrt(rdelta))
+
+        # solution : la plus petite distance positive
+        if rsol1 > 0:
+            if rsol2 > 0:
+                rsolfi = min(rsol1, rsol2)
+            else:
+                rsolfi = rsol1;
+        else:
+            if rsol2 > 0:
+                rsolfi = rsol2
+
+        if '-DSPHERIQUE' in options:
+            zph0[icouche] = zph0[icouche-1] + np.float32(rsolfi)
+            for ilam in xrange(0, NLAM):
+                hph0[icouche + ilam * (NATM + 1)] = hph0[icouche - 1 + ilam * (NATM + 1)] + (abs(H[icouche + ilam * (NATM + 1)]
+                                                    - H[icouche - 1 + ilam * (NATM + 1)]) * rsolfi )/(abs(ALT[icouche - 1] - ALT[icouche]));
+
+        xphbis += vx*rsolfi;
+        yphbis += vy*rsolfi;
+        zphbis += vz*rsolfi;
+
+
+    return x0, y0, z0, zph0, hph0
+
+
+
 if __name__ == '__main__':
 
-    test_rayleigh()
-    # test_kokhanovsky()
-    # test_rayleigh_aerosols()
+    #test_rayleigh()
+    #test_kokhanovsky()
+    test_rayleigh_aerosols()
     # test_atm_surf()
     # test_atm_surf_ocean()
     # test_surf_ocean()
-    # test_ocean()
+    #test_ocean()
     # test_reptran()
     # test_ozone_lut()
     # test_multispectral()
