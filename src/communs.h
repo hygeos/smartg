@@ -106,14 +106,6 @@ typedef int CrMCCUDA;
 #define OUTPUT_BOA_DOWN_0M_UP_0P   2 // downward radiance at BOA below surface (0-) and upward radiance at BOA above surface (0+)
 
 
-/* Paramètres pour l'océan */
-#define NFOCE_c = 10000000
-
-/* Pour le calcul de la fonction de phase dans l'océan*/
-#define NWAV	71
-
-#define ANGTRONC 1999
-
 /* Constantes propres au calcul sphérique */
 #define RTER 6400
 
