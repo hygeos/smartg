@@ -68,6 +68,12 @@ class PhaseFunction(object):
         self.coef_trunc = coef_trunc
         assert phase.shape == (self.N, 4)
 
+    def ang_in_rad(self):
+        if self.degrees == True:
+            return self.ang * (pi/180.)
+        else:
+            return self.ang
+
     def write(self, filename, overwrite=False):
         '''
         write the phase function to a text file filename

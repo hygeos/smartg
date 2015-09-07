@@ -267,12 +267,12 @@ class Smartg(object):
 	# par unité de surface)
 
         for k in xrange(0, 5):
-            calculTabFinal(tabFinalEvent[k*NPSTK*NBTHETA*NBPHI*nlam:(k+1)*NPSTK*NBTHETA*NBPHI*nlam],
-                           tabTh, tabPhi, tabPhotonsTot[k*NPSTK*NBTHETA*NBPHI*nlam:(k+1)*NPSTK*NBTHETA*NBPHI* nlam],
-                           nbPhotonsTot, nbPhotonsTotInter, NBTHETA, NBPHI, nlam)
+            calculTabFinal(tabFinalEvent[k*NPSTK*NBTHETA*NBPHI*NLAM:(k+1)*NPSTK*NBTHETA*NBPHI*NLAM],
+                           tabTh, tabPhi, tabPhotonsTot[k*NPSTK*NBTHETA*NBPHI*NLAM:(k+1)*NPSTK*NBTHETA*NBPHI* NLAM],
+                           nbPhotonsTot, nbPhotonsTotInter, NBTHETA, NBPHI, NLAM)
 
         # stockage des resultats dans une MLUT
-        self.output = creerMLUTsResultats(tabFinalEvent, NBPHI, NBTHETA, tabTh, tabPhi, nlam, tabPhotonsTot,nbPhotonsTot,D,nprofilesAtm,nprofilesOc)
+        self.output = creerMLUTsResultats(tabFinalEvent, NBPHI, NBTHETA, tabTh, tabPhi, NLAM, tabPhotonsTot,nbPhotonsTot,D,nprofilesAtm,nprofilesOc)
         p.finish('traitement termine :' + afficheProgress(nbPhotonsTot, NBPHOTONS, options, nbPhotonsSorTot))
   
     def view(self, QU=False, field='up (TOA)'):
@@ -705,13 +705,8 @@ def calculF(phases, N):
         phases_list = np.append(phases_list, tmp)
         scum = np.zeros(phase.N)
         # conversion en gradiant
-        if phase.degrees == True:
-           angles = phase.ang_in_rad()
-           # un biais apparait lorsque la ligne ci-dessous est mise en commentaire dans le test rayleigh + aerosols ???
-           # l'attribut ang de l'objet phase n'est pourtant utilisé que dans cette fonction
-           phase.ang = phase.ang_in_rad()
-        else:
-           angles = phase.ang
+
+        angles = phase.ang_in_rad()
 
         scum = [0]
         dtheta = np.diff(angles)
@@ -730,7 +725,7 @@ def calculF(phases, N):
             while scum[ipf+1]<z:
                 ipf += 1
 
-            phase_H[base_index+4] = np.float32( ((scum[ipf+1]-z)*phase.ang[ipf] + (z-scum[ipf])*phase.ang[ipf+1])/(scum[ipf+1]-scum[ipf]) )
+            phase_H[base_index+4] = np.float32( ((scum[ipf+1]-z)*angles[ipf] + (z-scum[ipf])*angles[ipf+1])/(scum[ipf+1]-scum[ipf]) )
             phase_H[base_index+0] = np.float32( phase.phase[ipf, 1])
             phase_H[base_index+1] = np.float32( phase.phase[ipf, 0])
             phase_H[base_index+2] = np.float32( phase.phase[ipf, 2])
@@ -915,7 +910,7 @@ def InitConstantes(D,surf,env,NATM,NOCE,HATM,mod):
         a,_ = mod.get_global('%sd'%key)
         cuda.memcpy_htod(a, D[key])
 
-def InitSD(nprofilesAtm, nprofilesOc, nlam,
+def InitSD(nprofilesAtm, nprofilesOc, NLAM,
            NLVL, NPSTK, NBTHETA, NBPHI, faer,
            foce, albedo, wl, hph0, zph0, x0, y0,
            z0,XBLOCK, XGRID, options):
@@ -927,7 +922,7 @@ def InitSD(nprofilesAtm, nprofilesOc, nlam,
 
         - nprofilesAtm: Atmospheric profile
         - nprofilesOc : Oceanic profile
-        - nlam: Number of wavelet length
+        - NLAM: Number of wavelet length
         - NLVL : Number of output levels
         - NPSTK : Number of stockes parameter
         - NBTHETA : Number of intervals in zenith
@@ -948,7 +943,7 @@ def InitSD(nprofilesAtm, nprofilesOc, nlam,
     Returns the following GPUStruct Class:
         * Tableau : Class containing the arrays sent to the device
             Attributes :
-                - nbPhotonsInter : number of photons injected by interval of nlam
+                - nbPhotonsInter : number of photons injected by interval of NLAM
                 - tabPhotons :  stockes parameters of all photons
                 - faer : cumulative distribution of the phase functions related to the aerosol
                 - foce : cumulative distribution of the phase functions related to the ocean
@@ -998,8 +993,8 @@ def InitSD(nprofilesAtm, nprofilesOc, nlam,
 
     """
     tmp = []
-    tmp = [(np.uint64, '*nbPhotonsInter', np.zeros(nlam, dtype=np.uint64)),
-           (np.float32, '*tabPhotons', np.zeros(NLVL * NPSTK * NBTHETA * NBPHI * nlam, dtype=np.float32)),
+    tmp = [(np.uint64, '*nbPhotonsInter', np.zeros(NLAM, dtype=np.uint64)),
+           (np.float32, '*tabPhotons', np.zeros(NLVL * NPSTK * NBTHETA * NBPHI * NLAM, dtype=np.float32)),
            (np.float32, '*faer', faer),
            (np.float32, '*foce', foce),
            (np.float32, '*ho', nprofilesOc['HO']),
@@ -1085,7 +1080,7 @@ def get_profAtm(wl, atm, D):
 
     return nprofilesAtm, phasesAtm, NATM, HATM
 
-def get_profOc(wl, water, D, nlam):
+def get_profOc(wl, water, D, NLAM):
 
     """
     get the oceanic profile, the altitude of the top of Atmosphere, the number of layers of the atmosphere
@@ -1094,7 +1089,7 @@ def get_profOc(wl, water, D, nlam):
         - water : Profile object
             default None (no atmosphere)
         - D : Dictionary containing all the parameters required to launch the simulation by the kernel
-        - nlam : Number of wavelet length
+        - NLAM : Number of wavelet length
     -------------------------------------------------------------------------------------------------------
     Returns :
         - phasesOc : Oceanic phase functions
@@ -1104,7 +1099,7 @@ def get_profOc(wl, water, D, nlam):
     """
 
     nprofilesOc = {}
-    nprofilesOc['HO'], nprofilesOc['SSO'], nprofilesOc['IPO'] = np.zeros(nlam*2, dtype=np.float32), np.zeros(nlam*2, dtype=np.float32), np.zeros(nlam*2, dtype=np.float32)
+    nprofilesOc['HO'], nprofilesOc['SSO'], nprofilesOc['IPO'] = np.zeros(NLAM*2, dtype=np.float32), np.zeros(NLAM*2, dtype=np.float32), np.zeros(NLAM*2, dtype=np.float32)
     if water is None:
             # use default water values
         nprofilesOc['HO'], nprofilesOc['SSO'], nprofilesOc['IPO'],phasesOc = [0], [0], [0], []
@@ -1114,7 +1109,7 @@ def get_profOc(wl, water, D, nlam):
             wl = [wl]
         D.update(LAMBDA=wl)
         profilesOc, phasesOc = water.calc_bands(wl)
-        for ilam in xrange(0, nlam):
+        for ilam in xrange(0, NLAM):
             nprofilesOc['HO'][ilam*2] = 0
             nprofilesOc['SSO'][ilam*2] = 1
             nprofilesOc['IPO'][ilam*2] = 0
@@ -1129,7 +1124,7 @@ def get_profOc(wl, water, D, nlam):
 
 def loop_kernel(NBPHOTONS, Tableau, Var, Init, NLVL,
                 NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
-                nlam, options , kern):
+                NLAM, options , kern):
     """
     launch the kernel several time until the targeted number of photons injected is reached
 
@@ -1143,7 +1138,7 @@ def loop_kernel(NBPHOTONS, Tableau, Var, Init, NLVL,
         - BLOCK : Block dimension
         - XGRID : Grid dimension
         - NBTHETA : Number of intervals in zenith
-        - nlam : Number of wavelet length
+        - NLAM : Number of wavelet length
         - options : compilation options
         - kern : kernel launching the transfert radiative simulation
     --------------------------------------------------------------
@@ -1158,9 +1153,9 @@ def loop_kernel(NBPHOTONS, Tableau, Var, Init, NLVL,
 
     # Initialize of the parameters
     nbPhotonsTot = 0
-    nbPhotonsTotInter = np.zeros(nlam, dtype=np.uint64)
+    nbPhotonsTotInter = np.zeros(NLAM, dtype=np.uint64)
     nbPhotonsSorTot = 0
-    tabPhotonsTot = np.zeros(NLVL*NPSTK*NBTHETA * NBPHI * nlam, dtype=np.float32)
+    tabPhotonsTot = np.zeros(NLVL*NPSTK*NBTHETA * NBPHI * NLAM, dtype=np.float32)
 
     # Initialize the progress bar
     p = Progress(NBPHOTONS)
@@ -1171,8 +1166,8 @@ def loop_kernel(NBPHOTONS, Tableau, Var, Init, NLVL,
 
     while(nbPhotonsTot < NBPHOTONS):
 
-        Tableau.tabPhotons = np.zeros(NLVL*NPSTK*NBTHETA * NBPHI * nlam, dtype=np.float32)
-        Tableau.nbPhotonsInter = np.zeros(nlam, dtype=np.int32)
+        Tableau.tabPhotons = np.zeros(NLVL*NPSTK*NBTHETA * NBPHI * NLAM, dtype=np.float32)
+        Tableau.nbPhotonsInter = np.zeros(NLAM, dtype=np.int32)
         Var.nbPhotons = np.uint32(0)
         if '-DPROGRESSION' in options:
             Var.nbPhotonsSor = np.uint32(0)
@@ -1192,7 +1187,7 @@ def loop_kernel(NBPHOTONS, Tableau, Var, Init, NLVL,
         nbPhotonsTot += Var.nbPhotons
         tabPhotonsTot+=Tableau.tabPhotons
 
-        for ilam in xrange(0, nlam):
+        for ilam in xrange(0, NLAM):
             nbPhotonsTotInter[ilam] += Tableau.nbPhotonsInter[ilam]
 
         if '-DPROGRESSION' in options:
