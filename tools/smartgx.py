@@ -383,9 +383,9 @@ def creerMLUTsResultats(tabFinal, NBPHI, NBTHETA, tabTh, tabPhi, NLAM,tabPhotons
     """
 
     # theta in degrees
-    tabThBis = np.round(tabTh/(np.pi / 180))
+    tabThBis = tabTh*180./np.pi
     # phi in degrees
-    tabPhiBis = np.round(tabPhi/(np.pi / 180))
+    tabPhiBis = tabPhi*180./np.pi
 
     nbwl = np.arange(NLAM)
 
