@@ -1058,6 +1058,7 @@ def read_mlut_hdf(filename, datasets=None):
 
         if (axes is None) and ('dimensions' in sds.attributes()):
             axes = sds.attributes()['dimensions'].split(',')
+            axes = map(lambda x: x.strip(), axes)
 
             # replace 'None's by None
             axes = map(lambda x: {True: None, False: x}[x == 'None'], axes)
