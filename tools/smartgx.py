@@ -273,7 +273,7 @@ def smartg(wl, pp=True,
 
         # stockage des resultats dans une MLUT
         output = creerMLUTsResultats(tabFinalEvent, NBPHI, NBTHETA, tabTh, tabPhi, wl, NLAM, tabPhotonsTot,nbPhotonsTot,D,nprofilesAtm,nprofilesOc)
-        p.finish('traitement termine :' + afficheProgress(nbPhotonsTot, NBPHOTONS, options, nbPhotonsSorTot))
+        p.finish('Done! (used {}) | '.format(pycuda.autoinit.device.name()) + afficheProgress(nbPhotonsTot, NBPHOTONS, options, nbPhotonsSorTot))
 
         return output
 
@@ -640,10 +640,10 @@ def afficheProgress(nbPhotonsTot, NBPHOTONS, options, nbPhotonsSorTot):
     pourcent = (100 * nbPhotonsTot / NBPHOTONS);
     # Affichage
     chaine = ''
-    chaine += 'Photons lances : %e (%3d%%)' % (nbPhotonsTot, pourcent)
+    chaine += 'Launched %.2e photons (%3d%%) ' % (nbPhotonsTot, pourcent)
 
     if '-DPROGRESSION' in options:
-        chaine += ' - phot sortis: %e ' % (nbPhotonsSorTot);
+        chaine += ' - received %.2e ' % (nbPhotonsSorTot);
 
     return chaine
 
@@ -719,13 +719,13 @@ def test_rayleigh():
     '''
     Basic Rayleigh example
     '''
-    return Smartg(wl=400., NBPHOTONS=1e9, atm=Profile('afglt'))
+    return smartg(wl=400., NBPHOTONS=1e9, atm=Profile('afglt'))
 
 def test_kokhanovsky():
     '''
     Just Rayleigh : kokhanovsky test case
     '''
-    return Smartg('SMART-G-PP', wl=500., DEPO=0., NBPHOTONS=1e9,
+    return smartg(wl=500., DEPO=0., NBPHOTONS=1e9,
             atm=Profile('afglt', grid='100[75]25[5]10[1]0'))
 
 def test_rayleigh_aerosols():
@@ -735,17 +735,17 @@ def test_rayleigh_aerosols():
     aer = AeroOPAC('maritime_clean', 0.4, 550.)
     pro = Profile('afglms', aer=aer)
 
-    return Smartg(wl=490., atm=pro, NBPHOTONS=1e9)
+    return smartg(wl=490., atm=pro, NBPHOTONS=1e9)
 
 def test_atm_surf():
     # lambertian surface of albedo 10%
-    return Smartg('SMART-G-PP', 490., NBPHOTONS=1e9,
+    return smartg(490., NBPHOTONS=1e9,
             atm = Profile('afglms'),
             surf = LambSurface(ALB=0.1))
 
 
 def test_atm_surf_ocean():
-    return Smartg('SMART-G-PP', 490., NBPHOTONS=1e7,
+    return smartg(490., NBPHOTONS=1e7,
             atm=Profile('afglms', aer=AeroOPAC('maritime_clean', 0.2, 550)),
             surf=RoughSurface(),
             NBTHETA=30,
@@ -753,14 +753,14 @@ def test_atm_surf_ocean():
 
 
 def test_surf_ocean():
-    return Smartg('SMART-G-PP',490., THVDEG=30., NBPHOTONS=2e6,
+    return smartg(490., THVDEG=30., NBPHOTONS=2e6,
             surf=RoughSurface(),
             water=IOP_MM(1., pfwav=[400.]))
 
 
 
 def test_ocean():
-    return Smartg(wl=560., THVDEG=30.,
+    return smartg(wl=560., THVDEG=30.,
             water=IOP_SPM(100.), NBPHOTONS=5e6)
 
 
@@ -772,7 +772,7 @@ def test_reptran():
     pro = Profile('afglms.dat', aer=aer, grid='100[75]25[5]10[1]0')
     files, ibands = [], []
     for iband in REPTRAN('reptran_solar_msg').band('msg1_seviri_ch008').ibands():
-        job = Smartg('SMART-G-PP', wl=np.mean(iband.band.awvl),
+        job = smartg('SMART-G-PP', wl=np.mean(iband.band.awvl),
                 NBPHOTONS=5e8,
                 iband=iband, atm=pro)
         files.append(job.output)
@@ -796,14 +796,13 @@ def test_ozone_lut():
         aer = AeroOPAC('maritime_clean', AOT, 550.)
         pro = Profile('afglms', aer=aer, O3=TCO)
 
-        job = Smartg('SMART-G-PP', wl=490., atm=pro, NBTHETA=50, NBPHOTONS=5e6)
+        m = smartg(wl=490., atm=pro, NBTHETA=50, NBPHOTONS=5e6)
 
-        lut = job.read('I_up (TOA)')
-        lut.attrs.update({'TCO':TCO, 'AOT': AOT})
-        luts.append(lut)
+        m.set_attrs({'TCO':TCO, 'AOT': AOT})
+        luts.append(m)
+
     merged = merge(luts, ['TCO', 'AOT'])
     merged.print_info()
-    merged.savesave(join(dir_output, 'test_ozone.hdf'))
 
 def test_multispectral():
     '''
@@ -817,7 +816,7 @@ def test_multispectral():
     aer=AeroOPAC('maritime_clean', 0.3, 550.),
     verbose=True)
 
-    return Smartg('SMART-G-PP', wl = np.linspace(400, 600, 10.),
+    return smartg(wl = np.linspace(400, 600, 10.),
              THVDEG=60.,
              atm=pro,
              surf=RoughSurface(),
@@ -1175,10 +1174,7 @@ def loop_kernel(NBPHOTONS, Tableau, Var, Init, NLVL,
             nbPhotonsSorTot += Var.nbPhotonsSor;
 
         # update of the progression Bar
-        if nbPhotonsTot > NBPHOTONS:
-            p.update(NBPHOTONS, afficheProgress(nbPhotonsTot, NBPHOTONS, options, nbPhotonsSorTot))
-        else:
-            p.update(nbPhotonsTot, afficheProgress(nbPhotonsTot, NBPHOTONS, options, nbPhotonsSorTot))
+        p.update(nbPhotonsTot, afficheProgress(nbPhotonsTot, NBPHOTONS, options, nbPhotonsSorTot))
 
     return nbPhotonsTot, nbPhotonsTotInter , nbPhotonsTotInter, nbPhotonsSorTot, tabPhotonsTot, p
 
@@ -1260,13 +1256,13 @@ def impactInit(HATM, NATM, NLAM, ALT, H, THVDEG, options):
 
 if __name__ == '__main__':
 
-    #test_rayleigh()
-    #test_kokhanovsky()
+    test_rayleigh()
+    test_kokhanovsky()
     test_rayleigh_aerosols()
-    # test_atm_surf()
-    # test_atm_surf_ocean()
-    # test_surf_ocean()
-    #test_ocean()
+    test_atm_surf()
+    test_atm_surf_ocean()
+    test_surf_ocean()
+    test_ocean()
     # test_reptran()
-    # test_ozone_lut()
-    # test_multispectral()
+    test_ozone_lut()
+    test_multispectral()

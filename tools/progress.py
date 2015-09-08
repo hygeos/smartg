@@ -1,4 +1,6 @@
 try:
+    import warnings
+    warnings.simplefilter(action = "ignore", category = FutureWarning)
     from IPython.html.widgets import FloatProgress
     from IPython.display import display
     ipython_available = True
@@ -12,6 +14,7 @@ A progress bar working both in console and notebook
 
 class Progress():
     def __init__(self, max):
+        self.max = max
         if ipython_available:
             try:
                 self.pbar = FloatProgress(min=0, max=max)
@@ -27,6 +30,8 @@ class Progress():
             self.pbar = ProgressBar(widgets=[self.custom, ' ', Percentage(), Bar(), ETA()], maxval=max).start()
 
     def update(self, value, text=''):
+
+        value = min(value, self.max)  # don't exceed max
 
         if self.notebook_mode:
             self.pbar.value = value
