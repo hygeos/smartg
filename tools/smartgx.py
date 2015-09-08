@@ -408,7 +408,7 @@ def creerMLUTsResultats(tabFinal, NBPHI, NBTHETA, tabTh, tabPhi, wl, NLAM, tabPh
             a.resize(NLAM, NBPHI, NBTHETA)
             m.add_dataset(label[i], a, axnames)
    
-    if D['OUTPUT_LAYERS'][0] == 1:
+    if D['OUTPUT_LAYERS'][0] & 1:
         label = ['I_down (0+)', 'Q_down (0+)', 'U_down (0+)','N_down (0+)']
         for i in xrange(0, 4):
             if NLAM == 1:
@@ -431,7 +431,7 @@ def creerMLUTsResultats(tabFinal, NBPHI, NBTHETA, tabTh, tabPhi, wl, NLAM, tabPh
                 a.resize(NLAM, NBPHI, NBTHETA)
                 m.add_dataset(label[i], a, axnames)
 
-    if D['OUTPUT_LAYERS'][0] == 2:
+    if D['OUTPUT_LAYERS'][0] & 2:
         label = ['I_down (0-)', 'Q_down (0-)', 'U_down (0-)','N_down (0-)']
         for i in xrange(0, 4):
             if NLAM == 1:
