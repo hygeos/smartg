@@ -429,6 +429,9 @@ def semi_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
     '''
     from pylab import figure
     from mpl_toolkits.axisartist.grid_finder import FixedLocator, DictFormatter
+    from matplotlib.transforms import Affine2D
+    from mpl_toolkits.axisartist import floating_axes
+    from matplotlib.projections import PolarAxes
 
     #
     # initialization
