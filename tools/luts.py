@@ -410,7 +410,7 @@ class Idx(object):
 
 
 def semi_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
-               sym=None, swap=False, fig=None, cmap='jet'):
+               sym=None, swap=False, fig=None, cmap=None):
     '''
     Contour and eventually transect of 2D LUT on a semi polar plot, with
     dimensions (angle, radius)
@@ -427,7 +427,7 @@ def semi_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
     swap: swap the order of the 2 axes to (radius, angle)
     fig : destination figure. If None (default), create a new figure.
     '''
-    from pylab import figure
+    from pylab import figure, cm
     from mpl_toolkits.axisartist.grid_finder import FixedLocator, DictFormatter
     from matplotlib.transforms import Affine2D
     from mpl_toolkits.axisartist import floating_axes
@@ -566,9 +566,11 @@ def semi_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
     #
     # draw colormesh
     #
-    cmap.set_under('black')
-    cmap.set_over('white')
-    cmap.set_bad('0.5') # grey 50%
+    if cmap is None:
+        cmap = cm.jet
+        cmap.set_under('black')
+        cmap.set_over('white')
+        cmap.set_bad('0.5') # grey 50%
     r, t = np.meshgrid(ax2_scaled, ax1_scaled)
     masked_data = np.ma.masked_where(np.isnan(data) | np.isinf(data), data)
     im = aux_ax_polar.pcolormesh(t, r, masked_data, cmap=cmap, vmin=vmin, vmax=vmax)
