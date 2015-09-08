@@ -14,7 +14,7 @@ from pycuda.compiler import SourceModule
 
 
 import numpy as np
-from smartg import Smartg, RoughSurface, LambSurface, FlatSurface, Environment
+from smartg import RoughSurface, LambSurface, FlatSurface, Environment
 from gpustruct import GPUStruct
 import time
 from numpy import pi
@@ -35,40 +35,39 @@ from luts import merge, read_lut_hdf, read_mlut_hdf, LUT, MLUT
 dir_install = dirname(dirname(realpath(__file__)))
 dir_kernel = join(dir_install, 'src/')
 
-class Smartg(object):
-    '''
-    Run a SMART-G job
-
-    Arguments:
-
-        - wl: wavelength in nm (float)
-              or a list of wavelengths, or an array
-              used for phase functions calculation (always)
-              and profile calculation (if iband is None)   # FIXME
-        - pp:
-            True: use plane parallel geometry (default)
-            False: use spherical shell geometry
-        - iband: a REPTRAN_BAND object describing the internal band
-            default None (no reptran mode)
-        - atm: Profile object
-            default None (no atmosphere)
-        - surf: Surface object
-            default None (no surface)
-        - water: Iop object, providing options relative to the ocean surface
-            default None (no ocean)
-        - env: environment effect parameters (dictionary)
-            default None (no environment effect)
-
-    Attributes:
-        - output: the name of the result file
-    '''
-    def __init__(self, wl, pp=True,
+def smartg(wl, pp=True,
            iband=None, atm=None, surf=None, water=None, env=None,
            NBPHOTONS=1e9, DEPO=0.0279, THVDEG=0., SEED=-1,
            NBTHETA=45, NBPHI=45,
            NFAER=1000000, NFOCE=1000000,
            OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
            NBLOOP=None):
+        '''
+        Run a SMART-G simulation
+
+        Arguments:
+
+            - wl: wavelength in nm (float)
+                  or a list of wavelengths, or an array
+                  used for phase functions calculation (always)
+                  and profile calculation (if iband is None)   # FIXME
+            - pp:
+                True: use plane parallel geometry (default)
+                False: use spherical shell geometry
+            - iband: a REPTRAN_BAND object describing the internal band
+                default None (no reptran mode)
+            - atm: Profile object
+                default None (no atmosphere)
+            - surf: Surface object
+                default None (no surface)
+            - water: Iop object, providing options relative to the ocean surface
+                default None (no ocean)
+            - env: environment effect parameters (dictionary)
+                default None (no environment effect)
+
+        Attributes:
+            - output: the name of the result file
+        '''
 
         #
         # initialization
@@ -183,7 +182,7 @@ class Smartg(object):
 
         albedo = np.zeros(2*NLAM)
         for i in xrange(NLAM):
-        # FIXME: implement spectral albedo
+            # FIXME: implement spectral albedo
             albedo[2*i] = surf_alb
             albedo[2*i+1] = seafloor_alb
 
@@ -244,8 +243,7 @@ class Smartg(object):
                 tabTransDir[ilam] = np.exp(-hph0[NATM + ilam * (NATM + 1)])
 
             if '-DDEBUG' in options:
-                print ("Paramètres initiaux du photon: taumax0=%lf - zintermax=%lf - (%lf,%lf,%lf)\n" %
-		       hph0[NATM+1], zph0[NATM+1], x0, y0, z0)
+                print ("Paramètres initiaux du photon: taumax0=%lf - zintermax=%lf - (%lf,%lf,%lf)\n" % (hph0[NATM+1], zph0[NATM+1], x0, y0, z0))
 
         # write the input variables into data structures
         Tableau, Var, Init = InitSD(nprofilesAtm, nprofilesOc, NLAM,
@@ -265,8 +263,8 @@ class Smartg(object):
         tabTh = np.zeros(NBTHETA, dtype=np.float64)
         tabPhi = np.zeros(NBPHI, dtype=np.float64)
 
-	# Création et calcul du tableau final (regroupant le poids de tous les photons ressortis sur une demi-sphère,
-	# par unité de surface)
+        # Création et calcul du tableau final (regroupant le poids de tous les photons ressortis sur une demi-sphère,
+        # par unité de surface)
 
         for k in xrange(0, 5):
             calculTabFinal(tabFinalEvent[k*NPSTK*NBTHETA*NBPHI*NLAM:(k+1)*NPSTK*NBTHETA*NBPHI*NLAM],
@@ -274,19 +272,10 @@ class Smartg(object):
                            nbPhotonsTot, nbPhotonsTotInter, NBTHETA, NBPHI, NLAM)
 
         # stockage des resultats dans une MLUT
-        self.output = creerMLUTsResultats(tabFinalEvent, NBPHI, NBTHETA, tabTh, tabPhi, wl, NLAM, tabPhotonsTot,nbPhotonsTot,D,nprofilesAtm,nprofilesOc)
+        output = creerMLUTsResultats(tabFinalEvent, NBPHI, NBTHETA, tabTh, tabPhi, wl, NLAM, tabPhotonsTot,nbPhotonsTot,D,nprofilesAtm,nprofilesOc)
         p.finish('traitement termine :' + afficheProgress(nbPhotonsTot, NBPHOTONS, options, nbPhotonsSorTot))
-  
-    def view(self, QU=False, field='up (TOA)'):
-        '''
-        visualization of a smartg result
 
-        Options:
-            QU: show Q and U also (default, False)
-        '''
-        from smartg_view import smartg_view
-
-        smartg_view(self.output, QU=QU, field=field)
+        return output
 
 
 def reptran_merge(files, ibands, output=None):
@@ -971,7 +960,7 @@ def InitSD(nprofilesAtm, nprofilesOc, NLAM,
 
         * Init : Class containing the initial parameters of the photon
             Attributes :
-                - x0,y0,z0 : carthesian coordinates of the photon at the initialization
+                - x0,y0,z0 : cartesian coordinates of the photon at the initialization
         -----------------------------------------------------------------------------------
         NB : When calling the class GPUStruct, it is important to consider the following elements:
              the structure in python has to be exactly the same as the structure in C ie:
