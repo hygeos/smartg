@@ -74,7 +74,7 @@ class Smartg(object):
            atm=None, surf=None, water=None, env=None,
            NBPHOTONS=1e8, DEPO=0.0279, THVDEG=0., SEED=-1,
            NBTHETA=45, NBPHI=45,
-           NFAER=1000000, NFOCE=10000000, WRITE_PERIOD=-1,
+           NFAER=1000000, NFOCE=1000000, WRITE_PERIOD=-1,
            OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
            NBLOOP=5000):
         #
