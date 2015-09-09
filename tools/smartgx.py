@@ -32,6 +32,39 @@ from luts import merge, read_lut_hdf, read_mlut_hdf, LUT, MLUT
 dir_install = dirname(dirname(realpath(__file__)))
 dir_kernel = join(dir_install, 'src/')
 
+
+def smartg_thr(*args, **kwargs):
+    '''
+    A wrapper around smartg running it in a thread
+    This prevents blocking the context in an interactive environment
+
+    Args and returns: identical as smartg
+    '''
+    from multiprocessing import Process, Queue
+    q = Queue()
+    p = Process(target=_smartg_thread, args=(q, args, kwargs))
+    p.start()
+    print 'started thread', p.pid
+    res = q.get()
+    if isinstance(res, Exception):
+        raise res
+    return res
+
+
+def _smartg_thread(q, args, kwargs):
+    '''
+    the thread function calling smartg
+    (called by smartg_thr)
+    '''
+    try:
+        m = smartg(*args, **kwargs)
+        q.put(m)
+    except Exception as ex:
+        # in case of exception, put the exception in the queue instead of the
+        # result
+        q.put(ex)
+
+
 def smartg(wl, pp=True,
            iband=None, atm=None, surf=None, water=None, env=None,
            NBPHOTONS=1e9, DEPO=0.0279, THVDEG=0., SEED=-1,
