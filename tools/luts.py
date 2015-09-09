@@ -860,18 +860,22 @@ class MLUT(CMN_MLUT_LUT):
     def set_attrs(self, attributes):
         self.attrs.update(attributes)
 
-    def print_info(self):
-        print 'Datasets:'
-        for name, dataset, axes in self.data:
+    def print_info(self, show_range=True):
+        print str(self)
+        print ' Datasets:'
+        for i, (name, dataset, axes) in enumerate(self.data):
             if axes is None:
                 axdesc = ''
             else:
-                axdesc = ' = '+ str(tuple(axes))
-            rng = 'between {} and {}'.format(np.amin(dataset), np.amax(dataset))
-            print ' * {} ({} {}), shape {}'.format(name, dataset.dtype, rng, dataset.shape) + axdesc
-        print 'Axes:'
-        for (name, values) in self.axes.items():
-            print ' * {}: {} values between {} and {}'.format(name, len(values), values[0], values[-1])
+                axdesc = ', axes='+ str(tuple(axes))
+            if show_range:
+                rng = ' between {:.3g} and {:.3g}'.format(np.amin(dataset), np.amax(dataset))
+            else:
+                rng = ''
+            print '  [{}] {} ({}{})'.format(i, name, dataset.dtype, rng, dataset.shape) + axdesc
+        print ' Axes:'
+        for i, (name, values) in enumerate(self.axes.items()):
+            print '  [{}] {}: {} values between {} and {}'.format(i, name, len(values), values[0], values[-1])
 
     def promote_attr(self, name):
         '''
