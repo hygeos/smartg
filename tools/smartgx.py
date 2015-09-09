@@ -84,6 +84,13 @@ def smartg(wl, pp=True,
         # warning! still hardcoded in device.cu (FIXME)
         NPSTK = 4
 
+        # indexing of the output levels
+        UPTOA = 0
+        DOWN0P = 1
+        DOWN0M = 2
+        UP0P = 3
+        UP0M = 4
+
         assert isinstance(wl, (float, list, np.ndarray))
         assert (iband is None) or isinstance(iband, REPTRAN_IBAND)
 
@@ -386,7 +393,6 @@ def creerMLUTsResultats(tabFinal, NBPHI, NBTHETA, tabTh, tabPhi, wl, NLAM, tabPh
     label = ['I_up (TOA)', 'Q_up (TOA)', 'U_up (TOA)','N_up (TOA)']
 
     # ecriture des données de sorties
-    # TODO: use variables DOWN0P, DOWN0M, etc..
     for i in xrange(0, 4):
         if NLAM == 1:
             a = tabFinal[i*NBPHI*NBTHETA*NLAM:(i+1)*NBPHI*NBTHETA*NLAM]
@@ -401,22 +407,22 @@ def creerMLUTsResultats(tabFinal, NBPHI, NBTHETA, tabTh, tabPhi, wl, NLAM, tabPh
         label = ['I_down (0+)', 'Q_down (0+)', 'U_down (0+)','N_down (0+)']
         for i in xrange(0, 4):
             if NLAM == 1:
-                a = tabFinal[(4+i)*NBPHI*NBTHETA*NLAM:(4+i+1)*NBPHI*NBTHETA*NLAM]
+                a = tabFinal[(DOWN0P*4+i)*NBPHI*NBTHETA*NLAM:(DOWN0P*4+i+1)*NBPHI*NBTHETA*NLAM]
                 a.resize(NBPHI, NBTHETA)
                 m.add_dataset(label[i], a, axnames)
             else:
-                a = tabFinal[(4+i)*NBPHI*NBTHETA*NLAM:((4+i+1))*NBPHI*NBTHETA*NLAM]
+                a = tabFinal[(DOWN0P+i)*NBPHI*NBTHETA*NLAM:((DOWN0P+i+1))*NBPHI*NBTHETA*NLAM]
                 a.resize(NLAM, NBPHI, NBTHETA)
                 m.add_dataset(label[i], a, axnames)
 
         label = ['I_up (0-)', 'Q_up (0-)', 'U_up (0-)','N_up (0-)']
         for i in xrange(0, 4):
             if NLAM == 1:
-                a = tabFinal[(4*4+i)*NBPHI*NBTHETA*NLAM:(4*4+i+1)*NBPHI*NBTHETA*NLAM]
+                a = tabFinal[(UP0M*4+i)*NBPHI*NBTHETA*NLAM:(UP0M*4+i+1)*NBPHI*NBTHETA*NLAM]
                 a.resize(NBPHI, NBTHETA)
                 m.add_dataset(label[i], a, axnames)
             else:
-                a = tabFinal[(4*4+i)*NBPHI*NBTHETA*NLAM:(4*4+i+1)*NBPHI*NBTHETA*NLAM]
+                a = tabFinal[(UP0M*4+i)*NBPHI*NBTHETA*NLAM:(UP0M*4+i+1)*NBPHI*NBTHETA*NLAM]
                 a.resize(NLAM, NBPHI, NBTHETA)
                 m.add_dataset(label[i], a, axnames)
 
@@ -424,22 +430,22 @@ def creerMLUTsResultats(tabFinal, NBPHI, NBTHETA, tabTh, tabPhi, wl, NLAM, tabPh
         label = ['I_down (0-)', 'Q_down (0-)', 'U_down (0-)','N_down (0-)']
         for i in xrange(0, 4):
             if NLAM == 1:
-                a = tabFinal[(2*4+i)*NBPHI*NBTHETA*NLAM:(2*4+i+1)*NBPHI*NBTHETA*NLAM]
+                a = tabFinal[(DOWN0M*4+i)*NBPHI*NBTHETA*NLAM:(DOWN0M*4+i+1)*NBPHI*NBTHETA*NLAM]
                 a.resize(NBPHI, NBTHETA)
                 m.add_dataset(label[i], a, axnames)
             else:
-                a = tabFinal[(2*4+i)*NBPHI*NBTHETA*NLAM:((2*4+i+1))*NBPHI*NBTHETA*NLAM]
+                a = tabFinal[(DOWN0M*4+i)*NBPHI*NBTHETA*NLAM:((DOWN0M*4+i+1))*NBPHI*NBTHETA*NLAM]
                 a.resize(NLAM, NBPHI, NBTHETA)
                 m.add_dataset(label[i], a, axnames)
 
         label = ['I_up (0+)', 'Q_up (0+)', 'U_up (0+)','N_up (0+)']
         for i in xrange(0, 4):
             if NLAM == 1:
-                a = tabFinal[(3*4+i)*NBPHI*NBTHETA*NLAM:(3*4+i+1)*NBPHI*NBTHETA*NLAM]
+                a = tabFinal[(UP0P*4+i)*NBPHI*NBTHETA*NLAM:(UP0P*4+i+1)*NBPHI*NBTHETA*NLAM]
                 a.resize(NBPHI, NBTHETA)
                 m.add_dataset(label[i], a, axnames)
             else:
-                a = tabFinal[(3*4+i)*NBPHI*NBTHETA*NLAM:(3*4+i+1)*NBPHI*NBTHETA*NLAM]
+                a = tabFinal[(UP0P*4+i)*NBPHI*NBTHETA*NLAM:(UP0P*4+i+1)*NBPHI*NBTHETA*NLAM]
                 a.resize(NLAM, NBPHI, NBTHETA)
                 m.add_dataset(label[i], a, axnames)
 
