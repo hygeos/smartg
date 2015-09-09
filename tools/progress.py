@@ -13,39 +13,68 @@ A progress bar working both in console and notebook
 '''
 
 class Progress():
-    def __init__(self, max):
+    def __init__(self, max, opt):
+        '''
+        Initialize the progress bar object
+        max: maximum value of the progress bar
+        opt: whether to show a progress bar (True/False)
+             or a Queue object to store the progress as (max_value), then (current_value, message)
+        '''
         self.max = max
-        if ipython_available:
+
+        # determine mode:
+        #    - 'queue': store progress in the queue
+        #    - 'off': no progress bar (opt == False)
+        #    - 'notebook': ipython notebook mode (opt == True)
+        #    - 'console': console mode (opt == True)
+
+        if not isinstance(opt, bool):
+            self.mode = 'queue'
+            self.queue = opt
+        elif not opt:
+            self.mode = 'off'
+        elif ipython_available:
             try:
                 self.pbar = FloatProgress(min=0, max=max)
-                self.notebook_mode = True
+                self.mode = 'notebook'
             except RuntimeError:
-                self.notebook_mode = False
-        else: self.notebook_mode = False
+                self.mode = 'console'
+        else: self.mode = 'console'
 
-        if self.notebook_mode:
+        if self.mode == 'notebook':
             display(self.pbar)
-        else:
+        elif self.mode == 'console':
             self.custom = Custom()
             self.pbar = ProgressBar(widgets=[self.custom, ' ', Percentage(), Bar(), ETA()], maxval=max).start()
+        elif self.mode == 'queue':
+            self.queue.put(max)
+        # else, no nothing (off)
 
-    def update(self, value, text=''):
+    def update(self, value, message=''):
 
         value = min(value, self.max)  # don't exceed max
 
-        if self.notebook_mode:
+        if self.mode == 'notebook':
             self.pbar.value = value
-            self.pbar.description = text
-        else:
+            self.pbar.description = message
+        elif self.mode == 'console':
             self.pbar.update(value)
-            self.custom.set(text)
+            self.custom.set(message)
+        elif self.mode == 'queue':
+            self.queue.put((value, message))
+        # else, no nothing (off)
 
     def finish(self, message=''):
-        if self.notebook_mode:
+        if self.mode == 'notebook':
             self.pbar.description=message
-        else:
+        elif self.mode == 'console':
             self.custom.set(message)
             self.pbar.finish()
+        elif self.mode == 'queue':
+            self.queue.put(message)
+        # else, no nothing (off)
+
+
 
 
 class Custom(Widget):

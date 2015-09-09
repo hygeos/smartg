@@ -41,17 +41,43 @@ def smartg_thr(*args, **kwargs):
     Args and returns: identical as smartg
     '''
     from multiprocessing import Process, Queue
-    q = Queue()
-    p = Process(target=_smartg_thread, args=(q, args, kwargs))
+    q = Queue()  # queue to store the result
+    qpro = Queue()  # queue to store the progress
+
+    if ('progress' not in kwargs):
+        kwargs['progress'] = True  # default value
+    if kwargs['progress']:
+        kwargs['progress'] = qpro
+
+    p = Process(target=_smartg_thread, args=(q, qpro, args, kwargs))
     p.start()
-    print 'started thread', p.pid
+    print 'Started thread', p.pid
+    pro = None
+
+    while q.empty():
+        if qpro.empty():
+            time.sleep(0.1)
+        else:
+            if pro is None:
+                pro = Progress(qpro.get(), True)
+            else:
+                ret = qpro.get()
+                if isinstance(ret, tuple):
+                    pro.update(ret[0], ret[1])
+
     res = q.get()
     if isinstance(res, Exception):
         raise res
+
+    while not qpro.empty():
+        ret = qpro.get()
+        if isinstance(ret, str):
+            pro.finish(ret)
+
     return res
 
 
-def _smartg_thread(q, args, kwargs):
+def _smartg_thread(q, qpro, args, kwargs):
     '''
     the thread function calling smartg
     (called by smartg_thr)
@@ -71,7 +97,7 @@ def smartg(wl, pp=True,
            NBTHETA=45, NBPHI=45,
            NFAER=1000000, NFOCE=1000000,
            OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
-           NBLOOP=None):
+           NBLOOP=None, progress=True):
         '''
         Run a SMART-G simulation
 
@@ -94,9 +120,11 @@ def smartg(wl, pp=True,
                 default None (no ocean)
             - env: environment effect parameters (dictionary)
                 default None (no environment effect)
+            - progress: whether to show a progress bar (True/False)
+                     or a Queue object to store the progress as (max_value), then (current_value, message), finally 'message'
 
         Attributes:
-            - output: the name of the result file
+            - result data (MLUT object)
         '''
         import pycuda.autoinit
         from pycuda.compiler import SourceModule
@@ -287,10 +315,14 @@ def smartg(wl, pp=True,
                        NFOCE, NBTHETA, NBPHI, OUTPUT_LAYERS)
 
 
+        # Initialize the progress bar
+        p = Progress(NBPHOTONS, progress)
+
+
         # Loop and kernel call
-        nbPhotonsTot, nbPhotonsTotInter , nbPhotonsTotInter, nbPhotonsSorTot, tabPhotonsTot, p = loop_kernel(NBPHOTONS, Tableau, Var, Init,
+        nbPhotonsTot, nbPhotonsTotInter , nbPhotonsTotInter, nbPhotonsSorTot, tabPhotonsTot = loop_kernel(NBPHOTONS, Tableau, Var, Init,
                                                                                                           NLVL, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
-                                                                                                          NLAM, options, kern)
+                                                                                                          NLAM, options, kern, p)
         # compute the final result
         tabFinalEvent = np.zeros(NLVL*NPSTK*NBTHETA*NBPHI*NLAM, dtype=np.float64)
         tabTh = np.zeros(NBTHETA, dtype=np.float64)
@@ -308,7 +340,7 @@ def smartg(wl, pp=True,
         output = creerMLUTsResultats(tabFinalEvent, NBPHI, NBTHETA, tabTh, tabPhi,
                                      wl, NLAM, tabPhotonsTot,nbPhotonsTot, OUTPUT_LAYERS,
                                      nprofilesAtm, nprofilesOc, UPTOA, DOWN0P, DOWN0M, UP0P, UP0M)
-        p.finish('Done! (used {}) | '.format(pycuda.autoinit.device.name()) + afficheProgress(nbPhotonsTot, NBPHOTONS, options, nbPhotonsSorTot))
+        p.finish('Done! (used {}) | '.format(pycuda.autoinit.device.name()) + afficheProgress(nbPhotonsTot, NBPHOTONS, nbPhotonsSorTot))
 
         return output
 
@@ -642,7 +674,7 @@ def calculTabFinal(tabFinal, tabTh, tabPhi, tabPhotonsTot, nbPhotonsTot, nbPhoto
                 tabFinal[3 * NBTHETA * NBPHI * NLAM + i * NBTHETA * NBPHI + iphi * NBTHETA + ith] = (tabPhotonsTot[3 * NBPHI * NBTHETA * NLAM + i * NBTHETA * NBPHI + ith * NBPHI + iphi])
 
 
-def afficheProgress(nbPhotonsTot, NBPHOTONS, options, nbPhotonsSorTot):
+def afficheProgress(nbPhotonsTot, NBPHOTONS, nbPhotonsSorTot):
     """
     function showing the progression of the radiative transfert simulation
 
@@ -661,10 +693,8 @@ def afficheProgress(nbPhotonsTot, NBPHOTONS, options, nbPhotonsSorTot):
     pourcent = (100 * nbPhotonsTot / NBPHOTONS);
     # Affichage
     chaine = ''
-    chaine += 'Launched %.2e photons (%3d%%) ' % (nbPhotonsTot, pourcent)
-
-    if '-DPROGRESSION' in options:
-        chaine += ' - received %.2e ' % (nbPhotonsSorTot);
+    chaine += 'Launched %.2e photons (%3d%%)' % (nbPhotonsTot, pourcent)
+    chaine += ' - received %.2e ' % (nbPhotonsSorTot);
 
     return chaine
 
@@ -740,13 +770,13 @@ def test_rayleigh():
     '''
     Basic Rayleigh example
     '''
-    return smartg(wl=400., NBPHOTONS=1e9, atm=Profile('afglt'))
+    return smartg_thr(wl=400., NBPHOTONS=1e9, atm=Profile('afglt'))
 
 def test_kokhanovsky():
     '''
     Just Rayleigh : kokhanovsky test case
     '''
-    return smartg(wl=500., DEPO=0., NBPHOTONS=1e9,
+    smartg(wl=500., DEPO=0., NBPHOTONS=1e9,
             atm=Profile('afglt', grid='100[75]25[5]10[1]0'))
 
 def test_rayleigh_aerosols():
@@ -756,7 +786,7 @@ def test_rayleigh_aerosols():
     aer = AeroOPAC('maritime_clean', 0.4, 550.)
     pro = Profile('afglms', aer=aer)
 
-    return smartg(wl=490., atm=pro, NBPHOTONS=1e9)
+    smartg(wl=490., atm=pro, NBPHOTONS=1e9)
 
 def test_atm_surf():
     # lambertian surface of albedo 10%
@@ -1137,7 +1167,7 @@ def get_profOc(wl, water, NLAM):
 
 def loop_kernel(NBPHOTONS, Tableau, Var, Init, NLVL,
                 NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
-                NLAM, options , kern):
+                NLAM, options , kern, p):
     """
     launch the kernel several time until the targeted number of photons injected is reached
 
@@ -1154,13 +1184,13 @@ def loop_kernel(NBPHOTONS, Tableau, Var, Init, NLVL,
         - NLAM : Number of wavelet length
         - options : compilation options
         - kern : kernel launching the transfert radiative simulation
+        - p: progress bar object
     --------------------------------------------------------------
     Returns :
         - nbPhotonsTot : Total number of photons processed
         - nbPhotonsTotInter : Total number of photons processed by interval
         - nbPhotonsSorTot : Total number of outgoing photons
         - tabPhotonsTot : Total weight of all outgoing photons
-        - p : progression bar
 
     """
 
@@ -1169,9 +1199,6 @@ def loop_kernel(NBPHOTONS, Tableau, Var, Init, NLVL,
     nbPhotonsTotInter = np.zeros(NLAM, dtype=np.uint64)
     nbPhotonsSorTot = 0
     tabPhotonsTot = np.zeros(NLVL*NPSTK*NBTHETA * NBPHI * NLAM, dtype=np.float32)
-
-    # Initialize the progress bar
-    p = Progress(NBPHOTONS)
 
     # skip List used to avoid transfering arrays already sent into the device
     skipTableau = ['faer', 'foce', 'ho', 'sso', 'ipo', 'h', 'pMol', 'ssa', 'abs', 'ip', 'alb', 'lambda', 'z']
@@ -1207,9 +1234,9 @@ def loop_kernel(NBPHOTONS, Tableau, Var, Init, NLVL,
             nbPhotonsSorTot += Var.nbPhotonsSor;
 
         # update of the progression Bar
-        p.update(nbPhotonsTot, afficheProgress(nbPhotonsTot, NBPHOTONS, options, nbPhotonsSorTot))
+        p.update(nbPhotonsTot, afficheProgress(nbPhotonsTot, NBPHOTONS, nbPhotonsSorTot))
 
-    return nbPhotonsTot, nbPhotonsTotInter , nbPhotonsTotInter, nbPhotonsSorTot, tabPhotonsTot, p
+    return nbPhotonsTot, nbPhotonsTotInter , nbPhotonsTotInter, nbPhotonsSorTot, tabPhotonsTot
 
 
 def impactInit(HATM, NATM, NLAM, ALT, H, THVDEG, options):
@@ -1290,12 +1317,12 @@ def impactInit(HATM, NATM, NLAM, ALT, H, THVDEG, options):
 if __name__ == '__main__':
 
     test_rayleigh()
-    test_kokhanovsky()
-    test_rayleigh_aerosols()
-    test_atm_surf()
-    test_atm_surf_ocean()
-    test_surf_ocean()
-    test_ocean()
+    # test_kokhanovsky()
+    # test_rayleigh_aerosols()
+    # test_atm_surf()
+    # test_atm_surf_ocean()
+    # test_surf_ocean()
+    # test_ocean()
     # test_reptran()
-    test_ozone_lut()
-    test_multispectral()
+    # test_ozone_lut()
+    # test_multispectral()
