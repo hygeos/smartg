@@ -11,7 +11,7 @@ from matplotlib.transforms import Affine2D
 from mpl_toolkits.axisartist import floating_axes
 from matplotlib.projections import PolarAxes
 from mpl_toolkits.axisartist.grid_finder import FixedLocator, DictFormatter
-from luts import Idx
+from luts import Idx, semi_polar
 
 
 
