@@ -174,49 +174,34 @@ def smartg(wl, pp=True,
         else:
             raise Exception('Error in SIM')
 
-        D.update(SIM=np.array([SIM], dtype=np.int32))
-
         #
         # atmosphere
         # get the phase function and the atmospheric profile
 
-        nprofilesAtm, phasesAtm, NATM, HATM = get_profAtm(wl,atm,D)
+        nprofilesAtm, phasesAtm, NATM, HATM = get_profAtm(wl,atm)
         #
         # surface
         #
         if surf is None:
             # default surface parameters
             surf = FlatSurface()
-            Ddef.update(surf.dict)
-        else:
-            D.update(surf.dict)
 
         #
         # ocean profile
         # get the phase function and oceanic profile
-        nprofilesOc, phasesOc, NOCE = get_profOc(wl, water, D, NLAM)
+        nprofilesOc, phasesOc, NOCE = get_profOc(wl, water, NLAM)
         #
         # environment effect
         #
         if env is None:
             # default values (no environment effect)
             env = Environment()
-            Ddef.update(env.dict)
-        else:
-            D.update(env.dict)
-
-        #
-        # update the dictionary with the default parameters
-        #
-        for k, v in Ddef.items():
-            if not k in D:
-                D.update({k: v})
 
         #
         # write the albedo file
         #
-        if 'SURFALB' in D:
-            surf_alb = D['SURFALB']
+        if 'SURFALB' in surf.dict:
+            surf_alb = surf.dict['SURFALB']
         else:
             surf_alb = -999.
         if water is None:
@@ -296,7 +281,11 @@ def smartg(wl, pp=True,
                                 XBLOCK, XGRID, SEED, options)
 
         # initialization of the constants
-        InitConstantes(D, surf, env, NATM, NOCE, HATM, mod)
+        InitConstantes(surf, env, NATM, NOCE, mod,
+                       NBPHOTONS, NBLOOP, THVDEG, DEPO,
+                       XBLOCK, XGRID, NLAM, SIM, NFAER,
+                       NFOCE, NBTHETA, NBPHI, OUTPUT_LAYERS)
+
 
         # Loop and kernel call
         nbPhotonsTot, nbPhotonsTotInter , nbPhotonsTotInter, nbPhotonsSorTot, tabPhotonsTot, p = loop_kernel(NBPHOTONS, Tableau, Var, Init,
@@ -316,7 +305,9 @@ def smartg(wl, pp=True,
                            nbPhotonsTot, nbPhotonsTotInter, NBTHETA, NBPHI, NLAM)
 
         # stockage des resultats dans une MLUT
-        output = creerMLUTsResultats(tabFinalEvent, NBPHI, NBTHETA, tabTh, tabPhi, wl, NLAM, tabPhotonsTot,nbPhotonsTot,D,nprofilesAtm,nprofilesOc, UPTOA, DOWN0P, DOWN0M, UP0P, UP0M)
+        output = creerMLUTsResultats(tabFinalEvent, NBPHI, NBTHETA, tabTh, tabPhi,
+                                     wl, NLAM, tabPhotonsTot,nbPhotonsTot, OUTPUT_LAYERS,
+                                     nprofilesAtm, nprofilesOc, UPTOA, DOWN0P, DOWN0M, UP0P, UP0M)
         p.finish('Done! (used {}) | '.format(pycuda.autoinit.device.name()) + afficheProgress(nbPhotonsTot, NBPHOTONS, options, nbPhotonsSorTot))
 
         return output
@@ -397,7 +388,10 @@ def reptran_merge(files, ibands, output=None):
 
     return output
 
-def creerMLUTsResultats(tabFinal, NBPHI, NBTHETA, tabTh, tabPhi, wl, NLAM, tabPhotonsTot,nbPhotonsTot,D,nprofilesAtm,nprofilesOc,UPTOA, DOWN0P, DOWN0M, UP0P, UP0M):
+def creerMLUTsResultats(tabFinal, NBPHI, NBTHETA, tabTh, tabPhi,
+                        wl, NLAM, tabPhotonsTot,nbPhotonsTot,OUTPUT_LAYERS,
+                        nprofilesAtm,nprofilesOc,UPTOA, DOWN0P, DOWN0M, UP0P, UP0M):
+
     """
     store the result in a MLUT
     Arguments :
@@ -433,14 +427,14 @@ def creerMLUTsResultats(tabFinal, NBPHI, NBTHETA, tabTh, tabPhi, wl, NLAM, tabPh
     # ecriture des données de sorties
     addLuts(m, label, NLAM, tabFinal, NBPHI, NBTHETA, axnames, UPTOA)
 
-    if D['OUTPUT_LAYERS'][0] & 1:
+    if OUTPUT_LAYERS & 1:
         label = ['I_down (0+)', 'Q_down (0+)', 'U_down (0+)','N_down (0+)']
         addLuts(m, label, NLAM, tabFinal, NBPHI, NBTHETA, axnames, DOWN0P)
 
         label = ['I_up (0-)', 'Q_up (0-)', 'U_up (0-)','N_up (0-)']
         addLuts(m, label, NLAM, tabFinal, NBPHI, NBTHETA, axnames, UP0M)
 
-    if D['OUTPUT_LAYERS'][0] & 2:
+    if OUTPUT_LAYERS & 2:
         label = ['I_down (0-)', 'Q_down (0-)', 'U_down (0-)','N_down (0-)']
         addLuts(m, label, NLAM, tabFinal, NBPHI, NBTHETA, axnames, DOWN0M)
 
@@ -693,7 +687,7 @@ def calculF(phases, N):
 
     NB : le programme smartg.py écrit les fonctions de phases dans des fichiers et convertit les angles en degrees si ces derniers sont en radians
     Ici la fonction calculF recupere les angles et verifie si ces derniers sont en degres et les convertit en radians
-
+    TODO : Améliorer cette fonction car elle impacte temps d'executions lorsque le nombre NFAER ou NFOCE augmente
     """
     nmax, n, imax=0, 0, 0
     phases_list = []
@@ -850,7 +844,10 @@ def test_multispectral():
              water=IOP_SPM(1.))
 
 
-def InitConstantes(D,surf,env,NATM,NOCE,HATM,mod):
+def InitConstantes(surf, env, NATM, NOCE, mod,
+                   NBPHOTONS, NBLOOP, THVDEG, DEPO,
+                   XBLOCK, XGRID,NLAM, SIM, NFAER,
+                   NFOCE, NBTHETA, NBPHI, OUTPUT_LAYERS) :
 
     """
     Initialize the constants in python and send them to the device memory
@@ -868,12 +865,13 @@ def InitConstantes(D,surf,env,NATM,NOCE,HATM,mod):
     """
 
     import pycuda.driver as cuda
+    D = {}
 
-    D['NBPHOTONS'] = np.array([D['NBPHOTONS']], dtype=np.int_)
-    THV = D['THVDEG']*np.pi/180.
-    STHV = np.array([np.sin(THV)], dtype=np.float32)
-    CTHV = np.array([np.cos(THV)], dtype=np.float32)
-    GAMAbis = D['DEPO'] / (2-D['DEPO'])
+    # compute some needed constants
+    THV = THVDEG * np.pi/180.
+    STHV = np.sin(THV)
+    CTHV = np.cos(THV)
+    GAMAbis = DEPO / (2- DEPO)
     DELTAbis = (1.0 - GAMAbis) / (1.0 + 2.0 *GAMAbis)
     DELTA_PRIMbis = GAMAbis / (1.0 + 2.0*GAMAbis)
     BETAbis  = 3./2. * DELTA_PRIMbis
@@ -881,42 +879,50 @@ def InitConstantes(D,surf,env,NATM,NOCE,HATM,mod):
     Abis = 1. + BETAbis / (3.0 * ALPHAbis)
     ACUBEbis = Abis * Abis* Abis
 
-    if surf != None:
-        D['SUR'] = np.array(D['SUR'], dtype=np.int32)
-        D['DIOPTRE'] = np.array(D['DIOPTRE'], dtype=np.int32)
-        D['WINDSPEED'] = np.array(D['WINDSPEED'], dtype=np.float32)
-        D['NH2O'] = np.array(D['NH2O'], dtype=np.float32)
-    if env != None:
-        D['ENV'] = np.array(D['ENV'], dtype=np.int32)
-        D['ENV_SIZE'] = np.array(D['ENV_SIZE'], dtype=np.float32)
-        D['X0'] = np.array(D['X0'], dtype=np.float32)
-        D['Y0'] = np.array(D['Y0'], dtype=np.float32)
-    # dictionary update
-
-    D.update(NATM=np.array([NATM], dtype=np.int32))
+    # converting the constants into arrays + dictionary update
+    D.update(NBPHOTONS=np.array([NBPHOTONS], dtype=np.uint64))
+    D.update(NBLOOP=np.array([NBLOOP], dtype=np.uint32))
+    D.update(THVDEG=np.array([THVDEG], dtype=np.float32))
+    D.update(DEPO=np.array([DEPO], dtype=np.float32))
     D.update(NOCE=np.array([NOCE], dtype=np.int32))
-    D.update(HATM=np.array([HATM], dtype=np.float32))
-    D.update(THV=THV)
-    D.update(STHV=STHV)
-    D.update(CTHV=CTHV)
-    D.update(GAMA=GAMAbis)
-    D.update(DELTA=DELTAbis)
-    D.update(DELTA_PRIM=DELTA_PRIMbis)
-    D.update(BETA=BETAbis)
-    D.update(ALPHA=ALPHAbis)
-    D.update(A=Abis)
-    D.update(ACUBE=ACUBEbis)
+    D.update(OUTPUT_LAYERS=np.array([OUTPUT_LAYERS], dtype=np.uint32))
+    D.update(NFAER=np.array([NFAER], dtype=np.uint32))
+    D.update(NFOCE=np.array([NFOCE], dtype=np.uint32))
+    D.update(NATM=np.array([NATM], dtype=np.int32))
+    D.update(XBLOCK=np.array([XBLOCK], dtype=np.int32))
+    D.update(YBLOCK=np.array([1], dtype=np.int32))
+    D.update(XGRID=np.array([XGRID], dtype=np.int32))
+    D.update(YGRID=np.array([1], dtype=np.int32))
+    D.update(NBTHETA=np.array([NBTHETA], dtype=np.int32))
+    D.update(NBPHI=np.array([NBPHI], dtype=np.int32))
+    D.update(NLAM=np.array([NLAM], dtype=np.int32))
+    D.update(SIM=np.array([SIM], dtype=np.int32))
+    if surf != None:
+        D.update(SUR=np.array(surf.dict['SUR'], dtype=np.int32))
+        D.update(DIOPTRE=np.array(surf.dict['DIOPTRE'], dtype=np.int32))
+        D.update(WINDSPEED=np.array(surf.dict['WINDSPEED'], dtype=np.float32))
+        D.update(NH2O=np.array(surf.dict['NH2O'], dtype=np.float32))
+    if env != None:
+        D.update(ENV=np.array(env.dict['ENV'], dtype=np.int32))
+        D.update(ENV_SIZE=np.array(env.dict['ENV_SIZE'], dtype=np.float32))
+        D.update(X0=np.array(env.dict['X0'], dtype=np.float32))
+        D.update(Y0=np.array(env.dict['Y0'], dtype=np.float32))
+    D.update(THV=np.array([THV], dtype=np.float32))
+    D.update(STHV=np.array([STHV], dtype=np.float32))
+    D.update(CTHV=np.array([CTHV], dtype=np.float32))
+    D.update(GAMA=np.array([GAMAbis], dtype=np.float32))
+    D.update(DELTA=np.array([DELTAbis], dtype=np.float32))
+    D.update(DELTA_PRIM=np.array([DELTA_PRIMbis], dtype=np.float32))
+    D.update(BETA=np.array([BETAbis], dtype=np.float32))
+    D.update(ALPHA=np.array([ALPHAbis], dtype=np.float32))
+    D.update(A=np.array([Abis], dtype=np.float32))
+    D.update(ACUBE=np.array([ACUBEbis], dtype=np.float32))
 
     # copy the constants into the device memory
-    for key in ('NBPHOTONS', 'NBLOOP', 'THVDEG', 'DEPO', 'WINDSPEED',
-                   'THV', 'GAMA', 'XBLOCK', 'YBLOCK', 'XGRID', 'YGRID',
-                   'STHV', 'CTHV', 'NLAM', 'NOCE', 'SIM', 'NATM', 'BETA',
-                   'ALPHA', 'ACUBE', 'A', 'DELTA', 'NFAER',
-                   'NBTHETA', 'NBPHI', 'OUTPUT_LAYERS',
-                   'SUR', 'DIOPTRE', 'ENV', 'ENV_SIZE',
-                   'NH2O', 'X0', 'Y0', 'DELTA_PRIM', 'NFOCE', 'NFAER'):
+    for key in D.keys():
         a,_ = mod.get_global('%sd'%key)
         cuda.memcpy_htod(a, D[key])
+
 
 def InitSD(nprofilesAtm, nprofilesOc, NLAM,
            NLVL, NPSTK, NBTHETA, NBPHI, faer,
@@ -1040,7 +1046,7 @@ def InitSD(nprofilesAtm, nprofilesOc, NLAM,
     return Tableau,Var,Init
 
 
-def get_profAtm(wl, atm, D):
+def get_profAtm(wl, atm):
 
     """
     get the atmospheric profile, the altitude of the top of Atmosphere, the number of layers of the atmosphere
@@ -1072,7 +1078,6 @@ def get_profAtm(wl, atm, D):
             nprofilesAtm[key] = []
             for profile in profilesAtm:
                 nprofilesAtm[key] = np.append(nprofilesAtm[key], profile[key])
-        D.update(LAMBDA=wl)
         NATM = len(profilesAtm[0])-1
         HATM = nprofilesAtm['ALT'][0]
     else:
@@ -1089,7 +1094,7 @@ def get_profAtm(wl, atm, D):
 
     return nprofilesAtm, phasesAtm, NATM, HATM
 
-def get_profOc(wl, water, D, NLAM):
+def get_profOc(wl, water, NLAM):
 
     """
     get the oceanic profile, the altitude of the top of Atmosphere, the number of layers of the atmosphere
@@ -1116,7 +1121,6 @@ def get_profOc(wl, water, D, NLAM):
     else:
         if isinstance(wl, (float, int, REPTRAN_IBAND)):
             wl = [wl]
-        D.update(LAMBDA=wl)
         profilesOc, phasesOc = water.calc_bands(wl)
         for ilam in xrange(0, NLAM):
             nprofilesOc['HO'][ilam*2] = 0
