@@ -283,7 +283,7 @@ def smartg(wl, pp=True,
                            nbPhotonsTot, nbPhotonsTotInter, NBTHETA, NBPHI, NLAM)
 
         # stockage des resultats dans une MLUT
-        output = creerMLUTsResultats(tabFinalEvent, NBPHI, NBTHETA, tabTh, tabPhi, wl, NLAM, tabPhotonsTot,nbPhotonsTot,D,nprofilesAtm,nprofilesOc)
+        output = creerMLUTsResultats(tabFinalEvent, NBPHI, NBTHETA, tabTh, tabPhi, wl, NLAM, tabPhotonsTot,nbPhotonsTot,D,nprofilesAtm,nprofilesOc, UPTOA, DOWN0P, DOWN0M, UP0P, UP0M)
         p.finish('Done! (used {}) | '.format(pycuda.autoinit.device.name()) + afficheProgress(nbPhotonsTot, NBPHOTONS, options, nbPhotonsSorTot))
 
         return output
@@ -364,7 +364,7 @@ def reptran_merge(files, ibands, output=None):
 
     return output
 
-def creerMLUTsResultats(tabFinal, NBPHI, NBTHETA, tabTh, tabPhi, wl, NLAM, tabPhotonsTot,nbPhotonsTot,D,nprofilesAtm,nprofilesOc):
+def creerMLUTsResultats(tabFinal, NBPHI, NBTHETA, tabTh, tabPhi, wl, NLAM, tabPhotonsTot,nbPhotonsTot,D,nprofilesAtm,nprofilesOc,UPTOA, DOWN0P, DOWN0M, UP0P, UP0M):
     """
     store the result in a MLUT
     Arguments :
@@ -379,6 +379,7 @@ def creerMLUTsResultats(tabFinal, NBPHI, NBTHETA, tabTh, tabPhi, wl, NLAM, tabPh
         - D : Dictionary containing all the parameters required to launch the simulation by the kernel
         - nprofilesAtm : List of atmospheric profiles set contiguously
         - nprofilesOc : List of oceanic profiles set contiguously
+        - UPTOA, DOWN0P, DOWN0M, UP0P, UP0M : indexing of the output levels
     Returns :
         - Res : MLUT corresponding to the final result
 
@@ -397,61 +398,21 @@ def creerMLUTsResultats(tabFinal, NBPHI, NBTHETA, tabTh, tabPhi, wl, NLAM, tabPh
     label = ['I_up (TOA)', 'Q_up (TOA)', 'U_up (TOA)','N_up (TOA)']
 
     # ecriture des données de sorties
-    for i in xrange(0, 4):
-        if NLAM == 1:
-            a = tabFinal[i*NBPHI*NBTHETA*NLAM:(i+1)*NBPHI*NBTHETA*NLAM]
-            a.resize(NBPHI, NBTHETA)
-            m.add_dataset(label[i], a, axnames)
-        else:
-            a = tabFinal[i*NBPHI*NBTHETA*NLAM:(i+1)*NBPHI*NBTHETA*NLAM]
-            a.resize(NLAM, NBPHI, NBTHETA)
-            m.add_dataset(label[i], a, axnames)
-   
+    addLuts(m, label, NLAM, tabFinal, NBPHI, NBTHETA, axnames, UPTOA)
+
     if D['OUTPUT_LAYERS'][0] & 1:
         label = ['I_down (0+)', 'Q_down (0+)', 'U_down (0+)','N_down (0+)']
-        for i in xrange(0, 4):
-            if NLAM == 1:
-                a = tabFinal[(DOWN0P*4+i)*NBPHI*NBTHETA*NLAM:(DOWN0P*4+i+1)*NBPHI*NBTHETA*NLAM]
-                a.resize(NBPHI, NBTHETA)
-                m.add_dataset(label[i], a, axnames)
-            else:
-                a = tabFinal[(DOWN0P+i)*NBPHI*NBTHETA*NLAM:((DOWN0P+i+1))*NBPHI*NBTHETA*NLAM]
-                a.resize(NLAM, NBPHI, NBTHETA)
-                m.add_dataset(label[i], a, axnames)
+        addLuts(m, label, NLAM, tabFinal, NBPHI, NBTHETA, axnames, DOWN0P)
 
         label = ['I_up (0-)', 'Q_up (0-)', 'U_up (0-)','N_up (0-)']
-        for i in xrange(0, 4):
-            if NLAM == 1:
-                a = tabFinal[(UP0M*4+i)*NBPHI*NBTHETA*NLAM:(UP0M*4+i+1)*NBPHI*NBTHETA*NLAM]
-                a.resize(NBPHI, NBTHETA)
-                m.add_dataset(label[i], a, axnames)
-            else:
-                a = tabFinal[(UP0M*4+i)*NBPHI*NBTHETA*NLAM:(UP0M*4+i+1)*NBPHI*NBTHETA*NLAM]
-                a.resize(NLAM, NBPHI, NBTHETA)
-                m.add_dataset(label[i], a, axnames)
+        addLuts(m, label, NLAM, tabFinal, NBPHI, NBTHETA, axnames, UP0M)
 
     if D['OUTPUT_LAYERS'][0] & 2:
         label = ['I_down (0-)', 'Q_down (0-)', 'U_down (0-)','N_down (0-)']
-        for i in xrange(0, 4):
-            if NLAM == 1:
-                a = tabFinal[(DOWN0M*4+i)*NBPHI*NBTHETA*NLAM:(DOWN0M*4+i+1)*NBPHI*NBTHETA*NLAM]
-                a.resize(NBPHI, NBTHETA)
-                m.add_dataset(label[i], a, axnames)
-            else:
-                a = tabFinal[(DOWN0M*4+i)*NBPHI*NBTHETA*NLAM:((DOWN0M*4+i+1))*NBPHI*NBTHETA*NLAM]
-                a.resize(NLAM, NBPHI, NBTHETA)
-                m.add_dataset(label[i], a, axnames)
+        addLuts(m, label, NLAM, tabFinal, NBPHI, NBTHETA, axnames, DOWN0M)
 
         label = ['I_up (0+)', 'Q_up (0+)', 'U_up (0+)','N_up (0+)']
-        for i in xrange(0, 4):
-            if NLAM == 1:
-                a = tabFinal[(UP0P*4+i)*NBPHI*NBTHETA*NLAM:(UP0P*4+i+1)*NBPHI*NBTHETA*NLAM]
-                a.resize(NBPHI, NBTHETA)
-                m.add_dataset(label[i], a, axnames)
-            else:
-                a = tabFinal[(UP0P*4+i)*NBPHI*NBTHETA*NLAM:(UP0P*4+i+1)*NBPHI*NBTHETA*NLAM]
-                a.resize(NLAM, NBPHI, NBTHETA)
-                m.add_dataset(label[i], a, axnames)
+        addLuts(m, label, NLAM, tabFinal, NBPHI, NBTHETA, axnames, UP0P)
 
     # ecriture des profiles Atmosphériques
     # (FIXME)
@@ -477,6 +438,29 @@ def creerMLUTsResultats(tabFinal, NBPHI, NBTHETA, tabTh, tabPhi, wl, NLAM, tabPh
     #    profOc = MLUT(luts)
 
     return m
+
+def addLuts(m, label, NLAM, tabFinal, NBPHI, NBTHETA, axnames, idx):
+    """
+    add a data set to a MLUT
+
+    Arguments :
+        - m : MLUT
+        - tabFinal : R, Q, U of all outgoing photons
+        - NBPHI : Number of intervals in azimuth angle
+        - NBTHETA : Number of intervals in azimuth angle
+        - axnames : Name of the axis
+        - idx : indexing of the output levels
+    """
+    for i in xrange(0, 4):
+        if NLAM == 1:
+            a = tabFinal[(idx*4+i)*NBPHI*NBTHETA*NLAM:(idx*4+i+1)*NBPHI*NBTHETA*NLAM]
+            a.resize(NBPHI, NBTHETA)
+            m.add_dataset(label[i], a, axnames)
+        else:
+            a = tabFinal[(idx*4+i)*NBPHI*NBTHETA*NLAM:(idx*4+i+1)*NBPHI*NBTHETA*NLAM]
+            a.resize(NLAM, NBPHI, NBTHETA)
+            m.add_dataset(label[i], a, axnames)
+
 
 def impactInit(HATM, NATM, NLAM, ALT, H, THVDEG, options):
     """
