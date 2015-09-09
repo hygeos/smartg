@@ -8,15 +8,12 @@ Speed-up Monte Carlo Advanced Radiative Transfer Code using GPU
 '''
 
 
-import pycuda.driver as cuda
-import pycuda.autoinit
-from pycuda.compiler import SourceModule
-
 
 import numpy as np
 from smartg import RoughSurface, LambSurface, FlatSurface, Environment
 from gpustruct import GPUStruct
 import time
+from datetime import datetime
 from numpy import pi
 from pyhdf.SD import SD, SDC
 from profile.profil import AeroOPAC, Profile, REPTRAN, REPTRAN_IBAND, CloudOPAC
@@ -68,6 +65,9 @@ def smartg(wl, pp=True,
         Attributes:
             - output: the name of the result file
         '''
+        import pycuda.autoinit
+        from pycuda.compiler import SourceModule
+
 
         #
         # initialization
@@ -91,6 +91,11 @@ def smartg(wl, pp=True,
         UP0P = 3
         UP0M = 4
 
+        if SEED == -1:
+            # SEED is based on clock
+            SEED = np.uint32((datetime.now()
+                - datetime.utcfromtimestamp(0)).total_seconds()*1000)
+
         assert isinstance(wl, (float, list, np.ndarray))
         assert (iband is None) or isinstance(iband, REPTRAN_IBAND)
 
@@ -103,7 +108,6 @@ def smartg(wl, pp=True,
                 'NBPHOTONS': str(int(NBPHOTONS)),
                 'THVDEG': np.array([THVDEG], dtype=np.float32),
                 'DEPO': np.array([DEPO], dtype=np.float32),
-                'SEED': SEED,
                 'NBTHETA': np.array([NBTHETA], dtype=np.int32),
                 'NBPHI': np.array([NBPHI], dtype=np.int32),
                 'NFAER': np.array([NFAER], dtype=np.uint32),
@@ -256,7 +260,7 @@ def smartg(wl, pp=True,
         Tableau, Var, Init = InitSD(nprofilesAtm, nprofilesOc, NLAM,
                                 NLVL, NPSTK, NBTHETA, NBPHI, faer, foce,
                                 albedo, wl, hph0, zph0, x0, y0, z0,
-                                XBLOCK, XGRID, options)
+                                XBLOCK, XGRID, SEED, options)
 
         # initialization of the constants
         InitConstantes(D, surf, env, NATM, NOCE, HATM, mod)
@@ -846,6 +850,7 @@ def InitConstantes(D,surf,env,NATM,NOCE,HATM,mod):
 
     """
 
+    import pycuda.driver as cuda
 
     D['NBPHOTONS'] = np.array([D['NBPHOTONS']], dtype=np.int_)
     THV = D['THVDEG']*np.pi/180.
@@ -899,7 +904,7 @@ def InitConstantes(D,surf,env,NATM,NOCE,HATM,mod):
 def InitSD(nprofilesAtm, nprofilesOc, NLAM,
            NLVL, NPSTK, NBTHETA, NBPHI, faer,
            foce, albedo, wl, hph0, zph0, x0, y0,
-           z0,XBLOCK, XGRID, options):
+           z0,XBLOCK, XGRID, SEED, options):
 
     """
     Initialize the principles data structures in python and send them the device memory
@@ -922,6 +927,7 @@ def InitSD(nprofilesAtm, nprofilesOc, NLAM,
         - (x0,y0,z0) : Initial coordinates of the photon
         - XBLOCK: Block Size
         - XGRID : Grid Size
+        - SEED: random number generator seed
         - options: compilation options
 
     -----------------------------------------------------------
@@ -998,7 +1004,7 @@ def InitSD(nprofilesAtm, nprofilesOc, NLAM,
     if '-DSPHERIQUE' in options:
         tmp += [(np.float32, '*hph0', hph0), (np.float32, '*zph0', zph0)]
     if '-DRANDPHILOX4x32_7' in options:
-        tmp += [(np.uint32, '*etat', np.zeros(XBLOCK*1*XGRID*1, dtype=np.uint32)), (np.uint32, 'config', 0)]
+        tmp += [(np.uint32, '*etat', np.zeros(XBLOCK*1*XGRID*1, dtype=np.uint32)), (np.uint32, 'config', SEED)]
 
 
     Tableau = GPUStruct(tmp)
