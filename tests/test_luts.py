@@ -4,7 +4,7 @@
 
 from nose.tools import raises
 import numpy as np
-from tools.luts import LUT, MLUT, read_mlut_hdf, merge
+from tools.luts import LUT, MLUT, read_mlut_hdf, merge, Idx
 import os
 
 def create_mlut():
@@ -145,6 +145,40 @@ def test_equality():
     assert m0 == m1
     assert m0 != 2
 
+def test_modify_axis():
+    l = create_lut()
+    l.axis('z')[2] = 0
+    assert l.axis('z')[0] == 0
+
+    # same for mlut
+    m = create_mlut()
+    m[0].axis(1)[0] = -10
+    assert m[0].axis(1)[0] == -10
+
+@raises(ValueError)
+def test_idx1():
+    Idx(2.5).index(np.array([2.]))
+
+@raises(ValueError)
+def test_idx2():
+    Idx(np.eye(2)).index(np.array([2.]))
+
+def test_idx3():
+    Idx(2.5).index(np.array([2.5]))
+
+def test_idx4():
+    assert Idx(2.5).index(np.arange(10)*2) == 1.25
+
+def test_idx5():
+    np.allclose(Idx(np.eye(2)).index(np.linspace(0, 5, 5)), 0.8*np.eye(2))
+
+@raises(ValueError)
+def test_idx6():
+    Idx(np.eye(2)).index(np.linspace(1, 5, 5))
+
+def test_idx7():
+    r = Idx(np.eye(2), bounds_error=False).index(np.linspace(2, 5, 5))
+    assert np.isnan(r).all()
 
 def test_convert():
     m = MLUT()

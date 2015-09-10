@@ -143,6 +143,18 @@ class LUT(CMN_MLUT_LUT):
             self.names = names
             assert len(names) == self.ndim
 
+    def axis(self, a):
+        '''
+        returns axis referred to by a (string or integer)
+        '''
+        if isinstance(a, str):
+            index = self.names.index(a)
+            return self.axes[index]
+        elif isinstance(a, int):
+            return self.axes[a]
+        else:
+            raise TypeError('argument of LUT.axis() should be int or string')
+
     def print_info(self, prepend=''):
         if self.desc is None:
             print prepend+'LUT ({}):'.format(self.data.dtype)
@@ -387,26 +399,33 @@ class Idx(object):
     Example: Idx(3., 'a') instead of Idx(3.)
     This allows verifying that the parameter is used in the right axis.
     '''
-    def __init__(self, value, name=None, round=False):
+    def __init__(self, value, name=None, round=False, bounds_error=True, fill_value=np.NaN):
         if value is not None:
             self.value = value
             self.name = name
             self.round = round
+            self.bounds_error = bounds_error
+            self.fill_value = fill_value
 
     def index(self, axis):
         '''
         Return the floating point index of the values in the axis
         '''
-        # axis is scalar or ndarray: interpolate
-        res = interp1d(axis, np.arange(len(axis)))(self.value)
-
-        if self.round:
-            if isinstance(res, np.ndarray):
-                res = res.round().astype(int)
-            else:
-                res = round(res)
-
-        return res
+        if len(axis) == 1:
+            if not np.allclose(np.array(self.value), axis[0]):
+                raise ValueError("(Idx) Out of axis value (value={}, axis={})".format(self.value, axis))
+            return 0
+        else:
+            # axis is scalar or ndarray: interpolate
+            res = interp1d(axis, np.arange(len(axis)),
+                    bounds_error=self.bounds_error,
+                    fill_value=self.fill_value)(self.value)
+            if self.round:
+                if isinstance(res, np.ndarray):
+                    res = res.round().astype(int)
+                else:
+                    res = round(res)
+            return res
 
 
 def semi_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
@@ -646,12 +665,12 @@ def merge(L, axes):
     >>> M2.set_attrs({'b':2, 'c':20})
     >>> M2.promote_attr('b')
     >>> merged = merge([M1, M2], ['c'])
-    >>> merged.print_info()
-    Datasets:
-     * a (float64 between 0.0 and 9.0), shape (2, 10) = ('c', None)
-     * b (float64 between 1.0 and 2.0), shape (2, 1) = ('c', None)
-    Axes:
-     * c: 2 values between 10 and 20
+    >>> merged.print_info(show_self=False)
+     Datasets:
+      [0] a (float64 between 0 and 9), axes=('c', None)
+      [1] b (float64 between 1 and 2), axes=('c', None)
+     Axes:
+      [0] c: 2 values between 10 and 20
     '''
 
     # LUT merging: convert to mlut
@@ -740,15 +759,15 @@ class MLUT(CMN_MLUT_LUT):
     >>> m.add_dataset('data3', np.random.randn(10, 12))
     >>> m.set_attr('x', 12)   # set MLUT attributes
     >>> m.set_attrs({'y':15, 'z':8})
-    >>> m.print_info()
-    Datasets:
-     * data1 (float64 between -2.55298981583 and 2.26975462399), shape (5, 6) = ('a', 'b')
-     * data2 (float64 between -2.22340315222 and 2.38314477486), shape (5, 6, 7) = ('a', 'b', 'c')
-     * data3 (float64 between -2.77259275643 and 2.30391669768), shape (10, 12) = (None, None)
-    Axes:
-     * a: 5 values between 100.0 and 150.0
-     * b: 6 values between 5.0 and 8.0
-     * c: 7 values between 0.0 and 1.0
+    >>> m.print_info(show_self=False)
+     Datasets:
+      [0] data1 (float64 between -2.55 and 2.27), axes=('a', 'b')
+      [1] data2 (float64 between -2.22 and 2.38), axes=('a', 'b', 'c')
+      [2] data3 (float64 between -2.77 and 2.3), axes=(None, None)
+     Axes:
+      [0] a: 5 values between 100.0 and 150.0
+      [1] b: 6 values between 5.0 and 8.0
+      [2] c: 7 values between 0.0 and 1.0
 
     Use bracket notation to extract a LUT
     Note that you can use a string or integer.
@@ -860,8 +879,9 @@ class MLUT(CMN_MLUT_LUT):
     def set_attrs(self, attributes):
         self.attrs.update(attributes)
 
-    def print_info(self, show_range=True):
-        print str(self)
+    def print_info(self, show_range=True, show_self=True):
+        if show_self:
+            print str(self)
         print ' Datasets:'
         for i, (name, dataset, axes) in enumerate(self.data):
             if axes is None:
@@ -1110,6 +1130,7 @@ def read_lut_hdf(filename, dataset, axnames=None):
     read a hdf file as a LUT, using axis list axnames
     if axnames is None, read the axes names in the attribute 'dimensions' of dataset
     '''
+    # TODO: deprecate this one
     axes = []
     names = []
     data = None
