@@ -373,12 +373,19 @@ class Subsetter(object):
         attrs = self.LUT.attrs
         desc = self.LUT.desc
 
+        assert len(keys) == self.LUT.ndim
+
         for i in xrange(self.LUT.ndim):
             if keys[i] == slice(None):
                 axes.append(self.LUT.axes[i])
                 names.append(self.LUT.names[i])
 
         data = self.LUT.__getitem__(keys)
+
+        # add missing axes which are added by additional
+        for i in xrange(data.ndim - len(axes)):
+            axes.append(None)
+            names.append(None)
 
         return LUT(data, axes=axes, names=names, attrs=attrs, desc=desc)
 
