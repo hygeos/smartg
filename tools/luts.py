@@ -120,7 +120,6 @@ class LUT(CMN_MLUT_LUT):
             self.attrs = attrs
         self.ndim = self.data.ndim
         self.shape = data.shape
-        self.sub = Subsetter(self)
 
         # check axes
         if axes is None:
@@ -142,6 +141,12 @@ class LUT(CMN_MLUT_LUT):
         else:
             self.names = names
             assert len(names) == self.ndim
+
+    def sub(self):
+        '''
+        returns a Subsetter object, which allows subsetting the LUT
+        '''
+        return Subsetter(self)
 
     def axis(self, a):
         '''
@@ -353,7 +358,7 @@ class LUT(CMN_MLUT_LUT):
 class Subsetter(object):
     '''
     A conveniency class to use the syntax like:
-    LUT.sub[:,:,0]
+    LUT.sub()[:,:,0]
     for subsetting LUTs
     '''
     def __init__(self, LUT):
