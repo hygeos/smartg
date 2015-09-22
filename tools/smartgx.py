@@ -92,7 +92,7 @@ def _smartg_thread(q, qpro, args, kwargs):
 
 
 def smartg(wl, pp=True,
-           iband=None, atm=None, surf=None, water=None, env=None,
+           atm=None, surf=None, water=None, env=None,
            NBPHOTONS=1e9, DEPO=0.0279, THVDEG=0., SEED=-1,
            NBTHETA=45, NBPHI=45,
            NFAER=1000000, NFOCE=1000000,
@@ -104,14 +104,11 @@ def smartg(wl, pp=True,
         Arguments:
 
             - wl: wavelength in nm (float)
-                  or a list of wavelengths, or an array
-                  used for phase functions calculation (always)
-                  and profile calculation (if iband is None)   # FIXME
+                  or: a list/array of wavelengths
+                  or: a list of IBANDs
             - pp:
                 True: use plane parallel geometry (default)
                 False: use spherical shell geometry
-            - iband: a REPTRAN_BAND object describing the internal band
-                default None (no reptran mode)
             - atm: Profile object
                 default None (no atmosphere)
             - surf: Surface object
@@ -141,7 +138,7 @@ def smartg(wl, pp=True,
         # warning! should be identical to the value defined in communs.h
         NLVL = 5
 
-        # number of Stockes parameters
+        # number of Stokes parameters
         # warning! still hardcoded in device.cu (FIXME)
         NPSTK = 4
 
@@ -158,12 +155,17 @@ def smartg(wl, pp=True,
                 - datetime.utcfromtimestamp(0)).total_seconds()*1000)
 
         assert isinstance(wl, (float, list, np.ndarray))
-        assert (iband is None) or isinstance(iband, REPTRAN_IBAND)
-
-        if isinstance(wl, (list, np.ndarray)):
-            NLAM = len(wl)
+        if isinstance(wl, list):
+            if (False not in map(lambda x: isinstance(x, REPTRAN_IBAND), wl)):
+                # wl is a list of REPTRAN_IBANDs
+                wavelengths = map(lambda x: x.w, wl)
+            else:
+                # wl is a list of floats
+                assert (False not in map(lambda x: isinstance(x, float), wl))
+                wavelengths = wl
         else:
-            NLAM = 1
+            wavelengths = wl
+        NLAM = np.array(wavelengths).size
 
         D = {
                 'NBPHOTONS': str(int(NBPHOTONS)),
@@ -305,7 +307,7 @@ def smartg(wl, pp=True,
         # write the input variables into data structures
         Tableau, Var, Init = InitSD(nprofilesAtm, nprofilesOc, NLAM,
                                 NLVL, NPSTK, NBTHETA, NBPHI, faer, foce,
-                                albedo, wl, hph0, zph0, x0, y0, z0,
+                                albedo, wavelengths, hph0, zph0, x0, y0, z0,
                                 XBLOCK, XGRID, SEED, options)
 
         # initialization of the constants
@@ -338,7 +340,7 @@ def smartg(wl, pp=True,
 
         # stockage des resultats dans une MLUT
         output = creerMLUTsResultats(tabFinalEvent, NBPHI, NBTHETA, tabTh, tabPhi,
-                                     wl, NLAM, tabPhotonsTot,nbPhotonsTot, OUTPUT_LAYERS,
+                                     wavelengths, NLAM, tabPhotonsTot,nbPhotonsTot, OUTPUT_LAYERS,
                                      nprofilesAtm, nprofilesOc, UPTOA, DOWN0P, DOWN0M, UP0P, UP0M)
         p.finish('Done! (used {}) | '.format(pycuda.autoinit.device.name()) + afficheProgress(nbPhotonsTot, NBPHOTONS, nbPhotonsSorTot))
 

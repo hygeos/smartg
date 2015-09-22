@@ -340,7 +340,7 @@ class LUT(CMN_MLUT_LUT):
             raise Exception('No plot defined for {} dimensions'.format(self.ndim))
 
 
-    def __plot_1d(self):
+    def __plot_1d(self, show_grid=True):
         '''
         plot a 1-dimension LUT
         '''
@@ -352,7 +352,7 @@ class LUT(CMN_MLUT_LUT):
             xlabel(self.names[0])
         if self.desc is not None:
             ylabel(self.desc)
-        grid()
+        grid(show_grid)
 
 
 class Subsetter(object):
