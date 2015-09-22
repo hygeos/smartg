@@ -167,27 +167,6 @@ def smartg(wl, pp=True,
             wavelengths = wl
         NLAM = np.array(wavelengths).size
 
-        D = {
-                'NBPHOTONS': str(int(NBPHOTONS)),
-                'THVDEG': np.array([THVDEG], dtype=np.float32),
-                'DEPO': np.array([DEPO], dtype=np.float32),
-                'NBTHETA': np.array([NBTHETA], dtype=np.int32),
-                'NBPHI': np.array([NBPHI], dtype=np.int32),
-                'NFAER': np.array([NFAER], dtype=np.uint32),
-                'NFOCE': np.array([NFOCE], dtype=np.uint32),
-                'OUTPUT_LAYERS': np.array([OUTPUT_LAYERS], dtype=np.uint32),
-                'XBLOCK': np.array([XBLOCK], dtype=np.int32),
-                'YBLOCK': np.array([1], dtype=np.int32),
-                'XGRID': np.array([XGRID], dtype=np.int32),
-                'YGRID': np.array([1], dtype=np.int32),
-                'NBLOOP': np.array([NBLOOP], dtype=np.uint32),
-                'NLAM': np.array([NLAM], dtype=np.int32),
-                }
-
-        # we use a separate disctionary to store the default parameters
-        # which should not override the specified ones
-        Ddef = {}
-
         # determine SIM
         if (atm is not None) and (surf is None) and (water is None):
             SIM = -2  # atmosphere only
