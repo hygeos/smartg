@@ -25,7 +25,7 @@ def create_lut():
     z = np.linspace(0, 120., 80)
     P0 = np.linspace(980, 1030, 6)
     Pdata = P0.reshape(1,-1)*np.exp(-z.reshape(-1,1)/8) # dimensions (z, P0)
-    return LUT(Pdata, axes=[z, P0], names=['z', 'P0'])
+    return LUT(Pdata, axes=[z, P0], names=['z', 'P0'], desc='Pdata')
 
 @raises(Exception)
 def test_getlut1():
@@ -189,6 +189,26 @@ def test_convert():
     m.set_attrs({'y':15, 'z':8})
 
     assert m == m[0].to_mlut()
+
+def test_oper_lut1():
+    l = create_lut()
+    assert (l+2).desc == l.desc
+
+def test_oper_lut2():
+    l = create_lut()
+    m = create_lut()
+    assert (l+m).desc == l.desc
+    assert np.allclose((l+m).data, (l.data)+(m.data))
+    m.desc = 'another'
+    assert (l+m).desc != l.desc
+
+def test_lut_apply():
+    l = create_lut()
+    m = l.apply(np.sqrt)
+    assert m.desc == l.desc
+    m = l.apply(np.sqrt, 'test')
+    assert m.desc == 'test'
+    assert np.allclose(m.data, np.sqrt(l.data))
 
 def test_write_read_mlut():
     # write a mlut, read it again, should be equal

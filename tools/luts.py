@@ -302,11 +302,51 @@ class LUT(CMN_MLUT_LUT):
         assert isinstance(other, LUT)
         return self.to_mlut().equal(other.to_mlut(), strict=strict, show_diff=show_diff)
 
+    def __binary_operation_lut__(self, other, fn):
+        # check axes
+        assert len(self.axes) == len(other.axes)
+        for i, ax in enumerate(self.axes):
+            assert len(ax) == len(other.axes[i])
+            assert np.allclose(ax, other.axes[i])
+        assert len(self.names) == len(other.names)
+        for i, n in enumerate(self.names):
+            assert other.names[i] == n
+
+        # include common attributes
+        attrs = {}
+        for k in self.attrs:
+            # check that the attributes are equal
+            if not (k in other.attrs):
+                continue
+            if isinstance(self.attrs[k], np.ndarray):
+                if not isinstance(other.attrs[k], np.ndarray):
+                    continue
+                if not np.allclose(self.attrs[k], other.attrs[k]):
+                    continue
+            else:
+                if self.attrs[k] != other.attrs[k]:
+                    continue
+            attrs.update({k: self.attrs[k]})
+
+        if self.desc == other.desc:
+            desc = self.desc
+        else:
+            desc = str(fn)
+
+        return LUT(fn(self.data, other.data),
+                axes=self.axes, names=self.names,
+                attrs=self.attrs, desc=desc)
+
+    def __binary_operation_scalar__(self, other, fn):
+        return LUT(fn(self.data, other),
+                axes=self.axes, names=self.names,
+                attrs=self.attrs, desc=self.desc)
+
     def __binary_operation__(self, other, fn):
         if isinstance(other, LUT):
-            return fn(self.to_mlut(), other.to_mlut())[0]
+            return self.__binary_operation_lut__(other, fn)
         else:
-            return fn(self.to_mlut(), other)[0]
+            return self.__binary_operation_scalar__(other, fn)
 
     def to_mlut(self):
         '''
@@ -330,6 +370,17 @@ class LUT(CMN_MLUT_LUT):
         m.set_attrs(self.attrs)
 
         return m
+
+    def apply(self, fn, desc=None):
+        '''
+        returns a LUT whose content is obtained by applying function fn
+        if desc is provided, use this description
+        '''
+        if (desc is None) and (self.desc is not None):
+            desc = self.desc
+        return LUT(fn(self.data),
+                axes=self.axes, names=self.names,
+                attrs=self.attrs, desc=desc)
 
     def save(self, filename, **kwargs):
         return self.to_mlut().save(filename, **kwargs)
