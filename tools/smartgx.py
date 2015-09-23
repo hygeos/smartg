@@ -150,6 +150,10 @@ def smartg(wl, pp=True,
         UP0P = 3
         UP0M = 4
 
+        attrs = {}
+        attrs.update({'device': pycuda.autoinit.device.name()})
+        attrs.update({'processing started at': datetime.now()})
+
         if SEED == -1:
             # SEED is based on clock
             SEED = np.uint32((datetime.now()
@@ -316,10 +320,11 @@ def smartg(wl, pp=True,
                            nbPhotonsTot, nbPhotonsTotInter, NBTHETA, NBPHI, NLAM)
 
         # stockage des resultats dans une MLUT
-        output = creerMLUTsResultats(tabFinalEvent, NBPHI, NBTHETA, tabTh, tabPhi,
+        output = creerMLUTsResultats(tabFinalEvent, attrs, NBPHI, NBTHETA, tabTh, tabPhi,
                                      wavelengths, NLAM, tabPhotonsTot,nbPhotonsTot, OUTPUT_LAYERS,
                                      nprofilesAtm, nprofilesOc, UPTOA, DOWN0P, DOWN0M, UP0P, UP0M)
-        p.finish('Done! (used {}) | '.format(pycuda.autoinit.device.name()) + afficheProgress(nbPhotonsTot, NBPHOTONS, nbPhotonsSorTot))
+
+        p.finish('Done! (used {}) | '.format(attrs['device']) + afficheProgress(nbPhotonsTot, NBPHOTONS, nbPhotonsSorTot))
 
         return output
 
@@ -399,16 +404,17 @@ def reptran_merge(files, ibands, output=None):
 
     return output
 
-def creerMLUTsResultats(tabFinal, NBPHI, NBTHETA, tabTh, tabPhi,
+def creerMLUTsResultats(tabFinal, attrs, NBPHI, NBTHETA, tabTh, tabPhi,
                         wl, NLAM, tabPhotonsTot,nbPhotonsTot,OUTPUT_LAYERS,
                         nprofilesAtm,nprofilesOc,UPTOA, DOWN0P, DOWN0M, UP0P, UP0M):
 
     """
     store the result in a MLUT
     Arguments :
+        - tabFinal : R, Q, U of all outgoing photons
+        - attrs: dictionary of global attributes to strore in the output
         - tabTh : Zenith angles in rad
         - tabPhi : Azimutal angles in rad
-        - tabFinal : R, Q, U of all outgoing photons
         - NBPHI : Number of intervals in azimuth angle
         - NBTHETA : Number of intervals in zenith
         - wl: list of wavelengths in nm
@@ -452,6 +458,7 @@ def creerMLUTsResultats(tabFinal, NBPHI, NBTHETA, tabTh, tabPhi,
         label = ['I_up (0+)', 'Q_up (0+)', 'U_up (0+)','N_up (0+)']
         addLuts(m, label, NLAM, tabFinal, NBPHI, NBTHETA, axnames, UP0P)
 
+
     # ecriture des profiles Atmosphériques
     # (FIXME)
     #if D['SIM'][0]==-2 or D['SIM'][0]==1 or D['SIM'][0]==2:
@@ -474,6 +481,11 @@ def creerMLUTsResultats(tabFinal, NBPHI, NBTHETA, tabTh, tabPhi,
     #        c=LUT(b, desc=key)
     #        luts.append(c)
     #    profOc = MLUT(luts)
+
+    # write attributes
+    attrs['processing duration'] = datetime.now() - attrs['processing started at']
+    for k, v in attrs.items():
+        m.set_attr(k, str(v))
 
     return m
 
