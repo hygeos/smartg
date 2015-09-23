@@ -24,6 +24,7 @@ from os.path import dirname, realpath, join, basename
 import textwrap
 from progress import Progress
 from luts import merge, read_lut_hdf, read_mlut_hdf, LUT, MLUT
+from scipy.interpolate import interp1d
 
 
 # set up default directories
@@ -695,20 +696,19 @@ def calculF(phases, N):
         - nmax : maximal number of angles describing the phase function (equivalent to MLSAAER and MLSAOCE in the old version)
         - phases_list : list of phase function set contiguously
         - phase_H : cumulative distribution of the phase functions
-
-    NB : le programme smartg.py écrit les fonctions de phases dans des fichiers et convertit les angles en degrees si ces derniers sont en radians
-    Ici la fonction calculF recupere les angles et verifie si ces derniers sont en degres et les convertit en radians
-    TODO : Améliorer cette fonction car elle impacte temps d'executions lorsque le nombre NFAER ou NFOCE augmente
     """
-    nmax, n, imax=0, 0, 0
+    nmax, nphases, imax=0, 0, 0
     phases_list = []
+
     # define the number of phases functions and the maximal number of angles describing each of them
     for idx, phase in enumerate(phases):
         if phase.N>nmax:
             imax, nmax = idx, phase.N
-        n += 1
+        nphases += 1
+
     # Initialize the cumulative distribution function
-    phase_H = np.zeros(5*n*N, dtype=np.float32)
+    phase_H = np.zeros((nphases, N, 5), dtype=np.float32)
+
     for idx, phase in enumerate(phases):
         if idx != imax:
             # resizing the attributes of the phase object following the nmax
@@ -730,22 +730,15 @@ def calculF(phases, N):
         scum = np.cumsum(scum)
         scum /= scum[phase.N-1]
 
-        ipf = 0
-        converted_N = np.float64(N)
-        for iang in xrange(0, N):
-            base_index = idx*5*N+iang*5
-            z = np.float64(iang+1)/converted_N
-            while scum[ipf+1]<z:
-                ipf += 1
+        # probability between 0 and 1
+        z = (np.arange(N, dtype='float64')+1)/N
+        phase_H[idx, :, 4] = interp1d(scum, phase.ang_in_rad())(z)  # angle
+        phase_H[idx, :, 0] = interp1d(scum, phase.phase[:,1])(z)  # I par
+        phase_H[idx, :, 1] = interp1d(scum, phase.phase[:,0])(z)  # I per
+        phase_H[idx, :, 2] = interp1d(scum, phase.phase[:,2])(z)  # U
+        phase_H[idx, :, 3] = 0.                                                # V, always 0
 
-            phase_H[base_index+4] = np.float32( ((scum[ipf+1]-z)*angles[ipf] + (z-scum[ipf])*angles[ipf+1])/(scum[ipf+1]-scum[ipf]) )
-            phase_H[base_index+0] = np.float32( phase.phase[ipf, 1])
-            phase_H[base_index+1] = np.float32( phase.phase[ipf, 0])
-            phase_H[base_index+2] = np.float32( phase.phase[ipf, 2])
-            phase_H[base_index+3] = np.float32(0)
-
-
-    return phase_H, phases_list, n, imax
+    return phase_H, phases_list, nphases, imax
 
 def test_rayleigh():
     '''
@@ -1063,10 +1056,9 @@ def get_profAtm(wl, atm):
     get the atmospheric profile, the altitude of the top of Atmosphere, the number of layers of the atmosphere
 
     Arguments :
-        - wl : wavelet length
+        - wl : wavelength
         - atm : Profile object
          default None (no atmosphere)
-        - D: Dictionary containing all the parameters required to launch the simulation by the kernel
     -----------------------------------------------------------------------------------------------------------
     Returns :
         - phasesAtm : Atmospheric phase functions
@@ -1114,7 +1106,7 @@ def get_profOc(wl, water, NLAM):
         - water : Profile object
             default None (no atmosphere)
         - D : Dictionary containing all the parameters required to launch the simulation by the kernel
-        - NLAM : Number of wavelet length
+        - NLAM : Number of wavelengths
     -------------------------------------------------------------------------------------------------------
     Returns :
         - phasesOc : Oceanic phase functions
