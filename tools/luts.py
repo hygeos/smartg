@@ -160,11 +160,11 @@ class LUT(CMN_MLUT_LUT):
         else:
             raise TypeError('argument of LUT.axis() should be int or string')
 
-    def print_info(self, prepend=''):
+    def print_info(self, show_attrs=False):
         if self.desc is None:
-            print prepend+'LUT ({}):'.format(self.data.dtype)
+            print 'LUT ({}):'.format(self.data.dtype)
         else:
-            print prepend+'LUT "{}" ({}):'.format(self.desc, self.data.dtype)
+            print 'LUT "{}" ({}):'.format(self.desc, self.data.dtype)
 
         for i in xrange(self.data.ndim):
             if self.names[i] is None:
@@ -172,13 +172,17 @@ class LUT(CMN_MLUT_LUT):
             else:
                 name = self.names[i]
             if self.axes[i] is None:
-                print prepend+'  Dim {} ({}): No axis attached'.format(i, name)
+                print '  Dim {} ({}): No axis attached'.format(i, name)
             else:
-                print prepend+'  Dim {} ({}): {} values betweeen {} and {}'.format(
+                print '  Dim {} ({}): {} values betweeen {} and {}'.format(
                         i, name,
                         len(self.axes[i]),
                         self.axes[i][0],
                         self.axes[i][-1])
+        if show_attrs:
+            print ' Attributes:'
+            for k, v in self.attrs.items():
+                print ' ', k, ':', v
 
     def __getitem__(self, keys):
         '''
@@ -891,7 +895,7 @@ class MLUT(CMN_MLUT_LUT):
     def set_attrs(self, attributes):
         self.attrs.update(attributes)
 
-    def print_info(self, show_range=True, show_self=True):
+    def print_info(self, show_range=True, show_self=True, show_attrs=False):
         if show_self:
             print str(self)
         print ' Datasets:'
@@ -908,6 +912,10 @@ class MLUT(CMN_MLUT_LUT):
         print ' Axes:'
         for i, (name, values) in enumerate(self.axes.items()):
             print '  [{}] {}: {} values between {} and {}'.format(i, name, len(values), values[0], values[-1])
+        if show_attrs:
+            print ' Attributes:'
+            for k, v in self.attrs.items():
+                print ' ', k, ':', v
 
     def promote_attr(self, name):
         '''
