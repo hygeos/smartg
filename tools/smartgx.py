@@ -252,26 +252,23 @@ def smartg(wl, pp=True,
         # get the kernel
         kern = mod.get_function('lancementKernelPy')
 
-	# computation of the phase function
+        # computation of the phase functions
         if(SIM == 0 or SIM == 2 or SIM == 3):
             if phasesOc != []:
-                foce, phasesOcm, NPHAOCE, imax = calculF(phasesOc, NFOCE)
+                foce = calculF(phasesOc, NFOCE)
             else:
-                foce, NPHAOCE, imax, phasesOcm = [0], 0, 0, [0]
+                foce = [0]
         else:
-            foce, phasesOcm = [0], [0]
+            foce = [0], [0]
 
         if(SIM == -2 or SIM == 1 or SIM == 2):
             if phasesAtm != []:
-                faer, phasesAtmm, NPHAAER, imax = calculF(phasesAtm, NFAER)
-                
+                faer = calculF(phasesAtm, NFAER)
             else:
-                faer, NPHAAER, imax, phasesAtmm = [0], 0, 0, [0]
-                  
+                faer = [0]
         else:
-            faer, phasesAtmm = [0], [0]
+            faer = [0]
 
-        
         # computation of the impact point
         x0, y0, z0, zph0, hph0 = impactInit(HATM, NATM, NLAM, nprofilesAtm['ALT'], nprofilesAtm['H'], THVDEG, options)
 
@@ -691,9 +688,6 @@ def calculF(phases, N):
         - N : Number of discrete values of the phase function
     --------------------------------------------------
     Returns :
-        - idx  : corresponding to a function phase
-        - imax : index of the function phase containing the maximal number of angles describing the phase function
-        - nmax : maximal number of angles describing the phase function (equivalent to MLSAAER and MLSAOCE in the old version)
         - phases_list : list of phase function set contiguously
         - phase_H : cumulative distribution of the phase functions
     """
@@ -738,7 +732,7 @@ def calculF(phases, N):
         phase_H[idx, :, 2] = interp1d(scum, phase.phase[:,2])(z)  # U
         phase_H[idx, :, 3] = 0.                                                # V, always 0
 
-    return phase_H, phases_list, nphases, imax
+    return phase_H
 
 def test_rayleigh():
     '''
