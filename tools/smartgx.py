@@ -190,9 +190,10 @@ def smartg(wl, pp=True,
 
         #
         # atmosphere
-        # get the phase function and the atmospheric profile
+        # get the phase function and the atmospheric profiles
 
         nprofilesAtm, phasesAtm, NATM, HATM = get_profAtm(wl,atm)
+
         #
         # surface
         #
@@ -204,6 +205,7 @@ def smartg(wl, pp=True,
         # ocean profile
         # get the phase function and oceanic profile
         nprofilesOc, phasesOc, NOCE = get_profOc(wl, water, NLAM)
+
         #
         # environment effect
         #
@@ -212,7 +214,7 @@ def smartg(wl, pp=True,
             env = Environment()
 
         #
-        # write the albedo file
+        # albedo
         #
         if 'SURFALB' in surf.dict:
             surf_alb = surf.dict['SURFALB']
@@ -276,10 +278,12 @@ def smartg(wl, pp=True,
         # computation of the impact point
         x0, y0, z0, zph0, hph0 = impactInit(HATM, NATM, NLAM, nprofilesAtm['ALT'], nprofilesAtm['H'], THVDEG, options)
 
-        if '-DSPHERIQUE' in options:
-            TAUATM = nprofilesAtm['H'][NATM];
-            tabTransDir = np.zeros(NLAM,dtype=np.float64)
-            for ilam in xrange(0, NLAM):
+        tabTransDir = np.zeros(NLAM, dtype=np.float64)
+        if pp:
+            for ilam in xrange(NLAM):
+                tabTransDir[ilam] = np.exp(-nprofilesAtm['H'][NATM+ilam*(NATM+1)]/np.cos(THVDEG*pi/180.))
+        else:
+            for ilam in xrange(NLAM):
                 tabTransDir[ilam] = np.exp(-hph0[NATM + ilam * (NATM + 1)])
 
             if '-DDEBUG' in options:
@@ -320,7 +324,7 @@ def smartg(wl, pp=True,
                            nbPhotonsTot, nbPhotonsTotInter, NBTHETA, NBPHI, NLAM)
 
         # stockage des resultats dans une MLUT
-        output = creerMLUTsResultats(tabFinalEvent, attrs, NBPHI, NBTHETA, tabTh, tabPhi,
+        output = creerMLUTsResultats(tabFinalEvent, attrs, tabTransDir, NBPHI, NBTHETA, tabTh, tabPhi,
                                      wavelengths, NLAM, tabPhotonsTot,nbPhotonsTot, OUTPUT_LAYERS,
                                      nprofilesAtm, nprofilesOc, UPTOA, DOWN0P, DOWN0M, UP0P, UP0M)
 
@@ -404,7 +408,7 @@ def reptran_merge(files, ibands, output=None):
 
     return output
 
-def creerMLUTsResultats(tabFinal, attrs, NBPHI, NBTHETA, tabTh, tabPhi,
+def creerMLUTsResultats(tabFinal, attrs, tabTransDir, NBPHI, NBTHETA, tabTh, tabPhi,
                         wl, NLAM, tabPhotonsTot,nbPhotonsTot,OUTPUT_LAYERS,
                         nprofilesAtm,nprofilesOc,UPTOA, DOWN0P, DOWN0M, UP0P, UP0M):
 
@@ -458,6 +462,9 @@ def creerMLUTsResultats(tabFinal, attrs, NBPHI, NBTHETA, tabTh, tabPhi,
         label = ['I_up (0+)', 'Q_up (0+)', 'U_up (0+)','N_up (0+)']
         addLuts(m, label, NLAM, tabFinal, NBPHI, NBTHETA, axnames, UP0P)
 
+    # direct transmission
+    m.add_dataset('direct transmission', tabTransDir,
+            axnames=['Wavelength'])
 
     # ecriture des profiles Atmosphériques
     # (FIXME)
