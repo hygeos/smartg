@@ -172,7 +172,7 @@ class LUT(CMN_MLUT_LUT):
             else:
                 name = self.names[i]
             if self.axes[i] is None:
-                print '  Dim {} ({}): No axis attached'.format(i, name)
+                print '  Dim {} ({}): {} values, no axis attached'.format(i, name, self.data.shape[i])
             else:
                 print '  Dim {} ({}): {} values betweeen {} and {}'.format(
                         i, name,
