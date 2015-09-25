@@ -333,80 +333,66 @@ def smartg(wl, pp=True,
         return output
 
 
-def reptran_merge(files, ibands, output=None):
+def reptran_merge(m, ibands, verbose=True):
     '''
-    merge (average) results from several correlated-k bands
+    merge (average) several correlated-k bands in the dimension 'Wavelength'
 
-    Arguments:
-        * files: a list of smartg files to merge
-        * ibands: a list of corresponding REPTRAN_IBANDs
-        * output: the hdf file to create
-            if None (default), the output file is determined by extracting the
-            common prefix and suffix of all input files, and insert the band
-            name inbetween
-
-    Returns the output file name
     '''
+    from collections import Counter
 
-    if output is None:
-        # determine the common prefix and suffix of all files
-        # and insert the band name between those
-        base = basename(files[0])
-        i = base.find('_WL')
-        i += 3
-        j = base.find('_', i)
-        output = join(dirname(files[0]),
-                    (base[:i]               # prefix
-                    + ibands[0].band.name  # iband name
-                    + base[j:]))            # suffix
+    # count how many ibands share the same band
+    c = Counter(map(lambda x: x.band, ibands))
+    nc = len(c)
 
-    print 'Merging {} files into {}'.format(len(files), output)
+    assert len(ibands) == len(m.axes['Wavelength'])
 
-    hdf_out = SD(output, SDC.WRITE|SDC.CREATE)
-    hdf_ref = SD(files[0])
-    for dataset in hdf_ref.datasets():
+    mmerged = MLUT()
+    mmerged.add_axis('Azimuth angles', m.axes['Azimuth angles'])
+    mmerged.add_axis('Zenith angles', m.axes['Zenith angles'])
 
-        sdsref = hdf_ref.select(dataset)
-        rank = sdsref.info()[1]
-        shape = sdsref.info()[2]
-        dtype  = sdsref.info()[3]
-        if rank < 2:
-            # axis: write the axis as-is
-            S = sdsref.get()
-        else:
-            # average all files
+    # wavelength axis
+    i = 0
+    wl = []
+    for _ in xrange(nc):
+        b = ibands[i].band
+        wl.append(np.average(b.awvl, weights=b.awvl_weight))
+        i += c[b]
+
+    mmerged.add_axis('Wavelength', wl)
+
+    # for each dataset
+    for (name, data, axnames) in m.data:
+
+        if axnames != ['Wavelength', 'Azimuth angles', 'Zenith angles']:
+            if verbose: print 'Skipping dataset', name
+            continue
+
+        _, nphi, ntheta = data.shape
+
+        mdata = np.zeros((nc, nphi, ntheta), dtype=data.dtype)
+
+        i0 = 0
+        for i in xrange(nc):  # loop on the merged bands
             S, norm = 0., 0.
-            for i in xrange(len(files)):
+            b = ibands[i0].band
+            for j in xrange(c[b]): # loop on the internal bands
+                weight = ibands[i0+j].weight
+                extra = ibands[i0+j].extra
+                S += data[i0+j] * weight * extra
+                norm += weight * extra
+            i0 += c[b]
 
-                file = files[i]
-                iband = ibands[i]
+            mdata[i,:,:] = S/norm
 
-                hdf = SD(file)
-                data = hdf.select(dataset).get()
-                hdf.end()
+        mmerged.add_dataset(name, mdata, ['Wavelength', 'Azimuth angles', 'Zenith angles'])
 
-                S += data * iband.weight * iband.extra
-                norm += iband.weight * iband.extra
+    mmerged.set_attrs(m.attrs)
 
-            S /= norm
-            S = S.astype(data.dtype)
+    if verbose:
+        print 'Merged {} wavelengths down to {}'.format(len(ibands), nc)
 
-        # write the dataset
-        sds = hdf_out.create(dataset, dtype, shape)
-        sds.setcompress(SDC.COMP_DEFLATE, 9)
-        sds[:] = S[:]
-        # copy sds attributes from first file
-        for a in sdsref.attributes().keys():
-            setattr(sds, a, sdsref.attributes()[a])
-        sds.endaccess()
+    return mmerged
 
-    # copy global attributes from first file
-    for a in hdf_ref.attributes():
-        setattr(hdf_out, a, hdf_ref.attributes()[a])
-
-    hdf_out.end()
-
-    return output
 
 def creerMLUTsResultats(tabFinal, attrs, tabTransDir, NBPHI, NBTHETA, tabTh, tabPhi,
                         wl, NLAM, tabPhotonsTot,nbPhotonsTot,OUTPUT_LAYERS,
@@ -436,9 +422,9 @@ def creerMLUTsResultats(tabFinal, attrs, tabTransDir, NBPHI, NBTHETA, tabTh, tab
     m = MLUT()
 
     # add axes
-    axnames = ['Azimut angles', 'Zenith angles']
+    axnames = ['Azimuth angles', 'Zenith angles']
     m.add_axis('Zenith angles', tabTh*180./np.pi)
-    m.add_axis('Azimut angles', tabPhi*180./np.pi)
+    m.add_axis('Azimuth angles', tabPhi*180./np.pi)
     if NLAM > 1:
         m.add_axis('Wavelength', wl)
         axnames.insert(0, 'Wavelength')
@@ -615,7 +601,7 @@ def calculOmega(tabTh, tabPhi, tabOmega, NBTHETA, NBPHI):
     for ith in xrange(1, NBTHETA):
         tabTh[ith] = tabTh[ith - 1] + dth
 
-    # Azimut angles of the center of the output angular boxes
+    # Azimuth angles of the center of the output angular boxes
     dphi = pi/NBPHI
     tabPhi[0] = dphi / 2.
     for iphi in xrange(1, NBPHI):
