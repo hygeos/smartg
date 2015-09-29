@@ -428,6 +428,8 @@ def creerMLUTsResultats(tabFinal, attrs, tabTransDir, NBPHI, NBTHETA, tabTh, tab
     if NLAM > 1:
         m.add_axis('Wavelength', wl)
         axnames.insert(0, 'Wavelength')
+    else:
+        m.set_attr('Wavelength', str(wl))
 
     label = ['I_up (TOA)', 'Q_up (TOA)', 'U_up (TOA)','N_up (TOA)']
 
@@ -449,8 +451,11 @@ def creerMLUTsResultats(tabFinal, attrs, tabTransDir, NBPHI, NBTHETA, tabTh, tab
         addLuts(m, label, NLAM, tabFinal, NBPHI, NBTHETA, axnames, UP0P)
 
     # direct transmission
-    m.add_dataset('direct transmission', tabTransDir,
-            axnames=['Wavelength'])
+    if NLAM > 1:
+        m.add_dataset('direct transmission', tabTransDir,
+                axnames=['Wavelength'])
+    else:
+        m.set_attr('direct transmission', str(tabTransDir[0]))
 
     # ecriture des profiles Atmosphériques
     # (FIXME)
