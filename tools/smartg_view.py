@@ -186,9 +186,7 @@ def smartg_view(mlut, QU=False, field='up (TOA)'):
     U = mlut['U_' + field]
 
     # polarized reflectance
-    IP = Q*Q + U*U
-    IP.data = np.sqrt(IP.data)
-    IP.desc = 'Pol. ref.'
+    IP = (Q*Q + U*U).apply(np.sqrt, 'Pol. ref.')
 
     # polarization ratio
     PR = 100*IP/I
