@@ -686,7 +686,7 @@ def semi_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
         ax_polar.set_title(lut.desc, weight='bold', position=(0.15,0.9))
 
 
-def merge(L, axes):
+def merge(L, axes, dtype=None):
     '''
     Merge several luts or mluts
 
@@ -694,6 +694,10 @@ def merge(L, axes):
         - L is a list of LUT or MLUT objects to merge
         - axes is a list of axes names to merge
           these names should be present in each LUT attribute
+        - dtype is the data type of the new axes
+          ex: dtype=float
+          if None, no data type conversion
+
 
     Returns a LUT or MLUT for which each dataset has new axes as defined in list axes
     (list of strings)
@@ -764,6 +768,8 @@ def merge(L, axes):
         axis = []
         for mlut in L:
             value = mlut.attrs[axname]
+            if dtype is not None:
+                value = dtype(value)
             if value not in axis:
                 axis.append(value)
         m.add_axis(axname, axis)
@@ -775,15 +781,18 @@ def merge(L, axes):
 
         # build new data
         new_shape = tuple(map(len, newaxes))+first.data[i][1].shape
-        dtype = first.data[i][1].dtype
-        newdata = np.zeros(new_shape, dtype=dtype)+np.NaN
+        _dtype = first.data[i][1].dtype
+        newdata = np.zeros(new_shape, dtype=_dtype)+np.NaN
         for mlut in L:
 
             # find the index of the attributes in the new LUT
             index = ()
             for j in xrange(len(axes)):
                 a = axes[j]
-                index += (newaxes[j].index(mlut.attrs[a]),)
+                value = mlut.attrs[a]
+                if dtype is not None:
+                    value = dtype(value)
+                index += (newaxes[j].index(value),)
             index += (slice(None),)
 
             newdata[index] = mlut.data[i][1]
@@ -1083,7 +1092,7 @@ class MLUT(CMN_MLUT_LUT):
         '''
         msg = 'MLUTs diff:'
         if not isinstance(other, MLUT):
-            msg += '  other is not a MLUT'
+            msg += '  other is not a MLUT ({})'.format(str(other))
             print msg
             return False
 
@@ -1139,6 +1148,8 @@ def read_mlut_hdf(filename, datasets=None):
             - or a tuple (dataset_name, axes) where axes is a list of
               dimensions (strings), overriding the attribute 'dimensions'
     '''
+    assert isinstance(datasets, list), 'datasets should be provided as a list'
+
     hdf = SD(filename)
 
     # read the datasets
