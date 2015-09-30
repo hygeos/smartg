@@ -27,6 +27,14 @@ from luts import merge, read_lut_hdf, read_mlut_hdf, LUT, MLUT
 from scipy.interpolate import interp1d
 
 
+# constants definition
+UPTOA = 0
+DOWN0P = 1
+DOWN0M = 2
+UP0P = 3
+UP0M = 4
+
+
 # set up default directories
 #
 # base smartg directory is one directory above here
@@ -142,13 +150,6 @@ def smartg(wl, pp=True,
         # number of Stokes parameters
         # warning! still hardcoded in device.cu (FIXME)
         NPSTK = 4
-
-        # indexing of the output levels
-        UPTOA = 0
-        DOWN0P = 1
-        DOWN0M = 2
-        UP0P = 3
-        UP0M = 4
 
         attrs = {}
         attrs.update({'device': pycuda.autoinit.device.name()})
@@ -307,26 +308,15 @@ def smartg(wl, pp=True,
 
 
         # Loop and kernel call
-        nbPhotonsTot, nbPhotonsTotInter , nbPhotonsTotInter, nbPhotonsSorTot, tabPhotonsTot = loop_kernel(NBPHOTONS, Tableau, Var, Init,
-                                                                                                          NLVL, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
-                                                                                                          NLAM, options, kern, p)
-        # compute the final result
-        tabFinalEvent = np.zeros(NLVL*NPSTK*NBTHETA*NBPHI*NLAM, dtype=np.float64)
-        tabTh = np.zeros(NBTHETA, dtype=np.float64)
-        tabPhi = np.zeros(NBPHI, dtype=np.float64)
+        (nbPhotonsTot, nbPhotonsTotInter, nbPhotonsTotInter,
+                nbPhotonsSorTot, tabPhotonsTot) = loop_kernel(NBPHOTONS, Tableau, Var, Init,
+                                                              NLVL, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
+                                                              NLAM, options, kern, p)
 
-        # Création et calcul du tableau final (regroupant le poids de tous les photons ressortis sur une demi-sphère,
-        # par unité de surface)
 
-        for k in xrange(0, 5):
-            calculTabFinal(tabFinalEvent[k*NPSTK*NBTHETA*NBPHI*NLAM:(k+1)*NPSTK*NBTHETA*NBPHI*NLAM],
-                           tabTh, tabPhi, tabPhotonsTot[k*NPSTK*NBTHETA*NBPHI*NLAM:(k+1)*NPSTK*NBTHETA*NBPHI* NLAM],
-                           nbPhotonsTot, nbPhotonsTotInter, NBTHETA, NBPHI, NLAM)
-
-        # stockage des resultats dans une MLUT
-        output = creerMLUTsResultats(tabFinalEvent, attrs, tabTransDir, NBPHI, NBTHETA, tabTh, tabPhi,
-                                     wavelengths, NLAM, tabPhotonsTot,nbPhotonsTot, OUTPUT_LAYERS,
-                                     nprofilesAtm, nprofilesOc, UPTOA, DOWN0P, DOWN0M, UP0P, UP0M, SIM)
+        # finalization
+        output = finalize(tabPhotonsTot, wavelengths, nbPhotonsTotInter,
+                           OUTPUT_LAYERS, tabTransDir, SIM, attrs, nprofilesAtm)
 
         p.finish('Done! (used {}) | '.format(attrs['device']) + afficheProgress(nbPhotonsTot, NBPHOTONS, nbPhotonsSorTot))
 
@@ -394,61 +384,97 @@ def reptran_merge(m, ibands, verbose=True):
     return mmerged
 
 
-def creerMLUTsResultats(tabFinal, attrs, tabTransDir, NBPHI, NBTHETA, tabTh, tabPhi,
-                        wl, NLAM, tabPhotonsTot,nbPhotonsTot,OUTPUT_LAYERS,
-                        nprofilesAtm,nprofilesOc,UPTOA, DOWN0P, DOWN0M, UP0P, UP0M, SIM):
+def calculOmega(NBTHETA, NBPHI):
+    '''
+    returns the zenith and azimuth angles, and the solid angles
+    '''
 
-    """
-    store the result in a MLUT
-    Arguments :
-        - tabFinal : R, Q, U of all outgoing photons
-        - attrs: dictionary of global attributes to strore in the output
-        - tabTh : Zenith angles in rad
-        - tabPhi : Azimutal angles in rad
-        - NBPHI : Number of intervals in azimuth angle
-        - NBTHETA : Number of intervals in zenith
-        - wl: list of wavelengths in nm
-        - tabPhotonsTot : Total weight of all outgoing photons
-        - nbPhotonsTot : Total number of photons processed
-        - D : Dictionary containing all the parameters required to launch the simulation by the kernel
-        - nprofilesAtm : List of atmospheric profiles set contiguously
-        - nprofilesOc : List of oceanic profiles set contiguously
-        - UPTOA, DOWN0P, DOWN0M, UP0P, UP0M : indexing of the output levels
-    Returns :
-        - Res : MLUT corresponding to the final result
+    # zenith angles
+    dth = (np.pi/2)/NBTHETA
+    tabTh = np.linspace(dth/2, np.pi/2-dth/2, NBTHETA, dtype='float64')
 
-    """
+    # azimuth angles
+    dphi = np.pi/NBPHI
+    tabPhi = np.linspace(dphi/2, np.pi-dphi/2, NBPHI, dtype='float64')
 
+    # solid angles
+    tabds = np.sin(tabTh) * dth * dphi
+
+    # normalize to 1
+    tabOmega = tabds/(sum(tabds)*NBPHI)
+
+    return tabTh, tabPhi, tabOmega
+
+
+def finalize(tabPhotonsTot2, wl, nbPhotonsTotInter, OUTPUT_LAYERS, tabTransDir, SIM, attrs, nprofilesAtm):
+    '''
+    create and return the final output
+    '''
+    (NLVL,NPSTK,NLAM,NBTHETA,NBPHI) = tabPhotonsTot2.shape
+    tabFinal = np.zeros_like(tabPhotonsTot2, dtype='float64')
+    tabTh, tabPhi, tabOmega = calculOmega(NBTHETA, NBPHI)
+
+    # normalization
+    # (broadcast to dimensions (LVL, LAM, THETA, PHI))
+    norm = 2.0 * tabOmega.reshape((1,1,-1,1)) * np.cos(tabTh).reshape((1,1,-1,1)) * nbPhotonsTotInter.reshape((1,-1,1,1))
+
+    # I
+    tabFinal[:,0,:,:,:] = (tabPhotonsTot2[:,0,:,:,:] + tabPhotonsTot2[:,1,:,:,:])/norm
+
+    # Q
+    tabFinal[:,1,:,:,:] = (tabPhotonsTot2[:,0,:,:,:] - tabPhotonsTot2[:,1,:,:,:])/norm
+
+    # U
+    tabFinal[:,2,:,:,:] = tabPhotonsTot2[:,2,:,:,:]/norm
+
+    # V
+    tabFinal[:,3,:,:,:] = tabPhotonsTot2[:,3,:,:,:]
+
+
+    #
+    # create the MLUT object
+    #
     m = MLUT()
 
-    # add axes
+    # add the axes
     axnames = ['Azimuth angles', 'Zenith angles']
     m.add_axis('Zenith angles', tabTh*180./np.pi)
     m.add_axis('Azimuth angles', tabPhi*180./np.pi)
     if NLAM > 1:
         m.add_axis('Wavelength', wl)
+        ilam = slice(None)
         axnames.insert(0, 'Wavelength')
     else:
         m.set_attr('Wavelength', str(wl))
+        ilam = 0
 
-    label = ['I_up (TOA)', 'Q_up (TOA)', 'U_up (TOA)','N_up (TOA)']
-
-    # ecriture des données de sorties
-    addLuts(m, label, NLAM, tabFinal, NBPHI, NBTHETA, axnames, UPTOA)
+    # swapaxes : (th, phi) -> (phi, theta)
+    m.add_dataset('I_up (TOA)', tabFinal.swapaxes(3,4)[UPTOA,0,ilam,:,:], axnames)
+    m.add_dataset('Q_up (TOA)', tabFinal.swapaxes(3,4)[UPTOA,1,ilam,:,:], axnames)
+    m.add_dataset('U_up (TOA)', tabFinal.swapaxes(3,4)[UPTOA,2,ilam,:,:], axnames)
+    m.add_dataset('N_up (TOA)', tabFinal.swapaxes(3,4)[UPTOA,3,ilam,:,:], axnames)
 
     if OUTPUT_LAYERS & 1:
-        label = ['I_down (0+)', 'Q_down (0+)', 'U_down (0+)','N_down (0+)']
-        addLuts(m, label, NLAM, tabFinal, NBPHI, NBTHETA, axnames, DOWN0P)
+        m.add_dataset('I_down (0+)', tabFinal.swapaxes(3,4)[DOWN0P,0,ilam,:,:], axnames)
+        m.add_dataset('Q_down (0+)', tabFinal.swapaxes(3,4)[DOWN0P,1,ilam,:,:], axnames)
+        m.add_dataset('U_down (0+)', tabFinal.swapaxes(3,4)[DOWN0P,2,ilam,:,:], axnames)
+        m.add_dataset('N_down (0+)', tabFinal.swapaxes(3,4)[DOWN0P,3,ilam,:,:], axnames)
 
-        label = ['I_up (0-)', 'Q_up (0-)', 'U_up (0-)','N_up (0-)']
-        addLuts(m, label, NLAM, tabFinal, NBPHI, NBTHETA, axnames, UP0M)
+        m.add_dataset('I_up (0-)', tabFinal.swapaxes(3,4)[UP0M,0,ilam,:,:], axnames)
+        m.add_dataset('Q_up (0-)', tabFinal.swapaxes(3,4)[UP0M,1,ilam,:,:], axnames)
+        m.add_dataset('U_up (0-)', tabFinal.swapaxes(3,4)[UP0M,2,ilam,:,:], axnames)
+        m.add_dataset('N_up (0-)', tabFinal.swapaxes(3,4)[UP0M,3,ilam,:,:], axnames)
 
     if OUTPUT_LAYERS & 2:
-        label = ['I_down (0-)', 'Q_down (0-)', 'U_down (0-)','N_down (0-)']
-        addLuts(m, label, NLAM, tabFinal, NBPHI, NBTHETA, axnames, DOWN0M)
+        m.add_dataset('I_down (0-)', tabFinal.swapaxes(3,4)[DOWN0M,0,ilam,:,:], axnames)
+        m.add_dataset('Q_down (0-)', tabFinal.swapaxes(3,4)[DOWN0M,1,ilam,:,:], axnames)
+        m.add_dataset('U_down (0-)', tabFinal.swapaxes(3,4)[DOWN0M,2,ilam,:,:], axnames)
+        m.add_dataset('N_down (0-)', tabFinal.swapaxes(3,4)[DOWN0M,3,ilam,:,:], axnames)
 
-        label = ['I_up (0+)', 'Q_up (0+)', 'U_up (0+)','N_up (0+)']
-        addLuts(m, label, NLAM, tabFinal, NBPHI, NBTHETA, axnames, UP0P)
+        m.add_dataset('I_up (0+)', tabFinal.swapaxes(3,4)[UP0P,0,ilam,:,:], axnames)
+        m.add_dataset('Q_up (0+)', tabFinal.swapaxes(3,4)[UP0P,1,ilam,:,:], axnames)
+        m.add_dataset('U_up (0+)', tabFinal.swapaxes(3,4)[UP0P,2,ilam,:,:], axnames)
+        m.add_dataset('N_up (0+)', tabFinal.swapaxes(3,4)[UP0P,3,ilam,:,:], axnames)
 
     # direct transmission
     if NLAM > 1:
@@ -468,125 +494,12 @@ def creerMLUTsResultats(tabFinal, attrs, tabTransDir, NBPHI, NBTHETA, tabTh, tab
             else:
                 m.add_dataset(key, nprofilesAtm[key].reshape((NLAM, -1)), ['Wavelength', 'ALT'])
 
-    ## ecriture des profiles Océaniques
-    #if D['SIM'][0]==0 or D['SIM'][0]==2 or D['SIM'][0]==3:
-    #    luts = []
-    #    keys=nprofilesOc.keys()
-    #    for key in keys:
-    #        a=nprofilesOc[key]
-    #        b=np.resize(a,(NLAM,D['NOCE']+1))
-    #        c=LUT(b, desc=key)
-    #        luts.append(c)
-    #    profOc = MLUT(luts)
-
     # write attributes
     attrs['processing duration'] = datetime.now() - attrs['processing started at']
     for k, v in attrs.items():
         m.set_attr(k, str(v))
 
     return m
-
-def addLuts(m, label, NLAM, tabFinal, NBPHI, NBTHETA, axnames, idx):
-    """
-    add a data set to a MLUT
-
-    Arguments :
-        - m : MLUT
-        - tabFinal : R, Q, U of all outgoing photons
-        - NBPHI : Number of intervals in azimuth angle
-        - NBTHETA : Number of intervals in azimuth angle
-        - axnames : Name of the axis
-        - idx : indexing of the output levels
-    """
-    for i in xrange(0, 4):
-        if NLAM == 1:
-            a = tabFinal[(idx*4+i)*NBPHI*NBTHETA*NLAM:(idx*4+i+1)*NBPHI*NBTHETA*NLAM]
-            a.resize(NBPHI, NBTHETA)
-            m.add_dataset(label[i], a, axnames)
-        else:
-            a = tabFinal[(idx*4+i)*NBPHI*NBTHETA*NLAM:(idx*4+i+1)*NBPHI*NBTHETA*NLAM]
-            a.resize(NLAM, NBPHI, NBTHETA)
-            m.add_dataset(label[i], a, axnames)
-
-
-def calculOmega(tabTh, tabPhi, tabOmega, NBTHETA, NBPHI):
-
-    """
-    compute the normalized area of each box, its theta , its psi in the form of 3 arrays
-
-    Arguments :
-        - tabTh : Zenith angles
-        - tabPhi : Azimutal angles
-        - NBTHETA : Number of intervals in zenith
-        - NBPHI : Number of intervals in azimuth angle
-        - tabOmega : Solid angle
-
-    """
-
-
-    tabds = np.zeros(NBTHETA * NBPHI, dtype=np.float64)
-    # Zenith angles of the center of the output angular boxes
-    dth = np.pi / 2 / NBTHETA
-    tabTh[0] = dth / 2.
-
-    for ith in xrange(1, NBTHETA):
-        tabTh[ith] = tabTh[ith - 1] + dth
-
-    # Azimuth angles of the center of the output angular boxes
-    dphi = pi/NBPHI
-    tabPhi[0] = dphi / 2.
-    for iphi in xrange(1, NBPHI):
-        tabPhi[iphi] = tabPhi[iphi - 1] + dphi
-
-    # Solid angles of the output angular boxes
-    sumds = 0
-    for ith in xrange(0, NBTHETA):
-        dth = pi/(2 * NBTHETA)
-        for iphi in xrange(0, NBPHI):
-            tabds[ith * NBPHI + iphi] = np.sin(tabTh[ith]) * dth * dphi;
-            sumds += tabds[ith * NBPHI + iphi]
-
-    # Normalisation de l'aire de chaque morceau de sphère
-    for ith in xrange(0, NBTHETA):
-        for iphi in xrange(0, NBPHI):
-            tabOmega[ith * NBPHI + iphi] = tabds[ith * NBPHI + iphi] / sumds
-
-
-
-def calculTabFinal(tabFinal, tabTh, tabPhi, tabPhotonsTot, nbPhotonsTot, nbPhotonsTotInter, NBTHETA, NBPHI, NLAM):
-    """
-    compute the tabFinal corresponding to R, Q, U of all outgoing photons
-
-    Arguments:
-        - tabFinal : R, Q, U of all outgoing photons
-        - tabTh : Zenith angles
-        - tabPhi : Azimutal angles
-        - tabPhotonsTot : Total weight of all outgoing photons
-        - nbPhotonsTot : Total number of photons processed
-        - nbPhotonsTotInter : Total number of photons processed by interval
-        - NBTHETA : Number of intervals in zenith
-        - NBPHI : Number of intervals in azimuth angle
-        - NLAM  : Number of wavelet length
-
-    """
-    # Fonction qui remplit le tabFinal correspondant à la reflectance (R), Q et U sur tous l'espace de sorti (dans chaque boite)
-    tabOmega = np.zeros(NBTHETA * NBPHI, dtype=np.float64)
-    calculOmega(tabTh, tabPhi, tabOmega, NBTHETA, NBPHI)
-    
-    # Remplissage du tableau final
-    for iphi in xrange(0, NBPHI):
-        for ith in xrange(0, NBTHETA):
-            norm = 2.0 * tabOmega[ith * NBPHI + iphi] * np.cos(tabTh[ith])
-            for i in xrange(0, NLAM):
-                normInter = norm * nbPhotonsTotInter[i]
-                # Reflectance
-                tabFinal[0 * NBTHETA * NBPHI * NLAM + i * NBTHETA * NBPHI + iphi * NBTHETA + ith] = (tabPhotonsTot[0 * NBPHI * NBTHETA * NLAM + i * NBTHETA * NBPHI + ith * NBPHI + iphi]  + tabPhotonsTot[1 * NBPHI * NBTHETA * NLAM+i * NBTHETA * NBPHI+ith * NBPHI + iphi]) / normInter
-                # Q
-                tabFinal[1 * NBTHETA * NBPHI * NLAM + i * NBTHETA * NBPHI + iphi * NBTHETA + ith]  = (tabPhotonsTot[0 * NBPHI * NBTHETA * NLAM + i * NBTHETA * NBPHI + ith * NBPHI + iphi] - tabPhotonsTot[1 * NBPHI * NBTHETA * NLAM + i * NBTHETA * NBPHI + ith * NBPHI + iphi]) / normInter
-                # U
-                tabFinal[2 * NBTHETA * NBPHI * NLAM + i * NBTHETA * NBPHI + iphi * NBTHETA + ith] = (tabPhotonsTot[2 * NBPHI * NBTHETA * NLAM + i * NBTHETA * NBPHI + ith * NBPHI + iphi]) / normInter
-                # N
-                tabFinal[3 * NBTHETA * NBPHI * NLAM + i * NBTHETA * NBPHI + iphi * NBTHETA + ith] = (tabPhotonsTot[3 * NBPHI * NBTHETA * NLAM + i * NBTHETA * NBPHI + ith * NBPHI + iphi])
 
 
 def afficheProgress(nbPhotonsTot, NBPHOTONS, nbPhotonsSorTot):
@@ -669,6 +582,7 @@ def calculF(phases, N):
         phase_H[idx, :, 3] = 0.                                                # V, always 0
 
     return phase_H
+
 
 def test_rayleigh():
     '''
@@ -1101,7 +1015,7 @@ def loop_kernel(NBPHOTONS, Tableau, Var, Init, NLVL,
     nbPhotonsTot = 0
     nbPhotonsTotInter = np.zeros(NLAM, dtype=np.uint64)
     nbPhotonsSorTot = 0
-    tabPhotonsTot = np.zeros(NLVL*NPSTK*NBTHETA * NBPHI * NLAM, dtype=np.float32)
+    tabPhotonsTot = np.zeros((NLVL,NPSTK,NLAM,NBTHETA,NBPHI), dtype=np.float32)
 
     # skip List used to avoid transfering arrays already sent into the device
     skipTableau = ['faer', 'foce', 'ho', 'sso', 'ipo', 'h', 'pMol', 'ssa', 'abs', 'ip', 'alb', 'lambda', 'z']
@@ -1128,7 +1042,7 @@ def loop_kernel(NBPHOTONS, Tableau, Var, Init, NLVL,
 
         # get the results
         nbPhotonsTot += Var.nbPhotons
-        tabPhotonsTot+=Tableau.tabPhotons
+        tabPhotonsTot += Tableau.tabPhotons.reshape(tabPhotonsTot.shape)
 
         for ilam in xrange(0, NLAM):
             nbPhotonsTotInter[ilam] += Tableau.nbPhotonsInter[ilam]
