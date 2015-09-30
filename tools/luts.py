@@ -875,6 +875,7 @@ class MLUT(CMN_MLUT_LUT):
     def add_axis(self, name, axis):
         ''' Add an axis to the MLUT '''
         assert isinstance(name, str)
+        assert name not in self.axes, 'Axis "{}" already in MLUT'.format(name)
         if isinstance(axis, list):
             ax = np.array(axis)
         else:
