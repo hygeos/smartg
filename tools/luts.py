@@ -388,25 +388,32 @@ class LUT(CMN_MLUT_LUT):
 
     def plot(self, *args, **kwargs):
         if self.ndim == 1:
-            self.__plot_1d()
+            self.__plot_1d(*args, **kwargs)
         elif self.ndim == 2:
             return semi_polar(self, *args, **kwargs)
         else:
             raise Exception('No plot defined for {} dimensions'.format(self.ndim))
 
 
-    def __plot_1d(self, show_grid=True):
+    def __plot_1d(self, show_grid=True, swap=False):
         '''
         plot a 1-dimension LUT
         '''
         from pylab import plot, xlabel, ylabel, grid
         x = self.axes[0]
         y = self.data
-        plot(x, y)
-        if self.names[0] is not None:
-            xlabel(self.names[0])
-        if self.desc is not None:
-            ylabel(self.desc)
+        if not swap:
+            plot(x, y)
+            if self.names[0] is not None:
+                xlabel(self.names[0])
+            if self.desc is not None:
+                ylabel(self.desc)
+        else:
+            plot(y, x)
+            if self.names[0] is not None:
+                ylabel(self.names[0])
+            if self.desc is not None:
+                xlabel(self.desc)
         grid(show_grid)
 
 
@@ -956,15 +963,16 @@ class MLUT(CMN_MLUT_LUT):
     def set_attrs(self, attributes):
         self.attrs.update(attributes)
 
-    def print_info(self, show_range=True, show_self=True, show_attrs=False):
+    def print_info(self, show_range=True, show_self=True, show_attrs=False, show_shape=False, show_axes=True):
         if show_self:
             print str(self)
         print ' Datasets:'
         for i, (name, dataset, axes) in enumerate(self.data):
-            if axes is None:
-                axdesc = ''
-            else:
-                axdesc = ', axes='+ str(tuple(axes))
+            axdesc = ''
+            if (axes is not None) and show_axes:
+                axdesc += ', axes='+ str(tuple(axes))
+            if show_shape:
+                axdesc += ', shape={}'.format(dataset.shape)
             if show_range:
                 rng = ' between {:.3g} and {:.3g}'.format(np.amin(dataset), np.amax(dataset))
             else:
@@ -1149,7 +1157,6 @@ def read_mlut_hdf(filename, datasets=None):
             - or a tuple (dataset_name, axes) where axes is a list of
               dimensions (strings), overriding the attribute 'dimensions'
     '''
-    assert isinstance(datasets, list), 'datasets should be provided as a list'
 
     hdf = SD(filename)
 
@@ -1158,6 +1165,8 @@ def read_mlut_hdf(filename, datasets=None):
     ls_datasets = []
     if datasets is None:
         datasets = xrange(len(hdf.datasets()))
+    else:
+        assert isinstance(datasets, list), 'datasets should be provided as a list'
 
     for i in datasets:
         if isinstance(i, tuple):
