@@ -326,7 +326,7 @@ def smartg(wl, pp=True,
         # stockage des resultats dans une MLUT
         output = creerMLUTsResultats(tabFinalEvent, attrs, tabTransDir, NBPHI, NBTHETA, tabTh, tabPhi,
                                      wavelengths, NLAM, tabPhotonsTot,nbPhotonsTot, OUTPUT_LAYERS,
-                                     nprofilesAtm, nprofilesOc, UPTOA, DOWN0P, DOWN0M, UP0P, UP0M)
+                                     nprofilesAtm, nprofilesOc, UPTOA, DOWN0P, DOWN0M, UP0P, UP0M, SIM)
 
         p.finish('Done! (used {}) | '.format(attrs['device']) + afficheProgress(nbPhotonsTot, NBPHOTONS, nbPhotonsSorTot))
 
@@ -396,7 +396,7 @@ def reptran_merge(m, ibands, verbose=True):
 
 def creerMLUTsResultats(tabFinal, attrs, tabTransDir, NBPHI, NBTHETA, tabTh, tabPhi,
                         wl, NLAM, tabPhotonsTot,nbPhotonsTot,OUTPUT_LAYERS,
-                        nprofilesAtm,nprofilesOc,UPTOA, DOWN0P, DOWN0M, UP0P, UP0M):
+                        nprofilesAtm,nprofilesOc,UPTOA, DOWN0P, DOWN0M, UP0P, UP0M, SIM):
 
     """
     store the result in a MLUT
@@ -457,17 +457,16 @@ def creerMLUTsResultats(tabFinal, attrs, tabTransDir, NBPHI, NBTHETA, tabTh, tab
     else:
         m.set_attr('direct transmission', str(tabTransDir[0]))
 
-    # ecriture des profiles Atmosphériques
-    # (FIXME)
-    #if D['SIM'][0]==-2 or D['SIM'][0]==1 or D['SIM'][0]==2:
-    #    luts = []
-    #    keys=nprofilesAtm.keys()
-    #    for key in keys:
-    #        a=nprofilesAtm[key]
-    #        b=np.resize(a,(NLAM,D['NATM']+1))
-    #        c=LUT(b, desc=key)
-    #        luts.append(c)
-    #    profAtm = MLUT(luts)
+    # write atmospheric profiles
+    if SIM in [-2, 1, 2]:
+        m.add_axis('ALT', nprofilesAtm['ALT'])
+        for key in nprofilesAtm.keys():
+            if key == 'ALT':
+                continue
+            if NLAM == 1:
+                m.add_dataset(key, nprofilesAtm[key], ['ALT'])
+            else:
+                m.add_dataset(key, nprofilesAtm[key].reshape((NLAM, -1)), ['Wavelength', 'ALT'])
 
     ## ecriture des profiles Océaniques
     #if D['SIM'][0]==0 or D['SIM'][0]==2 or D['SIM'][0]==3:
