@@ -133,7 +133,7 @@ def smartg(wl, pp=True,
         #
 
         if NBLOOP is None:
-            NBLOOP = NBPHOTONS/30
+            NBLOOP = min(NBPHOTONS/30, 1e8)
 
         # number of output levels
         # warning! should be identical to the value defined in communs.h
@@ -204,7 +204,7 @@ def smartg(wl, pp=True,
         #
         # ocean profile
         # get the phase function and oceanic profile
-        nprofilesOc, phasesOc, NOCE = get_profOc(wl, water, NLAM)
+        nprofilesOc, phasesOc, NOCE = get_profOc(wavelengths, water, NLAM)
 
         #
         # environment effect
