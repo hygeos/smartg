@@ -906,7 +906,7 @@ class MLUT(CMN_MLUT_LUT):
 
         self.data.append((name, dataset, axnames))
 
-    def save(self, filename, overwrite=False, verbose=False):
+    def save(self, filename, overwrite=False, verbose=False, compress=True):
         '''
         Save a MLUT to a hdf file
         '''
@@ -933,7 +933,8 @@ class MLUT(CMN_MLUT_LUT):
                     print '   Write axis "{}" in "{}"'.format(name, filename)
                 type = typeconv[ax.dtype]
                 sds = hdf.create(name, type, ax.shape)
-                sds.setcompress(SDC.COMP_DEFLATE, 9)
+                if compress:
+                    sds.setcompress(SDC.COMP_DEFLATE, 9)
                 sds[:] = ax[:]
                 sds.endaccess()
 
@@ -943,7 +944,8 @@ class MLUT(CMN_MLUT_LUT):
                 print '   Write data "{}"'.format(name)
             type = typeconv[data.dtype]
             sds = hdf.create(name, type, data.shape)
-            sds.setcompress(SDC.COMP_DEFLATE, 9)
+            if compress:
+                sds.setcompress(SDC.COMP_DEFLATE, 9)
             sds[:] = data[:]
             if axnames is not None:
                 setattr(sds, 'dimensions', ','.join(map(str, axnames)))
