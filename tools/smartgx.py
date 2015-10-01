@@ -154,6 +154,10 @@ def smartg(wl, pp=True,
         attrs = {}
         attrs.update({'device': pycuda.autoinit.device.name()})
         attrs.update({'processing started at': datetime.now()})
+        attrs.update({'VZA': THVDEG})
+        attrs.update({'MODE': {True: 'PPA', False: 'SSA'}[pp]})
+        attrs.update({'XBLOCK': XBLOCK})
+        attrs.update({'XGRID': XGRID})
 
         if SEED == -1:
             # SEED is based on clock
