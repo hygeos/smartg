@@ -3,6 +3,16 @@
 #####################
 
 
+v2.0-beta
+=========
+
+A whole bunch of changes :)
+Added many python tools for input preparation and data management.
+Added a python interface and tools to use in ipython notebooks.
+Added a full python (pycuda) version. This version is still separated from the
+'executable' version. Both versions are still working, but the executable
+version may be deprecated.
+Other corrections in the code, see 'git log v1.3.2..v2.0beta' for more informations.
 
 
 v1.3.2
