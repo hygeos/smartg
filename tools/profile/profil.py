@@ -1318,23 +1318,23 @@ class Profile(object):
             indices[:,i] = ind_z[:] + max
 
 
-        for w in pfwav:
+        for ww in pfwav:
             if self.verbose:
-                print 'Computing phase functions at {} nm'.format(w)
-            pro.calc(w)
+                print 'Computing phase functions at {} nm'.format(ww)
+            pro.calc(ww)
 
             # aerosol profile and phase functions
             if self.aer is not None:
-                pfaer = pro.aer.phase(w)
-                _, dtauaer, ssaaer = pro.aer.calc(w)
+                pfaer = pro.aer.phase(ww)
+                _, dtauaer, ssaaer = pro.aer.calc(ww)
             else:
                 pfaer = 0.
                 dtauaer, ssaaer = 0., 0.
 
             # cloud profile and phase function
             if self.cloud is not None:
-                pfcld = pro.cloud.phase(w)
-                _, dtaucld, ssacld = pro.cloud.calc(w)
+                pfcld = pro.cloud.phase(ww)
+                _, dtaucld, ssacld = pro.cloud.calc(ww)
             else:
                 pfcld = 0.
                 dtaucld, ssacld = 0., 0.
