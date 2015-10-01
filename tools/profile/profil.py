@@ -1121,7 +1121,11 @@ class Profile(object):
         self.atm_filename = atm_filename
         self.pfwav = pfwav
         self.pfgrid = pfgrid
-        self.last = None   # last parameters to avoid recalculation when possible
+        self.cache_phase_keys = []
+        self.cache_phase_values = []
+        self.cache_prof_keys = []
+        self.cache_prof_values = []
+
 
         crs_O3_filename = join(dir_libradtran_crs, 'crs_O3_UBremen_cf.dat')
         crs_NO2_filename = join(dir_libradtran_crs, 'crs_NO2_UBremen_cf.dat')
@@ -1227,9 +1231,6 @@ class Profile(object):
         else:
             wl = w
 
-        if (self.last is not None) and (self.last[0] == list(wl)):
-            return (self.last[1], self.last[2])
-
         if use_reptran : profiles, phases = self.calc_bands(w)
         else : profiles, phases = self.calc_bands(wl)
 
@@ -1256,8 +1257,6 @@ class Profile(object):
             fp.write(file_phase+'\n')
         fp.close()
 
-        self.last = (list(wl), file_profiles, file_list_phases)
-
         return file_profiles, file_list_phases
 
     def calc_phase(self, w):
@@ -1268,10 +1267,13 @@ class Profile(object):
 
         -> create a new profile at a grid pfgrid (coarse grid) and for bands pfwav
         '''
-
         # convert to list if wl is a scalar
         if isinstance(w, (float, int, REPTRAN_IBAND)):
             w = [w]
+
+        for i in xrange(len(self.cache_phase_keys)):
+            if np.alltrue(self.cache_phase_keys[i] == w):
+                return self.cache_phase_values[i]
 
         use_reptran = isinstance(w[0], REPTRAN_IBAND)
         if use_reptran:
@@ -1359,6 +1361,9 @@ class Profile(object):
             print '  indices:'
             print indices
 
+        self.cache_phase_keys.append(w)
+        self.cache_phase_values.append((phases, indices))
+
         return phases, indices
 
     def calc_bands(self, w):
@@ -1404,6 +1409,10 @@ class Profile(object):
         (I,ALT,hmol,haer,H,XDEL,YDEL,XSSA,percent_abs, IPHA)
 
         '''
+        for i in xrange(len(self.cache_prof_keys)):
+            if np.alltrue(self.cache_prof_keys[i] == w):
+                return self.cache_prof_values[i]
+
         use_reptran = isinstance(w, REPTRAN_IBAND)
         if use_reptran:
             wl = w.w
@@ -1523,6 +1532,9 @@ class Profile(object):
                 else:
                     xssa=(ssaaer[m]*taua+ssaclo[m]*tauc)/(taua+tauc)
                 profile[m] = (m, z[m], dataray[m], dataaer[m]+dataclo[m], htot , xdel, ydel, xssa, abs, 0)
+
+        self.cache_prof_keys.append(w)
+        self.cache_prof_values.append(profile)
 
         return profile
 
