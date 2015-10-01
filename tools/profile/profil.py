@@ -18,7 +18,7 @@ import tempfile
 from phase_functions import PhaseFunction
 from glob import glob
 
-dir_libradtran = '/home/applis/libRadtran-2.0-beta/'
+dir_libradtran = '/home/applis/libRadtran/libRadtran-2.0/'
 dir_libradtran_reptran =  join(dir_libradtran, 'data/correlated_k/reptran/')
 dir_libradtran_opac =  join(dir_libradtran, 'data/aerosol/OPAC/')
 dir_libradtran_atmmod = join(dir_libradtran, 'data/atmmod/')
