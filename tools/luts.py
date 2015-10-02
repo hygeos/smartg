@@ -18,6 +18,26 @@ from os.path import exists
 from os import remove
 from collections import OrderedDict, Iterable
 
+
+def interleave_seq(p, q):
+    '''
+    Interleave 2 sequences (union, preserve order)
+    ([1, 3, 4, 6], [2, 3, 6]) -> [1, 2, 3, 4, 6]
+    '''
+    if len(p) == 0:
+        return q
+    elif len(q) == 0:
+        return p
+    elif p[0] == q[0]:
+        return [p[0]] + interleave_seq(p[1:], q[1:])
+    elif p[0] in q[1:]:
+        if q[0] in p[1:]:
+            raise ValueError('sequences "{}" and "{}" cannot be interleaved'.format(p, q))
+        return interleave_seq(q, p)
+    else:  # p[0] not in q
+        return [p[0]] + interleave_seq(p[1:], q)
+
+
 class CMN_MLUT_LUT(object):
     '''
     Base class for MLUTs and LUTS
@@ -302,15 +322,34 @@ class LUT(CMN_MLUT_LUT):
         assert isinstance(other, LUT)
         return self.to_mlut().equal(other.to_mlut(), strict=strict, show_diff=show_diff)
 
+
     def __binary_operation_lut__(self, other, fn):
-        # check axes
-        assert len(self.axes) == len(other.axes)
-        for i, ax in enumerate(self.axes):
-            assert len(ax) == len(other.axes[i])
-            assert np.allclose(ax, other.axes[i])
-        assert len(self.names) == len(other.names)
-        for i, n in enumerate(self.names):
-            assert other.names[i] == n
+        '''
+        apply fn(self, other) where other is a LUT
+        the result is determined by using common axes between self and other
+        and using appropriate broadcasting
+        '''
+        # shapes for broadcasting self vs other
+        # None adds an singleton dimension, slice(None) adds a full dimension
+        shp1, shp2 = [], []
+
+        # new axes
+        axes = []
+
+        # determine union of axes
+        names = interleave_seq(self.names, other.names)
+        for i, a in enumerate(names):
+            if a in self.names:
+                axes.append(self.axes[self.names.index(a)])
+                shp1.append(slice(None))
+                if a in other.names:
+                    shp2.append(slice(None))
+                else:
+                    shp2.append(None)
+            else:
+                axes.append(other.axes[other.names.index(a)])
+                shp1.append(None)
+                shp2.append(slice(None))
 
         # include common attributes
         attrs = {}
@@ -333,9 +372,12 @@ class LUT(CMN_MLUT_LUT):
         else:
             desc = str(fn)
 
-        return LUT(fn(self.data, other.data),
-                axes=self.axes, names=self.names,
-                attrs=self.attrs, desc=desc)
+        return LUT(
+                fn(self.data.__getitem__(tuple(shp1)),
+                    other.data.__getitem__(tuple(shp2))),
+                axes=axes, names=names,
+                attrs=attrs, desc=desc)
+
 
     def __binary_operation_scalar__(self, other, fn):
         return LUT(fn(self.data, other),
@@ -1224,7 +1266,6 @@ def read_lut_hdf(filename, dataset, axnames=None):
     read a hdf file as a LUT, using axis list axnames
     if axnames is None, read the axes names in the attribute 'dimensions' of dataset
     '''
-    # TODO: deprecate this one
     axes = []
     names = []
     data = None
@@ -1279,8 +1320,6 @@ def read_lut_hdf(filename, dataset, axnames=None):
         attrs.update({a: hdf.attributes()[a]})
 
     return LUT(data, axes=axes, names=names, desc=dataset, attrs=attrs)
-
-
 
 
 

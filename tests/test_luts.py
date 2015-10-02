@@ -101,6 +101,28 @@ def test_operations3():
             ]:
         yield check_operations3, op, res
 
+# "broadcasting" operations between LUTs
+def test_broadcasting():
+    l = create_lut()
+    l.names[0] = 'zz'
+    p = create_lut()
+    assert (p+l).names == ['z', 'zz', 'P0']
+    assert (p+l)[2, 3, 4] == p[2, 4] + l[3, 4]
+
+def test_broadcasting2():
+    l = create_lut()
+    z = l.sub()[:,0]
+    p = l.sub()[0,:]
+    (z + p).print_info()
+    assert (z+p)[4,5] == z[4] + p[5]
+
+@raises(ValueError)
+def test_broadcasting3():
+    l1 = LUT(np.eye(3), axes=[None, None], names=['a', 'b'])
+    l2 = LUT(np.eye(3), axes=[None, None], names=['b', 'a'])
+    l1+l2
+
+
 def test_indexing():
     m = create_mlut()
     for i, d in enumerate(m.datasets()):
