@@ -123,6 +123,23 @@ def test_broadcasting3():
     l1+l2
 
 
+def test_reduce():
+    l = create_lut()
+    l.print_info()
+    l.reduce(np.sum, 'z')
+    l.reduce(np.sum, 'P0')
+    l.reduce(np.sum, 0)
+    l.reduce(np.sum, 1)
+
+
+def test_reduce_2():
+    # test reduce using grouping
+    l = create_lut()
+    P0 = l.axis('P0')
+    l.reduce(np.sum, 'P0', grouping=(P0<1000), newaxis=[1000, 1010])
+    l.reduce(np.sum, 'P0', grouping=(P0<1000))
+
+
 def test_indexing():
     m = create_mlut()
     for i, d in enumerate(m.datasets()):

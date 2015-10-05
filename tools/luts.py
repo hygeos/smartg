@@ -38,6 +38,16 @@ def interleave_seq(p, q):
         return [p[0]] + interleave_seq(p[1:], q)
 
 
+def uniq(seq):
+    '''
+    Returns uniques elements from a sequence, whist preserving its order
+    http://stackoverflow.com/questions/480214/
+    '''
+    seen = set()
+    seen_add = seen.add
+    return [ x for x in seq if not (x in seen or seen_add(x))]
+
+
 class CMN_MLUT_LUT(object):
     '''
     Base class for MLUTs and LUTS
@@ -279,7 +289,7 @@ class LUT(CMN_MLUT_LUT):
                 inf[inf == self.data.shape[i]-1] -= 1
                 x = k-inf
                 if k.ndim > 0:
-                    x = x.__getitem__(dims_result)
+                    x = x[dims_result]
             elif isinstance(k, float):
                 interpolate = True
                 inf = int(k)
@@ -373,8 +383,8 @@ class LUT(CMN_MLUT_LUT):
             desc = str(fn)
 
         return LUT(
-                fn(self.data.__getitem__(tuple(shp1)),
-                    other.data.__getitem__(tuple(shp2))),
+                fn(self.data[tuple(shp1)],
+                    other.data[tuple(shp2)]),
                 axes=axes, names=names,
                 attrs=attrs, desc=desc)
 
@@ -426,6 +436,58 @@ class LUT(CMN_MLUT_LUT):
 
     def save(self, filename, **kwargs):
         return self.to_mlut().save(filename, **kwargs)
+
+    def reduce(self, fn, axis, grouping=None):
+        '''
+        apply function fn to a given axis
+        fn: function to apply
+            should be applicable to a numpy.ndarray and support argument axis
+            (example: numpy.sum)
+        axis: name (str) or index of axis
+        grouping: iterable of same size as axis
+                  fn is applied by groups corresponding to identical values in
+                  grouping
+                      example: grouping = [0, 0, 0, 1, 1, 2]
+                      results in fn(3 first elements), fn(2 next), then fn(last)
+                    the axis of the reduced axis takes the values of grouping
+                  default None (apply to all elements, remove axis)
+        '''
+        if isinstance(axis, str):
+            index = self.names.index(axis)
+        else:
+            index = axis
+
+        if grouping is None:
+            axes = list(self.axes)
+            names = list(self.names)
+            axes.pop(index)
+            names.pop(index)
+            if self.ndim == 1:
+                # returns a scalar
+                return fn(self.data, axis=index)
+            else:
+                # returns a LUT
+                return LUT(fn(self.data, axis=index),
+                        axes=axes, names=names,
+                        attrs=self.attrs, desc=self.desc)
+        else:
+            assert len(grouping) == len(self.axes[index])
+            shp = list(self.data.shape)
+            U = uniq(grouping)
+            shp[index] = len(U)
+            data = np.zeros(shp, dtype=self.data.dtype)
+            ind1 = [slice(None),] * self.ndim
+            ind2 = [slice(None),] * self.ndim
+            for i, u in enumerate(U):
+                # fill each group
+                ind1[index] = i
+                ind2[index] = (grouping == u)
+                data[tuple(ind1)] = fn(self.data[tuple(ind2)], axis=index)
+            axes = list(self.axes)
+            axes[index] = U
+            return LUT(data,
+                    axes=axes, names=self.names,
+                    attrs=self.attrs, desc=self.desc)
 
 
     def plot(self, *args, **kwargs):
@@ -484,7 +546,7 @@ class Subsetter(object):
                 axes.append(self.LUT.axes[i])
                 names.append(self.LUT.names[i])
 
-        data = self.LUT.__getitem__(keys)
+        data = self.LUT[keys]
 
         # add missing axes which are added by additional
         for i in xrange(data.ndim - len(axes)):
