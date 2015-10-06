@@ -178,17 +178,26 @@ class LUT(CMN_MLUT_LUT):
         '''
         return Subsetter(self)
 
-    def axis(self, a):
+    def axis(self, a, aslut=False):
         '''
         returns axis referred to by a (string or integer)
+        aslut:
+            False: returns the values
+            True: returns axis a a LUT
+                (containing itself as only axis)
         '''
         if isinstance(a, str):
             index = self.names.index(a)
-            return self.axes[index]
         elif isinstance(a, int):
-            return self.axes[a]
+            index = a
         else:
             raise TypeError('argument of LUT.axis() should be int or string')
+        
+        if aslut:
+            data = self.axes[index]
+            return LUT(data, axes=[data], names=[self.names[index]])
+        else:
+            return self.axes[index]
 
     def print_info(self, show_attrs=False):
         if self.desc is None:
@@ -1251,12 +1260,17 @@ class MLUT(CMN_MLUT_LUT):
 
         return eq
 
-    def axis(self, axname):
+    def axis(self, axname, aslut=False):
         '''
         returns an axis as a LUT
+        if aslut: returns it as a LUT
+        otherwise, as values
         '''
         data = self.axes[axname]
-        return LUT(desc=axname, data=data, axes=[data], names=[axname])
+        if aslut:
+            return LUT(desc=axname, data=data, axes=[data], names=[axname])
+        else:
+            return data
 
 
 def read_mlut_hdf(filename, datasets=None):

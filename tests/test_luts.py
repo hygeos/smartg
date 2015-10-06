@@ -148,6 +148,16 @@ def test_indexing():
         elif m[d].ndim == 3:
             assert np.allclose(m[d][:,:,:], m[i][:,:,:])
 
+def test_axis():
+    m = create_mlut()
+    assert np.alltrue(m.axis('a') == m.axes['a'])
+    assert np.alltrue(m.axis('a', aslut=True)[:] == m.axes['a'])
+
+    l = create_lut()
+    assert np.alltrue(l.axis('z') == l.axes[0])
+    assert np.alltrue(l.axis(0) == l.axes[0])
+    assert np.alltrue(l.axis('z', aslut=True)[:] == l.axes[0])
+    assert np.alltrue(l.axis(0, aslut=True)[:] == l.axes[0])
 
 def test_merge():
     mluts = []
