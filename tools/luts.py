@@ -437,7 +437,7 @@ class LUT(CMN_MLUT_LUT):
     def save(self, filename, **kwargs):
         return self.to_mlut().save(filename, **kwargs)
 
-    def reduce(self, fn, axis, grouping=None):
+    def reduce(self, fn, axis, grouping=None, **kwargs):
         '''
         apply function fn to a given axis
         fn: function to apply
@@ -464,10 +464,10 @@ class LUT(CMN_MLUT_LUT):
             names.pop(index)
             if self.ndim == 1:
                 # returns a scalar
-                return fn(self.data, axis=index)
+                return fn(self.data, axis=index, **kwargs)
             else:
                 # returns a LUT
-                return LUT(fn(self.data, axis=index),
+                return LUT(fn(self.data, axis=index, **kwargs),
                         axes=axes, names=names,
                         attrs=self.attrs, desc=self.desc)
         else:
@@ -482,7 +482,7 @@ class LUT(CMN_MLUT_LUT):
                 # fill each group
                 ind1[index] = i
                 ind2[index] = (grouping == u)
-                data[tuple(ind1)] = fn(self.data[tuple(ind2)], axis=index)
+                data[tuple(ind1)] = fn(self.data[tuple(ind2)], axis=index, **kwargs)
             axes = list(self.axes)
             axes[index] = U
             return LUT(data,

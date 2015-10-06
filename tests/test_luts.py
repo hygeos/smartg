@@ -136,7 +136,7 @@ def test_reduce_2():
     # test reduce using grouping
     l = create_lut()
     P0 = l.axis('P0')
-    l.reduce(np.sum, 'P0', grouping=(P0<1000), newaxis=[1000, 1010])
+    l.reduce(np.sum, 'P0', grouping=(P0<1000))
     l.reduce(np.sum, 'P0', grouping=(P0<1000))
 
 
