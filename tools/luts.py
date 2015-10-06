@@ -1251,6 +1251,13 @@ class MLUT(CMN_MLUT_LUT):
 
         return eq
 
+    def axis(self, axname):
+        '''
+        returns an axis as a LUT
+        '''
+        data = self.axes[axname]
+        return LUT(desc=axname, data=data, axes=[data], names=[axname])
+
 
 def read_mlut_hdf(filename, datasets=None):
     '''
