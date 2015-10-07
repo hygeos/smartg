@@ -513,10 +513,11 @@ class CloudOPAC(object):
         return 'CLO={base}-AOT={aot}'.format(base=self.basename, aot=self.__tau)
 
 
-def trapzinterp(y, x, xnew):
+def trapzinterp(y, x, xnew, samesize=True):
     '''
     integrate y(x) using the composite trapezoidal rule, interpolated on a new grid xnew
-    returns an array of same size as xnew, whose first element is y[xnew[0]]
+    if samesize: returns an array of same size as xnew, whose first element is y[xnew[0]]
+    otherwise, returns an array of size len(xnew)-1
     '''
     # revert x and y such that x be increasing
     if x[0] > x[-1]:
@@ -531,7 +532,9 @@ def trapzinterp(y, x, xnew):
 
     # for every interval of the new grid
     nnew= len(xnew)
-    integ = np.array([ynew[0]], dtype='f')
+    integ = np.array([], dtype='f')
+    if samesize:
+        integ = np.append(integ, ynew[0])
     for i in xrange(nnew-1):
 
         i1, i2 = idx[i], idx[i+1]
