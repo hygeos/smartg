@@ -107,7 +107,7 @@ typedef int CrMCCUDA;
 
 
 /* Constantes propres au calcul sphérique */
-#define RTER 6400
+#define RTER 6400.
 
 
 /* Test des differentes fonctions random */

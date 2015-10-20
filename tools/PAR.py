@@ -1,10 +1,12 @@
 import numpy as np
-from smartg import Smartg, RoughSurface, LambSurface, FlatSurface
-from profile.profil import Profile, AeroOPAC, CloudOPAC, REPTRAN, REPTRAN_IBAND
+from smartg import RoughSurface, LambSurface, FlatSurface
+from smartgx import smartg, smartg_thr, reptran_merge
+from profile.profil import Profile, AeroOPAC, CloudOPAC, REPTRAN, REPTRAN_IBAND, trapzinterp
 from luts import MLUT, LUT, Idx, merge, read_lut_hdf, read_mlut_hdf
 from water.iop_spm import IOP_SPM
 from water.iop_mm import IOP_MM
 from smartg_view import semi_polar, smartg_view
+import tempfile
 #from IPython.html.widgets.interaction import interact, interact_manual
 #from IPython.display import clear_output
 from scipy.integrate import simps, trapz
@@ -12,29 +14,41 @@ import scipy.constants as cst
 from pylab import *
 import ephem
 
-def Irr(R):
-    #---------------------------------------------------------
-    # Compute Irradiance from a 2D(phi,theta) Reflectance LUT from SMART-G
-    #---------------------------------------------------------
-    phi = R.axes[0]
-    the = R.axes[1]
-    mu  = np.cos(the*np.pi/180.)
-    Tab = np.zeros(len(phi),dtype=float)
-    for iphi in range(len(phi)):
-        Tab[iphi] =   simps(mu *  R[iphi,:], - mu)
-    return 2 * simps(Tab, phi*np.pi/180.) / np.pi  
+def Irr(L, azimuth='Azimuth angles', zenith='Zenith angles'):
+    '''
+    Compute plane irradiance over dimensions (theta, phi)
+    L: reflectance LUT
+    phi: name of the azimuth axis in degrees
+    theta: name of the zenith axis in degrees
+    returns the irradiance value or a LUT for the remainding dimensions
+    '''
+    mu = (L.axis(zenith, aslut=True)*pi/180.).apply(cos)
+    phi = L.axis(azimuth, aslut=True)*pi/180.
+    return 2./pi*(mu*L).reduce(simps, zenith, x=-mu[:]).reduce(simps, azimuth, x=phi[:])
+
+#def Irr(R):
+#    #---------------------------------------------------------
+#    # Compute Irradiance from a 2D(phi,theta) Reflectance LUT from SMART-G
+#    #---------------------------------------------------------
+#    phi = R.axes[0]
+#    the = R.axes[1]
+#    mu  = np.cos(the*np.pi/180.)
+#    Tab = np.zeros(len(phi),dtype=float)
+#    for iphi in range(len(phi)):
+#        Tab[iphi] =   simps(mu *  R[iphi,:], - mu)
+#    return 2 * simps(Tab, phi*np.pi/180.) / np.pi  
     
-def SpherIrr(R):
-    #---------------------------------------------------------
-    # Compute Spherical Irradiance from a 2D(phi,theta) Reflectance LUT from SMART-G
-    #---------------------------------------------------------
-    phi = R.axes[0]
-    the = R.axes[1]
-    mu  = np.cos(the*np.pi/180.)
-    Tab = np.zeros(len(phi),dtype=float)
-    for iphi in range(len(phi)):
-        Tab[iphi] =  simps(R[iphi,:], -mu)
-    return 2 * simps(Tab, phi*np.pi/180.) / np.pi  
+def SpherIrr(L, azimuth='Azimuth angles', zenith='Zenith angles'):
+    '''
+    Compute spherical irradiance over dimensions (theta, phi)
+    L: reflectance LUT
+    phi: name of the azimuth axis in degrees
+    theta: name of the zenith axis in degrees
+    returns the irradiance value or a LUT for the remainding dimensions
+    '''
+    mu = (L.axis(zenith, aslut=True)*pi/180.).apply(cos)
+    phi = L.axis(azimuth, aslut=True)*pi/180.
+    return 2./pi*(L).reduce(simps, zenith, x=-mu[:]).reduce(simps, azimuth, x=phi[:]) 
     
 def ReadREPTRAN_bands(repname, BAND=None, LMIN=None, LMAX=None, SAMPLING=100000, FULL=False):
     rep = REPTRAN(repname+'.cdf')
@@ -78,11 +92,11 @@ def ReadREPTRAN_bands(repname, BAND=None, LMIN=None, LMAX=None, SAMPLING=100000,
             ib_l.append(ib)
             if FULL:band_l.append(iband)
             
-    wi=LUT(np.array(wi_l),axes=[wi_l],names=['Wavelengths'],desc='Wavelengths internal band')
-    wb=LUT(np.array(wb_l),axes=[wi_l],names=['Wavelengths'],desc='Wavelengths central band')
-    we=LUT(np.array(we_l),axes=[wi_l],names=['Wavelengths'],desc='Weight')
-    ex=LUT(np.array(ex_l),axes=[wi_l],names=['Wavelengths'],desc='E0')
-    dl=LUT(np.array(dl_l),axes=[wi_l],names=['Wavelengths'],desc='Dlambda')
+    wi=LUT(np.array(wi_l),axes=[wi_l],names=['Wavelength'],desc='Wavelength internal band')
+    wb=LUT(np.array(wb_l),axes=[wi_l],names=['Wavelength'],desc='Wavelength central band')
+    we=LUT(np.array(we_l),axes=[wi_l],names=['Wavelength'],desc='Weight')
+    ex=LUT(np.array(ex_l),axes=[wi_l],names=['Wavelength'],desc='E0')
+    dl=LUT(np.array(dl_l),axes=[wi_l],names=['Wavelength'],desc='Dlambda')
     if FULL : return wi, wb, we, ex, dl, band_l
     else : return wi, wb, we, ex, dl
 
@@ -120,9 +134,11 @@ def Int(wi, wb, ex, we, dl, M=None, field=None, lim=[400.,700.]):
                 axes=[L.axes[1], L.axes[2]], desc='Q_'+L.desc, \
                 names=[L.names[1], L.names[2]], attrs=L.attrs)
         else:
+
             E = sum(tab[ok] * ex.data[ok] * we.data[ok] * dl.data[ok])
             Q = sum(tab[ok] * wi.data[ok] * ex.data[ok] * we.data[ok] * dl.data[ok])
     else:
+
         E = sum(ex.data[ok] * we.data[ok] * dl.data[ok])
         Q = sum(ex.data[ok] * wi.data[ok] * we.data[ok] * dl.data[ok])
     
@@ -135,6 +151,58 @@ def Int(wi, wb, ex, we, dl, M=None, field=None, lim=[400.,700.]):
     Qavg = Q/norm
         
     return E, Eavg, Q, Qavg
+    
+def nInt(wi, wb, ex, we, dl, M=None, field=None, lim=[400.,700.]):
+    '''
+    all input vectors have same length, coming from REPTRAN
+    wi : input wavelengths of internal bands (nm)
+    wb : input wavelengths of bands (nm)
+    ex : input extra-terrestrial irradiances at internal bands (W m-2 nm-1)
+    we : input weights of internal bands
+    dl : input bandwidths of bands (nm)
+    M  : optional LUT or MLUT with 3D (lambda,phi,theta) or 1D (lambda) radiative field to spectrally integrate
+    field : optional field of MLUT (ex: 'I_up (TOA'), if None, the extraterrestrial irradiance is integrated
+    lim: spectral boundaries for integration
+    
+    returns
+    spectrally integrated intensity and averaged intensity
+    spectrally integrated daily quanta and average daily quanta
+    '''
+    ok=np.where((wb.data >=lim[0]) & (wb.data <lim[1]))[0]
+    if (M != None) :
+        if (field != None) :
+            L = M[field]
+            tab = L.data
+        else : 
+            tab = M.data
+        
+        if tab.ndim == 3 :
+            R = np.rollaxis(tab,0,3)
+            E = LUT(sum(R[:,:,ok] * ex.data[ok] * we.data[ok] * dl.data[ok], axis=2), \
+                axes=[L.axes[1], L.axes[2]], desc='E_'+L.desc, \
+                names=[L.names[1], L.names[2]], attrs=L.attrs)
+            Q = LUT(sum(R[:,:,ok] * wi.data[ok] * ex.data[ok] * we.data[ok] * dl.data[ok], axis=2) , \
+                axes=[L.axes[1], L.axes[2]], desc='Q_'+L.desc, \
+                names=[L.names[1], L.names[2]], attrs=L.attrs)
+        else:
+
+            E = sum(tab[ok] * ex.data[ok] * we.data[ok] * dl.data[ok])
+            Q = sum(tab[ok] * wi.data[ok] * ex.data[ok] * we.data[ok] * dl.data[ok])
+    else:
+
+        E = sum(ex.data[ok] * we.data[ok] * dl.data[ok])
+        Q = sum(ex.data[ok] * wi.data[ok] * we.data[ok] * dl.data[ok])
+    
+    norm = sum(we.data[ok] * dl.data[ok])
+    E *= 1e-3 # from mW/m2/nm to W/m2/nm 
+    Eavg = E/norm
+    Q *= 1e-12/(cst.h*cst.c*cst.Avogadro) * 3600*24 # from mW/m2/nm*nm to W/m2/m*m (1e-12) and then to
+        # Einstein/m2/day
+
+    Qavg = Q/norm
+        
+    return E, Eavg, Q, Qavg
+
 
 
 def SpecInt(wi, wb, ex, we, dl, M=None, field=None, lim=[400.,700.]):
@@ -175,7 +243,7 @@ def SpecInt(wi, wb, ex, we, dl, M=None, field=None, lim=[400.,700.]):
     return E, Eavg
 
 
-def SpecInt2(wi, wb, ex, we, dl, M=None, field=None, Irradiance=False, lim=None, DL=None):
+def SpecInt2(wi, wb, ex, we, dl, M=None, field=None, Irradiance=False, PlaneIrr=True, lim=None, DL=None):
     Eavg=[] 
     if DL == None:
         wu = np.unique(wb.data)
@@ -186,14 +254,17 @@ def SpecInt2(wi, wb, ex, we, dl, M=None, field=None, Irradiance=False, lim=None,
         wu = np.linspace(lim[0],lim[1]-DL,endpoint=True,num=(lim[1]-lim[0])/DL)
     for linf in wu:
         E1,E2 = SpecInt(wi, wb, ex, we, dl, M=M, field=field,lim=[linf,linf+DL])
-        if Irradiance :
-            Eavg.append(Irr(E2))
-        else:
+        if not Irradiance :
             Eavg.append(E2)
+        else:
+            if PlaneIrr:
+                Eavg.append(Irr(E2))
+            else:
+                Eavg.append(SpherIrr(E2))
     Mavg = merge(Eavg, ['LAMBDA'])
     return  Mavg
 
-def Int2(wi, wb, ex, we, dl, M=None, field=None, lim=[400.,700.], DL=1., Irradiance=False):
+def Int2(wi, wb, ex, we, dl, M=None, field=None, lim=[400.,700.], DL=1., Irradiance=False, PlaneIrr=True):
     l=[]
     Qavg=[]
     Eavg=[]
@@ -202,45 +273,53 @@ def Int2(wi, wb, ex, we, dl, M=None, field=None, lim=[400.,700.], DL=1., Irradia
     for linf in np.linspace(lim[0],lim[1]-DL,endpoint=True,num=(lim[1]-lim[0])/DL):
         E1,E2,Q1,Q2 = Int(wi, wb, ex, we, dl, M=M, field=field,lim=[linf,linf+DL])
         l.append(linf+DL/2.)
-        if Irradiance :
-            Eint.append(Irr(E1))
-            Eavg.append(Irr(E2))
-            Qint.append(Irr(Q1))
-            Qavg.append(Irr(Q2))
-        else:
+        if not Irradiance :
             Eint.append(E1)
             Eavg.append(E2)
             Qint.append(Q1)
             Qavg.append(Q2)
+        else:
+            if PlaneIrr:
+                Eint.append(Irr(E1))
+                Eavg.append(Irr(E2))
+                Qint.append(Irr(Q1))
+                Qavg.append(Irr(Q2))
+            else:
+                Eint.append(SpherIrr(E1))
+                Eavg.append(SpherIrr(E2))
+                Qint.append(SpherIrr(Q1))
+                Qavg.append(SpherIrr(Q2))
+                
     return l, Eint, Eavg, Qint, Qavg
 
 def viewPAR(fi, fsp, SZA=None, RAA=None, verbose=False):
     repname='reptran_solar_coarse'
     #repname='reptran_solar_sentinel'
-    LMIN=400. # nm
+    LMIN=380. # nm
     LMAX=700. # nm
     SAMPLING=1 # reptran file undersampling (1 : all bands included)
-    DL=5. #nm spectral interval for integration
+    DL=10. #nm spectral interval for integration
     wi,wb,we,ex,dl = ReadREPTRAN_bands(repname,LMIN=LMIN,LMAX=LMAX,SAMPLING=SAMPLING)       
-    M=read_mlut_hdf(fi)
-    transdir=read_lut_hdf(fsp,'Direct Transmission',axnames=['Wavelengths'])
-    transdir.axes[0]=wi.data
-    transdir.names[0]='Wavelengths'
+    M2=read_mlut_hdf(fi)
+    transdir=M2['direct transmission']
+#    transdir=read_lut_hdf(fsp,'direct transmission',axnames=['Wavelength'])
+#    transdir.axes[0]=wi.data
+#    transdir.names[0]='Wavelength'
 
     # transform MLUT with an explicit wavelength axis
     # -------------------------------------------
-    MM_l=[]
-    for k in range(len(M.luts)):
-        MM_tmp = M.luts[k]
-        MM=LUT(MM_tmp.data,axes=[wi.data,MM_tmp.axes[1],MM_tmp.axes[2]],desc=MM_tmp.desc,
-               names=['Wavelengths',MM_tmp.names[1],MM_tmp.names[2]],attrs=MM_tmp.attrs)
-        MM_l.append(MM)
-    M2 = MLUT(MM_l)
-    # -------------------------------------------  
-    iza = M2['I_up (TOA)'].attrs['VZA (deg.)']
+#    MM_l=[]
+#    for k in range(len(M.luts)):
+#        MM_tmp = M.luts[k]
+#        MM=LUT(MM_tmp.data,axes=[wi.data,MM_tmp.axes[1],MM_tmp.axes[2]],desc=MM_tmp.desc,
+#               names=['Wavelength',MM_tmp.names[1],MM_tmp.names[2]],attrs=MM_tmp.attrs)
+#        MM_l.append(MM)
+#    M2 = MLUT(MM_l)
+#    # -------------------------------------------  
+    iza = float(M2['I_up (TOA)'].attrs['VZA'])
     mus = np.cos(iza * np.pi/180.)
     if verbose :fig,ax=subplots()
-    if verbose :ax.set_ylabel('Irradiance (mW/cm2/mic)', color='b')
+    if verbose :ax.set_ylabel('Irradiance (W/m2/nm)', color='b')
     if verbose :ax.set_xlabel('Wavelength (nm)')
     if verbose : print '*****************************'
     if verbose : print '* %.2f - %.2f nm'%(LMIN,LMAX)
@@ -248,97 +327,102 @@ def viewPAR(fi, fsp, SZA=None, RAA=None, verbose=False):
         if verbose : print '******* VZA : %5.2f  ********'%iza
     else:
         if verbose : print '******* SZA : %5.2f  ********'%iza
-        if verbose : print '       Level             | PAR(Ein./m2/day) R/T | Irr.(mW/cm2/mic) R/T'
+        if verbose : print '       Level             | PAR(Ein./m2/day) R/T | Irr.(W/m2/nm) R/T'
 
         #### Extra-terrestrial ##########
         lp,sEint_toad,sEavg_toad,sQint_toad,sQavg_toad = Int2(wi, wb, ex, we, dl, M=None, field=None, lim=[LMIN,LMAX], DL=DL)
-        if verbose :ax.plot(np.array(lp),np.array(sEavg_toad)*mus*1e2,'k+-',label='TOAd')
+        if verbose :ax.plot(np.array(lp),np.array(sEavg_toad)*mus,'k+-',label='TOA incident')
 
         Eint_toad,Eavg_toad,Qint_toad,Qavg_toad = Int(wi, wb, ex, we, dl, M=None, field=None, lim=[LMIN,LMAX])
-        if verbose : print '(1) TOA incident         |  %7.3f     1.000   |  %7.3f     1.000   '%(Qint_toad*mus,Eavg_toad*mus*1e2) # 1e2 conversion\
-                            # from W m-2 nm-1 to mW cm-2 mic-1
+        if verbose : print '(1) TOA incident         |  %7.3f     1.000   |  %7.3f     1.000   '%(Qint_toad*mus,Eavg_toad*mus) # 
 
         #### TOA ########## 
         field = 'I_up (TOA)'
         lp, sEint_toau,sEavg_toau,sQint_toau,sQavg_toau = Int2(wi, wb, ex, we, dl, M=M2, field=field, \
                     lim=[LMIN,LMAX], DL=DL, Irradiance=True)
-        if verbose :ax.plot(np.array(lp),np.array(sEavg_toau)*mus*1e2,'r',label='TOAu')
+        if verbose :ax.plot(np.array(lp),np.array(sEavg_toau)*mus,'r',label='TOA up')
 
 
         Eint_toau,Eavg_toau,Qint_toau,Qavg_toau = Int(wi, wb, ex, we, dl, M=M2, field=field, \
                     lim=[LMIN,LMAX])
         QQ=Irr(Qint_toau)
         EE=Irr(Eavg_toau)
-        if verbose : print '(2) TOA up               |  %7.3f     %5.3f   |  %7.3f     %5.3f   '%(QQ*mus,QQ/Qint_toad,EE*mus*1e2,EE/Eavg_toad)       
+        if verbose : print '(2) TOA up               |  %7.3f     %5.3f   |  %7.3f     %5.3f   '%(QQ*mus,QQ/Qint_toad,EE*mus,EE/Eavg_toad)       
 
 
         #### Surface direct ##########
         lp, sEdirint_boad,sEdiravg_boad,sQdirint_boad,sQdiravg_boad = Int2(wi, wb, ex, we, dl, M=transdir, field=None, \
                     lim=[LMIN,LMAX], DL=DL)
-        if verbose :ax.plot(np.array(lp),np.array(sEdiravg_boad)*mus*1e2,'b',label='BOAd_dir')
+        if verbose :ax.plot(np.array(lp),np.array(sEdiravg_boad)*mus,'b',label='BOA (0+) down (dir)')
 
         Edirint_boad,Ediravg_boad,Qdirint_boad,Qdiravg_boad = Int(wi, wb, ex, we, dl, M=transdir, field=None, lim=[LMIN,LMAX])
-        if verbose : print '(3) BOA (0+) down  (dir) |  %7.3f     %5.3f   |  %7.3f     %5.3f   '%(Qdirint_boad*mus,Qdirint_boad/Qint_toad,Ediravg_boad*mus*1e2,Ediravg_boad/Eavg_toad)
+        if verbose : print '(3) BOA (0+) down (dir)  |  %7.3f     %5.3f   |  %7.3f     %5.3f   '%(Qdirint_boad*mus,Qdirint_boad/Qint_toad,Ediravg_boad*mus,Ediravg_boad/Eavg_toad)
         #### Surface diffuse ##########
         field = 'I_down (0+)'
         lp, sEdifint_boad,sEdifavg_boad,sQdifint_boad,sQdifavg_boad = Int2(wi, wb, ex, we, dl, M=M2, field=field, \
                     lim=[LMIN,LMAX], DL=DL, Irradiance=True)
-        if verbose :ax.plot(np.array(lp),np.array(sEdifavg_boad)*mus*1e2,'c',label='BOAd_dif')
+        if verbose :ax.plot(np.array(lp),np.array(sEdifavg_boad)*mus,'c',label='BOA (0+) down (dif)')
 
         Edifint_boad,Edifavg_boad,Qdifint_boad,Qdifavg_boad = Int(wi, wb, ex, we, dl, M=M2, field=field, lim=[LMIN,LMAX])
         QQ=Irr(Qdifint_boad)
         EE=Irr(Edifavg_boad)
-        if verbose : print '(4) BOA (0+) down  (dif) |  %7.3f     %5.3f   |  %7.3f     %5.3f   '%(QQ*mus,QQ/Qint_toad,EE*mus*1e2,EE/Eavg_toad)
+        if verbose : print '(4) BOA (0+) down (dif)  |  %7.3f     %5.3f   |  %7.3f     %5.3f   '%(QQ*mus,QQ/Qint_toad,EE*mus,EE/Eavg_toad)
         Eavg_boad = EE + Ediravg_boad
         Qint_boad = QQ + Qdirint_boad
 
         #### Surface total ##########
-        if verbose :ax.plot(np.array(lp),(np.array(sEdifavg_boad)+np.array(sEdiravg_boad))*mus*1e2,'k',label='BOAd_tot')
-        if verbose : print '(5) BOA (0+) down  (tot) |  %7.3f     %5.3f   |  %7.3f     %5.3f   '\
-            %(Qint_boad*mus,Qint_boad/Qint_toad,Eavg_boad*mus*1e2,Eavg_boad/Eavg_toad)
+        if verbose :ax.plot(np.array(lp),(np.array(sEdifavg_boad)+np.array(sEdiravg_boad))*mus,'k',label='BOA (0+) down (tot)')
+        if verbose : print '(5) BOA (0+) down (tot)  |  %7.3f     %5.3f   |  %7.3f     %5.3f   '\
+            %(Qint_boad*mus,Qint_boad/Qint_toad,Eavg_boad*mus,Eavg_boad/Eavg_toad)
 
         #### Surface Up ##########
         field = 'I_up (0+)'
         lp, sEint_boau,sEavg_boau,sQint_boau,sQavg_boau = Int2(wi, wb, ex, we, dl, M=M2, field=field, \
                     lim=[LMIN,LMAX], DL=DL, Irradiance=True)
-        if verbose :ax.plot(np.array(lp),np.array(sEavg_boau)*mus*1e2,'g',label='BOAu') 
+        if verbose :ax.plot(np.array(lp),np.array(sEavg_boau)*mus,'g',label='BOA (0+) up') 
 
         Eint_boau,Eavg_boau,Qint_boau,Qavg_boau = Int(wi, wb, ex, we, dl, M=M2, field=field, \
                     lim=[LMIN,LMAX])
         QQ=Irr(Qint_boau)
         EE=Irr(Eavg_boau)
-        if verbose : print '(6) BOA (0+) up          |  %7.3f     %5.3f   |  %7.3f     %5.3f   '%(QQ*mus,QQ/Qint_boad,EE*mus*1e2,EE/Eavg_boad)
+        if verbose : print '(6) BOA (0+) up          |  %7.3f     %5.3f   |  %7.3f     %5.3f   '%(QQ*mus,QQ/Qint_boad,EE*mus,EE/Eavg_boad)
 
         #### Water down ##########
         field = 'I_down (0-)'
         lp, sEint_tood,sEavg_tood,sQint_tood,sQavg_tood = Int2(wi, wb, ex, we, dl, M=M2, field=field, \
                     lim=[LMIN,LMAX], DL=DL, Irradiance=True)
-        if verbose :ax.plot(np.array(lp),np.array(sEavg_tood)*mus*1e2,'y',label='TOOd') 
+        lp, ssEint_tood,ssEavg_tood,ssQint_tood,ssQavg_tood = Int2(wi, wb, ex, we, dl, M=M2, field=field, \
+                    lim=[LMIN,LMAX], DL=DL, Irradiance=True, PlaneIrr=False)
+        if verbose :ax.plot(np.array(lp),np.array(sEavg_tood)*mus,'y',label='BOA (0-) down') 
 
         Eint_tood,Eavg_tood,Qint_tood,Qavg_tood = Int(wi, wb, ex, we, dl, M=M2, field=field, \
                     lim=[LMIN,LMAX])
         QQ=Irr(Qint_tood)
         EE=Irr(Eavg_tood)
-        if verbose : print '(7) BOA (0-) down        |  %7.3f     %5.3f   |  %7.3f     %5.3f   '%(QQ*mus,QQ/Qint_boad,EE*mus*1e2,EE/Eavg_boad)
+        if verbose : print '(7) BOA (0-) down        |  %7.3f     %5.3f   |  %7.3f     %5.3f   '%(QQ*mus,QQ/Qint_boad,EE*mus,EE/Eavg_boad)
 
 
         #### Water up ##########
         field = 'I_up (0-)'
         lp, sEint_toou,sEavg_toou,sQint_toou,sQavg_toou = Int2(wi, wb, ex, we, dl, M=M2, field=field, \
                     lim=[LMIN,LMAX], DL=DL, Irradiance=True)
-        if verbose :ax.plot(np.array(lp),np.array(sEavg_toou)*mus*1e2,'k',label='TOOu') 
+        lp, ssEint_toou,ssEavg_toou,ssQint_toou,ssQavg_toou = Int2(wi, wb, ex, we, dl, M=M2, field=field, \
+                    lim=[LMIN,LMAX], DL=DL, Irradiance=True, PlaneIrr=False)
+        if verbose :ax.plot(np.array(lp),np.array(sEavg_toou)*mus,'k',label='BOA (0-) up') 
 
         Eint_toou,Eavg_toou,Qint_toou,Qavg_toou = Int(wi, wb, ex, we, dl, M=M2, field=field, \
                     lim=[LMIN,LMAX])
         QQ=Irr(Qint_toou)
         EE=Irr(Eavg_toou)
-        if verbose : print '(8) BOA (0-) up          |  %7.3f     %5.3f   |  %7.3f     %5.3f   '%(QQ*mus,QQ/Irr(Qint_tood),EE*mus*1e2,EE/Irr(Eavg_tood))
+        if verbose : print '(8) BOA (0-) up          |  %7.3f     %5.3f   |  %7.3f     %5.3f   '%(QQ*mus,QQ/Irr(Qint_tood),EE*mus,EE/Irr(Eavg_tood))
 
 
         #### Water spherical ##########
+        if verbose :ax.plot(np.array(lp),(np.array(ssEavg_tood)+np.array(ssEavg_toou))*mus,'ko-',label='BOA (0-) spher.')
+            
         QQ=SpherIrr(Qint_tood) + SpherIrr(Qint_toou)
         EE=SpherIrr(Eavg_tood) + SpherIrr(Eavg_toou)
-        if verbose : print '(9) BOA (0-) spher.      |  %7.3f             |  %7.3f             '%(QQ*mus,EE*mus*1e2)
+        if verbose : print '(9) BOA (0-) spher.      |  %7.3f             |  %7.3f             '%(QQ*mus,EE*mus)
 
 
         if verbose :legend(bbox_to_anchor=(-0.15, 1), loc='upper right', borderaxespad=0.)
@@ -347,16 +431,16 @@ def viewPAR(fi, fsp, SZA=None, RAA=None, verbose=False):
     if (SZA!=None) and (RAA!=None):
         field = 'I_up (TOA)'
         if verbose :ax2 = ax.twinx()
-        if verbose :ax2.set_ylabel('Radiance (mW/cm2/mic/sr)', color='r')
+        if verbose :ax2.set_ylabel('Radiance (W/m2/nm/sr)', color='r')
         lp, sEint_toau,sEavg_toau,sQint_toau,sQavg_toau = Int2(wi, wb, ex, we, dl, M=M2, field=field, \
                     lim=[LMIN,LMAX], DL=DL, Irradiance=False)
         
-        if verbose : print '(0) TOA up sat. SZA:%5.1f RAA:%5.1f | Radiance (mW/cm2/mic/sr)'%(SZA,RAA) 
+        if verbose : print '(0) TOA up sat. SZA:%5.1f RAA:%5.1f | Radiance (W/m2/nm/sr)'%(SZA,RAA) 
         sRad = []
         musObs=cos(SZA*np.pi/180.)
         for k,Rad in enumerate(sEavg_toau):
-            r = Rad[Idx(RAA),Idx(SZA)]*musObs*1e2/np.pi
-            #r = Rad[Idx(RAA),Idx(SZA)]*mus*1e2/np.pi
+            r = Rad[Idx(RAA),Idx(SZA)]*musObs/np.pi
+            #r = Rad[Idx(RAA),Idx(SZA)]*mus/np.pi
             sRad.append(r)
             if verbose :print '(0) ----------- %5.1f(nm)| %7.3f '%(lp[k],r) 
         if verbose :ax2.plot(np.array(lp),np.array(sRad),'r+-',label='TOAu')
@@ -368,15 +452,15 @@ def viewPAR(fi, fsp, SZA=None, RAA=None, verbose=False):
             lp, sEint_toau,sEavg_toau,sQint_toau,sQavg_toau = Int2(wi, wb, ex, we, dl, M=M2, field=field, \
                     lim=[lam-DL/2,lam+DL/2], DL=DL, Irradiance=False)
             Rad = sEavg_toau[0]
-            r = Rad[Idx(RAA),Idx(SZA)]*musObs*1e2/np.pi
-            #r = Rad[Idx(RAA),Idx(SZA)]*mus*1e2/np.pi
+            r = Rad[Idx(RAA),Idx(SZA)]*musObs/np.pi
+            #r = Rad[Idx(RAA),Idx(SZA)]*mus/np.pi
             if verbose : print '--------------- %5.1f(nm)| %7.3f '%(lam,r)
             r_l.append(r)
             #semi_polar(Rad)
         if verbose : legend(bbox_to_anchor=(1.15, 1), loc='upper left', borderaxespad=0.)
         return r_l
     else :
-        return Eavg_boad*mus*1e2, Qint_boad*mus
+        return Eavg_boad*mus, Qint_boad*mus
     
     
 def dailyPAR(fpp_l, fsp_l, dt_l ,verbose=False):
@@ -398,7 +482,7 @@ def dailyPAR(fpp_l, fsp_l, dt_l ,verbose=False):
         dPAR2 = simps(PAR2,dt)
         dlength=dt[-1] - dt[0]
 
-        print 'dlength (day) : %.4f , daily PAR: %8.3f (mW/cm2/mic) %8.3f (E/m2/day), daytime PAR: %8.3f (mW/cm2/mic)'\
+        print 'dlength (day) : %.4f , daily PAR: %8.3f (W/m2/nm) %8.3f (E/m2/day), daytime PAR: %8.3f (W/m2/nm)'\
                 %(dlength,dPAR,dPAR2,dPAR/dlength)
             
 def ObsPAR(fi_l, fsp_l, SZA_l, raa_l,verbose=False):
@@ -451,7 +535,8 @@ def simulatePAR(CALC=True, verbose=False) :
     lat=45.
     lon=-40.
     da_l=['2015/7/15','2015/1/15'] # date of acquisition
-
+    dir='/home/did/RTC/SMART-G/tools/PAR/VIIRS4/'
+#    dir='/tmp/'
     vza_l=[0., 30., 60.]
     raa=90. # Sun VIIRS relative azimuth
     time_step=120. # time step for daily PAR integration (minute)
@@ -462,25 +547,25 @@ def simulatePAR(CALC=True, verbose=False) :
     if CALC : 
             pro = Profile(atmmodel,O3=o3,
                 grid=grid,  # optional, otherwise use default grid
-                #pfgrid=pfgrid,   # optional, otherwise use a single band 100-0
+                pfgrid=pfgrid,   # optional, otherwise use a single band 100-0
                 pfwav=pfwav # optional, otherwise phase functions are calculated at all bands
-                #,aer=aer
+                ,aer=aer
                 ,cloud=CloudOPAC(cloudname,[(cloudscatt, wc, reff , Zcmin, Zcmax)], cot, wref)
                 )
     else :
             pro = Profile(atmmodel,O3=o3
-                #,aer=aer
+                ,aer=aer
                 ,cloud=CloudOPAC(cloudname,[(cloudscatt, wc, reff , Zcmin, Zcmax)], cot, wref)
                 )
-    '''
+ 
     pro.calc(665.)            
     aer.calc(665.)
     t665=aer.tau_tot
     aer.calc(865.)
     t865=aer.tau_tot
     Angstrom = -np.log(t665/t865)/np.log(665./865.)
-    '''
-    Angstrom=0.
+
+ #   Angstrom=0.
     
     surf=RoughSurface(SUR=3, WIND=ws, NH2O=1.34)
     #water=IOP_SPM(SPM=100.,pfwav=pfwav,NANG=7201)
@@ -527,6 +612,8 @@ def simulatePAR(CALC=True, verbose=False) :
         fsp_l=[]
         dt_l =[drise]
 
+
+  
         start = ephem.Date(drise+20*ephem.minute) # we start 20 min after sunrise
         stop = ephem.Date(dset-20*ephem.minute) # we stop 20 min before sunset
         for date in np.linspace(start,stop,endpoint=True,num=8):
@@ -535,17 +622,32 @@ def simulatePAR(CALC=True, verbose=False) :
             SZA = 90.-float(sun.alt)*180/np.pi     
             dt_l.append(date)
 
-            if CALC : fpp_l.append(Smartg('SMART-G-PP', wl = ibands, THVDEG=SZA,
+            if CALC : 
+                filename = tempfile.mktemp(dir=dir, prefix='fpp_')
+                smartg(wl = ibands, THVDEG=SZA,
+                atm=pro, NBPHOTONS=1e7,OUTPUT_LAYERS=3,
+                surf=surf, water=water, NFAER=10000,NFOCE=100000).save(filename, compress=False)
+                fpp_l.append(filename)
+                      
+#            if CALC : 
+#                fpp_l.append(Smartg('SMART-G-PP', wl = ibands, THVDEG=SZA,
             #if CALC : fpp_l.append(Smartg('SMART-G-PP', wl = list(wi.data), THVDEG=SZA,
-                      atm=pro, dir='/home/did/RTC/SMART-G/tools/PAR/VIIRS3',
-                      NBPHOTONS=1e7,OUTPUT_LAYERS=3,
-                      surf=surf, water=water, overwrite=True, NFAER=10000,NFOCE=100000).output)
-
-            if CALC : fsp_l.append(Smartg('SMART-G-SP', wl = ibands, THVDEG=SZA,
-            #if CALC : fsp_l.append(Smartg('SMART-G-SP', wl = list(wi.data), THVDEG=SZA,
-                      atm=pro, dir='/home/did/RTC/SMART-G/tools/PAR/VIIRS3',
-                      NBPHOTONS=1e7,OUTPUT_LAYERS=0,
-                      surf=surf, water=water, overwrite=True, NFAER=10000,NFOCE=100000).output)
+#                      atm=pro, dir='/home/did/RTC/SMART-G/tools/PAR/VIIRS3',
+#                      NBPHOTONS=1e7,OUTPUT_LAYERS=3,
+#                      surf=surf, water=water, overwrite=True, NFAER=10000,NFOCE=100000).output)
+            if CALC : 
+                filename = tempfile.mktemp(dir=dir, prefix='fsp_')
+                smartg(wl = ibands, THVDEG=SZA, pp=True,
+                atm=pro, NBPHOTONS=1e7,OUTPUT_LAYERS=0,
+                surf=surf, water=water, NFAER=10000,NFOCE=100000).save(filename, compress=False)
+                fsp_l.append(filename)
+#
+#            if CALC : 
+#                fsp_l.append(Smartg('SMART-G-SP', wl = ibands, THVDEG=SZA,
+#            #if CALC : fsp_l.append(Smartg('SMART-G-SP', wl = list(wi.data), THVDEG=SZA,
+#                      atm=pro, dir='/home/did/RTC/SMART-G/tools/PAR/VIIRS3',
+#                      NBPHOTONS=1e7,OUTPUT_LAYERS=0,
+#                      surf=surf, water=water, overwrite=True, NFAER=10000,NFOCE=100000).output)
         dt_l.append(dset)
 
         fpp_l_l.append(fpp_l)
@@ -568,19 +670,30 @@ def simulatePAR(CALC=True, verbose=False) :
             fpp2_l=[]
             fsp2_l=[]  
             for VZA in vza_l:
-                TRAIL  = '%7.3f %7.3f %7.3f %7.3f %7.3f %7.1f %7.3f %7.1f'%(SZA,VZA,raa,aot,Angstrom,o3,wvc,SurfPre)
-                if CALC : fpp2_l.append(Smartg('SMART-G-PP', wl = ibands, THVDEG=VZA,
-                #if CALC : fpp2_l.append(Smartg('SMART-G-PP', wl = list(wi.data), THVDEG=VZA,
-                          atm=pro, dir='/home/did/RTC/SMART-G/tools/PAR/VIIRS3',
-                          NBPHOTONS=1e8,OUTPUT_LAYERS=3,
-                          surf=surf, water=water, overwrite=True, NFAER=10000,NFOCE=100000).output)
-
+                TAIL  = '%7.3f %7.3f %7.3f %7.3f %7.3f %7.1f %7.3f %7.1f'%(SZA,VZA,raa,aot,Angstrom,o3,wvc,SurfPre)
+#                if CALC : fpp2_l.append(Smartg('SMART-G-PP', wl = ibands, THVDEG=VZA,
+#                #if CALC : fpp2_l.append(Smartg('SMART-G-PP', wl = list(wi.data), THVDEG=VZA,
+#                          atm=pro, dir='/home/did/RTC/SMART-G/tools/PAR/VIIRS3',
+#                          NBPHOTONS=1e8,OUTPUT_LAYERS=3,
+#                          surf=surf, water=water, overwrite=True, NFAER=10000,NFOCE=100000).output)
+                if CALC : 
+                    filename = tempfile.mktemp(dir=dir, prefix='fpp_')
+                    smartg(wl = ibands, THVDEG=SZA,
+                    atm=pro, NBPHOTONS=1e8,OUTPUT_LAYERS=3,
+                    surf=surf, water=water, NFAER=10000,NFOCE=100000).save(filename, compress=False)
+                    fpp2_l.append(filename)
                 #if CALC : fsp2_l.append(Smartg('SMART-G-SP', wl = list(wi.data), THVDEG=VZA,
-                if CALC : fsp2_l.append(Smartg('SMART-G-SP', wl = ibands, THVDEG=VZA,
-                          atm=pro, dir='/home/did/RTC/SMART-G/tools/PAR/VIIRS3',
-                          NBPHOTONS=1e7,OUTPUT_LAYERS=0,
-                          surf=surf, water=water, overwrite=True, NFAER=10000,NFOCE=100000).output)
-                print HEADER,TRAIL
+#                if CALC : fsp2_l.append(Smartg('SMART-G-SP', wl = ibands, THVDEG=VZA,
+#                          atm=pro, dir='/home/did/RTC/SMART-G/tools/PAR/VIIRS3',
+#                          NBPHOTONS=1e7,OUTPUT_LAYERS=0,
+#                          surf=surf, water=water, overwrite=True, NFAER=10000,NFOCE=100000).output)
+                if CALC : 
+                    filename = tempfile.mktemp(dir=dir, prefix='fsp_')
+                    smartg(wl = ibands, THVDEG=SZA, pp=True,
+                    atm=pro, NBPHOTONS=1e7,OUTPUT_LAYERS=0,
+                    surf=surf, water=water, NFAER=10000,NFOCE=100000).save(filename, compress=False)
+                    fsp2_l.append(filename)
+                print HEADER,TAIL
         fpp2_l_l.append(fpp2_l)
         fsp2_l_l.append(fsp2_l)
 

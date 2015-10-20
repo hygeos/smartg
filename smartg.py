@@ -306,8 +306,8 @@ def smartg(wl, pp=True,
             for ilam in xrange(NLAM):
                 tabTransDir[ilam] = np.exp(-hph0[NATM + ilam * (NATM + 1)])
 
-            if '-DDEBUG' in options:
-                print ("Paramètres initiaux du photon: taumax0=%lf - zintermax=%lf - (%lf,%lf,%lf)\n" % (hph0[NATM+1], zph0[NATM+1], x0, y0, z0))
+#            if '-DDEBUG' in options:
+#                print ("Paramètres initiaux du photon: taumax0=%lf - zintermax=%lf - (%lf,%lf,%lf)\n" % (hph0[NATM+1], zph0[NATM+1], x0, y0, z0))
 
         # write the input variables into data structures
         Tableau, Var, Init = InitSD(nprofilesAtm, nprofilesOc, NLAM,
