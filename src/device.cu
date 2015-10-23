@@ -397,13 +397,12 @@ __device__ void initPhoton(Photon* ph, Tableaux tab
         // Initialisation du photon au sommet de l'atmosphère
         //
 
-        ph->x = 0;
-        ph->y = 0;
-        ph->z = tab.z[NATMd + ph->ilam*(NATMd+1)];
-        ph->couche=0;	// Sommet de l'atmosphère
+        ph->x = init->x0;
+        ph->y = init->y0;
+        ph->z = init->z0;
+        ph->couche = 0;   // top of atmosphere
 
         #ifdef SPHERIQUE
-        ph->z = ph->z + RTER;
         ph->rayon = sqrtf(ph->x*ph->x + ph->y*ph->y + ph->z*ph->z );
         #endif
 
@@ -448,196 +447,96 @@ __device__ void initPhoton(Photon* ph, Tableaux tab
 
 #ifdef SPHERIQUE
 __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
-		#ifdef RANDMWC
-		, unsigned long long* etatThr, unsigned int* configThr
-		#endif
-		#if defined(RANDCUDA) || defined (RANDCURANDSOBOL32) || defined (RANDCURANDSCRAMBLEDSOBOL32)
+        #ifdef RANDMWC
+        , unsigned long long* etatThr, unsigned int* configThr
+        #endif
+        #if defined(RANDCUDA) || defined (RANDCURANDSOBOL32) || defined (RANDCURANDSCRAMBLEDSOBOL32)
                 , curandSTATE* etatThr
         #endif
-		#ifdef RANDMT
-		, EtatMT* etatThr, ConfigMT* configThr
-		#endif
-		#ifdef RANDPHILOX4x32_7
+        #ifdef RANDMT
+        , EtatMT* etatThr, ConfigMT* configThr
+        #endif
+        #ifdef RANDPHILOX4x32_7
                 , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr
-		#endif
-		    ) {
+        #endif
+            ) {
 
-    /*  Convention for variable names 
-        - h for cumulative optical thickness
-        - tau for optical thicknesses (within layers or random)
-        - z for cumulative distances
-        - d for distances
-        - r for radius
-        - i for indices
-        # suffixes 
-        - _p for previous
-        - _n for next
-        - _cur for current
-    */
+    float tauRdm;
+    float hph = 0.;  // cumulative optical thickness
+    float vzn, delta;
+    float d_cur, r_cur2, h_cur;
+    int sign_direction;
+    int i_layer_fw, i_layer_bh; // index or layers forward and hehind the photon
+    float costh, sinth;
+    int ilam = ph->ilam*(NATMd+1);  // wavelength offset in optical thickness table
 
-	float d_cur = 0.f;      // Distance within the current layer
-	float delta;            // 2nd Order Equation determinant for distance determination within a layer
-	
-	float tauRdm;	        // Random optical thickness
-	
-	float zph = 0.f;        // Cumulative distance from start until current layer
-	float zph_p = 0.f;      // Cumulative distance from start until previous layer
-	float hph = 0.f;        // Cumulative Optical Thickness from start until current layer 
-	float hph_p = 0.f;      // Cumulative Optical Thickness from start until previous layer
-	
-	float vzn;				// projection of vz on the local vertical
-	float sinth;			// Sine of angle between z and vz
-	float costh;			// Cosine of angle between z and vz
-	float r_tangent;	    // tangent radius of moving photon/
-	int i_layer_tangent = -999;
-
-	float r_cur;			
-	float r_cur2;
-	int i_layer_n = 0;      // index of next layer that photon will enter in
-	int i_layer_cur; 		// index of current layer where the photon is
-	int sign_direction;		// 1 if photon is moving up, -1  for down
-	int flagSortie = 0;		// Flag indicating that the photon will exit without interaction
-	int icompteur = 0;
-	
-	float rdist;
-	float rra;
-    int icouche;
-	int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
-	
-	    #ifdef DEBUG
-	     double rsol1,rsol2;
-	    #endif
-	
-
-	/** Random Optical Thickness to go through **/
-	tauRdm = -logf(1.F-RAND);
-    if(idx==0)printf("B%i %i %f %f %f %f %f %f %f\n",ph->loc,ph->locPrec,ph->vx,ph->vy,ph->vz,ph->x,ph->y,ph->z,ph->rayon);
-
-	if( tauRdm == 0. ){
-        /* null displacement */
-		ph->locPrec = ATMOS;
-		return;
-	}
-
-    /**********************************************************************************/
-    /* We determine the path length. 1) from the photon position to the next layer    */
-    /**********************************************************************************/
-
-	if( ph->locPrec==NONE ){
-        // if the photon comes from space its going down
-		sign_direction = -1;
+    #ifdef DEBUG
+    int niter = 0;
+    if ((ph->couche >= NATMd) || (ph->couche < 0)) {
+        printf("Fatal error, wrong index (%d)\n", ph->couche);
     }
+    #endif
 
-   /*DR 
-		// Si tauRdm est plus élevé que Taumax, le photon va directement heurter la surface
-		if( tauRdm >= (tab.hph0[NATMd + ph->ilam*(NATMd+1)]) ){
-			flagSortie = 1;
-			zph=tab.zph0[NATMd]; // Cette valeur signifie que le photon a traversé toute l'atmosphère 
-		}
+    // Random Optical Thickness to go through
+    tauRdm = -logf(1.F-RAND);
 
-		while( (hph < tauRdm) && (flagSortie!=1) ){
+    vzn = __fdividef( ph->vx*ph->x + ph->vy*ph->y + ph->vz*ph->z , ph->rayon);
 
-			    #ifdef DEBUG
-			    if( icompteur==(NATMd+1) ){
-				    printf("icompteur = NATMd+1 pour premier calcul de position - tauRdm=%f - taumax=%f - hph_p=%f - hph=%f\n",\
-					    tauRdm, ph->taumax, hph_p, hph);
-					    flagSortie = 1;
-					    break;
-			    }
-			    #endif
-			
-			// Sauvegarde du calcul de la couche précédente
-			hph_p = hph;
-			zph_p = zph;
-			
-			hph = tab.hph0[icompteur+ph->ilam*(NATMd+1)];
-			zph = tab.zph0[icompteur];
-			
-			icompteur++;
-		}
-		
-	}*/ 
+    // a priori value for sign_direction:
+    // sign_direction may change sign from -1 to +1 if the photon does not
+    // cross lower layer
+    if (vzn <= 0) sign_direction = -1;
+    else sign_direction = 1;
 
+    while (1) {
 
-	//else if( ((ph->locPrec==ATMOS)||(ph->locPrec==SURF0P)) ){
-	if( ((ph->locPrec==ATMOS)||(ph->locPrec==SURF0P)||(ph->locPrec==NONE)) ){
+        #ifdef DEBUG
+        niter++;
 
-        /* Computation of the cumulative optical thickness and cumulative distance until we reach tauRdm*/
-		r_cur  = ph->rayon;
-		r_cur2 = r_cur*r_cur;
+        if (niter > 100) {
+            printf("niter=%d break\n", niter);
+            break;
+        }
+        #endif
 
-		vzn = __fdividef( ph->vx*ph->x + ph->vy*ph->y + ph->vz*ph->z ,r_cur);
-		
-        if(idx==0)printf("A%i %i %f %f %f %f %f %f %f\n",ph->loc,ph->locPrec,ph->vx,ph->vy,ph->vz,ph->x,ph->y,ph->z,ph->rayon);
-		
-		if((vzn<0.f)&&(ph->locPrec==SURF0P)){
-			ph->loc=ABSORBED;
-			return;
-		}
+        //
+        // stopping criteria
+        //
+        if (ph->couche == NATMd) {
+            ph->loc = SURF0P;
+            ph->couche -= 1;  // next time photon enters move_sp, it's at layers NATM-1
+            break;
+        }
+        if (ph->couche < 0) {
+            ph->loc = SPACE;
+            break;
+        }
 
-		costh = vzn;
-		
-		if( abs(costh)>1.f ){
-			costh = rintf(costh);
-		}
-		
-		sinth = sqrtf(1.f-costh*costh);
+        //
+        // determine the index of the next potential layer
+        //
+        if (sign_direction < 0) {
+            // photon goes down
+            // (towards higher indices)
+            i_layer_fw = ph->couche + 1;
+            i_layer_bh = ph->couche;
+        } else {
+            // photon goes up
+            // (towards lower indices)
+            i_layer_fw = ph->couche;
+            i_layer_bh = ph->couche + 1;
+        }
 
-		i_layer_cur = ph->couche;
-		sign_direction = 1;
-		
-		// if the photon moves down, determination of the tangent radius
-		if(vzn<0.f){
-			sign_direction = -1;
-			
-            // Computation of the tangent radius
-			r_tangent = r_cur*sinth;
-			
-			// search for the corresponding layer index if the tangent radius is within the atmosphere
-			if( r_tangent > RTER ){ 
-				i_layer_tangent = 0;
-				while( (RTER+tab.z[i_layer_tangent])>r_tangent){
-					i_layer_tangent++;
-					    #ifdef DEBUG
-					    if( i_layer_tangent==(NATMd+1) ){
-						    printf("Arret de calcul couche r_tangent (%lf)\n", r_tangent);
-						    ph->loc = NONE;
-						    return;
-					    }
-					    #endif
-				}
-			}
-		}
-		
-        // when arriving in the tangent layer (we were descending), the sign of the direction changes
-		if( (i_layer_cur==i_layer_tangent)&&(sign_direction==-1) ){
-			sign_direction=1;
-		}
+        //
+        // initializations
+        //
+        costh = vzn;
+        sinth = sqrtf(1.f-costh*costh);
+        r_cur2 = ph->rayon*ph->rayon;
 
-        // Determination of the next layer i_layer_n  that depends of the direction
-        // if we are moving up then i_layer_n is decreasing
-		bool test_sign_direction = (sign_direction==1);
-		i_layer_n = i_layer_cur - test_sign_direction;
-		
-		if( i_layer_n<0 ){
-            // the photon is exiting
-			ph->loc=SPACE;
-			return;
-		}
-
-		    #ifdef DEBUG
-		    if( (i_layer_n<0)||(i_layer_n>NATMd) ){
-			    printf("OUPS#1: i_layer_n=%d  sign_direction=%d  i_layer_cur=%d  vzn=%lf  locPrec=%d  rayon=%25.20lf\n\t\
-                 (%20.16lf , %20.16lf , %20.16lf )\n",\
-			    i_layer_n,sign_direction,i_layer_cur, vzn, ph->locPrec, r_cur, ph->x, ph->y, ph->z);
-			    ph->loc=NONE;
-			    return;
-		    }
-		    #endif
-		
-	    /*******************************************************/	
-        /* Determination of the distance within the next layer */
-	    /*******************************************************/	
+        //
+        // calculate the distance d_cur from the current position to the fw layer
+        //
         // ri : radius of next layer boundary ri=zi+RTER
         // r  : radius of current point along the path 
         // costh: cosine of the path direction with the vertical of the current point
@@ -645,244 +544,85 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
         // or: d_cur**2 - 2 *r * costh * d_cur + r**2-ri**2 = 0 , to be solved for d_cur
         // determinant delta is : 4 r**2 costh**2 - 4(r**2-ri**2)
         // it simplifies to:
-		delta = 4.f*( (tab.z[i_layer_n]+RTER)*(tab.z[i_layer_n]+RTER) - r_cur2*sinth*sinth);
-		
-		// There must be a real solution delta > 0 , otherwise, error has to be raised
-		if(delta<0){
-			    #ifdef DEBUG
-			    	printf("OUPS rdelta #1=%lf - i_layer_cur=%d - tab.z[i_layer_cur]= %16.13lf - rayon= %17.13lf - rayon2=%20.16lf\n\t\
-                    sinth= %20.19lf - sign_direction=%d\n",\
-				    delta, i_layer_cur, tab.z[i_layer_cur], r_cur, r_cur2, sinth, sign_direction);
-			    #endif
-			ph->loc=NONE;
-			return;
-		}
-		
+        delta = 4.f*((tab.z[i_layer_fw]+RTER)*(tab.z[i_layer_fw]+RTER) - r_cur2*sinth*sinth);
 
-		/* There is two real solutions for d_cur:
-        * if photon goes up and costh>0, the smallest solution must be kept
-        * if photon goes down and costh<0, the smallest solution must be kept
-        * if photon goes down and costh>0, the greatest solution must be kept
-		*/
-		d_cur = 0.5f*( -2.f*r_cur*costh + sign_direction*sqrtf(delta) );
-		
-		if( abs(d_cur) < 5e-3f ){
-			d_cur=0.f;
-		}
-		
-		if( d_cur<0.f ){
-			    #ifdef DEBUG
-			    printf("OUPS: d_cur #1=%lf, (%lf,%lf) - vzn=%lf - sign_direction=%d - locPrec=%d\n\t\
-                    costh= %16.15lf - rayon= %16.12lf - delta= %16.10lf - i_layer_cur=%d - i_layer_n=%d\n",\
-                    d_cur, 0.5*( -2*r_cur*costh + sqrt(delta)),0.5*( -2*r_cur*costh - sqrt(delta)) , vzn, sign_direction, ph->locPrec, 
-                    costh, r_cur, delta,
-                    i_layer_cur, i_layer_n);
-			    #endif
-			
-			ph->loc=NONE;
-			return;
-		}
+        if (delta < 0) {
+            if (sign_direction > 0) {
+                //#ifdef DEBUG
+                //printf("Warning sign_direction (idx=%d, niter=%d, lay=%d, delta=%f, alt=%f zlay1=%f zlay2=%f vzn=%f)\n",
+                //        idx, niter, ph->couche, delta, ph->rayon-RTER,
+                //        tab.z[i_layer_fw],
+                //        tab.z[i_layer_bh],
+                //        vzn);
+                //#endif
+
+                // because of numerical uncertainties, a downward photon may
+                // not strictly be between zi and zi+1
+                // in rare case of grazing angle there is sometimes no intersection
+                // with current layer because photon is actually slightly above it.
+                // therefore we consider that delta=0 such that the photon is
+                // tangent to the layer
+                delta = 0.;
+            } else {
+                // no intersection, with lower layer, we should to towards higher layer
+                sign_direction = 1;
+                continue;
+            }
+        }
+
+        /* Now, there are two real solutions for d_cur:
+        *
+        * if photon goes towards higher layers (sign_direction == 1) and costh>0
+        * => we keep the smallest solution in abs. val   (both terms are of opposite signs)
+        *
+        * if photon goes towards lower layers (sign_direction == -1) and costh<0
+        * => we keep the smallest solution in abs. val   (both terms are of opposite signs)
+        *
+        * if photon goes towards higher layers (sign_direction == 1) and costh<0
+        * => we keep the greatest solution in abs. val   (both terms are of same signs)
+        *
+        * NOTE: the solution is always the smallest positive one
+        */
+        d_cur = 0.5f*(-2.*ph->rayon*costh + sign_direction*sqrtf(delta));
 
 
-		// Compute the optical thickness within layer next
+        //
+        // calculate the optical thickness h_cur to the next layer
         // We compute the layer extinction coefficient of the layer DTau/Dz and multiply by the distance within the layer
-
-		if( i_layer_n != i_layer_cur ){
-			hph = __fdividef( abs(tab.h[i_layer_cur+ph->ilam*(NATMd+1)] - tab.h[i_layer_n+ph->ilam*(NATMd+1)])
-                    *d_cur, abs(tab.z[i_layer_n] - tab.z[i_layer_cur]) );
-		}
-
-		else{
-			if( i_layer_n==0 ){
-				hph = __fdividef( abs(tab.h[1+ph->ilam*(NATMd+1)] - tab.h[0+ph->ilam*(NATMd+1)])
-                        *d_cur, abs(tab.z[1] - tab.z[0]) );
-			}
-			else{
-				hph = __fdividef( abs(tab.h[i_layer_n-1+ph->ilam*(NATMd+1)] - tab.h[i_layer_n+ph->ilam*(NATMd+1)])
-                        *d_cur, abs(tab.z[i_layer_n-1] - tab.z[i_layer_n]) );
-			}
-		}
-
-		zph=d_cur;
-		i_layer_cur = i_layer_n;
+        //
+        h_cur = __fdividef(abs(tab.h[i_layer_bh+ilam] - tab.h[i_layer_fw+ilam])*d_cur,
+                          abs(tab.z[i_layer_bh] - tab.z[i_layer_fw]));
 
 
-    /************************************************************************************/
-    /* We determine the path length.2) We loop along the path until we interact or exit */
-    /************************************************************************************/
-		
-		while( (hph < tauRdm) ){
-			
-			icompteur++;
-			
-            // Check for exit
-			if( (i_layer_cur==0)||(i_layer_cur==NATMd) ) {
-				flagSortie=1;
-				break;
-			}
+        //
+        // update photon position
+        //
+        if (hph + h_cur > tauRdm) {
+            // photon stops within the layer
+            d_cur *= (tauRdm-hph)/h_cur;
+            ph->x = ph->x + ph->vx*d_cur;
+            ph->y = ph->y + ph->vy*d_cur;
+            ph->z = ph->z + ph->vz*d_cur;
+            ph->rayon = sqrtf(ph->x*ph->x + ph->y*ph->y + ph->z*ph->z);
+            ph->weight *= 1.f - tab.abs[ph->couche+ilam];
+            ph->prop_aer = 1.f - tab.pMol[ph->couche+ilam];
 
-			//  Update of the index of next layer
-			i_layer_n = i_layer_cur - sign_direction;
-			
-            // In the case of the tangent layer, we first change direction and stay in the same layer 
-			if( (i_layer_n == i_layer_tangent) && (sign_direction==-1) ){
-				sign_direction = 1;
-				i_layer_n = i_layer_cur;
-			}
-
-
-			delta = 4.f*( (tab.z[i_layer_n]+RTER)*(tab.z[i_layer_n]+RTER) - r_cur2*sinth*sinth);
-			
-			
-			if(delta<0){
-				    #ifdef DEBUG
-				        printf("OUPS delta #2=%lf - i_layer_n=%d - tab.z[i_layer_n]= %16.13lf - rayon= %17.13lf - rayon2= %20.16lf\n\t\
-                        sinth= %20.19lf - sign_direction=%d\n",\
-				        delta, i_layer_n, tab.z[i_layer_n], r_cur, r_cur2, sinth, sign_direction);
-				    #endif
-				ph->loc=NONE;
-				return;
-			}
-			
-			
-			d_cur= 0.5f*( -2.f*r_cur*costh + sign_direction*sqrtf(delta));
-            if(idx==0)printf("Boucle %i f %f %f %f",i_layer_n,ph->vx,ph->vy,ph->vz,d_cur);
-
-			
-			// Init cumulative quantities
-			hph_p = hph;
-			zph_p = zph;
-			
-			    #ifdef DEBUG
-			        if( i_layer_n<0 ){
-				        printf("OUPS: i_layer_n #1 = %d - rayon=%lf - icouchePhoton=%d - i_layer_cur=%d\n",\
-				        i_layer_n, r_cur, ph->couche, i_layer_cur);
-				        ph->loc=NONE;
-				        return;
-			        }
-			        if(i_layer_n>NATMd){
-				        printf("OUPS: i_layer_n #1 = %d\n",i_layer_n);
-				        ph->loc=NONE;
-				        return;
-			        }
-			    #endif
-			
-			if( i_layer_n != i_layer_cur ){
-				hph += __fdividef( 	abs(tab.h[i_layer_cur+ph->ilam*(NATMd+1)] - tab.h[i_layer_n+ph->ilam*(NATMd+1)])
-                        *(d_cur-zph_p), abs(tab.z[i_layer_n] - tab.z[i_layer_cur]) );
-			}
-			else{
-				if( i_layer_n == 0 ){
-					hph += __fdividef( 	abs(tab.h[1+ph->ilam*(NATMd+1)] - tab.h[0+ph->ilam*(NATMd+1)])
-                            *(d_cur-zph_p) , abs(tab.z[1]- tab.z[0]) );
-				}
-				else{
-					hph += __fdividef( 	abs(tab.h[i_layer_n-1+ph->ilam*(NATMd+1)] - tab.h[i_layer_n+ph->ilam*(NATMd+1)])
-                            *(d_cur-zph_p), abs(tab.z[i_layer_n-1] - tab.z[i_layer_n]) );
-				}
-			}
-
-            // Update of layers index
-			zph=d_cur;
-			i_layer_cur = i_layer_n;
-			
-			    #ifdef DEBUG
-			    // Compteur de débordement
-			        if(icompteur==(2*NATMd+2)){
-				        printf("icouche = 2(NATMd+1) - (%lf,%lf,%lf) - i_layer_n=%d - flagSortie=%d\n\t\
-	                    ph->vz=%f - d_cur=%f - tauRdm=%f - hph=%f\n",\
-				        ph->x,ph->y,ph->z, i_layer_n,flagSortie, ph->vz,d_cur,tauRdm,hph);
-				        ph->loc=NONE;
-				        return;
-			        }
-			    #endif
-		
-		}// End while along the path
-
-	}// End Location search
-
-	
-	/* Update photons coordiantes  */
-    /* fine linear interpolation of distance in the final layer in the case of interaction*/
-    /* Ddist = (Dist-Dist0)/(Dtau-Dtau0)*(TauRdm -Tau0) + Dist0*/
-	if( flagSortie==0 ){
-		rra = __fdividef( zph_p - zph , hph_p - hph );
-		rdist = rra*( tauRdm-hph ) + zph;
-	}
-	else{
-		rdist = zph;
-	}
-
-	ph->x = ph->x + ph->vx*rdist;
-	ph->y = ph->y + ph->vy*rdist;
-	ph->z = ph->z + ph->vz*rdist;
+            break;
+        } else {
+            // photon advances to the next layer
+            hph += h_cur;
+            ph->x = ph->x + ph->vx*d_cur;
+            ph->y = ph->y + ph->vy*d_cur;
+            ph->z = ph->z + ph->vz*d_cur;
+            ph->couche -= sign_direction;
+            ph->rayon = sqrtf(ph->x*ph->x + ph->y*ph->y + ph->z*ph->z);
+            vzn = __fdividef( ph->vx*ph->x + ph->vy*ph->y + ph->vz*ph->z , ph->rayon);
+        }
 
 
-	/* Update photon location */
-
-    /* No interaction */
-	if( flagSortie==1 ){
-		if(sign_direction==-1){
-			ph->loc = SURF0P;
-			ph->couche = NATMd;
-			ph->rayon = RTER;
-		}
-		else{
-			ph->loc = SPACE;
-		}
-
-		return;
-	}
-
-
-    /* Interaction */
-    // Update of photons radius
-	r_cur2 = ph->x*ph->x + ph->y*ph->y + ph->z*ph->z;
-	r_cur  = sqrtf(r_cur2);
-
-	if(r_cur < RTER){
-		if( abs(r_cur-RTER)<1.e-4f ){
-			r_cur=RTER;
-			ph->loc=SURF0P;
-			    #ifdef DEBUG
-			        if(idx==0) printf("MetaProblème #2: Correction du rayon\n");
-			    #endif
-		}
-		else{
-			    #ifdef DEBUG
-			        if(idx==0) printf("MetaProblème #2: rayon=%20.16lf - (%lf,%lf,%lf) - i_layer_n=%d - icompteur=%d -locPrec=%d\n\t\
-                    d_cur=%15.12lf - tauRdm= %lf - hph_p= %15.12lf - hph= %15.12lf - zph_p= %15.12lf - zph= %15.12lf - rdist=%15.12lf\n",\
-			        r_cur,ph->x, ph->y,ph->z, i_layer_n, icompteur,ph->locPrec,\
-			        d_cur,tauRdm, hph_p, hph, zph_p, zph,rdist);
-			    #endif
-			ph->loc = NONE;
-			return;
-		}
-	}
-
-	//  Search for photon layer index
-	icouche = 0;
-	while((RTER+tab.z[icouche])>r_cur){
-		icouche++;
-		    #ifdef DEBUG
-		     if (icouche==NATMd+1){
-			    printf("Arret de calcul couche #2 (rayon=%f)\n", r_cur);
-			    ph->loc=NONE;
-			    return;
-		     }
-		    #endif
-	}
-
-
-    // Update of photons properties
-	ph->couche = icouche;
-	ph->rayon = r_cur;
-	ph->locPrec=ATMOS;
-	ph->prop_aer = 1.f - tab.pMol[ph->couche+ph->ilam*(NATMd+1)];
-    ph->weight = ph->weight * (1.f - tab.abs[ph->couche+ph->ilam*(NATMd+1)]);
-
+    }
 }
-#endif // Spherical
+#endif // SPHERIQUE
 
 
 __device__ void move_pp(Photon* ph,float*z, float* h, float* pMol , float *abs , float* ho
@@ -1352,6 +1092,9 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 	}
 	else{
 		// Photon considéré comme perdu
+        #ifdef DEBUG
+        printf("Error in surfaceAgitee ph->z = %f\n", ph->z);
+        #endif
 		ph->loc = ABSORBED;	// Correspondant au weight=0 en Fortran
 		return;
 	}
@@ -1893,9 +1636,16 @@ __device__ void countPhoton(Photon* ph,
 
 	float weight = ph->weight;
 
+    #ifdef DEBUG
+    int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
+    if (isnan(weight)) printf("(idx=%d) Error, weight is NaN\n", idx);
+    if (isnan(s1)) printf("(idx=%d) Error, s1 is NaN\n", idx);
+    if (isnan(s2)) printf("(idx=%d) Error, s2 is NaN\n", idx);
+    if (isnan(s3)) printf("(idx=%d) Error, s3 is NaN\n", idx);
+    #endif
 
 	// Rangement du photon dans sa case, et incrémentation de variables
-	if(((ith >= 0) && (ith < NBTHETAd)) && ((iphi >= 0) && (iphi < NBPHId)) && (il >= 0) && (il < NLAMd))
+	if(((ith >= 0) && (ith < NBTHETAd)) && ((iphi >= 0) && (iphi < NBPHId)) && (il >= 0) && (il < NLAMd) && (!isnan(weight)))
 	{
         // select the appropriate level (count_level)
         tabCount = tab.tabPhotons + count_level*4*NBTHETAd*NBPHId*NLAMd;

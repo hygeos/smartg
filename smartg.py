@@ -250,6 +250,7 @@ def smartg(wl, pp=True,
         # options.extend(['-DPARAMETRES','-DPROGRESSION'])
         if not pp:
             options.append('-DSPHERIQUE')
+        # options.append('-DDEBUG')
 
         #
         # compile or load the kernel
@@ -302,9 +303,10 @@ def smartg(wl, pp=True,
         if pp:
             for ilam in xrange(NLAM):
                 tabTransDir[ilam] = np.exp(-nprofilesAtm['H'][NATM+ilam*(NATM+1)]/np.cos(THVDEG*pi/180.))
-        else:
-            for ilam in xrange(NLAM):
-                tabTransDir[ilam] = np.exp(-hph0[NATM + ilam * (NATM + 1)])
+        else: # FIXME
+            # for ilam in xrange(NLAM):
+                # tabTransDir[ilam] = np.exp(-hph0[NATM + ilam * (NATM + 1)])
+            pass
 
 #            if '-DDEBUG' in options:
 #                print ("Paramètres initiaux du photon: taumax0=%lf - zintermax=%lf - (%lf,%lf,%lf)\n" % (hph0[NATM+1], zph0[NATM+1], x0, y0, z0))
@@ -967,13 +969,13 @@ def loop_kernel(NBPHOTONS, Tableau, Var, Init, NLVL,
     return nbPhotonsTot, nbPhotonsTotInter , nbPhotonsTotInter, nbPhotonsSorTot, tabPhotonsTot
 
 
-def impactInit(HATM, NATM, NLAM, ALT, H, THVDEG, options):
+def impactInit(Hatm, NATM, NLAM, ALT, H, THVDEG, options):
     """
-    Calcul du profil que le photon va rencontrer lors de son premier passage dans l'atmosphère
-    Sauvegarde de ce profil dans tab et sauvegarde des coordonnées initiales du photon dans init
+    Calculate the coordinates of the entry point in the atmosphere
 
     Arguments :
-        - HATM : Altitude of the Top of Atmosphere
+        - pp: plane parallel/spherical mode
+        - Hatm : Altitude of the Top of Atmosphere
         - NATM : Number of layers of the atmosphere
         - NLAM : Number of wavelet length
         - ALT : Altitude of the atmosphere
@@ -982,10 +984,9 @@ def impactInit(HATM, NATM, NLAM, ALT, H, THVDEG, options):
         - options : compilation options
 
     Returns :
-        - (x0, y0, z0) : carthesian coordinates
-        - hph0 : Optical thickness seen in front of the photon
-        - zph0 : Corresponding Altitude
+        - (x0, y0, z0) : cartesian coordinates
     """
+
     vx = -np.sin(THVDEG * np.pi / 180)
     vy = 0.
     vz = -np.cos(THVDEG * np.pi / 180)
@@ -993,12 +994,27 @@ def impactInit(HATM, NATM, NLAM, ALT, H, THVDEG, options):
 
     thv = THVDEG * np.pi / 180
 
-    rdelta = 4 * 6400 * 6400 + 4 * (np.tan(thv) * np.tan(thv) + 1) * (HATM * HATM + 2 * HATM * 6400)
-    localh = (-2. * 6400 + np.sqrt(rdelta) )/(2. * (np.tan(thv) * np.tan(thv) + 1.))
+    if '-DSPHERIQUE' not in options:
+        z0 = Hatm
+        x0 = Hatm*np.sin(THVDEG*np.pi/180.)
+        y0 = 0.
+    else:
+        tanthv = np.tan(THVDEG*np.pi/180.)
+        Rter = 6400. # FIXME
 
-    x0 = localh * np.tan(thv)
-    y0 = 0
-    z0 = localh
+        # Pythagorean theorem in right triangle OMZ, where:
+        # * O is the center of the earth
+        # * M is the entry point in the atmosphere, has cartesian coordinates (x0, y0, Rter+z0)
+        #     (origin is at the surface)
+        # * Z is the projection of M on z axis
+        # tan(thv) = x0/z0
+        # Rter is the radius of the earth and Hatm the thickness of the atmosphere
+        # solve the equation x0^2 + (Rter+z0)^2 = (Rter+Hatm)^2 for z0
+        delta = 4*Rter**2 + 4*(tanthv**2 + 1) * (Hatm**2 + 2*Hatm*Rter)
+        z0 = (-2.*Rter + np.sqrt(delta))/(2 *(tanthv**2 + 1.))
+        x0 = z0*tanthv
+        y0 = 0.
+
     zph0, hph0 = [], []
 
     if '-DSPHERIQUE' in options:
@@ -1040,17 +1056,3 @@ def impactInit(HATM, NATM, NLAM, ALT, H, THVDEG, options):
 
     return x0, y0, z0, zph0, hph0
 
-
-
-if __name__ == '__main__':
-
-    test_rayleigh()
-    # test_kokhanovsky()
-    # test_rayleigh_aerosols()
-    # test_atm_surf()
-    # test_atm_surf_ocean()
-    # test_surf_ocean()
-    # test_ocean()
-    # test_reptran()
-    # test_ozone_lut()
-    # test_multispectral()
