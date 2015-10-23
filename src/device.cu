@@ -440,6 +440,7 @@ __device__ void initPhoton(Photon* ph, Tableaux tab
 	ph->stokes1 = 0.5F;
 	ph->stokes2 = 0.5F;
 	ph->stokes3 = 0.F;
+	ph->stokes4 = 0.F;
 
 }
 
@@ -750,7 +751,7 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
 
 	float zang=0.f, theta=0.f;
 	int iang, ilay, ipha;
-	float stokes1, stokes2, norm;
+	float stokes1, stokes2, stokes3, stokes4, norm;
 	float cTh2;
 	float prop_aer = ph->prop_aer;
 	
@@ -791,8 +792,8 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
 			// Calcul des parametres de Stokes du photon apres diffusion
 			
 			// Rotation des paramètres de stokes
-			rotateStokes(ph->stokes1, ph->stokes2, ph->stokes3, psi,
-				     &ph->stokes1, &ph->stokes2, &ph->stokes3);
+			rotateStokes(ph->stokes1, ph->stokes2, ph->stokes3,  psi,
+				     &ph->stokes1, &ph->stokes2, &ph->stokes3 );
 
 			// Calcul des parametres de Stokes du photon apres diffusion
 			float cross_term;
@@ -802,12 +803,14 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
 			ph->stokes1 = 3./2. * (  DELTAd  * stokes1 + cross_term );
 			ph->stokes2 = 3./2. * (  DELTAd  * cTh2 * stokes2 + cross_term );			
 			ph->stokes3 = 3./2. * (  DELTAd * cTh  * ph->stokes3 );
+			ph->stokes4 = 3./2. * (  DELTAd * DELTA_SECOd * cTh * ph->stokes4 );
 			// bias sampling scheme
 			float phase_func;
 			phase_func = 3./4. * DELTAd * (cTh2+1.0) + 3.0 * DELTA_PRIMd;
 			ph->stokes1 /= phase_func;  
 			ph->stokes2 /= phase_func;  
 			ph->stokes3 /= phase_func;     		
+			ph->stokes4 /= phase_func;     		
 
 
 		}
@@ -829,19 +832,23 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
 			cPsi = __cosf(psi);	//cosPsiPhoton
 			sPsi = __sinf(psi);     //sinPsiPhoton		
 			// Rotation des paramètres de stokes
-			rotateStokes(ph->stokes1, ph->stokes2, ph->stokes3, psi,
+			rotateStokes(ph->stokes1, ph->stokes2, ph->stokes3,   psi,
 				     &ph->stokes1, &ph->stokes2, &ph->stokes3);
 
+            stokes3=ph->stokes3;
+            stokes4=ph->stokes4;
 			// Calcul des parametres de Stokes du photon apres diffusion
 			ph->stokes1 *= faer[ipha*NFAERd*5+iang*5+0];
 			ph->stokes2 *= faer[ipha*NFAERd*5+iang*5+1];
-			ph->stokes3 *= faer[ipha*NFAERd*5+iang*5+2];
+			ph->stokes3 = stokes3*faer[ipha*NFAERd*5+iang*5+2] - stokes4*faer[ipha*NFAERd*5+iang*5+3];
+			ph->stokes4 = stokes4*faer[ipha*NFAERd*5+iang*5+2] + stokes3*faer[ipha*NFAERd*5+iang*5+3];
 
 			float debias;
 			debias = __fdividef( 2., faer[ipha*NFAERd*5+iang*5+0] + faer[ipha*NFAERd*5+iang*5+1] );
 			ph->stokes1 *= debias;  
 			ph->stokes2 *= debias;  
 			ph->stokes3 *= debias;  
+			ph->stokes4 *= debias;  
 
 			ph->weight *= ssa[ilay];
 			
@@ -894,12 +901,14 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
 			ph->stokes1 = 3./2. * (  DELTAd  * stokes1 + cross_term );
 			ph->stokes2 = 3./2. * (  DELTAd  * cTh2 * stokes2 + cross_term );			
 			ph->stokes3 = 3./2. * (  DELTAd * cTh  * ph->stokes3 );
+			ph->stokes4 = 3./2. * (  DELTAd * DELTA_SECOd * cTh * ph->stokes4 );
 			// bias sampling scheme
 			float phase_func;
 			phase_func = 3./4. * DELTAd * (cTh2+1.0) + 3.0 * DELTA_PRIMd;
 			ph->stokes1 /= phase_func;  
 			ph->stokes2 /= phase_func;  
 			ph->stokes3 /= phase_func;     		
+			ph->stokes4 /= phase_func;     		
 
             // Changement de longueur d onde
             new_wavel  = 22.94 + 0.83 * (ph->wavel) + 0.0007 * (ph->wavel)*(ph->wavel);
@@ -930,16 +939,20 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
                 &ph->stokes1, &ph->stokes2, &ph->stokes3);
 
 
+		stokes3 = ph->stokes3;
+		stokes4 = ph->stokes4;
         // Calcul des parametres de Stokes du photon apres diffusion
         ph->stokes1 *= foce[ipha*NFOCEd*5+iang*5+0];
         ph->stokes2 *= foce[ipha*NFOCEd*5+iang*5+1];
-        ph->stokes3 *= foce[ipha*NFOCEd*5+iang*5+2];
+        ph->stokes3 = stokes3*foce[ipha*NFOCEd*5+iang*5+2] - stokes4*foce[ipha*NFOCEd*5+iang*5+3];
+        ph->stokes4 = stokes4*foce[ipha*NFOCEd*5+iang*5+2] + stokes3*foce[ipha*NFOCEd*5+iang*5+3];
 
         float debias;
         debias = __fdividef( 2., foce[ipha*NFOCEd*5+iang*5+0] + foce[ipha*NFOCEd*5+iang*5+1] );
         ph->stokes1 *= debias;
         ph->stokes2 *= debias;
         ph->stokes3 *= debias;
+        ph->stokes4 *= debias;
 
 		ph->weight *= sso[ilay];
 
@@ -1040,9 +1053,10 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 	float temp;
 	
 	float nx, ny, nz;	// Coordonnées du vecteur normal à une facette de vague
-	float s1, s2, s3;
+	float s1, s2, s3 ;
+    float stokes3, stokes4;
 	
-	float rpar, rper, rparper;	// Coefficient de reflexion parallèle et perpendiculaire
+	float rpar, rper, rparper, rparper_cross;	// Coefficient de reflexion parallèle et perpendiculaire
 	float rpar2;		// Coefficient de reflexion parallèle au carré
 	float rper2;		// Coefficient de reflexion perpendiculaire au carré
 	float rat;			// Rapport des coefficients de reflexion perpendiculaire et parallèle
@@ -1241,6 +1255,7 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 		rpar2 = rpar*rpar;
 		rper2 = rper*rper;
         rparper = rpar * rper;
+        rparper_cross = 0.;
         // DR rat is the energetic reflection factor used to normalize the R and T matrix (see Xun 2014)
 		rat =  __fdividef(ph->stokes1*rper2 + ph->stokes2*rpar2,ph->stokes1+ph->stokes2);
 		//rat = 0.5 * (rper2 + rpar2); // DR see Xun 2014, eq 15 strange ....
@@ -1255,16 +1270,19 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 		rpar2 = rpar*rpar;
 		rper2 = rper*rper;
         rparper = __fdividef(2.*sTh*sTh*sTh*sTh, 1.-(1.+nind * nind)*cTh*cTh) - 1.; // DR !! Mobley 2015
+        rparper_cross = -__fdividef(2.*cTh*sTh*sTh*sqrtf(sTh*sTh-nind*nind), 1.-(1.+nind * nind)*cTh*cTh); // DR !! Mobley 2015
 		ReflTot = 1;
 	}
 
-	
+    stokes3 = ph->stokes3;	
+    stokes4 = ph->stokes4;	
 	if( (ReflTot==1) || (SURd==1) || ( (SURd==3)&&(RAND<rat) ) ){
 
 		
 		ph->stokes1 *= rper2;
 		ph->stokes2 *= rpar2;
-		ph->stokes3 *= rparper; // DR Mobley 2015 sign convention
+		ph->stokes3 = rparper*stokes3 + rparper_cross*stokes4; // DR Mobley 2015 sign convention
+		ph->stokes4 = rparper*stokes4 - rparper_cross*stokes3; // DR Mobley 2015 sign convention
 		
 		ph->vx += 2.F*cTh*nx;
 		ph->vy += 2.F*cTh*ny;
@@ -1322,6 +1340,7 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 		ph->stokes2 *= tpar*tpar*geo_trans_factor;
 		ph->stokes1 *= tper*tper*geo_trans_factor;
 		ph->stokes3 *= tpar*tper*geo_trans_factor; //DR positive factor Mobley 2015
+		ph->stokes4 *= tpar*tper*geo_trans_factor; //DR positive factor Mobley 2015
 		
 		alpha  = __fdividef(cTh,nind) - cot;
 		ph->vx = __fdividef(ph->vx,nind) + alpha*nx;
@@ -1517,6 +1536,7 @@ __device__ void surfaceLambertienne(Photon* ph, float* alb
 	ph->stokes1 = 0.5 * norm;
 	ph->stokes2 = 0.5 * norm;
     ph->stokes3 = 0.0;
+    ph->stokes4 = 0.0;
 
 	
 	ph->vx = vxn;
@@ -1583,7 +1603,7 @@ __device__ void countPhoton(Photon* ph,
     }
 
     // don't count the photons directly transmitted
-    if ((ph->weight == WEIGHTINIT) && (ph->stokes1 == ph->stokes2) && (ph->stokes3 == 0.f)) {
+    if ((ph->weight == WEIGHTINIT) && (ph->stokes1 == ph->stokes2) && (ph->stokes3 == 0.f) && (ph->stokes4 == 0.f)) {
         return;
     }
 
@@ -1614,10 +1634,10 @@ __device__ void countPhoton(Photon* ph,
 	calculPsi(ph, &psi, theta);
 	
 	// Rotation of stokes parameters
-    float s1, s2, s3;
-    rotateStokes(ph->stokes1, ph->stokes2, ph->stokes3, psi,
+    float s1, s2, s3, s4;
+    rotateStokes(ph->stokes1, ph->stokes2, ph->stokes3,  psi,
             &s1, &s2, &s3);
-	
+    s4 = ph->stokes4;
 	// Calcul de la case dans laquelle le photon sort
 	calculCase(&ith, &iphi, &il, ph 
 			   #ifdef PROGRESSION
@@ -1625,10 +1645,12 @@ __device__ void countPhoton(Photon* ph,
 			   #endif
 			   );
 	
-    // modify stokes parameters for OS code compatibility
   	if( ph->vy<0.f )
-  		s3 = -s3;
+    		s3 = -s3;
 	
+    // Change sign convention for compatibility with OS
+    s3 = -s3;
+
 	float tmp = s1;
 	s1 = s2;
 	s2 = tmp;
@@ -1648,13 +1670,14 @@ __device__ void countPhoton(Photon* ph,
 	if(((ith >= 0) && (ith < NBTHETAd)) && ((iphi >= 0) && (iphi < NBPHId)) && (il >= 0) && (il < NLAMd) && (!isnan(weight)))
 	{
         // select the appropriate level (count_level)
-        tabCount = tab.tabPhotons + count_level*4*NBTHETAd*NBPHId*NLAMd;
+        tabCount = tab.tabPhotons + count_level*5*NBTHETAd*NBPHId*NLAMd;
 
         // count in that level
         atomicAdd(tabCount+(0 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), weight * s1);
         atomicAdd(tabCount+(1 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), weight * s2);
         atomicAdd(tabCount+(2 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), weight * s3);
-        atomicAdd(tabCount+(3 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), 1.);
+        atomicAdd(tabCount+(3 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), weight * s4);
+        atomicAdd(tabCount+(4 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), 1.);
 	}
 	else
 	{
@@ -1670,9 +1693,9 @@ __device__ void countPhoton(Photon* ph,
 //
 // Rotation of the stokes parameters by an angle psi between the incidence and
 // the emergence planes
-// input: 3 stokes parameters s1, s2, s3
+// input: 3 stokes parameters s1, s2, s3, (s4 does not need to be rotated)
 //        rotation angle psi in radians
-// output: 3 rotated stokes parameters s1r, s2r, s3r
+// output: 3 rotated stokes parameters s1r, s2r, s3r,
 //
 __device__ void rotateStokes(float s1, float s2, float s3, float psi,
         float *s1r, float *s2r, float *s3r)
@@ -1823,20 +1846,23 @@ void initConstantesDevice()
 	float STHV = sin(THVRAD); //sinThetaView
 	cudaMemcpyToSymbol(STHVd, &STHV, sizeof(float));
 	
-	float GAMAbis = DEPO / (2.F-DEPO);
-	cudaMemcpyToSymbol(GAMAd, &GAMAbis, sizeof(float));
-	float DELTAbis      = (1.0 - GAMAbis) / (1.0 + 2.0*GAMAbis);
-	float DELTA_PRIMbis = GAMAbis / (1.0 + 2.0*GAMAbis);
-	float BETAbis  = 3./2. * DELTA_PRIMbis;
-	float ALPHAbis = 1./8. * DELTAbis;
-	float Abis     = 1. + BETAbis / (3.0 * ALPHAbis);
-	float ACUBEbis = Abis * Abis* Abis;
-	cudaMemcpyToSymbol(BETAd, &BETAbis, sizeof(float));
-	cudaMemcpyToSymbol(ALPHAd, &ALPHAbis, sizeof(float));
-	cudaMemcpyToSymbol(Ad, &Abis, sizeof(float));
-	cudaMemcpyToSymbol(ACUBEd, &ACUBEbis, sizeof(float));
- 	cudaMemcpyToSymbol(DELTAd, &DELTAbis, sizeof(float));
-	cudaMemcpyToSymbol(DELTA_PRIMd, &DELTA_PRIMbis, sizeof(float));
+    //float GAMA = (1.F + DEPO)/(1.F + DEPO/2.F);
+	float GAMA = DEPO / (2.F-DEPO);
+	float DELTA      = (1.F - GAMA) / (1.F + 2.F*GAMA);
+	float DELTA_PRIM = GAMA / (1.F + 2.F*GAMA);
+	float DELTA_SECO = (1.F -3.F*GAMA) / (1.F - GAMA);
+	float BETA  = 3.F/2.F * DELTA_PRIM;
+	float ALPHA = 1.F/8.F * DELTA;
+	float A     = 1.F + BETA / (3.F * ALPHA);
+	float ACUBE = A * A* A;
+	cudaMemcpyToSymbol(BETAd, &BETA, sizeof(float));
+	cudaMemcpyToSymbol(ALPHAd, &ALPHA, sizeof(float));
+	cudaMemcpyToSymbol(Ad, &A, sizeof(float));
+	cudaMemcpyToSymbol(ACUBEd, &ACUBE, sizeof(float));
+ 	cudaMemcpyToSymbol(DELTAd, &DELTA, sizeof(float));
+	cudaMemcpyToSymbol(DELTA_PRIMd, &DELTA_PRIM, sizeof(float));
+	cudaMemcpyToSymbol(DELTA_SECOd, &DELTA_SECO, sizeof(float));
+ 	cudaMemcpyToSymbol(GAMAd, &GAMA, sizeof(float));
 
 
 	cudaMemcpyToSymbol(TAUATMd, &TAUATM, sizeof(float));

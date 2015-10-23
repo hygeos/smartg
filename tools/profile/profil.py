@@ -24,6 +24,9 @@ dir_libradtran_opac =  join(dir_libradtran, 'data/aerosol/OPAC/')
 dir_libradtran_atmmod = join(dir_libradtran, 'data/atmmod/')
 dir_libradtran_crs = join(dir_libradtran, 'data/crs/')
 
+NPSTK = 5 
+        # number of Stokes parameters of the radiation field + 1 for number of photons
+        # warning! still hardcoded in device.cu  (FIXME)
 
 class AeroOPAC(object):
     '''
@@ -149,7 +152,7 @@ class AeroOPAC(object):
 
         self.tau_tot=np.sum(self.dtau_tot)
 
-    def calc(self,w):
+    def calc(self,w, NTHETA=7201):
         '''
         calcul des propritees optiques du melange en fonction de l'alitude et
         aussi integrees sur la verticale à la longueur d'onde w (nm)
@@ -163,10 +166,12 @@ class AeroOPAC(object):
 
         rh=h2o/vapor_pressure(T)*100 # calcul du profil vertical de RH
         M=len(self.z)
-        MMAX=5000 # Nb de polynome de Legendre au total
+#        MMAX=5000 # Nb de polynome de Legendre au total maximum
         self.dtau_tot=np.zeros(M,np.float32)
         self.ssa_tot=np.zeros(M,np.float32)
-        self.pmom_tot=np.zeros((M,4,MMAX),np.float64)
+#        self.pmom_tot=np.zeros((M,NPSTK-1,MMAX),np.float64)
+        self.theta = np.linspace(0.,180.,num=NTHETA,endpoint=True,dtype=np.float64)
+        self.phase_tot=np.zeros((M,NPSTK-1,NTHETA),np.float64)
 
         norm=np.zeros(M,np.float32)
         k=0
@@ -196,14 +201,18 @@ class AeroOPAC(object):
                         dtau = dz * ext * self.scalingfact # calcul de l'epaisseur optique du niveau, eventuellement mise a l'echelle
                         dssa = dtau*ssa # ssa pondere par l'epsaissuer optique
                         norm[m]+=dssa
-                        for n in range(4): # pour chaque element de la matrice de Stokes independant (4 pour Mie) 
-                            nmax=scamat.nmom[int(iw),int(ir),n]
-                            dp[n]= scamat.pmom[int(iw),int(ir),n,:nmax]*dssa # plus proche voisin pour pmom pondere par ssa et tau de la composante
+                        for n in range(NPSTK-1): # pour chaque element de la matrice de Stokes independant (NPSTK-1 pour Mie) 
+#                            nmax=scamat.nmom[int(iw),int(ir),n]
+#                            dp[n]= scamat.pmom[int(iw),int(ir),n,:nmax]*dssa # plus proche voisin pour pmom pondere par ssa et tau de la composante
+                            nmax=scamat.ntheta[int(iw),int(ir),n]
+                            ftheta = interp1d(scamat.theta[int(iw),int(ir),n,:nmax],scamat.phase[int(iw),int(ir),n,:nmax]) # function to interpolate phase function
+                            dp[n]= ftheta(self.theta)*dssa # plus proche voisin pour pmom pondere par ssa et tau de la composante
                     self.dtau_tot[m]+=dtau #somme sur les composantes
                     self.ssa_tot[m]+=dssa #moyenne pondere par l'epassieur optique pour ssa
-                    for n in range(4):
-                        nmax=scamat.nmom[int(iw),int(ir),n]
-                        self.pmom_tot[m,n,:nmax]+=dp[n]
+                    for n in range(NPSTK-1):
+#                        nmax=scamat.nmom[int(iw),int(ir),n]
+#                        self.pmom_tot[m,n,:nmax]+=dp[n]
+                        self.phase_tot[m,n,:]+=dp[n]
 
             else:  # idem mais rien de depend de RH pour cette composante
                 tabext=np.squeeze(scamat.ext)
@@ -212,8 +221,11 @@ class AeroOPAC(object):
                 tabssa=np.squeeze(scamat.ssa)
                 fssa=interp1d(scamat.wlgrid,tabssa,bounds_error=False,fill_value=0.)                       
                 ssa=fssa(w*1e-3)
-                nmom=np.squeeze(scamat.nmom)
-                pmom=np.squeeze(scamat.pmom)
+#                nmom=np.squeeze(scamat.nmom)
+#                pmom=np.squeeze(scamat.pmom)
+                ntheta=np.squeeze(scamat.ntheta)
+                theta=np.squeeze(scamat.theta)
+                phase=np.squeeze(scamat.phase)
 
                 for m in xrange(M):
                     if m==0:
@@ -229,36 +241,43 @@ class AeroOPAC(object):
                         dtau = dz * ext * self.scalingfact
                         dssa = dtau*ssa
                         norm[m]+=dssa
-                        for n in range(4): # pour chaque element de la matrice de Stokes independant (4 pour Mie) 
-                            nmax=nmom[int(iw),n]
-                            dp[n]= pmom[int(iw),n,:nmax]*dssa # plus proche voisin pour pmom pondere par ssa et tau de la composante
-
+                        for n in range(NPSTK-1): # pour chaque element de la matrice de Stokes independant (NPSTK-1 pour Mie) 
+#                            nmax=nmom[int(iw),n]
+#                            dp[n]= pmom[int(iw),n,:nmax]*dssa # plus proche voisin pour pmom pondere par ssa et tau de la composante
+                            nmax=ntheta[int(iw),n]
+                            ftheta = interp1d(theta[int(iw),n,:nmax],phase[int(iw),n,:nmax]) # function to interpolate phase function
+                            dp[n]= ftheta(self.theta)*dssa # plus proche voisin pour phase pondere par ssa et tau de la composante
+                            
                     self.dtau_tot[m]+=dtau
                     self.ssa_tot[m]+=dssa
-                    for n in range(4):
-                        nmax=nmom[int(iw),n]
-                        self.pmom_tot[m,n,:nmax]+=dp[n]
+                    for n in range(NPSTK-1):
+#                        nmax=nmom[int(iw),n]
+#                        self.pmom_tot[m,n,:nmax]+=dp[n]
+                        self.phase_tot[m,n,:]+=dp[n]
 
             k=k+1 # each component
 
         for m in xrange(M):
             if m==0:
                 self.ssa_tot[m]=1.
-                for n in range(4):
-                    self.pmom_tot[m,n,:]=0.
+                for n in range(NPSTK-1):
+#                    self.pmom_tot[m,n,:]=0.
+                    self.phase_tot[m,n,:]=0.
             else:
                 if (self.dtau_tot[m]>1e-8 and norm[m] > 1e-8): 
                     self.ssa_tot[m]/=self.dtau_tot[m]
-                    for n in range(4):  
-                        self.pmom_tot[m,n,:]/=norm[m]
+                    for n in range(NPSTK-1):  
+#                        self.pmom_tot[m,n,:]/=norm[m]
+                        self.phase_tot[m,n,:]/=norm[m]
                 else:
                     self.ssa_tot[m]=1.
-                    for n in range(4):
-                        self.pmom_tot[m,n,:]=0.
+                    for n in range(NPSTK-1):
+#                        self.pmom_tot[m,n,:]=0.
+                        self.phase_tot[m,n,:]=0.
 
 
         self.tau_tot=np.sum(self.dtau_tot)
-        self.MMAX=MMAX
+#        self.MMAX=MMAX
 
         dataaer  = np.zeros(M, np.float)
         for m in xrange(M):
@@ -279,12 +298,19 @@ class AeroOPAC(object):
         NTHETA: number of angles
         '''
         M=len(self.z)
-        Leg=Legendres(self.MMAX,NTHETA)
+#        Leg=Legendres(self.MMAX,NTHETA)
+        N=len(self.theta)
+        pha=np.zeros((N, NPSTK-1),np.float64)
         phases = []
 
         for m in range(1, M):   # not the top boundary
-            theta, pha = Mom2Pha(self.pmom_tot[m,:,:],Leg)
-            phases.append(PhaseFunction(theta, pha, degrees=True))
+#            theta, pha = Mom2Pha(self.pmom_tot[m,:,:],Leg)
+#            phases.append(PhaseFunction(theta, pha, degrees=True))
+            pha[:,0] = self.phase_tot[m,0,:] + self.phase_tot[m,1,:]
+            pha[:,1] = self.phase_tot[m,0,:] - self.phase_tot[m,1,:]
+            pha[:,2] = self.phase_tot[m,2,:]
+            pha[:,3] = self.phase_tot[m,3,:]
+            phases.append(PhaseFunction(self.theta, pha, degrees=True))
 
         return phases
 
@@ -401,7 +427,7 @@ class CloudOPAC(object):
         MMAX=5000 # Nb de polynome de Legendre au total
         self.dtau_tot=np.zeros(M,np.float32)
         self.ssa_tot=np.zeros(M,np.float32)
-        self.pmom_tot=np.zeros((M,4,MMAX),np.float64)
+        self.pmom_tot=np.zeros((M,NPSTK-1,MMAX),np.float64)
         norm=np.zeros(M,np.float32)
         k=0
         for scamat in self.scamatlist:
@@ -441,7 +467,7 @@ class CloudOPAC(object):
                     dtau = dz * ext * self.scalingfact
                     dssa = dtau*ssa
                     norm[m]+=dssa
-                    for n in range(4): # pour chaque element de la matrice de Stokes independant (4 pour Mie) 
+                    for n in range(NPSTK-1): # pour chaque element de la matrice de Stokes independant (NPSTK-1 pour Mie) 
                         if nmom.ndim==2:
                             nmax=nmom[int(iw),n]
                         else:
@@ -451,7 +477,7 @@ class CloudOPAC(object):
                 
                 self.dtau_tot[m]+=dtau
                 self.ssa_tot[m]+=dssa
-                for n in range(4):
+                for n in range(NPSTK-1):
                     if nmom.ndim==2:
                         nmax=nmom[int(iw),n]
                     else:
@@ -464,16 +490,16 @@ class CloudOPAC(object):
         for m in xrange(M):
             if m==0:
                 self.ssa_tot[m]=1.
-                for n in range(4):
+                for n in range(NPSTK-1):
                     self.pmom_tot[m,n,:]=0.
             else:
                 if (self.dtau_tot[m]>1e-8 and norm[m] > 1e-8): 
                     self.ssa_tot[m]/=self.dtau_tot[m]
-                    for n in range(4):  
+                    for n in range(NPSTK-1):  
                         self.pmom_tot[m,n,:]/=norm[m]
                 else:
                     self.ssa_tot[m]=1.
-                    for n in range(4):
+                    for n in range(NPSTK-1):
                         self.pmom_tot[m,n,:]=0.
 
 
@@ -607,10 +633,10 @@ class ScaMat(object):
         nc=netCDF4.Dataset(fname)
         self.wlgrid=nc.variables["wavelen"][:]
 
-        self.thgrid=nc.variables["theta"][:]
+        self.theta=nc.variables["theta"][:]
         self.phase=nc.variables["phase"][:]
         self.pmom=nc.variables["pmom"][:]
-        self.nth=nc.variables["ntheta"][:]
+        self.ntheta=nc.variables["ntheta"][:]
         self.nmom=nc.variables["nmom"][:]
         self.ext=nc.variables["ext"][:]
         self.ssa=nc.variables["ssa"][:]
@@ -632,7 +658,8 @@ class Legendres(object):
         mu=np.linspace(0.,np.pi,ntheta,endpoint=True,dtype=np.float64)
         mu=np.cos(mu)
         un64=np.ones_like(mu)
-        zero64=np.ones_like(mu)
+        #zero64=np.ones_like(mu) !! FIXME DR
+        zero64=np.zeros_like(mu)
         self.p1=np.zeros((nterm+1,ntheta),np.float64)
         self.p2=np.zeros((nterm+1,ntheta),np.float64)
         self.p1[0,:]=un64
@@ -658,17 +685,27 @@ def Mom2Pha(Mom,Leg):
     sumP=np.zeros_like(Leg.mu)
     sumQ=np.zeros_like(Leg.mu)
     sumU=np.zeros_like(Leg.mu)
-    sumZ=np.zeros_like(Leg.mu)
-    pha=np.zeros((Leg.ntheta, 4),np.float64)
+    sumV=np.zeros_like(Leg.mu)
+    pha=np.zeros((Leg.ntheta, NPSTK-1),np.float64)
     for k in range(Leg.nterm):
         sumP=sumP+Mom[0,k]*Leg.p1[k,:]
         sumQ=sumQ+Mom[1,k]*Leg.p2[k,:]
         sumU=sumU+Mom[2,k]*Leg.p1[k,:]
+        sumV=sumV+Mom[3,k]*Leg.p1[k,:]
     pha[:,0]=sumP+sumQ
     pha[:,1]=sumP-sumQ
     pha[:,2]=sumU
-    pha[:,3]=sumZ
+    pha[:,3]=sumV
     return np.arccos(Leg.mu)/np.pi*180.,pha
+    
+    
+def Pha2Pha(Pha):
+    pha=np.zeros((Pha.shape()[-1], NPSTK-1),np.float64)
+    pha[:,0] = Pha[0,:] + Pha[1,:]
+    pha[:,0] = Pha[0,:] - Pha[1,:]
+    pha[:,2] = Pha[2,:]
+    pha[:,3] = Pha[3,:]
+    return pha
 
 class REPTRAN_IBAND(object):
     '''

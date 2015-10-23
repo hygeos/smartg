@@ -168,13 +168,43 @@ class PhaseFunction(object):
             raise Exception('Error')
 
     def plot(self):
-        from pylab import semilogy, grid
+        from pylab import subplots, setp
         ang = self.ang
+        fig, axarr = subplots(2, 2)
+        P11 = 0.5*(self.phase[:,0]+self.phase[:,1])
+        P12 = 0.5*(self.phase[:,0]-self.phase[:,1])
+        P33 = self.phase[:,2]
+        P43 = self.phase[:,3]
         if self.degrees:
-            semilogy(ang, self.phase[:,0]+self.phase[:,1])
+            axarr[0,0].semilogy(ang, P11)
         else:
-            semilogy(ang*180.3/pi, self.phase[:,0]+self.phase[:,1])
-        grid()
+            axarr[0,0].semilogy(ang*180.3/pi, P11)
+        axarr[0, 0].set_title(r'$P_{11}$')
+        axarr[0,0].grid()
+        
+        if self.degrees:
+            axarr[0,1].plot(ang, -P12/P11)
+        else:
+            axarr[0,1].plot(ang*180.3/pi, -P12/P11)
+        axarr[0, 1].set_title(r'-$P_{12}/P_{11}$')
+        axarr[0,1].grid()
+        
+        if self.degrees:
+            axarr[1,0].plot(ang, P33/P11)
+        else:
+            axarr[1,0].plot(ang*180.3/pi, P33/P11)
+        axarr[1, 0].set_title(r'$P_{33}/P_{11}$')
+        axarr[1,0].grid()
+                
+        if self.degrees:
+            axarr[1,1].plot(ang, P43/P11)
+        else:
+            axarr[1,1].plot(ang*180.3/pi, P43/P11)
+        axarr[1, 1].set_title(r'$P_{43}/P_{11}$')
+        axarr[1,1].grid()
+        setp([a.get_xticklabels() for a in axarr[0, :]], visible=False)
+        #setp([a.get_yticklabels() for a in axarr[:, 1]], visible=False)
+        return fig, axarr
 
 def test():
     from pylab import show, semilogy, grid

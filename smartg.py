@@ -150,9 +150,10 @@ def smartg(wl, pp=True,
         # warning! should be identical to the value defined in communs.h
         NLVL = 5
 
-        # number of Stokes parameters
-        # warning! still hardcoded in device.cu (FIXME)
-        NPSTK = 4
+        # number of Stokes parameters of the radiation field + 1 for number of photons
+        # warning! still hardcoded in device.cu and profil.py (FIXME)
+#        NPSTK = 4
+        NPSTK = 5
 
         attrs = {}
         attrs.update({'device': pycuda.autoinit.device.name()})
@@ -449,7 +450,10 @@ def finalize(tabPhotonsTot2, wl, nbPhotonsTotInter, OUTPUT_LAYERS, tabTransDir, 
     tabFinal[:,2,:,:,:] = tabPhotonsTot2[:,2,:,:,:]/norm
 
     # V
-    tabFinal[:,3,:,:,:] = tabPhotonsTot2[:,3,:,:,:]
+    tabFinal[:,3,:,:,:] = tabPhotonsTot2[:,3,:,:,:]/norm
+
+    # N
+    tabFinal[:,4,:,:,:] = tabPhotonsTot2[:,4,:,:,:]
 
 
     #
@@ -473,29 +477,34 @@ def finalize(tabPhotonsTot2, wl, nbPhotonsTotInter, OUTPUT_LAYERS, tabTransDir, 
     m.add_dataset('I_up (TOA)', tabFinal.swapaxes(3,4)[UPTOA,0,ilam,:,:], axnames)
     m.add_dataset('Q_up (TOA)', tabFinal.swapaxes(3,4)[UPTOA,1,ilam,:,:], axnames)
     m.add_dataset('U_up (TOA)', tabFinal.swapaxes(3,4)[UPTOA,2,ilam,:,:], axnames)
-    m.add_dataset('N_up (TOA)', tabFinal.swapaxes(3,4)[UPTOA,3,ilam,:,:], axnames)
+    m.add_dataset('V_up (TOA)', tabFinal.swapaxes(3,4)[UPTOA,3,ilam,:,:], axnames)
+    m.add_dataset('N_up (TOA)', tabFinal.swapaxes(3,4)[UPTOA,4,ilam,:,:], axnames)
 
     if OUTPUT_LAYERS & 1:
         m.add_dataset('I_down (0+)', tabFinal.swapaxes(3,4)[DOWN0P,0,ilam,:,:], axnames)
         m.add_dataset('Q_down (0+)', tabFinal.swapaxes(3,4)[DOWN0P,1,ilam,:,:], axnames)
         m.add_dataset('U_down (0+)', tabFinal.swapaxes(3,4)[DOWN0P,2,ilam,:,:], axnames)
-        m.add_dataset('N_down (0+)', tabFinal.swapaxes(3,4)[DOWN0P,3,ilam,:,:], axnames)
+        m.add_dataset('V_down (0+)', tabFinal.swapaxes(3,4)[DOWN0P,3,ilam,:,:], axnames)
+        m.add_dataset('N_down (0+)', tabFinal.swapaxes(3,4)[DOWN0P,4,ilam,:,:], axnames)
 
         m.add_dataset('I_up (0-)', tabFinal.swapaxes(3,4)[UP0M,0,ilam,:,:], axnames)
         m.add_dataset('Q_up (0-)', tabFinal.swapaxes(3,4)[UP0M,1,ilam,:,:], axnames)
         m.add_dataset('U_up (0-)', tabFinal.swapaxes(3,4)[UP0M,2,ilam,:,:], axnames)
-        m.add_dataset('N_up (0-)', tabFinal.swapaxes(3,4)[UP0M,3,ilam,:,:], axnames)
+        m.add_dataset('V_up (0-)', tabFinal.swapaxes(3,4)[UP0M,3,ilam,:,:], axnames)
+        m.add_dataset('N_up (0-)', tabFinal.swapaxes(3,4)[UP0M,4,ilam,:,:], axnames)
 
     if OUTPUT_LAYERS & 2:
         m.add_dataset('I_down (0-)', tabFinal.swapaxes(3,4)[DOWN0M,0,ilam,:,:], axnames)
         m.add_dataset('Q_down (0-)', tabFinal.swapaxes(3,4)[DOWN0M,1,ilam,:,:], axnames)
         m.add_dataset('U_down (0-)', tabFinal.swapaxes(3,4)[DOWN0M,2,ilam,:,:], axnames)
-        m.add_dataset('N_down (0-)', tabFinal.swapaxes(3,4)[DOWN0M,3,ilam,:,:], axnames)
+        m.add_dataset('V_down (0-)', tabFinal.swapaxes(3,4)[DOWN0M,3,ilam,:,:], axnames)
+        m.add_dataset('N_down (0-)', tabFinal.swapaxes(3,4)[DOWN0M,4,ilam,:,:], axnames)
 
         m.add_dataset('I_up (0+)', tabFinal.swapaxes(3,4)[UP0P,0,ilam,:,:], axnames)
         m.add_dataset('Q_up (0+)', tabFinal.swapaxes(3,4)[UP0P,1,ilam,:,:], axnames)
         m.add_dataset('U_up (0+)', tabFinal.swapaxes(3,4)[UP0P,2,ilam,:,:], axnames)
-        m.add_dataset('N_up (0+)', tabFinal.swapaxes(3,4)[UP0P,3,ilam,:,:], axnames)
+        m.add_dataset('V_up (0+)', tabFinal.swapaxes(3,4)[UP0P,3,ilam,:,:], axnames)
+        m.add_dataset('N_up (0+)', tabFinal.swapaxes(3,4)[UP0P,4,ilam,:,:], axnames)
 
     # direct transmission
     if NLAM > 1:
@@ -597,10 +606,10 @@ def calculF(phases, N):
         # probability between 0 and 1
         z = (np.arange(N, dtype='float64')+1)/N
         phase_H[idx, :, 4] = interp1d(scum, phase.ang_in_rad())(z)  # angle
-        phase_H[idx, :, 0] = interp1d(scum, phase.phase[:,1])(z)  # I par
-        phase_H[idx, :, 1] = interp1d(scum, phase.phase[:,0])(z)  # I per
-        phase_H[idx, :, 2] = interp1d(scum, phase.phase[:,2])(z)  # U
-        phase_H[idx, :, 3] = 0.                                                # V, always 0
+        phase_H[idx, :, 0] = interp1d(scum, phase.phase[:,1])(z)  # I par P11
+        phase_H[idx, :, 1] = interp1d(scum, phase.phase[:,0])(z)  # I per P22
+        phase_H[idx, :, 2] = interp1d(scum, phase.phase[:,2])(z)  # U P33
+        phase_H[idx, :, 3] = interp1d(scum, phase.phase[:,3])(z)  # V P43                                          
 
     return phase_H
 
@@ -635,10 +644,15 @@ def InitConstantes(surf, env, NATM, NOCE, mod,
     GAMAbis = DEPO / (2- DEPO)
     DELTAbis = (1.0 - GAMAbis) / (1.0 + 2.0 *GAMAbis)
     DELTA_PRIMbis = GAMAbis / (1.0 + 2.0*GAMAbis)
+    DELTA_SECObis = (1.0 - 3.0*GAMAbis) / (1.0 - GAMAbis);
     BETAbis  = 3./2. * DELTA_PRIMbis
     ALPHAbis = 1./8. * DELTAbis
     Abis = 1. + BETAbis / (3.0 * ALPHAbis)
     ACUBEbis = Abis * Abis* Abis
+    
+    '''
+    init constante in device.cu #FIXME
+    '''
 
     # converting the constants into arrays + dictionary update
     D.update(NBPHOTONS=np.array([NBPHOTONS], dtype=np.uint64))
@@ -674,6 +688,7 @@ def InitConstantes(surf, env, NATM, NOCE, mod,
     D.update(GAMA=np.array([GAMAbis], dtype=np.float32))
     D.update(DELTA=np.array([DELTAbis], dtype=np.float32))
     D.update(DELTA_PRIM=np.array([DELTA_PRIMbis], dtype=np.float32))
+    D.update(DELTA_SECO=np.array([DELTA_SECObis], dtype=np.float32))
     D.update(BETA=np.array([BETAbis], dtype=np.float32))
     D.update(ALPHA=np.array([ALPHAbis], dtype=np.float32))
     D.update(A=np.array([Abis], dtype=np.float32))
@@ -699,7 +714,7 @@ def InitSD(nprofilesAtm, nprofilesOc, NLAM,
         - nprofilesOc : Oceanic profile
         - NLAM: Number of wavelet length
         - NLVL : Number of output levels
-        - NPSTK : Number of stockes parameter
+        - NPSTK : Number of stockes parameter + 1 for number of photons
         - NBTHETA : Number of intervals in zenith
         - NBPHI : Number of intervals in azimuth angle
         - faer : CDF of scattering phase matrices (Atmosphere)
@@ -907,7 +922,7 @@ def loop_kernel(NBPHOTONS, Tableau, Var, Init, NLVL,
         - Var : Class containing the variables sent to the device
         - Init : Class containing the initial parameters of the photon
         - NLVL : Number of output levels
-        - NPSTK : Number of stockes parameter
+        - NPSTK : Number of Stokes parameters + 1 for number of photons
         - BLOCK : Block dimension
         - XGRID : Grid dimension
         - NBTHETA : Number of intervals in zenith

@@ -223,7 +223,7 @@ typedef struct __align__(16)
 	float stokes1;
 	float stokes2;
 	float stokes3;
-	// float stokes4;
+	float stokes4;
 	
 	// Paramètres pour une atmosphère sphérique
 	int couche;
