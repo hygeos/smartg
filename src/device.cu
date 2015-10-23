@@ -977,9 +977,9 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
 	vy = cTh * vy_s + sTh * ( cPsi * uy_s + sPsi * wy );
 	vz = cTh * vz_s + sTh * ( cPsi * uz_s + sPsi * wz );
 	// Changement du vecteur u (orthogonal au vecteur vitesse du photon)
-	ph->ux = __fdividef(cTh * vx - vx_s, sTh);
-	ph->uy = __fdividef(cTh * vy - vy_s, sTh);
-	ph->uz = __fdividef(cTh * vz - vz_s, sTh);
+    ph->ux = cTh * vx - vx_s;
+    ph->uy = cTh * vy - vy_s;
+    ph->uz = cTh * vz - vz_s;
 	
 	
 	// Changement du vecteur v (vitesse du photon)
