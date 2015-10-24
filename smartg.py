@@ -298,7 +298,7 @@ def smartg(wl, pp=True,
             faer = [0]
 
         # computation of the impact point
-        x0, y0, z0, zph0, hph0 = impactInit(HATM, NATM, NLAM, nprofilesAtm['ALT'], nprofilesAtm['H'], THVDEG, options)
+        x0, y0, z0 = impactInit(HATM, NATM, NLAM, nprofilesAtm['ALT'], nprofilesAtm['H'], THVDEG, options)
 
         tabTransDir = np.zeros(NLAM, dtype=np.float64)
         if pp:
@@ -315,7 +315,7 @@ def smartg(wl, pp=True,
         # write the input variables into data structures
         Tableau, Var, Init = InitSD(nprofilesAtm, nprofilesOc, NLAM,
                                 NLVL, NPSTK, NBTHETA, NBPHI, faer, foce,
-                                albedo, wavelengths, hph0, zph0, x0, y0, z0,
+                                albedo, wavelengths, x0, y0, z0,
                                 XBLOCK, XGRID, SEED, options)
 
         # initialization of the constants
@@ -702,7 +702,7 @@ def InitConstantes(surf, env, NATM, NOCE, mod,
 
 def InitSD(nprofilesAtm, nprofilesOc, NLAM,
            NLVL, NPSTK, NBTHETA, NBPHI, faer,
-           foce, albedo, wl, hph0, zph0, x0, y0,
+           foce, albedo, wl, x0, y0,
            z0,XBLOCK, XGRID, SEED, options):
 
     """
@@ -712,7 +712,7 @@ def InitSD(nprofilesAtm, nprofilesOc, NLAM,
 
         - nprofilesAtm: Atmospheric profile
         - nprofilesOc : Oceanic profile
-        - NLAM: Number of wavelet length
+        - NLAM: Number of wavelength
         - NLVL : Number of output levels
         - NPSTK : Number of stockes parameter + 1 for number of photons
         - NBTHETA : Number of intervals in zenith
@@ -720,9 +720,7 @@ def InitSD(nprofilesAtm, nprofilesOc, NLAM,
         - faer : CDF of scattering phase matrices (Atmosphere)
         - foce : CDF of scattering phase matrices (Ocean)
         - albedo : Spectral Albedo
-        - wl: wavelet length
-        - hph0 : Optical thickness seen in front of the photon
-        - zph0 : Corresponding Altitude
+        - wl: wavelength
         - (x0,y0,z0) : Initial coordinates of the photon
         - XBLOCK: Block Size
         - XGRID : Grid Size
@@ -745,12 +743,9 @@ def InitSD(nprofilesAtm, nprofilesOc, NLAM,
                 - pMol : proportion of molecules in each layer of atmospheric model
                 - ssa : albedo of simple diffusion of the aerosols in each layer of the atmospheric model
                 - abs : proportion of absorbent in each layer of the atmospheric model
-                - lambda : wavelet lenghts
+                - lambda : wavelength
                 - z : altitudes level in the atmosphere
             optional:
-            if SPHERIQUE FLAG
-                - hph0 : optical thickness seen in front of the photon
-                - zph0 : corresponding altitude
             if DRANDPHILOX4x32_7 FLAG
                 - etat : related to the generation of random number
                 - config : related to the generation of random number
@@ -800,8 +795,6 @@ def InitSD(nprofilesAtm, nprofilesOc, NLAM,
            (np.float32, '*lambda', wl),
            (np.float32, '*z', nprofilesAtm['ALT'])]
 
-    if '-DSPHERIQUE' in options:
-        tmp += [(np.float32, '*hph0', hph0), (np.float32, '*zph0', zph0)]
     if '-DRANDPHILOX4x32_7' in options:
         tmp += [(np.uint32, '*etat', np.zeros(XBLOCK*1*XGRID*1, dtype=np.uint32)), (np.uint32, 'config', SEED)]
 
@@ -874,7 +867,7 @@ def get_profOc(wl, water, NLAM):
     """
     get the oceanic profile, the altitude of the top of Atmosphere, the number of layers of the atmosphere
     Arguments :
-        - wl : wavelet length
+        - wl : wavelengths
         - water : Profile object
             default None (no atmosphere)
         - D : Dictionary containing all the parameters required to launch the simulation by the kernel
@@ -926,7 +919,7 @@ def loop_kernel(NBPHOTONS, Tableau, Var, Init, NLVL,
         - BLOCK : Block dimension
         - XGRID : Grid dimension
         - NBTHETA : Number of intervals in zenith
-        - NLAM : Number of wavelet length
+        - NLAM : Number of wavelengths
         - options : compilation options
         - kern : kernel launching the transfert radiative simulation
         - p: progress bar object
@@ -992,7 +985,7 @@ def impactInit(Hatm, NATM, NLAM, ALT, H, THVDEG, options):
         - pp: plane parallel/spherical mode
         - Hatm : Altitude of the Top of Atmosphere
         - NATM : Number of layers of the atmosphere
-        - NLAM : Number of wavelet length
+        - NLAM : Number of wavelengths
         - ALT : Altitude of the atmosphere
         - H : optical thickness of each layer in the atmosphere
         - THVDEG : View Zenith Angle in degree
@@ -1029,11 +1022,11 @@ def impactInit(Hatm, NATM, NLAM, ALT, H, THVDEG, options):
         z0 = (-2.*Rter + np.sqrt(delta))/(2 *(tanthv**2 + 1.))
         x0 = z0*tanthv
         y0 = 0.
+        z0 += Rter
 
     zph0, hph0 = [], []
 
     if '-DSPHERIQUE' in options:
-        z0 += 6400
         zph0 = np.zeros((NATM + 1), dtype=np.float32)
         hph0 = np.zeros((NATM + 1)*NLAM, dtype=np.float32)
 
@@ -1069,5 +1062,5 @@ def impactInit(Hatm, NATM, NLAM, ALT, H, THVDEG, options):
         zphbis += vz*rsolfi;
 
 
-    return x0, y0, z0, zph0, hph0
+    return x0, y0, z0
 

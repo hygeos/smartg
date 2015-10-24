@@ -346,17 +346,6 @@ typedef struct __align__(16)
 
     float* z;
 
-    #ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
-
-					// Altitude de chaque couches
-
-	
-	/* Profil atmosphérique initial vu par la photon */
-	float* hph0;			// Epaisseur optique vue devant le photon
-	float* zph0;			// Altitude correspondante
-	#endif
-	
-	
 	#ifdef RANDMWC
 	unsigned long long* etat;
 	unsigned int* config;
