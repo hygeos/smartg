@@ -234,7 +234,6 @@ typedef struct __align__(16)
                 // atmosphère: valeurs positives
                 // océan: valeurs négatives
 
-	int locPrec; // previous localisation
 	// Position cartésienne du photon
 	float x;
 	float y;

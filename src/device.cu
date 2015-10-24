@@ -389,8 +389,6 @@ __device__ void initPhoton(Photon* ph, Tableaux tab
 	ph->wavel = tab.lambda[ph->ilam];
     atomicAdd(tab.nbPhotonsInter+ph->ilam, 1);
 
-    ph->locPrec = NONE;
-
     if ((SIMd == -2) || (SIMd == 1) || (SIMd == 2)) {
 
         //
@@ -1075,8 +1073,6 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 	float icp, isp, ict, ist;	// Sinus et cosinus de l'angle d'impact
 	float vxn, vyn, vzn, uxn, uyn, uzn;
 	
-	ph->locPrec = ph->loc;
-	
 	
 	/** Calcul de l'angle entre l'axe z et la normale au point d'impact **/
 	/*NOTE: le float pour les calculs suivant fait une erreur de 2.3% 
@@ -1461,8 +1457,6 @@ __device__ void surfaceLambertienne(Photon* ph, float* alb
 	
     if (ph->loc != SEAFLOOR){
 
-	ph->locPrec = ph->loc;
-	
 	
 	/** Calcul de l'angle entre l'axe z et la normale au point d'impact **/
 	/*NOTE: le float pour les calculs suivant fait une erreur de 2.3% 
