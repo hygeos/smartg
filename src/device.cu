@@ -1942,14 +1942,6 @@ __device__ unsigned int randomPhilox4x32_7uint(philox4x32_ctr_t* ctr, philox4x32
 }
 #endif
 
-__global__ void lancementKernel(Variables* var, Tableaux tab
-		, Init* init
-		)
-{
-    launchKernel(var,tab,init
-            );
-}
-
 extern "C" {
     __global__ void lancementKernelPy(Variables* var, Tableaux *tab
 	, Init* init

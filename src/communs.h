@@ -59,13 +59,10 @@ typedef int CrMCCUDA;
 /* Lié au photon */
 // Poids initial du photon
 #define WEIGHTINIT 1.F
-// Au dela du poids WEIGHTMAX le photon est considéré comme une erreur
-#define WEIGHTMAX 50.F
 
 #define WEIGHTRR 1.F
 // Détecte les photons très proches du zenith
 #define VALMIN 0.000001F
-#define WEIGHTMIN 1.e-5f
 
 
 /* Mathématiques */
@@ -133,60 +130,6 @@ typedef curandStateScrambledSobol32_t curandSTATE;
 #ifdef RANDPHILOX4x32_7
 #define RAND randomPhilox4x32_7float(etatThr, configThr)
 #endif
-
-/**********************************************************
-*	> Variables externes fichier host
-***********************************************************/
-
-extern unsigned long long NBPHOTONS;
-extern unsigned int NBLOOP;
-extern int SEED;
-extern int XBLOCK;
-extern int YBLOCK;
-extern int XGRID;
-extern int YGRID;
-extern int DEVICE;
-extern int NBTHETA;
-extern int NBPHI;
-extern int NLAM;
-extern int NPHAAER;
-extern int NPHAOCE;
-extern int SIM;
-extern int SUR;
-extern int DIOPTRE;
-extern int ENV;
-
-extern unsigned int LSAAER;
-extern unsigned int NFAER;
-
-extern unsigned int LSAOCE;
-extern unsigned int NFOCE;
-
-extern float THVDEG;
-extern float TAURAY;
-extern float TAUAER;
-extern float TAUATM;
-extern float ENV_SIZE;
-extern float X0;
-extern float Y0;
-extern float DEPO;  // depolarization factor
-extern char PATHDIFFOCE[];
-extern char PATHPROFILOCE[];
-extern int NOCE;
-extern unsigned int OUTPUT_LAYERS;
-extern int NATM;
-extern float HATM;
-extern float WINDSPEED;
-extern float NH2O;
-extern float TRANSDIR;
-
-extern char PATHRESULTATSHDF[];
-extern char PATHDIFFAER[];
-extern char PATHPROFILATM[];
-extern char PATHALB[];
-
-
-
 
 
 
@@ -271,18 +214,6 @@ typedef struct __align__(16)
 }Variables;
 
 
-typedef struct __align__(16)
-{
-	//garbage
-	    float *depth;
-	    float *hmol;
-	    float *haer;
-	    float *xdel;
-
-}Garbages;
-
-
-
 /* ConfigMT
 * Paramètres pour la fonction random Mersenne Twister
 */
@@ -325,9 +256,6 @@ typedef struct __align__(16)
 	float* ho;				// Pointeur vers l'épaisseur optique de chaque couches du modele oceanique
     float* sso;             // Pointeur vers le profil de l albedo de diffusion simple dans l'ocean
     int* ipo;                // pointer to the vertical profile of ocean phase function index
-    // garbage
-
-
 
 	
 	float* h;				// Pointeur vers l'épaisseur optique de chaque couches du modèle atmosphérique

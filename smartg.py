@@ -185,7 +185,7 @@ def smartg(wl, pp=True,
            NBTHETA=45, NBPHI=45,
            NFAER=1000000, NFOCE=1000000,
            OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
-           NBLOOP=None, progress=True):
+           NBLOOP=None, progress=True, debug=False):
         '''
         Run a SMART-G simulation
 
@@ -214,7 +214,7 @@ def smartg(wl, pp=True,
         import pycuda.autoinit
         from pycuda.compiler import SourceModule
         from pycuda.driver import module_from_buffer
-
+        from pycuda.gpuarray import zeros as gpu_zeros
 
         #
         # initialization
@@ -328,7 +328,8 @@ def smartg(wl, pp=True,
         # options.extend(['-DPARAMETRES','-DPROGRESSION'])
         if not pp:
             options.append('-DSPHERIQUE')
-        # options.append('-DDEBUG')
+        if debug:
+            options.append('-DDEBUG')
 
         #
         # compile or load the kernel
@@ -702,13 +703,12 @@ def InitConstantes(surf, env, NATM, NOCE, mod,
     Arguments:
 
         - D: Dictionary containing all the parameters required to launch the simulation by the kernel
-        - surf : surf: Surface object
+        - surf : Surface object
         - env : environment effect parameters (dictionary)
         - NATM : Number of layers of the atmosphere
         - NOCE : Number of layers of the ocean
         - HATM : Altitude of the Top of Atmosphere
         - mod : PyCUDA module compiling the kernel
-
     """
 
     import pycuda.driver as cuda
@@ -726,16 +726,9 @@ def InitConstantes(surf, env, NATM, NOCE, mod,
     ALPHAbis = 1./8. * DELTAbis
     Abis = 1. + BETAbis / (3.0 * ALPHAbis)
     ACUBEbis = Abis * Abis* Abis
-    
-    '''
-    init constante in device.cu #FIXME
-    '''
 
     # converting the constants into arrays + dictionary update
-    D.update(NBPHOTONS=np.array([NBPHOTONS], dtype=np.uint64))
     D.update(NBLOOP=np.array([NBLOOP], dtype=np.uint32))
-    D.update(THVDEG=np.array([THVDEG], dtype=np.float32))
-    D.update(DEPO=np.array([DEPO], dtype=np.float32))
     D.update(NOCE=np.array([NOCE], dtype=np.int32))
     D.update(OUTPUT_LAYERS=np.array([OUTPUT_LAYERS], dtype=np.uint32))
     D.update(NFAER=np.array([NFAER], dtype=np.uint32))
@@ -759,10 +752,8 @@ def InitConstantes(surf, env, NATM, NOCE, mod,
         D.update(ENV_SIZE=np.array(env.dict['ENV_SIZE'], dtype=np.float32))
         D.update(X0=np.array(env.dict['X0'], dtype=np.float32))
         D.update(Y0=np.array(env.dict['Y0'], dtype=np.float32))
-    D.update(THV=np.array([THV], dtype=np.float32))
     D.update(STHV=np.array([STHV], dtype=np.float32))
     D.update(CTHV=np.array([CTHV], dtype=np.float32))
-    D.update(GAMA=np.array([GAMAbis], dtype=np.float32))
     D.update(DELTA=np.array([DELTAbis], dtype=np.float32))
     D.update(DELTA_PRIM=np.array([DELTA_PRIMbis], dtype=np.float32))
     D.update(DELTA_SECO=np.array([DELTA_SECObis], dtype=np.float32))

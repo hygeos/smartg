@@ -19,20 +19,9 @@
 *	> Variables externes fichier device/kernel
 ***********************************************************/
 
-__device__ __constant__ unsigned long long NBPHOTONSd;
 __device__ __constant__ unsigned int NBLOOPd;
-__device__ __constant__ float THVDEGd;
-__device__ __constant__ float TAURAYd;
-__device__ __constant__ float TAUAERd;
-__device__ __constant__ float TAUATMd;
-#ifndef SPHERIQUE
-__device__ __constant__ float TAUMAXd;	//tau initial du photon (Host)
-#endif
-__device__ __constant__ float W0OCEd;
-__device__ __constant__ float DEPOd;
 __device__ __constant__ int NOCEd;
 __device__ __constant__ unsigned int OUTPUT_LAYERSd;
-__device__ __constant__ float W0LAMd;
 __device__ __constant__ unsigned int NFAERd;
 __device__ __constant__ unsigned int NFOCEd;
 __device__ __constant__ int NATMd;
@@ -46,9 +35,6 @@ __device__ __constant__ int YGRIDd;
 __device__ __constant__ int NBTHETAd;
 __device__ __constant__ int NBPHId;
 __device__ __constant__ int NLAMd;
-__device__ __constant__ int NPHAAERd;
-__device__ __constant__ int NPHAOCEd;
-__device__ __constant__ int PROFILd;
 __device__ __constant__ int SIMd;
 __device__ __constant__ int SURd;
 __device__ __constant__ int DIOPTREd;
@@ -56,11 +42,9 @@ __device__ __constant__ int ENVd;
 __device__ __constant__ float ENV_SIZEd;		// Size of target in km
 __device__ __constant__ float X0d;		// position of the target in x (km)
 __device__ __constant__ float Y0d;		// position of the target in y (km)
-__device__ __constant__ float THVd;		//thetaView_Host in radians
 __device__ __constant__ float STHVd;	//sinThetaView_Host
 __device__ __constant__ float CTHVd;	//cosThetaView_Host
 
-__device__ __constant__ float GAMAd;
 __device__ __constant__ float DELTAd;
 __device__ __constant__ float DELTA_PRIMd;
 __device__ __constant__ float DELTA_SECOd;
@@ -85,9 +69,6 @@ __device__ __constant__ float ACUBEd;
 * Il peut être important de rappeler que le kernel lance tous les threads mais effectue des calculs similaires. La boucle de la
 * fonction va donc être effectuée pour chaque thread du block de la grille
 */
-__global__ void lancementKernel(Variables* var, Tableaux tab
-		, Init* init
-			       );
 extern "C" {
 __global__ void lancementKernelPy(Variables* var, Tableaux *tab, Init* init);
 }
