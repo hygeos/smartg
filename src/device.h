@@ -247,16 +247,6 @@ __device__ void calculCase(int*, int*, int*, Photon*
 					);
 
 
-/**********************************************************
-*	> Initialisation de données dans le device
-***********************************************************/
-
-/* initConstantesDevice
-* Fonction qui initialise les constantes du device calculés dans le host
-* Elle doit rester dans ce fichier
-*/
-void initConstantesDevice();
-
 
 /**********************************************************
 *	> Fonctions liées au générateur aléatoire

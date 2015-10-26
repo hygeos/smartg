@@ -10,7 +10,6 @@ Speed-up Monte Carlo Advanced Radiative Transfer Code using GPU
 
 
 import numpy as np
-from tools.smartg import RoughSurface, LambSurface, FlatSurface, Environment
 from tools.gpustruct import GPUStruct
 import time
 from datetime import datetime
@@ -33,7 +32,7 @@ dir_bin = join(dir_root, 'bin/')
 src_device = join(dir_src, 'device.cu')
 binnames = {
             True: join(dir_bin, 'pp.cubin'),
-            # False: join(dir_bin, 'sp.cubin'),   # FIXME: repair SP
+            False: join(dir_bin, 'sp.cubin'),
         }
 
 
@@ -43,6 +42,84 @@ DOWN0P = 1
 DOWN0M = 2
 UP0P = 3
 UP0M = 4
+
+class FlatSurface(object):
+    '''
+    Definition of a flat sea surface
+
+    Arguments:
+        SUR: Processes at the surface dioptre
+            # 1 Forced reflection
+            # 2 Forced transmission
+            # 3 Reflection and transmission
+        NH2O: Relative refarctive index air/water
+    '''
+    def __init__(self, SUR=3, NH2O=1.33):
+        self.dict = {
+                'SUR': SUR,
+                'DIOPTRE': 0,
+                'WINDSPEED': -999.,
+                'NH2O': NH2O,
+                }
+    def __str__(self):
+        return 'FLATSURF-SUR={SUR}'.format(**self.dict)
+
+class RoughSurface(object):
+    '''
+    Definition of a roughened sea surface
+
+    Arguments:
+        WIND: wind speed (m/s)
+        SUR: Processes at the surface dioptre
+            # 1 Forced reflection
+            # 2 Forced transmission
+            # 3 Reflection and transmission
+        NH2O: Relative refarctive index air/water
+    '''
+    def __init__(self, WIND=5., SUR=3, NH2O=1.33):
+        self.dict = {
+                'SUR': SUR,
+                'DIOPTRE': 1,
+                'WINDSPEED': WIND,
+                'NH2O': NH2O,
+                }
+    def __str__(self):
+        return 'ROUGHSUR={SUR}-WIND={WINDSPEED}-DI={DIOPTRE}'.format(**self.dict)
+
+
+class LambSurface(object):
+    '''
+    Definition of a lambertian reflector
+
+    ALB: Albedo of the reflector
+    '''
+    def __init__(self, ALB=0.5):
+        self.dict = {
+                'SUR': 1,
+                'DIOPTRE': 3,
+                'SURFALB': ALB,
+                'WINDSPEED': -999.,
+                'NH2O': -999.,
+                }
+    def __str__(self):
+        return 'LAMBSUR-ALB={SURFALB}'.format(**self.dict)
+
+class Environment(object):
+    '''
+    Stores the smartg parameters relative the the environment effect
+    '''
+    def __init__(self, ENV=0, ENV_SIZE=0., X0=0., Y0=0., ALB=0.5):
+        self.dict = {
+                'ENV': ENV,
+                'ENV_SIZE': ENV_SIZE,
+                'X0': X0,
+                'Y0': Y0,
+                'SURFALB': ALB,
+                }
+
+    def __str__(self):
+        return 'ENV={ENV_SIZE}-X={X0:.1f}-Y={Y0:.1f}'.format(**self.dict)
+
 
 def smartg_thr(*args, **kwargs):
     '''
