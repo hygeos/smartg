@@ -1063,6 +1063,7 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 	float ncot, ncTh;	// ncot = nind*cot, ncoi = nind*cTh
 	float tpar, tper;	//
     float geo_trans_factor;
+    int iter=0;
 	
 	
 	/** Séparation du code pour atmosphère sphérique ou parallèle **/
@@ -1118,7 +1119,7 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 	uxn= ict*icp*ph->ux - ict*isp*ph->uy + ist*ph->uz;
 	uyn= isp*ph->ux + icp*ph->uy;
 	uzn= -icp*ist*ph->ux + ist*isp*ph->uy + ict*ph->uz;
-	
+
 	ph->vx = vxn;
 	ph->vy = vyn;
 	ph->vz = vzn;
@@ -1144,6 +1145,8 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
     // DR A = Sum_0_2pi Sumr_0_pi/2 P_alpha_beta /cos(beta) cos(theta_inc) dalpha dbeta
     // DR Finally P = 1/A * P_alpha_beta  /cos(beta) cos(theta_inc)
 	if( DIOPTREd !=0 ){
+        // Rough surface
+
         theta = DEMIPI;
         // DR Computation of P_alpha_beta = P_Cox_Munk(beta) * P(alpha | beta)
         // DR we draw beta first according to Cox_Munk isotropic and then draw alpha, conditional probability
@@ -1152,6 +1155,24 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 		sig = sqrtf(0.003F + 0.00512f *WINDSPEEDd);
 		beta = atanf( sig*sqrtf(-__logf(RAND)) );
         while(theta>=DEMIPI){
+            iter++;
+            if (iter >= 20) {  // FIXME
+                // safety check
+                printf("Warning, photon rejected in RoughSurface while loop\n");
+                printf("  rayon=%f V=(%f,%f,%f)\n",
+                        ph->rayon,
+                        ph->vx,
+                        ph->vy,
+                        ph->vz
+                      );
+                printf("  test rot. vec. pos. (%f,%f,%f)\n",
+                        ict*icp*ph->x - ict*isp*ph->y + ist*ph->z,
+                        isp*ph->x + icp*ph->y,
+                        -icp*ist*ph->x + ist*isp*ph->y + ict*ph->z);
+
+                ph->loc = NONE;
+                break;
+            }
            alpha = DEUXPI * RAND;
 	       sBeta = __sinf( beta );
 	       cBeta = __cosf( beta );
@@ -1173,6 +1194,8 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
         }
 	}
     else{
+        // Flat surface
+
         beta = 0;
         alpha = DEUXPI * RAND;
 	    sBeta = __sinf( beta );
