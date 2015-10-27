@@ -53,6 +53,9 @@ __device__ __constant__ float ALPHAd;
 __device__ __constant__ float Ad;
 __device__ __constant__ float ACUBEd;
 
+__device__ __constant__ float RTER;
+
+
 
 /**********************************************************
 *	> Prototypes de device.cu

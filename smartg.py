@@ -182,6 +182,7 @@ def _smartg_thread(q, qpro, args, kwargs):
 def smartg(wl, pp=True,
            atm=None, surf=None, water=None, env=None,
            NBPHOTONS=1e9, DEPO=0.0279, THVDEG=0., SEED=-1,
+           RTER=6400.,
            NBTHETA=45, NBPHI=45,
            NFAER=1000000, NFOCE=1000000,
            OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
@@ -214,7 +215,6 @@ def smartg(wl, pp=True,
         import pycuda.autoinit
         from pycuda.compiler import SourceModule
         from pycuda.driver import module_from_buffer
-        from pycuda.gpuarray import zeros as gpu_zeros
 
         #
         # initialization
@@ -376,7 +376,7 @@ def smartg(wl, pp=True,
             faer = [0]
 
         # computation of the impact point
-        x0, y0, z0 = impactInit(HATM, NATM, NLAM, nprofilesAtm['ALT'], nprofilesAtm['H'], THVDEG, options)
+        x0, y0, z0 = impactInit(HATM, NATM, NLAM, nprofilesAtm['ALT'], nprofilesAtm['H'], THVDEG, options, RTER)
 
         tabTransDir = np.zeros(NLAM, dtype=np.float64)
         if pp:
@@ -400,7 +400,7 @@ def smartg(wl, pp=True,
         InitConstantes(surf, env, NATM, NOCE, mod,
                        NBPHOTONS, NBLOOP, THVDEG, DEPO,
                        XBLOCK, XGRID, NLAM, SIM, NFAER,
-                       NFOCE, NBTHETA, NBPHI, OUTPUT_LAYERS)
+                       NFOCE, NBTHETA, NBPHI, OUTPUT_LAYERS, RTER)
 
 
         # Initialize the progress bar
@@ -695,7 +695,7 @@ def calculF(phases, N):
 def InitConstantes(surf, env, NATM, NOCE, mod,
                    NBPHOTONS, NBLOOP, THVDEG, DEPO,
                    XBLOCK, XGRID,NLAM, SIM, NFAER,
-                   NFOCE, NBTHETA, NBPHI, OUTPUT_LAYERS) :
+                   NFOCE, NBTHETA, NBPHI, OUTPUT_LAYERS, RTER) :
 
     """
     Initialize the constants in python and send them to the device memory
@@ -766,6 +766,8 @@ def InitConstantes(surf, env, NATM, NOCE, mod,
     for key in D.keys():
         a,_ = mod.get_global('%sd'%key)
         cuda.memcpy_htod(a, D[key])
+
+    cuda.memcpy_htod(mod.get_global('RTER')[0], np.array([RTER], dtype=np.float32))
 
 
 def InitSD(nprofilesAtm, nprofilesOc, NLAM,
@@ -1045,7 +1047,7 @@ def loop_kernel(NBPHOTONS, Tableau, Var, Init, NLVL,
     return nbPhotonsTot, nbPhotonsTotInter , nbPhotonsTotInter, nbPhotonsSorTot, tabPhotonsTot
 
 
-def impactInit(Hatm, NATM, NLAM, ALT, H, THVDEG, options):
+def impactInit(Hatm, NATM, NLAM, ALT, H, THVDEG, options, Rter):
     """
     Calculate the coordinates of the entry point in the atmosphere
 
@@ -1058,6 +1060,7 @@ def impactInit(Hatm, NATM, NLAM, ALT, H, THVDEG, options):
         - H : optical thickness of each layer in the atmosphere
         - THVDEG : View Zenith Angle in degree
         - options : compilation options
+        - Rter: earth radius
 
     Returns :
         - (x0, y0, z0) : cartesian coordinates
@@ -1076,7 +1079,6 @@ def impactInit(Hatm, NATM, NLAM, ALT, H, THVDEG, options):
         y0 = 0.
     else:
         tanthv = np.tan(THVDEG*np.pi/180.)
-        Rter = 6400. # FIXME
 
         # Pythagorean theorem in right triangle OMZ, where:
         # * O is the center of the earth

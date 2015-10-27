@@ -103,10 +103,6 @@ typedef int CrMCCUDA;
 #define OUTPUT_BOA_DOWN_0M_UP_0P   2 // downward radiance at BOA below surface (0-) and upward radiance at BOA above surface (0+)
 
 
-/* Constantes propres au calcul sphérique */
-#define RTER 6400.
-
-
 /* Test des differentes fonctions random */
 #if defined(RANDCUDA)
 typedef curandState_t curandSTATE;
