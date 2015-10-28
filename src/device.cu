@@ -465,7 +465,7 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
     float vzn, delta;
     float d_cur, r_cur2, h_cur;
     int sign_direction;
-    int i_layer_fw, i_layer_bh; // index or layers forward and hehind the photon
+    int i_layer_fw, i_layer_bh; // index or layers forward and behind the photon
     float costh, sinth;
     int ilam = ph->ilam*(NATMd+1);  // wavelength offset in optical thickness table
 
@@ -504,6 +504,11 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
         if (ph->couche == NATMd) {
             ph->loc = SURF0P;
             ph->couche -= 1;  // next time photon enters move_sp, it's at layers NATM-1
+            #ifdef DEBUG
+            if (ph->vx*ph->x + ph->vy*ph->y + ph->vz*ph->z > 0) {
+                printf("Warning, vzn > 0 at SURF0P in move_sp (vzn=%f)\n", vzn);
+            }
+            #endif
             break;
         }
         if (ph->couche < 0) {
@@ -605,6 +610,10 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
             ph->rayon = sqrtf(ph->x*ph->x + ph->y*ph->y + ph->z*ph->z);
             ph->weight *= 1.f - tab.abs[ph->couche+ilam];
             ph->prop_aer = 1.f - tab.pMol[ph->couche+ilam];
+
+            #ifdef DEBUG
+            vzn = __fdividef( ph->vx*ph->x + ph->vy*ph->y + ph->vz*ph->z , ph->rayon);
+            #endif
 
             break;
         } else {
@@ -1050,7 +1059,12 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 	float nind;
 	float temp;
 	
-	float nx, ny, nz;	// Coordonnées du vecteur normal à une facette de vague
+    // coordinates of the normal to the wave facet in the original axis
+	float nx, ny, nz;
+
+    // coordinates of the normal to the wave facet in the local axis (Nx, Ny, Nz)
+	float n_x, n_y, n_z;
+
 	float s1, s2, s3 ;
     float stokes3, stokes4;
 	
@@ -1064,69 +1078,51 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 	float tpar, tper;	//
     float geo_trans_factor;
     int iter=0;
+    float vzn;  // projection of V on the local vertical
 	
-	
-	/** Séparation du code pour atmosphère sphérique ou parallèle **/
-	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
-	
-	/** Calcul du theta impact et phi impact **/
-	//NOTE: Dans le code Fortran, ce calcul est effectué dans atmos
-	float icp, isp, ict, ist;	// Sinus et cosinus de l'angle d'impact
-	float vxn, vyn, vzn, uxn, uyn, uzn;
-	
-	
-	/** Calcul de l'angle entre l'axe z et la normale au point d'impact **/
-	/*NOTE: le float pour les calculs suivant fait une erreur de 2.3% 
-	 * par exemple (theta_float=0.001196 / theta_double=0.0011691
-	 * Mais ils sont bien plus performant et cette erreur ne pose pas de problème jusqu'à présent.
-	 * De plus, l'angle d'impact n'est pas calculé mais directement les cosinus et sinus de cet angle.
-	*/
-	if( ph->z > 0. ){
-		ict = __fdividef(ph->z,RTER);
-		
-		if(ict>1.f){
-				ict = 1.f;
-		}
+    #ifdef SPHERIQUE
+    // define 3 vectors Nx, Ny and Nz in cartesian coordinates which define a
+    // local orthonormal basis at the impact point.
+    // Nz is the local vertical direction, the direction of the 2 others does not matter
+    // because the azimuth is chosen randomly
+    float Nxx, Nxy, Nxz;
+    float Nyx, Nyy, Nyz;
+    float Nzx, Nzy, Nzz;
+    float norm;
 
-		ist = sqrtf( 1.f - ict*ict );
-   
-		if(ph->x >= 0.f) ist = -ist;
-		
-        icp = __fdividef(ph->x,sqrtf(ph->x*ph->x + ph->y*ph->y));
-        isp = sqrtf( 1.f - icp*icp );
-        if (isnan(isp)) { // avoid numerical instabilities where x,y are close to zero (or icp>1)
-            icp = 1.F;
-            isp = 0.F;
-        }
-        
-        if( ph->y < 0.f ) isp = -isp;
-	}
-	else{
-		// Photon considéré comme perdu
-        #ifdef DEBUG
-        printf("Error in surfaceAgitee ph->z = %f\n", ph->z);
-        #endif
-		ph->loc = ABSORBED;	// Correspondant au weight=0 en Fortran
-		return;
-	}
-	
-	
-	/** Il faut exprimer Vx,y,z et Ux,y,z dans le repère de la normale au point d'impact **/
-	vxn= ict*icp*ph->vx - ict*isp*ph->vy + ist*ph->vz;
-	vyn= isp*ph->vx + icp*ph->vy;
-	vzn= -icp*ist*ph->vx + ist*isp*ph->vy + ict*ph->vz;
-	
-	uxn= ict*icp*ph->ux - ict*isp*ph->uy + ist*ph->uz;
-	uyn= isp*ph->ux + icp*ph->uy;
-	uzn= -icp*ist*ph->ux + ist*isp*ph->uy + ict*ph->uz;
+    // Nz is the vertical at the impact point
+    Nzx = ph->x/RTER;
+    Nzy = ph->y/RTER;
+    Nzz = ph->z/RTER;
 
-	ph->vx = vxn;
-	ph->vy = vyn;
-	ph->vz = vzn;
-	ph->ux = uxn;
-	ph->uy = uyn;
-	ph->uz = uzn;
-	#endif	/* Fin de la séparation atmosphère sphérique */
+    // Nx is chosen arbitrarily by cross product of Nz with axis X = (1,0,0)
+    // and normalized
+    Nxx = 0.;
+    Nxy = Nzz;
+    Nxz = -Nzy;
+    norm = sqrt(Nxy*Nxy + Nxz*Nxz);
+    Nxy /= norm;
+    Nxz /= norm;
+
+    // Ny is the cross product of Nx and Nz
+    Nyx = -Nzy*Nzy - Nzz*Nzz;
+    Nyy = Nzx*Nzy;
+    Nyz = Nzx*Nzz;
+    norm = sqrt(Nyx*Nyx + Nyy*Nyy + Nyz*Nyz);
+    Nyx /= norm;
+    Nyy /= norm;
+    Nyz /= norm;
+
+    #ifdef DEBUG
+    // we check that there is no upward photon reaching surface0+
+    if ((ph->loc == SURF0P) && (ph->vx*ph->x + ph->vy*ph->y + ph->vz*ph->z > 0)) {
+        // upward photon when reaching the surface at (0+)
+        printf("Warning, vzn>0 (vzn=%f) with SURF0+ in surfaceAgitee\n",
+                ph->vx*ph->x + ph->vy*ph->y + ph->vz*ph->z);
+    }
+    #endif
+    #endif
+
 	
 	/** **/
     // DR Estimation of the probability P of interaction of the photon with zentih angle theta with a facet of slope beta and azimut alpha	
@@ -1152,11 +1148,11 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
         // DR we draw beta first according to Cox_Munk isotropic and then draw alpha, conditional probability
         // DR rejection method: to exclude unphysical azimuth (leading to incident angle theta >=PI/2)
         // DR we continue until acceptable value for alpha
-		sig = sqrtf(0.003F + 0.00512f *WINDSPEEDd);
-		beta = atanf( sig*sqrtf(-__logf(RAND)) );
-        while(theta>=DEMIPI){
+        sig = sqrtf(0.003F + 0.00512f *WINDSPEEDd);
+        beta = atanf( sig*sqrtf(-__logf(RAND)) );
+        while (theta >= DEMIPI) {
             iter++;
-            if (iter >= 20) {  // FIXME
+            if (iter >= 20) {
                 // safety check
                 #ifdef DEBUG
                 printf("Warning, photon rejected in RoughSurface while loop\n");
@@ -1170,46 +1166,63 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
                 break;
             }
            alpha = DEUXPI * RAND;
-	       sBeta = __sinf( beta );
-	       cBeta = __cosf( beta );
-	       nx = sBeta*__cosf( alpha );
-	       ny = sBeta*__sinf( alpha );
-	
+           sBeta = __sinf( beta );
+           cBeta = __cosf( beta );
+
+           // the facet has coordinates
+           // (sin(beta)*cos(alpha), sin(beta)*sin(alpha), cos(beta)) in axis (Nx, Ny, Nz)
+           n_x = sBeta*__cosf( alpha );
+           n_y = sBeta*__sinf( alpha );
+
            // compute relative index of refraction
            // DR a: air, b: water , Mobley 2015 nind = nba = nb/na
-	       if (ph->loc == SURF0M) {
-		       nind = __fdividef(1.f,NH2Od);
-		       nz = -cBeta;
-	       }
-	       else{
-		       nind = NH2Od;
-		       nz = cBeta;
-	       }
-	       temp = -(nx*ph->vx + ny*ph->vy + nz*ph->vz);
-	       theta = acosf( fmin(1.00F-VALMIN, fmax( -(1.F-VALMIN), temp ) ));
+           if (ph->loc == SURF0M) {
+               nind = __fdividef(1.f,NH2Od);
+               n_z = -cBeta;
+           }
+           else{
+               nind = NH2Od;
+               n_z = cBeta;
+           }
+
+           temp = -(n_x*ph->vx + n_y*ph->vy + n_z*ph->vz);
+           theta = acosf( fmin(1.00F-VALMIN, fmax( -(1.F-VALMIN), temp ) ));
         }
-	}
-    else{
+    } else {
         // Flat surface
 
         beta = 0;
         alpha = DEUXPI * RAND;
-	    sBeta = __sinf( beta );
-	    cBeta = __cosf( beta );
-	    nx = sBeta*__cosf( alpha );
-	    ny = sBeta*__sinf( alpha );
-	
+        sBeta = __sinf( beta );
+        cBeta = __cosf( beta );
+        n_x = sBeta*__cosf( alpha );
+        n_y = sBeta*__sinf( alpha );
+
         if (ph->loc == SURF0M) {
-		    nind = __fdividef(1.f,NH2Od);
-		    nz = -cBeta;
-	    }
-	    else{
-		    nind = NH2Od;
-		    nz = cBeta;
-	    }
-	    temp = -(nx*ph->vx + ny*ph->vy + nz*ph->vz);
-	    theta = acosf( fmin(1.00F-VALMIN, fmax( -(1.F-VALMIN), temp ) ));
+            nind = __fdividef(1.f,NH2Od);
+            n_z = -cBeta;
+        }
+        else{
+            nind = NH2Od;
+            n_z = cBeta;
+        }
+        temp = -(n_x*ph->vx + n_y*ph->vy + n_z*ph->vz);
+        theta = acosf( fmin(1.00F-VALMIN, fmax( -(1.F-VALMIN), temp ) ));
     }
+
+
+    // express the coordinates of the normal to the wave facet in the original
+    // axis instead of local axis (Nx, Ny, Nz)
+    #ifdef SPHERIQUE
+    nx = n_x*Nxx + n_y*Nyx + n_z*Nzx;
+    ny = n_x*Nxy + n_y*Nyy + n_z*Nzy;
+    nz = n_x*Nxz + n_y*Nyz + n_z*Nzz;
+    #else
+    nx = n_x;
+    ny = n_y;
+    nz = n_z;
+    #endif
+
 
 	cTh = __cosf(theta);
 	sTh = __sinf(theta);
@@ -1230,7 +1243,12 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
     float slopeA=0.00377;
     float theta_thres;
     theta_thres = 83.46 - WINDSPEEDd; // between 1 and 15 m/s
+    #ifdef SPHERIQUE
+    // avz is the projection of V on the local vertical
+    float avz = abs(ph->x*ph->vx + ph->y*ph->vy + ph->z*ph->vz)/RTER;
+    #else
     float avz = abs(ph->vz);
+    #endif
     float aavz = acosf(avz)*360./DEUXPI;
     if(aavz > theta_thres){
        Anorm = avz + slopeA * (aavz - theta_thres);
@@ -1317,13 +1335,17 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 			ph->weight /= rat;
 			}
 
-
+        #ifdef SPHERIQUE
+        vzn = ph->vx*ph->x + ph->vy*ph->y + ph->vz*ph->z;
+        #else
+        vzn = ph->vz;
+        #endif
 
         //
         // photon next location
         //
         if (ph->loc == SURF0P) {
-            if (ph->vz > 0) {  // avoid multiple reflexion above the surface
+            if (vzn > 0) {  // avoid multiple reflexion above the surface
                 // SURF0P becomes ATM or SPACE
                 if( SIMd==-1 || SIMd==0 ){
                     ph->loc = SPACE;
@@ -1332,7 +1354,7 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
                 }
             } // else, no change of location
         } else {
-            if (ph->vz < 0) {  // avoid multiple reflexion under the surface
+            if (vzn < 0) {  // avoid multiple reflexion under the surface
                 // SURF0M becomes OCEAN or ABSORBED
                 if( SIMd==1 ){
                     ph->loc = ABSORBED;
@@ -1365,7 +1387,13 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
 		ph->uy = __fdividef( ny+cot*ph->vy,sTh )*nind;
 		ph->uz = __fdividef( nz+cot*ph->vz,sTh )*nind;
 
-		
+        #ifdef SPHERIQUE
+        vzn = ph->vx*ph->x + ph->vy*ph->y + ph->vz*ph->z;
+        #else
+        vzn = ph->vz;
+        #endif
+
+
         // DR Normalization of the transmission matrix
         // the transmission coefficient is taken into account:
         // once in the random selection (Rand > rat)
@@ -1379,7 +1407,7 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
         // photon next location
         //
         if (ph->loc == SURF0M) {
-            if (ph->vz > 0) {
+            if (vzn > 0) {
                 // SURF0P becomes ATM or SPACE
                 if( SIMd==-1 || SIMd==0 ){
                     ph->loc = SPACE;
@@ -1391,7 +1419,7 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
                 ph->loc = SURF0P;
             }
         } else {
-            if (ph->vz < 0) {  // avoid multiple reflexion under the surface
+            if (vzn < 0) {  // avoid multiple reflexion under the surface
                 // SURF0M becomes OCEAN or ABSORBED
                 if( SIMd==-1 || SIMd==1 ){
                     ph->loc = ABSORBED;
@@ -1406,31 +1434,7 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
         }
 
 	} // Transmission
-
-	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
-	/** Retour dans le repère d'origine **/
-	
-	// Re-projection vers le repères de direction de photon. L'angle à prendre pour la projection est -angleImpact
-	isp = -isp;
-	ist = -ist;
-	
-	vxn= ict*icp*ph->vx - ict*isp*ph->vy + ist*ph->vz;
-	vyn= isp*ph->vx + icp*ph->vy;
-	vzn= -icp*ist*ph->vx + ist*isp*ph->vy + ict*ph->vz;
-	
-	uxn= ict*icp*ph->ux - ict*isp*ph->uy + ist*ph->uz;
-	uyn= isp*ph->ux + icp*ph->uy;
-	uzn= -icp*ist*ph->ux + ist*isp*ph->uy + ict*ph->uz;
-	
-	ph->vx = vxn;
-	ph->vy = vyn;
-	ph->vz = vzn;
-	ph->ux = uxn;
-	ph->uy = uyn;
-	ph->uz = uzn;
-	#endif
 }
-
 
 
 /* surfaceLambertienne
