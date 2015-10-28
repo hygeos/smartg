@@ -416,7 +416,7 @@ class CloudOPAC(object):
 
         self.tau_tot=np.sum(self.dtau_tot)
 
-    def calc(self,w):
+    def calc(self,w,NTHETA=7201):
         '''
         calcul des propritees optiques du melange en fonction de l'alitude et
         aussi integrees sur la verticale à la longueur d'onde w (nm)
@@ -424,15 +424,18 @@ class CloudOPAC(object):
         '''
 
         M=len(self.z)
-        MMAX=5000 # Nb de polynome de Legendre au total
         self.dtau_tot=np.zeros(M,np.float32)
         self.ssa_tot=np.zeros(M,np.float32)
-        self.pmom_tot=np.zeros((M,NPSTK-1,MMAX),np.float64)
+#        MMAX=5000
+#        self.pmom_tot=np.zeros((M,NPSTK-1,MMAX),np.float64)
+        self.theta = np.linspace(0.,180.,num=NTHETA,endpoint=True,dtype=np.float64)
+        self.phase_tot=np.zeros((M,NPSTK-1,NTHETA),np.float64)
         norm=np.zeros(M,np.float32)
         k=0
         for scamat in self.scamatlist:
-            # NMAX we test the MAx number of Legendre polynomials coeffcient in PMOM
-            NMAX2 = scamat.pmom.shape[-1]
+
+#            MMAX2 = scamat.pmom.shape[-1]
+            MMAX2 = scamat.phase.shape[-1]
             fiw=interp1d(scamat.wlgrid,np.arange(len(scamat.wlgrid))) # function to locate wavelength index in grid (float)
             iw=fiw(w*1e-3) # floating wavelength index 
             
@@ -443,15 +446,21 @@ class CloudOPAC(object):
                 ssa=interp2(scamat.wlgrid,scamat.reffgrid,tabssa,w*1e-3,self.reff[k])
                 fir=interp1d(scamat.reffgrid,np.arange(len(scamat.reffgrid)))
                 ir=int(fir(self.reff[k])) # nearest neighbour interpolation for reff on phase function
-                nmom=np.squeeze(scamat.nmom[:,ir])
-                pmom=np.squeeze(scamat.pmom[:,ir,:,:])
+#                nmom=np.squeeze(scamat.nmom[:,ir])
+#                pmom=np.squeeze(scamat.pmom[:,ir,:,:])
+                ntheta=np.squeeze(scamat.ntheta[:,ir])
+                theta=np.squeeze(scamat.theta[:,ir,:,:])
+                phase=np.squeeze(scamat.phase[:,ir,:,:])
             else:
                 fext=interp1d(scamat.wlgrid,tabext,bounds_error=False,fill_value=0.)
                 ext0=fext(w*1e-3)
                 fssa=interp1d(scamat.wlgrid,tabssa,bounds_error=False,fill_value=0.)
                 ssa=fssa(w*1e-3)
-                nmom=np.squeeze(scamat.nmom)
-                pmom=np.squeeze(scamat.pmom)
+#                nmom=np.squeeze(scamat.nmom)
+#                pmom=np.squeeze(scamat.pmom)
+                ntheta=np.squeeze(scamat.ntheta)
+                theta=np.squeeze(scamat.theta)
+                phase=np.squeeze(scamat.phase)
 
             for m in xrange(M):
                 if m==0:
@@ -468,22 +477,29 @@ class CloudOPAC(object):
                     dssa = dtau*ssa
                     norm[m]+=dssa
                     for n in range(NPSTK-1): # pour chaque element de la matrice de Stokes independant (NPSTK-1 pour Mie) 
-                        if nmom.ndim==2:
-                            nmax=nmom[int(iw),n]
+                        if ntheta.ndim==2:
+#                        if nmom.ndim==2:
+#                            nmax=nmom[int(iw),n]
+                            nmax=ntheta[int(iw),n]
+                            ftheta = interp1d(theta[int(iw),n,:nmax],phase[int(iw),n,:nmax]) # function to interpolate phase function
+                            dp[n]= ftheta(self.theta)*dssa # plus proche voisin pour phase pondere par ssa et tau de la composante
+
                         else:
-                            nmax=nmom[int(iw)]
-                        nmax=min(NMAX2,nmax)
-                        dp[n]= pmom[int(iw),n,:nmax]*dssa # plus proche voisin pour pmom pondere par ssa et tau de la composante
-                
+#                            nmax=nmom[int(iw)]
+                            nmax=ntheta[int(iw)]
+                            ftheta = interp1d(theta[int(iw),n,:nmax],phase[int(iw),n,:nmax]) # function to interpolate phase function
+                            dp[n]= ftheta(self.theta)*dssa # plus proche voisin pour phase pondere par ssa et tau de la composante
                 self.dtau_tot[m]+=dtau
                 self.ssa_tot[m]+=dssa
                 for n in range(NPSTK-1):
-                    if nmom.ndim==2:
-                        nmax=nmom[int(iw),n]
-                    else:
-                        nmax=nmom[int(iw)]
-                    nmax=min(NMAX2,nmax)
-                    self.pmom_tot[m,n,:nmax]+=dp[n]
+#                    if nmom.ndim==2:
+#                        nmax=nmom[int(iw),n]
+#                    else:
+#                        nmax=nmom[int(iw)]
+
+#                    nmax=min(MMAX2,nmax)
+#                    self.pmom_tot[m,n,:nmax]+=dp[n]
+                    self.phase_tot[m,n,:]+=dp[n]
 
             k=k+1 # each component
 
@@ -491,20 +507,23 @@ class CloudOPAC(object):
             if m==0:
                 self.ssa_tot[m]=1.
                 for n in range(NPSTK-1):
-                    self.pmom_tot[m,n,:]=0.
+#                    self.pmom_tot[m,n,:]=0.
+                    self.phase_tot[m,n,:]=0.
             else:
                 if (self.dtau_tot[m]>1e-8 and norm[m] > 1e-8): 
                     self.ssa_tot[m]/=self.dtau_tot[m]
                     for n in range(NPSTK-1):  
-                        self.pmom_tot[m,n,:]/=norm[m]
+#                        self.pmom_tot[m,n,:]/=norm[m]
+                        self.phase_tot[m,n,:]/=norm[m]
                 else:
                     self.ssa_tot[m]=1.
                     for n in range(NPSTK-1):
-                        self.pmom_tot[m,n,:]=0.
+#                        self.pmom_tot[m,n,:]=0.
+                        self.phase_tot[m,n,:]=0.
 
 
         self.tau_tot=np.sum(self.dtau_tot)
-        self.MMAX=MMAX
+        self.MMAX=MMAX2
 
         dataaer  = np.zeros(M, np.float)
         for m in xrange(M):
@@ -517,7 +536,7 @@ class CloudOPAC(object):
         self.calcTau(wref) # calcul de l'AOT a la longueur d'onde de reference
         self.scalingfact=tauref/self.tau_tot # calcul du facteur d'echelle
 
-
+        
     def phase(self, wl, NTHETA=7201):
         '''
         returns the phase matrix for all layers
@@ -526,12 +545,19 @@ class CloudOPAC(object):
         NTHETA: number of angles
         '''
         M=len(self.z)
-        Leg=Legendres(self.MMAX,NTHETA)
+#        Leg=Legendres(self.MMAX,NTHETA)
+        N=len(self.theta)
+        pha=np.zeros((N, NPSTK-1),np.float64)
         phases = []
 
         for m in range(1, M):   # not the top boundary
-            theta, pha = Mom2Pha(self.pmom_tot[m,:,:],Leg)
-            phases.append(PhaseFunction(theta, pha, degrees=True))
+#            theta, pha = Mom2Pha(self.pmom_tot[m,:,:],Leg)
+#            phases.append(PhaseFunction(theta, pha, degrees=True))
+            pha[:,0] = self.phase_tot[m,0,:] + self.phase_tot[m,1,:]
+            pha[:,1] = self.phase_tot[m,0,:] - self.phase_tot[m,1,:]
+            pha[:,2] = self.phase_tot[m,2,:]
+            pha[:,3] = self.phase_tot[m,3,:]
+            phases.append(PhaseFunction(self.theta, pha, degrees=True))
 
         return phases
 
