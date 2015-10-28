@@ -182,7 +182,7 @@ def _smartg_thread(q, qpro, args, kwargs):
 def smartg(wl, pp=True,
            atm=None, surf=None, water=None, env=None,
            NBPHOTONS=1e9, DEPO=0.0279, THVDEG=0., SEED=-1,
-           RTER=6400.,
+           RTER=6371.,
            NBTHETA=45, NBPHI=45,
            NFAER=1000000, NFOCE=1000000,
            OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
