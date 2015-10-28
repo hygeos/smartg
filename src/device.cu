@@ -1158,18 +1158,14 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
             iter++;
             if (iter >= 20) {  // FIXME
                 // safety check
+                #ifdef DEBUG
                 printf("Warning, photon rejected in RoughSurface while loop\n");
-                printf("  rayon=%f V=(%f,%f,%f)\n",
-                        ph->rayon,
+                printf("  V=(%f,%f,%f)\n",
                         ph->vx,
                         ph->vy,
                         ph->vz
                       );
-                printf("  test rot. vec. pos. (%f,%f,%f)\n",
-                        ict*icp*ph->x - ict*isp*ph->y + ist*ph->z,
-                        isp*ph->x + icp*ph->y,
-                        -icp*ist*ph->x + ist*isp*ph->y + ict*ph->z);
-
+                #endif
                 ph->loc = NONE;
                 break;
             }
