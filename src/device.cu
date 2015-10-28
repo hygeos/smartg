@@ -1095,23 +1095,23 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
     Nzy = ph->y/RTER;
     Nzz = ph->z/RTER;
 
-    // Nx is chosen arbitrarily by cross product of Nz with axis X = (1,0,0)
+    // Ny is chosen arbitrarily by cross product of Nz with axis X = (1,0,0)
     // and normalized
-    Nxx = 0.;
-    Nxy = Nzz;
-    Nxz = -Nzy;
-    norm = sqrt(Nxy*Nxy + Nxz*Nxz);
-    Nxy /= norm;
-    Nxz /= norm;
-
-    // Ny is the cross product of Nx and Nz
-    Nyx = -Nzy*Nzy - Nzz*Nzz;
-    Nyy = Nzx*Nzy;
-    Nyz = Nzx*Nzz;
-    norm = sqrt(Nyx*Nyx + Nyy*Nyy + Nyz*Nyz);
-    Nyx /= norm;
+    Nyx = 0.;
+    Nyy = Nzz;
+    Nyz = -Nzy;
+    norm = sqrt(Nyy*Nyy + Nyz*Nyz);
     Nyy /= norm;
     Nyz /= norm;
+
+    // Nx is the cross product of Ny and Nz
+    Nxx = Nzy*Nzy + Nzz*Nzz;
+    Nxy = -Nzx*Nzy;
+    Nxz = -Nzx*Nzz;
+    norm = sqrt(Nxx*Nxx + Nxy*Nxy + Nxz*Nxz);
+    Nxx /= norm;
+    Nxy /= norm;
+    Nxz /= norm;
 
     #ifdef DEBUG
     // we check that there is no upward photon reaching surface0+
