@@ -469,9 +469,14 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
     float costh, sinth;
     int ilam = ph->ilam*(NATMd+1);  // wavelength offset in optical thickness table
 
+    if (ph->couche == 0) ph->couche = 1;
+
     #ifdef DEBUG
     int niter = 0;
-    if ((ph->couche >= NATMd) || (ph->couche < 0)) {
+    // ph->couche is indexed
+    // from 1 (TOA layer between interfaces 0 and 1)
+    // to NATM (bottom layer between interfaces NATM-1 to NATM)
+    if ((ph->couche > NATMd) || (ph->couche <= 0)) {
         printf("Fatal error, wrong index (%d)\n", ph->couche);
     }
     #endif
@@ -492,7 +497,7 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
         #ifdef DEBUG
         niter++;
 
-        if (niter > 100) {
+        if (niter > 2*NATMd+1) {
             printf("niter=%d break\n", niter);
             break;
         }
@@ -501,9 +506,9 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
         //
         // stopping criteria
         //
-        if (ph->couche == NATMd) {
+        if (ph->couche == NATMd+1) {
             ph->loc = SURF0P;
-            ph->couche -= 1;  // next time photon enters move_sp, it's at layers NATM-1
+            ph->couche -= 1;  // next time photon enters move_sp, it's at layers NATM
             #ifdef DEBUG
             if (ph->vx*ph->x + ph->vy*ph->y + ph->vz*ph->z > 0) {
                 printf("Warning, vzn > 0 at SURF0P in move_sp (vzn=%f)\n", vzn);
@@ -511,7 +516,7 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
             #endif
             break;
         }
-        if (ph->couche < 0) {
+        if (ph->couche <= 0) {
             ph->loc = SPACE;
             break;
         }
@@ -522,13 +527,13 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
         if (sign_direction < 0) {
             // photon goes down
             // (towards higher indices)
-            i_layer_fw = ph->couche + 1;
-            i_layer_bh = ph->couche;
+            i_layer_fw = ph->couche;
+            i_layer_bh = ph->couche - 1;
         } else {
             // photon goes up
             // (towards lower indices)
-            i_layer_fw = ph->couche;
-            i_layer_bh = ph->couche + 1;
+            i_layer_fw = ph->couche - 1;
+            i_layer_bh = ph->couche;
         }
 
         //
