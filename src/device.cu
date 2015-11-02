@@ -1662,8 +1662,9 @@ __device__ void countPhoton(Photon* ph,
 			   #endif
 			   );
 	
-  	if( ph->vy<0.f )
-    		s3 = -s3;
+  	// DR if( ph->vy<0.f )
+    // 		s3 = -s3;
+    // unecessary convention no dicontinuities ar nadir
 	
     // Change sign convention for compatibility with OS
     s3 = -s3;
