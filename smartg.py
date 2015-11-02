@@ -376,19 +376,7 @@ def smartg(wl, pp=True,
             faer = [0]
 
         # computation of the impact point
-        x0, y0, z0 = impactInit(HATM, NATM, NLAM, nprofilesAtm['ALT'], nprofilesAtm['H'], THVDEG, options, RTER)
-
-        tabTransDir = np.zeros(NLAM, dtype=np.float64)
-        if pp:
-            for ilam in xrange(NLAM):
-                tabTransDir[ilam] = np.exp(-nprofilesAtm['H'][NATM+ilam*(NATM+1)]/np.cos(THVDEG*pi/180.))
-        else: # FIXME
-            # for ilam in xrange(NLAM):
-                # tabTransDir[ilam] = np.exp(-hph0[NATM + ilam * (NATM + 1)])
-            pass
-
-#            if '-DDEBUG' in options:
-#                print ("Paramètres initiaux du photon: taumax0=%lf - zintermax=%lf - (%lf,%lf,%lf)\n" % (hph0[NATM+1], zph0[NATM+1], x0, y0, z0))
+        x0, y0, z0, tabTransDir = impactInit(pp, HATM, NATM, NLAM, nprofilesAtm['ALT'], nprofilesAtm['H'], THVDEG, RTER)
 
         # write the input variables into data structures
         Tableau, Var, Init = InitSD(nprofilesAtm, nprofilesOc, NLAM,
@@ -1047,19 +1035,19 @@ def loop_kernel(NBPHOTONS, Tableau, Var, Init, NLVL,
     return nbPhotonsTot, nbPhotonsTotInter , nbPhotonsTotInter, nbPhotonsSorTot, tabPhotonsTot
 
 
-def impactInit(Hatm, NATM, NLAM, ALT, H, THVDEG, options, Rter):
+def impactInit(pp, Hatm, NATM, NLAM, ALT, H, THVDEG, Rter):
     """
     Calculate the coordinates of the entry point in the atmosphere
+    and direct transmission of the atmosphere
 
     Arguments :
         - pp: plane parallel/spherical mode
         - Hatm : Altitude of the Top of Atmosphere
         - NATM : Number of layers of the atmosphere
         - NLAM : Number of wavelengths
-        - ALT : Altitude of the atmosphere
-        - H : optical thickness of each layer in the atmosphere
+        - ALT : Altitude profile of the atmosphere
+        - H : optical thickness profile of the atmosphere
         - THVDEG : View Zenith Angle in degree
-        - options : compilation options
         - Rter: earth radius
 
     Returns :
@@ -1069,14 +1057,16 @@ def impactInit(Hatm, NATM, NLAM, ALT, H, THVDEG, options, Rter):
     vx = -np.sin(THVDEG * np.pi / 180)
     vy = 0.
     vz = -np.cos(THVDEG * np.pi / 180)
-    # Calcul du point d'impact
 
-    thv = THVDEG * np.pi / 180
+    tabTransDir = np.zeros(NLAM, dtype=np.float64)
 
-    if '-DSPHERIQUE' not in options:
+    if pp:
         z0 = Hatm
         x0 = Hatm*np.sin(THVDEG*np.pi/180.)
         y0 = 0.
+
+        for ilam in xrange(NLAM):
+            tabTransDir[ilam] = np.exp(-H[NATM+ilam*(NATM+1)]/np.cos(THVDEG*pi/180.))
     else:
         tanthv = np.tan(THVDEG*np.pi/180.)
 
@@ -1094,43 +1084,49 @@ def impactInit(Hatm, NATM, NLAM, ALT, H, THVDEG, options, Rter):
         y0 = 0.
         z0 += Rter
 
-    zph0, hph0 = [], []
+        # loop over the NATM atmosphere layers to find the total optical thickness
+        xph = x0
+        yph = y0
+        zph = z0
+        for i in xrange(1, NATM+1):
+            # V is the direction vector, X is the position vector, D is the
+            # distance to the next layer and R is the position vector at the
+            # next layer
+            # we have: R = X + V.D
+            # R² = X² + (V.D)² + 2XVD
+            # where R is Rter+ALT[i]
+            # solve for D:
+            delta = 4.*(vx*xph + vy*yph + vz*zph)**2 - 4*((xph**2 + yph**2 + zph**2) - (Rter + ALT[i])**2)
 
-    if '-DSPHERIQUE' in options:
-        zph0 = np.zeros((NATM + 1), dtype=np.float32)
-        hph0 = np.zeros((NATM + 1)*NLAM, dtype=np.float32)
+            # the 2 solutions are:
+            D1 = 0.5 * (-2. * (vx*xph+vy*yph+vz*zph) + np.sqrt(delta))
+            D2 = 0.5 * (-2. * (vx*xph+vy*yph+vz*zph) - np.sqrt(delta))
 
-    xphbis = x0;
-    yphbis = y0;
-    zphbis = z0;
-
-    for icouche in xrange(1, NATM + 1):
-        rdelta = 4. * (vx * xphbis + vy * yphbis + vz * zphbis) * (vx * xphbis + vy * yphbis
-                    + vz * zphbis) - 4. * (xphbis * xphbis + yphbis * yphbis
-                    + zphbis * zphbis - (ALT[icouche] + 6400) * (ALT[icouche] + 6400))
-        rsol1 = 0.5 * (-2 * (vx * xphbis + vy * yphbis + vz * zphbis) + np.sqrt(rdelta))
-        rsol2 = 0.5 * (-2 * (vx * xphbis + vy * yphbis + vz * zphbis) - np.sqrt(rdelta))
-
-        # solution : la plus petite distance positive
-        if rsol1 > 0:
-            if rsol2 > 0:
-                rsolfi = min(rsol1, rsol2)
+            # the solution is the smallest positive one
+            if D1 > 0:
+                if D2 > 0:
+                    D = min(D1, D2)
+                else:
+                    D = D1
             else:
-                rsolfi = rsol1;
-        else:
-            if rsol2 > 0:
-                rsolfi = rsol2
+                if D2 > 0:
+                    D = D2
+                else:
+                    raise Exception('No solution in impactInit')
 
-        if '-DSPHERIQUE' in options:
-            zph0[icouche] = zph0[icouche-1] + np.float32(rsolfi)
-            for ilam in xrange(0, NLAM):
-                hph0[icouche + ilam * (NATM + 1)] = hph0[icouche - 1 + ilam * (NATM + 1)] + (abs(H[icouche + ilam * (NATM + 1)]
-                                                    - H[icouche - 1 + ilam * (NATM + 1)]) * rsolfi )/(abs(ALT[icouche - 1] - ALT[icouche]));
+            for ilam in xrange(NLAM):
+                # optical thickness of the layer in vertical direction
+                hlay0 = abs(H[i + ilam*(NATM+1)] - H[i - 1 + ilam*(NATM+1)])
 
-        xphbis += vx*rsolfi;
-        yphbis += vy*rsolfi;
-        zphbis += vz*rsolfi;
+                # thickness of the layer
+                D0 = abs(ALT[i-1] - ALT[i])
+
+                # optical thickness of the layer at current wavelength
+                hlay = hlay0*D/D0
+
+                # transmission
+                tabTransDir[ilam] += np.exp(-hlay)
 
 
-    return x0, y0, z0
+    return x0, y0, z0, tabTransDir
 
