@@ -462,11 +462,12 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
 
     float tauRdm;
     float hph = 0.;  // cumulative optical thickness
-    float vzn, delta;
-    float d_cur, r_cur2, h_cur;
+    float vzn, delta1;
+    float d_cur, h_cur;
+    float rat;
     int sign_direction;
     int i_layer_fw, i_layer_bh; // index or layers forward and behind the photon
-    float costh, sinth;
+    float costh, sinth2;
     int ilam = ph->ilam*(NATMd+1);  // wavelength offset in optical thickness table
 
     if (ph->couche == 0) ph->couche = 1;
@@ -540,8 +541,7 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
         // initializations
         //
         costh = vzn;
-        sinth = sqrtf(1.f-costh*costh);
-        r_cur2 = ph->rayon*ph->rayon;
+        sinth2 = 1.f-costh*costh;
 
         //
         // calculate the distance d_cur from the current position to the fw layer
@@ -549,21 +549,22 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
         // ri : radius of next layer boundary ri=zi+RTER
         // r  : radius of current point along the path 
         // costh: cosine of the path direction with the vertical of the current point
-        // In the triangle we have ri**2 = d_cur**2 + r**2 - 2 *d_cur *r * costh
-        // or: d_cur**2 - 2 *r * costh * d_cur + r**2-ri**2 = 0 , to be solved for d_cur
-        // determinant delta is : 4 r**2 costh**2 - 4(r**2-ri**2)
-        // it simplifies to:
-        delta = 4.f*((tab.z[i_layer_fw]+RTER)*(tab.z[i_layer_fw]+RTER) - r_cur2*sinth*sinth);
+        // In the triangle we have ri² = d_cur² + r² - 2*d_cur*r*costh
+        // or: d_cur**2 - 2*r*costh*d_cur + r**2-ri**2 = 0 , to be solved for d_cur
+        // delta = 4.r².costh² - 4(r²-ri²) = 4*r²*((ri/r)²-sinth²) = 4*r²*delta1
+        // with delta1 = (ri/r)²-sinth²
+        rat = (tab.z[i_layer_fw]+RTER)/ph->rayon;
+        delta1 = rat*rat - sinth2;   // same sign as delta
 
-        if (delta < 0) {
+        if (delta1 < 0) {
             if (sign_direction > 0) {
-                //#ifdef DEBUG
-                //printf("Warning sign_direction (idx=%d, niter=%d, lay=%d, delta=%f, alt=%f zlay1=%f zlay2=%f vzn=%f)\n",
-                //        idx, niter, ph->couche, delta, ph->rayon-RTER,
-                //        tab.z[i_layer_fw],
-                //        tab.z[i_layer_bh],
-                //        vzn);
-                //#endif
+                #ifdef DEBUG
+                printf("Warning sign_direction (niter=%d, lay=%d, delta1=%f, alt=%f zlay1=%f zlay2=%f vzn=%f)\n",
+                        niter, ph->couche, delta1, ph->rayon-RTER,
+                        tab.z[i_layer_fw],
+                        tab.z[i_layer_bh],
+                        vzn);
+                #endif
 
                 // because of numerical uncertainties, a downward photon may
                 // not strictly be between zi and zi+1
@@ -571,7 +572,7 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
                 // with current layer because photon is actually slightly above it.
                 // therefore we consider that delta=0 such that the photon is
                 // tangent to the layer
-                delta = 0.;
+                delta1 = 0.;
             } else {
                 // no intersection, with lower layer, we should to towards higher layer
                 sign_direction = 1;
@@ -591,8 +592,10 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
         * => we keep the greatest solution in abs. val   (both terms are of same signs)
         *
         * NOTE: the solution is always the smallest positive one
+        * NOTE: sqrt(delta) = 2*r*sqrt(delta1)
         */
-        d_cur = 0.5f*(-2.*ph->rayon*costh + sign_direction*sqrtf(delta));
+        /* d_cur = 0.5f*(-2.*ph->rayon*costh + sign_direction*2*ph->rayon*sqrtf(delta1)); simplified to: */
+        d_cur = ph->rayon*(-costh + sign_direction*sqrtf(delta1));
 
 
         //
