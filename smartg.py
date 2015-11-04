@@ -186,7 +186,8 @@ def smartg(wl, pp=True,
            NBTHETA=45, NBPHI=45,
            NFAER=1000000, NFOCE=1000000,
            OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
-           NBLOOP=None, progress=True, debug=False):
+           NBLOOP=None, progress=True, debug=False,
+           alt_move=False):
         '''
         Run a SMART-G simulation
 
@@ -330,6 +331,8 @@ def smartg(wl, pp=True,
             options.append('-DSPHERIQUE')
         if debug:
             options.append('-DDEBUG')
+        if alt_move:
+            options.append('-DALT_MOVE')
 
         #
         # compile or load the kernel
@@ -1057,6 +1060,7 @@ def impactInit(pp, Hatm, NATM, NLAM, ALT, H, THVDEG, Rter):
     vx = -np.sin(THVDEG * np.pi / 180)
     vy = 0.
     vz = -np.cos(THVDEG * np.pi / 180)
+    Rter = np.double(Rter)
 
     tabTransDir = np.zeros(NLAM, dtype=np.float64)
 

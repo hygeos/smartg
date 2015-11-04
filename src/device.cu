@@ -462,8 +462,9 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
 
     float tauRdm;
     float hph = 0.;  // cumulative optical thickness
-    float vzn, delta1;
-    float d_cur, h_cur;
+    float vzn, delta1, h_cur;
+    float d_tot = 0.;
+    float d;
     float rat;
     int sign_direction;
     int i_layer_fw, i_layer_bh; // index or layers forward and behind the photon
@@ -486,6 +487,10 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
     tauRdm = -logf(1.F-RAND);
 
     vzn = __fdividef( ph->vx*ph->x + ph->vy*ph->y + ph->vz*ph->z , ph->rayon);
+    #ifndef ALT_MOVE
+    costh = vzn;
+    sinth2 = 1.f-costh*costh;
+    #endif
 
     // a priori value for sign_direction:
     // sign_direction may change sign from -1 to +1 if the photon does not
@@ -537,20 +542,25 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
             i_layer_bh = ph->couche;
         }
 
-        //
+        #ifdef ALT_MOVE
         // initializations
-        //
         costh = vzn;
         sinth2 = 1.f-costh*costh;
+        #endif
 
         //
-        // calculate the distance d_cur from the current position to the fw layer
+        // calculate the distance d to the fw layer
+        #ifndef ALT_MOVE
+        // from the initial position
+        #else
+        // from the current position
+        #endif
         //
         // ri : radius of next layer boundary ri=zi+RTER
         // r  : radius of current point along the path 
-        // costh: cosine of the path direction with the vertical of the current point
-        // In the triangle we have ri² = d_cur² + r² - 2*d_cur*r*costh
-        // or: d_cur**2 - 2*r*costh*d_cur + r**2-ri**2 = 0 , to be solved for d_cur
+        // costh: angle between the position vector and the direction vector
+        // In the triangle we have ri² = d² + r² + 2*d*r*costh
+        // or: d**2 + 2*r*costh*d + r**2-ri**2 = 0 , to be solved for d
         // delta = 4.r².costh² - 4(r²-ri²) = 4*r²*((ri/r)²-sinth²) = 4*r²*delta1
         // with delta1 = (ri/r)²-sinth²
         rat = (tab.z[i_layer_fw]+RTER)/ph->rayon;
@@ -574,13 +584,14 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
                 // tangent to the layer
                 delta1 = 0.;
             } else {
-                // no intersection, with lower layer, we should to towards higher layer
+                // no intersection, with lower layer, we should go towards higher layer
                 sign_direction = 1;
                 continue;
             }
         }
 
-        /* Now, there are two real solutions for d_cur:
+        /* Now, there are two real solutions for d
+        *  The solution is the smallest positive one
         *
         * if photon goes towards higher layers (sign_direction == 1) and costh>0
         * => we keep the smallest solution in abs. val   (both terms are of opposite signs)
@@ -591,19 +602,35 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
         * if photon goes towards higher layers (sign_direction == 1) and costh<0
         * => we keep the greatest solution in abs. val   (both terms are of same signs)
         *
-        * NOTE: the solution is always the smallest positive one
-        * NOTE: sqrt(delta) = 2*r*sqrt(delta1)
         */
-        /* d_cur = 0.5f*(-2.*ph->rayon*costh + sign_direction*2*ph->rayon*sqrtf(delta1)); simplified to: */
-        d_cur = ph->rayon*(-costh + sign_direction*sqrtf(delta1));
+        /* d = 0.5f*(-2.*ph->rayon*costh + sign_direction*2*ph->rayon*sqrtf(delta1)); simplified to: */
+        d = ph->rayon*(-costh + sign_direction*sqrtf(delta1));
+        #ifdef DEBUG
+        if (d < 0) {
+            #ifndef ALT_MOVE
+            printf("Warning in move_sp (d=%f < 0 ; vzn=%f, sqrt(delta1)=%f)\n",
+                d, vzn, sqrtf(delta1));
+            #else
+            printf("(alt_move) Warning in move_sp (d=%f < 0 ; vzn=%f, sqrt(delta1)=%f)\n",
+                d, vzn, sqrtf(delta1));
+            #endif
+        } else if (d_tot > d) {
+            printf("Error in move_sp (d_tot=%f > d=%f)\n", d_tot, d);
+        }
+        #endif
 
 
         //
         // calculate the optical thickness h_cur to the next layer
         // We compute the layer extinction coefficient of the layer DTau/Dz and multiply by the distance within the layer
         //
-        h_cur = __fdividef(abs(tab.h[i_layer_bh+ilam] - tab.h[i_layer_fw+ilam])*d_cur,
+        #ifndef ALT_MOVE
+        h_cur = __fdividef(abs(tab.h[i_layer_bh+ilam] - tab.h[i_layer_fw+ilam])*(d - d_tot),
                           abs(tab.z[i_layer_bh] - tab.z[i_layer_fw]));
+        #else
+        h_cur = __fdividef(abs(tab.h[i_layer_bh+ilam] - tab.h[i_layer_fw+ilam])*d,
+                          abs(tab.z[i_layer_bh] - tab.z[i_layer_fw]));
+        #endif
 
 
         //
@@ -611,10 +638,13 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
         //
         if (hph + h_cur > tauRdm) {
             // photon stops within the layer
-            d_cur *= (tauRdm-hph)/h_cur;
-            ph->x = ph->x + ph->vx*d_cur;
-            ph->y = ph->y + ph->vy*d_cur;
-            ph->z = ph->z + ph->vz*d_cur;
+            #ifndef ALT_MOVE
+            d_tot += (d - d_tot)*(tauRdm - hph)/h_cur;
+            #else
+            d *= (tauRdm-hph)/h_cur;
+            ph->x = ph->x + ph->vx*d;
+            ph->y = ph->y + ph->vy*d;
+            ph->z = ph->z + ph->vz*d;
             ph->rayon = sqrtf(ph->x*ph->x + ph->y*ph->y + ph->z*ph->z);
             ph->weight *= 1.f - tab.abs[ph->couche+ilam];
             ph->prop_aer = 1.f - tab.pMol[ph->couche+ilam];
@@ -622,21 +652,36 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
             #ifdef DEBUG
             vzn = __fdividef( ph->vx*ph->x + ph->vy*ph->y + ph->vz*ph->z , ph->rayon);
             #endif
+            #endif
 
             break;
         } else {
             // photon advances to the next layer
             hph += h_cur;
-            ph->x = ph->x + ph->vx*d_cur;
-            ph->y = ph->y + ph->vy*d_cur;
-            ph->z = ph->z + ph->vz*d_cur;
             ph->couche -= sign_direction;
+            #ifndef ALT_MOVE
+            d_tot = d;
+            #else
+            ph->x = ph->x + ph->vx*d;
+            ph->y = ph->y + ph->vy*d;
+            ph->z = ph->z + ph->vz*d;
             ph->rayon = sqrtf(ph->x*ph->x + ph->y*ph->y + ph->z*ph->z);
             vzn = __fdividef( ph->vx*ph->x + ph->vy*ph->y + ph->vz*ph->z , ph->rayon);
+            #endif
         }
 
-
     }
+    #ifndef ALT_MOVE
+    //
+    // update the position of the photon
+    //
+    ph->x = ph->x + ph->vx*d_tot;
+    ph->y = ph->y + ph->vy*d_tot;
+    ph->z = ph->z + ph->vz*d_tot;
+    ph->rayon = sqrtf(ph->x*ph->x + ph->y*ph->y + ph->z*ph->z);
+    ph->weight *= 1.f - tab.abs[ph->couche+ilam];
+    ph->prop_aer = 1.f - tab.pMol[ph->couche+ilam];
+    #endif
 }
 #endif // SPHERIQUE
 
