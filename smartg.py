@@ -23,6 +23,8 @@ import textwrap
 from tools.progress import Progress
 from tools.luts import merge, read_lut_hdf, read_mlut_hdf, LUT, MLUT
 from scipy.interpolate import interp1d
+import subprocess
+from collections import OrderedDict
 
 
 # set up directories
@@ -233,13 +235,14 @@ def smartg(wl, pp=True,
 #        NPSTK = 4
         NPSTK = 5
 
-        attrs = {}
+        attrs = OrderedDict()
         attrs.update({'device': pycuda.autoinit.device.name()})
         attrs.update({'processing started at': datetime.now()})
         attrs.update({'VZA': THVDEG})
         attrs.update({'MODE': {True: 'PPA', False: 'SSA'}[pp]})
         attrs.update({'XBLOCK': XBLOCK})
         attrs.update({'XGRID': XGRID})
+        attrs.update(get_git_attrs())
 
         if SEED == -1:
             # SEED is based on clock
@@ -594,7 +597,8 @@ def finalize(tabPhotonsTot2, wl, nbPhotonsTotInter, OUTPUT_LAYERS, tabTransDir, 
                 m.add_dataset(key, nprofilesAtm[key].reshape((NLAM, -1)), ['Wavelength', 'ALT'])
 
     # write attributes
-    attrs['processing duration'] = datetime.now() - attrs['processing started at']
+    attrs['processing duration (s)'] = (datetime.now()
+                                        - attrs['processing started at']).total_seconds()
     for k, v in attrs.items():
         m.set_attr(k, str(v))
 
@@ -962,6 +966,32 @@ def get_profOc(wl, water, NLAM):
         NOCE = 1
 
     return nprofilesOc, phasesOc, NOCE
+
+
+def get_git_attrs():
+    R = {}
+
+    # check current commit
+    p = subprocess.Popen(['git', 'rev-parse', 'HEAD'],
+                         stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE)
+    if p.wait():
+        return {}
+    else:
+        shasum = p.communicate()[0].strip()
+        R.update({'git_commit_ref': shasum})
+
+    # check if repo is dirty
+    p = subprocess.Popen(['git', 'status', '--porcelain',
+                          '--untracked-files=no'],
+                          stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE)
+    if p.wait():
+        return {}
+    else:
+        is_dirty = len(p.communicate()[0]) != 0
+        R.update({'git_dirty_repo': int(is_dirty)})
+    return R
 
 
 def loop_kernel(NBPHOTONS, Tableau, Var, Init, NLVL,
