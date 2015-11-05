@@ -197,23 +197,87 @@ def smartg(wl, pp=True,
 
             - wl: wavelength in nm (float)
                   or: a list/array of wavelengths
-                  or: a list of IBANDs
+                  or: a list of IBANDs (reptran)
+
             - pp:
                 True: use plane parallel geometry (default)
                 False: use spherical shell geometry
+
             - atm: Profile object
                 default None (no atmosphere)
+                Example:
+                    # clear atmosphere, AFGL midlatitude summer
+                    Profile('afglms')
+                    # AFGL tropical with maritime clear aerosols AOT(550)=0.3
+                    Profile('afglms', aer=AeroOPAC('maritime_clean', 0.3, 550., ))
+
             - surf: Surface object
                 default None (no surface)
+                RoughSurface(WIND=5.)  # wind-roughened ocean surface
+                FlatSurface()          # flat air-water interface
+                LambSurface(ALB=0.1)   # Lambertian surface of albedo 0.1
+
             - water: Iop object, providing options relative to the ocean surface
                 default None (no ocean)
+
             - env: environment effect parameters (dictionary)
                 default None (no environment effect)
+
+            - NBPHOTONS: number of photons launched
+
+            - DEPO: Rayleigh depolarization ratio
+
+            - THVDEG: zenith angle of the observer in degrees
+                the result corresponds to various positions of the sun
+                NOTE: in plane parallel geometry, due to Fermat's principle, we
+                can exchange the positions of the sun and observer.
+
+            - SEED: integer used to initiate the series of random numbers
+                default: based on clock time
+
+            - RTER: earth radius in km
+
+            - NBTHETA: number of zenith angles in output
+
+            - NBPHI: number of azimuth angles in output
+
+            - NFAER: number of discretization of the inversed aerosol phase functions
+
+            - NFOCE: number of discretization of the inversed ocean phase functions
+
+            - OUTPUT_LAYERS: control the output layers. Add the following values:
+                0: top of atmosphere only (TOA)
+                1: add output layers at (0+, down) and (0-, up)
+                2: add output layers at (0-, down) and (0+, up)
+                Example: OUTPUT_LAYERS=3 to use all output layers.
+
+            - XBLOCK and XGRID: control the number of blocks and grid size for
+              the GPU execution
+
+            - NBLOOP: number of photons launched in one kernel run
+
             - progress: whether to show a progress bar (True/False)
                      or a Queue object to store the progress as (max_value), then (current_value, message), finally 'message'
 
-        Attributes:
-            - result data (MLUT object)
+            - debug: set to True to activate debug mode (optional stdout if problems are detected)
+                NOTE: compilation flag, not available if the kernel is provided as a binary
+
+            - alt_move: set to true to activate the alternate move scheme in move_sp.
+                NOTE: compilation flag, not available if the kernel is provided as a binary 
+
+
+        Return value:
+        ------------
+
+        Returns a MLUT object containing:
+            - the polarized reflectance (I,Q,U,V) at the different layers
+            - the number of photons (N) received at each layer
+            - the profiles and phase functions
+            - attributes
+
+        Example:
+            M = smartg(wl=400., NBPHOTONS=1e7, atm=Profile('afglt'))
+            M['I_up (TOA)'][:,:] contains the top of atmosphere reflectance
         '''
         import pycuda.autoinit
         from pycuda.compiler import SourceModule
