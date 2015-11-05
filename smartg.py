@@ -17,6 +17,7 @@ from numpy import pi
 from tools.profile.profil import AeroOPAC, Profile, REPTRAN, REPTRAN_IBAND, CloudOPAC
 from tools.water.iop_spm import IOP_SPM
 from tools.water.iop_mm import IOP_MM
+from tools.water.iop_AOS_water import IOP_AOS_WATER
 from tools.water.phase_functions import PhaseFunction
 from os.path import dirname, realpath, join, basename, exists
 import textwrap
