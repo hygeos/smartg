@@ -532,6 +532,7 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
         //
         if (ph->couche == NATMd+1) {
             ph->loc = SURF0P;
+            ph->tau = 0.;
             ph->couche -= 1;  // next time photon enters move_sp, it's at layers NATM
             #ifdef DEBUG
             if (ph->vx*ph->x + ph->vy*ph->y + ph->vz*ph->z > 0) {
@@ -1151,7 +1152,6 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
     float geo_trans_factor;
     int iter=0;
     float vzn;  // projection of V on the local vertical
-    int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
 	
     #ifdef SPHERIQUE
     // define 3 vectors Nx, Ny and Nz in cartesian coordinates which define a
@@ -1229,8 +1229,8 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
             if (iter >= 100) {
                 // safety check
                 #ifdef DEBUG
-                if (idx==0) printf("Warning, photon rejected in RoughSurface while loop\n");
-                if (idx==0) printf("  V=(%f,%f,%f)\n",
+                printf("Warning, photon rejected in RoughSurface while loop\n");
+                printf("  V=(%f,%f,%f)\n",
                         ph->vx,
                         ph->vy,
                         ph->vz
