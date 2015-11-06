@@ -1174,8 +1174,11 @@ def impactInit(pp, Hatm, NATM, NLAM, ALT, H, THVDEG, Rter):
         x0 = Hatm*np.sin(THVDEG*np.pi/180.)
         y0 = 0.
 
-        for ilam in xrange(NLAM):
-            tabTransDir[ilam] = np.exp(-H[NATM+ilam*(NATM+1)]/np.cos(THVDEG*pi/180.))
+        if NATM == 0:
+            tabTransDir[:] = 1.
+        else:
+            for ilam in xrange(NLAM):
+                tabTransDir[ilam] = np.exp(-H[NATM+ilam*(NATM+1)]/np.cos(THVDEG*pi/180.))
     else:
         tanthv = np.tan(THVDEG*np.pi/180.)
 
