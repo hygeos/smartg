@@ -782,7 +782,6 @@ __device__ void move_pp(Photon* ph,float*z, float* h, float* pMol , float *abs ,
         ph->prop_aer = 1.f - pMol[ph->couche+ph->ilam*(NATMd+1)];
         ph->weight = ph->weight * (1.f - abs[ph->couche+ph->ilam*(NATMd+1)]);
 
-    }
 
         float phz,rdist;
         Dsca= fabs(h[icouche] - h[icouche-1]) ;
@@ -794,6 +793,8 @@ __device__ void move_pp(Photon* ph,float*z, float* h, float* pMol , float *abs ,
         ph->z = phz;
         ph->x = ph->x + ph->vx*rdist;
         ph->y = ph->y + ph->vy*rdist;
+
+    }
 
 }
 
