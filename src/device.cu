@@ -1715,8 +1715,8 @@ __device__ void countPhoton(Photon* ph,
 			   #endif
 			   );
 	
-  	if( ph->vy<0.f )
-     		s3 = -s3;
+  	//if( ph->vy<0.f )
+     //		s3 = -s3;
 	
     // Change sign convention for compatibility with OS
     s3 = -s3;
@@ -1836,14 +1836,29 @@ __device__ void calculCase(int* ith, int* iphi, int* il, Photon* photon
 		// On place d'abord le photon dans un demi-cercle
 		float cPhiP = __fdividef(photon->vx, vxy); //cosPhiPhoton
 		// Cas limite où phi est très proche de 0, la formule générale ne marche pas
-		if(cPhiP >= 1.F) *iphi = 0;
+		//if(cPhiP >= 1.F) *iphi = 0;
 		// Cas limite où phi est très proche de PI, la formule générale ne marche pas
-		else if(cPhiP <= -1.F) *iphi = (NBPHId) - 1;
-		// Cas général
-		else *iphi = __float2int_rd(__fdividef(acosf(cPhiP) * NBPHId, PI));
+		//else if(cPhiP <= -1.F) *iphi = (NBPHId) - 1;
+		// Size of the angular boxes
+        float dphi = __fdividef(2.F*PI,NBPHId);
+
+        // Boxes centred on 0., dphi, 2dphi, ..., 180-dphi, 180., 180.+dphi,...., 360-dphi .
+        // Boxes indices 0, 1, 2, ..., NBPHI/2-1, NBPHI/2, NBPHI/2 +1,..., NBPHI-2, NBPHI -1
+        // So 2 boxes on 0 and 180 + NBPHI/2-1 boxes with vy>0 and NBPHI/2 -1 boxes with vy<0
+        // Total NBPHI boxes from 0 to NBPHI -1; NBPHI has to be even
+        // if the azimuth is within the zeroth boxe centered on 0. of width dphi/2 (half width dphi/4)
+        if(cPhiP >= cosf(dphi/2.)) *iphi = 0;
+        // if the azimuth is in the middle box centered on 180.
+        else if(cPhiP <= -cosf(dphi/2.)) *iphi = NBPHId/2;
+		else {
+            // otherwise it lies in a dphi box whose index (starting from 1) is given by the ratio of
+            // Phi -dphi/4. to the possible phi range that is PI-dphi/2. multiplied by the number of boxes NBPHId/2-1
+            *iphi = __float2int_rd(__fdividef((acosf(cPhiP)-dphi/2.) * (NBPHId/2-1.0F), PI-dphi)) + 1;
+		    //else *iphi = __float2int_rd(__fdividef(acosf(cPhiP) * NBPHId, PI));
 		
-		// Puis on place le photon dans l'autre demi-cercle selon vy, utile uniquement lorsque l'on travail sur tous l'espace
-// 		if(photon->vy < 0.F) *iphi = NBPHId - 1 - *iphi;
+		    // Puis on place le photon dans l'autre demi-cercle selon vy, utile uniquement lorsque l'on travail sur tous l'espace
+   		    if(photon->vy < 0.F) *iphi = NBPHId - *iphi;
+            }
 		#ifdef PROGRESSION
 		// Lorsque vy=0 on décide par défaut que le photon reste du côté vy>0
 		if(photon->vy == 0.F) atomicAdd(&(var->erreurvy), 1);

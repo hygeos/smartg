@@ -553,8 +553,11 @@ def calculOmega(NBTHETA, NBPHI):
     tabTh = np.linspace(dth/2, np.pi/2-dth/2, NBTHETA, dtype='float64')
 
     # azimuth angles
-    dphi = np.pi/NBPHI
-    tabPhi = np.linspace(dphi/2, np.pi-dphi/2, NBPHI, dtype='float64')
+    #dphi = np.pi/NBPHI
+    #tabPhi = np.linspace(dphi/2, np.pi-dphi/2, NBPHI, dtype='float64')
+    dphi = 2*np.pi/NBPHI
+    tabPhi = np.linspace(0., 2*np.pi-dphi, NBPHI, dtype='float64')
+
 
     # solid angles
     tabds = np.sin(tabTh) * dth * dphi
