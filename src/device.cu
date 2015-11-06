@@ -1151,6 +1151,7 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
     float geo_trans_factor;
     int iter=0;
     float vzn;  // projection of V on the local vertical
+    int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
 	
     #ifdef SPHERIQUE
     // define 3 vectors Nx, Ny and Nz in cartesian coordinates which define a
@@ -1184,6 +1185,7 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
     Nxx /= norm;
     Nxy /= norm;
     Nxz /= norm;
+
 
     #ifdef DEBUG
     // we check that there is no upward photon reaching surface0+
@@ -1227,8 +1229,8 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
             if (iter >= 100) {
                 // safety check
                 #ifdef DEBUG
-                printf("Warning, photon rejected in RoughSurface while loop\n");
-                printf("  V=(%f,%f,%f)\n",
+                if (idx==0) printf("Warning, photon rejected in RoughSurface while loop\n");
+                if (idx==0) printf("  V=(%f,%f,%f)\n",
                         ph->vx,
                         ph->vy,
                         ph->vz
@@ -1905,10 +1907,12 @@ __device__ void display(const char* desc, Photon* ph) {
     int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
 
     if (idx==0) {
-        printf("%16s X=(%.3g,%.3g,%.3g) \tV=(%.3g,%.3g,%.3g) \ttau=%.3g \tweight=%.3g loc=",
+        printf("%16s X=(%.3g,%.3g,%.3g) \tV=(%.3g,%.3g,%.3g) \tStokes=(%.3g,%.3g,%.3g,%.3g) \ttau=%.3g \tweight=%.3g loc=",
                desc,
                ph->x, ph->y, ph->z,
                ph->vx,ph->vy,ph->vz,
+               ph->stokes1, ph->stokes2,
+               ph->stokes3, ph->stokes4,
                ph->tau, ph->weight
                );
         switch(ph->loc) {
