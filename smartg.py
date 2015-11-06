@@ -190,7 +190,7 @@ def smartg(wl, pp=True,
            NFAER=1000000, NFOCE=1000000,
            OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
            NBLOOP=None, progress=True, debug=False,
-           alt_move=False):
+           alt_move=False, debug_photon=False):
         '''
         Run a SMART-G simulation
 
@@ -264,6 +264,9 @@ def smartg(wl, pp=True,
                 NOTE: compilation flag, not available if the kernel is provided as a binary
 
             - alt_move: set to true to activate the alternate move scheme in move_sp.
+                NOTE: compilation flag, not available if the kernel is provided as a binary 
+
+            - debug_photon: activate the display of photon path for the thread 0
                 NOTE: compilation flag, not available if the kernel is provided as a binary 
 
 
@@ -345,9 +348,14 @@ def smartg(wl, pp=True,
 
         #
         # atmosphere
+        #
         # get the phase function and the atmospheric profiles
 
         nprofilesAtm, phasesAtm, NATM, HATM = get_profAtm(wl,atm)
+
+        # computation of the impact point
+        x0, y0, z0, tabTransDir = impactInit(pp, HATM, NATM, NLAM, nprofilesAtm['ALT'], nprofilesAtm['H'], THVDEG, RTER)
+
 
         #
         # surface
@@ -401,6 +409,8 @@ def smartg(wl, pp=True,
             options.append('-DDEBUG')
         if alt_move:
             options.append('-DALT_MOVE')
+        if debug_photon:
+            options.append('-DDEBUG_PHOTON')
 
         #
         # compile or load the kernel
@@ -445,9 +455,6 @@ def smartg(wl, pp=True,
                 faer = [0]
         else:
             faer = [0]
-
-        # computation of the impact point
-        x0, y0, z0, tabTransDir = impactInit(pp, HATM, NATM, NLAM, nprofilesAtm['ALT'], nprofilesAtm['H'], THVDEG, RTER)
 
         # write the input variables into data structures
         Tableau, Var, Init = InitSD(nprofilesAtm, nprofilesOc, NLAM,

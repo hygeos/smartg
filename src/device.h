@@ -230,6 +230,9 @@ __device__ void calculCase(int*, int*, int*, Photon*
 				#endif 
 					);
 
+#ifdef DEBUG_PHOTON
+__device__ void display(const char* desc, Photon* ph);
+#endif
 
 
 /**********************************************************

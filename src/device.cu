@@ -152,6 +152,9 @@ __device__ void launchKernel(Variables* var, Tableaux tab
 			    , &configThr
 			    #endif
 					);
+            #ifdef DEBUG_PHOTON
+            display("INIT", &ph);
+            #endif
 			
 		}
 		
@@ -178,6 +181,9 @@ __device__ void launchKernel(Variables* var, Tableaux tab
                         , &configThr
                         #endif
                                 );
+            #ifdef DEBUG_PHOTON
+            display("MOVE", &ph);
+            #endif
 		}
 
         //
@@ -198,6 +204,9 @@ __device__ void launchKernel(Variables* var, Tableaux tab
 
             // reset the photon location (always)
             ph.loc = NONE;
+            #ifdef DEBUG_PHOTON
+            display("SPACE", &ph);
+            #endif
         } else if ((ph.loc == SURF0M) || (ph.loc == SURF0P)) {
             if ((loc_prev == ATMOS) || (loc_prev == SPACE)) count_level = DOWN0P;
             if (loc_prev == OCEAN) count_level = UP0M;
@@ -225,6 +234,9 @@ __device__ void launchKernel(Variables* var, Tableaux tab
 			, &configThr
 			#endif
 				);
+            #ifdef DEBUG_PHOTON
+            display("SCATTER", &ph);
+            #endif
 
 		}
 		syncthreads();
@@ -273,6 +285,9 @@ __device__ void launchKernel(Variables* var, Tableaux tab
 						);
                 }
            }
+            #ifdef DEBUG_PHOTON
+             display("SURFACE", &ph);
+            #endif
 		}
 		syncthreads();
 
@@ -286,6 +301,9 @@ __device__ void launchKernel(Variables* var, Tableaux tab
 			 , &configThr
 			      #endif
 			);
+            #ifdef DEBUG_PHOTON
+            display("SEAFLOOR", &ph);
+            #endif
         }
 		syncthreads();
 
@@ -1205,7 +1223,7 @@ __device__ void surfaceAgitee(Photon* ph, float* alb
         beta = atanf( sig*sqrtf(-__logf(RAND)) );
         while (theta >= DEMIPI) {
             iter++;
-            if (iter >= 20) {
+            if (iter >= 100) {
                 // safety check
                 #ifdef DEBUG
                 printf("Warning, photon rejected in RoughSurface while loop\n");
@@ -1877,6 +1895,37 @@ __device__ void calculCase(int* ith, int* iphi, int* il, Photon* photon
 	}
 	
 }
+
+#ifdef DEBUG_PHOTON
+__device__ void display(const char* desc, Photon* ph) {
+    //
+    // display the status of the photon (only for thread 0)
+    //
+    int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
+
+    if (idx==0) {
+        printf("%16s X=(%.3g,%.3g,%.3g) \tV=(%.3g,%.3g,%.3g) \ttau=%.3g \tweight=%.3g loc=",
+               desc,
+               ph->x, ph->y, ph->z,
+               ph->vx,ph->vy,ph->vz,
+               ph->tau, ph->weight
+               );
+        switch(ph->loc) {
+            case 0: printf("SPACE"); break;
+            case 1: printf("ATMOS"); break;
+            case 2: printf("SURF0P"); break;
+            case 3: printf("SURF0M"); break;
+            case 4: printf("ABSORBED"); break;
+            case 5: printf("NONE"); break;
+            case 6: printf("OCEAN"); break;
+            case 7: printf("SEAFLOOR"); break;
+            default:
+                    printf("UNDEFINED");
+        }
+        printf("\n");
+    }
+}
+#endif
 
 
 
