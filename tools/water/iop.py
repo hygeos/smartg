@@ -10,12 +10,14 @@ class IOP(object):
     '''
     abstract base class for IOP models
     '''
-    def write(self, wl, dir_profile, dir_phases, dir_list_phases):
+    def write(self, wl,  dir_profile, dir_phases, dir_list_phases, Zbottom=10000., Nlayer=2,):
         '''
         write profiles and phase functions at bands wl (list)
         returns a tuple (profile, phases) where
         - profiles is the filename containing the concatenated profiles
         - phase is a file containing the list pf phase functions
+        -Zbottom is the depth of the bottom in m
+        -Nlayer is the number of layer in the ocean
         '''
         # convert to list if wl is a scalar
         if isinstance(wl, (float, int)):
@@ -29,7 +31,11 @@ class IOP(object):
         for (atot, btot, ipha) in iops:
                 f.write('# I   DEPTH    H(I)    SSA(I)  IPHA\n')
                 f.write('0 0. 0. 1. 0\n')
-                f.write('1 1000. -1.e10 {} {}\n'.format(btot/(atot+btot), ipha))
+                for n in range(Nlayer):
+                    z= (n+1.)*Zbottom/Nlayer
+                    tau=z*(atot+btot) 
+                    f.write('{} {} {} {} {}\n'.format(n+1,z,-tau,btot/(atot+btot), ipha))
+                #f.write('1 1000. -1.e10 {} {}\n'.format(btot/(atot+btot), ipha))
         f.close()
 
         # write the phase functions and list of phase functions

@@ -121,6 +121,20 @@ __device__ void move_sp(Photon*, Tableaux tab, Init* init
 		    );
 #endif
 
+__device__ void move_spp(Photon*, Tableaux tab, Init* init
+		#ifdef RANDMWC
+		, unsigned long long*, unsigned int*
+		#endif
+		#if defined(RANDCUDA) || defined (RANDCURANDSOBOL32) || defined (RANDCURANDSCRAMBLEDSOBOL32)
+                , curandSTATE* etatThr
+                #endif
+		#ifdef RANDMT
+		, EtatMT*, ConfigMT*
+                #endif
+                #ifdef RANDPHILOX4x32_7
+                , philox4x32_ctr_t*, philox4x32_key_t*
+                #endif
+		    );
 
 // move, version plan parallèle
 __device__ void move_pp(Photon*,float*z, float* h, float* pMol , float *abs , float* ho

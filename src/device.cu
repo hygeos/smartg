@@ -176,7 +176,7 @@ __device__ void launchKernel(Variables* var, Tableaux tab
                                 );
             else 
             #endif
-               move_pp(&ph,tab.z, tab.h, tab.pMol , tab.abs , tab.ho, &etatThr
+                move_pp(&ph,tab.z, tab.h, tab.pMol , tab.abs , tab.ho, &etatThr
                         #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
                         , &configThr
                         #endif
@@ -184,6 +184,12 @@ __device__ void launchKernel(Variables* var, Tableaux tab
             #ifdef DEBUG_PHOTON
             display("MOVE", &ph);
             #endif
+                /*move_spp(&ph, tab, init
+                        , &etatThr
+                        #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
+                        , &configThr
+                        #endif
+                                );*/
 		}
 
         //
@@ -703,6 +709,97 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
     #endif
 }
 #endif // SPHERIQUE
+
+__device__ void move_spp(Photon* ph, Tableaux tab, Init* init
+        #ifdef RANDMWC
+        , unsigned long long* etatThr, unsigned int* configThr
+        #endif
+        #if defined(RANDCUDA) || defined (RANDCURANDSOBOL32) || defined (RANDCURANDSCRAMBLEDSOBOL32)
+                , curandSTATE* etatThr
+        #endif
+        #ifdef RANDMT
+        , EtatMT* etatThr, ConfigMT* configThr
+        #endif
+        #ifdef RANDPHILOX4x32_7
+                , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr
+        #endif
+            ) {
+
+    float tauRdm;
+    float hph = 0., aph=0.;  // cumulative optical thicknesses scattering and absorption
+    float vzn, tau_tot;
+    float d_cur, h_cur, a_cur;
+    int sign_direction;
+    int i_layer_fw, i_layer_bh ; // index or layers forward and behind the photon
+    float costh;
+    int ilam = ph->ilam*(NATMd+1);  // wavelength offset in optical thickness table
+
+    // Random Optical Thickness to go through
+    tauRdm = -logf(1.F-RAND);
+
+    vzn = ph->vz;
+    costh = vzn;
+
+    if (vzn <= 0) {
+        sign_direction = -1;
+    }
+    else {
+        sign_direction = 1;
+    }
+
+    while (1) {
+
+        //
+        // stopping criteria
+        //
+        if (ph->couche == NATMd) {
+            ph->loc = SURF0P;
+            ph->couche -= 1;  // next time photon enters move_sp, it's at layer NATM-1
+            break;
+        }
+        if (ph->couche < 0) {
+            ph->loc = SPACE;
+            break;
+        }
+
+        i_layer_fw = ph->couche + (1-sign_direction)/2;
+        i_layer_bh = ph->couche + (1+sign_direction)/2;
+
+        d_cur = __fdividef(abs(ph->z - tab.z[i_layer_fw]),abs(costh));
+
+        // calculate the extinction optical thickness h_cur to the next layer
+        // We compute the layer extinction coefficient of the layer DTau/Dz and multiply by the distance within the layer
+
+        tau_tot = __fdividef(abs(tab.h[i_layer_fw+ilam] - tab.h[i_layer_bh+ilam]),
+                          abs(tab.z[i_layer_fw] - tab.z[i_layer_bh])) * d_cur;
+
+        h_cur = tau_tot * (1.- tab.abs[ph->couche+ilam]); // extinction OT (without gaseous absorption)
+        a_cur = tau_tot * tab.abs[ph->couche+ilam]; // gaseous absorption OT
+
+        //
+        // update photon position
+        //
+        if (hph + h_cur > tauRdm) {
+            // photon stops within the layer
+            d_cur *= (tauRdm-hph)/h_cur;
+            a_cur *= (tauRdm-hph)/h_cur;
+            ph->x = ph->x + ph->vx*d_cur;
+            ph->y = ph->y + ph->vy*d_cur;
+            ph->z = ph->z + ph->vz*d_cur;
+            ph->weight *= expf(-(aph + a_cur)); // Total gaseous absorption
+            ph->prop_aer = 1.f - tab.pMol[ph->couche+ilam];
+            break;
+        } else {
+            // photon advances to the next layer
+            hph += h_cur;
+            aph += a_cur;
+            ph->x = ph->x + ph->vx*d_cur;
+            ph->y = ph->y + ph->vy*d_cur;
+            ph->z = ph->z + ph->vz*d_cur;
+            ph->couche -= sign_direction;
+        }
+    }
+}
 
 
 __device__ void move_pp(Photon* ph,float*z, float* h, float* pMol , float *abs , float* ho
@@ -1742,8 +1839,8 @@ __device__ void countPhoton(Photon* ph,
 			   #endif
 			   );
 	
-  	//if( ph->vy<0.f )
-     //		s3 = -s3;
+  	/*if( ph->vy<0.f )
+    		s3 = -s3;*/  // DR 
 	
     // Change sign convention for compatibility with OS
     s3 = -s3;
