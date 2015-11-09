@@ -503,7 +503,7 @@ class LUT(CMN_MLUT_LUT):
         if self.ndim == 1:
             self.__plot_1d(*args, **kwargs)
         elif self.ndim == 2:
-            return polar(self, *args, **kwargs)
+            return plot_polar(self, *args, **kwargs)
         else:
             raise Exception('No plot defined for {} dimensions'.format(self.ndim))
 
@@ -615,7 +615,7 @@ class Idx(object):
             return res
 
 
-def polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
+def plot_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
                sym=None, swap=False, fig=None, cmap=None, semi=False):
     '''
     Contour and eventually transect of 2D LUT on a semi polar plot, with

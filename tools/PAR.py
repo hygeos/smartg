@@ -180,7 +180,6 @@ def viewPAR(fi, fsp, SZA=None, RAA=None, verbose=False):
             #r = Rad[Idx(RAA),Idx(SZA)]*mus/np.pi
             if verbose : print '--------------- %5.1f(nm)| %7.3f '%(lam,r)
             r_l.append(r)
-            #semi_polar(Rad)
         if verbose : legend(bbox_to_anchor=(1.15, 1), loc='upper left', borderaxespad=0.)
         return r_l
     else :

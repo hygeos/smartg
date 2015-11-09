@@ -20,7 +20,7 @@ from tools.water.iop_mm import IOP_MM
 from tools.water.iop_AOS_water import IOP_AOS_WATER
 from tools.water.phase_functions import PhaseFunction
 from os.path import dirname, realpath, join, basename, exists
-import textwrap
+from warnings import warn
 from tools.progress import Progress
 from tools.luts import merge, read_lut_hdf, read_mlut_hdf, LUT, MLUT
 from scipy.interpolate import interp1d
@@ -186,7 +186,7 @@ def smartg(wl, pp=True,
            atm=None, surf=None, water=None, env=None,
            NBPHOTONS=1e9, DEPO=0.0279, THVDEG=0., SEED=-1,
            RTER=6371.,
-           NBTHETA=45, NBPHI=45,
+           NBTHETA=45, NBPHI=90,
            NFAER=1000000, NFOCE=1000000,
            OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
            NBLOOP=None, progress=True, debug=False,
@@ -290,6 +290,9 @@ def smartg(wl, pp=True,
         #
         # initialization
         #
+
+        if NBPHI%2 == 1:
+            warn('Odd number of azimuth')
 
         if NBLOOP is None:
             NBLOOP = min(NBPHOTONS/30, 1e8)
