@@ -503,7 +503,7 @@ class LUT(CMN_MLUT_LUT):
         if self.ndim == 1:
             self.__plot_1d(*args, **kwargs)
         elif self.ndim == 2:
-            return semi_polar(self, *args, **kwargs)
+            return polar(self, *args, **kwargs)
         else:
             raise Exception('No plot defined for {} dimensions'.format(self.ndim))
 
@@ -615,8 +615,8 @@ class Idx(object):
             return res
 
 
-def semi_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
-               sym=None, swap=False, fig=None, cmap=None):
+def polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
+               sym=None, swap=False, fig=None, cmap=None, semi=False):
     '''
     Contour and eventually transect of 2D LUT on a semi polar plot, with
     dimensions (angle, radius)
@@ -632,6 +632,8 @@ def semi_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
          if None (default), use symmetry iff axis is 'zenith'
     swap: swap the order of the 2 axes to (radius, angle)
     fig : destination figure. If None (default), create a new figure.
+    cmap: color map
+    semi: polar by default, otherwise semi polar if lut is computed for 360 deg
     '''
     from pylab import figure, cm
     from mpl_toolkits.axisartist.grid_finder import FixedLocator, DictFormatter
@@ -642,6 +644,9 @@ def semi_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
     #
     # initialization
     #
+    Phimax = 360.
+    if semi : Phimax=180.
+    
 
     assert lut.ndim == 2
 
@@ -675,7 +680,7 @@ def semi_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
     #
     ax1_ticks = [0, 45, 90, 135, 180]
     if 'azimu' in name1.lower():
-        ax1_min, ax1_max = 0., 180.
+        ax1_min, ax1_max = 0., Phimax
         ax1_ticks = dict(zip(ax1_ticks, map(str, ax1_ticks)))
         label1 = r'$\phi$'
         ax1_scaled = ax1
@@ -685,8 +690,8 @@ def semi_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
                          map(lambda x: '{:.1f}'.format(x), np.linspace(ax1_min, ax1_max, len(ax1_ticks)))))
         label1 = name1
 
-        # rescale ax1 to (0, 180)
-        ax1_scaled = (ax1-ax1_min)/(ax1_max-ax1_min)*180.
+        # rescale ax1 to (0, Phimax)
+        ax1_scaled = (ax1-ax1_min)/(ax1_max-ax1_min)*Phimax
 
     ax2_ticks = [0, 30, 60, 90]
     if 'zenit' in name2.lower():
@@ -719,7 +724,7 @@ def semi_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
     tr = tr_rotate + tr_scale + PolarAxes.PolarTransform()
 
     grid_helper = floating_axes.GridHelperCurveLinear(tr,
-                                    extremes=(0., 180., 0., 90.),
+                                    extremes=(0., Phimax, 0., 90.),
                                     grid_locator1=grid_locator1,
                                     grid_locator2=grid_locator2,
                                     tick_formatter1=tick_formatter1,
@@ -785,10 +790,13 @@ def semi_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
         # convert Idx instance to index if necessarry
         if isinstance(index, Idx):
             index = int(round(index.index(ax1)))
-
+        if semi:
+            mirror_index = -1 -index
+        else:
+            mirror_index = (ax1_scaled.shape[0]/2 + index)%ax1_scaled.shape[0]
         # draw line over colormesh
         vertex0 = np.array([[0,0],[ax1_scaled[index],ax2_max]])
-        vertex1 = np.array([[0,0],[ax1_scaled[-1-index],ax2_max]])
+        vertex1 = np.array([[0,0],[ax1_scaled[mirror_index],ax2_max]])
         aux_ax_polar.plot(vertex0[:,0],vertex0[:,1], 'w')
         if sym:
             aux_ax_polar.plot(vertex1[:,0],vertex1[:,1],'w--')
@@ -798,7 +806,7 @@ def semi_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
         #
         ax_cart.plot(ax2, data[index,:],'k-')
         if sym:
-            ax_cart.plot(-ax2, data[-1-index,:],'k--')
+            ax_cart.plot(-ax2, data[mirror_index,:],'k--')
 
     # add colorbar
     fig.colorbar(im, orientation='horizontal', extend='both', ticks=np.linspace(vmin, vmax, 5))
