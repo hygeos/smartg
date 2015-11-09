@@ -298,3 +298,13 @@ def test_write_read_mlut2():
         assert m0[d] == m1[0]
 
 
+def test_names_axes_without_values():
+    '''
+    datasets with named axes but without values
+    '''
+    m = MLUT()
+    m.add_axis('b', np.linspace(100, 200, 10))
+    m.add_dataset('data', np.zeros((5, 10, 20)), axnames=['a', 'b', 'c'])
+    m['data']
+    m['data'][0,0,0]
+    m['data'][:,:,:]

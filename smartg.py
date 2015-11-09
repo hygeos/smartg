@@ -482,7 +482,7 @@ def smartg(wl, pp=True,
 
         # finalization
         output = finalize(tabPhotonsTot, wavelengths, nbPhotonsTotInter,
-                           OUTPUT_LAYERS, tabTransDir, SIM, attrs, nprofilesAtm)
+                           OUTPUT_LAYERS, tabTransDir, SIM, attrs, nprofilesAtm, phasesAtm)
 
         p.finish('Done! (used {}) | '.format(attrs['device']) + afficheProgress(nbPhotonsTot, NBPHOTONS, nbPhotonsSorTot))
 
@@ -575,7 +575,7 @@ def calculOmega(NBTHETA, NBPHI):
     return tabTh, tabPhi, tabOmega
 
 
-def finalize(tabPhotonsTot2, wl, nbPhotonsTotInter, OUTPUT_LAYERS, tabTransDir, SIM, attrs, nprofilesAtm):
+def finalize(tabPhotonsTot2, wl, nbPhotonsTotInter, OUTPUT_LAYERS, tabTransDir, SIM, attrs, nprofilesAtm, phasesAtm):
     '''
     create and return the final output
     '''
@@ -670,6 +670,20 @@ def finalize(tabPhotonsTot2, wl, nbPhotonsTotInter, OUTPUT_LAYERS, tabTransDir, 
                 m.add_dataset(key, nprofilesAtm[key], ['ALT'])
             else:
                 m.add_dataset(key, nprofilesAtm[key].reshape((NLAM, -1)), ['Wavelength', 'ALT'])
+
+    # write atmospheric phase functions
+    if len(phasesAtm) > 0:
+        npstk = 4
+        nscat = len(phasesAtm[0].ang)
+        npha = len(phasesAtm)
+        pha = np.zeros((npha, nscat, npstk), dtype='float')
+        m.add_axis('SCAT_ANGLE_ATM', phasesAtm[0].ang_in_rad()*180./pi)
+
+        for i in xrange(npha):
+            assert phasesAtm[i].phase.shape == phasesAtm[0].phase.shape
+            pha[i, ] = phasesAtm[i].phase[:]
+        m.add_dataset('phases_atm', pha, ['IPHA', 'SCAT_ANGLE_ATM', 'NPSTK'])
+
 
     # write attributes
     attrs['processing duration (s)'] = (datetime.now()

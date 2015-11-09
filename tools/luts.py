@@ -508,7 +508,7 @@ class LUT(CMN_MLUT_LUT):
             raise Exception('No plot defined for {} dimensions'.format(self.ndim))
 
 
-    def __plot_1d(self, show_grid=True, swap=False):
+    def __plot_1d(self, fmt='-', show_grid=True, swap=False):
         '''
         plot a 1-dimension LUT
         '''
@@ -516,7 +516,7 @@ class LUT(CMN_MLUT_LUT):
         x = self.axes[0]
         y = self.data
         if not swap:
-            plot(x, y)
+            plot(x, y, fmt)
             if self.names[0] is not None:
                 xlabel(self.names[0])
             if self.desc is not None:
@@ -1012,7 +1012,7 @@ class MLUT(CMN_MLUT_LUT):
             assert len(axnames) == dataset.ndim
             for i, ax in enumerate(axnames):
                 if ax is None: continue
-                assert ax in self.axes
+                if ax not in self.axes: continue
                 assert dataset.shape[i] == len(self.axes[ax])
         else:
             axnames = [None]*dataset.ndim
@@ -1121,7 +1121,6 @@ class MLUT(CMN_MLUT_LUT):
         '''
         if isinstance(key, str):
             index = -1
-            self.data
             for i, (name, _, _) in enumerate(self.data):
                 if key == name:
                     index = i
@@ -1140,7 +1139,7 @@ class MLUT(CMN_MLUT_LUT):
             axes = []
             names = []
             for ax in axnames:
-                if ax is None:
+                if (ax is None) or (ax not in self.axes):
                     axes.append(None)
                 else:
                     axes.append(self.axes[ax])
