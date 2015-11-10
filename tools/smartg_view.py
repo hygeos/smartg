@@ -41,7 +41,7 @@ def smartg_view(mlut, QU=False, field='up (TOA)'):
         plot_polar(I,  0, rect='221', sub='223', fig=fig)
         plot_polar(PR, 0, rect='222', sub='224', fig=fig, vmin=0, vmax=100)
         
-def phase_view(mlut, ipha=None, fig= None, axarr=None):
+def phase_view(mlut, ipha=None, fig= None, axarr=None, iw=0):
     '''
     visualization of a smartg MLUT phase function from output
 
@@ -52,35 +52,50 @@ def phase_view(mlut, ipha=None, fig= None, axarr=None):
     '''
 
     from pylab import subplots, setp
+    from numpy import unique
     
+    nd = mlut['H'].ndim
+    labw=''
+    if nd>1:
+        wi = mlut['H'].names.index('Wavelength') # Wavelength index
+        key = [slice(None)]*nd
+        key[wi] = iw
+        key=tuple(key)
+        labw=r' at $%.1f nm$'%mlut.axes['Wavelength'][iw]
+    else:
+        key=tuple([slice(None)])
+        labw=''
+
     phase = mlut['phases_atm']
     ang = phase.axes[1]
-    Npha = phase[:,0,0].shape[0]
-    if (fig==None or axarr==None):
+
+    if (axarr==None):
         fig, axarr = subplots(2, 2)
-    fig.set_size_inches(12, 6)
-    if ipha==None : ni=range(Npha)
+        fig.set_size_inches(10, 6)
+        
+    if ipha==None : ni= unique(mlut['IPHA'].__getitem__(key)) 
     else:ni=[ipha]
     
     for i in ni:
+        
         P11 = 0.5*(phase[i,:,0]+phase[i,:,1])
         P12 = 0.5*(phase[i,:,0]-phase[i,:,1])
         P33 = phase[i,:,2]
         P43 = phase[i,:,3]
     
-        axarr[0,0].semilogy(ang, P11,label='%3i'%i)
-        axarr[0,0].set_title(r'$P_{11}$')
+        if (np.max(P11[:]) > 0.) :axarr[0,0].semilogy(ang, P11,label='%3i'%i)
+        axarr[0,0].set_title(r'$P_{11}$'+labw)
         axarr[0,0].grid()
         
-        axarr[0,1].plot(ang, -P12/P11)
+        if (np.max(P11[:]) > 0.) :axarr[0,1].plot(ang, -P12/P11)
         axarr[0,1].set_title(r'-$P_{12}/P_{11}$')
         axarr[0,1].grid()
         
-        axarr[1,0].plot(ang, P33/P11)
+        if (np.max(P11[:]) > 0.) :axarr[1,0].plot(ang, P33/P11)
         axarr[1,0].set_title(r'$P_{33}/P_{11}$')
         axarr[1,0].grid()
                 
-        axarr[1,1].plot(ang, P43/P11)
+        if (np.max(P11[:]) > 0.) :axarr[1,1].plot(ang, P43/P11)
         axarr[1,1].set_title(r'$P_{43}/P_{11}$')
         axarr[1,1].grid()
     
@@ -89,7 +104,7 @@ def phase_view(mlut, ipha=None, fig= None, axarr=None):
 
     return fig, axarr
     
-def atm_view(mlut, ipha=None, fig=None, ax=None):
+def atm_view(mlut, ipha=None, fig=None, ax=None, iw=0):
     '''
     visualization of a smartg MLUT atmospheric profile from output
 
@@ -97,44 +112,91 @@ def atm_view(mlut, ipha=None, fig=None, ax=None):
         ipha: sabsolute index of the phase function coming from Profile
         fig : fig object to be created or included in
         axarr : system of axes (2,2) to be created on used
+        iw : in case of multi wavelength simulation, index of wavelength to be plotted
     '''
 
     from pylab import subplots, xlabel, ylabel
-    
-    if (fig==None or ax==None):
+
+    if (ax==None):
         fig, ax = subplots(1, 1)
-    fig.set_size_inches(5, 5)
+        fig.set_size_inches(5, 5)
     
-    z = LUT(mlut.axes['ALT'],axes=[mlut.axes['ALT']],names=['ALT'])
+    nd = mlut['H'].ndim
+    if nd>1:
+        wi = mlut['H'].names.index('Wavelength') # Wavelength index
+        key = [slice(None)]*nd
+        key[wi] = iw
+        key=tuple(key)
+        labw=r' at $%.1f nm$'%mlut.axes['Wavelength'][iw]
+        
+    else:
+        key=tuple([slice(None)])
+        labw=''
+        
+    z = mlut['H'].axis('ALT',aslut=True)
     Dz = z.apply(np.gradient)
     Dz = Dz.apply(abs,'Dz')
-    Dtau = mlut['H'].apply(np.gradient,'Dtau')
+    Dtau = mlut['H'].sub().__getitem__(key).apply(np.gradient,'Dtau')
     Tot = (Dtau / Dz)
-    Ext = Tot * (1. -mlut['percent_abs'])
-    Gas = Tot * mlut['percent_abs']
-    DtauR = mlut['hmol'].apply(np.gradient,'DtauR')
+    Ext = Tot * (1. -mlut['percent_abs'].sub().__getitem__(key))
+    Gas = Tot * mlut['percent_abs'].sub().__getitem__(key)
+    DtauR = mlut['hmol'].sub().__getitem__(key).apply(np.gradient,'DtauR')
     ExtR = (DtauR / Dz)
-    ExtA = Ext - ExtR
-    ExtA = ExtA.apply(abs)
-    ScaA = ExtA * mlut['XSSA']
-    AbsA = ExtA * (1.-mlut['XSSA'])
-    if (np.max(Gas[:]) > 0.) : ax.semilogx(Gas[:],z[:], 'g',label=r'$\sigma_{abs}^{gas}$')
-    ax.semilogx(ExtR[:],z[:], 'b',label=r'$\sigma_{sca}^{R}$' )
-    if (np.max(AbsA[:]) > 0.) : ax.semilogx(AbsA[:],z[:],'r',label=r'$\sigma_{abs}^{a+c}$')
+    ExtA = Ext * mlut['XDEL'].sub().__getitem__(key)
+    ScaA = ExtA * mlut['XSSA'].sub().__getitem__(key)
+    AbsA = ExtA * (1.-mlut['XSSA'].sub().__getitem__(key))
+    if (np.max(Gas[:]) > 0.) : ax.semilogx(Gas[:],z[:], 'g:',linewidth=3,label=r'$\sigma_{abs}^{gas}$')
+    ax.semilogx(ExtR[:],z[:], 'b-.',linewidth=2, label=r'$\sigma_{sca}^{R}$' )
+    if (np.max(AbsA[:]) > 0.) : ax.semilogx(AbsA[:],z[:],'r-',label=r'$\sigma_{abs}^{a+c}$')
     if (np.max(ScaA[:]) > 0.) : ax.semilogx(ScaA[:],z[:],'y',label=r'$\sigma_{sca}^{a+c}$')
     ax.semilogx(Tot[:],z[:],'k',label=r'$\sigma_{ext}^{tot}$')
     ax.grid()
-    ax.set_xlim(1e-10,10)
+    ax.set_xlim(1e-6,10)
     xlabel(r'$(km^{-1})$')
     ylabel(r'$z (km)$')
     ax.set_ylim(0,50)
-    ax.set_title('Vertical profile')
+    ax.set_title('Vertical profile'+labw)
     ax.legend()
-    i=0
-    for k in range(len(list(mlut['IPHA'].axes[0]))):
-        if mlut['IPHA'][k]!=i :
-            zl = mlut['IPHA'].axes[0][k]
-            ax.plot([1e-10,10],[zl+1,zl+1],'k--')
-            ax.annotate('%i'%mlut['IPHA'][k],xy=(1e-8,zl-1))
-            i=mlut['IPHA'][k]
+    
+    try:        
+        i=0
+        ax.annotate('%i'%(mlut['IPHA'].sub().__getitem__(key)[0]),xy=(1e-5,47))
+        for k in range(mlut.axes['ALT'].shape[0]):
+            i0 = mlut['IPHA'].sub().__getitem__(key)[k]
+            if i0 != i :
+                zl = mlut.axes['ALT'][k]
+                ax.plot([1e-6,10],[zl+1,zl+1],'k--')
+                ax.annotate('%i'%i0,xy=(1e-5,zl-1))
+                i = i0
+            
+    except:
+        return fig, ax
+        
     return fig, ax
+    
+    
+def input_view(mlut, iw=0):
+    
+    import matplotlib.pyplot as plt
+    from numpy import array
+    fig = plt.figure()
+    fig.set_size_inches(12,6)
+    try:
+        mlut['phases_atm']
+        ax1 = plt.subplot2grid((2,3),(0,0))
+        ax2 = plt.subplot2grid((2,3),(0,1))
+        ax3 = plt.subplot2grid((2,3),(1,0))
+        ax4 = plt.subplot2grid((2,3),(1,1))
+    
+        axarr = array([[ax1,ax2],[ax3,ax4]])
+    
+        _,_= phase_view(mlut, iw=iw, axarr=axarr)
+        
+        ax5 = plt.subplot2grid((2,3),(0,2),rowspan=2,colspan=1)
+        
+        _,_= atm_view(mlut, iw=iw, ax=ax5)
+        
+        plt.tight_layout()
+        
+    except:
+        _,_= atm_view(mlut, iw=iw)
