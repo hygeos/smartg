@@ -128,7 +128,7 @@ __device__ void launchKernel(Variables* var, Tableaux tab
 	
 	Photon ph; 		// On associe une structure de photon au thread
 	ph.loc = NONE;	// Initialement le photon n'est nulle part, il doit être initialisé
-	
+    int le=1;
 	
     atomicAdd(&(var->nThreadsActive), 1);
 
@@ -230,12 +230,18 @@ __device__ void launchKernel(Variables* var, Tableaux tab
 
 		
         //
-		// Diffusion
+		// Scatter
         //
         // -> dans ATMOS ou OCEAN
 		if( (ph.loc == ATMOS) || (ph.loc == OCEAN)){
-	
-			scatter(&ph, tab.faer, tab.ssa , tab.foce , tab.sso, tab.ip, tab.ipo, &etatThr
+            /*le=1;
+			scatter(&ph, tab.faer, tab.ssa , tab.foce , tab.sso, tab.ip, tab.ipo, le, &etatThr
+			#if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
+			, &configThr
+			#endif
+				);*/
+            le=0;
+			scatter(&ph, tab.faer, tab.ssa , tab.foce , tab.sso, tab.ip, tab.ipo, le, &etatThr 
 			#if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
 			, &configThr
 			#endif
@@ -457,12 +463,17 @@ __device__ void initPhoton(Photon* ph, Tableaux tab
 	
 
 	ph->weight = WEIGHTINIT;
+	ph->weight_le = WEIGHTINIT;
 	
 	// Initialisation des paramètres de stokes du photon
 	ph->stokes1 = 0.5F;
 	ph->stokes2 = 0.5F;
 	ph->stokes3 = 0.F;
 	ph->stokes4 = 0.F;
+	ph->stokes1_le = 0.5F;
+	ph->stokes2_le = 0.5F;
+	ph->stokes3_le = 0.F;
+	ph->stokes4_le = 0.F;
 
 }
 
@@ -908,7 +919,7 @@ __device__ void move_pp(Photon* ph,float*z, float* h, float* pMol , float *abs ,
 * Diffusion du photon par une molécule ou un aérosol
 * Modification des paramètres de stokes et des vecteurs U et V du photon (polarisation, vitesse)
 */
-__device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , float* sso, int* ip, int* ipo
+__device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , float* sso, int* ip, int* ipo, int le
 			#ifdef RANDMWC
 			, unsigned long long* etatThr, unsigned int* configThr
 			#endif
@@ -934,12 +945,25 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
 
 	float zang=0.f, theta=0.f;
 	int iang, ilay, ipha;
-	float stokes1, stokes2, stokes3, stokes4, norm;
+	float stokes1, stokes2, stokes3, stokes4; 
+    float stokes1_tmp, stokes2_tmp, stokes3_tmp, stokes4_tmp, norm, weight;
 	float cTh2;
 	float prop_aer = ph->prop_aer;
 	
-	stokes1 = ph->stokes1;
-	stokes2 = ph->stokes2;
+	if (!le) {
+        stokes1 = ph->stokes1;
+	    stokes2 = ph->stokes2;
+        stokes3 = ph->stokes3;
+	    stokes4 = ph->stokes4;
+	    weight =  ph->weight;
+    }
+    else {
+        stokes1 = ph->stokes1_le;
+	    stokes2 = ph->stokes2_le;
+        stokes3 = ph->stokes3_le;
+	    stokes4 = ph->stokes4_le;
+	    weight =  ph->weight_le;
+    }
 	
 	
 	///////// Possible de mettre dans une fonction séparée, mais attention aux performances /////////
@@ -980,20 +1004,20 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
 
 			// Calcul des parametres de Stokes du photon apres diffusion
 			float cross_term;
-			stokes1 = ph->stokes1;
-			stokes2 = ph->stokes2;
+			stokes1_tmp = stokes1;
+			stokes2_tmp = stokes2;
 			cross_term  = DELTA_PRIMd * (stokes1 + stokes2);
-			ph->stokes1 = 3./2. * (  DELTAd  * stokes1 + cross_term );
-			ph->stokes2 = 3./2. * (  DELTAd  * cTh2 * stokes2 + cross_term );			
-			ph->stokes3 = 3./2. * (  DELTAd * cTh  * ph->stokes3 );
-			ph->stokes4 = 3./2. * (  DELTAd * DELTA_SECOd * cTh * ph->stokes4 );
+			stokes1 = 3./2. * (  DELTAd  * stokes1_tmp + cross_term );
+			stokes2 = 3./2. * (  DELTAd  * cTh2 * stokes2_tmp + cross_term );			
+			stokes3 = 3./2. * (  DELTAd * cTh  * stokes3 );
+			stokes4 = 3./2. * (  DELTAd * DELTA_SECOd * cTh * stokes4 );
 			// bias sampling scheme
 			float phase_func;
 			phase_func = 3./4. * DELTAd * (cTh2+1.0) + 3.0 * DELTA_PRIMd;
-			ph->stokes1 /= phase_func;  
-			ph->stokes2 /= phase_func;  
-			ph->stokes3 /= phase_func;     		
-			ph->stokes4 /= phase_func;     		
+			stokes1 /= phase_func;  
+			stokes2 /= phase_func;  
+			stokes3 /= phase_func;     		
+			stokes4 /= phase_func;     		
 
 
 		}
@@ -1015,28 +1039,42 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
 			cPsi = __cosf(psi);	//cosPsiPhoton
 			sPsi = __sinf(psi);     //sinPsiPhoton		
 			// Rotation des paramètres de stokes
-			rotateStokes(ph->stokes1, ph->stokes2, ph->stokes3,   psi,
-				     &ph->stokes1, &ph->stokes2, &ph->stokes3);
+			rotateStokes(stokes1, stokes2, stokes3,   psi,
+				     &stokes1, &stokes2, &stokes3);
 
-            stokes3=ph->stokes3;
-            stokes4=ph->stokes4;
+            stokes3_tmp=stokes3;
+            stokes4_tmp=stokes4;
 			// Calcul des parametres de Stokes du photon apres diffusion
-			ph->stokes1 *= faer[ipha*NFAERd*5+iang*5+0];
-			ph->stokes2 *= faer[ipha*NFAERd*5+iang*5+1];
-			ph->stokes3 = stokes3*faer[ipha*NFAERd*5+iang*5+2] - stokes4*faer[ipha*NFAERd*5+iang*5+3];
-			ph->stokes4 = stokes4*faer[ipha*NFAERd*5+iang*5+2] + stokes3*faer[ipha*NFAERd*5+iang*5+3];
+			stokes1 *= faer[ipha*NFAERd*5+iang*5+0];
+			stokes2 *= faer[ipha*NFAERd*5+iang*5+1];
+			stokes3 = stokes3_tmp*faer[ipha*NFAERd*5+iang*5+2] - stokes4_tmp*faer[ipha*NFAERd*5+iang*5+3];
+			stokes4 = stokes4_tmp*faer[ipha*NFAERd*5+iang*5+2] + stokes3_tmp*faer[ipha*NFAERd*5+iang*5+3];
 
 			float debias;
 			debias = __fdividef( 2., faer[ipha*NFAERd*5+iang*5+0] + faer[ipha*NFAERd*5+iang*5+1] );
-			ph->stokes1 *= debias;  
-			ph->stokes2 *= debias;  
-			ph->stokes3 *= debias;  
-			ph->stokes4 *= debias;  
+			stokes1 *= debias;  
+			stokes2 *= debias;  
+			stokes3 *= debias;  
+			stokes4 *= debias;  
 
-			ph->weight *= ssa[ilay];
+			weight *= ssa[ilay];
 			
 		}
-		
+
+	    if (!le) {
+            ph->stokes1 = stokes1;
+	        ph->stokes2 = stokes2;
+            ph->stokes3 = stokes3;
+	        ph->stokes4 = stokes4;
+	        ph->weight =  weight;
+        }
+        else {
+            ph->stokes1_le = stokes1;
+	        ph->stokes2_le = stokes2;
+            ph->stokes3_le = stokes3;
+	        ph->stokes4_le = stokes4;
+	        ph->weight_le =  weight;
+        }
 	}
 	else{	/* Photon dans l'océan */
 	    float prop_raman=1., new_wavel;
@@ -1152,6 +1190,7 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
 		}
 		
     } //photon in ocean
+
    ////////// Fin séparation ////////////
 	
 	sTh = sqrtf(1.F - cTh*cTh);	// sinThetaPhoton

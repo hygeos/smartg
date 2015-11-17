@@ -153,6 +153,9 @@ typedef struct __align__(16)
 	
 	// Poids du photon
 	float weight;
+
+	// Poids du photon virtuel
+	float weight_le;
 	
 	// longueur d onde du photon
 	float wavel; // for Raman
@@ -163,6 +166,12 @@ typedef struct __align__(16)
 	float stokes2;
 	float stokes3;
 	float stokes4;
+
+	// Paramètres de stokes du photon virtuel
+	float stokes1_le;
+	float stokes2_le;
+	float stokes3_le;
+	float stokes4_le;
 	
 	// Paramètres pour une atmosphère sphérique
 	int couche;

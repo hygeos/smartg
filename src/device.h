@@ -157,7 +157,7 @@ __device__ void move_pp(Photon*,float*z, float* h, float* pMol , float *abs , fl
 * Diffusion du photon par une molécule ou un aérosol
 * Modification des paramètres de stokes et des vecteurs U et V du photon (polarisation, vitesse)
 */
-__device__ void scatter(Photon* photon, float* faer, float* ssa , float* foce , float* sso, int* ip, int* ipo
+__device__ void scatter(Photon* photon, float* faer, float* ssa , float* foce , float* sso, int* ip, int* ipo, int le
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif
