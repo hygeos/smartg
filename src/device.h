@@ -36,6 +36,7 @@ __device__ __constant__ int NBTHETAd;
 __device__ __constant__ int NBPHId;
 __device__ __constant__ int NLAMd;
 __device__ __constant__ int SIMd;
+__device__ __constant__ int LEd;
 __device__ __constant__ int SURd;
 __device__ __constant__ int DIOPTREd;
 __device__ __constant__ int ENVd;
@@ -157,7 +158,7 @@ __device__ void move_pp(Photon*,float*z, float* h, float* pMol , float *abs , fl
 * Diffusion du photon par une molécule ou un aérosol
 * Modification des paramètres de stokes et des vecteurs U et V du photon (polarisation, vitesse)
 */
-__device__ void scatter(Photon* photon, float* faer, float* ssa , float* foce , float* sso, int* ip, int* ipo, int le
+__device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , float* sso, int* ip, int* ipo, int le, float* thv, float* phi
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif
@@ -248,6 +249,22 @@ __device__ void calculCase(int*, int*, int*, Photon*
 __device__ void display(const char* desc, Photon* ph);
 #endif
 
+__device__ void copyPhoton(Photon*, Photon*); 
+
+__device__ void modifyUV( float vx0, float vy0, float vz0, float ux0, float uy0, float uz0,
+        float cTh, float psi, 
+        float *vx1, float *vy1, float *vz1, float *ux1, float *uy1, float *uz1) ;
+
+__device__ float calculTheta(float vx0, float vy0, float vz0, float vx1, float vy1, float vz1);
+
+__device__ void calculPsiLE(float ux0, float uy0, float uz0,
+			    float vx0, float vy0, float vz0,
+			    float vx1, float vy1, float vz1,
+			    float* psi,
+			    float* ux1, float* uy1, float* uz1);
+#ifdef DOUBLE
+__device__ double DatomicAdd(double* address, double val);
+#endif
 
 /**********************************************************
 *	> Fonctions liées au générateur aléatoire

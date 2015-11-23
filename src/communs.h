@@ -154,12 +154,13 @@ typedef struct __align__(16)
 	// Poids du photon
 	float weight;
 
-	// Poids du photon virtuel
-	float weight_le;
-	
 	// longueur d onde du photon
 	float wavel; // for Raman
     int ilam; // wavelength index
+
+    // Angular box indices (for LE)
+    int iph;
+    int ith;
 	
 	// Paramètres de stokes du photon
 	float stokes1;
@@ -167,12 +168,6 @@ typedef struct __align__(16)
 	float stokes3;
 	float stokes4;
 
-	// Paramètres de stokes du photon virtuel
-	float stokes1_le;
-	float stokes2_le;
-	float stokes3_le;
-	float stokes4_le;
-	
 	// Paramètres pour une atmosphère sphérique
 	int couche;
 	float prop_aer;		// Proportion d'aérosols par rapport aux molécules à l'endroit où se situe le photon
@@ -251,8 +246,11 @@ typedef struct __align__(16)
 	
 
 
+    #ifdef DOUBLE
+	double* tabPhotons;		//Tableau contenant l'ensemble des paramètres de stokes de tous les photons (évènements confondus)
+    #else
 	float* tabPhotons;		//Tableau contenant l'ensemble des paramètres de stokes de tous les photons (évènements confondus)
-
+    #endif
 
 
 	float* faer;			// Pointeur vers le modèle de diffusion des aérosols
@@ -272,6 +270,8 @@ typedef struct __align__(16)
 
 
 
+    float* thv;
+    float* phi;             // Pointer to zeinth and azimut angles for output in local estimate
 
     float* lambda;
 	/** Séparation du code pour atmosphère sphérique ou parallèle **/

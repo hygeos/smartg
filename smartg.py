@@ -190,7 +190,7 @@ def smartg(wl, pp=True,
            NFAER=1000000, NFOCE=1000000,
            OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
            NBLOOP=None, progress=True, debug=False,
-           alt_move=False, debug_photon=False):
+           alt_move=False, debug_photon=False, double=False, le=None):
         '''
         Run a SMART-G simulation
 
@@ -268,6 +268,10 @@ def smartg(wl, pp=True,
 
             - debug_photon: activate the display of photon path for the thread 0
                 NOTE: compilation flag, not available if the kernel is provided as a binary 
+
+            - double : accumulate photons table in double precision, default single
+
+            - le: Local Estimate method activation (by providing two arrays of zenit and azimuth angles for output), default cone sampling
 
 
         Return value:
@@ -397,12 +401,18 @@ def smartg(wl, pp=True,
             albedo[2*i] = surf_alb
             albedo[2*i+1] = seafloor_alb
 
+        # Local Estilate option
+        LE = 0
+        if le!=None:
+            LE = 1
+
         # compilation option
         # list of compilation flag :
         #     - DRANDPHILOX4x32_7 : Utilisation du random Philox-4x32-7
         #     - DPROGRESSION : Calcul et affichage de la progression de la simulation
         #     - DSPHERIQUE : Calcul en sphérique
         #     - DDEBUG : Ajout de tests intermédiaires utilisés lors du débugage
+        #     - DDOUBLE : Accumulation de TabPhotons en double precision (!slow down processing)
 
         options = ['-DRANDPHILOX4x32_7','-DPROGRESSION']
         # options.extend(['-DPARAMETRES','-DPROGRESSION'])
@@ -414,6 +424,8 @@ def smartg(wl, pp=True,
             options.append('-DALT_MOVE')
         if debug_photon:
             options.append('-DDEBUG_PHOTON')
+        if double:
+            options.append('-DDOUBLE')
 
         #
         # compile or load the kernel
@@ -469,7 +481,7 @@ def smartg(wl, pp=True,
         InitConstantes(surf, env, NATM, NOCE, mod,
                        NBPHOTONS, NBLOOP, THVDEG, DEPO,
                        XBLOCK, XGRID, NLAM, SIM, NFAER,
-                       NFOCE, NBTHETA, NBPHI, OUTPUT_LAYERS, RTER)
+                       NFOCE, NBTHETA, NBPHI, OUTPUT_LAYERS, RTER, LE)
 
 
         # Initialize the progress bar
@@ -485,7 +497,7 @@ def smartg(wl, pp=True,
 
         # finalization
         output = finalize(tabPhotonsTot, wavelengths, nbPhotonsTotInter,
-                           OUTPUT_LAYERS, tabTransDir, SIM, attrs, nprofilesAtm, phasesAtm)
+                           OUTPUT_LAYERS, tabTransDir, SIM, attrs, nprofilesAtm, phasesAtm, le=le)
 
         p.finish('Done! (used {}) | '.format(attrs['device']) + afficheProgress(nbPhotonsTot, NBPHOTONS, nbPhotonsSorTot))
 
@@ -578,17 +590,22 @@ def calculOmega(NBTHETA, NBPHI):
     return tabTh, tabPhi, tabOmega
 
 
-def finalize(tabPhotonsTot2, wl, nbPhotonsTotInter, OUTPUT_LAYERS, tabTransDir, SIM, attrs, nprofilesAtm, phasesAtm):
+def finalize(tabPhotonsTot2, wl, nbPhotonsTotInter, OUTPUT_LAYERS, tabTransDir, SIM, attrs, nprofilesAtm, phasesAtm, le=None):
     '''
     create and return the final output
     '''
     (NLVL,NPSTK,NLAM,NBTHETA,NBPHI) = tabPhotonsTot2.shape
     tabFinal = np.zeros_like(tabPhotonsTot2, dtype='float64')
-    tabTh, tabPhi, tabOmega = calculOmega(NBTHETA, NBPHI)
 
     # normalization
     # (broadcast to dimensions (LVL, LAM, THETA, PHI))
-    norm = 2.0 * tabOmega.reshape((1,1,-1,1)) * np.cos(tabTh).reshape((1,1,-1,1)) * nbPhotonsTotInter.reshape((1,-1,1,1))
+    if le!=None : 
+        tabTh = le['thv']
+        tabPhi = le['phi']
+        norm = 4.0 * np.cos(tabTh).reshape((1,1,-1,1)) * nbPhotonsTotInter.reshape((1,-1,1,1)) 
+    else : 
+        tabTh, tabPhi, tabOmega = calculOmega(NBTHETA, NBPHI )
+        norm = 2.0 * tabOmega.reshape((1,1,-1,1)) * np.cos(tabTh).reshape((1,1,-1,1)) * nbPhotonsTotInter.reshape((1,-1,1,1))
 
     # I
     tabFinal[:,0,:,:,:] = (tabPhotonsTot2[:,0,:,:,:] + tabPhotonsTot2[:,1,:,:,:])/norm
@@ -782,7 +799,7 @@ def calculF(phases, N):
 def InitConstantes(surf, env, NATM, NOCE, mod,
                    NBPHOTONS, NBLOOP, THVDEG, DEPO,
                    XBLOCK, XGRID,NLAM, SIM, NFAER,
-                   NFOCE, NBTHETA, NBPHI, OUTPUT_LAYERS, RTER) :
+                   NFOCE, NBTHETA, NBPHI, OUTPUT_LAYERS, RTER, LE) :
 
     """
     Initialize the constants in python and send them to the device memory
@@ -829,6 +846,7 @@ def InitConstantes(surf, env, NATM, NOCE, mod,
     D.update(NBPHI=np.array([NBPHI], dtype=np.int32))
     D.update(NLAM=np.array([NLAM], dtype=np.int32))
     D.update(SIM=np.array([SIM], dtype=np.int32))
+    D.update(LE=np.array([LE], dtype=np.int32))
     if surf != None:
         D.update(SUR=np.array(surf.dict['SUR'], dtype=np.int32))
         D.update(DIOPTRE=np.array(surf.dict['DIOPTRE'], dtype=np.int32))
@@ -860,7 +878,7 @@ def InitConstantes(surf, env, NATM, NOCE, mod,
 def InitSD(nprofilesAtm, nprofilesOc, NLAM,
            NLVL, NPSTK, NBTHETA, NBPHI, faer,
            foce, albedo, wl, x0, y0,
-           z0,XBLOCK, XGRID, SEED, options):
+           z0,XBLOCK, XGRID, SEED, options, le=None):
 
     """
     Initialize the principles data structures in python and send them the device memory
@@ -883,6 +901,7 @@ def InitSD(nprofilesAtm, nprofilesOc, NLAM,
         - XGRID : Grid Size
         - SEED: random number generator seed
         - options: compilation options
+        - le: Local estimate 
 
     -----------------------------------------------------------
 
@@ -902,6 +921,8 @@ def InitSD(nprofilesAtm, nprofilesOc, NLAM,
                 - abs : proportion of absorbent in each layer of the atmospheric model
                 - lambda : wavelength
                 - z : altitudes level in the atmosphere
+                - thv : zenith angles for output (for Local estimate)
+                - phi : azimut angles for output (for Local estimate)
             optional:
             if DRANDPHILOX4x32_7 FLAG
                 - etat : related to the generation of random number
@@ -936,9 +957,12 @@ def InitSD(nprofilesAtm, nprofilesOc, NLAM,
 
     """
     tmp = []
-    tmp = [(np.uint64, '*nbPhotonsInter', np.zeros(NLAM, dtype=np.uint64)),
-           (np.float32, '*tabPhotons', np.zeros(NLVL * NPSTK * NBTHETA * NBPHI * NLAM, dtype=np.float32)),
-           (np.float32, '*faer', faer),
+    tmp = [(np.uint64, '*nbPhotonsInter', np.zeros(NLAM, dtype=np.uint64))]
+    if '-DDOUBLE' in options:
+        tmp += [(np.float64, '*tabPhotons', np.zeros(NLVL * NPSTK * NBTHETA * NBPHI * NLAM, dtype=np.float64))]
+    else : 
+        tmp += [(np.float32, '*tabPhotons', np.zeros(NLVL * NPSTK * NBTHETA * NBPHI * NLAM, dtype=np.float32))]
+    tmp += [(np.float32, '*faer', faer),
            (np.float32, '*foce', foce),
            (np.float32, '*ho', nprofilesOc['HO']),
            (np.float32, '*sso', nprofilesOc['SSO']),
@@ -951,6 +975,10 @@ def InitSD(nprofilesAtm, nprofilesOc, NLAM,
            (np.float32, '*alb', albedo),
            (np.float32, '*lambda', wl),
            (np.float32, '*z', nprofilesAtm['ALT'])]
+    if le != None:
+        tmp += [(np.float32, '*thv', le['thv']) , (np.float32, '*phi', le['phi'])]
+    else:
+        tmp += [(np.float32, '*thv', np.zeros(NBTHETA,dtype=np.float32)), (np.float32, '*phi', np.zeros(NBPHI,dtype=np.float32))]
 
     if '-DRANDPHILOX4x32_7' in options:
         tmp += [(np.uint32, '*etat', np.zeros(XBLOCK*1*XGRID*1, dtype=np.uint32)), (np.uint32, 'config', SEED)]
@@ -1127,7 +1155,10 @@ def loop_kernel(NBPHOTONS, Tableau, Var, Init, NLVL,
 
     while(nbPhotonsTot < NBPHOTONS):
 
-        Tableau.tabPhotons = np.zeros(NLVL*NPSTK*NBTHETA * NBPHI * NLAM, dtype=np.float32)
+        if '-DDOUBLE' in options:
+            Tableau.tabPhotons = np.zeros(NLVL*NPSTK*NBTHETA * NBPHI * NLAM, dtype=np.float64)
+        else : 
+            Tableau.tabPhotons = np.zeros(NLVL*NPSTK*NBTHETA * NBPHI * NLAM, dtype=np.float32)
         Tableau.nbPhotonsInter = np.zeros(NLAM, dtype=np.int32)
         Var.nbPhotons = np.uint32(0)
         if '-DPROGRESSION' in options:

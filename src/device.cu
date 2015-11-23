@@ -126,9 +126,8 @@ __device__ void launchKernel(Variables* var, Tableaux tab
 	unsigned int nbPhotonsSorThr = 0; 		// Nombre de photons traités par le thread et ressortis dans l'espace
 	#endif
 	
-	Photon ph; 		// On associe une structure de photon au thread
+	Photon ph, ph_le; 		// On associe une structure de photon au thread
 	ph.loc = NONE;	// Initialement le photon n'est nulle part, il doit être initialisé
-    int le=1;
 	
     atomicAdd(&(var->nThreadsActive), 1);
 
@@ -219,7 +218,9 @@ __device__ void launchKernel(Variables* var, Tableaux tab
         }
 
         // count the photons
-        countPhoton(&ph, tab, count_level
+        
+        /* Cone Sampling */
+        if (LEd ==0) countPhoton(&ph, tab, count_level
                 #ifdef PROGRESSION
                 , var
                 #endif
@@ -234,14 +235,32 @@ __device__ void launchKernel(Variables* var, Tableaux tab
         //
         // -> dans ATMOS ou OCEAN
 		if( (ph.loc == ATMOS) || (ph.loc == OCEAN)){
-            /*le=1;
-			scatter(&ph, tab.faer, tab.ssa , tab.foce , tab.sso, tab.ip, tab.ipo, le, &etatThr
-			#if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
-			, &configThr
-			#endif
-				);*/
-            le=0;
-			scatter(&ph, tab.faer, tab.ssa , tab.foce , tab.sso, tab.ip, tab.ipo, le, &etatThr 
+
+            /* Local Estimate */
+            if (LEd == 1) {
+			 for (int iph=0; iph<NBPHId; iph++){
+			  for (int ith=0; ith<NBTHETAd; ith++){
+                copyPhoton(&ph, &ph_le);
+                ph_le.iph = iph;
+                ph_le.ith = ith;
+                scatter(&ph_le, tab.faer, tab.ssa , tab.foce , tab.sso, tab.ip, tab.ipo, 1, tab.thv, tab.phi, &etatThr
+			    #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
+			    , &configThr
+			    #endif
+				);
+                #ifdef DEBUG_PHOTON
+                display("SCATTER LE", &ph_le);
+                #endif
+                countPhoton(&ph_le, tab, UPTOA
+                #ifdef PROGRESSION
+                , var
+                #endif
+                );
+              }
+             }
+            }
+
+			scatter(&ph, tab.faer, tab.ssa , tab.foce , tab.sso, tab.ip, tab.ipo, 0, tab.thv, tab.phi, &etatThr 
 			#if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
 			, &configThr
 			#endif
@@ -329,7 +348,9 @@ __device__ void launchKernel(Variables* var, Tableaux tab
             if ((ph.loc == ATMOS) || (ph.loc == SPACE)) count_level = UP0P;
             if (ph.loc == OCEAN) count_level = DOWN0M;
         }
-        countPhoton(&ph, tab, count_level
+        
+        /* Cone Sampling */
+        if (LEd == 0) countPhoton(&ph, tab, count_level
                 #ifdef PROGRESSION
                 , var
                 #endif
@@ -463,17 +484,12 @@ __device__ void initPhoton(Photon* ph, Tableaux tab
 	
 
 	ph->weight = WEIGHTINIT;
-	ph->weight_le = WEIGHTINIT;
 	
 	// Initialisation des paramètres de stokes du photon
 	ph->stokes1 = 0.5F;
 	ph->stokes2 = 0.5F;
 	ph->stokes3 = 0.F;
 	ph->stokes4 = 0.F;
-	ph->stokes1_le = 0.5F;
-	ph->stokes2_le = 0.5F;
-	ph->stokes3_le = 0.F;
-	ph->stokes4_le = 0.F;
 
 }
 
@@ -914,12 +930,7 @@ __device__ void move_pp(Photon* ph,float*z, float* h, float* pMol , float *abs ,
 }
 
 
-
-/* scatter
-* Diffusion du photon par une molécule ou un aérosol
-* Modification des paramètres de stokes et des vecteurs U et V du photon (polarisation, vitesse)
-*/
-__device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , float* sso, int* ip, int* ipo, int le
+__device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , float* sso, int* ip, int* ipo, int le, float* tabthv, float* tabphi
 			#ifdef RANDMWC
 			, unsigned long long* etatThr, unsigned int* configThr
 			#endif
@@ -934,95 +945,93 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
                         #endif
 			){
 
-	float cTh=0.f, sTh, psi, cPsi, sPsi;
-	float wx, wy, wz, vx, vy, vz;
-	
-	
-	/* Les calculs qui différent pour les aérosols et les molécules sont regroupés dans cette partie.
-	 * L'idée à termes est de réduire au maximum cette fonction, en calculant également la fonction de phase pour les
-	 * molécules, à la manière des aérosols.
-	*/
-
+	float cTh=0.f ;
 	float zang=0.f, theta=0.f;
 	int iang, ilay, ipha;
-	float stokes1, stokes2, stokes3, stokes4; 
-    float stokes1_tmp, stokes2_tmp, stokes3_tmp, stokes4_tmp, norm, weight;
-	float cTh2;
+	float stokes1, stokes2, stokes3, stokes4;
+	float cTh2, psi;
 	float prop_aer = ph->prop_aer;
 	
-	if (!le) {
-        stokes1 = ph->stokes1;
-	    stokes2 = ph->stokes2;
-        stokes3 = ph->stokes3;
-	    stokes4 = ph->stokes4;
-	    weight =  ph->weight;
-    }
-    else {
-        stokes1 = ph->stokes1_le;
-	    stokes2 = ph->stokes2_le;
-        stokes3 = ph->stokes3_le;
-	    stokes4 = ph->stokes4_le;
-	    weight =  ph->weight_le;
-    }
-	
-	
-	///////// Possible de mettre dans une fonction séparée, mais attention aux performances /////////
-	///////// Faire également attention à bien passer le pointeur de cTh et le modifier dans la fonction /////////
-	
+    /* Scattering in atmosphere */
 	if(ph->loc!=OCEAN){
         ilay = ph->couche + ph->ilam*(NATMd+1); // atm layer index
         ipha  = ip[ilay]; // atm phase function index
 		if( prop_aer<RAND ){
 
-			// Get Teta (see Wang et al., 2012)
-			float b = (RAND - 4.0 * ALPHAd - BETAd) / (2.0 * ALPHAd);
-			float expo = 1./2.;
-			float base = ACUBEd + b*b;
-			float tmp  = pow(base, expo);
-			expo = 1./3.;
-			base = -b + tmp;
-			float u = pow(base,expo);
-			cTh     = u - Ad / u;  						       
+            if (le){
+                float thv, phi;
+                float vx ,vy ,vz;
+                /*int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+                int ipack = idx/(NBTHETAd*NBPHId);
+                int iang  = idx - ipack * (NBTHETAd*NBPHId);
+                int ith = iang/NBTHETAd;
+                int iph = iang - ith*NBTHETAd ;*/
+                phi =  __fdividef(((float)ph->iph) * 2 * PI, NBPHId);
+                thv =  __fdividef(((float)ph->ith) * DEMIPI, NBTHETAd);
+                //phi =  tabphi[ph->iph];
+                //thv =  tabthv[ph->ith];
+                /* on en deduit les cosinus directeurs du photon virtuel sortant dans la direction ith,iph */
+                vx = __cosf(phi) * __sinf(thv);
+                vy = __sinf(phi) * __sinf(thv);
+                vz = __cosf(thv);
+                theta = calculTheta(ph->vx, ph->vy, ph->vz, vx, vy, vz);
+                cTh = __cosf(theta);
+                cTh2 = cTh * cTh;
+                calculPsiLE(ph->ux , ph->uy, ph->uz, ph->vx , ph->vy, ph->vz, vx, vy, vz, &psi, &ph->ux, &ph->uy, &ph->uz); 
+                ph->vx = vx;
+                ph->vy = vy;
+                ph->vz = vz;
 
-			if (cTh < -1.0) cTh = -1.0;
-			if (cTh >  1.0) cTh =  1.0;
-			cTh2 = cTh * cTh;
+            }
+            else {
+			    // Get Teta (see Wang et al., 2012)
+			    float b = (RAND - 4.0 * ALPHAd - BETAd) / (2.0 * ALPHAd);
+			    float expo = 1./2.;
+			    float base = ACUBEd + b*b;
+			    float tmp  = pow(base, expo);
+			    expo = 1./3.;
+			    base = -b + tmp;
+			    float u = pow(base,expo);
+			    cTh     = u - Ad / u;  						       
+
+			    if (cTh < -1.0) cTh = -1.0;
+			    if (cTh >  1.0) cTh =  1.0;
 			
-			/////////////
-			//  Get Phi
+			    cTh2 = cTh * cTh;
+			    /////////////
+			    //  Get Phi
+			    // Biased sampling scheme for phi
+			    psi = RAND * DEUXPI;
+            }
 
-			// Biased sampling scheme for phi
-			psi = RAND * DEUXPI;	//psiPhoton
-			cPsi = __cosf(psi);	//cosPsiPhoton
-			sPsi = __sinf(psi);     //sinPsiPhoton		
-
-			// Calcul des parametres de Stokes du photon apres diffusion
-			
 			// Rotation des paramètres de stokes
 			rotateStokes(ph->stokes1, ph->stokes2, ph->stokes3,  psi,
 				     &ph->stokes1, &ph->stokes2, &ph->stokes3 );
 
 			// Calcul des parametres de Stokes du photon apres diffusion
 			float cross_term;
-			stokes1_tmp = stokes1;
-			stokes2_tmp = stokes2;
-			cross_term  = DELTA_PRIMd * (stokes1 + stokes2);
-			stokes1 = 3./2. * (  DELTAd  * stokes1_tmp + cross_term );
-			stokes2 = 3./2. * (  DELTAd  * cTh2 * stokes2_tmp + cross_term );			
-			stokes3 = 3./2. * (  DELTAd * cTh  * stokes3 );
-			stokes4 = 3./2. * (  DELTAd * DELTA_SECOd * cTh * stokes4 );
-			// bias sampling scheme
+			stokes1 = ph->stokes1;
+			stokes2 = ph->stokes2;
+			cross_term  = DELTA_PRIMd * (ph->stokes1 + ph->stokes2);
+			ph->stokes1 = 3./2. * (  DELTAd  * stokes1 + cross_term );
+			ph->stokes2 = 3./2. * (  DELTAd  * cTh2 * stokes2 + cross_term );			
+			ph->stokes3 = 3./2. * (  DELTAd  * cTh  * ph->stokes3 );
+			ph->stokes4 = 3./2. * (  DELTAd  * DELTA_SECOd * cTh * ph->stokes4 );
+			// Bias sampling scheme
 			float phase_func;
 			phase_func = 3./4. * DELTAd * (cTh2+1.0) + 3.0 * DELTA_PRIMd;
-			stokes1 /= phase_func;  
-			stokes2 /= phase_func;  
-			stokes3 /= phase_func;     		
-			stokes4 /= phase_func;     		
 
+            if (!le){
+			    ph->stokes1 /= phase_func;  
+			    ph->stokes2 /= phase_func;  
+			    ph->stokes3 /= phase_func;     		
+			    ph->stokes4 /= phase_func;     		
+            }
 
 		}
 		else{
 			// Aérosols
+            float cPsi, sPsi;
 			zang = RAND*(NFAERd-2);
 			iang= __float2int_rd(zang);
 			zang = zang - iang;
@@ -1039,45 +1048,32 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
 			cPsi = __cosf(psi);	//cosPsiPhoton
 			sPsi = __sinf(psi);     //sinPsiPhoton		
 			// Rotation des paramètres de stokes
-			rotateStokes(stokes1, stokes2, stokes3,   psi,
-				     &stokes1, &stokes2, &stokes3);
+			rotateStokes(ph->stokes1, ph->stokes2, ph->stokes3,   psi,
+				     &ph->stokes1, &ph->stokes2, &ph->stokes3);
 
-            stokes3_tmp=stokes3;
-            stokes4_tmp=stokes4;
+            stokes3=ph->stokes3;
+            stokes4=ph->stokes4;
 			// Calcul des parametres de Stokes du photon apres diffusion
-			stokes1 *= faer[ipha*NFAERd*5+iang*5+0];
-			stokes2 *= faer[ipha*NFAERd*5+iang*5+1];
-			stokes3 = stokes3_tmp*faer[ipha*NFAERd*5+iang*5+2] - stokes4_tmp*faer[ipha*NFAERd*5+iang*5+3];
-			stokes4 = stokes4_tmp*faer[ipha*NFAERd*5+iang*5+2] + stokes3_tmp*faer[ipha*NFAERd*5+iang*5+3];
+			ph->stokes1 *= faer[ipha*NFAERd*5+iang*5+0];
+			ph->stokes2 *= faer[ipha*NFAERd*5+iang*5+1];
+			ph->stokes3 = stokes3*faer[ipha*NFAERd*5+iang*5+2] - stokes4*faer[ipha*NFAERd*5+iang*5+3];
+			ph->stokes4 = stokes4*faer[ipha*NFAERd*5+iang*5+2] + stokes3*faer[ipha*NFAERd*5+iang*5+3];
 
 			float debias;
 			debias = __fdividef( 2., faer[ipha*NFAERd*5+iang*5+0] + faer[ipha*NFAERd*5+iang*5+1] );
-			stokes1 *= debias;  
-			stokes2 *= debias;  
-			stokes3 *= debias;  
-			stokes4 *= debias;  
+			ph->stokes1 *= debias;  
+			ph->stokes2 *= debias;  
+			ph->stokes3 *= debias;  
+			ph->stokes4 *= debias;  
 
-			weight *= ssa[ilay];
+			ph->weight *= ssa[ilay];
 			
 		}
 
-	    if (!le) {
-            ph->stokes1 = stokes1;
-	        ph->stokes2 = stokes2;
-            ph->stokes3 = stokes3;
-	        ph->stokes4 = stokes4;
-	        ph->weight =  weight;
-        }
-        else {
-            ph->stokes1_le = stokes1;
-	        ph->stokes2_le = stokes2;
-            ph->stokes3_le = stokes3;
-	        ph->stokes4_le = stokes4;
-	        ph->weight_le =  weight;
-        }
 	}
 	else{	/* Photon dans l'océan */
 	    float prop_raman=1., new_wavel;
+        float cPsi, sPsi;
         ilay = ph->couche + ph->ilam*(NOCEd+1); // oce layer index
         ipha  = ipo[ilay]; // oce phase function index
 
@@ -1192,46 +1188,11 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
     } //photon in ocean
 
    ////////// Fin séparation ////////////
-	
-	sTh = sqrtf(1.F - cTh*cTh);	// sinThetaPhoton
-	
-	/** Création de 2 vecteurs provisoires w et v **/
-	float vx_s, vy_s, vz_s, ux_s, uy_s, uz_s;	// Parametres du photon sauves pour optimisation
-	vx_s = ph->vx;
-	vy_s = ph->vy;
-	vz_s = ph->vz;
-	ux_s = ph->ux;
-	uy_s = ph->uy;
-	uz_s = ph->uz;
-	// w est le rotationnel entre l'ancien vecteur u et l'ancien vecteur v du photon
-	wx = uy_s * vz_s - uz_s * vy_s;
-	wy = uz_s * vx_s -ux_s * vz_s;
-	wz = ux_s * vy_s - uy_s * vx_s;
-	// v est le nouveau vecteur v du photon
-	vx = cTh * vx_s + sTh * ( cPsi * ux_s + sPsi * wx );
-	vy = cTh * vy_s + sTh * ( cPsi * uy_s + sPsi * wy );
-	vz = cTh * vz_s + sTh * ( cPsi * uz_s + sPsi * wz );
-	// Changement du vecteur u (orthogonal au vecteur vitesse du photon)
-    ph->ux = cTh * vx - vx_s;
-    ph->uy = cTh * vy - vy_s;
-    ph->uz = cTh * vz - vz_s;
-	
-	
-	// Changement du vecteur v (vitesse du photon)
-	ph->vx = vx;
-	ph->vy = vy;
-	ph->vz = vz;
-
-    // renormalisation
-    norm=sqrtf(ph->vx*ph->vx+ph->vy*ph->vy+ph->vz*ph->vz);
-    ph->vx/=norm;
-    ph->vy/=norm;
-    ph->vz/=norm;
-    norm=sqrtf(ph->ux*ph->ux+ph->uy*ph->uy+ph->uz*ph->uz);
-    ph->ux/=norm;
-    ph->uy/=norm;
-    ph->uz/=norm;
-
+   
+    if (!le){
+        modifyUV( ph->vx, ph->vy, ph->vz, ph->ux, ph->uy, ph->uz, cTh, psi, 
+                &ph->vx, &ph->vy, &ph->vz, &ph->ux, &ph->uy, &ph->uz) ;
+    }
 
 }
 
@@ -1840,8 +1801,11 @@ __device__ void countPhoton(Photon* ph,
         return;
     }
 
-    float *tabCount; // pointer to the "counting" array:
-                     // may be TOA, or BOA down, and so on
+    #ifdef DOUBLE 
+    double *tabCount;                   // pointer to the "counting" array:
+    #else                               // may be TOA, or BOA down, and so on
+    float *tabCount; 
+    #endif
 
     float theta = acosf(fmin(1.F, fmax(-1.F, 0.f * ph->vx + 1.f * ph->vz)));
     #ifdef SPHERIQUE
@@ -1851,15 +1815,14 @@ __device__ void countPhoton(Photon* ph,
     }
     #endif
 
-    // Si theta = 0 on l'ignore
-    // (cas où le photon repart dans la direction de visée)
 	if(theta == 0.F)
 	{
 		#ifdef PROGRESSION
 		atomicAdd(&(var->erreurtheta), 1);
 		#endif
-		return;
+		//return;
 	}
+
 
 	float psi;
 	int ith=0, iphi=0, il=0;
@@ -1872,11 +1835,16 @@ __device__ void countPhoton(Photon* ph,
             &s1, &s2, &s3);
     s4 = ph->stokes4;
 	// Calcul de la case dans laquelle le photon sort
-	calculCase(&ith, &iphi, &il, ph 
+	if (LEd == 0) calculCase(&ith, &iphi, &il, ph 
 			   #ifdef PROGRESSION
 			   , var
 			   #endif
 			   );
+    else {
+        ith = ph->ith;
+        iphi= ph->iph;
+        ph->weight *= __expf(__fdividef(-(tab.h[NATMd + ph->ilam *(NATMd+1)]-ph->tau),abs(ph->vz))); // LE attenuation to TOA
+    }
 	
   	/*if( ph->vy<0.f )
     		s3 = -s3;*/  // DR 
@@ -1906,11 +1874,19 @@ __device__ void countPhoton(Photon* ph,
         tabCount = tab.tabPhotons + count_level*5*NBTHETAd*NBPHId*NLAMd;
 
         // count in that level
-        atomicAdd(tabCount+(0 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), weight * s1);
-        atomicAdd(tabCount+(1 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), weight * s2);
-        atomicAdd(tabCount+(2 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), weight * s3);
-        atomicAdd(tabCount+(3 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), weight * s4);
-        atomicAdd(tabCount+(4 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), 1.);
+        #ifdef DOUBLE 
+            DatomicAdd(tabCount+(0 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), (double)weight * (double)s1);
+            DatomicAdd(tabCount+(1 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), (double)weight * (double)s2);
+            DatomicAdd(tabCount+(2 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), (double)weight * (double)s3);
+            DatomicAdd(tabCount+(3 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), (double)weight * (double)s4);
+            DatomicAdd(tabCount+(4 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), (double)1.);
+        #else
+            atomicAdd(tabCount+(0 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), weight * s1);
+            atomicAdd(tabCount+(1 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), weight * s2);
+            atomicAdd(tabCount+(2 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), weight * s3);
+            atomicAdd(tabCount+(3 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), weight * s4);
+            atomicAdd(tabCount+(4 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), 1.);
+        #endif
 	}
 	else
 	{
@@ -2014,10 +1990,9 @@ __device__ void calculCase(int* ith, int* iphi, int* il, Photon* photon
         // if the azimuth is in the middle box centered on 180.
         else if(cPhiP <= -cosf(dphi/2.)) *iphi = NBPHId/2;
 		else {
-            // otherwise it lies in a dphi box whose index (starting from 1) is given by the ratio of
-            // Phi -dphi/4. to the possible phi range that is PI-dphi/2. multiplied by the number of boxes NBPHId/2-1
+            /* otherwise it lies in a dphi box whose index (starting from 1) is given by the ratio of
+             Phi -dphi/4. to the possible phi range that is PI-dphi/2. multiplied by the number of boxes NBPHId/2-1*/
             *iphi = __float2int_rd(__fdividef((acosf(cPhiP)-dphi/2.) * (NBPHId/2-1.0F), PI-dphi)) + 1;
-		    //else *iphi = __float2int_rd(__fdividef(acosf(cPhiP) * NBPHId, PI));
 		
 		    // Puis on place le photon dans l'autre demi-cercle selon vy, utile uniquement lorsque l'on travail sur tous l'espace
    		    if(photon->vy < 0.F) *iphi = NBPHId - *iphi;
@@ -2049,10 +2024,11 @@ __device__ void display(const char* desc, Photon* ph) {
     int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
 
     if (idx==0) {
-        printf("%16s X=(%.3g,%.3g,%.3g) \tV=(%.3g,%.3g,%.3g) \tStokes=(%.3g,%.3g,%.3g,%.3g) \ttau=%.3g \tweight=%.3g loc=",
+        printf("%16s X=(%.3g,%.3g,%.3g) \tV=(%.3g,%.3g,%.3g) \tU=(%.3g,%.3g,%.3g) \tS=(%.3g,%.3g,%.3g,%.3g) \ttau=%.3g \tweight=%.3g loc=",
                desc,
                ph->x, ph->y, ph->z,
                ph->vx,ph->vy,ph->vz,
+               ph->ux,ph->uy,ph->uz,
                ph->stokes1, ph->stokes2,
                ph->stokes3, ph->stokes4,
                ph->tau, ph->weight
@@ -2074,7 +2050,184 @@ __device__ void display(const char* desc, Photon* ph) {
 }
 #endif
 
+__device__ void modifyUV( float vx0, float vy0, float vz0, float ux0, float uy0, float uz0,
+        float cTh, float psi, 
+        float *vx1, float *vy1, float *vz1, float *ux1, float *uy1, float *uz1) { 
 
+    float sTh, cPsi, sPsi, wx, wy, wz, vx, vy, vz, ux, uy, uz, norm;
+    sPsi = __sinf(psi);
+    cPsi = __cosf(psi);
+    sTh = sqrtf(1.F - cTh*cTh);
+	// w est le rotationnel entre l'ancien vecteur u et l'ancien vecteur v du photon
+	wx = uy0 * vz0 - uz0 * vy0;
+	wy = uz0 * vx0 - ux0 * vz0;
+	wz = ux0 * vy0 - uy0 * vx0;
+	// v est le nouveau vecteur v du photon
+	vx = cTh * vx0 + sTh * ( cPsi * ux0 + sPsi * wx );
+	vy = cTh * vy0 + sTh * ( cPsi * uy0 + sPsi * wy );
+	vz = cTh * vz0 + sTh * ( cPsi * uz0 + sPsi * wz );
+	// Changement du vecteur u (orthogonal au vecteur vitesse du photon)
+    if (cTh <= -1.F) {
+        ux  = -ux0;
+        uy  = -uy0;
+        uz  = -uz0;
+        }
+    else if (cTh >= 1.F){
+        ux  = ux0;
+        uy  = uy0;
+        uz  = uz0;
+    }
+    else {
+        ux = cTh * vx - vx0;
+        uy = cTh * vy - vy0;
+        uz = cTh * vz - vz0;
+    }
+
+    norm=sqrtf(vx*vx+vy*vy+vz*vz);
+    *vx1 = vx/norm;
+    *vy1 = vy/norm;
+    *vz1 = vz/norm;
+    norm=sqrtf(ux*ux+uy*uy+uz*uz);
+    *ux1 = ux/norm;
+    *uy1 = uy/norm;
+    *uz1 = uz/norm;
+}
+
+__device__ void calculPsiLE( float ux0, float uy0, float uz0,
+			     float vx0, float vy0, float vz0, 
+			     float vx1, float vy1, float vz1, 
+			     float* psi,
+			     float* ux1, float* uy1, float* uz1)
+{
+	float prod_scal;
+	
+	float den;
+	float y1;
+	float cpsi;
+	float spsi;
+
+	float EPS6 = 1e-6;
+	
+	float wx0, wy0, wz0;
+	float wx1, wy1, wz1;
+
+	// compute former w
+	// w est le rotationnel entre l'ancien vecteur u et l'ancien vecteur v du photon
+	wx0 = uy0 * vz0 - uz0 * vy0;
+	wy0 = uz0 * vx0 - ux0 * vz0;
+	wz0 = ux0 * vy0 - uy0 * vx0;
+
+	// compute the normal to the new scattering plan i.e. new w vector
+	wx1 = vy1 * vz0 - vz1 * vy0;
+	wy1 = vz1 * vx0 - vx1 * vz0;
+	wz1 = vx1 * vy0 - vy1 * vx0;
+
+	den = sqrtf( wx1* wx1 +  wy1* wy1 +  wz1* wz1);
+
+	if (den < EPS6) {
+		prod_scal =  vx0*vx1 + vy0*vy1 + vz0*vz1;
+		if (prod_scal < 0.0)
+			{   
+				// diffusion vers l'avant
+				wx1 = wx0;
+				wy1 = wy0;
+				wz1 = wz0;
+			}
+		else
+			{ 
+				// diffusion vers l'arriere
+				wx1 = -wx0;
+				wy1 = -wy0;
+				wz1 = -wz0;
+			}
+	}
+	else
+		{
+			wx1 = __fdividef(wx1,den);
+			wy1 = __fdividef(wy1,den);
+			wz1 = __fdividef(wz1,den);
+		}
+	
+	//  Compute the scalar product between w0 and w1
+	cpsi = wx0 * wx1 + wy0 * wy1 + wz0 * wz1;
+
+	if (cpsi >  1.0) 
+		cpsi =  1.0;
+	if (cpsi < -1.0) 
+		cpsi = -1.0;
+	spsi = sqrtf(1.0 - cpsi * cpsi);
+	if (spsi >  1.0) 
+		spsi =  1.0;
+
+	// Change of reference frame, look for the expression of  {vx1, vy1, vz1}
+	// in the base linked to the photon before the scattering event = old
+	// scattering plan. 
+	// Let say that x1, y1, z1 are the new coordinate of cos_dir_sensor
+	y1 = wx0*vx1 + wy0*vy1 + wz0*vz1;
+	// --- Sign of spsi
+	if (y1 < 0.0) 
+		spsi = -spsi;
+
+	*psi = acosf(cpsi);
+	if (spsi<0)
+		*psi = 2*PI - *psi;
+
+	// get the new u vector
+	*ux1 = vy1 * wz1 - vz1 * wy1 ;
+	*uy1 = vz1 * wx1 - vx1 * wz1 ; 
+	*uz1 = vx1 * wy1 - vy1 * wx1 ;
+	
+}
+
+__device__ float calculTheta(float vx0, float vy0, float vz0, float vx1, float vy1, float vz1){
+
+	// compute the diffusion angle theta between
+	// to direction cosine {vx0, vy0, vz0} and {vx1, vy1, vz1} 
+
+	float cs;
+	float theta;
+	
+	//--- Find cos(theta) and sin(theta)
+	cs =  vx1*vx0 + vy1*vy0 + vz1*vz0  ;//  produit scalaire
+	
+	// test cs to avois acos(cs)=NaN
+	if(cs>+1) cs = 1.00;
+	if(cs<-1) cs = -1.00;
+		
+	//--- compute theta
+	
+	theta = acosf(cs);
+
+	return(theta);		
+}
+
+__device__ void copyPhoton(Photon* ph, Photon* ph_le) {
+    //
+    ph_le->vx = ph->vx;
+    ph_le->vy = ph->vy;
+    ph_le->vz = ph->vz;
+    ph_le->ux = ph->ux;
+    ph_le->uy = ph->uy;
+    ph_le->uz = ph->uz;
+    ph_le->stokes1 = ph->stokes1;
+    ph_le->stokes2 = ph->stokes2;
+    ph_le->stokes3 = ph->stokes3;
+    ph_le->stokes4 = ph->stokes4;
+    ph_le->loc = ph->loc;
+    ph_le->tau = ph->tau;
+    ph_le->couche = ph->couche;
+    ph_le->weight = ph->weight;
+    ph_le->wavel = ph->wavel;
+    ph_le->ilam = ph->ilam;
+    ph_le->prop_aer = ph->prop_aer;
+    ph_le->x = ph->x;
+    ph_le->y = ph->y;
+    ph_le->z = ph->z;
+    #ifdef SPHERIQUE
+    ph_le->rayon = ph->rayon;
+    ph_le->taumax = ph->taumax;
+    #endif
+}
 
 /**********************************************************
 *	> Fonctions liées au générateur aléatoire
@@ -2235,4 +2388,21 @@ extern "C" {
     ) {
         launchKernel(var, *tab,init);
     }
+}
+
+__device__ double DatomicAdd(double* address, double val)
+{
+        unsigned long long int* address_as_ull =
+                             (unsigned long long int*)address;
+        unsigned long long int old = *address_as_ull, assumed;
+        do {
+           assumed = old;
+           old = atomicCAS(address_as_ull, assumed,
+                __double_as_longlong(val +
+                __longlong_as_double(assumed)));
+
+                // Note: uses integer comparison to avoid hang in case of NaN (since NaN != NaN)
+        } while (assumed != old);
+
+        return __longlong_as_double(old);
 }
