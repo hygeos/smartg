@@ -762,7 +762,8 @@ def calculF(phases, N):
         nphases += 1
 
     # Initialize the cumulative distribution function
-    phase_H = np.zeros((nphases, N, 5), dtype=np.float32)
+    #phase_H = np.zeros((nphases, N, 5), dtype=np.float32)
+    phase_H = np.zeros((nphases, N, 10), dtype=np.float32)
 
     for idx, phase in enumerate(phases):
         if idx != imax:
@@ -787,11 +788,17 @@ def calculF(phases, N):
 
         # probability between 0 and 1
         z = (np.arange(N, dtype='float64')+1)/N
-        phase_H[idx, :, 4] = interp1d(scum, phase.ang_in_rad())(z)  # angle
+        phase_H[idx, :, 4] = interp1d(scum, phase.ang_in_rad())(z)# angle
         phase_H[idx, :, 0] = interp1d(scum, phase.phase[:,1])(z)  # I par P11
         phase_H[idx, :, 1] = interp1d(scum, phase.phase[:,0])(z)  # I per P22
         phase_H[idx, :, 2] = interp1d(scum, phase.phase[:,2])(z)  # U P33
-        phase_H[idx, :, 3] = interp1d(scum, phase.phase[:,3])(z)  # V P43                                          
+        phase_H[idx, :, 3] = interp1d(scum, phase.phase[:,3])(z)  # V P43  
+        phase_H[idx, :, 5] = phase.ang.resize(N)                  # angle regular step
+        phase_H[idx, :, 6] = phase.phase[:,1].resize(N)           # I par P11
+        phase_H[idx, :, 7] = phase.phase[:,0].resize(N)           # I per P22
+        phase_H[idx, :, 8] = phase.phase[:,2].resize(N)           # U P33
+        phase_H[idx, :, 9] = phase.phase[:,3].resize(N)           # V P43                                          
+                                        
 
     return phase_H
 

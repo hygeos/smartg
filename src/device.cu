@@ -956,35 +956,37 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
 	if(ph->loc!=OCEAN){
         ilay = ph->couche + ph->ilam*(NATMd+1); // atm layer index
         ipha  = ip[ilay]; // atm phase function index
+        if (le){
+            /* in case of LE the photon units vectors, scattering angle and Psi rotation angle are determined by output zenith and azimuth angles*/
+            float thv, phi;
+            float vx ,vy ,vz;
+            /*int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+            int ipack = idx/(NBTHETAd*NBPHId);
+            int iang  = idx - ipack * (NBTHETAd*NBPHId);
+            int ith = iang/NBTHETAd;
+            int iph = iang - ith*NBTHETAd ;*/
+            phi =  __fdividef(((float)ph->iph) * 2 * PI, NBPHId);
+            thv =  __fdividef(((float)ph->ith) * DEMIPI, NBTHETAd);
+            vx = __cosf(phi) * __sinf(thv);
+            vy = __sinf(phi) * __sinf(thv);
+            vz = __cosf(thv);
+            theta = calculTheta(ph->vx, ph->vy, ph->vz, vx, vy, vz);
+            cTh = __cosf(theta);
+            cTh2 = cTh * cTh;
+            calculPsiLE(ph->ux , ph->uy, ph->uz, ph->vx , ph->vy, ph->vz, vx, vy, vz, &psi, &ph->ux, &ph->uy, &ph->uz); 
+            ph->vx = vx;
+            ph->vy = vy;
+            ph->vz = vz;
+        }
+
 		if( prop_aer<RAND ){
-
-            if (le){
-                float thv, phi;
-                float vx ,vy ,vz;
-                /*int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
-                int ipack = idx/(NBTHETAd*NBPHId);
-                int iang  = idx - ipack * (NBTHETAd*NBPHId);
-                int ith = iang/NBTHETAd;
-                int iph = iang - ith*NBTHETAd ;*/
-                phi =  __fdividef(((float)ph->iph) * 2 * PI, NBPHId);
-                thv =  __fdividef(((float)ph->ith) * DEMIPI, NBTHETAd);
-                //phi =  tabphi[ph->iph];
-                //thv =  tabthv[ph->ith];
-                /* on en deduit les cosinus directeurs du photon virtuel sortant dans la direction ith,iph */
-                vx = __cosf(phi) * __sinf(thv);
-                vy = __sinf(phi) * __sinf(thv);
-                vz = __cosf(thv);
-                theta = calculTheta(ph->vx, ph->vy, ph->vz, vx, vy, vz);
-                cTh = __cosf(theta);
-                cTh2 = cTh * cTh;
-                calculPsiLE(ph->ux , ph->uy, ph->uz, ph->vx , ph->vy, ph->vz, vx, vy, vz, &psi, &ph->ux, &ph->uy, &ph->uz); 
-                ph->vx = vx;
-                ph->vy = vy;
-                ph->vz = vz;
-
-            }
-            else {
-			    // Get Teta (see Wang et al., 2012)
+            /***********************/
+            /* Rayleigh scattering */
+            /***********************/
+            if(!le) {
+                /* in the case of propagation (not LE) the photons scattering angle and Psi rotation angle are determined randomly*/
+			    /////////////
+			    // Get Theta (see Wang et al., 2012)
 			    float b = (RAND - 4.0 * ALPHAd - BETAd) / (2.0 * ALPHAd);
 			    float expo = 1./2.;
 			    float base = ACUBEd + b*b;
@@ -993,22 +995,21 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
 			    base = -b + tmp;
 			    float u = pow(base,expo);
 			    cTh     = u - Ad / u;  						       
-
 			    if (cTh < -1.0) cTh = -1.0;
 			    if (cTh >  1.0) cTh =  1.0;
-			
 			    cTh2 = cTh * cTh;
+			
 			    /////////////
 			    //  Get Phi
-			    // Biased sampling scheme for phi
+			    //  Biased sampling scheme for psi 1)
 			    psi = RAND * DEUXPI;
             }
 
-			// Rotation des paramètres de stokes
+			// Stokes vector rotation
 			rotateStokes(ph->stokes1, ph->stokes2, ph->stokes3,  psi,
 				     &ph->stokes1, &ph->stokes2, &ph->stokes3 );
 
-			// Calcul des parametres de Stokes du photon apres diffusion
+			// Scattering matrix multiplication
 			float cross_term;
 			stokes1 = ph->stokes1;
 			stokes2 = ph->stokes2;
@@ -1017,11 +1018,11 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
 			ph->stokes2 = 3./2. * (  DELTAd  * cTh2 * stokes2 + cross_term );			
 			ph->stokes3 = 3./2. * (  DELTAd  * cTh  * ph->stokes3 );
 			ph->stokes4 = 3./2. * (  DELTAd  * DELTA_SECOd * cTh * ph->stokes4 );
-			// Bias sampling scheme
-			float phase_func;
-			phase_func = 3./4. * DELTAd * (cTh2+1.0) + 3.0 * DELTA_PRIMd;
 
             if (!le){
+			    // Bias sampling scheme 2): Debiasing
+			    float phase_func;
+			    phase_func = 3./4. * DELTAd * (cTh2+1.0) + 3.0 * DELTA_PRIMd;
 			    ph->stokes1 /= phase_func;  
 			    ph->stokes2 /= phase_func;  
 			    ph->stokes3 /= phase_func;     		
@@ -1030,42 +1031,87 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
 
 		}
 		else{
-			// Aérosols
-            float cPsi, sPsi;
-			zang = RAND*(NFAERd-2);
-			iang= __float2int_rd(zang);
-			zang = zang - iang;
-			/* L'accès à faer[x][y] se fait par faer[y*5+x] */
-			theta = faer[ipha*NFAERd*5+iang*5+4]+ zang*( faer[ipha*NFAERd*5+(iang+1)*5+4]-faer[ipha*NFAERd*5+iang*5+4] );
-			//theta = faer[iang*5+4]+ zang*( faer[(iang+1)*5+4]-faer[iang*5+4] );
-			cTh = __cosf(theta);
+            /***********************/
+            /* Aerosols scattering */
+            /***********************/
+            float P11,P22,P33,P43;
+            if(!le) {
+                /* in the case of propagation (not LE) the photons scattering angle and Psi rotation angle are determined randomly*/
+			    /////////////
+                // Get Theta from Cumulative Distribution Function
+                // (column number 4 of faer)
+			    zang = RAND*(NFAERd-2);
+			    iang= __float2int_rd(zang);
+			    zang = zang - iang;
+			    theta = faer[ipha*NFAERd*10+iang*10+4]+ zang*( faer[ipha*NFAERd*10+(iang+1)*10+4]-faer[ipha*NFAERd*10+iang*10+4] );
+			    //theta = faer[ipha*NFAERd*5+iang*5+4]+ zang*( faer[ipha*NFAERd*5+(iang+1)*5+4]-faer[ipha*NFAERd*5+iang*5+4] );
+			    cTh = __cosf(theta);
 
-			//////////////
-			//  Get Phi
+			    /////////////
+			    //  Get Phi
+			    //  Biased sampling scheme for psi 1)
+			    psi = RAND * DEUXPI;	
 
-			// biased sampling scheme for phi
-			psi = RAND * DEUXPI;	//psiPhoton
-			cPsi = __cosf(psi);	//cosPsiPhoton
-			sPsi = __sinf(psi);     //sinPsiPhoton		
-			// Rotation des paramètres de stokes
+                /////////////
+                // Get Scattering matrix from CDF
+                // (column 0 -> 3 of faer)
+                P11 = faer[ipha*NFAERd*10+iang*10+0];
+                P22 = faer[ipha*NFAERd*10+iang*10+1];
+                P33 = faer[ipha*NFAERd*10+iang*10+2];
+                P43 = faer[ipha*NFAERd*10+iang*10+3];
+            }
+
+            else {
+                /////////////
+                // Get Index of scattering angle and Scattering matrix directly 
+                // (column 6 -> 9 of faer)
+                zang = theta * NFAERd/PI ;
+                iang = __float2int_rd(zang);
+			    zang = zang - iang;
+                if (abs(cTh) < 1) {
+                    P11 = faer[ipha*NFAERd*10+iang*10+6] + zang * (faer[ipha*NFAERd*10+(iang+1)*10+6] - faer[ipha*NFAERd*10+iang*10+6]);
+                    P22 = faer[ipha*NFAERd*10+iang*10+7] + zang * (faer[ipha*NFAERd*10+(iang+1)*10+7] - faer[ipha*NFAERd*10+iang*10+7]);
+                    P33 = faer[ipha*NFAERd*10+iang*10+8] + zang * (faer[ipha*NFAERd*10+(iang+1)*10+8] - faer[ipha*NFAERd*10+iang*10+8]);
+                    P43 = faer[ipha*NFAERd*10+iang*10+9] + zang * (faer[ipha*NFAERd*10+(iang+1)*10+9] - faer[ipha*NFAERd*10+iang*10+9]);
+                }
+                else if (cTh >=1) {
+                    P11 = faer[ipha*NFAERd*10+0*10+6];
+                    P22 = faer[ipha*NFAERd*10+0*10+7];
+                    P33 = faer[ipha*NFAERd*10+0*10+8];
+                    P43 = faer[ipha*NFAERd*10+0*10+9];
+                }
+                else {
+                    P11 = faer[ipha*NFAERd*10+(NFAERd-1)*10+6];
+                    P22 = faer[ipha*NFAERd*10+(NFAERd-1)*10+7];
+                    P33 = faer[ipha*NFAERd*10+(NFAERd-1)*10+8];
+                    P43 = faer[ipha*NFAERd*10+(NFAERd-1)*10+9];
+                }
+            }
+
+			// Stokes vector rotation
 			rotateStokes(ph->stokes1, ph->stokes2, ph->stokes3,   psi,
-				     &ph->stokes1, &ph->stokes2, &ph->stokes3);
+			        &ph->stokes1, &ph->stokes2, &ph->stokes3);
 
+			// Scattering matrix multiplication
             stokes3=ph->stokes3;
             stokes4=ph->stokes4;
-			// Calcul des parametres de Stokes du photon apres diffusion
-			ph->stokes1 *= faer[ipha*NFAERd*5+iang*5+0];
-			ph->stokes2 *= faer[ipha*NFAERd*5+iang*5+1];
-			ph->stokes3 = stokes3*faer[ipha*NFAERd*5+iang*5+2] - stokes4*faer[ipha*NFAERd*5+iang*5+3];
-			ph->stokes4 = stokes4*faer[ipha*NFAERd*5+iang*5+2] + stokes3*faer[ipha*NFAERd*5+iang*5+3];
+			ph->stokes1 *= P11;
+			ph->stokes2 *= P22;
+			ph->stokes3 = stokes3 * P33 - stokes4 * P43;
+			ph->stokes4 = stokes4 * P33 + stokes3 * P43;
 
-			float debias;
-			debias = __fdividef( 2., faer[ipha*NFAERd*5+iang*5+0] + faer[ipha*NFAERd*5+iang*5+1] );
-			ph->stokes1 *= debias;  
-			ph->stokes2 *= debias;  
-			ph->stokes3 *= debias;  
-			ph->stokes4 *= debias;  
+            if (!le){
+			    // Bias sampling scheme 2): Debiasing
+			    float debias;
+			    debias = __fdividef( 2., P11 + P22 );
+			    ph->stokes1 *= debias;  
+			    ph->stokes2 *= debias;  
+			    ph->stokes3 *= debias;  
+			    ph->stokes4 *= debias;  
 
+            }
+
+            // Photon weight reduction due to the aerosol single scattering albedo of the current layer
 			ph->weight *= ssa[ilay];
 			
 		}
@@ -1843,6 +1889,7 @@ __device__ void countPhoton(Photon* ph,
     else {
         ith = ph->ith;
         iphi= ph->iph;
+        il = ph->ilam;
         ph->weight *= __expf(__fdividef(-(tab.h[NATMd + ph->ilam *(NATMd+1)]-ph->tau),abs(ph->vz))); // LE attenuation to TOA
     }
 	

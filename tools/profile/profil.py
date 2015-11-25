@@ -1175,13 +1175,14 @@ class Profile(object):
           default value: [100, 0]
         - pfwav: a list of wavelengths over which the phase functions are calculated
           default: None (all wavelengths)
+        - tauR: Rayleigh optical thckness, default None computed from atmospheric profile and wavelength
         - lat: latitude (for Rayleigh optical depth calculation, default=45.)
         - O3: total ozone column (Dobson units), or None to use atmospheric
           profile value (default)
         - NO2: activate ON2 absorption (default True)
     '''
     def __init__(self, atm_filename, aer=None, grid=None, cloud=None,
-                pfgrid=[100., 0.], pfwav=None,
+                pfgrid=[100., 0.], pfwav=None, tauR=None,
                 lat=45., O3=None, NO2=True, verbose=False, overwrite=False):
 
         self.atm_filename = atm_filename
@@ -1267,6 +1268,7 @@ class Profile(object):
         self.lat = lat
         self.O3 = O3
         self.NO2 = NO2
+        self.tauR =tauR
 
         self.aer = aer
         if self.aer is not None:
@@ -1529,6 +1531,11 @@ class Profile(object):
         datao3  = np.zeros(M, np.float)
         datano2  = np.zeros(M, np.float)
         dataray = np.zeros(M, np.float)
+        
+        scaleR = 1.
+        if self.tauR != None :
+            scaleR = self.tauR/rod(wl*1e-3, self.co2[-1]/self.air[-1]*1e6, self.lat, z[-1]*1e3, self.P[-1])
+            
         for m in xrange(M):
 
             #### Chappuis bands
@@ -1547,7 +1554,7 @@ class Profile(object):
                             + np.interp(wl,self.crs_no2[:,0],self.crs_no2[:,3])*(self.T[m]-T0)**2
                 datano2[m] *= self.no2[m] * 1e-15
 
-            dataray[m] = rod(wl*1e-3, self.co2[m]/self.air[m]*1e6, self.lat, z[m]*1e3, self.P[m])
+            dataray[m] = rod(wl*1e-3, self.co2[m]/self.air[m]*1e6, self.lat, z[m]*1e3, self.P[m]) * scaleR
 
         datano2[datano2 < 0] = 0.
 
