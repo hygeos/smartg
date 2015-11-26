@@ -44,6 +44,7 @@ class AeroOPAC(object):
         self.__tau = tau
         self.__wref = wref
         self.overwrite = overwrite
+        self.phases = None
 
         if dirname(filename) == '':
             self.filename = join(dir_libradtran_opac, 'standard_aerosol_files', filename)
@@ -298,24 +299,36 @@ class AeroOPAC(object):
         NTHETA: number of angles
         '''
         M=len(self.z)
-#        Leg=Legendres(self.MMAX,NTHETA)
         N=len(self.theta)
         pha=np.zeros((N, NPSTK-1),np.float64)
-        phases = []
+        if self.phases == None:
+            self.phases = []
+            for m in range(1, M):   # not the top boundary
+                pha[:,0] = self.phase_tot[m,0,:] + self.phase_tot[m,1,:]
+                pha[:,1] = self.phase_tot[m,0,:] - self.phase_tot[m,1,:]
+                pha[:,2] = self.phase_tot[m,2,:]
+                pha[:,3] = self.phase_tot[m,3,:]
+                self.phases.append(PhaseFunction(self.theta, pha, degrees=True))
 
-        for m in range(1, M):   # not the top boundary
-#            theta, pha = Mom2Pha(self.pmom_tot[m,:,:],Leg)
-#            phases.append(PhaseFunction(theta, pha, degrees=True))
-            pha[:,0] = self.phase_tot[m,0,:] + self.phase_tot[m,1,:]
-            pha[:,1] = self.phase_tot[m,0,:] - self.phase_tot[m,1,:]
-            pha[:,2] = self.phase_tot[m,2,:]
-            pha[:,3] = self.phase_tot[m,3,:]
-            phases.append(PhaseFunction(self.theta, pha, degrees=True))
-
-        return phases
+        return self.phases
 
     def __str__(self):
         return 'AER={base}-AOT={aot}'.format(base=self.basename, aot=self.__tau)
+        
+    def setphase(self, filename):
+        '''
+        returns the phase matrix for all layers
+
+        filename where the phase matrix is stored (Smart-g format)
+        '''
+        data = np.loadtxt(filename)
+        M=len(self.z)
+        theta = data[:,0]
+        pha=data[:,1:]
+        self.phases = []
+
+        for m in range(1, M):   # not the top boundary
+            self.phases.append(PhaseFunction(theta, pha, degrees=True))
         
 
 class CloudOPAC(object):
@@ -1176,13 +1189,14 @@ class Profile(object):
         - pfwav: a list of wavelengths over which the phase functions are calculated
           default: None (all wavelengths)
         - tauR: Rayleigh optical thckness, default None computed from atmospheric profile and wavelength
+        - ssa : arbitrarily set the aerosol signle scatering albedo to a constant value
         - lat: latitude (for Rayleigh optical depth calculation, default=45.)
         - O3: total ozone column (Dobson units), or None to use atmospheric
           profile value (default)
         - NO2: activate ON2 absorption (default True)
     '''
     def __init__(self, atm_filename, aer=None, grid=None, cloud=None,
-                pfgrid=[100., 0.], pfwav=None, tauR=None,
+                pfgrid=[100., 0.], pfwav=None, tauR=None, ssa=None,
                 lat=45., O3=None, NO2=True, verbose=False, overwrite=False):
 
         self.atm_filename = atm_filename
@@ -1268,7 +1282,8 @@ class Profile(object):
         self.lat = lat
         self.O3 = O3
         self.NO2 = NO2
-        self.tauR =tauR
+        self.tauR = tauR
+        self.ssa = ssa
 
         self.aer = aer
         if self.aer is not None:
@@ -1602,6 +1617,8 @@ class Profile(object):
                 # xssa=ssaaer[m]
                 if ((taua+tauc) <=0):
                     xssa=1.
+                elif (self.ssa!= None) :
+                    xssa=self.ssa
                 else:
                     xssa=(ssaaer[m]*taua+ssaclo[m]*tauc)/(taua+tauc)
                 profile[m] = (m, z[m], dataray[m], dataaer[m]+dataclo[m], htot , xdel, ydel, xssa, abs, 0)

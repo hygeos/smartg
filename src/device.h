@@ -158,7 +158,7 @@ __device__ void move_pp(Photon*,float*z, float* h, float* pMol , float *abs , fl
 * Diffusion du photon par une molécule ou un aérosol
 * Modification des paramètres de stokes et des vecteurs U et V du photon (polarisation, vitesse)
 */
-__device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , float* sso, int* ip, int* ipo, int le, float* thv, float* phi
+__device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , float* sso, int* ip, int* ipo, int le, float* thv, float* phi, int count_level
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif
@@ -229,17 +229,17 @@ __device__ void rotateStokes(float s1, float s2, float s3, float psi,
         float *s1r, float *s2r, float *s3r);
 
 
-/* calculPsi
+/* ComputePsi
 * Calcul du psi pour la direction de sortie du photon
 */
-__device__ void calculPsi(Photon*, float*, float);
+__device__ void ComputePsi(Photon*, float*, float);
 
 
-/* calculCase
+/* ComputeBox
 * Fonction qui calcule la position (ith, iphi) du photon dans le tableau de sortie
 * La position correspond à une boite contenu dans l'espace de sortie
 */
-__device__ void calculCase(int*, int*, int*, Photon*
+__device__ void ComputeBox(int*, int*, int*, Photon*
 				#ifdef PROGRESSION
 				, Variables* var
 				#endif 
@@ -255,9 +255,9 @@ __device__ void modifyUV( float vx0, float vy0, float vz0, float ux0, float uy0,
         float cTh, float psi, 
         float *vx1, float *vy1, float *vz1, float *ux1, float *uy1, float *uz1) ;
 
-__device__ float calculTheta(float vx0, float vy0, float vz0, float vx1, float vy1, float vz1);
+__device__ float ComputeTheta(float vx0, float vy0, float vz0, float vx1, float vy1, float vz1);
 
-__device__ void calculPsiLE(float ux0, float uy0, float uz0,
+__device__ void ComputePsiLE(float ux0, float uy0, float uz0,
 			    float vx0, float vy0, float vz0,
 			    float vx1, float vy1, float vz1,
 			    float* psi,

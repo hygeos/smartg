@@ -270,6 +270,7 @@ def smartg(wl, pp=True,
                 NOTE: compilation flag, not available if the kernel is provided as a binary 
 
             - double : accumulate photons table in double precision, default single
+                NOTE: compilation flag, not available if the kernel is provided as a binary 
 
             - le: Local Estimate method activation (by providing two arrays of zenit and azimuth angles for output), default cone sampling
 
@@ -750,7 +751,7 @@ def calculF(phases, N):
     --------------------------------------------------
     Returns :
         - phases_list : list of phase function set contiguously
-        - phase_H : cumulative distribution of the phase functions
+        - phase_H : cumulative distribution of the phase function and phase function
     """
     nmax, nphases, imax=0, 0, 0
     phases_list = []
@@ -788,17 +789,22 @@ def calculF(phases, N):
 
         # probability between 0 and 1
         z = (np.arange(N, dtype='float64')+1)/N
-        phase_H[idx, :, 4] = interp1d(scum, phase.ang_in_rad())(z)# angle
+        angN = (np.arange(N, dtype='float64'))/(N-1)*np.pi
+        f1 = interp1d(phase.ang_in_rad(), phase.phase[:,1])
+        f2 = interp1d(phase.ang_in_rad(), phase.phase[:,0])
+        f3 = interp1d(phase.ang_in_rad(), phase.phase[:,2])
+        f4 = interp1d(phase.ang_in_rad(), phase.phase[:,3])
+        
         phase_H[idx, :, 0] = interp1d(scum, phase.phase[:,1])(z)  # I par P11
         phase_H[idx, :, 1] = interp1d(scum, phase.phase[:,0])(z)  # I per P22
         phase_H[idx, :, 2] = interp1d(scum, phase.phase[:,2])(z)  # U P33
-        phase_H[idx, :, 3] = interp1d(scum, phase.phase[:,3])(z)  # V P43  
-        phase_H[idx, :, 5] = phase.ang.resize(N)                  # angle regular step
-        phase_H[idx, :, 6] = phase.phase[:,1].resize(N)           # I par P11
-        phase_H[idx, :, 7] = phase.phase[:,0].resize(N)           # I per P22
-        phase_H[idx, :, 8] = phase.phase[:,2].resize(N)           # U P33
-        phase_H[idx, :, 9] = phase.phase[:,3].resize(N)           # V P43                                          
-                                        
+        phase_H[idx, :, 3] = interp1d(scum, phase.phase[:,3])(z)  # V P43    
+        phase_H[idx, :, 4] = interp1d(scum, phase.ang_in_rad())(z)# angle
+        phase_H[idx, :, 5] = angN    # angle regular step
+        phase_H[idx, :, 6] = f1(angN)# I par P11
+        phase_H[idx, :, 7] = f2(angN)# I per P22
+        phase_H[idx, :, 8] = f3(angN)# U P33
+        phase_H[idx, :, 9] = f4(angN)# V P43
 
     return phase_H
 

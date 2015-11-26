@@ -236,31 +236,47 @@ __device__ void launchKernel(Variables* var, Tableaux tab
         // -> dans ATMOS ou OCEAN
 		if( (ph.loc == ATMOS) || (ph.loc == OCEAN)){
 
-            /* Local Estimate */
+            /* Scattering Local Estimate */
             if (LEd == 1) {
-			 for (int iph=0; iph<NBPHId; iph++){
-			  for (int ith=0; ith<NBTHETAd; ith++){
-                copyPhoton(&ph, &ph_le);
-                ph_le.iph = iph;
-                ph_le.ith = ith;
-                scatter(&ph_le, tab.faer, tab.ssa , tab.foce , tab.sso, tab.ip, tab.ipo, 1, tab.thv, tab.phi, &etatThr
-			    #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
-			    , &configThr
-			    #endif
-				);
-                #ifdef DEBUG_PHOTON
-                display("SCATTER LE", &ph_le);
-                #endif
-                countPhoton(&ph_le, tab, UPTOA
-                #ifdef PROGRESSION
-                , var
-                #endif
-                );
+              int NK, up_level, down_level;
+              if (ph.loc == ATMOS) {
+                  NK=2;
+                  up_level = UPTOA;
+                  down_level = DOWN0P;
               }
-             }
+              if (ph.loc == OCEAN) {
+                  NK=1;
+                  up_level = UP0M;
+              }
+              for(int k=0; k<NK; k++){
+                if (k==0) count_level = up_level;
+                else count_level = down_level;
+
+			    for (int iph=0; iph<NBPHId; iph++){
+			      for (int ith=0; ith<NBTHETAd; ith++){
+                    copyPhoton(&ph, &ph_le);
+                    ph_le.iph = iph;
+                    ph_le.ith = ith;
+                    scatter(&ph_le, tab.faer, tab.ssa , tab.foce , tab.sso, tab.ip, tab.ipo, 1, tab.thv, tab.phi, count_level, &etatThr
+			        #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
+			        , &configThr
+			        #endif
+				    );
+                    #ifdef DEBUG_PHOTON
+                    display("SCATTER LE", &ph_le);
+                    #endif
+                    countPhoton(&ph_le, tab, count_level
+                    #ifdef PROGRESSION
+                    , var
+                    #endif
+                    );
+                  }
+                }
+              }
             }
 
-			scatter(&ph, tab.faer, tab.ssa , tab.foce , tab.sso, tab.ip, tab.ipo, 0, tab.thv, tab.phi, &etatThr 
+            /* Scattering Propagation */
+			scatter(&ph, tab.faer, tab.ssa , tab.foce , tab.sso, tab.ip, tab.ipo, 0, tab.thv, tab.phi, 0, &etatThr 
 			#if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
 			, &configThr
 			#endif
@@ -930,7 +946,7 @@ __device__ void move_pp(Photon* ph,float*z, float* h, float* pMol , float *abs ,
 }
 
 
-__device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , float* sso, int* ip, int* ipo, int le, float* tabthv, float* tabphi
+__device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , float* sso, int* ip, int* ipo, int le, float* tabthv, float* tabphi, int count_level
 			#ifdef RANDMWC
 			, unsigned long long* etatThr, unsigned int* configThr
 			#endif
@@ -949,35 +965,37 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
 	float zang=0.f, theta=0.f;
 	int iang, ilay, ipha;
 	float stokes1, stokes2, stokes3, stokes4;
-	float cTh2, psi;
+	float cTh2, psi, sign;
 	float prop_aer = ph->prop_aer;
 	
+    if (le){
+        /* in case of LE the photon units vectors, scattering angle and Psi rotation angle are determined by output zenith and azimuth angles*/
+        float thv, phi;
+        float vx ,vy ,vz;
+        if (count_level==DOWN0P) sign = -1;
+        else sign = 1;
+        phi =  __fdividef(((float)ph->iph) * 2 * PI, NBPHId);
+        thv =  sign * __fdividef(((float)ph->ith) * DEMIPI, NBTHETAd);
+        //phi = tabphi[ph->iph];
+        //thv = sign * tabthv[ph->ith];
+        vx = __cosf(phi) * __sinf(thv);
+        vy = __sinf(phi) * __sinf(thv);
+        vz = __cosf(thv);
+        theta = ComputeTheta(ph->vx, ph->vy, ph->vz, vx, vy, vz);
+        cTh = __cosf(theta);
+		if (cTh < -1.0) cTh = -1.0;
+		if (cTh >  1.0) cTh =  1.0;
+        cTh2 = cTh * cTh;
+        ComputePsiLE(ph->ux , ph->uy, ph->uz, ph->vx , ph->vy, ph->vz, vx, vy, vz, &psi, &ph->ux, &ph->uy, &ph->uz); 
+        ph->vx = vx;
+        ph->vy = vy;
+        ph->vz = vz;
+    }
+
     /* Scattering in atmosphere */
 	if(ph->loc!=OCEAN){
         ilay = ph->couche + ph->ilam*(NATMd+1); // atm layer index
         ipha  = ip[ilay]; // atm phase function index
-        if (le){
-            /* in case of LE the photon units vectors, scattering angle and Psi rotation angle are determined by output zenith and azimuth angles*/
-            float thv, phi;
-            float vx ,vy ,vz;
-            /*int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
-            int ipack = idx/(NBTHETAd*NBPHId);
-            int iang  = idx - ipack * (NBTHETAd*NBPHId);
-            int ith = iang/NBTHETAd;
-            int iph = iang - ith*NBTHETAd ;*/
-            phi =  __fdividef(((float)ph->iph) * 2 * PI, NBPHId);
-            thv =  __fdividef(((float)ph->ith) * DEMIPI, NBTHETAd);
-            vx = __cosf(phi) * __sinf(thv);
-            vy = __sinf(phi) * __sinf(thv);
-            vz = __cosf(thv);
-            theta = calculTheta(ph->vx, ph->vy, ph->vz, vx, vy, vz);
-            cTh = __cosf(theta);
-            cTh2 = cTh * cTh;
-            calculPsiLE(ph->ux , ph->uy, ph->uz, ph->vx , ph->vy, ph->vz, vx, vy, vz, &psi, &ph->ux, &ph->uy, &ph->uz); 
-            ph->vx = vx;
-            ph->vy = vy;
-            ph->vz = vz;
-        }
 
 		if( prop_aer<RAND ){
             /***********************/
@@ -1065,7 +1083,8 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
                 /////////////
                 // Get Index of scattering angle and Scattering matrix directly 
                 // (column 6 -> 9 of faer)
-                zang = theta * NFAERd/PI ;
+                zang = theta * (NFAERd-1)/PI ;
+                //zang = theta * NFAERd/PI ;
                 iang = __float2int_rd(zang);
 			    zang = zang - iang;
                 if (abs(cTh) < 1) {
@@ -1873,7 +1892,7 @@ __device__ void countPhoton(Photon* ph,
 	float psi;
 	int ith=0, iphi=0, il=0;
 	// Initialisation de psi
-	calculPsi(ph, &psi, theta);
+	ComputePsi(ph, &psi, theta);
 	
 	// Rotation of stokes parameters
     float s1, s2, s3, s4;
@@ -1881,16 +1900,19 @@ __device__ void countPhoton(Photon* ph,
             &s1, &s2, &s3);
     s4 = ph->stokes4;
 	// Calcul de la case dans laquelle le photon sort
-	if (LEd == 0) calculCase(&ith, &iphi, &il, ph 
+	if (LEd == 0) ComputeBox(&ith, &iphi, &il, ph 
 			   #ifdef PROGRESSION
 			   , var
 			   #endif
 			   );
     else {
+        float tle;
+        if (count_level==UPTOA) tle = tab.h[NATMd + ph->ilam *(NATMd+1)];
+        if ((count_level==DOWN0P) || (count_level==UP0M) ) tle = 0.F;
         ith = ph->ith;
         iphi= ph->iph;
         il = ph->ilam;
-        ph->weight *= __expf(__fdividef(-(tab.h[NATMd + ph->ilam *(NATMd+1)]-ph->tau),abs(ph->vz))); // LE attenuation to TOA
+        ph->weight *= __expf(__fdividef(- abs(tle - ph->tau),abs(ph->vz))); // LE attenuation to count_level
     }
 	
   	/*if( ph->vy<0.f )
@@ -1971,10 +1993,10 @@ __device__ void rotateStokes(float s1, float s2, float s3, float psi,
 
 
 
-/* calculPsi
+/* ComputePsi
 * Calcul du psi pour la direction de sortie du photon
 */
-__device__ void calculPsi(Photon* photon, float* psi, float theta)
+__device__ void ComputePsi(Photon* photon, float* psi, float theta)
 {
 	float sign;
 // 	if (theta >= 0.05F)
@@ -1991,11 +2013,11 @@ __device__ void calculPsi(Photon* photon, float* psi, float theta)
 }
 
 
-/* calculCase
+/* ComputeBox
 * Fonction qui calcule la position (ith, iphi) et l'indice spectral (il) du photon dans le tableau de sortie
 * La position correspond à une boite contenu dans l'espace de sortie
 */
-__device__ void calculCase(int* ith, int* iphi, int* il, Photon* photon
+__device__ void ComputeBox(int* ith, int* iphi, int* il, Photon* photon
 			#ifdef PROGRESSION
 			, Variables* var
 			#endif 
@@ -2140,7 +2162,7 @@ __device__ void modifyUV( float vx0, float vy0, float vz0, float ux0, float uy0,
     *uz1 = uz/norm;
 }
 
-__device__ void calculPsiLE( float ux0, float uy0, float uz0,
+__device__ void ComputePsiLE( float ux0, float uy0, float uz0,
 			     float vx0, float vy0, float vz0, 
 			     float vx1, float vy1, float vz1, 
 			     float* psi,
@@ -2226,7 +2248,7 @@ __device__ void calculPsiLE( float ux0, float uy0, float uz0,
 	
 }
 
-__device__ float calculTheta(float vx0, float vy0, float vz0, float vx1, float vy1, float vz1){
+__device__ float ComputeTheta(float vx0, float vy0, float vz0, float vx1, float vy1, float vz1){
 
 	// compute the diffusion angle theta between
 	// to direction cosine {vx0, vy0, vz0} and {vx1, vy1, vz1} 
