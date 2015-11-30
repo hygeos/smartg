@@ -11,11 +11,12 @@ Provides:
     - read_lut_hdf: read LUTs from HDF files
 '''
 
+from __future__ import print_function
 import numpy as np
 from scipy.interpolate import interp1d
 from os.path import exists
 from os import remove
-from collections import OrderedDict, Iterable
+from collections import OrderedDict
 import warnings
 
 
@@ -164,11 +165,11 @@ class LUT(object):
             return self.axes[index]
 
     def print_info(self, show_attrs=False):
-        print 'LUT {}({} between {:.3g} and {:.3g}):'.format(
+        print('LUT {}({} between {:.3g} and {:.3g}):'.format(
                 {True: '', False: '"{}" '.format(self.desc)}[self.desc is None],
                 self.data.dtype,
                 np.amin(self.data), np.amax(self.data)
-                )
+                ))
 
         for i in xrange(self.data.ndim):
             if self.names[i] is None:
@@ -176,17 +177,17 @@ class LUT(object):
             else:
                 name = self.names[i]
             if self.axes[i] is None:
-                print '  Dim {} ({}): {} values, no axis attached'.format(i, name, self.data.shape[i])
+                print('  Dim {} ({}): {} values, no axis attached'.format(i, name, self.data.shape[i]))
             else:
-                print '  Dim {} ({}): {} values betweeen {} and {}'.format(
+                print('  Dim {} ({}): {} values betweeen {} and {}'.format(
                         i, name,
                         len(self.axes[i]),
                         self.axes[i][0],
-                        self.axes[i][-1])
+                        self.axes[i][-1]))
         if show_attrs:
-            print ' Attributes:'
+            print(' Attributes:')
             for k, v in self.attrs.items():
-                print ' ', k, ':', v
+                print(' ', k, ':', v)
 
     def __getitem__(self, keys):
         '''
@@ -1056,14 +1057,14 @@ class MLUT(object):
                 raise ex
 
         if verbose:
-            print 'Writing "{}" to "{}"'.format(self.desc, filename)
+            print('Writing "{}" to "{}"'.format(self.desc, filename))
         hdf = SD(filename, SDC.WRITE | SDC.CREATE)
 
         # write axes
         if self.axes is not None:
             for name, ax in self.axes.items():
                 if verbose:
-                    print '   Write axis "{}" in "{}"'.format(name, filename)
+                    print('   Write axis "{}" in "{}"'.format(name, filename))
                 type = typeconv[ax.dtype]
                 sds = hdf.create(name, type, ax.shape)
                 if compress:
@@ -1074,7 +1075,7 @@ class MLUT(object):
         # write datasets
         for name, data, axnames, attrs in self.data:
             if verbose:
-                print '   Write data "{}"'.format(name)
+                print('   Write data "{}"'.format(name))
             type = typeconv[data.dtype]
             sds = hdf.create(name, type, data.shape)
             if compress:
@@ -1090,7 +1091,7 @@ class MLUT(object):
 
         # write attributes
         if verbose:
-            print '   Write {} attributes'.format(len(self.attrs))
+            print('   Write {} attributes'.format(len(self.attrs)))
         for k, v in self.attrs.items():
             setattr(hdf, k, v)
 
@@ -1111,8 +1112,8 @@ class MLUT(object):
 
     def print_info(self, show_range=True, show_self=True, show_attrs=False, show_shape=False, show_axes=True):
         if show_self:
-            print str(self)
-        print ' Datasets:'
+            print(str(self))
+        print(' Datasets:')
         for i, (name, dataset, axes, attrs) in enumerate(self.data):
             axdesc = ''
             if (axes is not None) and show_axes:
@@ -1123,18 +1124,18 @@ class MLUT(object):
                 rng = ' between {:.3g} and {:.3g}'.format(np.amin(dataset), np.amax(dataset))
             else:
                 rng = ''
-            print '  [{}] {} ({}{})'.format(i, name, dataset.dtype, rng, dataset.shape) + axdesc
+            print('  [{}] {} ({}{})'.format(i, name, dataset.dtype, rng, dataset.shape) + axdesc)
             if show_attrs and (len(attrs) != 0):
-                print '    Attributes:'
+                print('    Attributes:')
                 for k, v in attrs.items():
-                    print '      {}: {}'.format(k, v)
-        print ' Axes:'
+                    print('      {}: {}'.format(k, v))
+        print(' Axes:')
         for i, (name, values) in enumerate(self.axes.items()):
-            print '  [{}] {}: {} values between {} and {}'.format(i, name, len(values), values[0], values[-1])
+            print('  [{}] {}: {} values between {} and {}'.format(i, name, len(values), values[0], values[-1]))
         if show_attrs:
-            print ' Attributes:'
+            print(' Attributes:')
             for k, v in self.attrs.items():
-                print ' ', k, ':', v
+                print(' ', k, ':', v)
 
     def promote_attr(self, name):
         '''
@@ -1193,7 +1194,7 @@ class MLUT(object):
         msg = 'MLUTs diff:'
         if not isinstance(other, MLUT):
             msg += '  other is not a MLUT ({})'.format(str(other))
-            print msg
+            print(msg)
             return False
 
         eq = True
@@ -1239,7 +1240,7 @@ class MLUT(object):
                     continue
 
         if show_diff and not eq:
-            print msg
+            print(msg)
 
         return eq
 
@@ -1359,10 +1360,10 @@ def read_lut_hdf(filename, dataset, axnames=None):
             dimensions = sds.attributes()['dimensions'].split(',')
             dimensions = map(lambda x: x.strip(), dimensions)
     else:
-        print 'dataset "{}" not available.'.format(dataset)
-        print '{} contains the following datasets:'.format(filename)
+        print('dataset "{}" not available.'.format(dataset))
+        print('{} contains the following datasets:'.format(filename))
         for d in hdf.datasets():
-            print '  *', d
+            print('  *', d)
         raise Exception('Missing dataset')
 
     if axnames == None:
