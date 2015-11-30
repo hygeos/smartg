@@ -109,7 +109,7 @@ class LUT(object):
         self.data = data
         self.desc = desc
         if attrs is None:
-            self.attrs = {}
+            self.attrs = OrderedDict()
         else:
             self.attrs = attrs
         self.ndim = self.data.ndim
@@ -320,8 +320,11 @@ class LUT(object):
                 return False
         if not self.data.shape == other.data.shape:
             return False
-        if not np.allclose(self.data, other.data):
-            return False
+        if strict:
+            if not np.allclose(self.data, other.data):
+                return False
+            if self.attrs != other.attrs:
+                return False
 
         return True
 
@@ -997,12 +1000,13 @@ class MLUT(object):
 
         self.axes[name] = ax
 
-    def add_dataset(self, name, dataset, axnames=None):
+    def add_dataset(self, name, dataset, axnames=None, attrs={}):
         '''
-        Add a dataset to the LUT
+        Add a dataset to the MLUT
         name (str): name of the dataset
         dataset (np.array)
         axnames: list of (strings or None), or None
+        attrs: dataset attributes
         '''
         assert name not in map(lambda x: x[0], self.data)
         if axnames is not None:
@@ -1015,7 +1019,7 @@ class MLUT(object):
         else:
             axnames = [None]*dataset.ndim
 
-        self.data.append((name, dataset, axnames))
+        self.data.append((name, dataset, axnames, attrs))
 
     def save(self, filename, fmt='netcdf4', overwrite=False,
              verbose=False, compress=True):
@@ -1068,7 +1072,7 @@ class MLUT(object):
                 sds.endaccess()
 
         # write datasets
-        for name, data, axnames in self.data:
+        for name, data, axnames, attrs in self.data:
             if verbose:
                 print '   Write data "{}"'.format(name)
             type = typeconv[data.dtype]
@@ -1078,6 +1082,10 @@ class MLUT(object):
             sds[:] = data[:]
             if axnames is not None:
                 setattr(sds, 'dimensions', ','.join(map(str, axnames)))
+            if 'dimensions' in attrs:
+                raise Exception('Error writing {}, "dimensions" attribute conflict'.format(filename))
+            for k, v in attrs.items():
+                setattr(sds, k, v)
             sds.endaccess()
 
         # write attributes
@@ -1105,7 +1113,7 @@ class MLUT(object):
         if show_self:
             print str(self)
         print ' Datasets:'
-        for i, (name, dataset, axes) in enumerate(self.data):
+        for i, (name, dataset, axes, attrs) in enumerate(self.data):
             axdesc = ''
             if (axes is not None) and show_axes:
                 axdesc += ', axes='+ str(tuple(axes))
@@ -1116,6 +1124,10 @@ class MLUT(object):
             else:
                 rng = ''
             print '  [{}] {} ({}{})'.format(i, name, dataset.dtype, rng, dataset.shape) + axdesc
+            if show_attrs and (len(attrs) != 0):
+                print '    Attributes:'
+                for k, v in attrs.items():
+                    print '      {}: {}'.format(k, v)
         print ' Axes:'
         for i, (name, values) in enumerate(self.axes.items()):
             print '  [{}] {}: {} values between {} and {}'.format(i, name, len(values), values[0], values[-1])
@@ -1140,7 +1152,7 @@ class MLUT(object):
         '''
         if isinstance(key, str):
             index = -1
-            for i, (name, _, _) in enumerate(self.data):
+            for i, (name, _, _, _) in enumerate(self.data):
                 if key == name:
                     index = i
                     break
@@ -1151,7 +1163,7 @@ class MLUT(object):
         else:
             raise Exception('multi-dimensional LUTs should only be indexed with strings or integers')
 
-        name, dataset, axnames = self.data[index]
+        name, dataset, axnames, attrs = self.data[index]
         if axnames is None:
             axes = None
         else:
@@ -1164,7 +1176,7 @@ class MLUT(object):
                     axes.append(self.axes[ax])
                 names.append(ax)
 
-        return LUT(desc=name, data=dataset, axes=axes, names=names, attrs=self.attrs)
+        return LUT(desc=name, data=dataset, axes=axes, names=names, attrs=attrs)
 
     def equal(self, other, strict=True, show_diff=False):
         '''
@@ -1199,13 +1211,20 @@ class MLUT(object):
                 eq = False
 
         # check datasets
-        for i, (name0, data0, axnames0) in enumerate(self.data):
-            name1, data1, axnames1 = other.data[i]
+        for i, (name0, data0, axnames0, attrs0) in enumerate(self.data):
+            name1, data1, axnames1, attrs1 = other.data[i]
             if ((name0 != name1)
                     or (strict and not np.allclose(data0, data1))
                     or (axnames0 != axnames1)):
                 msg += '  dataset {} is different\n'.format(name0)
                 eq = False
+            if (attrs0 != attrs1):
+                msg += '  attributes of dataset "{}" are different: {} != {}\n'.format(name0,
+                        str(attrs0),
+                        str(attrs1),
+                        )
+                eq = False
+
 
         # check attributes
         if strict:
@@ -1285,7 +1304,7 @@ def read_mlut_hdf(filename, datasets=None):
         if axes is not None:
             ls_axes.extend(axes)
 
-        ls_datasets.append((sdsname, sds.get(), axes))
+        ls_datasets.append((sdsname, sds.get(), axes, sds.attributes()))
 
     # remove 'None' axes
     while None in ls_axes:
@@ -1295,20 +1314,21 @@ def read_mlut_hdf(filename, datasets=None):
     m = MLUT()
     for ax in set(ls_axes):
 
-        # read the axis of not done already
+        # read the axis if not done already
         if ax not in map(lambda x: x[0], ls_datasets):
             sds = hdf.select(ax)
             m.add_axis(ax, sds.get())
         else:
             i = map(lambda x: x[0], ls_datasets).index(ax)
-            (name, data, axnames) = ls_datasets.pop(i)
+            (name, data, _, _) = ls_datasets.pop(i)
             m.add_axis(name, data)
 
     # add the datasets
-    for (name, data, axnames) in ls_datasets:
-        m.add_dataset(name, data, axnames)
+    for (name, data, axnames, attrs) in ls_datasets:
+        attrs.pop('dimensions')
+        m.add_dataset(name, data, axnames, attrs)
 
-    # read the attributes
+    # read the global attributes
     for k, v in hdf.attributes().items():
         m.set_attr(k, v)
 

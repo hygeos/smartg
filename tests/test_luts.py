@@ -13,7 +13,7 @@ def create_mlut():
     m.add_axis('a', np.linspace(100, 150, 5))
     m.add_axis('b', np.linspace(5, 8, 6))
     m.add_axis('c', np.linspace(0, 1, 7))
-    m.add_dataset('data1', np.arange(5*6, dtype='float').reshape(5,6), ['a', 'b'])
+    m.add_dataset('data1', np.arange(5*6, dtype='float').reshape(5,6), ['a', 'b'], attrs={'a1': 12})
     m.add_dataset('data2', np.random.randn(5, 6, 7), ['a', 'b', 'c'])
     m.add_dataset('data3', np.random.randn(10, 12))
     m.set_attr('x', 12)   # set MLUT attributes
@@ -25,14 +25,14 @@ def create_lut():
     z = np.linspace(0, 120., 80)
     P0 = np.linspace(980, 1030, 6)
     Pdata = P0.reshape(1,-1)*np.exp(-z.reshape(-1,1)/8) # dimensions (z, P0)
-    return LUT(Pdata, axes=[z, P0], names=['z', 'P0'], desc='Pdata')
+    return LUT(Pdata, axes=[z, P0], names=['z', 'P0'], desc='Pdata', attrs={'unit': 'HPa'})
 
 def test_scalar():
     '''
     Add a scalar dataset (0 dimensions) and make some operations with it
     '''
     m = create_mlut()
-    m.add_dataset('scalar', np.array(1.))
+    m.add_dataset('scalar', np.array(1.), attrs={'desc': 'scalar value'})
     m['scalar'].print_info()
     (m['scalar']+m['scalar']).apply(np.sqrt).print_info()
 
@@ -55,11 +55,11 @@ def test_lut_oper1():
         m1 = create_mlut()
         m1['data1'].data[:] = 2
 
-        # check that same result is obtained through MLUT and LUT operation
+        # check that same result is obtained through LUT and array operations
         for i in ['data1', 'data2', 'data3']:
             res = fn(m0[i], m1[i])
             assert np.allclose(res.data, fn(m0[i].data, m1[i].data))
-            assert res.attrs['x'] == 12
+            assert 'x' not in res.attrs
 
             if i == 'data1':
                 assert res[1,1] == result
@@ -188,6 +188,16 @@ def test_equality():
     assert m0 == m1
     assert m0 != 2
 
+def test_equality2():
+    l0 = create_lut()
+    l1 = create_lut()
+
+    assert l0 == l1
+    assert l0 != 2
+
+    l1.attrs['another'] = 'attribute'
+    assert l0 != l1
+
 def test_modify_axis():
     l = create_lut()
     l.axis('z')[2] = 0
@@ -231,7 +241,7 @@ def test_convert():
     m.set_attr('x', 12)   # set MLUT attributes
     m.set_attrs({'y':15, 'z':8})
 
-    assert m == m[0].to_mlut()
+    assert m.equal(m[0].to_mlut(), strict=False) # not strict equality because of attributes
 
 def test_oper_lut1():
     l = create_lut()
