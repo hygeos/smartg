@@ -27,36 +27,42 @@ def create_lut():
     Pdata = P0.reshape(1,-1)*np.exp(-z.reshape(-1,1)/8) # dimensions (z, P0)
     return LUT(Pdata, axes=[z, P0], names=['z', 'P0'], desc='Pdata')
 
+def test_scalar():
+    '''
+    Add a scalar dataset (0 dimensions) and make some operations with it
+    '''
+    m = create_mlut()
+    m.add_dataset('scalar', np.array(1.))
+    m['scalar'].print_info()
+    (m['scalar']+m['scalar']).apply(np.sqrt).print_info()
+
 @raises(Exception)
-def test_getlut1():
+def test_mlut_index1():
     m = create_mlut()
     m['data4']
 
-def test_getlut2():
+def test_mlut_index2():
     m = create_mlut()
     m['data1']
 
-def test_operations1():
-    def check_operations1(fn, result):
+def test_lut_oper1():
+    '''
+    test operations on LUTs
+    '''
+    def check(fn, result):
         m0 = create_mlut()
         m0.set_attr('z', 5)
         m1 = create_mlut()
         m1['data1'].data[:] = 2
 
-        m = fn(m0, m1)
-        assert m.attrs['x'] == 12
-        assert not 'z' in m.attrs
-        assert 'a' in m.axes
-        assert 'b' in m.axes
-        assert 'c' in m.axes
-        assert 'data1' in m.datasets()
-        assert 'data2' in m.datasets()
-        assert 'data3' in m.datasets()
-
-        assert m['data1'][1,1] == result
-
         # check that same result is obtained through MLUT and LUT operation
-        assert np.allclose(fn(m0, m1)['data2'][:,:,:], fn(m0['data2'], m1['data2'])[:,:,:])
+        for i in ['data1', 'data2', 'data3']:
+            res = fn(m0[i], m1[i])
+            assert np.allclose(res.data, fn(m0[i].data, m1[i].data))
+            assert res.attrs['x'] == 12
+
+            if i == 'data1':
+                assert res[1,1] == result
 
     for (op, res) in [
             (lambda x, y: x+y, 9.),
@@ -65,23 +71,25 @@ def test_operations1():
             (lambda x, y: x*y, 14.),
             (lambda x, y: x/y, 3.5),
             ]:
-        yield check_operations1, op, res
+        yield check, op, res
 
 
-@raises(AssertionError)
-def test_operations2():
-    # Operations should not be allowed between inconsistent MLUTS
-    m0 = create_mlut()
-    m0.add_dataset('data4', np.random.randn(10, 12))
-    m1 = create_mlut()
-    m0 + m1
+@raises(ValueError)
+def test_lut_oper2():
+    '''
+    LUT operation between LUTs with incompatible shapes
+    '''
+    L0 = LUT(np.arange(5))
+    L1 = LUT(np.arange(10))
+    L0 + L1
 
-def test_operations3():
+
+def test_lut_oper3():
+    '''
+    Scalar operations between LUTs
+    '''
     def check_operations3(fn, result):
         m0 = create_mlut()
-
-        # operate on the MLUT
-        assert fn(m0)['data1'][1,1] == res
 
         # operate on the LUT
         assert fn(m0['data1'])[1,1] == res
@@ -102,7 +110,7 @@ def test_operations3():
         yield check_operations3, op, res
 
 # "broadcasting" operations between LUTs
-def test_broadcasting():
+def test_broadcasting1():
     l = create_lut()
     l.names[0] = 'zz'
     p = create_lut()
@@ -172,20 +180,6 @@ def test_merge():
     assert len(m.datasets()) == 3
     assert m[0].shape == (5, 3, 5, 6)
     assert 'x' in m.attrs
-
-
-def test_merge2():
-    # test equality between merging luts and mluts
-    mluts = []
-    for p1 in np.arange(5):
-        for p2 in np.arange(3):
-            m = create_mlut()
-            m.set_attr('p1', p1)
-            m.set_attr('p2', p2)
-            mluts.append(m)
-    m = merge(mluts, ['p1', 'p2'])
-
-    assert m[0] == merge(map(lambda x: x[0], mluts), ['p1', 'p2'])
 
 def test_equality():
     m0 = create_mlut()
@@ -266,7 +260,7 @@ def test_write_read_mlut():
     tmpdir = tempfile.mkdtemp()
     filename = os.path.join(tmpdir, 'mlut.hdf')
     try:
-        m0.save(filename)
+        m0.save_hdf(filename)
         m1 = read_mlut_hdf(filename)
     except:
         raise
@@ -286,7 +280,7 @@ def test_write_read_mlut2():
         tmpdir = tempfile.mkdtemp()
         filename = os.path.join(tmpdir, 'mlut.hdf')
         try:
-            m0.save(filename)
+            m0.save_hdf(filename)
             m1 = read_mlut_hdf(filename, datasets=[d])
         except:
             raise

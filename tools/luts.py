@@ -12,11 +12,11 @@ Provides:
 '''
 
 import numpy as np
-from pyhdf.SD import SD, SDC
 from scipy.interpolate import interp1d
 from os.path import exists
 from os import remove
 from collections import OrderedDict, Iterable
+import warnings
 
 
 def interleave_seq(p, q):
@@ -48,43 +48,7 @@ def uniq(seq):
     return [ x for x in seq if not (x in seen or seen_add(x))]
 
 
-class CMN_MLUT_LUT(object):
-    '''
-    Base class for MLUTs and LUTS
-    Should not be used as-is
-    '''
-    def __add__(self, other):
-        return self.__binary_operation__(other, lambda x, y: x+y)
-
-    def __radd__(self, other):
-        return self.__binary_operation__(other, lambda x, y: x+y)
-
-    def __sub__(self, other):
-        return self.__binary_operation__(other, lambda x, y: x-y)
-
-    def __rsub__(self, other):
-        return self.__binary_operation__(other, lambda x, y: y-x)
-
-    def __mul__(self, other):
-        return self.__binary_operation__(other, lambda x, y: x*y)
-
-    def __rmul__(self, other):
-        return self.__binary_operation__(other, lambda x, y: x*y)
-
-    def __div__(self, other):
-        return self.__binary_operation__(other, lambda x, y: x/y)
-
-    def __rdiv__(self, other):
-        return self.__binary_operation__(other, lambda x, y: y/x)
-
-    def __eq__(self, other):
-        return self.equal(other)
-
-    def __neq__(self, other):
-        return not self.__eq__(other)
-
-
-class LUT(CMN_MLUT_LUT):
+class LUT(object):
     '''
     Look-up table storage with generic multi-dimensional interpolation.
     Extends the __getitem__ method of ndarrays to float and float arrays (index
@@ -192,7 +156,7 @@ class LUT(CMN_MLUT_LUT):
             index = a
         else:
             raise TypeError('argument of LUT.axis() should be int or string')
-        
+
         if aslut:
             data = self.axes[index]
             return LUT(data, axes=[data], names=[self.names[index]])
@@ -200,10 +164,11 @@ class LUT(CMN_MLUT_LUT):
             return self.axes[index]
 
     def print_info(self, show_attrs=False):
-        if self.desc is None:
-            print 'LUT ({}):'.format(self.data.dtype)
-        else:
-            print 'LUT "{}" ({}):'.format(self.desc, self.data.dtype)
+        print 'LUT {}({} between {:.3g} and {:.3g}):'.format(
+                {True: '', False: '"{}" '.format(self.desc)}[self.desc is None],
+                self.data.dtype,
+                np.amin(self.data), np.amax(self.data)
+                )
 
         for i in xrange(self.data.ndim):
             if self.names[i] is None:
@@ -337,9 +302,28 @@ class LUT(CMN_MLUT_LUT):
         return result
 
 
-    def equal(self, other, strict=True, show_diff=True):
-        assert isinstance(other, LUT)
-        return self.to_mlut().equal(other.to_mlut(), strict=strict, show_diff=show_diff)
+    def equal(self, other, strict=True):
+        '''
+        Checks equality between two LUTs:
+            - same axes
+            - same shape
+            - same values (if strict)
+        '''
+        if not isinstance(other, LUT):
+            return False
+        for i, ax in enumerate(self.axes):
+            if (ax is None) and (other.axes[i] is None):
+                continue
+            if (ax is None) or (other.axes[i] is None):
+                return False
+            if not np.allclose(ax, other.axes[i]):
+                return False
+        if not self.data.shape == other.data.shape:
+            return False
+        if not np.allclose(self.data, other.data):
+            return False
+
+        return True
 
 
     def __binary_operation_lut__(self, other, fn):
@@ -409,6 +393,37 @@ class LUT(CMN_MLUT_LUT):
         else:
             return self.__binary_operation_scalar__(other, fn)
 
+    def __add__(self, other):
+        return self.__binary_operation__(other, lambda x, y: x+y)
+
+    def __radd__(self, other):
+        return self.__binary_operation__(other, lambda x, y: x+y)
+
+    def __sub__(self, other):
+        return self.__binary_operation__(other, lambda x, y: x-y)
+
+    def __rsub__(self, other):
+        return self.__binary_operation__(other, lambda x, y: y-x)
+
+    def __mul__(self, other):
+        return self.__binary_operation__(other, lambda x, y: x*y)
+
+    def __rmul__(self, other):
+        return self.__binary_operation__(other, lambda x, y: x*y)
+
+    def __div__(self, other):
+        return self.__binary_operation__(other, lambda x, y: x/y)
+
+    def __rdiv__(self, other):
+        return self.__binary_operation__(other, lambda x, y: y/x)
+
+    def __eq__(self, other):
+        return self.equal(other)
+
+    def __neq__(self, other):
+        return not self.equal(other)
+
+
     def to_mlut(self):
         '''
         convert to a MLUT
@@ -442,9 +457,6 @@ class LUT(CMN_MLUT_LUT):
         return LUT(fn(self.data),
                 axes=self.axes, names=self.names,
                 attrs=self.attrs, desc=desc)
-
-    def save(self, filename, **kwargs):
-        return self.to_mlut().save(filename, **kwargs)
 
     def reduce(self, fn, axis, grouping=None, **kwargs):
         '''
@@ -814,76 +826,54 @@ def plot_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
         ax_polar.set_title(lut.desc, weight='bold', position=(0.15,0.9))
 
 
-def merge(L, axes, dtype=None):
+def merge(M, axes, dtype=None):
     '''
-    Merge several luts or mluts
+    Merge several luts
 
     Arguments:
-        - L is a list of LUT or MLUT objects to merge
+        - M is a list of MLUT objects to merge
         - axes is a list of axes names to merge
           these names should be present in each LUT attribute
         - dtype is the data type of the new axes
           ex: dtype=float
           if None, no data type conversion
 
-
-    Returns a LUT or MLUT for which each dataset has new axes as defined in list axes
+    Returns a MLUT for which each dataset has new axes as defined in list axes
     (list of strings)
     The attributes of the merged mlut consists of the common attributes with
     identical values.
 
-    Example:
-
     >>> np.random.seed(0)
 
-    create four 2D LUTs with identical axes and 2 attributes
-    >>> ax1 = np.arange(4)     # 0..3
-    >>> ax2 = np.arange(5)+10  # 10..14
-    >>> L1 = LUT(np.random.rand(4, 5), axes=[ax1, ax2], names=['C','D'], attrs={'A':11, 'B': 1})
-    >>> L2 = LUT(np.random.rand(4, 5), axes=[ax1, ax2], names=['C','D'], attrs={'A':11, 'B': 2})
-    >>> Lmerged = merge([L1, L2], ['B'])  # merge 2 luts (1 new dimension 'B')
-    >>> Lmerged.shape, Lmerged.attrs    # should contain 'A', which has not been merged
-    ((2, 4, 5), OrderedDict([('A', 11)]))
-
-    create 2 more LUTs and merge 4 luts over 2 dimensions
-    merge them and create two new axes 'A' and 'B', using the attributes
-    provided in each LUT attributes
-    >>> L3 = LUT(np.random.rand(4, 5), axes=[ax1, ax2], names=['C','D'], attrs={'A':10, 'B': 1})
-    >>> L4 = LUT(np.random.rand(4, 5), axes=[ax1, ax2], names=['C','D'], attrs={'A':10, 'B': 2})
-    >>> Lmerged = merge([L1, L2, L3, L4], ['A', 'B'])
-    >>> Lmerged.shape
-    (2, 2, 4, 5)
-
-    Merge two MLUTS using attribute to LUT promotion
-    >>> M1 = MLUT()
-    >>> M1.add_dataset('a', np.arange(10))
-    >>> M1.set_attrs({'b':1, 'c':10})
-    >>> M1.promote_attr('b')  # attribute 'a' is converted to a scalar LUT
-    >>> M2 = MLUT()
-    >>> M2.add_dataset('a', np.arange(10))
-    >>> M2.set_attrs({'b':2, 'c':20})
-    >>> M2.promote_attr('b')
-    >>> merged = merge([M1, M2], ['c'])
+    Example: merge two MLUTS
+    (also using attribute to dataset promotion)
+    >>> M = []
+    >>> for b in range(4):
+    ...     M1 = MLUT()
+    ...     M1.add_axis('ax1', np.arange(4))
+    ...     M1.add_axis('ax2', np.arange(5)+10)
+    ...     M1.add_dataset('a', np.random.randn(4, 5), ['ax1', 'ax2'])
+    ...     M1.set_attrs({'b':b, 'c':b*10})
+    ...     M1.promote_attr('b')  # attribute 'b' is converted to a scalar dataset
+    ...     M.append(M1)
+    >>> merged = merge(M, ['c'])
     >>> merged.print_info(show_self=False)
      Datasets:
-      [0] a (float64 between 0 and 9), axes=('c', None)
-      [1] b (float64 between 1 and 2), axes=('c', None)
+      [0] a (float64 between -2.55 and 2.27), axes=('c', 'ax1', 'ax2')
+      [1] b (float64 between 0 and 3), axes=('c',)
      Axes:
-      [0] c: 2 values between 10 and 20
+      [0] ax1: 4 values between 0 and 3
+      [1] ax2: 5 values between 10 and 14
+      [2] c: 4 values between 0 and 30
+
     '''
 
-    # LUT merging: convert to mlut
-    if isinstance(L[0], LUT):
-        return merge(map(lambda x: x.to_mlut(), L), axes)[0]
-
-    # else: MLUT merging
-
     m = MLUT()
-    first = L[0]
+    first = M[0]
 
     # check mluts compatibility
-    for i in xrange(1, len(L)):
-        assert first.equal(L[i], strict=False)
+    for i in xrange(1, len(M)):
+        assert first.equal(M[i], strict=False)
 
     # add old axes
     for (axname, axis) in first.axes.items():
@@ -894,7 +884,7 @@ def merge(L, axes, dtype=None):
     newaxnames = []
     for axname in axes:
         axis = []
-        for mlut in L:
+        for mlut in M:
             value = mlut.attrs[axname]
             if dtype is not None:
                 value = dtype(value)
@@ -911,7 +901,7 @@ def merge(L, axes, dtype=None):
         new_shape = tuple(map(len, newaxes))+first.data[i][1].shape
         _dtype = first.data[i][1].dtype
         newdata = np.zeros(new_shape, dtype=_dtype)+np.NaN
-        for mlut in L:
+        for mlut in M:
 
             # find the index of the attributes in the new LUT
             index = ()
@@ -921,7 +911,9 @@ def merge(L, axes, dtype=None):
                 if dtype is not None:
                     value = dtype(value)
                 index += (newaxes[j].index(value),)
-            index += (slice(None),)
+
+            if mlut.data[i][1].ndim != 0:
+                index += (slice(None),)
 
             newdata[index] = mlut.data[i][1]
 
@@ -934,20 +926,20 @@ def merge(L, axes, dtype=None):
 
     # fill with common arguments
     for k, v in first.attrs.items():
-        if False in map(lambda x: k in x.attrs, L):
+        if False in map(lambda x: k in x.attrs, M):
             continue
         if isinstance(v, np.ndarray):
-            if False in map(lambda x: np.allclose(v, x.attrs[k]), L):
+            if False in map(lambda x: np.allclose(v, x.attrs[k]), M):
                 continue
         else:
-            if False in map(lambda x: v == x.attrs[k], L):
+            if False in map(lambda x: v == x.attrs[k], M):
                 continue
         m.set_attr(k, v)
 
     return m
 
 
-class MLUT(CMN_MLUT_LUT):
+class MLUT(object):
     '''
     A class to store and manage multiple look-up tables
 
@@ -977,16 +969,9 @@ class MLUT(CMN_MLUT_LUT):
     Note that you can use a string or integer.
     data1 is the first dataset in this case, we could use m[0]
     >>> m['data1'].print_info()  # or m[0]
-    LUT "data1" (float64):
+    LUT "data1" (float64 between -2.55 and 2.27):
       Dim 0 (a): 5 values betweeen 100.0 and 150.0
       Dim 1 (b): 6 values betweeen 5.0 and 8.0
-
-    Binary operations are possible between two MLUTs or a MLUT and a float or
-    int
-    >>> (m*2)['data1'][0,0] == m['data1'][0,0]*2
-    True
-
-    MLUTs can be stored using the save(filename) method.
     '''
     def __init__(self):
         # axes
@@ -1013,7 +998,12 @@ class MLUT(CMN_MLUT_LUT):
         self.axes[name] = ax
 
     def add_dataset(self, name, dataset, axnames=None):
-        ''' Add a dataset to the LUT '''
+        '''
+        Add a dataset to the LUT
+        name (str): name of the dataset
+        dataset (np.array)
+        axnames: list of (strings or None), or None
+        '''
         assert name not in map(lambda x: x[0], self.data)
         if axnames is not None:
             # check axes consistency
@@ -1027,10 +1017,28 @@ class MLUT(CMN_MLUT_LUT):
 
         self.data.append((name, dataset, axnames))
 
-    def save(self, filename, overwrite=False, verbose=False, compress=True):
+    def save(self, filename, fmt='netcdf4', overwrite=False,
+             verbose=False, compress=True):
+        if fmt=='netcdf4':
+            self.save_netcdf4(filename, overwrite=overwrite,
+                              verbose=verbose, compress=compress)
+        elif fmt=='hdf4':
+            self.save_hdf(filename, overwrite=overwrite,
+                          verbose=verbose, compress=compress)
+        else:
+            raise ValueError('Invalid format {}'.format(fmt))
+
+    def save_netcdf4(self, filename, overwrite=False,
+                     verbose=False, compress=True):
+        raise NotImplementedError
+
+
+    def save_hdf(self, filename, overwrite=False, verbose=False, compress=True):
         '''
         Save a MLUT to a hdf file
         '''
+        from pyhdf.SD import SD, SDC
+
         typeconv = {
                     np.dtype('float32'): SDC.FLOAT32,
                     np.dtype('float64'): SDC.FLOAT64,
@@ -1081,9 +1089,16 @@ class MLUT(CMN_MLUT_LUT):
         hdf.end()
 
     def set_attr(self, key, value):
+        '''
+        Set one attribute key -> value
+        '''
         self.attrs[key] = value
 
     def set_attrs(self, attributes):
+        '''
+        Set multiple attributes to attrs
+        attributes: dict
+        '''
         self.attrs.update(attributes)
 
     def print_info(self, show_range=True, show_self=True, show_attrs=False, show_shape=False, show_axes=True):
@@ -1115,11 +1130,7 @@ class MLUT(CMN_MLUT_LUT):
         '''
         assert isinstance(name, str)
         assert name in self.attrs
-        value = self.attrs[name]
-        if isinstance(value, Iterable):
-            value = np.array(value)
-        else:
-            value = np.array([value])
+        value = np.array(self.attrs[name])
 
         self.add_dataset(name, value)
 
@@ -1154,60 +1165,6 @@ class MLUT(CMN_MLUT_LUT):
                 names.append(ax)
 
         return LUT(desc=name, data=dataset, axes=axes, names=names, attrs=self.attrs)
-
-    def __binary_operation_scalar__(self, other, fn):
-        '''
-        Binary operation between a MLUT and a scalar
-        '''
-        m = MLUT()
-        m.attrs = self.attrs
-        m.axes = self.axes
-
-        for i, (name, data, axnames) in enumerate(self.data):
-            m.add_dataset(name, fn(data, other), axnames=axnames)
-
-        return m
-
-    def __binary_operation_mlut__(self, other, fn):
-        '''
-        Binary operation between two MLUTS
-        '''
-        m = MLUT()
-
-        # check and include axes
-        for ax in self.axes:
-            assert ax in other.axes
-            assert len(self.axes[ax]) == len(other.axes[ax])
-            assert np.allclose(self.axes[ax], other.axes[ax])
-            m.add_axis(ax, self.axes[ax])
-
-        # include datasets
-        assert len(self.data) == len(other.data),  'Binary operation between inconsistent MLUTs'
-        for i, (name, data, axnames) in enumerate(self.data):
-            m.add_dataset(name, fn(data, other.data[i][1]), axnames=axnames)
-
-        # include common attributes
-        for k in self.attrs:
-            # check that the attributes are equal
-            if not (k in other.attrs):
-                continue
-            if isinstance(self.attrs[k], np.ndarray):
-                if not isinstance(other.attrs[k], np.ndarray):
-                    continue
-                if not np.allclose(self.attrs[k], other.attrs[k]):
-                    continue
-            else:
-                if self.attrs[k] != other.attrs[k]:
-                    continue
-
-            m.set_attr(k, self.attrs[k])
-        return m
-
-    def __binary_operation__(self, other, fn):
-        if isinstance(other, MLUT):
-            return self.__binary_operation_mlut__(other, fn)
-        else:
-            return self.__binary_operation_scalar__(other, fn)
 
     def equal(self, other, strict=True, show_diff=False):
         '''
@@ -1267,6 +1224,12 @@ class MLUT(CMN_MLUT_LUT):
 
         return eq
 
+    def __eq__(self, other):
+        return self.equal(other)
+
+    def __neq__(self, other):
+        return not self.equal(other)
+
     def axis(self, axname, aslut=False):
         '''
         returns an axis as a LUT
@@ -1291,6 +1254,7 @@ def read_mlut_hdf(filename, datasets=None):
             - or a tuple (dataset_name, axes) where axes is a list of
               dimensions (strings), overriding the attribute 'dimensions'
     '''
+    from pyhdf.SD import SD
 
     hdf = SD(filename)
 
@@ -1356,6 +1320,10 @@ def read_lut_hdf(filename, dataset, axnames=None):
     read a hdf file as a LUT, using axis list axnames
     if axnames is None, read the axes names in the attribute 'dimensions' of dataset
     '''
+    from pyhdf.SD import SD
+
+    warnings.warn('This function shall be replaced by read_mlut_*', DeprecationWarning)
+
     axes = []
     names = []
     data = None
