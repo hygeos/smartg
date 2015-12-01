@@ -56,6 +56,14 @@ class LUT(object):
     tables with floats)
     The LUT axes can be optionally provided so that values can be interpolated
     into float indices in a first step, using the Idx class.
+    Other features:
+        * binary operations between LUTs and with scalars
+        * automatic broadcasting:
+          binary operations between LUTs with different axes
+          the LUTs are broadcasted together according to their common axes
+        * apply functions, dimension reduction (apply a function along a given axis)
+        * equality testing
+        * plotting
 
     Arguments:
         * data is a n-dimension array containing the LUT data
@@ -980,7 +988,7 @@ class MLUT(object):
     def __init__(self):
         # axes
         self.axes = OrderedDict()
-        # data: a list of (name, array, axnames)
+        # data: a list of (name, array, axnames, attributes)
         self.data = []
         # attributes
         self.attrs = OrderedDict()
@@ -1022,32 +1030,14 @@ class MLUT(object):
 
         self.data.append((name, dataset, axnames, attrs))
 
-    def save(self, filename, fmt='netcdf4', overwrite=False,
+    def save(self, filename, fmt=None, overwrite=False,
              verbose=False, compress=True):
-        if fmt=='netcdf4':
-            self.save_netcdf4(filename, overwrite=overwrite,
-                              verbose=verbose, compress=compress)
-        elif fmt=='hdf4':
-            self.save_hdf(filename, overwrite=overwrite,
-                          verbose=verbose, compress=compress)
-        else:
-            raise ValueError('Invalid format {}'.format(fmt))
-
-    def save_netcdf4(self, filename, overwrite=False,
-                     verbose=False, compress=True):
-        raise NotImplementedError
-
-
-    def save_hdf(self, filename, overwrite=False, verbose=False, compress=True):
         '''
-        Save a MLUT to a hdf file
+        Save a MLUT to filename
+        fmt: output format: hdf4, netcdf4,
+             or None (determine from filename extension)
         '''
-        from pyhdf.SD import SD, SDC
 
-        typeconv = {
-                    np.dtype('float32'): SDC.FLOAT32,
-                    np.dtype('float64'): SDC.FLOAT64,
-                    }
         if exists(filename):
             if overwrite:
                 remove(filename)
@@ -1057,7 +1047,68 @@ class MLUT(object):
                 raise ex
 
         if verbose:
-            print('Writing "{}" to "{}"'.format(self.desc, filename))
+            print('Writing "{}" to "{}" ({} format)'.format(self.desc, filename, fmt))
+
+        if fmt is None:
+            if filename.endswith('.hdf'):
+                fmt = 'hdf4'
+            elif filename.endswith('.nc'):
+                fmt = 'netcdf4'
+            else:
+                raise ValueError('Cannot determine desired format '
+                        'of filename "{}"'.format(filename))
+
+        if fmt=='netcdf4':
+            self.__save_netcdf4(filename, overwrite=overwrite,
+                              verbose=verbose, compress=compress)
+        elif fmt=='hdf4':
+            self.__save_hdf(filename, overwrite=overwrite,
+                          verbose=verbose, compress=compress)
+        else:
+            raise ValueError('Invalid format {}'.format(fmt))
+
+    def __save_netcdf4(self, filename, overwrite=False,
+                     verbose=False, compress=True):
+        from netCDF4 import Dataset
+        root = Dataset(filename, 'w', format='NETCDF4')
+        dummycount = 0
+
+        # write axes and create associated dimensions
+        for axname, ax in self.axes.items():
+            root.createDimension(axname, len(ax))
+            var = root.createVariable(axname, ax.dtype, [axname], zlib=compress)
+            var[:] = ax[:]
+
+        # write datasets
+        for (name, data, axnames, attributes) in self.data:
+            # create dummy dimensions when axis is missing
+            for i in xrange(len(axnames)):
+                if axnames[i] is None:
+                    dummycount += 1
+                    dim = 'dummy{:d}'.format(dummycount)
+                    axnames[i] = dim
+                    root.createDimension(dim, data.shape[i])
+
+            var = root.createVariable(name, data.dtype, axnames, zlib=compress)
+            var.setncatts(attributes)
+            var[:] = data[:]
+
+        # write global attributes
+        root.setncatts(self.attrs)
+
+        root.close()
+
+
+    def __save_hdf(self, filename, overwrite=False, verbose=False, compress=True):
+        '''
+        Save a MLUT to a hdf file
+        '''
+        from pyhdf.SD import SD, SDC
+
+        typeconv = {
+                    np.dtype('float32'): SDC.FLOAT32,
+                    np.dtype('float64'): SDC.FLOAT64,
+                    }
         hdf = SD(filename, SDC.WRITE | SDC.CREATE)
 
         # write axes
@@ -1261,6 +1312,65 @@ class MLUT(object):
             return LUT(desc=axname, data=data, axes=[data], names=[axname])
         else:
             return data
+
+
+def read_mlut(filename, fmt=None):
+    '''
+    Read a MLUT (multi-format)
+    fmt: netcdf4, hdf4
+         or None (determine format from extension)
+    '''
+    if fmt is None:
+        if filename.endswith('.hdf'):
+            fmt = 'hdf4'
+        elif filename.endswith('.nc'):
+            fmt = 'netcdf4'
+        else:
+            raise ValueError('Cannot determine desired format '
+                    'of filename "{}"'.format(filename))
+
+    if fmt=='netcdf4':
+        return read_mlut_netcdf4(filename)
+    elif fmt=='hdf4':
+        return read_mlut_hdf(filename)
+    else:
+        raise ValueError('Invalid format {}'.format(fmt))
+
+
+def read_mlut_netcdf4(filename):
+    '''
+    Read a MLUT (netcdf4 format)
+    '''
+    # assumes everything is in the root group
+    m = MLUT()
+    from netCDF4 import Dataset
+    root = Dataset(filename, 'r', format='NETCDF4')
+
+    # read axes
+    for dim in root.dimensions:
+        if not dim.startswith('dummy'):
+            m.add_axis(str(dim), root.variables[dim][:])
+
+    # read datasets
+    for varname in root.variables:
+        if varname in m.axes:
+            continue
+        var = root.variables[varname]
+
+        # read attributes
+        attrs = {}
+        for a in var.ncattrs():
+            attrs[a] = var.getncattr(a)
+
+        m.add_dataset(varname, var[:], map(str, var.dimensions), attrs=attrs)
+
+    # read global attributes
+    for a in root.ncattrs():
+        m.set_attr(a, root.getncattr(a))
+
+    root.close()
+
+    return m
 
 
 def read_mlut_hdf(filename, datasets=None):

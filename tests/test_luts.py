@@ -4,7 +4,7 @@
 
 from nose.tools import raises
 import numpy as np
-from tools.luts import LUT, MLUT, read_mlut_hdf, merge, Idx
+from tools.luts import LUT, MLUT, read_mlut, read_mlut_hdf, merge, Idx
 import os
 
 def create_mlut():
@@ -264,22 +264,29 @@ def test_lut_apply():
     assert np.allclose(m.data, np.sqrt(l.data))
 
 def test_write_read_mlut():
-    # write a mlut, read it again, should be equal
-    import tempfile
-    m0 = create_mlut()
-    tmpdir = tempfile.mkdtemp()
-    filename = os.path.join(tmpdir, 'mlut.hdf')
-    try:
-        m0.save_hdf(filename)
-        m1 = read_mlut_hdf(filename)
-    except:
-        raise
-    finally:
-        # always remove that file
-        os.remove(filename)
-        os.rmdir(tmpdir)
 
-    assert m0.equal(m1, strict=True, show_diff=True)
+    import tempfile
+
+    def check(filename):
+
+        # write a mlut, read it again, should be equal
+        m0 = create_mlut()
+        tmpdir = tempfile.mkdtemp()
+        filename = os.path.join(tmpdir,filename)
+        try:
+            m0.save(filename)
+            m1 = read_mlut(filename)
+        except:
+            raise
+        finally:
+            # always remove that file
+            os.remove(filename)
+            os.rmdir(tmpdir)
+
+        assert m0.equal(m1, strict=True, show_diff=True)
+
+    for filename in ['mlut.hdf', 'mlut.nc']:
+        yield check, filename
 
 
 def test_write_read_mlut2():
@@ -290,7 +297,7 @@ def test_write_read_mlut2():
         tmpdir = tempfile.mkdtemp()
         filename = os.path.join(tmpdir, 'mlut.hdf')
         try:
-            m0.save_hdf(filename)
+            m0.save(filename)
             m1 = read_mlut_hdf(filename, datasets=[d])
         except:
             raise
