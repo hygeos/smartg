@@ -660,7 +660,7 @@ def plot_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
     semi: polar by default, otherwise semi polar if lut is computed for 360 deg
     '''
     from pylab import figure, cm
-    from mpl_toolkits.axisartist.grid_finder import FixedLocator, DictFormatter
+    import mpl_toolkits.axisartist.angle_helper as angle_helper
     from matplotlib.transforms import Affine2D
     from mpl_toolkits.axisartist import floating_axes
     from matplotlib.projections import PolarAxes
@@ -702,32 +702,24 @@ def plot_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
     #
     # semi polar axis
     #
-    ax1_ticks = [0, 45, 90, 135, 180]
     if 'azimu' in name1.lower():
         ax1_min, ax1_max = 0., Phimax
-        ax1_ticks = dict(zip(ax1_ticks, map(str, ax1_ticks)))
         label1 = r'$\phi$'
         ax1_scaled = ax1
     else:
         ax1_min, ax1_max = ax1[0], ax1[-1]
-        ax1_ticks = dict(zip(ax1_ticks,
-                         map(lambda x: '{:.1f}'.format(x), np.linspace(ax1_min, ax1_max, len(ax1_ticks)))))
         label1 = name1
 
         # rescale ax1 to (0, Phimax)
         ax1_scaled = (ax1-ax1_min)/(ax1_max-ax1_min)*Phimax
 
-    ax2_ticks = [0, 30, 60, 90]
     if 'zenit' in name2.lower():
         ax2_min, ax2_max = 0, 90.
         if sym is None: sym=True
-        ax2_ticks = dict(zip(ax2_ticks, map(str, ax2_ticks)))
         label2 = r'$\theta$'
         ax2_scaled = ax2
     else:
         ax2_min, ax2_max = ax2[0], ax2[-1]
-        ax2_ticks = dict(zip(ax2_ticks,
-                             map(lambda x: '{:.1f}'.format(x), np.linspace(ax2_min, ax2_max, len(ax2_ticks)))))
         if sym is None: sym=False
         label2 = name2
 
@@ -735,12 +727,12 @@ def plot_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
         ax2_scaled = (ax2-ax2_min)/(ax2_max-ax2_min)*90.
 
     # 1st axis
-    grid_locator1 = FixedLocator(ax1_ticks.keys())
-    tick_formatter1 = DictFormatter(ax1_ticks)
+    grid_locator1 = angle_helper.LocatorD({True: 4, False:8}[semi], include_last=False)
+    tick_formatter1 = angle_helper.FormatterDMS()
 
     # 2nd axis
-    grid_locator2 = FixedLocator(ax2_ticks.keys())
-    tick_formatter2 = DictFormatter(ax2_ticks)
+    grid_locator2 = angle_helper.LocatorD(3)
+    tick_formatter2 = angle_helper.FormatterDMS()
 
     tr_rotate = Affine2D().translate(0, 0)  # orientation
     tr_scale = Affine2D().scale(np.pi/180., 1.)  # scale to radians
