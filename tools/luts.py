@@ -173,6 +173,13 @@ class LUT(object):
             return self.axes[index]
 
     def print_info(self, show_attrs=False):
+        '''
+        Prints the LUT informations
+        arguments:
+            show_attrs: show LUT attributes (default: False)
+
+        returns self
+        '''
         print('LUT {}({} between {:.3g} and {:.3g}):'.format(
                 {True: '', False: '"{}" '.format(self.desc)}[self.desc is None],
                 self.data.dtype,
@@ -196,6 +203,8 @@ class LUT(object):
             print(' Attributes:')
             for k, v in self.attrs.items():
                 print(' ', k, ':', v)
+
+        return self
 
     def __getitem__(self, keys):
         '''
@@ -524,17 +533,32 @@ class LUT(object):
 
 
     def plot(self, *args, **kwargs):
+        '''
+        Plot a 1 or 2-dimension LUT
+        Note:
+        in 2-dim, creates a new figure
+
+        Arguments:
+            * swap: swap x and y axes
+            * show_grid
+            * fmt: format for plotting 1d data
+
+            Only in 2-dim:
+            * vmin, vmax: color scale extent (default: from min/max)
+            * cmap: colormap instance
+            * index: index (or Idx instance) for plotting transect
+        '''
         if self.ndim == 1:
-            self.__plot_1d(*args, **kwargs)
+            return self.__plot_1d(*args, **kwargs)
         elif self.ndim == 2:
-            return plot_polar(self, *args, **kwargs)
+            return self.__plot_2d(*args, **kwargs)
         else:
             raise Exception('No plot defined for {} dimensions'.format(self.ndim))
 
 
     def __plot_1d(self, fmt='-', show_grid=True, swap=False):
         '''
-        plot a 1-dimension LUT
+        plot a 1-dimension LUT, returns self
         '''
         from pylab import plot, xlabel, ylabel, grid
         x = self.axes[0]
@@ -552,6 +576,102 @@ class LUT(object):
             if self.desc is not None:
                 xlabel(self.desc)
         grid(show_grid)
+
+        return self
+
+    def __plot_2d(self, fmt='k-', show_grid=True, swap=False,
+                  vmin=None, vmax=None, cmap=None, index=None):
+        '''
+        Plot a 2-dimension LUT, with optional transect
+        returns self
+        '''
+        import matplotlib.pyplot as plt
+
+        if vmin is None:
+            vmin = np.amin(self.data[~np.isnan(self.data)])
+        if vmax is None:
+            vmax = np.amax(self.data[~np.isnan(self.data)])
+
+        if cmap is None:
+            cmap = plt.cm.jet
+            cmap.set_under('black')
+            cmap.set_over('white')
+            cmap.set_bad('0.5') # grey 50%
+
+        if not swap:
+            axis1, axis2 = self.axes[1], self.axes[0]
+            lab1, lab2 = self.names[1], self.names[0]
+            data = self.data
+        else:
+            axis1, axis2 = self.axes[0], self.axes[1]
+            data = np.swapaxes(self.data, 0, 1)
+            lab1, lab2 = self.names[0], self.names[1]
+
+        if axis1 is None:
+            axis1 = np.arange(data.shape[1])
+        if axis2 is None:
+            axis2 = np.arange(data.shape[0])
+
+        if index is None:
+            fig, ax1 = plt.subplots(nrows=1, ncols=1)
+        else:
+            fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1, sharex=True)
+
+        X, Y = np.meshgrid(axis1, axis2)
+        plt.sca(ax1)
+        im = plt.pcolormesh(X, Y, data, vmin=vmin, vmax=vmax)
+        plt.grid(show_grid)
+        plt.axis([
+            np.amin(axis1),
+            np.amax(axis1),
+            np.amin(axis2),
+            np.amax(axis2),
+            ])
+        cbar_ax = fig.add_axes([0.92, 0.25, 0.03, 0.5])
+        # cbar_ax.text(0, -0.1, self.desc, verticalalignment='top')
+        if self.desc is not None:
+            cbar_ax.set_title(self.desc, weight='bold', horizontalalignment='left', position=(0.,-0.15))
+        plt.colorbar(im, extend='both', orientation='vertical', cax=cbar_ax)
+
+        if index is None:
+            plt.sca(ax1)
+            plt.ylabel(lab2)
+            plt.xlabel(lab1)
+        else:
+            # show transect
+            if isinstance(index, Idx):
+                v = index.value
+            else:
+                v = axis2[index]
+
+            ax1.plot([np.amin(axis1), np.amax(axis1)], [v, v], 'w--')
+
+            if not swap:
+                ax2.plot(axis1, self[index, :], fmt)
+            else:
+                ax2.plot(axis1, self[:, index], fmt)
+            ax2.grid(show_grid)
+
+            plt.sca(ax1)
+            plt.ylabel(lab2)
+            plt.sca(ax2)
+            plt.ylabel(self.desc)
+            plt.xlabel(lab1)
+
+            ax2.axis(ymin=vmin, ymax=vmax)
+
+        fig.subplots_adjust(hspace=0.)
+
+        return self
+
+    def plot_polar(self, *args, **kwargs):
+        plot_polar(self, *args, **kwargs)
+        return self
+
+    def plot_semi(self, *args, **kwargs):
+        kwargs['semi'] = True
+        plot_polar(self, *args, **kwargs)
+        return self
 
 
 class Subsetter(object):
@@ -639,14 +759,18 @@ class Idx(object):
             return res
 
 
+
 def plot_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
-               sym=None, swap=False, fig=None, cmap=None, semi=False):
+               sym=True, swap='auto', fig=None, cmap=None, semi=False):
     '''
     Contour and eventually transect of 2D LUT on a semi polar plot, with
     dimensions (angle, radius)
 
     lut: 2D look-up table to display
+            with axes (radius, angle) (unless swapped)
+            angle is assumed to be in degrees and is not scaled
     index: index of the item to transect in the 'angle' dimension
+           can be an Idx instance
            if None (default), no transect
     vmin, vmax: range of values
                 default None: determine min/max from values
@@ -655,6 +779,7 @@ def plot_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
     sym: the transect uses symmetrical axis (boolean)
          if None (default), use symmetry iff axis is 'zenith'
     swap: swap the order of the 2 axes to (radius, angle)
+          if 'auto', searches for 'azi' in both axes names
     fig : destination figure. If None (default), create a new figure.
     cmap: color map
     semi: polar by default, otherwise semi polar if lut is computed for 360 deg
@@ -670,7 +795,6 @@ def plot_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
     #
     Phimax = 360.
     if semi : Phimax=180.
-    
 
     assert lut.ndim == 2
 
@@ -681,6 +805,13 @@ def plot_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
         else:
             fig = figure(figsize=(4.5, 6))
 
+    if swap =='auto':
+        if ('azi' in lut.names[1].lower()) and ('azi' not in lut.names[0].lower()):
+            swap = True
+        else:
+            swap = False
+
+    # ax1 is angle, ax2 is radius
     if swap:
         ax1, ax2 = lut.axes[1], lut.axes[0]
         name1, name2 = lut.names[1], lut.names[0]
@@ -691,9 +822,9 @@ def plot_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
         data = lut.data
 
     if vmin is None:
-        vmin = np.amin(lut.data)
+        vmin = np.amin(lut.data[~np.isnan(lut.data)])
     if vmax is None:
-        vmax = np.amax(lut.data)
+        vmax = np.amax(lut.data[~np.isnan(lut.data)])
     if vmin == vmax:
         vmin -= 0.001
         vmax += 0.001
@@ -702,37 +833,39 @@ def plot_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
     #
     # semi polar axis
     #
-    if 'azimu' in name1.lower():
-        ax1_min, ax1_max = 0., Phimax
-        label1 = r'$\phi$'
-        ax1_scaled = ax1
-    else:
-        ax1_min, ax1_max = ax1[0], ax1[-1]
-        label1 = name1
+    # angle
+    ax1_scaled = ax1
+    label1 = name1
 
-        # rescale ax1 to (0, Phimax)
-        ax1_scaled = (ax1-ax1_min)/(ax1_max-ax1_min)*Phimax
+    # radius axis
+    # scale to [0, 90]
+    ax2_min = np.amin(ax2)
+    ax2_max = np.amax(ax2)
+    ax2_scaled = (ax2 - ax2_min)/(ax2_max- ax2_min)*90.
+    label2 = name2
 
-    if 'zenit' in name2.lower():
-        ax2_min, ax2_max = 0, 90.
-        if sym is None: sym=True
-        label2 = r'$\theta$'
-        ax2_scaled = ax2
-    else:
-        ax2_min, ax2_max = ax2[0], ax2[-1]
-        if sym is None: sym=False
-        label2 = name2
-
-        # rescale to (0, 90)
-        ax2_scaled = (ax2-ax2_min)/(ax2_max-ax2_min)*90.
-
-    # 1st axis
-    grid_locator1 = angle_helper.LocatorD({True: 4, False:8}[semi], include_last=False)
+    # angle axis
+    grid_locator1 = angle_helper.LocatorDMS({True: 4, False:8}[semi], include_last=False)
     tick_formatter1 = angle_helper.FormatterDMS()
 
-    # 2nd axis
-    grid_locator2 = angle_helper.LocatorD(3)
-    tick_formatter2 = angle_helper.FormatterDMS()
+    class Locator(object):
+        def __call__(self, *args):
+            # as returned by angle_helper.step
+            return [np.array([0, 30, 60, 90]), 4, 1.0]
+    class Formatter(object):
+        def __call__(self, *args):
+            return map(lambda x: '{:.3g}'.format(x), np.linspace(ax2_min, ax2_max, 4))
+
+    # radius axis
+    if ((ax2_min < 10.) and (ax2_min >= 0)
+            and (ax2_max <= 90) and (ax2_max > 80)):
+        # angle in degrees
+        grid_locator2 = angle_helper.LocatorDMS(4)
+        tick_formatter2 = angle_helper.FormatterDMS()
+    else:
+        # custom locator
+        grid_locator2 = Locator()
+        tick_formatter2 = Formatter()
 
     tr_rotate = Affine2D().translate(0, 0)  # orientation
     tr_scale = Affine2D().scale(np.pi/180., 1.)  # scale to radians
