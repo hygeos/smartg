@@ -1184,18 +1184,16 @@ def impactInit(pp, Hatm, NATM, NLAM, ALT, H, THVDEG, Rter):
     vz = -np.cos(THVDEG * np.pi / 180)
     Rter = np.double(Rter)
 
-    tabTransDir = np.zeros(NLAM, dtype=np.float64)
+    tautot = np.zeros(NLAM, dtype=np.float64)
 
     if pp:
         z0 = Hatm
         x0 = Hatm*np.sin(THVDEG*np.pi/180.)
         y0 = 0.
 
-        if NATM == 0:
-            tabTransDir[:] = 1.
-        else:
+        if NATM != 0:
             for ilam in xrange(NLAM):
-                tabTransDir[ilam] = np.exp(-H[NATM+ilam*(NATM+1)]/np.cos(THVDEG*pi/180.))
+                tautot[ilam] = H[NATM+ilam*(NATM+1)]/np.cos(THVDEG*pi/180.)
     else:
         tanthv = np.tan(THVDEG*np.pi/180.)
 
@@ -1243,6 +1241,11 @@ def impactInit(pp, Hatm, NATM, NLAM, ALT, H, THVDEG, Rter):
                 else:
                     raise Exception('No solution in impactInit')
 
+            # photon moves forward
+            xph += vx * D
+            yph += vy * D
+            zph += vz * D
+
             for ilam in xrange(NLAM):
                 # optical thickness of the layer in vertical direction
                 hlay0 = abs(H[i + ilam*(NATM+1)] - H[i - 1 + ilam*(NATM+1)])
@@ -1253,9 +1256,8 @@ def impactInit(pp, Hatm, NATM, NLAM, ALT, H, THVDEG, Rter):
                 # optical thickness of the layer at current wavelength
                 hlay = hlay0*D/D0
 
-                # transmission
-                tabTransDir[ilam] += np.exp(-hlay)
+                # cumulative optical thickness
+                tautot[ilam] += hlay
 
-
-    return x0, y0, z0, tabTransDir
+    return x0, y0, z0, np.exp(-tautot)
 
