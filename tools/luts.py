@@ -461,7 +461,7 @@ class LUT(object):
                 m.add_axis(name, axis)
 
         # datasets
-        m.add_dataset(self.desc, self.data, axnames=self.names)
+        m.add_dataset(self.desc, self.data, axnames=self.names, attrs=self.attrs)
 
         # attributes
         m.set_attrs(self.attrs)
@@ -556,7 +556,7 @@ class LUT(object):
             raise Exception('No plot defined for {} dimensions'.format(self.ndim))
 
 
-    def __plot_1d(self, fmt='-', show_grid=True, swap=False):
+    def __plot_1d(self, show_grid=True, swap=False, **kwargs):
         '''
         plot a 1-dimension LUT, returns self
         '''
@@ -564,13 +564,13 @@ class LUT(object):
         x = self.axes[0]
         y = self.data
         if not swap:
-            plot(x, y, fmt)
+            plot(x, y, **kwargs)
             if self.names[0] is not None:
                 xlabel(self.names[0])
             if self.desc is not None:
                 ylabel(self.desc)
         else:
-            plot(y, x)
+            plot(y, x, **kwargs)
             if self.names[0] is not None:
                 ylabel(self.names[0])
             if self.desc is not None:
@@ -1155,6 +1155,28 @@ class MLUT(object):
 
         self.data.append((name, dataset, axnames, attrs))
 
+    def add_lut(self, lut):
+        '''
+        Add a LUT to the MLUT
+
+        returns self
+        '''
+        assert lut.desc is not None
+        for iax in xrange(lut.ndim):
+            axname = lut.names[iax]
+            ax = lut.axes[iax]
+            if axname in self.axes:
+                # check axis
+                assert self.axes[axname].shape == ax.shape
+                assert np.allclose(self.axes[axname], ax)
+            else:
+                # add the axis
+                self.add_axis(axname, ax)
+
+        self.add_dataset(lut.desc, lut.data, axnames=lut.names, attrs=lut.attrs)
+
+        return self
+
     def save(self, filename, fmt=None, overwrite=False,
              verbose=False, compress=True):
         '''
@@ -1313,6 +1335,8 @@ class MLUT(object):
             for k, v in self.attrs.items():
                 print(' ', k, ':', v)
 
+        return self
+
     def promote_attr(self, name):
         '''
         Create a new dataset from attribute name
@@ -1428,7 +1452,7 @@ class MLUT(object):
 
     def axis(self, axname, aslut=False):
         '''
-        returns an axis as a LUT
+        returns an axis
         if aslut: returns it as a LUT
         otherwise, as values
         '''
