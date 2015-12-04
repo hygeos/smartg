@@ -1482,6 +1482,9 @@ def read_mlut(filename, fmt=None):
         return read_mlut_netcdf4(filename)
     elif fmt=='hdf4':
         return read_mlut_hdf(filename)
+    elif fmt=='hdf5':
+        return read_mlut_hdf5(filename)
+
     else:
         raise ValueError('Invalid format {}'.format(fmt))
 
@@ -1518,6 +1521,72 @@ def read_mlut_netcdf4(filename):
         m.set_attr(a, root.getncattr(a))
 
     root.close()
+
+    return m
+
+
+def read_mlut_hdf5(filename, datasets=None):
+    '''
+    read a MLUT from a hdf5 file (filename)
+    datasets: list of datasets to read:
+        * None (default): read all datasets, including axes as indicated by the
+          attribute 'dimensions'
+        * a list of:
+            - dataset names (string)
+            - or a tuple (dataset_name, axes) where axes is a list of
+              dimensions (strings), overriding the attribute 'dimensions'
+    '''
+    import h5py
+
+    f = h5py.File(filename)
+
+    # set the list of dataset
+    if datasets is None:
+        ls_datasets = f['data'].keys()
+    else:
+        ls_datasets = datasets
+
+    # look for axis rquired for the datasets
+    ls_axis   = []
+    axis_data = []
+    for dataset in ls_datasets: 
+        if dataset in f['data'].keys():
+            if not f['data'][dataset].attrs.__contains__('dimensions'):
+                print('Missing -dimensions- Attr in dataset "{}" '.format(dataset))
+                raise Exception('Missing dimensions Attr in dataset')
+            else:
+                dimensions = f['data'][dataset].attrs.get('dimensions').split(',')
+                axis_data.append(dimensions)
+                for aa in dimensions:
+                    ls_axis.append(aa)
+        else:
+            print('dataset "{}" not available.'.format(dataset))
+            print('{} contains the following datasets:'.format(filename))
+            for d in f['data'].keys():
+                print ('  *', d)
+            raise Exception('Missing dataset')
+    ls_axis = list(set(ls_axis))
+
+    m = MLUT()
+    # add axis to the MLUT
+    for ax in ls_axis:
+        axis = f['axis'][ax][...]
+        m.add_axis(ax, axis)
+
+    # add data to MLUT
+    for idata in xrange(len(ls_datasets)):
+        dataset = ls_datasets[idata]
+        data = f['data'][dataset][...]
+        attrs = {}
+        if f['data'][dataset].attrs.__contains__('_FillValue'):
+            attrs['_FillValue'] = f['data'][dataset].attrs.get('_FillValue')
+        if f['data'][dataset].attrs.__contains__('add_offset'):
+            attrs['add_offset'] = f['data'][dataset].attrs.get('add_offset')
+        if f['data'][dataset].attrs.__contains__('scale_factor'):
+            attrs['scale_factor'] = f['data'][dataset].attrs.get('scale_factor')
+        m.add_dataset(dataset, data, axnames=axis_data[idata], attrs=attrs)
+
+    f.close()
 
     return m
 
