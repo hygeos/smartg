@@ -5,10 +5,13 @@
 Several tools for look-up tables management and interpolation
 
 Provides:
-    - LUT class: extends ndarrays for generic multi-dimensional interpolation
+    - LUT class: Look-Up Tables
+      extends ndarrays for generic look-up table management including dimensions description,
+      binary operations, multi-dimensional interpolation, plotting, etc
     - Idx class: find the index of values, for LUT interpolation
-    - merge: look-up tables merging
-    - read_lut_hdf: read LUTs from HDF files
+    - MLUT class: Multiple Look-Up Tables
+      groups several LUTs, provides I/O interfaces with multiple data types
+    - merge: MLUT merging
 '''
 
 from __future__ import print_function
@@ -548,36 +551,48 @@ class LUT(object):
             * cmap: colormap instance
             * index: index (or Idx instance) for plotting transect
         '''
-        if self.ndim == 1:
-            return self.__plot_1d(*args, **kwargs)
+        if self.ndim == 0:
+            print(self.data)
+        elif self.ndim == 1:
+            self.__plot_1d(*args, **kwargs)
         elif self.ndim == 2:
-            return self.__plot_2d(*args, **kwargs)
+            self.__plot_2d(*args, **kwargs)
         else:
-            raise Exception('No plot defined for {} dimensions'.format(self.ndim))
+            self.__plot_nd(*args, **kwargs)
+
+        return self
 
 
-    def __plot_1d(self, show_grid=True, swap=False, **kwargs):
+    def __plot_1d(self, show_grid=True, swap=False, fmt=None, **kwargs):
         '''
         plot a 1-dimension LUT, returns self
         '''
         from pylab import plot, xlabel, ylabel, grid
-        x = self.axes[0]
-        y = self.data
-        if not swap:
-            plot(x, y, **kwargs)
-            if self.names[0] is not None:
-                xlabel(self.names[0])
-            if self.desc is not None:
-                ylabel(self.desc)
-        else:
-            plot(y, x, **kwargs)
-            if self.names[0] is not None:
-                ylabel(self.names[0])
-            if self.desc is not None:
-                xlabel(self.desc)
-        grid(show_grid)
+        ax = self.axes[0]
+        if ax is None:
+            ax = range(self.shape[0])
 
-        return self
+        if not swap:
+            xx = ax
+            yy = self.data
+            xlab = self.names[0]
+            ylab = self.desc
+        else:
+            xx = self.data
+            yy = ax
+            xlab = self.desc
+            ylab = self.names[0]
+
+        if fmt is None:
+            plot(xx, yy, label=ylab)
+        else:
+            plot(xx, yy, fmt, label=ylab)
+        if xlab is not None:
+            xlabel(xlab)
+        if ylab is not None:
+            ylabel(ylab)
+
+        grid(show_grid)
 
     def __plot_2d(self, fmt='k-', show_grid=True, swap=False,
                   vmin=None, vmax=None, cmap=None, index=None):
@@ -662,7 +677,64 @@ class LUT(object):
 
         fig.subplots_adjust(hspace=0.)
 
-        return self
+    def __plot_nd(self, *args, **kwargs):
+        try:
+            from ipywidgets import VBox, HBox, Checkbox, IntSlider, HTML
+            from IPython.display import display, clear_output
+        except ImportError:
+            raise Exception('IPython notebook widgets are required '
+                    'to plot a LUT with more than 2 dimensions')
+        wid = []
+        chks, sliders, texts = [], [], []
+        for i in xrange(self.ndim):
+            name = self.names[i]
+            ax = self.axes[i]
+            desc = name
+            if desc is None:
+                desc = 'NoName'
+            if ax is not None:
+                desc += ' [{:.5g}, {:.5g}]'.format(ax[0], ax[-1])
+            chk = Checkbox(description=desc, value=False)
+            slider = IntSlider(min=0, max=self.shape[i]-1)
+            slider.visible = False
+            text = HTML(value='')
+            text.visible = False
+            chks.append(chk)
+            sliders.append(slider)
+            texts.append(text)
+            wid.append(HBox([chk, text, slider]))
+
+        def update():
+            clear_output()
+
+            keys = []
+            ndim = 0
+            for i in xrange(self.ndim):
+                # set sliders visibility
+                sliders[i].visible = chks[i].value
+                texts[i].visible = chks[i].value
+
+                if chks[i].value:
+                    index = sliders[i].value
+                    keys.append(index)
+                    # set text (value)
+                    if self.axes[i] != None:
+                        texts[i].value = '&nbsp;&nbsp;{:.5g}&nbsp;&nbsp;'.format(self.axes[i][index])
+                else:
+                    keys.append(slice(None))
+                    ndim += 1
+
+            if ndim <= 2:
+                self.sub().__getitem__(tuple(keys)).plot(*args, **kwargs)
+            else:
+                print('Please select at least {} dimension(s)'.format(ndim-2))
+
+        for i in xrange(self.ndim):
+            chks[i].on_trait_change(update, 'value')
+            sliders[i].on_trait_change(update, 'value')
+
+        display(VBox(wid))
+        update()
 
     def plot_polar(self, *args, **kwargs):
         plot_polar(self, *args, **kwargs)
@@ -994,7 +1066,7 @@ def merge(M, axes, dtype=None):
     ...     M1.promote_attr('b')  # attribute 'b' is converted to a scalar dataset
     ...     M.append(M1)
     >>> merged = merge(M, ['c'])
-    >>> merged.print_info(show_self=False)
+    >>> _=merged.print_info(show_self=False)
      Datasets:
       [0] a (float64 between -2.55 and 2.27), axes=('c', 'ax1', 'ax2')
       [1] b (float64 between 0 and 3), axes=('c',)
@@ -1092,7 +1164,7 @@ class MLUT(object):
     >>> m.add_dataset('data3', np.random.randn(10, 12))
     >>> m.set_attr('x', 12)   # set MLUT attributes
     >>> m.set_attrs({'y':15, 'z':8})
-    >>> m.print_info(show_self=False)
+    >>> _=m.print_info(show_self=False)
      Datasets:
       [0] data1 (float64 between -2.55 and 2.27), axes=('a', 'b')
       [1] data2 (float64 between -2.22 and 2.38), axes=('a', 'b', 'c')
@@ -1105,7 +1177,7 @@ class MLUT(object):
     Use bracket notation to extract a LUT
     Note that you can use a string or integer.
     data1 is the first dataset in this case, we could use m[0]
-    >>> m['data1'].print_info()  # or m[0]
+    >>> _=m['data1'].print_info()  # or m[0]
     LUT "data1" (float64 between -2.55 and 2.27):
       Dim 0 (a): 5 values betweeen 100.0 and 150.0
       Dim 1 (b): 6 values betweeen 5.0 and 8.0
