@@ -319,3 +319,13 @@ def test_names_axes_without_values():
     m['data']
     m['data'][0,0,0]
     m['data'][:,:,:]
+
+def test_add_lut():
+    '''
+    test add a LUT to a MLUT
+    '''
+    l = create_lut()
+    m = create_mlut()
+    m.add_lut(l)
+    assert len(m.axes) == 5
+    assert m[l.desc].equal(l)
