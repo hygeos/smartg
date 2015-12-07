@@ -10,7 +10,7 @@ class IOP(object):
     '''
     abstract base class for IOP models
     '''
-    def write(self, wl,  dir_profile, dir_phases, dir_list_phases, Zbottom=10000., Nlayer=2,):
+    def write(self, wl,  dir_profile, dir_phases, dir_list_phases, Zbottom=10000., Nlayer=2):
         '''
         write profiles and phase functions at bands wl (list)
         returns a tuple (profile, phases) where

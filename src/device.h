@@ -37,6 +37,7 @@ __device__ __constant__ int NBPHId;
 __device__ __constant__ int NLAMd;
 __device__ __constant__ int SIMd;
 __device__ __constant__ int LEd;
+__device__ __constant__ int FLUXd;
 __device__ __constant__ int SURd;
 __device__ __constant__ int DIOPTREd;
 __device__ __constant__ int ENVd;
@@ -158,7 +159,7 @@ __device__ void move_pp(Photon*,float*z, float* h, float* pMol , float *abs , fl
 * Diffusion du photon par une molécule ou un aérosol
 * Modification des paramètres de stokes et des vecteurs U et V du photon (polarisation, vitesse)
 */
-__device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , float* sso, int* ip, int* ipo, int le, float* thv, float* phi, int count_level
+__device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , float* sso, int* ip, int* ipo, int le, float* tabthv, float* tabphi, int count_level
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif
@@ -178,7 +179,22 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
 * Reflexion sur une surface agitée ou plane en fonction de la valeur de DIOPTRE
 * //TODO: transmission vers l'océan et/ou reflexion totale
 */
-__device__ void surfaceAgitee(Photon*, float* alb
+__device__ void surfaceAgitee_old(Photon*, float* alb
+		#ifdef RANDMWC
+		, unsigned long long* etatThr, unsigned int* configThr
+		#endif
+                #if defined(RANDCUDA) || defined (RANDCURANDSOBOL32) || defined (RANDCURANDSCRAMBLEDSOBOL32)
+                , curandSTATE* etatThr
+                #endif
+		#ifdef RANDMT
+		, EtatMT* etatThr, ConfigMT* configThr
+		#endif
+		#ifdef RANDPHILOX4x32_7
+                , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr
+		#endif
+		      );
+
+__device__ void surfaceAgitee(Photon*, float* alb, int le, float* tabthv, float* tabphi, int count_level
 		#ifdef RANDMWC
 		, unsigned long long* etatThr, unsigned int* configThr
 		#endif

@@ -258,7 +258,7 @@ typedef struct __align__(16)
 	float* foce;			// Pointeur vers le modèle de diffusion dans l'océan
 	float* ho;				// Pointeur vers l'épaisseur optique de chaque couches du modele oceanique
     float* sso;             // Pointeur vers le profil de l albedo de diffusion simple dans l'ocean
-    int* ipo;                // pointer to the vertical profile of ocean phase function index
+    int* ipo;               // Pointer to the vertical profile of ocean phase function index
 
 	
 	float* h;				// Pointeur vers l'épaisseur optique de chaque couches du modèle atmosphérique
@@ -268,15 +268,12 @@ typedef struct __align__(16)
     int* ip;                // pointer to the vertical profile of atmospheric phase function index
     float* alb;             // Pointeur vers l albedo de la surface lambertienne
 
-
-
-    float* thv;
-    float* phi;             // Pointer to zeinth and azimut angles for output in local estimate
-
     float* lambda;
-	/** Séparation du code pour atmosphère sphérique ou parallèle **/
 
     float* z;
+
+    float* tabthv;
+    float* tabphi;          // Pointer to zenith and azimut angles for output in local estimate
 
 	#ifdef RANDMWC
 	unsigned long long* etat;
