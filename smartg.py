@@ -1188,7 +1188,7 @@ def impactInit(pp, Hatm, NATM, NLAM, ALT, H, THVDEG, Rter):
 
     if pp:
         z0 = Hatm
-        x0 = Hatm*np.sin(THVDEG*np.pi/180.)
+        x0 = Hatm*np.tan(THVDEG*np.pi/180.)
         y0 = 0.
 
         if NATM != 0:

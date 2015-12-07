@@ -761,6 +761,12 @@ __device__ void move_pp(Photon* ph,float*z, float* h, float* pMol , float *abs ,
         if(ph->tau < 0.F){
             ph->loc = SURF0P;
             ph->tau = 0.F;
+
+            // move the photon forward down to the surface
+            // the linear distance is ph->z/ph->vz
+            ph->x += ph->vx * fabs(ph->z/ph->vz);
+            ph->y += ph->vy * fabs(ph->z/ph->vz);
+            ph->z = 0.;
         return;
         }
         // Si tau>TAUATM le photon atteint l'espace
