@@ -52,6 +52,19 @@ def uniq(seq):
     return [ x for x in seq if not (x in seen or seen_add(x))]
 
 
+def bin_edges(x):
+    '''
+    calculate n+1 bin edges from n bin centers in x
+    '''
+    assert x.ndim == 1
+    if len(x) == 1:
+        return np.array([x-0.5, x+0.5])
+    else:
+        first = (3*x[0] - x[1])/2.
+        last = (3*x[-1] - x[-2])/2.
+        return np.append(np.append(first, 0.5*(x[1:]+x[:-1])), last)
+
+
 class LUT(object):
     '''
     Look-up table storage with generic multi-dimensional interpolation.
@@ -563,7 +576,7 @@ class LUT(object):
         return self
 
 
-    def __plot_1d(self, show_grid=True, swap=False, fmt=None, **kwargs):
+    def __plot_1d(self, show_grid=True, swap=False, fmt=None, label=None, **kwargs):
         '''
         plot a 1-dimension LUT, returns self
         '''
@@ -584,9 +597,9 @@ class LUT(object):
             ylab = self.names[0]
 
         if fmt is None:
-            plot(xx, yy, label=ylab)
+            plot(xx, yy, label=label)
         else:
-            plot(xx, yy, fmt, label=ylab)
+            plot(xx, yy, fmt, label=label)
         if xlab is not None:
             xlabel(xlab)
         if ylab is not None:
@@ -631,6 +644,9 @@ class LUT(object):
             fig, ax1 = plt.subplots(nrows=1, ncols=1)
         else:
             fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1, sharex=True)
+
+        axis1 = bin_edges(axis1)
+        axis2 = bin_edges(axis2)
 
         X, Y = np.meshgrid(axis1, axis2)
         plt.sca(ax1)
@@ -1109,7 +1125,11 @@ def merge(M, axes, dtype=None):
         # build new data
         new_shape = tuple(map(len, newaxes))+first.data[i][1].shape
         _dtype = first.data[i][1].dtype
-        newdata = np.zeros(new_shape, dtype=_dtype)+np.NaN
+        newdata = np.zeros(new_shape, dtype=_dtype)
+        try:
+            newdata += np.NaN
+        except:
+            pass
         for mlut in M:
 
             # find the index of the attributes in the new LUT
