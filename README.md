@@ -10,7 +10,7 @@ SMART-G is written in python2 and cuda. Its dependencies are:
 * scipy
 
 Optional dependencies:
-* [ipython notebook](http://ipython.org/notebook.html) has nice possibilities for interactive development and vizualization, in particular if you are using a remote cuda computer. Sample notebooks are provided in the folder [notebooks](notebooks).
+* [ipython notebook](http://ipython.org/notebook.html) has nice possibilities for interactive development and visualization, in particular if you are using a remote cuda computer. Sample notebooks are provided in the folder [notebooks](notebooks).
 * [nose](http://nose.readthedocs.org/) for testing
 
 # Examples

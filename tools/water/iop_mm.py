@@ -90,8 +90,7 @@ class IOP_MM(IOP):
         self.alb = ALB
         self.pfwav=pfwav
         self.verbose = verbose
-        self.last = None   # last parameters (wl, profil, phases) , to avoid
-                           # reprocessing wavelengths that have been calxculated already
+        self.last = None   # stores last result (managed by parent class)
 
     def calc(self, wl, skip_phase=False):
         '''

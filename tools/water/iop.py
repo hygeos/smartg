@@ -21,9 +21,6 @@ class IOP(object):
         if isinstance(wl, (float, int)):
             wl = [wl]
 
-        if (self.last is not None) and (self.last[0] == list(wl)):
-            return (self.last[1], self.last[2])
-
         iops, phases = self.calc_bands(wl)
 
         # write the profiles
@@ -44,8 +41,6 @@ class IOP(object):
             fp.write(file_phase+'\n')
         fp.close()
 
-        self.last = (list(wl), profil_oce, file_list_pf_ocean)
-
         return profil_oce, file_list_pf_ocean
 
 
@@ -56,6 +51,9 @@ class IOP(object):
 
         returns a list of (a, b, iphase) and a list of phase functions
         '''
+
+        if (self.last is not None) and (self.last[0] == list(wl)):
+            return (self.last[1], self.last[2])
 
         #
         # calculate the phase functions
@@ -91,6 +89,8 @@ class IOP(object):
             b = b1*phases_1[ipha].coef_trunc + b2*phases_2[ipha].coef_trunc
 
             iops.append((a, b, ipha))
+
+        self.last = (list(wl), iops, phases_tot)
 
         return iops, phases_tot
 

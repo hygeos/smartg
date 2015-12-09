@@ -40,7 +40,7 @@ class IOP_SPM(IOP):
         self.alb = ALB
         self.pfwav=pfwav
         self.verbose = verbose
-        self.last = None   # stores last result (wl, a, pha), to avoid reprocessing
+        self.last = None   # stores last result (managed by parent class)
 
 
     def calc(self, w, skip_phase=False):
@@ -55,10 +55,6 @@ class IOP_SPM(IOP):
             * btot is the total scattering coefficient
             * phase is the PhaseFunction object
         '''
-
-        if (self.last is not None) and (self.last[0] == w):
-            return (self.last[1], self.last[2])
-
 
         SPM = self.__SPM
         NANG = self.__NANG
@@ -131,8 +127,6 @@ class IOP_SPM(IOP):
             rat1 = integ_ff/2.
             pf1 *= 1/rat1
             P1 = PhaseFunction(ang, pf1, degrees=False, coef_trunc=rat1)
-
-        self.last = (w, atot, [(bw, P0), (bp, P1)])
 
         return atot, [(bw, P0), (bp, P1)]
 
