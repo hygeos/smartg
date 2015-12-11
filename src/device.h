@@ -107,7 +107,7 @@ __device__ void initPhoton(Photon* ph, Tableaux tab
 
 // move, version sphérique
 #ifdef SPHERIQUE
-__device__ void move_sp(Photon*, Tableaux tab, Init* init
+__device__ void move_sp(Photon*, Tableaux tab, Init* init, int le, int count_level
 		#ifdef RANDMWC
 		, unsigned long long*, unsigned int*
 		#endif

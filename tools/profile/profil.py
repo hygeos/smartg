@@ -39,12 +39,13 @@ class AeroOPAC(object):
         wref: reference wavelength (nm) for aot
         overwrite: recalculate and overwrite phase functions
     '''
-    def __init__(self, filename, tau, wref, overwrite=True):
+    def __init__(self, filename, tau, wref, overwrite=True, RH=None, allow_regrid=True):
 
         self.__tau = tau
         self.__wref = wref
         self.overwrite = overwrite
         self.phases = None
+        self.allow_regrid = allow_regrid
 
         if dirname(filename) == '':
             self.filename = join(dir_libradtran_opac, 'standard_aerosol_files', filename)
@@ -65,6 +66,10 @@ class AeroOPAC(object):
         # interpolated profiles, initialized by regrid()
         self.z = None
         self.dens = None
+
+        
+        if RH is not None : self.RH = RH
+        else : self.RH = None
 
     @staticmethod
     def listStandardAerosolFiles():
@@ -93,7 +98,10 @@ class AeroOPAC(object):
         Initialize the model using height profile, temperature and h2o conc.
         '''
         self.scalingfact = 1.
-        self.regrid(z)
+        if self.allow_regrid : self.regrid(z)
+        else : 
+            self.dens = self.densities
+            self.z = z
         self.__T = T
         self.__h2o = h2o
         self.setTauref(self.__tau, self.__wref)
@@ -112,11 +120,15 @@ class AeroOPAC(object):
 
     def calcTau(self,w): # calcul des propritees optiques du melange en fonction de l'alitude et aussi integrees sur la verticale
 
-        T = self.__T
-        h2o = self.__h2o
 
-        rh=h2o/vapor_pressure(T)*100 # calcul du profil vertical de RH
         M=len(self.z)
+        if self.RH is None : 
+            T = self.__T
+            h2o = self.__h2o
+            rh=h2o/vapor_pressure(T)*100 # calcul du profil vertical de RH
+        else :
+            rh = np.zeros(M,np.float32)
+            rh[:] = self.RH
         self.dtau_tot=np.zeros(M,np.float32)
         k=0
         for scamat in self.scamatlist: 
@@ -162,11 +174,15 @@ class AeroOPAC(object):
             - dtau_tot: le profile d'épaisseurs optiques de chaque couche
             - ssa_tot, l'albedo de diffusion simple de chaque couche
         '''
-        h2o = self.__h2o
-        T = self.__T
 
-        rh=h2o/vapor_pressure(T)*100 # calcul du profil vertical de RH
         M=len(self.z)
+        if self.RH is None : 
+            h2o = self.__h2o
+            T = self.__T
+            rh=h2o/vapor_pressure(T)*100 # calcul du profil vertical de RH
+        else :
+            rh = np.zeros(M,np.float32)
+            rh[:] = self.RH
 #        MMAX=5000 # Nb de polynome de Legendre au total maximum
         self.dtau_tot=np.zeros(M,np.float32)
         self.ssa_tot=np.zeros(M,np.float32)

@@ -167,7 +167,7 @@ __device__ void launchKernel(Variables* var, Tableaux tab
 
             #ifdef SPHERIQUE
             if (ph.loc == ATMOS)
-                move_sp(&ph, tab, init
+                move_sp(&ph, tab, init, 0, 0
                         , &etatThr
                         #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
                         , &configThr
@@ -242,7 +242,8 @@ __device__ void launchKernel(Variables* var, Tableaux tab
               int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
               int iph0 = idx%NBPHId;
               if (ph.loc == ATMOS) {
-                  NK=2;
+                  NK=1;
+                  //NK=2;
                   up_level = UPTOA;
                   down_level = DOWN0P;
               }
@@ -266,10 +267,24 @@ __device__ void launchKernel(Variables* var, Tableaux tab
 			        , &configThr
 			        #endif
 				    );
-                    #ifdef DEBUG_PHOTON
+
+                        #ifdef DEBUG_PHOTON
                     if (k==0) display("SCATTER LE UP", &ph_le);
                     else display("SCATTER LE DOWN", &ph_le);
+                        #endif
+
+                    #ifdef SPHERIQUE
+                    if (ph_le.loc==ATMOS) move_sp(&ph_le, tab, init, 1, count_level
+                        , &etatThr
+                        #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
+                        , &configThr
+                        #endif
+                                );
+                        #ifdef DEBUG_PHOTON
+                    display("MOVE LE", &ph_le);
+                        #endif
                     #endif
+
                     countPhoton(&ph_le, tab, count_level
                     #ifdef PROGRESSION
                     , var
@@ -331,8 +346,8 @@ __device__ void launchKernel(Variables* var, Tableaux tab
                         copyPhoton(&ph, &ph_le);
                         ph_le.iph = (iph + iph0)%NBPHId;
                         ph_le.ith = (ith + ith0)%NBTHETAd;
-                        ph_le.iph = iph;
-                        ph_le.ith = ith;
+                        //ph_le.iph = iph;
+                        //ph_le.ith = ith;
 
                         surfaceAgitee(&ph_le, tab.alb, 1, tab.tabthv, tab.tabphi, count_level, &etatThr
                         #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
@@ -349,11 +364,21 @@ __device__ void launchKernel(Variables* var, Tableaux tab
                             , var
                             #endif
                         );
-                        if (k==0) countPhoton(&ph_le, tab, UPTOA
+                        if (k==0) { 
+                            #ifdef SPHERIQUE
+                            if (ph_le.loc==ATMOS) move_sp(&ph_le, tab, init, 1, UPTOA
+                                , &etatThr
+                                #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
+                                , &configThr
+                                #endif
+                                );
+                            #endif
+                            countPhoton(&ph_le, tab, UPTOA
                             #ifdef PROGRESSION
                             , var
                             #endif
                             );
+                        }
                       }
                     }
                   }
@@ -571,7 +596,7 @@ __device__ void initPhoton(Photon* ph, Tableaux tab
 
 
 #ifdef SPHERIQUE
-__device__ void move_sp(Photon* ph, Tableaux tab, Init* init
+__device__ void move_sp(Photon* ph, Tableaux tab, Init* init, int le, int count_level
         #ifdef RANDMWC
         , unsigned long long* etatThr, unsigned int* configThr
         #endif
@@ -610,7 +635,10 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
     #endif
 
     // Random Optical Thickness to go through
-    tauRdm = -logf(1.F-RAND);
+    if (!le) tauRdm = -logf(1.F-RAND);
+    // in LE photon is forced to exit upward or downward
+    else tauRdm = 1e6;
+    
 
     vzn = __fdividef( ph->vx*ph->x + ph->vy*ph->y + ph->vz*ph->z , ph->rayon);
     #ifndef ALT_MOVE
@@ -797,6 +825,11 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init
             #endif
         }
 
+
+    }
+    if (le) {
+        if (( (count_level==UPTOA)  && (ph->loc==SPACE ) ) || ( (count_level==DOWN0P) && (ph->loc==SURF0P) )) ph->weight *= __expf(-(hph + h_cur));
+        else ph->weight = 0.;
     }
     #ifndef ALT_MOVE
     //
@@ -1034,8 +1067,6 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
         float vx ,vy ,vz;
         if (count_level==DOWN0P) sign = -1;
         else sign = 1;
-        //phi =  __fdividef(((float)ph->iph) * 2 * PI, NBPHId);
-        //thv =  __fdividef(((float)ph->ith) * DEMIPI, NBTHETAd);
         phi = tabphi[ph->iph];
         thv = tabthv[ph->ith];
         vx = __cosf(phi) * __sinf(thv);
@@ -1050,9 +1081,6 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
         ph->vx = vx;
         ph->vy = vy;
         ph->vz = vz;
-            #ifdef DEBUG_PHOTON
-            display("SCATTER inside", ph);
-            #endif
     }
 
     /* Scattering in atmosphere */
@@ -2010,12 +2038,12 @@ __device__ void surfaceAgitee(Photon* ph, float* alb, int le, float* tabthv, flo
      vy = __sinf(phi) * __sinf(thv);
      vz = sign * __cosf(thv);  
      
-     // Normal to the facet
+     // Normal to the facet in the global frame
      n_x = (vx - ph->vx)/2.F;
      n_y = (vy - ph->vy)/2.F;
      n_z = (vz - ph->vz)/2.F;
 
-     // specular reflection: (reflected - incident)/2 =  cos(theta) normal
+     // specular reflection: (reflected - incident)/2 
      cTh = sqrtf(n_x*n_x + n_y*n_y + n_z*n_z);
      n_x/=cTh;
      n_y/=cTh;
@@ -2063,39 +2091,37 @@ __device__ void surfaceAgitee(Photon* ph, float* alb, int le, float* tabthv, flo
     //                                        Theta_thres=f(Windspeed)
     // The slope of the model is constant=0.004 and threshold depends on windspeed. Below threshold on theta, all slopes
     // are possible and thus A=1/vz
-    float Anorm;
-    float slopeA=0.00377;
-    float theta_thres;
-    theta_thres = 83.46 - WINDSPEEDd; // between 1 and 15 m/s
+    //float Anorm;
+    //float slopeA=0.00377;
+    //float theta_thres;
+    //theta_thres = 83.46 - WINDSPEEDd; // between 1 and 15 m/s
+    //float aavz = acosf(avz)*360./DEUXPI;
+    //if(aavz > theta_thres){
+    //   Anorm = avz + slopeA * (aavz - theta_thres);
+    //}
+    //else{
+    //   Anorm = avz;
+    //}
+
     #ifdef SPHERIQUE
     // avz is the projection of V on the local vertical
     float avz = abs(ph->x*ph->vx + ph->y*ph->vy + ph->z*ph->vz)/RTER;
     #else
     float avz = abs(ph->vz);
     #endif
-    float aavz = acosf(avz)*360./DEUXPI;
-    if(aavz > theta_thres){
-       Anorm = avz + slopeA * (aavz - theta_thres);
-    }
-    else{
-       Anorm = avz;
-    }
+
 
     // Ross et al 2005
+    float Anorm;
     float nu = __fdividef(1.F, tanf(acosf(avz))*(sqrtf(2.) * sig));
     Anorm = __fdividef(__expf(-nu*nu) - nu * sqrtf(PI) * erfcf(nu),2.F * nu * sqrtf(PI));
     Anorm = (1.F +  Anorm) * avz;                 
-		// probabilite de realisation de beta 
-		//betaProb = expf( - ( tanf(beta)*tanf(beta) ) / sig2 ) / ( PI * sig2);
-		
-		//*wght *= PI * betaProb / (4.0 * nz * nz * nz * nz * -StackPos->vz * tab.cosdirLE[igeom*3+2]);
-    // DR probability of slope interaction with photon corection factor, biased sampling correction of pure Cox_Munk probability function
+
     if (!le) ph->weight *= __fdividef(fabs(cTh), cBeta * Anorm);
-    //if (le && (DIOPTREd!=0)) ph->weight  *= __fdividef(abs(cTh), cBeta * Anorm) * __expf(-(tbeta*tbeta))/(sig*sig);  
+
     if (le && (DIOPTREd!=0)) ph->weight  *=
         __fdividef(1.F, cBeta*cBeta*cBeta*cBeta *Anorm)
         * __expf(-(tanf(beta)*tanf(beta))/sig2)/(sig2);  
-        //__fdividef(1.F, cBeta*cBeta*cBeta*cBeta *fabs(ph->vz)) 
 
 	// Rotation of Stokes parameters
 	s1 = ph->stokes1;
@@ -2518,13 +2544,15 @@ __device__ void countPhoton(Photon* ph,
 			   #endif
 			   );
     else {
-        float tau_le;
-        if (count_level==UPTOA) tau_le = tab.h[NATMd + ph->ilam *(NATMd+1)];
-        if ((count_level==DOWN0P) || (count_level==UP0M) || (count_level==UP0P) ) tau_le = 0.F;
         ith = ph->ith;
         iphi= ph->iph;
         il = ph->ilam;
+        #ifndef SPHERIQUE
+        float tau_le;
+        if (count_level==UPTOA) tau_le = tab.h[NATMd + ph->ilam *(NATMd+1)];
+        if ((count_level==DOWN0P) || (count_level==UP0M) || (count_level==UP0P) ) tau_le = 0.F;
         ph->weight *= __expf(__fdividef(-fabs(tau_le - ph->tau), abs(ph->vz))); // LE attenuation to count_level
+        #endif
     }
 	
   	/*if( ph->vy<0.f )
@@ -2539,7 +2567,7 @@ __device__ void countPhoton(Photon* ph,
 	
 
 	float weight = ph->weight;
-	if (FLUXd==1) weight *= __cosf(ph->vz);
+	if (FLUXd==1 && LEd==0) weight *= __cosf(ph->vz);
 
     #ifdef DEBUG
     int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
