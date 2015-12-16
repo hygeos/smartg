@@ -415,14 +415,12 @@ def smartg(wl, pp=True,
             
         # compilation option
         # list of compilation flag :
-        #     - DRANDPHILOX4x32_7 : Utilisation du random Philox-4x32-7
         #     - DPROGRESSION : Calcul et affichage de la progression de la simulation
         #     - DSPHERIQUE : Calcul en sphérique
         #     - DDEBUG : Ajout de tests intermédiaires utilisés lors du débugage
         #     - DDOUBLE : Accumulation de TabPhotons en double precision (!slow down processing)
 
-        options = ['-DRANDPHILOX4x32_7','-DPROGRESSION']
-        # options.extend(['-DPARAMETRES','-DPROGRESSION'])
+        options = ['-DPROGRESSION']
         if not pp:
             options.append('-DSPHERIQUE')
         if debug:
@@ -949,10 +947,8 @@ def InitSD(nprofilesAtm, nprofilesOc, NLAM,
                 - z : altitudes level in the atmosphere
                 - thv : zenith angles for output (for Local estimate)
                 - phi : azimut angles for output (for Local estimate)
-            optional:
-            if DRANDPHILOX4x32_7 FLAG
-                - etat : related to the generation of random number
-                - config : related to the generation of random number
+                - etat : related to the RNG
+                - config : related to the RNG
 
         * Var : Class containing the variables sent to the device
             Attributes :
@@ -1006,8 +1002,7 @@ def InitSD(nprofilesAtm, nprofilesOc, NLAM,
     else:
         tmp += [(np.float32, '*tabthv', np.ones(NBTHETA,dtype=np.float32)), (np.float32, '*tabphi', np.zeros(NBPHI,dtype=np.float32))]
 
-    if '-DRANDPHILOX4x32_7' in options:
-        tmp += [(np.uint32, '*etat', np.zeros(XBLOCK*1*XGRID*1, dtype=np.uint32)), (np.uint32, 'config', SEED)]
+    tmp += [(np.uint32, '*etat', np.zeros(XBLOCK*1*XGRID*1, dtype=np.uint32)), (np.uint32, 'config', SEED)]
 
 
     Tableau = GPUStruct(tmp)

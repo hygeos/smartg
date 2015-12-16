@@ -86,37 +86,19 @@ __device__ void launchKernel(Variables* var, Tableaux tab
     int this_thread_active = 1;
 
 
-	// Paramètres de la fonction random en mémoire locale
-	#ifdef RANDMWC
-	unsigned long long etatThr;
-	unsigned int configThr;
-	configThr = tab.config[idx];
-	etatThr = tab.etat[idx];
-	#endif
-	#if defined(RANDCUDA) || defined (RANDCURANDSOBOL32) || defined (RANDCURANDSCRAMBLEDSOBOL32)
-        curandSTATE etatThr;
-	etatThr = tab.etat[idx];
-	#endif
-	#ifdef RANDMT
-	ConfigMT configThr;
-	EtatMT etatThr;
-	configThr = tab.config[idx];
-	etatThr = tab.etat[idx];
-	#endif
-        #ifdef RANDPHILOX4x32_7
-        //la clef se defini par l'identifiant global (unique) du thread...
-        //...et par la clef utilisateur ou clef par defaut
-        //ce systeme garanti l'existence de 2^32 generateurs differents par run et...
-        //...la possiblite de reemployer les memes sequences a partir de la meme clef utilisateur
-        //(plus d'infos dans "communs.h")
-        philox4x32_key_t configThr = {{idx, tab.config}};
-        //le compteur se defini par trois mots choisis au hasard (il parait)...
-        //...et un compteur definissant le nombre d'appel au generateur
-        //ce systeme garanti l'existence de 2^32 nombres distincts pouvant etre genere par thread,...
-        //...et ce sur l'ensemble du process (et non pas 2^32 par thread par appel au kernel)
-        //(plus d'infos dans "communs.h")
-        philox4x32_ctr_t etatThr = {{tab.etat[idx], 0xf00dcafe, 0xdeadbeef, 0xbeeff00d}};
-        #endif
+    // Paramètres de la fonction random en mémoire locale
+    //la clef se defini par l'identifiant global (unique) du thread...
+    //...et par la clef utilisateur ou clef par defaut
+    //ce systeme garanti l'existence de 2^32 generateurs differents par run et...
+    //...la possiblite de reemployer les memes sequences a partir de la meme clef utilisateur
+    //(plus d'infos dans "communs.h")
+    philox4x32_key_t configThr = {{idx, tab.config}};
+    //le compteur se defini par trois mots choisis au hasard (il parait)...
+    //...et un compteur definissant le nombre d'appel au generateur
+    //ce systeme garanti l'existence de 2^32 nombres distincts pouvant etre genere par thread,...
+    //...et ce sur l'ensemble du process (et non pas 2^32 par thread par appel au kernel)
+    //(plus d'infos dans "communs.h")
+    philox4x32_ctr_t etatThr = {{tab.etat[idx], 0xf00dcafe, 0xdeadbeef, 0xbeeff00d}};
 
 	
 	// Création de variable propres à chaque thread
@@ -141,22 +123,16 @@ __device__ void launchKernel(Variables* var, Tableaux tab
             atomicAdd(&(var->nThreadsActive), -1);
         }
 
-		// Si le photon est à NONE on l'initialise et on le met à la localisation correspondant à la simulaiton en cours
-		if((ph.loc == NONE) && this_thread_active){
-			
-			initPhoton(&ph, tab
-				, init
-			    , &etatThr
-			    #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
-			    , &configThr
-			    #endif
-					);
+        // Si le photon est à NONE on l'initialise et on le met à la localisation correspondant à la simulaiton en cours
+        if((ph.loc == NONE) && this_thread_active){
+
+            initPhoton(&ph, tab , init , &etatThr , &configThr);
             #ifdef DEBUG_PHOTON
             display("INIT", &ph);
             #endif
-			
-		}
-		
+
+        }
+
 
         //
 		// Deplacement
@@ -167,28 +143,14 @@ __device__ void launchKernel(Variables* var, Tableaux tab
 
             #ifdef SPHERIQUE
             if (ph.loc == ATMOS)
-                move_sp(&ph, tab, init, 0, 0
-                        , &etatThr
-                        #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
-                        , &configThr
-                        #endif
-                                );
+                move_sp(&ph, tab, init, 0, 0 , &etatThr , &configThr);
             else 
             #endif
-                move_pp(&ph,tab.z, tab.h, tab.pMol , tab.abs , tab.ho, &etatThr
-                        #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
-                        , &configThr
-                        #endif
-                                );
+                move_pp(&ph,tab.z, tab.h, tab.pMol , tab.abs , tab.ho, &etatThr , &configThr);
             #ifdef DEBUG_PHOTON
             display("MOVE", &ph);
             #endif
-                /*move_spp(&ph, tab, init
-                        , &etatThr
-                        #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
-                        , &configThr
-                        #endif
-                                );*/
+                /*move_spp(&ph, tab, init , &etatThr , &configThr);*/
 		}
 
         //
@@ -234,73 +196,60 @@ __device__ void launchKernel(Variables* var, Tableaux tab
 		// Scatter
         //
         // -> dans ATMOS ou OCEAN
-		if( (ph.loc == ATMOS) || (ph.loc == OCEAN)){
+        if( (ph.loc == ATMOS) || (ph.loc == OCEAN)) {
 
             /* Scattering Local Estimate */
             if (LEd == 1) {
-              int NK, up_level, down_level;
-              int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
-              int iph0 = idx%NBPHId;
-              if (ph.loc == ATMOS) {
-                  NK=1;
-                  //NK=2;
-                  up_level = UPTOA;
-                  down_level = DOWN0P;
-              }
-              if (ph.loc == OCEAN) {
-                  NK=1;
-                  up_level = UP0M;
-              }
-              for(int k=0; k<NK; k++){
-                if (k==0) count_level = up_level;
-                else count_level = down_level;
-
-			    for (int iph=0; iph<NBPHId; iph++){
-			      for (int ith=0; ith<NBTHETAd; ith++){
-                    copyPhoton(&ph, &ph_le);
-                    ph_le.iph = (iph + iph0)%NBPHId;
-                    ph_le.ith = (ith + ith0)%NBTHETAd;
-                    //ph_le.iph = iph;
-                    //ph_le.ith = ith;
-                    scatter(&ph_le, tab.faer, tab.ssa , tab.foce , tab.sso, tab.ip, tab.ipo, 1, tab.tabthv, tab.tabphi, count_level, &etatThr
-			        #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
-			        , &configThr
-			        #endif
-				    );
-
-                        #ifdef DEBUG_PHOTON
-                    if (k==0) display("SCATTER LE UP", &ph_le);
-                    else display("SCATTER LE DOWN", &ph_le);
-                        #endif
-
-                    #ifdef SPHERIQUE
-                    if (ph_le.loc==ATMOS) move_sp(&ph_le, tab, init, 1, count_level
-                        , &etatThr
-                        #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
-                        , &configThr
-                        #endif
-                                );
-                        #ifdef DEBUG_PHOTON
-                    display("MOVE LE", &ph_le);
-                        #endif
-                    #endif
-
-                    countPhoton(&ph_le, tab, count_level
-                    #ifdef PROGRESSION
-                    , var
-                    #endif
-                    );
-                  }
+                int NK, up_level, down_level;
+                int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
+                int iph0 = idx%NBPHId;
+                if (ph.loc == ATMOS) {
+                    NK=1;
+                    //NK=2;
+                    up_level = UPTOA;
+                    down_level = DOWN0P;
                 }
-              }
+                if (ph.loc == OCEAN) {
+                    NK=1;
+                    up_level = UP0M;
+                }
+                for(int k=0; k<NK; k++){
+                    if (k==0) count_level = up_level;
+                    else count_level = down_level;
+
+                    for (int iph=0; iph<NBPHId; iph++){
+                        for (int ith=0; ith<NBTHETAd; ith++){
+                            copyPhoton(&ph, &ph_le);
+                            ph_le.iph = (iph + iph0)%NBPHId;
+                            ph_le.ith = (ith + ith0)%NBTHETAd;
+                            //ph_le.iph = iph;
+                            //ph_le.ith = ith;
+                            scatter(&ph_le, tab.faer, tab.ssa , tab.foce , tab.sso, tab.ip, tab.ipo, 1, tab.tabthv, tab.tabphi, count_level, &etatThr , &configThr);
+
+                            #ifdef DEBUG_PHOTON
+                            if (k==0) display("SCATTER LE UP", &ph_le);
+                            else display("SCATTER LE DOWN", &ph_le);
+                            #endif
+
+                            #ifdef SPHERIQUE
+                            if (ph_le.loc==ATMOS) move_sp(&ph_le, tab, init, 1, count_level , &etatThr , &configThr);
+                            #ifdef DEBUG_PHOTON
+                            display("MOVE LE", &ph_le);
+                            #endif
+                            #endif
+
+                            countPhoton(&ph_le, tab, count_level
+                            #ifdef PROGRESSION
+                                    , var
+                            #endif
+                                    );
+                        }
+                    }
+                }
             }
 
             /* Scattering Propagation */
-			scatter(&ph, tab.faer, tab.ssa , tab.foce , tab.sso, tab.ip, tab.ipo, 0, tab.tabthv, tab.tabphi, 0, &etatThr 
-			#if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
-			, &configThr
-			#endif
-				);
+            scatter(&ph, tab.faer, tab.ssa , tab.foce , tab.sso, tab.ip, tab.ipo, 0, tab.tabthv, tab.tabphi, 0, &etatThr , &configThr);
             #ifdef DEBUG_PHOTON
             display("SCATTER", &ph);
             #endif
@@ -316,7 +265,6 @@ __device__ void launchKernel(Variables* var, Tableaux tab
         loc_prev = ph.loc;
         if ((ph.loc == SURF0M) || (ph.loc == SURF0P)){
            // Eventually evaluate Downward 0+ and Upward 0- radiance
-
 
            if( ENVd==0 ) { // si pas d effet d environnement
 			if( DIOPTREd!=3 ) {
@@ -349,16 +297,13 @@ __device__ void launchKernel(Variables* var, Tableaux tab
                         //ph_le.iph = iph;
                         //ph_le.ith = ith;
 
-                        surfaceAgitee(&ph_le, tab.alb, 1, tab.tabthv, tab.tabphi, count_level, &etatThr
-                        #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
-                        , &configThr
-                        #endif
-                        );
-                            #ifdef DEBUG_PHOTON
+                        surfaceAgitee(&ph_le, tab.alb, 1, tab.tabthv, tab.tabphi, count_level, &etatThr , &configThr);
+
+                        #ifdef DEBUG_PHOTON
                         if (k==0) display("SURFACE LE UP", &ph_le);
                         else display("SURFACE LE DOWN", &ph_le);
-                            #endif
-                            
+                        #endif
+
                         countPhoton(&ph_le, tab, count_level
                             #ifdef PROGRESSION
                             , var
@@ -366,12 +311,7 @@ __device__ void launchKernel(Variables* var, Tableaux tab
                         );
                         if (k==0) { 
                             #ifdef SPHERIQUE
-                            if (ph_le.loc==ATMOS) move_sp(&ph_le, tab, init, 1, UPTOA
-                                , &etatThr
-                                #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
-                                , &configThr
-                                #endif
-                                );
+                            if (ph_le.loc==ATMOS) move_sp(&ph_le, tab, init, 1, UPTOA , &etatThr , &configThr);
                             #endif
                             countPhoton(&ph_le, tab, UPTOA
                             #ifdef PROGRESSION
@@ -383,37 +323,21 @@ __device__ void launchKernel(Variables* var, Tableaux tab
                     }
                   }
                 }
-				surfaceAgitee(&ph, tab.alb, 0, tab.tabthv, tab.tabphi, count_level, &etatThr 
-					#if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
-					, &configThr
-					#endif
-						);
+				surfaceAgitee(&ph, tab.alb, 0, tab.tabthv, tab.tabphi, count_level, &etatThr , &configThr);
             }
 
 			else
-				surfaceLambertienne(&ph, tab.alb, &etatThr
-                                        #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
-					, &configThr
-					#endif
-						);
+				surfaceLambertienne(&ph, tab.alb, &etatThr , &configThr);
            }
 
            else {
                 float dis=0;
                 dis = sqrtf((ph.x-X0d)*(ph.x-X0d) +(ph.y-Y0d)*(ph.y-Y0d));
                 if( dis > ENV_SIZEd) {
-				     surfaceLambertienne(&ph, tab.alb, &etatThr
-                                        #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
-					 , &configThr
-					      #endif
-						);
+                    surfaceLambertienne(&ph, tab.alb, &etatThr , &configThr);
                 }
                 else {
-				     surfaceAgitee(&ph, tab.alb, 0, tab.tabthv, tab.tabphi, count_level, &etatThr
-					        #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
-					 , &configThr
-					        #endif
-						);
+                    surfaceAgitee(&ph, tab.alb, 0, tab.tabthv, tab.tabphi, count_level, &etatThr , &configThr);
                 }
            }
             #ifdef DEBUG_PHOTON
@@ -426,17 +350,13 @@ __device__ void launchKernel(Variables* var, Tableaux tab
 		// Reflection
         //
         // -> in SEAFLOOR
-		if(ph.loc == SEAFLOOR){
-		     surfaceLambertienne(&ph, tab.alb, &etatThr
-                                    #if defined(RANDMWC) || defined(RANDMT) || defined(RANDPHILOX4x32_7)
-			 , &configThr
-			      #endif
-			);
+        if(ph.loc == SEAFLOOR){
+            surfaceLambertienne(&ph, tab.alb, &etatThr , &configThr);
             #ifdef DEBUG_PHOTON
             display("SEAFLOOR", &ph);
             #endif
         }
-		syncthreads();
+        syncthreads();
 
 
         //
@@ -488,14 +408,8 @@ __device__ void launchKernel(Variables* var, Tableaux tab
 	atomicAdd(&(var->nbThreads), 1);
 	#endif
 
-        #ifdef RANDPHILOX4x32_7
 	// Sauvegarde de l'état du random pour que les nombres ne soient pas identiques à chaque appel du kernel
 	tab.etat[idx] = etatThr[0];
-        #else
-	// Sauvegarde de l'état du random pour que les nombres ne soient pas identiques à chaque appel du kernel
-	tab.etat[idx] = etatThr;
-        #endif
-
 
 }
 
@@ -507,21 +421,8 @@ __device__ void launchKernel(Variables* var, Tableaux tab
 /* initPhoton
 * Initialise le photon dans son état initial avant l'entrée dans l'atmosphère
 */
-__device__ void initPhoton(Photon* ph, Tableaux tab
-		,  Init* init
-		#ifdef RANDMWC
-		, unsigned long long* etatThr, unsigned int* configThr
-		#endif
-		#if defined(RANDCUDA) || defined (RANDCURANDSOBOL32) || defined (RANDCURANDSCRAMBLEDSOBOL32)
-                , curandSTATE* etatThr
-        #endif
-		#ifdef RANDMT
-		, EtatMT* etatThr, ConfigMT* configThr
-		#endif
-		#ifdef RANDPHILOX4x32_7
-                , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr
-		#endif
-		    )
+__device__ void initPhoton(Photon* ph, Tableaux tab,
+        Init* init , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr)
 {
 	// Initialisation du vecteur vitesse
 	ph->vx = - STHVd;
@@ -596,20 +497,7 @@ __device__ void initPhoton(Photon* ph, Tableaux tab
 
 
 #ifdef SPHERIQUE
-__device__ void move_sp(Photon* ph, Tableaux tab, Init* init, int le, int count_level
-        #ifdef RANDMWC
-        , unsigned long long* etatThr, unsigned int* configThr
-        #endif
-        #if defined(RANDCUDA) || defined (RANDCURANDSOBOL32) || defined (RANDCURANDSCRAMBLEDSOBOL32)
-                , curandSTATE* etatThr
-        #endif
-        #ifdef RANDMT
-        , EtatMT* etatThr, ConfigMT* configThr
-        #endif
-        #ifdef RANDPHILOX4x32_7
-                , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr
-        #endif
-            ) {
+__device__ void move_sp(Photon* ph, Tableaux tab, Init* init, int le, int count_level , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr) {
 
     float tauRdm;
     float hph = 0.;  // cumulative optical thickness
@@ -845,20 +733,7 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init, int le, int count_
 }
 #endif // SPHERIQUE
 
-__device__ void move_spp(Photon* ph, Tableaux tab, Init* init
-        #ifdef RANDMWC
-        , unsigned long long* etatThr, unsigned int* configThr
-        #endif
-        #if defined(RANDCUDA) || defined (RANDCURANDSOBOL32) || defined (RANDCURANDSCRAMBLEDSOBOL32)
-                , curandSTATE* etatThr
-        #endif
-        #ifdef RANDMT
-        , EtatMT* etatThr, ConfigMT* configThr
-        #endif
-        #ifdef RANDPHILOX4x32_7
-                , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr
-        #endif
-            ) {
+__device__ void move_spp(Photon* ph, Tableaux tab, Init* init , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr) {
 
     float tauRdm;
     float hph = 0., aph=0.;  // cumulative optical thicknesses scattering and absorption
@@ -937,21 +812,7 @@ __device__ void move_spp(Photon* ph, Tableaux tab, Init* init
 }
 
 
-__device__ void move_pp(Photon* ph, float*z, float* h, float* pMol , float *abs , float* ho
-		#ifdef RANDMWC
-		, unsigned long long* etatThr, unsigned int* configThr
-		#endif
-		#if defined(RANDCUDA) || defined (RANDCURANDSOBOL32) || defined (RANDCURANDSCRAMBLEDSOBOL32)
-                , curandSTATE* etatThr
-                #endif
-		#ifdef RANDMT
-		, EtatMT* etatThr, ConfigMT* configThr
-		#endif
-		#ifdef RANDPHILOX4x32_7
-                , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr
-		#endif
-		    ) {
-
+__device__ void move_pp(Photon* ph, float*z, float* h, float* pMol , float *abs , float* ho , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr) {
 
 	float Dsca=0.f, dsca=0.f;
 
@@ -1039,20 +900,7 @@ __device__ void move_pp(Photon* ph, float*z, float* h, float* pMol , float *abs 
 }
 
 
-__device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , float* sso, int* ip, int* ipo, int le, float* tabthv, float* tabphi, int count_level
-			#ifdef RANDMWC
-			, unsigned long long* etatThr, unsigned int* configThr
-			#endif
-			#if defined(RANDCUDA) || defined (RANDCURANDSOBOL32) || defined (RANDCURANDSCRAMBLEDSOBOL32)
-                        , curandSTATE* etatThr
-                        #endif
-			#ifdef RANDMT
-			, EtatMT* etatThr, ConfigMT* configThr
-			#endif
-                        #ifdef RANDPHILOX4x32_7
-                        , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr
-                        #endif
-			){
+__device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , float* sso, int* ip, int* ipo, int le, float* tabthv, float* tabphi, int count_level , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr){
 
 	float cTh=0.f ;
 	float zang=0.f, theta=0.f;
@@ -1405,20 +1253,7 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
 /* surfaceAgitee
 * Reflexion sur une surface agitée ou plane en fonction de la valeur de DIOPTRE
 */
-__device__ void surfaceAgitee_old(Photon* ph, float* alb
-		#ifdef RANDMWC
-		, unsigned long long* etatThr, unsigned int* configThr
-		#endif
-		#if defined(RANDCUDA) || defined (RANDCURANDSOBOL32) || defined (RANDCURANDSCRAMBLEDSOBOL32)
-                , curandSTATE* etatThr
-                #endif
-		#ifdef RANDMT
-		, EtatMT* etatThr, ConfigMT* configThr
-		#endif
-		#ifdef RANDPHILOX4x32_7
-                , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr
-		#endif
-			){
+__device__ void surfaceAgitee_old(Photon* ph, float* alb , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr) {
 	
 	if( SIMd == -2){ // Atmosphère , la surface absorbe tous les photons
 		ph->loc = ABSORBED;
@@ -1822,20 +1657,7 @@ __device__ void surfaceAgitee_old(Photon* ph, float* alb
 }
 
 
-__device__ void surfaceAgitee(Photon* ph, float* alb, int le, float* tabthv, float* tabphi, int count_level
-		#ifdef RANDMWC
-		, unsigned long long* etatThr, unsigned int* configThr
-		#endif
-		#if defined(RANDCUDA) || defined (RANDCURANDSOBOL32) || defined (RANDCURANDSCRAMBLEDSOBOL32)
-                , curandSTATE* etatThr
-                #endif
-		#ifdef RANDMT
-		, EtatMT* etatThr, ConfigMT* configThr
-		#endif
-		#ifdef RANDPHILOX4x32_7
-                , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr
-		#endif
-			){
+__device__ void surfaceAgitee(Photon* ph, float* alb, int le, float* tabthv, float* tabphi, int count_level , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr) {
 	
 	if( SIMd == -2){ // Atmosphère , la surface absorbe tous les photons
 		ph->loc = ABSORBED;
@@ -2315,20 +2137,7 @@ __device__ void surfaceAgitee(Photon* ph, float* alb, int le, float* tabthv, flo
 /* surfaceLambertienne
 * Reflexion sur une surface lambertienne
 */
-__device__ void surfaceLambertienne(Photon* ph, float* alb
-						#ifdef RANDMWC
-						, unsigned long long* etatThr, unsigned int* configThr
-						#endif
-                                                #if defined(RANDCUDA) || defined (RANDCURANDSOBOL32) || defined (RANDCURANDSCRAMBLEDSOBOL32)
-                                                , curandSTATE* etatThr
-						#endif
-						#ifdef RANDMT
-						, EtatMT* etatThr, ConfigMT* configThr
-						#endif
-                                                #ifdef RANDPHILOX4x32_7
-                                                , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr
-                                                #endif
-						){
+__device__ void surfaceLambertienne(Photon* ph, float* alb , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr) {
 	
 	if( SIMd == -2){ 	// Atmosphère ou océan seuls, la surface absorbe tous les photons
 		ph->loc = ABSORBED;
@@ -2943,118 +2752,7 @@ __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
 *	> Fonctions liées au générateur aléatoire
 ***********************************************************/
 
-#ifdef RANDCUDA
-/* initRandCUDA
-* Fonction qui initialise les generateurs du random cuda
-*/
-__global__ void initRandCUDA(curandState_t* etat, unsigned long long seed)
-{
-	// Pour chaque thread on initialise son generateur avec le meme seed mais un idx different
-	int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
-	curand_init(seed, idx, 0, etat+idx);
-}
-#endif
-#if defined(RANDCURANDSOBOL32) || defined (RANDCURANDSCRAMBLEDSOBOL32)
-/* initRandCUDANDQRNGs
-* Fonction qui initialise le generateur (scrambled) sobol 32 de curand
-*/
-__global__ void initRandCUDANDQRNGs
-(
-    curandSTATE* etat,
-    curandDirectionVectors32_t *rngDirections
-)
-{
-    // Pour chaque thread on initialise son generateur avec le meme seed mais un idx different
-    unsigned int gID = threadIdx.x + blockDim.x * (threadIdx.y + blockDim.y * (blockIdx.x + blockIdx.y * gridDim.x));
-    curand_init(
-        //seule 20000 dimensions sont disponibles... le % permet de ne pas planter ici en segfault, mais...
-        //...attention a la pertinence des resultats ici, si on depasse les 20000 threads !
-        rngDirections[gID % 20000],
-        #ifdef RANDCURANDSCRAMBLEDSOBOL32
-        3, //aucune indication sur la pertinence de cette valeur...
-        #endif
-        /*0*/gID,
-        etat+gID
-               );
-}
-#endif
 
-
-#ifdef RANDMT
-/* initRandMTEtat
-* Fonction qui initialise l'etat des generateurs du random Mersenne Twister (generateur = etat + config)
-*/
-__global__ void initRandMTEtat(EtatMT* etat, ConfigMT* config)
-{
-	int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
-	// Initialisation de l'etat du MT de chaque thread avec un seed different et aleatoire
-	etat[idx].mt[0] = config[idx].seed;
-	for (int i = 1; i < MT_NN; i++)
-		etat[idx].mt[i] = (1812433253U * (etat[idx].mt[i - 1] ^ (etat[idx].mt[i - 1] >> 30)) + i) & MT_WMASK;
-	etat[idx].iState = 0;
-	etat[idx].mti1 = etat[idx].mt[0];
-}
-
-
-/* randomMTfloat
-* Fonction random Mersenne Twister qui renvoit un float de ]0.1] à partir d'un generateur (etat+config)
-*/
-__device__ float randomMTfloat(EtatMT* etat, ConfigMT* config)
-{
-	//Convert to (0, 1] float
-	return __fdividef(__uint2float_rz(randomMTuint(etat, config)) + 1.0f, 4294967296.0f);
-}
-
-
-/* randomMTuint
-* Fonction random Mersenne Twister qui renvoit un uint à partir d'un generateur (etat+config)
-*/
-__device__ unsigned int randomMTuint(EtatMT* etat, ConfigMT* config)
-{
-	unsigned int mti;
-	unsigned int mtiM;
-	unsigned int x;
-	int iState1;
-	int iStateM;
-	iState1 = etat->iState + 1;
-	iStateM = etat->iState + MT_MM;
-	if(iState1 >= MT_NN) iState1 -= MT_NN;
-	if(iStateM >= MT_NN) iStateM -= MT_NN;
-	mti  = etat->mti1;
-	etat->mti1 = etat->mt[iState1];
-	mtiM = etat->mt[iStateM];
-	
-	// MT recurrence
-	x = (mti & MT_UMASK) | (etat->mti1 & MT_LMASK);
-	x = mtiM ^ (x >> 1) ^ ((x & 1) ? config->matrix_a : 0);
-	
-	etat->mt[etat->iState] = x;
-	etat->iState = iState1;
-	
-	//Tempering transformation
-	x ^= (x >> MT_SHIFT0);
-	x ^= (x << MT_SHIFTB) & config->mask_b;
-	x ^= (x << MT_SHIFTC) & config->mask_c;
-	x ^= (x >> MT_SHIFT1);
-	return x;
-}
-#endif
-
-
-#ifdef RANDMWC
-/* randomMWCfloat
-* Fonction random MWC qui renvoit un float de ]0.1] à partir d'un generateur (x+a)
-*/
-__device__ float randomMWCfloat(unsigned long long* x,unsigned int* a)
-{
-	//Generate a random number (0,1]
-	*x=(*x&0xffffffffull)*(*a)+(*x>>32);
-	return __fdividef(__uint2float_rz((unsigned int)(*x)) + 1.0f,(float)0x100000000);
-}
-
-#endif
-
-#ifdef RANDPHILOX4x32_7
 /* initPhilox4x32_7Compteur
 * Fonction qui initialise la partie variable du compteur des philox
 */
@@ -3090,7 +2788,6 @@ __device__ unsigned int randomPhilox4x32_7uint(philox4x32_ctr_t* ctr, philox4x32
     //conversion d'un des mots generes sous forme d'unsigned int
     return (unsigned int) res[0];
 }
-#endif
 
 extern "C" {
     __global__ void lancementKernelPy(Variables* var, Tableaux *tab
