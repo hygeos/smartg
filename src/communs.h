@@ -32,23 +32,6 @@
 /**********************************************************
 *	> Constantes
 ***********************************************************/
-// Codes retours des methode du projet MCCUDA
-typedef int CrMCCUDA;
-#define MCCUDA_OK                                           0
-#define MCCUDA_KO                                           1
-#define MCCUDA_ENVIRONNEMENT_GPU_NON_COMPATIBLE             2
-
-// Constantes pour la fonction random Mersenne Twister
-#define MT_MM 9
-#define MT_NN 19
-#define MT_WMASK 0xFFFFFFFFU
-#define MT_UMASK 0xFFFFFFFEU
-#define MT_LMASK 0x1U
-#define MT_SHIFT0 12
-#define MT_SHIFTB 7
-#define MT_SHIFTC 15
-#define MT_SHIFT1 18
-
 
 /* Lié au photon */
 // Poids initial du photon
@@ -66,8 +49,6 @@ typedef int CrMCCUDA;
 //6.283 185 307 17F
 #define DEMIPI 1.5707963F
 //1.570 796 326 79F
-#define DEG2RAD 0.017453293F
-//0.017453293
 
 
 
@@ -186,26 +167,6 @@ typedef struct __align__(16)
 	
 }Variables;
 
-
-/* ConfigMT
-* Paramètres pour la fonction random Mersenne Twister
-*/
-typedef struct {
-	unsigned int matrix_a;
-	unsigned int mask_b;
-	unsigned int mask_c;
-	unsigned int seed;
-} ConfigMT;
-
-
-/* EtatMT
-* Etat du générateur pour la fonction random Mersenne Twister
-*/
-typedef struct {
-	unsigned int mt[MT_NN];
-	int iState;
-	unsigned int mti1;
-} EtatMT;
 
 
 /* Tableaux
