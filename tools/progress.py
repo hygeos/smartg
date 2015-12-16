@@ -1,8 +1,6 @@
 try:
-    import warnings
-    warnings.simplefilter(action = "ignore", category = FutureWarning)
-    from IPython.html.widgets import FloatProgress
-    from IPython.display import display
+    from ipywidgets import FloatProgress
+    from notebook import display
     ipython_available = True
 except:
     ipython_available = False
