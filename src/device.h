@@ -68,17 +68,9 @@ __device__ __constant__ float RTER;
 *	> Kernel
 ***********************************************************/
 
-/* lancementKernel
-* Kernel de lancement et gestion de la simulation
-* Les fonctions de plus bas niveau sont appelées en fonction de la localisation du photon
-* Il peut être important de rappeler que le kernel lance tous les threads mais effectue des calculs similaires. La boucle de la
-* fonction va donc être effectuée pour chaque thread du block de la grille
-*/
 extern "C" {
-__global__ void lancementKernelPy(Variables* var, Tableaux *tab, Init* init);
+__global__ void launchKernel(Variables* var, Tableaux *tab, Init* init);
 }
-
-__device__ void launchKernel(Variables* var, Tableaux tab, Init* init);
 
 
 /**********************************************************

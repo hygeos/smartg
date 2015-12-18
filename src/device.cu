@@ -65,20 +65,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *	> Kernel
 ***********************************************************/
 
-/* lancementKernel
-* Kernel de lancement et gestion de la simulation
-* Les fonctions de plus bas niveau sont appelées en fonction de la localisation du photon
-* Il peut être important de rappeler que le kernel lance tous les threads mais effectue des calculs similaires. La boucle de la
-* fonction va donc être effectuée pour chaque thread du block de la grille
-* A TESTER: Regarder pour effectuer une réduction de l'atomicAdd
-*/
 
+extern "C" {
+__global__ void launchKernel(Variables* var, Tableaux *tab , Init* init) {
 
-
-__device__ void launchKernel(Variables* var, Tableaux tab
-		, Init* init
-			       )
-{
 	// idx est l'indice du thread considéré
 	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
     int loc_prev;
@@ -92,13 +82,13 @@ __device__ void launchKernel(Variables* var, Tableaux tab
     //ce systeme garanti l'existence de 2^32 generateurs differents par run et...
     //...la possiblite de reemployer les memes sequences a partir de la meme clef utilisateur
     //(plus d'infos dans "communs.h")
-    philox4x32_key_t configThr = {{idx, tab.config}};
+    philox4x32_key_t configThr = {{idx, tab->config}};
     //le compteur se defini par trois mots choisis au hasard (il parait)...
     //...et un compteur definissant le nombre d'appel au generateur
     //ce systeme garanti l'existence de 2^32 nombres distincts pouvant etre genere par thread,...
     //...et ce sur l'ensemble du process (et non pas 2^32 par thread par appel au kernel)
     //(plus d'infos dans "communs.h")
-    philox4x32_ctr_t etatThr = {{tab.etat[idx], 0xf00dcafe, 0xdeadbeef, 0xbeeff00d}};
+    philox4x32_ctr_t etatThr = {{tab->etat[idx], 0xf00dcafe, 0xdeadbeef, 0xbeeff00d}};
 
 	
 	// Création de variable propres à chaque thread
@@ -126,7 +116,7 @@ __device__ void launchKernel(Variables* var, Tableaux tab
         // Si le photon est à NONE on l'initialise et on le met à la localisation correspondant à la simulaiton en cours
         if((ph.loc == NONE) && this_thread_active){
 
-            initPhoton(&ph, tab , init , &etatThr , &configThr);
+            initPhoton(&ph, *tab, init , &etatThr , &configThr);
             #ifdef DEBUG_PHOTON
             display("INIT", &ph);
             #endif
@@ -143,14 +133,14 @@ __device__ void launchKernel(Variables* var, Tableaux tab
 
             #ifdef SPHERIQUE
             if (ph.loc == ATMOS)
-                move_sp(&ph, tab, init, 0, 0 , &etatThr , &configThr);
+                move_sp(&ph, *tab, init, 0, 0 , &etatThr , &configThr);
             else 
             #endif
-                move_pp(&ph,tab.z, tab.h, tab.pMol , tab.abs , tab.ho, &etatThr , &configThr);
+                move_pp(&ph, tab->z, tab->h, tab->pMol, tab->abs, tab->ho, &etatThr , &configThr);
             #ifdef DEBUG_PHOTON
             display("MOVE", &ph);
             #endif
-                /*move_spp(&ph, tab, init , &etatThr , &configThr);*/
+                /*move_spp(&ph, *tab, init , &etatThr , &configThr);*/
 		}
 
         //
@@ -182,7 +172,7 @@ __device__ void launchKernel(Variables* var, Tableaux tab
         // count the photons
         
         /* Cone Sampling */
-        if (LEd ==0) countPhoton(&ph, tab, count_level
+        if (LEd ==0) countPhoton(&ph, *tab, count_level
                 #ifdef PROGRESSION
                 , var
                 #endif
@@ -224,7 +214,9 @@ __device__ void launchKernel(Variables* var, Tableaux tab
                             ph_le.ith = (ith + ith0)%NBTHETAd;
                             //ph_le.iph = iph;
                             //ph_le.ith = ith;
-                            scatter(&ph_le, tab.faer, tab.ssa , tab.foce , tab.sso, tab.ip, tab.ipo, 1, tab.tabthv, tab.tabphi, count_level, &etatThr , &configThr);
+                            scatter(&ph_le, tab->faer, tab->ssa, tab->foce, tab->sso,
+                                    tab->ip, tab->ipo, 1, tab->tabthv, tab->tabphi,
+                                    count_level, &etatThr , &configThr);
 
                             #ifdef DEBUG_PHOTON
                             if (k==0) display("SCATTER LE UP", &ph_le);
@@ -232,13 +224,13 @@ __device__ void launchKernel(Variables* var, Tableaux tab
                             #endif
 
                             #ifdef SPHERIQUE
-                            if (ph_le.loc==ATMOS) move_sp(&ph_le, tab, init, 1, count_level , &etatThr , &configThr);
+                            if (ph_le.loc==ATMOS) move_sp(&ph_le, *tab, init, 1, count_level , &etatThr , &configThr);
                             #ifdef DEBUG_PHOTON
                             display("MOVE LE", &ph_le);
                             #endif
                             #endif
 
-                            countPhoton(&ph_le, tab, count_level
+                            countPhoton(&ph_le, *tab, count_level
                             #ifdef PROGRESSION
                                     , var
                             #endif
@@ -249,7 +241,9 @@ __device__ void launchKernel(Variables* var, Tableaux tab
             }
 
             /* Scattering Propagation */
-            scatter(&ph, tab.faer, tab.ssa , tab.foce , tab.sso, tab.ip, tab.ipo, 0, tab.tabthv, tab.tabphi, 0, &etatThr , &configThr);
+            scatter(&ph, tab->faer, tab->ssa , tab->foce , tab->sso,
+                    tab->ip, tab->ipo, 0, tab->tabthv, tab->tabphi, 0,
+                    &etatThr , &configThr);
             #ifdef DEBUG_PHOTON
             display("SCATTER", &ph);
             #endif
@@ -297,23 +291,24 @@ __device__ void launchKernel(Variables* var, Tableaux tab
                         //ph_le.iph = iph;
                         //ph_le.ith = ith;
 
-                        surfaceAgitee(&ph_le, tab.alb, 1, tab.tabthv, tab.tabphi, count_level, &etatThr , &configThr);
+                        surfaceAgitee(&ph_le, tab->alb, 1, tab->tabthv, tab->tabphi,
+                                count_level, &etatThr , &configThr);
 
                         #ifdef DEBUG_PHOTON
                         if (k==0) display("SURFACE LE UP", &ph_le);
                         else display("SURFACE LE DOWN", &ph_le);
                         #endif
 
-                        countPhoton(&ph_le, tab, count_level
+                        countPhoton(&ph_le, *tab, count_level
                             #ifdef PROGRESSION
                             , var
                             #endif
                         );
                         if (k==0) { 
                             #ifdef SPHERIQUE
-                            if (ph_le.loc==ATMOS) move_sp(&ph_le, tab, init, 1, UPTOA , &etatThr , &configThr);
+                            if (ph_le.loc==ATMOS) move_sp(&ph_le, *tab, init, 1, UPTOA , &etatThr , &configThr);
                             #endif
-                            countPhoton(&ph_le, tab, UPTOA
+                            countPhoton(&ph_le, *tab, UPTOA
                             #ifdef PROGRESSION
                             , var
                             #endif
@@ -323,21 +318,22 @@ __device__ void launchKernel(Variables* var, Tableaux tab
                     }
                   }
                 }
-				surfaceAgitee(&ph, tab.alb, 0, tab.tabthv, tab.tabphi, count_level, &etatThr , &configThr);
+				surfaceAgitee(&ph, tab->alb, 0, tab->tabthv, tab->tabphi,
+                        count_level, &etatThr , &configThr);
             }
 
 			else
-				surfaceLambertienne(&ph, tab.alb, &etatThr , &configThr);
+				surfaceLambertienne(&ph, tab->alb, &etatThr , &configThr);
            }
 
            else {
                 float dis=0;
                 dis = sqrtf((ph.x-X0d)*(ph.x-X0d) +(ph.y-Y0d)*(ph.y-Y0d));
                 if( dis > ENV_SIZEd) {
-                    surfaceLambertienne(&ph, tab.alb, &etatThr , &configThr);
+                    surfaceLambertienne(&ph, tab->alb, &etatThr , &configThr);
                 }
                 else {
-                    surfaceAgitee(&ph, tab.alb, 0, tab.tabthv, tab.tabphi, count_level, &etatThr , &configThr);
+                    surfaceAgitee(&ph, tab->alb, 0, tab->tabthv, tab->tabphi, count_level, &etatThr , &configThr);
                 }
            }
             #ifdef DEBUG_PHOTON
@@ -351,7 +347,7 @@ __device__ void launchKernel(Variables* var, Tableaux tab
         //
         // -> in SEAFLOOR
         if(ph.loc == SEAFLOOR){
-            surfaceLambertienne(&ph, tab.alb, &etatThr , &configThr);
+            surfaceLambertienne(&ph, tab->alb, &etatThr , &configThr);
             #ifdef DEBUG_PHOTON
             display("SEAFLOOR", &ph);
             #endif
@@ -370,7 +366,7 @@ __device__ void launchKernel(Variables* var, Tableaux tab
         }
         
         /* Cone Sampling */
-        if (LEd == 0) countPhoton(&ph, tab, count_level
+        if (LEd == 0) countPhoton(&ph, *tab, count_level
                 #ifdef PROGRESSION
                 , var
                 #endif
@@ -409,8 +405,9 @@ __device__ void launchKernel(Variables* var, Tableaux tab
 	#endif
 
 	// Sauvegarde de l'état du random pour que les nombres ne soient pas identiques à chaque appel du kernel
-	tab.etat[idx] = etatThr[0];
+	tab->etat[idx] = etatThr[0];
 
+}
 }
 
 
@@ -2787,14 +2784,6 @@ __device__ unsigned int randomPhilox4x32_7uint(philox4x32_ctr_t* ctr, philox4x32
     (*ctr).v[0]++;
     //conversion d'un des mots generes sous forme d'unsigned int
     return (unsigned int) res[0];
-}
-
-extern "C" {
-    __global__ void lancementKernelPy(Variables* var, Tableaux *tab
-	, Init* init
-    ) {
-        launchKernel(var, *tab,init);
-    }
 }
 
 __device__ double DatomicAdd(double* address, double val)

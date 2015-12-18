@@ -457,7 +457,7 @@ def smartg(wl, pp=True,
             raise IOError('Could not find {} or {}.'.format(src_device, binnames[pp]))
 
         # get the kernel
-        kern = mod.get_function('lancementKernelPy')
+        kern = mod.get_function('launchKernel')
 
         # computation of the phase functions
         if(SIM == 0 or SIM == 2 or SIM == 3):

@@ -14,18 +14,6 @@
 ***********************************************************/
 
 
-/**********************************************************
-*	> Include
-***********************************************************/
-
-#include <stdio.h>
-#include <mfhdf.h>
-#include <stdlib.h>
-#include <math.h>
-#include <string.h>
-
-#include <sys/stat.h>
-#include <sys/types.h>
 
 #include "philox.h"
 
