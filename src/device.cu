@@ -67,7 +67,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 extern "C" {
-__global__ void launchKernel(Variables* var, Tableaux *tab , Init* init) {
+__global__ void launchKernel(Variables* var, Tableaux *tab, float *X0) {
 
 	// idx est l'indice du thread considéré
 	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
@@ -116,7 +116,7 @@ __global__ void launchKernel(Variables* var, Tableaux *tab , Init* init) {
         // Si le photon est à NONE on l'initialise et on le met à la localisation correspondant à la simulaiton en cours
         if((ph.loc == NONE) && this_thread_active){
 
-            initPhoton(&ph, *tab, init , &etatThr , &configThr);
+            initPhoton(&ph, *tab, X0, &etatThr , &configThr);
             #ifdef DEBUG_PHOTON
             display("INIT", &ph);
             #endif
@@ -418,8 +418,8 @@ __global__ void launchKernel(Variables* var, Tableaux *tab , Init* init) {
 /* initPhoton
 * Initialise le photon dans son état initial avant l'entrée dans l'atmosphère
 */
-__device__ void initPhoton(Photon* ph, Tableaux tab,
-        Init* init , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr)
+__device__ void initPhoton(Photon* ph, Tableaux tab, float *X0,
+                           philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr)
 {
 	// Initialisation du vecteur vitesse
 	ph->vx = - STHVd;
@@ -438,15 +438,17 @@ __device__ void initPhoton(Photon* ph, Tableaux tab,
 	ph->wavel = tab.lambda[ph->ilam];
     atomicAdd(tab.nbPhotonsInter+ph->ilam, 1);
 
+    int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+
     if ((SIMd == -2) || (SIMd == 1) || (SIMd == 2)) {
 
         //
         // Initialisation du photon au sommet de l'atmosphère
         //
 
-        ph->x = init->x0;
-        ph->y = init->y0;
-        ph->z = init->z0;
+        ph->x = X0[0];
+        ph->y = X0[1];
+        ph->z = X0[2];
         ph->couche = 0;   // top of atmosphere
 
         #ifdef SPHERIQUE

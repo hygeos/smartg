@@ -26,6 +26,7 @@ from tools.luts import merge, read_lut_hdf, read_mlut_hdf, LUT, MLUT
 from scipy.interpolate import interp1d
 import subprocess
 from collections import OrderedDict
+from pycuda.gpuarray import to_gpu
 
 
 # set up directories
@@ -366,6 +367,7 @@ def smartg(wl, pp=True,
 
         # computation of the impact point
         x0, y0, z0, tabTransDir = impactInit(pp, HATM, NATM, NLAM, nprofilesAtm['ALT'], nprofilesAtm['H'], THVDEG, RTER)
+        X0 = to_gpu(np.array([x0, y0, z0], dtype='float32'))
 
 
         #
@@ -477,7 +479,7 @@ def smartg(wl, pp=True,
             faer = [0]
 
         # write the input variables into data structures
-        Tableau, Var, Init = InitSD(nprofilesAtm, nprofilesOc, NLAM,
+        Tableau, Var = InitSD(nprofilesAtm, nprofilesOc, NLAM,
                                 NLVL, NPSTK, NBTHETA, NBPHI, faer, foce,
                                 albedo, wavelengths, x0, y0, z0,
                                 XBLOCK, XGRID, SEED, options, le=le)
@@ -495,10 +497,10 @@ def smartg(wl, pp=True,
 
 
         # Loop and kernel call
-        (nbPhotonsTot, nbPhotonsTotInter, nbPhotonsTotInter,
-                nbPhotonsSorTot, tabPhotonsTot) = loop_kernel(NBPHOTONS, Tableau, Var, Init,
+        (nbPhotonsTot, nbPhotonsTotInter,
+                nbPhotonsSorTot, tabPhotonsTot) = loop_kernel(NBPHOTONS, Tableau, Var,
                                                               NLVL, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
-                                                              NLAM, options, kern, p)
+                                                              NLAM, options, kern, p, X0)
 
 
         # finalization
@@ -920,7 +922,6 @@ def InitSD(nprofilesAtm, nprofilesOc, NLAM,
         - foce : CDF of scattering phase matrices (Ocean)
         - albedo : Spectral Albedo
         - wl: wavelength
-        - (x0,y0,z0) : Initial coordinates of the photon
         - XBLOCK: Block Size
         - XGRID : Grid Size
         - SEED: random number generator seed
@@ -963,9 +964,6 @@ def InitSD(nprofilesAtm, nprofilesOc, NLAM,
                 - erreurvy : number of outgoing photons
                 - erreurcase : number of photons stored in a non existing box
 
-        * Init : Class containing the initial parameters of the photon
-            Attributes :
-                - x0,y0,z0 : cartesian coordinates of the photon at the initialization
         -----------------------------------------------------------------------------------
         NB : When calling the class GPUStruct, it is important to consider the following elements:
              the structure in python has to be exactly the same as the structure in C ie:
@@ -1012,13 +1010,11 @@ def InitSD(nprofilesAtm, nprofilesOc, NLAM,
         tmp2 = [(np.uint64, 'nbThreads', 0), (np.uint64, 'nbPhotonsSor', 0), (np.uint32, 'erreurvxy', 0), (np.int32, 'erreurvy', 0), (np.int32, 'erreurcase', 0)]
         tmp += tmp2
     Var = GPUStruct(tmp)
-    Init = GPUStruct([(np.float32, 'x0', x0), (np.float32, 'y0', y0), (np.float32, 'z0', z0)])
     # copy the data to the GPU
     Var.copy_to_gpu(['nbPhotons'])
     Tableau.copy_to_gpu(['tabPhotons','nbPhotonsInter'])
-    Init.copy_to_gpu()
 
-    return Tableau,Var,Init
+    return Tableau,Var
 
 
 def get_profAtm(wl, atm):
@@ -1135,9 +1131,9 @@ def get_git_attrs():
     return R
 
 
-def loop_kernel(NBPHOTONS, Tableau, Var, Init, NLVL,
+def loop_kernel(NBPHOTONS, Tableau, Var, NLVL,
                 NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
-                NLAM, options , kern, p):
+                NLAM, options , kern, p, X0):
     """
     launch the kernel several time until the targeted number of photons injected is reached
 
@@ -1145,7 +1141,6 @@ def loop_kernel(NBPHOTONS, Tableau, Var, Init, NLVL,
         - NBPHOTONS : Number of photons injected
         - Tableau : Class containing the arrays sent to the device
         - Var : Class containing the variables sent to the device
-        - Init : Class containing the initial parameters of the photon
         - NLVL : Number of output levels
         - NPSTK : Number of Stokes parameters + 1 for number of photons
         - BLOCK : Block dimension
@@ -1155,6 +1150,7 @@ def loop_kernel(NBPHOTONS, Tableau, Var, Init, NLVL,
         - options : compilation options
         - kern : kernel launching the transfert radiative simulation
         - p: progress bar object
+        - X0: initial coordinates of the photon entering the atmosphere
     --------------------------------------------------------------
     Returns :
         - nbPhotonsTot : Total number of photons processed
@@ -1190,7 +1186,7 @@ def loop_kernel(NBPHOTONS, Tableau, Var, Init, NLVL,
         Var.copy_to_gpu(skipVar)
 
         # kernel launch
-        kern(Var.get_ptr(), Tableau.get_ptr(), Init.get_ptr(), block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
+        kern(Var.get_ptr(), Tableau.get_ptr(), X0, block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
 
         # transfert the result from the device to the host
         Tableau.copy_from_gpu(skipTableau)
@@ -1209,7 +1205,7 @@ def loop_kernel(NBPHOTONS, Tableau, Var, Init, NLVL,
         # update of the progression Bar
         p.update(nbPhotonsTot, afficheProgress(nbPhotonsTot, NBPHOTONS, nbPhotonsSorTot))
 
-    return nbPhotonsTot, nbPhotonsTotInter , nbPhotonsTotInter, nbPhotonsSorTot, tabPhotonsTot
+    return nbPhotonsTot, nbPhotonsTotInter, nbPhotonsSorTot, tabPhotonsTot
 
 
 def impactInit(pp, Hatm, NATM, NLAM, ALT, H, THVDEG, Rter):

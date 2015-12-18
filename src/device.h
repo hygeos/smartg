@@ -69,7 +69,7 @@ __device__ __constant__ float RTER;
 ***********************************************************/
 
 extern "C" {
-__global__ void launchKernel(Variables* var, Tableaux *tab, Init* init);
+__global__ void launchKernel(Variables* var, Tableaux *tab, float *X0);
 }
 
 
@@ -80,7 +80,8 @@ __global__ void launchKernel(Variables* var, Tableaux *tab, Init* init);
 /* initPhoton
 * Initialise le photon dans son état initial avant l'entrée dans l'atmosphère
 */
-__device__ void initPhoton(Photon* ph, Tableaux tab , Init* init , philox4x32_ctr_t*, philox4x32_key_t*);
+__device__ void initPhoton(Photon* ph, Tableaux tab, float *X0,
+                           philox4x32_ctr_t*, philox4x32_key_t*);
 
 
 // move, version sphérique

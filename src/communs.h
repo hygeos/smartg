@@ -15,6 +15,7 @@
 
 
 
+#include <stdio.h>
 #include "philox.h"
 
 /**********************************************************
@@ -233,25 +234,6 @@ typedef struct __align__(16)
     //!< ...la partie de la clef fixee par l'utilisateur
 	
 } Tableaux;
-
-
-/* Code spécifique à une atmosphère sphérique */
-/* Init
-* Paramètres initiaux du photon lors du premier impact avec l'atmosphère
-* Les calculs sont effectués dans host.cu une seule fois
-*/
-typedef struct __align__(16){
-	
-	/* Coordonnées initiales */
-	float x0;
-	float y0;
-	float z0;
-	
-	/* Paramètres liés au profil initial vu par le photon */
-	//float* taumax0;		// Valeur maximale de l'épaisseur optique parcourue par le photon qui conduira à une 1ère intéraction
-	//float zintermax0;	// Distance entre le photon et une des extrémités de l'atmosphère dans le cas où il n'y as pas d'intéractoin
-
-} Init;
 
 
 /* Evnt
