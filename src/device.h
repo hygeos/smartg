@@ -85,10 +85,10 @@ __device__ void initPhoton(Photon* ph, Tableaux tab , Init* init , philox4x32_ct
 
 // move, version sphérique
 #ifdef SPHERIQUE
-__device__ void move_sp(Photon*, Tableaux tab, Init* init, int le, int count_level , philox4x32_ctr_t*, philox4x32_key_t*);
+__device__ void move_sp(Photon*, Tableaux tab, int le, int count_level , philox4x32_ctr_t*, philox4x32_key_t*);
 #endif
 
-__device__ void move_spp(Photon*, Tableaux tab, Init* init , philox4x32_ctr_t*, philox4x32_key_t*);
+__device__ void move_spp(Photon*, Tableaux tab, philox4x32_ctr_t*, philox4x32_key_t*);
 
 // move, version plan parallèle
 __device__ void move_pp(Photon*,float*z, float* h, float* pMol , float *abs , float* ho , philox4x32_ctr_t*, philox4x32_key_t*);

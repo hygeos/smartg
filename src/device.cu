@@ -133,14 +133,14 @@ __global__ void launchKernel(Variables* var, Tableaux *tab , Init* init) {
 
             #ifdef SPHERIQUE
             if (ph.loc == ATMOS)
-                move_sp(&ph, *tab, init, 0, 0 , &etatThr , &configThr);
+                move_sp(&ph, *tab, 0, 0 , &etatThr , &configThr);
             else 
             #endif
                 move_pp(&ph, tab->z, tab->h, tab->pMol, tab->abs, tab->ho, &etatThr , &configThr);
             #ifdef DEBUG_PHOTON
             display("MOVE", &ph);
             #endif
-                /*move_spp(&ph, *tab, init , &etatThr , &configThr);*/
+                /*move_spp(&ph, *tab, &etatThr , &configThr);*/
 		}
 
         //
@@ -224,7 +224,7 @@ __global__ void launchKernel(Variables* var, Tableaux *tab , Init* init) {
                             #endif
 
                             #ifdef SPHERIQUE
-                            if (ph_le.loc==ATMOS) move_sp(&ph_le, *tab, init, 1, count_level , &etatThr , &configThr);
+                            if (ph_le.loc==ATMOS) move_sp(&ph_le, *tab, 1, count_level , &etatThr , &configThr);
                             #ifdef DEBUG_PHOTON
                             display("MOVE LE", &ph_le);
                             #endif
@@ -306,7 +306,7 @@ __global__ void launchKernel(Variables* var, Tableaux *tab , Init* init) {
                         );
                         if (k==0) { 
                             #ifdef SPHERIQUE
-                            if (ph_le.loc==ATMOS) move_sp(&ph_le, *tab, init, 1, UPTOA , &etatThr , &configThr);
+                            if (ph_le.loc==ATMOS) move_sp(&ph_le, *tab, 1, UPTOA , &etatThr , &configThr);
                             #endif
                             countPhoton(&ph_le, *tab, UPTOA
                             #ifdef PROGRESSION
@@ -494,7 +494,7 @@ __device__ void initPhoton(Photon* ph, Tableaux tab,
 
 
 #ifdef SPHERIQUE
-__device__ void move_sp(Photon* ph, Tableaux tab, Init* init, int le, int count_level , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr) {
+__device__ void move_sp(Photon* ph, Tableaux tab, int le, int count_level , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr) {
 
     float tauRdm;
     float hph = 0.;  // cumulative optical thickness
@@ -730,7 +730,7 @@ __device__ void move_sp(Photon* ph, Tableaux tab, Init* init, int le, int count_
 }
 #endif // SPHERIQUE
 
-__device__ void move_spp(Photon* ph, Tableaux tab, Init* init , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr) {
+__device__ void move_spp(Photon* ph, Tableaux tab, philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr) {
 
     float tauRdm;
     float hph = 0., aph=0.;  // cumulative optical thicknesses scattering and absorption
