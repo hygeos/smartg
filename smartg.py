@@ -1156,6 +1156,8 @@ def loop_kernel(NBPHOTONS, Tableau, Var, NLVL,
         - tabPhotonsTot : Total weight of all outgoing photons
 
     """
+    # Initializations
+    nThreadsActive = gpuzeros(1, dtype='int32')
 
     # Initialize the array for error counting
     NERROR = 32
@@ -1187,7 +1189,7 @@ def loop_kernel(NBPHOTONS, Tableau, Var, NLVL,
 
         # kernel launch
         kern(Var.get_ptr(), Tableau.get_ptr(), X0,
-                errorcount,
+                errorcount, nThreadsActive,
                 block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
 
         # transfert the result from the device to the host

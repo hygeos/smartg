@@ -68,7 +68,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 extern "C" {
 __global__ void launchKernel(Variables* var, Tableaux *tab, float *X0,
-        unsigned long long *errorcount) {
+        unsigned long long *errorcount, int *nThreadsActive) {
 
 	// idx est l'indice du thread considéré
 	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
@@ -99,16 +99,16 @@ __global__ void launchKernel(Variables* var, Tableaux *tab, float *X0,
 	Photon ph, ph_le; 		// On associe une structure de photon au thread
 	ph.loc = NONE;	// Initialement le photon n'est nulle part, il doit être initialisé
 	
-    atomicAdd(&(var->nThreadsActive), 1);
+    atomicAdd(nThreadsActive, 1);
 
     //
     // main loop
     //
-    while (var->nThreadsActive > 0) {
+    while (*nThreadsActive > 0) {
 
         if ((var->nbPhotons > NBLOOPd) && this_thread_active) {
             this_thread_active = 0;
-            atomicAdd(&(var->nThreadsActive), -1);
+            atomicAdd(nThreadsActive, -1);
         }
 
         // Si le photon est à NONE on l'initialise et on le met à la localisation correspondant à la simulaiton en cours

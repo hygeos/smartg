@@ -70,7 +70,7 @@ __device__ __constant__ float RTER;
 
 extern "C" {
 __global__ void launchKernel(Variables* var, Tableaux *tab, float *X0,
-        unsigned long long *errorcount);
+        unsigned long long *errorcount, int *nThreadsActive);
 }
 
 
