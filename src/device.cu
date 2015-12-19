@@ -1567,7 +1567,7 @@ __device__ void surfaceAgitee(Photon* ph, float* alb, int le, float* tabthv, flo
 	float sig, sig2  ;
 	float beta = 0.F;	// Angle par rapport à la verticale du vecteur normal à une facette de vagues 
 	float sBeta;
-	float cBeta, tbeta;
+	float cBeta;
 	
 	float alpha ;	//Angle azimutal du vecteur normal a une facette de vagues
 	
@@ -1740,7 +1740,7 @@ __device__ void surfaceAgitee(Photon* ph, float* alb, int le, float* tabthv, flo
     } /* not le*/
 
     if (le) {
-     float sign, norm;
+     float sign;
      if ((count_level==DOWN0M) || (count_level==DOWN0P)) sign = -1;
      else sign = 1;
      if (ph->loc == SURF0M) {
@@ -1776,7 +1776,7 @@ __device__ void surfaceAgitee(Photon* ph, float* alb, int le, float* tabthv, flo
         ph->weight = 0.;
         return;
      }
-     tbeta = __fdividef(__tanf(beta),sig);
+     // tbeta = __fdividef(__tanf(beta),sig);
     
     } /*le*/
 
