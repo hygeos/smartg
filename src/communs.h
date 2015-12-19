@@ -62,6 +62,11 @@
 #define UP0M	4
 
 
+// List of errors
+#define ERROR_THETA 0
+#define ERROR_CASE  1
+#define ERROR_VXY   2
+
 // bitmasks for output
 #define OUTPUT_BOA_DOWN_0P_UP_0M   1 // downward radiance at BOA above surface (0+) and upward radiance at BOA below surface (0-)
 #define OUTPUT_BOA_DOWN_0M_UP_0P   2 // downward radiance at BOA below surface (0-) and upward radiance at BOA above surface (0+)

@@ -26,7 +26,7 @@ from tools.luts import merge, read_lut_hdf, read_mlut_hdf, LUT, MLUT
 from scipy.interpolate import interp1d
 import subprocess
 from collections import OrderedDict
-from pycuda.gpuarray import to_gpu
+from pycuda.gpuarray import to_gpu, zeros as gpuzeros
 import pycuda.driver as cuda
 
 
@@ -481,7 +481,7 @@ def smartg(wl, pp=True,
         # write the input variables into data structures
         Tableau, Var = InitSD(nprofilesAtm, nprofilesOc, NLAM,
                                 NLVL, NPSTK, NBTHETA, NBPHI, faer, foce,
-                                albedo, wavelengths, x0, y0, z0,
+                                albedo, wavelengths,
                                 XBLOCK, XGRID, SEED, options, le=le)
 
         # initialization of the constants
@@ -498,9 +498,10 @@ def smartg(wl, pp=True,
 
         # Loop and kernel call
         (nbPhotonsTot, nbPhotonsTotInter,
-                nbPhotonsSorTot, tabPhotonsTot) = loop_kernel(NBPHOTONS, Tableau, Var,
-                                                              NLVL, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
-                                                              NLAM, options, kern, p, X0)
+                nbPhotonsSorTot, tabPhotonsTot, errorcount
+                ) = loop_kernel(NBPHOTONS, Tableau, Var,
+                                NLVL, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
+                                NLAM, options, kern, p, X0)
 
 
         # finalization
@@ -902,8 +903,7 @@ def InitConstantes(surf, env, NATM, NOCE, mod,
 
 def InitSD(nprofilesAtm, nprofilesOc, NLAM,
            NLVL, NPSTK, NBTHETA, NBPHI, faer,
-           foce, albedo, wl, x0, y0,
-           z0,XBLOCK, XGRID, SEED, options, le=None):
+           foce, albedo, wl, XBLOCK, XGRID, SEED, options, le=None):
 
     """
     Initialize the principles data structures in python and send them the device memory
@@ -1157,6 +1157,10 @@ def loop_kernel(NBPHOTONS, Tableau, Var, NLVL,
 
     """
 
+    # Initialize the array for error counting
+    NERROR = 32
+    errorcount = gpuzeros(NERROR, dtype='uint64')
+
     # Initialize of the parameters
     nbPhotonsTot = 0
     nbPhotonsTotInter = np.zeros(NLAM, dtype=np.uint64)
@@ -1182,7 +1186,9 @@ def loop_kernel(NBPHOTONS, Tableau, Var, NLVL,
         Var.copy_to_gpu(skipVar)
 
         # kernel launch
-        kern(Var.get_ptr(), Tableau.get_ptr(), X0, block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
+        kern(Var.get_ptr(), Tableau.get_ptr(), X0,
+                errorcount,
+                block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
 
         # transfert the result from the device to the host
         Tableau.copy_from_gpu(skipTableau)
@@ -1200,9 +1206,7 @@ def loop_kernel(NBPHOTONS, Tableau, Var, NLVL,
         # update of the progression Bar
         p.update(nbPhotonsTot, afficheProgress(nbPhotonsTot, NBPHOTONS, nbPhotonsSorTot))
 
-        print nbPhotonsTot, nbPhotonsTotInter, nbPhotonsSorTot
-        print sum(nbPhotonsTotInter) - nbPhotonsTot
-    return nbPhotonsTot, nbPhotonsTotInter, nbPhotonsSorTot, tabPhotonsTot
+    return nbPhotonsTot, nbPhotonsTotInter, nbPhotonsSorTot, tabPhotonsTot, errorcount
 
 
 def impactInit(pp, Hatm, NATM, NLAM, ALT, H, THVDEG, Rter):

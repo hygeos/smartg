@@ -67,7 +67,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 extern "C" {
-__global__ void launchKernel(Variables* var, Tableaux *tab, float *X0) {
+__global__ void launchKernel(Variables* var, Tableaux *tab, float *X0,
+        unsigned long long *errorcount) {
 
 	// idx est l'indice du thread considéré
 	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
@@ -167,7 +168,8 @@ __global__ void launchKernel(Variables* var, Tableaux *tab, float *X0) {
         // count the photons
         
         /* Cone Sampling */
-        if (LEd ==0) countPhoton(&ph, *tab, count_level , var);
+        if (LEd ==0) countPhoton(&ph, *tab, count_level,
+                errorcount);
 
 
 		syncthreads();
@@ -221,7 +223,8 @@ __global__ void launchKernel(Variables* var, Tableaux *tab, float *X0) {
                             #endif
                             #endif
 
-                            countPhoton(&ph_le, *tab, count_level , var);
+                            countPhoton(&ph_le, *tab, count_level,
+                                    errorcount);
                         }
                     }
                 }
@@ -286,12 +289,12 @@ __global__ void launchKernel(Variables* var, Tableaux *tab, float *X0) {
                         else display("SURFACE LE DOWN", &ph_le);
                         #endif
 
-                        countPhoton(&ph_le, *tab, count_level , var);
+                        countPhoton(&ph_le, *tab, count_level, errorcount);
                         if (k==0) { 
                             #ifdef SPHERIQUE
                             if (ph_le.loc==ATMOS) move_sp(&ph_le, *tab, 1, UPTOA , &etatThr , &configThr);
                             #endif
-                            countPhoton(&ph_le, *tab, UPTOA , var);
+                            countPhoton(&ph_le, *tab, UPTOA , errorcount);
                         }
                       }
                     }
@@ -345,7 +348,7 @@ __global__ void launchKernel(Variables* var, Tableaux *tab, float *X0) {
         }
         
         /* Cone Sampling */
-        if (LEd == 0) countPhoton(&ph, *tab, count_level , var);
+        if (LEd == 0) countPhoton(&ph, *tab, count_level, errorcount);
 
 
 
@@ -2183,10 +2186,8 @@ __device__ void surfaceLambertienne(Photon* ph, float* alb , philox4x32_ctr_t* e
 
 
 __device__ void countPhoton(Photon* ph,
-        Tableaux tab,
-        int count_level
-		, Variables* var
-		    ) {
+        Tableaux tab, int count_level,
+		unsigned long long *errorcount) {
 
     if (count_level < 0) {
         // don't count anything
@@ -2214,7 +2215,7 @@ __device__ void countPhoton(Photon* ph,
 
 	if(theta == 0.F)
 	{
-		atomicAdd(&(var->erreurtheta), 1);
+		atomicAdd(errorcount+ERROR_THETA, 1);
 	}
 
 
@@ -2234,7 +2235,7 @@ __device__ void countPhoton(Photon* ph,
     }
     s4 = ph->stokes4;
 	// Calcul de la case dans laquelle le photon sort
-	if (LEd == 0) ComputeBox(&ith, &iphi, &il, ph , var);
+	if (LEd == 0) ComputeBox(&ith, &iphi, &il, ph, errorcount);
     else {
         ith = ph->ith;
         iphi= ph->iph;
@@ -2292,7 +2293,7 @@ __device__ void countPhoton(Photon* ph,
 	}
 	else
 	{
-		atomicAdd(&(var->erreurcase), 1);
+		atomicAdd(errorcount+ERROR_CASE, 1);
 	}
 
 }
@@ -2348,7 +2349,8 @@ __device__ void ComputePsi(Photon* photon, float* psi, float theta)
 * Fonction qui calcule la position (ith, iphi) et l'indice spectral (il) du photon dans le tableau de sortie
 * La position correspond à une boite contenu dans l'espace de sortie
 */
-__device__ void ComputeBox(int* ith, int* iphi, int* il, Photon* photon , Variables* var)
+__device__ void ComputeBox(int* ith, int* iphi, int* il,
+                           Photon* photon, unsigned long long *errorcount)
 {
 	// vxy est la projection du vecteur vitesse du photon sur (x,y)
 	float vxy = sqrtf(photon->vx * photon->vx + photon->vy * photon->vy);
@@ -2394,12 +2396,12 @@ __device__ void ComputeBox(int* ith, int* iphi, int* il, Photon* photon , Variab
    		    if(photon->vy < 0.F) *iphi = NBPHId - *iphi;
             }
 		// Lorsque vy=0 on décide par défaut que le photon reste du côté vy>0
-		if(photon->vy == 0.F) atomicAdd(&(var->erreurvy), 1);
+		if(photon->vy == 0.F) atomicAdd(errorcount+ERROR_VXY, 1);
 	}
 	
 	else{
 		// Photon très près du zenith
-		atomicAdd(&(var->erreurvxy), 1);
+		atomicAdd(errorcount+ERROR_VXY, 1);
 // 		/*if(photon->vy < 0.F) *iphi = NBPHId - 1;
 // 		else*/ *iphi = 0;
 		if(photon->vy >= 0.F)  *iphi = 0;

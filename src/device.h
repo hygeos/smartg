@@ -69,7 +69,8 @@ __device__ __constant__ float RTER;
 ***********************************************************/
 
 extern "C" {
-__global__ void launchKernel(Variables* var, Tableaux *tab, float *X0);
+__global__ void launchKernel(Variables* var, Tableaux *tab, float *X0,
+        unsigned long long *errorcount);
 }
 
 
@@ -118,7 +119,7 @@ __device__ void surfaceLambertienne(Photon* , float* alb, philox4x32_ctr_t* etat
 /* exit
 * Sauve les paramètres des photons sortis dans l'espace dans la boite correspondant à la direction de sortie
 */
-__device__ void countPhoton(Photon* , Tableaux, int , Variables*);
+__device__ void countPhoton(Photon* , Tableaux, int, unsigned long long*);
 
 
 
@@ -137,7 +138,8 @@ __device__ void ComputePsi(Photon*, float*, float);
 * Fonction qui calcule la position (ith, iphi) du photon dans le tableau de sortie
 * La position correspond à une boite contenu dans l'espace de sortie
 */
-__device__ void ComputeBox(int*, int*, int*, Photon* , Variables* var);
+__device__ void ComputeBox(int*, int*, int*, Photon*,
+                           unsigned long long *errorcount);
 
 #ifdef DEBUG_PHOTON
 __device__ void display(const char* desc, Photon* ph);
