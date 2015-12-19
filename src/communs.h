@@ -146,13 +146,11 @@ typedef struct __align__(16)
 	int erreurpoids;				// Nombre de photons ayant un poids anormalement élevé
 	int erreurtheta;				// Nombre de photons ignorés (sortant dans la direction de visée)
 	
-	#ifdef PROGRESSION
 	unsigned long long nbThreads;	// Nombre total de threads lancés
 	unsigned long long nbPhotonsSor;// Nombre de photons ressortis pour un appel du Kernel
 	int erreurvxy;					// Nombre de photons sortant au zénith et donc difficiles à classer
 	int erreurvy;					// Nombre de photons sortant à phi=0 ou phi=PI et donc difficiles à classer
 	int erreurcase;					// Nombre de photons rangé dans une case inexistante
-	#endif
 	
 }Variables;
 

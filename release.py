@@ -70,7 +70,7 @@ def main():
     for pp in binnames.keys():
         print 'Compilation in {} mode...'.format({True: 'pp', False: 'sp'}[pp])
 
-        options = ['-DPROGRESSION']
+        options = []
         if not pp:
             options.append('-DSPHERIQUE')
 

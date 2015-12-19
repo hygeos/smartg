@@ -27,6 +27,7 @@ from scipy.interpolate import interp1d
 import subprocess
 from collections import OrderedDict
 from pycuda.gpuarray import to_gpu
+import pycuda.driver as cuda
 
 
 # set up directories
@@ -417,12 +418,11 @@ def smartg(wl, pp=True,
             
         # compilation option
         # list of compilation flag :
-        #     - DPROGRESSION : Calcul et affichage de la progression de la simulation
         #     - DSPHERIQUE : Calcul en sphérique
         #     - DDEBUG : Ajout de tests intermédiaires utilisés lors du débugage
         #     - DDOUBLE : Accumulation de TabPhotons en double precision (!slow down processing)
 
-        options = ['-DPROGRESSION']
+        options = []
         if not pp:
             options.append('-DSPHERIQUE')
         if debug:
@@ -840,7 +840,6 @@ def InitConstantes(surf, env, NATM, NOCE, mod,
         - mod : PyCUDA module compiling the kernel
     """
 
-    import pycuda.driver as cuda
     D = {}
 
     # compute some needed constants
@@ -957,7 +956,6 @@ def InitSD(nprofilesAtm, nprofilesOc, NLAM,
                 - nThreadsActive : Number of active threads
                 - erreurpoids : Number of photons having a weight abnormally high
                 - erreurtheta : Number of photons ignored
-            if PROGRESSION FLAG
                 - nbThreads : Total number of thread launched
                 - nbPhotonsSor : number of photons reaching the space during a kernel call
                 - erreurvxy : number of outgoing photons in the zenith
@@ -1006,9 +1004,8 @@ def InitSD(nprofilesAtm, nprofilesOc, NLAM,
     Tableau = GPUStruct(tmp)
 
     tmp = [(np.uint64, 'nbPhotons', 0),(np.int32, 'nThreadsActive', 0), (np.int32, 'erreurpoids', 0), (np.int32, 'erreurtheta', 0)]
-    if '-DPROGRESSION' in options:
-        tmp2 = [(np.uint64, 'nbThreads', 0), (np.uint64, 'nbPhotonsSor', 0), (np.uint32, 'erreurvxy', 0), (np.int32, 'erreurvy', 0), (np.int32, 'erreurcase', 0)]
-        tmp += tmp2
+    tmp2 = [(np.uint64, 'nbThreads', 0), (np.uint64, 'nbPhotonsSor', 0), (np.uint32, 'erreurvxy', 0), (np.int32, 'erreurvy', 0), (np.int32, 'erreurcase', 0)]
+    tmp += tmp2
     Var = GPUStruct(tmp)
     # copy the data to the GPU
     Var.copy_to_gpu(['nbPhotons'])
@@ -1178,8 +1175,7 @@ def loop_kernel(NBPHOTONS, Tableau, Var, NLVL,
             Tableau.tabPhotons = np.zeros(NLVL*NPSTK*NBTHETA * NBPHI * NLAM, dtype=np.float32)
         Tableau.nbPhotonsInter = np.zeros(NLAM, dtype=np.int32)
         Var.nbPhotons = np.uint32(0)
-        if '-DPROGRESSION' in options:
-            Var.nbPhotonsSor = np.uint32(0)
+        Var.nbPhotonsSor = np.uint32(0)
 
             # transfert the data from the host to the device
         Tableau.copy_to_gpu(skipTableau)
@@ -1199,12 +1195,13 @@ def loop_kernel(NBPHOTONS, Tableau, Var, NLVL,
         for ilam in xrange(0, NLAM):
             nbPhotonsTotInter[ilam] += Tableau.nbPhotonsInter[ilam]
 
-        if '-DPROGRESSION' in options:
-            nbPhotonsSorTot += Var.nbPhotonsSor;
+        nbPhotonsSorTot += Var.nbPhotonsSor;
 
         # update of the progression Bar
         p.update(nbPhotonsTot, afficheProgress(nbPhotonsTot, NBPHOTONS, nbPhotonsSorTot))
 
+        print nbPhotonsTot, nbPhotonsTotInter, nbPhotonsSorTot
+        print sum(nbPhotonsTotInter) - nbPhotonsTot
     return nbPhotonsTot, nbPhotonsTotInter, nbPhotonsSorTot, tabPhotonsTot
 
 

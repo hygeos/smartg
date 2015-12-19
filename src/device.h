@@ -118,11 +118,7 @@ __device__ void surfaceLambertienne(Photon* , float* alb, philox4x32_ctr_t* etat
 /* exit
 * Sauve les paramètres des photons sortis dans l'espace dans la boite correspondant à la direction de sortie
 */
-__device__ void countPhoton(Photon* , Tableaux, int
-		#ifdef PROGRESSION
-		, Variables*
-		#endif
-		    );
+__device__ void countPhoton(Photon* , Tableaux, int , Variables*);
 
 
 
@@ -141,11 +137,7 @@ __device__ void ComputePsi(Photon*, float*, float);
 * Fonction qui calcule la position (ith, iphi) du photon dans le tableau de sortie
 * La position correspond à une boite contenu dans l'espace de sortie
 */
-__device__ void ComputeBox(int*, int*, int*, Photon*
-				#ifdef PROGRESSION
-				, Variables* var
-				#endif 
-					);
+__device__ void ComputeBox(int*, int*, int*, Photon* , Variables* var);
 
 #ifdef DEBUG_PHOTON
 __device__ void display(const char* desc, Photon* ph);

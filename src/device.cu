@@ -93,10 +93,7 @@ __global__ void launchKernel(Variables* var, Tableaux *tab, float *X0) {
 	
 	// Création de variable propres à chaque thread
 	unsigned long long nbPhotonsThr = 0; 	// Nombre de photons traités par le thread
-	
-	#ifdef PROGRESSION
 	unsigned int nbPhotonsSorThr = 0; 		// Nombre de photons traités par le thread et ressortis dans l'espace
-	#endif
 	
 	Photon ph, ph_le; 		// On associe une structure de photon au thread
 	ph.loc = NONE;	// Initialement le photon n'est nulle part, il doit être initialisé
@@ -153,10 +150,7 @@ __global__ void launchKernel(Variables* var, Tableaux *tab, float *X0) {
             // increment the photon counter
             // (for this thread)
             nbPhotonsThr++;
-
-            #ifdef PROGRESSION
             nbPhotonsSorThr++;
-            #endif
 
             // reset the photon location (always)
             ph.loc = NONE;
@@ -173,11 +167,7 @@ __global__ void launchKernel(Variables* var, Tableaux *tab, float *X0) {
         // count the photons
         
         /* Cone Sampling */
-        if (LEd ==0) countPhoton(&ph, *tab, count_level
-                #ifdef PROGRESSION
-                , var
-                #endif
-                );
+        if (LEd ==0) countPhoton(&ph, *tab, count_level , var);
 
 
 		syncthreads();
@@ -231,11 +221,7 @@ __global__ void launchKernel(Variables* var, Tableaux *tab, float *X0) {
                             #endif
                             #endif
 
-                            countPhoton(&ph_le, *tab, count_level
-                            #ifdef PROGRESSION
-                                    , var
-                            #endif
-                                    );
+                            countPhoton(&ph_le, *tab, count_level , var);
                         }
                     }
                 }
@@ -300,20 +286,12 @@ __global__ void launchKernel(Variables* var, Tableaux *tab, float *X0) {
                         else display("SURFACE LE DOWN", &ph_le);
                         #endif
 
-                        countPhoton(&ph_le, *tab, count_level
-                            #ifdef PROGRESSION
-                            , var
-                            #endif
-                        );
+                        countPhoton(&ph_le, *tab, count_level , var);
                         if (k==0) { 
                             #ifdef SPHERIQUE
                             if (ph_le.loc==ATMOS) move_sp(&ph_le, *tab, 1, UPTOA , &etatThr , &configThr);
                             #endif
-                            countPhoton(&ph_le, *tab, UPTOA
-                            #ifdef PROGRESSION
-                            , var
-                            #endif
-                            );
+                            countPhoton(&ph_le, *tab, UPTOA , var);
                         }
                       }
                     }
@@ -367,11 +345,7 @@ __global__ void launchKernel(Variables* var, Tableaux *tab, float *X0) {
         }
         
         /* Cone Sampling */
-        if (LEd == 0) countPhoton(&ph, *tab, count_level
-                #ifdef PROGRESSION
-                , var
-                #endif
-                );
+        if (LEd == 0) countPhoton(&ph, *tab, count_level , var);
 
 
 
@@ -397,13 +371,11 @@ __global__ void launchKernel(Variables* var, Tableaux *tab, float *X0) {
 
 	atomicAdd(&(var->nbPhotons), nbPhotonsThr);
 
-	#ifdef PROGRESSION
 	// On rassemble les nombres de photons traités et sortis de chaque thread
 	atomicAdd(&(var->nbPhotonsSor), nbPhotonsSorThr);
 
 	// On incrémente avncement qui compte le nombre d'appels du Kernel
 	atomicAdd(&(var->nbThreads), 1);
-	#endif
 
 	// Sauvegarde de l'état du random pour que les nombres ne soient pas identiques à chaque appel du kernel
 	tab->etat[idx] = etatThr[0];
@@ -438,8 +410,6 @@ __device__ void initPhoton(Photon* ph, Tableaux tab, float *X0,
 	ph->ilam = __float2uint_rz(RAND * NLAMd);
 	ph->wavel = tab.lambda[ph->ilam];
     atomicAdd(tab.nbPhotonsInter+ph->ilam, 1);
-
-    int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
 
     if ((SIMd == -2) || (SIMd == 1) || (SIMd == 2)) {
 
@@ -2215,9 +2185,7 @@ __device__ void surfaceLambertienne(Photon* ph, float* alb , philox4x32_ctr_t* e
 __device__ void countPhoton(Photon* ph,
         Tableaux tab,
         int count_level
-		#ifdef PROGRESSION
-		, Variables* var   // TODO: remove nbPhotonsSorThr
-		#endif
+		, Variables* var
 		    ) {
 
     if (count_level < 0) {
@@ -2246,10 +2214,7 @@ __device__ void countPhoton(Photon* ph,
 
 	if(theta == 0.F)
 	{
-		#ifdef PROGRESSION
 		atomicAdd(&(var->erreurtheta), 1);
-		#endif
-		//return;
 	}
 
 
@@ -2269,11 +2234,7 @@ __device__ void countPhoton(Photon* ph,
     }
     s4 = ph->stokes4;
 	// Calcul de la case dans laquelle le photon sort
-	if (LEd == 0) ComputeBox(&ith, &iphi, &il, ph 
-			   #ifdef PROGRESSION
-			   , var
-			   #endif
-			   );
+	if (LEd == 0) ComputeBox(&ith, &iphi, &il, ph , var);
     else {
         ith = ph->ith;
         iphi= ph->iph;
@@ -2331,9 +2292,7 @@ __device__ void countPhoton(Photon* ph,
 	}
 	else
 	{
-		#ifdef PROGRESSION
 		atomicAdd(&(var->erreurcase), 1);
-		#endif
 	}
 
 }
@@ -2389,11 +2348,7 @@ __device__ void ComputePsi(Photon* photon, float* psi, float theta)
 * Fonction qui calcule la position (ith, iphi) et l'indice spectral (il) du photon dans le tableau de sortie
 * La position correspond à une boite contenu dans l'espace de sortie
 */
-__device__ void ComputeBox(int* ith, int* iphi, int* il, Photon* photon
-			#ifdef PROGRESSION
-			, Variables* var
-			#endif 
-			)
+__device__ void ComputeBox(int* ith, int* iphi, int* il, Photon* photon , Variables* var)
 {
 	// vxy est la projection du vecteur vitesse du photon sur (x,y)
 	float vxy = sqrtf(photon->vx * photon->vx + photon->vy * photon->vy);
@@ -2438,17 +2393,13 @@ __device__ void ComputeBox(int* ith, int* iphi, int* il, Photon* photon
 		    // Puis on place le photon dans l'autre demi-cercle selon vy, utile uniquement lorsque l'on travail sur tous l'espace
    		    if(photon->vy < 0.F) *iphi = NBPHId - *iphi;
             }
-		#ifdef PROGRESSION
 		// Lorsque vy=0 on décide par défaut que le photon reste du côté vy>0
 		if(photon->vy == 0.F) atomicAdd(&(var->erreurvy), 1);
-		#endif
 	}
 	
 	else{
 		// Photon très près du zenith
-		#ifdef PROGRESSION
 		atomicAdd(&(var->erreurvxy), 1);
-		#endif
 // 		/*if(photon->vy < 0.F) *iphi = NBPHId - 1;
 // 		else*/ *iphi = 0;
 		if(photon->vy >= 0.F)  *iphi = 0;
