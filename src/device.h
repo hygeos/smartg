@@ -70,7 +70,7 @@ __device__ __constant__ float RTER;
 
 extern "C" {
 __global__ void launchKernel(Variables* var, Tableaux *tab, float *X0,
-        unsigned long long *errorcount, int *nThreadsActive);
+        unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons);
 }
 
 
@@ -119,7 +119,7 @@ __device__ void surfaceLambertienne(Photon* , float* alb, philox4x32_ctr_t* etat
 /* exit
 * Sauve les paramètres des photons sortis dans l'espace dans la boite correspondant à la direction de sortie
 */
-__device__ void countPhoton(Photon* , Tableaux, int, unsigned long long*);
+__device__ void countPhoton(Photon* , Tableaux, int, unsigned long long*, void*);
 
 
 

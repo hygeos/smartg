@@ -503,6 +503,7 @@ def smartg(wl, pp=True,
                                 NLVL, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                                 NLAM, options, kern, p, X0)
 
+        print errorcount
 
         # finalization
         output = finalize(tabPhotonsTot, wavelengths, nbPhotonsTotInter,
@@ -956,7 +957,6 @@ def InitSD(nprofilesAtm, nprofilesOc, NLAM,
                 - nThreadsActive : Number of active threads
                 - erreurpoids : Number of photons having a weight abnormally high
                 - erreurtheta : Number of photons ignored
-                - nbThreads : Total number of thread launched
                 - nbPhotonsSor : number of photons reaching the space during a kernel call
                 - erreurvxy : number of outgoing photons in the zenith
                 - erreurvy : number of outgoing photons
@@ -976,10 +976,6 @@ def InitSD(nprofilesAtm, nprofilesOc, NLAM,
     """
     tmp = []
     tmp = [(np.uint64, '*nbPhotonsInter', np.zeros(NLAM, dtype=np.uint64))]
-    if '-DDOUBLE' in options:
-        tmp += [(np.float64, '*tabPhotons', np.zeros(NLVL * NPSTK * NBTHETA * NBPHI * NLAM, dtype=np.float64))]
-    else : 
-        tmp += [(np.float32, '*tabPhotons', np.zeros(NLVL * NPSTK * NBTHETA * NBPHI * NLAM, dtype=np.float32))]
     tmp += [(np.float32, '*faer', faer),
            (np.float32, '*foce', foce),
            (np.float32, '*ho', nprofilesOc['HO']),
@@ -1004,7 +1000,7 @@ def InitSD(nprofilesAtm, nprofilesOc, NLAM,
     Tableau = GPUStruct(tmp)
 
     tmp = [(np.uint64, 'nbPhotons', 0),(np.int32, 'nThreadsActive', 0), (np.int32, 'erreurpoids', 0), (np.int32, 'erreurtheta', 0)]
-    tmp2 = [(np.uint64, 'nbThreads', 0), (np.uint64, 'nbPhotonsSor', 0), (np.uint32, 'erreurvxy', 0), (np.int32, 'erreurvy', 0), (np.int32, 'erreurcase', 0)]
+    tmp2 = [(np.uint64, 'nbPhotonsSor', 0), (np.uint32, 'erreurvxy', 0), (np.int32, 'erreurvy', 0), (np.int32, 'erreurcase', 0)]
     tmp += tmp2
     Var = GPUStruct(tmp)
     # copy the data to the GPU
@@ -1169,11 +1165,18 @@ def loop_kernel(NBPHOTONS, Tableau, Var, NLVL,
     nbPhotonsSorTot = 0
     tabPhotonsTot = np.zeros((NLVL,NPSTK,NLAM,NBTHETA,NBPHI), dtype=np.float32)
 
+    if '-DDOUBLE' in options:
+        tabPhotons = gpuzeros((NLVL,NPSTK,NLAM,NBTHETA,NBPHI), dtype=np.float64)
+    else:
+        tabPhotons = gpuzeros((NLVL,NPSTK,NLAM,NBTHETA,NBPHI), dtype=np.float32)
+
     # skip List used to avoid transfering arrays already sent into the device
     skipTableau = ['faer', 'foce', 'ho', 'sso', 'ipo', 'h', 'pMol', 'ssa', 'abs', 'ip', 'alb', 'lambda', 'z']
-    skipVar = ['erreurtheta', 'erreurpoids', 'nThreadsActive', 'nbThreads', 'erreurvxy', 'erreurvy', 'erreurcase']
+    skipVar = ['erreurtheta', 'erreurpoids', 'nThreadsActive', 'erreurvxy', 'erreurvy', 'erreurcase']
 
     while(nbPhotonsTot < NBPHOTONS):
+
+        tabPhotons.fill(0.)
 
         if '-DDOUBLE' in options:
             Tableau.tabPhotons = np.zeros(NLVL*NPSTK*NBTHETA * NBPHI * NLAM, dtype=np.float64)
@@ -1189,7 +1192,7 @@ def loop_kernel(NBPHOTONS, Tableau, Var, NLVL,
 
         # kernel launch
         kern(Var.get_ptr(), Tableau.get_ptr(), X0,
-                errorcount, nThreadsActive,
+                errorcount, nThreadsActive, tabPhotons,
                 block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
 
         # transfert the result from the device to the host
@@ -1198,7 +1201,7 @@ def loop_kernel(NBPHOTONS, Tableau, Var, NLVL,
 
         # get the results
         nbPhotonsTot += Var.nbPhotons
-        tabPhotonsTot += Tableau.tabPhotons.reshape(tabPhotonsTot.shape)
+        tabPhotonsTot += tabPhotons.get()
 
         for ilam in xrange(0, NLAM):
             nbPhotonsTotInter[ilam] += Tableau.nbPhotonsInter[ilam]
@@ -1208,6 +1211,8 @@ def loop_kernel(NBPHOTONS, Tableau, Var, NLVL,
         # update of the progression Bar
         p.update(nbPhotonsTot, afficheProgress(nbPhotonsTot, NBPHOTONS, nbPhotonsSorTot))
 
+        # print nbPhotonsTot, nbPhotonsTotInter, nbPhotonsSorTot
+        # print sum(nbPhotonsTotInter) - nbPhotonsTot
     return nbPhotonsTot, nbPhotonsTotInter, nbPhotonsSorTot, tabPhotonsTot, errorcount
 
 

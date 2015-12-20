@@ -68,7 +68,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 extern "C" {
 __global__ void launchKernel(Variables* var, Tableaux *tab, float *X0,
-        unsigned long long *errorcount, int *nThreadsActive) {
+        unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons) {
 
 	// idx est l'indice du thread considéré
 	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
@@ -169,7 +169,7 @@ __global__ void launchKernel(Variables* var, Tableaux *tab, float *X0,
         
         /* Cone Sampling */
         if (LEd ==0) countPhoton(&ph, *tab, count_level,
-                errorcount);
+                errorcount, tabPhotons);
 
 
 		syncthreads();
@@ -224,7 +224,7 @@ __global__ void launchKernel(Variables* var, Tableaux *tab, float *X0,
                             #endif
 
                             countPhoton(&ph_le, *tab, count_level,
-                                    errorcount);
+                                    errorcount, tabPhotons);
                         }
                     }
                 }
@@ -289,12 +289,12 @@ __global__ void launchKernel(Variables* var, Tableaux *tab, float *X0,
                         else display("SURFACE LE DOWN", &ph_le);
                         #endif
 
-                        countPhoton(&ph_le, *tab, count_level, errorcount);
+                        countPhoton(&ph_le, *tab, count_level, errorcount, tabPhotons);
                         if (k==0) { 
                             #ifdef SPHERIQUE
                             if (ph_le.loc==ATMOS) move_sp(&ph_le, *tab, 1, UPTOA , &etatThr , &configThr);
                             #endif
-                            countPhoton(&ph_le, *tab, UPTOA , errorcount);
+                            countPhoton(&ph_le, *tab, UPTOA , errorcount, tabPhotons);
                         }
                       }
                     }
@@ -348,7 +348,7 @@ __global__ void launchKernel(Variables* var, Tableaux *tab, float *X0,
         }
         
         /* Cone Sampling */
-        if (LEd == 0) countPhoton(&ph, *tab, count_level, errorcount);
+        if (LEd == 0) countPhoton(&ph, *tab, count_level, errorcount, tabPhotons);
 
 
 
@@ -376,9 +376,6 @@ __global__ void launchKernel(Variables* var, Tableaux *tab, float *X0,
 
 	// On rassemble les nombres de photons traités et sortis de chaque thread
 	atomicAdd(&(var->nbPhotonsSor), nbPhotonsSorThr);
-
-	// On incrémente avncement qui compte le nombre d'appels du Kernel
-	atomicAdd(&(var->nbThreads), 1);
 
 	// Sauvegarde de l'état du random pour que les nombres ne soient pas identiques à chaque appel du kernel
 	tab->etat[idx] = etatThr[0];
@@ -2187,7 +2184,9 @@ __device__ void surfaceLambertienne(Photon* ph, float* alb , philox4x32_ctr_t* e
 
 __device__ void countPhoton(Photon* ph,
         Tableaux tab, int count_level,
-		unsigned long long *errorcount) {
+		unsigned long long *errorcount,
+        void *tabPhotons
+        ) {
 
     if (count_level < 0) {
         // don't count anything
@@ -2273,17 +2272,21 @@ __device__ void countPhoton(Photon* ph,
 	// Rangement du photon dans sa case, et incrémentation de variables
 	if(((ith >= 0) && (ith < NBTHETAd)) && ((iphi >= 0) && (iphi < NBPHId)) && (il >= 0) && (il < NLAMd) && (!isnan(weight)))
 	{
-        // select the appropriate level (count_level)
-        tabCount = tab.tabPhotons + count_level*5*NBTHETAd*NBPHId*NLAMd;
 
-        // count in that level
         #ifdef DOUBLE 
+
+            // select the appropriate level (count_level)
+            tabCount = (double*)tabPhotons + count_level*5*NBTHETAd*NBPHId*NLAMd;
+
             DatomicAdd(tabCount+(0 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), (double)weight * (double)s1);
             DatomicAdd(tabCount+(1 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), (double)weight * (double)s2);
             DatomicAdd(tabCount+(2 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), (double)weight * (double)s3);
             DatomicAdd(tabCount+(3 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), (double)weight * (double)s4);
             DatomicAdd(tabCount+(4 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), (double)1.);
         #else
+            // select the appropriate level (count_level)
+            tabCount = (float*)tabPhotons + count_level*5*NBTHETAd*NBPHId*NLAMd;
+
             atomicAdd(tabCount+(0 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), weight * s1);
             atomicAdd(tabCount+(1 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), weight * s2);
             atomicAdd(tabCount+(2 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), weight * s3);

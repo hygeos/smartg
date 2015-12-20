@@ -165,14 +165,6 @@ typedef struct __align__(16)
 	unsigned long long* nbPhotonsInter;		// Tableau contenant le nb de photons injecte par interval NLAM 
 	
 
-
-    #ifdef DOUBLE
-	double* tabPhotons;		//Tableau contenant l'ensemble des paramètres de stokes de tous les photons (évènements confondus)
-    #else
-	float* tabPhotons;		//Tableau contenant l'ensemble des paramètres de stokes de tous les photons (évènements confondus)
-    #endif
-
-
 	float* faer;			// Pointeur vers le modèle de diffusion des aérosols
 	
 	float* foce;			// Pointeur vers le modèle de diffusion dans l'océan
