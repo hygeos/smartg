@@ -12,13 +12,13 @@ def a_w(lam):
     '''
 
     # 1) Pope&Fry
-    wl_popefry = loadtxt('/home/did/RTC/SMART-G/tools/water/data/pope97.dat', skiprows=6, usecols=(0,))
-    aw_popefry = loadtxt('/home/did/RTC/SMART-G/tools/water/data/pope97.dat', skiprows=6, usecols=(1,))
+    wl_popefry = loadtxt('tools/water/data/pope97.dat', skiprows=6, usecols=(0,))
+    aw_popefry = loadtxt('tools/water/data/pope97.dat', skiprows=6, usecols=(1,))
     aw_popefry *= 100. # convert cm-1 => m-1
 
     # 2) Palmer&Williams
-    wl_palmerw = loadtxt('/home/did/RTC/SMART-G/tools/water/data/palmer74.dat', skiprows=5, usecols=(0,))[::-1]
-    aw_palmerw = loadtxt('/home/did/RTC/SMART-G/tools/water/data/palmer74.dat', skiprows=5, usecols=(1,))[::-1]
+    wl_palmerw = loadtxt('tools/water/data/palmer74.dat', skiprows=5, usecols=(0,))[::-1]
+    aw_palmerw = loadtxt('tools/water/data/palmer74.dat', skiprows=5, usecols=(1,))[::-1]
     aw_palmerw *= 100. # convert cm-1 => m-1
 
     if not isinstance(lam,float) :
