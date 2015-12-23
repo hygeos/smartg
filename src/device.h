@@ -35,6 +35,8 @@ __device__ __constant__ int YGRIDd;
 __device__ __constant__ int NBTHETAd;
 __device__ __constant__ int NBPHId;
 __device__ __constant__ int NLAMd;
+__device__ __constant__ int NPSTKd;
+__device__ __constant__ int NLVLd;
 __device__ __constant__ int SIMd;
 __device__ __constant__ int LEd;
 __device__ __constant__ int FLUXd;
@@ -70,7 +72,9 @@ __device__ __constant__ float RTER;
 
 extern "C" {
 __global__ void launchKernel(Variables* var, Tableaux *tab, float *X0,
-        unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons);
+        unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons,
+        unsigned long long *NPhotonsIn,
+        unsigned long long *NPhotonsOut);
 }
 
 
@@ -82,6 +86,7 @@ __global__ void launchKernel(Variables* var, Tableaux *tab, float *X0,
 * Initialise le photon dans son état initial avant l'entrée dans l'atmosphère
 */
 __device__ void initPhoton(Photon* ph, Tableaux tab, float *X0,
+                           unsigned long long *NPhotonsIn,
                            philox4x32_ctr_t*, philox4x32_key_t*);
 
 
@@ -119,7 +124,7 @@ __device__ void surfaceLambertienne(Photon* , float* alb, philox4x32_ctr_t* etat
 /* exit
 * Sauve les paramètres des photons sortis dans l'espace dans la boite correspondant à la direction de sortie
 */
-__device__ void countPhoton(Photon* , Tableaux, int, unsigned long long*, void*);
+__device__ void countPhoton(Photon* , Tableaux, int, unsigned long long*, void*, unsigned long long*);
 
 
 

@@ -51,9 +51,6 @@
 #define OCEAN       6
 #define SEAFLOOR    7
 
-// Number of output levels
-#define NLVL  5
-
 // indexing of the output levels
 #define UPTOA   0
 #define DOWN0P	1
@@ -162,9 +159,6 @@ typedef struct __align__(16)
 typedef struct __align__(16)
 {
 
-	unsigned long long* nbPhotonsInter;		// Tableau contenant le nb de photons injecte par interval NLAM 
-	
-
 	float* faer;			// Pointeur vers le modèle de diffusion des aérosols
 	
 	float* foce;			// Pointeur vers le modèle de diffusion dans l'océan
@@ -223,17 +217,6 @@ typedef struct __align__(16)
     //!< ...la partie de la clef fixee par l'utilisateur
 	
 } Tableaux;
-
-
-/* Evnt
-* DEBUG permet de recuperer des infos sur certains photons
-*/
-typedef struct __align__(16)
-{
-	int action;
-	float tau;
-	float poids;
-} Evnt;
 
 
 #endif	// COMMUNS_H

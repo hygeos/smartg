@@ -68,7 +68,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 extern "C" {
 __global__ void launchKernel(Variables* var, Tableaux *tab, float *X0,
-        unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons) {
+        unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons,
+        unsigned long long *NPhotonsIn,
+        unsigned long long *NPhotonsOut) {
 
 	// idx est l'indice du thread considéré
 	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
@@ -114,7 +116,7 @@ __global__ void launchKernel(Variables* var, Tableaux *tab, float *X0,
         // Si le photon est à NONE on l'initialise et on le met à la localisation correspondant à la simulaiton en cours
         if((ph.loc == NONE) && this_thread_active){
 
-            initPhoton(&ph, *tab, X0, &etatThr , &configThr);
+            initPhoton(&ph, *tab, X0, NPhotonsIn, &etatThr , &configThr);
             #ifdef DEBUG_PHOTON
             display("INIT", &ph);
             #endif
@@ -169,7 +171,7 @@ __global__ void launchKernel(Variables* var, Tableaux *tab, float *X0,
         
         /* Cone Sampling */
         if (LEd ==0) countPhoton(&ph, *tab, count_level,
-                errorcount, tabPhotons);
+                errorcount, tabPhotons, NPhotonsOut);
 
 
 		syncthreads();
@@ -224,7 +226,7 @@ __global__ void launchKernel(Variables* var, Tableaux *tab, float *X0,
                             #endif
 
                             countPhoton(&ph_le, *tab, count_level,
-                                    errorcount, tabPhotons);
+                                    errorcount, tabPhotons, NPhotonsOut);
                         }
                     }
                 }
@@ -289,12 +291,12 @@ __global__ void launchKernel(Variables* var, Tableaux *tab, float *X0,
                         else display("SURFACE LE DOWN", &ph_le);
                         #endif
 
-                        countPhoton(&ph_le, *tab, count_level, errorcount, tabPhotons);
+                        countPhoton(&ph_le, *tab, count_level, errorcount, tabPhotons, NPhotonsOut);
                         if (k==0) { 
                             #ifdef SPHERIQUE
                             if (ph_le.loc==ATMOS) move_sp(&ph_le, *tab, 1, UPTOA , &etatThr , &configThr);
                             #endif
-                            countPhoton(&ph_le, *tab, UPTOA , errorcount, tabPhotons);
+                            countPhoton(&ph_le, *tab, UPTOA , errorcount, tabPhotons, NPhotonsOut);
                         }
                       }
                     }
@@ -348,7 +350,7 @@ __global__ void launchKernel(Variables* var, Tableaux *tab, float *X0,
         }
         
         /* Cone Sampling */
-        if (LEd == 0) countPhoton(&ph, *tab, count_level, errorcount, tabPhotons);
+        if (LEd == 0) countPhoton(&ph, *tab, count_level, errorcount, tabPhotons, NPhotonsOut);
 
 
 
@@ -391,7 +393,7 @@ __global__ void launchKernel(Variables* var, Tableaux *tab, float *X0,
 /* initPhoton
 * Initialise le photon dans son état initial avant l'entrée dans l'atmosphère
 */
-__device__ void initPhoton(Photon* ph, Tableaux tab, float *X0,
+__device__ void initPhoton(Photon* ph, Tableaux tab, float *X0, unsigned long long *NPhotonsIn,
                            philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr)
 {
 	// Initialisation du vecteur vitesse
@@ -409,7 +411,7 @@ __device__ void initPhoton(Photon* ph, Tableaux tab, float *X0,
      //mono chromatique
 	ph->ilam = __float2uint_rz(RAND * NLAMd);
 	ph->wavel = tab.lambda[ph->ilam];
-    atomicAdd(tab.nbPhotonsInter+ph->ilam, 1);
+    atomicAdd(NPhotonsIn+ph->ilam, 1);
 
     if ((SIMd == -2) || (SIMd == 1) || (SIMd == 2)) {
 
@@ -2185,7 +2187,7 @@ __device__ void surfaceLambertienne(Photon* ph, float* alb , philox4x32_ctr_t* e
 __device__ void countPhoton(Photon* ph,
         Tableaux tab, int count_level,
 		unsigned long long *errorcount,
-        void *tabPhotons
+        void *tabPhotons, unsigned long long *NPhotonsOut
         ) {
 
     if (count_level < 0) {
@@ -2293,6 +2295,7 @@ __device__ void countPhoton(Photon* ph,
             atomicAdd(tabCount+(3 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), weight * s4);
             atomicAdd(tabCount+(4 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), 1.);
         #endif
+        atomicAdd(NPhotonsOut + ((count_level*NLAMd + il)*NBTHETAd + ith)*NBPHId + iphi, 1);
 	}
 	else
 	{

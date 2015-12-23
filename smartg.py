@@ -313,7 +313,6 @@ def smartg(wl, pp=True,
 
         # number of Stokes parameters of the radiation field + 1 for number of photons
         # warning! still hardcoded in device.cu and profil.py (FIXME)
-#        NPSTK = 4
         NPSTK = 5
 
         attrs = OrderedDict()
@@ -489,7 +488,7 @@ def smartg(wl, pp=True,
                        NBPHOTONS, NBLOOP, THVDEG, DEPO,
                        XBLOCK, XGRID, NLAM, SIM, NFAER,
                        NFOCE, NBTHETA, NBPHI, OUTPUT_LAYERS, 
-                       RTER, LE, FLUX)
+                       RTER, LE, FLUX, NLVL, NPSTK)
 
 
         # Initialize the progress bar
@@ -497,19 +496,21 @@ def smartg(wl, pp=True,
 
 
         # Loop and kernel call
-        (nbPhotonsTot, nbPhotonsTotInter,
-                nbPhotonsSorTot, tabPhotonsTot, errorcount
+        (NPhotonsInTot,
+                tabPhotonsTot, errorcount, NPhotonsOutTot
                 ) = loop_kernel(NBPHOTONS, Tableau, Var,
                                 NLVL, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                                 NLAM, options, kern, p, X0)
 
-        print errorcount
-
         # finalization
-        output = finalize(tabPhotonsTot, wavelengths, nbPhotonsTotInter,
+        output = finalize(tabPhotonsTot, wavelengths, NPhotonsInTot, errorcount, NPhotonsOutTot,
                            OUTPUT_LAYERS, tabTransDir, SIM, attrs, nprofilesAtm, phasesAtm, le=le, flux=flux)
 
-        p.finish('Done! (used {}) | '.format(attrs['device']) + afficheProgress(nbPhotonsTot, NBPHOTONS, nbPhotonsSorTot))
+        p.finish('Done! | Received {:.1%} of {:.3g} photons ({:.1%})'.format(
+            np.sum(NPhotonsOutTot[0,...])/float(np.sum(NPhotonsInTot)),
+            np.sum(NPhotonsInTot),
+            np.sum(NPhotonsInTot)/float(NBPHOTONS),
+            ))
 
         return output
 
@@ -600,12 +601,13 @@ def calculOmega(NBTHETA, NBPHI):
     return tabTh, tabPhi, tabOmega
 
 
-def finalize(tabPhotonsTot2, wl, nbPhotonsTotInter, OUTPUT_LAYERS, tabTransDir, SIM, attrs, nprofilesAtm, phasesAtm, le=None, flux=None):
+def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
+        OUTPUT_LAYERS, tabTransDir, SIM, attrs, nprofilesAtm, phasesAtm, le=None, flux=None):
     '''
     create and return the final output
     '''
-    (NLVL,NPSTK,NLAM,NBTHETA,NBPHI) = tabPhotonsTot2.shape
-    tabFinal = np.zeros_like(tabPhotonsTot2, dtype='float64')
+    (NLVL,NPSTK,NLAM,NBTHETA,NBPHI) = tabPhotonsTot.shape
+    tabFinal = np.zeros_like(tabPhotonsTot, dtype='float64')
 
     # normalization in case of radiance
     if flux is None:
@@ -613,28 +615,28 @@ def finalize(tabPhotonsTot2, wl, nbPhotonsTotInter, OUTPUT_LAYERS, tabTransDir, 
         if le!=None : 
             tabTh = le['thv']
             tabPhi = le['phi']
-            norm = 4.0 * np.cos(tabTh).reshape((1,1,-1,1)) * nbPhotonsTotInter.reshape((1,-1,1,1)) 
+            norm = 4.0 * np.cos(tabTh).reshape((1,1,-1,1)) * NPhotonsInTot.reshape((1,-1,1,1)) 
         else : 
             tabTh, tabPhi, tabOmega = calculOmega(NBTHETA, NBPHI )
-            norm = 2.0 * tabOmega.reshape((1,1,-1,1)) * np.cos(tabTh).reshape((1,1,-1,1)) * nbPhotonsTotInter.reshape((1,-1,1,1))
+            norm = 2.0 * tabOmega.reshape((1,1,-1,1)) * np.cos(tabTh).reshape((1,1,-1,1)) * NPhotonsInTot.reshape((1,-1,1,1))
     else:
-        norm = nbPhotonsTotInter.reshape((1,-1,1,1))
+        norm = NPhotonsInTot.reshape((1,-1,1,1))
         tabTh, tabPhi, _ = calculOmega(NBTHETA, NBPHI)
 
     # I
-    tabFinal[:,0,:,:,:] = (tabPhotonsTot2[:,0,:,:,:] + tabPhotonsTot2[:,1,:,:,:])/norm
+    tabFinal[:,0,:,:,:] = (tabPhotonsTot[:,0,:,:,:] + tabPhotonsTot[:,1,:,:,:])/norm
 
     # Q
-    tabFinal[:,1,:,:,:] = (tabPhotonsTot2[:,0,:,:,:] - tabPhotonsTot2[:,1,:,:,:])/norm
+    tabFinal[:,1,:,:,:] = (tabPhotonsTot[:,0,:,:,:] - tabPhotonsTot[:,1,:,:,:])/norm
 
     # U
-    tabFinal[:,2,:,:,:] = tabPhotonsTot2[:,2,:,:,:]/norm
+    tabFinal[:,2,:,:,:] = tabPhotonsTot[:,2,:,:,:]/norm
 
     # V
-    tabFinal[:,3,:,:,:] = tabPhotonsTot2[:,3,:,:,:]/norm
+    tabFinal[:,3,:,:,:] = tabPhotonsTot[:,3,:,:,:]/norm
 
     # N
-    tabFinal[:,4,:,:,:] = tabPhotonsTot2[:,4,:,:,:]
+    tabFinal[:,4,:,:,:] = tabPhotonsTot[:,4,:,:,:]
 
 
     #
@@ -659,33 +661,33 @@ def finalize(tabPhotonsTot2, wl, nbPhotonsTotInter, OUTPUT_LAYERS, tabTransDir, 
     m.add_dataset('Q_up (TOA)', tabFinal.swapaxes(3,4)[UPTOA,1,ilam,:,:], axnames)
     m.add_dataset('U_up (TOA)', tabFinal.swapaxes(3,4)[UPTOA,2,ilam,:,:], axnames)
     m.add_dataset('V_up (TOA)', tabFinal.swapaxes(3,4)[UPTOA,3,ilam,:,:], axnames)
-    m.add_dataset('N_up (TOA)', tabFinal.swapaxes(3,4)[UPTOA,4,ilam,:,:], axnames)
+    m.add_dataset('N_up (TOA)', NPhotonsOutTot.swapaxes(2,3)[UPTOA,ilam,:,:], axnames)
 
     if OUTPUT_LAYERS & 1:
         m.add_dataset('I_down (0+)', tabFinal.swapaxes(3,4)[DOWN0P,0,ilam,:,:], axnames)
         m.add_dataset('Q_down (0+)', tabFinal.swapaxes(3,4)[DOWN0P,1,ilam,:,:], axnames)
         m.add_dataset('U_down (0+)', tabFinal.swapaxes(3,4)[DOWN0P,2,ilam,:,:], axnames)
         m.add_dataset('V_down (0+)', tabFinal.swapaxes(3,4)[DOWN0P,3,ilam,:,:], axnames)
-        m.add_dataset('N_down (0+)', tabFinal.swapaxes(3,4)[DOWN0P,4,ilam,:,:], axnames)
+        m.add_dataset('N_down (0+)', NPhotonsOutTot.swapaxes(2,3)[DOWN0P,ilam,:,:], axnames)
 
         m.add_dataset('I_up (0-)', tabFinal.swapaxes(3,4)[UP0M,0,ilam,:,:], axnames)
         m.add_dataset('Q_up (0-)', tabFinal.swapaxes(3,4)[UP0M,1,ilam,:,:], axnames)
         m.add_dataset('U_up (0-)', tabFinal.swapaxes(3,4)[UP0M,2,ilam,:,:], axnames)
         m.add_dataset('V_up (0-)', tabFinal.swapaxes(3,4)[UP0M,3,ilam,:,:], axnames)
-        m.add_dataset('N_up (0-)', tabFinal.swapaxes(3,4)[UP0M,4,ilam,:,:], axnames)
+        m.add_dataset('N_up (0-)', NPhotonsOutTot.swapaxes(2,3)[UP0M,ilam,:,:], axnames)
 
     if OUTPUT_LAYERS & 2:
         m.add_dataset('I_down (0-)', tabFinal.swapaxes(3,4)[DOWN0M,0,ilam,:,:], axnames)
         m.add_dataset('Q_down (0-)', tabFinal.swapaxes(3,4)[DOWN0M,1,ilam,:,:], axnames)
         m.add_dataset('U_down (0-)', tabFinal.swapaxes(3,4)[DOWN0M,2,ilam,:,:], axnames)
         m.add_dataset('V_down (0-)', tabFinal.swapaxes(3,4)[DOWN0M,3,ilam,:,:], axnames)
-        m.add_dataset('N_down (0-)', tabFinal.swapaxes(3,4)[DOWN0M,4,ilam,:,:], axnames)
+        m.add_dataset('N_down (0-)', NPhotonsOutTot.swapaxes(2,3)[DOWN0M,ilam,:,:], axnames)
 
         m.add_dataset('I_up (0+)', tabFinal.swapaxes(3,4)[UP0P,0,ilam,:,:], axnames)
         m.add_dataset('Q_up (0+)', tabFinal.swapaxes(3,4)[UP0P,1,ilam,:,:], axnames)
         m.add_dataset('U_up (0+)', tabFinal.swapaxes(3,4)[UP0P,2,ilam,:,:], axnames)
         m.add_dataset('V_up (0+)', tabFinal.swapaxes(3,4)[UP0P,3,ilam,:,:], axnames)
-        m.add_dataset('N_up (0+)', tabFinal.swapaxes(3,4)[UP0P,4,ilam,:,:], axnames)
+        m.add_dataset('N_up (0+)', NPhotonsOutTot.swapaxes(2,3)[UP0P,ilam,:,:], axnames)
 
     # direct transmission
     if NLAM > 1:
@@ -718,6 +720,12 @@ def finalize(tabPhotonsTot2, wl, nbPhotonsTotInter, OUTPUT_LAYERS, tabTransDir, 
             pha[i, ] = phasesAtm[i].phase[:]
         m.add_dataset('phases_atm', pha, ['IPHA', 'SCAT_ANGLE_ATM', 'NPSTK'])
 
+    # write the error count
+    m.add_dataset('flags', errorcount.get(), attrs={
+        'BIT 0': 'ERROR_THETA',
+        'BIT 1': 'ERROR_CASE',
+        'BIT 2': 'ERROR_VXY',
+        })
 
     # write attributes
     attrs['processing duration (s)'] = (datetime.now()
@@ -727,30 +735,6 @@ def finalize(tabPhotonsTot2, wl, nbPhotonsTotInter, OUTPUT_LAYERS, tabTransDir, 
 
     return m
 
-
-def afficheProgress(nbPhotonsTot, NBPHOTONS, nbPhotonsSorTot):
-    """
-    function showing the progression of the radiative transfert simulation
-
-    Arguments :
-        - nbPhotonsTot : Total number of photons processed
-        - NBPHOTONS : Number of photons injected
-        - options : compilation options
-        - nbPhotonsSorTot : Total number of outgoing photons
-    ----------------------------------------------------
-    Returns :
-        - chaine : string containing the information concerning the progression
-
-    """
-
-    # Calcul du pourcentage de photons traités
-    pourcent = (100 * nbPhotonsTot / NBPHOTONS);
-    # Affichage
-    chaine = ''
-    chaine += 'Launched %.2e photons (%3d%%)' % (nbPhotonsTot, pourcent)
-    chaine += ' - received %.2e ' % (nbPhotonsSorTot);
-
-    return chaine
 
 
 def calculF(phases, N):
@@ -826,7 +810,7 @@ def InitConstantes(surf, env, NATM, NOCE, mod,
                    NBPHOTONS, NBLOOP, THVDEG, DEPO,
                    XBLOCK, XGRID,NLAM, SIM, NFAER,
                    NFOCE, NBTHETA, NBPHI, OUTPUT_LAYERS, 
-                   RTER, LE, FLUX) :
+                   RTER, LE, FLUX, NLVL, NPSTK) :
 
     """
     Initialize the constants in python and send them to the device memory
@@ -874,6 +858,8 @@ def InitConstantes(surf, env, NATM, NOCE, mod,
     D.update(SIM=np.array([SIM], dtype=np.int32))
     D.update(LE=np.array([LE], dtype=np.int32))
     D.update(FLUX=np.array([FLUX], dtype=np.int32))
+    D.update(NLVL=np.array([NLVL], dtype=np.int32))
+    D.update(NPSTK=np.array([NPSTK], dtype=np.int32))
     if surf != None:
         D.update(SUR=np.array(surf.dict['SUR'], dtype=np.int32))
         D.update(DIOPTRE=np.array(surf.dict['DIOPTRE'], dtype=np.int32))
@@ -975,7 +961,6 @@ def InitSD(nprofilesAtm, nprofilesOc, NLAM,
 
     """
     tmp = []
-    tmp = [(np.uint64, '*nbPhotonsInter', np.zeros(NLAM, dtype=np.uint64))]
     tmp += [(np.float32, '*faer', faer),
            (np.float32, '*foce', foce),
            (np.float32, '*ho', nprofilesOc['HO']),
@@ -1005,7 +990,7 @@ def InitSD(nprofilesAtm, nprofilesOc, NLAM,
     Var = GPUStruct(tmp)
     # copy the data to the GPU
     Var.copy_to_gpu(['nbPhotons'])
-    Tableau.copy_to_gpu(['tabPhotons','nbPhotonsInter'])
+    Tableau.copy_to_gpu(['tabPhotons'])
 
     return Tableau,Var
 
@@ -1146,8 +1131,8 @@ def loop_kernel(NBPHOTONS, Tableau, Var, NLVL,
         - X0: initial coordinates of the photon entering the atmosphere
     --------------------------------------------------------------
     Returns :
-        - nbPhotonsTot : Total number of photons processed
-        - nbPhotonsTotInter : Total number of photons processed by interval
+        - nbPhotonsTot : Total number of photons processed   # FIXME description
+        - NPhotonsInTot : Total number of photons processed by interval
         - nbPhotonsSorTot : Total number of outgoing photons
         - tabPhotonsTot : Total weight of all outgoing photons
 
@@ -1160,10 +1145,15 @@ def loop_kernel(NBPHOTONS, Tableau, Var, NLVL,
     errorcount = gpuzeros(NERROR, dtype='uint64')
 
     # Initialize of the parameters
-    nbPhotonsTot = 0
-    nbPhotonsTotInter = np.zeros(NLAM, dtype=np.uint64)
-    nbPhotonsSorTot = 0
     tabPhotonsTot = np.zeros((NLVL,NPSTK,NLAM,NBTHETA,NBPHI), dtype=np.float32)
+
+    # arrays for counting the input photons (per wavelength)
+    NPhotonsIn = gpuzeros(NLAM, dtype=np.uint64)
+    NPhotonsInTot = np.zeros(NLAM, dtype=np.uint64)
+
+    # arrays for counting the output photons
+    NPhotonsOut = gpuzeros((NLVL,NLAM,NBTHETA,NBPHI), dtype=np.uint64)
+    NPhotonsOutTot = np.zeros((NLVL,NLAM,NBTHETA,NBPHI), dtype=np.uint64)
 
     if '-DDOUBLE' in options:
         tabPhotons = gpuzeros((NLVL,NPSTK,NLAM,NBTHETA,NBPHI), dtype=np.float64)
@@ -1174,15 +1164,16 @@ def loop_kernel(NBPHOTONS, Tableau, Var, NLVL,
     skipTableau = ['faer', 'foce', 'ho', 'sso', 'ipo', 'h', 'pMol', 'ssa', 'abs', 'ip', 'alb', 'lambda', 'z']
     skipVar = ['erreurtheta', 'erreurpoids', 'nThreadsActive', 'erreurvxy', 'erreurvy', 'erreurcase']
 
-    while(nbPhotonsTot < NBPHOTONS):
+    while(np.sum(NPhotonsInTot) < NBPHOTONS):
 
         tabPhotons.fill(0.)
+        NPhotonsOut.fill(0)
+        NPhotonsIn.fill(0)
 
         if '-DDOUBLE' in options:
             Tableau.tabPhotons = np.zeros(NLVL*NPSTK*NBTHETA * NBPHI * NLAM, dtype=np.float64)
         else : 
             Tableau.tabPhotons = np.zeros(NLVL*NPSTK*NBTHETA * NBPHI * NLAM, dtype=np.float32)
-        Tableau.nbPhotonsInter = np.zeros(NLAM, dtype=np.int32)
         Var.nbPhotons = np.uint32(0)
         Var.nbPhotonsSor = np.uint32(0)
 
@@ -1193,27 +1184,22 @@ def loop_kernel(NBPHOTONS, Tableau, Var, NLVL,
         # kernel launch
         kern(Var.get_ptr(), Tableau.get_ptr(), X0,
                 errorcount, nThreadsActive, tabPhotons,
+                NPhotonsIn, NPhotonsOut,
                 block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
 
         # transfert the result from the device to the host
         Tableau.copy_from_gpu(skipTableau)
         Var.copy_from_gpu(skipVar)
 
-        # get the results
-        nbPhotonsTot += Var.nbPhotons
+        NPhotonsInTot += NPhotonsIn.get()
+        NPhotonsOutTot += NPhotonsOut.get()
         tabPhotonsTot += tabPhotons.get()
 
-        for ilam in xrange(0, NLAM):
-            nbPhotonsTotInter[ilam] += Tableau.nbPhotonsInter[ilam]
-
-        nbPhotonsSorTot += Var.nbPhotonsSor;
-
         # update of the progression Bar
-        p.update(nbPhotonsTot, afficheProgress(nbPhotonsTot, NBPHOTONS, nbPhotonsSorTot))
+        p.update(np.sum(NPhotonsInTot),
+                'Launched {:.3g} photons'.format(np.sum(NPhotonsInTot)))
 
-        # print nbPhotonsTot, nbPhotonsTotInter, nbPhotonsSorTot
-        # print sum(nbPhotonsTotInter) - nbPhotonsTot
-    return nbPhotonsTot, nbPhotonsTotInter, nbPhotonsSorTot, tabPhotonsTot, errorcount
+    return NPhotonsInTot, tabPhotonsTot, errorcount, NPhotonsOutTot
 
 
 def impactInit(pp, Hatm, NATM, NLAM, ALT, H, THVDEG, Rter):
