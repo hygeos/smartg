@@ -108,7 +108,7 @@ __global__ void launchKernel(Variables* var, Tableaux *tab, float *X0,
     //
     while (*nThreadsActive > 0) {
 
-        if ((var->nbPhotons > NBLOOPd) && this_thread_active) {
+        if ((var->nbPhotons > NBLOOPd) && this_thread_active && (ph.loc == NONE)) {
             this_thread_active = 0;
             atomicAdd(nThreadsActive, -1);
         }
