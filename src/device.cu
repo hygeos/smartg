@@ -67,16 +67,19 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 extern "C" {
-__global__ void launchKernel(Variables* var, Tableaux *tab, float *X0,
+__global__ void launchKernel(Tableaux *tab, float *X0,
         unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons,
+        unsigned long long *Counter,
         unsigned long long *NPhotonsIn,
-        unsigned long long *NPhotonsOut) {
+        unsigned long long *NPhotonsOut
+        ) {
 
-	// idx est l'indice du thread considéré
-	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+    // current thread index
+    int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
     int loc_prev;
     int count_level;
     int this_thread_active = 1;
+    unsigned long long iloop = 0;
 
 
     // Paramètres de la fonction random en mémoire locale
@@ -96,7 +99,6 @@ __global__ void launchKernel(Variables* var, Tableaux *tab, float *X0,
 	
 	// Création de variable propres à chaque thread
 	unsigned long long nbPhotonsThr = 0; 	// Nombre de photons traités par le thread
-	unsigned int nbPhotonsSorThr = 0; 		// Nombre de photons traités par le thread et ressortis dans l'espace
 	
 	Photon ph, ph_le; 		// On associe une structure de photon au thread
 	ph.loc = NONE;	// Initialement le photon n'est nulle part, il doit être initialisé
@@ -107,8 +109,14 @@ __global__ void launchKernel(Variables* var, Tableaux *tab, float *X0,
     // main loop
     //
     while (*nThreadsActive > 0) {
+        iloop += 1;
 
-        if ((var->nbPhotons > NBLOOPd) && this_thread_active && (ph.loc == NONE)) {
+        if (((Counter[0] > NBLOOPd)
+                    && this_thread_active
+                    && (ph.loc == NONE))
+                || (iloop > MAX_LOOP)  // avoid infinite loop
+                                       // when photons don't end
+                ) {
             this_thread_active = 0;
             atomicAdd(nThreadsActive, -1);
         }
@@ -117,6 +125,7 @@ __global__ void launchKernel(Variables* var, Tableaux *tab, float *X0,
         if((ph.loc == NONE) && this_thread_active){
 
             initPhoton(&ph, *tab, X0, NPhotonsIn, &etatThr , &configThr);
+            iloop = 1;
             #ifdef DEBUG_PHOTON
             display("INIT", &ph);
             #endif
@@ -153,7 +162,6 @@ __global__ void launchKernel(Variables* var, Tableaux *tab, float *X0,
             // increment the photon counter
             // (for this thread)
             nbPhotonsThr++;
-            nbPhotonsSorThr++;
 
             // reset the photon location (always)
             ph.loc = NONE;
@@ -365,7 +373,7 @@ __global__ void launchKernel(Variables* var, Tableaux *tab, float *X0,
         // from time to time, transfer the per-thread photon counter to the
         // global counter
         if (nbPhotonsThr % 100 == 0) {
-            atomicAdd(&(var->nbPhotons), nbPhotonsThr);
+            atomicAdd(Counter, nbPhotonsThr);
             nbPhotonsThr = 0;
         }
 
@@ -374,10 +382,11 @@ __global__ void launchKernel(Variables* var, Tableaux *tab, float *X0,
 
 	// Après la boucle on rassemble les nombres de photons traités par chaque thread
 
-	atomicAdd(&(var->nbPhotons), nbPhotonsThr);
+	atomicAdd(Counter, nbPhotonsThr);
 
-	// On rassemble les nombres de photons traités et sortis de chaque thread
-	atomicAdd(&(var->nbPhotonsSor), nbPhotonsSorThr);
+    if (ph.loc != NONE) {
+        atomicAdd(errorcount+ERROR_MAX_LOOP, 1);
+    }
 
 	// Sauvegarde de l'état du random pour que les nombres ne soient pas identiques à chaque appel du kernel
 	tab->etat[idx] = etatThr[0];

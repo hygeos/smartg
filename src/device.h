@@ -71,8 +71,9 @@ __device__ __constant__ float RTER;
 ***********************************************************/
 
 extern "C" {
-__global__ void launchKernel(Variables* var, Tableaux *tab, float *X0,
+__global__ void launchKernel(Tableaux *tab, float *X0,
         unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons,
+        unsigned long long *Counter,
         unsigned long long *NPhotonsIn,
         unsigned long long *NPhotonsOut);
 }

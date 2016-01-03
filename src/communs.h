@@ -33,11 +33,10 @@
 
 /* Mathématiques */
 #define PI 3.1415927F
-//3.141 592 653 589F
 #define DEUXPI 6.2831853F
-//6.283 185 307 17F
 #define DEMIPI 1.5707963F
-//1.570 796 326 79F
+
+#define MAX_LOOP 100000
 
 
 
@@ -60,9 +59,10 @@
 
 
 // List of errors
-#define ERROR_THETA 0
-#define ERROR_CASE  1
-#define ERROR_VXY   2
+#define ERROR_THETA      0
+#define ERROR_CASE       1
+#define ERROR_VXY        2
+#define ERROR_MAX_LOOP   3
 
 // bitmasks for output
 #define OUTPUT_BOA_DOWN_0P_UP_0M   1 // downward radiance at BOA above surface (0+) and upward radiance at BOA below surface (0-)
@@ -135,21 +135,6 @@ typedef struct __align__(16)
 	#endif
 	
 }	Photon;
-
-
-/* Variables
-* Contient toutes les variables qui sont renvoyées dans le host depuis le device suite
-* à l'execution d'un kernel
-*/
-typedef struct __align__(16)
-{
-	unsigned long long nbPhotons;	// Nombre de photons traités pour un appel du Kernel
-	
-	unsigned long long nbThreads;	// Nombre total de threads lancés
-	unsigned long long nbPhotonsSor;// Nombre de photons ressortis pour un appel du Kernel
-	
-}Variables;
-
 
 
 /* Tableaux

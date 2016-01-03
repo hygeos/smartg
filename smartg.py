@@ -478,7 +478,7 @@ def smartg(wl, pp=True,
             faer = [0]
 
         # write the input variables into data structures
-        Tableau, Var = InitSD(nprofilesAtm, nprofilesOc, NLAM,
+        Tableau = InitSD(nprofilesAtm, nprofilesOc, NLAM,
                                 NLVL, NPSTK, NBTHETA, NBPHI, faer, foce,
                                 albedo, wavelengths,
                                 XBLOCK, XGRID, SEED, options, le=le)
@@ -498,9 +498,9 @@ def smartg(wl, pp=True,
         # Loop and kernel call
         (NPhotonsInTot,
                 tabPhotonsTot, errorcount, NPhotonsOutTot
-                ) = loop_kernel(NBPHOTONS, Tableau, Var,
+                ) = loop_kernel(NBPHOTONS, Tableau,
                                 NLVL, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
-                                NLAM, options, kern, p, X0)
+                                NLAM, options, kern, p, X0, NBLOOP)
 
         # finalization
         output = finalize(tabPhotonsTot, wavelengths, NPhotonsInTot, errorcount, NPhotonsOutTot,
@@ -721,11 +721,14 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
         m.add_dataset('phases_atm', pha, ['IPHA', 'SCAT_ANGLE_ATM', 'NPSTK'])
 
     # write the error count
-    m.add_dataset('flags', errorcount.get(), attrs={
-        'BIT 0': 'ERROR_THETA',
-        'BIT 1': 'ERROR_CASE',
-        'BIT 2': 'ERROR_VXY',
-        })
+    err = errorcount.get()
+    for i, d in enumerate([
+            'ERROR_THETA',
+            'ERROR_CASE',
+            'ERROR_VXY',
+            'ERROR_MAX_LOOP',
+            ]):
+        m.set_attr(d, err[i])
 
     # write attributes
     attrs['processing duration (s)'] = (datetime.now()
@@ -984,15 +987,9 @@ def InitSD(nprofilesAtm, nprofilesOc, NLAM,
 
     Tableau = GPUStruct(tmp)
 
-    tmp = [(np.uint64, 'nbPhotons', 0),(np.int32, 'nThreadsActive', 0), (np.int32, 'erreurpoids', 0), (np.int32, 'erreurtheta', 0)]
-    tmp2 = [(np.uint64, 'nbPhotonsSor', 0), (np.uint32, 'erreurvxy', 0), (np.int32, 'erreurvy', 0), (np.int32, 'erreurcase', 0)]
-    tmp += tmp2
-    Var = GPUStruct(tmp)
-    # copy the data to the GPU
-    Var.copy_to_gpu(['nbPhotons'])
     Tableau.copy_to_gpu(['tabPhotons'])
 
-    return Tableau,Var
+    return Tableau
 
 
 def get_profAtm(wl, atm):
@@ -1109,16 +1106,15 @@ def get_git_attrs():
     return R
 
 
-def loop_kernel(NBPHOTONS, Tableau, Var, NLVL,
+def loop_kernel(NBPHOTONS, Tableau, NLVL,
                 NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
-                NLAM, options , kern, p, X0):
+                NLAM, options , kern, p, X0, NBLOOP):
     """
     launch the kernel several time until the targeted number of photons injected is reached
 
     Arguments:
         - NBPHOTONS : Number of photons injected
         - Tableau : Class containing the arrays sent to the device
-        - Var : Class containing the variables sent to the device
         - NLVL : Number of output levels
         - NPSTK : Number of Stokes parameters + 1 for number of photons
         - BLOCK : Block dimension
@@ -1139,6 +1135,8 @@ def loop_kernel(NBPHOTONS, Tableau, Var, NLVL,
     """
     # Initializations
     nThreadsActive = gpuzeros(1, dtype='int32')
+    Counter = gpuzeros(1, dtype='uint64')
+
 
     # Initialize the array for error counting
     NERROR = 32
@@ -1162,34 +1160,25 @@ def loop_kernel(NBPHOTONS, Tableau, Var, NLVL,
 
     # skip List used to avoid transfering arrays already sent into the device
     skipTableau = ['faer', 'foce', 'ho', 'sso', 'ipo', 'h', 'pMol', 'ssa', 'abs', 'ip', 'alb', 'lambda', 'z']
-    skipVar = ['erreurtheta', 'erreurpoids', 'nThreadsActive', 'erreurvxy', 'erreurvy', 'erreurcase']
 
     while(np.sum(NPhotonsInTot) < NBPHOTONS):
 
         tabPhotons.fill(0.)
         NPhotonsOut.fill(0)
         NPhotonsIn.fill(0)
-
-        if '-DDOUBLE' in options:
-            Tableau.tabPhotons = np.zeros(NLVL*NPSTK*NBTHETA * NBPHI * NLAM, dtype=np.float64)
-        else : 
-            Tableau.tabPhotons = np.zeros(NLVL*NPSTK*NBTHETA * NBPHI * NLAM, dtype=np.float32)
-        Var.nbPhotons = np.uint32(0)
-        Var.nbPhotonsSor = np.uint32(0)
+        Counter.fill(0)
 
             # transfert the data from the host to the device
         Tableau.copy_to_gpu(skipTableau)
-        Var.copy_to_gpu(skipVar)
 
         # kernel launch
-        kern(Var.get_ptr(), Tableau.get_ptr(), X0,
+        kern(Tableau.get_ptr(), X0,
                 errorcount, nThreadsActive, tabPhotons,
-                NPhotonsIn, NPhotonsOut,
+                Counter, NPhotonsIn, NPhotonsOut,
                 block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
 
         # transfert the result from the device to the host
         Tableau.copy_from_gpu(skipTableau)
-        Var.copy_from_gpu(skipVar)
 
         NPhotonsInTot += NPhotonsIn.get()
         NPhotonsOutTot += NPhotonsOut.get()
