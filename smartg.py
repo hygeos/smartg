@@ -311,9 +311,8 @@ def smartg(wl, pp=True,
         # warning! should be identical to the value defined in communs.h
         NLVL = 5
 
-        # number of Stokes parameters of the radiation field + 1 for number of photons
-        # warning! still hardcoded in device.cu and profil.py (FIXME)
-        NPSTK = 5
+        # number of Stokes parameters of the radiation field
+        NPSTK = 4
 
         attrs = OrderedDict()
         attrs.update({'device': pycuda.autoinit.device.name()})
@@ -634,9 +633,6 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
 
     # V
     tabFinal[:,3,:,:,:] = tabPhotonsTot[:,3,:,:,:]/norm
-
-    # N
-    tabFinal[:,4,:,:,:] = tabPhotonsTot[:,4,:,:,:]
 
 
     #

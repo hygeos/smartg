@@ -24,9 +24,7 @@ dir_libradtran_opac =  join(dir_libradtran, 'data/aerosol/OPAC/')
 dir_libradtran_atmmod = join(dir_libradtran, 'data/atmmod/')
 dir_libradtran_crs = join(dir_libradtran, 'data/crs/')
 
-NPSTK = 5 
-        # number of Stokes parameters of the radiation field + 1 for number of photons
-        # warning! still hardcoded in device.cu  (FIXME)
+NPSTK = 4 # number of Stokes parameters of the radiation field
 
 class AeroOPAC(object):
     '''
@@ -186,9 +184,9 @@ class AeroOPAC(object):
 #        MMAX=5000 # Nb de polynome de Legendre au total maximum
         self.dtau_tot=np.zeros(M,np.float32)
         self.ssa_tot=np.zeros(M,np.float32)
-#        self.pmom_tot=np.zeros((M,NPSTK-1,MMAX),np.float64)
+#        self.pmom_tot=np.zeros((M,NPSTK,MMAX),np.float64)
         self.theta = np.linspace(0.,180.,num=NTHETA,endpoint=True,dtype=np.float64)
-        self.phase_tot=np.zeros((M,NPSTK-1,NTHETA),np.float64)
+        self.phase_tot=np.zeros((M,NPSTK,NTHETA),np.float64)
 
         norm=np.zeros(M,np.float32)
         k=0
@@ -218,7 +216,7 @@ class AeroOPAC(object):
                         dtau = dz * ext * self.scalingfact # calcul de l'epaisseur optique du niveau, eventuellement mise a l'echelle
                         dssa = dtau*ssa # ssa pondere par l'epsaissuer optique
                         norm[m]+=dssa
-                        for n in range(NPSTK-1): # pour chaque element de la matrice de Stokes independant (NPSTK-1 pour Mie) 
+                        for n in range(NPSTK): # pour chaque element de la matrice de Stokes independant (NPSTK pour Mie) 
 #                            nmax=scamat.nmom[int(iw),int(ir),n]
 #                            dp[n]= scamat.pmom[int(iw),int(ir),n,:nmax]*dssa # plus proche voisin pour pmom pondere par ssa et tau de la composante
                             nmax=scamat.ntheta[int(iw),int(ir),n]
@@ -226,7 +224,7 @@ class AeroOPAC(object):
                             dp[n]= ftheta(self.theta)*dssa # plus proche voisin pour pmom pondere par ssa et tau de la composante
                     self.dtau_tot[m]+=dtau #somme sur les composantes
                     self.ssa_tot[m]+=dssa #moyenne pondere par l'epassieur optique pour ssa
-                    for n in range(NPSTK-1):
+                    for n in range(NPSTK):
 #                        nmax=scamat.nmom[int(iw),int(ir),n]
 #                        self.pmom_tot[m,n,:nmax]+=dp[n]
                         self.phase_tot[m,n,:]+=dp[n]
@@ -258,7 +256,7 @@ class AeroOPAC(object):
                         dtau = dz * ext * self.scalingfact
                         dssa = dtau*ssa
                         norm[m]+=dssa
-                        for n in range(NPSTK-1): # pour chaque element de la matrice de Stokes independant (NPSTK-1 pour Mie) 
+                        for n in range(NPSTK): # pour chaque element de la matrice de Stokes independant (NPSTK pour Mie) 
 #                            nmax=nmom[int(iw),n]
 #                            dp[n]= pmom[int(iw),n,:nmax]*dssa # plus proche voisin pour pmom pondere par ssa et tau de la composante
                             nmax=ntheta[int(iw),n]
@@ -267,7 +265,7 @@ class AeroOPAC(object):
                             
                     self.dtau_tot[m]+=dtau
                     self.ssa_tot[m]+=dssa
-                    for n in range(NPSTK-1):
+                    for n in range(NPSTK):
 #                        nmax=nmom[int(iw),n]
 #                        self.pmom_tot[m,n,:nmax]+=dp[n]
                         self.phase_tot[m,n,:]+=dp[n]
@@ -277,18 +275,18 @@ class AeroOPAC(object):
         for m in xrange(M):
             if m==0:
                 self.ssa_tot[m]=1.
-                for n in range(NPSTK-1):
+                for n in range(NPSTK):
 #                    self.pmom_tot[m,n,:]=0.
                     self.phase_tot[m,n,:]=0.
             else:
                 if (self.dtau_tot[m]>1e-8 and norm[m] > 1e-8): 
                     self.ssa_tot[m]/=self.dtau_tot[m]
-                    for n in range(NPSTK-1):  
+                    for n in range(NPSTK):  
 #                        self.pmom_tot[m,n,:]/=norm[m]
                         self.phase_tot[m,n,:]/=norm[m]
                 else:
                     self.ssa_tot[m]=1.
-                    for n in range(NPSTK-1):
+                    for n in range(NPSTK):
 #                        self.pmom_tot[m,n,:]=0.
                         self.phase_tot[m,n,:]=0.
 
@@ -316,7 +314,7 @@ class AeroOPAC(object):
         '''
         M=len(self.z)
         N=len(self.theta)
-        pha=np.zeros((N, NPSTK-1),np.float64)
+        pha=np.zeros((N, NPSTK),np.float64)
         if self.phases == None:
             self.phases = []
             for m in range(1, M):   # not the top boundary
@@ -456,9 +454,9 @@ class CloudOPAC(object):
         self.dtau_tot=np.zeros(M,np.float32)
         self.ssa_tot=np.zeros(M,np.float32)
 #        MMAX=5000
-#        self.pmom_tot=np.zeros((M,NPSTK-1,MMAX),np.float64)
+#        self.pmom_tot=np.zeros((M,NPSTK,MMAX),np.float64)
         self.theta = np.linspace(0.,180.,num=NTHETA,endpoint=True,dtype=np.float64)
-        self.phase_tot=np.zeros((M,NPSTK-1,NTHETA),np.float64)
+        self.phase_tot=np.zeros((M,NPSTK,NTHETA),np.float64)
         norm=np.zeros(M,np.float32)
         k=0
         for scamat in self.scamatlist:
@@ -505,7 +503,7 @@ class CloudOPAC(object):
                     dtau = dz * ext * self.scalingfact
                     dssa = dtau*ssa
                     norm[m]+=dssa
-                    for n in range(NPSTK-1): # pour chaque element de la matrice de Stokes independant (NPSTK-1 pour Mie) 
+                    for n in range(NPSTK): # pour chaque element de la matrice de Stokes independant (NPSTK pour Mie) 
                         if ntheta.ndim==2:
 #                        if nmom.ndim==2:
 #                            nmax=nmom[int(iw),n]
@@ -520,7 +518,7 @@ class CloudOPAC(object):
                             dp[n]= ftheta(self.theta)*dssa # plus proche voisin pour phase pondere par ssa et tau de la composante
                 self.dtau_tot[m]+=dtau
                 self.ssa_tot[m]+=dssa
-                for n in range(NPSTK-1):
+                for n in range(NPSTK):
 #                    if nmom.ndim==2:
 #                        nmax=nmom[int(iw),n]
 #                    else:
@@ -535,18 +533,18 @@ class CloudOPAC(object):
         for m in xrange(M):
             if m==0:
                 self.ssa_tot[m]=1.
-                for n in range(NPSTK-1):
+                for n in range(NPSTK):
 #                    self.pmom_tot[m,n,:]=0.
                     self.phase_tot[m,n,:]=0.
             else:
                 if (self.dtau_tot[m]>1e-8 and norm[m] > 1e-8): 
                     self.ssa_tot[m]/=self.dtau_tot[m]
-                    for n in range(NPSTK-1):  
+                    for n in range(NPSTK):  
 #                        self.pmom_tot[m,n,:]/=norm[m]
                         self.phase_tot[m,n,:]/=norm[m]
                 else:
                     self.ssa_tot[m]=1.
-                    for n in range(NPSTK-1):
+                    for n in range(NPSTK):
 #                        self.pmom_tot[m,n,:]=0.
                         self.phase_tot[m,n,:]=0.
 
@@ -576,7 +574,7 @@ class CloudOPAC(object):
         M=len(self.z)
 #        Leg=Legendres(self.MMAX,NTHETA)
         N=len(self.theta)
-        pha=np.zeros((N, NPSTK-1),np.float64)
+        pha=np.zeros((N, NPSTK),np.float64)
         phases = []
 
         for m in range(1, M):   # not the top boundary
@@ -741,7 +739,7 @@ def Mom2Pha(Mom,Leg):
     sumQ=np.zeros_like(Leg.mu)
     sumU=np.zeros_like(Leg.mu)
     sumV=np.zeros_like(Leg.mu)
-    pha=np.zeros((Leg.ntheta, NPSTK-1),np.float64)
+    pha=np.zeros((Leg.ntheta, NPSTK),np.float64)
     for k in range(Leg.nterm):
         sumP=sumP+Mom[0,k]*Leg.p1[k,:]
         sumQ=sumQ+Mom[1,k]*Leg.p2[k,:]
@@ -755,7 +753,7 @@ def Mom2Pha(Mom,Leg):
     
     
 def Pha2Pha(Pha):
-    pha=np.zeros((Pha.shape()[-1], NPSTK-1),np.float64)
+    pha=np.zeros((Pha.shape()[-1], NPSTK),np.float64)
     pha[:,0] = Pha[0,:] + Pha[1,:]
     pha[:,0] = Pha[0,:] - Pha[1,:]
     pha[:,2] = Pha[2,:]
