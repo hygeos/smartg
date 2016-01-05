@@ -78,7 +78,8 @@ __global__ void launchKernel(Tableaux *tab,
         unsigned long long *Counter,
         unsigned long long *NPhotonsIn,
         unsigned long long *NPhotonsOut,
-        float *tabthv, float *tabphi
+        float *tabthv, float *tabphi,
+        unsigned int *philox_data
         );
 }
 

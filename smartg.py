@@ -535,7 +535,8 @@ def smartg(wl, pp=True,
                 tabPhotonsTot, errorcount, NPhotonsOutTot
                 ) = loop_kernel(NBPHOTONS, Tableau, faer2, foce2,
                                 NLVL, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
-                                NLAM, options, kern, p, X0, le, spectrum)
+                                NLAM, options, kern, p, X0, le, spectrum,
+                                SEED)
 
         # finalization
         output = finalize(tabPhotonsTot, wavelengths, NPhotonsInTot, errorcount, NPhotonsOutTot,
@@ -1155,7 +1156,7 @@ def get_git_attrs():
 
 def loop_kernel(NBPHOTONS, Tableau, faer2, foce2, NLVL,
                 NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
-                NLAM, options , kern, p, X0, le, spectrum):
+                NLAM, options , kern, p, X0, le, spectrum, SEED):
     """
     launch the kernel several time until the targeted number of photons injected is reached
 
@@ -1213,6 +1214,11 @@ def loop_kernel(NBPHOTONS, Tableau, faer2, foce2, NLVL,
         tabthv = gpuzeros(1, dtype='float32')
         tabphi = gpuzeros(1, dtype='float32')
 
+    # RNG status and configuration
+    philox_data = np.zeros(XBLOCK*XGRID+1, dtype='uint32')
+    philox_data[0] = SEED
+    philox_data = to_gpu(philox_data)
+
     # skip List used to avoid transfering arrays already sent into the device
     skipTableau = ['faer', 'foce', 'ho', 'sso', 'ipo', 'h', 'pMol', 'ssa', 'abs', 'ip', 'alb', 'lambda', 'z']
 
@@ -1230,6 +1236,7 @@ def loop_kernel(NBPHOTONS, Tableau, faer2, foce2, NLVL,
         kern(Tableau.get_ptr(), spectrum, X0, faer2, foce2,
                 errorcount, nThreadsActive, tabPhotons,
                 Counter, NPhotonsIn, NPhotonsOut, tabthv, tabphi,
+                philox_data,
                 block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
 
         # transfert the result from the device to the host

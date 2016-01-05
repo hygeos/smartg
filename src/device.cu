@@ -74,7 +74,8 @@ __global__ void launchKernel(Tableaux *tab,
         unsigned long long *Counter,
         unsigned long long *NPhotonsIn,
         unsigned long long *NPhotonsOut,
-        float *tabthv, float *tabphi
+        float *tabthv, float *tabphi,
+        unsigned int *philox_data
         ) {
 
     // current thread index
@@ -84,6 +85,9 @@ __global__ void launchKernel(Tableaux *tab,
     int this_thread_active = 1;
     unsigned long long iloop = 0;
 
+    // philox_data:
+    // index 0: seed (config)
+    // index 1 to last: status
 
     // Paramètres de la fonction random en mémoire locale
     //la clef se defini par l'identifiant global (unique) du thread...
@@ -91,13 +95,13 @@ __global__ void launchKernel(Tableaux *tab,
     //ce systeme garanti l'existence de 2^32 generateurs differents par run et...
     //...la possiblite de reemployer les memes sequences a partir de la meme clef utilisateur
     //(plus d'infos dans "communs.h")
-    philox4x32_key_t configThr = {{idx, tab->config}};
+    philox4x32_key_t configThr = {{idx, philox_data[0]}};
     //le compteur se defini par trois mots choisis au hasard (il parait)...
     //...et un compteur definissant le nombre d'appel au generateur
     //ce systeme garanti l'existence de 2^32 nombres distincts pouvant etre genere par thread,...
     //...et ce sur l'ensemble du process (et non pas 2^32 par thread par appel au kernel)
     //(plus d'infos dans "communs.h")
-    philox4x32_ctr_t etatThr = {{tab->etat[idx], 0xf00dcafe, 0xdeadbeef, 0xbeeff00d}};
+    philox4x32_ctr_t etatThr = {{philox_data[idx+1], 0xf00dcafe, 0xdeadbeef, 0xbeeff00d}};
 
 	
 	// Création de variable propres à chaque thread
@@ -392,7 +396,7 @@ __global__ void launchKernel(Tableaux *tab,
     }
 
 	// Sauvegarde de l'état du random pour que les nombres ne soient pas identiques à chaque appel du kernel
-	tab->etat[idx] = etatThr[0];
+    philox_data[idx+1] = etatThr[0];
 
 }
 }
