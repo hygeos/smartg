@@ -63,6 +63,11 @@ type_Phase = [
         ('a_P33', 'float32'),  #  | angle [0, 180]
         ('a_P43', 'float32'),  # /
         ]
+type_Spectrum = [
+        ('lambda'      , 'float32'),
+        ('alb_surface' , 'float32'),
+        ('alb_seafloor', 'float32'),
+        ]
 
 class FlatSurface(object):
     '''
@@ -409,16 +414,23 @@ def smartg(wl, pp=True,
         #
         # albedo
         #
+        spectrum = np.zeros(NLAM, dtype=type_Spectrum)
+        spectrum['lambda'] = np.array(wavelengths)
         if 'SURFALB' in surf.dict:
             surf_alb = surf.dict['SURFALB']
+            spectrum['alb_surface'] = surf.dict['SURFALB']
         else:
             surf_alb = -999.
+            spectrum['alb_surface'] = -999.
         if water is None:
             seafloor_alb = -999.
+            spectrum['alb_seafloor'] = -999.
         else:
             seafloor_alb = water.alb
+            spectrum['alb_seafloor'] = water.alb
+        spectrum = to_gpu(spectrum)
 
-        albedo = np.zeros(2*NLAM)
+        albedo = np.zeros(2*NLAM)   # TODO: deprecate
         for i in xrange(NLAM):
             # FIXME: implement spectral albedo
             albedo[2*i] = surf_alb
@@ -523,7 +535,7 @@ def smartg(wl, pp=True,
                 tabPhotonsTot, errorcount, NPhotonsOutTot
                 ) = loop_kernel(NBPHOTONS, Tableau, faer2, foce2,
                                 NLVL, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
-                                NLAM, options, kern, p, X0, le)
+                                NLAM, options, kern, p, X0, le, spectrum)
 
         # finalization
         output = finalize(tabPhotonsTot, wavelengths, NPhotonsInTot, errorcount, NPhotonsOutTot,
@@ -1143,7 +1155,7 @@ def get_git_attrs():
 
 def loop_kernel(NBPHOTONS, Tableau, faer2, foce2, NLVL,
                 NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
-                NLAM, options , kern, p, X0, le):
+                NLAM, options , kern, p, X0, le, spectrum):
     """
     launch the kernel several time until the targeted number of photons injected is reached
 
@@ -1215,7 +1227,7 @@ def loop_kernel(NBPHOTONS, Tableau, faer2, foce2, NLVL,
         Tableau.copy_to_gpu(skipTableau)
 
         # kernel launch
-        kern(Tableau.get_ptr(), X0, faer2, foce2,
+        kern(Tableau.get_ptr(), spectrum, X0, faer2, foce2,
                 errorcount, nThreadsActive, tabPhotons,
                 Counter, NPhotonsIn, NPhotonsOut, tabthv, tabphi,
                 block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))

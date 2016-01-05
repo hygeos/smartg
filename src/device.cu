@@ -67,7 +67,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 extern "C" {
-__global__ void launchKernel(Tableaux *tab, float *X0,
+__global__ void launchKernel(Tableaux *tab,
+        struct Spectrum *spectrum, float *X0,
         struct Phase *faer, struct Phase *foce,
         unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons,
         unsigned long long *Counter,
@@ -126,7 +127,7 @@ __global__ void launchKernel(Tableaux *tab, float *X0,
         // Si le photon est à NONE on l'initialise et on le met à la localisation correspondant à la simulaiton en cours
         if((ph.loc == NONE) && this_thread_active){
 
-            initPhoton(&ph, *tab, X0, NPhotonsIn, &etatThr , &configThr);
+            initPhoton(&ph, *tab, spectrum, X0, NPhotonsIn, &etatThr , &configThr);
             iloop = 1;
             #ifdef DEBUG_PHOTON
             display("INIT", &ph);
@@ -180,7 +181,7 @@ __global__ void launchKernel(Tableaux *tab, float *X0,
         // count the photons
         
         /* Cone Sampling */
-        if (LEd ==0) countPhoton(&ph, *tab, count_level,
+        if (LEd ==0) countPhoton(&ph, tabthv, tabphi, *tab, count_level,
                 errorcount, tabPhotons, NPhotonsOut);
 
 
@@ -235,7 +236,7 @@ __global__ void launchKernel(Tableaux *tab, float *X0,
                             #endif
                             #endif
 
-                            countPhoton(&ph_le, *tab, count_level,
+                            countPhoton(&ph_le, tabthv, tabphi, *tab, count_level,
                                     errorcount, tabPhotons, NPhotonsOut);
                         }
                     }
@@ -293,7 +294,7 @@ __global__ void launchKernel(Tableaux *tab, float *X0,
                         //ph_le.iph = iph;
                         //ph_le.ith = ith;
 
-                        surfaceAgitee(&ph_le, tab->alb, 1, tabthv, tabphi,
+                        surfaceAgitee(&ph_le, 1, tabthv, tabphi,
                                 count_level, &etatThr , &configThr);
 
                         #ifdef DEBUG_PHOTON
@@ -301,33 +302,33 @@ __global__ void launchKernel(Tableaux *tab, float *X0,
                         else display("SURFACE LE DOWN", &ph_le);
                         #endif
 
-                        countPhoton(&ph_le, *tab, count_level, errorcount, tabPhotons, NPhotonsOut);
+                        countPhoton(&ph_le, tabthv, tabphi, *tab, count_level, errorcount, tabPhotons, NPhotonsOut);
                         if (k==0) { 
                             #ifdef SPHERIQUE
                             if (ph_le.loc==ATMOS) move_sp(&ph_le, *tab, 1, UPTOA , &etatThr , &configThr);
                             #endif
-                            countPhoton(&ph_le, *tab, UPTOA , errorcount, tabPhotons, NPhotonsOut);
+                            countPhoton(&ph_le, tabthv, tabphi, *tab, UPTOA , errorcount, tabPhotons, NPhotonsOut);
                         }
                       }
                     }
                   }
                 }
-				surfaceAgitee(&ph, tab->alb, 0, tabthv, tabphi,
+				surfaceAgitee(&ph, 0, tabthv, tabphi,
                         count_level, &etatThr , &configThr);
             }
 
 			else
-				surfaceLambertienne(&ph, tab->alb, &etatThr , &configThr);
+				surfaceLambertienne(&ph, spectrum, &etatThr , &configThr);
            }
 
            else {
                 float dis=0;
                 dis = sqrtf((ph.x-X0d)*(ph.x-X0d) +(ph.y-Y0d)*(ph.y-Y0d));
                 if( dis > ENV_SIZEd) {
-                    surfaceLambertienne(&ph, tab->alb, &etatThr , &configThr);
+                    surfaceLambertienne(&ph, spectrum, &etatThr , &configThr);
                 }
                 else {
-                    surfaceAgitee(&ph, tab->alb, 0, tabthv, tabphi, count_level, &etatThr , &configThr);
+                    surfaceAgitee(&ph, 0, tabthv, tabphi, count_level, &etatThr , &configThr);
                 }
            }
             #ifdef DEBUG_PHOTON
@@ -341,7 +342,7 @@ __global__ void launchKernel(Tableaux *tab, float *X0,
         //
         // -> in SEAFLOOR
         if(ph.loc == SEAFLOOR){
-            surfaceLambertienne(&ph, tab->alb, &etatThr , &configThr);
+            surfaceLambertienne(&ph, spectrum, &etatThr , &configThr);
             #ifdef DEBUG_PHOTON
             display("SEAFLOOR", &ph);
             #endif
@@ -360,7 +361,7 @@ __global__ void launchKernel(Tableaux *tab, float *X0,
         }
         
         /* Cone Sampling */
-        if (LEd == 0) countPhoton(&ph, *tab, count_level, errorcount, tabPhotons, NPhotonsOut);
+        if (LEd == 0) countPhoton(&ph, tabthv, tabphi, *tab, count_level, errorcount, tabPhotons, NPhotonsOut);
 
 
 
@@ -404,7 +405,8 @@ __global__ void launchKernel(Tableaux *tab, float *X0,
 /* initPhoton
 * Initialise le photon dans son état initial avant l'entrée dans l'atmosphère
 */
-__device__ void initPhoton(Photon* ph, Tableaux tab, float *X0, unsigned long long *NPhotonsIn,
+__device__ void initPhoton(Photon* ph, Tableaux tab,
+                           struct Spectrum *spectrum, float *X0, unsigned long long *NPhotonsIn,
                            philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr)
 {
 	// Initialisation du vecteur vitesse
@@ -421,7 +423,7 @@ __device__ void initPhoton(Photon* ph, Tableaux tab, float *X0, unsigned long lo
     // Initialisation de la longueur d onde
      //mono chromatique
 	ph->ilam = __float2uint_rz(RAND * NLAMd);
-	ph->wavel = tab.lambda[ph->ilam];
+	ph->wavel = spectrum[ph->ilam].lambda;
     atomicAdd(NPhotonsIn+ph->ilam, 1);
 
     if ((SIMd == -2) || (SIMd == 1) || (SIMd == 2)) {
@@ -1156,7 +1158,7 @@ __device__ void scatter(Photon* ph, struct Phase *faer, float* ssa,
 /* surfaceAgitee
 * Reflexion sur une surface agitée ou plane en fonction de la valeur de DIOPTRE
 */
-__device__ void surfaceAgitee_old(Photon* ph, float* alb , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr) {
+__device__ void surfaceAgitee_old(Photon* ph, philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr) {
 	
 	if( SIMd == -2){ // Atmosphère , la surface absorbe tous les photons
 		ph->loc = ABSORBED;
@@ -1560,7 +1562,7 @@ __device__ void surfaceAgitee_old(Photon* ph, float* alb , philox4x32_ctr_t* eta
 }
 
 
-__device__ void surfaceAgitee(Photon* ph, float* alb, int le, float* tabthv, float* tabphi, int count_level , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr) {
+__device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, int count_level , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr) {
 	
 	if( SIMd == -2){ // Atmosphère , la surface absorbe tous les photons
 		ph->loc = ABSORBED;
@@ -2040,7 +2042,7 @@ __device__ void surfaceAgitee(Photon* ph, float* alb, int le, float* tabthv, flo
 /* surfaceLambertienne
 * Reflexion sur une surface lambertienne
 */
-__device__ void surfaceLambertienne(Photon* ph, float* alb , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr) {
+__device__ void surfaceLambertienne(Photon* ph, struct Spectrum *spectrum, philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr) {
 	
 	if( SIMd == -2){ 	// Atmosphère ou océan seuls, la surface absorbe tous les photons
 		ph->loc = ABSORBED;
@@ -2159,7 +2161,7 @@ __device__ void surfaceLambertienne(Photon* ph, float* alb , philox4x32_ctr_t* e
 	
     if (ph->loc != SEAFLOOR){
 
-	  ph->weight *= alb[0+ph->ilam*2];
+	  ph->weight *= spectrum[ph->ilam].alb_surface;
 
 	  #ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
 	  /** Retour dans le repère d'origine **/
@@ -2185,7 +2187,7 @@ __device__ void surfaceLambertienne(Photon* ph, float* alb , philox4x32_ctr_t* e
     } // not seafloor 
 
     else {
-	  ph->weight *= alb[1+ph->ilam*2];
+	  ph->weight *= spectrum[ph->ilam].alb_seafloor;
       ph->loc = OCEAN;
     }
     
@@ -2194,6 +2196,7 @@ __device__ void surfaceLambertienne(Photon* ph, float* alb , philox4x32_ctr_t* e
 
 
 __device__ void countPhoton(Photon* ph,
+        float *tabthv, float *tabphi,
         Tableaux tab, int count_level,
 		unsigned long long *errorcount,
         void *tabPhotons, unsigned long long *NPhotonsOut
@@ -2244,8 +2247,8 @@ __device__ void countPhoton(Photon* ph,
         float sin_psi;
         float eps=1e-4;
 
-            ux_phi = cosf(tab.tabphi[ph->iph]);
-            uy_phi = sinf(tab.tabphi[ph->iph]);
+            ux_phi = cosf(tabphi[ph->iph]);
+            uy_phi = sinf(tabphi[ph->iph]);
             cos_psi = (ux_phi*ph->ux + uy_phi*ph->uy);
             if( cos_psi > 1.0) cos_psi = 1.0;
             if( cos_psi < -1.0) cos_psi = -1.0;

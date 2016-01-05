@@ -71,7 +71,8 @@ __device__ __constant__ float RTER;
 ***********************************************************/
 
 extern "C" {
-__global__ void launchKernel(Tableaux *tab, float *X0,
+__global__ void launchKernel(Tableaux *tab,
+        struct Spectrum *spectrum, float *X0,
         struct Phase *faer, struct Phase *foce2,
         unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons,
         unsigned long long *Counter,
@@ -89,7 +90,8 @@ __global__ void launchKernel(Tableaux *tab, float *X0,
 /* initPhoton
 * Initialise le photon dans son état initial avant l'entrée dans l'atmosphère
 */
-__device__ void initPhoton(Photon* ph, Tableaux tab, float *X0,
+__device__ void initPhoton(Photon* ph, Tableaux tab,
+                           struct Spectrum *spectrum,float *X0,
                            unsigned long long *NPhotonsIn,
                            philox4x32_ctr_t*, philox4x32_key_t*);
 
@@ -118,21 +120,21 @@ __device__ void scatter(Photon* ph, Phase *faer2, float* ssa,
 * Reflexion sur une surface agitée ou plane en fonction de la valeur de DIOPTRE
 * //TODO: transmission vers l'océan et/ou reflexion totale
 */
-__device__ void surfaceAgitee_old(Photon*, float* alb , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr);
+__device__ void surfaceAgitee_old(Photon*, philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr);
 
-__device__ void surfaceAgitee(Photon*, float* alb, int le, float* tabthv, float* tabphi, int count_level , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr);
+__device__ void surfaceAgitee(Photon*, int le, float* tabthv, float* tabphi, int count_level , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr);
 
 
 /* surfaceLambertienne
 * Reflexion sur une surface lambertienne
 */
-__device__ void surfaceLambertienne(Photon* , float* alb, philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr);
+__device__ void surfaceLambertienne(Photon* , struct Spectrum *spectrum, philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr);
 
 
 /* exit
 * Sauve les paramètres des photons sortis dans l'espace dans la boite correspondant à la direction de sortie
 */
-__device__ void countPhoton(Photon* , Tableaux, int, unsigned long long*, void*, unsigned long long*);
+__device__ void countPhoton(Photon* , float*, float *, Tableaux, int, unsigned long long*, void*, unsigned long long*);
 
 
 

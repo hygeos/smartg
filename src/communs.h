@@ -137,6 +137,12 @@ typedef struct __align__(16)
 }	Photon;
 
 
+struct Spectrum {
+    float lambda;
+    float alb_surface;
+    float alb_seafloor;
+};
+
 struct Phase {
     float p_ang; /* \                          */
     float p_P11; /*  | equally spaced in       */
