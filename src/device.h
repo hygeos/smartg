@@ -135,7 +135,6 @@ __device__ void rotateStokes(float s1, float s2, float s3, float psi,
 
 
 /* ComputePsi
-* Calcul du psi pour la direction de sortie du photon
 */
 __device__ void ComputePsi(Photon*, float*, float);
 

@@ -275,7 +275,9 @@ def smartg(wl, pp=True,
             - double : accumulate photons table in double precision, default single
                 NOTE: compilation flag, not available if the kernel is provided as a binary 
 
-            - le: Local Estimate method activation (by providing two arrays of zenit and azimuth angles for output), default cone sampling
+            - le: Local Estimate method activation (by providing a dictionnary of two float32 arrays of zenith and azimuth angles in radian
+                  for output), default cone sampling
+                NOTE: Overwrite NBPHI and NBTHETA
             
             - flux: if specified output is 'planar' or 'spherical' flux instead of radiance
 
@@ -406,10 +408,12 @@ def smartg(wl, pp=True,
             albedo[2*i] = surf_alb
             albedo[2*i+1] = seafloor_alb
 
-        # Local Estilate option
+        # Local Estimate option
         LE = 0
         if le!=None:
             LE = 1
+            NBTHETA =  le['thv'].shape[0]
+            NBPHI   =  le['phi'].shape[0]
         
         FLUX = 0
         if flux == 'planar' : FLUX = 1

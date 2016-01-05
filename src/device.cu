@@ -816,8 +816,8 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
         /* in case of LE the photon units vectors, scattering angle and Psi rotation angle are determined by output zenith and azimuth angles*/
         float thv, phi;
         float vx ,vy ,vz;
-        if (count_level==DOWN0P) sign = -1;
-        else sign = 1;
+        if (count_level==DOWN0P) sign = -1.0F;
+        else sign = 1.0F;
         phi = tabphi[ph->iph];
         thv = tabthv[ph->ith];
         vx = __cosf(phi) * __sinf(thv);
@@ -1761,7 +1761,7 @@ __device__ void surfaceAgitee(Photon* ph, float* alb, int le, float* tabthv, flo
      thv = tabthv[ph->ith];
      vx = __cosf(phi) * __sinf(thv);
      vy = __sinf(phi) * __sinf(thv);
-     vz = sign * __cosf(thv);  
+     vz = sign * cosf(thv);  
      
      // Normal to the facet in the global frame
      n_x = (vx - ph->vx)/2.F;
@@ -2215,7 +2215,7 @@ __device__ void countPhoton(Photon* ph,
     float *tabCount; 
     #endif
 
-    float theta = acosf(fmin(1.F, fmax(-1.F, 0.f * ph->vx + 1.f * ph->vz)));
+    float theta = acosf(fmin(1.F, fmax(-1.F, ph->vz)));
     #ifdef SPHERIQUE
     if(ph->vz<=0.f) {
          // do not count the downward photons leaving atmosphere
@@ -2232,17 +2232,34 @@ __device__ void countPhoton(Photon* ph,
 	float psi=0.;
 	int ith=0, iphi=0, il=0;
     float s1, s2, s3, s4;
-	// Initialisation de psi
-	if (theta != 0.F) {
+
+    if (theta != 0.F) {
         ComputePsi(ph, &psi, theta);
-        rotateStokes(ph->stokes1, ph->stokes2, ph->stokes3,  psi,
-            &s1, &s2, &s3);
     }
     else {
-        s1 = ph->stokes1;
-        s2 = ph->stokes2;
-        s3 = ph->stokes3;
+        // Compute Psi in the special case of nadir
+        float ux_phi;
+        float uy_phi;
+        float cos_psi;
+        float sin_psi;
+        float eps=1e-4;
+
+            ux_phi = cosf(tab.tabphi[ph->iph]);
+            uy_phi = sinf(tab.tabphi[ph->iph]);
+            cos_psi = (ux_phi*ph->ux + uy_phi*ph->uy);
+            if( cos_psi > 1.0) cos_psi = 1.0;
+            if( cos_psi < -1.0) cos_psi = -1.0;
+            sin_psi = sqrtf(1.0 - (cos_psi*cos_psi) );
+            if(( abs( (ph->ux*cos_psi - ph->uy*sin_psi) - ux_phi ) < eps ) and ( abs( (ph->ux*sin_psi + ph->uy*cos_psi) - uy_phi ) < eps )) {
+                psi = -acosf(cos_psi);
+            }
+            else{
+                psi = acosf(cos_psi);
+            } 
     }
+
+    rotateStokes(ph->stokes1, ph->stokes2, ph->stokes3,  psi,
+        &s1, &s2, &s3);
     s4 = ph->stokes4;
 	// Calcul de la case dans laquelle le photon sort
 	if (LEd == 0) ComputeBox(&ith, &iphi, &il, ph, errorcount);
@@ -2273,7 +2290,7 @@ __device__ void countPhoton(Photon* ph,
 	if (FLUXd==1 && LEd==0) weight *= __cosf(ph->vz);
 
     #ifdef DEBUG
-    int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
+    //int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
     if (isnan(weight)) printf("(idx=%d) Error, weight is NaN\n", idx);
     if (isnan(s1)) printf("(idx=%d) Error, s1 is NaN\n", idx);
     if (isnan(s2)) printf("(idx=%d) Error, s2 is NaN\n", idx);
@@ -2339,22 +2356,17 @@ __device__ void rotateStokes(float s1, float s2, float s3, float psi,
 
 
 /* ComputePsi
-* Calcul du psi pour la direction de sortie du photon
 */
 __device__ void ComputePsi(Photon* photon, float* psi, float theta)
 {
-	float sign;
-// 	if (theta >= 0.05F)
-// 	{
-		*psi = acosf(fmin(1.F, fmax(-1.F, __fdividef(0.f * photon->ux + 1.f * photon->uz, __sinf(theta)))));
-// 	}
-// 	else
-// 	{
-// 		*psi = acosf(fmin(1.F - VALMIN, fmax(-(1.F - VALMIN), - 1.f * photon->ux + 0.f * photon->uz)));
-// 	}
-	
-	sign = 0.f * (photon->uy * photon->vz - photon->uz * photon->vy) + 1.f * (photon->ux * photon->vy - photon->uy * photon->vx);
-	if (sign < 0.F) *psi = -(*psi);
+    //float sign;
+	//*psi = acosf(fmin(1.F, fmax(-1.F, __fdividef(photon->uz, __sinf(theta)))));
+	//sign = photon->ux * photon->vy - photon->uy * photon->vx;
+	//if (sign < 0.F) *psi = -(*psi);
+    // see Rammella et al. Three Monte Carlo programs of polarized light transport into scattering media: part I Optics Express, 2005, 13, 4420
+    double wz;
+    wz = (double)photon->vx * (double)photon->uy - (double)photon->vy * (double)photon->ux;
+    *psi = atan2(wz, -1.*(double)photon->uz); 
 }
 
 
