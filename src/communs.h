@@ -137,6 +137,20 @@ typedef struct __align__(16)
 }	Photon;
 
 
+struct Phase {
+    float p_ang; /* \                          */
+    float p_P11; /*  | equally spaced in       */
+    float p_P22; /*  | scattering probability  */
+    float p_P33; /*  | [0, 1]                  */
+    float p_P43; /* /                          */
+
+    float a_P11; /* \                          */
+    float a_P22; /*  | equally spaced in scat. */
+    float a_P33; /*  | angle [0, 180]          */
+    float a_P43; /* /                          */
+
+};
+
 /* Tableaux
 * Ensemble des tableaux envoyés par le host dans le device
 * tabPhotons est également modifié par le kernel pour sauver les paramètres de stokes du photon sorti dans l'espace

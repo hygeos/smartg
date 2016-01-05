@@ -48,6 +48,22 @@ DOWN0M = 2
 UP0P = 3
 UP0M = 4
 
+#
+# type definitions (should match cuda struct definitions)
+#
+type_Phase = [
+        ('p_ang', 'float32'),  # \
+        ('p_P11', 'float32'),  #  | equally spaced in
+        ('p_P22', 'float32'),  #  | scattering probability
+        ('p_P33', 'float32'),  #  | [0, 1]
+        ('p_P43', 'float32'),  # /
+
+        ('a_P11', 'float32'),  # \
+        ('a_P22', 'float32'),  #  | equally spaced in scat.
+        ('a_P33', 'float32'),  #  | angle [0, 180]
+        ('a_P43', 'float32'),  # /
+        ]
+
 class FlatSurface(object):
     '''
     Definition of a flat sea surface
@@ -466,19 +482,23 @@ def smartg(wl, pp=True,
         # computation of the phase functions
         if(SIM == 0 or SIM == 2 or SIM == 3):
             if phasesOc != []:
-                foce = calculF(phasesOc, NFOCE)
+                foce, foce2 = calculF(phasesOc, NFOCE)
             else:
                 foce = [0]
+                foce2 = gpuzeros(1, dtype='float32')
         else:
             foce = [0], [0]
+            foce2 = gpuzeros(1, dtype='float32')
 
         if(SIM == -2 or SIM == 1 or SIM == 2):
             if phasesAtm != []:
-                faer = calculF(phasesAtm, NFAER)
+                faer, faer2 = calculF(phasesAtm, NFAER)
             else:
                 faer = [0]
+                faer2 = gpuzeros(1, dtype='float32')
         else:
             faer = [0]
+            faer2 = gpuzeros(1, dtype='float32')
 
         # write the input variables into data structures
         Tableau = InitSD(nprofilesAtm, nprofilesOc, NLAM,
@@ -501,7 +521,7 @@ def smartg(wl, pp=True,
         # Loop and kernel call
         (NPhotonsInTot,
                 tabPhotonsTot, errorcount, NPhotonsOutTot
-                ) = loop_kernel(NBPHOTONS, Tableau,
+                ) = loop_kernel(NBPHOTONS, Tableau, faer2, foce2,
                                 NLVL, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                                 NLAM, options, kern, p, X0, NBLOOP)
 
@@ -763,8 +783,9 @@ def calculF(phases, N):
         nphases += 1
 
     # Initialize the cumulative distribution function
-    #phase_H = np.zeros((nphases, N, 5), dtype=np.float32)
-    phase_H = np.zeros((nphases, N, 10), dtype=np.float32)
+    phase_H = np.zeros((nphases, N, 10), dtype=np.float32)    # TODO: deprecate
+    phase_HH = np.zeros((nphases, N), dtype=type_Phase, order='C')
+
 
     for idx, phase in enumerate(phases):
         if idx != imax:
@@ -794,7 +815,7 @@ def calculF(phases, N):
         f2 = interp1d(phase.ang_in_rad(), phase.phase[:,0])
         f3 = interp1d(phase.ang_in_rad(), phase.phase[:,2])
         f4 = interp1d(phase.ang_in_rad(), phase.phase[:,3])
-        
+
         phase_H[idx, :, 0] = interp1d(scum, phase.phase[:,1])(z)  # I par P11
         phase_H[idx, :, 1] = interp1d(scum, phase.phase[:,0])(z)  # I per P22
         phase_H[idx, :, 2] = interp1d(scum, phase.phase[:,2])(z)  # U P33
@@ -806,7 +827,21 @@ def calculF(phases, N):
         phase_H[idx, :, 8] = f3(angN)# U P33
         phase_H[idx, :, 9] = f4(angN)# V P43
 
-    return phase_H
+        # parameters equally spaced in scattering probabiliyu
+        phase_HH['p_P11'][idx, :] = interp1d(scum, phase.phase[:,1])(z)  # I par P11
+        phase_HH['p_P22'][idx, :] = interp1d(scum, phase.phase[:,0])(z)  # I per P22
+        phase_HH['p_P33'][idx, :] = interp1d(scum, phase.phase[:,2])(z)  # U P33
+        phase_HH['p_P43'][idx, :] = interp1d(scum, phase.phase[:,3])(z)  # V P43
+        phase_HH['p_ang'][idx, :] = interp1d(scum, phase.ang_in_rad())(z) # angle
+
+
+        # parameters equally spaced in scattering angle [0, 180]
+        phase_HH['a_P11'][idx, :] = f1(angN)  # I par P11
+        phase_HH['a_P22'][idx, :] = f2(angN)  # I per P22
+        phase_HH['a_P33'][idx, :] = f3(angN)  # U P33
+        phase_HH['a_P43'][idx, :] = f4(angN)  # V P43
+
+    return phase_H, to_gpu(phase_HH)
 
 
 def InitConstantes(surf, env, NATM, NOCE, mod,
@@ -1106,7 +1141,7 @@ def get_git_attrs():
     return R
 
 
-def loop_kernel(NBPHOTONS, Tableau, NLVL,
+def loop_kernel(NBPHOTONS, Tableau, faer2, foce2, NLVL,
                 NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                 NLAM, options , kern, p, X0, NBLOOP):
     """
@@ -1172,7 +1207,7 @@ def loop_kernel(NBPHOTONS, Tableau, NLVL,
         Tableau.copy_to_gpu(skipTableau)
 
         # kernel launch
-        kern(Tableau.get_ptr(), X0,
+        kern(Tableau.get_ptr(), X0, faer2, foce2,
                 errorcount, nThreadsActive, tabPhotons,
                 Counter, NPhotonsIn, NPhotonsOut,
                 block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))

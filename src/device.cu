@@ -68,6 +68,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 extern "C" {
 __global__ void launchKernel(Tableaux *tab, float *X0,
+        struct Phase *faer, struct Phase *foce,
         unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons,
         unsigned long long *Counter,
         unsigned long long *NPhotonsIn,
@@ -217,7 +218,7 @@ __global__ void launchKernel(Tableaux *tab, float *X0,
                             ph_le.ith = (ith + ith0)%NBTHETAd;
                             //ph_le.iph = iph;
                             //ph_le.ith = ith;
-                            scatter(&ph_le, tab->faer, tab->ssa, tab->foce, tab->sso,
+                            scatter(&ph_le, faer, tab->ssa, foce, tab->sso,
                                     tab->ip, tab->ipo, 1, tab->tabthv, tab->tabphi,
                                     count_level, &etatThr , &configThr);
 
@@ -241,7 +242,7 @@ __global__ void launchKernel(Tableaux *tab, float *X0,
             }
 
             /* Scattering Propagation */
-            scatter(&ph, tab->faer, tab->ssa , tab->foce , tab->sso,
+            scatter(&ph, faer, tab->ssa , foce, tab->sso,
                     tab->ip, tab->ipo, 0, tab->tabthv, tab->tabphi, 0,
                     &etatThr , &configThr);
             #ifdef DEBUG_PHOTON
@@ -803,7 +804,11 @@ __device__ void move_pp(Photon* ph, float*z, float* h, float* pMol , float *abs 
 }
 
 
-__device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , float* sso, int* ip, int* ipo, int le, float* tabthv, float* tabphi, int count_level , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr){
+__device__ void scatter(Photon* ph, struct Phase *faer, float* ssa,
+        struct Phase *foce,
+        float* sso, int* ip, int* ipo, int le,
+        float* tabthv, float* tabphi, int count_level,
+        philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr){
 
 	float cTh=0.f ;
 	float zang=0.f, theta=0.f;
@@ -854,7 +859,7 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
 			    expo = 1./3.;
 			    base = -b + tmp;
 			    float u = pow(base,expo);
-			    cTh     = u - Ad / u;  						       
+			    cTh     = u - Ad / u;
 			    if (cTh < -1.0) cTh = -1.0;
 			    if (cTh >  1.0) cTh =  1.0;
 			    cTh2 = cTh * cTh;
@@ -899,12 +904,11 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
                 /* in the case of propagation (not LE) the photons scattering angle and Psi rotation angle are determined randomly*/
 			    /////////////
                 // Get Theta from Cumulative Distribution Function
-                // (column number 4 of faer)
 			    zang = RAND*(NFAERd-2);
 			    iang= __float2int_rd(zang);
 			    zang = zang - iang;
-			    theta = faer[ipha*NFAERd*10+iang*10+4]+ zang*( faer[ipha*NFAERd*10+(iang+1)*10+4]-faer[ipha*NFAERd*10+iang*10+4] );
-			    //theta = faer[ipha*NFAERd*5+iang*5+4]+ zang*( faer[ipha*NFAERd*5+(iang+1)*5+4]-faer[ipha*NFAERd*5+iang*5+4] );
+
+			    theta = (1.-zang)*faer[ipha*NFAERd+iang].p_ang + zang*faer[ipha*NFAERd+iang+1].p_ang;
 			    cTh = __cosf(theta);
 
 			    /////////////
@@ -914,38 +918,36 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
 
                 /////////////
                 // Get Scattering matrix from CDF
-                // (column 0 -> 3 of faer)
-                P11 = faer[ipha*NFAERd*10+iang*10+0];
-                P22 = faer[ipha*NFAERd*10+iang*10+1];
-                P33 = faer[ipha*NFAERd*10+iang*10+2];
-                P43 = faer[ipha*NFAERd*10+iang*10+3];
+                P11 = faer[ipha*NFAERd+iang].p_P11;
+                P22 = faer[ipha*NFAERd+iang].p_P22;
+                P33 = faer[ipha*NFAERd+iang].p_P33;
+                P43 = faer[ipha*NFAERd+iang].p_P43;
             }
 
             else {
                 /////////////
                 // Get Index of scattering angle and Scattering matrix directly 
-                // (column 6 -> 9 of faer)
                 zang = theta * (NFAERd-1)/PI ;
                 //zang = theta * NFAERd/PI ;
                 iang = __float2int_rd(zang);
 			    zang = zang - iang;
                 if (abs(cTh) < 1) {
-                    P11 = faer[ipha*NFAERd*10+iang*10+6] + zang * (faer[ipha*NFAERd*10+(iang+1)*10+6] - faer[ipha*NFAERd*10+iang*10+6]);
-                    P22 = faer[ipha*NFAERd*10+iang*10+7] + zang * (faer[ipha*NFAERd*10+(iang+1)*10+7] - faer[ipha*NFAERd*10+iang*10+7]);
-                    P33 = faer[ipha*NFAERd*10+iang*10+8] + zang * (faer[ipha*NFAERd*10+(iang+1)*10+8] - faer[ipha*NFAERd*10+iang*10+8]);
-                    P43 = faer[ipha*NFAERd*10+iang*10+9] + zang * (faer[ipha*NFAERd*10+(iang+1)*10+9] - faer[ipha*NFAERd*10+iang*10+9]);
+                    P11 = (1-zang)*faer[ipha*NFAERd+iang].a_P11 + zang*faer[ipha*NFAERd+iang+1].a_P11;
+                    P22 = (1-zang)*faer[ipha*NFAERd+iang].a_P22 + zang*faer[ipha*NFAERd+iang+1].a_P22;
+                    P33 = (1-zang)*faer[ipha*NFAERd+iang].a_P33 + zang*faer[ipha*NFAERd+iang+1].a_P33;
+                    P43 = (1-zang)*faer[ipha*NFAERd+iang].a_P43 + zang*faer[ipha*NFAERd+iang+1].a_P43;
                 }
                 else if (cTh >=1) {
-                    P11 = faer[ipha*NFAERd*10+0*10+6];
-                    P22 = faer[ipha*NFAERd*10+0*10+7];
-                    P33 = faer[ipha*NFAERd*10+0*10+8];
-                    P43 = faer[ipha*NFAERd*10+0*10+9];
+                    P11 = faer[ipha*NFAERd].a_P11;
+                    P22 = faer[ipha*NFAERd].a_P22;
+                    P33 = faer[ipha*NFAERd].a_P33;
+                    P43 = faer[ipha*NFAERd].a_P43;
                 }
                 else {
-                    P11 = faer[ipha*NFAERd*10+(NFAERd-1)*10+6];
-                    P22 = faer[ipha*NFAERd*10+(NFAERd-1)*10+7];
-                    P33 = faer[ipha*NFAERd*10+(NFAERd-1)*10+8];
-                    P43 = faer[ipha*NFAERd*10+(NFAERd-1)*10+9];
+                    P11 = faer[ipha*NFAERd+(NFAERd-1)].a_P11;
+                    P22 = faer[ipha*NFAERd+(NFAERd-1)].a_P22;
+                    P33 = faer[ipha*NFAERd+(NFAERd-1)].a_P33;
+                    P43 = faer[ipha*NFAERd+(NFAERd-1)].a_P43;
                 }
             }
 
@@ -1053,11 +1055,10 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
                 /* in the case of propagation (not LE) the photons scattering angle and Psi rotation angle are determined randomly*/
 			    /////////////
                 // Get Theta from Cumulative Distribution Function
-                // (column number 4 of foce)
 			    zang = RAND*(NFOCEd-2);
 			    iang= __float2int_rd(zang);
 			    zang = zang - iang;
-			    theta = foce[ipha*NFOCEd*10+iang*10+4]+ zang*( foce[ipha*NFOCEd*10+(iang+1)*10+4]-foce[ipha*NFOCEd*10+iang*10+4] );
+			    theta = (1.-zang)*foce[ipha*NFOCEd+iang].p_ang + zang*foce[ipha*NFOCEd+iang+1].p_ang;
 			    cTh = __cosf(theta);
 
 			    /////////////
@@ -1067,38 +1068,36 @@ __device__ void scatter( Photon* ph, float* faer, float* ssa , float* foce , flo
 
                 /////////////
                 // Get Scattering matrix from CDF
-                // (column 0 -> 3 of foce)
-                P11 = foce[ipha*NFOCEd*10+iang*10+0];
-                P22 = foce[ipha*NFOCEd*10+iang*10+1];
-                P33 = foce[ipha*NFOCEd*10+iang*10+2];
-                P43 = foce[ipha*NFOCEd*10+iang*10+3];
+                P11 = foce[ipha*NFOCEd+iang].p_P11;
+                P22 = foce[ipha*NFOCEd+iang].p_P22;
+                P33 = foce[ipha*NFOCEd+iang].p_P33;
+                P43 = foce[ipha*NFOCEd+iang].p_P43;
             }
 
             else {
                 /////////////
                 // Get Index of scattering angle and Scattering matrix directly 
-                // (column 6 -> 9 of foce)
                 zang = theta * (NFOCEd-1)/PI ;
                 //zang = theta * NFOCEd/PI ;
                 iang = __float2int_rd(zang);
 			    zang = zang - iang;
                 if (abs(cTh) < 1) {
-                    P11 = foce[ipha*NFOCEd*10+iang*10+6] + zang * (foce[ipha*NFOCEd*10+(iang+1)*10+6] - foce[ipha*NFOCEd*10+iang*10+6]);
-                    P22 = foce[ipha*NFOCEd*10+iang*10+7] + zang * (foce[ipha*NFOCEd*10+(iang+1)*10+7] - foce[ipha*NFOCEd*10+iang*10+7]);
-                    P33 = foce[ipha*NFOCEd*10+iang*10+8] + zang * (foce[ipha*NFOCEd*10+(iang+1)*10+8] - foce[ipha*NFOCEd*10+iang*10+8]);
-                    P43 = foce[ipha*NFOCEd*10+iang*10+9] + zang * (foce[ipha*NFOCEd*10+(iang+1)*10+9] - foce[ipha*NFOCEd*10+iang*10+9]);
+                    P11 = (1.-zang)*foce[ipha*NFOCEd+iang].a_P11 + zang*foce[ipha*NFOCEd+iang+1].a_P11;
+                    P22 = (1.-zang)*foce[ipha*NFOCEd+iang].a_P22 + zang*foce[ipha*NFOCEd+iang+1].a_P22;
+                    P33 = (1.-zang)*foce[ipha*NFOCEd+iang].a_P33 + zang*foce[ipha*NFOCEd+iang+1].a_P33;
+                    P43 = (1.-zang)*foce[ipha*NFOCEd+iang].a_P43 + zang*foce[ipha*NFOCEd+iang+1].a_P43;
                 }
                 else if (cTh >=1) {
-                    P11 = foce[ipha*NFOCEd*10+0*10+6];
-                    P22 = foce[ipha*NFOCEd*10+0*10+7];
-                    P33 = foce[ipha*NFOCEd*10+0*10+8];
-                    P43 = foce[ipha*NFOCEd*10+0*10+9];
+                    P11 = foce[ipha*NFOCEd].a_P11;
+                    P22 = foce[ipha*NFOCEd].a_P22;
+                    P33 = foce[ipha*NFOCEd].a_P33;
+                    P43 = foce[ipha*NFOCEd].a_P43;
                 }
                 else {
-                    P11 = foce[ipha*NFOCEd*10+(NFOCEd-1)*10+6];
-                    P22 = foce[ipha*NFOCEd*10+(NFOCEd-1)*10+7];
-                    P33 = foce[ipha*NFOCEd*10+(NFOCEd-1)*10+8];
-                    P43 = foce[ipha*NFOCEd*10+(NFOCEd-1)*10+9];
+                    P11 = foce[ipha*NFOCEd+NFOCEd-1].a_P11;
+                    P22 = foce[ipha*NFOCEd+NFOCEd-1].a_P22;
+                    P33 = foce[ipha*NFOCEd+NFOCEd-1].a_P33;
+                    P43 = foce[ipha*NFOCEd+NFOCEd-1].a_P43;
                 }
             }
 

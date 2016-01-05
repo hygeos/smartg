@@ -72,6 +72,7 @@ __device__ __constant__ float RTER;
 
 extern "C" {
 __global__ void launchKernel(Tableaux *tab, float *X0,
+        struct Phase *faer, struct Phase *foce2,
         unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons,
         unsigned long long *Counter,
         unsigned long long *NPhotonsIn,
@@ -104,7 +105,11 @@ __device__ void move_pp(Photon*,float*z, float* h, float* pMol , float *abs , fl
 * Diffusion du photon par une molécule ou un aérosol
 * Modification des paramètres de stokes et des vecteurs U et V du photon (polarisation, vitesse)
 */
-__device__ void scatter(Photon* ph, float* faer, float* ssa , float* foce , float* sso, int* ip, int* ipo, int le, float* tabthv, float* tabphi, int count_level , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr);
+__device__ void scatter(Photon* ph, Phase *faer2, float* ssa,
+        struct Phase *foce2,
+        float* sso, int* ip, int* ipo, int le,
+        float* tabthv, float* tabphi, int count_level,
+        philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr);
 
 
 /* surfaceAgitee
