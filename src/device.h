@@ -76,7 +76,9 @@ __global__ void launchKernel(Tableaux *tab, float *X0,
         unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons,
         unsigned long long *Counter,
         unsigned long long *NPhotonsIn,
-        unsigned long long *NPhotonsOut);
+        unsigned long long *NPhotonsOut,
+        float *tabthv, float *tabphi
+        );
 }
 
 

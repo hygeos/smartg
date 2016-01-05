@@ -523,7 +523,7 @@ def smartg(wl, pp=True,
                 tabPhotonsTot, errorcount, NPhotonsOutTot
                 ) = loop_kernel(NBPHOTONS, Tableau, faer2, foce2,
                                 NLVL, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
-                                NLAM, options, kern, p, X0, NBLOOP)
+                                NLAM, options, kern, p, X0, le)
 
         # finalization
         output = finalize(tabPhotonsTot, wavelengths, NPhotonsInTot, errorcount, NPhotonsOutTot,
@@ -1143,7 +1143,7 @@ def get_git_attrs():
 
 def loop_kernel(NBPHOTONS, Tableau, faer2, foce2, NLVL,
                 NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
-                NLAM, options , kern, p, X0, NBLOOP):
+                NLAM, options , kern, p, X0, le):
     """
     launch the kernel several time until the targeted number of photons injected is reached
 
@@ -1193,6 +1193,14 @@ def loop_kernel(NBPHOTONS, Tableau, faer2, foce2, NLVL,
     else:
         tabPhotons = gpuzeros((NLVL,NPSTK,NLAM,NBTHETA,NBPHI), dtype=np.float32)
 
+    # local estimates angles
+    if le != None:
+        tabthv = to_gpu(le['thv'].astype('float32'))
+        tabphi = to_gpu(le['phi'].astype('float32'))
+    else:
+        tabthv = gpuzeros(1, dtype='float32')
+        tabphi = gpuzeros(1, dtype='float32')
+
     # skip List used to avoid transfering arrays already sent into the device
     skipTableau = ['faer', 'foce', 'ho', 'sso', 'ipo', 'h', 'pMol', 'ssa', 'abs', 'ip', 'alb', 'lambda', 'z']
 
@@ -1209,7 +1217,7 @@ def loop_kernel(NBPHOTONS, Tableau, faer2, foce2, NLVL,
         # kernel launch
         kern(Tableau.get_ptr(), X0, faer2, foce2,
                 errorcount, nThreadsActive, tabPhotons,
-                Counter, NPhotonsIn, NPhotonsOut,
+                Counter, NPhotonsIn, NPhotonsOut, tabthv, tabphi,
                 block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
 
         # transfert the result from the device to the host

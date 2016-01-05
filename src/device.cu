@@ -72,7 +72,8 @@ __global__ void launchKernel(Tableaux *tab, float *X0,
         unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons,
         unsigned long long *Counter,
         unsigned long long *NPhotonsIn,
-        unsigned long long *NPhotonsOut
+        unsigned long long *NPhotonsOut,
+        float *tabthv, float *tabphi
         ) {
 
     // current thread index
@@ -219,7 +220,7 @@ __global__ void launchKernel(Tableaux *tab, float *X0,
                             //ph_le.iph = iph;
                             //ph_le.ith = ith;
                             scatter(&ph_le, faer, tab->ssa, foce, tab->sso,
-                                    tab->ip, tab->ipo, 1, tab->tabthv, tab->tabphi,
+                                    tab->ip, tab->ipo, 1, tabthv, tabphi,
                                     count_level, &etatThr , &configThr);
 
                             #ifdef DEBUG_PHOTON
@@ -243,7 +244,7 @@ __global__ void launchKernel(Tableaux *tab, float *X0,
 
             /* Scattering Propagation */
             scatter(&ph, faer, tab->ssa , foce, tab->sso,
-                    tab->ip, tab->ipo, 0, tab->tabthv, tab->tabphi, 0,
+                    tab->ip, tab->ipo, 0, tabthv, tabphi, 0,
                     &etatThr , &configThr);
             #ifdef DEBUG_PHOTON
             display("SCATTER", &ph);
@@ -292,7 +293,7 @@ __global__ void launchKernel(Tableaux *tab, float *X0,
                         //ph_le.iph = iph;
                         //ph_le.ith = ith;
 
-                        surfaceAgitee(&ph_le, tab->alb, 1, tab->tabthv, tab->tabphi,
+                        surfaceAgitee(&ph_le, tab->alb, 1, tabthv, tabphi,
                                 count_level, &etatThr , &configThr);
 
                         #ifdef DEBUG_PHOTON
@@ -311,7 +312,7 @@ __global__ void launchKernel(Tableaux *tab, float *X0,
                     }
                   }
                 }
-				surfaceAgitee(&ph, tab->alb, 0, tab->tabthv, tab->tabphi,
+				surfaceAgitee(&ph, tab->alb, 0, tabthv, tabphi,
                         count_level, &etatThr , &configThr);
             }
 
@@ -326,7 +327,7 @@ __global__ void launchKernel(Tableaux *tab, float *X0,
                     surfaceLambertienne(&ph, tab->alb, &etatThr , &configThr);
                 }
                 else {
-                    surfaceAgitee(&ph, tab->alb, 0, tab->tabthv, tab->tabphi, count_level, &etatThr , &configThr);
+                    surfaceAgitee(&ph, tab->alb, 0, tabthv, tabphi, count_level, &etatThr , &configThr);
                 }
            }
             #ifdef DEBUG_PHOTON
