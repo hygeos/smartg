@@ -798,7 +798,6 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
         ph->prop_aer = 1.f - prof_atm[ph->couche+ph->ilam*(NATMd+1)].pmol;
         ph->weight = ph->weight * (1.f - prof_atm[ph->couche+ph->ilam*(NATMd+1)].abs);
 
-
         Dsca= fabs(prof_atm[icouche+ph->ilam*(NATMd+1)].tau - prof_atm[icouche-1+ph->ilam*(NATMd+1)].tau);
         dsca= fabs(tauBis - prof_atm[icouche-1+ph->ilam*(NATMd+1)].tau) ;
 
@@ -1761,28 +1760,38 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
      float sign;
      if ((count_level==DOWN0M) || (count_level==DOWN0P)) sign = -1;
      else sign = 1;
-     if (ph->loc == SURF0M) {
-         nind = __fdividef(1.f,NH2Od);
-     }
-     else{
-         nind = NH2Od;
-     }
+
      phi = tabphi[ph->iph];
      thv = tabthv[ph->ith];
      vx = __cosf(phi) * __sinf(thv);
      vy = __sinf(phi) * __sinf(thv);
      vz = sign * cosf(thv);  
      
-     // Normal to the facet in the global frame
-     n_x = (vx - ph->vx)/2.F;
-     n_y = (vy - ph->vy)/2.F;
-     n_z = (vz - ph->vz)/2.F;
-
-     // specular reflection: (reflected - incident)/2 
-     cTh = sqrtf(n_x*n_x + n_y*n_y + n_z*n_z);
-     n_x/=cTh;
-     n_y/=cTh;
-     n_z/=cTh;
+     if (ph->loc==SURF0M) { // Refraction geometry
+        float gam=1;
+        nind = __fdividef(1.f,NH2Od);
+        // Normal to the facet in the global frame
+        n_x = (vx/nind - ph->vx)/gam;
+        n_y = (vy/nind - ph->vy)/gam;
+        n_z = (vz/nind - ph->vz)/gam;
+        // specular reflection: (reflected - incident)/2 
+        cTh = sqrtf(n_x*n_x + n_y*n_y + n_z*n_z);
+        n_x/=cTh;
+        n_y/=cTh;
+        n_z/=cTh;
+     }
+     if (ph->loc==SURF0P) { // Reflection geometry
+        nind = NH2Od;
+        // Normal to the facet in the global frame
+        n_x = (vx - ph->vx)/2.F;
+        n_y = (vy - ph->vy)/2.F;
+        n_z = (vz - ph->vz)/2.F;
+        // specular reflection: (reflected - incident)/2 
+        cTh = sqrtf(n_x*n_x + n_y*n_y + n_z*n_z);
+        n_x/=cTh;
+        n_y/=cTh;
+        n_z/=cTh;
+     }
 
      // Incidence angle
      theta = acosf( fmin(1.00F-VALMIN, fmax( -(1.F-VALMIN), cTh ) ));
@@ -1794,7 +1803,6 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
         ph->weight = 0.;
         return;
      }
-     // tbeta = __fdividef(__tanf(beta),sig);
     
     } /*le*/
 
@@ -1840,23 +1848,29 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 
     #ifdef SPHERIQUE
     // avz is the projection of V on the local vertical
-    float avz = abs(ph->x*ph->vx + ph->y*ph->vy + ph->z*ph->vz)/RTER;
+    float avz = fabs(ph->x*ph->vx + ph->y*ph->vy + ph->z*ph->vz)/RTER;
     #else
-    float avz = abs(ph->vz);
+    float avz = fabs(ph->vz);
     #endif
 
 
     // Ross et al 2005
     float Anorm;
     float nu = __fdividef(1.F, tanf(acosf(avz))*(sqrtf(2.) * sig));
-    Anorm = __fdividef(__expf(-nu*nu) - nu * sqrtf(PI) * erfcf(nu),2.F * nu * sqrtf(PI));
-    Anorm = (1.F +  Anorm) * avz;                 
+    Anorm = 1.F + __fdividef(__expf(-nu*nu) - nu * sqrtf(PI) * erfcf(nu),2.F * nu * sqrtf(PI));
 
-    if (!le) ph->weight *= __fdividef(fabs(cTh), cBeta * Anorm);
 
-    if (le && (DIOPTREd!=0)) ph->weight  *=
-        __fdividef(1.F, cBeta*cBeta*cBeta*cBeta *Anorm)
-        * __expf(-(tanf(beta)*tanf(beta))/sig2)/(sig2);  
+    // Weighting
+
+    if (!le) ph->weight *= __fdividef(fabs(cTh), cBeta * avz * Anorm);
+
+    if (le && (ph->loc==SURF0P) && (DIOPTREd!=0)) ph->weight  *=
+          __expf(-(1.F-cBeta*cBeta)/(cBeta*cBeta*sig2)) / sig2  
+        * __fdividef(1.F, cBeta*cBeta*cBeta*cBeta * avz * Anorm);
+
+    if (le && (ph->loc==SURF0M) && (DIOPTREd!=0)) ph->weight  *=
+          __expf(-(1.F-cBeta*cBeta)/(cBeta*cBeta*sig2)) / sig2  
+        * __fdividef(1.F, cBeta*cBeta*cBeta*cBeta * avz * Anorm);
 
 	// Rotation of Stokes parameters
 	s1 = ph->stokes1;
@@ -1907,8 +1921,10 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 
     stokes3 = ph->stokes3;	
     stokes4 = ph->stokes4;	
+    int condR;
+    condR = (SURd==3)&&(RAND<rat);
 
-	if( (ReflTot==1) || (SURd==1) || ( (SURd==3)&&(RAND<rat) ) || (le) ){
+	if( (!le && ((ReflTot==1) || (SURd==1) || ( condR ))) || (le && ph->loc==SURF0P) ){
 	//if( (ReflTot==1) || (SURd==1) || ( (SURd==3)&&(RAND<rat) ) ){
 
 		ph->stokes1 *= rper2;
@@ -1977,7 +1993,7 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 
 	} // Reflection
 
-	else{	// Transmission
+	else if ((!condR && !le) || (le && ph->loc==SURF0M)){	// Transmission
 
 		
         geo_trans_factor = nind* cot/cTh; // DR Mobley 2015 OK , see Xun 2014
@@ -1990,9 +2006,16 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 		ph->stokes4 *= tpar*tper*geo_trans_factor; //DR positive factor Mobley 2015
 		
 		alpha  = __fdividef(cTh,nind) - cot;
-		ph->vx = __fdividef(ph->vx,nind) + alpha*nx;
-		ph->vy = __fdividef(ph->vy,nind) + alpha*ny;
-		ph->vz = __fdividef(ph->vz,nind) + alpha*nz;
+        if (le) {
+		    ph->vx = vx;
+		    ph->vy = vy;
+		    ph->vz = vz;
+        }
+        else {
+		    ph->vx = __fdividef(ph->vx,nind) + alpha*nx;
+		    ph->vy = __fdividef(ph->vy,nind) + alpha*ny;
+		    ph->vz = __fdividef(ph->vz,nind) + alpha*nz;
+        }
 		ph->ux = __fdividef( nx+cot*ph->vx,sTh )*nind;
 		ph->uy = __fdividef( ny+cot*ph->vy,sTh )*nind;
 		ph->uz = __fdividef( nz+cot*ph->vz,sTh )*nind;
@@ -2010,13 +2033,14 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
         // once in the transmission matrix multiplication
         // so we normalize by (1-rat) (Xun 2014).
         // Not to be applied for forced transmission (SUR=2)
-        if ( SURd == 3) 
+        if ( (SURd == 3 ) && !le) 
             ph->weight /= (1-rat);
 
         //
         // photon next location
         //
-        if (ph->loc == SURF0M) {
+        if (!le) {
+         if (ph->loc == SURF0M) {
             if (vzn > 0) {
                 // SURF0P becomes ATM or SPACE
                 if( SIMd==-1 || SIMd==0 ){
@@ -2028,7 +2052,7 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
                 // multiple transmissions (vz<0 after water->air transmission)
                 ph->loc = SURF0P;
             }
-        } else {
+         } else {
             if (vzn < 0) {  // avoid multiple reflexion under the surface
                 // SURF0M becomes OCEAN or ABSORBED
                 if( SIMd==-1 || SIMd==1 ){
@@ -2041,6 +2065,7 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
                 // (for symmetry, but should not happen)
                 ph->loc = SURF0P;
             }
+         }
         }
 
 	} // Transmission
@@ -2537,7 +2562,7 @@ __device__ void ComputePsiLE( float ux0, float uy0, float uz0,
 	float cpsi;
 	float spsi;
 
-	float EPS6 = 1e-6;
+	float EPS6 = 1e-9;
 	
 	float wx0, wy0, wz0;
 	float wx1, wy1, wz1;
