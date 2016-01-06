@@ -75,6 +75,8 @@ __global__ void launchKernel(Tableaux *tab,
         unsigned long long *NPhotonsIn,
         unsigned long long *NPhotonsOut,
         float *tabthv, float *tabphi,
+        struct Profile *prof_atm,
+        struct Profile *prof_oc,
         unsigned int *philox_data
         ) {
 
@@ -131,7 +133,7 @@ __global__ void launchKernel(Tableaux *tab,
         // Si le photon est à NONE on l'initialise et on le met à la localisation correspondant à la simulaiton en cours
         if((ph.loc == NONE) && this_thread_active){
 
-            initPhoton(&ph, *tab, spectrum, X0, NPhotonsIn, &etatThr , &configThr);
+            initPhoton(&ph, prof_atm, spectrum, X0, NPhotonsIn, &etatThr , &configThr);
             iloop = 1;
             #ifdef DEBUG_PHOTON
             display("INIT", &ph);
@@ -149,10 +151,10 @@ __global__ void launchKernel(Tableaux *tab,
 
             #ifdef SPHERIQUE
             if (ph.loc == ATMOS)
-                move_sp(&ph, *tab, 0, 0 , &etatThr , &configThr);
+                move_sp(&ph, prof_atm, 0, 0 , &etatThr , &configThr);
             else 
             #endif
-                move_pp(&ph, tab->z, tab->h, tab->pMol, tab->abs, tab->ho, &etatThr , &configThr);
+                move_pp(&ph, prof_atm, prof_oc, &etatThr , &configThr);
             #ifdef DEBUG_PHOTON
             display("MOVE", &ph);
             #endif
@@ -185,7 +187,7 @@ __global__ void launchKernel(Tableaux *tab,
         // count the photons
         
         /* Cone Sampling */
-        if (LEd ==0) countPhoton(&ph, tabthv, tabphi, *tab, count_level,
+        if (LEd ==0) countPhoton(&ph, prof_atm, tabthv, tabphi, count_level,
                 errorcount, tabPhotons, NPhotonsOut);
 
 
@@ -224,8 +226,8 @@ __global__ void launchKernel(Tableaux *tab,
                             ph_le.ith = (ith + ith0)%NBTHETAd;
                             //ph_le.iph = iph;
                             //ph_le.ith = ith;
-                            scatter(&ph_le, faer, tab->ssa, foce, tab->sso,
-                                    tab->ip, tab->ipo, 1, tabthv, tabphi,
+                            scatter(&ph_le, prof_atm, prof_oc, faer, foce,
+                                    1, tabthv, tabphi,
                                     count_level, &etatThr , &configThr);
 
                             #ifdef DEBUG_PHOTON
@@ -234,13 +236,13 @@ __global__ void launchKernel(Tableaux *tab,
                             #endif
 
                             #ifdef SPHERIQUE
-                            if (ph_le.loc==ATMOS) move_sp(&ph_le, *tab, 1, count_level , &etatThr , &configThr);
+                            if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, count_level , &etatThr , &configThr);
                             #ifdef DEBUG_PHOTON
                             display("MOVE LE", &ph_le);
                             #endif
                             #endif
 
-                            countPhoton(&ph_le, tabthv, tabphi, *tab, count_level,
+                            countPhoton(&ph_le, prof_atm, tabthv, tabphi, count_level,
                                     errorcount, tabPhotons, NPhotonsOut);
                         }
                     }
@@ -248,8 +250,8 @@ __global__ void launchKernel(Tableaux *tab,
             }
 
             /* Scattering Propagation */
-            scatter(&ph, faer, tab->ssa , foce, tab->sso,
-                    tab->ip, tab->ipo, 0, tabthv, tabphi, 0,
+            scatter(&ph, prof_atm, prof_oc, faer, foce,
+                    0, tabthv, tabphi, 0,
                     &etatThr , &configThr);
             #ifdef DEBUG_PHOTON
             display("SCATTER", &ph);
@@ -306,12 +308,12 @@ __global__ void launchKernel(Tableaux *tab,
                         else display("SURFACE LE DOWN", &ph_le);
                         #endif
 
-                        countPhoton(&ph_le, tabthv, tabphi, *tab, count_level, errorcount, tabPhotons, NPhotonsOut);
+                        countPhoton(&ph_le, prof_atm, tabthv, tabphi, count_level, errorcount, tabPhotons, NPhotonsOut);
                         if (k==0) { 
                             #ifdef SPHERIQUE
-                            if (ph_le.loc==ATMOS) move_sp(&ph_le, *tab, 1, UPTOA , &etatThr , &configThr);
+                            if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA , &etatThr , &configThr);
                             #endif
-                            countPhoton(&ph_le, tabthv, tabphi, *tab, UPTOA , errorcount, tabPhotons, NPhotonsOut);
+                            countPhoton(&ph_le, prof_atm, tabthv, tabphi, UPTOA , errorcount, tabPhotons, NPhotonsOut);
                         }
                       }
                     }
@@ -365,7 +367,7 @@ __global__ void launchKernel(Tableaux *tab,
         }
         
         /* Cone Sampling */
-        if (LEd == 0) countPhoton(&ph, tabthv, tabphi, *tab, count_level, errorcount, tabPhotons, NPhotonsOut);
+        if (LEd == 0) countPhoton(&ph, prof_atm, tabthv, tabphi, count_level, errorcount, tabPhotons, NPhotonsOut);
 
 
 
@@ -409,7 +411,7 @@ __global__ void launchKernel(Tableaux *tab,
 /* initPhoton
 * Initialise le photon dans son état initial avant l'entrée dans l'atmosphère
 */
-__device__ void initPhoton(Photon* ph, Tableaux tab,
+__device__ void initPhoton(Photon* ph, struct Profile *prof_atm,
                            struct Spectrum *spectrum, float *X0, unsigned long long *NPhotonsIn,
                            philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr)
 {
@@ -447,7 +449,7 @@ __device__ void initPhoton(Photon* ph, Tableaux tab,
 
         // !! DEV on ne calucle pas d ep optique ici
         ph->loc = ATMOS;
-        ph->tau = tab.h[NATMd + ph->ilam*(NATMd+1)]; 
+        ph->tau = prof_atm[NATMd + ph->ilam*(NATMd+1)].tau;
 
     } else if ((SIMd == -1) || (SIMd == 0) || (SIMd == 3)) {
 
@@ -486,7 +488,7 @@ __device__ void initPhoton(Photon* ph, Tableaux tab,
 
 
 #ifdef SPHERIQUE
-__device__ void move_sp(Photon* ph, Tableaux tab, int le, int count_level , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr) {
+__device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_level , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr) {
 
     float tauRdm;
     float hph = 0.;  // cumulative optical thickness
@@ -595,7 +597,7 @@ __device__ void move_sp(Photon* ph, Tableaux tab, int le, int count_level , phil
         // or: d**2 + 2*r*costh*d + r**2-ri**2 = 0 , to be solved for d
         // delta = 4.r².costh² - 4(r²-ri²) = 4*r²*((ri/r)²-sinth²) = 4*r²*delta1
         // with delta1 = (ri/r)²-sinth²
-        rat = (tab.z[i_layer_fw]+RTER)/ph->rayon;
+        rat = (prof_atm[i_layer_fw].z+RTER)/ph->rayon;
         delta1 = rat*rat - sinth2;   // same sign as delta
 
         if (delta1 < 0) {
@@ -603,8 +605,8 @@ __device__ void move_sp(Photon* ph, Tableaux tab, int le, int count_level , phil
                 #ifdef DEBUG
                 printf("Warning sign_direction (niter=%d, lay=%d, delta1=%f, alt=%f zlay1=%f zlay2=%f vzn=%f)\n",
                         niter, ph->couche, delta1, ph->rayon-RTER,
-                        tab.z[i_layer_fw],
-                        tab.z[i_layer_bh],
+                        prof_atm[i_layer_fw].z,
+                        prof_atm[i_layer_bh].z,
                         vzn);
                 #endif
 
@@ -657,11 +659,11 @@ __device__ void move_sp(Photon* ph, Tableaux tab, int le, int count_level , phil
         // We compute the layer extinction coefficient of the layer DTau/Dz and multiply by the distance within the layer
         //
         #ifndef ALT_MOVE
-        h_cur = __fdividef(abs(tab.h[i_layer_bh+ilam] - tab.h[i_layer_fw+ilam])*(d - d_tot),
-                          abs(tab.z[i_layer_bh] - tab.z[i_layer_fw]));
+        h_cur = __fdividef(abs(prof_atm[i_layer_bh+ilam].tau - prof_atm[i_layer_fw+ilam].tau)*(d - d_tot),
+                          abs(prof_atm[i_layer_bh].z - prof_atm[i_layer_fw].z));
         #else
-        h_cur = __fdividef(abs(tab.h[i_layer_bh+ilam] - tab.h[i_layer_fw+ilam])*d,
-                          abs(tab.z[i_layer_bh] - tab.z[i_layer_fw]));
+        h_cur = __fdividef(abs(prof_atm[i_layer_bh+ilam].tau - prof_atm[i_layer_fw+ilam].tau)*d,
+                          abs(prof_atm[i_layer_bh].z - prof_atm[i_layer_fw].z));
         #endif
 
 
@@ -678,8 +680,8 @@ __device__ void move_sp(Photon* ph, Tableaux tab, int le, int count_level , phil
             ph->y = ph->y + ph->vy*d;
             ph->z = ph->z + ph->vz*d;
             ph->rayon = sqrtf(ph->x*ph->x + ph->y*ph->y + ph->z*ph->z);
-            ph->weight *= 1.f - tab.abs[ph->couche+ilam];
-            ph->prop_aer = 1.f - tab.pMol[ph->couche+ilam];
+            ph->weight *= 1.f - prof_atm[ph->couche+ilam].abs;
+            ph->prop_aer = 1.f - prof_atm[ph->couche+ilam].pmol;
 
             #ifdef DEBUG
             vzn = __fdividef( ph->vx*ph->x + ph->vy*ph->y + ph->vz*ph->z , ph->rayon);
@@ -716,14 +718,15 @@ __device__ void move_sp(Photon* ph, Tableaux tab, int le, int count_level , phil
     ph->y = ph->y + ph->vy*d_tot;
     ph->z = ph->z + ph->vz*d_tot;
     ph->rayon = sqrtf(ph->x*ph->x + ph->y*ph->y + ph->z*ph->z);
-    ph->weight *= 1.f - tab.abs[ph->couche+ilam];
-    ph->prop_aer = 1.f - tab.pMol[ph->couche+ilam];
+    ph->weight *= 1.f - prof_atm[ph->couche+ilam].abs;
+    ph->prop_aer = 1.f - prof_atm[ph->couche+ilam].pmol;
     #endif
 }
 #endif // SPHERIQUE
 
 
-__device__ void move_pp(Photon* ph, float*z, float* h, float* pMol , float *abs , float* ho , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr) {
+__device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc,
+        philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr) {
 
 	float Dsca=0.f, dsca=0.f;
 
@@ -742,17 +745,17 @@ __device__ void move_pp(Photon* ph, float*z, float* h, float* pMol , float *abs 
            return;
         }
         // Si tau<TAUOCEAN le photon atteint le fond 
-        else if( ph->tau < ho[NOCEd + ph->ilam *(NOCEd+1)] ){
+        else if( ph->tau < prof_oc[NOCEd + ph->ilam *(NOCEd+1)].tau ){
             ph->loc = SEAFLOOR;
-            ph->tau = ho[NOCEd + ph->ilam *(NOCEd+1)];
+            ph->tau = prof_oc[NOCEd + ph->ilam *(NOCEd+1)].tau;
             return;
         }
 
         // Calcul de la couche dans laquelle se trouve le photon
-        tauBis =  ho[NOCEd + ph->ilam *(NOCEd+1)] - ph->tau;
+        tauBis = prof_oc[NOCEd + ph->ilam *(NOCEd+1)].tau - ph->tau;
         icouche = 1;
 
-        while ((ho[icouche+ ph->ilam *(NOCEd+1)] > (tauBis)) && (icouche < NOCEd)) {
+        while ((prof_oc[icouche+ ph->ilam *(NOCEd+1)].tau > (tauBis)) && (icouche < NOCEd)) {
             icouche++;
         }
         ph->couche = icouche;
@@ -776,7 +779,7 @@ __device__ void move_pp(Photon* ph, float*z, float* h, float* pMol , float *abs 
         return;
         }
         // Si tau>TAUATM le photon atteint l'espace
-        else if( ph->tau > h[NATMd + ph->ilam *(NATMd+1)] ){
+        else if( ph->tau > prof_atm[NATMd + ph->ilam *(NATMd+1)].tau ){
             ph->loc = SPACE;
             return;
         }
@@ -784,23 +787,23 @@ __device__ void move_pp(Photon* ph, float*z, float* h, float* pMol , float *abs 
         // Sinon il reste dans l'atmosphère, et va subit une nouvelle diffusion
         
         // Calcul de la couche dans laquelle se trouve le photon
-        tauBis =  h[NATMd + ph->ilam *(NATMd+1)] - ph->tau;
+        tauBis =  prof_atm[NATMd + ph->ilam *(NATMd+1)].tau - ph->tau;
         icouche = 1;
         
-        while ((h[icouche+ ph->ilam *(NATMd+1)] < (tauBis)) && (icouche < NATMd)) {
+        while ((prof_atm[icouche+ ph->ilam *(NATMd+1)].tau < (tauBis)) && (icouche < NATMd)) {
             icouche++;
         }
         
         ph->couche = icouche;
-        ph->prop_aer = 1.f - pMol[ph->couche+ph->ilam*(NATMd+1)];
-        ph->weight = ph->weight * (1.f - abs[ph->couche+ph->ilam*(NATMd+1)]);
+        ph->prop_aer = 1.f - prof_atm[ph->couche+ph->ilam*(NATMd+1)].pmol;
+        ph->weight = ph->weight * (1.f - prof_atm[ph->couche+ph->ilam*(NATMd+1)].abs);
 
 
-        Dsca= fabs(h[icouche] - h[icouche-1]) ;
-        dsca= fabs(tauBis - h[icouche-1]) ;
+        Dsca= fabs(prof_atm[icouche].tau - prof_atm[icouche-1].tau) ;    // FIXME: bug here, does not account for wavelength ?!
+        dsca= fabs(tauBis - prof_atm[icouche-1].tau) ;
 
         //calcul de la nouvelle altitude du photon
-        phz = __fdividef(dsca,Dsca) * (z[icouche]-z[icouche-1]) + z[icouche-1]; 
+        phz = __fdividef(dsca,Dsca) * (prof_atm[icouche].z - prof_atm[icouche-1].z) + prof_atm[icouche-1].z; 
         rdist=  fabs(__fdividef(phz-ph->z, ph->vz));
         ph->z = phz;
         ph->x = ph->x + ph->vx*rdist;
@@ -811,9 +814,10 @@ __device__ void move_pp(Photon* ph, float*z, float* h, float* pMol , float *abs 
 }
 
 
-__device__ void scatter(Photon* ph, struct Phase *faer, float* ssa,
-        struct Phase *foce,
-        float* sso, int* ip, int* ipo, int le,
+__device__ void scatter(Photon* ph,
+        struct Profile *prof_atm, struct Profile *prof_oc,
+        struct Phase *faer, struct Phase *foce,
+        int le,
         float* tabthv, float* tabphi, int count_level,
         philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr){
 
@@ -849,7 +853,7 @@ __device__ void scatter(Photon* ph, struct Phase *faer, float* ssa,
     /* Scattering in atmosphere */
 	if(ph->loc!=OCEAN){
         ilay = ph->couche + ph->ilam*(NATMd+1); // atm layer index
-        ipha  = ip[ilay]; // atm phase function index
+        ipha  = prof_atm[ilay].iphase; // atm phase function index
 
 		if( prop_aer<RAND ){
             /***********************/
@@ -982,7 +986,7 @@ __device__ void scatter(Photon* ph, struct Phase *faer, float* ssa,
             }
 
             // Photon weight reduction due to the aerosol single scattering albedo of the current layer
-			ph->weight *= ssa[ilay];
+			ph->weight *= prof_atm[ilay].ssa;
 			
 		}
 
@@ -990,7 +994,7 @@ __device__ void scatter(Photon* ph, struct Phase *faer, float* ssa,
 	else{	/* Photon dans l'océan */
 	    float prop_raman=1., new_wavel;
         ilay = ph->couche + ph->ilam*(NOCEd+1); // oce layer index
-        ipha  = ipo[ilay]; // oce phase function index
+        ipha  = prof_oc[ilay].iphase; // oce phase function index
 
         // we fix the proportion of Raman to 2% at 488 nm, !! DEV
         //prop_raman = 0.02 * pow ((1.e7/ph->wavel-3400.)/(1.e7/488.-3400.),5); // Raman scattering to pure water scattering ratio
@@ -1131,7 +1135,7 @@ __device__ void scatter(Photon* ph, struct Phase *faer, float* ssa,
             }
 
             // Photon weight reduction due to the aerosol single scattering albedo of the current layer
-			ph->weight *= sso[ilay];
+			ph->weight *= prof_oc[ilay].ssa;
 			
 		} /* elastic scattering*/
 
@@ -2200,8 +2204,9 @@ __device__ void surfaceLambertienne(Photon* ph, struct Spectrum *spectrum, philo
 
 
 __device__ void countPhoton(Photon* ph,
+        struct Profile *prof_atm,
         float *tabthv, float *tabphi,
-        Tableaux tab, int count_level,
+        int count_level,
 		unsigned long long *errorcount,
         void *tabPhotons, unsigned long long *NPhotonsOut
         ) {
@@ -2276,7 +2281,7 @@ __device__ void countPhoton(Photon* ph,
         il = ph->ilam;
         #ifndef SPHERIQUE
         float tau_le;
-        if (count_level==UPTOA) tau_le = tab.h[NATMd + ph->ilam *(NATMd+1)];
+        if (count_level==UPTOA) tau_le = prof_atm[NATMd + ph->ilam *(NATMd+1)].tau;
         if ((count_level==DOWN0P) || (count_level==UP0M) || (count_level==UP0P) ) tau_le = 0.F;
         ph->weight *= __expf(__fdividef(-fabs(tau_le - ph->tau), abs(ph->vz))); // LE attenuation to count_level
         #endif

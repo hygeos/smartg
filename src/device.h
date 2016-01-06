@@ -79,6 +79,8 @@ __global__ void launchKernel(Tableaux *tab,
         unsigned long long *NPhotonsIn,
         unsigned long long *NPhotonsOut,
         float *tabthv, float *tabphi,
+        struct Profile *prof_atm,
+        struct Profile *prof_oc,
         unsigned int *philox_data
         );
 }
@@ -91,7 +93,7 @@ __global__ void launchKernel(Tableaux *tab,
 /* initPhoton
 * Initialise le photon dans son état initial avant l'entrée dans l'atmosphère
 */
-__device__ void initPhoton(Photon* ph, Tableaux tab,
+__device__ void initPhoton(Photon* ph, struct Profile *prof_atm,
                            struct Spectrum *spectrum,float *X0,
                            unsigned long long *NPhotonsIn,
                            philox4x32_ctr_t*, philox4x32_key_t*);
@@ -99,20 +101,22 @@ __device__ void initPhoton(Photon* ph, Tableaux tab,
 
 // move, version sphérique
 #ifdef SPHERIQUE
-__device__ void move_sp(Photon*, Tableaux tab, int le, int count_level , philox4x32_ctr_t*, philox4x32_key_t*);
+__device__ void move_sp(Photon*, struct Profile *prof_atm, int le, int count_level , philox4x32_ctr_t*, philox4x32_key_t*);
 #endif
 
 // move, version plan parallèle
-__device__ void move_pp(Photon*,float*z, float* h, float* pMol , float *abs , float* ho , philox4x32_ctr_t*, philox4x32_key_t*);
+__device__ void move_pp(Photon*, struct Profile *prof_atm, struct Profile* prof_oc,
+        philox4x32_ctr_t*, philox4x32_key_t*);
 
 
 /* scatter
 * Diffusion du photon par une molécule ou un aérosol
 * Modification des paramètres de stokes et des vecteurs U et V du photon (polarisation, vitesse)
 */
-__device__ void scatter(Photon* ph, Phase *faer2, float* ssa,
-        struct Phase *foce2,
-        float* sso, int* ip, int* ipo, int le,
+__device__ void scatter(Photon* ph,
+        struct Profile *prof_atm, struct Profile *prof_oc,
+        struct Phase *faer2, struct Phase *foce2,
+        int le,
         float* tabthv, float* tabphi, int count_level,
         philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr);
 
@@ -135,7 +139,8 @@ __device__ void surfaceLambertienne(Photon* , struct Spectrum *spectrum, philox4
 /* exit
 * Sauve les paramètres des photons sortis dans l'espace dans la boite correspondant à la direction de sortie
 */
-__device__ void countPhoton(Photon* , float*, float *, Tableaux, int, unsigned long long*, void*, unsigned long long*);
+__device__ void countPhoton(Photon* , struct Profile* prof_atm, float*, float *,
+        int, unsigned long long*, void*, unsigned long long*);
 
 
 

@@ -157,6 +157,15 @@ struct Phase {
 
 };
 
+struct Profile {
+    float z;      // altitude
+    float tau;    // cumulated optical thickness (from top)
+    float pmol;   // probability of pure Rayleigh scattering event
+    float ssa;    // single scattering albedo (scatterer only)
+    float abs;    // absorption coefficient
+    int iphase;   // phase function index
+};
+
 /* Tableaux
 * Ensemble des tableaux envoyés par le host dans le device
 * tabPhotons est également modifié par le kernel pour sauver les paramètres de stokes du photon sorti dans l'espace

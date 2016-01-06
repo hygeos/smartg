@@ -52,22 +52,32 @@ UP0M = 4
 # type definitions (should match cuda struct definitions)
 #
 type_Phase = [
-        ('p_ang', 'float32'),  # \
-        ('p_P11', 'float32'),  #  | equally spaced in
-        ('p_P22', 'float32'),  #  | scattering probability
-        ('p_P33', 'float32'),  #  | [0, 1]
-        ('p_P43', 'float32'),  # /
+    ('p_ang', 'float32'),  # \
+    ('p_P11', 'float32'),  #  | equally spaced in
+    ('p_P22', 'float32'),  #  | scattering probability
+    ('p_P33', 'float32'),  #  | [0, 1]
+    ('p_P43', 'float32'),  # /
 
-        ('a_P11', 'float32'),  # \
-        ('a_P22', 'float32'),  #  | equally spaced in scat.
-        ('a_P33', 'float32'),  #  | angle [0, 180]
-        ('a_P43', 'float32'),  # /
-        ]
+    ('a_P11', 'float32'),  # \
+    ('a_P22', 'float32'),  #  | equally spaced in scat.
+    ('a_P33', 'float32'),  #  | angle [0, 180]
+    ('a_P43', 'float32'),  # /
+    ]
+
 type_Spectrum = [
-        ('lambda'      , 'float32'),
-        ('alb_surface' , 'float32'),
-        ('alb_seafloor', 'float32'),
-        ]
+    ('lambda'      , 'float32'),
+    ('alb_surface' , 'float32'),
+    ('alb_seafloor', 'float32'),
+    ]
+
+type_Profile = [
+    ('z',      'float32'),   # // altitude
+    ('tau',    'float32'),   # // cumulated optical thickness (from top)
+    ('pmol',   'float32'),   # // probability of pure Rayleigh scattering event
+    ('ssa',    'float32'),   # // single scattering albedo (scatterer only)
+    ('abs',    'float32'),   # // absorption coefficient
+    ('iphase', 'int32'),    # // phase function index
+    ]
 
 class FlatSurface(object):
     '''
@@ -385,7 +395,7 @@ def smartg(wl, pp=True,
         #
         # get the phase function and the atmospheric profiles
 
-        nprofilesAtm, phasesAtm, NATM, HATM = get_profAtm(wl,atm)
+        prof_atm, nprofilesAtm, phasesAtm, NATM, HATM = get_profAtm(wl,atm)
 
         # computation of the impact point
         x0, y0, z0, tabTransDir = impactInit(pp, HATM, NATM, NLAM, nprofilesAtm['ALT'], nprofilesAtm['H'], THVDEG, RTER)
@@ -402,7 +412,7 @@ def smartg(wl, pp=True,
         #
         # ocean profile
         # get the phase function and oceanic profile
-        nprofilesOc, phasesOc, NOCE = get_profOc(wavelengths, water, NLAM)
+        prof_oc, nprofilesOc, phasesOc, NOCE = get_profOc(wavelengths, water, NLAM)
 
         #
         # environment effect
@@ -536,7 +546,7 @@ def smartg(wl, pp=True,
                 ) = loop_kernel(NBPHOTONS, Tableau, faer2, foce2,
                                 NLVL, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                                 NLAM, options, kern, p, X0, le, spectrum,
-                                SEED)
+                                prof_atm, prof_oc, SEED)
 
         # finalization
         output = finalize(tabPhotonsTot, wavelengths, NPhotonsInTot, errorcount, NPhotonsOutTot,
@@ -1058,6 +1068,7 @@ def get_profAtm(wl, atm):
 
     """
     nprofilesAtm = {}
+
     if atm is not None:
         # write the profile
         if isinstance(wl, (float, int, REPTRAN_IBAND)):
@@ -1073,6 +1084,19 @@ def get_profAtm(wl, atm):
                 nprofilesAtm[key] = np.append(nprofilesAtm[key], profile[key])
         NATM = len(profilesAtm[0])-1
         HATM = nprofilesAtm['ALT'][0]
+
+        #
+        # switch to new format
+        #
+        shp = (len(wl), NATM+1)
+        prof_atm = np.zeros(shp, dtype=type_Profile)
+        prof_atm['z'][0,:] = nprofilesAtm['ALT']    # only for first wavelength
+        prof_atm['z'][1:,:] = -999.                 # other wavelengths are NaN
+        prof_atm['tau'] = nprofilesAtm['H'].reshape(shp)
+        prof_atm['pmol'] = nprofilesAtm['YDEL'].reshape(shp)
+        prof_atm['ssa'] = nprofilesAtm['XSSA'].reshape(shp)
+        prof_atm['abs'] = nprofilesAtm['percent_abs'].reshape(shp)
+        prof_atm['iphase'] = nprofilesAtm['IPHA'].reshape(shp)
     else:
         # no atmosphere
         phasesAtm = []
@@ -1085,7 +1109,9 @@ def get_profAtm(wl, atm):
         NATM = 0
         HATM = 0
 
-    return nprofilesAtm, phasesAtm, NATM, HATM
+        prof_atm = np.zeros(1, dtype=type_Profile)
+
+    return to_gpu(prof_atm), nprofilesAtm, phasesAtm, NATM, HATM    # TODO: deprecate nprofilesAtm, use only prof_atm
 
 def get_profOc(wl, water, NLAM):
 
@@ -1111,6 +1137,8 @@ def get_profOc(wl, water, NLAM):
             # use default water values
         nprofilesOc['HO'], nprofilesOc['SSO'], nprofilesOc['IPO'],phasesOc = [0], [0], [0], []
         NOCE = 0
+
+        prof_oc = np.zeros(1, dtype=type_Profile)
     else:
         if isinstance(wl, (float, int, REPTRAN_IBAND)):
             wl = [wl]
@@ -1125,7 +1153,26 @@ def get_profOc(wl, water, NLAM):
             # parametrer les indices
         NOCE = 1
 
-    return nprofilesOc, phasesOc, NOCE
+        #
+        # switch to new format
+        #
+        shp = (len(wl), 2)
+        prof_oc = np.zeros(shp, dtype=type_Profile)
+        prof_oc['z'][0,:] = 0.      # only for first wavelength
+        prof_oc['z'][1:,:] = -999.  # otherwise -999.
+        prof_oc['pmol'][:,:] = 0.    # use only CDF
+        prof_oc['abs'][:,:] = 0.   # no absorption
+        for ilam in xrange(0, NLAM):
+            prof_oc['tau'][ilam, 0] = 0.
+            prof_oc['ssa'][ilam, 0] = 1.
+            prof_oc['iphase'][ilam, 0] = 0
+
+            prof_oc['tau'][ilam, 1] = -1.e10
+            prof_oc['ssa'][ilam, 1] = profilesOc[ilam][1]/(profilesOc[ilam][1]+profilesOc[ilam][0])
+            prof_oc['iphase'][ilam, 1] = profilesOc[ilam][2]
+
+
+    return to_gpu(prof_oc), nprofilesOc, phasesOc, NOCE
 
 
 def get_git_attrs():
@@ -1156,7 +1203,8 @@ def get_git_attrs():
 
 def loop_kernel(NBPHOTONS, Tableau, faer2, foce2, NLVL,
                 NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
-                NLAM, options , kern, p, X0, le, spectrum, SEED):
+                NLAM, options , kern, p, X0, le, spectrum,
+                prof_atm, prof_oc, SEED):
     """
     launch the kernel several time until the targeted number of photons injected is reached
 
@@ -1236,7 +1284,7 @@ def loop_kernel(NBPHOTONS, Tableau, faer2, foce2, NLVL,
         kern(Tableau.get_ptr(), spectrum, X0, faer2, foce2,
                 errorcount, nThreadsActive, tabPhotons,
                 Counter, NPhotonsIn, NPhotonsOut, tabthv, tabphi,
-                philox_data,
+                prof_atm, prof_oc, philox_data,
                 block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
 
         # transfert the result from the device to the host
