@@ -67,7 +67,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 extern "C" {
-__global__ void launchKernel(Tableaux *tab,
+__global__ void launchKernel(
         struct Spectrum *spectrum, float *X0,
         struct Phase *faer, struct Phase *foce,
         unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons,
@@ -2664,16 +2664,6 @@ __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
 *	> Fonctions liées au générateur aléatoire
 ***********************************************************/
 
-
-/* initPhilox4x32_7Compteur
-* Fonction qui initialise la partie variable du compteur des philox
-*/
-__global__ void initPhilox4x32_7Compteur(unsigned int* tab, unsigned int compteurInit)
-{
-    unsigned int gID = threadIdx.x + blockDim.x * (threadIdx.y + blockDim.y * (blockIdx.x + blockIdx.y * gridDim.x));
-
-    tab[gID] = compteurInit;
-}
 
 /* randomPhilox4x32_7float
 * Fonction random Philox-4x32-7 qui renvoit un float dans ]0;1]

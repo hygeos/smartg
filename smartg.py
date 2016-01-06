@@ -10,7 +10,6 @@ Speed-up Monte Carlo Advanced Radiative Transfer Code using GPU
 
 
 import numpy as np
-from tools.gpustruct import GPUStruct
 import time
 from datetime import datetime
 from numpy import pi
@@ -427,24 +426,14 @@ def smartg(wl, pp=True,
         spectrum = np.zeros(NLAM, dtype=type_Spectrum)
         spectrum['lambda'] = np.array(wavelengths)
         if 'SURFALB' in surf.dict:
-            surf_alb = surf.dict['SURFALB']
             spectrum['alb_surface'] = surf.dict['SURFALB']
         else:
-            surf_alb = -999.
             spectrum['alb_surface'] = -999.
         if water is None:
-            seafloor_alb = -999.
             spectrum['alb_seafloor'] = -999.
         else:
-            seafloor_alb = water.alb
             spectrum['alb_seafloor'] = water.alb
         spectrum = to_gpu(spectrum)
-
-        albedo = np.zeros(2*NLAM)   # TODO: deprecate
-        for i in xrange(NLAM):
-            # FIXME: implement spectral albedo
-            albedo[2*i] = surf_alb
-            albedo[2*i+1] = seafloor_alb
 
         # Local Estimate option
         LE = 0
@@ -504,32 +493,22 @@ def smartg(wl, pp=True,
         # computation of the phase functions
         if(SIM == 0 or SIM == 2 or SIM == 3):
             if phasesOc != []:
-                foce, foce2 = calculF(phasesOc, NFOCE)
+                foce = calculF(phasesOc, NFOCE)
             else:
-                foce = [0]
-                foce2 = gpuzeros(1, dtype='float32')
+                foce = gpuzeros(1, dtype='float32')
         else:
-            foce = [0], [0]
-            foce2 = gpuzeros(1, dtype='float32')
+            foce = gpuzeros(1, dtype='float32')
 
         if(SIM == -2 or SIM == 1 or SIM == 2):
             if phasesAtm != []:
-                faer, faer2 = calculF(phasesAtm, NFAER)
+                faer = calculF(phasesAtm, NFAER)
             else:
-                faer = [0]
-                faer2 = gpuzeros(1, dtype='float32')
+                faer = gpuzeros(1, dtype='float32')
         else:
-            faer = [0]
-            faer2 = gpuzeros(1, dtype='float32')
-
-        # write the input variables into data structures
-        Tableau = InitSD(nprofilesAtm, nprofilesOc, NLAM,
-                                NLVL, NPSTK, NBTHETA, NBPHI, faer, foce,
-                                albedo, wavelengths,
-                                XBLOCK, XGRID, SEED, options, le=le)
+            faer = gpuzeros(1, dtype='float32')
 
         # initialization of the constants
-        InitConstantes(surf, env, NATM, NOCE, mod,
+        InitConst(surf, env, NATM, NOCE, mod,
                        NBPHOTONS, NBLOOP, THVDEG, DEPO,
                        XBLOCK, XGRID, NLAM, SIM, NFAER,
                        NFOCE, NBTHETA, NBPHI, OUTPUT_LAYERS, 
@@ -543,7 +522,7 @@ def smartg(wl, pp=True,
         # Loop and kernel call
         (NPhotonsInTot,
                 tabPhotonsTot, errorcount, NPhotonsOutTot
-                ) = loop_kernel(NBPHOTONS, Tableau, faer2, foce2,
+                ) = loop_kernel(NBPHOTONS, faer, foce,
                                 NLVL, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                                 NLAM, options, kern, p, X0, le, spectrum,
                                 prof_atm, prof_oc, SEED)
@@ -622,7 +601,7 @@ def reptran_merge(m, ibands, verbose=True):
     return mmerged
 
 
-def calculOmega(NBTHETA, NBPHI):
+def calcOmega(NBTHETA, NBPHI):
     '''
     returns the zenith and azimuth angles, and the solid angles
     '''
@@ -663,11 +642,11 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
             tabPhi = le['phi']
             norm = 4.0 * np.cos(tabTh).reshape((1,1,-1,1)) * NPhotonsInTot.reshape((1,-1,1,1)) 
         else : 
-            tabTh, tabPhi, tabOmega = calculOmega(NBTHETA, NBPHI )
+            tabTh, tabPhi, tabOmega = calcOmega(NBTHETA, NBPHI )
             norm = 2.0 * tabOmega.reshape((1,1,-1,1)) * np.cos(tabTh).reshape((1,1,-1,1)) * NPhotonsInTot.reshape((1,-1,1,1))
     else:
         norm = NPhotonsInTot.reshape((1,-1,1,1))
-        tabTh, tabPhi, _ = calculOmega(NBTHETA, NBPHI)
+        tabTh, tabPhi, _ = calcOmega(NBTHETA, NBPHI)
 
     # I
     tabFinal[:,0,:,:,:] = (tabPhotonsTot[:,0,:,:,:] + tabPhotonsTot[:,1,:,:,:])/norm
@@ -806,10 +785,7 @@ def calculF(phases, N):
         nphases += 1
 
     # Initialize the cumulative distribution function
-    phase_H = np.zeros((nphases, N, 10), dtype=np.float32)    # TODO: deprecate
-    phase_HH = np.zeros((nphases, N), dtype=type_Phase, order='C')
-
-
+    phase_H = np.zeros((nphases, N), dtype=type_Phase, order='C')
     for idx, phase in enumerate(phases):
         if idx != imax:
             # resizing the attributes of the phase object following the nmax
@@ -839,35 +815,24 @@ def calculF(phases, N):
         f3 = interp1d(phase.ang_in_rad(), phase.phase[:,2])
         f4 = interp1d(phase.ang_in_rad(), phase.phase[:,3])
 
-        phase_H[idx, :, 0] = interp1d(scum, phase.phase[:,1])(z)  # I par P11
-        phase_H[idx, :, 1] = interp1d(scum, phase.phase[:,0])(z)  # I per P22
-        phase_H[idx, :, 2] = interp1d(scum, phase.phase[:,2])(z)  # U P33
-        phase_H[idx, :, 3] = interp1d(scum, phase.phase[:,3])(z)  # V P43    
-        phase_H[idx, :, 4] = interp1d(scum, phase.ang_in_rad())(z)# angle
-        phase_H[idx, :, 5] = angN    # angle regular step
-        phase_H[idx, :, 6] = f1(angN)# I par P11
-        phase_H[idx, :, 7] = f2(angN)# I per P22
-        phase_H[idx, :, 8] = f3(angN)# U P33
-        phase_H[idx, :, 9] = f4(angN)# V P43
-
         # parameters equally spaced in scattering probabiliyu
-        phase_HH['p_P11'][idx, :] = interp1d(scum, phase.phase[:,1])(z)  # I par P11
-        phase_HH['p_P22'][idx, :] = interp1d(scum, phase.phase[:,0])(z)  # I per P22
-        phase_HH['p_P33'][idx, :] = interp1d(scum, phase.phase[:,2])(z)  # U P33
-        phase_HH['p_P43'][idx, :] = interp1d(scum, phase.phase[:,3])(z)  # V P43
-        phase_HH['p_ang'][idx, :] = interp1d(scum, phase.ang_in_rad())(z) # angle
+        phase_H['p_P11'][idx, :] = interp1d(scum, phase.phase[:,1])(z)  # I par P11
+        phase_H['p_P22'][idx, :] = interp1d(scum, phase.phase[:,0])(z)  # I per P22
+        phase_H['p_P33'][idx, :] = interp1d(scum, phase.phase[:,2])(z)  # U P33
+        phase_H['p_P43'][idx, :] = interp1d(scum, phase.phase[:,3])(z)  # V P43
+        phase_H['p_ang'][idx, :] = interp1d(scum, phase.ang_in_rad())(z) # angle
 
 
         # parameters equally spaced in scattering angle [0, 180]
-        phase_HH['a_P11'][idx, :] = f1(angN)  # I par P11
-        phase_HH['a_P22'][idx, :] = f2(angN)  # I per P22
-        phase_HH['a_P33'][idx, :] = f3(angN)  # U P33
-        phase_HH['a_P43'][idx, :] = f4(angN)  # V P43
+        phase_H['a_P11'][idx, :] = f1(angN)  # I par P11
+        phase_H['a_P22'][idx, :] = f2(angN)  # I per P22
+        phase_H['a_P33'][idx, :] = f3(angN)  # U P33
+        phase_H['a_P43'][idx, :] = f4(angN)  # V P43
 
-    return phase_H, to_gpu(phase_HH)
+    return to_gpu(phase_H)
 
 
-def InitConstantes(surf, env, NATM, NOCE, mod,
+def InitConst(surf, env, NATM, NOCE, mod,
                    NBPHOTONS, NBLOOP, THVDEG, DEPO,
                    XBLOCK, XGRID,NLAM, SIM, NFAER,
                    NFOCE, NBTHETA, NBPHI, OUTPUT_LAYERS, 
@@ -947,107 +912,6 @@ def InitConstantes(surf, env, NATM, NOCE, mod,
         cuda.memcpy_htod(a, D[key])
 
     cuda.memcpy_htod(mod.get_global('RTER')[0], np.array([RTER], dtype=np.float32))
-
-
-def InitSD(nprofilesAtm, nprofilesOc, NLAM,
-           NLVL, NPSTK, NBTHETA, NBPHI, faer,
-           foce, albedo, wl, XBLOCK, XGRID, SEED, options, le=None):
-
-    """
-    Initialize the principles data structures in python and send them the device memory
-
-    Arguments:
-
-        - nprofilesAtm: Atmospheric profile
-        - nprofilesOc : Oceanic profile
-        - NLAM: Number of wavelength
-        - NLVL : Number of output levels
-        - NPSTK : Number of stockes parameter + 1 for number of photons
-        - NBTHETA : Number of intervals in zenith
-        - NBPHI : Number of intervals in azimuth angle
-        - faer : CDF of scattering phase matrices (Atmosphere)
-        - foce : CDF of scattering phase matrices (Ocean)
-        - albedo : Spectral Albedo
-        - wl: wavelength
-        - XBLOCK: Block Size
-        - XGRID : Grid Size
-        - SEED: random number generator seed
-        - options: compilation options
-        - le: Local estimate 
-
-    -----------------------------------------------------------
-
-    Returns the following GPUStruct Class:
-        * Tableau : Class containing the arrays sent to the device
-            Attributes :
-                - nbPhotonsInter : number of photons injected by interval of NLAM
-                - tabPhotons :  stockes parameters of all photons
-                - faer : cumulative distribution of the phase functions related to the aerosol
-                - foce : cumulative distribution of the phase functions related to the ocean
-                - ho : optical thickness of each layer of the ocean model
-                - sso : albedo of simple diffusion in ocean
-                - ipo : vertical profile of ocean phase function index
-                - h : optical thickness of each layer of the atmospheric model
-                - pMol : proportion of molecules in each layer of atmospheric model
-                - ssa : albedo of simple diffusion of the aerosols in each layer of the atmospheric model
-                - abs : proportion of absorbent in each layer of the atmospheric model
-                - lambda : wavelength
-                - z : altitudes level in the atmosphere
-                - thv : zenith angles for output (for Local estimate)
-                - phi : azimut angles for output (for Local estimate)
-                - etat : related to the RNG
-                - config : related to the RNG
-
-        * Var : Class containing the variables sent to the device
-            Attributes :
-                - nbPhotons : Number of photons processed during a kernel call
-                - nThreadsActive : Number of active threads
-                - erreurpoids : Number of photons having a weight abnormally high
-                - erreurtheta : Number of photons ignored
-                - nbPhotonsSor : number of photons reaching the space during a kernel call
-                - erreurvxy : number of outgoing photons in the zenith
-                - erreurvy : number of outgoing photons
-                - erreurcase : number of photons stored in a non existing box
-
-        -----------------------------------------------------------------------------------
-        NB : When calling the class GPUStruct, it is important to consider the following elements:
-             the structure in python has to be exactly the same as the structure in C ie:
-            - the number of attributes as to be the same
-            - the types of attributes have to be the same
-            - the order of the attributes declared has to be the same
-            the kernel has to take pointers as arguments in CUDA and python
-
-        The guideline of this class is defined in the program GPUStruct.py with an example
-
-
-    """
-    tmp = []
-    tmp += [(np.float32, '*faer', faer),
-           (np.float32, '*foce', foce),
-           (np.float32, '*ho', nprofilesOc['HO']),
-           (np.float32, '*sso', nprofilesOc['SSO']),
-           (np.int32, '*ipo', nprofilesOc['IPO']),
-           (np.float32, '*h', nprofilesAtm['H']),
-           (np.float32, '*pMol', nprofilesAtm['YDEL']),
-           (np.float32, '*ssa', nprofilesAtm['XSSA']),
-           (np.float32, '*abs', nprofilesAtm['percent_abs']),
-           (np.int32, '*ip', nprofilesAtm['IPHA']),
-           (np.float32, '*alb', albedo),
-           (np.float32, '*lambda', wl),
-           (np.float32, '*z', nprofilesAtm['ALT'])]
-    if le!=None:
-        tmp += [(np.float32, '*tabthv', le['thv']) , (np.float32, '*tabphi', le['phi'])]
-    else:
-        tmp += [(np.float32, '*tabthv', np.ones(NBTHETA,dtype=np.float32)), (np.float32, '*tabphi', np.zeros(NBPHI,dtype=np.float32))]
-
-    tmp += [(np.uint32, '*etat', np.zeros(XBLOCK*1*XGRID*1, dtype=np.uint32)), (np.uint32, 'config', SEED)]
-
-
-    Tableau = GPUStruct(tmp)
-
-    Tableau.copy_to_gpu(['tabPhotons'])
-
-    return Tableau
 
 
 def get_profAtm(wl, atm):
@@ -1201,7 +1065,7 @@ def get_git_attrs():
     return R
 
 
-def loop_kernel(NBPHOTONS, Tableau, faer2, foce2, NLVL,
+def loop_kernel(NBPHOTONS, faer, foce, NLVL,
                 NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                 NLAM, options , kern, p, X0, le, spectrum,
                 prof_atm, prof_oc, SEED):
@@ -1267,9 +1131,6 @@ def loop_kernel(NBPHOTONS, Tableau, faer2, foce2, NLVL,
     philox_data[0] = SEED
     philox_data = to_gpu(philox_data)
 
-    # skip List used to avoid transfering arrays already sent into the device
-    skipTableau = ['faer', 'foce', 'ho', 'sso', 'ipo', 'h', 'pMol', 'ssa', 'abs', 'ip', 'alb', 'lambda', 'z']
-
     while(np.sum(NPhotonsInTot) < NBPHOTONS):
 
         tabPhotons.fill(0.)
@@ -1277,18 +1138,12 @@ def loop_kernel(NBPHOTONS, Tableau, faer2, foce2, NLVL,
         NPhotonsIn.fill(0)
         Counter.fill(0)
 
-            # transfert the data from the host to the device
-        Tableau.copy_to_gpu(skipTableau)
-
         # kernel launch
-        kern(Tableau.get_ptr(), spectrum, X0, faer2, foce2,
+        kern(spectrum, X0, faer, foce,
                 errorcount, nThreadsActive, tabPhotons,
                 Counter, NPhotonsIn, NPhotonsOut, tabthv, tabphi,
                 prof_atm, prof_oc, philox_data,
                 block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
-
-        # transfert the result from the device to the host
-        Tableau.copy_from_gpu(skipTableau)
 
         NPhotonsInTot += NPhotonsIn.get()
         NPhotonsOutTot += NPhotonsOut.get()

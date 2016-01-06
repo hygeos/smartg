@@ -71,7 +71,7 @@ __device__ __constant__ float RTER;
 ***********************************************************/
 
 extern "C" {
-__global__ void launchKernel(Tableaux *tab,
+__global__ void launchKernel(
         struct Spectrum *spectrum, float *X0,
         struct Phase *faer, struct Phase *foce2,
         unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons,
