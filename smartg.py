@@ -394,10 +394,10 @@ def smartg(wl, pp=True,
         #
         # get the phase function and the atmospheric profiles
 
-        prof_atm, nprofilesAtm, phasesAtm, NATM, HATM = get_profAtm(wl,atm)
+        prof_atm, phasesAtm, NATM, HATM = get_profAtm(wl,atm)
 
         # computation of the impact point
-        x0, y0, z0, tabTransDir = impactInit(pp, HATM, NATM, NLAM, nprofilesAtm['ALT'], nprofilesAtm['H'], THVDEG, RTER)
+        x0, y0, z0, tabTransDir = impactInit(pp, HATM, NATM, NLAM, prof_atm, THVDEG, RTER)
         X0 = to_gpu(np.array([x0, y0, z0], dtype='float32'))
 
 
@@ -525,11 +525,11 @@ def smartg(wl, pp=True,
                 ) = loop_kernel(NBPHOTONS, faer, foce,
                                 NLVL, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                                 NLAM, options, kern, p, X0, le, spectrum,
-                                prof_atm, prof_oc, SEED)
+                                to_gpu(prof_atm), to_gpu(prof_oc), SEED)
 
         # finalization
         output = finalize(tabPhotonsTot, wavelengths, NPhotonsInTot, errorcount, NPhotonsOutTot,
-                           OUTPUT_LAYERS, tabTransDir, SIM, attrs, nprofilesAtm, phasesAtm, le=le, flux=flux)
+                           OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, phasesAtm, le=le, flux=flux)
 
         p.finish('Done! | Received {:.1%} of {:.3g} photons ({:.1%})'.format(
             np.sum(NPhotonsOutTot[0,...])/float(np.sum(NPhotonsInTot)),
@@ -627,7 +627,7 @@ def calcOmega(NBTHETA, NBPHI):
 
 
 def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
-        OUTPUT_LAYERS, tabTransDir, SIM, attrs, nprofilesAtm, phasesAtm, le=None, flux=None):
+        OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, phasesAtm, le=None, flux=None):
     '''
     create and return the final output
     '''
@@ -720,14 +720,14 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
 
     # write atmospheric profiles
     if SIM in [-2, 1, 2]:
-        m.add_axis('ALT', nprofilesAtm['ALT'])
-        for key in nprofilesAtm.keys():
-            if key == 'ALT':
+        m.add_axis('ALT', prof_atm['z'][0,:])
+        for (key,_) in type_Profile:
+            if key == 'z':
                 continue
             if NLAM == 1:
-                m.add_dataset(key, nprofilesAtm[key], ['ALT'])
+                m.add_dataset(key, prof_atm[key].ravel(), ['ALT'])
             else:
-                m.add_dataset(key, nprofilesAtm[key].reshape((NLAM, -1)), ['Wavelength', 'ALT'])
+                m.add_dataset(key, prof_atm[key], ['Wavelength', 'ALT'])
 
     # write atmospheric phase functions
     if len(phasesAtm) > 0:
@@ -950,7 +950,7 @@ def get_profAtm(wl, atm):
         HATM = nprofilesAtm['ALT'][0]
 
         #
-        # switch to new format
+        # reformat
         #
         shp = (len(wl), NATM+1)
         prof_atm = np.zeros(shp, dtype=type_Profile)
@@ -975,7 +975,7 @@ def get_profAtm(wl, atm):
 
         prof_atm = np.zeros(1, dtype=type_Profile)
 
-    return to_gpu(prof_atm), nprofilesAtm, phasesAtm, NATM, HATM    # TODO: deprecate nprofilesAtm, use only prof_atm
+    return prof_atm, phasesAtm, NATM, HATM
 
 def get_profOc(wl, water, NLAM):
 
@@ -1036,7 +1036,7 @@ def get_profOc(wl, water, NLAM):
             prof_oc['iphase'][ilam, 1] = profilesOc[ilam][2]
 
 
-    return to_gpu(prof_oc), nprofilesOc, phasesOc, NOCE
+    return prof_oc, nprofilesOc, phasesOc, NOCE
 
 
 def get_git_attrs():
@@ -1156,7 +1156,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL,
     return NPhotonsInTot, tabPhotonsTot, errorcount, NPhotonsOutTot
 
 
-def impactInit(pp, Hatm, NATM, NLAM, ALT, H, THVDEG, Rter):
+def impactInit(pp, Hatm, NATM, NLAM, prof_atm, THVDEG, Rter):
     """
     Calculate the coordinates of the entry point in the atmosphere
     and direct transmission of the atmosphere
@@ -1189,7 +1189,7 @@ def impactInit(pp, Hatm, NATM, NLAM, ALT, H, THVDEG, Rter):
 
         if NATM != 0:
             for ilam in xrange(NLAM):
-                tautot[ilam] = H[NATM+ilam*(NATM+1)]/np.cos(THVDEG*pi/180.)
+                tautot[ilam] = prof_atm['tau'][ilam, NATM]/np.cos(THVDEG*pi/180.)
     else:
         tanthv = np.tan(THVDEG*np.pi/180.)
 
@@ -1219,7 +1219,7 @@ def impactInit(pp, Hatm, NATM, NLAM, ALT, H, THVDEG, Rter):
             # R² = X² + (V.D)² + 2XVD
             # where R is Rter+ALT[i]
             # solve for D:
-            delta = 4.*(vx*xph + vy*yph + vz*zph)**2 - 4*((xph**2 + yph**2 + zph**2) - (Rter + ALT[i])**2)
+            delta = 4.*(vx*xph + vy*yph + vz*zph)**2 - 4*((xph**2 + yph**2 + zph**2) - (Rter + prof_atm['z'][0,i])**2)
 
             # the 2 solutions are:
             D1 = 0.5 * (-2. * (vx*xph+vy*yph+vz*zph) + np.sqrt(delta))
@@ -1244,10 +1244,10 @@ def impactInit(pp, Hatm, NATM, NLAM, ALT, H, THVDEG, Rter):
 
             for ilam in xrange(NLAM):
                 # optical thickness of the layer in vertical direction
-                hlay0 = abs(H[i + ilam*(NATM+1)] - H[i - 1 + ilam*(NATM+1)])
+                hlay0 = abs(prof_atm['tau'][ilam, i] - prof_atm['tau'][ilam, i - 1])
 
                 # thickness of the layer
-                D0 = abs(ALT[i-1] - ALT[i])
+                D0 = abs(prof_atm['z'][0,i-1] - prof_atm['z'][0,i])
 
                 # optical thickness of the layer at current wavelength
                 hlay = hlay0*D/D0
