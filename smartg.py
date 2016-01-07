@@ -411,7 +411,7 @@ def smartg(wl, pp=True,
         #
         # ocean profile
         # get the phase function and oceanic profile
-        prof_oc, nprofilesOc, phasesOc, NOCE = get_profOc(wavelengths, water, NLAM)
+        prof_oc, phasesOc, NOCE = get_profOc(wavelengths, water, NLAM)
 
         #
         # environment effect
@@ -931,7 +931,6 @@ def get_profAtm(wl, atm):
         - HATM : Altitude of the Top of Atmosphere
 
     """
-    nprofilesAtm = {}
 
     if atm is not None:
         # write the profile
@@ -939,37 +938,26 @@ def get_profAtm(wl, atm):
             wl = [wl]
         profilesAtm, phasesAtm = atm.calc_bands(wl)
         # the altitude is get only by the first atmospheric profile
-        nprofilesAtm['ALT'] = profilesAtm[0]['ALT']
         # remove the key Altitude from the list of keys
-        keys = [x for x in profilesAtm[0].dtype.names if x != 'ALT']
-        for key in keys:
-            nprofilesAtm[key] = []
-            for profile in profilesAtm:
-                nprofilesAtm[key] = np.append(nprofilesAtm[key], profile[key])
         NATM = len(profilesAtm[0])-1
-        HATM = nprofilesAtm['ALT'][0]
+        HATM = profilesAtm[0]['ALT'][0]
 
         #
         # reformat
         #
         shp = (len(wl), NATM+1)
         prof_atm = np.zeros(shp, dtype=type_Profile)
-        prof_atm['z'][0,:] = nprofilesAtm['ALT']    # only for first wavelength
+        prof_atm['z'][0,:] = profilesAtm[0]['ALT']    # only for first wavelength
         prof_atm['z'][1:,:] = -999.                 # other wavelengths are NaN
-        prof_atm['tau'] = nprofilesAtm['H'].reshape(shp)
-        prof_atm['pmol'] = nprofilesAtm['YDEL'].reshape(shp)
-        prof_atm['ssa'] = nprofilesAtm['XSSA'].reshape(shp)
-        prof_atm['abs'] = nprofilesAtm['percent_abs'].reshape(shp)
-        prof_atm['iphase'] = nprofilesAtm['IPHA'].reshape(shp)
+        for i, profile in enumerate(profilesAtm):
+            prof_atm['tau'][i,:] = profile['H']
+            prof_atm['pmol'][i,:] = profile['YDEL']
+            prof_atm['ssa'][i,:] = profile['XSSA']
+            prof_atm['abs'][i,:] = profile['percent_abs']
+            prof_atm['iphase'][i,:] = profile['IPHA']
     else:
         # no atmosphere
         phasesAtm = []
-        nprofilesAtm['H'] = [0]
-        nprofilesAtm['YDEL'] = [0]
-        nprofilesAtm['XSSA'] = [0]
-        nprofilesAtm['percent_abs'] = [0]
-        nprofilesAtm['IPHA'] = [0]
-        nprofilesAtm['ALT'] = [0]
         NATM = 0
         HATM = 0
 
@@ -995,11 +983,9 @@ def get_profOc(wl, water, NLAM):
 
     """
 
-    nprofilesOc = {}
-    nprofilesOc['HO'], nprofilesOc['SSO'], nprofilesOc['IPO'] = np.zeros(NLAM*2, dtype=np.float32), np.zeros(NLAM*2, dtype=np.float32), np.zeros(NLAM*2, dtype=np.float32)
     if water is None:
             # use default water values
-        nprofilesOc['HO'], nprofilesOc['SSO'], nprofilesOc['IPO'],phasesOc = [0], [0], [0], []
+        phasesOc = []
         NOCE = 0
 
         prof_oc = np.zeros(1, dtype=type_Profile)
@@ -1007,14 +993,6 @@ def get_profOc(wl, water, NLAM):
         if isinstance(wl, (float, int, REPTRAN_IBAND)):
             wl = [wl]
         profilesOc, phasesOc = water.calc_bands(wl)
-        for ilam in xrange(0, NLAM):
-            nprofilesOc['HO'][ilam*2] = 0
-            nprofilesOc['SSO'][ilam*2] = 1
-            nprofilesOc['IPO'][ilam*2] = 0
-            nprofilesOc['HO'][ilam*2+1] = -1.e10
-            nprofilesOc['SSO'][ilam*2+1] = profilesOc[ilam][1]/(profilesOc[ilam][1]+profilesOc[ilam][0])
-            nprofilesOc['IPO'][ilam*2+1] = profilesOc[ilam][2]
-            # parametrer les indices
         NOCE = 1
 
         #
@@ -1036,7 +1014,7 @@ def get_profOc(wl, water, NLAM):
             prof_oc['iphase'][ilam, 1] = profilesOc[ilam][2]
 
 
-    return prof_oc, nprofilesOc, phasesOc, NOCE
+    return prof_oc, phasesOc, NOCE
 
 
 def get_git_attrs():
