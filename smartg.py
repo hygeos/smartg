@@ -217,9 +217,8 @@ def _smartg_thread(q, qpro, args, kwargs):
 def smartg(wl, pp=True,
            atm=None, surf=None, water=None, env=None,
            NBPHOTONS=1e9, DEPO=0.0279, THVDEG=0., SEED=-1,
-           RTER=6371.,
-           NBTHETA=45, NBPHI=90,
-           NFAER=1000000, NFOCE=1000000,
+           RTER=6371., wl_proba=None,
+           NBTHETA=45, NBPHI=90, NF=1e6,
            OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
            NBLOOP=None, progress=True, debug=False,
            alt_move=False, debug_photon=False, double=False, 
@@ -271,13 +270,16 @@ def smartg(wl, pp=True,
 
             - RTER: earth radius in km
 
+            - wl_proba: probability of occurency of each wavelength
+
             - NBTHETA: number of zenith angles in output
 
             - NBPHI: number of azimuth angles in output
 
-            - NFAER: number of discretization of the inversed aerosol phase functions
-
-            - NFOCE: number of discretization of the inversed ocean phase functions
+            - NF: number of discretization of :
+                    * the inversed aerosol phase functions
+                    * the inversed ocean phase functions
+                    * the inversed probability of each wavelength occurence
 
             - OUTPUT_LAYERS: control the output layers. Add the following values:
                 0: top of atmosphere only (TOA)
@@ -495,7 +497,7 @@ def smartg(wl, pp=True,
         # computation of the phase functions
         if(SIM == 0 or SIM == 2 or SIM == 3):
             if phasesOc != []:
-                foce = calculF(phasesOc, NFOCE)
+                foce = calculF(phasesOc, NF)
             else:
                 foce = gpuzeros(1, dtype='float32')
         else:
@@ -503,7 +505,7 @@ def smartg(wl, pp=True,
 
         if(SIM == -2 or SIM == 1 or SIM == 2):
             if phasesAtm != []:
-                faer = calculF(phasesAtm, NFAER)
+                faer = calculF(phasesAtm, NF)
             else:
                 faer = gpuzeros(1, dtype='float32')
         else:
@@ -512,8 +514,8 @@ def smartg(wl, pp=True,
         # initialization of the constants
         InitConst(surf, env, NATM, NOCE, mod,
                        NBPHOTONS, NBLOOP, THVDEG, DEPO,
-                       XBLOCK, XGRID, NLAM, SIM, NFAER,
-                       NFOCE, NBTHETA, NBPHI, OUTPUT_LAYERS, 
+                       XBLOCK, XGRID, NLAM, SIM, NF,
+                       NBTHETA, NBPHI, OUTPUT_LAYERS, 
                        RTER, LE, FLUX, NLVL, NPSTK)
 
 
@@ -836,8 +838,8 @@ def calculF(phases, N):
 
 def InitConst(surf, env, NATM, NOCE, mod,
                    NBPHOTONS, NBLOOP, THVDEG, DEPO,
-                   XBLOCK, XGRID,NLAM, SIM, NFAER,
-                   NFOCE, NBTHETA, NBPHI, OUTPUT_LAYERS, 
+                   XBLOCK, XGRID,NLAM, SIM, NF,
+                   NBTHETA, NBPHI, OUTPUT_LAYERS, 
                    RTER, LE, FLUX, NLVL, NPSTK) :
 
     """
@@ -854,8 +856,6 @@ def InitConst(surf, env, NATM, NOCE, mod,
         - mod : PyCUDA module compiling the kernel
     """
 
-    D = {}
-
     # compute some needed constants
     THV = THVDEG * np.pi/180.
     STHV = np.sin(THV)
@@ -869,52 +869,47 @@ def InitConst(surf, env, NATM, NOCE, mod,
     Abis = 1. + BETAbis / (3.0 * ALPHAbis)
     ACUBEbis = Abis * Abis* Abis
 
-    # converting the constants into arrays + dictionary update
-    D.update(NBLOOP=np.array([NBLOOP], dtype=np.uint32))
-    D.update(NOCE=np.array([NOCE], dtype=np.int32))
-    D.update(OUTPUT_LAYERS=np.array([OUTPUT_LAYERS], dtype=np.uint32))
-    D.update(NFAER=np.array([NFAER], dtype=np.uint32))
-    D.update(NFOCE=np.array([NFOCE], dtype=np.uint32))
-    D.update(NATM=np.array([NATM], dtype=np.int32))
-    D.update(XBLOCK=np.array([XBLOCK], dtype=np.int32))
-    D.update(YBLOCK=np.array([1], dtype=np.int32))
-    D.update(XGRID=np.array([XGRID], dtype=np.int32))
-    D.update(YGRID=np.array([1], dtype=np.int32))
-    D.update(NBTHETA=np.array([NBTHETA], dtype=np.int32))
-    D.update(NBPHI=np.array([NBPHI], dtype=np.int32))
-    D.update(NLAM=np.array([NLAM], dtype=np.int32))
-    D.update(SIM=np.array([SIM], dtype=np.int32))
-    D.update(LE=np.array([LE], dtype=np.int32))
-    D.update(FLUX=np.array([FLUX], dtype=np.int32))
-    D.update(NLVL=np.array([NLVL], dtype=np.int32))
-    D.update(NPSTK=np.array([NPSTK], dtype=np.int32))
+    def copy_to_device(name, scalar, dtype):
+        cuda.memcpy_htod(mod.get_global(name)[0], np.array([scalar], dtype=dtype))
+
+    # copy constants to device
+    copy_to_device('NBLOOPd', NBLOOP, np.uint32)
+    copy_to_device('NOCEd', NOCE, np.int32)
+    copy_to_device('OUTPUT_LAYERSd', OUTPUT_LAYERS, np.uint32)
+    copy_to_device('NF', NF, np.uint32)
+    copy_to_device('NATMd', NATM, np.int32)
+    copy_to_device('XBLOCKd', XBLOCK, np.int32)
+    copy_to_device('YBLOCKd', 1, np.int32)
+    copy_to_device('XGRIDd', XGRID, np.int32)
+    copy_to_device('YGRIDd', 1, np.int32)
+    copy_to_device('NBTHETAd', NBTHETA, np.int32)
+    copy_to_device('NBPHId', NBPHI, np.int32)
+    copy_to_device('NLAMd', NLAM, np.int32)
+    copy_to_device('SIMd', SIM, np.int32)
+    copy_to_device('LEd', LE, np.int32)
+    copy_to_device('FLUXd', FLUX, np.int32)
+    copy_to_device('NLVLd', NLVL, np.int32)
+    copy_to_device('NPSTKd', NPSTK, np.int32)
     if surf != None:
-        D.update(SUR=np.array(surf.dict['SUR'], dtype=np.int32))
-        D.update(DIOPTRE=np.array(surf.dict['DIOPTRE'], dtype=np.int32))
-        D.update(WINDSPEED=np.array(surf.dict['WINDSPEED'], dtype=np.float32))
-        D.update(NH2O=np.array(surf.dict['NH2O'], dtype=np.float32))
+        copy_to_device('SURd', surf.dict['SUR'], np.int32)
+        copy_to_device('DIOPTREd', surf.dict['DIOPTRE'], np.int32)
+        copy_to_device('WINDSPEEDd', surf.dict['WINDSPEED'], np.float32)
+        copy_to_device('NH2Od', surf.dict['NH2O'], np.float32)
     if env != None:
-        D.update(ENV=np.array(env.dict['ENV'], dtype=np.int32))
-        D.update(ENV_SIZE=np.array(env.dict['ENV_SIZE'], dtype=np.float32))
-        D.update(X0=np.array(env.dict['X0'], dtype=np.float32))
-        D.update(Y0=np.array(env.dict['Y0'], dtype=np.float32))
-    D.update(STHV=np.array([STHV], dtype=np.float32))
-    D.update(CTHV=np.array([CTHV], dtype=np.float32))
-    D.update(DELTA=np.array([DELTAbis], dtype=np.float32))
-    D.update(DELTA_PRIM=np.array([DELTA_PRIMbis], dtype=np.float32))
-    D.update(DELTA_SECO=np.array([DELTA_SECObis], dtype=np.float32))
-    D.update(BETA=np.array([BETAbis], dtype=np.float32))
-    D.update(ALPHA=np.array([ALPHAbis], dtype=np.float32))
-    D.update(A=np.array([Abis], dtype=np.float32))
-    D.update(ACUBE=np.array([ACUBEbis], dtype=np.float32))
-
-    # copy the constants into the device memory
-    for key in D.keys():
-        a,_ = mod.get_global('%sd'%key)
-        cuda.memcpy_htod(a, D[key])
-
-    cuda.memcpy_htod(mod.get_global('RTER')[0], np.array([RTER], dtype=np.float32))
-
+        copy_to_device('ENVd', env.dict['ENV'], np.int32)
+        copy_to_device('ENV_SIZEd', env.dict['ENV_SIZE'], np.float32)
+        copy_to_device('X0d', env.dict['X0'], np.float32)
+        copy_to_device('Y0d', env.dict['Y0'], np.float32)
+    copy_to_device('STHVd', STHV, np.float32)
+    copy_to_device('CTHVd', CTHV, np.float32)
+    copy_to_device('DELTAd', DELTAbis, np.float32)
+    copy_to_device('DELTA_PRIMd', DELTA_PRIMbis, np.float32)
+    copy_to_device('DELTA_SECOd', DELTA_SECObis, np.float32)
+    copy_to_device('BETAd', BETAbis, np.float32)
+    copy_to_device('ALPHAd', ALPHAbis, np.float32)
+    copy_to_device('Ad', Abis, np.float32)
+    copy_to_device('ACUBEd', ACUBEbis, np.float32)
+    copy_to_device('RTER', RTER, np.float32)
 
 def get_profAtm(wl, atm):
 

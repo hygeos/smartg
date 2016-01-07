@@ -914,11 +914,11 @@ __device__ void scatter(Photon* ph,
                 /* in the case of propagation (not LE) the photons scattering angle and Psi rotation angle are determined randomly*/
 			    /////////////
                 // Get Theta from Cumulative Distribution Function
-			    zang = RAND*(NFAERd-2);
+			    zang = RAND*(NF-2);
 			    iang= __float2int_rd(zang);
 			    zang = zang - iang;
 
-			    theta = (1.-zang)*faer[ipha*NFAERd+iang].p_ang + zang*faer[ipha*NFAERd+iang+1].p_ang;
+			    theta = (1.-zang)*faer[ipha*NF+iang].p_ang + zang*faer[ipha*NF+iang+1].p_ang;
 			    cTh = __cosf(theta);
 
 			    /////////////
@@ -928,36 +928,35 @@ __device__ void scatter(Photon* ph,
 
                 /////////////
                 // Get Scattering matrix from CDF
-                P11 = faer[ipha*NFAERd+iang].p_P11;
-                P22 = faer[ipha*NFAERd+iang].p_P22;
-                P33 = faer[ipha*NFAERd+iang].p_P33;
-                P43 = faer[ipha*NFAERd+iang].p_P43;
+                P11 = faer[ipha*NF+iang].p_P11;
+                P22 = faer[ipha*NF+iang].p_P22;
+                P33 = faer[ipha*NF+iang].p_P33;
+                P43 = faer[ipha*NF+iang].p_P43;
             }
 
             else {
                 /////////////
                 // Get Index of scattering angle and Scattering matrix directly 
-                zang = theta * (NFAERd-1)/PI ;
-                //zang = theta * NFAERd/PI ;
+                zang = theta * (NF-1)/PI ;
                 iang = __float2int_rd(zang);
 			    zang = zang - iang;
                 if (abs(cTh) < 1) {
-                    P11 = (1-zang)*faer[ipha*NFAERd+iang].a_P11 + zang*faer[ipha*NFAERd+iang+1].a_P11;
-                    P22 = (1-zang)*faer[ipha*NFAERd+iang].a_P22 + zang*faer[ipha*NFAERd+iang+1].a_P22;
-                    P33 = (1-zang)*faer[ipha*NFAERd+iang].a_P33 + zang*faer[ipha*NFAERd+iang+1].a_P33;
-                    P43 = (1-zang)*faer[ipha*NFAERd+iang].a_P43 + zang*faer[ipha*NFAERd+iang+1].a_P43;
+                    P11 = (1-zang)*faer[ipha*NF+iang].a_P11 + zang*faer[ipha*NF+iang+1].a_P11;
+                    P22 = (1-zang)*faer[ipha*NF+iang].a_P22 + zang*faer[ipha*NF+iang+1].a_P22;
+                    P33 = (1-zang)*faer[ipha*NF+iang].a_P33 + zang*faer[ipha*NF+iang+1].a_P33;
+                    P43 = (1-zang)*faer[ipha*NF+iang].a_P43 + zang*faer[ipha*NF+iang+1].a_P43;
                 }
                 else if (cTh >=1) {
-                    P11 = faer[ipha*NFAERd].a_P11;
-                    P22 = faer[ipha*NFAERd].a_P22;
-                    P33 = faer[ipha*NFAERd].a_P33;
-                    P43 = faer[ipha*NFAERd].a_P43;
+                    P11 = faer[ipha*NF].a_P11;
+                    P22 = faer[ipha*NF].a_P22;
+                    P33 = faer[ipha*NF].a_P33;
+                    P43 = faer[ipha*NF].a_P43;
                 }
                 else {
-                    P11 = faer[ipha*NFAERd+(NFAERd-1)].a_P11;
-                    P22 = faer[ipha*NFAERd+(NFAERd-1)].a_P22;
-                    P33 = faer[ipha*NFAERd+(NFAERd-1)].a_P33;
-                    P43 = faer[ipha*NFAERd+(NFAERd-1)].a_P43;
+                    P11 = faer[ipha*NF+(NF-1)].a_P11;
+                    P22 = faer[ipha*NF+(NF-1)].a_P22;
+                    P33 = faer[ipha*NF+(NF-1)].a_P33;
+                    P43 = faer[ipha*NF+(NF-1)].a_P43;
                 }
             }
 
@@ -1065,10 +1064,10 @@ __device__ void scatter(Photon* ph,
                 /* in the case of propagation (not LE) the photons scattering angle and Psi rotation angle are determined randomly*/
 			    /////////////
                 // Get Theta from Cumulative Distribution Function
-			    zang = RAND*(NFOCEd-2);
+			    zang = RAND*(NF-2);
 			    iang= __float2int_rd(zang);
 			    zang = zang - iang;
-			    theta = (1.-zang)*foce[ipha*NFOCEd+iang].p_ang + zang*foce[ipha*NFOCEd+iang+1].p_ang;
+			    theta = (1.-zang)*foce[ipha*NF+iang].p_ang + zang*foce[ipha*NF+iang+1].p_ang;
 			    cTh = __cosf(theta);
 
 			    /////////////
@@ -1078,36 +1077,35 @@ __device__ void scatter(Photon* ph,
 
                 /////////////
                 // Get Scattering matrix from CDF
-                P11 = foce[ipha*NFOCEd+iang].p_P11;
-                P22 = foce[ipha*NFOCEd+iang].p_P22;
-                P33 = foce[ipha*NFOCEd+iang].p_P33;
-                P43 = foce[ipha*NFOCEd+iang].p_P43;
+                P11 = foce[ipha*NF+iang].p_P11;
+                P22 = foce[ipha*NF+iang].p_P22;
+                P33 = foce[ipha*NF+iang].p_P33;
+                P43 = foce[ipha*NF+iang].p_P43;
             }
 
             else {
                 /////////////
                 // Get Index of scattering angle and Scattering matrix directly 
-                zang = theta * (NFOCEd-1)/PI ;
-                //zang = theta * NFOCEd/PI ;
+                zang = theta * (NF-1)/PI ;
                 iang = __float2int_rd(zang);
 			    zang = zang - iang;
                 if (abs(cTh) < 1) {
-                    P11 = (1.-zang)*foce[ipha*NFOCEd+iang].a_P11 + zang*foce[ipha*NFOCEd+iang+1].a_P11;
-                    P22 = (1.-zang)*foce[ipha*NFOCEd+iang].a_P22 + zang*foce[ipha*NFOCEd+iang+1].a_P22;
-                    P33 = (1.-zang)*foce[ipha*NFOCEd+iang].a_P33 + zang*foce[ipha*NFOCEd+iang+1].a_P33;
-                    P43 = (1.-zang)*foce[ipha*NFOCEd+iang].a_P43 + zang*foce[ipha*NFOCEd+iang+1].a_P43;
+                    P11 = (1.-zang)*foce[ipha*NF+iang].a_P11 + zang*foce[ipha*NF+iang+1].a_P11;
+                    P22 = (1.-zang)*foce[ipha*NF+iang].a_P22 + zang*foce[ipha*NF+iang+1].a_P22;
+                    P33 = (1.-zang)*foce[ipha*NF+iang].a_P33 + zang*foce[ipha*NF+iang+1].a_P33;
+                    P43 = (1.-zang)*foce[ipha*NF+iang].a_P43 + zang*foce[ipha*NF+iang+1].a_P43;
                 }
                 else if (cTh >=1) {
-                    P11 = foce[ipha*NFOCEd].a_P11;
-                    P22 = foce[ipha*NFOCEd].a_P22;
-                    P33 = foce[ipha*NFOCEd].a_P33;
-                    P43 = foce[ipha*NFOCEd].a_P43;
+                    P11 = foce[ipha*NF].a_P11;
+                    P22 = foce[ipha*NF].a_P22;
+                    P33 = foce[ipha*NF].a_P33;
+                    P43 = foce[ipha*NF].a_P43;
                 }
                 else {
-                    P11 = foce[ipha*NFOCEd+NFOCEd-1].a_P11;
-                    P22 = foce[ipha*NFOCEd+NFOCEd-1].a_P22;
-                    P33 = foce[ipha*NFOCEd+NFOCEd-1].a_P33;
-                    P43 = foce[ipha*NFOCEd+NFOCEd-1].a_P43;
+                    P11 = foce[ipha*NF+NF-1].a_P11;
+                    P22 = foce[ipha*NF+NF-1].a_P22;
+                    P33 = foce[ipha*NF+NF-1].a_P33;
+                    P43 = foce[ipha*NF+NF-1].a_P43;
                 }
             }
 
