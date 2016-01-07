@@ -201,7 +201,8 @@ __global__ void launchKernel(
         if( (ph.loc == ATMOS) || (ph.loc == OCEAN)) {
 
             /* Scattering Local Estimate */
-            if (LEd == 1) {
+            if ((LEd == 1) && (ph.loc == ATMOS)) {
+            //if (LEd == 1) {
                 int NK, up_level, down_level;
                 int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
                 int iph0 = idx%NBPHId;
@@ -280,7 +281,7 @@ __global__ void launchKernel(
                       NK=1;
                       //NK=2;
                       up_level = UP0P;
-                      down_level = DOWN0P;      
+                      down_level = DOWN0M;      
                   }
                   if (ph.loc == SURF0M) {
                       NK=1;
@@ -1602,7 +1603,7 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 	float rpar2;		// Coefficient de reflexion parallèle au carré
 	float rper2;		// Coefficient de reflexion perpendiculaire au carré
 	float rat;			// Rapport des coefficients de reflexion perpendiculaire et parallèle
-	float ReflTot;		// Flag pour la réflexion totale sur le dioptre
+	int ReflTot;		// Flag pour la réflexion totale sur le dioptre
 	float cot;			// Cosinus de l'angle de réfraction du photon
 	float ncot, ncTh;	// ncot = nind*cot, ncoi = nind*cTh
 	float tpar, tper;	//
@@ -1610,6 +1611,20 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
     int iter=0;
     float vzn;  // projection of V on the local vertical
     float thv, phi, vx, vy, vz;
+
+    // Determination of the relative refractive index
+    // a: air, b: water , Mobley 2015 nind = nba = nb/na
+    // and sign for further computation
+    float sign;
+    if (ph->loc == SURF0M)  {
+        nind = __fdividef(1.f,NH2Od);
+        sign = -1;
+    }
+    else  {
+        nind = NH2Od;
+        sign = 1;
+    }
+    
 	
     #ifdef SPHERIQUE
     // define 3 vectors Nx, Ny and Nz in cartesian coordinates which define a
@@ -1716,87 +1731,65 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
            // (sin(beta)*cos(alpha), sin(beta)*sin(alpha), cos(beta)) in axis (Nx, Ny, Nz)
            n_x = sBeta*__cosf( alpha );
            n_y = sBeta*__sinf( alpha );
+           n_z = sign * cBeta;
 
-           // compute relative index of refraction
-           // DR a: air, b: water , Mobley 2015 nind = nba = nb/na
-           if (ph->loc == SURF0M) {
-               nind = __fdividef(1.f,NH2Od);
-               n_z = -cBeta;
-           }
-           else{
-               nind = NH2Od;
-               n_z = cBeta;
-           }
-
-           temp = -(n_x*ph->vx + n_y*ph->vy + n_z*ph->vz);
-           theta = acosf( fmin(1.00F-VALMIN, fmax( -(1.F-VALMIN), temp ) ));
+           cTh = -(n_x*ph->vx + n_y*ph->vy + n_z*ph->vz);
+           theta = acosf( fmin(1.00F-VALMIN, fmax( -(1.F-VALMIN), cTh ) ));
         }
      } else {
         // Flat surface
+        beta  = 0.F;
+        cBeta = 1.F;
+        n_x   = 0.F;
+        n_y   = 0.F;
+        n_z   = sign;
 
-        beta = 0.;
-        alpha = DEUXPI * RAND;
-        sBeta = __sinf( beta );
-        cBeta = __cosf( beta );
-        n_x = sBeta*__cosf( alpha );
-        n_y = sBeta*__sinf( alpha );
-
-        if (ph->loc == SURF0M) {
-            nind = __fdividef(1.f,NH2Od);
-            n_z = -cBeta;
-        }
-        else{
-            nind = NH2Od;
-            n_z = cBeta;
-        }
-        temp = -(n_x*ph->vx + n_y*ph->vy + n_z*ph->vz);
-        theta = acosf( fmin(1.00F-VALMIN, fmax( -(1.F-VALMIN), temp ) ));
+        cTh = -(n_x*ph->vx + n_y*ph->vy + n_z*ph->vz);
+        theta = acosf( fmin(1.00F-VALMIN, fmax( -(1.F-VALMIN), cTh ) ));
      }
     } /* not le*/
 
     if (le) {
-     float sign;
-     if ((count_level==DOWN0M) || (count_level==DOWN0P)) sign = -1;
-     else sign = 1;
+     float sign_le = 1.F;
+     float norm;
+     if (count_level==DOWN0M) sign_le = -1.F;
 
      phi = tabphi[ph->iph];
      thv = tabthv[ph->ith];
-     vx = __cosf(phi) * __sinf(thv);
-     vy = __sinf(phi) * __sinf(thv);
-     vz = sign * cosf(thv);  
+     vx  = cosf(phi) * sinf(thv);
+     vy  = sinf(phi) * sinf(thv);
+     vz  = sign_le * cosf(thv);  
      
-     if (ph->loc==SURF0M) { // Refraction geometry
-        float gam=1;
-        nind = __fdividef(1.f,NH2Od);
-        // Normal to the facet in the global frame
-        n_x = (vx/nind - ph->vx)/gam;
-        n_y = (vy/nind - ph->vy)/gam;
-        n_z = (vz/nind - ph->vz)/gam;
-        // specular reflection: (reflected - incident)/2 
-        cTh = sqrtf(n_x*n_x + n_y*n_y + n_z*n_z);
-        n_x/=cTh;
-        n_y/=cTh;
-        n_z/=cTh;
+     if ((ph->loc==SURF0P) && (count_level==DOWN0M) ||
+         (ph->loc==SURF0M) && (count_level==UP0P))   { // Refraction geometry
+        // vector equation for determining the half direction h = - (ni*i + no*o)
+        // or h = - (i + nind*o)
+        n_x = (-vx/nind + ph->vx);
+        n_y = (-vy/nind + ph->vy);
+        n_z = (-vz/nind + ph->vz);
      }
-     if (ph->loc==SURF0P) { // Reflection geometry
-        nind = NH2Od;
-        // Normal to the facet in the global frame
-        n_x = (vx - ph->vx)/2.F;
-        n_y = (vy - ph->vy)/2.F;
-        n_z = (vz - ph->vz)/2.F;
-        // specular reflection: (reflected - incident)/2 
-        cTh = sqrtf(n_x*n_x + n_y*n_y + n_z*n_z);
-        n_x/=cTh;
-        n_y/=cTh;
-        n_z/=cTh;
+     if ((ph->loc==SURF0P) && (count_level==UP0P) ||
+         (ph->loc==SURF0M) && (count_level==DOWN0M)) { // Reflection geometry
+        // vector equation for determining the half direction h = sign(i dot o) (i + o)
+        n_x = sign * (vx - ph->vx);
+        n_y = sign * (vy - ph->vy);
+        n_z = sign * (vz - ph->vz);
      }
 
+     // Normal to the facet in the global frame
+     // Normalization of the half direction vector
+     norm = sqrtf(n_x*n_x + n_y*n_y + n_z*n_z);
+     n_x/=norm;
+     n_y/=norm;
+     n_z/=norm;
+
      // Incidence angle
+     cTh = -(n_x*ph->vx + n_y*ph->vy + n_z*ph->vz);
      theta = acosf( fmin(1.00F-VALMIN, fmax( -(1.F-VALMIN), cTh ) ));
 
      // facet slope
      cBeta = fabs(n_z);
-     beta = acosf(n_z);
+     beta  = acosf(n_z);
 	 if( (DIOPTREd == 0) && (fabs(beta) >= 1e-6)) {  //  for a flat ocean beta shall be stricly zero 
         ph->weight = 0.;
         return;
@@ -1817,32 +1810,8 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
     nz = n_z;
     #endif
 
-	cTh = __cosf(theta);
+	//cTh = __cosf(theta);
 	sTh = __sinf(theta);
-
-    // Anorm factor modelled with a simple linear fit that represents the departure from vz,
-    // (Anorm-vz)
-    // ^                                               +
-    // |                                              + 
-    // |                                             + 
-    // |                                            + 
-    // |                                           + 
-    // ++++++++++++++++++++++++++++++++++++++++++++--------> (theta)
-    // 0                                          |        90
-    //                                        Theta_thres=f(Windspeed)
-    // The slope of the model is constant=0.004 and threshold depends on windspeed. Below threshold on theta, all slopes
-    // are possible and thus A=1/vz
-    //float Anorm;
-    //float slopeA=0.00377;
-    //float theta_thres;
-    //theta_thres = 83.46 - WINDSPEEDd; // between 1 and 15 m/s
-    //float aavz = acosf(avz)*360./DEUXPI;
-    //if(aavz > theta_thres){
-    //   Anorm = avz + slopeA * (aavz - theta_thres);
-    //}
-    //else{
-    //   Anorm = avz;
-    //}
 
     #ifdef SPHERIQUE
     // avz is the projection of V on the local vertical
@@ -1853,22 +1822,27 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 
 
     // Ross et al 2005
+    // Normalization of the slope probability density function taking into acount shadows
+    // used to LE weight, and also to debias random draw of slope in non LE
     float Anorm;
     float nu = __fdividef(1.F, tanf(acosf(avz))*(sqrtf(2.) * sig));
     Anorm = 1.F + __fdividef(__expf(-nu*nu) - nu * sqrtf(PI) * erfcf(nu),2.F * nu * sqrtf(PI));
-
+    Anorm *= avz;
 
     // Weighting
 
-    if (!le) ph->weight *= __fdividef(fabs(cTh), cBeta * avz * Anorm);
+    ph->weight *= __fdividef(fabs(cTh), cBeta * Anorm);
 
     if (le && (ph->loc==SURF0P) && (DIOPTREd!=0)) ph->weight  *=
           __expf(-(1.F-cBeta*cBeta)/(cBeta*cBeta*sig2)) / sig2  
-        * __fdividef(1.F, cBeta*cBeta*cBeta*cBeta * avz * Anorm);
+        * __fdividef(1.F, cBeta*cBeta*cBeta * fabs(cTh));
 
-    if (le && (ph->loc==SURF0M) && (DIOPTREd!=0)) ph->weight  *=
+    if (le && (ph->loc==SURF0M) && (DIOPTREd!=0))  {
+        if (sTh <= nind) ph->weight  *=
           __expf(-(1.F-cBeta*cBeta)/(cBeta*cBeta*sig2)) / sig2  
-        * __fdividef(1.F, cBeta*cBeta*cBeta*cBeta * avz * Anorm);
+        * __fdividef(1.F, cBeta*cBeta*cBeta);
+        else ph->weight = 0.F;
+    }
 
 	// Rotation of Stokes parameters
 	s1 = ph->stokes1;
@@ -1922,7 +1896,7 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
     int condR;
     condR = (SURd==3)&&(RAND<rat);
 
-	if( (!le && ((ReflTot==1) || (SURd==1) || ( condR ))) || (le && ph->loc==SURF0P) ){
+	if( (!le && ((ReflTot) || (SURd==1) || (condR))) || (le && ph->loc==SURF0P) ){
 	//if( (ReflTot==1) || (SURd==1) || ( (SURd==3)&&(RAND<rat) ) ){
 
 		ph->stokes1 *= rper2;
@@ -1952,7 +1926,7 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
         // DR once in the reflection matrix multiplication
         // DR so twice and thus we normalize by rat (Xun 2014).
         // DR not to be applied for forced reflection (SUR=1 or total reflection) where there is no random selection
-		if (SURd==3 && ReflTot==0 && !le) {
+		if (SURd==3 && !ReflTot && !le) {
 		//if (SURd==3 && ReflTot==0) {
 			ph->weight /= rat;
 			}
@@ -1991,7 +1965,7 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 
 	} // Reflection
 
-	else if ((!condR && !le) || (le && ph->loc==SURF0M)){	// Transmission
+	else if ((!condR && !le) || (le && (ph->loc==SURF0M) && !ReflTot)){	// Transmission
 
 		
         geo_trans_factor = nind* cot/cTh; // DR Mobley 2015 OK , see Xun 2014
@@ -2008,6 +1982,7 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 		    ph->vx = vx;
 		    ph->vy = vy;
 		    ph->vz = vz;
+
         }
         else {
 		    ph->vx = __fdividef(ph->vx,nind) + alpha*nx;
@@ -2325,7 +2300,7 @@ __device__ void countPhoton(Photon* ph,
 	if (FLUXd==1 && LEd==0) weight *= __cosf(ph->vz);
 
     #ifdef DEBUG
-    //int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
+    int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
     if (isnan(weight)) printf("(idx=%d) Error, weight is NaN\n", idx);
     if (isnan(s1)) printf("(idx=%d) Error, s1 is NaN\n", idx);
     if (isnan(s2)) printf("(idx=%d) Error, s2 is NaN\n", idx);
@@ -2392,16 +2367,12 @@ __device__ void rotateStokes(float s1, float s2, float s3, float psi,
 
 /* ComputePsi
 */
-__device__ void ComputePsi(Photon* photon, float* psi, float theta)
+__device__ void ComputePsi(Photon* ph, float* psi, float theta)
 {
-    //float sign;
-	//*psi = acosf(fmin(1.F, fmax(-1.F, __fdividef(photon->uz, __sinf(theta)))));
-	//sign = photon->ux * photon->vy - photon->uy * photon->vx;
-	//if (sign < 0.F) *psi = -(*psi);
     // see Rammella et al. Three Monte Carlo programs of polarized light transport into scattering media: part I Optics Express, 2005, 13, 4420
     double wz;
-    wz = (double)photon->vx * (double)photon->uy - (double)photon->vy * (double)photon->ux;
-    *psi = atan2(wz, -1.*(double)photon->uz); 
+    wz = (double)ph->vx * (double)ph->uy - (double)ph->vy * (double)ph->ux;
+    *psi = atan2(wz, -1.*(double)ph->uz); 
 }
 
 
@@ -2478,7 +2449,7 @@ __device__ void display(const char* desc, Photon* ph) {
     int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
 
     if (idx==0) {
-        printf("%16s X=(%.3g,%.3g,%.3g) \tV=(%.3g,%.3g,%.3g) \tU=(%.3g,%.3g,%.3g) \tS=(%.3g,%.3g,%.3g,%.3g) \ttau=%.3g \tweight=%.3g loc=",
+        printf("%16s X=(%6.3f,%6.3f,%6.3f) V=(%6.3f,%6.3f,%6.3f) U=(%6.3f,%6.3f,%6.3f) S=(%6.3f,%6.3f,%6.3f,%6.3f) tau=%6.3f weight=%6.3f loc=",
                desc,
                ph->x, ph->y, ph->z,
                ph->vx,ph->vy,ph->vz,
