@@ -799,10 +799,10 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
         ph->weight = ph->weight * (1.f - prof_atm[ph->couche+ph->ilam*(NATMd+1)].abs);
 
 
-        Dsca= fabs(prof_atm[icouche].tau - prof_atm[icouche-1].tau) ;    // FIXME: bug here, does not account for wavelength ?!
-        dsca= fabs(tauBis - prof_atm[icouche-1].tau) ;
+        Dsca= fabs(prof_atm[icouche+ph->ilam*(NATMd+1)].tau - prof_atm[icouche-1+ph->ilam*(NATMd+1)].tau);
+        dsca= fabs(tauBis - prof_atm[icouche-1+ph->ilam*(NATMd+1)].tau) ;
 
-        //calcul de la nouvelle altitude du photon
+        // calculate new photon position
         phz = __fdividef(dsca,Dsca) * (prof_atm[icouche].z - prof_atm[icouche-1].z) + prof_atm[icouche-1].z; 
         rdist=  fabs(__fdividef(phz-ph->z, ph->vz));
         ph->z = phz;
