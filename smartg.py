@@ -348,6 +348,8 @@ def smartg(wl, pp=True,
 
         attrs = OrderedDict()
         attrs.update({'device': pycuda.autoinit.device.name()})
+        attrs.update({'pycuda_version': pycuda.VERSION_TEXT})
+        attrs.update({'cuda_version': '.'.join(map(str, pycuda.driver.get_version()))})
         attrs.update({'processing started at': datetime.now()})
         attrs.update({'VZA': THVDEG})
         attrs.update({'MODE': {True: 'PPA', False: 'SSA'}[pp]})
