@@ -348,11 +348,13 @@ def smartg(wl, pp=True,
         # number of Stokes parameters of the radiation field
         NPSTK = 4
 
+        t0 = datetime.now()
+
         attrs = OrderedDict()
         attrs.update({'device': pycuda.autoinit.device.name()})
         attrs.update({'pycuda_version': pycuda.VERSION_TEXT})
         attrs.update({'cuda_version': '.'.join(map(str, pycuda.driver.get_version()))})
-        attrs.update({'processing started at': datetime.now()})
+        attrs.update({'processing started at': t0})
         attrs.update({'VZA': THVDEG})
         attrs.update({'MODE': {True: 'PPA', False: 'SSA'}[pp]})
         attrs.update({'XBLOCK': XBLOCK})
@@ -448,7 +450,7 @@ def smartg(wl, pp=True,
         
         FLUX = 0
         if flux == 'planar' : FLUX = 1
-            
+
         # compilation option
         # list of compilation flag :
         #     - DSPHERIQUE : Calcul en sphérique
@@ -470,6 +472,7 @@ def smartg(wl, pp=True,
         #
         # compile or load the kernel
         #
+        time_before_compilation = datetime.now()
         if exists(src_device):
 
             # load device.cu
@@ -493,6 +496,8 @@ def smartg(wl, pp=True,
 
         # get the kernel
         kern = mod.get_function('launchKernel')
+        attrs['compilation time (s)'] = (datetime.now()
+                - time_before_compilation).total_seconds()
 
         # computation of the phase functions
         if(SIM == 0 or SIM == 2 or SIM == 3):
@@ -524,16 +529,19 @@ def smartg(wl, pp=True,
 
 
         # Loop and kernel call
+        time_before_loop = datetime.now()
         (NPhotonsInTot,
                 tabPhotonsTot, errorcount, NPhotonsOutTot
                 ) = loop_kernel(NBPHOTONS, faer, foce,
                                 NLVL, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                                 NLAM, options, kern, p, X0, le, spectrum,
                                 to_gpu(prof_atm), to_gpu(prof_oc), SEED)
+        attrs['kernel time (s)'] = (datetime.now() - time_before_loop).total_seconds()
 
         # finalization
         output = finalize(tabPhotonsTot, wavelengths, NPhotonsInTot, errorcount, NPhotonsOutTot,
                            OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, phasesAtm, le=le, flux=flux)
+        output.set_attr('total processing time (s)', (datetime.now() - t0).total_seconds())
 
         p.finish('Done! | Received {:.1%} of {:.3g} photons ({:.1%})'.format(
             np.sum(NPhotonsOutTot[0,...])/float(np.sum(NPhotonsInTot)),
@@ -757,8 +765,6 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
         m.set_attr(d, err[i])
 
     # write attributes
-    attrs['processing duration (s)'] = (datetime.now()
-                                        - attrs['processing started at']).total_seconds()
     for k, v in attrs.items():
         m.set_attr(k, str(v))
 
