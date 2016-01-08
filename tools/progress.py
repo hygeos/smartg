@@ -1,8 +1,10 @@
 try:
     from ipywidgets import FloatProgress
-    from notebook import display
+    from IPython.display import display
+    from traitlets import traitlets
+    FloatProgress()
     ipython_available = True
-except:
+except traitlets.TraitError:
     ipython_available = False
 from progressbar import ProgressBar, Widget, ETA, Percentage, Bar
 

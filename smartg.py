@@ -355,7 +355,7 @@ class Smartg(object):
             - attributes
 
         Example:
-            M = Smartg().run(wl=400., NBPHOTONS=1e7, atm=Profile('afglt'))    # FIXME
+            M = Smartg().run(wl=400., NBPHOTONS=1e7, atm=Profile('afglt'))
             M['I_up (TOA)'][:,:] contains the top of atmosphere reflectance
         '''
 
