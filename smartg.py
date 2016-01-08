@@ -400,7 +400,7 @@ def smartg(wl, pp=True,
         #
         # get the phase function and the atmospheric profiles
 
-        prof_atm, phasesAtm, NATM, HATM = get_profAtm(wl,atm)
+        prof_atm, phasesAtm, NATM, HATM, taumol, tauaer = get_profAtm(wl,atm)
 
         # computation of the impact point
         x0, y0, z0, tabTransDir = impactInit(pp, HATM, NATM, NLAM, prof_atm, THVDEG, RTER)
@@ -540,7 +540,7 @@ def smartg(wl, pp=True,
 
         # finalization
         output = finalize(tabPhotonsTot, wavelengths, NPhotonsInTot, errorcount, NPhotonsOutTot,
-                           OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, phasesAtm, le=le, flux=flux)
+                           OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, phasesAtm, taumol, tauaer, le=le, flux=flux)
         output.set_attr('total processing time (s)', (datetime.now() - t0).total_seconds())
 
         p.finish('Done! | Received {:.1%} of {:.3g} photons ({:.1%})'.format(
@@ -639,7 +639,8 @@ def calcOmega(NBTHETA, NBPHI):
 
 
 def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
-        OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, phasesAtm, le=None, flux=None):
+        OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, phasesAtm,
+        taumol, tauaer, le=None, flux=None):
     '''
     create and return the final output
     '''
@@ -740,6 +741,13 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
                 m.add_dataset(key, prof_atm[key].ravel(), ['ALT'])
             else:
                 m.add_dataset(key, prof_atm[key], ['Wavelength', 'ALT'])
+
+        if NLAM == 1:
+            m.add_dataset('taumol', taumol.ravel(), ['ALT'])
+            m.add_dataset('tauaer', tauaer.ravel(), ['ALT'])
+        else:
+            m.add_dataset('taumol', taumol, ['Wavelength', 'ALT'])
+            m.add_dataset('tauaer', tauaer, ['Wavelength', 'ALT'])
 
     # write atmospheric phase functions
     if len(phasesAtm) > 0:
@@ -950,6 +958,8 @@ def get_profAtm(wl, atm):
         #
         shp = (len(wl), NATM+1)
         prof_atm = np.zeros(shp, dtype=type_Profile)
+        taumol = np.zeros(shp, dtype=np.float32)
+        tauaer = np.zeros(shp, dtype=np.float32)
         prof_atm['z'][0,:] = profilesAtm[0]['ALT']    # only for first wavelength
         prof_atm['z'][1:,:] = -999.                 # other wavelengths are NaN
         for i, profile in enumerate(profilesAtm):
@@ -958,6 +968,9 @@ def get_profAtm(wl, atm):
             prof_atm['ssa'][i,:] = profile['XSSA']
             prof_atm['abs'][i,:] = profile['percent_abs']
             prof_atm['iphase'][i,:] = profile['IPHA']
+
+            taumol[i,:] = profile['hmol']
+            tauaer[i,:] = profile['haer']
     else:
         # no atmosphere
         phasesAtm = []
@@ -966,7 +979,7 @@ def get_profAtm(wl, atm):
 
         prof_atm = np.zeros(1, dtype=type_Profile)
 
-    return prof_atm, phasesAtm, NATM, HATM
+    return prof_atm, phasesAtm, NATM, HATM, taumol, tauaer
 
 def get_profOc(wl, water, NLAM):
 
