@@ -5,7 +5,7 @@
 SMART-G examples
 '''
 
-from smartg import smartg, Profile, AeroOPAC, LambSurface, RoughSurface
+from smartg import Smartg, Profile, AeroOPAC, LambSurface, RoughSurface
 from smartg import IOP_MM, IOP_SPM, REPTRAN, reptran_merge, merge
 import numpy as np
 
@@ -14,19 +14,19 @@ def test_rayleigh():
     '''
     Basic Rayleigh example
     '''
-    smartg(wl=400., NBPHOTONS=1e6, atm=Profile('afglt'), progress=False)
+    Smartg().run(wl=400., NBPHOTONS=1e6, atm=Profile('afglt'), progress=False)
 
 def test_sp():
     '''
     Basic test in spherical
     '''
-    smartg(pp=False, wl=400., NBPHOTONS=1e6, atm=Profile('afglt'), progress=False)
+    Smartg(pp=False).run(wl=400., NBPHOTONS=1e6, atm=Profile('afglt'), progress=False)
 
 def test_rayleigh_grid():
     '''
     Use a custom atmosphere grid
     '''
-    smartg(wl=500., NBPHOTONS=1e7,
+    Smartg().run(wl=500., NBPHOTONS=1e7,
            atm=Profile('afglt', grid='100[75]25[5]10[1]0'), progress=False)
 
 
@@ -36,20 +36,20 @@ def test_aerosols():
     '''
     aer = AeroOPAC('maritime_clean', 0.4, 550.)
     pro = Profile('afglms', aer=aer)
-    smartg(wl=490., atm=pro, NBPHOTONS=1e6, progress=False)
+    Smartg().run(wl=490., atm=pro, NBPHOTONS=1e6, progress=False)
 
 
 def test_atm_surf():
     '''
     atmosphere + lambertian surface of albedo 10%
     '''
-    return smartg(490., NBPHOTONS=1e6,
+    return Smartg().run(490., NBPHOTONS=1e6,
                   atm=Profile('afglms'),
                   surf=LambSurface(ALB=0.1), progress=False)
 
 
 def test_atm_surf_ocean():
-    return smartg(490., NBPHOTONS=1e6,
+    return Smartg().run(490., NBPHOTONS=1e6,
                   atm=Profile('afglms',
                               aer=AeroOPAC('maritime_clean', 0.2, 550)),
                   surf=RoughSurface(),
@@ -58,13 +58,13 @@ def test_atm_surf_ocean():
 
 
 def test_surf_ocean():
-    return smartg(490., THVDEG=30., NBPHOTONS=1e6,
+    return Smartg().run(490., THVDEG=30., NBPHOTONS=1e6,
                   surf=RoughSurface(),
                   water=IOP_MM(1., pfwav=[400.]), progress=False)
 
 
 def test_ocean():
-    return smartg(wl=560., THVDEG=30.,
+    return Smartg().run(wl=560., THVDEG=30.,
                   water=IOP_SPM(100.), NBPHOTONS=1e6, progress=False)
 
 
@@ -100,7 +100,7 @@ def test_ozone_lut():
         aer = AeroOPAC('maritime_clean', AOT, 550.)
         pro = Profile('afglms', aer=aer, O3=TCO)
 
-        m = smartg(wl=490., atm=pro, NBTHETA=50, NBPHOTONS=1e6, progress=False)
+        m = Smartg().run(wl=490., atm=pro, NBTHETA=50, NBPHOTONS=1e6, progress=False)
 
         m.set_attrs({'TCO':TCO, 'AOT': AOT})
         luts.append(m)
@@ -120,7 +120,7 @@ def test_multispectral():
         aer=AeroOPAC('maritime_clean', 0.3, 550., ),
         verbose=True)
 
-    return smartg(wl = np.linspace(400, 600, 2),
+    return Smartg().run(wl = np.linspace(400, 600, 2),
              THVDEG=60.,
              atm=pro,
              surf=RoughSurface(),

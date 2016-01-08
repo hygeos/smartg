@@ -156,73 +156,120 @@ class Environment(object):
         return 'ENV={ENV_SIZE}-X={X0:.1f}-Y={Y0:.1f}'.format(**self.dict)
 
 
-def smartg_thr(*args, **kwargs):
-    '''
-    A wrapper around smartg running it in a thread
-    This prevents blocking the context in an interactive environment
+def smartg(*args, **kwargs):
 
-    Args and returns: identical as smartg
-    '''
-    from multiprocessing import Process, Queue
-    q = Queue()  # queue to store the result
-    qpro = Queue()  # queue to store the progress
+    warn('function smartg will be deprecated. Please use Smartg(<compilation_option>).run(<runtime_options>)')
 
-    if ('progress' not in kwargs):
-        kwargs['progress'] = True  # default value
-    if kwargs['progress']:
-        kwargs['progress'] = qpro
+    comp_kwargs = {}
+    for k in ['pp', 'debug', 'alt_move', 'debug_photon', 'double']:
+        if k in kwargs:
+            comp_kwargs[k] = kwargs.pop(k)
 
-    p = Process(target=_smartg_thread, args=(q, qpro, args, kwargs))
-    p.start()
-    print 'Started thread', p.pid
-    pro = None
+    return Smartg(**comp_kwargs).run(*args, **kwargs)
 
-    while q.empty():
-        if qpro.empty():
-            time.sleep(0.1)
+
+class Smartg(object):
+
+    def __init__(self, pp=True, debug=False,
+                 alt_move=False, debug_photon=False,
+                 double=False):
+        '''
+        Initialization of the Smartg object
+
+        Performs the compilation and loading of the kernel.
+        This class is designed so split compilation and kernel loading from the
+        code execution: in case of successive smartg executions, the kernel
+        loading time is not repeated.
+
+        Arguments:
+            - pp:
+                True: use plane parallel geometry (default)
+                False: use spherical shell geometry
+
+            - debug: set to True to activate debug mode (optional stdout if problems are detected)
+                NOTE: compilation flag, not available if the kernel is provided as a binary
+
+            - alt_move: set to true to activate the alternate move scheme in move_sp.
+                NOTE: compilation flag, not available if the kernel is provided as a binary 
+
+            - debug_photon: activate the display of photon path for the thread 0
+                NOTE: compilation flag, not available if the kernel is provided as a binary 
+
+            - double : accumulate photons table in double precision, default single
+                NOTE: compilation flag, not available if the kernel is provided as a binary 
+        '''
+        import pycuda.autoinit
+        from pycuda.compiler import SourceModule
+        from pycuda.driver import module_from_buffer
+
+        self.pp = pp
+        self.double = double
+
+        #
+        # compilation option
+        #
+        options = []
+        if not pp:
+            # spherical shell calculation
+            options.append('-DSPHERIQUE')
+        if debug:
+            # additional tests for debugging
+            options.append('-DDEBUG')
+        if alt_move:
+            options.append('-DALT_MOVE')
+        if debug_photon:
+            options.append('-DDEBUG_PHOTON')
+        if double:
+            # counting in double precision
+            # ! slows down processing
+            options.append('-DDOUBLE')
+
+        #
+        # compile the kernel or load binary
+        #
+        time_before_compilation = datetime.now()
+        if exists(src_device):
+
+            # load device.cu
+            src_device_content = open(src_device).read()
+
+            # kernel compilation
+            self.mod = SourceModule(src_device_content,
+                               nvcc='/usr/local/cuda/bin/nvcc',
+                               options=options,
+                               no_extern_c=True,
+                               cache_dir='/tmp/',
+                               include_dirs=[dir_src,
+                                   join(dir_src, 'incRNGs/Random123/')])
+        elif exists(binnames[pp]):
+            # load existing binary
+            print 'read binary', binnames[pp]
+            self.mod = module_from_buffer(open(binnames[pp], 'rb').read())
+
         else:
-            if pro is None:
-                pro = Progress(qpro.get(), True)
-            else:
-                ret = qpro.get()
-                if isinstance(ret, tuple):
-                    pro.update(ret[0], ret[1])
+            raise IOError('Could not find {} or {}.'.format(src_device, binnames[pp]))
 
-    res = q.get()
-    if isinstance(res, Exception):
-        raise res
+        # load the kernel
+        self.kernel = self.mod.get_function('launchKernel')
 
-    while not qpro.empty():
-        ret = qpro.get()
-        if isinstance(ret, str):
-            pro.finish(ret)
+        #
+        # common attributes
+        #
+        self.common_attrs = OrderedDict()
+        self.common_attrs['compilation_time'] = (datetime.now()
+                        - time_before_compilation).total_seconds()
+        self.common_attrs['device'] = pycuda.autoinit.device.name()
+        self.common_attrs['pycuda_version'] = pycuda.VERSION_TEXT
+        self.common_attrs['cuda_version'] = '.'.join(map(str, pycuda.driver.get_version()))
 
-    return res
-
-
-def _smartg_thread(q, qpro, args, kwargs):
-    '''
-    the thread function calling smartg
-    (called by smartg_thr)
-    '''
-    try:
-        m = smartg(*args, **kwargs)
-        q.put(m)
-    except Exception as ex:
-        # in case of exception, put the exception in the queue instead of the
-        # result
-        q.put(ex)
-
-
-def smartg(wl, pp=True,
-           atm=None, surf=None, water=None, env=None,
-           NBPHOTONS=1e9, DEPO=0.0279, THVDEG=0., SEED=-1,
-           RTER=6371., wl_proba=None,
-           NBTHETA=45, NBPHI=90, NF=1e6,
-           OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
-           NBLOOP=None, progress=True, debug=False,
-           alt_move=False, debug_photon=False, double=False, 
-           le=None, flux=None):
+    def run(self, wl,
+             atm=None, surf=None, water=None, env=None,
+             NBPHOTONS=1e9, DEPO=0.0279, THVDEG=0., SEED=-1,
+             RTER=6371., wl_proba=None,
+             NBTHETA=45, NBPHI=90, NF=1e6,
+             OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
+             NBLOOP=None, progress=True,
+             le=None, flux=None):
         '''
         Run a SMART-G simulation
 
@@ -231,10 +278,6 @@ def smartg(wl, pp=True,
             - wl: wavelength in nm (float)
                   or: a list/array of wavelengths
                   or: a list of IBANDs (reptran)
-
-            - pp:
-                True: use plane parallel geometry (default)
-                False: use spherical shell geometry
 
             - atm: Profile object
                 default None (no atmosphere)
@@ -295,18 +338,6 @@ def smartg(wl, pp=True,
             - progress: whether to show a progress bar (True/False)
                      or a Queue object to store the progress as (max_value), then (current_value, message), finally 'message'
 
-            - debug: set to True to activate debug mode (optional stdout if problems are detected)
-                NOTE: compilation flag, not available if the kernel is provided as a binary
-
-            - alt_move: set to true to activate the alternate move scheme in move_sp.
-                NOTE: compilation flag, not available if the kernel is provided as a binary 
-
-            - debug_photon: activate the display of photon path for the thread 0
-                NOTE: compilation flag, not available if the kernel is provided as a binary 
-
-            - double : accumulate photons table in double precision, default single
-                NOTE: compilation flag, not available if the kernel is provided as a binary 
-
             - le: Local Estimate method activation (by providing a dictionnary of two float32 arrays of zenith and azimuth angles in radian
                   for output), default cone sampling
                 NOTE: Overwrite NBPHI and NBTHETA
@@ -324,12 +355,9 @@ def smartg(wl, pp=True,
             - attributes
 
         Example:
-            M = smartg(wl=400., NBPHOTONS=1e7, atm=Profile('afglt'))
+            M = Smartg().run(wl=400., NBPHOTONS=1e7, atm=Profile('afglt'))    # FIXME
             M['I_up (TOA)'][:,:] contains the top of atmosphere reflectance
         '''
-        import pycuda.autoinit
-        from pycuda.compiler import SourceModule
-        from pycuda.driver import module_from_buffer
 
         #
         # initialization
@@ -351,12 +379,9 @@ def smartg(wl, pp=True,
         t0 = datetime.now()
 
         attrs = OrderedDict()
-        attrs.update({'device': pycuda.autoinit.device.name()})
-        attrs.update({'pycuda_version': pycuda.VERSION_TEXT})
-        attrs.update({'cuda_version': '.'.join(map(str, pycuda.driver.get_version()))})
         attrs.update({'processing started at': t0})
         attrs.update({'VZA': THVDEG})
-        attrs.update({'MODE': {True: 'PPA', False: 'SSA'}[pp]})
+        attrs.update({'MODE': {True: 'PPA', False: 'SSA'}[self.pp]})
         attrs.update({'XBLOCK': XBLOCK})
         attrs.update({'XGRID': XGRID})
         attrs.update(get_git_attrs())
@@ -403,7 +428,7 @@ def smartg(wl, pp=True,
         prof_atm, phasesAtm, NATM, HATM, taumol, tauaer = get_profAtm(wl,atm)
 
         # computation of the impact point
-        x0, y0, z0, tabTransDir = impactInit(pp, HATM, NATM, NLAM, prof_atm, THVDEG, RTER)
+        x0, y0, z0, tabTransDir = impactInit(self.pp, HATM, NATM, NLAM, prof_atm, THVDEG, RTER)
         X0 = to_gpu(np.array([x0, y0, z0], dtype='float32'))
 
 
@@ -451,54 +476,6 @@ def smartg(wl, pp=True,
         FLUX = 0
         if flux == 'planar' : FLUX = 1
 
-        # compilation option
-        # list of compilation flag :
-        #     - DSPHERIQUE : Calcul en sphérique
-        #     - DDEBUG : Ajout de tests intermédiaires utilisés lors du débugage
-        #     - DDOUBLE : Accumulation de TabPhotons en double precision (!slow down processing)
-
-        options = []
-        if not pp:
-            options.append('-DSPHERIQUE')
-        if debug:
-            options.append('-DDEBUG')
-        if alt_move:
-            options.append('-DALT_MOVE')
-        if debug_photon:
-            options.append('-DDEBUG_PHOTON')
-        if double:
-            options.append('-DDOUBLE')
-
-        #
-        # compile or load the kernel
-        #
-        time_before_compilation = datetime.now()
-        if exists(src_device):
-
-            # load device.cu
-            src_device_content = open(src_device).read()
-
-            # kernel compilation
-            mod = SourceModule(src_device_content,
-                               nvcc='/usr/local/cuda/bin/nvcc',
-                               options=options,
-                               no_extern_c=True,
-                               cache_dir='/tmp/',
-                               include_dirs=[dir_src,
-                                   join(dir_src, 'incRNGs/Random123/')])
-        elif exists(binnames[pp]):
-            # load existing binary
-            print 'read binary', binnames[pp]
-            mod = module_from_buffer(open(binnames[pp], 'rb').read())
-
-        else:
-            raise IOError('Could not find {} or {}.'.format(src_device, binnames[pp]))
-
-        # get the kernel
-        kern = mod.get_function('launchKernel')
-        attrs['compilation time (s)'] = (datetime.now()
-                - time_before_compilation).total_seconds()
-
         # computation of the phase functions
         if(SIM == 0 or SIM == 2 or SIM == 3):
             if phasesOc != []:
@@ -517,7 +494,7 @@ def smartg(wl, pp=True,
             faer = gpuzeros(1, dtype='float32')
 
         # initialization of the constants
-        InitConst(surf, env, NATM, NOCE, mod,
+        InitConst(surf, env, NATM, NOCE, self.mod,
                        NBPHOTONS, NBLOOP, THVDEG, DEPO,
                        XBLOCK, XGRID, NLAM, SIM, NF,
                        NBTHETA, NBPHI, OUTPUT_LAYERS, 
@@ -534,14 +511,15 @@ def smartg(wl, pp=True,
                 tabPhotonsTot, errorcount, NPhotonsOutTot
                 ) = loop_kernel(NBPHOTONS, faer, foce,
                                 NLVL, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
-                                NLAM, options, kern, p, X0, le, spectrum,
+                                NLAM, self.double, self.kernel, p, X0, le, spectrum,
                                 to_gpu(prof_atm), to_gpu(prof_oc), SEED)
         attrs['kernel time (s)'] = (datetime.now() - time_before_loop).total_seconds()
+        attrs.update(self.common_attrs)
 
         # finalization
         output = finalize(tabPhotonsTot, wavelengths, NPhotonsInTot, errorcount, NPhotonsOutTot,
                            OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, phasesAtm, taumol, tauaer, le=le, flux=flux)
-        output.set_attr('total processing time (s)', (datetime.now() - t0).total_seconds())
+        output.set_attr('processing time (s)', (datetime.now() - t0).total_seconds())
 
         p.finish('Done! | Received {:.1%} of {:.3g} photons ({:.1%})'.format(
             np.sum(NPhotonsOutTot[0,...])/float(np.sum(NPhotonsInTot)),
@@ -742,12 +720,13 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
             else:
                 m.add_dataset(key, prof_atm[key], ['Wavelength', 'ALT'])
 
-        if NLAM == 1:
-            m.add_dataset('taumol', taumol.ravel(), ['ALT'])
-            m.add_dataset('tauaer', tauaer.ravel(), ['ALT'])
-        else:
-            m.add_dataset('taumol', taumol, ['Wavelength', 'ALT'])
-            m.add_dataset('tauaer', tauaer, ['Wavelength', 'ALT'])
+        if (taumol is not None) and (tauaer is not None):
+            if NLAM == 1:
+                m.add_dataset('taumol', taumol.ravel(), ['ALT'])
+                m.add_dataset('tauaer', tauaer.ravel(), ['ALT'])
+            else:
+                m.add_dataset('taumol', taumol, ['Wavelength', 'ALT'])
+                m.add_dataset('tauaer', tauaer, ['Wavelength', 'ALT'])
 
     # write atmospheric phase functions
     if len(phasesAtm) > 0:
@@ -976,6 +955,8 @@ def get_profAtm(wl, atm):
         phasesAtm = []
         NATM = 0
         HATM = 0
+        taumol = None
+        tauaer = None
 
         prof_atm = np.zeros(1, dtype=type_Profile)
 
@@ -1061,7 +1042,7 @@ def get_git_attrs():
 
 def loop_kernel(NBPHOTONS, faer, foce, NLVL,
                 NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
-                NLAM, options , kern, p, X0, le, spectrum,
+                NLAM, double , kern, p, X0, le, spectrum,
                 prof_atm, prof_oc, SEED):
     """
     launch the kernel several time until the targeted number of photons injected is reached
@@ -1107,7 +1088,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL,
     NPhotonsOut = gpuzeros((NLVL,NLAM,NBTHETA,NBPHI), dtype=np.uint64)
     NPhotonsOutTot = np.zeros((NLVL,NLAM,NBTHETA,NBPHI), dtype=np.uint64)
 
-    if '-DDOUBLE' in options:
+    if double:
         tabPhotons = gpuzeros((NLVL,NPSTK,NLAM,NBTHETA,NBPHI), dtype=np.float64)
     else:
         tabPhotons = gpuzeros((NLVL,NPSTK,NLAM,NBTHETA,NBPHI), dtype=np.float32)
