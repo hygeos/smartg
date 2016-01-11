@@ -203,8 +203,8 @@ __global__ void launchKernel(
         if( (ph.loc == ATMOS) || (ph.loc == OCEAN)) {
 
             /* Scattering Local Estimate */
-            if ((LEd == 1) && (ph.loc == ATMOS)) {
-            //if (LEd == 1) {
+            //if ((LEd == 1) && (ph.loc == ATMOS)) {
+            if (LEd == 1) {
                 int NK, up_level, down_level;
                 int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
                 int iph0 = idx%NBPHId;
@@ -280,14 +280,14 @@ __global__ void launchKernel(
                   int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
                   int iph0 = idx%NBPHId;
                   if (ph.loc == SURF0P) {
-                      NK=1;
-                      //NK=2;
+                      //NK=1;
+                      NK=2;
                       up_level = UP0P;
                       down_level = DOWN0M;      
                   }
                   if (ph.loc == SURF0M) {
-                      NK=1;
-                      //NK=2;
+                      //NK=1;
+                      NK=2;
                       up_level = UP0P;
                       down_level = DOWN0M; 
                   }
@@ -1772,9 +1772,9 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
          (ph->loc==SURF0M) && (count_level==UP0P))   { // Refraction geometry
         // vector equation for determining the half direction h = - (ni*i + no*o)
         // or h = - (i + nind*o)
-        n_x = (-vx/nind + ph->vx);
-        n_y = (-vy/nind + ph->vy);
-        n_z = (-vz/nind + ph->vz);
+        n_x = (vx*nind - ph->vx);
+        n_y = (vy*nind - ph->vy);
+        n_z = (-vz*nind - ph->vz);
      }
      if ((ph->loc==SURF0P) && (count_level==UP0P) ||
          (ph->loc==SURF0M) && (count_level==DOWN0M)) { // Reflection geometry
@@ -1848,6 +1848,7 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
     if (le && (ph->loc==SURF0M) && (DIOPTREd!=0))  {
         if (sTh <= nind) ph->weight  *=
           __expf(-(1.F-cBeta*cBeta)/(cBeta*cBeta*sig2)) / sig2  
+        //* __fdividef(1.F, cBeta*cBeta*cBeta * fabs(cTh));
         * __fdividef(1.F, cBeta*cBeta*cBeta);
         else ph->weight = 0.F;
     }
