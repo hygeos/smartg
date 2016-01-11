@@ -14,6 +14,7 @@ import time
 from datetime import datetime
 from numpy import pi
 from tools.profile.profil import AeroOPAC, Profile, REPTRAN, REPTRAN_IBAND, CloudOPAC
+from tools.cdf import ICDF
 from tools.water.iop_spm import IOP_SPM
 from tools.water.iop_mm import IOP_MM
 from tools.water.iop_AOS_water import IOP_AOS_WATER
@@ -313,7 +314,8 @@ class Smartg(object):
 
             - RTER: earth radius in km
 
-            - wl_proba: probability of occurency of each wavelength
+            - wl_proba: inversed cumulative distribution function for wavelength selection
+                        (it is the result of function ICDF(proba, N))
 
             - NBTHETA: number of zenith angles in output
 
@@ -493,12 +495,21 @@ class Smartg(object):
         else:
             faer = gpuzeros(1, dtype='float32')
 
+        if wl_proba is not None:
+            assert wl_proba.dtype == 'int64'
+            wl_proba_icdf = to_gpu(wl_proba)
+            NWLPROBA = len(wl_proba_icdf)
+        else:
+            wl_proba_icdf = gpuzeros(1, dtype='int64')
+            NWLPROBA = 0
+
         # initialization of the constants
         InitConst(surf, env, NATM, NOCE, self.mod,
                        NBPHOTONS, NBLOOP, THVDEG, DEPO,
                        XBLOCK, XGRID, NLAM, SIM, NF,
-                       NBTHETA, NBPHI, OUTPUT_LAYERS, 
-                       RTER, LE, FLUX, NLVL, NPSTK)
+                       NBTHETA, NBPHI, OUTPUT_LAYERS,
+                       RTER, LE, FLUX, NLVL, NPSTK,
+                       NWLPROBA)
 
 
         # Initialize the progress bar
@@ -512,7 +523,8 @@ class Smartg(object):
                 ) = loop_kernel(NBPHOTONS, faer, foce,
                                 NLVL, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                                 NLAM, self.double, self.kernel, p, X0, le, spectrum,
-                                to_gpu(prof_atm), to_gpu(prof_oc), SEED)
+                                to_gpu(prof_atm), to_gpu(prof_oc),
+                                wl_proba_icdf, SEED)
         attrs['kernel time (s)'] = (datetime.now() - time_before_loop).total_seconds()
         attrs.update(self.common_attrs)
 
@@ -832,8 +844,8 @@ def calculF(phases, N):
 def InitConst(surf, env, NATM, NOCE, mod,
                    NBPHOTONS, NBLOOP, THVDEG, DEPO,
                    XBLOCK, XGRID,NLAM, SIM, NF,
-                   NBTHETA, NBPHI, OUTPUT_LAYERS, 
-                   RTER, LE, FLUX, NLVL, NPSTK) :
+                   NBTHETA, NBPHI, OUTPUT_LAYERS,
+                   RTER, LE, FLUX, NLVL, NPSTK, NWLPROBA) :
 
     """
     Initialize the constants in python and send them to the device memory
@@ -903,6 +915,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
     copy_to_device('Ad', Abis, np.float32)
     copy_to_device('ACUBEd', ACUBEbis, np.float32)
     copy_to_device('RTER', RTER, np.float32)
+    copy_to_device('NWLPROBA', NWLPROBA, np.int32)
 
 def get_profAtm(wl, atm):
 
@@ -1043,7 +1056,7 @@ def get_git_attrs():
 def loop_kernel(NBPHOTONS, faer, foce, NLVL,
                 NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                 NLAM, double , kern, p, X0, le, spectrum,
-                prof_atm, prof_oc, SEED):
+                prof_atm, prof_oc, wl_proba_icdf, SEED):
     """
     launch the kernel several time until the targeted number of photons injected is reached
 
@@ -1117,7 +1130,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL,
         kern(spectrum, X0, faer, foce,
                 errorcount, nThreadsActive, tabPhotons,
                 Counter, NPhotonsIn, NPhotonsOut, tabthv, tabphi,
-                prof_atm, prof_oc, philox_data,
+                prof_atm, prof_oc, wl_proba_icdf, philox_data,
                 block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
 
         NPhotonsInTot += NPhotonsIn.get()

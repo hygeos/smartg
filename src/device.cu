@@ -77,6 +77,7 @@ __global__ void launchKernel(
         float *tabthv, float *tabphi,
         struct Profile *prof_atm,
         struct Profile *prof_oc,
+        long long *wl_proba_icdf,
         unsigned int *philox_data
         ) {
 
@@ -133,7 +134,8 @@ __global__ void launchKernel(
         // Si le photon est à NONE on l'initialise et on le met à la localisation correspondant à la simulaiton en cours
         if((ph.loc == NONE) && this_thread_active){
 
-            initPhoton(&ph, prof_atm, spectrum, X0, NPhotonsIn, &etatThr , &configThr);
+            initPhoton(&ph, prof_atm, spectrum, X0, NPhotonsIn, wl_proba_icdf,
+                       &etatThr , &configThr);
             iloop = 1;
             #ifdef DEBUG_PHOTON
             display("INIT", &ph);
@@ -414,6 +416,7 @@ __global__ void launchKernel(
 */
 __device__ void initPhoton(Photon* ph, struct Profile *prof_atm,
                            struct Spectrum *spectrum, float *X0, unsigned long long *NPhotonsIn,
+                           long long *wl_proba_icdf,
                            philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr)
 {
 	// Initialisation du vecteur vitesse
@@ -429,7 +432,12 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm,
 	
     // Initialisation de la longueur d onde
      //mono chromatique
-	ph->ilam = __float2uint_rz(RAND * NLAMd);
+    if (NWLPROBA == 0) {
+        ph->ilam = __float2uint_rz(RAND * NLAMd);
+    } else {
+        ph->ilam = wl_proba_icdf[__float2uint_rz(RAND * NWLPROBA)];
+    }
+
 	ph->wavel = spectrum[ph->ilam].lambda;
     atomicAdd(NPhotonsIn+ph->ilam, 1);
 

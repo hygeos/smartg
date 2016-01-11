@@ -57,6 +57,7 @@ __device__ __constant__ float Ad;
 __device__ __constant__ float ACUBEd;
 
 __device__ __constant__ float RTER;
+__device__ __constant__ int NWLPROBA;
 
 
 
@@ -80,6 +81,7 @@ __global__ void launchKernel(
         float *tabthv, float *tabphi,
         struct Profile *prof_atm,
         struct Profile *prof_oc,
+        long long *wl_proba_icdf,
         unsigned int *philox_data
         );
 }
@@ -95,6 +97,7 @@ __global__ void launchKernel(
 __device__ void initPhoton(Photon* ph, struct Profile *prof_atm,
                            struct Spectrum *spectrum,float *X0,
                            unsigned long long *NPhotonsIn,
+                           long long *wl_proba_icdf,
                            philox4x32_ctr_t*, philox4x32_key_t*);
 
 
