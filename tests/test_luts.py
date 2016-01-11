@@ -124,6 +124,15 @@ def test_broadcasting2():
     (z + p).print_info()
     assert (z+p)[4,5] == z[4] + p[5]
 
+def test_sub():
+    l = create_lut()
+
+    assert l.sub()[1, :] == l.sub({'z': 1})
+    assert l.sub()[1, :] == l.sub({0: 1})
+    assert l.sub()[1.4, :] == l.sub({'z': 1.4})
+    assert l.sub()[Idx(50), :] == l.sub({'z':Idx(50)})
+    l.sub({'z': 1.4, 'P0': 4}).print_info()
+
 @raises(ValueError)
 def test_broadcasting3():
     l1 = LUT(np.eye(3), axes=[None, None], names=['a', 'b'])

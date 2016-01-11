@@ -161,11 +161,45 @@ class LUT(object):
             self.names = names
             assert len(names) == self.ndim
 
-    def sub(self):
+    def sub(self, d=None):
         '''
-        returns a Subsetter object, which allows subsetting the LUT
+        returns a subset LUT of current LUT
+
+        * provide axis names and values
+          example: lut.sub({'axis1': 1.5})
+                   returns the lut stripped from 'axis1', for which we use the index 1.5
+        * the axis can be provided by its index; the value can be provided as int, float or Idx
+                   lut.sub({2: Idx(42.)})
+        * if no argument is provided, returns a 'subsetter' object which can be indexed like:
+                lut.sub()[-1,:,0.2, Idx(12.)]
         '''
-        return Subsetter(self)
+        if d is None:
+            return Subsetter(self)
+        else:
+            dd = {}
+            for ax, v in d.items():
+                if isinstance(ax, str):
+                    iax = self.names.index(ax)
+                    dd[iax] = v
+                else:
+                    assert isinstance(ax, int)
+                    dd[ax] = v
+
+            keys = []
+            axes = []
+            names = []
+            for i in xrange(self.ndim):
+                if i in dd:
+                    keys.append(dd[i])
+                else:
+                    keys.append(slice(None))
+                    axes.append(self.axes[i])
+                    names.append(self.names[i])
+
+            data = self[tuple(keys)]
+
+            return LUT(data, axes=axes, names=names, attrs=self.attrs, desc=self.desc)
+
 
     def axis(self, a, aslut=False):
         '''
