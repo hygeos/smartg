@@ -54,10 +54,10 @@ def phase_view(mlut, ipha=None, fig= None, axarr=None, iw=0):
     from pylab import subplots, setp
     from numpy import unique
     
-    nd = mlut['H'].ndim
+    nd = mlut['tau'].ndim
     labw=''
     if nd>1:
-        wi = mlut['H'].names.index('Wavelength') # Wavelength index
+        wi = mlut['tau'].names.index('Wavelength') # Wavelength index
         key = [slice(None)]*nd
         key[wi] = iw
         key=tuple(key)

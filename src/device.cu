@@ -203,14 +203,12 @@ __global__ void launchKernel(
         if( (ph.loc == ATMOS) || (ph.loc == OCEAN)) {
 
             /* Scattering Local Estimate */
-            //if ((LEd == 1) && (ph.loc == ATMOS)) {
             if (LEd == 1) {
-                int NK, up_level, down_level;
+                int NK, up_level, down_level, count_level_le;
                 int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
                 int iph0 = idx%NBPHId;
                 if (ph.loc == ATMOS) {
-                    NK=1;
-                    //NK=2;
+                    NK=2;
                     up_level = UPTOA;
                     down_level = DOWN0P;
                 }
@@ -219,8 +217,8 @@ __global__ void launchKernel(
                     up_level = UP0M;
                 }
                 for(int k=0; k<NK; k++){
-                    if (k==0) count_level = up_level;
-                    else count_level = down_level;
+                    if (k==0) count_level_le = up_level;
+                    else count_level_le = down_level;
 
                     for (int iph=0; iph<NBPHId; iph++){
                         for (int ith=0; ith<NBTHETAd; ith++){
@@ -231,7 +229,7 @@ __global__ void launchKernel(
                             //ph_le.ith = ith;
                             scatter(&ph_le, prof_atm, prof_oc, faer, foce,
                                     1, tabthv, tabphi,
-                                    count_level, &etatThr , &configThr);
+                                    count_level_le, &etatThr , &configThr);
 
                             #ifdef DEBUG_PHOTON
                             if (k==0) display("SCATTER LE UP", &ph_le);
@@ -239,13 +237,13 @@ __global__ void launchKernel(
                             #endif
 
                             #ifdef SPHERIQUE
-                            if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, count_level , &etatThr , &configThr);
+                            if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, count_level_le , &etatThr , &configThr);
                             #ifdef DEBUG_PHOTON
                             display("MOVE LE", &ph_le);
                             #endif
                             #endif
 
-                            countPhoton(&ph_le, prof_atm, tabthv, tabphi, count_level,
+                            countPhoton(&ph_le, prof_atm, tabthv, tabphi, count_level_le,
                                     errorcount, tabPhotons, NPhotonsOut);
                         }
                     }
@@ -276,24 +274,12 @@ __global__ void launchKernel(
 			if( DIOPTREd!=3 ) {
                 /* Surface Local Estimate */
                 if ((LEd == 1) && (SIMd != -2)) {
-                  int NK, up_level, down_level;
+                  int NK=2, count_level_le;
                   int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
                   int iph0 = idx%NBPHId;
-                  if (ph.loc == SURF0P) {
-                      //NK=1;
-                      NK=2;
-                      up_level = UP0P;
-                      down_level = DOWN0M;      
-                  }
-                  if (ph.loc == SURF0M) {
-                      //NK=1;
-                      NK=2;
-                      up_level = UP0P;
-                      down_level = DOWN0M; 
-                  }
                   for(int k=0; k<NK; k++){
-                    if (k==0) count_level = up_level;
-                    else count_level = down_level;
+                    if (k==0) count_level_le = UP0P;
+                    else count_level_le = DOWN0M;
 
                     for (int iph=0; iph<NBPHId; iph++){
                       for (int ith=0; ith<NBTHETAd; ith++){
@@ -304,14 +290,14 @@ __global__ void launchKernel(
                         //ph_le.ith = ith;
 
                         surfaceAgitee(&ph_le, 1, tabthv, tabphi,
-                                count_level, &etatThr , &configThr);
+                                count_level_le, &etatThr , &configThr);
 
                         #ifdef DEBUG_PHOTON
                         if (k==0) display("SURFACE LE UP", &ph_le);
                         else display("SURFACE LE DOWN", &ph_le);
                         #endif
 
-                        countPhoton(&ph_le, prof_atm, tabthv, tabphi, count_level, errorcount, tabPhotons, NPhotonsOut);
+                        countPhoton(&ph_le, prof_atm, tabthv, tabphi, count_level_le, errorcount, tabPhotons, NPhotonsOut);
                         if (k==0) { 
                             #ifdef SPHERIQUE
                             if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA , &etatThr , &configThr);
@@ -856,6 +842,7 @@ __device__ void scatter(Photon* ph,
         ph->vx = vx;
         ph->vy = vy;
         ph->vz = vz;
+
     }
 
     /* Scattering in atmosphere */
@@ -912,6 +899,8 @@ __device__ void scatter(Photon* ph,
 			    ph->stokes3 /= phase_func;     		
 			    ph->stokes4 /= phase_func;     		
             }
+
+            else ph->weight /= 4.F; //Phase function normalization
 
 		}
 		else{
@@ -992,6 +981,8 @@ __device__ void scatter(Photon* ph,
 
             }
 
+            else ph->weight /= 4.F; //Phase function normalization
+
             // Photon weight reduction due to the aerosol single scattering albedo of the current layer
 			ph->weight *= prof_atm[ilay].ssa;
 			
@@ -1057,6 +1048,8 @@ __device__ void scatter(Photon* ph,
 			    ph->stokes3 /= phase_func;     		
 			    ph->stokes4 /= phase_func;     		
             }
+
+            else ph->weight /= 4.F; //Phase function normalization
 
             /* Wavelength change */
             new_wavel  = 22.94 + 0.83 * (ph->wavel) + 0.0007 * (ph->wavel)*(ph->wavel);
@@ -1139,6 +1132,8 @@ __device__ void scatter(Photon* ph,
 			    ph->stokes3 *= debias;  
 			    ph->stokes4 *= debias;  
             }
+
+            else ph->weight /= 4.F; //Phase function normalization
 
             // Photon weight reduction due to the aerosol single scattering albedo of the current layer
 			ph->weight *= prof_oc[ilay].ssa;
@@ -1587,6 +1582,7 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 	float theta;	// Angle de deflection polaire de diffusion [rad]
 	float psi;		// Angle azimutal de diffusion [rad]
 	float cTh, sTh;	//cos et sin de l'angle d'incidence du photon sur le dioptre
+    float cThr;
 	
 	float sig, sig2  ;
 	float beta = 0.F;	// Angle par rapport à la verticale du vecteur normal à une facette de vagues 
@@ -1595,14 +1591,14 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 	
 	float alpha ;	//Angle azimutal du vecteur normal a une facette de vagues
 	
-	float nind;
+	float nind, no;
 	float temp;
 	
     // coordinates of the normal to the wave facet in the original axis
 	float nx, ny, nz;
 
     // coordinates of the normal to the wave facet in the local axis (Nx, Ny, Nz)
-	float n_x, n_y, n_z;
+	float n_x, n_y, n_z, normn;
 
 	float s1, s2, s3 ;
     float stokes3, stokes4;
@@ -1626,10 +1622,12 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
     float sign;
     if (ph->loc == SURF0M)  {
         nind = __fdividef(1.f,NH2Od);
+        no   = 1.F;
         sign = -1;
     }
     else  {
         nind = NH2Od;
+        no   = NH2Od;
         sign = 1;
     }
     
@@ -1737,8 +1735,8 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 
            // the facet has coordinates
            // (sin(beta)*cos(alpha), sin(beta)*sin(alpha), cos(beta)) in axis (Nx, Ny, Nz)
-           n_x = sBeta*__cosf( alpha );
-           n_y = sBeta*__sinf( alpha );
+           n_x = sign * sBeta * __cosf( alpha );
+           n_y = sign * sBeta * __sinf( alpha );
            n_z = sign * cBeta;
 
            cTh = -(n_x*ph->vx + n_y*ph->vy + n_z*ph->vz);
@@ -1759,7 +1757,6 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 
     if (le) {
      float sign_le = 1.F;
-     float norm;
      if (count_level==DOWN0M) sign_le = -1.F;
 
      phi = tabphi[ph->iph];
@@ -1772,24 +1769,25 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
          (ph->loc==SURF0M) && (count_level==UP0P))   { // Refraction geometry
         // vector equation for determining the half direction h = - (ni*i + no*o)
         // or h = - (i + nind*o)
-        n_x = (vx*nind - ph->vx);
-        n_y = (vy*nind - ph->vy);
-        n_z = (-vz*nind - ph->vz);
+        // h is pointing toward the incoming ray
+        n_x = sign * (ph->vx - vx*nind) ;
+        n_y = sign * (ph->vy - vy*nind) ;
+        n_z = sign * (ph->vz - vz*nind) ;
      }
      if ((ph->loc==SURF0P) && (count_level==UP0P) ||
          (ph->loc==SURF0M) && (count_level==DOWN0M)) { // Reflection geometry
         // vector equation for determining the half direction h = sign(i dot o) (i + o)
-        n_x = sign * (vx - ph->vx);
-        n_y = sign * (vy - ph->vy);
-        n_z = sign * (vz - ph->vz);
+        n_x = vx - ph->vx;
+        n_y = vy - ph->vy;
+        n_z = vz - ph->vz;
      }
 
      // Normal to the facet in the global frame
      // Normalization of the half direction vector
-     norm = sqrtf(n_x*n_x + n_y*n_y + n_z*n_z);
-     n_x/=norm;
-     n_y/=norm;
-     n_z/=norm;
+     normn = sqrtf(n_x*n_x + n_y*n_y + n_z*n_z);
+     n_x/=normn;
+     n_y/=normn;
+     n_z/=normn;
 
      // Incidence angle
      cTh = -(n_x*ph->vx + n_y*ph->vy + n_z*ph->vz);
@@ -1828,31 +1826,6 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
     float avz = fabs(ph->vz);
     #endif
 
-
-    // Ross et al 2005
-    // Normalization of the slope probability density function taking into acount shadows
-    // used to LE weight, and also to debias random draw of slope in non LE
-    float Anorm;
-    float nu = __fdividef(1.F, tanf(acosf(avz))*(sqrtf(2.) * sig));
-    Anorm = 1.F + __fdividef(__expf(-nu*nu) - nu * sqrtf(PI) * erfcf(nu),2.F * nu * sqrtf(PI));
-    Anorm *= avz;
-
-    // Weighting
-
-    ph->weight *= __fdividef(fabs(cTh), cBeta * Anorm);
-
-    if (le && (ph->loc==SURF0P) && (DIOPTREd!=0)) ph->weight  *=
-          __expf(-(1.F-cBeta*cBeta)/(cBeta*cBeta*sig2)) / sig2  
-        * __fdividef(1.F, cBeta*cBeta*cBeta * fabs(cTh));
-
-    if (le && (ph->loc==SURF0M) && (DIOPTREd!=0))  {
-        if (sTh <= nind) ph->weight  *=
-          __expf(-(1.F-cBeta*cBeta)/(cBeta*cBeta*sig2)) / sig2  
-        //* __fdividef(1.F, cBeta*cBeta*cBeta * fabs(cTh));
-        * __fdividef(1.F, cBeta*cBeta*cBeta);
-        else ph->weight = 0.F;
-    }
-
 	// Rotation of Stokes parameters
 	s1 = ph->stokes1;
 	s2 = ph->stokes2;
@@ -1860,10 +1833,10 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 
 	if( (s1!=s2) || (s3!=0.F) ){
 
-		temp = __fdividef(nx*ph->ux + ny*ph->uy + nz*ph->uz,sTh);
+		temp = __fdividef(n_x*ph->ux + n_y*ph->uy + n_z*ph->uz,sTh);
 		psi = acosf( fmin(1.00F, fmax( -1.F, temp ) ));	
 
-		if( (nx*(ph->uy*ph->vz-ph->uz*ph->vy) + ny*(ph->uz*ph->vx-ph->ux*ph->vz) + nz*(ph->ux*ph->vy-ph->uy*ph->vx) ) <0 ){
+		if( (n_x*(ph->uy*ph->vz-ph->uz*ph->vy) + n_y*(ph->uz*ph->vx-ph->ux*ph->vz) + n_z*(ph->ux*ph->vy-ph->uy*ph->vx) ) <0 ){
 			psi = -psi;
 		}
 
@@ -1884,7 +1857,6 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
         rparper_cross = 0.;
         // DR rat is the energetic reflection factor used to normalize the R and T matrix (see Xun 2014)
 		rat =  __fdividef(ph->stokes1*rper2 + ph->stokes2*rpar2,ph->stokes1+ph->stokes2);
-		//rat = 0.5 * (rper2 + rpar2); // DR see Xun 2014, eq 15 strange ....
 		ReflTot = 0;
 	}
 	else{
@@ -1900,13 +1872,44 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 		ReflTot = 1;
 	}
 
+    // Weighting
+
+    // Ross et al 2005
+    // Normalization of the slope probability density function taking into acount shadows
+    // used to LE weight, and also to debias random draw of slope in non LE
+    float Anorm;
+    float nu = __fdividef(1.F, tanf(acosf(avz))*(sqrtf(2.) * sig));
+    Anorm = 1.F + __fdividef(__expf(-nu*nu) - nu * sqrtf(PI) * erfcf(nu),2.F * nu * sqrtf(PI));
+    Anorm *= avz;
+
+    ph->weight *= __fdividef(fabs(cTh), cBeta * Anorm); // Common to all photons, cBeta for surface area unit correction
+    
+    if (le && (DIOPTREd!=0)) {
+     cThr= -(n_x*vx + n_y*vy + n_z*vz);
+     if ((ph->loc==SURF0P) && (count_level==UP0P) ||
+         (ph->loc==SURF0M) && (count_level==DOWN0M)) { // Reflection geometry
+            ph->weight  *=
+                 __fdividef( __expf(-(1.F-cBeta*cBeta)/(cBeta*cBeta*sig2)) ,  cBeta*cBeta*cBeta * sig2)
+                *__fdividef(1.F, 4.F * fabs(cTh));
+     }
+     if ((ph->loc==SURF0P) && (count_level==DOWN0M) ||
+         (ph->loc==SURF0M) && (count_level==UP0P))   { // Refraction geometry
+            if (sTh <= nind) ph->weight  *=
+                 __fdividef( __expf(-(1.F-cBeta*cBeta)/(cBeta*cBeta*sig2)) ,  cBeta*cBeta*cBeta * sig2)
+                *__fdividef(no*no * fabs(cThr), normn*normn);
+            else ph->weight = 0.F;
+     }
+    }
+
     stokes3 = ph->stokes3;	
     stokes4 = ph->stokes4;	
     int condR;
     condR = (SURd==3)&&(RAND<rat);
 
-	if( (!le && ((ReflTot) || (SURd==1) || (condR))) || (le && ph->loc==SURF0P) ){
-	//if( (ReflTot==1) || (SURd==1) || ( (SURd==3)&&(RAND<rat) ) ){
+	if (  (!le && (condR || (SURd==1) || ReflTot) )
+       || ( le && (ph->loc==SURF0M) && (count_level == DOWN0M) )
+       || ( le && (ph->loc==SURF0P) && (count_level == UP0P)   )
+       ){	// Reflection
 
 		ph->stokes1 *= rper2;
 		ph->stokes2 *= rpar2;
@@ -1919,14 +1922,14 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 		    ph->vz = vz;
         }
         else {
-		    ph->vx += 2.F*cTh*nx;
-		    ph->vy += 2.F*cTh*ny;
-		    ph->vz += 2.F*cTh*nz;
+		    ph->vx += 2.F*cTh*n_x;
+		    ph->vy += 2.F*cTh*n_y;
+		    ph->vz += 2.F*cTh*n_z;
         }
 
-		ph->ux = __fdividef( nx-cTh*ph->vx,sTh );
-		ph->uy = __fdividef( ny-cTh*ph->vy,sTh );
-		ph->uz = __fdividef( nz-cTh*ph->vz,sTh );
+		ph->ux = __fdividef( n_x-cTh*ph->vx,sTh );
+		ph->uy = __fdividef( n_y-cTh*ph->vy,sTh );
+		ph->uz = __fdividef( n_z-cTh*ph->vz,sTh );
 		
 
         // DR Normalization of the reflexion matrix
@@ -1974,9 +1977,20 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 
 	} // Reflection
 
-	else if ((!condR && !le) || (le && (ph->loc==SURF0M) && !ReflTot)){	// Transmission
+	else if (  (!le && !condR) 
+            || ( le && (ph->loc==SURF0M) && (count_level == UP0P  ) && !ReflTot )
+            || ( le && (ph->loc==SURF0P) && (count_level == DOWN0M) )
+            ){	// Transmission
 
 		
+        #ifdef DEBUG_PHOTON
+            if (le) display("TRANS_AVANT_LE", ph);
+            if (!le) display("TRANS_AVANT", ph);
+        #endif
+
+        //if (!le) geo_trans_factor = nind* cot/cTh; // DR Mobley 2015 OK , see Xun 2014
+        //else geo_trans_factor = 1.;
+        //geo_trans_factor = 1.;
         geo_trans_factor = nind* cot/cTh; // DR Mobley 2015 OK , see Xun 2014
 		tpar = __fdividef( 2*cTh,ncTh+ cot);
 		tper = __fdividef( 2*cTh,cTh+ ncot);
@@ -1994,13 +2008,13 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 
         }
         else {
-		    ph->vx = __fdividef(ph->vx,nind) + alpha*nx;
-		    ph->vy = __fdividef(ph->vy,nind) + alpha*ny;
-		    ph->vz = __fdividef(ph->vz,nind) + alpha*nz;
+		    ph->vx = __fdividef(ph->vx,nind) + alpha*n_x;
+		    ph->vy = __fdividef(ph->vy,nind) + alpha*n_y;
+		    ph->vz = __fdividef(ph->vz,nind) + alpha*n_z;
         }
-		ph->ux = __fdividef( nx+cot*ph->vx,sTh )*nind;
-		ph->uy = __fdividef( ny+cot*ph->vy,sTh )*nind;
-		ph->uz = __fdividef( nz+cot*ph->vz,sTh )*nind;
+		ph->ux = __fdividef( n_x+cot*ph->vx,sTh )*nind;
+		ph->uy = __fdividef( n_y+cot*ph->vy,sTh )*nind;
+		ph->uz = __fdividef( n_z+cot*ph->vz,sTh )*nind;
 
         #ifdef SPHERIQUE
         vzn = ph->vx*ph->x + ph->vy*ph->y + ph->vz*ph->z;
@@ -2049,6 +2063,10 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
             }
          }
         }
+        #ifdef DEBUG_PHOTON
+            if (le) display("TRANS_APRES_LE", ph);
+            if (!le) display("TRANS_APRES", ph);
+        #endif
 
 	} // Transmission
 }
@@ -2458,7 +2476,7 @@ __device__ void display(const char* desc, Photon* ph) {
     int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
 
     if (idx==0) {
-        printf("%16s X=(%6.3f,%6.3f,%6.3f) V=(%6.3f,%6.3f,%6.3f) U=(%6.3f,%6.3f,%6.3f) S=(%6.3f,%6.3f,%6.3f,%6.3f) tau=%6.3f weight=%6.3f loc=",
+        printf("%16s X=(%6.3f,%6.3f,%6.3f) V=(%6.3f,%6.3f,%6.3f) U=(%6.3f,%6.3f,%6.3f) S=(%6.3f,%6.3f,%6.3f,%6.3f) tau=%6.3f weight=%11.3e loc=",
                desc,
                ph->x, ph->y, ph->z,
                ph->vx,ph->vy,ph->vz,

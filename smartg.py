@@ -643,7 +643,8 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
         if le!=None : 
             tabTh = le['thv']
             tabPhi = le['phi']
-            norm = 4.0 * np.cos(tabTh).reshape((1,1,-1,1)) * NPhotonsInTot.reshape((1,-1,1,1)) 
+            norm =  np.cos(tabTh).reshape((1,1,-1,1)) * NPhotonsInTot.reshape((1,-1,1,1)) 
+            #norm = 4.0 * np.cos(tabTh).reshape((1,1,-1,1)) * NPhotonsInTot.reshape((1,-1,1,1)) 
         else : 
             tabTh, tabPhi, tabOmega = calcOmega(NBTHETA, NBPHI )
             norm = 2.0 * tabOmega.reshape((1,1,-1,1)) * np.cos(tabTh).reshape((1,1,-1,1)) * NPhotonsInTot.reshape((1,-1,1,1))
