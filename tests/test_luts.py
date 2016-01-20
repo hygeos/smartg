@@ -338,3 +338,23 @@ def test_add_lut():
     m.add_lut(l)
     assert len(m.axes) == 5
     assert m[l.desc].equal(l)
+
+
+def test_swapaxes():
+    l = create_mlut()['data2']
+    l.print_info()
+    l.swapaxes('b', 'c')
+
+    a = l
+    a = a.swapaxes('a', 'c')
+    a = a.swapaxes('a', 'c')
+    assert a == l
+
+    a = l
+    a = a.swapaxes('b', 'c')
+    a = a.swapaxes('a', 'c')
+    a = a.swapaxes('a', 'c')
+    a = a.swapaxes('b', 'c')
+    assert a == l
+
+    assert l.swapaxes(0,2).sub()[:,:,0] == l.sub()[0,:,:].swapaxes(0,1)

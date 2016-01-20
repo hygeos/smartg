@@ -146,10 +146,12 @@ class LUT(object):
         else:
             self.axes = axes
             assert len(axes) == self.ndim
-            for ax in axes:
+            for i, ax in enumerate(axes):
                 if isinstance(ax, np.ndarray):
                     assert ax.ndim == 1
-                elif isinstance(ax, list): pass
+                    assert len(ax) == data.shape[i]
+                elif isinstance(ax, list):
+                    assert len(ax) == data.shape[i]
                 elif ax is None: pass
                 else:
                     raise Exception('Invalid axis type {}'.format(ax.__class__))
@@ -580,6 +582,33 @@ class LUT(object):
             return LUT(data,
                     axes=axes, names=self.names,
                     attrs=self.attrs, desc=self.desc)
+
+
+    def swapaxes(self, axis1, axis2):
+        '''
+        Swaps two axes of the LUT
+
+        Arguments:
+            axis1 and axis2 (int or str): the name or index of the axes to swap
+
+        Returns: the swapped LUT
+        '''
+        if isinstance(axis1, str):
+            axis1 = self.names.index(axis1)
+        if isinstance(axis2, str):
+            axis2 = self.names.index(axis2)
+
+        # swap the names and axes
+        names, axes = [], []
+        for i in xrange(self.ndim):
+            names.append(self.names[i])
+            axes.append(self.axes[i])
+        names[axis1], names[axis2] = names[axis2], names[axis1]
+        axes[axis1], axes[axis2] = axes[axis2], axes[axis1]
+
+        return LUT(self.data.swapaxes(axis1, axis2),
+                   axes=axes, names=names,
+                   attrs=self.attrs, desc=self.desc)
 
 
     def plot(self, *args, **kwargs):
