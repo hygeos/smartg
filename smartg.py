@@ -1020,7 +1020,8 @@ def get_profOc(wl, water, NLAM):
             prof_oc['ssa'][ilam, 0] = 1.
             prof_oc['iphase'][ilam, 0] = 0
 
-            prof_oc['tau'][ilam, 1] = -1.e10
+            prof_oc['tau'][ilam, 1] = -3.37
+            #prof_oc['tau'][ilam, 1] = -1.e10
             prof_oc['ssa'][ilam, 1] = profilesOc[ilam][1]/(profilesOc[ilam][1]+profilesOc[ilam][0])
             prof_oc['iphase'][ilam, 1] = profilesOc[ilam][2]
 

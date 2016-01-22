@@ -79,8 +79,10 @@ class IOP_AOS_WATER(IOP):
             pf0[:,1] = 0.75 * cos(ang)**2
             pf0[:,2] = 0.75 * cos(ang)
             pf0[:,3] = 0.
-            P0 = PhaseFunction(ang, pf0, degrees=False)
-            P1 = PhaseFunction(ang, pf1, degrees=False)
+            P0 = PhaseFunction(ang, 2*pf0, degrees=False)
+            #P0 = PhaseFunction(ang, pf0, degrees=False)
+            P1 = PhaseFunction(ang, 2*pf1, degrees=False)
+            #P1 = PhaseFunction(ang, pf1, degrees=False)
 
 
         return a0, [(b0, P0), (0., P1)]

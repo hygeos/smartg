@@ -281,8 +281,8 @@ __global__ void launchKernel(
                     if (k==0) count_level_le = UP0P;
                     else count_level_le = DOWN0M;
 
-                    for (int iph=0; iph<NBPHId; iph++){
-                      for (int ith=0; ith<NBTHETAd; ith++){
+                    for (int ith=0; ith<NBTHETAd; ith++){
+                      for (int iph=0; iph<NBPHId; iph++){
                         copyPhoton(&ph, &ph_le);
                         ph_le.iph = (iph + iph0)%NBPHId;
                         ph_le.ith = (ith + ith0)%NBTHETAd;
@@ -1610,7 +1610,7 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 	int ReflTot;		// Flag pour la réflexion totale sur le dioptre
 	float cot;			// Cosinus de l'angle de réfraction du photon
 	float ncot, ncTh;	// ncot = nind*cot, ncoi = nind*cTh
-	float tpar, tper;	//
+	float tpar, tper, tparper, tpar2, tper2;	//
     float geo_trans_factor;
     int iter=0;
     float vzn;  // projection of V on the local vertical
@@ -1741,6 +1741,7 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 
            cTh = -(n_x*ph->vx + n_y*ph->vy + n_z*ph->vz);
            theta = acosf( fmin(1.00F-VALMIN, fmax( -(1.F-VALMIN), cTh ) ));
+           //if (theta >= DEMIPI) ph->weight = 0.F;
         }
      } else {
         // Flat surface
@@ -1790,7 +1791,7 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
      n_z/=normn;
 
      // Incidence angle
-     cTh = -(n_x*ph->vx + n_y*ph->vy + n_z*ph->vz);
+     cTh = fabs(-(n_x*ph->vx + n_y*ph->vy + n_z*ph->vz));
      theta = acosf( fmin(1.00F-VALMIN, fmax( -(1.F-VALMIN), cTh ) ));
 
      // facet slope
@@ -1854,7 +1855,12 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 		rpar2 = rpar*rpar;
 		rper2 = rper*rper;
         rparper = rpar * rper;
-        rparper_cross = 0.;
+        rparper_cross = 0.F;
+		tpar = __fdividef( 2.F*cTh,ncTh+ cot);
+		tper = __fdividef( 2.F*cTh,cTh+ ncot);
+        tpar2= tpar * tpar;
+        tper2= tper * tper;
+        tparper = tpar * tper;
         // DR rat is the energetic reflection factor used to normalize the R and T matrix (see Xun 2014)
 		rat =  __fdividef(ph->stokes1*rper2 + ph->stokes2*rpar2,ph->stokes1+ph->stokes2);
 		ReflTot = 0;
@@ -1869,42 +1875,52 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 		rper2 = rper*rper;
         rparper = __fdividef(2.*sTh*sTh*sTh*sTh, 1.-(1.+nind * nind)*cTh*cTh) - 1.; // DR !! Mobley 2015
         rparper_cross = -__fdividef(2.*cTh*sTh*sTh*sqrtf(sTh*sTh-nind*nind), 1.-(1.+nind * nind)*cTh*cTh); // DR !! Mobley 2015
+        tpar = 0.;
+        tper = 0.;
+        tpar2 =0.;
+        tper2 =0.;
+        tparper =0.;
 		ReflTot = 1;
 	}
 
     // Weighting
-
+    float Anorm;
     // Ross et al 2005
     // Normalization of the slope probability density function taking into acount shadows
     // used to LE weight, and also to debias random draw of slope in non LE
-    float Anorm;
     float nu = __fdividef(1.F, tanf(acosf(avz))*(sqrtf(2.) * sig));
     Anorm = 1.F + __fdividef(__expf(-nu*nu) - nu * sqrtf(PI) * erfcf(nu),2.F * nu * sqrtf(PI));
     Anorm *= avz;
 
-    ph->weight *= __fdividef(fabs(cTh), cBeta * Anorm); // Common to all photons, cBeta for surface area unit correction
+    if (!le) ph->weight *= __fdividef(fabs(cTh), cBeta *  Anorm ); // Common to all photons, cBeta for surface area unit correction
     
     if (le && (DIOPTREd!=0)) {
      cThr= -(n_x*vx + n_y*vy + n_z*vz);
+     ph->weight *= __fdividef(fabs(cTh), cBeta  * Anorm ); // Common to all photons, cBeta for surface area unit correction
      if ((ph->loc==SURF0P) && (count_level==UP0P) ||
          (ph->loc==SURF0M) && (count_level==DOWN0M)) { // Reflection geometry
             ph->weight  *=
                  __fdividef( __expf(-(1.F-cBeta*cBeta)/(cBeta*cBeta*sig2)) ,  cBeta*cBeta*cBeta * sig2)
-                *__fdividef(1.F, 4.F * fabs(cTh));
+                *__fdividef(1.F, 4.F * fabs(cTh) );
      }
      if ((ph->loc==SURF0P) && (count_level==DOWN0M) ||
          (ph->loc==SURF0M) && (count_level==UP0P))   { // Refraction geometry
             if (sTh <= nind) ph->weight  *=
                  __fdividef( __expf(-(1.F-cBeta*cBeta)/(cBeta*cBeta*sig2)) ,  cBeta*cBeta*cBeta * sig2)
-                *__fdividef(no*no * fabs(cThr), normn*normn);
+                *__fdividef(nind*nind * fabs(cThr), normn*normn);
+                //*__fdividef(no*no * fabs(cThr), normn*normn);
             else ph->weight = 0.F;
+     }
+     if (ph->weight <= 1e-15) {
+         ph->weight = 0.;
+         //return;
      }
     }
 
     stokes3 = ph->stokes3;	
     stokes4 = ph->stokes4;	
-    int condR;
-    condR = (SURd==3)&&(RAND<rat);
+    int condR=1;
+    if (!le) condR = (SURd==3)&&(RAND<rat);
 
 	if (  (!le && (condR || (SURd==1) || ReflTot) )
        || ( le && (ph->loc==SURF0M) && (count_level == DOWN0M) )
@@ -1979,7 +1995,7 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 
 	else if (  (!le && !condR) 
             || ( le && (ph->loc==SURF0M) && (count_level == UP0P  ) && !ReflTot )
-            || ( le && (ph->loc==SURF0P) && (count_level == DOWN0M) )
+            || ( le && (ph->loc==SURF0P) && (count_level == DOWN0M) && !ReflTot )
             ){	// Transmission
 
 		
@@ -1989,17 +2005,21 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
         #endif
 
         //if (!le) geo_trans_factor = nind* cot/cTh; // DR Mobley 2015 OK , see Xun 2014
-        //else geo_trans_factor = 1.;
         //geo_trans_factor = 1.;
+        //geo_trans_factor = nind * sqrtf(1.F - 1.F/(nind*nind) *sTh*sTh )/cTh;
         geo_trans_factor = nind* cot/cTh; // DR Mobley 2015 OK , see Xun 2014
-		tpar = __fdividef( 2*cTh,ncTh+ cot);
-		tper = __fdividef( 2*cTh,cTh+ ncot);
 		
-		ph->stokes2 *= tpar*tpar*geo_trans_factor;
-		ph->stokes1 *= tper*tper*geo_trans_factor;
-		ph->stokes3 *= tpar*tper*geo_trans_factor; //DR positive factor Mobley 2015
-		ph->stokes4 *= tpar*tper*geo_trans_factor; //DR positive factor Mobley 2015
+		ph->stokes1 *= tper2*geo_trans_factor;
+		ph->stokes2 *= tpar2*geo_trans_factor;
+		ph->stokes3 *= tparper*geo_trans_factor;
+		ph->stokes4 *= tparper*geo_trans_factor;
 		
+        #ifdef DEBUG
+        int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
+        if (idx==0 && count_level==UP0P && ph->loc==SURF0M) printf("%i %i %i %.0f %f %f %f %f %f %f %10.3e\n", le, ph->loc, count_level, sign,
+                            cTh, tabthv[ph->ith]*180/PI, tabphi[ph->iph]*180/PI, tpar2, ph->stokes1+ph->stokes2, geo_trans_factor,ph->weight);
+        #endif
+
 		alpha  = __fdividef(cTh,nind) - cot;
         if (le) {
 		    ph->vx = vx;
