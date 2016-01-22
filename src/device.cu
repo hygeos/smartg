@@ -110,7 +110,7 @@ __global__ void launchKernel(
 	// Création de variable propres à chaque thread
 	unsigned long long nbPhotonsThr = 0; 	// Nombre de photons traités par le thread
 	
-	Photon ph, ph_le; 		// On associe une structure de photon au thread
+	Photon ph, ph_le, ph_le2; 		// On associe une structure de photon au thread
 	ph.loc = NONE;	// Initialement le photon n'est nulle part, il doit être initialisé
 	
     atomicAdd(nThreadsActive, 1);
@@ -225,8 +225,6 @@ __global__ void launchKernel(
                             copyPhoton(&ph, &ph_le);
                             ph_le.iph = (iph + iph0)%NBPHId;
                             ph_le.ith = (ith + ith0)%NBTHETAd;
-                            //ph_le.iph = iph;
-                            //ph_le.ith = ith;
                             scatter(&ph_le, prof_atm, prof_oc, faer, foce,
                                     1, tabthv, tabphi,
                                     count_level_le, &etatThr , &configThr);
@@ -249,6 +247,50 @@ __global__ void launchKernel(
                     }
                 }
             }
+
+            /* TEST DOUBLE LOCAL ESTIMATE IN OCEAN */
+            /* Scattering Double Local Estimate in Ocean in case of dioptre 
+            if (LEd == 1 && ph.loc==OCEAN && SIMd != -2) {
+                int NK, up_level, down_level, count_level_le;
+                int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
+                int iph0 = idx%NBPHId;
+                copyPhoton(&ph, &ph_le);
+                scatter(&ph_le, prof_atm, prof_oc, faer, foce,
+                            1, tabthv, tabphi,
+                            UP0M2, &etatThr , &configThr);
+                ph_le.weight *= expf(-fabs(ph_le.tau/ph_le.vz));
+                ph_le.loc=SURF0M;
+                ph_le.tau=0.F;
+                NK=2;
+                up_level = UP0P;
+                down_level = DOWN0M;
+                for(int k=0; k<NK; k++){
+                    if (k==0) count_level_le = up_level;
+                    else count_level_le = down_level;
+
+                    for (int iph=0; iph<NBPHId; iph++){
+                        for (int ith=0; ith<NBTHETAd; ith++){
+                            copyPhoton(&ph_le, &ph_le2);
+                            ph_le2.iph = (iph + iph0)%NBPHId;
+                            ph_le2.ith = (ith + ith0)%NBTHETAd;
+
+                            surfaceAgitee(&ph_le2, 1, tabthv, tabphi,
+                                count_level_le, &etatThr , &configThr);
+
+                            #ifdef DEBUG_PHOTON
+                            if (k==0) display("SURFACE LE2 UP", &ph_le2);
+                            else display("SURFACE LE2 DOWN", &ph_le2);
+                            #endif
+                            countPhoton(&ph_le2, prof_atm, tabthv, tabphi, count_level_le, errorcount, tabPhotons, NPhotonsOut);
+
+                            if (k==0) { 
+                             countPhoton(&ph_le2, prof_atm, tabthv, tabphi, UPTOA , errorcount, tabPhotons, NPhotonsOut);
+                            }
+
+                        }
+                    }
+                }
+            } */ //Double LE
 
             /* Scattering Propagation */
             scatter(&ph, prof_atm, prof_oc, faer, foce,
@@ -273,7 +315,9 @@ __global__ void launchKernel(
            if( ENVd==0 ) { // si pas d effet d environnement
 			if( DIOPTREd!=3 ) {
                 /* Surface Local Estimate */
-                if ((LEd == 1) && (SIMd != -2)) {
+                if (LEd == 1 && SIMd != -2) {
+                /* TEST Double LE */
+                //if ((LEd == 1) && (SIMd != -2 && ph.loc == SURF0P)) {
                   int NK=2, count_level_le;
                   int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
                   int iph0 = idx%NBPHId;
@@ -286,8 +330,6 @@ __global__ void launchKernel(
                         copyPhoton(&ph, &ph_le);
                         ph_le.iph = (iph + iph0)%NBPHId;
                         ph_le.ith = (ith + ith0)%NBTHETAd;
-                        //ph_le.iph = iph;
-                        //ph_le.ith = ith;
 
                         surfaceAgitee(&ph_le, 1, tabthv, tabphi,
                                 count_level_le, &etatThr , &configThr);
@@ -300,7 +342,7 @@ __global__ void launchKernel(
                         countPhoton(&ph_le, prof_atm, tabthv, tabphi, count_level_le, errorcount, tabPhotons, NPhotonsOut);
                         if (k==0) { 
                             #ifdef SPHERIQUE
-                            if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA , &etatThr , &configThr);
+                            move_sp(&ph_le, prof_atm, 1, UPTOA , &etatThr , &configThr);
                             #endif
                             countPhoton(&ph_le, prof_atm, tabthv, tabphi, UPTOA , errorcount, tabPhotons, NPhotonsOut);
                         }
@@ -826,10 +868,18 @@ __device__ void scatter(Photon* ph,
         /* in case of LE the photon units vectors, scattering angle and Psi rotation angle are determined by output zenith and azimuth angles*/
         float thv, phi;
         float vx ,vy ,vz;
-        if (count_level==DOWN0P) sign = -1.0F;
-        else sign = 1.0F;
-        phi = tabphi[ph->iph];
-        thv = tabthv[ph->ith];
+
+        if (count_level==UP0M2) { /* In case of Double Local Estimate, the first direction is chosen randomly */
+			phi = RAND * DEUXPI;
+            thv = RAND * DEMIPI;
+            sign = 1.0F;
+        }
+        else {
+            if (count_level==DOWN0P) sign = -1.0F;
+            else sign = 1.0F;
+            phi = tabphi[ph->iph];
+            thv = tabthv[ph->ith];
+        }
         vx = __cosf(phi) * __sinf(thv);
         vy = __sinf(phi) * __sinf(thv);
         vz = sign * __cosf(thv);

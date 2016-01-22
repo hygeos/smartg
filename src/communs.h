@@ -56,6 +56,7 @@
 #define DOWN0M	2
 #define UP0P	3
 #define UP0M	4
+#define UP0M2	5
 
 
 // List of errors
