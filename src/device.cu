@@ -1591,7 +1591,7 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 	
 	float alpha ;	//Angle azimutal du vecteur normal a une facette de vagues
 	
-	float nind, no;
+	float nind;
 	float temp;
 	
     // coordinates of the normal to the wave facet in the original axis
@@ -1622,12 +1622,10 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
     float sign;
     if (ph->loc == SURF0M)  {
         nind = __fdividef(1.f,NH2Od);
-        no   = 1.F;
         sign = -1;
     }
     else  {
         nind = NH2Od;
-        no   = NH2Od;
         sign = 1;
     }
     
@@ -1708,8 +1706,6 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
         // DR rejection method: to exclude unphysical azimuth (leading to incident angle theta >=PI/2)
         // DR we continue until acceptable value for alpha
 
-        beta = atanf( sig*sqrtf(-__logf(RAND)) );
-
         while (theta >= DEMIPI) {
            iter++;
            if (iter >= 100) {
@@ -1741,7 +1737,6 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 
            cTh = -(n_x*ph->vx + n_y*ph->vy + n_z*ph->vz);
            theta = acosf( fmin(1.00F-VALMIN, fmax( -(1.F-VALMIN), cTh ) ));
-           //if (theta >= DEMIPI) ph->weight = 0.F;
         }
      } else {
         // Flat surface
@@ -1834,10 +1829,10 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 
 	if( (s1!=s2) || (s3!=0.F) ){
 
-		temp = __fdividef(n_x*ph->ux + n_y*ph->uy + n_z*ph->uz,sTh);
+		temp = __fdividef(nx*ph->ux + ny*ph->uy + nz*ph->uz,sTh);
 		psi = acosf( fmin(1.00F, fmax( -1.F, temp ) ));	
 
-		if( (n_x*(ph->uy*ph->vz-ph->uz*ph->vy) + n_y*(ph->uz*ph->vx-ph->ux*ph->vz) + n_z*(ph->ux*ph->vy-ph->uy*ph->vx) ) <0 ){
+		if( (nx*(ph->uy*ph->vz-ph->uz*ph->vy) + ny*(ph->uz*ph->vx-ph->ux*ph->vz) + nz*(ph->ux*ph->vy-ph->uy*ph->vx) ) <0 ){
 			psi = -psi;
 		}
 
@@ -1892,11 +1887,10 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
     Anorm = 1.F + __fdividef(__expf(-nu*nu) - nu * sqrtf(PI) * erfcf(nu),2.F * nu * sqrtf(PI));
     Anorm *= avz;
 
-    if (!le) ph->weight *= __fdividef(fabs(cTh), cBeta *  Anorm ); // Common to all photons, cBeta for surface area unit correction
+    ph->weight *= __fdividef(fabs(cTh), cBeta *  Anorm ); // Common to all photons, cBeta for surface area unit correction
     
     if (le && (DIOPTREd!=0)) {
      cThr= -(n_x*vx + n_y*vy + n_z*vz);
-     ph->weight *= __fdividef(fabs(cTh), cBeta  * Anorm ); // Common to all photons, cBeta for surface area unit correction
      if ((ph->loc==SURF0P) && (count_level==UP0P) ||
          (ph->loc==SURF0M) && (count_level==DOWN0M)) { // Reflection geometry
             ph->weight  *=
@@ -1908,7 +1902,6 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
             if (sTh <= nind) ph->weight  *=
                  __fdividef( __expf(-(1.F-cBeta*cBeta)/(cBeta*cBeta*sig2)) ,  cBeta*cBeta*cBeta * sig2)
                 *__fdividef(nind*nind * fabs(cThr), normn*normn);
-                //*__fdividef(no*no * fabs(cThr), normn*normn);
             else ph->weight = 0.F;
      }
      if (ph->weight <= 1e-15) {
