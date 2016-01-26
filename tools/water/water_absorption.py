@@ -4,6 +4,7 @@
 
 
 from numpy import loadtxt, zeros, NaN, interp
+from os.path import dirname, join
 
 
 def a_w(lam):
@@ -11,14 +12,18 @@ def a_w(lam):
     pure water absorption from Pope and Fry + Palmer and Williams
     '''
 
+    this_dir = dirname(__file__)
+    file_pope97 = join(this_dir, 'data', 'pope97.dat')
+    file_palmer = join(this_dir, 'data', 'palmer74.dat')
+
     # 1) Pope&Fry
-    wl_popefry = loadtxt('tools/water/data/pope97.dat', skiprows=6, usecols=(0,))
-    aw_popefry = loadtxt('tools/water/data/pope97.dat', skiprows=6, usecols=(1,))
+    wl_popefry = loadtxt(file_pope97, skiprows=6, usecols=(0,))
+    aw_popefry = loadtxt(file_pope97, skiprows=6, usecols=(1,))
     aw_popefry *= 100. # convert cm-1 => m-1
 
     # 2) Palmer&Williams
-    wl_palmerw = loadtxt('tools/water/data/palmer74.dat', skiprows=5, usecols=(0,))[::-1]
-    aw_palmerw = loadtxt('tools/water/data/palmer74.dat', skiprows=5, usecols=(1,))[::-1]
+    wl_palmerw = loadtxt(file_palmer, skiprows=5, usecols=(0,))[::-1]
+    aw_palmerw = loadtxt(file_palmer, skiprows=5, usecols=(1,))[::-1]
     aw_palmerw *= 100. # convert cm-1 => m-1
 
     if not isinstance(lam,float) :
