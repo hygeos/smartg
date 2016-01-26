@@ -73,7 +73,7 @@ def phase_view(mlut, ipha=None, fig= None, axarr=None, iw=0):
         fig, axarr = subplots(2, 2)
         fig.set_size_inches(10, 6)
         
-    if ipha==None : ni= unique(mlut['IPHA'].__getitem__(key)) 
+    if ipha==None : ni= unique(mlut['iphase'].__getitem__(key)) 
     else:ni=[ipha]
     
     for i in ni:
@@ -121,9 +121,9 @@ def atm_view(mlut, ipha=None, fig=None, ax=None, iw=0):
         fig, ax = subplots(1, 1)
         fig.set_size_inches(5, 5)
     
-    nd = mlut['H'].ndim
+    nd = mlut['tau'].ndim
     if nd>1:
-        wi = mlut['H'].names.index('Wavelength') # Wavelength index
+        wi = mlut['tau'].names.index('Wavelength') # Wavelength index
         key = [slice(None)]*nd
         key[wi] = iw
         key=tuple(key)
@@ -133,18 +133,18 @@ def atm_view(mlut, ipha=None, fig=None, ax=None, iw=0):
         key=tuple([slice(None)])
         labw=''
         
-    z = mlut['H'].axis('ALT',aslut=True)
+    z = mlut['tau'].axis('ALT',aslut=True)
     Dz = z.apply(np.gradient)
     Dz = Dz.apply(abs,'Dz')
-    Dtau = mlut['H'].sub().__getitem__(key).apply(np.gradient,'Dtau')
+    Dtau = mlut['tau'].sub().__getitem__(key).apply(np.gradient,'Dtau')
     Tot = (Dtau / Dz)
-    Ext = Tot * (1. -mlut['percent_abs'].sub().__getitem__(key))
-    Gas = Tot * mlut['percent_abs'].sub().__getitem__(key)
-    DtauR = mlut['hmol'].sub().__getitem__(key).apply(np.gradient,'DtauR')
+    Ext = Tot * (1. -mlut['abs'].sub().__getitem__(key))
+    Gas = Tot * mlut['abs'].sub().__getitem__(key)
+    DtauR = mlut['taumol'].sub().__getitem__(key).apply(np.gradient,'DtauR')
     ExtR = (DtauR / Dz)
-    ExtA = Ext * mlut['XDEL'].sub().__getitem__(key)
-    ScaA = ExtA * mlut['XSSA'].sub().__getitem__(key)
-    AbsA = ExtA * (1.-mlut['XSSA'].sub().__getitem__(key))
+    ExtA = Ext * (1-mlut['pmol']).sub().__getitem__(key)
+    ScaA = ExtA * mlut['ssa'].sub().__getitem__(key)
+    AbsA = ExtA * (1.-mlut['ssa'].sub().__getitem__(key))
     if (np.max(Gas[:]) > 0.) : ax.semilogx(Gas[:],z[:], 'g:',linewidth=3,label=r'$\sigma_{abs}^{gas}$')
     ax.semilogx(ExtR[:],z[:], 'b-.',linewidth=2, label=r'$\sigma_{sca}^{R}$' )
     if (np.max(AbsA[:]) > 0.) : ax.semilogx(AbsA[:],z[:],'r-',label=r'$\sigma_{abs}^{a+c}$')
@@ -160,9 +160,9 @@ def atm_view(mlut, ipha=None, fig=None, ax=None, iw=0):
     
     try:        
         i=0
-        ax.annotate('%i'%(mlut['IPHA'].sub().__getitem__(key)[0]),xy=(1e-5,47))
+        ax.annotate('%i'%(mlut['iphase'].sub().__getitem__(key)[0]),xy=(1e-5,47))
         for k in range(mlut.axes['ALT'].shape[0]):
-            i0 = mlut['IPHA'].sub().__getitem__(key)[k]
+            i0 = mlut['iphase'].sub().__getitem__(key)[k]
             if i0 != i :
                 zl = mlut.axes['ALT'][k]
                 ax.plot([1e-6,10],[zl+1,zl+1],'k--')
