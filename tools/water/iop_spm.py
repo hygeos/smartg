@@ -100,7 +100,7 @@ class IOP_SPM(IOP):
             pf0[:,0] = 0.75 * cos(ang)**2
             pf0[:,2] = 0.75 * cos(ang)
             pf0[:,3] = 0.
-            P0 = PhaseFunction(ang, pf0, degrees=False)
+            P0 = PhaseFunction(ang, 2*pf0, degrees=False)
 
             # particles (troncature)
             itronc = int(NANG * ang_trunc/180.)
@@ -126,7 +126,7 @@ class IOP_SPM(IOP):
                     integ_ff_back += dtheta*((sin1*pm1+sin2*pm2)/3. + (sin1*pm2+sin2*pm1)/6.)
             rat1 = integ_ff/2.
             pf1 *= 1/rat1
-            P1 = PhaseFunction(ang, pf1, degrees=False, coef_trunc=rat1)
+            P1 = PhaseFunction(ang, 2*pf1, degrees=False, coef_trunc=rat1)
 
         return atot, [(bw, P0), (bp, P1)]
 
