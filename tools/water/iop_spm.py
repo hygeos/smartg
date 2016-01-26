@@ -96,8 +96,8 @@ class IOP_SPM(IOP):
 
             # pure water
             pf0 = zeros((NANG, 4), dtype='float64') # pure water phase function
-            pf0[:,0] = 0.75
-            pf0[:,1] = 0.75 * cos(ang)**2
+            pf0[:,1] = 0.75
+            pf0[:,0] = 0.75 * cos(ang)**2
             pf0[:,2] = 0.75 * cos(ang)
             pf0[:,3] = 0.
             P0 = PhaseFunction(ang, pf0, degrees=False)
