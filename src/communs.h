@@ -26,7 +26,7 @@
 // Poids initial du photon
 #define WEIGHTINIT 1.F
 
-#define WEIGHTRR 0.001F
+#define WEIGHTRR 0.1F
 // Détecte les photons très proches du zenith
 #define VALMIN 0.000001F
 

@@ -16,8 +16,10 @@ import numpy as np
 
 wl_1 = array([350.0525, 450.0666, 550.084, 650.099])
 
-ablk = array([0.0204, 0.0092, 0.3400, 0.6240])
+aw   = array([0.0204, 0.0092, 0.0565, 0.3400])
+bw   = array([0.0134, 0.0045, 0.0019, 0.0010])
 
+ablk = array([0.0204, 0.0092, 0.3400, 0.6240])
 wblk = array([0.3964, 0.3285, 0.0325, 0.0029])
 
 
@@ -62,8 +64,10 @@ class IOP_AOS_WATER(IOP):
         #
         # pure water coefficients
         #
-        a0 = ablk[i1]
-        b0 = a0*wblk[i1]/(1.-wblk[i1])
+        #a0 = ablk[i1]
+        #b0 = a0*wblk[i1]/(1.-wblk[i1])
+        a0 = aw[i1]
+        b0 = bw[i1]
         #
         # phase function
         #
@@ -75,8 +79,8 @@ class IOP_AOS_WATER(IOP):
             # pure water
             pf0 = zeros((NANG, 4), dtype='float64') # pure water phase function with 0 depol factor
             pf1 = zeros((NANG, 4), dtype='float64')
-            pf0[:,0] = 0.75
-            pf0[:,1] = 0.75 * cos(ang)**2
+            pf0[:,1] = 0.75
+            pf0[:,0] = 0.75 * cos(ang)**2
             pf0[:,2] = 0.75 * cos(ang)
             pf0[:,3] = 0.
             P0 = PhaseFunction(ang, 2*pf0, degrees=False)
