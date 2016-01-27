@@ -125,17 +125,14 @@ __device__ void scatter(Photon* ph,
 
 /* surfaceAgitee
 * Reflexion sur une surface agitée ou plane en fonction de la valeur de DIOPTRE
-* //TODO: transmission vers l'océan et/ou reflexion totale
 */
-__device__ void surfaceAgitee_old(Photon*, philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr);
-
 __device__ void surfaceAgitee(Photon*, int le, float* tabthv, float* tabphi, int count_level , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr);
 
 
 /* surfaceLambertienne
 * Reflexion sur une surface lambertienne
 */
-__device__ void surfaceLambertienne(Photon* , struct Spectrum *spectrum, philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr);
+__device__ void surfaceLambertienne(Photon*, int le, float* tabthv, float* tabphi, struct Spectrum *spectrum, philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr);
 
 
 /* exit

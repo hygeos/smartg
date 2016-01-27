@@ -326,7 +326,7 @@ __global__ void launchKernel(
                     if (k==0) count_level_le = UP0P;
                     else count_level_le = DOWN0M;
 
-                    for (int ith=0; ith<NBTHETAd; ith++){
+                for (int ith=0; ith<NBTHETAd; ith++){
                       for (int iph=0; iph<NBPHId; iph++){
                         copyPhoton(&ph, &ph_le);
                         ph_le.iph = (iph + iph0)%NBPHId;
@@ -355,20 +355,35 @@ __global__ void launchKernel(
                         count_level, &etatThr , &configThr);
             }
 
-			else
-				surfaceLambertienne(&ph, spectrum, &etatThr , &configThr);
-           }
+			else { 
+                if (LEd == 1 && SIMd != -2) {
+                  int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
+                  int iph0 = idx%NBPHId;
+                  for (int ith=0; ith<NBTHETAd; ith++){
+                    for (int iph=0; iph<NBPHId; iph++){
+                        copyPhoton(&ph, &ph_le);
+                        ph_le.iph = (iph + iph0)%NBPHId;
+                        ph_le.ith = (ith + ith0)%NBTHETAd;
+				        surfaceLambertienne(&ph_le, 1, tabthv, tabphi, spectrum, &etatThr , &configThr);
+                        countPhoton(&ph_le, prof_atm, tabthv, tabphi, UP0P,  errorcount, tabPhotons, NPhotonsOut);
+                        countPhoton(&ph_le, prof_atm, tabthv, tabphi, UPTOA, errorcount, tabPhotons, NPhotonsOut);
+                    }
+                  }
+                }
+				surfaceLambertienne(&ph, 0, tabthv, tabphi, spectrum, &etatThr , &configThr);
+            } // DIOPTRE=!3
+           } // ENV=0
 
            else {
                 float dis=0;
                 dis = sqrtf((ph.x-X0d)*(ph.x-X0d) +(ph.y-Y0d)*(ph.y-Y0d));
                 if( dis > ENV_SIZEd) {
-                    surfaceLambertienne(&ph, spectrum, &etatThr , &configThr);
+                    surfaceLambertienne(&ph, 0, tabthv, tabphi, spectrum, &etatThr , &configThr);
                 }
                 else {
                     surfaceAgitee(&ph, 0, tabthv, tabphi, count_level, &etatThr , &configThr);
                 }
-           }
+           } // ENV=1
             #ifdef DEBUG_PHOTON
              display("SURFACE", &ph);
             #endif
@@ -380,11 +395,24 @@ __global__ void launchKernel(
         //
         // -> in SEAFLOOR
         if(ph.loc == SEAFLOOR){
-            surfaceLambertienne(&ph, spectrum, &etatThr , &configThr);
+           if (LEd == 1 && SIMd != -2) {
+              int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
+              int iph0 = idx%NBPHId;
+              for (int ith=0; ith<NBTHETAd; ith++){
+                for (int iph=0; iph<NBPHId; iph++){
+                    copyPhoton(&ph, &ph_le);
+                    ph_le.iph = (iph + iph0)%NBPHId;
+                    ph_le.ith = (ith + ith0)%NBTHETAd;
+				    surfaceLambertienne(&ph_le, 1, tabthv, tabphi, spectrum, &etatThr , &configThr);
+                    countPhoton(&ph_le, prof_atm, tabthv, tabphi, UP0M,  errorcount, tabPhotons, NPhotonsOut);
+                }
+              }
+            }
+			surfaceLambertienne(&ph, 0, tabthv, tabphi, spectrum, &etatThr , &configThr);
             #ifdef DEBUG_PHOTON
             display("SEAFLOOR", &ph);
             #endif
-        }
+         }
         syncthreads();
 
 
@@ -1638,10 +1666,10 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 	} // Reflection
 
 	else if (  (!le && !condR) 
-            || ( le && (ph->loc==SURF0M) && (count_level == UP0P  ) )
-            || ( le && (ph->loc==SURF0P) && (count_level == DOWN0M) )
-            //|| ( le && (ph->loc==SURF0M) && (count_level == UP0P  ) && !ReflTot )
-            //|| ( le && (ph->loc==SURF0P) && (count_level == DOWN0M) && !ReflTot )
+            //|| ( le && (ph->loc==SURF0M) && (count_level == UP0P  ) )
+            //|| ( le && (ph->loc==SURF0P) && (count_level == DOWN0M) )
+            || ( le && (ph->loc==SURF0M) && (count_level == UP0P  ) && !ReflTot )
+            || ( le && (ph->loc==SURF0P) && (count_level == DOWN0M) && !ReflTot )
             ){	// Transmission
 
         geo_trans_factor = nind* cot/cTh; // DR Mobley 2015 OK , see Xun 2014, Zhai et al 2010
@@ -1722,7 +1750,7 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 /* surfaceLambertienne
 * Reflexion sur une surface lambertienne
 */
-__device__ void surfaceLambertienne(Photon* ph, struct Spectrum *spectrum, philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr) {
+__device__ void surfaceLambertienne(Photon* ph, int le, float* tabthv, float* tabphi, struct Spectrum *spectrum, philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr) {
 	
 	if( SIMd == -2){ 	// Atmosphère ou océan seuls, la surface absorbe tous les photons
 		ph->loc = ABSORBED;
@@ -1730,13 +1758,26 @@ __device__ void surfaceLambertienne(Photon* ph, struct Spectrum *spectrum, philo
 	}
 	
 	float uxn,vxn,uyn,vyn,uzn,vzn;	// Vecteur du photon après reflexion
-	float cTh2 = RAND;
-	float cTh = sqrtf( cTh2 );
-	float sTh = sqrtf( 1.0F - cTh2 );
-	
-	float phi = RAND*DEUXPI;	//angle azimutal
-	float cPhi = __cosf(phi);
-	float sPhi = __sinf(phi);
+    float thv, phi, vx, vy, vz;
+    float cTh, sTh, cPhi, sPhi;
+
+    if (le) {
+        phi = tabphi[ph->iph];
+        thv = tabthv[ph->ith];
+        vx  = cosf(phi) * sinf(thv);
+        vy  = sinf(phi) * sinf(thv);
+        vz  = cosf(thv);  
+        ph->weight *= vz;
+        cTh = vz;
+    }
+    else {
+	    cTh = sqrtf( RAND );
+	    phi = RAND*DEUXPI;	//angle azimutal
+    }
+
+	sTh = sqrtf( 1.0F - cTh*cTh );
+	cPhi = __cosf(phi);
+	sPhi = __sinf(phi);
 	
     #ifdef SPHERIQUE
 	float icp, isp, ict, ist;	// Sinus et cosinus de l'angle d'impact
@@ -1803,7 +1844,7 @@ __device__ void surfaceLambertienne(Photon* ph, struct Spectrum *spectrum, philo
 
     } // photon not seafloor
 	
-	#endif
+	#endif //SPHERICAL
 	
 	
 	/** calcul u,v new **/
