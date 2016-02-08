@@ -304,17 +304,21 @@ class LUT(object):
 
         # determine the dimensions of the result (for broadcasting coef)
         dims_array = None
-        dims_result = []
+        index0 = []
         for i in xrange(N):
             k = keys[i]
             if isinstance(k, np.ndarray):
+                index0.append(np.zeros_like(k, dtype='int'))
                 if dims_array is None:
                     dims_array = k.shape
-                    dims_result.extend([slice(None)]*k.ndim)
                 else:
                     assert dims_array == k.shape, 'LUTS.__getitem__: all arrays must have same shape ({} != {})'.format(str(dims_array), str(k.shape))
+            elif isinstance(k, slice):
+                index0.append(k)
             else:
-                dims_result.append(None)
+                index0.append(0)
+
+        shp_res = np.zeros(1).reshape([1]*self.ndim)[index0].shape
 
         # determine the interpolation axes
         # and for those axes, determine the lower index (inf) and the weight
@@ -333,7 +337,7 @@ class LUT(object):
                 inf[inf == self.data.shape[i]-1] -= 1
                 x = k-inf
                 if k.ndim > 0:
-                    x = x[dims_result]
+                    x = x.reshape(shp_res)
             elif isinstance(k, float):
                 interpolate = True
                 inf = int(k)
@@ -852,8 +856,14 @@ class Subsetter(object):
 
         assert len(keys) == self.LUT.ndim
 
+        array_dims_added = True
         for i in xrange(self.LUT.ndim):
-            if keys[i] == slice(None):
+            if isinstance(keys[i], np.ndarray):
+                if array_dims_added:
+                    axes.extend([None]*keys[i].ndim)
+                    names.extend([None]*keys[i].ndim)
+                    array_dims_added = False
+            elif keys[i] == slice(None):
                 axes.append(self.LUT.axes[i])
                 names.append(self.LUT.names[i])
 

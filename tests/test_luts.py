@@ -5,6 +5,7 @@
 from nose.tools import raises
 import numpy as np
 from tools.luts import LUT, MLUT, read_mlut, read_mlut_hdf, merge, Idx
+import itertools
 import os
 
 def create_mlut():
@@ -164,6 +165,38 @@ def test_indexing():
             assert np.allclose(m[d][:,:], m[i][:,:])
         elif m[d].ndim == 3:
             assert np.allclose(m[d][:,:,:], m[i][:,:,:])
+
+
+def test_indexing1():
+    '''
+    check many indexing methods
+    '''
+    def check(i0,i1,i2,i3):
+        inputs = {
+                'i': 0,
+                'f': 0.25,
+                'imf': np.random.random((2,3)),
+                'imi': np.zeros((2,3), dtype='int'),
+                ':': slice(None)
+                }
+        print 'indices are "{},{},{},{}"'.format(i0, i1, i2, i3)
+        i0 = inputs[t0]
+        i1 = inputs[t1]
+        i2 = inputs[t2]
+        i3 = inputs[t3]
+
+        D = np.random.randn(8,9,10,11)
+        L = LUT(D)
+        L[i0,i1,i2,i3].shape
+        L.sub()[i0,i1,i2,i3].shape
+
+    for (t0,t1,t2,t3) in itertools.product(
+            ['i', 'f', 'imi', 'imf', ':'],
+            ['i', 'f', 'imi', 'imf', ':'],
+            ['i', 'f', 'imi', 'imf', ':'],
+            ['i', 'f', 'imi', 'imf', ':'],
+            ):
+        yield check, t0, t1, t2, t3
 
 def test_axis():
     m = create_mlut()
