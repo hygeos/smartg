@@ -1758,21 +1758,28 @@ __device__ void surfaceLambertienne(Photon* ph, int le, float* tabthv, float* ta
 	}
 	
 	float uxn,vxn,uyn,vyn,uzn,vzn;	// Vecteur du photon après reflexion
-    float thv, phi, vx, vy, vz;
+    float phi;
     float cTh, sTh, cPhi, sPhi;
 
     if (le) {
-        phi = tabphi[ph->iph];
-        thv = tabthv[ph->ith];
-        vx  = cosf(phi) * sinf(thv);
-        vy  = sinf(phi) * sinf(thv);
-        vz  = cosf(thv);  
-        ph->weight *= vz;
-        cTh = vz;
+        cTh  = cosf(tabthv[ph->ith]);  
+        phi  = tabphi[ph->iph];
+        ph->weight *= cTh;
     }
     else {
-	    cTh = sqrtf( RAND );
-	    phi = RAND*DEUXPI;	//angle azimutal
+        float ddis=0.0F;
+        if ((LEd==0) || (LEd==1 && RAND>ddis)) {
+            // Standard sampling
+	        cTh = sqrtf( RAND );
+	        phi = RAND*DEUXPI;
+        }
+        else {
+            // DDIS sampling , Buras and Mayer
+            float Om = 0.001;
+	        cTh = sqrtf(1.F-RAND*Om);
+            phi = RAND*DEUXPI;
+            ph->weight *= DEUXPI*(1. -sqrtf(1.F-Om));
+        }
     }
 
 	sTh = sqrtf( 1.0F - cTh*cTh );
@@ -2016,7 +2023,7 @@ __device__ void countPhoton(Photon* ph,
 
     #ifdef DEBUG
     int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
-    if (isnan(weight)) printf("(idx=%d) Error, weight is NaN\n", idx);
+    if (isnan(weight)) printf("(idx=%d) Error, weight is NaN, %d\n", idx,ph->loc);
     if (isnan(s1)) printf("(idx=%d) Error, s1 is NaN\n", idx);
     if (isnan(s2)) printf("(idx=%d) Error, s2 is NaN\n", idx);
     if (isnan(s3)) printf("(idx=%d) Error, s3 is NaN\n", idx);

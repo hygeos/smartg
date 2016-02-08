@@ -1208,10 +1208,12 @@ class Profile(object):
         - O3: total ozone column (Dobson units), or None to use atmospheric
           profile value (default)
         - NO2: activate ON2 absorption (default True)
+        - P0: (optional) Pressure at the sea level, default: surface pressure from AFGL file
     '''
     def __init__(self, atm_filename, aer=None, grid=None, cloud=None,
                 pfgrid=[100., 0.], pfwav=None, tauR=None, ssa=None,
-                lat=45., O3=None, NO2=True, verbose=False, overwrite=False):
+                lat=45., O3=None, NO2=True, verbose=False, overwrite=False, 
+                P0=None):
 
         self.atm_filename = atm_filename
         self.pfwav = pfwav
@@ -1249,6 +1251,10 @@ class Profile(object):
         self.h2o = data[:,6] # H2O density en cm-3
         self.co2 = data[:,7] # CO2 density en cm-3
         self.no2 = data[:,8] # NO2 density en cm-3
+
+        if (P0 != None):
+            self.P *= P0/self.P[-1]
+
 
         # lecture des fichiers US Standard atmosphere pour les autres gaz
         datach4 = np.loadtxt(ch4_filename, comments="#")

@@ -639,14 +639,20 @@ class LUT(object):
         return self
 
 
-    def __plot_1d(self, show_grid=True, swap=False, fmt=None, label=None, **kwargs):
+    def __plot_1d(self, show_grid=True, swap=False, fmt=None, label=None, 
+            vmin=None, vmax=None, **kwargs):
         '''
         plot a 1-dimension LUT, returns self
         '''
-        from pylab import plot, xlabel, ylabel, grid
+        from pylab import plot, xlabel, ylabel, grid, ylim
         ax = self.axes[0]
         if ax is None:
             ax = range(self.shape[0])
+
+        if vmin is None:
+            vmin = np.amin(self.data[~np.isnan(self.data)])
+        if vmax is None:
+            vmax = np.amax(self.data[~np.isnan(self.data)])
 
         if not swap:
             xx = ax
@@ -663,6 +669,7 @@ class LUT(object):
             plot(xx, yy, label=label)
         else:
             plot(xx, yy, fmt, label=label)
+        ylim(vmin,vmax)
         if xlab is not None:
             xlabel(xlab)
         if ylab is not None:
