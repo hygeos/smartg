@@ -659,16 +659,22 @@ class Gas(object):
         self.dens=dens
         self.scalingfact=1.
         self.initcol= self.calcColumn()
+        self.Avogadro=codata.value('Avogadro constant')
 
     def calcColumn(self):
         return simps(self.dens,-self.z) * 1e5 
 
     def setColumn(self,DU=None, Dens=None):
         if DU != None : self.scalingfact = 2.69e16 * DU / self.calcColumn() 
-        if Dens !=None: self.scalingfact = Dens / self.calcColumn()
+        M_H2O=18.015
+        if Dens !=None: self.scalingfact = Dens/ M_H2O * self.Avogadro/ self.calcColumn()
 
     def getDU(self):
         return self.calcColumn() / 2.69e16 * self.scalingfact
+
+    def getDens(self):
+        M_H2O=18.015
+        return self.calcColumn() / self.Avogadro * M_H2O * self.scalingfact
 
     def regrid(self,znew):
         self.dens = trapzinterp(self.dens, self.z, znew)
@@ -787,7 +793,7 @@ class REPTRAN_IBAND(object):
         using temperature T and pressure P, and profile of molecular density of
         various gases stored in densmol
             densmol has shape (Nlayer_atmo, Ngas)
-            densmol[:,0]=h2o
+            densmol[:,0]=gh2o.dens*gh2o.scalingfact
             densmol[:,1]=co2
             densmol[:,2]=go3.dens*go3.scalingfact
             densmol[:,3]=n2o
@@ -1202,18 +1208,20 @@ class Profile(object):
           default value: [100, 0]
         - pfwav: a list of wavelengths over which the phase functions are calculated
           default: None (all wavelengths)
-        - tauR: Rayleigh optical thckness, default None computed from atmospheric profile and wavelength
+        - tauR: Rayleigh optical thickness, default None computed from atmospheric profile and wavelength
         - ssa : arbitrarily set the aerosol signle scatering albedo to a constant value
         - lat: latitude (for Rayleigh optical depth calculation, default=45.)
         - O3: total ozone column (Dobson units), or None to use atmospheric
+          profile value (default)
+        - H2O: total water vapour column (mol cm-2), or None to use atmospheric
           profile value (default)
         - NO2: activate ON2 absorption (default True)
         - P0: (optional) Pressure at the sea level, default: surface pressure from AFGL file
     '''
     def __init__(self, atm_filename, aer=None, grid=None, cloud=None,
                 pfgrid=[100., 0.], pfwav=None, tauR=None, ssa=None,
-                lat=45., O3=None, NO2=True, verbose=False, overwrite=False, 
-                P0=None):
+                lat=45., O3=None, H2O=None, NO2=True, verbose=False, 
+                overwrite=False, P0=None):
 
         self.atm_filename = atm_filename
         self.pfwav = pfwav
@@ -1248,7 +1256,7 @@ class Profile(object):
         self.air = data[:,3] # Air density en cm-3
         o3 = data[:,4] # Ozone density en cm-3
         self.o2 = data[:,5] # O2 density en cm-3
-        self.h2o = data[:,6] # H2O density en cm-3
+        h2o = data[:,6] # H2O density en cm-3
         self.co2 = data[:,7] # CO2 density en cm-3
         self.no2 = data[:,8] # NO2 density en cm-3
 
@@ -1272,6 +1280,8 @@ class Profile(object):
 
         self.go3 = Gas(z,o3)
         self.go3.setColumn(DU=O3)
+        self.gh2o = Gas(z,h2o)
+        self.gh2o.setColumn(Dens=H2O)
 
         #-------------------------------------------
         # optionnal regrid
@@ -1285,8 +1295,9 @@ class Profile(object):
             self.T = interp1d(z, self.T)(znew)
             airnew = trapzinterp(self.air, z, znew)
             o3 = trapzinterp(o3, z, znew)
+            h2o = trapzinterp(h2o, z, znew)
             self.o2 = trapzinterp(self.o2, z, znew)
-            self.h2o = trapzinterp(self.h2o, z, znew)
+            #self.h2o = trapzinterp(self.h2o, z, znew)
             self.co2 = trapzinterp(self.co2, z, znew)
             self.no2 = trapzinterp(self.no2, z, znew)
             self.ch4 = trapzinterp(self.ch4/self.air, z, znew)*airnew
@@ -1297,17 +1308,19 @@ class Profile(object):
             self.air = airnew
 
             self.go3.regrid(znew)
+            self.gh2o.regrid(znew)
 
         self.z = z
         self.lat = lat
         self.O3 = O3
+        self.H2O = H2O
         self.NO2 = NO2
         self.tauR = tauR
         self.ssa = ssa
 
         self.aer = aer
         if self.aer is not None:
-            self.aer.init(z, self.T, self.h2o)
+            self.aer.init(z, self.T, self.gh2o.dens*self.gh2o.scalingfact)
 
         self.cloud = cloud
         if self.cloud is not None:
@@ -1397,7 +1410,7 @@ class Profile(object):
             pfwav = self.pfwav
 
         pro = Profile(self.atm_filename, aer=self.aer, cloud=self.cloud, grid=self.pfgrid,
-                lat=self.lat, O3=self.O3, NO2=self.NO2, verbose=self.verbose, overwrite=self.overwrite)
+                lat=self.lat, O3=self.O3, H2O=self.H2O, NO2=self.NO2, verbose=self.verbose, overwrite=self.overwrite)
 
         # calculate the indices of wl in pfwav
         ind_wl = []
@@ -1524,7 +1537,7 @@ class Profile(object):
 
         if (self.aer is not None) and (list(self.z) != list(self.aer.z)):
             # re-initialize aer if necessary
-            self.aer.init(self.z, self.T, self.h2o)
+            self.aer.init(self.z, self.T, self.gh2o.dens*self.gh2o.scalingfact)
 
         if (self.cloud is not None) and (list(self.z) != list(self.cloud.z)):
             # re-initialize cloud if necessary
@@ -1548,7 +1561,7 @@ class Profile(object):
         if use_reptran:
             Nmol = 8
             densmol = np.zeros((M, Nmol), np.float)
-            densmol[:,0] = self.h2o
+            densmol[:,0] = self.gh2o.dens*self.gh2o.scalingfact
             densmol[:,1] = self.co2
             densmol[:,2] = self.go3.dens*self.go3.scalingfact
             densmol[:,3] = self.n2o
@@ -1556,7 +1569,7 @@ class Profile(object):
             densmol[:,5] = self.ch4
             densmol[:,6] = self.o2
             densmol[:,7] = self.n2
-            xh2o = self.h2o/self.air   # h2o vmr
+            xh2o = self.gh2o.dens*self.gh2o.scalingfact/self.air   # h2o vmr
             datamol = w.calc_profile(self.T, self.P, xh2o, densmol)
         else:
             datamol = np.zeros(M, np.float)
@@ -1653,7 +1666,7 @@ class Profile(object):
         returns a string class descriptor
         (for building a default file name)
         '''
-        S = 'ATM={atmfile}-O3={O3}'.format(atmfile=self.basename, O3=self.O3)
+        S = 'ATM={atmfile}-O3={O3}-H2O={H2O}'.format(atmfile=self.basename, O3=self.O3, H2O=self.H2O)
 
         if self.aer is not None:
             S += '-{}'.format(str(self.aer))
