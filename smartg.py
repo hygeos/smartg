@@ -187,17 +187,15 @@ class Smartg(object):
                 True: use plane parallel geometry (default)
                 False: use spherical shell geometry
 
+            Compilation flags, not available if the kernel is provided as a binary:
+
             - debug: set to True to activate debug mode (optional stdout if problems are detected)
-                NOTE: compilation flag, not available if the kernel is provided as a binary
 
             - alt_move: set to true to activate the alternate move scheme in move_sp.
-                NOTE: compilation flag, not available if the kernel is provided as a binary 
 
             - debug_photon: activate the display of photon path for the thread 0
-                NOTE: compilation flag, not available if the kernel is provided as a binary 
 
             - double : accumulate photons table in double precision, default single
-                NOTE: compilation flag, not available if the kernel is provided as a binary 
         '''
         import pycuda.autoinit
         from pycuda.compiler import SourceModule
@@ -372,7 +370,7 @@ class Smartg(object):
             NBLOOP = min(NBPHOTONS/30, 1e8)
 
         # number of output levels
-        # warning! should be identical to the value defined in communs.h
+        # warning! values defined in communs.h should be < LVL
         NLVL = 5
 
         # number of Stokes parameters of the radiation field
@@ -635,34 +633,28 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
     create and return the final output
     '''
     (NLVL,NPSTK,NLAM,NBTHETA,NBPHI) = tabPhotonsTot.shape
-    tabFinal = np.zeros_like(tabPhotonsTot, dtype='float64')
 
     # normalization in case of radiance
+    # (broadcast everything to dimensions (LVL,NPSTK,LAM,THETA,PHI))
+    norm_npho = NPhotonsInTot.reshape((1,1,-1,1,1))
     if flux is None:
-        # (broadcast to dimensions (LVL, LAM, THETA, PHI))
         if le!=None : 
             tabTh = le['thv']
             tabPhi = le['phi']
-            norm =  np.cos(tabTh).reshape((1,1,-1,1)) * NPhotonsInTot.reshape((1,-1,1,1)) 
-            #norm = 4.0 * np.cos(tabTh).reshape((1,1,-1,1)) * NPhotonsInTot.reshape((1,-1,1,1)) 
+            norm_geo =  np.cos(tabTh).reshape((1,1,1,-1,1))
         else : 
             tabTh, tabPhi, tabOmega = calcOmega(NBTHETA, NBPHI )
-            norm = 2.0 * tabOmega.reshape((1,1,-1,1)) * np.cos(tabTh).reshape((1,1,-1,1)) * NPhotonsInTot.reshape((1,-1,1,1))
+            norm_geo = 2.0 * tabOmega.reshape((1,1,-1,1)) * np.cos(tabTh).reshape((1,1,-1,1))
     else:
-        norm = NPhotonsInTot.reshape((1,-1,1,1))
+        norm_geo = 1.
         tabTh, tabPhi, _ = calcOmega(NBTHETA, NBPHI)
 
-    # I
-    tabFinal[:,0,:,:,:] = (tabPhotonsTot[:,0,:,:,:] + tabPhotonsTot[:,1,:,:,:])/norm
+    # normalization
+    tabFinal = tabPhotonsTot.astype('float64')/(norm_geo*norm_npho)
 
-    # Q
-    tabFinal[:,1,:,:,:] = (tabPhotonsTot[:,0,:,:,:] - tabPhotonsTot[:,1,:,:,:])/norm
-
-    # U
-    tabFinal[:,2,:,:,:] = tabPhotonsTot[:,2,:,:,:]/norm
-
-    # V
-    tabFinal[:,3,:,:,:] = tabPhotonsTot[:,3,:,:,:]/norm
+    # swapaxes : (th, phi) -> (phi, theta)
+    tabFinal = tabFinal.swapaxes(3,4)
+    NPhotonsOutTot = NPhotonsOutTot.swapaxes(2,3)
 
 
     #
@@ -682,38 +674,37 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
         m.set_attr('Wavelength', str(wl))
         ilam = 0
 
-    # swapaxes : (th, phi) -> (phi, theta)
-    m.add_dataset('I_up (TOA)', tabFinal.swapaxes(3,4)[UPTOA,0,ilam,:,:], axnames)
-    m.add_dataset('Q_up (TOA)', tabFinal.swapaxes(3,4)[UPTOA,1,ilam,:,:], axnames)
-    m.add_dataset('U_up (TOA)', tabFinal.swapaxes(3,4)[UPTOA,2,ilam,:,:], axnames)
-    m.add_dataset('V_up (TOA)', tabFinal.swapaxes(3,4)[UPTOA,3,ilam,:,:], axnames)
-    m.add_dataset('N_up (TOA)', NPhotonsOutTot.swapaxes(2,3)[UPTOA,ilam,:,:], axnames)
+    m.add_dataset('I_up (TOA)', tabFinal[UPTOA,0,ilam,:,:], axnames)
+    m.add_dataset('Q_up (TOA)', tabFinal[UPTOA,1,ilam,:,:], axnames)
+    m.add_dataset('U_up (TOA)', tabFinal[UPTOA,2,ilam,:,:], axnames)
+    m.add_dataset('V_up (TOA)', tabFinal[UPTOA,3,ilam,:,:], axnames)
+    m.add_dataset('N_up (TOA)', NPhotonsOutTot[UPTOA,ilam,:,:], axnames)
 
     if OUTPUT_LAYERS & 1:
-        m.add_dataset('I_down (0+)', tabFinal.swapaxes(3,4)[DOWN0P,0,ilam,:,:], axnames)
-        m.add_dataset('Q_down (0+)', tabFinal.swapaxes(3,4)[DOWN0P,1,ilam,:,:], axnames)
-        m.add_dataset('U_down (0+)', tabFinal.swapaxes(3,4)[DOWN0P,2,ilam,:,:], axnames)
-        m.add_dataset('V_down (0+)', tabFinal.swapaxes(3,4)[DOWN0P,3,ilam,:,:], axnames)
-        m.add_dataset('N_down (0+)', NPhotonsOutTot.swapaxes(2,3)[DOWN0P,ilam,:,:], axnames)
+        m.add_dataset('I_down (0+)', tabFinal[DOWN0P,0,ilam,:,:], axnames)
+        m.add_dataset('Q_down (0+)', tabFinal[DOWN0P,1,ilam,:,:], axnames)
+        m.add_dataset('U_down (0+)', tabFinal[DOWN0P,2,ilam,:,:], axnames)
+        m.add_dataset('V_down (0+)', tabFinal[DOWN0P,3,ilam,:,:], axnames)
+        m.add_dataset('N_down (0+)', NPhotonsOutTot[DOWN0P,ilam,:,:], axnames)
 
-        m.add_dataset('I_up (0-)', tabFinal.swapaxes(3,4)[UP0M,0,ilam,:,:], axnames)
-        m.add_dataset('Q_up (0-)', tabFinal.swapaxes(3,4)[UP0M,1,ilam,:,:], axnames)
-        m.add_dataset('U_up (0-)', tabFinal.swapaxes(3,4)[UP0M,2,ilam,:,:], axnames)
-        m.add_dataset('V_up (0-)', tabFinal.swapaxes(3,4)[UP0M,3,ilam,:,:], axnames)
-        m.add_dataset('N_up (0-)', NPhotonsOutTot.swapaxes(2,3)[UP0M,ilam,:,:], axnames)
+        m.add_dataset('I_up (0-)', tabFinal[UP0M,0,ilam,:,:], axnames)
+        m.add_dataset('Q_up (0-)', tabFinal[UP0M,1,ilam,:,:], axnames)
+        m.add_dataset('U_up (0-)', tabFinal[UP0M,2,ilam,:,:], axnames)
+        m.add_dataset('V_up (0-)', tabFinal[UP0M,3,ilam,:,:], axnames)
+        m.add_dataset('N_up (0-)', NPhotonsOutTot[UP0M,ilam,:,:], axnames)
 
     if OUTPUT_LAYERS & 2:
-        m.add_dataset('I_down (0-)', tabFinal.swapaxes(3,4)[DOWN0M,0,ilam,:,:], axnames)
-        m.add_dataset('Q_down (0-)', tabFinal.swapaxes(3,4)[DOWN0M,1,ilam,:,:], axnames)
-        m.add_dataset('U_down (0-)', tabFinal.swapaxes(3,4)[DOWN0M,2,ilam,:,:], axnames)
-        m.add_dataset('V_down (0-)', tabFinal.swapaxes(3,4)[DOWN0M,3,ilam,:,:], axnames)
-        m.add_dataset('N_down (0-)', NPhotonsOutTot.swapaxes(2,3)[DOWN0M,ilam,:,:], axnames)
+        m.add_dataset('I_down (0-)', tabFinal[DOWN0M,0,ilam,:,:], axnames)
+        m.add_dataset('Q_down (0-)', tabFinal[DOWN0M,1,ilam,:,:], axnames)
+        m.add_dataset('U_down (0-)', tabFinal[DOWN0M,2,ilam,:,:], axnames)
+        m.add_dataset('V_down (0-)', tabFinal[DOWN0M,3,ilam,:,:], axnames)
+        m.add_dataset('N_down (0-)', NPhotonsOutTot[DOWN0M,ilam,:,:], axnames)
 
-        m.add_dataset('I_up (0+)', tabFinal.swapaxes(3,4)[UP0P,0,ilam,:,:], axnames)
-        m.add_dataset('Q_up (0+)', tabFinal.swapaxes(3,4)[UP0P,1,ilam,:,:], axnames)
-        m.add_dataset('U_up (0+)', tabFinal.swapaxes(3,4)[UP0P,2,ilam,:,:], axnames)
-        m.add_dataset('V_up (0+)', tabFinal.swapaxes(3,4)[UP0P,3,ilam,:,:], axnames)
-        m.add_dataset('N_up (0+)', NPhotonsOutTot.swapaxes(2,3)[UP0P,ilam,:,:], axnames)
+        m.add_dataset('I_up (0+)', tabFinal[UP0P,0,ilam,:,:], axnames)
+        m.add_dataset('Q_up (0+)', tabFinal[UP0P,1,ilam,:,:], axnames)
+        m.add_dataset('U_up (0+)', tabFinal[UP0P,2,ilam,:,:], axnames)
+        m.add_dataset('V_up (0+)', tabFinal[UP0P,3,ilam,:,:], axnames)
+        m.add_dataset('N_up (0+)', NPhotonsOutTot[UP0P,ilam,:,:], axnames)
 
     # direct transmission
     if NLAM > 1:
@@ -1093,7 +1084,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL,
     errorcount = gpuzeros(NERROR, dtype='uint64')
 
     # Initialize of the parameters
-    tabPhotonsTot = np.zeros((NLVL,NPSTK,NLAM,NBTHETA,NBPHI), dtype=np.float32)
+    tabPhotonsTot = np.zeros((NLVL,NPSTK,NLAM,NBTHETA,NBPHI), dtype=np.float64)
 
     # arrays for counting the input photons (per wavelength)
     NPhotonsIn = gpuzeros(NLAM, dtype=np.uint64)

@@ -1943,6 +1943,7 @@ __device__ void countPhoton(Photon* ph,
 
     #ifdef DOUBLE 
     double *tabCount;                   // pointer to the "counting" array:
+    double dweight, ds1, ds2, ds3, ds4;
     #else                               // may be TOA, or BOA down, and so on
     float *tabCount; 
     #endif
@@ -1964,6 +1965,7 @@ __device__ void countPhoton(Photon* ph,
 	float psi=0.;
 	int ith=0, iphi=0, il=0;
     float s1, s2, s3, s4;
+    int II, JJ;
 
     if (theta != 0.F) {
         ComputePsi(ph, &psi, theta);
@@ -2032,24 +2034,31 @@ __device__ void countPhoton(Photon* ph,
 	// Rangement du photon dans sa case, et incrémentation de variables
 	if(((ith >= 0) && (ith < NBTHETAd)) && ((iphi >= 0) && (iphi < NBPHId)) && (il >= 0) && (il < NLAMd) && (!isnan(weight)))
 	{
+        II = NBTHETAd*NBPHId*NLAMd;
+        JJ = il*NBTHETAd*NBPHId + ith*NBPHId + iphi;
 
         #ifdef DOUBLE 
+            dweight = (double)weight;
+            ds1 = (double)s1;
+            ds2 = (double)s2;
+            ds3 = (double)s3;
+            ds4 = (double)s4;
 
             // select the appropriate level (count_level)
             tabCount = (double*)tabPhotons + count_level*NPSTKd*NBTHETAd*NBPHId*NLAMd;
 
-            DatomicAdd(tabCount+(0 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), (double)weight * (double)s1);
-            DatomicAdd(tabCount+(1 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), (double)weight * (double)s2);
-            DatomicAdd(tabCount+(2 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), (double)weight * (double)s3);
-            DatomicAdd(tabCount+(3 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), (double)weight * (double)s4);
+            DatomicAdd(tabCount+(0*II+JJ), dweight*(ds1+ds2));
+            DatomicAdd(tabCount+(1*II+JJ), dweight*(ds1-ds2));
+            DatomicAdd(tabCount+(2*II+JJ), dweight*ds3);
+            DatomicAdd(tabCount+(3*II+JJ), dweight*ds4);
         #else
             // select the appropriate level (count_level)
             tabCount = (float*)tabPhotons + count_level*NPSTKd*NBTHETAd*NBPHId*NLAMd;
 
-            atomicAdd(tabCount+(0 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), weight * s1);
-            atomicAdd(tabCount+(1 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), weight * s2);
-            atomicAdd(tabCount+(2 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), weight * s3);
-            atomicAdd(tabCount+(3 * NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi), weight * s4);
+            atomicAdd(tabCount+(0*II+JJ), weight * (s1+s2));
+            atomicAdd(tabCount+(1*II+JJ), weight * (s1-s2));
+            atomicAdd(tabCount+(2*II+JJ), weight * s3);
+            atomicAdd(tabCount+(3*II+JJ), weight * s4);
         #endif
         atomicAdd(NPhotonsOut + ((count_level*NLAMd + il)*NBTHETAd + ith)*NBPHId + iphi, 1);
 	}
