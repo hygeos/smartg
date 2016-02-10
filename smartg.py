@@ -685,10 +685,10 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
     m.add_dataset('U_up (TOA)', tabFinal[UPTOA,2,ilam,:,:], axnames)
     m.add_dataset('V_up (TOA)', tabFinal[UPTOA,3,ilam,:,:], axnames)
     if sigma is not None:
-        m.add_dataset('I_up_stdev (TOA)', sigma[UPTOA,0,ilam,:,:], axnames)
-        m.add_dataset('Q_up_stdev (TOA)', sigma[UPTOA,1,ilam,:,:], axnames)
-        m.add_dataset('U_up_stdev (TOA)', sigma[UPTOA,2,ilam,:,:], axnames)
-        m.add_dataset('V_up_stdev (TOA)', sigma[UPTOA,3,ilam,:,:], axnames)
+        m.add_dataset('I_stdev_up (TOA)', sigma[UPTOA,0,ilam,:,:], axnames)
+        m.add_dataset('Q_stdev_up (TOA)', sigma[UPTOA,1,ilam,:,:], axnames)
+        m.add_dataset('U_stdev_up (TOA)', sigma[UPTOA,2,ilam,:,:], axnames)
+        m.add_dataset('V_stdev_up (TOA)', sigma[UPTOA,3,ilam,:,:], axnames)
     m.add_dataset('N_up (TOA)', NPhotonsOutTot[UPTOA,ilam,:,:], axnames)
 
     if OUTPUT_LAYERS & 1:
@@ -697,10 +697,10 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
         m.add_dataset('U_down (0+)', tabFinal[DOWN0P,2,ilam,:,:], axnames)
         m.add_dataset('V_down (0+)', tabFinal[DOWN0P,3,ilam,:,:], axnames)
         if sigma is not None:
-            m.add_dataset('I_down_stdev (0+)', sigma[DOWN0P,0,ilam,:,:], axnames)
-            m.add_dataset('Q_down_stdev (0+)', sigma[DOWN0P,1,ilam,:,:], axnames)
-            m.add_dataset('U_down_stdev (0+)', sigma[DOWN0P,2,ilam,:,:], axnames)
-            m.add_dataset('V_down_stdev (0+)', sigma[DOWN0P,3,ilam,:,:], axnames)
+            m.add_dataset('I_stdev_down (0+)', sigma[DOWN0P,0,ilam,:,:], axnames)
+            m.add_dataset('Q_stdev_down (0+)', sigma[DOWN0P,1,ilam,:,:], axnames)
+            m.add_dataset('U_stdev_down (0+)', sigma[DOWN0P,2,ilam,:,:], axnames)
+            m.add_dataset('V_stdev_down (0+)', sigma[DOWN0P,3,ilam,:,:], axnames)
         m.add_dataset('N_down (0+)', NPhotonsOutTot[DOWN0P,ilam,:,:], axnames)
 
         m.add_dataset('I_up (0-)', tabFinal[UP0M,0,ilam,:,:], axnames)
@@ -708,10 +708,10 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
         m.add_dataset('U_up (0-)', tabFinal[UP0M,2,ilam,:,:], axnames)
         m.add_dataset('V_up (0-)', tabFinal[UP0M,3,ilam,:,:], axnames)
         if sigma is not None:
-            m.add_dataset('I_up_stdev (0-)', sigma[UP0M,0,ilam,:,:], axnames)
-            m.add_dataset('Q_up_stdev (0-)', sigma[UP0M,1,ilam,:,:], axnames)
-            m.add_dataset('U_up_stdev (0-)', sigma[UP0M,2,ilam,:,:], axnames)
-            m.add_dataset('V_up_stdev (0-)', sigma[UP0M,3,ilam,:,:], axnames)
+            m.add_dataset('I_stdev_up (0-)', sigma[UP0M,0,ilam,:,:], axnames)
+            m.add_dataset('Q_stdev_up (0-)', sigma[UP0M,1,ilam,:,:], axnames)
+            m.add_dataset('U_stdev_up (0-)', sigma[UP0M,2,ilam,:,:], axnames)
+            m.add_dataset('V_stdev_up (0-)', sigma[UP0M,3,ilam,:,:], axnames)
         m.add_dataset('N_up (0-)', NPhotonsOutTot[UP0M,ilam,:,:], axnames)
 
     if OUTPUT_LAYERS & 2:
@@ -720,10 +720,10 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
         m.add_dataset('U_down (0-)', tabFinal[DOWN0M,2,ilam,:,:], axnames)
         m.add_dataset('V_down (0-)', tabFinal[DOWN0M,3,ilam,:,:], axnames)
         if sigma is not None:
-            m.add_dataset('I_down_stdev (0-)', sigma[DOWN0M,0,ilam,:,:], axnames)
-            m.add_dataset('Q_down_stdev (0-)', sigma[DOWN0M,1,ilam,:,:], axnames)
-            m.add_dataset('U_down_stdev (0-)', sigma[DOWN0M,2,ilam,:,:], axnames)
-            m.add_dataset('V_down_stdev (0-)', sigma[DOWN0M,3,ilam,:,:], axnames)
+            m.add_dataset('I_stdev_down (0-)', sigma[DOWN0M,0,ilam,:,:], axnames)
+            m.add_dataset('Q_stdev_down (0-)', sigma[DOWN0M,1,ilam,:,:], axnames)
+            m.add_dataset('U_stdev_down (0-)', sigma[DOWN0M,2,ilam,:,:], axnames)
+            m.add_dataset('V_stdev_down (0-)', sigma[DOWN0M,3,ilam,:,:], axnames)
         m.add_dataset('N_down (0-)', NPhotonsOutTot[DOWN0M,ilam,:,:], axnames)
 
         m.add_dataset('I_up (0+)', tabFinal[UP0P,0,ilam,:,:], axnames)
@@ -731,10 +731,10 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
         m.add_dataset('U_up (0+)', tabFinal[UP0P,2,ilam,:,:], axnames)
         m.add_dataset('V_up (0+)', tabFinal[UP0P,3,ilam,:,:], axnames)
         if sigma is not None:
-            m.add_dataset('I_up_stdev (0+)', sigma[UP0P,0,ilam,:,:], axnames)
-            m.add_dataset('Q_up_stdev (0+)', sigma[UP0P,1,ilam,:,:], axnames)
-            m.add_dataset('U_up_stdev (0+)', sigma[UP0P,2,ilam,:,:], axnames)
-            m.add_dataset('V_up_stdev (0+)', sigma[UP0P,3,ilam,:,:], axnames)
+            m.add_dataset('I_stdev_up (0+)', sigma[UP0P,0,ilam,:,:], axnames)
+            m.add_dataset('Q_stdev_up (0+)', sigma[UP0P,1,ilam,:,:], axnames)
+            m.add_dataset('U_stdev_up (0+)', sigma[UP0P,2,ilam,:,:], axnames)
+            m.add_dataset('V_stdev_up (0+)', sigma[UP0P,3,ilam,:,:], axnames)
         m.add_dataset('N_up (0+)', NPhotonsOutTot[UP0P,ilam,:,:], axnames)
 
     # direct transmission
