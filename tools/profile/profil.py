@@ -329,16 +329,21 @@ class AeroOPAC(object):
     def __str__(self):
         return 'AER={base}-AOT={aot}'.format(base=self.basename, aot=self.__tau)
         
-    def setphase(self, filename):
+    def setphase(self, filename, standard=False):
         '''
-        returns the phase matrix for all layers
+        read the phase matrix for all layers
 
-        filename where the phase matrix is stored (Smart-g format)
+        filename where the phase matrix is stored (Smart-g format as defaut, otherwise standard)
         '''
         data = np.loadtxt(filename)
         M=len(self.z)
         theta = data[:,0]
         pha=data[:,1:]
+        if standard:
+            pha[:,0] = data[:,1] + data[:,2]
+            pha[:,1] = data[:,1] - data[:,2]
+            pha[:,2] = data[:,3]
+            pha[:,3] = data[:,4]
         self.phases = []
 
         for m in range(1, M):   # not the top boundary
