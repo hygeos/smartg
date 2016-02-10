@@ -268,7 +268,7 @@ class Smartg(object):
              NBTHETA=45, NBPHI=90, NF=1e6,
              OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
              NBLOOP=None, progress=True,
-             le=None, flux=None):
+             le=None, flux=None, stdev=True):
         '''
         Run a SMART-G simulation
 
@@ -341,8 +341,10 @@ class Smartg(object):
             - le: Local Estimate method activation (by providing a dictionnary of two float32 arrays of zenith and azimuth angles in radian
                   for output), default cone sampling
                 NOTE: Overwrite NBPHI and NBTHETA
-            
+
             - flux: if specified output is 'planar' or 'spherical' flux instead of radiance
+
+            - stdev: calculate the standard deviation between each kernel run
 
 
         Return value:
@@ -517,18 +519,20 @@ class Smartg(object):
         # Loop and kernel call
         time_before_loop = datetime.now()
         (NPhotonsInTot,
-                tabPhotonsTot, errorcount, NPhotonsOutTot
+                tabPhotonsTot, errorcount, NPhotonsOutTot, sigma, Nkernel
                 ) = loop_kernel(NBPHOTONS, faer, foce,
                                 NLVL, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                                 NLAM, self.double, self.kernel, p, X0, le, spectrum,
                                 to_gpu(prof_atm), to_gpu(prof_oc),
-                                wl_proba_icdf, SEED)
+                                wl_proba_icdf, SEED, stdev)
         attrs['kernel time (s)'] = (datetime.now() - time_before_loop).total_seconds()
+        attrs['number of kernel iterations'] = Nkernel
         attrs.update(self.common_attrs)
 
         # finalization
         output = finalize(tabPhotonsTot, wavelengths, NPhotonsInTot, errorcount, NPhotonsOutTot,
-                           OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, phasesAtm, taumol, tauaer, le=le, flux=flux)
+                           OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, phasesAtm,
+                           taumol, tauaer, sigma, le=le, flux=flux)
         output.set_attr('processing time (s)', (datetime.now() - t0).total_seconds())
 
         p.finish('Done! | Received {:.1%} of {:.3g} photons ({:.1%})'.format(
@@ -628,7 +632,7 @@ def calcOmega(NBTHETA, NBPHI):
 
 def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
         OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, phasesAtm,
-        taumol, tauaer, le=None, flux=None):
+        taumol, tauaer, sigma, le=None, flux=None):
     '''
     create and return the final output
     '''
@@ -651,9 +655,11 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
 
     # normalization
     tabFinal = tabPhotonsTot.astype('float64')/(norm_geo*norm_npho)
+    sigma /= norm_geo
 
     # swapaxes : (th, phi) -> (phi, theta)
     tabFinal = tabFinal.swapaxes(3,4)
+    sigma = sigma.swapaxes(3,4)
     NPhotonsOutTot = NPhotonsOutTot.swapaxes(2,3)
 
 
@@ -678,6 +684,11 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
     m.add_dataset('Q_up (TOA)', tabFinal[UPTOA,1,ilam,:,:], axnames)
     m.add_dataset('U_up (TOA)', tabFinal[UPTOA,2,ilam,:,:], axnames)
     m.add_dataset('V_up (TOA)', tabFinal[UPTOA,3,ilam,:,:], axnames)
+    if sigma is not None:
+        m.add_dataset('I_up_stdev (TOA)', sigma[UPTOA,0,ilam,:,:], axnames)
+        m.add_dataset('Q_up_stdev (TOA)', sigma[UPTOA,1,ilam,:,:], axnames)
+        m.add_dataset('U_up_stdev (TOA)', sigma[UPTOA,2,ilam,:,:], axnames)
+        m.add_dataset('V_up_stdev (TOA)', sigma[UPTOA,3,ilam,:,:], axnames)
     m.add_dataset('N_up (TOA)', NPhotonsOutTot[UPTOA,ilam,:,:], axnames)
 
     if OUTPUT_LAYERS & 1:
@@ -685,12 +696,22 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
         m.add_dataset('Q_down (0+)', tabFinal[DOWN0P,1,ilam,:,:], axnames)
         m.add_dataset('U_down (0+)', tabFinal[DOWN0P,2,ilam,:,:], axnames)
         m.add_dataset('V_down (0+)', tabFinal[DOWN0P,3,ilam,:,:], axnames)
+        if sigma is not None:
+            m.add_dataset('I_down_stdev (0+)', sigma[DOWN0P,0,ilam,:,:], axnames)
+            m.add_dataset('Q_down_stdev (0+)', sigma[DOWN0P,1,ilam,:,:], axnames)
+            m.add_dataset('U_down_stdev (0+)', sigma[DOWN0P,2,ilam,:,:], axnames)
+            m.add_dataset('V_down_stdev (0+)', sigma[DOWN0P,3,ilam,:,:], axnames)
         m.add_dataset('N_down (0+)', NPhotonsOutTot[DOWN0P,ilam,:,:], axnames)
 
         m.add_dataset('I_up (0-)', tabFinal[UP0M,0,ilam,:,:], axnames)
         m.add_dataset('Q_up (0-)', tabFinal[UP0M,1,ilam,:,:], axnames)
         m.add_dataset('U_up (0-)', tabFinal[UP0M,2,ilam,:,:], axnames)
         m.add_dataset('V_up (0-)', tabFinal[UP0M,3,ilam,:,:], axnames)
+        if sigma is not None:
+            m.add_dataset('I_up_stdev (0-)', sigma[UP0M,0,ilam,:,:], axnames)
+            m.add_dataset('Q_up_stdev (0-)', sigma[UP0M,1,ilam,:,:], axnames)
+            m.add_dataset('U_up_stdev (0-)', sigma[UP0M,2,ilam,:,:], axnames)
+            m.add_dataset('V_up_stdev (0-)', sigma[UP0M,3,ilam,:,:], axnames)
         m.add_dataset('N_up (0-)', NPhotonsOutTot[UP0M,ilam,:,:], axnames)
 
     if OUTPUT_LAYERS & 2:
@@ -698,12 +719,22 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
         m.add_dataset('Q_down (0-)', tabFinal[DOWN0M,1,ilam,:,:], axnames)
         m.add_dataset('U_down (0-)', tabFinal[DOWN0M,2,ilam,:,:], axnames)
         m.add_dataset('V_down (0-)', tabFinal[DOWN0M,3,ilam,:,:], axnames)
+        if sigma is not None:
+            m.add_dataset('I_down_stdev (0-)', sigma[DOWN0M,0,ilam,:,:], axnames)
+            m.add_dataset('Q_down_stdev (0-)', sigma[DOWN0M,1,ilam,:,:], axnames)
+            m.add_dataset('U_down_stdev (0-)', sigma[DOWN0M,2,ilam,:,:], axnames)
+            m.add_dataset('V_down_stdev (0-)', sigma[DOWN0M,3,ilam,:,:], axnames)
         m.add_dataset('N_down (0-)', NPhotonsOutTot[DOWN0M,ilam,:,:], axnames)
 
         m.add_dataset('I_up (0+)', tabFinal[UP0P,0,ilam,:,:], axnames)
         m.add_dataset('Q_up (0+)', tabFinal[UP0P,1,ilam,:,:], axnames)
         m.add_dataset('U_up (0+)', tabFinal[UP0P,2,ilam,:,:], axnames)
         m.add_dataset('V_up (0+)', tabFinal[UP0P,3,ilam,:,:], axnames)
+        if sigma is not None:
+            m.add_dataset('I_up_stdev (0+)', sigma[UP0P,0,ilam,:,:], axnames)
+            m.add_dataset('Q_up_stdev (0+)', sigma[UP0P,1,ilam,:,:], axnames)
+            m.add_dataset('U_up_stdev (0+)', sigma[UP0P,2,ilam,:,:], axnames)
+            m.add_dataset('V_up_stdev (0+)', sigma[UP0P,3,ilam,:,:], axnames)
         m.add_dataset('N_up (0+)', NPhotonsOutTot[UP0P,ilam,:,:], axnames)
 
     # direct transmission
@@ -1049,7 +1080,7 @@ def get_git_attrs():
 def loop_kernel(NBPHOTONS, faer, foce, NLVL,
                 NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                 NLAM, double , kern, p, X0, le, spectrum,
-                prof_atm, prof_oc, wl_proba_icdf, SEED):
+                prof_atm, prof_oc, wl_proba_icdf, SEED, stdev):
     """
     launch the kernel several time until the targeted number of photons injected is reached
 
@@ -1085,6 +1116,13 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL,
 
     # Initialize of the parameters
     tabPhotonsTot = np.zeros((NLVL,NPSTK,NLAM,NBTHETA,NBPHI), dtype=np.float64)
+    if stdev:
+        # to calculate the standard deviation of the result, we accumulate the
+        # parameters and their squares
+        # finally we extrapolate in 1/sqrt(N_simu)
+        sum_x = 0.
+        sum_x2 = 0.
+        N_simu = 0
 
     # arrays for counting the input photons (per wavelength)
     NPhotonsIn = gpuzeros(NLAM, dtype=np.uint64)
@@ -1126,15 +1164,34 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL,
                 prof_atm, prof_oc, wl_proba_icdf, philox_data,
                 block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
 
-        NPhotonsInTot += NPhotonsIn.get()
+        L = NPhotonsIn.get()   # number of photons launched by last kernel
+        NPhotonsInTot += L
+
         NPhotonsOutTot += NPhotonsOut.get()
-        tabPhotonsTot += tabPhotons.get()
+        S = tabPhotons.get().astype('float64')   # sum of weights for the last kernel
+        tabPhotonsTot += S
+
+        if stdev:
+            N_simu += 1
+            L = L.reshape((1,1,-1,1,1))   # broadcast to tabPhotonsTot
+            # NOTE: we normalize by the number of photons launched, thus we don't do it later
+            sum_x += S/L
+            sum_x2 += (S/L)**2
 
         # update of the progression Bar
         p.update(np.sum(NPhotonsInTot),
                 'Launched {:.3g} photons'.format(np.sum(NPhotonsInTot)))
 
-    return NPhotonsInTot, tabPhotonsTot, errorcount, NPhotonsOutTot
+    if stdev:
+        # finalize the calculation of the standard deviation
+        sigma = np.sqrt(sum_x2/N_simu - (sum_x/N_simu)**2)
+
+        # extrapolate in 1/sqrt(N_simu)
+        sigma /= np.sqrt(N_simu)
+    else:
+        sigma = None
+
+    return NPhotonsInTot, tabPhotonsTot, errorcount, NPhotonsOutTot, sigma, N_simu
 
 
 def impactInit(pp, Hatm, NATM, NLAM, prof_atm, THVDEG, Rter):
