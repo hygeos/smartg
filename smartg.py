@@ -446,22 +446,22 @@ class Smartg(object):
         # get the phase function and oceanic profile
         prof_oc, phasesOc, NOCE = get_profOc(wavelengths, water, NLAM)
 
-        #
-        # environment effect
-        #
-        if env is None:
-            # default values (no environment effect)
-            env = Environment()
 
         #
-        # albedo
+        # albedo and adjacency effect
         #
         spectrum = np.zeros(NLAM, dtype=type_Spectrum)
         spectrum['lambda'] = np.array(wavelengths)
-        if 'SURFALB' in surf.dict:
-            spectrum['alb_surface'] = surf.dict['SURFALB']
+        if env is None:
+            # default values (no environment effect)
+            env = Environment()
+            if 'SURFALB' in surf.dict:
+                spectrum['alb_surface'] = surf.dict['SURFALB']
+            else:
+                spectrum['alb_surface'] = -999.
         else:
-            spectrum['alb_surface'] = -999.
+            spectrum['alb_surface'] = env.alb.get(wavelengths)
+
         if water is None:
             spectrum['alb_seafloor'] = -999.
         else:
