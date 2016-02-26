@@ -224,6 +224,10 @@ class LUT(object):
         else:
             return self.axes[index]
 
+    def describe(self, *args, **kwargs):
+        # same as print_info()
+        return self.print_info(*args, **kwargs)
+
     def print_info(self, show_attrs=False):
         '''
         Prints the LUT informations
@@ -246,7 +250,7 @@ class LUT(object):
             if self.axes[i] is None:
                 print('  Dim {} ({}): {} values, no axis attached'.format(i, name, self.data.shape[i]))
             else:
-                print('  Dim {} ({}): {} values betweeen {} and {}'.format(
+                print('  Dim {} ({}): {} values in [{}, {}]'.format(
                         i, name,
                         len(self.axes[i]),
                         self.axes[i][0],
@@ -632,7 +636,10 @@ class LUT(object):
             * index: index (or Idx instance) for plotting transect
         '''
         if self.ndim == 0:
-            print(self.data)
+            if self.desc is None:
+                print('{:3g}'.format(self.data))
+            else:
+                print('{}: {:3g}'.format(self.desc, self.data))
         elif self.ndim == 1:
             self.__plot_1d(*args, **kwargs)
         elif self.ndim == 2:
@@ -644,11 +651,12 @@ class LUT(object):
 
 
     def __plot_1d(self, show_grid=True, swap=False, fmt=None, label=None, 
-            vmin=None, vmax=None, **kwargs):
+            vmin=None, vmax=None, legend=False, **kwargs):
         '''
         plot a 1-dimension LUT, returns self
         '''
         from pylab import plot, xlabel, ylabel, grid, ylim
+        import pylab as pl
         ax = self.axes[0]
         if ax is None:
             ax = range(self.shape[0])
@@ -676,13 +684,17 @@ class LUT(object):
         ylim(vmin,vmax)
         if xlab is not None:
             xlabel(xlab)
-        if ylab is not None:
+        if ylab is not None and not legend:
             ylabel(ylab)
 
         grid(show_grid)
+        if legend:
+            leg = pl.legend(loc='best', fancybox=True)
+            leg.get_frame().set_alpha(0.5)
+
 
     def __plot_2d(self, fmt='k-', show_grid=True, swap=False,
-                  vmin=None, vmax=None, cmap=None, index=None):
+                  vmin=None, vmax=None, cmap=None, index=None, **kwargs):
         '''
         Plot a 2-dimension LUT, with optional transect
         returns self
@@ -1327,13 +1339,15 @@ class MLUT(object):
 
         self.data.append((name, dataset, axnames, attrs))
 
-    def add_lut(self, lut):
+    def add_lut(self, lut, desc=None):
         '''
         Add a LUT to the MLUT
 
         returns self
         '''
-        assert lut.desc is not None
+        if desc is None:
+            desc = lut.desc
+        assert desc is not None
         for iax in xrange(lut.ndim):
             axname = lut.names[iax]
             ax = lut.axes[iax]
@@ -1345,7 +1359,7 @@ class MLUT(object):
                 # add the axis
                 self.add_axis(axname, ax)
 
-        self.add_dataset(lut.desc, lut.data, axnames=lut.names, attrs=lut.attrs)
+        self.add_dataset(desc, lut.data, axnames=lut.names, attrs=lut.attrs)
 
         return self
 
@@ -1480,6 +1494,10 @@ class MLUT(object):
         '''
         self.attrs.update(attributes)
 
+    def describe(self, *args, **kwargs):
+        # same as print_info()
+        return self.print_info(*args, **kwargs)
+
     def print_info(self, show_range=True, show_self=True, show_attrs=False, show_shape=False, show_axes=True):
         if show_self:
             print(str(self))
@@ -1491,7 +1509,7 @@ class MLUT(object):
             if show_shape:
                 axdesc += ', shape={}'.format(dataset.shape)
             if show_range:
-                rng = ' between {:.3g} and {:.3g}'.format(np.amin(dataset), np.amax(dataset))
+                rng = ' in [{:.3g}, {:.3g}]'.format(np.amin(dataset), np.amax(dataset))
             else:
                 rng = ''
             print('  [{}] {} ({}{})'.format(i, name, dataset.dtype, rng, dataset.shape) + axdesc)
@@ -1501,7 +1519,7 @@ class MLUT(object):
                     print('      {}: {}'.format(k, v))
         print(' Axes:')
         for i, (name, values) in enumerate(self.axes.items()):
-            print('  [{}] {}: {} values between {} and {}'.format(i, name, len(values), values[0], values[-1]))
+            print('  [{}] {}: {} values in [{}, {}]'.format(i, name, len(values), values[0], values[-1]))
         if show_attrs:
             print(' Attributes:')
             for k, v in self.attrs.items():
@@ -1523,7 +1541,7 @@ class MLUT(object):
         '''
         return the LUT corresponding to key (int or string)
         '''
-        if isinstance(key, str):
+        if isinstance(key, (str, unicode)):
             index = -1
             for i, (name, _, _, _) in enumerate(self.data):
                 if key == name:
@@ -1633,6 +1651,84 @@ class MLUT(object):
             return LUT(desc=axname, data=data, axes=[data], names=[axname])
         else:
             return data
+
+    def plot(self, datasets=None, *args, **kwargs):
+        try:
+            from ipywidgets import VBox, HBox, Checkbox, IntSlider, HTML
+            from IPython.display import display, clear_output
+        except ImportError:
+            raise Exception('IPython notebook widgets are required '
+                    'to plot a LUT with more than 2 dimensions')
+
+        if datasets is None:
+            datasets = self.datasets()
+
+        wid = []
+        axes = {}  # name: ()
+        for d in datasets:
+            print(d, d.__class__, isinstance(d, str))
+            for iax, name in enumerate(self[d].names):
+                if name is None:
+                    raise Exception('Does not work with unnamed axes, sorry :/')
+                if name in axes:
+                    continue
+
+                ax = self[d].axes[iax]
+                desc = name
+                if ax is not None:
+                    desc += ' [{:.5g}, {:.5g}]'.format(ax[0], ax[-1])
+
+                chk = Checkbox(description=desc, value=False)
+                slider = IntSlider(min=0, max=self[d].shape[iax]-1)
+                slider.visible = False
+                text = HTML(value='')
+                text.visible = False
+
+                wid.append(HBox([chk, text, slider]))
+
+                axes[name] = (chk, slider, text)
+
+        def update():
+            clear_output()
+
+            # update sliders visibility
+            for a, (chk, slider, text)  in axes.items():
+                slider.visible = chk.value
+                text.visible = chk.value
+
+            # display each dataset
+            for d in datasets:
+
+                keys = []
+                ndim = 0
+
+                for i, name in enumerate(self[d].names):
+                    chk, slider, text = axes[name]
+
+                    if chk.value:
+                        index = slider.value
+                        keys.append(index)
+                        # set text (value)
+                        if self[d].axes[i] != None:
+                            text.value = '&nbsp;&nbsp;{:.5g}&nbsp;&nbsp;'.format(self[d].axes[i][index])
+                    else:
+                        keys.append(slice(None))
+                        ndim += 1
+
+                if ndim <= 2:
+                    self[d].sub().__getitem__(tuple(keys)).plot(label=d, legend=True, *args, **kwargs)
+                else:
+                    print('{}: Please select at least {} dimension(s)'.format(d, ndim-2))
+
+
+
+        for a, (chk, slider, text)  in axes.items():
+            chk.on_trait_change(update, 'value')
+            slider.on_trait_change(update, 'value')
+
+        display(VBox(wid))
+        update()
+
 
 
 def read_mlut(filename, fmt=None):
