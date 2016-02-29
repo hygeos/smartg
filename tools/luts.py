@@ -1190,7 +1190,7 @@ def merge(M, axes, dtype=None):
 
     # check mluts compatibility
     for i in xrange(1, len(M)):
-        assert first.equal(M[i], strict=False)
+        assert first.equal(M[i], strict=False, show_diff=True)
 
     # add old axes
     for (axname, axis) in first.axes.items():
@@ -1212,11 +1212,11 @@ def merge(M, axes, dtype=None):
         newaxnames.append(axname)
 
     # dataset loop
-    for i in xrange(len(first.datasets())):
+    for name in first.datasets():
 
         # build new data
-        new_shape = tuple(map(len, newaxes))+first.data[i][1].shape
-        _dtype = first.data[i][1].dtype
+        new_shape = tuple(map(len, newaxes))+first[name].shape
+        _dtype = first[name].data.dtype
         newdata = np.zeros(new_shape, dtype=_dtype)
         try:
             newdata += np.NaN
@@ -1226,20 +1226,18 @@ def merge(M, axes, dtype=None):
 
             # find the index of the attributes in the new LUT
             index = ()
-            for j in xrange(len(axes)):
-                a = axes[j]
+            for j, a in enumerate(axes):
                 value = mlut.attrs[a]
                 if dtype is not None:
                     value = dtype(value)
                 index += (newaxes[j].index(value),)
 
-            if mlut.data[i][1].ndim != 0:
+            if first[name].data.ndim != 0:
                 index += (slice(None),)
 
-            newdata[index] = mlut.data[i][1]
+            newdata[index] = mlut[name].data
 
-        name = first.data[i][0]
-        axnames = first.data[i][2]
+        axnames = first[name].names
         if axnames is None:
             m.add_dataset(name, newdata)
         else:
@@ -1602,22 +1600,17 @@ class MLUT(object):
                 eq = False
 
         # check datasets
-        for i, (name0, data0, axnames0, attrs0) in enumerate(self.data):
-            name1, data1, axnames1, attrs1 = other.data[i]
-            if ((name0 != name1)
-                    or (strict and not np.allclose(data0, data1))
-                    or (axnames0 != axnames1)):
-                msg += '  dataset {} is different\n'.format(name0)
-                eq = False
-            if (attrs0 != attrs1):
-                msg += '  attributes of dataset "{}" are different: {} != {}\n'.format(name0,
-                        str(attrs0),
-                        str(attrs1),
-                        )
+        if set(self.datasets()) != set(other.datasets()):
+            msg += '  Datasets are different\n'
+            msg += '   -> {}'.format(str(self.datasets()))
+            msg += '   -> {}'.format(str(other.datasets()))
+            eq = False
+        for name in self.datasets():
+            if not self[name].equal(other[name], strict=strict):
+                msg += '  dataset {} differs\n'.format(name)
                 eq = False
 
-
-        # check attributes
+        # check global attributes
         if strict:
             for a in set(self.attrs.keys()).union(other.attrs.keys()):
                 if (a not in self.attrs) or (a not in other.attrs):
