@@ -137,7 +137,7 @@ class LUT(object):
             self.attrs = OrderedDict()
         else:
             self.attrs = attrs
-        self.ndim = self.data.ndim
+        self.ndim = len(self.data.shape)
         self.shape = data.shape
 
         # check axes
@@ -199,6 +199,9 @@ class LUT(object):
             for i in xrange(self.ndim):
                 if i in dd:
                     keys.append(dd[i])
+                    if isinstance(dd[i], slice):
+                        axes.append(self.axes[i][dd[i]])
+                        names.append(self.names[i])
                 else:
                     keys.append(slice(None))
                     axes.append(self.axes[i])
@@ -254,7 +257,7 @@ class LUT(object):
                 self.data.dtype, rng,
                 ))
 
-        for i in xrange(self.data.ndim):
+        for i in xrange(len(self.data.shape)):
             if self.names[i] is None:
                 name = 'NoName'
             else:
@@ -1348,7 +1351,7 @@ class MLUT(object):
         assert name not in map(lambda x: x[0], self.data)
         if axnames is not None:
             # check axes consistency
-            assert len(axnames) == dataset.ndim
+            assert len(axnames) == len(dataset.shape)
             for i, ax in enumerate(axnames):
                 if ax is None: continue
                 if ax not in self.axes: continue
@@ -1527,14 +1530,13 @@ class MLUT(object):
                 axdesc += ', axes='+ str(tuple(axes))
             if show_shape:
                 axdesc += ', shape={}'.format(dataset.shape)
-            if show_range:
-                try:
-                    rng = ' in [{:.3g}, {:.3g}]'.format(np.amin(dataset), np.amax(dataset))
-                except TypeError:
-                    rng = ''
+            if show_range and isinstance(dataset, np.ndarray):
+                rng = ' in [{:.3g}, {:.3g}]'.format(np.amin(dataset), np.amax(dataset))
             else:
                 rng = ''
             print('  [{}] {} ({}{})'.format(i, name, dataset.dtype, rng, dataset.shape) + axdesc)
+
+
             if show_attrs and (len(attrs) != 0):
                 print('    Attributes:')
                 for k, v in attrs.items():
@@ -1848,7 +1850,7 @@ def read_mlut_netcdf4(filename):
     return m
 
 
-def read_mlut_hdf5(filename, datasets=None):
+def read_mlut_hdf5(filename, datasets=None, lazy=False, group=None):
     '''
     read a MLUT from a hdf5 file (filename)
     datasets: list of datasets to read:
@@ -1861,7 +1863,12 @@ def read_mlut_hdf5(filename, datasets=None):
     '''
     import h5py
 
-    f = h5py.File(filename)
+    ff = h5py.File(filename)
+
+    if group:
+        f = ff[group]
+    else:
+        f = ff
 
     # set the list of dataset
     if datasets is None:
@@ -1899,7 +1906,10 @@ def read_mlut_hdf5(filename, datasets=None):
     # add data to MLUT
     for idata in xrange(len(ls_datasets)):
         dataset = ls_datasets[idata]
-        data = f['data'][dataset][...]
+        if lazy:
+            data = f['data'][dataset]
+        else:
+            data = f['data'][dataset][...]
         attrs = {}
         if f['data'][dataset].attrs.__contains__('_FillValue'):
             attrs['_FillValue'] = f['data'][dataset].attrs.get('_FillValue')
@@ -1909,7 +1919,8 @@ def read_mlut_hdf5(filename, datasets=None):
             attrs['scale_factor'] = f['data'][dataset].attrs.get('scale_factor')
         m.add_dataset(dataset, data, axnames=axis_data[idata], attrs=attrs)
 
-    f.close()
+    if not lazy:
+        ff.close()
 
     return m
 
