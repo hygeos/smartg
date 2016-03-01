@@ -1669,21 +1669,42 @@ class MLUT(object):
         else:
             return data
 
-    def plot(self, datasets=None, *args, **kwargs):
+    def plot(self, datasets=None, extra_widgets=True, *args, **kwargs):
+        '''
+        display all datasets in the MLUT
+        * datasets: list of datasets to display
+                    if None, display all datasets
+        * extra_widgets: show extra widgets for:
+                 1) interactive selection of datasets to display
+                 2) choice of min/max values
+        '''
         try:
-            from ipywidgets import VBox, HBox, Checkbox, IntSlider, HTML
+            from ipywidgets import VBox, HBox, Checkbox, IntSlider, HTML, FloatText
             from IPython.display import display, clear_output
         except ImportError:
             raise Exception('IPython notebook widgets are required '
-                    'to plot a LUT with more than 2 dimensions')
+                    'to plot a MLUT')
 
         if datasets is None:
             datasets = self.datasets()
 
         wid = []
         axes = {}  # name: ()
+        dstchk = {}  # dataset checkboxes
+        if 'vmin' in kwargs:
+            vmin = kwargs['vmin']
+        else:
+            vmin = 0
+        if 'vmax' in kwargs:
+            vmax = kwargs['vmax']
+        else:
+            vmax = 1
+        vminmax = [   # vmin/vmax float texts
+                FloatText(description='vmin', value=vmin),
+                FloatText(description='vmax', value=vmax),
+                ]
         for d in datasets:
-            print(d, d.__class__, isinstance(d, str))
+            dstchk[d] = Checkbox(description=d, value=True)
             for iax, name in enumerate(self[d].names):
                 if name is None:
                     raise Exception('Does not work with unnamed axes, sorry :/')
@@ -1705,8 +1726,19 @@ class MLUT(object):
 
                 axes[name] = (chk, slider, text)
 
+        if extra_widgets:
+            wid.insert(0, HTML(value='<b>AXES:</b>'))
+            wid.insert(0, HBox(dstchk.values()))
+            wid.insert(0, HTML(value='<b>DATASETS:</b>'))
+            wid.insert(0, HBox(vminmax))
+
         def update():
             clear_output()
+
+            # update vmin/vmax
+            if extra_widgets:
+                kwargs['vmin'] = vminmax[0].value
+                kwargs['vmax'] = vminmax[1].value
 
             # update sliders visibility
             for a, (chk, slider, text)  in axes.items():
@@ -1715,6 +1747,9 @@ class MLUT(object):
 
             # display each dataset
             for d in datasets:
+
+                if not dstchk[d].value:
+                    continue
 
                 keys = []
                 ndim = 0
@@ -1738,10 +1773,13 @@ class MLUT(object):
                     print('{}: Please select at least {} dimension(s)'.format(d, ndim-2))
 
 
-
         for a, (chk, slider, text)  in axes.items():
             chk.on_trait_change(update, 'value')
             slider.on_trait_change(update, 'value')
+        for fl in vminmax:
+            fl.on_trait_change(update, 'value')
+        for chk in dstchk.values():
+            chk.on_trait_change(update, 'value')
 
         display(VBox(wid))
         update()
