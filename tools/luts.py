@@ -163,6 +163,12 @@ class LUT(object):
             self.names = names
             assert len(names) == self.ndim
 
+        if self.data.dtype.char == 'S':
+            # formatter for string arrays (display values)
+            self.formatter = '{}'
+        else:
+            self.formatter = '{:3g}'
+
     def sub(self, d=None):
         '''
         returns a subset LUT of current LUT
@@ -236,10 +242,16 @@ class LUT(object):
 
         returns self
         '''
-        print('LUT {}({} between {:.3g} and {:.3g}):'.format(
+        try:
+            rng = ' between {:.3g} and {:.3g}'.format(
+                    np.amin(self.data), np.amax(self.data)
+                    )
+        except TypeError:
+            rng = ''
+
+        print('LUT {}({}{}):'.format(
                 {True: '', False: '"{}" '.format(self.desc)}[self.desc is None],
-                self.data.dtype,
-                np.amin(self.data), np.amax(self.data)
+                self.data.dtype, rng,
                 ))
 
         for i in xrange(self.data.ndim):
@@ -375,7 +387,10 @@ class LUT(object):
 
                 keys[interpolate_axis[i]] = inf_list[i] + bb
 
-            result += coef * self.data[tuple(keys)]
+            if (coef == 1) and (result == 0):
+                result = self.data[tuple(keys)]
+            else:
+                result += coef * self.data[tuple(keys)]
 
         return result
 
@@ -637,9 +652,9 @@ class LUT(object):
         '''
         if self.ndim == 0:
             if self.desc is None:
-                print('{:3g}'.format(self.data))
+                print(self.formatter.format(self.data))
             else:
-                print('{}: {:3g}'.format(self.desc, self.data))
+                print(('{}: '+self.formatter).format(self.desc, self.data))
         elif self.ndim == 1:
             self.__plot_1d(*args, **kwargs)
         elif self.ndim == 2:
@@ -657,6 +672,12 @@ class LUT(object):
         '''
         from pylab import plot, xlabel, ylabel, grid, ylim
         import pylab as pl
+
+        # no plotting for string datasets
+        if self.data.dtype.char == 'S':
+            warnings.warn('1D plot does not work for string arrays')
+            return
+
         ax = self.axes[0]
         if ax is None:
             ax = range(self.shape[0])
@@ -1507,7 +1528,10 @@ class MLUT(object):
             if show_shape:
                 axdesc += ', shape={}'.format(dataset.shape)
             if show_range:
-                rng = ' in [{:.3g}, {:.3g}]'.format(np.amin(dataset), np.amax(dataset))
+                try:
+                    rng = ' in [{:.3g}, {:.3g}]'.format(np.amin(dataset), np.amax(dataset))
+                except TypeError:
+                    rng = ''
             else:
                 rng = ''
             print('  [{}] {} ({}{})'.format(i, name, dataset.dtype, rng, dataset.shape) + axdesc)
