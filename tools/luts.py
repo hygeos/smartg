@@ -173,13 +173,28 @@ class LUT(object):
         '''
         returns a subset LUT of current LUT
 
-        * provide axis names and values
-          example: lut.sub({'axis1': 1.5})
-                   returns the lut stripped from 'axis1', for which we use the index 1.5
-        * the axis can be provided by its index; the value can be provided as int, float or Idx
-                   lut.sub({2: Idx(42.)})
+        d is a dictionary of axis: value
+
+        * axis is the name (string) or index (integer) of the axis to consider
+
+        * value can be:
+            * scalar integer (axis is removed)
+            * float index (axis is removed with interpolation)
+            * slice (axis is subsetted)
+            * array (axis is subsetted)
+            * Idx (axis is subsetted)
+
         * if no argument is provided, returns a 'subsetter' object which can be indexed like:
                 lut.sub()[-1,:,0.2, Idx(12.)]
+
+        Examples:
+          lut.sub({'axis1': 1.5})
+             returns the lut stripped from 'axis1', for which we use the index 1.5
+          lut.sub({2: Idx(42.)})
+          lut.sub({'ax': arange(5)})   # first 5 values
+          lut.sub({'z': slice(None,None,2)})   # every other value
+          lut.sub({'wav': lut.axis('wav')<500.})   # array of booleans
+          lut.sub({'wav': Idx(lambda x: x<500.)})  # select wav < 500
         '''
         if d is None:
             return Subsetter(self)
@@ -187,8 +202,10 @@ class LUT(object):
             dd = {}
             for ax, v in d.items():
                 if isinstance(ax, str):
-                    iax = self.names.index(ax)
-                    dd[iax] = v
+                    if ax in self.names:
+                        iax = self.names.index(ax)
+                        dd[iax] = v
+                    # if ax is not in the LUT, ignore this dimension
                 else:
                     assert isinstance(ax, int)
                     dd[ax] = v
@@ -198,11 +215,22 @@ class LUT(object):
             names = []
             for i in xrange(self.ndim):
                 if i in dd:
-                    keys.append(dd[i])
-                    if isinstance(dd[i], slice):
-                        axes.append(self.axes[i][dd[i]])
+                    if isinstance(dd[i], Idx):
+                        ind = dd[i].index(self.axes[i])
+                    else:
+                        ind = dd[i]
+
+                    keys.append(ind)
+
+                    if isinstance(ind, slice):
+                        axes.append(self.axes[i][ind])
                         names.append(self.names[i])
+                    elif isinstance(ind, np.ndarray) and (ind.ndim > 0):
+                        axes.append(self.axes[i][ind])
+                        names.append(self.names[i])
+
                 else:
+                    # axis not provided: take the full axis
                     keys.append(slice(None))
                     axes.append(self.axes[i])
                     names.append(self.names[i])
@@ -313,7 +341,6 @@ class LUT(object):
 
         if N != self.ndim:
             raise Exception('Incorrect number of dimensions in __getitem__')
-
 
         # convert the Idx keys to float indices
         for i in xrange(N):
@@ -948,10 +975,15 @@ class Idx(object):
         '''
         Return the floating point index of the values in the axis
         '''
-        if len(axis) == 1:
+        if hasattr(self.value, '__call__'):
+            # if value is a function, returns value applied to axis
+            return self.value(axis)
+
+        elif len(axis) == 1:
             if not np.allclose(np.array(self.value), axis[0]):
                 raise ValueError("(Idx) Out of axis value (value={}, axis={})".format(self.value, axis))
             return 0
+
         else:
             # axis is scalar or ndarray: interpolate
             res = interp1d(axis, np.arange(len(axis)),
@@ -1379,6 +1411,8 @@ class MLUT(object):
                 # check axis
                 assert self.axes[axname].shape == ax.shape
                 assert np.allclose(self.axes[axname], ax)
+            elif axname is None:
+                assert ax is None
             else:
                 # add the axis
                 self.add_axis(axname, ax)
@@ -1386,6 +1420,25 @@ class MLUT(object):
         self.add_dataset(desc, lut.data, axnames=lut.names, attrs=lut.attrs)
 
         return self
+
+    def sub(self, d):
+        '''
+        The MLUT equivalent of LUT.sub
+
+        returns a MLUT where each LUT is subsetted using dictionary d
+        keys should only be strings
+        values can be int, float, slice, Idx, array (bool or int)
+        '''
+        m = MLUT()
+        for dd in d:
+            assert isinstance(dd, str)
+
+        for dd in self.datasets():
+            m.add_lut(self[dd].sub(d))
+
+        m.attrs = self.attrs
+
+        return m
 
     def save(self, filename, fmt=None, overwrite=False,
              verbose=False, compress=True):
@@ -1533,7 +1586,10 @@ class MLUT(object):
             if show_shape:
                 axdesc += ', shape={}'.format(dataset.shape)
             if show_range and isinstance(dataset, np.ndarray):
-                rng = ' in [{:.3g}, {:.3g}]'.format(np.amin(dataset), np.amax(dataset))
+                try:
+                    rng = ' in [{:.3g}, {:.3g}]'.format(np.amin(dataset), np.amax(dataset))
+                except TypeError:
+                    rng = ''
             else:
                 rng = ''
             print('  [{}] {} ({}{})'.format(i, name, dataset.dtype, rng, dataset.shape) + axdesc)

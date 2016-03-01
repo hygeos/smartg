@@ -134,6 +134,29 @@ def test_sub():
     assert l.sub()[Idx(50), :] == l.sub({'z':Idx(50)})
     l.sub({'z': 1.4, 'P0': 4}).print_info()
 
+def test_sub2():
+    # test more complex subsetting
+    # using arrays, etc
+    l = create_lut()
+
+    s = l.sub({'z': np.arange(3)})
+    assert len(s.axis('z')) == 3
+
+    l.sub({'z': l.axis('z') < 50})
+
+    l.sub({'z': Idx(lambda x: x<50.)}).describe()
+
+    l.sub({'P0': Idx(1002)}).describe()
+
+    l.sub({'P0': slice(None,None,2)}).describe()
+
+
+def test_sub3():
+    # subsetting MLUTs
+    m = create_mlut()
+    m.sub({'b': Idx(lambda x: x<7)}).describe()
+
+
 @raises(ValueError)
 def test_broadcasting3():
     l1 = LUT(np.eye(3), axes=[None, None], names=['a', 'b'])
