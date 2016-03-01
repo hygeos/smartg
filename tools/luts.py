@@ -301,6 +301,11 @@ class LUT(object):
         Returns: a scalar or ndarray
         '''
 
+        if self.data.dtype.char == 'S':
+            # string arrays: bypass this method and directly apply
+            # ndarray.__getitem__
+            return self.data[keys]
+
         if not isinstance(keys, tuple):
             keys = (keys,)
         keys = list(keys)
@@ -390,10 +395,7 @@ class LUT(object):
 
                 keys[interpolate_axis[i]] = inf_list[i] + bb
 
-            if (coef == 1) and (result == 0):
-                result = self.data[tuple(keys)]
-            else:
-                result += coef * self.data[tuple(keys)]
+            result += coef * self.data[tuple(keys)]
 
         return result
 

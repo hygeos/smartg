@@ -391,3 +391,6 @@ def test_swapaxes():
     assert a == l
 
     assert l.swapaxes(0,2).sub()[:,:,0] == l.sub()[0,:,:].swapaxes(0,1)
+
+def test_lut_string():
+    LUT(np.array(['abc', 'def', 'hij']))[2]
