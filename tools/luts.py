@@ -592,7 +592,7 @@ class LUT(object):
                 axes=self.axes, names=self.names,
                 attrs=self.attrs, desc=desc)
 
-    def reduce(self, fn, axis, grouping=None, **kwargs):
+    def reduce(self, fn, axis, grouping=None, as_lut=False, **kwargs):
         '''
         apply function fn to a given axis
         fn: function to apply
@@ -606,6 +606,9 @@ class LUT(object):
                       results in fn(3 first elements), fn(2 next), then fn(last)
                     the axis of the reduced axis takes the values of grouping
                   default None (apply to all elements, remove axis)
+        as_lut: if axis reduction results in a scalar, returns a dimensionless LUT
+                default False (returns a scalar)
+
         '''
         if isinstance(axis, str):
             index = self.names.index(axis)
@@ -617,7 +620,7 @@ class LUT(object):
             names = list(self.names)
             axes.pop(index)
             names.pop(index)
-            if self.ndim == 1:
+            if (self.ndim == 1) and (not as_lut):
                 # returns a scalar
                 return fn(self.data, axis=index, **kwargs)
             else:

@@ -792,6 +792,21 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
     for k, v in attrs.items():
         m.set_attr(k, str(v))
 
+    # fluxes post-processing
+    if flux is not None:
+        m.set_attr('flux', flux)
+        for d in m.datasets():
+            if (('_stdev_' in d)
+                    or (d.startswith('Q_'))
+                    or (d.startswith('U_'))
+                    or (d.startswith('V_'))
+                    ):
+                m.rm_lut(d)
+            elif d.startswith('I_') or d.startswith('N_'):
+                l = m[d].reduce(np.sum, 'Azimuth angles').reduce(np.sum, 'Zenith angles', as_lut=True)
+                m.rm_lut(d)
+                m.add_lut(l, desc=d.replace('I_', 'flux_'))
+
     return m
 
 
