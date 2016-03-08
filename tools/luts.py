@@ -41,6 +41,12 @@ def interleave_seq(p, q):
     else:  # p[0] not in q
         return [p[0]] + interleave_seq(p[1:], q)
 
+def sizeof_fmt(num, suffix='B'):
+    for unit in ['','Ki','Mi','Gi','Ti','Pi','Ei','Zi']:
+        if abs(num) < 1024.0:
+            return "%3.1f%s%s" % (num, unit, suffix)
+        num /= 1024.0
+    return "%.1f%s%s" % (num, 'Yi', suffix)
 
 def uniq(seq):
     '''
@@ -261,11 +267,11 @@ class LUT(object):
         else:
             return self.axes[index]
 
-    def describe(self, *args, **kwargs):
-        # same as print_info()
-        return self.print_info(*args, **kwargs)
+    def print_info(self, *args, **kwargs):
+        # same as describe()
+        return self.describe(*args, **kwargs)
 
-    def print_info(self, show_attrs=False):
+    def describe(self, show_attrs=False):
         '''
         Prints the LUT informations
         arguments:
@@ -1421,6 +1427,17 @@ class MLUT(object):
 
         return self
 
+    def rm_lut(self, name):
+        ''' remove a LUT '''
+        assert isinstance(name, basestring)
+
+        try:
+            index = map(lambda x: x[0], self.data).index(name)
+        except ValueError:
+            raise Exception('{} is not in {}', name, self)
+
+        self.data.pop(index)
+
     def sub(self, d):
         '''
         The MLUT equivalent of LUT.sub
@@ -1571,11 +1588,12 @@ class MLUT(object):
         '''
         self.attrs.update(attributes)
 
-    def describe(self, *args, **kwargs):
-        # same as print_info()
-        return self.print_info(*args, **kwargs)
+    def print_info(self, *args, **kwargs):
+        # same as describe()
+        return self.describe(*args, **kwargs)
 
-    def print_info(self, show_range=True, show_self=True, show_attrs=False, show_shape=False, show_axes=True):
+    def describe(self, show_range=True, show_self=True, show_attrs=False, show_shape=False, show_axes=True, mem=False):
+        total_size = 0
         if show_self:
             print(str(self))
         print(' Datasets:')
@@ -1592,8 +1610,12 @@ class MLUT(object):
                     rng = ''
             else:
                 rng = ''
-            print('  [{}] {} ({}{})'.format(i, name, dataset.dtype, rng, dataset.shape) + axdesc)
-
+            if mem:
+                memdesc = ', {}'.format(sizeof_fmt(dataset.nbytes))
+            else:
+                memdesc = ''
+            print('  [{}] {} ({}{})'.format(i, name, dataset.dtype, rng, dataset.shape) + axdesc + memdesc)
+            total_size += dataset.nbytes
 
             if show_attrs and (len(attrs) != 0):
                 print('    Attributes:')
@@ -1606,6 +1628,8 @@ class MLUT(object):
             print(' Attributes:')
             for k, v in self.attrs.items():
                 print(' ', k, ':', v)
+        if mem:
+            print('Total memory usage: {}'.format(sizeof_fmt(total_size)))
 
         return self
 

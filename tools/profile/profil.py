@@ -1220,8 +1220,9 @@ class Profile(object):
           profile value (default)
         - H2O: total water vapour column (mol cm-2), or None to use atmospheric
           profile value (default)
-        - NO2: activate ON2 absorption (default True)
-        - P0: (optional) Pressure at the sea level, default: surface pressure from AFGL file
+        - NO2: activate NO2 absorption (default True)
+        - P0: Pressure at the sea level in <TODO>
+              default: surface pressure from AFGL file
     '''
     def __init__(self, atm_filename, aer=None, grid=None, cloud=None,
                 pfgrid=[100., 0.], pfwav=None, tauR=None, ssa=None,

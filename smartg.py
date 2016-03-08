@@ -338,8 +338,10 @@ class Smartg(object):
             - progress: whether to show a progress bar (True/False)
                      or a Queue object to store the progress as (max_value), then (current_value, message), finally 'message'
 
-            - le: Local Estimate method activation (by providing a dictionnary of two float32 arrays of zenith and azimuth angles in radian
-                  for output), default cone sampling
+            - le: Local Estimate method activation
+                  Provide output geometries in radians like so:
+                  {'th':<float32 array>, 'phi': <float32 array>}
+                  default None: cone sampling
                 NOTE: Overwrite NBPHI and NBTHETA
 
             - flux: if specified output is 'planar' or 'spherical' flux instead of radiance
@@ -472,7 +474,7 @@ class Smartg(object):
         LE = 0
         if le!=None:
             LE = 1
-            NBTHETA =  le['thv'].shape[0]
+            NBTHETA =  le['th'].shape[0]
             NBPHI   =  le['phi'].shape[0]
         
         FLUX = 0
@@ -643,7 +645,7 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
     norm_npho = NPhotonsInTot.reshape((1,1,-1,1,1))
     if flux is None:
         if le!=None : 
-            tabTh = le['thv']
+            tabTh = le['th']
             tabPhi = le['phi']
             norm_geo =  np.cos(tabTh).reshape((1,1,1,-1,1))
         else : 
@@ -1139,7 +1141,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL,
 
     # local estimates angles
     if le != None:
-        tabthv = to_gpu(le['thv'].astype('float32'))
+        tabthv = to_gpu(le['th'].astype('float32'))
         tabphi = to_gpu(le['phi'].astype('float32'))
     else:
         tabthv = gpuzeros(1, dtype='float32')
