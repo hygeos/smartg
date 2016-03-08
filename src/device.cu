@@ -181,9 +181,9 @@ __global__ void launchKernel(
             display("SPACE", &ph);
             #endif
 
-        } else if (ph.loc == SURF0P) {
+        } else if ((ph.loc == SURF0P) && (loc_prev != SURF0P)) {
             count_level = DOWN0P;
-        } else if (ph.loc == SURF0M) {
+        } else if ((ph.loc == SURF0M) && (loc_prev != SURF0M)) {
             count_level = UP0M;
         }
 
