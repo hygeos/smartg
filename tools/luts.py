@@ -283,7 +283,7 @@ class LUT(object):
             rng = ' between {:.3g} and {:.3g}'.format(
                     np.amin(self.data), np.amax(self.data)
                     )
-        except TypeError:
+        except:
             rng = ''
 
         print('LUT {}({}{}):'.format(
@@ -1418,11 +1418,12 @@ class MLUT(object):
             ax = lut.axes[iax]
             if axname in self.axes:
                 # check axis
-                assert self.axes[axname].shape == ax.shape
-                assert np.allclose(self.axes[axname], ax)
+                if ax is not None:
+                    assert self.axes[axname].shape == ax.shape
+                    assert np.allclose(self.axes[axname], ax)
             elif axname is None:
                 assert ax is None
-            else:
+            elif ax is not None:
                 # add the axis
                 self.add_axis(axname, ax)
 
@@ -1584,12 +1585,16 @@ class MLUT(object):
         '''
         self.attrs[key] = value
 
+        return self
+
     def set_attrs(self, attributes):
         '''
         Set multiple attributes to attrs
         attributes: dict
         '''
         self.attrs.update(attributes)
+
+        return self
 
     def print_info(self, *args, **kwargs):
         # same as describe()
@@ -1609,7 +1614,7 @@ class MLUT(object):
             if show_range and isinstance(dataset, np.ndarray):
                 try:
                     rng = ' in [{:.3g}, {:.3g}]'.format(np.amin(dataset), np.amax(dataset))
-                except TypeError:
+                except:
                     rng = ''
             else:
                 rng = ''
@@ -1791,7 +1796,7 @@ class MLUT(object):
                 FloatText(description='vmax', value=vmax),
                 ]
         for d in datasets:
-            dstchk[d] = Checkbox(description=d, value=True)
+            dstchk[d] = Checkbox(description=d, value=False)
             for iax, name in enumerate(self[d].names):
                 if name is None:
                     raise Exception('Does not work with unnamed axes, sorry :/')
@@ -1803,7 +1808,7 @@ class MLUT(object):
                 if ax is not None:
                     desc += ' [{:.5g}, {:.5g}]'.format(ax[0], ax[-1])
 
-                chk = Checkbox(description=desc, value=False)
+                chk = Checkbox(description=desc, value=True)
                 slider = IntSlider(min=0, max=self[d].shape[iax]-1)
                 slider.visible = False
                 text = HTML(value='')
