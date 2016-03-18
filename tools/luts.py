@@ -2073,7 +2073,8 @@ def read_mlut_hdf(filename, datasets=None):
 
     # add the datasets
     for (name, data, axnames, attrs) in ls_datasets:
-        attrs.pop('dimensions')
+        if 'dimensions' in attrs:
+            attrs.pop('dimensions')
         m.add_dataset(name, data, axnames, attrs)
 
     # read the global attributes

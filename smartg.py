@@ -478,7 +478,7 @@ class Smartg(object):
             NBPHI   =  le['phi'].shape[0]
         
         FLUX = 0
-        if flux == 'planar' : FLUX = 1
+        if flux == 'spherical' : FLUX = 1
 
         # computation of the phase functions
         if(SIM == 0 or SIM == 2 or SIM == 3):
