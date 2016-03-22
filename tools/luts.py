@@ -169,11 +169,10 @@ class LUT(object):
             self.names = names
             assert len(names) == self.ndim
 
-        if self.data.dtype.char == 'S':
-            # formatter for string arrays (display values)
-            self.formatter = '{}'
-        else:
+        if np.issubdtype(self.data.dtype, np.float):
             self.formatter = '{:3g}'
+        else:
+            self.formatter = '{}'
 
     def sub(self, d=None):
         '''
@@ -1771,7 +1770,8 @@ class MLUT(object):
                  2) choice of min/max values
         '''
         try:
-            from ipywidgets import VBox, HBox, Checkbox, IntSlider, HTML, FloatText
+            from ipywidgets import VBox, HBox, Checkbox, IntSlider, HTML, FloatText, Button
+            from pylab import axis
             from IPython.display import display, clear_output
         except ImportError:
             raise Exception('IPython notebook widgets are required '
@@ -1791,9 +1791,12 @@ class MLUT(object):
             vmax = kwargs['vmax']
         else:
             vmax = 1
-        vminmax = [   # vmin/vmax float texts
+        vminmax = [   # vmin/vmax/xmin/xmax float texts
                 FloatText(description='vmin', value=vmin),
                 FloatText(description='vmax', value=vmax),
+                Checkbox(description='xmin/xmax', value=False),
+                FloatText(description='xmin', value=0),
+                FloatText(description='xmax', value=1),
                 ]
         for d in datasets:
             dstchk[d] = Checkbox(description=d, value=False)
@@ -1813,10 +1816,14 @@ class MLUT(object):
                 slider.visible = False
                 text = HTML(value='')
                 text.visible = False
+                button_minus = Button(description='-')
+                setattr(button_minus, 'slider', slider)
+                button_plus  = Button(description='+')
+                setattr(button_plus, 'slider', slider)
 
-                wid.append(HBox([chk, text, slider]))
+                wid.append(HBox([chk, text, slider, button_minus, button_plus]))
 
-                axes[name] = (chk, slider, text)
+                axes[name] = (chk, slider, text, button_minus, button_plus)
 
         if extra_widgets:
             wid.insert(0, HTML(value='<b>AXES:</b>'))
@@ -1831,11 +1838,15 @@ class MLUT(object):
             if extra_widgets:
                 kwargs['vmin'] = vminmax[0].value
                 kwargs['vmax'] = vminmax[1].value
+                vminmax[3].visible = vminmax[2].value
+                vminmax[4].visible = vminmax[2].value
 
             # update sliders visibility
-            for a, (chk, slider, text)  in axes.items():
+            for a, (chk, slider, text, button_minus, button_plus) in axes.items():
                 slider.visible = chk.value
                 text.visible = chk.value
+                button_minus.visible = chk.value
+                button_plus.visible = chk.value
 
             # display each dataset
             for d in datasets:
@@ -1847,7 +1858,7 @@ class MLUT(object):
                 ndim = 0
 
                 for i, name in enumerate(self[d].names):
-                    chk, slider, text = axes[name]
+                    chk, slider, text, _, _ = axes[name]
 
                     if chk.value:
                         index = slider.value
@@ -1861,13 +1872,19 @@ class MLUT(object):
 
                 if ndim <= 2:
                     self[d].sub().__getitem__(tuple(keys)).plot(label=d, legend=True, *args, **kwargs)
+                    if vminmax[2].value:
+                        axis(xmin=vminmax[3].value, xmax=vminmax[4].value)
                 else:
                     print('{}: Please select at least {} dimension(s)'.format(d, ndim-2))
-
-
-        for a, (chk, slider, text)  in axes.items():
+        def decrement(b):
+            b.slider.value -= 1
+        def increment(b):
+            b.slider.value += 1
+        for a, (chk, slider, text, button_minus, button_plus) in axes.items():
             chk.on_trait_change(update, 'value')
             slider.on_trait_change(update, 'value')
+            button_minus.on_click(decrement)
+            button_plus.on_click(increment)
         for fl in vminmax:
             fl.on_trait_change(update, 'value')
         for chk in dstchk.values():
