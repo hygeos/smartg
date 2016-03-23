@@ -60,7 +60,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "device.h"
 #include <math.h>
 
-
 /**********************************************************
 *	> Kernel
 ***********************************************************/
@@ -110,10 +109,12 @@ __global__ void launchKernel(
 	// Création de variable propres à chaque thread
 	unsigned long long nbPhotonsThr = 0; 	// Nombre de photons traités par le thread
 	
+
 	Photon ph, ph_le; 		// On associe une structure de photon au thread
-    //Photon ph_le2;
+	//Photon ph_le2
+
 	ph.loc = NONE;	// Initialement le photon n'est nulle part, il doit être initialisé
-	
+
     atomicAdd(nThreadsActive, 1);
 
     //

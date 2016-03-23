@@ -519,15 +519,14 @@ class Smartg(object):
 
 
         # Loop and kernel call
-        time_before_loop = datetime.now()
         (NPhotonsInTot,
-                tabPhotonsTot, errorcount, NPhotonsOutTot, sigma, Nkernel
+                tabPhotonsTot, errorcount, NPhotonsOutTot, sigma, Nkernel, secs_cuda_clock
                 ) = loop_kernel(NBPHOTONS, faer, foce,
                                 NLVL, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                                 NLAM, self.double, self.kernel, p, X0, le, spectrum,
                                 to_gpu(prof_atm), to_gpu(prof_oc),
                                 wl_proba_icdf, SEED, stdev)
-        attrs['kernel time (s)'] = (datetime.now() - time_before_loop).total_seconds()
+        attrs['kernel time (s)'] = secs_cuda_clock
         attrs['number of kernel iterations'] = Nkernel
         attrs.update(self.common_attrs)
 
@@ -1168,6 +1167,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL,
     philox_data[0] = SEED
     philox_data = to_gpu(philox_data)
 
+    secs_cuda_clock = 0.
     while(np.sum(NPhotonsInTot.get()) < NBPHOTONS):
 
         tabPhotons.fill(0.)
@@ -1175,12 +1175,18 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL,
         NPhotonsIn.fill(0)
         Counter.fill(0)
 
+        start_cuda_clock = cuda.Event()
+        end_cuda_clock = cuda.Event()
+        start_cuda_clock.record()
         # kernel launch
         kern(spectrum, X0, faer, foce,
                 errorcount, nThreadsActive, tabPhotons,
                 Counter, NPhotonsIn, NPhotonsOut, tabthv, tabphi,
                 prof_atm, prof_oc, wl_proba_icdf, philox_data,
                 block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
+        end_cuda_clock.record()
+        end_cuda_clock.synchronize()
+        secs_cuda_clock = secs_cuda_clock + start_cuda_clock.time_till(end_cuda_clock)
 
         cuda.Context.synchronize()
 
@@ -1203,6 +1209,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL,
         sphot = np.sum(NPhotonsInTot.get())
         p.update(sphot,
                 'Launched {:.3g} photons'.format(sphot))
+    secs_cuda_clock = secs_cuda_clock*1e-3
 
     if stdev:
         # finalize the calculation of the standard deviation
@@ -1213,7 +1220,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL,
     else:
         sigma = None
 
-    return NPhotonsInTot.get(), tabPhotonsTot.get(), errorcount, NPhotonsOutTot.get(), sigma, N_simu
+    return NPhotonsInTot.get(), tabPhotonsTot.get(), errorcount, NPhotonsOutTot.get(), sigma, N_simu, secs_cuda_clock
 
 
 def impactInit(pp, Hatm, NATM, NLAM, prof_atm, THVDEG, Rter):

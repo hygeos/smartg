@@ -83,8 +83,9 @@
 * Contient toutes les informations sur le photon lors de son parcours dans l'atmosphère
 */
 
-typedef struct __align__(16)
+class Photon
 {
+ public:
 	// Vecteur normalisé de la direction du photon (vitesse)
 	float vx;
 	float vy;
@@ -102,11 +103,11 @@ typedef struct __align__(16)
 
 	// longueur d onde du photon
 	float wavel; // for Raman
-    int ilam; // wavelength index
+	int ilam; // wavelength index
 
-    // Angular box indices (for LE)
-    int iph;
-    int ith;
+	// Angular box indices (for LE)
+	int iph;
+	int ith;
 	
 	// Paramètres de stokes du photon
 	float stokes1;
@@ -134,8 +135,9 @@ typedef struct __align__(16)
 	float taumax;
 	
 	#endif
-	
-}	Photon;
+
+ private:
+};
 
 
 struct Spectrum {
@@ -166,6 +168,5 @@ struct Profile {
     float abs;    // absorption coefficient
     int iphase;   // phase function index
 };
-
 
 #endif	// COMMUNS_H
