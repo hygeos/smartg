@@ -85,58 +85,56 @@
 
 class Photon
 {
- public:
-	// Vecteur normalisé de la direction du photon (vitesse)
-	float vx;
-	float vy;
-	float vz;
-	// Vecteur normalisé orthogonal à la vitesse du photon (polarisation)
-	float ux;
-	float uy;
-	float uz;
+public:
+    // Vecteur normalisé de la direction du photon (vitesse)
+    float vx;
+    float vy;
+    float vz;
+    // Vecteur normalisé orthogonal à la vitesse du photon (polarisation)
+    float ux;
+    float uy;
+    float uz;
 	
-	// Localisation du photon
-	int loc;
+    // Localisation du photon
+    int loc;
+    
+    // Poids du photon
+    float weight;
+
+    // longueur d onde du photon
+    float wavel; // for Raman
+    int ilam; // wavelength index
+    
+    // Angular box indices (for LE)
+    int iph;
+    int ith;
 	
-	// Poids du photon
-	float weight;
+    // Paramètres de stokes du photon
+    float stokes1;
+    float stokes2;
+    float stokes3;
+    float stokes4;
 
-	// longueur d onde du photon
-	float wavel; // for Raman
-	int ilam; // wavelength index
-
-	// Angular box indices (for LE)
-	int iph;
-	int ith;
-	
-	// Paramètres de stokes du photon
-	float stokes1;
-	float stokes2;
-	float stokes3;
-	float stokes4;
-
-	// Paramètres pour une atmosphère sphérique
-	int couche;
-	float prop_aer;		// Proportion d'aérosols par rapport aux molécules à l'endroit où se situe le photon
+    // Paramètres pour une atmosphère sphérique
+    int couche;
+    float prop_aer;		// Proportion d'aérosols par rapport aux molécules à l'endroit où se situe le photon
 	
 
-	float tau;	// localisation en epaisseur optique
+    float tau;	// localisation en epaisseur optique
                 // atmosphère: valeurs positives
                 // océan: valeurs négatives
 
-	// Position cartésienne du photon
-	float x;
-	float y;
-	float z;
+    // Position cartésienne du photon
+    float3 pos;
 
-	#ifdef SPHERIQUE
+    #ifdef SPHERIQUE
 
-	float rayon;
-	float taumax;
+    float rayon;
+    float taumax;
 	
-	#endif
+    #endif
 
- private:
+private:
 };
 
 

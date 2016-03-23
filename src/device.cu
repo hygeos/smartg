@@ -66,44 +66,44 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 extern "C" {
-__global__ void launchKernel(
-        struct Spectrum *spectrum, float *X0,
-        struct Phase *faer, struct Phase *foce,
-        unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons,
-        unsigned long long *Counter,
-        unsigned long long *NPhotonsIn,
-        unsigned long long *NPhotonsOut,
-        float *tabthv, float *tabphi,
-        struct Profile *prof_atm,
-        struct Profile *prof_oc,
-        long long *wl_proba_icdf,
-        unsigned int *philox_data
-        ) {
+	__global__ void launchKernel(
+							 struct Spectrum *spectrum, float *X0,
+							 struct Phase *faer, struct Phase *foce,
+							 unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons,
+							 unsigned long long *Counter,
+							 unsigned long long *NPhotonsIn,
+							 unsigned long long *NPhotonsOut,
+							 float *tabthv, float *tabphi,
+							 struct Profile *prof_atm,
+							 struct Profile *prof_oc,
+							 long long *wl_proba_icdf,
+							 unsigned int *philox_data
+							 ) {
 
     // current thread index
-    int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
-    int loc_prev;
-    int count_level;
-    int this_thread_active = 1;
-    unsigned long long iloop = 0;
+	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+	int loc_prev;
+	int count_level;
+	int this_thread_active = 1;
+	unsigned long long iloop = 0;
 
-    // philox_data:
-    // index 0: seed (config)
-    // index 1 to last: status
+	// philox_data:
+	// index 0: seed (config)
+	// index 1 to last: status
 
-    // Paramètres de la fonction random en mémoire locale
-    //la clef se defini par l'identifiant global (unique) du thread...
-    //...et par la clef utilisateur ou clef par defaut
-    //ce systeme garanti l'existence de 2^32 generateurs differents par run et...
-    //...la possiblite de reemployer les memes sequences a partir de la meme clef utilisateur
-    //(plus d'infos dans "communs.h")
-    philox4x32_key_t configThr = {{idx, philox_data[0]}};
-    //le compteur se defini par trois mots choisis au hasard (il parait)...
-    //...et un compteur definissant le nombre d'appel au generateur
-    //ce systeme garanti l'existence de 2^32 nombres distincts pouvant etre genere par thread,...
-    //...et ce sur l'ensemble du process (et non pas 2^32 par thread par appel au kernel)
-    //(plus d'infos dans "communs.h")
-    philox4x32_ctr_t etatThr = {{philox_data[idx+1], 0xf00dcafe, 0xdeadbeef, 0xbeeff00d}};
+	// Paramètres de la fonction random en mémoire locale
+	//la clef se defini par l'identifiant global (unique) du thread...
+	//...et par la clef utilisateur ou clef par defaut
+	//ce systeme garanti l'existence de 2^32 generateurs differents par run et...
+	//...la possiblite de reemployer les memes sequences a partir de la meme clef utilisateur
+	//(plus d'infos dans "communs.h")
+	philox4x32_key_t configThr = {{idx, philox_data[0]}};
+	//le compteur se defini par trois mots choisis au hasard (il parait)...
+	//...et un compteur definissant le nombre d'appel au generateur
+	//ce systeme garanti l'existence de 2^32 nombres distincts pouvant etre genere par thread,...
+	//...et ce sur l'ensemble du process (et non pas 2^32 par thread par appel au kernel)
+	//(plus d'infos dans "communs.h")
+	philox4x32_ctr_t etatThr = {{philox_data[idx+1], 0xf00dcafe, 0xdeadbeef, 0xbeeff00d}};
 
 	
 	// Création de variable propres à chaque thread
@@ -115,20 +115,20 @@ __global__ void launchKernel(
 
 	ph.loc = NONE;	// Initialement le photon n'est nulle part, il doit être initialisé
 
-    atomicAdd(nThreadsActive, 1);
+	atomicAdd(nThreadsActive, 1);
 
     //
     // main loop
     //
-    while (*nThreadsActive > 0) {
-        iloop += 1;
+	while (*nThreadsActive > 0) {
+		iloop += 1;
 
         if (((Counter[0] > NBLOOPd)
-                    && this_thread_active
-                    && (ph.loc == NONE))
-                || (iloop > MAX_LOOP)  // avoid infinite loop
+			 && this_thread_active
+			 && (ph.loc == NONE))
+			|| (iloop > MAX_LOOP)  // avoid infinite loop
                                        // when photons don't end
-                ) {
+			) {
             this_thread_active = 0;
             atomicAdd(nThreadsActive, -1);
         }
@@ -146,12 +146,12 @@ __global__ void launchKernel(
         }
 
 
-        //
-		// Deplacement
-        //
-        // -> Si OCEAN ou ATMOS
-        loc_prev = ph.loc;
-		if( (ph.loc == ATMOS) || (ph.loc == OCEAN)){
+			//
+			// Deplacement
+			//
+			// -> Si OCEAN ou ATMOS
+			loc_prev = ph.loc;
+			if( (ph.loc == ATMOS) || (ph.loc == OCEAN)){
 
             #ifdef SPHERIQUE
             if (ph.loc == ATMOS)
@@ -168,8 +168,8 @@ __global__ void launchKernel(
         // count after move:
         // count the photons in space and reaching surface from above or below
         //
-        count_level = -1;
-        if (ph.loc == SPACE) {
+			count_level = -1;
+			if (ph.loc == SPACE) {
             count_level = UPTOA;
 
             // increment the photon counter
@@ -188,39 +188,39 @@ __global__ void launchKernel(
             count_level = UP0M;
         }
 
-        // count the photons
+			// count the photons
         
-        /* Cone Sampling */
-        if (LEd ==0) countPhoton(&ph, prof_atm, tabthv, tabphi, count_level,
+			/* Cone Sampling */
+			if (LEd ==0) countPhoton(&ph, prof_atm, tabthv, tabphi, count_level,
                 errorcount, tabPhotons, NPhotonsOut);
 
 
-		syncthreads();
+			syncthreads();
 
 		
-        //
-		// Scatter
-        //
-        // -> dans ATMOS ou OCEAN
-        if( (ph.loc == ATMOS) || (ph.loc == OCEAN)) {
+			//
+			// Scatter
+			//
+			// -> dans ATMOS ou OCEAN
+			if( (ph.loc == ATMOS) || (ph.loc == OCEAN)) {
 
             /* Scattering Local Estimate */
             if (LEd == 1) {
-                int NK, up_level, down_level, count_level_le;
-                int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
-                int iph0 = idx%NBPHId;
-                if (ph.loc == ATMOS) {
-                    NK=2;
-                    up_level = UPTOA;
-                    down_level = DOWN0P;
-                }
-                if (ph.loc == OCEAN) {
-                    NK=1;
-                    up_level = UP0M;
-                }
-                for(int k=0; k<NK; k++){
-                    if (k==0) count_level_le = up_level;
-                    else count_level_le = down_level;
+			int NK, up_level, down_level, count_level_le;
+			int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
+			int iph0 = idx%NBPHId;
+			if (ph.loc == ATMOS) {
+			NK=2;
+			up_level = UPTOA;
+			down_level = DOWN0P;
+		}
+			if (ph.loc == OCEAN) {
+			NK=1;
+			up_level = UP0M;
+		}
+			for(int k=0; k<NK; k++){
+			if (k==0) count_level_le = up_level;
+			else count_level_le = down_level;
 
                     for (int iph=0; iph<NBPHId; iph++){
                         for (int ith=0; ith<NBTHETAd; ith++){
@@ -377,7 +377,7 @@ __global__ void launchKernel(
 
            else {
                 float dis=0;
-                dis = sqrtf((ph.x-X0d)*(ph.x-X0d) +(ph.y-Y0d)*(ph.y-Y0d));
+                dis = sqrtf((ph.pos.x-X0d)*(ph.pos.x-X0d) +(ph.pos.y-Y0d)*(ph.pos.y-Y0d));
                 if( dis > ENV_SIZEd) {
                     surfaceLambertienne(&ph, 0, tabthv, tabphi, spectrum, &etatThr , &configThr);
                 }
@@ -505,13 +505,13 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm,
         // Initialisation du photon au sommet de l'atmosphère
         //
 
-        ph->x = X0[0];
-        ph->y = X0[1];
-        ph->z = X0[2];
+        ph->pos.x = X0[0];
+        ph->pos.y = X0[1];
+        ph->pos.z = X0[2];
         ph->couche = 0;   // top of atmosphere
 
         #ifdef SPHERIQUE
-        ph->rayon = sqrtf(ph->x*ph->x + ph->y*ph->y + ph->z*ph->z );
+        ph->rayon = sqrtf(ph->pos.x*ph->pos.x + ph->pos.y*ph->pos.y + ph->pos.z*ph->pos.z );
         #endif
 
         // !! DEV on ne calucle pas d ep optique ici
@@ -523,12 +523,12 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm,
         //
         // Initialisation du photon à la surface ou dans l'océan
         //
-        ph->x = 0.;
-        ph->y = 0.;
+        ph->pos.x = 0.;
+        ph->pos.y = 0.;
         #ifdef SPHERIQUE
-        ph->z = RTER;
+        ph->pos.z = RTER;
         #else
-        ph->z = 0;
+        ph->pos.z = 0;
         #endif
 
         ph->tau = 0.f;
@@ -781,9 +781,9 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
     //
     // update the position of the photon
     //
-    ph->x = ph->x + ph->vx*d_tot;
-    ph->y = ph->y + ph->vy*d_tot;
-    ph->z = ph->z + ph->vz*d_tot;
+    ph->pos.x = ph->pos.x + ph->vx*d_tot;
+    ph->pos.y = ph->pos.y + ph->vy*d_tot;
+    ph->pos.z = ph->pos.z + ph->vz*d_tot;
     ph->rayon = sqrtf(ph->x*ph->x + ph->y*ph->y + ph->z*ph->z);
     ph->weight *= 1.f - prof_atm[ph->couche+ilam].abs;
     ph->prop_aer = 1.f - prof_atm[ph->couche+ilam].pmol;
@@ -840,9 +840,9 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 
             // move the photon forward down to the surface
             // the linear distance is ph->z/ph->vz
-            ph->x += ph->vx * fabs(ph->z/ph->vz);
-            ph->y += ph->vy * fabs(ph->z/ph->vz);
-            ph->z = 0.;
+            ph->pos.x += ph->vx * fabs(ph->pos.z/ph->vz);
+            ph->pos.y += ph->vy * fabs(ph->pos.z/ph->vz);
+            ph->pos.z = 0.;
         return;
         }
         // Si tau>TAUATM le photon atteint l'espace
@@ -870,10 +870,10 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 
         // calculate new photon position
         phz = __fdividef(dsca,Dsca) * (prof_atm[icouche].z - prof_atm[icouche-1].z) + prof_atm[icouche-1].z; 
-        rdist=  fabs(__fdividef(phz-ph->z, ph->vz));
-        ph->z = phz;
-        ph->x = ph->x + ph->vx*rdist;
-        ph->y = ph->y + ph->vy*rdist;
+        rdist=  fabs(__fdividef(phz-ph->pos.z, ph->vz));
+        ph->pos.z = phz;
+        ph->pos.x = ph->pos.x + ph->vx*rdist;
+        ph->pos.y = ph->pos.y + ph->vy*rdist;
 
     }
 
@@ -2378,9 +2378,9 @@ __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
     ph_le->wavel = ph->wavel;
     ph_le->ilam = ph->ilam;
     ph_le->prop_aer = ph->prop_aer;
-    ph_le->x = ph->x;
-    ph_le->y = ph->y;
-    ph_le->z = ph->z;
+    ph_le->pos.x = ph->pos.x;
+    ph_le->pos.y = ph->pos.y;
+    ph_le->pos.z = ph->pos.z;
     #ifdef SPHERIQUE
     ph_le->rayon = ph->rayon;
     ph_le->taumax = ph->taumax;
