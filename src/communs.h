@@ -87,13 +87,9 @@ class Photon
 {
 public:
     // Vecteur normalisé de la direction du photon (vitesse)
-    float vx;
-    float vy;
-    float vz;
+    float3 v;
     // Vecteur normalisé orthogonal à la vitesse du photon (polarisation)
-    float ux;
-    float uy;
-    float uz;
+    float3 u;
 	
     // Localisation du photon
     int loc;

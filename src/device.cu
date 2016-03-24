@@ -478,15 +478,15 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm,
                            philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr)
 {
 	// Initialisation du vecteur vitesse
-	ph->vx = - STHVd;
-	ph->vy = 0.F;
-	ph->vz = - CTHVd;
+	ph->v.x = - STHVd;
+	ph->v.y = 0.F;
+	ph->v.z = - CTHVd;
 
 	
 	// Initialisation du vecteur orthogonal au vecteur vitesse
-	ph->ux = -ph->vz;
-	ph->uy = 0.F;
-	ph->uz = ph->vx;
+	ph->u.x = -ph->v.z;
+	ph->u.y = 0.F;
+	ph->u.z = ph->v.x;
 	
     // Initialisation de la longueur d onde
      //mono chromatique
@@ -586,7 +586,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
     else tauRdm = 1e6;
     
 
-    vzn = __fdividef( ph->vx*ph->x + ph->vy*ph->y + ph->vz*ph->z , ph->rayon);
+    vzn = __fdividef( ph->v.x*ph->pos.x + ph->v.y*ph->pos.y + ph->v.z*ph->pos.z , ph->rayon);
     #ifndef ALT_MOVE
     costh = vzn;
     sinth2 = 1.f-costh*costh;
@@ -617,7 +617,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
             ph->tau = 0.;
             ph->couche -= 1;  // next time photon enters move_sp, it's at layers NATM
             #ifdef DEBUG
-            if (ph->vx*ph->x + ph->vy*ph->y + ph->vz*ph->z > 0) {
+            if (ph->v.x*ph->pos.x + ph->v.y*ph->pos.y + ph->v.z*ph->pos.z > 0) {
                 printf("Warning, vzn > 0 at SURF0P in move_sp (vzn=%f)\n", vzn);
             }
             #endif
@@ -743,15 +743,15 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
             d_tot += (d - d_tot)*(tauRdm - hph)/h_cur;
             #else
             d *= (tauRdm-hph)/h_cur;
-            ph->x = ph->x + ph->vx*d;
-            ph->y = ph->y + ph->vy*d;
-            ph->z = ph->z + ph->vz*d;
-            ph->rayon = sqrtf(ph->x*ph->x + ph->y*ph->y + ph->z*ph->z);
+            ph->pos.x = ph->pos.x + ph->v.x*d;
+            ph->pos.y = ph->pos.y + ph->v.y*d;
+            ph->pos.z = ph->pos.z + ph->v.z*d;
+            ph->rayon = sqrtf(ph->pos.x*ph->pos.x + ph->pos.y*ph->pos.y + ph->pos.z*ph->pos.z);
             ph->weight *= 1.f - prof_atm[ph->couche+ilam].abs;
             ph->prop_aer = 1.f - prof_atm[ph->couche+ilam].pmol;
 
             #ifdef DEBUG
-            vzn = __fdividef( ph->vx*ph->x + ph->vy*ph->y + ph->vz*ph->z , ph->rayon);
+            vzn = __fdividef( ph->v.x*ph->pos.x + ph->v.y*ph->pos.y + ph->v.z*ph->pos.z , ph->rayon);
             #endif
             #endif
 
@@ -763,11 +763,11 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
             #ifndef ALT_MOVE
             d_tot = d;
             #else
-            ph->x = ph->x + ph->vx*d;
-            ph->y = ph->y + ph->vy*d;
-            ph->z = ph->z + ph->vz*d;
-            ph->rayon = sqrtf(ph->x*ph->x + ph->y*ph->y + ph->z*ph->z);
-            vzn = __fdividef( ph->vx*ph->x + ph->vy*ph->y + ph->vz*ph->z , ph->rayon);
+            ph->pos.x = ph->pos.x + ph->v.x*d;
+            ph->pos.y = ph->pos.y + ph->v.y*d;
+            ph->pos.z = ph->pos.z + ph->v.z*d;
+            ph->rayon = sqrtf(ph->pos.x*ph->pos.x + ph->pos.y*ph->pos.y + ph->pos.z*ph->pos.z);
+            vzn = __fdividef( ph->v.x*ph->pos.x + ph->v.y*ph->pos.y + ph->v.z*ph->pos.z , ph->rayon);
             #endif
         }
 
@@ -781,10 +781,10 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
     //
     // update the position of the photon
     //
-    ph->pos.x = ph->pos.x + ph->vx*d_tot;
-    ph->pos.y = ph->pos.y + ph->vy*d_tot;
-    ph->pos.z = ph->pos.z + ph->vz*d_tot;
-    ph->rayon = sqrtf(ph->x*ph->x + ph->y*ph->y + ph->z*ph->z);
+    ph->pos.x = ph->pos.x + ph->v.x*d_tot;
+    ph->pos.y = ph->pos.y + ph->v.y*d_tot;
+    ph->pos.z = ph->pos.z + ph->v.z*d_tot;
+    ph->rayon = sqrtf(ph->pos.x*ph->pos.x + ph->pos.y*ph->pos.y + ph->pos.z*ph->pos.z);
     ph->weight *= 1.f - prof_atm[ph->couche+ilam].abs;
     ph->prop_aer = 1.f - prof_atm[ph->couche+ilam].pmol;
     #endif
@@ -797,7 +797,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 
 	float Dsca=0.f, dsca=0.f;
 
-	ph->tau += -logf(1.f - RAND)*ph->vz;
+	ph->tau += -logf(1.f - RAND)*ph->v.z;
 
 	float tauBis;
     int icouche;
@@ -840,8 +840,8 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 
             // move the photon forward down to the surface
             // the linear distance is ph->z/ph->vz
-            ph->pos.x += ph->vx * fabs(ph->pos.z/ph->vz);
-            ph->pos.y += ph->vy * fabs(ph->pos.z/ph->vz);
+            ph->pos.x += ph->v.x * fabs(ph->pos.z/ph->v.z);
+            ph->pos.y += ph->v.y * fabs(ph->pos.z/ph->v.z);
             ph->pos.z = 0.;
         return;
         }
@@ -870,10 +870,10 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 
         // calculate new photon position
         phz = __fdividef(dsca,Dsca) * (prof_atm[icouche].z - prof_atm[icouche-1].z) + prof_atm[icouche-1].z; 
-        rdist=  fabs(__fdividef(phz-ph->pos.z, ph->vz));
+        rdist=  fabs(__fdividef(phz-ph->pos.z, ph->v.z));
         ph->pos.z = phz;
-        ph->pos.x = ph->pos.x + ph->vx*rdist;
-        ph->pos.y = ph->pos.y + ph->vy*rdist;
+        ph->pos.x = ph->pos.x + ph->v.x*rdist;
+        ph->pos.y = ph->pos.y + ph->v.y*rdist;
 
     }
 
@@ -897,7 +897,7 @@ __device__ void scatter(Photon* ph,
     if (le){
         /* in case of LE the photon units vectors, scattering angle and Psi rotation angle are determined by output zenith and azimuth angles*/
         float thv, phi;
-        float vx ,vy ,vz;
+        float3 v;
 
         if (count_level==UP0M2) { /* In case of Double Local Estimate, the first direction is chosen randomly */
 			phi = RAND * DEUXPI;
@@ -910,18 +910,18 @@ __device__ void scatter(Photon* ph,
             phi = tabphi[ph->iph];
             thv = tabthv[ph->ith];
         }
-        vx = __cosf(phi) * __sinf(thv);
-        vy = __sinf(phi) * __sinf(thv);
-        vz = sign * __cosf(thv);
-        theta = ComputeTheta(ph->vx, ph->vy, ph->vz, vx, vy, vz);
+        v.x = __cosf(phi) * __sinf(thv);
+        v.y = __sinf(phi) * __sinf(thv);
+        v.z = sign * __cosf(thv);
+        theta = ComputeTheta(ph->v.x, ph->v.y, ph->v.z, v.x, v.y, v.z);
         cTh = __cosf(theta);
 		if (cTh < -1.0) cTh = -1.0;
 		if (cTh >  1.0) cTh =  1.0;
         cTh2 = cTh * cTh;
-        ComputePsiLE(ph->ux , ph->uy, ph->uz, ph->vx , ph->vy, ph->vz, vx, vy, vz, &psi, &ph->ux, &ph->uy, &ph->uz); 
-        ph->vx = vx;
-        ph->vy = vy;
-        ph->vz = vz;
+        ComputePsiLE(ph->u.x , ph->u.y, ph->u.z, ph->v.x , ph->v.y, ph->v.z, v.x, v.y, v.z, &psi, &ph->u.x, &ph->u.y, &ph->u.z); 
+        ph->v.x = v.x;
+        ph->v.y = v.y;
+        ph->v.z = v.z;
 
     }
 
@@ -1237,8 +1237,8 @@ __device__ void scatter(Photon* ph,
    ////////// Fin séparation ////////////
    
     if (!le){
-        modifyUV( ph->vx, ph->vy, ph->vz, ph->ux, ph->uy, ph->uz, cTh, psi, 
-                &ph->vx, &ph->vy, &ph->vz, &ph->ux, &ph->uy, &ph->uz) ;
+        modifyUV( ph->v.x, ph->v.y, ph->v.z, ph->u.x, ph->u.y, ph->u.z, cTh, psi, 
+                &ph->v.x, &ph->v.y, &ph->v.z, &ph->u.x, &ph->u.y, &ph->u.z) ;
     }
 
 }
@@ -1286,7 +1286,8 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
     float geo_trans_factor;
     int iter=0;
     float vzn;  // projection of V on the local vertical
-    float thv, phi, vx, vy, vz;
+    float thv, phi;
+	float3 v;
 
     // Determination of the relative refractive index
     // a: air, b: water , Mobley 2015 nind = nba = nb/na
@@ -1313,9 +1314,9 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
     float norm;
 
     // Nz is the vertical at the impact point
-    Nzx = ph->x/RTER;
-    Nzy = ph->y/RTER;
-    Nzz = ph->z/RTER;
+    Nzx = ph->pos.x/RTER;
+    Nzy = ph->pos.y/RTER;
+    Nzz = ph->pos.z/RTER;
 
     // Ny is chosen arbitrarily by cross product of Nz with axis X = (1,0,0)
     // and normalized
@@ -1338,10 +1339,10 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 
     #ifdef DEBUG
     // we check that there is no upward photon reaching surface0+
-    if ((ph->loc == SURF0P) && (ph->vx*ph->x + ph->vy*ph->y + ph->vz*ph->z > 0)) {
+    if ((ph->loc == SURF0P) && (ph->v.x*ph->pos.x + ph->v.y*ph->pos.y + ph->v.z*ph->pos.z > 0)) {
         // upward photon when reaching the surface at (0+)
         printf("Warning, vzn>0 (vzn=%f) with SURF0+ in surfaceAgitee\n",
-                ph->vx*ph->x + ph->vy*ph->y + ph->vz*ph->z);
+                ph->v.x*ph->pos.x + ph->v.y*ph->pos.y + ph->v.z*ph->pos.z);
     }
     #endif
     #endif
@@ -1386,9 +1387,9 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
                 printf("Warning, photon rejected in RoughSurface while loop\n");
                 printf("%i  V=(%f,%f,%f) beta,alpha=(%f,%f) \n",
                         iter,
-                        ph->vx,
-                        ph->vy,
-                        ph->vz,
+                        ph->v.x,
+                        ph->v.y,
+                        ph->v.z,
                         beta/PI*180,
                         alpha/PI*180
                       );
@@ -1409,7 +1410,7 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
            n_y = sign * sBeta * __sinf( alpha );
            n_z = sign * cBeta;
 
-           cTh = -(n_x*ph->vx + n_y*ph->vy + n_z*ph->vz);
+           cTh = -(n_x*ph->v.x + n_y*ph->v.y + n_z*ph->v.z);
            theta = acosf( fmin(1.00F-VALMIN, fmax( -(1.F-VALMIN), cTh ) ));
         }
      } else {
@@ -1420,7 +1421,7 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
         n_y   = 0.F;
         n_z   = sign;
 
-        cTh = -(n_x*ph->vx + n_y*ph->vy + n_z*ph->vz);
+        cTh = -(n_x*ph->v.x + n_y*ph->v.y + n_z*ph->v.z);
         theta = acosf( fmin(1.00F-VALMIN, fmax( -(1.F-VALMIN), cTh ) ));
      }
     } /* not le*/
@@ -1431,9 +1432,9 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 
      phi = tabphi[ph->iph];
      thv = tabthv[ph->ith];
-     vx  = cosf(phi) * sinf(thv);
-     vy  = sinf(phi) * sinf(thv);
-     vz  = sign_le * cosf(thv);  
+     v.x  = cosf(phi) * sinf(thv);
+     v.y  = sinf(phi) * sinf(thv);
+     v.z  = sign_le * cosf(thv);  
      
      // Normal to the facet in the global frame
      // 1) Determination of the half direction vector
@@ -1442,16 +1443,16 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
         // vector equation for determining the half direction h = - (ni*i + no*o)
         // or h = - (i + nind*o)
         // h is pointing toward the incoming ray
-        nx = sign * (ph->vx - vx*nind) ;
-        ny = sign * (ph->vy - vy*nind) ;
-        nz = sign * (ph->vz - vz*nind) ;
+        nx = sign * (ph->v.x - v.x*nind) ;
+        ny = sign * (ph->v.y - v.y*nind) ;
+        nz = sign * (ph->v.z - v.z*nind) ;
      }
      if ((ph->loc==SURF0P) && (count_level==UP0P) ||
          (ph->loc==SURF0M) && (count_level==DOWN0M)) { // Reflection geometry
         // vector equation for determining the half direction h = sign(i dot o) (i + o)
-        nx = vx - ph->vx;
-        ny = vy - ph->vy;
-        nz = vz - ph->vz;
+        nx = v.x - ph->v.x;
+        ny = v.y - ph->v.y;
+        nz = v.z - ph->v.z;
      }
 
      // 2) Normalization of the half direction vector
@@ -1461,12 +1462,12 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
      nz/=normn;
 
      // Incidence angle in the local frame
-     cTh = fabs(-(nx*ph->vx + ny*ph->vy + nz*ph->vz));
+     cTh = fabs(-(nx*ph->v.x + ny*ph->v.y + nz*ph->v.z));
      theta = acosf( fmin(1.00F-VALMIN, fmax( -(1.F-VALMIN), cTh ) ));
 
      #ifdef SPHERIQUE
      // facet slope
-     cBeta = 1./RTER * fabs(nx*ph->x + ny*ph->y + nz*ph->z);
+     cBeta = 1./RTER * fabs(nx*ph->pos.x + ny*ph->pos.y + nz*ph->pos.z);
      beta  = fabs(acosf(cBeta));
      #else
      cBeta = fabs(nz);
@@ -1498,9 +1499,9 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 
     #ifdef SPHERIQUE
     // avz is the projection of V on the local vertical
-    float avz = fabs(ph->x*ph->vx + ph->y*ph->vy + ph->z*ph->vz)/RTER;
+    float avz = fabs(ph->pos.x*ph->v.x + ph->pos.y*ph->v.y + ph->pos.z*ph->v.z)/RTER;
     #else
-    float avz = fabs(ph->vz);
+    float avz = fabs(ph->v.z);
     #endif
 
 	// Rotation of Stokes parameters
@@ -1510,10 +1511,10 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 
 	if( (s1!=s2) || (s3!=0.F) ){
 
-		temp = __fdividef(nx*ph->ux + ny*ph->uy + nz*ph->uz,sTh);
+		temp = __fdividef(nx*ph->u.x + ny*ph->u.y + nz*ph->u.z,sTh);
 		psi = acosf( fmin(1.00F, fmax( -1.F, temp ) ));	
 
-		if( (nx*(ph->uy*ph->vz-ph->uz*ph->vy) + ny*(ph->uz*ph->vx-ph->ux*ph->vz) + nz*(ph->ux*ph->vy-ph->uy*ph->vx) ) <0 ){
+		if( (nx*(ph->u.y*ph->v.z-ph->u.z*ph->v.y) + ny*(ph->u.z*ph->v.x-ph->u.x*ph->v.z) + nz*(ph->u.x*ph->v.y-ph->u.y*ph->v.x) ) <0 ){
 			psi = -psi;
 		}
 
@@ -1606,19 +1607,19 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 		ph->stokes4 = rparper*stokes4 - rparper_cross*stokes3; // DR Mobley 2015 sign convention
 		
         if (le) {
-		    ph->vx = vx;
-		    ph->vy = vy;
-		    ph->vz = vz;
+		    ph->v.x = v.x;
+		    ph->v.y = v.y;
+		    ph->v.z = v.z;
         }
         else {
-		    ph->vx += 2.F*cTh*nx;
-		    ph->vy += 2.F*cTh*ny;
-		    ph->vz += 2.F*cTh*nz;
+		    ph->v.x += 2.F*cTh*nx;
+		    ph->v.y += 2.F*cTh*ny;
+		    ph->v.z += 2.F*cTh*nz;
         }
 
-		ph->ux = __fdividef( nx-cTh*ph->vx,sTh );
-		ph->uy = __fdividef( ny-cTh*ph->vy,sTh );
-		ph->uz = __fdividef( nz-cTh*ph->vz,sTh );
+		ph->u.x = __fdividef( nx-cTh*ph->v.x,sTh );
+		ph->u.y = __fdividef( ny-cTh*ph->v.y,sTh );
+		ph->u.z = __fdividef( nz-cTh*ph->v.z,sTh );
 		
 
         // DR Normalization of the reflexion matrix
@@ -1633,9 +1634,9 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 			}
 
         #ifdef SPHERIQUE
-        vzn = ph->vx*ph->x + ph->vy*ph->y + ph->vz*ph->z;
+        vzn = ph->v.x*ph->pos.x + ph->v.y*ph->pos.y + ph->v.z*ph->pos.z;
         #else
-        vzn = ph->vz;
+        vzn = ph->v.z;
         #endif
 
         //
@@ -1682,24 +1683,24 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 		
 		alpha  = __fdividef(cTh,nind) - cot;
         if (le) {
-		    ph->vx = vx;
-		    ph->vy = vy;
-		    ph->vz = vz;
+		    ph->v.x = v.x;
+		    ph->v.y = v.y;
+		    ph->v.z = v.z;
 
         }
         else {
-		    ph->vx = __fdividef(ph->vx,nind) + alpha*nx;
-		    ph->vy = __fdividef(ph->vy,nind) + alpha*ny;
-		    ph->vz = __fdividef(ph->vz,nind) + alpha*nz;
+		    ph->v.x = __fdividef(ph->v.x,nind) + alpha*nx;
+		    ph->v.y = __fdividef(ph->v.y,nind) + alpha*ny;
+		    ph->v.z = __fdividef(ph->v.z,nind) + alpha*nz;
         }
-		ph->ux = __fdividef(nx+cot*ph->vx,sTh )*nind;
-		ph->uy = __fdividef(ny+cot*ph->vy,sTh )*nind;
-		ph->uz = __fdividef(nz+cot*ph->vz,sTh )*nind;
+		ph->u.x = __fdividef(nx+cot*ph->v.x,sTh )*nind;
+		ph->u.y = __fdividef(ny+cot*ph->v.y,sTh )*nind;
+		ph->u.z = __fdividef(nz+cot*ph->v.z,sTh )*nind;
 
         #ifdef SPHERIQUE
-        vzn = ph->vx*ph->x + ph->vy*ph->y + ph->vz*ph->z;
+        vzn = ph->v.x*ph->pos.x + ph->v.y*ph->pos.y + ph->v.z*ph->pos.z;
         #else
-        vzn = ph->vz;
+        vzn = ph->v.z;
         #endif
 
 
@@ -1805,8 +1806,8 @@ __device__ void surfaceLambertienne(Photon* ph, int le, float* tabthv, float* ta
 	* Mais ils sont bien plus performant et cette erreur ne pose pas de problème jusqu'à présent.
 	* De plus, l'angle d'impact n'est pas calculé mais directement les cosinus et sinus de cet angle.
 	*/
-	if( ph->z > 0. ){
-		ict = __fdividef(ph->z,RTER);
+	if( ph->pos.z > 0. ){
+		ict = __fdividef(ph->pos.z,RTER);
 		
 		if(ict>1.f){
 			ict = 1.f;
@@ -1814,17 +1815,17 @@ __device__ void surfaceLambertienne(Photon* ph, int le, float* tabthv, float* ta
 		
 		ist = sqrtf( 1.f - ict*ict );
 		
-		if(ph->x >= 0.f) ist = -ist;
+		if(ph->pos.x >= 0.f) ist = -ist;
 		
-		if( sqrtf(ph->x*ph->x + ph->y*ph->y)<1.e-6 ){
+		if( sqrtf(ph->pos.x*ph->pos.x + ph->pos.y*ph->pos.y)<1.e-6 ){
 			/*NOTE En fortran ce test est à 1.e-8, relativement au double utilisés, peut peut être être supprimer ici*/
 			icp = 1.f;
 		}
 		else{
-			icp = __fdividef(ph->x,sqrtf(ph->x*ph->x + ph->y*ph->y));
+			icp = __fdividef(ph->pos.x,sqrtf(ph->pos.x*ph->pos.x + ph->pos.y*ph->pos.y));
 			isp = sqrtf( 1.f - icp*icp );
 			
-			if( ph->y < 0.f ) isp = -isp;
+			if( ph->pos.y < 0.f ) isp = -isp;
 		}
 	}
 	else{
@@ -1835,20 +1836,20 @@ __device__ void surfaceLambertienne(Photon* ph, int le, float* tabthv, float* ta
 	
 	
 	/** Il faut exprimer Vx,y,z et Ux,y,z dans le repère de la normale au point d'impact **/
-	vxn= ict*icp*ph->vx - ict*isp*ph->vy + ist*ph->vz;
-	vyn= isp*ph->vx + icp*ph->vy;
-	vzn= -icp*ist*ph->vx + ist*isp*ph->vy + ict*ph->vz;
+	vxn= ict*icp*ph->v.x - ict*isp*ph->v.y + ist*ph->v.z;
+	vyn= isp*ph->v.x + icp*ph->v.y;
+	vzn= -icp*ist*ph->v.x + ist*isp*ph->v.y + ict*ph->v.z;
 	
-	uxn= ict*icp*ph->ux - ict*isp*ph->uy + ist*ph->uz;
-	uyn= isp*ph->ux + icp*ph->uy;
-	uzn= -icp*ist*ph->ux + ist*isp*ph->uy + ict*ph->uz;
+	uxn= ict*icp*ph->u.x - ict*isp*ph->u.y + ist*ph->u.z;
+	uyn= isp*ph->u.x + icp*ph->u.y;
+	uzn= -icp*ist*ph->u.x + ist*isp*ph->u.y + ict*ph->u.z;
 	
-	ph->vx = vxn;
-	ph->vy = vyn;
-	ph->vz = vzn;
-	ph->ux = uxn;
-	ph->uy = uyn;
-	ph->uz = uzn;
+	ph->v.x = vxn;
+	ph->v.y = vyn;
+	ph->v.z = vzn;
+	ph->u.x = uxn;
+	ph->u.y = uyn;
+	ph->u.z = uzn;
 
     } // photon not seafloor
 	
@@ -1874,12 +1875,12 @@ __device__ void surfaceLambertienne(Photon* ph, int le, float* tabthv, float* ta
     ph->stokes4 = 0.0;
 
 	
-	ph->vx = vxn;
-	ph->vy = vyn;
-	ph->vz = vzn;
-	ph->ux = uxn;
-	ph->uy = uyn;
-	ph->uz = uzn;
+	ph->v.x = vxn;
+	ph->v.y = vyn;
+	ph->v.z = vzn;
+	ph->u.x = uxn;
+	ph->u.y = uyn;
+	ph->u.z = uzn;
 	
 
     if (DIOPTREd!=4 && ((ph->loc == SURF0M) || (ph->loc == SURF0P))){
@@ -1898,20 +1899,20 @@ __device__ void surfaceLambertienne(Photon* ph, int le, float* tabthv, float* ta
 	  isp = -isp;
 	  ist = -ist;
 	
-	  vxn= ict*icp*ph->vx - ict*isp*ph->vy + ist*ph->vz;
-	  vyn= isp*ph->vx + icp*ph->vy;
-	  vzn= -icp*ist*ph->vx + ist*isp*ph->vy + ict*ph->vz;
+	  vxn= ict*icp*ph->v.x - ict*isp*ph->v.y + ist*ph->v.z;
+	  vyn= isp*ph->v.x + icp*ph->v.y;
+	  vzn= -icp*ist*ph->v.x + ist*isp*ph->v.y + ict*ph->v.z;
 	
-	  uxn= ict*icp*ph->ux - ict*isp*ph->uy + ist*ph->uz;
-	  uyn= isp*ph->ux + icp*ph->uy;
-	  uzn= -icp*ist*ph->ux + ist*isp*ph->uy + ict*ph->uz;
+	  uxn= ict*icp*ph->u.x - ict*isp*ph->u.y + ist*ph->u.z;
+	  uyn= isp*ph->u.x + icp*ph->u.y;
+	  uzn= -icp*ist*ph->u.x + ist*isp*ph->u.y + ict*ph->u.z;
 	
-	  ph->vx = vxn;
-	  ph->vy = vyn;
-	  ph->vz = vzn;
-	  ph->ux = uxn;
-	  ph->uy = uyn;
-	  ph->uz = uzn;
+	  ph->v.x = vxn;
+	  ph->v.y = vyn;
+	  ph->v.z = vzn;
+	  ph->u.x = uxn;
+	  ph->u.y = uyn;
+	  ph->u.z = uzn;
 	#endif
     } // not seafloor 
 
@@ -1949,9 +1950,9 @@ __device__ void countPhoton(Photon* ph,
     float *tabCount; 
     #endif
 
-    float theta = acosf(fmin(1.F, fmax(-1.F, ph->vz)));
+    float theta = acosf(fmin(1.F, fmax(-1.F, ph->v.z)));
     #ifdef SPHERIQUE
-    if(ph->vz<=0.f) {
+    if(ph->v.z<=0.f) {
          // do not count the downward photons leaving atmosphere
          // DR April 2016, test flux for spherical shell
         //return;
@@ -1982,11 +1983,11 @@ __device__ void countPhoton(Photon* ph,
 
             ux_phi = cosf(tabphi[ph->iph]);
             uy_phi = sinf(tabphi[ph->iph]);
-            cos_psi = (ux_phi*ph->ux + uy_phi*ph->uy);
+            cos_psi = (ux_phi*ph->u.x + uy_phi*ph->u.y);
             if( cos_psi > 1.0) cos_psi = 1.0;
             if( cos_psi < -1.0) cos_psi = -1.0;
             sin_psi = sqrtf(1.0 - (cos_psi*cos_psi) );
-            if(( abs( (ph->ux*cos_psi - ph->uy*sin_psi) - ux_phi ) < eps ) and ( abs( (ph->ux*sin_psi + ph->uy*cos_psi) - uy_phi ) < eps )) {
+            if(( abs( (ph->u.x*cos_psi - ph->u.y*sin_psi) - ux_phi ) < eps ) and ( abs( (ph->u.x*sin_psi + ph->u.y*cos_psi) - uy_phi ) < eps )) {
                 psi = -acosf(cos_psi);
             }
             else{
@@ -2007,7 +2008,7 @@ __device__ void countPhoton(Photon* ph,
         float tau_le;
         if (count_level==UPTOA) tau_le = prof_atm[NATMd + ph->ilam *(NATMd+1)].tau;
         if ((count_level==DOWN0P) || (count_level==UP0M) || (count_level==UP0P) ) tau_le = 0.F;
-        ph->weight *= __expf(__fdividef(-fabs(tau_le - ph->tau), abs(ph->vz))); // LE attenuation to count_level
+        ph->weight *= __expf(__fdividef(-fabs(tau_le - ph->tau), abs(ph->v.z))); // LE attenuation to count_level
         #endif
     }
 	
@@ -2023,7 +2024,7 @@ __device__ void countPhoton(Photon* ph,
 	
 
 	float weight = ph->weight;
-	if (FLUXd==1 && LEd==0) weight /= fabs(ph->vz);
+	if (FLUXd==1 && LEd==0) weight /= fabs(ph->v.z);
 
     #ifdef DEBUG
     int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
@@ -2104,8 +2105,8 @@ __device__ void ComputePsi(Photon* ph, float* psi, float theta)
 {
     // see Rammella et al. Three Monte Carlo programs of polarized light transport into scattering media: part I Optics Express, 2005, 13, 4420
     double wz;
-    wz = (double)ph->vx * (double)ph->uy - (double)ph->vy * (double)ph->ux;
-    *psi = atan2(wz, -1.*(double)ph->uz); 
+    wz = (double)ph->v.x * (double)ph->u.y - (double)ph->v.y * (double)ph->u.x;
+    *psi = atan2(wz, -1.*(double)ph->u.z); 
 }
 
 
@@ -2117,11 +2118,11 @@ __device__ void ComputeBox(int* ith, int* iphi, int* il,
                            Photon* photon, unsigned long long *errorcount)
 {
 	// vxy est la projection du vecteur vitesse du photon sur (x,y)
-	float vxy = sqrtf(photon->vx * photon->vx + photon->vy * photon->vy);
+	float vxy = sqrtf(photon->v.x * photon->v.x + photon->v.y * photon->v.y);
 
 	// Calcul de la valeur de ithv
 	// _rn correspond à round to the nearest integer
-	*ith = __float2int_rd(__fdividef(acosf(fabsf(photon->vz)) * NBTHETAd, DEMIPI));
+	*ith = __float2int_rd(__fdividef(acosf(fabsf(photon->v.z)) * NBTHETAd, DEMIPI));
 	//*ith = __float2int_rn(__fdividef(acosf(fabsf(photon->vz)) * NBTHETAd, DEMIPI));
 
 	// Calcul de la valeur de il
@@ -2135,7 +2136,7 @@ __device__ void ComputeBox(int* ith, int* iphi, int* il,
 	{	//on calcule iphi
 	
 		// On place d'abord le photon dans un demi-cercle
-		float cPhiP = __fdividef(photon->vx, vxy); //cosPhiPhoton
+		float cPhiP = __fdividef(photon->v.x, vxy); //cosPhiPhoton
 		// Cas limite où phi est très proche de 0, la formule générale ne marche pas
 		//if(cPhiP >= 1.F) *iphi = 0;
 		// Cas limite où phi est très proche de PI, la formule générale ne marche pas
@@ -2157,10 +2158,10 @@ __device__ void ComputeBox(int* ith, int* iphi, int* il,
             *iphi = __float2int_rd(__fdividef((acosf(cPhiP)-dphi/2.) * (NBPHId/2-1.0F), PI-dphi)) + 1;
 		
 		    // Puis on place le photon dans l'autre demi-cercle selon vy, utile uniquement lorsque l'on travail sur tous l'espace
-   		    if(photon->vy < 0.F) *iphi = NBPHId - *iphi;
+   		    if(photon->v.y < 0.F) *iphi = NBPHId - *iphi;
             }
 		// Lorsque vy=0 on décide par défaut que le photon reste du côté vy>0
-		if(photon->vy == 0.F) atomicAdd(errorcount+ERROR_VXY, 1);
+		if(photon->v.y == 0.F) atomicAdd(errorcount+ERROR_VXY, 1);
 	}
 	
 	else{
@@ -2168,7 +2169,7 @@ __device__ void ComputeBox(int* ith, int* iphi, int* il,
 		atomicAdd(errorcount+ERROR_VXY, 1);
 // 		/*if(photon->vy < 0.F) *iphi = NBPHId - 1;
 // 		else*/ *iphi = 0;
-		if(photon->vy >= 0.F)  *iphi = 0;
+		if(photon->v.y >= 0.F)  *iphi = 0;
 		else *iphi = NBPHId - 1;
 	}
 	
@@ -2184,9 +2185,9 @@ __device__ void display(const char* desc, Photon* ph) {
     if (idx==0) {
         printf("%16s X=(%6.3f,%6.3f,%6.3f) V=(%6.3f,%6.3f,%6.3f) U=(%6.3f,%6.3f,%6.3f) S=(%6.3f,%6.3f,%6.3f,%6.3f) tau=%6.3f weight=%11.3e loc=",
                desc,
-               ph->x, ph->y, ph->z,
-               ph->vx,ph->vy,ph->vz,
-               ph->ux,ph->uy,ph->uz,
+               ph->pos.x, ph->pos.y, ph->pos.z,
+               ph->v.x,ph->v.y,ph->v.z,
+               ph->u.x,ph->u.y,ph->u.z,
                ph->stokes1, ph->stokes2,
                ph->stokes3, ph->stokes4,
                ph->tau, ph->weight
@@ -2212,7 +2213,8 @@ __device__ void modifyUV( float vx0, float vy0, float vz0, float ux0, float uy0,
         float cTh, float psi, 
         float *vx1, float *vy1, float *vz1, float *ux1, float *uy1, float *uz1) { 
 
-    float sTh, cPsi, sPsi, wx, wy, wz, vx, vy, vz, ux, uy, uz, norm;
+    float sTh, cPsi, sPsi, wx, wy, wz, norm;
+	float3 v, u;
     sPsi = __sinf(psi);
     cPsi = __cosf(psi);
     sTh = sqrtf(1.F - cTh*cTh);
@@ -2221,34 +2223,34 @@ __device__ void modifyUV( float vx0, float vy0, float vz0, float ux0, float uy0,
 	wy = uz0 * vx0 - ux0 * vz0;
 	wz = ux0 * vy0 - uy0 * vx0;
 	// v est le nouveau vecteur v du photon
-	vx = cTh * vx0 + sTh * ( cPsi * ux0 + sPsi * wx );
-	vy = cTh * vy0 + sTh * ( cPsi * uy0 + sPsi * wy );
-	vz = cTh * vz0 + sTh * ( cPsi * uz0 + sPsi * wz );
+	v.x = cTh * vx0 + sTh * ( cPsi * ux0 + sPsi * wx );
+	v.y = cTh * vy0 + sTh * ( cPsi * uy0 + sPsi * wy );
+	v.z = cTh * vz0 + sTh * ( cPsi * uz0 + sPsi * wz );
 	// Changement du vecteur u (orthogonal au vecteur vitesse du photon)
     if (cTh <= -1.F) {
-        ux  = -ux0;
-        uy  = -uy0;
-        uz  = -uz0;
+        u.x  = -ux0;
+        u.y  = -uy0;
+        u.z  = -uz0;
         }
     else if (cTh >= 1.F){
-        ux  = ux0;
-        uy  = uy0;
-        uz  = uz0;
+        u.x  = ux0;
+        u.y  = uy0;
+        u.z  = uz0;
     }
     else {
-        ux = cTh * vx - vx0;
-        uy = cTh * vy - vy0;
-        uz = cTh * vz - vz0;
+        u.x = cTh * v.x - vx0;
+        u.y = cTh * v.y - vy0;
+        u.z = cTh * v.z - vz0;
     }
 
-    norm=sqrtf(vx*vx+vy*vy+vz*vz);
-    *vx1 = vx/norm;
-    *vy1 = vy/norm;
-    *vz1 = vz/norm;
-    norm=sqrtf(ux*ux+uy*uy+uz*uz);
-    *ux1 = ux/norm;
-    *uy1 = uy/norm;
-    *uz1 = uz/norm;
+    norm=sqrtf(v.x*v.x+v.y*v.y+v.z*v.z);
+    *vx1 = v.x/norm;
+    *vy1 = v.y/norm;
+    *vz1 = v.z/norm;
+    norm=sqrtf(u.x*u.x+u.y*u.y+u.z*u.z);
+    *ux1 = u.x/norm;
+    *uy1 = u.y/norm;
+    *uz1 = u.z/norm;
 }
 
 __device__ void ComputePsiLE( float ux0, float uy0, float uz0,
@@ -2361,12 +2363,12 @@ __device__ float ComputeTheta(float vx0, float vy0, float vz0, float vx1, float 
 
 __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
     //
-    ph_le->vx = ph->vx;
-    ph_le->vy = ph->vy;
-    ph_le->vz = ph->vz;
-    ph_le->ux = ph->ux;
-    ph_le->uy = ph->uy;
-    ph_le->uz = ph->uz;
+    ph_le->v.x = ph->v.x;
+    ph_le->v.y = ph->v.y;
+    ph_le->v.z = ph->v.z;
+    ph_le->u.x = ph->u.x;
+    ph_le->u.y = ph->u.y;
+    ph_le->u.z = ph->u.z;
     ph_le->stokes1 = ph->stokes1;
     ph_le->stokes2 = ph->stokes2;
     ph_le->stokes3 = ph->stokes3;
