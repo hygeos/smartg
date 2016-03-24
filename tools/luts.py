@@ -755,7 +755,8 @@ class LUT(object):
 
 
     def __plot_2d(self, fmt='k-', show_grid=True, swap=False,
-                  vmin=None, vmax=None, cmap=None, index=None, **kwargs):
+                  vmin=None, vmax=None, cmap=None, index=None,
+                  label=None, **kwargs):
         '''
         Plot a 2-dimension LUT, with optional transect
         returns self
@@ -807,7 +808,9 @@ class LUT(object):
             ])
         cbar_ax = fig.add_axes([0.92, 0.25, 0.03, 0.5])
         # cbar_ax.text(0, -0.1, self.desc, verticalalignment='top')
-        if self.desc is not None:
+        if label is None:
+            label = self.desc
+        if label is not None:
             cbar_ax.set_title(self.desc, weight='bold', horizontalalignment='left', position=(0.,-0.15))
         plt.colorbar(im, extend='both', orientation='vertical', cax=cbar_ax)
 
