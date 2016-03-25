@@ -260,6 +260,7 @@ class Smartg(object):
         self.common_attrs['device'] = pycuda.autoinit.device.name()
         self.common_attrs['pycuda_version'] = pycuda.VERSION_TEXT
         self.common_attrs['cuda_version'] = '.'.join(map(str, pycuda.driver.get_version()))
+        self.common_attrs.update(get_git_attrs())
 
     def run(self, wl,
              atm=None, surf=None, water=None, env=None,
@@ -388,7 +389,6 @@ class Smartg(object):
         attrs.update({'MODE': {True: 'PPA', False: 'SSA'}[self.pp]})
         attrs.update({'XBLOCK': XBLOCK})
         attrs.update({'XGRID': XGRID})
-        attrs.update(get_git_attrs())
 
         if SEED == -1:
             # SEED is based on clock
