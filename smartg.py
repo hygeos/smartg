@@ -657,12 +657,13 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
 
     # normalization
     tabFinal = tabPhotonsTot.astype('float64')/(norm_geo*norm_npho)
-    sigma /= norm_geo
 
     # swapaxes : (th, phi) -> (phi, theta)
     tabFinal = tabFinal.swapaxes(3,4)
-    sigma = sigma.swapaxes(3,4)
     NPhotonsOutTot = NPhotonsOutTot.swapaxes(2,3)
+    if sigma is not None:
+        sigma /= norm_geo
+        sigma = sigma.swapaxes(3,4)
 
 
     #
@@ -1133,13 +1134,13 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL,
 
     # Initialize of the parameters
     tabPhotonsTot = np.zeros((NLVL,NPSTK,NLAM,NBTHETA,NBPHI), dtype=np.float64)
+    N_simu = 0
     if stdev:
         # to calculate the standard deviation of the result, we accumulate the
         # parameters and their squares
         # finally we extrapolate in 1/sqrt(N_simu)
         sum_x = 0.
         sum_x2 = 0.
-        N_simu = 0
 
     # arrays for counting the input photons (per wavelength)
     NPhotonsIn = gpuzeros(NLAM, dtype=np.uint64)
@@ -1188,8 +1189,8 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL,
         S = tabPhotons.get().astype('float64')   # sum of weights for the last kernel
         tabPhotonsTot += S
 
+        N_simu += 1
         if stdev:
-            N_simu += 1
             L = L.reshape((1,1,-1,1,1))   # broadcast to tabPhotonsTot
             # NOTE: we normalize by the number of photons launched, thus we don't do it later
             sum_x += S/L
