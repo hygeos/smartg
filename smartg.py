@@ -269,7 +269,7 @@ class Smartg(object):
              NBTHETA=45, NBPHI=90, NF=1e6,
              OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
              NBLOOP=None, progress=True,
-             le=None, flux=None, stdev=True):
+             le=None, flux=None, stdev=False):
         '''
         Run a SMART-G simulation
 
@@ -1133,7 +1133,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL,
     errorcount = gpuzeros(NERROR, dtype='uint64')
 
     # Initialize of the parameters
-    tabPhotonsTot = np.zeros((NLVL,NPSTK,NLAM,NBTHETA,NBPHI), dtype=np.float64)
+    tabPhotonsTot = gpuzeros((NLVL,NPSTK,NLAM,NBTHETA,NBPHI), dtype=np.float64)
     N_simu = 0
     if stdev:
         # to calculate the standard deviation of the result, we accumulate the
@@ -1144,11 +1144,11 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL,
 
     # arrays for counting the input photons (per wavelength)
     NPhotonsIn = gpuzeros(NLAM, dtype=np.uint64)
-    NPhotonsInTot = np.zeros(NLAM, dtype=np.uint64)
+    NPhotonsInTot = gpuzeros(NLAM, dtype=np.uint64)
 
     # arrays for counting the output photons
     NPhotonsOut = gpuzeros((NLVL,NLAM,NBTHETA,NBPHI), dtype=np.uint64)
-    NPhotonsOutTot = np.zeros((NLVL,NLAM,NBTHETA,NBPHI), dtype=np.uint64)
+    NPhotonsOutTot = gpuzeros((NLVL,NLAM,NBTHETA,NBPHI), dtype=np.uint64)
 
     if double:
         tabPhotons = gpuzeros((NLVL,NPSTK,NLAM,NBTHETA,NBPHI), dtype=np.float64)
@@ -1168,7 +1168,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL,
     philox_data[0] = SEED
     philox_data = to_gpu(philox_data)
 
-    while(np.sum(NPhotonsInTot) < NBPHOTONS):
+    while(np.sum(NPhotonsInTot.get()) < NBPHOTONS):
 
         tabPhotons.fill(0.)
         NPhotonsOut.fill(0)
@@ -1182,23 +1182,27 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL,
                 prof_atm, prof_oc, wl_proba_icdf, philox_data,
                 block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
 
-        L = NPhotonsIn.get()   # number of photons launched by last kernel
+        cuda.Context.synchronize()
+
+        L = NPhotonsIn   # number of photons launched by last kernel
         NPhotonsInTot += L
 
-        NPhotonsOutTot += NPhotonsOut.get()
-        S = tabPhotons.get().astype('float64')   # sum of weights for the last kernel
+        NPhotonsOutTot += NPhotonsOut
+        S = tabPhotons   # sum of weights for the last kernel
         tabPhotonsTot += S
 
         N_simu += 1
         if stdev:
             L = L.reshape((1,1,-1,1,1))   # broadcast to tabPhotonsTot
-            # NOTE: we normalize by the number of photons launched, thus we don't do it later
-            sum_x += S/L
-            sum_x2 += (S/L)**2
+            warn('stdev is activated: it is known to slow down the code considerably.')
+            SoverL = S.get()/L.get()
+            sum_x += SoverL
+            sum_x2 += (SoverL)**2
 
         # update of the progression Bar
-        p.update(np.sum(NPhotonsInTot),
-                'Launched {:.3g} photons'.format(np.sum(NPhotonsInTot)))
+        sphot = np.sum(NPhotonsInTot.get())
+        p.update(sphot,
+                'Launched {:.3g} photons'.format(sphot))
 
     if stdev:
         # finalize the calculation of the standard deviation
@@ -1209,7 +1213,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL,
     else:
         sigma = None
 
-    return NPhotonsInTot, tabPhotonsTot, errorcount, NPhotonsOutTot, sigma, N_simu
+    return NPhotonsInTot.get(), tabPhotonsTot.get(), errorcount, NPhotonsOutTot.get(), sigma, N_simu
 
 
 def impactInit(pp, Hatm, NATM, NLAM, prof_atm, THVDEG, Rter):
