@@ -742,8 +742,8 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
             d_tot += (d - d_tot)*(tauRdm - hph)/h_cur;
             #else
             d *= (tauRdm-hph)/h_cur;
-            ph->pos = Operator+(ph->pos, ph->v*d);
-            ph->rayon = sqrtf(ph->pos.x*ph->pos.x + ph->pos.y*ph->pos.y + ph->pos.z*ph->pos.z);
+            ph->pos = operator+(ph->pos, ph->v*d);
+            ph->rayon = length(ph->pos);
             ph->weight *= 1.f - prof_atm[ph->couche+ilam].abs;
             ph->prop_aer = 1.f - prof_atm[ph->couche+ilam].pmol;
 
@@ -761,11 +761,10 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
             d_tot = d;
             #else
             ph->pos = operator+(ph->pos, ph->v*d);
-            ph->rayon = sqrtf(ph->pos.x*ph->pos.x + ph->pos.y*ph->pos.y + ph->pos.z*ph->pos.z);
+            ph->rayon = length(ph->pos);
             vzn = __fdividef( dot(ph->v, ph->pos) , ph->rayon);
             #endif
         }
-
 
     }
     if (le) {
