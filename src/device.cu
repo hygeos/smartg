@@ -2357,9 +2357,7 @@ __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
     ph_le->v.x = ph->v.x;
     ph_le->v.y = ph->v.y;
     ph_le->v.z = ph->v.z;
-    ph_le->u.x = ph->u.x;
-    ph_le->u.y = ph->u.y;
-    ph_le->u.z = ph->u.z;
+    ph_le->u = ph->u;
     ph_le->stokes.x = ph->stokes.x;
     ph_le->stokes.y = ph->stokes.y;
     ph_le->stokes.z = ph->stokes.z;
