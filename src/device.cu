@@ -545,10 +545,10 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm,
 	ph->weight = WEIGHTINIT;
 	
 	// Initialisation des paramètres de stokes du photon
-	ph->stokes1 = 0.5F;
-	ph->stokes2 = 0.5F;
-	ph->stokes3 = 0.F;
-	ph->stokes4 = 0.F;
+	ph->stokes.x = 0.5F;
+	ph->stokes.y = 0.5F;
+	ph->stokes.z = 0.F;
+	ph->stokes.w = 0.F;
 
 }
 
@@ -890,7 +890,7 @@ __device__ void scatter(Photon* ph,
 	float cTh=0.f ;
 	float zang=0.f, theta=0.f;
 	int iang, ilay, ipha;
-	float stokes1, stokes2, stokes3, stokes4;
+	float4 stokes;
 	float cTh2, psi, sign;
 	float prop_aer = ph->prop_aer;
 	
@@ -957,27 +957,27 @@ __device__ void scatter(Photon* ph,
             }
 
 			// Stokes vector rotation
-			rotateStokes(ph->stokes1, ph->stokes2, ph->stokes3,  psi,
-				     &ph->stokes1, &ph->stokes2, &ph->stokes3 );
+			rotateStokes(ph->stokes.x, ph->stokes.y, ph->stokes.z,  psi,
+				     &ph->stokes.x, &ph->stokes.y, &ph->stokes.z );
 
 			// Scattering matrix multiplication
 			float cross_term;
-			stokes1 = ph->stokes1;
-			stokes2 = ph->stokes2;
-			cross_term  = DELTA_PRIMd * (ph->stokes1 + ph->stokes2);
-			ph->stokes1 = 3./2. * (  DELTAd  * stokes1 + cross_term );
-			ph->stokes2 = 3./2. * (  DELTAd  * cTh2 * stokes2 + cross_term );			
-			ph->stokes3 = 3./2. * (  DELTAd  * cTh  * ph->stokes3 );
-			ph->stokes4 = 3./2. * (  DELTAd  * DELTA_SECOd * cTh * ph->stokes4 );
+			stokes.x = ph->stokes.x;
+			stokes.y = ph->stokes.y;
+			cross_term  = DELTA_PRIMd * (ph->stokes.x + ph->stokes.y);
+			ph->stokes.x = 3./2. * (  DELTAd  * stokes.x + cross_term );
+			ph->stokes.y = 3./2. * (  DELTAd  * cTh2 * stokes.y + cross_term );			
+			ph->stokes.z = 3./2. * (  DELTAd  * cTh  * ph->stokes.z );
+			ph->stokes.w = 3./2. * (  DELTAd  * DELTA_SECOd * cTh * ph->stokes.w );
 
             if (!le){
 			    // Bias sampling scheme 2): Debiasing
 			    float phase_func;
 			    phase_func = 3./4. * DELTAd * (cTh2+1.0) + 3.0 * DELTA_PRIMd;
-			    ph->stokes1 /= phase_func;  
-			    ph->stokes2 /= phase_func;  
-			    ph->stokes3 /= phase_func;     		
-			    ph->stokes4 /= phase_func;     		
+			    ph->stokes.x /= phase_func;  
+			    ph->stokes.y /= phase_func;  
+			    ph->stokes.z /= phase_func;     		
+			    ph->stokes.w /= phase_func;     		
             }
 
             else ph->weight /= 4.F; //Phase function normalization
@@ -1039,25 +1039,25 @@ __device__ void scatter(Photon* ph,
             }
 
 			// Stokes vector rotation
-			rotateStokes(ph->stokes1, ph->stokes2, ph->stokes3,   psi,
-			        &ph->stokes1, &ph->stokes2, &ph->stokes3);
+			rotateStokes(ph->stokes.x, ph->stokes.y, ph->stokes.z,   psi,
+			        &ph->stokes.x, &ph->stokes.y, &ph->stokes.z);
 
 			// Scattering matrix multiplication
-            stokes3=ph->stokes3;
-            stokes4=ph->stokes4;
-			ph->stokes1 *= P11;
-			ph->stokes2 *= P22;
-			ph->stokes3 = stokes3 * P33 - stokes4 * P43;
-			ph->stokes4 = stokes4 * P33 + stokes3 * P43;
+            stokes.z=ph->stokes.z;
+            stokes.w=ph->stokes.w;
+			ph->stokes.x *= P11;
+			ph->stokes.y *= P22;
+			ph->stokes.z = stokes.z * P33 - stokes.w * P43;
+			ph->stokes.w = stokes.w * P33 + stokes.z * P43;
 
             if (!le){
 			    // Bias sampling scheme 2): Debiasing
 			    float debias;
 			    debias = __fdividef( 2., P11 + P22 );
-			    ph->stokes1 *= debias;  
-			    ph->stokes2 *= debias;  
-			    ph->stokes3 *= debias;  
-			    ph->stokes4 *= debias;  
+			    ph->stokes.x *= debias;  
+			    ph->stokes.y *= debias;  
+			    ph->stokes.z *= debias;  
+			    ph->stokes.w *= debias;  
 
             }
 
@@ -1106,27 +1106,27 @@ __device__ void scatter(Photon* ph,
             }
 
 			// Stokes vector rotation
-			rotateStokes(ph->stokes1, ph->stokes2, ph->stokes3,  psi,
-				     &ph->stokes1, &ph->stokes2, &ph->stokes3 );
+			rotateStokes(ph->stokes.x, ph->stokes.y, ph->stokes.z,  psi,
+				     &ph->stokes.x, &ph->stokes.y, &ph->stokes.z );
 
 			// Scattering matrix multiplication
 			float cross_term;
-			stokes1 = ph->stokes1;
-			stokes2 = ph->stokes2;
-			cross_term  = DELTA_PRIMd * (ph->stokes1 + ph->stokes2);
-			ph->stokes1 = 3./2. * (  DELTAd  * stokes1 + cross_term );
-			ph->stokes2 = 3./2. * (  DELTAd  * cTh2 * stokes2 + cross_term );			
-			ph->stokes3 = 3./2. * (  DELTAd  * cTh  * ph->stokes3 );
-			ph->stokes4 = 3./2. * (  DELTAd  * DELTA_SECOd * cTh * ph->stokes4 );
+			stokes.x = ph->stokes.x;
+			stokes.y = ph->stokes.y;
+			cross_term  = DELTA_PRIMd * (ph->stokes.x + ph->stokes.y);
+			ph->stokes.x = 3./2. * (  DELTAd  * stokes.x + cross_term );
+			ph->stokes.y = 3./2. * (  DELTAd  * cTh2 * stokes.y + cross_term );			
+			ph->stokes.z = 3./2. * (  DELTAd  * cTh  * ph->stokes.z );
+			ph->stokes.w = 3./2. * (  DELTAd  * DELTA_SECOd * cTh * ph->stokes.w );
 
             if (!le){
 			    // Bias sampling scheme 2): Debiasing
 			    float phase_func;
 			    phase_func = 3./4. * DELTAd * (cTh2+1.0) + 3.0 * DELTA_PRIMd;
-			    ph->stokes1 /= phase_func;  
-			    ph->stokes2 /= phase_func;  
-			    ph->stokes3 /= phase_func;     		
-			    ph->stokes4 /= phase_func;     		
+			    ph->stokes.x /= phase_func;  
+			    ph->stokes.y /= phase_func;  
+			    ph->stokes.z /= phase_func;     		
+			    ph->stokes.w /= phase_func;     		
             }
 
             else ph->weight /= 4.F; //Phase function normalization
@@ -1192,25 +1192,25 @@ __device__ void scatter(Photon* ph,
             }
 
 			// Stokes vector rotation
-			rotateStokes(ph->stokes1, ph->stokes2, ph->stokes3,   psi,
-			        &ph->stokes1, &ph->stokes2, &ph->stokes3);
+			rotateStokes(ph->stokes.x, ph->stokes.y, ph->stokes.z,   psi,
+			        &ph->stokes.x, &ph->stokes.y, &ph->stokes.z);
 
 			// Scattering matrix multiplication
-            stokes3=ph->stokes3;
-            stokes4=ph->stokes4;
-			ph->stokes1 *= P11;
-			ph->stokes2 *= P22;
-			ph->stokes3 = stokes3 * P33 - stokes4 * P43;
-			ph->stokes4 = stokes4 * P33 + stokes3 * P43;
+            stokes.z=ph->stokes.z;
+            stokes.w=ph->stokes.w;
+			ph->stokes.x *= P11;
+			ph->stokes.y *= P22;
+			ph->stokes.z = stokes.z * P33 - stokes.w * P43;
+			ph->stokes.w = stokes.w * P33 + stokes.z * P43;
 
             if (!le){
 			    // Bias sampling scheme 2): Debiasing
 			    float debias;
 			    debias = __fdividef( 2., P11 + P22 );
-			    ph->stokes1 *= debias;  
-			    ph->stokes2 *= debias;  
-			    ph->stokes3 *= debias;  
-			    ph->stokes4 *= debias;  
+			    ph->stokes.x *= debias;  
+			    ph->stokes.y *= debias;  
+			    ph->stokes.z *= debias;  
+			    ph->stokes.w *= debias;  
             }
 
             else ph->weight /= 4.F; //Phase function normalization
@@ -1273,7 +1273,7 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 	float n_x, n_y, n_z, normn;
 
 	float s1, s2, s3 ;
-    float stokes3, stokes4;
+    float4 stokes;
 	
 	float rpar, rper, rparper, rparper_cross;	// Coefficient de reflexion parallèle et perpendiculaire
 	float rpar2;		// Coefficient de reflexion parallèle au carré
@@ -1505,9 +1505,9 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
     #endif
 
 	// Rotation of Stokes parameters
-	s1 = ph->stokes1;
-	s2 = ph->stokes2;
-	s3 = ph->stokes3;
+	s1 = ph->stokes.x;
+	s2 = ph->stokes.y;
+	s3 = ph->stokes.z;
 
 	if( (s1!=s2) || (s3!=0.F) ){
 
@@ -1518,8 +1518,8 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 			psi = -psi;
 		}
 
-        rotateStokes(ph->stokes1, ph->stokes2, ph->stokes3, psi,
-                &ph->stokes1, &ph->stokes2, &ph->stokes3);
+        rotateStokes(ph->stokes.x, ph->stokes.y, ph->stokes.z, psi,
+                &ph->stokes.x, &ph->stokes.y, &ph->stokes.z);
 	}
 
 	if( sTh<=nind){
@@ -1539,7 +1539,7 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
         tper2= tper * tper;
         tparper = tpar * tper;
         // DR rat is the energetic reflection factor used to normalize the R and T matrix (see Xun 2014)
-		rat =  __fdividef(ph->stokes1*rper2 + ph->stokes2*rpar2,ph->stokes1+ph->stokes2);
+		rat =  __fdividef(ph->stokes.x*rper2 + ph->stokes.y*rpar2,ph->stokes.x+ph->stokes.y);
 		ReflTot = 0;
 	}
 	else{
@@ -1591,8 +1591,8 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
      }
     }
 
-    stokes3 = ph->stokes3;	
-    stokes4 = ph->stokes4;	
+    stokes.z = ph->stokes.z;	
+    stokes.w = ph->stokes.w;	
     int condR=1;
     if (!le) condR = (SURd==3)&&(RAND<rat);
 
@@ -1601,10 +1601,10 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
        || ( le && (ph->loc==SURF0P) && (count_level == UP0P)   )
        ){	// Reflection
 
-		ph->stokes1 *= rper2;
-		ph->stokes2 *= rpar2;
-		ph->stokes3 = rparper*stokes3 + rparper_cross*stokes4; // DR Mobley 2015 sign convention
-		ph->stokes4 = rparper*stokes4 - rparper_cross*stokes3; // DR Mobley 2015 sign convention
+		ph->stokes.x *= rper2;
+		ph->stokes.y *= rpar2;
+		ph->stokes.z = rparper*stokes.z + rparper_cross*stokes.w; // DR Mobley 2015 sign convention
+		ph->stokes.w = rparper*stokes.w - rparper_cross*stokes.z; // DR Mobley 2015 sign convention
 		
         if (le) {
 		    ph->v.x = v.x;
@@ -1676,10 +1676,10 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 
         geo_trans_factor = nind* cot/cTh; // DR Mobley 2015 OK , see Xun 2014, Zhai et al 2010
 		
-		ph->stokes1 *= tper2*geo_trans_factor;
-		ph->stokes2 *= tpar2*geo_trans_factor;
-		ph->stokes3 *= tparper*geo_trans_factor;
-		ph->stokes4 *= tparper*geo_trans_factor;
+		ph->stokes.x *= tper2*geo_trans_factor;
+		ph->stokes.y *= tpar2*geo_trans_factor;
+		ph->stokes.z *= tparper*geo_trans_factor;
+		ph->stokes.w *= tparper*geo_trans_factor;
 		
 		alpha  = __fdividef(cTh,nind) - cot;
         if (le) {
@@ -1868,11 +1868,11 @@ __device__ void surfaceLambertienne(Photon* ph, int le, float* tabthv, float* ta
 
 	// Depolarisation du Photon
 	float norm;
-	norm = ph->stokes1 + ph->stokes2;
-	ph->stokes1 = 0.5 * norm;
-	ph->stokes2 = 0.5 * norm;
-    ph->stokes3 = 0.0;
-    ph->stokes4 = 0.0;
+	norm = ph->stokes.x + ph->stokes.y;
+	ph->stokes.x = 0.5 * norm;
+	ph->stokes.y = 0.5 * norm;
+    ph->stokes.z = 0.0;
+    ph->stokes.w = 0.0;
 
 	
 	ph->v.x = vxn;
@@ -1939,7 +1939,7 @@ __device__ void countPhoton(Photon* ph,
     }
 
     // don't count the photons directly transmitted
-    if ((ph->weight == WEIGHTINIT) && (ph->stokes1 == ph->stokes2) && (ph->stokes3 == 0.f) && (ph->stokes4 == 0.f)) {
+    if ((ph->weight == WEIGHTINIT) && (ph->stokes.x == ph->stokes.y) && (ph->stokes.z == 0.f) && (ph->stokes.w == 0.f)) {
         return;
     }
 
@@ -1995,9 +1995,9 @@ __device__ void countPhoton(Photon* ph,
             } 
     }
 
-    rotateStokes(ph->stokes1, ph->stokes2, ph->stokes3,  psi,
+    rotateStokes(ph->stokes.x, ph->stokes.y, ph->stokes.z,  psi,
         &s1, &s2, &s3);
-    s4 = ph->stokes4;
+    s4 = ph->stokes.w;
 	// Calcul de la case dans laquelle le photon sort
 	if (LEd == 0) ComputeBox(&ith, &iphi, &il, ph, errorcount);
     else {
@@ -2188,8 +2188,8 @@ __device__ void display(const char* desc, Photon* ph) {
                ph->pos.x, ph->pos.y, ph->pos.z,
                ph->v.x,ph->v.y,ph->v.z,
                ph->u.x,ph->u.y,ph->u.z,
-               ph->stokes1, ph->stokes2,
-               ph->stokes3, ph->stokes4,
+               ph->stokes.x, ph->stokes.y,
+               ph->stokes.z, ph->stokes.w,
                ph->tau, ph->weight
                );
         switch(ph->loc) {
@@ -2369,10 +2369,10 @@ __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
     ph_le->u.x = ph->u.x;
     ph_le->u.y = ph->u.y;
     ph_le->u.z = ph->u.z;
-    ph_le->stokes1 = ph->stokes1;
-    ph_le->stokes2 = ph->stokes2;
-    ph_le->stokes3 = ph->stokes3;
-    ph_le->stokes4 = ph->stokes4;
+    ph_le->stokes.x = ph->stokes.x;
+    ph_le->stokes.y = ph->stokes.y;
+    ph_le->stokes.z = ph->stokes.z;
+    ph_le->stokes.w = ph->stokes.w;
     ph_le->loc = ph->loc;
     ph_le->tau = ph->tau;
     ph_le->couche = ph->couche;

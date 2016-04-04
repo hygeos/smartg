@@ -106,10 +106,7 @@ public:
     int ith;
 	
     // Paramètres de stokes du photon
-    float stokes1;
-    float stokes2;
-    float stokes3;
-    float stokes4;
+    float4 stokes;
 
     // Paramètres pour une atmosphère sphérique
     int couche;
