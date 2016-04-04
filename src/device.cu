@@ -776,9 +776,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
     //
     // update the position of the photon
     //
-    ph->pos.x = ph->pos.x + ph->v.x*d_tot;
-    ph->pos.y = ph->pos.y + ph->v.y*d_tot;
-    ph->pos.z = ph->pos.z + ph->v.z*d_tot;
+    ph->pos = operator+(ph->pos, ph->v*d_tot);
     ph->rayon = sqrtf(ph->pos.x*ph->pos.x + ph->pos.y*ph->pos.y + ph->pos.z*ph->pos.z);
     ph->weight *= 1.f - prof_atm[ph->couche+ilam].abs;
     ph->prop_aer = 1.f - prof_atm[ph->couche+ilam].pmol;
