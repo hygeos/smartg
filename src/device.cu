@@ -60,6 +60,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "device.h"
 #include <math.h>
 
+#include <helper_math.h>
+
 /**********************************************************
 *	> Kernel
 ***********************************************************/
@@ -743,9 +745,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
             d_tot += (d - d_tot)*(tauRdm - hph)/h_cur;
             #else
             d *= (tauRdm-hph)/h_cur;
-            ph->pos.x = ph->pos.x + ph->v.x*d;
-            ph->pos.y = ph->pos.y + ph->v.y*d;
-            ph->pos.z = ph->pos.z + ph->v.z*d;
+            ph->pos = Operator+(ph->pos, ph->v*d);
             ph->rayon = sqrtf(ph->pos.x*ph->pos.x + ph->pos.y*ph->pos.y + ph->pos.z*ph->pos.z);
             ph->weight *= 1.f - prof_atm[ph->couche+ilam].abs;
             ph->prop_aer = 1.f - prof_atm[ph->couche+ilam].pmol;
