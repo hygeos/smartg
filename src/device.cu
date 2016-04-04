@@ -1689,7 +1689,7 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 		ph->u.z = __fdividef(nz+cot*ph->v.z,sTh )*nind;
 
         #ifdef SPHERIQUE
-        vzn = ph->v.x*ph->pos.x + ph->v.y*ph->pos.y + ph->v.z*ph->pos.z;
+        vzn = dot(ph->v, ph->pos); // produit scalaire
         #else
         vzn = ph->v.z;
         #endif
