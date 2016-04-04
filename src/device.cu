@@ -833,8 +833,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 
             // move the photon forward down to the surface
             // the linear distance is ph->z/ph->vz
-            ph->pos.x += ph->v.x * fabs(ph->pos.z/ph->v.z);
-            ph->pos.y += ph->v.y * fabs(ph->pos.z/ph->v.z);
+            operator+=(ph->pos, ph->v * fabs(ph->pos.z/ph->v.z));
             ph->pos.z = 0.;
         return;
         }
