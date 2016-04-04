@@ -616,7 +616,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
             ph->tau = 0.;
             ph->couche -= 1;  // next time photon enters move_sp, it's at layers NATM
             #ifdef DEBUG
-            if (ph->v.x*ph->pos.x + ph->v.y*ph->pos.y + ph->v.z*ph->pos.z > 0) {
+            if (dot(ph->v, ph->pos) > 0) {
                 printf("Warning, vzn > 0 at SURF0P in move_sp (vzn=%f)\n", vzn);
             }
             #endif
