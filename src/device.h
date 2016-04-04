@@ -170,13 +170,13 @@ __device__ void modifyUV( float vx0, float vy0, float vz0, float ux0, float uy0,
         float cTh, float psi, 
         float *vx1, float *vy1, float *vz1, float *ux1, float *uy1, float *uz1) ;
 
-__device__ float ComputeTheta(float vx0, float vy0, float vz0, float vx1, float vy1, float vz1);
+__device__ float ComputeTheta(float3 v0, float3 v1);
 
-__device__ void ComputePsiLE(float ux0, float uy0, float uz0,
-			    float vx0, float vy0, float vz0,
-			    float vx1, float vy1, float vz1,
+__device__ void ComputePsiLE(float3 u0,
+			    float3 v0,
+			    float3 v1,
 			    float* psi,
-			    float* ux1, float* uy1, float* uz1);
+			    float3* u1);
 #ifdef DOUBLE
 __device__ double DatomicAdd(double* address, double val);
 #endif

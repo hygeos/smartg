@@ -908,7 +908,7 @@ __device__ void scatter(Photon* ph,
 		if (cTh < -1.0) cTh = -1.0;
 		if (cTh >  1.0) cTh =  1.0;
         cTh2 = cTh * cTh;
-        ComputePsiLE(ph->u.x , ph->u.y, ph->u.z, ph->v.x , ph->v.y, ph->v.z, v.x, v.y, v.z, &psi, &ph->u.x, &ph->u.y, &ph->u.z); 
+        ComputePsiLE(ph->u, ph->v, v, &psi, &ph->u); 
         ph->v.x = v.x;
         ph->v.y = v.y;
         ph->v.z = v.z;
@@ -2243,11 +2243,11 @@ __device__ void modifyUV( float vx0, float vy0, float vz0, float ux0, float uy0,
     *uz1 = u.z/norm;
 }
 
-__device__ void ComputePsiLE( float ux0, float uy0, float uz0,
-			     float vx0, float vy0, float vz0, 
-			     float vx1, float vy1, float vz1, 
+__device__ void ComputePsiLE( float3 u0,
+			     float3 v0, 
+			     float3 v1, 
 			     float* psi,
-			     float* ux1, float* uy1, float* uz1)
+			     float3* u1)
 {
 	float prod_scal;
 	
@@ -2258,48 +2258,37 @@ __device__ void ComputePsiLE( float ux0, float uy0, float uz0,
 
 	float EPS6 = 1e-9;
 	
-	float wx0, wy0, wz0;
-	float wx1, wy1, wz1;
+	float3 w0;
+	float3 w1;
 
 	// compute former w
-	// w est le rotationnel entre l'ancien vecteur u et l'ancien vecteur v du photon
-	wx0 = uy0 * vz0 - uz0 * vy0;
-	wy0 = uz0 * vx0 - ux0 * vz0;
-	wz0 = ux0 * vy0 - uy0 * vx0;
+	// w est le produit vectoriel entre l'ancien vecteur u et l'ancien vecteur v du photon
+	w0 = cross(u0, v0);
 
 	// compute the normal to the new scattering plan i.e. new w vector
-	wx1 = vy1 * vz0 - vz1 * vy0;
-	wy1 = vz1 * vx0 - vx1 * vz0;
-	wz1 = vx1 * vy0 - vy1 * vx0;
+	w1 = cross(v1, v0);
 
-	den = sqrtf( wx1* wx1 +  wy1* wy1 +  wz1* wz1);
-
+	den = length(w1); // Euclidean length also called L2-norm
 	if (den < EPS6) {
-		prod_scal =  vx0*vx1 + vy0*vy1 + vz0*vz1;
+		prod_scal =  dot(v0, v1);
 		if (prod_scal < 0.0)
 			{   
 				// diffusion vers l'avant
-				wx1 = wx0;
-				wy1 = wy0;
-				wz1 = wz0;
+				w1 = w0;
 			}
 		else
 			{ 
 				// diffusion vers l'arriere
-				wx1 = -wx0;
-				wy1 = -wy0;
-				wz1 = -wz0;
+				w1 = -w0;
 			}
 	}
 	else
 		{
-			wx1 = __fdividef(wx1,den);
-			wy1 = __fdividef(wy1,den);
-			wz1 = __fdividef(wz1,den);
+			operator/=(w1, den); // need to see if "__fdividef" is better
 		}
 	
 	//  Compute the scalar product between w0 and w1
-	cpsi = wx0 * wx1 + wy0 * wy1 + wz0 * wz1;
+	cpsi = dot(w0,w1);
 
 	if (cpsi >  1.0) 
 		cpsi =  1.0;
@@ -2313,7 +2302,7 @@ __device__ void ComputePsiLE( float ux0, float uy0, float uz0,
 	// in the base linked to the photon before the scattering event = old
 	// scattering plan. 
 	// Let say that x1, y1, z1 are the new coordinate of cos_dir_sensor
-	y1 = wx0*vx1 + wy0*vy1 + wz0*vz1;
+	y1 = dot(w0,v1);
 	// --- Sign of spsi
 	if (y1 < 0.0) 
 		spsi = -spsi;
@@ -2323,9 +2312,7 @@ __device__ void ComputePsiLE( float ux0, float uy0, float uz0,
 		*psi = 2*PI - *psi;
 
 	// get the new u vector
-	*ux1 = vy1 * wz1 - vz1 * wy1 ;
-	*uy1 = vz1 * wx1 - vx1 * wz1 ; 
-	*uz1 = vx1 * wy1 - vy1 * wx1 ;
+	*u1 = cross(v1, w1);
 	
 }
 
