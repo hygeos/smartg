@@ -2371,9 +2371,7 @@ __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
     ph_le->wavel = ph->wavel;
     ph_le->ilam = ph->ilam;
     ph_le->prop_aer = ph->prop_aer;
-    ph_le->pos.x = ph->pos.x;
-    ph_le->pos.y = ph->pos.y;
-    ph_le->pos.z = ph->pos.z;
+    ph_le->pos = ph->pos;
     #ifdef SPHERIQUE
     ph_le->rayon = ph->rayon;
     ph_le->taumax = ph->taumax;
