@@ -863,9 +863,8 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
         // calculate new photon position
         phz = __fdividef(dsca,Dsca) * (prof_atm[icouche].z - prof_atm[icouche-1].z) + prof_atm[icouche-1].z; 
         rdist=  fabs(__fdividef(phz-ph->pos.z, ph->v.z));
+        operator+= (ph->pos, ph->v*rdist);
         ph->pos.z = phz;
-        ph->pos.x = ph->pos.x + ph->v.x*rdist;
-        ph->pos.y = ph->pos.y + ph->v.y*rdist;
 
     }
 
