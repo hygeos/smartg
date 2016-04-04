@@ -903,7 +903,7 @@ __device__ void scatter(Photon* ph,
         v.x = __cosf(phi) * __sinf(thv);
         v.y = __sinf(phi) * __sinf(thv);
         v.z = sign * __cosf(thv);
-        theta = ComputeTheta(ph->v.x, ph->v.y, ph->v.z, v.x, v.y, v.z);
+        theta = ComputeTheta(ph->v, v);
         cTh = __cosf(theta);
 		if (cTh < -1.0) cTh = -1.0;
 		if (cTh >  1.0) cTh =  1.0;
@@ -2329,7 +2329,7 @@ __device__ void ComputePsiLE( float ux0, float uy0, float uz0,
 	
 }
 
-__device__ float ComputeTheta(float vx0, float vy0, float vz0, float vx1, float vy1, float vz1){
+__device__ float ComputeTheta(float3 v0, float3 v1){
 
 	// compute the diffusion angle theta between
 	// to direction cosine {vx0, vy0, vz0} and {vx1, vy1, vz1} 
@@ -2338,7 +2338,7 @@ __device__ float ComputeTheta(float vx0, float vy0, float vz0, float vx1, float 
 	float theta;
 	
 	//--- Find cos(theta) and sin(theta)
-	cs =  vx1*vx0 + vy1*vy0 + vz1*vz0  ;//  produit scalaire
+	cs =  dot(v1,v0)  ;//  produit scalaire
 	
 	// test cs to avois acos(cs)=NaN
 	if(cs>+1) cs = 1.00;
