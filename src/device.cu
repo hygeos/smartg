@@ -525,12 +525,9 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm,
         //
         // Initialisation du photon à la surface ou dans l'océan
         //
-        ph->pos.x = 0.;
-        ph->pos.y = 0.;
+        ph->pos = make_float3(0.,0.,0.);
         #ifdef SPHERIQUE
         ph->pos.z = RTER;
-        #else
-        ph->pos.z = 0;
         #endif
 
         ph->tau = 0.f;
