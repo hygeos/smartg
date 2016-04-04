@@ -760,9 +760,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
             #ifndef ALT_MOVE
             d_tot = d;
             #else
-            ph->pos.x = ph->pos.x + ph->v.x*d;
-            ph->pos.y = ph->pos.y + ph->v.y*d;
-            ph->pos.z = ph->pos.z + ph->v.z*d;
+            ph->pos = operator+(ph->pos, ph->v*d);
             ph->rayon = sqrtf(ph->pos.x*ph->pos.x + ph->pos.y*ph->pos.y + ph->pos.z*ph->pos.z);
             vzn = __fdividef( ph->v.x*ph->pos.x + ph->v.y*ph->pos.y + ph->v.z*ph->pos.z , ph->rayon);
             #endif
