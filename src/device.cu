@@ -585,7 +585,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
     else tauRdm = 1e6;
     
 
-    vzn = __fdividef( ph->v.x*ph->pos.x + ph->v.y*ph->pos.y + ph->v.z*ph->pos.z , ph->rayon);
+    vzn = __fdividef( dot(ph->v,ph->pos) , ph->rayon);
     #ifndef ALT_MOVE
     costh = vzn;
     sinth2 = 1.f-costh*costh;
