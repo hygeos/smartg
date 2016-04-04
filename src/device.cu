@@ -909,9 +909,8 @@ __device__ void scatter(Photon* ph,
 		if (cTh >  1.0) cTh =  1.0;
         cTh2 = cTh * cTh;
         ComputePsiLE(ph->u, ph->v, v, &psi, &ph->u); 
-        ph->v.x = v.x;
-        ph->v.y = v.y;
-        ph->v.z = v.z;
+        ph->v = v;
+
 
     }
 
