@@ -1226,8 +1226,7 @@ __device__ void scatter(Photon* ph,
    ////////// Fin séparation ////////////
    
     if (!le){
-        modifyUV( ph->v.x, ph->v.y, ph->v.z, ph->u.x, ph->u.y, ph->u.z, cTh, psi, 
-                &ph->v.x, &ph->v.y, &ph->v.z, &ph->u.x, &ph->u.y, &ph->u.z) ;
+        modifyUV( ph->v, ph->u, cTh, psi, &ph->v, &ph->u) ;
     }
 
 }
@@ -2198,48 +2197,24 @@ __device__ void display(const char* desc, Photon* ph) {
 }
 #endif
 
-__device__ void modifyUV( float vx0, float vy0, float vz0, float ux0, float uy0, float uz0,
-        float cTh, float psi, 
-        float *vx1, float *vy1, float *vz1, float *ux1, float *uy1, float *uz1) { 
+__device__ void modifyUV( float3 v0, float3 u0, float cTh, float psi, float3 *v1, float3 *u1){ 
+    float sTh, cPsi, sPsi;
+	float3 v, u, w;
 
-    float sTh, cPsi, sPsi, wx, wy, wz, norm;
-	float3 v, u;
     sPsi = __sinf(psi);
     cPsi = __cosf(psi);
     sTh = sqrtf(1.F - cTh*cTh);
-	// w est le rotationnel entre l'ancien vecteur u et l'ancien vecteur v du photon
-	wx = uy0 * vz0 - uz0 * vy0;
-	wy = uz0 * vx0 - ux0 * vz0;
-	wz = ux0 * vy0 - uy0 * vx0;
-	// v est le nouveau vecteur v du photon
-	v.x = cTh * vx0 + sTh * ( cPsi * ux0 + sPsi * wx );
-	v.y = cTh * vy0 + sTh * ( cPsi * uy0 + sPsi * wy );
-	v.z = cTh * vz0 + sTh * ( cPsi * uz0 + sPsi * wz );
+	w = cross(u0, v0); // w : cross product entre l'ancien vec u et l'ancien vec v du photon
+	v = operator+(cTh * v0, sTh * (operator+(cPsi * u0, sPsi * w))); // v est le nouveau vecteur v du photon
 	// Changement du vecteur u (orthogonal au vecteur vitesse du photon)
     if (cTh <= -1.F) {
-        u.x  = -ux0;
-        u.y  = -uy0;
-        u.z  = -uz0;
-        }
+		u = -u0;}
     else if (cTh >= 1.F){
-        u.x  = ux0;
-        u.y  = uy0;
-        u.z  = uz0;
-    }
-    else {
-        u.x = cTh * v.x - vx0;
-        u.y = cTh * v.y - vy0;
-        u.z = cTh * v.z - vz0;
-    }
+        u  = u0;}
+    else {u = operator-(cTh * v, v0);}
 
-    norm=sqrtf(v.x*v.x+v.y*v.y+v.z*v.z);
-    *vx1 = v.x/norm;
-    *vy1 = v.y/norm;
-    *vz1 = v.z/norm;
-    norm=sqrtf(u.x*u.x+u.y*u.y+u.z*u.z);
-    *ux1 = u.x/norm;
-    *uy1 = u.y/norm;
-    *uz1 = u.z/norm;
+	*v1 = normalize(v); // v1 = v normalized
+	*u1 = normalize(u); // u1 = u normalized
 }
 
 __device__ void ComputePsiLE( float3 u0, float3 v0, float3 v1, float* psi, float3* u1){
