@@ -1327,10 +1327,9 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 
     #ifdef DEBUG
     // we check that there is no upward photon reaching surface0+
-    if ((ph->loc == SURF0P) && (ph->v.x*ph->pos.x + ph->v.y*ph->pos.y + ph->v.z*ph->pos.z > 0)) {
+    if ((ph->loc == SURF0P) && (dot(ph->v, ph->pos) > 0)) {
         // upward photon when reaching the surface at (0+)
-        printf("Warning, vzn>0 (vzn=%f) with SURF0+ in surfaceAgitee\n",
-                ph->v.x*ph->pos.x + ph->v.y*ph->pos.y + ph->v.z*ph->pos.z);
+        printf("Warning, vzn>0 (vzn=%f) with SURF0+ in surfaceAgitee\n", dot(ph->v, ph->pos);
     }
     #endif
     #endif
