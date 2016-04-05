@@ -1296,34 +1296,19 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
     // local orthonormal basis at the impact point.
     // Nz is the local vertical direction, the direction of the 2 others does not matter
     // because the azimuth is chosen randomly
-    float Nxx, Nxy, Nxz;
-    float Nyx, Nyy, Nyz;
-    float Nzx, Nzy, Nzz;
-    float norm;
+	float3 Nx, Ny, Nz;
 
-    // Nz is the vertical at the impact point
-    Nzx = ph->pos.x/RTER;
-    Nzy = ph->pos.y/RTER;
-    Nzz = ph->pos.z/RTER;
+	Nz = ph->pos/RTER; // Nz is the vertical at the impact point
 
     // Ny is chosen arbitrarily by cross product of Nz with axis X = (1,0,0)
-    // and normalized
-    Nyx = 0.;
-    Nyy = Nzz;
-    Nyz = -Nzy;
-    norm = sqrt(Nyy*Nyy + Nyz*Nyz);
-    Nyy /= norm;
-    Nyz /= norm;
+	Ny = cross(Nz, make_float3(1.0,0.0,0.0));
 
     // Nx is the cross product of Ny and Nz
-    Nxx = Nzy*Nzy + Nzz*Nzz;
-    Nxy = -Nzx*Nzy;
-    Nxz = -Nzx*Nzz;
-    norm = sqrt(Nxx*Nxx + Nxy*Nxy + Nxz*Nxz);
-    Nxx /= norm;
-    Nxy /= norm;
-    Nxz /= norm;
-
+	Nx = cross(Ny, Nz);
+ 
+	// Normalizatioin
+	Ny = normalize(Ny);
+	Nz = normalize(Nz);
 
     #ifdef DEBUG
     // we check that there is no upward photon reaching surface0+
@@ -1472,9 +1457,9 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
     // axis instead of local axis (Nx, Ny, Nz)
     if (!le) {
     #ifdef SPHERIQUE
-    nx = n_x*Nxx + n_y*Nyx + n_z*Nzx;
-    ny = n_x*Nxy + n_y*Nyy + n_z*Nzy;
-    nz = n_x*Nxz + n_y*Nyz + n_z*Nzz;
+    nx = n_x*Nx.x + n_y*Ny.x + n_z*Nz.x;
+    ny = n_x*Nx.y + n_y*Ny.y + n_z*Nz.y;
+    nz = n_x*Nx.z + n_y*Ny.z + n_z*Nz.z;
     #else
     nx = n_x;
     ny = n_y;
