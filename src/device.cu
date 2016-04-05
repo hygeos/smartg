@@ -2242,52 +2242,25 @@ __device__ void modifyUV( float vx0, float vy0, float vz0, float ux0, float uy0,
     *uz1 = u.z/norm;
 }
 
-__device__ void ComputePsiLE( float3 u0,
-			     float3 v0, 
-			     float3 v1, 
-			     float* psi,
-			     float3* u1)
-{
-	float prod_scal;
-	
-	float den;
-	float y1;
-	float cpsi;
-	float spsi;
-
-	float EPS6 = 1e-9;
-	
-	float3 w0;
-	float3 w1;
+__device__ void ComputePsiLE( float3 u0, float3 v0, float3 v1, float* psi, float3* u1){
+	float prod_scal, den, y1, cpsi, spsi;	
+	float EPS6 = 1e-9;	
+	float3 w0, w1;
 
 	// compute former w
-	// w est le produit vectoriel entre l'ancien vecteur u et l'ancien vecteur v du photon
-	w0 = cross(u0, v0);
-
-	// compute the normal to the new scattering plan i.e. new w vector
-	w1 = cross(v1, v0);
+	w0 = cross(u0, v0); // w : cross product entre l'ancien vec u et l'ancien vec v du photon
+	w1 = cross(v1, v0);	// compute the normal to the new scattering plan i.e. new w vector
 
 	den = length(w1); // Euclidean length also called L2-norm
 	if (den < EPS6) {
 		prod_scal =  dot(v0, v1);
 		if (prod_scal < 0.0)
-			{   
-				// diffusion vers l'avant
-				w1 = w0;
-			}
-		else
-			{ 
-				// diffusion vers l'arriere
-				w1 = -w0;
-			}
+			w1 = w0;       // diffusion vers l'avant
+		else{ w1 = -w0; }   // diffusion vers l'arriere
 	}
-	else
-		{
-			operator/=(w1, den); // need to see if "__fdividef" is better
-		}
+	else{ operator/=(w1, den); } // Hors Sujet : need to see if "__fdividef" is better
 	
-	//  Compute the scalar product between w0 and w1
-	cpsi = dot(w0,w1);
+	cpsi = dot(w0,w1); 	//  Compute the scalar product between w0 and w1
 
 	if (cpsi >  1.0) 
 		cpsi =  1.0;
@@ -2311,12 +2284,10 @@ __device__ void ComputePsiLE( float3 u0,
 		*psi = 2*PI - *psi;
 
 	// get the new u vector
-	*u1 = cross(v1, w1);
-	
+	*u1 = cross(v1, w1);	
 }
 
 __device__ float ComputeTheta(float3 v0, float3 v1){
-
 	// compute the diffusion angle theta between
 	// to direction cosine {vx0, vy0, vz0} and {vx1, vy1, vz1} 
 
@@ -2342,7 +2313,7 @@ __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
     ph_le->v.x = ph->v.x;
     ph_le->v.y = ph->v.y;
     ph_le->v.z = ph->v.z;
-    ph_le->u = ph->u;
+    ph_le->u = ph->u; // float3
     ph_le->stokes.x = ph->stokes.x;
     ph_le->stokes.y = ph->stokes.y;
     ph_le->stokes.z = ph->stokes.z;
@@ -2354,7 +2325,7 @@ __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
     ph_le->wavel = ph->wavel;
     ph_le->ilam = ph->ilam;
     ph_le->prop_aer = ph->prop_aer;
-    ph_le->pos = ph->pos;
+    ph_le->pos = ph->pos; // float3
     #ifdef SPHERIQUE
     ph_le->rayon = ph->rayon;
     ph_le->taumax = ph->taumax;
