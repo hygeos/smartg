@@ -1471,7 +1471,7 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 
     #ifdef SPHERIQUE
     // avz is the projection of V on the local vertical
-    float avz = fabs(ph->pos.x*ph->v.x + ph->pos.y*ph->v.y + ph->pos.z*ph->v.z)/RTER;
+	float avz = fabs(dot(ph->pos, ph->v))/RTER;
     #else
     float avz = fabs(ph->v.z);
     #endif
