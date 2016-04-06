@@ -17,6 +17,7 @@ from scipy.integrate import simps
 import tempfile
 from phase_functions import PhaseFunction
 from glob import glob
+from tools.luts import LUT
 
 dir_libradtran = '/home/applis/libRadtran/libRadtran-2.0/'
 dir_libradtran_reptran =  join(dir_libradtran, 'data/correlated_k/reptran/')
@@ -771,6 +772,267 @@ def Pha2Pha(Pha):
     pha[:,3] = Pha[3,:]
     return pha
 
+
+def skipcomment(f):
+    while(True):
+        pos=f.tell()
+        if not f.readline().strip().startswith('#'): break
+    f.seek(pos,0)    
+    
+    
+class KDIS(object):
+    
+    def __init__(self, model, dir_data, format='ascii'):
+
+        # read the entire K-distribution definition from files
+        #
+        # Selection of the desired KDIS band or absorbing gases
+        # must be done later while setting up the artdeco variables
+   
+    
+        self.model = model
+    
+        if format == 'ascii':
+            filename = dir_data+'kdis_'+model+'_def.dat'
+            if not os.path.isfile(filename):
+                print "(kdis_coef) ERROR"
+                print "            Missing file:", filename
+                exit()
+            fdef = open(filename,'r')
+            skipcomment(fdef)
+            tmp = fdef.readline()
+            self.nmaxai = int(tmp.split()[0])
+            skipcomment(fdef)
+            tmp = fdef.readline()
+            self.nsp     = int(tmp.split()[0])
+            self.fcont   = np.zeros(self.nsp)
+            self.species = []
+            skipcomment(fdef)
+            for i in xrange(self.nsp):
+                tmp = fdef.readline()
+                if int(tmp.split()[1]) == 1:
+                    print " kdis_coeff ERROR"
+                    print "            read NOT implemented for concentration dependent species"
+                    exit()
+                self.species.append(tmp.split()[0])
+                self.fcont[i] = float(tmp.split()[2])
+            self.nsp_c = 0
+            skipcomment(fdef)
+            tmp = fdef.readline()
+            self.nwvl = int(tmp.split()[0])
+            self.wvlband = np.zeros((3, self.nwvl))
+            skipcomment(fdef)
+            for i in xrange(self.nwvl):
+                tmp = fdef.readline()
+                self.wvlband[0,i] = float(tmp.split()[1])*1e3 # from mic to nm
+                self.wvlband[1,i] = float(tmp.split()[2])*1e3
+                self.wvlband[2,i] = float(tmp.split()[3])*1e3
+                if i>0:
+                    if self.wvlband[0,i] < self.wvlband[0,i-1]:
+                        print " kdis_coeff ERROR"
+                        print "            wavelengths must be sorted in increasing order"
+                        exit()
+            skipcomment(fdef)
+            tmp = fdef.readline()
+            skipcomment(fdef)
+            self.np = int(tmp.split()[0])
+            self.p = np.zeros(self.np)
+            for i in xrange(self.np):
+                tmp = fdef.readline()
+                self.p[i] = float(tmp.split()[0])
+                if i>0:
+                    if self.p[i] < self.p[i-1]:
+                        print " kdis_coeff ERROR"
+                        print "            pressure must be sorted in increasing order"
+                        exit()
+            skipcomment(fdef)
+            tmp = fdef.readline()
+            skipcomment(fdef)
+            self.nt = int(tmp.split()[0])
+            self.t = np.zeros(self.nt)
+            for i in xrange(self.nt):
+                tmp = fdef.readline()
+                self.t[i] = float(tmp.split()[0])
+                if i>0:
+                    if self.t[i] < self.t[i-1]:
+                        print " kdis_coeff ERROR"
+                        print "            temperature must be sorted in increasing order"
+                        exit()
+            fdef.close()
+    
+            self.nai   = np.zeros((self.nsp,self.nwvl), dtype='int')
+            self.ki    = np.zeros((self.nsp,self.nwvl,self.nmaxai,self.np,self.nt))
+            self.ai    = np.zeros((self.nsp,self.nwvl,self.nmaxai))
+            self.xsect = np.zeros((self.nsp,self.nwvl))
+    
+            for isp in xrange(self.nsp):
+                filename = dir_data+'kdis_'+model+'_'+self.species[isp]+'.dat'
+                if not os.path.isfile(filename):
+                    print "(kdis_coef) ERROR"
+                    print "            Missing file:", filename
+                    exit()
+                f = open(filename,'r')
+                skipcomment(f)
+                for iwvl in xrange(self.nwvl):
+                    tmp = f.readline()
+                    self.nai[isp,iwvl]   = int(tmp.split()[1])
+                    self.xsect[isp,iwvl] = float(tmp.split()[2])
+                for iwvl in xrange(self.nwvl):
+                    if self.nai[isp,iwvl]>1:
+                        skipcomment(f)
+                        tmp = f.readline()
+                        #print 'nai, nmaxai=',self.nai[isp,iwvl], self.nmaxai
+                        for iai in xrange(self.nai[isp,iwvl]):
+                            #print iai, float(tmp.split()[iai])
+                            self.ai[isp,iwvl,iai] = float(tmp.split()[iai])
+    
+                        for it in xrange(self.nt):
+                            for ip in xrange(self.np):
+                                tmp = f.readline()
+                                for iai in xrange(self.nai[isp,iwvl]):
+                                    self.ki[isp,iwvl,iai,ip,it] = float(tmp.split()[iai])
+    
+                f.close()
+                
+                
+    def nbands(self):
+        '''
+        number of bands
+        '''
+        return self.nwvl
+
+    def band(self, band):
+        '''
+        returns a KDIS_BAND
+        '''
+        return KDIS_BAND(self, band)
+
+    def bands(self):
+        '''
+        iterates over all bands
+        '''
+        for i in xrange(self.nbands()):
+            yield self.band(i)    
+            
+    def to_smartg(self):
+        '''
+        return a list of KDIS_IBANDS for Smartg.run() method
+        '''
+        ik_l=[]
+        for k in self.bands():
+            for ik in k.ibands():
+                ik_l.append(ik)
+        return ik_l
+
+    def get_weight(self):
+        '''
+        return weights, wavelengths and normalization in npostprocessing
+        '''
+        wb_l=[]
+        we_l=[]
+        for k in self.bands():
+            for ik in k.ibands():
+                wb_l.append(ik.w)
+                we_l.append(ik.weight)
+        wb=LUT(np.array(wb_l),axes=[wb_l],names=['Wavelength'],desc='Wavelength')
+        we=LUT(np.array(we_l),axes=[wb_l],names=['Wavelength'],desc='Weight')
+        norm = we.reduce(np.sum,'Wavelength',grouping=wb.data)
+        return we, wb, norm
+   
+class KDIS_IBAND(object):
+    '''
+    KDIS internal band
+
+    Arguments:
+        band: KDIS_BAND object
+        index: band index
+        iband: internal band index
+    '''
+    def __init__(self, band, index):
+
+        self.band = band     # parent KDIS_BAND
+        self.index = index   # internal band index
+        self.w = band.awvl[index]  # band wavelength
+        
+        #self.extra = band.aextra[index]  # solar irradiance
+        self.xsect = band.xsect  # absorption or not
+        if self.xsect != 0 : self.weight =  band.awvl_weight[index]  # weight
+        else : self.weight = 1.
+        #self.species=['H2O','CO2','O3','N2O','CO','CH4','O2','N2']
+           
+                
+    def ki_interp(P, T, ki, Pout, Tout):
+        ki_t = np.zeros(len(T))
+        for it in xrange(len(T)):
+            fki        = interp1d(P, ki[:,it], kind='linear')
+            ki_t[it] = fki(Pout)
+        fki = interp1d(T, ki_t, kind='linear')
+        return fki(Tout)
+        
+    
+    def calc_profile(self, T, P, densmol):
+        '''
+        calculate a gaseous absorption profile for this internal band
+        using temperature T and pressure P, and profile of molecular density of
+        various gases stored in densmol
+            densmol has shape (Nlayer_atmo, Ngas)
+            densmol[:,0]=gh2o.dens*gh2o.scalingfact
+            densmol[:,1]=co2
+            densmol[:,2]=go3.dens*go3.scalingfact
+            densmol[:,3]=n2o
+            densmol[:,4]=co
+            densmol[:,5]=ch4
+            densmol[:,6]=o2
+            densmol[:,7]=n2
+        '''
+        Nmol = 1
+        M = len(T)
+        datamol = np.zeros(M, np.float)
+
+        assert densmol.shape[1] == 8
+        assert len(T) == len(P)
+        assert len(T) == densmol.shape[0]
+
+        # for each gas
+        #for ig in np.arange(Nmol):
+        for ig in [0]:
+            if self.xsect != 0 :
+                tab = self.band.kdis.ki[0, self.band.band, self.index, :, :]
+                datamol += interp2(self.band.kdis.p, self.band.kdis.t, np.squeeze(tab), P, T) * densmol[:,ig]
+
+        return datamol      
+        
+        
+class KDIS_BAND(object):
+    def __init__(self, kdis, band):
+
+        self.kdis = kdis # parent kdis coeff
+        self.band = band
+        self.w = kdis.wvlband[0, self.band]
+        self.wmin = kdis.wvlband[1, self.band]
+        self.wmax = kdis.wvlband[2, self.band]
+        self.nband = kdis.nai[0, self.band] # the number of internal bands (representative bands) in this channel
+        #self.iband= np.arange(self.nband)
+        self.awvl = [kdis.wvlband[0, self.band]]*self.nband # the corresponsing wavelenghts of the internal bands
+        self.awvl_weight = kdis.ai[0, self.band, :self.nband] # the weights of the internal bands for this channel
+        #self.aextra = reptran.extra[self._iband-1] # the extra terrestrial solar irradiance of the internal bands for this channel    
+        self.xsect = kdis.xsect[0,self.band] # the source of absorption by species of the internal bands for this channel
+
+
+    def iband(self, index):
+        '''
+        returns internal band by its number (starting at zero)
+        '''
+        return KDIS_IBAND(self, index)
+
+    def ibands(self):
+        '''
+        iterate over each internal band
+        '''
+        for i in xrange(self.nband):
+            yield self.iband(i)
+
+
 class REPTRAN_IBAND(object):
     '''
     REPTRAN internal band
@@ -780,11 +1042,10 @@ class REPTRAN_IBAND(object):
         index: band index
         iband: internal band index
     '''
-    def __init__(self, band, index, iband):
+    def __init__(self, band, index):
 
         self.band = band     # parent REPTRAN_BAND
         self.index = index   # internal band index
-        self.iband = iband   # internal band number
         self.w = band.awvl[index]  # band wavelength
         self.weight =  band.awvl_weight[index]  # weight
         self.extra = band.aextra[index]  # solar irradiance
@@ -866,6 +1127,7 @@ class REPTRAN_BAND(object):
         '''
         returns internal band by its number (starting at zero)
         '''
+        print self._iband[index]
         return REPTRAN_IBAND(self, index, self._iband[index])
 
     def ibands(self):
@@ -1344,16 +1606,18 @@ class Profile(object):
         - phase is a file containing the list pf phase functions
         '''
         # convert to list if wl is a scalar
-        if isinstance(w, (float, int, REPTRAN_IBAND)):
+        if isinstance(w, (float, int, REPTRAN_IBAND, KDIS_IBAND)):
             w = [w]
 
         use_reptran = isinstance(w[0], REPTRAN_IBAND)
-        if use_reptran:
+        use_kdis    = isinstance(w[0], KDIS_IBAND)
+        if (use_reptran or use_kdis):
             wl = map(lambda x:x.w, w)
         else:
             wl = w
 
         if use_reptran : profiles, phases = self.calc_bands(w)
+        if use_kdis    : profiles, phases = self.calc_bands(w)
         else : profiles, phases = self.calc_bands(wl)
 
         header = "# I ALT   hmol(I) haer(I)  H(I)  "
@@ -1390,7 +1654,7 @@ class Profile(object):
         -> create a new profile at a grid pfgrid (coarse grid) and for bands pfwav
         '''
         # convert to list if wl is a scalar
-        if isinstance(w, (float, int, REPTRAN_IBAND)):
+        if isinstance(w, (float, int, REPTRAN_IBAND, KDIS_IBAND)):
             w = [w]
 
         for i in xrange(len(self.cache_phase_keys)):
@@ -1398,7 +1662,8 @@ class Profile(object):
                 return self.cache_phase_values[i]
 
         use_reptran = isinstance(w[0], REPTRAN_IBAND)
-        if use_reptran:
+        use_kdis = isinstance(w[0], KDIS_IBAND)
+        if (use_reptran or use_kdis):
             wl = map(lambda x:x.w, w)
         else:
             wl = w
@@ -1498,10 +1763,11 @@ class Profile(object):
         (I,ALT,hmol,haer,H,XDEL,YDEL,XSSA,percent_abs)
         '''
         # convert to list if wl is a scalar
-        if isinstance(w, (float, int, REPTRAN_IBAND)):
+        if isinstance(w, (float, int, REPTRAN_IBAND, KDIS_IBAND)):
             w = [w]
         use_reptran = isinstance(w[0], REPTRAN_IBAND)
-        if use_reptran:
+        use_kdis = isinstance(w[0], KDIS_IBAND)
+        if (use_reptran or use_kdis):
             wl = map(lambda x:x.w, w)
         else:
             wl = w
@@ -1512,7 +1778,7 @@ class Profile(object):
         # calculate the profiles
         profiles = []
         for i in xrange(len(wl)):
-            if use_reptran : 
+            if (use_reptran or use_kdis) : 
                 pro = self.calc(w[i])
             else : pro  = self.calc(wl[i])
 
@@ -1536,7 +1802,8 @@ class Profile(object):
                 return self.cache_prof_values[i]
 
         use_reptran = isinstance(w, REPTRAN_IBAND)
-        if use_reptran:
+        use_kdis    = isinstance(w, KDIS_IBAND)
+        if (use_reptran or use_kdis):
             wl = w.w
         else:
             wl = w
@@ -1564,7 +1831,7 @@ class Profile(object):
             dataclo = np.zeros(M, np.float)
             ssaclo = np.zeros(M, np.float)
 
-        if use_reptran:
+        if (use_reptran or use_kdis):
             Nmol = 8
             densmol = np.zeros((M, Nmol), np.float)
             densmol[:,0] = self.gh2o.dens*self.gh2o.scalingfact
@@ -1576,7 +1843,8 @@ class Profile(object):
             densmol[:,6] = self.o2
             densmol[:,7] = self.n2
             xh2o = self.gh2o.dens*self.gh2o.scalingfact/self.air   # h2o vmr
-            datamol = w.calc_profile(self.T, self.P, xh2o, densmol)
+            if use_reptran : datamol = w.calc_profile(self.T, self.P, xh2o, densmol)
+            else :           datamol = w.calc_profile(self.T, self.P, densmol)*1e5
         else:
             datamol = np.zeros(M, np.float)
 

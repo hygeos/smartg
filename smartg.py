@@ -13,7 +13,7 @@ import numpy as np
 import time
 from datetime import datetime
 from numpy import pi
-from tools.profile.profil import AeroOPAC, Profile, REPTRAN, REPTRAN_IBAND, CloudOPAC
+from tools.profile.profil import AeroOPAC, Profile, KDIS, KDIS_IBAND, REPTRAN, REPTRAN_IBAND, CloudOPAC
 from tools.cdf import ICDF
 from tools.water.iop_spm import IOP_SPM
 from tools.water.iop_mm import IOP_MM
@@ -277,7 +277,7 @@ class Smartg(object):
 
             - wl: wavelength in nm (float)
                   or: a list/array of wavelengths
-                  or: a list of IBANDs (reptran)
+                  or: a list of IBANDs (reptran, kdis)
 
             - atm: Profile object
                 default None (no atmosphere)
@@ -397,8 +397,8 @@ class Smartg(object):
 
         assert isinstance(wl, (float, list, np.ndarray))
         if isinstance(wl, list):
-            if (False not in map(lambda x: isinstance(x, REPTRAN_IBAND), wl)):
-                # wl is a list of REPTRAN_IBANDs
+            if (False not in map(lambda x: isinstance(x, (REPTRAN_IBAND, KDIS_IBAND)), wl)):
+                # wl is a list of REPTRAN_IBANDs or KDIS_IBANDS
                 wavelengths = map(lambda x: x.w, wl)
             else:
                 # wl is a list of floats
@@ -978,7 +978,7 @@ def get_profAtm(wl, atm):
 
     if atm is not None:
         # write the profile
-        if isinstance(wl, (float, int, REPTRAN_IBAND)):
+        if isinstance(wl, (float, int, REPTRAN_IBAND, KDIS_IBAND)):
             wl = [wl]
         profilesAtm, phasesAtm = atm.calc_bands(wl)
         # the altitude is get only by the first atmospheric profile
@@ -1042,7 +1042,7 @@ def get_profOc(wl, water, NLAM, DEPTH=100.):
 
         prof_oc = np.zeros(1, dtype=type_Profile)
     else:
-        if isinstance(wl, (float, int, REPTRAN_IBAND)):
+        if isinstance(wl, (float, int, REPTRAN_IBAND, KDIS_IBAND)):
             wl = [wl]
         profilesOc, phasesOc = water.calc_bands(wl)
         NOCE = 1
