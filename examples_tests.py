@@ -14,7 +14,7 @@ def test_rayleigh():
     '''
     Basic Rayleigh example
     '''
-    Smartg().run(wl=400., NBPHOTONS=1e6, atm=Profile('afglt'), progress=False)
+    Smartg(debug=True).run(wl=400., NBPHOTONS=1e6, atm=Profile('afglt'), progress=False)
 
 def test_sp():
     '''

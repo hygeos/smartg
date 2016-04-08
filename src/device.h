@@ -144,8 +144,7 @@ __device__ void countPhoton(Photon* , struct Profile* prof_atm, float*, float *,
 
 
 // rotation of the stokes parameters by an angle psi
-__device__ void rotateStokes(float s1, float s2, float s3, float psi,
-        float *s1r, float *s2r, float *s3r);
+__device__ void rotateStokes(float4 s, float psi, float4 *sr);
 
 
 /* ComputePsi

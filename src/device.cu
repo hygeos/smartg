@@ -61,7 +61,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <math.h>
 
 #include <helper_math.h>
-
+#include <stdio.h>
 /**********************************************************
 *	> Kernel
 ***********************************************************/
@@ -946,8 +946,7 @@ __device__ void scatter(Photon* ph,
             }
 
 			// Stokes vector rotation
-			rotateStokes(ph->stokes.x, ph->stokes.y, ph->stokes.z,  psi,
-				     &ph->stokes.x, &ph->stokes.y, &ph->stokes.z );
+			rotateStokes(ph->stokes, psi, &ph->stokes);
 
 			// Scattering matrix multiplication
 			float cross_term;
@@ -1028,8 +1027,7 @@ __device__ void scatter(Photon* ph,
             }
 
 			// Stokes vector rotation
-			rotateStokes(ph->stokes.x, ph->stokes.y, ph->stokes.z,   psi,
-			        &ph->stokes.x, &ph->stokes.y, &ph->stokes.z);
+			rotateStokes(ph->stokes, psi, &ph->stokes);
 
 			// Scattering matrix multiplication
             stokes.z=ph->stokes.z;
@@ -1095,8 +1093,7 @@ __device__ void scatter(Photon* ph,
             }
 
 			// Stokes vector rotation
-			rotateStokes(ph->stokes.x, ph->stokes.y, ph->stokes.z,  psi,
-				     &ph->stokes.x, &ph->stokes.y, &ph->stokes.z );
+			rotateStokes(ph->stokes, psi, &ph->stokes );
 
 			// Scattering matrix multiplication
 			float cross_term;
@@ -1181,8 +1178,7 @@ __device__ void scatter(Photon* ph,
             }
 
 			// Stokes vector rotation
-			rotateStokes(ph->stokes.x, ph->stokes.y, ph->stokes.z,   psi,
-			        &ph->stokes.x, &ph->stokes.y, &ph->stokes.z);
+			rotateStokes(ph->stokes, psi, &ph->stokes);
 
 			// Scattering matrix multiplication
             stokes.z=ph->stokes.z;
@@ -1490,8 +1486,7 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 			psi = -psi;
 		}
 
-        rotateStokes(ph->stokes.x, ph->stokes.y, ph->stokes.z, psi,
-                &ph->stokes.x, &ph->stokes.y, &ph->stokes.z);
+        rotateStokes(ph->stokes, psi, &ph->stokes);
 	}
 
 	if( sTh<=nind){
@@ -1939,7 +1934,7 @@ __device__ void countPhoton(Photon* ph,
 
 	float psi=0.;
 	int ith=0, iphi=0, il=0;
-    float s1, s2, s3, s4;
+    float4 st; // replace s1, s2, s3, s4
     int II, JJ;
 
     if (theta != 0.F) {
@@ -1967,9 +1962,8 @@ __device__ void countPhoton(Photon* ph,
             } 
     }
 
-    rotateStokes(ph->stokes.x, ph->stokes.y, ph->stokes.z,  psi,
-        &s1, &s2, &s3);
-    s4 = ph->stokes.w;
+    rotateStokes(ph->stokes, psi, &st);
+    st.w = ph->stokes.w;
 	// Calcul de la case dans laquelle le photon sort
 	if (LEd == 0) ComputeBox(&ith, &iphi, &il, ph, errorcount);
     else {
@@ -1988,11 +1982,11 @@ __device__ void countPhoton(Photon* ph,
     		s3 = -s3;*/  // DR 
 	
     // Change sign convention for compatibility with OS
-    s3 = -s3;
+    st.z = -st.z;
 
-	float tmp = s1;
-	s1 = s2;
-	s2 = tmp;
+	float tmp = st.x;
+	st.x = st.y;
+	st.y = tmp;
 	
 
 	float weight = ph->weight;
@@ -2001,9 +1995,9 @@ __device__ void countPhoton(Photon* ph,
     #ifdef DEBUG
     int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
     if (isnan(weight)) printf("(idx=%d) Error, weight is NaN, %d\n", idx,ph->loc);
-    if (isnan(s1)) printf("(idx=%d) Error, s1 is NaN\n", idx);
-    if (isnan(s2)) printf("(idx=%d) Error, s2 is NaN\n", idx);
-    if (isnan(s3)) printf("(idx=%d) Error, s3 is NaN\n", idx);
+    if (isnan(st.x)) printf("(idx=%d) Error, s1 is NaN\n", idx);
+    if (isnan(st.y)) printf("(idx=%d) Error, s2 is NaN\n", idx);
+    if (isnan(st.z)) printf("(idx=%d) Error, s3 is NaN\n", idx);
     #endif
 
 	// Rangement du photon dans sa case, et incrémentation de variables
@@ -2014,10 +2008,10 @@ __device__ void countPhoton(Photon* ph,
 
         #ifdef DOUBLE 
             dweight = (double)weight;
-            ds1 = (double)s1;
-            ds2 = (double)s2;
-            ds3 = (double)s3;
-            ds4 = (double)s4;
+            ds1 = (double)st.x;
+            ds2 = (double)st.y;
+            ds3 = (double)st.z;
+            ds4 = (double)st.w;
 
             // select the appropriate level (count_level)
             tabCount = (double*)tabPhotons + count_level*NPSTKd*NBTHETAd*NBPHId*NLAMd;
@@ -2030,10 +2024,10 @@ __device__ void countPhoton(Photon* ph,
             // select the appropriate level (count_level)
             tabCount = (float*)tabPhotons + count_level*NPSTKd*NBTHETAd*NBPHId*NLAMd;
 
-            atomicAdd(tabCount+(0*II+JJ), weight * (s1+s2));
-            atomicAdd(tabCount+(1*II+JJ), weight * (s1-s2));
-            atomicAdd(tabCount+(2*II+JJ), weight * s3);
-            atomicAdd(tabCount+(3*II+JJ), weight * s4);
+            atomicAdd(tabCount+(0*II+JJ), weight * (st.x+st.y));
+            atomicAdd(tabCount+(1*II+JJ), weight * (st.x-st.y));
+            atomicAdd(tabCount+(2*II+JJ), weight * st.z);
+            atomicAdd(tabCount+(3*II+JJ), weight * st.w);
         #endif
         atomicAdd(NPhotonsOut + ((count_level*NLAMd + il)*NBTHETAd + ith)*NBPHId + iphi, 1);
 	}
@@ -2049,26 +2043,26 @@ __device__ void countPhoton(Photon* ph,
 //
 // Rotation of the stokes parameters by an angle psi between the incidence and
 // the emergence planes
-// input: 3 stokes parameters s1, s2, s3, (s4 does not need to be rotated)
+// input: float4 stokes parameters
 //        rotation angle psi in radians
-// output: 3 rotated stokes parameters s1r, s2r, s3r,
+// output: float 4 rotated stokes parameters
 //
-__device__ void rotateStokes(float s1, float s2, float s3, float psi,
-        float *s1r, float *s2r, float *s3r)
+__device__ void rotateStokes(float4 s, float psi, float4 *sr)
 {
-    float cPsi = __cosf(psi);
-    float sPsi = __sinf(psi);
-    float cPsi2 = cPsi * cPsi;
-    float sPsi2 = sPsi * sPsi;
-    float twopsi = 2.F*psi;
+    float cPsi2 = pow(__cosf(psi),2);
+    float sPsi2 = pow(__sinf(psi),2);
     float a, s2Psi;
-    s2Psi = __sinf(twopsi);
-    a = 0.5f*s2Psi*s3;
-    *s1r = cPsi2 * s1 + sPsi2 * s2 - a;
-    *s2r = sPsi2 * s1 + cPsi2 * s2 + a;
-    *s3r = s2Psi * (s1 - s2) + __cosf(twopsi) * s3;
-}
+    s2Psi = __sinf(2.F*psi); a = 0.5f*s2Psi;
 
+	float3x3 L = make_float3x3(
+		cPsi2, sPsi2, -a,                
+		sPsi2, cPsi2, a,                 
+		s2Psi, -s2Psi, __cosf(2.F*psi)   
+		);
+
+    // Since s(4) do not change by the rotation, multiply the 3x3 matrix L(psi) by the 3 first terms of s
+	(*sr) = mul(L,s); // see the function "mul" in helper_math.h for more infos
+}
 
 
 /* ComputePsi

@@ -238,7 +238,7 @@ class Smartg(object):
                                options=options,
                                no_extern_c=True,
                                cache_dir='/tmp/',
-                               include_dirs=['/usr/local/cuda/samples/common/inc/', dir_src,
+                               include_dirs=[dir_src,
                                    join(dir_src, 'incRNGs/Random123/')])
         elif exists(binnames[pp]):
             # load existing binary
