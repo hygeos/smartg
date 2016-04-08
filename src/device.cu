@@ -2049,15 +2049,14 @@ __device__ void countPhoton(Photon* ph,
 //
 __device__ void rotateStokes(float4 s, float psi, float4 *sr)
 {
-    float cPsi2 = pow(__cosf(psi),2);
-    float sPsi2 = pow(__sinf(psi),2);
-    float a, s2Psi;
-    s2Psi = __sinf(2.F*psi); a = 0.5f*s2Psi;
+    // #ifdef SPHERIQUE
+    float cPsi = __cosf(psi); float sPsi = __sinf(psi); float cPsi2 = cPsi * cPsi; float sPsi2 = sPsi * sPsi;
+	float twopsi = 2.F*psi;  float s2Psi = __sinf(twopsi); float a = 0.5f*s2Psi;
 
 	float3x3 L = make_float3x3(
 		cPsi2, sPsi2, -a,                
 		sPsi2, cPsi2, a,                 
-		s2Psi, -s2Psi, __cosf(2.F*psi)   
+		s2Psi, -s2Psi, __cosf(twopsi)   
 		);
 
     // Since s(4) do not change by the rotation, multiply the 3x3 matrix L(psi) by the 3 first terms of s
@@ -2211,6 +2210,7 @@ __device__ void ComputePsiLE( float3 u0, float3 v0, float3 v1, float* psi, float
 			w1 = w0;       // diffusion vers l'avant
 		else{ w1 = -w0; }   // diffusion vers l'arriere
 	}
+
 	else{ operator/=(w1, den); } // Hors Sujet : need to see if "__fdividef" is better
 	
 	cpsi = dot(w0,w1); 	//  Compute the scalar product between w0 and w1
