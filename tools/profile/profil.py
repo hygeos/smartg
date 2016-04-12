@@ -778,7 +778,9 @@ def skipcomment(f):
         pos=f.tell()
         if not f.readline().strip().startswith('#'): break
     f.seek(pos,0)    
-    
+
+def getKey(custom):
+    return custom.w
     
 class KDIS(object):
     
@@ -789,7 +791,7 @@ class KDIS(object):
         # Selection of the desired KDIS band or absorbing gases
         # must be done later while setting up the artdeco variables
    
-    
+        from itertools import product
         self.model = model
     
         if format == 'ascii':
@@ -893,7 +895,52 @@ class KDIS(object):
                                     self.ki[isp,iwvl,iai,ip,it] = float(tmp.split()[iai])
     
                 f.close()
+            
+            filename = dir_data+'kdis_'+model+'_'+'solarflux.dat'
+            if not os.path.isfile(filename):
+                    print "(kdis_coef) ERROR"
+                    print "            Missing file:", filename
+                    exit()
+            fsol = open(filename,'r')
+            skipcomment(fsol)
+            tmp = fsol.readline()
+            skipcomment(fsol)
+            tmp = fsol.readline()
+            nn = float(tmp.split()[0])
+            if nn != self.nwvl :
+                print " solar flux and kdis have uncompatible band number"
+                exit()
+            skipcomment(fsol)
+            self.solarflux = np.zeros(self.nwvl)
+            skipcomment(fsol)
+            for i in xrange(self.nwvl):
+                tmp = fsol.readline()
+                self.solarflux[i] = float(tmp.split()[0])
                 
+            fsol.close()
+            
+        # support for multi species   
+
+        self.nai_eff    = np.prod(self.nai, axis=0)
+        self.nmaxai_eff = np.max(self.nai_eff)
+        self.ai_eff  = np.zeros((self.nwvl, self.nmaxai_eff))
+        self.iki_eff = np.zeros((self.nsp,self.nwvl,self.nmaxai_eff), dtype='int')
+
+        for iwvl in xrange(self.nwvl):
+
+            iai_eff = 0
+            nested_list = []
+            for isp in xrange(self.nsp):
+                nested_list.append(range(self.nai[isp,iwvl]))
+            for k in product(*nested_list):
+                self.iki_eff[:,iwvl, iai_eff] = k
+                self.ai_eff[iwvl, iai_eff]    = 1.0
+                for isp in xrange(self.nsp):
+                    if self.nai[isp,iwvl] > 1:
+                        self.ai_eff[iwvl, iai_eff ] *= self.ai[isp,iwvl,self.iki_eff[isp,iwvl, iai_eff]]
+                
+                iai_eff += 1
+            
                 
     def nbands(self):
         '''
@@ -914,30 +961,40 @@ class KDIS(object):
         for i in xrange(self.nbands()):
             yield self.band(i)    
             
-    def to_smartg(self):
+    def to_smartg(self, lmin=None, lmax=None):
         '''
         return a list of KDIS_IBANDS for Smartg.run() method
         '''
         ik_l=[]
         for k in self.bands():
-            for ik in k.ibands():
-                ik_l.append(ik)
-        return ik_l
+            if (lmin is None and lmax is None) or \
+               (lmin is None and k.wmax <= lmax) or \
+               (lmax is None and k.wmin >= lmin) or \
+               (k.wmin >= lmin and k.wmax <= lmax) :
+                for ik in k.ibands():
+                    ik_l.append(ik)
+        return KDIS_IBAND_LIST(ik_l)
 
     def get_weight(self):
         '''
-        return weights, wavelengths and normalization in npostprocessing
+        return weights, wavelengths, solarflux, band width and normalization in postprocessing
         '''
         wb_l=[]
         we_l=[]
+        ex_l=[]
+        dl_l=[]
         for k in self.bands():
             for ik in k.ibands():
                 wb_l.append(ik.w)
                 we_l.append(ik.weight)
+                ex_l.append(ik.ex)
+                dl_l.append(ik.dl)
         wb=LUT(np.array(wb_l),axes=[wb_l],names=['Wavelength'],desc='Wavelength')
         we=LUT(np.array(we_l),axes=[wb_l],names=['Wavelength'],desc='Weight')
+        ex=LUT(np.array(ex_l),axes=[wb_l],names=['Wavelength'],desc='SolarFlux')
+        dl=LUT(np.array(dl_l),axes=[wb_l],names=['Wavelength'],desc='BandWidth')
         norm = we.reduce(np.sum,'Wavelength',grouping=wb.data)
-        return we, wb, norm
+        return we, wb, ex, dl, norm
    
 class KDIS_IBAND(object):
     '''
@@ -953,11 +1010,12 @@ class KDIS_IBAND(object):
         self.band = band     # parent KDIS_BAND
         self.index = index   # internal band index
         self.w = band.awvl[index]  # band wavelength
-        
-        #self.extra = band.aextra[index]  # solar irradiance
+        self.ex= band.solarflux # solar irradiance
+        self.dl= band.dl  #bandwidth
         self.xsect = band.xsect  # absorption or not
-        if self.xsect != 0 : self.weight =  band.awvl_weight[index]  # weight
-        else : self.weight = 1.
+#        if self.xsect != 0 : self.weight =  band.awvl_weight[index]  # weight
+#        else : self.weight = 1.
+        self.weight =  band.awvl_weight[index]  # weight
         #self.species=['H2O','CO2','O3','N2O','CO','CH4','O2','N2']
            
                 
@@ -985,6 +1043,7 @@ class KDIS_IBAND(object):
             densmol[:,6]=o2
             densmol[:,7]=n2
         '''
+        species = ['h2o', 'co2', 'o3', 'n2o', 'co', 'ch4', 'o2', 'n2']
         Nmol = 1
         M = len(T)
         datamol = np.zeros(M, np.float)
@@ -994,11 +1053,13 @@ class KDIS_IBAND(object):
         assert len(T) == densmol.shape[0]
 
         # for each gas
-        #for ig in np.arange(Nmol):
-        for ig in [0]:
-            if self.xsect != 0 :
-                tab = self.band.kdis.ki[0, self.band.band, self.index, :, :]
-                datamol += interp2(self.band.kdis.p, self.band.kdis.t, np.squeeze(tab), P, T) * densmol[:,ig]
+        for ig in xrange(self.band.kdis.nsp):
+            specie = self.band.kdis.species[ig]
+            ispecie= species.index(specie)
+            if self.xsect[ig] == -1 :
+                ikig = self.band.kdis.iki_eff[ig, self.band.band, self.index]
+                tab = self.band.kdis.ki[ig, self.band.band, ikig, :, :]
+                datamol += interp2(self.band.kdis.p, self.band.kdis.t, np.squeeze(tab), P, T) * densmol[:,ispecie]
 
         return datamol      
         
@@ -1011,12 +1072,15 @@ class KDIS_BAND(object):
         self.w = kdis.wvlband[0, self.band]
         self.wmin = kdis.wvlband[1, self.band]
         self.wmax = kdis.wvlband[2, self.band]
-        self.nband = kdis.nai[0, self.band] # the number of internal bands (representative bands) in this channel
+        #self.nband = kdis.nai[0, self.band] # the number of internal bands (representative bands) in this channel
+        self.nband = kdis.nai_eff[self.band] # the number of internal bands (representative bands) in this channel
         #self.iband= np.arange(self.nband)
-        self.awvl = [kdis.wvlband[0, self.band]]*self.nband # the corresponsing wavelenghts of the internal bands
-        self.awvl_weight = kdis.ai[0, self.band, :self.nband] # the weights of the internal bands for this channel
-        #self.aextra = reptran.extra[self._iband-1] # the extra terrestrial solar irradiance of the internal bands for this channel    
-        self.xsect = kdis.xsect[0,self.band] # the source of absorption by species of the internal bands for this channel
+        self.awvl = [self.w]*self.nband # the corresponsing wavelenghts of the internal bands
+        self.awvl_weight = kdis.ai_eff[self.band, :self.nband] # the weights of the internal bands for this channel
+        #self.awvl_weight = kdis.ai[0, self.band, :self.nband] # the weights of the internal bands for this channel
+        self.dl = (kdis.wvlband[2,self.band] - kdis.wvlband[1,self.band]) # bandwidth
+        self.solarflux = kdis.solarflux[self.band]/self.dl # the extra terrestrial solar irradiance of the internal bands for this channel    
+        self.xsect = kdis.xsect[:,self.band] # the source of absorption by species of the internal bands for this channel
 
 
     def iband(self, index):
@@ -1032,6 +1096,33 @@ class KDIS_BAND(object):
         for i in xrange(self.nband):
             yield self.iband(i)
 
+class KDIS_IBAND_LIST(object):  
+    '''
+    KDIS list of IBANDS
+    '''
+    def __init__(self, l):
+        self.l=l
+        
+    def get_weights(self):
+        '''
+        return weights, wavelengths, solarflux, band width and normalization in postprocessing
+        '''
+        wb_l=[]
+        we_l=[]
+        ex_l=[]
+        dl_l=[]
+        for ik in self.l:
+                wb_l.append(ik.w)
+                we_l.append(ik.weight)
+                ex_l.append(ik.ex)
+                dl_l.append(ik.dl)
+        wb=LUT(np.array(wb_l),axes=[wb_l],names=['Wavelength'],desc='Wavelength')
+        we=LUT(np.array(we_l),axes=[wb_l],names=['Wavelength'],desc='Weight')
+        ex=LUT(np.array(ex_l),axes=[wb_l],names=['Wavelength'],desc='SolarFlux')
+        dl=LUT(np.array(dl_l),axes=[wb_l],names=['Wavelength'],desc='BandWidth')
+        norm = we.reduce(np.sum,'Wavelength',grouping=wb.data)
+        return we, wb, ex, dl, norm    
+        
 
 class REPTRAN_IBAND(object):
     '''
@@ -1047,6 +1138,7 @@ class REPTRAN_IBAND(object):
         self.band = band     # parent REPTRAN_BAND
         self.index = index   # internal band index
         self.w = band.awvl[index]  # band wavelength
+        self._iband=band._iband[index]
         self.weight =  band.awvl_weight[index]  # weight
         self.extra = band.aextra[index]  # solar irradiance
         self.crs_source = band.across_section_source[index,:]  # table of absorbing gases
@@ -1084,7 +1176,7 @@ class REPTRAN_IBAND(object):
 
                 # on recupere la LUT d'absorption
                 crs_filename = self.filename[:-4] + '.lookup.' + self.species[ig]
-                crs_mol = readCRS(crs_filename, self.iband)
+                crs_mol = readCRS(crs_filename, self._iband)
 
                 # interpolation du profil vertical de temperature de reference dans les LUT
                 f=interp1d(crs_mol.pressure,crs_mol.t_ref)
@@ -1118,17 +1210,24 @@ class REPTRAN_BAND(object):
         self.aextra = reptran.extra[self._iband-1] # the extra terrestrial solar irradiance of the internal bands for this channel
         self.across_section_source = reptran.cross_section_source[self._iband-1] # the source of absorption by species of the internal bands for this channel
         self.name = reptran.band_names[band]
-        self.filename = reptran.filename
-
+        self.filename = reptran.filename    
         # the wavelength integral (width) of this channel
         self.Rint = reptran.wvl_integral[self.band]
+        
+        try:
+            self.wmin = float(self.name.split('to')[0].rstrip().split('bandfrom')[1])
+            self.wmax = float(self.name.split('to')[1].rstrip().split('nm')[0])
+        except:
+            self.w    = np.mean(self.awvl)
+            self.wmin = self.w - self.Rint/2.
+            self.wmax = self.w + self.Rint/2.
+
 
     def iband(self, index):
         '''
         returns internal band by its number (starting at zero)
         '''
-        print self._iband[index]
-        return REPTRAN_IBAND(self, index, self._iband[index])
+        return REPTRAN_IBAND(self, index)
 
     def ibands(self):
         '''
@@ -1136,6 +1235,7 @@ class REPTRAN_BAND(object):
         '''
         for i in xrange(self.nband):
             yield self.iband(i)
+            
 
 class REPTRAN(object):
     '''
@@ -1174,15 +1274,15 @@ class REPTRAN(object):
         '''
         return len(self.wvl_integral)
 
-    def band(self, band_):
+    def band(self, band):
         '''
         returns a REPTRAN_BAND
         band can be defined either by an integer, or a string
         '''
-        if isinstance(band_, str):
-            return self.band(self.band_names.index(band_))
+        if isinstance(band, str):
+            return self.band(self.band_names.index(band))
         else:
-            return REPTRAN_BAND(self, band_)
+            return REPTRAN_BAND(self, band)
 
     def bands(self):
         '''
@@ -1190,7 +1290,59 @@ class REPTRAN(object):
         '''
         for i in xrange(self.nbands()):
             yield self.band(i)
+            
+    def to_smartg(self, lmin=None, lmax=None, include=''):
+        '''
+        return a REPTRAN_IBAND_LIST for Smartg.run() method
+        '''
+        ik_l=[]
+        for k in self.bands():
+            if (include in k.name) and ( \
+               (lmin is None and lmax is None) or \
+               (lmin is None and k.wmax <= lmax) or \
+               (lmax is None and k.wmin >= lmin) or \
+               (k.wmin >= lmin and k.wmax <= lmax)) :
+                for ik in k.ibands():
+                    ik_l.append(ik)
+        
+        return REPTRAN_IBAND_LIST(sorted(ik_l, key=lambda x:x.w))
+            
+class REPTRAN_IBAND_LIST(object):
+    '''
+    KDIS list of IBANDS
+    '''
+    
+    def __init__(self, l):
+        self.l=l
 
+    def get_weights(self):
+        '''
+        return weights, wavelengths, solarflux, band width and normalization in postprocessing
+        '''
+        we_l=[]
+        ex_l=[]
+        dl_l=[]
+        wb_l=[]
+        wi_l=[]
+        for iband in self.l:
+            #for iband in band.ibands():
+                wi = iband.band.awvl[iband.index] # wvl of internal band
+                wi_l.append(wi)
+                we = iband.band.awvl_weight[iband.index] # weight of internal band
+                we_l.append(we)
+                ex = iband.band.aextra[iband.index] # E0 of internal band
+                ex_l.append(ex)
+                dl = iband.band.Rint # bandwidth
+                dl_l.append(dl)
+                wb = np.mean(iband.band.awvl[:])
+                wb_l.append(wb)
+        wb=LUT(np.array(wb_l),axes=[wi_l],names=['Wavelength'],desc='Wavelength central band')
+        we=LUT(np.array(we_l),axes=[wi_l],names=['Wavelength'],desc='Weight')
+        ex=LUT(np.array(ex_l),axes=[wi_l],names=['Wavelength'],desc='E0')
+        dl=LUT(np.array(dl_l),axes=[wi_l],names=['Wavelength'],desc='Dlambda')
+        norm = we.reduce(np.sum,'Wavelength',grouping=wb.data)
+        return we, wb, ex, dl, norm 
+        
 
 class readCRS(object):
     def __init__(self,filename,iband):
