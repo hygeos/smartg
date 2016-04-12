@@ -1362,18 +1362,18 @@ inline __host__ __device__ float2 mul(float2x2 M, float2 v)
 inline __host__ __device__ float3 mul(float3x3 M, float3 v)
 {
 	float3 r;
-	r.x = M._00*v.x + M._01*v.y + M._02*v.z;
-	r.y = M._10*v.x + M._11*v.y + M._12*v.z;
-	r.z = M._20*v.x + M._21*v.y + M._22*v.z;
+	r.x = dot (M._m00_m01_m02, v);
+	r.y = dot (M._m10_m11_m12, v);
+	r.z = dot (M._m20_m21_m22, v);
 	return r;
 }
 
 inline __host__ __device__ float4 mul(float3x3 M, float4 v)
 {
-	float4 r;
-	r.x = M._00*v.x + M._01*v.y + M._02*v.z;
-	r.y = M._10*v.x + M._11*v.y + M._12*v.z;
-	r.z = M._20*v.x + M._21*v.y + M._22*v.z;
+	float4 r; float3 v2=make_float3(v.x, v.y, v.z);
+	r.x = dot (M._m00_m01_m02, v2);
+	r.y = dot (M._m10_m11_m12, v2);
+	r.z = dot (M._m20_m21_m22, v2);
 	return r;
 }
 
