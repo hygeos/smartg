@@ -1574,9 +1574,7 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 		ph->stokes.w = rparper*stokes.w - rparper_cross*stokes.z; // DR Mobley 2015 sign convention
 		
         if (le) {
-		    ph->v.x = v.x;
-		    ph->v.y = v.y;
-		    ph->v.z = v.z;
+		    ph->v = v;
         }
         else {
 		    ph->v.x += 2.F*cTh*nx;
@@ -1649,12 +1647,8 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 		ph->stokes.w *= tparper*geo_trans_factor;
 		
 		alpha  = __fdividef(cTh,nind) - cot;
-        if (le) {
-		    ph->v.x = v.x;
-		    ph->v.y = v.y;
-		    ph->v.z = v.z;
 
-        }
+        if (le) { ph->v = v; }
         else {
 		    ph->v.x = __fdividef(ph->v.x,nind) + alpha*nx;
 		    ph->v.y = __fdividef(ph->v.y,nind) + alpha*ny;
@@ -2262,10 +2256,7 @@ __device__ float ComputeTheta(float3 v0, float3 v1){
 }
 
 __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
-    //
-    ph_le->v.x = ph->v.x;
-    ph_le->v.y = ph->v.y;
-    ph_le->v.z = ph->v.z;
+    ph_le->v = ph->v; //float3
     ph_le->u = ph->u; // float3
     ph_le->stokes.x = ph->stokes.x;
     ph_le->stokes.y = ph->stokes.y;
