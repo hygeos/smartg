@@ -1411,7 +1411,7 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
         // vector equation for determining the half direction h = - (ni*i + no*o)
         // or h = - (i + nind*o)
         // h is pointing toward the incoming ray
-		 no = operator*(sign, (operator-(ph->v, operator*(v, nind))));
+		 no = sign*(operator-(ph->v, v*nind));
      }
      if ((ph->loc==SURF0P) && (count_level==UP0P) ||
          (ph->loc==SURF0M) && (count_level==DOWN0M)) { // Reflection geometry
@@ -1446,7 +1446,7 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
     // axis instead of local axis (Nx, Ny, Nz)
     if (!le) {
     #ifdef SPHERIQUE
-	no = operator+(operator+(operator*(n_l.x, Nx), operator*(n_l.y, Ny)), operator*(n_l.z,Nz));
+	no = operator+(operator+(n_l.x*Nx, n_l.y*Ny), n_l.z*Nz);
     #else
     no = n_l;
     #endif
@@ -1563,9 +1563,9 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 		ph->stokes.w = rparper*stokes.w - rparper_cross*stokes.z; // DR Mobley 2015 sign convention
 		
         if (le) { ph->v = v; }
-        else { operator+=(ph->v, operator*(2.F*cTh, no)); }
+        else { operator+=(ph->v, (2.F*cTh)*no); }
 
-		ph->u = operator/(operator-(no, operator*(cTh, ph->v)), sTh );	
+		ph->u = operator/(operator-(no, cTh*ph->v), sTh);	
 
         // DR Normalization of the reflexion matrix
         // DR the reflection coefficient is taken into account:
@@ -1629,8 +1629,8 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 		alpha  = __fdividef(cTh, nind) - cot;
 
         if (le) { ph->v = v; }
-        else { ph->v = operator+(operator/(ph->v, nind), operator*(alpha, no)); }
-		ph->u = operator*(operator/(operator+(no, operator*(cot, ph->v)), sTh ), nind);
+        else { ph->v = operator+(operator/(ph->v, nind), alpha*no); }
+		ph->u = operator/(operator+(no, cot*ph->v), sTh )*nind;
 
         #ifdef SPHERIQUE
         vzn = dot(ph->v, ph->pos); // produit scalaire
