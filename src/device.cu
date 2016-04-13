@@ -1849,7 +1849,8 @@ __device__ void countPhoton(Photon* ph,
 
     #ifdef DOUBLE 
     double *tabCount;                   // pointer to the "counting" array:
-    double dweight, ds1, ds2, ds3, ds4;
+    double dweight;
+	double4 ds;                         // replace ds1, ds2, ds3, ds4
     #else                               // may be TOA, or BOA down, and so on
     float *tabCount; 
     #endif
@@ -1945,18 +1946,15 @@ __device__ void countPhoton(Photon* ph,
 
         #ifdef DOUBLE 
             dweight = (double)weight;
-            ds1 = (double)st.x;
-            ds2 = (double)st.y;
-            ds3 = (double)st.z;
-            ds4 = (double)st.w;
+            ds = make_double4(st.x, st.y, st.z, st.w);
 
             // select the appropriate level (count_level)
             tabCount = (double*)tabPhotons + count_level*NPSTKd*NBTHETAd*NBPHId*NLAMd;
 
-            DatomicAdd(tabCount+(0*II+JJ), dweight*(ds1+ds2));
-            DatomicAdd(tabCount+(1*II+JJ), dweight*(ds1-ds2));
-            DatomicAdd(tabCount+(2*II+JJ), dweight*ds3);
-            DatomicAdd(tabCount+(3*II+JJ), dweight*ds4);
+            DatomicAdd(tabCount+(0*II+JJ), dweight*(ds.x+ds.y));
+            DatomicAdd(tabCount+(1*II+JJ), dweight*(ds.x-ds.y));
+            DatomicAdd(tabCount+(2*II+JJ), dweight*ds.z);
+            DatomicAdd(tabCount+(3*II+JJ), dweight*ds.w);
         #else
             // select the appropriate level (count_level)
             tabCount = (float*)tabPhotons + count_level*NPSTKd*NBTHETAd*NBPHId*NLAMd;
