@@ -513,7 +513,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm,
         ph->couche = 0;   // top of atmosphere
 
         #ifdef SPHERIQUE
-        ph->rayon = sqrtf(ph->pos.x*ph->pos.x + ph->pos.y*ph->pos.y + ph->pos.z*ph->pos.z );
+		ph->rayon = length(ph->pos);
         #endif
 
         // !! DEV on ne calucle pas d ep optique ici
@@ -585,7 +585,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
     else tauRdm = 1e6;
     
 
-    vzn = __fdividef( dot(ph->v,ph->pos) , ph->rayon);
+    vzn = __fdividef( dot(ph->v, ph->pos), ph->rayon);
     #ifndef ALT_MOVE
     costh = vzn;
     sinth2 = 1.f-costh*costh;
@@ -776,7 +776,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
     // update the position of the photon
     //
     ph->pos = operator+(ph->pos, ph->v*d_tot);
-    ph->rayon = sqrtf(ph->pos.x*ph->pos.x + ph->pos.y*ph->pos.y + ph->pos.z*ph->pos.z);
+    ph->rayon = length(ph->pos);
     ph->weight *= 1.f - prof_atm[ph->couche+ilam].abs;
     ph->prop_aer = 1.f - prof_atm[ph->couche+ilam].pmol;
     #endif
@@ -1251,10 +1251,10 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 	float temp;
 	
     // coordinates of the normal to the wave facet in the original axis
-	float nx, ny, nz;
+	float3 no;
 
     // coordinates of the normal to the wave facet in the local axis (Nx, Ny, Nz)
-	float n_x, n_y, n_z, normn;
+	float3 n_l;
 
 	float s1, s2, s3 ;
     float4 stokes;
@@ -1310,7 +1310,7 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
     // we check that there is no upward photon reaching surface0+
     if ((ph->loc == SURF0P) && (dot(ph->v, ph->pos) > 0)) {
         // upward photon when reaching the surface at (0+)
-        printf("Warning, vzn>0 (vzn=%f) with SURF0+ in surfaceAgitee\n", dot(ph->v, ph->pos);
+        printf("Warning, vzn>0 (vzn=%f) with SURF0+ in surfaceAgitee\n", dot(ph->v, ph->pos));
     }
     #endif
     #endif
@@ -1374,22 +1374,22 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
            // (sin(beta)*cos(alpha), sin(beta)*sin(alpha), cos(beta)) in axis (Nx, Ny, Nz)
 
            // Normal of the facet in the local frame
-           n_x = sign * sBeta * __cosf( alpha );
-           n_y = sign * sBeta * __sinf( alpha );
-           n_z = sign * cBeta;
+           n_l.x = sign * sBeta * __cosf( alpha );
+           n_l.y = sign * sBeta * __sinf( alpha );
+           n_l.z = sign * cBeta;
 
-           cTh = -(n_x*ph->v.x + n_y*ph->v.y + n_z*ph->v.z);
+           cTh = -(dot(n_l, ph->v));
            theta = acosf( fmin(1.00F-VALMIN, fmax( -(1.F-VALMIN), cTh ) ));
         }
      } else {
         // Flat surface
         beta  = 0.F;
         cBeta = 1.F;
-        n_x   = 0.F;
-        n_y   = 0.F;
-        n_z   = sign;
+        n_l.x   = 0.F;
+        n_l.y   = 0.F;
+        n_l.z   = sign;
 
-        cTh = -(n_x*ph->v.x + n_y*ph->v.y + n_z*ph->v.z);
+        cTh = -(dot(n_l, ph->v));
         theta = acosf( fmin(1.00F-VALMIN, fmax( -(1.F-VALMIN), cTh ) ));
      }
     } /* not le*/
@@ -1411,35 +1411,28 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
         // vector equation for determining the half direction h = - (ni*i + no*o)
         // or h = - (i + nind*o)
         // h is pointing toward the incoming ray
-        nx = sign * (ph->v.x - v.x*nind) ;
-        ny = sign * (ph->v.y - v.y*nind) ;
-        nz = sign * (ph->v.z - v.z*nind) ;
+		 no = operator*(sign, (operator-(ph->v, operator*(v, nind))));
      }
      if ((ph->loc==SURF0P) && (count_level==UP0P) ||
          (ph->loc==SURF0M) && (count_level==DOWN0M)) { // Reflection geometry
         // vector equation for determining the half direction h = sign(i dot o) (i + o)
-        nx = v.x - ph->v.x;
-        ny = v.y - ph->v.y;
-        nz = v.z - ph->v.z;
+		 no = operator-(v, ph->v);
      }
 
      // 2) Normalization of the half direction vector
-     normn = sqrtf(nx*nx + ny*ny + nz*nz);
-     nx/=normn;
-     ny/=normn;
-     nz/=normn;
+     no=normalize(no);
 
      // Incidence angle in the local frame
-     cTh = fabs(-(nx*ph->v.x + ny*ph->v.y + nz*ph->v.z));
+     cTh = fabs(-dot(no, ph->v));
      theta = acosf( fmin(1.00F-VALMIN, fmax( -(1.F-VALMIN), cTh ) ));
 
      #ifdef SPHERIQUE
      // facet slope
-     cBeta = 1./RTER * fabs(nx*ph->pos.x + ny*ph->pos.y + nz*ph->pos.z);
+     cBeta = 1./RTER * fabs(dot(no, ph->pos));
      beta  = fabs(acosf(cBeta));
      #else
-     cBeta = fabs(nz);
-     beta  = acosf(nz);
+     cBeta = fabs(no.z);
+     beta  = acosf(no.z);
      #endif
 	 if( (DIOPTREd == 0) && (fabs(beta) >= 1e-6)) {  //  for a flat ocean beta shall be stricly zero 
         ph->weight = 0.;
@@ -1453,13 +1446,9 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
     // axis instead of local axis (Nx, Ny, Nz)
     if (!le) {
     #ifdef SPHERIQUE
-    nx = n_x*Nx.x + n_y*Ny.x + n_z*Nz.x;
-    ny = n_x*Nx.y + n_y*Ny.y + n_z*Nz.y;
-    nz = n_x*Nx.z + n_y*Ny.z + n_z*Nz.z;
+	no = operator+(operator+(operator*(n_l.x, Nx), operator*(n_l.y, Ny)), operator*(n_l.z,Nz));
     #else
-    nx = n_x;
-    ny = n_y;
-    nz = n_z;
+    no = n_l;
     #endif
     }
 
@@ -1479,10 +1468,10 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 
 	if( (s1!=s2) || (s3!=0.F) ){
 
-		temp = __fdividef(nx*ph->u.x + ny*ph->u.y + nz*ph->u.z,sTh);
+		temp = __fdividef(dot(no, ph->u), sTh);
 		psi = acosf( fmin(1.00F, fmax( -1.F, temp ) ));	
 
-		if( (nx*(ph->u.y*ph->v.z-ph->u.z*ph->v.y) + ny*(ph->u.z*ph->v.x-ph->u.x*ph->v.z) + nz*(ph->u.x*ph->v.y-ph->u.y*ph->v.x) ) <0 ){
+		if( dot(no, cross(ph->u, ph->v)) <0 ){
 			psi = -psi;
 		}
 
@@ -1573,19 +1562,10 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 		ph->stokes.z = rparper*stokes.z + rparper_cross*stokes.w; // DR Mobley 2015 sign convention
 		ph->stokes.w = rparper*stokes.w - rparper_cross*stokes.z; // DR Mobley 2015 sign convention
 		
-        if (le) {
-		    ph->v = v;
-        }
-        else {
-		    ph->v.x += 2.F*cTh*nx;
-		    ph->v.y += 2.F*cTh*ny;
-		    ph->v.z += 2.F*cTh*nz;
-        }
+        if (le) { ph->v = v; }
+        else { operator+=(ph->v, operator*(2.F*cTh, no)); }
 
-		ph->u.x = __fdividef( nx-cTh*ph->v.x,sTh );
-		ph->u.y = __fdividef( ny-cTh*ph->v.y,sTh );
-		ph->u.z = __fdividef( nz-cTh*ph->v.z,sTh );
-		
+		ph->u = operator/(operator-(no, operator*(cTh, ph->v)), sTh );	
 
         // DR Normalization of the reflexion matrix
         // DR the reflection coefficient is taken into account:
@@ -1646,17 +1626,11 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 		ph->stokes.z *= tparper*geo_trans_factor;
 		ph->stokes.w *= tparper*geo_trans_factor;
 		
-		alpha  = __fdividef(cTh,nind) - cot;
+		alpha  = __fdividef(cTh, nind) - cot;
 
         if (le) { ph->v = v; }
-        else {
-		    ph->v.x = __fdividef(ph->v.x,nind) + alpha*nx;
-		    ph->v.y = __fdividef(ph->v.y,nind) + alpha*ny;
-		    ph->v.z = __fdividef(ph->v.z,nind) + alpha*nz;
-        }
-		ph->u.x = __fdividef(nx+cot*ph->v.x,sTh )*nind;
-		ph->u.y = __fdividef(ny+cot*ph->v.y,sTh )*nind;
-		ph->u.z = __fdividef(nz+cot*ph->v.z,sTh )*nind;
+        else { ph->v = operator+(operator/(ph->v, nind), operator*(alpha, no)); }
+		ph->u = operator*(operator/(operator+(no, operator*(cot, ph->v)), sTh ), nind);
 
         #ifdef SPHERIQUE
         vzn = dot(ph->v, ph->pos); // produit scalaire
