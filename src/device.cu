@@ -962,10 +962,7 @@ __device__ void scatter(Photon* ph,
 			    // Bias sampling scheme 2): Debiasing
 			    float phase_func;
 			    phase_func = 3./4. * DELTAd * (cTh2+1.0) + 3.0 * DELTA_PRIMd;
-			    ph->stokes.x /= phase_func;  
-			    ph->stokes.y /= phase_func;  
-			    ph->stokes.z /= phase_func;     		
-			    ph->stokes.w /= phase_func;     		
+				operator/=(ph->stokes, phase_func);   		
             }
 
             else ph->weight /= 4.F; //Phase function normalization
@@ -1041,11 +1038,7 @@ __device__ void scatter(Photon* ph,
 			    // Bias sampling scheme 2): Debiasing
 			    float debias;
 			    debias = __fdividef( 2., P11 + P22 );
-			    ph->stokes.x *= debias;  
-			    ph->stokes.y *= debias;  
-			    ph->stokes.z *= debias;  
-			    ph->stokes.w *= debias;  
-
+				operator*=(ph->stokes, debias); 
             }
 
             else ph->weight /= 4.F; //Phase function normalization
@@ -1109,10 +1102,7 @@ __device__ void scatter(Photon* ph,
 			    // Bias sampling scheme 2): Debiasing
 			    float phase_func;
 			    phase_func = 3./4. * DELTAd * (cTh2+1.0) + 3.0 * DELTA_PRIMd;
-			    ph->stokes.x /= phase_func;  
-			    ph->stokes.y /= phase_func;  
-			    ph->stokes.z /= phase_func;     		
-			    ph->stokes.w /= phase_func;     		
+				operator/=(ph->stokes, phase_func);    		
             }
 
             else ph->weight /= 4.F; //Phase function normalization
@@ -1192,10 +1182,7 @@ __device__ void scatter(Photon* ph,
 			    // Bias sampling scheme 2): Debiasing
 			    float debias;
 			    debias = __fdividef( 2., P11 + P22 );
-			    ph->stokes.x *= debias;  
-			    ph->stokes.y *= debias;  
-			    ph->stokes.z *= debias;  
-			    ph->stokes.w *= debias;  
+				operator*=(ph->stokes, debias);
             }
 
             else ph->weight /= 4.F; //Phase function normalization
@@ -2232,10 +2219,7 @@ __device__ float ComputeTheta(float3 v0, float3 v1){
 __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
     ph_le->v = ph->v; //float3
     ph_le->u = ph->u; // float3
-    ph_le->stokes.x = ph->stokes.x;
-    ph_le->stokes.y = ph->stokes.y;
-    ph_le->stokes.z = ph->stokes.z;
-    ph_le->stokes.w = ph->stokes.w;
+    ph_le->stokes = ph->stokes; //float4
     ph_le->loc = ph->loc;
     ph_le->tau = ph->tau;
     ph_le->couche = ph->couche;
