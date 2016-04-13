@@ -1681,7 +1681,7 @@ __device__ void surfaceLambertienne(Photon* ph, int le, float* tabthv, float* ta
 		return;
 	}
 	
-	float uxn,vxn,uyn,vyn,uzn,vzn;	// Vecteur du photon après reflexion
+	float3 u_n, v_n;	// Vecteur du photon après reflexion
     float phi;
     float cTh, sTh, cPhi, sPhi;
 
@@ -1756,37 +1756,29 @@ __device__ void surfaceLambertienne(Photon* ph, int le, float* tabthv, float* ta
 		return;
 	}
 	
-	
 	/** Il faut exprimer Vx,y,z et Ux,y,z dans le repère de la normale au point d'impact **/
-	vxn= ict*icp*ph->v.x - ict*isp*ph->v.y + ist*ph->v.z;
-	vyn= isp*ph->v.x + icp*ph->v.y;
-	vzn= -icp*ist*ph->v.x + ist*isp*ph->v.y + ict*ph->v.z;
+	v_n.x= ict*icp*ph->v.x - ict*isp*ph->v.y + ist*ph->v.z;
+	v_n.y= isp*ph->v.x + icp*ph->v.y;
+	v_n.z= -icp*ist*ph->v.x + ist*isp*ph->v.y + ict*ph->v.z;
 	
-	uxn= ict*icp*ph->u.x - ict*isp*ph->u.y + ist*ph->u.z;
-	uyn= isp*ph->u.x + icp*ph->u.y;
-	uzn= -icp*ist*ph->u.x + ist*isp*ph->u.y + ict*ph->u.z;
+	u_n.x= ict*icp*ph->u.x - ict*isp*ph->u.y + ist*ph->u.z;
+	u_n.y= isp*ph->u.x + icp*ph->u.y;
+	u_n.z= -icp*ist*ph->u.x + ist*isp*ph->u.y + ict*ph->u.z;
 	
-	ph->v.x = vxn;
-	ph->v.y = vyn;
-	ph->v.z = vzn;
-	ph->u.x = uxn;
-	ph->u.y = uyn;
-	ph->u.z = uzn;
+	ph->v = v_n;
+	ph->u = u_n;
 
     } // photon not seafloor
-	
 	#endif //SPHERICAL
-	
-	
+
 	/** calcul u,v new **/
-	vxn = cPhi*sTh;
-	vyn = sPhi*sTh;
-	vzn = cTh;
+	v_n.x = cPhi*sTh;
+	v_n.y = sPhi*sTh;
+	v_n.z = cTh;
 	
-	uxn = cPhi*cTh;
-	uyn = sPhi*cTh;
-	uzn = -sTh;
-	
+	u_n.x = cPhi*cTh;
+	u_n.y = sPhi*cTh;
+	u_n.z = -sTh;
 
 	// Depolarisation du Photon
 	float norm;
@@ -1796,15 +1788,9 @@ __device__ void surfaceLambertienne(Photon* ph, int le, float* tabthv, float* ta
     ph->stokes.z = 0.0;
     ph->stokes.w = 0.0;
 
+	ph->v = v_n;
+	ph->u = u_n;
 	
-	ph->v.x = vxn;
-	ph->v.y = vyn;
-	ph->v.z = vzn;
-	ph->u.x = uxn;
-	ph->u.y = uyn;
-	ph->u.z = uzn;
-	
-
     if (DIOPTREd!=4 && ((ph->loc == SURF0M) || (ph->loc == SURF0P))){
 	  // Si le dioptre est seul, le photon est mis dans l'espace
 	  bool test_s = ( SIMd == -1);
@@ -1821,21 +1807,17 @@ __device__ void surfaceLambertienne(Photon* ph, int le, float* tabthv, float* ta
 	  isp = -isp;
 	  ist = -ist;
 	
-	  vxn= ict*icp*ph->v.x - ict*isp*ph->v.y + ist*ph->v.z;
-	  vyn= isp*ph->v.x + icp*ph->v.y;
-	  vzn= -icp*ist*ph->v.x + ist*isp*ph->v.y + ict*ph->v.z;
+	  v_n.x= ict*icp*ph->v.x - ict*isp*ph->v.y + ist*ph->v.z;
+	  v_n.y= isp*ph->v.x + icp*ph->v.y;
+	  v_n.z= -icp*ist*ph->v.x + ist*isp*ph->v.y + ict*ph->v.z;
 	
-	  uxn= ict*icp*ph->u.x - ict*isp*ph->u.y + ist*ph->u.z;
-	  uyn= isp*ph->u.x + icp*ph->u.y;
-	  uzn= -icp*ist*ph->u.x + ist*isp*ph->u.y + ict*ph->u.z;
+	  u_n.x= ict*icp*ph->u.x - ict*isp*ph->u.y + ist*ph->u.z;
+	  u_n.y= isp*ph->u.x + icp*ph->u.y;
+	  u_n.z= -icp*ist*ph->u.x + ist*isp*ph->u.y + ict*ph->u.z;
 	
-	  ph->v.x = vxn;
-	  ph->v.y = vyn;
-	  ph->v.z = vzn;
-	  ph->u.x = uxn;
-	  ph->u.y = uyn;
-	  ph->u.z = uzn;
-	#endif
+	  ph->v = v_n;
+	  ph->u = u_n;
+	  #endif
     } // not seafloor 
 
     else {
