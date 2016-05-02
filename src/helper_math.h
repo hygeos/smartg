@@ -103,6 +103,12 @@ struct float3x3
 	float _00, _01, _02, _10, _11, _12, _20, _21, _22;
 };
 
+struct float4x4
+{
+    float4  _m00_m01_m02_m03, _m10_m11_m12_m13, _m20_m21_m22_m23, _m30_m31_m32_m33;
+	float _00, _01, _02, _03, _10, _11, _12, _13, _20, _21, _22, _23, _30, _31, _32, _33;
+};
+
 // make functions of matrices
 inline __host__ __device__ float2x2 make_float2x2(float m00, float m01,
 												  float m10, float m11){
@@ -127,6 +133,22 @@ inline __host__ __device__ float3x3 make_float3x3(float m00, float m01,float m02
 	return M;
 }
 
+inline __host__ __device__ float4x4 make_float4x4(float m00, float m01, float m02, float m03,
+												  float m10, float m11, float m12, float m13,
+												  float m20, float m21, float m22, float m23,
+												  float m30, float m31, float m32, float m33){
+	float4x4 M;
+	M._00=m00; M._01=m01; M._02=m02; M._03=m03;
+	M._10=m10; M._11=m11; M._12=m12; M._13=m13;
+	M._20=m20; M._21=m21; M._22=m22; M._23=m23;
+	M._30=m30; M._31=m31; M._32=m32; M._33=m33;
+	M._m00_m01_m02_m03=make_float4(M._00, M._01, M._02, M._03); // row 1
+	M._m10_m11_m12_m13=make_float4(M._10, M._11, M._12, M._13); // row 2
+	M._m20_m21_m22_m23=make_float4(M._20, M._21, M._22, M._23); // row 3
+	M._m30_m31_m32_m33=make_float4(M._30, M._31, M._32, M._33); // row 3
+	return M;
+}
+
 // others
 inline __host__ __device__ float2x2 make_float2x2(float s)
 {
@@ -146,6 +168,16 @@ inline __host__ __device__ float3x3 make_float3x3(float s)
 inline __host__ __device__ float3x3 make_float3x3(float3 r1, float3 r2, float3 r3)
 {
     return make_float3x3(r1.x, r1.y, r1.z, r2.x, r2.y, r2.z, r3.x, r3.y, r3.z);
+}
+
+inline __host__ __device__ float4x4 make_float4x4(float s)
+{
+    return make_float4x4(s, s, s, s, s, s, s, s, s, s, s, s, s, s, s, s);
+}
+
+inline __host__ __device__ float4x4 make_float4x4(float4 r1, float4 r2, float4 r3, float4 r4)
+{
+    return make_float4x4(r1.x, r1.y, r1.z, r1.w, r2.x, r2.y, r2.z, r2.w, r3.x, r3.y, r3.z, r3.w, r4.x, r4.y, r4.z, r4.w);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1374,6 +1406,16 @@ inline __host__ __device__ float4 mul(float3x3 M, float4 v)
 	r.x = dot (M._m00_m01_m02, v2);
 	r.y = dot (M._m10_m11_m12, v2);
 	r.z = dot (M._m20_m21_m22, v2);
+	return r;
+}
+
+inline __host__ __device__ float4 mul(float4x4 M, float4 v)
+{
+	float4 r;
+	r.x = dot (M._m00_m01_m02_m03, v);
+	r.y = dot (M._m10_m11_m12_m13, v);
+	r.z = dot (M._m20_m21_m22_m23, v);
+	r.w = dot (M._m30_m31_m32_m33, v);
 	return r;
 }
 

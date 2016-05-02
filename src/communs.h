@@ -139,15 +139,19 @@ struct Spectrum {
 
 struct Phase {
     float p_ang; /* \                          */
-    float p_P11; /*  | equally spaced in       */
+    float p_P11; /*  |                         */
+	float p_P12; /*  | equally spaced in       */
     float p_P22; /*  | scattering probability  */
     float p_P33; /*  | [0, 1]                  */
-    float p_P43; /* /                          */
+    float p_P43; /*  |                         */
+	float p_P44; /* /                          */
 
     float a_P11; /* \                          */
+    float a_P12; /*  |                         */
     float a_P22; /*  | equally spaced in scat. */
     float a_P33; /*  | angle [0, 180]          */
-    float a_P43; /* /                          */
+    float a_P43; /*  |                         */
+    float a_P44; /* /                          */
 
 };
 

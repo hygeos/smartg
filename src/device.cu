@@ -917,17 +917,33 @@ __device__ void scatter(Photon* ph,
     /* Scattering in atmosphere */
 	if(ph->loc!=OCEAN){
         ilay = ph->couche + ph->ilam*(NATMd+1); // atm layer index
-        ipha  = prof_atm[ilay].iphase; // atm phase function index
-
+        // ipha  = prof_atm[ilay].iphase; // atm phase function index
+        ipha  = 0;
+		// int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
+		// if (idx == 0) { 
+		// 	if (ipha != 0)
+		// 		printf("is equal: %d\n", faer[ipha*NF+iang].p_P43);
+		// }
 		if( prop_aer<RAND ){
+        ipha  = 0;
             /***********************/
             /* Rayleigh scattering */
             /***********************/
+			float RANDONE;
+			RANDONE = RAND;
+			float RANDTWO;
+			RANDTWO = RANDONE * NF;
+			RANDTWO = int(RANDTWO);
+			RANDTWO =  RANDTWO / NF;
             if(!le) {
                 /* in the case of propagation (not LE) the photons scattering angle and Psi rotation angle are determined randomly*/
 			    /////////////
 			    // Get Theta (see Wang et al., 2012)
-			    float b = (RAND - 4.0 * ALPHAd - BETAd) / (2.0 * ALPHAd);
+			    float b = (RANDTWO - 4.0 * ALPHAd - BETAd) / (2.0 * ALPHAd);
+				// int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
+				// if (idx == 0) {
+				// 	printf("RANDTWO = %f\n", RANDTWO);
+				// }
 			    float expo = 1./2.;
 			    float base = ACUBEd + b*b;
 			    float tmp  = pow(base, expo);
@@ -949,26 +965,125 @@ __device__ void scatter(Photon* ph,
 			rotateStokes(ph->stokes, psi, &ph->stokes);
 
 			// Scattering matrix multiplication
-			float cross_term;
-			stokes.x = ph->stokes.x;
-			stokes.y = ph->stokes.y;
-			cross_term  = DELTA_PRIMd * (ph->stokes.x + ph->stokes.y);
-			ph->stokes.x = 3./2. * (  DELTAd  * stokes.x + cross_term );
-			ph->stokes.y = 3./2. * (  DELTAd  * cTh2 * stokes.y + cross_term );			
-			ph->stokes.z = 3./2. * (  DELTAd  * cTh  * ph->stokes.z );
-			ph->stokes.w = 3./2. * (  DELTAd  * DELTA_SECOd * cTh * ph->stokes.w );
+			float4x4 P_scatter = make_float4x4(
+				(3./2.)*(DELTAd+DELTA_PRIMd), (3./2.)*DELTA_PRIMd, 0., 0.,
+				(3./2.)*DELTA_PRIMd, (3./2.)*(DELTAd*cTh2 + DELTA_PRIMd), 0., 0.,
+				0., 0., (3./2.)*(DELTAd*cTh), 0.,
+				0., 0., 0., (3./2.)*(DELTAd*DELTA_SECOd*cTh)
+				);
+
+
+			if(le){
+				float a11, a12, a22, a33, a44;
+
+                zang = theta*NF / PI ;
+                iang = __float2int_rd(zang);
+			    zang = zang - iang;
+
+				a11 = (1-zang)*faer[ipha*NF+iang].a_P11 + zang*faer[ipha*NF+iang+1].a_P11;
+				a12 = (1-zang)*faer[ipha*NF+iang].a_P12 + zang*faer[ipha*NF+iang+1].a_P12;
+				a22 = (1-zang)*faer[ipha*NF+iang].a_P22 + zang*faer[ipha*NF+iang+1].a_P22;
+				a33 = (1-zang)*faer[ipha*NF+iang].a_P33 + zang*faer[ipha*NF+iang+1].a_P33;
+				a44 = (1-zang)*faer[ipha*NF+iang].a_P44 + zang*faer[ipha*NF+iang+1].a_P44;
+
+				int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
+				if (idx == 0) {
+					if (a11 != P_scatter._00)
+						printf("a11= %.8f, P_scatter._00 =%.8f\n", a11, P_scatter._00);
+					if (a12 != P_scatter._01)
+						printf("a12= %.8f, P_scatter._01 =%.8f\n", a12, P_scatter._01);
+					// // printf("RANDONE AFTER = %f\n", RANDONE);
+					if (fabs(a22 - P_scatter._11) > 1e-5)
+						printf("a22= %.8f, P_scatter._11 =%.8f\n", a22, P_scatter._11);
+					if (fabs(a33 - P_scatter._22) > 1e-5)
+						printf("a33= %.8f, P_scatter._22 =%.8f\n", a33, P_scatter._22);
+					if (fabs(a44 - P_scatter._33) > 1e-5)
+						printf("a44= %.8f, P_scatter._33 =%.8f\n", a44, P_scatter._33);
+					// if (fabs(cThbis - cTh) > 1e-5)
+					// 	printf("cThbis= %.8f, cTh =%.8f\n", cThbis, cTh);
+					// if (P22 != b)
+					// 	printf("P22= %.8f, cTh =%.8f, iang = %d, RANDONE=%f, RANDTWO=%f\n", P22, cTh, iang, RANDONE, RANDTWO);
+					// printf("iang= %d, P11 = %f\n", iang, P11);
+
+					// printf("iang= %d, %d\n", iang, NF);
+				}
+			}
+
+
+			ph->stokes = mul(P_scatter, ph->stokes);
+
+
+			
+			// ph->stokes.w = 3./2. * (  DELTAd  * DELTA_SECOd * cTh * ph->stokes.w );
+
+			// float cross_term;
+			// stokes.x = ph->stokes.x;
+			// stokes.y = ph->stokes.y;
+			// cross_term  = DELTA_PRIMd * (ph->stokes.x + ph->stokes.y);
+			// ph->stokes.x = 3./2. * (  DELTAd  * stokes.x + cross_term );
+			// ph->stokes.y = 3./2. * (  DELTAd  * cTh2 * stokes.y + cross_term );			
+			// ph->stokes.z = 3./2. * (  DELTAd  * cTh  * ph->stokes.z );
+			// ph->stokes.w = 3./2. * (  DELTAd  * DELTA_SECOd * cTh * ph->stokes.w );
 
             if (!le){
+                // P11 = faer[ipha*NF+iang].p_P11;
 			    // Bias sampling scheme 2): Debiasing
 			    float phase_func;
+				float P11, P12, P22, P33, P44;
+			    float b = (RANDTWO - 4.0 * ALPHAd - BETAd) / (2.0 * ALPHAd);
+			    float expo = 1./2.;
+			    float base = ACUBEd + b*b;
+			    float tmp  = pow(base, expo);
+				float cThbis=0.f;
+			    expo = 1./3.;
+			    base = -b + tmp;
+			    float u = pow(base,expo);
+			    cTh     = u - Ad / u;
+
+			    zang = RANDTWO*(NF-1);
+			    iang = __float2int_rd(zang);
+			    zang = zang - iang;
+			    // iang = 1;
+
+			    theta = (1.-zang)*faer[ipha*(NF+1)+iang].p_ang + zang*faer[ipha*(NF+1)+iang+1].p_ang;
+			    cThbis = __cosf(theta);
+
+				P11 = faer[ipha*NF+iang].p_P11;
+				P12 = faer[ipha*NF+iang].p_P12;
+				P22 = faer[ipha*NF+iang].p_P22;
+				P33 = faer[ipha*NF+iang].p_P33;
+				P44 = faer[ipha*NF+iang].p_P44;
+
 			    phase_func = 3./4. * DELTAd * (cTh2+1.0) + 3.0 * DELTA_PRIMd;
-				operator/=(ph->stokes, phase_func);   		
+				operator/=(ph->stokes, phase_func);
+				int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
+				if (idx == 0) {
+					if (P11 != P_scatter._00)
+						printf("P11= %.8f, P_scatter._00 =%.8f\n", P11, P_scatter._00);
+					if (P12 != P_scatter._01)
+						printf("P12= %.8f, P_scatter._01 =%.8f\n", P12, P_scatter._01);
+					// printf("RANDONE AFTER = %f\n", RANDONE);
+					if (fabs(P22 - P_scatter._11) > 1e-5)
+						printf("P22= %.8f, P_scatter._11 =%.8f\n", P22, P_scatter._11);
+					if (fabs(P33 - P_scatter._22) > 1e-5)
+						printf("P33= %.8f, P_scatter._22 =%.8f\n", P33, P_scatter._22);
+					if (fabs(P44 - P_scatter._33) > 1e-5)
+						printf("P44= %.8f, P_scatter._33 =%.8f\n", P44, P_scatter._33);
+					if (fabs(cThbis - cTh) > 1e-5)
+						printf("cThbis= %.8f, cTh =%.8f\n", cThbis, cTh);
+					// if (P22 != b)
+					// 	printf("P22= %.8f, cTh =%.8f, iang = %d, RANDONE=%f, RANDTWO=%f\n", P22, cTh, iang, RANDONE, RANDTWO);
+					// printf("iang= %d, P11 = %f\n", iang, P11);
+
+					// printf("iang= %d, %d\n", iang, NF);
+				}
             }
 
             else ph->weight /= 4.F; //Phase function normalization
 
 		}
 		else{
+			ipha  = prof_atm[ilay].iphase + 1;
             /***********************/
             /* Aerosols scattering */
             /***********************/
@@ -977,8 +1092,10 @@ __device__ void scatter(Photon* ph,
                 /* in the case of propagation (not LE) the photons scattering angle and Psi rotation angle are determined randomly*/
 			    /////////////
                 // Get Theta from Cumulative Distribution Function
+				ipha  = prof_atm[ilay].iphase + 1;
 			    zang = RAND*(NF-2);
 			    iang= __float2int_rd(zang);
+			    // iang= 1;
 			    zang = zang - iang;
 
 			    theta = (1.-zang)*faer[ipha*NF+iang].p_ang + zang*faer[ipha*NF+iang+1].p_ang;
@@ -991,10 +1108,20 @@ __device__ void scatter(Photon* ph,
 
                 /////////////
                 // Get Scattering matrix from CDF
+				// int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
+				// if (idx == 0) { 
+				// 	printf("is equal: %f\n", faer[ipha*NF+iang].p_P43);
+				// }
                 P11 = faer[ipha*NF+iang].p_P11;
                 P22 = faer[ipha*NF+iang].p_P22;
                 P33 = faer[ipha*NF+iang].p_P33;
                 P43 = faer[ipha*NF+iang].p_P43;
+				// int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
+				// if (idx == 0) {
+				// 	// if (P11 != (3./2.)*(DELTAd+DELTA_PRIMd))
+				// 	// 	printf("P11= %f, P_scatter.m_00 =%f\n", P11, (3./2.)*(DELTAd+DELTA_PRIMd));
+				// 	printf("iang aero = %d, P11 = %f\n", iang, P11);
+				// }
             }
 
             else {
