@@ -487,14 +487,14 @@ class Smartg(object):
         # computation of the phase functions
         if(SIM == 0 or SIM == 2 or SIM == 3):
             if phasesOc != []:
-                foce = calculF(phasesOc, NF)
+                foce = calculF(phasesOc, NF, DEPO)
             else:
                 foce = gpuzeros(1, dtype='float32')
         else:
             foce = gpuzeros(1, dtype='float32')
 
         if(SIM == -2 or SIM == 1 or SIM == 2):
-            faer = calculF(phasesAtm, NF)
+            faer = calculF(phasesAtm, NF, DEPO)
         else:
             faer = gpuzeros(1, dtype='float32')
 
@@ -812,7 +812,7 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
 
 
 
-def calculF(phases, N):
+def calculF(phases, N, DEPO):
 
     """
     Compute CDF of scattering phase matrices
@@ -847,7 +847,6 @@ def calculF(phases, N):
     for idx, phase in enumerate(phases):
         if idx == 0:
             phase_H = np.zeros((nphases, N), dtype=type_Phase, order='C')
-            DEPO = 0.0279
             GAMA = DEPO / (2- DEPO)
             DELTA = np.float32((1.0 - GAMA) / (1.0 + 2.0 *GAMA));
             DELTA_PRIM = np.float32(GAMA / (1.0 + 2.0*GAMA));

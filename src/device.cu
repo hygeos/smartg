@@ -910,271 +910,104 @@ __device__ void scatter(Photon* ph,
         cTh2 = cTh * cTh;
         ComputePsiLE(ph->u, ph->v, v, &psi, &ph->u); 
         ph->v = v;
-
-
     }
 
     /* Scattering in atmosphere */
 	if(ph->loc!=OCEAN){
+		/************************************/
+		/* Rayleigh and Aerosols scattering */
+		/************************************/
         ilay = ph->couche + ph->ilam*(NATMd+1); // atm layer index
-        // ipha  = prof_atm[ilay].iphase; // atm phase function index
-        ipha  = 0;
-		// int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
-		// if (idx == 0) { 
-		// 	if (ipha != 0)
-		// 		printf("is equal: %d\n", faer[ipha*NF+iang].p_P43);
-		// }
-		if( prop_aer<RAND ){
-        ipha  = 0;
-            /***********************/
-            /* Rayleigh scattering */
-            /***********************/
-			float RANDONE;
-			RANDONE = RAND;
-			float RANDTWO;
-			RANDTWO = RANDONE * NF;
-			RANDTWO = int(RANDTWO);
-			RANDTWO =  RANDTWO / NF;
-            if(!le) {
-                /* in the case of propagation (not LE) the photons scattering angle and Psi rotation angle are determined randomly*/
-			    /////////////
-			    // Get Theta (see Wang et al., 2012)
-			    float b = (RANDTWO - 4.0 * ALPHAd - BETAd) / (2.0 * ALPHAd);
-				// int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
-				// if (idx == 0) {
-				// 	printf("RANDTWO = %f\n", RANDTWO);
-				// }
-			    float expo = 1./2.;
-			    float base = ACUBEd + b*b;
-			    float tmp  = pow(base, expo);
-			    expo = 1./3.;
-			    base = -b + tmp;
-			    float u = pow(base,expo);
-			    cTh     = u - Ad / u;
-			    if (cTh < -1.0) cTh = -1.0;
-			    if (cTh >  1.0) cTh =  1.0;
-			    cTh2 = cTh * cTh;
-			
-			    /////////////
-			    //  Get Phi
-			    //  Biased sampling scheme for psi 1)
-			    psi = RAND * DEUXPI;
-            }
 
-			// Stokes vector rotation
-			rotateStokes(ph->stokes, psi, &ph->stokes);
+		/* atm phase function index */
+		if( prop_aer < RAND ){ipha  = 0;} // Rayleigh index
+		else {ipha  = prof_atm[ilay].iphase +1;} // Aerosols index
 
-			// Scattering matrix multiplication
-			float4x4 P_scatter = make_float4x4(
-				(3./2.)*(DELTAd+DELTA_PRIMd), (3./2.)*DELTA_PRIMd, 0., 0.,
-				(3./2.)*DELTA_PRIMd, (3./2.)*(DELTAd*cTh2 + DELTA_PRIMd), 0., 0.,
-				0., 0., (3./2.)*(DELTAd*cTh), 0.,
-				0., 0., 0., (3./2.)*(DELTAd*DELTA_SECOd*cTh)
-				);
+		float P11, P12, P22, P33, P43, P44;
+		if(!le) {
+			/* in the case of propagation (not LE) the photons scattering angle and Psi rotation angle are determined randomly*/
+			/////////////
+			// Get Theta from Cumulative Distribution Function
+			zang = RAND*(NF-1);
+			iang= __float2int_rd(zang);
+			zang = zang - iang;
 
+			theta = (1.-zang)*faer[ipha*NF+iang].p_ang + zang*faer[ipha*NF+iang+1].p_ang;
+			cTh = __cosf(theta);
 
-			if(le){
-				float a11, a12, a22, a33, a44;
+			/////////////
+			//  Get Phi
+			//  Biased sampling scheme for psi 1)
+			psi = RAND * DEUXPI;	
 
-                zang = theta*NF / PI ;
-                iang = __float2int_rd(zang);
-			    zang = zang - iang;
+			/////////////
+			// Get Scattering matrix from CDF
+			P11 = faer[ipha*NF+iang].p_P11;
+			P12 = faer[ipha*NF+iang].p_P12;
+			P22 = faer[ipha*NF+iang].p_P22;
+			P33 = faer[ipha*NF+iang].p_P33;
+			P43 = faer[ipha*NF+iang].p_P43;
+			P44 = faer[ipha*NF+iang].p_P44;
+		}
+		else {
+			/////////////
+			// Get Index of scattering angle and Scattering matrix directly 
+			zang = theta * NF/PI ;
+			iang = __float2int_rd(zang);
+			zang = zang - iang;
 
-				a11 = (1-zang)*faer[ipha*NF+iang].a_P11 + zang*faer[ipha*NF+iang+1].a_P11;
-				a12 = (1-zang)*faer[ipha*NF+iang].a_P12 + zang*faer[ipha*NF+iang+1].a_P12;
-				a22 = (1-zang)*faer[ipha*NF+iang].a_P22 + zang*faer[ipha*NF+iang+1].a_P22;
-				a33 = (1-zang)*faer[ipha*NF+iang].a_P33 + zang*faer[ipha*NF+iang+1].a_P33;
-				a44 = (1-zang)*faer[ipha*NF+iang].a_P44 + zang*faer[ipha*NF+iang+1].a_P44;
-
-				int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
-				if (idx == 0) {
-					if (a11 != P_scatter._00)
-						printf("a11= %.8f, P_scatter._00 =%.8f\n", a11, P_scatter._00);
-					if (a12 != P_scatter._01)
-						printf("a12= %.8f, P_scatter._01 =%.8f\n", a12, P_scatter._01);
-					// // printf("RANDONE AFTER = %f\n", RANDONE);
-					if (fabs(a22 - P_scatter._11) > 1e-5)
-						printf("a22= %.8f, P_scatter._11 =%.8f\n", a22, P_scatter._11);
-					if (fabs(a33 - P_scatter._22) > 1e-5)
-						printf("a33= %.8f, P_scatter._22 =%.8f\n", a33, P_scatter._22);
-					if (fabs(a44 - P_scatter._33) > 1e-5)
-						printf("a44= %.8f, P_scatter._33 =%.8f\n", a44, P_scatter._33);
-					// if (fabs(cThbis - cTh) > 1e-5)
-					// 	printf("cThbis= %.8f, cTh =%.8f\n", cThbis, cTh);
-					// if (P22 != b)
-					// 	printf("P22= %.8f, cTh =%.8f, iang = %d, RANDONE=%f, RANDTWO=%f\n", P22, cTh, iang, RANDONE, RANDTWO);
-					// printf("iang= %d, P11 = %f\n", iang, P11);
-
-					// printf("iang= %d, %d\n", iang, NF);
-				}
+			if (abs(cTh) < 1) {
+				P11 = (1-zang)*faer[ipha*NF+iang].a_P11 + zang*faer[ipha*NF+iang+1].a_P11;
+				P12 = (1-zang)*faer[ipha*NF+iang].a_P12 + zang*faer[ipha*NF+iang+1].a_P12;
+				P22 = (1-zang)*faer[ipha*NF+iang].a_P22 + zang*faer[ipha*NF+iang+1].a_P22;
+				P33 = (1-zang)*faer[ipha*NF+iang].a_P33 + zang*faer[ipha*NF+iang+1].a_P33;
+				P43 = (1-zang)*faer[ipha*NF+iang].a_P43 + zang*faer[ipha*NF+iang+1].a_P43;
+				P44 = (1-zang)*faer[ipha*NF+iang].a_P44 + zang*faer[ipha*NF+iang+1].a_P44;
 			}
-
-
-			ph->stokes = mul(P_scatter, ph->stokes);
-
-
-			
-			// ph->stokes.w = 3./2. * (  DELTAd  * DELTA_SECOd * cTh * ph->stokes.w );
-
-			// float cross_term;
-			// stokes.x = ph->stokes.x;
-			// stokes.y = ph->stokes.y;
-			// cross_term  = DELTA_PRIMd * (ph->stokes.x + ph->stokes.y);
-			// ph->stokes.x = 3./2. * (  DELTAd  * stokes.x + cross_term );
-			// ph->stokes.y = 3./2. * (  DELTAd  * cTh2 * stokes.y + cross_term );			
-			// ph->stokes.z = 3./2. * (  DELTAd  * cTh  * ph->stokes.z );
-			// ph->stokes.w = 3./2. * (  DELTAd  * DELTA_SECOd * cTh * ph->stokes.w );
-
-            if (!le){
-                // P11 = faer[ipha*NF+iang].p_P11;
-			    // Bias sampling scheme 2): Debiasing
-			    float phase_func;
-				float P11, P12, P22, P33, P44;
-			    float b = (RANDTWO - 4.0 * ALPHAd - BETAd) / (2.0 * ALPHAd);
-			    float expo = 1./2.;
-			    float base = ACUBEd + b*b;
-			    float tmp  = pow(base, expo);
-				float cThbis=0.f;
-			    expo = 1./3.;
-			    base = -b + tmp;
-			    float u = pow(base,expo);
-			    cTh     = u - Ad / u;
-
-			    zang = RANDTWO*(NF-1);
-			    iang = __float2int_rd(zang);
-			    zang = zang - iang;
-			    // iang = 1;
-
-			    theta = (1.-zang)*faer[ipha*(NF+1)+iang].p_ang + zang*faer[ipha*(NF+1)+iang+1].p_ang;
-			    cThbis = __cosf(theta);
-
-				P11 = faer[ipha*NF+iang].p_P11;
-				P12 = faer[ipha*NF+iang].p_P12;
-				P22 = faer[ipha*NF+iang].p_P22;
-				P33 = faer[ipha*NF+iang].p_P33;
-				P44 = faer[ipha*NF+iang].p_P44;
-
-			    phase_func = 3./4. * DELTAd * (cTh2+1.0) + 3.0 * DELTA_PRIMd;
-				operator/=(ph->stokes, phase_func);
-				int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
-				if (idx == 0) {
-					if (P11 != P_scatter._00)
-						printf("P11= %.8f, P_scatter._00 =%.8f\n", P11, P_scatter._00);
-					if (P12 != P_scatter._01)
-						printf("P12= %.8f, P_scatter._01 =%.8f\n", P12, P_scatter._01);
-					// printf("RANDONE AFTER = %f\n", RANDONE);
-					if (fabs(P22 - P_scatter._11) > 1e-5)
-						printf("P22= %.8f, P_scatter._11 =%.8f\n", P22, P_scatter._11);
-					if (fabs(P33 - P_scatter._22) > 1e-5)
-						printf("P33= %.8f, P_scatter._22 =%.8f\n", P33, P_scatter._22);
-					if (fabs(P44 - P_scatter._33) > 1e-5)
-						printf("P44= %.8f, P_scatter._33 =%.8f\n", P44, P_scatter._33);
-					if (fabs(cThbis - cTh) > 1e-5)
-						printf("cThbis= %.8f, cTh =%.8f\n", cThbis, cTh);
-					// if (P22 != b)
-					// 	printf("P22= %.8f, cTh =%.8f, iang = %d, RANDONE=%f, RANDTWO=%f\n", P22, cTh, iang, RANDONE, RANDTWO);
-					// printf("iang= %d, P11 = %f\n", iang, P11);
-
-					// printf("iang= %d, %d\n", iang, NF);
-				}
-            }
-
-            else ph->weight /= 4.F; //Phase function normalization
-
+			else if (cTh >=1) {
+				P11 = faer[ipha*NF].a_P11;
+				P12 = faer[ipha*NF].a_P12;
+				P22 = faer[ipha*NF].a_P22;
+				P33 = faer[ipha*NF].a_P33;
+				P43 = faer[ipha*NF].a_P43;
+				P44 = faer[ipha*NF].a_P44;
+			}
+			else {
+				P11 = faer[ipha*NF+(NF-1)].a_P11;
+				P12 = faer[ipha*NF+(NF-1)].a_P12;
+				P22 = faer[ipha*NF+(NF-1)].a_P22;
+				P33 = faer[ipha*NF+(NF-1)].a_P33;
+				P43 = faer[ipha*NF+(NF-1)].a_P43;
+				P44 = faer[ipha*NF+(NF-1)].a_P44;
+			}
 		}
-		else{
-			ipha  = prof_atm[ilay].iphase + 1;
-            /***********************/
-            /* Aerosols scattering */
-            /***********************/
-            float P11,P22,P33,P43;
-            if(!le) {
-                /* in the case of propagation (not LE) the photons scattering angle and Psi rotation angle are determined randomly*/
-			    /////////////
-                // Get Theta from Cumulative Distribution Function
-				ipha  = prof_atm[ilay].iphase + 1;
-			    zang = RAND*(NF-2);
-			    iang= __float2int_rd(zang);
-			    // iang= 1;
-			    zang = zang - iang;
 
-			    theta = (1.-zang)*faer[ipha*NF+iang].p_ang + zang*faer[ipha*NF+iang+1].p_ang;
-			    cTh = __cosf(theta);
+		// Stokes vector rotation
+		rotateStokes(ph->stokes, psi, &ph->stokes);
 
-			    /////////////
-			    //  Get Phi
-			    //  Biased sampling scheme for psi 1)
-			    psi = RAND * DEUXPI;	
+		// Scattering matrix multiplication
+		float4x4 P_scatter = make_float4x4(
+			P11, P12, 0., 0.,
+			P12, P22, 0., 0.,
+			0., 0., P33, P43,
+			0., 0., P43, P44
+			);
 
-                /////////////
-                // Get Scattering matrix from CDF
-				// int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
-				// if (idx == 0) { 
-				// 	printf("is equal: %f\n", faer[ipha*NF+iang].p_P43);
-				// }
-                P11 = faer[ipha*NF+iang].p_P11;
-                P22 = faer[ipha*NF+iang].p_P22;
-                P33 = faer[ipha*NF+iang].p_P33;
-                P43 = faer[ipha*NF+iang].p_P43;
-				// int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
-				// if (idx == 0) {
-				// 	// if (P11 != (3./2.)*(DELTAd+DELTA_PRIMd))
-				// 	// 	printf("P11= %f, P_scatter.m_00 =%f\n", P11, (3./2.)*(DELTAd+DELTA_PRIMd));
-				// 	printf("iang aero = %d, P11 = %f\n", iang, P11);
-				// }
-            }
+		ph->stokes = mul(P_scatter, ph->stokes);
 
-            else {
-                /////////////
-                // Get Index of scattering angle and Scattering matrix directly 
-                zang = theta * (NF-1)/PI ;
-                iang = __float2int_rd(zang);
-			    zang = zang - iang;
-                if (abs(cTh) < 1) {
-                    P11 = (1-zang)*faer[ipha*NF+iang].a_P11 + zang*faer[ipha*NF+iang+1].a_P11;
-                    P22 = (1-zang)*faer[ipha*NF+iang].a_P22 + zang*faer[ipha*NF+iang+1].a_P22;
-                    P33 = (1-zang)*faer[ipha*NF+iang].a_P33 + zang*faer[ipha*NF+iang+1].a_P33;
-                    P43 = (1-zang)*faer[ipha*NF+iang].a_P43 + zang*faer[ipha*NF+iang+1].a_P43;
-                }
-                else if (cTh >=1) {
-                    P11 = faer[ipha*NF].a_P11;
-                    P22 = faer[ipha*NF].a_P22;
-                    P33 = faer[ipha*NF].a_P33;
-                    P43 = faer[ipha*NF].a_P43;
-                }
-                else {
-                    P11 = faer[ipha*NF+(NF-1)].a_P11;
-                    P22 = faer[ipha*NF+(NF-1)].a_P22;
-                    P33 = faer[ipha*NF+(NF-1)].a_P33;
-                    P43 = faer[ipha*NF+(NF-1)].a_P43;
-                }
-            }
+		if (!le){
+			// Bias sampling scheme 2): Debiasing
+			float debias;
+			debias = __fdividef( 2., P11 + P22 + 2*P12 );
+			operator*=(ph->stokes, debias); 
+		}
 
-			// Stokes vector rotation
-			rotateStokes(ph->stokes, psi, &ph->stokes);
+		else ph->weight /= 4.F; //Phase function normalization
 
-			// Scattering matrix multiplication
-            stokes.z=ph->stokes.z;
-            stokes.w=ph->stokes.w;
-			ph->stokes.x *= P11;
-			ph->stokes.y *= P22;
-			ph->stokes.z = stokes.z * P33 - stokes.w * P43;
-			ph->stokes.w = stokes.w * P33 + stokes.z * P43;
-
-            if (!le){
-			    // Bias sampling scheme 2): Debiasing
-			    float debias;
-			    debias = __fdividef( 2., P11 + P22 );
-				operator*=(ph->stokes, debias); 
-            }
-
-            else ph->weight /= 4.F; //Phase function normalization
-
-            // Photon weight reduction due to the aerosol single scattering albedo of the current layer
+		if( prop_aer >= RAND ){
+			// Photon weight reduction due to the aerosol single scattering albedo of the current layer
 			ph->weight *= prof_atm[ilay].ssa;
-			
 		}
-
 	}
 	else{	/* Photon dans l'océan */
 	    float prop_raman=1., new_wavel;
