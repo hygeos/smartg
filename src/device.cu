@@ -1952,6 +1952,19 @@ __device__ void countPhoton(Photon* ph,
 //
 __device__ void rotateStokes(float4 s, float psi, float4 *sr)
 {
+    #ifdef SPHERIQUE
+    float cPsi = __cosf(psi);
+    float sPsi = __sinf(psi);
+    float cPsi2 = cPsi * cPsi;
+    float sPsi2 = sPsi * sPsi;
+    float twopsi = 2.F*psi;
+    float a, s2Psi;
+    s2Psi = __sinf(twopsi);
+    a = 0.5f*s2Psi*s.z;
+    (*sr).x = cPsi2 * s.x + sPsi2 * s.y - a;
+    (*sr).y = sPsi2 * s.x + cPsi2 * s.y + a;
+    (*sr).z = s2Psi * (s.x - s.y) + __cosf(twopsi) * s.z;
+    #else
     float cPsi = __cosf(psi); float sPsi = __sinf(psi); float cPsi2 = cPsi * cPsi; float sPsi2 = sPsi * sPsi;
 	float twopsi = 2.F*psi;  float s2Psi = __sinf(twopsi); float a = 0.5f*s2Psi;
 
@@ -1963,18 +1976,7 @@ __device__ void rotateStokes(float4 s, float psi, float4 *sr)
 
     // Since s(4) do not change by the rotation, multiply the 3x3 matrix L(psi) by the 3 first terms of s
 	(*sr) = mul(L,s); // see the function "mul" in helper_math.h for more infos
-
-    // float cPsi = __cosf(psi);
-    // float sPsi = __sinf(psi);
-    // float cPsi2 = cPsi * cPsi;
-    // float sPsi2 = sPsi * sPsi;
-    // float twopsi = 2.F*psi;
-    // float a, s2Psi;
-    // s2Psi = __sinf(twopsi);
-    // a = 0.5f*s2Psi*s.z;
-    // (*sr).x = cPsi2 * s.x + sPsi2 * s.y - a;
-    // (*sr).y = sPsi2 * s.x + cPsi2 * s.y + a;
-    // (*sr).z = s2Psi * (s.x - s.y) + __cosf(twopsi) * s.z;
+    #endif
 }
 
 
