@@ -918,7 +918,6 @@ __device__ void scatter(Photon* ph,
 		/* Rayleigh and Aerosols scattering */
 		/************************************/
         ilay = ph->couche + ph->ilam*(NATMd+1); // atm layer index
-
 		/* atm phase function index */
 		if( prop_aer < RAND ){ipha  = 0;} // Rayleigh index
 		else {ipha  = prof_atm[ilay].iphase +1;} // Aerosols index
@@ -948,6 +947,9 @@ __device__ void scatter(Photon* ph,
 			P33 = faer[ipha*NF+iang].p_P33;
 			P43 = faer[ipha*NF+iang].p_P43;
 			P44 = faer[ipha*NF+iang].p_P44;
+			// int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+			// if (idx == 0)
+			// 	printf("P11 = %.3f, P12 = %.3f, P22 = %.3f, P33 = %.3f, P43 = %.3f, P44 = %.3f\n", P11, P12, P22, P33, P43, P44);
 		}
 		else {
 			/////////////
@@ -989,11 +991,18 @@ __device__ void scatter(Photon* ph,
 		float4x4 P_scatter = make_float4x4(
 			P11, P12, 0., 0.,
 			P12, P22, 0., 0.,
-			0., 0., P33, P43,
+			0., 0., P33, -P43,
 			0., 0., P43, P44
 			);
 
 		ph->stokes = mul(P_scatter, ph->stokes);
+
+		// stokes=ph->stokes;
+
+		// ph->stokes.x = stokes.x * P11 + stokes.y * P12;
+		// ph->stokes.y = stokes.y * P22 + stokes.x * P12;
+		// ph->stokes.z = stokes.z * P33 - stokes.w * P43;
+		// ph->stokes.w = stokes.w * P33 + stokes.z * P44;
 
 		if (!le){
 			// Bias sampling scheme 2): Debiasing
@@ -1016,7 +1025,6 @@ __device__ void scatter(Photon* ph,
 
         // we fix the proportion of Raman to 2% at 488 nm, !! DEV
         //prop_raman = 0.02 * pow ((1.e7/ph->wavel-3400.)/(1.e7/488.-3400.),5); // Raman scattering to pure water scattering ratio
-
 	    if(prop_raman <RAND ){
             /***********************/
             /* Raman scattering    */
@@ -1944,7 +1952,6 @@ __device__ void countPhoton(Photon* ph,
 //
 __device__ void rotateStokes(float4 s, float psi, float4 *sr)
 {
-    // #ifdef SPHERIQUE
     float cPsi = __cosf(psi); float sPsi = __sinf(psi); float cPsi2 = cPsi * cPsi; float sPsi2 = sPsi * sPsi;
 	float twopsi = 2.F*psi;  float s2Psi = __sinf(twopsi); float a = 0.5f*s2Psi;
 
@@ -1956,6 +1963,18 @@ __device__ void rotateStokes(float4 s, float psi, float4 *sr)
 
     // Since s(4) do not change by the rotation, multiply the 3x3 matrix L(psi) by the 3 first terms of s
 	(*sr) = mul(L,s); // see the function "mul" in helper_math.h for more infos
+
+    // float cPsi = __cosf(psi);
+    // float sPsi = __sinf(psi);
+    // float cPsi2 = cPsi * cPsi;
+    // float sPsi2 = sPsi * sPsi;
+    // float twopsi = 2.F*psi;
+    // float a, s2Psi;
+    // s2Psi = __sinf(twopsi);
+    // a = 0.5f*s2Psi*s.z;
+    // (*sr).x = cPsi2 * s.x + sPsi2 * s.y - a;
+    // (*sr).y = sPsi2 * s.x + cPsi2 * s.y + a;
+    // (*sr).z = s2Psi * (s.x - s.y) + __cosf(twopsi) * s.z;
 }
 
 

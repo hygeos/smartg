@@ -844,6 +844,8 @@ def calculF(phases, N, DEPO):
                 imax, nmax = idx, phase.N
         nphases += 1
 
+    # Initialize the cumulative distribution function
+    phase_H = np.zeros((nphases, N), dtype=type_Phase, order='C')
     for idx, phase in enumerate(phases):
         if idx == 0:
             phase_H = np.zeros((nphases, N), dtype=type_Phase, order='C')
@@ -879,8 +881,6 @@ def calculF(phases, N, DEPO):
             phase_H['a_P33'][idx, :] = (3.0/2.0)*DELTA*cThLE[:]  # U P33
             phase_H['a_P44'][idx, :] = (3.0/2.0)*DELTA_SECO*DELTA*cThLE[:]  # V P43
         else:
-            # Initialize the cumulative distribution function
-            phase_H = np.zeros((nphases, N), dtype=type_Phase, order='C')
             if idx != imax:
                 # resizing the attributes of the phase object following the nmax
                 phase.ang.resize(nmax)
@@ -910,11 +910,11 @@ def calculF(phases, N, DEPO):
             f4 = interp1d(phase.ang_in_rad(), phase.phase[:,3])
 
             # parameters equally spaced in scattering probabiliyu
-            phase_H['p_P11'][idx, :] = interp1d(scum, phase.phase[:,1])(z)  # I par P11
-            phase_H['p_P22'][idx, :] = interp1d(scum, phase.phase[:,0])(z)  # I per P22
-            phase_H['p_P33'][idx, :] = interp1d(scum, phase.phase[:,2])(z)  # U P33
-            phase_H['p_P43'][idx, :] = interp1d(scum, phase.phase[:,3])(z)  # V P43
-            phase_H['p_ang'][idx, :] = interp1d(scum, phase.ang_in_rad())(z) # angle
+            phase_H['p_P11'][idx, :] = 5#interp1d(scum, phase.phase[:,1])(z)  # I par P11
+            phase_H['p_P22'][idx, :] = 5#interp1d(scum, phase.phase[:,0])(z)  # I per P22
+            phase_H['p_P33'][idx, :] = 5#interp1d(scum, phase.phase[:,2])(z)  # U P33
+            phase_H['p_P43'][idx, :] = 5#interp1d(scum, phase.phase[:,3])(z)  # V P43
+            phase_H['p_ang'][idx, :] = 5#interp1d(scum, phase.ang_in_rad())(z) # angle
 
             # parameters equally spaced in scattering angle [0, 180]
             phase_H['a_P11'][idx, :] = f1(angN)  # I par P11
