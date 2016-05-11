@@ -866,20 +866,25 @@ def calculF(phases, N, DEPO):
             theta = np.arccos(cTh)
             cThLE = np.cos(thetaLE)
             cTh2LE = cThLE*cThLE
+            T_demi = (3.0/2.0)
+            P11 = T_demi*(DELTA+DELTA_PRIM)
+            P12 = T_demi*DELTA_PRIM
+            P33bis = T_demi*DELTA
+            P44bis = P33bis*DELTA_SECO
 
             # parameters equally spaced in scattering probabiliyu
-            phase_H['p_P11'][idx, :] = (3.0/2.0)*(DELTA+DELTA_PRIM)
-            phase_H['p_P12'][idx, :] = (3.0/2.0)*DELTA_PRIM
-            phase_H['p_P22'][idx, :] = (3.0/2.0)*(DELTA*cTh2[:] + DELTA_PRIM)
-            phase_H['p_P33'][idx, :] = (3.0/2.0)*DELTA*cTh[:] # U P33
-            phase_H['p_P44'][idx, :] = (3.0/2.0)*DELTA_SECO*DELTA*cTh[:] # V P43
+            phase_H['p_P11'][idx, :] = P11
+            phase_H['p_P12'][idx, :] = P12
+            phase_H['p_P22'][idx, :] = T_demi*(DELTA*cTh2[:] + DELTA_PRIM)
+            phase_H['p_P33'][idx, :] = P33bis*cTh[:] # U
+            phase_H['p_P44'][idx, :] = P44bis*cTh[:] # V
             phase_H['p_ang'][idx, :] = theta[:] # angle
 
-            phase_H['a_P11'][idx, :] = (3.0/2.0)*(DELTA+DELTA_PRIM)
-            phase_H['a_P12'][idx, :] = (3.0/2.0)*DELTA_PRIM
-            phase_H['a_P22'][idx, :] = (3.0/2.0)*(DELTA*cTh2LE[:] + DELTA_PRIM) 
-            phase_H['a_P33'][idx, :] = (3.0/2.0)*DELTA*cThLE[:]  # U P33
-            phase_H['a_P44'][idx, :] = (3.0/2.0)*DELTA_SECO*DELTA*cThLE[:]  # V P43
+            phase_H['a_P11'][idx, :] = P11
+            phase_H['a_P12'][idx, :] = P12
+            phase_H['a_P22'][idx, :] = T_demi*(DELTA*cTh2LE[:] + DELTA_PRIM) 
+            phase_H['a_P33'][idx, :] = P33bis*cThLE[:]  # U
+            phase_H['a_P44'][idx, :] = P44bis*cThLE[:]  # V
         else:
             if idx != imax:
                 # resizing the attributes of the phase object following the nmax
@@ -910,11 +915,11 @@ def calculF(phases, N, DEPO):
             f4 = interp1d(phase.ang_in_rad(), phase.phase[:,3])
 
             # parameters equally spaced in scattering probabiliyu
-            phase_H['p_P11'][idx, :] = 5#interp1d(scum, phase.phase[:,1])(z)  # I par P11
-            phase_H['p_P22'][idx, :] = 5#interp1d(scum, phase.phase[:,0])(z)  # I per P22
-            phase_H['p_P33'][idx, :] = 5#interp1d(scum, phase.phase[:,2])(z)  # U P33
-            phase_H['p_P43'][idx, :] = 5#interp1d(scum, phase.phase[:,3])(z)  # V P43
-            phase_H['p_ang'][idx, :] = 5#interp1d(scum, phase.ang_in_rad())(z) # angle
+            phase_H['p_P11'][idx, :] = interp1d(scum, phase.phase[:,1])(z)  # I par P11
+            phase_H['p_P22'][idx, :] = interp1d(scum, phase.phase[:,0])(z)  # I per P22
+            phase_H['p_P33'][idx, :] = interp1d(scum, phase.phase[:,2])(z)  # U P33
+            phase_H['p_P43'][idx, :] = interp1d(scum, phase.phase[:,3])(z)  # V P43
+            phase_H['p_ang'][idx, :] = interp1d(scum, phase.ang_in_rad())(z) # angle
 
             # parameters equally spaced in scattering angle [0, 180]
             phase_H['a_P11'][idx, :] = f1(angN)  # I par P11
@@ -1044,7 +1049,6 @@ def get_profAtm(wl, atm):
             prof_atm['ssa'][i,:] = profile['XSSA']
             prof_atm['abs'][i,:] = profile['percent_abs']
             prof_atm['iphase'][i,:] = profile['IPHA']
-
             taumol[i,:] = profile['hmol']
             tauaer[i,:] = profile['haer']
     else:
