@@ -48,14 +48,6 @@ __device__ __constant__ float Y0d;		// position of the target in y (km)
 __device__ __constant__ float STHVd;	//sinThetaView_Host
 __device__ __constant__ float CTHVd;	//cosThetaView_Host
 
-__device__ __constant__ float DELTAd;
-__device__ __constant__ float DELTA_PRIMd;
-__device__ __constant__ float DELTA_SECOd;
-__device__ __constant__ float BETAd;
-__device__ __constant__ float ALPHAd;
-__device__ __constant__ float Ad;
-__device__ __constant__ float ACUBEd;
-
 __device__ __constant__ float RTER;
 __device__ __constant__ int NWLPROBA;
 

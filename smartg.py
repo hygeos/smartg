@@ -486,10 +486,7 @@ class Smartg(object):
 
         # computation of the phase functions
         if(SIM == 0 or SIM == 2 or SIM == 3):
-            if phasesOc != []:
-                foce = calculF(phasesOc, NF, DEPO)
-            else:
-                foce = gpuzeros(1, dtype='float32')
+            foce = calculF(phasesOc, NF, DEPO)
         else:
             foce = gpuzeros(1, dtype='float32')
 
@@ -829,7 +826,7 @@ def calculF(phases, N, DEPO):
     phases_list = []
     
     if (phases == []):
-        phases = ['rayleigh']
+        phases = ['rayleighANDORraman']
     else:
         other_phase = phases[0]
         phases.reverse()
@@ -954,14 +951,6 @@ def InitConst(surf, env, NATM, NOCE, mod,
     THV = THVDEG * np.pi/180.
     STHV = np.sin(THV)
     CTHV = np.cos(THV)
-    GAMAbis = DEPO / (2- DEPO)
-    DELTAbis = (1.0 - GAMAbis) / (1.0 + 2.0 *GAMAbis)
-    DELTA_PRIMbis = GAMAbis / (1.0 + 2.0*GAMAbis)
-    DELTA_SECObis = (1.0 - 3.0*GAMAbis) / (1.0 - GAMAbis);
-    BETAbis  = 3./2. * DELTA_PRIMbis
-    ALPHAbis = 1./8. * DELTAbis
-    Abis = 1. + BETAbis / (3.0 * ALPHAbis)
-    ACUBEbis = Abis * Abis* Abis
 
     def copy_to_device(name, scalar, dtype):
         cuda.memcpy_htod(mod.get_global(name)[0], np.array([scalar], dtype=dtype))
@@ -996,13 +985,6 @@ def InitConst(surf, env, NATM, NOCE, mod,
         copy_to_device('Y0d', env.dict['Y0'], np.float32)
     copy_to_device('STHVd', STHV, np.float32)
     copy_to_device('CTHVd', CTHV, np.float32)
-    copy_to_device('DELTAd', DELTAbis, np.float32)
-    copy_to_device('DELTA_PRIMd', DELTA_PRIMbis, np.float32)
-    copy_to_device('DELTA_SECOd', DELTA_SECObis, np.float32)
-    copy_to_device('BETAd', BETAbis, np.float32)
-    copy_to_device('ALPHAd', ALPHAbis, np.float32)
-    copy_to_device('Ad', Abis, np.float32)
-    copy_to_device('ACUBEd', ACUBEbis, np.float32)
     copy_to_device('RTER', RTER, np.float32)
     copy_to_device('NWLPROBA', NWLPROBA, np.int32)
 
@@ -1173,7 +1155,6 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL,
     # Initializations
     nThreadsActive = gpuzeros(1, dtype='int32')
     Counter = gpuzeros(1, dtype='uint64')
-
 
     # Initialize the array for error counting
     NERROR = 32

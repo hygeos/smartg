@@ -880,10 +880,10 @@ __device__ void scatter(Photon* ph,
 	float cTh=0.f ;
 	float zang=0.f, theta=0.f;
 	int iang, ilay, ipha;
-	float4 stokes;
-	float cTh2, psi, sign;
-	float prop_aer = ph->prop_aer;
-	
+	float psi, sign;
+	float prop_aer = ph->prop_aer, RANDTWO;
+	RANDTWO = RAND;
+
     if (le){
         /* in case of LE the photon units vectors, scattering angle and Psi rotation angle are determined by output zenith and azimuth angles*/
         float thv, phi;
@@ -907,7 +907,6 @@ __device__ void scatter(Photon* ph,
         cTh = __cosf(theta);
 		if (cTh < -1.0) cTh = -1.0;
 		if (cTh >  1.0) cTh =  1.0;
-        cTh2 = cTh * cTh;
         ComputePsiLE(ph->u, ph->v, v, &psi, &ph->u); 
         ph->v = v;
     }
@@ -919,7 +918,7 @@ __device__ void scatter(Photon* ph,
 		/************************************/
         ilay = ph->couche + ph->ilam*(NATMd+1); // atm layer index
 		/* atm phase function index */
-		if( prop_aer < RAND ){ipha  = 0;} // Rayleigh index
+		if( prop_aer < RANDTWO ){ipha  = 0;} // Rayleigh index
 		else {ipha  = prof_atm[ilay].iphase + 1;} // Aerosols index
 
 		float P11, P12, P22, P33, P43, P44;
@@ -1016,173 +1015,140 @@ __device__ void scatter(Photon* ph,
 
 		else ph->weight /= 4.F; //Phase function normalization
 
-		if( prop_aer >= RAND ){
+		if( prop_aer >= RANDTWO ){
 			// Photon weight reduction due to the aerosol single scattering albedo of the current layer
 			ph->weight *= prof_atm[ilay].ssa;
 		}
 	}
 	else{	/* Photon dans l'océan */
+        /***********************************/
+		/* Raman and Elastic scattering    */
+		/***********************************/
 	    float prop_raman=1., new_wavel;
         ilay = ph->couche + ph->ilam*(NOCEd+1); // oce layer index
-        ipha  = prof_oc[ilay].iphase + 1; // oce phase function index
 
         // we fix the proportion of Raman to 2% at 488 nm, !! DEV
         //prop_raman = 0.02 * pow ((1.e7/ph->wavel-3400.)/(1.e7/488.-3400.),5); // Raman scattering to pure water scattering ratio
-	    if(prop_raman <RAND ){
-            /***********************/
-            /* Raman scattering    */
-            /* Phase function      */
-            /* similar to Rayleigh */
-            /***********************/
-            if(!le) {
-                /* in the case of propagation (not LE) the photons scattering angle and Psi rotation angle are determined randomly*/
-			    /////////////
-			    // Get Theta (see Wang et al., 2012)
-			    float b = (RAND - 4.0 * ALPHAd - BETAd) / (2.0 * ALPHAd);
-			    float expo = 1./2.;
-			    float base = ACUBEd + b*b;
-			    float tmp  = pow(base, expo);
-			    expo = 1./3.;
-			    base = -b + tmp;
-			    float u = pow(base,expo);
-			    cTh     = u - Ad / u;  						       
-			    if (cTh < -1.0) cTh = -1.0;
-			    if (cTh >  1.0) cTh =  1.0;
-			    cTh2 = cTh * cTh;
-			
-			    /////////////
-			    //  Get Phi
-			    //  Biased sampling scheme for psi 1)
-			    psi = RAND * DEUXPI;
-            }
 
-			// Stokes vector rotation
-			rotateStokes(ph->stokes, psi, &ph->stokes );
+		/* ocean phase function index */
+		if( prop_raman < RANDTWO ){ipha  = 0;} // raman index
+		else {ipha  = prof_oc[ilay].iphase + 1;} // Elastic index
 
-			// Scattering matrix multiplication
-			float cross_term;
-			stokes.x = ph->stokes.x;
-			stokes.y = ph->stokes.y;
-			cross_term  = DELTA_PRIMd * (ph->stokes.x + ph->stokes.y);
-			ph->stokes.x = 3./2. * (  DELTAd  * stokes.x + cross_term );
-			ph->stokes.y = 3./2. * (  DELTAd  * cTh2 * stokes.y + cross_term );			
-			ph->stokes.z = 3./2. * (  DELTAd  * cTh  * ph->stokes.z );
-			ph->stokes.w = 3./2. * (  DELTAd  * DELTA_SECOd * cTh * ph->stokes.w );
+		float P11, P12, P22, P33, P43, P44;
+		if(!le) {
+			/* in the case of propagation (not LE) the photons scattering angle and Psi rotation angle are determined randomly*/
+			/////////////
+			// Get Theta from Cumulative Distribution Function
+			zang = RAND*(NF-1);
+			iang= __float2int_rd(zang);
+			zang = zang - iang;
 
-            if (!le){
-			    // Bias sampling scheme 2): Debiasing
-			    float phase_func;
-			    phase_func = 3./4. * DELTAd * (cTh2+1.0) + 3.0 * DELTA_PRIMd;
-				operator/=(ph->stokes, phase_func);    		
-            }
+			theta = (1.-zang)*foce[ipha*NF+iang].p_ang + zang*foce[ipha*NF+iang+1].p_ang;
+			cTh = __cosf(theta);
 
-            else ph->weight /= 4.F; //Phase function normalization
+			/////////////
+			//  Get Phi
+			//  Biased sampling scheme for psi 1)
+			psi = RAND * DEUXPI;	
 
+			/////////////
+			// Get Scattering matrix from CDF
+			P11 = foce[ipha*NF+iang].p_P11;
+			P12 = foce[ipha*NF+iang].p_P12;
+			P22 = foce[ipha*NF+iang].p_P22;
+			P33 = foce[ipha*NF+iang].p_P33;
+			P43 = foce[ipha*NF+iang].p_P43;
+			P44 = foce[ipha*NF+iang].p_P44;
+
+			// int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+			// if (P12 != 0){
+			// if (idx == 0)
+			// 	printf("P11 = %.3f, P12 = %.3f, P22 = %.3f, P33 = %.3f, P43 = %.3f, P44 = %.3f\n", P11, P12, P22, P33, P43, P44);
+			// }
+		}
+		else {
+			/////////////
+			// Get Index of scattering angle and Scattering matrix directly 
+			zang = theta * NF/PI ;
+			iang = __float2int_rd(zang);
+			zang = zang - iang;
+
+			if (abs(cTh) < 1) {
+				P11 = (1.-zang)*foce[ipha*NF+iang].a_P11 + zang*foce[ipha*NF+iang+1].a_P11;
+				P12 = (1.-zang)*foce[ipha*NF+iang].a_P12 + zang*foce[ipha*NF+iang+1].a_P12;
+				P22 = (1.-zang)*foce[ipha*NF+iang].a_P22 + zang*foce[ipha*NF+iang+1].a_P22;
+				P33 = (1.-zang)*foce[ipha*NF+iang].a_P33 + zang*foce[ipha*NF+iang+1].a_P33;
+				P43 = (1.-zang)*foce[ipha*NF+iang].a_P43 + zang*foce[ipha*NF+iang+1].a_P43;
+				P44 = (1.-zang)*foce[ipha*NF+iang].a_P44 + zang*foce[ipha*NF+iang+1].a_P44;
+			}
+			else if (cTh >=1) {
+				P11 = foce[ipha*NF].a_P11;
+				P12 = foce[ipha*NF].a_P12;
+				P22 = foce[ipha*NF].a_P22;
+				P33 = foce[ipha*NF].a_P33;
+				P43 = foce[ipha*NF].a_P43;
+				P44 = foce[ipha*NF].a_P44;
+			}
+			else {
+				P11 = foce[ipha*NF+(NF-1)].a_P11;
+				P12 = foce[ipha*NF+(NF-1)].a_P12;
+				P22 = foce[ipha*NF+(NF-1)].a_P22;
+				P33 = foce[ipha*NF+(NF-1)].a_P33;
+				P43 = foce[ipha*NF+(NF-1)].a_P43;
+				P44 = foce[ipha*NF+(NF-1)].a_P44;
+			}
+		}
+
+		// Stokes vector rotation
+		rotateStokes(ph->stokes, psi, &ph->stokes);
+
+		// Scattering matrix multiplication
+		float4x4 P_scatter = make_float4x4(
+			P11, P12, 0., 0.,
+			P12, P22, 0., 0.,
+			0., 0., P33, -P43,
+			0., 0., P43, P44
+			);
+
+		ph->stokes = mul(P_scatter, ph->stokes);
+
+		if (!le){
+			// Bias sampling scheme 2): Debiasing
+			float debias;
+			debias = __fdividef( 2., P11 + P22 + 2*P12 );
+			operator*=(ph->stokes, debias); 
+		}
+
+		else{ph->weight /= 4.F;} //Phase function normalization
+
+		if( prop_raman < RANDTWO ){
             /* Wavelength change */
             new_wavel  = 22.94 + 0.83 * (ph->wavel) + 0.0007 * (ph->wavel)*(ph->wavel);
             ph->weight /= new_wavel/ph->wavel;
             ph->wavel = new_wavel;
-		  }
-
-	  else{
-            /***********************/
-            /* Elastic scattering */
-            /***********************/
-            float P11,P22,P33,P43;
-            if(!le) {
-                /* in the case of propagation (not LE) the photons scattering angle and Psi rotation angle are determined randomly*/
-			    /////////////
-                // Get Theta from Cumulative Distribution Function
-			    zang = RAND*(NF-2);
-			    iang= __float2int_rd(zang);
-			    zang = zang - iang;
-			    theta = (1.-zang)*foce[ipha*NF+iang].p_ang + zang*foce[ipha*NF+iang+1].p_ang;
-			    cTh = __cosf(theta);
-
-			    /////////////
-			    //  Get Phi
-			    //  Biased sampling scheme for psi 1)
-			    psi = RAND * DEUXPI;	
-
-                /////////////
-                // Get Scattering matrix from CDF
-                P11 = foce[ipha*NF+iang].p_P11;
-                P22 = foce[ipha*NF+iang].p_P22;
-                P33 = foce[ipha*NF+iang].p_P33;
-                P43 = foce[ipha*NF+iang].p_P43;
-            }
-
-            else {
-                /////////////
-                // Get Index of scattering angle and Scattering matrix directly 
-                zang = theta * (NF-1)/PI ;
-                iang = __float2int_rd(zang);
-			    zang = zang - iang;
-                if (abs(cTh) < 1) {
-                    P11 = (1.-zang)*foce[ipha*NF+iang].a_P11 + zang*foce[ipha*NF+iang+1].a_P11;
-                    P22 = (1.-zang)*foce[ipha*NF+iang].a_P22 + zang*foce[ipha*NF+iang+1].a_P22;
-                    P33 = (1.-zang)*foce[ipha*NF+iang].a_P33 + zang*foce[ipha*NF+iang+1].a_P33;
-                    P43 = (1.-zang)*foce[ipha*NF+iang].a_P43 + zang*foce[ipha*NF+iang+1].a_P43;
-                }
-                else if (cTh >=1) {
-                    P11 = foce[ipha*NF].a_P11;
-                    P22 = foce[ipha*NF].a_P22;
-                    P33 = foce[ipha*NF].a_P33;
-                    P43 = foce[ipha*NF].a_P43;
-                }
-                else {
-                    P11 = foce[ipha*NF+NF-1].a_P11;
-                    P22 = foce[ipha*NF+NF-1].a_P22;
-                    P33 = foce[ipha*NF+NF-1].a_P33;
-                    P43 = foce[ipha*NF+NF-1].a_P43;
-                }
-            }
-
-			// Stokes vector rotation
-			rotateStokes(ph->stokes, psi, &ph->stokes);
-
-			// Scattering matrix multiplication
-            stokes.z=ph->stokes.z;
-            stokes.w=ph->stokes.w;
-			ph->stokes.x *= P11;
-			ph->stokes.y *= P22;
-			ph->stokes.z = stokes.z * P33 - stokes.w * P43;
-			ph->stokes.w = stokes.w * P33 + stokes.z * P43;
-
-            if (!le){
-			    // Bias sampling scheme 2): Debiasing
-			    float debias;
-			    debias = __fdividef( 2., P11 + P22 );
-				operator*=(ph->stokes, debias);
-            }
-
-            else ph->weight /= 4.F; //Phase function normalization
-
-            // Photon weight reduction due to the aerosol single scattering albedo of the current layer
-			ph->weight *= prof_oc[ilay].ssa;
-			
-		} /* elastic scattering*/
-
-	/** Russian roulette for propagating photons **/
-     if (!le) {
-	  if( ph->weight < WEIGHTRR ){
-		if( RAND < __fdividef(ph->weight,WEIGHTRR) ){
-			ph->weight = WEIGHTRR;
 		}
-		else{
-				ph->loc = ABSORBED;
+
+	    else{
+			// Photon weight reduction due to the aerosol single scattering albedo of the current layer
+			ph->weight *= prof_oc[ilay].ssa;
+		}
+
+		/** Russian roulette for propagating photons **/
+		if (!le) {
+			if( ph->weight < WEIGHTRR ){
+				if( RANDTWO < __fdividef(ph->weight,WEIGHTRR) ){ph->weight = WEIGHTRR;}
+				else{ph->loc = ABSORBED;}
 			}
 		}
-     }
 		
     } //photon in ocean
 
-   ////////// Fin séparation ////////////
+	////////// Fin séparation ////////////
    
     if (!le){
         modifyUV( ph->v, ph->u, cTh, psi, &ph->v, &ph->u) ;
     }
-
+	
 }
 
 
