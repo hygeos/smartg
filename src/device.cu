@@ -1952,7 +1952,8 @@ __device__ void countPhoton(Photon* ph,
     #ifdef SPHERIQUE
     if(ph->vz<=0.f) {
          // do not count the downward photons leaving atmosphere
-         return;
+         // DR April 2016, test flux for spherical shell
+        //return;
     }
     #endif
 

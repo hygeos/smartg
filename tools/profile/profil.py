@@ -27,6 +27,10 @@ dir_libradtran_crs = join(dir_libradtran, 'data/crs/')
 
 NPSTK = 4 # number of Stokes parameters of the radiation field
 
+
+            
+            
+
 class AeroOPAC(object):
     '''
     Initialize the Aerosol OPAC model
@@ -60,6 +64,7 @@ class AeroOPAC(object):
         assert exists(self.filename), '{} does not exist'.format(self.filename)
 
         self.scalingfact=1.
+        self.scaleonly = False
         self._readStandardAerosolFile()
 
         # interpolated profiles, initialized by regrid()
@@ -96,14 +101,15 @@ class AeroOPAC(object):
         '''
         Initialize the model using height profile, temperature and h2o conc.
         '''
-        self.scalingfact = 1.
         if self.allow_regrid : self.regrid(z)
         else : 
             self.dens = self.densities
             self.z = z
         self.__T = T
         self.__h2o = h2o
-        self.setTauref(self.__tau, self.__wref)
+        if not self.scaleonly:
+            self.setTauref(self.__tau, self.__wref)
+            self.scalingfact = 1.
 
     def regrid(self,znew):
         '''
@@ -143,7 +149,7 @@ class AeroOPAC(object):
                         ext0=interp2(scamat.wlgrid,scamat.rhgrid,tabext,w*1.e-3,rh[m]) # interpolation pour la longueur d'onde et la RH du niveau en cours
                         ext=ext0*frho(rh[m])/frho(50.)*self.dens[m,k] # calcul du coefficient de diffusion et ajustement pour RH du niveau
                         dz = self.z[m-1]-self.z[m]
-                        dtau = dz * ext * self.scalingfact # calcul de l'epaisseur optique du niveau, eventuellement mise a l'echelle
+                        dtau = dz * ext #* self.scalingfact # calcul de l'epaisseur optique du niveau, eventuellement mise a l'echelle
                     self.dtau_tot[m]+=dtau #somme sur les composantes
 
             else:  # idem mais rien de depend de RH pour cette composante
@@ -157,7 +163,7 @@ class AeroOPAC(object):
                     else:
                         ext=ext0*self.dens[m,k]
                         dz = self.z[m-1]-self.z[m]
-                        dtau = dz * ext * self.scalingfact
+                        dtau = dz * ext #* self.scalingfact
                     self.dtau_tot[m]+=dtau
 
             k=k+1
@@ -173,7 +179,6 @@ class AeroOPAC(object):
             - dtau_tot: le profile d'épaisseurs optiques de chaque couche
             - ssa_tot, l'albedo de diffusion simple de chaque couche
         '''
-
         M=len(self.z)
         if self.RH is None : 
             h2o = self.__h2o
@@ -189,122 +194,129 @@ class AeroOPAC(object):
         self.theta = np.linspace(0.,180.,num=NTHETA,endpoint=True,dtype=np.float64)
         self.phase_tot=np.zeros((M,NPSTK,NTHETA),np.float64)
 
-        norm=np.zeros(M,np.float32)
-        k=0
-        for scamat in self.scamatlist:
-            fiw=interp1d(scamat.wlgrid,np.arange(len(scamat.wlgrid))) # function to locate wavelength index in grid (float)
-            iw=fiw(w*1e-3) # floating wavelength index 
-            if scamat.nrh>1: # si les prorietes de la composante dependent de RH (donc de Z)
-                fir=interp1d(scamat.rhgrid,np.arange(len(scamat.rhgrid))) # function to locate RH index in grid 
-                rho=scamat.rho[0,:] # lecture du profil de densite
-                tabext=np.squeeze(scamat.ext) # tableau de la section efficace de diffusion (en km-1/(g/m3)) donnes pour RH=50%
-                frho=interp1d(scamat.rhgrid,rho,bounds_error=False,fill_value=0.) # interpolation de la densite en fonction de RH
-                for m in range(M):
-                    ir=fir(rh[m]) # floating rh index
-                    if m==0:
-                        dz=0.
-                        dtau=0.
-                        dssa=1.
-                        dp=[0.,0.,0.,0.]
-                        nmax=[0,0,0,0]
-                        ext=0.
-                    else:
-                        ext0=interp2(scamat.wlgrid,scamat.rhgrid,tabext,w*1.e-3,rh[m]) # interpolation pour la longueur d'onde et la RH du niveau en cours
-                        tabssa=np.squeeze(scamat.ssa) # tableau des albedo de diffusion simple 
-                        ssa=interp2(scamat.wlgrid,scamat.rhgrid,tabssa,w*1.e-3,rh[m]) # interpolation pour la longueur d'onde et la RH du niveau en cours
-                        ext=ext0*frho(rh[m])/frho(50.)*self.dens[m,k] # calcul du coefficient de diffusion et ajustement pour RH du niveau
-                        dz = self.z[m-1]-self.z[m]                       
-                        dtau = dz * ext * self.scalingfact # calcul de l'epaisseur optique du niveau, eventuellement mise a l'echelle
-                        dssa = dtau*ssa # ssa pondere par l'epsaissuer optique
-                        norm[m]+=dssa
-                        for n in range(NPSTK): # pour chaque element de la matrice de Stokes independant (NPSTK pour Mie) 
-#                            nmax=scamat.nmom[int(iw),int(ir),n]
-#                            dp[n]= scamat.pmom[int(iw),int(ir),n,:nmax]*dssa # plus proche voisin pour pmom pondere par ssa et tau de la composante
-                            nmax=scamat.ntheta[int(iw),int(ir),n]
-                            ftheta = interp1d(scamat.theta[int(iw),int(ir),n,:nmax],scamat.phase[int(iw),int(ir),n,:nmax]) # function to interpolate phase function
-                            dp[n]= ftheta(self.theta)*dssa # plus proche voisin pour pmom pondere par ssa et tau de la composante
-                    self.dtau_tot[m]+=dtau #somme sur les composantes
-                    self.ssa_tot[m]+=dssa #moyenne pondere par l'epassieur optique pour ssa
-                    for n in range(NPSTK):
-#                        nmax=scamat.nmom[int(iw),int(ir),n]
-#                        self.pmom_tot[m,n,:nmax]+=dp[n]
-                        self.phase_tot[m,n,:]+=dp[n]
-
-            else:  # idem mais rien de depend de RH pour cette composante
-                tabext=np.squeeze(scamat.ext)
-                fext=interp1d(scamat.wlgrid,tabext,bounds_error=False,fill_value=0.)                       
-                ext0=fext(w*1e-3)
-                tabssa=np.squeeze(scamat.ssa)
-                fssa=interp1d(scamat.wlgrid,tabssa,bounds_error=False,fill_value=0.)                       
-                ssa=fssa(w*1e-3)
-#                nmom=np.squeeze(scamat.nmom)
-#                pmom=np.squeeze(scamat.pmom)
-                ntheta=np.squeeze(scamat.ntheta)
-                theta=np.squeeze(scamat.theta)
-                phase=np.squeeze(scamat.phase)
-
-                for m in xrange(M):
-                    if m==0:
-                        dz=0.
-                        dtau=0.
-                        dssa=1.
-                        dp=[0.,0.,0.,0.]
-                        nmax=[0,0,0,0]
-                        ext=0.
-                    else:
-                        ext=ext0*self.dens[m,k]
-                        dz = self.z[m-1]-self.z[m]
-                        dtau = dz * ext * self.scalingfact
-                        dssa = dtau*ssa
-                        norm[m]+=dssa
-                        for n in range(NPSTK): # pour chaque element de la matrice de Stokes independant (NPSTK pour Mie) 
-#                            nmax=nmom[int(iw),n]
-#                            dp[n]= pmom[int(iw),n,:nmax]*dssa # plus proche voisin pour pmom pondere par ssa et tau de la composante
-                            nmax=ntheta[int(iw),n]
-                            ftheta = interp1d(theta[int(iw),n,:nmax],phase[int(iw),n,:nmax]) # function to interpolate phase function
-                            dp[n]= ftheta(self.theta)*dssa # plus proche voisin pour phase pondere par ssa et tau de la composante
-                            
-                    self.dtau_tot[m]+=dtau
-                    self.ssa_tot[m]+=dssa
-                    for n in range(NPSTK):
-#                        nmax=nmom[int(iw),n]
-#                        self.pmom_tot[m,n,:nmax]+=dp[n]
-                        self.phase_tot[m,n,:]+=dp[n]
-
-            k=k+1 # each component
-
-        for m in xrange(M):
-            if m==0:
-                self.ssa_tot[m]=1.
-                for n in range(NPSTK):
-#                    self.pmom_tot[m,n,:]=0.
-                    self.phase_tot[m,n,:]=0.
-            else:
-                if (self.dtau_tot[m]>1e-8 and norm[m] > 1e-8): 
-                    self.ssa_tot[m]/=self.dtau_tot[m]
-                    for n in range(NPSTK):  
-#                        self.pmom_tot[m,n,:]/=norm[m]
-                        self.phase_tot[m,n,:]/=norm[m]
-                else:
+        if not self.scaleonly: # if we have to compute all optical properties
+            
+            norm=np.zeros(M,np.float32)
+            k=0
+            for scamat in self.scamatlist:
+                fiw=interp1d(scamat.wlgrid,np.arange(len(scamat.wlgrid))) # function to locate wavelength index in grid (float)
+                iw=fiw(w*1e-3) # floating wavelength index 
+                if scamat.nrh>1: # si les prorietes de la composante dependent de RH (donc de Z)
+                    fir=interp1d(scamat.rhgrid,np.arange(len(scamat.rhgrid))) # function to locate RH index in grid 
+                    rho=scamat.rho[0,:] # lecture du profil de densite
+                    tabext=np.squeeze(scamat.ext) # tableau de la section efficace de diffusion (en km-1/(g/m3)) donnes pour RH=50%
+                    frho=interp1d(scamat.rhgrid,rho,bounds_error=False,fill_value=0.) # interpolation de la densite en fonction de RH
+                    for m in range(M):
+                        ir=fir(rh[m]) # floating rh index
+                        if m==0:
+                            dz=0.
+                            dtau=0.
+                            dssa=1.
+                            dp=[0.,0.,0.,0.]
+                            nmax=[0,0,0,0]
+                            ext=0.
+                        else:
+                            ext0=interp2(scamat.wlgrid,scamat.rhgrid,tabext,w*1.e-3,rh[m]) # interpolation pour la longueur d'onde et la RH du niveau en cours
+                            tabssa=np.squeeze(scamat.ssa) # tableau des albedo de diffusion simple 
+                            ssa=interp2(scamat.wlgrid,scamat.rhgrid,tabssa,w*1.e-3,rh[m]) # interpolation pour la longueur d'onde et la RH du niveau en cours
+                            ext=ext0*frho(rh[m])/frho(50.)*self.dens[m,k] # calcul du coefficient de diffusion et ajustement pour RH du niveau
+                            dz = self.z[m-1]-self.z[m]                       
+                            dtau = dz * ext * self.scalingfact # calcul de l'epaisseur optique du niveau, eventuellement mise a l'echelle
+                            dssa = dtau*ssa # ssa pondere par l'epsaissuer optique
+                            norm[m]+=dssa
+                            for n in range(NPSTK): # pour chaque element de la matrice de Stokes independant (NPSTK pour Mie) 
+    #                            nmax=scamat.nmom[int(iw),int(ir),n]
+    #                            dp[n]= scamat.pmom[int(iw),int(ir),n,:nmax]*dssa # plus proche voisin pour pmom pondere par ssa et tau de la composante
+                                nmax=scamat.ntheta[int(iw),int(ir),n]
+                                ftheta = interp1d(scamat.theta[int(iw),int(ir),n,:nmax],scamat.phase[int(iw),int(ir),n,:nmax]) # function to interpolate phase function
+                                dp[n]= ftheta(self.theta)*dssa # plus proche voisin pour pmom pondere par ssa et tau de la composante
+                        self.dtau_tot[m]+=dtau #somme sur les composantes
+                        self.ssa_tot[m]+=dssa #moyenne pondere par l'epassieur optique pour ssa
+                        for n in range(NPSTK):
+    #                        nmax=scamat.nmom[int(iw),int(ir),n]
+    #                        self.pmom_tot[m,n,:nmax]+=dp[n]
+                            self.phase_tot[m,n,:]+=dp[n]
+    
+                else:  # idem mais rien de depend de RH pour cette composante
+                    tabext=np.squeeze(scamat.ext)
+                    fext=interp1d(scamat.wlgrid,tabext,bounds_error=False,fill_value=0.)                       
+                    ext0=fext(w*1e-3)
+                    tabssa=np.squeeze(scamat.ssa)
+                    fssa=interp1d(scamat.wlgrid,tabssa,bounds_error=False,fill_value=0.)                       
+                    ssa=fssa(w*1e-3)
+    #                nmom=np.squeeze(scamat.nmom)
+    #                pmom=np.squeeze(scamat.pmom)
+                    ntheta=np.squeeze(scamat.ntheta)
+                    theta=np.squeeze(scamat.theta)
+                    phase=np.squeeze(scamat.phase)
+    
+                    for m in xrange(M):
+                        if m==0:
+                            dz=0.
+                            dtau=0.
+                            dssa=1.
+                            dp=[0.,0.,0.,0.]
+                            nmax=[0,0,0,0]
+                            ext=0.
+                        else:
+                            ext=ext0*self.dens[m,k]
+                            dz = self.z[m-1]-self.z[m]
+                            dtau = dz * ext * self.scalingfact
+                            dssa = dtau*ssa
+                            norm[m]+=dssa
+                            for n in range(NPSTK): # pour chaque element de la matrice de Stokes independant (NPSTK pour Mie) 
+    #                            nmax=nmom[int(iw),n]
+    #                            dp[n]= pmom[int(iw),n,:nmax]*dssa # plus proche voisin pour pmom pondere par ssa et tau de la composante
+                                nmax=ntheta[int(iw),n]
+                                ftheta = interp1d(theta[int(iw),n,:nmax],phase[int(iw),n,:nmax]) # function to interpolate phase function
+                                dp[n]= ftheta(self.theta)*dssa # plus proche voisin pour phase pondere par ssa et tau de la composante
+                                
+                        self.dtau_tot[m]+=dtau
+                        self.ssa_tot[m]+=dssa
+                        for n in range(NPSTK):
+    #                        nmax=nmom[int(iw),n]
+    #                        self.pmom_tot[m,n,:nmax]+=dp[n]
+                            self.phase_tot[m,n,:]+=dp[n]
+    
+                k=k+1 # each component
+    
+            for m in xrange(M):
+                if m==0:
                     self.ssa_tot[m]=1.
                     for n in range(NPSTK):
-#                        self.pmom_tot[m,n,:]=0.
+    #                    self.pmom_tot[m,n,:]=0.
                         self.phase_tot[m,n,:]=0.
+                else:
+                    if (self.dtau_tot[m]>1e-8 and norm[m] > 1e-8): 
+                        self.ssa_tot[m]/=self.dtau_tot[m]
+                        for n in range(NPSTK):  
+    #                        self.pmom_tot[m,n,:]/=norm[m]
+                            self.phase_tot[m,n,:]/=norm[m]
+                    else:
+                        self.ssa_tot[m]=1.
+                        for n in range(NPSTK):
+    #                        self.pmom_tot[m,n,:]=0.
+                            self.phase_tot[m,n,:]=0.
 
-
+        else : # we just rescale the optical thicknesses
+            for m in xrange(M):
+                self.dtau_tot[m] *= self.scalingfact
+            
         self.tau_tot=np.sum(self.dtau_tot)
 #        self.MMAX=MMAX
 
         dataaer  = np.zeros(M, np.float)
         for m in xrange(M):
             dataaer[m] = np.sum(self.dtau_tot[:m+1])
-
+       
         return (dataaer, self.dtau_tot, self.ssa_tot)
 
 
-    def setTauref(self,tauref,wref): # On fixe l'AOT a une valeur pour une longueur d'onde de reference
+    def setTauref(self, tauref, wref): # On fixe l'AOT a une valeur pour une longueur d'onde de reference
         self.calcTau(wref) # calcul de l'AOT a la longueur d'onde de reference
-        self.scalingfact=tauref/self.tau_tot # calcul du facteur d'echelle        
+        self.scalingfact=tauref/self.tau_tot # calcul du facteur d'echelle   
+       
+        
 
     def phase(self, wl, NTHETA=7201):
         '''
@@ -1949,10 +1961,13 @@ class Profile(object):
         (I,ALT,hmol,haer,H,XDEL,YDEL,XSSA,percent_abs, IPHA)
 
         '''
-        for i in xrange(len(self.cache_prof_keys)):
-            if np.alltrue(self.cache_prof_keys[i] == w):
-                return self.cache_prof_values[i]
-
+        #for i in xrange(len(self.cache_prof_keys)):
+         #   if np.alltrue(self.cache_prof_keys[i] == w):
+         #       return self.cache_prof_values[i]
+        if w in self.cache_prof_keys:
+            i = self.cache_prof_keys.index(w)
+            #return self.cache_prof_values[i]
+            
         use_reptran = isinstance(w, REPTRAN_IBAND)
         use_kdis    = isinstance(w, KDIS_IBAND)
         if (use_reptran or use_kdis):
@@ -1972,8 +1987,12 @@ class Profile(object):
         M = len(z)  # Final number of layer
 
         if self.aer is not None:
-            dataaer, _, ssaaer = self.aer.calc(wl)
-        else:
+            if w in self.cache_prof_keys:
+                dataaer = self.cache_prof_values[i]['haer']
+                ssaaer  = self.cache_prof_values[i]['XSSA']
+            else:
+                dataaer, _, ssaaer = self.aer.calc(wl)
+        else :
             dataaer = np.zeros(M, np.float)
             ssaaer = np.zeros(M, np.float)
 
