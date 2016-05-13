@@ -975,34 +975,16 @@ __device__ void scatter(Photon* ph,
 	else {
 		/////////////
 		// Get Index of scattering angle and Scattering matrix directly 
-		zang = theta * NF/PI ;
+		zang = theta * (NF-1)/PI ;
 		iang = __float2int_rd(zang);
 		zang = zang - iang;
 
-		if (abs(cTh) < 1) {
-			P11 = (1-zang)*func[ipha*NF+iang].a_P11 + zang*func[ipha*NF+iang+1].a_P11;
-			P12 = (1-zang)*func[ipha*NF+iang].a_P12 + zang*func[ipha*NF+iang+1].a_P12;
-			P22 = (1-zang)*func[ipha*NF+iang].a_P22 + zang*func[ipha*NF+iang+1].a_P22;
-			P33 = (1-zang)*func[ipha*NF+iang].a_P33 + zang*func[ipha*NF+iang+1].a_P33;
-			P43 = (1-zang)*func[ipha*NF+iang].a_P43 + zang*func[ipha*NF+iang+1].a_P43;
-			P44 = (1-zang)*func[ipha*NF+iang].a_P44 + zang*func[ipha*NF+iang+1].a_P44;
-		}
-		else if (cTh >=1) {
-			P11 = func[ipha*NF].a_P11;
-			P12 = func[ipha*NF].a_P12;
-			P22 = func[ipha*NF].a_P22;
-			P33 = func[ipha*NF].a_P33;
-			P43 = func[ipha*NF].a_P43;
-			P44 = func[ipha*NF].a_P44;
-		}
-		else {
-			P11 = func[ipha*NF+(NF-1)].a_P11;
-			P12 = func[ipha*NF+(NF-1)].a_P12;
-			P22 = func[ipha*NF+(NF-1)].a_P22;
-			P33 = func[ipha*NF+(NF-1)].a_P33;
-			P43 = func[ipha*NF+(NF-1)].a_P43;
-			P44 = func[ipha*NF+(NF-1)].a_P44;
-		}
+		P11 = (1-zang)*func[ipha*NF+iang].a_P11 + zang*func[ipha*NF+iang+1].a_P11;
+		P12 = (1-zang)*func[ipha*NF+iang].a_P12 + zang*func[ipha*NF+iang+1].a_P12;
+		P22 = (1-zang)*func[ipha*NF+iang].a_P22 + zang*func[ipha*NF+iang+1].a_P22;
+		P33 = (1-zang)*func[ipha*NF+iang].a_P33 + zang*func[ipha*NF+iang+1].a_P33;
+		P43 = (1-zang)*func[ipha*NF+iang].a_P43 + zang*func[ipha*NF+iang+1].a_P43;
+		P44 = (1-zang)*func[ipha*NF+iang].a_P44 + zang*func[ipha*NF+iang+1].a_P44;
 	}
 
 	// Stokes vector rotation
