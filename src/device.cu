@@ -2022,7 +2022,7 @@ __device__ void countPhoton(Photon* ph,
 	
 
 	float weight = ph->weight;
-	if (FLUXd==1 && LEd==0) weight /= __cosf(ph->vz);
+	if (FLUXd==1 && LEd==0) weight /= fabs(ph->vz);
 
     #ifdef DEBUG
     int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);

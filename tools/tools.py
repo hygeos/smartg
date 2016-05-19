@@ -10,7 +10,6 @@ sys.path.append('..')
 import numpy as np
 from profile.profil import REPTRAN
 from luts import LUT, merge
-from scipy.integrate import simps
 import scipy.constants as cst
 from pylab import *
 
@@ -25,7 +24,7 @@ def Irr(L, azimuth='Azimuth angles', zenith='Zenith angles'):
     '''
     mu = (L.axis(zenith, aslut=True)*pi/180.).apply(cos)
     phi = L.axis(azimuth, aslut=True)*pi/180.
-    return 2./pi*(mu*L).reduce(simps, zenith, x=-mu[:]).reduce(simps, azimuth, x=phi[:])
+    return 1./pi*(mu*L).reduce(trapz, zenith, x=-mu[:]).reduce(trapz, azimuth, x=phi[:])
 
 def SpherIrr(L, azimuth='Azimuth angles', zenith='Zenith angles'):
     '''
@@ -37,7 +36,7 @@ def SpherIrr(L, azimuth='Azimuth angles', zenith='Zenith angles'):
     '''
     mu = (L.axis(zenith, aslut=True)*pi/180.).apply(cos)
     phi = L.axis(azimuth, aslut=True)*pi/180.
-    return 2./pi*(L).reduce(simps, zenith, x=-mu[:]).reduce(simps, azimuth, x=phi[:]) 
+    return 1./pi*(L).reduce(trapz, zenith, x=-mu[:]).reduce(trapz, azimuth, x=phi[:]) 
 
 def ReadREPTRAN_bands(repname, BAND=None, LMIN=None, LMAX=None, SAMPLING=100000, FULL=False):
     rep = REPTRAN(repname+'.cdf')
