@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 
+from __future__ import print_function, division
 from nose.tools import raises
 import numpy as np
 from tools.luts import LUT, MLUT, read_mlut, read_mlut_hdf, merge, Idx
@@ -202,7 +203,7 @@ def test_indexing1():
                 'imi': np.zeros((2,3), dtype='int'),
                 ':': slice(None)
                 }
-        print 'indices are "{},{},{},{}"'.format(i0, i1, i2, i3)
+        print('indices are "{},{},{},{}"'.format(i0, i1, i2, i3))
         i0 = inputs[t0]
         i1 = inputs[t1]
         i2 = inputs[t2]
