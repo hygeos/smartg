@@ -548,6 +548,12 @@ class LUT(object):
     def __rmul__(self, other):
         return self.__binary_operation__(other, lambda x, y: x*y)
 
+    def __div__(self, other):
+        return self.__binary_operation__(other, lambda x, y: x/y)
+
+    def __rdiv__(self, other):
+        return self.__binary_operation__(other, lambda x, y: y/x)
+
     def __truediv__(self, other):
         return self.__binary_operation__(other, lambda x, y: x/y)
 
