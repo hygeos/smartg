@@ -819,110 +819,93 @@ def calculF(phases, N, DEPO):
         - N : Number of discrete values of the phase function
     --------------------------------------------------
     Returns :
-        - phases_list : list of phase function set contiguously
         - phase_H : cumulative distribution of the phase function and phase function
     """
-    nmax, nphases, imax=0, 0, 0
-    phases_list = []
-    
-    if (phases == []):
-        phases = ['rayleighANDORraman']
-    else:
-        other_phase = phases[0]
-        phases.reverse()
-        phases.append(other_phase)
-        phases.reverse()
+    nmax, nphases = 0, 1
 
     # define the number of phases functions and the maximal number of angles describing each of them
     for idx, phase in enumerate(phases):
-        # print idx, type(phase)
         if idx > 0:
             if phase.N>nmax:
-                imax, nmax = idx, phase.N
+                nmax = phase.N
         nphases += 1
 
     # Initialize the cumulative distribution function
     phase_H = np.zeros((nphases, N), dtype=type_Phase, order='C')
+
+
+    # Set Rayleigh phase function
+    idx = 0
+    GAMA = DEPO / (2- DEPO)
+    DELTA = np.float32((1.0 - GAMA) / (1.0 + 2.0 *GAMA));
+    DELTA_PRIM = np.float32(GAMA / (1.0 + 2.0*GAMA));
+    DELTA_SECO = np.float32((1.0 - 3.0*GAMA) / (1.0 - GAMA));
+    BETA  = np.float32(3./2. * DELTA_PRIM);
+    ALPHA = np.float32(1./8. * DELTA);
+    A = np.float32(1. + BETA / (3.0 * ALPHA));
+
+    i = np.arange(int(N), dtype=np.float32)
+    thetaLE = np.linspace(0., pi, int(N), endpoint=True, dtype=np.float64)
+    b = ((i/(N-1)) - 4.0*ALPHA - BETA) / (2.0*ALPHA)
+    u = (-b + (A**3.0 + b**2.0)**(1.0/2.0))**(1.0/3.0)
+    cTh = u - (A/u)
+    cTh2 = cTh*cTh
+    theta = np.arccos(cTh)
+    cThLE = np.cos(thetaLE)
+    cTh2LE = cThLE*cThLE
+    T_demi = (3.0/2.0)
+    P11 = T_demi*(DELTA+DELTA_PRIM)
+    P12 = T_demi*DELTA_PRIM
+    P33bis = T_demi*DELTA
+    P44bis = P33bis*DELTA_SECO
+
+    # parameters equally spaced in scattering probabiliyu
+    phase_H['p_P11'][idx, :] = P11
+    phase_H['p_P12'][idx, :] = P12
+    phase_H['p_P22'][idx, :] = T_demi*(DELTA*cTh2[:] + DELTA_PRIM)
+    phase_H['p_P33'][idx, :] = P33bis*cTh[:] # U
+    phase_H['p_P44'][idx, :] = P44bis*cTh[:] # V
+    phase_H['p_ang'][idx, :] = theta[:] # angle
+
+    phase_H['a_P11'][idx, :] = P11
+    phase_H['a_P12'][idx, :] = P12
+    phase_H['a_P22'][idx, :] = T_demi*(DELTA*cTh2LE[:] + DELTA_PRIM) 
+    phase_H['a_P33'][idx, :] = P33bis*cThLE[:]  # U
+    phase_H['a_P44'][idx, :] = P44bis*cThLE[:]  # V
+
     for idx, phase in enumerate(phases):
-        if idx == 0:
-            phase_H = np.zeros((nphases, N), dtype=type_Phase, order='C')
-            GAMA = DEPO / (2- DEPO)
-            DELTA = np.float32((1.0 - GAMA) / (1.0 + 2.0 *GAMA));
-            DELTA_PRIM = np.float32(GAMA / (1.0 + 2.0*GAMA));
-            DELTA_SECO = np.float32((1.0 - 3.0*GAMA) / (1.0 - GAMA));
-            BETA  = np.float32(3./2. * DELTA_PRIM);
-            ALPHA = np.float32(1./8. * DELTA);
-            A = np.float32(1. + BETA / (3.0 * ALPHA));
+        # conversion en gradiant
+        angles = phase.ang_in_rad()
 
-            i = np.arange(int(N), dtype=np.float32)
-            thetaLE = np.linspace(0., pi, int(N), endpoint=True, dtype=np.float64)
-            b = ((i/(N-1)) - 4.0*ALPHA - BETA) / (2.0*ALPHA)
-            u = (-b + (A**3.0 + b**2.0)**(1.0/2.0))**(1.0/3.0)
-            cTh = u - (A/u)
-            cTh2 = cTh*cTh
-            theta = np.arccos(cTh)
-            cThLE = np.cos(thetaLE)
-            cTh2LE = cThLE*cThLE
-            T_demi = (3.0/2.0)
-            P11 = T_demi*(DELTA+DELTA_PRIM)
-            P12 = T_demi*DELTA_PRIM
-            P33bis = T_demi*DELTA
-            P44bis = P33bis*DELTA_SECO
+        scum = [0]
+        dtheta = np.diff(angles)
+        pm = phase.phase[:, 1] + phase.phase[:, 0]
+        sin = np.sin(angles)
+        tmp = dtheta * ((sin[:-1] * pm[:-1] + sin[1:] * pm[1:]) / 3. +  (sin[:-1] * pm[1:] + sin[1:] * pm[:-1])/6. )* np.pi * 2.
+        scum = np.append(scum,tmp)
+        scum = np.cumsum(scum)
+        scum /= scum[phase.N-1]
 
-            # parameters equally spaced in scattering probabiliyu
-            phase_H['p_P11'][idx, :] = P11
-            phase_H['p_P12'][idx, :] = P12
-            phase_H['p_P22'][idx, :] = T_demi*(DELTA*cTh2[:] + DELTA_PRIM)
-            phase_H['p_P33'][idx, :] = P33bis*cTh[:] # U
-            phase_H['p_P44'][idx, :] = P44bis*cTh[:] # V
-            phase_H['p_ang'][idx, :] = theta[:] # angle
+        # probability between 0 and 1
+        z = (np.arange(N, dtype='float64')+1)/N
+        angN = (np.arange(N, dtype='float64'))/(N-1)*np.pi
+        f1 = interp1d(phase.ang_in_rad(), phase.phase[:,1])
+        f2 = interp1d(phase.ang_in_rad(), phase.phase[:,0])
+        f3 = interp1d(phase.ang_in_rad(), phase.phase[:,2])
+        f4 = interp1d(phase.ang_in_rad(), phase.phase[:,3])
 
-            phase_H['a_P11'][idx, :] = P11
-            phase_H['a_P12'][idx, :] = P12
-            phase_H['a_P22'][idx, :] = T_demi*(DELTA*cTh2LE[:] + DELTA_PRIM) 
-            phase_H['a_P33'][idx, :] = P33bis*cThLE[:]  # U
-            phase_H['a_P44'][idx, :] = P44bis*cThLE[:]  # V
-        else:
-            if idx != imax:
-                # resizing the attributes of the phase object following the nmax
-                phase.ang.resize(nmax)
-                phase.phase.resize(nmax, 4)
-            tmp = np.append(phase.ang, phase.phase)
-            phases_list = np.append(phases_list, tmp)
-            scum = np.zeros(phase.N)
-            # conversion en gradiant
+        # parameters equally spaced in scattering probabiliyu
+        phase_H['p_P11'][idx+1, :] = interp1d(scum, phase.phase[:,1])(z)  # I par P11
+        phase_H['p_P22'][idx+1, :] = interp1d(scum, phase.phase[:,0])(z)  # I per P22
+        phase_H['p_P33'][idx+1, :] = interp1d(scum, phase.phase[:,2])(z)  # U P33
+        phase_H['p_P43'][idx+1, :] = interp1d(scum, phase.phase[:,3])(z)  # V P43
+        phase_H['p_ang'][idx+1, :] = interp1d(scum, phase.ang_in_rad())(z) # angle
 
-            angles = phase.ang_in_rad()
-
-            scum = [0]
-            dtheta = np.diff(angles)
-            pm = phase.phase[:, 1] + phase.phase[:, 0]
-            sin = np.sin(angles)
-            tmp = dtheta * ((sin[:-1] * pm[:-1] + sin[1:] * pm[1:]) / 3. +  (sin[:-1] * pm[1:] + sin[1:] * pm[:-1])/6. )* np.pi * 2.
-            scum = np.append(scum,tmp)
-            scum = np.cumsum(scum)
-            scum /= scum[phase.N-1]
-
-            # probability between 0 and 1
-            z = (np.arange(N, dtype='float64')+1)/N
-            angN = (np.arange(N, dtype='float64'))/(N-1)*np.pi
-            f1 = interp1d(phase.ang_in_rad(), phase.phase[:,1])
-            f2 = interp1d(phase.ang_in_rad(), phase.phase[:,0])
-            f3 = interp1d(phase.ang_in_rad(), phase.phase[:,2])
-            f4 = interp1d(phase.ang_in_rad(), phase.phase[:,3])
-
-            # parameters equally spaced in scattering probabiliyu
-            phase_H['p_P11'][idx, :] = interp1d(scum, phase.phase[:,1])(z)  # I par P11
-            phase_H['p_P22'][idx, :] = interp1d(scum, phase.phase[:,0])(z)  # I per P22
-            phase_H['p_P33'][idx, :] = interp1d(scum, phase.phase[:,2])(z)  # U P33
-            phase_H['p_P43'][idx, :] = interp1d(scum, phase.phase[:,3])(z)  # V P43
-            phase_H['p_ang'][idx, :] = interp1d(scum, phase.ang_in_rad())(z) # angle
-
-            # parameters equally spaced in scattering angle [0, 180]
-            phase_H['a_P11'][idx, :] = f1(angN)  # I par P11
-            phase_H['a_P22'][idx, :] = f2(angN)  # I per P22
-            phase_H['a_P33'][idx, :] = f3(angN)  # U P33
-            phase_H['a_P43'][idx, :] = f4(angN)  # V P43
+        # parameters equally spaced in scattering angle [0, 180]
+        phase_H['a_P11'][idx+1, :] = f1(angN)  # I par P11
+        phase_H['a_P22'][idx+1, :] = f2(angN)  # I per P22
+        phase_H['a_P33'][idx+1, :] = f3(angN)  # U P33
+        phase_H['a_P43'][idx+1, :] = f4(angN)  # V P43
 
     return to_gpu(phase_H)
 
