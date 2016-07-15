@@ -894,21 +894,16 @@ __device__ void scatter(Photon* ph,
         /* in case of LE the photon units vectors, scattering angle and Psi rotation angle are determined by output zenith and azimuth angles*/
         float thv, phi;
         float3 v;
+        float EPS = 1e-12;
 
-        if (count_level==UP0M2) { /* In case of Double Local Estimate, the first direction is chosen randomly */
-			phi = RAND * DEUXPI;
-            thv = RAND * DEMIPI;
-            sign = 1.0F;
-        }
-        else {
-            if (count_level==DOWN0P) sign = -1.0F;
-            else sign = 1.0F;
-            phi = tabphi[ph->iph];
-            thv = tabthv[ph->ith];
-        }
-        v.x = __cosf(phi) * __sinf(thv);
-        v.y = __sinf(phi) * __sinf(thv);
-        v.z = sign * __cosf(thv);
+        if (count_level==DOWN0P) sign = -1.0F;
+        else sign = 1.0F;
+        phi = tabphi[ph->iph];
+        thv = tabthv[ph->ith];
+        if (thv < EPS) thv = EPS;
+        v.x = cosf(phi) * sinf(thv);
+        v.y = sinf(phi) * sinf(thv);
+        v.z = sign * cosf(thv);
         theta = ComputeTheta(ph->v, v);
         cTh = __cosf(theta);
 		if (cTh < -1.0) cTh = -1.0;
