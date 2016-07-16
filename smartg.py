@@ -14,6 +14,7 @@ import numpy as np
 from datetime import datetime
 from numpy import pi
 from tools.profile.profil import AeroOPAC, Profile, KDIS, KDIS_IBAND, REPTRAN, REPTRAN_IBAND, REPTRAN_IBAND_LIST, KDIS_IBAND_LIST, CloudOPAC
+from tools.profil2 import AtmAFGL
 from tools.cdf import ICDF
 from tools.water.iop_spm import IOP_SPM
 from tools.water.iop_mm import IOP_MM
@@ -1027,7 +1028,8 @@ def get_profAtm(wl, atm):
 
     """
 
-    if atm is not None:
+    if isinstance(atm, Profile):
+        # TODO: deprecate this (for backward compatibility)
         # write the profile
         if isinstance(wl, (float, int, REPTRAN_IBAND, KDIS_IBAND)):
             wl = [wl]
@@ -1056,6 +1058,31 @@ def get_profAtm(wl, atm):
             prof_atm['iphase'][i,:] = profile['IPHA']
             taumol[i,:] = profile['hmol']
             tauaer[i,:] = profile['haer']
+
+    elif isinstance(atm, AtmAFGL):
+        # calculate profile and phase function
+        prof, pha = atm.prof_phase(wl)
+
+        # reformat to smartg format
+        NATM = len(prof.axis('z'))
+        shp = (len(wl), NATM)
+        prof_atm = np.zeros(shp, dtype=type_Profile)
+        taumol = np.zeros(shp, dtype=np.float32)
+        tauaer = np.zeros(shp, dtype=np.float32)
+        prof_atm['z'][0,:] = prof.axis('z')
+        prof_atm['z'][1:,:] = -999.                 # other wavelengths are NaN
+
+        prof_atm['tau'][:,:] = prof['tau_tot'][:,:]
+        prof_atm['tausca'][:] = prof['tau_sca'][:,:]
+        prof_atm['tauabs'][:] = prof['tau_abs'][:,:]
+        prof_atm['pmol'][:] = prof['pmol'][:,:]
+        prof_atm['ssa'][:] = prof['ssa'][:,:]
+        prof_atm['abs'][:] = prof['pabs'][:,:]
+        # prof_atm['iphase'][:] = 
+
+        taumol[:,:] = prof['tau_r'][:,:]
+        tauaer[:,:] = prof['tau_a'][:,:]
+
     else:
         # no atmosphere
         phasesAtm = []
@@ -1065,6 +1092,9 @@ def get_profAtm(wl, atm):
         tauaer = None
 
         prof_atm = np.zeros(1, dtype=type_Profile)
+
+    print('->', prof_atm['abs'])
+    # print('->', tauaer)
 
     return prof_atm, phasesAtm, NATM, HATM, taumol, tauaer
 
