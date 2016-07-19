@@ -140,8 +140,7 @@ def test_sub2():
     # using arrays, etc
     l = create_lut()
 
-    s = l.sub({'z': np.arange(3)})
-    assert len(s.axis('z')) == 3
+    l.sub({'z': np.arange(3)})
 
     l.sub({'z': l.axis('z') < 50})
 
@@ -164,6 +163,21 @@ def test_broadcasting3():
     l2 = LUT(np.eye(3), axes=[None, None], names=['b', 'a'])
     l1+l2
 
+def test_dimensions():
+    l2 = LUT(np.zeros((2, 3, 4, 5)),
+             axes=[np.arange(2),np.arange(3),np.arange(4),np.arange(5)],
+             names=['2', '3', '4', '5'])
+    i1 = np.zeros(10, dtype='int')
+    i2 = np.eye(10, dtype='int')
+    assert l2.sub()[i1, 0, :,:].shape == (10,4,5)
+    assert l2.sub()[i2, 0, :,:].shape == (10,10,4,5)
+    assert l2.sub()[:,i2,0,:].shape == (2,10,10,5)
+    assert l2.sub()[:,i2,0,i2].shape == (2,10,10)
+    assert l2.sub()[:,i2,0,i2].names == ['2', None, None]
+    assert l2.sub()[:,i2,0,:].shape == (2,10,10,5)
+    assert l2.sub({'2':i2, '4':i2}).shape == (10,10,3,5)
+    assert l2.sub({1:i2, '4':i2}).shape == (2,10,10,5)
+    assert l2.sub({1:0, '4':i2}).shape == (2,10,10,5)
 
 def test_reduce():
     l = create_lut()

@@ -208,46 +208,19 @@ class LUT(object):
         if d is None:
             return Subsetter(self)
         else:
-            dd = {}
+            keys = [slice(None)] * self.ndim
+
             for ax, v in d.items():
                 if isinstance(ax, str):
                     if ax in self.names:
                         iax = self.names.index(ax)
-                        dd[iax] = v
+                        keys[iax] = v
                     # if ax is not in the LUT, ignore this dimension
                 else:
                     assert isinstance(ax, int)
-                    dd[ax] = v
+                    keys[ax] = v
 
-            keys = []
-            axes = []
-            names = []
-            for i in xrange(self.ndim):
-                if i in dd:
-                    if isinstance(dd[i], Idx):
-                        ind = dd[i].index(self.axes[i])
-                    else:
-                        ind = dd[i]
-
-                    keys.append(ind)
-
-                    if isinstance(ind, slice):
-                        axes.append(self.axes[i][ind])
-                        names.append(self.names[i])
-                    elif isinstance(ind, np.ndarray) and (ind.ndim > 0):
-                        axes.append(self.axes[i][ind])
-                        names.append(self.names[i])
-
-                else:
-                    # axis not provided: take the full axis
-                    keys.append(slice(None))
-                    axes.append(self.axes[i])
-                    names.append(self.names[i])
-
-            data = self[tuple(keys)]
-
-            return LUT(data, axes=axes, names=names, attrs=self.attrs, desc=self.desc)
-
+            return Subsetter(self)[tuple(keys)]
 
     def axis(self, a, aslut=False):
         '''
@@ -942,6 +915,7 @@ class Subsetter(object):
         '''
         axes = []
         names = []
+        keys_ = []
         attrs = self.LUT.attrs
         desc = self.LUT.desc
 
@@ -949,14 +923,20 @@ class Subsetter(object):
 
         array_dims_added = True
         for i in xrange(self.LUT.ndim):
-            if isinstance(keys[i], np.ndarray):
+            if isinstance(keys[i], Idx):
+                keys_.append(keys[i].index(self.LUT.axes[i]))
+            else:
+                keys_.append(keys[i])
+
+            if isinstance(keys_[i], np.ndarray):
                 if array_dims_added:
-                    axes.extend([None]*keys[i].ndim)
-                    names.extend([None]*keys[i].ndim)
+                    axes.extend([None]*keys_[i].ndim)
+                    names.extend([None]*keys_[i].ndim)
                     array_dims_added = False
-            elif keys[i] == slice(None):
+            elif keys_[i] == slice(None):
                 axes.append(self.LUT.axes[i])
                 names.append(self.LUT.names[i])
+            # else: ignoring scalar indices
 
         data = self.LUT[keys]
 
