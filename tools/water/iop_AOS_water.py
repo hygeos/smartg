@@ -30,11 +30,13 @@ class IOP_AOS_WATER(IOP):
         NANG: number if angles for the phase function
         ang_trunc: truncation angle in degrees
         ALB: albedo of the sea floor
+        DEPTH: depth in m ; default None = Semi infinite
         pfwav: list of arrays at which the phase functions are calculated
     '''
-    def __init__(self, NANG=72001, ALB=0., pfwav=None, verbose=False):
+    def __init__(self, NANG=72001, ALB=0., DEPTH=None, pfwav=None, verbose=False):
         self.NANG = NANG
         self.alb = ALB
+        self.depth = DEPTH
         self.pfwav=pfwav
         self.verbose = verbose
         self.last = None   # last parameters (wl, profil, phases) , to avoid

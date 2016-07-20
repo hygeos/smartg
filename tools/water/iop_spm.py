@@ -27,10 +27,11 @@ class IOP_SPM(IOP):
         alpha: parameter for CDOM absorption
         nbp: refractive index of particles (relative to water)
         ALB: albedo of the sea floor
+        DEPTH: depth in m , default None = Semi infinite
         pfwav: list of arrays at which the phase functions are calculated
     '''
     def __init__(self, SPM, NANG=72001, ang_trunc=5., gamma=0.5,
-            alpha=1., nbp=1.15, ALB=0., pfwav=None, verbose=False):
+            alpha=1., nbp=1.15, ALB=0., DEPTH=None, pfwav=None, verbose=False):
         self.__SPM = SPM
         self.__NANG = NANG
         self.__ang_trunc = ang_trunc
@@ -38,6 +39,7 @@ class IOP_SPM(IOP):
         self.__alpha = alpha
         self.__nbp = nbp
         self.alb = ALB
+        self.depth = DEPTH
         self.pfwav=pfwav
         self.verbose = verbose
         self.last = None   # stores last result (managed by parent class)

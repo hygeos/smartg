@@ -1028,7 +1028,7 @@ def get_profAtm(wl, atm):
 
     return prof_atm, phasesAtm, NATM, HATM, taumol, tauaer
 
-def get_profOc(wl, water, NLAM, DEPTH=100.):
+def get_profOc(wl, water, NLAM):
 
     """
     get the oceanic profile, the altitude of the top of Atmosphere, the number of layers of the atmosphere
@@ -1038,7 +1038,6 @@ def get_profOc(wl, water, NLAM, DEPTH=100.):
             default None (no atmosphere)
         - D : Dictionary containing all the parameters required to launch the simulation by the kernel
         - NLAM : Number of wavelengths
-        - DEPTH: Seafloor depth in m
     -------------------------------------------------------------------------------------------------------
     Returns :
         - phasesOc : Oceanic phase functions
@@ -1058,7 +1057,10 @@ def get_profOc(wl, water, NLAM, DEPTH=100.):
             wl = [wl]
         profilesOc, phasesOc = water.calc_bands(wl)
         NOCE = 1
-
+        if water.depth is None:
+            DEPTH = 10000.
+        else:
+            DEPTH = water.depth
         #
         # switch to new format
         #
