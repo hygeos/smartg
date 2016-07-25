@@ -58,6 +58,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "communs.h"
 #include "device.h"
+#include "geometry.h"
 #include <math.h>
 
 #include <helper_math.h>

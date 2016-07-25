@@ -1435,6 +1435,13 @@ inline __host__ __device__ float length(float4 v)
 {
     return sqrtf(dot(v, v));
 }
+// Enable to calcule the lengh between two points
+inline __host__ __device__ float length(float3 p1, float3 p2)
+{
+	float3 v;
+	v.x = p1.x-p2.x; v.y = p1.y-p2.y; v.z = p1.z-p2.z;
+    return sqrtf(dot(v, v));
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // normalize
@@ -1587,5 +1594,64 @@ inline __device__ __host__ float4 smoothstep(float4 a, float4 b, float4 x)
 {
     float4 y = clamp((x - a) / (b - a), 0.0f, 1.0f);
     return (y*y*(make_float4(3.0f) - (make_float4(2.0f)*y)));
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Simple swap function
+////////////////////////////////////////////////////////////////////////////////
+
+inline __device__ __host__ void swap(float *a, float *b)
+{
+	float temp = *a;
+	*a = *b;
+	*b = temp;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Quadratic (At² + Bt + C = 0)
+// - return true if there exist quadratic values
+// - Modify t0 and t1 by the computed ones
+////////////////////////////////////////////////////////////////////////////////
+
+inline __device__ __host__ bool quadratic(float *t0, float *t1,
+										  float A, float B, float C)
+{
+    // Trouver le discriminant quadratique
+	float discrim = (B * B) - (4 * A * C);
+	if (discrim < 0) {return false;}
+	float rootDiscrim = sqrtf(discrim);
+
+	// Calculer les valeurs de t0 et t1
+    float q;
+	if (B < 0) {q = -.5f * (B - rootDiscrim);}
+	else {q = -.5f * (B + rootDiscrim);}
+	if (A < 1e-8) {*t0 = q / A;}
+	else {*t0= C / q;}
+    *t1 = C / q;
+    if (*t0 > *t1) {swap(t0, t1);}
+    return true;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// FaceForward
+//  Flip the Vector/Normal a if the Vector/Normal b is in the opposite direction.
+//  For exemple, it can be useful to flip a surface normal so that it lies in the
+//  same hemisphere as a given vector.
+// - Args : Vector or Normal a, b
+// - Output : Possibly fliped Vector or Normal a
+////////////////////////////////////////////////////////////////////////////////
+
+inline __device__ __host__ float3 faceForward(float3 a, float3 b)
+{
+	return (dot(a, b) < 0.f) ? a*(-1) : a;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// radians
+// - convert degrée to radians
+////////////////////////////////////////////////////////////////////////////////
+
+inline __device__ __host__ float radians(float deg) {
+    return ((float)PI/180.f) * deg;
 }
 #endif
