@@ -18,12 +18,25 @@
  *  This is part of the Helper library includes
  *
  *    Thanks to Linh Hah for additions and fixes.
+ *
+ *  The file includes several additions from:
+ *    Hygeos - 165 Avenue de Bretagne, 59000 Lille, France.
+ *      - Additional functions
+ *      - Add of some child structures
+ *      - Add of Matrix structures
  */
 
 #ifndef HELPER_MATH_H
 #define HELPER_MATH_H
 
 #include "cuda_runtime.h"
+
+#ifndef DEBUG
+#define myError(expr) ((void)0)
+#else
+#define myError(expr) ( (expr) ? \
+						(printf("vector or matrice indices error***\n")) : (0) )
+#endif
 
 typedef unsigned int uint;
 typedef unsigned short ushort;
@@ -66,6 +79,275 @@ inline float rsqrtf(float x)
 #endif
 
 ////////////////////////////////////////////////////////////////////////////////
+// child to enable indices
+////////////////////////////////////////////////////////////////////////////////
+
+// child structures
+struct int2c: public int2
+{
+	__host__ __device__ int operator[](int idx) const
+	{
+		myError((idx < 0) || (idx > 1));
+		return (&x)[idx];
+	}
+
+	__host__ __device__ int &operator[](int idx)
+	{
+	    myError((idx < 0) || (idx > 1));
+		return (&x)[idx];
+	}	
+};
+
+struct int3c: public int3
+{
+	__host__ __device__ int operator[](int idx) const
+	{
+		myError((idx < 0) || (idx > 2));
+		return (&x)[idx];
+	}
+
+	__host__ __device__ int &operator[](int idx)
+	{
+	    myError((idx < 0) || (idx > 2));
+		return (&x)[idx];
+	}	
+};
+
+struct int4c: public int4
+{
+	__host__ __device__ int operator[](int idx) const
+	{
+		myError((idx < 0) || (idx > 3));
+		return (&x)[idx];
+	}
+
+	__host__ __device__ int &operator[](int idx)
+	{
+	    myError((idx < 0) || (idx > 3));
+		return (&x)[idx];
+	}	
+};
+
+struct float2c: public float2
+{
+	__host__ __device__ float operator[](int idx) const
+	{
+		myError((idx < 0) || (idx > 1));
+		return (&x)[idx];
+	}
+
+	__host__ __device__ float &operator[](int idx)
+	{
+	    myError((idx < 0) || (idx > 1));
+		return (&x)[idx];
+	}	
+};
+
+struct float3c: public float3
+{
+	__host__ __device__ float operator[](int idx) const
+	{
+		myError((idx < 0) || (idx > 2));
+		return (&x)[idx];
+	}
+
+	__host__ __device__ float &operator[](int idx)
+	{
+	    myError((idx < 0) || (idx > 2));
+		return (&x)[idx];
+	}	
+};
+
+struct float4c: public float4
+{
+	__host__ __device__ float operator[](int idx) const
+	{
+		myError((idx < 0) || (idx > 3));
+		return (&x)[idx];
+	}
+
+	__host__ __device__ float &operator[](int idx)
+	{
+
+		myError((idx < 0) || (idx > 3));
+		return (&x)[idx];
+	}	
+};
+
+// child constructors
+inline __host__ __device__ int2c make_int2c(int x, int y)
+{
+  int2c t; t.x = x; t.y = y; return t;
+}
+inline __host__ __device__ int2c make_int2c(int2 s)
+{
+  int2c t; t.x = s.x; t.y = s.y; return t;
+}
+
+inline __host__ __device__ int3c make_int3c(int x, int y, int z)
+{
+  int3c t; t.x = x; t.y = y; t.z = z; return t;
+}
+inline __host__ __device__ int3c make_int3c(int3 s)
+{
+  int3c t; t.x = s.x; t.y = s.y; t.z = s.z; return t;
+}
+
+inline __host__ __device__ int4c make_int4c(int x, int y, int z, int w)
+{
+  int4c t; t.x = x; t.y = y; t.z = z; t.w = w; return t;
+}
+inline __host__ __device__ int4c make_int4c(int4 s)
+{
+  int4c t; t.x = s.x; t.y = s.y; t.z = s.z; t.w = s.w; return t;
+}
+
+inline __host__ __device__ float2c make_float2c(int x, int y)
+{
+  float2c t; t.x = x; t.y = y; return t;
+}
+inline __host__ __device__ float2c make_float2c(float2 s)
+{
+  float2c t; t.x = s.x; t.y = s.y; return t;
+}
+
+inline __host__ __device__ float3c make_float3c(int x, int y, int z)
+{
+  float3c t; t.x = x; t.y = y; t.z = z; return t;
+}
+inline __host__ __device__ float3c make_float3c(float3 s)
+{
+  float3c t; t.x = s.x; t.y = s.y; t.z = s.z; return t;
+}
+
+inline __host__ __device__ float4c make_float4c(float x, float y, float z, float w)
+{
+  float4c t; t.x = x; t.y = y; t.z = z; t.w = w; return t;
+}
+inline __host__ __device__ float4c make_float4c(float4 s)
+{
+  float4c t; t.x = s.x; t.y = s.y; t.z = s.z; t.w = s.w; return t;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// BEGIN MATRICES
+////////////////////////////////////////////////////////////////////////////////
+
+// structures of matrices
+struct float2x2
+{
+    float2c r0, r1;
+
+	__host__ __device__ float2c operator[](int idx) const
+	{
+		myError((idx < 0) || (idx > 1));
+		return (&r0)[idx];
+	}
+
+	__host__ __device__ float2c &operator[](int idx)
+	{
+		myError((idx < 0) || (idx > 1));
+		return (&r0)[idx];
+	}
+};
+
+struct float3x3
+{
+    float3c r0, r1, r2;
+
+	__host__ __device__ float3c operator[](int idx) const
+	{
+		myError((idx < 0) || (idx > 2));
+		return (&r0)[idx];
+	}
+
+	__host__ __device__ float3c &operator[](int idx)
+	{
+		myError((idx < 0) || (idx > 2));
+		return (&r0)[idx];
+	}
+};
+
+struct float4x4
+{
+    float4c r0, r1, r2, r3;
+
+	__host__ __device__ float4c operator[](int idx) const
+	{
+		myError((idx < 0) || (idx > 3));
+		return (&r0)[idx];
+	}
+
+	__host__ __device__ float4c &operator[](int idx)
+	{
+		myError((idx < 0) || (idx > 3));
+		return (&r0)[idx];
+	}
+};
+
+// matrices constructors
+inline __host__ __device__ float2x2 make_float2x2(float m00, float m01,
+												  float m10, float m11){
+	float2x2 M;
+	M.r0.x=m00; M.r0.y=m01; // row 0
+	M.r1.x=m10; M.r1.y=m11; // row 1
+	return M;
+}
+
+inline __host__ __device__ float3x3 make_float3x3(float m00, float m01,float m02,
+												  float m10, float m11, float m12,
+												  float m20, float m21, float m22){
+	float3x3 M;
+	M.r0.x=m00; M.r0.y=m01; M.r0.z=m02; // row 0
+	M.r1.x=m10; M.r1.y=m11; M.r1.z=m12; // row 1
+	M.r2.x=m20; M.r2.y=m21; M.r2.z=m22; // row 2
+	return M;
+}
+
+inline __host__ __device__ float4x4 make_float4x4(float m00, float m01, float m02, float m03,
+												  float m10, float m11, float m12, float m13,
+												  float m20, float m21, float m22, float m23,
+												  float m30, float m31, float m32, float m33){
+	float4x4 M;
+	M.r0.x=m00; M.r0.y=m01; M.r0.z=m02; M.r0.w=m03; // row 0
+	M.r1.x=m10; M.r1.y=m11; M.r1.z=m12; M.r1.w=m13; // row 1
+	M.r2.x=m20; M.r2.y=m21; M.r2.z=m22; M.r2.w=m23; // row 2
+	M.r3.x=m30; M.r3.y=m31; M.r3.z=m32; M.r3.w=m33; // row 3
+	return M;
+}
+
+// others
+inline __host__ __device__ float2x2 make_float2x2(float s)
+{
+    return make_float2x2(s, s, s, s);
+}
+
+inline __host__ __device__ float2x2 make_float2x2(float2c r1, float2c r2)
+{
+    return make_float2x2(r1.x, r1.y, r2.x, r2.y);
+}
+
+inline __host__ __device__ float3x3 make_float3x3(float s)
+{
+    return make_float3x3(s, s, s, s, s, s, s, s, s);
+}
+
+inline __host__ __device__ float3x3 make_float3x3(float3c r1, float3c r2, float3c r3)
+{
+    return make_float3x3(r1.x, r1.y, r1.z, r2.x, r2.y, r2.z, r3.x, r3.y, r3.z);
+}
+
+inline __host__ __device__ float4x4 make_float4x4(float s)
+{
+    return make_float4x4(s, s, s, s, s, s, s, s, s, s, s, s, s, s, s, s);
+}
+
+inline __host__ __device__ float4x4 make_float4x4(float4c r1, float4c r2, float4c r3, float4c r4)
+{
+    return make_float4x4(r1.x, r1.y, r1.z, r1.w, r2.x, r2.y, r2.z, r2.w, r3.x, r3.y, r3.z, r3.w, r4.x, r4.y, r4.z, r4.w);
+}
+
+////////////////////////////////////////////////////////////////////////////////
 // constructors
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -85,104 +367,6 @@ inline __host__ __device__ float2 make_float2(uint2 a)
 {
     return make_float2(float(a.x), float(a.y));
 }
-
-////////////////////////////////////////////////////////////////////////////////
-// BEGIN MATRICES
-////////////////////////////////////////////////////////////////////////////////
-
-// Structures of matrices
-struct float2x2
-{
-    float2  _m00_m01, _m10_m11;
-	float _00, _01, _10, _11;
-};
-
-struct float3x3
-{
-    float3  _m00_m01_m02, _m10_m11_m12, _m20_m21_m22;
-	float _00, _01, _02, _10, _11, _12, _20, _21, _22;
-};
-
-struct float4x4
-{
-    float4  _m00_m01_m02_m03, _m10_m11_m12_m13, _m20_m21_m22_m23, _m30_m31_m32_m33;
-	float _00, _01, _02, _03, _10, _11, _12, _13, _20, _21, _22, _23, _30, _31, _32, _33;
-};
-
-// make functions of matrices
-inline __host__ __device__ float2x2 make_float2x2(float m00, float m01,
-												  float m10, float m11){
-	float2x2 M;
-	M._00=m00; M._01=m01;
-	M._10=m10; M._11=m11;
-	M._m00_m01=make_float2(M._00, M._01); // row 1
-	M._m10_m11=make_float2(M._10, M._11); // row 2 
-	return M;
-}
-
-inline __host__ __device__ float3x3 make_float3x3(float m00, float m01,float m02,
-												  float m10, float m11, float m12,
-												  float m20, float m21, float m22){
-	float3x3 M;
-	M._00=m00; M._01=m01; M._02=m02;
-	M._10=m10; M._11=m11; M._12=m12;
-	M._20=m20; M._21=m21; M._22=m22;
-	M._m00_m01_m02=make_float3(M._00, M._01, M._02); // row 1
-	M._m10_m11_m12=make_float3(M._10, M._11, M._12); // row 2
-	M._m20_m21_m22=make_float3(M._20, M._21, M._22); // row 3
-	return M;
-}
-
-inline __host__ __device__ float4x4 make_float4x4(float m00, float m01, float m02, float m03,
-												  float m10, float m11, float m12, float m13,
-												  float m20, float m21, float m22, float m23,
-												  float m30, float m31, float m32, float m33){
-	float4x4 M;
-	M._00=m00; M._01=m01; M._02=m02; M._03=m03;
-	M._10=m10; M._11=m11; M._12=m12; M._13=m13;
-	M._20=m20; M._21=m21; M._22=m22; M._23=m23;
-	M._30=m30; M._31=m31; M._32=m32; M._33=m33;
-	M._m00_m01_m02_m03=make_float4(M._00, M._01, M._02, M._03); // row 1
-	M._m10_m11_m12_m13=make_float4(M._10, M._11, M._12, M._13); // row 2
-	M._m20_m21_m22_m23=make_float4(M._20, M._21, M._22, M._23); // row 3
-	M._m30_m31_m32_m33=make_float4(M._30, M._31, M._32, M._33); // row 3
-	return M;
-}
-
-// others
-inline __host__ __device__ float2x2 make_float2x2(float s)
-{
-    return make_float2x2(s, s, s, s);
-}
-
-inline __host__ __device__ float2x2 make_float2x2(float2 r1, float2 r2)
-{
-    return make_float2x2(r1.x, r1.y, r2.x, r2.y);
-}
-
-inline __host__ __device__ float3x3 make_float3x3(float s)
-{
-    return make_float3x3(s, s, s, s, s, s, s, s, s);
-}
-
-inline __host__ __device__ float3x3 make_float3x3(float3 r1, float3 r2, float3 r3)
-{
-    return make_float3x3(r1.x, r1.y, r1.z, r2.x, r2.y, r2.z, r3.x, r3.y, r3.z);
-}
-
-inline __host__ __device__ float4x4 make_float4x4(float s)
-{
-    return make_float4x4(s, s, s, s, s, s, s, s, s, s, s, s, s, s, s, s);
-}
-
-inline __host__ __device__ float4x4 make_float4x4(float4 r1, float4 r2, float4 r3, float4 r4)
-{
-    return make_float4x4(r1.x, r1.y, r1.z, r1.w, r2.x, r2.y, r2.z, r2.w, r3.x, r3.y, r3.z, r3.w, r4.x, r4.y, r4.z, r4.w);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-// END MATRICES
-////////////////////////////////////////////////////////////////////////////////
 
 inline __host__ __device__ int2 make_int2(int s)
 {
@@ -1386,36 +1570,37 @@ inline __host__ __device__ uint dot(uint4 a, uint4 b)
 inline __host__ __device__ float2 mul(float2x2 M, float2 v)
 {
 	float2 r;
-	r.x = M._00*v.x + M._01*v.y;
-	r.y = M._10*v.x + M._11*v.y;
+	r.x = dot (M.r0, v);
+	r.y = dot (M.r1, v);
 	return r;
 }
 
 inline __host__ __device__ float3 mul(float3x3 M, float3 v)
 {
 	float3 r;
-	r.x = dot (M._m00_m01_m02, v);
-	r.y = dot (M._m10_m11_m12, v);
-	r.z = dot (M._m20_m21_m22, v);
+	r.x = dot (M.r0, v);
+	r.y = dot (M.r1, v);
+	r.z = dot (M.r2, v);
 	return r;
 }
 
 inline __host__ __device__ float4 mul(float3x3 M, float4 v)
 {
 	float4 r; float3 v2=make_float3(v.x, v.y, v.z);
-	r.x = dot (M._m00_m01_m02, v2);
-	r.y = dot (M._m10_m11_m12, v2);
-	r.z = dot (M._m20_m21_m22, v2);
+	r.x = dot (M.r0, v2);
+	r.y = dot (M.r1, v2);
+	r.z = dot (M.r2, v2);
+	r.w = 0.;
 	return r;
 }
 
 inline __host__ __device__ float4 mul(float4x4 M, float4 v)
 {
 	float4 r;
-	r.x = dot (M._m00_m01_m02_m03, v);
-	r.y = dot (M._m10_m11_m12_m13, v);
-	r.z = dot (M._m20_m21_m22_m23, v);
-	r.w = dot (M._m30_m31_m32_m33, v);
+	r.x = dot (M.r0, v);
+	r.y = dot (M.r1, v);
+	r.z = dot (M.r2, v);
+	r.w = dot (M.r3, v);
 	return r;
 }
 
@@ -1648,7 +1833,7 @@ inline __device__ __host__ float3 faceForward(float3 a, float3 b)
 
 ////////////////////////////////////////////////////////////////////////////////
 // radians
-// - convert degrée to radians
+// - convert degree to radians
 ////////////////////////////////////////////////////////////////////////////////
 
 inline __device__ __host__ float radians(float deg) {
