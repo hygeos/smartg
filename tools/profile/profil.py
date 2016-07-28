@@ -17,7 +17,7 @@ from scipy.integrate import simps
 import tempfile
 from phase_functions import PhaseFunction
 from glob import glob
-from tools.luts import LUT
+from smartg.tools.luts import LUT
 
 dir_libradtran = '/home/applis/libRadtran/libRadtran-2.0/'
 dir_libradtran_reptran =  join(dir_libradtran, 'data/correlated_k/reptran/')
