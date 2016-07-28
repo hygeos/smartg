@@ -18,6 +18,7 @@ from tools.cdf import ICDF
 from tools.water.iop_spm import IOP_SPM
 from tools.water.iop_mm import IOP_MM
 from tools.water.iop_AOS_water import IOP_AOS_WATER
+from tools.water.iop_PandR import IOP_PandR
 from tools.water.phase_functions import PhaseFunction
 from os.path import dirname, realpath, join, basename, exists
 from warnings import warn
