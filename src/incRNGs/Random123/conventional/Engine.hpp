@@ -39,8 +39,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <sstream>
 #include <algorithm>
 #include <vector>
-#include <stdint.h>
-#if R123_USE_CXX0X
+#if R123_USE_CXX11_TYPE_TRAITS
 #include <type_traits>
 #endif
 
@@ -121,8 +120,8 @@ public:
 
     template <typename SeedSeq>
     explicit Engine(SeedSeq &s
-#if R123_USE_CXX0X
-                    , typename std::enable_if<!std::is_convertible<SeedSeq, result_type>::value>::type* dummy=0
+#if R123_USE_CXX11_TYPE_TRAITS
+                    , typename std::enable_if<!std::is_convertible<SeedSeq, result_type>::value>::type* =0
 #endif
                     )
         : b(), c(), elem() {
@@ -134,8 +133,8 @@ public:
     }
     template <typename SeedSeq>
     void seed(SeedSeq &s
-#if R123_USE_CXX0X
-                    , typename std::enable_if<!std::is_convertible<SeedSeq, result_type>::value>::type* dummy=0
+#if R123_USE_CXX11_TYPE_TRAITS
+                    , typename std::enable_if<!std::is_convertible<SeedSeq, result_type>::value>::type* =0
 #endif
               ){ 
         *this = Engine(s);
@@ -161,8 +160,22 @@ public:
         return is;
     }
 
-    static result_type min R123_NO_MACRO_SUBST () { return 0; }
-    static result_type max R123_NO_MACRO_SUBST () { return std::numeric_limits<result_type>::max R123_NO_MACRO_SUBST (); }
+    // The <random> shipped with MacOS Xcode 4.5.2 imposes a
+    // non-standard requirement that URNGs also have static data
+    // members: _Min and _Max.  Later versions of libc++ impose the
+    // requirement only when constexpr isn't supported.  Although the
+    // Xcode 4.5.2 requirement is clearly non-standard, it is unlikely
+    // to be fixed and it is very easy work around.  We certainly
+    // don't want to go to great lengths to accommodate every buggy
+    // library we come across, but in this particular case, the effort
+    // is low and the benefit is high, so it's worth doing.  Thanks to
+    // Yan Zhou for pointing this out to us.  See similar code in
+    // ../MicroURNG.hpp
+    const static result_type _Min = 0;
+    const static result_type _Max = ~((result_type)0);
+
+    static R123_CONSTEXPR result_type min R123_NO_MACRO_SUBST () { return _Min; }
+    static R123_CONSTEXPR result_type max R123_NO_MACRO_SUBST () { return _Max; }
 
     result_type operator()(){
         if( c.size() == 1 )     // short-circuit the scalar case.  Compilers aren't mind-readers.

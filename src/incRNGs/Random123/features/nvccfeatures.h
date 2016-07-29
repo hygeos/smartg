@@ -32,10 +32,32 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef __r123_nvcc_features_dot_h__
 #define __r123_nvcc_features_dot_h__
 
+#if !defined(CUDART_VERSION)
+#error "why are we in nvccfeatures.h if CUDART_VERSION is not defined"
+#endif
+
+#if CUDART_VERSION < 4010
+#error "CUDA versions earlier than 4.1 produce incorrect results for some templated functions in namespaces.  Random123 isunsupported.  See comments in nvccfeatures.h"
+// This test was added in Random123-1.08 (August, 2013) because we
+// discovered that Ftype(maxTvalue<T>()) with Ftype=double and
+// T=uint64_t in examples/uniform.hpp produces -1 for CUDA4.0 and
+// earlier.  We can't be sure this bug doesn't also affect invocations
+// of other templated functions, e.g., essentially all of Random123.
+// Thus, we no longer trust CUDA versions earlier than 4.1 even though
+// we had previously tested and timed Random123 with CUDA 3.x and 4.0.
+// If you feel lucky or desperate, you can change #error to #warning, but
+// please take extra care to be sure that you are getting correct
+// results.
+#endif
+
 // nvcc falls through to gcc or msvc.  So first define
 // a couple of things and then include either gccfeatures.h
 // or msvcfeatures.h
 
+//#ifdef  __CUDA_ARCH__ allows Philox32 and Philox64 to be compiled
+//for both device and host functions in CUDA by setting compiler flags
+//for the device function
+#ifdef  __CUDA_ARCH__
 #ifndef R123_CUDA_DEVICE
 #define R123_CUDA_DEVICE __device__
 #endif
@@ -44,9 +66,25 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define R123_USE_MULHILO64_CUDA_INTRIN 1
 #endif
 
+#ifndef R123_THROW
+// No exceptions in CUDA, at least upto 4.0
+#define R123_THROW(x)    R123_ASSERT(0)
+#endif
+
 #ifndef R123_ASSERT
 #define R123_ASSERT(x) if((x)) ; else asm("trap;")
 #endif
+
+#else // ! __CUDA_ARCH__
+// If we're using nvcc not compiling for the CUDA architecture,
+// then we must be compiling for the host.  In that case,
+// tell the philox code to use the mulhilo64 asm because
+// nvcc doesn't grok uint128_t.
+#ifndef R123_USE_MULHILO64_ASM
+#define R123_USE_MULHILO64_ASM 1
+#endif
+
+#endif // __CUDA_ARCH__
 
 #ifndef R123_BUILTIN_EXPECT
 #define R123_BUILTIN_EXPECT(expr,likely) expr
@@ -76,11 +114,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // uint64_t, which is what we'd get without this, is
 // not the same as unsigned long long
 #define R123_ULONG_LONG unsigned long long
-#endif
-
-#ifndef R123_THROW
-// No exceptions in CUDA, at least upto 4.0
-#define R123_THROW(x)    R123_ASSERT(0)
 #endif
 
 #if defined(__GNUC__)

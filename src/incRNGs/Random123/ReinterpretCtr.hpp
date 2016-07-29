@@ -77,10 +77,10 @@ struct ReinterpretCtr{
     // Sep 2011.
     ctr_type  operator()(ctr_type c, key_type k){
         bctype bc;
-        memcpy(&bc, &c, sizeof(c));
+        std::memcpy(&bc, &c, sizeof(c));
         CBRNG b;
         bc = b(bc, k);
-        memcpy(&c, &bc, sizeof(bc));
+        std::memcpy(&c, &bc, sizeof(bc));
         return c;
     }
 };

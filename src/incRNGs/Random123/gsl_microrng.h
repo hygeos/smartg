@@ -108,6 +108,7 @@ NAME##_get_double (void * vstate)                                       \
                                                                         \
 static void NAME##_set(void *vstate, unsigned long int s){              \
     NAME##_state *st = (NAME##_state *)vstate;                          \
+    (void)s; /* ignored */                                              \
     st->elem = 0;                                                       \
     st->n = ~0; /* will abort if _reset is not called */                \
 }                                                                       \

@@ -40,6 +40,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #if R123_USE_IA32INTRIN_H
 #include <ia32intrin.h>
 #endif
+#if R123_USE_XMMINTRIN_H
+#include <xmmintrin.h>
+#endif
 #if R123_USE_EMMINTRIN_H
 #include <emmintrin.h>
 #endif
@@ -144,22 +147,18 @@ R123_STATIC_INLINE __m128 _mm_castsi128_ps(__m128i si){
 
 struct r123m128i{
     __m128i m;
-#if R123_USE_CXX0X
+#if R123_USE_CXX11_UNRESTRICTED_UNIONS
     // C++98 forbids a union member from having *any* constructors.
-    // C++0x relaxes this, and allows union members to have constructors
-    // as long as there is a "trivial" default construtor.  So in C++0x
+    // C++11 relaxes this, and allows union members to have constructors
+    // as long as there is a "trivial" default construtor.  So in C++11
     // we can provide a r123m128i constructor with an __m128i argument, and still
     // have the default (and hence trivial) default constructor.
-    // Unfortunately, this doesn't quite work with gcc-4.5, which 
-    // incorrectly refuses to allow such an object to be a member of a union.
-    // Thus, this code is conditionalized USE_CXX0X and we only set USE_CXX0X
-    // in gccfeatures.h gcc 4.6 or higher.
     r123m128i() = default;
     r123m128i(__m128i _m): m(_m){}
 #endif
     r123m128i& operator=(const __m128i& rhs){ m=rhs; return *this;}
     r123m128i& operator=(R123_ULONG_LONG n){ m = _mm_set_epi64x(0, n); return *this;}
-#if R123_USE_CXX0X
+#if R123_USE_CXX11_EXPLICIT_CONVERSIONS
     // With C++0x we can attach explicit to the bool conversion operator
     // to disambiguate undesired promotions.  For g++, this works
     // only in 4.5 and above.
@@ -216,19 +215,19 @@ R123_STATIC_INLINE r123m128i& operator+=(r123m128i& lhs, R123_ULONG_LONG n){
 }
 
 // We need this one because it's present, but never used in r123array1xm128i::incr
-R123_STATIC_INLINE bool operator<=(R123_ULONG_LONG lhs, const r123m128i &rhs){
+R123_STATIC_INLINE bool operator<=(R123_ULONG_LONG, const r123m128i &){
     throw std::runtime_error("operator<=(unsigned long long, r123m128i) is unimplemented.");}
 
 // The comparisons aren't implemented, but if we leave them out, and 
 // somebody writes, e.g., M1 < M2, the compiler will do an implicit
 // conversion through void*.  Sigh...
-R123_STATIC_INLINE bool operator<(const r123m128i& lhs, const r123m128i& rhs){
+R123_STATIC_INLINE bool operator<(const r123m128i&, const r123m128i&){
     throw std::runtime_error("operator<(r123m128i, r123m128i) is unimplemented.");}
-R123_STATIC_INLINE bool operator<=(const r123m128i& lhs, const r123m128i& rhs){
+R123_STATIC_INLINE bool operator<=(const r123m128i&, const r123m128i&){
     throw std::runtime_error("operator<=(r123m128i, r123m128i) is unimplemented.");}
-R123_STATIC_INLINE bool operator>(const r123m128i& lhs, const r123m128i& rhs){
+R123_STATIC_INLINE bool operator>(const r123m128i&, const r123m128i&){
     throw std::runtime_error("operator>(r123m128i, r123m128i) is unimplemented.");}
-R123_STATIC_INLINE bool operator>=(const r123m128i& lhs, const r123m128i& rhs){
+R123_STATIC_INLINE bool operator>=(const r123m128i&, const r123m128i&){
     throw std::runtime_error("operator>=(r123m128i, r123m128i) is unimplemented.");}
 
 R123_STATIC_INLINE bool operator==(const r123m128i &lhs, const r123m128i &rhs){ 

@@ -28,29 +28,40 @@ DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Copyright (c) 2013, Los Alamos National Security, LLC
+All rights reserved.
+
+Copyright 2013. Los Alamos National Security, LLC. This software was produced
+under U.S. Government contract DE-AC52-06NA25396 for Los Alamos National
+Laboratory (LANL), which is operated by Los Alamos National Security, LLC for
+the U.S. Department of Energy. The U.S. Government has rights to use,
+reproduce, and distribute this software.  NEITHER THE GOVERNMENT NOR LOS
+ALAMOS NATIONAL SECURITY, LLC MAKES ANY WARRANTY, EXPRESS OR IMPLIED, OR
+ASSUMES ANY LIABILITY FOR THE USE OF THIS SOFTWARE.  If software is modified
+to produce derivative works, such modified software should be clearly marked,
+so as not to confuse it with the version available from LANL.
 */
-#ifndef __msvcfeatures_dot_hpp
-#define __msvcfeatures_dot_hpp
+#ifndef __pgccfeatures_dot_hpp
+#define __pgccfeatures_dot_hpp
 
-//#if _MSVC_FULL_VER <= 15
-//#error "We've only tested MSVC_FULL_VER==15."
-//#endif
-
-#if !defined(_M_IX86) && !defined(_M_X64)
+#if !defined(__x86_64__) && !defined(__i386__)
 #  error "This code has only been tested on x86 platforms."
-{ // maybe an unbalanced brace will terminate the compilation
-// You are invited to try Random123 on other architectures, by changing
-// the conditions that reach this error, but you should consider it a
-// porting exercise and expect to encounter bugs and deficiencies.
-// Please let the authors know of any successes (or failures).
+#include <including_a_nonexistent_file_will_stop_some_compilers_from_continuing_with_a_hopeless_task>
+{ /* maybe an unbalanced brace will terminate the compilation */
+ /* Feel free to try the Random123 library on other architectures by changing
+ the conditions that reach this error, but you should consider it a
+ porting exercise and expect to encounter bugs and deficiencies.
+ Please let the authors know of any successes (or failures). */
 #endif
 
 #ifndef R123_STATIC_INLINE
-#define R123_STATIC_INLINE static __inline
+#define R123_STATIC_INLINE static inline
 #endif
 
+/* Found this example in PGI's emmintrin.h. */
 #ifndef R123_FORCE_INLINE
-#define R123_FORCE_INLINE(decl) _forceinline decl
+#define R123_FORCE_INLINE(decl) decl __attribute__((__always_inline__))
 #endif
 
 #ifndef R123_CUDA_DEVICE
@@ -63,56 +74,40 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endif
 
 #ifndef R123_BUILTIN_EXPECT
-#define R123_BUILTIN_EXPECT(expr,likely) expr
+#define R123_BUILTIN_EXPECT(expr,likely) (expr)
 #endif
 
-// The basic idiom is:
-// #ifndef R123_SOMETHING
-// #if some condition
-// #define R123_SOMETHING 1
-// #else
-// #define R123_SOMETHING 0
-// #endif
-// #endif
-// This idiom allows an external user to override any decision
-// in this file with a command-line -DR123_SOMETHING=1 or -DR123_SOMETHINE=0
-
-// An alternative idiom is:
-// #ifndef R123_SOMETHING
-// #define R123_SOMETHING (some boolean expression)
-// #endif
-// where the boolean expression might contain previously-defined R123_SOMETHING_ELSE
-// pp-symbols.
-
+/* PGI through 13.2 doesn't appear to support AES-NI. */
 #ifndef R123_USE_AES_NI
-#if defined(_M_X64)
-#define R123_USE_AES_NI 1
-#else
 #define R123_USE_AES_NI 0
 #endif
-#endif
 
+/* PGI through 13.2 appears to support MMX, SSE, SSE3, SSE3, SSSE3, SSE4a, and
+   ABM, but not SSE4.1 or SSE4.2. */
 #ifndef R123_USE_SSE4_2
-#if defined(_M_X64)
-#define R123_USE_SSE4_2 1
-#else
 #define R123_USE_SSE4_2 0
-#endif
 #endif
 
 #ifndef R123_USE_SSE4_1
-#if defined(_M_X64)
-#define R123_USE_SSE4_1 1
-#else
 #define R123_USE_SSE4_1 0
-#endif
 #endif
 
 #ifndef R123_USE_SSE
+/* There's no point in trying to compile SSE code in Random123
+   unless SSE2 is available. */
+#ifdef __SSE2__
 #define R123_USE_SSE 1
+#else
+#define R123_USE_SSE 0
+#endif
 #endif
 
 #ifndef R123_USE_AES_OPENSSL
+/* There isn't really a good way to tell at compile time whether
+   openssl is available.  Without a pre-compilation configure-like
+   tool, it's less error-prone to guess that it isn't available.  Add
+   -DR123_USE_AES_OPENSSL=1 and any necessary LDFLAGS or LDLIBS to
+   play with openssl */
 #define R123_USE_AES_OPENSSL 0
 #endif
 
@@ -121,11 +116,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endif
 
 #ifndef R123_USE_ASM_GNU
-#define R123_USE_ASM_GNU 0
+#define R123_USE_ASM_GNU 1
 #endif
 
 #ifndef R123_USE_CPUID_MSVC
-#define R123_USE_CPUID_MSVC 1
+#define R123_USE_CPUID_MSVC 0
 #endif
 
 #ifndef R123_USE_X86INTRIN_H
@@ -136,8 +131,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define R123_USE_IA32INTRIN_H 0
 #endif
 
+/* emmintrin.h from PGI #includes xmmintrin.h but then complains at link time
+   about undefined references to _mm_castsi128_ps(__m128i).  Why? */
 #ifndef R123_USE_XMMINTRIN_H
-#define R123_USE_XMMINTRIN_H 0
+#define R123_USE_XMMINTRIN_H 1
 #endif
 
 #ifndef R123_USE_EMMINTRIN_H
@@ -145,35 +142,35 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endif
 
 #ifndef R123_USE_SMMINTRIN_H
-#define R123_USE_SMMINTRIN_H 1
+#define R123_USE_SMMINTRIN_H 0
 #endif
 
 #ifndef R123_USE_WMMINTRIN_H
-#define R123_USE_WMMINTRIN_H 1
+#define R123_USE_WMMINTRIN_H 0
 #endif
 
 #ifndef R123_USE_INTRIN_H
+#ifdef __ABM__
 #define R123_USE_INTRIN_H 1
+#else
+#define R123_USE_INTRIN_H 0
 #endif
-
-#ifndef R123_USE_MULHILO16_ASM
-#define R123_USE_MULHILO16_ASM 0
 #endif
 
 #ifndef R123_USE_MULHILO32_ASM
 #define R123_USE_MULHILO32_ASM 0
 #endif
 
+#ifndef R123_USE_MULHILO64_MULHI_INTRIN
+#define R123_USE_MULHILO64_MULHI_INTRIN 0
+#endif
+
 #ifndef R123_USE_MULHILO64_ASM
-#define R123_USE_MULHILO64_ASM 0
+#define R123_USE_MULHILO64_ASM 1
 #endif
 
 #ifndef R123_USE_MULHILO64_MSVC_INTRIN
-#if defined(_M_X64)
-#define R123_USE_MULHILO64_MSVC_INTRIN 1
-#else
 #define R123_USE_MULHILO64_MSVC_INTRIN 0
-#endif
 #endif
 
 #ifndef R123_USE_MULHILO64_CUDA_INTRIN
@@ -192,9 +189,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #error UINT64_C not defined.  You must define __STDC_CONSTANT_MACROS before you #include <stdint.h>
 #endif
 
-#pragma warning(disable:4244)
-#pragma warning(disable:4996)
-
-// If you add something, it must go in all the other XXfeatures.hpp
-// and in ../ut_features.cpp
+/* If you add something, it must go in all the other XXfeatures.hpp
+   and in ../ut_features.cpp */
 #endif

@@ -110,12 +110,14 @@ public:
     MicroURNG(ctr_type _c0, ukey_type _uk) : b(), c0(_c0), k(_uk), n(0), last_elem(0) {
         chkhighbits();
     }
-    result_type min R123_NO_MACRO_SUBST () const{
-        return std::numeric_limits<result_type>::min R123_NO_MACRO_SUBST ();
-    }
-    result_type max R123_NO_MACRO_SUBST () const{
-        return std::numeric_limits<result_type>::max R123_NO_MACRO_SUBST ();
-    }
+
+    // _Min and _Max work around a bug in the library shipped with MacOS Xcode 4.5.2.
+    // See the commment in conventional/Engine.hpp.  
+    const static result_type _Min = 0;
+    const static result_type _Max = ~((result_type)0);
+
+    static R123_CONSTEXPR result_type min R123_NO_MACRO_SUBST () { return _Min; }
+    static R123_CONSTEXPR result_type max R123_NO_MACRO_SUBST () { return _Max; }
     // extra methods:
     const ctr_type& counter() const{ return c0; }
     void reset(ctr_type _c0, ukey_type _uk){
