@@ -54,7 +54,13 @@ private:
 };
 
 
-class Shape // must be defined before the struc DifferentialGeometry
+// Variable globale (coté device)
+// - doit être défini avant la classe Shape.
+// - La fonction kernel est appelée à plusieurs reprises, il est donc
+// - nécessaire d'initialiser la variable au début de la fonction.
+__device__ static unsigned long int bigCount;
+
+class Shape // doit être défini avant la structure DifferentialGeometry
 // ========================================================
 // Classe Shape : commun avec toute les géométries
 // ========================================================
@@ -63,17 +69,30 @@ public:
     // Méthodes publiques
 	__host__ __device__ Shape()
 	{
-	    shapeId = 1;
+        #if __CUDA_ARCH__ >= 200 
+		shapeId = bigCount;
+		bigCount++;
+		#elif !defined(__CUDA_ARCH__)
+		shapeId++;
+        #endif
 	}
 
     // Paramètres publiques
-    unsigned long int shapeId;
+    #if __CUDA_ARCH__ >= 200
+	unsigned long int shapeId;
+    #elif !defined(__CUDA_ARCH__)
+	static unsigned long int shapeId;
+    #endif
 
 private:
 };
 
+#if !defined(__CUDA_ARCH__)
+unsigned long int Shape::shapeId = 1;
+#endif
 
-struct DifferentialGeometry // must be defined beforce child shape classes like sphere
+
+struct DifferentialGeometry // doit être défini avant les classes filles de Shape
 // ========================================================
 // Struture d'une géomértie différentielle
 // ========================================================

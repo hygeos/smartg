@@ -116,6 +116,8 @@ extern "C" {
 	Photon ph, ph_le; 		// On associe une structure de photon au thread
 	//Photon ph_le2
 
+	bigCount = 1;   // Initialisation de la variable globale bigCount (voir geometry.h)
+
 	ph.loc = NONE;	// Initialement le photon n'est nulle part, il doit être initialisé
 
 	atomicAdd(nThreadsActive, 1);
