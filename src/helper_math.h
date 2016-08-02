@@ -1839,4 +1839,100 @@ inline __device__ __host__ float3 faceForward(float3 a, float3 b)
 inline __device__ __host__ float radians(float deg) {
     return ((float)PI/180.f) * deg;
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// Inverse using Gauss-Jordan elimination
+// - compute the inverse of square matrix (here 4x4 matrix)
+////////////////////////////////////////////////////////////////////////////////
+
+inline __device__ __host__ float4x4 inverse(const float4x4 &m)
+{
+	int4c indxc, indxr;
+	int4c ipiv = make_int4c(0., 0., 0., 0.);
+	float4x4 minv;
+	minv = m;
+	for (int i =0; i < 4; i++)
+	{
+		int irow = -1, icol = -1;
+		float big =0.;
+		// choice of the pivot
+		for (int j = 0; j < 4; j++)
+		{
+			if (ipiv[j] != 1)
+			{
+				for (int k = 0; k < 4; k++)
+				{
+					if (ipiv[k] == 0)
+					{
+						if (fabsf(minv[j][k]) >= big)
+						{
+							big = float(fabsf(minv[j][k]));
+                            irow = j;
+                            icol = k;
+						}
+					}
+					else if (ipiv[k] > 1)
+                        asm("trap;");
+				}
+			}
+		}
+		++ipiv[icol];
+        if (irow != icol)
+		{
+            for (int k = 0; k < 4; ++k)
+                swap(&minv[irow][k], &minv[icol][k]);
+        }
+        indxr[i] = irow;
+        indxc[i] = icol;
+        if (minv[icol][icol] == 0.)
+            asm("trap;");
+
+        // Set $m[icol][icol]$ to one by scaling row _icol_ appropriately
+        float pivinv = 1.f / minv[icol][icol];
+        minv[icol][icol] = 1.f;
+        for (int j = 0; j < 4; j++)
+            minv[icol][j] *= pivinv;
+
+        // Subtract this row from others to zero out their columns
+        for (int j = 0; j < 4; j++)
+		{
+            if (j != icol)
+			{
+                float save = minv[j][icol];
+                minv[j][icol] = 0;
+                for (int k = 0; k < 4; k++)
+                    minv[j][k] -= minv[icol][k]*save;
+            }
+        }
+    }
+    // Swap columns to reflect permutation
+    for (int j = 3; j >= 0; j--) {
+        if (indxr[j] != indxc[j]) {
+            for (int k = 0; k < 4; k++)
+                swap(&minv[k][indxr[j]], &minv[k][indxc[j]]);
+        }
+    }
+    return minv;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Compare two string (works also in the device)
+////////////////////////////////////////////////////////////////////////////////
+
+inline __device__ __host__ bool compStr(const char* s1, const char* s2)
+{
+	int i = 0;
+	do
+	{
+		if (s1[i] != s2[i])
+			return false;
+		i++;
+	}
+	while (s1[i] != '\0' && s2[i] != '\0');
+
+	if (s1[i] == '\0' && s2[i] == '\0')
+		return true;
+
+	return false;
+}
 #endif
