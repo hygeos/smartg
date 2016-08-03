@@ -1567,6 +1567,7 @@ inline __host__ __device__ uint dot(uint4 a, uint4 b)
 // mul - multiplication with vectors and matrices
 ////////////////////////////////////////////////////////////////////////////////
 
+// mutiplication matrix x vector
 inline __host__ __device__ float2 mul(float2x2 M, float2 v)
 {
 	float2 r;
@@ -1601,6 +1602,48 @@ inline __host__ __device__ float4 mul(float4x4 M, float4 v)
 	r.y = dot (M.r1, v);
 	r.z = dot (M.r2, v);
 	r.w = dot (M.r3, v);
+	return r;
+}
+
+// mutiplication matrix x matrix
+inline __host__ __device__ float2x2 mul(const float2x2 &M1, const float2x2 &M2)
+{
+	float2x2 r;
+	for (int i = 0; i < 2; ++i)
+	{
+		for (int j = 0; j < 2; ++j)
+		{
+			r[i][j] = M1[i][0] * M2[0][j] + M1[i][1] * M2[1][j];
+		}
+	}
+	return r;
+}
+
+inline __host__ __device__ float3x3 mul(const float3x3 &M1, const float3x3 &M2)
+{
+	float3x3 r;
+	for (int i = 0; i < 3; ++i)
+	{
+		for (int j = 0; j < 3; ++j)
+		{
+			r[i][j] = M1[i][0] * M2[0][j] + M1[i][1] * M2[1][j] +
+				M1[i][2] * M2[2][j];
+		}
+	}
+	return r;
+}
+
+inline __host__ __device__ float4x4 mul(const float4x4 &M1, const float4x4 &M2)
+{
+	float4x4 r;
+	for (int i = 0; i < 4; ++i)
+	{
+		for (int j = 0; j < 4; ++j)
+		{
+			r[i][j] = M1[i][0] * M2[0][j] + M1[i][1] * M2[1][j] +
+				M1[i][2] * M2[2][j] + M1[i][3] * M2[3][j];
+		}
+	}
 	return r;
 }
 
@@ -1934,5 +1977,36 @@ inline __device__ __host__ bool compStr(const char* s1, const char* s2)
 		return true;
 
 	return false;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Matrix transpose
+////////////////////////////////////////////////////////////////////////////////
+
+inline __host__ __device__ float2x2 transpose(float2x2 m)
+{
+    return make_float2x2(
+		m[0][0], m[1][0],
+		m[0][1], m[1][1]
+		);
+}
+
+inline __host__ __device__ float3x3 transpose(float3x3 m)
+{
+    return make_float3x3(
+		m[0][0], m[1][0], m[2][0],
+		m[0][1], m[1][1], m[2][1],
+		m[0][2], m[1][2], m[2][2]
+		);
+}
+
+inline __host__ __device__ float4x4 transpose(float4x4 m)
+{
+    return make_float4x4(
+		m[0][0], m[1][0], m[2][0], m[3][0],
+		m[0][1], m[1][1], m[2][1], m[3][1],
+		m[0][2], m[1][2], m[2][2], m[3][2],
+		m[0][3], m[1][3], m[2][3], m[3][3]
+		);
 }
 #endif

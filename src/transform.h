@@ -27,19 +27,24 @@ public:
 	__host__ __device__ Transform(const float4x4 &mat);
 	__host__ __device__ Transform(const float4x4 &mat, const float4x4 &matInv);
 
-    __host__ __device__ bool operator<(const Transform &t2) const;
-    __host__ __device__ bool IsIdentity() const;
+    __host__ __device__ bool operator<(const Transform &t2) const;  // pas encore utilisée
+    __host__ __device__ bool IsIdentity() const;                    // pas encore utilisée
 
 	inline __host__ __device__ float3 operator()(const float3 &c, const char* type) const;
 	inline __host__ __device__ void operator()(const float3 &c, float3 *ctrans,
 												 const char* type) const;
     inline __host__ __device__ Ray operator()(const Ray &r) const;
     inline __host__ __device__ void operator()(const Ray &r, Ray *rt) const;
+    __host__ __device__ Transform operator*(const Transform &t2) const;
 
     __host__ __device__ const float4x4 &GetMatrix() const { return m; }
     __host__ __device__ const float4x4 &GetInverseMatrix() const { return mInv; }
     __host__ __device__ Transform Inverse(const Transform &t);
     __host__ __device__	Transform Translate(const float3 &delta); // delta doit être un vecteur
+	__host__ __device__ Transform Scale(float x, float y, float z); // Echelle (facteur) en x, y et z
+	__host__ __device__ Transform RotateX(float angle);             // rot par rapport à X  
+	__host__ __device__ Transform RotateY(float angle);             // rot par rapport à Y  
+	__host__ __device__ Transform RotateZ(float angle);             // rot par rapport à Z  
 
 private:
 	// Paramètres privés
@@ -184,6 +189,13 @@ inline void Transform::operator()(const Ray &r, Ray *rt) const
     }
 }
 
+Transform Transform::operator*(const Transform &t2) const
+{
+    float4x4 myM = mul(m, t2.m);
+    float4x4 myMinv = mul(t2.mInv, mInv);
+    return Transform(myM, myMinv);
+}
+
 Transform Transform::Inverse(const Transform &t)
 {
 	return Transform(t.mInv, t.m);
@@ -204,5 +216,59 @@ Transform Transform::Translate(const float3 &delta)
 		0, 0, 0,        1
 		);
     return Transform(myM, myMinv);
+}
+
+Transform Transform::Scale(float x, float y, float z) {
+    float4x4 myM = make_float4x4(
+		x, 0, 0, 0,
+		0, y, 0, 0,
+		0, 0, z, 0,
+		0, 0, 0, 1
+		);
+    float4x4 myMinv = make_float4x4(
+		1.f/x,     0,     0,     0,
+		0,     1.f/y,     0,     0,
+		0,         0,     1.f/z, 0,
+		0,         0,     0,     1)
+		;
+    return Transform(myM, myMinv);
+}
+
+Transform Transform::RotateX(float angle) {
+    float sin_t = sinf(radians(angle));
+    float cos_t = cosf(radians(angle));
+    float4x4 myM = make_float4x4(
+		1,     0,      0, 0,
+		0, cos_t, -sin_t, 0,
+		0, sin_t,  cos_t, 0,
+		0,     0,      0, 1
+		);
+    return Transform(myM, transpose(myM));
+}
+
+
+Transform Transform::RotateY(float angle) {
+    float sin_t = sinf(radians(angle));
+    float cos_t = cosf(radians(angle));
+    float4x4 myM = make_float4x4(
+		cos_t , 0, sin_t, 0,
+		0,      1,     0, 0,
+		-sin_t, 0, cos_t, 0,
+		0,      0,     0, 1
+		);
+    return Transform(myM, transpose(myM));
+}
+
+
+
+Transform Transform::RotateZ(float angle) {
+    float sin_t = sinf(radians(angle));
+    float cos_t = cosf(radians(angle));
+    float4x4 m = make_float4x4(
+		cos_t, -sin_t, 0, 0,
+		sin_t,  cos_t, 0, 0,
+		0,          0, 1, 0,
+		0,          0, 0, 1);
+    return Transform(m, transpose(m));
 }
 #endif // _TRANSFORM_H_
