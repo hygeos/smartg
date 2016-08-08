@@ -1845,16 +1845,15 @@ inline __device__ __host__ bool quadratic(float *t0, float *t1,
 										  float A, float B, float C)
 {
     // Trouver le discriminant quadratique
-	float discrim = (B * B) - (4 * A * C);
+	double discrim = (double)B * (double)B - 4 * (double)A * (double)C;
 	if (discrim < 0) {return false;}
-	float rootDiscrim = sqrtf(discrim);
+	double rootDiscrim = std::sqrt(discrim);
 
 	// Calculer les valeurs de t0 et t1
-    float q;
-	if (B < 0) {q = -.5f * (B - rootDiscrim);}
-	else {q = -.5f * (B + rootDiscrim);}
-	if (A < 1e-8) {*t0 = q / A;}
-	else {*t0= C / q;}
+     double q;
+	if (B < 0) {q = -.5 * (B - rootDiscrim);}
+	else {q = -.5 * (B + rootDiscrim);}
+	*t0 = q / A;
     *t1 = C / q;
     if (*t0 > *t1) {swap(t0, t1);}
     return true;
