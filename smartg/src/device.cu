@@ -1393,8 +1393,9 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
                         struct RNG_State *rngstate) {
 
 	float delta_i=0.f, delta=0.f, epsilon;
-    float phz, rdist, tauBis;
+	float dtau, prev_tau, phz, rdist, tauBis;
     int ilayer;
+	
     #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
     float dsca_dl, dsca_dl0=-ph->tau ;
     int DL=(NLAMd-1)/(NLOWd-1);
@@ -1403,8 +1404,9 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
     float ab;
     #endif
 
-
-	ph->tau += -logf(1.f - RAND)*ph->v.z;
+	prev_tau = ph->tau;        // previous value of tau photon
+	dtau = -logf(1.f - RAND);  // optical distance reached
+	ph->tau += (dtau*ph->v.z); // the value of tau photon
 
 	if (ph->loc == OCEAN){  
         // If tau>0 photon is reaching the surface 
@@ -1545,6 +1547,70 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 
 
     if (ph->loc == ATMOS) {
+
+        float phz,rdist;
+		bool mytest;
+		float3 phit;
+
+		// Launch le function mysFirstTest to see if there are an intersection with the 
+		// geometry, return true/false and give the position phit of the intersection
+		mytest = mysFirstTest(ph->pos, ph->v, &phit);
+
+		// if mytest = true (intersection with the geometry) and the position of the
+		// intersection is in the atmosphere (0 < Z < 120), then: Begin to analyse
+		if(mytest && phit.z >= 0.F && phit.z <= 120.F)
+		{
+			float dTauPrim;
+			int ilayer2;
+			dTauPrim = 0.f;
+			ilayer = 1;
+
+			// Find the layer where there are intersection
+			while(prof_atm[ilayer].z > phit.z && prof_atm[ilayer].z > 0.F)
+			{
+				ilayer ++;
+			}
+
+			float3 newP, oldP;
+			ilayer2 = ph->couche; // initialise with the actual layer
+			oldP = ph->pos; // initialise with the actual position
+
+			// cumulate the tau distances until ilayer2 is equal to the intersection layer
+			while(ilayer2 != ilayer)
+			{
+				rdist = fabs(prof_atm[ilayer].z - phit.z)/ph->v.z;
+				newP = ph->pos + rdist*ph->v;
+				delta_i = fabs(prof_atm[ilayer2+ph->ilam*(NATMd+1)].tau - prof_atm[ilayer2-1+ph->ilam*(NATMd+1)].tau);
+				dTauPrim += (length(newP, oldP)/fabs(prof_atm[ilayer2 - 1].z - prof_atm[ilayer2].z))*delta_i;
+
+				// the photon come from lower layers
+				if(ilayer2 < ilayer){ilayer2++;}
+				// the photon come from higher layers
+				else if(ilayer2 > ilayer){ilayer2--;}
+				oldP = newP; //Update the position of the photon
+			}
+
+			// Calculate and add the last tau distance when ilayer2 is equal to ilayer
+			delta_i = fabs(prof_atm[ilayer+ph->ilam*(NATMd+1)].tau - prof_atm[ilayer-1+ph->ilam*(NATMd+1)].tau);
+			dTauPrim = (length(phit, oldP)/fabs(prof_atm[ilayer - 1].z - prof_atm[ilayer].z))*delta_i;
+
+			// if dTauPrim (optical distance to hit the geometry) < dtau, then:
+			// there are interaction.
+			if (dTauPrim < dtau)
+			{
+				// values update since the photon hit the geometry
+				ph->couche = ilayer;
+				ph->prop_aer = 1.f - prof_atm[ph->couche+ph->ilam*(NATMd+1)].pmol;
+				ph->weight = ph->weight * (1.f - prof_atm[ph->couche+ph->ilam*(NATMd+1)].abs);
+				ph->loc = SURF0P;
+				ph->tau = prev_tau + dTauPrim * ph->v.z;
+				rdist=  fabs((phit.z-ph->pos.z)/(ph->v.z));
+				operator+= (ph->pos, ph->v*rdist);
+				ph->pos.z = phit.z;
+				return;
+			}
+		}
+
         // If tau<0 photon is reaching the surface 
         if(ph->tau < 0.F){
 
@@ -4059,5 +4125,63 @@ __device__ double DatomicAdd(double* address, double val)
 
         return __longlong_as_double(old);
 }
-
 #endif
+
+
+/**********************************************************
+*	> Fonctions liées à la création de géométries
+***********************************************************/
+
+
+__device__ bool mysFirstTest(float3 o, float3 dir, float3* phit)
+{ 
+	Ray R1(o, dir, 0); // don't have to be modified
+
+	// ========================================================
+	// transform needed for the first sphere
+	Transform TSph1, invTSph1, TRX;
+	TRX = TSph1.RotateX(90);
+	TSph1 = TRX;
+	invTSph1 = TSph1.Inverse(TSph1);
+
+    // create the first sphere
+	Sphere Sph1(&TSph1, &invTSph1, 50.f, -50.f, 50.f, 29.f); 
+	// ========================================================
+	// transform needed for the second sphere
+	Transform TSph2, invTSph2, TTrans;
+	TTrans = TSph2.Translate(make_float3(-70.f, 0.f, -5.f));
+	TSph2 = TTrans;
+	invTSph2 = TSph2.Inverse(TSph2);
+
+    // create the second sphere
+	Sphere Sph2(&TSph2, &invTSph2, 50.f, -50.f, 50.f, 360.f);
+	// ========================================================
+
+	float myt1, myt2;                  // for each sphere
+	DifferentialGeometry myDg1, myDg2; // for each sphere
+	bool myb1, myb2;                   // for each sphere
+
+	myb1 = Sph1.Intersect(R1, &myt1, &myDg1);
+	myb2 = Sph2.Intersect(R1, &myt2, &myDg2);
+
+	if (myb1 && myb2)
+	{
+		*(phit) = R1(min(myt1, myt2));
+		return true;
+	}
+	else if (myb1)
+	{
+		*(phit) = R1(myt1);	
+		return true;
+	}
+	else if (myb2)
+	{
+		*(phit) = R1(myt2);	
+		return true;
+	}
+	else
+	{
+		*(phit) = make_float3(-1, -1, -1);
+		return false;
+	}
+}

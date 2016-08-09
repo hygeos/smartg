@@ -213,7 +213,12 @@ __device__ float randomPhilox4x32_7float(philox4x32_ctr_t*, philox4x32_key_t*);
 * En pratique les valeurs generees sont des int32. Il y a donc une conversion vers uint32 de realisee
 */
 __device__ unsigned int randomPhilox4x32_7uint(philox4x32_ctr_t*, philox4x32_key_t*);
-
 #endif
 
+/**********************************************************
+*	> Fonctions liées à la création de géométries
+***********************************************************/
+
+
+__device__ bool mysFirstTest(float3 o, float3 dir, float3* phit);
 #endif // DEVICE_H
