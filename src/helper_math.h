@@ -202,7 +202,7 @@ inline __host__ __device__ int4c make_int4c(int4 s)
   int4c t; t.x = s.x; t.y = s.y; t.z = s.z; t.w = s.w; return t;
 }
 
-inline __host__ __device__ float2c make_float2c(int x, int y)
+inline __host__ __device__ float2c make_float2c(float x, float y)
 {
   float2c t; t.x = x; t.y = y; return t;
 }
@@ -211,7 +211,7 @@ inline __host__ __device__ float2c make_float2c(float2 s)
   float2c t; t.x = s.x; t.y = s.y; return t;
 }
 
-inline __host__ __device__ float3c make_float3c(int x, int y, int z)
+inline __host__ __device__ float3c make_float3c(float x, float y, float z)
 {
   float3c t; t.x = x; t.y = y; t.z = z; return t;
 }
