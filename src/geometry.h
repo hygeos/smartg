@@ -52,4 +52,75 @@ public:
  
 private:
 };
+
+
+class BBox
+// ========================================================
+// Classe BBox
+// ========================================================
+{
+public:
+	// Méthodes publiques de la Box
+	__host__ __device__ BBox()
+	{
+		pMin = make_float3( INFINITY,  INFINITY,  INFINITY);
+		pMax = make_float3(-INFINITY, -INFINITY, -INFINITY);
+	}
+    __host__ __device__ BBox(const float3 &p) : pMin(p), pMax(p) { }
+	__host__ __device__ BBox(const float3 &p1, const float3 &p2)
+	{
+        pMin = make_float3(min(p1.x, p2.x), min(p1.y, p2.y), min(p1.z, p2.z));
+        pMax = make_float3(max(p1.x, p2.x), max(p1.y, p2.y), max(p1.z, p2.z));
+    }
+    __host__ __device__ bool Inside(const float3 &pt) const
+	{
+        return (pt.x >= pMin.x && pt.x <= pMax.x &&
+                pt.y >= pMin.y && pt.y <= pMax.y &&
+                pt.z >= pMin.z && pt.z <= pMax.z);
+    }
+	__host__ __device__ bool IntersectP(const Ray &ray) const
+	{
+		float t0 = ray.mint, t1 = ray.maxt;
+		float invRayDir, tNear, tFar;
+
+		// Update interval for _i_th bounding box slab
+		invRayDir = 1.f / ray.d.x;
+		tNear = (pMin.x - ray.o.x) * invRayDir;
+		tFar  = (pMax.x - ray.o.x) * invRayDir;
+
+		// Update parametric interval from slab intersection $t$s
+		if (tNear > tFar) swap(&tNear, &tFar);
+		t0 = tNear > t0 ? tNear : t0;
+		t1 = tFar  < t1 ? tFar  : t1;
+		if (t0 > t1) return false;
+
+		// Update interval for _i_th bounding box slab
+		invRayDir = 1.f / ray.d.y;
+		tNear = (pMin.y - ray.o.y) * invRayDir;
+		tFar  = (pMax.y - ray.o.y) * invRayDir;
+
+		// Update parametric interval from slab intersection $t$s
+		if (tNear > tFar) swap(&tNear, &tFar);
+		t0 = tNear > t0 ? tNear : t0;
+		t1 = tFar  < t1 ? tFar  : t1;
+		if (t0 > t1) return false;
+
+		// Update interval for _i_th bounding box slab
+		invRayDir = 1.f / ray.d.z;
+		tNear = (pMin.z - ray.o.z) * invRayDir;
+		tFar  = (pMax.z - ray.o.z) * invRayDir;
+
+		// Update parametric interval from slab intersection $t$s
+		if (tNear > tFar) swap(&tNear, &tFar);
+		t0 = tNear > t0 ? tNear : t0;
+		t1 = tFar  < t1 ? tFar  : t1;
+		if (t0 > t1) return false;
+
+		return true;
+	}
+	// Paramètres publiques de la Box
+    float3 pMin, pMax; // point min et point max
+private:
+};
+
 #endif // _GEOMETRY_H_
