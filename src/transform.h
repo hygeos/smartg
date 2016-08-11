@@ -35,6 +35,7 @@ public:
 												 const char* type) const;
     inline __host__ __device__ Ray operator()(const Ray &r) const;
     inline __host__ __device__ void operator()(const Ray &r, Ray *rt) const;
+    __host__ __device__ BBox operator()(const BBox &b) const;
     __host__ __device__ Transform operator*(const Transform &t2) const;
 
     __host__ __device__ const float4x4 &GetMatrix() const { return m; }
@@ -187,6 +188,26 @@ inline void Transform::operator()(const Ray &r, Ray *rt) const
         rt->maxt = r.maxt;
         rt->time = r.time;
     }
+}
+
+// les 8 coins d'une box peuvent être défini en fonction
+// d'un seul point et de ces trois vecteurs unitaires
+BBox Transform::operator()(const BBox &b) const
+{
+    const Transform &M = *this;
+	char myP[]="Point", myV[]="Vector";
+
+    // creation du point P et du vecteur V=(v1, v2, v3)
+	float3 P, V;
+
+	// Application des transformations
+	P = M(b.pMin, myP);
+	V = M(b.pMax-b.pMin, myV);
+
+	// Creation de la box avec le 1er point P et le point
+	// max calculé à partir des trois vecteurs unitaires
+	BBox ret(P, P+V);
+    return ret;
 }
 
 Transform Transform::operator*(const Transform &t2) const

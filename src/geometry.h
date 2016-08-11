@@ -108,7 +108,8 @@ public:
                 pt.y >= pMin.y && pt.y <= pMax.y &&
                 pt.z >= pMin.z && pt.z <= pMax.z);
     }
-	__host__ __device__ bool IntersectP(const Ray &ray) const
+	__host__ __device__ bool IntersectP(const Ray &ray, float *hitt0 = NULL,
+										float *hitt1 = NULL) const
 	{
 		float t0 = 0., t1 = ray.maxt;
 
@@ -124,6 +125,8 @@ public:
 			t1 = tFar  < t1 ? tFar  : t1;
 			if (t0 > t1) {return false;}
 		}
+		if (hitt0) *hitt0 = t0;
+		if (hitt1) *hitt1 = t1;
 		return true;
 	}
 
