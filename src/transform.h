@@ -198,15 +198,28 @@ BBox Transform::operator()(const BBox &b) const
 	char myP[]="Point", myV[]="Vector";
 
     // creation du point P et du vecteur V=(v1, v2, v3)
-	float3 P, V;
+	float3 P, V1, V2, V3;
 
 	// Application des transformations
 	P = M(b.pMin, myP);
-	V = M(b.pMax-b.pMin, myV);
+	V1 = M(make_float3(b.pMax.x-b.pMin.x, 0, 0), myV);
+	V2 = M(make_float3(0, b.pMax.y-b.pMin.y, 0), myV);
+	V3 = M(make_float3(0, 0, b.pMax.z-b.pMin.z), myV);
 
-	// Creation de la box avec le 1er point P et le point
-	// max calculé à partir des trois vecteurs unitaires
-	BBox ret(P, P+V);
+	// Creation de la box avec le 1er point P
+	BBox ret(P);
+
+    // élargir la box en prenant une face du cube
+	// Face avec 4 points : P, P+V.x, P+V.y, P+(V.x, V.y)
+	ret = ret.Union(ret, P+V1);
+	ret = ret.Union(ret, P+V2);
+	ret = ret.Union(ret, P+V1+V2);
+
+	// un point en z est suffisant (symétrie)
+	ret = ret.Union(ret, P+V3);
+	/* ret = ret.Union(ret, P+V1+V3); */
+	/* ret = ret.Union(ret, P+V2+V3); */
+	/* ret = ret.Union(ret, P+V1+V2+V3); */
     return ret;
 }
 

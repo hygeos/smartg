@@ -97,11 +97,37 @@ public:
 	}
     __host__ __device__ BBox(const float3 &p)
 		: pMin(make_float3c(p)), pMax(make_float3c(p)) { }
+
 	__host__ __device__ BBox(const float3 &p1, const float3 &p2)
 	{
         pMin = make_float3c(min(p1.x, p2.x), min(p1.y, p2.y), min(p1.z, p2.z));
         pMax = make_float3c(max(p1.x, p2.x), max(p1.y, p2.y), max(p1.z, p2.z));
     }
+
+	__host__ __device__ BBox Union(const BBox &b, const float3 &p)
+	{
+		BBox ret = b;
+		ret.pMin.x = min(b.pMin.x, p.x);
+		ret.pMin.y = min(b.pMin.y, p.y);
+		ret.pMin.z = min(b.pMin.z, p.z);
+		ret.pMax.x = max(b.pMax.x, p.x);
+		ret.pMax.y = max(b.pMax.y, p.y);
+		ret.pMax.z = max(b.pMax.z, p.z);
+		return ret;
+	}
+	
+	__host__ __device__ BBox Union(const BBox &b, const BBox &b2)
+	{
+		BBox ret;
+		ret.pMin.x = min(b.pMin.x, b2.pMin.x);
+		ret.pMin.y = min(b.pMin.y, b2.pMin.y);
+		ret.pMin.z = min(b.pMin.z, b2.pMin.z);
+		ret.pMax.x = max(b.pMax.x, b2.pMax.x);
+		ret.pMax.y = max(b.pMax.y, b2.pMax.y);
+		ret.pMax.z = max(b.pMax.z, b2.pMax.z);
+		return ret;
+	}
+
     __host__ __device__ bool Inside(const float3 &pt) const
 	{
         return (pt.x >= pMin.x && pt.x <= pMax.x &&
@@ -134,5 +160,4 @@ public:
     float3c pMin, pMax; // point min et point max
 private:
 };
-
 #endif // _GEOMETRY_H_
