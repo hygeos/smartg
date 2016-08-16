@@ -37,6 +37,11 @@ public:
 		shapeId++;
         #endif
 	}
+    __host__ __device__ virtual BBox ObjectBound() const = 0;
+    __host__ __device__ virtual BBox WorldBound() const
+	{
+		return (*ObjectToWorld)(ObjectBound());
+	}
 
     // Paramètres publiques
     #if __CUDA_ARCH__ >= 200
@@ -95,6 +100,7 @@ public:
 	// Méthodes publiques de la sphère
 	__host__ __device__ Sphere(const Transform *o2w, const Transform *w2o,
 							   float rad, float zmin, float zmax, float phiMax);
+    __host__ __device__ virtual BBox ObjectBound() const;
     __host__ __device__ bool Intersect(const Ray &ray, float* tHit,
 									   DifferentialGeometry *Dg) const;
     __host__ __device__ float Area() const;
@@ -120,6 +126,30 @@ private:
     thetaMin = acosf(clamp(zmin/radius, -1.f, 1.f));
     thetaMax = acosf(clamp(zmax/radius, -1.f, 1.f));
     phiMax = radians(clamp(pm, 0.0f, 360.0f));
+}
+
+BBox Sphere::ObjectBound() const
+{	
+	if (phiMax < PI/2)
+	{
+		return BBox(make_float3( 0.f, 0.f, zmin),
+					make_float3( radius, radius*sinf(phiMax), zmax));
+	}
+	else if (phiMax < PI)
+	{
+		return BBox(make_float3( radius*cosf(phiMax), 0.f, zmin),
+					make_float3( radius, radius, zmax));
+	}
+	else if (phiMax < 3*PI/2)
+	{
+	    return BBox(make_float3(-radius, radius*sinf(phiMax), zmin),
+					make_float3( radius,  radius, zmax));
+	}
+	else //if (phiMax >= 3*PI/2)
+	{
+	    return BBox(make_float3(-radius, -radius, zmin),
+					make_float3( radius,  radius, zmax));
+	}
 }
 
 bool Sphere::Intersect(const Ray &r, float *tHit, DifferentialGeometry *dg) const
