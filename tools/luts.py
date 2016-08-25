@@ -1152,11 +1152,13 @@ def plot_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
     ax_polar.axis["top"].major_ticklabels.set_axis_direction("top")
     ax_polar.axis["top"].label.set_axis_direction("top")
 
-    ax_polar.axis["top"].axes.text(0.70, 0.92, label1,
+    #ax_polar.axis["top"].axes.text(0.70, 0.92, label1,
+    ax_polar.axis["top"].axes.text(0.72, 0.98, label1,
                                    transform=ax_polar.transAxes,
                                    ha='left',
                                    va='bottom')
-    ax_polar.axis["left"].axes.text(0.25, -0.03, label2,
+    #ax_polar.axis["left"].axes.text(0.25, -0.03, label2,
+    ax_polar.axis["left"].axes.text(0.10, -0.03, label2,
                                    transform=ax_polar.transAxes,
                                    ha='center',
                                    va='top')
@@ -1186,7 +1188,7 @@ def plot_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
     # draw colormesh
     #
     if cmap is None:
-        cmap = cm.jet
+        cmap = cm.rainbow
         cmap.set_under('black')
         cmap.set_over('white')
         cmap.set_bad('0.5') # grey 50%
@@ -1219,7 +1221,7 @@ def plot_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
     # add colorbar
     fig.colorbar(im, orientation='horizontal', extend='both', ticks=np.linspace(vmin, vmax, 5))
     if lut.desc is not None:
-        ax_polar.set_title(lut.desc, weight='bold', position=(0.15,0.9))
+        ax_polar.set_title(lut.desc, weight='bold', position=(0.05,0.97))
 
 
 def merge(M, axes, dtype=None):

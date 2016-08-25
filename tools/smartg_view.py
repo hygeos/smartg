@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # encoding: utf-8
 
-
 import warnings
 warnings.simplefilter("ignore",DeprecationWarning)
 from pylab import figure
@@ -10,36 +9,128 @@ np.seterr(invalid='ignore', divide='ignore') # ignore division by zero errors
 from luts import plot_polar, LUT
 
 
-def smartg_view(mlut, QU=False, field='up (TOA)'):
+def mdesc(desc, logI=False):
+    sep1=desc.find('_')
+    sep2=desc.find('(')
+    sep3=desc.find(')')
+    stokes=desc[0:sep1]
+    dir=desc[sep1+1:sep2-1]
+
+    if logI and stokes=='I':
+        pref=r'$log_{10} '
+    else:
+        pref=r'$'
+        
+    if dir == 'up':
+        return pref + stokes + '^{\uparrow}' + '_{'+desc[sep2+1:sep3]+'}$'
+    else:
+        return pref + stokes + '^{\downarrow}' + '_{'+desc[sep2+1:sep3]+'}$'
+    
+
+def smartg_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (TOA)', ind=0, cmap=None):
     '''
     visualization of a smartg MLUT
 
     Options:
-        QU: show Q and U also
+        logI: shows log10 of I
+        Circ: shows Circular polarization 
+        QU:  shows Q U and DoP
+        field: level of output
+        ind: index of azimutal plane
+        full: shows all
+        cmap: color map
     '''
 
     I = mlut['I_' + field]
     Q = mlut['Q_' + field]
     U = mlut['U_' + field]
+    V = mlut['V_' + field]
 
-    # polarized reflectance
-    IP = (Q*Q + U*U).apply(np.sqrt, 'Pol. ref.')
+    # Linearly polarized reflectance
+    IPL = (Q*Q + U*U).apply(np.sqrt, 'Lin. Pol. ref.')
+    
+    # Polarized reflectance
+    IP = (Q*Q + U*U +V*V).apply(np.sqrt, 'Pol. ref.')
 
-    # polarization ratio
-    PR = 100*IP/I
-    PR.desc = 'Pol. ratio. (%)'
+    # Degree of Linear Polarization (%)
+    DoLP = 100*IPL/I
+    DoLP.desc = r'$DoLP$'
+    
+    # Angle of Linear Polarization (deg)
+    AoLP = (U/Q)
+    AoLP.apply(np.arctan)*90/np.pi
+    AoLP.desc = r'$AoLP$'
+    
+    # Degree of Circular Polarization (%)
+    DoCP = 100*V.apply(abs)/I
+    DoCP.desc = r'$DoCP$'
 
-    if QU:
-        fig = figure(figsize=(9, 9))
-        plot_polar(I,  0, rect='421', sub='423', fig=fig)
-        plot_polar(Q,  0, rect='422', sub='424', fig=fig)
-        plot_polar(U,  0, rect='425', sub='427', fig=fig)
-        plot_polar(PR, 0, rect='426', sub='428', fig=fig, vmin=0, vmax=100)
+    # Degree of Polarization (%)
+    DoP = 100*IP/I
+    DoP.desc = r'$DoP$'
+
+    if not full:
+        if QU:
+            fig = figure(figsize=(9, 9))
+            if logI:
+                lI=I.apply(np.log10)
+                lI.desc = mdesc(I.desc, logI=logI)
+                plot_polar(lI,  ind, rect='421', sub='423', fig=fig, cmap=cmap)
+            else:
+                I.desc = mdesc(I.desc)
+                plot_polar(I,  ind, rect='421', sub='423', fig=fig, cmap=cmap)
+            Q.desc = mdesc(Q.desc)
+            U.desc = mdesc(U.desc)
+            plot_polar(Q,  ind, rect='422', sub='424', fig=fig, cmap=cmap)
+            plot_polar(U,  ind, rect='425', sub='427', fig=fig, cmap=cmap)
+            if Circ:
+                V.desc = mdesc(V.desc)
+                plot_polar(V, ind, rect='426', sub='428', fig=fig, cmap=cmap)
+            else:
+                plot_polar(DoP, ind, rect='426', sub='428', fig=fig, vmin=0, vmax=100, cmap=cmap)
+        else:
+            # show only I and PR
+            fig = figure(figsize=(9, 4.5))
+            if logI:
+                lI=I.apply(np.log10)
+                lI.desc = mdesc(I.desc, logI=logI)
+                plot_polar(lI,  ind, rect='221', sub='223', fig=fig, cmap=cmap)
+            else:
+                I.desc = mdesc(I.desc)
+                plot_polar(I,  ind, rect='221', sub='223', fig=fig, cmap=cmap)
+
+            if Circ:
+                plot_polar(DoCP, ind, rect='222', sub='224', fig=fig, vmin=0, vmax=100, cmap=cmap)
+            else:
+                plot_polar(DoP, ind, rect='222', sub='224', fig=fig, vmin=0, vmax=100, cmap=cmap)
+
+        return fig
+
+
     else:
-        # show only I and PR
-        fig = figure(figsize=(9, 4.5))
-        plot_polar(I,  0, rect='221', sub='223', fig=fig)
-        plot_polar(PR, 0, rect='222', sub='224', fig=fig, vmin=0, vmax=100)
+        # full plots
+        fig1 = figure(figsize=(16, 4))
+        lI=I.apply(np.log10)
+        lI.desc = mdesc(I.desc,logI=True)
+        I.desc = mdesc(I.desc)
+        Q.desc = mdesc(Q.desc)
+        U.desc = mdesc(U.desc)
+        V.desc = mdesc(V.desc)
+        plot_polar(I,  ind, rect='241', sub='245', fig=fig1, cmap=cmap)
+        plot_polar(Q,  ind, rect='242', sub='246', fig=fig1, cmap=cmap)
+        plot_polar(U,  ind, rect='243', sub='247', fig=fig1, cmap=cmap)
+        plot_polar(V,  ind, rect='244', sub='248', fig=fig1, cmap=cmap)
+        
+        fig2 = figure(figsize=(16, 4))
+        Q.desc = mdesc(Q.desc)
+        U.desc = mdesc(U.desc)
+        V.desc = mdesc(V.desc)
+        plot_polar(lI,  ind, rect='241', sub='245', fig=fig2, cmap=cmap)
+        plot_polar(DoLP,  ind, rect='242', sub='246', fig=fig2, vmin=0, vmax=100, cmap=cmap)
+        plot_polar(DoCP,  ind, rect='243', sub='247', fig=fig2, vmin=0, vmax=100, cmap=cmap)
+        plot_polar(DoP,  ind, rect='244', sub='248', fig=fig2, vmin=0, vmax=100, cmap=cmap)
+
+        return fig1, fig2
         
 def phase_view(mlut, ipha=None, fig= None, axarr=None, iw=0):
     '''
@@ -55,7 +146,7 @@ def phase_view(mlut, ipha=None, fig= None, axarr=None, iw=0):
     from numpy import unique
     
     nd = mlut['tau'].ndim
-    labw=''
+    Linlabw=''
     if nd>1:
         wi = mlut['tau'].names.index('Wavelength') # Wavelength index
         key = [slice(None)]*nd

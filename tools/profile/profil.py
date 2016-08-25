@@ -109,7 +109,7 @@ class AeroOPAC(object):
         self.__h2o = h2o
         if not self.scaleonly:
             self.setTauref(self.__tau, self.__wref)
-            self.scalingfact = 1.
+            #self.scalingfact = 1.
 
     def regrid(self,znew):
         '''
