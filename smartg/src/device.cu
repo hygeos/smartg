@@ -129,6 +129,9 @@ extern "C" {
 
 	Photon ph, ph_le; 		// On associe une structure de photon au thread
 
+	bool geoIntersect = false;  // S'il y a intersection avec une géométrie = true
+	float3 geoNormal;           // Normal de la géométrie
+
 	bigCount = 1;   // Initialisation de la variable globale bigCount (voir geometry.h)
 
 	ph.loc = NONE;	// Initialement le photon n'est nulle part, il doit être initialisé
@@ -164,14 +167,12 @@ extern "C" {
 
         }
 
-
-		//
+        //
 		// Deplacement
 		//
 		// -> Si OCEAN ou ATMOS
 		loc_prev = ph.loc;
 		if( (ph.loc == ATMOS) || (ph.loc == OCEAN)){
-
         #ifdef SPHERIQUE
         if (ph.loc == ATMOS)
            move_sp(&ph, prof_atm, 0, 0 , &rngstate);
@@ -181,11 +182,11 @@ extern "C" {
         #ifdef ALT_PP
         move_pp2(&ph, prof_atm, prof_oc, 0, 0 , &rngstate);
         #else
-        move_pp(&ph, prof_atm, prof_oc, &rngstate);
+        move_pp(&ph, prof_atm, prof_oc, &rngstate, &geoNormal, &geoIntersect);
         #endif
 
         #ifdef DEBUG_PHOTON
-        display("MOVE", &ph);
+		display("MOVE", &ph);
         #endif
 		}
 
@@ -222,12 +223,12 @@ extern "C" {
             errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
 
 		__syncthreads();
-		
+
 		//
 		// Scatter
 		//
 		// -> dans ATMOS ou OCEAN
-		if( (ph.loc == ATMOS) || (ph.loc == OCEAN)) {
+		if( ((ph.loc == ATMOS) || (ph.loc == OCEAN)) ) {
 
 			/* Choose the scatterer */
             choose_scatterer(&ph, prof_atm, prof_oc,  spectrum, 
@@ -434,10 +435,14 @@ extern "C" {
                     }//direction
                   }//direction
                 } //LE
-
-                //Propagation of Lambertian reflection with le=0
-				surfaceLambert(&ph, 0, tabthv, tabphi, spectrum, &rngstate);
-            } // Lambertian
+				// s'il y a intersection avec une géométrie, utiliser la fonction 3D
+				if (geoIntersect){
+					surfaceLambertienne3D(&ph, 0, tabthv, tabphi, spectrum,
+														&rngstate, &geoNormal);
+				}
+				//Propagation of Lambertian reflection with le=0
+				else{surfaceLambert(&ph, 0, tabthv, tabphi, spectrum, &rngstate);}
+            } // Lambertian (DIOPTRE=!3)
            } // ENV=0
 
            // Environment effects, no LE computed yet
@@ -1390,10 +1395,10 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
 
 
 __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc,
-                        struct RNG_State *rngstate) {
+                        struct RNG_State *rngstate, float3 *geoNpp, bool *geoIntpp) {
 
 	float delta_i=0.f, delta=0.f, epsilon;
-	float dtau, prev_tau, phz, rdist, tauBis;
+	float tauR, prev_tau, phz, rdist, tauBis;
     int ilayer;
 	
     #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
@@ -1405,8 +1410,8 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
     #endif
 
 	prev_tau = ph->tau;        // previous value of tau photon
-	dtau = -logf(1.f - RAND);  // optical distance reached
-	ph->tau += (dtau*ph->v.z); // the value of tau photon
+	tauR = -logf(1.f - RAND);  // optical distance reached calculated randomly
+	ph->tau += (tauR*ph->v.z); // the value of tau photon at the reached point
 
 	if (ph->loc == OCEAN){  
         // If tau>0 photon is reaching the surface 
@@ -1547,69 +1552,97 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 
 
     if (ph->loc == ATMOS) {
-
         float phz,rdist;
-		bool mytest;
-		float3 phit;
 
-		// Launch le function mysFirstTest to see if there are an intersection with the 
+		// ========================================================================================================
+		// Here geometry modification in the function move_pp
+		// ========================================================================================================
+		float timeT;                                 // the time from the parametric form of a ray
+		bool mytest;                                 // initiate the boolean of the intersection test
+		float3 phit=make_float3(0.f, 0.f, 0.f);      // initiate the intersection point 
+		float3 myNormal=make_float3(0.f, 0.f, 0.f);  // initiate the normal at phit
+
+		// Launch the function geoTest to see if there are an intersection with the 
 		// geometry, return true/false and give the position phit of the intersection
-		mytest = mysFirstTest(ph->pos, ph->v, &phit);
+		mytest = geoTest(ph->pos, ph->v, &phit, &myNormal);
 
-		// if mytest = true (intersection with the geometry) and the position of the
-		// intersection is in the atmosphere (0 < Z < 120), then: Begin to analyse
+		// this condition enable to correct an important bug in case of reflection
+		// Without this condition, the photon where the initial position is assimilated to phit
+		// will be reflected...
+		if ((fabs(phit.x-ph->pos.x) < 1e-5) && (fabs(phit.y-ph->pos.y) < 1e-5) && (fabs(phit.z-ph->pos.z) < 1e-5))
+			mytest = false;
+
+		*geoIntpp = false;
+		// mytest =false;
+
+		// if mytest = true (intersection with the geometry) and the position of the intersection is in
+		// the atmosphere (0 < Z < 120), then: Begin to analyse is there is really an intersection
 		if(mytest && phit.z >= 0.F && phit.z <= 120.F)
 		{
-			float dTauPrim;
-			int ilayer2;
-			dTauPrim = 0.f;
-			ilayer = 1;
+			float tauHit = 0.f; // Optical depth distance (from the initial position of the photon to phit)
+			int ilayer2 = ph->layer;
+			if (ilayer2==0) {ilayer2=1;} // Be sure that we're not out of the atmosphere
 
-			// Find the layer where there are intersection
-			while(prof_atm[ilayer].z > phit.z && prof_atm[ilayer].z > 0.F)
+			if((phit.z >= prof_atm[ilayer2].z) && (phit.z < prof_atm[ilayer2-1].z)) // 1 layer case: n = 1
 			{
-				ilayer ++;
-			}
-
-			float3 newP, oldP;
-			ilayer2 = ph->couche; // initialise with the actual layer
-			oldP = ph->pos; // initialise with the actual position
-
-			// cumulate the tau distances until ilayer2 is equal to the intersection layer
-			while(ilayer2 != ilayer)
-			{
-				rdist = fabs(prof_atm[ilayer].z - phit.z)/ph->v.z;
-				newP = ph->pos + rdist*ph->v;
+				// delta_i is: Delta(tau)1 = |tau(i-1) - tau(i)|
 				delta_i = fabs(prof_atm[ilayer2+ph->ilam*(NATMd+1)].tau - prof_atm[ilayer2-1+ph->ilam*(NATMd+1)].tau);
-				dTauPrim += (length(newP, oldP)/fabs(prof_atm[ilayer2 - 1].z - prof_atm[ilayer2].z))*delta_i;
+				// tauHit = (Delat(D1)/Delat(Z1))*delta_i
+				tauHit += (length(ph->pos, phit)/fabs(prof_atm[ilayer2-1].z - prof_atm[ilayer2].z))*delta_i;
+			}
+			else // several layers case: n >= 2
+			{
+				// Find the layer where there is intersection
+				ilayer2 = 1;
+				while(prof_atm[ilayer2].z > phit.z && prof_atm[ilayer2].z > 0.F)
+				{
+					ilayer2 ++;
+				} 
 
-				// the photon come from lower layers
-				if(ilayer2 < ilayer){ilayer2++;}
-				// the photon come from higher layers
-				else if(ilayer2 > ilayer){ilayer2--;}
-				oldP = newP; //Update the position of the photon
+				float3 newP, oldP;
+				bool higher = false;
+
+				ilayer = ph->layer;          // initialise with the actual layer
+				if (ilayer==0) {ilayer=1;}   // be sure that we're not out of the atmosphere
+				oldP = ph->pos;                // initialise with the actual position
+
+				// check if the photon come from higher or lower layers
+				if(ilayer < ilayer2) // true if the photon come from higher layers
+					higher =  true;
+
+				while(ilayer != ilayer2)
+				{
+					if(higher){timeT = fabs(prof_atm[ilayer].z - oldP.z)/fabs(ph->v.z);}
+					else{timeT = fabs(prof_atm[ilayer-1].z - oldP.z)/fabs(ph->v.z);}
+					newP = oldP + timeT*ph->v;
+					delta_i = fabs(prof_atm[ilayer+ph->ilam*(NATMd+1)].tau - prof_atm[ilayer-1+ph->ilam*(NATMd+1)].tau);
+					tauHit += (length(newP, oldP)/fabs(prof_atm[ilayer - 1].z - prof_atm[ilayer].z))*delta_i;
+					
+					// the photon come from higher layers
+					if(higher){ilayer++;}
+					// the photon come from lower layers
+					else{ilayer--;}
+					oldP = newP; //Update the position of the photon
+				}
+
+				// Calculate and add the last tau distance when ilayer is equal to ilayer2
+				delta_i = fabs(prof_atm[ilayer2+ph->ilam*(NATMd+1)].tau - prof_atm[ilayer2-1+ph->ilam*(NATMd+1)].tau);
+				tauHit += (length(phit, oldP)/fabs(prof_atm[ilayer2 - 1].z - prof_atm[ilayer2].z))*delta_i;
 			}
 
-			// Calculate and add the last tau distance when ilayer2 is equal to ilayer
-			delta_i = fabs(prof_atm[ilayer+ph->ilam*(NATMd+1)].tau - prof_atm[ilayer-1+ph->ilam*(NATMd+1)].tau);
-			dTauPrim = (length(phit, oldP)/fabs(prof_atm[ilayer - 1].z - prof_atm[ilayer].z))*delta_i;
-
-			// if dTauPrim (optical distance to hit the geometry) < dtau, then:
-			// there are interaction.
-			if (dTauPrim < dtau)
+			// if tauHit (optical distance to hit the geometry) < tauR, then: there is interaction.
+			if (tauHit < tauR)
 			{
-				// values update since the photon hit the geometry
-				ph->couche = ilayer;
-				ph->prop_aer = 1.f - prof_atm[ph->couche+ph->ilam*(NATMd+1)].pmol;
-				ph->weight = ph->weight * (1.f - prof_atm[ph->couche+ph->ilam*(NATMd+1)].abs);
-				ph->loc = SURF0P;
-				ph->tau = prev_tau + dTauPrim * ph->v.z;
-				rdist=  fabs((phit.z-ph->pos.z)/(ph->v.z));
-				operator+= (ph->pos, ph->v*rdist);
-				ph->pos.z = phit.z;
+				ph->loc = SURF0P;                       // update of the loc of the photon 
+				ph->tau = prev_tau + tauHit * ph->v.z;  // update the value of tau photon
+				if (ph->tau < 0) ph->tau = 0.f;	
+				ph->pos = phit;                         // update the position of the photon
+				*geoNpp = myNormal;                     // take the normal of the geo
+				*geoIntpp = true;                       // enable to use surfaceLambertienne3D
 				return;
 			}
 		}
+		// ========================================================================================================
 
         // If tau<0 photon is reaching the surface 
         if(ph->tau < 0.F){
@@ -3044,6 +3077,117 @@ __device__ void surfaceLambert(Photon* ph, int le,
 
 } //surfaceLambert
 
+__device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* tabphi,
+									  struct Spectrum *spectrum, philox4x32_ctr_t* etatThr,
+									  philox4x32_key_t* configThr, float3* normal)
+// __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* tabphi,
+// 									  struct Spectrum *spectrum, philox4x32_ctr_t* etatThr,
+// 									  philox4x32_key_t* configThr)
+{
+	if( SIMd == -2)
+	{ 	// Atmosphère ou océan seuls, la surface absorbe tous les photons
+		ph->loc = ABSORBED;
+		return;
+	}
+	
+	float3 u_n, v_n;	// Vecteur du photon après reflexion
+    float phi;
+    float cTh, sTh, cPhi, sPhi;
+
+    if (le)
+	{
+        cTh  = cosf(tabthv[ph->ith]);  
+        phi  = tabphi[ph->iph];
+        ph->weight *= cTh;
+    }
+    else
+	{
+        float ddis=0.0F;
+        if ((LEd==0) || (LEd==1 && RAND>ddis))
+		{
+            // Standard sampling
+	        cTh = sqrtf( RAND );
+	        phi = RAND*DEUXPI;
+        }
+        else
+		{
+            // DDIS sampling , Buras and Mayer
+            float Om = 0.001;
+	        cTh = sqrtf(1.F-RAND*Om);
+            phi = RAND*DEUXPI;
+            ph->weight *= DEUXPI*(1. -sqrtf(1.F-Om));
+        }
+    }
+
+	sTh = sqrtf( 1.0F - cTh*cTh );
+	cPhi = __cosf(phi);
+	sPhi = __sinf(phi);
+	
+
+	/** calcul u,v new **/
+	v_n.x = cPhi*sTh;
+	v_n.y = sPhi*sTh;
+	v_n.z = cTh;
+	
+	u_n.x = cPhi*cTh;
+	u_n.y = sPhi*cTh;
+	u_n.z = -sTh;
+
+	// Depolarisation of the photon
+	float norm;
+	norm = ph->stokes.x + ph->stokes.y;
+	ph->stokes.x = 0.5 * norm;
+	ph->stokes.y = 0.5 * norm;
+    ph->stokes.z = 0.0;
+    ph->stokes.w = 0.0;
+
+
+    if (DIOPTREd!=4 && ((ph->loc == SURF0M) || (ph->loc == SURF0P)))
+	{
+		// Si le dioptre est seul, le photon est mis dans l'espace
+		bool test_s = ( SIMd == -1);
+		ph->loc = SPACE*test_s + ATMOS*(!test_s);
+    }
+
+    if (ph->loc != SEAFLOOR)
+	{
+		ph->weight *= spectrum[ph->ilam].alb_surface;
+	
+		// // Unit vectors which form a second base and where e3 is the geo normal
+		float3 e1, e2, e3;
+		e3 = normalize(*normal);         // be sure that e3 is normalized
+		coordinateSystem(e3, &e1, &e2);  // create e1, e2 orthogonal unit vectors 
+		// e1 = normalize(e1);
+		// e2 = normalize(e2);
+
+		// The passage matrix and his transpose tM, ie. for a vector X: $X = M X' and X' = tM X$
+		// - Works only if the two basis have the same origin
+		float4x4 M = make_float4x4(
+			e1.x, e2.x, e3.x, 0.f,
+			e1.y, e2.y, e3.y, 0.f,
+			e1.z, e2.z, e3.z, 0.f,
+			0.f , 0.f , 0.f , 1.f
+			);
+		float4x4 tM = transpose(M);
+		
+		// Create the transforms obect to world
+		Transform oTw(M, tM);
+		char myV[]="Vector";
+
+		// apply the transformation
+		v_n = oTw(v_n, myV);
+		u_n = oTw(u_n, myV);
+
+		// Update the value of u and v of the photon
+		ph->v = v_n;
+		ph->u = u_n;
+    } // not seafloor 
+    else
+	{
+		ph->weight *= spectrum[ph->ilam].alb_seafloor;
+		ph->loc = OCEAN;
+    }
+}
 
 /* Surface BRDF */
 __device__ void surfaceBRDF(Photon* ph, int le,
@@ -4133,50 +4277,138 @@ __device__ double DatomicAdd(double* address, double val)
 ***********************************************************/
 
 
-__device__ bool mysFirstTest(float3 o, float3 dir, float3* phit)
+__device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN)
 { 
-	Ray R1(o, dir, 0); // don't have to be modified
+	// don't have to be modified
+	Ray R1(o, dir, 0);
 
-	// ========================================================
-	// transform needed for the first sphere
-	Transform TSph1, invTSph1, TRX;
-	TRX = TSph1.RotateX(90);
-	TSph1 = TRX;
-	invTSph1 = TSph1.Inverse(TSph1);
+	// =============================================================================
+	// can be modified
+	// =============================================================================
 
-    // create the first sphere
-	Sphere Sph1(&TSph1, &invTSph1, 50.f, -50.f, 50.f, 29.f); 
-	// ========================================================
-	// transform needed for the second sphere
-	Transform TSph2, invTSph2, TTrans;
-	TTrans = TSph2.Translate(make_float3(-70.f, 0.f, -5.f));
-	TSph2 = TTrans;
-	invTSph2 = TSph2.Inverse(TSph2);
+	// =========================================
+	// comment bellow to take into account the geometry
+	*(phit) = make_float3(-1, -1, -1);
+	*(myN) = make_float3(0, 0, 0);
+	return false;
+	// comment above to take into account the geometry
+	// =========================================
 
-    // create the second sphere
-	Sphere Sph2(&TSph2, &invTSph2, 50.f, -50.f, 50.f, 360.f);
-	// ========================================================
+	// // ========================================================
+	// // transform needed for the first sphere
+	// Transform TSph1, invTSph1, TRX;
+	// // rotation of 90 degree in x direction
+	// TRX = TSph1.RotateX(90);
+	// TSph1 = TRX;
+	// invTSph1 = TSph1.Inverse(TSph1);
 
-	float myt1, myt2;                  // for each sphere
-	DifferentialGeometry myDg1, myDg2; // for each sphere
-	bool myb1, myb2;                   // for each sphere
+    // // create the first sphere and bound box
+	// Sphere Sph1(&TSph1, &invTSph1, 0.f, -0.f, 0.f, 29.9f);
+	// BBox myBBox1 =  Sph1.WorldBoundSphere();
+	// // ========================================================
 
-	myb1 = Sph1.Intersect(R1, &myt1, &myDg1);
-	myb2 = Sph2.Intersect(R1, &myt2, &myDg2);
+	// // ========================================================
+	// // transform needed for the second sphere
+	// Transform TSph2, invTSph2, TTrans;
+	// // translation of -110 km in x direction
+	// TTrans = TSph2.Translate(make_float3(-110.f, 0.f, 0.f));
+	// TSph2 = TTrans;
+	// invTSph2 = TSph2.Inverse(TSph2);
 
-	if (myb1 && myb2)
+    // // create the second sphere and bound box
+	// Sphere Sph2(&TSph2, &invTSph2, 50.f, -50.f, 50.f, 360.f);
+	// BBox myBBox2 = Sph2.WorldBoundSphere();
+	// // ========================================================
+
+	// float myt1, myt2;                  // for each sphere
+	// DifferentialGeometry myDg1, myDg2; // for each sphere
+	// bool myb1, myb2;                   // for each sphere
+
+	// // Check if there is intersection with the bounding boxes
+	// if (myBBox1.IntersectP(R1)){myb1 = Sph1.Intersect(R1, &myt1, &myDg1);}
+	// else {myb1 = false;}
+
+	// if (myBBox2.IntersectP(R1)){myb2 = Sph2.Intersect(R1, &myt2, &myDg2);}
+	// else {myb2 = false;}
+	
+	// //Take into account the fact that we have two geometries
+	// if (myb1 && myb2)
+	// {
+	// 	if (myt1 < myt2)
+	// 	{
+	// 		*(phit) = R1(myt1);
+	// 		*(myN) = faceForward(myDg1.nn, -1.*R1.d);
+	// 	}
+	// 	else
+	// 	{
+	// 		*(phit) = R1(myt2);
+	// 		*(myN) = faceForward(myDg2.nn, -1.*R1.d);
+	// 	}	
+	// 	return true;
+	// }
+	// else if (myb1)
+	// {
+	// 	*(phit) = R1(myt1);	
+	// 	*(myN) = faceForward(myDg1.nn, -1.*R1.d);
+	// 	return true;
+	// }
+	// else if (myb2)
+	// {
+	// 	*(phit) = R1(myt2);
+	// 	*(myN) = faceForward(myDg2.nn, -1.*R1.d);
+	// 	return true;
+	// }
+	// else
+	// {
+	// 	*(phit) = make_float3(-1, -1, -1);
+	// 	return false;
+	// }
+
+	// =============================================================================
+    //
+	// =============================================================================
+	int vi[6] = {0, 1, 2,  // vertices index for triangle 1
+				 2, 3, 1}; // vertices index for triangle 2
+
+	// Vertical triangleMesh at x = 60km
+	// float P[12] = {60.f, -30.f, 0.f,  // vertex coordinate P0 
+	// 			   60.f, 30.f,  0.f,  // vertex coordinate P1
+	// 			   60.f, -30.f, 30.f,  // vertex coordinate P2
+	// 			   60.f, 30.f,  30.f}; // vertex coordinate P3
+
+	// honrizontal triangleMesh at z = 110km
+	float P[12] = {10.f, -10.f, 110.f,  // vertex coordinate P0 
+				   10.f, 10.f,  110.f,  // vertex coordinate P1
+				   -10.f, 10.f, 110.f,  // vertex coordinate P2
+				   -10.f, -10.f,110.f}; // vertex coordinate P3
+
+	// declaration of a table of float3 which contains P0, P1, P2, P3
+	float3 Pvec[4] = {make_float3(P[0], P[1], P[2]),
+					  make_float3(P[3], P[4], P[5]),
+					  make_float3(P[6], P[7], P[8]),
+					  make_float3(P[9], P[10], P[11])};
+
+	Transform nothing; // transformation "nulle"
+
+	// declaration of a table of triangle classes, here 2 triangles
+	Triangle rt[2];
+	// initialisation of the triangles classes with no transformation
+	for (int i = 0; i < 2; ++i)
+		rt[i] = Triangle(&nothing, &nothing);
+	
+	// Create the triangleMesh
+	// - 2 is the number of triangle
+	// - 4 is the number of vertices
+	TriangleMesh tri(&nothing, &nothing, 2, 4, vi, Pvec, rt);
+
+	float mytTri;                  // declare the time t where there is intersection with the mesh
+	DifferentialGeometry myDgTri;  // declare the differential geo of the mesh
+
+	// test directly (without Bounding box) if there is intersection with the mesh
+	if (tri.Intersect(R1, &mytTri, &myDgTri))
 	{
-		*(phit) = R1(min(myt1, myt2));
-		return true;
-	}
-	else if (myb1)
-	{
-		*(phit) = R1(myt1);	
-		return true;
-	}
-	else if (myb2)
-	{
-		*(phit) = R1(myt2);	
+		*(phit) = R1(mytTri);
+		*(myN) = faceForward(myDgTri.nn, -1.*R1.d);
 		return true;
 	}
 	else
@@ -4184,4 +4416,5 @@ __device__ bool mysFirstTest(float3 o, float3 dir, float3* phit)
 		*(phit) = make_float3(-1, -1, -1);
 		return false;
 	}
+	// =============================================================================
 }

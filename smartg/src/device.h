@@ -106,7 +106,7 @@ __device__ void move_pp2(Photon*, struct Profile *prof_atm, struct Profile* prof
 
 // move, version plan parallèle
 __device__ void move_pp(Photon*, struct Profile *prof_atm, struct Profile* prof_oc,
-                        struct RNG_State*);
+                        struct RNG_State*, float3 *geoNpp, bool *geoIntpp);
 
 
 /* scatter */
@@ -136,6 +136,10 @@ __device__ void surfaceBRDF_old(Photon*, int le, float* tabthv, float* tabphi, i
 __device__ void surfaceLambert(Photon*, int le,
                                     float* tabthv, float* tabphi, struct Spectrum *spectrum,
                                     struct RNG_State*);
+
+__device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* tabphi,
+									  struct Spectrum *spectrum, philox4x32_ctr_t* etatThr,
+									  philox4x32_key_t* configThr, float3* normal);
 
 __device__ void countPhoton(Photon* , struct Profile* prof_atm, struct Profile* prof_oc, float*, float *,
         int, unsigned long long*, void*, void*, void*, unsigned long long*);
@@ -220,5 +224,5 @@ __device__ unsigned int randomPhilox4x32_7uint(philox4x32_ctr_t*, philox4x32_key
 ***********************************************************/
 
 
-__device__ bool mysFirstTest(float3 o, float3 dir, float3* phit);
+__device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN);
 #endif // DEVICE_H
