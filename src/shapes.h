@@ -37,11 +37,6 @@ public:
 		shapeId++;
         #endif
 	}
-    __host__ __device__ virtual BBox ObjectBound() const = 0;
-    __host__ __device__ virtual BBox WorldBound() const
-	{
-		return (*ObjectToWorld)(ObjectBound());
-	}
 
     // Paramètres publiques
     #if __CUDA_ARCH__ >= 200
@@ -100,7 +95,11 @@ public:
 	// Méthodes publiques de la sphère
 	__host__ __device__ Sphere(const Transform *o2w, const Transform *w2o,
 							   float rad, float zmin, float zmax, float phiMax);
-    __host__ __device__ virtual BBox ObjectBound() const;
+
+    /* uniquement device pour éviter des problèmes de mémoires */
+    __device__ BBox ObjectBoundSphere() const;
+    __device__ BBox WorldBoundSphere() const;
+
     __host__ __device__ bool Intersect(const Ray &ray, float* tHit,
 									   DifferentialGeometry *Dg) const;
     __host__ __device__ float Area() const;
@@ -116,8 +115,8 @@ private:
 // -------------------------------------------------------
 // définitions des méthodes de la classe sphere
 // -------------------------------------------------------
-	Sphere::Sphere(const Transform *o2w, const Transform *w2o,
-				   float rad, float z0, float z1, float pm)
+Sphere::Sphere(const Transform *o2w, const Transform *w2o,
+			   float rad, float z0, float z1, float pm)
 	: Shape(o2w, w2o)
 {
     radius = rad;
@@ -128,8 +127,13 @@ private:
     phiMax = radians(clamp(pm, 0.0f, 360.0f));
 }
 
-BBox Sphere::ObjectBound() const
-{	
+__device__ BBox Sphere::WorldBoundSphere() const
+{
+	return (*ObjectToWorld)(ObjectBoundSphere());
+}
+
+__device__ BBox Sphere::ObjectBoundSphere() const
+{
 	if (phiMax < PI/2)
 	{
 		return BBox(make_float3( 0.f, 0.f, zmin),
