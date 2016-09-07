@@ -2008,4 +2008,24 @@ inline __host__ __device__ float4x4 transpose(float4x4 m)
 		m[0][3], m[1][3], m[2][3], m[3][3]
 		);
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// CoordinateSystem function
+// - enable to get an orthogonal coordinate from a given vector
+////////////////////////////////////////////////////////////////////////////////
+
+inline __host__ __device__ void coordinateSystem(const float3 &v1, float3 *v2, float3 *v3)
+{
+    if (fabsf(v1.x) > fabsf(v1.y))
+	{
+        float invLen = 1.f / sqrtf(v1.x*v1.x + v1.z*v1.z);
+        *v2 = make_float3(-v1.z * invLen, 0.f, v1.x * invLen);
+    }
+    else
+	{
+        float invLen = 1.f / sqrtf(v1.y*v1.y + v1.z*v1.z);
+        *v2 = make_float3(0.f, v1.z * invLen, -v1.y * invLen);
+    }
+    *v3 = cross(v1, *v2);
+}
 #endif

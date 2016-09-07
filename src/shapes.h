@@ -6,9 +6,10 @@
 #include "transform.h"
 
 #include <math.h>
+#include <math_constants.h>
+#include <limits>
 #include <helper_math.h>
 #include <stdio.h>
-
 
 /**********************************************************
 *	> Classes/structures liées à l'étude de géométries
@@ -17,7 +18,7 @@
 
 // Variable globale (coté device)
 // - La fonction kernel est appelée à plusieurs reprises, il est donc
-// - nécessaire d'initialiser la variable au début de la fonction.
+// - nécessaire d'initialiser la variable au début de la fonction kernel.
 __device__ static unsigned long int bigCount;
 
 class Shape // doit être défini avant la structure DifferentialGeometry
@@ -27,6 +28,21 @@ class Shape // doit être défini avant la structure DifferentialGeometry
 {
 public:
     // Méthodes publiques
+	__host__ __device__ Shape()
+	{
+        #if __CUDA_ARCH__ >= 200
+		shapeId = bigCount;
+		bigCount++;
+		#elif !defined(__CUDA_ARCH__)
+		shapeId++;
+        #endif
+
+		// Initialisation avec des transformations "nulles"
+		Transform nothing;
+		ObjectToWorld = &nothing;
+		WorldToObject = &nothing;
+	}
+
 	__host__ __device__ Shape(const Transform *o2w, const Transform *w2o)
 		: ObjectToWorld(o2w), WorldToObject(w2o)
 	{
@@ -237,5 +253,262 @@ bool Sphere::Intersect(const Ray &r, float *tHit, DifferentialGeometry *dg) cons
 
 float Sphere::Area() const {
     return phiMax * radius * (zmax-zmin);
+}
+
+
+class Triangle : public Shape
+// ========================================================
+// Classe triangle
+// ========================================================
+{
+public:
+	// Méthodes publiques de classe triangle
+	__host__ __device__ Triangle();
+	__host__ __device__ Triangle(const Transform *o2w, const Transform *w2o);
+	__host__ __device__ Triangle(const Transform *o2w, const Transform *w2o,
+								 float3 a, float3 b, float3 c);
+
+    /* uniquement device pour éviter des problèmes de mémoires */
+    __device__ BBox ObjectBoundTriangle() const;
+    __device__ BBox WorldBoundTriangle() const;
+
+    __host__ __device__ bool Intersect(const Ray &ray, float* tHit,
+									   DifferentialGeometry *dg) const;
+    __host__ __device__ float Area() const;
+
+private:
+	// Paramètres privés de la classe triangle
+	float3 p1, p2, p3;
+};
+
+// -------------------------------------------------------
+// définitions des méthodes de la classe Triangle
+// -------------------------------------------------------
+Triangle::Triangle()
+// Donne la possibilité de créer un tableau de triangle
+{
+	p1 = make_float3(0.f, 0.f, 0.f);
+	p2 = make_float3(0.f, 0.f, 0.f);
+	p3 = make_float3(0.f, 0.f, 0.f);
+}
+
+Triangle::Triangle(const Transform *o2w, const Transform *w2o)
+	: Shape(o2w, w2o)
+{
+	p1 = make_float3(0.f, 0.f, 0.f);
+	p2 = make_float3(0.f, 0.f, 0.f);
+	p3 = make_float3(0.f, 0.f, 0.f);
+}
+
+Triangle::Triangle(const Transform *o2w, const Transform *w2o,
+				   float3 a, float3 b, float3 c)
+	: Shape(o2w, w2o)
+{
+	p1 = a; p2 =b; p3 = c;
+}
+
+// Méthode de Möller-Trumbore pour l'intersection rayon/triangle
+bool Triangle::Intersect(const Ray &ray, float* tHit,
+						 DifferentialGeometry *dg) const
+{
+	float3 e1 = p2 - p1;
+	float3 e2 = p3 - p1;
+	float3 s1 = cross(ray.d, e2);
+	float divisor = dot(s1, e1);
+
+	if (divisor == 0.)
+		return false;
+	float invDivisor = 1.f/divisor;
+
+	// Calcul de la 1er composante des coordonnées baricentriques
+	float3 s = ray.o - p1;
+	float b1 = dot(s, s1) * invDivisor;
+    if (b1 < 0. || b1 > 1.)
+        return false;
+
+    // Calcul de la 2nd composante des coordonnées baricentriques
+    float3 s2 = cross(s, e1);
+    float b2 = dot(ray.d, s2) * invDivisor;
+	if (b2 < 0. || b1 + b2 > 1.)
+        return false;
+
+    // Calcul de temps t du rayon pour atteindre le point d'intersection
+    float t = dot(e2, s2) * invDivisor;
+    if (t < ray.mint || t > ray.maxt)
+        return false;
+
+    // Calcul des dérivée partielles du triangle
+	float3 dpdu, dpdv;
+	float3c uvsC0, uvsC1; // row1 and row2
+	uvsC0 = make_float3c(0., 1., 1.);
+	uvsC1 = make_float3c(0., 0., 1.);
+		
+    // Calcul du Delta pour les dérivée partielles du triangle
+	float du1 = uvsC0[0] - uvsC0[2];
+	float du2 = uvsC0[1] - uvsC0[2];
+    float dv1 = uvsC1[0] - uvsC1[2];
+    float dv2 = uvsC1[1] - uvsC1[2];
+    float3 dp1 = p1 - p3, dp2 = p2 - p3;
+    float determinant = du1 * dv2 - dv1 * du2;
+
+    if (determinant == 0.)
+	{
+        // Gestion du cas où le déterminant est nul
+        coordinateSystem(normalize(cross(e2, e1)), &dpdu, &dpdv);
+    }
+    else
+	{
+        double invdet = 1. / determinant;
+        dpdu = (dv2 * dp1 - dv1 * dp2) * invdet;
+        dpdv = (-du2 * dp1 + du1 * dp2) * invdet;
+    }
+
+    // Interpolation des coordonnées paramétrique du triangle $(u,v)$
+    float b0 = 1 - b1 - b2;
+    float tu = b0*uvsC0[0] + b1*uvsC0[1] + b2*uvsC0[2];
+    float tv = b0*uvsC1[0] + b1*uvsC1[1] + b2*uvsC1[2];
+
+    // Initialisation de  _DifferentialGeometry_ depuis les données paramétriques
+    *dg = DifferentialGeometry(ray(t), dpdu, dpdv, tu, tv, this);
+
+    // mise a jour de _tHit_
+	*tHit = t;
+	return true;
+}
+
+__device__ BBox Triangle::ObjectBoundTriangle() const
+{
+	char myP[]="Point";
+	BBox objectBounds((*WorldToObject)(p1, myP), (*WorldToObject)(p2, myP));
+	return objectBounds.Union(objectBounds, (*WorldToObject)(p3, myP));
+}
+
+__device__ BBox Triangle::WorldBoundTriangle() const
+{
+	BBox worldBounds(p1, p2);
+    return worldBounds.Union(worldBounds, p3);
+}
+
+float Triangle::Area() const
+{
+    return 0.5f * length(cross(p2-p1, p3-p1));
+}
+
+
+class TriangleMesh : public Shape
+// ========================================================
+// Classe triangleMesh
+// ========================================================
+{
+public:
+	// Méthodes publiques de classe triangleMesh
+	__host__ __device__ TriangleMesh(const Transform *o2w, const Transform *w2o,
+									 int nt, int nv, int *vi, float3 *P, Triangle *rt);
+
+    /* uniquement device pour éviter des problèmes de mémoires */
+    __device__ BBox ObjectBoundTriangleMesh() const;
+    __device__ BBox WorldBoundTriangleMesh() const;
+
+    __host__ __device__ bool Intersect(const Ray &ray, float* tHit,
+									   DifferentialGeometry *dg) const;
+    __host__ __device__ float Area() const;
+
+private:
+	// Paramètres privés de la classe triangleMesh
+	int ntris, nverts;
+	int *vertexIndex;
+	float3 *p;
+	Triangle *refTri;
+};
+
+// -------------------------------------------------------
+// définitions des méthodes de la classe TriangleMesh
+// -------------------------------------------------------
+TriangleMesh::TriangleMesh(const Transform *o2w, const Transform *w2o,
+						   int nt, int nv, int *vi, float3 *P, Triangle *rt)
+	: Shape(o2w, w2o)
+{
+	ntris = nt; nverts = nv;
+	vertexIndex = vi;
+	refTri = rt;
+	p = P;
+
+	// Applique les transformations sur le maillage
+	char myP[]="Point";
+	for (int i = 0; i < nverts; ++i)
+		p[i] = (*ObjectToWorld)(p[i], myP);
+	
+    // créer les triangles en fonction de *vi et *P	
+	Transform nothing;
+    for (int i = 0; i < ntris; ++i)
+	{
+		float3 PA = p[vertexIndex[3*i]];
+		float3 PB = p[vertexIndex[3*i + 1]];
+		float3 PC = p[vertexIndex[3*i + 2]];
+		refTri[i] = Triangle(&nothing, &nothing, PA, PB, PC);
+	}
+}
+
+
+bool TriangleMesh::Intersect(const Ray &ray, float* tHit,
+							 DifferentialGeometry *dg) const
+{
+    bool dgbool = false;
+    #if __CUDA_ARCH__ >= 200
+	*tHit = CUDART_INF_F;
+    #elif !defined(__CUDA_ARCH__)
+	*tHit = std::numeric_limits<float>::max();
+    #endif
+	for (int i = 0; i < ntris; ++i)
+	{
+		bool mybool;
+		float triHit;
+		DifferentialGeometry dgTri;
+		mybool = refTri[i].Intersect(ray, &triHit, &dgTri);
+		if (mybool)
+		{
+			dgbool = true;
+			if (*tHit > triHit)
+			{
+				*dg = dgTri;
+				*tHit = triHit;
+			}
+		}
+	}
+
+	if (!dgbool)
+		return false;
+	
+	return true;
+}
+
+__device__ BBox TriangleMesh::ObjectBoundTriangleMesh() const
+{
+	BBox objectBounds;
+	char myP[]="Point";
+    for (int i = 0; i < nverts; i++)
+        objectBounds.Union(objectBounds, (*WorldToObject)(p[i], myP));
+    return objectBounds;
+}
+
+__device__ BBox TriangleMesh::WorldBoundTriangleMesh() const
+{
+    BBox worldBounds;
+    for (int i = 0; i < nverts; i++)
+        worldBounds.Union(worldBounds, p[i]);
+    return worldBounds;
+}
+
+float TriangleMesh::Area() const
+{
+	float Area = 0.f;
+    for (int i = 0; i < ntris; ++i)
+	{
+		float3 PA = p[vertexIndex[3*i]];
+		float3 PB = p[vertexIndex[3*i + 1]];
+		float3 PC = p[vertexIndex[3*i + 2]];
+		Area += 0.5f * length(cross(PB-PA, PC-PA));
+	}
+    return Area;
 }
 #endif // _SHAPES_H_
