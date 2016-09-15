@@ -921,6 +921,11 @@ class LUT(object):
         plot_polar(self, *args, **kwargs)
         return self
 
+    def transect2D(self, *args, **kwargs):
+        transect2D(self, *args, **kwargs)
+        return self
+
+
 
 class Subsetter(object):
     '''
@@ -1182,6 +1187,7 @@ def plot_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
         else:
             ax_cart.set_xlim(ax2_min, ax2_max)
         ax_cart.set_ylim(vmin, vmax)
+        ax_cart.ticklabel_format(axis='y', style='sci', scilimits=(-2,2))
         ax_cart.grid(True)
 
     #
@@ -1222,6 +1228,105 @@ def plot_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
     fig.colorbar(im, orientation='horizontal', extend='both', ticks=np.linspace(vmin, vmax, 5))
     if lut.desc is not None:
         ax_polar.set_title(lut.desc, weight='bold', position=(0.05,0.97))
+
+
+def transect2D(lut, index=None, vmin=None, vmax=None, sym=True, swap='auto', fig=None, sub=121):
+    '''
+    Transect of 2D LUT
+
+    lut: 2D look-up table to display
+            with axes (radius, angle) (unless swapped)
+            angle is assumed to be in degrees and is not scaled
+    index: index of the item to transect in the 'angle' dimension
+           can be an Idx instance
+           if None (default), no transect
+    vmin, vmax: range of values
+                default None: determine min/max from values
+    sym: the transect uses symmetrical axis (boolean)
+         if None (default), use symmetry if axis is 'zenith'
+    swap: swap the order of the 2 axes to (radius, angle)
+          if 'auto', searches for 'azi' in both axes names
+    fig : destination figure. If None (default), create a new figure.
+    '''
+    from pylab import figure
+
+    assert lut.ndim == 2
+
+    if fig is None:
+        fig = figure(figsize=(4.5, 2.5))
+
+    if swap =='auto':
+        if ('azi' in lut.names[1].lower()) and ('azi' not in lut.names[0].lower()):
+            swap = True
+        else:
+            swap = False
+
+    # ax1 is angle, ax2 is radius
+    if swap:
+        ax1, ax2 = lut.axes[1], lut.axes[0]
+        name1, name2 = lut.names[1], lut.names[0]
+        data = np.swapaxes(lut.data, 0, 1)
+    else:
+        ax1, ax2 = lut.axes[0], lut.axes[1]
+        name1, name2 = lut.names[0], lut.names[1]
+        data = lut.data
+
+
+    if vmin is None:
+        vmin = np.amin(lut.data[~np.isnan(lut.data)])
+    if vmax is None:
+        vmax = np.amax(lut.data[~np.isnan(lut.data)])
+    if vmin == vmax:
+        vmin -= 0.001
+        vmax += 0.001
+    if vmin > vmax: vmin, vmax = vmax, vmin
+
+    #
+    # semi polar axis
+    #
+    # angle
+    ax1_scaled = ax1
+    label2 = name2
+
+    # convert Idx instance to index if necessarry
+    if isinstance(index, Idx):
+        index = int(round(index.index(ax1)))
+    mirror_index = (ax1_scaled.shape[0]/2 + index)%ax1_scaled.shape[0]
+
+    if swap:
+        title=lut.axes[1][index]
+    else:
+        title=lut.axes[0][index]
+
+    # radius axis
+    # scale to [0, 90]
+    ax2_min = np.amin(ax2)
+    ax2_max = np.amax(ax2)
+    label1 = name1 + ' {:7.2f}'.format(title)
+    #
+
+    ax_cart = fig.add_subplot(sub)
+    ax_cart.grid(True)
+
+    if sym:
+        ax_cart.set_xlim(-ax2_max, ax2_max)
+    else:
+        ax_cart.set_xlim(ax2_min, ax2_max)
+    ax_cart.set_ylim(vmin, vmax)
+    ax_cart.ticklabel_format(axis='y', style='sci', scilimits=(-2,2))
+    ax_cart.grid(True)
+    ax_cart.set_xlabel(label2)
+    #ax_cart.set_title(label1)
+
+    #
+    # plot transects
+    #
+    ax_cart.plot(ax2, data[index,:],'k-')
+    if sym:
+       ax_cart.plot(-ax2, data[mirror_index,:],'k--')
+
+    if lut.desc is not None:
+        ax_cart.set_title(lut.desc)
 
 
 def merge(M, axes, dtype=None):

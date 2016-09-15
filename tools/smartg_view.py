@@ -6,7 +6,7 @@ warnings.simplefilter("ignore",DeprecationWarning)
 from pylab import figure
 import numpy as np
 np.seterr(invalid='ignore', divide='ignore') # ignore division by zero errors
-from luts import plot_polar, LUT
+from luts import plot_polar, LUT, transect2D
 
 
 def mdesc(desc, logI=False):
@@ -27,7 +27,7 @@ def mdesc(desc, logI=False):
         return pref + stokes + '^{\downarrow}' + '_{'+desc[sep2+1:sep3]+'}$'
     
 
-def smartg_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (TOA)', ind=0, cmap=None):
+def smartg_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (TOA)', ind=0, cmap=None, fig=None):
     '''
     visualization of a smartg MLUT
 
@@ -71,7 +71,7 @@ def smartg_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (T
 
     if not full:
         if QU:
-            fig = figure(figsize=(9, 9))
+            if fig is None: fig = figure(figsize=(9, 9))
             if logI:
                 lI=I.apply(np.log10)
                 lI.desc = mdesc(I.desc, logI=logI)
@@ -90,7 +90,7 @@ def smartg_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (T
                 plot_polar(DoP, ind, rect='426', sub='428', fig=fig, vmin=0, vmax=100, cmap=cmap)
         else:
             # show only I and PR
-            fig = figure(figsize=(9, 4.5))
+            if fig is None: fig = figure(figsize=(9, 4.5))
             if logI:
                 lI=I.apply(np.log10)
                 lI.desc = mdesc(I.desc, logI=logI)
@@ -129,6 +129,112 @@ def smartg_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (T
         plot_polar(DoLP,  ind, rect='242', sub='246', fig=fig2, vmin=0, vmax=100, cmap=cmap)
         plot_polar(DoCP,  ind, rect='243', sub='247', fig=fig2, vmin=0, vmax=100, cmap=cmap)
         plot_polar(DoP,  ind, rect='244', sub='248', fig=fig2, vmin=0, vmax=100, cmap=cmap)
+
+        return fig1, fig2
+
+def transect_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (TOA)', ind=0, fig=None):
+    '''
+    visualization of a smartg MLUT
+
+    Options:
+        logI: shows log10 of I
+        Circ: shows Circular polarization 
+        QU:  shows Q U and DoP
+        field: level of output
+        ind: index of azimutal plane
+        full: shows all
+    '''
+
+    I = mlut['I_' + field]
+    Q = mlut['Q_' + field]
+    U = mlut['U_' + field]
+    V = mlut['V_' + field]
+
+    # Linearly polarized reflectance
+    IPL = (Q*Q + U*U).apply(np.sqrt, 'Lin. Pol. ref.')
+    
+    # Polarized reflectance
+    IP = (Q*Q + U*U +V*V).apply(np.sqrt, 'Pol. ref.')
+
+    # Degree of Linear Polarization (%)
+    DoLP = 100*IPL/I
+    DoLP.desc = r'$DoLP$'
+    
+    # Angle of Linear Polarization (deg)
+    AoLP = (U/Q)
+    AoLP.apply(np.arctan)*90/np.pi
+    AoLP.desc = r'$AoLP$'
+    
+    # Degree of Circular Polarization (%)
+    DoCP = 100*V.apply(abs)/I
+    DoCP.desc = r'$DoCP$'
+
+    # Degree of Polarization (%)
+    DoP = 100*IP/I
+    DoP.desc = r'$DoP$'
+
+    if not full:
+        if QU:
+            if fig is None: fig = figure(figsize=(8, 8))
+            if logI:
+                lI=I.apply(np.log10)
+                lI.desc = mdesc(I.desc, logI=logI)
+                transect2D(lI,  ind, sub=221, fig=fig)
+            else:
+                I.desc = mdesc(I.desc)
+                transect2D(I,  ind, sub=221, fig=fig)
+            Q.desc = mdesc(Q.desc)
+            U.desc = mdesc(U.desc)
+            transect2D(Q,  ind, sub=222, fig=fig)
+            transect2D(U,  ind, sub=223, fig=fig)
+            if Circ:
+                V.desc = mdesc(V.desc)
+                transect2D(V, ind, sub=224, fig=fig)
+            else:
+                transect2D(DoP, ind, sub=224, fig=fig, vmin=0, vmax=100)
+        else:
+            # show only I and PR
+            if fig is None: fig = figure(figsize=(8, 4))
+            if logI:
+                lI=I.apply(np.log10)
+                lI.desc = mdesc(I.desc, logI=logI)
+                transect2D(lI,  ind, sub=121, fig=fig)
+            else:
+                I.desc = mdesc(I.desc)
+                transect2D(I,  ind, sub=121, fig=fig)
+
+            if Circ:
+                transect2D(DoCP, ind, sub=122, fig=fig, vmin=0, vmax=100)
+            else:
+                transect2D(DoP, ind, sub=122, fig=fig, vmin=0, vmax=100)
+
+        return fig
+
+
+    else:
+        # full plots
+        if fig is None: 
+            fig1 = figure(figsize=(16, 4))
+            fig2 = figure(figsize=(16, 4))
+        else : fig1,fig2 = fig
+        lI=I.apply(np.log10)
+        lI.desc = mdesc(I.desc,logI=True)
+        I.desc = mdesc(I.desc)
+        Q.desc = mdesc(Q.desc)
+        U.desc = mdesc(U.desc)
+        V.desc = mdesc(V.desc)
+        transect2D(I,  ind,  sub=141, fig=fig1)
+        transect2D(Q,  ind,  sub=142, fig=fig1)
+        transect2D(U,  ind, sub=143, fig=fig1)
+        transect2D(V,  ind, sub=144, fig=fig1)
+        
+        Q.desc = mdesc(Q.desc)
+        U.desc = mdesc(U.desc)
+        V.desc = mdesc(V.desc)
+        transect2D(lI,  ind, sub=141,fig=fig2)
+        transect2D(DoLP,  ind, sub=142, fig=fig2, vmin=0, vmax=100)
+        transect2D(DoCP,  ind, sub=143, fig=fig2, vmin=0, vmax=100)
+        transect2D(DoP,  ind,  sub=144, fig=fig2, vmin=0, vmax=100)
 
         return fig1, fig2
         
