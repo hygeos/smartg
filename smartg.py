@@ -895,11 +895,12 @@ def calculF(phases, N, DEPO):
         f3 = interp1d(phase.ang_in_rad(), phase.phase[:,2])
         f4 = interp1d(phase.ang_in_rad(), phase.phase[:,3])
 
-        # parameters equally spaced in scattering probabiliyu
+        # parameters equally spaced in scattering probability
         phase_H['p_P11'][idx+1, :] = interp1d(scum, phase.phase[:,1])(z)  # I par P11
         phase_H['p_P22'][idx+1, :] = interp1d(scum, phase.phase[:,0])(z)  # I per P22
         phase_H['p_P33'][idx+1, :] = interp1d(scum, phase.phase[:,2])(z)  # U P33
         phase_H['p_P43'][idx+1, :] = interp1d(scum, phase.phase[:,3])(z)  # V P43
+        phase_H['p_P44'][idx+1, :] = interp1d(scum, phase.phase[:,2])(z)  # V P44= P33
         phase_H['p_ang'][idx+1, :] = interp1d(scum, phase.ang_in_rad())(z) # angle
 
         # parameters equally spaced in scattering angle [0, 180]
@@ -907,6 +908,7 @@ def calculF(phases, N, DEPO):
         phase_H['a_P22'][idx+1, :] = f2(angN)  # I per P22
         phase_H['a_P33'][idx+1, :] = f3(angN)  # U P33
         phase_H['a_P43'][idx+1, :] = f4(angN)  # V P43
+        phase_H['a_P44'][idx+1, :] = f3(angN)  # V P44=P33
 
     return to_gpu(phase_H)
 

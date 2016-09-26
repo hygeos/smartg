@@ -1591,7 +1591,8 @@ inline __host__ __device__ float4 mul(float3x3 M, float4 v)
 	r.x = dot (M.r0, v2);
 	r.y = dot (M.r1, v2);
 	r.z = dot (M.r2, v2);
-	r.w = 0.;
+	//r.w = 0.;
+	r.w = v.w;
 	return r;
 }
 

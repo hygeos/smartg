@@ -1005,13 +1005,14 @@ __device__ void scatter(Photon* ph,
 	// ph->stokes.x = stokes.x * P11 + stokes.y * P12;
 	// ph->stokes.y = stokes.y * P22 + stokes.x * P12;
 	// ph->stokes.z = stokes.z * P33 - stokes.w * P43;
-	// ph->stokes.w = stokes.w * P33 + stokes.z * P44;
+	// ph->stokes.w = stokes.w * P44 + stokes.z * P43;
 
 	if (!le){
 		// Bias sampling scheme 2): Debiasing
 		float debias;
 		debias = __fdividef( 2., P11 + P22 + 2*P12 );
-		operator*=(ph->stokes, debias); 
+		//operator*=(ph->stokes, debias); 
+		ph->weight *= debias; 
 	}
 
 	else ph->weight /= 4.F; // Phase function normalization

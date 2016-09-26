@@ -132,7 +132,7 @@ def smartg_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (T
 
         return fig1, fig2
 
-def transect_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (TOA)', ind=0, fig=None):
+def transect_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (TOA)', ind=0, fig=None, color='k'):
     '''
     visualization of a smartg MLUT
 
@@ -143,6 +143,7 @@ def transect_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up 
         field: level of output
         ind: index of azimutal plane
         full: shows all
+        color: color of the transect
     '''
 
     I = mlut['I_' + field]
@@ -179,34 +180,34 @@ def transect_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up 
             if logI:
                 lI=I.apply(np.log10)
                 lI.desc = mdesc(I.desc, logI=logI)
-                transect2D(lI,  ind, sub=221, fig=fig)
+                transect2D(lI,  ind, sub=221, fig=fig, color=color)
             else:
                 I.desc = mdesc(I.desc)
-                transect2D(I,  ind, sub=221, fig=fig)
+                transect2D(I,  ind, sub=221, fig=fig, color=color)
             Q.desc = mdesc(Q.desc)
             U.desc = mdesc(U.desc)
-            transect2D(Q,  ind, sub=222, fig=fig)
-            transect2D(U,  ind, sub=223, fig=fig)
+            transect2D(Q,  ind, sub=222, fig=fig, color=color)
+            transect2D(U,  ind, sub=223, fig=fig, color=color)
             if Circ:
                 V.desc = mdesc(V.desc)
-                transect2D(V, ind, sub=224, fig=fig)
+                transect2D(V, ind, sub=224, fig=fig, color=color)
             else:
-                transect2D(DoP, ind, sub=224, fig=fig, vmin=0, vmax=100)
+                transect2D(DoP, ind, sub=224, fig=fig, vmin=0, vmax=100, color=color)
         else:
             # show only I and PR
             if fig is None: fig = figure(figsize=(8, 4))
             if logI:
                 lI=I.apply(np.log10)
                 lI.desc = mdesc(I.desc, logI=logI)
-                transect2D(lI,  ind, sub=121, fig=fig)
+                transect2D(lI,  ind, sub=121, fig=fig, color=color)
             else:
                 I.desc = mdesc(I.desc)
-                transect2D(I,  ind, sub=121, fig=fig)
+                transect2D(I,  ind, sub=121, fig=fig, color=color)
 
             if Circ:
-                transect2D(DoCP, ind, sub=122, fig=fig, vmin=0, vmax=100)
+                transect2D(DoCP, ind, sub=122, fig=fig, vmin=0, vmax=100, color=color)
             else:
-                transect2D(DoP, ind, sub=122, fig=fig, vmin=0, vmax=100)
+                transect2D(DoP, ind, sub=122, fig=fig, vmin=0, vmax=100, color=color)
 
         return fig
 
@@ -223,18 +224,18 @@ def transect_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up 
         Q.desc = mdesc(Q.desc)
         U.desc = mdesc(U.desc)
         V.desc = mdesc(V.desc)
-        transect2D(I,  ind,  sub=141, fig=fig1)
-        transect2D(Q,  ind,  sub=142, fig=fig1)
-        transect2D(U,  ind, sub=143, fig=fig1)
-        transect2D(V,  ind, sub=144, fig=fig1)
+        transect2D(I,  ind,  sub=141, fig=fig1, color=color)
+        transect2D(Q,  ind,  sub=142, fig=fig1, color=color)
+        transect2D(U,  ind, sub=143, fig=fig1, color=color)
+        transect2D(V,  ind, sub=144, fig=fig1, color=color)
         
         Q.desc = mdesc(Q.desc)
         U.desc = mdesc(U.desc)
         V.desc = mdesc(V.desc)
-        transect2D(lI,  ind, sub=141,fig=fig2)
-        transect2D(DoLP,  ind, sub=142, fig=fig2, vmin=0, vmax=100)
-        transect2D(DoCP,  ind, sub=143, fig=fig2, vmin=0, vmax=100)
-        transect2D(DoP,  ind,  sub=144, fig=fig2, vmin=0, vmax=100)
+        transect2D(lI,  ind, sub=141,fig=fig2, color=color)
+        transect2D(DoLP,  ind, sub=142, fig=fig2, vmin=0, vmax=100, color=color)
+        transect2D(DoCP,  ind, sub=143, fig=fig2, vmin=0, vmax=100, color=color)
+        transect2D(DoP,  ind,  sub=144, fig=fig2, vmin=0, vmax=100, color=color)
 
         return fig1, fig2
         
