@@ -1011,8 +1011,7 @@ __device__ void scatter(Photon* ph,
 		// Bias sampling scheme 2): Debiasing
 		float debias;
 		debias = __fdividef( 2., P11 + P22 + 2*P12 );
-		//operator*=(ph->stokes, debias); 
-		ph->weight *= debias; 
+		operator*=(ph->stokes, debias); 
 	}
 
 	else ph->weight /= 4.F; // Phase function normalization
