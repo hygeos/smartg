@@ -27,7 +27,7 @@ def mdesc(desc, logI=False):
         return pref + stokes + '^{\downarrow}' + '_{'+desc[sep2+1:sep3]+'}$'
     
 
-def smartg_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (TOA)', ind=0, cmap=None, fig=None):
+def smartg_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (TOA)', ind=0, cmap=None, fig=None, subdict=None):
     '''
     visualization of a smartg MLUT
 
@@ -39,12 +39,24 @@ def smartg_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (T
         ind: index of azimutal plane
         full: shows all
         cmap: color map
+        fig: already existing figure
+        subdict: dictionnary of LUT subsetter (see LUT class , sub() method)
+
+    Outputs:
+    if full is False, it returns 1 figure
+    if full is True,  it returns 2 figures
     '''
 
     I = mlut['I_' + field]
     Q = mlut['Q_' + field]
     U = mlut['U_' + field]
     V = mlut['V_' + field]
+
+    if subdict is not None :
+        I = I.sub(d=subdict)
+        Q = Q.sub(d=subdict)
+        U = U.sub(d=subdict)
+        V = V.sub(d=subdict)
 
     # Linearly polarized reflectance
     IPL = (Q*Q + U*U).apply(np.sqrt, 'Lin. Pol. ref.')
@@ -132,7 +144,7 @@ def smartg_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (T
 
         return fig1, fig2
 
-def transect_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (TOA)', ind=0, fig=None, color='k'):
+def transect_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (TOA)', ind=0, fig=None, color='k', subdict=None, **kwargs):
     '''
     visualization of a smartg MLUT
 
@@ -144,12 +156,23 @@ def transect_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up 
         ind: index of azimutal plane
         full: shows all
         color: color of the transect
+        subdict: dictionnary of LUT subsetter (see LUT class , sub() method)
+
+    Outputs:
+    if full is False, it returns 1 figure
+    if full is True,  it returns 2 figures
     '''
 
     I = mlut['I_' + field]
     Q = mlut['Q_' + field]
     U = mlut['U_' + field]
     V = mlut['V_' + field]
+
+    if subdict is not None :
+        I = I.sub(d=subdict)
+        Q = Q.sub(d=subdict)
+        U = U.sub(d=subdict)
+        V = V.sub(d=subdict)
 
     # Linearly polarized reflectance
     IPL = (Q*Q + U*U).apply(np.sqrt, 'Lin. Pol. ref.')
@@ -180,17 +203,17 @@ def transect_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up 
             if logI:
                 lI=I.apply(np.log10)
                 lI.desc = mdesc(I.desc, logI=logI)
-                transect2D(lI,  ind, sub=221, fig=fig, color=color)
+                transect2D(lI,  ind, sub=221, fig=fig, color=color, **kwargs)
             else:
                 I.desc = mdesc(I.desc)
-                transect2D(I,  ind, sub=221, fig=fig, color=color)
+                transect2D(I,  ind, sub=221, fig=fig, color=color, **kwargs)
             Q.desc = mdesc(Q.desc)
             U.desc = mdesc(U.desc)
-            transect2D(Q,  ind, sub=222, fig=fig, color=color)
-            transect2D(U,  ind, sub=223, fig=fig, color=color)
+            transect2D(Q,  ind, sub=222, fig=fig, color=color, **kwargs)
+            transect2D(U,  ind, sub=223, fig=fig, color=color, **kwargs)
             if Circ:
                 V.desc = mdesc(V.desc)
-                transect2D(V, ind, sub=224, fig=fig, color=color)
+                transect2D(V, ind, sub=224, fig=fig, color=color, **kwargs)
             else:
                 transect2D(DoP, ind, sub=224, fig=fig, vmin=0, vmax=100, color=color)
         else:
@@ -199,13 +222,13 @@ def transect_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up 
             if logI:
                 lI=I.apply(np.log10)
                 lI.desc = mdesc(I.desc, logI=logI)
-                transect2D(lI,  ind, sub=121, fig=fig, color=color)
+                transect2D(lI,  ind, sub=121, fig=fig, color=color, **kwargs)
             else:
                 I.desc = mdesc(I.desc)
-                transect2D(I,  ind, sub=121, fig=fig, color=color)
+                transect2D(I,  ind, sub=121, fig=fig, color=color, **kwargs)
 
             if Circ:
-                transect2D(DoCP, ind, sub=122, fig=fig, vmin=0, vmax=100, color=color)
+                transect2D(DoCP, ind, sub=122, fig=fig, vmin=0, vmax=100, color=color )
             else:
                 transect2D(DoP, ind, sub=122, fig=fig, vmin=0, vmax=100, color=color)
 
@@ -224,15 +247,15 @@ def transect_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up 
         Q.desc = mdesc(Q.desc)
         U.desc = mdesc(U.desc)
         V.desc = mdesc(V.desc)
-        transect2D(I,  ind,  sub=141, fig=fig1, color=color)
-        transect2D(Q,  ind,  sub=142, fig=fig1, color=color)
-        transect2D(U,  ind, sub=143, fig=fig1, color=color)
-        transect2D(V,  ind, sub=144, fig=fig1, color=color)
+        transect2D(I,  ind,  sub=141, fig=fig1, color=color, **kwargs)
+        transect2D(Q,  ind,  sub=142, fig=fig1, color=color, **kwargs)
+        transect2D(U,  ind, sub=143, fig=fig1, color=color, **kwargs)
+        transect2D(V,  ind, sub=144, fig=fig1, color=color, **kwargs)
         
         Q.desc = mdesc(Q.desc)
         U.desc = mdesc(U.desc)
         V.desc = mdesc(V.desc)
-        transect2D(lI,  ind, sub=141,fig=fig2, color=color)
+        transect2D(lI,  ind, sub=141,fig=fig2, color=color, **kwargs)
         transect2D(DoLP,  ind, sub=142, fig=fig2, vmin=0, vmax=100, color=color)
         transect2D(DoCP,  ind, sub=143, fig=fig2, vmin=0, vmax=100, color=color)
         transect2D(DoP,  ind,  sub=144, fig=fig2, vmin=0, vmax=100, color=color)
