@@ -23,7 +23,7 @@ from tools.water.phase_functions import PhaseFunction
 from os.path import dirname, realpath, join, basename, exists
 from warnings import warn
 from tools.progress import Progress
-from tools.luts import merge, read_lut_hdf, read_mlut_hdf, LUT, MLUT
+from tools.luts import merge, read_lut_hdf, read_mlut_hdf, LUT, MLUT, Idx
 from scipy.interpolate import interp1d
 import subprocess
 from collections import OrderedDict
@@ -145,18 +145,45 @@ class LambSurface(object):
     def __str__(self):
         return 'LAMBSUR-ALB={SURFALB}'.format(**self.dict)
 
+class Albedo_cst(object):
+    '''
+    Constant albedo (white)
+    '''
+    def __init__(self, alb):
+        self.alb = alb
+
+    def get(self, wl):
+        alb = np.zeros(np.array(wl).shape, dtype='float32')
+        alb[...] = self.alb
+        return alb
+
+class Albedo_speclib(object):
+    '''
+    Albedo from speclib
+    (http://speclib.jpl.nasa.gov/)
+    '''
+    def __init__(self, filename):
+        data = np.genfromtxt(filename, skip_header=26)
+        # convert X axis from micrometers to nm
+        # convert Y axis from percent to dimensionless
+        self.data = LUT(data[:,1]/100., axes=[data[:,0]*1000.], names=['wavelength'])
+
+    def get(self, wl):
+        return self.data[Idx(wl)]
+
+
 class Environment(object):
     '''
     Stores the smartg parameters relative the the environment effect
     '''
-    def __init__(self, ENV=0, ENV_SIZE=0., X0=0., Y0=0., ALB=0.5):
+    def __init__(self, ENV=0, ENV_SIZE=0., X0=0., Y0=0., ALB=Albedo_cst(0.5)):
         self.dict = {
                 'ENV': ENV,
                 'ENV_SIZE': ENV_SIZE,
                 'X0': X0,
                 'Y0': Y0,
-                'SURFALB': ALB,
                 }
+        self.alb = ALB
 
     def __str__(self):
         return 'ENV={ENV_SIZE}-X={X0:.1f}-Y={Y0:.1f}'.format(**self.dict)
