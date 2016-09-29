@@ -9,10 +9,24 @@ import sys
 sys.path.append('..')
 import numpy as np
 from profile.profil import REPTRAN
-from luts import LUT, merge
+from luts import LUT, merge, MLUT
 import scipy.constants as cst
 from pylab import *
 
+
+def reduce_reptran(mlut, ibands):
+    '''
+    Compute the final spectral signal from mlut ouput of smart_g and
+    REPTRAN_IBAND_LIST weights
+    '''
+    we, wb, ex, dl, norm = ibands.get_weights()
+    res = MLUT()
+    for l in mlut:
+        for pref in ['I_','Q_','U_','V_','transmission'] :
+            if pref in l.desc:
+                    lr = (l*we).reduce(sum,'Wavelength',grouping=wb.data)/norm
+                    res.add_lut(lr, desc=l.desc)
+    return res
 
 def Irr(L, azimuth='Azimuth angles', zenith='Zenith angles'):
     '''

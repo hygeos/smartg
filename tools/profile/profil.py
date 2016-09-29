@@ -1321,7 +1321,7 @@ class REPTRAN(object):
             
 class REPTRAN_IBAND_LIST(object):
     '''
-    KDIS list of IBANDS
+    REPTRAN LIST OF IBANDS
     '''
     
     def __init__(self, l):
@@ -1348,13 +1348,24 @@ class REPTRAN_IBAND_LIST(object):
                 dl_l.append(dl)
                 wb = np.mean(iband.band.awvl[:])
                 wb_l.append(wb)
-        wb=LUT(np.array(wb_l),axes=[wi_l],names=['Wavelength'],desc='Wavelength central band')
-        we=LUT(np.array(we_l),axes=[wi_l],names=['Wavelength'],desc='Weight')
-        ex=LUT(np.array(ex_l),axes=[wi_l],names=['Wavelength'],desc='E0')
-        dl=LUT(np.array(dl_l),axes=[wi_l],names=['Wavelength'],desc='Dlambda')
+        wb=LUT(np.array(wb_l),axes=[np.array(wi_l)],names=['Wavelength'],desc='Wavelength central band')
+        we=LUT(np.array(we_l),axes=[np.array(wi_l)],names=['Wavelength'],desc='Weight')
+        ex=LUT(np.array(ex_l),axes=[np.array(wi_l)],names=['Wavelength'],desc='E0')
+        dl=LUT(np.array(dl_l),axes=[np.array(wi_l)],names=['Wavelength'],desc='Dlambda')
         norm = we.reduce(np.sum,'Wavelength',grouping=wb.data)
         return we, wb, ex, dl, norm 
         
+    def get_names(self):
+        '''
+        return band names
+        '''
+        names=[]
+
+        for iband in self.l:
+            names.append(iband.band.name)
+
+        return list(set(names))
+
 
 class readCRS(object):
     def __init__(self,filename,iband):

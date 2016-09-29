@@ -13,7 +13,7 @@ import numpy as np
 import time
 from datetime import datetime
 from numpy import pi
-from tools.profile.profil import AeroOPAC, Profile, KDIS, KDIS_IBAND, REPTRAN, REPTRAN_IBAND, CloudOPAC
+from tools.profile.profil import AeroOPAC, Profile, KDIS, KDIS_IBAND, REPTRAN, REPTRAN_IBAND, REPTRAN_IBAND_LIST, KDIS_IBAND_LIST, CloudOPAC
 from tools.cdf import ICDF
 from tools.water.iop_spm import IOP_SPM
 from tools.water.iop_mm import IOP_MM

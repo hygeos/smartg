@@ -1539,7 +1539,6 @@ class MLUT(object):
             if axname in self.axes:
                 # check axis
                 if ax is not None:
-                    assert self.axes[axname].shape == ax.shape
                     assert np.allclose(self.axes[axname], ax)
             elif axname is None:
                 assert ax is None
