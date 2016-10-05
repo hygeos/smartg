@@ -22,7 +22,7 @@ def reduce_reptran(mlut, ibands):
     we, wb, ex, dl, norm = ibands.get_weights()
     res = MLUT()
     for l in mlut:
-        for pref in ['I_','Q_','U_','V_','transmission'] :
+        for pref in ['I_','Q_','U_','V_','transmission','flux'] :
             if pref in l.desc:
                     lr = (l*we).reduce(sum,'Wavelength',grouping=wb.data)/norm
                     res.add_lut(lr, desc=l.desc)
