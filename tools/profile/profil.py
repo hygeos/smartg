@@ -1972,12 +1972,12 @@ class Profile(object):
         (I,ALT,hmol,haer,H,XDEL,YDEL,XSSA,percent_abs, IPHA)
 
         '''
-        #for i in xrange(len(self.cache_prof_keys)):
-         #   if np.alltrue(self.cache_prof_keys[i] == w):
-         #       return self.cache_prof_values[i]
-        if w in self.cache_prof_keys:
-            i = self.cache_prof_keys.index(w)
-            #return self.cache_prof_values[i]
+        for i in xrange(len(self.cache_prof_keys)):
+            if np.alltrue(self.cache_prof_keys[i] == w):
+                return self.cache_prof_values[i]
+        #if w in self.cache_prof_keys:
+        #    i = self.cache_prof_keys.index(w)
+        #    return self.cache_prof_values[i]
             
         use_reptran = isinstance(w, REPTRAN_IBAND)
         use_kdis    = isinstance(w, KDIS_IBAND)
@@ -2069,6 +2069,8 @@ class Profile(object):
                                      ('hmol', float),
                                      ('haer', float), 
                                      ('H', float), 
+                                     ('HSCA', float), 
+                                     ('HABS', float), 
                                      ('XDEL', float), 
                                      ('YDEL', float), 
                                      ('XSSA', float), 
@@ -2084,7 +2086,10 @@ class Profile(object):
                 taur_prec=0. #rayleigh
                 taua_prec=0. #aerosols
                 tauc_prec=0. #clouds
-                profile[m] = (m, z[m], 0., 0., 0. , 0., 1., 1., 0., 0)
+                hsca=0. #cumulated total scattering OT
+                habs=0. #cumulated total absorption OT
+
+                profile[m] = (m, z[m], 0., 0., 0., 0., 0., 0., 1., 1., 0., 0)
             else : 
                 dz = z[m-1]-z[m]
                 taur = dataray[m] - taur_prec
@@ -2110,7 +2115,10 @@ class Profile(object):
                     xssa=self.ssa
                 else:
                     xssa=(ssaaer[m]*taua+ssaclo[m]*tauc)/(taua+tauc)
-                profile[m] = (m, z[m], dataray[m], dataaer[m]+dataclo[m], htot , xdel, ydel, xssa, abs, 0)
+                hsca += taur + (taua+tauc)*xssa
+                habs += taug + (taua+tauc)*(1.-xssa)
+                habs = htot - hsca
+                profile[m] = (m, z[m], dataray[m], dataaer[m]+dataclo[m], htot , hsca, habs, xdel, ydel, xssa, abs, 0)
 
         self.cache_prof_keys.append(w)
         self.cache_prof_values.append(profile)

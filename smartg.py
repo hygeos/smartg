@@ -77,7 +77,9 @@ type_Spectrum = [
 
 type_Profile = [
     ('z',      'float32'),   # // altitude
-    ('tau',    'float32'),   # // cumulated optical thickness (from top)
+    ('tau',    'float32'),   # // cumulated extinction optical thickness (from top)
+    ('tausca', 'float32'),   # // cumulated scattering optical thickness (from top)
+    ('tauabs', 'float32'),   # // cumulated absorption optical thickness (from top)
     ('pmol',   'float32'),   # // probability of pure Rayleigh scattering event
     ('ssa',    'float32'),   # // single scattering albedo (scatterer only)
     ('abs',    'float32'),   # // absorption coefficient
@@ -301,7 +303,7 @@ class Smartg(object):
              NBTHETA=45, NBPHI=90, NF=1e6,
              OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
              NBLOOP=None, progress=True,
-             le=None, flux=None, stdev=False):
+             le=None, flux=None, stdev=False, BEER=0):
         '''
         Run a SMART-G simulation
 
@@ -380,6 +382,8 @@ class Smartg(object):
             - flux: if specified output is 'planar' or 'spherical' flux instead of radiance
 
             - stdev: calculate the standard deviation between each kernel run
+
+            - BEER: if BEER=1 compute absorption using Beer-Lambert law, otherwise compute it with the Single scattering albedo
 
 
         Return value:
@@ -508,7 +512,7 @@ class Smartg(object):
             LE = 1
             NBTHETA =  le['th'].shape[0]
             NBPHI   =  le['phi'].shape[0]
-        
+
         FLUX = 0
         if flux == 'spherical' : FLUX = 1
 
@@ -537,7 +541,7 @@ class Smartg(object):
                        XBLOCK, XGRID, NLAM, SIM, NF,
                        NBTHETA, NBPHI, OUTPUT_LAYERS,
                        RTER, LE, FLUX, NLVL, NPSTK,
-                       NWLPROBA)
+                       NWLPROBA, BEER)
 
 
         # Initialize the progress bar
@@ -944,7 +948,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
                    NBPHOTONS, NBLOOP, THVDEG, DEPO,
                    XBLOCK, XGRID,NLAM, SIM, NF,
                    NBTHETA, NBPHI, OUTPUT_LAYERS,
-                   RTER, LE, FLUX, NLVL, NPSTK, NWLPROBA) :
+                   RTER, LE, FLUX, NLVL, NPSTK, NWLPROBA, BEER) :
 
     """
     Initialize the constants in python and send them to the device memory
@@ -986,6 +990,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
     copy_to_device('FLUXd', FLUX, np.int32)
     copy_to_device('NLVLd', NLVL, np.int32)
     copy_to_device('NPSTKd', NPSTK, np.int32)
+    copy_to_device('BEERd', BEER, np.int32)
     if surf != None:
         copy_to_device('SURd', surf.dict['SUR'], np.int32)
         copy_to_device('DIOPTREd', surf.dict['DIOPTRE'], np.int32)
@@ -1040,6 +1045,8 @@ def get_profAtm(wl, atm):
         prof_atm['z'][1:,:] = -999.                 # other wavelengths are NaN
         for i, profile in enumerate(profilesAtm):
             prof_atm['tau'][i,:] = profile['H']
+            prof_atm['tausca'][i,:] = profile['HSCA']
+            prof_atm['tauabs'][i,:] = profile['HABS']
             prof_atm['pmol'][i,:] = profile['YDEL']
             prof_atm['ssa'][i,:] = profile['XSSA']
             prof_atm['abs'][i,:] = profile['percent_abs']
@@ -1102,10 +1109,14 @@ def get_profOc(wl, water, NLAM):
         prof_oc['abs'][:,:] = 0.   # no absorption
         for ilam in xrange(0, NLAM):
             prof_oc['tau'][ilam, 0] = 0.
+            prof_oc['tausca'][ilam, 0] = 0.
+            prof_oc['tauabs'][ilam, 0] = 0.
             prof_oc['ssa'][ilam, 0] = 1.
             prof_oc['iphase'][ilam, 0] = 0
 
             prof_oc['tau'][ilam, 1] = - (profilesOc[ilam][1]+profilesOc[ilam][0]) * DEPTH
+            prof_oc['tausca'][ilam, 1] = - (profilesOc[ilam][1]) * DEPTH
+            prof_oc['tauabs'][ilam, 1] = - (profilesOc[ilam][0]) * DEPTH
             prof_oc['ssa'][ilam, 1] = profilesOc[ilam][1]/(profilesOc[ilam][1]+profilesOc[ilam][0])
             prof_oc['iphase'][ilam, 1] = profilesOc[ilam][2]
 

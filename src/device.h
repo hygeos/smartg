@@ -50,6 +50,7 @@ __device__ __constant__ float CTHVd;	//cosThetaView_Host
 
 __device__ __constant__ float RTER;
 __device__ __constant__ int NWLPROBA;
+__device__ __constant__ int BEERd;
 
 
 
@@ -166,6 +167,8 @@ __device__ void ComputePsiLE(float3 u0,	float3 v0, float3 v1, float* psi, float3
 #ifdef DOUBLE
 __device__ double DatomicAdd(double* address, double val);
 #endif
+
+__device__ float get_tau(int , struct Profile ) ;  
 
 /**********************************************************
 *	> Fonctions liées au générateur aléatoire

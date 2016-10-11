@@ -116,6 +116,8 @@ public:
     float tau;	// localisation en epaisseur optique
                 // atmosphère: valeurs positives
                 // océan: valeurs négatives
+                //
+    float tauabs; //localisation epaisseur optique d'absorption
 
     // Position cartésienne du photon
     float3 pos;
@@ -157,7 +159,9 @@ struct Phase {
 
 struct Profile {
     float z;      // altitude
-    float tau;    // cumulated optical thickness (from top)
+    float tau;    // cumulated extinction optical thickness (from top)
+    float tausca; // cumulated scattering optical thickness (from top)
+    float tauabs; // cumulated absorption optical thickness (from top)
     float pmol;   // probability of pure Rayleigh scattering event
     float ssa;    // single scattering albedo (scatterer only)
     float abs;    // absorption coefficient
