@@ -565,7 +565,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
 
     float tauRdm;
     float hph = 0.;  // cumulative optical thickness
-    float vzn, delta1, h_cur;
+    float vzn, delta1, h_cur, h_cur_abs, delt;
     float d_tot = 0.;
     float d;
     float rat;
@@ -588,7 +588,9 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
 
     // Random Optical Thickness to go through
     if (!le) tauRdm = -logf(1.F-RAND);
-    // in LE photon is forced to exit upward or downward
+    // if called with le mode, it serves to compute the transmission
+    // from photon last intercation position to TOA, thus 
+    // photon is forced to exit upward or downward and tauRdm is chosen to be an upper limit
     else tauRdm = 1e6;
     
 
@@ -728,14 +730,18 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
 
 
         //
-        // calculate the optical thickness h_cur to the next layer
+        // calculate the optical thicknesses h_cur and h_cur_abs to the next layer
         // We compute the layer extinction coefficient of the layer DTau/Dz and multiply by the distance within the layer
         //
         #ifndef ALT_MOVE
-        h_cur = __fdividef(abs(prof_atm[i_layer_bh+ilam].tau - prof_atm[i_layer_fw+ilam].tau)*(d - d_tot),
+        h_cur = __fdividef(abs(get_tau(BEERd,prof_atm[i_layer_bh+ilam]) - get_tau(BEERd,prof_atm[i_layer_fw+ilam]))*(d - d_tot),
+                          abs(prof_atm[i_layer_bh].z - prof_atm[i_layer_fw].z));
+        h_cur_abs = __fdividef(abs(prof_atm[i_layer_bh+ilam].tauabs - prof_atm[i_layer_fw+ilam].tauabs)*(d - d_tot),
                           abs(prof_atm[i_layer_bh].z - prof_atm[i_layer_fw].z));
         #else
-        h_cur = __fdividef(abs(prof_atm[i_layer_bh+ilam].tau - prof_atm[i_layer_fw+ilam].tau)*d,
+        h_cur = __fdividef(abs(get_tau(BEERd,prof_atm[i_layer_bh+ilam]) - get_tau(BEERd,prof_atm[i_layer_fw+ilam]))*d,
+                          abs(prof_atm[i_layer_bh].z - prof_atm[i_layer_fw].z));
+        h_cur_abs = __fdividef(abs(prof_atm[i_layer_bh+ilam].tauabs - prof_atm[i_layer_fw+ilam].tauabs)*d,
                           abs(prof_atm[i_layer_bh].z - prof_atm[i_layer_fw].z));
         #endif
 
@@ -745,19 +751,19 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
         //
         if (hph + h_cur > tauRdm) {
             // photon stops within the layer
+            delt = (tauRdm - hph)/h_cur;
             #ifndef ALT_MOVE
-            d_tot += (d - d_tot)*(tauRdm - hph)/h_cur;
+            d_tot += (d - d_tot)*delt;
             #else
-            d *= (tauRdm-hph)/h_cur;
+            d *= delt;
             ph->pos = operator+(ph->pos, ph->v*d);
             ph->rayon = length(ph->pos);
-            ph->weight *= 1.f - prof_atm[ph->couche+ilam].abs;
-            ph->prop_aer = 1.f - prof_atm[ph->couche+ilam].pmol;
 
             #ifdef DEBUG
             vzn = __fdividef( dot(ph->v, ph->pos) , ph->rayon);
             #endif
             #endif
+            if (BEERd == 1) ph->weight *= __expf(-( delt * h_cur_abs));
 
             break;
         } else {
@@ -771,6 +777,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
             ph->rayon = length(ph->pos);
             vzn = __fdividef( dot(ph->v, ph->pos) , ph->rayon);
             #endif
+            if (BEERd == 1) ph->weight *= __expf(-( h_cur_abs));
         }
 
     }
@@ -778,15 +785,17 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
         if (( (count_level==UPTOA)  && (ph->loc==SPACE ) ) || ( (count_level==DOWN0P) && (ph->loc==SURF0P) )) ph->weight *= __expf(-(hph + h_cur));
         else ph->weight = 0.;
     }
+
     #ifndef ALT_MOVE
     //
     // update the position of the photon
     //
     ph->pos = operator+(ph->pos, ph->v*d_tot);
     ph->rayon = length(ph->pos);
-    ph->weight *= 1.f - prof_atm[ph->couche+ilam].abs;
-    ph->prop_aer = 1.f - prof_atm[ph->couche+ilam].pmol;
     #endif
+
+    ph->prop_aer = 1.f - prof_atm[ph->couche+ilam].pmol;
+    if (BEERd == 0) ph->weight *= 1.f - prof_atm[ph->couche+ilam].abs;
 }
 #endif // SPHERIQUE
 
@@ -803,6 +812,10 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 
 	if (ph->loc == OCEAN){  
         if (ph->tau > 0) {
+            if (BEERd == 1) {// absorption between start and stop
+                ab =  0.F;
+                ph->weight *= exp(-fabs(__fdividef(ab-ph->tauabs, ph->v.z)));
+            }
            ph->tau = 0.F;
            ph->tauabs = 0.F;
            ph->loc = SURF0M;
@@ -813,6 +826,10 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
         }
         // Si tau<TAUOCEAN le photon atteint le fond 
         else if( ph->tau < get_tau(BEERd, prof_oc[NOCEd + ph->ilam *(NOCEd+1)]) ){
+            if (BEERd == 1) {// absorption between start and stop
+                ab = prof_oc[NOCEd + ph->ilam *(NOCEd+1)].tauabs;
+                ph->weight *= exp(-fabs(__fdividef(ab-ph->tauabs, ph->v.z)));
+            }
             ph->loc = SEAFLOOR;
             ph->tau = get_tau(BEERd, prof_oc[NOCEd + ph->ilam *(NOCEd+1)]);
             ph->tauabs = prof_oc[NOCEd + ph->ilam *(NOCEd+1)].tauabs;
@@ -827,6 +844,10 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             icouche++;
         }
         ph->couche = icouche;
+
+        Dsca= fabs(get_tau(BEERd, prof_oc[icouche+ph->ilam*(NOCEd+1)]) - get_tau(BEERd, prof_oc[icouche-1+ph->ilam*(NOCEd+1)]));
+        dsca= fabs(tauBis - get_tau(BEERd, prof_oc[icouche-1+ph->ilam*(NOCEd+1)])) ;
+        delt = __fdividef(dsca,Dsca);
         
     } // Ocean
 

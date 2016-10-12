@@ -26,6 +26,7 @@ def reduce_reptran(mlut, ibands):
             if pref in l.desc:
                     lr = (l*we).reduce(sum,'Wavelength',grouping=wb.data)/norm
                     res.add_lut(lr, desc=l.desc)
+    res.attrs = mlut.attrs
     return res
 
 def Irr(L, azimuth='Azimuth angles', zenith='Zenith angles'):
