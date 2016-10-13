@@ -9,8 +9,8 @@ Speed-up Monte Carlo Advanced Radiative Transfer Code using GPU
 
 
 
+from __future__ import print_function, division
 import numpy as np
-import time
 from datetime import datetime
 from numpy import pi
 from tools.profile.profil import AeroOPAC, Profile, KDIS, KDIS_IBAND, REPTRAN, REPTRAN_IBAND, REPTRAN_IBAND_LIST, KDIS_IBAND_LIST, CloudOPAC
@@ -29,6 +29,9 @@ import subprocess
 from collections import OrderedDict
 from pycuda.gpuarray import to_gpu, zeros as gpuzeros
 import pycuda.driver as cuda
+import sys
+if sys.version_info[:2] >= (3, 0):
+    xrange = range
 
 
 # set up directories
@@ -276,7 +279,7 @@ class Smartg(object):
                                    join(dir_src, 'incRNGs/Random123/')])
         elif exists(binnames[pp]):
             # load existing binary
-            print 'read binary', binnames[pp]
+            print('Loading binary', binnames[pp])
             self.mod = module_from_buffer(open(binnames[pp], 'rb').read())
 
         else:
@@ -606,7 +609,7 @@ def reptran_merge(m, ibands, verbose=True):
     for (name, data, axnames) in m.data:
 
         if axnames != ['Wavelength', 'Azimuth angles', 'Zenith angles']:
-            if verbose: print 'Skipping dataset', name
+            if verbose: print('Skipping dataset', name)
             continue
 
         _, nphi, ntheta = data.shape
@@ -631,7 +634,7 @@ def reptran_merge(m, ibands, verbose=True):
     mmerged.set_attrs(m.attrs)
 
     if verbose:
-        print 'Merged {} wavelengths down to {}'.format(len(ibands), nc)
+        print('Merged {} wavelengths down to {}'.format(len(ibands), nc))
 
     return mmerged
 
