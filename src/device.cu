@@ -503,8 +503,16 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm,
         ph->ilam = wl_proba_icdf[__float2uint_rz(RAND * NWLPROBA)];
     }
 
-	ph->wavel = spectrum[ph->ilam].lambda;
+    #ifdef ALIS
+    //ph->ilam = 0;
+    ph->ilam = (NLAMd-1);
+    for (int k=0; k<NLAMd; k++) atomicAdd(NPhotonsIn +k, 1);
+    #else
     atomicAdd(NPhotonsIn+ph->ilam, 1);
+    #endif
+
+	ph->wavel = spectrum[ph->ilam].lambda;
+
 
     if ((SIMd == -2) || (SIMd == 1) || (SIMd == 2)) {
 
@@ -541,12 +549,26 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm,
 
         if (SIMd == 3) {
             ph->loc = OCEAN;
+            ph->couche = 0;
         } else {
             ph->loc = SURF0P;
+            ph->couche = NATMd;
         }
 
     } else ph->loc = NONE;
 	
+    #ifdef ALIS
+    int DL=(NLAMd-1)/(N_LOW-1);
+    ph->nevt = 0;
+    ph->layer_prev[ph->nevt] = ph->couche;
+    ph->vz_prev[ph->nevt] = ph->v.z;
+    ph->delta_prev[ph->nevt] = 0.f;
+    for (int k=0; k<N_LOW; k++) {
+        ph->weight_sca[k] = 1.0f;
+        ph->dtau_sca[k] = get_tau(1,prof_atm[NATMd + k*DL*(NATMd+1)]) - get_tau(1,prof_atm[NATMd + ph->ilam*(NATMd+1)]);
+        //ph->dtau_sca[k] = get_tau(1,prof_atm[NATMd + k*DL*(NATMd+1)]) ;
+    }
+    #endif
 
 	ph->weight = WEIGHTINIT;
 	
@@ -806,6 +828,10 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 	float Dsca=0.f, dsca=0.f, delt, ab;
     float phz, rdist, tauBis;
     int icouche;
+    #ifdef ALIS
+    float dsca_dl, dsca_dl0;
+    int DL=(NLAMd-1)/(N_LOW-1);
+    #endif
 
 
 	ph->tau += -logf(1.f - RAND)*ph->v.z;
@@ -855,10 +881,18 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 
         // Si tau<0 le photon atteint la surface
         if(ph->tau < 0.F){
+            #ifndef ALIS
             if (BEERd == 1) {// absorption between start and stop
                 ab =  0.F;
                 ph->weight *= exp(-fabs(__fdividef(ab-ph->tauabs, ph->v.z)));
             }
+            #else
+            for (int k=0; k<N_LOW; k++) {
+                dsca_dl = 0.F;
+                ph->weight_sca[k] *= exp(-fabs(__fdividef(dsca_dl-ph->dtau_sca[k], ph->v.z)));
+                ph->dtau_sca[k] = 0.F;
+            }
+            #endif
             ph->loc = SURF0P;
             ph->tau = 0.F;
             ph->tauabs = 0.F;
@@ -868,14 +902,32 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             operator+=(ph->pos, ph->v * fabs(ph->pos.z/ph->v.z));
             ph->pos.z = 0.;
             ph->couche = NATMd;
+            #ifdef ALIS
+            ph->nevt++;
+            ph->layer_prev[ph->nevt] = ph->couche;
+            ph->vz_prev[ph->nevt] = ph->v.z;
+            ph->delta_prev[ph->nevt] = 1.f;
+            #endif
         return;
         }
         // Si tau>TAUATM le photon atteint l'espace
         else if( ph->tau > get_tau(BEERd, prof_atm[NATMd + ph->ilam *(NATMd+1)]) ){
+            #ifndef ALIS
             if (BEERd == 1) {// absorption between start and stop
                 ab = prof_atm[NATMd + ph->ilam *(NATMd+1)].tauabs;
                 ph->weight *= exp(-fabs(__fdividef(ab-ph->tauabs, ph->v.z)));
             }
+            #else
+            for (int k=0; k<N_LOW; k++) {
+                dsca_dl = get_tau(1,prof_atm[NATMd + k*DL*(NATMd+1)]) - get_tau(1,prof_atm[NATMd + ph->ilam*(NATMd+1)]);
+                ph->weight_sca[k] *= exp(-fabs(__fdividef(dsca_dl-ph->dtau_sca[k], ph->v.z)));
+            }
+            ph->couche = 0;
+            ph->nevt++;
+            ph->layer_prev[ph->nevt] = ph->couche;
+            ph->vz_prev[ph->nevt] = ph->v.z;
+            ph->delta_prev[ph->nevt] = 0.f;
+            #endif
             ph->loc = SPACE;
             return;
         }
@@ -897,18 +949,39 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
         dsca= fabs(tauBis - get_tau(BEERd, prof_atm[icouche-1+ph->ilam*(NATMd+1)])) ;
         delt = __fdividef(dsca,Dsca);
 
+        #ifdef ALIS
+        ph->nevt++;
+        ph->layer_prev[ph->nevt] = ph->couche;
+        ph->vz_prev[ph->nevt] = ph->v.z;
+        ph->delta_prev[ph->nevt] = delt;
+        #endif
+
+        #ifndef ALIS
         if (BEERd == 0) ph->weight = ph->weight * (1.f - prof_atm[ph->couche+ph->ilam*(NATMd+1)].abs);
         else { // We compute the cumulated absorption OT at the new postion of the photon
             // photon new position in the layer
-            int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
             ab = prof_atm[NATMd+ph->ilam*(NATMd+1)].tauabs - 
                 (delt * (prof_atm[icouche+ph->ilam*(NATMd+1)].tauabs - prof_atm[icouche-1+ph->ilam*(NATMd+1)].tauabs) +
                 prof_atm[icouche-1+ph->ilam*(NATMd+1)].tauabs);
             // absorption between start and stop
             ph->weight *= exp(-fabs(__fdividef(ab-ph->tauabs, ph->v.z)));
-            if (idx == 0) printf("%f , %f, %i ,%f\n", ab, ph->tauabs, icouche, ph->weight);
             ph->tauabs = ab;
         }
+        #else
+
+        // cumulated scattering OD at reference wavelength
+        dsca_dl0 = get_tau(1,prof_atm[NATMd + ph->ilam*(NATMd+1)]) - 
+            (delt * (get_tau(1,prof_atm[icouche+ph->ilam*(NATMd+1)]) - get_tau(1,prof_atm[icouche-1+ph->ilam*(NATMd+1)])) +
+            get_tau(1,prof_atm[icouche-1+ph->ilam*(NATMd+1)]));
+        for (int k=0; k<N_LOW; k++) {
+           // cumulated scattering relative OD wrt reference wavelength
+            dsca_dl = get_tau(1,prof_atm[NATMd + k*DL*(NATMd+1)]) - 
+                (delt * (get_tau(1,prof_atm[icouche+k*DL*(NATMd+1)]) - get_tau(1,prof_atm[icouche-1+k*DL*(NATMd+1)])) +
+                get_tau(1,prof_atm[icouche-1+k*DL*(NATMd+1)])) - dsca_dl0;
+            ph->weight_sca[k] *= exp(-fabs(__fdividef(dsca_dl-ph->dtau_sca[k], ph->v.z)));
+            ph->dtau_sca[k] = dsca_dl;
+        }
+        #endif
         // calculate new photon position
         phz = delt * (prof_atm[icouche].z - prof_atm[icouche-1].z) + prof_atm[icouche-1].z; 
         rdist=  fabs(__fdividef(phz-ph->pos.z, ph->v.z));
@@ -1066,6 +1139,13 @@ __device__ void scatter(Photon* ph,
 		/************************/
 		/* Photon in atmosphere */
 		/************************/
+        #ifdef ALIS
+        int DL=(NLAMd-1)/(N_LOW-1);
+        for (int k=0; k<N_LOW; k++) {
+            ph->weight_sca[k] *= __fdividef(get_tau(1,prof_atm[ph->couche+ k*DL*(NATMd+1)]), 
+                                get_tau(1,prof_atm[ph->couche + ph->ilam*(NATMd+1)]));
+        }
+        #endif
 		if( prop_aer >= RANDTWO ){ // Aerosols
 			// Photon weight reduction due to the aerosol single scattering albedo of the current layer
 			if (BEERd == 0) ph->weight *= prof_atm[ilay].ssa;
@@ -1688,7 +1768,7 @@ __device__ void surfaceLambertienne(Photon* ph, int le, float* tabthv, float* ta
     if (ph->loc != SEAFLOOR){
 
 	  ph->weight *= spectrum[ph->ilam].alb_surface;
-
+      
 	  #ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
 	  /** Retour dans le repère d'origine **/
 	  // Re-projection vers le repères de direction de photon. L'angle à prendre pour la projection est -angleImpact
@@ -1739,6 +1819,9 @@ __device__ void countPhoton(Photon* ph,
     double *tabCount;                   // pointer to the "counting" array:
     double dweight;
 	double4 ds;                         // replace ds1, ds2, ds3, ds4
+    #ifdef ALIS
+    double dwsca, dwabs;
+    #endif
     #else                               // may be TOA, or BOA down, and so on
     float *tabCount; 
     #endif
@@ -1798,10 +1881,33 @@ __device__ void countPhoton(Photon* ph,
         il = ph->ilam;
         #ifndef SPHERIQUE
         float tau_le;
+        #ifndef ALIS
         if (count_level==UPTOA) tau_le = prof_atm[NATMd + ph->ilam *(NATMd+1)].tau;
         if ((count_level==DOWN0P) || (count_level==UP0M) || (count_level==UP0P) ) tau_le = 0.F;
-        if (BEERd == 0) ph->weight *= __expf(__fdividef(-fabs(tau_le - ph->tau), abs(ph->v.z))); // LE attenuation to count_level
-        else ph->weight *= __expf(__fdividef(-fabs(tau_le - (ph->tau+ph->tauabs)), abs(ph->v.z))); // LE attenuation to count_level
+        if (BEERd == 0) ph->weight *= expf(-fabs(__fdividef(tau_le - ph->tau, ph->v.z))); // LE attenuation to count_level
+        else ph->weight *= expf(-fabs(__fdividef(tau_le - (ph->tau+ph->tauabs), ph->v.z))); // LE attenuation to count_level
+        #else
+        // move artificially toward space
+        
+        ph->couche = 0;
+        ph->nevt++;
+        ph->layer_prev[ph->nevt] = ph->couche;
+        ph->vz_prev[ph->nevt] = ph->v.z;
+        ph->delta_prev[ph->nevt] = 0.f;
+        
+        float dsca_dl;
+        int DL=(NLAMd-1)/(N_LOW-1);
+        if (count_level==UPTOA) tau_le = prof_atm[NATMd + ph->ilam *(NATMd+1)].tausca;
+        if ((count_level==DOWN0P) || (count_level==UP0M) || (count_level==UP0P) ) tau_le = 0.F;
+                        // LE attenuation to count_level (only scattering)
+                        // absorption treated separately
+        if (BEERd == 0) ph->weight *= expf(-fabs(__fdividef(tau_le - (ph->tau-ph->tauabs), ph->v.z))); 
+        else ph->weight *= expf(-fabs(__fdividef(tau_le - ph->tau, ph->v.z)));
+        for (int k=0; k<N_LOW; k++) {
+           dsca_dl = get_tau(1,prof_atm[NATMd + k*DL*(NATMd+1)]) - get_tau(1,prof_atm[NATMd + ph->ilam*(NATMd+1)]);
+           ph->weight_sca[k] *= exp(-fabs(__fdividef(dsca_dl-ph->dtau_sca[k], ph->v.z)));
+        }
+        #endif
         #endif
     }
 	
@@ -1828,37 +1934,114 @@ __device__ void countPhoton(Photon* ph,
     #endif
 
 	// Rangement du photon dans sa case, et incrémentation de variables
+    II = NBTHETAd*NBPHId*NLAMd;
+
+    #ifndef ALIS
 	if(((ith >= 0) && (ith < NBTHETAd)) && ((iphi >= 0) && (iphi < NBPHId)) && (il >= 0) && (il < NLAMd) && (!isnan(weight)))
 	{
-        II = NBTHETAd*NBPHId*NLAMd;
-        JJ = il*NBTHETAd*NBPHId + ith*NBPHId + iphi;
+      JJ = il*NBTHETAd*NBPHId + ith*NBPHId + iphi;
 
-        #ifdef DOUBLE 
-            dweight = (double)weight;
-            ds = make_double4(st.x, st.y, st.z, st.w);
+      #ifdef DOUBLE 
+      // select the appropriate level (count_level)
+      tabCount = (double*)tabPhotons + count_level*NPSTKd*NBTHETAd*NBPHId*NLAMd;
+      dweight = (double)weight;
+      ds = make_double4(st.x, st.y, st.z, st.w);
 
-            // select the appropriate level (count_level)
-            tabCount = (double*)tabPhotons + count_level*NPSTKd*NBTHETAd*NBPHId*NLAMd;
+      DatomicAdd(tabCount+(0*II+JJ), dweight*(ds.x+ds.y));
+      DatomicAdd(tabCount+(1*II+JJ), dweight*(ds.x-ds.y));
+      DatomicAdd(tabCount+(2*II+JJ), dweight*ds.z);
+      DatomicAdd(tabCount+(3*II+JJ), dweight*ds.w);
 
-            DatomicAdd(tabCount+(0*II+JJ), dweight*(ds.x+ds.y));
-            DatomicAdd(tabCount+(1*II+JJ), dweight*(ds.x-ds.y));
-            DatomicAdd(tabCount+(2*II+JJ), dweight*ds.z);
-            DatomicAdd(tabCount+(3*II+JJ), dweight*ds.w);
-        #else
-            // select the appropriate level (count_level)
-            tabCount = (float*)tabPhotons + count_level*NPSTKd*NBTHETAd*NBPHId*NLAMd;
+      #else
+      tabCount = (float*)tabPhotons + count_level*NPSTKd*NBTHETAd*NBPHId*NLAMd;
 
-            atomicAdd(tabCount+(0*II+JJ), weight * (st.x+st.y));
-            atomicAdd(tabCount+(1*II+JJ), weight * (st.x-st.y));
-            atomicAdd(tabCount+(2*II+JJ), weight * st.z);
-            atomicAdd(tabCount+(3*II+JJ), weight * st.w);
-        #endif
-        atomicAdd(NPhotonsOut + ((count_level*NLAMd + il)*NBTHETAd + ith)*NBPHId + iphi, 1);
+      atomicAdd(tabCount+(0*II+JJ), weight * (st.x+st.y));
+      atomicAdd(tabCount+(1*II+JJ), weight * (st.x-st.y));
+      atomicAdd(tabCount+(2*II+JJ), weight * st.z);
+      atomicAdd(tabCount+(3*II+JJ), weight * st.w);
+      #endif
+
+      atomicAdd(NPhotonsOut + ((count_level*NLAMd + il)*NBTHETAd + ith)*NBPHId + iphi, 1);
 	}
+	else
+	{
+	  atomicAdd(errorcount+ERROR_CASE, 1);
+	}
+
+    #else //ALIS
+    int DL=(NLAMd-1)/(N_LOW-1);
+    int ik;
+	if(((ith >= 0) && (ith < NBTHETAd)) && ((iphi >= 0) && (iphi < NBPHId)) && (!isnan(weight)))
+    {
+
+
+      for (il=0; il<NLAMd; il++) {
+          float wabs = 1.0f;
+          ik = il/DL;
+          JJ = il*NBTHETAd*NBPHId + ith*NBPHId + iphi;
+          // Linear interpolation for scattering correction
+          float wsca;
+          if (il != NLAMd-1) wsca = __fdividef((il-ik*DL)*1.0f,DL*1.0f) * (ph->weight_sca[ik+1] - ph->weight_sca[ik]) +
+                          ph->weight_sca[ik]; 
+          else wsca = ph->weight_sca[N_LOW-1];
+
+          // Polynomial fit for scattering correction
+          
+         /* 
+          float wsca = 0.;
+          for (int k=0; k<N_LOW; k++){
+            float acc = 1.f;
+            for (int j=0; j< N_LOW; j++) {
+                if (j!=k) acc *= __fdividef((float)il-(float)j*DL,(float)k*DL-(float)j*DL); 
+            }
+            wsca += ph->weight_sca[k] * acc;
+          }
+          */
+          
+         
+
+          for (int n=0; n<ph->nevt; n++){
+              float tauabs1, tauabs2;
+              if (ph->layer_prev[n+1] == 0) tauabs2 = 0.;
+              else tauabs2 = (prof_atm[ph->layer_prev[n+1]   + il *(NATMd+1)].tauabs -
+                             prof_atm[ph->layer_prev[n+1]-1 + il *(NATMd+1)].tauabs) *
+                             ph->delta_prev[n+1] + prof_atm[ph->layer_prev[n+1]-1 + il *(NATMd+1)].tauabs;
+              if (ph->layer_prev[n] == 0) tauabs1 = 0.;
+              else tauabs1 = (prof_atm[ph->layer_prev[n]   + il *(NATMd+1)].tauabs -
+                             prof_atm[ph->layer_prev[n]-1 + il *(NATMd+1)].tauabs) *
+                             ph->delta_prev[n] + prof_atm[ph->layer_prev[n]-1 + il *(NATMd+1)].tauabs;
+              wabs *= exp(-fabs(__fdividef(tauabs2 - tauabs1 , ph->vz_prev[n+1])));
+          }
+
+          #ifdef DOUBLE 
+          tabCount = (double*)tabPhotons + count_level*NPSTKd*NBTHETAd*NBPHId*NLAMd;
+          dweight = (double)weight;
+          ds = make_double4(st.x, st.y, st.z, st.w);
+          dwsca=(double)wsca;
+          dwabs=(double)wabs;
+
+          DatomicAdd(tabCount+(0*II+JJ), dweight * dwsca * dwabs * (ds.x+ds.y));
+          DatomicAdd(tabCount+(1*II+JJ), dweight * dwsca * dwabs * (ds.x-ds.y));
+          DatomicAdd(tabCount+(2*II+JJ), dweight * dwsca * dwabs * ds.z);
+          DatomicAdd(tabCount+(3*II+JJ), dweight * dwsca * dwabs * ds.w);
+
+          #else
+          tabCount = (float*)tabPhotons + count_level*NPSTKd*NBTHETAd*NBPHId*NLAMd;
+          atomicAdd(tabCount+(0*II+JJ), weight * wsca * wabs * (st.x+st.y));
+          atomicAdd(tabCount+(1*II+JJ), weight * wsca * wabs * (st.x-st.y));
+          atomicAdd(tabCount+(2*II+JJ), weight * wsca * wabs * st.z);
+          atomicAdd(tabCount+(3*II+JJ), weight * wsca * wabs * st.w);
+          #endif    
+
+          atomicAdd(NPhotonsOut + ((count_level*NLAMd + il)*NBTHETAd + ith)*NBPHId + iphi, 1);
+      }
+
+    }
 	else
 	{
 		atomicAdd(errorcount+ERROR_CASE, 1);
 	}
+    #endif //ALIS
 
 }
 
@@ -1971,14 +2154,14 @@ __device__ void display(const char* desc, Photon* ph) {
     int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
 
     if (idx==0) {
-        printf("%16s X=(%6.3f,%6.3f,%6.3f) V=(%6.3f,%6.3f,%6.3f) U=(%6.3f,%6.3f,%6.3f) S=(%6.3f,%6.3f,%6.3f,%6.3f) tau=%6.3f weight=%11.3e loc=",
+        printf("%16s X=(%6.3f,%6.3f,%6.3f) V=(%6.3f,%6.3f,%6.3f) U=(%6.3f,%6.3f,%6.3f) S=(%6.3f,%6.3f,%6.3f,%6.3f) tau=%6.3f tauabs=%6.3f weight=%11.3e loc=",
                desc,
                ph->pos.x, ph->pos.y, ph->pos.z,
                ph->v.x,ph->v.y,ph->v.z,
                ph->u.x,ph->u.y,ph->u.z,
                ph->stokes.x, ph->stokes.y,
                ph->stokes.z, ph->stokes.w,
-               ph->tau, ph->weight
+               ph->tau,ph->tauabs, ph->weight
                );
         switch(ph->loc) {
             case 0: printf("SPACE"); break;
@@ -1992,6 +2175,19 @@ __device__ void display(const char* desc, Photon* ph) {
             default:
                     printf("UNDEFINED");
         }
+        #ifdef ALIS
+        printf(" nevt=%2d",ph->nevt);
+        printf(" wsca=");
+        for (int k=0; k<N_LOW; k++) printf("%7.5f ",ph->weight_sca[k]);
+        printf(" dtausca=");
+        for (int k=0; k<N_LOW; k++) printf("%7.5f ",ph->dtau_sca[k]);
+        printf(" layers=");
+        for (int k=0; k<ph->nevt+1; k++) printf("%3d ",ph->layer_prev[k]);
+        printf(" vz=");
+        for (int k=0; k<ph->nevt+1; k++) printf("%7.5f ",ph->vz_prev[k]);
+        printf(" delta=");
+        for (int k=0; k<ph->nevt+1; k++) printf("%7.5f ",ph->delta_prev[k]);
+        #endif
         printf("\n");
     }
 }
@@ -2101,6 +2297,16 @@ __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
     ph_le->rayon = ph->rayon;
     ph_le->taumax = ph->taumax;
     #endif
+    #ifdef ALIS
+    int k;
+    ph_le->nevt = ph->nevt;
+    for (k=0; k<NEVTMAX; k++) ph_le->layer_prev[k] = ph->layer_prev[k];
+    for (k=0; k<NEVTMAX; k++) ph_le->vz_prev[k] = ph->vz_prev[k];
+    for (k=0; k<NEVTMAX; k++) ph_le->delta_prev[k] = ph->delta_prev[k];
+    for (k=0; k<N_LOW; k++) ph_le->weight_sca[k] = ph->weight_sca[k];
+    for (k=0; k<N_LOW; k++) ph_le->dtau_sca[k] = ph->dtau_sca[k];
+    #endif
+
 }
 
 __device__ float get_tau(int BEERd, struct Profile prof) {  

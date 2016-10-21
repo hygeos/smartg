@@ -200,7 +200,7 @@ def smartg(*args, **kwargs):
     warn('function smartg will be deprecated. Please use Smartg(<compilation_option>).run(<runtime_options>)')
 
     comp_kwargs = {}
-    for k in ['pp', 'debug', 'alt_move', 'debug_photon', 'double']:
+    for k in ['pp', 'debug', 'alt_move', 'debug_photon', 'double', 'alis']:
         if k in kwargs:
             comp_kwargs[k] = kwargs.pop(k)
 
@@ -211,7 +211,7 @@ class Smartg(object):
 
     def __init__(self, pp=True, debug=False,
                  alt_move=False, debug_photon=False,
-                 double=False):
+                 double=False, alis=False):
         '''
         Initialization of the Smartg object
 
@@ -234,6 +234,8 @@ class Smartg(object):
             - debug_photon: activate the display of photon path for the thread 0
 
             - double : accumulate photons table in double precision, default single
+
+            - alis : implement the ALIS method (Emde et al. 2010) for treating gaseous absorption
         '''
         import pycuda.autoinit
         from pycuda.compiler import SourceModule
@@ -241,6 +243,7 @@ class Smartg(object):
 
         self.pp = pp
         self.double = double
+        self.alis = alis
 
         #
         # compilation option
@@ -260,6 +263,8 @@ class Smartg(object):
             # counting in double precision
             # ! slows down processing
             options.append('-DDOUBLE')
+        if alis:
+            options.append('-DALIS')
 
         #
         # compile the kernel or load binary
@@ -386,6 +391,7 @@ class Smartg(object):
             - stdev: calculate the standard deviation between each kernel run
 
             - BEER: if BEER=1 compute absorption using Beer-Lambert law, otherwise compute it with the Single scattering albedo
+                (BEER automatically set to 1 if ALIS is chosen)
 
 
         Return value:
@@ -429,6 +435,8 @@ class Smartg(object):
         attrs.update({'MODE': {True: 'PPA', False: 'SSA'}[self.pp]})
         attrs.update({'XBLOCK': XBLOCK})
         attrs.update({'XGRID': XGRID})
+
+        if self.alis: BEER=1
 
         if SEED == -1:
             # SEED is based on clock

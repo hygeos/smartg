@@ -1960,6 +1960,7 @@ class Profile(object):
             if (use_reptran or use_kdis) : 
                 pro = self.calc(w[i])
             else : pro  = self.calc(wl[i])
+           # else : pro  = self.cache_prof_values[i]
 
             # setup the phase functions indices in profile
             pro['IPHA'] = indices[:,i]
@@ -2124,8 +2125,8 @@ class Profile(object):
                 habs = htot - hsca
                 profile[m] = (m, z[m], dataray[m], dataaer[m]+dataclo[m], htot , hsca, habs, xdel, ydel, xssa, abs, 0)
 
-        self.cache_prof_keys.append(w)
-        self.cache_prof_values.append(profile)
+        #self.cache_prof_keys.append(w)
+        #self.cache_prof_values.append(profile)
 
         return profile
 
