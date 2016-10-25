@@ -268,7 +268,7 @@ class Smartg(object):
 
             # kernel compilation
             self.mod = SourceModule(src_device_content,
-                               nvcc='/usr/local/cuda/bin/nvcc',
+                               nvcc='nvcc',
                                options=options,
                                no_extern_c=True,
                                cache_dir='/tmp/',
