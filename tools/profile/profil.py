@@ -1655,7 +1655,7 @@ class Profile(object):
         - lat: latitude (for Rayleigh optical depth calculation, default=45.)
         - O3: total ozone column (Dobson units), or None to use atmospheric
           profile value (default)
-        - H2O: total water vapour column (mol cm-2), or None to use atmospheric
+        - H2O: total water vapour column (g.cm-2), or None to use atmospheric
           profile value (default)
         - NO2: activate NO2 absorption (default True)
         - P0: Pressure at the sea level in <TODO>
