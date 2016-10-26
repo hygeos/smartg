@@ -202,7 +202,7 @@ extern "C" {
                 errorcount, tabPhotons, NPhotonsOut);
 
 
-			syncthreads();
+			__syncthreads();
 
 		
 			//
@@ -310,7 +310,7 @@ extern "C" {
             #endif
 
 		}
-		syncthreads();
+		__syncthreads();
 
 
         //
@@ -396,7 +396,7 @@ extern "C" {
              display("SURFACE", &ph);
             #endif
 		}
-		syncthreads();
+		__syncthreads();
 
         //
 		// Reflection
@@ -421,7 +421,7 @@ extern "C" {
             display("SEAFLOOR", &ph);
             #endif
          }
-        syncthreads();
+        __syncthreads();
 
 
         //
@@ -443,7 +443,7 @@ extern "C" {
 			ph.loc = NONE;
 			nbPhotonsThr++;
 		}
-		syncthreads();
+		__syncthreads();
 
 		
 
