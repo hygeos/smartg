@@ -310,7 +310,7 @@ def test_idx6():
     Idx(np.eye(2)).index(np.linspace(1, 5, 5))
 
 def test_idx7():
-    r = Idx(np.eye(2), bounds_error=False).index(np.linspace(2, 5, 5))
+    r = Idx(np.eye(2), fill_value=np.NaN).index(np.linspace(2, 5, 5))
     assert np.isnan(r).all()
 
 def test_convert():

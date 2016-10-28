@@ -968,13 +968,16 @@ class Idx(object):
     argument.
     Example: Idx(3., 'a') instead of Idx(3.)
     This allows verifying that the parameter is used in the right axis.
+
+    Options:
+        - fill_value are passed to interp1d (implies bounds_error=False)
+          Special value for fill_value='extrema': fill with extrema values, don't extrapolate
     '''
-    def __init__(self, value, name=None, round=False, bounds_error=True, fill_value=np.NaN):
+    def __init__(self, value, name=None, round=False, fill_value=None):
         if value is not None:
             self.value = value
             self.name = name
             self.round = round
-            self.bounds_error = bounds_error
             self.fill_value = fill_value
 
     def index(self, axis):
@@ -992,9 +995,15 @@ class Idx(object):
 
         else:
             # axis is scalar or ndarray: interpolate
+            if self.fill_value == 'extrema':
+                fv = (0, len(axis)-1)
+            else:
+                fv = self.fill_value
+            be = (self.fill_value is None)
+
             res = interp1d(axis, np.arange(len(axis)),
-                    bounds_error=self.bounds_error,
-                    fill_value=self.fill_value)(self.value)
+                    bounds_error=be,
+                    fill_value=fv)(self.value)
             if self.round:
                 if isinstance(res, np.ndarray):
                     res = res.round().astype(int)
