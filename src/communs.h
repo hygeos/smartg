@@ -37,8 +37,8 @@
 #define DEMIPI 1.5707963F
 
 #define MAX_LOOP 100000
-#define NEVTMAX 50 // Maximum number of scattering evts stored in photon
-#define N_LOW 41
+#define MAX_NEVT 50 // Maximum number of scattering evts stored in photon
+#define MAX_NLOW 101
 
 
 
@@ -126,11 +126,11 @@ public:
 
     #ifdef ALIS
     unsigned short nevt;  // Number  of events
-    short layer_prev[NEVTMAX]; // History of layer where events occured
-    float vz_prev[NEVTMAX]; // History of z cosine where events occured
-    float delta_prev[NEVTMAX]; // History of proportion (between 0 and 1) within the layer where events occured
-    float weight_sca[N_LOW]; // Table of scattering weigths for Importance Sampling correction
-    float dtau_sca[N_LOW]; // Table of differential scattering OD of the photon for Importance Sampling correction
+    short layer_prev[MAX_NEVT]; // History of layer where events occured
+    float vz_prev[MAX_NEVT]; // History of z cosine where events occured
+    float delta_prev[MAX_NEVT]; // History of proportion (between 0 and 1) within the layer where events occured
+    float weight_sca[MAX_NLOW]; // Table of scattering weigths for Importance Sampling correction
+    float tau_sca[MAX_NLOW]; // Table of differential scattering OD of the photon for Importance Sampling correction
     #endif
 
     #ifdef SPHERIQUE

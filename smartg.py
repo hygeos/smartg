@@ -211,7 +211,7 @@ class Smartg(object):
 
     def __init__(self, pp=True, debug=False,
                  alt_move=False, debug_photon=False,
-                 double=False, alis=False):
+                 double=False, alis=None):
         '''
         Initialization of the Smartg object
 
@@ -235,7 +235,9 @@ class Smartg(object):
 
             - double : accumulate photons table in double precision, default single
 
-            - alis : implement the ALIS method (Emde et al. 2010) for treating gaseous absorption
+            - alis : dictionary, if present implement the ALIS method (Emde et al. 2010) for treating gaseous absorption, with field 'nlow'
+                is the number of wavelength to fit the spectral dependence of scattering, 
+                nlow-1 has to divide NW-1 where NW is the number of wavelengths, nlow has to be lesser than MAX_NLOW that is defined in communs.h
         '''
         import pycuda.autoinit
         from pycuda.compiler import SourceModule
@@ -436,7 +438,6 @@ class Smartg(object):
         attrs.update({'XBLOCK': XBLOCK})
         attrs.update({'XGRID': XGRID})
 
-        if self.alis: BEER=1
 
         if SEED == -1:
             # SEED is based on clock
@@ -448,6 +449,12 @@ class Smartg(object):
         if monochromatic:
             wavelengths = wavelengths.reshape(1)
         NLAM = wavelengths.size
+
+        NLOW=-1
+        if self.alis is not None :
+            BEER=1
+            if (self.alis['nlow'] ==-1) : NLOW=NLAM
+            else: NLOW=self.alis['nlow']
 
         # determine SIM
         if (atm is not None) and (surf is None) and (water is None):
@@ -555,7 +562,7 @@ class Smartg(object):
                        XBLOCK, XGRID, NLAM, SIM, NF,
                        NBTHETA, NBPHI, OUTPUT_LAYERS,
                        RTER, LE, FLUX, NLVL, NPSTK,
-                       NWLPROBA, BEER)
+                       NWLPROBA, BEER, NLOW)
 
 
         # Initialize the progress bar
@@ -982,7 +989,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
                    NBPHOTONS, NBLOOP, THVDEG, DEPO,
                    XBLOCK, XGRID,NLAM, SIM, NF,
                    NBTHETA, NBPHI, OUTPUT_LAYERS,
-                   RTER, LE, FLUX, NLVL, NPSTK, NWLPROBA, BEER) :
+                   RTER, LE, FLUX, NLVL, NPSTK, NWLPROBA, BEER, NLOW) :
 
     """
     Initialize the constants in python and send them to the device memory
@@ -1025,6 +1032,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
     copy_to_device('NLVLd', NLVL, np.int32)
     copy_to_device('NPSTKd', NPSTK, np.int32)
     copy_to_device('BEERd', BEER, np.int32)
+    copy_to_device('NLOWd', NLOW, np.int32)
     if surf != None:
         copy_to_device('SURd', surf.dict['SUR'], np.int32)
         copy_to_device('DIOPTREd', surf.dict['DIOPTRE'], np.int32)

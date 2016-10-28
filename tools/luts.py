@@ -1228,7 +1228,7 @@ def plot_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
         ax_polar.set_title(lut.desc, weight='bold', position=(0.05,0.97))
 
 
-def transect2D(lut, index=None, vmin=None, vmax=None, sym=True, swap='auto', fig=None, sub=121, color='k'):
+def transect2D(lut, index=None, vmin=None, vmax=None, sym=True, swap='auto', fig=None, sub=121, color='k', percent=False):
     '''
     Transect of 2D LUT
 
@@ -1246,6 +1246,7 @@ def transect2D(lut, index=None, vmin=None, vmax=None, sym=True, swap='auto', fig
           if 'auto', searches for 'azi' in both axes names
     fig : destination figure. If None (default), create a new figure.
     color : color of the transect
+    percent: if True set scale to 0 to 100%
     '''
     from pylab import figure
 
@@ -1279,6 +1280,9 @@ def transect2D(lut, index=None, vmin=None, vmax=None, sym=True, swap='auto', fig
         vmin -= 0.001
         vmax += 0.001
     if vmin > vmax: vmin, vmax = vmax, vmin
+    if percent:
+        vmin=0.
+        vmax=100.
 
     #
     # semi polar axis

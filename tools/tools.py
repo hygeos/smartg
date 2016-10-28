@@ -16,7 +16,7 @@ from pylab import *
 
 def reduce_reptran(mlut, ibands):
     '''
-    Compute the final spectral signal from mlut ouput of smart_g and
+    Compute the final spectral signal from mlut output of smart_g and
     REPTRAN_IBAND_LIST weights
     '''
     we, wb, ex, dl, norm = ibands.get_weights()
@@ -26,6 +26,22 @@ def reduce_reptran(mlut, ibands):
             if pref in l.desc:
                     lr = (l*we).reduce(sum,'Wavelength',grouping=wb.data)/norm
                     res.add_lut(lr, desc=l.desc)
+    res.attrs = mlut.attrs
+    return res
+
+def reduce_kdis(mlut, ibands, use_solar=False):
+    '''
+    Compute the final spectral signal from mlut output of smart_g and
+    KDIS_IBAND_LIST weights
+    '''
+    we, wb, ex, dl, norm = ibands.get_weights()
+    res = MLUT()
+    for l in mlut:
+        for pref in ['I_','Q_','U_','V_','transmission','flux'] :
+            if pref in l.desc:
+                if use_solar : lr = (l*we*ex*dl).reduce(sum,'Wavelength',grouping=wb.data)/norm
+                else         : lr = (l*we*dl   ).reduce(sum,'Wavelength',grouping=wb.data)/norm
+                res.add_lut(lr, desc=l.desc)
     res.attrs = mlut.attrs
     return res
 

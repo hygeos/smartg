@@ -1661,15 +1661,17 @@ class Profile(object):
         - NO2: activate NO2 absorption (default True)
         - P0: Pressure at the sea level in <TODO>
               default: surface pressure from AFGL file
+        - force_cache :  force the use of cached values, don t recalculate profile
     '''
     def __init__(self, atm_filename, aer=None, grid=None, cloud=None,
                 pfgrid=[100., 0.], pfwav=None, tauR=None, ssa=None,
                 lat=45., O3=None, H2O=None, NO2=True, verbose=False, 
-                overwrite=False, P0=None):
+                overwrite=False, P0=None, force_cache=False):
 
         self.atm_filename = atm_filename
         self.pfwav = pfwav
         self.pfgrid = pfgrid
+        self.force_cache = force_cache
         self.cache_phase_keys = []
         self.cache_phase_values = []
         self.cache_prof_keys = []
@@ -1729,7 +1731,7 @@ class Profile(object):
 
         #-------------------------------------------
         # optionnal regrid
-        if grid != None:
+        if grid is not None:
             if isinstance(grid, str):
                 znew = change_altitude_grid(z, grid)
             else:
@@ -1761,6 +1763,7 @@ class Profile(object):
         self.NO2 = NO2
         self.tauR = tauR
         self.ssa = ssa
+        self.P0 = P0
 
         self.aer = aer
         if self.aer is not None:
@@ -1857,7 +1860,8 @@ class Profile(object):
             pfwav = self.pfwav
 
         pro = Profile(self.atm_filename, aer=self.aer, cloud=self.cloud, grid=self.pfgrid,
-                lat=self.lat, O3=self.O3, H2O=self.H2O, NO2=self.NO2, verbose=self.verbose, overwrite=self.overwrite)
+                lat=self.lat, O3=self.O3, H2O=self.H2O, NO2=self.NO2, verbose=self.verbose, overwrite=self.overwrite,
+                P0=self.P0, tauR=self.tauR, ssa=self.ssa, force_cache=self.force_cache)
 
         # calculate the indices of wl in pfwav
         ind_wl = []
@@ -1959,8 +1963,9 @@ class Profile(object):
         for i in xrange(len(wl)):
             if (use_reptran or use_kdis) : 
                 pro = self.calc(w[i])
-            else : pro  = self.calc(wl[i])
-           # else : pro  = self.cache_prof_values[i]
+            else : 
+                if self.force_cache: pro  = self.cache_prof_values[i]
+                else : pro  = self.calc(wl[i])
 
             # setup the phase functions indices in profile
             pro['IPHA'] = indices[:,i]

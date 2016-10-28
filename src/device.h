@@ -51,6 +51,7 @@ __device__ __constant__ float CTHVd;	//cosThetaView_Host
 __device__ __constant__ float RTER;
 __device__ __constant__ int NWLPROBA;
 __device__ __constant__ int BEERd;
+__device__ __constant__ int NLOWd;
 
 
 

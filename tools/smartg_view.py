@@ -215,7 +215,7 @@ def transect_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up 
                 V.desc = mdesc(V.desc)
                 transect2D(V, ind, sub=224, fig=fig, color=color, **kwargs)
             else:
-                transect2D(DoP, ind, sub=224, fig=fig, vmin=0, vmax=100, color=color)
+                transect2D(DoP, ind, sub=224, fig=fig,  color=color, percent=True, **kwargs)
         else:
             # show only I and PR
             if fig is None: fig = figure(figsize=(8, 4))
@@ -228,9 +228,9 @@ def transect_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up 
                 transect2D(I,  ind, sub=121, fig=fig, color=color, **kwargs)
 
             if Circ:
-                transect2D(DoCP, ind, sub=122, fig=fig, vmin=0, vmax=100, color=color )
+                transect2D(DoCP, ind, sub=122, fig=fig,  color=color, percent=True, **kwargs)
             else:
-                transect2D(DoP, ind, sub=122, fig=fig, vmin=0, vmax=100, color=color)
+                transect2D(DoP, ind, sub=122, fig=fig, color=color, percent=True, **kwargs)
 
         return fig
 
@@ -256,9 +256,9 @@ def transect_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up 
         U.desc = mdesc(U.desc)
         V.desc = mdesc(V.desc)
         transect2D(lI,  ind, sub=141,fig=fig2, color=color, **kwargs)
-        transect2D(DoLP,  ind, sub=142, fig=fig2, vmin=0, vmax=100, color=color)
-        transect2D(DoCP,  ind, sub=143, fig=fig2, vmin=0, vmax=100, color=color)
-        transect2D(DoP,  ind,  sub=144, fig=fig2, vmin=0, vmax=100, color=color)
+        transect2D(DoLP,  ind, sub=142, fig=fig2, color=color, percent=True, **kwargs)
+        transect2D(DoCP,  ind, sub=143, fig=fig2, color=color, percent=True, **kwargs)
+        transect2D(DoP,  ind,  sub=144, fig=fig2, color=color, percent=True, **kwargs)
 
         return fig1, fig2
         
