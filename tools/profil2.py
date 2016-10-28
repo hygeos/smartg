@@ -500,9 +500,9 @@ class AtmAFGL(object):
         #
         T0 = 273.15  # in K
         T = LUT(prof.T, names=['temperature'])
-        tau_o3  = self.crs_chappuis.sub()[Idx(wav), 0]
-        tau_o3 += self.crs_chappuis.sub()[Idx(wav), 1]*(T - T0)
-        tau_o3 += self.crs_chappuis.sub()[Idx(wav), 2]*(T - T0)*(T - T0)
+        tau_o3  = self.crs_chappuis.sub()[Idx(wav, fill_value='extrema'), 0]
+        tau_o3 += self.crs_chappuis.sub()[Idx(wav, fill_value='extrema'), 1]*(T - T0)
+        tau_o3 += self.crs_chappuis.sub()[Idx(wav, fill_value='extrema'), 2]*(T - T0)*(T - T0)
 
         # LUT in 10^(-20) cm2, convert in km-1
         tau_o3 *= prof.dens_o3 * 1e-15
@@ -512,9 +512,9 @@ class AtmAFGL(object):
         #
         # NO2 optical thickness
         #
-        tau_no2  = self.crs_no2.sub()[Idx(wav), 0]
-        tau_no2 += self.crs_no2.sub()[Idx(wav), 1]*(T - T0)
-        tau_no2 += self.crs_no2.sub()[Idx(wav), 2]*(T - T0)*(T - T0)
+        tau_no2  = self.crs_no2.sub()[Idx(wav, fill_value='extrema'), 0]
+        tau_no2 += self.crs_no2.sub()[Idx(wav, fill_value='extrema'), 1]*(T - T0)
+        tau_no2 += self.crs_no2.sub()[Idx(wav, fill_value='extrema'), 2]*(T - T0)*(T - T0)
 
         tau_no2 *= prof.dens_no2 * 1e-15
         tau_no2 *= dz
