@@ -19,7 +19,7 @@ from __future__ import print_function, division, absolute_import
 import numpy as np
 from os.path import join, dirname, exists, basename
 from glob import glob
-from tools.luts import MLUT, LUT, read_mlut_netcdf4, Idx
+from .luts import MLUT, LUT, read_mlut_netcdf4, Idx
 from scipy.interpolate import interp1d
 from scipy.integrate import simps
 from scipy.constants import codata
@@ -425,14 +425,15 @@ class AtmAFGL(object):
 
         profile = self.calc_profile(wav)
 
-        if self.pfwav is None:
-            pha = self.phase(wav)
-        else:
-            pha = self.phase(self.pfwav)
+        if phase:
+            if self.pfwav is None:
+                pha = self.phase(wav)
+            else:
+                pha = self.phase(self.pfwav)
 
-        profile.add_lut(pha, desc='phase')
+            profile.add_lut(pha, desc='phase')
 
-        # fill profile with phase function indices (TODO)
+            # fill profile with phase function indices (TODO)
 
         return profile
 
