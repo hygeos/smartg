@@ -405,13 +405,15 @@ class AtmAFGL(object):
         if grid is None:
             self.prof = prof
         else:
+            if isinstance(grid, str):
+                grid = change_altitude_grid(prof.z, grid)
             self.prof = prof.regrid(grid)
 
         #
         # calculate reduced profile
         # (for phase function blending)
         #
-        self.prof_red = prof.regrid(pfgrid)
+        self.prof_red = prof.regrid(pfgrid)    # TODO: only if necessary
 
 
     def calc(self, wav, phase=True):
@@ -431,7 +433,8 @@ class AtmAFGL(object):
             else:
                 pha = self.phase(self.pfwav)
 
-            profile.add_lut(pha, desc='phase')
+            if pha is not None:
+                profile.add_lut(pha, desc='phase')
 
             # fill profile with phase function indices (TODO)
 
@@ -573,7 +576,10 @@ class AtmAFGL(object):
             # print(comp)
             pha += comp.phase(wav, self.pfgrid, self.prof_red.RH())
 
-        return pha
+        if len(self.comp) == 0:
+            return None
+        else:
+            return pha
 
 def trapzinterp(y, x, xnew, samesize=True):
     '''
