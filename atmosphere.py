@@ -2,29 +2,16 @@
 # -*- coding: utf-8 -*-
 
 
-# TODO
-# base class for atmospheric profile ?
-#   -> CloudOPAC
-#   -> AeroOPAC
-#   -> other ?
-# adaptation pour profile océanique ?
-# controler les paramètres d'absorption
-# controler l'épaisseur optique totale
-# fournir des profiles de vapeur d'eau (et autres) "custom"
-# fournir plusieurs composantes (aerosol, cloud, etc)
-
-
-
 from __future__ import print_function, division, absolute_import
 import numpy as np
 from os.path import join, dirname, exists, basename
 from glob import glob
-from .luts import MLUT, LUT, read_mlut_netcdf4, Idx
+from tools.luts import MLUT, LUT, read_mlut_netcdf4, Idx
 from scipy.interpolate import interp1d
 from scipy.integrate import simps
 from scipy.constants import codata
 import netCDF4
-from warnings import warn
+from warnings import warn, catch_warnings
 import sys
 if sys.version_info[:2] >= (3, 0):
     xrange = range
@@ -55,58 +42,61 @@ class Species(object):
 
         self._wav = nc.variables["wavelen"][:]*1e3  # wavelength (converted µm -> nm)
 
-        if u'hum' in nc.variables.keys(): 
-            self._rhgrid = nc.variables["hum"][:]
-            self._nrh = len(self._rhgrid)
+        if 'hum' in nc.variables: 
+            self._rh_reff = nc.variables['hum'][:]
+            self._rh_or_reff = 'rh'
+        elif 'reff' in nc.variables:
+            self._rh_reff = nc.variables['reff'][:]
+            self._rh_or_reff = 'reff'
         else:
-            self._rhgrid = None
-            self._nrh = 1
+            raise Exception('Error')
+        self._nrh_reff = len(self._rh_reff)
 
         # density in g/cm^3
         # note: bypass the dimension lambda
         # constant values for all wavelengths
         self._rho = LUT(
                 nc.variables["rho"][0,:],
-                axes = [self._rhgrid],
-                names = ['rh'],
+                axes = [self._rh_reff],
+                names = [self._rh_or_reff],
             )
 
         # extinction coefficient (nlam, rh) in km^-1/(g/m^3)
         self._ext = LUT(
-                    np.array(nc.variables["ext"][:]),
-                    axes = [self._wav, self._rhgrid],
-                    names = ['lambda', 'rh'],
+                    np.array(nc.variables['ext'][:]),
+                    axes = [self._wav, self._rh_reff],
+                    names = ['lambda', self._rh_or_reff],
                 )
 
         # single scattering albedo (nlam, nhum)
         self._ssa = LUT(
                     np.array(nc.variables['ssa']),
-                    axes = [self._wav, self._rhgrid],
-                    names = ['lambda', 'rh'],
+                    axes = [self._wav, self._rh_reff],
+                    names = ['lambda', self._rh_or_reff],
                 )
 
         # scattering angle in degrees (nlam, nhum, nphamat, nthetamax)
         self._theta = LUT(
             nc.variables['theta'][:],
-            axes=[self._wav, self._rhgrid, None, None],
-            names=['lam', 'rh', 'stk', 'nthetamax'])
+            axes=[self._wav, self._rh_reff, None, None],
+            names=['lam', self._rh_or_reff, 'stk', 'nthetamax'])
 
 
         # phase matrix (nlam, nhum, nphamat, nthetamax)
         self._phase = LUT(
             nc.variables['phase'][:],
-            axes=[self._wav, self._rhgrid, None, None],
-            names=['lam', 'rh', 'stk', 'nthetamax'])
+            axes=[self._wav, self._rh_reff, None, None],
+            names=['lam', self._rh_or_reff, 'stk', 'nthetamax'])
 
         # number of scattering angles (nlam, nhum, nphamat)
         self._ntheta = LUT(
                 nc.variables['ntheta'][:],
-                axes=[self._wav, self._rhgrid, None],
-                names=['lam', 'rh', 'nthetamax'])
+                axes=[self._wav, self._rh_reff, None],
+                names=['lam', self._rh_or_reff, 'nthetamax'])
 
         nc.close()
 
-    def ext_ssa(self, wav, rh=None):
+    def ext_ssa(self, wav, rh=None, reff=None):
         '''
         returns the extinction coefficient and single scattering albedo of
         each layer
@@ -114,23 +104,14 @@ class Species(object):
 
         parameters:
             wav: array of wavelength in nm (N wavelengths)
+
             rh: relative humidity (M layers)
+                *or*
+            reff: effective radius
         '''
         assert isiterable(wav)
 
-        if self._nrh > 1: # if the component properties depend on RH (thus Z)
-            assert rh is not None
-
-            [wav2, rh2] = np.broadcast_arrays(wav[:,None], rh[None,:])
-            ext = self._ext[Idx(wav2), Idx(rh2, fill_value='extrema,warn')]
-            ssa = self._ssa[Idx(wav2), Idx(rh2, fill_value='extrema,warn')]
-
-            ext *= self._rho[Idx(rh)]/self._rho[Idx(50.)]
-
-
-        else: # nothing depends on RH for this component
-            assert self._ext.shape[1] == 1 # no dependency on reff
-
+        if (self._nrh_reff == 1):
             # wavelength interpolation
             ext = self._ext[Idx(wav), 0]
             ssa = self._ssa[Idx(wav), 0]
@@ -139,9 +120,33 @@ class Species(object):
             ext = ext[:,None]
             ssa = ssa[:,None]
 
+        elif reff is not None:
+            assert self._rh_or_reff == 'reff'
+            reff2 = 0.*wav + reff   # so that reff2 has same size as wav
+
+            # wavelength interpolation
+            ext = self._ext[Idx(wav), Idx(reff2)]
+            ssa = self._ssa[Idx(wav), Idx(reff2)]
+
+            # create empty dimension for rh
+            ext = ext[:,None]
+            ssa = ssa[:,None]
+
+        elif rh is not None: # the component properties depend on RH (thus Z)
+            assert self._rh_or_reff == 'rh'
+
+            [wav2, rh2] = np.broadcast_arrays(wav[:,None], rh[None,:])
+            ext = self._ext[Idx(wav2), Idx(rh2, fill_value='extrema,warn')]
+            ssa = self._ssa[Idx(wav2), Idx(rh2, fill_value='extrema,warn')]
+
+            ext *= self._rho[Idx(rh)]/self._rho[Idx(50.)]
+
+        else:
+            raise Exception('Error')
+
         return ext, ssa
 
-    def phase(self, wav, rh, NBTHETA):
+    def phase(self, wav, rh, NBTHETA, reff=None):
         '''
         phase function of species at wavelengths wav
         resampled over NBTHETA angles
@@ -150,7 +155,7 @@ class Species(object):
         theta = np.linspace(0., 180., num=NBTHETA)
         NLAM = len(wav)
 
-        if self._nrh > 1:
+        if (self._nrh_reff > 1) and (self._rh_or_reff == 'rh'):
             # drop first altitude element
 
             P = np.zeros((NLAM, len(rh)-1, NPSTK, NBTHETA), dtype='float32')
@@ -181,7 +186,10 @@ class Species(object):
 
         else: # phase function does not depend on rh
             P = np.zeros((NLAM, 1, NPSTK, NBTHETA), dtype='float32')
-            irh = 0
+            if (self._rh_or_reff == 'reff') and (reff is not None):
+                irh = Idx(reff).index(self._phase.axes[1])
+            else:
+                irh = 0
 
             # interpolate on wav and rh
             pha = self._phase.sub()[Idx(wav,round=True),irh,:,:]  # (lam, stk, nthetamax)
@@ -192,14 +200,19 @@ class Species(object):
                 warn('Insufficient number of sampling angles for phase function')
 
             for ilam in xrange(NLAM):
-                for istk in xrange(NPSTK):
-                    nth_ = nth[ilam, istk]
-                    P[ilam, 0, istk, :] = interp1d(th[ilam,istk,:nth_], pha[ilam,istk,:nth_])(theta)
+                nth_ = nth[ilam, 0]
+                assert (nth[ilam, :] == nth_).all()
+                P0 = interp1d(th[ilam,0,:nth_], pha[ilam,0,:nth_])(theta)
+                P1 = interp1d(th[ilam,1,:nth_], pha[ilam,1,:nth_])(theta)
+                P[ilam, 0, 0, :] = P0 + P1
+                P[ilam, 0, 1, :] = P0 - P1
+                P[ilam, 0, 2, :] = interp1d(th[ilam,2,:nth_], pha[ilam,2,:nth_])(theta)
+                P[ilam, 0, 3, :] = interp1d(th[ilam,3,:nth_], pha[ilam,3,:nth_])(theta)
 
         return LUT(P,
                    axes=[wav, None, None, theta],
-                   names=['wav', 'altitude', 'stk', 'theta'],
-                   attrs={'nrh': self._nrh})
+                   names=['wav_phase_atm', 'z_phase_atm', 'stk', 'theta'],
+                   )
 
 
 class AeroOPAC(object):
@@ -209,12 +222,19 @@ class AeroOPAC(object):
     Args:
         filename: name of the aerosol file. If no directory is specified,
                   assume directory <libradtran>/data/aerosol/OPAC/standard_aerosol_files
+                  aerosol files should be:
+                      'antarctic', 'continental_average', 'continental_clean',
+                      'continental_polluted', 'desert', 'desert_spheroids',
+                      'maritime_clean', 'maritime_polluted', 'maritime_tropical',
+                      'urban'
+
         tau_ref: optical thickness at wavelength wref
         w_ref: reference wavelength (nm) for aot
     '''
     def __init__(self, filename, tau_ref, w_ref):
         self.tau_ref = tau_ref
         self.w_ref = w_ref
+        self.reff = None
 
         if dirname(filename) == '':
             self.filename = join(dir_libradtran_opac, 'standard_aerosol_files', filename)
@@ -255,7 +275,7 @@ class AeroOPAC(object):
         self.densities = data[::-1,1:]  # vertical profile of mass concentration (g/m3)
                                         # (zopac, species)
 
-    def dtau_ssa(self, wav, Z, rh):
+    def dtau_ssa(self, wav, Z, rh=None):
         '''
         returns a profile of optical thickness and single scattering albedo at
         each wavelength
@@ -280,14 +300,14 @@ class AeroOPAC(object):
                     self.densities[:,i],
                     self.zopac, Z
                     )
-            ext, ssa_ = s.ext_ssa(wav, rh)
+            ext, ssa_ = s.ext_ssa(wav, rh, reff=self.reff)
             dtau_ = ext * dens * dZ
             dtau += dtau_
 
-            ext, ssa_ = s.ext_ssa(w0,rh)
-            dtau_ref += ext * dens * dZ
-
             ssa += dtau_ * ssa_
+
+            ext, ssa_ = s.ext_ssa(w0, rh, reff=self.reff)
+            dtau_ref += ext * dens * dZ
 
         ssa[dtau!=0] /= dtau[dtau!=0]
 
@@ -297,7 +317,7 @@ class AeroOPAC(object):
 
         return dtau, ssa
 
-    def phase(self, wav, Z, rh, NBTHETA=7201):
+    def phase(self, wav, Z, rh=None, NBTHETA=7201):
         '''
         Phase function calculation at wavelength wav and altitudes Z
         relative humidity is rh
@@ -305,6 +325,7 @@ class AeroOPAC(object):
         '''
         P = 0.
         dssa = 0.
+        dtau = 0.
 
         for i, s in enumerate(self.species):
             # integrate density along altitude
@@ -313,14 +334,20 @@ class AeroOPAC(object):
                     self.zopac, Z)
 
             # optical properties of the current species
-            ext, ssa = s.ext_ssa(wav, rh)
-            dtau = ext * dens * (-diff1(Z))
+            ext, ssa = s.ext_ssa(wav, rh, reff=self.reff)
+            dtau_ = ext * dens * (-diff1(Z))
+            dtau += dtau_
 
-            dssa_ = dtau*ssa  # NLAM, ALTITUDE
+            dssa_ = dtau_*ssa  # NLAM, ALTITUDE
+            dssa_ = dssa_[:,1:,None,None]
             dssa += dssa_
-            P += s.phase(wav, rh, NBTHETA)*dssa_[:,1:,None,None]  # (NLAM, ALTITUDE-1, NPSTK, NBTHETA)
+            P += s.phase(wav, rh, NBTHETA, reff=self.reff)*dssa_  # (NLAM, ALTITUDE-1, NPSTK, NBTHETA)
 
-        P.axes[1] = average(Z)    # FIXME: weight according to tau
+        with np.errstate(divide='ignore'):
+            P.data /= dssa
+        P.data[np.isnan(P.data)] = 0.
+
+        P.axes[1] = average(Z)
 
         return P
 
@@ -333,13 +360,40 @@ class AeroOPAC(object):
         return map(lambda x: basename(x)[:-4], files)
 
 
-class AtmAFGL(object):
+class CloudOPAC(AeroOPAC):
+    def __init__(self, species, reff, zmin, zmax, tau_ref, w_ref):
+        '''
+        Single species, localized between zmin and zmax,
+        with and effective radius reff
+
+        Example: CloudOPAC('wc.sol', 12.68, 2, 3, 10., 550.)
+                 # water cloud mie, reff=12.68 between 2 and 3 km
+                 # total optical thickness of 10 at 550 nm
+        '''
+        self.reff = reff
+        self.tau_ref = tau_ref
+        self.w_ref = w_ref
+        self.species = [Species(species+'.mie')]
+        self.zopac     = np.array([zmax, zmax, zmin, zmin, 0.], dtype='f')
+        self.densities = np.array([  0.,   1.,   1.,   0., 0.], dtype='f')[:,None]
+
+
+class Atmosphere(object):
+    ''' Base class for atmosphere '''
+    pass
+
+
+class AtmAFGL(Atmosphere):
     '''
     Atmospheric profile definition using AFGL data
 
     Arguments:
         - atm_filename AFGL atmosphere file
           if provided without a directory, use default directory dir_libradtran_atmmod
+          atmosphere files should be:
+            'afglms', 'afglmw', 'afglss', 'afglsw', 'afglt',
+            'afglus', 'afglus_ch4_vmr', 'afglus_co_vmr', 'afglus_n2_vmr',
+            'afglus_n2o_vmr', 'afglus_no2', 'mcclams', 'mcclamw'
         - comp: list of components objects (aerosol, clouds)
         - grid: new grid altitudes (list of decreasing altitudes in km)
         - lat: latitude (for Rayleigh optical depth calculation, default=45.)
@@ -418,14 +472,14 @@ class AtmAFGL(object):
 
     def calc(self, wav, phase=True):
         '''
-        Profile and phase function calculation
+        Profile and phase function calculation at bands wav
 
         phase: boolean (activate phase function calculation)
 
         Returns: profile + phase function MLUT
         '''
 
-        profile = self.calc_profile(wav)
+        profile = self.profile(wav)
 
         if phase:
             if self.pfwav is None:
@@ -434,14 +488,12 @@ class AtmAFGL(object):
                 pha = self.phase(self.pfwav)
 
             if pha is not None:
-                profile.add_lut(pha, desc='phase')
-
-            # fill profile with phase function indices (TODO)
+                profile.add_lut(pha, desc='phase_atm')
 
         return profile
 
 
-    def calc_profile(self, wav, prof=None):
+    def profile(self, wav, prof=None):
         '''
         Calculate the profile of optical properties at given wavelengths
         wav: array of wavelength in nm
@@ -484,6 +536,7 @@ class AtmAFGL(object):
             dtaua += dtau_
             ssa += dtau_ * ssa_
         ssa[dtaua!=0] /= dtaua[dtaua!=0]
+        ssa[dtaua==0] = 1.
 
         taua = np.cumsum(dtaua, axis=1)
         pro.add_dataset('tau_a', taua,
@@ -559,13 +612,15 @@ class AtmAFGL(object):
                         attrs={'description':
                                'Cumulated absorption optical thickness'})
 
-        pmol = dtaur/(dtaur + dtaua)
+        with np.errstate(invalid='ignore'):
+            pmol = dtaur/(dtaur + dtaua)
         pro.add_dataset('pmol', pmol,
                         axnames=['wavelength', 'z'],
                         attrs={'description':
                                'Ratio of molecular scattering to total scattering'})
 
-        pabs = dtaug[:,:]/diff1(tau_tot, axis=1)
+        with np.errstate(invalid='ignore'):
+            pabs = dtaug[:,:]/diff1(tau_tot, axis=1)
         pro.add_dataset('pabs', pabs,
                         axnames=['wavelength', 'z'],
                         attrs={'description':
@@ -579,12 +634,18 @@ class AtmAFGL(object):
         Phase functions calculation at bands, using reduced profile
         '''
         wav = to_array(wav)
-        prof_reduced = self.calc_profile(wav, self.prof_red)
         pha = 0.
+        norm = 0.
+        rh = self.prof_red.RH()
         for comp in self.comp:
-            warn('weigh the phase functions using prof_reduced')
-            # print(comp)
-            pha += comp.phase(wav, self.pfgrid, self.prof_red.RH())
+            dtau, ssa = comp.dtau_ssa(wav, self.pfgrid, rh=rh)
+            dtau = dtau[:,1:][:,:,None,None]
+            ssa = ssa[:,1:][:,:,None,None]
+            pha += comp.phase(wav, self.pfgrid, rh)*dtau*ssa
+            norm += dtau*ssa
+
+        pha /= norm
+        pha.data[np.isnan(pha.data)] = 0.
 
         if len(self.comp) == 0:
             return None
@@ -948,21 +1009,4 @@ def isnumeric(x):
         return True
     except TypeError:
         return False
-
-if __name__ == "__main__":
-
-    # aer = AeroOPAC('maritime_clean', 0.4, 550.)
-    # aer._readStandardAerosolFile()
-
-    # atm = AtmAFGL('afglms')
-    # atm.profile([400., 500.]).describe()
-    # atm = AtmAFGL('afglms', comp=[AeroOPAC('maritime_clean', 0.5, 550.)])
-    # atm.profile(500.).describe()
-
-    # Species('wc.sol.mie').dtau(wav=[400., 500.])
-    # print '---'
-    # read_opac_component('soot.mie').print_info()
-
-    # TODO: test
-    pass
 

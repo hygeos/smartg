@@ -14,7 +14,8 @@ import numpy as np
 from datetime import datetime
 from numpy import pi
 from tools.profile.profil import AeroOPAC, Profile, KDIS, KDIS_IBAND, REPTRAN, REPTRAN_IBAND, REPTRAN_IBAND_LIST, KDIS_IBAND_LIST, CloudOPAC
-from tools.profil2 import AtmAFGL
+from atmosphere import Atmosphere
+from water import Water_base
 from tools.cdf import ICDF
 from tools.water.iop_spm import IOP_SPM
 from tools.water.iop_mm import IOP_MM
@@ -31,6 +32,7 @@ from collections import OrderedDict
 from pycuda.gpuarray import to_gpu, zeros as gpuzeros
 import pycuda.driver as cuda
 import sys
+from itertools import product
 if sys.version_info[:2] >= (3, 0):
     xrange = range
 
@@ -331,7 +333,7 @@ class Smartg(object):
                 FlatSurface()          # flat air-water interface
                 LambSurface(ALB=0.1)   # Lambertian surface of albedo 0.1
 
-            - water: Iop object, providing options relative to the ocean surface
+            - water: water object, providing options relative to the ocean surface
                 default None (no ocean)
 
             - env: environment effect parameters (dictionary)
@@ -413,6 +415,7 @@ class Smartg(object):
 
         if NBLOOP is None:
             NBLOOP = min(NBPHOTONS/30, 1e8)
+        NF = int(NF)
 
         # number of output levels
         # warning! values defined in communs.h should be < LVL
@@ -467,14 +470,23 @@ class Smartg(object):
         #
         # atmosphere
         #
-        # get the phase function and the atmospheric profiles
+        if isinstance(atm, Atmosphere):
+            prof_atm = atm.calc(wl)
+        else:
+            prof_atm = atm
 
-        prof_atm, phasesAtm, NATM, HATM, taumol, tauaer = get_profAtm(wl,atm)
+        if prof_atm is not None:
+            faer, ipha = calculF(prof_atm, NF, DEPO, ray=True, kind='atm')
+            prof_atm_gpu = init_prof_atm(wl, prof_atm, ipha)
+            NATM = len(prof_atm.axis('z')) - 1
+        else:
+            faer = gpuzeros(1, dtype='float32')
+            prof_atm_gpu = to_gpu(np.zeros(1, dtype=type_Profile))
+            NATM = 0
+
 
         # computation of the impact point
-        x0, y0, z0, tabTransDir = impactInit(self.pp, HATM, NATM, NLAM, prof_atm, THVDEG, RTER)
-        X0 = to_gpu(np.array([x0, y0, z0], dtype='float32'))
-
+        X0, tabTransDir = impactInit(prof_atm, NLAM, THVDEG, RTER, self.pp)
 
         #
         # surface
@@ -484,10 +496,21 @@ class Smartg(object):
             surf = FlatSurface()
 
         #
-        # ocean profile
-        # get the phase function and oceanic profile
-        prof_oc, phasesOc, NOCE = get_profOc(wavelengths, water, NLAM)
+        # ocean
+        #
+        if isinstance(water, Water_base):
+            prof_oc = water.calc(wl)
+        else:
+            prof_oc = water
 
+        if prof_oc is not None:
+            foce, ipha = calculF(prof_oc, NF, DEPO=0., ray=False, kind='oc')
+            prof_oc_gpu = init_prof_oc(prof_oc)
+            NOCE = len(prof_oc.axis('z')) - 1
+        else:
+            foce = gpuzeros(1, dtype='float32')
+            prof_oc_gpu = to_gpu(np.zeros(1, dtype=type_Profile))
+            NOCE = 0
 
         #
         # albedo and adjacency effect
@@ -520,17 +543,6 @@ class Smartg(object):
         FLUX = 0
         if flux == 'spherical' : FLUX = 1
 
-        # computation of the phase functions
-        if(SIM == 0 or SIM == 2 or SIM == 3):
-            foce = calculF(phasesOc, NF, DEPO)
-        else:
-            foce = gpuzeros(1, dtype='float32')
-
-        if(SIM == -2 or SIM == 1 or SIM == 2):
-            faer = calculF(phasesAtm, NF, DEPO)
-        else:
-            faer = gpuzeros(1, dtype='float32')
-
         if wl_proba is not None:
             assert wl_proba.dtype == 'int64'
             wl_proba_icdf = to_gpu(wl_proba)
@@ -558,7 +570,7 @@ class Smartg(object):
                 ) = loop_kernel(NBPHOTONS, faer, foce,
                                 NLVL, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                                 NLAM, self.double, self.kernel, p, X0, le, spectrum,
-                                to_gpu(prof_atm), to_gpu(prof_oc),
+                                prof_atm_gpu, prof_oc_gpu,
                                 wl_proba_icdf, SEED, stdev)
         attrs['kernel time (s)'] = secs_cuda_clock
         attrs['number of kernel iterations'] = Nkernel
@@ -566,8 +578,8 @@ class Smartg(object):
 
         # finalization
         output = finalize(tabPhotonsTot, wavelengths, NPhotonsInTot, errorcount, NPhotonsOutTot,
-                           OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, phasesAtm,
-                           taumol, tauaer, sigma, le=le, flux=flux)
+                           OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, prof_oc,
+                           sigma, le=le, flux=flux)
         output.set_attr('processing time (s)', (datetime.now() - t0).total_seconds())
 
         p.finish('Done! | Received {:.1%} of {:.3g} photons ({:.1%})'.format(
@@ -581,7 +593,7 @@ class Smartg(object):
 
 def reptran_merge(m, ibands, verbose=True):
     '''
-    merge (average) several correlated-k bands in the dimension 'Wavelength'
+    merge (average) several correlated-k bands in the dimension 'wavelength'
 
     '''
     from collections import Counter
@@ -590,7 +602,7 @@ def reptran_merge(m, ibands, verbose=True):
     c = Counter(map(lambda x: x.band, ibands))
     nc = len(c)
 
-    assert len(ibands) == len(m.axes['Wavelength'])
+    assert len(ibands) == len(m.axes['wavelength'])
 
     mmerged = MLUT()
     mmerged.add_axis('Azimuth angles', m.axes['Azimuth angles'])
@@ -604,12 +616,12 @@ def reptran_merge(m, ibands, verbose=True):
         wl.append(np.average(b.awvl, weights=b.awvl_weight))
         i += c[b]
 
-    mmerged.add_axis('Wavelength', wl)
+    mmerged.add_axis('wavelength', wl)
 
     # for each dataset
     for (name, data, axnames) in m.data:
 
-        if axnames != ['Wavelength', 'Azimuth angles', 'Zenith angles']:
+        if axnames != ['wavelength', 'Azimuth angles', 'Zenith angles']:
             if verbose: print('Skipping dataset', name)
             continue
 
@@ -630,7 +642,7 @@ def reptran_merge(m, ibands, verbose=True):
 
             mdata[i,:,:] = S/norm
 
-        mmerged.add_dataset(name, mdata, ['Wavelength', 'Azimuth angles', 'Zenith angles'])
+        mmerged.add_dataset(name, mdata, ['wavelength', 'Azimuth angles', 'Zenith angles'])
 
     mmerged.set_attrs(m.attrs)
 
@@ -666,8 +678,8 @@ def calcOmega(NBTHETA, NBPHI):
 
 
 def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
-        OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, phasesAtm,
-        taumol, tauaer, sigma, le=None, flux=None):
+             OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, prof_oc,
+             sigma, le=None, flux=None):
     '''
     create and return the final output
     '''
@@ -709,11 +721,11 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
     m.add_axis('Zenith angles', tabTh*180./np.pi)
     m.add_axis('Azimuth angles', tabPhi*180./np.pi)
     if NLAM > 1:
-        m.add_axis('Wavelength', wl)
+        m.add_axis('wavelength', wl)
         ilam = slice(None)
-        axnames.insert(0, 'Wavelength')
+        axnames.insert(0, 'wavelength')
     else:
-        m.set_attr('Wavelength', str(wl))
+        m.set_attr('wavelength', str(wl))
         ilam = 0
 
     m.add_dataset('I_up (TOA)', tabFinal[UPTOA,0,ilam,:,:], axnames)
@@ -776,41 +788,24 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
     # direct transmission
     if NLAM > 1:
         m.add_dataset('direct transmission', tabTransDir,
-                axnames=['Wavelength'])
+                axnames=['wavelength'])
     else:
         m.set_attr('direct transmission', str(tabTransDir[0]))
 
     # write atmospheric profiles
-    if SIM in [-2, 1, 2]:
-        m.add_axis('ALT', prof_atm['z'][0,:])
-        for (key,_) in type_Profile:
-            if key == 'z':
-                continue
-            if NLAM == 1:
-                m.add_dataset(key, prof_atm[key].ravel(), ['ALT'])
-            else:
-                m.add_dataset(key, prof_atm[key], ['Wavelength', 'ALT'])
+    if prof_atm is not None:
+        m.add_lut(prof_atm['tau_tot'])
+        m.add_lut(prof_atm['tau_sca'])
+        m.add_lut(prof_atm['tau_abs'])
+        m.add_lut(prof_atm['pmol'])
+        m.add_lut(prof_atm['ssa'])
+        m.add_lut(prof_atm['pabs'])
+        if 'phase_atm' in prof_atm.datasets():
+            m.add_lut(prof_atm['phase_atm'])
 
-        if (taumol is not None) and (tauaer is not None):
-            if NLAM == 1:
-                m.add_dataset('taumol', taumol.ravel(), ['ALT'])
-                m.add_dataset('tauaer', tauaer.ravel(), ['ALT'])
-            else:
-                m.add_dataset('taumol', taumol, ['Wavelength', 'ALT'])
-                m.add_dataset('tauaer', tauaer, ['Wavelength', 'ALT'])
-
-    # write atmospheric phase functions
-    if len(phasesAtm) > 0:
-        npstk = 4
-        nscat = len(phasesAtm[0].ang)
-        npha = len(phasesAtm)
-        pha = np.zeros((npha, nscat, npstk), dtype='float')
-        m.add_axis('SCAT_ANGLE_ATM', phasesAtm[0].ang_in_rad()*180./pi)
-
-        for i in xrange(npha):
-            assert phasesAtm[i].phase.shape == phasesAtm[0].phase.shape
-            pha[i, ] = phasesAtm[i].phase[:]
-        m.add_dataset('phases_atm', pha, ['IPHA', 'SCAT_ANGLE_ATM', 'NPSTK'])
+    # write ocean profiles
+    if prof_oc is not None:
+        raise NotImplementedError
 
     # write the error count
     err = errorcount.get()
@@ -844,34 +839,14 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
     return m
 
 
+def rayleigh(N, DEPO):
+    '''
+    Rayleigh phase function, incl. cumulative
+    over N angles
+    DEPO: depolarization coefficient
+    '''
+    pha = np.zeros(N, dtype=type_Phase, order='C')
 
-def calculF(phases, N, DEPO):
-
-    """
-    Compute CDF of scattering phase matrices
-
-    Arguments :
-        - phases : list of phase functions
-        - N : Number of discrete values of the phase function
-    --------------------------------------------------
-    Returns :
-        - phase_H : cumulative distribution of the phase function and phase function
-    """
-    nmax, nphases = 0, 1
-
-    # define the number of phases functions and the maximal number of angles describing each of them
-    for idx, phase in enumerate(phases):
-        if idx > 0:
-            if phase.N>nmax:
-                nmax = phase.N
-        nphases += 1
-
-    # Initialize the cumulative distribution function
-    phase_H = np.zeros((nphases, N), dtype=type_Phase, order='C')
-
-
-    # Set Rayleigh phase function
-    idx = 0
     GAMA = DEPO / (2- DEPO)
     DELTA = np.float32((1.0 - GAMA) / (1.0 + 2.0 *GAMA));
     DELTA_PRIM = np.float32(GAMA / (1.0 + 2.0*GAMA));
@@ -885,6 +860,7 @@ def calculF(phases, N, DEPO):
     b = ((i/(N-1)) - 4.0*ALPHA - BETA) / (2.0*ALPHA)
     u = (-b + (A**3.0 + b**2.0)**(1.0/2.0))**(1.0/3.0)
     cTh = u - (A/u)
+    cTh = np.clip(cTh, -1, 1)
     cTh2 = cTh*cTh
     theta = np.arccos(cTh)
     cThLE = np.cos(thetaLE)
@@ -895,57 +871,108 @@ def calculF(phases, N, DEPO):
     P33bis = T_demi*DELTA
     P44bis = P33bis*DELTA_SECO
 
-    # parameters equally spaced in scattering probabiliyu
-    phase_H['p_P11'][idx, :] = P11
-    phase_H['p_P12'][idx, :] = P12
-    phase_H['p_P22'][idx, :] = T_demi*(DELTA*cTh2[:] + DELTA_PRIM)
-    phase_H['p_P33'][idx, :] = P33bis*cTh[:] # U
-    phase_H['p_P44'][idx, :] = P44bis*cTh[:] # V
-    phase_H['p_ang'][idx, :] = theta[:] # angle
+    # parameters equally spaced in scattering probabiliy [0, 1]
+    pha['p_P11'][:] = P11
+    pha['p_P12'][:] = P12
+    pha['p_P22'][:] = T_demi*(DELTA*cTh2[:] + DELTA_PRIM)
+    pha['p_P33'][:] = P33bis*cTh[:] # U
+    pha['p_P44'][:] = P44bis*cTh[:] # V
+    pha['p_ang'][:] = theta[:] # angle
 
-    phase_H['a_P11'][idx, :] = P11
-    phase_H['a_P12'][idx, :] = P12
-    phase_H['a_P22'][idx, :] = T_demi*(DELTA*cTh2LE[:] + DELTA_PRIM) 
-    phase_H['a_P33'][idx, :] = P33bis*cThLE[:]  # U
-    phase_H['a_P44'][idx, :] = P44bis*cThLE[:]  # V
+    # parameters equally spaced in scattering angle [0, 180]
+    pha['a_P11'][:] = P11
+    pha['a_P12'][:] = P12
+    pha['a_P22'][:] = T_demi*(DELTA*cTh2LE[:] + DELTA_PRIM) 
+    pha['a_P33'][:] = P33bis*cThLE[:]  # U
+    pha['a_P44'][:] = P44bis*cThLE[:]  # V
 
-    for idx, phase in enumerate(phases):
-        # conversion en gradiant
-        angles = phase.ang_in_rad()
+    return pha
+
+
+def calculF(profile, N, DEPO, ray, kind):
+    '''
+    Calculate cumulated phase functions from profile
+    N: number of angles
+    DEPO: depolarization factor
+    kind: 'atm' or 'oc'
+    ray (boolean): include rayleigh phase function
+    '''
+
+    if 'wav_phase_{}'.format(kind) in profile.axes:
+        wav = profile.axis('wav_phase_{}'.format(kind))
+        altitude = profile.axis('z_phase_{}'.format(kind))
+        name_phase = 'phase_{}'.format(kind)
+    else:
+        wav, altitude = [], []
+    nphases = len(wav) * len(altitude)
+
+    if ray:
+        nphases += 1   # include Rayleigh phase function
+
+    # Initialize the cumulative distribution function
+    phase_H = np.zeros((nphases, N), dtype=type_Phase, order='C')
+
+    # Set Rayleigh phase function
+    idx = 0
+    if ray:
+        phase_H[0,:] = rayleigh(N, DEPO)
+        idx += 1
+
+    if 'wav_phase_{}'.format(kind) in profile.axes:
+        angles = profile.axis('theta') * pi/180.
+        assert angles[-1] < 3.15   # assert that angles are in radians
+        dtheta = np.diff(angles)
+
+        # phase function indices
+        ipha_w = np.array([np.abs(wav - x).argmin() for x in profile.axis('wavelength')])
+        ipha_a = np.array([np.abs(altitude - x).argmin() for x in profile.axis('z')])
+        ipha = ipha_a[None,:] + ipha_w[:,None]*len(altitude)
+    else:
+        ipha = None
+
+    for (iw, w), (ialt, alt) in product(
+            enumerate(wav),
+            enumerate(altitude),
+            ):
+
+        phase = profile[name_phase][iw, ialt, :, :]  # wav, alt, stk, theta
 
         scum = [0]
         dtheta = np.diff(angles)
-        pm = phase.phase[:, 1] + phase.phase[:, 0]
+        pm = phase[1, :] + phase[0, :]
         sin = np.sin(angles)
-        tmp = dtheta * ((sin[:-1] * pm[:-1] + sin[1:] * pm[1:]) / 3. +  (sin[:-1] * pm[1:] + sin[1:] * pm[:-1])/6. )* np.pi * 2.
+        tmp = dtheta * ((sin[:-1] * pm[:-1] + sin[1:] * pm[1:]) / 3.
+                        + (sin[:-1] * pm[1:] + sin[1:] * pm[:-1])/6.) * np.pi * 2.
         scum = np.append(scum,tmp)
         scum = np.cumsum(scum)
-        scum /= scum[phase.N-1]
+        scum /= scum[-1]
 
         # probability between 0 and 1
         z = (np.arange(N, dtype='float64')+1)/N
         angN = (np.arange(N, dtype='float64'))/(N-1)*np.pi
-        f1 = interp1d(phase.ang_in_rad(), phase.phase[:,1])
-        f2 = interp1d(phase.ang_in_rad(), phase.phase[:,0])
-        f3 = interp1d(phase.ang_in_rad(), phase.phase[:,2])
-        f4 = interp1d(phase.ang_in_rad(), phase.phase[:,3])
+        f1 = interp1d(angles, phase[1,:])
+        f2 = interp1d(angles, phase[0,:])
+        f3 = interp1d(angles, phase[2,:])
+        f4 = interp1d(angles, phase[3,:])
 
         # parameters equally spaced in scattering probability
-        phase_H['p_P11'][idx+1, :] = interp1d(scum, phase.phase[:,1])(z)  # I par P11
-        phase_H['p_P22'][idx+1, :] = interp1d(scum, phase.phase[:,0])(z)  # I per P22
-        phase_H['p_P33'][idx+1, :] = interp1d(scum, phase.phase[:,2])(z)  # U P33
-        phase_H['p_P43'][idx+1, :] = interp1d(scum, phase.phase[:,3])(z)  # V P43
-        phase_H['p_P44'][idx+1, :] = interp1d(scum, phase.phase[:,2])(z)  # V P44= P33
-        phase_H['p_ang'][idx+1, :] = interp1d(scum, phase.ang_in_rad())(z) # angle
+        phase_H['p_P11'][idx, :] = interp1d(scum, phase[1,:])(z)  # I par P11
+        phase_H['p_P22'][idx, :] = interp1d(scum, phase[0,:])(z)  # I per P22
+        phase_H['p_P33'][idx, :] = interp1d(scum, phase[2,:])(z)  # U P33
+        phase_H['p_P43'][idx, :] = interp1d(scum, phase[3,:])(z)  # V P43
+        phase_H['p_P44'][idx, :] = interp1d(scum, phase[2,:])(z)  # V P44= P33
+        phase_H['p_ang'][idx, :] = interp1d(scum, angles)(z) # angle
 
         # parameters equally spaced in scattering angle [0, 180]
-        phase_H['a_P11'][idx+1, :] = f1(angN)  # I par P11
-        phase_H['a_P22'][idx+1, :] = f2(angN)  # I per P22
-        phase_H['a_P33'][idx+1, :] = f3(angN)  # U P33
-        phase_H['a_P43'][idx+1, :] = f4(angN)  # V P43
-        phase_H['a_P44'][idx+1, :] = f3(angN)  # V P44=P33
+        phase_H['a_P11'][idx, :] = f1(angN)  # I par P11
+        phase_H['a_P22'][idx, :] = f2(angN)  # I per P22
+        phase_H['a_P33'][idx, :] = f3(angN)  # U P33
+        phase_H['a_P43'][idx, :] = f4(angN)  # V P43
+        phase_H['a_P44'][idx, :] = f3(angN)  # V P44=P33
 
-    return to_gpu(phase_H)
+        idx += 1
+
+    return to_gpu(phase_H), ipha
 
 
 def InitConst(surf, env, NATM, NOCE, mod,
@@ -1010,151 +1037,33 @@ def InitConst(surf, env, NATM, NOCE, mod,
     copy_to_device('RTER', RTER, np.float32)
     copy_to_device('NWLPROBA', NWLPROBA, np.int32)
 
-def get_profAtm(wl, atm):
 
-    """
-    get the atmospheric profile, the altitude of the top of Atmosphere, the number of layers of the atmosphere
+def init_prof_atm(wl, prof, ipha):
+    '''
+    take the atmospheric profile as a MLUT, and setup the gpu structure
+    '''
 
-    Arguments :
-        - wl : wavelength
-        - atm : Profile object
-         default None (no atmosphere)
-    -----------------------------------------------------------------------------------------------------------
-    Returns :
-        - phasesAtm : Atmospheric phase functions
-        - nprofilesAtm : List of atmospheric profiles set contiguously
-        - NATM : Number of layers of the atmosphere
-        - HATM : Altitude of the Top of Atmosphere
+    # reformat to smartg format
 
-    """
+    NATM = len(prof.axis('z')) - 1
+    shp = (len(wl), NATM+1)
+    prof_atm = np.zeros(shp, dtype=type_Profile)
+    prof_atm['z'][0,:] = prof.axis('z')
+    prof_atm['z'][1:,:] = -999.      # other wavelengths are NaN
 
-    if isinstance(atm, Profile):
-        # TODO: deprecate this (for backward compatibility)
-        # write the profile
-        if isinstance(wl, (float, int, REPTRAN_IBAND, KDIS_IBAND)):
-            wl = [wl]
-        profilesAtm, phasesAtm = atm.calc_bands(wl)
-        # the altitude is get only by the first atmospheric profile
-        # remove the key Altitude from the list of keys
-        NATM = len(profilesAtm[0])-1
-        HATM = profilesAtm[0]['ALT'][0]
+    prof_atm['tau'][:,:] = prof['tau_tot'][:,:]
+    prof_atm['tausca'][:] = prof['tau_sca'][:,:]
+    prof_atm['tauabs'][:] = prof['tau_abs'][:,:]
+    prof_atm['pmol'][:] = prof['pmol'][:,:]
+    prof_atm['ssa'][:] = prof['ssa'][:,:]
+    prof_atm['abs'][:] = prof['pabs'][:,:]
+    if ipha is not None:
+        prof_atm['iphase'][:] = ipha[:]
 
-        #
-        # reformat
-        #
-        shp = (len(wl), NATM+1)
-        prof_atm = np.zeros(shp, dtype=type_Profile)
-        taumol = np.zeros(shp, dtype=np.float32)
-        tauaer = np.zeros(shp, dtype=np.float32)
-        prof_atm['z'][0,:] = profilesAtm[0]['ALT']    # only for first wavelength
-        prof_atm['z'][1:,:] = -999.                 # other wavelengths are NaN
-        for i, profile in enumerate(profilesAtm):
-            prof_atm['tau'][i,:] = profile['H']
-            prof_atm['tausca'][i,:] = profile['HSCA']
-            prof_atm['tauabs'][i,:] = profile['HABS']
-            prof_atm['pmol'][i,:] = profile['YDEL']
-            prof_atm['ssa'][i,:] = profile['XSSA']
-            prof_atm['abs'][i,:] = profile['percent_abs']
-            prof_atm['iphase'][i,:] = profile['IPHA']
-            taumol[i,:] = profile['hmol']
-            tauaer[i,:] = profile['haer']
+    return to_gpu(prof_atm)
 
-    elif isinstance(atm, AtmAFGL):
-        # calculate profile and phase function
-        prof, pha = atm.prof_phase(wl)
-
-        # reformat to smartg format
-        NATM = len(prof.axis('z'))
-        shp = (len(wl), NATM)
-        prof_atm = np.zeros(shp, dtype=type_Profile)
-        taumol = np.zeros(shp, dtype=np.float32)
-        tauaer = np.zeros(shp, dtype=np.float32)
-        prof_atm['z'][0,:] = prof.axis('z')
-        prof_atm['z'][1:,:] = -999.                 # other wavelengths are NaN
-
-        prof_atm['tau'][:,:] = prof['tau_tot'][:,:]
-        prof_atm['tausca'][:] = prof['tau_sca'][:,:]
-        prof_atm['tauabs'][:] = prof['tau_abs'][:,:]
-        prof_atm['pmol'][:] = prof['pmol'][:,:]
-        prof_atm['ssa'][:] = prof['ssa'][:,:]
-        prof_atm['abs'][:] = prof['pabs'][:,:]
-        # prof_atm['iphase'][:] = 
-
-        taumol[:,:] = prof['tau_r'][:,:]
-        tauaer[:,:] = prof['tau_a'][:,:]
-
-    else:
-        # no atmosphere
-        phasesAtm = []
-        NATM = 0
-        HATM = 0
-        taumol = None
-        tauaer = None
-
-        prof_atm = np.zeros(1, dtype=type_Profile)
-
-    print('->', prof_atm['abs'])
-    # print('->', tauaer)
-
-    return prof_atm, phasesAtm, NATM, HATM, taumol, tauaer
-
-def get_profOc(wl, water, NLAM):
-
-    """
-    get the oceanic profile, the altitude of the top of Atmosphere, the number of layers of the atmosphere
-    Arguments :
-        - wl : wavelengths
-        - water : Profile object
-            default None (no atmosphere)
-        - D : Dictionary containing all the parameters required to launch the simulation by the kernel
-        - NLAM : Number of wavelengths
-    -------------------------------------------------------------------------------------------------------
-    Returns :
-        - phasesOc : Oceanic phase functions
-        - nprofilesOc : List of oceanic profiles set contiguously
-        - NOCE : Number of layers of the ocean
-
-    """
-
-    if water is None:
-            # use default water values
-        phasesOc = []
-        NOCE = 0
-
-        prof_oc = np.zeros(1, dtype=type_Profile)
-    else:
-        if isinstance(wl, (float, int, REPTRAN_IBAND, KDIS_IBAND)):
-            wl = [wl]
-        profilesOc, phasesOc = water.calc_bands(wl)
-        NOCE = 1
-        if water.depth is None:
-            DEPTH = 10000.
-        else:
-            DEPTH = water.depth
-        #
-        # switch to new format
-        #
-        shp = (len(wl), 2)
-        prof_oc = np.zeros(shp, dtype=type_Profile)
-        prof_oc['z'][0,:] = 0.      # only for first wavelength
-        prof_oc['z'][1:,:] = -999.  # otherwise -999.
-        prof_oc['pmol'][:,:] = 0.    # use only CDF
-        prof_oc['abs'][:,:] = 0.   # no absorption
-        for ilam in xrange(0, NLAM):
-            prof_oc['tau'][ilam, 0] = 0.
-            prof_oc['tausca'][ilam, 0] = 0.
-            prof_oc['tauabs'][ilam, 0] = 0.
-            prof_oc['ssa'][ilam, 0] = 1.
-            prof_oc['iphase'][ilam, 0] = 0
-
-            prof_oc['tau'][ilam, 1] = - (profilesOc[ilam][1]+profilesOc[ilam][0]) * DEPTH
-            prof_oc['tausca'][ilam, 1] = - (profilesOc[ilam][1]) * DEPTH
-            prof_oc['tauabs'][ilam, 1] = - (profilesOc[ilam][0]) * DEPTH
-            prof_oc['ssa'][ilam, 1] = profilesOc[ilam][1]/(profilesOc[ilam][1]+profilesOc[ilam][0])
-            prof_oc['iphase'][ilam, 1] = profilesOc[ilam][2]
-
-
-    return prof_oc, phasesOc, NOCE
+def init_prof_oc():
+    raise NotImplementedError
 
 
 def get_git_attrs():
@@ -1311,24 +1220,20 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL,
     return NPhotonsInTot.get(), tabPhotonsTot.get(), errorcount, NPhotonsOutTot.get(), sigma, N_simu, secs_cuda_clock
 
 
-def impactInit(pp, Hatm, NATM, NLAM, prof_atm, THVDEG, Rter):
-    """
+def impactInit(prof_atm, NLAM, THVDEG, Rter, pp):
+    '''
     Calculate the coordinates of the entry point in the atmosphere
     and direct transmission of the atmosphere
 
-    Arguments :
-        - pp: plane parallel/spherical mode
-        - Hatm : Altitude of the Top of Atmosphere
-        - NATM : Number of layers of the atmosphere
-        - NLAM : Number of wavelengths
-        - ALT : Altitude profile of the atmosphere
-        - H : optical thickness profile of the atmosphere
-        - THVDEG : View Zenith Angle in degree
-        - Rter: earth radius
-
     Returns :
-        - (x0, y0, z0) : cartesian coordinates
-    """
+        - [x0, y0, z0] : cartesian coordinates
+    '''
+    if prof_atm is None:
+        Hatm = 0.
+        NATM = 0
+    else:
+        Hatm = prof_atm.axis('z')[0]
+        NATM = len(prof_atm.axis('z'))-1
 
     vx = -np.sin(THVDEG * np.pi / 180)
     vy = 0.
@@ -1344,7 +1249,7 @@ def impactInit(pp, Hatm, NATM, NLAM, prof_atm, THVDEG, Rter):
 
         if NATM != 0:
             for ilam in xrange(NLAM):
-                tautot[ilam] = prof_atm['tau'][ilam, NATM]/np.cos(THVDEG*pi/180.)
+                tautot[ilam] = prof_atm['tau_tot'][ilam, NATM]/np.cos(THVDEG*pi/180.)
     else:
         tanthv = np.tan(THVDEG*np.pi/180.)
 
@@ -1410,5 +1315,5 @@ def impactInit(pp, Hatm, NATM, NLAM, prof_atm, THVDEG, Rter):
                 # cumulative optical thickness
                 tautot[ilam] += hlay
 
-    return x0, y0, z0, np.exp(-tautot)
+    return to_gpu(np.array([x0, y0, z0], dtype='float32')), np.exp(-tautot)
 
