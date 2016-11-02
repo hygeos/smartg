@@ -112,8 +112,8 @@ def test_lut_oper3():
             ]:
         yield check_operations3, op, res
 
-# "broadcasting" operations between LUTs
 def test_broadcasting1():
+    # "broadcasting" operations between LUTs
     l = create_lut()
     l.names[0] = 'zz'
     p = create_lut()
@@ -135,6 +135,15 @@ def test_sub():
     assert l.sub()[1.4, :] == l.sub({'z': 1.4})
     assert l.sub()[Idx(50), :] == l.sub({'z':Idx(50)})
     l.sub({'z': 1.4, 'P0': 4}).print_info()
+
+def test_getitem():
+    # test interpolation
+    l = create_lut()
+    l[2.5, 1.5]
+    l[2.5, Idx(1000)]
+    l[2.5, np.ones((4, 4), dtype='float')*1.5]
+    l[Idx(100.), Idx(np.ones((4, 4))*1000.)]
+
 
 def test_sub2():
     # test more complex subsetting
