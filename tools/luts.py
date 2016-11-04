@@ -997,6 +997,14 @@ class Idx(object):
             # axis is scalar or ndarray: interpolate
             if self.fill_value == 'extrema':
                 fv = (0, len(axis)-1)
+            elif self.fill_value == 'extrema,warn':
+                fv = (0, len(axis)-1)
+                if (np.amax(self.value) > np.amax(axis)):
+                    warnings.warn('(Idx) Value {} is above the axis maximum {} (axis {})'.format(
+                        np.amax(self.value), np.amax(axis), self.name))
+                if (np.amin(self.value) < np.amin(axis)):
+                    warnings.warn('(Idx) Value {} is above the axis minimum {} (axis {})'.format(
+                        np.amin(self.value), np.amin(axis), self.name))
             else:
                 fv = self.fill_value
             be = (self.fill_value is None)

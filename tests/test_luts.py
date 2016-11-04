@@ -8,6 +8,7 @@ import numpy as np
 from tools.luts import LUT, MLUT, read_mlut, read_mlut_hdf, merge, Idx
 import itertools
 import os
+import warnings
 
 def create_mlut():
     np.random.seed(0)
@@ -312,6 +313,19 @@ def test_idx6():
 def test_idx7():
     r = Idx(np.eye(2), fill_value=np.NaN).index(np.linspace(2, 5, 5))
     assert np.isnan(r).all()
+
+def test_idx_oob_1():
+    with warnings.catch_warnings(record=True) as w:
+        assert Idx(-1, fill_value='extrema').index(np.arange(10)) == 0.
+        assert Idx(100, fill_value='extrema').index(np.arange(10)) == 9.
+        assert len(w) == 0
+
+    with warnings.catch_warnings(record=True) as w:
+        assert Idx(-1, fill_value='extrema,warn').index(np.arange(10)) == 0.
+        assert Idx(100, fill_value='extrema,warn').index(np.arange(10)) == 9.
+        assert len(w) == 2
+
+
 
 def test_convert():
     m = MLUT()
