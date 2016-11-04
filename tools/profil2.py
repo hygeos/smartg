@@ -122,8 +122,8 @@ class Species(object):
             assert rh is not None
 
             [wav2, rh2] = np.broadcast_arrays(wav[:,None], rh[None,:])
-            ext = self._ext[Idx(wav2), Idx(rh2)]
-            ssa = self._ssa[Idx(wav2), Idx(rh2)]
+            ext = self._ext[Idx(wav2), Idx(rh2, fill_value='extrema,warn')]
+            ssa = self._ssa[Idx(wav2), Idx(rh2, fill_value='extrema,warn')]
 
             ext *= self._rho[Idx(rh)]/self._rho[Idx(50.)]
 
@@ -507,7 +507,12 @@ class AtmAFGL(object):
         # LUT in 10^(-20) cm2, convert in km-1
         tau_o3 *= prof.dens_o3 * 1e-15
         tau_o3 *= dz
-        assert (tau_o3.data >= 0).all()
+        if not (tau_o3.data >= 0).all():
+            warn('Negative values in tau_o3 ({}%, min value is {}, set to 0)'.format(
+                100.*np.sum(tau_o3.data<0)/float(tau_o3.data.size),
+                tau_o3.data[tau_o3.data == np.amin(tau_o3.data)][0]
+                ))
+        tau_o3.data[tau_o3.data < 0] = 0
 
         #
         # NO2 optical thickness
@@ -518,7 +523,12 @@ class AtmAFGL(object):
 
         tau_no2 *= prof.dens_no2 * 1e-15
         tau_no2 *= dz
-        assert (tau_no2.data >= 0).all()
+        if not (tau_no2.data >= 0).all():
+            warn('Negative values in tau_no2 ({}%, min value is {}, set to 0)'.format(
+                100.*np.sum(tau_no2.data<0)/float(tau_no2.data.size),
+                tau_no2.data[tau_no2.data == np.amin(tau_no2.data)][0]
+                ))
+        tau_no2.data[tau_no2.data < 0] = 0
 
         #
         # Total gaseous optical thickness
@@ -572,7 +582,7 @@ class AtmAFGL(object):
         prof_reduced = self.calc_profile(wav, self.prof_red)
         pha = 0.
         for comp in self.comp:
-            warn('weight the phase functions using prof_reduced')
+            warn('weigh the phase functions using prof_reduced')
             # print(comp)
             pha += comp.phase(wav, self.pfgrid, self.prof_red.RH())
 
