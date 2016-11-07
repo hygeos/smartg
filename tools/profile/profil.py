@@ -17,6 +17,7 @@ from scipy.integrate import simps
 import tempfile
 from phase_functions import PhaseFunction
 from glob import glob
+import warnings
 from ..luts import LUT
 
 dir_libradtran = '/home/applis/libRadtran/libRadtran-2.0/'
@@ -1946,6 +1947,9 @@ class Profile(object):
             wl = map(lambda x:x.w, w)
         else:
             wl = w
+
+        if len(w) > 1:
+            warnings.warn('Bug in multi-wavelength (phase function is always that of the first wavelength)')
 
         # calculate the phase functions
         phases, indices = self.calc_phase(wl)
