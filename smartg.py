@@ -13,7 +13,7 @@ import numpy as np
 from datetime import datetime
 from numpy import pi
 from atmosphere import Atmosphere
-from water import Water_base
+from water import IOP_base
 from os.path import dirname, realpath, join, exists
 from warnings import warn
 from tools.progress import Progress
@@ -175,6 +175,12 @@ class Albedo_speclib(object):
 class Environment(object):
     '''
     Stores the smartg parameters relative the the environment effect
+
+    ENV: activate environment effect (default 0, deactivated)
+    ENV_SIZE, X0, Y0: radius and position of the adjacency effect circle
+    ALB: albedo model
+
+    NB: water is inside, lambertian is outside.
     '''
     def __init__(self, ENV=0, ENV_SIZE=0., X0=0., Y0=0., ALB=Albedo_cst(0.5)):
         self.dict = {
@@ -313,9 +319,9 @@ class Smartg(object):
                 default None (no atmosphere)
                 Example:
                     # clear atmosphere, AFGL midlatitude summer
-                    Profile('afglms')
+                    AtmAFGL('afglms')
                     # AFGL tropical with maritime clear aerosols AOT(550)=0.3
-                    Profile('afglms', aer=AeroOPAC('maritime_clean', 0.3, 550., ))
+                    AtmAFGL('afglt', aer=[AeroOPAC('maritime_clean', 0.3, 550.)])
 
             - surf: Surface object
                 default None (no surface)
@@ -479,7 +485,7 @@ class Smartg(object):
         #
         # ocean
         #
-        if isinstance(water, Water_base):
+        if isinstance(water, IOP_base):
             prof_oc = water.calc(wavelengths)
         else:
             prof_oc = water
