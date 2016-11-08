@@ -644,13 +644,14 @@ class AtmAFGL(Atmosphere):
             pha += comp.phase(wav, self.pfgrid, rh)*dtau*ssa
             norm += dtau*ssa
 
-        pha /= norm
-        pha.data[np.isnan(pha.data)] = 0.
+        if len(self.comp) > 0:
+            pha /= norm
+            pha.data[np.isnan(pha.data)] = 0.
 
-        if len(self.comp) == 0:
-            return None
-        else:
             return pha
+        else:
+            return None
+
 
 def trapzinterp(y, x, xnew, samesize=True):
     '''
