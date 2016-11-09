@@ -1545,6 +1545,9 @@ class MLUT(object):
             if axname in self.axes:
                 # check axis
                 if ax is not None:
+                    assert np.array(self.axes[axname]).shape == np.array(ax).shape, \
+                            'Inconsistent shapes for axis "{}": {} != {}'.format(
+                                    axname, self.axes[axname].shape, ax.shape)
                     assert np.allclose(self.axes[axname], ax)
             elif axname is None:
                 assert ax is None
