@@ -8,24 +8,16 @@ Speed-up Monte Carlo Advanced Radiative Transfer Code using GPU
 '''
 
 
-
 from __future__ import print_function, division
 import numpy as np
 from datetime import datetime
 from numpy import pi
-from tools.profile.profil import AeroOPAC, Profile, KDIS, KDIS_IBAND, REPTRAN, REPTRAN_IBAND, REPTRAN_IBAND_LIST, KDIS_IBAND_LIST, CloudOPAC
 from atmosphere import Atmosphere
 from water import Water_base
-from tools.cdf import ICDF
-from tools.water.iop_spm import IOP_SPM
-from tools.water.iop_mm import IOP_MM
-from tools.water.iop_AOS_water import IOP_AOS_WATER
-from tools.water.iop_PandR import IOP_PandR
-from tools.water.phase_functions import PhaseFunction
-from os.path import dirname, realpath, join, basename, exists
+from os.path import dirname, realpath, join, exists
 from warnings import warn
 from tools.progress import Progress
-from tools.luts import merge, read_lut_hdf, read_mlut_hdf, LUT, MLUT, Idx
+from tools.luts import LUT, MLUT, Idx
 from scipy.interpolate import interp1d
 import subprocess
 from collections import OrderedDict
@@ -315,9 +307,7 @@ class Smartg(object):
 
         Arguments:
 
-            - wl: wavelength in nm (float)
-                  or: a list/array of wavelengths
-                  or: a list of IBANDs (reptran, kdis)
+            - wl: a list/array of wavelengths (in nm)
 
             - atm: Profile object
                 default None (no atmosphere)
@@ -396,7 +386,8 @@ class Smartg(object):
         ------------
 
         Returns a MLUT object containing:
-            - the polarized reflectance (I,Q,U,V) at the different layers
+            - the polarized dimensionless reflectance (I,Q,U,V) at the
+              different layers
             - the number of photons (N) received at each layer
             - the profiles and phase functions
             - attributes
@@ -438,18 +429,8 @@ class Smartg(object):
             SEED = np.uint32((datetime.now()
                 - datetime.utcfromtimestamp(0)).total_seconds()*1000)
 
-        assert isinstance(wl, (float, list, np.ndarray))
-        if isinstance(wl, list):
-            if (False not in map(lambda x: isinstance(x, (REPTRAN_IBAND, KDIS_IBAND)), wl)):
-                # wl is a list of REPTRAN_IBANDs or KDIS_IBANDS
-                wavelengths = map(lambda x: x.w, wl)
-            else:
-                # wl is a list of floats
-                assert (False not in map(lambda x: isinstance(x, float), wl))
-                wavelengths = wl
-        else:
-            wavelengths = wl
-        NLAM = np.array(wavelengths).size
+        wavelengths = np.array(wl, dtype='float32')
+        NLAM = wavelengths.size
 
         # determine SIM
         if (atm is not None) and (surf is None) and (water is None):
@@ -471,13 +452,13 @@ class Smartg(object):
         # atmosphere
         #
         if isinstance(atm, Atmosphere):
-            prof_atm = atm.calc(wl)
+            prof_atm = atm.calc(wavelengths)
         else:
             prof_atm = atm
 
         if prof_atm is not None:
-            faer, ipha = calculF(prof_atm, NF, DEPO, ray=True, kind='atm')
-            prof_atm_gpu = init_prof_atm(wl, prof_atm, ipha)
+            faer, ipha = calculF(prof_atm, NF, DEPO, kind='atm')
+            prof_atm_gpu = init_profile(wavelengths, prof_atm, ipha)
             NATM = len(prof_atm.axis('z')) - 1
         else:
             faer = gpuzeros(1, dtype='float32')
@@ -499,13 +480,13 @@ class Smartg(object):
         # ocean
         #
         if isinstance(water, Water_base):
-            prof_oc = water.calc(wl)
+            prof_oc = water.calc(wavelengths)
         else:
             prof_oc = water
 
         if prof_oc is not None:
-            foce, ipha = calculF(prof_oc, NF, DEPO=0., ray=False, kind='oc')
-            prof_oc_gpu = init_prof_oc(prof_oc)
+            foce, ipha = calculF(prof_oc, NF, DEPO=0., kind='oc')
+            prof_oc_gpu = init_profile(wavelengths, prof_oc, ipha)
             NOCE = len(prof_oc.axis('z')) - 1
         else:
             foce = gpuzeros(1, dtype='float32')
@@ -516,7 +497,7 @@ class Smartg(object):
         # albedo and adjacency effect
         #
         spectrum = np.zeros(NLAM, dtype=type_Spectrum)
-        spectrum['lambda'] = np.array(wavelengths)
+        spectrum['lambda'] = wavelengths
         if env is None:
             # default values (no environment effect)
             env = Environment()
@@ -530,12 +511,12 @@ class Smartg(object):
         if water is None:
             spectrum['alb_seafloor'] = -999.
         else:
-            spectrum['alb_seafloor'] = water.alb
+            spectrum['alb_seafloor'] = prof_oc['albedo_seafloor'][:]
         spectrum = to_gpu(spectrum)
 
         # Local Estimate option
         LE = 0
-        if le!=None:
+        if le is not None:
             LE = 1
             NBTHETA =  le['th'].shape[0]
             NBPHI   =  le['phi'].shape[0]
@@ -805,7 +786,7 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
 
     # write ocean profiles
     if prof_oc is not None:
-        raise NotImplementedError
+        warn('Not implemented: OC profile in result')
 
     # write the error count
     err = errorcount.get()
@@ -889,7 +870,7 @@ def rayleigh(N, DEPO):
     return pha
 
 
-def calculF(profile, N, DEPO, ray, kind):
+def calculF(profile, N, DEPO, kind):
     '''
     Calculate cumulated phase functions from profile
     N: number of angles
@@ -906,17 +887,17 @@ def calculF(profile, N, DEPO, ray, kind):
         wav, altitude = [], []
     nphases = len(wav) * len(altitude)
 
-    if ray:
-        nphases += 1   # include Rayleigh phase function
+    nphases += 1   # include Rayleigh phase function
 
     # Initialize the cumulative distribution function
-    phase_H = np.zeros((nphases, N), dtype=type_Phase, order='C')
+    if nphases > 0:
+        shp = (nphases, N)
+    else:
+        shp = (1, N)
+    phase_H = np.zeros(shp, dtype=type_Phase, order='C')
 
     # Set Rayleigh phase function
-    idx = 0
-    if ray:
-        phase_H[0,:] = rayleigh(N, DEPO)
-        idx += 1
+    phase_H[0,:] = rayleigh(N, DEPO)
 
     if 'wav_phase_{}'.format(kind) in profile.axes:
         angles = profile.axis('theta') * pi/180.
@@ -928,8 +909,10 @@ def calculF(profile, N, DEPO, ray, kind):
         ipha_a = np.array([np.abs(altitude - x).argmin() for x in profile.axis('z')])
         ipha = ipha_a[None,:] + ipha_w[:,None]*len(altitude)
     else:
-        ipha = None
+        shp = (len(profile.axis('wavelength')), len(profile.axis('z')))
+        ipha = np.zeros(shp, dtype='int64') - 1   # so that ipha+1 points to a valid phase function (Rayleigh)
 
+    idx = 1
     for (iw, w), (ialt, alt) in product(
             enumerate(wav),
             enumerate(altitude),
@@ -1038,32 +1021,29 @@ def InitConst(surf, env, NATM, NOCE, mod,
     copy_to_device('NWLPROBA', NWLPROBA, np.int32)
 
 
-def init_prof_atm(wl, prof, ipha):
+def init_profile(wl, prof, ipha):
     '''
-    take the atmospheric profile as a MLUT, and setup the gpu structure
+    take the profile as a MLUT, and setup the gpu structure
     '''
 
     # reformat to smartg format
 
     NATM = len(prof.axis('z')) - 1
     shp = (len(wl), NATM+1)
-    prof_atm = np.zeros(shp, dtype=type_Profile)
-    prof_atm['z'][0,:] = prof.axis('z')
-    prof_atm['z'][1:,:] = -999.      # other wavelengths are NaN
+    prof_gpu = np.zeros(shp, dtype=type_Profile, order='C')
+    prof_gpu['z'][0,:] = prof.axis('z')
+    prof_gpu['z'][1:,:] = -999.      # other wavelengths are NaN
 
-    prof_atm['tau'][:,:] = prof['tau_tot'][:,:]
-    prof_atm['tausca'][:] = prof['tau_sca'][:,:]
-    prof_atm['tauabs'][:] = prof['tau_abs'][:,:]
-    prof_atm['pmol'][:] = prof['pmol'][:,:]
-    prof_atm['ssa'][:] = prof['ssa'][:,:]
-    prof_atm['abs'][:] = prof['pabs'][:,:]
+    prof_gpu['tau'][:,:] = prof['tau_tot'][:,:]
+    prof_gpu['tausca'][:] = prof['tau_sca'][:,:]
+    prof_gpu['tauabs'][:] = prof['tau_abs'][:,:]
+    prof_gpu['pmol'][:] = prof['pmol'][:,:]
+    prof_gpu['ssa'][:] = prof['ssa'][:,:]
+    prof_gpu['abs'][:] = prof['pabs'][:,:]
     if ipha is not None:
-        prof_atm['iphase'][:] = ipha[:]
+        prof_gpu['iphase'][:] = ipha[:]
 
-    return to_gpu(prof_atm)
-
-def init_prof_oc():
-    raise NotImplementedError
+    return to_gpu(prof_gpu)
 
 
 def get_git_attrs():
@@ -1109,12 +1089,12 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL,
         - NBTHETA : Number of intervals in zenith
         - NLAM : Number of wavelengths
         - options : compilation options
-        - kern : kernel launching the transfert radiative simulation
+        - kern : kernel launching the transfert radiative
         - p: progress bar object
         - X0: initial coordinates of the photon entering the atmosphere
     --------------------------------------------------------------
     Returns :
-        - nbPhotonsTot : Total number of photons processed   # FIXME description
+        - nbPhotonsTot : Total number of photons processed
         - NPhotonsInTot : Total number of photons processed by interval
         - nbPhotonsSorTot : Total number of outgoing photons
         - tabPhotonsTot : Total weight of all outgoing photons
@@ -1175,6 +1155,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL,
         start_cuda_clock = cuda.Event()
         end_cuda_clock = cuda.Event()
         start_cuda_clock.record()
+
         # kernel launch
         kern(spectrum, X0, faer, foce,
                 errorcount, nThreadsActive, tabPhotons,
