@@ -88,7 +88,7 @@ __global__ void launchKernel(
 /* initPhoton
 * Initialise le photon dans son état initial avant l'entrée dans l'atmosphère
 */
-__device__ void initPhoton(Photon* ph, struct Profile *prof_atm,
+__device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc,
                            struct Spectrum *spectrum,float *X0,
                            unsigned long long *NPhotonsIn,
                            long long *wl_proba_icdf,

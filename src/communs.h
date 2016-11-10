@@ -37,7 +37,7 @@
 #define DEMIPI 1.5707963F
 
 #define MAX_LOOP 100000
-#define MAX_NEVT 50 // Maximum number of scattering evts stored in photon
+#define MAX_NEVT 100 // Maximum number of scattering evts stored in photon
 #define MAX_NLOW 101
 
 
