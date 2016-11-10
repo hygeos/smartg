@@ -617,6 +617,7 @@ class AtmAFGL(Atmosphere):
 
         with np.errstate(invalid='ignore'):
             pmol = dtaur/(dtaur + dtaua)
+        pmol[np.isnan(pmol)] = 1.
         pro.add_dataset('pmol', pmol,
                         axnames=['wavelength', 'z'],
                         attrs={'description':
@@ -624,6 +625,7 @@ class AtmAFGL(Atmosphere):
 
         with np.errstate(invalid='ignore'):
             pabs = dtaug[:,:]/diff1(tau_tot, axis=1)
+        pabs[np.isnan(pabs)] = 0.
         pro.add_dataset('pabs', pabs,
                         axnames=['wavelength', 'z'],
                         attrs={'description':
