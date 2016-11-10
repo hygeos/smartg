@@ -10,13 +10,13 @@ class IOP_base(object):
     pass
 
 class IOP_Rw(IOP_base):
-    def __init__(self, f_Rw):
+    def __init__(self, ALB):
         '''
         Defines a model of water reflectance (lambertian under the surface)
 
-        f_Rw if a function lambda (nm) -> Rw(0-, lambda)
+        ALB: albedo object of the lambertian reflector
         '''
-        self.f_Rw = f_Rw
+        self.ALB = ALB
 
     def calc(self, wav):
         '''
@@ -40,9 +40,10 @@ class IOP_Rw(IOP_base):
         pro.add_dataset('pabs', np.zeros(shp, dtype='float32'),
                         ['wavelength', 'z'])
         pro.add_dataset('albedo_seafloor',
-                        self.f_Rw(wav), ['wavelength'])
+                        self.ALB.get(wav), ['wavelength'])
 
         return pro
+
 
 class IOP_MM(IOP_base):
     '''
