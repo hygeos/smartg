@@ -1219,8 +1219,9 @@ def impactInit(prof_atm, NLAM, THVDEG, Rter, pp):
         Hatm = 0.
         NATM = 0
     else:
-        Hatm = prof_atm.axis('z')[0]
-        NATM = len(prof_atm.axis('z'))-1
+        Zatm = prof_atm.axis('z')
+        Hatm = Zatm[0]
+        NATM = len(Zatm)-1
 
     vx = -np.sin(THVDEG * np.pi / 180)
     vy = 0.
@@ -1266,7 +1267,7 @@ def impactInit(prof_atm, NLAM, THVDEG, Rter, pp):
             # R² = X² + (V.D)² + 2XVD
             # where R is Rter+ALT[i]
             # solve for D:
-            delta = 4.*(vx*xph + vy*yph + vz*zph)**2 - 4*((xph**2 + yph**2 + zph**2) - (Rter + prof_atm['z'][0,i])**2)
+            delta = 4.*(vx*xph + vy*yph + vz*zph)**2 - 4*((xph**2 + yph**2 + zph**2) - (Rter + Zatm[i])**2)
 
             # the 2 solutions are:
             D1 = 0.5 * (-2. * (vx*xph+vy*yph+vz*zph) + np.sqrt(delta))
@@ -1291,10 +1292,10 @@ def impactInit(prof_atm, NLAM, THVDEG, Rter, pp):
 
             for ilam in xrange(NLAM):
                 # optical thickness of the layer in vertical direction
-                hlay0 = abs(prof_atm['tau'][ilam, i] - prof_atm['tau'][ilam, i - 1])
+                hlay0 = abs(prof_atm['tau_tot'][ilam, i] - prof_atm['tau_tot'][ilam, i - 1])
 
                 # thickness of the layer
-                D0 = abs(prof_atm['z'][0,i-1] - prof_atm['z'][0,i])
+                D0 = abs(Zatm[i-1] - Zatm[i])
 
                 # optical thickness of the layer at current wavelength
                 hlay = hlay0*D/D0
