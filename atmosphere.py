@@ -361,15 +361,15 @@ class AeroOPAC(object):
 
 
 class CloudOPAC(AeroOPAC):
-    def __init__(self, species, reff, zmin, zmax, tau_ref, w_ref):
-        '''
-        Single species, localized between zmin and zmax,
-        with and effective radius reff
+    '''
+    Single species, localized between zmin and zmax,
+    with and effective radius reff
 
-        Example: CloudOPAC('wc.sol', 12.68, 2, 3, 10., 550.)
-                 # water cloud mie, reff=12.68 between 2 and 3 km
-                 # total optical thickness of 10 at 550 nm
-        '''
+    Example: CloudOPAC('wc.sol', 12.68, 2, 3, 10., 550.)
+             # water cloud mie, reff=12.68 between 2 and 3 km
+             # total optical thickness of 10 at 550 nm
+    '''
+    def __init__(self, species, reff, zmin, zmax, tau_ref, w_ref):
         self.reff = reff
         self.tau_ref = tau_ref
         self.w_ref = w_ref
@@ -464,7 +464,7 @@ class AtmAFGL(Atmosphere):
         else:
             if isinstance(grid, str):
                 grid = change_altitude_grid(prof.z, grid)
-            self.prof = prof.regrid(grid)
+            self.prof = prof.regrid(np.array(grid))
 
         #
         # calculate reduced profile
