@@ -397,6 +397,8 @@ class AtmAFGL(Atmosphere):
         - comp: list of components objects (aerosol, clouds)
         - grid: new grid altitudes (list of decreasing altitudes in km)
         - lat: latitude (for Rayleigh optical depth calculation, default=45.)
+        - P0: Sea surface pressure
+              (default: SSP from AFGL)
 
         Gaseous absorption:
         - O3: total ozone column (Dobson units),
@@ -413,7 +415,7 @@ class AtmAFGL(Atmosphere):
           default value: [100, 0]
     '''
     def __init__(self, atm_filename, comp=[], grid=None, lat=45.,
-                 O3=None, H2O=None, NO2=True,
+                 P0=None, O3=None, H2O=None, NO2=True,
                  pfwav=None, pfgrid=np.array([100., 0.])):
 
         self.lat = lat
@@ -451,7 +453,8 @@ class AtmAFGL(Atmosphere):
         self.crs_no2
 
         # read afgl file
-        prof = Profile_base(atm_filename, O3=O3, H2O=H2O, NO2=NO2)
+        prof = Profile_base(atm_filename, O3=O3,
+                            H2O=H2O, NO2=NO2, P0=P0)
 
         #
         # regrid profile if required
@@ -706,8 +709,9 @@ class Profile_base(object):
       or None to use atmospheric profile value (default)
     - H2O: total water vapour column (g.cm-2), or None to use atmospheric
       profile value (default)
+    - P0: sea surface pressure (hPa)
     '''
-    def __init__(self, atm_filename, O3=None, H2O=None, NO2=True):
+    def __init__(self, atm_filename, O3=None, H2O=None, NO2=True, P0=None):
 
         if atm_filename is None:
             return
@@ -733,6 +737,9 @@ class Profile_base(object):
             M_H2O = 18.015 # g/mol
             Avogadro = codata.value('Avogadro constant')
             self.dens_h2o *= H2O/ M_H2O * Avogadro / (simps(self.dens_h2o, -self.z) * 1e5)
+
+        if P0 is not None:
+            self.P *= P0/self.P[-1]
 
         if not NO2:
             self.dens_no2[:] = 0.
