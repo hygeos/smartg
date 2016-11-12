@@ -406,6 +406,8 @@ class AtmAFGL(Atmosphere):
         - H2O: total water vapour column (g.cm-2), or None to use atmospheric
           profile value (default)
         - NO2: activate NO2 absorption (default True)
+        - tauR: Rayleigh optical thickness, default None computed
+          from atmospheric profile and wavelength
 
         Phase functions definition:
         - pfwav: a list of wavelengths over which the phase functions are calculated
@@ -414,14 +416,21 @@ class AtmAFGL(Atmosphere):
           can be provided as an array of decreasing altitudes or a gridspec
           default value: [100, 0]
     '''
-    def __init__(self, atm_filename, comp=[], grid=None, lat=45.,
+    def __init__(self, atm_filename, comp=[],
+                 grid=None, lat=45.,
                  P0=None, O3=None, H2O=None, NO2=True,
+                 tauR=None,
                  pfwav=None, pfgrid=[100., 0.]):
 
         self.lat = lat
         self.comp = comp
         self.pfwav = pfwav
         self.pfgrid = np.array(pfgrid)
+
+        self.tauR = tauR
+        if tauR is not None:
+            self.tauR = np.array(tauR)
+
         assert (np.diff(pfgrid) < 0.).all()
 
         #
@@ -521,6 +530,16 @@ class AtmAFGL(Atmosphere):
         # cumulated Rayleigh optical thickness (wav, z)
         tauray = rod(wav*1e-3, prof.dens_co2/prof.dens_air*1e6, self.lat,
                      prof.z*1e3, prof.P)
+
+        if self.tauR is not None:
+            # scale Rayleigh optical thickness
+            if self.tauR.ndim == 1:
+                # for each wavelength
+                tauray *= self.tauR[:,None]/tauray[:,-1:]
+            else:
+                # scalar
+                tauray *= self.tauR/tauray[:,-1:]
+
         assert tauray.ndim == 2
 
         # Rayleigh optical thickness
