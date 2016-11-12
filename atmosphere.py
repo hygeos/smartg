@@ -416,12 +416,12 @@ class AtmAFGL(Atmosphere):
     '''
     def __init__(self, atm_filename, comp=[], grid=None, lat=45.,
                  P0=None, O3=None, H2O=None, NO2=True,
-                 pfwav=None, pfgrid=np.array([100., 0.])):
+                 pfwav=None, pfgrid=[100., 0.]):
 
         self.lat = lat
         self.comp = comp
         self.pfwav = pfwav
-        self.pfgrid = pfgrid
+        self.pfgrid = np.array(pfgrid)
         assert (np.diff(pfgrid) < 0.).all()
 
         #
