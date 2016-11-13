@@ -1758,6 +1758,33 @@ class MLUT(object):
 
         return self
 
+    def dropaxis(self, *ax_to_drop):
+        '''
+        drop axes of size 1
+
+        example:
+            m.dropaxis('a')   # remove axis 'a' of size 1
+            m.dropaxis('a', 'b')   # remove 'a' and 'b'
+        '''
+        m = MLUT()
+
+        # axes
+        for axname, ax in self.axes.items():
+            if axname not in ax_to_drop:
+                m.add_axis(axname, ax)
+
+        # datasets
+        for (name, data, axnames, attributes) in self.data:
+            axes = [x for x in axnames if x not in ax_to_drop]
+            shp = [s for (x, s) in zip(axnames, data.shape) if x not in ax_to_drop]
+            m.add_dataset(name, data.reshape(shp), axnames=axes, attrs=attributes)
+
+        # global attributes
+        m.attrs = self.attrs
+
+        return m
+
+
     def promote_attr(self, name):
         '''
         Create a new dataset from attribute name

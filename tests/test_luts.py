@@ -257,6 +257,21 @@ def test_axis():
     assert np.alltrue(l.axis('z', aslut=True)[:] == l.axes[0])
     assert np.alltrue(l.axis(0, aslut=True)[:] == l.axes[0])
 
+def test_dropaxis():
+    m = MLUT()
+    m.add_axis('a', [1])
+    m.add_axis('b', np.linspace(5, 8, 6))
+    m.add_axis('c', [12])
+    m.add_dataset('data1', np.random.randn(1, 6, 1), ['a', 'b', 'c'])
+    m.add_dataset('data2', np.random.randn(1, 6), ['c', 'b'])
+    m.add_dataset('data3', np.random.randn(1, 1), ['a', 'c'])
+    m.attrs = {'un':1, 'deux':2}
+
+    assert m.dropaxis('a')['data1'].shape == (6, 1)
+    assert m.dropaxis('a', 'c')['data3'].data == m['data3'][0,0]
+    assert m.dropaxis('a', 'c')['data3'].shape == ()
+    assert m.dropaxis('a', 'c').attrs == m.attrs
+
 def test_merge():
     mluts = []
     for p1 in np.arange(5):
