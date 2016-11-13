@@ -220,21 +220,30 @@ class AeroOPAC(object):
     Initialize the Aerosol OPAC model
 
     Args:
-        filename: name of the aerosol file. If no directory is specified,
-                  assume directory <libradtran>/data/aerosol/OPAC/standard_aerosol_files
-                  aerosol files should be:
-                      'antarctic', 'continental_average', 'continental_clean',
-                      'continental_polluted', 'desert', 'desert_spheroids',
-                      'maritime_clean', 'maritime_polluted', 'maritime_tropical',
-                      'urban'
+        filename: name of the aerosol file.
+                  If no directory is specified, assume directory
+                  <libradtran>/data/aerosol/OPAC/standard_aerosol_files
+                  aerosol files can be:
+                      'antarctic', 'continental_average',
+                      'continental_clean', 'continental_polluted',
+                      'desert', 'desert_spheroids',
+                      'maritime_clean', 'maritime_polluted',
+                      'maritime_tropical', 'urban'
 
         tau_ref: optical thickness at wavelength wref
         w_ref: reference wavelength (nm) for aot
+        ssa: force single scattering albedo
+             (scalar or 1-d array-like for multichromatic)
     '''
-    def __init__(self, filename, tau_ref, w_ref):
+    def __init__(self, filename, tau_ref, w_ref, ssa=None):
         self.tau_ref = tau_ref
         self.w_ref = w_ref
         self.reff = None
+
+        if ssa is None:
+            self.ssa = None
+        else:
+            self.ssa = np.array(ssa)
 
         if dirname(filename) == '':
             self.filename = join(dir_libradtran_opac, 'standard_aerosol_files', filename)
@@ -315,6 +324,13 @@ class AeroOPAC(object):
         # specified wavelength
         dtau *= self.tau_ref/np.sum(dtau_ref)
 
+        # force ssa
+        if self.ssa is not None:
+            if self.ssa.ndim == 0: # scalar
+                ssa[:,:] = self.ssa
+            else:
+                ssa[:,:] = self.ssa[:,None]
+
         return dtau, ssa
 
     def phase(self, wav, Z, rh=None, NBTHETA=7201):
@@ -376,6 +392,7 @@ class CloudOPAC(AeroOPAC):
         self.species = [Species(species+'.mie')]
         self.zopac     = np.array([zmax, zmax, zmin, zmin, 0.], dtype='f')
         self.densities = np.array([  0.,   1.,   1.,   0., 0.], dtype='f')[:,None]
+        self.ssa = None
 
 
 class Atmosphere(object):
