@@ -300,6 +300,7 @@ class Smartg(object):
         self.common_attrs['cuda_version'] = '.'.join(map(str, pycuda.driver.get_version()))
         self.common_attrs.update(get_git_attrs())
 
+
     def run(self, wl,
              atm=None, surf=None, water=None, env=None,
              NBPHOTONS=1e9, DEPO=0.0279, THVDEG=0., SEED=-1,
@@ -313,7 +314,7 @@ class Smartg(object):
 
         Arguments:
 
-            - wl: a list/array of wavelengths (in nm)
+            - wl: a scalar or list/array of wavelengths (in nm)
 
             - atm: Profile object
                 default None (no atmosphere)
@@ -436,6 +437,9 @@ class Smartg(object):
                 - datetime.utcfromtimestamp(0)).total_seconds()*1000)
 
         wavelengths = np.array(wl, dtype='float32')
+        monochromatic = (wavelengths.ndim == 0)
+        if monochromatic:
+            wavelengths = wavelengths.reshape(1)
         NLAM = wavelengths.size
 
         # determine SIM
@@ -574,6 +578,10 @@ class Smartg(object):
             np.sum(NPhotonsInTot),
             np.sum(NPhotonsInTot)/float(NBPHOTONS),
             ))
+
+        if monochromatic:
+            output = output.dropaxis('wavelength')
+            output.attrs['wavelength'] = wl
 
         return output
 

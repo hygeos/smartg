@@ -530,7 +530,9 @@ class AtmAFGL(Atmosphere):
 
         returns: the profile of optical properties
         '''
-        wav = to_array(wav)
+        wav = np.array(wav)
+        if wav.ndim == 0:
+            wav = wav.reshape(1)
 
         if prof is None:
             prof = self.prof
@@ -674,7 +676,9 @@ class AtmAFGL(Atmosphere):
         '''
         Phase functions calculation at bands, using reduced profile
         '''
-        wav = to_array(wav)
+        wav = np.array(wav)
+        if wav.ndim == 0:
+            wav = wav.reshape(1)
         pha = 0.
         norm = 0.
         rh = self.prof_red.RH()
@@ -1007,24 +1011,6 @@ def rod(lam, co2, lat, z, P):
     return raycrs(lam, co2) * P*1e3 * Avogadro/MA/G
 
 
-def to_array(x):
-    '''
-    Converts input to ndarray, from scalar, list or ndarray
-    '''
-    if isinstance(x, np.ndarray):
-        r = x
-    elif isinstance(x, list):
-        r = np.array(x)
-    else:
-        assert isnumeric(x)
-        r = np.array([x])
-
-    try:
-        r*2.
-    except:
-        raise Exception('Should be numeric ({})'.format(x))
-
-    return r
 
 def diff1(A, axis=0, samesize=True):
     if samesize:
