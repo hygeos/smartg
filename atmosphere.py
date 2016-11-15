@@ -30,6 +30,14 @@ NPSTK = 4 # number of Stokes parameters of the radiation field
 class Species(object):
     '''
     Optical properties of one species
+
+    List of species:
+        inso.mie, miam.mie, miam_spheroids.tmatrix,
+        micm.mie, micm_spheroids.tmatrix, minm.mie,
+        minm_spheroids.tmatrix, mitr.mie,
+        mitr_spheroids.tmatrix, soot.mie,
+        ssam.mie, sscm.mie, suso.mie,
+        waso.mie, wc.sol.mie
     '''
     def __init__(self, species):
 
@@ -234,11 +242,17 @@ class AeroOPAC(object):
         w_ref: reference wavelength (nm) for aot
         ssa: force single scattering albedo
              (scalar or 1-d array-like for multichromatic)
+
+        phase: LUT of phase function
+               (can be read from file with read_phase)
+
+        Example: AeroOPAC('maritime_clean', 0.1, 550.).calc(400.)
     '''
-    def __init__(self, filename, tau_ref, w_ref, ssa=None):
+    def __init__(self, filename, tau_ref, w_ref, ssa=None, phase=None):
         self.tau_ref = tau_ref
         self.w_ref = w_ref
         self.reff = None
+        self._phase = phase
 
         if ssa is None:
             self.ssa = None
@@ -339,6 +353,20 @@ class AeroOPAC(object):
         relative humidity is rh
         angle resampling over NBTHETA angles
         '''
+        if self._phase is not None:
+            if self._phase.ndim == 2:
+                # convert to 4-dim by inserting empty dimensions wav_phase_atm
+                # and z_phase_atm
+                assert self._phase.names == ['stk', 'theta']
+                pha = LUT(self._phase.data[None,None,:,:],
+                          names = ['wav_phase_atm', 'z_phase_atm'] + self._phase.names,
+                          axes = [None, None] + self._phase.axes,
+                         )
+
+                return pha
+            else:
+                return self._phase
+
         P = 0.
         dssa = 0.
         dtau = 0.
@@ -381,11 +409,13 @@ class CloudOPAC(AeroOPAC):
     Single species, localized between zmin and zmax,
     with and effective radius reff
 
+    TODO: phase
+
     Example: CloudOPAC('wc.sol', 12.68, 2, 3, 10., 550.)
              # water cloud mie, reff=12.68 between 2 and 3 km
              # total optical thickness of 10 at 550 nm
     '''
-    def __init__(self, species, reff, zmin, zmax, tau_ref, w_ref):
+    def __init__(self, species, reff, zmin, zmax, tau_ref, w_ref, phase=None):
         self.reff = reff
         self.tau_ref = tau_ref
         self.w_ref = w_ref
@@ -393,6 +423,7 @@ class CloudOPAC(AeroOPAC):
         self.zopac     = np.array([zmax, zmax, zmin, zmin, 0.], dtype='f')
         self.densities = np.array([  0.,   1.,   1.,   0., 0.], dtype='f')[:,None]
         self.ssa = None
+        self._phase = phase
 
 
 class Atmosphere(object):
@@ -696,6 +727,30 @@ class AtmAFGL(Atmosphere):
             return pha
         else:
             return None
+
+
+def read_phase(filename, standard=False):
+    '''
+    Read phase function from filename as a LUT
+
+    standard: standard phase function definition, otherwise Smart-g definition
+    '''
+    data = np.loadtxt(filename)
+
+    theta = data[:,0]
+    pha=data[:,1:]
+    if standard:
+        pha[:,0] = data[:,1] + data[:,2]
+        pha[:,1] = data[:,1] - data[:,2]
+        pha[:,2] = data[:,3]
+        pha[:,3] = data[:,4]
+
+    P = LUT(pha.swapaxes(0, 1),  # stk, theta
+            axes=[None, theta],
+            names=['stk', 'theta'],
+           )
+
+    return P
 
 
 def trapzinterp(y, x, xnew, samesize=True):
