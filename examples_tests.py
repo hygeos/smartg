@@ -5,29 +5,30 @@
 SMART-G examples
 '''
 
-from smartg import Smartg, Profile, AeroOPAC, LambSurface, RoughSurface
-from smartg import IOP_MM, IOP_SPM, REPTRAN, reptran_merge, merge
+from smartg import Smartg, LambSurface, RoughSurface
+from atmosphere import AtmAFGL, AeroOPAC
 import numpy as np
+from nose.tools import nottest
 
 
 def test_rayleigh():
     '''
     Basic Rayleigh example
     '''
-    Smartg(debug=True).run(wl=400., NBPHOTONS=1e6, atm=Profile('afglt'), progress=False)
+    Smartg(debug=True).run(wl=400., NBPHOTONS=1e6, atm=AtmAFGL('afglt'), progress=False)
 
 def test_sp():
     '''
     Basic test in spherical
     '''
-    Smartg(pp=False).run(wl=400., NBPHOTONS=1e6, atm=Profile('afglt'), progress=False)
+    Smartg(pp=False).run(wl=400., NBPHOTONS=1e6, atm=AtmAFGL('afglt'), progress=False)
 
 def test_rayleigh_grid():
     '''
     Use a custom atmosphere grid
     '''
     Smartg().run(wl=500., NBPHOTONS=1e7,
-           atm=Profile('afglt', grid='100[75]25[5]10[1]0'), progress=False)
+           atm=AtmAFGL('afglt', grid='100[75]25[5]10[1]0'), progress=False)
 
 
 def test_aerosols():
@@ -35,7 +36,7 @@ def test_aerosols():
     test with aerosols
     '''
     aer = AeroOPAC('maritime_clean', 0.4, 550.)
-    pro = Profile('afglms', aer=aer)
+    pro = AtmAFGL('afglms', comp=[aer])
     Smartg().run(wl=490., atm=pro, NBPHOTONS=1e6, progress=False)
 
 
@@ -44,25 +45,28 @@ def test_atm_surf():
     atmosphere + lambertian surface of albedo 10%
     '''
     return Smartg().run(490., NBPHOTONS=1e6,
-                  atm=Profile('afglms'),
+                  atm=AtmAFGL('afglms'),
                   surf=LambSurface(ALB=0.1), progress=False)
 
 
+@nottest
 def test_atm_surf_ocean():
     return Smartg().run(490., NBPHOTONS=1e6,
-                  atm=Profile('afglms',
+                  atm=AtmAFGL('afglms',
                               aer=AeroOPAC('maritime_clean', 0.2, 550)),
                   surf=RoughSurface(),
                   NBTHETA=30,
                   water=IOP_MM(chl=1., NANG=1000), progress=False)
 
 
+@nottest
 def test_surf_ocean():
     return Smartg().run(490., THVDEG=30., NBPHOTONS=1e6,
                   surf=RoughSurface(),
                   water=IOP_MM(1., pfwav=[400.]), progress=False)
 
 
+@nottest
 def test_ocean():
     return Smartg().run(wl=560., THVDEG=30.,
                   water=IOP_SPM(100.), NBPHOTONS=1e6, progress=False)
@@ -73,7 +77,7 @@ def test_ocean():
 #     using reptran
 #     '''
 #     aer = AeroOPAC('maritime_polluted', 0.4, 550.)
-#     pro = Profile('afglms.dat', aer=aer, grid='100[75]25[5]10[1]0')
+#     pro = AtmAFGL('afglms.dat', aer=aer, grid='100[75]25[5]10[1]0')
 #     files, ibands = [], []
 #     for iband in REPTRAN('reptran_solar_msg').band('msg1_seviri_ch008').ibands():
 #         job = smartg('SMART-G-PP', wl=np.mean(iband.band.awvl),
@@ -85,6 +89,7 @@ def test_ocean():
 #     reptran_merge(files, ibands)
 
 
+@nottest
 def test_ozone_lut():
     '''
     Ozone Gaseous transmission for MERIS
@@ -98,7 +103,7 @@ def test_ozone_lut():
     for TCO, AOT in product(list_TCO, list_AOT):
 
         aer = AeroOPAC('maritime_clean', AOT, 550.)
-        pro = Profile('afglms', aer=aer, O3=TCO)
+        pro = AtmAFGL('afglms', aer=aer, O3=TCO)
 
         m = Smartg().run(wl=490., atm=pro, NBTHETA=50, NBPHOTONS=1e6, progress=False)
 
@@ -108,12 +113,13 @@ def test_ozone_lut():
     merged = merge(luts, ['TCO', 'AOT'])
     merged.print_info()
 
+@nottest
 def test_multispectral():
     '''
     multispectral processing
     '''
 
-    pro = Profile('afglt',
+    pro = AtmAFGL('afglt',
         grid='100[75]25[5]10[1]0', # [100, 75, 50, 30, 20, 10, 5, 1, 0.],  # optional, otherwise use default grid
         # pfgrid=[100, 20, 0.],   # optional, otherwise use a single band 100-0
         # pfwav=[400, 500, 600], # optional, otherwise phase functions are calculated at all bands
@@ -125,25 +131,4 @@ def test_multispectral():
              atm=pro,
              surf=RoughSurface(),
              water=IOP_SPM(1.), progress=False)
-
-# def test_pp_sp():
-#     '''
-#     Check consistency between PP and SP for large RTER
-#     '''
-#     M = []
-#     for pp in [True, False]:
-#         M.append(smartg(pp=pp, wl=400., NBPHOTONS=1e8, atm=Profile('afglt'), progress=False))
-#     mpp = M[0]
-#     msp = M[1]
-# 
-#     rdiff = ((mpp - msp)/msp)['I_up (TOA)']
-#     print np.mean(rdiff[:,:])
-#     assert False
-# 
-# def test_pp_sp2():
-#     '''
-#     check consistency of PP and SP without atmosphere
-#     '''
-#     # TODO: with or without ocean
-#     assert False
 
