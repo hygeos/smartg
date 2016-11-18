@@ -456,6 +456,10 @@ class AtmAFGL(Atmosphere):
         - NO2: activate NO2 absorption (default True)
         - tauR: Rayleigh optical thickness, default None computed
           from atmospheric profile and wavelength
+        - prof_abs: the gaseous absorption optical thickness profile LUT provided by user
+                    is directly used, it shortcuts any further gaseous absorption computation
+        - prof_ray: the rayleigh scattering cumulative optical thickness profile  provided by user
+                    is directly used, it shortcuts any further rayleigh scattering computation
 
         Phase functions definition:
         - pfwav: a list of wavelengths over which the phase functions are calculated
@@ -468,12 +472,15 @@ class AtmAFGL(Atmosphere):
                  grid=None, lat=45.,
                  P0=None, O3=None, H2O=None, NO2=True,
                  tauR=None,
-                 pfwav=None, pfgrid=[100., 0.]):
+                 pfwav=None, pfgrid=[100., 0.], prof_abs=None,
+                 prof_ray=None):
 
         self.lat = lat
         self.comp = comp
         self.pfwav = pfwav
         self.pfgrid = np.array(pfgrid)
+        self.prof_abs = prof_abs
+        self.prof_ray = prof_ray
 
         self.tauR = tauR
         if tauR is not None:
@@ -578,8 +585,10 @@ class AtmAFGL(Atmosphere):
         # Rayleigh optical thickness
         #
         # cumulated Rayleigh optical thickness (wav, z)
-        tauray = rod(wav*1e-3, prof.dens_co2/prof.dens_air*1e6, self.lat,
+        if self.prof_ray is None :
+            tauray = rod(wav*1e-3, prof.dens_co2/prof.dens_air*1e6, self.lat,
                      prof.z*1e3, prof.P)
+        else : tauray = self.prof_ray
 
         if self.tauR is not None:
             # scale Rayleigh optical thickness
@@ -619,46 +628,49 @@ class AtmAFGL(Atmosphere):
                         attrs={'description':
                                'Single scattering albedo'})
 
+        if self.prof_abs is None:
+            #
+            # Ozone optical thickness
+            #
+            T0 = 273.15  # in K
+            T = LUT(prof.T, names=['temperature'])
+            tau_o3  = self.crs_chappuis.sub()[Idx(wav, fill_value='extrema'), 0]
+            tau_o3 += self.crs_chappuis.sub()[Idx(wav, fill_value='extrema'), 1]*(T - T0)
+            tau_o3 += self.crs_chappuis.sub()[Idx(wav, fill_value='extrema'), 2]*(T - T0)*(T - T0)
 
-        #
-        # Ozone optical thickness
-        #
-        T0 = 273.15  # in K
-        T = LUT(prof.T, names=['temperature'])
-        tau_o3  = self.crs_chappuis.sub()[Idx(wav, fill_value='extrema'), 0]
-        tau_o3 += self.crs_chappuis.sub()[Idx(wav, fill_value='extrema'), 1]*(T - T0)
-        tau_o3 += self.crs_chappuis.sub()[Idx(wav, fill_value='extrema'), 2]*(T - T0)*(T - T0)
+            # LUT in 10^(-20) cm2, convert in km-1
+            tau_o3 *= prof.dens_o3 * 1e-15
+            tau_o3 *= dz
+            if not (tau_o3.data >= 0).all():
+                warn('Negative values in tau_o3 ({}%, min value is {}, set to 0)'.format(
+                    100.*np.sum(tau_o3.data<0)/float(tau_o3.data.size),
+                    tau_o3.data[tau_o3.data == np.amin(tau_o3.data)][0]
+                    ))
+            tau_o3.data[tau_o3.data < 0] = 0
 
-        # LUT in 10^(-20) cm2, convert in km-1
-        tau_o3 *= prof.dens_o3 * 1e-15
-        tau_o3 *= dz
-        if not (tau_o3.data >= 0).all():
-            warn('Negative values in tau_o3 ({}%, min value is {}, set to 0)'.format(
-                100.*np.sum(tau_o3.data<0)/float(tau_o3.data.size),
-                tau_o3.data[tau_o3.data == np.amin(tau_o3.data)][0]
-                ))
-        tau_o3.data[tau_o3.data < 0] = 0
+            #
+            # NO2 optical thickness
+            #
+            tau_no2  = self.crs_no2.sub()[Idx(wav, fill_value='extrema'), 0]
+            tau_no2 += self.crs_no2.sub()[Idx(wav, fill_value='extrema'), 1]*(T - T0)
+            tau_no2 += self.crs_no2.sub()[Idx(wav, fill_value='extrema'), 2]*(T - T0)*(T - T0)
 
-        #
-        # NO2 optical thickness
-        #
-        tau_no2  = self.crs_no2.sub()[Idx(wav, fill_value='extrema'), 0]
-        tau_no2 += self.crs_no2.sub()[Idx(wav, fill_value='extrema'), 1]*(T - T0)
-        tau_no2 += self.crs_no2.sub()[Idx(wav, fill_value='extrema'), 2]*(T - T0)*(T - T0)
+            tau_no2 *= prof.dens_no2 * 1e-15
+            tau_no2 *= dz
+            if not (tau_no2.data >= 0).all():
+                warn('Negative values in tau_no2 ({}%, min value is {}, set to 0)'.format(
+                    100.*np.sum(tau_no2.data<0)/float(tau_no2.data.size),
+                    tau_no2.data[tau_no2.data == np.amin(tau_no2.data)][0]
+                    ))
+            tau_no2.data[tau_no2.data < 0] = 0
 
-        tau_no2 *= prof.dens_no2 * 1e-15
-        tau_no2 *= dz
-        if not (tau_no2.data >= 0).all():
-            warn('Negative values in tau_no2 ({}%, min value is {}, set to 0)'.format(
-                100.*np.sum(tau_no2.data<0)/float(tau_no2.data.size),
-                tau_no2.data[tau_no2.data == np.amin(tau_no2.data)][0]
-                ))
-        tau_no2.data[tau_no2.data < 0] = 0
-
-        #
-        # Total gaseous optical thickness
-        #
-        dtaug = tau_o3 + tau_no2   # TODO: other gases
+            #
+            # Total gaseous optical thickness
+            #
+            dtaug = tau_o3 + tau_no2   # TODO: other gases
+            
+        else : dtaug = self.prof_abs
+            
         taug = dtaug.apply(lambda x: np.cumsum(x, axis=1))
         taug.attrs['description'] = 'Cumulated gaseous optical thickness'
         pro.add_lut(taug, desc='taug')

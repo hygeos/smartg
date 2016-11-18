@@ -694,7 +694,7 @@ class LUT(object):
         '''
         plot a 1-dimension LUT, returns self
         '''
-        from pylab import plot, xlabel, ylabel, grid, ylim
+        from pylab import plot, xlabel, ylabel, grid, ylim, ticklabel_format
         import pylab as pl
 
         # no plotting for string datasets
@@ -731,6 +731,8 @@ class LUT(object):
             xlabel(xlab)
         if ylab is not None and not legend:
             ylabel(ylab)
+
+        ticklabel_format(axis='y', style='sci', scilimits=(-2,2))
 
         grid(show_grid)
         if legend:
@@ -810,6 +812,7 @@ class LUT(object):
                 v = axis2[index]
 
             ax1.plot([np.amin(axis1), np.amax(axis1)], [v, v], 'w--')
+            ax1.ticklabel_format(axis='y', style='sci', scilimits=(-2,2))
 
             if not swap:
                 ax2.plot(axis1, self[index, :], fmt)
@@ -824,6 +827,7 @@ class LUT(object):
             plt.xlabel(lab1)
 
             ax2.axis(ymin=vmin, ymax=vmax)
+            ax2.ticklabel_format(axis='y', style='sci', scilimits=(-2,2))
 
         fig.subplots_adjust(hspace=0.)
 
