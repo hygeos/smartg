@@ -374,7 +374,6 @@ class Smartg(object):
             - NBLOOP: number of photons launched in one kernel run
 
             - progress: whether to show a progress bar (True/False)
-                     or a Queue object to store the progress as (max_value), then (current_value, message), finally 'message'
 
             - le: Local Estimate method activation
                   Provide output geometries in radians like so:
@@ -553,7 +552,6 @@ class Smartg(object):
 
         # Initialize the progress bar
         p = Progress(NBPHOTONS, progress)
-
 
         # Loop and kernel call
         (NPhotonsInTot,
