@@ -169,7 +169,7 @@ __device__ void ComputePsiLE(float3 u0,	float3 v0, float3 v1, float* psi, float3
 __device__ double DatomicAdd(double* address, double val);
 #endif
 
-__device__ float get_tau(int , struct Profile ) ;  
+__device__ float get_OD(int , struct Profile ) ;  
 
 /**********************************************************
 *	> Fonctions liées au générateur aléatoire

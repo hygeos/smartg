@@ -22,12 +22,11 @@
 *	> Constantes
 ***********************************************************/
 
-/* Lié au photon */
-// Poids initial du photon
 #define WEIGHTINIT 1.F
 
+// THRESHOLD for RUSSIAN ROULETTE PROCEDURE
 #define WEIGHTRR 0.1F
-// Détecte les photons très proches du zenith
+// THRESHOLD for SMALL ANGLE VALUE
 #define VALMIN 0.000001F
 
 
@@ -37,12 +36,12 @@
 #define DEMIPI 1.5707963F
 
 #define MAX_LOOP 100000
-#define MAX_NEVT 100 // Maximum number of scattering evts stored in photon
-#define MAX_NLOW 101
+#define MAX_NEVT 100 // Maximum number of scattering evts stored in photon in the ALIS procedure
+#define MAX_NLOW 101 // MAX Number of wavelengths stored in the ALIS scattering correction
 
 
 
-/* Localisation du photon */
+/* Possible Localisation photon */
 #define SPACE       0
 #define ATMOS       1
 #define SURF0P      2   // surface (air side)
@@ -72,7 +71,7 @@
 #define OUTPUT_BOA_DOWN_0M_UP_0P   2 // downward radiance at BOA below surface (0-) and upward radiance at BOA above surface (0+)
 
 
-/* Test des differentes fonctions random */
+/* random generator */
 #define RAND randomPhilox4x32_7float(etatThr, configThr)
 
 
@@ -82,60 +81,58 @@
 ***********************************************************/
 
 /* Photon
-* Contient toutes les informations sur le photon lors de son parcours dans l'atmosphère
 */
 
 class Photon
 {
 public:
-    // Vecteur normalisé de la direction du photon (vitesse)
+    // Normalized direction vector
     float3 v;
-    // Vecteur normalisé orthogonal à la vitesse du photon (polarisation)
+    // Normalized vector orthogonal to the direction vector 
     float3 u;
 	
-    // Localisation du photon
+    // Localization of the photon
     int loc;
     
-    // Poids du photon
+    // photon's weight
     float weight;
 
-    // longueur d onde du photon
-    float wavel; // for Raman
-    int ilam; // wavelength index
+    // wavelength
+    float wavel; // used for inelastic scatering
+    int ilam; // wavelength index in case of multispectral computation
     
     // Angular box indices (for LE)
     int iph;
     int ith;
 	
-    // Paramètres de stokes du photon
+    // Stokes parameters
     float4 stokes;
 
-    // Paramètres pour une atmosphère sphérique
-    int couche;
-    float prop_aer;		// Proportion d'aérosols par rapport aux molécules à l'endroit où se situe le photon
+    int layer;
+    float prop_aer;		// Aerosol proportion within the photon current layer
 	
 
-    float tau;	// localisation en epaisseur optique
-                // atmosphère: valeurs positives
-                // océan: valeurs négatives
+    float tau;	// vertical coordinate in optical depth (extinction or scattering depending on BEER keyword)
+                // atmosphere : positive values
+                // ocean: negative values
                 //
-    float tauabs; //localisation epaisseur optique d'absorption
+    float tau_abs; // vertical coordinate in absorption optical depth
 
-    // Position cartésienne du photon
+    // Cartesian coordinates of the photon
     float3 pos;
 
     #ifdef ALIS
     unsigned short nevt;  // Number  of events
     short layer_prev[MAX_NEVT]; // History of layer where events occured
     float vz_prev[MAX_NEVT]; // History of z cosine where events occured
-    float delta_prev[MAX_NEVT]; // History of proportion (between 0 and 1) within the layer where events occured
+    float epsilon_prev[MAX_NEVT]; // History of proportion (between 0 and 1) within the layer where events occured
     float weight_sca[MAX_NLOW]; // Table of scattering weigths for Importance Sampling correction
-    float tau_sca[MAX_NLOW]; // Table of differential scattering OD of the photon for Importance Sampling correction
+    float tau_sca[MAX_NLOW]; // Table of verical scattering OD of the photon for Importance Sampling correction
     #endif
 
     #ifdef SPHERIQUE
 
-    float rayon;
+    float radius;
     float taumax;
 	
     #endif
@@ -170,9 +167,9 @@ struct Phase {
 
 struct Profile {
     float z;      // altitude
-    float tau;    // cumulated extinction optical thickness (from top)
-    float tausca; // cumulated scattering optical thickness (from top)
-    float tauabs; // cumulated absorption optical thickness (from top)
+    float OD;    // cumulated extinction optical thickness (from top)
+    float OD_sca; // cumulated scattering optical thickness (from top)
+    float OD_abs; // cumulated absorption optical thickness (from top)
     float pmol;   // probability of pure Rayleigh scattering event
     float ssa;    // single scattering albedo (scatterer only)
     float abs;    // absorption coefficient

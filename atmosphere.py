@@ -679,19 +679,19 @@ class AtmAFGL(Atmosphere):
         # Total optical thickness and other parameters
         #
         tau_tot = tauray + taua + taug[:,:]
-        pro.add_dataset('tau_tot', tau_tot,
+        pro.add_dataset('OD', tau_tot,
                         axnames=['wavelength', 'z'],
                         attrs={'description':
                                'Cumulated total optical thickness'})
 
         tau_sca = np.cumsum(dtaur + dtaua*ssa, axis=1)
-        pro.add_dataset('tau_sca', tau_sca,
+        pro.add_dataset('OD_sca', tau_sca,
                         axnames=['wavelength', 'z'],
                         attrs={'description':
                                'Cumulated scattering optical thickness'})
 
         tau_abs = np.cumsum(dtaug[:,:] + dtaua*(1-ssa), axis=1)
-        pro.add_dataset('tau_abs', tau_abs,
+        pro.add_dataset('OD_abs', tau_abs,
                         axnames=['wavelength', 'z'],
                         attrs={'description':
                                'Cumulated absorption optical thickness'})

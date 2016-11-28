@@ -74,14 +74,14 @@ type_Spectrum = [
     ]
 
 type_Profile = [
-    ('z',      'float32'),   # // altitude
-    ('tau',    'float32'),   # // cumulated extinction optical thickness (from top)
-    ('tausca', 'float32'),   # // cumulated scattering optical thickness (from top)
-    ('tauabs', 'float32'),   # // cumulated absorption optical thickness (from top)
-    ('pmol',   'float32'),   # // probability of pure Rayleigh scattering event
-    ('ssa',    'float32'),   # // single scattering albedo (scatterer only)
-    ('abs',    'float32'),   # // absorption coefficient
-    ('iphase', 'int32'),    # // phase function index
+    ('z',      'float32'),    # // altitude
+    ('OD',    'float32'),     # // cumulated extinction optical thickness (from top)
+    ('OD_sca', 'float32'),    # // cumulated scattering optical thickness (from top)
+    ('OD_abs', 'float32'),    # // cumulated absorption optical thickness (from top)
+    ('pmol',   'float32'),    # // probability of pure Rayleigh scattering event
+    ('ssa',    'float32'),    # // layer single scattering albedo (scatterer only)
+    ('pabs',    'float32'),   # // layer single scattering albedo
+    ('iphase', 'int32'),      # // phase function index
     ]
 
 class FlatSurface(object):
@@ -802,9 +802,9 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
 
     # write atmospheric profiles
     if prof_atm is not None:
-        m.add_lut(prof_atm['tau_tot'])
-        m.add_lut(prof_atm['tau_sca'])
-        m.add_lut(prof_atm['tau_abs'])
+        m.add_lut(prof_atm['OD'])
+        m.add_lut(prof_atm['OD_sca'])
+        m.add_lut(prof_atm['OD_abs'])
         m.add_lut(prof_atm['pmol'])
         m.add_lut(prof_atm['ssa'])
         m.add_lut(prof_atm['pabs'])
@@ -1062,12 +1062,12 @@ def init_profile(wl, prof, ipha):
     prof_gpu['z'][0,:] = prof.axis('z')
     prof_gpu['z'][1:,:] = -999.      # other wavelengths are NaN
 
-    prof_gpu['tau'][:,:] = prof['tau_tot'][:,:]
-    prof_gpu['tausca'][:] = prof['tau_sca'][:,:]
-    prof_gpu['tauabs'][:] = prof['tau_abs'][:,:]
+    prof_gpu['OD'][:,:] = prof['OD'][:,:]
+    prof_gpu['OD_sca'][:] = prof['OD_sca'][:,:]
+    prof_gpu['OD_abs'][:] = prof['OD_abs'][:,:]
     prof_gpu['pmol'][:] = prof['pmol'][:,:]
     prof_gpu['ssa'][:] = prof['ssa'][:,:]
-    prof_gpu['abs'][:] = prof['pabs'][:,:]
+    prof_gpu['pabs'][:] = prof['pabs'][:,:]
     if ipha is not None:
         prof_gpu['iphase'][:] = ipha[:]
 
@@ -1259,7 +1259,7 @@ def impactInit(prof_atm, NLAM, THVDEG, Rter, pp):
 
         if NATM != 0:
             for ilam in xrange(NLAM):
-                tautot[ilam] = prof_atm['tau_tot'][ilam, NATM]/np.cos(THVDEG*pi/180.)
+                tautot[ilam] = prof_atm['OD'][ilam, NATM]/np.cos(THVDEG*pi/180.)
     else:
         tanthv = np.tan(THVDEG*np.pi/180.)
 
