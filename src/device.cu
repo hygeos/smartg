@@ -529,7 +529,6 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		ph->radius = length(ph->pos);
         #endif
 
-        // !! DEV on ne calucle pas d ep optique ici
         ph->loc = ATMOS;
         ph->tau = get_OD(BEERd, prof_atm[NATMd + ph->ilam*(NATMd+1)]) ;
         ph->tau_abs = prof_atm[NATMd + ph->ilam*(NATMd+1)].OD_abs;
@@ -549,7 +548,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 
         if (SIMd == 3) {
             ph->loc = OCEAN;
-            ph->layer = 0;
+            ph->layer = NOCEd;
         } else {
             ph->loc = SURF0P;
             ph->layer = NATMd;
