@@ -240,7 +240,7 @@ class AeroOPAC(object):
 
         tau_ref: optical thickness at wavelength wref
         w_ref: reference wavelength (nm) for aot
-        ssa: force single scattering albedo
+        ssa: force particle single scattering albedo
              (scalar or 1-d array-like for multichromatic)
 
         phase: LUT of phase function
@@ -456,10 +456,13 @@ class AtmAFGL(Atmosphere):
         - NO2: activate NO2 absorption (default True)
         - tauR: Rayleigh optical thickness, default None computed
           from atmospheric profile and wavelength
-        - prof_abs: the gaseous absorption optical thickness profile LUT provided by user
-                    is directly used, it shortcuts any further gaseous absorption computation
-        - prof_ray: the rayleigh scattering cumulative optical thickness profile  provided by user
-                    is directly used, it shortcuts any further rayleigh scattering computation
+        - prof_abs: the gaseous absorption optical thickness profile  provided by user
+                    if directly used, it shortcuts any further gaseous absorption computation, array of dimension (NWavelength,NZ)
+        - prof_ray: the rayleigh scattering optical thickness profile  provided by user
+                    if directly used, it shortcuts any further rayleigh scattering computation , array of dimension (NWavelength,NZ)
+        - prof_aer: a tuple (ext,ssa) the aerosol extinction optical thickness profile and single scattering albedo arrays  
+                    provided by user, each array has dimensions (NWavelength,NZ)
+                    if directly used, it shortcuts any further rayleigh scattering computation
 
         Phase functions definition:
         - pfwav: a list of wavelengths over which the phase functions are calculated
@@ -473,7 +476,7 @@ class AtmAFGL(Atmosphere):
                  P0=None, O3=None, H2O=None, NO2=True,
                  tauR=None,
                  pfwav=None, pfgrid=[100., 0.], prof_abs=None,
-                 prof_ray=None):
+                 prof_ray=None, prof_aer=None):
 
         self.lat = lat
         self.comp = comp
@@ -481,6 +484,7 @@ class AtmAFGL(Atmosphere):
         self.pfgrid = np.array(pfgrid)
         self.prof_abs = prof_abs
         self.prof_ray = prof_ray
+        self.prof_aer = prof_aer
 
         self.tauR = tauR
         if tauR is not None:
@@ -588,7 +592,10 @@ class AtmAFGL(Atmosphere):
         if self.prof_ray is None :
             tauray = rod(wav*1e-3, prof.dens_co2/prof.dens_air*1e6, self.lat,
                      prof.z*1e3, prof.P)
-        else : tauray = self.prof_ray
+            dtaur  = diff1(tauray, axis=1)
+        else : 
+            dtaur = self.prof_ray
+            tauray= np.cumsum(dtaur,axis=1)
 
         if self.tauR is not None:
             # scale Rayleigh optical thickness
@@ -603,30 +610,35 @@ class AtmAFGL(Atmosphere):
 
         # Rayleigh optical thickness
         dtaur = diff1(tauray, axis=1)
-        pro.add_dataset('tau_r', tauray, axnames=['wavelength', 'z'],
+        pro.add_dataset('OD_r', tauray, axnames=['wavelength', 'z'],
                         attrs={'description':
                                'Cumulated rayleigh optical thickness'})
 
         #
         # Aerosol optical thickness and single scattering albedo
         #
-        dtaua = np.zeros((len(wav), len(prof.z)), dtype='float32')
-        ssa = np.zeros((len(wav), len(prof.z)), dtype='float32')
-        for comp in self.comp:
-            dtau_, ssa_ = comp.dtau_ssa(wav, prof.z, prof.RH())
-            dtaua += dtau_
-            ssa += dtau_ * ssa_
-        ssa[dtaua!=0] /= dtaua[dtaua!=0]
-        ssa[dtaua==0] = 1.
+        if self.prof_aer is None :
+            dtaua = np.zeros((len(wav), len(prof.z)), dtype='float32')
+            ssa_p = np.zeros((len(wav), len(prof.z)), dtype='float32')
+            for comp in self.comp:
+                dtau_, ssa_ = comp.dtau_ssa(wav, prof.z, prof.RH())
+                dtaua += dtau_
+                ssa_p+= dtau_ * ssa_
+            ssa_p[dtaua!=0] /= dtaua[dtaua!=0]
+            ssa_p[dtaua==0] = 1.
+            taua = np.cumsum(dtaua, axis=1)
 
-        taua = np.cumsum(dtaua, axis=1)
-        pro.add_dataset('tau_a', taua,
+        else:
+            (dtaua, ssa_p) = self.prof_aer
+            taua= np.cumsum(dtaua,axis=1)
+
+        pro.add_dataset('OD_p', taua,
                         axnames=['wavelength', 'z'],
                         attrs={'description':
-                               'Cumulated aerosol optical thickness at each wavelength'})
-        pro.add_dataset('ssa', ssa, axnames=['wavelength', 'z'],
+                               'Cumulated particles optical thickness at each wavelength'})
+        pro.add_dataset('ssa_p', ssa_p, axnames=['wavelength', 'z'],
                         attrs={'description':
-                               'Single scattering albedo'})
+                               'Particles single scattering albedo of the layer'})
 
         if self.prof_abs is None:
             #
@@ -668,12 +680,17 @@ class AtmAFGL(Atmosphere):
             # Total gaseous optical thickness
             #
             dtaug = tau_o3 + tau_no2   # TODO: other gases
+            taug = dtaug.apply(lambda x: np.cumsum(x, axis=1))
+            taug.attrs['description'] = 'Cumulated gaseous absorption optical thickness'
+            pro.add_lut(taug, desc='OD_g')
             
-        else : dtaug = self.prof_abs
+        else : 
+            dtaug = self.prof_abs
+            taug  = np.cumsum(dtaug,axis=1)
+            pro.add_dataset('OD_g', taug, axnames=['wavelength', 'z'],
+                  attrs={'description':
+                         'Cumulated gaseous absorption optical thickness'})
             
-        taug = dtaug.apply(lambda x: np.cumsum(x, axis=1))
-        taug.attrs['description'] = 'Cumulated gaseous optical thickness'
-        pro.add_lut(taug, desc='taug')
 
         #
         # Total optical thickness and other parameters
@@ -682,15 +699,15 @@ class AtmAFGL(Atmosphere):
         pro.add_dataset('OD', tau_tot,
                         axnames=['wavelength', 'z'],
                         attrs={'description':
-                               'Cumulated total optical thickness'})
+                               'Cumulated extinction optical thickness'})
 
-        tau_sca = np.cumsum(dtaur + dtaua*ssa, axis=1)
+        tau_sca = np.cumsum(dtaur + dtaua*ssa_p, axis=1)
         pro.add_dataset('OD_sca', tau_sca,
                         axnames=['wavelength', 'z'],
                         attrs={'description':
                                'Cumulated scattering optical thickness'})
 
-        tau_abs = np.cumsum(dtaug[:,:] + dtaua*(1-ssa), axis=1)
+        tau_abs = np.cumsum(dtaug[:,:] + dtaua*(1-ssa_p), axis=1)
         pro.add_dataset('OD_abs', tau_abs,
                         axnames=['wavelength', 'z'],
                         attrs={'description':
@@ -702,15 +719,15 @@ class AtmAFGL(Atmosphere):
         pro.add_dataset('pmol', pmol,
                         axnames=['wavelength', 'z'],
                         attrs={'description':
-                               'Ratio of molecular scattering to total scattering'})
+                               'Ratio of molecular scattering to total scattering of the layer'})
 
         with np.errstate(invalid='ignore'):
-            pabs = dtaug[:,:]/diff1(tau_tot, axis=1)
-        pabs[np.isnan(pabs)] = 0.
-        pro.add_dataset('pabs', pabs,
+            ssa = (dtaur+ dtaua*ssa_p)/diff1(tau_tot, axis=1)
+        ssa[np.isnan(ssa)] = 0.
+        pro.add_dataset('ssa', ssa,
                         axnames=['wavelength', 'z'],
                         attrs={'description':
-                               'Ratio of gaseous absorption to total extinction'})
+                               'Single scattering albedo of the layer'})
 
         return pro
 
@@ -726,11 +743,11 @@ class AtmAFGL(Atmosphere):
         norm = 0.
         rh = self.prof_red.RH()
         for comp in self.comp:
-            dtau, ssa = comp.dtau_ssa(wav, self.pfgrid, rh=rh)
+            dtau, ssa_p = comp.dtau_ssa(wav, self.pfgrid, rh=rh)
             dtau = dtau[:,1:][:,:,None,None]
-            ssa = ssa[:,1:][:,:,None,None]
-            pha += comp.phase(wav, self.pfgrid, rh)*dtau*ssa
-            norm += dtau*ssa
+            ssa_p = ssa_p[:,1:][:,:,None,None]
+            pha += comp.phase(wav, self.pfgrid, rh)*dtau*ssa_p
+            norm += dtau*ssa_p
 
         if len(self.comp) > 0:
             pha /= norm

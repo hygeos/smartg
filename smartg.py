@@ -79,8 +79,7 @@ type_Profile = [
     ('OD_sca', 'float32'),    # // cumulated scattering optical thickness (from top)
     ('OD_abs', 'float32'),    # // cumulated absorption optical thickness (from top)
     ('pmol',   'float32'),    # // probability of pure Rayleigh scattering event
-    ('ssa',    'float32'),    # // layer single scattering albedo (scatterer only)
-    ('pabs',    'float32'),   # // layer single scattering albedo
+    ('ssa',    'float32'),    # // layer single scattering albedo
     ('iphase', 'int32'),      # // phase function index
     ]
 
@@ -807,7 +806,7 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
         m.add_lut(prof_atm['OD_abs'])
         m.add_lut(prof_atm['pmol'])
         m.add_lut(prof_atm['ssa'])
-        m.add_lut(prof_atm['pabs'])
+        m.add_lut(prof_atm['ssa_p'])
         if 'phase_atm' in prof_atm.datasets():
             m.add_lut(prof_atm['phase_atm'])
 
@@ -1067,7 +1066,6 @@ def init_profile(wl, prof, ipha):
     prof_gpu['OD_abs'][:] = prof['OD_abs'][:,:]
     prof_gpu['pmol'][:] = prof['pmol'][:,:]
     prof_gpu['ssa'][:] = prof['ssa'][:,:]
-    prof_gpu['pabs'][:] = prof['pabs'][:,:]
     if ipha is not None:
         prof_gpu['iphase'][:] = ipha[:]
 
@@ -1314,7 +1312,7 @@ def impactInit(prof_atm, NLAM, THVDEG, Rter, pp):
 
             for ilam in xrange(NLAM):
                 # optical thickness of the layer in vertical direction
-                hlay0 = abs(prof_atm['tau_tot'][ilam, i] - prof_atm['tau_tot'][ilam, i - 1])
+                hlay0 = abs(prof_atm['OD'][ilam, i] - prof_atm['OD'][ilam, i - 1])
 
                 # thickness of the layer
                 D0 = abs(Zatm[i-1] - Zatm[i])
