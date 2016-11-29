@@ -7,6 +7,7 @@ import numpy as np
 from os.path import join, dirname, exists, basename
 from glob import glob
 from tools.luts import MLUT, LUT, read_mlut_netcdf4, Idx
+from tools.phase import calc_iphase
 from scipy.interpolate import interp1d
 from scipy.integrate import simps
 from scipy.constants import codata
@@ -554,12 +555,16 @@ class AtmAFGL(Atmosphere):
 
         if phase:
             if self.pfwav is None:
-                pha = self.phase(wav)
+                wav_pha = wav
             else:
-                pha = self.phase(self.pfwav)
+                wav_pha = self.pfwav
+            pha = self.phase(wav_pha)
 
             if pha is not None:
-                profile.add_lut(pha, desc='phase_atm')
+                pha_, ipha = calc_iphase(pha, profile.axis('wavelength'), profile.axis('z'))
+                profile.add_axis('theta', pha.axes[-1])
+                profile.add_dataset('phase_atm', pha_, ['iphase_atm', 'stk', 'theta'])
+                profile.add_dataset('iphase_atm', ipha, ['wavelength', 'z'])
 
         return profile
 

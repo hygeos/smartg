@@ -455,8 +455,8 @@ class Smartg(object):
             prof_atm = atm
 
         if prof_atm is not None:
-            faer, ipha = calculF(prof_atm, NF, DEPO, kind='atm')
-            prof_atm_gpu = init_profile(wavelengths, prof_atm, ipha)
+            faer = calculF(prof_atm, NF, DEPO, kind='atm')
+            prof_atm_gpu = init_profile(wavelengths, prof_atm)
             NATM = len(prof_atm.axis('z')) - 1
         else:
             faer = gpuzeros(1, dtype='float32')
@@ -483,8 +483,8 @@ class Smartg(object):
             prof_oc = water
 
         if prof_oc is not None:
-            foce, ipha = calculF(prof_oc, NF, DEPO=0., kind='oc')
-            prof_oc_gpu = init_profile(wavelengths, prof_oc, ipha)
+            foce = calculF(prof_oc, NF, DEPO=0., kind='oc')
+            prof_oc_gpu = init_profile(wavelengths, prof_oc)
             NOCE = len(prof_oc.axis('z')) - 1
         else:
             foce = gpuzeros(1, dtype='float32')
@@ -880,13 +880,11 @@ def calculF(profile, N, DEPO, kind):
     ray (boolean): include rayleigh phase function
     '''
 
-    if 'wav_phase_{}'.format(kind) in profile.axes:
-        wav = profile.axis('wav_phase_{}'.format(kind))
-        altitude = profile.axis('z_phase_{}'.format(kind))
-        name_phase = 'phase_{}'.format(kind)
+    name_phase = 'phase_{}'.format(kind)
+    if name_phase in profile.datasets():
+        nphases = profile[name_phase].shape[0]
     else:
-        wav, altitude = [], []
-    nphases = len(wav) * len(altitude)
+        nphases = 0
 
     nphases += 1   # include Rayleigh phase function
 
@@ -899,30 +897,17 @@ def calculF(profile, N, DEPO, kind):
 
     # Set Rayleigh phase function
     phase_H[0,:] = rayleigh(N, DEPO)
-
-    if 'wav_phase_{}'.format(kind) in profile.axes:
+    if 'theta' in profile.axes:
         angles = profile.axis('theta') * pi/180.
         assert angles[-1] < 3.15   # assert that angles are in radians
         dtheta = np.diff(angles)
 
-        # phase function indices
-        ipha_w = np.array([np.abs(wav - x).argmin() for x in profile.axis('wavelength')])
-        ipha_a = np.array([np.abs(altitude - x).argmin() for x in profile.axis('z')])
-        ipha = ipha_a[None,:] + ipha_w[:,None]*len(altitude)
-    else:
-        shp = (len(profile.axis('wavelength')), len(profile.axis('z')))
-        ipha = np.zeros(shp, dtype='int64') - 1   # so that ipha+1 points to a valid phase function (Rayleigh)
-
     idx = 1
-    for (iw, w), (ialt, alt) in product(
-            enumerate(wav),
-            enumerate(altitude),
-            ):
+    for ipha in range(nphases-1):
 
-        phase = profile[name_phase][iw, ialt, :, :]  # wav, alt, stk, theta
+        phase = profile[name_phase][ipha, :, :]  # ipha, stk, theta
 
         scum = [0]
-        dtheta = np.diff(angles)
         pm = phase[1, :] + phase[0, :]
         sin = np.sin(angles)
         tmp = dtheta * ((sin[:-1] * pm[:-1] + sin[1:] * pm[1:]) / 3.
@@ -956,7 +941,7 @@ def calculF(profile, N, DEPO, kind):
 
         idx += 1
 
-    return to_gpu(phase_H), ipha
+    return to_gpu(phase_H)
 
 
 def InitConst(surf, env, NATM, NOCE, mod,
@@ -1023,7 +1008,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
     copy_to_device('NWLPROBA', NWLPROBA, np.int32)
 
 
-def init_profile(wl, prof, ipha):
+def init_profile(wl, prof):
     '''
     take the profile as a MLUT, and setup the gpu structure
     '''
@@ -1041,8 +1026,9 @@ def init_profile(wl, prof, ipha):
     prof_gpu['OD_abs'][:] = prof['OD_abs'][:,:]
     prof_gpu['pmol'][:] = prof['pmol'][:,:]
     prof_gpu['ssa'][:] = prof['ssa'][:,:]
-    if ipha is not None:
-        prof_gpu['iphase'][:] = ipha[:]
+    prof_gpu['abs'][:] = prof['pabs'][:,:]
+    if 'iphase_atm' in prof.datasets():
+        prof_gpu['iphase'][:] = prof['iphase_atm'][:,:]
 
     return to_gpu(prof_gpu)
 
