@@ -12,6 +12,9 @@ from iop import IOP
 from numpy import sin, cos, pi, array, exp
 from numpy import arange, zeros, log10, sqrt
 import numpy as np
+import warnings
+
+warnings.warn('deprecated')
 
 
 wl_1 = array([350., 355., 360., 365., 370., 375., 380., 385., 390., 395.,

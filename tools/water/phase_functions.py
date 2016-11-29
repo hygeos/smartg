@@ -5,6 +5,9 @@
 from numpy import sin, cos, pi, allclose
 from os.path import exists, dirname
 from os import makedirs, remove
+import warnings
+
+warnings.warn('deprecated')
 
 
 def fournierForand(ang, n, mu):
