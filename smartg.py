@@ -456,7 +456,7 @@ class Smartg(object):
 
         if prof_atm is not None:
             faer = calculF(prof_atm, NF, DEPO, kind='atm')
-            prof_atm_gpu = init_profile(wavelengths, prof_atm)
+            prof_atm_gpu = init_profile(wavelengths, prof_atm, 'atm')
             NATM = len(prof_atm.axis('z')) - 1
         else:
             faer = gpuzeros(1, dtype='float32')
@@ -484,7 +484,7 @@ class Smartg(object):
 
         if prof_oc is not None:
             foce = calculF(prof_oc, NF, DEPO=0., kind='oc')
-            prof_oc_gpu = init_profile(wavelengths, prof_oc)
+            prof_oc_gpu = init_profile(wavelengths, prof_oc, 'oc')
             NOCE = len(prof_oc.axis('z')) - 1
         else:
             foce = gpuzeros(1, dtype='float32')
@@ -776,12 +776,12 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
 
     # write atmospheric profiles
     if prof_atm is not None:
-        m.add_lut(prof_atm['OD'])
-        m.add_lut(prof_atm['OD_sca'])
-        m.add_lut(prof_atm['OD_abs'])
-        m.add_lut(prof_atm['pmol'])
-        m.add_lut(prof_atm['ssa'])
-        m.add_lut(prof_atm['ssa_p'])
+        m.add_lut(prof_atm['OD_atm'])
+        m.add_lut(prof_atm['OD_sca_atm'])
+        m.add_lut(prof_atm['OD_abs_atm'])
+        m.add_lut(prof_atm['pmol_atm'])
+        m.add_lut(prof_atm['ssa_atm'])
+        m.add_lut(prof_atm['ssa_p_atm'])
         if 'phase_atm' in prof_atm.datasets():
             m.add_lut(prof_atm['phase_atm'])
 
@@ -1008,9 +1008,11 @@ def InitConst(surf, env, NATM, NOCE, mod,
     copy_to_device('NWLPROBA', NWLPROBA, np.int32)
 
 
-def init_profile(wl, prof):
+def init_profile(wl, prof, kind):
     '''
     take the profile as a MLUT, and setup the gpu structure
+
+    kind = 'atm' or 'oc' for atmosphere or ocean
     '''
 
     # reformat to smartg format
@@ -1021,14 +1023,13 @@ def init_profile(wl, prof):
     prof_gpu['z'][0,:] = prof.axis('z')
     prof_gpu['z'][1:,:] = -999.      # other wavelengths are NaN
 
-    prof_gpu['OD'][:,:] = prof['OD'][:,:]
-    prof_gpu['OD_sca'][:] = prof['OD_sca'][:,:]
-    prof_gpu['OD_abs'][:] = prof['OD_abs'][:,:]
-    prof_gpu['pmol'][:] = prof['pmol'][:,:]
-    prof_gpu['ssa'][:] = prof['ssa'][:,:]
-    prof_gpu['abs'][:] = prof['pabs'][:,:]
+    prof_gpu['OD'][:,:] = prof['OD_'+kind][:,:]
+    prof_gpu['OD_sca'][:] = prof['OD_sca_'+kind][:,:]
+    prof_gpu['OD_abs'][:] = prof['OD_abs_'+kind][:,:]
+    prof_gpu['pmol'][:] = prof['pmol_'+kind][:,:]
+    prof_gpu['ssa'][:] = prof['ssa_'+kind][:,:]
     if 'iphase_atm' in prof.datasets():
-        prof_gpu['iphase'][:] = prof['iphase_atm'][:,:]
+        prof_gpu['iphase'][:] = prof['iphase_'+kind][:,:]
 
     return to_gpu(prof_gpu)
 
@@ -1218,7 +1219,7 @@ def impactInit(prof_atm, NLAM, THVDEG, Rter, pp):
 
         if NATM != 0:
             for ilam in xrange(NLAM):
-                tautot[ilam] = prof_atm['OD'][ilam, NATM]/np.cos(THVDEG*pi/180.)
+                tautot[ilam] = prof_atm['OD_atm'][ilam, NATM]/np.cos(THVDEG*pi/180.)
     else:
         tanthv = np.tan(THVDEG*np.pi/180.)
 
@@ -1273,7 +1274,7 @@ def impactInit(prof_atm, NLAM, THVDEG, Rter, pp):
 
             for ilam in xrange(NLAM):
                 # optical thickness of the layer in vertical direction
-                hlay0 = abs(prof_atm['OD'][ilam, i] - prof_atm['OD'][ilam, i - 1])
+                hlay0 = abs(prof_atm['OD_atm'][ilam, i] - prof_atm['OD_atm'][ilam, i - 1])
 
                 # thickness of the layer
                 D0 = abs(Zatm[i-1] - Zatm[i])

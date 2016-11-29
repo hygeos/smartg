@@ -220,7 +220,7 @@ class Species(object):
 
         return LUT(P,
                    axes=[wav, None, None, theta],
-                   names=['wav_phase_atm', 'z_phase_atm', 'stk', 'theta'],
+                   names=['wav_phase', 'z_phase', 'stk', 'theta'],
                    )
 
 
@@ -356,11 +356,11 @@ class AeroOPAC(object):
         '''
         if self._phase is not None:
             if self._phase.ndim == 2:
-                # convert to 4-dim by inserting empty dimensions wav_phase_atm
-                # and z_phase_atm
+                # convert to 4-dim by inserting empty dimensions wav_phase
+                # and z_phase
                 assert self._phase.names == ['stk', 'theta']
                 pha = LUT(self._phase.data[None,None,:,:],
-                          names = ['wav_phase_atm', 'z_phase_atm'] + self._phase.names,
+                          names = ['wav_phase', 'z_phase'] + self._phase.names,
                           axes = [None, None] + self._phase.axes,
                          )
 
@@ -641,7 +641,7 @@ class AtmAFGL(Atmosphere):
                         axnames=['wavelength', 'z'],
                         attrs={'description':
                                'Cumulated particles optical thickness at each wavelength'})
-        pro.add_dataset('ssa_p', ssa_p, axnames=['wavelength', 'z'],
+        pro.add_dataset('ssa_p_atm', ssa_p, axnames=['wavelength', 'z'],
                         attrs={'description':
                                'Particles single scattering albedo of the layer'})
 
@@ -701,19 +701,19 @@ class AtmAFGL(Atmosphere):
         # Total optical thickness and other parameters
         #
         tau_tot = tauray + taua + taug[:,:]
-        pro.add_dataset('OD', tau_tot,
+        pro.add_dataset('OD_atm', tau_tot,
                         axnames=['wavelength', 'z'],
                         attrs={'description':
                                'Cumulated extinction optical thickness'})
 
         tau_sca = np.cumsum(dtaur + dtaua*ssa_p, axis=1)
-        pro.add_dataset('OD_sca', tau_sca,
+        pro.add_dataset('OD_sca_atm', tau_sca,
                         axnames=['wavelength', 'z'],
                         attrs={'description':
                                'Cumulated scattering optical thickness'})
 
         tau_abs = np.cumsum(dtaug[:,:] + dtaua*(1-ssa_p), axis=1)
-        pro.add_dataset('OD_abs', tau_abs,
+        pro.add_dataset('OD_abs_atm', tau_abs,
                         axnames=['wavelength', 'z'],
                         attrs={'description':
                                'Cumulated absorption optical thickness'})
@@ -721,7 +721,7 @@ class AtmAFGL(Atmosphere):
         with np.errstate(invalid='ignore'):
             pmol = dtaur/(dtaur + dtaua)
         pmol[np.isnan(pmol)] = 1.
-        pro.add_dataset('pmol', pmol,
+        pro.add_dataset('pmol_atm', pmol,
                         axnames=['wavelength', 'z'],
                         attrs={'description':
                                'Ratio of molecular scattering to total scattering of the layer'})
@@ -729,7 +729,7 @@ class AtmAFGL(Atmosphere):
         with np.errstate(invalid='ignore'):
             ssa = (dtaur+ dtaua*ssa_p)/diff1(tau_tot, axis=1)
         ssa[np.isnan(ssa)] = 1.
-        pro.add_dataset('ssa', ssa,
+        pro.add_dataset('ssa_atm', ssa,
                         axnames=['wavelength', 'z'],
                         attrs={'description':
                                'Single scattering albedo of the layer'})
