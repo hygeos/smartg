@@ -815,7 +815,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
     #endif
 
     ph->prop_aer = 1.f - prof_atm[ph->layer+ilam].pmol;
-    if (BEERd == 0) ph->weight *= 1.f - prof_atm[ph->layer+ilam].abs;
+    if (BEERd == 0) ph->weight *= prof_atm[ph->layer+ilam].ssa;
 }
 #endif // SPHERIQUE
 
@@ -915,7 +915,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
         #endif
             
         #ifndef ALIS
-        if (BEERd == 0) ph->weight = ph->weight * prof_oc[ph->layer+ph->ilam*(NOCEd+1)].ssa;
+        if (BEERd == 0) ph->weight *= prof_oc[ph->layer+ph->ilam*(NOCEd+1)].ssa;
         else { // We compute the cumulated absorption OT at the new postion of the photon
             // photon new position in the layer
             ab = prof_oc[NATMd+ph->ilam*(NOCEd+1)].OD_abs - 
@@ -1029,7 +1029,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
         #endif
 
         #ifndef ALIS
-        if (BEERd == 0) ph->weight = ph->weight * prof_atm[ph->layer+ph->ilam*(NATMd+1)].ssa;
+        if (BEERd == 0) ph->weight *= prof_atm[ph->layer+ph->ilam*(NATMd+1)].ssa;
         else { // We compute the cumulated absorption OT at the new postion of the photon
             // photon new position in the layer
             ab = prof_atm[NATMd+ph->ilam*(NATMd+1)].OD_abs - 
