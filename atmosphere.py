@@ -723,7 +723,7 @@ class AtmAFGL(Atmosphere):
 
         with np.errstate(invalid='ignore'):
             ssa = (dtaur+ dtaua*ssa_p)/diff1(tau_tot, axis=1)
-        ssa[np.isnan(ssa)] = 0.
+        ssa[np.isnan(ssa)] = 1.
         pro.add_dataset('ssa', ssa,
                         axnames=['wavelength', 'z'],
                         attrs={'description':
