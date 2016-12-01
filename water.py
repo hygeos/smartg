@@ -33,19 +33,19 @@ class IOP_Rw(IOP_base):
         '''
         pro = MLUT()
         pro.add_axis('wavelength', wav)
-        pro.add_axis('z', np.arange(2))
+        pro.add_axis('z_oc', np.arange(2))
         shp = (len(wav), 2)
 
         pro.add_dataset('OD_oc', np.zeros(shp, dtype='float32'),
-                        ['wavelength', 'z'])
+                        ['wavelength', 'z_oc'])
         pro.add_dataset('OD_sca_oc', np.zeros(shp, dtype='float32'),
-                        ['wavelength', 'z'])
+                        ['wavelength', 'z_oc'])
         pro.add_dataset('OD_abs_oc', np.zeros(shp, dtype='float32'),
-                        ['wavelength', 'z'])
+                        ['wavelength', 'z_oc'])
         pro.add_dataset('pmol_oc', np.zeros(shp, dtype='float32'),
-                        ['wavelength', 'z'])
+                        ['wavelength', 'z_oc'])
         pro.add_dataset('ssa_oc', np.ones(shp, dtype='float32'),
-                        ['wavelength', 'z'])
+                        ['wavelength', 'z_oc'])
         pro.add_dataset('albedo_seafloor',
                         self.ALB.get(wav), ['wavelength'])
 
@@ -169,7 +169,7 @@ class IOP_1(IOP_base):
         wav = np.array(wav)
         pro = MLUT()
         pro.add_axis('wavelength', wav)
-        pro.add_axis('z', np.array([0., -self.depth]))
+        pro.add_axis('z_oc', np.array([0., -self.depth]))
 
         if phase:
             if self.pfwav is None:
@@ -179,14 +179,14 @@ class IOP_1(IOP_base):
             Bp = self.calc_iop(wav_pha)['Bp']
             pha = self.phase(wav_pha, Bp)
 
-            pha_, ipha = calc_iphase(pha['phase'], pro.axis('wavelength'), pro.axis('z'))
+            pha_, ipha = calc_iphase(pha['phase'], pro.axis('wavelength'), pro.axis('z_oc'))
 
             # index with ipha and reshape to broadcast to [wav, z]
-            coef_trunc = pha['coef_trunc'].data.ravel()[ipha][:,0]  # discard dimension 'z'
+            coef_trunc = pha['coef_trunc'].data.ravel()[ipha][:,0]  # discard dimension 'z_oc'
 
             pro.add_axis('theta', pha.axis('theta'))
             pro.add_dataset('phase_oc', pha_, ['iphase', 'stk', 'theta'])
-            pro.add_dataset('iphase_oc', ipha, ['wavelength', 'z'])
+            pro.add_dataset('iphase_oc', ipha, ['wavelength', 'z_oc'])
         else:
             coef_trunc = 2.
 
@@ -197,27 +197,27 @@ class IOP_1(IOP_base):
         tau_tot = np.zeros(shp, dtype='float32')
         tau_tot[:,1] = - ((iop['atot'] + iop['btot']) * self.depth)
         pro.add_dataset('OD_oc', tau_tot,
-                        ['wavelength', 'z'])
+                        ['wavelength', 'z_oc'])
 
         tau_sca = np.zeros(shp, dtype='float32')
         tau_sca[:,1] = - (iop['btot'] * self.depth)
         pro.add_dataset('OD_sca_oc', tau_sca,
-                        ['wavelength', 'z'])
+                        ['wavelength', 'z_oc'])
 
         tau_abs = np.zeros(shp, dtype='float32')
         tau_abs[:,1] = - (iop['atot'] * self.depth)
         pro.add_dataset('OD_abs_oc', tau_abs,
-                        ['wavelength', 'z'])
+                        ['wavelength', 'z_oc'])
 
         pmol = np.zeros(shp, dtype='float32')
         pmol[:,1] = iop['bw']/iop['btot']
         pro.add_dataset('pmol_oc', pmol,
-                        ['wavelength', 'z'])
+                        ['wavelength', 'z_oc'])
 
         ssa = np.zeros(shp, dtype='float32')
         ssa[:,1] = 1.
         pro.add_dataset('ssa_oc', ssa,
-                        ['wavelength', 'z'])
+                        ['wavelength', 'z_oc'])
 
         pro.add_dataset('albedo_seafloor',
                         self.ALB.get(wav),

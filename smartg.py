@@ -457,7 +457,7 @@ class Smartg(object):
         if prof_atm is not None:
             faer = calculF(prof_atm, NF, DEPO, kind='atm')
             prof_atm_gpu = init_profile(wavelengths, prof_atm, 'atm')
-            NATM = len(prof_atm.axis('z')) - 1
+            NATM = len(prof_atm.axis('z_atm')) - 1
         else:
             faer = gpuzeros(1, dtype='float32')
             prof_atm_gpu = to_gpu(np.zeros(1, dtype=type_Profile))
@@ -485,7 +485,7 @@ class Smartg(object):
         if prof_oc is not None:
             foce = calculF(prof_oc, NF, DEPO=0., kind='oc')
             prof_oc_gpu = init_profile(wavelengths, prof_oc, 'oc')
-            NOCE = len(prof_oc.axis('z')) - 1
+            NOCE = len(prof_oc.axis('z_oc')) - 1
         else:
             foce = gpuzeros(1, dtype='float32')
             prof_oc_gpu = to_gpu(np.zeros(1, dtype=type_Profile))
@@ -787,7 +787,15 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
 
     # write ocean profiles
     if prof_oc is not None:
-        warn('Not implemented: OC profile in result')
+        m.add_lut(prof_oc['OD_oc'])
+        m.add_lut(prof_oc['OD_sca_oc'])
+        m.add_lut(prof_oc['OD_abs_oc'])
+        m.add_lut(prof_oc['pmol_oc'])
+        m.add_lut(prof_oc['ssa_oc'])
+        if 'ssa_p_oc' in prof_oc.datasets():
+            m.add_lut(prof_oc['ssa_p_oc'])
+        if 'phase_oc' in prof_oc.datasets():
+            m.add_lut(prof_oc['phase_oc'])
 
     # write the error count
     err = errorcount.get()
@@ -1017,10 +1025,10 @@ def init_profile(wl, prof, kind):
 
     # reformat to smartg format
 
-    NATM = len(prof.axis('z')) - 1
+    NATM = len(prof.axis('z_'+kind)) - 1
     shp = (len(wl), NATM+1)
     prof_gpu = np.zeros(shp, dtype=type_Profile, order='C')
-    prof_gpu['z'][0,:] = prof.axis('z')
+    prof_gpu['z'][0,:] = prof.axis('z_'+kind)
     prof_gpu['z'][1:,:] = -999.      # other wavelengths are NaN
 
     prof_gpu['OD'][:,:] = prof['OD_'+kind][:,:]
@@ -1201,7 +1209,7 @@ def impactInit(prof_atm, NLAM, THVDEG, Rter, pp):
         Hatm = 0.
         NATM = 0
     else:
-        Zatm = prof_atm.axis('z')
+        Zatm = prof_atm.axis('z_atm')
         Hatm = Zatm[0]
         NATM = len(Zatm)-1
 

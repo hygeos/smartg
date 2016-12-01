@@ -561,10 +561,10 @@ class AtmAFGL(Atmosphere):
             pha = self.phase(wav_pha)
 
             if pha is not None:
-                pha_, ipha = calc_iphase(pha, profile.axis('wavelength'), profile.axis('z'))
+                pha_, ipha = calc_iphase(pha, profile.axis('wavelength'), profile.axis('z_atm'))
                 profile.add_axis('theta', pha.axes[-1])
                 profile.add_dataset('phase_atm', pha_, ['iphase_atm', 'stk', 'theta'])
-                profile.add_dataset('iphase_atm', ipha, ['wavelength', 'z'])
+                profile.add_dataset('iphase_atm', ipha, ['wavelength', 'z_atm'])
 
         return profile
 
@@ -587,7 +587,7 @@ class AtmAFGL(Atmosphere):
         dz = -diff1(prof.z)
 
         pro = MLUT()
-        pro.add_axis('z', prof.z)
+        pro.add_axis('z_atm', prof.z)
         pro.add_axis('wavelength', wav)
 
         #
@@ -615,7 +615,7 @@ class AtmAFGL(Atmosphere):
 
         # Rayleigh optical thickness
         dtaur = diff1(tauray, axis=1)
-        pro.add_dataset('OD_r', tauray, axnames=['wavelength', 'z'],
+        pro.add_dataset('OD_r', tauray, axnames=['wavelength', 'z_atm'],
                         attrs={'description':
                                'Cumulated rayleigh optical thickness'})
 
@@ -638,10 +638,10 @@ class AtmAFGL(Atmosphere):
             taua= np.cumsum(dtaua,axis=1)
 
         pro.add_dataset('OD_p', taua,
-                        axnames=['wavelength', 'z'],
+                        axnames=['wavelength', 'z_atm'],
                         attrs={'description':
                                'Cumulated particles optical thickness at each wavelength'})
-        pro.add_dataset('ssa_p_atm', ssa_p, axnames=['wavelength', 'z'],
+        pro.add_dataset('ssa_p_atm', ssa_p, axnames=['wavelength', 'z_atm'],
                         attrs={'description':
                                'Particles single scattering albedo of the layer'})
 
@@ -692,7 +692,7 @@ class AtmAFGL(Atmosphere):
         else : 
             dtaug = self.prof_abs
             taug  = np.cumsum(dtaug,axis=1)
-            pro.add_dataset('OD_g', taug, axnames=['wavelength', 'z'],
+            pro.add_dataset('OD_g', taug, axnames=['wavelength', 'z_atm'],
                   attrs={'description':
                          'Cumulated gaseous absorption optical thickness'})
             
@@ -702,19 +702,19 @@ class AtmAFGL(Atmosphere):
         #
         tau_tot = tauray + taua + taug[:,:]
         pro.add_dataset('OD_atm', tau_tot,
-                        axnames=['wavelength', 'z'],
+                        axnames=['wavelength', 'z_atm'],
                         attrs={'description':
                                'Cumulated extinction optical thickness'})
 
         tau_sca = np.cumsum(dtaur + dtaua*ssa_p, axis=1)
         pro.add_dataset('OD_sca_atm', tau_sca,
-                        axnames=['wavelength', 'z'],
+                        axnames=['wavelength', 'z_atm'],
                         attrs={'description':
                                'Cumulated scattering optical thickness'})
 
         tau_abs = np.cumsum(dtaug[:,:] + dtaua*(1-ssa_p), axis=1)
         pro.add_dataset('OD_abs_atm', tau_abs,
-                        axnames=['wavelength', 'z'],
+                        axnames=['wavelength', 'z_atm'],
                         attrs={'description':
                                'Cumulated absorption optical thickness'})
 
@@ -722,7 +722,7 @@ class AtmAFGL(Atmosphere):
             pmol = dtaur/(dtaur + dtaua)
         pmol[np.isnan(pmol)] = 1.
         pro.add_dataset('pmol_atm', pmol,
-                        axnames=['wavelength', 'z'],
+                        axnames=['wavelength', 'z_atm'],
                         attrs={'description':
                                'Ratio of molecular scattering to total scattering of the layer'})
 
@@ -730,7 +730,7 @@ class AtmAFGL(Atmosphere):
             ssa = (dtaur+ dtaua*ssa_p)/diff1(tau_tot, axis=1)
         ssa[np.isnan(ssa)] = 1.
         pro.add_dataset('ssa_atm', ssa,
-                        axnames=['wavelength', 'z'],
+                        axnames=['wavelength', 'z_atm'],
                         attrs={'description':
                                'Single scattering albedo of the layer'})
 
