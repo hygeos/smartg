@@ -1115,7 +1115,7 @@ __device__ void scatter(Photon* ph,
         ilay = ph->layer + ph->ilam*(NATMd+1); // atm layer index
 
 		/* atm phase function index */
-		if( prop_aer < RANDTWO ){ipha  = 0;} // Rayleigh index
+		if( prop_aer < RAND ){ipha  = 0;} // Rayleigh index
 		else {ipha  = prof_atm[ilay].iphase + 1;} // Aerosols index
 	}
 	/* Scattering in ocean */
@@ -1128,7 +1128,8 @@ __device__ void scatter(Photon* ph,
 
 		/* ocean phase function index */
 		if( prop_raman < RANDTWO ){ipha  = 0;} // raman index
-		else {ipha  = prof_oc[ilay].iphase + 1;} // Elastic index
+		else if ( prop_aer < RAND ){ipha  = 0;} // Rayleigh index
+		else {ipha  = prof_atm[ilay].iphase + 1;} // Aerosols index
 	}
 
 	if(!le) {
@@ -1217,15 +1218,16 @@ __device__ void scatter(Photon* ph,
         float P11_aer_ref, P11_ray, P22_aer_ref, P22_ray, P_ref;
         float pmol= prof_atm[ph->layer+ ph->ilam*(NATMd+1)].pmol;
         
-        if (pmol >1.) {
+        if (pmol <1.) {
 		    zang = theta * (NF-1)/PI ;
 		    iang = __float2int_rd(zang);
 		    zang = zang - iang;
+		    int ipharef  = prof_atm[ph->layer+ph->ilam*(NATMd+1)].iphase + 1; 
             // Phase functions of aerosols and Rayliegh, and mixture of both at reference wavelength
-		    P11_aer_ref = (1-zang)*func[ipha*NF+iang].a_P11 + zang*func[ipha*NF+iang+1].a_P11;
-		    P11_ray     = (1-zang)*func[0   *NF+iang].a_P11 + zang*func[0   *NF+iang+1].a_P11;
-		    P22_aer_ref = (1-zang)*func[ipha*NF+iang].a_P22 + zang*func[ipha*NF+iang+1].a_P22;
-		    P22_ray     = (1-zang)*func[0   *NF+iang].a_P22 + zang*func[0   *NF+iang+1].a_P22;
+		    P11_aer_ref = (1-zang)*func[ipharef*NF+iang].a_P11 + zang*func[ipharef*NF+iang+1].a_P11;
+		    P11_ray     = (1-zang)*func[0      *NF+iang].a_P11 + zang*func[0      *NF+iang+1].a_P11;
+		    P22_aer_ref = (1-zang)*func[ipharef*NF+iang].a_P22 + zang*func[ipharef*NF+iang+1].a_P22;
+		    P22_ray     = (1-zang)*func[0      *NF+iang].a_P22 + zang*func[0      *NF+iang+1].a_P22;
             P_ref     = (P11_ray+P22_ray) * pmol + (P11_aer_ref+P22_aer_ref) * (1.-pmol);
         }
 
@@ -1233,15 +1235,18 @@ __device__ void scatter(Photon* ph,
             ph->weight_sca[k] *= __fdividef(get_OD(1,prof_atm[ph->layer+ k*DL*(NATMd+1)]), 
                                             get_OD(1,prof_atm[ph->layer + ph->ilam*(NATMd+1)]));
 
-            if (pmol >1.) {
+            if (pmol <1.) {
 		        int iphak  = prof_atm[ph->layer+k*DL*(NATMd+1)].iphase + 1; 
+                float pmol_k = prof_atm[ph->layer+ k*DL*(NATMd+1)].pmol;
                 // Phase functions of aerosols  at other wavelengths, Rayleigh is supposed to be constant with wavelength
 		        float P11_aer = (1-zang)*func[iphak*NF+iang].a_P11 + zang*func[iphak*NF+iang+1].a_P11;
 		        float P22_aer = (1-zang)*func[iphak*NF+iang].a_P22 + zang*func[iphak*NF+iang+1].a_P22;
                 // Phase functions of the mixture of aerosols and Rayliegh at other wavelengths
-                float P_k   = (P11_ray+P22_ray) *     prof_atm[ph->layer+ k*DL*(NATMd+1)].pmol + 
-                              (P11_aer+P22_aer) * (1.-prof_atm[ph->layer+ k*DL*(NATMd+1)].pmol);
+                float P_k   = (P11_ray+P22_ray) * pmol_k + (P11_aer+P22_aer) * (1.-pmol_k);
                 ph->weight_sca[k] *= __fdividef(P_k, P_ref);
+                //int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
+                //if (idx==0) printf("%d %d %f %d %f %f %f %f\n",ipha,ph->layer,pmol,k,pmol_k,
+                //        ph->weight_sca[k],P_k,P_ref);
             }
         }
         #endif
@@ -1269,7 +1274,7 @@ __device__ void scatter(Photon* ph,
 		/** Russian roulette for propagating photons **/
 		if (!le) {
 			if( ph->weight < WEIGHTRR ){
-				if( RANDTWO < __fdividef(ph->weight,WEIGHTRR) ){ph->weight = WEIGHTRR;}
+				if( RAND < __fdividef(ph->weight,WEIGHTRR) ){ph->weight = WEIGHTRR;}
 				else{ph->loc = ABSORBED;}
 			}
 		}
