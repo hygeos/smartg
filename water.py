@@ -109,7 +109,7 @@ class IOP_1(IOP_base):
 
         wav: wavelength in nm
         coef_trunc: integrate (normalized to 2) of the truncated phase function
-        -> scattering coefficient has to be multiplied by 2/coef_trunc
+        -> scattering coefficient has to be multiplied by coef_trunc/2.
         '''
         chl = self.chl
 
@@ -138,7 +138,7 @@ class IOP_1(IOP_base):
 
         bp = 0.416*(chl**0.766)*550./wav
 
-        bp *= 2./coef_trunc
+        bp *= coef_trunc/2.
 
         btot = bw + bp
 
