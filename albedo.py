@@ -30,4 +30,16 @@ class Albedo_speclib(object):
     def get(self, wl):
         return self.data[Idx(wl)]
 
+class Albedo_spectrum(object):
+    '''
+    Albedo R(lambda)
+
+    R spectral albedo, lam in nm
+    '''
+    def __init__(self, R, lam):
+        self.data = LUT(R, axes=[lam], names=['wavelength'])
+
+    def get(self, wl):
+        return self.data[Idx(wl)]
+
 
