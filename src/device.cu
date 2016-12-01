@@ -1264,9 +1264,33 @@ __device__ void scatter(Photon* ph,
 	    else{ // Elastic
             #ifdef ALIS
             int DL=(NLAMd-1)/(NLOWd-1);
+            float P11_aer_ref, P11_ray, P22_aer_ref, P22_ray, P_ref;
+            float pmol= prof_oc[ph->layer+ ph->ilam*(NOCEd+1)].pmol;
+            if (pmol <1.) {
+		        zang = theta * (NF-1)/PI ;
+		        iang = __float2int_rd(zang);
+		        zang = zang - iang;
+		        int ipharef  = prof_oc[ph->layer+ph->ilam*(NOCEd+1)].iphase + 1; 
+                // Phase functions of aerosols and Rayliegh, and mixture of both at reference wavelength
+		        P11_aer_ref = (1-zang)*func[ipharef*NF+iang].a_P11 + zang*func[ipharef*NF+iang+1].a_P11;
+		        P11_ray     = (1-zang)*func[0      *NF+iang].a_P11 + zang*func[0      *NF+iang+1].a_P11;
+		        P22_aer_ref = (1-zang)*func[ipharef*NF+iang].a_P22 + zang*func[ipharef*NF+iang+1].a_P22;
+		        P22_ray     = (1-zang)*func[0      *NF+iang].a_P22 + zang*func[0      *NF+iang+1].a_P22;
+                P_ref     = (P11_ray+P22_ray) * pmol + (P11_aer_ref+P22_aer_ref) * (1.-pmol);
+            }
             for (int k=0; k<NLOWd; k++) {
                  ph->weight_sca[k] *= __fdividef(get_OD(1,prof_oc[ph->layer+ k*DL*(NOCEd+1)]), 
                      get_OD(1,prof_oc[ph->layer + ph->ilam*(NOCEd+1)]));
+                if (pmol <1.) {
+		            int iphak  = prof_oc[ph->layer+k*DL*(NOCEd+1)].iphase + 1; 
+                    float pmol_k = prof_oc[ph->layer+ k*DL*(NOCEd+1)].pmol;
+                    // Phase functions of aerosols  at other wavelengths, Rayleigh is supposed to be constant with wavelength
+		            float P11_aer = (1-zang)*func[iphak*NF+iang].a_P11 + zang*func[iphak*NF+iang+1].a_P11;
+		            float P22_aer = (1-zang)*func[iphak*NF+iang].a_P22 + zang*func[iphak*NF+iang+1].a_P22;
+                    // Phase functions of the mixture of aerosols and Rayliegh at other wavelengths
+                    float P_k   = (P11_ray+P22_ray) * pmol_k + (P11_aer+P22_aer) * (1.-pmol_k);
+                    ph->weight_sca[k] *= __fdividef(P_k, P_ref);
+                }
             }
             #endif
 		}
@@ -1278,7 +1302,7 @@ __device__ void scatter(Photon* ph,
 				else{ph->loc = ABSORBED;}
 			}
 		}
-	}
+	} //ocean
 		
 	if (!le){
 		modifyUV( ph->v, ph->u, cTh, psi, &ph->v, &ph->u) ;
