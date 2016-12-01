@@ -918,7 +918,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
         if (BEERd == 0) ph->weight *= prof_oc[ph->layer+ph->ilam*(NOCEd+1)].ssa;
         else { // We compute the cumulated absorption OT at the new postion of the photon
             // photon new position in the layer
-            ab = prof_oc[NATMd+ph->ilam*(NOCEd+1)].OD_abs - 
+            ab = prof_oc[NOCEd+ph->ilam*(NOCEd+1)].OD_abs - 
                 (epsilon * (prof_oc[ilayer+ph->ilam*(NOCEd+1)].OD_abs - prof_oc[ilayer-1+ph->ilam*(NOCEd+1)].OD_abs) +
                 prof_oc[ilayer-1+ph->ilam*(NOCEd+1)].OD_abs);
             // absorption between start and stop
@@ -1214,31 +1214,34 @@ __device__ void scatter(Photon* ph,
 		/************************/
         #ifdef ALIS
         int DL=(NLAMd-1)/(NLOWd-1);
-        float P11_aer_ref, P11_ray, P11_ref;
+        float P11_aer_ref, P11_ray, P22_aer_ref, P22_ray, P_ref;
         float pmol= prof_atm[ph->layer+ ph->ilam*(NATMd+1)].pmol;
         
-        if (pmol >=1.) {
+        if (pmol >1.) {
 		    zang = theta * (NF-1)/PI ;
 		    iang = __float2int_rd(zang);
 		    zang = zang - iang;
             // Phase functions of aerosols and Rayliegh, and mixture of both at reference wavelength
 		    P11_aer_ref = (1-zang)*func[ipha*NF+iang].a_P11 + zang*func[ipha*NF+iang+1].a_P11;
-		    P11_ray     = (1-zang)*func[0*NF+iang].a_P11    + zang*func[0*NF+iang+1].a_P11;
-            P11_ref = P11_ray * pmol + P11_aer_ref * (1.-pmol);
+		    P11_ray     = (1-zang)*func[0   *NF+iang].a_P11 + zang*func[0   *NF+iang+1].a_P11;
+		    P22_aer_ref = (1-zang)*func[ipha*NF+iang].a_P22 + zang*func[ipha*NF+iang+1].a_P22;
+		    P22_ray     = (1-zang)*func[0   *NF+iang].a_P22 + zang*func[0   *NF+iang+1].a_P22;
+            P_ref     = (P11_ray+P22_ray) * pmol + (P11_aer_ref+P22_aer_ref) * (1.-pmol);
         }
 
         for (int k=0; k<NLOWd; k++) {
             ph->weight_sca[k] *= __fdividef(get_OD(1,prof_atm[ph->layer+ k*DL*(NATMd+1)]), 
                                             get_OD(1,prof_atm[ph->layer + ph->ilam*(NATMd+1)]));
 
-            if (pmol >=1.) {
+            if (pmol >1.) {
 		        int iphak  = prof_atm[ph->layer+k*DL*(NATMd+1)].iphase + 1; 
                 // Phase functions of aerosols  at other wavelengths, Rayleigh is supposed to be constant with wavelength
 		        float P11_aer = (1-zang)*func[iphak*NF+iang].a_P11 + zang*func[iphak*NF+iang+1].a_P11;
+		        float P22_aer = (1-zang)*func[iphak*NF+iang].a_P22 + zang*func[iphak*NF+iang+1].a_P22;
                 // Phase functions of the mixture of aerosols and Rayliegh at other wavelengths
-                float P11_k   = P11_ray     * prof_atm[ph->layer+ k*DL*(NATMd+1)].pmol + 
-                          P11_aer     * (1.-prof_atm[ph->layer+ k*DL*(NATMd+1)].pmol);
-                ph->weight_sca[k] *= __fdividef(P11_k, P11_ref);
+                float P_k   = (P11_ray+P22_ray) *     prof_atm[ph->layer+ k*DL*(NATMd+1)].pmol + 
+                              (P11_aer+P22_aer) * (1.-prof_atm[ph->layer+ k*DL*(NATMd+1)].pmol);
+                ph->weight_sca[k] *= __fdividef(P_k, P_ref);
             }
         }
         #endif
