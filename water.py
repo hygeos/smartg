@@ -214,8 +214,7 @@ class IOP_1(IOP_base):
         pro.add_dataset('pmol_oc', pmol,
                         ['wavelength', 'z_oc'])
 
-        ssa = np.zeros(shp, dtype='float32')
-        ssa[:,1] = 1.
+        ssa = np.ones(shp, dtype='float32')
         pro.add_dataset('ssa_oc', ssa,
                         ['wavelength', 'z_oc'])
 
