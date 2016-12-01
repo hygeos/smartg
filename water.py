@@ -214,7 +214,11 @@ class IOP_1(IOP_base):
         pro.add_dataset('pmol_oc', pmol,
                         ['wavelength', 'z_oc'])
 
-        ssa = np.ones(shp, dtype='float32')
+        with np.errstate(invalid='ignore'):
+            ssa = tau_sca/tau_tot
+
+        ssa[np.isnan(ssa)] = 1.
+
         pro.add_dataset('ssa_oc', ssa,
                         ['wavelength', 'z_oc'])
 
