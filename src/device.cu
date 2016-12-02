@@ -1129,7 +1129,7 @@ __device__ void scatter(Photon* ph,
 		/* ocean phase function index */
 		if( prop_raman < RANDTWO ){ipha  = 0;} // raman index
 		else if ( prop_aer < RAND ){ipha  = 0;} // Rayleigh index
-		else {ipha  = prof_atm[ilay].iphase + 1;} // Aerosols index
+		else {ipha  = prof_oc[ilay].iphase + 1;} // Aerosols index
 	}
 
 	if(!le) {
