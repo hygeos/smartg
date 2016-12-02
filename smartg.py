@@ -905,8 +905,8 @@ def calculF(profile, N, DEPO, kind):
 
     # Set Rayleigh phase function
     phase_H[0,:] = rayleigh(N, DEPO)
-    if 'theta' in profile.axes:
-        angles = profile.axis('theta') * pi/180.
+    if 'theta_'+kind in profile.axes:
+        angles = profile.axis('theta_'+kind) * pi/180.
         assert angles[-1] < 3.15   # assert that angles are in radians
         dtheta = np.diff(angles)
 

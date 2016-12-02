@@ -184,8 +184,8 @@ class IOP_1(IOP_base):
             # index with ipha and reshape to broadcast to [wav, z]
             coef_trunc = pha['coef_trunc'].data.ravel()[ipha][:,0]  # discard dimension 'z_oc'
 
-            pro.add_axis('theta', pha.axis('theta'))
-            pro.add_dataset('phase_oc', pha_, ['iphase', 'stk', 'theta'])
+            pro.add_axis('theta_oc', pha.axis('theta_oc'))
+            pro.add_dataset('phase_oc', pha_, ['iphase', 'stk', 'theta_oc'])
             pro.add_dataset('iphase_oc', ipha, ['wavelength', 'z_oc'])
         else:
             coef_trunc = 2.
@@ -269,8 +269,8 @@ class IOP_1(IOP_base):
         result = MLUT()
         result.add_axis('wav_phase_oc', wav)
         result.add_axis('z_phase_oc', np.array([0.]))
-        result.add_axis('theta', ang*180./np.pi)
-        result.add_dataset('phase', pha, ['wav_phase_oc', 'z_phase_oc', 'stk', 'theta'])
+        result.add_axis('theta_oc', ang*180./np.pi)
+        result.add_dataset('phase', pha, ['wav_phase_oc', 'z_phase_oc', 'stk', 'theta_oc'])
         result.add_dataset('coef_trunc', integ_ff[:,None], ['wav_phase_oc', 'z_phase_oc'])
 
         return result

@@ -220,7 +220,7 @@ class Species(object):
 
         return LUT(P,
                    axes=[wav, None, None, theta],
-                   names=['wav_phase', 'z_phase', 'stk', 'theta'],
+                   names=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
                    )
 
 
@@ -358,7 +358,7 @@ class AeroOPAC(object):
             if self._phase.ndim == 2:
                 # convert to 4-dim by inserting empty dimensions wav_phase
                 # and z_phase
-                assert self._phase.names == ['stk', 'theta']
+                assert self._phase.names == ['stk', 'theta_atm']
                 pha = LUT(self._phase.data[None,None,:,:],
                           names = ['wav_phase', 'z_phase'] + self._phase.names,
                           axes = [np.array([wav[0]]), np.array([0.])] + self._phase.axes,
@@ -562,8 +562,8 @@ class AtmAFGL(Atmosphere):
 
             if pha is not None:
                 pha_, ipha = calc_iphase(pha, profile.axis('wavelength'), profile.axis('z_atm'))
-                profile.add_axis('theta', pha.axes[-1])
-                profile.add_dataset('phase_atm', pha_, ['iphase_atm', 'stk', 'theta'])
+                profile.add_axis('theta_atm', pha.axes[-1])
+                profile.add_dataset('phase_atm', pha_, ['iphase_atm', 'stk', 'theta_atm'])
                 profile.add_dataset('iphase_atm', ipha, ['wavelength', 'z_atm'])
 
         return profile
@@ -781,7 +781,7 @@ def read_phase(filename, standard=False):
 
     P = LUT(pha.swapaxes(0, 1),  # stk, theta
             axes=[None, theta],
-            names=['stk', 'theta'],
+            names=['stk', 'theta_atm'],
            )
 
     return P
