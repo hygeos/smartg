@@ -361,7 +361,7 @@ class AeroOPAC(object):
                 assert self._phase.names == ['stk', 'theta']
                 pha = LUT(self._phase.data[None,None,:,:],
                           names = ['wav_phase', 'z_phase'] + self._phase.names,
-                          axes = [None, None] + self._phase.axes,
+                          axes = [np.array([wav[0]]), np.array([0.])] + self._phase.axes,
                          )
 
                 return pha
