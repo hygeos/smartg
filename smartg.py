@@ -796,6 +796,7 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
             m.add_lut(prof_oc['ssa_p_oc'])
         if 'phase_oc' in prof_oc.datasets():
             m.add_lut(prof_oc['phase_oc'])
+        m.add_lut(prof_oc['albedo_seafloor'])
 
     # write the error count
     err = errorcount.get()
