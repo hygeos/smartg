@@ -857,7 +857,6 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             if (SIMd == 3){
               ph->loc = SPACE;
             }
-            ph->pos.z = 0.;
             ph->layer = NOCEd;
             #ifdef ALIS
             ph->nevt++;
