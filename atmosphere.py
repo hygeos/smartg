@@ -11,6 +11,7 @@ from tools.phase import calc_iphase
 from scipy.interpolate import interp1d
 from scipy.integrate import simps
 from scipy.constants import codata
+from bandset import BandSet
 import netCDF4
 from warnings import warn, catch_warnings
 import sys
@@ -458,9 +459,11 @@ class AtmAFGL(Atmosphere):
         - tauR: Rayleigh optical thickness, default None computed
           from atmospheric profile and wavelength
         - prof_abs: the gaseous absorption optical thickness profile  provided by user
-                    if directly used, it shortcuts any further gaseous absorption computation, array of dimension (NWavelength,NZ)
+                    if directly used, it shortcuts any further gaseous absorption computation
+                    array of dimension (NWavelength,NZ)
         - prof_ray: the rayleigh scattering optical thickness profile  provided by user
-                    if directly used, it shortcuts any further rayleigh scattering computation , array of dimension (NWavelength,NZ)
+                    if directly used, it shortcuts any further rayleigh scattering computation
+                    array of dimension (NWavelength,NZ)
         - prof_aer: a tuple (ext,ssa) the aerosol extinction optical thickness profile and single scattering albedo arrays  
                     provided by user, each array has dimensions (NWavelength,NZ)
                     if directly used, it shortcuts any further rayleigh scattering computation
@@ -539,7 +542,7 @@ class AtmAFGL(Atmosphere):
         # calculate reduced profile
         # (for phase function blending)
         #
-        self.prof_red = prof.regrid(pfgrid)    # TODO: only if necessary
+        self.prof_red = prof.regrid(pfgrid)
 
 
     def calc(self, wav, phase=True):
@@ -550,12 +553,14 @@ class AtmAFGL(Atmosphere):
 
         Returns: profile + phase function MLUT
         '''
+        if not isinstance(wav, BandSet):
+            wav = BandSet(wav)
 
         profile = self.profile(wav)
 
         if phase:
             if self.pfwav is None:
-                wav_pha = wav
+                wav_pha = wav[:]
             else:
                 wav_pha = self.pfwav
             pha = self.phase(wav_pha)
@@ -577,9 +582,8 @@ class AtmAFGL(Atmosphere):
 
         returns: the profile of optical properties
         '''
-        wav = np.array(wav)
-        if wav.ndim == 0:
-            wav = wav.reshape(1)
+        if not isinstance(wav, BandSet):
+            wav = BandSet(wav)
 
         if prof is None:
             prof = self.prof
@@ -588,14 +592,14 @@ class AtmAFGL(Atmosphere):
 
         pro = MLUT()
         pro.add_axis('z_atm', prof.z)
-        pro.add_axis('wavelength', wav)
+        pro.add_axis('wavelength', wav[:])
 
         #
         # Rayleigh optical thickness
         #
         # cumulated Rayleigh optical thickness (wav, z)
         if self.prof_ray is None :
-            tauray = rod(wav*1e-3, prof.dens_co2/prof.dens_air*1e6, self.lat,
+            tauray = rod(wav[:]*1e-3, prof.dens_co2/prof.dens_air*1e6, self.lat,
                      prof.z*1e3, prof.P)
             dtaur  = diff1(tauray, axis=1)
         else : 
@@ -626,7 +630,7 @@ class AtmAFGL(Atmosphere):
             dtaua = np.zeros((len(wav), len(prof.z)), dtype='float32')
             ssa_p = np.zeros((len(wav), len(prof.z)), dtype='float32')
             for comp in self.comp:
-                dtau_, ssa_ = comp.dtau_ssa(wav, prof.z, prof.RH())
+                dtau_, ssa_ = comp.dtau_ssa(wav[:], prof.z, prof.RH())
                 dtaua += dtau_
                 ssa_p+= dtau_ * ssa_
             ssa_p[dtaua!=0] /= dtaua[dtaua!=0]
@@ -682,20 +686,28 @@ class AtmAFGL(Atmosphere):
             tau_no2.data[tau_no2.data < 0] = 0
 
             #
+            # other gases (reptran)
+            #
+            if wav.use_reptran_kdis:
+                tau_mol = wav.calc_profile(self.prof)
+            else:
+                tau_mol = np.zeros((len(wav), len(prof.z)), dtype='float32') * dz
+
+
+            #
             # Total gaseous optical thickness
             #
-            dtaug = tau_o3 + tau_no2   # TODO: other gases
+            dtaug = tau_o3 + tau_no2 + tau_mol
             taug = dtaug.apply(lambda x: np.cumsum(x, axis=1))
             taug.attrs['description'] = 'Cumulated gaseous absorption optical thickness'
             pro.add_lut(taug, desc='OD_g')
-            
-        else : 
+
+        else:
             dtaug = self.prof_abs
             taug  = np.cumsum(dtaug,axis=1)
             pro.add_dataset('OD_g', taug, axnames=['wavelength', 'z_atm'],
                   attrs={'description':
                          'Cumulated gaseous absorption optical thickness'})
-            
 
         #
         # Total optical thickness and other parameters
@@ -874,6 +886,22 @@ class Profile_base(object):
 
         if not NO2:
             self.dens_no2[:] = 0.
+
+        #
+        # read standard US atmospheres for other gases
+        #
+        ch4_filename = join(dir_libradtran_atmmod, 'afglus_ch4_vmr.dat')
+        co_filename = join(dir_libradtran_atmmod, 'afglus_co_vmr.dat')
+        n2o_filename = join(dir_libradtran_atmmod, 'afglus_n2o_vmr.dat')
+        n2_filename = join(dir_libradtran_atmmod, 'afglus_n2_vmr.dat')
+        datach4 = np.loadtxt(ch4_filename, comments="#")
+        self.dens_ch4 = datach4[:,1] * self.dens_air # CH4 density en cm-3
+        dataco = np.loadtxt(co_filename, comments="#")
+        self.dens_co = dataco[:,1] * self.dens_air # CO density en cm-3
+        datan2o = np.loadtxt(n2o_filename, comments="#")
+        self.dens_n2o = datan2o[:,1] * self.dens_air # N2O density en cm-3
+        datan2 = np.loadtxt(n2_filename, comments="#")
+        self.dens_n2 = datan2[:,1] * self.dens_air # N2 density en cm-3
 
 
     def regrid(self, znew):

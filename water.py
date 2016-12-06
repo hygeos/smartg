@@ -32,7 +32,7 @@ class IOP_Rw(IOP_base):
         Profile and phase function calculation at bands wav (nm)
         '''
         pro = MLUT()
-        pro.add_axis('wavelength', wav)
+        pro.add_axis('wavelength', wav[:])
         pro.add_axis('z_oc', np.arange(2))
         shp = (len(wav), 2)
 
@@ -168,7 +168,7 @@ class IOP_1(IOP_base):
         '''
         wav = np.array(wav)
         pro = MLUT()
-        pro.add_axis('wavelength', wav)
+        pro.add_axis('wavelength', wav[:])
         pro.add_axis('z_oc', np.array([0., -self.depth]))
 
         if phase:

@@ -25,7 +25,9 @@ from collections import OrderedDict
 from pycuda.gpuarray import to_gpu, zeros as gpuzeros
 import pycuda.driver as cuda
 import sys
+from bandset import BandSet
 from itertools import product
+from collections import Iterable
 if sys.version_info[:2] >= (3, 0):
     xrange = range
 
@@ -296,6 +298,7 @@ class Smartg(object):
         Arguments:
 
             - wl: a scalar or list/array of wavelengths (in nm)
+                  or a list of REPTRAN or KDIS IBANDS
 
             - atm: Profile object
                 default None (no atmosphere)
@@ -418,11 +421,9 @@ class Smartg(object):
             SEED = np.uint32((datetime.now()
                 - datetime.utcfromtimestamp(0)).total_seconds()*1000)
 
-        wavelengths = np.array(wl, dtype='float32')
-        monochromatic = (wavelengths.ndim == 0)
-        if monochromatic:
-            wavelengths = wavelengths.reshape(1)
-        NLAM = wavelengths.size
+        if not isinstance(wl, BandSet):
+            wl = BandSet(wl)
+        NLAM = wl.size
 
         NLOW=-1
         if self.alis is not None :
@@ -450,13 +451,13 @@ class Smartg(object):
         # atmosphere
         #
         if isinstance(atm, Atmosphere):
-            prof_atm = atm.calc(wavelengths)
+            prof_atm = atm.calc(wl)
         else:
             prof_atm = atm
 
         if prof_atm is not None:
             faer = calculF(prof_atm, NF, DEPO, kind='atm')
-            prof_atm_gpu = init_profile(wavelengths, prof_atm, 'atm')
+            prof_atm_gpu = init_profile(wl, prof_atm, 'atm')
             NATM = len(prof_atm.axis('z_atm')) - 1
         else:
             faer = gpuzeros(1, dtype='float32')
@@ -478,13 +479,13 @@ class Smartg(object):
         # ocean
         #
         if isinstance(water, IOP_base):
-            prof_oc = water.calc(wavelengths)
+            prof_oc = water.calc(wl)
         else:
             prof_oc = water
 
         if prof_oc is not None:
             foce = calculF(prof_oc, NF, DEPO=0., kind='oc')
-            prof_oc_gpu = init_profile(wavelengths, prof_oc, 'oc')
+            prof_oc_gpu = init_profile(wl, prof_oc, 'oc')
             NOCE = len(prof_oc.axis('z_oc')) - 1
         else:
             foce = gpuzeros(1, dtype='float32')
@@ -495,7 +496,7 @@ class Smartg(object):
         # albedo and adjacency effect
         #
         spectrum = np.zeros(NLAM, dtype=type_Spectrum)
-        spectrum['lambda'] = wavelengths
+        spectrum['lambda'] = wl[:]
         if env is None:
             # default values (no environment effect)
             env = Environment()
@@ -504,7 +505,7 @@ class Smartg(object):
             else:
                 spectrum['alb_surface'] = -999.
         else:
-            spectrum['alb_surface'] = env.alb.get(wavelengths)
+            spectrum['alb_surface'] = env.alb.get(wl[:])
 
         if water is None:
             spectrum['alb_seafloor'] = -999.
@@ -555,7 +556,7 @@ class Smartg(object):
         attrs.update(self.common_attrs)
 
         # finalization
-        output = finalize(tabPhotonsTot, wavelengths, NPhotonsInTot, errorcount, NPhotonsOutTot,
+        output = finalize(tabPhotonsTot, wl[:], NPhotonsInTot, errorcount, NPhotonsOutTot,
                            OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, prof_oc,
                            sigma, le=le, flux=flux)
         output.set_attr('processing time (s)', (datetime.now() - t0).total_seconds())
@@ -566,9 +567,9 @@ class Smartg(object):
             np.sum(NPhotonsInTot)/float(NBPHOTONS),
             ))
 
-        if monochromatic:
+        if wl.scalar:
             output = output.dropaxis('wavelength')
-            output.attrs['wavelength'] = wl
+            output.attrs['wavelength'] = wl[:]
 
         return output
 
