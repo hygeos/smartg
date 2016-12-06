@@ -4,7 +4,7 @@
 
 from __future__ import print_function, division
 import numpy as np
-from tools.luts import LUT
+from tools.luts import LUT, MLUT
 from os.path import dirname, join, exists
 from atmosphere import dir_libradtran_reptran
 from scipy.interpolate import interp1d
@@ -14,6 +14,37 @@ import netCDF4
 from itertools import product
 from warnings import warn
 
+
+def reduce_reptran(mlut, ibands):
+    '''
+    Compute the final spectral signal from mlut output of smart_g and
+    REPTRAN_IBAND_LIST weights
+    '''
+    we, wb, ex, dl, norm = ibands.get_weights()
+    res = MLUT()
+    for l in mlut:
+        for pref in ['I_','Q_','U_','V_','transmission','flux'] :
+            if pref in l.desc:
+                    lr = (l*we).reduce(sum,'Wavelength',grouping=wb.data)/norm
+                    res.add_lut(lr, desc=l.desc)
+    res.attrs = mlut.attrs
+    return res
+
+def reduce_kdis(mlut, ibands, use_solar=False):
+    '''
+    Compute the final spectral signal from mlut output of smart_g and
+    KDIS_IBAND_LIST weights
+    '''
+    we, wb, ex, dl, norm = ibands.get_weights()
+    res = MLUT()
+    for l in mlut:
+        for pref in ['I_','Q_','U_','V_','transmission','flux'] :
+            if pref in l.desc:
+                if use_solar : lr = (l*we*ex*dl).reduce(sum,'Wavelength',grouping=wb.data)/norm
+                else         : lr = (l*we*dl   ).reduce(sum,'Wavelength',grouping=wb.data)/norm
+                res.add_lut(lr, desc=l.desc)
+    res.attrs = mlut.attrs
+    return res
 
 def interp3(x, y, z, v, xi, yi, zi, **kwargs):
     """Sample a 3D array "v" with pixel corner locations at "x","y","z" at the
