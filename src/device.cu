@@ -153,30 +153,30 @@ extern "C" {
         }
 
 
-			//
-			// Deplacement
-			//
-			// -> Si OCEAN ou ATMOS
-			loc_prev = ph.loc;
-			if( (ph.loc == ATMOS) || (ph.loc == OCEAN)){
+		//
+		// Deplacement
+		//
+		// -> Si OCEAN ou ATMOS
+		loc_prev = ph.loc;
+		if( (ph.loc == ATMOS) || (ph.loc == OCEAN)){
 
-            #ifdef SPHERIQUE
-            if (ph.loc == ATMOS)
-                move_sp(&ph, prof_atm, 0, 0 , &etatThr , &configThr);
-            else 
-            #endif
-                move_pp(&ph, prof_atm, prof_oc, &etatThr , &configThr);
-            #ifdef DEBUG_PHOTON
-            display("MOVE", &ph);
-            #endif
+        #ifdef SPHERIQUE
+        if (ph.loc == ATMOS)
+           move_sp(&ph, prof_atm, 0, 0 , &etatThr , &configThr);
+        else 
+        #endif
+        move_pp(&ph, prof_atm, prof_oc, &etatThr , &configThr);
+        #ifdef DEBUG_PHOTON
+        display("MOVE", &ph);
+        #endif
 		}
 
         //
         // count after move:
         // count the photons in space and reaching surface from above or below
         //
-			count_level = -1;
-			if (ph.loc == SPACE) {
+		count_level = -1;
+		if (ph.loc == SPACE) {
             count_level = UPTOA;
 
             // increment the photon counter
@@ -195,45 +195,49 @@ extern "C" {
             count_level = UP0M;
         }
 
-			// count the photons
+		// count the photons
         
-			/* Cone Sampling */
-			if (LEd ==0) countPhoton(&ph, prof_atm, tabthv, tabphi, count_level,
-                errorcount, tabPhotons, NPhotonsOut);
+		/* Cone Sampling */
+		if (LEd ==0) countPhoton(&ph, prof_atm, tabthv, tabphi, count_level,
+            errorcount, tabPhotons, NPhotonsOut);
 
-
-			__syncthreads();
-
+		__syncthreads();
 		
-			//
-			// Scatter
-			//
-			// -> dans ATMOS ou OCEAN
-			if( (ph.loc == ATMOS) || (ph.loc == OCEAN)) {
+		//
+		// Scatter
+		//
+		// -> dans ATMOS ou OCEAN
+		if( (ph.loc == ATMOS) || (ph.loc == OCEAN)) {
 
             /* Scattering Local Estimate */
             if (LEd == 1) {
-			int NK, up_level, down_level, count_level_le;
-			int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
-			int iph0 = idx%NBPHId;
-			if (ph.loc == ATMOS) {
-			NK=2;
-			up_level = UPTOA;
-			down_level = DOWN0P;
-		}
-			if (ph.loc == OCEAN) {
-			NK=1;
-			up_level = UP0M;
-		}
-			for(int k=0; k<NK; k++){
-			if (k==0) count_level_le = up_level;
-			else count_level_le = down_level;
+			    int NK, up_level, down_level, count_level_le;
+			    int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
+			    int iph0 = idx%NBPHId;
+			    if (ph.loc == ATMOS) {
+			        NK=2;
+			        up_level = UPTOA;
+			        down_level = DOWN0P;
+		        }
+			    if (ph.loc == OCEAN) {
+			        NK=1;
+			        up_level = UP0M;
+		        }
 
+                // Loop on levels for counting (for upward and backward)
+			    for(int k=0; k<NK; k++){
+			        if (k==0) count_level_le = up_level;
+			        else count_level_le = down_level;
+
+                    // Double Loop on directions
                     for (int iph=0; iph<NBPHId; iph++){
                         for (int ith=0; ith<NBTHETAd; ith++){
+                            // Copy of the propagation photon to to the virtual, local estiumate photon
                             copyPhoton(&ph, &ph_le);
+                            // Computation of the index of the direction
                             ph_le.iph = (iph + iph0)%NBPHId;
                             ph_le.ith = (ith + ith0)%NBTHETAd;
+                            // Scatter the virtual photon, using le=1, and count_level for the scattering angle computation
                             scatter(&ph_le, prof_atm, prof_oc, faer, foce,
                                     1, tabthv, tabphi,
                                     count_level_le, &etatThr , &configThr);
@@ -244,18 +248,22 @@ extern "C" {
                             #endif
 
                             #ifdef SPHERIQUE
+                            // !! in case of spherical geometry, the attenuation is computation using the move_sp function
+                            // in plane parallel, this is done in the next countPhoton function
                             if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, count_level_le , &etatThr , &configThr);
                             #ifdef DEBUG_PHOTON
                             display("MOVE LE", &ph_le);
                             #endif
                             #endif
 
+                            // Finally count the virtual photon
                             countPhoton(&ph_le, prof_atm, tabthv, tabphi, count_level_le,
                                     errorcount, tabPhotons, NPhotonsOut);
-                        }
-                    }
-                }
-            }
+
+                        } //directions
+                    } // directions
+                } // levels
+            } // LE
 
             /* TEST DOUBLE LOCAL ESTIMATE IN OCEAN */
             // Scattering Double Local Estimate in Ocean in case of dioptre 
@@ -301,7 +309,7 @@ extern "C" {
                 }
             }*/  //Double LE
 
-            /* Scattering Propagation */
+            /* Scattering Propagation , using le=0 and propagation photon */
             scatter(&ph, prof_atm, prof_oc, faer, foce,
                     0, tabthv, tabphi, 0,
                     &etatThr , &configThr);
@@ -309,7 +317,7 @@ extern "C" {
             display("SCATTER", &ph);
             #endif
 
-		}
+		} // photon in ATMOS or OCEAN
 		__syncthreads();
 
 
@@ -321,11 +329,14 @@ extern "C" {
         if ((ph.loc == SURF0M) || (ph.loc == SURF0P)){
            // Eventually evaluate Downward 0+ and Upward 0- radiance
 
-           if( ENVd==0 ) { // si pas d effet d environnement
+           // if not environment effects 
+           if( ENVd==0 ) { 
+
+           // if not a Lambertian surface
 			if( DIOPTREd!=3 ) {
-                /* Surface Local Estimate */
+                /* Surface Local Estimate (not evaluated if atmosphere only simulation)*/
                 if (LEd == 1 && SIMd != -2) {
-                /* TEST Double LE */
+                ///* TEST Double LE */
                 //if ((LEd == 1) && (SIMd != -2 && ph.loc == SURF0P)) {
                   int NK=2, count_level_le;
                   int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
@@ -334,12 +345,13 @@ extern "C" {
                     if (k==0) count_level_le = UP0P;
                     else count_level_le = DOWN0M;
 
-                for (int ith=0; ith<NBTHETAd; ith++){
+                    for (int ith=0; ith<NBTHETAd; ith++){
                       for (int iph=0; iph<NBPHId; iph++){
                         copyPhoton(&ph, &ph_le);
                         ph_le.iph = (iph + iph0)%NBPHId;
                         ph_le.ith = (ith + ith0)%NBTHETAd;
 
+                        // Reflect or Tramsit the virtual photon, using le=1, and count_level for the scattering angle computation
                         surfaceAgitee(&ph_le, 1, tabthv, tabphi,
                                 count_level_le, &etatThr , &configThr);
 
@@ -348,21 +360,30 @@ extern "C" {
                         else display("SURFACE LE DOWN", &ph_le);
                         #endif
 
+                        // Count the photon up to the counting levels (at the surface UP0P or DOW0M)
                         countPhoton(&ph_le, prof_atm, tabthv, tabphi, count_level_le, errorcount, tabPhotons, NPhotonsOut);
+
+                        // Only for upward photons count also them up to TOA
                         if (k==0) { 
                             #ifdef SPHERIQUE
+                            // for spherical case attenuation if performed usin move_sp
                             move_sp(&ph_le, prof_atm, 1, UPTOA , &etatThr , &configThr);
                             #endif
+                            // Final counting at the TOA
                             countPhoton(&ph_le, prof_atm, tabthv, tabphi, UPTOA , errorcount, tabPhotons, NPhotonsOut);
                         }
-                      }
-                    }
-                  }
-                }
+                      }//direction
+                    }//direction
+                  }// counting levels
+                } //LE
+
+                // Propagation of photon using le=0
 				surfaceAgitee(&ph, 0, tabthv, tabphi,
                         count_level, &etatThr , &configThr);
-            }
+            } // Not lambertian
 
+
+            // Lambertian case
 			else { 
                 if (LEd == 1 && SIMd != -2) {
                   int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
@@ -373,15 +394,23 @@ extern "C" {
                         ph_le.iph = (iph + iph0)%NBPHId;
                         ph_le.ith = (ith + ith0)%NBTHETAd;
 				        surfaceLambertienne(&ph_le, 1, tabthv, tabphi, spectrum, &etatThr , &configThr);
+                        // Only two levels for counting by definition
                         countPhoton(&ph_le, prof_atm, tabthv, tabphi, UP0P,  errorcount, tabPhotons, NPhotonsOut);
+                        #ifdef SPHERIQUE
+                        // for spherical case attenuation if performed usin move_sp
+                        move_sp(&ph_le, prof_atm, 1, UPTOA , &etatThr , &configThr);
+                        #endif
                         countPhoton(&ph_le, prof_atm, tabthv, tabphi, UPTOA, errorcount, tabPhotons, NPhotonsOut);
-                    }
-                  }
-                }
+                    }//direction
+                  }//direction
+                } //LE
+
+                //Propagation of Lamberatian reflection with le=0
 				surfaceLambertienne(&ph, 0, tabthv, tabphi, spectrum, &etatThr , &configThr);
-            } // DIOPTRE=!3
+            } // Lambertian
            } // ENV=0
 
+           // Environment effects, no LE computed yet
            else {
                 float dis=0;
                 dis = sqrtf((ph.pos.x-X0d)*(ph.pos.x-X0d) +(ph.pos.y-Y0d)*(ph.pos.y-Y0d));
@@ -392,10 +421,12 @@ extern "C" {
                     surfaceAgitee(&ph, 0, tabthv, tabphi, count_level, &etatThr , &configThr);
                 }
            } // ENV=1
-            #ifdef DEBUG_PHOTON
-             display("SURFACE", &ph);
-            #endif
+
+           #ifdef DEBUG_PHOTON
+           display("SURFACE", &ph);
+           #endif
 		}
+
 		__syncthreads();
 
         //
@@ -412,10 +443,12 @@ extern "C" {
                     ph_le.iph = (iph + iph0)%NBPHId;
                     ph_le.ith = (ith + ith0)%NBTHETAd;
 				    surfaceLambertienne(&ph_le, 1, tabthv, tabphi, spectrum, &etatThr , &configThr);
+                    // Only one contribution to UP0M level
                     countPhoton(&ph_le, prof_atm, tabthv, tabphi, UP0M,  errorcount, tabPhotons, NPhotonsOut);
                 }
               }
-            }
+            } //LE
+
 			surfaceLambertienne(&ph, 0, tabthv, tabphi, spectrum, &etatThr , &configThr);
             #ifdef DEBUG_PHOTON
             display("SEAFLOOR", &ph);
@@ -2000,13 +2033,17 @@ __device__ void countPhoton(Photon* ph,
 
     rotateStokes(ph->stokes, psi, &st);
     st.w = ph->stokes.w;
-	// Calcul de la case dans laquelle le photon sort
+	// Compute Box for outgoinh photons in case of propagation photon
 	if (LEd == 0) ComputeBox(&ith, &iphi, &il, ph, errorcount);
+
+    // For virtual (LE) photons the direction is stored within photon structure
+    // Moreover we compute also final attenuation for LE 
     else {
         ith = ph->ith;
         iphi= ph->iph;
-        il = ph->ilam;
+        il  = ph->ilam;
 
+        // Computation of final attenutation only in PP
         #ifndef SPHERIQUE
         int layer_le;
         float tau_le;
@@ -2014,30 +2051,37 @@ __device__ void countPhoton(Photon* ph,
         if ((count_level==DOWN0P) || (count_level==UP0M) || (count_level==UP0P) ) layer_le = NATMd;
 
         #ifndef ALIS
+        // Attenuation of the current photon
+        // First get the extinction optical depth at the counting level
         tau_le = prof_atm[(NATMd-layer_le) + ph->ilam *(NATMd+1)].OD;
+        // if BEER=0, photon variable tau corresponds to extinction
         if (BEERd == 0) ph->weight *= expf(-fabs(__fdividef(tau_le - ph->tau, ph->v.z))); // LE attenuation to count_level
+        // if BEER=1, photon variable tau corresponds to scattering only, need to add photon absorption variable
         else ph->weight *= expf(-fabs(__fdividef(tau_le - (ph->tau+ph->tau_abs), ph->v.z))); // LE attenuation to count_level
 
+        // Specific computation for ALIS
         #else
         float dsca_dl, dsca_dl0;
         int DL=(NLAMd-1)/(NLOWd-1);
+
         // move artificially toward space
-        // complete photon history for final absorption computation
+        // complete photon history for further final absorption computation
         ph->layer = 0;
         ph->nevt++;
         ph->layer_prev[ph->nevt] = ph->layer;
         ph->vz_prev[ph->nevt] = ph->v.z;
         ph->epsilon_prev[ph->nevt] = 0.f;
         
+        // Attenuation by scattering only of the main 'central' or 'reference' photon
+        // First get the scattering optical depth at the counting level
         tau_le = prof_atm[(NATMd-layer_le) + ph->ilam *(NATMd+1)].OD_sca;
-        ph->weight *= expf(-fabs(__fdividef(tau_le - (ph->tau), ph->v.z))); // LE attenuation to count_level without absorption, central wavelength
+        // LE attenuation to count_level without absorption, central wavelength
+        dsca_dl0 = tau_le - ph->tau; 
+        ph->weight *= expf(-fabs(__fdividef(dcsa_dl0, ph->v.z)));
 
-        // Differential LE attenuation to count_level (only scattering)
-        dsca_dl0 = tau_le ; 
-        dsca_dl0 -= ph->tau;
+        // Differential LE scattering attenuation to count_level for others 'scattering' wavelengths
         for (int k=0; k<NLOWd; k++) {
-           dsca_dl = prof_atm[(NATMd-layer_le) + k*DL*(NATMd+1)].OD_sca ;
-           dsca_dl -= ph->tau_sca[k]; 
+           dsca_dl = prof_atm[(NATMd-layer_le) + k*DL*(NATMd+1)].OD_sca - ph->tau_sca[k]; 
            ph->weight_sca[k] *= exp(-__fdividef(fabs(dsca_dl) -fabs(dsca_dl0), fabs(ph->v.z)));
         }
         #endif
@@ -2070,6 +2114,7 @@ __device__ void countPhoton(Photon* ph,
 	// Rangement du photon dans sa case, et incrémentation de variables
     II = NBTHETAd*NBPHId*NLAMd;
 
+    // Regular counting procedure
     #ifndef ALIS
 	if(((ith >= 0) && (ith < NBTHETAd)) && ((iphi >= 0) && (iphi < NBPHId)) && (il >= 0) && (il < NLAMd) && (!isnan(weight)))
 	{
@@ -2080,17 +2125,13 @@ __device__ void countPhoton(Photon* ph,
       tabCount = (double*)tabPhotons + count_level*NPSTKd*NBTHETAd*NBPHId*NLAMd;
       dweight = (double)weight;
       ds = make_double4(st.x, st.y, st.z, st.w);
-
-      
       DatomicAdd(tabCount+(0*II+JJ), dweight*(ds.x+ds.y));
       DatomicAdd(tabCount+(1*II+JJ), dweight*(ds.x-ds.y));
       DatomicAdd(tabCount+(2*II+JJ), dweight*ds.z);
       DatomicAdd(tabCount+(3*II+JJ), dweight*ds.w);
-      
 
       #else
       tabCount = (float*)tabPhotons + count_level*NPSTKd*NBTHETAd*NBPHId*NLAMd;
-
       atomicAdd(tabCount+(0*II+JJ), weight * (st.x+st.y));
       atomicAdd(tabCount+(1*II+JJ), weight * (st.x-st.y));
       atomicAdd(tabCount+(2*II+JJ), weight * st.z);
@@ -2108,25 +2149,20 @@ __device__ void countPhoton(Photon* ph,
     int DL=(NLAMd-1)/(NLOWd-1);
 	if(((ith >= 0) && (ith < NBTHETAd)) && ((iphi >= 0) && (iphi < NBPHId)) && (!isnan(weight)))
     {
-
-
+      // For all wavelengths
       for (il=0; il<NLAMd; il++) {
           float wabs = 1.0f;
           JJ = il*NBTHETAd*NBPHId + ith*NBPHId + iphi;
-          // Linear interpolation for scattering correction
-          
-          
+
+          // Linear interpolation upon wavelength of the scattering correction
           int ik=il/DL;
           float wsca;
           if (il != NLAMd-1) wsca = __fdividef((il-ik*DL)*1.0f,DL*1.0f) * (ph->weight_sca[ik+1] - ph->weight_sca[ik]) +
                           ph->weight_sca[ik]; 
           else wsca = ph->weight_sca[NLOWd-1];
           
-          
-
-          // Polynomial fit for scattering correction
-          
-        /* 
+          //  OR Polynomial fit for scattering correction, !!DEV
+          /* 
           float wsca = 0.;
           for (int k=0; k<NLOWd; k++){
             float acc = 1.f;
@@ -2134,11 +2170,12 @@ __device__ void countPhoton(Photon* ph,
                 if (j!=k) acc *= __fdividef((float)il-(float)j*DL,(float)k*DL-(float)j*DL); 
             }
             wsca += ph->weight_sca[k] * acc;
-          }
+           }
           */
         
-
+          // Computation of the absorption along photon s history
           for (int n=0; n<ph->nevt; n++){
+              //Computing absorption optical depths form start to stop for all segments
               float tau_abs1, tau_abs2;
               if (ph->layer_prev[n+1] == 0) tau_abs2 = 0.;
               else tau_abs2 = (prof_atm[ph->layer_prev[n+1]   + il *(NATMd+1)].OD_abs -
@@ -2157,7 +2194,6 @@ __device__ void countPhoton(Photon* ph,
           ds = make_double4(st.x, st.y, st.z, st.w);
           dwsca=(double)wsca;
           dwabs=(double)wabs;
-
           DatomicAdd(tabCount+(0*II+JJ), dweight * dwsca * dwabs * (ds.x+ds.y));
           DatomicAdd(tabCount+(1*II+JJ), dweight * dwsca * dwabs * (ds.x-ds.y));
           DatomicAdd(tabCount+(2*II+JJ), dweight * dwsca * dwabs * ds.z);
