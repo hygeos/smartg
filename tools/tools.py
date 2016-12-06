@@ -69,56 +69,6 @@ def SpherIrr(L, azimuth='Azimuth angles', zenith='Zenith angles'):
     phi = L.axis(azimuth, aslut=True)*pi/180.
     return 1./pi*(L).reduce(trapz, zenith, x=-mu[:]).reduce(trapz, azimuth, x=phi[:]) 
 
-def ReadREPTRAN_bands(repname, BAND=None, LMIN=None, LMAX=None, SAMPLING=100000, FULL=False):
-    rep = REPTRAN(repname+'.cdf')
-    L = rep.band_names
-    wi_l=[]
-    we_l=[]
-    ex_l=[]
-    dl_l=[]
-    wb_l=[]
-    ii_l=[]
-    ni_l=[]
-    ib_l=[]
-    if FULL :band_l=[]
-    if BAND==None:
-        istart=0
-    else:
-        istart=rep.band(BAND).band
-    for i in range(istart,len(L),SAMPLING):
-        band = rep.band(L[i])
-        if LMIN != None:
-            if band.awvl[0] < LMIN : continue
-        if LMAX != None:
-            if band.awvl[-1] > LMAX : break
-        
-        for iband in band.ibands():
-            wi = iband.band.awvl[iband.index] # wvl of internal band
-            wi_l.append(wi)
-            we = iband.band.awvl_weight[iband.index] # weight of internal band
-            we_l.append(we)
-            ex = iband.band.aextra[iband.index] # E0 of internal band
-            ex_l.append(ex)
-            dl = iband.band.Rint # bandwidth
-            dl_l.append(dl)
-            wb = np.mean(iband.band.awvl[:])
-            wb_l.append(wb)
-            ii = iband.index
-            ii_l.append(ii)
-            ni = iband.band.nband
-            ni_l.append(ni)
-            ib = iband.band.band
-            ib_l.append(ib)
-            if FULL:band_l.append(iband)
-
-    wi=LUT(np.array(wi_l),axes=[wi_l],names=['Wavelength'],desc='Wavelength internal band')
-    wb=LUT(np.array(wb_l),axes=[wi_l],names=['Wavelength'],desc='Wavelength central band')
-    we=LUT(np.array(we_l),axes=[wi_l],names=['Wavelength'],desc='Weight')
-    ex=LUT(np.array(ex_l),axes=[wi_l],names=['Wavelength'],desc='E0')
-    dl=LUT(np.array(dl_l),axes=[wi_l],names=['Wavelength'],desc='Dlambda')
-    if FULL : return wi, wb, we, ex, dl, band_l
-    else : return wi, wb, we, ex, dl
-
 
 def Int(wi, wb, ex, we, dl, M=None, field=None, lim=[400.,700.]):
     '''
