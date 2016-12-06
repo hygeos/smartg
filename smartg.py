@@ -574,67 +574,6 @@ class Smartg(object):
         return output
 
 
-def reptran_merge(m, ibands, verbose=True):
-    '''
-    merge (average) several correlated-k bands in the dimension 'wavelength'
-
-    '''
-    from collections import Counter
-
-    # count how many ibands share the same band
-    c = Counter(map(lambda x: x.band, ibands))
-    nc = len(c)
-
-    assert len(ibands) == len(m.axes['wavelength'])
-
-    mmerged = MLUT()
-    mmerged.add_axis('Azimuth angles', m.axes['Azimuth angles'])
-    mmerged.add_axis('Zenith angles', m.axes['Zenith angles'])
-
-    # wavelength axis
-    i = 0
-    wl = []
-    for _ in xrange(nc):
-        b = ibands[i].band
-        wl.append(np.average(b.awvl, weights=b.awvl_weight))
-        i += c[b]
-
-    mmerged.add_axis('wavelength', wl)
-
-    # for each dataset
-    for (name, data, axnames) in m.data:
-
-        if axnames != ['wavelength', 'Azimuth angles', 'Zenith angles']:
-            if verbose: print('Skipping dataset', name)
-            continue
-
-        _, nphi, ntheta = data.shape
-
-        mdata = np.zeros((nc, nphi, ntheta), dtype=data.dtype)
-
-        i0 = 0
-        for i in xrange(nc):  # loop on the merged bands
-            S, norm = 0., 0.
-            b = ibands[i0].band
-            for j in xrange(c[b]): # loop on the internal bands
-                weight = ibands[i0+j].weight
-                extra = ibands[i0+j].extra
-                S += data[i0+j] * weight * extra
-                norm += weight * extra
-            i0 += c[b]
-
-            mdata[i,:,:] = S/norm
-
-        mmerged.add_dataset(name, mdata, ['wavelength', 'Azimuth angles', 'Zenith angles'])
-
-    mmerged.set_attrs(m.attrs)
-
-    if verbose:
-        print('Merged {} wavelengths down to {}'.format(len(ibands), nc))
-
-    return mmerged
-
-
 def calcOmega(NBTHETA, NBPHI):
     '''
     returns the zenith and azimuth angles, and the solid angles
