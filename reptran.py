@@ -25,7 +25,7 @@ def reduce_reptran(mlut, ibands):
     for l in mlut:
         for pref in ['I_','Q_','U_','V_','transmission','flux'] :
             if pref in l.desc:
-                    lr = (l*we).reduce(sum,'Wavelength',grouping=wb.data)/norm
+                    lr = (l*we).reduce(np.sum,'Wavelength',grouping=wb.data)/norm
                     res.add_lut(lr, desc=l.desc)
     res.attrs = mlut.attrs
     return res
@@ -40,8 +40,8 @@ def reduce_kdis(mlut, ibands, use_solar=False):
     for l in mlut:
         for pref in ['I_','Q_','U_','V_','transmission','flux'] :
             if pref in l.desc:
-                if use_solar : lr = (l*we*ex*dl).reduce(sum,'Wavelength',grouping=wb.data)/norm
-                else         : lr = (l*we*dl   ).reduce(sum,'Wavelength',grouping=wb.data)/norm
+                if use_solar : lr = (l*we*ex*dl).reduce(np.sum,'Wavelength',grouping=wb.data)/norm
+                else         : lr = (l*we*dl   ).reduce(np.sum,'Wavelength',grouping=wb.data)/norm
                 res.add_lut(lr, desc=l.desc)
     res.attrs = mlut.attrs
     return res
@@ -482,7 +482,6 @@ class REPTRAN_IBAND(object):
         T = prof.T
         P = prof.P
         M = len(T)
-        print(prof.dens_h2o)
 
         densmol = np.zeros((M, Nmol), np.float)
         densmol[:,0] = prof.dens_h2o
