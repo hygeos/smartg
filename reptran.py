@@ -22,7 +22,7 @@ def reduce_reptran(mlut, ibands):
     for l in mlut:
         for pref in ['I_','Q_','U_','V_','transmission','flux'] :
             if pref in l.desc:
-                    lr = (l*we).reduce(np.sum,'Wavelength',grouping=wb.data)/norm
+                    lr = (l*we).reduce(np.sum,'wavelength',grouping=wb.data)/norm
                     res.add_lut(lr, desc=l.desc)
     res.attrs = mlut.attrs
     return res
@@ -252,11 +252,11 @@ class REPTRAN_IBAND_LIST(object):
                 dl_l.append(dl)
                 wb = np.mean(iband.band.awvl[:])
                 wb_l.append(wb)
-        wb=LUT(np.array(wb_l),axes=[np.array(wi_l)],names=['Wavelength'],desc='Wavelength central band')
-        we=LUT(np.array(we_l),axes=[np.array(wi_l)],names=['Wavelength'],desc='Weight')
-        ex=LUT(np.array(ex_l),axes=[np.array(wi_l)],names=['Wavelength'],desc='E0')
-        dl=LUT(np.array(dl_l),axes=[np.array(wi_l)],names=['Wavelength'],desc='Dlambda')
-        norm = we.reduce(np.sum,'Wavelength',grouping=wb.data)
+        wb=LUT(np.array(wb_l),axes=[np.array(wi_l)],names=['wavelength'],desc='wavelength central band')
+        we=LUT(np.array(we_l),axes=[np.array(wi_l)],names=['wavelength'],desc='Weight')
+        ex=LUT(np.array(ex_l),axes=[np.array(wi_l)],names=['wavelength'],desc='E0')
+        dl=LUT(np.array(dl_l),axes=[np.array(wi_l)],names=['wavelength'],desc='Dlambda')
+        norm = we.reduce(np.sum,'wavelength',grouping=wb.data)
         return we, wb, ex, dl, norm 
         
     def get_names(self):
