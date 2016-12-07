@@ -921,6 +921,10 @@ class Profile_base(object):
         prof.dens_h2o = trapzinterp(self.dens_h2o, z, znew)
         prof.dens_co2 = trapzinterp(self.dens_co2, z, znew)
         prof.dens_no2 = trapzinterp(self.dens_no2, z, znew)
+        prof.dens_ch4 = trapzinterp(self.dens_ch4, z, znew)
+        prof.dens_co = trapzinterp(self.dens_co, z, znew)
+        prof.dens_n2o = trapzinterp(self.dens_n2o, z, znew)
+        prof.dens_n2 = trapzinterp(self.dens_n2, z, znew)
 
         return prof
 
