@@ -72,7 +72,10 @@ class IOP_1(IOP_base):
         self.NANG = NANG
         self.ang_trunc = ang_trunc
         self.ALB = ALB
-        self.pfwav = pfwav
+        if pfwav is None:
+            self.pfwav = None
+        else:
+            self.pfwav = np.array(pfwav)
 
         #
         # read pure water absorption coefficient
@@ -114,7 +117,7 @@ class IOP_1(IOP_base):
         chl = self.chl
 
         # pure water absorption
-        aw = self.aw[Idx(wav)]
+        aw = self.aw[Idx(wav[:])]
 
         # phytoplankton absorption
         aphy = (self.BRICAUD['A'][Idx(wav, fill_value='extrema')]
