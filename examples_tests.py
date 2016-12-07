@@ -7,8 +7,10 @@ SMART-G examples
 
 from smartg import Smartg, LambSurface, RoughSurface
 from atmosphere import AtmAFGL, AeroOPAC
+from tools.luts import merge
 import numpy as np
-from nose.tools import nottest
+from reptran import REPTRAN, reduce_reptran
+from water import IOP_1
 
 
 def test_rayleigh():
@@ -44,52 +46,45 @@ def test_atm_surf():
     '''
     atmosphere + lambertian surface of albedo 10%
     '''
-    return Smartg().run(490., NBPHOTONS=1e6,
-                  atm=AtmAFGL('afglms'),
-                  surf=LambSurface(ALB=0.1), progress=False)
+    S = Smartg()
+    return S.run(490., NBPHOTONS=1e6,
+                 atm=AtmAFGL('afglms'),
+                 surf=LambSurface(ALB=0.1), progress=False)
 
 
-@nottest
 def test_atm_surf_ocean():
-    return Smartg().run(490., NBPHOTONS=1e6,
-                  atm=AtmAFGL('afglms',
-                              aer=AeroOPAC('maritime_clean', 0.2, 550)),
-                  surf=RoughSurface(),
-                  NBTHETA=30,
-                  water=IOP_MM(chl=1., NANG=1000), progress=False)
+    S = Smartg()
+    return S.run(490., NBPHOTONS=1e6, THVDEG=30.,
+                 atm=AtmAFGL('afglms',
+                             comp=[AeroOPAC('maritime_clean', 0.2, 550)]),
+                 surf=RoughSurface(),
+                 water=IOP_1(chl=1., NANG=1000), progress=False)
 
 
-@nottest
 def test_surf_ocean():
-    return Smartg().run(490., THVDEG=30., NBPHOTONS=1e6,
-                  surf=RoughSurface(),
-                  water=IOP_MM(1., pfwav=[400.]), progress=False)
+    S = Smartg()
+    return S.run(490., THVDEG=30., NBPHOTONS=1e6,
+                 surf=RoughSurface(),
+                 water=IOP_1(1., pfwav=[400.]), progress=False)
 
 
-@nottest
 def test_ocean():
-    return Smartg().run(wl=560., THVDEG=30.,
-                  water=IOP_SPM(100.), NBPHOTONS=1e6, progress=False)
+    S = Smartg()
+    return S.run(wl=560., THVDEG=30.,
+                 water=IOP_1(100.), NBPHOTONS=1e6, progress=False)
 
 
-# def test_reptran():
-#     '''
-#     using reptran
-#     '''
-#     aer = AeroOPAC('maritime_polluted', 0.4, 550.)
-#     pro = AtmAFGL('afglms.dat', aer=aer, grid='100[75]25[5]10[1]0')
-#     files, ibands = [], []
-#     for iband in REPTRAN('reptran_solar_msg').band('msg1_seviri_ch008').ibands():
-#         job = smartg('SMART-G-PP', wl=np.mean(iband.band.awvl),
-#                 NBPHOTONS=5e8,
-#                 iband=iband, atm=pro, progress=False)
-#         files.append(job.output)
-#         ibands.append(iband)
-# 
-#     reptran_merge(files, ibands)
+def test_reptran():
+    aer = AeroOPAC('maritime_polluted', 0.4, 550.)
+    pro = AtmAFGL('afglms.dat', comp=[aer], grid='100[75]25[5]10[1]0')
+    ibands = REPTRAN('reptran_solar_msg').to_smartg('msg1_seviri_ch008')
 
+    res = Smartg().run(ibands.l,
+                       NBPHOTONS=1e7,
+                       atm=pro, progress=False)
 
-@nottest
+    return reduce_reptran(res, ibands)
+
 def test_ozone_lut():
     '''
     Ozone Gaseous transmission for MERIS
@@ -103,7 +98,7 @@ def test_ozone_lut():
     for TCO, AOT in product(list_TCO, list_AOT):
 
         aer = AeroOPAC('maritime_clean', AOT, 550.)
-        pro = AtmAFGL('afglms', aer=aer, O3=TCO)
+        pro = AtmAFGL('afglms', comp=[aer], O3=TCO)
 
         m = Smartg().run(wl=490., atm=pro, NBTHETA=50, NBPHOTONS=1e6, progress=False)
 
@@ -113,22 +108,20 @@ def test_ozone_lut():
     merged = merge(luts, ['TCO', 'AOT'])
     merged.print_info()
 
-@nottest
+
 def test_multispectral():
-    '''
-    multispectral processing
-    '''
 
-    pro = AtmAFGL('afglt',
-        grid='100[75]25[5]10[1]0', # [100, 75, 50, 30, 20, 10, 5, 1, 0.],  # optional, otherwise use default grid
-        # pfgrid=[100, 20, 0.],   # optional, otherwise use a single band 100-0
-        # pfwav=[400, 500, 600], # optional, otherwise phase functions are calculated at all bands
-        aer=AeroOPAC('maritime_clean', 0.3, 550., ),
-        verbose=True)
+    atm = AtmAFGL('afglt',
+        comp=[AeroOPAC('maritime_clean', 0.3, 550., )],
+        grid='100[75]25[5]10[1]0', # optional, otherwise use default grid
+        pfgrid=[100, 20, 0.],   # optional, otherwise use a single band 100-0
+        pfwav=[400, 500, 600],  # optional, otherwise phase functions are calculated at all bands
+        )
 
-    return Smartg().run(wl = np.linspace(400, 600, 2),
-             THVDEG=60.,
-             atm=pro,
-             surf=RoughSurface(),
-             water=IOP_SPM(1.), progress=False)
+    return Smartg().run(np.linspace(400, 600, 10),
+                        THVDEG=60.,
+                        atm=atm,
+                        surf=RoughSurface(),
+                        water=IOP_1(1.),
+                        progress=False)
 
