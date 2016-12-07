@@ -2017,22 +2017,23 @@ __device__ void countPhoton(Photon* ph,
         float sin_psi;
         float eps=1e-4;
 
-            ux_phi = cosf(tabphi[ph->iph]);
-            uy_phi = sinf(tabphi[ph->iph]);
-            cos_psi = (ux_phi*ph->u.x + uy_phi*ph->u.y);
-            if( cos_psi > 1.0) cos_psi = 1.0;
-            if( cos_psi < -1.0) cos_psi = -1.0;
-            sin_psi = sqrtf(1.0 - (cos_psi*cos_psi) );
-            if(( abs( (ph->u.x*cos_psi - ph->u.y*sin_psi) - ux_phi ) < eps ) and ( abs( (ph->u.x*sin_psi + ph->u.y*cos_psi) - uy_phi ) < eps )) {
+        ux_phi = cosf(tabphi[ph->iph]);
+        uy_phi = sinf(tabphi[ph->iph]);
+        cos_psi = (ux_phi*ph->u.x + uy_phi*ph->u.y);
+        if( cos_psi > 1.0) cos_psi = 1.0;
+        if( cos_psi < -1.0) cos_psi = -1.0;
+        sin_psi = sqrtf(1.0 - (cos_psi*cos_psi));
+        if( (abs((ph->u.x*cos_psi-ph->u.y*sin_psi)-ux_phi) < eps) && (abs((ph->u.x*sin_psi+ph->u.y*cos_psi)-uy_phi) < eps) ) {
                 psi = -acosf(cos_psi);
-            }
-            else{
+        }
+        else{
                 psi = acosf(cos_psi);
-            } 
+        } 
     }
 
     rotateStokes(ph->stokes, psi, &st);
     st.w = ph->stokes.w;
+
 	// Compute Box for outgoinh photons in case of propagation photon
 	if (LEd == 0) ComputeBox(&ith, &iphi, &il, ph, errorcount);
 
@@ -2064,8 +2065,7 @@ __device__ void countPhoton(Photon* ph,
         float dsca_dl, dsca_dl0;
         int DL=(NLAMd-1)/(NLOWd-1);
 
-        // move artificially toward space
-        // complete photon history for further final absorption computation
+        // Complete photon history toward space for further final absorption computation
         ph->layer = 0;
         ph->nevt++;
         ph->layer_prev[ph->nevt] = ph->layer;
@@ -2085,7 +2085,6 @@ __device__ void countPhoton(Photon* ph,
            ph->weight_sca[k] *= exp(-__fdividef(fabs(dsca_dl) -fabs(dsca_dl0), fabs(ph->v.z)));
         }
         #endif
-
         #endif
     }
 	
