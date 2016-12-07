@@ -55,15 +55,6 @@ class REPTRAN_IBAND(object):
         calculate a gaseous absorption profile for this internal band
         using temperature T and pressure P, and profile of molecular density of
         various gases stored in the profile prof
-            densmol has shape (Nlayer_atmo, Ngas)
-            densmol[:,0]=gh2o.dens*gh2o.scalingfact
-            densmol[:,1]=co2
-            densmol[:,2]=go3.dens*go3.scalingfact
-            densmol[:,3]=n2o
-            densmol[:,4]=co
-            densmol[:,5]=ch4
-            densmol[:,6]=o2
-            densmol[:,7]=n2
         '''
         Nmol = 8
         T = prof.T

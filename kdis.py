@@ -272,31 +272,29 @@ class KDIS_IBAND(object):
         return fki(Tout)
         
     
-    def calc_profile(self, T, P, densmol):
+    def calc_profile(self, prof):
         '''
         calculate a gaseous absorption profile for this internal band
         using temperature T and pressure P, and profile of molecular density of
         various gases stored in densmol
-            densmol has shape (Nlayer_atmo, Ngas)
-            densmol[:,0]=gh2o.dens*gh2o.scalingfact
-            densmol[:,1]=co2
-            densmol[:,2]=go3.dens*go3.scalingfact
-            densmol[:,3]=n2o
-            densmol[:,4]=co
-            densmol[:,5]=ch4
-            densmol[:,6]=o2
-            densmol[:,7]=n2
         '''
-        raise Exception('Fix KDIS_IBAND.calc_profile following REPTRAN_IBAND.calc_profile')
 
         species = ['h2o', 'co2', 'o3', 'n2o', 'co', 'ch4', 'o2', 'n2']
-        Nmol = 1
+        T = prof.T
+        P = prof.P
+        Ngas = 8
         M = len(T)
         datamol = np.zeros(M, np.float)
 
-        assert densmol.shape[1] == 8
-        assert len(T) == len(P)
-        assert len(T) == densmol.shape[0]
+        densmol = np.zeros((M, Ngas), np.float)
+        densmol[:,0] = prof.dens_h2o
+        densmol[:,1] = prof.dens_co2
+        densmol[:,2] = prof.dens_o3
+        densmol[:,3] = prof.dens_no2
+        densmol[:,4] = prof.dens_co
+        densmol[:,5] = prof.dens_ch4
+        densmol[:,6] = prof.dens_o2
+        densmol[:,7] = prof.dens_n2
 
         # for each gas
         for ig in range(self.band.kdis.nsp):
@@ -307,9 +305,9 @@ class KDIS_IBAND(object):
                 tab = self.band.kdis.ki[ig, self.band.band, ikig, :, :]
                 datamol += interp2(self.band.kdis.p, self.band.kdis.t, np.squeeze(tab), P, T) * densmol[:,ispecie]
 
-        return datamol      
-        
-        
+        return datamol
+
+
 class KDIS_BAND(object):
     def __init__(self, kdis, band):
 
