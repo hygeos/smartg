@@ -8,7 +8,6 @@ Common miscellaneous tools
 import sys
 sys.path.append('..')
 import numpy as np
-from profile.profil import REPTRAN
 from luts import LUT, merge, MLUT
 import scipy.constants as cst
 from pylab import *
