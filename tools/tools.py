@@ -5,10 +5,14 @@
 Common miscellaneous tools
 '''
 
+
+from __future__ import print_function, division
+
+
 import sys
 sys.path.append('..')
 import numpy as np
-from luts import LUT, merge, MLUT
+from .luts import LUT, merge, MLUT
 import scipy.constants as cst
 from pylab import *
 

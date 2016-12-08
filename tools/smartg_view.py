@@ -1,12 +1,15 @@
 #!/usr/bin/env python
 # encoding: utf-8
 
+
+from __future__ import print_function, division
+
 import warnings
 warnings.simplefilter("ignore",DeprecationWarning)
 from pylab import figure
 import numpy as np
 np.seterr(invalid='ignore', divide='ignore') # ignore division by zero errors
-from luts import plot_polar, LUT, transect2D
+from .luts import plot_polar, LUT, transect2D
 
 
 def mdesc(desc, logI=False):
@@ -22,9 +25,9 @@ def mdesc(desc, logI=False):
         pref=r'$'
         
     if dir == 'up':
-        return pref + stokes + '^{\uparrow}' + '_{'+desc[sep2+1:sep3]+'}$'
+        return pref + stokes + r'^{\uparrow}' + '_{'+desc[sep2+1:sep3]+'}$'
     else:
-        return pref + stokes + '^{\downarrow}' + '_{'+desc[sep2+1:sep3]+'}$'
+        return pref + stokes + r'^{\downarrow}' + '_{'+desc[sep2+1:sep3]+'}$'
     
 
 def smartg_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (TOA)', ind=0, cmap=None, fig=None, subdict=None):
