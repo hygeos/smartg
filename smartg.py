@@ -175,18 +175,6 @@ class Environment(object):
         return 'ENV={ENV_SIZE}-X={X0:.1f}-Y={Y0:.1f}'.format(**self.dict)
 
 
-def smartg(*args, **kwargs):
-
-    warn('function smartg will be deprecated. Please use Smartg(<compilation_option>).run(<runtime_options>)')
-
-    comp_kwargs = {}
-    for k in ['pp', 'debug', 'alt_move', 'debug_photon', 'double', 'alis']:
-        if k in kwargs:
-            comp_kwargs[k] = kwargs.pop(k)
-
-    return Smartg(**comp_kwargs).run(*args, **kwargs)
-
-
 class Smartg(object):
 
     def __init__(self, pp=True, debug=False,
