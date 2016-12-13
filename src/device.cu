@@ -2077,7 +2077,7 @@ __device__ void countPhoton(Photon* ph,
         tau_le = prof_atm[(NATMd-layer_le) + ph->ilam *(NATMd+1)].OD_sca;
         // LE attenuation to count_level without absorption, central wavelength
         dsca_dl0 = tau_le - ph->tau; 
-        ph->weight *= expf(-fabs(__fdividef(dcsa_dl0, ph->v.z)));
+        ph->weight *= expf(-fabs(__fdividef(dsca_dl0, ph->v.z)));
 
         // Differential LE scattering attenuation to count_level for others 'scattering' wavelengths
         for (int k=0; k<NLOWd; k++) {
