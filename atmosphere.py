@@ -678,11 +678,11 @@ class AtmAFGL(Atmosphere):
 
             tau_no2 *= prof.dens_no2 * 1e-15
             tau_no2 *= dz
-            if not (tau_no2.data >= 0).all():
-                warn('Negative values in tau_no2 ({}%, min value is {}, set to 0)'.format(
-                    100.*np.sum(tau_no2.data<0)/float(tau_no2.data.size),
-                    tau_no2.data[tau_no2.data == np.amin(tau_no2.data)][0]
-                    ))
+            # if not (tau_no2.data >= 0).all():
+            #     warn('Negative values in tau_no2 ({}%, min value is {}, set to 0)'.format(
+            #         100.*np.sum(tau_no2.data<0)/float(tau_no2.data.size),
+            #         tau_no2.data[tau_no2.data == np.amin(tau_no2.data)][0]
+            #         ))
             tau_no2.data[tau_no2.data < 0] = 0
 
             #
