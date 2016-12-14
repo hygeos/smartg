@@ -21,8 +21,8 @@ def reduce_kdis(mlut, ibands, use_solar=False):
     for l in mlut:
         for pref in ['I_','Q_','U_','V_','transmission','flux'] :
             if pref in l.desc:
-                if use_solar : lr = (l*we*ex*dl).reduce(np.sum,'Wavelength',grouping=wb.data)/norm
-                else         : lr = (l*we*dl   ).reduce(np.sum,'Wavelength',grouping=wb.data)/norm
+                if use_solar : lr = (l*we*ex*dl).reduce(np.sum,'wavelength',grouping=wb.data)/norm
+                else         : lr = (l*we*dl   ).reduce(np.sum,'wavelength',grouping=wb.data)/norm
                 res.add_lut(lr, desc=l.desc)
     res.attrs = mlut.attrs
     return res
@@ -233,11 +233,11 @@ class KDIS(object):
                 we_l.append(ik.weight)
                 ex_l.append(ik.ex)
                 dl_l.append(ik.dl)
-        wb=LUT(np.array(wb_l),axes=[wb_l],names=['Wavelength'],desc='Wavelength')
-        we=LUT(np.array(we_l),axes=[wb_l],names=['Wavelength'],desc='Weight')
-        ex=LUT(np.array(ex_l),axes=[wb_l],names=['Wavelength'],desc='SolarFlux')
-        dl=LUT(np.array(dl_l),axes=[wb_l],names=['Wavelength'],desc='BandWidth')
-        norm = we.reduce(np.sum,'Wavelength',grouping=wb.data)
+        wb=LUT(np.array(wb_l),axes=[wb_l],names=['wavelength'],desc='wavelength')
+        we=LUT(np.array(we_l),axes=[wb_l],names=['wavelength'],desc='weight')
+        ex=LUT(np.array(ex_l),axes=[wb_l],names=['wavelength'],desc='solarflux')
+        dl=LUT(np.array(dl_l),axes=[wb_l],names=['wavelength'],desc='bandwidth')
+        norm = we.reduce(np.sum,'wavelength',grouping=wb.data)
         return we, wb, ex, dl, norm
    
 class KDIS_IBAND(object):
@@ -305,7 +305,7 @@ class KDIS_IBAND(object):
                 tab = self.band.kdis.ki[ig, self.band.band, ikig, :, :]
                 datamol += interp2(self.band.kdis.p, self.band.kdis.t, np.squeeze(tab), P, T) * densmol[:,ispecie]
 
-        return datamol
+        return datamol*1e5
 
 
 class KDIS_BAND(object):
@@ -360,11 +360,11 @@ class KDIS_IBAND_LIST(object):
                 we_l.append(ik.weight)
                 ex_l.append(ik.ex)
                 dl_l.append(ik.dl)
-        wb=LUT(np.array(wb_l),axes=[wb_l],names=['Wavelength'],desc='Wavelength')
-        we=LUT(np.array(we_l),axes=[wb_l],names=['Wavelength'],desc='Weight')
-        ex=LUT(np.array(ex_l),axes=[wb_l],names=['Wavelength'],desc='SolarFlux')
-        dl=LUT(np.array(dl_l),axes=[wb_l],names=['Wavelength'],desc='BandWidth')
-        norm = we.reduce(np.sum,'Wavelength',grouping=wb.data)
+        wb=LUT(np.array(wb_l),axes=[wb_l],names=['wavelength'],desc='wavelength')
+        we=LUT(np.array(we_l),axes=[wb_l],names=['wavelength'],desc='weight')
+        ex=LUT(np.array(ex_l),axes=[wb_l],names=['wavelength'],desc='solarflux')
+        dl=LUT(np.array(dl_l),axes=[wb_l],names=['wavelength'],desc='bandwidth')
+        norm = we.reduce(np.sum,'wavelength',grouping=wb.data)
         return we, wb, ex, dl, norm    
 
 def skipcomment(f):

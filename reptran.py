@@ -12,7 +12,7 @@ import netCDF4
 from tools.interp import interp2, interp3
 
 
-def reduce_reptran(mlut, ibands):
+def reduce_reptran(mlut, ibands, use_solar=False):
     '''
     Compute the final spectral signal from mlut output of smart_g and
     REPTRAN_IBAND_LIST weights
@@ -22,8 +22,10 @@ def reduce_reptran(mlut, ibands):
     for l in mlut:
         for pref in ['I_','Q_','U_','V_','transmission','flux'] :
             if pref in l.desc:
-                    lr = (l*we).reduce(np.sum,'wavelength',grouping=wb.data)/norm
-                    res.add_lut(lr, desc=l.desc)
+                if use_solar : lr = (l*we*ex*dl).reduce(np.sum,'wavelength',grouping=wb.data)/norm
+                else         : lr = (l*we*dl   ).reduce(np.sum,'wavelength',grouping=wb.data)/norm
+
+                res.add_lut(lr, desc=l.desc)
     res.attrs = mlut.attrs
     return res
 
