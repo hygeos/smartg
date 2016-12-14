@@ -510,7 +510,7 @@ class Smartg(object):
         if water is None:
             spectrum['alb_seafloor'] = -999.
         else:
-            spectrum['alb_seafloor'] = prof_oc['albedo_seafloor'][:]
+            spectrum['alb_seafloor'] = prof_oc['albedo_seafloor'].data[...]
         spectrum = to_gpu(spectrum)
 
         # Local Estimate option
@@ -972,11 +972,11 @@ def init_profile(wl, prof, kind):
     prof_gpu['z'][0,:] = prof.axis('z_'+kind)
     prof_gpu['z'][1:,:] = -999.      # other wavelengths are NaN
 
-    prof_gpu['OD'][:,:] = prof['OD_'+kind][:,:]
-    prof_gpu['OD_sca'][:] = prof['OD_sca_'+kind][:,:]
-    prof_gpu['OD_abs'][:] = prof['OD_abs_'+kind][:,:]
-    prof_gpu['pmol'][:] = prof['pmol_'+kind][:,:]
-    prof_gpu['ssa'][:] = prof['ssa_'+kind][:,:]
+    prof_gpu['OD'][:,:] = prof['OD_'+kind].data[...]
+    prof_gpu['OD_sca'][:] = prof['OD_sca_'+kind].data[...]
+    prof_gpu['OD_abs'][:] = prof['OD_abs_'+kind].data[...]
+    prof_gpu['pmol'][:] = prof['pmol_'+kind].data[...]
+    prof_gpu['ssa'][:] = prof['ssa_'+kind].data[...]
     if 'iphase_atm' in prof.datasets():
         prof_gpu['iphase'][:] = prof['iphase_'+kind][:,:]
 
@@ -1168,7 +1168,14 @@ def impactInit(prof_atm, NLAM, THVDEG, Rter, pp):
 
         if NATM != 0:
             for ilam in xrange(NLAM):
-                tautot[ilam] = prof_atm['OD_atm'][ilam, NATM]/np.cos(THVDEG*pi/180.)
+                if prof_atm['OD_atm'].ndim == 2:
+                    # lam, z
+                    tautot[ilam] = prof_atm['OD_atm'][ilam, NATM]/np.cos(THVDEG*pi/180.)
+                elif prof_atm['OD_atm'].ndim == 1:
+                    # z
+                    tautot[ilam] = prof_atm['OD_atm'][NATM]/np.cos(THVDEG*pi/180.)
+                else:
+                    raise Exception('invalid number of dimensions in prof_atm')
     else:
         tanthv = np.tan(THVDEG*np.pi/180.)
 

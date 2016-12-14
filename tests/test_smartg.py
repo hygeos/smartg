@@ -166,21 +166,43 @@ def test_atm_surf_ioprw():
     runner.run_pp_sp([400., 500., 600.], atm=atm, surf=surf, water=water)
     runner.run_pp_sp(400., atm=atm, surf=surf, water=water)
 
-def test_reuse():
+def test_reuse1():
     atm = AtmAFGL('afglt', comp=[AeroOPAC('desert', 0.1, 550.)])
     surf = RoughSurface(WIND=2.)
     water = IOP_Rw(ALB=Albedo_cst(0.05))
 
-    res = runner.run_pp([400., 500., 600.], atm=atm, surf=surf, water=water)
+    wl = [400., 500., 600.]
+
+    res = runner.run_pp(wl, atm=atm, surf=surf, water=water)
 
     # reuse atm
-    runner.run_pp([400., 500., 600.], atm=res, surf=surf, water=water)
+    runner.run_pp(wl, atm=res, surf=surf, water=water)
 
     # reuse water
-    runner.run_pp([400., 500., 600.], atm=atm, surf=surf, water=res)
+    runner.run_pp(wl, atm=atm, surf=surf, water=res)
 
     # reuse both
-    runner.run_pp([400., 500., 600.], atm=res, surf=surf, water=res)
+    runner.run_pp(wl, atm=res, surf=surf, water=res)
+
+
+def test_reuse2():
+    atm = AtmAFGL('afglt', comp=[AeroOPAC('desert', 0.1, 550.)])
+    surf = RoughSurface(WIND=2.)
+    water = IOP_Rw(ALB=Albedo_cst(0.05))
+
+    wl = 500.
+
+    res = runner.run_pp(wl, atm=atm, surf=surf, water=water)
+
+    # reuse atm
+    runner.run_pp(wl, atm=res, surf=surf, water=water)
+
+    # reuse water
+    runner.run_pp(wl, atm=atm, surf=surf, water=res)
+
+    # reuse both
+    runner.run_pp(wl, atm=res, surf=surf, water=res)
+
 
 def test_reptran():
     atm = AtmAFGL('afglt', comp=[AeroOPAC('desert', 0.1, 550.)])
