@@ -132,7 +132,7 @@ __device__ void surfaceLambertienne(Photon*, int le, float* tabthv, float* tabph
 /* exit
 * Sauve les paramètres des photons sortis dans l'espace dans la boite correspondant à la direction de sortie
 */
-__device__ void countPhoton(Photon* , struct Profile* prof_atm, float*, float *,
+__device__ void countPhoton(Photon* , struct Profile* prof_atm, struct Profile* prof_oc, float*, float *,
         int, unsigned long long*, void*, unsigned long long*);
 
 
