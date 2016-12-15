@@ -14,9 +14,135 @@ dir_aux = join(this_dir, 'auxdata')
 
 
 
+def read_aw(dir_aux):
+    '''
+    Read pure water absorption from pope&fry, 97 (<700nm)
+    and palmer&williams, 74 (>700nm)
+    '''
+
+    # Pope&Fry
+    data_pf = np.genfromtxt(join(dir_aux, 'water', 'pope97.dat'), skip_header=6)
+    aw_pf = data_pf[:,1] * 100 #  convert from cm-1 to m-1
+    lam_pf = data_pf[:,0]
+    ok_pf = lam_pf <= 700
+
+    # Palmer&Williams
+    data_pw = np.genfromtxt(join(dir_aux, 'water', 'palmer74.dat'), skip_header=5)
+    aw_pw = data_pw[::-1,1] * 100 #  convert from cm-1 to m-1
+    lam_pw = data_pw[::-1,0]
+    ok_pw = lam_pw > 700
+
+    aw = LUT(
+            np.array(list(aw_pf[ok_pf]) + list(aw_pw[ok_pw])),
+            axes=[np.array(list(lam_pf[ok_pf]) + list(lam_pw[ok_pw]))]
+            )
+
+    return aw
+
 
 class IOP_base(object):
     pass
+
+class IOP(IOP_base):
+    '''
+    Profile of water properties defined by:
+        * phase: phase functions
+          LUT with dimensions [nwav, nz, stk, angle]
+        * bp, bw: particle and water scattering coefficient in m-1
+          numpy arrays, dimensions [nwav, nZ]
+          by default, bw takes default values
+        * atot, ap, aw: total, particle and water absorption coefficient in m-1
+          numpy array, dimensions [nwav, nZ]
+          either provide atot or ap
+          if ap is provided, aw can be provided as well, otherwise it takes default values
+        * Z: profile of depths in m
+        * ALB: seafloor albedo (albedo object)
+
+        NOTE: first item in dimension Z is not used
+    '''
+    def __init__(self, phase, bp=None, bw=None,
+                 atot=None, ap=None, aw=None,
+                 Z=[0, 10000], ALB=Albedo_cst(0.)):
+
+        self.Z = np.array(Z, dtype='float')
+        self.bp = bp
+        self.bw = bw
+        self.atot = atot
+        self.ap = ap
+        self.aw = aw
+        self.phase = phase
+        self.ALB = ALB
+
+    def calc(self, wav):
+
+        # absorption
+        atot = self.atot
+        if atot is None:
+            if self.aw is None:
+                aw = read_aw(dir_aux)
+                self.aw = aw[Idx(wav)]
+            atot = self.aw + self.ap
+
+
+        # scattering
+        bp = self.bp
+
+        bw = self.bw
+        if bw is None:
+            bw = 19.3e-4*((wav[:]/550.)**-4.3)
+            bw = bw[:,None]  # add a dimension Z for broadcasting
+
+        btot = bw + bp
+
+        pro = MLUT()
+
+        pro.add_axis('wavelength', wav[:])
+        pro.add_axis('z_oc', -self.Z)
+
+        if self.phase is not None:
+
+            pha = self.phase
+            pha_, ipha = calc_iphase(pha, pro.axis('wavelength'), pro.axis('z_oc'))
+
+            pro.add_axis('theta_oc', pha.axis('theta_oc'))
+            pro.add_dataset('phase_oc', pha_, ['iphase', 'stk', 'theta_oc'])
+            pro.add_dataset('iphase_oc', ipha, ['wavelength', 'z_oc'])
+
+        dz = np.diff(self.Z)
+
+        tau_tot = - (atot + btot)*dz
+        pro.add_dataset('OD_oc', tau_tot,
+                        ['wavelength', 'z_oc'])
+
+        tau_sca = - btot*dz
+        pro.add_dataset('OD_sca_oc', tau_sca,
+                        ['wavelength', 'z_oc'])
+
+        tau_abs = - (atot * dz)
+        pro.add_dataset('OD_abs_oc', tau_abs,
+                        ['wavelength', 'z_oc'])
+
+        pmol = bp/btot
+        pro.add_dataset('pmol_oc', pmol,
+                        ['wavelength', 'z_oc'])
+
+        with np.errstate(invalid='ignore'):
+            ssa = tau_sca/tau_tot
+
+        ssa[np.isnan(ssa)] = 1.
+
+        pro.add_dataset('ssa_oc', ssa,
+                        ['wavelength', 'z_oc'])
+
+        pro.add_dataset('albedo_seafloor',
+                        self.ALB.get(wav),
+                        ['wavelength'])
+
+        return pro
+
+
+
+
 
 class IOP_Rw(IOP_base):
     def __init__(self, ALB):
@@ -80,22 +206,7 @@ class IOP_1(IOP_base):
         #
         # read pure water absorption coefficient
         #
-        # Pope&Fry
-        data_pf = np.genfromtxt(join(dir_aux, 'water', 'pope97.dat'), skip_header=6)
-        aw_pf = data_pf[:,1] * 100 #  convert from cm-1 to m-1
-        lam_pf = data_pf[:,0]
-        ok_pf = lam_pf <= 700
-
-        # Palmer&Williams
-        data_pw = np.genfromtxt(join(dir_aux, 'water', 'palmer74.dat'), skip_header=5)
-        aw_pw = data_pw[::-1,1] * 100 #  convert from cm-1 to m-1
-        lam_pw = data_pw[::-1,0]
-        ok_pw = lam_pw > 700
-
-        self.aw = LUT(
-                np.array(list(aw_pf[ok_pf]) + list(aw_pw[ok_pw])),
-                axes=[np.array(list(lam_pf[ok_pf]) + list(lam_pw[ok_pw]))]
-                )
+        self.aw = read_aw(dir_aux)
 
         # Bricaud (98)
         ap_bricaud = np.genfromtxt(join(dir_aux, 'water', 'aph_bricaud_1998.txt'),
@@ -159,6 +270,7 @@ class IOP_1(IOP_base):
                 'aw': aw,
                 'bw': bw,
                 'btot': btot,
+                'bp': bp,
                 'Bp': Bp,
                 }
 
@@ -235,9 +347,7 @@ class IOP_1(IOP_base):
     def phase(self, wav, Bp):
         '''
         Calculate the phase function and associated truncation factor
-        as a MLUT with parameters
-            * phase []
-            * phase_trunc_coef []
+        as a MLUT
         Bp is the backscattering ratio
         '''
         nwav = len(wav)

@@ -10,7 +10,7 @@ from __future__ import print_function, division
 from smartg import Smartg, RoughSurface, LambSurface
 from smartg import Environment, Albedo_cst
 from atmosphere import AtmAFGL, AeroOPAC, CloudOPAC, read_phase
-from water import IOP_Rw, IOP_1
+from water import IOP_Rw, IOP_1, IOP
 import numpy as np
 from itertools import product
 from unittest import skip
@@ -157,6 +157,21 @@ def test_surf_iop1_2():
     wav = np.linspace(400, 800, 12)
     runner.run_pp_sp(wav, atm=atm, surf=surf, water=water)
     runner.run_pp_sp(400., atm=atm, surf=surf, water=water)
+
+def test_iop():
+    wav = np.array([400., 500., 600.])
+    nwav = len(wav)
+    iop1 = IOP_1(1.).calc_iop(wav)
+    P = IOP_1(1.).phase(wav, np.array([0.05, 0.05, 0.05]))
+
+    bp = np.zeros((nwav, 2), dtype='float32')
+    bp[:,1] = iop1['bp']
+    atot = np.zeros((nwav, 2), dtype='float32')
+    atot[:,1] = iop1['atot']
+    iop = IOP(phase=P['phase'], bp=bp, atot=atot)
+
+    runner.run_pp(wav, water=iop)
+    runner.run_pp(wav, surf=RoughSurface(), water=iop)
 
 def test_atm_surf_ioprw():
     atm = AtmAFGL('afglt', comp=[AeroOPAC('desert', 0.1, 550.)])
