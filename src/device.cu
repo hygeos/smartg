@@ -193,6 +193,8 @@ extern "C" {
             count_level = DOWN0P;
         } else if ((ph.loc == SURF0M) && (loc_prev != SURF0M)) {
             count_level = UP0M;
+        } else if (ph.loc == SEAFLOOR) {
+            count_level = DOWNB;
         }
 
 		// count the photons
@@ -862,12 +864,14 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
 __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc,
         philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr) {
 
-	float delta_i=0.f, delta=0.f, epsilon, ab;
+	float delta_i=0.f, delta=0.f, epsilon;
     float phz, rdist, tauBis;
     int ilayer;
     #ifdef ALIS
     float dsca_dl, dsca_dl0=-ph->tau ;
     int DL=(NLAMd-1)/(NLOWd-1);
+    #else
+    float ab;
     #endif
 
 
@@ -2042,7 +2046,7 @@ __device__ void countPhoton(Photon* ph,
 
 	float weight = ph->weight;
     #ifdef ALIS
-        float *weight_sca;
+        float weight_sca[MAX_NLOW];
         for (int k=0; k<NLOWd; k++) {
             weight_sca[k] = ph->weight_sca[k];
         }
@@ -2136,7 +2140,9 @@ __device__ void countPhoton(Photon* ph,
 	st.y = tmp;
 	
 
-	if (FLUXd==1 && LEd==0) weight /= fabs(ph->v.z);
+
+    float weight_irr = fabs(ph->v.z);
+	if (FLUXd==1 && LEd==0 & weight_irr > 0.01f) weight /= weight_irr;
 
     #ifdef DEBUG
     int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
