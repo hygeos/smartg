@@ -20,7 +20,8 @@ def fournierForand(ang, n, mu):
     delta = 4/( 3*(n-1)*(n-1) )*sin(ang/2)*sin(ang/2)
     delta180 = 4/( 3*(n-1)*(n-1) )*sin(pi/2)*sin(pi/2)
 
-    res = 1/( 4*pi*(1-delta)*(1-delta)*(delta**v) )*( v*(1-delta) - (1-(delta**v)) + ( delta*(1-(delta**v)) - v*(1-delta) )*1/(sin(ang/2)*sin(ang/2)) ) + (1-(delta180**v))/(16*pi*(delta180-1)*(delta180**v)) * (3*cos(ang)*cos(ang) - 1)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        res = 1/( 4*pi*(1-delta)*(1-delta)*(delta**v) )*( v*(1-delta) - (1-(delta**v)) + ( delta*(1-(delta**v)) - v*(1-delta) )*1/(sin(ang/2)*sin(ang/2)) ) + (1-(delta180**v))/(16*pi*(delta180-1)*(delta180**v)) * (3*cos(ang)*cos(ang) - 1)
     res *= 4*pi
 
     return res
