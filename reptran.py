@@ -249,7 +249,8 @@ class REPTRAN_IBAND_LIST(object):
         we=LUT(np.array(we_l),axes=[np.array(wi_l)],names=['wavelength'],desc='Weight')
         ex=LUT(np.array(ex_l),axes=[np.array(wi_l)],names=['wavelength'],desc='E0')
         dl=LUT(np.array(dl_l),axes=[np.array(wi_l)],names=['wavelength'],desc='Dlambda')
-        norm = we.reduce(np.sum,'wavelength',grouping=wb.data)
+        norm = (we*dl).reduce(np.sum,'wavelength',grouping=wb.data)
+        #norm = we.reduce(np.sum,'wavelength',grouping=wb.data)
         return we, wb, ex, dl, norm 
         
     def get_names(self):

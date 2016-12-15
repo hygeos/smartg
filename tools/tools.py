@@ -42,6 +42,15 @@ def SpherIrr(L, azimuth='Azimuth angles', zenith='Zenith angles'):
     phi = L.axis(azimuth, aslut=True)*pi/180.
     return 1./pi*(L).reduce(trapz, zenith, x=-mu[:]).reduce(trapz, azimuth, x=phi[:]) 
 
+def reduce_Irr(m):
+    res = MLUT()
+    for d in m.datasets():
+        if d.startswith('I_'):
+            l = Irr(m[d])
+            res.add_lut(l, desc=d.replace('I_', 'Pflux_'))
+            l = SpherIrr(m[d])
+            res.add_lut(l, desc=d.replace('I_', 'Sflux_'))
+    return res
 
 def Int(wi, wb, ex, we, dl, M=None, field=None, lim=[400.,700.]):
     '''

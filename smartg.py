@@ -49,6 +49,7 @@ DOWN0P = 1
 DOWN0M = 2
 UP0P = 3
 UP0M = 4
+DOWNB = 5
 
 #
 # type definitions (should match cuda struct definitions)
@@ -401,7 +402,8 @@ class Smartg(object):
 
         # number of output levels
         # warning! values defined in communs.h should be < LVL
-        NLVL = 5
+        NLVL = 6
+        #NLVL = 5
 
         # number of Stokes parameters of the radiation field
         NPSTK = 4
@@ -521,7 +523,10 @@ class Smartg(object):
             NBPHI   =  le['phi'].shape[0]
 
         FLUX = 0
-        if flux == 'spherical' : FLUX = 1
+        if flux is not None:
+            LE=0
+            if flux== 'spherical' : 
+                FLUX = 1
 
         if wl_proba is not None:
             assert wl_proba.dtype == 'int64'
@@ -706,6 +711,18 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
             m.add_dataset('U_stdev_up (0+)', sigma[UP0P,2,ilam,:,:], axnames)
             m.add_dataset('V_stdev_up (0+)', sigma[UP0P,3,ilam,:,:], axnames)
         m.add_dataset('N_up (0+)', NPhotonsOutTot[UP0P,ilam,:,:], axnames)
+
+        m.add_dataset('I_down (B)', tabFinal[DOWNB,0,ilam,:,:], axnames)
+        m.add_dataset('Q_down (B)', tabFinal[DOWNB,1,ilam,:,:], axnames)
+        m.add_dataset('U_down (B)', tabFinal[DOWNB,2,ilam,:,:], axnames)
+        m.add_dataset('V_down (B)', tabFinal[DOWNB,3,ilam,:,:], axnames)
+        if sigma is not None:
+            m.add_dataset('I_stdev_down (B)', sigma[DOWNB,0,ilam,:,:], axnames)
+            m.add_dataset('Q_stdev_down (B)', sigma[DOWNB,1,ilam,:,:], axnames)
+            m.add_dataset('U_stdev_down (B)', sigma[DOWNB,2,ilam,:,:], axnames)
+            m.add_dataset('V_stdev_down (B)', sigma[DOWNB,3,ilam,:,:], axnames)
+        m.add_dataset('N_down (B)', NPhotonsOutTot[DOWNB,ilam,:,:], axnames)
+
 
     # direct transmission
     if NLAM > 1:

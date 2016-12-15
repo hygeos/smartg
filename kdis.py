@@ -364,7 +364,8 @@ class KDIS_IBAND_LIST(object):
         we=LUT(np.array(we_l),axes=[wb_l],names=['wavelength'],desc='weight')
         ex=LUT(np.array(ex_l),axes=[wb_l],names=['wavelength'],desc='solarflux')
         dl=LUT(np.array(dl_l),axes=[wb_l],names=['wavelength'],desc='bandwidth')
-        norm = we.reduce(np.sum,'wavelength',grouping=wb.data)
+        norm = (we*dl).reduce(np.sum,'wavelength',grouping=wb.data)
+        #norm = we.reduce(np.sum,'wavelength',grouping=wb.data)
         return we, wb, ex, dl, norm    
 
 def skipcomment(f):
