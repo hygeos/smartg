@@ -2097,12 +2097,13 @@ __device__ void countPhoton(Photon* ph,
             prof = prof_atm;
         }
         if ((count_level==DOWN0P) || (count_level==UP0M) || (count_level==UP0P) ) {
-            layer_le = NATMd;
             if (ph->loc == ATMOS) {
+                layer_le = NATMd;
                 layer_end= NATMd;
                 prof = prof_atm;
             }
             if ((ph->loc == OCEAN) || (ph->loc == SEAFLOOR)) {
+                layer_le = NOCEd;
                 layer_end= NOCEd;
                 prof = prof_oc;
             }
