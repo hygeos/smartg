@@ -233,8 +233,18 @@ def test_reptran():
     reduce_reptran(res, ibands)
 
 
-
-
+def test_rng():
+    atm = AtmAFGL('afglt')
+    surf = RoughSurface()
+    water = IOP_1(chl=1.)
+    wav = np.linspace(400, 800, 12)
+    for rng in [
+                'CURAND_PHILOX',
+                'PHILOX',
+                ]:
+        Smartg(rng=rng).run(wav, atm=atm,
+                            surf=surf, water=water,
+                            NBPHOTONS=1e6, progress=False)
 
 
 

@@ -82,7 +82,7 @@ extern "C" {
 							 struct Profile *prof_atm,
 							 struct Profile *prof_oc,
 							 long long *wl_proba_icdf,
-							 unsigned int *philox_data
+							 void *rng_state
 							 ) {
 
     // current thread index
@@ -92,6 +92,8 @@ extern "C" {
 	int this_thread_active = 1;
 	unsigned long long iloop = 0;
 
+    struct RNG_State rngstate;
+    #ifdef PHILOX
 	// philox_data:
 	// index 0: seed (config)
 	// index 1 to last: status
@@ -102,13 +104,22 @@ extern "C" {
 	//ce systeme garanti l'existence de 2^32 generateurs differents par run et...
 	//...la possiblite de reemployer les memes sequences a partir de la meme clef utilisateur
 	//(plus d'infos dans "communs.h")
-	philox4x32_key_t configThr = {{idx, philox_data[0]}};
+	philox4x32_key_t configThr = {{idx, ((unsigned int *)rng_state)[0]}};
 	//le compteur se defini par trois mots choisis au hasard (il parait)...
 	//...et un compteur definissant le nombre d'appel au generateur
 	//ce systeme garanti l'existence de 2^32 nombres distincts pouvant etre genere par thread,...
 	//...et ce sur l'ensemble du process (et non pas 2^32 par thread par appel au kernel)
 	//(plus d'infos dans "communs.h")
-	philox4x32_ctr_t etatThr = {{philox_data[idx+1], 0xf00dcafe, 0xdeadbeef, 0xbeeff00d}};
+	philox4x32_ctr_t etatThr = {{((unsigned int *)rng_state)[idx+1], 0xf00dcafe, 0xdeadbeef, 0xbeeff00d}};
+
+    rngstate.configThr = configThr;
+    rngstate.etatThr = etatThr;
+
+    #endif
+    #ifdef CURAND_PHILOX
+    // copy RNG state in local memory
+    rngstate.state = ((curandStatePhilox4_32_10_t *)rng_state)[idx];
+    #endif
 
 	
 	// Création de variable propres à chaque thread
@@ -144,7 +155,7 @@ extern "C" {
         if((ph.loc == NONE) && this_thread_active){
 
             initPhoton(&ph, prof_atm, prof_oc, spectrum, X0, NPhotonsIn, wl_proba_icdf,
-                       &etatThr , &configThr);
+                       &rngstate);
             iloop = 1;
             #ifdef DEBUG_PHOTON
             display("INIT", &ph);
@@ -162,10 +173,10 @@ extern "C" {
 
         #ifdef SPHERIQUE
         if (ph.loc == ATMOS)
-           move_sp(&ph, prof_atm, 0, 0 , &etatThr , &configThr);
+           move_sp(&ph, prof_atm, 0, 0 , &rngstate);
         else 
         #endif
-        move_pp(&ph, prof_atm, prof_oc, &etatThr , &configThr);
+        move_pp(&ph, prof_atm, prof_oc, &rngstate);
         #ifdef DEBUG_PHOTON
         display("MOVE", &ph);
         #endif
@@ -243,7 +254,7 @@ extern "C" {
                             // Scatter the virtual photon, using le=1, and count_level for the scattering angle computation
                             scatter(&ph_le, prof_atm, prof_oc, faer, foce,
                                     1, tabthv, tabphi,
-                                    count_level_le, &etatThr , &configThr);
+                                    count_level_le, &rngstate);
 
                             #ifdef DEBUG_PHOTON
                             if (k==0) display("SCATTER LE UP", &ph_le);
@@ -253,7 +264,7 @@ extern "C" {
                             #ifdef SPHERIQUE
                             // !! in case of spherical geometry, the attenuation is computation using the move_sp function
                             // in plane parallel, this is done in the next countPhoton function
-                            if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, count_level_le , &etatThr , &configThr);
+                            if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, count_level_le , &rngstate);
                             #ifdef DEBUG_PHOTON
                             display("MOVE LE", &ph_le);
                             #endif
@@ -277,7 +288,7 @@ extern "C" {
                 copyPhoton(&ph, &ph_le);
                 scatter(&ph_le, prof_atm, prof_oc, faer, foce,
                             1, tabthv, tabphi,
-                            UP0M2, &etatThr , &configThr);
+                            UP0M2, &rngstate);
                 ph_le.weight *= expf(-fabs(ph_le.tau/ph_le.vz));
                 ph_le.loc=SURF0M;
                 ph_le.tau=0.F;
@@ -295,7 +306,7 @@ extern "C" {
                             ph_le2.ith = (ith + ith0)%NBTHETAd;
 
                             surfaceAgitee(&ph_le2, 1, tabthv, tabphi,
-                                count_level_le, &etatThr , &configThr);
+                                          count_level_le, &rngstate);
 
                             #ifdef DEBUG_PHOTON
                             if (k==0) display("SURFACE LE2 UP", &ph_le2);
@@ -315,7 +326,7 @@ extern "C" {
             /* Scattering Propagation , using le=0 and propagation photon */
             scatter(&ph, prof_atm, prof_oc, faer, foce,
                     0, tabthv, tabphi, 0,
-                    &etatThr , &configThr);
+                    &rngstate);
             #ifdef DEBUG_PHOTON
             display("SCATTER", &ph);
             #endif
@@ -356,7 +367,7 @@ extern "C" {
 
                         // Reflect or Tramsit the virtual photon, using le=1, and count_level for the scattering angle computation
                         surfaceAgitee(&ph_le, 1, tabthv, tabphi,
-                                count_level_le, &etatThr , &configThr);
+                                      count_level_le, &rngstate);
 
                         #ifdef DEBUG_PHOTON
                         if (k==0) display("SURFACE LE UP", &ph_le);
@@ -370,7 +381,7 @@ extern "C" {
                         if (k==0) { 
                             #ifdef SPHERIQUE
                             // for spherical case attenuation if performed usin move_sp
-                            move_sp(&ph_le, prof_atm, 1, UPTOA , &etatThr , &configThr);
+                            move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
                             #endif
                             // Final counting at the TOA
                             countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA , errorcount, tabPhotons, NPhotonsOut);
@@ -387,7 +398,7 @@ extern "C" {
 
                 // Propagation of photon using le=0
 				surfaceAgitee(&ph, 0, tabthv, tabphi,
-                        count_level, &etatThr , &configThr);
+                              count_level, &rngstate);
             } // Not lambertian
 
 
@@ -401,12 +412,12 @@ extern "C" {
                         copyPhoton(&ph, &ph_le);
                         ph_le.iph = (iph + iph0)%NBPHId;
                         ph_le.ith = (ith + ith0)%NBTHETAd;
-				        surfaceLambertienne(&ph_le, 1, tabthv, tabphi, spectrum, &etatThr , &configThr);
+				        surfaceLambertienne(&ph_le, 1, tabthv, tabphi, spectrum, &rngstate);
                         // Only two levels for counting by definition
                         countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, NPhotonsOut);
                         #ifdef SPHERIQUE
                         // for spherical case attenuation if performed usin move_sp
-                        move_sp(&ph_le, prof_atm, 1, UPTOA , &etatThr , &configThr);
+                        move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
                         #endif
                         countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, NPhotonsOut);
                     }//direction
@@ -414,7 +425,7 @@ extern "C" {
                 } //LE
 
                 //Propagation of Lamberatian reflection with le=0
-				surfaceLambertienne(&ph, 0, tabthv, tabphi, spectrum, &etatThr , &configThr);
+				surfaceLambertienne(&ph, 0, tabthv, tabphi, spectrum, &rngstate);
             } // Lambertian
            } // ENV=0
 
@@ -423,10 +434,10 @@ extern "C" {
                 float dis=0;
                 dis = sqrtf((ph.pos.x-X0d)*(ph.pos.x-X0d) +(ph.pos.y-Y0d)*(ph.pos.y-Y0d));
                 if( dis > ENV_SIZEd) {
-                    surfaceLambertienne(&ph, 0, tabthv, tabphi, spectrum, &etatThr , &configThr);
+                    surfaceLambertienne(&ph, 0, tabthv, tabphi, spectrum, &rngstate);
                 }
                 else {
-                    surfaceAgitee(&ph, 0, tabthv, tabphi, count_level, &etatThr , &configThr);
+                    surfaceAgitee(&ph, 0, tabthv, tabphi, count_level, &rngstate);
                 }
            } // ENV=1
 
@@ -450,14 +461,14 @@ extern "C" {
                     copyPhoton(&ph, &ph_le);
                     ph_le.iph = (iph + iph0)%NBPHId;
                     ph_le.ith = (ith + ith0)%NBTHETAd;
-				    surfaceLambertienne(&ph_le, 1, tabthv, tabphi, spectrum, &etatThr , &configThr);
+				    surfaceLambertienne(&ph_le, 1, tabthv, tabphi, spectrum, &rngstate);
                     //  contribution to UP0M level
                     countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0M,   errorcount, tabPhotons, NPhotonsOut);
                 }
               }
             } //LE
 
-			surfaceLambertienne(&ph, 0, tabthv, tabphi, spectrum, &etatThr , &configThr);
+			surfaceLambertienne(&ph, 0, tabthv, tabphi, spectrum, &rngstate);
             #ifdef DEBUG_PHOTON
             display("SEAFLOOR", &ph);
             #endif
@@ -506,8 +517,14 @@ extern "C" {
         atomicAdd(errorcount+ERROR_MAX_LOOP, 1);
     }
 
-	// Sauvegarde de l'état du random pour que les nombres ne soient pas identiques à chaque appel du kernel
-    philox_data[idx+1] = etatThr[0];
+    #ifdef PHILOX
+	// Sauvegarde de l'état du random pour que les nombres
+    // ne soient pas identiques à chaque appel du kernel
+    ((unsigned int *)rng_state)[idx+1] = rngstate.etatThr[0];
+    #endif
+    #ifdef CURAND_PHILOX
+    ((curandStatePhilox4_32_10_t *)rng_state)[idx] = rngstate.state;
+    #endif
 
 }
 }
@@ -523,8 +540,7 @@ extern "C" {
 __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc,
                            struct Spectrum *spectrum, float *X0, unsigned long long *NPhotonsIn,
                            long long *wl_proba_icdf,
-                           philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr)
-{
+                           struct RNG_State *rngstate) {
 	// Initialisation du vecteur vitesse
 	ph->v.x = - STHVd;
 	ph->v.y = 0.F;
@@ -622,7 +638,8 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 
 
 #ifdef SPHERIQUE
-__device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_level , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr) {
+__device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_level,
+                        struct RNG_State *rngstate) {
 
     float tauRdm;
     float hph = 0.;  // cumulative optical thickness
@@ -862,7 +879,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
 
 
 __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc,
-        philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr) {
+                        struct RNG_State *rngstate) {
 
 	float delta_i=0.f, delta=0.f, epsilon;
     float phz, rdist, tauBis;
@@ -1113,7 +1130,7 @@ __device__ void scatter(Photon* ph,
         struct Phase *faer, struct Phase *foce,
         int le,
         float* tabthv, float* tabphi, int count_level,
-        philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr){
+        struct RNG_State *rngstate) {
 
 	float cTh=0.f ;
 	float zang=0.f, theta=0.f;
@@ -1353,7 +1370,9 @@ __device__ void scatter(Photon* ph,
 }
 
 
-__device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, int count_level , philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr) {
+__device__ void surfaceAgitee(Photon* ph, int le,
+                              float* tabthv, float* tabphi, int count_level,
+                              struct RNG_State *rngstate) {
 	
 	if( SIMd == -2){ // Atmosphère , la surface absorbe tous les photons
 		ph->loc = ABSORBED;
@@ -1812,7 +1831,9 @@ __device__ void surfaceAgitee(Photon* ph, int le, float* tabthv, float* tabphi, 
 /* surfaceLambertienne
 * Reflexion sur une surface lambertienne
 */
-__device__ void surfaceLambertienne(Photon* ph, int le, float* tabthv, float* tabphi, struct Spectrum *spectrum, philox4x32_ctr_t* etatThr, philox4x32_key_t* configThr) {
+__device__ void surfaceLambertienne(Photon* ph, int le,
+                                    float* tabthv, float* tabphi, struct Spectrum *spectrum,
+                                    struct RNG_State *rngstate) {
 	
 	if( SIMd == -2){ 	// Atmosphère ou océan seuls, la surface absorbe tous les photons
 		ph->loc = ABSORBED;
@@ -2605,6 +2626,9 @@ __device__ float get_OD_abs(float z1in, int layer1in, float z2in, int layer2in, 
 }
 */
 
+
+#ifdef PHILOX
+
 /**********************************************************
 *	> Fonctions liées au générateur aléatoire
 ***********************************************************/
@@ -2652,3 +2676,5 @@ __device__ double DatomicAdd(double* address, double val)
 
         return __longlong_as_double(old);
 }
+
+#endif

@@ -16,7 +16,6 @@
 
 
 #include <stdio.h>
-#include "philox.h"
 
 /**********************************************************
 *	> Constantes
@@ -72,8 +71,28 @@
 #define OUTPUT_BOA_DOWN_0M_UP_0P   2 // downward radiance at BOA below surface (0-) and upward radiance at BOA above surface (0+)
 
 
-/* random generator */
-#define RAND randomPhilox4x32_7float(etatThr, configThr)
+// pseudo-random number generator
+#ifdef PHILOX
+    #include "philox.h"
+
+    struct RNG_State {
+        philox4x32_key_t configThr;
+        philox4x32_ctr_t etatThr;
+    };
+
+    #define RAND randomPhilox4x32_7float(&rngstate->etatThr, &rngstate->configThr)
+#endif
+#ifdef CURAND_PHILOX
+    #include <curand.h>
+    #include <curand_kernel.h>
+
+    struct RNG_State {
+        curandStatePhilox4_32_10_t state;
+    };
+
+    #define RAND curand_uniform(&rngstate->state)
+
+#endif
 
 
 

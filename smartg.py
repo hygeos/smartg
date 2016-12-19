@@ -28,6 +28,9 @@ import sys
 from bandset import BandSet
 from itertools import product
 from collections import Iterable
+import pycuda.autoinit
+from pycuda.compiler import SourceModule
+from pycuda.driver import module_from_buffer
 if sys.version_info[:2] >= (3, 0):
     xrange = range
 
@@ -188,7 +191,7 @@ class Smartg(object):
 
     def __init__(self, pp=True, debug=False,
                  alt_move=False, debug_photon=False,
-                 double=False, alis=None):
+                 double=False, alis=None, rng='PHILOX'):
         '''
         Initialization of the Smartg object
 
@@ -215,14 +218,16 @@ class Smartg(object):
             - alis : dictionary, if present implement the ALIS method (Emde et al. 2010) for treating gaseous absorption, with field 'nlow'
                 is the number of wavelength to fit the spectral dependence of scattering, 
                 nlow-1 has to divide NW-1 where NW is the number of wavelengths, nlow has to be lesser than MAX_NLOW that is defined in communs.h
+
+            - rng: choice of pseudo-random number generator:
+                   * PHILOX
+                   * CURAND_PHILOX
         '''
-        import pycuda.autoinit
-        from pycuda.compiler import SourceModule
-        from pycuda.driver import module_from_buffer
 
         self.pp = pp
         self.double = double
         self.alis = alis
+        self.rng = init_rng(rng)
 
         #
         # compilation option
@@ -244,6 +249,7 @@ class Smartg(object):
             options.append('-DDOUBLE')
         if alis:
             options.append('-DALIS')
+        options.append('-D'+rng)
 
         #
         # compile the kernel or load binary
@@ -418,11 +424,6 @@ class Smartg(object):
         attrs.update({'XGRID': XGRID})
 
 
-        if SEED == -1:
-            # SEED is based on clock
-            SEED = np.uint32((datetime.now()
-                - datetime.utcfromtimestamp(0)).total_seconds()*1000)
-
         if not isinstance(wl, BandSet):
             wl = BandSet(wl)
         NLAM = wl.size
@@ -548,6 +549,9 @@ class Smartg(object):
         # Initialize the progress bar
         p = Progress(NBPHOTONS, progress)
 
+        # Initialize the RNG
+        self.rng.setup(SEED, XBLOCK, XGRID)
+
         # Loop and kernel call
         (NPhotonsInTot,
                 tabPhotonsTot, errorcount, NPhotonsOutTot, sigma, Nkernel, secs_cuda_clock
@@ -555,7 +559,7 @@ class Smartg(object):
                                 NLVL, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                                 NLAM, self.double, self.kernel, p, X0, le, spectrum,
                                 prof_atm_gpu, prof_oc_gpu,
-                                wl_proba_icdf, SEED, stdev)
+                                wl_proba_icdf, stdev, self.rng)
         attrs['kernel time (s)'] = secs_cuda_clock
         attrs['number of kernel iterations'] = Nkernel
         attrs.update(self.common_attrs)
@@ -1028,8 +1032,8 @@ def get_git_attrs():
 
 def loop_kernel(NBPHOTONS, faer, foce, NLVL,
                 NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
-                NLAM, double , kern, p, X0, le, spectrum,
-                prof_atm, prof_oc, wl_proba_icdf, SEED, stdev):
+                NLAM, double, kern, p, X0, le, spectrum,
+                prof_atm, prof_oc, wl_proba_icdf, stdev, rng):
     """
     launch the kernel several time until the targeted number of photons injected is reached
 
@@ -1093,11 +1097,6 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL,
         tabthv = gpuzeros(1, dtype='float32')
         tabphi = gpuzeros(1, dtype='float32')
 
-    # RNG status and configuration
-    philox_data = np.zeros(XBLOCK*XGRID+1, dtype='uint32')
-    philox_data[0] = SEED
-    philox_data = to_gpu(philox_data)
-
     secs_cuda_clock = 0.
     while(np.sum(NPhotonsInTot.get()) < NBPHOTONS):
 
@@ -1114,7 +1113,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL,
         kern(spectrum, X0, faer, foce,
                 errorcount, nThreadsActive, tabPhotons,
                 Counter, NPhotonsIn, NPhotonsOut, tabthv, tabphi,
-                prof_atm, prof_oc, wl_proba_icdf, philox_data,
+                prof_atm, prof_oc, wl_proba_icdf, rng.state,
                 block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
         end_cuda_clock.record()
         end_cuda_clock.synchronize()
@@ -1260,3 +1259,74 @@ def impactInit(prof_atm, NLAM, THVDEG, Rter, pp):
 
     return to_gpu(np.array([x0, y0, z0], dtype='float32')), np.exp(-tautot)
 
+
+def init_rng(rng):
+    if rng == 'PHILOX':
+        return RNG_PHILOX()
+    elif rng == 'CURAND_PHILOX':
+        return RNG_CURAND_PHILOX()
+    else:
+        raise Exception('Invalid RNG "{}"'.format(rng))
+
+
+class RNG_PHILOX(object):
+    def __init__(self):
+        pass
+
+    def setup(self, SEED, XBLOCK, XGRID):
+        if SEED == -1:
+            # SEED is based on clock
+            SEED = np.uint32((datetime.now()
+                - datetime.utcfromtimestamp(0)).total_seconds()*1000)
+
+        state = np.zeros(XBLOCK*XGRID+1, dtype='uint32')
+        state[0] = SEED
+        self.state = to_gpu(state)
+
+
+class RNG_CURAND_PHILOX(object):
+    def __init__(self):
+        # build module containing initilization functions
+        source = r'''
+        #include <curand.h>
+        #include <curand_kernel.h>
+
+        #define YBLOCKd 1
+        #define YGRIDd 1
+
+        __device__ __constant__ int XBLOCKd;
+        __device__ __constant__ int XGRIDd;
+        __device__ __constant__ int SEEDd;
+
+        extern "C" {
+        __global__ void get_state_size(int *s) {
+            *s = sizeof(curandStatePhilox4_32_10_t);
+        }
+
+        __global__ void setup(curandStatePhilox4_32_10_t *state) {
+            int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+            curand_init(SEEDd, idx, 0, &state[idx]);
+        }
+        }
+        '''
+        self.mod = SourceModule(source, no_extern_c=True)
+
+        # get state size
+        s = gpuzeros(1, dtype='int32')
+        self.mod.get_function('get_state_size')(s, block=(1, 1, 1), grid=(1, 1, 1))
+        self.STATE_SIZE = int(s.get())  # size in bytes
+
+    def setup(self, SEED, XBLOCK, XGRID):
+        if SEED == -1:
+            # SEED is based on clock
+            SEED = np.uint32((datetime.now()
+                - datetime.utcfromtimestamp(0)).total_seconds()*1000)
+
+        cuda.memcpy_htod(self.mod.get_global('XBLOCKd')[0], np.array([XBLOCK], dtype=np.int32))
+        cuda.memcpy_htod(self.mod.get_global('XGRIDd')[0], np.array([XGRID], dtype=np.int32))
+        cuda.memcpy_htod(self.mod.get_global('SEEDd')[0], np.array([XGRID], dtype=np.int32))
+
+        # setup RNG
+        self.state = gpuzeros(self.STATE_SIZE*XBLOCK*XGRID, dtype='uint8')
+        setup = self.mod.get_function('setup')
+        setup(self.state, block=(XBLOCK,1,1), grid=(XGRID, 1, 1))
