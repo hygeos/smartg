@@ -12,18 +12,20 @@ import netCDF4
 from tools.interp import interp2, interp3
 
 
-def reduce_reptran(mlut, ibands, use_solar=False):
+def reduce_reptran(mlut, ibands, use_solar=False, integrated=False):
     '''
     Compute the final spectral signal from mlut output of smart_g and
     REPTRAN_IBAND_LIST weights
     '''
-    we, wb, ex, dl, norm = ibands.get_weights()
+    we, wb, ex, dl, norm, norm_dl = ibands.get_weights()
     res = MLUT()
     for l in mlut:
         for pref in ['I_','Q_','U_','V_','transmission','flux'] :
             if pref in l.desc:
-                if use_solar : lr = (l*we*ex*dl).reduce(np.sum,'wavelength',grouping=wb.data)/norm
-                else         : lr = (l*we*dl   ).reduce(np.sum,'wavelength',grouping=wb.data)/norm
+                if use_solar : lr = (l*we*ex*dl).reduce(np.sum,'wavelength',grouping=wb.data)
+                else         : lr = (l*we*dl   ).reduce(np.sum,'wavelength',grouping=wb.data)
+                if integrated: lr = lr/norm
+                else         : lr = lr/norm_dl
 
                 res.add_lut(lr, desc=l.desc)
     res.attrs = mlut.attrs
@@ -249,9 +251,9 @@ class REPTRAN_IBAND_LIST(object):
         we=LUT(np.array(we_l),axes=[np.array(wi_l)],names=['wavelength'],desc='Weight')
         ex=LUT(np.array(ex_l),axes=[np.array(wi_l)],names=['wavelength'],desc='E0')
         dl=LUT(np.array(dl_l),axes=[np.array(wi_l)],names=['wavelength'],desc='Dlambda')
-        norm = (we*dl).reduce(np.sum,'wavelength',grouping=wb.data)
-        #norm = we.reduce(np.sum,'wavelength',grouping=wb.data)
-        return we, wb, ex, dl, norm 
+        norm_dl = (we*dl).reduce(np.sum,'wavelength',grouping=wb.data)
+        norm = we.reduce(np.sum,'wavelength',grouping=wb.data)
+        return we, wb, ex, dl, norm, norm_dl 
         
     def get_names(self):
         '''
