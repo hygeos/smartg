@@ -2083,6 +2083,11 @@ __device__ void countPhoton(Photon* ph,
         iphi= ph->iph;
         il  = ph->ilam;
 
+        if (!(   (SIMd==-1) 
+              || (NATMd==0 && (count_level==UPTOA || count_level==UP0P)) 
+              || (NOCEd==0 && count_level==UP0P)
+             )
+           ){
         // Computation of final attenutation only in PP
         #ifndef SPHERIQUE
         int layer_le;
@@ -2149,7 +2154,8 @@ __device__ void countPhoton(Photon* ph,
         }
         #endif
         #endif
-    }
+     } // SIMd  
+    }   //LE
 	
   	/*if( ph->vy<0.f )
     		s3 = -s3;*/  // DR 
