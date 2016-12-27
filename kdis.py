@@ -212,14 +212,20 @@ class KDIS(object):
         return a list of KDIS_IBANDS for Smartg.run() method
         '''
         ik_l=[]
+
+        if not isinstance(lmin,list):
+            lmin=[lmin]
+            lmax=[lmax]
         for k in self.bands():
-            if (lmin is None and lmax is None) or \
-               (lmin is None and k.wmax <= lmax) or \
-               (lmax is None and k.wmin >= lmin) or \
-               (k.wmin >= lmin and k.wmax <= lmax) :
-                for ik in k.ibands():
-                    ik_l.append(ik)
-        return KDIS_IBAND_LIST(ik_l)
+            for ii in range(len(lmin)):
+                if (k.wmin >= lmin[ii]) and (k.wmax <= lmax[ii]):
+                    for ik in k.ibands():
+                        ik_l.append(ik)
+
+        assert len(ik_l) != 0
+
+        return KDIS_IBAND_LIST(sorted(ik_l, key=lambda x:x.w))
+
 
     def get_weight(self):
         '''

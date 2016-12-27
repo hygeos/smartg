@@ -209,10 +209,15 @@ class REPTRAN(object):
         return a REPTRAN_IBAND_LIST for Smartg.run() method
         '''
         ik_l=[]
+        if not isinstance(lmin,list):
+            lmin=[lmin]
+            lmax=[lmax]
         for k in self.bands():
-            if (include in k.name) and (k.wmin >= lmin) and (k.wmax <= lmax):
-                for ik in k.ibands():
-                    ik_l.append(ik)
+            if (include in k.name):
+                for ii in range(len(lmin)):
+                    if (k.wmin >= lmin[ii]) and (k.wmax <= lmax[ii]):
+                        for ik in k.ibands():
+                            ik_l.append(ik)
 
         assert len(ik_l) != 0
 
