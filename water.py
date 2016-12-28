@@ -60,8 +60,8 @@ class IOP(IOP_base):
 
         NOTE: first item in dimension Z is not used
     '''
-    def __init__(self, phase, bp=None, bw=None,
-                 atot=None, ap=None, aw=None,
+    def __init__(self, phase=None, bp=0., bw=None,
+                 atot=None, ap=0., aw=None,
                  Z=[0, 10000], ALB=Albedo_cst(0.)):
 
         self.Z = np.array(Z, dtype='float')
@@ -122,7 +122,10 @@ class IOP(IOP_base):
         pro.add_dataset('OD_abs_oc', tau_abs,
                         ['wavelength', 'z_oc'])
 
-        pmol = bp/btot
+        with np.errstate(divide='ignore'):
+            pmol = bp/btot
+
+        pmol[np.isnan(pmol)] = 1.
         pro.add_dataset('pmol_oc', pmol,
                         ['wavelength', 'z_oc'])
 

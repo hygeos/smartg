@@ -2102,7 +2102,7 @@ __device__ void countPhoton(Photon* ph,
             prof = prof_atm;
         }
         if ((count_level==DOWN0P) || (count_level==UP0M) || (count_level==UP0P) ) {
-            if (ph->loc == ATMOS) {
+            if ((ph->loc == ATMOS) || (ph->loc == SURF0M) || (ph->loc == SURF0P) ) {
                 layer_le = NATMd;
                 layer_end= NATMd;
                 prof = prof_atm;
