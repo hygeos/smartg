@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from tools.luts import MLUT, LUT, Idx
+from atmosphere import diff1
 import numpy as np
 from warnings import warn
 from albedo import Albedo_cst
@@ -105,18 +106,19 @@ class IOP(IOP_base):
             pro.add_dataset('phase_oc', pha_, ['iphase', 'stk', 'theta_oc'])
             pro.add_dataset('iphase_oc', ipha, ['wavelength', 'z_oc'])
 
-        dz = np.diff(self.Z)
+        #dz = np.diff(self.Z)
+        dz = diff1(self.Z)
 
         tau_tot = - (atot + btot)*dz
-        pro.add_dataset('OD_oc', tau_tot,
+        pro.add_dataset('OD_oc', np.cumsum(tau_tot, out=tau_tot, axis=1),
                         ['wavelength', 'z_oc'])
 
         tau_sca = - btot*dz
-        pro.add_dataset('OD_sca_oc', tau_sca,
+        pro.add_dataset('OD_sca_oc', np.cumsum(tau_sca, out=tau_sca, axis=1),
                         ['wavelength', 'z_oc'])
 
         tau_abs = - (atot * dz)
-        pro.add_dataset('OD_abs_oc', tau_abs,
+        pro.add_dataset('OD_abs_oc', np.cumsum(tau_abs, out=tau_abs, axis=1),
                         ['wavelength', 'z_oc'])
 
         with np.errstate(divide='ignore'):

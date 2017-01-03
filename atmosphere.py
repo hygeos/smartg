@@ -770,7 +770,7 @@ class AtmAFGL(Atmosphere):
             return None
 
 
-def read_phase(filename, standard=False):
+def read_phase(filename, standard=False, kind='atm'):
     '''
     Read phase function from filename as a LUT
 
@@ -788,7 +788,7 @@ def read_phase(filename, standard=False):
 
     P = LUT(pha.swapaxes(0, 1),  # stk, theta
             axes=[None, theta],
-            names=['stk', 'theta_atm'],
+            names=['stk', 'theta_'+kind],
            )
 
     return P
