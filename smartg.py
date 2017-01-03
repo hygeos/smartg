@@ -18,7 +18,7 @@ from os.path import dirname, realpath, join, exists
 from warnings import warn
 from albedo import Albedo_cst
 from tools.progress import Progress
-from tools.luts import LUT, MLUT, Idx
+from tools.luts import MLUT
 from scipy.interpolate import interp1d
 import subprocess
 from collections import OrderedDict
@@ -26,8 +26,6 @@ from pycuda.gpuarray import to_gpu, zeros as gpuzeros
 import pycuda.driver as cuda
 import sys
 from bandset import BandSet
-from itertools import product
-from collections import Iterable
 import pycuda.autoinit
 from pycuda.compiler import SourceModule
 from pycuda.driver import module_from_buffer
@@ -47,6 +45,7 @@ binnames = {
 
 
 # constants definition
+# (should match #defines in src/communs.h)
 UPTOA = 0
 DOWN0P = 1
 DOWN0M = 2

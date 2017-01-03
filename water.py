@@ -6,12 +6,9 @@ import numpy as np
 from warnings import warn
 from albedo import Albedo_cst
 from os.path import realpath, dirname, join
-from atmosphere import NPSTK
+from config import NPSTK
 from tools.phase import fournierForand, integ_phase, calc_iphase
-
-this_dir = dirname(realpath(__file__))
-dir_aux = join(this_dir, 'auxdata')
-
+from config import dir_auxdata as dir_aux
 
 
 def read_aw(dir_aux):

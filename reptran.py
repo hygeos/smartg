@@ -6,7 +6,7 @@ from __future__ import print_function, division
 import numpy as np
 from tools.luts import LUT, MLUT
 from os.path import dirname, join
-from atmosphere import dir_libradtran_reptran
+from config import dir_libradtran_reptran
 from scipy.interpolate import interp1d
 import netCDF4
 from tools.interp import interp2, interp3

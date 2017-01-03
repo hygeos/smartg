@@ -6,26 +6,21 @@ from __future__ import print_function, division, absolute_import
 import numpy as np
 from os.path import join, dirname, exists, basename
 from glob import glob
-from tools.luts import MLUT, LUT, read_mlut_netcdf4, Idx
+from tools.luts import MLUT, LUT, Idx
 from tools.phase import calc_iphase
 from scipy.interpolate import interp1d
 from scipy.integrate import simps
 from scipy.constants import codata
 from bandset import BandSet
 import netCDF4
-from warnings import warn, catch_warnings
+from config import NPSTK, dir_libradtran_opac
+from config import dir_libradtran_atmmod
+from config import dir_libradtran_crs
+from warnings import warn
 import sys
 if sys.version_info[:2] >= (3, 0):
     xrange = range
 
-
-dir_libradtran = '/home/applis/libRadtran/libRadtran-2.0/'
-dir_libradtran_reptran =  join(dir_libradtran, 'data/correlated_k/reptran/')
-dir_libradtran_opac =  join(dir_libradtran, 'data/aerosol/OPAC/')
-dir_libradtran_atmmod = join(dir_libradtran, 'data/atmmod/')
-dir_libradtran_crs = join(dir_libradtran, 'data/crs/')
-
-NPSTK = 4 # number of Stokes parameters of the radiation field
 
 
 
