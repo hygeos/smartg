@@ -988,7 +988,7 @@ def init_profile(wl, prof, kind):
     prof_gpu['pmol'][:] = prof['pmol_'+kind].data[...]
     prof_gpu['ssa'][:] = prof['ssa_'+kind].data[...]
     if 'iphase_'+kind in prof.datasets():
-        prof_gpu['iphase'][:] = prof['iphase_'+kind][:,:]
+        prof_gpu['iphase'][:] = prof['iphase_'+kind].data[...]
 
     return to_gpu(prof_gpu)
 
