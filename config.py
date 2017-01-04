@@ -4,6 +4,7 @@
 from __future__ import print_function, division, absolute_import
 from os.path import join, dirname, realpath, isdir
 from subprocess import check_call
+from builtins import input
 
 '''
 SMART-G project-wide configuration
@@ -52,7 +53,6 @@ def check_libradtran():
     cmds.append(('wget http://www.meteo.physik.uni-muenchen.de/~libradtran/lib/exe/fetch.php?media=download:reptran_2015_all.tar.gz -O reptran_2015_all.tar.gz', dir_libradtran))
     cmds.append(('tar xzvf reptran_2015_all.tar.gz', dir_libradtran))
     cmds.append(('rm -fv reptran_2015_all.tar.gz', dir_libradtran))
-    cmds.append(('cp -v data/wc/mie/*.cdf data/aerosol/OPAC/optprop/', dir_libradtran))
 
     print('Libradtran base directory does not exist:')
     print(dir_libradtran)
