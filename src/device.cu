@@ -234,7 +234,7 @@ extern "C" {
 		        }
 			    if (ph.loc == OCEAN) {
 			        NK=2;
-			        up_level = UP0M;
+                    up_level = UP0M;
 			        down_level = DOWNB;
 		        }
 
@@ -961,6 +961,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             ilayer++;
         }
         ph->layer = ilayer;
+        ph->prop_aer = 1.f - prof_oc[ph->layer+ph->ilam*(NOCEd+1)].pmol;
 
         delta_i= fabs(get_OD(BEERd, prof_oc[ilayer+ph->ilam*(NOCEd+1)]) - get_OD(BEERd, prof_oc[ilayer-1+ph->ilam*(NOCEd+1)]));
         delta= fabs(tauBis - get_OD(BEERd, prof_oc[ilayer-1+ph->ilam*(NOCEd+1)])) ;

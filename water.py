@@ -122,7 +122,7 @@ class IOP(IOP_base):
                         ['wavelength', 'z_oc'])
 
         with np.errstate(divide='ignore'):
-            pmol = bp/btot
+            pmol = bw/btot
 
         pmol[np.isnan(pmol)] = 1.
         pro.add_dataset('pmol_oc', pmol,

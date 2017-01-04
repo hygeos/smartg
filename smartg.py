@@ -474,7 +474,7 @@ class Smartg(object):
             prof_oc = water
 
         if prof_oc is not None:
-            foce = calculF(prof_oc, NF, DEPO=0., kind='oc')
+            foce = calculF(prof_oc, NF, DEPO=0.0906, kind='oc')
             prof_oc_gpu = init_profile(wl, prof_oc, 'oc')
             NOCE = len(prof_oc.axis('z_oc')) - 1
         else:
@@ -732,6 +732,7 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
         m.add_lut(prof_atm['ssa_p_atm'])
         if 'phase_atm' in prof_atm.datasets():
             m.add_lut(prof_atm['phase_atm'])
+            m.add_lut(prof_atm['iphase_atm'])
 
     # write ocean profiles
     if prof_oc is not None:
@@ -744,6 +745,7 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
             m.add_lut(prof_oc['ssa_p_oc'])
         if 'phase_oc' in prof_oc.datasets():
             m.add_lut(prof_oc['phase_oc'])
+            m.add_lut(prof_oc['iphase_oc'])
         m.add_lut(prof_oc['albedo_seafloor'])
 
     # write the error count
@@ -832,7 +834,7 @@ def calculF(profile, N, DEPO, kind):
     '''
     Calculate cumulated phase functions from profile
     N: number of angles
-    DEPO: depolarization factor
+    DEPO: depolarization factor 'atmospheric'
     kind: 'atm' or 'oc'
     ray (boolean): include rayleigh phase function
     '''
@@ -985,7 +987,7 @@ def init_profile(wl, prof, kind):
     prof_gpu['OD_abs'][:] = prof['OD_abs_'+kind].data[...]
     prof_gpu['pmol'][:] = prof['pmol_'+kind].data[...]
     prof_gpu['ssa'][:] = prof['ssa_'+kind].data[...]
-    if 'iphase_atm' in prof.datasets():
+    if 'iphase_'+kind in prof.datasets():
         prof_gpu['iphase'][:] = prof['iphase_'+kind][:,:]
 
     return to_gpu(prof_gpu)
