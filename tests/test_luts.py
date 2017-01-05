@@ -359,7 +359,7 @@ def test_convert():
     m.set_attr('x', 12)   # set MLUT attributes
     m.set_attrs({'y':15, 'z':8})
 
-    assert m.equal(m[0].to_mlut(), strict=False) # not strict equality because of attributes
+    assert m.equal(m[0].to_mlut(), attributes=False)
 
 def test_oper_lut1():
     l = create_lut()
@@ -401,7 +401,7 @@ def test_write_read_mlut():
             os.remove(filename)
             os.rmdir(tmpdir)
 
-        assert m0.equal(m1, strict=True, show_diff=True)
+        assert m0.equal(m1, show_diff=True)
 
     for filename in ['mlut.hdf', 'mlut.nc']:
         yield check, filename
