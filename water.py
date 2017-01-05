@@ -85,6 +85,9 @@ class IOP(IOP_base):
         # scattering
         bp = self.bp
 
+        if (self.phase is None) and ((np.array(bp) > 0).any()):
+            raise Exception('No phase function has been provided, but bp>0')
+
         bw = self.bw
         if bw is None:
             bw = 19.3e-4*((wav[:]/550.)**-4.3)
