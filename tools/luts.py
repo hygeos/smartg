@@ -2256,13 +2256,15 @@ def read_mlut_hdf(filename, datasets=None):
     # transfer the axes from ls_datasets to the new MLUT
     m = MLUT()
     for ax in set(ls_axes):
+        [x[0] for x in ls_datasets]
 
         # read the axis if not done already
-        if ax not in map(lambda x: x[0], ls_datasets):
-            sds = hdf.select(ax)
-            m.add_axis(ax, sds.get())
+        if ax not in [x[0] for x in ls_datasets]:
+            if ax in hdf.datasets():
+                sds = hdf.select(ax)
+                m.add_axis(ax, sds.get())
         else:
-            i = list(map(lambda x: x[0], ls_datasets)).index(ax)
+            i = [x[0] for x in ls_datasets].index(ax)
             (name, data, _, _) = ls_datasets.pop(i)
             m.add_axis(name, data)
 

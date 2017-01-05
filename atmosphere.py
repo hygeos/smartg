@@ -563,7 +563,7 @@ class AtmAFGL(Atmosphere):
             if pha is not None:
                 pha_, ipha = calc_iphase(pha, profile.axis('wavelength'), profile.axis('z_atm'))
                 profile.add_axis('theta_atm', pha.axes[-1])
-                profile.add_dataset('phase_atm', pha_, ['iphase_atm', 'stk', 'theta_atm'])
+                profile.add_dataset('phase_atm', pha_, ['iphase', 'stk', 'theta_atm'])
                 profile.add_dataset('iphase_atm', ipha, ['wavelength', 'z_atm'])
 
         return profile

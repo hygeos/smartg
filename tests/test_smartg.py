@@ -51,12 +51,14 @@ class Runner(object):
                 res.save(f.name, overwrite=True, fmt=fmt, verbose=True)
                 res1 = read_mlut(f.name, fmt=fmt)
                 assert res.equal(res1, show_diff=True, attributes=False)
+                print('Checked {} output: OK'.format(fmt))
 
 
     def run_pp(self, wav, atm=None, surf=None, water=None):
         res = self.Spp.run(wav, THVDEG=30, atm=atm, surf=surf, water=water,
                             progress=progress, NBPHOTONS=1e5)
         self.print_time(res.attrs)
+        res.describe()
 
         self.check_save_read(res)
 
