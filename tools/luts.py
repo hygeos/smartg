@@ -1383,7 +1383,7 @@ def merge(M, axes, dtype=None):
 
     # check mluts compatibility
     for i in xrange(1, len(M)):
-        assert first.equal(M[i], strict=False, show_diff=True)
+        assert first.equal(M[i], content=False, attributes=False, show_diff=True)
 
     # add old axes
     for (axname, axis) in first.axes.items():
@@ -1641,14 +1641,16 @@ class MLUT(object):
         # write datasets
         for (name, data, axnames, attributes) in self.data:
             if verbose:
-                print('   Write data "{}" ({})'.format(name, data.dtype))
+                print('   Write data "{}" ({}, {})'.format(name, data.dtype, data.shape))
             # create dummy dimensions when axis is missing
             for i in xrange(len(axnames)):
                 if axnames[i] is None:
                     dummycount += 1
-                    dim = 'dummy{:d}'.format(dummycount)
-                    axnames[i] = dim
-                    root.createDimension(dim, data.shape[i])
+                    axnames[i] = 'dummy{:d}'.format(dummycount)
+                if axnames[i] not in root.dimensions:
+                    if verbose:
+                        print('   Create dimension {}'.format(axnames[i]))
+                    root.createDimension(axnames[i], data.shape[i])
 
             var = root.createVariable(name, data.dtype, axnames, zlib=compress)
             var.setncatts(attributes)
@@ -1706,7 +1708,7 @@ class MLUT(object):
                 data = data.astype('int32')
 
             if verbose:
-                print('   Write data "{}" ({})'.format(name, data.dtype))
+                print('   Write data "{}" ({}, {})'.format(name, data.dtype, data.shape))
             type = typeconv[data.dtype]
             sds = hdf.create(name, type, data.shape)
             if compress:
@@ -1724,7 +1726,10 @@ class MLUT(object):
         if verbose:
             print('   Write {} attributes'.format(len(self.attrs)))
         for k, v in self.attrs.items():
-            setattr(hdf, str(k), str(v))
+            try:
+                setattr(hdf, k, v)
+            except HDF4Error:
+                setattr(hdf, str(k), str(v))
 
         hdf.end()
 
@@ -1859,7 +1864,7 @@ class MLUT(object):
 
         return LUT(desc=name, data=dataset, axes=axes, names=names, attrs=attrs)
 
-    def equal(self, other, content=True, attributes=True, strict=True, show_diff=False):
+    def equal(self, other, content=True, attributes=True, show_diff=False):
         '''
         Test equality between two MLUTs
         Arguments:
@@ -2105,7 +2110,7 @@ def read_mlut_netcdf4(filename):
 
     # read axes
     for dim in root.dimensions:
-        if not dim.startswith('dummy'):
+        if (not dim.startswith('dummy')) and (dim in root.variables):
             m.add_axis(str(dim), root.variables[dim][:])
 
     # read datasets
@@ -2119,7 +2124,7 @@ def read_mlut_netcdf4(filename):
         for a in var.ncattrs():
             attrs[a] = var.getncattr(a)
 
-        m.add_dataset(varname, var[:], list(map(str, var.dimensions)), attrs=attrs)
+        m.add_dataset(varname, var[:], [str(x) for x in var.dimensions], attrs=attrs)
 
     # read global attributes
     for a in root.ncattrs():
