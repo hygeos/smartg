@@ -9,6 +9,7 @@ from tools.luts import LUT, MLUT, read_mlut, read_mlut_hdf, merge, Idx
 import itertools
 import os
 import warnings
+from tempfile import NamedTemporaryFile
 
 def create_mlut():
     np.random.seed(0)
@@ -38,6 +39,13 @@ def test_scalar():
     m.add_dataset('scalar', np.array(1.), attrs={'desc': 'scalar value'})
     m['scalar'].print_info()
     (m['scalar']+m['scalar']).apply(np.sqrt).print_info()
+
+    m.describe()
+    for fmt in ['hdf4', 'netcdf4']:
+        with NamedTemporaryFile() as f:
+            m.save(f.name, overwrite=True, verbose=True, fmt=fmt)
+            assert m.equal(read_mlut(f.name, fmt=fmt), show_diff=True)
+
 
 @raises(Exception)
 def test_mlut_index1():
