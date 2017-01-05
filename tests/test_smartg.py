@@ -11,10 +11,13 @@ from smartg import Smartg, RoughSurface, LambSurface
 from smartg import Environment, Albedo_cst
 from atmosphere import AtmAFGL, AeroOPAC, CloudOPAC, read_phase
 from water import IOP_Rw, IOP_1, IOP
+from tools.luts import read_mlut
 import numpy as np
 from itertools import product
 from unittest import skip
 from reptran import REPTRAN, reduce_reptran
+from tempfile import NamedTemporaryFile
+from os import system
 
 wav_list = [
             500.,
@@ -41,10 +44,22 @@ class Runner(object):
                     float(attrs['processing time (s)']),
                     float(attrs['kernel time (s)']),
                     ))
+
+    def check_save_read(self, res):
+        for fmt in ['hdf4', 'netcdf4']:
+            with NamedTemporaryFile() as f:
+                res.save(f.name, overwrite=True, fmt=fmt, verbose=True)
+                res1 = read_mlut(f.name, fmt=fmt)
+                assert res.equal(res1, show_diff=True, attributes=False)
+
+
     def run_pp(self, wav, atm=None, surf=None, water=None):
         res = self.Spp.run(wav, THVDEG=30, atm=atm, surf=surf, water=water,
                             progress=progress, NBPHOTONS=1e5)
         self.print_time(res.attrs)
+
+        self.check_save_read(res)
+
         return res
 
     def run_sp(self, wav, atm=None, surf=None, water=None):
