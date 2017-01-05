@@ -1671,6 +1671,18 @@ class MLUT(object):
         from pyhdf.SD import SD, SDC
         from pyhdf.error import HDF4Error
 
+        def safecast(data):
+            # hdf4 does not support int64, uint64
+            # cast to 32-bits
+            if data.dtype == np.dtype('uint64'):
+                assert np.allclose(data, data.astype('uint32'))
+                return data.astype('uint32')
+            if data.dtype == np.dtype('int64'):
+                assert np.allclose(data, data.astype('int32'))
+                return data.astype('int32')
+            return data
+
+
         typeconv = {
                     np.dtype('float32'): SDC.FLOAT32,
                     np.dtype('float64'): SDC.FLOAT64,
@@ -1694,18 +1706,13 @@ class MLUT(object):
                 sds = hdf.create(name, type, ax.shape)
                 if compress:
                     sds.setcompress(SDC.COMP_DEFLATE, 9)
-                sds[:] = ax[:]
+                sds[:] = safecast(ax)[:]
                 sds.endaccess()
 
         # write datasets
         for name, data, axnames, attrs in self.data:
 
-            if data.dtype == np.dtype('uint64'):
-                assert np.allclose(data, data.astype('uint32'))
-                data = data.astype('uint32')
-            if data.dtype == np.dtype('int64'):
-                assert np.allclose(data, data.astype('int32'))
-                data = data.astype('int32')
+            data = safecast(data)
 
             if verbose:
                 print('   Write data "{}" ({}, {})'.format(name, data.dtype, data.shape))
