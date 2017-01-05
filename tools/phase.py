@@ -79,8 +79,8 @@ def calc_iphase(phase, wav_full, z_full):
     nwav, nz, nstk, ntheta = phase.shape
     pha = phase.data.reshape(nwav*nz, nstk, ntheta)
 
-    ipha_w = np.array([np.abs(wav - x).argmin() for x in wav_full])
-    ipha_a = np.array([np.abs(altitude - x).argmin() for x in z_full])
+    ipha_w = np.array([np.abs(wav - x).argmin() for x in wav_full], dtype='int32')
+    ipha_a = np.array([np.abs(altitude - x).argmin() for x in z_full], dtype='int32')
     ipha = ipha_a[None,:] + ipha_w[:,None]*len(altitude)
 
     return (pha, ipha)
