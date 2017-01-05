@@ -1654,7 +1654,7 @@ class MLUT(object):
 
             var = root.createVariable(name, data.dtype, axnames, zlib=compress)
             var.setncatts(attributes)
-            var[:] = data[:]
+            var[:] = data[...]
 
         # write global attributes
         if verbose:
@@ -1717,11 +1717,19 @@ class MLUT(object):
             if verbose:
                 print('   Write data "{}" ({}, {})'.format(name, data.dtype, data.shape))
             type = typeconv[data.dtype]
-            sds = hdf.create(name, type, data.shape)
+
+            # write data
+            if data.ndim == 0:
+                # scalar
+                sds = hdf.create(name, type, (1,))
+                setattr(sds, 'lut:scalar', 'True')
+            else:
+                sds = hdf.create(name, type, data.shape)
             if compress:
                 sds.setcompress(SDC.COMP_DEFLATE, 9)
-            sds[:] = data[:]
-            if axnames is not None:
+            sds[:] = data[...]
+
+            if axnames not in [None, []]:
                 setattr(sds, 'dimensions', ','.join(map(str, axnames)))
             if 'dimensions' in attrs:
                 raise Exception('Error writing {}, "dimensions" attribute conflict'.format(filename))
@@ -1907,7 +1915,7 @@ class MLUT(object):
             eq = False
         for name in self.datasets():
             if not self[name].equal(other[name], strict=content):
-                msg += '  dataset {} differs\n'.format(name)
+                msg += '  dataset {} differs (shapes are {} and {})\n'.format(name, self[name].shape, other[name].shape)
                 eq = False
 
         # check global attributes
@@ -2251,15 +2259,20 @@ def read_mlut_hdf(filename, datasets=None):
 
         if (axes is None) and ('dimensions' in sds.attributes()):
             axes = sds.attributes()['dimensions'].split(',')
-            axes = list(map(lambda x: x.strip(), axes))
+            axes = [x.strip() for x in axes]
 
             # replace 'None's by None
-            axes = list(map(lambda x: {True: None, False: x}[x == 'None'], axes))
+            axes = [None if (x=='None') else x for x in axes]
 
         if axes is not None:
             ls_axes.extend(axes)
 
-        ls_datasets.append((sdsname, sds.get(), axes, sds.attributes()))
+        data = sds.get()
+        attrs = sds.attributes()
+        if 'lut:scalar' in attrs:
+            attrs.pop('lut:scalar')
+            data = data.reshape(())
+        ls_datasets.append((sdsname, data, axes, attrs))
 
     # remove 'None' axes
     while None in ls_axes:
