@@ -1606,7 +1606,7 @@ class MLUT(object):
                 raise ex
 
         if verbose:
-            print('Writing "{}" to "{}" ({} format)'.format(self.desc, filename, fmt))
+            print('Writing "{}" to "{}" ({} format)'.format(self, filename, fmt))
 
         if fmt is None:
             if filename.endswith('.hdf'):
@@ -1627,7 +1627,7 @@ class MLUT(object):
             raise ValueError('Invalid format {}'.format(fmt))
 
     def __save_netcdf4(self, filename, overwrite=False,
-                     verbose=False, compress=True):
+                      verbose=False, compress=True):
         from netCDF4 import Dataset
         root = Dataset(filename, 'w', format='NETCDF4')
         dummycount = 0
@@ -1640,6 +1640,8 @@ class MLUT(object):
 
         # write datasets
         for (name, data, axnames, attributes) in self.data:
+            if verbose:
+                print('   Write data "{}" ({})'.format(name, data.dtype))
             # create dummy dimensions when axis is missing
             for i in xrange(len(axnames)):
                 if axnames[i] is None:
@@ -1653,6 +1655,8 @@ class MLUT(object):
             var[:] = data[:]
 
         # write global attributes
+        if verbose:
+            print('   Write {} attributes'.format(len(self.attrs)))
         root.setncatts(self.attrs)
 
         root.close()
@@ -1663,10 +1667,19 @@ class MLUT(object):
         Save a MLUT to a hdf file
         '''
         from pyhdf.SD import SD, SDC
+        from pyhdf.error import HDF4Error
 
         typeconv = {
                     np.dtype('float32'): SDC.FLOAT32,
                     np.dtype('float64'): SDC.FLOAT64,
+                    np.dtype('uint64'): SDC.UINT32, # /!\
+                    np.dtype('int64'): SDC.INT32,   # hdf4 does not support 64-bit ints
+                    np.dtype('uint32'): SDC.UINT32,
+                    np.dtype('int32'): SDC.INT32,
+                    np.dtype('uint16'): SDC.UINT16,
+                    np.dtype('int16'): SDC.INT16,
+                    np.dtype('uint8'): SDC.UINT8,
+                    np.dtype('int8'): SDC.INT8,
                     }
         hdf = SD(filename, SDC.WRITE | SDC.CREATE)
 
@@ -1684,8 +1697,16 @@ class MLUT(object):
 
         # write datasets
         for name, data, axnames, attrs in self.data:
+
+            if data.dtype == np.dtype('uint64'):
+                assert np.allclose(data, data.astype('uint32'))
+                data = data.astype('uint32')
+            if data.dtype == np.dtype('int64'):
+                assert np.allclose(data, data.astype('int32'))
+                data = data.astype('int32')
+
             if verbose:
-                print('   Write data "{}"'.format(name))
+                print('   Write data "{}" ({})'.format(name, data.dtype))
             type = typeconv[data.dtype]
             sds = hdf.create(name, type, data.shape)
             if compress:
@@ -1703,7 +1724,7 @@ class MLUT(object):
         if verbose:
             print('   Write {} attributes'.format(len(self.attrs)))
         for k, v in self.attrs.items():
-            setattr(hdf, k, v)
+            setattr(hdf, str(k), str(v))
 
         hdf.end()
 
@@ -1838,17 +1859,13 @@ class MLUT(object):
 
         return LUT(desc=name, data=dataset, axes=axes, names=names, attrs=attrs)
 
-    def equal(self, other, strict=True, show_diff=False):
+    def equal(self, other, content=True, attributes=True, strict=True, show_diff=False):
         '''
         Test equality between two MLUTs
         Arguments:
          * show_diff: print their differences
-         * strict:
-            True: use strict equality
-            False: MLUTs compatibility but not strict equality
-                -> same axes
-                -> same datasets names and shapes, but not content
-                -> attributes may be different
+         * content: check LUT content (otherwise only axes and shapes)
+         * attributes: check global attributes
         '''
         msg = 'MLUTs diff:'
         if not isinstance(other, MLUT):
@@ -1877,12 +1894,12 @@ class MLUT(object):
             msg += '   -> {}'.format(str(other.datasets()))
             eq = False
         for name in self.datasets():
-            if not self[name].equal(other[name], strict=strict):
+            if not self[name].equal(other[name], strict=content):
                 msg += '  dataset {} differs\n'.format(name)
                 eq = False
 
         # check global attributes
-        if strict:
+        if attributes:
             for a in set(self.attrs.keys()).union(other.attrs.keys()):
                 if (a not in self.attrs) or (a not in other.attrs):
                     msg += '  attribute {} missing in either MLUT\n'.format(a)
