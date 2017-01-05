@@ -42,13 +42,13 @@ class Runner(object):
                     float(attrs['kernel time (s)']),
                     ))
     def run_pp(self, wav, atm=None, surf=None, water=None):
-        res = self.Spp.run(wav, atm=atm, surf=surf, water=water,
+        res = self.Spp.run(wav, THVDEG=30, atm=atm, surf=surf, water=water,
                             progress=progress, NBPHOTONS=1e5)
         self.print_time(res.attrs)
         return res
 
     def run_sp(self, wav, atm=None, surf=None, water=None):
-        res = self.Ssp.run(wav, atm=atm, surf=surf, water=water,
+        res = self.Ssp.run(wav, THVDEG=30, atm=atm, surf=surf, water=water,
                             progress=progress, NBPHOTONS=1e4)
         self.print_time(res.attrs)
         return res
@@ -157,6 +157,26 @@ def test_surf_iop1_2():
     wav = np.linspace(400, 800, 12)
     runner.run_pp_sp(wav, atm=atm, surf=surf, water=water)
     runner.run_pp_sp(400., atm=atm, surf=surf, water=water)
+
+def test_surf_iop_1():
+    #
+    # test IOP in absence of a phase function (pure Rayleigh)
+    #
+    wl=[390.,450.,550.,650.]
+    grid=[0.,15] # in m for water, here sea bottom at 15m depth
+
+    # Seafloor albedo, here grey lambertian reflection with albedo of 0.1
+    ALB=Albedo_cst(0.1)
+
+    # particle absorption and scatering coefficient profiles (in m-1) and grid
+    aw=np.array([[0.    , 0.     , 0.     , 0.]                                     , 
+                 [0.0204, 0.0092 , 0.0565 , 0.3400]]).T # with shape (N wavelengths , N levels)
+    bw=np.array([[0.,     0.,     0.,     0.],
+                 [0.0134, 0.0045, 0.0019, 0.0010]]).T
+    water_custom = IOP(phase=None, aw=aw, bw=bw, Z=grid, ALB=ALB)
+
+    runner.run_pp_sp(wl, water=water_custom)
+
 
 def test_iop():
     wav = np.array([400., 500., 600.])
