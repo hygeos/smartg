@@ -716,11 +716,8 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
 
 
     # direct transmission
-    if NLAM > 1:
-        m.add_dataset('direct transmission', tabTransDir,
-                axnames=['wavelength'])
-    else:
-        m.set_attr('direct transmission', tabTransDir[0])
+    m.add_dataset('direct transmission', tabTransDir,
+                   axnames=['wavelength'])
 
     # write atmospheric profiles
     if prof_atm is not None:
@@ -746,10 +743,7 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
         if 'phase_oc' in prof_oc.datasets():
             m.add_lut(prof_oc['phase_oc'])
             m.add_lut(prof_oc['iphase_oc'])
-        if NLAM > 1:
-            m.add_lut(prof_oc['albedo_seafloor'])
-        else:
-            m.set_attr('albedo_seafloot', prof_oc['albedo_seafloor'][:])
+        m.add_lut(prof_oc['albedo_seafloor'])
 
     # write the error count
     err = errorcount.get()
