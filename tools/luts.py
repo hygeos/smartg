@@ -690,12 +690,19 @@ class LUT(object):
 
 
     def __plot_1d(self, show_grid=True, swap=False, fmt=None, label=None, 
-            vmin=None, vmax=None, legend=False, **kwargs):
+                  vmin=None, vmax=None, legend=False, plot=None, **kwargs):
         '''
         plot a 1-dimension LUT, returns self
+
+        arguments:
+            plot: custom plot function (defaults to plot)
+                  example: plot=semilogy
         '''
-        from pylab import plot, xlabel, ylabel, grid, ylim, ticklabel_format
+        from pylab import xlabel, ylabel, grid, ylim, ticklabel_format
         import pylab as pl
+
+        if plot is None:
+            plot = pl.plot
 
         # no plotting for string datasets
         if self.data.dtype.char == 'S':
@@ -732,7 +739,8 @@ class LUT(object):
         if ylab is not None and not legend:
             ylabel(ylab)
 
-        ticklabel_format(axis='y', style='sci', scilimits=(-2,2))
+        if plot == pl.plot:
+            ticklabel_format(axis='y', style='sci', scilimits=(-2,2))
 
         grid(show_grid)
         if legend:
