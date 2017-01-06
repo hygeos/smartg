@@ -537,7 +537,7 @@ class Smartg(object):
         p = Progress(NBPHOTONS, progress)
 
         # Initialize the RNG
-        self.rng.setup(SEED, XBLOCK, XGRID)
+        SEED = self.rng.setup(SEED, XBLOCK, XGRID)
 
         # Loop and kernel call
         (NPhotonsInTot,
@@ -549,6 +549,7 @@ class Smartg(object):
                                 wl_proba_icdf, stdev, self.rng)
         attrs['kernel time (s)'] = secs_cuda_clock
         attrs['number of kernel iterations'] = Nkernel
+        attrs['seed'] = SEED
         attrs.update(self.common_attrs)
 
         # finalization
@@ -1269,6 +1270,8 @@ class RNG_PHILOX(object):
         state[0] = SEED
         self.state = to_gpu(state)
 
+        return SEED
+
 
 class RNG_CURAND_PHILOX(object):
     def __init__(self):
@@ -1316,3 +1319,5 @@ class RNG_CURAND_PHILOX(object):
         self.state = gpuzeros(self.STATE_SIZE*XBLOCK*XGRID, dtype='uint8')
         setup = self.mod.get_function('setup')
         setup(self.state, block=(XBLOCK,1,1), grid=(XGRID, 1, 1))
+
+        return SEED
