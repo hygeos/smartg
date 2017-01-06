@@ -284,4 +284,19 @@ def test_rng():
                             NBPHOTONS=1e6, progress=False)
 
 
+def test_le():
+    atm = AtmAFGL('afglt')
+    surf = RoughSurface()
+    water = IOP_1(chl=1.)
+    wav = 400.
+    res = Smartg().run(wav, atm=atm,
+                 surf=surf, water=water,
+                 THVDEG=10.,
+                 le={
+                     'th':  np.array([0.], dtype='float32')*np.pi/180.,
+                     'phi': np.array([0.], dtype='float32')*np.pi/180.,
+                     },
+                 NBPHOTONS=1e6, progress=False)
+    assert res['I_up (TOA)'][:,:] > 0
+
 
