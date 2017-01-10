@@ -32,6 +32,7 @@ progress=False
 
 class Runner(object):
     def __init__(self):
+        self.Spp_debug = Smartg(pp=True,debug_photon=True)
         self.Spp = Smartg(pp=True)
         self.Ssp = Smartg(pp=False)
 
@@ -69,6 +70,27 @@ class Runner(object):
                             progress=progress, NBPHOTONS=1e4)
         self.print_time(res.attrs)
         return res
+
+    def run_pp_le_debug(self, wav, atm=None, surf=None, water=None, le=None):
+        res = self.Spp_debug.run(wav, THVDEG=30, atm=atm, surf=surf, water=water,
+                            progress=progress, NBPHOTONS=1e5, le=le)
+        self.print_time(res.attrs)
+        res.describe()
+
+        self.check_save_read(res)
+
+        return res
+
+    def run_pp_le(self, wav, atm=None, surf=None, water=None, le=None):
+        res = self.Spp.run(wav, THVDEG=30, atm=atm, surf=surf, water=water,
+                            progress=progress, NBPHOTONS=1e5, le=le)
+        self.print_time(res.attrs)
+        res.describe()
+
+        self.check_save_read(res)
+
+        return res
+
 
 runner = Runner()
 
@@ -283,6 +305,15 @@ def test_rng():
                             surf=surf, water=water,
                             NBPHOTONS=1e6, progress=False)
 
+def test_atm_surf2():
+
+    wl = np.linspace(550., 570., num=21)
+
+    pro = AtmAFGL('afglt',
+              pfwav=[560.], # wavelengths for which the phase function is computed
+                                     # optional, otherwise phase functions are calculated at all bands
+                                     # nearest neighbour is then used during the RT computation
+              comp=[AeroOPAC('maritime_clean', 0.3, 550.)])
 
 def test_le():
     atm = AtmAFGL('afglt')
@@ -300,3 +331,5 @@ def test_le():
     assert res['I_up (TOA)'][:,:] > 0
 
 
+test_atm_surf2()
+#test_wav()

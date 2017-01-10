@@ -352,7 +352,9 @@ extern "C" {
                 if (LEd == 1 && SIMd != -2) {
                 ///* TEST Double LE */
                 //if ((LEd == 1) && (SIMd != -2 && ph.loc == SURF0P)) {
-                  int NK=2, count_level_le;
+                  int NK, count_level_le;
+                  if (NOCEd==0) NK=1;
+                  else NK=2;
                   int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
                   int iph0 = idx%NBPHId;
                   for(int k=0; k<NK; k++){
@@ -1149,7 +1151,7 @@ __device__ void scatter(Photon* ph,
         float3 v;
         float EPS = 1e-12;
 
-        if (count_level==DOWN0P) sign = -1.0F;
+        if (count_level==DOWN0P || count_level==DOWNB) sign = -1.0F;
         else sign = 1.0F;
         phi = tabphi[ph->iph];
         thv = tabthv[ph->ith];
@@ -1732,7 +1734,7 @@ __device__ void surfaceAgitee(Photon* ph, int le,
         //
         // photon next location
         //
-        if (!le) {
+        //if (!le) {
          if (ph->loc == SURF0P) {
             if (vzn > 0) {  // avoid multiple reflexion above the surface
                 // SURF0P becomes ATM or SPACE
@@ -1752,7 +1754,7 @@ __device__ void surfaceAgitee(Photon* ph, int le,
                 }
             } // else, no change of location
          }
-        }
+        //}
 
 
 	} // Reflection
@@ -1796,7 +1798,7 @@ __device__ void surfaceAgitee(Photon* ph, int le,
         //
         // photon next location
         //
-        if (!le) {
+        //if (!le) {
          if (ph->loc == SURF0M) {
             if (vzn > 0) {
                 // SURF0P becomes ATM or SPACE
@@ -1823,7 +1825,7 @@ __device__ void surfaceAgitee(Photon* ph, int le,
                 ph->loc = SURF0P;
             }
          }
-        }
+        //}
 
 	} // Transmission
 }
