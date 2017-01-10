@@ -32,7 +32,6 @@ progress=False
 
 class Runner(object):
     def __init__(self):
-        self.Spp_debug = Smartg(pp=True,debug_photon=True)
         self.Spp = Smartg(pp=True)
         self.Ssp = Smartg(pp=False)
 
@@ -69,16 +68,6 @@ class Runner(object):
         res = self.Ssp.run(wav, THVDEG=30, atm=atm, surf=surf, water=water,
                             progress=progress, NBPHOTONS=1e4)
         self.print_time(res.attrs)
-        return res
-
-    def run_pp_le_debug(self, wav, atm=None, surf=None, water=None, le=None):
-        res = self.Spp_debug.run(wav, THVDEG=30, atm=atm, surf=surf, water=water,
-                            progress=progress, NBPHOTONS=1e5, le=le)
-        self.print_time(res.attrs)
-        res.describe()
-
-        self.check_save_read(res)
-
         return res
 
     def run_pp_le(self, wav, atm=None, surf=None, water=None, le=None):
@@ -331,5 +320,12 @@ def test_le():
     assert res['I_up (TOA)'][:,:] > 0
 
 
-test_atm_surf2()
+def test_oc_surf2():
+    wav = np.linspace(400, 800, 20)
+    water = IOP_1(chl=1., ang_trunc=30.)
+    le={'th':np.array([30.])*np.pi/180.,
+        'phi': np.array([0.])*np.pi/180.}
+    runner.run_pp_le(wav, atm=None, surf=RoughSurface(), water=water, le=le)
+
+test_oc_surf2()
 #test_wav()
