@@ -380,7 +380,7 @@ class IOP_1(IOP_base):
         pha[:,:,:,0] = 0.
 
         # normalize
-        integ_ff = integ_phase(ang, pha[:,0,0,:] + pha[:,0,1,:])
+        integ_ff = integ_phase(ang, (pha[:,0,0,:] + pha[:,0,1,:])/2.)
         pha *= 2./integ_ff[:,None,None,None]
 
         # create output MLUT
