@@ -280,7 +280,7 @@ class Smartg(object):
 
     def run(self, wl,
              atm=None, surf=None, water=None, env=None,
-             NBPHOTONS=1e9, DEPO=0.0279, THVDEG=0., SEED=-1,
+             NBPHOTONS=1e9, DEPO=0.0279, DEPO_WATER= 0.0906, THVDEG=0., SEED=-1,
              RTER=6371., wl_proba=None,
              NBTHETA=45, NBPHI=90, NF=1e6,
              OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
@@ -316,7 +316,9 @@ class Smartg(object):
 
             - NBPHOTONS: number of photons launched
 
-            - DEPO: Rayleigh depolarization ratio
+            - DEPO: (Air) Rayleigh depolarization ratio
+
+            - DEPO_WATER: (Water) Rayleigh depolarization ratio
 
             - THVDEG: zenith angle of the observer in degrees
                 the result corresponds to various positions of the sun
@@ -474,7 +476,7 @@ class Smartg(object):
             prof_oc = water
 
         if prof_oc is not None:
-            foce = calculF(prof_oc, NF, DEPO=0.0906, kind='oc')
+            foce = calculF(prof_oc, NF, DEPO_WATER, kind='oc')
             prof_oc_gpu = init_profile(wl, prof_oc, 'oc')
             NOCE = len(prof_oc.axis('z_oc')) - 1
         else:
