@@ -2117,7 +2117,7 @@ __device__ void countPhoton(Photon* ph,
             }
         }
         if (count_level==DOWNB) {
-            layer_le = 0; 
+            layer_le = 0;
             layer_end= NOCEd;
             prof = prof_oc;
         }

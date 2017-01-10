@@ -1240,7 +1240,7 @@ def plot_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
         ax_polar.set_title(lut.desc, weight='bold', position=(0.05,0.97))
 
 
-def transect2D(lut, index=None, vmin=None, vmax=None, sym=True, swap='auto', fig=None, sub=121, color='k', percent=False):
+def transect2D(lut, index=None, vmin=None, vmax=None, sym=True, swap='auto', fig=None, sub=121, color='k', percent=False, fmt='-'):
     '''
     Transect of 2D LUT
 
@@ -1336,9 +1336,9 @@ def transect2D(lut, index=None, vmin=None, vmax=None, sym=True, swap='auto', fig
     #
     # plot transects
     #
-    ax_cart.plot(ax2, data[index,:],'-', color=color)
+    ax_cart.plot(ax2, data[index,:],fmt, color=color)
     if sym:
-       ax_cart.plot(-ax2, data[mirror_index,:],'--', color=color)
+       ax_cart.plot(-ax2, data[mirror_index,:],fmt, color=color)
 
     if lut.desc is not None:
         ax_cart.set_title(lut.desc)
