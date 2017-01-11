@@ -164,7 +164,8 @@ class LUT(object):
                     assert len(ax) == data.shape[i]
                 elif ax is None: pass
                 else:
-                    raise Exception('Invalid axis type {}'.format(ax.__class__))
+                    assert ax[:].ndim == 1
+                    assert len(ax) == data.shape[i]
 
         # check names
         if names is None:
@@ -178,23 +179,22 @@ class LUT(object):
         else:
             self.formatter = '{}'
 
-    def sub(self, d=None):
+    def sub(self, d=None, ignore=False):
         '''
-        returns a subset LUT of current LUT
+        returns a subset LUT of current LUT along several axes
 
-        d is a dictionary of axis: value
+        * d is a dictionary of {ax: value}, where:
 
-        * axis is the name (string) or index (integer) of the axis to consider
+            - ax is the name (string) or index (integer) of the axis to consider
 
-        * value can be:
-            * scalar integer (axis is removed)
-            * float index (axis is removed with interpolation)
-            * slice (axis is subsetted)
-            * array (axis is subsetted)
-            * Idx (axis is subsetted)
+            - value can be:
+                * scalar integer (axis is removed)
+                * float index (axis is removed with interpolation)
+                * slice (axis is subsetted)
+                * 1-d array (axis is subsetted)
+                * Idx
 
-        * if no argument is provided, returns a 'subsetter' object which can be indexed like:
-                lut.sub()[-1,:,0.2, Idx(12.)]
+        * ignore: if True, return full LUT if axis is not present in LUT
 
         Examples:
           lut.sub({'axis1': 1.5})
@@ -207,20 +207,65 @@ class LUT(object):
         '''
         if d is None:
             return Subsetter(self)
-        else:
-            keys = [slice(None)] * self.ndim
 
-            for ax, v in d.items():
-                if isinstance(ax, str):
-                    if ax in self.names:
-                        iax = self.names.index(ax)
-                        keys[iax] = v
-                    # if ax is not in the LUT, ignore this dimension
+        keys = [slice(None)] * self.ndim
+        names = list(self.names)
+        axes = list(self.axes)
+        dims_to_remove = []
+
+        for ax, v in d.items():
+            # ax: str or int
+            if isinstance(ax, int):
+                iax = ax
+            else:
+                assert isinstance(ax, str), 'ax should be str or int'
+                if ax in self.names:
+                    iax = self.names.index(ax)
                 else:
-                    assert isinstance(ax, int)
-                    keys[ax] = v
+                    if ignore:
+                        continue
+                    else:
+                        raise Exception('sub is not possible on axis "{}" '
+                                        'because this axis is not present '
+                                        'in {}'.format(ax, self))
 
-            return Subsetter(self)[tuple(keys)]
+            if isinstance(v, Idx_base):
+                idx = v.index(self.axes[iax])
+                newax = v.apply(self.axes[iax])
+            else:
+                idx = v
+                newax = None
+
+            # axes: names and values
+            if (np.array(idx).ndim == 0) and not isinstance(v, slice):
+                # scalar, remove dimension
+                dims_to_remove.append(iax)
+            # in all other cases, keep dimension
+            elif axes[iax] is None:
+                axes[iax] = None
+            elif isinstance(v, slice):
+                axes[iax] = axes[iax][v]
+            elif np.array(idx).ndim == 1:
+                if newax is not None:
+                    axes[iax] = newax
+                elif v.dtype.kind in ['u', 'i']: # integer
+                    axes[iax] = axes[iax][v]
+                else:
+                    axes[iax] = None
+            else:
+                raise Exception('Cannot use a {}-dim array to '
+                                'subset a LUT'.format(np.array(idx).ndim))
+
+            keys[iax] = idx
+
+        axes = [a for i, a in enumerate(axes) if not i in dims_to_remove]
+        names = [a for i, a in enumerate(names) if not i in dims_to_remove]
+
+        data = self[tuple(keys)]
+
+        return LUT(data, axes=axes, names=names,
+                   attrs=dict(self.attrs), desc=self.desc)
+
 
     def axis(self, a, aslut=False):
         '''
@@ -322,12 +367,13 @@ class LUT(object):
         N = len(keys)
 
         if N != self.ndim:
-            raise Exception('Incorrect number of dimensions in __getitem__')
+            raise Exception('Incorrect number of dimensions in __getitem__ '
+                            '(expecting {}, got {})'.format(self.ndim, N))
 
         # convert the Idx keys to float indices
         for i in xrange(N):
             k = keys[i]
-            if isinstance(k, Idx):
+            if isinstance(k, Idx_base):
                 # k is an Idx instance
                 # convert it to float indices for the current axis
                 if k.name not in [None, self.names[i]]:
@@ -912,62 +958,21 @@ class LUT(object):
         return self
 
 
-
-class Subsetter(object):
-    '''
-    A conveniency class to use the syntax like:
-    LUT.sub()[:,:,0]
-    for subsetting LUTs
-    '''
-    def __init__(self, LUT):
-        self.LUT = LUT
-
-    def __getitem__(self, keys):
-        '''
-        subset parent LUT
-        '''
-        axes = []
-        names = []
-        keys_ = []
-        attrs = self.LUT.attrs
-        desc = self.LUT.desc
-
-        assert len(keys) == self.LUT.ndim
-
-        array_dims_added = True
-        for i in xrange(self.LUT.ndim):
-            if isinstance(keys[i], Idx):
-                keys_.append(keys[i].index(self.LUT.axes[i]))
-            else:
-                keys_.append(keys[i])
-
-            if isinstance(keys_[i], np.ndarray):
-                if array_dims_added:
-                    axes.extend([None]*keys_[i].ndim)
-                    names.extend([None]*keys_[i].ndim)
-                    array_dims_added = False
-            elif keys_[i] == slice(None):
-                axes.append(self.LUT.axes[i])
-                names.append(self.LUT.names[i])
-            # else: ignoring scalar indices
-
-        data = self.LUT[keys]
-
-        # add missing axes which are added by additional
-        for i in xrange(data.ndim - len(axes)):
-            axes.append(None)
-            names.append(None)
-
-        return LUT(data, axes=axes, names=names, attrs=attrs, desc=desc)
-
-
-class Idx(object):
+def Idx(value, name=None, round=False, fill_value=None):
     '''
     Calculate the indices of values by interpolation in a LUT axis
     The index method is typically called when indexing a dimension of a LUT
     object by a Idx object.
     The round attribute (boolean) indicates whether the resulting index should
     be rounded to the closest integer.
+
+    Idx value can be of several kinds:
+    - scalar (int or float)
+     => index return scalar float index
+    - array-like
+      => index return array-like float index
+    - callable (ex: lambda x: x<5)
+      => index returns callable applied to axis
 
     Example: find the float index of 35. in an array [0, 10, ..., 100]
     >>> Idx(35.).index(np.linspace(0, 100, 11))
@@ -985,6 +990,22 @@ class Idx(object):
     Options:
         - fill_value are passed to interp1d (implies bounds_error=False)
           Special value for fill_value='extrema': fill with extrema values, don't extrapolate
+
+    NOTE: this function is a factory that returns an Idx_* instance based on input type
+
+    Method apply(axis):
+        returns the Idx values applied to axis instead of their index
+    '''
+    if hasattr(value, '__call__'):
+        return Idx_filter(value, name=name)
+    else:
+        return Idx_arr(value, name=name,
+                       round=round, fill_value=fill_value)
+
+
+class Idx_base(object):
+    '''
+    Base class for Idx objects
     '''
     def __init__(self, value, name=None, round=False, fill_value=None):
         if value is not None:
@@ -993,15 +1014,16 @@ class Idx(object):
             self.round = round
             self.fill_value = fill_value
 
+
+class Idx_arr(Idx_base):
+    '''
+    Idx class for array-like values
+    '''
     def index(self, axis):
         '''
         Return the floating point index of the values in the axis
         '''
-        if hasattr(self.value, '__call__'):
-            # if value is a function, returns value applied to axis
-            return self.value(axis)
-
-        elif len(axis) == 1:
+        if len(axis) == 1:
             if not np.allclose(np.array(self.value), axis[0]):
                 raise ValueError("(Idx) Out of axis value (value={}, axis={})".format(self.value, axis))
             return 0
@@ -1032,6 +1054,37 @@ class Idx(object):
                     res = round(res)
             return res
 
+
+    def apply(self, axis=None):
+        return self.value
+
+class Idx_filter(Idx_base):
+    '''
+    Idx class for filtering functions
+    '''
+    def index(self, axis):
+        # value is a callable (function):
+        # returns value applied to axis
+        return self.value(axis)
+
+    def apply(self, axis):
+        return axis[self.index(axis)]
+
+
+class Subsetter(object):
+    '''
+    A conveniency class to use the syntax like:
+    LUT.sub()[:,:,0]
+    for subsetting LUTs
+    '''
+    def __init__(self, LUT):
+        self.LUT = LUT
+
+    def __getitem__(self, keys):
+        '''
+        subset parent LUT
+        '''
+        return self.LUT.sub(dict(enumerate(keys)))
 
 
 def plot_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
@@ -1214,7 +1267,7 @@ def plot_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
 
     if show_sub:
         # convert Idx instance to index if necessarry
-        if isinstance(index, Idx):
+        if isinstance(index, Idx_base):
             index = int(round(index.index(ax1)))
         if semi:
             mirror_index = -1 -index
@@ -1304,7 +1357,7 @@ def transect2D(lut, index=None, vmin=None, vmax=None, sym=True, swap='auto', fig
     label2 = name2
 
     # convert Idx instance to index if necessarry
-    if isinstance(index, Idx):
+    if isinstance(index, Idx_base):
         index = int(round(index.index(ax1)))
     mirror_index = (ax1_scaled.shape[0]/2 + index)%ax1_scaled.shape[0]
 
@@ -1569,10 +1622,13 @@ class MLUT(object):
 
     def rm_lut(self, name):
         ''' remove a LUT '''
-        assert isinstance(name, basestring)
+        try:
+            assert isinstance(name, basestring)
+        except NameError: # must be python 3
+            assert isinstance(name, (str, bytes))
 
         try:
-            index = map(lambda x: x[0], self.data).index(name)
+            index = [x[0] for x in self.data].index(name)
         except ValueError:
             raise Exception('{} is not in {}', name, self)
 
@@ -1591,7 +1647,7 @@ class MLUT(object):
             assert isinstance(dd, str)
 
         for dd in self.datasets():
-            m.add_lut(self[dd].sub(d))
+            m.add_lut(self[dd].sub(d, ignore=True))
 
         m.attrs = self.attrs
 

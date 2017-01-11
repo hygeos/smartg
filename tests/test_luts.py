@@ -172,8 +172,17 @@ def test_sub2():
 def test_sub3():
     # subsetting MLUTs
     m = create_mlut()
-    m.sub({'b': Idx(lambda x: x<7)}).describe()
+    mm = m.sub({'b': Idx(lambda x: x<7)}).describe()
+    assert (mm.axis('b') < 7).all()
 
+def test_sub4():
+    LUT(np.eye(4)).sub({0: np.arange(2, dtype='int')}).describe()
+
+def test_sub5():
+    LUT(np.eye(4)).sub({1: slice(None,None,2)}).describe()
+
+def test_sub6():
+    LUT(np.eye(4)).sub()[:,:].describe()
 
 @raises(ValueError)
 def test_broadcasting3():
@@ -187,15 +196,11 @@ def test_dimensions():
              names=['2', '3', '4', '5'])
     i1 = np.zeros(10, dtype='int')
     i2 = np.eye(10, dtype='int')
-    assert l2.sub()[i1, 0, :,:].shape == (10,4,5)
-    assert l2.sub()[i2, 0, :,:].shape == (10,10,4,5)
-    assert l2.sub()[:,i2,0,:].shape == (2,10,10,5)
-    assert l2.sub()[:,i2,0,i2].shape == (2,10,10)
-    assert l2.sub()[:,i2,0,i2].names == ['2', None, None]
-    assert l2.sub()[:,i2,0,:].shape == (2,10,10,5)
-    assert l2.sub({'2':i2, '4':i2}).shape == (10,10,3,5)
-    assert l2.sub({1:i2, '4':i2}).shape == (2,10,10,5)
-    assert l2.sub({1:0, '4':i2}).shape == (2,10,10,5)
+    assert l2[i1, 0, :,:].shape == (10,4,5)
+    assert l2[i2, 0, :,:].shape == (10,10,4,5)
+    assert l2[:,i2,0,:].shape == (2,10,10,5)
+    assert l2[:,i2,0,i2].shape == (2,10,10)
+    assert l2[:,i2,0,:].shape == (2,10,10,5)
 
 def test_reduce():
     l = create_lut()
@@ -244,7 +249,6 @@ def test_indexing1():
         D = np.random.randn(8,9,10,11)
         L = LUT(D)
         L[i0,i1,i2,i3].shape
-        L.sub()[i0,i1,i2,i3].shape
 
     for (t0,t1,t2,t3) in itertools.product(
             ['i', 'f', 'imi', 'imf', ':'],
@@ -345,6 +349,11 @@ def test_idx6():
 def test_idx7():
     r = Idx(np.eye(2), fill_value=np.NaN).index(np.linspace(2, 5, 5))
     assert np.isnan(r).all()
+
+def test_idx8():
+    idx = Idx(lambda x: x<5)
+    assert (idx.index(np.arange(10)+100) < 10).all()
+    assert (idx.apply(np.arange(10)+100) >= 100).all()
 
 def test_idx_oob_1():
     with warnings.catch_warnings(record=True) as w:
@@ -478,3 +487,7 @@ def test_swapaxes():
 
 def test_lut_string():
     LUT(np.array(['abc', 'def', 'hij']))[2]
+
+def test_rm_lut():
+    m = create_mlut()
+    m.rm_lut('data1')
