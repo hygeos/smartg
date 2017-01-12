@@ -208,6 +208,13 @@ class LUT(object):
         if d is None:
             return Subsetter(self)
 
+        if self.ndim == 0:
+            # scalar lut, cannot subset
+            if ignore:
+                return self
+            else:
+                raise Exception('Cannot subset scalar LUT {}'.format(self))
+
         keys = [slice(None)] * self.ndim
         names = list(self.names)
         axes = list(self.axes)

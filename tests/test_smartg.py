@@ -11,7 +11,7 @@ from smartg import Smartg, RoughSurface, LambSurface
 from smartg import Environment, Albedo_cst
 from atmosphere import AtmAFGL, AeroOPAC, CloudOPAC, read_phase
 from water import IOP_Rw, IOP_1, IOP
-from tools.luts import read_mlut
+from tools.luts import read_mlut, Idx
 import numpy as np
 from itertools import product
 from unittest import skip
@@ -147,6 +147,10 @@ def test_wav():
 
     res = runner.run_pp([400., 500.], atm=AtmAFGL('afglt'))
     assert 'wavelength' in res.axes
+
+def test_sub():
+    res = runner.run_pp(500., atm=AtmAFGL('afglt'))
+    res.sub({'Zenith angles': Idx(lambda x: x<50.)}).describe()
 
 def test_aerosols1():
     atm = AtmAFGL('afglt', comp=[AeroOPAC('desert', 0.1, 550.) ])
