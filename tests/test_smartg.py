@@ -152,7 +152,7 @@ def test_wav():
 
 def test_sub():
     res = runner.run_pp(500., atm=AtmAFGL('afglt'))
-    res.sub({'Zenith angles': Idx(lambda x: x<50.)}).describe()
+    res.sub({'Zenith angles': Idx(lambda x: x<50.)}).sub({'Azimuth angles': Idx(lambda x: x<180.)}).describe()
 
 def test_aerosols1():
     atm = AtmAFGL('afglt', comp=[AeroOPAC('desert', 0.1, 550.) ])
