@@ -329,14 +329,13 @@ class IOP_1(IOP_base):
         pro.add_dataset('OD_abs_oc', tau_abs,
                         ['wavelength', 'z_oc'])
 
-        pmol = np.zeros(shp, dtype='float32')
+        pmol = np.ones(shp, dtype='float32')
         pmol[:,1] = iop['bw']/iop['btot']
         pro.add_dataset('pmol_oc', pmol,
                         ['wavelength', 'z_oc'])
 
         with np.errstate(invalid='ignore'):
             ssa = tau_sca/tau_tot
-
         ssa[np.isnan(ssa)] = 1.
 
         pro.add_dataset('ssa_oc', ssa,
@@ -392,100 +391,3 @@ class IOP_1(IOP_base):
         result.add_dataset('coef_trunc', integ_ff[:,None], ['wav_phase_oc', 'z_phase_oc'])
 
         return result
-
-class IOP_AOS_WATER(IOP_base):
-    '''
-    IOP model
-    using similar IOP parameterization as AOS model case II (Pure water) for validation
-    Parameters:
-        ALB: albedo of the sea floor (Albedo instance)
-        DEPTH: depth in m
-    '''
-    def __init__(self, ALB=Albedo_cst(0.), DEPTH=10000):
-        self.depth = float(DEPTH)
-        self.ALB = ALB
-
-    def calc_iop(self, wav):
-        '''
-        inherent optical properties calculation
-
-        wav: wavelength in nm
-        '''
-        wl_1 = np.array([350.0525, 450.0666, 550.084, 650.099])
-
-        aw   = np.array([0.0204, 0.0092, 0.0565, 0.3400])
-        bw   = np.array([0.0134, 0.0045, 0.0019, 0.0010])
-
-        #ablk = np.array([0.0204, 0.0092, 0.3400, 0.6240])
-        #wblk = np.array([0.3964, 0.3285, 0.0325, 0.0029])
-
-        #
-        # wavelength index
-        #
-        #if (wav < wl_1[0]) or (wav > wl_1[-1]):
-        #    raise Exception('Error, wavelength {} is out of range ({}, {})'.format(wav, wl_1[0], wl_1[-1]))
-        #i1 = int((wav - wl_1[0])/(wl_1[1] - wl_1[0]))
-        i1 = np.array([np.abs(wl_1 - x).argmin() for x in wav])
-
-        atot = aw[i1]
-        aphy = aw[i1]*0.
-        btot = bw[i1]
-        Bp   = bw[i1]*0.
-
-        return {'atot': atot,
-                'aphy': aphy,
-                'aw': atot,
-                'bw': btot,
-                'btot': btot,
-                'Bp': Bp,
-                }
-
-
-    def calc(self, wav):
-        '''
-        Profile and phase function calculation
-
-        wav: wavelength in nm
-        '''
-        wav = np.array(wav)
-        pro = MLUT()
-        pro.add_axis('wavelength', wav)
-        pro.add_axis('z_oc', np.array([0., -self.depth]))
-
-        iop = self.calc_iop(wav)
-
-        shp = (len(wav), 2)
-
-        tau_tot = np.zeros(shp, dtype='float32')
-        tau_tot[:,1] = - ((iop['atot'] + iop['btot']) * self.depth)
-        pro.add_dataset('OD_oc', tau_tot,
-                        ['wavelength', 'z_oc'])
-
-        tau_sca = np.zeros(shp, dtype='float32')
-        tau_sca[:,1] = - (iop['btot'] * self.depth)
-        pro.add_dataset('OD_sca_oc', tau_sca,
-                        ['wavelength', 'z_oc'])
-
-        tau_abs = np.zeros(shp, dtype='float32')
-        tau_abs[:,1] = - (iop['atot'] * self.depth)
-        pro.add_dataset('OD_abs_oc', tau_abs,
-                        ['wavelength', 'z_oc'])
-
-        pmol = np.zeros(shp, dtype='float32')
-        pmol[:,1] = iop['bw']/iop['btot']
-        pro.add_dataset('pmol_oc', pmol,
-                        ['wavelength', 'z_oc'])
-
-        with np.errstate(invalid='ignore'):
-            ssa = tau_sca/tau_tot
-
-        ssa[np.isnan(ssa)] = 1.
-
-        pro.add_dataset('ssa_oc', ssa,
-                        ['wavelength', 'z_oc'])
-
-        pro.add_dataset('albedo_seafloor',
-                        self.ALB.get(wav),
-                        ['wavelength'])
-
-        return pro
