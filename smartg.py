@@ -411,6 +411,7 @@ class Smartg(object):
         attrs.update({'MODE': {True: 'PPA', False: 'SSA'}[self.pp]})
         attrs.update({'XBLOCK': XBLOCK})
         attrs.update({'XGRID': XGRID})
+        attrs.update({'NPHOTONS': '{:g}'.format(NBPHOTONS)})
 
 
         if not isinstance(wl, BandSet):

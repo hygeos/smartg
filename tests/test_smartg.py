@@ -148,6 +148,8 @@ def test_wav():
     res = runner.run_pp([400., 500.], atm=AtmAFGL('afglt'))
     assert 'wavelength' in res.axes
 
+    print('Number of photons:', res.attrs['NPHOTONS'])
+
 def test_sub():
     res = runner.run_pp(500., atm=AtmAFGL('afglt'))
     res.sub({'Zenith angles': Idx(lambda x: x<50.)}).describe()
