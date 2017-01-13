@@ -1,15 +1,16 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from tools.luts import MLUT, LUT, Idx
-from atmosphere import diff1
+from __future__ import print_function, division, absolute_import
+from smartg.tools.luts import MLUT, LUT, Idx
+from smartg.atmosphere import diff1
 import numpy as np
 from warnings import warn
-from albedo import Albedo_cst
+from smartg.albedo import Albedo_cst
 from os.path import realpath, dirname, join
-from config import NPSTK
-from tools.phase import fournierForand, integ_phase, calc_iphase
-from config import dir_auxdata as dir_aux
+from smartg.config import NPSTK
+from smartg.tools.phase import fournierForand, integ_phase, calc_iphase
+from smartg.config import dir_auxdata as dir_aux
 
 
 def read_aw(dir_aux):

@@ -2,14 +2,14 @@
 # -*- coding: utf-8 -*-
 
 
-from __future__ import print_function, division
+from __future__ import print_function, division, absolute_import
 import numpy as np
-from tools.luts import LUT, MLUT
+from smartg.tools.luts import LUT, MLUT
 from os.path import dirname, join
-from config import dir_libradtran_reptran
+from smartg.config import dir_libradtran_reptran
 from scipy.interpolate import interp1d
 import netCDF4
-from tools.interp import interp2, interp3
+from smartg.tools.interp import interp2, interp3
 
 
 def reduce_reptran(mlut, ibands, use_solar=False, integrated=False):

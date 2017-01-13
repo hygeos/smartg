@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+from __future__ import print_function, division, absolute_import
 import numpy as np
-from tools.luts import LUT, Idx
+from smartg.tools.luts import LUT, Idx
 
 class Albedo_cst(object):
     '''

@@ -8,29 +8,26 @@ Speed-up Monte Carlo Advanced Radiative Transfer Code using GPU
 '''
 
 
-from __future__ import print_function, division
+from __future__ import print_function, division, absolute_import
 import numpy as np
 from datetime import datetime
 from numpy import pi
-from atmosphere import Atmosphere
-from water import IOP_base
+from smartg.atmosphere import Atmosphere
+from smartg.water import IOP_base
 from os.path import dirname, realpath, join, exists
 from warnings import warn
-from albedo import Albedo_cst
-from tools.progress import Progress
-from tools.luts import MLUT
+from smartg.albedo import Albedo_cst
+from smartg.tools.progress import Progress
+from smartg.tools.luts import MLUT
 from scipy.interpolate import interp1d
 import subprocess
 from collections import OrderedDict
 from pycuda.gpuarray import to_gpu, zeros as gpuzeros
 import pycuda.driver as cuda
-import sys
-from bandset import BandSet
+from smartg.bandset import BandSet
 import pycuda.autoinit
 from pycuda.compiler import SourceModule
 from pycuda.driver import module_from_buffer
-if sys.version_info[:2] >= (3, 0):
-    xrange = range
 
 
 # set up directories
@@ -1173,7 +1170,7 @@ def impactInit(prof_atm, NLAM, THVDEG, Rter, pp):
         y0 = 0.
 
         if NATM != 0:
-            for ilam in xrange(NLAM):
+            for ilam in range(NLAM):
                 if prof_atm['OD_atm'].ndim == 2:
                     # lam, z
                     tautot[ilam] = prof_atm['OD_atm'][ilam, NATM]/np.cos(THVDEG*pi/180.)
@@ -1203,7 +1200,7 @@ def impactInit(prof_atm, NLAM, THVDEG, Rter, pp):
         xph = x0
         yph = y0
         zph = z0
-        for i in xrange(1, NATM+1):
+        for i in range(1, NATM+1):
             # V is the direction vector, X is the position vector, D is the
             # distance to the next layer and R is the position vector at the
             # next layer
@@ -1234,7 +1231,7 @@ def impactInit(prof_atm, NLAM, THVDEG, Rter, pp):
             yph += vy * D
             zph += vz * D
 
-            for ilam in xrange(NLAM):
+            for ilam in range(NLAM):
                 # optical thickness of the layer in vertical direction
                 hlay0 = abs(prof_atm['OD_atm'][ilam, i] - prof_atm['OD_atm'][ilam, i - 1])
 

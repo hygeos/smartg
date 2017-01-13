@@ -6,16 +6,16 @@ from __future__ import print_function, division, absolute_import
 import numpy as np
 from os.path import join, dirname, exists, basename
 from glob import glob
-from tools.luts import MLUT, LUT, Idx
-from tools.phase import calc_iphase
+from smartg.tools.luts import MLUT, LUT, Idx
+from smartg.tools.phase import calc_iphase
 from scipy.interpolate import interp1d
 from scipy.integrate import simps
 from scipy.constants import codata
-from bandset import BandSet
+from smartg.bandset import BandSet
 import netCDF4
-from config import NPSTK, dir_libradtran_opac
-from config import dir_libradtran_atmmod
-from config import dir_libradtran_crs
+from smartg.config import NPSTK, dir_libradtran_opac
+from smartg.config import dir_libradtran_atmmod
+from smartg.config import dir_libradtran_crs
 from warnings import warn
 import sys
 if sys.version_info[:2] >= (3, 0):

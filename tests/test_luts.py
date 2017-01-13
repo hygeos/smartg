@@ -5,7 +5,7 @@
 from __future__ import print_function, division
 from nose.tools import raises
 import numpy as np
-from tools.luts import LUT, MLUT, read_mlut, read_mlut_hdf, merge, Idx
+from smartg.tools.luts import LUT, MLUT, read_mlut, read_mlut_hdf, merge, Idx
 import itertools
 import os
 import warnings

@@ -6,16 +6,16 @@
 Suite de tests SMARTG
 '''
 
-from __future__ import print_function, division
-from smartg import Smartg, RoughSurface, LambSurface
-from smartg import Environment, Albedo_cst
-from atmosphere import AtmAFGL, AeroOPAC, CloudOPAC, read_phase
-from water import IOP_Rw, IOP_1, IOP
-from tools.luts import read_mlut, Idx
+from __future__ import print_function, division, absolute_import
+from smartg.smartg import Smartg, RoughSurface, LambSurface
+from smartg.smartg import Environment, Albedo_cst
+from smartg.atmosphere import AtmAFGL, AeroOPAC, CloudOPAC, read_phase
+from smartg.water import IOP_Rw, IOP_1, IOP
+from smartg.tools.luts import read_mlut, Idx
 import numpy as np
 from itertools import product
 from unittest import skip
-from reptran import REPTRAN, reduce_reptran
+from smartg.reptran import REPTRAN, reduce_reptran
 from tempfile import NamedTemporaryFile
 from os import system
 

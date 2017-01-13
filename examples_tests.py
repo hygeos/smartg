@@ -5,19 +5,20 @@
 SMART-G examples
 '''
 
-from smartg import Smartg, LambSurface, RoughSurface
-from atmosphere import AtmAFGL, AeroOPAC
-from tools.luts import merge
+from __future__ import print_function, division, absolute_import
+from smartg.smartg import Smartg, LambSurface, RoughSurface
+from smartg.atmosphere import AtmAFGL, AeroOPAC
+from smartg.tools.luts import merge
+from smartg.reptran import REPTRAN, reduce_reptran
+from smartg.water import IOP_1
 import numpy as np
-from reptran import REPTRAN, reduce_reptran
-from water import IOP_1
 
 
 def test_rayleigh():
     '''
     Basic Rayleigh example
     '''
-    Smartg(debug=True).run(wl=400., NBPHOTONS=1e6, atm=AtmAFGL('afglt'), progress=False)
+    Smartg().run(wl=400., NBPHOTONS=1e6, atm=AtmAFGL('afglt'), progress=False)
 
 def test_sp():
     '''

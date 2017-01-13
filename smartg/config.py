@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from __future__ import print_function, division, absolute_import
+from __future__ import print_function, division
 from os.path import join, dirname, realpath, isdir
 from subprocess import check_call
 from builtins import input
@@ -12,7 +12,7 @@ SMART-G project-wide configuration
 Execute this module to install libRadtran data files
 '''
 
-dir_root = dirname(realpath(__file__))
+dir_root = dirname(dirname(realpath(__file__)))
 
 # number of Stokes parameters of the radiation field
 NPSTK = 4

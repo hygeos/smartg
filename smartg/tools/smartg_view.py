@@ -2,17 +2,16 @@
 # encoding: utf-8
 
 
-from __future__ import print_function, division
+from __future__ import print_function, division, absolute_import
 
 import warnings
 warnings.simplefilter("ignore",DeprecationWarning)
 from pylab import figure
 import numpy as np
 np.seterr(invalid='ignore', divide='ignore') # ignore division by zero errors
-from .luts import plot_polar, LUT, transect2D
-import sys
-sys.path.append('..')
-from atmosphere import diff1
+from smartg.tools.luts import plot_polar, LUT, transect2D
+from smartg.atmosphere import diff1
+
 
 def mdesc(desc, logI=False):
     sep1=desc.find('_')
