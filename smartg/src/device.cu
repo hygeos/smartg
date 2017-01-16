@@ -2025,15 +2025,11 @@ __device__ void countPhoton(Photon* ph,
     if(ph->v.z<=0.f) {
          // do not count the downward photons leaving atmosphere
          // DR April 2016, test flux for spherical shell
-        //return;
+         // !! TO TEST in glitter + spherical !!
+         //return;
+         // !! TO TEST in glitter + spherical !!
     }
     #endif
-
-	if(theta == 0.F)
-	{
-		atomicAdd(errorcount+ERROR_THETA, 1);
-	}
-
 
 	float psi=0.;
 	int ith=0, iphi=0, il=0;
@@ -2044,17 +2040,22 @@ __device__ void countPhoton(Photon* ph,
         ComputePsi(ph, &psi, theta);
     }
     else {
-        // Compute Psi in the special case of nadir
+      if (LEd == 0) {
+            atomicAdd(errorcount+ERROR_THETA, 1);
+            return;
+      }
+      else {
+        // Compute Psi in the special case of zenith
         float ux_phi;
         float uy_phi;
         float cos_psi;
         float sin_psi;
         float eps=1e-4;
 
-        ux_phi = cosf(tabphi[ph->iph]);
-        uy_phi = sinf(tabphi[ph->iph]);
+        ux_phi  = cosf(tabphi[ph->iph]);
+        uy_phi  = sinf(tabphi[ph->iph]);
         cos_psi = (ux_phi*ph->u.x + uy_phi*ph->u.y);
-        if( cos_psi > 1.0) cos_psi = 1.0;
+        if( cos_psi >  1.0) cos_psi =  1.0;
         if( cos_psi < -1.0) cos_psi = -1.0;
         sin_psi = sqrtf(1.0 - (cos_psi*cos_psi));
         if( (abs((ph->u.x*cos_psi-ph->u.y*sin_psi)-ux_phi) < eps) && (abs((ph->u.x*sin_psi+ph->u.y*cos_psi)-uy_phi) < eps) ) {
@@ -2063,6 +2064,7 @@ __device__ void countPhoton(Photon* ph,
         else{
                 psi = acosf(cos_psi);
         } 
+      }
     }
 
     rotateStokes(ph->stokes, psi, &st);
@@ -2201,6 +2203,11 @@ __device__ void countPhoton(Photon* ph,
       DatomicAdd(tabCount+(1*II+JJ), dweight*(ds.x-ds.y));
       DatomicAdd(tabCount+(2*II+JJ), dweight*ds.z);
       DatomicAdd(tabCount+(3*II+JJ), dweight*ds.w);
+      // If GTX 1000 or more recent use native double atomic add
+      /*atomicAdd(tabCount+(0*II+JJ), dweight*(ds.x+ds.y));
+      atomicAdd(tabCount+(1*II+JJ), dweight*(ds.x-ds.y));
+      atomicAdd(tabCount+(2*II+JJ), dweight*ds.z);
+      atomicAdd(tabCount+(3*II+JJ), dweight*ds.w);*/
 
       #else
       tabCount = (float*)tabPhotons + count_level*NPSTKd*NBTHETAd*NBPHId*NLAMd;
