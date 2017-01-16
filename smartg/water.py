@@ -165,7 +165,7 @@ class IOP_Rw(IOP_base):
         '''
         pro = MLUT()
         pro.add_axis('wavelength', wav[:])
-        pro.add_axis('z_oc', np.arange(2))
+        pro.add_axis('z_oc', np.zeros(2))
         shp = (len(wav), 2)
 
         pro.add_dataset('OD_oc', np.zeros(shp, dtype='float32'),
@@ -174,7 +174,7 @@ class IOP_Rw(IOP_base):
                         ['wavelength', 'z_oc'])
         pro.add_dataset('OD_abs_oc', np.zeros(shp, dtype='float32'),
                         ['wavelength', 'z_oc'])
-        pro.add_dataset('pmol_oc', np.zeros(shp, dtype='float32'),
+        pro.add_dataset('pmol_oc', np.ones(shp, dtype='float32'),
                         ['wavelength', 'z_oc'])
         pro.add_dataset('ssa_oc', np.ones(shp, dtype='float32'),
                         ['wavelength', 'z_oc'])

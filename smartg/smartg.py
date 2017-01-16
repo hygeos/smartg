@@ -217,6 +217,7 @@ class Smartg(object):
         # compilation option
         #
         options = []
+        # options = ['-g', '-G']
         if not pp:
             # spherical shell calculation
             options.append('-DSPHERIQUE')
