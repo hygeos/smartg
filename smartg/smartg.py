@@ -309,7 +309,7 @@ class Smartg(object):
             - water: water object, providing options relative to the ocean surface
                 default None (no ocean)
 
-            - env: environment effect parameters (dictionary)
+            - env: environment effect object (a.k.a. adjacency effect)
                 default None (no environment effect)
 
             - NBPHOTONS: number of photons launched
@@ -496,6 +496,7 @@ class Smartg(object):
             else:
                 spectrum['alb_surface'] = -999.
         else:
+            assert surf is not None
             spectrum['alb_surface'] = env.alb.get(wl[:])
 
         if water is None:
@@ -508,6 +509,14 @@ class Smartg(object):
         LE = 0
         if le is not None:
             LE = 1
+            if not 'th' in le:
+                le['th'] = np.array(le['th_deg'], dtype='float32').ravel() * np.pi/180.
+            else:
+                le['th'] = np.array(le['th'], dtype='float32').ravel()
+            if not 'phi' in le:
+                le['phi'] = np.array(le['phi_deg'], dtype='float32').ravel() * np.pi/180.
+            else:
+                le['phi'] = np.array(le['phi'], dtype='float32').ravel()
             NBTHETA =  le['th'].shape[0]
             NBPHI   =  le['phi'].shape[0]
 
