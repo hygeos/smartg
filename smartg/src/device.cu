@@ -2074,7 +2074,8 @@ __device__ void countPhoton(Photon* ph,
     }
 
     // don't count the photons directly transmitted
-    if ((ph->weight == WEIGHTINIT) && (ph->stokes.x == ph->stokes.y) && (ph->stokes.z == 0.f) && (ph->stokes.w == 0.f)) {
+    //if ((ph->weight == WEIGHTINIT) && (ph->stokes.x == ph->stokes.y) && (ph->stokes.z == 0.f) && (ph->stokes.w == 0.f)) {
+    if ((ph->stokes.x == ph->stokes.y) && (ph->stokes.z == 0.f) && (ph->stokes.w == 0.f)) {
         return;
     }
 
