@@ -436,11 +436,80 @@ extern "C" {
                 float dis=0;
                 dis = sqrtf((ph.pos.x-X0d)*(ph.pos.x-X0d) +(ph.pos.y-Y0d)*(ph.pos.y-Y0d));
                 if( dis > ENV_SIZEd) {
+                 if (LEd == 1 && SIMd != -2) {
+                  int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
+                  int iph0 = idx%NBPHId;
+                  for (int ith=0; ith<NBTHETAd; ith++){
+                    for (int iph=0; iph<NBPHId; iph++){
+                        copyPhoton(&ph, &ph_le);
+                        ph_le.iph = (iph + iph0)%NBPHId;
+                        ph_le.ith = (ith + ith0)%NBTHETAd;
+				        surfaceLambertienne(&ph_le, 1, tabthv, tabphi, spectrum, &rngstate);
+                        // Only two levels for counting by definition
+                        countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, NPhotonsOut);
+                        #ifdef SPHERIQUE
+                        // for spherical case attenuation if performed usin move_sp
+                        move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
+                        #endif
+                        countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, NPhotonsOut);
+                    }//direction
+                  }//direction
+                 } //LE
+                 //Propagation of Lamberatian reflection with le=0
                     surfaceLambertienne(&ph, 0, tabthv, tabphi, spectrum, &rngstate);
-                }
+                }// dis
                 else {
+                 if (LEd == 1 && SIMd != -2) {
+                 ///* TEST Double LE */
+                 //if ((LEd == 1) && (SIMd != -2 && ph.loc == SURF0P)) {
+                  int NK, count_level_le;
+                  if (NOCEd==0) NK=1;
+                  else NK=2;
+                  int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
+                  int iph0 = idx%NBPHId;
+                  for(int k=0; k<NK; k++){
+                    if (k==0) count_level_le = UP0P;
+                    else count_level_le = DOWN0M;
+
+                    for (int ith=0; ith<NBTHETAd; ith++){
+                      for (int iph=0; iph<NBPHId; iph++){
+                        copyPhoton(&ph, &ph_le);
+                        ph_le.iph = (iph + iph0)%NBPHId;
+                        ph_le.ith = (ith + ith0)%NBTHETAd;
+
+                        // Reflect or Tramsit the virtual photon, using le=1, and count_level for the scattering angle computation
+                        surfaceAgitee(&ph_le, 1, tabthv, tabphi,
+                                      count_level_le, &rngstate);
+
+                        #ifdef DEBUG_PHOTON
+                        if (k==0) display("SURFACE LE UP", &ph_le);
+                        else display("SURFACE LE DOWN", &ph_le);
+                        #endif
+
+                        // Count the photon up to the counting levels (at the surface UP0P or DOW0M)
+                        countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, count_level_le, errorcount, tabPhotons, NPhotonsOut);
+
+                        // Only for upward photons count also them up to TOA
+                        if (k==0) { 
+                            #ifdef SPHERIQUE
+                            // for spherical case attenuation if performed usin move_sp
+                            move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
+                            #endif
+                            // Final counting at the TOA
+                            countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA , errorcount, tabPhotons, NPhotonsOut);
+                        }
+                        // Only for downward photons count also them up to Bottom 
+                        if (k==1) { 
+                            // Final counting at the B 
+                            countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, DOWNB , errorcount, tabPhotons, NPhotonsOut);
+                        }
+                      }//direction
+                    }//direction
+                  }// counting levels
+                 } //LE
+                // Propagation of photon using le=0
                     surfaceAgitee(&ph, 0, tabthv, tabphi, count_level, &rngstate);
-                }
+                } //dis
            } // ENV=1
 
            #ifdef DEBUG_PHOTON
