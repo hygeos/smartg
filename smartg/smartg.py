@@ -31,13 +31,15 @@ from pycuda.driver import module_from_buffer
 
 
 # set up directories
-dir_root = dirname(realpath(__file__))
-dir_src = join(dir_root, 'src/')
+dir_root = dirname(dirname(realpath(__file__)))
+dir_src = join(dir_root, 'smartg/src/')
 dir_bin = join(dir_root, 'bin/')
 src_device = join(dir_src, 'device.cu')
-binnames = {
-            True: join(dir_bin, 'pp.cubin'),
-            False: join(dir_bin, 'sp.cubin'),
+binnames = { # keys are (PP, ALIS)
+        (True , False): join(dir_bin, 'pp.cubin'),
+        (True , True ): join(dir_bin, 'pp.alis.cubin'),
+        (False, False): join(dir_bin, 'sp.cubin'),
+        (False, True ): join(dir_bin, 'sp.alis.cubin'),
         }
 
 
@@ -253,16 +255,18 @@ class Smartg(object):
                                cache_dir='/tmp/',
                                include_dirs=[dir_src,
                                    join(dir_src, 'incRNGs/Random123/')])
-        elif exists(binnames[pp]):
-            # load existing binary
-            print('Loading binary', binnames[pp])
-            self.mod = module_from_buffer(open(binnames[pp], 'rb').read())
-
         else:
-            raise IOError('Could not find {} or {}.'.format(src_device, binnames[pp]))
+            binname = binnames[(pp,alis is not None)]
+            if exists(binname):
+                # load existing binary
+                print('Loading binary', binname)
+                self.mod = module_from_buffer(open(binname, 'rb').read())
 
-        # load the kernel
-        self.kernel = self.mod.get_function('launchKernel')
+            else:
+                raise IOError('Could not find {} or {}.'.format(src_device, binname))
+
+            # load the kernel
+            self.kernel = self.mod.get_function('launchKernel')
 
         #
         # common attributes
