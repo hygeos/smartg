@@ -18,7 +18,14 @@ def test_rayleigh():
     '''
     Basic Rayleigh example
     '''
-    Smartg().run(wl=400., NBPHOTONS=1e6, atm=AtmAFGL('afglt'), progress=False)
+    res = Smartg().run(wl=400., NBPHOTONS=1e6, atm=AtmAFGL('afglt'), progress=False)
+
+    # NOTE:
+    # the result is an object of class MLUT, that has many features, including
+    # writing and reading in netcdf or hdf formats, interpolation, plotting,
+    # indexing, etc.
+    # example: to save in netcdf4 format, use:
+    #          res.save('result.nc')
 
 def test_sp():
     '''
@@ -85,6 +92,23 @@ def test_reptran():
                        atm=pro, progress=False)
 
     return reduce_reptran(res, ibands)
+
+def test_le():
+    atm = AtmAFGL('afglt')
+    surf = RoughSurface()
+    water = IOP_1(chl=1.)
+    wav = 450.
+    res = Smartg().run(wav,
+                 atm=atm,
+                 surf=surf,
+                 water=water,
+                 THVDEG=10.,
+                 le={
+                     'th_deg':  30.,
+                     'phi_deg': 0.,
+                     },
+                 NBPHOTONS=1e6, progress=False)
+    assert res['I_up (TOA)'][:,:] > 0
 
 def test_ozone_lut():
     '''
