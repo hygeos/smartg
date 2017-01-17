@@ -2036,6 +2036,7 @@ __device__ void countPhoton(Photon* ph,
     float4 st; // replace s1, s2, s3, s4
     int II, JJ;
 
+
     if (theta != 0.F) {
         ComputePsi(ph, &psi, theta);
     }
@@ -2330,7 +2331,7 @@ __device__ void ComputePsi(Photon* ph, float* psi, float theta)
     // see Rammella et al. Three Monte Carlo programs of polarized light transport into scattering media: part I Optics Express, 2005, 13, 4420
     double wz;
     wz = (double)ph->v.x * (double)ph->u.y - (double)ph->v.y * (double)ph->u.x;
-    *psi = atan2(wz, -1.*(double)ph->u.z); 
+    *psi = atan2(wz, -1.e+00*(double)ph->u.z); 
 }
 
 
