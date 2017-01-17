@@ -1,1 +1,0 @@
-auxdata/samples/pf_maritime_clean_490nm_layer-49.txt
