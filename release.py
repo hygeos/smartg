@@ -5,11 +5,12 @@
 release script for SMART-G
 '''
 
-from os.path import exists, join, dirname
+from __future__ import print_function, absolute_import, division
+from os.path import exists, join, dirname, realpath
 from os import mkdir, remove, makedirs
 from pycuda.compiler import compile
-
-from smartg import dir_src, binnames, dir_bin, src_device, dir_root
+from smartg.smartg import dir_src, binnames, dir_bin, src_device, dir_root
+from smartg.smartg import Smartg
 from subprocess import Popen, PIPE
 from datetime import datetime
 import tarfile
@@ -20,18 +21,27 @@ def main():
 
     version = datetime.now().strftime('%Y%m%d')
     target = join(dir_root, 'release/target/smartg-{}.tar.gz'.format(version))
-    skiplist = ['src/*', 'tools/analyze/*', 'makefile*', 'scripts/*',
-                'auxdata/*', 'Parametres.txt', 'CHANGELOG.TXT',
-                '.gitignore', 'NOTES.TXT', 'TODO.TXT', 'validation/*',
-                'release.py', 'notebooks/old_demo_notebook.ipynb',
-                '*.hdf', '*.png', '*.ksh']
+    skiplist = [
+            'NOTES.TXT',
+            'TODO.TXT',
+            'performance.py',
+            'smartg/src/*',
+            'auxdata/validation/*',
+            'smartg/tools/water/*',
+            'notebooks/demo_notebook_ALIS.ipynb',
+            'validation.py',
+            '.gitignore',
+            'release.py',
+            ]
 
     if exists(target):
         raise IOError('file {} exists'.format(target))
+    print('Target is {}'.format(target))
 
     # check git status
     if len(Popen(['git', 'diff', '--name-only'], stdout=PIPE).communicate()[0]):
-        raise Exception('error, repository is dirty :(')
+        pass
+        # raise Exception('error, repository is dirty :(')
 
     #
     # initialization
@@ -48,7 +58,7 @@ def main():
         makedirs(dirname(target))
     tar = tarfile.open(target, 'w:gz')
     nskip = 0
-    for f in Popen(['git', 'ls-files'], stdout=PIPE).communicate()[0].split('\n'):
+    for f in Popen(['git', 'ls-files'], stdout=PIPE).communicate()[0].decode('utf-8').split('\n'):
 
         skip = (len(f) == 0)
         for p in skiplist:
@@ -59,42 +69,46 @@ def main():
             nskip += 1
             continue
 
-        print 'adding "{}"'.format(f)
+        print('adding "{}"'.format(f))
         tar.add(f, arcname=join('smartg', f))
 
-    print 'skipped {} files'.format(nskip)
+    print('skipped {} files'.format(nskip))
 
     #
     # compilation for pp and sp
     #
-    for pp in binnames.keys():
-        print 'Compilation in {} mode...'.format({True: 'pp', False: 'sp'}[pp])
+    for binopts in binnames.keys():
+        print('Compilation binary {} with options {} ...'.format(binnames[binopts], binopts))
 
         options = []
-        if not pp:
+        if binopts[0]:
             options.append('-DSPHERIQUE')
+        if binopts[1]:
+            options.append('-DALIS')
+        options.append('-DPHILOX')
 
         options.extend([
             '-gencode', 'arch=compute_20,code=compute_20',
             '-gencode', 'arch=compute_30,code=compute_30',
             '-gencode', 'arch=compute_50,code=compute_50',
+            '-gencode', 'arch=compute_60,code=compute_60',
             ])
 
         binary = compile(src_device_content,
-                       nvcc='/usr/local/cuda/bin/nvcc',
+                       nvcc='nvcc',
                        options=options,
                        no_extern_c=True,
                        cache_dir='/tmp/',
                          include_dirs=[dir_src, dir_src+'incRNGs/Random123/',],
                        target='fatbin')
 
-        binname = binnames[pp]
+        binname = binnames[binopts]
         if exists(binname):
-            print 'Warning: removing {}'.format(binname)
+            print('Warning: removing {}'.format(binname))
             remove(binname)
         with open(binname, 'wb') as f:
             f.write(binary)
-            print 'wrote', binname
+            print('wrote', binname)
 
         assert binname.startswith(dir_root)
         reldir = binname[len(dir_root)+1:]
@@ -111,8 +125,9 @@ def main():
     tar.add(version_file, arcname=join('smartg', version_file))
     tar.close()
 
-    print 'created', target
+    print('created', target)
 
 
 if __name__ == "__main__":
     main()
+
