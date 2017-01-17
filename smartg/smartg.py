@@ -355,9 +355,12 @@ class Smartg(object):
 
             - le: Local Estimate method activation
                   Provide output geometries in radians like so:
-                  {'th':<float32 array>, 'phi': <float32 array>}
+                  le={'th': <array-like>, 'phi': <array-like>}
+                  or:
+                  le={'th_deg': <array-like>, 'phi_deg': <array-like>}    # to provide angles in degrees
+                  angles can be provided as scalar, lists or 1-dim arrays
                   default None: cone sampling
-                NOTE: Overwrite NBPHI and NBTHETA
+                  NOTE: Overrides NBPHI and NBTHETA
 
             - flux: if specified output is 'planar' or 'spherical' flux instead of radiance
 
