@@ -36,9 +36,10 @@ class Species(object):
         ssam.mie, sscm.mie, suso.mie,
         waso.mie, wc.sol.mie
     '''
-    def __init__(self, species):
+    def __init__(self, species, wav_clip=False):
 
         self.name = species
+        self.wav_clip = wav_clip
         fname = join(dir_libradtran_opac, 'optprop', species+'.cdf')
         if not exists(fname):
             raise Exception('file {} does not exist'.format(fname))
@@ -130,8 +131,9 @@ class Species(object):
             reff2 = 0.*wav + reff   # so that reff2 has same size as wav
 
             # wavelength interpolation
-            ext = self._ext[Idx(wav), Idx(reff2)]
-            ssa = self._ssa[Idx(wav), Idx(reff2)]
+            fv = 'extrema' if self.wav_clip else None
+            ext = self._ext[Idx(wav, fill_value=fv), Idx(reff2)]
+            ssa = self._ssa[Idx(wav, fill_value=fv), Idx(reff2)]
 
             # create empty dimension for rh
             ext = ext[:,None]
@@ -197,9 +199,11 @@ class Species(object):
                 irh = 0
 
             # interpolate on wav and rh
-            pha = self._phase.sub()[Idx(wav,round=True),irh,:,:]  # (lam, stk, nthetamax)
-            th = self._theta[Idx(wav,round=True),irh,:,:]   # (lam, stk, nthetamax)
-            nth = self._ntheta[Idx(wav,round=True),irh,:]   # (lam, stk)
+            fv = 'extrema' if self.wav_clip else None
+            iwav = Idx(wav,round=True, fill_value=fv)
+            pha = self._phase.sub()[iwav,irh,:,:]  # (lam, stk, nthetamax)
+            th = self._theta[iwav,irh,:,:]   # (lam, stk, nthetamax)
+            nth = self._ntheta[iwav,irh,:]   # (lam, stk)
 
             if (NBTHETA < nth).any():
                 warn('Insufficient number of sampling angles for phase function')
@@ -406,17 +410,19 @@ class CloudOPAC(AeroOPAC):
     Single species, localized between zmin and zmax,
     with and effective radius reff
 
-    TODO: phase
+    wav_clip: if True, don't raise Error upon interpolation error in
+    wavelength, use the extrema values
 
     Example: CloudOPAC('wc.sol', 12.68, 2, 3, 10., 550.)
              # water cloud mie, reff=12.68 between 2 and 3 km
              # total optical thickness of 10 at 550 nm
     '''
-    def __init__(self, species, reff, zmin, zmax, tau_ref, w_ref, phase=None):
+    def __init__(self, species, reff, zmin, zmax, tau_ref, w_ref,
+                 phase=None, wav_clip=False):
         self.reff = reff
         self.tau_ref = tau_ref
         self.w_ref = w_ref
-        self.species = [Species(species+'.mie')]
+        self.species = [Species(species+'.mie', wav_clip=wav_clip)]
         self.zopac     = np.array([zmax, zmax, zmin, zmin, 0.], dtype='f')
         self.densities = np.array([  0.,   1.,   1.,   0., 0.], dtype='f')[:,None]
         self.ssa = None
