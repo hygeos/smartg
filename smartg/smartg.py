@@ -265,8 +265,8 @@ class Smartg(object):
             else:
                 raise IOError('Could not find {} or {}.'.format(src_device, binname))
 
-            # load the kernel
-            self.kernel = self.mod.get_function('launchKernel')
+        # load the kernel
+        self.kernel = self.mod.get_function('launchKernel')
 
         #
         # common attributes
