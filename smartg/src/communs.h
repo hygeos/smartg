@@ -141,8 +141,11 @@ public:
     // Cartesian coordinates of the photon
     float3 pos;
 
+    // Number of interaction (scattering or reflection/transmission)
+    unsigned short nint;
+
     #ifdef ALIS
-    unsigned short nevt;  // Number  of events
+    unsigned short nevt;  // Number  of events (including exit)
     short layer_prev[MAX_NEVT]; // History of layer where events occured
     float vz_prev[MAX_NEVT]; // History of z cosine where events occured
     float epsilon_prev[MAX_NEVT]; // History of proportion (between 0 and 1) within the layer where events occured

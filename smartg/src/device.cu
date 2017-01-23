@@ -612,6 +612,8 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
                            struct Spectrum *spectrum, float *X0, unsigned long long *NPhotonsIn,
                            long long *wl_proba_icdf,
                            struct RNG_State *rngstate) {
+    ph->nint = 0;
+
 	// Initialisation du vecteur vitesse
 	ph->v.x = - STHVd;
 	ph->v.y = 0.F;
@@ -968,6 +970,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 	if (ph->loc == OCEAN){  
         // If tau>0 photon is reaching the surface 
         if (ph->tau > 0) {
+
             #ifndef ALIS
             if (BEERd == 1) {// absorption between start and stop
                 ab =  0.F;
@@ -982,6 +985,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
                 ph->tau_sca[k] = 0.F;
             }
             #endif
+
             ph->tau = 0.F;
             ph->tau_abs = 0.F;
             ph->loc = SURF0M;
@@ -989,6 +993,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
               ph->loc = SPACE;
             }
             ph->layer = NOCEd;
+
             #ifdef ALIS
             ph->nevt++;
             ph->layer_prev[ph->nevt] = ph->layer;
@@ -997,8 +1002,9 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             #endif
            return;
         }
-        // Si tau<TAUOCEAN le photon atteint le fond 
+        // If tau<TAUOCEAN photon is reaching the sea bottom
         else if( ph->tau < get_OD(BEERd, prof_oc[NOCEd + ph->ilam *(NOCEd+1)]) ){
+
             #ifndef ALIS
             if (BEERd == 1) {// absorption between start and stop
                 ab = prof_oc[NOCEd + ph->ilam *(NOCEd+1)].OD_abs;
@@ -1012,15 +1018,19 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
                 ph->weight_sca[k] *= exp(-__fdividef(fabs(dsca_dl) - fabs(dsca_dl0), fabs(ph->v.z)));
                 ph->tau_sca[k] = get_OD(1,prof_oc[NOCEd + k*DL*(NOCEd+1)]);
             }
+            #endif
+
+            ph->loc = SEAFLOOR;
+            ph->tau = get_OD(BEERd, prof_oc[NOCEd + ph->ilam *(NOCEd+1)]);
+            ph->tau_abs = prof_oc[NOCEd + ph->ilam *(NOCEd+1)].OD_abs;
             ph->layer = 0;
+
+            #ifdef ALIS
             ph->nevt++;
             ph->layer_prev[ph->nevt] = ph->layer;
             ph->vz_prev[ph->nevt] = ph->v.z;
             ph->epsilon_prev[ph->nevt] = 0.f;
             #endif
-            ph->loc = SEAFLOOR;
-            ph->tau = get_OD(BEERd, prof_oc[NOCEd + ph->ilam *(NOCEd+1)]);
-            ph->tau_abs = prof_oc[NOCEd + ph->ilam *(NOCEd+1)].OD_abs;
             return;
         }
 
@@ -1075,9 +1085,9 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
     } // Ocean
 
     if (ph->loc == ATMOS) {
-
-        // Si tau<0 le photon atteint la surface
+        // If tau<0 photon is reaching the surface 
         if(ph->tau < 0.F){
+
             #ifndef ALIS
             if (BEERd == 1) {// absorption between start and stop
                 ab =  0.F;
@@ -1092,15 +1102,16 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
                 ph->tau_sca[k] = 0.F;
             }
             #endif
+
             ph->loc = SURF0P;
             ph->tau = 0.F;
             ph->tau_abs = 0.F;
-
             // move the photon forward down to the surface
             // the linear distance is ph->z/ph->vz
             operator+=(ph->pos, ph->v * fabs(ph->pos.z/ph->v.z));
             ph->pos.z = 0.;
             ph->layer = NATMd;
+
             #ifdef ALIS
             ph->nevt++;
             ph->layer_prev[ph->nevt] = ph->layer;
@@ -1109,8 +1120,9 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             #endif
         return;
         }
-        // Si tau>TAUATM le photon atteint l'espace
+        // If tau>TAUATM photon is reaching space
         else if( ph->tau > get_OD(BEERd, prof_atm[NATMd + ph->ilam *(NATMd+1)]) ){
+
             #ifndef ALIS
             if (BEERd == 1) {// absorption between start and stop
                 ab = prof_atm[NATMd + ph->ilam *(NATMd+1)].OD_abs;
@@ -1124,14 +1136,18 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
                 ph->weight_sca[k] *= exp(-__fdividef(fabs(dsca_dl) - fabs(dsca_dl0), fabs(ph->v.z)));
                 ph->tau_sca[k] = get_OD(1,prof_atm[NATMd + k*DL*(NATMd+1)]);
             }
+            #endif
+
+            ph->loc = SPACE;
             ph->layer = 0;
+
+            #ifdef ALIS
             ph->nevt++;
             ph->layer_prev[ph->nevt] = ph->layer;
             ph->vz_prev[ph->nevt] = ph->v.z;
             ph->epsilon_prev[ph->nevt] = 0.f;
             #endif
 
-            ph->loc = SPACE;
             return;
         }
         
@@ -1186,6 +1202,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             ph->tau_sca[k] = tautmp;
         }
         #endif
+
         // calculate new photon position
         phz = epsilon * (prof_atm[ilayer].z - prof_atm[ilayer-1].z) + prof_atm[ilayer-1].z; 
         rdist=  fabs(__fdividef(phz-ph->pos.z, ph->v.z));
@@ -1214,6 +1231,7 @@ __device__ void scatter(Photon* ph,
 	float prop_raman=1., new_wavel;
 	float P11, P12, P22, P33, P43, P44;
 
+    ph->nint += 1;
     if (le){
         /* in case of LE the photon units vectors, scattering angle and Psi rotation angle are determined by output zenith and azimuth angles*/
         float thv, phi;
@@ -1450,6 +1468,7 @@ __device__ void surfaceAgitee(Photon* ph, int le,
 		ph->loc = ABSORBED;
 		return;
 	}
+    ph->nint += 1;
 	
 	// Réflexion sur le dioptre agité
 	float theta;	// Angle de deflection polaire de diffusion [rad]
@@ -1912,6 +1931,7 @@ __device__ void surfaceLambertienne(Photon* ph, int le,
 		return;
 	}
 	
+    ph->nint += 1;
 	float3 u_n, v_n;	// Vecteur du photon après reflexion
     float phi;
     float cTh, sTh, cPhi, sPhi;
@@ -2075,7 +2095,7 @@ __device__ void countPhoton(Photon* ph,
 
     // don't count the photons directly transmitted
     //if ((ph->weight == WEIGHTINIT) && (ph->stokes.x == ph->stokes.y) && (ph->stokes.z == 0.f) && (ph->stokes.w == 0.f)) {
-    if ((ph->stokes.x == ph->stokes.y) && (ph->stokes.z == 0.f) && (ph->stokes.w == 0.f)) {
+    if (ph->nint == 0) {
         return;
     }
 
@@ -2617,6 +2637,7 @@ __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
     ph_le->ilam = ph->ilam;
     ph_le->prop_aer = ph->prop_aer;
     ph_le->pos = ph->pos; // float3
+    ph_le->nint = ph->nint;
     #ifdef SPHERIQUE
     ph_le->radius = ph->radius;
     ph_le->taumax = ph->taumax;
