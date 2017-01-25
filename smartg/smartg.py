@@ -739,6 +739,9 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
 
     # write atmospheric profiles
     if prof_atm is not None:
+        m.add_lut(prof_atm['OD_r'])
+        m.add_lut(prof_atm['OD_p'])
+        m.add_lut(prof_atm['OD_g'])
         m.add_lut(prof_atm['OD_atm'])
         m.add_lut(prof_atm['OD_sca_atm'])
         m.add_lut(prof_atm['OD_abs_atm'])
