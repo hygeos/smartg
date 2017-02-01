@@ -1275,7 +1275,7 @@ def plot_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
     if show_sub:
         # convert Idx instance to index if necessarry
         if isinstance(index, Idx_base):
-            index = int(round(index.index(ax1)))
+            index = int(np.around(index.index(ax1)))
         if semi:
             mirror_index = -1 -index
         else:
@@ -1365,7 +1365,7 @@ def transect2D(lut, index=None, vmin=None, vmax=None, sym=True, swap='auto', fig
 
     # convert Idx instance to index if necessarry
     if isinstance(index, Idx_base):
-        index = int(round(index.index(ax1)))
+        index = int(np.around(index.index(ax1)))
     mirror_index = (ax1_scaled.shape[0]/2 + index)%ax1_scaled.shape[0]
 
     if swap:
