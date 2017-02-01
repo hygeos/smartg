@@ -81,7 +81,7 @@ def main():
         print('Compilation binary {} with options {} ...'.format(binnames[binopts], binopts))
 
         options = []
-        if binopts[0]:
+        if not binopts[0]:
             options.append('-DSPHERIQUE')
         if binopts[1]:
             options.append('-DALIS')
