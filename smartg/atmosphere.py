@@ -146,7 +146,7 @@ class Species(object):
             ext = self._ext[Idx(wav2), Idx(rh2, fill_value='extrema,warn')]
             ssa = self._ssa[Idx(wav2), Idx(rh2, fill_value='extrema,warn')]
 
-            ext *= self._rho[Idx(rh)]/self._rho[Idx(50.)]
+            ext *= self._rho[Idx(rh, fill_value='extrema,warn')]/self._rho[Idx(50.)]
 
         else:
             raise Exception('Error')
