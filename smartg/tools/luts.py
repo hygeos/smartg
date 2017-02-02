@@ -1045,7 +1045,7 @@ class Idx_arr(Idx_base):
                     warnings.warn('(Idx) Value {} is above the axis maximum {} (axis {})'.format(
                         np.amax(self.value), np.amax(axis), self.name))
                 if (np.amin(self.value) < np.amin(axis)):
-                    warnings.warn('(Idx) Value {} is above the axis minimum {} (axis {})'.format(
+                    warnings.warn('(Idx) Value {} is under the axis minimum {} (axis {})'.format(
                         np.amin(self.value), np.amin(axis), self.name))
             else:
                 fv = self.fill_value
@@ -1940,15 +1940,13 @@ class MLUT(object):
             axes = None
         else:
             axes = []
-            names = []
             for ax in axnames:
                 if (ax is None) or (ax not in self.axes):
                     axes.append(None)
                 else:
                     axes.append(self.axes[ax])
-                names.append(ax)
 
-        return LUT(desc=name, data=dataset, axes=axes, names=names, attrs=attrs)
+        return LUT(desc=name, data=dataset, axes=axes, names=axnames, attrs=attrs)
 
     def equal(self, other, content=True, attributes=True, show_diff=False):
         '''
