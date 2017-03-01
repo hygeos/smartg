@@ -25,7 +25,6 @@ from collections import OrderedDict
 from pycuda.gpuarray import to_gpu, zeros as gpuzeros
 import pycuda.driver as cuda
 from smartg.bandset import BandSet
-import pycuda.autoinit
 from pycuda.compiler import SourceModule
 from pycuda.driver import module_from_buffer
 
@@ -209,6 +208,7 @@ class Smartg(object):
                    * PHILOX
                    * CURAND_PHILOX
         '''
+        import pycuda.autoinit
 
         self.pp = pp
         self.double = double
