@@ -176,7 +176,7 @@ class Smartg(object):
 
     def __init__(self, pp=True, debug=False,
                  alt_move=False, debug_photon=False,
-                 double=False, alis=None, rng='PHILOX'):
+                 double=False, alis=None, back=False, bias=True, rng='PHILOX'):
         '''
         Initialization of the Smartg object
 
@@ -204,6 +204,10 @@ class Smartg(object):
                 is the number of wavelength to fit the spectral dependence of scattering, 
                 nlow-1 has to divide NW-1 where NW is the number of wavelengths, nlow has to be lesser than MAX_NLOW that is defined in communs.h
 
+            - back : boolean, if True, run in backward mode, default forward mode
+            
+            - bias : boolean, if True, use the bias sampling scheme, default True
+            
             - rng: choice of pseudo-random number generator:
                    * PHILOX
                    * CURAND_PHILOX
@@ -236,6 +240,12 @@ class Smartg(object):
             options.append('-DDOUBLE')
         if alis:
             options.append('-DALIS')
+        if back:
+            # backward mode
+            options.append('-DBACK')
+        if bias:
+            # bias sampling scheme for scattering and reflection/transmission
+            options.append('-DBIAS')
         options.append('-D'+rng)
 
         #

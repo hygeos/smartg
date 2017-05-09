@@ -342,9 +342,16 @@ inline __host__ __device__ float4x4 make_float4x4(float s)
     return make_float4x4(s, s, s, s, s, s, s, s, s, s, s, s, s, s, s, s);
 }
 
+
 inline __host__ __device__ float4x4 make_float4x4(float4c r1, float4c r2, float4c r3, float4c r4)
 {
     return make_float4x4(r1.x, r1.y, r1.z, r1.w, r2.x, r2.y, r2.z, r2.w, r3.x, r3.y, r3.z, r3.w, r4.x, r4.y, r4.z, r4.w);
+}
+
+inline __host__ __device__ float4x4 make_diag_float4x4(float s)
+{
+    float z = 0.;
+    return make_float4x4(s, z, z, z, z, s, z, z, z, z, s, z, z, z, z, s);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

@@ -99,6 +99,7 @@
 /**********************************************************
 *	> Définition des structures
 ***********************************************************/
+#include "helper_math.h"
 
 /* Photon
 */
@@ -154,10 +155,13 @@ public:
     #endif
 
     #ifdef SPHERIQUE
-
     float radius;
     float taumax;
-	
+    #endif
+
+    #ifdef BACK
+    float4x4 M;
+    float4x4 Mf;
     #endif
 
 private:

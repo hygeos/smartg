@@ -706,6 +706,40 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 	ph->stokes.z = 0.F;
 	ph->stokes.w = 0.F;
 
+    #ifdef BACK
+    //ph->Mf= make_diag_float4x4 (1.F);
+    ph->M = make_diag_float4x4 (1.F);
+
+    /*float theta = acosf(fmin(1.F, fmax(-1.F, ph->v.z)));
+    float psi;
+    if (theta != 0.F) {
+        ComputePsi(ph, &psi, theta);
+    }
+    else {
+        // Compute Psi in the special case of zenith
+        float ux_phi;
+        float uy_phi;
+        float cos_psi;
+        float sin_psi;
+        float eps=1e-4;
+
+        ux_phi  = 1.F;
+        uy_phi  = 0.F;
+        cos_psi = (ux_phi*ph->u.x + uy_phi*ph->u.y);
+        if( cos_psi >  1.0) cos_psi =  1.0;
+        if( cos_psi < -1.0) cos_psi = -1.0;
+        sin_psi = sqrtf(1.0 - (cos_psi*cos_psi));
+        if( (abs((ph->u.x*cos_psi-ph->u.y*sin_psi)-ux_phi) < eps) && (abs((ph->u.x*sin_psi+ph->u.y*cos_psi)-uy_phi) < eps) ) {
+                psi = -acosf(cos_psi);
+        }
+        else{
+                psi = acosf(cos_psi);
+        } 
+      }
+    float4x4 L;
+    rotationM(psi,&L);
+    ph->M = L;*/
+    #endif
 }
 
 
@@ -1294,11 +1328,6 @@ __device__ void scatter(Photon* ph,
 		cTh = __cosf(theta);
 
 		/////////////
-		//  Get Phi
-		//  Biased sampling scheme for psi 1)
-		psi = RAND * DEUXPI;	
-
-		/////////////
 		// Get Scattering matrix from CDF
 		P11 = func[ipha*NF+iang].p_P11;
 		P12 = func[ipha*NF+iang].p_P12;
@@ -1307,11 +1336,66 @@ __device__ void scatter(Photon* ph,
 		P43 = func[ipha*NF+iang].p_P43;
 		P44 = func[ipha*NF+iang].p_P44;
 
-		// int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
-		// if (faer[ipha*NF+iang].p_P11 == func[ipha*NF+iang].p_P11){
-		// if (idx == 0)
-		// 	printf("P11 = %.3f, P12 = %.3f, P22 = %.3f, P33 = %.3f, P43 = %.3f, P44 = %.3f\n", P11, P12, P22, P33, P43, P44);
-		// }
+        #ifndef BIAS
+		/////////////
+		//  Get Phi
+		//  Rejection method for sampling psi  : !!!! NEW !!!!
+        float fpsi_cond=0.F; 
+        float fpsi=0.F; 
+        float gamma=0.F; 
+        float Q = ph->stokes.x - ph->stokes.y;
+        float U = ph->stokes.z;
+        float DoLP = __fdividef(sqrtf(Q*Q+U*U), ph->stokes.x + ph->stokes.y);
+        float K = __fdividef(P11-P22,P11+P22+2*P12);
+        if (abs(Q) > 0.F) gamma   = 0.5F * atan2((double)U,(double)Q);
+        float fpsi_cond_max = (1.F + DoLP * fabs(K)  )/DEUXPI;
+        int niter=0;
+        while (fpsi >= fpsi_cond)
+            {
+            niter++;
+		    psi = RAND * DEUXPI;	
+            fpsi= RAND * fpsi_cond_max;
+            fpsi_cond = (1.F + DoLP * K * cosf(2*(psi-gamma)))/DEUXPI;
+            if (niter >= 100) {
+                // safety check
+                #ifdef DEBUG
+                printf("Warning, photon rejected in scatter while loop\n");
+                printf("%i  S=(%f,%f), DoLP, gamma=(%f,%f) psi,theta=(%f,%f) \n",
+                        niter,
+                        Q,
+                        U,
+                        DoLP,
+                        gamma,
+                        psi/PI*180,
+                        theta/PI*180
+                      );
+                #endif
+                ph->loc = NONE;
+                break;
+              }
+		    }
+		int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+		if (idx == -1){
+			printf("P11 = %.3f, P12 = %.3f, P22 = %.3f, P33 = %.3f, P43 = %.3f, P44 = %.3f\n", P11, P12, P22, P33, P43, P44);
+            printf("%i  S=(%f,%f), DoLP, gamma=(%f,%f) psi,fpsi,fpsi_cond,theta=(%f,%f,%f,%f) \n",
+                        niter,
+                        Q,
+                        U,
+                        DoLP,
+                        gamma,
+                        psi/PI*180,
+                        fpsi,
+                        fpsi_cond,
+                        theta/PI*180
+                      );
+		 }
+
+        #else
+		/////////////
+		//  Get Phi
+		//  Biased sampling scheme for psi 1)
+		psi = RAND * DEUXPI;	
+        #endif
 	}
 	else {
 		/////////////
@@ -1333,29 +1417,44 @@ __device__ void scatter(Photon* ph,
 
 	// Scattering matrix multiplication
 	float4x4 P_scatter = make_float4x4(
-		P11, P12, 0., 0.,
-		P12, P22, 0., 0.,
-		0., 0., P33, -P43,
-		0., 0., P43, P44
+		P11, P12, 0. , 0.  ,
+		P12, P22, 0. , 0.  ,
+		0. , 0. , P33, -P43,
+		0. , 0. , P43, P44
 		);
 
 	ph->stokes = mul(P_scatter, ph->stokes);
 
-	// stokes=ph->stokes;
-
-	// ph->stokes.x = stokes.x * P11 + stokes.y * P12;
-	// ph->stokes.y = stokes.y * P22 + stokes.x * P12;
-	// ph->stokes.z = stokes.z * P33 - stokes.w * P43;
-	// ph->stokes.w = stokes.w * P44 + stokes.z * P43;
+    #ifdef BACK
+    float4x4 L;
+    //float4x4 Lf;
+    rotationM(DEUXPI-psi,&L);
+    ph->M   = mul(ph->M,mul(L,P_scatter));
+    //rotationM(psi,&Lf);
+    //ph->Mf  = mul(mul(P_scatter,Lf),ph->Mf);
+    #endif
 
 	if (!le){
 		// Bias sampling scheme 2): Debiasing
-		float debias;
-		debias = __fdividef( 2., P11 + P22 + 2*P12 );
+		float debias = 1.F;
+        #ifdef BIAS
+		debias = __fdividef( 2., P11 + P22 + 2*P12 ); // Debias is equal to the inverse of the phase function
 		operator*=(ph->stokes, debias); 
+        #endif
+        #ifdef BACK
+        ph->M  = mul(ph->M ,   make_diag_float4x4(debias));
+        //ph->Mf = mul(ph->Mf ,  make_diag_float4x4(debias));
+        #endif
 	}
 
-	else ph->weight /= 4.F; // Phase function normalization
+	else {
+        //ph->weight /= 4.F; // Phase function normalization
+		operator*=(ph->stokes, 0.25F); 
+        #ifdef BACK
+        ph->M  = mul(ph->M ,   make_diag_float4x4(0.25F));
+        //ph->Mf = mul(ph->Mf ,  make_diag_float4x4(0.25F));
+        #endif
+    }
 
 
 	if(ph->loc!=OCEAN){
@@ -1492,7 +1591,7 @@ __device__ void surfaceAgitee(Photon* ph, int le,
 	float3 n_l;
 
 	float s1, s2, s3 ;
-    float4 stokes;
+    //float4 stokes;
 	
 	float rpar, rper, rparper, rparper_cross;	// Coefficient de reflexion parallèle et perpendiculaire
 	float rpar2;		// Coefficient de reflexion parallèle au carré
@@ -1507,6 +1606,9 @@ __device__ void surfaceAgitee(Photon* ph, int le,
     float vzn;  // projection of V on the local vertical
     float thv, phi;
 	float3 v;
+
+    // Reflection  and Transmission Matrices
+    float4x4 R, T;
 
     // Determination of the relative refractive index
     // a: air, b: water , Mobley 2015 nind = nba = nb/na
@@ -1782,8 +1884,8 @@ __device__ void surfaceAgitee(Photon* ph, int le,
      }
     }
 
-    stokes.z = ph->stokes.z;	
-    stokes.w = ph->stokes.w;	
+    /*stokes.z = ph->stokes.z;	
+    stokes.w = ph->stokes.w;*/	
     int condR=1;
     if (!le) condR = (SURd==3)&&(RAND<rat);
 
@@ -1792,10 +1894,18 @@ __device__ void surfaceAgitee(Photon* ph, int le,
        || ( le && (ph->loc==SURF0P) && (count_level == UP0P)   )
        ){	// Reflection
 
-		ph->stokes.x *= rper2;
+	    R= make_float4x4(
+		    rper2, 0., 0., 0.,
+		    0., rpar2, 0., 0.,
+		    0., 0., rparper, rparper_cross,
+		    0., 0., -rparper_cross, rparper
+		    );
+
+		/*ph->stokes.x *= rper2;
 		ph->stokes.y *= rpar2;
 		ph->stokes.z = rparper*stokes.z + rparper_cross*stokes.w; // DR Mobley 2015 sign convention
-		ph->stokes.w = rparper*stokes.w - rparper_cross*stokes.z; // DR Mobley 2015 sign convention
+		ph->stokes.w = rparper*stokes.w - rparper_cross*stokes.z; // DR Mobley 2015 sign convention*/
+        ph->stokes = mul(R,ph->stokes);
 		
         if (le) { ph->v = v; }
         else { operator+=(ph->v, (2.F*cTh)*no); }
@@ -1847,6 +1957,7 @@ __device__ void surfaceAgitee(Photon* ph, int le,
 
 	} // Reflection
 
+
 	else if (  (!le && !condR) 
             //|| ( le && (ph->loc==SURF0M) && (count_level == UP0P  ) )
             //|| ( le && (ph->loc==SURF0P) && (count_level == DOWN0M) )
@@ -1855,11 +1966,19 @@ __device__ void surfaceAgitee(Photon* ph, int le,
             ){	// Transmission
 
         geo_trans_factor = nind* cot/cTh; // DR Mobley 2015 OK , see Xun 2014, Zhai et al 2010
+	    T= make_float4x4(
+		    tper2*geo_trans_factor, 0., 0., 0.,
+		    0., tpar2*geo_trans_factor, 0., 0.,
+		    0., 0., tparper*geo_trans_factor, 0.,
+		    0., 0., 0., tparper*geo_trans_factor
+		    );
 		
-		ph->stokes.x *= tper2*geo_trans_factor;
+		/*ph->stokes.x *= tper2*geo_trans_factor;
 		ph->stokes.y *= tpar2*geo_trans_factor;
 		ph->stokes.z *= tparper*geo_trans_factor;
-		ph->stokes.w *= tparper*geo_trans_factor;
+		ph->stokes.w *= tparper*geo_trans_factor;*/
+        ph->stokes = mul(T,ph->stokes);
+
 		
 		alpha  = __fdividef(cTh, nind) - cot;
 
@@ -1972,7 +2091,6 @@ __device__ void surfaceLambertienne(Photon* ph, int le,
 	
     if (ph->loc != SEAFLOOR){
 
-	
 	/** Calcul de l'angle entre l'axe z et la normale au point d'impact **/
 	/*NOTE: le float pour les calculs suivant fait une erreur de 2.3% 
 	* par exemple (theta_float=0.001196 / theta_double=0.0011691
@@ -2032,13 +2150,17 @@ __device__ void surfaceLambertienne(Photon* ph, int le,
 	u_n.z = -sTh;
 
 	// Depolarisation du Photon
-	float norm;
-	norm = ph->stokes.x + ph->stokes.y;
-	ph->stokes.x = 0.5 * norm;
-	ph->stokes.y = 0.5 * norm;
-    ph->stokes.z = 0.0;
-    ph->stokes.w = 0.0;
+    float4x4 L = make_float4x4(
+                    0.5F, 0.5F, 0.F, 0.F,
+                    0.5F, 0.5F, 0.F, 0.F,
+                    0.0F, 0.0F, 0.F, 0.F,
+                    0.0F, 0.0F, 0.F, 0.F 
+            );
+    ph->stokes = mul(L,ph->stokes);
 
+    #ifdef BACK
+    ph->M = mul(L,ph->M);
+    #endif
 	ph->v = v_n;
 	ph->u = u_n;
 	
@@ -2160,6 +2282,19 @@ __device__ void countPhoton(Photon* ph,
 
     rotateStokes(ph->stokes, psi, &st);
     st.w = ph->stokes.w;
+
+    #ifdef BACK
+    float4x4 L;
+    float4 stback = make_float4(0.5F, 0.5F, 0., 0.);
+    //float4 stforw = make_float4(0.5F, 0.5F, 0., 0.);
+    //rotationM(psi,&L);
+	//ph->Mf = mul(L,ph->Mf);
+    rotationM(DEUXPI-psi,&L);
+	ph->M = mul(ph->M,L);
+    stback = mul(ph->M, stback);
+    //stforw = mul(ph->Mf,stforw);
+    st = stback;
+    #endif
 
 	float weight = ph->weight;
     #ifdef ALIS
@@ -2413,6 +2548,22 @@ __device__ void rotateStokes(float4 s, float psi, float4 *sr)
 	(*sr) = mul(L,s); // see the function "mul" in helper_math.h for more infos
 }
 
+//
+// Rotation Matrix L from an angle psi between the incidence and
+// the emergence planes
+__device__ void rotationM(float psi, float4x4 *L)
+{
+    float cPsi = __cosf(psi); float sPsi = __sinf(psi); float cPsi2 = cPsi * cPsi; float sPsi2 = sPsi * sPsi;
+	float twopsi = 2.F*psi;  float s2Psi = __sinf(twopsi); float a = 0.5f*s2Psi;
+
+	*L = make_float4x4(
+		cPsi2, sPsi2, -a, 0.f,               
+		sPsi2, cPsi2, a, 0.f,                 
+		s2Psi, -s2Psi, __cosf(twopsi), 0.f,
+        0.f, 0.f, 0.f, 1.f
+		);
+}
+
 
 /* ComputePsi
 */
@@ -2651,6 +2802,11 @@ __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
     for (k=0; k<NLOWd; k++) ph_le->weight_sca[k] = ph->weight_sca[k];
     for (k=0; k<NLOWd; k++) ph_le->tau_sca[k] = ph->tau_sca[k];
     #endif
+    #ifdef BACK
+    int kk;
+    for (kk=0; kk<16; kk++) ph_le->M[kk] = ph->M[kk];
+    //for (kk=0; kk<16; kk++) ph_le->Mf[kk] = ph->Mf[kk];
+    #endif
 
 }
 
@@ -2659,81 +2815,6 @@ __device__ float get_OD(int BEERd, struct Profile prof) {
     else            return prof.OD;
 }
 
-/*
-__device__ float get_OD_abs(float z1in, int layer1in, float z2in, int layer2in, float vz, int il, float* zatm, float* odatm)
-{
-	// odatm is a pointer toward the appropriate optical depth array (cumulated optical depth
-	//       regarding the TOA with dimension NATM+1)
-
-	// This routine aonly apply to plan-parallel atmopshere 
-
-	//int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
-
-	float tau = 0.0;
-	int it;
-	int ib;
-	float zt;
-	float zb;
-
-	int layer1;
-	int layer2;
-	float z1;
-	float z2;
-
-	layer1 = layer1in;
-	layer2 = layer2in;
-	z1       = z1in;
-	z2       = z2in;  
-
-	if (layer1 == 0) {
-		layer1 = 1;
-		z1      = HATMd;
-	}
-	if (layer2 == 0) {
-		layer2 = 1;
-		z2      = HATMd;
-	}
-	
-	// which layer is the BOTTOM and which is the TOP
-	if (vz>0){
-		it = layer2;
-		ib = layer1;
-		zt = z2;
-		zb = z1;
-	} else{
-		it = layer1;
-		ib = layer2;
-		zt = z1;
-		zb = z2;
-	}
-
-	if (ib==it){
-		// begin and end in the same layer
-		//  =    dz   *     DTAU_layer             /       DZ_layer
-		tau = (zt-zb) * __fdividef( (*(odatm+ib)-*(odatm+ib-1)), (*(zatm+ib-1)-*(zatm+ib)) );
-
-	}else{
-		// contribution from the layers in between layers containing photon start and arrival
-		if (ib > (it+1)){
-			tau = *(odatm+ib-1)-*(odatm+it);
-		}
-
-		// contribution from the bottom layer
-		//              dz       *     DTAU_layer                         /       DZ_layer   
-		tau += (*(zatm+ib-1)-zb) * __fdividef( (*(odatm+ib)-*(odatm+ib-1)),  (*(zatm+ib-1)-*(zatm+ib))) ;
-		
-		// contribution from the top layer
-		//              dz       *     DTAU_layer                         /       DZ_layer   
-		tau += (zt-*(zatm+it)) * __fdividef( (*(odatm+it)-*(odatm+it-1)),  (*(zatm+it-1)-*(zatm+it))) ;
-	}
-	
-	tau = __fdividef(tau,  fabs(vz));
-
-	
-	return(tau);
-
-}
-*/
 
 
 #ifdef PHILOX
