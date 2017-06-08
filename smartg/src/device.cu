@@ -1802,6 +1802,9 @@ __device__ void surfaceAgitee(Photon* ph, int le,
 	s1 = ph->stokes.x;
 	s2 = ph->stokes.y;
 	s3 = ph->stokes.z;
+    #ifdef BACK
+    float4x4 L = make_diag_float4x4 (1.F);
+    #endif
 
 	if( (s1!=s2) || (s3!=0.F) ){
 
@@ -1813,6 +1816,9 @@ __device__ void surfaceAgitee(Photon* ph, int le,
 		}
 
         rotateStokes(ph->stokes, psi, &ph->stokes);
+        #ifdef BACK
+        rotationM(DEUXPI-psi,&L);
+        #endif
 	}
 
 	if( sTh<=nind){
@@ -1832,7 +1838,8 @@ __device__ void surfaceAgitee(Photon* ph, int le,
         tper2= tper * tper;
         tparper = tpar * tper;
         // DR rat is the energetic reflection factor used to normalize the R and T matrix (see Xun 2014)
-		rat =  __fdividef(ph->stokes.x*rper2 + ph->stokes.y*rpar2,ph->stokes.x+ph->stokes.y);
+		rat =  __fdividef(rper2 + rpar2, 2.F);
+        //rat =  __fdividef(ph->stokes.x*rper2 + ph->stokes.y*rpar2,ph->stokes.x+ph->stokes.y);
 		ReflTot = 0;
 	}
 	else{
@@ -1854,12 +1861,14 @@ __device__ void surfaceAgitee(Photon* ph, int le,
 	}
 
     // Weighting
+    float LambdaS;
     float Anorm;
     // Ross et al 2005
-    // Normalization of the slope probability density function taking into acount shadows
+    // Normalization of the slope probability density function taking into acount slope shadowing and hiding
     // used to LE weight, and also to debias random draw of slope in non LE
     float nu = __fdividef(1.F, tanf(acosf(avz))*(sqrtf(2.) * sig));
-    Anorm = 1.F + __fdividef(__expf(-nu*nu) - nu * sqrtf(PI) * erfcf(nu),2.F * nu * sqrtf(PI));
+    LambdaS  =  __fdividef(__expf(-nu*nu) - nu * sqrtf(PI) * erfcf(nu),2.F * nu * sqrtf(PI));
+    Anorm = 1.F + LambdaS;
     Anorm *= avz;
 
     ph->weight *= __fdividef(fabs(cTh), cBeta *  Anorm ); // Common to all photons, cBeta for surface area unit correction
@@ -1906,6 +1915,10 @@ __device__ void surfaceAgitee(Photon* ph, int le,
 		ph->stokes.z = rparper*stokes.z + rparper_cross*stokes.w; // DR Mobley 2015 sign convention
 		ph->stokes.w = rparper*stokes.w - rparper_cross*stokes.z; // DR Mobley 2015 sign convention*/
         ph->stokes = mul(R,ph->stokes);
+
+        #ifdef BACK
+        ph->M   = mul(ph->M,mul(L,R));
+        #endif
 		
         if (le) { ph->v = v; }
         else { operator+=(ph->v, (2.F*cTh)*no); }
@@ -2035,6 +2048,15 @@ __device__ void surfaceAgitee(Photon* ph, int le,
         //}
 
 	} // Transmission
+    if (WAVE_SHADOWd) {
+        // Add Wave shadowing
+        // compute wave shadow outgoing photon
+        float LambdaR;
+        nu = __fdividef(1.F, tanf(acosf(fabs(ph->v.z)))*(sqrtf(2.) * sig));
+        LambdaR  =  __fdividef(__expf(-nu*nu) - nu * sqrtf(PI) * erfcf(nu),2.F * nu * sqrtf(PI));
+        //compute wave shadow function incoming and outgoing photon
+        ph->weight *= __fdividef(1.F, 1.F + LambdaR + LambdaS);
+    }
 }
 
 

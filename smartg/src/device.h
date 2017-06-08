@@ -41,6 +41,7 @@ __device__ __constant__ int LEd;
 __device__ __constant__ int FLUXd;
 __device__ __constant__ int SURd;
 __device__ __constant__ int DIOPTREd;
+__device__ __constant__ int WAVE_SHADOWd;
 __device__ __constant__ int ENVd;
 __device__ __constant__ float ENV_SIZEd;		// Size of target in km
 __device__ __constant__ float X0d;		// position of the target in x (km)

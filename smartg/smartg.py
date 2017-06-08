@@ -104,6 +104,7 @@ class FlatSurface(object):
                 'DIOPTRE': 0,
                 'WINDSPEED': -999.,
                 'NH2O': NH2O,
+                'WAVE_SHADOW': 0,
                 }
     def __str__(self):
         return 'FLATSURF-SUR={SUR}'.format(**self.dict)
@@ -119,13 +120,16 @@ class RoughSurface(object):
             # 2 Forced transmission
             # 3 Reflection and transmission
         NH2O: Relative refarctive index air/water
+        WAVE_SHADOW : include wave shadowing effect (default not)
     '''
-    def __init__(self, WIND=5., SUR=3, NH2O=1.33):
+    def __init__(self, WIND=5., SUR=3, NH2O=1.33, WAVE_SHADOW=False):
+
         self.dict = {
                 'SUR': SUR,
                 'DIOPTRE': 1,
                 'WINDSPEED': WIND,
                 'NH2O': NH2O,
+                'WAVE_SHADOW': 1 if WAVE_SHADOW else 0,
                 }
     def __str__(self):
         return 'ROUGHSUR={SUR}-WIND={WINDSPEED}-DI={DIOPTRE}'.format(**self.dict)
@@ -144,6 +148,7 @@ class LambSurface(object):
                 'SURFALB': ALB,
                 'WINDSPEED': -999.,
                 'NH2O': -999.,
+                'WAVE_SHADOW': 0,
                 }
     def __str__(self):
         return 'LAMBSUR-ALB={SURFALB}'.format(**self.dict)
@@ -984,6 +989,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
         copy_to_device('DIOPTREd', surf.dict['DIOPTRE'], np.int32)
         copy_to_device('WINDSPEEDd', surf.dict['WINDSPEED'], np.float32)
         copy_to_device('NH2Od', surf.dict['NH2O'], np.float32)
+        copy_to_device('WAVE_SHADOWd', surf.dict['WAVE_SHADOW'], np.int32)
     if env != None:
         copy_to_device('ENVd', env.dict['ENV'], np.int32)
         copy_to_device('ENV_SIZEd', env.dict['ENV_SIZE'], np.float32)
