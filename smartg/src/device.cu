@@ -2048,12 +2048,23 @@ __device__ void surfaceAgitee(Photon* ph, int le,
         //}
 
 	} // Transmission
+
+    #ifdef BACK
+    float LambdaR, Anorm_back;
+    nu = __fdividef(1.F, tanf(acosf(fabs(ph->v.z)))*(sqrtf(2.) * sig));
+    LambdaR  =  __fdividef(__expf(-nu*nu) - nu * sqrtf(PI) * erfcf(nu),2.F * nu * sqrtf(PI));
+    Anorm_back = (1.F + LambdaR) * fabs(ph->v.z);
+    ph->weight *= __fdividef(Anorm, Anorm_back);
+    #endif
+
     if (WAVE_SHADOWd) {
         // Add Wave shadowing
         // compute wave shadow outgoing photon
+        #ifndef BACK
         float LambdaR;
         nu = __fdividef(1.F, tanf(acosf(fabs(ph->v.z)))*(sqrtf(2.) * sig));
         LambdaR  =  __fdividef(__expf(-nu*nu) - nu * sqrtf(PI) * erfcf(nu),2.F * nu * sqrtf(PI));
+        #endif
         //compute wave shadow function incoming and outgoing photon
         ph->weight *= __fdividef(1.F, 1.F + LambdaR + LambdaS);
     }

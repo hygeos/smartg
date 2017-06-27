@@ -31,7 +31,8 @@ def mdesc(desc, logI=False):
         return pref + stokes + r'^{\downarrow}' + '_{'+desc[sep2+1:sep3]+'}$'
     
 
-def smartg_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (TOA)', ind=0, cmap=None, fig=None, subdict=None):
+def smartg_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (TOA)', ind=0, cmap=None, fig=None, subdict=None,
+        Imin=None, Imax=None):
     '''
     visualization of a smartg MLUT
 
@@ -45,6 +46,8 @@ def smartg_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (T
         cmap: color map
         fig: already existing figure
         subdict: dictionnary of LUT subsetter (see LUT class , sub() method)
+        Imin: min value of I
+        Imax: max value of I
 
     Outputs:
     if full is False, it returns 1 figure
@@ -91,10 +94,10 @@ def smartg_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (T
             if logI:
                 lI=I.apply(np.log10)
                 lI.desc = mdesc(I.desc, logI=logI)
-                plot_polar(lI,  ind, rect='421', sub='423', fig=fig, cmap=cmap)
+                plot_polar(lI,  ind, rect='421', sub='423', fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
             else:
                 I.desc = mdesc(I.desc)
-                plot_polar(I,  ind, rect='421', sub='423', fig=fig, cmap=cmap)
+                plot_polar(I,  ind, rect='421', sub='423', fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
             Q.desc = mdesc(Q.desc)
             U.desc = mdesc(U.desc)
             plot_polar(Q,  ind, rect='422', sub='424', fig=fig, cmap=cmap)
@@ -110,10 +113,10 @@ def smartg_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (T
             if logI:
                 lI=I.apply(np.log10)
                 lI.desc = mdesc(I.desc, logI=logI)
-                plot_polar(lI,  ind, rect='221', sub='223', fig=fig, cmap=cmap)
+                plot_polar(lI,  ind, rect='221', sub='223', fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
             else:
                 I.desc = mdesc(I.desc)
-                plot_polar(I,  ind, rect='221', sub='223', fig=fig, cmap=cmap)
+                plot_polar(I,  ind, rect='221', sub='223', fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
 
             if Circ:
                 plot_polar(DoCP, ind, rect='222', sub='224', fig=fig, vmin=0, vmax=100, cmap=cmap)
@@ -132,7 +135,7 @@ def smartg_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (T
         Q.desc = mdesc(Q.desc)
         U.desc = mdesc(U.desc)
         V.desc = mdesc(V.desc)
-        plot_polar(I,  ind, rect='241', sub='245', fig=fig1, cmap=cmap)
+        plot_polar(I,  ind, rect='241', sub='245', fig=fig1, cmap=cmap, vmin=Imin, vmax=Imax)
         plot_polar(Q,  ind, rect='242', sub='246', fig=fig1, cmap=cmap)
         plot_polar(U,  ind, rect='243', sub='247', fig=fig1, cmap=cmap)
         plot_polar(V,  ind, rect='244', sub='248', fig=fig1, cmap=cmap)
@@ -148,7 +151,8 @@ def smartg_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (T
 
         return fig1, fig2
 
-def transect_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (TOA)', ind=0, fig=None, color='k', subdict=None, **kwargs):
+def transect_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (TOA)', ind=0, fig=None, color='k', subdict=None, 
+         **kwargs):
     '''
     visualization of a smartg MLUT
 
@@ -207,10 +211,10 @@ def transect_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up 
             if logI:
                 lI=I.apply(np.log10)
                 lI.desc = mdesc(I.desc, logI=logI)
-                transect2D(lI,  ind, sub=221, fig=fig, color=color, **kwargs)
+                transect2D(lI,  ind, sub=221, fig=fig, color=color,  **kwargs)
             else:
                 I.desc = mdesc(I.desc)
-                transect2D(I,  ind, sub=221, fig=fig, color=color, **kwargs)
+                transect2D(I,  ind, sub=221, fig=fig, color=color,   **kwargs)
             Q.desc = mdesc(Q.desc)
             U.desc = mdesc(U.desc)
             transect2D(Q,  ind, sub=222, fig=fig, color=color, **kwargs)
@@ -226,10 +230,10 @@ def transect_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up 
             if logI:
                 lI=I.apply(np.log10)
                 lI.desc = mdesc(I.desc, logI=logI)
-                transect2D(lI,  ind, sub=121, fig=fig, color=color, **kwargs)
+                transect2D(lI,  ind, sub=121, fig=fig, color=color,   **kwargs)
             else:
                 I.desc = mdesc(I.desc)
-                transect2D(I,  ind, sub=121, fig=fig, color=color, **kwargs)
+                transect2D(I,  ind, sub=121, fig=fig, color=color,  **kwargs)
 
             if Circ:
                 transect2D(DoCP, ind, sub=122, fig=fig,  color=color, percent=True, **kwargs)
@@ -251,7 +255,7 @@ def transect_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up 
         Q.desc = mdesc(Q.desc)
         U.desc = mdesc(U.desc)
         V.desc = mdesc(V.desc)
-        transect2D(I,  ind,  sub=141, fig=fig1, color=color, **kwargs)
+        transect2D(I,  ind,  sub=141, fig=fig1, color=color,  **kwargs)
         transect2D(Q,  ind,  sub=142, fig=fig1, color=color, **kwargs)
         transect2D(U,  ind, sub=143, fig=fig1, color=color, **kwargs)
         transect2D(V,  ind, sub=144, fig=fig1, color=color, **kwargs)

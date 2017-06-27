@@ -16,6 +16,50 @@ from .luts import LUT, merge, MLUT
 import scipy.constants as cst
 from pylab import *
 
+class Legendres(object):
+    def __init__(self,nterm,ntheta):
+        mu=np.linspace(0.,np.pi,ntheta,endpoint=True,dtype=np.float64)
+        mu=np.cos(mu)
+        un64=np.ones_like(mu)
+        #zero64=np.ones_like(mu) !! FIXME DR
+        zero64=np.zeros_like(mu)
+        self.p1=np.zeros((nterm+1,ntheta),np.float64)
+        self.p2=np.zeros((nterm+1,ntheta),np.float64)
+        self.p1[0,:]=un64
+        self.p1[1,:]=mu
+        self.p2[0,:]=zero64
+        self.p2[1,:]=zero64
+        self.p2[2,:]=un64 * 3. * (1.-mu*mu)/(2. *np.sqrt(6.* un64))
+        for k in range(nterm):
+            dk=np.float64(k)
+            if k>=1:
+                self.p1[k+1,:]= ((2.*dk+1.) * mu * self.p1[k,:] - dk * self.p1[k-1,:] ) / (dk+1)
+            if k>=2:
+                PAR1=(2.*dk+1.)/np.sqrt((dk+3.*un64)*(dk-1.))
+                PAR2=mu*self.p2[k,:]
+                PAR3=(np.sqrt((dk+2.*un64)*(dk-2.)))/(2.*dk+1.)
+                PAR4=self.p2[k-1,:]
+                self.p2[k+1,:]=PAR1*(PAR2-PAR3*PAR4)
+        self.mu=mu
+        self.ntheta=ntheta
+        self.nterm=nterm
+
+def Mom2Pha(Mom,Leg,NPSTK=4):
+    sumP=np.zeros_like(Leg.mu)
+    sumQ=np.zeros_like(Leg.mu)
+    sumU=np.zeros_like(Leg.mu)
+    sumV=np.zeros_like(Leg.mu)
+    pha=np.zeros((Leg.ntheta, NPSTK),np.float64)
+    for k in range(Leg.nterm):
+        sumP=sumP+Mom[0,k]*Leg.p1[k,:]
+        sumQ=sumQ+Mom[1,k]*Leg.p2[k,:]
+        sumU=sumU+Mom[2,k]*Leg.p1[k,:]
+        sumV=sumV+Mom[3,k]*Leg.p1[k,:]
+    pha[:,0]=sumP+sumQ
+    pha[:,1]=sumP-sumQ
+    pha[:,2]=sumU
+    pha[:,3]=sumV
+    return np.arccos(Leg.mu)/np.pi*180.,pha
 
 
 def Irr(L, azimuth='Azimuth angles', zenith='Zenith angles'):
