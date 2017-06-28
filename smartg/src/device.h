@@ -39,6 +39,7 @@ __device__ __constant__ int NLVLd;
 __device__ __constant__ int SIMd;
 __device__ __constant__ int LEd;
 __device__ __constant__ int FLUXd;
+__device__ __constant__ int MId;
 __device__ __constant__ int SURd;
 __device__ __constant__ int DIOPTREd;
 __device__ __constant__ int WAVE_SHADOWd;
@@ -53,6 +54,15 @@ __device__ __constant__ float RTER;
 __device__ __constant__ int NWLPROBA;
 __device__ __constant__ int BEERd;
 __device__ __constant__ int NLOWd;
+__device__ __constant__ int BACKd;
+__device__ __constant__ float POSXd;
+__device__ __constant__ float POSYd;
+__device__ __constant__ float POSZd;
+__device__ __constant__ float THDEGd;
+__device__ __constant__ float PHDEGd;
+__device__ __constant__ int LOCd;
+__device__ __constant__ float FOVd;
+__device__ __constant__ int TYPEd;
 
 
 
@@ -89,6 +99,11 @@ __global__ void launchKernel(
 /* initPhoton
 * Initialise le photon dans son état initial avant l'entrée dans l'atmosphère
 */
+__device__ void initPhoton2(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc,
+                           struct Spectrum *spectrum,float *X0,
+                           unsigned long long *NPhotonsIn,
+                           long long *wl_proba_icdf, float* tabthv, float* tabphi,
+                           struct RNG_State*);
 __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc,
                            struct Spectrum *spectrum,float *X0,
                            unsigned long long *NPhotonsIn,

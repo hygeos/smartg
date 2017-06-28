@@ -154,8 +154,10 @@ extern "C" {
         // Si le photon est à NONE on l'initialise et on le met à la localisation correspondant à la simulaiton en cours
         if((ph.loc == NONE) && this_thread_active){
 
-            initPhoton(&ph, prof_atm, prof_oc, spectrum, X0, NPhotonsIn, wl_proba_icdf,
+            initPhoton2(&ph, prof_atm, prof_oc, spectrum, X0, NPhotonsIn, wl_proba_icdf, tabthv, tabphi,
                        &rngstate);
+            //initPhoton(&ph, prof_atm, prof_oc, spectrum, X0, NPhotonsIn, wl_proba_icdf,
+                      // &rngstate);
             iloop = 1;
             #ifdef DEBUG_PHOTON
             display("INIT", &ph);
@@ -604,6 +606,244 @@ extern "C" {
 /**********************************************************
 *	> Modélisation phénomènes physiques
 ***********************************************************/
+/* initPhoton2
+   New init with sensor class
+*/
+
+__device__ void initPhoton2(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc,
+                           struct Spectrum *spectrum, float *X0, unsigned long long *NPhotonsIn,
+                           long long *wl_proba_icdf, float* tabthv, float* tabphi,
+                           struct RNG_State *rngstate) {
+    float dz, dz_i, delta_i, epsilon;
+    float cTh, sTh, phi;
+    int ilayer;
+
+    ph->nint = 0;
+	ph->weight = WEIGHTINIT;
+
+	// Stokes parameters initialization according to natural sunlight
+	ph->stokes.x = 0.5F;
+	ph->stokes.y = 0.5F;
+	ph->stokes.z = 0.F;
+	ph->stokes.w = 0.F;
+	
+    // Wavelength initialization
+    if (NWLPROBA == 0) { 
+        ph->ilam = __float2uint_rz(RAND * NLAMd);
+    } else {
+        ph->ilam = wl_proba_icdf[__float2uint_rz(RAND * NWLPROBA)];
+    }
+	ph->wavel = spectrum[ph->ilam].lambda;
+
+
+    // Position and optical thicknesses initializations
+    ph->pos = make_float3(POSXd,POSYd,POSZd);
+    ph->loc = LOCd;
+    #ifdef SPHERIQUE
+    ph->pos.z += RTER;
+	ph->radius = length(ph->pos);
+    #endif
+
+    if(ph->loc == SURF0P){
+        ph->layer   = NATMd;
+        ph->tau     = 0.F;
+        ph->tau_abs = 0.F;
+        epsilon     = 0.F;
+        ph->pos.z   = 0.F;
+        #ifdef ALIS
+        for (int k=0; k<NLOWd; k++) {
+            ph->tau_sca[k] = 0.F;
+        }
+        #endif
+    }
+
+    if(ph->loc == SURF0M){
+        ph->layer   = NOCEd;
+        ph->tau     = 0.F;
+        ph->tau_abs = 0.F;
+        epsilon     = 0.F;
+        ph->pos.z   = 0.F;
+        #ifdef SPHERIQUE
+        ph->pos.z = RTER;
+        #endif
+        #ifdef ALIS
+        for (int k=0; k<NLOWd; k++) {
+            ph->tau_sca[k] = 0.F; ;
+        }
+        #endif
+    }
+
+    if(ph->loc == SEAFLOOR){
+        ph->layer   = 0;
+        ph->tau     = get_OD(BEERd, prof_oc[NOCEd +ph->ilam*(NOCEd+1)]);
+        ph->tau_abs = prof_oc[NOCEd +ph->ilam*(NOCEd+1)].OD_abs;
+        epsilon     = 0.F;
+        ph->pos.z   = prof_oc[NOCEd].z;
+        #ifdef ALIS
+        int DL=(NLAMd-1)/(NLOWd-1);
+        for (int k=0; k<NLOWd; k++) {
+            ph->tau_sca[k] = get_OD(1,prof_oc[NOCEd + k*DL*(NOCEd+1)]) ;
+        }
+        #endif
+    }
+
+    if(ph->loc == OCEAN){
+        ilayer = 1;
+        while (( prof_oc[ilayer].z > POSZd) && (ilayer < NOCEd)) {
+            ilayer++;
+        }
+        ph->layer = ilayer;
+        dz_i    = fabs(prof_oc[ilayer].z - prof_oc[ilayer-1].z);
+        dz      = fabs(POSZd - prof_oc[ilayer-1].z) ;
+        epsilon = fabs(__fdividef(dz,dz_i));
+
+        delta_i = fabs(get_OD(BEERd, prof_oc[ilayer+ph->ilam*(NOCEd+1)]) - get_OD(BEERd, prof_oc[ilayer-1+ph->ilam*(NOCEd+1)]));
+        ph->tau = epsilon * delta_i + (get_OD(BEERd, prof_oc[NOCEd+ph->ilam*(NOCEd+1)])-
+                                       get_OD(BEERd, prof_oc[ilayer+ph->ilam*(NOCEd+1)])); 
+
+        delta_i = fabs(prof_oc[ilayer+ph->ilam*(NOCEd+1)].OD_abs - prof_oc[ilayer-1+ph->ilam*(NOCEd+1)].OD_abs);
+        ph->tau_abs = epsilon * delta_i + (prof_oc[NOCEd+ph->ilam*(NOCEd+1)].OD_abs -
+                                           prof_oc[ilayer+ph->ilam*(NOCEd+1)].OD_abs); 
+        #ifdef ALIS
+        int DL=(NLAMd-1)/(NLOWd-1);
+        for (int k=0; k<NLOWd; k++) {
+            delta_i = fabs(get_OD(BEERd, prof_oc[ilayer+k*DL*(NOCEd+1)]) - get_OD(BEERd, prof_oc[ilayer-1+k*DL*(NOCEd+1)]));
+            ph->tau_sca[k] = epsilon * delta_i + (get_OD(1,prof_oc[NOCEd + k*DL*(NOCEd+1)])-
+                                                  get_OD(1,prof_oc[ilayer + k*DL*(NOCEd+1)]));
+        }
+        #endif
+    }
+
+    if(ph->loc == ATMOS){
+        ilayer = 1;
+        while (( prof_atm[ilayer].z > POSZd) && (ilayer < NATMd)) {
+            ilayer++;
+        }
+        ph->layer = ilayer;
+        dz_i    = fabs(prof_atm[ilayer-1].z - prof_atm[ilayer].z);
+        dz      = fabs(POSZd - prof_atm[ilayer].z) ;
+        epsilon = fabs(__fdividef(dz,dz_i));
+
+        delta_i = fabs(get_OD(BEERd, prof_atm[ilayer+ph->ilam*(NATMd+1)]) - get_OD(BEERd, prof_atm[ilayer-1+ph->ilam*(NATMd+1)]));
+        ph->tau = epsilon * delta_i + (get_OD(BEERd, prof_atm[NATMd+ph->ilam*(NATMd+1)])-
+                                       get_OD(BEERd, prof_atm[ilayer+ph->ilam*(NATMd+1)])); 
+        delta_i = fabs(prof_atm[ilayer+ph->ilam*(NATMd+1)].OD_abs - prof_atm[ilayer-1+ph->ilam*(NATMd+1)].OD_abs);
+        ph->tau_abs = epsilon * delta_i + (prof_atm[NATMd+ph->ilam*(NATMd+1)].OD_abs -
+                                           prof_atm[ilayer+ph->ilam*(NATMd+1)].OD_abs); 
+        #ifdef ALIS
+        int DL=(NLAMd-1)/(NLOWd-1);
+        for (int k=0; k<NLOWd; k++) {
+            delta_i = fabs(get_OD(BEERd, prof_atm[ilayer+k*DL*(NATMd+1)]) - get_OD(BEERd, prof_atm[ilayer-1+k*DL*(NATMd+1)]));
+            ph->tau_sca[k] = epsilon * delta_i + (get_OD(1,prof_atm[NATMd + k*DL*(NATMd+1)])-
+                                                  get_OD(1,prof_atm[ilayer + k*DL*(NATMd+1)]));
+        }
+        #endif
+    }
+
+    // Direction initialization
+    if (TYPEd != 0) {
+        // Standard sampling of zenith angle for lambertian emittor (for planar flux)
+	    cTh = sqrtf(1.F-RAND*sinf(FOVd*DEUXPI/360.));
+        // for spherical flux, adjust weight as a function of cTh
+        float weight_irr = fabs(cTh);
+        if (TYPEd == 2 && weight_irr > 0.001f) ph->weight /= weight_irr;
+        
+	    phi = RAND*DEUXPI;
+        sTh = sqrtf(1.F - cTh*cTh);
+	    ph->v.x   = cosf(phi)*sTh;
+	    ph->v.y   = sinf(phi)*sTh;
+	    ph->v.z   = cTh;
+	    // Initialization of the orthogonal vector to the propagation
+        ph->u.x   = cosf(phi)*cTh;
+        ph->u.y   = sinf(phi)*cTh;
+	    ph->u.z   = -sTh;
+    }
+    else {
+        // One fixed direction (for radiance)
+        ph->v.x = 0.F;
+        ph->v.y = 0.F;
+        ph->v.z = 1.F;
+	    // Initialization of the orthogonal vector to the propagation
+        ph->u.x = 1.F;
+        ph->u.y = 0.F;
+	    ph->u.z = 0.F;
+    }
+
+
+    // Rotations of v and u in the detector direction THDEG,PHDEG
+    float cPh;
+    if (MId != 0) { // Multiple Init Direction
+        if (MId <=0) { 
+            // Random selection of Zenith init angle
+            ph->ith = __float2uint_rz(RAND * NBTHETAd);
+            // Random selection of Azimuth init angle
+            if (MId == -1) ph->iph = __float2uint_rz(RAND * NBPHId);
+            else {
+                ph->iph = ph->ith; // Zip option iph follows ith;
+            }
+        }
+        else {
+            // Random selection of Zenith and (zipped) Azimuth init angles according to MId and NLAMd
+            int NL = NLAMd/MId;
+            int NT = NBTHETAd/MId;
+            int offset = ph->ilam/NL;
+            ph->ith = __float2uint_rz(RAND * NT) + offset*NT;
+            ph->iph = ph->ith;
+        }
+        cTh = cosf(DEUXPI/2. - tabthv[ph->ith]);
+        cPh = cosf(DEUXPI/2. - tabphi[ph->iph]);
+    }
+    else {
+        ph->ith = 0;
+        ph->iph = 0;
+        cTh = cosf(THDEGd*DEUXPI/360.);
+        cPh = cosf(PHDEGd*DEUXPI/360.);
+    }
+    sTh       = sqrtf(1.F - cTh*cTh);
+    float sPh = sqrtf(1.F - cPh*cPh);
+	float3x3 LTh = make_float3x3(
+		cTh,  0.F,  sTh,                
+		0.F,  1.F,  0.F,                 
+	   -sTh,  0.F,  cTh                 
+        );
+	float3x3 LPh = make_float3x3(
+		cPh, -sPh,  0.F,                
+		sPh,  cPh,  0.F,                 
+		0.F,  0.F,  1.F                 
+        );
+	ph->v = mul(LTh,ph->v);
+	ph->v = mul(LPh,ph->v);
+	ph->u = mul(LTh,ph->u);
+	ph->u = mul(LPh,ph->u);
+
+
+    // init specific ALIS quantities
+    #ifdef ALIS
+    ph->nevt = 0;
+    ph->layer_prev[ph->nevt]   = ph->layer;
+    ph->vz_prev[ph->nevt]      = ph->v.z;
+    ph->epsilon_prev[ph->nevt] = epsilon;
+    for (int k=0; k<NLOWd; k++) {
+        ph->weight_sca[k] = 1.0F;
+    }
+    #endif
+
+    // Init photon counters
+    #ifdef ALIS
+    for (int k=0; k<NLAMd; k++) atomicAdd(NPhotonsIn + k, 1);
+    #else
+    if (MId != 0) {
+        atomicAdd(NPhotonsIn + (ph->ilam*NBTHETAd + ph->ith)*NBPHId + ph->iph, 1);
+    }
+    else atomicAdd(NPhotonsIn + ph->ilam, 1);
+    #endif
+
+    #ifdef BACK
+    //ph->Mf= make_diag_float4x4 (1.F);
+    ph->M = make_diag_float4x4 (1.F);
+    #endif
+
+    }
 
 /* initPhoton
 * Initialise le photon dans son état initial avant l'entrée dans l'atmosphère
@@ -2434,7 +2674,9 @@ __device__ void countPhoton(Photon* ph,
 
 
     float weight_irr = fabs(ph->v.z);
-	if (FLUXd==1 && LEd==0 & weight_irr > 0.01f) weight /= weight_irr;
+	//if (FLUXd==1 && LEd==0 & weight_irr > 0.01f) weight /= weight_irr;
+    // In Forward mode, and in case of spherical flux, update the weight
+	if (BACKd ==0 && FLUXd==2 && LEd==0 & weight_irr > 0.001f) weight /= weight_irr;
 
     #ifdef DEBUG
     int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);

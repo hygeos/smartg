@@ -41,6 +41,17 @@ binnames = { # keys are (PP, ALIS)
         (False, True ): join(dir_bin, 'sp.alis.cubin'),
         }
 
+# constants definition
+# (should match #defines in src/communs.h)
+SPACE    =  0
+ATMOS    =  1
+SURF0P   =  2   # surface (air side)
+SURF0M   =  3   # surface (water side)
+ABSORBED =  4
+NONE     =  5
+OCEAN    =  6
+SEAFLOOR =  7
+LOC_CODE = ['','ATMOS','SURF0P','SURF0M','','','OCEAN','SEAFLOOR']
 
 # constants definition
 # (should match #defines in src/communs.h)
@@ -176,6 +187,34 @@ class Environment(object):
     def __str__(self):
         return 'ENV={ENV_SIZE}-X={X0:.1f}-Y={Y0:.1f}'.format(**self.dict)
 
+class Sensor(object):
+    '''
+    Definition of the sensor
+
+    BACK: Backward mode (default 1, backward mode)
+    POS: Position (X,Y,Z) in cartesian coordinates, default origin
+    TH,PH: Direction (theta, phi) of zenith and azimuth angles of viewing direction
+            (Zenith> 90 for downward looking, <90 for upward, default Zenith)
+    LOC: Localization (default SURF0P)
+    FOV: Field of View (deg, default 0.)
+    TYPE: Radiance (0), Planar flux (1), Spherical Flux (2), default 0
+    '''
+    def __init__(self, BACK=1, POSX=0., POSY=0., POSZ=0., THDEG=0., PHDEG=180., LOC='SURF0P', FOV=0., TYPE=0):
+        self.dict = {
+                'BACK':  BACK,
+                'POSX':  POSX,
+                'POSY':  POSY,
+                'POSZ':  POSZ,
+                'THDEG': THDEG,
+                'PHDEG': PHDEG,
+                'LOC'  : LOC_CODE.index(LOC),
+                'FOV':   FOV,
+                'TYPE':  TYPE
+                }
+
+    def __str__(self):
+        return 'SENSOR=-POSX{POSX}-POSY{POSY}-POSZ{POSZ}-THETA={THDEG:.3f}-PHI={PHDEG:.3f}'.format(**self.dict)
+
 
 class Smartg(object):
 
@@ -302,7 +341,7 @@ class Smartg(object):
              NBTHETA=45, NBPHI=90, NF=1e6,
              OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
              NBLOOP=None, progress=True,
-             le=None, flux=None, stdev=False, BEER=0):
+             le=None, flux=None, stdev=False, BEER=0, sensor=None):
         '''
         Run a SMART-G simulation
 
@@ -388,6 +427,7 @@ class Smartg(object):
             - BEER: if BEER=1 compute absorption using Beer-Lambert law, otherwise compute it with the Single scattering albedo
                 (BEER automatically set to 1 if ALIS is chosen)
 
+            - sensor : sensor object, backward mode activated (from sensor to source)
 
         Return value:
         ------------
@@ -481,6 +521,16 @@ class Smartg(object):
         # computation of the impact point
         X0, tabTransDir = impactInit(prof_atm, NLAM, THVDEG, RTER, self.pp)
 
+        # sensor definition
+        if sensor is None:
+            # by defaut sensor in forward mode, with ZA=180.-THVDEG, PHDEG=180., FOV=0.
+            if (SIM == 3):
+                sensor = Sensor(BACK=0, THDEG=180.-THVDEG, PHDEG=180., LOC='OCEAN') 
+            elif ((SIM == -1) or (SIM == 0)):  
+                sensor = Sensor(BACK=0, THDEG=180.-THVDEG, PHDEG=180., LOC='SURF0P') 
+            else:
+                sensor = Sensor(BACK=0, POSX=X0.get()[0], POSY=X0.get()[1], POSZ=X0.get()[2], THDEG=180.-THVDEG, PHDEG=180., LOC='ATMOS') 
+
         #
         # surface
         #
@@ -542,11 +592,16 @@ class Smartg(object):
             NBTHETA =  le['th'].shape[0]
             NBPHI   =  le['phi'].shape[0]
 
+        # Multiple Init Direction
+        MI = 0
+
         FLUX = 0
         if flux is not None:
             LE=0
             if flux== 'spherical' : 
                 FLUX = 1
+            if flux== 'spherical' : 
+                FLUX = 2
 
         if wl_proba is not None:
             assert wl_proba.dtype == 'int64'
@@ -561,8 +616,8 @@ class Smartg(object):
                        NBPHOTONS, NBLOOP, THVDEG, DEPO,
                        XBLOCK, XGRID, NLAM, SIM, NF,
                        NBTHETA, NBPHI, OUTPUT_LAYERS,
-                       RTER, LE, FLUX, NLVL, NPSTK,
-                       NWLPROBA, BEER, NLOW)
+                       RTER, LE, FLUX, MI, NLVL, NPSTK,
+                       NWLPROBA, BEER, NLOW, sensor)
 
 
         # Initialize the progress bar
@@ -940,7 +995,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
                    NBPHOTONS, NBLOOP, THVDEG, DEPO,
                    XBLOCK, XGRID,NLAM, SIM, NF,
                    NBTHETA, NBPHI, OUTPUT_LAYERS,
-                   RTER, LE, FLUX, NLVL, NPSTK, NWLPROBA, BEER, NLOW) :
+                   RTER, LE, FLUX, MI, NLVL, NPSTK, NWLPROBA, BEER, NLOW, sensor) :
 
     """
     Initialize the constants in python and send them to the device memory
@@ -980,10 +1035,21 @@ def InitConst(surf, env, NATM, NOCE, mod,
     copy_to_device('SIMd', SIM, np.int32)
     copy_to_device('LEd', LE, np.int32)
     copy_to_device('FLUXd', FLUX, np.int32)
+    copy_to_device('MId', MI, np.int32)
     copy_to_device('NLVLd', NLVL, np.int32)
     copy_to_device('NPSTKd', NPSTK, np.int32)
     copy_to_device('BEERd', BEER, np.int32)
     copy_to_device('NLOWd', NLOW, np.int32)
+    if sensor != None:
+        copy_to_device('BACKd', sensor.dict['BACK'], np.int32)
+        copy_to_device('POSXd', sensor.dict['POSX'], np.float32)
+        copy_to_device('POSYd', sensor.dict['POSY'], np.float32)
+        copy_to_device('POSZd', sensor.dict['POSZ'], np.float32)
+        copy_to_device('THDEGd', sensor.dict['THDEG'], np.float32)
+        copy_to_device('PHDEGd', sensor.dict['PHDEG'], np.float32)
+        copy_to_device('LOCd', sensor.dict['LOC'], np.int32)
+        copy_to_device('FOVd', sensor.dict['FOV'], np.float32)
+        copy_to_device('TYPEd', sensor.dict['TYPE'], np.int32)
     if surf != None:
         copy_to_device('SURd', surf.dict['SUR'], np.int32)
         copy_to_device('DIOPTREd', surf.dict['DIOPTRE'], np.int32)
