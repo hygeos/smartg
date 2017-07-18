@@ -116,6 +116,7 @@ class FlatSurface(object):
                 'WINDSPEED': -999.,
                 'NH2O': NH2O,
                 'WAVE_SHADOW': 0,
+                'BRDF' : 0,
                 }
     def __str__(self):
         return 'FLATSURF-SUR={SUR}'.format(**self.dict)
@@ -132,18 +133,20 @@ class RoughSurface(object):
             # 3 Reflection and transmission
         NH2O: Relative refarctive index air/water
         WAVE_SHADOW : include wave shadowing effect (default not)
+        BRDF : replace slope sampling by Cox & Munk BRDF, no ocean, just reflection
     '''
-    def __init__(self, WIND=5., SUR=3, NH2O=1.33, WAVE_SHADOW=False):
+    def __init__(self, WIND=5., SUR=3, NH2O=1.33, WAVE_SHADOW=False, BRDF=False):
 
         self.dict = {
-                'SUR': SUR,
+                'SUR': SUR if not BRDF else 1,
                 'DIOPTRE': 1,
                 'WINDSPEED': WIND,
                 'NH2O': NH2O,
                 'WAVE_SHADOW': 1 if WAVE_SHADOW else 0,
+                'BRDF': 1 if BRDF else 0,
                 }
     def __str__(self):
-        return 'ROUGHSUR={SUR}-WIND={WINDSPEED}-DI={DIOPTRE}'.format(**self.dict)
+        return 'ROUGHSUR={SUR}-WIND={WINDSPEED}-DI={DIOPTRE}-BRDF={BRDF}'.format(**self.dict)
 
 
 class LambSurface(object):
@@ -160,6 +163,7 @@ class LambSurface(object):
                 'WINDSPEED': -999.,
                 'NH2O': -999.,
                 'WAVE_SHADOW': 0,
+                'BRDF': 1,
                 }
     def __str__(self):
         return 'LAMBSUR-ALB={SURFALB}'.format(**self.dict)
@@ -225,7 +229,7 @@ class Smartg(object):
         Initialization of the Smartg object
 
         Performs the compilation and loading of the kernel.
-        This class is designed so split compilation and kernel loading from the
+        This class is :esigned so split compilation and kernel loading from the
         code execution: in case of successive smartg executions, the kernel
         loading time is not repeated.
 
@@ -262,6 +266,7 @@ class Smartg(object):
         self.double = double
         self.alis = alis
         self.rng = init_rng(rng)
+        self.back= back
 
         #
         # compilation option
@@ -484,6 +489,10 @@ class Smartg(object):
             if (self.alis['nlow'] ==-1) : NLOW=NLAM
             else: NLOW=self.alis['nlow']
 
+        if surf is not None:
+            if surf.dict['BRDF'] !=0 :
+                water = None # special case BRDF, water is shortcut
+
         # determine SIM
         if (atm is not None) and (surf is None) and (water is None):
             SIM = -2  # atmosphere only
@@ -530,6 +539,7 @@ class Smartg(object):
                 sensor = Sensor(BACK=0, THDEG=180.-THVDEG, PHDEG=180., LOC='SURF0P') 
             else:
                 sensor = Sensor(BACK=0, POSX=X0.get()[0], POSY=X0.get()[1], POSZ=X0.get()[2], THDEG=180.-THVDEG, PHDEG=180., LOC='ATMOS') 
+
 
         #
         # surface
@@ -642,7 +652,7 @@ class Smartg(object):
         # finalization
         output = finalize(tabPhotonsTot, wl[:], NPhotonsInTot, errorcount, NPhotonsOutTot,
                            OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, prof_oc,
-                           sigma, le=le, flux=flux)
+                           sigma, THVDEG, le=le, flux=flux, back=self.back)
         output.set_attr('processing time (s)', (datetime.now() - t0).total_seconds())
 
         p.finish('Done! | Received {:.1%} of {:.3g} photons ({:.1%})'.format(
@@ -685,7 +695,7 @@ def calcOmega(NBTHETA, NBPHI):
 
 def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
              OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, prof_oc,
-             sigma, le=None, flux=None):
+             sigma, THVDEG, le=None, flux=None, back=False):
     '''
     create and return the final output
     '''
@@ -698,7 +708,12 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
         if le!=None : 
             tabTh = le['th']
             tabPhi = le['phi']
-            norm_geo =  np.cos(tabTh).reshape((1,1,1,-1,1))
+            if back:
+                norm_geo =  1. 
+                #norm_geo =  np.cos(tabTh).reshape((1,1,1,-1,1))
+            else:
+                norm_geo = 1.
+                #norm_geo =  np.cos(tabTh).reshape((1,1,1,-1,1))
         else : 
             tabTh, tabPhi, tabOmega = calcOmega(NBTHETA, NBPHI )
             norm_geo = 2.0 * tabOmega.reshape((1,1,-1,1)) * np.cos(tabTh).reshape((1,1,-1,1))
@@ -1052,6 +1067,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
         copy_to_device('TYPEd', sensor.dict['TYPE'], np.int32)
     if surf != None:
         copy_to_device('SURd', surf.dict['SUR'], np.int32)
+        copy_to_device('BRDFd', surf.dict['BRDF'], np.int32)
         copy_to_device('DIOPTREd', surf.dict['DIOPTRE'], np.int32)
         copy_to_device('WINDSPEEDd', surf.dict['WINDSPEED'], np.float32)
         copy_to_device('NH2Od', surf.dict['NH2O'], np.float32)

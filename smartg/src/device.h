@@ -41,6 +41,7 @@ __device__ __constant__ int LEd;
 __device__ __constant__ int FLUXd;
 __device__ __constant__ int MId;
 __device__ __constant__ int SURd;
+__device__ __constant__ int BRDFd;
 __device__ __constant__ int DIOPTREd;
 __device__ __constant__ int WAVE_SHADOWd;
 __device__ __constant__ int ENVd;
@@ -137,6 +138,8 @@ __device__ void scatter(Photon* ph,
 * Reflexion sur une surface agitée ou plane en fonction de la valeur de DIOPTRE
 */
 __device__ void surfaceAgitee(Photon*, int le, float* tabthv, float* tabphi, int count_level,
+                              struct RNG_State*);
+__device__ void surfaceBRDF(Photon*, int le, float* tabthv, float* tabphi, int count_level,
                               struct RNG_State*);
 
 
