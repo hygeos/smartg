@@ -593,6 +593,9 @@ extern "C" {
 			ph.loc = NONE;
 			nbPhotonsThr++;
 		}
+		if(ph.loc == REMOVED){
+			ph.loc = NONE;
+		}
 		__syncthreads();
 
 		
@@ -1816,16 +1819,14 @@ __device__ void scatter(Photon* ph,
             #endif
 		}
 
-		/** Russian roulette for propagating photons **/
-		if (!le) {
-			if( ph->weight < WEIGHTRR ){
-				if( RAND < __fdividef(ph->weight,WEIGHTRR) ){ph->weight = WEIGHTRR;}
-				else{ph->loc = ABSORBED;}
-			}
-		}
 	} //ocean
 		
 	if (!le){
+		/** Russian roulette for propagating photons **/
+		if( ph->weight < WEIGHTRR ){
+			if( RAND < __fdividef(ph->weight,WEIGHTRR) ){ph->weight = WEIGHTRR;}
+			else{ph->loc = ABSORBED;}
+		}
 		modifyUV( ph->v, ph->u, cTh, psi, &ph->v, &ph->u) ;
 	}
     else {
@@ -1877,7 +1878,6 @@ __device__ void surfaceAgitee(Photon* ph, int le,
 	float cot;			// Cosinus de l'angle de réfraction du photon
 	float ncot, ncTh;	// ncot = nind*cot, ncoi = nind*cTh
 	float tpar, tper, tparper, tpar2, tper2;	//
-    float geo_trans_factor;
     int iter=0;
     float vzn;  // projection of V on the local vertical
     float thv, phi;
@@ -1899,9 +1899,6 @@ __device__ void surfaceAgitee(Photon* ph, int le,
         sign = 1;
     }
      
-    #ifdef BACK
-        float vz_back;
-    #endif
 	
     #ifdef SPHERIQUE
     // define 3 vectors Nx, Ny and Nz in cartesian coordinates which define a
@@ -1910,7 +1907,7 @@ __device__ void surfaceAgitee(Photon* ph, int le,
     // because the azimuth is chosen randomly
 	float3 Nx, Ny, Nz;
 
-	Nz = ph->pos/RTER; // Nz is the vertical at the impact point
+	Nz = ph->pos; // Nz is the vertical at the impact point
 
     // Ny is chosen arbitrarily by cross product of Nz with axis X = (1,0,0)
 	Ny = cross(Nz, make_float3(1.0,0.0,0.0));
@@ -1918,7 +1915,8 @@ __device__ void surfaceAgitee(Photon* ph, int le,
     // Nx is the cross product of Ny and Nz
 	Nx = cross(Ny, Nz);
  
-	// Normalizatioin
+	// Normalization
+	Nx = normalize(Nx);
 	Ny = normalize(Ny);
 	Nz = normalize(Nz);
 
@@ -2043,7 +2041,8 @@ __device__ void surfaceAgitee(Photon* ph, int le,
 
      #ifdef SPHERIQUE
      // facet slope
-     cBeta = 1./RTER * fabs(dot(no, ph->pos));
+     //cBeta = 1./RTER * fabs(dot(no, ph->pos));
+     cBeta = fabs(dot(no, Nz));
      beta  = fabs(acosf(cBeta));
      #else
      cBeta = fabs(no.z);
@@ -2071,7 +2070,8 @@ __device__ void surfaceAgitee(Photon* ph, int le,
 
     #ifdef SPHERIQUE
     // avz is the projection of V on the local vertical
-	float avz = fabs(dot(ph->pos, ph->v))/RTER;
+	//float avz = fabs(dot(ph->pos, ph->v))/RTER;
+	float avz = fabs(dot(Nz, ph->v));
     #else
     float avz = fabs(ph->v.z);
     #endif
@@ -2139,48 +2139,60 @@ __device__ void surfaceAgitee(Photon* ph, int le,
 	}
 
     // Weighting
-    float LambdaS;
-    float Anorm;
-    // Ross et al 2005
-    // Normalization of the slope probability density function taking into acount slope shadowing and hiding
-    // used to LE weight, and also to debias random draw of slope in non LE
-    float nu = __fdividef(1.F, tanf(acosf(avz))*(sqrtf(2.) * sig));
-    LambdaS  =  __fdividef(__expf(-nu*nu) - nu * sqrtf(PI) * erfcf(nu),2.F * nu * sqrtf(PI));
-    Anorm = 1.F + LambdaS;
-    //Anorm *= avz;
+    float p,qv,LambdaS,LambdaR,jac;
 
-    #ifdef BACK
-    vz_back = avz;
-    #endif BACK
-    ph->weight *= __fdividef(fabs(cTh), cBeta * Anorm * avz ); // Common to all photons, cBeta for surface area unit correction
+    // Ross et al 2005, Ross and Dion, 2007, Zeisse 1995
+    // Slope sampling bias correction using the normalized interaction PDF q
+    // weight has to be multiplied by q/p, where p is the slope PDF
+    // Coefficient Lambda for normalization of q taking into acount slope shadowing and hiding
+    // Including wave shadows is performed at the end after the outgoing direction is calculated
+
+    // 1. Source direction
+    LambdaS  =  Lambda(avz,sig);
+
+    // Bias sampling correction
+    if (!le) ph->weight *= __fdividef(fabs(cTh), cBeta * (1.F + LambdaS) * avz );
     
     if (le && (DIOPTREd!=0)) {
+     // The weight depends on the normalized VISIBLE interaction PDF qv (Ross 2005) 
+     // Compute p 
+     p =  __fdividef( __expf(-(1.F-cBeta*cBeta)/(cBeta*cBeta*sig2)) ,  cBeta*cBeta*cBeta * sig2); 
+
      if ((ph->loc==SURF0P) && (count_level==UP0P) ||
          (ph->loc==SURF0M) && (count_level==DOWN0M)) { // Reflection geometry
-            ph->weight  *=
-                 __fdividef( __expf(-(1.F-cBeta*cBeta)/(cBeta*cBeta*sig2)) ,  cBeta*cBeta*cBeta * sig2)
-                *__fdividef(1.F, 4.F * fabs(cTh) );
+            qv  = __fdividef(p * fabs(cTh), cBeta * fabs(v.z));
+            // Multiplication by the reflection Jacobian
+            jac = __fdividef(1.F, 4.F * fabs(cTh) );
      }
      if ((ph->loc==SURF0P) && (count_level==DOWN0M) ||
          (ph->loc==SURF0M) && (count_level==UP0P))   { // Refraction geometry
-            if (sTh <= nind) ph->weight  *=
-                 __fdividef( __expf(-(1.F-cBeta*cBeta)/(cBeta*cBeta*sig2)) ,  cBeta*cBeta*cBeta * sig2)
-                *__fdividef(nind*nind * cot, (ncot - cTh)*(ncot - cTh)); // See Zhai et al., 2010
-            else ph->weight = 0.F;
+            if (sTh <= nind) {
+                //qv  =  __fdividef(p * fabs(cot), cBeta * fabs(v.z));
+                qv  =  __fdividef(p * fabs(cTh), cBeta * fabs(v.z));
+                // Multiplication by the refraction Jacobian
+                jac = __fdividef(nind*nind * cot, (ncot - cTh)*(ncot - cTh)); // See Zhai et al., 2010
+            }
+            else qv = 0.F;
+            #ifdef BACK
+            /* for reciprocity of transmission function see Walter 2007 */
+            //ph->weight /= nind;
+            #endif
      }
-	/** Russian roulette for LE photons **/
-	 /*if( ph->weight < WEIGHTRR ){
-			if( RAND < __fdividef(ph->weight,WEIGHTRR) ){ph->weight = WEIGHTRR;}
-			else{ph->loc = ABSORBED;}
-		}*/
-     if (ph->weight <= 1e-15) {
-         ph->weight = 0.;
-         //return;
-     }
-    }
 
-    /*stokes.z = ph->stokes.z;	
-    stokes.w = ph->stokes.w;*/	
+     // 2. Reflected/Refracted direction, Normalization of qv
+     LambdaR  =  Lambda(fabs(v.z),sig);
+
+     if (WAVE_SHADOWd)
+         qv /= (1.F + LambdaS + LambdaR);
+     else
+         qv /= (1.F + LambdaS);
+
+     // apply the BRDF to the weight
+     ph->weight *= __fdividef(qv * jac , avz);
+
+
+    } /*le */
+
     int condR=1;
     if (!le) condR = (SURd==3)&&(RAND<rat);
 
@@ -2192,14 +2204,10 @@ __device__ void surfaceAgitee(Photon* ph, int le,
 	    R= make_float4x4(
 		    rper2, 0., 0., 0.,
 		    0., rpar2, 0., 0.,
-		    0., 0., rparper, rparper_cross,
+		    0., 0.,  rparper, rparper_cross,
 		    0., 0., -rparper_cross, rparper
 		    );
 
-		/*ph->stokes.x *= rper2;
-		ph->stokes.y *= rpar2;
-		ph->stokes.z = rparper*stokes.z + rparper_cross*stokes.w; // DR Mobley 2015 sign convention
-		ph->stokes.w = rparper*stokes.w - rparper_cross*stokes.z; // DR Mobley 2015 sign convention*/
         ph->stokes = mul(R,ph->stokes);
 
         #ifdef BACK
@@ -2223,7 +2231,7 @@ __device__ void surfaceAgitee(Photon* ph, int le,
 			}
 
         #ifdef SPHERIQUE
-        vzn = dot(ph->v, ph->pos); // produit scalaire
+        vzn = dot(ph->v, Nz);
         #else
         vzn = ph->v.z;
         #endif
@@ -2231,7 +2239,6 @@ __device__ void surfaceAgitee(Photon* ph, int le,
         //
         // photon next location
         //
-        //if (!le) {
          if (ph->loc == SURF0P) {
             if (vzn > 0) {  // avoid multiple reflexion above the surface
                 // SURF0P becomes ATM or SPACE
@@ -2241,7 +2248,7 @@ __device__ void surfaceAgitee(Photon* ph, int le,
                     ph->loc = ATMOS;
                 }
             } // else, no change of location
-        //else ph->loc = NONE;
+        else if (SINGLEd) ph->loc = REMOVED;
      } else {
         if (vzn < 0) {  // avoid multiple reflexion under the surface
             // SURF0M becomes OCEAN or ABSORBED
@@ -2251,8 +2258,8 @@ __device__ void surfaceAgitee(Photon* ph, int le,
                 ph->loc = OCEAN;
             }
         } // else, no change of location
+        else if (SINGLEd) ph->loc = REMOVED;
      }
-    //}
 
 
 } // Reflection
@@ -2265,20 +2272,21 @@ else if (  (!le && !condR)
         || ( le && (ph->loc==SURF0P) && (count_level == DOWN0M) && !ReflTot )
         ){	// Transmission
 
-    geo_trans_factor = nind* cot/cTh; // DR Mobley 2015 OK , see Xun 2014, Zhai et al 2010
+    float geo_trans_factor = nind* cot/cTh; // DR Mobley 2015 OK , see Xun 2014, Zhai et al 2010
     T= make_float4x4(
-        tper2*geo_trans_factor, 0., 0., 0.,
-        0., tpar2*geo_trans_factor, 0., 0.,
-        0., 0., tparper*geo_trans_factor, 0.,
-        0., 0., 0., tparper*geo_trans_factor
+        tper2, 0., 0., 0.,
+        0., tpar2, 0., 0.,
+        0., 0., tparper, 0.,
+        0., 0., 0., tparper
         );
     
-    /*ph->stokes.x *= tper2*geo_trans_factor;
-    ph->stokes.y *= tpar2*geo_trans_factor;
-    ph->stokes.z *= tparper*geo_trans_factor;
-    ph->stokes.w *= tparper*geo_trans_factor;*/
     ph->stokes = mul(T,ph->stokes);
+    ph->weight *= geo_trans_factor;
 
+    #ifdef BACK
+    ph->M   = mul(ph->M,mul(L,T));
+    //ph->weight /= nind*nind;
+    #endif
     
     alpha  = __fdividef(cTh, nind) - cot;
 
@@ -2287,7 +2295,7 @@ else if (  (!le && !condR)
     ph->u = operator/(operator+(no, cot*ph->v), sTh )*nind;
 
     #ifdef SPHERIQUE
-    vzn = dot(ph->v, ph->pos); // produit scalaire
+    vzn = dot(ph->v, Nz);
     #else
     vzn = ph->v.z;
     #endif
@@ -2305,7 +2313,6 @@ else if (  (!le && !condR)
     //
     // photon next location
     //
-    //if (!le) {
      if (ph->loc == SURF0M) {
         if (vzn > 0) {
             // SURF0P becomes ATM or SPACE
@@ -2317,6 +2324,7 @@ else if (  (!le && !condR)
         } else {
             // multiple transmissions (vz<0 after water->air transmission)
             ph->loc = SURF0P;
+            if (SINGLEd) ph->loc = REMOVED;
         }
      } else {
         if (vzn < 0) {  // avoid multiple reflexion under the surface
@@ -2329,40 +2337,30 @@ else if (  (!le && !condR)
         } else {
             // multiple transmissions (vz<0 after water->air transmission)
             // (for symmetry, but should not happen)
-            ph->loc = SURF0P;
+            ph->loc = SURF0M;
+            if (SINGLEd) ph->loc = REMOVED;
         }
-         }
-        //}
+     }
 
 	} // Transmission
 
-    if (le) {
-        ph->weight /= fabs(ph->v.z);
-    }
+    LambdaR  =  Lambda(fabs(ph->v.z),sig);
+    if (WAVE_SHADOWd && !le) 
+        ph->weight *= __fdividef(1.F + LambdaS, 1.F + LambdaR + LambdaS);
 
     #ifdef BACK
-    float LambdaR, Anorm_back;
-    nu = __fdividef(1.F, tanf(acosf(fabs(ph->v.z)))*(sqrtf(2.) * sig));
-    LambdaR  =  __fdividef(__expf(-nu*nu) - nu * sqrtf(PI) * erfcf(nu),2.F * nu * sqrtf(PI));
-    Anorm_back = (1.F + LambdaR);
-    if (le) ph->weight *= __fdividef(Anorm, Anorm_back);
-    else {
-        float vzmin = fmax(0.01F, fabs(ph->v.z)); 
-        ph->weight *= __fdividef(Anorm*avz, Anorm_back*vzmin);
-        //ph->weight *= __fdividef(Anorm, Anorm_back);
+    if (!le){
+        if (!WAVE_SHADOWd) ph->weight *= __fdividef(avz * (1.F + LambdaS), fabs(ph->v.z) * (1.F + LambdaR));
+        // else   ph->weight *= __fdividef(avz, fabs(ph->v.z));
     }
     #endif
 
-    if (WAVE_SHADOWd) {
-        // Add Wave shadowing
-        // compute wave shadow outgoing photon
-        #ifndef BACK
-        float LambdaR;
-        nu = __fdividef(1.F, tanf(acosf(fabs(ph->v.z)))*(sqrtf(2.) * sig));
-        LambdaR  =  __fdividef(__expf(-nu*nu) - nu * sqrtf(PI) * erfcf(nu),2.F * nu * sqrtf(PI));
-        #endif
-        //compute wave shadow function incoming and outgoing photon
-        ph->weight *= __fdividef(1.F, 1.F + LambdaR + LambdaS);
+    if (!le) {
+		/** Russian roulette for propagating photons **/
+		if( ph->weight < WEIGHTRR ){
+			if( RAND < __fdividef(ph->weight,WEIGHTRR) ){ph->weight = WEIGHTRR;}
+			else{ph->loc = ABSORBED;}
+		}
     }
 
 }
@@ -2384,11 +2382,7 @@ __device__ void surfaceBRDF(Photon* ph, int le,
 	float cTh, sTh;	//cos et sin de l'angle d'incidence du photon sur le dioptre
 	
 	float sig, sig2  ;
-	float beta = 0.F;	// Angle par rapport à la verticale du vecteur normal à une facette de vagues 
-	float sBeta;
 	float cBeta;
-	
-	float alpha ;	//Angle azimutal du vecteur normal a une facette de vagues
 	
 	float nind; // relative index of refrection 
 	float temp;
@@ -2405,11 +2399,8 @@ __device__ void surfaceBRDF(Photon* ph, int le,
 	float rpar, rper, rparper, rparper_cross;	// Coefficient de reflexion parallèle et perpendiculaire
 	float rpar2;		// Coefficient de reflexion parallèle au carré
 	float rper2;		// Coefficient de reflexion perpendiculaire au carré
-	float rat;			// Rapport des coefficients de reflexion perpendiculaire et parallèle
-	int ReflTot;		// Flag pour la réflexion totale sur le dioptre
 	float cot;			// Cosinus de l'angle de réfraction du photon
 	float ncot, ncTh;	// ncot = nind*cot, ncoi = nind*cTh
-    int iter=0;
     float vzn;  // projection of V on the local vertical
     float thv, phi;
 	float3 v;
@@ -2422,10 +2413,6 @@ __device__ void surfaceBRDF(Photon* ph, int le,
     // and sign for further computation
     nind = NH2Od;
      
-    #ifdef BACK
-        float vz_back;
-    #endif
-	
     #ifdef SPHERIQUE
     // define 3 vectors Nx, Ny and Nz in cartesian coordinates which define a
     // local orthonormal basis at the impact point.
@@ -2467,38 +2454,35 @@ __device__ void surfaceBRDF(Photon* ph, int le,
 	 thv = acosf(sqrtf( RAND ));
     }
 
-     v.x  = cosf(phi) * sinf(thv);
-     v.y  = sinf(phi) * sinf(thv);
-     v.z  = cosf(thv);  
+    v.x  = cosf(phi) * sinf(thv);
+    v.y  = sinf(phi) * sinf(thv);
+    v.z  = cosf(thv);  
      
-     // vector equation for determining the half direction h = sign(i dot o) (i + o)
-	 no = operator-(v, ph->v);
+    // vector equation for determining the half direction h = sign(i dot o) (i + o)
+	no = operator-(v, ph->v);
 
-     // 2) Normalization of the half direction vector
-     no=normalize(no);
+    // 2) Normalization of the half direction vector
+    no=normalize(no);
 
-     // Incidence angle in the local frame
-     cTh = fabs(-dot(no, ph->v));
-     theta = acosf( fmin(1.00F-VALMIN, fmax( -(1.F-VALMIN), cTh ) ));
+    // Incidence angle in the local frame
+    cTh = fabs(-dot(no, ph->v));
+    theta = acosf( fmin(1.00F-VALMIN, fmax( -(1.F-VALMIN), cTh ) ));
 
-     #ifdef SPHERIQUE
-     // facet slope
-     cBeta = 1./RTER * fabs(dot(no, ph->pos));
-     beta  = fabs(acosf(cBeta));
-     #else
-     cBeta = fabs(no.z);
-     beta  = acosf(no.z);
-     #endif
-    
+    #ifdef SPHERIQUE
+    // facet slope
+    cBeta = 1./RTER * fabs(dot(no, ph->pos));
+    #else
+    cBeta = fabs(no.z);
+    #endif
 
     // express the coordinates of the normal to the wave facet in the original
     // axis instead of local axis (Nx, Ny, Nz)
     if (!le) {
-    #ifdef SPHERIQUE
-	no = operator+(operator+(n_l.x*Nx, n_l.y*Ny), n_l.z*Nz);
-    #else
-    no = n_l;
-    #endif
+        #ifdef SPHERIQUE
+	    no = operator+(operator+(n_l.x*Nx, n_l.y*Ny), n_l.z*Nz);
+        #else
+        no = n_l;
+        #endif
     }
 
 	sTh = __sinf(theta);
@@ -2543,15 +2527,10 @@ __device__ void surfaceBRDF(Photon* ph, int le,
 	rper2 = rper*rper;
     rparper = rpar * rper;
     rparper_cross = 0.F;
-    // DR rat is the energetic reflection factor used to normalize the R and T matrix (see Xun 2014)
-	rat =  __fdividef(rper2 + rpar2, 2.F);
-    //rat =  __fdividef(ph->stokes.x*rper2 + ph->stokes.y*rpar2,ph->stokes.x+ph->stokes.y);
-	ReflTot = 0;
 
     // Weighting
     float LambdaS;
-    float nu = __fdividef(1.F, tanf(acosf(avz))*(sqrtf(2.) * sig));
-    LambdaS  =  __fdividef(__expf(-nu*nu) - nu * sqrtf(PI) * erfcf(nu),2.F * nu * sqrtf(PI));
+    LambdaS  =  Lambda(avz,sig);
 
     ph->weight *= __fdividef(1.F, cBeta * avz * fabs(v.z) ); // Common to all photons, cBeta for surface area unit correction
     
@@ -2579,7 +2558,7 @@ __device__ void surfaceBRDF(Photon* ph, int le,
 	ph->u = operator/(operator-(no, cTh*ph->v), sTh);	
 
     #ifdef SPHERIQUE
-    vzn = dot(ph->v, ph->pos); // produit scalaire
+    vzn = dot(ph->v, ph->pos)/ph->radius; // produit scalaire
     #else
     vzn = ph->v.z;
     #endif
@@ -2595,8 +2574,7 @@ __device__ void surfaceBRDF(Photon* ph, int le,
         // Add Wave shadowing
         // compute wave shadow outgoing photon
         float LambdaR;
-        nu = __fdividef(1.F, tanf(acosf(fabs(ph->v.z)))*(sqrtf(2.) * sig));
-        LambdaR  =  __fdividef(__expf(-nu*nu) - nu * sqrtf(PI) * erfcf(nu),2.F * nu * sqrtf(PI));
+        LambdaR  =  Lambda(fabs(ph->v.z),sig);
         //compute wave shadow function incoming and outgoing photon
         ph->weight *= __fdividef(1.F, 1.F + LambdaR + LambdaS);
     }
@@ -2685,8 +2663,7 @@ __device__ void surfaceLambertienne(Photon* ph, int le,
 		}
 	}
 	else{
-		// Photon considéré comme perdu
-		ph->loc = ABSORBED;	// Correspondant au weight=0 en Fortran
+		ph->loc = ABSORBED;	
 		return;
 	}
 	
@@ -2777,7 +2754,7 @@ __device__ void countPhoton(Photon* ph,
         void *tabPhotons, unsigned long long *NPhotonsOut
         ) {
 
-    if (count_level < 0) {
+    if (count_level < 0 || ph->loc==REMOVED || ph->loc==ABSORBED) {
         // don't count anything
         return;
     }
@@ -2953,6 +2930,7 @@ __device__ void countPhoton(Photon* ph,
         #endif
         #endif
      } // SIMd  
+
     }   //LE
 	
   	/*if( ph->vy<0.f )
@@ -3236,6 +3214,7 @@ __device__ void display(const char* desc, Photon* ph) {
             case 5: printf("NONE"); break;
             case 6: printf("OCEAN"); break;
             case 7: printf("SEAFLOOR"); break;
+            case 8: printf("REMOVED"); break;
             default:
                     printf("UNDEFINED");
         }
@@ -3279,7 +3258,7 @@ __device__ void modifyUV( float3 v0, float3 u0, float cTh, float psi, float3 *v1
 
 __device__ void ComputePsiLE( float3 u0, float3 v0, float3 v1, float* psi, float3* u1){
 	float prod_scal, den, y1, cpsi, spsi;	
-	float EPS6 = 1e-9;	
+	float EPS6 = 1e-4;	
 	float3 w0, w1;
 
 	// compute former w
@@ -3294,7 +3273,7 @@ __device__ void ComputePsiLE( float3 u0, float3 v0, float3 v1, float* psi, float
 		else{ w1 = -w0; }   // diffusion vers l'arriere
 	}
 
-	else{ operator/=(w1, den); } // Hors Sujet : need to see if "__fdividef" is better
+	else{ operator/=(w1, den); }
 	
 	cpsi = dot(w0,w1); 	//  Compute the scalar product between w0 and w1
 
@@ -3385,6 +3364,15 @@ __device__ float get_OD(int BEERd, struct Profile prof) {
 }
 
 
+__device__ float Lambda(float avz, float sig) {
+    float l;
+    if (avz == 1.F) l = 1.F;
+    else {
+        float nu = __fdividef(1.F, tanf(acosf(avz))*(sqrtf(2.) * sig));
+        l = __fdividef(__expf(-nu*nu) - nu * sqrtf(PI) * erfcf(nu),2.F * nu * sqrtf(PI));
+    }
+    return l;
+}
 
 #ifdef PHILOX
 

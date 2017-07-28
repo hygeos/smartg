@@ -44,6 +44,7 @@ __device__ __constant__ int SURd;
 __device__ __constant__ int BRDFd;
 __device__ __constant__ int DIOPTREd;
 __device__ __constant__ int WAVE_SHADOWd;
+__device__ __constant__ int SINGLEd;
 __device__ __constant__ int ENVd;
 __device__ __constant__ float ENV_SIZEd;		// Size of target in km
 __device__ __constant__ float X0d;		// position of the target in x (km)
@@ -196,6 +197,7 @@ __device__ double DatomicAdd(double* address, double val);
 
 __device__ float get_OD(int , struct Profile ) ;  
 
+__device__ float Lambda(float , float ) ;
 
 
 #ifdef PHILOX

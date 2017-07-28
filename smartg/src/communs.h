@@ -50,6 +50,9 @@
 #define OCEAN       6
 #define SEAFLOOR    7
 
+// test
+#define REMOVED     8
+
 // indexing of the output levels
 #define UPTOA   0
 #define DOWN0P	1

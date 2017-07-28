@@ -117,6 +117,7 @@ class FlatSurface(object):
                 'NH2O': NH2O,
                 'WAVE_SHADOW': 0,
                 'BRDF' : 0,
+                'SINGLE' : 1,
                 }
     def __str__(self):
         return 'FLATSURF-SUR={SUR}'.format(**self.dict)
@@ -134,8 +135,9 @@ class RoughSurface(object):
         NH2O: Relative refarctive index air/water
         WAVE_SHADOW : include wave shadowing effect (default not)
         BRDF : replace slope sampling by Cox & Munk BRDF, no ocean, just reflection
+        SINGLE: dont allow multiple reflections/refractions at the interface, default False
     '''
-    def __init__(self, WIND=5., SUR=3, NH2O=1.33, WAVE_SHADOW=False, BRDF=False):
+    def __init__(self, WIND=5., SUR=3, NH2O=1.33, WAVE_SHADOW=False, BRDF=False, SINGLE=False):
 
         self.dict = {
                 'SUR': SUR if not BRDF else 1,
@@ -144,9 +146,10 @@ class RoughSurface(object):
                 'NH2O': NH2O,
                 'WAVE_SHADOW': 1 if WAVE_SHADOW else 0,
                 'BRDF': 1 if BRDF else 0,
+                'SINGLE': 1 if SINGLE else 0,
                 }
     def __str__(self):
-        return 'ROUGHSUR={SUR}-WIND={WINDSPEED}-DI={DIOPTRE}-BRDF={BRDF}'.format(**self.dict)
+        return 'ROUGHSUR={SUR}-WIND={WINDSPEED}-DI={DIOPTRE}-WAVE_SHADOW={WAVE_SHADOW}-BRDF={BRDF}-SINGLE={SINGLE}'.format(**self.dict)
 
 
 class LambSurface(object):
@@ -164,6 +167,7 @@ class LambSurface(object):
                 'NH2O': -999.,
                 'WAVE_SHADOW': 0,
                 'BRDF': 1,
+                'SINGLE': 1,
                 }
     def __str__(self):
         return 'LAMBSUR-ALB={SURFALB}'.format(**self.dict)
@@ -1072,6 +1076,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
         copy_to_device('WINDSPEEDd', surf.dict['WINDSPEED'], np.float32)
         copy_to_device('NH2Od', surf.dict['NH2O'], np.float32)
         copy_to_device('WAVE_SHADOWd', surf.dict['WAVE_SHADOW'], np.int32)
+        copy_to_device('SINGLEd', surf.dict['SINGLE'], np.int32)
     if env != None:
         copy_to_device('ENVd', env.dict['ENV'], np.int32)
         copy_to_device('ENV_SIZEd', env.dict['ENV_SIZE'], np.float32)
