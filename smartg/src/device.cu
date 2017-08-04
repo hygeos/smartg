@@ -205,7 +205,7 @@ extern "C" {
         } else if ((ph.loc == SURF0P) && (loc_prev != SURF0P)) {
             count_level = DOWN0P;
         } else if ((ph.loc == SURF0M) && (loc_prev != SURF0M)) {
-            count_level = UP0M;
+            count_level = UP0M; 
         } else if (ph.loc == SEAFLOOR) {
             count_level = DOWNB;
         }
@@ -389,7 +389,7 @@ extern "C" {
                         if (k==0) { 
                             #ifdef SPHERIQUE
                             // for spherical case attenuation if performed usin move_sp
-                            move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
+                            if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
                             #endif
                             // Final counting at the TOA
                             countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA , errorcount, tabPhotons, NPhotonsOut);
@@ -429,7 +429,7 @@ extern "C" {
                         countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, NPhotonsOut);
                         #ifdef SPHERIQUE
                         // for spherical case attenuation if performed usin move_sp
-                        move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
+                        if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
                         #endif
                         countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, NPhotonsOut);
                     }//direction
@@ -459,7 +459,7 @@ extern "C" {
                         countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, NPhotonsOut);
                         #ifdef SPHERIQUE
                         // for spherical case attenuation if performed usin move_sp
-                        move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
+                        if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
                         #endif
                         countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, NPhotonsOut);
                     }//direction
@@ -517,7 +517,7 @@ extern "C" {
                         if (k==0) { 
                             #ifdef SPHERIQUE
                             // for spherical case attenuation if performed usin move_sp
-                            move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
+                            if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
                             #endif
                             // Final counting at the TOA
                             countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA , errorcount, tabPhotons, NPhotonsOut);
@@ -1863,13 +1863,11 @@ __device__ void surfaceAgitee(Photon* ph, int le,
 	
     // coordinates of the normal to the wave facet in the original axis
 	float3 no;
-
+    // coordinates of the half direction vector of the wave facet in the original axis (see Walter 2007)
+    float3 half;
     // coordinates of the normal to the wave facet in the local axis (Nx, Ny, Nz)
 	float3 n_l;
 
-	float s1, s2, s3 ;
-    //float4 stokes;
-	
 	float rpar, rper, rparper, rparper_cross;	// Coefficient de reflexion parallèle et perpendiculaire
 	float rpar2;		// Coefficient de reflexion parallèle au carré
 	float rper2;		// Coefficient de reflexion perpendiculaire au carré
@@ -1881,14 +1879,15 @@ __device__ void surfaceAgitee(Photon* ph, int le,
     int iter=0;
     float vzn;  // projection of V on the local vertical
     float thv, phi;
-	float3 v;
+	float3 v, v_l;
 
     // Reflection  and Transmission Matrices
     float4x4 R, T;
 
     // Determination of the relative refractive index
     // a: air, b: water , Mobley 2015 nind = nba = nb/na
-    // and sign for further computation
+    // in general nind = n_t/n_i or no/ni (transmitted over incident or output versus input)
+    // and sign for further computation, sign positive for upward facet normal for reflection
     float sign;
     if (ph->loc == SURF0M)  {
         nind = __fdividef(1.f,NH2Od);
@@ -1924,12 +1923,21 @@ __device__ void surfaceAgitee(Photon* ph, int le,
     // we check that there is no upward photon reaching surface0+
     if ((ph->loc == SURF0P) && (dot(ph->v, ph->pos) > 0)) {
         // upward photon when reaching the surface at (0+)
-        printf("Warning, vzn>0 (vzn=%f) with SURF0+ in surfaceAgitee\n", dot(ph->v, ph->pos));
+        printf("Warning, vzn>0 (vzn=%f) with SURF0+ in surfaceAgitee, %f %f %f %f %f %f\n", dot(ph->v, ph->pos),Nz.x,Nz.y,Nz.z, ph->pos.x,ph->pos.y,ph->pos.z);
     }
     #endif
+
+    /* Compute the photon v vector in the local frame */
+    v_l.x = dot(ph->v,Nx);
+    v_l.y = dot(ph->v,Ny);
+    v_l.z = dot(ph->v,Nz);
+
+    #else
+    v_l = ph->v;
     #endif
 
-	
+    if (ph->loc==SURF0M) v_l = ph->v;
+
 	/** **/
     // DR Estimation of the probability P of interaction of the photon with zentih angle theta with a facet of slope beta and azimut alpha	
     // DR P_alpha_beta : Probability of occurence of a given azimuth and slope
@@ -1950,6 +1958,9 @@ __device__ void surfaceAgitee(Photon* ph, int le,
 
     sig = sqrtf(0.003F + 0.00512f *WINDSPEEDd);
     sig2= sig * sig;
+
+
+    /* SAMPLING */
 
     if (!le) {
 	 if( DIOPTREd !=0 ){
@@ -1984,15 +1995,13 @@ __device__ void surfaceAgitee(Photon* ph, int le,
            sBeta = __sinf( beta );
            cBeta = __cosf( beta );
 
-           // the facet has coordinates
-           // (sin(beta)*cos(alpha), sin(beta)*sin(alpha), cos(beta)) in axis (Nx, Ny, Nz)
-
            // Normal of the facet in the local frame
            n_l.x = sign * sBeta * __cosf( alpha );
            n_l.y = sign * sBeta * __sinf( alpha );
            n_l.z = sign * cBeta;
 
-           cTh = -(dot(n_l, ph->v));
+           // Compute incidence angle //
+           cTh = -(dot(n_l,v_l));
            theta = acosf( fmin(1.00F-VALMIN, fmax( -(1.F-VALMIN), cTh ) ));
         }
      } else {
@@ -2003,7 +2012,7 @@ __device__ void surfaceAgitee(Photon* ph, int le,
         n_l.y   = 0.F;
         n_l.z   = sign;
 
-        cTh = -(dot(n_l, ph->v));
+        cTh = -(dot(n_l, v_l));
         theta = acosf( fmin(1.00F-VALMIN, fmax( -(1.F-VALMIN), cTh ) ));
      }
     } /* not le*/
@@ -2018,30 +2027,43 @@ __device__ void surfaceAgitee(Photon* ph, int le,
      v.z  = sign_le * cosf(thv);  
      
      // Normal to the facet in the global frame
+     // We refer to Walter 2007
+     // i : input unit vector, directed outward facet, so i=-ph->v
+     // o : output unit vector, so o=v
+
      // 1) Determination of the half direction vector
      if ((ph->loc==SURF0P) && (count_level==DOWN0M) ||
          (ph->loc==SURF0M) && (count_level==UP0P))   { // Refraction geometry
-        // vector equation for determining the half direction h = - (ni*i + no*o)
-        // or h = - (i + nind*o)
-        // h is pointing toward the incoming ray
-		 no = sign*(operator-(ph->v, v*nind));
+        // vector equation for determining the half direction half = - (no*o + ni*i)
+        // or half = - (nind*o + i)
+        // The convention in Walter is h pointing towards the medieum with lowest index of refraction
+        /*****/
+        // So
+		 half = operator-(v*nind, ph->v) *(-1.F*sign);
+         // test : exclude facets whose normal are not on the same side as incoming photons
+         if ((half.z * sign) < 0) {
+             ph->weight = 0.F;
+             ph->loc=REMOVED;
+             return;
+         }
      }
      if ((ph->loc==SURF0P) && (count_level==UP0P) ||
          (ph->loc==SURF0M) && (count_level==DOWN0M)) { // Reflection geometry
-        // vector equation for determining the half direction h = sign(i dot o) (i + o)
-		 no = operator-(v, ph->v);
+        // vector equation for determining the half direction h = (o + i)
+		 half = operator-(v, ph->v);
      }
 
-     // 2) Normalization of the half direction vector
-     no=normalize(no);
 
-     // Incidence angle in the local frame
+     // 2) Normalization of the half direction vector: facet normal unit vector
+     no=normalize(half);
+     //no=normalize(no);
+
+     // Incidence angle
      cTh = fabs(-dot(no, ph->v));
      theta = acosf( fmin(1.00F-VALMIN, fmax( -(1.F-VALMIN), cTh ) ));
 
      #ifdef SPHERIQUE
      // facet slope
-     //cBeta = 1./RTER * fabs(dot(no, ph->pos));
      cBeta = fabs(dot(no, Nz));
      beta  = fabs(acosf(cBeta));
      #else
@@ -2055,6 +2077,7 @@ __device__ void surfaceAgitee(Photon* ph, int le,
     
     } /*le*/
 
+	sTh = __sinf(theta);
 
     // express the coordinates of the normal to the wave facet in the original
     // axis instead of local axis (Nx, Ny, Nz)
@@ -2066,38 +2089,30 @@ __device__ void surfaceAgitee(Photon* ph, int le,
     #endif
     }
 
-	sTh = __sinf(theta);
 
     #ifdef SPHERIQUE
     // avz is the projection of V on the local vertical
-	//float avz = fabs(dot(ph->pos, ph->v))/RTER;
 	float avz = fabs(dot(Nz, ph->v));
     #else
     float avz = fabs(ph->v.z);
     #endif
 
 	// Rotation of Stokes parameters
-	s1 = ph->stokes.x;
-	s2 = ph->stokes.y;
-	s3 = ph->stokes.z;
+
+	//temp = dot(cross(ph->v,ph->u),normalize(cross(ph->v,no)));
+    // Simplification :
+	temp = __fdividef(dot(no, ph->u), sTh);
+	psi = acosf( fmin(1.00F, fmax( -1.F, temp ) ));	
+
+	if( dot(no, cross(ph->u, ph->v)) <0 ){
+		psi = -psi;
+	}
+
+    rotateStokes(ph->stokes, psi, &ph->stokes);
     #ifdef BACK
     float4x4 L = make_diag_float4x4 (1.F);
+    rotationM(DEUXPI-psi,&L);
     #endif
-
-	if( (s1!=s2) || (s3!=0.F) ){
-
-		temp = __fdividef(dot(no, ph->u), sTh);
-		psi = acosf( fmin(1.00F, fmax( -1.F, temp ) ));	
-
-		if( dot(no, cross(ph->u, ph->v)) <0 ){
-			psi = -psi;
-		}
-
-        rotateStokes(ph->stokes, psi, &ph->stokes);
-        #ifdef BACK
-        rotationM(DEUXPI-psi,&L);
-        #endif
-	}
 
 	if( sTh<=nind){
 		temp = __fdividef(sTh,nind);
@@ -2119,6 +2134,8 @@ __device__ void surfaceAgitee(Photon* ph, int le,
 		rat =  __fdividef(rper2 + rpar2, 2.F);
         //rat =  __fdividef(ph->stokes.x*rper2 + ph->stokes.y*rpar2,ph->stokes.x+ph->stokes.y);
 		ReflTot = 0;
+        //int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
+        //if (idx==0 && (ph->loc==SURF0M) && (count_level==UP0P) && (le)) printf("DEB %.3f %.3f %.3f %.4f\n", v.z, no.z, ph->v.z,psi);
 	}
 	else{
 		cot = 0.f;
@@ -2167,7 +2184,6 @@ __device__ void surfaceAgitee(Photon* ph, int le,
      if ((ph->loc==SURF0P) && (count_level==DOWN0M) ||
          (ph->loc==SURF0M) && (count_level==UP0P))   { // Refraction geometry
             if (sTh <= nind) {
-                //qv  =  __fdividef(p * fabs(cot), cBeta * fabs(v.z));
                 qv  =  __fdividef(p * fabs(cTh), cBeta * fabs(v.z));
                 // Multiplication by the refraction Jacobian
                 jac = __fdividef(nind*nind * cot, (ncot - cTh)*(ncot - cTh)); // See Zhai et al., 2010
@@ -2175,7 +2191,6 @@ __device__ void surfaceAgitee(Photon* ph, int le,
             else qv = 0.F;
             #ifdef BACK
             /* for reciprocity of transmission function see Walter 2007 */
-            //ph->weight /= nind;
             #endif
      }
 
@@ -2356,7 +2371,7 @@ else if (  (!le && !condR)
     #endif
 
     if (!le) {
-		/** Russian roulette for propagating photons **/
+		/* Russian roulette for propagating photons **/
 		if( ph->weight < WEIGHTRR ){
 			if( RAND < __fdividef(ph->weight,WEIGHTRR) ){ph->weight = WEIGHTRR;}
 			else{ph->loc = ABSORBED;}
@@ -2390,18 +2405,11 @@ __device__ void surfaceBRDF(Photon* ph, int le,
     // coordinates of the normal to the wave facet in the original axis
 	float3 no;
 
-    // coordinates of the normal to the wave facet in the local axis (Nx, Ny, Nz)
-	float3 n_l;
-
-	float s1, s2, s3 ;
-    //float4 stokes;
-	
 	float rpar, rper, rparper, rparper_cross;	// Coefficient de reflexion parallèle et perpendiculaire
 	float rpar2;		// Coefficient de reflexion parallèle au carré
 	float rper2;		// Coefficient de reflexion perpendiculaire au carré
 	float cot;			// Cosinus de l'angle de réfraction du photon
 	float ncot, ncTh;	// ncot = nind*cot, ncoi = nind*cTh
-    float vzn;  // projection of V on the local vertical
     float thv, phi;
 	float3 v;
 
@@ -2420,7 +2428,7 @@ __device__ void surfaceBRDF(Photon* ph, int le,
     // because the azimuth is chosen randomly
 	float3 Nx, Ny, Nz;
 
-	Nz = ph->pos/RTER; // Nz is the vertical at the impact point
+	Nz = ph->pos; // Nz is the vertical at the impact point
 
     // Ny is chosen arbitrarily by cross product of Nz with axis X = (1,0,0)
 	Ny = cross(Nz, make_float3(1.0,0.0,0.0));
@@ -2429,6 +2437,7 @@ __device__ void surfaceBRDF(Photon* ph, int le,
 	Nx = cross(Ny, Nz);
  
 	// Normalizatioin
+	Nx = normalize(Nx);
 	Ny = normalize(Ny);
 	Nz = normalize(Nz);
 
@@ -2470,52 +2479,33 @@ __device__ void surfaceBRDF(Photon* ph, int le,
 
     #ifdef SPHERIQUE
     // facet slope
-    cBeta = 1./RTER * fabs(dot(no, ph->pos));
+    cBeta = fabs(dot(no, Nz));
     #else
     cBeta = fabs(no.z);
     #endif
-
-    // express the coordinates of the normal to the wave facet in the original
-    // axis instead of local axis (Nx, Ny, Nz)
-    if (!le) {
-        #ifdef SPHERIQUE
-	    no = operator+(operator+(n_l.x*Nx, n_l.y*Ny), n_l.z*Nz);
-        #else
-        no = n_l;
-        #endif
-    }
 
 	sTh = __sinf(theta);
 
     #ifdef SPHERIQUE
     // avz is the projection of V on the local vertical
-	float avz = fabs(dot(ph->pos, ph->v))/RTER;
+	float avz = fabs(dot(Nz, ph->v));
     #else
     float avz = fabs(ph->v.z);
     #endif
 
 	// Rotation of Stokes parameters
-	s1 = ph->stokes.x;
-	s2 = ph->stokes.y;
-	s3 = ph->stokes.z;
+    temp = __fdividef(dot(no, ph->u), sTh);
+	psi = acosf( fmin(1.00F, fmax( -1.F, temp ) ));	
+
+	if( dot(no, cross(ph->u, ph->v)) <0 ){
+		psi = -psi;
+	}
+
+    rotateStokes(ph->stokes, psi, &ph->stokes);
     #ifdef BACK
     float4x4 L = make_diag_float4x4 (1.F);
+    rotationM(DEUXPI-psi,&L);
     #endif
-
-	if( (s1!=s2) || (s3!=0.F) ){
-
-		temp = __fdividef(dot(no, ph->u), sTh);
-		psi = acosf( fmin(1.00F, fmax( -1.F, temp ) ));	
-
-		if( dot(no, cross(ph->u, ph->v)) <0 ){
-			psi = -psi;
-		}
-
-        rotateStokes(ph->stokes, psi, &ph->stokes);
-        #ifdef BACK
-        rotationM(DEUXPI-psi,&L);
-        #endif
-	}
 
 	temp = __fdividef(sTh,nind);
 	cot = sqrtf( 1.0F - temp*temp );
@@ -2557,12 +2547,6 @@ __device__ void surfaceBRDF(Photon* ph, int le,
     ph->v = v;
 	ph->u = operator/(operator-(no, cTh*ph->v), sTh);	
 
-    #ifdef SPHERIQUE
-    vzn = dot(ph->v, ph->pos)/ph->radius; // produit scalaire
-    #else
-    vzn = ph->v.z;
-    #endif
-
         // photon next location
     if( SIMd==-1 || SIMd==0 ){
         ph->loc = SPACE;
@@ -2577,6 +2561,14 @@ __device__ void surfaceBRDF(Photon* ph, int le,
         LambdaR  =  Lambda(fabs(ph->v.z),sig);
         //compute wave shadow function incoming and outgoing photon
         ph->weight *= __fdividef(1.F, 1.F + LambdaR + LambdaS);
+    }
+
+    if (!le) {
+		/* Russian roulette for propagating photons **/
+		if( ph->weight < WEIGHTRR ){
+			if( RAND < __fdividef(ph->weight,WEIGHTRR) ){ph->weight = WEIGHTRR;}
+			else{ph->loc = ABSORBED;}
+		}
     }
 
 }
@@ -2793,35 +2785,18 @@ __device__ void countPhoton(Photon* ph,
     int II, JJ;
 
 
-    if (theta != 0.F) {
-        ComputePsi(ph, &psi, theta);
+    if ((theta != 0.F) && (theta!= acosf(-1.F))) {
+       ComputePsi(ph, &psi, theta);
     }
     else {
-      if (LEd == 0) {
-            atomicAdd(errorcount+ERROR_THETA, 1);
-            return;
-      }
-      else {
-        // Compute Psi in the special case of zenith
-        float ux_phi;
-        float uy_phi;
-        float cos_psi;
-        float sin_psi;
-        float eps=1e-4;
-
-        ux_phi  = cosf(tabphi[ph->iph]);
-        uy_phi  = sinf(tabphi[ph->iph]);
-        cos_psi = (ux_phi*ph->u.x + uy_phi*ph->u.y);
-        if( cos_psi >  1.0) cos_psi =  1.0;
-        if( cos_psi < -1.0) cos_psi = -1.0;
-        sin_psi = sqrtf(1.0 - (cos_psi*cos_psi));
-        if( (abs((ph->u.x*cos_psi-ph->u.y*sin_psi)-ux_phi) < eps) && (abs((ph->u.x*sin_psi+ph->u.y*cos_psi)-uy_phi) < eps) ) {
-                psi = -acosf(cos_psi);
-        }
-        else{
-                psi = acosf(cos_psi);
-        } 
-      }
+       if (LEd == 0) {
+          atomicAdd(errorcount+ERROR_THETA, 1);
+          return;
+       }
+       else {
+          // Compute Psi in the special case of zenith
+          ComputePsiZenith(ph,&psi,tabphi[ph->iph]);
+       }
     }
 
     rotateStokes(ph->stokes, psi, &st);
@@ -2848,7 +2823,7 @@ __device__ void countPhoton(Photon* ph,
         }
     #endif
 
-	// Compute Box for outgoinh photons in case of propagation photon
+	// Compute Box for outgoing photons in case of cone sampling
 	if (LEd == 0) ComputeBox(&ith, &iphi, &il, ph, errorcount);
 
     // For virtual (LE) photons the direction is stored within photon structure
@@ -2927,8 +2902,8 @@ __device__ void countPhoton(Photon* ph,
            dsca_dl = prof[(layer_end-layer_le) + k*DL*(layer_end+1)].OD_sca - ph->tau_sca[k]; 
            weight_sca[k] *= exp(-__fdividef(fabs(dsca_dl) -fabs(dsca_dl0), fabs(ph->v.z)));
         }
-        #endif
-        #endif
+        #endif // NOT ALIS
+        #endif // NOT SPHERIQUE
      } // SIMd  
 
     }   //LE
@@ -3120,6 +3095,31 @@ __device__ void ComputePsi(Photon* ph, float* psi, float theta)
     double wz;
     wz = (double)ph->v.x * (double)ph->u.y - (double)ph->v.y * (double)ph->u.x;
     *psi = atan2(wz, -1.e+00*(double)ph->u.z); 
+}
+
+/* ComputePsiZenith
+*/
+__device__ void ComputePsiZenith(Photon* ph, float* psi, float phi)
+{
+        // Compute Psi in the special case of zenith
+        float ux_phi;
+        float uy_phi;
+        float cos_psi;
+        float sin_psi;
+        float eps=1e-4;
+
+        ux_phi  = cosf(phi);
+        uy_phi  = sinf(phi);
+        cos_psi = (ux_phi*ph->u.x + uy_phi*ph->u.y);
+        if( cos_psi >  1.0) cos_psi =  1.0;
+        if( cos_psi < -1.0) cos_psi = -1.0;
+        sin_psi = sqrtf(1.0 - (cos_psi*cos_psi));
+        if( (abs((ph->u.x*cos_psi-ph->u.y*sin_psi)-ux_phi) < eps) && (abs((ph->u.x*sin_psi+ph->u.y*cos_psi)-uy_phi) < eps) ) {
+                *psi = -acosf(cos_psi);
+        }
+        else{
+                *psi = acosf(cos_psi);
+        } 
 }
 
 

@@ -171,6 +171,9 @@ __device__ void rotationM(float psi, float4x4 *L);
 */
 __device__ void ComputePsi(Photon*, float*, float);
 
+/* ComputePsiZenith
+*/
+__device__ void ComputePsiZenith(Photon* , float* , float);
 
 /* ComputeBox
 * Fonction qui calcule la position (ith, iphi) du photon dans le tableau de sortie
