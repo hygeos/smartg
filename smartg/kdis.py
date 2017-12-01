@@ -1,14 +1,15 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from __future__ import print_function, division
+from __future__ import print_function, division, absolute_import
 import numpy as np
-from tools.luts import LUT, MLUT
+from smartg.tools.luts import LUT, MLUT
+import sys
 from os.path import dirname, join, exists
 from scipy.interpolate import interp1d
 import os
 from itertools import product
-from tools.interp import interp2, interp3
+from smartg.tools.interp import interp2, interp3
 
 
 def reduce_kdis(mlut, ibands, use_solar=False, integrated=False):
@@ -22,7 +23,7 @@ def reduce_kdis(mlut, ibands, use_solar=False, integrated=False):
         for pref in ['I_','Q_','U_','V_','transmission','flux'] :
             if pref in l.desc:
                 if use_solar : lr = (l*we*ex*dl).reduce(np.sum,'wavelength',grouping=wb.data)
-                else         : lr = (l*we*dl   ).reduce(np.sum,'wavelength',grouping=wb.data)/norm
+                else         : lr = (l*we*dl   ).reduce(np.sum,'wavelength',grouping=wb.data)
                 if integrated: lr = lr/norm
                 else         : lr = lr/norm_dl
                 res.add_lut(lr, desc=l.desc)
@@ -45,7 +46,7 @@ class KDIS(object):
             if not os.path.isfile(filename):
                 print("(kdis_coef) ERROR")
                 print("            Missing file:", filename)
-                exit()
+                sys.exit()
             fdef = open(filename,'r')
             skipcomment(fdef)
             tmp = fdef.readline()
@@ -61,7 +62,7 @@ class KDIS(object):
                 if int(tmp.split()[1]) == 1:
                     print(" kdis_coeff ERROR")
                     print("            read NOT implemented for concentration dependent species")
-                    exit()
+                    sys.exit()
                 self.species.append(tmp.split()[0])
                 self.fcont[i] = float(tmp.split()[2])
             self.nsp_c = 0
@@ -79,7 +80,7 @@ class KDIS(object):
                     if self.wvlband[0,i] < self.wvlband[0,i-1]:
                         print(" kdis_coeff ERROR")
                         print("            wavelengths must be sorted in increasing order")
-                        exit()
+                        sys.exit()
             skipcomment(fdef)
             tmp = fdef.readline()
             skipcomment(fdef)
@@ -92,7 +93,7 @@ class KDIS(object):
                     if self.p[i] < self.p[i-1]:
                         print(" kdis_coeff ERROR")
                         print("            pressure must be sorted in increasing order")
-                        exit()
+                        sys.exit()
             skipcomment(fdef)
             tmp = fdef.readline()
             skipcomment(fdef)
@@ -105,7 +106,7 @@ class KDIS(object):
                     if self.t[i] < self.t[i-1]:
                         print(" kdis_coeff ERROR")
                         print("            temperature must be sorted in increasing order")
-                        exit()
+                        sys.exit()
             fdef.close()
     
             self.nai   = np.zeros((self.nsp,self.nwvl), dtype='int')
@@ -118,7 +119,7 @@ class KDIS(object):
                 if not os.path.isfile(filename):
                     print("(kdis_coef) ERROR")
                     print("            Missing file:", filename)
-                    exit()
+                    sys.exit()
                 f = open(filename,'r')
                 skipcomment(f)
                 for iwvl in range(self.nwvl):
@@ -146,7 +147,7 @@ class KDIS(object):
             if not os.path.isfile(filename):
                     print("(kdis_coef) ERROR")
                     print("            Missing file:", filename)
-                    exit()
+                    sys.exit()
             fsol = open(filename,'r')
             skipcomment(fsol)
             tmp = fsol.readline()
@@ -155,7 +156,7 @@ class KDIS(object):
             nn = float(tmp.split()[0])
             if nn != self.nwvl :
                 print(" solar flux and kdis have uncompatible band number")
-                exit()
+                sys.exit()
             skipcomment(fsol)
             self.solarflux = np.zeros(self.nwvl)
             skipcomment(fsol)
@@ -207,7 +208,8 @@ class KDIS(object):
         for i in range(self.nbands()):
             yield self.band(i)    
             
-    def to_smartg(self, lmin=None, lmax=None):
+
+    def to_smartg(self, include='', lmin=-np.inf, lmax=np.inf):
         '''
         return a list of KDIS_IBANDS for Smartg.run() method
         '''
