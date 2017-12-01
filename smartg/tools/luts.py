@@ -1104,7 +1104,7 @@ def plot_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
             with axes (radius, angle) (unless swapped)
             angle is assumed to be in degrees and is not scaled
     index: index of the item to transect in the 'angle' dimension
-           can be an Idx instance
+           can be an Idx instance of several values or a list of indices
            if None (default), no transect
     vmin, vmax: range of values
                 default None: determine min/max from values
@@ -1275,24 +1275,28 @@ def plot_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
     if show_sub:
         # convert Idx instance to index if necessarry
         if isinstance(index, Idx_base):
-            index = int(np.around(index.index(ax1)))
-        if semi:
-            mirror_index = -1 -index
-        else:
-            mirror_index = (ax1_scaled.shape[0]/2 + index)%ax1_scaled.shape[0]
-        # draw line over colormesh
-        vertex0 = np.array([[0,0],[ax1_scaled[index],ax2_max]])
-        vertex1 = np.array([[0,0],[ax1_scaled[mirror_index],ax2_max]])
-        aux_ax_polar.plot(vertex0[:,0],vertex0[:,1], 'w')
-        if sym:
-            aux_ax_polar.plot(vertex1[:,0],vertex1[:,1],'w--')
+            indexes = np.round(index.index(ax1)).astype(int)
+            #indexes = int(round(index.index(ax1)))
+        else: indexes = index
+        for ii,index in enumerate(indexes):
+            if semi:
+                mirror_index = -1 -index
+            else:
+                mirror_index = (ax1_scaled.shape[0]//2 + index)%ax1_scaled.shape[0]
+            # draw line over colormesh
+            vertex0 = np.array([[0,0],[ax1_scaled[index],ax2_max]])
+            vertex1 = np.array([[0,0],[ax1_scaled[mirror_index],ax2_max]])
+            aux_ax_polar.plot(vertex0[:,0],vertex0[:,1], 'w')
+            if sym:
+                aux_ax_polar.plot(vertex1[:,0],vertex1[:,1],'w--',linewidth=2)
 
-        #
-        # plot transects
-        #
-        ax_cart.plot(ax2, data[index,:],'k-')
-        if sym:
-            ax_cart.plot(-ax2, data[mirror_index,:],'k--')
+            #
+            # plot transects
+            #
+            color = ['k', 'r','g','b','m','y'][ii%6]
+            ax_cart.plot(ax2, data[index,:],'-'+color)
+            if sym:
+                ax_cart.plot(-ax2, data[mirror_index,:],'--'+color)
 
     # add colorbar
     fig.colorbar(im, orientation='horizontal', extend='both', ticks=np.linspace(vmin, vmax, 5))
