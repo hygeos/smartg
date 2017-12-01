@@ -4,7 +4,6 @@
 from __future__ import print_function, division
 from os.path import join, dirname, realpath, isdir
 from subprocess import check_call
-from builtins import input
 
 '''
 SMART-G project-wide configuration
@@ -34,6 +33,8 @@ dir_libradtran_crs = join(dir_libradtran, 'data/crs/')
 # setup
 #
 def check_libradtran():
+    from builtins import input
+
     if (isdir(dir_libradtran)
             and isdir(dir_libradtran_reptran)
             and isdir(dir_libradtran_opac)
