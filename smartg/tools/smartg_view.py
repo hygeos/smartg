@@ -6,10 +6,10 @@ from __future__ import print_function, division, absolute_import
 
 import warnings
 warnings.simplefilter("ignore",DeprecationWarning)
-from pylab import figure
+from pylab import figure, subplot2grid, tight_layout, setp, subplots, xlabel, ylabel
 import numpy as np
 np.seterr(invalid='ignore', divide='ignore') # ignore division by zero errors
-from smartg.tools.luts import plot_polar, LUT, transect2D
+from smartg.tools.luts import plot_polar, transect2D
 from smartg.atmosphere import diff1
 
 
@@ -280,11 +280,8 @@ def phase_view(mlut, ipha=None, fig= None, axarr=None, iw=0, kind='atm'):
         axarr : system of axes (2,2) to be created on used
     '''
 
-    from pylab import subplots, setp
-    from numpy import unique
-    
     nd = mlut['OD_'+kind].ndim
-    Linlabw=''
+    #Linlabw=''
     if nd>1:
         wi = mlut['OD_'+kind].names.index('wavelength') # Wavelength index
         key = [slice(None)]*nd
@@ -297,11 +294,11 @@ def phase_view(mlut, ipha=None, fig= None, axarr=None, iw=0, kind='atm'):
 
     phase = mlut['phase_'+kind]
     ang = phase.axis('theta_'+kind)
-    if (axarr==None):
+    if (axarr is None):
         fig, axarr = subplots(2, 2)
         fig.set_size_inches(10, 6)
         
-    if ipha==None : ni= unique(mlut['iphase_'+kind].__getitem__(key)) 
+    if (ipha is None) : ni= np.unique(mlut['iphase_'+kind].__getitem__(key)) 
     else:ni=[ipha]
     
     for i in ni:
@@ -343,9 +340,7 @@ def atm_view(mlut, ipha=None, fig=None, ax=None, iw=0, kind='atm'):
         iw : in case of multi wavelength simulation, index of wavelength to be plotted
     '''
 
-    from pylab import subplots, xlabel, ylabel
-
-    if (ax==None):
+    if (ax is None):
         fig, ax = subplots(1, 1)
         fig.set_size_inches(5, 5)
     
@@ -424,26 +419,24 @@ def atm_view(mlut, ipha=None, fig=None, ax=None, iw=0, kind='atm'):
     
 def input_view(mlut, iw=0, kind='atm'):
     
-    import matplotlib.pyplot as plt
-    from numpy import array
-    fig = plt.figure()
+    fig = figure()
     fig.set_size_inches(12,6)
     try:
         mlut['phase_'+kind]
-        ax1 = plt.subplot2grid((2,3),(0,0))
-        ax2 = plt.subplot2grid((2,3),(0,1))
-        ax3 = plt.subplot2grid((2,3),(1,0))
-        ax4 = plt.subplot2grid((2,3),(1,1))
+        ax1 = subplot2grid((2,3),(0,0))
+        ax2 = subplot2grid((2,3),(0,1))
+        ax3 = subplot2grid((2,3),(1,0))
+        ax4 = subplot2grid((2,3),(1,1))
     
-        axarr = array([[ax1,ax2],[ax3,ax4]])
+        axarr = np.array([[ax1,ax2],[ax3,ax4]])
     
         _,_= phase_view(mlut, iw=iw, axarr=axarr, kind=kind)
         
-        ax5 = plt.subplot2grid((2,3),(0,2),rowspan=2,colspan=1)
+        ax5 = subplot2grid((2,3),(0,2),rowspan=2,colspan=1)
         
         _,_= atm_view(mlut, iw=iw, ax=ax5, kind=kind)
         
-        plt.tight_layout()
+        tight_layout()
         
     except:
         _,_= atm_view(mlut, iw=iw, kind=kind)
