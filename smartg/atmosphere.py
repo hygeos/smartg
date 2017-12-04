@@ -194,7 +194,7 @@ class Species(object):
         else: # phase function does not depend on rh
             P = np.zeros((NLAM, 1, NPSTK, NBTHETA), dtype='float32')
             if (self._rh_or_reff == 'reff') and (reff is not None):
-                irh = Idx(reff).index(self._phase.axes[1])
+                irh = Idx(reff, round=True).index(self._phase.axes[1])
             else:
                 irh = 0
 
