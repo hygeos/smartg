@@ -339,7 +339,8 @@ class Smartg(object):
                         - time_before_compilation).total_seconds()
         self.common_attrs['device'] = pycuda.autoinit.device.name()
         self.common_attrs['pycuda_version'] = pycuda.VERSION_TEXT
-        self.common_attrs['cuda_version'] = '.'.join(map(str, pycuda.driver.get_version()))
+        #self.common_attrs['cuda_version'] = '.'.join(map(str, pycuda.driver.get_version()))        
+        self.common_attrs['cuda_version'] = '.'.join(str(pycuda.driver.get_driver_version()))
         self.common_attrs.update(get_git_attrs())
 
 
