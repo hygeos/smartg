@@ -1605,24 +1605,30 @@ __device__ void scatter(Photon* ph,
 
 		/////////////
 		// Get Scattering matrix from CDF
-		P11 = func[ipha*NF+iang].p_P11;
+		/*P11 = func[ipha*NF+iang].p_P11;
 		P12 = func[ipha*NF+iang].p_P12;
 		P22 = func[ipha*NF+iang].p_P22;
 		P33 = func[ipha*NF+iang].p_P33;
 		P43 = func[ipha*NF+iang].p_P43;
-		P44 = func[ipha*NF+iang].p_P44;
+		P44 = func[ipha*NF+iang].p_P44;*/
+		P11 = (1-zang)*func[ipha*NF+iang].p_P11 + zang*func[ipha*NF+iang+1].p_P11;
+		P12 = (1-zang)*func[ipha*NF+iang].p_P12 + zang*func[ipha*NF+iang+1].p_P12;
+		P22 = (1-zang)*func[ipha*NF+iang].p_P22 + zang*func[ipha*NF+iang+1].p_P22;
+		P33 = (1-zang)*func[ipha*NF+iang].p_P33 + zang*func[ipha*NF+iang+1].p_P33;
+		P43 = (1-zang)*func[ipha*NF+iang].p_P43 + zang*func[ipha*NF+iang+1].p_P43;
+		P44 = (1-zang)*func[ipha*NF+iang].p_P44 + zang*func[ipha*NF+iang+1].p_P44;
 
         #ifndef BIAS
 		/////////////
-		//  Get Phi
+		//  Get Psi
 		//  Rejection method for sampling psi  : !!!! NEW !!!!
         float fpsi_cond=0.F; 
         float fpsi=0.F; 
         float gamma=0.F; 
-        float Q = ph->stokes.x - ph->stokes.y;
+        float Q = ph->stokes.y - ph->stokes.x;
         float U = ph->stokes.z;
         float DoLP = __fdividef(sqrtf(Q*Q+U*U), ph->stokes.x + ph->stokes.y);
-        float K = __fdividef(P11-P22,P11+P22+2*P12);
+        float K = __fdividef(P22-P11,P11+P22+2*P12);
         if (abs(Q) > 0.F) gamma   = 0.5F * atan2((double)U,(double)Q);
         float fpsi_cond_max = (1.F + DoLP * fabs(K)  )/DEUXPI;
         int niter=0;
@@ -1715,6 +1721,9 @@ __device__ void scatter(Photon* ph,
 		float debias = 1.F;
         #ifdef BIAS
 		debias = __fdividef( 2., P11 + P22 + 2*P12 ); // Debias is equal to the inverse of the phase function
+		operator*=(ph->stokes, debias); 
+        #else
+        debias = __fdividef( 1., ph->stokes.x + ph->stokes.y);
 		operator*=(ph->stokes, debias); 
         #endif
         #ifdef BACK
