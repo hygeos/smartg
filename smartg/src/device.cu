@@ -1605,12 +1605,6 @@ __device__ void scatter(Photon* ph,
 
 		/////////////
 		// Get Scattering matrix from CDF
-		/*P11 = func[ipha*NF+iang].p_P11;
-		P12 = func[ipha*NF+iang].p_P12;
-		P22 = func[ipha*NF+iang].p_P22;
-		P33 = func[ipha*NF+iang].p_P33;
-		P43 = func[ipha*NF+iang].p_P43;
-		P44 = func[ipha*NF+iang].p_P44;*/
 		P11 = (1-zang)*func[ipha*NF+iang].p_P11 + zang*func[ipha*NF+iang+1].p_P11;
 		P12 = (1-zang)*func[ipha*NF+iang].p_P12 + zang*func[ipha*NF+iang+1].p_P12;
 		P22 = (1-zang)*func[ipha*NF+iang].p_P22 + zang*func[ipha*NF+iang+1].p_P22;
@@ -1625,19 +1619,19 @@ __device__ void scatter(Photon* ph,
         float fpsi_cond=0.F; 
         float fpsi=0.F; 
         float gamma=0.F; 
-        float Q = ph->stokes.y - ph->stokes.x;
-        float U = ph->stokes.z;
+        float Q = ph->stokes.x - ph->stokes.y;
+        float U = -ph->stokes.z;
         float DoLP = __fdividef(sqrtf(Q*Q+U*U), ph->stokes.x + ph->stokes.y);
-        float K = __fdividef(P22-P11,P11+P22+2*P12);
+        float K = __fdividef(P11-P22,P11+P22+2*P12);
         if (abs(Q) > 0.F) gamma   = 0.5F * atan2((double)U,(double)Q);
-        float fpsi_cond_max = (1.F + DoLP * fabs(K)  )/DEUXPI;
+        float fpsi_cond_max = (1.F + DoLP * fabs(K) )/DEUXPI;
         int niter=0;
         while (fpsi >= fpsi_cond)
             {
             niter++;
 		    psi = RAND * DEUXPI;	
             fpsi= RAND * fpsi_cond_max;
-            fpsi_cond = (1.F + DoLP * K * cosf(2*(psi-gamma)))/DEUXPI;
+            fpsi_cond = (1.F + DoLP * K * cosf(2*(psi-gamma)) )/DEUXPI;
             if (niter >= 100) {
                 // safety check
                 #ifdef DEBUG
@@ -1723,11 +1717,11 @@ __device__ void scatter(Photon* ph,
 		debias = __fdividef( 2., P11 + P22 + 2*P12 ); // Debias is equal to the inverse of the phase function
 		operator*=(ph->stokes, debias); 
         #else
-        debias = __fdividef( 1., ph->stokes.x + ph->stokes.y);
+        debias = __fdividef( 1., ph->stokes.x + ph->stokes.y); //Normalization of the Stokes vector
 		operator*=(ph->stokes, debias); 
         #endif
         #ifdef BACK
-        ph->M  = mul(ph->M ,   make_diag_float4x4(debias));
+        ph->M  = mul(ph->M ,   make_diag_float4x4(debias)); // Bias sampling scheme only for backward mode
         //ph->Mf = mul(ph->Mf ,  make_diag_float4x4(debias));
         #endif
 	}
