@@ -921,19 +921,32 @@ def rayleigh(N, DEPO):
     P44bis = P33bis*DELTA_SECO
 
     # parameters equally spaced in scattering probabiliy [0, 1]
-    pha['p_P11'][:] = P11
+    # pha['p_P11'][:] = P11
+    # pha['p_P12'][:] = P12
+    # pha['p_P22'][:] = T_demi*(DELTA*cTh2[:] + DELTA_PRIM)
+    # pha['p_P33'][:] = P33bis*cTh[:] # U
+    # pha['p_P44'][:] = P44bis*cTh[:] # V
+    # pha['p_ang'][:] = theta[:] # angle
+
+    pha['p_P11'][:] = T_demi*(DELTA*cTh2[:] + DELTA_PRIM)
     pha['p_P12'][:] = P12
-    pha['p_P22'][:] = T_demi*(DELTA*cTh2[:] + DELTA_PRIM)
+    pha['p_P22'][:] = P11
     pha['p_P33'][:] = P33bis*cTh[:] # U
     pha['p_P44'][:] = P44bis*cTh[:] # V
     pha['p_ang'][:] = theta[:] # angle
 
     # parameters equally spaced in scattering angle [0, 180]
-    pha['a_P11'][:] = P11
+    pha['a_P11'][:] = T_demi*(DELTA*cTh2LE[:] + DELTA_PRIM) 
     pha['a_P12'][:] = P12
-    pha['a_P22'][:] = T_demi*(DELTA*cTh2LE[:] + DELTA_PRIM) 
+    pha['a_P22'][:] = P11
     pha['a_P33'][:] = P33bis*cThLE[:]  # U
     pha['a_P44'][:] = P44bis*cThLE[:]  # V
+
+    # pha['a_P11'][:] = P11
+    # pha['a_P12'][:] = P12
+    # pha['a_P22'][:] = T_demi*(DELTA*cTh2LE[:] + DELTA_PRIM) 
+    # pha['a_P33'][:] = P33bis*cThLE[:]  # U
+    # pha['a_P44'][:] = P44bis*cThLE[:]  # V
 
     return pha
 
@@ -986,14 +999,18 @@ def calculF(profile, N, DEPO, kind):
         # probability between 0 and 1
         z = (np.arange(N, dtype='float64')+1)/N
         angN = (np.arange(N, dtype='float64'))/(N-1)*np.pi
-        f1 = interp1d(angles, phase[1,:])
-        f2 = interp1d(angles, phase[0,:])
+        # f1 = interp1d(angles, phase[1,:])
+        # f2 = interp1d(angles, phase[0,:])
+        f1 = interp1d(angles, phase[0,:])
+        f2 = interp1d(angles, phase[1,:])
         f3 = interp1d(angles, phase[2,:])
         f4 = interp1d(angles, phase[3,:])
 
         # parameters equally spaced in scattering probability
-        phase_H['p_P11'][idx, :] = interp1d(scum, phase[1,:])(z)  # I par P11
-        phase_H['p_P22'][idx, :] = interp1d(scum, phase[0,:])(z)  # I per P22
+        # phase_H['p_P11'][idx, :] = interp1d(scum, phase[1,:])(z)  # I par P11
+        # phase_H['p_P22'][idx, :] = interp1d(scum, phase[0,:])(z)  # I per P22
+        phase_H['p_P11'][idx, :] = interp1d(scum, phase[0,:])(z)  # I par P11
+        phase_H['p_P22'][idx, :] = interp1d(scum, phase[1,:])(z)  # I per P22
         phase_H['p_P33'][idx, :] = interp1d(scum, phase[2,:])(z)  # U P33
         phase_H['p_P43'][idx, :] = interp1d(scum, phase[3,:])(z)  # V P43
         phase_H['p_P44'][idx, :] = interp1d(scum, phase[2,:])(z)  # V P44= P33
