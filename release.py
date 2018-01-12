@@ -119,7 +119,7 @@ def main():
     version_file = 'version.txt'
     with open(version_file, 'w') as fp:
         shasum = Popen(['git', 'rev-parse', 'HEAD'], stdout=PIPE).communicate()[0]
-        fp.write(shasum)
+        fp.write(shasum.decode())
         fp.write(version)
         fp.write('\n')
     tar.add(version_file, arcname=join('smartg', version_file))
