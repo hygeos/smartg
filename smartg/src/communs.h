@@ -164,7 +164,7 @@ public:
 
     #ifdef BACK
     float4x4 M;
-    float4x4 Mf;
+    //float4x4 Mf;
     #endif
 
 private:

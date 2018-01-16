@@ -1620,10 +1620,10 @@ __device__ void scatter(Photon* ph,
         float fpsi=0.F; 
         float gamma=0.F; 
         float Q = ph->stokes.x - ph->stokes.y;
-        float U = -ph->stokes.z;
+        float U = ph->stokes.z;
         float DoLP = __fdividef(sqrtf(Q*Q+U*U), ph->stokes.x + ph->stokes.y);
         float K = __fdividef(P11-P22,P11+P22+2*P12);
-        if (abs(Q) > 0.F) gamma   = 0.5F * atan2((double)U,(double)Q);
+        if (abs(Q) > 0.F) gamma   = 0.5F * atan2(-(double)U,(double)Q);
         float fpsi_cond_max = (1.F + DoLP * fabs(K) )/DEUXPI;
         int niter=0;
         while (fpsi >= fpsi_cond)
@@ -1650,7 +1650,7 @@ __device__ void scatter(Photon* ph,
                 break;
               }
 		    }
-		int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+		/*int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
 		if (idx == -1){
 			printf("P11 = %.3f, P12 = %.3f, P22 = %.3f, P33 = %.3f, P43 = %.3f, P44 = %.3f\n", P11, P12, P22, P33, P43, P44);
             printf("%i  S=(%f,%f), DoLP, gamma=(%f,%f) psi,fpsi,fpsi_cond,theta=(%f,%f,%f,%f) \n",
@@ -1664,7 +1664,7 @@ __device__ void scatter(Photon* ph,
                         fpsi_cond,
                         theta/PI*180
                       );
-		 }
+		 }*/
 
         #else
 		/////////////
@@ -1712,13 +1712,13 @@ __device__ void scatter(Photon* ph,
 
 	if (!le){
 		// Bias sampling scheme 2): Debiasing
-		float debias = 1.F;
         #ifdef BIAS
-		debias = __fdividef( 2., P11 + P22 + 2*P12 ); // Debias is equal to the inverse of the phase function
-		operator*=(ph->stokes, debias); 
+		float debias = 1.F;
+		debias = __fdividef( 2.*(ph->stokes.x + ph->stokes.y), P11 + P22 + 2*P12 ); // Debias is equal to the inverse of the phase function
+        ph->weight*=debias;
+		operator/=(ph->stokes, ph->stokes.x + ph->stokes.y); 
         #else
-        debias = __fdividef( 1., ph->stokes.x + ph->stokes.y); //Normalization of the Stokes vector
-		operator*=(ph->stokes, debias); 
+		operator/=(ph->stokes, ph->stokes.x + ph->stokes.y); 
         #endif
         #ifdef BACK
         ph->M  = mul(ph->M ,   make_diag_float4x4(debias)); // Bias sampling scheme only for backward mode
@@ -1727,10 +1727,10 @@ __device__ void scatter(Photon* ph,
 	}
 
 	else {
-        //ph->weight /= 4.F; // Phase function normalization
-		operator*=(ph->stokes, 0.25F); 
+        ph->weight /= 4.F; // Phase function normalization
+		//operator*=(ph->stokes, 0.25F); 
         #ifdef BACK
-        ph->M  = mul(ph->M ,   make_diag_float4x4(0.25F));
+        //ph->M  = mul(ph->M ,   make_diag_float4x4(0.25F));
         //ph->Mf = mul(ph->Mf ,  make_diag_float4x4(0.25F));
         #endif
     }
@@ -1874,7 +1874,7 @@ __device__ void surfaceAgitee(Photon* ph, int le,
 	float rpar, rper, rparper, rparper_cross;	// Coefficient de reflexion parallèle et perpendiculaire
 	float rpar2;		// Coefficient de reflexion parallèle au carré
 	float rper2;		// Coefficient de reflexion perpendiculaire au carré
-	float rat;			// Rapport des coefficients de reflexion perpendiculaire et parallèle
+	float rat  ;	    // Reflection coefficient for unpolarized light
 	int ReflTot;		// Flag pour la réflexion totale sur le dioptre
 	float cot;			// Cosinus de l'angle de réfraction du photon
 	float ncot, ncTh;	// ncot = nind*cot, ncoi = nind*cTh
@@ -2134,18 +2134,20 @@ __device__ void surfaceAgitee(Photon* ph, int le,
         tper2= tper * tper;
         tparper = tpar * tper;
         // DR rat is the energetic reflection factor used to normalize the R and T matrix (see Xun 2014)
-		rat =  __fdividef(rper2 + rpar2, 2.F);
-        //rat =  __fdividef(ph->stokes.x*rper2 + ph->stokes.y*rpar2,ph->stokes.x+ph->stokes.y);
+        #ifdef BIAS
+		rat =  __fdividef(rpar2 + rper2, 2.F);
+        #else
+        rat =  __fdividef(ph->stokes.x*rpar2 + ph->stokes.y*rper2, ph->stokes.x+ph->stokes.y);
+        #endif
 		ReflTot = 0;
-        //int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
-        //if (idx==0 && (ph->loc==SURF0M) && (count_level==UP0P) && (le)) printf("DEB %.3f %.3f %.3f %.4f\n", v.z, no.z, ph->v.z,psi);
+        /*int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
+        if (idx==0 && (ph->loc==SURF0M) && (count_level==UP0P) && (le)) printf("DEB %.3f %.3f %.3f %.4f\n", v.z, no.z, ph->v.z,psi);*/
 	}
 	else{
 		cot = 0.f;
 		rpar = 1.f;
 		rper = 1.f;
         rat = 1.f;
-        // DR rat is normalizing the relection matrix
 		rpar2 = rpar*rpar;
 		rper2 = rper*rper;
         rparper = __fdividef(2.*sTh*sTh*sTh*sTh, 1.-(1.+nind * nind)*cTh*cTh) - 1.; // DR !! Mobley 2015
@@ -2200,10 +2202,10 @@ __device__ void surfaceAgitee(Photon* ph, int le,
      // 2. Reflected/Refracted direction, Normalization of qv
      LambdaR  =  Lambda(fabs(v.z),sig);
 
-     if (WAVE_SHADOWd)
-         qv /= (1.F + LambdaS + LambdaR);
-     else
-         qv /= (1.F + LambdaS);
+     float norma;
+     if (WAVE_SHADOWd) norma = 1. + LambdaS + LambdaR;
+     else norma = 1. + LambdaS;
+     qv /= norma;
 
      // apply the BRDF to the weight
      ph->weight *= __fdividef(qv * jac , avz);
@@ -2220,13 +2222,17 @@ __device__ void surfaceAgitee(Photon* ph, int le,
        ){	// Reflection
 
 	    R= make_float4x4(
-		    rper2, 0., 0., 0.,
-		    0., rpar2, 0., 0.,
+		    rpar2, 0., 0., 0.,
+		    0., rper2, 0., 0.,
 		    0., 0.,  rparper, rparper_cross,
 		    0., 0., -rparper_cross, rparper
 		    );
 
         ph->stokes = mul(R,ph->stokes);
+        #ifndef BIAS
+        ph->weight *= ph->stokes.x + ph->stokes.y;
+		operator/=(ph->stokes, ph->stokes.x + ph->stokes.y); 
+        #endif
 
         #ifdef BACK
         ph->M   = mul(ph->M,mul(L,R));
@@ -2244,8 +2250,7 @@ __device__ void surfaceAgitee(Photon* ph, int le,
         // DR so twice and thus we normalize by rat (Xun 2014).
         // DR not to be applied for forced reflection (SUR=1 or total reflection) where there is no random selection
 		if (SURd==3 && !ReflTot && !le) {
-		//if (SURd==3 && ReflTot==0) {
-			ph->weight /= rat;
+            ph->weight /=rat;
 			}
 
         #ifdef SPHERIQUE
@@ -2284,22 +2289,24 @@ __device__ void surfaceAgitee(Photon* ph, int le,
 
 
 else if (  (!le && !condR) 
-        //|| ( le && (ph->loc==SURF0M) && (count_level == UP0P  ) )
-        //|| ( le && (ph->loc==SURF0P) && (count_level == DOWN0M) )
         || ( le && (ph->loc==SURF0M) && (count_level == UP0P  ) && !ReflTot )
         || ( le && (ph->loc==SURF0P) && (count_level == DOWN0M) && !ReflTot )
         ){	// Transmission
 
     float geo_trans_factor = nind* cot/cTh; // DR Mobley 2015 OK , see Xun 2014, Zhai et al 2010
     T= make_float4x4(
-        tper2, 0., 0., 0.,
-        0., tpar2, 0., 0.,
+        tpar2, 0., 0., 0.,
+        0., tper2, 0., 0.,
         0., 0., tparper, 0.,
         0., 0., 0., tparper
         );
     
     ph->stokes = mul(T,ph->stokes);
     ph->weight *= geo_trans_factor;
+    #ifndef BIAS
+    ph->weight *= ph->stokes.x + ph->stokes.y;
+	operator/=(ph->stokes, ph->stokes.x + ph->stokes.y); 
+    #endif
 
     #ifdef BACK
     ph->M   = mul(ph->M,mul(L,T));
@@ -2535,13 +2542,17 @@ __device__ void surfaceBRDF(Photon* ph, int le,
     }
 
 	R= make_float4x4(
-	   rper2, 0., 0., 0.,
-	   0., rpar2, 0., 0.,
+	   rpar2, 0., 0., 0.,
+	   0., rper2, 0., 0.,
 	   0., 0., rparper, rparper_cross,
 	   0., 0., -rparper_cross, rparper
 	   );
 
     ph->stokes = mul(R,ph->stokes);
+    #ifndef BIAS
+    ph->weight *= ph->stokes.x + ph->stokes.y;
+	operator/=(ph->stokes, ph->stokes.x + ph->stokes.y); 
+    #endif
 
     #ifdef BACK
     ph->M   = mul(ph->M,mul(L,R));
@@ -2561,13 +2572,14 @@ __device__ void surfaceBRDF(Photon* ph, int le,
         // Add Wave shadowing
         // compute wave shadow outgoing photon
         float LambdaR;
-        LambdaR  =  Lambda(fabs(ph->v.z),sig);
-        //compute wave shadow function incoming and outgoing photon
+        LambdaR  =  Lambda(fabs(v.z),sig);
         ph->weight *= __fdividef(1.F, 1.F + LambdaR + LambdaS);
+        int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
+        if(idx==0)printf("ts:%f tv:%f shadow:%f\n",avz,fabs(v.z),__fdividef(1.F, 1.F + LambdaR + LambdaS));
     }
 
     if (!le) {
-		/* Russian roulette for propagating photons **/
+		// Russian roulette for propagating photons 
 		if( ph->weight < WEIGHTRR ){
 			if( RAND < __fdividef(ph->weight,WEIGHTRR) ){ph->weight = WEIGHTRR;}
 			else{ph->loc = ABSORBED;}
@@ -2914,12 +2926,13 @@ __device__ void countPhoton(Photon* ph,
   	/*if( ph->vy<0.f )
     		s3 = -s3;*/  // DR 
 	
+    /*
     // Change sign convention for compatibility with OS
     st.z = -st.z;
 
 	float tmp = st.x;
 	st.x = st.y;
-	st.y = tmp;
+	st.y = tmp;*/
 	
 
 
@@ -3369,10 +3382,29 @@ __device__ float get_OD(int BEERd, struct Profile prof) {
 
 __device__ float Lambda(float avz, float sig) {
     float l;
-    if (avz == 1.F) l = 1.F;
+    if (avz == 1.F) l = 0.F;
     else {
         float nu = __fdividef(1.F, tanf(acosf(avz))*(sqrtf(2.) * sig));
         l = __fdividef(__expf(-nu*nu) - nu * sqrtf(PI) * erfcf(nu),2.F * nu * sqrtf(PI));
+    }
+    return l;
+}
+
+__device__ double LambdaM(double avz, double sig2) {
+    // Mischenko implementation
+    double l;
+    if (avz == 1.F) l = 0.;
+    else {
+        double s1,s2,s3,xi,xxi,dcot,t1,t2;
+        s1 = __dsqrt_rn(2.*(double)sig2/(double)PI);
+        s3 = __drcp_rn(__dsqrt_rn(2.*(double)sig2));
+        s2 = s3*s3;
+        xi = (double)avz;
+        xxi=xi*xi;
+        dcot =  xi *__drcp_rn(__dsqrt_rn(1.-xxi));
+        t1 = exp(-dcot*dcot*s2);
+        t2 = erfc(dcot*s3);
+        l  = 0.5*(s1*t1/dcot-t2);
     }
     return l;
 }

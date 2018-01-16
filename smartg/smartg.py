@@ -915,7 +915,8 @@ def rayleigh(N, DEPO):
     cThLE = np.cos(thetaLE)
     cTh2LE = cThLE*cThLE
     T_demi = (3.0/2.0)
-    P11 = T_demi*(DELTA+DELTA_PRIM)
+    P22 = T_demi*(DELTA+DELTA_PRIM)
+    #P11 = T_demi*(DELTA+DELTA_PRIM)
     P12 = T_demi*DELTA_PRIM
     P33bis = T_demi*DELTA
     P44bis = P33bis*DELTA_SECO
@@ -930,7 +931,7 @@ def rayleigh(N, DEPO):
 
     pha['p_P11'][:] = T_demi*(DELTA*cTh2[:] + DELTA_PRIM)
     pha['p_P12'][:] = P12
-    pha['p_P22'][:] = P11
+    pha['p_P22'][:] = P22
     pha['p_P33'][:] = P33bis*cTh[:] # U
     pha['p_P44'][:] = P44bis*cTh[:] # V
     pha['p_ang'][:] = theta[:] # angle
@@ -938,7 +939,7 @@ def rayleigh(N, DEPO):
     # parameters equally spaced in scattering angle [0, 180]
     pha['a_P11'][:] = T_demi*(DELTA*cTh2LE[:] + DELTA_PRIM) 
     pha['a_P12'][:] = P12
-    pha['a_P22'][:] = P11
+    pha['a_P22'][:] = P22
     pha['a_P33'][:] = P33bis*cThLE[:]  # U
     pha['a_P44'][:] = P44bis*cThLE[:]  # V
 
