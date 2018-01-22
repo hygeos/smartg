@@ -1711,15 +1711,14 @@ __device__ void scatter(Photon* ph,
     #endif
 
 	if (!le){
-		// Bias sampling scheme 2): Debiasing
-        #ifdef BIAS
 		float debias = 1.F;
-		debias = __fdividef( 2.*(ph->stokes.x + ph->stokes.y), P11 + P22 + 2*P12 ); // Debias is equal to the inverse of the phase function
-        ph->weight*=debias;
-		operator/=(ph->stokes, ph->stokes.x + ph->stokes.y); 
+        #ifdef BIAS
+		// Bias sampling scheme 2): Debiasing and normalizing
+		debias = __fdividef(2.F, P11 + P22 + 2*P12 ); // Debias is equal to the inverse of the phase function
         #else
-		operator/=(ph->stokes, ph->stokes.x + ph->stokes.y); 
+        debias = __fdividef(1.F, ph->stokes.x + ph->stokes.y);
         #endif
+		operator*=(ph->stokes, debias); 
         #ifdef BACK
         ph->M  = mul(ph->M ,   make_diag_float4x4(debias)); // Bias sampling scheme only for backward mode
         //ph->Mf = mul(ph->Mf ,  make_diag_float4x4(debias));
@@ -1728,11 +1727,6 @@ __device__ void scatter(Photon* ph,
 
 	else {
         ph->weight /= 4.F; // Phase function normalization
-		//operator*=(ph->stokes, 0.25F); 
-        #ifdef BACK
-        //ph->M  = mul(ph->M ,   make_diag_float4x4(0.25F));
-        //ph->Mf = mul(ph->Mf ,  make_diag_float4x4(0.25F));
-        #endif
     }
 
 
