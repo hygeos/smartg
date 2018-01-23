@@ -56,7 +56,6 @@ __device__ __constant__ float RTER;
 __device__ __constant__ int NWLPROBA;
 __device__ __constant__ int BEERd;
 __device__ __constant__ int NLOWd;
-__device__ __constant__ int BACKd;
 __device__ __constant__ float POSXd;
 __device__ __constant__ float POSYd;
 __device__ __constant__ float POSZd;

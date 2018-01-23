@@ -2188,9 +2188,6 @@ __device__ void surfaceAgitee(Photon* ph, int le,
                 jac = __fdividef(nind*nind * cot, (ncot - cTh)*(ncot - cTh)); // See Zhai et al., 2010
             }
             else qv = 0.F;
-            #ifdef BACK
-            /* for reciprocity of transmission function see Walter 2007 */
-            #endif
      }
 
      // 2. Reflected/Refracted direction, Normalization of qv
@@ -2303,8 +2300,9 @@ else if (  (!le && !condR)
     #endif
 
     #ifdef BACK
+    /* for reciprocity of transmission function see Walter 2007 */
     ph->M   = mul(ph->M,mul(L,T));
-    //ph->weight /= nind*nind;
+    ph->weight /= nind*nind;
     #endif
     
     alpha  = __fdividef(cTh, nind) - cot;
@@ -2933,7 +2931,7 @@ __device__ void countPhoton(Photon* ph,
     float weight_irr = fabs(ph->v.z);
 	//if (FLUXd==1 && LEd==0 & weight_irr > 0.01f) weight /= weight_irr;
     // In Forward mode, and in case of spherical flux, update the weight
-	if (BACKd ==0 && FLUXd==2 && LEd==0 & weight_irr > 0.001f) weight /= weight_irr;
+	if (FLUXd==2 && LEd==0 & weight_irr > 0.001f) weight /= weight_irr;
 
     #ifdef DEBUG
     int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);

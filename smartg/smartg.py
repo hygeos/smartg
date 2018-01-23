@@ -199,7 +199,6 @@ class Sensor(object):
     '''
     Definition of the sensor
 
-    BACK: Backward mode (default 1, backward mode)
     POS: Position (X,Y,Z) in cartesian coordinates, default origin
     TH,PH: Direction (theta, phi) of zenith and azimuth angles of viewing direction
             (Zenith> 90 for downward looking, <90 for upward, default Zenith)
@@ -207,9 +206,8 @@ class Sensor(object):
     FOV: Field of View (deg, default 0.)
     TYPE: Radiance (0), Planar flux (1), Spherical Flux (2), default 0
     '''
-    def __init__(self, BACK=1, POSX=0., POSY=0., POSZ=0., THDEG=0., PHDEG=180., LOC='SURF0P', FOV=0., TYPE=0):
+    def __init__(self, POSX=0., POSY=0., POSZ=0., THDEG=0., PHDEG=180., LOC='SURF0P', FOV=0., TYPE=0):
         self.dict = {
-                'BACK':  BACK,
                 'POSX':  POSX,
                 'POSY':  POSY,
                 'POSZ':  POSZ,
@@ -539,11 +537,11 @@ class Smartg(object):
         if sensor is None:
             # by defaut sensor in forward mode, with ZA=180.-THVDEG, PHDEG=180., FOV=0.
             if (SIM == 3):
-                sensor = Sensor(BACK=0, THDEG=180.-THVDEG, PHDEG=180., LOC='OCEAN') 
+                sensor = Sensor(THDEG=180.-THVDEG, PHDEG=180., LOC='OCEAN') 
             elif ((SIM == -1) or (SIM == 0)):  
-                sensor = Sensor(BACK=0, THDEG=180.-THVDEG, PHDEG=180., LOC='SURF0P') 
+                sensor = Sensor(THDEG=180.-THVDEG, PHDEG=180., LOC='SURF0P') 
             else:
-                sensor = Sensor(BACK=0, POSX=X0.get()[0], POSY=X0.get()[1], POSZ=X0.get()[2], THDEG=180.-THVDEG, PHDEG=180., LOC='ATMOS') 
+                sensor = Sensor(POSX=X0.get()[0], POSY=X0.get()[1], POSZ=X0.get()[2], THDEG=180.-THVDEG, PHDEG=180., LOC='ATMOS') 
 
 
         #
@@ -1079,7 +1077,6 @@ def InitConst(surf, env, NATM, NOCE, mod,
     copy_to_device('BEERd', BEER, np.int32)
     copy_to_device('NLOWd', NLOW, np.int32)
     if sensor != None:
-        copy_to_device('BACKd', sensor.dict['BACK'], np.int32)
         copy_to_device('POSXd', sensor.dict['POSX'], np.float32)
         copy_to_device('POSYd', sensor.dict['POSY'], np.float32)
         copy_to_device('POSZd', sensor.dict['POSZ'], np.float32)
