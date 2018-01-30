@@ -1969,6 +1969,7 @@ __device__ void surfaceAgitee(Photon* ph, int le,
         // DR rejection method: to exclude unphysical azimuth (leading to incident angle theta >=PI/2)
         // DR we continue until acceptable value for alpha
 
+
         while (theta >= DEMIPI) {
            iter++;
            if (iter >= 100) {
@@ -2039,7 +2040,6 @@ __device__ void surfaceAgitee(Photon* ph, int le,
 		 half = operator-(v*nind, ph->v) *(-1.F*sign);
          // test : exclude facets whose normal are not on the same side as incoming photons
          if ((half.z * sign) < 0) {
-             ph->weight = 0.F;
              ph->loc=REMOVED;
              return;
          }
@@ -2096,7 +2096,7 @@ __device__ void surfaceAgitee(Photon* ph, int le,
 
 	// Rotation of Stokes parameters
 
-	//temp = dot(cross(ph->v,ph->u),normalize(cross(ph->v,no)));
+	// temp = dot(cross(ph->v,ph->u),normalize(cross(ph->v,no)));
     // Simplification :
 	temp = __fdividef(dot(no, ph->u), sTh);
 	psi = acosf( fmin(1.00F, fmax( -1.F, temp ) ));	
@@ -2253,7 +2253,7 @@ __device__ void surfaceAgitee(Photon* ph, int le,
         //
         // photon next location
         //
-         if (ph->loc == SURF0P) {
+        if (ph->loc == SURF0P) {
             if (vzn > 0) {  // avoid multiple reflexion above the surface
                 // SURF0P becomes ATM or SPACE
                 if( SIMd==-1 || SIMd==0 ){
@@ -2262,18 +2262,18 @@ __device__ void surfaceAgitee(Photon* ph, int le,
                     ph->loc = ATMOS;
                 }
             } // else, no change of location
-        else if (SINGLEd) ph->loc = REMOVED;
-     } else {
-        if (vzn < 0) {  // avoid multiple reflexion under the surface
-            // SURF0M becomes OCEAN or ABSORBED
-            if( SIMd==1 ){
-                ph->loc = ABSORBED;
-            } else{
-                ph->loc = OCEAN;
-            }
-        } // else, no change of location
-        else if (SINGLEd) ph->loc = REMOVED;
-     }
+            else if (SINGLEd) ph->loc = REMOVED;
+        } else {
+            if (vzn < 0) {  // avoid multiple reflexion under the surface
+               // SURF0M becomes OCEAN or ABSORBED
+               if( SIMd==1 ){
+                  ph->loc = ABSORBED;
+               } else{
+                  ph->loc = OCEAN;
+               }
+            } // else, no change of location
+            else if (SINGLEd) ph->loc = REMOVED;
+        }
 
 
 } // Reflection
@@ -2303,6 +2303,8 @@ else if (  (!le && !condR)
     /* for reciprocity of transmission function see Walter 2007 */
     ph->M   = mul(ph->M,mul(L,T));
     ph->weight /= nind*nind;
+    /* Bias sample correction for facet slope now has to be modidied since incident angle and refracted angle are not equal 
+    ph->weight *= cot/cTh;*/
     #endif
     
     alpha  = __fdividef(cTh, nind) - cot;
@@ -2566,8 +2568,8 @@ __device__ void surfaceBRDF(Photon* ph, int le,
         float LambdaR;
         LambdaR  =  Lambda(fabs(v.z),sig);
         ph->weight *= __fdividef(1.F, 1.F + LambdaR + LambdaS);
-        int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
-        if(idx==0)printf("ts:%f tv:%f shadow:%f\n",avz,fabs(v.z),__fdividef(1.F, 1.F + LambdaR + LambdaS));
+        /*int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
+        if(idx==0)printf("ts:%f tv:%f shadow:%f\n",avz,fabs(v.z),__fdividef(1.F, 1.F + LambdaR + LambdaS));*/
     }
 
     if (!le) {
@@ -2806,7 +2808,10 @@ __device__ void countPhoton(Photon* ph,
        }
     }
 
+    //int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
+    //if (idx==0 && LEd==1 && count_level==DOWN0M) printf("avant %f %f %f %f %d %f\n",ph->v.z,theta,psi,ph->stokes.x-ph->stokes.y, ph->loc,ph->stokes.z);
     rotateStokes(ph->stokes, psi, &st);
+    //if (idx==0 && LEd==1 && count_level==DOWN0M) printf("apres %f %f %f %f %d %f\n",ph->v.z,theta,psi,st.x-st.y, ph->loc,st.z);
     st.w = ph->stokes.w;
 
     #ifdef BACK
@@ -2820,6 +2825,7 @@ __device__ void countPhoton(Photon* ph,
     stback = mul(ph->M, stback);
     //stforw = mul(ph->Mf,stforw);
     st = stback;
+    //st = stforw;
     #endif
 
 	float weight = ph->weight;
