@@ -154,10 +154,8 @@ extern "C" {
         // Si le photon est à NONE on l'initialise et on le met à la localisation correspondant à la simulaiton en cours
         if((ph.loc == NONE) && this_thread_active){
 
-            initPhoton2(&ph, prof_atm, prof_oc, spectrum, X0, NPhotonsIn, wl_proba_icdf, tabthv, tabphi,
+            initPhoton(&ph, prof_atm, prof_oc, spectrum, X0, NPhotonsIn, wl_proba_icdf, tabthv, tabphi,
                        &rngstate);
-            //initPhoton(&ph, prof_atm, prof_oc, spectrum, X0, NPhotonsIn, wl_proba_icdf,
-             //          &rngstate);
             iloop = 1;
             #ifdef DEBUG_PHOTON
             display("INIT", &ph);
@@ -632,13 +630,12 @@ extern "C" {
 
 
 /**********************************************************
-*	> Modélisation phénomènes physiques
+*	> Phyisical Processes
 ***********************************************************/
-/* initPhoton2
-   New init with sensor class
+/* initPhoton
 */
 
-__device__ void initPhoton2(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc,
+__device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc,
                            struct Spectrum *spectrum, float *X0, unsigned long long *NPhotonsIn,
                            long long *wl_proba_icdf, float* tabthv, float* tabphi,
                            struct RNG_State *rngstate) {
@@ -880,144 +877,6 @@ __device__ void initPhoton2(Photon* ph, struct Profile *prof_atm, struct Profile
     #endif
 
     }
-
-/* initPhoton
-* Initialise le photon dans son état initial avant l'entrée dans l'atmosphère
-*/
-__device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc,
-                           struct Spectrum *spectrum, float *X0, unsigned long long *NPhotonsIn,
-                           long long *wl_proba_icdf,
-                           struct RNG_State *rngstate) {
-    ph->nint = 0;
-
-	// Initialisation du vecteur vitesse
-	ph->v.x = - STHVd;
-	ph->v.y = 0.F;
-	ph->v.z = - CTHVd;
-
-	
-	// Initialisation du vecteur orthogonal au vecteur vitesse
-	ph->u.x = -ph->v.z;
-	ph->u.y = 0.F;
-	ph->u.z = ph->v.x;
-	
-    // Initialisation de la longueur d onde
-     //mono chromatique
-    if (NWLPROBA == 0) {
-        ph->ilam = __float2uint_rz(RAND * NLAMd);
-    } else {
-        ph->ilam = wl_proba_icdf[__float2uint_rz(RAND * NWLPROBA)];
-    }
-
-    #ifdef ALIS
-    //ph->ilam = 0;
-    //ph->ilam = (NLAMd-1)/2;
-    for (int k=0; k<NLAMd; k++) atomicAdd(NPhotonsIn +k, 1);
-    #else
-    atomicAdd(NPhotonsIn+ph->ilam, 1);
-    #endif
-
-	ph->wavel = spectrum[ph->ilam].lambda;
-
-
-    if ((SIMd == -2) || (SIMd == 1) || (SIMd == 2)) {
-
-        //
-        // Initialisation du photon au sommet de l'atmosphère
-        //
-
-        ph->pos.x = X0[0];
-        ph->pos.y = X0[1];
-        ph->pos.z = X0[2];
-        ph->layer = 0;   // top of atmosphere
-
-        #ifdef SPHERIQUE
-		ph->radius = length(ph->pos);
-        #endif
-
-        ph->loc = ATMOS;
-        ph->tau = get_OD(BEERd, prof_atm[NATMd + ph->ilam*(NATMd+1)]) ;
-        ph->tau_abs = prof_atm[NATMd + ph->ilam*(NATMd+1)].OD_abs;
-
-    } else if ((SIMd == -1) || (SIMd == 0) || (SIMd == 3)) {
-
-        //
-        // Initialisation du photon à la surface ou dans l'océan
-        //
-        ph->pos = make_float3(0.,0.,0.);
-        #ifdef SPHERIQUE
-        ph->pos.z = RTER;
-        #endif
-
-        ph->tau = 0.f;
-        ph->tau_abs = 0.f;
-
-        if (SIMd == 3) {
-            ph->loc = OCEAN;
-            ph->layer = NOCEd;
-        } else {
-            ph->loc = SURF0P;
-            ph->layer = NATMd;
-        }
-
-    } else ph->loc = NONE;
-	
-    #ifdef ALIS
-    int DL=(NLAMd-1)/(NLOWd-1);
-    ph->nevt = 0;
-    ph->layer_prev[ph->nevt] = ph->layer;
-    ph->vz_prev[ph->nevt] = ph->v.z;
-    ph->epsilon_prev[ph->nevt] = 0.f;
-    for (int k=0; k<NLOWd; k++) {
-        ph->weight_sca[k] = 1.0f;
-        ph->tau_sca[k] = get_OD(1,prof_atm[NATMd + k*DL*(NATMd+1)]) ;
-    }
-    #endif
-
-	ph->weight = WEIGHTINIT;
-	
-	// Initialisation des paramètres de stokes du photon
-	ph->stokes.x = 0.5F;
-	ph->stokes.y = 0.5F;
-	ph->stokes.z = 0.F;
-	ph->stokes.w = 0.F;
-
-    #ifdef BACK
-    //ph->Mf= make_diag_float4x4 (1.F);
-    ph->M = make_diag_float4x4 (1.F);
-
-    /*float theta = acosf(fmin(1.F, fmax(-1.F, ph->v.z)));
-    float psi;
-    if (theta != 0.F) {
-        ComputePsi(ph, &psi, theta);
-    }
-    else {
-        // Compute Psi in the special case of zenith
-        float ux_phi;
-        float uy_phi;
-        float cos_psi;
-        float sin_psi;
-        float eps=1e-4;
-
-        ux_phi  = 1.F;
-        uy_phi  = 0.F;
-        cos_psi = (ux_phi*ph->u.x + uy_phi*ph->u.y);
-        if( cos_psi >  1.0) cos_psi =  1.0;
-        if( cos_psi < -1.0) cos_psi = -1.0;
-        sin_psi = sqrtf(1.0 - (cos_psi*cos_psi));
-        if( (abs((ph->u.x*cos_psi-ph->u.y*sin_psi)-ux_phi) < eps) && (abs((ph->u.x*sin_psi+ph->u.y*cos_psi)-uy_phi) < eps) ) {
-                psi = -acosf(cos_psi);
-        }
-        else{
-                psi = acosf(cos_psi);
-        } 
-      }
-    float4x4 L;
-    rotationM(psi,&L);
-    ph->M = L;*/
-    #endif
-}
-
 
 
 #ifdef SPHERIQUE
@@ -1851,7 +1710,7 @@ __device__ void surfaceAgitee(Photon* ph, int le,
 	float sig, sig2  ;
 	float beta = 0.F;	// Angle par rapport à la verticale du vecteur normal à une facette de vagues 
 	float sBeta;
-	float cBeta;
+	float cBeta, cBeta2;
 	
 	float alpha ;	//Angle azimutal du vecteur normal a une facette de vagues
 	
@@ -1953,8 +1812,8 @@ __device__ void surfaceAgitee(Photon* ph, int le,
     // DR Finally P = 1/A * P_alpha_beta  /cos(beta) cos(theta_inc)
 
 
-    sig = sqrtf(0.003F + 0.00512f *WINDSPEEDd);
-    sig2= sig * sig;
+    sig2 = 0.003F + 0.00512f *WINDSPEEDd;
+    sig  = sqrtf(sig2);
 
 
     /* SAMPLING */
@@ -2172,7 +2031,8 @@ __device__ void surfaceAgitee(Photon* ph, int le,
     if (le && (DIOPTREd!=0)) {
      // The weight depends on the normalized VISIBLE interaction PDF qv (Ross 2005) 
      // Compute p 
-     p =  __fdividef( __expf(-(1.F-cBeta*cBeta)/(cBeta*cBeta*sig2)) ,  cBeta*cBeta*cBeta * sig2); 
+     cBeta2 = cBeta*cBeta;
+     p =  __fdividef( __expf(-(1.F-cBeta2)/(cBeta2*sig2)) , cBeta2*cBeta * sig2); 
 
      if ((ph->loc==SURF0P) && (count_level==UP0P) ||
          (ph->loc==SURF0M) && (count_level==DOWN0M)) { // Reflection geometry
@@ -2303,7 +2163,7 @@ else if (  (!le && !condR)
     /* for reciprocity of transmission function see Walter 2007 */
     ph->M   = mul(ph->M,mul(L,T));
     ph->weight /= nind*nind;
-    /* Bias sample correction for facet slope now has to be modidied since incident angle and refracted angle are not equal 
+    /* Bias sample correction for facet slope now has to be modidied since incident angle and refracted angle are not equal ?
     ph->weight *= cot/cTh;*/
     #endif
     
@@ -2401,7 +2261,7 @@ __device__ void surfaceBRDF(Photon* ph, int le,
 	float cTh, sTh;	//cos et sin de l'angle d'incidence du photon sur le dioptre
 	
 	float sig, sig2  ;
-	float cBeta;
+	float cBeta, cBeta2;
 	
 	float nind; // relative index of refrection 
 	float temp;
@@ -2454,8 +2314,8 @@ __device__ void surfaceBRDF(Photon* ph, int le,
     #endif
     #endif
 
-    sig = sqrtf(0.003F + 0.00512f *WINDSPEEDd);
-    sig2= sig * sig;
+    sig2 = 0.003F + 0.00512f *WINDSPEEDd;
+    sig  = sqrtf(sig2);
 
     // Rough surface
     if (le) {
@@ -2522,18 +2382,9 @@ __device__ void surfaceBRDF(Photon* ph, int le,
     rparper = rpar * rper;
     rparper_cross = 0.F;
 
-    // Weighting
-    float LambdaS;
-    LambdaS  =  Lambda(avz,sig);
-
-    ph->weight *= __fdividef(1.F, cBeta * avz * fabs(v.z) ); // Common to all photons, cBeta for surface area unit correction
-    
-    ph->weight *=  __fdividef( __expf(-(1.F-cBeta*cBeta)/(cBeta*cBeta*sig2)) ,  cBeta*cBeta*cBeta * sig2)
-                 * __fdividef(1.F, 4.F  );
-    if (ph->weight <= 1e-15) {
-         ph->weight = 0.;
-         //return;
-    }
+    // BRDF Weighting
+    float cBeta2 = cBeta*cBeta;
+    ph->weight *=  __fdividef( __expf(-(1.F-cBeta2)/(cBeta2*sig2)), 4.F * cBeta2*cBeta2 * avz * fabs(v.z) * sig2);
 
 	R= make_float4x4(
 	   rpar2, 0., 0., 0.,
@@ -2565,7 +2416,8 @@ __device__ void surfaceBRDF(Photon* ph, int le,
     if (WAVE_SHADOWd) {
         // Add Wave shadowing
         // compute wave shadow outgoing photon
-        float LambdaR;
+        float LambdaR, LambdaS;
+        LambdaS  =  Lambda(avz,sig);
         LambdaR  =  Lambda(fabs(v.z),sig);
         ph->weight *= __fdividef(1.F, 1.F + LambdaR + LambdaS);
         /*int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
