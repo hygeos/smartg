@@ -660,7 +660,6 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     }
 	ph->wavel = spectrum[ph->ilam].lambda;
 
-
     // Position and optical thicknesses initializations
     ph->pos = make_float3(POSXd,POSYd,POSZd);
     ph->loc = LOCd;
@@ -801,7 +800,6 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
         ph->u.y = 0.F;
 	    ph->u.z = 0.F;
     }
-
 
     // Rotations of v and u in the detector direction THDEG,PHDEG
     float cPh;
@@ -1710,7 +1708,7 @@ __device__ void surfaceAgitee(Photon* ph, int le,
 	float sig, sig2  ;
 	float beta = 0.F;	// Angle par rapport à la verticale du vecteur normal à une facette de vagues 
 	float sBeta;
-	float cBeta, cBeta2;
+	float cBeta;
 	
 	float alpha ;	//Angle azimutal du vecteur normal a une facette de vagues
 	
@@ -2031,7 +2029,7 @@ __device__ void surfaceAgitee(Photon* ph, int le,
     if (le && (DIOPTREd!=0)) {
      // The weight depends on the normalized VISIBLE interaction PDF qv (Ross 2005) 
      // Compute p 
-     cBeta2 = cBeta*cBeta;
+     float cBeta2 = cBeta*cBeta;
      p =  __fdividef( __expf(-(1.F-cBeta2)/(cBeta2*sig2)) , cBeta2*cBeta * sig2); 
 
      if ((ph->loc==SURF0P) && (count_level==UP0P) ||
@@ -2261,7 +2259,7 @@ __device__ void surfaceBRDF(Photon* ph, int le,
 	float cTh, sTh;	//cos et sin de l'angle d'incidence du photon sur le dioptre
 	
 	float sig, sig2  ;
-	float cBeta, cBeta2;
+	float cBeta;
 	
 	float nind; // relative index of refrection 
 	float temp;
