@@ -133,9 +133,8 @@ public:
     float4 stokes;
 
     int layer;
-    float prop_aer;		// Aerosol proportion within the photon current layer
+    // float prop_aer;		// Aerosol proportion within the photon current layer
 	
-
     float tau;	// vertical coordinate in optical depth (extinction or scattering depending on BEER keyword)
                 // atmosphere : positive values
                 // ocean: negative values

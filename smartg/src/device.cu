@@ -1112,7 +1112,8 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
     ph->radius = length(ph->pos);
     #endif
 
-    ph->prop_aer = 1.f - prof_atm[ph->layer+ilam].pmol;
+    // ph->prop_aer = 1.f - prof_atm[ph->layer+ilam].pmol;
+	
     if (BEERd == 0) ph->weight *= prof_atm[ph->layer+ilam].ssa;
 }
 #endif // SPHERIQUE
@@ -1209,7 +1210,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             ilayer++;
         }
         ph->layer = ilayer;
-        ph->prop_aer = 1.f - prof_oc[ph->layer+ph->ilam*(NOCEd+1)].pmol;
+        // ph->prop_aer = 1.f - prof_oc[ph->layer+ph->ilam*(NOCEd+1)].pmol;
 
         delta_i= fabs(get_OD(BEERd, prof_oc[ilayer+ph->ilam*(NOCEd+1)]) - get_OD(BEERd, prof_oc[ilayer-1+ph->ilam*(NOCEd+1)]));
         delta= fabs(tauBis - get_OD(BEERd, prof_oc[ilayer-1+ph->ilam*(NOCEd+1)])) ;
@@ -1329,7 +1330,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
         }
         
         ph->layer = ilayer;
-        ph->prop_aer = 1.f - prof_atm[ph->layer+ph->ilam*(NATMd+1)].pmol;
+        // ph->prop_aer = 1.f - prof_atm[ph->layer+ph->ilam*(NATMd+1)].pmol;
 
         delta_i= fabs(get_OD(BEERd, prof_atm[ilayer+ph->ilam*(NATMd+1)]) - get_OD(BEERd, prof_atm[ilayer-1+ph->ilam*(NATMd+1)]));
         delta= fabs(tauBis - get_OD(BEERd, prof_atm[ilayer-1+ph->ilam*(NATMd+1)])) ;
@@ -1392,12 +1393,12 @@ __device__ void scatter(Photon* ph,
 	float zang=0.f, theta=0.f;
 	int iang, ilay, ipha;
 	float psi, sign;
-	float prop_aer = ph->prop_aer, RANDTWO;
-	RANDTWO = RAND;
 	struct Phase *func;
-	float prop_raman=1., new_wavel;
+	float new_wavel;
 	float P11, P12, P22, P33, P43, P44;
 
+
+	
     ph->nint += 1;
     if (le){
         /* in case of LE the photon units vectors, scattering angle and Psi rotation angle are determined by output zenith and azimuth angles*/
@@ -1422,8 +1423,27 @@ __device__ void scatter(Photon* ph,
     }
 
 
+
+
+
+	
+
+
+
+	float RANDTWO;
+	RANDTWO = RAND;
+	float prop_raman=1.;
+	float prop_aer;
+
+
+
+	
+	
     /* Scattering in atmosphere */
 	if(ph->loc!=OCEAN){
+
+         prop_aer = 1.f - prof_atm[ph->layer+ph->ilam*(NATMd+1)].pmol;
+		
 		/************************************/
 		/* Rayleigh and Aerosols scattering */
 		/************************************/
@@ -1431,11 +1451,15 @@ __device__ void scatter(Photon* ph,
         ilay = ph->layer + ph->ilam*(NATMd+1); // atm layer index
 
 		/* atm phase function index */
-		if( prop_aer < RAND ){ipha  = 0;} // Rayleigh index
+		if( prop_aer < RAND ){ipha  = 0;}         // Rayleigh index
 		else {ipha  = prof_atm[ilay].iphase + 1;} // Aerosols index
+		
 	}
 	/* Scattering in ocean */
 	else{
+
+		prop_aer = 1.f - prof_oc[ph->layer+ph->ilam*(NOCEd+1)].pmol;
+		
         /***********************************/
 		/* Raman and Elastic scattering    */
 		/***********************************/
@@ -1448,6 +1472,11 @@ __device__ void scatter(Photon* ph,
 		else {ipha  = prof_oc[ilay].iphase + 1;} // Aerosols index
 	}
 
+
+
+
+
+	
 	if(!le) {
 		/* in the case of propagation (not LE) the photons scattering angle and Psi
 		   rotation angle are determined randomly */
@@ -3198,7 +3227,7 @@ __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
     ph_le->weight = ph->weight;
     ph_le->wavel = ph->wavel;
     ph_le->ilam = ph->ilam;
-    ph_le->prop_aer = ph->prop_aer;
+    //ph_le->prop_aer = ph->prop_aer;
     ph_le->pos = ph->pos; // float3
     ph_le->nint = ph->nint;
     #ifdef SPHERIQUE
