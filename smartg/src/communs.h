@@ -202,6 +202,8 @@ struct Profile {
     float OD_abs; // cumulated absorption optical thickness (from top)
     float pmol;   // probability of pure Rayleigh scattering event
     float ssa;    // single scattering albedo of the layer
+    float pine;   // Fraction of inelastic scattering of the layer
+    float FQY1;   // Fluorescence like Quantum Yield of 1st specie of the layer
     int iphase;   // phase function index
 };
 

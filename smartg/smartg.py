@@ -90,11 +90,13 @@ type_Spectrum = [
 
 type_Profile = [
     ('z',      'float32'),    # // altitude
-    ('OD',    'float32'),     # // cumulated extinction optical thickness (from top)
+    ('OD',     'float32'),    # // cumulated extinction optical thickness (from top)
     ('OD_sca', 'float32'),    # // cumulated scattering optical thickness (from top)
     ('OD_abs', 'float32'),    # // cumulated absorption optical thickness (from top)
     ('pmol',   'float32'),    # // probability of pure Rayleigh scattering event
     ('ssa',    'float32'),    # // layer single scattering albedo
+    ('pine',   'float32'),    # // layer fraction of inelastic scattering
+    ('FQY1',   'float32'),    # // layer Fluorescence Quantum Yield of 1st specie
     ('iphase', 'int32'),      # // phase function index
     ]
 
@@ -852,6 +854,9 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
         if 'phase_oc' in prof_oc.datasets():
             m.add_lut(prof_oc['phase_oc'])
             m.add_lut(prof_oc['iphase_oc'])
+        if 'pine_oc' in prof_oc.datasets():
+            m.add_lut(prof_oc['pine_oc'])
+            m.add_lut(prof_oc['FQY1_oc'])
         m.add_lut(prof_oc['albedo_seafloor'])
 
     # write the error count
@@ -1124,6 +1129,10 @@ def init_profile(wl, prof, kind):
     prof_gpu['OD_abs'][:] = prof['OD_abs_'+kind].data[...]
     prof_gpu['pmol'][:] = prof['pmol_'+kind].data[...]
     prof_gpu['ssa'][:] = prof['ssa_'+kind].data[...]
+    #NEW !!!
+    prof_gpu['pine'][:] = prof['pine_'+kind].data[...]
+    prof_gpu['FQY1'][:] = prof['FQY1_'+kind].data[...]
+    #NEW !!!
     if 'iphase_'+kind in prof.datasets():
         prof_gpu['iphase'][:] = prof['iphase_'+kind].data[...]
 

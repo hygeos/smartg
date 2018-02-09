@@ -747,6 +747,18 @@ class AtmAFGL(Atmosphere):
                         attrs={'description':
                                'Single scattering albedo of the layer'})
 
+        #NEW !!! for coherence with ocean flurorescence/inelastic scattering
+        pine = np.zeros_like(ssa)
+        FQY1 = np.zeros_like(ssa)
+        pro.add_dataset('pine_atm', pine,
+                        axnames=['wavelength', 'z_atm'],
+                        attrs={'description':
+                               'fraction of inelastic scattering of the layer'})
+        pro.add_dataset('FQY1_atm', FQY1,
+                        axnames=['wavelength', 'z_atm'],
+                        attrs={'description':
+                               'fluoresence quantum yield of the layer'})
+        #NEW !!!
         return pro
 
 

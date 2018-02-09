@@ -240,6 +240,14 @@ class IOP_1(IOP_base):
         aphy = (self.BRICAUD['A'][Idx(wav, fill_value='extrema')]
                 * (chl**self.BRICAUD['E'][Idx(wav, fill_value='extrema')]))
 
+        # NEW !!!
+        # chlorophyll fluorescence (scattering coefficient)
+        FQYC = 0.02 # Fluorescence Quantum Yield for Chlorophyll
+        bfC = FQYC * aphy
+        bfC[wav<370.]=0.
+        bfC[wav>690.]=0.
+        # NEW !!!
+
         # CDM absorption central value
         # from Bricaud et al GBC, 2012 (data from nov 2007)
         fa = 1.
@@ -251,7 +259,10 @@ class IOP_1(IOP_base):
 
         aCDM = aCDM443 * np.exp(-S*(wav - 443))
 
-        atot = aw + aphy + aCDM
+        # NEW !!!
+        #atot = aw + aphy + aCDM
+        atot = aw + aCDM
+        # NEW !!!
 
         # Pure Sea water scattering coefficient
         bw = 19.3e-4*((wav/550.)**-4.3)
@@ -260,7 +271,10 @@ class IOP_1(IOP_base):
 
         bp *= coef_trunc/2.
 
-        btot = bw + bp
+        # NEW !!!
+        #btot = bw + bp
+        btot = bw + bp + aphy
+        # NEW !!!
 
         #
         # backscattering coefficient
@@ -278,6 +292,8 @@ class IOP_1(IOP_base):
                 'btot': btot,
                 'bp': bp,
                 'Bp': Bp,
+                'bfC': bfC,
+                'FQYC': FQYC
                 }
 
 
@@ -341,6 +357,21 @@ class IOP_1(IOP_base):
 
         pro.add_dataset('ssa_oc', ssa,
                         ['wavelength', 'z_oc'])
+
+        # NEW !!!
+        tau_ine = np.zeros(shp, dtype='float32')
+        tau_ine[:,1] = - ((iop['bfC']) * self.depth)
+        with np.errstate(invalid='ignore'):
+            pine = tau_ine/tau_sca
+        pine[np.isnan(pine)] = 0.
+        pro.add_dataset('pine_oc', pine,
+                        ['wavelength', 'z_oc'])
+
+        FQY1 = np.zeros(shp, dtype='float32')
+        FQY1[:,1] = iop['FQYC']
+        pro.add_dataset('FQY1_oc', FQY1,
+                        ['wavelength', 'z_oc'])
+        # NEW !!!
 
         pro.add_dataset('albedo_seafloor',
                         self.ALB.get(wav),
