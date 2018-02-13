@@ -380,7 +380,8 @@ def atm_view(mlut, ipha=None, fig=None, ax=None, iw=0, kind='atm'):
         ax.set_xlim(1e-6,10)
         xlabel(r'$(km^{-1})$')
         ylabel(r'$z (km)$')
-        ax.set_ylim(0,50)
+        #ax.set_ylim(0,50)
+        ax.set_ylim(0,max(100.,z.data.max()))
     else :
         Dtau_ScaA.data[0] = Dtau_ScaA.data[1]
         Dtau_Abs.data[0] = Dtau_Abs.data[1]
@@ -390,10 +391,11 @@ def atm_view(mlut, ipha=None, fig=None, ax=None, iw=0, kind='atm'):
         if (np.max(Dtau_ScaA[:]) > 0.) : ax.semilogx((Dtau_ScaA/Dz)[:], z[:],'r^-', label=r'$\sigma_{sca}^{p}$')
         if (np.max(Dtau_Abs[:]) > 0.)  : ax.semilogx((Dtau_Abs/Dz)[:], z[:], 'g^-', label=r'$\sigma_{abs}^{tot}$')
         ax.semilogx((Dtau_ScaR/Dz)[:], z[:], 'b^-', label=r'$\sigma_{sca}^{w}$' )
-        ax.set_xlim(1e-5,10)
+        ax.set_xlim(1e-3,3)
         xlabel(r'$(m^{-1})$')
         ylabel(r'$z (m)$')
-        ax.set_ylim(-50,1)
+        #ax.set_ylim(-50,1)
+        ax.set_ylim(0,min(-100.,z.data.min()))
     ax.semilogx((Dtau/Dz)[:], z[:], 'k^-', label=r'$\sigma_{ext}^{tot}$')
     ax.set_title('Vertical profile'+labw)
     ax.grid()

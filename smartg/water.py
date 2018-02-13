@@ -114,10 +114,14 @@ class IOP(IOP_base):
         dz = diff1(self.Z)
 
         tau_tot = - (atot + btot)*dz
+        tau_sca = - btot*dz
+        with np.errstate(invalid='ignore'):
+            ssa = tau_sca/tau_tot
+        ssa[np.isnan(ssa)] = 1.
+
         pro.add_dataset('OD_oc', np.cumsum(tau_tot, out=tau_tot, axis=1),
                         ['wavelength', 'z_oc'])
 
-        tau_sca = - btot*dz
         pro.add_dataset('OD_sca_oc', np.cumsum(tau_sca, out=tau_sca, axis=1),
                         ['wavelength', 'z_oc'])
 
@@ -127,15 +131,9 @@ class IOP(IOP_base):
 
         with np.errstate(divide='ignore'):
             pmol = bw/btot
-
         pmol[np.isnan(pmol)] = 1.
         pro.add_dataset('pmol_oc', pmol,
                         ['wavelength', 'z_oc'])
-
-        with np.errstate(invalid='ignore'):
-            ssa = tau_sca/tau_tot
-
-        ssa[np.isnan(ssa)] = 1.
 
         pro.add_dataset('ssa_oc', ssa,
                         ['wavelength', 'z_oc'])
@@ -145,9 +143,6 @@ class IOP(IOP_base):
                         ['wavelength'])
 
         return pro
-
-
-
 
 
 class IOP_Rw(IOP_base):
@@ -196,14 +191,16 @@ class IOP_1(IOP_base):
         ALB: albedo of the sea floor (Albedo instance)
         DEPTH: depth in m
         pfwav: list of wavelengths at which the phase functions are calculated
+        CFluo: Chorophyll a fluorescence activated
     '''
     def __init__(self, chl, pfwav=None, ALB=Albedo_cst(0.),
-                 DEPTH=10000, NANG=72001, ang_trunc=5.):
+                 DEPTH=10000, NANG=72001, ang_trunc=5., CFluo=False):
         self.chl = chl
         self.depth = float(DEPTH)
         self.NANG = NANG
         self.ang_trunc = ang_trunc
         self.ALB = ALB
+        self.CFluo = CFluo
         if pfwav is None:
             self.pfwav = None
         else:
@@ -242,7 +239,10 @@ class IOP_1(IOP_base):
 
         # NEW !!!
         # chlorophyll fluorescence (scattering coefficient)
-        FQYC = 0.02 # Fluorescence Quantum Yield for Chlorophyll
+        if self.CFluo:
+            FQYC = 0.02 # Fluorescence Quantum Yield for Chlorophyll
+        else:
+            FQYC = 0.
         bfC = FQYC * aphy
         bfC[wav<370.]=0.
         bfC[wav>690.]=0.
@@ -260,8 +260,10 @@ class IOP_1(IOP_base):
         aCDM = aCDM443 * np.exp(-S*(wav - 443))
 
         # NEW !!!
-        #atot = aw + aphy + aCDM
-        atot = aw + aCDM
+        if self.CFluo:
+            atot = aw + aCDM
+        else:
+            atot = aw + aphy + aCDM
         # NEW !!!
 
         # Pure Sea water scattering coefficient
@@ -272,8 +274,10 @@ class IOP_1(IOP_base):
         bp *= coef_trunc/2.
 
         # NEW !!!
-        #btot = bw + bp
-        btot = bw + bp + aphy
+        if self.CFluo:
+            btot = bw + bp + aphy
+        else:
+            btot = bw + bp
         # NEW !!!
 
         #
@@ -347,7 +351,7 @@ class IOP_1(IOP_base):
                         ['wavelength', 'z_oc'])
 
         pmol = np.ones(shp, dtype='float32')
-        pmol[:,1] = iop['bw']/iop['btot']
+        pmol[:,1] = iop['bw']/(iop['bw']+iop['bp'])
         pro.add_dataset('pmol_oc', pmol,
                         ['wavelength', 'z_oc'])
 
@@ -421,5 +425,289 @@ class IOP_1(IOP_base):
         result.add_axis('theta_oc', ang*180./np.pi)
         result.add_dataset('phase', pha, ['wav_phase_oc', 'z_phase_oc', 'stk', 'theta_oc'])
         result.add_dataset('coef_trunc', integ_ff[:,None], ['wav_phase_oc', 'z_phase_oc'])
+
+        return result
+
+
+class IOP_profile(IOP_base):
+    '''
+    IOP model described in Zhai et al, optics express, 2017
+
+    Parameters:
+        chl: chlorophyll concentration in mg/m3 at the surface
+        NANG: number of angles for the phase function
+        ang_trunc: truncation angle in degrees
+        ALB: albedo of the sea floor (Albedo instance)
+        DEPTH: depth in m
+        pfwav: list of wavelengths at which the phase functions are calculated
+        Nlayer: Number of vertical layers
+        MIXED: Mixed or Statified waters
+    '''
+    def __init__(self, chls, pfwav=None, ALB=Albedo_cst(0.),
+                 DEPTH=300., NANG=72001, ang_trunc=5., NLAYER=20, MIXED=False):
+        self.chls = chls
+        self.depth = float(DEPTH)
+        self.NANG = NANG
+        self.ang_trunc = ang_trunc
+        self.ALB = ALB
+        if pfwav is None:
+            self.pfwav = None
+        else:
+            self.pfwav = np.array(pfwav)
+
+        #
+        # read pure water absorption coefficient
+        #
+        self.aw = read_aw(dir_aux)
+
+        # Bricaud (98)
+        # Absorption of the phytoplankton
+        ap_bricaud = np.genfromtxt(join(dir_aux, 'water', 'aph_bricaud_1998.txt'),
+                                   delimiter=',', skip_header=12)  # header is lambda,Ap,Ep,Aphi,Ephi
+        # Add extension to 360 nm (Wei et al., 2016)
+        # spectral slope of aph is symetrical wrt 440 nm in the 360-520 spectral range
+        wUV = np.linspace(360., 398., num=20)
+        A   = ap_bricaud[:,1]
+        B   = 1.-ap_bricaud[:,2]
+        w   = ap_bricaud[:,0]
+        ii  = np.where((w<=520.) & (w>480.))
+        AUV = np.zeros_like(wUV)
+        BUV = np.zeros_like(wUV)
+        AUV[::-1] = A[ii]
+        BUV[::-1] = B[ii]
+        self.BRICAUD = MLUT()
+        self.BRICAUD.add_axis('wav', np.concatenate((wUV,ap_bricaud[:,0])))
+        self.BRICAUD.add_dataset('A', np.concatenate((AUV,A)), axnames=['wav'])
+        self.BRICAUD.add_dataset('E', np.concatenate((BUV,B)), axnames=['wav'])
+
+        ## Determine Chl vertical profile
+        #1. Determine chlorophyll interagted column until Euphotic Depth Zeu 
+        if not MIXED:
+            if (chls > 1.): chl_zeu = 37.7*chls**0.615 
+            else: chl_zeu = 36.1*chls**0.357
+        else:
+            chl_zeu = 42.1*chls**0.538
+
+        #2. Derive Euphotic Depth and make vertical grid
+        Zeu = 568.2*chl_zeu**(-0.746)
+        Zmax= min(DEPTH*0.999, 3.*Zeu)
+        self.z = np.concatenate((np.linspace(0, Zmax, num=NLAYER), np.array([DEPTH])))
+
+        #3. Introduce reduced concentration chi and reduced depth zeta
+        # Stratified Trophic case 1 parametrization
+        #   see J. Uitz, H. Claustre, A. Morel, and S. B. Hooker, 
+        #   “Vertical distribution of phytoplankton communities in open ocean: 
+        #   An assessment based on surface chlorophyll,” J. Geophys. Res. 111, C08005 (2006).
+        self.chi_b    = 0.471
+        self.s        = 0.135
+        self.chi_max  = 1.572
+        self.zeta_max = 0.969
+        self.Dzeta    = 0.393
+        zeta = self.z/Zeu
+        chl  = self.chls*self.chi(zeta)/self.chi(0.)
+        chl[chl<0.]=0.
+        self.chl = chl
+
+    def chi(self, zeta):
+        return self.chi_b - self.s*zeta + self.chi_max*np.exp(-((zeta-self.zeta_max)/self.Dzeta)**2)
+
+
+    def calc_iop(self, wav, coef_trunc=2., p1=0.33, R1=0.5, R2=0.5):
+        '''
+        inherent optical properties calculation
+
+        wav: wavelength in nm
+        coef_trunc: integrate (normalized to 2) of the truncated phase function
+        -> scattering coefficient has to be multiplied by coef_trunc/2.
+        p1 and R1 are parameters explained in Zhai et al. 2017, related to particles extinction
+        R2 is related to CDOM absorption
+        '''
+        chl = self.chl
+        chl2, wav2 = np.meshgrid(chl,wav)
+
+        # pure water absorption
+        aw = self.aw[Idx(wav2[:])]
+        # Pure Sea water scattering coefficient
+        bw = 19.3e-4*((wav2/550.)**-4.32)
+
+        # phytoplankton absorption
+        aphy = (self.BRICAUD['A'][Idx(wav2, fill_value='extrema')]
+                * (chl2**self.BRICAUD['E'][Idx(wav2, fill_value='extrema')]))
+        aphy440 = (self.BRICAUD['A'][Idx(440., fill_value='extrema')]
+                * (chl2**self.BRICAUD['E'][Idx(440., fill_value='extrema')]))
+        # phytoplankton covariant particles extinction
+        cp550 = p1*chl2**0.57
+        n1    = -0.4 + (1.6+1.2*R1)/(1+chl2**0.5)
+        cp    = cp550*(550./wav2)**n1
+        bp    = cp-aphy
+        # correct for phase function truncation
+        bp *= coef_trunc/2.
+        # NEW !!!
+        # chlorophyll fluorescence (scattering coefficient)
+        # Fluorescence Quantum Yield for Chlorophyll
+        FQYC = np.ones_like(aphy) * 0.02
+        FQYC[wav2<370.]=0.
+        FQYC[wav2>690.]=0.
+        bfC = FQYC * aphy
+        # NEW !!!
+
+        # CDOM covariant absorption
+        p2       = 0.3 + (5.7*R2*aphy440)/(0.02+aphy440)
+        aCDOM440 = p2 * aphy440
+        aCDOM    = aCDOM440 *np.exp(-0.014*(wav2-440.))
+
+        # NEW !!!
+        #atot = aw + aphy + aCDM
+        atot = aw + aCDOM
+        # NEW !!!
+
+        # NEW !!!
+        #btot = bw + bp
+        btot = bw + bp + aphy
+        # NEW !!!
+
+        #
+        # backscattering coefficient
+        #
+        v = np.zeros_like(aphy)
+        good=np.where(chl2<2.)
+        v[good] = 0.5*(np.log10(chl2[good]) - 0.3)
+        Bp = 0.002 + 0.01*( 0.5-0.25*np.log10(chl2))*((wav2/550.)**v)
+        Bp[np.isinf(Bp)]=0.
+        Bp[np.isnan(Bp)]=0.
+
+        return {'atot': atot,
+                'aphy': aphy,
+                'aw': aw,
+                'bw': bw,
+                'btot': btot,
+                'bp': bp,
+                'Bp': Bp,
+                'bfC': bfC,
+                'FQYC': FQYC
+                }
+
+    def calc(self, wav, phase=True):
+        '''
+        Profile and phase function calculation
+
+        wav: wavelength in nm
+        '''
+        wav = np.array(wav)
+        pro = MLUT()
+        pro.add_axis('wavelength', wav[:])
+        #pro.add_axis('z_oc', np.array([0., -self.depth]))
+        pro.add_axis('z_oc', -self.z)
+
+        if phase:
+            if self.pfwav is None:
+                wav_pha = wav
+            else:
+                wav_pha = self.pfwav
+            Bp = self.calc_iop(wav_pha)['Bp']
+            pha = self.phase(wav_pha, Bp)
+
+            pha_, ipha = calc_iphase(pha['phase'], pro.axis('wavelength'), pro.axis('z_oc'))
+
+            # index with ipha and reshape to broadcast to [wav, z]
+            #coef_trunc = pha['coef_trunc'].data.ravel()[ipha][:,0]  # discard dimension 'z_oc'
+            coef_trunc = pha['coef_trunc'].data.ravel()[ipha][:,:]
+
+            pro.add_axis('theta_oc', pha.axis('theta_oc'))
+            pro.add_dataset('phase_oc', pha_, ['iphase', 'stk', 'theta_oc'])
+            pro.add_dataset('iphase_oc', ipha, ['wavelength', 'z_oc'])
+        else:
+            coef_trunc = 2.
+
+        iop = self.calc_iop(wav, coef_trunc=coef_trunc)
+
+        dz,_ = np.meshgrid(diff1(self.z),wav)
+
+        tau_tot = - (iop['atot'] + iop['btot'])*dz
+        tau_sca = - iop['btot'] * dz
+        # NEW !!!
+        tau_ine = - iop['bfC']  * dz
+        with np.errstate(invalid='ignore'):
+            pine = tau_ine/tau_sca
+        pine[np.isnan(pine)] = 0.
+        # NEW !!!
+        with np.errstate(invalid='ignore'):
+            ssa = tau_sca/tau_tot
+        ssa[np.isnan(ssa)] = 1.
+
+        pro.add_dataset('OD_oc', np.cumsum(tau_tot, out=tau_tot, axis=1),
+                        ['wavelength', 'z_oc'])
+
+        pro.add_dataset('OD_sca_oc', np.cumsum(tau_sca, out=tau_sca, axis=1),
+                        ['wavelength', 'z_oc'])
+
+        tau_abs = - (iop['atot'] * dz)
+        pro.add_dataset('OD_abs_oc', np.cumsum(tau_abs, out=tau_abs, axis=1),
+                        ['wavelength', 'z_oc'])
+
+        with np.errstate(divide='ignore'):
+            pmol = iop['bw']/(iop['bw']+iop['bp'])
+        pmol[np.isnan(pmol)] = 1.
+        pro.add_dataset('pmol_oc', pmol,
+                        ['wavelength', 'z_oc'])
+        pro.add_dataset('ssa_oc', ssa,
+                        ['wavelength', 'z_oc'])
+
+        # NEW !!!
+        pro.add_dataset('pine_oc', pine,
+                        ['wavelength', 'z_oc'])
+        pro.add_dataset('FQY1_oc', iop['FQYC'],
+                        ['wavelength', 'z_oc'])
+        # NEW !!!
+
+        pro.add_dataset('albedo_seafloor',
+                        self.ALB.get(wav),
+                        ['wavelength'])
+
+        return pro
+
+
+    def phase(self, wav, Bp):
+        '''
+        Calculate the phase function and associated truncation factor
+        as a MLUT
+        Bp is the backscattering ratio
+        '''
+        nwav = len(wav)
+        nz   = Bp.shape[1]
+
+        # particles phase function
+        # see Park & Ruddick, 05
+        # https://odnature.naturalsciences.be/downloads/publications/park_appliedoptics_2005.pdf
+        ang = np.linspace(0, np.pi, self.NANG, dtype='float64')    # angle in radians
+        ff1 = fournierForand(ang, 1.117,3.695)[None,None,:]
+        ff2 = fournierForand(ang, 1.05, 3.259)[None,None,:]
+
+        itronc = int(self.NANG * self.ang_trunc/180.)
+        pha = np.zeros((nwav, nz, NPSTK, self.NANG), dtype='float64')
+        r1 = ((Bp - 0.002)/0.028)[:,:,None]
+
+        pha[:,:,0,:] = 0.5*(r1*ff1 + (1-r1)*ff2)
+
+        # truncate
+        pha[:,:,0,:itronc] = pha[:,:,0,itronc][:,:,None]
+
+        pha[:,:,1,:] = pha[:,:,0,:]
+        pha[:,:,2,:] = 0.
+        pha[:,:,3,:] = 0.
+
+        pha[:,:,:,0] = 0.
+
+        # normalize
+        integ_ff = integ_phase(ang, (pha[:,:,0,:] + pha[:,:,1,:])/2.)
+        pha *= 2./integ_ff[:,:,None,None]
+
+        # create output MLUT
+        result = MLUT()
+        result.add_axis('wav_phase_oc', wav)
+        result.add_axis('z_phase_oc', self.z)
+        result.add_axis('theta_oc', ang*180./np.pi)
+        result.add_dataset('phase', pha, ['wav_phase_oc', 'z_phase_oc', 'stk', 'theta_oc'])
+        result.add_dataset('coef_trunc', integ_ff[:,:], ['wav_phase_oc', 'z_phase_oc'])
 
         return result
