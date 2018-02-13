@@ -121,7 +121,9 @@ __device__ void move_pp(Photon*, struct Profile *prof_atm, struct Profile* prof_
 */
 __device__ void scatter(Photon* ph,
         struct Profile *prof_atm, struct Profile *prof_oc,
+		struct Spectrum *spectrum,
         struct Phase *faer2, struct Phase *foce2,
+		unsigned long long *NPhotonsIn,
         int le,
         float* tabthv, float* tabphi, int count_level,
         struct RNG_State*);

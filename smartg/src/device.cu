@@ -252,7 +252,8 @@ extern "C" {
                             ph_le.iph = (iph + iph0)%NBPHId;
                             ph_le.ith = (ith + ith0)%NBTHETAd;
                             // Scatter the virtual photon, using le=1, and count_level for the scattering angle computation
-                            scatter(&ph_le, prof_atm, prof_oc, faer, foce,
+                            scatter(&ph_le, prof_atm, prof_oc, spectrum, faer, foce,
+									NPhotonsIn,
                                     1, tabthv, tabphi,
                                     count_level_le, &rngstate);
 
@@ -286,7 +287,8 @@ extern "C" {
                 int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
                 int iph0 = idx%NBPHId;
                 copyPhoton(&ph, &ph_le);
-                scatter(&ph_le, prof_atm, prof_oc, faer, foce,
+                scatter(&ph_le, prof_atm, prof_oc, spectrum, faer, foce,
+				            NPhotonsIn,
                             1, tabthv, tabphi,
                             UP0M2, &rngstate);
                 ph_le.weight *= expf(-fabs(ph_le.tau/ph_le.vz));
@@ -324,7 +326,8 @@ extern "C" {
             }*/  //Double LE
 
             /* Scattering Propagation , using le=0 and propagation photon */
-            scatter(&ph, prof_atm, prof_oc, faer, foce,
+            scatter(&ph, prof_atm, prof_oc,  spectrum, faer, foce,
+					NPhotonsIn,
                     0, tabthv, tabphi, 0,
                     &rngstate);
             #ifdef DEBUG_PHOTON
@@ -658,6 +661,9 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     } else {
         ph->ilam = wl_proba_icdf[__float2uint_rz(RAND * NWLPROBA)];
     }
+
+	//ph->ilam = 0;
+
 	ph->wavel = spectrum[ph->ilam].lambda;
 
     // Position and optical thicknesses initializations
@@ -1384,19 +1390,21 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 
 __device__ void scatter(Photon* ph,
         struct Profile *prof_atm, struct Profile *prof_oc,
+		struct Spectrum *spectrum,
         struct Phase *faer, struct Phase *foce,
+		unsigned long long *NPhotonsIn,			
         int le,
         float* tabthv, float* tabphi, int count_level,
         struct RNG_State *rngstate) {
+
+	// int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
 
 	float cTh=0.f ;
 	float zang=0.f, theta=0.f;
 	int iang, ilay, ipha;
 	float psi, sign;
 	struct Phase *func;
-	float new_wavel;
 	float P11, P12, P22, P33, P43, P44;
-
 
 	
     ph->nint += 1;
@@ -1424,286 +1432,390 @@ __device__ void scatter(Photon* ph,
 
 
 
-
-
-	
-
-
-
-	float RANDTWO;
-	RANDTWO = RAND;
-	float prop_raman=1.;
-	float prop_aer;
-
-
-
-	
+  
+	float pmol;
+	float pine;
+	float FQY1;
+	bool fluo = false;
 	
     /* Scattering in atmosphere */
 	if(ph->loc!=OCEAN){
 
-         prop_aer = 1.f - prof_atm[ph->layer+ph->ilam*(NATMd+1)].pmol;
+		pmol = 1.f - prof_atm[ph->layer+ph->ilam*(NATMd+1)].pmol;
+		ilay = ph->layer + ph->ilam*(NATMd+1); // atm layer index
 		
 		/************************************/
 		/* Rayleigh and Aerosols scattering */
 		/************************************/
 		func = faer; // atm phases
-        ilay = ph->layer + ph->ilam*(NATMd+1); // atm layer index
-
-		/* atm phase function index */
-		if( prop_aer < RAND ){ipha  = 0;}         // Rayleigh index
-		else {ipha  = prof_atm[ilay].iphase + 1;} // Aerosols index
 		
+		/* atm phase function index */
+		if( pmol < RAND ){ipha  = 0;}             // Rayleigh index
+		else {ipha  = prof_atm[ilay].iphase + 1;} // particle index
+			
 	}
 	/* Scattering in ocean */
 	else{
 
-		prop_aer = 1.f - prof_oc[ph->layer+ph->ilam*(NOCEd+1)].pmol;
+		pmol = 1.f - prof_oc[ph->layer+ph->ilam*(NOCEd+1)].pmol;
+		pine = 1.f - prof_oc[ph->layer+ph->ilam*(NOCEd+1)].pine;
+		FQY1 =       prof_oc[ph->layer+ph->ilam*(NOCEd+1)].FQY1;
 		
-        /***********************************/
-		/* Raman and Elastic scattering    */
-		/***********************************/
-		func = foce; // oce phases
-        ilay = ph->layer + ph->ilam*(NOCEd+1); // oce layer index
+		ilay = ph->layer + ph->ilam*(NOCEd+1); // oce layer index
 
-		/* ocean phase function index */
-		if( prop_raman < RANDTWO ){ipha  = 0;} // raman index
-		else if ( prop_aer < RAND ){ipha  = 0;} // Rayleigh index
-		else {ipha  = prof_oc[ilay].iphase + 1;} // Aerosols index
-	}
+		if (pine  < RAND){
 
-
-
-
-
-	
-	if(!le) {
-		/* in the case of propagation (not LE) the photons scattering angle and Psi
-		   rotation angle are determined randomly */
-		/////////////
-		// Get Theta from Cumulative Distribution Function
-		zang = RAND*(NF-1);
-		iang= __float2int_rd(zang);
-		zang = zang - iang;
-
-		theta = (1.-zang)*func[ipha*NF+iang].p_ang + zang*func[ipha*NF+iang+1].p_ang;
-		cTh = __cosf(theta);
-
-		/////////////
-		// Get Scattering matrix from CDF
-		P11 = (1-zang)*func[ipha*NF+iang].p_P11 + zang*func[ipha*NF+iang+1].p_P11;
-		P12 = (1-zang)*func[ipha*NF+iang].p_P12 + zang*func[ipha*NF+iang+1].p_P12;
-		P22 = (1-zang)*func[ipha*NF+iang].p_P22 + zang*func[ipha*NF+iang+1].p_P22;
-		P33 = (1-zang)*func[ipha*NF+iang].p_P33 + zang*func[ipha*NF+iang+1].p_P33;
-		P43 = (1-zang)*func[ipha*NF+iang].p_P43 + zang*func[ipha*NF+iang+1].p_P43;
-		P44 = (1-zang)*func[ipha*NF+iang].p_P44 + zang*func[ipha*NF+iang+1].p_P44;
-
-        #ifndef BIAS
-		/////////////
-		//  Get Psi
-		//  Rejection method for sampling psi  : !!!! NEW !!!!
-        float fpsi_cond=0.F; 
-        float fpsi=0.F; 
-        float gamma=0.F; 
-        float Q = ph->stokes.x - ph->stokes.y;
-        float U = ph->stokes.z;
-        float DoLP = __fdividef(sqrtf(Q*Q+U*U), ph->stokes.x + ph->stokes.y);
-        float K = __fdividef(P11-P22,P11+P22+2*P12);
-        if (abs(Q) > 0.F) gamma   = 0.5F * atan2(-(double)U,(double)Q);
-        float fpsi_cond_max = (1.F + DoLP * fabs(K) )/DEUXPI;
-        int niter=0;
-        while (fpsi >= fpsi_cond)
-            {
-            niter++;
-		    psi = RAND * DEUXPI;	
-            fpsi= RAND * fpsi_cond_max;
-            fpsi_cond = (1.F + DoLP * K * cosf(2*(psi-gamma)) )/DEUXPI;
-            if (niter >= 100) {
-                // safety check
-                #ifdef DEBUG
-                printf("Warning, photon rejected in scatter while loop\n");
-                printf("%i  S=(%f,%f), DoLP, gamma=(%f,%f) psi,theta=(%f,%f) \n",
-                        niter,
-                        Q,
-                        U,
-                        DoLP,
-                        gamma,
-                        psi/PI*180,
-                        theta/PI*180
-                      );
-                #endif
-                ph->loc = NONE;
-                break;
-              }
-		    }
-		/*int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
-		if (idx == -1){
-			printf("P11 = %.3f, P12 = %.3f, P22 = %.3f, P33 = %.3f, P43 = %.3f, P44 = %.3f\n", P11, P12, P22, P33, P43, P44);
-            printf("%i  S=(%f,%f), DoLP, gamma=(%f,%f) psi,fpsi,fpsi_cond,theta=(%f,%f,%f,%f) \n",
-                        niter,
-                        Q,
-                        U,
-                        DoLP,
-                        gamma,
-                        psi/PI*180,
-                        fpsi,
-                        fpsi_cond,
-                        theta/PI*180
-                      );
-		 }*/
-
-        #else
-		/////////////
-		//  Get Phi
-		//  Biased sampling scheme for psi 1)
-		psi = RAND * DEUXPI;	
-        #endif
-	}
-	else {
-		/////////////
-		// Get Index of scattering angle and Scattering matrix directly 
-		zang = theta * (NF-1)/PI ;
-		iang = __float2int_rd(zang);
-		zang = zang - iang;
-
-		P11 = (1-zang)*func[ipha*NF+iang].a_P11 + zang*func[ipha*NF+iang+1].a_P11;
-		P12 = (1-zang)*func[ipha*NF+iang].a_P12 + zang*func[ipha*NF+iang+1].a_P12;
-		P22 = (1-zang)*func[ipha*NF+iang].a_P22 + zang*func[ipha*NF+iang+1].a_P22;
-		P33 = (1-zang)*func[ipha*NF+iang].a_P33 + zang*func[ipha*NF+iang+1].a_P33;
-		P43 = (1-zang)*func[ipha*NF+iang].a_P43 + zang*func[ipha*NF+iang+1].a_P43;
-		P44 = (1-zang)*func[ipha*NF+iang].a_P44 + zang*func[ipha*NF+iang+1].a_P44;
-	}
-
-	// Stokes vector rotation
-	rotateStokes(ph->stokes, psi, &ph->stokes);
-
-	// Scattering matrix multiplication
-	float4x4 P_scatter = make_float4x4(
-		P11, P12, 0. , 0.  ,
-		P12, P22, 0. , 0.  ,
-		0. , 0. , P33, -P43,
-		0. , 0. , P43, P44
-		);
-
-	ph->stokes = mul(P_scatter, ph->stokes);
-
-    #ifdef BACK
-    float4x4 L;
-    //float4x4 Lf;
-    rotationM(DEUXPI-psi,&L);
-    ph->M   = mul(ph->M,mul(L,P_scatter));
-    //rotationM(psi,&Lf);
-    //ph->Mf  = mul(mul(P_scatter,Lf),ph->Mf);
-    #endif
-
-	if (!le){
-		float debias = 1.F;
-        #ifdef BIAS
-		// Bias sampling scheme 2): Debiasing and normalizing
-		debias = __fdividef(2.F, P11 + P22 + 2*P12 ); // Debias is equal to the inverse of the phase function
-        #else
-        debias = __fdividef(1.F, ph->stokes.x + ph->stokes.y);
-        #endif
-		operator*=(ph->stokes, debias); 
-        #ifdef BACK
-        ph->M  = mul(ph->M ,   make_diag_float4x4(debias)); // Bias sampling scheme only for backward mode
-        //ph->Mf = mul(ph->Mf ,  make_diag_float4x4(debias));
-        #endif
-	}
-
-	else {
-        ph->weight /= 4.F; // Phase function normalization
-    }
-
-
-	if(ph->loc!=OCEAN){
-		/************************/
-		/* Photon in atmosphere */
-		/************************/
-        #ifdef ALIS
-        int DL=(NLAMd-1)/(NLOWd-1);
-        float P11_aer_ref, P11_ray, P22_aer_ref, P22_ray, P_ref;
-        float pmol= prof_atm[ph->layer+ ph->ilam*(NATMd+1)].pmol;
-        
-        if (pmol <1.) {
-		    zang = theta * (NF-1)/PI ;
-		    iang = __float2int_rd(zang);
-		    zang = zang - iang;
-		    int ipharef  = prof_atm[ph->layer+ph->ilam*(NATMd+1)].iphase + 1; 
-            // Phase functions of aerosols and Rayliegh, and mixture of both at reference wavelength
-		    P11_aer_ref = (1-zang)*func[ipharef*NF+iang].a_P11 + zang*func[ipharef*NF+iang+1].a_P11;
-		    P11_ray     = (1-zang)*func[0      *NF+iang].a_P11 + zang*func[0      *NF+iang+1].a_P11;
-		    P22_aer_ref = (1-zang)*func[ipharef*NF+iang].a_P22 + zang*func[ipharef*NF+iang+1].a_P22;
-		    P22_ray     = (1-zang)*func[0      *NF+iang].a_P22 + zang*func[0      *NF+iang+1].a_P22;
-            P_ref     = (P11_ray+P22_ray) * pmol + (P11_aer_ref+P22_aer_ref) * (1.-pmol);
-        }
-
-        for (int k=0; k<NLOWd; k++) {
-            ph->weight_sca[k] *= __fdividef(get_OD(1,prof_atm[ph->layer+ k*DL*(NATMd+1)]), 
-                                            get_OD(1,prof_atm[ph->layer + ph->ilam*(NATMd+1)]));
-
-            if (pmol <1.) {
-		        int iphak  = prof_atm[ph->layer+k*DL*(NATMd+1)].iphase + 1; 
-                float pmol_k = prof_atm[ph->layer+ k*DL*(NATMd+1)].pmol;
-                // Phase functions of aerosols  at other wavelengths, Rayleigh is supposed to be constant with wavelength
-		        float P11_aer = (1-zang)*func[iphak*NF+iang].a_P11 + zang*func[iphak*NF+iang+1].a_P11;
-		        float P22_aer = (1-zang)*func[iphak*NF+iang].a_P22 + zang*func[iphak*NF+iang+1].a_P22;
-                // Phase functions of the mixture of aerosols and Rayliegh at other wavelengths
-                float P_k   = (P11_ray+P22_ray) * pmol_k + (P11_aer+P22_aer) * (1.-pmol_k);
-                ph->weight_sca[k] *= __fdividef(P_k, P_ref);
-                //int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
-                //if (idx==0) printf("%d %d %f %d %f %f %f %f\n",ipha,ph->layer,pmol,k,pmol_k,
-                //        ph->weight_sca[k],P_k,P_ref);
-            }
-        }
-        #endif
-	}
-	else{
-		/*******************/
-		/* Photon in ocean */
-		/*******************/
-		if( prop_raman < RANDTWO ){	// Raman
-            /* Wavelength change */
-            new_wavel  = 22.94 + 0.83 * (ph->wavel) + 0.0007 * (ph->wavel)*(ph->wavel);
-            ph->weight /= new_wavel/ph->wavel;
-            ph->wavel = new_wavel;
-		}		
-	    else{ // Elastic
-            #ifdef ALIS
-            int DL=(NLAMd-1)/(NLOWd-1);
-            float P11_aer_ref, P11_ray, P22_aer_ref, P22_ray, P_ref;
-            float pmol= prof_oc[ph->layer+ ph->ilam*(NOCEd+1)].pmol;
-            if (pmol <1.) {
-		        zang = theta * (NF-1)/PI ;
-		        iang = __float2int_rd(zang);
-		        zang = zang - iang;
-		        int ipharef  = prof_oc[ph->layer+ph->ilam*(NOCEd+1)].iphase + 1; 
-                // Phase functions of aerosols and Rayliegh, and mixture of both at reference wavelength
-		        P11_aer_ref = (1-zang)*func[ipharef*NF+iang].a_P11 + zang*func[ipharef*NF+iang+1].a_P11;
-		        P11_ray     = (1-zang)*func[0      *NF+iang].a_P11 + zang*func[0      *NF+iang+1].a_P11;
-		        P22_aer_ref = (1-zang)*func[ipharef*NF+iang].a_P22 + zang*func[ipharef*NF+iang+1].a_P22;
-		        P22_ray     = (1-zang)*func[0      *NF+iang].a_P22 + zang*func[0      *NF+iang+1].a_P22;
-                P_ref     = (P11_ray+P22_ray) * pmol + (P11_aer_ref+P22_aer_ref) * (1.-pmol);
-            }
-            for (int k=0; k<NLOWd; k++) {
-                 ph->weight_sca[k] *= __fdividef(get_OD(1,prof_oc[ph->layer+ k*DL*(NOCEd+1)]), 
-                     get_OD(1,prof_oc[ph->layer + ph->ilam*(NOCEd+1)]));
-                if (pmol <1.) {
-		            int iphak  = prof_oc[ph->layer+k*DL*(NOCEd+1)].iphase + 1; 
-                    float pmol_k = prof_oc[ph->layer+ k*DL*(NOCEd+1)].pmol;
-                    // Phase functions of aerosols  at other wavelengths, Rayleigh is supposed to be constant with wavelength
-		            float P11_aer = (1-zang)*func[iphak*NF+iang].a_P11 + zang*func[iphak*NF+iang+1].a_P11;
-		            float P22_aer = (1-zang)*func[iphak*NF+iang].a_P22 + zang*func[iphak*NF+iang+1].a_P22;
-                    // Phase functions of the mixture of aerosols and Rayliegh at other wavelengths
-                    float P_k   = (P11_ray+P22_ray) * pmol_k + (P11_aer+P22_aer) * (1.-pmol_k);
-                    ph->weight_sca[k] *= __fdividef(P_k, P_ref);
-                }
-            }
-            #endif
+			/***********************************/
+			/*     inelastic scattering    */
+			/***********************************/
+			fluo = true;
+				
+		}else{
+		
+			/***********************************/
+			/* Elastic scattering    */
+			/***********************************/
+			func = foce; // oce phases
+			
+			/* ocean phase function index */
+			if ( pmol < RAND ){ipha  = 0;}           // Rayleigh index
+			else {ipha  = prof_oc[ilay].iphase + 1;} // particle index
 		}
 
-	} //ocean
+
+	}
+
+
+
+
+
+	if (!fluo){
+
+		if(!le) {
+
+			/* in the case of propagation (not LE) the photons scattering angle and Psi
+			   rotation angle are determined randomly */
+			/////////////
+			// Get Theta from Cumulative Distribution Function
+			zang = RAND*(NF-1);
+			iang= __float2int_rd(zang);
+			zang = zang - iang;
+
+			theta = (1.-zang)*func[ipha*NF+iang].p_ang + zang*func[ipha*NF+iang+1].p_ang;
+			cTh = __cosf(theta);
+
+			/////////////
+			// Get Scattering matrix from CDF
+			P11 = (1-zang)*func[ipha*NF+iang].p_P11 + zang*func[ipha*NF+iang+1].p_P11;
+			P12 = (1-zang)*func[ipha*NF+iang].p_P12 + zang*func[ipha*NF+iang+1].p_P12;
+			P22 = (1-zang)*func[ipha*NF+iang].p_P22 + zang*func[ipha*NF+iang+1].p_P22;
+			P33 = (1-zang)*func[ipha*NF+iang].p_P33 + zang*func[ipha*NF+iang+1].p_P33;
+			P43 = (1-zang)*func[ipha*NF+iang].p_P43 + zang*func[ipha*NF+iang+1].p_P43;
+			P44 = (1-zang)*func[ipha*NF+iang].p_P44 + zang*func[ipha*NF+iang+1].p_P44;
+
+#ifndef BIAS
+			/////////////
+			//  Get Psi
+			//  Rejection method for sampling psi  : !!!! NEW !!!!
+			float fpsi_cond=0.F; 
+			float fpsi=0.F; 
+			float gamma=0.F; 
+			float Q = ph->stokes.x - ph->stokes.y;
+			float U = ph->stokes.z;
+			float DoLP = __fdividef(sqrtf(Q*Q+U*U), ph->stokes.x + ph->stokes.y);
+			float K = __fdividef(P11-P22,P11+P22+2*P12);
+			if (abs(Q) > 0.F) gamma   = 0.5F * atan2(-(double)U,(double)Q);
+			float fpsi_cond_max = (1.F + DoLP * fabs(K) )/DEUXPI;
+			int niter=0;
+			while (fpsi >= fpsi_cond)
+				{
+					niter++;
+					psi = RAND * DEUXPI;	
+					fpsi= RAND * fpsi_cond_max;
+					fpsi_cond = (1.F + DoLP * K * cosf(2*(psi-gamma)) )/DEUXPI;
+					if (niter >= 100) {
+						// safety check
+#ifdef DEBUG
+						printf("Warning, photon rejected in scatter while loop\n");
+						printf("%i  S=(%f,%f), DoLP, gamma=(%f,%f) psi,theta=(%f,%f) \n",
+							   niter,
+							   Q,
+							   U,
+							   DoLP,
+							   gamma,
+							   psi/PI*180,
+							   theta/PI*180
+							   );
+#endif
+						ph->loc = NONE;
+						break;
+					}
+				}
+			/*int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+			  if (idx == -1){
+			  printf("P11 = %.3f, P12 = %.3f, P22 = %.3f, P33 = %.3f, P43 = %.3f, P44 = %.3f\n", P11, P12, P22, P33, P43, P44);
+			  printf("%i  S=(%f,%f), DoLP, gamma=(%f,%f) psi,fpsi,fpsi_cond,theta=(%f,%f,%f,%f) \n",
+			  niter,
+			  Q,
+			  U,
+			  DoLP,
+			  gamma,
+			  psi/PI*180,
+			  fpsi,
+			  fpsi_cond,
+			  theta/PI*180
+			  );
+			  }*/
+
+#else
+			/////////////
+			//  Get Phi
+			//  Biased sampling scheme for psi 1)
+			psi = RAND * DEUXPI;	
+#endif
+
+
+		}else {
+	
+			/////////////
+			// Get Index of scattering angle and Scattering matrix directly 
+			zang = theta * (NF-1)/PI ;
+			iang = __float2int_rd(zang);
+			zang = zang - iang;
+
+			P11 = (1-zang)*func[ipha*NF+iang].a_P11 + zang*func[ipha*NF+iang+1].a_P11;
+			P12 = (1-zang)*func[ipha*NF+iang].a_P12 + zang*func[ipha*NF+iang+1].a_P12;
+			P22 = (1-zang)*func[ipha*NF+iang].a_P22 + zang*func[ipha*NF+iang+1].a_P22;
+			P33 = (1-zang)*func[ipha*NF+iang].a_P33 + zang*func[ipha*NF+iang+1].a_P33;
+			P43 = (1-zang)*func[ipha*NF+iang].a_P43 + zang*func[ipha*NF+iang+1].a_P43;
+			P44 = (1-zang)*func[ipha*NF+iang].a_P44 + zang*func[ipha*NF+iang+1].a_P44;
+
+		}
+
+		// Stokes vector rotation
+		rotateStokes(ph->stokes, psi, &ph->stokes);
+
+		// Scattering matrix multiplication
+		float4x4 P_scatter = make_float4x4(
+										   P11, P12, 0. , 0.  ,
+										   P12, P22, 0. , 0.  ,
+										   0. , 0. , P33, -P43,
+										   0. , 0. , P43, P44
+										   );
+
+		ph->stokes = mul(P_scatter, ph->stokes);
+
+#ifdef BACK
+		float4x4 L;
+		//float4x4 Lf;
+		rotationM(DEUXPI-psi,&L);
+		ph->M   = mul(ph->M,mul(L,P_scatter));
+		//rotationM(psi,&Lf);
+		//ph->Mf  = mul(mul(P_scatter,Lf),ph->Mf);
+#endif
+
+		if (!le){
+			float debias = 1.F;
+#ifdef BIAS
+			// Bias sampling scheme 2): Debiasing and normalizing
+			debias = __fdividef(2.F, P11 + P22 + 2*P12 ); // Debias is equal to the inverse of the phase function
+#else
+			debias = __fdividef(1.F, ph->stokes.x + ph->stokes.y);
+#endif
+			operator*=(ph->stokes, debias); 
+#ifdef BACK
+			ph->M  = mul(ph->M ,   make_diag_float4x4(debias)); // Bias sampling scheme only for backward mode
+			//ph->Mf = mul(ph->Mf ,  make_diag_float4x4(debias));
+#endif
+		}
+
+		else {
+			ph->weight /= 4.F; // Phase function normalization
+		}
+
+
+
+
+	}else{ 
+
+		/////////////////
+		// Fluorescence
+
+		if (!le){
+
+			theta = RAND * DEMIPI;
+			cTh = __cosf(theta);
+			psi = RAND * DEUXPI;			
+			
+		}else{
 		
+			ph->weight /= 4.F * PI; // Phase function normalization	
+			
+		}
+		
+		// Depolarization
+		ph->stokes.x = 0.5F;
+		ph->stokes.y = 0.5F;
+		ph->stokes.z = 0.F;
+		ph->stokes.w = 0.F;
+
+		// if (idx == 0) {
+		// 	printf("\n(before)  %f %f %i \n", ph->weight, ph->wavel, ph->ilam );
+		// }
+		
+		/* Wavelength change */
+		float sigmac   = 10.6;
+		float lambdac0 = 685.0; 
+		float new_wavel;
+
+
+		float rand1 = RAND;
+		float rand2 = RAND;
+		new_wavel = lambdac0 + sigmac * sqrtf(-2.0*logf(RAND)) * cosf(DEUXPI * rand2);
+
+
+		ph->weight /= new_wavel / ph->wavel;
+		ph->weight *= FQY1;
+		ph->wavel = new_wavel;
+
+		// if (idx == 0) {
+		// 	printf("  %f \n",  new_wavel);
+		// 	printf("  %i \n",  NLAMd);
+		// 	printf("  %f \n",  spectrum[0].lambda);
+		// 	printf("  %f \n",  spectrum[NLAMd-1].lambda);
+		// }
+
+
+		if (ph->wavel > spectrum[NLAMd-1].lambda ){
+
+			ph->weight = 0.0;
+			ph->loc = ABSORBED;
+
+		}else if (ph->wavel < spectrum[0].lambda ) {
+
+			ph->weight = 0.0;
+			ph->loc = ABSORBED;
+
+		} else {
+
+			atomicAdd(NPhotonsIn + ph->ilam, -1);
+
+			ph->ilam = __float2int_rd(__fdividef( (ph->wavel -  spectrum[0].lambda)* NLAMd, spectrum[NLAMd-1].lambda - spectrum[0].lambda ));
+			
+			atomicAdd(NPhotonsIn + ph->ilam, 1);
+
+		}
+
+
+		// if (idx == 0) {
+		// 	printf("(after)  %f %f %i \n", ph->weight, ph->wavel, ph->ilam );
+		// }
+
+
+	}
+
+
+
+
+
+
+
+	if (!fluo){
+
+		if(ph->loc!=OCEAN){
+			/************************/
+			/* Photon in atmosphere */
+			/************************/
+#ifdef ALIS
+			int DL=(NLAMd-1)/(NLOWd-1);
+			float P11_aer_ref, P11_ray, P22_aer_ref, P22_ray, P_ref;
+			float pmol= prof_atm[ph->layer+ ph->ilam*(NATMd+1)].pmol;
+        
+			if (pmol <1.) {
+				zang = theta * (NF-1)/PI ;
+				iang = __float2int_rd(zang);
+				zang = zang - iang;
+				int ipharef  = prof_atm[ph->layer+ph->ilam*(NATMd+1)].iphase + 1; 
+				// Phase functions of aerosols and Rayliegh, and mixture of both at reference wavelength
+				P11_aer_ref = (1-zang)*func[ipharef*NF+iang].a_P11 + zang*func[ipharef*NF+iang+1].a_P11;
+				P11_ray     = (1-zang)*func[0      *NF+iang].a_P11 + zang*func[0      *NF+iang+1].a_P11;
+				P22_aer_ref = (1-zang)*func[ipharef*NF+iang].a_P22 + zang*func[ipharef*NF+iang+1].a_P22;
+				P22_ray     = (1-zang)*func[0      *NF+iang].a_P22 + zang*func[0      *NF+iang+1].a_P22;
+				P_ref     = (P11_ray+P22_ray) * pmol + (P11_aer_ref+P22_aer_ref) * (1.-pmol);
+			}
+
+			for (int k=0; k<NLOWd; k++) {
+				ph->weight_sca[k] *= __fdividef(get_OD(1,prof_atm[ph->layer+ k*DL*(NATMd+1)]), 
+												get_OD(1,prof_atm[ph->layer + ph->ilam*(NATMd+1)]));
+
+				if (pmol <1.) {
+					int iphak  = prof_atm[ph->layer+k*DL*(NATMd+1)].iphase + 1; 
+					float pmol_k = prof_atm[ph->layer+ k*DL*(NATMd+1)].pmol;
+					// Phase functions of aerosols  at other wavelengths, Rayleigh is supposed to be constant with wavelength
+					float P11_aer = (1-zang)*func[iphak*NF+iang].a_P11 + zang*func[iphak*NF+iang+1].a_P11;
+					float P22_aer = (1-zang)*func[iphak*NF+iang].a_P22 + zang*func[iphak*NF+iang+1].a_P22;
+					// Phase functions of the mixture of aerosols and Rayliegh at other wavelengths
+					float P_k   = (P11_ray+P22_ray) * pmol_k + (P11_aer+P22_aer) * (1.-pmol_k);
+					ph->weight_sca[k] *= __fdividef(P_k, P_ref);
+					//int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
+					//if (idx==0) printf("%d %d %f %d %f %f %f %f\n",ipha,ph->layer,pmol,k,pmol_k,
+					//        ph->weight_sca[k],P_k,P_ref);
+				}
+			}
+#endif
+		}
+		else{
+		
+			/*******************/
+			/* Photon in ocean */
+			/*******************/	    
+#ifdef ALIS
+			int DL=(NLAMd-1)/(NLOWd-1);
+			float P11_aer_ref, P11_ray, P22_aer_ref, P22_ray, P_ref;
+			float pmol= prof_oc[ph->layer+ ph->ilam*(NOCEd+1)].pmol;
+			if (pmol <1.) {
+				zang = theta * (NF-1)/PI ;
+				iang = __float2int_rd(zang);
+				zang = zang - iang;
+				int ipharef  = prof_oc[ph->layer+ph->ilam*(NOCEd+1)].iphase + 1; 
+				// Phase functions of aerosols and Rayliegh, and mixture of both at reference wavelength
+				P11_aer_ref = (1-zang)*func[ipharef*NF+iang].a_P11 + zang*func[ipharef*NF+iang+1].a_P11;
+				P11_ray     = (1-zang)*func[0      *NF+iang].a_P11 + zang*func[0      *NF+iang+1].a_P11;
+				P22_aer_ref = (1-zang)*func[ipharef*NF+iang].a_P22 + zang*func[ipharef*NF+iang+1].a_P22;
+				P22_ray     = (1-zang)*func[0      *NF+iang].a_P22 + zang*func[0      *NF+iang+1].a_P22;
+				P_ref     = (P11_ray+P22_ray) * pmol + (P11_aer_ref+P22_aer_ref) * (1.-pmol);
+			}
+			for (int k=0; k<NLOWd; k++) {
+				ph->weight_sca[k] *= __fdividef(get_OD(1,prof_oc[ph->layer+ k*DL*(NOCEd+1)]), 
+												get_OD(1,prof_oc[ph->layer + ph->ilam*(NOCEd+1)]));
+				if (pmol <1.) {
+					int iphak  = prof_oc[ph->layer+k*DL*(NOCEd+1)].iphase + 1; 
+					float pmol_k = prof_oc[ph->layer+ k*DL*(NOCEd+1)].pmol;
+					// Phase functions of aerosols  at other wavelengths, Rayleigh is supposed to be constant with wavelength
+					float P11_aer = (1-zang)*func[iphak*NF+iang].a_P11 + zang*func[iphak*NF+iang+1].a_P11;
+					float P22_aer = (1-zang)*func[iphak*NF+iang].a_P22 + zang*func[iphak*NF+iang+1].a_P22;
+					// Phase functions of the mixture of aerosols and Rayliegh at other wavelengths
+					float P_k   = (P11_ray+P22_ray) * pmol_k + (P11_aer+P22_aer) * (1.-pmol_k);
+					ph->weight_sca[k] *= __fdividef(P_k, P_ref);
+				}
+			}
+#endif
+	   
+		} //ocean
+		
+	}
+
+
+
+
+
+
+
+
+
+
+
+
 	if (!le){
 		/** Russian roulette for propagating photons **/
 		if( ph->weight < WEIGHTRR ){
@@ -1715,6 +1827,10 @@ __device__ void scatter(Photon* ph,
     else {
         ph->weight /= fabs(ph->v.z);
     }
+
+
+
+
 	
 }
 
