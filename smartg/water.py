@@ -191,16 +191,16 @@ class IOP_1(IOP_base):
         ALB: albedo of the sea floor (Albedo instance)
         DEPTH: depth in m
         pfwav: list of wavelengths at which the phase functions are calculated
-        CFluo: Chorophyll a fluorescence activated
+        FQYC: Chorophyll a fluorescence Quantum Yield
     '''
     def __init__(self, chl, pfwav=None, ALB=Albedo_cst(0.),
-                 DEPTH=10000, NANG=72001, ang_trunc=5., CFluo=False):
+                 DEPTH=10000, NANG=72001, ang_trunc=5., FQYC=0.):
         self.chl = chl
         self.depth = float(DEPTH)
         self.NANG = NANG
         self.ang_trunc = ang_trunc
         self.ALB = ALB
-        self.CFluo = CFluo
+        self.FQYC = FQYC
         if pfwav is None:
             self.pfwav = None
         else:
@@ -239,13 +239,9 @@ class IOP_1(IOP_base):
 
         # NEW !!!
         # chlorophyll fluorescence (scattering coefficient)
-        if self.CFluo:
-            FQYC = 0.02 # Fluorescence Quantum Yield for Chlorophyll
-        else:
-            FQYC = 0.
-        bfC = FQYC * aphy
-        bfC[wav<370.]=0.
-        bfC[wav>690.]=0.
+        FQYC = np.full_like(aphy, self.FQYC) # Fluorescence Quantum Yield for Chlorophyll
+        FQYC[wav<370.]=0.
+        FQYC[wav>690.]=0.
         # NEW !!!
 
         # CDM absorption central value
@@ -260,10 +256,7 @@ class IOP_1(IOP_base):
         aCDM = aCDM443 * np.exp(-S*(wav - 443))
 
         # NEW !!!
-        if self.CFluo:
-            atot = aw + aCDM
-        else:
-            atot = aw + aphy + aCDM
+        atot = aw + aphy * (1.-FQYC) + aCDM
         # NEW !!!
 
         # Pure Sea water scattering coefficient
@@ -274,10 +267,7 @@ class IOP_1(IOP_base):
         bp *= coef_trunc/2.
 
         # NEW !!!
-        if self.CFluo:
-            btot = bw + bp + aphy
-        else:
-            btot = bw + bp
+        btot = bw + bp + aphy * FQYC
         # NEW !!!
 
         #
@@ -296,7 +286,6 @@ class IOP_1(IOP_base):
                 'btot': btot,
                 'bp': bp,
                 'Bp': Bp,
-                'bfC': bfC,
                 'FQYC': FQYC
                 }
 
@@ -363,8 +352,8 @@ class IOP_1(IOP_base):
                         ['wavelength', 'z_oc'])
 
         # NEW !!!
-        tau_ine = np.zeros(shp, dtype='float32')
-        tau_ine[:,1] = - ((iop['bfC']) * self.depth)
+        tau_ine = np.ones(shp, dtype='float32')
+        tau_ine[:,1] = -((iop['aphy'] * iop['FQYC']) * self.depth)
         with np.errstate(invalid='ignore'):
             pine = tau_ine/tau_sca
         pine[np.isnan(pine)] = 0.
@@ -442,14 +431,16 @@ class IOP_profile(IOP_base):
         pfwav: list of wavelengths at which the phase functions are calculated
         Nlayer: Number of vertical layers
         MIXED: Mixed or Statified waters
+        FQYC : Fluorescence Quantum Yield for Chlorophyll
     '''
     def __init__(self, chls, pfwav=None, ALB=Albedo_cst(0.),
-                 DEPTH=300., NANG=72001, ang_trunc=5., NLAYER=20, MIXED=False):
+                 DEPTH=300., NANG=72001, ang_trunc=5., NLAYER=20, MIXED=False, FQYC=0.):
         self.chls = chls
         self.depth = float(DEPTH)
         self.NANG = NANG
         self.ang_trunc = ang_trunc
         self.ALB = ALB
+        self.FQYC = FQYC
         if pfwav is None:
             self.pfwav = None
         else:
@@ -544,12 +535,9 @@ class IOP_profile(IOP_base):
         bp *= coef_trunc/2.
         # NEW !!!
         # chlorophyll fluorescence (scattering coefficient)
-        # Fluorescence Quantum Yield for Chlorophyll
-        FQYC = np.ones_like(aphy) * 0.02
+        FQYC = np.full_like(aphy, self.FQYC) # Fluorescence Quantum Yield for Chlorophyll
         FQYC[wav2<370.]=0.
         FQYC[wav2>690.]=0.
-        bfC = FQYC * aphy
-        # NEW !!!
 
         # CDOM covariant absorption
         p2       = 0.3 + (5.7*R2*aphy440)/(0.02+aphy440)
@@ -557,13 +545,11 @@ class IOP_profile(IOP_base):
         aCDOM    = aCDOM440 *np.exp(-0.014*(wav2-440.))
 
         # NEW !!!
-        #atot = aw + aphy + aCDM
-        atot = aw + aCDOM
+        atot = aw + aphy*(1.-FQYC) + aCDOM
         # NEW !!!
 
         # NEW !!!
-        #btot = bw + bp
-        btot = bw + bp + aphy
+        btot = bw + bp + aphy* FQYC
         # NEW !!!
 
         #
@@ -578,12 +564,12 @@ class IOP_profile(IOP_base):
 
         return {'atot': atot,
                 'aphy': aphy,
+                'aCDOM':aCDOM,
                 'aw': aw,
                 'bw': bw,
                 'btot': btot,
                 'bp': bp,
                 'Bp': Bp,
-                'bfC': bfC,
                 'FQYC': FQYC
                 }
 
@@ -610,7 +596,6 @@ class IOP_profile(IOP_base):
             pha_, ipha = calc_iphase(pha['phase'], pro.axis('wavelength'), pro.axis('z_oc'))
 
             # index with ipha and reshape to broadcast to [wav, z]
-            #coef_trunc = pha['coef_trunc'].data.ravel()[ipha][:,0]  # discard dimension 'z_oc'
             coef_trunc = pha['coef_trunc'].data.ravel()[ipha][:,:]
 
             pro.add_axis('theta_oc', pha.axis('theta_oc'))
@@ -625,15 +610,37 @@ class IOP_profile(IOP_base):
 
         tau_tot = - (iop['atot'] + iop['btot'])*dz
         tau_sca = - iop['btot'] * dz
+        tau_y   = - iop['aCDOM'] * dz
+        tau_w   = -(iop['aw'] + iop['bw'])*dz
+        tau_p   = -(iop['aphy'] + iop['bp'])*dz
+        ssa_w   = iop['bw']/(iop['aw'] + iop['bw'])
         # NEW !!!
-        tau_ine = - iop['bfC']  * dz
+        tau_ine = - (iop['aphy'] * iop['FQYC'])  * dz
         with np.errstate(invalid='ignore'):
             pine = tau_ine/tau_sca
         pine[np.isnan(pine)] = 0.
+        with np.errstate(invalid='ignore'):
+            ssa_p = iop['bp']/(iop['aphy'] + iop['bp'])
+        ssa_p[np.isnan(ssa_p)] = 0.
         # NEW !!!
         with np.errstate(invalid='ignore'):
             ssa = tau_sca/tau_tot
         ssa[np.isnan(ssa)] = 1.
+
+        pro.add_dataset('OD_w', np.cumsum(tau_w, out=tau_w, axis=1),
+                        ['wavelength', 'z_oc'],
+                        attrs={'description':
+                               'Cumulated water optical thickness at each wavelength'})
+
+        pro.add_dataset('OD_p_oc', np.cumsum(tau_p, out=tau_p, axis=1),
+                        ['wavelength', 'z_oc'],
+                        attrs={'description':
+                               'Cumulated oceanic particles optical thickness at each wavelength'})
+
+        pro.add_dataset('OD_y', np.cumsum(tau_y, out=tau_y, axis=1),
+                        ['wavelength', 'z_oc'],
+                        attrs={'description':
+                               'Cumulated CDOM optical thickness at each wavelength'})
 
         pro.add_dataset('OD_oc', np.cumsum(tau_tot, out=tau_tot, axis=1),
                         ['wavelength', 'z_oc'])
@@ -652,7 +659,10 @@ class IOP_profile(IOP_base):
                         ['wavelength', 'z_oc'])
         pro.add_dataset('ssa_oc', ssa,
                         ['wavelength', 'z_oc'])
-
+        pro.add_dataset('ssa_p_oc', ssa_p,
+                        ['wavelength', 'z_oc'])
+        pro.add_dataset('ssa_w', ssa_w,
+                        ['wavelength', 'z_oc'])
         # NEW !!!
         pro.add_dataset('pine_oc', pine,
                         ['wavelength', 'z_oc'])

@@ -700,8 +700,11 @@ class AtmAFGL(Atmosphere):
             #
             dtaug = tau_o3 + tau_no2 + tau_mol
             taug = dtaug.apply(lambda x: np.cumsum(x, axis=1))
-            taug.attrs['description'] = 'Cumulated gaseous absorption optical thickness'
-            pro.add_lut(taug, desc='OD_g')
+            #taug.attrs['description'] = 'Cumulated gaseous absorption optical thickness'
+            #pro.add_lut(taug, desc='OD_g')
+            pro.add_dataset('OD_g', taug.data,
+                        axnames=['wavelength', 'z_atm'],
+                        attrs={'description': 'Cumulated gaseous absorption optical thickness'})
 
         else:
             dtaug = self.prof_abs

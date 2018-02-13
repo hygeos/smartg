@@ -841,14 +841,22 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
         if 'phase_atm' in prof_atm.datasets():
             m.add_lut(prof_atm['phase_atm'])
             m.add_lut(prof_atm['iphase_atm'])
+        if 'pine_atm' in prof_atm.datasets():
+            m.add_lut(prof_atm['pine_atm'])
+            m.add_lut(prof_atm['FQY1_atm'])
 
     # write ocean profiles
     if prof_oc is not None:
+        m.add_lut(prof_oc['OD_w'])
+        m.add_lut(prof_oc['OD_p_oc'])
+        m.add_lut(prof_oc['OD_y'])
         m.add_lut(prof_oc['OD_oc'])
         m.add_lut(prof_oc['OD_sca_oc'])
         m.add_lut(prof_oc['OD_abs_oc'])
         m.add_lut(prof_oc['pmol_oc'])
         m.add_lut(prof_oc['ssa_oc'])
+        if 'ssa_w' in prof_oc.datasets():
+            m.add_lut(prof_oc['ssa_w'])
         if 'ssa_p_oc' in prof_oc.datasets():
             m.add_lut(prof_oc['ssa_p_oc'])
         if 'phase_oc' in prof_oc.datasets():

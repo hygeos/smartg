@@ -329,7 +329,7 @@ def phase_view(mlut, ipha=None, fig= None, axarr=None, iw=0, kind='atm'):
 
     return fig, axarr
     
-def atm_view(mlut, ipha=None, fig=None, ax=None, iw=0, kind='atm'):
+def atm_view(mlut, ipha=None, fig=None, ax=None, iw=0, kind='atm', zmax=None, depthmax=None):
     '''
     visualization of a smartg MLUT atmospheric profile from output
 
@@ -338,6 +338,8 @@ def atm_view(mlut, ipha=None, fig=None, ax=None, iw=0, kind='atm'):
         fig : fig object to be created or included in
         axarr : system of axes (2,2) to be created or used
         iw : in case of multi wavelength simulation, index of wavelength to be plotted
+        zmax: max altitude of the atmopshere plot
+        depthmax: max depth of the ocean plot
     '''
 
     if (ax is None):
@@ -362,40 +364,42 @@ def atm_view(mlut, ipha=None, fig=None, ax=None, iw=0, kind='atm'):
     Dz = z.apply(diff1)
     Dz = Dz.apply(abs,'Dz')
     Dtau     = sign * mlut['OD_'+kind    ].sub().__getitem__(key).apply(diff1,'Dtau')
-    Dtau_Sca = sign * mlut['OD_sca_'+kind].sub().__getitem__(key).apply(diff1,'Dtau_sca')
-    Dtau_Abs = sign * mlut['OD_abs_'+kind].sub().__getitem__(key).apply(diff1,'Dtau_abs')
-
-    pmol     = mlut['pmol_'+kind].sub().__getitem__(key)
-    Dtau_ScaR = Dtau_Sca * pmol
-    Dtau_ScaA = Dtau_Sca - Dtau_ScaR
     if kind=='atm':
+        Dtau_ExtA = sign * mlut['OD_p'].sub().__getitem__(key).apply(diff1,'Dtau_ExtA')
+        Dtau_ScaR = sign * mlut['OD_r'].sub().__getitem__(key).apply(diff1,'Dtau_ScaR')
+        Dtau_AbsG = sign * mlut['OD_g'].sub().__getitem__(key).apply(diff1,'Dtau_AbsG')
         ssa_p = mlut['ssa_p_'+kind].sub().__getitem__(key)
-        Dtau_ExtA = Dtau_ScaA / ssa_p
+        Dtau_ScaA = Dtau_ExtA * ssa_p
         Dtau_AbsA = Dtau_ExtA * (1. - ssa_p)
-        Dtau_AbsG = Dtau_Abs - Dtau_AbsA
         if (np.max(Dtau_AbsA[:]) > 0.) : ax.semilogx((Dtau_AbsA/Dz)[:], z[:], 'r--',label=r'$\sigma_{abs}^{a+c}$')
         if (np.max(Dtau_ScaA[:]) > 0.) : ax.semilogx((Dtau_ScaA/Dz)[:], z[:], 'r',  label=r'$\sigma_{sca}^{a+c}$')
-        if (np.max(Dtau_AbsG[:]) > 0.) : ax.semilogx((Dtau_AbsG/Dz)[:], z[:], 'g',  label=r'$\sigma_{abs}^{gas}$')
+        if (np.max(Dtau_AbsG[:]) > 0.) : ax.semilogx((Dtau_AbsG/Dz)[:], z[:], 'g--',  label=r'$\sigma_{abs}^{gas}$')
         ax.semilogx((Dtau_ScaR/Dz)[:], z[:], 'b', label=r'$\sigma_{sca}^{R}$' )
         ax.set_xlim(1e-6,10)
         xlabel(r'$(km^{-1})$')
         ylabel(r'$z (km)$')
-        #ax.set_ylim(0,50)
-        ax.set_ylim(0,max(100.,z.data.max()))
+        if zmax is None : zmax = max(100.,z.data.max())
+        ax.set_ylim(0,zmax)
     else :
-        Dtau_ScaA.data[0] = Dtau_ScaA.data[1]
-        Dtau_Abs.data[0] = Dtau_Abs.data[1]
-        Dtau_ScaR.data[0] = Dtau_ScaR.data[1]
-        Dtau.data[0] = Dtau.data[1]
-        Dz.data[0] = Dz.data[1]
-        if (np.max(Dtau_ScaA[:]) > 0.) : ax.semilogx((Dtau_ScaA/Dz)[:], z[:],'r^-', label=r'$\sigma_{sca}^{p}$')
-        if (np.max(Dtau_Abs[:]) > 0.)  : ax.semilogx((Dtau_Abs/Dz)[:], z[:], 'g^-', label=r'$\sigma_{abs}^{tot}$')
-        ax.semilogx((Dtau_ScaR/Dz)[:], z[:], 'b^-', label=r'$\sigma_{sca}^{w}$' )
+        Dtau_ExtP = sign * mlut['OD_p_oc'].sub().__getitem__(key).apply(diff1,'Dtau_ExtP')
+        Dtau_ExtW = sign * mlut['OD_w'].sub().__getitem__(key).apply(diff1,'Dtau_ExtW')
+        Dtau_AbsY = sign * mlut['OD_y'].sub().__getitem__(key).apply(diff1,'Dtau_AbsY')
+        ssa_p = mlut['ssa_p_'+kind].sub().__getitem__(key)
+        ssa_w = mlut['ssa_w'].sub().__getitem__(key)
+        Dtau_ScaP = Dtau_ExtP * ssa_p
+        Dtau_AbsP = Dtau_ExtP * (1. - ssa_p)
+        Dtau_ScaW = Dtau_ExtW * ssa_w
+        Dtau_AbsW = Dtau_ExtW * (1. - ssa_w)
+        if (np.max(Dtau_AbsP[:]) > 0.) : ax.semilogx((Dtau_AbsP/Dz)[:], z[:], 'r--',label=r'$\sigma_{abs}^{p}$')
+        if (np.max(Dtau_ScaP[:]) > 0.) : ax.semilogx((Dtau_ScaP/Dz)[:], z[:], 'r',  label=r'$\sigma_{sca}^{p}$')
+        if (np.max(Dtau_AbsW[:]) > 0.) : ax.semilogx((Dtau_AbsW/Dz)[:], z[:], 'b--',label=r'$\sigma_{abs}^{w}$')
+        if (np.max(Dtau_ScaW[:]) > 0.) : ax.semilogx((Dtau_ScaW/Dz)[:], z[:], 'b',  label=r'$\sigma_{sca}^{w}$')
+        if (np.max(Dtau_AbsY[:]) > 0.) : ax.semilogx((Dtau_AbsY/Dz)[:], z[:], 'y--',  label=r'$\sigma_{abs}^{y}$')
         ax.set_xlim(1e-3,3)
         xlabel(r'$(m^{-1})$')
         ylabel(r'$z (m)$')
-        #ax.set_ylim(-50,1)
-        ax.set_ylim(0,min(-100.,z.data.min()))
+        if depthmax is None : depthmax = min(-100.,z.data.min())
+        ax.set_ylim(depthmax,0)
     ax.semilogx((Dtau/Dz)[:], z[:], 'k^-', label=r'$\sigma_{ext}^{tot}$')
     ax.set_title('Vertical profile'+labw)
     ax.grid()
@@ -403,14 +407,23 @@ def atm_view(mlut, ipha=None, fig=None, ax=None, iw=0, kind='atm'):
     
     try:        
         i=0
-        ax.annotate('%i'%(mlut['iphase_'+kind].sub().__getitem__(key)[0]),xy=(1e-5,51))
+        if kind=='atm':
+            xy=(1e-5,zmax*0.9)
+        else:
+            xy=(1e-3,depthmax*0.9)
+        ax.annotate('%i'%(mlut['iphase_'+kind].sub().__getitem__(key)[0]),xy=xy)
         for k in range(mlut.axes['z_'+kind].shape[0]):
             i0 = mlut['iphase_'+kind].sub().__getitem__(key)[k]
             if i0 != i :
                 zl = mlut.axes['z_'+kind][k]
-                ax.plot([1e-6,10],[zl,zl],'k--')
-                #ax.plot([1e-6,10],[zl+1,zl+1],'k--')
-                ax.annotate('%i'%i0,xy=(1e-5,zl-1))
+                if kind=='atm':
+                    ax.plot([1e-6,10],[zl,zl],'k--')
+                    #ax.plot([1e-6,10],[zl+1,zl+1],'k--')
+                    ax.annotate('%i'%i0,xy=(1e-5,zl-1))
+                else:
+                    ax.plot([1e-3,3],[zl,zl],'k--')
+                    #ax.plot([1e-6,10],[zl+1,zl+1],'k--')
+                    ax.annotate('%i'%i0,xy=(1e-3,zl-1))
                 i = i0
             
     except:
