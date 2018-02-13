@@ -194,7 +194,7 @@ class IOP_1(IOP_base):
         FQYC: Chorophyll a fluorescence Quantum Yield
     '''
     def __init__(self, chl, pfwav=None, ALB=Albedo_cst(0.),
-                 DEPTH=10000, NANG=72001, ang_trunc=5., FQYC=0.):
+                 DEPTH=10000, NANG=72001, ang_trunc=5., FQYC=0.0):
         self.chl = chl
         self.depth = float(DEPTH)
         self.NANG = NANG
@@ -228,6 +228,7 @@ class IOP_1(IOP_base):
         coef_trunc: integrate (normalized to 2) of the truncated phase function
         -> scattering coefficient has to be multiplied by coef_trunc/2.
         '''
+
         chl = self.chl
 
         # pure water absorption
@@ -236,6 +237,7 @@ class IOP_1(IOP_base):
         # phytoplankton absorption
         aphy = (self.BRICAUD['A'][Idx(wav, fill_value='extrema')]
                 * (chl**self.BRICAUD['E'][Idx(wav, fill_value='extrema')]))
+
 
         # NEW !!!
         # chlorophyll fluorescence (scattering coefficient)
@@ -364,8 +366,8 @@ class IOP_1(IOP_base):
         FQY1[:,1] = iop['FQYC']
         pro.add_dataset('FQY1_oc', FQY1,
                         ['wavelength', 'z_oc'])
-        # NEW !!!
 
+        # NEW !!!
         pro.add_dataset('albedo_seafloor',
                         self.ALB.get(wav),
                         ['wavelength'])

@@ -1397,7 +1397,7 @@ __device__ void scatter(Photon* ph,
         float* tabthv, float* tabphi, int count_level,
         struct RNG_State *rngstate) {
 
-	// int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+	//int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
 
 	float cTh=0.f ;
 	float zang=0.f, theta=0.f;
@@ -1459,19 +1459,22 @@ __device__ void scatter(Photon* ph,
 
 		pmol = 1.f - prof_oc[ph->layer+ph->ilam*(NOCEd+1)].pmol;
 		pine = 1.f - prof_oc[ph->layer+ph->ilam*(NOCEd+1)].pine;
-		FQY1 =       prof_oc[ph->layer+ph->ilam*(NOCEd+1)].FQY1;
 		
 		ilay = ph->layer + ph->ilam*(NOCEd+1); // oce layer index
 
 		if (pine  < RAND){
+			
+			// if (idx==0){
+			// 	printf("fluo \n");
+			// }
 
 			/***********************************/
 			/*     inelastic scattering    */
 			/***********************************/
 			fluo = true;
-				
+			
 		}else{
-		
+			
 			/***********************************/
 			/* Elastic scattering    */
 			/***********************************/
@@ -1480,8 +1483,8 @@ __device__ void scatter(Photon* ph,
 			/* ocean phase function index */
 			if ( pmol < RAND ){ipha  = 0;}           // Rayleigh index
 			else {ipha  = prof_oc[ilay].iphase + 1;} // particle index
+		
 		}
-
 
 	}
 
@@ -1668,14 +1671,11 @@ __device__ void scatter(Photon* ph,
 		float lambdac0 = 685.0; 
 		float new_wavel;
 
-
 		float rand1 = RAND;
 		float rand2 = RAND;
 		new_wavel = lambdac0 + sigmac * sqrtf(-2.0*logf(RAND)) * cosf(DEUXPI * rand2);
 
-
 		ph->weight /= new_wavel / ph->wavel;
-		ph->weight *= FQY1;
 		ph->wavel = new_wavel;
 
 		// if (idx == 0) {
@@ -1698,11 +1698,11 @@ __device__ void scatter(Photon* ph,
 
 		} else {
 
-			atomicAdd(NPhotonsIn + ph->ilam, -1);
+			//atomicAdd(NPhotonsIn + ph->ilam, -1);
 
 			ph->ilam = __float2int_rd(__fdividef( (ph->wavel -  spectrum[0].lambda)* NLAMd, spectrum[NLAMd-1].lambda - spectrum[0].lambda ));
 			
-			atomicAdd(NPhotonsIn + ph->ilam, 1);
+			//atomicAdd(NPhotonsIn + ph->ilam, 1);
 
 		}
 
