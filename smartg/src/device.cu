@@ -1655,12 +1655,16 @@ __device__ void scatter(Photon* ph,
 			ph->weight /= 4.F * PI; // Phase function normalization	
 			
 		}
-		
-		// Depolarization
-		ph->stokes.x = 0.5F;
-		ph->stokes.y = 0.5F;
-		ph->stokes.z = 0.F;
-		ph->stokes.w = 0.F;
+
+
+		// Depolarisation du Photon
+		float4x4 L = make_float4x4(
+								   0.5F, 0.5F, 0.F, 0.F,
+								   0.5F, 0.5F, 0.F, 0.F,
+								   0.0F, 0.0F, 0.F, 0.F,
+								   0.0F, 0.0F, 0.F, 0.F 
+								   );
+		ph->stokes = mul(L,ph->stokes);
 
 		// if (idx == 0) {
 		// 	printf("\n(before)  %f %f %i \n", ph->weight, ph->wavel, ph->ilam );
@@ -1670,12 +1674,11 @@ __device__ void scatter(Photon* ph,
 		float sigmac   = 10.6;
 		float lambdac0 = 685.0; 
 		float new_wavel;
-
 		float rand1 = RAND;
 		float rand2 = RAND;
 		new_wavel = lambdac0 + sigmac * sqrtf(-2.0*logf(RAND)) * cosf(DEUXPI * rand2);
 
-		ph->weight /= new_wavel / ph->wavel;
+		ph->weight /= ph->wavel / new_wavel;
 		ph->wavel = new_wavel;
 
 		// if (idx == 0) {
@@ -1804,13 +1807,6 @@ __device__ void scatter(Photon* ph,
 		} //ocean
 		
 	}
-
-
-
-
-
-
-
 
 
 
