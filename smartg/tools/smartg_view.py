@@ -11,6 +11,7 @@ import numpy as np
 np.seterr(invalid='ignore', divide='ignore') # ignore division by zero errors
 from smartg.tools.luts import plot_polar, transect2D
 from smartg.atmosphere import diff1
+from smartg.water import diff2
 
 
 def mdesc(desc, logI=False):
@@ -270,18 +271,19 @@ def transect_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up 
 
         return fig1, fig2
         
-def phase_view(mlut, ipha=None, fig= None, axarr=None, iw=0, kind='atm'):
+def phase_view(mlut, ipha=None, fig=None, axarr=None, iw=0, kind='atm'):
     '''
     visualization of a smartg MLUT phase function from output
 
     Options:
-        ipha: sabsolute index of the phase function coming from Profile
+        ipha: absolute index of the phase function coming from Profile
         fig : fig object to be created or included in
         axarr : system of axes (2,2) to be created on used
+        iw : in case of multi wavelength simulation, index of wavelength to be plotted
+        kind : atmopsheric 'atm' or oceanic 'oc' phase function
     '''
 
     nd = mlut['OD_'+kind].ndim
-    #Linlabw=''
     if nd>1:
         wi = mlut['OD_'+kind].names.index('wavelength') # Wavelength index
         key = [slice(None)]*nd
@@ -328,18 +330,18 @@ def phase_view(mlut, ipha=None, fig= None, axarr=None, iw=0, kind='atm'):
     axarr[0,0].legend(loc='upper center',fontsize = 'medium',labelspacing=0.01)
 
     return fig, axarr
+
     
-def atm_view(mlut, ipha=None, fig=None, ax=None, iw=0, kind='atm', zmax=None, depthmax=None):
+def profile_view(mlut, fig=None, ax=None, iw=0, kind='atm', zmax=None):
     '''
-    visualization of a smartg MLUT atmospheric profile from output
+    visualization of a smartg MLUT profile from output
 
     Options:
-        ipha: absolute index of the phase function coming from Profile
         fig : fig object to be created or included in
         axarr : system of axes (2,2) to be created or used
         iw : in case of multi wavelength simulation, index of wavelength to be plotted
-        zmax: max altitude of the atmopshere plot
-        depthmax: max depth of the ocean plot
+        kind : atmopsheric 'atm' or oceanic 'oc' profile
+        zmax: max altitude or depth of the plot
     '''
 
     if (ax is None):
@@ -358,16 +360,21 @@ def atm_view(mlut, ipha=None, fig=None, ax=None, iw=0, kind='atm', zmax=None, de
         key=tuple([slice(None)])
         labw=''
 
-    sign=1.    
-    if kind=='oc': sign=-1.
     z = mlut.axis('z_'+kind, aslut=True)
-    Dz = z.apply(diff1)
+    if kind=='oc': 
+        sign=-1.
+        func = diff2
+    else:
+        sign=1.    
+        func = diff1
+    Dz = z.apply(func)
     Dz = Dz.apply(abs,'Dz')
-    Dtau     = sign * mlut['OD_'+kind    ].sub().__getitem__(key).apply(diff1,'Dtau')
+    Dtau     = sign * mlut['OD_'+kind    ].sub().__getitem__(key).apply(func,'Dtau')
+    Dtau_Sca = sign * mlut['OD_sca_'+kind    ].sub().__getitem__(key).apply(func,'Dtau_Sca')
     if kind=='atm':
-        Dtau_ExtA = sign * mlut['OD_p'].sub().__getitem__(key).apply(diff1,'Dtau_ExtA')
-        Dtau_ScaR = sign * mlut['OD_r'].sub().__getitem__(key).apply(diff1,'Dtau_ScaR')
-        Dtau_AbsG = sign * mlut['OD_g'].sub().__getitem__(key).apply(diff1,'Dtau_AbsG')
+        Dtau_ExtA = sign * mlut['OD_p'].sub().__getitem__(key).apply(func,'Dtau_ExtA')
+        Dtau_ScaR = sign * mlut['OD_r'].sub().__getitem__(key).apply(func,'Dtau_ScaR')
+        Dtau_AbsG = sign * mlut['OD_g'].sub().__getitem__(key).apply(func,'Dtau_AbsG')
         ssa_p = mlut['ssa_p_'+kind].sub().__getitem__(key)
         Dtau_ScaA = Dtau_ExtA * ssa_p
         Dtau_AbsA = Dtau_ExtA * (1. - ssa_p)
@@ -381,25 +388,28 @@ def atm_view(mlut, ipha=None, fig=None, ax=None, iw=0, kind='atm', zmax=None, de
         if zmax is None : zmax = max(100.,z.data.max())
         ax.set_ylim(0,zmax)
     else :
-        Dtau_ExtP = sign * mlut['OD_p_oc'].sub().__getitem__(key).apply(diff1,'Dtau_ExtP')
-        Dtau_ExtW = sign * mlut['OD_w'].sub().__getitem__(key).apply(diff1,'Dtau_ExtW')
-        Dtau_AbsY = sign * mlut['OD_y'].sub().__getitem__(key).apply(diff1,'Dtau_AbsY')
+        Dtau_ExtP = sign * mlut['OD_p_oc'].sub().__getitem__(key).apply(func,'Dtau_ExtP')
+        Dtau_ExtW = sign * mlut['OD_w'].sub().__getitem__(key).apply(func,'Dtau_ExtW')
+        Dtau_AbsY = sign * mlut['OD_y'].sub().__getitem__(key).apply(func,'Dtau_AbsY')
         ssa_p = mlut['ssa_p_'+kind].sub().__getitem__(key)
         ssa_w = mlut['ssa_w'].sub().__getitem__(key)
+        pine  = mlut['pine_oc'].sub().__getitem__(key)
         Dtau_ScaP = Dtau_ExtP * ssa_p
         Dtau_AbsP = Dtau_ExtP * (1. - ssa_p)
         Dtau_ScaW = Dtau_ExtW * ssa_w
         Dtau_AbsW = Dtau_ExtW * (1. - ssa_w)
+        Dtau_Ine  = Dtau_Sca  * pine
         if (np.max(Dtau_AbsP[:]) > 0.) : ax.semilogx((Dtau_AbsP/Dz)[:], z[:], 'r--',label=r'$\sigma_{abs}^{p}$')
         if (np.max(Dtau_ScaP[:]) > 0.) : ax.semilogx((Dtau_ScaP/Dz)[:], z[:], 'r',  label=r'$\sigma_{sca}^{p}$')
         if (np.max(Dtau_AbsW[:]) > 0.) : ax.semilogx((Dtau_AbsW/Dz)[:], z[:], 'b--',label=r'$\sigma_{abs}^{w}$')
         if (np.max(Dtau_ScaW[:]) > 0.) : ax.semilogx((Dtau_ScaW/Dz)[:], z[:], 'b',  label=r'$\sigma_{sca}^{w}$')
-        if (np.max(Dtau_AbsY[:]) > 0.) : ax.semilogx((Dtau_AbsY/Dz)[:], z[:], 'y--',  label=r'$\sigma_{abs}^{y}$')
-        ax.set_xlim(1e-3,3)
+        if (np.max(Dtau_AbsY[:]) > 0.) : ax.semilogx((Dtau_AbsY/Dz)[:], z[:], 'y--',label=r'$\sigma_{abs}^{y}$')
+        if (np.max(Dtau_Ine[:])  > 0.) : ax.semilogx((Dtau_Ine/Dz)[:] , z[:], 'm:' ,label=r'$\sigma_{ine}^{}$')
+        ax.set_xlim(1e-4,10)
         xlabel(r'$(m^{-1})$')
         ylabel(r'$z (m)$')
-        if depthmax is None : depthmax = min(-100.,z.data.min())
-        ax.set_ylim(depthmax,0)
+        if zmax is None : zmax = min(-100.,z.data.min())
+        ax.set_ylim(zmax,0)
     ax.semilogx((Dtau/Dz)[:], z[:], 'k^-', label=r'$\sigma_{ext}^{tot}$')
     ax.set_title('Vertical profile'+labw)
     ax.grid()
@@ -410,7 +420,7 @@ def atm_view(mlut, ipha=None, fig=None, ax=None, iw=0, kind='atm', zmax=None, de
         if kind=='atm':
             xy=(1e-5,zmax*0.9)
         else:
-            xy=(1e-3,depthmax*0.9)
+            xy=(1e-4,zmax*0.9)
         ax.annotate('%i'%(mlut['iphase_'+kind].sub().__getitem__(key)[0]),xy=xy)
         for k in range(mlut.axes['z_'+kind].shape[0]):
             i0 = mlut['iphase_'+kind].sub().__getitem__(key)[k]
@@ -421,9 +431,9 @@ def atm_view(mlut, ipha=None, fig=None, ax=None, iw=0, kind='atm', zmax=None, de
                     #ax.plot([1e-6,10],[zl+1,zl+1],'k--')
                     ax.annotate('%i'%i0,xy=(1e-5,zl-1))
                 else:
-                    ax.plot([1e-3,3],[zl,zl],'k--')
+                    ax.plot([1e-4,10],[zl,zl],'k--')
                     #ax.plot([1e-6,10],[zl+1,zl+1],'k--')
-                    ax.annotate('%i'%i0,xy=(1e-3,zl-1))
+                    ax.annotate('%i'%i0,xy=(1e-4,zl-1))
                 i = i0
             
     except:
@@ -432,8 +442,16 @@ def atm_view(mlut, ipha=None, fig=None, ax=None, iw=0, kind='atm', zmax=None, de
     return fig, ax
     
     
-def input_view(mlut, iw=0, kind='atm'):
-    
+def input_view(mlut, iw=0, kind='atm', zmax=None, ipha=None):
+    ''' 
+    visualization of a smartg MLUT profile and phase functions from output
+
+    Options:
+        iw : in case of multi wavelength simulation, index of wavelength to be plotted
+        kind : atmopsheric 'atm' or oceanic 'oc' profile
+        zmax: max altitude or depth of the plot
+        ipha: absolute index of the phase function coming from Profile
+    '''
     fig = figure()
     fig.set_size_inches(12,6)
     try:
@@ -445,13 +463,13 @@ def input_view(mlut, iw=0, kind='atm'):
     
         axarr = np.array([[ax1,ax2],[ax3,ax4]])
     
-        _,_= phase_view(mlut, iw=iw, axarr=axarr, kind=kind)
+        _,_= phase_view(mlut, iw=iw, axarr=axarr, kind=kind, ipha=ipha)
         
         ax5 = subplot2grid((2,3),(0,2),rowspan=2,colspan=1)
         
-        _,_= atm_view(mlut, iw=iw, ax=ax5, kind=kind)
+        _,_= profile_view(mlut, iw=iw, ax=ax5, kind=kind, zmax=zmax)
         
         tight_layout()
         
     except:
-        _,_= atm_view(mlut, iw=iw, kind=kind)
+        _,_= profile_view(mlut, iw=iw, kind=kind, zmax=zmax)

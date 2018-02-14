@@ -12,6 +12,9 @@ from smartg.config import NPSTK
 from smartg.tools.phase import fournierForand, integ_phase, calc_iphase
 from smartg.config import dir_auxdata as dir_aux
 
+def diff2(x):
+    return np.ediff1d(x, to_end=[0.])
+
 
 def read_aw(dir_aux):
     '''
@@ -283,6 +286,7 @@ class IOP_1(IOP_base):
 
         return {'atot': atot,
                 'aphy': aphy,
+                'aCDM': aCDM,
                 'aw': aw,
                 'bw': bw,
                 'btot': btot,
@@ -326,6 +330,34 @@ class IOP_1(IOP_base):
 
         shp = (len(wav), 2)
 
+        tau_w = np.zeros(shp, dtype='float32')
+        tau_y = np.zeros(shp, dtype='float32')
+        tau_p = np.zeros(shp, dtype='float32')
+        ssa_w = np.zeros(shp, dtype='float32')
+        ssa_p = np.zeros(shp, dtype='float32')
+        tau_y[:,1]   = - iop['aCDM'] * self.depth
+        tau_w[:,1]   = -(iop['aw'] + iop['bw'])*self.depth
+        tau_p[:,1]   = -(iop['aphy'] + iop['bp'])*self.depth
+        ssa_w[:,1]   =  iop['bw']/(iop['aw'] + iop['bw'])
+        with np.errstate(invalid='ignore'):
+            ssa_p[:,1] = iop['bp']/(iop['aphy'] + iop['bp'])
+        ssa_p[np.isnan(ssa_p)] = 0.
+
+        pro.add_dataset('OD_w', tau_w,
+                        ['wavelength', 'z_oc'],
+                        attrs={'description':
+                               'Cumulated water optical thickness at each wavelength'})
+
+        pro.add_dataset('OD_p_oc', tau_p,
+                        ['wavelength', 'z_oc'],
+                        attrs={'description':
+                               'Cumulated oceanic particles optical thickness at each wavelength'})
+
+        pro.add_dataset('OD_y', tau_y,
+                        ['wavelength', 'z_oc'],
+                        attrs={'description':
+                               'Cumulated CDOM optical thickness at each wavelength'})
+
         tau_tot = np.zeros(shp, dtype='float32')
         tau_tot[:,1] = - ((iop['atot'] + iop['btot']) * self.depth)
         pro.add_dataset('OD_oc', tau_tot,
@@ -351,6 +383,10 @@ class IOP_1(IOP_base):
         ssa[np.isnan(ssa)] = 1.
 
         pro.add_dataset('ssa_oc', ssa,
+                        ['wavelength', 'z_oc'])
+        pro.add_dataset('ssa_p_oc', ssa_p,
+                        ['wavelength', 'z_oc'])
+        pro.add_dataset('ssa_w', ssa_w,
                         ['wavelength', 'z_oc'])
 
         # NEW !!!
@@ -431,12 +467,12 @@ class IOP_profile(IOP_base):
         ALB: albedo of the sea floor (Albedo instance)
         DEPTH: depth in m
         pfwav: list of wavelengths at which the phase functions are calculated
-        Nlayer: Number of vertical layers
+        NLAYER: Number of vertical layers
         MIXED: Mixed or Statified waters
         FQYC : Fluorescence Quantum Yield for Chlorophyll
     '''
     def __init__(self, chls, pfwav=None, ALB=Albedo_cst(0.),
-                 DEPTH=300., NANG=72001, ang_trunc=5., NLAYER=20, MIXED=False, FQYC=0.):
+                 DEPTH=300., NANG=7201, ang_trunc=5., NLAYER=20, MIXED=False, FQYC=0.):
         self.chls = chls
         self.depth = float(DEPTH)
         self.NANG = NANG
@@ -484,7 +520,7 @@ class IOP_profile(IOP_base):
         #2. Derive Euphotic Depth and make vertical grid
         Zeu = 568.2*chl_zeu**(-0.746)
         Zmax= min(DEPTH*0.999, 3.*Zeu)
-        self.z = np.concatenate((np.linspace(0, Zmax, num=NLAYER), np.array([DEPTH])))
+        self.z = np.concatenate((np.linspace(0, Zmax, num=NLAYER-1), np.array([DEPTH])))
 
         #3. Introduce reduced concentration chi and reduced depth zeta
         # Stratified Trophic case 1 parametrization
@@ -561,8 +597,8 @@ class IOP_profile(IOP_base):
         good=np.where(chl2<2.)
         v[good] = 0.5*(np.log10(chl2[good]) - 0.3)
         Bp = 0.002 + 0.01*( 0.5-0.25*np.log10(chl2))*((wav2/550.)**v)
-        Bp[np.isinf(Bp)]=0.
-        Bp[np.isnan(Bp)]=0.
+        Bp[np.isinf(Bp)]=0.5
+        Bp[np.isnan(Bp)]=0.5
 
         return {'atot': atot,
                 'aphy': aphy,
@@ -584,7 +620,6 @@ class IOP_profile(IOP_base):
         wav = np.array(wav)
         pro = MLUT()
         pro.add_axis('wavelength', wav[:])
-        #pro.add_axis('z_oc', np.array([0., -self.depth]))
         pro.add_axis('z_oc', -self.z)
 
         if phase:
@@ -609,22 +644,24 @@ class IOP_profile(IOP_base):
         iop = self.calc_iop(wav, coef_trunc=coef_trunc)
 
         dz,_ = np.meshgrid(diff1(self.z),wav)
+        #dz,_ = np.meshgrid(diff2(self.z),wav)
 
-        tau_tot = - (iop['atot'] + iop['btot'])*dz
-        tau_sca = - iop['btot'] * dz
-        tau_y   = - iop['aCDOM'] * dz
-        tau_w   = -(iop['aw'] + iop['bw'])*dz
-        tau_p   = -(iop['aphy'] + iop['bp'])*dz
-        ssa_w   = iop['bw']/(iop['aw'] + iop['bw'])
-        # NEW !!!
-        tau_ine = - (iop['aphy'] * iop['FQYC'])  * dz
+        tau_w   = - (iop['aw']   + iop['bw']  ) * dz
+        tau_p   = - (iop['aphy'] + iop['bp']  ) * dz
+        tau_y   = - (iop['aCDOM']             ) * dz
+        tau_tot = - (iop['atot'] + iop['btot']) * dz
+        tau_sca = - (iop['btot']              ) * dz
+        tau_abs = - (iop['atot']              ) * dz
+        tau_ine = - (iop['aphy'] * iop['FQYC']) * dz
+
+        ssa_w   = iop['bw']/(iop['aw']   + iop['bw'])
+        ssa_p   = iop['bp']/(iop['aphy'] + iop['bp'])
+        pmol    = iop['bw']/(iop['bw']   + iop['bp'])
+
         with np.errstate(invalid='ignore'):
             pine = tau_ine/tau_sca
         pine[np.isnan(pine)] = 0.
-        with np.errstate(invalid='ignore'):
-            ssa_p = iop['bp']/(iop['aphy'] + iop['bp'])
-        ssa_p[np.isnan(ssa_p)] = 0.
-        # NEW !!!
+
         with np.errstate(invalid='ignore'):
             ssa = tau_sca/tau_tot
         ssa[np.isnan(ssa)] = 1.
@@ -650,24 +687,23 @@ class IOP_profile(IOP_base):
         pro.add_dataset('OD_sca_oc', np.cumsum(tau_sca, out=tau_sca, axis=1),
                         ['wavelength', 'z_oc'])
 
-        tau_abs = - (iop['atot'] * dz)
         pro.add_dataset('OD_abs_oc', np.cumsum(tau_abs, out=tau_abs, axis=1),
                         ['wavelength', 'z_oc'])
 
-        with np.errstate(divide='ignore'):
-            pmol = iop['bw']/(iop['bw']+iop['bp'])
-        pmol[np.isnan(pmol)] = 1.
+        pro.add_dataset('pine_oc', pine,
+                        ['wavelength', 'z_oc'])
+
         pro.add_dataset('pmol_oc', pmol,
                         ['wavelength', 'z_oc'])
+
         pro.add_dataset('ssa_oc', ssa,
                         ['wavelength', 'z_oc'])
+
         pro.add_dataset('ssa_p_oc', ssa_p,
                         ['wavelength', 'z_oc'])
         pro.add_dataset('ssa_w', ssa_w,
                         ['wavelength', 'z_oc'])
         # NEW !!!
-        pro.add_dataset('pine_oc', pine,
-                        ['wavelength', 'z_oc'])
         pro.add_dataset('FQY1_oc', iop['FQYC'],
                         ['wavelength', 'z_oc'])
         # NEW !!!
@@ -717,7 +753,7 @@ class IOP_profile(IOP_base):
         # create output MLUT
         result = MLUT()
         result.add_axis('wav_phase_oc', wav)
-        result.add_axis('z_phase_oc', self.z)
+        result.add_axis('z_phase_oc', -self.z)
         result.add_axis('theta_oc', ang*180./np.pi)
         result.add_dataset('phase', pha, ['wav_phase_oc', 'z_phase_oc', 'stk', 'theta_oc'])
         result.add_dataset('coef_trunc', integ_ff[:,:], ['wav_phase_oc', 'z_phase_oc'])
