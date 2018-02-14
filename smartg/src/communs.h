@@ -50,6 +50,13 @@
 #define OCEAN       6
 #define SEAFLOOR    7
 
+
+/* Possible Scatterers */
+#define RAY         0
+#define PTCLE       1
+#define CHLFLUO     2
+
+
 // test
 #define REMOVED     8
 
@@ -143,6 +150,9 @@ public:
 
     // Cartesian coordinates of the photon
     float3 pos;
+
+	// scatterer
+	short int scatterer;
 
     // Number of interaction (scattering or reflection/transmission)
     unsigned short nint;

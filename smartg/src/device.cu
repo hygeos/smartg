@@ -222,6 +222,13 @@ extern "C" {
 		// -> dans ATMOS ou OCEAN
 		if( (ph.loc == ATMOS) || (ph.loc == OCEAN)) {
 
+			/* Choose the scatterer */
+            choose_scatterer(&ph, prof_atm, prof_oc,  spectrum, 
+							 &rngstate); 
+            #ifdef DEBUG_PHOTON
+            display("CHOOSE SCAT", &ph);
+            #endif
+
             /* Scattering Local Estimate */
             if (LEd == 1) {
 			    int NK, up_level, down_level, count_level_le;
@@ -252,8 +259,7 @@ extern "C" {
                             ph_le.iph = (iph + iph0)%NBPHId;
                             ph_le.ith = (ith + ith0)%NBTHETAd;
                             // Scatter the virtual photon, using le=1, and count_level for the scattering angle computation
-                            scatter(&ph_le, prof_atm, prof_oc, spectrum, faer, foce,
-									NPhotonsIn,
+                            scatter(&ph_le, prof_atm, prof_oc, faer, foce,
                                     1, tabthv, tabphi,
                                     count_level_le, &rngstate);
 
@@ -287,8 +293,7 @@ extern "C" {
                 int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
                 int iph0 = idx%NBPHId;
                 copyPhoton(&ph, &ph_le);
-                scatter(&ph_le, prof_atm, prof_oc, spectrum, faer, foce,
-				            NPhotonsIn,
+                scatter(&ph_le, prof_atm, prof_oc, faer, foce,
                             1, tabthv, tabphi,
                             UP0M2, &rngstate);
                 ph_le.weight *= expf(-fabs(ph_le.tau/ph_le.vz));
@@ -326,8 +331,7 @@ extern "C" {
             }*/  //Double LE
 
             /* Scattering Propagation , using le=0 and propagation photon */
-            scatter(&ph, prof_atm, prof_oc,  spectrum, faer, foce,
-					NPhotonsIn,
+            scatter(&ph, prof_atm, prof_oc, faer, foce,
                     0, tabthv, tabphi, 0,
                     &rngstate);
             #ifdef DEBUG_PHOTON
@@ -1388,11 +1392,13 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 }
 
 
+
+
+
+
 __device__ void scatter(Photon* ph,
-        struct Profile *prof_atm, struct Profile *prof_oc,
-		struct Spectrum *spectrum,
+       struct Profile *prof_atm, struct Profile *prof_oc,
         struct Phase *faer, struct Phase *foce,
-		unsigned long long *NPhotonsIn,			
         int le,
         float* tabthv, float* tabphi, int count_level,
         struct RNG_State *rngstate) {
@@ -1405,9 +1411,8 @@ __device__ void scatter(Photon* ph,
 	float psi, sign;
 	struct Phase *func;
 	float P11, P12, P22, P33, P43, P44;
-
 	
-    ph->nint += 1;
+
     if (le){
         /* in case of LE the photon units vectors, scattering angle and Psi rotation angle are determined by output zenith and azimuth angles*/
         float thv, phi;
@@ -1430,69 +1435,37 @@ __device__ void scatter(Photon* ph,
         ph->v = v;
     }
 
-
-
-  
-	float pmol;
-	float pine;
-	float FQY1;
-	bool fluo = false;
-	
     /* Scattering in atmosphere */
 	if(ph->loc!=OCEAN){
 
-		pmol = 1.f - prof_atm[ph->layer+ph->ilam*(NATMd+1)].pmol;
-		ilay = ph->layer + ph->ilam*(NATMd+1); // atm layer index
-		
-		/************************************/
-		/* Rayleigh and Aerosols scattering */
-		/************************************/
-		func = faer; // atm phases
-		
-		/* atm phase function index */
-		if( pmol < RAND ){ipha  = 0;}             // Rayleigh index
-		else {ipha  = prof_atm[ilay].iphase + 1;} // particle index
+			ilay = ph->layer + ph->ilam*(NATMd+1); // atm layer index
 			
-	}
+			func = faer; // atm phases
+			
+			/************************************/
+			/* Rayleigh or ptcle scattering */
+			/************************************/
+			if( ph->scatterer == RAY ){ipha  = 0;}   // Rayleigh index
+			else if(ph->scatterer == PTCLE ){ipha  = prof_atm[ilay].iphase + 1;} // particle index
+		
+		}
 	/* Scattering in ocean */
 	else{
 
-		pmol = 1.f - prof_oc[ph->layer+ph->ilam*(NOCEd+1)].pmol;
-		pine = 1.f - prof_oc[ph->layer+ph->ilam*(NOCEd+1)].pine;
-		
-		ilay = ph->layer + ph->ilam*(NOCEd+1); // oce layer index
+			ilay = ph->layer + ph->ilam*(NOCEd+1); // oce layer index
 
-		if (pine  < RAND){
-			
-			// if (idx==0){
-			// 	printf("fluo \n");
-			// }
-
-			/***********************************/
-			/*     inelastic scattering    */
-			/***********************************/
-			fluo = true;
-			
-		}else{
-			
-			/***********************************/
-			/* Elastic scattering    */
-			/***********************************/
 			func = foce; // oce phases
 			
-			/* ocean phase function index */
-			if ( pmol < RAND ){ipha  = 0;}           // Rayleigh index
-			else {ipha  = prof_oc[ilay].iphase + 1;} // particle index
-		
+			if (ph->scatterer == RAY){ipha  = 0;}	// Rayleigh index
+			else if(ph->scatterer == PTCLE ){ ipha  = prof_oc[ilay].iphase + 1;} // particle index
+
 		}
 
-	}
 
 
 
 
-
-	if (!fluo){
+	if ( (ph->scatterer == RAY) or (ph->scatterer == PTCLE) ){
 
 		if(!le) {
 
@@ -1639,7 +1612,9 @@ __device__ void scatter(Photon* ph,
 
 
 
-	}else{ 
+		}
+
+	else if (ph->scatterer == CHLFLUO){ 
 
 		/////////////////
 		// Fluorescence
@@ -1666,64 +1641,15 @@ __device__ void scatter(Photon* ph,
 								   );
 		ph->stokes = mul(L,ph->stokes);
 
-		// if (idx == 0) {
-		// 	printf("\n(before)  %f %f %i \n", ph->weight, ph->wavel, ph->ilam );
-		// }
-		
-		/* Wavelength change */
-		float sigmac   = 10.6;
-		float lambdac0 = 685.0; 
-		float new_wavel;
-		float rand1 = RAND;
-		float rand2 = RAND;
-		new_wavel = lambdac0 + sigmac * sqrtf(-2.0*logf(RAND)) * cosf(DEUXPI * rand2);
-
-		ph->weight /= ph->wavel / new_wavel;
-		ph->wavel = new_wavel;
-
-		// if (idx == 0) {
-		// 	printf("  %f \n",  new_wavel);
-		// 	printf("  %i \n",  NLAMd);
-		// 	printf("  %f \n",  spectrum[0].lambda);
-		// 	printf("  %f \n",  spectrum[NLAMd-1].lambda);
-		// }
-
-
-		if (ph->wavel > spectrum[NLAMd-1].lambda ){
-
-			ph->weight = 0.0;
-			ph->loc = ABSORBED;
-
-		}else if (ph->wavel < spectrum[0].lambda ) {
-
-			ph->weight = 0.0;
-			ph->loc = ABSORBED;
-
-		} else {
-
-			//atomicAdd(NPhotonsIn + ph->ilam, -1);
-
-			ph->ilam = __float2int_rd(__fdividef( (ph->wavel -  spectrum[0].lambda)* NLAMd, spectrum[NLAMd-1].lambda - spectrum[0].lambda ));
-			
-			//atomicAdd(NPhotonsIn + ph->ilam, 1);
-
 		}
 
 
-		// if (idx == 0) {
-		// 	printf("(after)  %f %f %i \n", ph->weight, ph->wavel, ph->ilam );
-		// }
-
-
-	}
 
 
 
 
 
-
-
-	if (!fluo){
+	if ( (ph->scatterer == RAY) or (ph->scatterer == PTCLE) ){
 
 		if(ph->loc!=OCEAN){
 			/************************/
@@ -1809,9 +1735,6 @@ __device__ void scatter(Photon* ph,
 	}
 
 
-
-
-
 	if (!le){
 		/** Russian roulette for propagating photons **/
 		if( ph->weight < WEIGHTRR ){
@@ -1824,11 +1747,154 @@ __device__ void scatter(Photon* ph,
         ph->weight /= fabs(ph->v.z);
     }
 
-
-
-
 	
 }
+
+
+
+
+
+
+
+
+
+
+__device__ void choose_scatterer(Photon* ph,
+        struct Profile *prof_atm, struct Profile *prof_oc,
+		struct Spectrum *spectrum,
+        struct RNG_State *rngstate) {
+
+	//int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+	
+    ph->nint += 1;
+  
+	float pmol;
+	float pine;
+	
+	if(ph->loc!=OCEAN){
+		/* Scattering in atmosphere */
+		pmol = 1.f - prof_atm[ph->layer+ph->ilam*(NATMd+1)].pmol;
+		/* Elastic scattering    */
+		if ( pmol < RAND ){
+			ph->scatterer = RAY; // Rayleigh index
+		} else {
+			ph->scatterer = PTCLE;	; // particle index
+		}	
+	}else{
+		/* Scattering in ocean */
+		pmol = 1.f - prof_oc[ph->layer+ph->ilam*(NOCEd+1)].pmol;
+		pine = 1.f - prof_oc[ph->layer+ph->ilam*(NOCEd+1)].pine;
+
+		if (pine  < RAND){
+			/* inelastic scattering    */
+			ph->scatterer =CHLFLUO ;
+		}else{
+			/* Elastic scattering    */
+			if ( pmol < RAND ){
+				ph->scatterer = RAY; // Rayleigh index
+			} else {
+				ph->scatterer = PTCLE;	; // particle index
+			}
+		}
+
+	}
+	
+
+	if (ph->scatterer == CHLFLUO){
+
+		////////////////////
+		// Chl Fluorescence
+		
+		/* Wavelength change */
+		float sigmac   = 10.6;
+		float lambdac0 = 685.0; 
+		float new_wavel;
+		float rand1 = RAND;
+		float rand2 = RAND;
+		new_wavel = lambdac0 + sigmac * sqrtf(-2.0*logf(RAND)) * cosf(DEUXPI * rand2);
+
+		ph->weight /= ph->wavel / new_wavel;
+		ph->wavel = new_wavel;
+
+		if (ph->wavel > spectrum[NLAMd-1].lambda ){
+
+			ph->weight = 0.0;
+			ph->loc = ABSORBED;
+
+		}else if (ph->wavel < spectrum[0].lambda ) {
+
+			ph->weight = 0.0;
+			ph->loc = ABSORBED;
+
+		} else {
+			ph->ilam = __float2int_rd(__fdividef( (ph->wavel -  spectrum[0].lambda)* NLAMd, spectrum[NLAMd-1].lambda - spectrum[0].lambda ));
+		}
+
+	}
+	
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 __device__ void surfaceAgitee(Photon* ph, int le,
@@ -3339,6 +3405,7 @@ __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
     ph_le->weight = ph->weight;
     ph_le->wavel = ph->wavel;
     ph_le->ilam = ph->ilam;
+	ph_le->scatterer=ph->scatterer;
     //ph_le->prop_aer = ph->prop_aer;
     ph_le->pos = ph->pos; // float3
     ph_le->nint = ph->nint;
