@@ -658,6 +658,8 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 	ph->stokes.y = 0.5F;
 	ph->stokes.z = 0.F;
 	ph->stokes.w = 0.F;
+
+	ph->scatterer = UNDEF;
 	
     // Wavelength initialization
     if (NWLPROBA == 0) { 
@@ -665,9 +667,6 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     } else {
         ph->ilam = wl_proba_icdf[__float2uint_rz(RAND * NWLPROBA)];
     }
-
-	//ph->ilam = 0;
-
 	ph->wavel = spectrum[ph->ilam].lambda;
 
     // Position and optical thicknesses initializations
@@ -1127,6 +1126,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
     if (BEERd == 0) ph->weight *= prof_atm[ph->layer+ilam].ssa;
 }
 #endif // SPHERIQUE
+
 
 
 __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc,
@@ -1648,14 +1648,13 @@ __device__ void scatter(Photon* ph,
 
 
 
-
+#ifdef ALIS
 	if ( (ph->scatterer == RAY) or (ph->scatterer == PTCLE) ){
 
 		if(ph->loc!=OCEAN){
 			/************************/
 			/* Photon in atmosphere */
 			/************************/
-#ifdef ALIS
 			int DL=(NLAMd-1)/(NLOWd-1);
 			float P11_aer_ref, P11_ray, P22_aer_ref, P22_ray, P_ref;
 			float pmol= prof_atm[ph->layer+ ph->ilam*(NATMd+1)].pmol;
@@ -1691,14 +1690,12 @@ __device__ void scatter(Photon* ph,
 					//        ph->weight_sca[k],P_k,P_ref);
 				}
 			}
-#endif
 		}
 		else{
 		
 			/*******************/
 			/* Photon in ocean */
 			/*******************/	    
-#ifdef ALIS
 			int DL=(NLAMd-1)/(NLOWd-1);
 			float P11_aer_ref, P11_ray, P22_aer_ref, P22_ray, P_ref;
 			float pmol= prof_oc[ph->layer+ ph->ilam*(NOCEd+1)].pmol;
@@ -1728,11 +1725,12 @@ __device__ void scatter(Photon* ph,
 					ph->weight_sca[k] *= __fdividef(P_k, P_ref);
 				}
 			}
-#endif
 	   
 		} //ocean
 		
 	}
+
+#endif
 
 
 	if (!le){
@@ -1746,6 +1744,8 @@ __device__ void scatter(Photon* ph,
     else {
         ph->weight /= fabs(ph->v.z);
     }
+
+	ph->scatterer = UNDEF;
 
 	
 }
@@ -1827,7 +1827,9 @@ __device__ void choose_scatterer(Photon* ph,
 			ph->loc = ABSORBED;
 
 		} else {
+
 			ph->ilam = __float2int_rd(__fdividef( (ph->wavel -  spectrum[0].lambda)* NLAMd, spectrum[NLAMd-1].lambda - spectrum[0].lambda ));
+
 		}
 
 	}
@@ -3267,27 +3269,37 @@ __device__ void display(const char* desc, Photon* ph) {
     int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
 
     if (idx==0) {
-        printf("%16s X=(%6.3f,%6.3f,%6.3f) V=(%6.3f,%6.3f,%6.3f) U=(%6.3f,%6.3f,%6.3f) S=(%6.3f,%6.3f,%6.3f,%6.3f) tau=%6.3f tau_abs=%6.3f weight=%11.3e loc=",
+        printf("%16s nint=%4i X=(%6.3f,%6.3f,%6.3f) V=(%6.3f,%6.3f,%6.3f) U=(%6.3f,%6.3f,%6.3f) S=(%6.3f,%6.3f,%6.3f,%6.3f) tau=%6.3f tau_abs=%6.3f weight=%11.3e ",
                desc,
+			   ph->nint,
                ph->pos.x, ph->pos.y, ph->pos.z,
                ph->v.x,ph->v.y,ph->v.z,
                ph->u.x,ph->u.y,ph->u.z,
                ph->stokes.x, ph->stokes.y,
                ph->stokes.z, ph->stokes.w,
-               ph->tau,ph->tau_abs, ph->weight
+               ph->tau,ph->tau_abs, ph->weight, ph->scatterer
                );
-        switch(ph->loc) {
-            case 0: printf("SPACE"); break;
-            case 1: printf("ATMOS"); break;
-            case 2: printf("SURF0P"); break;
-            case 3: printf("SURF0M"); break;
-            case 4: printf("ABSORBED"); break;
-            case 5: printf("NONE"); break;
-            case 6: printf("OCEAN"); break;
-            case 7: printf("SEAFLOOR"); break;
-            case 8: printf("REMOVED"); break;
+
+        switch(ph->scatterer) {
+            case -1: printf("scatterer =   UNDEF"); break;
+            case 0: printf("scatterer =     RAY"); break;
+            case 1: printf("scatterer =   PTCLE"); break;
+            case 2: printf("scatterer = CHLFLUO"); break;
             default:
-                    printf("UNDEFINED");
+                    printf("scatterer =   UNDEF");
+        }
+        switch(ph->loc) {
+            case 0: printf(" loc=   SPACE"); break;
+            case 1: printf(" loc=   ATMOS"); break;
+            case 2: printf(" loc=  SURF0P"); break;
+            case 3: printf(" loc=  SURF0M"); break;
+            case 4: printf(" loc=ABSORBED"); break;
+            case 5: printf(" loc=    NONE"); break;
+            case 6: printf(" loc=   OCEAN"); break;
+            case 7: printf(" loc=SEAFLOOR"); break;
+            case 8: printf(" loc= REMOVED"); break;
+            default:
+                    printf(" loc=UNDEFINED");
         }
         #ifdef ALIS
         printf(" nevt=%2d",ph->nevt);

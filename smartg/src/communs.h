@@ -52,6 +52,7 @@
 
 
 /* Possible Scatterers */
+#define UNDEF      -1
 #define RAY         0
 #define PTCLE       1
 #define CHLFLUO     2
