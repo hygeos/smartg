@@ -468,11 +468,12 @@ class IOP_profile(IOP_base):
         DEPTH: depth in m
         pfwav: list of wavelengths at which the phase functions are calculated
         NLAYER: Number of vertical layers
+        Zeu   : Euphotic Depth (m), default is computed from climatology
         MIXED: Mixed or Statified waters
         FQYC : Fluorescence Quantum Yield for Chlorophyll
     '''
     def __init__(self, chls, pfwav=None, ALB=Albedo_cst(0.),
-                 DEPTH=300., NANG=7201, ang_trunc=5., NLAYER=20, MIXED=False, FQYC=0.):
+                 DEPTH=300., NANG=7201, ang_trunc=5., NLAYER=20, Zeu=None, MIXED=False, FQYC=0.):
         self.chls = chls
         self.depth = float(DEPTH)
         self.NANG = NANG
@@ -511,16 +512,17 @@ class IOP_profile(IOP_base):
 
         ## Determine Chl vertical profile
         #1. Determine chlorophyll interagted column until Euphotic Depth Zeu 
-        if not MIXED:
-            if (chls > 1.): chl_zeu = 37.7*chls**0.615 
-            else: chl_zeu = 36.1*chls**0.357
-        else:
-            chl_zeu = 42.1*chls**0.538
-
+        if Zeu is None:
+            if not MIXED:
+                if (chls > 1.): chl_zeu = 37.7*chls**0.615 
+                else: chl_zeu = 36.1*chls**0.357
+            else:
+                chl_zeu = 42.1*chls**0.538
+            Zeu = 568.2*chl_zeu**(-0.746)
+         
         #2. Derive Euphotic Depth and make vertical grid
-        Zeu = 568.2*chl_zeu**(-0.746)
-        Zmax= min(DEPTH*0.999, 3.*Zeu)
-        self.z = np.concatenate((np.linspace(0, Zmax, num=NLAYER-1), np.array([DEPTH])))
+        Zmax= min(DEPTH, 5*Zeu)
+        self.z = np.linspace(0, Zmax, num=NLAYER+1)
 
         #3. Introduce reduced concentration chi and reduced depth zeta
         # Stratified Trophic case 1 parametrization
@@ -534,7 +536,7 @@ class IOP_profile(IOP_base):
         self.Dzeta    = 0.393
         zeta = self.z/Zeu
         chl  = self.chls*self.chi(zeta)/self.chi(0.)
-        chl[chl<0.]=0.
+        chl[chl<0.]=1e-8
         self.chl = chl
 
     def chi(self, zeta):
@@ -565,10 +567,14 @@ class IOP_profile(IOP_base):
         aphy440 = (self.BRICAUD['A'][Idx(440., fill_value='extrema')]
                 * (chl2**self.BRICAUD['E'][Idx(440., fill_value='extrema')]))
         # phytoplankton covariant particles extinction
-        cp550 = p1*chl2**0.57
-        n1    = -0.4 + (1.6+1.2*R1)/(1+chl2**0.5)
-        cp    = cp550*(550./wav2)**n1
-        bp    = cp-aphy
+        ## Zhai et al., 2017
+        # cp550 = p1*chl2**0.57
+        # n1    = -0.4 + (1.6+1.2*R1)/(1+chl2**0.5)
+        # cp    = cp550*(550./wav2)**n1
+        # bp    = cp-aphy
+
+        ## return to IOP_1 definition
+        bp = 0.416*(chl2**0.766)*550./wav2
         # correct for phase function truncation
         bp *= coef_trunc/2.
         # NEW !!!
@@ -578,9 +584,22 @@ class IOP_profile(IOP_base):
         FQYC[wav2>690.]=0.
 
         # CDOM covariant absorption
-        p2       = 0.3 + (5.7*R2*aphy440)/(0.02+aphy440)
-        aCDOM440 = p2 * aphy440
-        aCDOM    = aCDOM440 *np.exp(-0.014*(wav2-440.))
+        ## Zhai et al., 2017
+        # p2       = 0.3 + (5.7*R2*aphy440)/(0.02+aphy440)
+        # aCDOM440 = p2 * aphy440
+        # aCDOM    = aCDOM440 *np.exp(-0.014*(wav2-440.))
+        # CDM absorption central value
+
+        ## return to IOP_1 definition
+        # from Bricaud et al GBC, 2012 (data from nov 2007)
+        fa = 1.
+        aCDM443 = fa * 0.069 * (chl2**1.070)
+
+        S = 0.00262*(aCDM443**(-0.448))
+        S[S > 0.025] = 0.025
+        S[S < 0.011] = 0.011
+
+        aCDOM = aCDM443 * np.exp(-S*(wav2 - 443))
 
         # NEW !!!
         atot = aw + aphy*(1.-FQYC) + aCDOM
@@ -643,8 +662,12 @@ class IOP_profile(IOP_base):
 
         iop = self.calc_iop(wav, coef_trunc=coef_trunc)
 
-        dz,_ = np.meshgrid(diff1(self.z),wav)
+        #dz,_ = np.meshgrid(diff1(self.z),wav)
         #dz,_ = np.meshgrid(diff2(self.z),wav)
+        dz   = diff1(self.z)
+        zeros = np.zeros((len(wav),1))
+        for key in iop.keys():
+            iop[key] = np.append(zeros, iop[key][:,:-1], axis=1)
 
         tau_w   = - (iop['aw']   + iop['bw']  ) * dz
         tau_p   = - (iop['aphy'] + iop['bp']  ) * dz
@@ -654,9 +677,18 @@ class IOP_profile(IOP_base):
         tau_abs = - (iop['atot']              ) * dz
         tau_ine = - (iop['aphy'] * iop['FQYC']) * dz
 
-        ssa_w   = iop['bw']/(iop['aw']   + iop['bw'])
-        ssa_p   = iop['bp']/(iop['aphy'] + iop['bp'])
-        pmol    = iop['bw']/(iop['bw']   + iop['bp'])
+
+        with np.errstate(invalid='ignore'):
+            ssa_w   = iop['bw']/(iop['aw']   + iop['bw'])
+        ssa_w[np.isnan(ssa_w)] = 1.
+
+        with np.errstate(invalid='ignore'):
+            ssa_p   = iop['bp']/(iop['aphy'] + iop['bp'])
+        ssa_p[np.isnan(ssa_p)] = 1.
+
+        with np.errstate(invalid='ignore'):
+            pmol    = iop['bw']/(iop['bw']   + iop['bp'])
+        pmol[np.isnan(pmol)]   = 1.
 
         with np.errstate(invalid='ignore'):
             pine = tau_ine/tau_sca
