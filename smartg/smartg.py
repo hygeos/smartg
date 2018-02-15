@@ -1129,7 +1129,11 @@ def init_profile(wl, prof, kind):
     NATM = len(prof.axis('z_'+kind)) - 1
     shp = (len(wl), NATM+1)
     prof_gpu = np.zeros(shp, dtype=type_Profile, order='C')
-    prof_gpu['z'][0,:] = prof.axis('z_'+kind)
+
+    if kind == "oc":
+        prof_gpu['z'][0,:] = prof.axis('z_'+kind)  * 1e-3 # to Km
+    else:
+        prof_gpu['z'][0,:] = prof.axis('z_'+kind)
     prof_gpu['z'][1:,:] = -999.      # other wavelengths are NaN
 
     prof_gpu['OD'][:,:] = prof['OD_'+kind].data[...]
