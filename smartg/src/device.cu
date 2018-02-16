@@ -1827,9 +1827,13 @@ __device__ void choose_scatterer(Photon* ph,
 			ph->loc = ABSORBED;
 
 		} else {
-
-			ph->ilam = __float2int_rd(__fdividef( (ph->wavel -  spectrum[0].lambda)* NLAMd, spectrum[NLAMd-1].lambda - spectrum[0].lambda ));
-
+			
+			// get new lamb index
+			new_ilam = __float2int_rd(__fdividef( (ph->wavel -  spectrum[0].lambda)* NLAMd, spectrum[NLAMd-1].lambda - spectrum[0].lambda ));
+			// update tau photon coordinates according to its new wavelength
+			ph->tau_abs = ph->tau_abs * prof_oc[ph->layer + new_ilam *(NOCEd+1)].OD_abs / prof_oc[ph->layer + ph->ilam *(NOCEd+1)].OD_abs;				
+			ph->tau     = ph->tau     * get_OD(BEERd, prof_oc[ph->layer + new_ilam *(NOCEd+1)]) /  get_OD(BEERd, prof_oc[ph->layer + ph->ilam *(NOCEd+1)]);
+			ph->ilam = new_ilam;
 		}
 
 	}
