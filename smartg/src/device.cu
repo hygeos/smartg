@@ -1809,6 +1809,7 @@ __device__ void choose_scatterer(Photon* ph,
 		float sigmac   = 10.6;
 		float lambdac0 = 685.0; 
 		float new_wavel;
+		int new_ilam;
 		float rand1 = RAND;
 		float rand2 = RAND;
 		new_wavel = lambdac0 + sigmac * sqrtf(-2.0*logf(RAND)) * cosf(DEUXPI * rand2);
