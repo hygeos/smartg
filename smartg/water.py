@@ -480,6 +480,7 @@ class IOP_profile(IOP_base):
         self.ang_trunc = ang_trunc
         self.ALB = ALB
         self.FQYC = FQYC
+        self.NLAYER=NLAYER
         if pfwav is None:
             self.pfwav = None
         else:
@@ -647,7 +648,7 @@ class IOP_profile(IOP_base):
             else:
                 wav_pha = self.pfwav
             Bp = self.calc_iop(wav_pha)['Bp']
-            pha = self.phase(wav_pha, Bp)
+            pha = self.phase(wav_pha, Bp[:,1:])
 
             pha_, ipha = calc_iphase(pha['phase'], pro.axis('wavelength'), pro.axis('z_oc'))
 
@@ -662,8 +663,6 @@ class IOP_profile(IOP_base):
 
         iop = self.calc_iop(wav, coef_trunc=coef_trunc)
 
-        #dz,_ = np.meshgrid(diff1(self.z),wav)
-        #dz,_ = np.meshgrid(diff2(self.z),wav)
         dz   = diff1(self.z)
         zeros = np.zeros((len(wav),1))
         for key in iop.keys():
@@ -754,7 +753,7 @@ class IOP_profile(IOP_base):
         Bp is the backscattering ratio
         '''
         nwav = len(wav)
-        nz   = Bp.shape[1]
+        nz   = self.NLAYER
 
         # particles phase function
         # see Park & Ruddick, 05
@@ -785,7 +784,8 @@ class IOP_profile(IOP_base):
         # create output MLUT
         result = MLUT()
         result.add_axis('wav_phase_oc', wav)
-        result.add_axis('z_phase_oc', -self.z)
+        #result.add_axis('z_phase_oc', np.array([0.]))
+        result.add_axis('z_phase_oc', -self.z[:-1])
         result.add_axis('theta_oc', ang*180./np.pi)
         result.add_dataset('phase', pha, ['wav_phase_oc', 'z_phase_oc', 'stk', 'theta_oc'])
         result.add_dataset('coef_trunc', integ_ff[:,:], ['wav_phase_oc', 'z_phase_oc'])
