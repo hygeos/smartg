@@ -158,6 +158,7 @@ extern "C" {
                        &rngstate);
             iloop = 1;
             #ifdef DEBUG_PHOTON
+			if (idx==0) {printf("\n");}
             display("INIT", &ph);
             #endif
 
@@ -1459,7 +1460,7 @@ __device__ void scatter(Photon* ph,
 			if (ph->scatterer == RAY){ipha  = 0;}	// Rayleigh index
 			else if(ph->scatterer == PTCLE ){ ipha  = prof_oc[ilay].iphase + 1;} // particle index
 
-		}
+}
 
 
 
@@ -1753,12 +1754,6 @@ __device__ void scatter(Photon* ph,
 
 
 
-
-
-
-
-
-
 __device__ void choose_scatterer(Photon* ph,
         struct Profile *prof_atm, struct Profile *prof_oc,
 		struct Spectrum *spectrum,
@@ -1840,62 +1835,6 @@ __device__ void choose_scatterer(Photon* ph,
 	}
 	
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -3278,15 +3217,26 @@ __device__ void display(const char* desc, Photon* ph) {
     int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
 
     if (idx==0) {
-        printf("%16s nint=%4i X=(%6.3f,%6.3f,%6.3f) V=(%6.3f,%6.3f,%6.3f) U=(%6.3f,%6.3f,%6.3f) S=(%6.3f,%6.3f,%6.3f,%6.3f) tau=%6.3f tau_abs=%6.3f weight=%11.3e ",
+		
+        // printf("%16s X=(%8.3f,%8.3f,%8.3f) V=(%6.3f,%6.3f,%6.3f) U=(%6.3f,%6.3f,%6.3f) S=(%6.3f,%6.3f,%6.3f,%6.3f) tau=%8.3f tau_abs=%8.3f weight=%11.3e ",
+        //        desc,
+        //        ph->pos.x, ph->pos.y, ph->pos.z,
+        //        ph->v.x,ph->v.y,ph->v.z,
+        //        ph->u.x,ph->u.y,ph->u.z,
+        //        ph->stokes.x, ph->stokes.y,
+        //        ph->stokes.z, ph->stokes.w,
+        //        ph->tau,ph->tau_abs, ph->weight, ph->scatterer
+        //        );
+
+		printf("%16s %4i X=(%9.4f,%9.4f,%9.4f) V=(%6.3f,%6.3f,%6.3f) U=(%6.3f,%6.3f,%6.3f) S=(%6.3f,%6.3f,%6.3f,%6.3f) tau=%8.3f tau_abs=%8.3f wvl=%6.3f weight=%11.3e ",
                desc,
 			   ph->nint,
                ph->pos.x, ph->pos.y, ph->pos.z,
                ph->v.x,ph->v.y,ph->v.z,
-               ph->u.x,ph->u.y,ph->u.z,
+			   ph->u.x,ph->u.y,ph->u.z,
                ph->stokes.x, ph->stokes.y,
                ph->stokes.z, ph->stokes.w,
-               ph->tau,ph->tau_abs, ph->weight, ph->scatterer
+               ph->tau,ph->tau_abs, ph->wavel, ph->weight, ph->scatterer
                );
 
         switch(ph->scatterer) {
