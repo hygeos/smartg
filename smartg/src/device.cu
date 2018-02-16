@@ -1732,12 +1732,13 @@ __device__ void scatter(Photon* ph,
 
 #endif
 
-
 	if (!le){
-		/** Russian roulette for propagating photons **/
-		if( ph->weight < WEIGHTRR ){
-			if( RAND < __fdividef(ph->weight,WEIGHTRR) ){ph->weight = WEIGHTRR;}
-			else{ph->loc = ABSORBED;}
+		if (RRd==1){
+			/** Russian roulette for propagating photons **/
+			if( ph->weight < WEIGHTRRd ){
+				if( RAND < __fdividef(ph->weight,WEIGHTRRd) ){ph->weight = WEIGHTRRd;}
+				else{ph->loc = ABSORBED;}
+			}
 		}
 		modifyUV( ph->v, ph->u, cTh, psi, &ph->v, &ph->u) ;
 	}
@@ -1746,7 +1747,6 @@ __device__ void scatter(Photon* ph,
     }
 
 	ph->scatterer = UNDEF;
-
 	
 }
 
@@ -2442,10 +2442,12 @@ else if (  (!le && !condR)
     #endif
 
     if (!le) {
-		/* Russian roulette for propagating photons **/
-		if( ph->weight < WEIGHTRR ){
-			if( RAND < __fdividef(ph->weight,WEIGHTRR) ){ph->weight = WEIGHTRR;}
-			else{ph->loc = ABSORBED;}
+		if (RRd==1){
+			/* Russian roulette for propagating photons **/
+			if( ph->weight < WEIGHTRRd ){
+				if( RAND < __fdividef(ph->weight,WEIGHTRRd) ){ph->weight = WEIGHTRRd;}
+				else{ph->loc = ABSORBED;}
+			}
 		}
     }
 
@@ -2632,10 +2634,12 @@ __device__ void surfaceBRDF(Photon* ph, int le,
     }
 
     if (!le) {
-		// Russian roulette for propagating photons 
-		if( ph->weight < WEIGHTRR ){
-			if( RAND < __fdividef(ph->weight,WEIGHTRR) ){ph->weight = WEIGHTRR;}
-			else{ph->loc = ABSORBED;}
+		if (RRd==1){
+			// Russian roulette for propagating photons 
+			if( ph->weight < WEIGHTRRd ){
+				if( RAND < __fdividef(ph->weight,WEIGHTRRd) ){ph->weight = WEIGHTRRd;}
+				else{ph->loc = ABSORBED;}
+			}
 		}
     }
 

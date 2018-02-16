@@ -351,7 +351,7 @@ class Smartg(object):
              NBTHETA=45, NBPHI=90, NF=1e6,
              OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
              NBLOOP=None, progress=True,
-             le=None, flux=None, stdev=False, BEER=0, sensor=None):
+             le=None, flux=None, stdev=False, BEER=0, RR=1, WEIGHTRR=0.1, sensor=None):
         '''
         Run a SMART-G simulation
 
@@ -433,6 +433,11 @@ class Smartg(object):
             - flux: if specified output is 'planar' or 'spherical' flux instead of radiance
 
             - stdev: calculate the standard deviation between each kernel run
+
+            - RR: Russian Roulette ON  = 1
+                                   OFF = 0
+
+            - WEIGHTRR threshold weight to apply the Russian Roulette
 
             - BEER: if BEER=1 compute absorption using Beer-Lambert law, otherwise compute it with the Single scattering albedo
                 (BEER automatically set to 1 if ALIS is chosen)
@@ -632,7 +637,7 @@ class Smartg(object):
                        XBLOCK, XGRID, NLAM, SIM, NF,
                        NBTHETA, NBPHI, OUTPUT_LAYERS,
                        RTER, LE, FLUX, MI, NLVL, NPSTK,
-                       NWLPROBA, BEER, NLOW, sensor)
+                       NWLPROBA, BEER, RR, WEIGHTRR, NLOW, sensor)
 
 
         # Initialize the progress bar
@@ -1044,7 +1049,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
                    NBPHOTONS, NBLOOP, THVDEG, DEPO,
                    XBLOCK, XGRID,NLAM, SIM, NF,
                    NBTHETA, NBPHI, OUTPUT_LAYERS,
-                   RTER, LE, FLUX, MI, NLVL, NPSTK, NWLPROBA, BEER, NLOW, sensor) :
+                   RTER, LE, FLUX, MI, NLVL, NPSTK, NWLPROBA, BEER, RR, WEIGHTRR, NLOW, sensor) :
 
     """
     Initialize the constants in python and send them to the device memory
@@ -1088,6 +1093,8 @@ def InitConst(surf, env, NATM, NOCE, mod,
     copy_to_device('NLVLd', NLVL, np.int32)
     copy_to_device('NPSTKd', NPSTK, np.int32)
     copy_to_device('BEERd', BEER, np.int32)
+    copy_to_device('RRd', RR, np.int32)
+    copy_to_device('WEIGHTRRd', WEIGHTRR, np.float32)
     copy_to_device('NLOWd', NLOW, np.int32)
     if sensor != None:
         copy_to_device('POSXd', sensor.dict['POSX'], np.float32)

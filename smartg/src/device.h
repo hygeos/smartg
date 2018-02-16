@@ -55,6 +55,8 @@ __device__ __constant__ float CTHVd;	//cosThetaView_Host
 __device__ __constant__ float RTER;
 __device__ __constant__ int NWLPROBA;
 __device__ __constant__ int BEERd;
+__device__ __constant__ int RRd;
+__device__ __constant__ float WEIGHTRRd; // THRESHOLD for RUSSIAN ROULETTE PROCEDURE
 __device__ __constant__ int NLOWd;
 __device__ __constant__ float POSXd;
 __device__ __constant__ float POSYd;
