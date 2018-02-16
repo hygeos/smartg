@@ -1612,7 +1612,7 @@ __device__ void scatter(Photon* ph,
 
 
 
-		}
+	}
 
 	else if (ph->scatterer == CHLFLUO){ 
 
@@ -1621,7 +1621,7 @@ __device__ void scatter(Photon* ph,
 
 		if (!le){
 
-			theta = RAND * DEMIPI;
+			theta = RAND * PI;
 			cTh = __cosf(theta);
 			psi = RAND * DEUXPI;			
 			
