@@ -1133,6 +1133,8 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
 __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc,
                         struct RNG_State *rngstate) {
 
+	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+
 	float delta_i=0.f, delta=0.f, epsilon;
     float phz, rdist, tauBis;
     int ilayer;
@@ -1173,6 +1175,10 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             }
             ph->layer = NOCEd;
 
+            // move the photon forward up to the surface
+            // the linear distance is ph->z/ph->vz
+            operator+=(ph->pos, ph->v * fabs(ph->pos.z/ph->v.z));
+
             #ifdef ALIS
             ph->nevt++;
             ph->layer_prev[ph->nevt] = ph->layer;
@@ -1204,6 +1210,9 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             ph->tau_abs = prof_oc[NOCEd + ph->ilam *(NOCEd+1)].OD_abs;
             ph->layer = 0;
 
+			// move the photon forward down to the seafloor
+            operator+=(ph->pos, ph->v * fabs( (ph->pos.z - prof_oc[NOCEd].z) /ph->v.z));
+
             #ifdef ALIS
             ph->nevt++;
             ph->layer_prev[ph->nevt] = ph->layer;
@@ -1213,20 +1222,38 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             return;
         }
 
-        // Calcul de la layer dans laquelle se trouve le photon
-        tauBis = get_OD(BEERd, prof_oc[NOCEd + ph->ilam *(NOCEd+1)]) - ph->tau;
-        ilayer = 1;
+        // // Calcul de la layer dans laquelle se trouve le photon
+		// tauBis = get_OD(BEERd, prof_oc[NOCEd + ph->ilam *(NOCEd+1)]) - ph->tau;
+        // ilayer = 1;
+        // while (( get_OD(BEERd, prof_oc[ilayer+ ph->ilam *(NOCEd+1)]) > (tauBis)) && (ilayer < NOCEd)) {
+        //     ilayer++;
+        // }
+        // ph->layer = ilayer;
+        // // ph->prop_aer = 1.f - prof_oc[ph->layer+ph->ilam*(NOCEd+1)].pmol;		
 
-        while (( get_OD(BEERd, prof_oc[ilayer+ ph->ilam *(NOCEd+1)]) > (tauBis)) && (ilayer < NOCEd)) {
+        // delta_i= fabs(get_OD(BEERd, prof_oc[ilayer+ph->ilam*(NOCEd+1)]) - get_OD(BEERd, prof_oc[ilayer-1+ph->ilam*(NOCEd+1)]));
+        // delta= fabs(tauBis - get_OD(BEERd, prof_oc[ilayer-1+ph->ilam*(NOCEd+1)])) ;
+        // epsilon = __fdividef(delta,delta_i);
+
+
+        // Calcul de la layer dans laquelle se trouve le photon
+        ilayer = 1;
+        while (( get_OD(BEERd, prof_oc[ilayer+ ph->ilam *(NOCEd+1)]) > (ph->tau)) && (ilayer < NOCEd)) {
             ilayer++;
         }
         ph->layer = ilayer;
-        // ph->prop_aer = 1.f - prof_oc[ph->layer+ph->ilam*(NOCEd+1)].pmol;
+        // ph->prop_aer = 1.f - prof_oc[ph->layer+ph->ilam*(NOCEd+1)].pmol;		
 
         delta_i= fabs(get_OD(BEERd, prof_oc[ilayer+ph->ilam*(NOCEd+1)]) - get_OD(BEERd, prof_oc[ilayer-1+ph->ilam*(NOCEd+1)]));
-        delta= fabs(tauBis - get_OD(BEERd, prof_oc[ilayer-1+ph->ilam*(NOCEd+1)])) ;
+        delta= fabs(ph->tau - get_OD(BEERd, prof_oc[ilayer-1+ph->ilam*(NOCEd+1)])) ;
         epsilon = __fdividef(delta,delta_i);
-        
+
+		// if (idx==0){
+		// 	printf(" Tau[i-1] = %12.6f \n", get_OD(BEERd, prof_oc[ilayer-1+ ph->ilam *(NOCEd+1)]) );			
+		// 	printf(" ph->tau  = %12.6f \n",  ph->tau );
+		// 	printf(" Tau[i]   = %12.6f \n", get_OD(BEERd, prof_oc[ilayer+ ph->ilam *(NOCEd+1)]) );
+		// }
+
         #ifdef ALIS
         ph->nevt++;
         ph->layer_prev[ph->nevt] = ph->layer;
@@ -1238,9 +1265,12 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
         if (BEERd == 0) ph->weight *= prof_oc[ph->layer+ph->ilam*(NOCEd+1)].ssa;
         else { // We compute the cumulated absorption OT at the new postion of the photon
             // photon new position in the layer
-            ab = prof_oc[NOCEd+ph->ilam*(NOCEd+1)].OD_abs - 
-                (epsilon * (prof_oc[ilayer+ph->ilam*(NOCEd+1)].OD_abs - prof_oc[ilayer-1+ph->ilam*(NOCEd+1)].OD_abs) +
-                prof_oc[ilayer-1+ph->ilam*(NOCEd+1)].OD_abs);
+            ab = prof_oc[ilayer-1+ph->ilam*(NOCEd+1)].OD_abs + epsilon * (prof_oc[ilayer+ph->ilam*(NOCEd+1)].OD_abs - prof_oc[ilayer-1+ph->ilam*(NOCEd+1)].OD_abs);
+			// if (idx==0){
+			// 	printf(" Tauabs[i-1] = %12.6f \n", prof_oc[ilayer-1+ph->ilam*(NOCEd+1)].OD_abs);
+			// 	printf(" ab  = %12.6f \n",  ab );
+			// 	printf(" Tauabs[i]   = %12.6f \n", prof_oc[ilayer+ph->ilam*(NOCEd+1)].OD_abs);
+			// }
             // absorption between start and stop
             ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
             ph->tau_abs = ab;
@@ -1260,8 +1290,23 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             ph->tau_sca[k] = tautmp;
         }
         #endif
-        
+		
+        // calculate new photon position
+        phz =  prof_oc[ilayer-1].z + epsilon * ( prof_oc[ilayer].z - prof_oc[ilayer-1].z); 
+		// if (idx==0){
+		// 	printf(" phz                 = %12.6f \n", phz);
+		// 	printf(" epsilon             = %12.6f \n", epsilon);
+		// 	printf(" prof_oc[ilayer-1].z = %12.6f \n", prof_oc[ilayer-1].z);
+		// 	printf(" prof_oc[ilayer].z   = %12.6f \n", prof_oc[ilayer].z);
+		// }
+		// move the photon to new position
+		operator+=(ph->pos, ph->v * fabs( (ph->pos.z - phz) / ph->v.z));
+
     } // Ocean
+
+
+
+
 
     if (ph->loc == ATMOS) {
         // If tau<0 photon is reaching the surface 
@@ -1384,7 +1429,10 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 
         // calculate new photon position
         phz = epsilon * (prof_atm[ilayer].z - prof_atm[ilayer-1].z) + prof_atm[ilayer-1].z; 
-        rdist=  fabs(__fdividef(phz-ph->pos.z, ph->v.z));
+		// if (idx==0) {
+		// 	printf(" epsilon atm = %12.6e\n", epsilon);
+		// }
+		rdist=  fabs(__fdividef(phz-ph->pos.z, ph->v.z));
         operator+= (ph->pos, ph->v*rdist);
         ph->pos.z = phz;
 
