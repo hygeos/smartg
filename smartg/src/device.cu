@@ -1406,7 +1406,7 @@ __device__ void scatter(Photon* ph,
 
 	//int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
 
-	float cTh=0.f ;
+	float cTh=0.f;
 	float zang=0.f, theta=0.f;
 	int iang, ilay, ipha;
 	float psi, sign;
@@ -1610,9 +1610,6 @@ __device__ void scatter(Photon* ph,
 			ph->weight /= 4.F; // Phase function normalization
 		}
 
-
-
-
 	}
 
 	else if (ph->scatterer == CHLFLUO){ 
@@ -1622,13 +1619,29 @@ __device__ void scatter(Photon* ph,
 
 		if (!le){
 
-			theta = RAND * PI;
-			cTh = __cosf(theta);
-			psi = RAND * DEUXPI;			
+			// isotropic point source
+			// see Leathers, R. A.; Downes, T. V.; Davis, C. O. & Davis, C. D. Monte Carlo Radiative Transfer Simulations for Ocean Optics: A Practical Guide Naval Research Laboratory, 2004, section 5.1.3
+			float phi;
+			float sTh;
+			cTh = 1.0-2.0*RAND;
+			phi = RAND*DEUXPI;
+			sTh = sqrtf(1.F - cTh*cTh);
+			ph->v.x   = cosf(phi)*sTh;
+			ph->v.y   = sinf(phi)*sTh;
+			ph->v.z   = cTh;
+			// Initialization of the orthogonal vector to the propagation
+			ph->u.x   = cosf(phi)*cTh;
+			ph->u.y   = sinf(phi)*cTh;
+			ph->u.z   = -sTh;
+			
+			// theta = RAND * PI;
+			// cTh = __cosf(theta);
+			// psi = RAND * DEUXPI;			
 			
 		}else{
-		
-			ph->weight /= 4.F * PI; // Phase function normalization	
+
+
+			ph->weight /= 4.0  ;    // Phase function normalization	
 			
 		}
 
@@ -1741,10 +1754,12 @@ __device__ void scatter(Photon* ph,
 				else{ph->loc = ABSORBED;}
 			}
 		}
-		modifyUV( ph->v, ph->u, cTh, psi, &ph->v, &ph->u) ;
+		if (ph->scatterer != CHLFLUO) { modifyUV( ph->v, ph->u, cTh, psi, &ph->v, &ph->u) ;}
 	}
     else {
-        ph->weight /= fabs(ph->v.z);
+		
+		ph->weight /= fabs(ph->v.z); 
+
     }
 
 	ph->scatterer = UNDEF;
