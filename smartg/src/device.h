@@ -138,8 +138,7 @@ __device__ void surfaceLambert(Photon*, int le,
                                     struct RNG_State*);
 
 __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* tabphi,
-									  struct Spectrum *spectrum, philox4x32_ctr_t* etatThr,
-									  philox4x32_key_t* configThr, float3* normal);
+									  struct Spectrum *spectrum, struct RNG_State*, float3* normal);
 
 __device__ void countPhoton(Photon* , struct Profile* prof_atm, struct Profile* prof_oc, float*, float *,
         int, unsigned long long*, void*, void*, void*, unsigned long long*);

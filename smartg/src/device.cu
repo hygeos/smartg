@@ -436,7 +436,8 @@ extern "C" {
                   }//direction
                 } //LE
 				// s'il y a intersection avec une géométrie, utiliser la fonction 3D
-				if (geoIntersect){
+				if (geoIntersect)
+				{
 					surfaceLambertienne3D(&ph, 0, tabthv, tabphi, spectrum,
 														&rngstate, &geoNormal);
 				}
@@ -1398,7 +1399,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
                         struct RNG_State *rngstate, float3 *geoNpp, bool *geoIntpp) {
 
 	float delta_i=0.f, delta=0.f, epsilon;
-	float tauR, prev_tau, phz, rdist, tauBis;
+	float tauR, prev_tau, tauBis; //phz, rdist
     int ilayer;
 	
     #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
@@ -1586,7 +1587,8 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 			if((phit.z >= prof_atm[ilayer2].z) && (phit.z < prof_atm[ilayer2-1].z)) // 1 layer case: n = 1
 			{
 				// delta_i is: Delta(tau)1 = |tau(i-1) - tau(i)|
-				delta_i = fabs(prof_atm[ilayer2+ph->ilam*(NATMd+1)].tau - prof_atm[ilayer2-1+ph->ilam*(NATMd+1)].tau);
+				delta_i = fabs(get_OD(BEERd, prof_atm[ilayer2+ph->ilam*(NATMd+1)]) - 
+							   get_OD(BEERd, prof_atm[ilayer2-1+ph->ilam*(NATMd+1)]));
 				// tauHit = (Delat(D1)/Delat(Z1))*delta_i
 				tauHit += (length(ph->pos, phit)/fabs(prof_atm[ilayer2-1].z - prof_atm[ilayer2].z))*delta_i;
 			}
@@ -1615,7 +1617,8 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 					if(higher){timeT = fabs(prof_atm[ilayer].z - oldP.z)/fabs(ph->v.z);}
 					else{timeT = fabs(prof_atm[ilayer-1].z - oldP.z)/fabs(ph->v.z);}
 					newP = oldP + timeT*ph->v;
-					delta_i = fabs(prof_atm[ilayer+ph->ilam*(NATMd+1)].tau - prof_atm[ilayer-1+ph->ilam*(NATMd+1)].tau);
+					delta_i = fabs(get_OD(BEERd, prof_atm[ilayer+ph->ilam*(NATMd+1)]) - 
+								   get_OD(BEERd, prof_atm[ilayer-1+ph->ilam*(NATMd+1)]));
 					tauHit += (length(newP, oldP)/fabs(prof_atm[ilayer - 1].z - prof_atm[ilayer].z))*delta_i;
 					
 					// the photon come from higher layers
@@ -1626,16 +1629,31 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 				}
 
 				// Calculate and add the last tau distance when ilayer is equal to ilayer2
-				delta_i = fabs(prof_atm[ilayer2+ph->ilam*(NATMd+1)].tau - prof_atm[ilayer2-1+ph->ilam*(NATMd+1)].tau);
+				delta_i = fabs(get_OD(BEERd, prof_atm[ilayer2+ph->ilam*(NATMd+1)]) - 
+							   get_OD(BEERd, prof_atm[ilayer2-1+ph->ilam*(NATMd+1)]));
 				tauHit += (length(phit, oldP)/fabs(prof_atm[ilayer2 - 1].z - prof_atm[ilayer2].z))*delta_i;
 			}
+
 
 			// if tauHit (optical distance to hit the geometry) < tauR, then: there is interaction.
 			if (tauHit < tauR)
 			{
+				// to see
+				ph->layer = ilayer2;
+				ph->prop_aer = 1.f - prof_atm[ph->layer+ph->ilam*(NATMd+1)].pmol;
+				if (BEERd == 0) ph->weight *= prof_atm[ph->layer+ph->ilam*(NATMd+1)].ssa;
+				else
+				{ // We compute the cumulated absorption OT at the new postion of the photon
+					// photon new position in the layer
+					ab = prof_atm[NATMd+ph->ilam*(NATMd+1)].OD_abs - 
+						(epsilon * (prof_atm[ilayer+ph->ilam*(NATMd+1)].OD_abs - prof_atm[ilayer-1+ph->ilam*(NATMd+1)].OD_abs) +
+						 prof_atm[ilayer-1+ph->ilam*(NATMd+1)].OD_abs);
+					// absorption between start and stop
+					ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
+					ph->tau_abs = ab;
+				}
 				ph->loc = SURF0P;                       // update of the loc of the photon 
 				ph->tau = prev_tau + tauHit * ph->v.z;  // update the value of tau photon
-				if (ph->tau < 0) ph->tau = 0.f;	
 				ph->pos = phit;                         // update the position of the photon
 				*geoNpp = myNormal;                     // take the normal of the geo
 				*geoIntpp = true;                       // enable to use surfaceLambertienne3D
@@ -2989,6 +3007,7 @@ __device__ void surfaceLambert(Photon* ph, int le,
 		ph->loc = ABSORBED;
 		return;
 	}
+
     ph->nint += 1;
 	
     float thv, phi;
@@ -3078,8 +3097,7 @@ __device__ void surfaceLambert(Photon* ph, int le,
 } //surfaceLambert
 
 __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* tabphi,
-									  struct Spectrum *spectrum, philox4x32_ctr_t* etatThr,
-									  philox4x32_key_t* configThr, float3* normal)
+									  struct Spectrum *spectrum, struct RNG_State *rngstate, float3* normal)
 // __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* tabphi,
 // 									  struct Spectrum *spectrum, philox4x32_ctr_t* etatThr,
 // 									  philox4x32_key_t* configThr)
@@ -3089,7 +3107,7 @@ __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* 
 		ph->loc = ABSORBED;
 		return;
 	}
-	
+	ph->nint += 1;
 	float3 u_n, v_n;	// Vecteur du photon après reflexion
     float phi;
     float cTh, sTh, cPhi, sPhi;
@@ -4288,74 +4306,129 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN)
 
 	// =========================================
 	// comment bellow to take into account the geometry
-	*(phit) = make_float3(-1, -1, -1);
-	*(myN) = make_float3(0, 0, 0);
-	return false;
+	// *(phit) = make_float3(-1, -1, -1);
+	// *(myN) = make_float3(0, 0, 0);
+	// return false;
 	// comment above to take into account the geometry
 	// =========================================
 
-	// // ========================================================
-	// // transform needed for the first sphere
-	// Transform TSph1, invTSph1, TRX;
-	// // rotation of 90 degree in x direction
-	// TRX = TSph1.RotateX(90);
-	// TSph1 = TRX;
-	// invTSph1 = TSph1.Inverse(TSph1);
+	// ========================================================
+	// Spheres
+	// ========================================================
+	// transform needed for the first sphere
+	Transform TSph1, invTSph1, TRX;
+	// rotation of 90 degree in x direction
+	TRX = TSph1.RotateX(90);
+	TSph1 = TRX;
+	invTSph1 = TSph1.Inverse(TSph1);
 
-    // // create the first sphere and bound box
-	// Sphere Sph1(&TSph1, &invTSph1, 0.f, -0.f, 0.f, 29.9f);
-	// BBox myBBox1 =  Sph1.WorldBoundSphere();
-	// // ========================================================
+    // create the first sphere and bound box
+	Sphere Sph1(&TSph1, &invTSph1, 60.f, -60.f, 60.f, 29.9f);
+	BBox myBBox1 =  Sph1.WorldBoundSphere();
+	// ========================================================
 
-	// // ========================================================
-	// // transform needed for the second sphere
-	// Transform TSph2, invTSph2, TTrans;
-	// // translation of -110 km in x direction
-	// TTrans = TSph2.Translate(make_float3(-110.f, 0.f, 0.f));
-	// TSph2 = TTrans;
-	// invTSph2 = TSph2.Inverse(TSph2);
+	// ========================================================
+	// transform needed for the second sphere
+	Transform TSph2, invTSph2, TTrans;
+	// translation of -110 km in x direction
+	TTrans = TSph2.Translate(make_float3(-110.f, 0.f, 0.f));
+	TSph2 = TTrans;
+	invTSph2 = TSph2.Inverse(TSph2);
 
-    // // create the second sphere and bound box
-	// Sphere Sph2(&TSph2, &invTSph2, 50.f, -50.f, 50.f, 360.f);
-	// BBox myBBox2 = Sph2.WorldBoundSphere();
-	// // ========================================================
+    // create the second sphere and bound box
+	Sphere Sph2(&TSph2, &invTSph2, 50.f, -50.f, 50.f, 360.f);
+	BBox myBBox2 = Sph2.WorldBoundSphere();
+	// ========================================================
 
-	// float myt1, myt2;                  // for each sphere
-	// DifferentialGeometry myDg1, myDg2; // for each sphere
-	// bool myb1, myb2;                   // for each sphere
+	float myt1, myt2;                  // for each sphere
+	DifferentialGeometry myDg1, myDg2; // for each sphere
+	bool myb1, myb2;                   // for each sphere
 
-	// // Check if there is intersection with the bounding boxes
-	// if (myBBox1.IntersectP(R1)){myb1 = Sph1.Intersect(R1, &myt1, &myDg1);}
-	// else {myb1 = false;}
+	// Check if there is intersection with the bounding boxes
+	if (myBBox1.IntersectP(R1)){myb1 = Sph1.Intersect(R1, &myt1, &myDg1);}
+	else {myb1 = false;}
 
-	// if (myBBox2.IntersectP(R1)){myb2 = Sph2.Intersect(R1, &myt2, &myDg2);}
-	// else {myb2 = false;}
+	if (myBBox2.IntersectP(R1)){myb2 = Sph2.Intersect(R1, &myt2, &myDg2);}
+	else {myb2 = false;}
+
+	//Take into account the fact that we have two geometries
+	if (myb1 && myb2)
+	{
+		if (myt1 < myt2)
+		{
+			*(phit) = R1(myt1);
+			*(myN) = faceForward(myDg1.nn, -1.*R1.d);
+		}
+		else
+		{
+			*(phit) = R1(myt2);
+			*(myN) = faceForward(myDg2.nn, -1.*R1.d);
+		}	
+		return true;
+	}
+	else if (myb1)
+	{
+		*(phit) = R1(myt1);	
+		*(myN) = faceForward(myDg1.nn, -1.*R1.d);
+		return true;
+	}
+	else if (myb2)
+	{
+		*(phit) = R1(myt2);
+		*(myN) = faceForward(myDg2.nn, -1.*R1.d);
+		return true;
+	}
+	else
+	{
+		*(phit) = make_float3(-1, -1, -1);
+		return false;
+	}
+
+	// =============================================================================
+    // Triangle mesh
+	// =============================================================================
+	// int vi[6] = {0, 1, 2,  // vertices index for triangle 1
+	// 			 2, 3, 1}; // vertices index for triangle 2
+
+	// // Vertical triangleMesh at x = 60km
+	// // float P[12] = {60.f, -30.f, 0.f,  // vertex coordinate P0 
+	// // 			   60.f, 30.f,  0.f,  // vertex coordinate P1
+	// // 			   60.f, -30.f, 30.f,  // vertex coordinate P2
+	// // 			   60.f, 30.f,  30.f}; // vertex coordinate P3
+
+	// // honrizontal triangleMesh at z = 110km
+	// float P[12] = {10.f, -10.f, 20.f,  // vertex coordinate P0 
+	// 			   10.f, 10.f,  20.f,  // vertex coordinate P1
+	// 			   -10.f, 10.f, 20.f,  // vertex coordinate P2
+	// 			   -10.f, -10.f,20.f}; // vertex coordinate P3
+
+	// // declaration of a table of float3 which contains P0, P1, P2, P3
+	// float3 Pvec[4] = {make_float3(P[0], P[1], P[2]),
+	// 		  make_float3(P[3], P[4], P[5]),
+	// 		  make_float3(P[6], P[7], P[8]),
+	// 		  make_float3(P[9], P[10], P[11])};
+
+	// Transform nothing; // transformation "nulle"
+
+	// // declaration of a table of triangle classes, here 2 triangles
+	// Triangle rt[2];
+	// // initialisation of the triangles classes with no transformation
+	// for (int i = 0; i < 2; ++i)
+	// 	rt[i] = Triangle(&nothing, &nothing);
 	
-	// //Take into account the fact that we have two geometries
-	// if (myb1 && myb2)
+	// // Create the triangleMesh
+	// // - 2 is the number of triangle
+	// // - 4 is the number of vertices
+	// TriangleMesh tri(&nothing, &nothing, 2, 4, vi, Pvec, rt);
+
+	// float mytTri;                  // declare the time t where there is intersection with the mesh
+	// DifferentialGeometry myDgTri;  // declare the differential geo of the mesh
+
+	// // test directly (without Bounding box) if there is intersection with the mesh
+	// if (tri.Intersect(R1, &mytTri, &myDgTri))
 	// {
-	// 	if (myt1 < myt2)
-	// 	{
-	// 		*(phit) = R1(myt1);
-	// 		*(myN) = faceForward(myDg1.nn, -1.*R1.d);
-	// 	}
-	// 	else
-	// 	{
-	// 		*(phit) = R1(myt2);
-	// 		*(myN) = faceForward(myDg2.nn, -1.*R1.d);
-	// 	}	
-	// 	return true;
-	// }
-	// else if (myb1)
-	// {
-	// 	*(phit) = R1(myt1);	
-	// 	*(myN) = faceForward(myDg1.nn, -1.*R1.d);
-	// 	return true;
-	// }
-	// else if (myb2)
-	// {
-	// 	*(phit) = R1(myt2);
-	// 	*(myN) = faceForward(myDg2.nn, -1.*R1.d);
+	// 	*(phit) = R1(mytTri);
+	// 	*(myN) = faceForward(myDgTri.nn, -1.*R1.d);
 	// 	return true;
 	// }
 	// else
@@ -4364,57 +4437,5 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN)
 	// 	return false;
 	// }
 
-	// =============================================================================
-    //
-	// =============================================================================
-	int vi[6] = {0, 1, 2,  // vertices index for triangle 1
-				 2, 3, 1}; // vertices index for triangle 2
-
-	// Vertical triangleMesh at x = 60km
-	// float P[12] = {60.f, -30.f, 0.f,  // vertex coordinate P0 
-	// 			   60.f, 30.f,  0.f,  // vertex coordinate P1
-	// 			   60.f, -30.f, 30.f,  // vertex coordinate P2
-	// 			   60.f, 30.f,  30.f}; // vertex coordinate P3
-
-	// honrizontal triangleMesh at z = 110km
-	float P[12] = {10.f, -10.f, 110.f,  // vertex coordinate P0 
-				   10.f, 10.f,  110.f,  // vertex coordinate P1
-				   -10.f, 10.f, 110.f,  // vertex coordinate P2
-				   -10.f, -10.f,110.f}; // vertex coordinate P3
-
-	// declaration of a table of float3 which contains P0, P1, P2, P3
-	float3 Pvec[4] = {make_float3(P[0], P[1], P[2]),
-					  make_float3(P[3], P[4], P[5]),
-					  make_float3(P[6], P[7], P[8]),
-					  make_float3(P[9], P[10], P[11])};
-
-	Transform nothing; // transformation "nulle"
-
-	// declaration of a table of triangle classes, here 2 triangles
-	Triangle rt[2];
-	// initialisation of the triangles classes with no transformation
-	for (int i = 0; i < 2; ++i)
-		rt[i] = Triangle(&nothing, &nothing);
-	
-	// Create the triangleMesh
-	// - 2 is the number of triangle
-	// - 4 is the number of vertices
-	TriangleMesh tri(&nothing, &nothing, 2, 4, vi, Pvec, rt);
-
-	float mytTri;                  // declare the time t where there is intersection with the mesh
-	DifferentialGeometry myDgTri;  // declare the differential geo of the mesh
-
-	// test directly (without Bounding box) if there is intersection with the mesh
-	if (tri.Intersect(R1, &mytTri, &myDgTri))
-	{
-		*(phit) = R1(mytTri);
-		*(myN) = faceForward(myDgTri.nn, -1.*R1.d);
-		return true;
-	}
-	else
-	{
-		*(phit) = make_float3(-1, -1, -1);
-		return false;
-	}
 	// =============================================================================
 }
