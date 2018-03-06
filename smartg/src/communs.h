@@ -32,7 +32,7 @@
 #define DEMIPI 1.5707963F
 
 #define MAX_LOOP 1000000000
-#define MAX_NEVT 100 // Maximum number of scattering evts stored in photon in the ALIS procedure
+#define MAX_NEVT 500 // Maximum number of scattering evts stored in photon in the ALIS procedure
 #define MAX_NLOW 101 // MAX Number of wavelengths stored in the ALIS scattering correction
 
 

@@ -26,13 +26,13 @@ def read_aw(dir_aux):
     data_pf = np.genfromtxt(join(dir_aux, 'water', 'pope97.dat'), skip_header=6)
     aw_pf = data_pf[:,1] * 100 #  convert from cm-1 to m-1
     lam_pf = data_pf[:,0]
-    ok_pf = lam_pf <= 700
+    ok_pf = lam_pf <= 725
 
     # Palmer&Williams
     data_pw = np.genfromtxt(join(dir_aux, 'water', 'palmer74.dat'), skip_header=5)
     aw_pw = data_pw[::-1,1] * 100 #  convert from cm-1 to m-1
     lam_pw = data_pw[::-1,0]
-    ok_pw = lam_pw > 700
+    ok_pw = lam_pw > 725
 
     aw = LUT(
             np.array(list(aw_pf[ok_pf]) + list(aw_pw[ok_pw])),
@@ -539,6 +539,7 @@ class IOP_profile(IOP_base):
         chl  = self.chls*self.chi(zeta)/self.chi(0.)
         chl[chl<0.]=1e-8
         self.chl = chl
+        self.chlmean = np.trapz(chl,self.z)/DEPTH
 
     def chi(self, zeta):
         return self.chi_b - self.s*zeta + self.chi_max*np.exp(-((zeta-self.zeta_max)/self.Dzeta)**2)
@@ -563,10 +564,18 @@ class IOP_profile(IOP_base):
         bw = 19.3e-4*((wav2/550.)**-4.32)
 
         # phytoplankton absorption
-        aphy = (self.BRICAUD['A'][Idx(wav2, fill_value='extrema')]
-                * (chl2**self.BRICAUD['E'][Idx(wav2, fill_value='extrema')]))
-        aphy440 = (self.BRICAUD['A'][Idx(440., fill_value='extrema')]
-                * (chl2**self.BRICAUD['E'][Idx(440., fill_value='extrema')]))
+        #aphy = (self.BRICAUD['A'][Idx(wav2, fill_value='extrema')]
+        #        * (chl2**self.BRICAUD['E'][Idx(wav2, fill_value='extrema')]))
+        #aphy440B = (self.BRICAUD['A'][Idx(440., fill_value='extrema')]
+        #        * (chl2**self.BRICAUD['E'][Idx(440., fill_value='extrema')]))
+        # specific phytoplankton absorption
+        chl2star=np.full_like(chl2, 1.)
+        aphystar = (self.BRICAUD['A'][Idx(wav2, fill_value='extrema')]
+                * (chl2star**self.BRICAUD['E'][Idx(wav2, fill_value='extrema')]))
+        aphy = aphystar * chl2
+        aphystar440 = (self.BRICAUD['A'][Idx(440., fill_value='extrema')]
+                * (chl2star**self.BRICAUD['E'][Idx(wav2, fill_value='extrema')]))
+        aphy440 = aphystar440 * chl2
         # phytoplankton covariant particles extinction
         ## Zhai et al., 2017
         # cp550 = p1*chl2**0.57
@@ -575,7 +584,11 @@ class IOP_profile(IOP_base):
         # bp    = cp-aphy
 
         ## return to IOP_1 definition
-        bp = 0.416*(chl2**0.766)*550./wav2
+        #bp = 0.416*(chl2**0.766)*550./wav2
+        piz440=0.68
+        bp440 = aphy440 * piz440/(1-piz440)
+        bp = bp440 *(wav2/440.)**(-1.)
+        #bp = 0.416*(chl2**0.766)*(wav2/550.)**(-1.)*6
         # correct for phase function truncation
         bp *= coef_trunc/2.
         # NEW !!!
@@ -593,20 +606,31 @@ class IOP_profile(IOP_base):
 
         ## return to IOP_1 definition
         # from Bricaud et al GBC, 2012 (data from nov 2007)
-        fa = 1.
-        aCDM443 = fa * 0.069 * (chl2**1.070)
+        #fa = 1.
+        #aCDM443 = fa * 0.069 * (chl2**1.070)
+        aCDM440 = 0.24*aphy440**0.43
 
-        S = 0.00262*(aCDM443**(-0.448))
-        S[S > 0.025] = 0.025
-        S[S < 0.011] = 0.011
+        #S = 0.00262*(aCDM443**(-0.448))
+        #S[S > 0.025] = 0.025
+        #S[S < 0.011] = 0.011
+        S=0.02
 
-        aCDOM = aCDM443 * np.exp(-S*(wav2 - 443))
+        aCDOM = aCDM440 * np.exp(-S*(wav2 - 440))
+        #aCDOM = aCDM443 * np.exp(-S*(wav2 - 443))
 
         # NEW !!!
         atot = aw + aphy*(1.-FQYC) + aCDOM
         # NEW !!!
 
         # NEW !!!
+        SPM = 10. # g/m3
+        gamma=0.5
+        bbpnap650 = 10**(1.03*np.log10(SPM) - 2.06) # Neukermans et al 2012
+        bbpnap = bbpnap650*(wav2/650.)**(-gamma)
+        Bpnap = np.zeros_like(aphy)
+        Bpnap[:] = 0.04
+        bpnap  = bbpnap/Bpnap
+        bp += bpnap
         btot = bw + bp + aphy* FQYC
         # NEW !!!
 
@@ -616,9 +640,12 @@ class IOP_profile(IOP_base):
         v = np.zeros_like(aphy)
         good=np.where(chl2<2.)
         v[good] = 0.5*(np.log10(chl2[good]) - 0.3)
-        Bp = 0.002 + 0.01*( 0.5-0.25*np.log10(chl2))*((wav2/550.)**v)
-        Bp[np.isinf(Bp)]=0.5
-        Bp[np.isnan(Bp)]=0.5
+        #Bp = 0.002 + 0.01*( 0.5-0.25*np.log10(chl2))*((wav2/550.)**v)
+        #Bp[np.isinf(Bp)]=0.5
+        #Bp[np.isnan(Bp)]=0.5
+
+
+        Bp = Bpnap
 
         return {'atot': atot,
                 'aphy': aphy,
