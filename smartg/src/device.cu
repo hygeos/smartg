@@ -2185,6 +2185,9 @@ __device__ void surfaceAgitee(Photon* ph, int le,
     #ifdef BACK
     float4x4 L = make_diag_float4x4 (1.F);
     rotationM(-psi,&L);
+    float tpar_b, tper_b, tpar2_b, tper2_b, tparper_b;
+    float rpar2_b, rper2_b, rat_b;
+    float cTh_b;
     #endif
 
 	if( sTh<=nind){
@@ -2212,6 +2215,24 @@ __device__ void surfaceAgitee(Photon* ph, int le,
 		ReflTot = 0;
         /*int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
         if (idx==0 && (ph->loc==SURF0M) && (count_level==UP0P) && (le)) printf("DEB %.3f %.3f %.3f %.4f\n", v.z, no.z, ph->v.z,psi);*/
+        #ifdef BACK
+        // in backward mode, nind -> 1/nind and incidence angle <-> emergence angle
+        cTh_b = cot;
+        float cot_b = cTh;
+        float nind_b= 1.F/nind;
+        float ncTh_b  = nind_b * cTh_b;
+        float ncot_b  = nind_b * cot_b;
+		rpar2_b = __fdividef(ncTh_b - cot_b,ncTh_b  + cot_b);
+        rpar2_b *= rpar2_b;
+		rper2_b = __fdividef(cTh_b - ncot_b,cTh_b + ncot_b);
+        rper2_b *= rper2_b;
+        rat_b = __fdividef(rpar2_b + rper2_b, 2.F);
+		tpar_b = __fdividef( 2.F*cTh_b,ncTh_b+ cot_b);
+		tper_b = __fdividef( 2.F*cTh_b,cTh_b+ ncot_b);
+        tpar2_b= tpar_b * tpar_b;
+        tper2_b= tper_b * tper_b;
+        tparper_b = tpar_b * tper_b;
+        #endif
 	}
 	else{
 		cot = 0.f;
@@ -2233,18 +2254,12 @@ __device__ void surfaceAgitee(Photon* ph, int le,
     // Weighting
     float p,qv,LambdaS,LambdaR,jac;
 
-    // Ross et al 2005, Ross and Dion, 2007, Zeisse 1995
-    // Slope sampling bias correction using the normalized interaction PDF q
-    // weight has to be multiplied by q/p, where p is the slope PDF
-    // Coefficient Lambda for normalization of q taking into acount slope shadowing and hiding
-    // Including wave shadows is performed at the end after the outgoing direction is calculated
-
-    // 1. Source direction
+    // Lambda shadowing Source direction
     LambdaS  =  Lambda(avz,sig);
 
-    // Bias sampling correction
-    if (!le) ph->weight *= __fdividef(fabs(cTh), cBeta * (1.F + LambdaS) * avz );
-    
+    //
+    // Local Estimate part
+    //
     if (le && (DIOPTREd!=0)) {
      // The weight depends on the normalized VISIBLE interaction PDF qv (Ross 2005) 
      // Compute p 
@@ -2267,7 +2282,7 @@ __device__ void surfaceAgitee(Photon* ph, int le,
             else qv = 0.F;
      }
 
-     // 2. Reflected/Refracted direction, Normalization of qv
+     // Reflected/Refracted direction, Normalization of qv
      LambdaR  =  Lambda(fabs(v.z),sig);
 
      float norma;
@@ -2278,12 +2293,15 @@ __device__ void surfaceAgitee(Photon* ph, int le,
      // apply the BRDF to the weight
      ph->weight *= __fdividef(qv * jac , avz);
 
-
     } /*le */
 
+    //
+    // Propagation part
+    //
+
+    // 1. Reflection
     int condR=1;
     if (!le) condR = (SURd==3)&&(RAND<rat);
-
 	if (  (!le && (condR || (SURd==1) || ReflTot) )
        || ( le && (ph->loc==SURF0M) && (count_level == DOWN0M) )
        || ( le && (ph->loc==SURF0P) && (count_level == UP0P)   )
