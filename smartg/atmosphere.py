@@ -931,16 +931,16 @@ class Profile_base(object):
         prof.P = interp1d(z, self.P)(znew)
         prof.T = interp1d(z, self.T)(znew)
 
-        prof.dens_air = trapzinterp(self.dens_air, z, znew)
-        prof.dens_o3  = trapzinterp(self.dens_o3, z, znew)
-        prof.dens_o2  = trapzinterp(self.dens_o2, z, znew)
-        prof.dens_h2o = trapzinterp(self.dens_h2o, z, znew)
-        prof.dens_co2 = trapzinterp(self.dens_co2, z, znew)
-        prof.dens_no2 = trapzinterp(self.dens_no2, z, znew)
-        prof.dens_ch4 = trapzinterp(self.dens_ch4, z, znew)
-        prof.dens_co = trapzinterp(self.dens_co, z, znew)
-        prof.dens_n2o = trapzinterp(self.dens_n2o, z, znew)
-        prof.dens_n2 = trapzinterp(self.dens_n2, z, znew)
+        prof.dens_air = interp1d(z, self.dens_air)  (znew)
+        prof.dens_o3  = interp1d(z, self.dens_o3)  (znew)
+        prof.dens_o2  = interp1d(z, self.dens_o2)  (znew)
+        prof.dens_h2o = interp1d(z, self.dens_h2o)  (znew)
+        prof.dens_co2 = interp1d(z, self.dens_co2)  (znew)
+        prof.dens_no2 = interp1d(z, self.dens_no2)  (znew)
+        prof.dens_ch4 = interp1d(z, self.dens_ch4)  (znew)
+        prof.dens_co  = interp1d(z, self.dens_co)  (znew)
+        prof.dens_n2o = interp1d(z, self.dens_n2o)  (znew)
+        prof.dens_n2 = interp1d(z, self.dens_n2)  (znew)
 
         return prof
 
