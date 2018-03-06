@@ -880,8 +880,8 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     #endif
 
     #ifdef BACK
-    //ph->Mf= make_diag_float4x4 (1.F);
     ph->M = make_diag_float4x4 (1.F);
+    //ph->Mf= make_diag_float4x4 (1.F);
     #endif
 
     }
@@ -1133,7 +1133,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
 __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc,
                         struct RNG_State *rngstate) {
 
-	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+	//int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
 
 	float delta_i=0.f, delta=0.f, epsilon;
     float phz, rdist, tauBis;
@@ -1630,28 +1630,29 @@ __device__ void scatter(Photon* ph,
 
 		ph->stokes = mul(P_scatter, ph->stokes);
 
-#ifdef BACK
+        #ifdef BACK
 		float4x4 L;
-		//float4x4 Lf;
-		rotationM(DEUXPI-psi,&L);
+		rotationM(-psi,&L);
 		ph->M   = mul(ph->M,mul(L,P_scatter));
+		//float4x4 Lf;
 		//rotationM(psi,&Lf);
 		//ph->Mf  = mul(mul(P_scatter,Lf),ph->Mf);
-#endif
+        #endif
 
 		if (!le){
 			float debias = 1.F;
-#ifdef BIAS
+            #ifdef BIAS
 			// Bias sampling scheme 2): Debiasing and normalizing
 			debias = __fdividef(2.F, P11 + P22 + 2*P12 ); // Debias is equal to the inverse of the phase function
-#else
+            #else
 			debias = __fdividef(1.F, ph->stokes.x + ph->stokes.y);
-#endif
+            #endif
+
 			operator*=(ph->stokes, debias); 
-#ifdef BACK
+            #ifdef BACK
 			ph->M  = mul(ph->M ,   make_diag_float4x4(debias)); // Bias sampling scheme only for backward mode
 			//ph->Mf = mul(ph->Mf ,  make_diag_float4x4(debias));
-#endif
+            #endif
 		}
 
 		else {
@@ -1888,7 +1889,9 @@ __device__ void choose_scatterer(Photon* ph,
 		} else {
 			
 			// get new lamb index
-			new_ilam = __float2int_rd(__fdividef( (ph->wavel -  spectrum[0].lambda)* NLAMd, spectrum[NLAMd-1].lambda - spectrum[0].lambda ));
+			//new_ilam = __float2int_rd(__fdividef( (ph->wavel -  spectrum[0].lambda)* NLAMd, spectrum[NLAMd-1].lambda - spectrum[0].lambda ));
+            new_ilam=0;
+            while ((ph->wavel>spectrum[new_ilam].lambda) && (new_ilam<NLAMd)) new_ilam++;
 			// update tau photon coordinates according to its new wavelength
 			ph->tau_abs = ph->tau_abs * prof_oc[ph->layer + new_ilam *(NOCEd+1)].OD_abs / prof_oc[ph->layer + ph->ilam *(NOCEd+1)].OD_abs;				
 			ph->tau     = ph->tau     * get_OD(BEERd, prof_oc[ph->layer + new_ilam *(NOCEd+1)]) /  get_OD(BEERd, prof_oc[ph->layer + ph->ilam *(NOCEd+1)]);
@@ -2181,7 +2184,7 @@ __device__ void surfaceAgitee(Photon* ph, int le,
     rotateStokes(ph->stokes, psi, &ph->stokes);
     #ifdef BACK
     float4x4 L = make_diag_float4x4 (1.F);
-    rotationM(DEUXPI-psi,&L);
+    rotationM(-psi,&L);
     #endif
 
 	if( sTh<=nind){
@@ -2584,7 +2587,7 @@ __device__ void surfaceBRDF(Photon* ph, int le,
     rotateStokes(ph->stokes, psi, &ph->stokes);
     #ifdef BACK
     float4x4 L = make_diag_float4x4 (1.F);
-    rotationM(DEUXPI-psi,&L);
+    rotationM(-psi,&L);
     #endif
 
 	temp = __fdividef(sTh,nind);
@@ -2772,7 +2775,7 @@ __device__ void surfaceLambertienne(Photon* ph, int le,
     ph->stokes = mul(L,ph->stokes);
 
     #ifdef BACK
-    ph->M = mul(L,ph->M);
+    ph->M = mul(ph->M,L);
     #endif
 	ph->v = v_n;
 	ph->u = u_n;
@@ -2887,15 +2890,15 @@ __device__ void countPhoton(Photon* ph,
     #ifdef BACK
     float4x4 L;
     float4 stback = make_float4(0.5F, 0.5F, 0., 0.);
-    //float4 stforw = make_float4(0.5F, 0.5F, 0., 0.);
-    //rotationM(psi,&L);
-	//ph->Mf = mul(L,ph->Mf);
-    rotationM(DEUXPI-psi,&L);
+    rotationM(-psi,&L);
 	ph->M = mul(ph->M,L);
     stback = mul(ph->M, stback);
-    //stforw = mul(ph->Mf,stforw);
     st = stback;
-    //st = stforw;
+    /*float4 stforw = make_float4(0.5F, 0.5F, 0., 0.);
+    rotationM(psi,&L);
+	ph->Mf = mul(L,ph->Mf);
+    stforw = mul(ph->Mf,stforw);
+    st = stforw;*/
     #endif
 
 	float weight = ph->weight;
@@ -3089,13 +3092,25 @@ __device__ void countPhoton(Photon* ph,
               //Computing absorption optical depths form start to stop for all segments
               float tau_abs1, tau_abs2;
               if (ph->layer_prev[n+1] == 0) tau_abs2 = 0.;
-              else tau_abs2 = (prof_atm[ph->layer_prev[n+1]   + il *(NATMd+1)].OD_abs -
+
+              else tau_abs2 = (prof_oc[ph->layer_prev[n+1]   + il *(NOCEd+1)].OD_abs -
+                             prof_oc[ph->layer_prev[n+1]-1 + il *(NOCEd+1)].OD_abs) *
+                             ph->epsilon_prev[n+1] + prof_oc[ph->layer_prev[n+1]-1 + il *(NOCEd+1)].OD_abs;
+              /*else tau_abs2 = (prof_atm[ph->layer_prev[n+1]   + il *(NATMd+1)].OD_abs -
                              prof_atm[ph->layer_prev[n+1]-1 + il *(NATMd+1)].OD_abs) *
-                             ph->epsilon_prev[n+1] + prof_atm[ph->layer_prev[n+1]-1 + il *(NATMd+1)].OD_abs;
+                             ph->epsilon_prev[n+1] + prof_atm[ph->layer_prev[n+1]-1 + il *(NATMd+1)].OD_abs;*/
+
+
               if (ph->layer_prev[n] == 0) tau_abs1 = 0.;
-              else tau_abs1 = (prof_atm[ph->layer_prev[n]   + il *(NATMd+1)].OD_abs -
+
+              else tau_abs1 = (prof_oc[ph->layer_prev[n]   + il *(NOCEd+1)].OD_abs -
+                             prof_oc[ph->layer_prev[n]-1 + il *(NOCEd+1)].OD_abs) *
+                             ph->epsilon_prev[n] + prof_oc[ph->layer_prev[n]-1 + il *(NOCEd+1)].OD_abs;
+
+              /*else tau_abs1 = (prof_atm[ph->layer_prev[n]   + il *(NATMd+1)].OD_abs -
                              prof_atm[ph->layer_prev[n]-1 + il *(NATMd+1)].OD_abs) *
-                             ph->epsilon_prev[n] + prof_atm[ph->layer_prev[n]-1 + il *(NATMd+1)].OD_abs;
+                             ph->epsilon_prev[n] + prof_atm[ph->layer_prev[n]-1 + il *(NATMd+1)].OD_abs;*/
+
               wabs *= exp(-fabs(__fdividef(tau_abs2 - tau_abs1 , ph->vz_prev[n+1])));
           }
 
