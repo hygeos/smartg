@@ -2371,90 +2371,103 @@ __device__ void surfaceAgitee(Photon* ph, int le,
         }
 
 
-} // Reflection
+     } // Reflection
 
 
-else if (  (!le && !condR) 
+    // 2. Transmission
+    else if (  (!le && !condR) 
         || ( le && (ph->loc==SURF0M) && (count_level == UP0P  ) && !ReflTot )
         || ( le && (ph->loc==SURF0P) && (count_level == DOWN0M) && !ReflTot )
         ){	// Transmission
 
-    float geo_trans_factor = nind* cot/cTh; // DR Mobley 2015 OK , see Xun 2014, Zhai et al 2010
-    T= make_float4x4(
+        T= make_float4x4(
         tpar2, 0., 0., 0.,
         0., tper2, 0., 0.,
         0., 0., tparper, 0.,
         0., 0., 0., tparper
         );
+        ph->stokes = mul(T,ph->stokes);
+
+        #ifndef BACK
+        float geo_trans_factor = nind* cot/cTh; // DR Mobley 2015 OK , see Xun 2014, Zhai et al 2010
+        #else
+        float geo_trans_factor = 1./nind* cTh/cot;
+        #endif
+        ph->weight *= geo_trans_factor;
+
+        #ifndef BIAS
+        ph->weight *= ph->stokes.x + ph->stokes.y;
+	    operator/=(ph->stokes, ph->stokes.x + ph->stokes.y); 
+        #endif
+
+        #ifdef BACK
+        /* for reciprocity of transmission function see Walter 2007 */
+        float4x4 T_b= make_float4x4(
+        tpar2_b, 0., 0., 0.,
+        0., tper2_b, 0., 0.,
+        0., 0., tparper_b, 0.,
+        0., 0., 0., tparper_b
+        );
+        ph->M   = mul(ph->M,mul(L,T_b));
+        #endif
     
-    ph->stokes = mul(T,ph->stokes);
-    ph->weight *= geo_trans_factor;
-    #ifndef BIAS
-    ph->weight *= ph->stokes.x + ph->stokes.y;
-	operator/=(ph->stokes, ph->stokes.x + ph->stokes.y); 
-    #endif
+        alpha  = __fdividef(cTh, nind) - cot;
 
-    #ifdef BACK
-    /* for reciprocity of transmission function see Walter 2007 */
-    ph->M   = mul(ph->M,mul(L,T));
-    ph->weight /= nind*nind;
-    /* Bias sample correction for facet slope now has to be modidied since incident angle and refracted angle are not equal ?
-    ph->weight *= cot/cTh;*/
-    #endif
-    
-    alpha  = __fdividef(cTh, nind) - cot;
+        if (le) { ph->v = v; }
+        else { ph->v = operator+(operator/(ph->v, nind), alpha*no); }
+        ph->u = operator/(operator+(no, cot*ph->v), sTh )*nind;
 
-    if (le) { ph->v = v; }
-    else { ph->v = operator+(operator/(ph->v, nind), alpha*no); }
-    ph->u = operator/(operator+(no, cot*ph->v), sTh )*nind;
-
-    #ifdef SPHERIQUE
-    vzn = dot(ph->v, Nz);
-    #else
-    vzn = ph->v.z;
-    #endif
+        #ifdef SPHERIQUE
+        vzn = dot(ph->v, Nz);
+        #else
+        vzn = ph->v.z;
+        #endif
 
 
-    // DR Normalization of the transmission matrix
-    // the transmission coefficient is taken into account:
-    // once in the random selection (Rand > rat)
-    // once in the transmission matrix multiplication
-    // so we normalize by (1-rat) (Xun 2014).
-    // Not to be applied for forced transmission (SUR=2)
-    if ( (SURd == 3 ) && !le) 
-        ph->weight /= (1-rat);
+        // DR Normalization of the transmission matrix
+        // the transmission coefficient is taken into account:
+        // once in the random selection (Rand > rat)
+        // once in the transmission matrix multiplication
+        // so we normalize by (1-rat) (Xun 2014).
+        // Not to be applied for forced transmission (SUR=2)
+        if ( (SURd == 3 ) && !le) 
+            #ifndef BACK
+            ph->weight /= (1-rat);
+            #else
+            ph->weight /= (1-rat_b);
+            #endif
 
-    //
-    // photon next location
-    //
-     if (ph->loc == SURF0M) {
-        if (vzn > 0) {
+        //
+        // photon next location
+        //
+        if (ph->loc == SURF0M) {
+         if (vzn > 0) {
             // SURF0P becomes ATM or SPACE
             if( SIMd==-1 || SIMd==0 ){
                 ph->loc = SPACE;
             } else{
                 ph->loc = ATMOS;
             }
-        } else {
+         } else {
             // multiple transmissions (vz<0 after water->air transmission)
             ph->loc = SURF0P;
             if (SINGLEd) ph->loc = REMOVED;
-        }
-     } else {
-        if (vzn < 0) {  // avoid multiple reflexion under the surface
-            // SURF0M becomes OCEAN or ABSORBED
-            if( SIMd==-1 || SIMd==1 ){
-                ph->loc = ABSORBED;
-            } else{
-                ph->loc = OCEAN;
-            }
+         }
         } else {
-            // multiple transmissions (vz<0 after water->air transmission)
-            // (for symmetry, but should not happen)
-            ph->loc = SURF0M;
-            if (SINGLEd) ph->loc = REMOVED;
+           if (vzn < 0) {  // avoid multiple reflexion under the surface
+              // SURF0M becomes OCEAN or ABSORBED
+              if( SIMd==-1 || SIMd==1 ){
+                ph->loc = ABSORBED;
+              } else{
+                ph->loc = OCEAN;
+              }
+           } else {
+              // multiple transmissions (vz<0 after water->air transmission)
+              // (for symmetry, but should not happen)
+              ph->loc = SURF0M;
+              if (SINGLEd) ph->loc = REMOVED;
+           }
         }
-     }
 
 	} // Transmission
 
