@@ -4297,12 +4297,7 @@ __device__ double DatomicAdd(double* address, double val)
 
 __device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN)
 { 
-	// don't have to be modified
 	Ray R1(o, dir, 0);
-
-	// =============================================================================
-	// can be modified
-	// =============================================================================
 
 	// =========================================
 	// comment just bellow to take into account the geometry
@@ -4318,26 +4313,19 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN)
 	// comment just above to take into account the geometry
 	// =========================================
 
-	// ========================================================
-	// Spheres
-	int const nObj = 2;
+	int const nObj = 3;
 
-	// float3 p1[nObj], p2[nObj], p3[nObj], p4[nObj];      // plane
 	IObjets ObjT[nObj]; // Tableau d'objets
-	
-	// float myRad[nObj], z0[nObj], z1[nObj], phi[nObj];   // sphere
-	// float3 mvR[nObj], mvT[nObj];                        // mvRotation et mvTranslation
 	Transform TmRX[nObj], TmRY[nObj], TmRZ[nObj], TmT[nObj], TSph[nObj], invTsph[nObj];
 	float myT = CUDART_INF_F, myTi;
 	bool myB = false, myBi;
 	DifferentialGeometry myDg, myDgi;
-	
-    // myRad[0] = 60; z0[0] = -60; z1[0] = 60; phi[0] = 29.9;
-	// myRad[1] = 50; z0[1] = -50; z1[1] = 50; phi[1] = 360;
-	// mvR[0].x = 90; mvR[0].y = 0; mvR[0].z = 0;
-	// mvR[1].x = 0; mvR[1].y = 0; mvR[1].z = 0;
-	// mvT[0].x = 0; mvT[0].y = 0; mvT[0].z = 0;
-	// mvT[1].x = -110; mvT[1].y = 0; mvT[1].z = 0;
+
+	// ***********Propre aux objets de type plane***********
+	int vi[6] = {0, 1, 2,  // vertices index for triangle 1
+				 2, 3, 1}; // vertices index for triangle 2
+	Transform nothing; // transformation "nulle"
+	// *****************************************************
 
 	ObjT[0].geo = 1;
 	ObjT[0].myRad = 60; ObjT[0].z0 = -60; ObjT[0].z1 = 60; ObjT[0].phi = 29.9;
@@ -4348,8 +4336,15 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN)
 	ObjT[1].myRad = 50; ObjT[1].z0 = -50; ObjT[1].z1 = 50; ObjT[1].phi = 360;	
 	ObjT[1].mvR.x = 0; ObjT[1].mvR.y = 0; ObjT[1].mvR.z = 0;
 	ObjT[1].mvT.x = -110; ObjT[1].mvT.y = 0; ObjT[1].mvT.z = 0;
-	
-	
+
+	ObjT[2].geo = 2;
+	ObjT[2].p0 = make_float3(-60., -60., 0.);
+	ObjT[2].p1 = make_float3(60., -60., 0.);
+	ObjT[2].p2 = make_float3(-60., 60., 0.);
+	ObjT[2].p3 = make_float3(60., 60., 0.);
+	ObjT[2].mvR.x = 0; ObjT[2].mvR.y = 0; ObjT[2].mvR.z = 0;
+	ObjT[2].mvT.x = 0; ObjT[2].mvT.y = 0; ObjT[2].mvT.z = 110;
+							 	
 	for (int i = 0; i < nObj; ++i)
 	{
 		// *****************************First Step********************************
@@ -4368,20 +4363,44 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN)
 			TmT[i] = TSph[i].Translate(make_float3(ObjT[i].mvT.x, ObjT[i].mvT.y,
 												   ObjT[i].mvT.z));
 			TSph[i] = TSph[i]*TmT[i]; }
-		
+
 		invTsph[i] = TSph[i].Inverse(TSph[i]); // inverse de la tranformation
-		
-	    Sphere myObject(&TSph[i], &invTsph[i], ObjT[i].myRad, ObjT[i].z0,
-						ObjT[i].z1, ObjT[i].phi);
-		
-		BBox myBBox = myObject.WorldBoundSphere();
-		
 		// ***********************************************************************
 		
-		// ******************************Second Step******************************
-		if (myBBox.IntersectP(R1))
-			myBi = myObject.Intersect(R1, &myTi, &myDgi);
+		// ******************************Second Step******************************	
+		if (ObjT[i].geo == 1) // cas d'un objet de type sphere
+		{
+			Sphere myObject(&TSph[i], &invTsph[i], ObjT[i].myRad, ObjT[i].z0,
+							ObjT[i].z1, ObjT[i].phi);
 		
+			BBox myBBox = myObject.WorldBoundSphere();
+
+			if (myBBox.IntersectP(R1))
+				myBi = myObject.Intersect(R1, &myTi, &myDgi);
+		}
+		else if (ObjT[i].geo == 2) // cas d'un objet de type plane
+		{
+			// declaration of a table of float3 which contains P0, P1, P2, P3
+			float3 Pvec[4] = {ObjT[i].p0, ObjT[i].p1, ObjT[i].p2, ObjT[i].p3};
+
+			// declaration of a table of triangle classes, here 2 triangles
+			Triangle rt[2];
+			
+			// initialisation of the triangles classes with no transformation
+			rt[0] = Triangle(&nothing, &nothing);
+			rt[1] = Triangle(&nothing, &nothing);
+	
+			// Create the triangleMesh (2 = number of triangle ; 4 = number of vertices)
+			TriangleMesh myObject(&TSph[i], &invTsph[i], 2, 4, vi, Pvec, rt);
+			
+			BBox myBBox = myObject.WorldBoundTriangleMesh();
+
+			if (myBBox.IntersectP(R1))
+				myBi = myObject.Intersect(R1, &myTi, &myDgi);
+		}
+		// ***********************************************************************
+		
+		// ******************************third Step*******************************
 		if (myBi and myT > myTi)
 		{
 			myB = true;
@@ -4389,145 +4408,17 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN)
 			myDg = myDgi;
 		}
 		// ***********************************************************************
-	}
-
-	if (myB)
+	} // FIN BOUCLE FOR (PARCOURANT LES OBJETS)
+	
+	if (myB) // Il y a intersection avec au moins un objet
 	{
 		*(phit) = R1(myT);	
 		*(myN) = faceForward(myDg.nn, -1.*R1.d);
 		return true;
 	}
-	else
+	else // Il y a pas d'intersection avec un objet
 	{
 		*(phit) = make_float3(-1, -1, -1);
 		return false;
-	}
-	
-	// // ========================================================
-	// // transform needed for the first sphere
-	// Transform TSph1, invTSph1, TRX;
-	// // rotation of 90 degree in x direction
-	// TRX = TSph1.RotateX(90);
-	// TSph1 = TRX;
-	// invTSph1 = TSph1.Inverse(TSph1);
-
-    // create the first sphere and bound box
-	// Sphere Sph1(&TSph1, &invTSph1, 60.f, -60.f, 60.f, 29.9f);
-	// BBox myBBox1 =  Sph1.WorldBoundSphere();
-	// ========================================================
-
-	// // ========================================================
-	// // transform needed for the second sphere
-	// Transform TSph2, invTSph2, TTrans;
-	// // translation of -110 km in x direction
-	// TTrans = TSph2.Translate(make_float3(-110.f, 0.f, 0.f));
-	// TSph2 = TTrans;
-	// invTSph2 = TSph2.Inverse(TSph2);
-
-    // create the second sphere and bound box
-	// Sphere Sph2(&TSph2, &invTSph2, 50.f, -50.f, 50.f, 360.f);
-
-	// BBox myBBox2 = Sph2.WorldBoundSphere();
-	// ========================================================
-	
-	// float myt1, myt2;                  // for each sphere
-	// DifferentialGeometry myDg1, myDg2; // for each sphere
-	// bool myb1, myb2;                   // for each sphere
-
-	// // Check if there is intersection with the bounding boxes
-	// if (myBBox1.IntersectP(R1)){myb1 = myObjects[0].Intersect(R1, &myt1, &myDg1);}
-	// // if (myBBox1.IntersectP(R1)){myb1 = Sph1.Intersect(R1, &myt1, &myDg1);}
-	// else {myb1 = false;}
-	
-	// if (myBBox2.IntersectP(R1)){myb2 = myObjects[1].Intersect(R1, &myt2, &myDg2);}
-	// // if (myBBox2.IntersectP(R1)){myb2 = Sph2.Intersect(R1, &myt2, &myDg2);}
-	// else {myb2 = false;}
-
-	// //Take into account the fact that we have two geometries
-	// if (myb1 && myb2)
-	// {
-	// 	if (myt1 < myt2)
-	// 	{
-	// 		*(phit) = R1(myt1);
-	// 		*(myN) = faceForward(myDg1.nn, -1.*R1.d);
-	// 	}
-	// 	else
-	// 	{
-	// 		*(phit) = R1(myt2);
-	// 		*(myN) = faceForward(myDg2.nn, -1.*R1.d);
-	// 	}	
-	// 	return true;
-	// }
-	// else if (myb1)
-	// {
-	// 	*(phit) = R1(myt1);	
-	// 	*(myN) = faceForward(myDg1.nn, -1.*R1.d);
-	// 	return true;
-	// }
-	// else if (myb2)
-	// {
-	// 	*(phit) = R1(myt2);
-	// 	*(myN) = faceForward(myDg2.nn, -1.*R1.d);
-	// 	return true;
-	// }
-	// else
-	// {
-	// 	*(phit) = make_float3(-1, -1, -1);
-	// 	return false;
-	// }
-
-	// =============================================================================
-    // Triangle mesh
-	// =============================================================================
-	// int vi[6] = {0, 1, 2,  // vertices index for triangle 1
-	// 			 2, 3, 1}; // vertices index for triangle 2
-
-	// // Vertical triangleMesh at x = 60km
-	// // float P[12] = {60.f, -30.f, 0.f,  // vertex coordinate P0 
-	// // 			   60.f, 30.f,  0.f,  // vertex coordinate P1
-	// // 			   60.f, -30.f, 30.f,  // vertex coordinate P2
-	// // 			   60.f, 30.f,  30.f}; // vertex coordinate P3
-
-	// // honrizontal triangleMesh at z = 110km
-	// float P[12] = {10.f, -10.f, 20.f,  // vertex coordinate P0 
-	// 			   10.f, 10.f,  20.f,  // vertex coordinate P1
-	// 			   -10.f, 10.f, 20.f,  // vertex coordinate P2
-	// 			   -10.f, -10.f,20.f}; // vertex coordinate P3
-
-	// // declaration of a table of float3 which contains P0, P1, P2, P3
-	// float3 Pvec[4] = {make_float3(P[0], P[1], P[2]),
-	// 		  make_float3(P[3], P[4], P[5]),
-	// 		  make_float3(P[6], P[7], P[8]),
-	// 		  make_float3(P[9], P[10], P[11])};
-
-	// Transform nothing; // transformation "nulle"
-
-	// // declaration of a table of triangle classes, here 2 triangles
-	// Triangle rt[2];
-	// // initialisation of the triangles classes with no transformation
-	// for (int i = 0; i < 2; ++i)
-	// 	rt[i] = Triangle(&nothing, &nothing);
-	
-	// // Create the triangleMesh
-	// // - 2 is the number of triangle
-	// // - 4 is the number of vertices
-	// TriangleMesh tri(&nothing, &nothing, 2, 4, vi, Pvec, rt);
-
-	// float mytTri;                  // declare the time t where there is intersection with the mesh
-	// DifferentialGeometry myDgTri;  // declare the differential geo of the mesh
-
-	// // test directly (without Bounding box) if there is intersection with the mesh
-	// if (tri.Intersect(R1, &mytTri, &myDgTri))
-	// {
-	// 	*(phit) = R1(mytTri);
-	// 	*(myN) = faceForward(myDgTri.nn, -1.*R1.d);
-	// 	return true;
-	// }
-	// else
-	// {
-	// 	*(phit) = make_float3(-1, -1, -1);
-	// 	return false;
-	// }
-
-	// =============================================================================
-}
+	}	
+} // FIN DE LA FONCTION GEOTEST()
