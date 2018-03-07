@@ -243,4 +243,12 @@ struct Sensor {
     int TYPE;     // sensor type: Radiance (0), Planar flux (1), Spherical Flux (2), default 0
 };
 
+// En rapport avec l'implementation des objets
+struct IObjets {
+    int geo; // 1 = sphere, 2 = plane, ...
+	float3 p1, p2, p3, p4;
+	float myRad, z0, z1, phi;
+	float3 mvR, mvT;
+};
+
 #endif	// COMMUNS_H
