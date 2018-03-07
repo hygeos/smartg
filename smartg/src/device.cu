@@ -4340,42 +4340,33 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN)
 	BBox myBBox2 = Sph2.WorldBoundSphere();
 	// ========================================================
 
-	float myt1, myt2;                  // for each sphere
-	DifferentialGeometry myDg1, myDg2; // for each sphere
-	bool myb1, myb2;                   // for each sphere
+	// --------------------------------------------------------
+	// ========================================================
 
-	// Check if there is intersection with the bounding boxes
-	if (myBBox1.IntersectP(R1)){myb1 = Sph1.Intersect(R1, &myt1, &myDg1);}
-	else {myb1 = false;}
+	int const nObj = 2;
+    Sphere myObjects[nObj];
+	myObjects[0] = Sph1;
+	myObjects[1] = Sph2;
+		
+	float myT = CUDART_INF_F, myTi;
+	bool myB = false, myBi;
+	DifferentialGeometry myDg, myDgi;
 
-	if (myBBox2.IntersectP(R1)){myb2 = Sph2.Intersect(R1, &myt2, &myDg2);}
-	else {myb2 = false;}
-
-	//Take into account the fact that we have two geometries
-	if (myb1 && myb2)
+	for (int i = 0; i < nObj; ++i)
 	{
-		if (myt1 < myt2)
+		myBi = myObjects[i].Intersect(R1, &myTi, &myDgi);
+		if (myBi and myT > myTi)
 		{
-			*(phit) = R1(myt1);
-			*(myN) = faceForward(myDg1.nn, -1.*R1.d);
+			myB = true;
+			myT = myTi;
+			myDg = myDgi;
 		}
-		else
-		{
-			*(phit) = R1(myt2);
-			*(myN) = faceForward(myDg2.nn, -1.*R1.d);
-		}	
-		return true;
 	}
-	else if (myb1)
+
+	if (myB)
 	{
-		*(phit) = R1(myt1);	
-		*(myN) = faceForward(myDg1.nn, -1.*R1.d);
-		return true;
-	}
-	else if (myb2)
-	{
-		*(phit) = R1(myt2);
-		*(myN) = faceForward(myDg2.nn, -1.*R1.d);
+		*(phit) = R1(myT);	
+		*(myN) = faceForward(myDg.nn, -1.*R1.d);
 		return true;
 	}
 	else
@@ -4383,6 +4374,55 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN)
 		*(phit) = make_float3(-1, -1, -1);
 		return false;
 	}
+	
+	// ========================================================
+	// --------------------------------------------------------
+	
+	// float myt1, myt2;                  // for each sphere
+	// DifferentialGeometry myDg1, myDg2; // for each sphere
+	// bool myb1, myb2;                   // for each sphere
+
+	// // Check if there is intersection with the bounding boxes
+	// if (myBBox1.IntersectP(R1)){myb1 = myObjects[0].Intersect(R1, &myt1, &myDg1);}
+	// // if (myBBox1.IntersectP(R1)){myb1 = Sph1.Intersect(R1, &myt1, &myDg1);}
+	// else {myb1 = false;}
+	
+	// if (myBBox2.IntersectP(R1)){myb2 = myObjects[1].Intersect(R1, &myt2, &myDg2);}
+	// // if (myBBox2.IntersectP(R1)){myb2 = Sph2.Intersect(R1, &myt2, &myDg2);}
+	// else {myb2 = false;}
+
+	// //Take into account the fact that we have two geometries
+	// if (myb1 && myb2)
+	// {
+	// 	if (myt1 < myt2)
+	// 	{
+	// 		*(phit) = R1(myt1);
+	// 		*(myN) = faceForward(myDg1.nn, -1.*R1.d);
+	// 	}
+	// 	else
+	// 	{
+	// 		*(phit) = R1(myt2);
+	// 		*(myN) = faceForward(myDg2.nn, -1.*R1.d);
+	// 	}	
+	// 	return true;
+	// }
+	// else if (myb1)
+	// {
+	// 	*(phit) = R1(myt1);	
+	// 	*(myN) = faceForward(myDg1.nn, -1.*R1.d);
+	// 	return true;
+	// }
+	// else if (myb2)
+	// {
+	// 	*(phit) = R1(myt2);
+	// 	*(myN) = faceForward(myDg2.nn, -1.*R1.d);
+	// 	return true;
+	// }
+	// else
+	// {
+	// 	*(phit) = make_float3(-1, -1, -1);
+	// 	return false;
+	// }
 
 	// =============================================================================
     // Triangle mesh

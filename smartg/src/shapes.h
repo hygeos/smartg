@@ -109,6 +109,7 @@ class Sphere : public Shape
 {
 public:
 	// Méthodes publiques de la sphère
+	__host__ __device__ Sphere();
 	__host__ __device__ Sphere(const Transform *o2w, const Transform *w2o,
 							   float rad, float zmin, float zmax, float phiMax);
 
@@ -131,6 +132,16 @@ private:
 // -------------------------------------------------------
 // définitions des méthodes de la classe sphere
 // -------------------------------------------------------
+Sphere::Sphere() : Shape()
+{
+    radius = 0.f;
+    zmin = 0.f;
+    zmax = 0.f;
+    thetaMin = 0.f;
+    thetaMax = 0.f;
+    phiMax = 0.f;
+}
+
 Sphere::Sphere(const Transform *o2w, const Transform *w2o,
 			   float rad, float z0, float z1, float pm)
 	: Shape(o2w, w2o)
