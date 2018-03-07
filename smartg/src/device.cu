@@ -4353,15 +4353,23 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN)
 	for (int i = 0; i < nObj; ++i)
 	{
 		// *****************************First Step********************************
-		TmRX[i] = TSph[i].RotateX(ObjT[i].mvR.x);
-		TmRY[i] = TSph[i].RotateY(ObjT[i].mvR.y);
-		TmRZ[i] = TSph[i].RotateZ(ObjT[i].mvR.z);
+		if (ObjT[i].mvR.x != 0) { // si diff de 0 alors il y a une rot en x
+			TmRX[i] = TSph[i].RotateX(ObjT[i].mvR.x);
+			TSph[i] = TmRX[i]; } 
+		if (ObjT[i].mvR.y != 0) { // si diff de 0 alors il y a une rot en y
+			TmRY[i] = TSph[i].RotateY(ObjT[i].mvR.y);
+			TSph[i] = TSph[i]*TmRY[i];}
+		if (ObjT[i].mvR.z != 0) { // si diff de 0 alors il y a une rot en z
+			TmRZ[i] = TSph[i].RotateZ(ObjT[i].mvR.z);
+			TSph[i] = TSph[i]*TmRZ[i]; }
 
-		TmT[i] = TSph[i].Translate(make_float3(ObjT[i].mvT.x, ObjT[i].mvT.y,
-											   ObjT[i].mvT.z));
+		// si une valeur en x, y ou z diff de 0 alors il y a une translation
+		if (ObjT[i].mvT.x != 0 or ObjT[i].mvT.y != 0 or ObjT[i].mvT.z != 0) {
+			TmT[i] = TSph[i].Translate(make_float3(ObjT[i].mvT.x, ObjT[i].mvT.y,
+												   ObjT[i].mvT.z));
+			TSph[i] = TSph[i]*TmT[i]; }
 		
-		TSph[i] = TmRX[i]*TmRY[i]*TmRZ[i]*TmT[i];
-		invTsph[i] = TSph[i].Inverse(TSph[i]);
+		invTsph[i] = TSph[i].Inverse(TSph[i]); // inverse de la tranformation
 		
 	    Sphere myObject(&TSph[i], &invTsph[i], ObjT[i].myRad, ObjT[i].z0,
 						ObjT[i].z1, ObjT[i].phi);
