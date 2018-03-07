@@ -2257,6 +2257,9 @@ __device__ void surfaceAgitee(Photon* ph, int le,
     // Lambda shadowing Source direction
     LambdaS  =  Lambda(avz,sig);
 
+    // Bias sampling
+    if (!le) ph->weight *= __fdividef(fabs(cTh), cBeta * (1.F + LambdaS) * avz );
+
     //
     // Local Estimate part
     //
