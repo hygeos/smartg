@@ -4326,7 +4326,7 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN)
 	float myRad[nObj], z0[nObj], z1[nObj], phi[nObj];
 	float3 mvR[nObj], mvT[nObj]; // mvRotation et mvTranslation
 	Transform TmRX[nObj], TmRY[nObj], TmRZ[nObj], TmT[nObj], TSph[nObj], invTsph[nObj];
-	Sphere myObjects[nObj];
+	//Sphere myObjects[nObj];
 	float myT = CUDART_INF_F, myTi;
 	bool myB = false, myBi;
 	DifferentialGeometry myDg, myDgi;
@@ -4349,12 +4349,11 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN)
 		
 		TSph[i] = TmRX[i]*TmRY[i]*TmRZ[i]*TmT[i];
 		invTsph[i] = TSph[i].Inverse(TSph[i]);
-	    Sphere Sphtemp(&TSph[i], &invTsph[i], myRad[i], z0[i], z1[i], phi[i]);
-		myObjects[i] = Sphtemp;
+	    Sphere myObject(&TSph[i], &invTsph[i], myRad[i], z0[i], z1[i], phi[i]);
 		// ***********************************************************************
 		
 		// ******************************Second Step******************************
-		myBi = myObjects[i].Intersect(R1, &myTi, &myDgi);
+		myBi = myObject.Intersect(R1, &myTi, &myDgi);
 		if (myBi and myT > myTi)
 		{
 			myB = true;
