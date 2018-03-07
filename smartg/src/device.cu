@@ -4305,55 +4305,55 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN)
 	// =============================================================================
 
 	// =========================================
-	// comment bellow to take into account the geometry
+	// comment just bellow to take into account the geometry
+	// ***************************************************** //
+	// ***************************************************** //
+	
 	// *(phit) = make_float3(-1, -1, -1);
 	// *(myN) = make_float3(0, 0, 0);
 	// return false;
-	// comment above to take into account the geometry
+	
+	// ***************************************************** //
+	// ***************************************************** //	
+	// comment just above to take into account the geometry
 	// =========================================
 
 	// ========================================================
 	// Spheres
-	// ========================================================
-	// transform needed for the first sphere
-	Transform TSph1, invTSph1, TRX;
-	// rotation of 90 degree in x direction
-	TRX = TSph1.RotateX(90);
-	TSph1 = TRX;
-	invTSph1 = TSph1.Inverse(TSph1);
-
-    // create the first sphere and bound box
-	Sphere Sph1(&TSph1, &invTSph1, 60.f, -60.f, 60.f, 29.9f);
-	BBox myBBox1 =  Sph1.WorldBoundSphere();
-	// ========================================================
-
-	// ========================================================
-	// transform needed for the second sphere
-	Transform TSph2, invTSph2, TTrans;
-	// translation of -110 km in x direction
-	TTrans = TSph2.Translate(make_float3(-110.f, 0.f, 0.f));
-	TSph2 = TTrans;
-	invTSph2 = TSph2.Inverse(TSph2);
-
-    // create the second sphere and bound box
-	Sphere Sph2(&TSph2, &invTSph2, 50.f, -50.f, 50.f, 360.f);
-	BBox myBBox2 = Sph2.WorldBoundSphere();
-	// ========================================================
-
-	// --------------------------------------------------------
-	// ========================================================
-
 	int const nObj = 2;
-    Sphere myObjects[nObj];
-	myObjects[0] = Sph1;
-	myObjects[1] = Sph2;
-		
+
+	//float3c p1[nObj], p2[nObj], p3[nObj], p4[nObj];
+	float myRad[nObj], z0[nObj], z1[nObj], phi[nObj];
+	float3 mvR[nObj], mvT[nObj]; // mvRotation et mvTranslation
+	Transform TmRX[nObj], TmRY[nObj], TmRZ[nObj], TmT[nObj], TSph[nObj], invTsph[nObj];
+	Sphere myObjects[nObj];
 	float myT = CUDART_INF_F, myTi;
 	bool myB = false, myBi;
 	DifferentialGeometry myDg, myDgi;
-
+	
+	myRad[0] = 60; z0[0] = -60; z1[0] = 60; phi[0] = 29.9;
+	myRad[1] = 50; z0[1] = -50; z1[1] = 50; phi[1] = 360;
+	mvR[0].x = 90; mvR[0].y = 0; mvR[0].z = 0;
+	mvR[1].x = 0; mvR[1].y = 0; mvR[1].z = 0;
+	mvT[0].x = 0; mvT[0].y = 0; mvT[0].z = 0;
+	mvT[1].x = -110; mvT[1].y = 0; mvT[1].z = 0;
+	
+	
 	for (int i = 0; i < nObj; ++i)
 	{
+		// *****************************First Step********************************
+		TmRX[i] = TSph[i].RotateX(mvR[i].x); TmRY[i] = TSph[i].RotateY(mvR[i].y);
+		TmRZ[i] = TSph[i].RotateZ(mvR[i].z);
+
+		TmT[i] = TSph[i].Translate(make_float3(mvT[i].x, mvT[i].y, mvT[i].z));
+		
+		TSph[i] = TmRX[i]*TmRY[i]*TmRZ[i]*TmT[i];
+		invTsph[i] = TSph[i].Inverse(TSph[i]);
+	    Sphere Sphtemp(&TSph[i], &invTsph[i], myRad[i], z0[i], z1[i], phi[i]);
+		myObjects[i] = Sphtemp;
+		// ***********************************************************************
+		
+		// ******************************Second Step******************************
 		myBi = myObjects[i].Intersect(R1, &myTi, &myDgi);
 		if (myBi and myT > myTi)
 		{
@@ -4361,6 +4361,7 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN)
 			myT = myTi;
 			myDg = myDgi;
 		}
+		// ***********************************************************************
 	}
 
 	if (myB)
@@ -4375,8 +4376,32 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN)
 		return false;
 	}
 	
+	// // ========================================================
+	// // transform needed for the first sphere
+	// Transform TSph1, invTSph1, TRX;
+	// // rotation of 90 degree in x direction
+	// TRX = TSph1.RotateX(90);
+	// TSph1 = TRX;
+	// invTSph1 = TSph1.Inverse(TSph1);
+
+    // create the first sphere and bound box
+	// Sphere Sph1(&TSph1, &invTSph1, 60.f, -60.f, 60.f, 29.9f);
+	// BBox myBBox1 =  Sph1.WorldBoundSphere();
 	// ========================================================
-	// --------------------------------------------------------
+
+	// // ========================================================
+	// // transform needed for the second sphere
+	// Transform TSph2, invTSph2, TTrans;
+	// // translation of -110 km in x direction
+	// TTrans = TSph2.Translate(make_float3(-110.f, 0.f, 0.f));
+	// TSph2 = TTrans;
+	// invTSph2 = TSph2.Inverse(TSph2);
+
+    // create the second sphere and bound box
+	// Sphere Sph2(&TSph2, &invTSph2, 50.f, -50.f, 50.f, 360.f);
+
+	// BBox myBBox2 = Sph2.WorldBoundSphere();
+	// ========================================================
 	
 	// float myt1, myt2;                  // for each sphere
 	// DifferentialGeometry myDg1, myDg2; // for each sphere
