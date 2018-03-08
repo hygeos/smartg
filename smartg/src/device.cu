@@ -4313,15 +4313,28 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN)
 	// comment just above to take into account the geometry
 	// =========================================
 
+	// ******************interval d'étude******************
+	BBox interval(make_float3(-160, -60, 0), make_float3(60, 60, 110));
+	if (!interval.IntersectP(R1))
+	{
+		*(phit) = make_float3(-1, -1, -1);
+		*(myN) = make_float3(0, 0, 0);
+		return false;
+	}
+	// *****************************************************
+	
 	int const nObj = 3;
 
 	IObjets ObjT[nObj]; // Tableau d'objets
+
+	// *************commun avec tous les objets*************
 	Transform TmRX[nObj], TmRY[nObj], TmRZ[nObj], TmT[nObj], TSph[nObj], invTsph[nObj];
-	float myT = CUDART_INF_F, myTi;
+	float myT = CUDART_INF_F, myTi; // myT = time
 	bool myB = false, myBi;
 	DifferentialGeometry myDg, myDgi;
-
-	// ***********Propre aux objets de type plane***********
+    // *****************************************************
+	
+	// *******Propre aux objets de type surface plane*******
 	int vi[6] = {0, 1, 2,  // vertices index for triangle 1
 				 2, 3, 1}; // vertices index for triangle 2
 	Transform nothing; // transformation "nulle"
@@ -4378,7 +4391,7 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN)
 			if (myBBox.IntersectP(R1))
 				myBi = myObject.Intersect(R1, &myTi, &myDgi);
 		}
-		else if (ObjT[i].geo == 2) // cas d'un objet de type plane
+		else if (ObjT[i].geo == 2) // cas d'un objet de type surface plane
 		{
 			// declaration of a table of float3 which contains P0, P1, P2, P3
 			float3 Pvec[4] = {ObjT[i].p0, ObjT[i].p1, ObjT[i].p2, ObjT[i].p3};
@@ -4401,8 +4414,9 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN)
 		// ***********************************************************************
 		
 		// ******************************third Step*******************************
-		if (myBi and myT > myTi)
-		{
+		if (myBi and myT > myTi) // il y a une intercection avec la geo en i -->
+		{ // si le photon intersecte cette geo en i avant la géo à i-1 alors on la
+		  // remplace avec la précédente via une mise à jour des données
 			myB = true;
 			myT = myTi;
 			myDg = myDgi;
