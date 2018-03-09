@@ -57,7 +57,12 @@ __device__ __constant__ int NJACd;
 __device__ __constant__ int HISTd;
 __device__ __constant__ int NSENSORd;
 __device__ __constant__ int nObj;
-
+__device__ __constant__ float Pmin_x;
+__device__ __constant__ float Pmin_y;
+__device__ __constant__ float Pmin_z;
+__device__ __constant__ float Pmax_x;
+__device__ __constant__ float Pmax_y;
+__device__ __constant__ float Pmax_z;
 
 /**********************************************************
 *	> Prototypes de device.cu

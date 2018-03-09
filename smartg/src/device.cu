@@ -4315,7 +4315,9 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN, struct 
 	// =========================================
 
 	// ******************interval d'étude******************
-	BBox interval(make_float3(-160, -60, 0), make_float3(60, 60, 110));
+	BBox interval(make_float3(Pmin_x, Pmin_y, Pmin_z),
+				  make_float3(Pmax_x, Pmax_y, Pmax_z));
+	
 	if (!interval.IntersectP(R1) or nObj == 0)
 	{
 		*(phit) = make_float3(-1, -1, -1);

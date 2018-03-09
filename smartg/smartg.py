@@ -405,7 +405,7 @@ class Smartg(object):
              OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
              NBLOOP=None, progress=True,
              le=None, flux=None, stdev=False, BEER=1, RR=1, WEIGHTRR=0.1, SZA_MAX=90., SUN_DISC=0,
-             sensor=None, refraction=False, reflectance=True, myObjects=None):
+             sensor=None, refraction=False, reflectance=True, myObjects=None, interval = None):
         '''
         Run a SMART-G simulation
 
@@ -583,7 +583,22 @@ class Smartg(object):
             myObjects0 = np.zeros(1, dtype=type_IObjets, order='C')
             
         myObjects0 = to_gpu(myObjects0)
-        
+
+        if interval is not None:
+            Pmin_x = interval[0][0]
+            Pmin_y = interval[0][1]
+            Pmin_z = interval[0][2]
+            Pmax_x = interval[1][0]
+            Pmax_y = interval[1][1]
+            Pmax_z = interval[1][2]
+        else:
+            Pmin_x = -100
+            Pmin_y = -200
+            Pmin_z = 0
+            Pmax_x = 100
+            Pmax_y = 200
+            Pmax_z = 120
+
         #
         # initialization
         #              
@@ -809,12 +824,13 @@ class Smartg(object):
 
         # initialization of the constants
         InitConst(surf, env, NATM, NOCE, self.mod,
-                       NBPHOTONS, NBLOOP, THVDEG, DEPO,
-                       XBLOCK, XGRID, NLAM, SIM, NF,
-                       NBTHETA, NBPHI, OUTPUT_LAYERS,
-                       RTER, LE, ZIP, FLUX, NLVL, NPSTK,
-                       NWLPROBA, BEER, RR, WEIGHTRR, NLOW, NJAC, 
-                       NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, nObj, HIST)
+                  NBPHOTONS, NBLOOP, THVDEG, DEPO,
+                  XBLOCK, XGRID, NLAM, SIM, NF,
+                  NBTHETA, NBPHI, OUTPUT_LAYERS,
+                  RTER, LE, ZIP, FLUX, NLVL, NPSTK,
+                  NWLPROBA, BEER, RR, WEIGHTRR, NLOW, NJAC, 
+                  NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, nObj,
+                  Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, HIST)
 
         # Initialize the progress bar
         p = Progress(NBPHOTONS, progress)
@@ -1286,7 +1302,8 @@ def InitConst(surf, env, NATM, NOCE, mod,
               XBLOCK, XGRID,NLAM, SIM, NF,
               NBTHETA, NBPHI, OUTPUT_LAYERS,
               RTER, LE, ZIP, FLUX, NLVL, NPSTK, NWLPROBA, BEER, RR, 
-              WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, nObj, HIST) :
+              WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, nObj,
+              Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, HIST) :
     """
     Initialize the constants in python and send them to the device memory
 
@@ -1358,6 +1375,12 @@ def InitConst(surf, env, NATM, NOCE, mod,
     copy_to_device('SZA_MAXd', SZA_MAX, np.float32)
     copy_to_device('SUN_DISCd', SUN_DISC, np.float32)
     copy_to_device('nObj', nObj, np.int32)
+    copy_to_device('Pmin_x', Pmin_x, np.float32)
+    copy_to_device('Pmin_y', Pmin_y, np.float32)
+    copy_to_device('Pmin_z', Pmin_z, np.float32)
+    copy_to_device('Pmax_x', Pmax_x, np.float32)
+    copy_to_device('Pmax_y', Pmax_y, np.float32)
+    copy_to_device('Pmax_z', Pmax_z, np.float32)
     # myObjects = np.zeros(NOBJO, dtype=type_IObjets0, order='C')
     # myObjects ['geo'][0] = 10 ; myObjects ['geo'][1] = 20 ; myObjects ['geo'][2] = 30 ;
     # myObjects0 = to_gpu(myObjects)
