@@ -414,7 +414,7 @@ class TriangleMesh : public Shape
 public:
 	// Méthodes publiques de classe triangleMesh
 	__host__ __device__ TriangleMesh(const Transform *o2w, const Transform *w2o,
-									 int nt, int nv, int *vi, float3 *P, Triangle *rt);
+									 int nt, int nv, int *vi, float3 *P);
 
     /* uniquement device pour éviter des problèmes de mémoires */
     __device__ BBox ObjectBoundTriangleMesh() const;
@@ -436,28 +436,18 @@ private:
 // définitions des méthodes de la classe TriangleMesh
 // -------------------------------------------------------
 TriangleMesh::TriangleMesh(const Transform *o2w, const Transform *w2o,
-						   int nt, int nv, int *vi, float3 *P, Triangle *rt)
+						   int nt, int nv, int *vi, float3 *P)
 	: Shape(o2w, w2o)
 {
 	ntris = nt; nverts = nv;
 	vertexIndex = vi;
-	refTri = rt;
+	/* refTri = rt; */
 	p = P;
 
 	// Applique les transformations sur le maillage
 	char myP[]="Point";
 	for (int i = 0; i < nverts; ++i)
 		p[i] = (*ObjectToWorld)(p[i], myP);
-	
-    // créer les triangles en fonction de *vi et *P	
-	Transform nothing;
-    for (int i = 0; i < ntris; ++i)
-	{
-		float3 PA = p[vertexIndex[3*i]];
-		float3 PB = p[vertexIndex[3*i + 1]];
-		float3 PC = p[vertexIndex[3*i + 2]];
-		refTri[i] = Triangle(&nothing, &nothing, PA, PB, PC);
-	}
 }
 
 
@@ -465,18 +455,24 @@ bool TriangleMesh::Intersect(const Ray &ray, float* tHit,
 							 DifferentialGeometry *dg) const
 {
     bool dgbool = false;
+	Transform nothing;
     #if __CUDA_ARCH__ >= 200
 	*tHit = CUDART_INF_F;
     #elif !defined(__CUDA_ARCH__)
 	*tHit = std::numeric_limits<float>::max();
     #endif
+
 	for (int i = 0; i < ntris; ++i)
 	{
-		bool mybool;
 		float triHit;
 		DifferentialGeometry dgTri;
-		mybool = refTri[i].Intersect(ray, &triHit, &dgTri);
-		if (mybool)
+		/* // créer le triangle i en fonction de *vi et *P	 */
+		float3 PA = p[vertexIndex[3*i]];
+		float3 PB = p[vertexIndex[3*i + 1]];
+		float3 PC = p[vertexIndex[3*i + 2]];
+		Triangle rt(&nothing, &nothing, PA, PB, PC);
+		
+		if (rt.Intersect(ray, &triHit, &dgTri))
 		{
 			dgbool = true;
 			if (*tHit > triHit)
@@ -486,11 +482,7 @@ bool TriangleMesh::Intersect(const Ray &ray, float* tHit,
 			}
 		}
 	}
-
-	if (!dgbool)
-		return false;
-	
-	return true;
+	return dgbool;
 }
 
 __device__ BBox TriangleMesh::ObjectBoundTriangleMesh() const

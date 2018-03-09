@@ -4410,15 +4410,15 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN, struct 
 							  make_float3(ObjT[i].p2x, ObjT[i].p2y, ObjT[i].p2z),
 							  make_float3(ObjT[i].p3x, ObjT[i].p3y, ObjT[i].p3z)};
 
-			// declaration of a table of triangle classes, here 2 triangles
-			Triangle rt[2];
+			// // declaration of a table of triangle classes, here 2 triangles
+			// Triangle rt[2];
 			
-			// initialisation of the triangles classes with no transformation
-			rt[0] = Triangle(&nothing, &nothing);
-			rt[1] = Triangle(&nothing, &nothing);
+			// // initialisation of the triangles classes with no transformation
+			// rt[0] = Triangle(&nothing, &nothing);
+			// rt[1] = Triangle(&nothing, &nothing);
 	
 			// Create the triangleMesh (2 = number of triangle ; 4 = number of vertices)
-			TriangleMesh myObject(&Ti, &invTi, 2, 4, vi, Pvec, rt);
+			TriangleMesh myObject(&Ti, &invTi, 2, 4, vi, Pvec);
 			
 			BBox myBBox = myObject.WorldBoundTriangleMesh();
 
