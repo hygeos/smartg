@@ -130,7 +130,7 @@ type_IObjets0 = [
     ('p1x', 'float32'),     # \               | 
     ('p1y', 'float32'),     #  | point p1     | 
     ('p1z', 'float32'),     # /               |
-                            #                 | Plane Objetc  
+                            #                 | Plane Object  
     ('p2x', 'float32'),     # \               | 
     ('p2y', 'float32'),     #  | point p2     |
     ('p2z', 'float32'),     # /               | 
@@ -140,7 +140,7 @@ type_IObjets0 = [
     ('p3z', 'float32'),     # /            /
 
     ('myRad', 'float32'),   # \
-    ('z0', 'float32'),      #  | Sperical objetc
+    ('z0', 'float32'),      #  | Sperical Object
     ('z1', 'float32'),      #  |
     ('phi', 'float32'),     # /
     
@@ -539,8 +539,8 @@ class Smartg(object):
         # Les Objets
         #
         if myObjects is not None:
-            NOBJO = len(myObjects)
-            myObjects0 = np.zeros(NOBJO, dtype=type_IObjets0, order='C')
+            nObj = len(myObjects)
+            myObjects0 = np.zeros(nObj, dtype=type_IObjets0, order='C')
             for i in xrange (0, len(myObjects)):
                 if isinstance(myObjects[i].geo, Spheric):    # si l'objet est une sphère
                     myObjects0['geo'][i] = 1
@@ -579,7 +579,7 @@ class Smartg(object):
                 myObjects0['mvTy'][i] = myObjects[i].transformation.transy
                 myObjects0['mvTz'][i] = myObjects[i].transformation.transz
         else:
-            NOBJO = 0
+            nObj = 0
             myObjects0 = np.zeros(1, dtype=type_IObjets0, order='C')
             
         myObjects0 = to_gpu(myObjects0)
@@ -814,7 +814,7 @@ class Smartg(object):
                        NBTHETA, NBPHI, OUTPUT_LAYERS,
                        RTER, LE, ZIP, FLUX, NLVL, NPSTK,
                        NWLPROBA, BEER, RR, WEIGHTRR, NLOW, NJAC, 
-                       NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, NOBJO, HIST)
+                       NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, nObj, HIST)
 
         # Initialize the progress bar
         p = Progress(NBPHOTONS, progress)
@@ -1286,7 +1286,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
               XBLOCK, XGRID,NLAM, SIM, NF,
               NBTHETA, NBPHI, OUTPUT_LAYERS,
               RTER, LE, ZIP, FLUX, NLVL, NPSTK, NWLPROBA, BEER, RR, 
-              WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, NOBJO, HIST) :
+              WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, nObj, HIST) :
     """
     Initialize the constants in python and send them to the device memory
 
@@ -1357,7 +1357,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
     copy_to_device('HORIZd', HORIZ, np.int32)
     copy_to_device('SZA_MAXd', SZA_MAX, np.float32)
     copy_to_device('SUN_DISCd', SUN_DISC, np.float32)
-    copy_to_device('NOBJO', NOBJO, np.int32)
+    copy_to_device('nObj', nObj, np.int32)
     # myObjects = np.zeros(NOBJO, dtype=type_IObjets0, order='C')
     # myObjects ['geo'][0] = 10 ; myObjects ['geo'][1] = 20 ; myObjects ['geo'][2] = 30 ;
     # myObjects0 = to_gpu(myObjects)

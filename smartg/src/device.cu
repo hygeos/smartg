@@ -4316,7 +4316,7 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN, struct 
 
 	// ******************interval d'étude******************
 	BBox interval(make_float3(-160, -60, 0), make_float3(60, 60, 110));
-	if (!interval.IntersectP(R1) or NOBJO == 0)
+	if (!interval.IntersectP(R1) or nObj == 0)
 	{
 		*(phit) = make_float3(-1, -1, -1);
 		*(myN) = make_float3(0, 0, 0);
@@ -4324,7 +4324,7 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN, struct 
 	}
 	// *****************************************************
 	
-	int const nObj = 3;
+	// int const nObj0 = 3;
 
 	// printf("one is %d\n", myObjets[0].geo);
 	// printf("two is %d\n", myObjets[1].geo);
@@ -4333,7 +4333,7 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN, struct 
 	// IObjets ObjT[nObj]; // Tableau d'objets
 	
 	// *************commun avec tous les objets*************
-	Transform TmRX[nObj], TmRY[nObj], TmRZ[nObj], TmT[nObj], TSph[nObj], invTsph[nObj];
+	// Transform TmRX[nObj0], TmRY[nObj0], TmRZ[nObj0], TmT[nObj0], TSph[nObj0], invTsph[nObj0];
 	float myT = CUDART_INF_F, myTi; // myT = time
 	bool myB = false, myBi;
 	DifferentialGeometry myDg, myDgi;
@@ -4364,32 +4364,37 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN, struct 
 	// ObjT[2].mvT.x = 0; ObjT[2].mvT.y = 0; ObjT[2].mvT.z = 110;
 
 
-	for (int i = 0; i < NOBJO; ++i)
+	for (int i = 0; i < nObj; ++i)
 	{
 		// *****************************First Step********************************
+		Transform Ti, invTi; // déclare la tranfo de l'objet i et son inverse
 		if (ObjT[i].mvRx != 0) { // si diff de 0 alors il y a une rot en x
-			TmRX[i] = TSph[i].RotateX(ObjT[i].mvRx);
-			TSph[i] = TmRX[i]; } 
+			Transform TmRX;
+			TmRX = Ti.RotateX(ObjT[i].mvRx);
+			Ti = TmRX; } 
 		if (ObjT[i].mvRy != 0) { // si diff de 0 alors il y a une rot en y
-			TmRY[i] = TSph[i].RotateY(ObjT[i].mvRy);
-			TSph[i] = TSph[i]*TmRY[i];}
+			Transform TmRY;
+			TmRY = Ti.RotateY(ObjT[i].mvRy);
+			Ti = Ti*TmRY;}
 		if (ObjT[i].mvRz != 0) { // si diff de 0 alors il y a une rot en z
-			TmRZ[i] = TSph[i].RotateZ(ObjT[i].mvRz);
-			TSph[i] = TSph[i]*TmRZ[i]; }
+			Transform TmRZ;
+			TmRZ = Ti.RotateZ(ObjT[i].mvRz);
+			Ti = Ti*TmRZ; }
 
 		// si une valeur en x, y ou z diff de 0 alors il y a une translation
 		if (ObjT[i].mvTx != 0 or ObjT[i].mvTy != 0 or ObjT[i].mvTz != 0) {
-			TmT[i] = TSph[i].Translate(make_float3(ObjT[i].mvTx, ObjT[i].mvTy,
+			Transform TmT;
+			TmT = Ti.Translate(make_float3(ObjT[i].mvTx, ObjT[i].mvTy,
 												   ObjT[i].mvTz));
-			TSph[i] = TSph[i]*TmT[i]; }
+			Ti = Ti*TmT; }
 
-		invTsph[i] = TSph[i].Inverse(TSph[i]); // inverse de la tranformation
+		invTi = Ti.Inverse(Ti); // inverse de la tranformation
 		// ***********************************************************************
 		
 		// ******************************Second Step******************************	
 		if (ObjT[i].geo == 1) // cas d'un objet de type sphere
 		{
-			Sphere myObject(&TSph[i], &invTsph[i], ObjT[i].myRad, ObjT[i].z0,
+			Sphere myObject(&Ti, &invTi, ObjT[i].myRad, ObjT[i].z0,
 							ObjT[i].z1, ObjT[i].phi);
 		
 			BBox myBBox = myObject.WorldBoundSphere();
@@ -4413,7 +4418,7 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN, struct 
 			rt[1] = Triangle(&nothing, &nothing);
 	
 			// Create the triangleMesh (2 = number of triangle ; 4 = number of vertices)
-			TriangleMesh myObject(&TSph[i], &invTsph[i], 2, 4, vi, Pvec, rt);
+			TriangleMesh myObject(&Ti, &invTi, 2, 4, vi, Pvec, rt);
 			
 			BBox myBBox = myObject.WorldBoundTriangleMesh();
 

@@ -56,7 +56,7 @@ __device__ __constant__ int NLOWd;
 __device__ __constant__ int NJACd;
 __device__ __constant__ int HISTd;
 __device__ __constant__ int NSENSORd;
-__device__ __constant__ int NOBJO;
+__device__ __constant__ int nObj;
 
 
 /**********************************************************
