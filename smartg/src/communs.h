@@ -251,4 +251,35 @@ struct IObjets {
 	float3 mvR, mvT;
 };
 
+struct IObjets0 {
+    int geo; // 1 = sphere, 2 = plane, ...
+	float p0x;
+	float p0y;
+	float p0z;
+	
+	float p1x;
+	float p1y;
+	float p1z;
+	
+	float p2x;
+	float p2y;
+	float p2z;
+	
+	float p3x;
+	float p3y;
+	float p3z;
+	
+	float myRad;
+	float z0;
+	float z1;
+	float phi;
+	
+	float mvRx;
+	float mvRy;
+	float mvRz;
+	
+	float mvTx;
+	float mvTy;
+	float mvTz;
+};
 #endif	// COMMUNS_H

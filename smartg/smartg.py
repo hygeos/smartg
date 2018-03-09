@@ -27,6 +27,14 @@ import pycuda.driver as cuda
 from smartg.bandset import BandSet
 from pycuda.compiler import SourceModule
 from pycuda.driver import module_from_buffer
+# bellow necessary for object incorporation
+import smartg.geometry
+from smartg.geometry import Vector, Point, Normal, Ray, BBox
+import smartg.transform
+from smartg.transform import Transform, Aff
+import smartg.visualizegeo
+from smartg.visualizegeo import Mirror, Plane, Spheric, Transformation, \
+    Entity, Analyse_create_entity
 
 
 # set up directories
@@ -110,6 +118,39 @@ type_Sensor = [
     ('LOC',    'int32'),      # // localization (ATMOS=1, ...), see constant definitions in communs.h
     ('FOV',    'float32'),    # // sensor FOV (degree) 
     ('TYPE',   'int32'),      # // sensor type: Radiance (0), Planar flux (1), Spherical Flux (2), default 0
+    ]
+
+type_IObjets0 = [
+    ('geo', 'int32'),       # 1 = sphere, 2 = plane, ...
+    
+    ('p0x', 'float32'),     # \            \
+    ('p0y', 'float32'),     #  | point p0   \
+    ('p0z', 'float32'),     # /              \ 
+                            #                 |
+    ('p1x', 'float32'),     # \               | 
+    ('p1y', 'float32'),     #  | point p1     | 
+    ('p1z', 'float32'),     # /               |
+                            #                 | Plane Objetc  
+    ('p2x', 'float32'),     # \               | 
+    ('p2y', 'float32'),     #  | point p2     |
+    ('p2z', 'float32'),     # /               | 
+                            #                 |
+    ('p3x', 'float32'),     # \              /
+    ('p3y', 'float32'),     #  | point p3   /
+    ('p3z', 'float32'),     # /            /
+
+    ('myRad', 'float32'),   # \
+    ('z0', 'float32'),      #  | Sperical objetc
+    ('z1', 'float32'),      #  |
+    ('phi', 'float32'),     # /
+    
+    ('mvRx', 'float32'),    # \
+    ('mvRy', 'float32'),    #  | Transformation type rotation
+    ('mvRz', 'float32'),    # /
+
+    ('mvTx', 'float32'),    # \
+    ('mvTy', 'float32'),    #  | tranformation type translation 
+    ('mvTz', 'float32'),    # /
     ]
 
 class FlatSurface(object):
@@ -364,7 +405,7 @@ class Smartg(object):
              OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
              NBLOOP=None, progress=True,
              le=None, flux=None, stdev=False, BEER=1, RR=1, WEIGHTRR=0.1, SZA_MAX=90., SUN_DISC=0,
-             sensor=None, refraction=False, reflectance=True):
+             sensor=None, refraction=False, reflectance=True, myObjects=None):
         '''
         Run a SMART-G simulation
 
@@ -493,11 +534,59 @@ class Smartg(object):
             M = Smartg().run(wl=400., NBPHOTONS=1e7, atm=Profile('afglt'))
             M['I_up (TOA)'][:,:] contains the top of atmosphere radiance/reflectance
         '''
+        
+        #
+        # Les Objets
+        #
+        if myObjects is not None:
+            NOBJO = len(myObjects)
+            myObjects0 = np.zeros(NOBJO, dtype=type_IObjets0, order='C')
+            for i in xrange (0, len(myObjects)):
+                if isinstance(myObjects[i].geo, Spheric):    # si l'objet est une sphère
+                    myObjects0['geo'][i] = 1
+                    
+                    myObjects0['myRad'][i] = myObjects[i].geo.radius
+                    myObjects0['z0'][i] = myObjects[i].geo.z0
+                    myObjects0['z1'][i] = myObjects[i].geo.z1
+                    myObjects0['phi'][i] = myObjects[i].geo.phi
+                    
+                elif isinstance(myObjects[i].geo, Plane):    # si l'objet = surface plane
+                    myObjects0['geo'][i] = 2
+                    
+                    myObjects0['p0x'][i] = myObjects[i].geo.p1.x
+                    myObjects0['p0y'][i] = myObjects[i].geo.p1.y
+                    myObjects0['p0z'][i] = myObjects[i].geo.p1.z
+                    
+                    myObjects0['p1x'][i] = myObjects[i].geo.p2.x
+                    myObjects0['p1y'][i] = myObjects[i].geo.p2.y
+                    myObjects0['p1z'][i] = myObjects[i].geo.p2.z
+                    
+                    myObjects0['p2x'][i] = myObjects[i].geo.p3.x
+                    myObjects0['p2y'][i] = myObjects[i].geo.p3.y
+                    myObjects0['p2z'][i] = myObjects[i].geo.p3.z
+                    
+                    myObjects0['p3x'][i] = myObjects[i].geo.p4.x
+                    myObjects0['p3y'][i] = myObjects[i].geo.p4.y
+                    myObjects0['p3z'][i] = myObjects[i].geo.p4.z
+                else:                                         # si pas d'objets
+                    myObjects0['geo'][i] = 0
+                    
+                myObjects0['mvRx'][i] = myObjects[i].transformation.rotx
+                myObjects0['mvRy'][i] = myObjects[i].transformation.roty
+                myObjects0['mvRz'][i] = myObjects[i].transformation.rotz
 
+                myObjects0['mvTx'][i] = myObjects[i].transformation.transx
+                myObjects0['mvTy'][i] = myObjects[i].transformation.transy
+                myObjects0['mvTz'][i] = myObjects[i].transformation.transz
+        else:
+            NOBJO = 0
+            myObjects0 = np.zeros(1, dtype=type_IObjets0, order='C')
+            
+        myObjects0 = to_gpu(myObjects0)
+        
         #
         # initialization
-        #
-
+        #              
         if NBPHI%2 == 1:
             warn('Odd number of azimuth')
 
@@ -566,12 +655,12 @@ class Smartg(object):
 
         #
         # atmosphere
-        #
+        #          
         if isinstance(atm, Atmosphere):
             prof_atm = atm.calc(wl)
         else:
             prof_atm = atm
-
+  
         if prof_atm is not None:
             faer = calculF(prof_atm, NF, DEPO, kind='atm')
             prof_atm_gpu = init_profile(wl, prof_atm, 'atm')
@@ -725,8 +814,7 @@ class Smartg(object):
                        NBTHETA, NBPHI, OUTPUT_LAYERS,
                        RTER, LE, ZIP, FLUX, NLVL, NPSTK,
                        NWLPROBA, BEER, RR, WEIGHTRR, NLOW, NJAC, 
-                       NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, HIST)
-
+                       NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, NOBJO, HIST)
 
         # Initialize the progress bar
         p = Progress(NBPHOTONS, progress)
@@ -740,7 +828,8 @@ class Smartg(object):
                                 NLVL, NATM, NOCE, MAX_HIST, NLOW, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                                 NLAM, NSENSOR, self.double, self.kernel, self.kernel2, p, X0, le, tab_sensor, spectrum,
                                 prof_atm_gpu, prof_oc_gpu,
-                                wl_proba_icdf, stdev, self.rng, hist=hist)
+                                wl_proba_icdf, stdev, self.rng, myObjects0, hist=hist)
+
         attrs['kernel time (s)'] = secs_cuda_clock
         attrs['number of kernel iterations'] = Nkernel
         attrs['seed'] = SEED
@@ -1193,12 +1282,11 @@ def calculF(profile, N, DEPO, kind):
 
 
 def InitConst(surf, env, NATM, NOCE, mod,
-                   NBPHOTONS, NBLOOP, THVDEG, DEPO,
-                   XBLOCK, XGRID,NLAM, SIM, NF,
-                   NBTHETA, NBPHI, OUTPUT_LAYERS,
-                   RTER, LE, ZIP, FLUX, NLVL, NPSTK, NWLPROBA, BEER, RR, 
-                   WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, HIST) :
-
+              NBPHOTONS, NBLOOP, THVDEG, DEPO,
+              XBLOCK, XGRID,NLAM, SIM, NF,
+              NBTHETA, NBPHI, OUTPUT_LAYERS,
+              RTER, LE, ZIP, FLUX, NLVL, NPSTK, NWLPROBA, BEER, RR, 
+              WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, NOBJO, HIST) :
     """
     Initialize the constants in python and send them to the device memory
 
@@ -1269,7 +1357,11 @@ def InitConst(surf, env, NATM, NOCE, mod,
     copy_to_device('HORIZd', HORIZ, np.int32)
     copy_to_device('SZA_MAXd', SZA_MAX, np.float32)
     copy_to_device('SUN_DISCd', SUN_DISC, np.float32)
-
+    copy_to_device('NOBJO', NOBJO, np.int32)
+    # myObjects = np.zeros(NOBJO, dtype=type_IObjets0, order='C')
+    # myObjects ['geo'][0] = 10 ; myObjects ['geo'][1] = 20 ; myObjects ['geo'][2] = 30 ;
+    # myObjects0 = to_gpu(myObjects)
+    # copy_to_device('myObjects', nObj, np.int32)
 
 def init_profile(wl, prof, kind):
     '''
@@ -1421,7 +1513,7 @@ def get_git_attrs():
 def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
                 NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                 NLAM, NSENSOR, double, kern, kern2, p, X0, le, tab_sensor, spectrum,
-                prof_atm, prof_oc, wl_proba_icdf, stdev, rng, hist=False):
+                prof_atm, prof_oc, wl_proba_icdf, stdev, rng, myObjects0, hist=False):
     """
     launch the kernel several time until the targeted number of photons injected is reached
 
@@ -1514,10 +1606,10 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
 
         # kernel launch
         kern(spectrum, X0, faer, foce,
-                errorcount, nThreadsActive, tabPhotons, tabDist, tabHist,
-                Counter, NPhotonsIn, NPhotonsOut, tabthv, tabphi, tab_sensor,
-                prof_atm, prof_oc, wl_proba_icdf, rng.state,
-                block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
+             errorcount, nThreadsActive, tabPhotons, tabDist, tabHist,
+             Counter, NPhotonsIn, NPhotonsOut, tabthv, tabphi, tab_sensor,
+             prof_atm, prof_oc, wl_proba_icdf, rng.state, myObjects0,
+             block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
         end_cuda_clock.record()
         end_cuda_clock.synchronize()
         secs_cuda_clock = secs_cuda_clock + start_cuda_clock.time_till(end_cuda_clock)
