@@ -120,7 +120,7 @@ type_Sensor = [
     ('TYPE',   'int32'),      # // sensor type: Radiance (0), Planar flux (1), Spherical Flux (2), default 0
     ]
 
-type_IObjets0 = [
+type_IObjets = [
     ('geo', 'int32'),       # 1 = sphere, 2 = plane, ...
     
     ('p0x', 'float32'),     # \            \
@@ -540,7 +540,7 @@ class Smartg(object):
         #
         if myObjects is not None:
             nObj = len(myObjects)
-            myObjects0 = np.zeros(nObj, dtype=type_IObjets0, order='C')
+            myObjects0 = np.zeros(nObj, dtype=type_IObjets, order='C')
             for i in xrange (0, len(myObjects)):
                 if isinstance(myObjects[i].geo, Spheric):    # si l'objet est une sphère
                     myObjects0['geo'][i] = 1
@@ -580,7 +580,7 @@ class Smartg(object):
                 myObjects0['mvTz'][i] = myObjects[i].transformation.transz
         else:
             nObj = 0
-            myObjects0 = np.zeros(1, dtype=type_IObjets0, order='C')
+            myObjects0 = np.zeros(1, dtype=type_IObjets, order='C')
             
         myObjects0 = to_gpu(myObjects0)
         

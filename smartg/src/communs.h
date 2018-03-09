@@ -245,41 +245,35 @@ struct Sensor {
 
 // En rapport avec l'implementation des objets
 struct IObjets {
-    int geo; // 1 = sphere, 2 = plane, ...
-	float3 p0, p1, p2, p3;
-	float myRad, z0, z1, phi;
-	float3 mvR, mvT;
-};
+    int geo;        /* 1 = sphere, 2 = plane, ...          */
+	
+	float p0x;      /* \             \                     */
+	float p0y;      /*  | point p0    \                    */
+	float p0z;      /* /               \                   */
+	                /*                  |                  */
+	float p1x;      /*  \               |                  */
+	float p1y;      /*   | point p1     |                  */
+	float p1z;      /*  /               |                  */
+	                /*                  | Plane Object     */
+	float p2x;      /*  \               |                  */
+	float p2y;      /*   | point p2     |                  */
+	float p2z;      /*  /               |                  */
+	                /*                  |                  */
+	float p3x;      /*  \              /                   */
+	float p3y;      /*   | point p3   /                    */
+	float p3z;      /*  /            /                     */
+	
+	float myRad;    /*  \                                  */
+	float z0;       /*   | Spherical Object                */
+	float z1;       /*   |                                 */
+	float phi;      /*  /                                  */
 
-struct IObjets0 {
-    int geo; // 1 = sphere, 2 = plane, ...
-	float p0x;
-	float p0y;
-	float p0z;
-	
-	float p1x;
-	float p1y;
-	float p1z;
-	
-	float p2x;
-	float p2y;
-	float p2z;
-	
-	float p3x;
-	float p3y;
-	float p3z;
-	
-	float myRad;
-	float z0;
-	float z1;
-	float phi;
-	
-	float mvRx;
-	float mvRy;
-	float mvRz;
-	
-	float mvTx;
-	float mvTy;
-	float mvTz;
+	float mvRx;     /*  \                                  */
+	float mvRy;     /*   | Transformation type rotation    */
+	float mvRz;     /*  /                                  */
+
+	float mvTx;     /*  \                                  */
+	float mvTy;     /*   | Transformation type translation */
+	float mvTz;     /*  /                                  */
 };
 #endif	// COMMUNS_H

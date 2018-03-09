@@ -83,7 +83,7 @@ extern "C" {
 							 struct Profile *prof_oc,
 							 long long *wl_proba_icdf,
 							 void *rng_state,
-							 struct IObjets0 *myObjets
+							 struct IObjets *myObjets
 							 ) {
 
     // current thread index
@@ -1397,7 +1397,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
 
 
 __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc,
-                        struct RNG_State *rngstate, float3 *geoNpp, bool *geoIntpp, struct IObjets0 *myObjets) {
+                        struct RNG_State *rngstate, float3 *geoNpp, bool *geoIntpp, struct IObjets *myObjets) {
 
 	float delta_i=0.f, delta=0.f, epsilon;
 	float tauR, prev_tau, tauBis; //phz, rdist
@@ -4296,10 +4296,10 @@ __device__ double DatomicAdd(double* address, double val)
 ***********************************************************/
 
 
-__device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN, struct IObjets0 *ObjT)
+__device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN, struct IObjets *ObjT)
 { 
 	Ray R1(o, dir, 0);
-// myObjets
+
 	// =========================================
 	// comment just bellow to take into account the geometry
 	// ***************************************************** //
@@ -4324,16 +4324,7 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN, struct 
 	}
 	// *****************************************************
 	
-	// int const nObj0 = 3;
-
-	// printf("one is %d\n", myObjets[0].geo);
-	// printf("two is %d\n", myObjets[1].geo);
-	// printf("three is %d\n", myObjets[2].geo);
-	
-	// IObjets ObjT[nObj]; // Tableau d'objets
-	
 	// *************commun avec tous les objets*************
-	// Transform TmRX[nObj0], TmRY[nObj0], TmRZ[nObj0], TmT[nObj0], TSph[nObj0], invTsph[nObj0];
 	float myT = CUDART_INF_F, myTi; // myT = time
 	bool myB = false, myBi;
 	DifferentialGeometry myDg, myDgi;
@@ -4345,28 +4336,10 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN, struct 
 	Transform nothing; // transformation "nulle"
 	// *****************************************************
 
-	// ObjT[0].geo = 1;
-	// ObjT[0].myRad = 60; ObjT[0].z0 = -60; ObjT[0].z1 = 60; ObjT[0].phi = 29.9;
-	// ObjT[0].mvR.x = 90; ObjT[0].mvR.y = 0; ObjT[0].mvR.z = 0;
-	// ObjT[0].mvT.x = 0; ObjT[0].mvT.y = 0; ObjT[0].mvT.z = 0;
-	
-	// ObjT[1].geo = 1;
-	// ObjT[1].myRad = 50; ObjT[1].z0 = -50; ObjT[1].z1 = 50; ObjT[1].phi = 360;	
-	// ObjT[1].mvR.x = 0; ObjT[1].mvR.y = 0; ObjT[1].mvR.z = 0;
-	// ObjT[1].mvT.x = -110; ObjT[1].mvT.y = 0; ObjT[1].mvT.z = 0;
-
-	// ObjT[2].geo = 2;
-	// ObjT[2].p0 = make_float3(-60., -60., 0.);
-	// ObjT[2].p1 = make_float3(60., -60., 0.);
-	// ObjT[2].p2 = make_float3(-60., 60., 0.);
-	// ObjT[2].p3 = make_float3(60., 60., 0.);
-	// ObjT[2].mvR.x = 0; ObjT[2].mvR.y = 0; ObjT[2].mvR.z = 0;
-	// ObjT[2].mvT.x = 0; ObjT[2].mvT.y = 0; ObjT[2].mvT.z = 110;
-
-
 	for (int i = 0; i < nObj; ++i)
 	{
 		// *****************************First Step********************************
+		// prise en compte de tte les tranformations existantes de l'objet(i)
 		Transform Ti, invTi; // déclare la tranfo de l'objet i et son inverse
 		if (ObjT[i].mvRx != 0) { // si diff de 0 alors il y a une rot en x
 			Transform TmRX;
@@ -4391,7 +4364,8 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN, struct 
 		invTi = Ti.Inverse(Ti); // inverse de la tranformation
 		// ***********************************************************************
 		
-		// ******************************Second Step******************************	
+		// ******************************Second Step******************************
+		// on voit s'il y a une intersection avec l'objet(i)
 		if (ObjT[i].geo == 1) // cas d'un objet de type sphere
 		{
 			Sphere myObject(&Ti, &invTi, ObjT[i].myRad, ObjT[i].z0,
@@ -4409,13 +4383,6 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN, struct 
 							  make_float3(ObjT[i].p1x, ObjT[i].p1y, ObjT[i].p1z),
 							  make_float3(ObjT[i].p2x, ObjT[i].p2y, ObjT[i].p2z),
 							  make_float3(ObjT[i].p3x, ObjT[i].p3y, ObjT[i].p3z)};
-
-			// // declaration of a table of triangle classes, here 2 triangles
-			// Triangle rt[2];
-			
-			// // initialisation of the triangles classes with no transformation
-			// rt[0] = Triangle(&nothing, &nothing);
-			// rt[1] = Triangle(&nothing, &nothing);
 	
 			// Create the triangleMesh (2 = number of triangle ; 4 = number of vertices)
 			TriangleMesh myObject(&Ti, &invTi, 2, 4, vi, Pvec);
@@ -4425,71 +4392,13 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN, struct 
 			if (myBBox.IntersectP(R1))
 				myBi = myObject.Intersect(R1, &myTi, &myDgi);
 		}
-
-
-
-
-	
-	// for (int i = 0; i < nObj; ++i)
-	// for (int i = 0; i < NOBJO; ++i)
-	// {
-	// 	// *****************************First Step********************************
-	// 	if (ObjT[i].mvR.x != 0) { // si diff de 0 alors il y a une rot en x
-	// 		TmRX[i] = TSph[i].RotateX(ObjT[i].mvR.x);
-	// 		TSph[i] = TmRX[i]; } 
-	// 	if (ObjT[i].mvR.y != 0) { // si diff de 0 alors il y a une rot en y
-	// 		TmRY[i] = TSph[i].RotateY(ObjT[i].mvR.y);
-	// 		TSph[i] = TSph[i]*TmRY[i];}
-	// 	if (ObjT[i].mvR.z != 0) { // si diff de 0 alors il y a une rot en z
-	// 		TmRZ[i] = TSph[i].RotateZ(ObjT[i].mvR.z);
-	// 		TSph[i] = TSph[i]*TmRZ[i]; }
-
-	// 	// si une valeur en x, y ou z diff de 0 alors il y a une translation
-	// 	if (ObjT[i].mvT.x != 0 or ObjT[i].mvT.y != 0 or ObjT[i].mvT.z != 0) {
-	// 		TmT[i] = TSph[i].Translate(make_float3(ObjT[i].mvT.x, ObjT[i].mvT.y,
-	// 											   ObjT[i].mvT.z));
-	// 		TSph[i] = TSph[i]*TmT[i]; }
-
-	// 	invTsph[i] = TSph[i].Inverse(TSph[i]); // inverse de la tranformation
-	// 	// ***********************************************************************
-		
-	// 	// ******************************Second Step******************************	
-	// 	if (ObjT[i].geo == 1) // cas d'un objet de type sphere
-	// 	{
-	// 		Sphere myObject(&TSph[i], &invTsph[i], ObjT[i].myRad, ObjT[i].z0,
-	// 						ObjT[i].z1, ObjT[i].phi);
-		
-	// 		BBox myBBox = myObject.WorldBoundSphere();
-
-	// 		if (myBBox.IntersectP(R1))
-	// 			myBi = myObject.Intersect(R1, &myTi, &myDgi);
-	// 	}
-	// 	else if (ObjT[i].geo == 2) // cas d'un objet de type surface plane
-	// 	{
-	// 		// declaration of a table of float3 which contains P0, P1, P2, P3
-	// 		float3 Pvec[4] = {ObjT[i].p0, ObjT[i].p1, ObjT[i].p2, ObjT[i].p3};
-
-	// 		// declaration of a table of triangle classes, here 2 triangles
-	// 		Triangle rt[2];
-			
-	// 		// initialisation of the triangles classes with no transformation
-	// 		rt[0] = Triangle(&nothing, &nothing);
-	// 		rt[1] = Triangle(&nothing, &nothing);
-	
-	// 		// Create the triangleMesh (2 = number of triangle ; 4 = number of vertices)
-	// 		TriangleMesh myObject(&TSph[i], &invTsph[i], 2, 4, vi, Pvec, rt);
-			
-	// 		BBox myBBox = myObject.WorldBoundTriangleMesh();
-
-	// 		if (myBBox.IntersectP(R1))
-	// 			myBi = myObject.Intersect(R1, &myTi, &myDgi);
-	// 	}
 		// ***********************************************************************
 		
 		// ******************************third Step*******************************
-		if (myBi and myT > myTi) // il y a une intercection avec la geo en i -->
-		{ // si le photon intersecte cette geo en i avant la géo à i-1 alors on la
-		  // remplace avec la précédente via une mise à jour des données
+		// s'il y a intersection avec plusieurs objets, assure qu'on garde l'objet
+		// le plus proche du point de départ du photon
+		if (myBi and myT > myTi) // si intercect objet(i) + time(i-1) > time(i)
+		{ // si objet(i) plus proche que objet(i-1) alors remplacement des données
 			myB = true;
 			myT = myTi;
 			myDg = myDgi;

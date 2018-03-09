@@ -84,7 +84,7 @@ __global__ void launchKernel(
         struct Profile *prof_oc,
         long long *wl_proba_icdf,
         void *rng_state,
-		struct IObjets0 *myObjets
+		struct IObjets *myObjets
         );
 }
 
@@ -108,7 +108,7 @@ __device__ void move_pp2(Photon*, struct Profile *prof_atm, struct Profile* prof
 
 // move, version plan parallèle
 __device__ void move_pp(Photon*, struct Profile *prof_atm, struct Profile* prof_oc,
-                        struct RNG_State*, float3 *geoNpp, bool *geoIntpp, struct IObjets0 *myObjets);
+                        struct RNG_State*, float3 *geoNpp, bool *geoIntpp, struct IObjets *myObjets);
 
 
 /* scatter */
@@ -225,5 +225,5 @@ __device__ unsigned int randomPhilox4x32_7uint(philox4x32_ctr_t*, philox4x32_key
 ***********************************************************/
 
 
-__device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN, struct IObjets0 *myObjets);
+__device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN, struct IObjets *myObjets);
 #endif // DEVICE_H
