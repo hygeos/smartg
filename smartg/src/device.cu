@@ -591,13 +591,47 @@ extern "C" {
          }
         __syncthreads();
 
+		//
+		// Reflection
+        //
+        // -> in OBJSURF
+        if(ph.loc == OBJSURF){
+			if (LEd == 1 && SIMd != 3) {
+				int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
+				int iph0 = idx%NBPHId;
+				for (int ith=0; ith<NBTHETAd; ith++){
+					for (int iph=0; iph<NBPHId; iph++){
+						copyPhoton(&ph, &ph_le);
+						ph_le.iph = (iph + iph0)%NBPHId;
+						ph_le.ith = (ith + ith0)%NBTHETAd;
+						surfaceLambertienne3D(&ph, 0, tabthv, tabphi, spectrum,
+											  &rngstate, &geoNormal);
+						// Only two levels for counting by definition
+						countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, NPhotonsOut);
+                        #ifdef SPHERIQUE
+						// for spherical case attenuation if performed usin move_sp
+						if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
+                        #endif
+						countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, NPhotonsOut);
+					}//direction
+				}//direction
+			} //LE
+		   
+			surfaceLambertienne3D(&ph, 0, tabthv, tabphi, spectrum,
+								  &rngstate, &geoNormal);
+			//surfaceLambertienne(&ph, 0, tabthv, tabphi, spectrum, &rngstate);
+            #ifdef DEBUG_PHOTON
+			display("OBJSURF", &ph);
+            #endif
+		}
+        __syncthreads();
 
         //
         // count after surface:
         // count the photons leaving the surface towards the ocean or atmosphere
         //
         count_level = -1;
-        if ((loc_prev == SURF0M) || (loc_prev == SURF0P)) {
+        if ((loc_prev == SURF0M) || (loc_prev == SURF0P) || (loc_prev == OBJSURF)) {
             if ((ph.loc == ATMOS) || (ph.loc == SPACE)) count_level = UP0P;
             if (ph.loc == OCEAN) count_level = DOWN0M;
         }
@@ -869,7 +903,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
         #endif
     }
 
-    if(ph->loc == ATMOS){
+    if((ph->loc == ATMOS) || (ph->loc == OBJSURF)){
         ilayer = 1;
         float POSZd_alt; 
         #ifdef SPHERIQUE
@@ -1653,7 +1687,8 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 					ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
 					ph->tau_abs = ab;
 				}
-				ph->loc = SURF0P;                       // update of the loc of the photon 
+				//ph->loc = ABSORBED;
+				ph->loc = OBJSURF;                       // update of the loc of the photon 
 				ph->tau = prev_tau + tauHit * ph->v.z;  // update the value of tau photon
 				ph->pos = phit;                         // update the position of the photon
 				*geoNpp = myNormal;                     // take the normal of the geo
@@ -2656,6 +2691,12 @@ __device__ void surfaceAgitee(Photon* ph, int le,
             else if (SINGLEd) ph->loc = REMOVED;
         }
 
+		if (ph->loc == OBJSURF)
+		{
+			if (vzn > 0) {ph->loc = ATMOS;}
+			else {ph->loc = OCEAN;}
+		}
+
 
      } // Reflection
 
@@ -2756,7 +2797,6 @@ __device__ void surfaceAgitee(Photon* ph, int le,
               if (SINGLEd) ph->loc = REMOVED;
            }
         }
-
 	} // Transmission
 
     LambdaR  =  LambdaM(fabs(ph->v.z),sig2*0.5);
@@ -3103,11 +3143,11 @@ __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* 
 // 									  struct Spectrum *spectrum, philox4x32_ctr_t* etatThr,
 // 									  philox4x32_key_t* configThr)
 {
-	if( SIMd == -2)
-	{ 	// Atmosphère ou océan seuls, la surface absorbe tous les photons
-		ph->loc = ABSORBED;
-		return;
-	}
+	// if( SIMd == -2)
+	// { 	// Atmosphère ou océan seuls, la surface absorbe tous les photons
+	// 	ph->loc = ABSORBED;
+	// 	return;
+	// }
 	ph->nint += 1;
 	float3 u_n, v_n;	// Vecteur du photon après reflexion
     float phi;
@@ -3161,7 +3201,7 @@ __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* 
     ph->stokes.w = 0.0;
 
 
-    if (DIOPTREd!=4 && ((ph->loc == SURF0M) || (ph->loc == SURF0P)))
+    if (DIOPTREd!=4 && ((ph->loc == SURF0M) || (ph->loc == SURF0P) || (ph->loc == OBJSURF)))
 	{
 		// Si le dioptre est seul, le photon est mis dans l'espace
 		bool test_s = ( SIMd == -1);
@@ -3170,7 +3210,8 @@ __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* 
 
     if (ph->loc != SEAFLOOR)
 	{
-		ph->weight *= spectrum[ph->ilam].alb_surface;
+		//ph->weight *= spectrum[ph->ilam].alb_surface;
+		ph->weight *= 0.5;
 	
 		// // Unit vectors which form a second base and where e3 is the geo normal
 		float3 e1, e2, e3;
@@ -3499,7 +3540,7 @@ __device__ void countPhoton(Photon* ph,
             prof = prof_atm;
         }
         if ((count_level==DOWN0P) || (count_level==DOWN0M) || (count_level==UP0P) || (count_level==UP0M) ) {
-            if ((ph->loc == ATMOS) || (ph->loc == SURF0M) || (ph->loc == SURF0P) ) {
+            if ((ph->loc == ATMOS) || (ph->loc == SURF0M) || (ph->loc == SURF0P) || (ph->loc == OBJSURF)) {
                 layer_le = NATMd;
                 layer_end= NATMd;
                 prof = prof_atm;
@@ -4017,7 +4058,8 @@ __device__ void display(const char* desc, Photon* ph) {
             case 5: printf(" loc=    NONE"); break;
             case 6: printf(" loc=   OCEAN"); break;
             case 7: printf(" loc=SEAFLOOR"); break;
-            case 8: printf(" loc= REMOVED"); break;
+            case 8: printf(" loc= OBJSURF"); break;
+		    case 9: printf(" loc= REMOVED"); break;
             default:
                     printf(" loc=UNDEFINED");
         }

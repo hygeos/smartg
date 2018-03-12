@@ -59,7 +59,8 @@ ABSORBED =  4
 NONE     =  5
 OCEAN    =  6
 SEAFLOOR =  7
-LOC_CODE = ['','ATMOS','SURF0P','SURF0M','','','OCEAN','SEAFLOOR']
+OBJSURF  =  8
+LOC_CODE = ['','ATMOS','SURF0P','SURF0M','','','OCEAN','SEAFLOOR', 'OBJSURF']
 
 # constants definition
 # (should match #defines in src/communs.h)
