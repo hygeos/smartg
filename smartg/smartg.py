@@ -518,7 +518,11 @@ class Smartg(object):
 
             - reflectance : if flux is None, output is in reflectance units if True,(for plane parallel atmosphere). Otherwise
                 is is in radiance units with Solar irradiance set to PI (default False)
-                
+            
+            - myObjects : liste d'objets (objets de classe entity)
+        
+            - interval : liste composée de deux listes [[pxmin, pymin, pzmin], [[pxmin, pymin, pzmin]]
+                         interval définit l'interval d'études des objets délimitée par deux points (pmin et pmax).
 
         Return value:
         ------------
