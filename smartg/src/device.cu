@@ -1400,7 +1400,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
                         struct RNG_State *rngstate, float3 *geoNpp, bool *geoIntpp, struct IObjets *myObjets) {
 
 	float delta_i=0.f, delta=0.f, epsilon;
-	float tauR, prev_tau, tauBis; //phz, rdist
+	float tauR, prev_tau, tauBis, phz; //rdist
     int ilayer;
 	
     #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
@@ -1554,7 +1554,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 
 
     if (ph->loc == ATMOS) {
-        float phz,rdist;
+        float rdist;
 
 		// ========================================================================================================
 		// Here geometry modification in the function move_pp
@@ -1641,7 +1641,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 			{
 				// to see
 				ph->layer = ilayer2;
-				ph->prop_aer = 1.f - prof_atm[ph->layer+ph->ilam*(NATMd+1)].pmol;
+				//ph->prop_aer = 1.f - prof_atm[ph->layer+ph->ilam*(NATMd+1)].pmol;
 				if (BEERd == 0) ph->weight *= prof_atm[ph->layer+ph->ilam*(NATMd+1)].ssa;
 				else
 				{ // We compute the cumulated absorption OT at the new postion of the photon
