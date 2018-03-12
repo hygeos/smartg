@@ -265,8 +265,8 @@ extern "C" {
                                     count_level_le, &rngstate);
 
                             #ifdef DEBUG_PHOTON
-                            if (k==0) display("SCATTER LE UP", &ph_le);
-                            else display("SCATTER LE DOWN", &ph_le);
+                            //if (k==0) display("SCATTER LE UP", &ph_le);
+                            //else display("SCATTER LE DOWN", &ph_le);
                             #endif
 
                             #ifdef SPHERIQUE
@@ -384,8 +384,8 @@ extern "C" {
                                       count_level_le, &rngstate);
 
                         #ifdef DEBUG_PHOTON
-                        if (k==0) display("SURFACE LE UP", &ph_le);
-                        else display("SURFACE LE DOWN", &ph_le);
+                        //if (k==0) display("SURFACE LE UP", &ph_le);
+                        //else display("SURFACE LE DOWN", &ph_le);
                         #endif
 
                         // Count the photon up to the counting levels (at the surface UP0P or DOW0M)
@@ -502,8 +502,8 @@ extern "C" {
                                       count_level_le, &rngstate);
 
                         #ifdef DEBUG_PHOTON
-                        if (k==0) display("SURFACE LE UP", &ph_le);
-                        else display("SURFACE LE DOWN", &ph_le);
+                        //if (k==0) display("SURFACE LE UP", &ph_le);
+                        //else display("SURFACE LE DOWN", &ph_le);
                         #endif
 
                         // Count the photon up to the counting levels (at the surface UP0P or DOW0M)
@@ -512,8 +512,8 @@ extern "C" {
                         // Only for upward photons count also them up to TOA
 
                         #ifdef DEBUG_PHOTON
-                        if (k==0) display("SURFACE LE UP", &ph_le);
-                        else display("SURFACE LE DOWN", &ph_le);
+                        //if (k==0) display("SURFACE LE UP", &ph_le);
+                        //else display("SURFACE LE DOWN", &ph_le);
                         #endif
 
                         // Count the photon up to the counting levels (at the surface UP0P or DOW0M)
@@ -2257,9 +2257,6 @@ __device__ void surfaceAgitee(Photon* ph, int le,
     // Lambda shadowing Source direction
     LambdaS  =  Lambda(avz,sig);
 
-    // Bias sampling
-    if (!le) ph->weight *= __fdividef(fabs(cTh), cBeta * (1.F + LambdaS) * avz );
-
     //
     // Local Estimate part
     //
@@ -2280,7 +2277,11 @@ __device__ void surfaceAgitee(Photon* ph, int le,
             if (sTh <= nind) {
                 qv  =  __fdividef(p * fabs(cTh), cBeta * fabs(v.z));
                 // Multiplication by the refraction Jacobian
+                #ifndef BACK
                 jac = __fdividef(nind*nind * cot, (ncot - cTh)*(ncot - cTh)); // See Zhai et al., 2010
+                #else
+                jac = __fdividef(cTh, nind*nind * (cTh/nind - cot)*(cTh/nind - cot));
+                #endif
             }
             else qv = 0.F;
      }
@@ -2475,17 +2476,45 @@ __device__ void surfaceAgitee(Photon* ph, int le,
 	} // Transmission
 
     LambdaR  =  Lambda(fabs(ph->v.z),sig);
-    if (WAVE_SHADOWd && !le) 
-        ph->weight *= __fdividef(1.F + LambdaS, 1.F + LambdaR + LambdaS);
-
-    #ifdef BACK
-    if (!le){
-        if (!WAVE_SHADOWd) ph->weight *= __fdividef(avz * (1.F + LambdaS), fabs(ph->v.z) * (1.F + LambdaR));
-        // else   ph->weight *= __fdividef(avz, fabs(ph->v.z));
-    }
-    #endif
 
     if (!le) {
+        if (WAVE_SHADOWd) ph->weight *= __fdividef(fabs(cTh), cBeta * (1.F + LambdaS + LambdaR) * avz );
+        else              ph->weight *= __fdividef(fabs(cTh), cBeta * (1.F + LambdaS) * avz );
+        //int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
+        // Ross et al 2005, Ross and Dion, 2007, Zeisse 1995
+        // Slope sampling bias correction using the normalized interaction PDF q
+        // weight has to be multiplied by q/p, where p is the slope PDF
+        // Coefficient Lambda for normalization of q taking into acount slope shadowing and hiding
+        // Including wave shadows is performed at the end after the outgoing direction is calculated
+
+        // Bias sampling correction
+
+        /*#ifndef BACK //
+        if (WAVE_SHADOWd) ph->weight *= __fdividef(fabs(cTh), cBeta * (1.F + LambdaS + LambdaR) * avz );
+        else              ph->weight *= __fdividef(fabs(cTh), cBeta * (1.F + LambdaS) * avz );
+        #else 
+        // special case of transmission in backward mode: incident<-> transmitted angles AND incoming<-> outgoing zenith angles
+        if (!condR)  { 
+            if (WAVE_SHADOWd) ph->weight *= __fdividef(fabs(cTh_b), cBeta * (1.F + LambdaS + LambdaR) * fabs(ph->v.z) );
+            else              ph->weight *= __fdividef(fabs(cTh_b), cBeta * (1.F + LambdaR) * fabs(ph->v.z) );
+        }
+        // special case of reflection in backward mode: incident = transmitted angles AND incoming<-> outgoing zenith angles
+	    if (condR || (SURd==1) || ReflTot) {
+            //if(idx==0)printf("ts:%f tv:%f shadow:%f\n",avz,fabs(ph->v.z),__fdividef(1.F, 1.F + LambdaR + LambdaS));
+            if (WAVE_SHADOWd) ph->weight *= __fdividef(fabs(cTh), cBeta * (1.F + LambdaS + LambdaR) * fabs(ph->v.z) );
+            else              ph->weight *= __fdividef(fabs(cTh), cBeta * (1.F + LambdaR) * fabs(ph->v.z) );
+            if (WAVE_SHADOWd) ph->weight *= __fdividef(fabs(cTh), cBeta * (1.F + LambdaS + LambdaR) * avz );
+            else              ph->weight *= __fdividef(fabs(cTh), cBeta * (1.F + LambdaR) * avz );
+        }
+        #endif
+        #ifndef BACK //
+        if (WAVE_SHADOWd) ph->weight *= __fdividef(fabs(cTh), cBeta * (1.F + LambdaS + LambdaR) * avz );
+        else              ph->weight *= __fdividef(fabs(cTh), cBeta * (1.F + LambdaS) * avz );
+        #else 
+        if (WAVE_SHADOWd) ph->weight *= __fdividef(fabs(cTh_b), cBeta * (1.F + LambdaS + LambdaR) * fabs(ph->v.z) );
+        else              ph->weight *= __fdividef(fabs(cTh_b), cBeta * (1.F + LambdaR) * fabs(ph->v.z) );
+        #endif*/ 
+
 		if (RRd==1){
 			/* Russian roulette for propagating photons **/
 			if( ph->weight < WEIGHTRRd ){
@@ -2673,8 +2702,6 @@ __device__ void surfaceBRDF(Photon* ph, int le,
         LambdaS  =  Lambda(avz,sig);
         LambdaR  =  Lambda(fabs(v.z),sig);
         ph->weight *= __fdividef(1.F, 1.F + LambdaR + LambdaS);
-        /*int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
-        if(idx==0)printf("ts:%f tv:%f shadow:%f\n",avz,fabs(v.z),__fdividef(1.F, 1.F + LambdaR + LambdaS));*/
     }
 
     if (!le) {
