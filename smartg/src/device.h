@@ -113,7 +113,7 @@ __device__ void move_pp2(Photon*, struct Profile *prof_atm, struct Profile* prof
 
 // move, version plan parallèle
 __device__ void move_pp(Photon*, struct Profile *prof_atm, struct Profile* prof_oc,
-                        struct RNG_State*, float3 *geoNpp, bool *geoIntpp, struct IObjets *myObjets);
+                        struct RNG_State*, IGeo *geoS, struct IObjets *myObjets);
 
 
 /* scatter */
@@ -145,7 +145,7 @@ __device__ void surfaceLambert(Photon*, int le,
                                     struct RNG_State*);
 
 __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* tabphi,
-									  struct Spectrum *spectrum, struct RNG_State*, float3* normal);
+									  struct Spectrum *spectrum, struct RNG_State*, IGeo* geoS);
 
 __device__ void countPhoton(Photon* , struct Profile* prof_atm, struct Profile* prof_oc, float*, float *,
         int, unsigned long long*, void*, void*, void*, unsigned long long*);
@@ -230,5 +230,5 @@ __device__ unsigned int randomPhilox4x32_7uint(philox4x32_ctr_t*, philox4x32_key
 ***********************************************************/
 
 
-__device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN, struct IObjets *myObjets);
+__device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV , struct IObjets *myObjets);
 #endif // DEVICE_H

@@ -130,8 +130,8 @@ extern "C" {
 
 	Photon ph, ph_le; 		// On associe une structure de photon au thread
 
-	bool geoIntersect = false;  // S'il y a intersection avec une géométrie = true
-	float3 geoNormal;           // Normal de la géométrie
+	//bool geoIntersect = false;  // S'il y a intersection avec une géométrie = true
+	IGeo geoStruc;
 
 	bigCount = 1;   // Initialisation de la variable globale bigCount (voir geometry.h)
 
@@ -183,7 +183,7 @@ extern "C" {
         #ifdef ALT_PP
         move_pp2(&ph, prof_atm, prof_oc, 0, 0 , &rngstate);
         #else
-        move_pp(&ph, prof_atm, prof_oc, &rngstate, &geoNormal, &geoIntersect, myObjets);
+        move_pp(&ph, prof_atm, prof_oc, &rngstate, &geoStruc, myObjets);
         #endif
 
         #ifdef DEBUG_PHOTON
@@ -436,14 +436,8 @@ extern "C" {
                     }//direction
                   }//direction
                 } //LE
-				// s'il y a intersection avec une géométrie, utiliser la fonction 3D
-				if (geoIntersect)
-				{
-					surfaceLambertienne3D(&ph, 0, tabthv, tabphi, spectrum,
-														&rngstate, &geoNormal);
-				}
 				//Propagation of Lambertian reflection with le=0
-				else{surfaceLambert(&ph, 0, tabthv, tabphi, spectrum, &rngstate);}
+				surfaceLambert(&ph, 0, tabthv, tabphi, spectrum, &rngstate);
             } // Lambertian (DIOPTRE=!3)
            } // ENV=0
 
@@ -604,8 +598,10 @@ extern "C" {
 						copyPhoton(&ph, &ph_le);
 						ph_le.iph = (iph + iph0)%NBPHId;
 						ph_le.ith = (ith + ith0)%NBTHETAd;
-						surfaceLambertienne3D(&ph, 0, tabthv, tabphi, spectrum,
-											  &rngstate, &geoNormal);
+						if (geoStruc.material == 1)
+						{surfaceLambertienne3D(&ph, 0, tabthv, tabphi, spectrum,
+											   &rngstate, &geoStruc);}
+						else {ph.loc = ABSORBED;}
 						// Only two levels for counting by definition
 						countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, NPhotonsOut);
                         #ifdef SPHERIQUE
@@ -616,9 +612,10 @@ extern "C" {
 					}//direction
 				}//direction
 			} //LE
-		   
-			surfaceLambertienne3D(&ph, 0, tabthv, tabphi, spectrum,
-								  &rngstate, &geoNormal);
+			if (geoStruc.material == 1)
+			{surfaceLambertienne3D(&ph, 0, tabthv, tabphi, spectrum,
+								   &rngstate, &geoStruc);}
+			else {ph.loc = ABSORBED;}
 			//surfaceLambertienne(&ph, 0, tabthv, tabphi, spectrum, &rngstate);
             #ifdef DEBUG_PHOTON
 			display("OBJSURF", &ph);
@@ -1431,7 +1428,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
 
 
 __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc,
-                        struct RNG_State *rngstate, float3 *geoNpp, bool *geoIntpp, struct IObjets *myObjets) {
+                        struct RNG_State *rngstate, IGeo *geoS, struct IObjets *myObjets) {
 
 	float delta_i=0.f, delta=0.f, epsilon;
 	float tauR, prev_tau, tauBis, phz; //rdist
@@ -1596,19 +1593,21 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 		float timeT;                                 // the time from the parametric form of a ray
 		bool mytest;                                 // initiate the boolean of the intersection test
 		float3 phit=make_float3(0.f, 0.f, 0.f);      // initiate the intersection point 
-		float3 myNormal=make_float3(0.f, 0.f, 0.f);  // initiate the normal at phit
+
 
 		// Launch the function geoTest to see if there are an intersection with the 
 		// geometry, return true/false and give the position phit of the intersection
-		mytest = geoTest(ph->pos, ph->v, &phit, &myNormal, myObjets);
-
+		
+		//mytest = geoTest(ph->pos, ph->v, &phit, &myNormal, &myMaterial, &myReflectivity, myObjets);
+		mytest = geoTest(ph->pos, ph->v, &phit, geoS, myObjets);
+		
 		// this condition enable to correct an important bug in case of reflection
 		// Without this condition, the photon where the initial position is assimilated to phit
 		// will be reflected...
 		if ((fabs(phit.x-ph->pos.x) < 1e-5) && (fabs(phit.y-ph->pos.y) < 1e-5) && (fabs(phit.z-ph->pos.z) < 1e-5))
 			mytest = false;
 
-		*geoIntpp = false;
+		//*geoIntpp = false;
 		// mytest =false;
 
 		// if mytest = true (intersection with the geometry) and the position of the intersection is in
@@ -1687,12 +1686,9 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 					ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
 					ph->tau_abs = ab;
 				}
-				//ph->loc = ABSORBED;
 				ph->loc = OBJSURF;                       // update of the loc of the photon 
 				ph->tau = prev_tau + tauHit * ph->v.z;  // update the value of tau photon
 				ph->pos = phit;                         // update the position of the photon
-				*geoNpp = myNormal;                     // take the normal of the geo
-				*geoIntpp = true;                       // enable to use surfaceLambertienne3D
 				return;
 			}
 		}
@@ -3138,7 +3134,7 @@ __device__ void surfaceLambert(Photon* ph, int le,
 } //surfaceLambert
 
 __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* tabphi,
-									  struct Spectrum *spectrum, struct RNG_State *rngstate, float3* normal)
+									  struct Spectrum *spectrum, struct RNG_State *rngstate, IGeo* geoS)
 // __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* tabphi,
 // 									  struct Spectrum *spectrum, philox4x32_ctr_t* etatThr,
 // 									  philox4x32_key_t* configThr)
@@ -3210,12 +3206,12 @@ __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* 
 
     if (ph->loc != SEAFLOOR)
 	{
-		//ph->weight *= spectrum[ph->ilam].alb_surface;
-		ph->weight *= 0.5;
+		ph->weight *= spectrum[ph->ilam].alb_surface;
+		//ph->weight *= 0.5;
 	
 		// // Unit vectors which form a second base and where e3 is the geo normal
 		float3 e1, e2, e3;
-		e3 = normalize(*normal);         // be sure that e3 is normalized
+		e3 = normalize(geoS->normal);         // be sure that e3 is normalized
 		coordinateSystem(e3, &e1, &e2);  // create e1, e2 orthogonal unit vectors 
 		// e1 = normalize(e1);
 		// e2 = normalize(e2);
@@ -4338,7 +4334,7 @@ __device__ double DatomicAdd(double* address, double val)
 ***********************************************************/
 
 
-__device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN, struct IObjets *ObjT)
+__device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct IObjets *ObjT)
 { 
 	Ray R1(o, dir, 0);
 
@@ -4363,7 +4359,7 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN, struct 
 	if (!interval.IntersectP(R1) or nObj == 0)
 	{
 		*(phit) = make_float3(-1, -1, -1);
-		*(myN) = make_float3(0, 0, 0);
+	    GeoV->normal = make_float3(0, 0, 0);
 		return false;
 	}
 	// *****************************************************
@@ -4446,6 +4442,8 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN, struct 
 			myB = true;
 			myT = myTi;
 			myDg = myDgi;
+		    GeoV->material = ObjT[i].material;
+			GeoV->reflectivity = ObjT[i].reflect;
 		}
 		// ***********************************************************************
 	} // FIN BOUCLE FOR (PARCOURANT LES OBJETS)
@@ -4453,7 +4451,7 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, float3* myN, struct 
 	if (myB) // Il y a intersection avec au moins un objet
 	{
 		*(phit) = R1(myT);	
-		*(myN) = faceForward(myDg.nn, -1.*R1.d);
+		GeoV->normal = faceForward(myDg.nn, -1.*R1.d);
 		return true;
 	}
 	else // Il y a pas d'intersection avec un objet

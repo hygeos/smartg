@@ -245,8 +245,34 @@ struct Sensor {
 };
 
 // En rapport avec l'implementation des objets
+
+
+struct IGeo
+{	
+    __device__ IGeo()
+	{
+		normal = make_float3(0., 0., 0.);
+		material = -1;
+		reflectivity = -1.;
+	}
+
+	__device__ IGeo(float3 nn, int mat, float ref)
+	{
+		normal = nn;
+		material = mat;
+		reflectivity = ref;
+	}
+	
+	float3 normal;
+	int material;
+	float reflectivity;
+};
+
 struct IObjets {
     int geo;        /* 1 = sphere, 2 = plane, ...          */
+	int material;   /* 1 = LambMirror, 2 = Matte,
+					   3 = Mirror, ...                     */
+	float reflect;  /* reflectivity of the material        */
 	
 	float p0x;      /* \             \                     */
 	float p0y;      /*  | point p0    \                    */

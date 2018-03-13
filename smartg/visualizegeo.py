@@ -34,6 +34,28 @@ class Mirror(object):
         return 'Material -> Mirror : ' \
             'reflectivity=' + str(self.reflectivity) + ', rugosity=' + str(self.rugosity)
 
+class LambMirror(object):
+    '''
+    definition...
+    '''
+    def __init__(self, reflectivity = 0.5):
+        self.reflectivity = reflectivity
+
+    def __str__(self):
+        return 'Material -> Lambertian Mirror : ' \
+            'reflectivity=' + str(self.reflectivity)
+
+class Matte(object):
+    '''
+    definition...
+    '''
+    def __init__(self, reflectivity = 0.5):
+        self.reflectivity = reflectivity
+
+    def __str__(self):
+        return 'Material -> Matte : ' \
+            'reflectivity=' + str(self.reflectivity)
+
 class Plane(object):
     '''
     Plane constructed with 4 points : p1, p2, p3, p4

@@ -34,7 +34,7 @@ import smartg.transform
 from smartg.transform import Transform, Aff
 import smartg.visualizegeo
 from smartg.visualizegeo import Mirror, Plane, Spheric, Transformation, \
-    Entity, Analyse_create_entity
+    Entity, Analyse_create_entity, LambMirror, Matte
 
 
 # set up directories
@@ -123,6 +123,9 @@ type_Sensor = [
 
 type_IObjets = [
     ('geo', 'int32'),       # 1 = sphere, 2 = plane, ...
+    ('material', 'int32'),  # 1 = LambMirror, 2 = Matte,
+                            # 3 = Mirror, ...
+    ('reflec', 'float32'),  # reflectivity of the material
     
     ('p0x', 'float32'),     # \            \
     ('p0y', 'float32'),     #  | point p0   \
@@ -583,6 +586,10 @@ class Smartg(object):
                 myObjects0['mvTx'][i] = myObjects[i].transformation.transx
                 myObjects0['mvTy'][i] = myObjects[i].transformation.transy
                 myObjects0['mvTz'][i] = myObjects[i].transformation.transz
+                
+                if isinstance(myObjects[i].material, LambMirror):
+                    myObjects0['material'][i] = 1
+                    myObjects0['reflec'][i] = myObjects[i].material.reflectivity
         else:
             nObj = 0
             myObjects0 = np.zeros(1, dtype=type_IObjets, order='C')
