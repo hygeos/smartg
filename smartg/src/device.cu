@@ -598,10 +598,11 @@ extern "C" {
 						copyPhoton(&ph, &ph_le);
 						ph_le.iph = (iph + iph0)%NBPHId;
 						ph_le.ith = (ith + ith0)%NBTHETAd;
-						if (geoStruc.material == 1)
+						if (geoStruc.material == 1) // Lambertian Mirror
 						{surfaceLambertienne3D(&ph, 0, tabthv, tabphi, spectrum,
 											   &rngstate, &geoStruc);}
-						else {ph.loc = ABSORBED;}
+						else if (geoStruc.material == 1){ph.loc = ABSORBED;} // Matte
+						else {ph.loc = ABSORBED;} // unknow material
 						// Only two levels for counting by definition
 						countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, NPhotonsOut);
                         #ifdef SPHERIQUE
@@ -615,7 +616,8 @@ extern "C" {
 			if (geoStruc.material == 1)
 			{surfaceLambertienne3D(&ph, 0, tabthv, tabphi, spectrum,
 								   &rngstate, &geoStruc);}
-			else {ph.loc = ABSORBED;}
+			else if (geoStruc.material == 1){ph.loc = ABSORBED;} // Matte
+			else {ph.loc = ABSORBED;} // unknow material
 			//surfaceLambertienne(&ph, 0, tabthv, tabphi, spectrum, &rngstate);
             #ifdef DEBUG_PHOTON
 			display("OBJSURF", &ph);
@@ -1597,8 +1599,6 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 
 		// Launch the function geoTest to see if there are an intersection with the 
 		// geometry, return true/false and give the position phit of the intersection
-		
-		//mytest = geoTest(ph->pos, ph->v, &phit, &myNormal, &myMaterial, &myReflectivity, myObjets);
 		mytest = geoTest(ph->pos, ph->v, &phit, geoS, myObjets);
 		
 		// this condition enable to correct an important bug in case of reflection
@@ -1606,9 +1606,6 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 		// will be reflected...
 		if ((fabs(phit.x-ph->pos.x) < 1e-5) && (fabs(phit.y-ph->pos.y) < 1e-5) && (fabs(phit.z-ph->pos.z) < 1e-5))
 			mytest = false;
-
-		//*geoIntpp = false;
-		// mytest =false;
 
 		// if mytest = true (intersection with the geometry) and the position of the intersection is in
 		// the atmosphere (0 < Z < 120), then: Begin to analyse is there is really an intersection
