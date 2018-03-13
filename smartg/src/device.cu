@@ -224,7 +224,7 @@ extern "C" {
             errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
 
 		__syncthreads();
-
+		
 		//
 		// Scatter
 		//
@@ -589,8 +589,10 @@ extern "C" {
 		// Reflection
         //
         // -> in OBJSURF
-        if(ph.loc == OBJSURF){
-			if (LEd == 1 && SIMd != 3) {
+        if(ph.loc == OBJSURF)
+		{
+			if (LEd == 1)
+			{				
 				int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
 				int iph0 = idx%NBPHId;
 				for (int ith=0; ith<NBTHETAd; ith++){
@@ -599,16 +601,16 @@ extern "C" {
 						ph_le.iph = (iph + iph0)%NBPHId;
 						ph_le.ith = (ith + ith0)%NBTHETAd;
 						if (geoStruc.material == 1) // Lambertian Mirror
-						{surfaceLambertienne3D(&ph, 0, tabthv, tabphi, spectrum,
+						{surfaceLambertienne3D(&ph_le, 1, tabthv, tabphi, spectrum,
 											   &rngstate, &geoStruc);}
-						else if (geoStruc.material == 1){ph.loc = ABSORBED;} // Matte
-						else {ph.loc = ABSORBED;} // unknow material
+						else if (geoStruc.material == 2){ph.loc = ABSORBED;} // Matte
+						else {ph.loc = ABSORBED;} // unknow material				
 						// Only two levels for counting by definition
 						countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, NPhotonsOut);
-                        #ifdef SPHERIQUE
+						#ifdef SPHERIQUE
 						// for spherical case attenuation if performed usin move_sp
 						if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
-                        #endif
+						#endif
 						countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, NPhotonsOut);
 					}//direction
 				}//direction
@@ -616,7 +618,7 @@ extern "C" {
 			if (geoStruc.material == 1)
 			{surfaceLambertienne3D(&ph, 0, tabthv, tabphi, spectrum,
 								   &rngstate, &geoStruc);}
-			else if (geoStruc.material == 1){ph.loc = ABSORBED;} // Matte
+			else if (geoStruc.material == 2){ph.loc = ABSORBED;} // Matte
 			else {ph.loc = ABSORBED;} // unknow material
 			//surfaceLambertienne(&ph, 0, tabthv, tabphi, spectrum, &rngstate);
             #ifdef DEBUG_PHOTON
@@ -1671,14 +1673,13 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 			{
 				// to see
 				ph->layer = ilayer2;
-				//ph->prop_aer = 1.f - prof_atm[ph->layer+ph->ilam*(NATMd+1)].pmol;
 				if (BEERd == 0) ph->weight *= prof_atm[ph->layer+ph->ilam*(NATMd+1)].ssa;
 				else
 				{ // We compute the cumulated absorption OT at the new postion of the photon
-					// photon new position in the layer
+					// see move photon paper eq 11
 					ab = prof_atm[NATMd+ph->ilam*(NATMd+1)].OD_abs - 
-						(epsilon * (prof_atm[ilayer+ph->ilam*(NATMd+1)].OD_abs - prof_atm[ilayer-1+ph->ilam*(NATMd+1)].OD_abs) +
-						 prof_atm[ilayer-1+ph->ilam*(NATMd+1)].OD_abs);
+						(epsilon * (prof_atm[ilayer2+ph->ilam*(NATMd+1)].OD_abs - prof_atm[ilayer2-1+ph->ilam*(NATMd+1)].OD_abs) +
+						 prof_atm[ilayer2-1+ph->ilam*(NATMd+1)].OD_abs);
 					// absorption between start and stop
 					ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
 					ph->tau_abs = ab;
@@ -3148,9 +3149,9 @@ __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* 
 
     if (le)
 	{
-        cTh  = cosf(tabthv[ph->ith]);  
+		cTh  = cosf(tabthv[ph->ith]);  
         phi  = tabphi[ph->iph];
-        ph->weight *= cTh;
+        //ph->weight *= cTh;
     }
     else
 	{
@@ -3175,7 +3176,6 @@ __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* 
 	cPhi = __cosf(phi);
 	sPhi = __sinf(phi);
 	
-
 	/** calcul u,v new **/
 	v_n.x = cPhi*sTh;
 	v_n.y = sPhi*sTh;
@@ -3185,15 +3185,27 @@ __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* 
 	u_n.y = sPhi*cTh;
 	u_n.z = -sTh;
 
-	// Depolarisation of the photon
-	float norm;
-	norm = ph->stokes.x + ph->stokes.y;
-	ph->stokes.x = 0.5 * norm;
-	ph->stokes.y = 0.5 * norm;
-    ph->stokes.z = 0.0;
-    ph->stokes.w = 0.0;
+	// // Depolarisation of the photon
+	// float norm;
+	// norm = ph->stokes.x + ph->stokes.y;
+	// ph->stokes.x = 0.5 * norm;
+	// ph->stokes.y = 0.5 * norm;
+    // ph->stokes.z = 0.0;
+    // ph->stokes.w = 0.0;
 
+	// Depolarisation du Photon
+    float4x4 L = make_float4x4(
+                    0.5F, 0.5F, 0.F, 0.F,
+                    0.5F, 0.5F, 0.F, 0.F,
+                    0.0F, 0.0F, 0.F, 0.F,
+                    0.0F, 0.0F, 0.F, 0.F 
+		);
+    ph->stokes = mul(L,ph->stokes);
 
+    #ifdef BACK
+    ph->M = mul(ph->M,L);
+    #endif
+	
     if (DIOPTREd!=4 && ((ph->loc == SURF0M) || (ph->loc == SURF0P) || (ph->loc == OBJSURF)))
 	{
 		// Si le dioptre est seul, le photon est mis dans l'espace
@@ -3203,8 +3215,8 @@ __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* 
 
     if (ph->loc != SEAFLOOR)
 	{
-		ph->weight *= spectrum[ph->ilam].alb_surface;
-		//ph->weight *= 0.5;
+		//ph->weight *= spectrum[ph->ilam].alb_surface;
+		ph->weight *= 0.5;
 	
 		// // Unit vectors which form a second base and where e3 is the geo normal
 		float3 e1, e2, e3;
