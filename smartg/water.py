@@ -62,8 +62,8 @@ class IOP(IOP_base):
 
         NOTE: first item in dimension Z is not used
     '''
-    def __init__(self, phase=None, bp=0., bw=None,
-                 atot=None, ap=0., aw=None,
+    def __init__(self, phase=None, bp=None, bw=None,
+                 atot=None, ap=None, aw=None, aCDOM=None,
                  Z=[0, 10000], ALB=Albedo_cst(0.)):
 
         self.Z = np.array(Z, dtype='float')
@@ -73,20 +73,31 @@ class IOP(IOP_base):
         self.ap = ap
         self.aw = aw
         self.phase = phase
+        self.aCDOM = aCDOM
         self.ALB = ALB
 
     def calc(self, wav):
 
         # absorption
-        atot = self.atot
-        if atot is None:
+        if self.ap is None:
+            ap=0.
+        else: ap=self.ap
+
+        if self.atot is None:
             if self.aw is None:
                 aw = read_aw(dir_aux)
                 self.aw = aw[Idx(wav)]
-            atot = self.aw + self.ap
+            else : aw=self.aw
+            atot = aw + ap
+        else: atot=self.atot
 
+        if self.aCDOM is None:
+            aCDOM = np.zeros_like(aw)
+        else : aCDOM= self.aCDOM
 
         # scattering
+        if self.bp is None:
+            bp = np.zeros_like(aw)
         bp = self.bp
 
         if (self.phase is None) and ((np.array(bp) > 0).any()):
@@ -98,6 +109,8 @@ class IOP(IOP_base):
             bw = bw[:,None]  # add a dimension Z for broadcasting
 
         btot = bw + bp
+
+        FQYC = np.zeros_like(aw)
 
         pro = MLUT()
 
@@ -116,11 +129,49 @@ class IOP(IOP_base):
         #dz = np.diff(self.Z)
         dz = diff1(self.Z)
 
-        tau_tot = - (atot + btot)*dz
-        tau_sca = - btot*dz
+        tau_w   = - (aw   + bw  ) * dz
+        tau_p   = - (ap + bp  ) * dz
+        tau_y   = - (aCDOM             ) * dz
+        tau_tot = - (atot + btot) * dz
+        tau_sca = - (btot              ) * dz
+        tau_abs = - (atot              ) * dz
+        tau_ine = - (ap * FQYC) * dz
+
+
+        with np.errstate(invalid='ignore'):
+            ssa_w   = bw/(aw   + bw)
+        ssa_w[np.isnan(ssa_w)] = 1.
+
+        with np.errstate(invalid='ignore'):
+            ssa_p   = bp/(ap + bp)
+        ssa_p[np.isnan(ssa_p)] = 1.
+
+        with np.errstate(invalid='ignore'):
+            pmol    = bw/(bw   + bp)
+        pmol[np.isnan(pmol)]   = 1.
+
+        with np.errstate(invalid='ignore'):
+            pine = tau_ine/tau_sca
+        pine[np.isnan(pine)] = 0.
+
         with np.errstate(invalid='ignore'):
             ssa = tau_sca/tau_tot
         ssa[np.isnan(ssa)] = 1.
+
+        pro.add_dataset('OD_w', np.cumsum(tau_w, out=tau_w, axis=1),
+                        ['wavelength', 'z_oc'],
+                        attrs={'description':
+                               'Cumulated water optical thickness at each wavelength'})
+
+        pro.add_dataset('OD_p_oc', np.cumsum(tau_p, out=tau_p, axis=1),
+                        ['wavelength', 'z_oc'],
+                        attrs={'description':
+                               'Cumulated oceanic particles optical thickness at each wavelength'})
+
+        pro.add_dataset('OD_y', np.cumsum(tau_y, out=tau_y, axis=1),
+                        ['wavelength', 'z_oc'],
+                        attrs={'description':
+                               'Cumulated CDOM optical thickness at each wavelength'})
 
         pro.add_dataset('OD_oc', np.cumsum(tau_tot, out=tau_tot, axis=1),
                         ['wavelength', 'z_oc'])
@@ -128,23 +179,30 @@ class IOP(IOP_base):
         pro.add_dataset('OD_sca_oc', np.cumsum(tau_sca, out=tau_sca, axis=1),
                         ['wavelength', 'z_oc'])
 
-        tau_abs = - (atot * dz)
         pro.add_dataset('OD_abs_oc', np.cumsum(tau_abs, out=tau_abs, axis=1),
                         ['wavelength', 'z_oc'])
 
-        with np.errstate(divide='ignore'):
-            pmol = bw/btot
-        pmol[np.isnan(pmol)] = 1.
+        pro.add_dataset('pine_oc', pine,
+                        ['wavelength', 'z_oc'])
+
         pro.add_dataset('pmol_oc', pmol,
                         ['wavelength', 'z_oc'])
 
         pro.add_dataset('ssa_oc', ssa,
                         ['wavelength', 'z_oc'])
 
+        pro.add_dataset('ssa_p_oc', ssa_p,
+                        ['wavelength', 'z_oc'])
+        pro.add_dataset('ssa_w', ssa_w,
+                        ['wavelength', 'z_oc'])
+        # NEW !!!
+        pro.add_dataset('FQY1_oc', FQYC,
+                        ['wavelength', 'z_oc'])
+        # NEW !!!
+
         pro.add_dataset('albedo_seafloor',
                         self.ALB.get(wav),
                         ['wavelength'])
-
         return pro
 
 
@@ -173,6 +231,10 @@ class IOP_Rw(IOP_base):
         pro.add_dataset('OD_abs_oc', np.zeros(shp, dtype='float32'),
                         ['wavelength', 'z_oc'])
         pro.add_dataset('pmol_oc', np.ones(shp, dtype='float32'),
+                        ['wavelength', 'z_oc'])
+        pro.add_dataset('pine_oc', np.ones(shp, dtype='float32'),
+                        ['wavelength', 'z_oc'])
+        pro.add_dataset('FQY1_oc', np.ones(shp, dtype='float32'),
                         ['wavelength', 'z_oc'])
         pro.add_dataset('ssa_oc', np.ones(shp, dtype='float32'),
                         ['wavelength', 'z_oc'])

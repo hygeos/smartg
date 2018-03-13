@@ -894,7 +894,9 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
     float tauRdm;
     float hph = 0.;  // cumulative optical thickness
     float vzn, delta1, h_cur, h_cur_abs, epsilon;
-    float d_tot = 0.;
+    #ifndef ALT_MOVE
+    float d_tot = 0;
+    #endif
     float d;
     float rat;
     int sign_direction;
@@ -3154,23 +3156,23 @@ __device__ void countPhoton(Photon* ph,
               float tau_abs1, tau_abs2;
               if (ph->layer_prev[n+1] == 0) tau_abs2 = 0.;
 
-              else tau_abs2 = (prof_oc[ph->layer_prev[n+1]   + il *(NOCEd+1)].OD_abs -
+              /*else tau_abs2 = (prof_oc[ph->layer_prev[n+1]   + il *(NOCEd+1)].OD_abs -
                              prof_oc[ph->layer_prev[n+1]-1 + il *(NOCEd+1)].OD_abs) *
-                             ph->epsilon_prev[n+1] + prof_oc[ph->layer_prev[n+1]-1 + il *(NOCEd+1)].OD_abs;
-              /*else tau_abs2 = (prof_atm[ph->layer_prev[n+1]   + il *(NATMd+1)].OD_abs -
+                             ph->epsilon_prev[n+1] + prof_oc[ph->layer_prev[n+1]-1 + il *(NOCEd+1)].OD_abs;*/
+              else tau_abs2 = (prof_atm[ph->layer_prev[n+1]   + il *(NATMd+1)].OD_abs -
                              prof_atm[ph->layer_prev[n+1]-1 + il *(NATMd+1)].OD_abs) *
-                             ph->epsilon_prev[n+1] + prof_atm[ph->layer_prev[n+1]-1 + il *(NATMd+1)].OD_abs;*/
+                             ph->epsilon_prev[n+1] + prof_atm[ph->layer_prev[n+1]-1 + il *(NATMd+1)].OD_abs;
 
 
               if (ph->layer_prev[n] == 0) tau_abs1 = 0.;
 
-              else tau_abs1 = (prof_oc[ph->layer_prev[n]   + il *(NOCEd+1)].OD_abs -
+              /*else tau_abs1 = (prof_oc[ph->layer_prev[n]   + il *(NOCEd+1)].OD_abs -
                              prof_oc[ph->layer_prev[n]-1 + il *(NOCEd+1)].OD_abs) *
-                             ph->epsilon_prev[n] + prof_oc[ph->layer_prev[n]-1 + il *(NOCEd+1)].OD_abs;
+                             ph->epsilon_prev[n] + prof_oc[ph->layer_prev[n]-1 + il *(NOCEd+1)].OD_abs;*/
 
-              /*else tau_abs1 = (prof_atm[ph->layer_prev[n]   + il *(NATMd+1)].OD_abs -
+              else tau_abs1 = (prof_atm[ph->layer_prev[n]   + il *(NATMd+1)].OD_abs -
                              prof_atm[ph->layer_prev[n]-1 + il *(NATMd+1)].OD_abs) *
-                             ph->epsilon_prev[n] + prof_atm[ph->layer_prev[n]-1 + il *(NATMd+1)].OD_abs;*/
+                             ph->epsilon_prev[n] + prof_atm[ph->layer_prev[n]-1 + il *(NATMd+1)].OD_abs;
 
               wabs *= exp(-fabs(__fdividef(tau_abs2 - tau_abs1 , ph->vz_prev[n+1])));
           }
