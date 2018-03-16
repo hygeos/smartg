@@ -144,7 +144,13 @@ extern "C" {
     //
 	while (*nThreadsActive > 0) {
 		iloop += 1;
-
+		
+		// if (iloop > 500)
+		// {
+		// 	this_thread_active = 0;
+        //     atomicAdd(nThreadsActive, -1);
+		// }
+			
         if (((Counter[0] > NBLOOPd)
 			 && this_thread_active
 			 && (ph.loc == NONE))
@@ -154,7 +160,7 @@ extern "C" {
             this_thread_active = 0;
             atomicAdd(nThreadsActive, -1);
         }
-
+		
         // Si le photon est à NONE on l'initialise et on le met à la localisation correspondant à la simulaiton en cours
         if((ph.loc == NONE) && this_thread_active){
 
@@ -632,11 +638,16 @@ extern "C" {
         // count the photons leaving the surface towards the ocean or atmosphere
         //
         count_level = -1;
-        if ((loc_prev == SURF0M) || (loc_prev == SURF0P) || (loc_prev == OBJSURF)) {
-            if ((ph.loc == ATMOS) || (ph.loc == SPACE)) count_level = UP0P;
+        if ((loc_prev == SURF0M) || (loc_prev == SURF0P)) {
+            if ((ph.loc == ATMOS) || (ph.loc == SPACE) || (ph.loc == OBJSURF)) count_level = UP0P;
             if (ph.loc == OCEAN) count_level = DOWN0M;
         }
-        
+        if ((loc_prev == OBJSURF))
+		{
+			if (ph.loc == SPACE) count_level = UP0P;
+			if (ph.loc == SURF0P) count_level = DOWN0P;
+		}
+		
         /* Cone Sampling */
         if (LEd == 0) countPhoton(&ph, prof_atm, prof_oc, tabthv, tabphi, count_level, errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
 
@@ -1606,8 +1617,13 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 		// this condition enable to correct an important bug in case of reflection
 		// Without this condition, the photon where the initial position is assimilated to phit
 		// will be reflected...
-		if ((fabs(phit.x-ph->pos.x) < 1e-5) && (fabs(phit.y-ph->pos.y) < 1e-5) && (fabs(phit.z-ph->pos.z) < 1e-5))
+		if ((fabs(phit.x-ph->pos.x) < 1e-5) && (fabs(phit.y-ph->pos.y) < 1e-5) &&
+			(fabs(phit.z-ph->pos.z) < 1e-5) && (ph->locPrev == OBJSURF))
+		{
 			mytest = false;
+			// ph->loc = REMOVED;
+			// return;
+		}
 
 		// if mytest = true (intersection with the geometry) and the position of the intersection is in
 		// the atmosphere (0 < Z < 120), then: Begin to analyse is there is really an intersection
@@ -1825,6 +1841,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 		rdist=  fabs(__fdividef(phz-ph->pos.z, ph->v.z));
         operator+= (ph->pos, ph->v*rdist);
         ph->pos.z = phz;
+		//ph->loc = ATMOS;
 
     } //ATMOS
 
@@ -3133,9 +3150,6 @@ __device__ void surfaceLambert(Photon* ph, int le,
 
 __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* tabphi,
 									  struct Spectrum *spectrum, struct RNG_State *rngstate, IGeo* geoS)
-// __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* tabphi,
-// 									  struct Spectrum *spectrum, philox4x32_ctr_t* etatThr,
-// 									  philox4x32_key_t* configThr)
 {
 	// if( SIMd == -2)
 	// { 	// Atmosphère ou océan seuls, la surface absorbe tous les photons
@@ -3206,10 +3220,11 @@ __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* 
     ph->M = mul(ph->M,L);
     #endif
 	
-    if (DIOPTREd!=4 && ((ph->loc == SURF0M) || (ph->loc == SURF0P) || (ph->loc == OBJSURF)))
+    if (DIOPTREd!=4 && (ph->loc == OBJSURF))
 	{
 		// Si le dioptre est seul, le photon est mis dans l'espace
 		bool test_s = ( SIMd == -1);
+		ph->locPrev = OBJSURF;
 		ph->loc = SPACE*test_s + ATMOS*(!test_s);
     }
 
@@ -3217,7 +3232,8 @@ __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* 
 	{
 		//ph->weight *= spectrum[ph->ilam].alb_surface;
 		ph->weight *= 0.5;
-	
+		//ph->weight *= geoS->reflectivity;
+			
 		// // Unit vectors which form a second base and where e3 is the geo normal
 		float3 e1, e2, e3;
 		e3 = normalize(geoS->normal);         // be sure that e3 is normalized
@@ -3244,15 +3260,27 @@ __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* 
 		u_n = oTw(u_n, myV);
 
 		// Update the value of u and v of the photon
+		if ( (isnan(v_n.x)) || (isnan(v_n.y)) || (isnan(v_n.z)) || (isnan(u_n.x)) || (isnan(u_n.y)) || (isnan(u_n.z)) )
+		{
+			ph->loc = REMOVED;
+			return;
+		}
 		ph->v = v_n;
 		ph->u = u_n;
-    } // not seafloor 
-    else
+    } // not seafloor
+	
+    if (!le)
 	{
-		ph->weight *= spectrum[ph->ilam].alb_seafloor;
-		ph->loc = OCEAN;
-    }
-}
+		if (RRd==1){
+			/* Russian roulette for propagating photons **/
+			if( ph->weight < WEIGHTRRd ){
+				// ph->loc = ABSORBED;
+				if( RAND < __fdividef(ph->weight,WEIGHTRRd) ){ph->weight = WEIGHTRRd;}
+				else{ph->loc = ABSORBED;}
+			}
+		}
+	} // not le
+} // Function lamb3D
 
 /* Surface BRDF */
 __device__ void surfaceBRDF(Photon* ph, int le,
@@ -4360,7 +4388,7 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct I
 	// ***************************************************** //	
 	// comment just above to take into account the geometry
 	// =========================================
-
+	
 	// ******************interval d'étude******************
 	BBox interval(make_float3(Pmin_x, Pmin_y, Pmin_z),
 				  make_float3(Pmax_x, Pmax_y, Pmax_z));
@@ -4371,12 +4399,21 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct I
 	    GeoV->normal = make_float3(0, 0, 0);
 		return false;
 	}
+
+
+	// int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
+
+    // if (idx==0)
+	// {
+	// 	printf("ObjT[0] = %d, ObjT[1] = %d, ObjT[2] = %d ", ObjT[0].geo, ObjT[1].geo, ObjT[2].geo);
+	// }
+
 	// *****************************************************
 	
 	// *************commun avec tous les objets*************
-	float myT = CUDART_INF_F, myTi; // myT = time
-	bool myB = false, myBi;
-	DifferentialGeometry myDg, myDgi;
+	float myT = CUDART_INF_F; // myT = time
+	bool myB = false;
+	DifferentialGeometry myDg;
     // *****************************************************
 	
 	// *******Propre aux objets de type surface plane*******
@@ -4387,6 +4424,9 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct I
 
 	for (int i = 0; i < nObj; ++i)
 	{
+		float myTi = CUDART_INF_F;
+		bool myBi = false;
+		DifferentialGeometry myDgi;
 		// *****************************First Step********************************
 		// prise en compte de tte les tranformations existantes de l'objet(i)
 		Transform Ti, invTi; // déclare la tranfo de l'objet i et son inverse
@@ -4442,11 +4482,16 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct I
 				myBi = myObject.Intersect(R1, &myTi, &myDgi);
 		}
 		// ***********************************************************************
+
+		// if (idx==0)
+		// {
+		// 	printf("myBi of ObjT[%d] = %d \n", i, myBi);
+		// }
 		
 		// ******************************third Step*******************************
 		// s'il y a intersection avec plusieurs objets, assure qu'on garde l'objet
 		// le plus proche du point de départ du photon
-		if (myBi and myT > myTi) // si intercect objet(i) + time(i-1) > time(i)
+		if (myBi & (myT > myTi)) // si intercect objet(i) + time(i-1) > time(i)
 		{ // si objet(i) plus proche que objet(i-1) alors remplacement des données
 			myB = true;
 			myT = myTi;

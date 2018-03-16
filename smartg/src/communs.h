@@ -133,7 +133,8 @@ public:
 	
     // Localization of the photon
     int loc;
-    
+    int locPrev;
+		
     // photon's weight
     float weight;
 
