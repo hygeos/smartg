@@ -591,39 +591,37 @@ extern "C" {
         // -> in OBJSURF
         if(ph.loc == OBJSURF)
 		{
-			if (LEd == 1)
-			{				
-				int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
-				int iph0 = idx%NBPHId;
-				for (int ith=0; ith<NBTHETAd; ith++){
-					for (int iph=0; iph<NBPHId; iph++){
-						copyPhoton(&ph, &ph_le);
-						ph_le.iph = (iph + iph0)%NBPHId;
-						ph_le.ith = (ith + ith0)%NBTHETAd;
-						if (geoStruc.material == 1) // Lambertian Mirror
-						{surfaceLambertienne3D(&ph_le, 1, tabthv, tabphi, spectrum,
-											   &rngstate, &geoStruc);}
-						else if (geoStruc.material == 2){ph.loc = ABSORBED;} // Matte
-						else {ph.loc = ABSORBED;} // unknow material				
-						// Only two levels for counting by definition
-						countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, NPhotonsOut);
-						#ifdef SPHERIQUE
-						// for spherical case attenuation if performed usin move_sp
-						if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
-						#endif
-						countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, NPhotonsOut);
+			if (geoStruc.material == 1) // Lambertian Mirror
+			{
+				if (LEd == 1)
+				{				
+					int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
+					int iph0 = idx%NBPHId;
+					for (int ith=0; ith<NBTHETAd; ith++){
+						for (int iph=0; iph<NBPHId; iph++){
+							copyPhoton(&ph, &ph_le);
+							ph_le.iph = (iph + iph0)%NBPHId;
+							ph_le.ith = (ith + ith0)%NBTHETAd;
+							surfaceLambertienne3D(&ph_le, 1, tabthv, tabphi, spectrum,
+												  &rngstate, &geoStruc);			
+							// Only two levels for counting by definition
+							countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, NPhotonsOut);
+                            #ifdef SPHERIQUE
+							// for spherical case attenuation if performed usin move_sp
+							if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
+						    #endif
+							countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, NPhotonsOut);
+						}//direction
 					}//direction
-				}//direction
-			} //LE
-			if (geoStruc.material == 1)
-			{surfaceLambertienne3D(&ph, 0, tabthv, tabphi, spectrum,
-								   &rngstate, &geoStruc);}
-			else if (geoStruc.material == 2){ph.loc = ABSORBED;} // Matte
+				} //LE
+				surfaceLambertienne3D(&ph, 0, tabthv, tabphi, spectrum,
+									  &rngstate, &geoStruc);
+                #ifdef DEBUG_PHOTON
+				display("OBJSURF", &ph);
+                #endif
+			} // END Lambertian Mirror
+			else if (geoStruc.material == 2) {ph.loc = ABSORBED;} // Matte
 			else {ph.loc = ABSORBED;} // unknow material
-			//surfaceLambertienne(&ph, 0, tabthv, tabphi, spectrum, &rngstate);
-            #ifdef DEBUG_PHOTON
-			display("OBJSURF", &ph);
-            #endif
 		}
         __syncthreads();
 
@@ -3114,32 +3112,36 @@ __device__ void surfaceLambert(Photon* ph, int le,
     ph->M = mul(ph->M, RL);
     #endif
 
-    /***************************************************/
-    /* Update of photon location and weight */
-    /***************************************************/
-    if (ph->loc == SURF0P){
-	  bool test_s = ( SIMd == SURF_ONLY);
-	  ph->loc = SPACE *test_s + ATMOS*(!test_s);
-      ph->layer = NATMd; 
-	  ph->weight *= spectrum[ph->ilam].alb_surface;  /*[Eq. 16,39]*/
-    }
-    else {
-      ph->loc = OCEAN;
-      ph->layer = NOCEd; 
-	  ph->weight *= spectrum[ph->ilam].alb_seafloor; /*[Eq. 16,39]*/
-    }
+	if (nObj == 0)
+	{
+		/***************************************************/
+		/* Update of photon location and weight */
+		/***************************************************/
+		if (ph->loc == SURF0P){
+			bool test_s = ( SIMd == SURF_ONLY);
+			ph->loc = SPACE*test_s + ATMOS*(!test_s);
+			ph->layer = NATMd;
+			ph->weight *= spectrum[ph->ilam].alb_surface;  /*[Eq. 16,39]*/
+		}
+		else
+		{
+			ph->loc = OCEAN;
+			ph->layer = NOCEd; 
+			ph->weight *= spectrum[ph->ilam].alb_seafloor; /*[Eq. 16,39]*/
+		}
+	}
+	else
+	{
+		ph->loc = ATMOS;
+	}
 
 } //surfaceLambert
 
 __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* tabphi,
 									  struct Spectrum *spectrum, struct RNG_State *rngstate, IGeo* geoS)
 {
-	// if( SIMd == -2)
-	// { 	// Atmosphère ou océan seuls, la surface absorbe tous les photons
-	// 	ph->loc = ABSORBED;
-	// 	return;
-	// }
 	ph->nint += 1;
+	
 	float3 u_n, v_n;	// Vecteur du photon après reflexion
     float phi;
     float cTh, sTh, cPhi, sPhi;
@@ -3203,53 +3205,46 @@ __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* 
     ph->M = mul(ph->M,L);
     #endif
 	
-    if (DIOPTREd!=4 && (ph->loc == OBJSURF))
+	ph->locPrev = OBJSURF;
+	ph->loc = ATMOS;
+	
+	// // Unit vectors which form a second base and where e3 is the geo normal
+	float3 e1, e2, e3;
+	e3 = normalize(geoS->normal);         // be sure that e3 is normalized
+	coordinateSystem(e3, &e1, &e2);  // create e1, e2 orthogonal unit vectors 
+	// e1 = normalize(e1);
+	// e2 = normalize(e2);
+
+	// The passage matrix and his transpose tM, ie. for a vector X: $X = M X' and X' = tM X$
+	// - Works only if the two basis have the same origin
+	float4x4 M = make_float4x4(
+		e1.x, e2.x, e3.x, 0.f,
+		e1.y, e2.y, e3.y, 0.f,
+		e1.z, e2.z, e3.z, 0.f,
+		0.f , 0.f , 0.f , 1.f
+		);
+	float4x4 tM = transpose(M);
+		
+	// Create the transforms obect to world
+	Transform oTw(M, tM);
+	char myV[]="Vector";
+
+	// apply the transformation
+	v_n = oTw(v_n, myV);
+	u_n = oTw(u_n, myV);
+
+	// 
+	if ( (isnan(v_n.x)) || (isnan(v_n.y)) || (isnan(v_n.z)) || (isnan(u_n.x)) || (isnan(u_n.y)) || (isnan(u_n.z)) )
 	{
-		// Si le dioptre est seul, le photon est mis dans l'espace
-		bool test_s = ( SIMd == -1);
-		ph->locPrev = OBJSURF;
-		ph->loc = SPACE*test_s + ATMOS*(!test_s);
-    }
+		ph->loc = REMOVED;
+		return;
+	}
+	
+	// Update the value of u and v of the photon	
+	ph->v = v_n;
+	ph->u = u_n;
 
-    if (ph->loc != SEAFLOOR)
-	{		
-		// // Unit vectors which form a second base and where e3 is the geo normal
-		float3 e1, e2, e3;
-		e3 = normalize(geoS->normal);         // be sure that e3 is normalized
-		coordinateSystem(e3, &e1, &e2);  // create e1, e2 orthogonal unit vectors 
-		// e1 = normalize(e1);
-		// e2 = normalize(e2);
-
-		// The passage matrix and his transpose tM, ie. for a vector X: $X = M X' and X' = tM X$
-		// - Works only if the two basis have the same origin
-		float4x4 M = make_float4x4(
-			e1.x, e2.x, e3.x, 0.f,
-			e1.y, e2.y, e3.y, 0.f,
-			e1.z, e2.z, e3.z, 0.f,
-			0.f , 0.f , 0.f , 1.f
-			);
-		float4x4 tM = transpose(M);
-		
-		// Create the transforms obect to world
-		Transform oTw(M, tM);
-		char myV[]="Vector";
-
-		// apply the transformation
-		v_n = oTw(v_n, myV);
-		u_n = oTw(u_n, myV);
-
-		// Update the value of u and v of the photon
-		if ( (isnan(v_n.x)) || (isnan(v_n.y)) || (isnan(v_n.z)) || (isnan(u_n.x)) || (isnan(u_n.y)) || (isnan(u_n.z)) )
-		{
-			ph->loc = REMOVED;
-			return;
-		}
-		
-		ph->v = v_n;
-		ph->u = u_n;
-
-		ph->weight *= geoS->reflectivity;
-    } // not seafloor
+	ph->weight *= geoS->reflectivity;
 	
     if (!le)
 	{
