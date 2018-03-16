@@ -144,12 +144,6 @@ extern "C" {
     //
 	while (*nThreadsActive > 0) {
 		iloop += 1;
-		
-		// if (iloop > 500)
-		// {
-		// 	this_thread_active = 0;
-        //     atomicAdd(nThreadsActive, -1);
-		// }
 			
         if (((Counter[0] > NBLOOPd)
 			 && this_thread_active
@@ -1606,24 +1600,14 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 		// Here geometry modification in the function move_pp
 		// ========================================================================================================
 		float timeT;                                 // the time from the parametric form of a ray
-		bool mytest;                                 // initiate the boolean of the intersection test
+		bool mytest = false;                         // initiate the boolean of the intersection test
 		float3 phit=make_float3(0.f, 0.f, 0.f);      // initiate the intersection point 
 
 
 		// Launch the function geoTest to see if there are an intersection with the 
 		// geometry, return true/false and give the position phit of the intersection
-		mytest = geoTest(ph->pos, ph->v, &phit, geoS, myObjets);
-		
-		// this condition enable to correct an important bug in case of reflection
-		// Without this condition, the photon where the initial position is assimilated to phit
-		// will be reflected...
-		if ((fabs(phit.x-ph->pos.x) < 1e-5) && (fabs(phit.y-ph->pos.y) < 1e-5) &&
-			(fabs(phit.z-ph->pos.z) < 1e-5) && (ph->locPrev == OBJSURF))
-		{
-			mytest = false;
-			// ph->loc = REMOVED;
-			// return;
-		}
+		// nObj = le nombre d'objets, si = 0 alors le test n'est pas nécessaire.
+		if (nObj > 0) {mytest = geoTest(ph->pos, ph->v, ph->locPrev, &phit, geoS, myObjets);}
 
 		// if mytest = true (intersection with the geometry) and the position of the intersection is in
 		// the atmosphere (0 < Z < 120), then: Begin to analyse is there is really an intersection
@@ -1841,7 +1825,6 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 		rdist=  fabs(__fdividef(phz-ph->pos.z, ph->v.z));
         operator+= (ph->pos, ph->v*rdist);
         ph->pos.z = phz;
-		//ph->loc = ATMOS;
 
     } //ATMOS
 
@@ -3229,11 +3212,7 @@ __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* 
     }
 
     if (ph->loc != SEAFLOOR)
-	{
-		//ph->weight *= spectrum[ph->ilam].alb_surface;
-		ph->weight *= 0.5;
-		//ph->weight *= geoS->reflectivity;
-			
+	{		
 		// // Unit vectors which form a second base and where e3 is the geo normal
 		float3 e1, e2, e3;
 		e3 = normalize(geoS->normal);         // be sure that e3 is normalized
@@ -3265,8 +3244,11 @@ __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* 
 			ph->loc = REMOVED;
 			return;
 		}
+		
 		ph->v = v_n;
 		ph->u = u_n;
+
+		ph->weight *= geoS->reflectivity;
     } // not seafloor
 	
     if (!le)
@@ -3274,7 +3256,6 @@ __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* 
 		if (RRd==1){
 			/* Russian roulette for propagating photons **/
 			if( ph->weight < WEIGHTRRd ){
-				// ph->loc = ABSORBED;
 				if( RAND < __fdividef(ph->weight,WEIGHTRRd) ){ph->weight = WEIGHTRRd;}
 				else{ph->loc = ABSORBED;}
 			}
@@ -4371,49 +4352,27 @@ __device__ double DatomicAdd(double* address, double val)
 ***********************************************************/
 
 
-__device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct IObjets *ObjT)
+__device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo *GeoV, struct IObjets *ObjT)
 { 
-	Ray R1(o, dir, 0);
-
-	// =========================================
-	// comment just bellow to take into account the geometry
-	// ***************************************************** //
-	// ***************************************************** //
-	
-	// *(phit) = make_float3(-1, -1, -1);
-	// *(myN) = make_float3(0, 0, 0);
-	// return false;
-	
-	// ***************************************************** //
-	// ***************************************************** //	
-	// comment just above to take into account the geometry
-	// =========================================
+	Ray R1(o, dir, 0); // initialisation du rayon pour l'étude d'intersection
 	
 	// ******************interval d'étude******************
 	BBox interval(make_float3(Pmin_x, Pmin_y, Pmin_z),
 				  make_float3(Pmax_x, Pmax_y, Pmax_z));
 	
-	if (!interval.IntersectP(R1) or nObj == 0)
+	if (!interval.IntersectP(R1))
 	{
 		*(phit) = make_float3(-1, -1, -1);
 	    GeoV->normal = make_float3(0, 0, 0);
 		return false;
 	}
-
-
-	// int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
-
-    // if (idx==0)
-	// {
-	// 	printf("ObjT[0] = %d, ObjT[1] = %d, ObjT[2] = %d ", ObjT[0].geo, ObjT[1].geo, ObjT[2].geo);
-	// }
-
 	// *****************************************************
 	
 	// *************commun avec tous les objets*************
 	float myT = CUDART_INF_F; // myT = time
 	bool myB = false;
 	DifferentialGeometry myDg;
+	float3 tempPhit; // Phit temporaire
     // *****************************************************
 	
 	// *******Propre aux objets de type surface plane*******
@@ -4482,29 +4441,35 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct I
 				myBi = myObject.Intersect(R1, &myTi, &myDgi);
 		}
 		// ***********************************************************************
-
-		// if (idx==0)
-		// {
-		// 	printf("myBi of ObjT[%d] = %d \n", i, myBi);
-		// }
 		
 		// ******************************third Step*******************************
 		// s'il y a intersection avec plusieurs objets, assure qu'on garde l'objet
 		// le plus proche du point de départ du photon
 		if (myBi & (myT > myTi)) // si intercect objet(i) + time(i-1) > time(i)
 		{ // si objet(i) plus proche que objet(i-1) alors remplacement des données
-			myB = true;
-			myT = myTi;
-			myDg = myDgi;
-		    GeoV->material = ObjT[i].material;
-			GeoV->reflectivity = ObjT[i].reflect;
+			
+		    tempPhit = R1(myTi); // valeur temporaire de phit
+			
+			// this condition enable to correct an important bug in case of reflection
+			// Without this condition, the photon where the initial position is assimilated to phit
+			// will be reflected...
+			if ((fabs(tempPhit.x-o.x) > 1e-5) || (fabs(tempPhit.y-o.y) > 1e-5) ||
+				(fabs(tempPhit.z-o.z) > 1e-5) || (phLocPrev != OBJSURF))
+			{
+				myB = true;
+				myT = myTi;
+				myDg = myDgi;
+				GeoV->material = ObjT[i].material;
+				GeoV->reflectivity = ObjT[i].reflect;
+				*(phit) = tempPhit;
+			}
 		}
 		// ***********************************************************************
 	} // FIN BOUCLE FOR (PARCOURANT LES OBJETS)
 	
 	if (myB) // Il y a intersection avec au moins un objet
 	{
-		*(phit) = R1(myT);	
+		// *(phit) = R1(myT);
 		GeoV->normal = faceForward(myDg.nn, -1.*R1.d);
 		return true;
 	}
