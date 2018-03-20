@@ -9,7 +9,7 @@ warnings.simplefilter("ignore",DeprecationWarning)
 from pylab import figure, subplot2grid, tight_layout, setp, subplots, xlabel, ylabel
 import numpy as np
 np.seterr(invalid='ignore', divide='ignore') # ignore division by zero errors
-from smartg.tools.luts import plot_polar, transect2D
+from smartg.tools.luts import plot_polar, transect2D, Idx
 from smartg.atmosphere import diff1
 from smartg.water import diff2
 
@@ -149,6 +149,7 @@ def smartg_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (T
         plot_polar(DoLP,  index=ind, rect='242', sub='246', fig=fig2, vmin=0, vmax=100, cmap=cmap)
         plot_polar(DoCP,  index=ind, rect='243', sub='247', fig=fig2, vmin=0, vmax=100, cmap=cmap)
         plot_polar(DoP,  index=ind, rect='244', sub='248', fig=fig2, vmin=0, vmax=100, cmap=cmap)
+        #plot_polar(AoLP,  index=ind, rect='244', sub='248', fig=fig2, vmin=-180, vmax=180, cmap=cmap)
 
         return fig1, fig2
 
@@ -268,6 +269,7 @@ def transect_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up 
         transect2D(DoLP,  index=ind, sub=142, fig=fig2, color=color, percent=True, **kwargs)
         transect2D(DoCP,  index=ind, sub=143, fig=fig2, color=color, percent=True, **kwargs)
         transect2D(DoP,  index=ind,  sub=144, fig=fig2, color=color, percent=True, **kwargs)
+        #transect2D(AoLP, index=ind,  sub=144, fig=fig2, color=color, **kwargs)
 
         return fig1, fig2
         
@@ -473,3 +475,170 @@ def input_view(mlut, iw=0, kind='atm', zmax=None, ipha=None):
         
     except:
         _,_= profile_view(mlut, iw=iw, kind=kind, zmax=zmax)
+
+def compare(mlut, mref, field='up (TOA)',errb=False, logI=False, U_sign=1, same_U_convention=True,
+                  Nparam=4, vmax=None, vmin=None, emax=None, ermax=None, same_azimuth_convention=True,
+                  azimuth=[0.,90.], title=''):
+    '''
+    compare the results of two smartg runs : mlut vs mref in two different azimuth planes
+    outputs: a figure
+    keywords:
+        field : name of the output level to be compared 
+        errb  : error bar visible for mlut : should have been run with the stdev option
+        LogI  : plot Intensity in log scale
+        U_sign: change sign for U
+        same_U_convention: mlut and mref have the same convention for U
+        Nparam: number of parameters :  by defaut 4 for I,Q,U, DoLP; 5 adds V:, 2 keeps only I and DoLP 
+        vmin,vmax: min and max values for parameters: list of length Nparam
+        emax: max absolute error scale : length Nparam
+        ermax: max relative error scale (in percent) : length Nparam
+        same_azimuth_convention: mlut and mref have the same azimuth convention
+        azimuth: list of azimuths
+        title: plot title
+    '''
+
+    from pylab import subplots
+    if vmax is None : vmax=[0.1]*Nparam 
+    if vmin is None : vmin=[-0.1]*Nparam 
+    if emax is None : emax=[0.1]*Nparam
+    if ermax is None : ermax=[0.1]*Nparam
+    stokesT = ['I','Q','U','V']
+    stokes=stokesT[:Nparam-1]
+    signT = [1,1,U_sign*1,1,1] # sign convention for both mluts
+    sign=signT[:Nparam-1]+[1]
+    if same_U_convention: diffsignT = [1,1,1,1,1]    # sign convention difference
+    else: diffsignT = [1,1,-1,1,1]
+    diffsign=diffsignT[:Nparam-1]+[1]
+    fig,ax = subplots(3,Nparam, sharey=False,sharex=True)
+    fig.set_size_inches(Nparam*3,8)
+    fig.set_dpi=600
+    fig.suptitle(title)
+    
+    for i in range(Nparam):
+        if i!=Nparam-1 :
+            S = mlut[stokes[i] + '_' + field]
+            if S.names.index('Azimuth angles') == 0: th = S.axes[1]   
+            else: th = S.axes[0]
+            Sref = mref[stokes[i] + '_' + field]
+            S.desc = mdesc(S.desc)
+            if errb : E = mlut[stokes[i] + '_' + 'stdev' + '_' + field]
+            if logI and stokes[i]=='I':
+                S=S.apply(np.log10)
+                Sref=Sref.apply(np.log10)
+                S.desc=r'$log_{10}$ '+S.desc
+        else:
+            I=mlut['I' + '_' + field]
+            Q=mlut['Q' + '_' + field]
+            U=mlut['U' + '_' + field]
+            Ip= ((Q*Q+U*U).apply(np.sqrt))
+            S= (Ip/I) * 100
+            S.desc= r'$DoLP' + I.desc[1:3] + I.desc[4:] + '$'
+            S.desc= 'DoLP' + I.desc[1:]
+            S.desc = mdesc(S.desc)
+            
+            if errb: 
+                dI=mlut['I' + '_' + 'stdev' + '_' + field]
+                dQ=mlut['Q' + '_' + 'stdev' + '_' + field]
+                dU=mlut['U' + '_' + 'stdev' + '_' + field]
+                dIp= ((dQ*dQ+dU*dU).apply(np.sqrt))
+                E = (dI/I + dIp/Ip) * S
+            Iref=mref['I' + '_' + field]
+            Qref=mref['Q' + '_' + field]
+            Uref=mref['U' + '_' + field]
+            Sref= (((Qref*Qref+Uref*Uref).apply(np.sqrt))/Iref) * 100           
+     
+        vmi=vmin[i]
+        vma=vmax[i]
+        ema=emax[i]
+        erma=ermax[i]
+
+        for phi0,sym1,sym2,labref in [(azimuth[0],'r','.','ref.'),(azimuth[1],'g','.','')]:
+
+            # both points at their own abscissas
+            if same_azimuth_convention:
+
+                if S.names.index('Azimuth angles') == 0: # check right order of axes
+                    refp = sign[i]*Sref[Idx(phi0,round=True),:] # reference for >0 view angle
+                    refm = sign[i]*Sref[Idx(180.-phi0,round=True),:] #      reference for <0 view angle
+                    sp   = diffsign[i]*sign[i]*S[Idx(phi0),:]       #     simulation for >0 view angle
+                    sm   = sign[i]*S[Idx(180-phi0),:]
+                    if errb:
+                        dsp  = E[Idx(phi0),:]         #     simulation error for >0 view angle
+                        dsm  = E[Idx(180.-phi0),:]
+                    else:
+                        (dsp,dsm) = (0,0)
+                else:
+                    refm = sign[i]*Sref.swapaxes(0,1)[Idx(phi0,round=True),:] # reference for >0 view angle
+                    refp = sign[i]*Sref.swapaxes(0,1)[Idx(180.-phi0,round=True),:] #      reference for <0 view angle
+                    sp   = diffsign[i]*sign[i]*S.swapaxes(0,1)[Idx(phi0),:]       #     simulation for >0 view angle
+                    sm   = sign[i]*S.swapaxes(0,1)[Idx(180-phi0),:]
+                    if errb:
+                        dsp  = E.swapaxes(0,1)[Idx(phi0),:]         #     simulation error for >0 view angle
+                        dsm  = E.swapaxes(0,1)[Idx(180.-phi0),:]
+                    else:
+                        (dsp,dsm) = (0,0)
+                        
+            else:
+                refp = sign[i]*Sref[Idx(180.-phi0,round=True),:] # reference for >0 view angle
+                refm = sign[i]*Sref[Idx(phi0,round=True),:] #      reference for <0 view angle
+                sp   = diffsign[i]*sign[i]*S[Idx(phi0),:]       #     simulation for >0 view angle
+                sm   = sign[i]*S[Idx(180-phi0),:]
+                if errb:
+                    dsp  = E[Idx(phi0),:]         #     simulation error for >0 view angle
+                    dsm  = E[Idx(180-phi0),:]
+                else:
+                    (dsp,dsm) = (0,0)
+                    
+            ax[0,i].plot(th, refp,'k'+sym2)
+            ax[0,i].plot(-th,refm,'k'+sym2,label=labref)
+            ax[0,i].errorbar(th, sp, fmt=sym1+'')
+            ax[0,i].errorbar(-th,sm, fmt=sym1+'', \
+                        label=r'smartg $\Phi=%.0f-%.0f$'%(phi0,180.-phi0))
+            ax[0,i].set_ylim([vmi, vma])
+            ax[0,i].set_xlim([-89., 89.])
+            ax[0,i].ticklabel_format(axis='y', style='sci', scilimits=(-2,2))
+            
+            if logI and i==0:
+                if errb:
+                    ax[1,i].errorbar(th,10**sp-10**refp, yerr=dsp,\
+                                 fmt=sym1+sym2,label=r'$\Phi=%.0f-%.0f$'%(phi0,180.-phi0),ecolor='k')
+                    ax[1,i].errorbar(-th,10**sm-10**refm,yerr=dsm,fmt=sym1+sym2,ecolor='k') 
+                else:
+                    ax[1,i].errorbar(th,10**sp-10**refp, \
+                                 fmt=sym1+sym2,label=r'$\Phi=%.0f-%.0f$'%(phi0,180.-phi0),ecolor='k')
+                    ax[1,i].errorbar(-th,10**sm-10**refm,fmt=sym1+sym2,ecolor='k') 
+    
+            else:
+                if errb:
+                    ax[1,i].errorbar(th,sp-refp, yerr=dsp,\
+                                 fmt=sym1+sym2,label=r'$\Phi=%.0f-%.0f$'%(phi0,180.-phi0),ecolor='k')
+                    ax[1,i].errorbar(-th,sm-refm,yerr=dsm,fmt=sym1+sym2,ecolor='k') 
+                else:
+                    ax[1,i].errorbar(th,sp-refp, \
+                                 fmt=sym1+sym2,label=r'$\Phi=%.0f-%.0f$'%(phi0,180.-phi0),ecolor='k')
+                    ax[1,i].errorbar(-th,sm-refm,fmt=sym1+sym2,ecolor='k') 
+            ax[1,i].set_ylim([-1*ema,ema])
+            ax[1,i].set_xlim([-89., 89.])  
+
+            ax[2,i].errorbar(th,(sp-refp)/refp*100,\
+                             fmt=sym1+sym2,label=r'$\Phi=%.0f-%.0f$'%(phi0,180.-phi0),ecolor='k')
+            ax[2,i].errorbar(-th,(sm-refm)/refm*100,fmt=sym1+sym2,ecolor='k')  
+            
+            if i!=Nparam-1 : ax[2,i].set_ylim([-1*erma,erma])
+            else : ax[2,i].set_ylim([-1*erma,erma])
+                
+            ax[2,i].set_xlim([-89., 89.])    
+            ax[1,i].plot([-89,89],[0.,0.],'k--')
+            ax[2,i].plot([-89,89],[0.,0.],'k--')
+            ax[1,i].ticklabel_format(axis='y', style='sci', scilimits=(-2,2))
+
+            ax[0,i].set_title(S.desc)   
+            if i==0: 
+ 
+                ax[0,i].legend(loc='upper center',fontsize = 8,labelspacing=0.0)
+                ax[1,i].text(-50.,ema*0.75,r'$N_{\Phi}$:%i, $N_{\theta}$:%i'%\
+                         (S.axes[0].shape[0],S.axes[1].shape[0]))
+                ax[1,i].set_ylabel(r'$\Delta$')
+                ax[2,i].set_ylabel(r'$\Delta (\%)$')
+    return fig
+
