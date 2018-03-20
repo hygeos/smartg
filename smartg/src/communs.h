@@ -246,7 +246,7 @@ struct Sensor {
 };
 
 // En rapport avec l'implementation des objets
-
+#include "transform.h" // La structure IGeo a une classe transform comme attrib
 
 struct IGeo
 {	
@@ -264,9 +264,10 @@ struct IGeo
 		reflectivity = ref;
 	}
 	
-	float3 normal;
-	int material;
-	float reflectivity;
+	float3 normal;      /* la normale de l'objet          */
+	int material;       /* la matière de l'objet          */
+	float reflectivity; /* l'albedo de l'objet            */
+    Transform mvTF;     /* Transformation de l'objet      */
 };
 
 struct IObjets {

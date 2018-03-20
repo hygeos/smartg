@@ -409,7 +409,7 @@ class Smartg(object):
              OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
              NBLOOP=None, progress=True,
              le=None, flux=None, stdev=False, BEER=1, RR=1, WEIGHTRR=0.1, SZA_MAX=90., SUN_DISC=0,
-             sensor=None, refraction=False, reflectance=True, myObjects=None, interval = None):
+             sensor=None, refraction=False, reflectance=True, myObjects=None, interval = None, IsAtm = 1):
         '''
         Run a SMART-G simulation
 
@@ -549,7 +549,7 @@ class Smartg(object):
         if myObjects is not None:
             nObj = len(myObjects)
             myObjects0 = np.zeros(nObj, dtype=type_IObjets, order='C')
-            for i in xrange (0, len(myObjects)):
+            for i in xrange (0, nObj):
                 if isinstance(myObjects[i].geo, Spheric):    # si l'objet est une sphère
                     myObjects0['geo'][i] = 1
                     
@@ -590,6 +590,13 @@ class Smartg(object):
                 if isinstance(myObjects[i].material, LambMirror):
                     myObjects0['material'][i] = 1
                     myObjects0['reflec'][i] = myObjects[i].material.reflectivity
+                if isinstance(myObjects[i].material, Matte):
+                    myObjects0['material'][i] = 2
+                    myObjects0['reflec'][i] = myObjects[i].material.reflectivity
+                if isinstance(myObjects[i].material, Mirror):
+                    myObjects0['material'][i] = 3
+                    myObjects0['reflec'][i] = myObjects[i].material.reflectivity
+                    
         else:
             nObj = 0
             myObjects0 = np.zeros(1, dtype=type_IObjets, order='C')
@@ -842,7 +849,7 @@ class Smartg(object):
                   RTER, LE, ZIP, FLUX, NLVL, NPSTK,
                   NWLPROBA, BEER, RR, WEIGHTRR, NLOW, NJAC, 
                   NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, nObj,
-                  Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, HIST)
+                  Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, HIST)
 
         # Initialize the progress bar
         p = Progress(NBPHOTONS, progress)
@@ -1315,7 +1322,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
               NBTHETA, NBPHI, OUTPUT_LAYERS,
               RTER, LE, ZIP, FLUX, NLVL, NPSTK, NWLPROBA, BEER, RR, 
               WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, nObj,
-              Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, HIST) :
+              Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, HIST) :
     """
     Initialize the constants in python and send them to the device memory
 
@@ -1393,10 +1400,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
     copy_to_device('Pmax_x', Pmax_x, np.float32)
     copy_to_device('Pmax_y', Pmax_y, np.float32)
     copy_to_device('Pmax_z', Pmax_z, np.float32)
-    # myObjects = np.zeros(NOBJO, dtype=type_IObjets0, order='C')
-    # myObjects ['geo'][0] = 10 ; myObjects ['geo'][1] = 20 ; myObjects ['geo'][2] = 30 ;
-    # myObjects0 = to_gpu(myObjects)
-    # copy_to_device('myObjects', nObj, np.int32)
+    copy_to_device('IsAtm', IsAtm, np.int32)
 
 def init_profile(wl, prof, kind):
     '''

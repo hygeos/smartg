@@ -621,6 +621,10 @@ extern "C" {
                 #endif
 			} // END Lambertian Mirror
 			else if (geoStruc.material == 2) {ph.loc = ABSORBED;} // Matte
+			else if (geoStruc.material == 3)
+			{
+				surfaceRugueuse3D(&ph, &geoStruc, &rngstate);
+			}
 			else {ph.loc = ABSORBED;} // unknow material
 		}
         __syncthreads();
@@ -828,6 +832,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
                           tab_sensor[ph->is].POSY,
                           tab_sensor[ph->is].POSZ);
     ph->loc = tab_sensor[ph->is].LOC;
+
     #ifdef SPHERIQUE
 	ph->radius = length(ph->pos);
     #endif
@@ -1042,6 +1047,14 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     //ph->Mf= make_diag_float4x4 (1.F);
     #endif
 
+
+	// if (nObj > 0)
+	// {
+	// 	//ph->pos = make_float3(POSXd,POSYd+150,POSZd);
+	// 	ph->pos = make_float3(((600*RAND)-300)+ ph->pos.x, ((600*RAND)-300) + ph->pos.y, POSZd);
+	// 	if (ph->tau < 1e-9) ph->tau_abs = 0.;
+	// }
+	
     }
 
 
@@ -1671,7 +1684,8 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 			{
 				// to see
 				ph->layer = ilayer2;
-				if (BEERd == 0) ph->weight *= prof_atm[ph->layer+ph->ilam*(NATMd+1)].ssa;
+				if (IsAtm == 0) ph->weight *= 1;
+				else if (BEERd == 0) ph->weight *= prof_atm[ph->layer+ph->ilam*(NATMd+1)].ssa;
 				else
 				{ // We compute the cumulated absorption OT at the new postion of the photon
 					// see move photon paper eq 11
@@ -1694,7 +1708,8 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
         if(ph->tau < 0.F){
 
             #ifndef ALIS
-            if (BEERd == 1) {// absorption between start and stop
+			if (IsAtm == 0) ph->weight *= 1;
+            else if (BEERd == 1) {// absorption between start and stop
                 ab =  0.F;
                 ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
             }
@@ -1733,7 +1748,8 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
         else if( ph->tau > get_OD(BEERd, prof_atm[NATMd + ph->ilam *(NATMd+1)]) ){
 
             #ifndef ALIS
-            if (BEERd == 1) {// absorption between start and stop
+			if (IsAtm == 0) ph->weight *= 1;
+			else if (BEERd == 1) {// absorption between start and stop
                 ab = prof_atm[NATMd + ph->ilam *(NATMd+1)].OD_abs;
                 ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
             }
@@ -1788,7 +1804,8 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
         #endif
 
         #ifndef ALIS
-        if (BEERd == 0) ph->weight *= prof_atm[ph->layer+ph->ilam*(NATMd+1)].ssa;
+		if (IsAtm == 0) ph->weight *= 1;
+        else if (BEERd == 0) ph->weight *= prof_atm[ph->layer+ph->ilam*(NATMd+1)].ssa;
         else { // We compute the cumulated absorption OT at the new postion of the photon
             // photon new position in the layer
             ab = prof_atm[NATMd+ph->ilam*(NATMd+1)].OD_abs - 
@@ -3420,6 +3437,102 @@ __device__ void surfaceBRDF(Photon* ph, int le,
 } //surfaceBRDF
 
 
+
+
+
+
+
+
+
+
+
+
+
+__device__ void surfaceRugueuse3D(Photon* ph, IGeo* geoS, struct RNG_State *rngstate)
+{
+    ph->nint += 1;
+	
+	float3 u_n, v_n;	// Vecteur du photon après reflexion
+
+	v_n = ph->v;
+	u_n = ph->u;
+
+	// Depolarisation du Photon
+    float4x4 L = make_float4x4(
+		0.5F, 0.5F, 0.F, 0.F,
+		0.5F, 0.5F, 0.F, 0.F,
+		0.0F, 0.0F, 0.F, 0.F,
+		0.0F, 0.0F, 0.F, 0.F 
+		);
+	
+    ph->stokes = mul(L,ph->stokes);
+
+    #ifdef BACK
+    ph->M = mul(ph->M,L);
+    #endif
+
+	Transform transfo, invTransfo;
+	char myV[]="Vector";
+	transfo = geoS->mvTF;
+	invTransfo = transfo.Inverse(transfo);
+
+	v_n = invTransfo(v_n, myV);
+	u_n = invTransfo(u_n, myV);
+	
+	v_n = make_float3(v_n.x, v_n.y, -v_n.z);
+	u_n = make_float3(u_n.x, u_n.y, -u_n.z);
+
+	v_n = transfo(v_n, myV);
+	u_n = transfo(u_n, myV);
+	
+	if ( (isnan(v_n.x)) || (isnan(v_n.y)) || (isnan(v_n.z)) || (isnan(u_n.x)) || (isnan(u_n.y)) || (isnan(u_n.z)) )
+	{
+		ph->loc = REMOVED;
+		return;
+	}
+	
+	// Update the value of u and v of the photon
+	
+	ph->locPrev = OBJSURF;
+	ph->loc = ATMOS;
+
+	ph->v = v_n;
+	ph->u = u_n;
+
+	ph->weight *= geoS->reflectivity;
+
+    if (1)
+	{
+		if (RRd==1){
+			/* Russian roulette for propagating photons **/
+			if( ph->weight < WEIGHTRRd ){
+				if( RAND < __fdividef(ph->weight,WEIGHTRRd) ){ph->weight = WEIGHTRRd;}
+				else{ph->loc = ABSORBED;}
+			}
+		}
+	} // not le
+	
+} // FUNCTION SURFACEAGITE3D
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 __device__ void countPhoton(Photon* ph,
         struct Profile *prof_atm, struct Profile *prof_oc,
         float *tabthv, float *tabphi,
@@ -4350,7 +4463,9 @@ __device__ double DatomicAdd(double* address, double val)
 __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo *GeoV, struct IObjets *ObjT)
 { 
 	Ray R1(o, dir, 0); // initialisation du rayon pour l'étude d'intersection
+
 	
+	//Ray R1(make_float3(70., 0., 120.), make_float3(-0.5, 0., -0.866), 0);
 	// ******************interval d'étude******************
 	BBox interval(make_float3(Pmin_x, Pmin_y, Pmin_z),
 				  make_float3(Pmax_x, Pmax_y, Pmax_z));
@@ -4448,8 +4563,8 @@ __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo 
 			// this condition enable to correct an important bug in case of reflection
 			// Without this condition, the photon where the initial position is assimilated to phit
 			// will be reflected...
-			if ((fabs(tempPhit.x-o.x) > 1e-5) || (fabs(tempPhit.y-o.y) > 1e-5) ||
-				(fabs(tempPhit.z-o.z) > 1e-5) || (phLocPrev != OBJSURF))
+			if ((fabs(tempPhit.x-o.x) > 1e-3) || (fabs(tempPhit.y-o.y) > 1e-3) ||
+				(fabs(tempPhit.z-o.z) > 1e-3) || (phLocPrev != OBJSURF))
 			{
 				myB = true;
 				myT = myTi;
@@ -4457,6 +4572,7 @@ __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo 
 				GeoV->material = ObjT[i].material;
 				GeoV->reflectivity = ObjT[i].reflect;
 				*(phit) = tempPhit;
+				GeoV->mvTF = Ti;
 			}
 		}
 		// ***********************************************************************

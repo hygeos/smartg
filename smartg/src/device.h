@@ -63,6 +63,7 @@ __device__ __constant__ float Pmin_z;
 __device__ __constant__ float Pmax_x;
 __device__ __constant__ float Pmax_y;
 __device__ __constant__ float Pmax_z;
+__device__ __constant__ int IsAtm;
 
 /**********************************************************
 *	> Prototypes de device.cu
@@ -146,6 +147,8 @@ __device__ void surfaceLambert(Photon*, int le,
 
 __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* tabphi,
 									  struct Spectrum *spectrum, struct RNG_State*, IGeo* geoS);
+
+__device__ void surfaceRugueuse3D(Photon* ph, IGeo* geoS, struct RNG_State *rngstate);
 
 __device__ void countPhoton(Photon* , struct Profile* prof_atm, struct Profile* prof_oc, float*, float *,
         int, unsigned long long*, void*, void*, void*, unsigned long long*);
