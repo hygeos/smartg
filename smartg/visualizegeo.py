@@ -186,9 +186,11 @@ def Analyse_create_entity(entity, Theta):
         Trans = tr.translate(Vector(E[k].transformation.transx, E[k].transformation.transy, \
                                     E[k].transformation.transz))
         Rotx = tr.rotateX(E[k].transformation.rotx)
+        Roty = tr.rotateY(E[k].transformation.roty)
+        Rotz = tr.rotateZ(E[k].transformation.rotz)
 
         # total tt of all transform together
-        tt = Trans*Rotx
+        tt = Trans*Rotx*Roty*Rotz
         tt_inv = tt.inverse(tt)
         
         # ===================================================================================

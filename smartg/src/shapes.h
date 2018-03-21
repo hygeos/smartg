@@ -319,14 +319,14 @@ Triangle::Triangle(const Transform *o2w, const Transform *w2o,
 }
 
 // Méthode de Möller-Trumbore pour l'intersection rayon/triangle
-bool Triangle::Intersect(const Ray &ray, float* tHit,
+bool Triangle::Intersect(const Ray &ray, float *tHit,
 						 DifferentialGeometry *dg) const
 {
 	float3 e1 = p2 - p1;
 	float3 e2 = p3 - p1;
 	float3 s1 = cross(ray.d, e2);
 	float divisor = dot(s1, e1);
-
+    
 	if (divisor == 0.)
 		return false;
 	float invDivisor = 1.f/divisor;
@@ -345,6 +345,7 @@ bool Triangle::Intersect(const Ray &ray, float* tHit,
 
     // Calcul de temps t du rayon pour atteindre le point d'intersection
     float t = dot(e2, s2) * invDivisor;
+	
     if (t < ray.mint || t > ray.maxt)
         return false;
 
@@ -446,6 +447,7 @@ TriangleMesh::TriangleMesh(const Transform *o2w, const Transform *w2o,
 
 	// Applique les transformations sur le maillage
 	char myP[]="Point";
+	
 	for (int i = 0; i < nverts; ++i)
 		p[i] = (*ObjectToWorld)(p[i], myP);
 }
@@ -471,7 +473,6 @@ bool TriangleMesh::Intersect(const Ray &ray, float* tHit,
 		float3 PB = p[vertexIndex[3*i + 1]];
 		float3 PC = p[vertexIndex[3*i + 2]];
 		Triangle rt(&nothing, &nothing, PA, PB, PC);
-		
 		if (rt.Intersect(ray, &triHit, &dgTri))
 		{
 			dgbool = true;

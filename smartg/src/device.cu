@@ -4464,8 +4464,6 @@ __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo 
 { 
 	Ray R1(o, dir, 0); // initialisation du rayon pour l'étude d'intersection
 
-	
-	//Ray R1(make_float3(70., 0., 120.), make_float3(-0.5, 0., -0.866), 0);
 	// ******************interval d'étude******************
 	BBox interval(make_float3(Pmin_x, Pmin_y, Pmin_z),
 				  make_float3(Pmax_x, Pmax_y, Pmax_z));
@@ -4499,10 +4497,21 @@ __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo 
 		// *****************************First Step********************************
 		// prise en compte de tte les tranformations existantes de l'objet(i)
 		Transform Ti, invTi; // déclare la tranfo de l'objet i et son inverse
+
+		/* !!! Nous notons qu'il est important de commencer avec la translation
+		   car s'il y a une rotation, alors le repère change (axe x ou y ou z) !!! */
+
+		// si une valeur en x, y ou z diff de 0 alors il y a une translation
+		if (ObjT[i].mvTx != 0 or ObjT[i].mvTy != 0 or ObjT[i].mvTz != 0) {
+			Transform TmT;
+			TmT = Ti.Translate(make_float3(ObjT[i].mvTx, ObjT[i].mvTy,
+												   ObjT[i].mvTz));
+			Ti = TmT; }
+		
 		if (ObjT[i].mvRx != 0) { // si diff de 0 alors il y a une rot en x
 			Transform TmRX;
 			TmRX = Ti.RotateX(ObjT[i].mvRx);
-			Ti = TmRX; } 
+			Ti = Ti*TmRX; } 
 		if (ObjT[i].mvRy != 0) { // si diff de 0 alors il y a une rot en y
 			Transform TmRY;
 			TmRY = Ti.RotateY(ObjT[i].mvRy);
@@ -4512,12 +4521,6 @@ __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo 
 			TmRZ = Ti.RotateZ(ObjT[i].mvRz);
 			Ti = Ti*TmRZ; }
 
-		// si une valeur en x, y ou z diff de 0 alors il y a une translation
-		if (ObjT[i].mvTx != 0 or ObjT[i].mvTy != 0 or ObjT[i].mvTz != 0) {
-			Transform TmT;
-			TmT = Ti.Translate(make_float3(ObjT[i].mvTx, ObjT[i].mvTy,
-												   ObjT[i].mvTz));
-			Ti = Ti*TmT; }
 
 		invTi = Ti.Inverse(Ti); // inverse de la tranformation
 		// ***********************************************************************
@@ -4557,7 +4560,6 @@ __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo 
 		// le plus proche du point de départ du photon
 		if (myBi & (myT > myTi)) // si intercect objet(i) + time(i-1) > time(i)
 		{ // si objet(i) plus proche que objet(i-1) alors remplacement des données
-			
 		    tempPhit = R1(myTi); // valeur temporaire de phit
 			
 			// this condition enable to correct an important bug in case of reflection
