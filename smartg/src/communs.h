@@ -204,6 +204,7 @@ struct Phase {
 
 struct Profile {
     float z;      // altitude
+    float n;      // refractive index
     float OD;    // cumulated extinction optical thickness (from top)
     float OD_sca; // cumulated scattering optical thickness (from top)
     float OD_abs; // cumulated absorption optical thickness (from top)

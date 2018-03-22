@@ -902,6 +902,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
     int sign_direction;
     int i_layer_fw, i_layer_bh; // index or layers forward and behind the photon
     float costh, sinth2;
+    float3 no;
     int ilam = ph->ilam*(NATMd+1);  // wavelength offset in optical thickness table
 
     if (ph->layer == 0) ph->layer = 1;
@@ -1105,7 +1106,46 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
             #else
             ph->pos = operator+(ph->pos, ph->v*d);
             ph->radius = length(ph->pos);
-            vzn = __fdividef( dot(ph->v, ph->pos) , ph->radius);
+            no  = operator/(ph->pos, ph->radius);
+            vzn = dot(ph->v, no);
+            //vzn = __fdividef( dot(ph->v, ph->pos) , ph->radius);
+            if (REFRACd) {
+                // We update photon direction at the interface due to refraction
+                // 1. sin_i
+                float sTh  = sqrtf(1.F - vzn*vzn);
+                // 2. determine old and new refraction indices from old and new layer indices
+                float nind = __fdividef(prof_atm[i_layer_fw+ilam].n, prof_atm[i_layer_bh+ilam].n);
+                float sign;
+                if (nind > 1) sign=1;
+                else sign=-1.F;
+                if (sTh!=0.F && nind!=1.F) {
+                    float cTh  = dot(-sign*no, ph->v);
+                    // 3. Snell Descartes law :
+		            float temp = __fdividef(sTh,nind);
+		            float cot  = sqrtf(1.F - temp*temp );
+                    float alpha= __fdividef(cTh, nind) - cot;
+                    // 4. Update photons direction cosines
+                    ph->v = operator+(operator/(ph->v, nind), alpha*no);
+                    ph->u = operator/(operator+(no, cot*ph->v), sTh )*nind;
+                    vzn = dot(ph->v, no);
+                    // 5. Rotates Stokes parameters
+	                temp = __fdividef(dot(no, ph->u), sTh);
+	                float psi = acosf( fmin(1.00F, fmax( -1.F, temp ) ));	
+	                if( dot(no, cross(ph->u, ph->v)) <0 ){
+		                psi = -psi;
+	                }
+                    rotateStokes(ph->stokes, psi, &ph->stokes);
+                    #ifdef BACK
+                    float4x4 L = make_diag_float4x4 (1.F);
+                    rotationM(-psi,&L);
+                    ph->M   = mul(ph->M,L);
+                    #endif
+                }
+                #ifdef DEBUG_PHOTON
+	            int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+                if (idx==0) printf("%f %f %f, %f %f %f, %i %i\n",ph->pos.x,ph->pos.y,ph->pos.z, ph->v.x, ph->v.y, ph->v.z, i_layer_bh, i_layer_fw);
+                #endif
+            }
             #endif
             if (BEERd == 1) ph->weight *= __expf(-( h_cur_abs));
         }

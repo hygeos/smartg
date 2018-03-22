@@ -561,7 +561,7 @@ def compare(mlut, mref, field='up (TOA)',errb=False, logI=False, U_sign=1, same_
                     refp = sign[i]*Sref[Idx(phi0,round=True),:] # reference for >0 view angle
                     refm = sign[i]*Sref[Idx(180.-phi0,round=True),:] #      reference for <0 view angle
                     sp   = diffsign[i]*sign[i]*S[Idx(phi0),:]       #     simulation for >0 view angle
-                    sm   = sign[i]*S[Idx(180-phi0),:]
+                    sm   = diffsign[i]*sign[i]*S[Idx(180-phi0),:]
                     if errb:
                         dsp  = E[Idx(phi0),:]         #     simulation error for >0 view angle
                         dsm  = E[Idx(180.-phi0),:]
@@ -571,7 +571,7 @@ def compare(mlut, mref, field='up (TOA)',errb=False, logI=False, U_sign=1, same_
                     refm = sign[i]*Sref.swapaxes(0,1)[Idx(phi0,round=True),:] # reference for >0 view angle
                     refp = sign[i]*Sref.swapaxes(0,1)[Idx(180.-phi0,round=True),:] #      reference for <0 view angle
                     sp   = diffsign[i]*sign[i]*S.swapaxes(0,1)[Idx(phi0),:]       #     simulation for >0 view angle
-                    sm   = sign[i]*S.swapaxes(0,1)[Idx(180-phi0),:]
+                    sm   = diffsign[i]*sign[i]*S.swapaxes(0,1)[Idx(180-phi0),:]
                     if errb:
                         dsp  = E.swapaxes(0,1)[Idx(phi0),:]         #     simulation error for >0 view angle
                         dsm  = E.swapaxes(0,1)[Idx(180.-phi0),:]
@@ -582,7 +582,7 @@ def compare(mlut, mref, field='up (TOA)',errb=False, logI=False, U_sign=1, same_
                 refp = sign[i]*Sref[Idx(180.-phi0,round=True),:] # reference for >0 view angle
                 refm = sign[i]*Sref[Idx(phi0,round=True),:] #      reference for <0 view angle
                 sp   = diffsign[i]*sign[i]*S[Idx(phi0),:]       #     simulation for >0 view angle
-                sm   = sign[i]*S[Idx(180-phi0),:]
+                sm   = diffsign[i]*sign[i]*S[Idx(180-phi0),:]
                 if errb:
                     dsp  = E[Idx(phi0),:]         #     simulation error for >0 view angle
                     dsm  = E[Idx(180-phi0),:]
@@ -593,7 +593,7 @@ def compare(mlut, mref, field='up (TOA)',errb=False, logI=False, U_sign=1, same_
             ax[0,i].plot(-th,refm,'k'+sym2,label=labref)
             ax[0,i].errorbar(th, sp, fmt=sym1+'')
             ax[0,i].errorbar(-th,sm, fmt=sym1+'', \
-                        label=r'smartg $\Phi=%.0f-%.0f$'%(phi0,180.-phi0))
+                        label=r'$\Phi=%.0f-%.0f$'%(phi0,180.-phi0))
             ax[0,i].set_ylim([vmi, vma])
             ax[0,i].set_xlim([-89., 89.])
             ax[0,i].ticklabel_format(axis='y', style='sci', scilimits=(-2,2))
@@ -636,8 +636,8 @@ def compare(mlut, mref, field='up (TOA)',errb=False, logI=False, U_sign=1, same_
             if i==0: 
  
                 ax[0,i].legend(loc='upper center',fontsize = 8,labelspacing=0.0)
-                ax[1,i].text(-50.,ema*0.75,r'$N_{\Phi}$:%i, $N_{\theta}$:%i'%\
-                         (S.axes[0].shape[0],S.axes[1].shape[0]))
+                #ax[1,i].text(-50.,ema*0.75,r'$N_{\Phi}$:%i, $N_{\theta}$:%i'%\
+                #         (S.axes[0].shape[0],S.axes[1].shape[0]))
                 ax[1,i].set_ylabel(r'$\Delta$')
                 ax[2,i].set_ylabel(r'$\Delta (\%)$')
     return fig

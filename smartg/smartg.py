@@ -90,6 +90,7 @@ type_Spectrum = [
 
 type_Profile = [
     ('z',      'float32'),    # // altitude
+    ('n',      'float32'),    # // refractive index
     ('OD',     'float32'),    # // cumulated extinction optical thickness (from top)
     ('OD_sca', 'float32'),    # // cumulated scattering optical thickness (from top)
     ('OD_abs', 'float32'),    # // cumulated absorption optical thickness (from top)
@@ -227,7 +228,7 @@ class Sensor(object):
 class Smartg(object):
 
     def __init__(self, pp=True, debug=False,
-                 alt_move=False, debug_photon=False,
+                 alt_move=True, debug_photon=False,
                  double=False, alis=None, back=False, bias=True, rng='PHILOX'):
         '''
         Initialization of the Smartg object
@@ -351,7 +352,8 @@ class Smartg(object):
              NBTHETA=45, NBPHI=90, NF=1e6,
              OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
              NBLOOP=None, progress=True,
-             le=None, flux=None, stdev=False, BEER=0, RR=1, WEIGHTRR=0.1, sensor=None):
+             le=None, flux=None, stdev=False, BEER=0, RR=1, WEIGHTRR=0.1, sensor=None,
+             refrac=False):
         '''
         Run a SMART-G simulation
 
@@ -442,7 +444,9 @@ class Smartg(object):
             - BEER: if BEER=1 compute absorption using Beer-Lambert law, otherwise compute it with the Single scattering albedo
                 (BEER automatically set to 1 if ALIS is chosen)
 
-            - sensor : sensor object, backward mode activated (from sensor to source)
+            - sensor : sensor object, backward mode (from sensor to source), back should be set to True in the smartg constructor
+
+            - refrac : include atmospheric refraction
 
         Return value:
         ------------
@@ -631,13 +635,16 @@ class Smartg(object):
             wl_proba_icdf = gpuzeros(1, dtype='int64')
             NWLPROBA = 0
 
+        REFRAC = 0
+        if refrac: REFRAC=1
+
         # initialization of the constants
         InitConst(surf, env, NATM, NOCE, self.mod,
                        NBPHOTONS, NBLOOP, THVDEG, DEPO,
                        XBLOCK, XGRID, NLAM, SIM, NF,
                        NBTHETA, NBPHI, OUTPUT_LAYERS,
                        RTER, LE, FLUX, MI, NLVL, NPSTK,
-                       NWLPROBA, BEER, RR, WEIGHTRR, NLOW, sensor)
+                       NWLPROBA, BEER, RR, WEIGHTRR, NLOW, sensor, REFRAC)
 
 
         # Initialize the progress bar
@@ -834,6 +841,7 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
 
     # write atmospheric profiles
     if prof_atm is not None:
+        m.add_lut(prof_atm['n_atm'])
         m.add_lut(prof_atm['OD_r'])
         m.add_lut(prof_atm['OD_p'])
         m.add_lut(prof_atm['OD_g'])
@@ -1049,7 +1057,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
                    NBPHOTONS, NBLOOP, THVDEG, DEPO,
                    XBLOCK, XGRID,NLAM, SIM, NF,
                    NBTHETA, NBPHI, OUTPUT_LAYERS,
-                   RTER, LE, FLUX, MI, NLVL, NPSTK, NWLPROBA, BEER, RR, WEIGHTRR, NLOW, sensor) :
+                   RTER, LE, FLUX, MI, NLVL, NPSTK, NWLPROBA, BEER, RR, WEIGHTRR, NLOW, sensor, REFRAC) :
 
     """
     Initialize the constants in python and send them to the device memory
@@ -1122,6 +1130,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
     copy_to_device('CTHVd', CTHV, np.float32)
     copy_to_device('RTER', RTER, np.float32)
     copy_to_device('NWLPROBA', NWLPROBA, np.int32)
+    copy_to_device('REFRACd', REFRAC, np.int32)
 
 
 def init_profile(wl, prof, kind):
@@ -1139,10 +1148,12 @@ def init_profile(wl, prof, kind):
 
     if kind == "oc":
         prof_gpu['z'][0,:] = prof.axis('z_'+kind)  * 1e-3 # to Km
+        prof_gpu['n'][0,:] = 1.34;
     else:
         prof_gpu['z'][0,:] = prof.axis('z_'+kind)
     prof_gpu['z'][1:,:] = -999.      # other wavelengths are NaN
 
+    prof_gpu['n'][:,:] = prof['n_'+kind].data[...]
     prof_gpu['OD'][:,:] = prof['OD_'+kind].data[...]
     prof_gpu['OD_sca'][:] = prof['OD_sca_'+kind].data[...]
     prof_gpu['OD_abs'][:] = prof['OD_abs_'+kind].data[...]

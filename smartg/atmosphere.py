@@ -595,6 +595,13 @@ class AtmAFGL(Atmosphere):
         pro.add_axis('z_atm', prof.z)
         pro.add_axis('wavelength', wav[:])
 
+        # refractive index
+        #n = n_air(wav[:]*1e-3, prof.dens_co2/prof.dens_air*1e6)
+        n = refractivity(wav[:]*1e-3, prof.P, prof.T,prof.dens_co2/prof.dens_air*1e6)
+        pro.add_dataset('n_atm', n, axnames=['wavelength', 'z_atm'],
+                        attrs={'description':
+                               'atmospheric refractive index'})
+
         #
         # Rayleigh optical thickness
         #
@@ -1147,7 +1154,18 @@ def rod(lam, co2, lat, z, P):
     G = g(lat, z)
     return raycrs(lam, co2) * P*1e3 * Avogadro/MA/G
 
-
+def refractivity(lam,P,T,co2):
+    ''' Refractivity of air
+        lam : um (N)
+        P   : hPa (M)
+        T   : K (M)
+        co2 : ppm (M)
+    '''
+    p= P*100.
+    t = T-273.15
+    Ntp = 1 + (n_air(lam[:],co2) - 1) * p * (1.+p*(60.1-0.972*t)*1e-10)\
+        /(96095.43 * (1 + 0.003661 * t))
+    return Ntp
 
 def diff1(A, axis=0, samesize=True):
     if samesize:
