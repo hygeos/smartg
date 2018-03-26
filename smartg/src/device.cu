@@ -87,7 +87,10 @@ extern "C" {
 							 ) {
 
     // current thread index
-	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+	int idx = blockIdx.x *blockDim.x + threadIdx.x;
+	// Old thred index :
+	// int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+	// int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
 	int loc_prev;
 	int count_level;
 	int this_thread_active = 1;
@@ -135,17 +138,43 @@ extern "C" {
 
 	bigCount = 1;   // Initialisation de la variable globale bigCount (voir geometry.h)
 
-	ph.loc = NONE;	// Initialement le photon n'est nulle part, il doit être initialisé
-
 	atomicAdd(nThreadsActive, 1);
 
     //
     // main loop
     //
 	while (*nThreadsActive > 0) {
-		iloop += 1;
-			
-        if (((Counter[0] > NBLOOPd)
+		iloop += 1;	
+
+		/* ************************************************************************************************** */
+		/* si on simule des objs on utilise cette astuce pour lancer exactement le nombre souhaité de photons */
+
+		// Si le nombre de ph lancés NBLOOPd > 256000 et que le compteur devient > (NBLOOPd-256000) alors
+		// on commence à diminuer le nombre de threads actif... ici à 999+1 = 1000 threads actif
+		if (nObj > 0 && (NBLOOPd > 256000) && idx > 999 && this_thread_active && Counter[0] >= (NBLOOPd-256000) && *nThreadsActive > 1000)
+		{
+			this_thread_active = 0;
+            atomicAdd(nThreadsActive, -1);
+		}
+		else if (nObj > 0 && (NBLOOPd > 2560) && idx > 99 && this_thread_active && Counter[0] >= (NBLOOPd-2560) && *nThreadsActive > 100)
+		{
+			this_thread_active = 0;
+            atomicAdd(nThreadsActive, -1);
+		}
+		else if(nObj > 0 && (NBLOOPd > 256) && idx > 9 && this_thread_active &&Counter[0] >= (NBLOOPd-256) && *nThreadsActive > 10)
+		{
+			this_thread_active = 0;
+            atomicAdd(nThreadsActive, -1);
+		}
+		else if(nObj > 0 && (NBLOOPd > 16) && idx > 0 && this_thread_active &&Counter[0] >= (NBLOOPd-16) && *nThreadsActive > 1)
+		{
+			this_thread_active = 0;
+            atomicAdd(nThreadsActive, -1);
+		}
+        /* ************************************************************************************************** */
+		
+		// Avant ">" et maintenant ">=" car si Counter = au nombre de ph lancés NBLOOPd, il faut s'arrêter !
+        if (((Counter[0] >= NBLOOPd)
 			 && this_thread_active
 			 && (ph.loc == NONE))
 			|| (iloop > MAX_LOOP)  // avoid infinite loop
@@ -198,11 +227,10 @@ extern "C" {
 		count_level = -1;
 		if (ph.loc == SPACE) {
             count_level = UPTOA;
-
+			
             // increment the photon counter
             // (for this thread)
             nbPhotonsThr++;
-
             // reset the photon location (always)
             ph.loc = NONE;
             #ifdef DEBUG_PHOTON
@@ -616,16 +644,37 @@ extern "C" {
 				} //LE
 				surfaceLambertienne3D(&ph, 0, tabthv, tabphi, spectrum,
 									  &rngstate, &geoStruc);
-                #ifdef DEBUG_PHOTON
-				display("OBJSURF", &ph);
-                #endif
 			} // END Lambertian Mirror
 			else if (geoStruc.material == 2) {ph.loc = ABSORBED;} // Matte
-			else if (geoStruc.material == 3)
+			else if (geoStruc.material == 3) // Mirror
 			{
+				if (LEd == 1)
+				{				
+					int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
+					int iph0 = idx%NBPHId;
+					for (int ith=0; ith<NBTHETAd; ith++){
+						for (int iph=0; iph<NBPHId; iph++){
+							copyPhoton(&ph, &ph_le);
+							ph_le.iph = (iph + iph0)%NBPHId;
+							ph_le.ith = (ith + ith0)%NBTHETAd;
+							surfaceRugueuse3D(&ph_le, &geoStruc, &rngstate);
+							// Only two levels for counting by definition
+							countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, NPhotonsOut);
+                            #ifdef SPHERIQUE
+							// for spherical case attenuation if performed usin move_sp
+							if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
+						    #endif
+							countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, NPhotonsOut);
+						}//direction
+					}//direction
+				} //LE
 				surfaceRugueuse3D(&ph, &geoStruc, &rngstate);
-			}
-			else {ph.loc = ABSORBED;} // unknow material
+			} // End Mirror
+			else {ph.loc = REMOVED;} // unknow material
+			
+			#ifdef DEBUG_PHOTON
+			display("OBJSURF", &ph);
+            #endif
 		}
         __syncthreads();
 
@@ -638,16 +687,9 @@ extern "C" {
             if ((ph.loc == ATMOS) || (ph.loc == SPACE) || (ph.loc == OBJSURF)) count_level = UP0P;
             if (ph.loc == OCEAN) count_level = DOWN0M;
         }
-        if ((loc_prev == OBJSURF))
-		{
-			if (ph.loc == SPACE) count_level = UP0P;
-			if (ph.loc == SURF0P) count_level = DOWN0P;
-		}
 		
         /* Cone Sampling */
         if (LEd == 0) countPhoton(&ph, prof_atm, prof_oc, tabthv, tabphi, count_level, errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
-
-
 
 		if(ph.loc == ABSORBED){
 			ph.loc = NONE;
@@ -662,18 +704,23 @@ extern "C" {
 
         // from time to time, transfer the per-thread photon counter to the
         // global counter
-        if (nbPhotonsThr % 100 == 0) {
-            atomicAdd(Counter, nbPhotonsThr);
-            nbPhotonsThr = 0;
-        }
+        // if (nbPhotonsThr % 100 == 0) {
+        //     atomicAdd(Counter, nbPhotonsThr);
+        //     nbPhotonsThr = 0;
+        // }
+		//nbPhotonsThr = 1;
+		// if (idx == 0) printf("nombre de photons par thread : %llu et counter : %d\n", nbPhotonsThr, Counter[0]);
 
+		atomicAdd(Counter, nbPhotonsThr);
+		nbPhotonsThr = 0;
+		__syncthreads();
+		
+	// }
 	}
 
-
 	// Après la boucle on rassemble les nombres de photons traités par chaque thread
-
 	atomicAdd(Counter, nbPhotonsThr);
-
+	
     if (ph.loc != NONE) {
         atomicAdd(errorcount+ERROR_MAX_LOOP, 1);
     }
@@ -1061,7 +1108,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 #ifdef SPHERIQUE
 __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_level,
                         struct RNG_State *rngstate) {
-
+	
     float tauRdm;
     float hph = 0.;  // cumulative optical thickness
     float vzn, delta1, h_cur, tau_cur, epsilon, AMF;
@@ -1604,6 +1651,10 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
     } // Ocean
 
 
+
+	
+
+
     if (ph->loc == ATMOS) {
         float rdist;
 
@@ -1618,8 +1669,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 		// Launch the function geoTest to see if there are an intersection with the 
 		// geometry, return true/false and give the position phit of the intersection
 		// nObj = le nombre d'objets, si = 0 alors le test n'est pas nécessaire.
-		if (nObj > 0) {mytest = geoTest(ph->pos, ph->v, ph->locPrev, &phit, geoS, myObjets);}
-
+		if (nObj > 0) {mytest = geoTest(ph->pos, ph->v, ph->locPrev, &phit, geoS, myObjets);}			
 		// if mytest = true (intersection with the geometry) and the position of the intersection is in
 		// the atmosphere (0 < Z < 120), then: Begin to analyse is there is really an intersection
 		if(mytest && phit.z >= 0.F && phit.z <= 120.F)
@@ -1680,7 +1730,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 
 
 			// if tauHit (optical distance to hit the geometry) < tauR, then: there is interaction.
-			if (tauHit < tauR)
+			if (tauHit < tauR || IsAtm == 0) // IsAtm == 0 (without atm for objects) -> we don't care about tau
 			{
 				// to see
 				ph->layer = ilayer2;
@@ -1701,15 +1751,50 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 				ph->pos = phit;                         // update the position of the photon
 				return;
 			}
-		}
+		} // End of mytest = true
+
+		// Case where atm is false in special case with objetcs
+		// if there is not an intersect with an objet we have a special treatment
+		if (nObj > 0 && IsAtm == 0 && !mytest)
+		{
+			BBox boite(make_float3(-120., -120., 0), make_float3(120., 120., 120.));
+			Ray Rayon(ph->pos, ph->v, 0);
+			float intTime0, intTime1;
+			bool intersectBox;
+			float3 intersectPoint = make_float3(-1., -1., -1.);
+			
+			intersectBox = boite.IntersectP(Rayon, &intTime0, &intTime1);
+			//if (intersectBoxdisplay("TEST6", ph);
+			if (intersectBox && intTime0 <= 0.) {intersectPoint = Rayon.o * intTime1;}
+			else if (intersectBox && intTime0 > 0.) {intersectPoint = Rayon.o * intTime0;}
+			else {printf("error1 in move_pp geo!! \n"); return;}
+
+			if (intersectPoint.z > 119.999)
+			{
+				ph->loc = SPACE;
+				ph->layer = 0;
+				ph->weight *= 1;
+				return;
+			}
+			else if (intersectPoint.z < 0.001)
+			{
+				ph->loc = SURF0P;
+				ph->tau = 0.F;
+				ph->tau_abs = 0.F;
+				ph->pos.z = 0.;
+				ph->layer = NATMd;
+				ph->weight *= 1;
+				return;
+			}
+			else {ph->loc = NONE;return;}
+		}	
 		// ========================================================================================================
 
         // If tau<0 photon is reaching the surface 
         if(ph->tau < 0.F){
 
             #ifndef ALIS
-			if (IsAtm == 0) ph->weight *= 1;
-            else if (BEERd == 1) {// absorption between start and stop
+            if (BEERd == 1) {// absorption between start and stop
                 ab =  0.F;
                 ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
             }
@@ -1748,8 +1833,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
         else if( ph->tau > get_OD(BEERd, prof_atm[NATMd + ph->ilam *(NATMd+1)]) ){
 
             #ifndef ALIS
-			if (IsAtm == 0) ph->weight *= 1;
-			else if (BEERd == 1) {// absorption between start and stop
+		    if (BEERd == 1) {// absorption between start and stop
                 ab = prof_atm[NATMd + ph->ilam *(NATMd+1)].OD_abs;
                 ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
             }
@@ -1781,7 +1865,6 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
         }
         
         // Sinon il reste dans l'atmosphère, et va subit une nouvelle diffusion
-        
         // Calcul de la layer dans laquelle se trouve le photon
         tauBis =  get_OD(BEERd, prof_atm[NATMd + ph->ilam *(NATMd+1)]) - ph->tau;
         ilayer = 1;
@@ -1804,8 +1887,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
         #endif
 
         #ifndef ALIS
-		if (IsAtm == 0) ph->weight *= 1;
-        else if (BEERd == 0) ph->weight *= prof_atm[ph->layer+ph->ilam*(NATMd+1)].ssa;
+        if (BEERd == 0) ph->weight *= prof_atm[ph->layer+ph->ilam*(NATMd+1)].ssa;
         else { // We compute the cumulated absorption OT at the new postion of the photon
             // photon new position in the layer
             ab = prof_atm[NATMd+ph->ilam*(NATMd+1)].OD_abs - 
@@ -1861,6 +1943,7 @@ __device__ void scatter(Photon* ph,
 	float P11, P12, P22, P33, P43, P44;
 	
 
+	
     if (le){
         /* in case of LE the photon units vectors, scattering angle and Psi rotation angle are determined by output zenith and azimuth angles*/
         float thv, phi;
@@ -2242,7 +2325,7 @@ __device__ void choose_scatterer(Photon* ph,
 __device__ void surfaceAgitee(Photon* ph, int le,
                               float* tabthv, float* tabphi, int count_level,
                               struct RNG_State *rngstate) {
-	
+
 	if( SIMd == ATM_ONLY){ // Atmosphère , la surface absorbe tous les photons
 		ph->loc = ABSORBED;
 		return;
@@ -3457,6 +3540,13 @@ __device__ void surfaceRugueuse3D(Photon* ph, IGeo* geoS, struct RNG_State *rngs
 	v_n = ph->v;
 	u_n = ph->u;
 
+	// float testX = RAND;
+	// if (testX < 0.5)
+	// {
+	// 	ph->loc = ABSORBED;
+	// 	return;
+	// }
+
 	// Depolarisation du Photon
     float4x4 L = make_float4x4(
 		0.5F, 0.5F, 0.F, 0.F,
@@ -3596,6 +3686,9 @@ __device__ void countPhoton(Photon* ph,
     else {
        if (LEd == 0) {
           atomicAdd(errorcount+ERROR_THETA, 1);
+		  // Permet de visualiser les photons aux zenith dans le cas où il y a au moins un obj
+		  if (nObj == 0)
+		  	  return;
        }
        else {
           // Compute Psi in the special case of zenith
@@ -3726,7 +3819,7 @@ __device__ void countPhoton(Photon* ph,
     if (count_level == UPTOA && HORIZd == 0) weight *= weight_irr;
 
     #ifdef DEBUG
-    int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
+	int idx = blockIdx.x *blockDim.x + threadIdx.x;
     if (isnan(weight)) printf("(idx=%d) Error, weight is NaN, %d\n", idx,ph->loc);
     if (isnan(st.x)) printf("(idx=%d) Error, s1 is NaN\n", idx);
     if (isnan(st.y)) printf("(idx=%d) Error, s2 is NaN\n", idx);
@@ -4148,9 +4241,9 @@ __device__ void display(const char* desc, Photon* ph) {
     //
     // display the status of the photon (only for thread 0)
     //
-    int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
+	int idx = blockIdx.x *blockDim.x + threadIdx.x;
 
-    if (idx==0) {
+    if (1){//idx==0) {
 		
 		printf("%16s %4i X=(%9.4f,%9.4f,%9.4f) V=(%6.3f,%6.3f,%6.3f) U=(%6.3f,%6.3f,%6.3f) S=(%6.3f,%6.3f,%6.3f,%6.3f) tau=%8.3f tau_abs=%8.3f wvl=%6.3f weight=%11.3e ",
                desc,

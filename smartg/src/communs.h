@@ -126,6 +126,13 @@
 class Photon
 {
 public:
+	// Initialisation(s)
+	__host__ __device__ Photon()
+	{
+		// Initialement le photon n'est nulle part, il doit être initialisé
+		loc = NONE;
+	}
+	
     // Normalized direction vector
     float3 v;
     // Normalized vector orthogonal to the direction vector 
