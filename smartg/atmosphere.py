@@ -596,7 +596,6 @@ class AtmAFGL(Atmosphere):
         pro.add_axis('wavelength', wav[:])
 
         # refractive index
-        #n = n_air(wav[:]*1e-3, prof.dens_co2/prof.dens_air*1e6)
         n = refractivity(wav[:]*1e-3, prof.P, prof.T,prof.dens_co2/prof.dens_air*1e6)
         pro.add_dataset('n_atm', n, axnames=['wavelength', 'z_atm'],
                         attrs={'description':

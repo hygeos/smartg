@@ -1109,41 +1109,45 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
             no  = operator/(ph->pos, ph->radius);
             vzn = dot(ph->v, no);
             //vzn = __fdividef( dot(ph->v, ph->pos) , ph->radius);
+            float psi;
             if (REFRACd) {
                 // We update photon direction at the interface due to refraction
-                // 1. sin_i
+                // 1. sin_i just to verify if refraction occurs
                 float sTh  = sqrtf(1.F - vzn*vzn);
                 // 2. determine old and new refraction indices from old and new layer indices
                 float nind = __fdividef(prof_atm[i_layer_fw+ilam].n, prof_atm[i_layer_bh+ilam].n);
                 float sign;
                 if (nind > 1) sign=1;
                 else sign=-1.F;
-                if (sTh!=0.F && nind!=1.F) {
-                    float cTh  = dot(-sign*no, ph->v);
+                if (sTh!=0.F && nind!=1.F) { // in case of refraction
+	              if( sTh<=nind){ // no total reflection
+                    float3 n = sign*no; // See convention as for Rough Surface 
+                    float cTh  = -dot(n, ph->v);
+                    sTh  = sqrtf(1.F - cTh*cTh);
                     // 3. Snell Descartes law :
 		            float temp = __fdividef(sTh,nind);
-		            float cot  = sqrtf(1.F - temp*temp );
+		            float cot  = sqrtf(1.F - temp*temp);
                     float alpha= __fdividef(cTh, nind) - cot;
-                    // 4. Update photons direction cosines
-                    ph->v = operator+(operator/(ph->v, nind), alpha*no);
-                    ph->u = operator/(operator+(no, cot*ph->v), sTh )*nind;
+                    // 4. Update photons direction cosines and u
+                    float3 v1=operator+(operator/(ph->v, nind), alpha*n);
+                    ComputePsiLE(ph->u, ph->v, v1, &psi, &ph->u); 
+                    ph->v = v1;
                     vzn = dot(ph->v, no);
-                    // 5. Rotates Stokes parameters
-	                temp = __fdividef(dot(no, ph->u), sTh);
-	                float psi = acosf( fmin(1.00F, fmax( -1.F, temp ) ));	
-	                if( dot(no, cross(ph->u, ph->v)) <0 ){
-		                psi = -psi;
-	                }
+                    /*//5. Rotates Stokes parameters
+                    psi=0.F;
                     rotateStokes(ph->stokes, psi, &ph->stokes);
                     #ifdef BACK
                     float4x4 L = make_diag_float4x4 (1.F);
                     rotationM(-psi,&L);
                     ph->M   = mul(ph->M,L);
-                    #endif
+                    #endif*/
+                  }
+                  else { //in case of total reflection we continue with refraction but tangent direction
+                  }
                 }
                 #ifdef DEBUG_PHOTON
 	            int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
-                if (idx==0) printf("%f %f %f, %f %f %f, %i %i\n",ph->pos.x,ph->pos.y,ph->pos.z, ph->v.x, ph->v.y, ph->v.z, i_layer_bh, i_layer_fw);
+                if (idx==0) printf("%f %f %f, %f %f %f, %i %i, %f\n",ph->pos.x,ph->pos.y,ph->pos.z, ph->v.x, ph->v.y, ph->v.z, i_layer_bh, i_layer_fw, psi);
                 #endif
             }
             #endif
@@ -1556,7 +1560,7 @@ __device__ void scatter(Photon* ph,
 
 
 
-	if ( (ph->scatterer == RAY) or (ph->scatterer == PTCLE) ){
+	if ( (ph->scatterer == RAY) || (ph->scatterer == PTCLE) ){
 
 		if(!le) {
 
@@ -1849,7 +1853,7 @@ __device__ void scatter(Photon* ph,
 	}
     else {
 		
-		ph->weight /= fabs(ph->v.z); 
+        ph->weight /= fabs(ph->v.z); 
 
     }
 
@@ -2953,16 +2957,10 @@ __device__ void countPhoton(Photon* ph,
     float *tabCount; 
     #endif
 
+    // We dont count photons leaving in boxes outside SZA range
+    if ((LEd==0) && (acosf(ph->v.z) > (SZA_MAXd*90./DEMIPI))) return;
+
     float theta = acosf(fmin(1.F, fmax(-1.F, ph->v.z)));
-    #ifdef SPHERIQUE
-    if(ph->v.z<=0.f) {
-         // do not count the downward photons leaving atmosphere
-         // DR April 2016, test flux for spherical shell
-         // !! TO TEST in glitter + spherical !!
-         //return;
-         // !! TO TEST in glitter + spherical !!
-    }
-    #endif
 
 	float psi=0.;
 	int ith=0, iphi=0, il=0;
@@ -2976,7 +2974,7 @@ __device__ void countPhoton(Photon* ph,
     else {
        if (LEd == 0) {
           atomicAdd(errorcount+ERROR_THETA, 1);
-          return;
+          //return;
        }
        else {
           // Compute Psi in the special case of zenith
@@ -3114,6 +3112,7 @@ __device__ void countPhoton(Photon* ph,
 	//if (FLUXd==1 && LEd==0 & weight_irr > 0.01f) weight /= weight_irr;
     // In Forward mode, and in case of spherical flux, update the weight
 	if (FLUXd==2 && LEd==0 & weight_irr > 0.001f) weight /= weight_irr;
+    if (count_level == UPTOA && HORIZd == 0) weight *= weight_irr;
 
     #ifdef DEBUG
     int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
@@ -3337,8 +3336,10 @@ __device__ void ComputeBox(int* ith, int* iphi, int* il,
 
 	// Calcul de la valeur de ithv
 	// _rn correspond à round to the nearest integer
-	*ith = __float2int_rd(__fdividef(acosf(fabsf(photon->v.z)) * NBTHETAd, DEMIPI));
-	//*ith = __float2int_rn(__fdividef(acosf(fabsf(photon->vz)) * NBTHETAd, DEMIPI));
+	//*ith = __float2int_rd(__fdividef(acosf(fabsf(photon->v.z)) * NBTHETAd, DEMIPI));
+	/////*ith = __float2int_rn(__fdividef(acosf(fabsf(photon->vz)) * NBTHETAd, DEMIPI));
+	//*ith = __float2int_rd(__fdividef(acosf(photon->v.z) * NBTHETAd, 2*DEMIPI));
+	*ith = __float2int_rd(__fdividef(acosf(photon->v.z) * NBTHETAd, SZA_MAXd/90.*DEMIPI));
 
 	// Calcul de la valeur de il
     // DEV!!

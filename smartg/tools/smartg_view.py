@@ -478,7 +478,7 @@ def input_view(mlut, iw=0, kind='atm', zmax=None, ipha=None):
 
 def compare(mlut, mref, field='up (TOA)',errb=False, logI=False, U_sign=1, same_U_convention=True,
                   Nparam=4, vmax=None, vmin=None, emax=None, ermax=None, same_azimuth_convention=True,
-                  azimuth=[0.,90.], title=''):
+                  azimuth=[0.,90.], title='', SZA_MAX=89.):
     '''
     compare the results of two smartg runs : mlut vs mref in two different azimuth planes
     outputs: a figure
@@ -495,6 +495,7 @@ def compare(mlut, mref, field='up (TOA)',errb=False, logI=False, U_sign=1, same_
         same_azimuth_convention: mlut and mref have the same azimuth convention
         azimuth: list of azimuths
         title: plot title
+        SZA_MAX: SZA max for the comparison
     '''
 
     from pylab import subplots
@@ -595,7 +596,7 @@ def compare(mlut, mref, field='up (TOA)',errb=False, logI=False, U_sign=1, same_
             ax[0,i].errorbar(-th,sm, fmt=sym1+'', \
                         label=r'$\Phi=%.0f-%.0f$'%(phi0,180.-phi0))
             ax[0,i].set_ylim([vmi, vma])
-            ax[0,i].set_xlim([-89., 89.])
+            ax[0,i].set_xlim([-SZA_MAX, SZA_MAX])
             ax[0,i].ticklabel_format(axis='y', style='sci', scilimits=(-2,2))
             
             if logI and i==0:
@@ -618,7 +619,7 @@ def compare(mlut, mref, field='up (TOA)',errb=False, logI=False, U_sign=1, same_
                                  fmt=sym1+sym2,label=r'$\Phi=%.0f-%.0f$'%(phi0,180.-phi0),ecolor='k')
                     ax[1,i].errorbar(-th,sm-refm,fmt=sym1+sym2,ecolor='k') 
             ax[1,i].set_ylim([-1*ema,ema])
-            ax[1,i].set_xlim([-89., 89.])  
+            ax[1,i].set_xlim([-SZA_MAX,SZA_MAX])  
 
             ax[2,i].errorbar(th,(sp-refp)/refp*100,\
                              fmt=sym1+sym2,label=r'$\Phi=%.0f-%.0f$'%(phi0,180.-phi0),ecolor='k')
@@ -627,9 +628,9 @@ def compare(mlut, mref, field='up (TOA)',errb=False, logI=False, U_sign=1, same_
             if i!=Nparam-1 : ax[2,i].set_ylim([-1*erma,erma])
             else : ax[2,i].set_ylim([-1*erma,erma])
                 
-            ax[2,i].set_xlim([-89., 89.])    
-            ax[1,i].plot([-89,89],[0.,0.],'k--')
-            ax[2,i].plot([-89,89],[0.,0.],'k--')
+            ax[2,i].set_xlim([-SZA_MAX, SZA_MAX])    
+            ax[1,i].plot([-SZA_MAX,SZA_MAX],[0.,0.],'k--')
+            ax[2,i].plot([-SZA_MAX,SZA_MAX],[0.,0.],'k--')
             ax[1,i].ticklabel_format(axis='y', style='sci', scilimits=(-2,2))
 
             ax[0,i].set_title(S.desc)   

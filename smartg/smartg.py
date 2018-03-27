@@ -352,8 +352,8 @@ class Smartg(object):
              NBTHETA=45, NBPHI=90, NF=1e6,
              OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
              NBLOOP=None, progress=True,
-             le=None, flux=None, stdev=False, BEER=0, RR=1, WEIGHTRR=0.1, sensor=None,
-             refrac=False):
+             le=None, flux=None, stdev=False, BEER=0, RR=1, WEIGHTRR=0.1, SZA_MAX=90.,
+             sensor=None, refraction=False, reflectance=True):
         '''
         Run a SMART-G simulation
 
@@ -444,9 +444,15 @@ class Smartg(object):
             - BEER: if BEER=1 compute absorption using Beer-Lambert law, otherwise compute it with the Single scattering albedo
                 (BEER automatically set to 1 if ALIS is chosen)
 
+            - SZA_MAX : Maximum SZA for solar BOXES in case a Regulard grid and cone sampling
+
             - sensor : sensor object, backward mode (from sensor to source), back should be set to True in the smartg constructor
 
-            - refrac : include atmospheric refraction
+            - refraction : include atmospheric refraction
+
+            - reflectance : if flux is None, output is in reflectance units if True,(for plane parallel atmosphere). Otherwise
+                is is in radiance units with Solar irradiance set to PI (default False)
+                
 
         Return value:
         ------------
@@ -460,7 +466,7 @@ class Smartg(object):
 
         Example:
             M = Smartg().run(wl=400., NBPHOTONS=1e7, atm=Profile('afglt'))
-            M['I_up (TOA)'][:,:] contains the top of atmosphere reflectance
+            M['I_up (TOA)'][:,:] contains the top of atmosphere radiance/reflectance
         '''
 
         #
@@ -636,7 +642,10 @@ class Smartg(object):
             NWLPROBA = 0
 
         REFRAC = 0
-        if refrac: REFRAC=1
+        if refraction: REFRAC=1
+
+        HORIZ = 1
+        if (not self.pp and not reflectance): HORIZ = 0
 
         # initialization of the constants
         InitConst(surf, env, NATM, NOCE, self.mod,
@@ -644,7 +653,8 @@ class Smartg(object):
                        XBLOCK, XGRID, NLAM, SIM, NF,
                        NBTHETA, NBPHI, OUTPUT_LAYERS,
                        RTER, LE, FLUX, MI, NLVL, NPSTK,
-                       NWLPROBA, BEER, RR, WEIGHTRR, NLOW, sensor, REFRAC)
+                       NWLPROBA, BEER, RR, WEIGHTRR, NLOW, 
+                       sensor, REFRAC, HORIZ, SZA_MAX)
 
 
         # Initialize the progress bar
@@ -669,7 +679,7 @@ class Smartg(object):
         # finalization
         output = finalize(tabPhotonsTot, wl[:], NPhotonsInTot, errorcount, NPhotonsOutTot,
                            OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, prof_oc,
-                           sigma, THVDEG, le=le, flux=flux, back=self.back)
+                           sigma, THVDEG, reflectance, HORIZ, le=le, flux=flux, back=self.back, SZA_MAX=SZA_MAX)
         output.set_attr('processing time (s)', (datetime.now() - t0).total_seconds())
 
         p.finish('Done! | Received {:.1%} of {:.3g} photons ({:.1%})'.format(
@@ -685,14 +695,22 @@ class Smartg(object):
         return output
 
 
-def calcOmega(NBTHETA, NBPHI):
+def calcOmega(NBTHETA, NBPHI, SZA_MAX=90.):
     '''
     returns the zenith and azimuth angles, and the solid angles
     '''
 
     # zenith angles
-    dth = (np.pi/2)/NBTHETA
-    tabTh = np.linspace(dth/2, np.pi/2-dth/2, NBTHETA, dtype='float64')
+    #dth = (np.pi/2)/NBTHETA
+    #tabTh = np.linspace(dth/2, np.pi/2-dth/2, NBTHETA, dtype='float64')
+
+    # zenith angles PI
+    #dth = (np.pi)/NBTHETA
+    #tabTh = np.linspace(dth/2, np.pi-dth/2, NBTHETA, dtype='float64')
+
+    # zenith angles SZA_MAX
+    dth = (SZA_MAX/180.*np.pi)/NBTHETA
+    tabTh = np.linspace(dth/2, SZA_MAX/180.*np.pi-dth/2, NBTHETA, dtype='float64')
 
     # azimuth angles
     #dphi = np.pi/NBPHI
@@ -712,7 +730,7 @@ def calcOmega(NBTHETA, NBPHI):
 
 def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
              OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, prof_oc,
-             sigma, THVDEG, le=None, flux=None, back=False):
+             sigma, THVDEG, reflectance, HORIZ, le=None, flux=None, back=False, SZA_MAX=90.):
     '''
     create and return the final output
     '''
@@ -725,18 +743,14 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
         if le!=None : 
             tabTh = le['th']
             tabPhi = le['phi']
-            if back:
-                norm_geo =  1. 
-                #norm_geo =  np.cos(tabTh).reshape((1,1,1,-1,1))
-            else:
-                norm_geo = 1.
-                #norm_geo =  np.cos(tabTh).reshape((1,1,1,-1,1))
+            norm_geo =  1. 
         else : 
-            tabTh, tabPhi, tabOmega = calcOmega(NBTHETA, NBPHI )
-            norm_geo = 2.0 * tabOmega.reshape((1,1,-1,1)) * np.cos(tabTh).reshape((1,1,-1,1))
+            tabTh, tabPhi, tabOmega = calcOmega(NBTHETA, NBPHI, SZA_MAX)
+            if HORIZ==1 : norm_geo = 2.0 * tabOmega.reshape((1,1,-1,1)) * np.cos(tabTh).reshape((1,1,-1,1))
+            else :  norm_geo = 2.0 * tabOmega.reshape((1,1,-1,1)) 
     else:
         norm_geo = 1.
-        tabTh, tabPhi, _ = calcOmega(NBTHETA, NBPHI)
+        tabTh, tabPhi, _ = calcOmega(NBTHETA, NBPHI, SZA_MAX)
 
     # normalization
     tabFinal = tabPhotonsTot.astype('float64')/(norm_geo*norm_npho)
@@ -880,7 +894,7 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
             m.add_lut(prof_oc['FQY1_oc'])
         m.add_lut(prof_oc['albedo_seafloor'])
 
-    # write the error count
+    # write the error )count
     err = errorcount.get()
     for i, d in enumerate([
             'ERROR_THETA',
@@ -1057,7 +1071,8 @@ def InitConst(surf, env, NATM, NOCE, mod,
                    NBPHOTONS, NBLOOP, THVDEG, DEPO,
                    XBLOCK, XGRID,NLAM, SIM, NF,
                    NBTHETA, NBPHI, OUTPUT_LAYERS,
-                   RTER, LE, FLUX, MI, NLVL, NPSTK, NWLPROBA, BEER, RR, WEIGHTRR, NLOW, sensor, REFRAC) :
+                   RTER, LE, FLUX, MI, NLVL, NPSTK, NWLPROBA, BEER, RR, 
+                   WEIGHTRR, NLOW, sensor, REFRAC, HORIZ, SZA_MAX) :
 
     """
     Initialize the constants in python and send them to the device memory
@@ -1131,6 +1146,8 @@ def InitConst(surf, env, NATM, NOCE, mod,
     copy_to_device('RTER', RTER, np.float32)
     copy_to_device('NWLPROBA', NWLPROBA, np.int32)
     copy_to_device('REFRACd', REFRAC, np.int32)
+    copy_to_device('HORIZd', HORIZ, np.int32)
+    copy_to_device('SZA_MAXd', SZA_MAX, np.float32)
 
 
 def init_profile(wl, prof, kind):
