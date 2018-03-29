@@ -134,7 +134,7 @@ __device__ void choose_scatterer(Photon* ph,
 __device__ void scatter(Photon* ph,
         struct Profile *prof_atm, struct Profile *prof_oc,
         struct Phase *faer2, struct Phase *foce2,
-        int le,
+        int le, float dth,
         float* tabthv, float* tabphi, int count_level,
         struct RNG_State*);
 

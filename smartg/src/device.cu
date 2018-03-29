@@ -91,6 +91,7 @@ extern "C" {
 	int count_level;
 	int this_thread_active = 1;
 	unsigned long long iloop = 0;
+    float dth=0.F;
 
     struct RNG_State rngstate;
     #ifdef PHILOX
@@ -127,7 +128,7 @@ extern "C" {
 	
 
 	Photon ph, ph_le; 		// On associe une structure de photon au thread
-	//Photon ph_le2
+	//Photon ph_le2;
 
 	bigCount = 1;   // Initialisation de la variable globale bigCount (voir geometry.h)
 
@@ -246,7 +247,7 @@ extern "C" {
 			        down_level = DOWNB;
 		        }
 
-                // Loop on levels for counting (for upward and backward)
+                // Loop on levels for counting (for upward and downward)
 			    for(int k=0; k<NK; k++){
 			        if (k==0) count_level_le = up_level;
 			        else count_level_le = down_level;
@@ -259,14 +260,34 @@ extern "C" {
                             // Computation of the index of the direction
                             ph_le.iph = (iph + iph0)%NBPHId;
                             ph_le.ith = (ith + ith0)%NBTHETAd;
+
+                            /*#ifdef SPHERIQUE
+                            // in case of atmospheric refraction determine the outgoing direction
+                            if (REFRACd && ph_le.loc==ATMOS) {
+                                float phi = tabphi[ph_le.iph];
+                                float thv = tabthv[ph_le.ith];
+                                float3 v;
+                                v.x = cosf(phi) * sinf(thv);
+                                v.y = sinf(phi) * sinf(thv);
+                                v.z = cosf(thv);
+                                ph_le.v = v;
+                                move_sp(&ph_le, prof_atm, 1, UPTOA , &rngstate);
+                                dth = -acosf(dot(ph_le.v,v));
+                                copyPhoton(&ph, &ph_le);
+                                ph_le.iph = (iph + iph0)%NBPHId;
+                                ph_le.ith = (ith + ith0)%NBTHETAd;
+                            }
+                            else dth=0.F;
+                            #endif*/
+
                             // Scatter the virtual photon, using le=1, and count_level for the scattering angle computation
                             scatter(&ph_le, prof_atm, prof_oc, faer, foce,
-                                    1, tabthv, tabphi,
+                                    1, dth, tabthv, tabphi,
                                     count_level_le, &rngstate);
 
                             #ifdef DEBUG_PHOTON
-                            //if (k==0) display("SCATTER LE UP", &ph_le);
-                            //else display("SCATTER LE DOWN", &ph_le);
+                            if (k==0) display("SCATTER LE UP", &ph_le);
+                            else display("SCATTER LE DOWN", &ph_le);
                             #endif
 
                             #ifdef SPHERIQUE
@@ -295,7 +316,7 @@ extern "C" {
                 int iph0 = idx%NBPHId;
                 copyPhoton(&ph, &ph_le);
                 scatter(&ph_le, prof_atm, prof_oc, faer, foce,
-                            1, tabthv, tabphi,
+                            1, dth, tabthv, tabphi,
                             UP0M2, &rngstate);
                 ph_le.weight *= expf(-fabs(ph_le.tau/ph_le.vz));
                 ph_le.loc=SURF0M;
@@ -333,7 +354,7 @@ extern "C" {
 
             /* Scattering Propagation , using le=0 and propagation photon */
             scatter(&ph, prof_atm, prof_oc, faer, foce,
-                    0, tabthv, tabphi, 0,
+                    0, 0.F, tabthv, tabphi, 0,
                     &rngstate);
             #ifdef DEBUG_PHOTON
             display("SCATTER", &ph);
@@ -1094,6 +1115,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
             vzn = __fdividef( dot(ph->v, ph->pos) , ph->radius);
             #endif
             #endif
+
             if (BEERd == 1) ph->weight *= __expf(-( epsilon * h_cur_abs));
 
             break;
@@ -1108,8 +1130,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
             ph->radius = length(ph->pos);
             no  = operator/(ph->pos, ph->radius);
             vzn = dot(ph->v, no);
-            //vzn = __fdividef( dot(ph->v, ph->pos) , ph->radius);
-            float psi;
+            float psi=0.F;
             if (REFRACd) {
                 // We update photon direction at the interface due to refraction
                 // 1. sin_i just to verify if refraction occurs
@@ -1120,41 +1141,37 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
                 if (nind > 1) sign=1;
                 else sign=-1.F;
                 if (sTh!=0.F && nind!=1.F) { // in case of refraction
+                  float3 v1;
+                  float3 n = sign*no; // See convention as for Rough Surface 
+                  float cTh  = -dot(n, ph->v);
 	              if( sTh<=nind){ // no total reflection
-                    float3 n = sign*no; // See convention as for Rough Surface 
-                    float cTh  = -dot(n, ph->v);
                     sTh  = sqrtf(1.F - cTh*cTh);
                     // 3. Snell Descartes law :
 		            float temp = __fdividef(sTh,nind);
 		            float cot  = sqrtf(1.F - temp*temp);
                     float alpha= __fdividef(cTh, nind) - cot;
                     // 4. Update photons direction cosines and u
-                    float3 v1=operator+(operator/(ph->v, nind), alpha*n);
+                    v1=operator+(operator/(ph->v, nind), alpha*n);
                     ComputePsiLE(ph->u, ph->v, v1, &psi, &ph->u); 
                     ph->v = v1;
                     vzn = dot(ph->v, no);
-                    /*//5. Rotates Stokes parameters
-                    psi=0.F;
-                    rotateStokes(ph->stokes, psi, &ph->stokes);
-                    #ifdef BACK
-                    float4x4 L = make_diag_float4x4 (1.F);
-                    rotationM(-psi,&L);
-                    ph->M   = mul(ph->M,L);
-                    #endif*/
                   }
                   else { //in case of total reflection we continue with refraction but tangent direction
-                  }
-                }
-                #ifdef DEBUG_PHOTON
-	            int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
-                if (idx==0) printf("%f %f %f, %f %f %f, %i %i, %f\n",ph->pos.x,ph->pos.y,ph->pos.z, ph->v.x, ph->v.y, ph->v.z, i_layer_bh, i_layer_fw, psi);
-                #endif
-            }
-            #endif
-            if (BEERd == 1) ph->weight *= __expf(-( h_cur_abs));
-        }
+                    v1=operator+(ph->v, (2*cTh)*n);
+                    ComputePsiLE(ph->u, ph->v, v1, &psi, &ph->u); 
+                    ph->v = v1;
+                    vzn = dot(ph->v, no);
+                  } // no total reflection 
+                } // no refraction computation necessary
 
-    }
+            } // No Refraction
+            #endif
+
+            if (BEERd == 1) ph->weight *= __expf(-( h_cur_abs));
+        } // photon advances to next layer
+
+    } // while loop
+
     if (le) {
         if (( (count_level==UPTOA)  && (ph->loc==SPACE ) ) || ( (count_level==DOWN0P) && (ph->loc==SURF0P) )) ph->weight *= __expf(-(hph + h_cur));
         else ph->weight = 0.;
@@ -1494,7 +1511,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 __device__ void scatter(Photon* ph,
        struct Profile *prof_atm, struct Profile *prof_oc,
         struct Phase *faer, struct Phase *foce,
-        int le,
+        int le, float dth,
         float* tabthv, float* tabphi, int count_level,
         struct RNG_State *rngstate) {
 
@@ -1517,7 +1534,7 @@ __device__ void scatter(Photon* ph,
         if (count_level==DOWN0P || count_level==DOWNB) sign = -1.0F;
         else sign = 1.0F;
         phi = tabphi[ph->iph];
-        thv = tabthv[ph->ith];
+        thv = tabthv[ph->ith] + dth;
         if (thv < EPS) thv = EPS;
         v.x = cosf(phi) * sinf(thv);
         v.y = sinf(phi) * sinf(thv);
