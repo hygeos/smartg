@@ -228,7 +228,7 @@ class Sensor(object):
 class Smartg(object):
 
     def __init__(self, pp=True, debug=False,
-                 alt_move=True, debug_photon=False,
+                 debug_photon=False,
                  double=False, alis=None, back=False, bias=True, rng='PHILOX'):
         '''
         Initialization of the Smartg object
@@ -246,8 +246,6 @@ class Smartg(object):
             Compilation flags, not available if the kernel is provided as a binary:
 
             - debug: set to True to activate debug mode (optional stdout if problems are detected)
-
-            - alt_move: set to true to activate the alternate move scheme in move_sp.
 
             - debug_photon: activate the display of photon path for the thread 0
 
@@ -284,8 +282,6 @@ class Smartg(object):
         if debug:
             # additional tests for debugging
             options.append('-DDEBUG')
-        if alt_move:
-            options.append('-DALT_MOVE')
         if debug_photon:
             options.append('-DDEBUG_PHOTON')
         if double:

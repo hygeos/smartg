@@ -166,7 +166,6 @@ public:
 
     #ifdef SPHERIQUE
     float radius;
-    float taumax;
     #endif
 
     #ifdef BACK

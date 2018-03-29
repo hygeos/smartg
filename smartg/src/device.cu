@@ -914,9 +914,9 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
 
     float tauRdm;
     float hph = 0.;  // cumulative optical thickness
-    float vzn, delta1, h_cur, h_cur_abs, epsilon;
-    #ifndef ALT_MOVE
-    float d_tot = 0;
+    float vzn, delta1, h_cur, epsilon;
+    #ifndef ALIS
+    float h_cur_abs;
     #endif
     float d;
     float rat;
@@ -928,29 +928,14 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
 
     if (ph->layer == 0) ph->layer = 1;
 
-    #ifdef DEBUG
-    int niter = 0;
-    // ph->layer is indexed
-    // from 1 (TOA layer between interfaces 0 and 1)
-    // to NATM (bottom layer between interfaces NATM-1 to NATM)
-    if ((ph->layer > NATMd) || (ph->layer <= 0)) {
-        printf("Fatal error, wrong index (%d)\n", ph->layer);
-    }
-    #endif
-
     // Random Optical Thickness to go through
     if (!le) tauRdm = -logf(1.F-RAND);
     // if called with le mode, it serves to compute the transmission
     // from photon last intercation position to TOA, thus 
     // photon is forced to exit upward or downward and tauRdm is chosen to be an upper limit
     else tauRdm = 1e6;
-    
 
     vzn = __fdividef( dot(ph->v, ph->pos), ph->radius);
-    #ifndef ALT_MOVE
-    costh = vzn;
-    sinth2 = 1.f-costh*costh;
-    #endif
 
     // a priori value for sign_direction:
     // sign_direction may change sign from -1 to +1 if the photon does not
@@ -960,15 +945,6 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
 
     while (1) {
 
-        #ifdef DEBUG
-        niter++;
-
-        if (niter > 2*NATMd+1) {
-            printf("niter=%d break\n", niter);
-            break;
-        }
-        #endif
-
         //
         // stopping criteria
         //
@@ -976,11 +952,6 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
             ph->loc = SURF0P;
             ph->tau = 0.;
             ph->layer -= 1;  // next time photon enters move_sp, it's at layers NATM
-            #ifdef DEBUG
-            if (dot(ph->v, ph->pos) > 0) {
-                printf("Warning, vzn > 0 at SURF0P in move_sp (vzn=%f)\n", vzn);
-            }
-            #endif
             break;
         }
         if (ph->layer <= 0) {
@@ -1003,19 +974,12 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
             i_layer_bh = ph->layer;
         }
 
-        #ifdef ALT_MOVE
         // initializations
         costh = vzn;
         sinth2 = 1.f-costh*costh;
-        #endif
-
         //
         // calculate the distance d to the fw layer
-        #ifndef ALT_MOVE
-        // from the initial position
-        #else
         // from the current position
-        #endif
         //
         // ri : radius of next layer boundary ri=zi+RTER
         // r  : radius of current point along the path 
@@ -1029,14 +993,6 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
 
         if (delta1 < 0) {
             if (sign_direction > 0) {
-                #ifdef DEBUG
-                printf("Warning sign_direction (niter=%d, lay=%d, delta1=%f, alt=%f zlay1=%f zlay2=%f vzn=%f)\n",
-                        niter, ph->layer, delta1, ph->radius-RTER,
-                        prof_atm[i_layer_fw].z,
-                        prof_atm[i_layer_bh].z,
-                        vzn);
-                #endif
-
                 // because of numerical uncertainties, a downward photon may
                 // not strictly be between zi and zi+1
                 // in rare case of grazing angle there is sometimes no intersection
@@ -1066,37 +1022,17 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
         */
         /* d = 0.5f*(-2.*ph->radius*costh + sign_direction*2*ph->radius*sqrtf(delta1)); simplified to: */
         d = ph->radius*(-costh + sign_direction*sqrtf(delta1));
-        #ifdef DEBUG
-        if (d < 0) {
-            #ifndef ALT_MOVE
-            printf("Warning in move_sp (d=%f < 0 ; vzn=%f, sqrt(delta1)=%f)\n",
-                d, vzn, sqrtf(delta1));
-            #else
-            printf("(alt_move) Warning in move_sp (d=%f < 0 ; vzn=%f, sqrt(delta1)=%f)\n",
-                d, vzn, sqrtf(delta1));
-            #endif
-        } else if (d_tot > d) {
-            printf("Error in move_sp (d_tot=%f > d=%f)\n", d_tot, d);
-        }
-        #endif
-
 
         //
         // calculate the optical thicknesses h_cur and h_cur_abs to the next layer
         // We compute the layer extinction coefficient of the layer DTau/Dz and multiply by the distance within the layer
         //
-        #ifndef ALT_MOVE
-        h_cur = __fdividef(abs(get_OD(BEERd,prof_atm[i_layer_bh+ilam]) - get_OD(BEERd,prof_atm[i_layer_fw+ilam]))*(d - d_tot),
-                          abs(prof_atm[i_layer_bh].z - prof_atm[i_layer_fw].z));
-        h_cur_abs = __fdividef(abs(prof_atm[i_layer_bh+ilam].OD_abs - prof_atm[i_layer_fw+ilam].OD_abs)*(d - d_tot),
-                          abs(prof_atm[i_layer_bh].z - prof_atm[i_layer_fw].z));
-        #else
         h_cur = __fdividef(abs(get_OD(BEERd,prof_atm[i_layer_bh+ilam]) - get_OD(BEERd,prof_atm[i_layer_fw+ilam]))*d,
                           abs(prof_atm[i_layer_bh].z - prof_atm[i_layer_fw].z));
+        #ifndef ALIS
         h_cur_abs = __fdividef(abs(prof_atm[i_layer_bh+ilam].OD_abs - prof_atm[i_layer_fw+ilam].OD_abs)*d,
                           abs(prof_atm[i_layer_bh].z - prof_atm[i_layer_fw].z));
         #endif
-
 
         //
         // update photon position
@@ -1104,28 +1040,19 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
         if (hph + h_cur > tauRdm) {
             // photon stops within the layer
             epsilon = (tauRdm - hph)/h_cur;
-            #ifndef ALT_MOVE
-            d_tot += (d - d_tot)*epsilon;
-            #else
             d *= epsilon;
             ph->pos = operator+(ph->pos, ph->v*d);
             ph->radius = length(ph->pos);
-
-            #ifdef DEBUG
-            vzn = __fdividef( dot(ph->v, ph->pos) , ph->radius);
-            #endif
-            #endif
-
+            #ifndef ALIS
             if (BEERd == 1) ph->weight *= __expf(-( epsilon * h_cur_abs));
-
+            #else
+            ph->cdist_atm[ph->layer] += d;
+            #endif
             break;
+
         } else {
             // photon advances to the next layer
             hph += h_cur;
-            ph->layer -= sign_direction;
-            #ifndef ALT_MOVE
-            d_tot = d;
-            #else
             ph->pos = operator+(ph->pos, ph->v*d);
             ph->radius = length(ph->pos);
             no  = operator/(ph->pos, ph->radius);
@@ -1165,9 +1092,14 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
                 } // no refraction computation necessary
 
             } // No Refraction
+
+            #ifndef ALIS
+            if (BEERd == 1) ph->weight *= __expf(-( h_cur_abs));
+            #else
+            ph->cdist_atm[ph->layer] += d;
             #endif
 
-            if (BEERd == 1) ph->weight *= __expf(-( h_cur_abs));
+            ph->layer -= sign_direction;
         } // photon advances to next layer
 
     } // while loop
@@ -1177,16 +1109,6 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
         else ph->weight = 0.;
     }
 
-    #ifndef ALT_MOVE
-    //
-    // update the position of the photon
-    //
-    ph->pos = operator+(ph->pos, ph->v*d_tot);
-    ph->radius = length(ph->pos);
-    #endif
-
-    // ph->prop_aer = 1.f - prof_atm[ph->layer+ilam].pmol;
-	
     if (BEERd == 0) ph->weight *= prof_atm[ph->layer+ilam].ssa;
 }
 #endif // SPHERIQUE
@@ -3581,7 +3503,6 @@ __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
     ph_le->nint = ph->nint;
     #ifdef SPHERIQUE
     ph_le->radius = ph->radius;
-    ph_le->taumax = ph->taumax;
     #endif
     #ifdef ALIS
     int k, kmax=ph->nevt+1;
