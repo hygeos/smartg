@@ -229,7 +229,7 @@ class Smartg(object):
 
     def __init__(self, pp=True, debug=False,
                  debug_photon=False,
-                 double=False, alis=None, back=False, bias=True, rng='PHILOX'):
+                 double=False, alis=None, back=False, bias=True, alt_pp=False, rng='PHILOX'):
         '''
         Initialization of the Smartg object
 
@@ -258,6 +258,8 @@ class Smartg(object):
             - back : boolean, if True, run in backward mode, default forward mode
             
             - bias : boolean, if True, use the bias sampling scheme, default True
+
+            - alt_pp: boolean, if True new PP progation scheme is used
             
             - rng: choice of pseudo-random number generator:
                    * PHILOX
@@ -279,6 +281,9 @@ class Smartg(object):
         if not pp:
             # spherical shell calculation
             options.append('-DSPHERIQUE')
+        if alt_pp:
+            # new Plane Parallel propagation scheme
+            options.append('-DALT_PP')
         if debug:
             # additional tests for debugging
             options.append('-DDEBUG')
@@ -473,7 +478,7 @@ class Smartg(object):
             warn('Odd number of azimuth')
 
         if NBLOOP is None:
-            NBLOOP = min(NBPHOTONS/30, 1e8)
+            NBLOOP = min(NBPHOTONS/30, 1e6)
         NF = int(NF)
 
         # number of output levels
@@ -1164,9 +1169,9 @@ def init_profile(wl, prof, kind):
         prof_gpu['n'][0,:] = 1.34;
     else:
         prof_gpu['z'][0,:] = prof.axis('z_'+kind)
+        prof_gpu['n'][:,:] = prof['n_'+kind].data[...]
     prof_gpu['z'][1:,:] = -999.      # other wavelengths are NaN
 
-    prof_gpu['n'][:,:] = prof['n_'+kind].data[...]
     prof_gpu['OD'][:,:] = prof['OD_'+kind].data[...]
     prof_gpu['OD_sca'][:] = prof['OD_sca_'+kind].data[...]
     prof_gpu['OD_abs'][:] = prof['OD_abs_'+kind].data[...]

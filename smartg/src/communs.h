@@ -33,7 +33,8 @@
 
 #define MAX_LOOP 1000000000
 #define MAX_NEVT 500 // Maximum number of scattering evts stored in photon in the ALIS procedure
-#define MAX_NLOW 101 // MAX Number of wavelengths stored in the ALIS scattering correction
+#define MAX_NLOW 201 // MAX Number of wavelengths stored in the ALIS scattering correction
+#define MAX_NLAYER 200 //
 
 
 
@@ -156,12 +157,17 @@ public:
     unsigned short nint;
 
     #ifdef ALIS
+    #ifndef ALT_PP
     unsigned short nevt;  // Number  of events (including exit)
     short layer_prev[MAX_NEVT]; // History of layer where events occured
     float vz_prev[MAX_NEVT]; // History of z cosine where events occured
     float epsilon_prev[MAX_NEVT]; // History of proportion (between 0 and 1) within the layer where events occured
-    float weight_sca[MAX_NLOW]; // Table of scattering weigths for Importance Sampling correction
     float tau_sca[MAX_NLOW]; // Table of verical scattering OD of the photon for Importance Sampling correction
+    #else
+    float cdist_atm[MAX_NLAYER]; // Table of cumulative distance per layer
+    float cdist_oc[MAX_NLAYER];
+    #endif
+    float weight_sca[MAX_NLOW]; // Table of scattering weigths for Importance Sampling correction
     #endif
 
     #ifdef SPHERIQUE

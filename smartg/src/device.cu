@@ -128,7 +128,6 @@ extern "C" {
 	
 
 	Photon ph, ph_le; 		// On associe une structure de photon au thread
-	//Photon ph_le2;
 
 	bigCount = 1;   // Initialisation de la variable globale bigCount (voir geometry.h)
 
@@ -178,7 +177,12 @@ extern "C" {
            move_sp(&ph, prof_atm, 0, 0 , &rngstate);
         else 
         #endif
+        #ifdef ALT_PP
+        move_pp2(&ph, prof_atm, prof_oc, 0, 0 , &rngstate);
+        #else
         move_pp(&ph, prof_atm, prof_oc, &rngstate);
+        #endif
+
         #ifdef DEBUG_PHOTON
         display("MOVE", &ph);
         #endif
@@ -291,12 +295,13 @@ extern "C" {
                             #endif
 
                             #ifdef SPHERIQUE
-                            // !! in case of spherical geometry, the attenuation is computation using the move_sp function
-                            // in plane parallel, this is done in the next countPhoton function
                             if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, count_level_le , &rngstate);
                             #ifdef DEBUG_PHOTON
                             display("MOVE LE", &ph_le);
                             #endif
+                            #endif
+                            #ifdef ALT_PP
+                            if (ph_le.loc==ATMOS) move_pp2(&ph_le, prof_atm, prof_oc, 1, count_level_le , &rngstate);
                             #endif
 
                             // Finally count the virtual photon
@@ -307,50 +312,6 @@ extern "C" {
                     } // directions
                 } // levels
             } // LE
-
-            /* TEST DOUBLE LOCAL ESTIMATE IN OCEAN */
-            // Scattering Double Local Estimate in Ocean in case of dioptre 
-            /*if (LEd == 1 && ph.loc==OCEAN && SIMd != -2) {
-                int NK, up_level, down_level, count_level_le;
-                int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
-                int iph0 = idx%NBPHId;
-                copyPhoton(&ph, &ph_le);
-                scatter(&ph_le, prof_atm, prof_oc, faer, foce,
-                            1, dth, tabthv, tabphi,
-                            UP0M2, &rngstate);
-                ph_le.weight *= expf(-fabs(ph_le.tau/ph_le.vz));
-                ph_le.loc=SURF0M;
-                ph_le.tau=0.F;
-                NK=2;
-                up_level = UP0P;
-                down_level = DOWN0M;
-                for(int k=0; k<NK; k++){
-                    if (k==0) count_level_le = up_level;
-                    else count_level_le = down_level;
-
-                    for (int iph=0; iph<NBPHId; iph++){
-                        for (int ith=0; ith<NBTHETAd; ith++){
-                            copyPhoton(&ph_le, &ph_le2);
-                            ph_le2.iph = (iph + iph0)%NBPHId;
-                            ph_le2.ith = (ith + ith0)%NBTHETAd;
-
-                            surfaceAgitee(&ph_le2, 1, tabthv, tabphi,
-                                          count_level_le, &rngstate);
-
-                            #ifdef DEBUG_PHOTON
-                            if (k==0) display("SURFACE LE2 UP", &ph_le2);
-                            else display("SURFACE LE2 DOWN", &ph_le2);
-                            #endif
-                            countPhoton(&ph_le2, prof_atm, tabthv, tabphi, count_level_le, errorcount, tabPhotons, NPhotonsOut);
-
-                            if (k==0) { 
-                             countPhoton(&ph_le2, prof_atm, tabthv, tabphi, UPTOA , errorcount, tabPhotons, NPhotonsOut);
-                            }
-
-                        }
-                    }
-                }
-            }*/  //Double LE
 
             /* Scattering Propagation , using le=0 and propagation photon */
             scatter(&ph, prof_atm, prof_oc, faer, foce,
@@ -380,7 +341,6 @@ extern "C" {
                 /* Surface Local Estimate (not evaluated if atmosphere only simulation)*/
                 if (LEd == 1 && SIMd != -2) {
                 ///* TEST Double LE */
-                //if ((LEd == 1) && (SIMd != -2 && ph.loc == SURF0P)) {
                   int NK, count_level_le;
                   if (NOCEd==0) NK=1;
                   else NK=2;
@@ -405,8 +365,8 @@ extern "C" {
                                       count_level_le, &rngstate);
 
                         #ifdef DEBUG_PHOTON
-                        //if (k==0) display("SURFACE LE UP", &ph_le);
-                        //else display("SURFACE LE DOWN", &ph_le);
+                        if (k==0) display("SURFACE LE UP", &ph_le);
+                        else display("SURFACE LE DOWN", &ph_le);
                         #endif
 
                         // Count the photon up to the counting levels (at the surface UP0P or DOW0M)
@@ -415,8 +375,10 @@ extern "C" {
                         // Only for upward photons count also them up to TOA
                         if (k==0) { 
                             #ifdef SPHERIQUE
-                            // for spherical case attenuation if performed usin move_sp
                             if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
+                            #endif
+                            #ifdef ALT_PP
+                            if (ph_le.loc==ATMOS) move_pp2(&ph_le, prof_atm, prof_oc, 1, UPTOA , &rngstate);
                             #endif
                             // Final counting at the TOA
                             countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA , errorcount, tabPhotons, NPhotonsOut);
@@ -455,8 +417,10 @@ extern "C" {
                         // Only two levels for counting by definition
                         countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, NPhotonsOut);
                         #ifdef SPHERIQUE
-                        // for spherical case attenuation if performed usin move_sp
                         if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
+                        #endif
+                        #ifdef ALT_PP
+                        if (ph_le.loc==ATMOS) move_pp2(&ph_le, prof_atm, prof_oc, 1, UPTOA , &rngstate);
                         #endif
                         countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, NPhotonsOut);
                     }//direction
@@ -485,20 +449,21 @@ extern "C" {
                         // Only two levels for counting by definition
                         countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, NPhotonsOut);
                         #ifdef SPHERIQUE
-                        // for spherical case attenuation if performed usin move_sp
                         if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
+                        #endif
+                        #ifdef ALT_PP
+                        if (ph_le.loc==ATMOS) move_pp2(&ph_le, prof_atm, prof_oc, 1, UPTOA , &rngstate);
                         #endif
                         countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, NPhotonsOut);
                     }//direction
                   }//direction
                  } //LE
-                 //Propagation of Lamberatian reflection with le=0
+                 //Propagation of Lambertian reflection with le=0
                     surfaceLambertienne(&ph, 0, tabthv, tabphi, spectrum, &rngstate);
                 }// dis
                 else {
                  if (LEd == 1 && SIMd != -2) {
                  ///* TEST Double LE */
-                 //if ((LEd == 1) && (SIMd != -2 && ph.loc == SURF0P)) {
                   int NK, count_level_le;
                   if (NOCEd==0) NK=1;
                   else NK=2;
@@ -523,8 +488,8 @@ extern "C" {
                                       count_level_le, &rngstate);
 
                         #ifdef DEBUG_PHOTON
-                        //if (k==0) display("SURFACE LE UP", &ph_le);
-                        //else display("SURFACE LE DOWN", &ph_le);
+                        if (k==0) display("SURFACE LE UP", &ph_le);
+                        else display("SURFACE LE DOWN", &ph_le);
                         #endif
 
                         // Count the photon up to the counting levels (at the surface UP0P or DOW0M)
@@ -533,8 +498,8 @@ extern "C" {
                         // Only for upward photons count also them up to TOA
 
                         #ifdef DEBUG_PHOTON
-                        //if (k==0) display("SURFACE LE UP", &ph_le);
-                        //else display("SURFACE LE DOWN", &ph_le);
+                        if (k==0) display("SURFACE LE UP", &ph_le);
+                        else display("SURFACE LE DOWN", &ph_le);
                         #endif
 
                         // Count the photon up to the counting levels (at the surface UP0P or DOW0M)
@@ -543,8 +508,10 @@ extern "C" {
                         // Only for upward photons count also them up to TOA
                         if (k==0) { 
                             #ifdef SPHERIQUE
-                            // for spherical case attenuation if performed usin move_sp
                             if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
+                            #endif
+                            #ifdef ALT_PP
+                            if (ph_le.loc==ATMOS) move_pp2(&ph_le, prof_atm, prof_oc, 1, UPTOA , &rngstate);
                             #endif
                             // Final counting at the TOA
                             countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA , errorcount, tabPhotons, NPhotonsOut);
@@ -707,7 +674,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
         #ifdef SPHERIQUE
         ph->pos.z = RTER;
         #endif
-        #ifdef ALIS
+        #if defined(ALIS) && !defined(ALT_PP)
         for (int k=0; k<NLOWd; k++) {
             ph->tau_sca[k] = 0.F;
         }
@@ -723,7 +690,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
         #ifdef SPHERIQUE
         ph->pos.z = RTER;
         #endif
-        #ifdef ALIS
+        #if defined(ALIS) && !defined(ALT_PP)
         for (int k=0; k<NLOWd; k++) {
             ph->tau_sca[k] = 0.F; ;
         }
@@ -736,7 +703,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
         ph->tau_abs = prof_oc[NOCEd +ph->ilam*(NOCEd+1)].OD_abs;
         epsilon     = 0.F;
         ph->pos.z   = prof_oc[NOCEd].z;
-        #ifdef ALIS
+        #if defined(ALIS) && !defined(ALT_PP)
         int DL=(NLAMd-1)/(NLOWd-1);
         for (int k=0; k<NLOWd; k++) {
             ph->tau_sca[k] = get_OD(1,prof_oc[NOCEd + k*DL*(NOCEd+1)]) ;
@@ -761,7 +728,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
         delta_i = fabs(prof_oc[ilayer+ph->ilam*(NOCEd+1)].OD_abs - prof_oc[ilayer-1+ph->ilam*(NOCEd+1)].OD_abs);
         ph->tau_abs = epsilon * delta_i + (prof_oc[NOCEd+ph->ilam*(NOCEd+1)].OD_abs -
                                            prof_oc[ilayer+ph->ilam*(NOCEd+1)].OD_abs); 
-        #ifdef ALIS
+        #if defined(ALIS) && !defined(ALT_PP)
         int DL=(NLAMd-1)/(NLOWd-1);
         for (int k=0; k<NLOWd; k++) {
             delta_i = fabs(get_OD(BEERd, prof_oc[ilayer+k*DL*(NOCEd+1)]) - get_OD(BEERd, prof_oc[ilayer-1+k*DL*(NOCEd+1)]));
@@ -793,7 +760,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
         delta_i = fabs(prof_atm[ilayer+ph->ilam*(NATMd+1)].OD_abs - prof_atm[ilayer-1+ph->ilam*(NATMd+1)].OD_abs);
         ph->tau_abs = epsilon * delta_i + (prof_atm[NATMd+ph->ilam*(NATMd+1)].OD_abs -
                                            prof_atm[ilayer+ph->ilam*(NATMd+1)].OD_abs); 
-        #ifdef ALIS
+        #if defined(ALIS) && !defined(ALT_PP)
         int DL=(NLAMd-1)/(NLOWd-1);
         for (int k=0; k<NLOWd; k++) {
             delta_i = fabs(get_OD(BEERd, prof_atm[ilayer+k*DL*(NATMd+1)]) - get_OD(BEERd, prof_atm[ilayer-1+k*DL*(NATMd+1)]));
@@ -881,13 +848,16 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 
     // init specific ALIS quantities
     #ifdef ALIS
+    #ifndef ALT_PP
     ph->nevt = 0;
     ph->layer_prev[ph->nevt]   = ph->layer;
     ph->vz_prev[ph->nevt]      = ph->v.z;
     ph->epsilon_prev[ph->nevt] = epsilon;
-    for (int k=0; k<NLOWd; k++) {
-        ph->weight_sca[k] = 1.0F;
-    }
+    #else
+    for (int k=0; k<(NATMd+1); k++) ph->cdist_atm[k]=0.F;
+    for (int k=0; k<NOCEd; k++) ph->cdist_oc[k]=0.F;
+    #endif
+    for (int k=0; k<NLOWd; k++) ph->weight_sca[k] = 1.0F;
     #endif
 
     // Init photon counters
@@ -914,7 +884,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
 
     float tauRdm;
     float hph = 0.;  // cumulative optical thickness
-    float vzn, delta1, h_cur, epsilon;
+    float vzn, delta1, h_cur, tau_cur, epsilon, AMF;
     #ifndef ALIS
     float h_cur_abs;
     #endif
@@ -1022,16 +992,16 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
         */
         /* d = 0.5f*(-2.*ph->radius*costh + sign_direction*2*ph->radius*sqrtf(delta1)); simplified to: */
         d = ph->radius*(-costh + sign_direction*sqrtf(delta1));
+        AMF = __fdividef(d, abs(prof_atm[i_layer_bh].z - prof_atm[i_layer_fw].z)); // Air Mass Factor
 
         //
         // calculate the optical thicknesses h_cur and h_cur_abs to the next layer
         // We compute the layer extinction coefficient of the layer DTau/Dz and multiply by the distance within the layer
         //
-        h_cur = __fdividef(abs(get_OD(BEERd,prof_atm[i_layer_bh+ilam]) - get_OD(BEERd,prof_atm[i_layer_fw+ilam]))*d,
-                          abs(prof_atm[i_layer_bh].z - prof_atm[i_layer_fw].z));
+        tau_cur = abs(get_OD(BEERd,prof_atm[i_layer_bh+ilam]) - get_OD(BEERd,prof_atm[i_layer_fw+ilam]));
+        h_cur   = tau_cur * AMF;
         #ifndef ALIS
-        h_cur_abs = __fdividef(abs(prof_atm[i_layer_bh+ilam].OD_abs - prof_atm[i_layer_fw+ilam].OD_abs)*d,
-                          abs(prof_atm[i_layer_bh].z - prof_atm[i_layer_fw].z));
+        h_cur_abs = abs(prof_atm[i_layer_bh+ilam].OD_abs - prof_atm[i_layer_fw+ilam].OD_abs) *AMF;
         #endif
 
         //
@@ -1041,12 +1011,20 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
             // photon stops within the layer
             epsilon = (tauRdm - hph)/h_cur;
             d *= epsilon;
+            AMF*= epsilon;
             ph->pos = operator+(ph->pos, ph->v*d);
             ph->radius = length(ph->pos);
             #ifndef ALIS
             if (BEERd == 1) ph->weight *= __expf(-( epsilon * h_cur_abs));
             #else
+            float tau;
             ph->cdist_atm[ph->layer] += d;
+            //ph->cdist_atm[i_layer_bh] += d;
+            int DL=(NLAMd-1)/(NLOWd-1);
+            for (int k=0; k<NLOWd; k++) {
+                tau = abs(get_OD(1,prof_atm[i_layer_bh + k*DL*(NATMd+1)]) - get_OD(1,prof_atm[i_layer_fw + k*DL*(NATMd+1)]));
+			    ph->weight_sca[k] *= exp(-(tau-tau_cur)*AMF);
+            }
             #endif
             break;
 
@@ -1079,13 +1057,13 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
                     float alpha= __fdividef(cTh, nind) - cot;
                     // 4. Update photons direction cosines and u
                     v1=operator+(operator/(ph->v, nind), alpha*n);
-                    ComputePsiLE(ph->u, ph->v, v1, &psi, &ph->u); 
+                    //ComputePsiLE(ph->u, ph->v, v1, &psi, &ph->u); 
                     ph->v = v1;
                     vzn = dot(ph->v, no);
                   }
                   else { //in case of total reflection we continue with refraction but tangent direction
                     v1=operator+(ph->v, (2*cTh)*n);
-                    ComputePsiLE(ph->u, ph->v, v1, &psi, &ph->u); 
+                    //ComputePsiLE(ph->u, ph->v, v1, &psi, &ph->u); 
                     ph->v = v1;
                     vzn = dot(ph->v, no);
                   } // no total reflection 
@@ -1096,7 +1074,14 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
             #ifndef ALIS
             if (BEERd == 1) ph->weight *= __expf(-( h_cur_abs));
             #else
+            float tau;
             ph->cdist_atm[ph->layer] += d;
+            //ph->cdist_atm[i_layer_bh] += d;
+            int DL=(NLAMd-1)/(NLOWd-1);
+            for (int k=0; k<NLOWd; k++) {
+                tau = abs(get_OD(1,prof_atm[i_layer_bh + k*DL*(NATMd+1)]) - get_OD(1,prof_atm[i_layer_fw + k*DL*(NATMd+1)]));
+			    ph->weight_sca[k] *= __expf(-(tau-tau_cur)*AMF);
+            }
             #endif
 
             ph->layer -= sign_direction;
@@ -1115,18 +1100,152 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
 
 
 
-__device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc,
+#ifdef ALT_PP
+__device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc, int le, int count_level,
                         struct RNG_State *rngstate) {
 
-	//int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+    float tauRdm;
+    float hph = 0.;  // cumulative optical thickness
+    float vzn, h_cur, tau_cur, epsilon, AMF;
+    #ifndef ALIS
+    float h_cur_abs;
+    #endif
+    float d;
+    int sign_direction;
+    int i_layer_fw, i_layer_bh; // index or layers forward and behind the photon
+    int ilam = ph->ilam*(NATMd+1);  // wavelength offset in optical thickness table
+
+    if (ph->layer == 0) ph->layer = 1;
+
+    // Random Optical Thickness to go through
+    if (!le) tauRdm = -logf(1.F-RAND);
+    // if called with le mode, it serves to compute the transmission
+    // from photon last intercation position to TOA, thus 
+    // photon is forced to exit upward or downward and tauRdm is chosen to be an upper limit
+    else tauRdm = 1e6;
+
+    vzn = ph->v.z;
+    //vzn = __fdividef( dot(ph->v, ph->pos), ph->radius);
+
+    // a priori value for sign_direction:
+    // sign_direction may change sign from -1 to +1 if the photon does not
+    // cross lower layer
+    if (vzn <= 0) sign_direction = -1;
+    else sign_direction = 1;
+
+    while (1) {
+
+        //
+        // stopping criteria
+        //
+        if (ph->layer == NATMd+1) {
+            ph->loc = SURF0P;
+            ph->tau = 0.;
+            ph->layer -= 1;  // next time photon enters move_pp2, it's at layers NATM
+            break;
+        }
+        if (ph->layer <= 0) {
+            ph->loc = SPACE;
+            break;
+        }
+
+        //
+        // determine the index of the next potential layer
+        //
+        if (sign_direction < 0) {
+            // photon goes down
+            // (towards higher indices)
+            i_layer_fw = ph->layer;
+            i_layer_bh = ph->layer - 1;
+        } else {
+            // photon goes up
+            // (towards lower indices)
+            i_layer_fw = ph->layer - 1;
+            i_layer_bh = ph->layer;
+        }
+
+        //
+        // calculate the distance d to the fw layer
+        // from the current position
+        d   = __fdividef(abs(ph->pos.z - prof_atm[i_layer_fw].z), fabs(ph->v.z));
+        AMF = __fdividef(d, abs(prof_atm[i_layer_bh].z - prof_atm[i_layer_fw].z)); // Air Mass Factor
+
+        //
+        // calculate the optical thicknesses h_cur and h_cur_abs to the next layer
+        // We compute the layer extinction coefficient of the layer DTau/Dz and multiply by the distance within the layer
+        //
+        tau_cur = abs(get_OD(BEERd,prof_atm[i_layer_bh+ilam]) - get_OD(BEERd,prof_atm[i_layer_fw+ilam]));
+        h_cur   = tau_cur * AMF;
+        #ifndef ALIS
+        h_cur_abs = abs(prof_atm[i_layer_bh+ilam].OD_abs - prof_atm[i_layer_fw+ilam].OD_abs) *AMF;
+        #endif
+
+        //
+        // update photon position
+        //
+        if (hph + h_cur > tauRdm) {
+            // photon stops within the layer
+            epsilon = (tauRdm - hph)/h_cur;
+            d *= epsilon;
+            AMF*= epsilon;
+            ph->pos = operator+(ph->pos, ph->v*d);
+            #ifndef ALIS
+            if (BEERd == 1) ph->weight *= __expf(-( epsilon * h_cur_abs));
+            #else
+            float tau;
+            ph->cdist_atm[ph->layer] += d;
+            int DL=(NLAMd-1)/(NLOWd-1);
+            for (int k=0; k<NLOWd; k++) {
+                tau = abs(get_OD(1,prof_atm[i_layer_bh + k*DL*(NATMd+1)]) - get_OD(1,prof_atm[i_layer_fw + k*DL*(NATMd+1)]));
+			    ph->weight_sca[k] *= exp(-(tau-tau_cur)*AMF);
+            }
+            #endif
+            break;
+
+        } else {
+            // photon advances to the next layer
+            hph += h_cur;
+            ph->pos = operator+(ph->pos, ph->v*d);
+
+            #ifndef ALIS
+            if (BEERd == 1) ph->weight *= __expf(-( h_cur_abs));
+            #else
+            float tau;
+            ph->cdist_atm[ph->layer] += d;
+            int DL=(NLAMd-1)/(NLOWd-1);
+            for (int k=0; k<NLOWd; k++) {
+                tau = abs(get_OD(1,prof_atm[i_layer_bh + k*DL*(NATMd+1)]) - get_OD(1,prof_atm[i_layer_fw + k*DL*(NATMd+1)]));
+			    ph->weight_sca[k] *= __expf(-(tau-tau_cur)*AMF);
+            }
+            #endif
+
+            ph->layer -= sign_direction;
+        } // photon advances to next layer
+
+    } // while loop
+
+    if (le) {
+        if (( (count_level==UPTOA)  && (ph->loc==SPACE ) ) || ( (count_level==DOWN0P) && (ph->loc==SURF0P) )) ph->weight *= __expf(-(hph + h_cur));
+        else ph->weight = 0.;
+    }
+
+    if (BEERd == 0) ph->weight *= prof_atm[ph->layer+ilam].ssa;
+}
+#endif // ALT_PP
+
+
+
+__device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc,
+                        struct RNG_State *rngstate) {
 
 	float delta_i=0.f, delta=0.f, epsilon;
     float phz, rdist, tauBis;
     int ilayer;
-    #ifdef ALIS
+    #if defined(ALIS) && !defined(ALT_PP)
     float dsca_dl, dsca_dl0=-ph->tau ;
     int DL=(NLAMd-1)/(NLOWd-1);
-    #else
+    #endif
+    #ifndef ALIS
     float ab;
     #endif
 
@@ -1143,6 +1262,8 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
                 ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
             }
             #else
+
+            #ifndef ALT_PP
             dsca_dl0 += 0.F;
             for (int k=0; k<NLOWd; k++) {
                 dsca_dl = 0.F;
@@ -1150,6 +1271,8 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
                 ph->weight_sca[k] *= exp(-__fdividef(fabs(dsca_dl)-fabs(dsca_dl0),  fabs(ph->v.z)));
                 ph->tau_sca[k] = 0.F;
             }
+            #endif
+
             #endif
 
             ph->tau = 0.F;
@@ -1164,7 +1287,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             // the linear distance is ph->z/ph->vz
             operator+=(ph->pos, ph->v * fabs(ph->pos.z/ph->v.z));
 
-            #ifdef ALIS
+            #if defined(ALIS) && !defined(ALT_PP)
             ph->nevt++;
             ph->layer_prev[ph->nevt] = ph->layer;
             ph->vz_prev[ph->nevt] = ph->v.z;
@@ -1181,6 +1304,8 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
                 ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
             }
             #else
+
+            #ifndef ALT_PP
             dsca_dl0 += get_OD(1,prof_oc[NOCEd + ph->ilam*(NOCEd+1)]) ; 
             for (int k=0; k<NLOWd; k++) {
                 dsca_dl = get_OD(1,prof_oc[NOCEd + k*DL*(NOCEd+1)]);
@@ -1188,6 +1313,8 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
                 ph->weight_sca[k] *= exp(-__fdividef(fabs(dsca_dl) - fabs(dsca_dl0), fabs(ph->v.z)));
                 ph->tau_sca[k] = get_OD(1,prof_oc[NOCEd + k*DL*(NOCEd+1)]);
             }
+            #endif
+
             #endif
 
             ph->loc = SEAFLOOR;
@@ -1198,7 +1325,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 			// move the photon forward down to the seafloor
             operator+=(ph->pos, ph->v * fabs( (ph->pos.z - prof_oc[NOCEd].z) /ph->v.z));
 
-            #ifdef ALIS
+            #if defined(ALIS) && !defined(ALT_PP)
             ph->nevt++;
             ph->layer_prev[ph->nevt] = ph->layer;
             ph->vz_prev[ph->nevt] = ph->v.z;
@@ -1207,39 +1334,19 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             return;
         }
 
-        // // Calcul de la layer dans laquelle se trouve le photon
-		// tauBis = get_OD(BEERd, prof_oc[NOCEd + ph->ilam *(NOCEd+1)]) - ph->tau;
-        // ilayer = 1;
-        // while (( get_OD(BEERd, prof_oc[ilayer+ ph->ilam *(NOCEd+1)]) > (tauBis)) && (ilayer < NOCEd)) {
-        //     ilayer++;
-        // }
-        // ph->layer = ilayer;
-        // // ph->prop_aer = 1.f - prof_oc[ph->layer+ph->ilam*(NOCEd+1)].pmol;		
-
-        // delta_i= fabs(get_OD(BEERd, prof_oc[ilayer+ph->ilam*(NOCEd+1)]) - get_OD(BEERd, prof_oc[ilayer-1+ph->ilam*(NOCEd+1)]));
-        // delta= fabs(tauBis - get_OD(BEERd, prof_oc[ilayer-1+ph->ilam*(NOCEd+1)])) ;
-        // epsilon = __fdividef(delta,delta_i);
-
-
-        // Calcul de la layer dans laquelle se trouve le photon
+        //computing photons layer number
         ilayer = 1;
         while (( get_OD(BEERd, prof_oc[ilayer+ ph->ilam *(NOCEd+1)]) > (ph->tau)) && (ilayer < NOCEd)) {
             ilayer++;
         }
         ph->layer = ilayer;
-        // ph->prop_aer = 1.f - prof_oc[ph->layer+ph->ilam*(NOCEd+1)].pmol;		
 
         delta_i= fabs(get_OD(BEERd, prof_oc[ilayer+ph->ilam*(NOCEd+1)]) - get_OD(BEERd, prof_oc[ilayer-1+ph->ilam*(NOCEd+1)]));
         delta= fabs(ph->tau - get_OD(BEERd, prof_oc[ilayer-1+ph->ilam*(NOCEd+1)])) ;
         epsilon = __fdividef(delta,delta_i);
 
-		// if (idx==0){
-		// 	printf(" Tau[i-1] = %12.6f \n", get_OD(BEERd, prof_oc[ilayer-1+ ph->ilam *(NOCEd+1)]) );			
-		// 	printf(" ph->tau  = %12.6f \n",  ph->tau );
-		// 	printf(" Tau[i]   = %12.6f \n", get_OD(BEERd, prof_oc[ilayer+ ph->ilam *(NOCEd+1)]) );
-		// }
 
-        #ifdef ALIS
+        #if defined(ALIS) && !defined(ALT_PP)
         ph->nevt++;
         ph->layer_prev[ph->nevt] = ph->layer;
         ph->vz_prev[ph->nevt] = ph->v.z;
@@ -1251,16 +1358,13 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
         else { // We compute the cumulated absorption OT at the new postion of the photon
             // photon new position in the layer
             ab = prof_oc[ilayer-1+ph->ilam*(NOCEd+1)].OD_abs + epsilon * (prof_oc[ilayer+ph->ilam*(NOCEd+1)].OD_abs - prof_oc[ilayer-1+ph->ilam*(NOCEd+1)].OD_abs);
-			// if (idx==0){
-			// 	printf(" Tauabs[i-1] = %12.6f \n", prof_oc[ilayer-1+ph->ilam*(NOCEd+1)].OD_abs);
-			// 	printf(" ab  = %12.6f \n",  ab );
-			// 	printf(" Tauabs[i]   = %12.6f \n", prof_oc[ilayer+ph->ilam*(NOCEd+1)].OD_abs);
-			// }
             // absorption between start and stop
             ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
             ph->tau_abs = ab;
         }
         #else
+
+        #ifndef ALT_PP
         // cumulated scattering OD at reference wavelength
         dsca_dl0 += get_OD(1,prof_oc[NOCEd + ph->ilam*(NOCEd+1)]) - 
             (epsilon * (get_OD(1,prof_oc[ilayer+ph->ilam*(NOCEd+1)]) - get_OD(1,prof_oc[ilayer-1+ph->ilam*(NOCEd+1)])) +
@@ -1275,22 +1379,15 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             ph->tau_sca[k] = tautmp;
         }
         #endif
+
+        #endif
 		
         // calculate new photon position
         phz =  prof_oc[ilayer-1].z + epsilon * ( prof_oc[ilayer].z - prof_oc[ilayer-1].z); 
-		// if (idx==0){
-		// 	printf(" phz                 = %12.6f \n", phz);
-		// 	printf(" epsilon             = %12.6f \n", epsilon);
-		// 	printf(" prof_oc[ilayer-1].z = %12.6f \n", prof_oc[ilayer-1].z);
-		// 	printf(" prof_oc[ilayer].z   = %12.6f \n", prof_oc[ilayer].z);
-		// }
 		// move the photon to new position
 		operator+=(ph->pos, ph->v * fabs( (ph->pos.z - phz) / ph->v.z));
 
     } // Ocean
-
-
-
 
 
     if (ph->loc == ATMOS) {
@@ -1303,6 +1400,8 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
                 ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
             }
             #else
+
+            #ifndef ALT_PP
             dsca_dl0 += 0.F;
             for (int k=0; k<NLOWd; k++) {
                 dsca_dl = 0.F;
@@ -1310,6 +1409,8 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
                 ph->weight_sca[k] *= exp(-__fdividef(fabs(dsca_dl)-fabs(dsca_dl0),  fabs(ph->v.z)));
                 ph->tau_sca[k] = 0.F;
             }
+            #endif
+
             #endif
 
             ph->loc = SURF0P;
@@ -1321,7 +1422,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             ph->pos.z = 0.;
             ph->layer = NATMd;
 
-            #ifdef ALIS
+            #if defined(ALIS) && !defined(ALT_PP)
             ph->nevt++;
             ph->layer_prev[ph->nevt] = ph->layer;
             ph->vz_prev[ph->nevt] = ph->v.z;
@@ -1338,6 +1439,8 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
                 ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
             }
             #else
+
+            #ifndef ALT_PP
             dsca_dl0 += get_OD(1,prof_atm[NATMd + ph->ilam*(NATMd+1)]) ; 
             for (int k=0; k<NLOWd; k++) {
                 dsca_dl = get_OD(1,prof_atm[NATMd + k*DL*(NATMd+1)]);
@@ -1347,10 +1450,12 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             }
             #endif
 
+            #endif
+
             ph->loc = SPACE;
             ph->layer = 0;
 
-            #ifdef ALIS
+            #if defined(ALIS) && !defined(ALT_PP)
             ph->nevt++;
             ph->layer_prev[ph->nevt] = ph->layer;
             ph->vz_prev[ph->nevt] = ph->v.z;
@@ -1371,13 +1476,12 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
         }
         
         ph->layer = ilayer;
-        // ph->prop_aer = 1.f - prof_atm[ph->layer+ph->ilam*(NATMd+1)].pmol;
 
         delta_i= fabs(get_OD(BEERd, prof_atm[ilayer+ph->ilam*(NATMd+1)]) - get_OD(BEERd, prof_atm[ilayer-1+ph->ilam*(NATMd+1)]));
         delta= fabs(tauBis - get_OD(BEERd, prof_atm[ilayer-1+ph->ilam*(NATMd+1)])) ;
         epsilon = __fdividef(delta,delta_i);
 
-        #ifdef ALIS
+        #if defined(ALIS) && !defined(ALT_PP)
         ph->nevt++;
         ph->layer_prev[ph->nevt] = ph->layer;
         ph->vz_prev[ph->nevt] = ph->v.z;
@@ -1397,6 +1501,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
         }
         #else
 
+        #ifndef ALT_PP
         // cumulated scattering OD at reference wavelength
         dsca_dl0 += get_OD(1,prof_atm[NATMd + ph->ilam*(NATMd+1)]) - 
             (epsilon * (get_OD(1,prof_atm[ilayer+ph->ilam*(NATMd+1)]) - get_OD(1,prof_atm[ilayer-1+ph->ilam*(NATMd+1)])) +
@@ -1412,11 +1517,10 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
         }
         #endif
 
+        #endif
+
         // calculate new photon position
         phz = epsilon * (prof_atm[ilayer].z - prof_atm[ilayer-1].z) + prof_atm[ilayer-1].z; 
-		// if (idx==0) {
-		// 	printf(" epsilon atm = %12.6e\n", epsilon);
-		// }
 		rdist=  fabs(__fdividef(phz-ph->pos.z, ph->v.z));
         operator+= (ph->pos, ph->v*rdist);
         ph->pos.z = phz;
@@ -1426,18 +1530,12 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 }
 
 
-
-
-
-
 __device__ void scatter(Photon* ph,
        struct Profile *prof_atm, struct Profile *prof_oc,
         struct Phase *faer, struct Phase *foce,
         int le, float dth,
         float* tabthv, float* tabphi, int count_level,
         struct RNG_State *rngstate) {
-
-	//int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
 
 	float cTh=0.f;
 	float zang=0.f, theta=0.f;
@@ -1484,7 +1582,7 @@ __device__ void scatter(Photon* ph,
 		
 		}
 	/* Scattering in ocean */
-	else{
+	else {
 
 			ilay = ph->layer + ph->ilam*(NOCEd+1); // oce layer index
 
@@ -1493,10 +1591,7 @@ __device__ void scatter(Photon* ph,
 			if (ph->scatterer == RAY){ipha  = 0;}	// Rayleigh index
 			else if(ph->scatterer == PTCLE ){ ipha  = prof_oc[ilay].iphase + 1;} // particle index
 
-}
-
-
-
+    }
 
 
 	if ( (ph->scatterer == RAY) || (ph->scatterer == PTCLE) ){
@@ -1523,7 +1618,7 @@ __device__ void scatter(Photon* ph,
 			P43 = (1-zang)*func[ipha*NF+iang].p_P43 + zang*func[ipha*NF+iang+1].p_P43;
 			P44 = (1-zang)*func[ipha*NF+iang].p_P44 + zang*func[ipha*NF+iang+1].p_P44;
 
-#ifndef BIAS
+            #ifndef BIAS
 			/////////////
 			//  Get Psi
 			//  Rejection method for sampling psi  : !!!! NEW !!!!
@@ -1545,7 +1640,7 @@ __device__ void scatter(Photon* ph,
 					fpsi_cond = (1.F + DoLP * K * cosf(2*(psi-gamma)) )/DEUXPI;
 					if (niter >= 100) {
 						// safety check
-#ifdef DEBUG
+                        #ifdef DEBUG
 						printf("Warning, photon rejected in scatter while loop\n");
 						printf("%i  S=(%f,%f), DoLP, gamma=(%f,%f) psi,theta=(%f,%f) \n",
 							   niter,
@@ -1556,33 +1651,18 @@ __device__ void scatter(Photon* ph,
 							   psi/PI*180,
 							   theta/PI*180
 							   );
-#endif
+                        #endif
 						ph->loc = NONE;
 						break;
 					}
 				}
-			/*int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
-			  if (idx == -1){
-			  printf("P11 = %.3f, P12 = %.3f, P22 = %.3f, P33 = %.3f, P43 = %.3f, P44 = %.3f\n", P11, P12, P22, P33, P43, P44);
-			  printf("%i  S=(%f,%f), DoLP, gamma=(%f,%f) psi,fpsi,fpsi_cond,theta=(%f,%f,%f,%f) \n",
-			  niter,
-			  Q,
-			  U,
-			  DoLP,
-			  gamma,
-			  psi/PI*180,
-			  fpsi,
-			  fpsi_cond,
-			  theta/PI*180
-			  );
-			  }*/
 
-#else
+            #else
 			/////////////
 			//  Get Phi
 			//  Biased sampling scheme for psi 1)
 			psi = RAND * DEUXPI;	
-#endif
+            #endif
 
 
 		}else {
@@ -1668,15 +1748,8 @@ __device__ void scatter(Photon* ph,
 			ph->u.y   = sinf(phi)*cTh;
 			ph->u.z   = -sTh;
 			
-			// theta = RAND * PI;
-			// cTh = __cosf(theta);
-			// psi = RAND * DEUXPI;			
-			
 		}else{
-
-
 			ph->weight /= 4.0  ;    // Phase function normalization	
-			
 		}
 
 
@@ -1688,15 +1761,9 @@ __device__ void scatter(Photon* ph,
 								   0.0F, 0.0F, 0.F, 0.F 
 								   );
 		ph->stokes = mul(L,ph->stokes);
-
 		}
 
-
-
-
-
-
-#ifdef ALIS
+    #ifdef ALIS
 	if ( (ph->scatterer == RAY) or (ph->scatterer == PTCLE) ){
 
 		if(ph->loc!=OCEAN){
@@ -1711,31 +1778,27 @@ __device__ void scatter(Photon* ph,
 				zang = theta * (NF-1)/PI ;
 				iang = __float2int_rd(zang);
 				zang = zang - iang;
-				int ipharef  = prof_atm[ph->layer+ph->ilam*(NATMd+1)].iphase + 1; 
-				// Phase functions of aerosols and Rayliegh, and mixture of both at reference wavelength
+				int ipharef = prof_atm[ph->layer+ph->ilam*(NATMd+1)].iphase + 1; 
+				// Phase functions of aerosols and Rayleigh, and mixture of both at reference wavelength
 				P11_aer_ref = (1-zang)*func[ipharef*NF+iang].a_P11 + zang*func[ipharef*NF+iang+1].a_P11;
 				P11_ray     = (1-zang)*func[0      *NF+iang].a_P11 + zang*func[0      *NF+iang+1].a_P11;
 				P22_aer_ref = (1-zang)*func[ipharef*NF+iang].a_P22 + zang*func[ipharef*NF+iang+1].a_P22;
 				P22_ray     = (1-zang)*func[0      *NF+iang].a_P22 + zang*func[0      *NF+iang+1].a_P22;
-				P_ref     = (P11_ray+P22_ray) * pmol + (P11_aer_ref+P22_aer_ref) * (1.-pmol);
+				P_ref       = (P11_ray+P22_ray) * pmol + (P11_aer_ref+P22_aer_ref) * (1.-pmol);
 			}
 
 			for (int k=0; k<NLOWd; k++) {
-				ph->weight_sca[k] *= __fdividef(get_OD(1,prof_atm[ph->layer+ k*DL*(NATMd+1)]), 
-												get_OD(1,prof_atm[ph->layer + ph->ilam*(NATMd+1)]));
-
+				ph->weight_sca[k] *= __fdividef(get_OD(1,prof_atm[ph->layer + k*DL*(NATMd+1)])     - get_OD(1,prof_atm[ph->layer-1 + k*DL*(NATMd+1)])     , 
+												get_OD(1,prof_atm[ph->layer + ph->ilam*(NATMd+1)]) - get_OD(1,prof_atm[ph->layer-1 + ph->ilam*(NATMd+1)]) );
 				if (pmol <1.) {
-					int iphak  = prof_atm[ph->layer+k*DL*(NATMd+1)].iphase + 1; 
-					float pmol_k = prof_atm[ph->layer+ k*DL*(NATMd+1)].pmol;
+					int iphak    = prof_atm[ph->layer + k*DL*(NATMd+1)].iphase + 1; 
+					float pmol_k = prof_atm[ph->layer + k*DL*(NATMd+1)].pmol;
 					// Phase functions of aerosols  at other wavelengths, Rayleigh is supposed to be constant with wavelength
 					float P11_aer = (1-zang)*func[iphak*NF+iang].a_P11 + zang*func[iphak*NF+iang+1].a_P11;
 					float P22_aer = (1-zang)*func[iphak*NF+iang].a_P22 + zang*func[iphak*NF+iang+1].a_P22;
-					// Phase functions of the mixture of aerosols and Rayliegh at other wavelengths
+					// Phase functions of the mixture of aerosols and Rayleigh at other wavelengths
 					float P_k   = (P11_ray+P22_ray) * pmol_k + (P11_aer+P22_aer) * (1.-pmol_k);
 					ph->weight_sca[k] *= __fdividef(P_k, P_ref);
-					//int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
-					//if (idx==0) printf("%d %d %f %d %f %f %f %f\n",ipha,ph->layer,pmol,k,pmol_k,
-					//        ph->weight_sca[k],P_k,P_ref);
 				}
 			}
 		}
@@ -1752,16 +1815,16 @@ __device__ void scatter(Photon* ph,
 				iang = __float2int_rd(zang);
 				zang = zang - iang;
 				int ipharef  = prof_oc[ph->layer+ph->ilam*(NOCEd+1)].iphase + 1; 
-				// Phase functions of aerosols and Rayliegh, and mixture of both at reference wavelength
+				// Phase functions of aerosols and Rayleigh, and mixture of both at reference wavelength
 				P11_aer_ref = (1-zang)*func[ipharef*NF+iang].a_P11 + zang*func[ipharef*NF+iang+1].a_P11;
 				P11_ray     = (1-zang)*func[0      *NF+iang].a_P11 + zang*func[0      *NF+iang+1].a_P11;
 				P22_aer_ref = (1-zang)*func[ipharef*NF+iang].a_P22 + zang*func[ipharef*NF+iang+1].a_P22;
 				P22_ray     = (1-zang)*func[0      *NF+iang].a_P22 + zang*func[0      *NF+iang+1].a_P22;
-				P_ref     = (P11_ray+P22_ray) * pmol + (P11_aer_ref+P22_aer_ref) * (1.-pmol);
+				P_ref       = (P11_ray+P22_ray) * pmol + (P11_aer_ref+P22_aer_ref) * (1.-pmol);
 			}
 			for (int k=0; k<NLOWd; k++) {
-				ph->weight_sca[k] *= __fdividef(get_OD(1,prof_oc[ph->layer+ k*DL*(NOCEd+1)]), 
-												get_OD(1,prof_oc[ph->layer + ph->ilam*(NOCEd+1)]));
+				ph->weight_sca[k] *= __fdividef(get_OD(1,prof_oc[ph->layer + k*DL*(NOCEd+1)])     - get_OD(1,prof_oc[ph->layer-1 + k*DL*(NOCEd+1)])     , 
+												get_OD(1,prof_oc[ph->layer + ph->ilam*(NOCEd+1)]) - get_OD(1,prof_oc[ph->layer-1 + ph->ilam*(NOCEd+1)]) );
 				if (pmol <1.) {
 					int iphak  = prof_oc[ph->layer+k*DL*(NOCEd+1)].iphase + 1; 
 					float pmol_k = prof_oc[ph->layer+ k*DL*(NOCEd+1)].pmol;
@@ -1778,7 +1841,7 @@ __device__ void scatter(Photon* ph,
 		
 	}
 
-#endif
+    #endif
 
 	if (!le){
 		if (RRd==1){
@@ -1799,8 +1862,6 @@ __device__ void scatter(Photon* ph,
 	ph->scatterer = UNDEF;
 	
 }
-
-
 
 
 __device__ void choose_scatterer(Photon* ph,
@@ -1886,12 +1947,6 @@ __device__ void choose_scatterer(Photon* ph,
 	}
 	
 }
-
-
-
-
-
-
 
 
 __device__ void surfaceAgitee(Photon* ph, int le,
@@ -1997,21 +2052,21 @@ __device__ void surfaceAgitee(Photon* ph, int le,
     if (ph->loc==SURF0M) v_l = ph->v;
 
 	/** **/
-    // DR Estimation of the probability P of interaction of the photon with zentih angle theta with a facet of slope beta and azimut alpha	
-    // DR P_alpha_beta : Probability of occurence of a given azimuth and slope
-    // DR P_alpha_beta = P_Cox_Munk(beta) * P(alpha | beta), conditional probability, for normal incidence, independent variables and P(alpha|beta)=P(alpha)=1/2pi
-    // DR following Plass75:
-    // DR Pfacet : Probability of occurence of a facet
-    // DR Pfacet = projected area of the facet divided by unit area of the possible interaction surface * P_alpha_beta
-    // DR Pfacet = P_alpha_beta / cos(beta)
-    // DR for non normal incident angle, the probability of interaction between the photon and the facet is proportional to the surface of the facet seen by the photon so
-    // DR that is cosine of incident angle of photon on the facet theta_inc=f(alpha,beta,theta)
-    // DR P # Pfacet * cos(theta_inc) for cos(theta_inc) >0
-    // DR P = 0 for cos(theta_inc)<=0
-    // DR for having a true probability, one has to normalize this to 1. The A normalization factor depends on theta and is the sum on all alpha and beta with the condition
-    // DR cos(theta_inc)>0 (visible facet)
-    // DR A = Sum_0_2pi Sumr_0_pi/2 P_alpha_beta /cos(beta) cos(theta_inc) dalpha dbeta
-    // DR Finally P = 1/A * P_alpha_beta  /cos(beta) cos(theta_inc)
+    //  Estimation of the probability P of interaction of the photon with zentih angle theta with a facet of slope beta and azimut alpha	
+    //  P_alpha_beta : Probability of occurence of a given azimuth and slope
+    //  P_alpha_beta = P_Cox_Munk(beta) * P(alpha | beta), conditional probability, for normal incidence, independent variables and P(alpha|beta)=P(alpha)=1/2pi
+    //  following Plass75:
+    //  Pfacet : Probability of occurence of a facet
+    //  Pfacet = projected area of the facet divided by unit area of the possible interaction surface * P_alpha_beta
+    //  Pfacet = P_alpha_beta / cos(beta)
+    //  for non normal incident angle, the probability of interaction between the photon and the facet is proportional to the surface of the facet seen by the photon so
+    //  that is cosine of incident angle of photon on the facet theta_inc=f(alpha,beta,theta)
+    //  P # Pfacet * cos(theta_inc) for cos(theta_inc) >0
+    //  P = 0 for cos(theta_inc)<=0
+    //  for having a true probability, one has to normalize this to 1. The A normalization factor depends on theta and is the sum on all alpha and beta with the condition
+    //  cos(theta_inc)>0 (visible facet)
+    //  A = Sum_0_2pi Sumr_0_pi/2 P_alpha_beta /cos(beta) cos(theta_inc) dalpha dbeta
+    //  Finally P = 1/A * P_alpha_beta  /cos(beta) cos(theta_inc)
 
 
     sig2 = 0.003F + 0.00512f *WINDSPEEDd;
@@ -2025,10 +2080,10 @@ __device__ void surfaceAgitee(Photon* ph, int le,
         // Rough surface
 
         theta = DEMIPI;
-        // DR Computation of P_alpha_beta = P_Cox_Munk(beta) * P(alpha | beta)
-        // DR we draw beta first according to Cox_Munk isotropic and then draw alpha, conditional probability
-        // DR rejection method: to exclude unphysical azimuth (leading to incident angle theta >=PI/2)
-        // DR we continue until acceptable value for alpha
+        //  Computation of P_alpha_beta = P_Cox_Munk(beta) * P(alpha | beta)
+        //  we draw beta first according to Cox_Munk isotropic and then draw alpha, conditional probability
+        //  rejection method: to exclude unphysical azimuth (leading to incident angle theta >=PI/2)
+        //  we continue until acceptable value for alpha
 
 
         while (theta >= DEMIPI) {
@@ -2198,8 +2253,6 @@ __device__ void surfaceAgitee(Photon* ph, int le,
         rat =  __fdividef(ph->stokes.x*rpar2 + ph->stokes.y*rper2, ph->stokes.x+ph->stokes.y);
         #endif
 		ReflTot = 0;
-        /*int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
-        if (idx==0 && (ph->loc==SURF0M) && (count_level==UP0P) && (le)) printf("DEB %.3f %.3f %.3f %.4f\n", v.z, no.z, ph->v.z,psi);*/
         #ifdef BACK
         // in backward mode, nind -> 1/nind and incidence angle <-> emergence angle
         cTh_b = cot;
@@ -2226,8 +2279,8 @@ __device__ void surfaceAgitee(Photon* ph, int le,
         rat = 1.f;
 		rpar2 = rpar*rpar;
 		rper2 = rper*rper;
-        rparper = __fdividef(2.*sTh*sTh*sTh*sTh, 1.-(1.+nind * nind)*cTh*cTh) - 1.; // DR !! Mobley 2015
-        rparper_cross = -__fdividef(2.*cTh*sTh*sTh*sqrtf(sTh*sTh-nind*nind), 1.-(1.+nind * nind)*cTh*cTh); // DR !! Mobley 2015
+        rparper = __fdividef(2.*sTh*sTh*sTh*sTh, 1.-(1.+nind * nind)*cTh*cTh) - 1.; //  Mobley 2015
+        rparper_cross = -__fdividef(2.*cTh*sTh*sTh*sqrtf(sTh*sTh-nind*nind), 1.-(1.+nind * nind)*cTh*cTh); //  Mobley 2015
         tpar = 0.;
         tper = 0.;
         tpar2 =0.;
@@ -2318,12 +2371,12 @@ __device__ void surfaceAgitee(Photon* ph, int le,
 
 		ph->u = operator/(operator-(no, cTh*ph->v), sTh);	
 
-        // DR Normalization of the reflexion matrix
-        // DR the reflection coefficient is taken into account:
-        // DR once in the random selection (Rand < rat)
-        // DR once in the reflection matrix multiplication
-        // DR so twice and thus we normalize by rat (Xun 2014).
-        // DR not to be applied for forced reflection (SUR=1 or total reflection) where there is no random selection
+        //  Normalization of the reflexion matrix
+        //  the reflection coefficient is taken into account:
+        //  once in the random selection (Rand < rat)
+        //  once in the reflection matrix multiplication
+        //  so twice and thus we normalize by rat (Xun 2014).
+        //  not to be applied for forced reflection (SUR=1 or total reflection) where there is no random selection
 		if (SURd==3 && !ReflTot && !le) {
             ph->weight /=rat;
 			}
@@ -2413,7 +2466,7 @@ __device__ void surfaceAgitee(Photon* ph, int le,
         #endif
 
 
-        // DR Normalization of the transmission matrix
+        // Normalization of the transmission matrix
         // the transmission coefficient is taken into account:
         // once in the random selection (Rand > rat)
         // once in the transmission matrix multiplication
@@ -2465,40 +2518,11 @@ __device__ void surfaceAgitee(Photon* ph, int le,
     if (!le) {
         if (WAVE_SHADOWd) ph->weight *= __fdividef(fabs(cTh), cBeta * (1.F + LambdaS + LambdaR) * avz );
         else              ph->weight *= __fdividef(fabs(cTh), cBeta * (1.F + LambdaS) * avz );
-        //int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
         // Ross et al 2005, Ross and Dion, 2007, Zeisse 1995
         // Slope sampling bias correction using the normalized interaction PDF q
         // weight has to be multiplied by q/p, where p is the slope PDF
         // Coefficient Lambda for normalization of q taking into acount slope shadowing and hiding
         // Including wave shadows is performed at the end after the outgoing direction is calculated
-
-        // Bias sampling correction
-
-        /*#ifndef BACK //
-        if (WAVE_SHADOWd) ph->weight *= __fdividef(fabs(cTh), cBeta * (1.F + LambdaS + LambdaR) * avz );
-        else              ph->weight *= __fdividef(fabs(cTh), cBeta * (1.F + LambdaS) * avz );
-        #else 
-        // special case of transmission in backward mode: incident<-> transmitted angles AND incoming<-> outgoing zenith angles
-        if (!condR)  { 
-            if (WAVE_SHADOWd) ph->weight *= __fdividef(fabs(cTh_b), cBeta * (1.F + LambdaS + LambdaR) * fabs(ph->v.z) );
-            else              ph->weight *= __fdividef(fabs(cTh_b), cBeta * (1.F + LambdaR) * fabs(ph->v.z) );
-        }
-        // special case of reflection in backward mode: incident = transmitted angles AND incoming<-> outgoing zenith angles
-	    if (condR || (SURd==1) || ReflTot) {
-            //if(idx==0)printf("ts:%f tv:%f shadow:%f\n",avz,fabs(ph->v.z),__fdividef(1.F, 1.F + LambdaR + LambdaS));
-            if (WAVE_SHADOWd) ph->weight *= __fdividef(fabs(cTh), cBeta * (1.F + LambdaS + LambdaR) * fabs(ph->v.z) );
-            else              ph->weight *= __fdividef(fabs(cTh), cBeta * (1.F + LambdaR) * fabs(ph->v.z) );
-            if (WAVE_SHADOWd) ph->weight *= __fdividef(fabs(cTh), cBeta * (1.F + LambdaS + LambdaR) * avz );
-            else              ph->weight *= __fdividef(fabs(cTh), cBeta * (1.F + LambdaR) * avz );
-        }
-        #endif
-        #ifndef BACK //
-        if (WAVE_SHADOWd) ph->weight *= __fdividef(fabs(cTh), cBeta * (1.F + LambdaS + LambdaR) * avz );
-        else              ph->weight *= __fdividef(fabs(cTh), cBeta * (1.F + LambdaS) * avz );
-        #else 
-        if (WAVE_SHADOWd) ph->weight *= __fdividef(fabs(cTh_b), cBeta * (1.F + LambdaS + LambdaR) * fabs(ph->v.z) );
-        else              ph->weight *= __fdividef(fabs(cTh_b), cBeta * (1.F + LambdaR) * fabs(ph->v.z) );
-        #endif*/ 
 
 		if (RRd==1){
 			/* Russian roulette for propagating photons **/
@@ -2744,22 +2768,14 @@ __device__ void surfaceLambertienne(Photon* ph, int le,
 	sPhi = __sinf(phi);
 	
     #ifdef SPHERIQUE
-	float icp, isp, ict, ist;	// Sinus et cosinus de l'angle d'impact
+	float icp, isp, ict, ist;	// Sine & cosine of the impact angle
     #endif
 	
 
-	/** Séparation du code pour atmosphère sphérique ou parallèle **/
-	#ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
-	/** Calcul du theta impact et phi impact **/
+	#ifdef SPHERIQUE
 	
     if (ph->loc != SEAFLOOR){
 
-	/** Calcul de l'angle entre l'axe z et la normale au point d'impact **/
-	/*NOTE: le float pour les calculs suivant fait une erreur de 2.3% 
-	* par exemple (theta_float=0.001196 / theta_double=0.0011691
-	* Mais ils sont bien plus performant et cette erreur ne pose pas de problème jusqu'à présent.
-	* De plus, l'angle d'impact n'est pas calculé mais directement les cosinus et sinus de cet angle.
-	*/
 	if( ph->pos.z > 0. ){
 		ict = __fdividef(ph->pos.z,RTER);
 		
@@ -2772,7 +2788,6 @@ __device__ void surfaceLambertienne(Photon* ph, int le,
 		if(ph->pos.x >= 0.f) ist = -ist;
 		
 		if( sqrtf(ph->pos.x*ph->pos.x + ph->pos.y*ph->pos.y)<1.e-6 ){
-			/*NOTE En fortran ce test est à 1.e-8, relativement au double utilisés, peut peut être être supprimer ici*/
 			icp = 1.f;
 		}
 		else{
@@ -2787,7 +2802,6 @@ __device__ void surfaceLambertienne(Photon* ph, int le,
 		return;
 	}
 	
-	/** Il faut exprimer Vx,y,z et Ux,y,z dans le repère de la normale au point d'impact **/
 	v_n.x= ict*icp*ph->v.x - ict*isp*ph->v.y + ist*ph->v.z;
 	v_n.y= isp*ph->v.x + icp*ph->v.y;
 	v_n.z= -icp*ist*ph->v.x + ist*isp*ph->v.y + ict*ph->v.z;
@@ -2802,7 +2816,6 @@ __device__ void surfaceLambertienne(Photon* ph, int le,
     } // photon not seafloor
 	#endif //SPHERICAL
 
-	/** calcul u,v new **/
 	v_n.x = cPhi*sTh;
 	v_n.y = sPhi*sTh;
 	v_n.z = cTh;
@@ -2811,7 +2824,6 @@ __device__ void surfaceLambertienne(Photon* ph, int le,
 	u_n.y = sPhi*cTh;
 	u_n.z = -sTh;
 
-	// Depolarisation du Photon
     float4x4 L = make_float4x4(
                     0.5F, 0.5F, 0.F, 0.F,
                     0.5F, 0.5F, 0.F, 0.F,
@@ -2827,7 +2839,6 @@ __device__ void surfaceLambertienne(Photon* ph, int le,
 	ph->u = u_n;
 	
     if (DIOPTREd!=4 && ((ph->loc == SURF0M) || (ph->loc == SURF0P))){
-	  // Si le dioptre est seul, le photon est mis dans l'espace
 	  bool test_s = ( SIMd == -1);
 	  ph->loc = SPACE*test_s + ATMOS*(!test_s);
     }
@@ -2836,7 +2847,7 @@ __device__ void surfaceLambertienne(Photon* ph, int le,
 
 	  ph->weight *= spectrum[ph->ilam].alb_surface;
       
-	  #ifdef SPHERIQUE	/* Code spécifique à une atmosphère sphérique */
+	  #ifdef SPHERIQUE
 	  /** Retour dans le repère d'origine **/
 	  // Re-projection vers le repères de direction de photon. L'angle à prendre pour la projection est -angleImpact
 	  isp = -isp;
@@ -2863,9 +2874,6 @@ __device__ void surfaceLambertienne(Photon* ph, int le,
 }
 
 
-
-
-
 __device__ void countPhoton(Photon* ph,
         struct Profile *prof_atm, struct Profile *prof_oc,
         float *tabthv, float *tabphi,
@@ -2880,7 +2888,6 @@ __device__ void countPhoton(Photon* ph,
     }
 
     // don't count the photons directly transmitted
-    //if ((ph->weight == WEIGHTINIT) && (ph->stokes.x == ph->stokes.y) && (ph->stokes.z == 0.f) && (ph->stokes.w == 0.f)) {
     if (ph->nint == 0) {
         return;
     }
@@ -2896,8 +2903,8 @@ __device__ void countPhoton(Photon* ph,
     float *tabCount; 
     #endif
 
-    // We dont count photons leaving in boxes outside SZA range
-    if ((LEd==0) && (acosf(ph->v.z) > (SZA_MAXd*90./DEMIPI))) return;
+    // We dont count UPTOA photons leaving in boxes outside SZA range
+    if ((LEd==0) && (count_level==UPTOA) && (acosf(ph->v.z) > (SZA_MAXd*90./DEMIPI))) return;
 
     float theta = acosf(fmin(1.F, fmax(-1.F, ph->v.z)));
 
@@ -2913,7 +2920,6 @@ __device__ void countPhoton(Photon* ph,
     else {
        if (LEd == 0) {
           atomicAdd(errorcount+ERROR_THETA, 1);
-          //return;
        }
        else {
           // Compute Psi in the special case of zenith
@@ -2921,10 +2927,7 @@ __device__ void countPhoton(Photon* ph,
        }
     }
 
-    //int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
-    //if (idx==0 && LEd==1 && count_level==DOWN0M) printf("avant %f %f %f %f %d %f\n",ph->v.z,theta,psi,ph->stokes.x-ph->stokes.y, ph->loc,ph->stokes.z);
     rotateStokes(ph->stokes, psi, &st);
-    //if (idx==0 && LEd==1 && count_level==DOWN0M) printf("apres %f %f %f %f %d %f\n",ph->v.z,theta,psi,st.x-st.y, ph->loc,st.z);
     st.w = ph->stokes.w;
 
     #ifdef BACK
@@ -2950,7 +2953,7 @@ __device__ void countPhoton(Photon* ph,
     #endif
 
 	// Compute Box for outgoing photons in case of cone sampling
-	if (LEd == 0) ComputeBox(&ith, &iphi, &il, ph, errorcount);
+	if (LEd == 0) ComputeBox(&ith, &iphi, &il, ph, errorcount, count_level);
 
     // For virtual (LE) photons the direction is stored within photon structure
     // Moreover we compute also final attenuation for LE 
@@ -2965,7 +2968,7 @@ __device__ void countPhoton(Photon* ph,
              )
            ){
         // Computation of final attenutation only in PP
-        #ifndef SPHERIQUE
+        #if !defined(SPHERIQUE) && !defined(ALT_PP)
         int layer_le;
         float tau_le;
         Profile *prof;
@@ -3029,26 +3032,12 @@ __device__ void countPhoton(Photon* ph,
            weight_sca[k] *= exp(-__fdividef(fabs(dsca_dl) -fabs(dsca_dl0), fabs(ph->v.z)));
         }
         #endif // NOT ALIS
-        #endif // NOT SPHERIQUE
+        #endif // NOT SPHERIQUE && NOT ALT_PP
      } // SIMd  
 
     }   //LE
 	
-  	/*if( ph->vy<0.f )
-    		s3 = -s3;*/  // DR 
-	
-    /*
-    // Change sign convention for compatibility with OS
-    st.z = -st.z;
-
-	float tmp = st.x;
-	st.x = st.y;
-	st.y = tmp;*/
-	
-
-
     float weight_irr = fabs(ph->v.z);
-	//if (FLUXd==1 && LEd==0 & weight_irr > 0.01f) weight /= weight_irr;
     // In Forward mode, and in case of spherical flux, update the weight
 	if (FLUXd==2 && LEd==0 & weight_irr > 0.001f) weight /= weight_irr;
     if (count_level == UPTOA && HORIZd == 0) weight *= weight_irr;
@@ -3128,25 +3117,19 @@ __device__ void countPhoton(Photon* ph,
            }
           */
         
-          // Computation of the absorption along photon s history
+          #if !defined(SPHERIQUE) && !defined(ALT_PP)
+          // Computation of the absorption along photon history with heights and direction cosines 
           for (int n=0; n<ph->nevt; n++){
               //Computing absorption optical depths form start to stop for all segments
               float tau_abs1, tau_abs2;
               if (ph->layer_prev[n+1] == 0) tau_abs2 = 0.;
 
-              /*else tau_abs2 = (prof_oc[ph->layer_prev[n+1]   + il *(NOCEd+1)].OD_abs -
-                             prof_oc[ph->layer_prev[n+1]-1 + il *(NOCEd+1)].OD_abs) *
-                             ph->epsilon_prev[n+1] + prof_oc[ph->layer_prev[n+1]-1 + il *(NOCEd+1)].OD_abs;*/
               else tau_abs2 = (prof_atm[ph->layer_prev[n+1]   + il *(NATMd+1)].OD_abs -
                              prof_atm[ph->layer_prev[n+1]-1 + il *(NATMd+1)].OD_abs) *
                              ph->epsilon_prev[n+1] + prof_atm[ph->layer_prev[n+1]-1 + il *(NATMd+1)].OD_abs;
 
 
               if (ph->layer_prev[n] == 0) tau_abs1 = 0.;
-
-              /*else tau_abs1 = (prof_oc[ph->layer_prev[n]   + il *(NOCEd+1)].OD_abs -
-                             prof_oc[ph->layer_prev[n]-1 + il *(NOCEd+1)].OD_abs) *
-                             ph->epsilon_prev[n] + prof_oc[ph->layer_prev[n]-1 + il *(NOCEd+1)].OD_abs;*/
 
               else tau_abs1 = (prof_atm[ph->layer_prev[n]   + il *(NATMd+1)].OD_abs -
                              prof_atm[ph->layer_prev[n]-1 + il *(NATMd+1)].OD_abs) *
@@ -3155,7 +3138,26 @@ __device__ void countPhoton(Photon* ph,
               wabs *= exp(-fabs(__fdividef(tau_abs2 - tau_abs1 , ph->vz_prev[n+1])));
           }
 
+          #else
+          // Computation of the absorption along photon history with cumulative distances in layers
+          wabs = 0.F;
+          for (int n=1; n<(NATMd+1); n++){
+              wabs += abs((prof_atm[n   + il*(NATMd+1)].OD_abs -
+                           prof_atm[n-1 + il*(NATMd+1)].OD_abs ) /
+                          (prof_atm[n].z  - prof_atm[n-1].z    )) * ph->cdist_atm[n];
+          }
+          for (int n=1; n<(NOCEd+1); n++){
+              wabs += abs((prof_oc[n    + il*(NOCEd+1)].OD_abs -
+                           prof_oc[n-1  + il*(NOCEd+1)].OD_abs ) /
+                          (prof_oc[n].z   - prof_oc[n-1].z     )) * ph->cdist_oc[n];
+          }
+          wabs = exp(-wabs);
+          #endif
+
           #ifdef DOUBLE 
+          //#if defined(SPHERIQUE) || defined(ALT_PP)
+          //tabCount2   = (double*)tabAMF     + count_level*NBTHETAd*NBPHId*NATMd;
+          //#endif
           tabCount = (double*)tabPhotons + count_level*NPSTKd*NBTHETAd*NBPHId*NLAMd;
           dweight = (double)weight;
           ds = make_double4(st.x, st.y, st.z, st.w);
@@ -3167,11 +3169,21 @@ __device__ void countPhoton(Photon* ph,
           DatomicAdd(tabCount+(3*II+JJ), dweight * dwsca * dwabs * ds.w);
 
           #else
+          //#if defined(SPHERIQUE) || defined(ALT_PP)
+          //tabCount2   = (float*)tabAMF     + count_level*NBTHETAd*NBPHId*NATMd;
+          //#endif
           tabCount = (float*)tabPhotons + count_level*NPSTKd*NBTHETAd*NBPHId*NLAMd;
           atomicAdd(tabCount+(0*II+JJ), weight * wsca * wabs * (st.x+st.y));
           atomicAdd(tabCount+(1*II+JJ), weight * wsca * wabs * (st.x-st.y));
           atomicAdd(tabCount+(2*II+JJ), weight * wsca * wabs * st.z);
           atomicAdd(tabCount+(3*II+JJ), weight * wsca * wabs * st.w);
+          //#if defined(SPHERIQUE) || defined(ALT_PP)
+          //int KK = NBTHETAd*NBPHId*NATMd;
+          //for (int n=0; n<NATMd; n++){
+            //int LL = n*NBTHETAd*NBPHId + ith*NBPHId + iphi;
+            //atomicAdd(tabCount2+(0*KK+LL), ph->cdist_atm[n]);
+          //}
+          //#endif
           #endif    
 
           atomicAdd(NPhotonsOut + ((count_level*NLAMd + il)*NBTHETAd + ith)*NBPHId + iphi, 1);
@@ -3268,20 +3280,21 @@ __device__ void ComputePsiZenith(Photon* ph, float* psi, float phi)
 * La position correspond à une boite contenu dans l'espace de sortie
 */
 __device__ void ComputeBox(int* ith, int* iphi, int* il,
-                           Photon* photon, unsigned long long *errorcount)
+                           Photon* photon, unsigned long long *errorcount, int count_level)
 {
 	// vxy est la projection du vecteur vitesse du photon sur (x,y)
 	float vxy = sqrtf(photon->v.x * photon->v.x + photon->v.y * photon->v.y);
 
 	// Calcul de la valeur de ithv
 	// _rn correspond à round to the nearest integer
-	//*ith = __float2int_rd(__fdividef(acosf(fabsf(photon->v.z)) * NBTHETAd, DEMIPI));
-	/////*ith = __float2int_rn(__fdividef(acosf(fabsf(photon->vz)) * NBTHETAd, DEMIPI));
-	//*ith = __float2int_rd(__fdividef(acosf(photon->v.z) * NBTHETAd, 2*DEMIPI));
-	*ith = __float2int_rd(__fdividef(acosf(photon->v.z) * NBTHETAd, SZA_MAXd/90.*DEMIPI));
+    #ifndef SPHERIQUE
+	*ith = __float2int_rd(__fdividef(acosf(fabsf(photon->v.z)) * NBTHETAd, DEMIPI));
+    #else
+    if (count_level==UPTOA) *ith = __float2int_rd(__fdividef(acosf(photon->v.z) * NBTHETAd, SZA_MAXd/90.*DEMIPI));
+    else                    *ith = __float2int_rd(__fdividef(acosf(fabsf(photon->v.z)) * NBTHETAd, DEMIPI));
+    #endif
 
 	// Calcul de la valeur de il
-    // DEV!!
     *il = photon->ilam;
 
 	/* Si le photon ressort très près du zénith on ne peut plus calculer iphi,
@@ -3339,16 +3352,6 @@ __device__ void display(const char* desc, Photon* ph) {
 
     if (idx==0) {
 		
-        // printf("%16s X=(%8.3f,%8.3f,%8.3f) V=(%6.3f,%6.3f,%6.3f) U=(%6.3f,%6.3f,%6.3f) S=(%6.3f,%6.3f,%6.3f,%6.3f) tau=%8.3f tau_abs=%8.3f weight=%11.3e ",
-        //        desc,
-        //        ph->pos.x, ph->pos.y, ph->pos.z,
-        //        ph->v.x,ph->v.y,ph->v.z,
-        //        ph->u.x,ph->u.y,ph->u.z,
-        //        ph->stokes.x, ph->stokes.y,
-        //        ph->stokes.z, ph->stokes.w,
-        //        ph->tau,ph->tau_abs, ph->weight, ph->scatterer
-        //        );
-
 		printf("%16s %4i X=(%9.4f,%9.4f,%9.4f) V=(%6.3f,%6.3f,%6.3f) U=(%6.3f,%6.3f,%6.3f) S=(%6.3f,%6.3f,%6.3f,%6.3f) tau=%8.3f tau_abs=%8.3f wvl=%6.3f weight=%11.3e ",
                desc,
 			   ph->nint,
@@ -3382,9 +3385,10 @@ __device__ void display(const char* desc, Photon* ph) {
                     printf(" loc=UNDEFINED");
         }
         #ifdef ALIS
-        printf(" nevt=%2d",ph->nevt);
         printf(" wsca=");
         for (int k=0; k<NLOWd; k++) printf("%7.5f ",ph->weight_sca[k]);
+        #ifndef ALT_PP
+        printf(" nevt=%2d",ph->nevt);
         printf(" dtausca=");
         for (int k=0; k<NLOWd; k++) printf("%7.5f ",ph->tau_sca[k]);
         printf(" layers=");
@@ -3393,6 +3397,7 @@ __device__ void display(const char* desc, Photon* ph) {
         for (int k=0; k<ph->nevt+1; k++) printf("%7.5f ",ph->vz_prev[k]);
         printf(" delta=");
         for (int k=0; k<ph->nevt+1; k++) printf("%7.5f ",ph->epsilon_prev[k]);
+        #endif
         #endif
         printf("\n");
     }
@@ -3498,21 +3503,28 @@ __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
     ph_le->wavel = ph->wavel;
     ph_le->ilam = ph->ilam;
 	ph_le->scatterer=ph->scatterer;
-    //ph_le->prop_aer = ph->prop_aer;
     ph_le->pos = ph->pos; // float3
     ph_le->nint = ph->nint;
     #ifdef SPHERIQUE
     ph_le->radius = ph->radius;
     #endif
+
     #ifdef ALIS
-    int k, kmax=ph->nevt+1;
+    int k; 
+    #ifndef ALT_PP
+    int kmax=ph->nevt+1;
     ph_le->nevt = ph->nevt;
     for (k=0; k<kmax; k++) ph_le->layer_prev[k] = ph->layer_prev[k];
     for (k=0; k<kmax; k++) ph_le->vz_prev[k] = ph->vz_prev[k];
     for (k=0; k<kmax; k++) ph_le->epsilon_prev[k] = ph->epsilon_prev[k];
-    for (k=0; k<NLOWd; k++) ph_le->weight_sca[k] = ph->weight_sca[k];
     for (k=0; k<NLOWd; k++) ph_le->tau_sca[k] = ph->tau_sca[k];
+    #else
+    for (k=0; k<(NATMd+1); k++) ph_le->cdist_atm[k] = ph->cdist_atm[k];
+    for (k=0; k<NOCEd; k++) ph_le->cdist_oc[k] = ph->cdist_oc[k];
     #endif
+    for (k=0; k<NLOWd; k++) ph_le->weight_sca[k] = ph->weight_sca[k];
+    #endif
+
     #ifdef BACK
     int kk;
     for (kk=0; kk<16; kk++) ph_le->M[kk] = ph->M[kk];

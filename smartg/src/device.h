@@ -115,6 +115,12 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 __device__ void move_sp(Photon*, struct Profile *prof_atm, int le, int count_level, struct RNG_State*);
 #endif
 
+// move new PP
+#ifdef ALT_PP
+__device__ void move_pp2(Photon*, struct Profile *prof_atm, struct Profile* prof_oc, int le, int count_level,
+                        struct RNG_State*);
+#endif
+
 // move, version plan parallèle
 __device__ void move_pp(Photon*, struct Profile *prof_atm, struct Profile* prof_oc,
                         struct RNG_State*);
@@ -184,7 +190,7 @@ __device__ void ComputePsiZenith(Photon* , float* , float);
 * La position correspond à une boite contenu dans l'espace de sortie
 */
 __device__ void ComputeBox(int*, int*, int*, Photon*,
-                           unsigned long long *errorcount);
+                           unsigned long long *errorcount, int count_level);
 
 #ifdef DEBUG_PHOTON
 __device__ void display(const char* desc, Photon* ph);

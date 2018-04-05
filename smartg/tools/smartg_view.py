@@ -272,6 +272,181 @@ def transect_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up 
         #transect2D(AoLP, index=ind,  sub=144, fig=fig2, color=color, **kwargs)
 
         return fig1, fig2
+
+def spectrum(lut, vmin=None, vmax=None, sub='111', fig=None, color='k', percent=False, fmt='-'):
+    '''
+    spectrum of a 1D LUT
+
+    lut:  1D look-up table to display
+            with axis 'wavelength'
+    vmin, vmax: range of values
+                default None: determine min/max from values
+    fig : destination figure. If None (default), create a new figure.
+    color : color of the transect
+    percent: if True set scale to 0 to 100%
+    '''
+    from pylab import figure
+
+    assert 'wavelength' in lut.names
+
+    if fig is None:
+        fig = figure(figsize=(4.5, 2.5))
+
+    ax1   = lut.axes[0]
+    data  = lut.data
+
+    if vmin is None:
+        vmin = np.amin(lut.data[~np.isnan(lut.data)])
+    if vmax is None:
+        vmax = np.amax(lut.data[~np.isnan(lut.data)])
+    if vmin == vmax:
+        vmin -= 0.001
+        vmax += 0.001
+    if vmin > vmax: vmin, vmax = vmax, vmin
+    if percent:
+        vmin=0.
+        vmax=100.
+
+    ax1_min = np.amin(ax1)
+    ax1_max = np.amax(ax1)
+    #
+
+    ax_cart = fig.add_subplot(sub)
+    ax_cart.grid(True)
+
+    ax_cart.set_xlim(ax1_min, ax1_max)
+    ax_cart.set_ylim(vmin, vmax)
+    ax_cart.ticklabel_format(axis='y', style='sci', scilimits=(-2,2))
+    #ax_cart.ticklabel_format(axis='x', style='sci', scilimits=(-2,2))
+    ax_cart.grid(True)
+    ax_cart.set_xlabel(r'$\lambda$ (nm)')
+
+    #
+    # plot
+    #
+    ax_cart.plot(ax1 , data[:], fmt, color=color)
+
+    if lut.desc is not None:
+        ax_cart.set_title(lut.desc)
+
+
+def spectrum_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (TOA)', fig=None, color='k', subdict=None, 
+         **kwargs):
+    '''
+    visualization of a smartg MLUT
+
+    Options:
+        logI: shows log10 of I
+        Circ: shows Circular polarization 
+        QU:  shows Q U and DoP
+        field: level of output
+        full: shows all
+        color: color of the transect
+        subdict: dictionnary of LUT subsetter (see LUT class , sub() method)
+
+    Outputs:
+    if full is False, it returns 1 figure
+    if full is True,  it returns 2 figures
+    '''
+
+    I = mlut['I_' + field]
+    Q = mlut['Q_' + field]
+    U = mlut['U_' + field]
+    V = mlut['V_' + field]
+
+    if subdict is not None :
+        I = I.sub(d=subdict)
+        Q = Q.sub(d=subdict)
+        U = U.sub(d=subdict)
+        V = V.sub(d=subdict)
+
+    # Linearly polarized reflectance
+    IPL = (Q*Q + U*U).apply(np.sqrt, 'Lin. Pol. ref.')
+    
+    # Polarized reflectance
+    IP = (Q*Q + U*U +V*V).apply(np.sqrt, 'Pol. ref.')
+
+    # Degree of Linear Polarization (%)
+    DoLP = 100*IPL/I
+    DoLP.desc = r'$DoLP$'
+    
+    # Angle of Linear Polarization (deg)
+    AoLP = (U/Q)
+    AoLP.apply(np.arctan)*90/np.pi
+    AoLP.desc = r'$AoLP$'
+    
+    # Degree of Circular Polarization (%)
+    DoCP = 100*V.apply(abs)/I
+    DoCP.desc = r'$DoCP$'
+
+    # Degree of Polarization (%)
+    DoP = 100*IP/I
+    DoP.desc = r'$DoP$'
+
+    if not full:
+        if QU:
+            if fig is None: fig = figure(figsize=(8, 8))
+            if logI:
+                lI=I.apply(np.log10)
+                lI.desc = mdesc(I.desc, logI=logI)
+                spectrum(lI, sub='221', fig=fig, color=color,  **kwargs)
+            else:
+                I.desc = mdesc(I.desc)
+                spectrum(I,  sub='221', fig=fig, color=color,   **kwargs)
+            Q.desc = mdesc(Q.desc)
+            U.desc = mdesc(U.desc)
+            spectrum(Q, sub='222', fig=fig, color=color, **kwargs)
+            spectrum(U, sub='223', fig=fig, color=color, **kwargs)
+            if Circ:
+                V.desc = mdesc(V.desc)
+                spectrum(V, sub='224', fig=fig, color=color, **kwargs)
+            else:
+                spectrum(DoP, sub='224', fig=fig,  color=color, percent=True, **kwargs)
+        else:
+            # show only I and PR
+            if fig is None: fig = figure(figsize=(8, 4))
+            if logI:
+                lI=I.apply(np.log10)
+                lI.desc = mdesc(I.desc, logI=logI)
+                spectrum(lI, sub='121', fig=fig, color=color,   **kwargs)
+            else:
+                I.desc = mdesc(I.desc)
+                spectrum(I, sub='121', fig=fig, color=color,  **kwargs)
+
+            if Circ:
+                spectrum(DoCP, sub='122', fig=fig,  color=color, percent=True, **kwargs)
+            else:
+                spectrum(DoP, sub='122', fig=fig, color=color, percent=True, **kwargs)
+
+        return fig
+
+    else:
+        # full plots
+        if fig is None: 
+            fig1 = figure(figsize=(16, 4))
+            fig2 = figure(figsize=(16, 4))
+        else : fig1,fig2 = fig
+        lI=I.apply(np.log10)
+        lI.desc = mdesc(I.desc,logI=True)
+        I.desc = mdesc(I.desc)
+        Q.desc = mdesc(Q.desc)
+        U.desc = mdesc(U.desc)
+        V.desc = mdesc(V.desc)
+        spectrum(I, sub='141', fig=fig1, color=color,  **kwargs)
+        spectrum(Q, sub='142', fig=fig1, color=color, **kwargs)
+        spectrum(U, sub='143', fig=fig1, color=color, **kwargs)
+        spectrum(V, sub='144', fig=fig1, color=color, **kwargs)
+        
+        Q.desc = mdesc(Q.desc)
+        U.desc = mdesc(U.desc)
+        V.desc = mdesc(V.desc)
+        spectrum(lI, sub='141', fig=fig2, color=color, **kwargs)
+        spectrum(DoLP, sub='142', fig=fig2, color=color, percent=True, **kwargs)
+        spectrum(DoCP, sub='143', fig=fig2, color=color, percent=True, **kwargs)
+        spectrum(DoP, sub='144', fig=fig2, color=color, percent=True, **kwargs)
+        #spectrum(AoLP, index=ind,  sub=144, fig=fig2, color=color, **kwargs)
+
+        return fig1, fig2
         
 def phase_view(mlut, ipha=None, fig=None, axarr=None, iw=0, kind='atm'):
     '''
