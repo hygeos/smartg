@@ -36,9 +36,9 @@ dir_bin = join(dir_root, 'bin/')
 src_device = join(dir_src, 'device.cu')
 binnames = { # keys are (PP, ALIS)
         (True , False): join(dir_bin, 'pp.cubin'),
-        (True , True ): join(dir_bin, 'pp.alis.cubin'),
+        # (True , True ): join(dir_bin, 'pp.alis.cubin'),
         (False, False): join(dir_bin, 'sp.cubin'),
-        (False, True ): join(dir_bin, 'sp.alis.cubin'),
+        # (False, True ): join(dir_bin, 'sp.alis.cubin'),
         }
 
 # constants definition
