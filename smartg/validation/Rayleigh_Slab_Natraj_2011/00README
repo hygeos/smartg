@@ -1,0 +1,48 @@
+Here we tabulate Stokes parameter results for optical thickness unity and larger. We use 
+the same definitions of Stokes parameters as given by Hovenier and van der Mee (1983) and 
+Hovenier et al. (2004), to which we refer for a more extensive treatment. These Stokes 
+parameters are essentially the same as those in Chandrasekhar (1950) and van de Hulst 
+(1957, 1980). We refer the reader to Natraj and Hovenier (2011) for computational details 
+and discussions of the tabulated results.
+
+The results for I, Q and U are tabulated for the following sets of parameters:
+
+TAU = 1, 2, 4, 8, 16, 32, 64, 100, 128, 256, 512, 1024, Infinity
+ALBEDO = 0.0, 0.25, 0.8
+MU0 = 0.02, 0.04, 0.06, ..., 0.96, 0.98, 1.00
+MU = 0.00, 0.02, 0.04, 0.06, ..., 0.96, 0.98, 1.00
+PHI = 0, 30, 60, 90, 120, 150, 180
+
+Here, TAU is the optical thickness; ALBEDO is the ground albedo of an underlying Lambert 
+surface; MU0 is the absolute value of the cosine of the angle between the incident beam and 
+the vertical; MU is the absolute value of the cosine of the angle between the emergent beam 
+and the vertical; PHI is the relative azimuth angle between the emergent and incident 
+beams.
+
+The files are named as follows:
+
+{I/Q/U}_{UP/DN}_TAU_{1/2/4/8/16/32/64/100/128/256/512/1024}
+
+and
+
+{I/Q/U}_UP_TAU_INFINITY
+
+where the filename has one of each argument inside the parentheses. UP, DN refer, 
+respectively, to upwelling radiation emerging from the top of the atmosphere and 
+downwelling radiation emerging from the bottom of the atmosphere. For infinite optical 
+thickness, there are no downwelling results since they are all identically zero.
+
+References:
+
+1. Chandrasekhar, S. 1950, Radiative Transfer (Oxford: Clarendon Press)
+
+2. Hovenier, J. W., & van der Mee, C. V. M. 1983, A&A, 128, 1
+
+3. Hovenier, J. W., van der Mee, C. V. M., & Domke, H. 2004, Transfer of Polarized Light in 
+   Planetary Atmospheres (Dordrecht: Kluwer Academic Publishers)
+
+4. Natraj, V., & Hovenier, J. W. 2011, ApJ, submitted
+
+5. van de Hulst, H. C. 1957, Light Scattering by Small Particles (New York: Wiley)
+
+6. van de Hulst, H. C. 1980, Multiple Light Scattering (New York: Academic Press)
