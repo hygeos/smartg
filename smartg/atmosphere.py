@@ -741,7 +741,7 @@ class AtmAFGL(Atmosphere):
                                'Cumulated absorption optical thickness'})
 
         with np.errstate(invalid='ignore'):
-            pmol = dtaur/(dtaur + dtaua)
+            pmol = dtaur/(dtaur + dtaua*ssa_p)
         pmol[np.isnan(pmol)] = 1.
         pro.add_dataset('pmol_atm', pmol,
                         axnames=['wavelength', 'z_atm'],

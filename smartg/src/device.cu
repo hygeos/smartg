@@ -1019,7 +1019,6 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
             #else
             float tau;
             ph->cdist_atm[ph->layer] += d;
-            //ph->cdist_atm[i_layer_bh] += d;
             int DL=(NLAMd-1)/(NLOWd-1);
             for (int k=0; k<NLOWd; k++) {
                 tau = abs(get_OD(1,prof_atm[i_layer_bh + k*DL*(NATMd+1)]) - get_OD(1,prof_atm[i_layer_fw + k*DL*(NATMd+1)]));
@@ -1035,7 +1034,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
             ph->radius = length(ph->pos);
             no  = operator/(ph->pos, ph->radius);
             vzn = dot(ph->v, no);
-            float psi=0.F;
+            //float psi=0.F;
             if (REFRACd) {
                 // We update photon direction at the interface due to refraction
                 // 1. sin_i just to verify if refraction occurs

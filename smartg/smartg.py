@@ -484,7 +484,6 @@ class Smartg(object):
         # number of output levels
         # warning! values defined in communs.h should be < LVL
         NLVL = 6
-        #NLVL = 5
 
         # number of Stokes parameters of the radiation field
         NPSTK = 4
