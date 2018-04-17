@@ -29,7 +29,7 @@ from pycuda.compiler import SourceModule
 from pycuda.driver import module_from_buffer
 # bellow necessary for object incorporation
 import smartg.geometry
-from smartg.geometry import Vector, Point, Normal, Ray, BBox
+from smartg.geometry import Vector, Point, Normal, Ray, BBox, CoordinateSystem
 import smartg.transform
 from smartg.transform import Transform, Aff
 import smartg.visualizegeo
@@ -125,6 +125,7 @@ type_IObjets = [
     ('geo', 'int32'),       # 1 = sphere, 2 = plane, ...
     ('material', 'int32'),  # 1 = LambMirror, 2 = Matte,
                             # 3 = Mirror, ...
+    ('type', 'int32'),      # 1 = reflector, 2 = receptor
     ('reflec', 'float32'),  # reflectivity of the material
     
     ('p0x', 'float32'),     # \            \
@@ -528,6 +529,9 @@ class Smartg(object):
             - interval : liste composée de deux listes [[pxmin, pymin, pzmin], [[pxmin, pymin, pzmin]]
                          interval définit l'interval d'études des objets délimitée par deux points (pmin et pmax).
 
+            - IsAtm (effet uniquement si myObjects != None) : si égal à 0 , cela permet dans le cas sans atmosphère,
+                      d'empêcher certaines fuites de photons.
+
         Return value:
         ------------
 
@@ -547,19 +551,27 @@ class Smartg(object):
         # Les Objets
         #
         if myObjects is not None:
+            # Initialisations
             nObj = len(myObjects)
             myObjects0 = np.zeros(nObj, dtype=type_IObjets, order='C')
+            TC = 0.; nbCx = int(0); nbCy = int(0);
+            pp1 = 0.; pp2 = 0.; pp3 = 0.; pp4 = 0.;
+            surfMir = None
+
+            # Début de la boucle pour la prise en compte de tous les objets
             for i in xrange (0, nObj):
+
+                # Pour l'instant 2 choix possibles : surface Sphérique ou Plane
                 if isinstance(myObjects[i].geo, Spheric):    # si l'objet est une sphère
-                    myObjects0['geo'][i] = 1
+                    myObjects0['geo'][i] = 1 # reconnaitre la forme sphérique sur Cuda
                     
                     myObjects0['myRad'][i] = myObjects[i].geo.radius
                     myObjects0['z0'][i] = myObjects[i].geo.z0
                     myObjects0['z1'][i] = myObjects[i].geo.z1
                     myObjects0['phi'][i] = myObjects[i].geo.phi
                     
-                elif isinstance(myObjects[i].geo, Plane):    # si l'objet = surface plane
-                    myObjects0['geo'][i] = 2
+                elif isinstance(myObjects[i].geo, Plane):    # si l'objet est une surface plane
+                    myObjects0['geo'][i] = 2 # reconnaitre la forme plane sur Cuda
                     
                     myObjects0['p0x'][i] = myObjects[i].geo.p1.x
                     myObjects0['p0y'][i] = myObjects[i].geo.p1.y
@@ -576,9 +588,11 @@ class Smartg(object):
                     myObjects0['p3x'][i] = myObjects[i].geo.p4.x
                     myObjects0['p3y'][i] = myObjects[i].geo.p4.y
                     myObjects0['p3z'][i] = myObjects[i].geo.p4.z
-                else:                                         # si pas d'objets
-                    myObjects0['geo'][i] = 0
-                    
+                else:    # si l'objet est autre chose (inconnu)
+                    raise NameError('You geometry can be only spheric or plane, please' + \
+                                    ' choose between Spheric or Plane classes!')
+
+                # Affectation des transformations (rotations et translations)
                 myObjects0['mvRx'][i] = myObjects[i].transformation.rotx
                 myObjects0['mvRy'][i] = myObjects[i].transformation.roty
                 myObjects0['mvRz'][i] = myObjects[i].transformation.rotz
@@ -586,7 +600,8 @@ class Smartg(object):
                 myObjects0['mvTx'][i] = myObjects[i].transformation.transx
                 myObjects0['mvTy'][i] = myObjects[i].transformation.transy
                 myObjects0['mvTz'][i] = myObjects[i].transformation.transz
-                
+
+                # Prendre en compte le matériau de l'objet
                 if isinstance(myObjects[i].material, LambMirror):
                     myObjects0['material'][i] = 1
                     myObjects0['reflec'][i] = myObjects[i].material.reflectivity
@@ -596,6 +611,82 @@ class Smartg(object):
                 if isinstance(myObjects[i].material, Mirror):
                     myObjects0['material'][i] = 3
                     myObjects0['reflec'][i] = myObjects[i].material.reflectivity
+
+                # Deux possibilités : l'objet est un reflecteur ou un recepteur   
+                if (myObjects[i].name == "reflector"):
+                    myObjects0['type'][i] = 1 # pour reconnaitre le reflect sur Cuda
+
+                    # Etape cruciale pour la visualisation des résulats (mode forward et mixte uniquement)
+
+                    # Récupération des 4 points formant le rectangle représentant le reflecteur
+                    pp1 = myObjects[i].geo.p1
+                    pp2 = myObjects[i].geo.p2
+                    pp3 = myObjects[i].geo.p3
+                    pp4 = myObjects[i].geo.p4
+
+                    # Prise en compte des transfos de rot en X et Y
+                    TpT = Transform()
+                    TpRX = TpT.rotateX(myObjects[i].transformation.rotx)
+                    TpRY = TpT.rotateY(myObjects[i].transformation.roty)
+                    TpT = TpRX*TpRY
+
+                    # Application des transfos sur les 4 points
+                    pp1 = TpT[pp1]
+                    pp2 = TpT[pp2]
+                    pp3 = TpT[pp3]
+                    pp4 = TpT[pp4]
+
+                    # Création d'une normale (inverse à la normale du recepteur)
+                    ee3 = Normal(1., 0., 0.)
+
+                    # production de deux vecs permettant la création d'un repère orthogonal avec la normale ee3
+                    ee1, ee2 = CoordinateSystem(ee3)
+
+                    # Création d'une matrice appelé matrice de passage
+                    mm = np.zeros((4,4), dtype=np.float64)
+
+                    # Remplissage de la matrice de passage en fonction du repère (ee3 étant le nouvel axe z)
+                    mm[0,0] = ee1.x ; mm[0,1] = ee2.x ; mm[0,2] = ee3.x ; mm[0,3] = 0. ;
+                    mm[1,0] = ee1.y ; mm[1,1] = ee2.y ; mm[1,2] = ee3.y ; mm[1,3] = 0. ;
+                    mm[2,0] = ee1.z ; mm[2,1] = ee2.z ; mm[2,2] = ee3.z ; mm[2,3] = 0. ;
+                    mm[3,0] = 0.    ; mm[3,1] = 0.    ; mm[3,2] = 0.    ; mm[3,3] = 1. ;
+
+                    # Création de la transformation permettant le changement de base
+                    mmInv = np.transpose(mm)
+                    ooTw = Transform(m = mm, mInv = mmInv)
+                    
+                    # Application du changement de base aux 4 points
+                    pp1 = ooTw[pp1]
+                    pp2 = ooTw[pp2]
+                    pp3 = ooTw[pp3]
+                    pp4 = ooTw[pp4]
+
+                    # Projection sur la surface de la base
+                    pp1.z = 0. ; pp2.z = 0. ; pp3.z = 0. ; pp4.z = 0.;
+
+                    # Calcul de l'aire du quadrilatère projeté (si rot x et y actif alors le quadri peut être convexe!!)
+                    # la formule si-dessous fait le calcul exacte de l'aire d'un quadri convexe!! (donc général)
+                    TwoAA = abs((pp1.x - pp4.x)*(pp2.y - pp3.y)) + abs((pp2.x - pp3.x)*(pp1.y - pp4.y))
+                    surfMir = TwoAA/2 # TwoAA = l'aire du quadri convexe multiplié par 2
+                    
+                elif (myObjects[i].name == "receptor"):
+                    myObjects0['type'][i] = 2 # pour reconnaitre le recept sur Cuda
+                    TC=myObjects[i].TC
+                    sizeXmin = min(myObjects[i].geo.p1.x, myObjects[i].geo.p2.x,
+                                   myObjects[i].geo.p3.x, myObjects[i].geo.p4.x)
+                    sizeXmax = max(myObjects[i].geo.p1.x, myObjects[i].geo.p2.x,
+                                   myObjects[i].geo.p3.x, myObjects[i].geo.p4.x)
+                    sizeX = sizeXmax - sizeXmin
+                    sizeYmin = min(myObjects[i].geo.p1.y, myObjects[i].geo.p2.y,
+                                   myObjects[i].geo.p3.y, myObjects[i].geo.p4.y)
+                    sizeYmax = max(myObjects[i].geo.p1.y, myObjects[i].geo.p2.y,
+                                   myObjects[i].geo.p3.y, myObjects[i].geo.p4.y)
+                    sizeY = sizeYmax - sizeYmin
+                    nbCx = int(sizeX/TC)
+                    nbCy = int(sizeY/TC)
+                else:
+                    raise NameError('You have to specify if your object is a reflector or a receptor!')
+                    
                     
         else:
             nObj = 0
@@ -611,21 +702,21 @@ class Smartg(object):
             Pmax_y = interval[1][1]
             Pmax_z = interval[1][2]
         else:
-            Pmin_x = -100
-            Pmin_y = -200
-            Pmin_z = 0
-            Pmax_x = 100
-            Pmax_y = 200
-            Pmax_z = 120
-
+            Pmin_x = -300; Pmin_y = -300; Pmin_z = 0;
+            Pmax_x = 300;  Pmax_y = 300; Pmax_z = 120;
+        # END OBJ ===================================================
+        
         #
         # initialization
         #              
         if NBPHI%2 == 1:
             warn('Odd number of azimuth')
 
-        if NBLOOP is None:
+        if (NBLOOP is None) and (nObj <= 0):
             NBLOOP = min(NBPHOTONS/30, 1e6)
+        elif (NBLOOP is None) and (nObj > 0):
+            NBLOOP = min(NBPHOTONS/10, 1e6)
+
         NF = int(NF)
 
         # number of output levels
@@ -849,7 +940,7 @@ class Smartg(object):
                   RTER, LE, ZIP, FLUX, NLVL, NPSTK,
                   NWLPROBA, BEER, RR, WEIGHTRR, NLOW, NJAC, 
                   NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, nObj,
-                  Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, HIST)
+                  Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, HIST)
 
         # Initialize the progress bar
         p = Progress(NBPHOTONS, progress)
@@ -859,22 +950,26 @@ class Smartg(object):
 
         # Loop and kernel call
         (NPhotonsInTot, tabPhotonsTot, tabDistTot, tabHistTot, errorcount, 
-         NPhotonsOutTot, sigma, Nkernel, secs_cuda_clock) = loop_kernel(NBPHOTONS, faer, foce,
-                                NLVL, NATM, NOCE, MAX_HIST, NLOW, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
-                                NLAM, NSENSOR, self.double, self.kernel, self.kernel2, p, X0, le, tab_sensor, spectrum,
-                                prof_atm_gpu, prof_oc_gpu,
-                                wl_proba_icdf, stdev, self.rng, myObjects0, hist=hist)
+         NPhotonsOutTot, sigma, Nkernel, secs_cuda_clock, cMatVisuRecep, CounterIntOb
+        ) = loop_kernel(NBPHOTONS, faer, foce,
+                        NLVL, NATM, NOCE, MAX_HIST, NLOW, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
+                        NLAM, NSENSOR, self.double, self.kernel, self.kernel2, p, X0, le, tab_sensor, spectrum,
+                        prof_atm_gpu, prof_oc_gpu,
+                        wl_proba_icdf, stdev, self.rng, myObjects0, TC, nbCx, nbCy, hist=hist)
 
         attrs['kernel time (s)'] = secs_cuda_clock
         attrs['number of kernel iterations'] = Nkernel
         attrs['seed'] = SEED
         attrs.update(self.common_attrs)
 
+        # En rapport avec l'implémentation des objets (permet le visuel des res du recept)
+        cMatVisuRecep[:][:] = cMatVisuRecep[:][:] * ((surfMir)/(TC*TC*CounterIntOb))
+            
         # finalization
         output = finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl[:], NPhotonsInTot, errorcount, NPhotonsOutTot,
-                           OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, prof_oc,
-                           sigma, THVDEG, reflectance, HORIZ, le=le, flux=flux, back=self.back, 
-                           SZA_MAX=SZA_MAX, SUN_DISC=SUN_DISC, hist=hist)
+                          OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, prof_oc,
+                          sigma, THVDEG, reflectance, HORIZ, le=le, flux=flux, back=self.back, 
+                          SZA_MAX=SZA_MAX, SUN_DISC=SUN_DISC, hist=hist, cMatVisuRecep=cMatVisuRecep)
         output.set_attr('processing time (s)', (datetime.now() - t0).total_seconds())
 
         p.finish('Done! | Received {:.1%} of {:.3g} photons ({:.1%})'.format(
@@ -926,8 +1021,8 @@ def calcOmega(NBTHETA, NBPHI, SZA_MAX=90., SUN_DISC=0):
 
 def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
              OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, prof_oc,
-             sigma, THVDEG, reflectance, HORIZ, le=None, flux=None, back=False, 
-             SZA_MAX=90., SUN_DISC=0, hist=False):
+             sigma, THVDEG, reflectance, HORIZ, le=None, flux=None,
+             back=False, SZA_MAX=90., SUN_DISC=0, hist=False, cMatVisuRecep = None):
     '''
     create and return the final output
     '''
@@ -1000,6 +1095,7 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
 
     m.add_axis('Zenith angles', tabTh*180./np.pi)
     m.add_axis('Azimuth angles', tabPhi*180./np.pi)
+    
     if NLAM > 1:
         m.add_axis('wavelength', wl)
         ilam = slice(None)
@@ -1172,6 +1268,9 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
                 m.rm_lut(d)
                 m.add_lut(l, desc=d.replace('I_', 'flux_'))
 
+    if (cMatVisuRecep is not None):
+        m.add_dataset('C_Receptor', cMatVisuRecep)
+
     return m
 
 
@@ -1322,7 +1421,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
               NBTHETA, NBPHI, OUTPUT_LAYERS,
               RTER, LE, ZIP, FLUX, NLVL, NPSTK, NWLPROBA, BEER, RR, 
               WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, nObj,
-              Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, HIST) :
+              Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, HIST) :
     """
     Initialize the constants in python and send them to the device memory
 
@@ -1393,6 +1492,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
     copy_to_device('HORIZd', HORIZ, np.int32)
     copy_to_device('SZA_MAXd', SZA_MAX, np.float32)
     copy_to_device('SUN_DISCd', SUN_DISC, np.float32)
+    # copy en rapport avec les objets :
     copy_to_device('nObj', nObj, np.int32)
     copy_to_device('Pmin_x', Pmin_x, np.float32)
     copy_to_device('Pmin_y', Pmin_y, np.float32)
@@ -1401,6 +1501,9 @@ def InitConst(surf, env, NATM, NOCE, mod,
     copy_to_device('Pmax_y', Pmax_y, np.float32)
     copy_to_device('Pmax_z', Pmax_z, np.float32)
     copy_to_device('IsAtm', IsAtm, np.int32)
+    copy_to_device('TCd', TC, np.float32)
+    copy_to_device('nbCx', nbCx, np.int32)
+    copy_to_device('nbCy', nbCy, np.int32)
 
 def init_profile(wl, prof, kind):
     '''
@@ -1552,7 +1655,7 @@ def get_git_attrs():
 def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
                 NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                 NLAM, NSENSOR, double, kern, kern2, p, X0, le, tab_sensor, spectrum,
-                prof_atm, prof_oc, wl_proba_icdf, stdev, rng, myObjects0, hist=False):
+                prof_atm, prof_oc, wl_proba_icdf, stdev, rng, myObjects0, TC, nbCx, nbCy, hist=False):
     """
     launch the kernel several time until the targeted number of photons injected is reached
 
@@ -1570,6 +1673,9 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         - kern : kernel launching the transfert radiative
         - p: progress bar object
         - X0: initial coordinates of the photon entering the atmosphere
+        - myObjetcs0 : gpu array containing the information of all the objects
+        - TC : if there is a receptor object, this is the size of 1 cell (result visualisation)
+        - nbCx, nbCy : number of cells in x and y directions
     --------------------------------------------------------------
     Returns :
         - nbPhotonsTot : Total number of photons processed
@@ -1582,7 +1688,11 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
     # Initializations
     nThreadsActive = gpuzeros(1, dtype='int32')
     Counter = gpuzeros(1, dtype='uint64')
-
+    # Initializations linked to objects
+    CounterIntObj = gpuzeros(1, dtype='uint64')
+    tabObjInfo = gpuzeros((2, nbCy, nbCx), dtype=np.float64)
+    tabMatRecep = np.zeros((nbCy, nbCx), dtype=np.float64)
+    
     # Initialize the array for error counting
     NERROR = 32
     errorcount = gpuzeros(NERROR, dtype='uint64')
@@ -1606,6 +1716,8 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
     # arrays for counting the input photons (per wavelength)
     NPhotonsIn = gpuzeros((NSENSOR,NLAM), dtype=np.uint64)
     NPhotonsInTot = gpuzeros((NSENSOR,NLAM), dtype=np.uint64)
+    nbPhotonRecept = 0.
+    weightRecept = 0.
 
     # arrays for counting the output photons
     NPhotonsOut = gpuzeros((NLVL,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.uint64)
@@ -1633,12 +1745,14 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
 
     secs_cuda_clock = 0.
     while(np.sum(NPhotonsInTot.get()) < NBPHOTONS):
-
         tabPhotons.fill(0.)
         NPhotonsOut.fill(0)
         NPhotonsIn.fill(0)
         Counter.fill(0)
-
+        # en rapport avec les objets
+        CounterIntObj.fill(0)
+        tabObjInfo.fill(0)
+        
         start_cuda_clock = cuda.Event()
         end_cuda_clock = cuda.Event()
         start_cuda_clock.record()
@@ -1646,7 +1760,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         # kernel launch
         kern(spectrum, X0, faer, foce,
              errorcount, nThreadsActive, tabPhotons, tabDist, tabHist,
-             Counter, NPhotonsIn, NPhotonsOut, tabthv, tabphi, tab_sensor,
+             Counter, CounterIntObj, tabObjInfo, NPhotonsIn, NPhotonsOut, tabthv, tabphi, tab_sensor,
              prof_atm, prof_oc, wl_proba_icdf, rng.state, myObjects0,
              block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
         end_cuda_clock.record()
@@ -1654,7 +1768,18 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         secs_cuda_clock = secs_cuda_clock + start_cuda_clock.time_till(end_cuda_clock)
 
         cuda.Context.synchronize()
+        np.set_printoptions(precision=5, linewidth=150)
+        # print ("counter of photon intersect the geo is:", CounterIntObj[0])
+        # print ("sum of weight(1) of photons which intersect the receptor:", tabObjInfo[0, 0, 0])
+        # print ("sum of weight(2) of photons which intersect the receptor: \n", tabObjInfo[1, :, :])
+        # print ("counter from host (smartg) is:", Counter[0])
+        # print ("NPhotonsIn host (smartg) is:", NPhotonsIn)
 
+        tabMatRecep += tabObjInfo[1, :, :].get()
+        weightRecept += tabObjInfo[0, 0, 0].get()
+        nbPhotonReceptIni = CounterIntObj[0] # number of photons intersect the receptor by last kernel
+        nbPhotonRecept += nbPhotonReceptIni
+        
         L = NPhotonsIn   # number of photons launched by last kernel
         NPhotonsInTot += L
 
@@ -1669,7 +1794,11 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
             H = tabHist
             tabHistTot = H
         #!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
+        print ("counter of photon intersect the geo is:", nbPhotonRecept)
+        print ("sum of weight(1) of photons which intersect the receptor:", weightRecept)
+        print ("NPhotonsIn host (smartg) is:", NPhotonsInTot)
+        print ("counter from host (smartg) is:", Counter[0])
+        
         N_simu += 1
         if stdev:
             (NSENSOR,NLAM) = NPhotonsIn.shape
@@ -1695,7 +1824,8 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         sigma = None
 
     #!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    return NPhotonsInTot.get(), tabPhotonsTot.get(), tabDistTot.get(), tabHistTot.get(), errorcount, NPhotonsOutTot.get(), sigma, N_simu, secs_cuda_clock
+    return NPhotonsInTot.get(), tabPhotonsTot.get(), tabDistTot.get(), tabHistTot.get(), errorcount, \
+        NPhotonsOutTot.get(), sigma, N_simu, secs_cuda_clock, tabMatRecep, nbPhotonRecept.get()
     #!!!!!!!!!!!!!!!!!!!!!!!!!!!
     #return NPhotonsInTot.get(), tabPhotonsTot.get(), errorcount, NPhotonsOutTot.get(), sigma, N_simu, secs_cuda_clock
 

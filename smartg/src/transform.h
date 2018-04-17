@@ -45,8 +45,8 @@ public:
 	__host__ __device__ Transform Scale(float x, float y, float z); // Echelle (facteur) en x, y et z
 	__host__ __device__ Transform RotateX(float angle);             // rot par rapport à X  
 	__host__ __device__ Transform RotateY(float angle);             // rot par rapport à Y  
-	__host__ __device__ Transform RotateZ(float angle);             // rot par rapport à Z  
-
+	__host__ __device__ Transform RotateZ(float angle);             // rot par rapport à Z
+	
 private:
 	// Paramètres privés
 	float4x4 m, mInv;
@@ -269,8 +269,13 @@ Transform Transform::Scale(float x, float y, float z) {
 }
 
 Transform Transform::RotateX(float angle) {
+	#if __CUDA_ARCH__ >= 200
+    float sin_t = sin(radians(angle));
+    float cos_t = cos(radians(angle));
+	#elif !defined(__CUDA_ARCH__)
     float sin_t = sinf(radians(angle));
     float cos_t = cosf(radians(angle));
+	#endif
     float4x4 myM = make_float4x4(
 		1,     0,      0, 0,
 		0, cos_t, -sin_t, 0,
@@ -282,8 +287,13 @@ Transform Transform::RotateX(float angle) {
 
 
 Transform Transform::RotateY(float angle) {
+    #if __CUDA_ARCH__ >= 200
+    float sin_t = sin(radians(angle));
+    float cos_t = cos(radians(angle));
+	#elif !defined(__CUDA_ARCH__)
     float sin_t = sinf(radians(angle));
     float cos_t = cosf(radians(angle));
+	#endif
     float4x4 myM = make_float4x4(
 		cos_t , 0, sin_t, 0,
 		0,      1,     0, 0,
@@ -296,8 +306,13 @@ Transform Transform::RotateY(float angle) {
 
 
 Transform Transform::RotateZ(float angle) {
-    float sin_t = sinf(radians(angle));
+	#if __CUDA_ARCH__ >= 200
+    float sin_t = sin(radians(angle));
+    float cos_t = cos(radians(angle));
+	#elif !defined(__CUDA_ARCH__)
+	float sin_t = sinf(radians(angle));
     float cos_t = cosf(radians(angle));
+	#endif
     float4x4 m = make_float4x4(
 		cos_t, -sin_t, 0, 0,
 		sin_t,  cos_t, 0, 0,

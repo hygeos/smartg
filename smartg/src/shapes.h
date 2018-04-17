@@ -325,17 +325,18 @@ bool Triangle::Intersect(const Ray &ray, float *tHit,
 	float3 e1 = p2 - p1;
 	float3 e2 = p3 - p1;
 	float3 s1 = cross(ray.d, e2);
-	float divisor = dot(s1, e1);
-    
+    float divisor = dot(s1, e1);
+
 	if (divisor == 0.)
-		return false;
-	float invDivisor = 1.f/divisor;
+	{return false;}
+	float invDivisor = 1.F/divisor;
 
 	// Calcul de la 1er composante des coordonnées baricentriques
 	float3 s = ray.o - p1;
 	float b1 = dot(s, s1) * invDivisor;
+
     if (b1 < 0. || b1 > 1.)
-        return false;
+	{return false;}
 
     // Calcul de la 2nd composante des coordonnées baricentriques
     float3 s2 = cross(s, e1);
@@ -424,12 +425,12 @@ public:
     __host__ __device__ bool Intersect(const Ray &ray, float* tHit,
 									   DifferentialGeometry *dg) const;
     __host__ __device__ float Area() const;
-
+	float3 *p;
 private:
 	// Paramètres privés de la classe triangleMesh
 	int ntris, nverts;
 	int *vertexIndex;
-	float3 *p;
+	//float3 *p;
 	Triangle *refTri;
 };
 
@@ -490,8 +491,9 @@ __device__ BBox TriangleMesh::ObjectBoundTriangleMesh() const
 {
 	BBox objectBounds;
 	char myP[]="Point";
-    for (int i = 0; i < nverts; i++)
-        objectBounds.Union(objectBounds, (*WorldToObject)(p[i], myP));
+    for (int i = 0; i < nverts; i++) {
+		float3 pW = (*WorldToObject)(p[i], myP);
+		objectBounds = objectBounds.Union(objectBounds, pW);}
     return objectBounds;
 }
 
@@ -499,7 +501,7 @@ __device__ BBox TriangleMesh::WorldBoundTriangleMesh() const
 {
     BBox worldBounds;
     for (int i = 0; i < nverts; i++)
-        worldBounds.Union(worldBounds, p[i]);
+		worldBounds = worldBounds.Union(worldBounds, p[i]);
     return worldBounds;
 }
 

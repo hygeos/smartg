@@ -56,6 +56,7 @@ __device__ __constant__ int NLOWd;
 __device__ __constant__ int NJACd;
 __device__ __constant__ int HISTd;
 __device__ __constant__ int NSENSORd;
+// copy en rapport avec les objets :
 __device__ __constant__ int nObj;
 __device__ __constant__ float Pmin_x;
 __device__ __constant__ float Pmin_y;
@@ -64,6 +65,9 @@ __device__ __constant__ float Pmax_x;
 __device__ __constant__ float Pmax_y;
 __device__ __constant__ float Pmax_z;
 __device__ __constant__ int IsAtm;
+__device__ __constant__ float TCd;
+__device__ __constant__ int nbCx;
+__device__ __constant__ int nbCy;
 
 /**********************************************************
 *	> Prototypes de device.cu
@@ -82,7 +86,7 @@ __global__ void launchKernel(
         unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons, void *tabDist, void *tabHist,
         //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         //unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons,
-        unsigned long long *Counter,
+        unsigned long long *Counter, unsigned long long *CounterIntObj, void *tabObjInfo,
         unsigned long long *NPhotonsIn,
         unsigned long long *NPhotonsOut,
         float *tabthv, float *tabphi,  struct Sensor *tab_sensor,
@@ -101,7 +105,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
                            struct Sensor *tab_sensor, struct Spectrum *spectrum,float *X0,
                            unsigned long long *NPhotonsIn,
                            long long *wl_proba_icdf, float* tabthv, float* tabphi,
-                           struct RNG_State*);
+                           struct RNG_State*, struct IObjets *myObjets);
 
 #ifdef SPHERIQUE
 __device__ void move_sp(Photon*, struct Profile *prof_atm, int le, int count_level, struct RNG_State*);
@@ -114,7 +118,7 @@ __device__ void move_pp2(Photon*, struct Profile *prof_atm, struct Profile* prof
 
 // move, version plan parallèle
 __device__ void move_pp(Photon*, struct Profile *prof_atm, struct Profile* prof_oc,
-                        struct RNG_State*, IGeo *geoS, struct IObjets *myObjets);
+                        struct RNG_State*, IGeo *geoS, struct IObjets *myObjets, void *tabObjInfo);
 
 
 /* scatter */
@@ -149,6 +153,8 @@ __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* 
 									  struct Spectrum *spectrum, struct RNG_State*, IGeo* geoS);
 
 __device__ void surfaceRugueuse3D(Photon* ph, IGeo* geoS, struct RNG_State *rngstate);
+
+__device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS);
 
 __device__ void countPhoton(Photon* , struct Profile* prof_atm, struct Profile* prof_oc, float*, float *,
         int, unsigned long long*, void*, void*, void*, unsigned long long*);
@@ -190,7 +196,6 @@ __device__ void ComputePsiLE(float3 u0,	float3 v0, float3 v1, float* psi, float3
 #ifdef DOUBLE
 __device__ double DatomicAdd(double* address, double val);
 #endif
-
 __device__ float get_OD(int , struct Profile ) ;  
 
 __device__ float Lambda(float , float ) ;

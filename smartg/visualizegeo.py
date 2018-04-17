@@ -60,14 +60,28 @@ class Plane(object):
     '''
     Plane constructed with 4 points : p1, p2, p3, p4
     '''
-    def __init__(self, p1 = Point(-0.5, -0.5, 0.), p2 = Point(-0.5, 0.5, 0.), \
-                 p3 = Point(0.5, 0.5, 0.), p4 = Point(0.5, -0.5, 0.)):
+    def __init__(self, p1 = Point(-0.5, -0.5, 0.), p2 = Point(0.5, -0.5, 0.), \
+                 p3 = Point(-0.5, 0.5, 0.), p4 = Point(0.5, 0.5, 0.)):
         if (isinstance(p1, Point) and isinstance(p2, Point) and \
             isinstance(p3, Point) and isinstance(p4, Point)):
-            self.p1 = p1
-            self.p2 = p2
-            self.p3 = p3
-            self.p4 = p4
+            if (  ( (p1.x == p3.x) and (p1.x < 0) )  and \
+                  ( (p2.x == p4.x) and (p2.x > 0) )  and \
+                  ( (p1.y == p2.y) and (p1.y < 0) )  and \
+                  ( (p3.y == p4.y) and (p3.y > 0) )   ):
+                self.p1 = p1
+                self.p2 = p2
+                self.p3 = p3
+                self.p4 = p4
+            elif ( (p1.x >= 0) or (p2.x <= 0) or (p1.y >= 0) or (p3.y >= 0) ):
+                raise NameError( 'Those conditions must be filled! : ' + \
+                                'p1.x < 0 , p1.y < 0 ,' + \
+                                'p2.x > 0 , p2.y < 0 ,' + \
+                                'p3.x < 0 , p3.y > 0 ,' + \
+                                'p4.x > 0 , p4.y > 0' )
+            elif ( (p1.x != p3.x) or (p2.x != p4.x) or (p1.y != p2.y) or (p3.y != p4.y) ):
+                raise NameError('Your plane geometry must be at leat a rectangle!')
+            else:
+                NameError('Unknown error in Plane class!')
         else:
             raise NameError('All arguments must be Point type!')
 
@@ -130,9 +144,10 @@ class Entity(object):
     '''
     definition...
     '''
-    def __init__(self, name="reflector", material=Mirror(), geo=Plane(), \
+    def __init__(self, name="reflector", TC = 0.01, material=Mirror(), geo=Plane(), \
                  transformation=Transformation()):
         self.name = name
+        self.TC = TC
         self.material = material
         self.geo = geo
         self.transformation = transformation

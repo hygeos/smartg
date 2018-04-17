@@ -1963,6 +1963,10 @@ inline __device__ __host__ float radians(float deg) {
     return ((float)PI/180.f) * deg;
 }
 
+inline __device__ __host__ double radiansd(double deg) {
+    return ((double)PI/180.f) * deg;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Inverse using Gauss-Jordan elimination
 // - compute the inverse of square matrix (here 4x4 matrix)

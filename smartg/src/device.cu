@@ -75,7 +75,7 @@ extern "C" {
 							 struct Spectrum *spectrum, float *X0,
 							 struct Phase *faer, struct Phase *foce,
 							 unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons, void *tabDist, void *tabHist, 
-							 unsigned long long *Counter,
+							 unsigned long long *Counter, unsigned long long *CounterIntObj, void *tabObjInfo,
 							 unsigned long long *NPhotonsIn,
 							 unsigned long long *NPhotonsOut,
 							 float *tabthv, float *tabphi, struct Sensor *tab_sensor,
@@ -130,7 +130,6 @@ extern "C" {
 	// Création de variable propres à chaque thread
 	unsigned long long nbPhotonsThr = 0; 	// Nombre de photons traités par le thread
 	
-
 	Photon ph, ph_le; 		// On associe une structure de photon au thread
 
 	//bool geoIntersect = false;  // S'il y a intersection avec une géométrie = true
@@ -140,33 +139,35 @@ extern "C" {
 
 	atomicAdd(nThreadsActive, 1);
 
+
     //
     // main loop
     //
 	while (*nThreadsActive > 0) {
-		iloop += 1;	
+		iloop += 1;
+		
 
 		/* ************************************************************************************************** */
 		/* si on simule des objs on utilise cette astuce pour lancer exactement le nombre souhaité de photons */
 
 		// Si le nombre de ph lancés NBLOOPd > 256000 et que le compteur devient > (NBLOOPd-256000) alors
 		// on commence à diminuer le nombre de threads actif... ici à 999+1 = 1000 threads actif
-		if (nObj > 0 && (NBLOOPd > 256000) && idx > 999 && this_thread_active && Counter[0] >= (NBLOOPd-256000) && *nThreadsActive > 1000)
+		if (nObj > 0 && (NBLOOPd > 50000) && idx > 999 && this_thread_active && Counter[0] >= (NBLOOPd-50000) && *nThreadsActive > 1000)
 		{
 			this_thread_active = 0;
             atomicAdd(nThreadsActive, -1);
 		}
-		else if (nObj > 0 && (NBLOOPd > 2560) && idx > 99 && this_thread_active && Counter[0] >= (NBLOOPd-2560) && *nThreadsActive > 100)
+		else if (nObj > 0 && (NBLOOPd > 5000) && idx > 99 && this_thread_active && Counter[0] >= (NBLOOPd-5000) && *nThreadsActive > 100)
 		{
 			this_thread_active = 0;
             atomicAdd(nThreadsActive, -1);
 		}
-		else if(nObj > 0 && (NBLOOPd > 256) && idx > 9 && this_thread_active &&Counter[0] >= (NBLOOPd-256) && *nThreadsActive > 10)
+		else if(nObj > 0 && (NBLOOPd > 500) && idx > 9 && this_thread_active &&Counter[0] >= (NBLOOPd-500) && *nThreadsActive > 10)
 		{
 			this_thread_active = 0;
             atomicAdd(nThreadsActive, -1);
 		}
-		else if(nObj > 0 && (NBLOOPd > 16) && idx > 0 && this_thread_active &&Counter[0] >= (NBLOOPd-16) && *nThreadsActive > 1)
+		else if(nObj > 0 && (NBLOOPd > 50) && idx > 0 && this_thread_active &&Counter[0] >= (NBLOOPd-50) && *nThreadsActive > 1)
 		{
 			this_thread_active = 0;
             atomicAdd(nThreadsActive, -1);
@@ -188,7 +189,7 @@ extern "C" {
         if((ph.loc == NONE) && this_thread_active){
 
             initPhoton(&ph, prof_atm, prof_oc, tab_sensor, spectrum, X0, NPhotonsIn, wl_proba_icdf, tabthv, tabphi,
-                       &rngstate);
+                       &rngstate, myObjets);
             iloop = 1;
             #ifdef DEBUG_PHOTON
 			if (idx==0) {printf("\n");}
@@ -212,7 +213,7 @@ extern "C" {
         #ifdef ALT_PP
         move_pp2(&ph, prof_atm, prof_oc, 0, 0 , &rngstate);
         #else
-        move_pp(&ph, prof_atm, prof_oc, &rngstate, &geoStruc, myObjets);
+        move_pp(&ph, prof_atm, prof_oc, &rngstate, &geoStruc, myObjets, tabObjInfo);
         #endif
 
         #ifdef DEBUG_PHOTON
@@ -645,7 +646,12 @@ extern "C" {
 				surfaceLambertienne3D(&ph, 0, tabthv, tabphi, spectrum,
 									  &rngstate, &geoStruc);
 			} // END Lambertian Mirror
-			else if (geoStruc.material == 2) {ph.loc = ABSORBED;} // Matte
+			else if (geoStruc.material == 2) // Matte
+			{
+				ph.loc = ABSORBED;
+				atomicAdd(CounterIntObj, 1);
+				countPhotonObj3D(&ph, tabObjInfo, &geoStruc);
+			} // End Matte
 			else if (geoStruc.material == 3) // Mirror
 			{
 				if (LEd == 1)
@@ -841,7 +847,7 @@ extern "C" {
 __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc, struct Sensor *tab_sensor,
                            struct Spectrum *spectrum, float *X0, unsigned long long *NPhotonsIn,
                            long long *wl_proba_icdf, float* tabthv, float* tabphi,
-                           struct RNG_State *rngstate) {
+                           struct RNG_State *rngstate, struct IObjets *myObjets) {
     float dz, dz_i, delta_i, epsilon;
     float cTh, sTh, phi;
     int ilayer;
@@ -1095,12 +1101,94 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     #endif
 
 
-	// if (nObj > 0)
-	// {
-	// 	//ph->pos = make_float3(POSXd,POSYd+150,POSZd);
-	// 	ph->pos = make_float3(((600*RAND)-300)+ ph->pos.x, ((600*RAND)-300) + ph->pos.y, POSZd);
-	// 	if (ph->tau < 1e-9) ph->tau_abs = 0.;
-	// }
+	if (nObj > 0) // Pour l'instant marche que pour le mode forward
+	{
+		
+		/* ***************************************************************************************** */
+		/* Créer la surface en TOA qui visera un reflecteur avec prise en compte des transformations */
+		/* ***************************************************************************************** */		
+		// Valeurs de l'angle zenital Theta et l'angle azimutal Phi (ici Phi pour l'instant imposé à 0)
+		float sunTheta = 180-THDEGd, sunPhi=0;
+
+        // One fixed direction (for radiance)
+        ph->v = make_float3(0.F, 0.F, -1.F);
+		
+	    // Initialization of the orthogonal vector to the propagation
+		ph->u = make_float3(-1.F, 0.F, 0.F);
+
+		// Creation des tranformations (pour le calcul de la direction du photon)
+		Transform ThetaPhi, TTheta, TPhi;
+		TTheta = ThetaPhi.RotateY(sunTheta);
+		TPhi = ThetaPhi.RotateZ(sunPhi);
+		ThetaPhi = TTheta * TPhi; // Regroupement des transformations
+
+		// Application des transformation sur les vecteurs u et v en fonction de heta et Phi
+		char myV[]="Vector";
+		ph->v = ThetaPhi(ph->v, myV);
+		ph->u = ThetaPhi(ph->u, myV);
+
+		// Récupération de l'objet réflecteur (marche pour l'instant que pour un seul reflecteur)
+		IObjets objP;		
+		for (int i=0; i<nObj; i++)
+		{
+			if (myObjets[i].type == 1) // if equal to reflector
+				objP = myObjets[i];
+		}
+
+    
+		if (objP.type == 1) // S'il y a un réflecteur 
+		{
+			// Création des transformations depuis les valeurs python du reflecteur
+			Transform Ti;			
+			if (objP.mvRx != 0) { // si diff de 0 alors il y a une rot en x
+				Transform TmRX;
+				TmRX = Ti.RotateX(objP.mvRx);
+				Ti = Ti*TmRX;}
+			if (objP.mvRy != 0) { // si diff de 0 alors il y a une rot en y
+				Transform TmRY;
+				//TmRY = Ti.RotateY(objP.mvRy - (180-THDEGd)); // 180-THDEGd = Theta Sun in degree
+				TmRY = Ti.RotateY(objP.mvRy);
+				Ti = Ti*TmRY;}
+			if (objP.mvRz != 0) { // si diff de 0 alors il y a une rot en z
+				Transform TmRZ;
+				TmRZ = Ti.RotateZ(objP.mvRz);
+				Ti = Ti*TmRZ;}
+			if (objP.mvTz != 0) { // si diff de 0 alors il y a une translation en z
+				float timeOne;
+				timeOne = (POSZd-objP.mvTz)/ph->v.z;
+				ph->pos.x = timeOne*ph->v.x;
+				ph->pos.y = timeOne*ph->v.y;
+			} // Les Translations en x et y sont prises en compte à la fin
+
+
+			// Si l'objet plan est un rectangle avec p0 le point min et p3 le point max, nous pouvons faire ce qui suit
+			float xMinP = objP.p0x, yMinP = objP.p0y, xMaxP = objP.p3x, yMaxP = objP.p3y;
+
+			// Tirer aléatoirement une position sur la surface du miroir dans sa position initiale
+			float3 posTrans;
+			posTrans = make_float3(   (  ( (xMaxP-xMinP)*RAND ) + xMinP  ), (  ( (yMaxP-yMinP)*RAND ) + yMinP  ), 0.  );
+			
+			// Application des transfos de rot du miroir à cette entité
+			char myP[]="Point";
+			posTrans = Ti(posTrans, myP);
+
+			// Projection des positions x et y suivant la direction solaire sur la surface de base de l'entité
+			float timeTwo;
+			timeTwo = posTrans.z/ph->v.z;
+			posTrans.x -= timeTwo*ph->v.x;
+			posTrans.y -= timeTwo*ph->v.y;
+
+			// On veut lancer les photons depuis TOA + prise en compte des transfos de translation en x et y
+			posTrans.x +=  ph->pos.x + objP.mvTx;
+			posTrans.y +=  ph->pos.y + objP.mvTy;			
+			posTrans.z = POSZd;
+
+			// mise à jour de la position finale du photon
+			ph->pos=posTrans;
+		}
+		/* ***************************************************************************************** */
+
+	}
 	
     }
 
@@ -1495,7 +1583,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
 
 
 __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc,
-                        struct RNG_State *rngstate, IGeo *geoS, struct IObjets *myObjets) {
+                        struct RNG_State *rngstate, IGeo *geoS, struct IObjets *myObjets, void *tabObjInfo) {
 
 	float delta_i=0.f, delta=0.f, epsilon;
 	float tauR, prev_tau, tauBis, phz; //rdist
@@ -1669,7 +1757,10 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 		// Launch the function geoTest to see if there are an intersection with the 
 		// geometry, return true/false and give the position phit of the intersection
 		// nObj = le nombre d'objets, si = 0 alors le test n'est pas nécessaire.
-		if (nObj > 0) {mytest = geoTest(ph->pos, ph->v, ph->locPrev, &phit, geoS, myObjets);}			
+		if (nObj > 0) {mytest = geoTest(ph->pos, ph->v, ph->locPrev, &phit, geoS, myObjets);}
+
+		if (IsAtm == 0 && ph->pos.z == 120. && mytest == false) {ph->loc=NONE; return;}
+		
 		// if mytest = true (intersection with the geometry) and the position of the intersection is in
 		// the atmosphere (0 < Z < 120), then: Begin to analyse is there is really an intersection
 		if(mytest && phit.z >= 0.F && phit.z <= 120.F)
@@ -1746,10 +1837,30 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 					ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
 					ph->tau_abs = ab;
 				}
-				ph->loc = OBJSURF;                       // update of the loc of the photon 
+				ph->loc = OBJSURF;                      // update of the loc of the photon 
 				ph->tau = prev_tau + tauHit * ph->v.z;  // update the value of tau photon
 				ph->pos = phit;                         // update the position of the photon
 				return;
+				
+				// Photon phBis;
+				
+				// phBis.weight = 1.;
+				// phBis.pos = phit;
+				// if (IsAtm == 0) phBis.weight = ph->weight * 1;
+				// else if (BEERd == 0) phBis.weight =  ph->weight * prof_atm[ph->layer+ph->ilam*(NATMd+1)].ssa;
+				// else
+				// { // We compute the cumulated absorption OT at the new postion of the photon
+				// 	// see move photon paper eq 11
+				// 	ab = prof_atm[NATMd+ph->ilam*(NATMd+1)].OD_abs - 
+				// 		(epsilon * (prof_atm[ilayer2+ph->ilam*(NATMd+1)].OD_abs - prof_atm[ilayer2-1+ph->ilam*(NATMd+1)].OD_abs) +
+				// 		 prof_atm[ilayer2-1+ph->ilam*(NATMd+1)].OD_abs);
+				// 	// absorption between start and stop
+				// 	phBis.weight = ph->weight * exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
+				// }
+				// //atomicAdd(CounterIntObj, 1);
+				// phBis.v = ph->v;
+				// countPhotonObj3D(&phBis, tabObjInfo, geoS);
+				
 			}
 		} // End of mytest = true
 
@@ -1757,16 +1868,16 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 		// if there is not an intersect with an objet we have a special treatment
 		if (nObj > 0 && IsAtm == 0 && !mytest)
 		{
-			BBox boite(make_float3(-120., -120., 0), make_float3(120., 120., 120.));
+			BBox boite(make_float3(Pmin_x, Pmin_y, Pmin_z), make_float3(Pmax_x, Pmax_y, Pmax_z));
 			Ray Rayon(ph->pos, ph->v, 0);
-			float intTime0, intTime1;
+			float intTime0=0., intTime1=0.;
 			bool intersectBox;
 			float3 intersectPoint = make_float3(-1., -1., -1.);
 			
 			intersectBox = boite.IntersectP(Rayon, &intTime0, &intTime1);
-			//if (intersectBoxdisplay("TEST6", ph);
-			if (intersectBox && intTime0 <= 0.) {intersectPoint = Rayon.o * intTime1;}
-			else if (intersectBox && intTime0 > 0.) {intersectPoint = Rayon.o * intTime0;}
+			
+			if (intersectBox && intTime0 < 0.) {intersectPoint = Rayon.o * intTime1;}
+			else if (intersectBox && intTime0 >= 0.) {intersectPoint = Rayon.o * intTime0;}
 			else {printf("error1 in move_pp geo!! \n"); return;}
 
 			if (intersectPoint.z > 119.999)
@@ -1776,7 +1887,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 				ph->weight *= 1;
 				return;
 			}
-			else if (intersectPoint.z < 0.001)
+			else if (intersectPoint.z < 0.0001)
 			{
 				ph->loc = SURF0P;
 				ph->tau = 0.F;
@@ -3250,7 +3361,6 @@ __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* 
 	{
 		cTh  = cosf(tabthv[ph->ith]);  
         phi  = tabphi[ph->iph];
-        //ph->weight *= cTh;
     }
     else
 	{
@@ -3283,14 +3393,6 @@ __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* 
 	u_n.x = cPhi*cTh;
 	u_n.y = sPhi*cTh;
 	u_n.z = -sTh;
-
-	// // Depolarisation of the photon
-	// float norm;
-	// norm = ph->stokes.x + ph->stokes.y;
-	// ph->stokes.x = 0.5 * norm;
-	// ph->stokes.y = 0.5 * norm;
-    // ph->stokes.z = 0.0;
-    // ph->stokes.w = 0.0;
 
 	// Depolarisation du Photon
     float4x4 L = make_float4x4(
@@ -3520,17 +3622,6 @@ __device__ void surfaceBRDF(Photon* ph, int le,
 } //surfaceBRDF
 
 
-
-
-
-
-
-
-
-
-
-
-
 __device__ void surfaceRugueuse3D(Photon* ph, IGeo* geoS, struct RNG_State *rngstate)
 {
     ph->nint += 1;
@@ -3540,87 +3631,118 @@ __device__ void surfaceRugueuse3D(Photon* ph, IGeo* geoS, struct RNG_State *rngs
 	v_n = ph->v;
 	u_n = ph->u;
 
-	// float testX = RAND;
-	// if (testX < 0.5)
-	// {
-	// 	ph->loc = ABSORBED;
-	// 	return;
-	// }
+	// Rotation of Stokes parameters
+	float temp, psi;
+	
+	temp = dot(cross(ph->v, ph->u),normalize(cross(ph->v, geoS->normal)));
+	psi = acosf( fmin(1.00F, fmax( -1.F, temp ) ));	
 
-	// Depolarisation du Photon
-    float4x4 L = make_float4x4(
-		0.5F, 0.5F, 0.F, 0.F,
-		0.5F, 0.5F, 0.F, 0.F,
-		0.0F, 0.0F, 0.F, 0.F,
-		0.0F, 0.0F, 0.F, 0.F 
+	if( dot(geoS->normal, cross(ph->u, ph->v)) <0 ){
+		psi = -psi;
+	}
+	
+	rotateStokes(ph->stokes, psi, &ph->stokes);
+    #ifdef BACK
+    float4x4 L = make_diag_float4x4 (1.F);
+    rotationM(-psi,&L);
+    #endif
+	
+	float4x4 R = make_float4x4(
+		1., 0.,  0.,  0.,
+		0., 1.,  0.,  0.,
+		0., 0., -1.,  0.,
+		0., 0.,  0., -1. 
 		);
 	
-    ph->stokes = mul(L,ph->stokes);
-
+	ph->stokes = mul(R, ph->stokes);
+	
     #ifdef BACK
-    ph->M = mul(ph->M,L);
+	ph->M   = mul(ph->M,mul(L,R));
     #endif
 
-	Transform transfo, invTransfo;
+	Transform transfo, invTransfo, aRot;
 	char myV[]="Vector";
 	transfo = geoS->mvTF;
+	aRot = aRot.RotateZ(180);
 	invTransfo = transfo.Inverse(transfo);
-
+	
 	v_n = invTransfo(v_n, myV);
 	u_n = invTransfo(u_n, myV);
-	
-	v_n = make_float3(v_n.x, v_n.y, -v_n.z);
-	u_n = make_float3(u_n.x, u_n.y, -u_n.z);
+
+	v_n = aRot(v_n, myV);
+	u_n = aRot(u_n, myV);
+
+	v_n = make_float3(-v_n.x, -v_n.y, -v_n.z);
+	u_n = make_float3(-u_n.x, -u_n.y, -u_n.z);
 
 	v_n = transfo(v_n, myV);
 	u_n = transfo(u_n, myV);
 	
-	if ( (isnan(v_n.x)) || (isnan(v_n.y)) || (isnan(v_n.z)) || (isnan(u_n.x)) || (isnan(u_n.y)) || (isnan(u_n.z)) )
+	if ( (isnan(v_n.x)) || (isnan(v_n.y)) || (isnan(v_n.z)))
 	{
 		ph->loc = REMOVED;
 		return;
 	}
 	
-	// Update the value of u and v of the photon
-	
+	// Update the value of u and v of the photon	
 	ph->locPrev = OBJSURF;
 	ph->loc = ATMOS;
+	ph->v = normalize(v_n);
+	ph->u = normalize(u_n);
 
-	ph->v = v_n;
-	ph->u = u_n;
+	if (geoS->type == 1)
+		ph->weight *= geoS->reflectivity;
+	else 
+		ph->weight *= geoS->reflectivity;
 
-	ph->weight *= geoS->reflectivity;
-
-    if (1)
-	{
-		if (RRd==1){
-			/* Russian roulette for propagating photons **/
-			if( ph->weight < WEIGHTRRd ){
-				if( RAND < __fdividef(ph->weight,WEIGHTRRd) ){ph->weight = WEIGHTRRd;}
-				else{ph->loc = ABSORBED;}
-			}
+	if (RRd==1){
+		/* Russian roulette for propagating photons **/
+		if( ph->weight < WEIGHTRRd ){
+			if( RAND < __fdividef(ph->weight,WEIGHTRRd) ){ph->weight = WEIGHTRRd;}
+			else{ph->loc = ABSORBED;}
 		}
-	} // not le
+	}
 	
 } // FUNCTION SURFACEAGITE3D
 
 
+__device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS)
+{
+	Transform transfo, invTransfo, rotz;
+	char myP[]="Point";
+	
+    double *tabCountObj;
+	double weight;
+	float3 p_t;
 
+	int indI = 0;
+	int indJ = 0;
 
+	float sizeX = nbCx*TCd;
+	float sizeY = nbCy*TCd;
 
+	// Trouver une solution à ça !!
+	if (ph->v.x < 0) return;
+	
+	p_t = ph->pos;
+	transfo = geoS->mvTF;
+	invTransfo = transfo.Inverse(transfo);
+	p_t = invTransfo(p_t, myP);
+	rotz = rotz.RotateZ(90);
+	p_t = rotz(p_t, myP);
 
+	indJ = floorf((p_t.x/TCd) + (sizeX/(2*TCd)));
+	indI = ceilf((p_t.y/TCd) + (sizeY/(2*TCd)));
 
-
-
-
-
-
-
-
-
-
-
-
+	if (indJ == nbCx) indJ -= 1;
+	indI = (nbCy-1) - (indI-1);
+	
+	tabCountObj = (double*)tabObjInfo;
+	weight = (double)ph->weight;
+	atomicAdd(tabCountObj, weight);
+	
+	atomicAdd(tabCountObj+(nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+}
 
 
 __device__ void countPhoton(Photon* ph,
@@ -4243,7 +4365,7 @@ __device__ void display(const char* desc, Photon* ph) {
     //
 	int idx = blockIdx.x *blockDim.x + threadIdx.x;
 
-    if (1){//idx==0) {
+    if (idx==0) {
 		
 		printf("%16s %4i X=(%9.4f,%9.4f,%9.4f) V=(%6.3f,%6.3f,%6.3f) U=(%6.3f,%6.3f,%6.3f) S=(%6.3f,%6.3f,%6.3f,%6.3f) tau=%8.3f tau_abs=%8.3f wvl=%6.3f weight=%11.3e ",
                desc,
@@ -4552,11 +4674,14 @@ __device__ double DatomicAdd(double* address, double val)
 *	> Fonctions liées à la création de géométries
 ***********************************************************/
 
-
+/* geoTest
+* Vérifie s'il y a une intersection avec au moins un objet, si il y a intersection avec plusieurs objets alors
+* retourne les infos d'intersection de l'objet dans la distance de parcours est la plus proche
+*/
 __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo *GeoV, struct IObjets *ObjT)
-{ 
+{
 	Ray R1(o, dir, 0); // initialisation du rayon pour l'étude d'intersection
-
+	
 	// ******************interval d'étude******************
 	BBox interval(make_float3(Pmin_x, Pmin_y, Pmin_z),
 				  make_float3(Pmax_x, Pmax_y, Pmax_z));
@@ -4598,13 +4723,13 @@ __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo 
 		if (ObjT[i].mvTx != 0 or ObjT[i].mvTy != 0 or ObjT[i].mvTz != 0) {
 			Transform TmT;
 			TmT = Ti.Translate(make_float3(ObjT[i].mvTx, ObjT[i].mvTy,
-												   ObjT[i].mvTz));
+										   ObjT[i].mvTz));
 			Ti = TmT; }
 		
 		if (ObjT[i].mvRx != 0) { // si diff de 0 alors il y a une rot en x
 			Transform TmRX;
 			TmRX = Ti.RotateX(ObjT[i].mvRx);
-			Ti = Ti*TmRX; } 
+			Ti = Ti*TmRX;}
 		if (ObjT[i].mvRy != 0) { // si diff de 0 alors il y a une rot en y
 			Transform TmRY;
 			TmRY = Ti.RotateY(ObjT[i].mvRy);
@@ -4612,7 +4737,7 @@ __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo 
 		if (ObjT[i].mvRz != 0) { // si diff de 0 alors il y a une rot en z
 			Transform TmRZ;
 			TmRZ = Ti.RotateZ(ObjT[i].mvRz);
-			Ti = Ti*TmRZ; }
+			Ti = Ti*TmRZ;}
 
 
 		invTi = Ti.Inverse(Ti); // inverse de la tranformation
@@ -4637,14 +4762,13 @@ __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo 
 							  make_float3(ObjT[i].p1x, ObjT[i].p1y, ObjT[i].p1z),
 							  make_float3(ObjT[i].p2x, ObjT[i].p2y, ObjT[i].p2z),
 							  make_float3(ObjT[i].p3x, ObjT[i].p3y, ObjT[i].p3z)};
-	
+			
 			// Create the triangleMesh (2 = number of triangle ; 4 = number of vertices)
 			TriangleMesh myObject(&Ti, &invTi, 2, 4, vi, Pvec);
 			
 			BBox myBBox = myObject.WorldBoundTriangleMesh();
-
 			if (myBBox.IntersectP(R1))
-				myBi = myObject.Intersect(R1, &myTi, &myDgi);
+				myBi = myObject.Intersect(R1, &myTi, &myDgi);				
 		}
 		// ***********************************************************************
 		
@@ -4668,20 +4792,17 @@ __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo 
 				GeoV->reflectivity = ObjT[i].reflect;
 				*(phit) = tempPhit;
 				GeoV->mvTF = Ti;
+				GeoV->type = ObjT[i].type;
+				GeoV->mvR = make_float3(ObjT[i].mvRx, ObjT[i].mvRy, ObjT[i].mvRz);
 			}
 		}
 		// ***********************************************************************
 	} // FIN BOUCLE FOR (PARCOURANT LES OBJETS)
 	
-	if (myB) // Il y a intersection avec au moins un objet
-	{
-		// *(phit) = R1(myT);
+	if (myB) { // Il y a intersection avec au moins un objet
 		GeoV->normal = faceForward(myDg.nn, -1.*R1.d);
-		return true;
-	}
-	else // Il y a pas d'intersection avec un objet
-	{
+		return true; }
+	else { // Il y a pas d'intersection avec un objet
 		*(phit) = make_float3(-1, -1, -1);
-		return false;
-	}	
+		return false; }	
 } // FIN DE LA FONCTION GEOTEST()

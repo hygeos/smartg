@@ -262,25 +262,32 @@ struct IGeo
 		normal = make_float3(0., 0., 0.);
 		material = -1;
 		reflectivity = -1.;
+		type = -1.;
+		mvR = make_float3(0, 0, 0);
 	}
 
-	__device__ IGeo(float3 nn, int mat, float ref)
+	__device__ IGeo(float3 nn, int mat, float ref, int typ, float3 mvRt)
 	{
 		normal = nn;
 		material = mat;
 		reflectivity = ref;
+		type = typ;
+		mvR = mvRt;
 	}
 	
 	float3 normal;      /* la normale de l'objet          */
 	int material;       /* la matière de l'objet          */
 	float reflectivity; /* l'albedo de l'objet            */
     Transform mvTF;     /* Transformation de l'objet      */
+	int type;           /* 1 = reflector, 2 = receptor    */
+	float3 mvR;           /* rotation angles in x, y, z     */
 };
 
 struct IObjets {
     int geo;        /* 1 = sphere, 2 = plane, ...          */
 	int material;   /* 1 = LambMirror, 2 = Matte,
 					   3 = Mirror, ...                     */
+	int type;       /* 1 = reflector, 2 = receptor         */
 	float reflect;  /* reflectivity of the material        */
 	
 	float p0x;      /* \             \                     */

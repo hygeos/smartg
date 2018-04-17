@@ -100,31 +100,54 @@ public:
 
 	__host__ __device__ BBox(const float3 &p1, const float3 &p2)
 	{
-        pMin = make_float3c(min(p1.x, p2.x), min(p1.y, p2.y), min(p1.z, p2.z));
+		#if __CUDA_ARCH__ >= 200
+        pMin = make_float3c(fmin(p1.x, p2.x), fmin(p1.y, p2.y), fmin(p1.z, p2.z));
+        pMax = make_float3c(fmax(p1.x, p2.x), fmax(p1.y, p2.y), fmax(p1.z, p2.z));
+		#elif !defined(__CUDA_ARCH__)
+		pMin = make_float3c(min(p1.x, p2.x), min(p1.y, p2.y), min(p1.z, p2.z));
         pMax = make_float3c(max(p1.x, p2.x), max(p1.y, p2.y), max(p1.z, p2.z));
+		#endif
     }
 
 	__host__ __device__ BBox Union(const BBox &b, const float3 &p)
 	{
 		BBox ret = b;
+        #if __CUDA_ARCH__ >= 200
+		ret.pMin.x = fmin(b.pMin.x, p.x);
+		ret.pMin.y = fmin(b.pMin.y, p.y);
+		ret.pMin.z = fmin(b.pMin.z, p.z);
+		ret.pMax.x = fmax(b.pMax.x, p.x);
+		ret.pMax.y = fmax(b.pMax.y, p.y);
+		ret.pMax.z = fmax(b.pMax.z, p.z);
+		#elif !defined(__CUDA_ARCH__)
 		ret.pMin.x = min(b.pMin.x, p.x);
 		ret.pMin.y = min(b.pMin.y, p.y);
 		ret.pMin.z = min(b.pMin.z, p.z);
 		ret.pMax.x = max(b.pMax.x, p.x);
 		ret.pMax.y = max(b.pMax.y, p.y);
 		ret.pMax.z = max(b.pMax.z, p.z);
+		#endif
 		return ret;
 	}
 	
 	__host__ __device__ BBox Union(const BBox &b, const BBox &b2)
 	{
 		BBox ret;
+		#if __CUDA_ARCH__ >= 200
+		ret.pMin.x = fmin(b.pMin.x, b2.pMin.x);
+		ret.pMin.y = fmin(b.pMin.y, b2.pMin.y);
+		ret.pMin.z = fmin(b.pMin.z, b2.pMin.z);
+		ret.pMax.x = fmax(b.pMax.x, b2.pMax.x);
+		ret.pMax.y = fmax(b.pMax.y, b2.pMax.y);
+		ret.pMax.z = fmax(b.pMax.z, b2.pMax.z);
+		#elif !defined(__CUDA_ARCH__)
 		ret.pMin.x = min(b.pMin.x, b2.pMin.x);
 		ret.pMin.y = min(b.pMin.y, b2.pMin.y);
 		ret.pMin.z = min(b.pMin.z, b2.pMin.z);
 		ret.pMax.x = max(b.pMax.x, b2.pMax.x);
 		ret.pMax.y = max(b.pMax.y, b2.pMax.y);
 		ret.pMax.z = max(b.pMax.z, b2.pMax.z);
+		#endif
 		return ret;
 	}
 
@@ -137,7 +160,7 @@ public:
 	__host__ __device__ bool IntersectP(const Ray &ray, float *hitt0 = NULL,
 										float *hitt1 = NULL) const
 	{
-		float t0 = 0., t1 = ray.maxt;
+		float t0 = 0., t1 = ray.maxt; //float epsi = (std::numeric_limits<float>::epsilon() * 0.5);
 
 		for (int i = 0; i < 3; ++i)
 		{
@@ -147,6 +170,7 @@ public:
 			float tFar  = (pMax[i] - ray.o[i]) * invRayDir;
 			// Update parametric interval from slab intersection $t$s
 			if (tNear > tFar) {swap(&tNear, &tFar);}
+			//tFar *= 1 + 2 * ( (3*epsi)/( 1-(3*epsi) ) );
 			t0 = tNear > t0 ? tNear : t0;
 			t1 = tFar  < t1 ? tFar  : t1;
 			if (t0 > t1) {return false;}
