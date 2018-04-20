@@ -177,6 +177,7 @@ extern "C" {
            move_sp(&ph, prof_atm, 0, 0 , &rngstate);
         else 
         #endif
+
         #ifdef ALT_PP
         move_pp2(&ph, prof_atm, prof_oc, 0, 0 , &rngstate);
         #else
@@ -679,7 +680,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
         #ifdef SPHERIQUE
         ph->pos.z = RTER;
         #endif
-        #if defined(ALIS) && !defined(ALT_PP)
+        #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
         for (int k=0; k<NLOWd; k++) {
             ph->tau_sca[k] = 0.F;
         }
@@ -695,7 +696,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
         #ifdef SPHERIQUE
         ph->pos.z = RTER;
         #endif
-        #if defined(ALIS) && !defined(ALT_PP)
+        #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
         for (int k=0; k<NLOWd; k++) {
             ph->tau_sca[k] = 0.F; ;
         }
@@ -708,7 +709,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
         ph->tau_abs = prof_oc[NOCEd +ph->ilam*(NOCEd+1)].OD_abs;
         epsilon     = 0.F;
         ph->pos.z   = prof_oc[NOCEd].z;
-        #if defined(ALIS) && !defined(ALT_PP)
+        #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
         int DL=(NLAMd-1)/(NLOWd-1);
         for (int k=0; k<NLOWd; k++) {
             ph->tau_sca[k] = get_OD(1,prof_oc[NOCEd + k*DL*(NOCEd+1)]) ;
@@ -733,7 +734,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
         delta_i = fabs(prof_oc[ilayer+ph->ilam*(NOCEd+1)].OD_abs - prof_oc[ilayer-1+ph->ilam*(NOCEd+1)].OD_abs);
         ph->tau_abs = epsilon * delta_i + (prof_oc[NOCEd+ph->ilam*(NOCEd+1)].OD_abs -
                                            prof_oc[ilayer+ph->ilam*(NOCEd+1)].OD_abs); 
-        #if defined(ALIS) && !defined(ALT_PP)
+        #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
         int DL=(NLAMd-1)/(NLOWd-1);
         for (int k=0; k<NLOWd; k++) {
             delta_i = fabs(get_OD(BEERd, prof_oc[ilayer+k*DL*(NOCEd+1)]) - get_OD(BEERd, prof_oc[ilayer-1+k*DL*(NOCEd+1)]));
@@ -765,7 +766,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
         delta_i = fabs(prof_atm[ilayer+ph->ilam*(NATMd+1)].OD_abs - prof_atm[ilayer-1+ph->ilam*(NATMd+1)].OD_abs);
         ph->tau_abs = epsilon * delta_i + (prof_atm[NATMd+ph->ilam*(NATMd+1)].OD_abs -
                                            prof_atm[ilayer+ph->ilam*(NATMd+1)].OD_abs); 
-        #if defined(ALIS) && !defined(ALT_PP)
+        #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
         int DL=(NLAMd-1)/(NLOWd-1);
         for (int k=0; k<NLOWd; k++) {
             delta_i = fabs(get_OD(BEERd, prof_atm[ilayer+k*DL*(NATMd+1)]) - get_OD(BEERd, prof_atm[ilayer-1+k*DL*(NATMd+1)]));
@@ -853,7 +854,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 
     // init specific ALIS quantities
     #ifdef ALIS
-    #ifndef ALT_PP
+    #if !defined(ALT_PP) && !defined(SPHERIQUE)
     ph->nevt = 0;
     // ph->layer_prev[ph->nevt] = ph->layer;
     if (ph->loc == ATMOS) ph->layer_prev[ph->nevt]   = ph->layer;
@@ -1277,7 +1278,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 	float delta_i=0.f, delta=0.f, epsilon;
     float phz, rdist, tauBis;
     int ilayer;
-    #if defined(ALIS) && !defined(ALT_PP)
+    #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
     float dsca_dl, dsca_dl0=-ph->tau ;
     int DL=(NLAMd-1)/(NLOWd-1);
     #endif
@@ -1299,7 +1300,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             }
             #else
 
-            #ifndef ALT_PP
+            #if !defined(ALT_PP) && !defined(SPHERIQUE)
             dsca_dl0 += 0.F;
             for (int k=0; k<NLOWd; k++) {
                 dsca_dl = 0.F;
@@ -1323,7 +1324,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             // the linear distance is ph->z/ph->vz
             operator+=(ph->pos, ph->v * fabs(ph->pos.z/ph->v.z));
 
-            #if defined(ALIS) && !defined(ALT_PP)
+            #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
             ph->nevt++;
             ph->layer_prev[ph->nevt] = -ph->layer;
             ph->vz_prev[ph->nevt] = ph->v.z;
@@ -1341,7 +1342,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             }
             #else
 
-            #ifndef ALT_PP
+            #if !defined(ALT_PP) && !defined(SPHERIQUE)
             dsca_dl0 += get_OD(1,prof_oc[NOCEd + ph->ilam*(NOCEd+1)]) ; 
             for (int k=0; k<NLOWd; k++) {
                 dsca_dl = get_OD(1,prof_oc[NOCEd + k*DL*(NOCEd+1)]);
@@ -1361,7 +1362,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 			// move the photon forward down to the seafloor
             operator+=(ph->pos, ph->v * fabs( (ph->pos.z - prof_oc[NOCEd].z) /ph->v.z));
 
-            #if defined(ALIS) && !defined(ALT_PP)
+            #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
             ph->nevt++;
             ph->layer_prev[ph->nevt] = -ph->layer;
             ph->vz_prev[ph->nevt] = ph->v.z;
@@ -1382,7 +1383,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
         epsilon = __fdividef(delta,delta_i);
 
 
-        #if defined(ALIS) && !defined(ALT_PP)
+        #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
         ph->nevt++;
         ph->layer_prev[ph->nevt] = -ph->layer;
         ph->vz_prev[ph->nevt] = ph->v.z;
@@ -1400,7 +1401,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
         }
         #else
 
-        #ifndef ALT_PP
+        #if !defined(ALT_PP) && !defined(SPHERIQUE)
         // cumulated scattering OD at reference wavelength
         dsca_dl0 += get_OD(1,prof_oc[NOCEd + ph->ilam*(NOCEd+1)]) - 
             (epsilon * (get_OD(1,prof_oc[ilayer+ph->ilam*(NOCEd+1)]) - get_OD(1,prof_oc[ilayer-1+ph->ilam*(NOCEd+1)])) +
@@ -1437,7 +1438,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             }
             #else
 
-            #ifndef ALT_PP
+            #if !defined(ALT_PP) && !defined(SPHERIQUE)
             dsca_dl0 += 0.F;
             for (int k=0; k<NLOWd; k++) {
                 dsca_dl = 0.F;
@@ -1458,7 +1459,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             ph->pos.z = 0.;
             ph->layer = NATMd;
 
-            #if defined(ALIS) && !defined(ALT_PP)
+            #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
             ph->nevt++;
             ph->layer_prev[ph->nevt] = ph->layer;
             ph->vz_prev[ph->nevt] = ph->v.z;
@@ -1476,7 +1477,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             }
             #else
 
-            #ifndef ALT_PP
+            #if !defined(ALT_PP) && !defined(SPHERIQUE)
             dsca_dl0 += get_OD(1,prof_atm[NATMd + ph->ilam*(NATMd+1)]) ; 
             for (int k=0; k<NLOWd; k++) {
                 dsca_dl = get_OD(1,prof_atm[NATMd + k*DL*(NATMd+1)]);
@@ -1491,7 +1492,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             ph->loc = SPACE;
             ph->layer = 0;
 
-            #if defined(ALIS) && !defined(ALT_PP)
+            #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
             ph->nevt++;
             ph->layer_prev[ph->nevt] = ph->layer;
             ph->vz_prev[ph->nevt] = ph->v.z;
@@ -1517,7 +1518,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
         delta= fabs(tauBis - get_OD(BEERd, prof_atm[ilayer-1+ph->ilam*(NATMd+1)])) ;
         epsilon = __fdividef(delta,delta_i);
 
-        #if defined(ALIS) && !defined(ALT_PP)
+        #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
         ph->nevt++;
         ph->layer_prev[ph->nevt] = ph->layer;
         ph->vz_prev[ph->nevt] = ph->v.z;
@@ -1537,7 +1538,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
         }
         #else
 
-        #ifndef ALT_PP
+        #if !defined(ALT_PP) && !defined(SPHERIQUE)
         // cumulated scattering OD at reference wavelength
         dsca_dl0 += get_OD(1,prof_atm[NATMd + ph->ilam*(NATMd+1)]) - 
             (epsilon * (get_OD(1,prof_atm[ilayer+ph->ilam*(NATMd+1)]) - get_OD(1,prof_atm[ilayer-1+ph->ilam*(NATMd+1)])) +
@@ -3579,7 +3580,7 @@ __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
 
     #ifdef ALIS
     int k; 
-    #ifndef ALT_PP
+    #if !defined(ALT_PP) && !defined(SPHERIQUE)
     int kmax=ph->nevt+1;
     ph_le->nevt = ph->nevt;
     for (k=0; k<kmax; k++) ph_le->layer_prev[k] = ph->layer_prev[k];

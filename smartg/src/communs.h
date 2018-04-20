@@ -157,7 +157,7 @@ public:
     unsigned short nint;
 
     #ifdef ALIS
-    #ifndef ALT_PP
+    #if !defined(ALT_PP) && !defined(SPHERIQUE)
     unsigned short nevt;  // Number  of events (including exit)
     short layer_prev[MAX_NEVT]; // History of layer where events occured
     float vz_prev[MAX_NEVT]; // History of z cosine where events occured
