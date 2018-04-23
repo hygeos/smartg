@@ -76,6 +76,22 @@ inline float rsqrtf(float x)
 {
     return 1.0f / sqrtf(x);
 }
+//******************************************************************************
+inline double fmin(double a, double b)
+{
+    return a < b ? a : b;
+}
+
+inline double fmax(double a, double b)
+{
+    return a > b ? a : b;
+}
+
+inline double rsqrt(double x)
+{
+    return 1.0 / sqrt(x);
+}
+
 #endif
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1790,6 +1806,20 @@ inline __host__ __device__ uint4 min(uint4 a, uint4 b)
     return make_uint4(min(a.x,b.x), min(a.y,b.y), min(a.z,b.z), min(a.w,b.w));
 }
 
+//******************************************************************************
+inline __host__ __device__ double2 fmin(double2 a, double2 b)
+{
+    return make_double2(fmin(a.x,b.x), fmin(a.y,b.y));
+}
+inline __host__ __device__ double3 fmin(double3 a, double3 b)
+{
+    return make_double3(fmin(a.x,b.x), fmin(a.y,b.y), fmin(a.z,b.z));
+}
+inline __host__ __device__ double4 fmin(double4 a, double4 b)
+{
+    return make_double4(fmin(a.x,b.x), fmin(a.y,b.y), fmin(a.z,b.z), fmin(a.w,b.w));
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // max
 ////////////////////////////////////////////////////////////////////////////////
@@ -1832,6 +1862,19 @@ inline __host__ __device__ uint4 max(uint4 a, uint4 b)
 {
     return make_uint4(max(a.x,b.x), max(a.y,b.y), max(a.z,b.z), max(a.w,b.w));
 }
+//******************************************************************************
+inline __host__ __device__ double2 fmax(double2 a, double2 b)
+{
+    return make_double2(fmax(a.x,b.x), fmax(a.y,b.y));
+}
+inline __host__ __device__ double3 fmax(double3 a, double3 b)
+{
+    return make_double3(fmax(a.x,b.x), fmax(a.y,b.y), fmax(a.z,b.z));
+}
+inline __host__ __device__ double4 fmax(double4 a, double4 b)
+{
+    return make_double4(fmax(a.x,b.x), fmax(a.y,b.y), fmax(a.z,b.z), fmax(a.w,b.w));
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // lerp
@@ -1851,6 +1894,23 @@ inline __device__ __host__ float3 lerp(float3 a, float3 b, float t)
     return a + t*(b-a);
 }
 inline __device__ __host__ float4 lerp(float4 a, float4 b, float t)
+{
+    return a + t*(b-a);
+}
+//******************************************************************************
+inline __device__ __host__ double lerp(double a, double b, double t)
+{
+    return a + t*(b-a);
+}
+inline __device__ __host__ double2 lerp(double2 a, double2 b, double t)
+{
+    return a + t*(b-a);
+}
+inline __device__ __host__ double3 lerp(double3 a, double3 b, double t)
+{
+    return a + t*(b-a);
+}
+inline __device__ __host__ double4 lerp(double4 a, double4 b, double t)
 {
     return a + t*(b-a);
 }
@@ -1947,6 +2007,36 @@ inline __device__ __host__ uint4 clamp(uint4 v, uint4 a, uint4 b)
 {
     return make_uint4(clamp(v.x, a.x, b.x), clamp(v.y, a.y, b.y), clamp(v.z, a.z, b.z), clamp(v.w, a.w, b.w));
 }
+//******************************************************************************
+inline __device__ __host__ double clamp(double f, double a, double b)
+{
+    return fmax(a, fmin(f, b));
+}
+
+inline __device__ __host__ double2 clamp(double2 v, double a, double b)
+{
+    return make_double2(clamp(v.x, a, b), clamp(v.y, a, b));
+}
+inline __device__ __host__ double2 clamp(double2 v, double2 a, double2 b)
+{
+    return make_double2(clamp(v.x, a.x, b.x), clamp(v.y, a.y, b.y));
+}
+inline __device__ __host__ double3 clamp(double3 v, double a, double b)
+{
+    return make_double3(clamp(v.x, a, b), clamp(v.y, a, b), clamp(v.z, a, b));
+}
+inline __device__ __host__ double3 clamp(double3 v, double3 a, double3 b)
+{
+    return make_double3(clamp(v.x, a.x, b.x), clamp(v.y, a.y, b.y), clamp(v.z, a.z, b.z));
+}
+inline __device__ __host__ double4 clamp(double4 v, double a, double b)
+{
+    return make_double4(clamp(v.x, a, b), clamp(v.y, a, b), clamp(v.z, a, b), clamp(v.w, a, b));
+}
+inline __device__ __host__ double4 clamp(double4 v, double4 a, double4 b)
+{
+    return make_double4(clamp(v.x, a.x, b.x), clamp(v.y, a.y, b.y), clamp(v.z, a.z, b.z), clamp(v.w, a.w, b.w));
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // dot product
@@ -1989,6 +2079,21 @@ inline __host__ __device__ uint dot(uint3 a, uint3 b)
     return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 inline __host__ __device__ uint dot(uint4 a, uint4 b)
+{
+    return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+}
+//******************************************************************************
+inline __host__ __device__ double dot(double2 a, double2 b)
+{
+    return a.x * b.x + a.y * b.y;
+}
+
+inline __host__ __device__ double dot(double3 a, double3 b)
+{
+	return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
+inline __host__ __device__ double dot(double4 a, double4 b)
 {
     return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
 }
@@ -2169,6 +2274,27 @@ inline __host__ __device__ float length(float3 p1, float3 p2)
     return sqrtf(dot(v, v));
 }
 
+//******************************************************************************
+inline __host__ __device__ double length(double2 v)
+{
+    return sqrt(dot(v, v));
+}
+inline __host__ __device__ double length(double3 v)
+{
+    return sqrt(dot(v, v));
+}
+inline __host__ __device__ double length(double4 v)
+{
+    return sqrt(dot(v, v));
+}
+// Enable to calcule the lengh between two points
+inline __host__ __device__ double length(double3 p1, double3 p2)
+{
+	double3 v;
+	v.x = p1.x-p2.x; v.y = p1.y-p2.y; v.z = p1.z-p2.z;
+    return sqrt(dot(v, v));
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // normalize
 ////////////////////////////////////////////////////////////////////////////////
@@ -2189,6 +2315,23 @@ inline __host__ __device__ float4 normalize(float4 v)
     return v * invLen;
 }
 
+//******************************************************************************
+inline __host__ __device__ double2 normalize(double2 v)
+{
+    double invLen = rsqrt(dot(v, v));
+    return v * invLen;
+}
+inline __host__ __device__ double3 normalize(double3 v)
+{
+    double invLen = rsqrt(dot(v, v));
+    return v * invLen;
+}
+inline __host__ __device__ double4 normalize(double4 v)
+{
+    double invLen = rsqrt(dot(v, v));
+    return v * invLen;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // floor
 ////////////////////////////////////////////////////////////////////////////////
@@ -2204,6 +2347,20 @@ inline __host__ __device__ float3 floorf(float3 v)
 inline __host__ __device__ float4 floorf(float4 v)
 {
     return make_float4(floorf(v.x), floorf(v.y), floorf(v.z), floorf(v.w));
+}
+
+//******************************************************************************
+inline __host__ __device__ double2 floord(double2 v)
+{
+    return make_double2(floor(v.x), floor(v.y));
+}
+inline __host__ __device__ double3 floord(double3 v)
+{
+    return make_double3(floor(v.x), floor(v.y), floor(v.z));
+}
+inline __host__ __device__ double4 floord(double4 v)
+{
+    return make_double4(floor(v.x), floor(v.y), floor(v.z), floor(v.w));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2227,6 +2384,24 @@ inline __host__ __device__ float4 fracf(float4 v)
     return make_float4(fracf(v.x), fracf(v.y), fracf(v.z), fracf(v.w));
 }
 
+//******************************************************************************
+inline __host__ __device__ double fracd(double v)
+{
+    return v - floor(v);
+}
+inline __host__ __device__ double2 fracd(double2 v)
+{
+    return make_double2(fracd(v.x), fracd(v.y));
+}
+inline __host__ __device__ double3 fracd(double3 v)
+{
+    return make_double3(fracd(v.x), fracd(v.y), fracd(v.z));
+}
+inline __host__ __device__ double4 fracd(double4 v)
+{
+    return make_double4(fracd(v.x), fracd(v.y), fracd(v.z), fracd(v.w));
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // fmod
 ////////////////////////////////////////////////////////////////////////////////
@@ -2244,21 +2419,35 @@ inline __host__ __device__ float4 fmodf(float4 a, float4 b)
     return make_float4(fmodf(a.x, b.x), fmodf(a.y, b.y), fmodf(a.z, b.z), fmodf(a.w, b.w));
 }
 
+//******************************************************************************
+inline __host__ __device__ double2 fmodd(double2 a, double2 b)
+{
+    return make_double2(fmod(a.x, b.x), fmod(a.y, b.y));
+}
+inline __host__ __device__ double3 fmodd(double3 a, double3 b)
+{
+    return make_double3(fmod(a.x, b.x), fmod(a.y, b.y), fmod(a.z, b.z));
+}
+inline __host__ __device__ double4 fmodd(double4 a, double4 b)
+{
+    return make_double4(fmod(a.x, b.x), fmod(a.y, b.y), fmod(a.z, b.z), fmod(a.w, b.w));
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // absolute value
 ////////////////////////////////////////////////////////////////////////////////
 
 inline __host__ __device__ float2 fabs(float2 v)
 {
-    return make_float2(fabs(v.x), fabs(v.y));
+    return make_float2(fabsf(v.x), fabsf(v.y));
 }
 inline __host__ __device__ float3 fabs(float3 v)
 {
-    return make_float3(fabs(v.x), fabs(v.y), fabs(v.z));
+    return make_float3(fabsf(v.x), fabsf(v.y), fabsf(v.z));
 }
 inline __host__ __device__ float4 fabs(float4 v)
 {
-    return make_float4(fabs(v.x), fabs(v.y), fabs(v.z), fabs(v.w));
+    return make_float4(fabsf(v.x), fabsf(v.y), fabsf(v.z), fabsf(v.w));
 }
 
 inline __host__ __device__ int2 abs(int2 v)
@@ -2274,6 +2463,20 @@ inline __host__ __device__ int4 abs(int4 v)
     return make_int4(abs(v.x), abs(v.y), abs(v.z), abs(v.w));
 }
 
+//******************************************************************************
+inline __host__ __device__ double2 fabs(double2 v)
+{
+    return make_double2(fabs(v.x), fabs(v.y));
+}
+inline __host__ __device__ double3 fabs(double3 v)
+{
+    return make_double3(fabs(v.x), fabs(v.y), fabs(v.z));
+}
+inline __host__ __device__ double4 fabs(double4 v)
+{
+    return make_double4(fabs(v.x), fabs(v.y), fabs(v.z), fabs(v.w));
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // reflect
 // - returns reflection of incident ray I around surface normal N
@@ -2285,6 +2488,12 @@ inline __host__ __device__ float3 reflect(float3 i, float3 n)
     return i - 2.0f * n * dot(n,i);
 }
 
+//******************************************************************************
+inline __host__ __device__ double3 reflect(double3 i, double3 n)
+{
+    return i - 2.0 * n * dot(n,i);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // cross product
 ////////////////////////////////////////////////////////////////////////////////
@@ -2292,6 +2501,12 @@ inline __host__ __device__ float3 reflect(float3 i, float3 n)
 inline __host__ __device__ float3 cross(float3 a, float3 b)
 {
     return make_float3(a.y*b.z - a.z*b.y, a.z*b.x - a.x*b.z, a.x*b.y - a.y*b.x);
+}
+
+//******************************************************************************
+inline __host__ __device__ double3 cross(double3 a, double3 b)
+{
+    return make_double3(a.y*b.z - a.z*b.y, a.z*b.x - a.x*b.z, a.x*b.y - a.y*b.x);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2322,6 +2537,28 @@ inline __device__ __host__ float4 smoothstep(float4 a, float4 b, float4 x)
     return (y*y*(make_float4(3.0f) - (make_float4(2.0f)*y)));
 }
 
+//******************************************************************************
+inline __device__ __host__ double smoothstep(double a, double b, double x)
+{
+    double y = clamp((x - a) / (b - a), 0.0, 1.0);
+    return (y*y*(3.0 - (2.0*y)));
+}
+inline __device__ __host__ double2 smoothstep(double2 a, double2 b, double2 x)
+{
+    double2 y = clamp((x - a) / (b - a), 0.0, 1.0);
+    return (y*y*(make_double2(3.0) - (make_double2(2.0)*y)));
+}
+inline __device__ __host__ double3 smoothstep(double3 a, double3 b, double3 x)
+{
+    double3 y = clamp((x - a) / (b - a), 0.0, 1.0);
+    return (y*y*(make_double3(3.0) - (make_double3(2.0)*y)));
+}
+inline __device__ __host__ double4 smoothstep(double4 a, double4 b, double4 x)
+{
+    double4 y = clamp((x - a) / (b - a), 0.0, 1.0);
+    return (y*y*(make_double4(3.0) - (make_double4(2.0)*y)));
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Simple swap function
 ////////////////////////////////////////////////////////////////////////////////
@@ -2329,6 +2566,14 @@ inline __device__ __host__ float4 smoothstep(float4 a, float4 b, float4 x)
 inline __device__ __host__ void swap(float *a, float *b)
 {
 	float temp = *a;
+	*a = *b;
+	*b = temp;
+}
+
+//******************************************************************************
+inline __device__ __host__ void swap(double *a, double *b)
+{
+	double temp = *a;
 	*a = *b;
 	*b = temp;
 }
@@ -2348,7 +2593,26 @@ inline __device__ __host__ bool quadratic(float *t0, float *t1,
 	double rootDiscrim = std::sqrt(discrim);
 
 	// Calculer les valeurs de t0 et t1
-     double q;
+	double q;
+	if (B < 0) {q = -.5 * (B - rootDiscrim);}
+	else {q = -.5 * (B + rootDiscrim);}
+	*t0 = q / A;
+    *t1 = C / q;
+    if (*t0 > *t1) {swap(t0, t1);}
+    return true;
+}
+
+//******************************************************************************
+inline __device__ __host__ bool quadratic(double *t0, double *t1,
+										  double A, double B, double C)
+{
+    // Trouver le discriminant quadratique
+	double discrim = B * B - 4 * A * C;
+	if (discrim < 0) {return false;}
+	double rootDiscrim = sqrt(discrim);
+
+	// Calculer les valeurs de t0 et t1
+	double q;
 	if (B < 0) {q = -.5 * (B - rootDiscrim);}
 	else {q = -.5 * (B + rootDiscrim);}
 	*t0 = q / A;
@@ -2381,6 +2645,22 @@ inline __device__ __host__ bool isBackward(float3 a, float3 b)
 	return (dot(a, b) < 0.f);
 }
 
+//******************************************************************************
+inline __device__ __host__ double3 faceForward(double3 a, double3 b)
+{
+	return (dot(a, b) < 0.) ? a*(-1) : a;
+}
+
+inline __device__ __host__ bool isForward(double3 a, double3 b)
+{
+	return (dot(a, b) > 0.);
+}
+
+inline __device__ __host__ bool isBackward(double3 a, double3 b)
+{
+	return (dot(a, b) < 0.);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // radians
 // - convert degree to radians
@@ -2391,7 +2671,7 @@ inline __device__ __host__ float radians(float deg) {
 }
 
 inline __device__ __host__ double radiansd(double deg) {
-    return ((double)PI/180.f) * deg;
+    return ((double)PI/180.) * deg;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2540,4 +2820,21 @@ inline __host__ __device__ void coordinateSystem(const float3 &v1, float3 *v2, f
     }
     *v3 = cross(v1, *v2);
 }
+
+//******************************************************************************
+inline __host__ __device__ void coordinateSystem(const double3 &v1, double3 *v2, double3 *v3)
+{
+    if (fabs(v1.x) > fabs(v1.y))
+	{
+        double invLen = 1. / sqrt(v1.x*v1.x + v1.z*v1.z);
+        *v2 = make_double3(-v1.z * invLen, 0., v1.x * invLen);
+    }
+    else
+	{
+        double invLen = 1. / sqrt(v1.y*v1.y + v1.z*v1.z);
+        *v2 = make_double3(0., v1.z * invLen, -v1.y * invLen);
+    }
+    *v3 = cross(v1, *v2);
+}
+
 #endif
