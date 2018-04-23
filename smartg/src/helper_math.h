@@ -381,6 +381,10 @@ inline __host__ __device__ double2 make_double2(uint2 a)
 {
     return make_double2(double(a.x), double(a.y));
 }
+inline __host__ __device__ double2 make_double2(float2 a)
+{
+    return make_double2(double(a.x), double(a.y));
+}
 
 inline __host__ __device__ double3 make_double3(double s)
 {
@@ -406,6 +410,10 @@ inline __host__ __device__ double3 make_double3(uint3 a)
 {
     return make_double3(double(a.x), double(a.y), double(a.z));
 }
+inline __host__ __device__ double3 make_double3(float3 a)
+{
+    return make_double3(double(a.x), double(a.y), double(a.z));
+}
 
 inline __host__ __device__ double4 make_double4(double s)
 {
@@ -426,6 +434,41 @@ inline __host__ __device__ double4 make_double4(int4 a)
 inline __host__ __device__ double4 make_double4(uint4 a)
 {
     return make_double4(double(a.x), double(a.y), double(a.z), double(a.w));
+}
+inline __host__ __device__ double4 make_double4(float4 a)
+{
+    return make_double4(double(a.x), double(a.y), double(a.z), double(a.w));
+}
+
+
+
+
+inline __host__ __device__ float2 make_float2(double2 a)
+{
+    return make_float2(float(a.x), float(a.y));
+}
+
+inline __host__ __device__ int2 make_int2(double2 a)
+{
+    return make_int2(int(a.x), int(a.y));
+}
+
+inline __host__ __device__ float3 make_float3(double3 a)
+{
+    return make_float3(float(a.x), float(a.y), float(a.z));
+}
+
+inline __host__ __device__ int3 make_int3(double3 a)
+{
+    return make_int3(int(a.x), int(a.y), int(a.z));
+}
+inline __host__ __device__ float4 make_float4(double4 a)
+{
+    return make_float4(float(a.x), float(a.y), float(a.z), float(a.w));
+}
+inline __host__ __device__ int4 make_int4(double4 a)
+{
+    return make_int4(int(a.x), int(a.y), int(a.z), int(a.w));
 }
 // ****************************************************************************
 inline __host__ __device__ float2 make_float2(float s)
