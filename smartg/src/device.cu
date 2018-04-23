@@ -3722,7 +3722,8 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS)
 	float sizeY = nbCy*TCd;
 
 	// Trouver une solution à ça !!
-	if (ph->v.x < 0) return;
+	//if (ph->v.x < 0) return;
+	if (!isBackward(geoS->normal, ph->v)) return;
 	
 	p_t = ph->pos;
 	transfo = geoS->mvTF;

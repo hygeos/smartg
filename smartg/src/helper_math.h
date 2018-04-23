@@ -364,6 +364,70 @@ inline __host__ __device__ float4x4 make_diag_float4x4(float s)
 // constructors
 ////////////////////////////////////////////////////////////////////////////////
 
+// ****************************************************************************
+inline __host__ __device__ double2 make_double2(double s)
+{
+    return make_double2(s, s);
+}
+inline __host__ __device__ double2 make_double2(double3 a)
+{
+    return make_double2(a.x, a.y);
+}
+inline __host__ __device__ double2 make_double2(int2 a)
+{
+    return make_double2(double(a.x), double(a.y));
+}
+inline __host__ __device__ double2 make_double2(uint2 a)
+{
+    return make_double2(double(a.x), double(a.y));
+}
+
+inline __host__ __device__ double3 make_double3(double s)
+{
+    return make_double3(s, s, s);
+}
+inline __host__ __device__ double3 make_double3(double2 a)
+{
+    return make_double3(a.x, a.y, 0.0);
+}
+inline __host__ __device__ double3 make_double3(double2 a, double s)
+{
+    return make_double3(a.x, a.y, s);
+}
+inline __host__ __device__ double3 make_double3(double4 a)
+{
+    return make_double3(a.x, a.y, a.z);
+}
+inline __host__ __device__ double3 make_double3(int3 a)
+{
+    return make_double3(double(a.x), double(a.y), double(a.z));
+}
+inline __host__ __device__ double3 make_double3(uint3 a)
+{
+    return make_double3(double(a.x), double(a.y), double(a.z));
+}
+
+inline __host__ __device__ double4 make_double4(double s)
+{
+    return make_double4(s, s, s, s);
+}
+inline __host__ __device__ double4 make_float4(double3 a)
+{
+    return make_double4(a.x, a.y, a.z, 0.0);
+}
+inline __host__ __device__ double4 make_float4(double3 a, double w)
+{
+    return make_double4(a.x, a.y, a.z, w);
+}
+inline __host__ __device__ double4 make_double4(int4 a)
+{
+    return make_double4(double(a.x), double(a.y), double(a.z), double(a.w));
+}
+inline __host__ __device__ double4 make_double4(uint4 a)
+{
+    return make_double4(double(a.x), double(a.y), double(a.z), double(a.w));
+}
+// ****************************************************************************
 inline __host__ __device__ float2 make_float2(float s)
 {
     return make_float2(s, s);
@@ -1952,6 +2016,16 @@ inline __device__ __host__ bool quadratic(float *t0, float *t1,
 inline __device__ __host__ float3 faceForward(float3 a, float3 b)
 {
 	return (dot(a, b) < 0.f) ? a*(-1) : a;
+}
+
+inline __device__ __host__ bool isForward(float3 a, float3 b)
+{
+	return (dot(a, b) > 0.f);
+}
+
+inline __device__ __host__ bool isBackward(float3 a, float3 b)
+{
+	return (dot(a, b) < 0.f);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
