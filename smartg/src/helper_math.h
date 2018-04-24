@@ -376,6 +376,58 @@ struct float4x4
 	}
 };
 
+//**********************
+struct double2x2
+{
+    double2c r0, r1;
+
+	__host__ __device__ double2c operator[](int idx) const
+	{
+		myError((idx < 0) || (idx > 1));
+		return (&r0)[idx];
+	}
+
+	__host__ __device__ double2c &operator[](int idx)
+	{
+		myError((idx < 0) || (idx > 1));
+		return (&r0)[idx];
+	}
+};
+
+struct double3x3
+{
+    double3c r0, r1, r2;
+
+	__host__ __device__ double3c operator[](int idx) const
+	{
+		myError((idx < 0) || (idx > 2));
+		return (&r0)[idx];
+	}
+
+	__host__ __device__ double3c &operator[](int idx)
+	{
+		myError((idx < 0) || (idx > 2));
+		return (&r0)[idx];
+	}
+};
+
+struct double4x4
+{
+    double4c r0, r1, r2, r3;
+
+	__host__ __device__ double4c operator[](int idx) const
+	{
+		myError((idx < 0) || (idx > 3));
+		return (&r0)[idx];
+	}
+
+	__host__ __device__ double4c &operator[](int idx)
+	{
+		myError((idx < 0) || (idx > 3));
+		return (&r0)[idx];
+	}
+};
+
 // matrices constructors
 inline __host__ __device__ float2x2 make_float2x2(float m00, float m01,
 												  float m10, float m11){
@@ -400,6 +452,37 @@ inline __host__ __device__ float4x4 make_float4x4(float m00, float m01, float m0
 												  float m20, float m21, float m22, float m23,
 												  float m30, float m31, float m32, float m33){
 	float4x4 M;
+	M.r0.x=m00; M.r0.y=m01; M.r0.z=m02; M.r0.w=m03; // row 0
+	M.r1.x=m10; M.r1.y=m11; M.r1.z=m12; M.r1.w=m13; // row 1
+	M.r2.x=m20; M.r2.y=m21; M.r2.z=m22; M.r2.w=m23; // row 2
+	M.r3.x=m30; M.r3.y=m31; M.r3.z=m32; M.r3.w=m33; // row 3
+	return M;
+}
+
+//**********************
+inline __host__ __device__ double2x2 make_double2x2(float m00, float m01,
+													float m10, float m11){
+	double2x2 M;
+	M.r0.x=m00; M.r0.y=m01; // row 0
+	M.r1.x=m10; M.r1.y=m11; // row 1
+	return M;
+}
+
+inline __host__ __device__ double3x3 make_double3x3(float m00, float m01,float m02,
+													float m10, float m11, float m12,
+													float m20, float m21, float m22){
+	double3x3 M;
+	M.r0.x=m00; M.r0.y=m01; M.r0.z=m02; // row 0
+	M.r1.x=m10; M.r1.y=m11; M.r1.z=m12; // row 1
+	M.r2.x=m20; M.r2.y=m21; M.r2.z=m22; // row 2
+	return M;
+}
+
+inline __host__ __device__ double4x4 make_double4x4(float m00, float m01, float m02, float m03,
+													float m10, float m11, float m12, float m13,
+													float m20, float m21, float m22, float m23,
+													float m30, float m31, float m32, float m33){
+	double4x4 M;
 	M.r0.x=m00; M.r0.y=m01; M.r0.z=m02; M.r0.w=m03; // row 0
 	M.r1.x=m10; M.r1.y=m11; M.r1.z=m12; M.r1.w=m13; // row 1
 	M.r2.x=m20; M.r2.y=m21; M.r2.z=m22; M.r2.w=m23; // row 2
@@ -449,6 +532,44 @@ inline __host__ __device__ float4x4 make_diag_float4x4(float s)
 {
     float z = 0.;
     return make_float4x4(s, z, z, z, z, s, z, z, z, z, s, z, z, z, z, s);
+}
+
+//**********************
+inline __host__ __device__ double2x2 make_double2x2(float s)
+{
+    return make_double2x2(s, s, s, s);
+}
+
+inline __host__ __device__ double2x2 make_double2x2(double2c r1, double2c r2)
+{
+    return make_double2x2(r1.x, r1.y, r2.x, r2.y);
+}
+
+inline __host__ __device__ double3x3 make_double3x3(double s)
+{
+    return make_double3x3(s, s, s, s, s, s, s, s, s);
+}
+
+inline __host__ __device__ double3x3 make_double3x3(double3c r1, double3c r2, double3c r3)
+{
+    return make_double3x3(r1.x, r1.y, r1.z, r2.x, r2.y, r2.z, r3.x, r3.y, r3.z);
+}
+
+inline __host__ __device__ double4x4 make_double4x4(double s)
+{
+    return make_double4x4(s, s, s, s, s, s, s, s, s, s, s, s, s, s, s, s);
+}
+
+
+inline __host__ __device__ double4x4 make_double4x4(double4c r1, double4c r2, double4c r3, double4c r4)
+{
+    return make_double4x4(r1.x, r1.y, r1.z, r1.w, r2.x, r2.y, r2.z, r2.w, r3.x, r3.y, r3.z, r3.w, r4.x, r4.y, r4.z, r4.w);
+}
+
+inline __host__ __device__ double4x4 make_diag_double4x4(double s)
+{
+    double z = 0.;
+    return make_double4x4(s, z, z, z, z, s, z, z, z, z, s, z, z, z, z, s);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
