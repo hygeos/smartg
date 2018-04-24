@@ -190,6 +190,53 @@ struct float4c: public float4
 	}	
 };
 
+//********************************************************************
+struct double2c: public double2
+{
+	__host__ __device__ double operator[](int idx) const
+	{
+		myError((idx < 0) || (idx > 1));
+		return (&x)[idx];
+	}
+
+	__host__ __device__ double &operator[](int idx)
+	{
+	    myError((idx < 0) || (idx > 1));
+		return (&x)[idx];
+	}	
+};
+
+struct double3c: public double3
+{
+	__host__ __device__ double operator[](int idx) const
+	{
+		myError((idx < 0) || (idx > 2));
+		return (&x)[idx];
+	}
+
+	__host__ __device__ double &operator[](int idx)
+	{
+	    myError((idx < 0) || (idx > 2));
+		return (&x)[idx];
+	}	
+};
+
+struct double4c: public double4
+{
+	__host__ __device__ double operator[](int idx) const
+	{
+		myError((idx < 0) || (idx > 3));
+		return (&x)[idx];
+	}
+
+	__host__ __device__ double &operator[](int idx)
+	{
+
+		myError((idx < 0) || (idx > 3));
+		return (&x)[idx];
+	}	
+};
+
 // child constructors
 inline __host__ __device__ int2c make_int2c(int x, int y)
 {
@@ -243,6 +290,34 @@ inline __host__ __device__ float4c make_float4c(float x, float y, float z, float
 inline __host__ __device__ float4c make_float4c(float4 s)
 {
   float4c t; t.x = s.x; t.y = s.y; t.z = s.z; t.w = s.w; return t;
+}
+
+//******************************************************************************
+inline __host__ __device__ double2c make_double2c(double x, double y)
+{
+  double2c t; t.x = x; t.y = y; return t;
+}
+inline __host__ __device__ double2c make_double2c(double2 s)
+{
+  double2c t; t.x = s.x; t.y = s.y; return t;
+}
+
+inline __host__ __device__ double3c make_double3c(double x, double y, double z)
+{
+  double3c t; t.x = x; t.y = y; t.z = z; return t;
+}
+inline __host__ __device__ double3c make_double3c(double3 s)
+{
+  double3c t; t.x = s.x; t.y = s.y; t.z = s.z; return t;
+}
+
+inline __host__ __device__ double4c make_double4c(double x, double y, double z, double w)
+{
+  double4c t; t.x = x; t.y = y; t.z = z; t.w = w; return t;
+}
+inline __host__ __device__ double4c make_double4c(double4 s)
+{
+  double4c t; t.x = s.x; t.y = s.y; t.z = s.z; t.w = s.w; return t;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
