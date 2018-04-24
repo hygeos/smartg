@@ -3211,15 +3211,15 @@ __device__ void countPhoton(Photon* ph,
           // Computation of the absorption along photon history with cumulative distances in layers
           wabs = 0.F;
           for (int n=1; n<(NATMd+1); n++){
-              wabs += abs((prof_atm[n   + il*(NATMd+1)].OD_abs -
-                           prof_atm[n-1 + il*(NATMd+1)].OD_abs ) /
-                          (prof_atm[n].z  - prof_atm[n-1].z    )) * ph->cdist_atm[n];
+              wabs += abs(__fdividef(prof_atm[n   + il*(NATMd+1)].OD_abs -
+                                     prof_atm[n-1 + il*(NATMd+1)].OD_abs,
+                                     prof_atm[n].z  - prof_atm[n-1].z) ) * ph->cdist_atm[n];
           }
-          for (int n=1; n<(NOCEd+1); n++){
+          /*for (int n=1; n<(NOCEd+1); n++){
               wabs += abs((prof_oc[n    + il*(NOCEd+1)].OD_abs -
                            prof_oc[n-1  + il*(NOCEd+1)].OD_abs ) /
                           (prof_oc[n].z   - prof_oc[n-1].z     )) * ph->cdist_oc[n];
-          }
+          }*/
           wabs = exp(-wabs);
           #endif
 
