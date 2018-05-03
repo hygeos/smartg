@@ -32,9 +32,10 @@
 #define DEMIPI 1.5707963F
 
 #define MAX_LOOP 1000000000
-#define MAX_NEVT 500 // Maximum number of scattering evts stored in photon in the ALIS procedure
-#define MAX_NLOW 201 // MAX Number of wavelengths stored in the ALIS scattering correction
-#define MAX_NLAYER 200 //
+#define MAX_NEVT 500 // Max number of scattering evts stored in photon in the ALIS procedure in basic plane parallel mode
+#define MAX_NLOW 201 // Max number of wavelengths stored in the ALIS scattering correction
+#define MAX_NLAYER 200 // Max number of vertical layers recorded in ALIS procedure in spherical or alternate PP mode
+#define MAX_BIN    80 // Max number of bins for histogram
 
 
 

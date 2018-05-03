@@ -57,6 +57,7 @@ __device__ __constant__ int NWLPROBA;
 __device__ __constant__ int REFRACd;
 __device__ __constant__ int HORIZd;
 __device__ __constant__ float SZA_MAXd;
+__device__ __constant__ float SUN_DISCd;
 __device__ __constant__ int BEERd;
 __device__ __constant__ int RRd;
 __device__ __constant__ float WEIGHTRRd; // THRESHOLD for RUSSIAN ROULETTE PROCEDURE
@@ -85,7 +86,10 @@ extern "C" {
 __global__ void launchKernel(
         struct Spectrum *spectrum, float *X0,
         struct Phase *faer, struct Phase *foce2,
-        unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons,
+        //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons, void *tabDist, void *tabHist,
+        //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        //unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons,
         unsigned long long *Counter,
         unsigned long long *NPhotonsIn,
         unsigned long long *NPhotonsOut,
@@ -166,7 +170,10 @@ __device__ void surfaceLambertienne(Photon*, int le,
 * Sauve les paramètres des photons sortis dans l'espace dans la boite correspondant à la direction de sortie
 */
 __device__ void countPhoton(Photon* , struct Profile* prof_atm, struct Profile* prof_oc, float*, float *,
-        int, unsigned long long*, void*, unsigned long long*);
+        //!!!!!!!!!!!!!!!!!!!!!!!!!
+        int, unsigned long long*, void*, void*, void*, unsigned long long*);
+        //!!!!!!!!!!!!!!!!!!!!!!!!!
+        //int, unsigned long long*, void*, unsigned long long*);
 
 
 
@@ -186,10 +193,8 @@ __device__ void ComputePsi(Photon*, float*, float);
 __device__ void ComputePsiZenith(Photon* , float* , float);
 
 /* ComputeBox
-* Fonction qui calcule la position (ith, iphi) du photon dans le tableau de sortie
-* La position correspond à une boite contenu dans l'espace de sortie
 */
-__device__ void ComputeBox(int*, int*, int*, Photon*,
+__device__ int ComputeBox(int*, int*, int*, Photon*,
                            unsigned long long *errorcount, int count_level);
 
 #ifdef DEBUG_PHOTON

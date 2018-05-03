@@ -74,7 +74,10 @@ extern "C" {
 	__global__ void launchKernel(
 							 struct Spectrum *spectrum, float *X0,
 							 struct Phase *faer, struct Phase *foce,
-							 unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons,
+                             //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+							 unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons, void *tabDist, void *tabHist,
+                             //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+							 //unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons,
 							 unsigned long long *Counter,
 							 unsigned long long *NPhotonsIn,
 							 unsigned long long *NPhotonsOut,
@@ -219,7 +222,7 @@ extern "C" {
         
 		/* Cone Sampling */
 		if (LEd ==0) countPhoton(&ph, prof_atm, prof_oc, tabthv, tabphi, count_level,
-            errorcount, tabPhotons, NPhotonsOut);
+            errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
 
 		__syncthreads();
 		
@@ -308,7 +311,7 @@ extern "C" {
 
                             // Finally count the virtual photon
                             countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, count_level_le,
-                                    errorcount, tabPhotons, NPhotonsOut);
+                                    errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
 
                         } //directions
                     } // directions
@@ -372,7 +375,7 @@ extern "C" {
                         #endif
 
                         // Count the photon up to the counting levels (at the surface UP0P or DOW0M)
-                        countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, count_level_le, errorcount, tabPhotons, NPhotonsOut);
+                        countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, count_level_le, errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
 
                         // Only for upward photons count also them up to TOA
                         if (k==0) { 
@@ -384,12 +387,12 @@ extern "C" {
                             //if (ph_le.loc==ATMOS) move_pp2(&ph_le, prof_atm, prof_oc, 1, UPTOA , &rngstate);
                             #endif
                             // Final counting at the TOA
-                            countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA , errorcount, tabPhotons, NPhotonsOut);
+                            countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA , errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
                         }
                         // Only for downward photons count also them up to Bottom 
                         if (k==1) { 
                             // Final counting at the B 
-                            countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, DOWNB , errorcount, tabPhotons, NPhotonsOut);
+                            countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, DOWNB , errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
                         }
                       }//direction
                     }//direction
@@ -418,7 +421,7 @@ extern "C" {
                         ph_le.ith = (ith + ith0)%NBTHETAd;
 				        surfaceLambertienne(&ph_le, 1, tabthv, tabphi, spectrum, &rngstate);
                         // Only two levels for counting by definition
-                        countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, NPhotonsOut);
+                        countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
                         #ifdef SPHERIQUE
                         if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
                         #endif
@@ -426,7 +429,7 @@ extern "C" {
                         move_pp2(&ph_le, prof_atm, prof_oc, 1, UPTOA , &rngstate);
                         //if (ph_le.loc==ATMOS) move_pp2(&ph_le, prof_atm, prof_oc, 1, UPTOA , &rngstate);
                         #endif
-                        countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, NPhotonsOut);
+                        countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
                     }//direction
                   }//direction
                 } //LE
@@ -451,7 +454,7 @@ extern "C" {
                         ph_le.ith = (ith + ith0)%NBTHETAd;
 				        surfaceLambertienne(&ph_le, 1, tabthv, tabphi, spectrum, &rngstate);
                         // Only two levels for counting by definition
-                        countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, NPhotonsOut);
+                        countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
                         #ifdef SPHERIQUE
                         if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
                         #endif
@@ -459,7 +462,7 @@ extern "C" {
                         move_pp2(&ph_le, prof_atm, prof_oc, 1, UPTOA , &rngstate);
                         //if (ph_le.loc==ATMOS) move_pp2(&ph_le, prof_atm, prof_oc, 1, UPTOA , &rngstate);
                         #endif
-                        countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, NPhotonsOut);
+                        countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
                     }//direction
                   }//direction
                  } //LE
@@ -498,7 +501,7 @@ extern "C" {
                         #endif
 
                         // Count the photon up to the counting levels (at the surface UP0P or DOW0M)
-                        countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, count_level_le, errorcount, tabPhotons, NPhotonsOut);
+                        countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, count_level_le, errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
 
                         // Only for upward photons count also them up to TOA
 
@@ -508,7 +511,7 @@ extern "C" {
                         #endif
 
                         // Count the photon up to the counting levels (at the surface UP0P or DOW0M)
-                        countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, count_level_le, errorcount, tabPhotons, NPhotonsOut);
+                        countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, count_level_le, errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
 
                         // Only for upward photons count also them up to TOA
                         if (k==0) { 
@@ -520,12 +523,12 @@ extern "C" {
                             //if (ph_le.loc==ATMOS) move_pp2(&ph_le, prof_atm, prof_oc, 1, UPTOA , &rngstate);
                             #endif
                             // Final counting at the TOA
-                            countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA , errorcount, tabPhotons, NPhotonsOut);
+                            countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA , errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
                         }
                         // Only for downward photons count also them up to Bottom 
                         if (k==1) { 
                             // Final counting at the B 
-                            countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, DOWNB , errorcount, tabPhotons, NPhotonsOut);
+                            countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, DOWNB , errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
                         }
                       }//direction
                     }//direction
@@ -561,7 +564,7 @@ extern "C" {
                     ph_le.ith = (ith + ith0)%NBTHETAd;
 				    surfaceLambertienne(&ph_le, 1, tabthv, tabphi, spectrum, &rngstate);
                     //  contribution to UP0M level
-                    countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0M,   errorcount, tabPhotons, NPhotonsOut);
+                    countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0M,   errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
                 }
               }
             } //LE
@@ -585,7 +588,7 @@ extern "C" {
         }
         
         /* Cone Sampling */
-        if (LEd == 0) countPhoton(&ph, prof_atm, prof_oc, tabthv, tabphi, count_level, errorcount, tabPhotons, NPhotonsOut);
+        if (LEd == 0) countPhoton(&ph, prof_atm, prof_oc, tabthv, tabphi, count_level, errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
 
 
 
@@ -863,7 +866,9 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     ph->vz_prev[ph->nevt]      = ph->v.z;
     ph->epsilon_prev[ph->nevt] = epsilon;
     #else
-    for (int k=0; k<(NATMd+1); k++) ph->cdist_atm[k]=0.F;
+    for (int k=0; k<(NATMd+1); k++) {
+        ph->cdist_atm[k]=0.F;
+    }
     for (int k=0; k<(NOCEd+1); k++) ph->cdist_oc[k] =0.F;
     #endif
     for (int k=0; k<NLOWd; k++) ph->weight_sca[k] = 1.0F;
@@ -1027,7 +1032,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
             if (BEERd == 1) ph->weight *= __expf(-( epsilon * h_cur_abs));
             #else
             float tau;
-            ph->cdist_atm[ph->layer] += d;
+            ph->cdist_atm[ph->layer-1] += d;
             int DL=(NLAMd-1)/(NLOWd-1);
             for (int k=0; k<NLOWd; k++) {
                 tau = abs(get_OD(1,prof_atm[i_layer_bh + k*DL*(NATMd+1)]) - get_OD(1,prof_atm[i_layer_fw + k*DL*(NATMd+1)]));
@@ -1083,7 +1088,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
             if (BEERd == 1) ph->weight *= __expf(-( h_cur_abs));
             #else
             float tau;
-            ph->cdist_atm[ph->layer] += d;
+            ph->cdist_atm[ph->layer-1] += d;
             int DL=(NLAMd-1)/(NLOWd-1);
             for (int k=0; k<NLOWd; k++) {
                 tau = abs(get_OD(1,prof_atm[i_layer_bh + k*DL*(NATMd+1)]) - get_OD(1,prof_atm[i_layer_fw + k*DL*(NATMd+1)]));
@@ -1228,8 +1233,10 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
             if (BEERd == 1) ph->weight *= __expf(-( epsilon * h_cur_abs));
             #else
             float tau;
-            if (ph->loc==ATMOS) ph->cdist_atm[ph->layer] += d;
-            else                ph->cdist_oc[ ph->layer] += d;
+            if (ph->loc==ATMOS) {
+                ph->cdist_atm[ph->layer-1] += d;
+            }
+            else                ph->cdist_oc[ ph->layer-1] += d;
             int DL=(NLAMd-1)/(NLOWd-1);
             for (int k=0; k<NLOWd; k++) {
                 tau = abs(get_OD(1,prof[i_layer_bh + k*DL*NL]) - get_OD(1,prof[i_layer_fw + k*DL*NL]));
@@ -1247,8 +1254,10 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
             if (BEERd == 1) ph->weight *= __expf(-( h_cur_abs));
             #else
             float tau;
-            if (ph->loc==ATMOS) ph->cdist_atm[ph->layer] += d;
-            else                ph->cdist_oc[ ph->layer] += d;
+            if (ph->loc==ATMOS) {
+                ph->cdist_atm[ph->layer-1] += d;
+            }
+            else                ph->cdist_oc[ ph->layer-1] += d;
             int DL=(NLAMd-1)/(NLOWd-1);
             for (int k=0; k<NLOWd; k++) {
                 tau = abs(get_OD(1,prof[i_layer_bh + k*DL*NL]) - get_OD(1,prof[i_layer_fw + k*DL*NL]));
@@ -2926,7 +2935,10 @@ __device__ void countPhoton(Photon* ph,
         float *tabthv, float *tabphi,
         int count_level,
 		unsigned long long *errorcount,
-        void *tabPhotons, unsigned long long *NPhotonsOut
+        //!!!!!!!!!!!!!!!!!!!!!!
+        void *tabPhotons, void *tabDist, void *tabHist, unsigned long long *NPhotonsOut
+        //!!!!!!!!!!!!!!!!!!!!!!
+        //void *tabPhotons, unsigned long long *NPhotonsOut
         ) {
 
     if (count_level < 0 || ph->loc==REMOVED || ph->loc==ABSORBED) {
@@ -2939,15 +2951,32 @@ __device__ void countPhoton(Photon* ph,
         return;
     }
 
+    // Declaration for double
     #ifdef DOUBLE 
-    double *tabCount;                   // pointer to the "counting" array:
-    double dweight;
-	double4 ds;                         // replace ds1, ds2, ds3, ds4
-    #ifdef ALIS
-    double dwsca, dwabs;
+     double *tabCount;                   // pointer to the "counting" array:
+     double dweight;
+	 double4 ds;                         // Stokes vector casted to double 
+     #ifdef ALIS
+      double dwsca, dwabs;                // General ALIS variables 
+      //!!!!!!!!!
+      #if ( defined(SPHERIQUE) || defined(ALT_PP) )
+       double *tabCount2;                  // Specific ALIS counting array pointer for path implementation (cumulative distances)
+      #endif
+     #endif
+     //!!!!!!!!!
+
+    // Declaration for single
+    #else                              
+     float *tabCount; 
+     //!!!!!!!!!
+     #if ( defined(SPHERIQUE) || defined(ALT_PP) ) && defined(ALIS)
+      float *tabCount2;
+     //!!!!!!!!!
+     #endif
     #endif
-    #else                               // may be TOA, or BOA down, and so on
-    float *tabCount; 
+
+    #if ( defined(SPHERIQUE) || defined(ALT_PP) ) && defined(ALIS)
+     unsigned long long *tabCount3; // Specific ALIS counting array pointer for path implementation (distances histograms)
     #endif
 
     // We dont count UPTOA photons leaving in boxes outside SZA range
@@ -3000,7 +3029,11 @@ __device__ void countPhoton(Photon* ph,
     #endif
 
 	// Compute Box for outgoing photons in case of cone sampling
-	if (LEd == 0) ComputeBox(&ith, &iphi, &il, ph, errorcount, count_level);
+	if (LEd == 0) { 
+        // if compute box returns 0, it excluded the photon (outside sun disc for example), so we dont count it
+        if (!ComputeBox(&ith, &iphi, &il, ph, errorcount, count_level)) return;
+    }
+
 
     // For virtual (LE) photons the direction is stored within photon structure
     // Moreover we compute also final attenuation for LE 
@@ -3140,7 +3173,6 @@ __device__ void countPhoton(Photon* ph,
 
     #else //ALIS
     int DL=(NLAMd-1)/(NLOWd-1);
-    Profile *prof;
 	if(((ith >= 0) && (ith < NBTHETAd)) && ((iphi >= 0) && (iphi < NBPHId)) && (!isnan(weight)))
     {
       // For all wavelengths
@@ -3168,6 +3200,7 @@ __device__ void countPhoton(Photon* ph,
           */
         
           #if !defined(SPHERIQUE) && !defined(ALT_PP)
+          Profile *prof;
           // Computation of the absorption along photon history with heights and direction cosines 
           for (int n=0; n<ph->nevt; n++){
               //Computing absorption optical depths form start to stop for all segments
@@ -3223,20 +3256,17 @@ __device__ void countPhoton(Photon* ph,
           for (int n=1; n<(NATMd+1); n++){
               wabs += abs(__fdividef(prof_atm[n   + il*(NATMd+1)].OD_abs -
                                      prof_atm[n-1 + il*(NATMd+1)].OD_abs,
-                                     prof_atm[n].z  - prof_atm[n-1].z) ) * ph->cdist_atm[n];
+                                     prof_atm[n].z  - prof_atm[n-1].z) ) * ph->cdist_atm[n-1];
           }
           /*for (int n=1; n<(NOCEd+1); n++){
-              wabs += abs((prof_oc[n    + il*(NOCEd+1)].OD_abs -
-                           prof_oc[n-1  + il*(NOCEd+1)].OD_abs ) /
-                          (prof_oc[n].z   - prof_oc[n-1].z     )) * ph->cdist_oc[n];
+              wabs += abs(__fdividef(prof_oc[n   + il*(NOCEd+1)].OD_abs -
+                                     prof_oc[n-1 + il*(NOCEd+1)].OD_abs,
+                                     prof_oc[n].z  - prof_oc[n-1].z) ) * ph->cdist_oc[n-1];
           }*/
           wabs = exp(-wabs);
           #endif
 
           #ifdef DOUBLE 
-          //#if defined(SPHERIQUE) || defined(ALT_PP)
-          //tabCount2   = (double*)tabAMF     + count_level*NBTHETAd*NBPHId*NATMd;
-          //#endif
           tabCount = (double*)tabPhotons + count_level*NPSTKd*NBTHETAd*NBPHId*NLAMd;
           dweight = (double)weight;
           ds = make_double4(st.x, st.y, st.z, st.w);
@@ -3253,27 +3283,42 @@ __device__ void countPhoton(Photon* ph,
           atomicAdd(tabCount+(3*II+JJ), dweight * dwsca * dwabs * ds.w);*/
 
           #else
-          //#if defined(SPHERIQUE) || defined(ALT_PP)
-          //tabCount2   = (float*)tabAMF     + count_level*NBTHETAd*NBPHId*NATMd;
-          //#endif
           tabCount = (float*)tabPhotons + count_level*NPSTKd*NBTHETAd*NBPHId*NLAMd;
           atomicAdd(tabCount+(0*II+JJ), weight * wsca * wabs * (st.x+st.y));
           atomicAdd(tabCount+(1*II+JJ), weight * wsca * wabs * (st.x-st.y));
           atomicAdd(tabCount+(2*II+JJ), weight * wsca * wabs * st.z);
           atomicAdd(tabCount+(3*II+JJ), weight * wsca * wabs * st.w);
-          //#if defined(SPHERIQUE) || defined(ALT_PP)
-          //int KK = NBTHETAd*NBPHId*NATMd;
-          //for (int n=0; n<NATMd; n++){
-            //int LL = n*NBTHETAd*NBPHId + ith*NBPHId + iphi;
-            //atomicAdd(tabCount2+(0*KK+LL), ph->cdist_atm[n]);
-          //}
-          //#endif
           #endif    
 
           atomicAdd(NPhotonsOut + ((count_level*NLAMd + il)*NBTHETAd + ith)*NBPHId + iphi, 1);
-      }
+      } // wavelength loop
 
-    }
+      #if ( defined(SPHERIQUE) || defined(ALT_PP) )
+          int KK = NBTHETAd*NBPHId*NATMd;
+          int KKK= KK * MAX_BIN;
+          tabCount3   = (unsigned long long*)tabHist     + count_level*KKK;
+          int ibin;
+          for (int n=0; n<NATMd; n++){
+                ibin = min(__float2int_rd(__fdividef(ph->cdist_atm[n]*20.F, MAX_BIN*1.F)), MAX_BIN-1);
+                int LLL = ibin*NBTHETAd*NBPHId*NATMd +  n*NBTHETAd*NBPHId + ith*NBPHId + iphi;
+                atomicAdd(tabCount3+LLL, 1);
+          }
+       #ifdef DOUBLE
+          tabCount2   = (double*)tabDist     + count_level*KK;
+          for (int n=0; n<NATMd; n++){
+            int LL = n*NBTHETAd*NBPHId + ith*NBPHId + iphi;
+            DatomicAdd(tabCount2+LL, (double)ph->cdist_atm[n]);
+          }
+       #else
+          tabCount2   = (float*)tabDist     + count_level*KK;
+          for (int n=0; n<NATMd; n++){
+            int LL = n*NBTHETAd*NBPHId + ith*NBPHId + iphi;
+            atomicAdd(tabCount2+LL, ph->cdist_atm[n]);
+          }
+       #endif
+      #endif
+
+    } // correct output box
 	else
 	{
 		atomicAdd(errorcount+ERROR_CASE, 1);
@@ -3360,10 +3405,8 @@ __device__ void ComputePsiZenith(Photon* ph, float* psi, float phi)
 
 
 /* ComputeBox
-* Fonction qui calcule la position (ith, iphi) et l'indice spectral (il) du photon dans le tableau de sortie
-* La position correspond à une boite contenu dans l'espace de sortie
 */
-__device__ void ComputeBox(int* ith, int* iphi, int* il,
+__device__ int ComputeBox(int* ith, int* iphi, int* il,
                            Photon* photon, unsigned long long *errorcount, int count_level)
 {
 	// vxy est la projection du vecteur vitesse du photon sur (x,y)
@@ -3377,6 +3420,7 @@ __device__ void ComputeBox(int* ith, int* iphi, int* il,
     if (count_level==UPTOA) *ith = __float2int_rd(__fdividef(acosf(photon->v.z) * NBTHETAd, SZA_MAXd/90.*DEMIPI));
     else                    *ith = __float2int_rd(__fdividef(acosf(fabsf(photon->v.z)) * NBTHETAd, DEMIPI));
     #endif
+
 
 	// Calcul de la valeur de il
     *il = photon->ilam;
@@ -3424,7 +3468,20 @@ __device__ void ComputeBox(int* ith, int* iphi, int* il,
 		if(photon->v.y >= 0.F)  *iphi = 0;
 		else *iphi = NBPHId - 1;
 	}
-	
+    if (SUN_DISCd <= 0) return 1;	
+
+    float phi = *iphi * __fdividef(2.F*PI, NBPHId);
+    float dth =  __fdividef(SZA_MAXd * PI, 180.F * NBTHETAd);
+    float cth = cosf((*ith + 0.5F) * dth);
+    float sth = sqrtf(1.F - cth*cth);
+    float3 center_dir = make_float3(cosf(phi)*sth, sinf(phi)*sth, cth);
+    if ((abs(acosf(dot(photon->v, center_dir)))*180.F/PI) >  SUN_DISCd ) {
+
+        //int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
+        //if (idx==0 && count_level==UPTOA) printf("center %f %f %f, phot %f %f %f \n", center_dir.x, center_dir.y, center_dir.z, photon->v.x, photon->v.y, photon->v.z);
+        return 0;
+    }
+    return 1;
 }
 
 #ifdef DEBUG_PHOTON
@@ -3603,7 +3660,9 @@ __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
     for (k=0; k<kmax; k++) ph_le->epsilon_prev[k] = ph->epsilon_prev[k];
     for (k=0; k<NLOWd; k++) ph_le->tau_sca[k] = ph->tau_sca[k];
     #else
-    for (k=0; k<(NATMd+1); k++) ph_le->cdist_atm[k] = ph->cdist_atm[k];
+    for (k=0; k<(NATMd+1); k++) {
+        ph_le->cdist_atm[k] = ph->cdist_atm[k];
+    }
     for (k=0; k<(NOCEd+1); k++) ph_le->cdist_oc[k] = ph->cdist_oc[k];
     #endif
     for (k=0; k<NLOWd; k++) ph_le->weight_sca[k] = ph->weight_sca[k];

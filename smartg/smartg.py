@@ -352,7 +352,7 @@ class Smartg(object):
              NBTHETA=45, NBPHI=90, NF=1e6,
              OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
              NBLOOP=None, progress=True, alis_options=None,
-             le=None, flux=None, stdev=False, BEER=0, RR=1, WEIGHTRR=0.1, SZA_MAX=90.,
+             le=None, flux=None, stdev=False, BEER=0, RR=1, WEIGHTRR=0.1, SZA_MAX=90., SUN_DISC=0,
              sensor=None, refraction=False, reflectance=True):
         '''
         Run a SMART-G simulation
@@ -450,6 +450,8 @@ class Smartg(object):
 
             - SZA_MAX : Maximum SZA for solar BOXES in case a Regulard grid and cone sampling
 
+            - SUN_DISC : Angular size of the Sun disc in degree, 0 (default means no angular size)
+
             - sensor : sensor object, backward mode (from sensor to source), back should be set to True in the smartg constructor
 
             - refraction : include atmospheric refraction
@@ -487,6 +489,11 @@ class Smartg(object):
         # number of output levels
         # warning! values defined in communs.h should be < LVL
         NLVL = 6
+
+        #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        # warning! values defined in communs.h 
+        MAX_BIN = 80
+        #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
         # number of Stokes parameters of the radiation field
         NPSTK = 4
@@ -657,7 +664,7 @@ class Smartg(object):
                        NBTHETA, NBPHI, OUTPUT_LAYERS,
                        RTER, LE, FLUX, MI, NLVL, NPSTK,
                        NWLPROBA, BEER, RR, WEIGHTRR, NLOW, 
-                       sensor, REFRAC, HORIZ, SZA_MAX)
+                       sensor, REFRAC, HORIZ, SZA_MAX, SUN_DISC)
 
 
         # Initialize the progress bar
@@ -668,9 +675,14 @@ class Smartg(object):
 
         # Loop and kernel call
         (NPhotonsInTot,
-                tabPhotonsTot, errorcount, NPhotonsOutTot, sigma, Nkernel, secs_cuda_clock
+                #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                tabPhotonsTot, tabDistTot, tabHistTot, errorcount, NPhotonsOutTot, sigma, Nkernel, secs_cuda_clock
                 ) = loop_kernel(NBPHOTONS, faer, foce,
-                                NLVL, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
+                                NLVL, NATM, MAX_BIN, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
+                #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                #tabPhotonsTot, errorcount, NPhotonsOutTot, sigma, Nkernel, secs_cuda_clock
+                #) = loop_kernel(NBPHOTONS, faer, foce,
+                #                NLVL, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                                 NLAM, self.double, self.kernel, p, X0, le, spectrum,
                                 prof_atm_gpu, prof_oc_gpu,
                                 wl_proba_icdf, stdev, self.rng)
@@ -680,9 +692,13 @@ class Smartg(object):
         attrs.update(self.common_attrs)
 
         # finalization
-        output = finalize(tabPhotonsTot, wl[:], NPhotonsInTot, errorcount, NPhotonsOutTot,
+        #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        output = finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl[:], NPhotonsInTot, errorcount, NPhotonsOutTot,
+        #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        #output = finalize(tabPhotonsTot, wl[:], NPhotonsInTot, errorcount, NPhotonsOutTot,
                            OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, prof_oc,
-                           sigma, THVDEG, reflectance, HORIZ, le=le, flux=flux, back=self.back, SZA_MAX=SZA_MAX)
+                           sigma, THVDEG, reflectance, HORIZ, le=le, flux=flux, back=self.back, 
+                           SZA_MAX=SZA_MAX, SUN_DISC=SUN_DISC)
         output.set_attr('processing time (s)', (datetime.now() - t0).total_seconds())
 
         p.finish('Done! | Received {:.1%} of {:.3g} photons ({:.1%})'.format(
@@ -698,7 +714,7 @@ class Smartg(object):
         return output
 
 
-def calcOmega(NBTHETA, NBPHI, SZA_MAX=90.):
+def calcOmega(NBTHETA, NBPHI, SZA_MAX=90., SUN_DISC=0):
     '''
     returns the zenith and azimuth angles, and the solid angles
     '''
@@ -727,13 +743,18 @@ def calcOmega(NBTHETA, NBPHI, SZA_MAX=90.):
 
     # normalize to 1
     tabOmega = tabds/(sum(tabds)*NBPHI)
+    if (SUN_DISC !=0) : tabOmega[:]= 2*np.pi * (1. - np.cos(SUN_DISC*np.pi/180))
 
     return tabTh, tabPhi, tabOmega
 
 
-def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
              OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, prof_oc,
-             sigma, THVDEG, reflectance, HORIZ, le=None, flux=None, back=False, SZA_MAX=90.):
+             sigma, THVDEG, reflectance, HORIZ, le=None, flux=None, back=False, 
+             SZA_MAX=90., SUN_DISC=0):
     '''
     create and return the final output
     '''
@@ -748,18 +769,25 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
             tabPhi = le['phi']
             norm_geo =  1. 
         else : 
-            tabTh, tabPhi, tabOmega = calcOmega(NBTHETA, NBPHI, SZA_MAX)
+            tabTh, tabPhi, tabOmega = calcOmega(NBTHETA, NBPHI, SZA_MAX=SZA_MAX, SUN_DISC=SUN_DISC)
             if HORIZ==1 : norm_geo = 2.0 * tabOmega.reshape((1,1,-1,1)) * np.cos(tabTh).reshape((1,1,-1,1))
             else :  norm_geo = 2.0 * tabOmega.reshape((1,1,-1,1)) 
     else:
         norm_geo = 1.
-        tabTh, tabPhi, _ = calcOmega(NBTHETA, NBPHI, SZA_MAX)
+        tabTh, tabPhi, _ = calcOmega(NBTHETA, NBPHI, SZA_MAX=SZA_MAX, SUN_DISC=SUN_DISC)
 
     # normalization
     tabFinal = tabPhotonsTot.astype('float64')/(norm_geo*norm_npho)
+    #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    tabDistFinal = tabDistTot.astype('float64')
+    tabHistFinal = tabHistTot
+    #tabHistFinal = tabHistTot.astype('int64')
+    #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     # swapaxes : (th, phi) -> (phi, theta)
     tabFinal = tabFinal.swapaxes(3,4)
+    tabDistFinal = tabDistFinal.swapaxes(2,3)
+    tabHistFinal = tabHistFinal.swapaxes(3,4)
     NPhotonsOutTot = NPhotonsOutTot.swapaxes(2,3)
     if sigma is not None:
         sigma /= norm_geo
@@ -793,6 +821,10 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
         m.add_dataset('U_stdev_up (TOA)', sigma[UPTOA,2,ilam,:,:], axnames)
         m.add_dataset('V_stdev_up (TOA)', sigma[UPTOA,3,ilam,:,:], axnames)
     m.add_dataset('N_up (TOA)', NPhotonsOutTot[UPTOA,ilam,:,:], axnames)
+    #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    m.add_dataset('cdist_up (TOA)', tabDistFinal[UPTOA,:,:,:]  ,['None', 'Azimuth angles', 'Zenith angles'])
+    m.add_dataset('disth_up (TOA)', tabHistFinal[UPTOA,:,:,:,:],['None', 'None', 'Azimuth angles', 'Zenith angles'])
+    #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     if OUTPUT_LAYERS & 1:
         m.add_dataset('I_down (0+)', tabFinal[DOWN0P,0,ilam,:,:], axnames)
@@ -805,6 +837,10 @@ def finalize(tabPhotonsTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
             m.add_dataset('U_stdev_down (0+)', sigma[DOWN0P,2,ilam,:,:], axnames)
             m.add_dataset('V_stdev_down (0+)', sigma[DOWN0P,3,ilam,:,:], axnames)
         m.add_dataset('N_down (0+)', NPhotonsOutTot[DOWN0P,ilam,:,:], axnames)
+        #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        m.add_dataset('cdist_down (0+)', tabDistFinal[DOWN0P,:,:,:], ['None', 'Azimuth angles', 'Zenith angles'])
+        m.add_dataset('disth_down (0+)', tabHistFinal[DOWN0P,:,:,:,:],['None', 'None', 'Azimuth angles', 'Zenith angles'])
+        #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
         m.add_dataset('I_up (0-)', tabFinal[UP0M,0,ilam,:,:], axnames)
         m.add_dataset('Q_up (0-)', tabFinal[UP0M,1,ilam,:,:], axnames)
@@ -1075,7 +1111,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
                    XBLOCK, XGRID,NLAM, SIM, NF,
                    NBTHETA, NBPHI, OUTPUT_LAYERS,
                    RTER, LE, FLUX, MI, NLVL, NPSTK, NWLPROBA, BEER, RR, 
-                   WEIGHTRR, NLOW, sensor, REFRAC, HORIZ, SZA_MAX) :
+                   WEIGHTRR, NLOW, sensor, REFRAC, HORIZ, SZA_MAX, SUN_DISC) :
 
     """
     Initialize the constants in python and send them to the device memory
@@ -1151,6 +1187,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
     copy_to_device('REFRACd', REFRAC, np.int32)
     copy_to_device('HORIZd', HORIZ, np.int32)
     copy_to_device('SZA_MAXd', SZA_MAX, np.float32)
+    copy_to_device('SUN_DISCd', SUN_DISC, np.float32)
 
 
 def init_profile(wl, prof, kind):
@@ -1214,8 +1251,11 @@ def get_git_attrs():
         R.update({'git_dirty_repo': int(is_dirty)})
     return R
 
-
-def loop_kernel(NBPHOTONS, faer, foce, NLVL,
+ 
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!
+def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, MAX_BIN,
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#def loop_kernel(NBPHOTONS, faer, foce, NLVL,
                 NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                 NLAM, double, kern, p, X0, le, spectrum,
                 prof_atm, prof_oc, wl_proba_icdf, stdev, rng):
@@ -1226,6 +1266,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL,
         - NBPHOTONS : Number of photons injected
         - Tableau : Class containing the arrays sent to the device
         - NLVL : Number of output levels
+        - NATM : Number of atmospheric layers
         - NPSTK : Number of Stokes parameters + 1 for number of photons
         - BLOCK : Block dimension
         - XGRID : Grid dimension
@@ -1241,6 +1282,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL,
         - NPhotonsInTot : Total number of photons processed by interval
         - nbPhotonsSorTot : Total number of outgoing photons
         - tabPhotonsTot : Total weight of all outgoing photons
+        - tabDistTot    : Total distance traveled by photons in atmospheric layers
 
     """
     # Initializations
@@ -1250,6 +1292,11 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL,
     # Initialize the array for error counting
     NERROR = 32
     errorcount = gpuzeros(NERROR, dtype='uint64')
+
+    #!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    tabDistTot = gpuzeros((NLVL,NATM,NBTHETA,NBPHI), dtype=np.float64)
+    tabHistTot = gpuzeros((NLVL,MAX_BIN,NATM,NBTHETA,NBPHI), dtype=np.uint64)
+    #!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     # Initialize of the parameters
     tabPhotonsTot = gpuzeros((NLVL,NPSTK,NLAM,NBTHETA,NBPHI), dtype=np.float64)
@@ -1271,8 +1318,15 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL,
 
     if double:
         tabPhotons = gpuzeros((NLVL,NPSTK,NLAM,NBTHETA,NBPHI), dtype=np.float64)
+        #!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        tabDist = gpuzeros((NLVL,NATM,NBTHETA,NBPHI), dtype=np.float64)
+        #!!!!!!!!!!!!!!!!!!!!!!!!!!!
     else:
         tabPhotons = gpuzeros((NLVL,NPSTK,NLAM,NBTHETA,NBPHI), dtype=np.float32)
+        #!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        tabDist = gpuzeros((NLVL,NATM,NBTHETA,NBPHI), dtype=np.float32)
+    tabHist = gpuzeros((NLVL,MAX_BIN,NATM,NBTHETA,NBPHI), dtype=np.uint64)
+    #!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     # local estimates angles
     if le != None:
@@ -1296,7 +1350,10 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL,
 
         # kernel launch
         kern(spectrum, X0, faer, foce,
-                errorcount, nThreadsActive, tabPhotons,
+                #!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                errorcount, nThreadsActive, tabPhotons, tabDist, tabHist,
+                #!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                #errorcount, nThreadsActive, tabPhotons,
                 Counter, NPhotonsIn, NPhotonsOut, tabthv, tabphi,
                 prof_atm, prof_oc, wl_proba_icdf, rng.state,
                 block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
@@ -1312,6 +1369,13 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL,
         NPhotonsOutTot += NPhotonsOut
         S = tabPhotons   # sum of weights for the last kernel
         tabPhotonsTot += S
+
+        #!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        T = tabDist
+        tabDistTot += T
+        H = tabHist
+        tabHistTot += H
+        #!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
         N_simu += 1
         if stdev:
@@ -1336,7 +1400,10 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL,
     else:
         sigma = None
 
-    return NPhotonsInTot.get(), tabPhotonsTot.get(), errorcount, NPhotonsOutTot.get(), sigma, N_simu, secs_cuda_clock
+    #!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    return NPhotonsInTot.get(), tabPhotonsTot.get(), tabDistTot.get(), tabHistTot.get(), errorcount, NPhotonsOutTot.get(), sigma, N_simu, secs_cuda_clock
+    #!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    #return NPhotonsInTot.get(), tabPhotonsTot.get(), errorcount, NPhotonsOutTot.get(), sigma, N_simu, secs_cuda_clock
 
 
 def impactInit(prof_atm, NLAM, THVDEG, Rter, pp):
