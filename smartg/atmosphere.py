@@ -696,7 +696,7 @@ class AtmAFGL(Atmosphere):
             # other gases (reptran)
             #
             if wav.use_reptran_kdis:
-                tau_mol = wav.calc_profile(self.prof)
+                tau_mol = wav.calc_profile(self.prof) * dz
             else:
                 tau_mol = np.zeros((len(wav), len(prof.z)), dtype='float32') * dz
 
