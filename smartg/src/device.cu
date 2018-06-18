@@ -3869,7 +3869,8 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS)
 	tabCountObj = (double*)tabObjInfo;
 	
 	weight = (double)ph->weight;
-	
+
+	#if __CUDA_ARCH__ >= 600
 	if (ph->direct == 0 && geoS->type == 2)
 	{
 		atomicAdd(tabCountObj, weight);
@@ -3891,6 +3892,29 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS)
 	{
 		atomicAdd(tabCountObj+3, weight);
 	}
+	#else
+	if (ph->direct == 0 && geoS->type == 2)
+	{
+		DatomicAdd(tabCountObj, weight);
+		DatomicAdd(tabCountObj+(nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+	}
+	else if (ph->direct != 0 && geoS->type == 2)
+	{
+		DatomicAdd(tabCountObj+1, weight);
+		if (ph->toucheMir == true)
+			DatomicAdd(tabCountObj+4, weight);
+		else
+			DatomicAdd(tabCountObj+5, weight);
+	}
+	else if (ph->direct == 0 && geoS->type == 1)
+	{
+		DatomicAdd(tabCountObj+2, weight);
+	}
+	else if (ph->direct != 0 && geoS->type == 1)
+	{
+		DatomicAdd(tabCountObj+3, weight);
+	}
+	#endif
 
 }
 
@@ -4112,15 +4136,19 @@ __device__ void countPhoton(Photon* ph,
       tabCount = (double*)tabPhotons + count_level*JJJ;
       dweight = (double)weight;
       ds = make_double4(st.x, st.y, st.z, st.w);
-      /*DatomicAdd(tabCount+(0*II+JJ), dweight*(ds.x+ds.y));
-      DatomicAdd(tabCount+(1*II+JJ), dweight*(ds.x-ds.y));
-      DatomicAdd(tabCount+(2*II+JJ), dweight*ds.z);
-      DatomicAdd(tabCount+(3*II+JJ), dweight*ds.w);*/
-      // If GTX 1000 or more recent use native double atomic add
+
+	  #if __CUDA_ARCH__ >= 600
+	  // If GTX 1000 or more recent use native double atomic add
       atomicAdd(tabCount+(0*II+JJ), dweight*(ds.x+ds.y));
       atomicAdd(tabCount+(1*II+JJ), dweight*(ds.x-ds.y));
       atomicAdd(tabCount+(2*II+JJ), dweight*ds.z);
       atomicAdd(tabCount+(3*II+JJ), dweight*ds.w);
+      #else
+      DatomicAdd(tabCount+(0*II+JJ), dweight*(ds.x+ds.y));
+	  DatomicAdd(tabCount+(1*II+JJ), dweight*(ds.x-ds.y));
+	  DatomicAdd(tabCount+(2*II+JJ), dweight*ds.z);
+	  DatomicAdd(tabCount+(3*II+JJ), dweight*ds.w);
+	  #endif
 
       #else
       tabCount = (float*)tabPhotons + count_level*JJJ;
@@ -4234,15 +4262,19 @@ __device__ void countPhoton(Photon* ph,
           ds = make_double4(st.x, st.y, st.z, st.w);
           dwsca=(double)wsca;
           dwabs=(double)wabs;
-          /*DatomicAdd(tabCount+(0*II+JJ), dweight * dwsca * dwabs * (ds.x+ds.y));
-          DatomicAdd(tabCount+(1*II+JJ), dweight * dwsca * dwabs * (ds.x-ds.y));
-          DatomicAdd(tabCount+(2*II+JJ), dweight * dwsca * dwabs * ds.z);
-          DatomicAdd(tabCount+(3*II+JJ), dweight * dwsca * dwabs * ds.w);*/
-          // If GTX 1000 or more recent use native double atomic add
+
+		  #if __CUDA_ARCH__ >= 600
           atomicAdd(tabCount+(0*II+JJ), dweight * dwsca * dwabs * (ds.x+ds.y));
           atomicAdd(tabCount+(1*II+JJ), dweight * dwsca * dwabs * (ds.x-ds.y));
-          atomicAdd(tabCount+(2*II+JJ), dweight * dwsca * dwabs * ds.z);
+		  atomicAdd(tabCount+(2*II+JJ), dweight * dwsca * dwabs * ds.z);
           atomicAdd(tabCount+(3*II+JJ), dweight * dwsca * dwabs * ds.w);
+		  #else
+		  // If GTX 1000 or more recent use native double atomic add
+          DatomicAdd(tabCount+(0*II+JJ), dweight * dwsca * dwabs * (ds.x+ds.y));
+          DatomicAdd(tabCount+(1*II+JJ), dweight * dwsca * dwabs * (ds.x-ds.y));
+          DatomicAdd(tabCount+(2*II+JJ), dweight * dwsca * dwabs * ds.z);
+          DatomicAdd(tabCount+(3*II+JJ), dweight * dwsca * dwabs * ds.w);
+		  #endif		  
 
           #else
           tabCount = (float*)tabPhotons + count_level*JJJ;
