@@ -29,7 +29,7 @@ from pycuda.compiler import SourceModule
 from pycuda.driver import module_from_buffer
 # bellow necessary for object incorporation
 import smartg.geometry
-from smartg.geometry import Vector, Point, Normal, Ray, BBox, CoordinateSystem
+from smartg.geometry import Vector, Point, Normal, Ray, BBox, CoordinateSystem, Normalize
 import smartg.transform
 from smartg.transform import Transform, Aff
 import smartg.visualizegeo
@@ -156,6 +156,10 @@ type_IObjets = [
     ('mvTx', 'float32'),    # \
     ('mvTy', 'float32'),    #  | tranformation type translation 
     ('mvTz', 'float32'),    # /
+
+    ('nBx', 'float32'),    # \
+    ('nBy', 'float32'),    #  | normalBase de l'obj apres trans 
+    ('nBz', 'float32'),    # /
     ]
 
 class FlatSurface(object):
@@ -280,6 +284,24 @@ class Sensor(object):
 
     def __str__(self):
         return 'SENSOR=-POSX{POSX}-POSY{POSY}-POSZ{POSZ}-THETA={THDEG:.3f}-PHI={PHDEG:.3f}'.format(**self.dict)
+
+class CusForward(object):
+    '''
+    Definition of CusForward (custum rectangular forward mode of surface X*Y)
+
+    CFX : size in X
+    CFY : size in Y
+    CFMODE : custum Forward = 1 -> activated
+    '''
+    def __init__(self, CFX=0., CFY=0., CFMODE = 1):
+        self.dict = {
+                'CFX':   CFX,
+                'CFY':   CFY,
+                'CFMODE': CFMODE
+                }
+
+    def __str__(self):
+        return 'CusForward=-CFX{CFX}-CFY{CFY}'.format(**self.dict)
 
 
 class Smartg(object):
@@ -410,7 +432,7 @@ class Smartg(object):
              OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
              NBLOOP=None, progress=True,
              le=None, flux=None, stdev=False, BEER=1, RR=1, WEIGHTRR=0.1, SZA_MAX=90., SUN_DISC=0,
-             sensor=None, refraction=False, reflectance=True, myObjects=None, interval = None, IsAtm = 1):
+             sensor=None, refraction=False, reflectance=True, myObjects=None, interval = None, IsAtm = 1, cusForward = None):
         '''
         Run a SMART-G simulation
 
@@ -588,6 +610,19 @@ class Smartg(object):
                     myObjects0['p3x'][i] = myObjects[i].geo.p4.x
                     myObjects0['p3y'][i] = myObjects[i].geo.p4.y
                     myObjects0['p3z'][i] = myObjects[i].geo.p4.z
+
+                    normalBase = Normal(0, 0, 1);
+                    # Prise en compte des transfos de rot en X et Y
+                    TpT0 = Transform()
+                    TpRX0 = TpT0.rotateX(myObjects[i].transformation.rotx)
+                    TpRY0 = TpT0.rotateY(myObjects[i].transformation.roty)
+                    TpRZ0 = TpT0.rotateZ(myObjects[i].transformation.rotz)
+                    TpT0 = TpRX0*TpRY0*TpRZ0
+                    normalBase = TpT0[normalBase]
+                    myObjects0['nBx'][i] = normalBase.x
+                    myObjects0['nBy'][i] = normalBase.y
+                    myObjects0['nBz'][i] = normalBase.z
+                    
                 else:    # si l'objet est autre chose (inconnu)
                     raise NameError('You geometry can be only spheric or plane, please' + \
                                     ' choose between Spheric or Plane classes!')
@@ -629,6 +664,7 @@ class Smartg(object):
                     TpRX = TpT.rotateX(myObjects[i].transformation.rotx)
                     TpRY = TpT.rotateY(myObjects[i].transformation.roty)
                     TpT = TpRX*TpRY
+                    invTpT = TpT.inverse(TpT)
 
                     # Application des transfos sur les 4 points
                     pp1 = TpT[pp1]
@@ -654,12 +690,94 @@ class Smartg(object):
                     # Création de la transformation permettant le changement de base
                     mmInv = np.transpose(mm)
                     ooTw = Transform(m = mm, mInv = mmInv)
+
+                    # ==================== direction solaire refléchi sur miroir v_n
+                    aRot = Transform()
+                    aRot = aRot.rotateZ(180)
+         
+                    v_n = Vector(-np.sin(THVDEG * np.pi / 180), 0., -np.cos(THVDEG * np.pi / 180))
+                    v_n = Normalize(v_n)
                     
+                    v_n2 = invTpT[v_n]
+
+	            v_n2 = aRot[v_n2]
+
+	            v_n2 = Vector(-v_n2.x, -v_n2.y, -v_n2.z)
+
+	            v_n2 = TpT[v_n2]
+	
+	            v_n2 = Normalize(v_n2)
+                    v_n2 = ooTw[v_n2]
+                    v_n2 = Normalize(v_n2)
+                    # ====================
+                    
+                    # ====================
+                    timeRefDir1b = (-1.* pp1.z)/v_n.z
+                    timeRefDir2b = (-1.* pp2.z)/v_n.z
+                    timeRefDir3b = (-1.* pp3.z)/v_n.z
+                    timeRefDir4b = (-1.* pp4.z)/v_n.z
+                    pp1b = pp1 + v_n*timeRefDir1b
+                    pp2b = pp2 + v_n*timeRefDir2b
+                    pp3b = pp3 + v_n*timeRefDir3b
+                    pp4b = pp4 + v_n*timeRefDir4b
+                    print ("pointbis", pp1b, pp2b, pp3b, pp4b)
+                    TwoAAbis = abs((pp1b.x - pp4b.x)*(pp2b.y - pp3b.y)) + abs((pp2b.x - pp3b.x)*(pp1b.y - pp4b.y))
+                    surfMirbis = TwoAAbis/2.
+                    print ("surfMirbis", surfMirbis)
+                    # ====================
+
+                    # nn3 = Normal(v_n)
+                    # nn1, nn2 = CoordinateSystem(nn3)
+                    # # Création d'une matrice appelé matrice de passage
+                    # mm2 = np.zeros((4,4), dtype=np.float64)
+                    # # Remplissage de la matrice de passage en fonction du repère (ee3 étant le nouvel axe z)
+                    # mm2[0,0] = nn1.x ; mm2[0,1] = nn2.x ; mm2[0,2] = nn3.x ; mm2[0,3] = 0. ;
+                    # mm2[1,0] = nn1.y ; mm2[1,1] = nn2.y ; mm2[1,2] = nn3.y ; mm2[1,3] = 0. ;
+                    # mm2[2,0] = nn1.z ; mm2[2,1] = nn2.z ; mm2[2,2] = nn3.z ; mm2[2,3] = 0. ;
+                    # mm2[3,0] = 0.    ; mm2[3,1] = 0.    ; mm2[3,2] = 0.    ; mm2[3,3] = 1. ;
+                    # ppn1 = pp1b
+                    # ppn2 = pp2b
+                    # ppn3 = pp3b
+                    # ppn4 = pp4b
+                    # # Création de la transformation permettant le changement de base
+                    # mm2Inv = np.transpose(mm2)
+                    # ooTwn = Transform(m = mm2, mInv = mm2Inv)
+                    # ppn1 = ooTwn[ppn1]
+                    # ppn2 = ooTwn[ppn2]
+                    # ppn3 = ooTwn[ppn3]
+                    # ppn4 = ooTwn[ppn4]
+                    # v_nn = ooTwn[v_n]
+                    # timen1 = (-1.* ppn1.z)/v_nn.z
+                    # timen2 = (-1.* ppn2.z)/v_nn.z
+                    # timen3 = (-1.* ppn3.z)/v_nn.z
+                    # timen4 = (-1.* ppn4.z)/v_nn.z
+                    # ppn1 += v_nn*timen1
+                    # ppn2 += v_nn*timen2
+                    # ppn3 += v_nn*timen3
+                    # ppn4 += v_nn*timen4
+                    # TwoAn = abs((ppn1.x - ppn4.x)*(ppn2.y - ppn3.y)) + abs((ppn2.x - ppn3.x)*(ppn1.y - ppn4.y))
+                    # surfMirbisn = TwoAn/2.
+                    # print ("surfMirn", surfMirbisn)
+                    
+                    #=====================
                     # Application du changement de base aux 4 points
                     pp1 = ooTw[pp1]
                     pp2 = ooTw[pp2]
                     pp3 = ooTw[pp3]
                     pp4 = ooTw[pp4]
+                    
+                    # ====================
+                    timeRefDir1 = (-1.* pp1.z)/v_n2.z
+                    timeRefDir2 = (-1.* pp2.z)/v_n2.z
+                    timeRefDir3 = (-1.* pp3.z)/v_n2.z
+                    timeRefDir4 = (-1.* pp4.z)/v_n2.z
+
+                    pp1 += v_n2*timeRefDir1
+                    pp2 += v_n2*timeRefDir2
+                    pp3 += v_n2*timeRefDir3
+                    pp4 += v_n2*timeRefDir4
+                    # ====================
+                    print (pp1, pp2, pp3, pp4)
 
                     # Projection sur la surface de la base
                     pp1.z = 0. ; pp2.z = 0. ; pp3.z = 0. ; pp4.z = 0.;
@@ -668,6 +786,10 @@ class Smartg(object):
                     # la formule si-dessous fait le calcul exacte de l'aire d'un quadri convexe!! (donc général)
                     TwoAA = abs((pp1.x - pp4.x)*(pp2.y - pp3.y)) + abs((pp2.x - pp3.x)*(pp1.y - pp4.y))
                     surfMir = TwoAA/2 # TwoAA = l'aire du quadri convexe multiplié par 2
+                    print("surfMirRecept=", surfMir)
+                    surfMir = surfMirbis * np.cos(THVDEG * np.pi / 180)
+                    print("surfMirbisaftercos=", surfMir)
+                    surfMir = surfMirbis
                     
                 elif (myObjects[i].name == "receptor"):
                     myObjects0['type'][i] = 2 # pour reconnaitre le recept sur Cuda
@@ -684,9 +806,46 @@ class Smartg(object):
                     sizeY = sizeYmax - sizeYmin
                     nbCx = int(sizeX/TC)
                     nbCy = int(sizeY/TC)
+                elif (myObjects[i].name == "surf"):
+                    myObjects0['type'][i] = 3 # pour reconnaitre le recept sur Cuda
                 else:
                     raise NameError('You have to specify if your object is a reflector or a receptor!')
-                    
+
+            if cusForward is not None:
+                nn3 = Normal(v_n)
+                nn1, nn2 = CoordinateSystem(nn3)
+                # Création d'une matrice appelé matrice de passage
+                mm2 = np.zeros((4,4), dtype=np.float64)
+                # Remplissage de la matrice de passage en fonction du repère (ee3 étant le nouvel axe z)
+                mm2[0,0] = nn1.x ; mm2[0,1] = nn2.x ; mm2[0,2] = nn3.x ; mm2[0,3] = 0. ;
+                mm2[1,0] = nn1.y ; mm2[1,1] = nn2.y ; mm2[1,2] = nn3.y ; mm2[1,3] = 0. ;
+                mm2[2,0] = nn1.z ; mm2[2,1] = nn2.z ; mm2[2,2] = nn3.z ; mm2[2,3] = 0. ;
+                mm2[3,0] = 0.    ; mm2[3,1] = 0.    ; mm2[3,2] = 0.    ; mm2[3,3] = 1. ;
+                xnn = float(cusForward.dict['CFX'])/2.
+                ynn = float(cusForward.dict['CFY'])/2.
+                ppn1 = Point(-xnn, -ynn, 0.)
+                ppn2 = Point(xnn, -ynn, 0.)
+                ppn3 = Point(-xnn, ynn, 0.)
+                ppn4 = Point(xnn, ynn, 0.)
+                # Création de la transformation permettant le changement de base
+                mm2Inv = np.transpose(mm2)
+                ooTwn = Transform(m = mm2, mInv = mm2Inv)
+                ppn1 = ooTwn[ppn1]
+                ppn2 = ooTwn[ppn2]
+                ppn3 = ooTwn[ppn3]
+                ppn4 = ooTwn[ppn4]
+                v_nn = ooTwn[v_n]
+                timen1 = (-1.* ppn1.z)/v_nn.z
+                timen2 = (-1.* ppn2.z)/v_nn.z
+                timen3 = (-1.* ppn3.z)/v_nn.z
+                timen4 = (-1.* ppn4.z)/v_nn.z
+                ppn1 += v_nn*timen1
+                ppn2 += v_nn*timen2
+                ppn3 += v_nn*timen3
+                ppn4 += v_nn*timen4
+                TwoAn = abs((ppn1.x - ppn4.x)*(ppn2.y - ppn3.y)) + abs((ppn2.x - ppn3.x)*(ppn1.y - ppn4.y))
+                surfMir = TwoAn/2.
+                print ("surfMirn", surfMir)
                     
         else:
             nObj = 0
@@ -822,7 +981,10 @@ class Smartg(object):
                   tab_sensor[i][k] = s.dict[k]
         tab_sensor = to_gpu(tab_sensor)
 
-
+        # cusForward definition
+        if cusForward is None:
+            cusForward = CusForward(CFX=0., CFY=0., CFMODE = 0)
+            
         #
         # surface
         #
@@ -939,7 +1101,7 @@ class Smartg(object):
                   NBTHETA, NBPHI, OUTPUT_LAYERS,
                   RTER, LE, ZIP, FLUX, NLVL, NPSTK,
                   NWLPROBA, BEER, RR, WEIGHTRR, NLOW, NJAC, 
-                  NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, nObj,
+                  NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusForward, nObj,
                   Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, HIST)
 
         # Initialize the progress bar
@@ -963,8 +1125,14 @@ class Smartg(object):
         attrs.update(self.common_attrs)
 
         # En rapport avec l'implémentation des objets (permet le visuel des res du recept)
-        cMatVisuRecep[:][:] = cMatVisuRecep[:][:] * ((surfMir)/(TC*TC*NBLOOP))#CounterIntOb))
-            
+        # POnePh = surfMir/CounterIntOb
+        # cMatVisuRecep[:][:] = cMatVisuRecep[:][:] * ((surfMir)/(TC*TC*CounterIntOb))
+        cMatVisuRecep[:][:] = cMatVisuRecep[:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
+        # cMatVisuRecep[:][:] = cMatVisuRecep[:][:] * ((0.01*0.012*np.cos(33.8652 * (np.pi / 180)))/(TC*TC*CounterIntOb))
+        print("surfmir=", surfMir)
+        print("sufreal=", ((0.01*0.012))) #/np.cos(33.8652 * (np.pi / 180))))
+        print("sufreal2=", 0.01*0.012*np.cos( 33.8652 * (np.pi / 180) )  )
+        print("sufreal3=", 0.01*0.012*np.cos( 37.849999999999994 * (np.pi / 180) )  )    
         # finalization
         output = finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl[:], NPhotonsInTot, errorcount, NPhotonsOutTot,
                           OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, prof_oc,
@@ -1420,7 +1588,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
               XBLOCK, XGRID,NLAM, SIM, NF,
               NBTHETA, NBPHI, OUTPUT_LAYERS,
               RTER, LE, ZIP, FLUX, NLVL, NPSTK, NWLPROBA, BEER, RR, 
-              WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, nObj,
+              WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusForward, nObj,
               Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, HIST) :
     """
     Initialize the constants in python and send them to the device memory
@@ -1503,8 +1671,12 @@ def InitConst(surf, env, NATM, NOCE, mod,
     copy_to_device('IsAtm', IsAtm, np.int32)
     copy_to_device('TCd', TC, np.float32)
     copy_to_device('nbCx', nbCx, np.int32)
-    copy_to_device('nbCy', nbCy, np.int32)
-
+    copy_to_device('nbCy', nbCy, np.int32)   
+    if cusForward != None:
+        copy_to_device('CFXd', cusForward.dict['CFX'], np.float32)
+        copy_to_device('CFYd', cusForward.dict['CFY'], np.float32)
+        copy_to_device('CFMODEd', cusForward.dict['CFMODE'], np.int32)
+        
 def init_profile(wl, prof, kind):
     '''
     take the profile as a MLUT, and setup the gpu structure
@@ -1689,7 +1861,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
     nThreadsActive = gpuzeros(1, dtype='int32')
     Counter = gpuzeros(1, dtype='uint64')
     # Initializations linked to objects
-    CounterIntObj = gpuzeros(1, dtype='uint64')
+    CounterIntObj = gpuzeros(7, dtype='uint64')
     tabObjInfo = gpuzeros((2, nbCy, nbCx), dtype=np.float64)
     tabMatRecep = np.zeros((nbCy, nbCx), dtype=np.float64)
     
@@ -1717,8 +1889,15 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
     NPhotonsIn = gpuzeros((NSENSOR,NLAM), dtype=np.uint64)
     NPhotonsInTot = gpuzeros((NSENSOR,NLAM), dtype=np.uint64)
     nbPhotonRecept = 0.
-    weightRecept = 0.
-
+    nbPhotonReceptD = 0. ;  nbPhotonReceptS = 0.;
+    nbPhotonReceptDM = 0.;  nbPhotonReceptSM = 0.;
+    nbPhotonReceptSSM = 0.; nbPhotonReceptSS = 0.; nbPhotonReceptTEST=0.;
+    weightReceptD = 0.
+    weightReceptS = 0.
+    weightMirrorD = 0.
+    weightMirrorS = 0.
+    weightMirrorSSM = 0.;weightMirrorSS = 0.;
+    
     # arrays for counting the output photons
     NPhotonsOut = gpuzeros((NLVL,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.uint64)
     NPhotonsOutTot = gpuzeros((NLVL,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.uint64)
@@ -1776,9 +1955,37 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         # print ("NPhotonsIn host (smartg) is:", NPhotonsIn)
 
         tabMatRecep += tabObjInfo[1, :, :].get()
-        weightRecept += tabObjInfo[0, 0, 0].get()
-        nbPhotonReceptIni = CounterIntObj[0] # number of photons intersect the receptor by last kernel
-        nbPhotonRecept += nbPhotonReceptIni
+        weightReceptD += tabObjInfo[0, 0, 0].get()
+        weightReceptS += tabObjInfo[0, 0, 1].get()
+        weightMirrorD += tabObjInfo[0, 0, 2].get()
+        weightMirrorS += tabObjInfo[0, 0, 3].get()
+        weightMirrorSSM += tabObjInfo[0, 0, 4].get()
+        weightMirrorSS += tabObjInfo[0, 0, 5].get()
+        
+        nbPhotonReceptIniD = CounterIntObj[0] # number of dircet photons intersect the receptor by last kernel
+        nbPhotonReceptIniS = CounterIntObj[1] # number of scattering photons intersect the receptor by last kernel
+        nbPhotonReceptD += nbPhotonReceptIniD
+        nbPhotonReceptS += nbPhotonReceptIniS
+        
+        nbPhotonReceptIniDM = CounterIntObj[2] # number of direct photons intersect the mirror by last kernel
+        nbPhotonReceptIniSM = CounterIntObj[3] # number of scattering photons intersect the mirror by last kernel
+        nbPhotonReceptDM += nbPhotonReceptIniDM
+        nbPhotonReceptSM += nbPhotonReceptIniSM
+        
+        nbPhotonReceptIniSSM = CounterIntObj[4] # number of scattering photons intersect the receptor and impacted by mirror by last kernel
+        nbPhotonReceptIniSS = CounterIntObj[5]  # number of scattering photons intersect the receptor and not impacted by mirror by last kernel
+
+        nbPhotonReceptSSM += nbPhotonReceptIniSSM
+        nbPhotonReceptSS += nbPhotonReceptIniSS
+
+        nbPhotonReceptIniTEST = CounterIntObj[6] # number of scattering photons intersect the receptor and impacted by mirror by last kernel
+        nbPhotonReceptTEST += nbPhotonReceptIniTEST
+        nbPhotonRecept += nbPhotonReceptIniD + nbPhotonReceptIniS
+
+        # print("tab[1]=", CounterIntObj[1])
+        # print("weighttab[1]=", tabObjInfo[0, 0, 1])
+        # print("percentage diffus=", (tabObjInfo[0, 0, 1]*100)/(weightRecept+tabObjInfo[0, 0, 1].get()))
+        # print("percentage diffus on mirror=", (tabObjInfo[0, 0, 3]*100)/(tabObjInfo[0, 0, 3].get()+tabObjInfo[0, 0, 2].get()))
         
         L = NPhotonsIn   # number of photons launched by last kernel
         NPhotonsInTot += L
@@ -1786,7 +1993,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         NPhotonsOutTot += NPhotonsOut
         S = tabPhotons   # sum of weights for the last kernel
         tabPhotonsTot += S
-
+        
         #!!!!!!!!!!!!!!!!!!!!!!!!!!!
         T = tabDist
         tabDistTot += T
@@ -1794,11 +2001,14 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
             H = tabHist
             tabHistTot = H
         #!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        print ("counter of photon intersect the geo is:", nbPhotonRecept)
-        print ("sum of weight(1) of photons which intersect the receptor:", weightRecept)
-        print ("NPhotonsIn host (smartg) is:", NPhotonsInTot)
-        print ("counter from host (smartg) is:", Counter[0])
-        
+        print ("Avancement... NPhotonsIn host (smartg) is:", NPhotonsInTot)
+        # print ("counter of photon intersect the geo is:", nbPhotonRecept+CounterIntObj[1].get())
+        # print ("sum of weight(1) of photons which intersect the receptor:", weightRecept+tabObjInfo[0, 0, 1].get())
+        # print("percentage direct=", (weightRecept*100)/(weightRecept+tabObjInfo[0, 0, 1].get()))
+        # print("percentage direct on mirror=", (tabObjInfo[0, 0, 2]*100)/(tabObjInfo[0, 0, 3].get()+tabObjInfo[0, 0, 2].get()))
+        # print ("NPhotonsIn host (smartg) is:", NPhotonsInTot)
+        # print ("counter from host (smartg) is:", Counter[0])
+
         N_simu += 1
         if stdev:
             (NSENSOR,NLAM) = NPhotonsIn.shape
@@ -1814,6 +2024,35 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
                 'Launched {:.3g} photons'.format(sphot))
     secs_cuda_clock = secs_cuda_clock*1e-3
 
+
+    print("nb photon diffus", nbPhotonReceptS)
+    print("weight photon diffus", weightReceptS)
+    print("nb photon direct", nbPhotonReceptD)
+    print("weight photon direct", weightReceptD)
+    
+    print ("counter of photon intersect the geo is:", nbPhotonRecept)
+    print ("sum of weight(1) of photons which intersect the receptor:", weightReceptD+weightReceptS)
+    
+    print("percentage diffus=", (weightReceptS*100)/(weightReceptD+weightReceptS))
+    print("percentage diffus on mirror=", (weightMirrorS*100)/(weightMirrorS+weightMirrorD))
+
+    print("percentage direct=", (weightReceptD*100)/(weightReceptD+weightReceptS))
+    print("percentage direct on mirror=", (weightMirrorD*100)/(weightMirrorS+weightMirrorD))
+    
+    print ("NPhotonsIn host (smartg) is:", NPhotonsInTot)
+    print ("counter from host (smartg) is:", Counter[0])
+
+    print("nb photon direct on mirror", nbPhotonReceptDM)
+    print("nb photon diffus on mirror", nbPhotonReceptSM)
+    print("weight photon direct on mirror", weightMirrorD)
+    print("weight photon diffus on mirror", weightMirrorS)
+
+    print("nb photon diffus on receptor impacted by mirror", nbPhotonReceptSSM)
+    print("nb photon diffus on receptor not impacted by mirror", nbPhotonReceptSS)
+    print("weight diffus on receptor impacted by mirror", weightMirrorSSM)
+    print("weight diffus on receptor not impacted by mirror", weightMirrorSS)
+    print("=======TEST nbdirect impacted by mirror=", nbPhotonReceptTEST)
+    
     if stdev:
         # finalize the calculation of the standard deviation
         sigma = np.sqrt(sum_x2/N_simu - (sum_x/N_simu)**2)

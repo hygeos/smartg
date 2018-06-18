@@ -101,7 +101,7 @@ class Transform(object):
             xn = self.mInv[0,0]*c.x + self.mInv[1,0]*c.y + self.mInv[2,0]*c.z
             yn = self.mInv[0,1]*c.x + self.mInv[1,1]*c.y + self.mInv[2,1]*c.z
             zn = self.mInv[0,2]*c.x + self.mInv[1,2]*c.y + self.mInv[2,2]*c.z
-            return normal(xn, yn, zn)
+            return Normal(xn, yn, zn)
         elif isinstance(c, Ray):
             R = Ray(c.o, c.d)
             R.o = self[R.o]

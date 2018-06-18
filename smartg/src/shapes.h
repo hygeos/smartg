@@ -319,50 +319,127 @@ Triangle::Triangle(const Transform *o2w, const Transform *w2o,
 }
 
 // Méthode de Möller-Trumbore pour l'intersection rayon/triangle
+/* bool Triangle::Intersect(const Ray &ray, float *tHit, */
+/* 						 DifferentialGeometry *dg) const */
+/* { */
+/* 	float3 e1 = p2 - p1; */
+/* 	float3 e2 = p3 - p1; */
+/* 	float3 s1 = cross(ray.d, e2); */
+/*     float divisor = dot(s1, e1); */
+
+/* 	if (divisor == 0.) */
+/* 	{return false;} */
+/* 	float invDivisor = 1.F/divisor; */
+
+/* 	// Calcul de la 1er composante des coordonnées baricentriques */
+/* 	float3 s = ray.o - p1; */
+/* 	float b1 = dot(s, s1) * invDivisor; */
+
+/*     if (b1 < 0. || b1 > 1.) */
+/* 	{return false;} */
+
+/*     // Calcul de la 2nd composante des coordonnées baricentriques */
+/*     float3 s2 = cross(s, e1); */
+/*     float b2 = dot(ray.d, s2) * invDivisor; */
+/* 	if (b2 < 0. || b1 + b2 > 1.) */
+/*         return false; */
+
+/*     // Calcul de temps t du rayon pour atteindre le point d'intersection */
+/*     float t = dot(e2, s2) * invDivisor; */
+	
+/*     if (t < ray.mint || t > ray.maxt) */
+/*         return false; */
+
+/*     // Calcul des dérivée partielles du triangle */
+/* 	float3 dpdu, dpdv; */
+/* 	float3c uvsC0, uvsC1; // row1 and row2 */
+/* 	uvsC0 = make_float3c(0., 1., 1.); */
+/* 	uvsC1 = make_float3c(0., 0., 1.); */
+		
+/*     // Calcul du Delta pour les dérivée partielles du triangle */
+/* 	float du1 = uvsC0[0] - uvsC0[2]; */
+/* 	float du2 = uvsC0[1] - uvsC0[2]; */
+/*     float dv1 = uvsC1[0] - uvsC1[2]; */
+/*     float dv2 = uvsC1[1] - uvsC1[2]; */
+/*     float3 dp1 = p1 - p3, dp2 = p2 - p3; */
+/*     float determinant = du1 * dv2 - dv1 * du2; */
+
+/*     if (determinant == 0.) */
+/* 	{ */
+/*         // Gestion du cas où le déterminant est nul */
+/*         coordinateSystem(normalize(cross(e2, e1)), &dpdu, &dpdv); */
+/*     } */
+/*     else */
+/* 	{ */
+/*         double invdet = 1. / determinant; */
+/*         dpdu = (dv2 * dp1 - dv1 * dp2) * invdet; */
+/*         dpdv = (-du2 * dp1 + du1 * dp2) * invdet; */
+/*     } */
+
+/*     // Interpolation des coordonnées paramétrique du triangle $(u,v)$ */
+/*     float b0 = 1 - b1 - b2; */
+/*     float tu = b0*uvsC0[0] + b1*uvsC0[1] + b2*uvsC0[2]; */
+/*     float tv = b0*uvsC1[0] + b1*uvsC1[1] + b2*uvsC1[2]; */
+
+/*     // Initialisation de  _DifferentialGeometry_ depuis les données paramétriques */
+/*     *dg = DifferentialGeometry(ray(t), dpdu, dpdv, tu, tv, this); */
+
+/*     // mise a jour de _tHit_ */
+/* 	*tHit = t; */
+/* 	return true; */
+/* } */
+//*******************************************************************************
+// Méthode de Möller-Trumbore pour l'intersection rayon/triangle
 bool Triangle::Intersect(const Ray &ray, float *tHit,
 						 DifferentialGeometry *dg) const
 {
-	float3 e1 = p2 - p1;
-	float3 e2 = p3 - p1;
-	float3 s1 = cross(ray.d, e2);
-    float divisor = dot(s1, e1);
+	double3 p1d = make_double3(double(p1.x), double(p1.y), double(p1.z));
+	double3 p2d = make_double3(double(p2.x), double(p2.y), double(p2.z));
+	double3 p3d = make_double3(double(p3.x), double(p3.y), double(p3.z));
+	double3 dray_o = make_double3(double(ray.o.x), double(ray.o.y), double(ray.o.z));
+	double3 dray_d = make_double3(double(ray.d.x), double(ray.d.y), double(ray.d.z));
+	
+	double3 e1 = p2d - p1d;
+	double3 e2 = p3d - p1d;
+	double3 s1 = cross(dray_d, e2);
+    double divisor = dot(s1, e1);
 
 	if (divisor == 0.)
 	{return false;}
-	float invDivisor = 1.F/divisor;
+	double invDivisor = 1./divisor;
 
 	// Calcul de la 1er composante des coordonnées baricentriques
-	float3 s = ray.o - p1;
-	float b1 = dot(s, s1) * invDivisor;
+	double3 s = dray_o - p1d;
+	double b1 = dot(s, s1) * invDivisor;
 
     if (b1 < 0. || b1 > 1.)
 	{return false;}
 
     // Calcul de la 2nd composante des coordonnées baricentriques
-    float3 s2 = cross(s, e1);
-    float b2 = dot(ray.d, s2) * invDivisor;
+    double3 s2 = cross(s, e1);
+    double b2 = dot(dray_d, s2) * invDivisor;
 	if (b2 < 0. || b1 + b2 > 1.)
         return false;
 
     // Calcul de temps t du rayon pour atteindre le point d'intersection
-    float t = dot(e2, s2) * invDivisor;
+    double t = dot(e2, s2) * invDivisor;
 	
     if (t < ray.mint || t > ray.maxt)
         return false;
 
     // Calcul des dérivée partielles du triangle
-	float3 dpdu, dpdv;
-	float3c uvsC0, uvsC1; // row1 and row2
-	uvsC0 = make_float3c(0., 1., 1.);
-	uvsC1 = make_float3c(0., 0., 1.);
+	double3 dpdu, dpdv;
+	double3c uvsC0, uvsC1; // row1 and row2
+	uvsC0 = make_double3c(0., 1., 1.);
+	uvsC1 = make_double3c(0., 0., 1.);
 		
     // Calcul du Delta pour les dérivée partielles du triangle
-	float du1 = uvsC0[0] - uvsC0[2];
-	float du2 = uvsC0[1] - uvsC0[2];
-    float dv1 = uvsC1[0] - uvsC1[2];
-    float dv2 = uvsC1[1] - uvsC1[2];
-    float3 dp1 = p1 - p3, dp2 = p2 - p3;
-    float determinant = du1 * dv2 - dv1 * du2;
+	double du1 = uvsC0[0] - uvsC0[2];
+	double du2 = uvsC0[1] - uvsC0[2];
+    double dv1 = uvsC1[0] - uvsC1[2];
+    double dv2 = uvsC1[1] - uvsC1[2];
+    double3 dp1 = p1d - p3d, dp2 = p2d - p3d;
+    double determinant = du1 * dv2 - dv1 * du2;
 
     if (determinant == 0.)
 	{
@@ -377,15 +454,18 @@ bool Triangle::Intersect(const Ray &ray, float *tHit,
     }
 
     // Interpolation des coordonnées paramétrique du triangle $(u,v)$
-    float b0 = 1 - b1 - b2;
-    float tu = b0*uvsC0[0] + b1*uvsC0[1] + b2*uvsC0[2];
-    float tv = b0*uvsC1[0] + b1*uvsC1[1] + b2*uvsC1[2];
+    double b0 = 1 - b1 - b2;
+    double tu = b0*uvsC0[0] + b1*uvsC0[1] + b2*uvsC0[2];
+    double tv = b0*uvsC1[0] + b1*uvsC1[1] + b2*uvsC1[2];
 
     // Initialisation de  _DifferentialGeometry_ depuis les données paramétriques
-    *dg = DifferentialGeometry(ray(t), dpdu, dpdv, tu, tv, this);
+	float3 dpduf = make_float3(float(dpdu.x), float(dpdu.y), float(dpdu.z));
+	float3 dpdvf = make_float3(float(dpdv.x), float(dpdv.y), float(dpdv.z));
+	
+	*dg = DifferentialGeometry(ray(float(t)), dpduf, dpdvf, float(tu), float(tv), this);
 
     // mise a jour de _tHit_
-	*tHit = t;
+	*tHit = float(t);
 	return true;
 }
 

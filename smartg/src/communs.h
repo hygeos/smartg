@@ -131,6 +131,8 @@ public:
 	{
 		// Initialement le photon n'est nulle part, il doit être initialisé
 		loc = NONE;
+		direct = 0;
+		toucheMir = false;
 	}
 	
     // Normalized direction vector
@@ -199,6 +201,8 @@ public:
     float4x4 M;
     //float4x4 Mf;
     #endif
+	int direct;
+	bool toucheMir;
 
 private:
 };
@@ -264,6 +268,7 @@ struct IGeo
 		reflectivity = -1.;
 		type = -1.;
 		mvR = make_float3(0, 0, 0);
+		normalBase = make_float3(0., 0., 0.);
 	}
 
 	__device__ IGeo(float3 nn, int mat, float ref, int typ, float3 mvRt)
@@ -275,7 +280,8 @@ struct IGeo
 		mvR = mvRt;
 	}
 	
-	float3 normal;      /* la normale de l'objet          */
+        float3 normal;      /* la normale de l'objet          */
+        float3 normalBase;  /* la normale de base de l'objet  */
 	int material;       /* la matière de l'objet          */
 	float reflectivity; /* l'albedo de l'objet            */
     Transform mvTF;     /* Transformation de l'objet      */
@@ -318,5 +324,9 @@ struct IObjets {
 	float mvTx;     /*  \                                  */
 	float mvTy;     /*   | Transformation type translation */
 	float mvTz;     /*  /                                  */
+
+	float nBx;     /*  \                                  */
+	float nBy;     /*   | Transformation type translation */
+	float nBz;     /*  /                                  */
 };
 #endif	// COMMUNS_H

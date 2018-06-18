@@ -68,6 +68,9 @@ __device__ __constant__ int IsAtm;
 __device__ __constant__ float TCd;
 __device__ __constant__ int nbCx;
 __device__ __constant__ int nbCy;
+__device__ __constant__ float CFXd;
+__device__ __constant__ float CFYd;
+__device__ __constant__ int CFMODEd;
 
 /**********************************************************
 *	> Prototypes de device.cu
