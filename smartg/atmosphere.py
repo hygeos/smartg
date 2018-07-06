@@ -169,7 +169,7 @@ class Species(object):
 
             for irh_, rh_ in enumerate(rh[1:]):
 
-                irh = Idx(rh_, round=True)
+                irh = Idx(rh_, round=True, fill_value='extrema')
 
                 # interpolate on wav and rh
                 pha = self._phase.sub()[Idx(wav,round=True),irh,:,:]  # (lam, stk, nthetamax)
