@@ -21,6 +21,7 @@ from scipy.interpolate import interp1d
 from os.path import exists
 from os import remove
 from collections import OrderedDict
+from numpy.ma import filled
 import warnings
 if sys.version_info[:2] >= (3, 0): # python2/3 compatibility
     unicode = str
@@ -2199,7 +2200,7 @@ def read_mlut_netcdf4(filename):
     # read axes
     for dim in root.dimensions:
         if (not dim.startswith('dummy')) and (dim in root.variables):
-            m.add_axis(str(dim), root.variables[dim][:])
+            m.add_axis(str(dim), filled(root.variables[dim][:]))
 
     # read datasets
     for varname in root.variables:
@@ -2212,7 +2213,7 @@ def read_mlut_netcdf4(filename):
         for a in var.ncattrs():
             attrs[a] = var.getncattr(a)
 
-        m.add_dataset(varname, var[:], [str(x) for x in var.dimensions], attrs=attrs)
+        m.add_dataset(varname, filled(var[:]), [str(x) for x in var.dimensions], attrs=attrs)
 
     # read global attributes
     for a in root.ncattrs():
