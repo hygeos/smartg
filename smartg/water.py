@@ -23,7 +23,9 @@ def read_aw(dir_aux):
     '''
 
     # Pope&Fry
-    data_pf = np.genfromtxt(join(dir_aux, 'water', 'pope97.dat'), skip_header=6)
+    with open(join(dir_aux, 'water', 'pope97.dat'), 'rb') as fp:
+        for i in range(6): fp.readline()  # skip the first 6 lines
+        data_pf = np.genfromtxt(fp)
     aw_pf = data_pf[:,1] * 100 #  convert from cm-1 to m-1
     lam_pf = data_pf[:,0]
     ok_pf = lam_pf <= 725
