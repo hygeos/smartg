@@ -1269,7 +1269,7 @@ def plot_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
         cmap.set_under('black')
         cmap.set_over('white')
         cmap.set_bad('0.5') # grey 50%
-    r, t = np.meshgrid(bin_edges(ax2_scaled), bin_edges(ax1_scaled))
+    r, t = np.meshgrid(ax2_scaled, ax1_scaled)
     masked_data = np.ma.masked_where(np.isnan(data) | np.isinf(data), data)
     im = aux_ax_polar.pcolormesh(t, r, masked_data, cmap=cmap, vmin=vmin, vmax=vmax)
 
