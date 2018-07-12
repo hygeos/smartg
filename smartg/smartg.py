@@ -8,7 +8,7 @@ Speed-up Monte Carlo Advanced Radiative Transfer Code using GPU
 '''
 
 
-from __future__ import print_function, division, absolute_import
+
 import numpy as np
 from datetime import datetime
 from numpy import pi
@@ -581,7 +581,7 @@ class Smartg(object):
             surfMir = None
 
             # Début de la boucle pour la prise en compte de tous les objets
-            for i in xrange (0, nObj):
+            for i in range (0, nObj):
 
                 # Pour l'instant 2 choix possibles : surface Sphérique ou Plane
                 if isinstance(myObjects[i].geo, Spheric):    # si l'objet est une sphère
@@ -699,14 +699,11 @@ class Smartg(object):
                     v_n = Normalize(v_n)
                     
                     v_n2 = invTpT[v_n]
+                    v_n2 = aRot[v_n2]
+                    v_n2 = Vector(-v_n2.x, -v_n2.y, -v_n2.z)
+                    v_n2 = TpT[v_n2]
 
-	            v_n2 = aRot[v_n2]
-
-	            v_n2 = Vector(-v_n2.x, -v_n2.y, -v_n2.z)
-
-	            v_n2 = TpT[v_n2]
-	
-	            v_n2 = Normalize(v_n2)
+                    v_n2 = Normalize(v_n2)
                     v_n2 = ooTw[v_n2]
                     v_n2 = Normalize(v_n2)
                     # ====================
@@ -1418,7 +1415,7 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
         m.set_attr(d, err[i])
 
     # write attributes
-    for k, v in attrs.items():
+    for k, v in list(attrs.items()):
         m.set_attr(k, str(v))
 
     # fluxes post-processing

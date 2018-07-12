@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import geometry
-from geometry import Vector, Point, Normal, Ray, BBox
-from geometry import Dot, Cross, Normalize, CoordinateSystem, \
+from . import geometry
+from .geometry import Vector, Point, Normal, Ray, BBox
+from .geometry import Dot, Cross, Normalize, CoordinateSystem, \
     Distance, FaceForward
 import math 
 import numpy as np
@@ -132,17 +132,17 @@ def Aff(Mat, myString = None):
     if (myString == None):
         myString = 'My Matrix'
     myString2 = ' '
-    for i in xrange(0, len(myString)-1):
+    for i in range(0, len(myString)-1):
         myString2 = myString2 + ' '
 
-    print myString + ' = (' + str(Mat[0,0]) + ', ' + str(Mat[0,1]) + ', ' \
-        + str(Mat[0,2]) + ', ' + str(Mat[0,3])+ ')'
-    print myString2 + '   (' + str(Mat[1,0]) + ', ' + str(Mat[1,1]) + ', ' \
-        + str(Mat[1,2]) + ', ' + str(Mat[1,3])+ ')'
-    print myString2 + '   (' + str(Mat[2,0]) + ', ' + str(Mat[2,1]) + ', ' \
-        + str(Mat[2,2]) + ', ' + str(Mat[2,3])+ ')'
-    print myString2 + '   (' + str(Mat[3,0]) + ', ' + str(Mat[3,1]) + ', ' \
-        + str(Mat[3,2]) + ', ' + str(Mat[3,3])+ ')'
+    print(myString + ' = (' + str(Mat[0,0]) + ', ' + str(Mat[0,1]) + ', ' \
+        + str(Mat[0,2]) + ', ' + str(Mat[0,3])+ ')')
+    print(myString2 + '   (' + str(Mat[1,0]) + ', ' + str(Mat[1,1]) + ', ' \
+        + str(Mat[1,2]) + ', ' + str(Mat[1,3])+ ')')
+    print(myString2 + '   (' + str(Mat[2,0]) + ', ' + str(Mat[2,1]) + ', ' \
+        + str(Mat[2,2]) + ', ' + str(Mat[2,3])+ ')')
+    print(myString2 + '   (' + str(Mat[3,0]) + ', ' + str(Mat[3,1]) + ', ' \
+        + str(Mat[3,2]) + ', ' + str(Mat[3,3])+ ')')
 #####################################################################################
 
 ##################################################################################### 
@@ -153,7 +153,7 @@ if __name__ == '__main__':
     V1 = Vector(1, 2, 3)
     R1 = Ray(P1, V1)
 
-    print "P1 =", P1, "V1 =", V1, "R1[1] =", R1[1]
+    print("P1 =", P1, "V1 =", V1, "R1[1] =", R1[1])
 
     MyT=Transform()
     Aff(MyT.m, 'Mat')
@@ -164,7 +164,7 @@ if __name__ == '__main__':
     V2 = Tinv[V1]
     R2 = Tinv[R1]
     
-    print "translated point =", P2, ", vector =", V2, ", ray =", R2[1]
+    print("translated point =", P2, ", vector =", V2, ", ray =", R2[1])
 
     muSca = MyT.scale(2,2,2)
     muScaInv = muSca.inverse(muSca)
@@ -175,13 +175,13 @@ if __name__ == '__main__':
     V3 = muScaInv[V2]
     R3 = muScaInv[R2]
 
-    print "trans + scale : point =", P3, ", vector =", V3, ", ray =", R3[1]
+    print("trans + scale : point =", P3, ", vector =", V3, ", ray =", R3[1])
 
     P4 = TSInv[P1]
     V4 = TSInv[V1]
     R4 = TSInv[R1]
 
-    print "trans + scale 2: point =", P4, ", vector =", V4, ", ray =", R4[1]
+    print("trans + scale 2: point =", P4, ", vector =", V4, ", ray =", R4[1])
     # Aff(MyT.mInv, 'MatInv')
     # MyT = MyT.Inverse(MyT)
     # Aff(MyT.m, 'Mat')

@@ -1,16 +1,16 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import geometry
-from geometry import Vector, Point, Normal, Ray, BBox
-from geometry import Dot, Cross, Normalize, CoordinateSystem, \
+from . import geometry
+from .geometry import Vector, Point, Normal, Ray, BBox
+from .geometry import Dot, Cross, Normalize, CoordinateSystem, \
     Distance, FaceForward
-import diffgeom
-from diffgeom import DifferentialGeometry
-import transform
-from transform import Transform, Aff
-import shape
-from shape import Shape, Sphere, TriangleM, TriangleMesh, swap, \
+from . import diffgeom
+from .diffgeom import DifferentialGeometry
+from . import transform
+from .transform import Transform, Aff
+from . import shape
+from .shape import Shape, Sphere, TriangleM, TriangleMesh, swap, \
     Clamp, Quadratic, Triangle
 import math 
 # from mpl_toolkits.mplot3d import Axes3D
@@ -192,7 +192,7 @@ def Analyse_create_entity(entity, Theta):
     ax = fig.add_subplot(111, projection=Axes3D.name)
     ax.scatter([-1,1], [-1,1], [-1,1], alpha=0.0)
     
-    for k in xrange (0, len(E)):
+    for k in range (0, len(E)):
         # ===================================================================================
         # En commun (!!reinitialized for each loop!!)
         # ===================================================================================
@@ -361,9 +361,9 @@ if __name__ == '__main__':
                                                          translation = np.array([0., 15., 30.]) ))
 
 
-    print "Helio1 :", Heliostat1
-    print "Recept1 :", Recepteur1
-    print "Helio2 :", Heliostat2
+    print("Helio1 :", Heliostat1)
+    print("Recept1 :", Recepteur1)
+    print("Helio2 :", Heliostat2)
     
     fig = Analyse_create_entity([Heliostat1, Recepteur1, Heliostat2], Theta = 0.)
 

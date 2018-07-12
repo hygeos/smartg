@@ -33,7 +33,7 @@ class Vector(object):
         else:
             raise NameError('Substraction with a Vector must be with another Vector')
 
-    def __div__(self, sca):
+    def __truediv__(self, sca):
         if (type(sca) != Vector) and (type(sca) != Point) and (type(sca) != Normal):
             return Vector(self.x/sca, self.y/sca, self.z/sca) 
         else:
@@ -93,7 +93,7 @@ class Point(object):
         else:
             raise NameError('Subs with a Point must be with another Point or a Vector')
 
-    def __div__(self, sca):
+    def __truediv__(self, sca):
         if (type(sca) != Vector) and (type(sca) != Point) and (type(sca) != Normal):
             return Point(self.x/sca, self.y/sca, self.z/sca)
         else:
@@ -151,7 +151,7 @@ class Normal(object):
         else:
             raise NameError('Substraction with a Normal must be with another Normal')
 
-    def __div__(self, sca):
+    def __truediv__(self, sca):
         if (type(sca) != Vector) and (type(sca) != Point) and (type(sca) != Normal):
             return Vector(self.x/sca, self.y/sca, self.z/sca) 
         else:
@@ -318,34 +318,34 @@ if __name__ == '__main__':
     b = Point(2, 4, 6)
     c = Vector(b)*2
     p1 = Point(4, 8, 12)
-    print "a =", a
-    print "b =", b
-    print "c =", c
-    print "Dot(a, c) =", Dot(a, c)
-    print "Dot(a, b) =", Dot(a, Vector(b))
-    print "Cross(a, c) =", Cross(a, c)
-    print "Lengh(a) =", a.Lengh()
-    print "normalize(a) =", Normalize(a)
-    print "Lengh of Normalize(a) =", Normalize(a).Lengh()
+    print("a =", a)
+    print("b =", b)
+    print("c =", c)
+    print("Dot(a, c) =", Dot(a, c))
+    print("Dot(a, b) =", Dot(a, Vector(b)))
+    print("Cross(a, c) =", Cross(a, c))
+    print("Lengh(a) =", a.Lengh())
+    print("normalize(a) =", Normalize(a))
+    print("Lengh of Normalize(a) =", Normalize(a).Lengh())
 
     v1 = Vector(2, 1, 0)
     v2, v3 = CoordinateSystem(v1)
 
-    print "v1 =", v1
-    print "v2 =", v2
-    print "v3 =", v3
-    print "p2 =", p1-b
-    print "type(p2) =", type(p1-b)
-    print "Distance(b, p1) =",  Distance(b, p1)
-    print "a*2 =", a*2
+    print("v1 =", v1)
+    print("v2 =", v2)
+    print("v3 =", v3)
+    print("p2 =", p1-b)
+    print("type(p2) =", type(p1-b))
+    print("Distance(b, p1) =",  Distance(b, p1))
+    print("a*2 =", a*2)
 
     vec1 = Vector (-2, 4, -1)
     vec2 = Vector (5, 1, 3)
 
-    print"FaceForward(vec1, vec2) =", FaceForward(vec1, vec2)
+    print("FaceForward(vec1, vec2) =", FaceForward(vec1, vec2))
 
     rayon = Ray(p1, vec2)
-    print "p1 =", rayon.o
-    print "vec2 =", rayon.d
-    print "rayon(t=1) =", rayon[1]
-    print "rayon(t=2) =", rayon[2]
+    print("p1 =", rayon.o)
+    print("vec2 =", rayon.d)
+    print("rayon(t=1) =", rayon[1])
+    print("rayon(t=2) =", rayon[2])

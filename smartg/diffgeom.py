@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import geometry
-from geometry import Vector, Point, Normal, Ray
-from geometry import Dot, Cross, Normalize, CoordinateSystem, \
+from . import geometry
+from .geometry import Vector, Point, Normal, Ray
+from .geometry import Dot, Cross, Normalize, CoordinateSystem, \
     Distance, FaceForward
 import math 
 
@@ -40,34 +40,34 @@ if __name__ == '__main__':
     b = Point(2, 4, 6)
     c = Vector(b)*2
     p1 = Point(4, 8, 12)
-    print "a =", a
-    print "b =", b
-    print "c =", c
-    print "Dot(a, c) =", Dot(a, c)
-    print "Dot(a, b) =", Dot(a, Vector(b))
-    print "Cross(a, c) =", Cross(a, c)
-    print "Lengh(a) =", a.Lengh()
-    print "normalize(a) =", Normalize(a)
-    print "Lengh of Normalize(a) =", Normalize(a).Lengh()
+    print("a =", a)
+    print("b =", b)
+    print("c =", c)
+    print("Dot(a, c) =", Dot(a, c))
+    print("Dot(a, b) =", Dot(a, Vector(b)))
+    print("Cross(a, c) =", Cross(a, c))
+    print("Lengh(a) =", a.Lengh())
+    print("normalize(a) =", Normalize(a))
+    print("Lengh of Normalize(a) =", Normalize(a).Lengh())
 
     v1 = Vector(2, 1, 0)
     v2, v3 = CoordinateSystem(v1)
 
-    print "v1 =", v1
-    print "v2 =", v2
-    print "v3 =", v3
-    print "p2 =", p1-b
-    print "type(p2) =", type(p1-b)
-    print "Distance(b, p1) =",  Distance(b, p1)
-    print "a*2 =", a*2
+    print("v1 =", v1)
+    print("v2 =", v2)
+    print("v3 =", v3)
+    print("p2 =", p1-b)
+    print("type(p2) =", type(p1-b))
+    print("Distance(b, p1) =",  Distance(b, p1))
+    print("a*2 =", a*2)
 
     vec1 = Vector (-2, 4, -1)
     vec2 = Vector (5, 1, 3)
 
-    print"FaceForward(vec1, vec2) =", FaceForward(vec1, vec2)
+    print("FaceForward(vec1, vec2) =", FaceForward(vec1, vec2))
 
     rayon = Ray(p1, vec2)
-    print "p1 =", rayon.o
-    print "vec2 =", rayon.d
-    print "rayon(t=1) =", rayon[1]
-    print "rayon(t=2) =", rayon[2]
+    print("p1 =", rayon.o)
+    print("vec2 =", rayon.d)
+    print("rayon(t=1) =", rayon[1])
+    print("rayon(t=2) =", rayon[2])

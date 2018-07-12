@@ -1,14 +1,14 @@
 #!/usr/bin/env python2
 # -*- coding: utf-8 -*-
 
-import geometry
-from geometry import Vector, Point, Normal, Ray, BBox
-from geometry import Dot, Cross, Normalize, CoordinateSystem, \
+from . import geometry
+from .geometry import Vector, Point, Normal, Ray, BBox
+from .geometry import Dot, Cross, Normalize, CoordinateSystem, \
     Distance, FaceForward
-import diffgeom
-from diffgeom import DifferentialGeometry
-import transform
-from transform import Transform
+from . import diffgeom
+from .diffgeom import DifferentialGeometry
+from . import transform
+from .transform import Transform
 import math 
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
@@ -172,7 +172,7 @@ class Triangle(Shape):
             invdet = 1./determinant
             myV1 = dp1*dv2
             myV2 = dp2*dv1
-            print type(myV1), type(myV2)
+            print(type(myV1), type(myV2))
             dpdu = ( dp1*dv2   - dp2*dv1) * invdet
             dpdv = (dp1*(-du2) + dp2*du1) * invdet
         
@@ -243,7 +243,7 @@ class TriangleM(Shape):
             invdet = 1./determinant
             myV1 = dp1*dv2
             myV2 = dp2*dv1
-            print type(myV1), type(myV2)
+            print(type(myV1), type(myV2))
             dpdu = ( dp1*dv2   - dp2*dv1) * invdet
             dpdv = (dp1*(-du2) + dp2*du1) * invdet
         
@@ -273,10 +273,10 @@ class TriangleMesh(Shape):
             self.nverts = np.amax(self.VertexIndex) + 1
             self.reftri = [None]*self.ntris
 
-            for i in xrange(0, self.nverts):
+            for i in range(0, self.nverts):
                 self.p[i] = self.oTw[P[i]]
             
-            for i in xrange(0, self.ntris):
+            for i in range(0, self.ntris):
                 PointA = Point(self.p[self.VertexIndex[3*i]])
                 PointB = Point(self.p[self.VertexIndex[3*i + 1]])
                 PointC = Point(self.p[self.VertexIndex[3*i + 2]])
@@ -287,7 +287,7 @@ class TriangleMesh(Shape):
     def Intersect(self, r):
         self.dg = None
         self.thit = float("inf")
-        for i in xrange(0, self.ntris):
+        for i in range(0, self.ntris):
             mybool = self.reftri[i].Intersect(r)
             if mybool:
                 TriThit = self.reftri[i].thit
@@ -332,17 +332,17 @@ def Quadratic(exist, t0, t1, A, B, C):
 if __name__ == '__main__':
 
     uvs = np.array([[0, 0], [1, 0], [1, 1]])
-    print "uvs[0, 0] =", uvs[0, 0], "uvs[0, 1] =", uvs[0, 1]
-    print "uvs[1, 0] =", uvs[1, 0], "uvs[1, 1] =", uvs[1, 1]
-    print "uvs[2, 0] =", uvs[2, 0], "uvs[2, 1] =", uvs[2, 1]
+    print("uvs[0, 0] =", uvs[0, 0], "uvs[0, 1] =", uvs[0, 1])
+    print("uvs[1, 0] =", uvs[1, 0], "uvs[1, 1] =", uvs[1, 1])
+    print("uvs[2, 0] =", uvs[2, 0], "uvs[2, 1] =", uvs[2, 1])
     
     aVec = np.array(30)
     aVec2 = np.zeros(5, dtype=np.float32)
     aVec2[0] = 1
     aVec2[2] = 368
     aVec2[3] = 68
-    print "lenght =", len(np.atleast_1d(aVec)), type(aVec)
-    print "lenght =", len(np.atleast_1d(aVec2)), type(aVec2), "max=", np.amax(aVec2), "min=",np.amin(aVec2)
+    print("lenght =", len(np.atleast_1d(aVec)), type(aVec))
+    print("lenght =", len(np.atleast_1d(aVec2)), type(aVec2), "max=", np.amax(aVec2), "min=",np.amin(aVec2))
  
     ARAY = Ray(Point(0, 0, 10), Vector(-0.3, 0.5, -1), 0, 0, 30)
     ARAY2 = Ray(Point(0, 0, 10), Vector(-1.8, 1.9, -1), 0, 0, 30)
@@ -355,22 +355,22 @@ if __name__ == '__main__':
     trimesh = TriangleMesh(Transform(), Transform(), vi, P)
     bool2 = trimesh.Intersect(ARAY2)
     if bool2:
-        print "There is an intersection with the triangle Mesh***"
-        print "At p = (", trimesh.dg.p.x, ", ", trimesh.dg.p.y, ", ", trimesh.dg.p.z, ")"
+        print("There is an intersection with the triangle Mesh***")
+        print("At p = (", trimesh.dg.p.x, ", ", trimesh.dg.p.y, ", ", trimesh.dg.p.z, ")")
         tHitmesh = trimesh.thit
     else:
-        print "No intersection with the triangle Mesh***"
+        print("No intersection with the triangle Mesh***")
 
 
     A1 = Point(0, 0, 0) ; A2 = Point(-30, 0, 0); A3 = Point(0, 30, 0);
     tri =  Triangle(Transform(), Transform(), A1, A2, A3)
     bool1 = tri.Intersect(ARAY)
     if bool1:
-        print "There is an intersection with the triangle***"
-        print "At p = (", tri.dg.p.x, ", ", tri.dg.p.y, ", ", tri.dg.p.z, ")"
+        print("There is an intersection with the triangle***")
+        print("At p = (", tri.dg.p.x, ", ", tri.dg.p.y, ", ", tri.dg.p.z, ")")
         tHit = tri.thit
     else:
-        print "No intersection with the triangle***"
+        print("No intersection with the triangle***")
 
     # transform needed for the first sphere
     TSph1 = Transform()
@@ -439,17 +439,17 @@ if __name__ == '__main__':
     Trx = [None]*trimesh.ntris
     Try = [None]*trimesh.ntris
     Trz = [None]*trimesh.ntris
-    for i in xrange(0, trimesh.ntris):
-        print "p1 = (", trimesh.reftri[i].p1.x, ", ", trimesh.reftri[i].p1.y, ", ", trimesh.reftri[i].p1.z, ")"
-        print "p2 = (", trimesh.reftri[i].p2.x, ", ", trimesh.reftri[i].p2.y, ", ", trimesh.reftri[i].p2.z, ")"
-        print "p3 = (", trimesh.reftri[i].p3.x, ", ", trimesh.reftri[i].p3.y, ", ", trimesh.reftri[i].p3.z, ")"
+    for i in range(0, trimesh.ntris):
+        print("p1 = (", trimesh.reftri[i].p1.x, ", ", trimesh.reftri[i].p1.y, ", ", trimesh.reftri[i].p1.z, ")")
+        print("p2 = (", trimesh.reftri[i].p2.x, ", ", trimesh.reftri[i].p2.y, ", ", trimesh.reftri[i].p2.z, ")")
+        print("p3 = (", trimesh.reftri[i].p3.x, ", ", trimesh.reftri[i].p3.y, ", ", trimesh.reftri[i].p3.z, ")")
         TrV1[i] = [trimesh.reftri[i].p1.x, trimesh.reftri[i].p1.y, trimesh.reftri[i].p1.z]
         TrV2[i] = [trimesh.reftri[i].p2.x, trimesh.reftri[i].p2.y, trimesh.reftri[i].p2.z]
         TrV3[i] = [trimesh.reftri[i].p3.x, trimesh.reftri[i].p3.y, trimesh.reftri[i].p3.z]
         Trx[i] = [TrV1[i][0], TrV2[i][0], TrV3[i][0]]
         Try[i] = [TrV1[i][1], TrV2[i][1], TrV3[i][1]]
         Trz[i] = [TrV1[i][2], TrV2[i][2], TrV3[i][2]]
-        Trverts = [zip(Trx[i], Try[i], Trz[i])]
+        Trverts = [list(zip(Trx[i], Try[i], Trz[i]))]
         Poly = Poly3DCollection(Trverts, facecolors='orange', linewidths=2)
         Poly.set_alpha(0.1)
         ax.add_collection3d(Poly)
