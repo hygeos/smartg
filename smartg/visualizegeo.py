@@ -22,6 +22,44 @@ import mpl_toolkits.mplot3d as mp3d
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from matplotlib import colors as mcolors
 
+def receiver_view(mlut, w = False, logI=False):
+
+    '''
+    mlut : mlut table
+    w : the receiver size, in meter
+    logI : enable log interval
+    '''
+    if w==False :
+        raise Exception("In receiver_view(), the receiver size w must be specified!")
+        
+    m = mlut
+
+    if logI == False :
+        cax = plt.imshow(m['C_Receptor'][:,:]*1320, cmap=plt.get_cmap('jet'), interpolation='None', \
+                         extent = [-(w*1000),(w*1000),-(w*1000),(w*1000)])
+    else:
+        #print(("npmin=", np.amin(m['C_Receptor'][:,:])*1320)) 
+        m2 = m['C_Receptor'][:,:]#*1000
+        if (np.amin(m2) < 0.00001):
+            valmin = 0.00001
+        else:
+            valmin = np.amin(m2)
+        #print(("maxval=", np.amax(m2)))
+        inte = m2.sum()/1e7
+        #print(("sum", m2.sum()))
+        #print(("inte=", inte))
+        cax = plt.imshow(m['C_Receptor'][:,:]*1360, cmap=cm.jet, norm=LogNorm(vmin=valmin, vmax=np.amax(m['C_Receptor'][:,:]*1360)), interpolation='None', \
+                         extent = [-(w*1000),(w*1000),-(w*1000),(w*1000)])
+    
+    cbar = plt.colorbar(cax)
+    cbar.set_label(r'Irradiance (W m$^{-2}$)', fontsize = 12)
+    plt.xlabel(r'Horizontale position (m)')
+    plt.ylabel(r'Verticale position (m)')
+    plt.title('Receiver surface')
+    plt.savefig('plot.pdf')  
+
+
+
 class Mirror(object):
     '''
     definition...
