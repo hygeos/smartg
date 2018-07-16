@@ -1894,6 +1894,8 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
     weightMirrorD = 0.
     weightMirrorS = 0.
     weightMirrorSSM = 0.;weightMirrorSS = 0.;
+    CAT0 = 0.; CAT1 = 0.; CAT2 = 0.; CAT3 = 0.; CAT4 = 0.;
+    CAT5 = 0.; CAT6 = 0.; CAT7 = 0.;
     
     # arrays for counting the output photons
     NPhotonsOut = gpuzeros((NLVL,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.uint64)
@@ -1958,6 +1960,9 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         weightMirrorS += tabObjInfo[0, 0, 3].get()
         weightMirrorSSM += tabObjInfo[0, 0, 4].get()
         weightMirrorSS += tabObjInfo[0, 0, 5].get()
+        CAT0 += tabObjInfo[0, 0, 6].get(); CAT1 += tabObjInfo[0, 0, 7].get(); CAT2 += tabObjInfo[0, 0, 8].get();
+        CAT3 += tabObjInfo[0, 0, 9].get(); CAT4 += tabObjInfo[0, 0, 10].get(); CAT5 += tabObjInfo[0, 0, 11].get();
+        CAT6 += tabObjInfo[0, 0, 12].get(); CAT7 += tabObjInfo[0, 0, 13].get();
         
         nbPhotonReceptIniD = CounterIntObj[0] # number of dircet photons intersect the receptor by last kernel
         nbPhotonReceptIniS = CounterIntObj[1] # number of scattering photons intersect the receptor by last kernel
@@ -2049,6 +2054,17 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
     print("weight diffus on receptor impacted by mirror", weightMirrorSSM)
     print("weight diffus on receptor not impacted by mirror", weightMirrorSS)
     print("=======TEST nbdirect impacted by mirror=", nbPhotonReceptTEST)
+    print("CAT0 =", CAT0)
+    print("CAT1 =", CAT1)
+    print("CAT2 =", CAT2)
+    print("CAT3 =", CAT3)
+    print("CAT4 =", CAT4)
+    print("CAT5 =", CAT5)
+    print("CAT6 =", CAT6)
+    print("CAT7 =", CAT7)
+    print("M (bleu) =", CAT0 + CAT1)
+    print("SGE (rouge) =", CAT2 + CAT3 + CAT6)
+    print("SGM (vert) =", CAT4 + CAT5 + CAT7)
     
     if stdev:
         # finalize the calculation of the standard deviation

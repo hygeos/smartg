@@ -133,6 +133,9 @@ public:
 		loc = NONE;
 		direct = 0;
 		toucheMir = false;
+		H = 0;
+		E = 0;
+		S = 0;
 	}
 	
     // Normalized direction vector
@@ -203,6 +206,7 @@ public:
     #endif
 	int direct;
 	bool toucheMir;
+	int H, E, S;
 
 private:
 };

@@ -891,6 +891,9 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 	
 	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
 	ph->direct = 0;
+	ph->H = 0;
+	ph->E = 0;
+	ph->S = 0;
 	ph->toucheMir = false;
 
     ph->nint = 0;
@@ -2178,7 +2181,8 @@ __device__ void scatter(Photon* ph,
 	struct Phase *func;
 	float P11, P12, P22, P33, P43, P44;
 
-	ph->direct+=1;
+	ph->direct += 1;
+	ph->S += 1;
 
 	
     if (le){
@@ -2568,6 +2572,7 @@ __device__ void surfaceAgitee(Photon* ph, int le,
 		return;
 	}
     ph->nint += 1;
+	ph->E += 1;
 	
 	// Réflexion sur le dioptre agité
 	float theta;	// Angle de deflection polaire de diffusion [rad]
@@ -3200,6 +3205,7 @@ __device__ void surfaceBRDF_old(Photon* ph, int le,
 		return;
 	}
     ph->nint += 1;
+	ph->E += 1;
 	
 	// Réflexion sur le dioptre agité
 	float theta;	// Angle de deflection polaire de diffusion [rad]
@@ -3374,6 +3380,7 @@ __device__ void surfaceLambert(Photon* ph, int le,
                               struct RNG_State *rngstate) {
 
 	ph->direct += 1;
+	ph->E += 1;
 	
 	if( SIMd == ATM_ONLY){ // Atmosphere only, surface absorbs all
 
@@ -3577,6 +3584,11 @@ __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* 
 
 	ph->weight *= geoS->reflectivity;
 	
+	if (geoS->type == 1)
+		ph->H += 1;
+	else
+		ph->E += 1;
+		
     if (!le)
 	{
 		if (RRd==1){
@@ -3819,9 +3831,9 @@ __device__ void surfaceRugueuse3D(Photon* ph, IGeo* geoS, struct RNG_State *rngs
 	ph->u = normalize(u_n);
 
 	if (geoS->type == 1)
-		ph->weight *= geoS->reflectivity;
+	{ph->weight *= geoS->reflectivity; ph->H += 1;}
 	else 
-		ph->weight *= geoS->reflectivity;
+	{ph->weight *= geoS->reflectivity;}
 
 	if (RRd==1){
 		/* Russian roulette for propagating photons **/
@@ -3892,6 +3904,41 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS)
 	{
 		atomicAdd(tabCountObj+3, weight);
 	}
+
+	// Les septs catégories + la cat 0
+	if (ph->H == 0 && ph->E == 0 && ph->S == 0 && geoS->type == 2) 
+	{ // CAT 0 : aucun changement de trajectoire avant de toucher le R.
+		atomicAdd(tabCountObj+6, weight);
+	}
+	else if ( ph->H != 0 && ph->E == 0 && ph->S == 0 && geoS->type == 2 )
+	{ // CAT 1 : only H avant de toucher le R.
+		atomicAdd(tabCountObj+7, weight);
+	}
+	else if ( ph->H == 0 && ph->E != 0 && ph->S == 0 && geoS->type == 2 )
+	{ // CAT 2 : only E avant de toucher le R.
+		atomicAdd(tabCountObj+8, weight);
+	}
+	else if ( ph->H == 0 && ph->E == 0 && ph->S != 0 && geoS->type == 2 )
+	{ // CAT 3 : only S avant de toucher le R.
+		atomicAdd(tabCountObj+9, weight);
+	}
+	else if ( ph->H != 0 && ph->E == 0 && ph->S != 0 && geoS->type == 2 )
+	{ // CAT 4 : 2 proc. H et S avant de toucher le R.
+		atomicAdd(tabCountObj+10, weight);
+	}
+	else if ( ph->H != 0 && ph->E != 0 && ph->S == 0 && geoS->type == 2 )
+	{ // CAT 5 : 2 proc. H et E avant de toucher le R.
+		atomicAdd(tabCountObj+11, weight);
+	}
+	else if ( ph->H == 0 && ph->E != 0 && ph->S != 0 && geoS->type == 2 )
+	{ // CAT 6 : 2 proc. E et S avant de toucher le R.
+		atomicAdd(tabCountObj+12, weight);
+	}	
+	else if ( ph->H != 0 && ph->E != 0 && ph->S != 0 && geoS->type == 2 )
+	{ // CAT 7 : 3 proc. H, E et S avant de toucher le R.
+		atomicAdd(tabCountObj+13, weight);
+	}	
+	
 	#else
 	if (ph->direct == 0 && geoS->type == 2)
 	{
@@ -3913,6 +3960,40 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS)
 	else if (ph->direct != 0 && geoS->type == 1)
 	{
 		DatomicAdd(tabCountObj+3, weight);
+	}
+
+		// Les septs catégories + la cat 0
+	if (ph->H == 0 && ph->E == 0 && ph->S == 0 && geoS->type == 2) 
+	{ // CAT 0 : aucun changement de trajectoire avant de toucher le R.
+		DatomicAdd(tabCountObj+6, weight);
+	}
+	else if ( ph->H != 0 && ph->E == 0 && ph->S == 0 && geoS->type == 2 )
+	{ // CAT 1 : only H avant de toucher le R.
+		DatomicAdd(tabCountObj+7, weight);
+	}
+	else if ( ph->H == 0 && ph->E != 0 && ph->S == 0 && geoS->type == 2 )
+	{ // CAT 2 : only E avant de toucher le R.
+		DatomicAdd(tabCountObj+8, weight);
+	}
+	else if ( ph->H == 0 && ph->E == 0 && ph->S != 0 && geoS->type == 2 )
+	{ // CAT 3 : only S avant de toucher le R.
+		DatomicAdd(tabCountObj+9, weight);
+	}
+	else if ( ph->H != 0 && ph->E == 0 && ph->S != 0 && geoS->type == 2 )
+	{ // CAT 4 : 2 proc. H et S avant de toucher le R.
+		DatomicAdd(tabCountObj+10, weight);
+	}
+	else if ( ph->H != 0 && ph->E != 0 && ph->S == 0 && geoS->type == 2 )
+	{ // CAT 5 : 2 proc. H et E avant de toucher le R.
+		atomicAdd(tabCountObj+11, weight);
+	}
+	else if ( ph->H == 0 && ph->E != 0 && ph->S != 0 && geoS->type == 2 )
+	{ // CAT 6 : 2 proc. E et S avant de toucher le R.
+		DatomicAdd(tabCountObj+12, weight);
+	}	
+	else if ( ph->H != 0 && ph->E != 0 && ph->S != 0 && geoS->type == 2 )
+	{ // CAT 7 : 3 proc. H, E et S avant de toucher le R.
+		DatomicAdd(tabCountObj+13, weight);
 	}
 	#endif
 
