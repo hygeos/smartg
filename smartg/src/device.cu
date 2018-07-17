@@ -924,9 +924,15 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 	ph->wavel = spectrum[ph->ilam].lambda;
 
     // Position and optical thicknesses initializations
+
     ph->pos = make_float3(tab_sensor[ph->is].POSX,
                           tab_sensor[ph->is].POSY,
                           tab_sensor[ph->is].POSZ);
+	
+	Transform TRotZ; char mPP[]="Point";
+	TRotZ = TRotZ.RotateZ(PHDEGd-180.);
+	ph->pos = TRotZ(ph->pos, mPP);
+	
     ph->loc = tab_sensor[ph->is].LOC;
 
     #ifdef SPHERIQUE
@@ -1070,7 +1076,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     }
 
     // Rotations of v and u in the detector direction THDEG,PHDEG
-    float cPh, sPh;
+	float cPh, sPh, THRAD, PHRAD;;
     /*if (MId != 0) { // Multiple Init Direction
         if (MId <=0) { 
             // Random selection of Zenith init angle
@@ -1089,16 +1095,27 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
             ph->ith = __float2uint_rz(RAND * NT) + offset*NT;
             ph->iph = ph->ith;
         }
-        cTh = cosf(DEUXPI/2. - tabthv[ph->ith]);
-        cPh = cosf(DEUXPI/2. - tabphi[ph->iph]);
+		THRAD = DEUXPI/2. - tabthv[ph->ith];
+		PHRAD = DEUXPI/2. - tabphi[ph->iph];
+        cTh = cosf(THRAD);
+        cPh = cosf(PHRAD);
     }*/
     
     ph->ith = 0;
     ph->iph = 0;
-    cTh = cosf(tab_sensor[ph->is].THDEG*DEUXPI/360.);
-    cPh = cosf(tab_sensor[ph->is].PHDEG*DEUXPI/360.);
-    sTh = sqrtf(1.F - cTh*cTh);
-    sPh = sqrtf(1.F - cPh*cPh);
+	THRAD = tab_sensor[ph->is].THDEG*DEUXPI/360.;
+	PHRAD = tab_sensor[ph->is].PHDEG*DEUXPI/360.;
+	cTh = cosf(THRAD);
+	cPh = cosf(PHRAD);
+	
+	// Permet d'utiliser un angle azimuth variable
+	sTh = sinf(THRAD);
+	sPh = sinf(PHRAD);
+	
+	// Attention! Marche parceque l'angle zenith compris entre 0 et 180
+    // sTh = sqrtf(1.F - cTh*cTh);
+    // sPh = sqrtf(1.F - cPh*cPh);
+
 	float3x3 LTh = make_float3x3(
 		cTh,  0.F,  sTh,                
 		0.F,  1.F,  0.F,                 

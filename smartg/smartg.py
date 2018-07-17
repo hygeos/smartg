@@ -426,7 +426,7 @@ class Smartg(object):
 
     def run(self, wl,
              atm=None, surf=None, water=None, env=None, alis_options=None,
-             NBPHOTONS=1e9, DEPO=0.0279, DEPO_WATER= 0.0906, THVDEG=0., SEED=-1,
+             NBPHOTONS=1e9, DEPO=0.0279, DEPO_WATER= 0.0906, THVDEG=0., PHVDEG=0., SEED=-1,
              RTER=6371., wl_proba=None,
              NBTHETA=45, NBPHI=90, NF=1e6,
              OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
@@ -476,6 +476,11 @@ class Smartg(object):
                 the result corresponds to various positions of the sun
                 NOTE: in plane parallel geometry, due to Fermat's principle, we
                 can exchange the positions of the sun and observer.
+
+            - PHVDEG: azimuth angle of the observer in degrees
+                the result corresponds to various positions of the sun
+                NOTE: It can be very useful to modify only this value instead
+                      of all the positions of all the objects
 
             - SEED: integer used to initiate the series of random numbers
                 default: based on clock time
@@ -959,11 +964,11 @@ class Smartg(object):
         if sensor is None:
             # by defaut sensor in forward mode, with ZA=180.-THVDEG, PHDEG=180., FOV=0.
             if (SIM == 3):
-                sensor2 = [Sensor(THDEG=180.-THVDEG, PHDEG=180., LOC='OCEAN')] 
+                sensor2 = [Sensor(THDEG=180.-THVDEG, PHDEG=PHVDEG+180., LOC='OCEAN')] 
             elif ((SIM == -1) or (SIM == 0)):  
-                sensor2 = [Sensor(THDEG=180.-THVDEG, PHDEG=180., LOC='SURF0P')] 
+                sensor2 = [Sensor(THDEG=180.-THVDEG, PHDEG=PHVDEG+180., LOC='SURF0P')] 
             else:
-                sensor2 = [Sensor(POSX=X0.get()[0], POSY=X0.get()[1], POSZ=X0.get()[2], THDEG=180.-THVDEG, PHDEG=180., LOC='ATMOS')] 
+                sensor2 = [Sensor(POSX=X0.get()[0], POSY=X0.get()[1], POSZ=X0.get()[2], THDEG=180.-THVDEG, PHDEG=PHVDEG+180., LOC='ATMOS')] 
 
         if isinstance(sensor, Sensor):
             sensor2=[sensor]
