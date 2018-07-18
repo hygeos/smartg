@@ -206,7 +206,7 @@ public:
     #endif
 	int direct;
 	bool toucheMir;
-	int H, E, S;
+    int H, E, S;
 
 private:
 };
@@ -275,13 +275,14 @@ struct IGeo
 		normalBase = make_float3(0., 0., 0.);
 	}
 
-	__device__ IGeo(float3 nn, int mat, float ref, int typ, float3 mvRt)
+	__device__ IGeo(float3 nn, int mat, float ref, int typ, float3 mvRt, float3 nB)
 	{
 		normal = nn;
 		material = mat;
 		reflectivity = ref;
 		type = typ;
 		mvR = mvRt;
+		normalBase = nB;
 	}
 	
         float3 normal;      /* la normale de l'objet          */
@@ -295,10 +296,11 @@ struct IGeo
 
 struct IObjets {
     int geo;        /* 1 = sphere, 2 = plane, ...          */
-	int material;   /* 1 = LambMirror, 2 = Matte,
-					   3 = Mirror, ...                     */
+	int materialAV; /* 1 = LambMirror, 2 = Matte,          */
+	int materialAR;	/* 3 = Mirror, ...                     */
 	int type;       /* 1 = reflector, 2 = receptor         */
-	float reflect;  /* reflectivity of the material        */
+	float reflectAV;/* reflectivity of the materialAV      */
+	float reflectAR;/* reflectivity of the materialAR      */
 	
 	float p0x;      /* \             \                     */
 	float p0y;      /*  | point p0    \                    */
@@ -329,8 +331,8 @@ struct IObjets {
 	float mvTy;     /*   | Transformation type translation */
 	float mvTz;     /*  /                                  */
 
-	float nBx;     /*  \                                  */
-	float nBy;     /*   | Transformation type translation */
-	float nBz;     /*  /                                  */
+	float nBx;      /*  \                                  */
+	float nBy;      /*   | Transformation type translation */
+	float nBz;      /*  /                                  */
 };
 #endif	// COMMUNS_H

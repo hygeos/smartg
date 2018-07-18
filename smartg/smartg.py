@@ -122,44 +122,45 @@ type_Sensor = [
     ]
 
 type_IObjets = [
-    ('geo', 'int32'),       # 1 = sphere, 2 = plane, ...
-    ('material', 'int32'),  # 1 = LambMirror, 2 = Matte,
-                            # 3 = Mirror, ...
-    ('type', 'int32'),      # 1 = reflector, 2 = receptor
-    ('reflec', 'float32'),  # reflectivity of the material
+    ('geo', 'int32'),         # 1 = sphere, 2 = plane, ...
+    ('materialAV', 'int32'),  # 1 = LambMirror, 2 = Matte,
+    ('materialAR', 'int32'),  # 3 = Mirror, ... (AV = avant, AR = Arriere)
+    ('type', 'int32'),        # 1 = reflector, 2 = receptor
+    ('reflecAV', 'float32'),  # reflectivity of materialAV
+    ('reflecAR', 'float32'),  # reflectivity of materialAR
     
-    ('p0x', 'float32'),     # \            \
-    ('p0y', 'float32'),     #  | point p0   \
-    ('p0z', 'float32'),     # /              \ 
-                            #                 |
-    ('p1x', 'float32'),     # \               | 
-    ('p1y', 'float32'),     #  | point p1     | 
-    ('p1z', 'float32'),     # /               |
-                            #                 | Plane Object  
-    ('p2x', 'float32'),     # \               | 
-    ('p2y', 'float32'),     #  | point p2     |
-    ('p2z', 'float32'),     # /               | 
-                            #                 |
-    ('p3x', 'float32'),     # \              /
-    ('p3y', 'float32'),     #  | point p3   /
-    ('p3z', 'float32'),     # /            /
+    ('p0x', 'float32'),       # \            \
+    ('p0y', 'float32'),       #  | point p0   \
+    ('p0z', 'float32'),       # /              \ 
+                              #                 |
+    ('p1x', 'float32'),       # \               | 
+    ('p1y', 'float32'),       #  | point p1     | 
+    ('p1z', 'float32'),       # /               |
+                              #                 | Plane Object  
+    ('p2x', 'float32'),       # \               | 
+    ('p2y', 'float32'),       #  | point p2     |
+    ('p2z', 'float32'),       # /               | 
+                              #                 |
+    ('p3x', 'float32'),       # \              /
+    ('p3y', 'float32'),       #  | point p3   /
+    ('p3z', 'float32'),       # /            /
 
-    ('myRad', 'float32'),   # \
-    ('z0', 'float32'),      #  | Sperical Object
-    ('z1', 'float32'),      #  |
-    ('phi', 'float32'),     # /
+    ('myRad', 'float32'),     # \
+    ('z0', 'float32'),        #  | Sperical Object
+    ('z1', 'float32'),        #  |
+    ('phi', 'float32'),       # /
     
-    ('mvRx', 'float32'),    # \
-    ('mvRy', 'float32'),    #  | Transformation type rotation
-    ('mvRz', 'float32'),    # /
+    ('mvRx', 'float32'),      # \
+    ('mvRy', 'float32'),      #  | Transformation type rotation
+    ('mvRz', 'float32'),      # /
 
-    ('mvTx', 'float32'),    # \
-    ('mvTy', 'float32'),    #  | tranformation type translation 
-    ('mvTz', 'float32'),    # /
+    ('mvTx', 'float32'),      # \
+    ('mvTy', 'float32'),      #  | tranformation type translation 
+    ('mvTz', 'float32'),      # /
 
-    ('nBx', 'float32'),    # \
-    ('nBy', 'float32'),    #  | normalBase de l'obj apres trans 
-    ('nBz', 'float32'),    # /
+    ('nBx', 'float32'),       # \
+    ('nBy', 'float32'),       #  | normalBase de l'obj apres trans 
+    ('nBz', 'float32'),       # /
     ]
 
 class FlatSurface(object):
@@ -642,16 +643,32 @@ class Smartg(object):
                 myObjects0['mvTz'][i] = myObjects[i].transformation.transz
 
                 # Prendre en compte le matériau de l'objet
-                if isinstance(myObjects[i].material, LambMirror):
-                    myObjects0['material'][i] = 1
-                    myObjects0['reflec'][i] = myObjects[i].material.reflectivity
-                if isinstance(myObjects[i].material, Matte):
-                    myObjects0['material'][i] = 2
-                    myObjects0['reflec'][i] = myObjects[i].material.reflectivity
-                if isinstance(myObjects[i].material, Mirror):
-                    myObjects0['material'][i] = 3
-                    myObjects0['reflec'][i] = myObjects[i].material.reflectivity
-
+                if isinstance(myObjects[i].materialAV, LambMirror):
+                    myObjects0['materialAV'][i] = 1
+                    myObjects0['reflecAV'][i] = myObjects[i].materialAV.reflectivity
+                elif isinstance(myObjects[i].materialAV, Matte):
+                    myObjects0['materialAV'][i] = 2
+                    myObjects0['reflecAV'][i] = myObjects[i].materialAV.reflectivity
+                elif isinstance(myObjects[i].materialAV, Mirror):
+                    myObjects0['materialAV'][i] = 3
+                    myObjects0['reflecAV'][i] = myObjects[i].materialAV.reflectivity
+                else:
+                    myObjects0['materialAV'][i] = 0
+                    myObjects0['reflecAV'][i] = 0
+                    
+                if isinstance(myObjects[i].materialAR, LambMirror):
+                    myObjects0['materialAR'][i] = 1
+                    myObjects0['reflecAR'][i] = myObjects[i].materialAR.reflectivity
+                elif isinstance(myObjects[i].materialAR, Matte):
+                    myObjects0['materialAR'][i] = 2
+                    myObjects0['reflecAR'][i] = myObjects[i].materialAR.reflectivity
+                elif isinstance(myObjects[i].materialAR, Mirror):
+                    myObjects0['materialAR'][i] = 3
+                    myObjects0['reflecAR'][i] = myObjects[i].materialAR.reflectivity
+                else:
+                    myObjects0['materialAR'][i] = 0
+                    myObjects0['reflecAR'][i] = 0
+                    
                 # Deux possibilités : l'objet est un reflecteur ou un recepteur   
                 if (myObjects[i].name == "reflector"):
                     myObjects0['type'][i] = 1 # pour reconnaitre le reflect sur Cuda

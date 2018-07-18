@@ -87,7 +87,7 @@ class Matte(object):
     '''
     definition...
     '''
-    def __init__(self, reflectivity = 0.5):
+    def __init__(self, reflectivity = 0.):
         self.reflectivity = reflectivity
 
     def __str__(self):
@@ -182,11 +182,12 @@ class Entity(object):
     '''
     definition...
     '''
-    def __init__(self, name="reflector", TC = 0.01, material=Mirror(), geo=Plane(), \
+    def __init__(self, name="reflector", TC = 0.01, materialAV=Matte(), materialAR=Matte(), geo=Plane(), \
                  transformation=Transformation()):
         self.name = name
         self.TC = TC
-        self.material = material
+        self.materialAV = materialAV
+        self.materialAR = materialAR
         self.geo = geo
         self.transformation = transformation
 

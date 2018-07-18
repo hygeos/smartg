@@ -134,7 +134,6 @@ extern "C" {
 
 	//bool geoIntersect = false;  // S'il y a intersection avec une géométrie = true
 	IGeo geoStruc;
-
 	bigCount = 1;   // Initialisation de la variable globale bigCount (voir geometry.h)
 
 	atomicAdd(nThreadsActive, 1);
@@ -3400,13 +3399,14 @@ __device__ void surfaceLambert(Photon* ph, int le,
 	ph->E += 1;
 	
 	if( SIMd == ATM_ONLY){ // Atmosphere only, surface absorbs all
-
 		ph->loc = ABSORBED;
 		return;
 	}
 
     ph->nint += 1;
-	
+	ph->direct += 1;
+	ph->E += 1;
+  	
     float thv, phi;
 	float3 v_n, u_n; // photon outgoing direction in the LOCAL frame
 
@@ -3505,6 +3505,16 @@ __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* 
 									  struct Spectrum *spectrum, struct RNG_State *rngstate, IGeo* geoS)
 {
 	ph->nint += 1;
+
+	if (geoS->type == 1)
+	{
+		if (  isBackward( make_double3(geoS->normalBase.x, geoS->normalBase.y, geoS->normalBase.z),
+						  make_double3(ph->v.x, ph->v.y, ph->v.z) )  ) // AV
+		{ ph->H += 1; }
+		else { ph->E += 1; } // AR traité comme environnement
+	}
+	else if ( geoS->type == 2)
+	{ ph->E += 1; }
 	
 	float3 u_n, v_n;	// Vecteur du photon après reflexion
     float phi;
@@ -3600,11 +3610,6 @@ __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* 
 	ph->u = u_n;
 
 	ph->weight *= geoS->reflectivity;
-	
-	if (geoS->type == 1)
-		ph->H += 1;
-	else
-		ph->E += 1;
 		
     if (!le)
 	{
@@ -3783,6 +3788,16 @@ __device__ void surfaceBRDF(Photon* ph, int le,
 __device__ void surfaceRugueuse3D(Photon* ph, IGeo* geoS, struct RNG_State *rngstate)
 {
     ph->nint += 1;
+
+	if (geoS->type == 1)
+	{
+		if (  isBackward( make_double3(geoS->normalBase.x, geoS->normalBase.y, geoS->normalBase.z),
+						  make_double3(ph->v.x, ph->v.y, ph->v.z) )  ) // AV
+		{ ph->H += 1; }
+		else { ph->E += 1; } // AR traité comme environnement
+	}
+	else if ( geoS->type == 2)
+	{ ph->E += 1; }
 	
 	float3 u_n, v_n;	// Vecteur du photon après reflexion
 
@@ -3846,12 +3861,9 @@ __device__ void surfaceRugueuse3D(Photon* ph, IGeo* geoS, struct RNG_State *rngs
 	ph->loc = ATMOS;
 	ph->v = normalize(v_n);
 	ph->u = normalize(u_n);
-
-	if (geoS->type == 1)
-	{ph->weight *= geoS->reflectivity; ph->H += 1;}
-	else 
-	{ph->weight *= geoS->reflectivity;}
-
+	
+	ph->weight *= geoS->reflectivity;
+	
 	if (RRd==1){
 		/* Russian roulette for propagating photons **/
 		if( ph->weight < WEIGHTRRd ){
@@ -3880,7 +3892,9 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS)
 
 	// Trouver une solution à ça !!
 	//if (ph->v.x < 0) return;
-	if (!isBackward(geoS->normalBase, ph->v)) return;
+	//if (!isBackward(geoS->normalBase, ph->v)) return;
+	if (   isForward(  make_double3(geoS->normalBase.x, geoS->normalBase.x, geoS->normalBase.x),
+				  make_double3(ph->v.x, ph->v.y, ph->v.z)  )   ) return;
 	//if (ph->direct == false) return;
 	p_t = ph->pos;
 	transfo = geoS->mvTF;
@@ -3927,31 +3941,32 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS)
 	{ // CAT 0 : aucun changement de trajectoire avant de toucher le R.
 		atomicAdd(tabCountObj+6, weight);
 	}
-	else if ( ph->H != 0 && ph->E == 0 && ph->S == 0 && geoS->type == 2 )
+	else if ( ph->H > 0 && ph->E == 0 && ph->S == 0 && geoS->type == 2 )
 	{ // CAT 1 : only H avant de toucher le R.
 		atomicAdd(tabCountObj+7, weight);
 	}
-	else if ( ph->H == 0 && ph->E != 0 && ph->S == 0 && geoS->type == 2 )
+	else if ( ph->H == 0 && ph->E > 0 && ph->S == 0 && geoS->type == 2 )
 	{ // CAT 2 : only E avant de toucher le R.
 		atomicAdd(tabCountObj+8, weight);
 	}
-	else if ( ph->H == 0 && ph->E == 0 && ph->S != 0 && geoS->type == 2 )
+	else if ( ph->H == 0 && ph->E == 0 && ph->S > 0 && geoS->type == 2 )
 	{ // CAT 3 : only S avant de toucher le R.
 		atomicAdd(tabCountObj+9, weight);
 	}
-	else if ( ph->H != 0 && ph->E == 0 && ph->S != 0 && geoS->type == 2 )
+	else if ( ph->H > 0 && ph->E == 0 && ph->S > 0 && geoS->type == 2 )
 	{ // CAT 4 : 2 proc. H et S avant de toucher le R.
 		atomicAdd(tabCountObj+10, weight);
 	}
-	else if ( ph->H != 0 && ph->E != 0 && ph->S == 0 && geoS->type == 2 )
+	else if ( ph->H > 0 && ph->E > 0 && ph->S == 0 && geoS->type == 2 )
 	{ // CAT 5 : 2 proc. H et E avant de toucher le R.
 		atomicAdd(tabCountObj+11, weight);
+		printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
 	}
-	else if ( ph->H == 0 && ph->E != 0 && ph->S != 0 && geoS->type == 2 )
+	else if ( ph->H == 0 && ph->E > 0 && ph->S > 0 && geoS->type == 2 )
 	{ // CAT 6 : 2 proc. E et S avant de toucher le R.
 		atomicAdd(tabCountObj+12, weight);
 	}	
-	else if ( ph->H != 0 && ph->E != 0 && ph->S != 0 && geoS->type == 2 )
+	else if ( ph->H > 0 && ph->E > 0 && ph->S > 0 && geoS->type == 2 )
 	{ // CAT 7 : 3 proc. H, E et S avant de toucher le R.
 		atomicAdd(tabCountObj+13, weight);
 	}	
@@ -5067,8 +5082,21 @@ __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo 
 				myB = true;
 				myT = myTi;
 				myDg = myDgi;
-				GeoV->material = ObjT[i].material;
-				GeoV->reflectivity = ObjT[i].reflect;
+				//GeoV->material = ObjT[i].material;
+				//GeoV->reflectivity = ObjT[i].reflect;
+				GeoV->normal = faceForward(myDg.nn, -1.*R1.d);
+				// if(isBackward(GeoV->normal, dir))
+				if(  isBackward( make_double3(GeoV->normalBase.x, GeoV->normalBase.y, GeoV->normalBase.z),
+								 make_double3(dir.x, dir.y, dir.z) )  )
+				{
+					GeoV->material = ObjT[i].materialAV;
+					GeoV->reflectivity = ObjT[i].reflectAV;
+				}
+				else
+				{
+					GeoV->material = ObjT[i].materialAR;
+					GeoV->reflectivity = ObjT[i].reflectAR;
+				}
 				*(phit) = tempPhit;
 				GeoV->mvTF = Ti;
 				GeoV->type = ObjT[i].type;
@@ -5080,7 +5108,6 @@ __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo 
 	} // FIN BOUCLE FOR (PARCOURANT LES OBJETS)
 	
 	if (myB) { // Il y a intersection avec au moins un objet
-		GeoV->normal = faceForward(myDg.nn, -1.*R1.d);
 		return true; }
 	else { // Il y a pas d'intersection avec un objet
 		*(phit) = make_float3(-1, -1, -1);
