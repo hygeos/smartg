@@ -26,6 +26,7 @@ dir_libradtran_reptran =  join(dir_libradtran, 'data/correlated_k/reptran/')
 dir_libradtran_opac =  join(dir_libradtran, 'data/aerosol/OPAC/')
 dir_libradtran_atmmod = join(dir_libradtran, 'data/atmmod/')
 dir_libradtran_crs = join(dir_libradtran, 'data/crs/')
+libradtran_version = '2.0.2'
 
 
 
@@ -43,10 +44,10 @@ def check_libradtran():
         return
 
     cmds = []
-    cmds.append(('wget http://www.libradtran.org/download/libRadtran-2.0.1.tar.gz', dir_auxdata))
-    cmds.append(('tar xzvf libRadtran-2.0.1.tar.gz', dir_auxdata))
-    cmds.append(('rm -fv libRadtran-2.0.1.tar.gz', dir_auxdata))
-    cmds.append(('ln -sfn libRadtran-2.0.1 libRadtran', dir_auxdata))
+    cmds.append(('wget http://www.libradtran.org/download/libRadtran-{}.tar.gz'.format(libradtran_version), dir_auxdata))
+    cmds.append(('tar xzvf libRadtran-{}.tar.gz'.format(libradtran_version), dir_auxdata))
+    cmds.append(('rm -fv libRadtran-{}.tar.gz'.format(libradtran_version), dir_auxdata))
+    cmds.append(('ln -sfn libRadtran-{} libRadtran'.format(libradtran_version), dir_auxdata))
 
     cmds.append(('wget http://www.meteo.physik.uni-muenchen.de/\~libradtran/lib/exe/fetch.php\?media\=download:optprop_v2.1.tar.gz -O optprop_v2.1.tar.gz', dir_libradtran))
     cmds.append(('tar xzvf optprop_v2.1.tar.gz', dir_libradtran))
