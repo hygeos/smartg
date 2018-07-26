@@ -880,6 +880,7 @@ class Profile_base(object):
 
         if atm_filename is None:
             return
+        self.atm_filename = atm_filename
 
         data = np.loadtxt(atm_filename, comments="#")
 
@@ -934,7 +935,12 @@ class Profile_base(object):
         prof = Profile_base(None)
         z = self.z
         prof.z = znew
-        prof.P = interp1d(z, self.P)(znew)
+        try:
+            prof.P = interp1d(z, self.P)(znew)
+        except ValueError:
+            print('Error interpolating ({}, {}) -> ({}, {})'.format(z[0], z[-1], znew[0], znew[-1]))
+            print('atm_filename = {}'.format(self.atm_filename))
+            raise
         prof.T = interp1d(z, self.T)(znew)
 
         prof.dens_air = interp1d(z, self.dens_air)  (znew)
