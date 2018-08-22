@@ -63,17 +63,24 @@ def uniq(seq):
     return [ x for x in seq if not (x in seen or seen_add(x))]
 
 
-def bin_edges(x):
+def bin_edges(x, min=None, max=None):
     '''
     calculate n+1 bin edges from n bin centers in x
     '''
     assert x.ndim == 1
     if len(x) == 1:
-        return np.array([x-0.5, x+0.5])
+        ret = np.array([x-0.5, x+0.5])
     else:
         first = (3*x[0] - x[1])/2.
         last = (3*x[-1] - x[-2])/2.
-        return np.append(np.append(first, 0.5*(x[1:]+x[:-1])), last)
+        ret = np.append(np.append(first, 0.5*(x[1:]+x[:-1])), last)
+    
+    if min is not None:
+        ret = np.maximum(ret, min)
+    if max is not None:
+        ret = np.minimum(ret, max)
+    
+    return ret
 
 
 class LUT(object):
@@ -1269,7 +1276,7 @@ def plot_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
         cmap.set_under('black')
         cmap.set_over('white')
         cmap.set_bad('0.5') # grey 50%
-    r, t = np.meshgrid(ax2_scaled, ax1_scaled)
+    r, t = np.meshgrid(bin_edges(ax2_scaled, min=0, max=90), bin_edges(ax1_scaled))
     masked_data = np.ma.masked_where(np.isnan(data) | np.isinf(data), data)
     im = aux_ax_polar.pcolormesh(t, r, masked_data, cmap=cmap, vmin=vmin, vmax=vmax)
 
