@@ -1123,7 +1123,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
     int ilam; 
     struct Profile *prof;
     int  NL;
-	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+	//int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
     if (ph->loc==OCEAN) {
         NL   = NOCEd+1;
         prof = prof_oc;
@@ -1213,7 +1213,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
         #ifndef ALIS
         h_cur_abs = abs(prof[i_layer_bh+ilam].OD_abs - prof[i_layer_fw+ilam].OD_abs) *AMF;
         #endif
-        if (idx==0) printf("%i %i %i %f %f %f\n",ph->layer,i_layer_bh, i_layer_fw, d, tau_cur, h_cur);
+        //if (idx==0) printf("%i %i %i %f %f %f\n",ph->layer,i_layer_bh, i_layer_fw, d, tau_cur, h_cur);
 
         //
         // update photon position
@@ -2154,7 +2154,8 @@ __device__ void surfaceAgitee(Photon* ph, int le,
            // Compute incidence angle //
            cTh = -(dot(n_l,v_l));
            theta = acosf( fmin(1.00F-VALMIN, fmax( -(1.F-VALMIN), cTh ) ));
-        }
+        } // while
+
      } else {
         // Flat surface
         beta  = 0.F;
@@ -2330,7 +2331,8 @@ __device__ void surfaceAgitee(Photon* ph, int le,
     float p,qv,LambdaS,LambdaR,jac;
 
     // Lambda shadowing Source direction
-    LambdaS  =  Lambda(avz,sig);
+    //LambdaS  =  Lambda(avz,sig);
+    LambdaS  =  LambdaM(avz,sig2*0.5);
 
     //
     // Local Estimate part
@@ -2362,7 +2364,8 @@ __device__ void surfaceAgitee(Photon* ph, int le,
      }
 
      // Reflected/Refracted direction, Normalization of qv
-     LambdaR  =  Lambda(fabs(v.z),sig);
+     //LambdaR  =  Lambda(fabs(v.z),sig);
+     LambdaR  =  LambdaM(fabs(v.z),sig2*0.5);
 
      float norma;
      if (WAVE_SHADOWd) norma = 1. + LambdaS + LambdaR;
@@ -2550,7 +2553,8 @@ __device__ void surfaceAgitee(Photon* ph, int le,
 
 	} // Transmission
 
-    LambdaR  =  Lambda(fabs(ph->v.z),sig);
+    //LambdaR  =  Lambda(fabs(ph->v.z),sig);
+    LambdaR  =  LambdaM(fabs(ph->v.z),sig2*0.5);
 
     if (!le) {
         if (WAVE_SHADOWd) ph->weight *= __fdividef(fabs(cTh), cBeta * (1.F + LambdaS + LambdaR) * avz );
@@ -2745,8 +2749,10 @@ __device__ void surfaceBRDF(Photon* ph, int le,
         // Add Wave shadowing
         // compute wave shadow outgoing photon
         float LambdaR, LambdaS;
-        LambdaS  =  Lambda(avz,sig);
-        LambdaR  =  Lambda(fabs(v.z),sig);
+        //LambdaS  =  Lambda(avz,sig);
+        //LambdaR  =  Lambda(fabs(v.z),sig);
+        LambdaS  =  LambdaM(avz,sig2*0.5);
+        LambdaR  =  LambdaM(fabs(v.z),sig2*0.5);
         ph->weight *= __fdividef(1.F, 1.F + LambdaR + LambdaS);
     }
 

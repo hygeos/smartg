@@ -651,9 +651,9 @@ def input_view(mlut, iw=0, kind='atm', zmax=None, ipha=None):
     except:
         _,_= profile_view(mlut, iw=iw, kind=kind, zmax=zmax)
 
-def compare(mlut, mref, field='up (TOA)',errb=False, logI=False, U_sign=1, same_U_convention=True,
+def compare(mlut, mref, field='up (TOA)',errb=False, logI=False, U_sign=1, same_U_convention=True, U_symetry=True,
                   Nparam=4, vmax=None, vmin=None, emax=None, ermax=None, same_azimuth_convention=True,
-                  azimuth=[0.,90.], title='', SZA_MAX=89.):
+                  azimuth=[0.,90.], title='', SZA_MAX=89., zenith_title=r'$SZA (°)$'):
     '''
     compare the results of two smartg runs : mlut vs mref in two different azimuth planes
     outputs: a figure
@@ -663,6 +663,7 @@ def compare(mlut, mref, field='up (TOA)',errb=False, logI=False, U_sign=1, same_
         LogI  : plot Intensity in log scale
         U_sign: change sign for U
         same_U_convention: mlut and mref have the same convention for U
+        U_symetry:  U changes sign convention for the  two halves of the plane
         Nparam: number of parameters :  by defaut 4 for I,Q,U, DoLP; 5 adds V:, 2 keeps only I and DoLP 
         vmin,vmax: min and max values for parameters: list of length Nparam
         emax: max absolute error scale : length Nparam
@@ -685,7 +686,10 @@ def compare(mlut, mref, field='up (TOA)',errb=False, logI=False, U_sign=1, same_
     if same_U_convention: diffsignT = [1,1,1,1,1]    # sign convention difference
     else: diffsignT = [1,1,-1,1,1]
     diffsign=diffsignT[:Nparam-1]+[1]
-    fig,ax = subplots(3,Nparam, sharey=False,sharex=True)
+    if U_symetry: symetryT=[1,1,1,1,1]
+    else: symetryT=[1,1,-1,1,1]
+    symetry=symetryT[:Nparam-1]+[1]
+    fig,ax = subplots(3,Nparam, sharey=False,sharex=True,gridspec_kw=dict(hspace=0.2,wspace=0.3))
     fig.set_size_inches(Nparam*3,8)
     fig.set_dpi=600
     fig.suptitle(title)
@@ -728,7 +732,8 @@ def compare(mlut, mref, field='up (TOA)',errb=False, logI=False, U_sign=1, same_
         ema=emax[i]
         erma=ermax[i]
 
-        for phi0,sym1,sym2,labref in [(azimuth[0],'r','.','ref.'),(azimuth[1],'g','.','')]:
+        for phi0,sym1,sym2,labref in [(azimuth[0],'r','-','ref.'),(azimuth[1],'g','-','')]:
+        #for phi0,sym1,sym2,labref in [(azimuth[0],'r','.','ref.'),(azimuth[1],'g','.','')]:
 
             # both points at their own abscissas
             if same_azimuth_convention:
@@ -737,7 +742,7 @@ def compare(mlut, mref, field='up (TOA)',errb=False, logI=False, U_sign=1, same_
                     refp = sign[i]*Sref[Idx(phi0,round=True),:] # reference for >0 view angle
                     refm = sign[i]*Sref[Idx(180.-phi0,round=True),:] #      reference for <0 view angle
                     sp   = diffsign[i]*sign[i]*S[Idx(phi0),:]       #     simulation for >0 view angle
-                    sm   = diffsign[i]*sign[i]*S[Idx(180-phi0),:]
+                    sm   = symetry[i]*diffsign[i]*sign[i]*S[Idx(180-phi0),:]
                     if errb:
                         dsp  = E[Idx(phi0),:]         #     simulation error for >0 view angle
                         dsm  = E[Idx(180.-phi0),:]
@@ -747,7 +752,7 @@ def compare(mlut, mref, field='up (TOA)',errb=False, logI=False, U_sign=1, same_
                     refm = sign[i]*Sref.swapaxes(0,1)[Idx(phi0,round=True),:] # reference for >0 view angle
                     refp = sign[i]*Sref.swapaxes(0,1)[Idx(180.-phi0,round=True),:] #      reference for <0 view angle
                     sp   = diffsign[i]*sign[i]*S.swapaxes(0,1)[Idx(phi0),:]       #     simulation for >0 view angle
-                    sm   = diffsign[i]*sign[i]*S.swapaxes(0,1)[Idx(180-phi0),:]
+                    sm   = symetry[i]*diffsign[i]*sign[i]*S.swapaxes(0,1)[Idx(180-phi0),:]
                     if errb:
                         dsp  = E.swapaxes(0,1)[Idx(phi0),:]         #     simulation error for >0 view angle
                         dsm  = E.swapaxes(0,1)[Idx(180.-phi0),:]
@@ -758,15 +763,15 @@ def compare(mlut, mref, field='up (TOA)',errb=False, logI=False, U_sign=1, same_
                 refp = sign[i]*Sref[Idx(180.-phi0,round=True),:] # reference for >0 view angle
                 refm = sign[i]*Sref[Idx(phi0,round=True),:] #      reference for <0 view angle
                 sp   = diffsign[i]*sign[i]*S[Idx(phi0),:]       #     simulation for >0 view angle
-                sm   = diffsign[i]*sign[i]*S[Idx(180-phi0),:]
+                sm   = symetry[i]*diffsign[i]*sign[i]*S[Idx(180-phi0),:]
                 if errb:
                     dsp  = E[Idx(phi0),:]         #     simulation error for >0 view angle
                     dsm  = E[Idx(180-phi0),:]
                 else:
                     (dsp,dsm) = (0,0)
                     
-            ax[0,i].plot(th, refp,'k'+sym2)
-            ax[0,i].plot(-th,refm,'k'+sym2,label=labref)
+            ax[0,i].plot(th, refp,'k'+'.')
+            ax[0,i].plot(-th,refm,'k'+'.',label=labref)
             ax[0,i].errorbar(th, sp, fmt=sym1+'')
             ax[0,i].errorbar(-th,sm, fmt=sym1+'', \
                         label=r'$\Phi=%.0f-%.0f$'%(phi0,180.-phi0))
@@ -787,18 +792,23 @@ def compare(mlut, mref, field='up (TOA)',errb=False, logI=False, U_sign=1, same_
             else:
                 if errb:
                     ax[1,i].errorbar(th,sp-refp, yerr=dsp,\
-                                 fmt=sym1+sym2,label=r'$\Phi=%.0f-%.0f$'%(phi0,180.-phi0),ecolor='k')
-                    ax[1,i].errorbar(-th,sm-refm,yerr=dsm,fmt=sym1+sym2,ecolor='k') 
+                                 fmt=sym1+sym2,label=r'$\Phi=%.0f-%.0f$'%(phi0,180.-phi0),ecolor=sym1)
+                    ax[1,i].errorbar(-th,sm-refm,yerr=dsm,fmt=sym1+sym2,ecolor=sym1) 
                 else:
                     ax[1,i].errorbar(th,sp-refp, \
-                                 fmt=sym1+sym2,label=r'$\Phi=%.0f-%.0f$'%(phi0,180.-phi0),ecolor='k')
-                    ax[1,i].errorbar(-th,sm-refm,fmt=sym1+sym2,ecolor='k') 
+                                 fmt=sym1+sym2,label=r'$\Phi=%.0f-%.0f$'%(phi0,180.-phi0),ecolor=sym1)
+                    ax[1,i].errorbar(-th,sm-refm,fmt=sym1+sym2,ecolor=sym1) 
             ax[1,i].set_ylim([-1*ema,ema])
             ax[1,i].set_xlim([-SZA_MAX,SZA_MAX])  
 
-            ax[2,i].errorbar(th,(sp-refp)/refp*100,\
+            if errb:
+                ax[2,i].errorbar(th,(sp-refp)/refp*100, yerr=dsp/abs(refp)*100, \
+                             fmt=sym1+sym2,label=r'$\Phi=%.0f-%.0f$'%(phi0,180.-phi0),ecolor=sym1)
+                ax[2,i].errorbar(-th,(sm-refm)/refm*100, yerr= dsm/abs(refm)*100,fmt=sym1+sym2,ecolor=sym1)  
+            else:
+                ax[2,i].errorbar(th,(sp-refp)/refp*100,\
                              fmt=sym1+sym2,label=r'$\Phi=%.0f-%.0f$'%(phi0,180.-phi0),ecolor='k')
-            ax[2,i].errorbar(-th,(sm-refm)/refm*100,fmt=sym1+sym2,ecolor='k')  
+                ax[2,i].errorbar(-th,(sm-refm)/refm*100,fmt=sym1+sym2,ecolor='k')  
             
             if i!=Nparam-1 : ax[2,i].set_ylim([-1*erma,erma])
             else : ax[2,i].set_ylim([-1*erma,erma])
@@ -816,5 +826,6 @@ def compare(mlut, mref, field='up (TOA)',errb=False, logI=False, U_sign=1, same_
                 #         (S.axes[0].shape[0],S.axes[1].shape[0]))
                 ax[1,i].set_ylabel(r'$\Delta$')
                 ax[2,i].set_ylabel(r'$\Delta (\%)$')
+            ax[2,i].set_xlabel(zenith_title)
     return fig
 

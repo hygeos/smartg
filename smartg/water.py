@@ -228,9 +228,15 @@ class IOP_Rw(IOP_base):
 
         pro.add_dataset('OD_oc', np.zeros(shp, dtype='float32'),
                         ['wavelength', 'z_oc'])
+        pro.add_dataset('OD_w', np.zeros(shp, dtype='float32'),
+                        ['wavelength', 'z_oc'])
+        pro.add_dataset('OD_p_oc', np.zeros(shp, dtype='float32'),
+                        ['wavelength', 'z_oc'])
         pro.add_dataset('OD_sca_oc', np.zeros(shp, dtype='float32'),
                         ['wavelength', 'z_oc'])
         pro.add_dataset('OD_abs_oc', np.zeros(shp, dtype='float32'),
+                        ['wavelength', 'z_oc'])
+        pro.add_dataset('OD_y', np.zeros(shp, dtype='float32'),
                         ['wavelength', 'z_oc'])
         pro.add_dataset('pmol_oc', np.ones(shp, dtype='float32'),
                         ['wavelength', 'z_oc'])

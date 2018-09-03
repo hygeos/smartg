@@ -1313,7 +1313,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL,
         N_simu += 1
         if stdev:
             L = L.reshape((1,1,-1,1,1))   # broadcast to tabPhotonsTot
-            warn('stdev is activated: it is known to slow down the code considerably.')
+            #warn('stdev is activated: it is known to slow down the code considerably.')
             SoverL = S.get()/L.get()
             sum_x += SoverL
             sum_x2 += (SoverL)**2

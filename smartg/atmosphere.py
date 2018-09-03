@@ -18,6 +18,7 @@ from smartg.config import dir_libradtran_atmmod
 from smartg.config import dir_libradtran_crs
 from warnings import warn
 import sys
+import pandas as pd
 if sys.version_info[:2] >= (3, 0):
     xrange = range
 
@@ -803,15 +804,16 @@ def read_phase(filename, standard=False, kind='atm'):
 
     standard: standard phase function definition, otherwise Smart-g definition
     '''
-    data = np.loadtxt(filename)
+    data2 = pd.read_csv(filename, sep='\s+', header=None)
 
-    theta = data[:,0]
-    pha=data[:,1:]
+    theta = np.array(data2[0])
+    pha   = np.array(data2[[1,2,3,4]])
+
     if standard:
-        pha[:,0] = data[:,1] + data[:,2]
-        pha[:,1] = data[:,1] - data[:,2]
-        pha[:,2] = data[:,3]
-        pha[:,3] = data[:,4]
+        pha[:,0] = data2[1] + data2[2]
+        pha[:,1] = data2[1] - data2[2]
+        pha[:,2] = data2[3]
+        pha[:,3] = data2[4]
 
     P = LUT(pha.swapaxes(0, 1),  # stk, theta
             axes=[None, theta],
@@ -918,13 +920,13 @@ class Profile_base(object):
         n2o_filename = join(dir_libradtran_atmmod, 'afglus_n2o_vmr.dat')
         n2_filename = join(dir_libradtran_atmmod, 'afglus_n2_vmr.dat')
         datach4 = np.loadtxt(ch4_filename, comments="#")
-        self.dens_ch4 = datach4[:,1] * self.dens_air # CH4 density en cm-3
+        self.dens_ch4 = interp1d(datach4[:,0] , datach4[:,1])(self.z) * self.dens_air # CH4 density en cm-3
         dataco = np.loadtxt(co_filename, comments="#")
-        self.dens_co = dataco[:,1] * self.dens_air # CO density en cm-3
+        self.dens_co = interp1d(dataco[:,0] , dataco[:,1])(self.z) * self.dens_air # CH4 density en cm-3
         datan2o = np.loadtxt(n2o_filename, comments="#")
-        self.dens_n2o = datan2o[:,1] * self.dens_air # N2O density en cm-3
+        self.dens_n2o = interp1d(datan2o[:,0] , datan2o[:,1])(self.z) * self.dens_air # CH4 density en cm-3
         datan2 = np.loadtxt(n2_filename, comments="#")
-        self.dens_n2 = datan2[:,1] * self.dens_air # N2 density en cm-3
+        self.dens_n2 = interp1d(datan2[:,0] , datan2[:,1])(self.z) * self.dens_air # CH4 density en cm-3
 
 
     def regrid(self, znew):
