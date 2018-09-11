@@ -229,7 +229,7 @@ class Smartg(object):
 
     def __init__(self, pp=True, debug=False,
                  debug_photon=False,
-                 double=False, alis=None, back=False, bias=True, alt_pp=False, rng='PHILOX'):
+                 double=False, alis=False, back=False, bias=True, alt_pp=False, rng='PHILOX'):
         '''
         Initialization of the Smartg object
 
@@ -251,9 +251,8 @@ class Smartg(object):
 
             - double : accumulate photons table in double precision, default single
 
-            - alis : dictionary, if present implement the ALIS method (Emde et al. 2010) for treating gaseous absorption, with field 'nlow'
-                is the number of wavelength to fit the spectral dependence of scattering, 
-                nlow-1 has to divide NW-1 where NW is the number of wavelengths, nlow has to be lesser than MAX_NLOW that is defined in communs.h
+            - alis : if True implement the ALIS method (Emde et al. 2010) for treating gaseous absorption in particular and avoid spectral noise
+            When using the run() method, specify the alis options
 
             - back : boolean, if True, run in backward mode, default forward mode
             
@@ -352,7 +351,7 @@ class Smartg(object):
              RTER=6371., wl_proba=None,
              NBTHETA=45, NBPHI=90, NF=1e6,
              OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
-             NBLOOP=None, progress=True,
+             NBLOOP=None, progress=True, alis_options=None,
              le=None, flux=None, stdev=False, BEER=0, RR=1, WEIGHTRR=0.1, SZA_MAX=90.,
              sensor=None, refraction=False, reflectance=True):
         '''
@@ -433,6 +432,10 @@ class Smartg(object):
                   default None: cone sampling
                   NOTE: Overrides NBPHI and NBTHETA
 
+            - alis_options : required if compiled already with the alis option. Dictionary, field 'nlow'
+                is the number of wavelength to fit the spectral dependence of scattering, 
+                nlow-1 has to divide NW-1 where NW is the number of wavelengths, nlow has to be lesser than MAX_NLOW that is defined in communs.h,
+
             - flux: if specified output is 'planar' or 'spherical' flux instead of radiance
 
             - stdev: calculate the standard deviation between each kernel run
@@ -504,10 +507,10 @@ class Smartg(object):
         NLAM = wl.size
 
         NLOW=-1
-        if self.alis is not None :
+        if alis_options is not None :
+            if (alis_options['nlow'] ==-1) : NLOW=NLAM
+            else: NLOW=alis_options['nlow']
             BEER=1
-            if (self.alis['nlow'] ==-1) : NLOW=NLAM
-            else: NLOW=self.alis['nlow']
 
         if surf is not None:
             if surf.dict['BRDF'] !=0 :
