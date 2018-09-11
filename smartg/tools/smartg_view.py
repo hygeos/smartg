@@ -653,7 +653,7 @@ def input_view(mlut, iw=0, kind='atm', zmax=None, ipha=None):
 
 def compare(mlut, mref, field='up (TOA)',errb=False, logI=False, U_sign=1, same_U_convention=True, U_symetry=True,
                   Nparam=4, vmax=None, vmin=None, emax=None, ermax=None, same_azimuth_convention=True,
-                  azimuth=[0.,90.], title='', SZA_MAX=89., zenith_title=r'$SZA (°)$'):
+                  azimuth=[0.,90.], title='', SZA_MAX=89., zenith_title=r'$SZA (°)$', errref=None):
     '''
     compare the results of two smartg runs : mlut vs mref in two different azimuth planes
     outputs: a figure
@@ -672,6 +672,7 @@ def compare(mlut, mref, field='up (TOA)',errb=False, logI=False, U_sign=1, same_
         azimuth: list of azimuths
         title: plot title
         SZA_MAX: SZA max for the comparison
+        errref : eventually intensity absolute error on refence points
     '''
 
     from pylab import subplots
@@ -805,6 +806,11 @@ def compare(mlut, mref, field='up (TOA)',errb=False, logI=False, U_sign=1, same_
                 ax[2,i].errorbar(th,(sp-refp)/refp*100, yerr=dsp/abs(refp)*100, \
                              fmt=sym1+sym2,label=r'$\Phi=%.0f-%.0f$'%(phi0,180.-phi0),ecolor=sym1)
                 ax[2,i].errorbar(-th,(sm-refm)/refm*100, yerr= dsm/abs(refm)*100,fmt=sym1+sym2,ecolor=sym1)  
+                if (i==0 and errref is not None):
+                    ax[2,0].plot(th,errref/refp*100,sym1+'-.')
+                    ax[2,0].plot(th,-errref/refp*100,sym1+'-.')
+                    ax[2,0].plot(-th,errref/refm*100,sym1+'-.')
+                    ax[2,0].plot(-th,-errref/refm*100,sym1+'-.')
             else:
                 ax[2,i].errorbar(th,(sp-refp)/refp*100,\
                              fmt=sym1+sym2,label=r'$\Phi=%.0f-%.0f$'%(phi0,180.-phi0),ecolor='k')

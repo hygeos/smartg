@@ -2109,7 +2109,6 @@ __device__ void surfaceAgitee(Photon* ph, int le,
     sig2 = 0.003F + 0.00512f *WINDSPEEDd;
     sig  = sqrtf(sig2);
 
-
     /* SAMPLING */
 
     if (!le) {
@@ -2592,7 +2591,7 @@ __device__ void surfaceBRDF(Photon* ph, int le,
 	float psi;		// Angle azimutal de diffusion [rad]
 	float cTh, sTh;	//cos et sin de l'angle d'incidence du photon sur le dioptre
 	
-	float sig, sig2  ;
+	float sig2  ;
 	float cBeta;
 	
 	float nind; // relative index of refrection 
@@ -2647,7 +2646,6 @@ __device__ void surfaceBRDF(Photon* ph, int le,
     #endif
 
     sig2 = 0.003F + 0.00512f *WINDSPEEDd;
-    sig  = sqrtf(sig2);
 
     // Rough surface
     if (le) {
