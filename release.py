@@ -17,9 +17,12 @@ import tarfile
 import fnmatch
 
 
+version = 'v0.9'
+
+
+
 def main():
 
-    version = datetime.now().strftime('%Y%m%d')
     target = join(dir_root, 'release/target/smartg-{}.tar.gz'.format(version))
     skiplist = [
             'NOTES.TXT',
@@ -120,6 +123,7 @@ def main():
         shasum = Popen(['git', 'rev-parse', 'HEAD'], stdout=PIPE).communicate()[0]
         fp.write(shasum.decode())
         fp.write(version)
+        fp.write(datetime.now().strftime('%Y%m%d:%H%M%S'))
         fp.write('\n')
     tar.add(version_file, arcname=join('smartg', version_file))
     tar.close()
