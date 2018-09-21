@@ -320,7 +320,7 @@ class Smartg(object):
                                include_dirs=[dir_src,
                                    join(dir_src, 'incRNGs/Random123/')])
         else:
-            binname = binnames[(pp,alis is not None)]
+            binname = binnames[(pp, alis)]
             if exists(binname):
                 # load existing binary
                 print('Loading binary', binname)
