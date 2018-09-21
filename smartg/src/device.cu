@@ -3246,6 +3246,11 @@ __device__ void countPhoton(Photon* ph,
           DatomicAdd(tabCount+(1*II+JJ), dweight * dwsca * dwabs * (ds.x-ds.y));
           DatomicAdd(tabCount+(2*II+JJ), dweight * dwsca * dwabs * ds.z);
           DatomicAdd(tabCount+(3*II+JJ), dweight * dwsca * dwabs * ds.w);
+          // If GTX 1000 or more recent use native double atomic add
+          /*atomicAdd(tabCount+(0*II+JJ), dweight * dwsca * dwabs * (ds.x+ds.y));
+          atomicAdd(tabCount+(1*II+JJ), dweight * dwsca * dwabs * (ds.x-ds.y));
+          atomicAdd(tabCount+(2*II+JJ), dweight * dwsca * dwabs * ds.z);
+          atomicAdd(tabCount+(3*II+JJ), dweight * dwsca * dwabs * ds.w);*/
 
           #else
           //#if defined(SPHERIQUE) || defined(ALT_PP)
