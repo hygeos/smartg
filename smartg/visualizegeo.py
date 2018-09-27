@@ -36,8 +36,8 @@ def receiver_view(mlut, w = False, logI=False, nameFile = 'plot'):
         wx= w[0]
         wy= w[1]
     else:
-        wx = w[0]
-        wy = w[1]
+        wx = w
+        wy = w
 
     m = mlut
 
@@ -58,8 +58,8 @@ def receiver_view(mlut, w = False, logI=False, nameFile = 'plot'):
         inte = m2.sum()/1e7
         #print(("sum", m2.sum()))
         #print(("inte=", inte))
-        cax = plt.imshow(m['C_Receptor'][:,:]*1360, cmap=plt.get_cmap('jet'), \
-                         norm=mcolors.LogNorm(vmin=valmin, vmax=np.amax(m['C_Receptor'][:,:]*1320)), \
+        cax = plt.imshow(m['C_Receptor'][:,:]*1320, cmap=plt.get_cmap('jet'), \
+                         norm=mcolors.LogNorm(vmin=valmin*1320, vmax=np.amax(m['C_Receptor'][:,:]*1320)), \
                          interpolation='None', extent = [-(wy*1000),(wy*1000),-(wx*1000),(wx*1000)])
 
     cbar = plt.colorbar()
