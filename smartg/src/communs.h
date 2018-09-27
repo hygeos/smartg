@@ -332,7 +332,7 @@ struct IObjets {
 	float mvTz;     /*  /                                  */
 
 	float nBx;      /*  \                                  */
-	float nBy;      /*   | Transformation type translation */
+	float nBy;      /*   | normalBase apres transfo        */
 	float nBz;      /*  /                                  */
 };
 #endif	// COMMUNS_H

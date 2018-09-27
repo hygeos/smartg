@@ -16,7 +16,7 @@
 /*************************************************************/
 /*         Philox 4x32 7                                     */
 /*
-Copyright 2010-2011, D. E. Shaw Research.
+Copyright 2010-2011, D. E. Shaw Reseach.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -1325,7 +1325,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 	if (CFMODEd == 1)
 	{
 		float3 cusForwPos = make_float3( ((CFXd * RAND) - 0.5*CFXd), ((CFYd * RAND) - 0.5*CFYd), 0.);
-		ph->pos.x += cusForwPos.x + 0.5;
+		ph->pos.x += cusForwPos.x + 1.;
 		ph->pos.y += cusForwPos.y;
 		ph->pos.z = POSZd;
 	} //END CFMODEd == 1
@@ -3877,7 +3877,7 @@ __device__ void surfaceRugueuse3D(Photon* ph, IGeo* geoS, struct RNG_State *rngs
 
 __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS)
 {
-	Transform transfo, invTransfo, rotz;
+	Transform transfo, invTransfo;
 	char myP[]="Point";
 	
     double *tabCountObj;
@@ -3890,42 +3890,63 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS)
 	float sizeX = nbCx*TCd;
 	float sizeY = nbCy*TCd;
 
-	// Trouver une solution à ça !!
-	//if (ph->v.x < 0) return;
-	//if (!isBackward(geoS->normalBase, ph->v)) return;
-	if (   isForward(  make_double3(geoS->normalBase.x, geoS->normalBase.x, geoS->normalBase.x),
+	// if (!isBackward(geoS->normalBase, ph->v)) return;
+	if (   isForward(  make_double3(geoS->normalBase.x, geoS->normalBase.y, geoS->normalBase.z),
 				  make_double3(ph->v.x, ph->v.y, ph->v.z)  )   ) return;
-	//if (ph->direct == false) return;
+
 	p_t = ph->pos;
 	transfo = geoS->mvTF;
 	invTransfo = transfo.Inverse(transfo);
 	p_t = invTransfo(p_t, myP);
-	rotz = rotz.RotateZ(90);
-	p_t = rotz(p_t, myP);
 
-	indJ = floorf((p_t.x/TCd) + (sizeX/(2*TCd)));
-	indI = ceilf((p_t.y/TCd) + (sizeY/(2*TCd)));
+    // ancienne implementation = mauvaise
+    // Transform rotz;
+	// rotz = rotz.RotateZ(0);
+	// p_t = rotz(p_t, myP);
+	// indJ = floorf((p_t.x/TCd) + (sizeX/(2*TCd)));
+	// indI = ceilf((p_t.y/TCd) + (sizeY/(2*TCd)));
+	// if (indJ == nbCx) indJ -= 1;
+	// indI = (nbCy-1) - (indI-1);
 
-	if (indJ == nbCx) indJ -= 1;
-	indI = (nbCy-1) - (indI-1);
+    // new implementation = bonne
+    // x (axe vers le haut ^); y (axe vers la gauche <--)
+	indJ = floorf( (-(p_t.y/TCd)) + (sizeY/(2*TCd)) );
+	indI = floorf( (-(p_t.x/TCd)) + (sizeX/(2*TCd)) );
+	if (indJ == nbCy) indJ -= 1;
+	if (indI == nbCx) indI -= 1;
 	
+
 	tabCountObj = (double*)tabObjInfo;
 	
 	weight = (double)ph->weight;
 
+	if(isnan(weight))
+	{
+		printf("Care weight is nan !! \n");
+		return;
+	}
 	#if __CUDA_ARCH__ >= 600
 	if (ph->direct == 0 && geoS->type == 2)
 	{
 		atomicAdd(tabCountObj, weight);
+
+		// matrice -- > (1 (via dimJ*dimI), dimI, dimJ)
 		atomicAdd(tabCountObj+(nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+		atomicAdd(tabCountObj+(2*nbCy*nbCx)+0, 1);
 	}
 	else if (ph->direct != 0 && geoS->type == 2)
 	{
 		atomicAdd(tabCountObj+1, weight);
+		atomicAdd(tabCountObj+(nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+		atomicAdd(tabCountObj+(2*nbCy*nbCx)+1, 1);
 		if (ph->toucheMir == true)
+		{
 			atomicAdd(tabCountObj+4, weight);
+		}
 		else
+		{
 			atomicAdd(tabCountObj+5, weight);
+		}
 	}
 	else if (ph->direct == 0 && geoS->type == 1)
 	{
@@ -3940,50 +3961,67 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS)
 	if (ph->H == 0 && ph->E == 0 && ph->S == 0 && geoS->type == 2) 
 	{ // CAT 0 : aucun changement de trajectoire avant de toucher le R.
 		atomicAdd(tabCountObj+6, weight);
+		atomicAdd(tabCountObj+(2*nbCy*nbCx)+2, 1);
 	}
 	else if ( ph->H > 0 && ph->E == 0 && ph->S == 0 && geoS->type == 2 )
 	{ // CAT 1 : only H avant de toucher le R.
 		atomicAdd(tabCountObj+7, weight);
+		atomicAdd(tabCountObj+(2*nbCy*nbCx)+3, 1);
 	}
 	else if ( ph->H == 0 && ph->E > 0 && ph->S == 0 && geoS->type == 2 )
 	{ // CAT 2 : only E avant de toucher le R.
 		atomicAdd(tabCountObj+8, weight);
+		atomicAdd(tabCountObj+(2*nbCy*nbCx)+4, 1);
 	}
 	else if ( ph->H == 0 && ph->E == 0 && ph->S > 0 && geoS->type == 2 )
 	{ // CAT 3 : only S avant de toucher le R.
 		atomicAdd(tabCountObj+9, weight);
+		atomicAdd(tabCountObj+(2*nbCy*nbCx)+5, 1);
 	}
 	else if ( ph->H > 0 && ph->E == 0 && ph->S > 0 && geoS->type == 2 )
 	{ // CAT 4 : 2 proc. H et S avant de toucher le R.
 		atomicAdd(tabCountObj+10, weight);
+		atomicAdd(tabCountObj+(2*nbCy*nbCx)+6, 1);
 	}
 	else if ( ph->H > 0 && ph->E > 0 && ph->S == 0 && geoS->type == 2 )
 	{ // CAT 5 : 2 proc. H et E avant de toucher le R.
 		atomicAdd(tabCountObj+11, weight);
-		printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
+		atomicAdd(tabCountObj+(2*nbCy*nbCx)+7, 1);
+		//printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
 	}
 	else if ( ph->H == 0 && ph->E > 0 && ph->S > 0 && geoS->type == 2 )
 	{ // CAT 6 : 2 proc. E et S avant de toucher le R.
 		atomicAdd(tabCountObj+12, weight);
+		atomicAdd(tabCountObj+(2*nbCy*nbCx)+8, 1);
 	}	
 	else if ( ph->H > 0 && ph->E > 0 && ph->S > 0 && geoS->type == 2 )
 	{ // CAT 7 : 3 proc. H, E et S avant de toucher le R.
 		atomicAdd(tabCountObj+13, weight);
+		atomicAdd(tabCountObj+(2*nbCy*nbCx)+9, 1);
 	}	
 	
 	#else
 	if (ph->direct == 0 && geoS->type == 2)
 	{
 		DatomicAdd(tabCountObj, weight);
+
+		// matrice -- > (1 (via dimJ*dimI), dimI, dimJ)
 		DatomicAdd(tabCountObj+(nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+		DatomicAdd(tabCountObj+(2*nbCy*nbCx)+0, 1);
 	}
 	else if (ph->direct != 0 && geoS->type == 2)
 	{
 		DatomicAdd(tabCountObj+1, weight);
+		DatomicAdd(tabCountObj+(nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+		DatomicAdd(tabCountObj+(2*nbCy*nbCx)+1, 1);
 		if (ph->toucheMir == true)
+		{
 			DatomicAdd(tabCountObj+4, weight);
+		}
 		else
+		{
 			DatomicAdd(tabCountObj+5, weight);
+		}
 	}
 	else if (ph->direct == 0 && geoS->type == 1)
 	{
@@ -3994,38 +4032,47 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS)
 		DatomicAdd(tabCountObj+3, weight);
 	}
 
-		// Les septs catégories + la cat 0
+	// Les septs catégories + la cat 0
 	if (ph->H == 0 && ph->E == 0 && ph->S == 0 && geoS->type == 2) 
 	{ // CAT 0 : aucun changement de trajectoire avant de toucher le R.
 		DatomicAdd(tabCountObj+6, weight);
+		DatomicAdd(tabCountObj+(2*nbCy*nbCx)+2, 1);
 	}
-	else if ( ph->H != 0 && ph->E == 0 && ph->S == 0 && geoS->type == 2 )
+	else if ( ph->H > 0 && ph->E == 0 && ph->S == 0 && geoS->type == 2 )
 	{ // CAT 1 : only H avant de toucher le R.
 		DatomicAdd(tabCountObj+7, weight);
+		DatomicAdd(tabCountObj+(2*nbCy*nbCx)+3, 1);
 	}
-	else if ( ph->H == 0 && ph->E != 0 && ph->S == 0 && geoS->type == 2 )
+	else if ( ph->H == 0 && ph->E > 0 && ph->S == 0 && geoS->type == 2 )
 	{ // CAT 2 : only E avant de toucher le R.
 		DatomicAdd(tabCountObj+8, weight);
+		DatomicAdd(tabCountObj+(2*nbCy*nbCx)+4, 1);
 	}
-	else if ( ph->H == 0 && ph->E == 0 && ph->S != 0 && geoS->type == 2 )
+	else if ( ph->H == 0 && ph->E == 0 && ph->S > 0 && geoS->type == 2 )
 	{ // CAT 3 : only S avant de toucher le R.
 		DatomicAdd(tabCountObj+9, weight);
+		DatomicAdd(tabCountObj+(2*nbCy*nbCx)+5, 1);
 	}
-	else if ( ph->H != 0 && ph->E == 0 && ph->S != 0 && geoS->type == 2 )
+	else if ( ph->H > 0 && ph->E == 0 && ph->S > 0 && geoS->type == 2 )
 	{ // CAT 4 : 2 proc. H et S avant de toucher le R.
 		DatomicAdd(tabCountObj+10, weight);
+		DatomicAdd(tabCountObj+(2*nbCy*nbCx)+6, 1);
 	}
-	else if ( ph->H != 0 && ph->E != 0 && ph->S == 0 && geoS->type == 2 )
+	else if ( ph->H > 0 && ph->E > 0 && ph->S == 0 && geoS->type == 2 )
 	{ // CAT 5 : 2 proc. H et E avant de toucher le R.
-		atomicAdd(tabCountObj+11, weight);
+		DatomicAdd(tabCountObj+11, weight);
+		DatomicAdd(tabCountObj+(2*nbCy*nbCx)+7, 1);
+		//printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
 	}
-	else if ( ph->H == 0 && ph->E != 0 && ph->S != 0 && geoS->type == 2 )
+	else if ( ph->H == 0 && ph->E > 0 && ph->S > 0 && geoS->type == 2 )
 	{ // CAT 6 : 2 proc. E et S avant de toucher le R.
 		DatomicAdd(tabCountObj+12, weight);
+		DatomicAdd(tabCountObj+(2*nbCy*nbCx)+8, 1);
 	}	
-	else if ( ph->H != 0 && ph->E != 0 && ph->S != 0 && geoS->type == 2 )
+	else if ( ph->H > 0 && ph->E > 0 && ph->S > 0 && geoS->type == 2 )
 	{ // CAT 7 : 3 proc. H, E et S avant de toucher le R.
 		DatomicAdd(tabCountObj+13, weight);
+		DatomicAdd(tabCountObj+(2*nbCy*nbCx)+9, 1);
 	}
 	#endif
 
@@ -5085,6 +5132,7 @@ __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo 
 				//GeoV->material = ObjT[i].material;
 				//GeoV->reflectivity = ObjT[i].reflect;
 				GeoV->normal = faceForward(myDg.nn, -1.*R1.d);
+				GeoV->normalBase = make_float3(ObjT[i].nBx, ObjT[i].nBy, ObjT[i].nBz);
 				// if(isBackward(GeoV->normal, dir))
 				if(  isBackward( make_double3(GeoV->normalBase.x, GeoV->normalBase.y, GeoV->normalBase.z),
 								 make_double3(dir.x, dir.y, dir.z) )  )
@@ -5094,14 +5142,13 @@ __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo 
 				}
 				else
 				{
-					GeoV->material = ObjT[i].materialAR;
+					GeoV->material = ObjT[i].materialAR; //AR
 					GeoV->reflectivity = ObjT[i].reflectAR;
 				}
 				*(phit) = tempPhit;
 				GeoV->mvTF = Ti;
 				GeoV->type = ObjT[i].type;
 				GeoV->mvR = make_float3(ObjT[i].mvRx, ObjT[i].mvRy, ObjT[i].mvRz);
-				GeoV->normalBase = make_float3(ObjT[i].nBx, ObjT[i].nBy, ObjT[i].nBz);
 			}
 		}
 		// ***********************************************************************

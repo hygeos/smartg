@@ -22,7 +22,7 @@ import mpl_toolkits.mplot3d as mp3d
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from matplotlib import colors as mcolors
 
-def receiver_view(mlut, w = False, logI=False):
+def receiver_view(mlut, w = False, logI=False, nameFile = 'plot'):
 
     '''
     mlut : mlut table
@@ -32,11 +32,21 @@ def receiver_view(mlut, w = False, logI=False):
     if w==False :
         raise Exception("In receiver_view(), the receiver size w must be specified!")
         
+    if isinstance(w, (list, tuple)):
+        wx= w[0]
+        wy= w[1]
+    else:
+        wx = w[0]
+        wy = w[1]
+
     m = mlut
 
+    plt.figure()
+    # print("MATRICE=", m['C_Receptor'].data.shape)
+    # print("M00 =", m['C_Receptor'][0,0])
     if logI == False :
         cax = plt.imshow(m['C_Receptor'][:,:]*1320, cmap=plt.get_cmap('jet'), interpolation='None', \
-                         extent = [-(w*1000),(w*1000),-(w*1000),(w*1000)])
+                         extent = [-(wy*1000),(wy*1000),-(wx*1000),(wx*1000)])
     else:
         #print(("npmin=", np.amin(m['C_Receptor'][:,:])*1320)) 
         m2 = m['C_Receptor'][:,:]#*1000
@@ -48,15 +58,19 @@ def receiver_view(mlut, w = False, logI=False):
         inte = m2.sum()/1e7
         #print(("sum", m2.sum()))
         #print(("inte=", inte))
-        cax = plt.imshow(m['C_Receptor'][:,:]*1360, cmap=cm.jet, norm=LogNorm(vmin=valmin, vmax=np.amax(m['C_Receptor'][:,:]*1360)), interpolation='None', \
-                         extent = [-(w*1000),(w*1000),-(w*1000),(w*1000)])
-    
+        cax = plt.imshow(m['C_Receptor'][:,:]*1360, cmap=plt.get_cmap('jet'), \
+                         norm=mcolors.LogNorm(vmin=valmin, vmax=np.amax(m['C_Receptor'][:,:]*1320)), \
+                         interpolation='None', extent = [-(wy*1000),(wy*1000),-(wx*1000),(wx*1000)])
+
+    cbar = plt.colorbar()
+    cbar.remove()
     cbar = plt.colorbar(cax)
     cbar.set_label(r'Irradiance (W m$^{-2}$)', fontsize = 12)
-    plt.xlabel(r'Horizontale position (m)')
-    plt.ylabel(r'Verticale position (m)')
+
+    plt.xlabel(r'Horizontale position (m) -y axis-')
+    plt.ylabel(r'Verticale position (m) -x axis-')
     plt.title('Receiver surface')
-    plt.savefig('plot.pdf')  
+    plt.savefig(nameFile + '.pdf')  
 
 
 
@@ -182,14 +196,18 @@ class Entity(object):
     '''
     definition...
     '''
-    def __init__(self, name="reflector", TC = 0.01, materialAV=Matte(), materialAR=Matte(), geo=Plane(), \
-                 transformation=Transformation()):
-        self.name = name
-        self.TC = TC
-        self.materialAV = materialAV
-        self.materialAR = materialAR
-        self.geo = geo
-        self.transformation = transformation
+    def __init__(self, entity = None, name="reflector", TC = 0.01, materialAV=Matte(), \
+                 materialAR=Matte(), geo=Plane(), transformation=Transformation()):
+        if isinstance(entity, Entity) :
+            self.name = entity.name; self.TC = entity.TC; self.materialAV = entity.materialAV;
+            self.materialAR = entity.materialAR; self.geo = entity.geo ; self.transformation = entity.transformation;
+        else:
+            self.name = name
+            self.TC = TC
+            self.materialAV = materialAV
+            self.materialAR = materialAR
+            self.geo = geo
+            self.transformation = transformation
 
     def __str__(self):
         return 'The entity is a ' + str(self.name) + ' with the following carac:\n' + \
