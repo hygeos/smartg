@@ -250,7 +250,7 @@ class AeroOPAC(object):
 
         Example: AeroOPAC('maritime_clean', 0.1, 550.).calc(400.)
     '''
-    def __init__(self, filename, tau_ref, w_ref, ssa=None, phase=None):
+    def __init__(self, filename, tau_ref, w_ref, zmin=None, zmax=None, ssa=None, phase=None):
         self.tau_ref = tau_ref
         self.w_ref = w_ref
         self.reff = None
@@ -297,6 +297,15 @@ class AeroOPAC(object):
         data = np.loadtxt(self.filename)
 
         self.zopac = data[::-1,0]   # altitude in km (increasing)
+
+        if zmin is None:
+            zmin = self.zopac[0]
+        if zmax is None:
+            zmax = self.zopac[-1]
+
+        # scale zopac between zmin and zmax
+        self.zopac = zmin + (zmax-zmin)*(self.zopac - self.zopac[0])/(self.zopac[-1] - self.zopac[0])
+
         self.densities = data[::-1,1:]  # vertical profile of mass concentration (g/m3)
                                         # (zopac, species)
 
