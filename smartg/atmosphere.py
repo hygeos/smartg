@@ -161,68 +161,63 @@ class Species(object):
         '''
 
         theta = np.linspace(0., 180., num=NBTHETA)
-        NLAM = len(wav)
+        lam_tabulated = self._phase.axis('lam')
+        nlam_tabulated = len(lam_tabulated)
 
         if (self._nrh_reff > 1) and (self._rh_or_reff == 'rh'):
             # drop first altitude element
 
-            P = np.zeros((NLAM, len(rh)-1, NPSTK, NBTHETA), dtype='float32')
+            P = LUT(
+                np.zeros((nlam_tabulated, len(rh)-1, NPSTK, NBTHETA), dtype='float32')+np.NaN,
+                axes=[lam_tabulated, None, None, theta],
+                names=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
+                )  # nlam_tabulated, nrh, stk, NBTHETA
 
             for irh_, rh_ in enumerate(rh[1:]):
 
                 irh = Idx(rh_, round=True, fill_value='extrema')
+                P.sub()[Idx(wav),:,:]
 
-                # interpolate on wav and rh
-                pha = self._phase.sub()[Idx(wav,round=True),irh,:,:]  # (lam, stk, nthetamax)
-                th = self._theta[Idx(wav,round=True),irh,:,:]   # (lam, stk, nthetamax)
-                nth = self._ntheta[Idx(wav,round=True),irh,:]   # (lam, stk)
+                # interpolate each tabulated wavelength
+                for ilam in range(nlam_tabulated):
+                    for istk in range(NPSTK):
+                        th = self._theta[ilam,irh,istk,:]
+                        nth = self._ntheta[ilam,irh,istk]
+                        P.data[ilam,irh_,istk,:] = interp1d(
+                                th[:nth],
+                                self._phase[ilam,irh,istk,:nth])(theta)
 
-                if (NBTHETA < nth).any():
-                    warn('Insufficient number of sampling angles for phase function')
-
-                for ilam in xrange(NLAM):
-                    nth_ = nth[ilam, 0]
-                    assert (nth_ == nth[ilam, :]).all()
-
-                    # convert I, Q => Ipar and Iper
-                    P0 = interp1d(th[ilam,0,:nth_], pha[ilam,0,:nth_])(theta)
-                    P1 = interp1d(th[ilam,1,:nth_], pha[ilam,1,:nth_])(theta)
-                    P[ilam, irh_, 0, :] = P0 + P1
-                    P[ilam, irh_, 1, :] = P0 - P1
-                    P[ilam, irh_, 2, :] = interp1d(th[ilam,2,:nth_], pha[ilam,2,:nth_])(theta)
-                    P[ilam, irh_, 3, :] = interp1d(th[ilam,3,:nth_], pha[ilam,3,:nth_])(theta)
 
         else: # phase function does not depend on rh
-            P = np.zeros((NLAM, 1, NPSTK, NBTHETA), dtype='float32')
+            P = LUT(
+                np.zeros((nlam_tabulated, 1, NPSTK, NBTHETA), dtype='float32')+np.NaN,
+                axes=[lam_tabulated, None, None, theta],
+                names=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
+                )  # nlam_tabulated, nrh, stk, NBTHETA
+
             if (self._rh_or_reff == 'reff') and (reff is not None):
                 irh = Idx(reff, round=True).index(self._phase.axes[1])
             else:
                 irh = 0
 
-            # interpolate on wav and rh
-            fv = 'extrema' if self.wav_clip else None
-            iwav = Idx(wav,round=True, fill_value=fv)
-            pha = self._phase.sub()[iwav,irh,:,:]  # (lam, stk, nthetamax)
-            th = self._theta[iwav,irh,:,:]   # (lam, stk, nthetamax)
-            nth = self._ntheta[iwav,irh,:]   # (lam, stk)
+            # interpolate each tabulated wavelength
+            for ilam in range(nlam_tabulated):
+                for istk in range(NPSTK):
+                    th = self._theta[ilam,irh,istk,:]
+                    nth = self._ntheta[ilam,irh,istk]
+                    irh_ = 0
+                    P.data[ilam,irh_,istk,:] = interp1d(
+                            th[:nth],
+                            self._phase[ilam,irh,istk,:nth])(theta)
 
-            if (NBTHETA < nth).any():
-                warn('Insufficient number of sampling angles for phase function')
 
-            for ilam in xrange(NLAM):
-                nth_ = nth[ilam, 0]
-                assert (nth[ilam, :] == nth_).all()
-                P0 = interp1d(th[ilam,0,:nth_], pha[ilam,0,:nth_])(theta)
-                P1 = interp1d(th[ilam,1,:nth_], pha[ilam,1,:nth_])(theta)
-                P[ilam, 0, 0, :] = P0 + P1
-                P[ilam, 0, 1, :] = P0 - P1
-                P[ilam, 0, 2, :] = interp1d(th[ilam,2,:nth_], pha[ilam,2,:nth_])(theta)
-                P[ilam, 0, 3, :] = interp1d(th[ilam,3,:nth_], pha[ilam,3,:nth_])(theta)
+        # convert I, Q into Ipar, Iper
+        P0 = P.data[:,:,0,:].copy()
+        P1 = P.data[:,:,1,:].copy()
+        P.data[:,:,0,:] = P0+P1
+        P.data[:,:,1,:] = P0-P1
 
-        return LUT(P,
-                   axes=[wav, None, None, theta],
-                   names=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
-                   )
+        return P.sub()[Idx(wav),:,:,:]
 
 
 class AeroOPAC(object):
