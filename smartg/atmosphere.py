@@ -473,6 +473,7 @@ class AtmAFGL(Atmosphere):
         - prof_aer: a tuple (ext,ssa) the aerosol extinction optical thickness profile and single scattering albedo arrays  
                     provided by user, each array has dimensions (NWavelength,NZ)
                     if directly used, it shortcuts any further rayleigh scattering computation
+        - RH_cst :  force relative humidity o be constant, default (None, recalculated)
 
         Phase functions definition:
         - pfwav: a list of wavelengths over which the phase functions are calculated
@@ -486,7 +487,7 @@ class AtmAFGL(Atmosphere):
                  P0=None, O3=None, H2O=None, NO2=True,
                  tauR=None,
                  pfwav=None, pfgrid=[100., 0.], prof_abs=None,
-                 prof_ray=None, prof_aer=None):
+                 prof_ray=None, prof_aer=None, RH_cst=None):
 
         self.lat = lat
         self.comp = comp
@@ -495,6 +496,7 @@ class AtmAFGL(Atmosphere):
         self.prof_abs = prof_abs
         self.prof_ray = prof_ray
         self.prof_aer = prof_aer
+        self.RH_cst = RH_cst
 
         self.tauR = tauR
         if tauR is not None:
@@ -532,7 +534,7 @@ class AtmAFGL(Atmosphere):
 
         # read afgl file
         prof = Profile_base(atm_filename, O3=O3,
-                            H2O=H2O, NO2=NO2, P0=P0)
+                            H2O=H2O, NO2=NO2, P0=P0, RH_cst=RH_cst)
 
         #
         # regrid profile if required
@@ -881,8 +883,9 @@ class Profile_base(object):
     - H2O: total water vapour column (g.cm-2), or None to use atmospheric
       profile value (default)
     - P0: sea surface pressure (hPa)
+    - RH_cst: force Relative humidity to be constant, (defualt recalculated)
     '''
-    def __init__(self, atm_filename, O3=None, H2O=None, NO2=True, P0=None):
+    def __init__(self, atm_filename, O3=None, H2O=None, NO2=True, P0=None, RH_cst=None):
 
         if atm_filename is None:
             return
@@ -899,6 +902,7 @@ class Profile_base(object):
         self.dens_h2o = data[:,6] # H2O density in cm-3
         self.dens_co2 = data[:,7] # CO2 density in cm-3
         self.dens_no2 = data[:,8] # NO2 density in cm-3
+        self.RH_cst   = RH_cst
 
         # scale to specified total O3 content
         if O3 is not None:
@@ -959,6 +963,7 @@ class Profile_base(object):
         prof.dens_co  = interp1d(z, self.dens_co)  (znew)
         prof.dens_n2o = interp1d(z, self.dens_n2o)  (znew)
         prof.dens_n2 = interp1d(z, self.dens_n2)  (znew)
+        prof.RH_cst   = self.RH_cst
 
         return prof
 
@@ -967,6 +972,7 @@ class Profile_base(object):
         returns profile of relative humidity for each layer
         '''
         rh = self.dens_h2o/vapor_pressure(self.T)*100.
+        if self.RH_cst is not None : rh[:] = self.RH_cst
         return rh
 
 
