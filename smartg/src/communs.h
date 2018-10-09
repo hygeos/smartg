@@ -33,7 +33,7 @@
 
 #define MAX_LOOP 1000000000
 #define MAX_NEVT 500 // Max number of scattering evts stored in photon in the ALIS procedure in basic plane parallel mode
-#define MAX_NLOW 201 // Max number of wavelengths stored in the ALIS scattering correction
+#define MAX_NLOW 1501 // Max number of wavelengths stored in the ALIS scattering correction
 #define MAX_NLAYER 200 // Max number of vertical layers recorded in ALIS procedure in spherical or alternate PP mode
 #define MAX_BIN    80 // Max number of bins for histogram
 
@@ -135,6 +135,9 @@ public:
     // Angular box indices (for LE)
     int iph;
     int ith;
+
+    // Sensor index
+    int is;
 	
     // Stokes parameters
     float4 stokes;
@@ -219,6 +222,17 @@ struct Profile {
     float pine;   // Fraction of inelastic scattering of the layer
     float FQY1;   // Fluorescence like Quantum Yield of 1st specie of the layer
     int iphase;   // phase function index
+};
+
+struct Sensor {
+    float POSX;   // X position of the sensor
+    float POSY;   // Y position of the sensor
+    float POSZ;   // Z position of the sensor (fromp Earth's center in spherical, from the ground in PP)
+    float THDEG;  // zenith angle of viewing direction (Zenith> 90 for downward looking, <90 for upward, default Zenith)
+    float PHDEG;  // azimut angle of viewing direction
+    int LOC;      // localization (ATMOS=1, ...), see constant definitions in communs.h
+    float FOV;    // sensor FOV (degree) 
+    int TYPE;     // sensor type: Radiance (0), Planar flux (1), Spherical Flux (2), default 0
 };
 
 #endif	// COMMUNS_H

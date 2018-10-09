@@ -18,7 +18,9 @@ def mdesc(desc, logI=False):
     sep1=desc.find('_')
     sep2=desc.find('(')
     sep3=desc.find(')')
-    stokes=desc[0:sep1]
+    if sep1 == 1 : stokes=desc[0:1]
+    else : stokes=desc[sep1-2:sep1]
+    #stokes=desc[0:sep1]
     dir=desc[sep1+1:sep2-1]
 
     if logI and stokes=='I':
@@ -27,13 +29,13 @@ def mdesc(desc, logI=False):
         pref=r'$'
         
     if dir == 'up':
-        return pref + stokes + r'^{\uparrow}' + '_{'+desc[sep2+1:sep3]+'}$'
+        return pref + stokes + r'^{\uparrow}' + '_{'+desc[sep2+1:sep3]+'}' + desc[sep3+1:] +'$'
     else:
-        return pref + stokes + r'^{\downarrow}' + '_{'+desc[sep2+1:sep3]+'}$'
+        return pref + stokes + r'^{\downarrow}' + '_{'+desc[sep2+1:sep3]+'}' + desc[sep3+1:] +'$'
     
 
-def smartg_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (TOA)', ind=[0], cmap=None, fig=None, subdict=None,
-        Imin=None, Imax=None):
+def smartg_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (TOA)', prefix='', ind=[0], cmap=None, fig=None, subdict=None,
+        Imin=None, Imax=None, Pmin=0, Pmax=100):
     '''
     visualization of a smartg MLUT
 
@@ -42,6 +44,7 @@ def smartg_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (T
         Circ: shows Circular polarization 
         QU:  shows Q U and DoP
         field: level of output
+        prefix: eventually a prefix for field
         ind: list of indices of azimutal planes
         full: shows all
         cmap: color map
@@ -49,16 +52,18 @@ def smartg_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (T
         subdict: dictionnary of LUT subsetter (see LUT class , sub() method)
         Imin: min value of I
         Imax: max value of I
+        Pmin: min value of DOP
+        Pmax: max value of DOP
 
     Outputs:
     if full is False, it returns 1 figure
     if full is True,  it returns 2 figures
     '''
 
-    I = mlut['I_' + field]
-    Q = mlut['Q_' + field]
-    U = mlut['U_' + field]
-    V = mlut['V_' + field]
+    I = mlut[prefix+'I_' + field]
+    Q = mlut[prefix+'Q_' + field]
+    U = mlut[prefix+'U_' + field]
+    V = mlut[prefix+'V_' + field]
 
     if subdict is not None :
         I = I.sub(d=subdict)
@@ -70,24 +75,24 @@ def smartg_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (T
     IPL = (Q*Q + U*U).apply(np.sqrt, 'Lin. Pol. ref.')
     
     # Polarized reflectance
-    IP = (Q*Q + U*U +V*V).apply(np.sqrt, 'Pol. ref.')
+    IP = (Q*Q + U*U + V*V).apply(np.sqrt, 'Pol. ref.')
 
     # Degree of Linear Polarization (%)
     DoLP = 100*IPL/I
-    DoLP.desc = r'$DoLP$'
+    DoLP.desc = prefix+r'$DoLP$'
     
     # Angle of Linear Polarization (deg)
     AoLP = (U/Q)
     AoLP.apply(np.arctan)*90/np.pi
-    AoLP.desc = r'$AoLP$'
+    AoLP.desc = prefix+r'$AoLP$'
     
     # Degree of Circular Polarization (%)
     DoCP = 100*V.apply(abs)/I
-    DoCP.desc = r'$DoCP$'
+    DoCP.desc = prefix+r'$DoCP$'
 
     # Degree of Polarization (%)
     DoP = 100*IP/I
-    DoP.desc = r'$DoP\,(\%)$'
+    DoP.desc = prefix+r'$DoP\,(\%)$'
 
     if not full:
         if QU:
@@ -107,7 +112,7 @@ def smartg_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (T
                 V.desc = mdesc(V.desc)
                 plot_polar(V, index=ind, rect='426', sub='428', fig=fig, cmap=cmap)
             else:
-                plot_polar(DoP, index=ind, rect='426', sub='428', fig=fig, vmin=0, vmax=100, cmap=cmap)
+                plot_polar(DoP, index=ind, rect='426', sub='428', fig=fig, vmin=Pmin, vmax=Pmax, cmap=cmap)
         else:
             # show only I and PR
             if fig is None: fig = figure(figsize=(9, 4.5))
@@ -120,9 +125,9 @@ def smartg_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (T
                 plot_polar(I,  index=ind, rect='221', sub='223', fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
 
             if Circ:
-                plot_polar(DoCP, index=ind, rect='222', sub='224', fig=fig, vmin=0, vmax=100, cmap=cmap)
+                plot_polar(DoCP, index=ind, rect='222', sub='224', fig=fig, vmin=0, vmax=Pmax, cmap=cmap)
             else:
-                plot_polar(DoP, index=ind, rect='222', sub='224', fig=fig, vmin=0, vmax=100, cmap=cmap)
+                plot_polar(DoP, index=ind, rect='222', sub='224', fig=fig, vmin=Pmin, vmax=Pmax, cmap=cmap)
 
         return fig
 
@@ -146,14 +151,14 @@ def smartg_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (T
         U.desc = mdesc(U.desc)
         V.desc = mdesc(V.desc)
         plot_polar(lI,  index=ind, rect='241', sub='245', fig=fig2, cmap=cmap)
-        plot_polar(DoLP,  index=ind, rect='242', sub='246', fig=fig2, vmin=0, vmax=100, cmap=cmap)
-        plot_polar(DoCP,  index=ind, rect='243', sub='247', fig=fig2, vmin=0, vmax=100, cmap=cmap)
-        plot_polar(DoP,  index=ind, rect='244', sub='248', fig=fig2, vmin=0, vmax=100, cmap=cmap)
+        plot_polar(DoLP,  index=ind, rect='242', sub='246', fig=fig2, vmin=Pmin, vmax=Pmax, cmap=cmap)
+        plot_polar(DoCP,  index=ind, rect='243', sub='247', fig=fig2, vmin=Pmin, vmax=Pmax, cmap=cmap)
+        plot_polar(DoP,  index=ind, rect='244', sub='248', fig=fig2, vmin=Pmin, vmax=Pmax, cmap=cmap)
         #plot_polar(AoLP,  index=ind, rect='244', sub='248', fig=fig2, vmin=-180, vmax=180, cmap=cmap)
 
         return fig1, fig2
 
-def transect_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (TOA)', ind=[0], fig=None, color='k', subdict=None, 
+def transect_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (TOA)', prefix='', ind=[0], fig=None, color='k', subdict=None, 
          **kwargs):
     '''
     visualization of a smartg MLUT
@@ -173,10 +178,10 @@ def transect_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up 
     if full is True,  it returns 2 figures
     '''
 
-    I = mlut['I_' + field]
-    Q = mlut['Q_' + field]
-    U = mlut['U_' + field]
-    V = mlut['V_' + field]
+    I = mlut[prefix+'I_' + field]
+    Q = mlut[prefix+'Q_' + field]
+    U = mlut[prefix+'U_' + field]
+    V = mlut[prefix+'V_' + field]
 
     if subdict is not None :
         I = I.sub(d=subdict)
@@ -192,20 +197,20 @@ def transect_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up 
 
     # Degree of Linear Polarization (%)
     DoLP = 100*IPL/I
-    DoLP.desc = r'$DoLP$'
+    DoLP.desc = prefix+r'$DoLP$'
     
     # Angle of Linear Polarization (deg)
     AoLP = (U/Q)
     AoLP.apply(np.arctan)*90/np.pi
-    AoLP.desc = r'$AoLP$'
+    AoLP.desc = prefix+r'$AoLP$'
     
     # Degree of Circular Polarization (%)
     DoCP = 100*V.apply(abs)/I
-    DoCP.desc = r'$DoCP$'
+    DoCP.desc = prefix+r'$DoCP$'
 
     # Degree of Polarization (%)
     DoP = 100*IP/I
-    DoP.desc = r'$DoP$'
+    DoP.desc = prefix+r'$DoP$'
 
     if not full:
         if QU:
@@ -330,7 +335,7 @@ def spectrum(lut, vmin=None, vmax=None, sub='111', fig=None, color='k', percent=
         ax_cart.set_title(lut.desc)
 
 
-def spectrum_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (TOA)', fig=None, color='k', subdict=None, 
+def spectrum_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (TOA)', prefix='', fig=None, color='k', subdict=None, 
          **kwargs):
     '''
     visualization of a smartg MLUT
@@ -349,10 +354,10 @@ def spectrum_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up 
     if full is True,  it returns 2 figures
     '''
 
-    I = mlut['I_' + field]
-    Q = mlut['Q_' + field]
-    U = mlut['U_' + field]
-    V = mlut['V_' + field]
+    I = mlut[prefix+'I_' + field]
+    Q = mlut[prefix+'Q_' + field]
+    U = mlut[prefix+'U_' + field]
+    V = mlut[prefix+'V_' + field]
 
     if subdict is not None :
         I = I.sub(d=subdict)
@@ -368,20 +373,20 @@ def spectrum_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up 
 
     # Degree of Linear Polarization (%)
     DoLP = 100*IPL/I
-    DoLP.desc = r'$DoLP$'
+    DoLP.desc = prefix+r'$DoLP$'
     
     # Angle of Linear Polarization (deg)
     AoLP = (U/Q)
     AoLP.apply(np.arctan)*90/np.pi
-    AoLP.desc = r'$AoLP$'
+    AoLP.desc = prefix+r'$AoLP$'
     
     # Degree of Circular Polarization (%)
     DoCP = 100*V.apply(abs)/I
-    DoCP.desc = r'$DoCP$'
+    DoCP.desc = prefix+r'$DoCP$'
 
     # Degree of Polarization (%)
     DoP = 100*IP/I
-    DoP.desc = r'$DoP$'
+    DoP.desc = prefix+r'$DoP$'
 
     if not full:
         if QU:

@@ -8,6 +8,7 @@ from os.path import join, dirname, exists, basename
 from glob import glob
 from smartg.tools.luts import MLUT, LUT, Idx
 from smartg.tools.phase import calc_iphase
+from smartg.tools.third_party_utils import change_altitude_grid
 from scipy.interpolate import interp1d
 from scipy.integrate import simps
 from scipy.constants import codata
@@ -974,102 +975,6 @@ class Profile_base(object):
         rh = self.dens_h2o/vapor_pressure(self.T)*100.
         if self.RH_cst is not None : rh[:] = self.RH_cst
         return rh
-
-
-
-def change_altitude_grid(zOld, gridSpec):
-    """ Setup a new altitude grid and interpolate profiles to new grid. """
-    zFirst, zLast =  zOld[0], zOld[-1]
-    #specs = re.split ('[-\s:,]+',gridSpec)
-    if gridSpec.count('[')+gridSpec.count(']') == 0:
-        if gridSpec.count(',')==0:
-            try:
-                deltaZ = float(gridSpec)
-            except ValueError:
-                raise Exception('z grid spacing not a number!')
-            # set up new altitude grid
-            zNew = np.arange(zFirst, zLast+deltaZ, deltaZ)
-        elif gridSpec.count(',')==1:
-            try:
-                zLow,zHigh = map(float, gridSpec.split(','))
-            except ValueError:
-                raise Exception('z grid spacing not a pair of floats!')
-
-            # for new grid simply extract old grid points within given bounds
-            # (also include altitudes slightly outside)
-            eps = min(zOld[1:]-zOld[:-1])/10.
-            zNew = np.compress(np.logical_and(np.greater_equal(zOld,zLow-eps), np.less_equal(zOld,zHigh+eps)), zOld)
-        elif gridSpec.count(',') == 2:
-            try:
-                zLow,zHigh,deltaZ = map(float, gridSpec.split(','))
-            except ValueError:
-                raise Exception('z grid spacing not a triple of floats (zLow.zHigh,deltaZ)!')
-
-            # set up new altitude grid
-            zNew = np.arange(max(zLow,zFirst), min(zHigh,zLast)+deltaZ, deltaZ)
-        elif gridSpec.count(',')>2:
-            try:
-                zNew = np.array(map(float, gridSpec.split(',')))
-            except ValueError:
-                raise Exception('z grid not a set of floats separated by commas!')
-    elif gridSpec.count('[') == gridSpec.count(']') > 0:
-        zNew = parseGridSpec(gridSpec)
-    if not zFirst <= zNew[0] < zNew[-1] <= zLast:
-        pass
-        #raise SystemExit, '%s  %f %f  %s  %f %f' % ('ERROR: new zGrid', zNew[0],zNew[-1], ' outside old grid', zFirst, zLast)
-    else:
-        raise Exception('New altitude not specified correctly\n'
-                'either simply give altitude step size, a pair of lower,upper limits, or "start(step)stop"!')
-    return zNew
-
-def parseGridSpec (gridSpec):
-    """ Set up (altitude) grid specified in format 'start[step1]stop1[step2]stop' or similar. """
-
-    # get indices of left and right brackets
-    lp = [];  rp = []
-    for i in range(len(gridSpec)):
-        if (gridSpec[i]=='['):
-            lp.append(i)
-        elif (gridSpec[i]==']'):
-            rp.append(i)
-        else:
-            pass
-    if len(lp) != len(rp):
-        print('cannot parse grid specification\n'
-                'number of opening and closing braces differs!\n'
-                'Use format start[step]stop')
-        raise SystemExit
-
-    # parse
-    gridStart = [];  gridStop = [];  gridStep = []
-    for i in range(len(lp)):
-        if i>0:  start=rp[i-1]+1
-        else:    start=0
-        if i<len(lp)-1: stop=lp[i+1]
-        else:           stop=len(gridSpec)
-
-        try:
-            gridStart.append(float(gridSpec[start:lp[i]]))
-        except ValueError:
-            raise Exception('cannot parse grid start specification\nstring not a number!')
-        try:
-            gridStep.append(float(gridSpec[lp[i]+1:rp[i]]))
-        except ValueError:
-            raise Exception('cannot parse grid step specification\nstring not a number!')
-        try:
-            gridStop.append(float(gridSpec[rp[i]+1:stop]))
-        except ValueError:
-            raise Exception('cannot parse grid stop specification\nstring not a number!')
-
-    # create the new grid (piecewise linspace)
-    newGrid = []
-    for i in range(len(lp)):
-        n = int(round(abs((gridStop[i] - gridStart[i])/gridStep[i])))
-        endpoint = (i == len(lp)-1)
-        if endpoint: n += 1
-        newGrid.extend(list(np.linspace(gridStart[i], gridStop[i], n, endpoint=endpoint)))
-
-    return np.array(newGrid)
 
 
 def FN2(lam):

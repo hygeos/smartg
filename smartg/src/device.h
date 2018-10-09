@@ -39,7 +39,7 @@ __device__ __constant__ int NLVLd;
 __device__ __constant__ int SIMd;
 __device__ __constant__ int LEd;
 __device__ __constant__ int FLUXd;
-__device__ __constant__ int MId;
+//__device__ __constant__ int MId;
 __device__ __constant__ int SURd;
 __device__ __constant__ int BRDFd;
 __device__ __constant__ int DIOPTREd;
@@ -62,15 +62,9 @@ __device__ __constant__ int BEERd;
 __device__ __constant__ int RRd;
 __device__ __constant__ float WEIGHTRRd; // THRESHOLD for RUSSIAN ROULETTE PROCEDURE
 __device__ __constant__ int NLOWd;
-__device__ __constant__ float POSXd;
-__device__ __constant__ float POSYd;
-__device__ __constant__ float POSZd;
-__device__ __constant__ float THDEGd;
-__device__ __constant__ float PHDEGd;
-__device__ __constant__ int LOCd;
-__device__ __constant__ float FOVd;
-__device__ __constant__ int TYPEd;
-
+__device__ __constant__ int NJACd;
+__device__ __constant__ int HISTd;
+__device__ __constant__ int NSENSORd;
 
 
 /**********************************************************
@@ -93,7 +87,7 @@ __global__ void launchKernel(
         unsigned long long *Counter,
         unsigned long long *NPhotonsIn,
         unsigned long long *NPhotonsOut,
-        float *tabthv, float *tabphi,
+        float *tabthv, float *tabphi,  struct Sensor *tab_sensor,
         struct Profile *prof_atm,
         struct Profile *prof_oc,
         long long *wl_proba_icdf,
@@ -109,7 +103,7 @@ __global__ void launchKernel(
 /* initPhoton
 */
 __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc,
-                           struct Spectrum *spectrum,float *X0,
+                           struct Sensor *tab_sensor, struct Spectrum *spectrum,float *X0,
                            unsigned long long *NPhotonsIn,
                            long long *wl_proba_icdf, float* tabthv, float* tabphi,
                            struct RNG_State*);
