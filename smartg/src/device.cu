@@ -694,10 +694,14 @@ extern "C" {
       double4 ds = make_double4(s.x, s.y, s.z, s.w);
       double dwsca=(double)wsca;
       double dwabs=(double)wabs;
-      DatomicAdd(tabCount+(0*II+JJ), dwsca * dwabs * ds.x);
+      /*DatomicAdd(tabCount+(0*II+JJ), dwsca * dwabs * ds.x);
       DatomicAdd(tabCount+(1*II+JJ), dwsca * dwabs * ds.y);
       DatomicAdd(tabCount+(2*II+JJ), dwsca * dwabs * ds.z);
-      DatomicAdd(tabCount+(3*II+JJ), dwsca * dwabs * ds.w);
+      DatomicAdd(tabCount+(3*II+JJ), dwsca * dwabs * ds.w);*/
+      atomicAdd(tabCount+(0*II+JJ), dwsca * dwabs * ds.x);
+      atomicAdd(tabCount+(1*II+JJ), dwsca * dwabs * ds.y);
+      atomicAdd(tabCount+(2*II+JJ), dwsca * dwabs * ds.z);
+      atomicAdd(tabCount+(3*II+JJ), dwsca * dwabs * ds.w);
 
       #else
       float *tabCount = (float*)tabPhotons + count_level*NPSTKd*NBTHETAd*NBPHId*NLAMd*NSENSORd;
@@ -710,7 +714,7 @@ extern "C" {
       counter2++;
     }
 
-} /* launchKernel*/
+} /* launchKernel2*/
 } /* extern C*/
 
 
@@ -3017,7 +3021,7 @@ __device__ void countPhoton(Photon* ph,
     #endif
 
     #if ( defined(SPHERIQUE) || defined(ALT_PP) ) && defined(ALIS)
-     unsigned long long *tabCount3; // Specific ALIS counting array pointer for path implementation (distances histograms)
+     float *tabCount3; // Specific ALIS counting array pointer for path implementation (distances histograms)
     #endif
 
     // We dont count UPTOA photons leaving in boxes outside SZA range
@@ -3187,15 +3191,15 @@ __device__ void countPhoton(Photon* ph,
       tabCount = (double*)tabPhotons + count_level*NPSTKd*NBTHETAd*NBPHId*NLAMd;
       dweight = (double)weight;
       ds = make_double4(st.x, st.y, st.z, st.w);
-      DatomicAdd(tabCount+(0*II+JJ), dweight*(ds.x+ds.y));
+      /*DatomicAdd(tabCount+(0*II+JJ), dweight*(ds.x+ds.y));
       DatomicAdd(tabCount+(1*II+JJ), dweight*(ds.x-ds.y));
       DatomicAdd(tabCount+(2*II+JJ), dweight*ds.z);
-      DatomicAdd(tabCount+(3*II+JJ), dweight*ds.w);
+      DatomicAdd(tabCount+(3*II+JJ), dweight*ds.w);*/
       // If GTX 1000 or more recent use native double atomic add
-      /*atomicAdd(tabCount+(0*II+JJ), dweight*(ds.x+ds.y));
+      atomicAdd(tabCount+(0*II+JJ), dweight*(ds.x+ds.y));
       atomicAdd(tabCount+(1*II+JJ), dweight*(ds.x-ds.y));
       atomicAdd(tabCount+(2*II+JJ), dweight*ds.z);
-      atomicAdd(tabCount+(3*II+JJ), dweight*ds.w);*/
+      atomicAdd(tabCount+(3*II+JJ), dweight*ds.w);
 
       #else
       tabCount = (float*)tabPhotons + count_level*NPSTKd*NBTHETAd*NBPHId*NLAMd;
@@ -3218,6 +3222,7 @@ __device__ void countPhoton(Photon* ph,
     int DL=(NLAMd-1)/(NLOWd-1);
 	if(((ith >= 0) && (ith < NBTHETAd)) && ((iphi >= 0) && (iphi < NBPHId)) && (!isnan(weight)))
     {
+     if(HISTd==0) {
       // For all wavelengths
       for (il=0; il<NLAMd; il++) {
           float wabs = 1.0f;
@@ -3309,15 +3314,15 @@ __device__ void countPhoton(Photon* ph,
           ds = make_double4(st.x, st.y, st.z, st.w);
           dwsca=(double)wsca;
           dwabs=(double)wabs;
-          DatomicAdd(tabCount+(0*II+JJ), dweight * dwsca * dwabs * (ds.x+ds.y));
+          /*DatomicAdd(tabCount+(0*II+JJ), dweight * dwsca * dwabs * (ds.x+ds.y));
           DatomicAdd(tabCount+(1*II+JJ), dweight * dwsca * dwabs * (ds.x-ds.y));
           DatomicAdd(tabCount+(2*II+JJ), dweight * dwsca * dwabs * ds.z);
-          DatomicAdd(tabCount+(3*II+JJ), dweight * dwsca * dwabs * ds.w);
+          DatomicAdd(tabCount+(3*II+JJ), dweight * dwsca * dwabs * ds.w);*/
           // If GTX 1000 or more recent use native double atomic add
-          /*atomicAdd(tabCount+(0*II+JJ), dweight * dwsca * dwabs * (ds.x+ds.y));
+          atomicAdd(tabCount+(0*II+JJ), dweight * dwsca * dwabs * (ds.x+ds.y));
           atomicAdd(tabCount+(1*II+JJ), dweight * dwsca * dwabs * (ds.x-ds.y));
           atomicAdd(tabCount+(2*II+JJ), dweight * dwsca * dwabs * ds.z);
-          atomicAdd(tabCount+(3*II+JJ), dweight * dwsca * dwabs * ds.w);*/
+          atomicAdd(tabCount+(3*II+JJ), dweight * dwsca * dwabs * ds.w);
 
           #else
           tabCount = (float*)tabPhotons + count_level*NPSTKd*NBTHETAd*NBPHId*NLAMd;
@@ -3329,14 +3334,14 @@ __device__ void countPhoton(Photon* ph,
 
           atomicAdd(NPhotonsOut + (((count_level*NSENSORd +is)*NLAMd + il)*NBTHETAd + ith)*NBPHId + iphi, 1);
       } // wavelength loop 
-     } //  if HIST==0
+     } //  if HISTd==0
 
      #if ( defined(SPHERIQUE) || defined(ALT_PP) )
      unsigned long long K   = NBTHETAd*NBPHId*NSENSORd;
      unsigned long long KK  = K*NATMd;
      unsigned long long LL;
      if (HISTd==1) { // Histories stored for absorption computation afterward (only spherical or alt_pp)
-          counter2=atomicAdd(NPhotonsOut + (((count_level*NSENSORd + is)*NLAMd + 0)*NBTHETAd + ith)*NBPHId + iphi, 1);
+          unsigned long long counter2=atomicAdd(NPhotonsOut + (((count_level*NSENSORd + is)*NLAMd + 0)*NBTHETAd + ith)*NBPHId + iphi, 1);
           if (counter2 >= MAX_HIST) return;
           //int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
           unsigned long long KK2 = K*(NATMd+4+NLOWd);
@@ -3364,15 +3369,19 @@ __device__ void countPhoton(Photon* ph,
                 LL2 = counter2*KK2 +  (n+NATMd+4)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
                 atomicAdd(tabCount3+LL2, weight_sca[n]);
           }
+       } // HISTd==1
+
        #ifdef DOUBLE
           tabCount2   = (double*)tabDist     + count_level*KK;
           for (int n=0; n<NOCEd; n++){
             LL = n*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
-            DatomicAdd(tabCount2+LL, (double)ph->cdist_oc[n]);
+            atomicAdd(tabCount2+LL, (double)ph->cdist_oc[n]);
+            //DatomicAdd(tabCount2+LL, (double)ph->cdist_oc[n]);
           }
           for (int n=0; n<NATMd; n++){
             LL = (n+NOCEd)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
-            DatomicAdd(tabCount2+LL, (double)ph->cdist_atm[n]);
+            atomicAdd(tabCount2+LL, (double)ph->cdist_atm[n]);
+            //DatomicAdd(tabCount2+LL, (double)ph->cdist_atm[n]);
           }
        #else
           tabCount2   = (float*)tabDist     + count_level*KK;
