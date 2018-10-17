@@ -820,7 +820,7 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
     # normalization
     tabFinal = tabPhotonsTot.astype('float64')/(norm_geo*norm_npho)
     tabDistFinal = tabDistTot.astype('float64')
-    tabHistFinal = tabHistTot
+    if hist : tabHistFinal = tabHistTot
 
     # swapaxes : (th, phi) -> (phi, theta)
     tabFinal = tabFinal.swapaxes(4,5)
@@ -1246,8 +1246,8 @@ def init_profile(wl, prof, kind):
 
     # reformat to smartg format
 
-    NATM = len(prof.axis('z_'+kind)) - 1
-    shp = (len(wl), NATM+1)
+    NLAY = len(prof.axis('z_'+kind)) - 1
+    shp = (len(wl), NLAY+1)
     prof_gpu = np.zeros(shp, dtype=type_Profile, order='C')
 
     if kind == "oc":
@@ -1340,6 +1340,7 @@ def reduce_diff(m, varnames, delta=None):
     for l in m:
         for pref in ['I_','Q_','U_','V_','transmission','flux'] :
             if pref in l.desc:
+                iw = l.names.index('wavelength')
                 lr = l.sub(d={'wavelength':np.arange(NW)})
                 res.add_lut(lr, desc=l.desc)
                 for k,varname in enumerate(varnames):
@@ -1349,8 +1350,8 @@ def reduce_diff(m, varnames, delta=None):
                         lr.desc = 'd'+l.desc+'/'+'d'+varname
                     else:
                         lr.desc = 'd'+l.desc+'->('+varname+')'
-                    lr.names[0]= 'wavelength'
-                    lr.axes[0] = m.axis('wavelength')[:NW]
+                    lr.names[iw]= 'wavelength'
+                    lr.axes[iw] = m.axis('wavelength')[:NW]
                     res.add_lut(lr)
     res.attrs = m.attrs
     return res
@@ -1499,8 +1500,9 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         #!!!!!!!!!!!!!!!!!!!!!!!!!!!
         T = tabDist
         tabDistTot += T
-        H = tabHist
-        tabHistTot += H
+        if hist :
+            H = tabHist
+            tabHistTot = H
         #!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
         N_simu += 1

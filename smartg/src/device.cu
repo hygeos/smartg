@@ -1264,7 +1264,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
         if (ph->loc == ATMOS) {
          if (ph->layer == NATMd+1) {
             ph->loc = SURF0P;
-            ph->tau = 0.;
+            //ph->tau = 0.;
             ph->layer -= 1;  // next time photon enters move_pp2, it's at layers NATM
             break;
          }
@@ -1276,14 +1276,14 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
         if (ph->loc == OCEAN) {
          if (ph->layer == NOCEd+1) {
             ph->loc = SEAFLOOR;
-            ph->tau = 0.;
+            //ph->tau = 0.;
             ph->layer -= 1;  // next time photon enters move_pp2, it's at layers NOCE
             break;
          }
          if (ph->layer <= 0) {
             ph->loc = SURF0M;
             ph->layer= 0;
-            ph->tau  = get_OD(BEERd,prof[0+ilam]);
+            //ph->tau  = get_OD(BEERd,prof[0+ilam]);
             break;
          }
         }
@@ -1361,6 +1361,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
             #endif
 
             ph->layer -= sign_direction;
+            count++;
         } // photon advances to next layer
 
     } // while loop
@@ -3053,7 +3054,7 @@ __device__ void countPhoton(Photon* ph,
 	float psi=0.;
 	int ith=0, iphi=0, il=0, is=ph->is;
     float4 st; // replace s1, s2, s3, s4
-    int II, JJ;
+    unsigned long long II, JJ, JJJ;
 
 
     if ((theta != 0.F) && (theta!= acosf(-1.F))) {
@@ -3199,7 +3200,7 @@ __device__ void countPhoton(Photon* ph,
     #endif
 
     II = NBTHETAd*NBPHId*NLAMd*NSENSORd;
-    //JJJ= NPSTKd*II;
+    JJJ= NPSTKd*II;
 
     // Regular counting procedure
     #ifndef ALIS //=========================================================================================================
@@ -3209,7 +3210,7 @@ __device__ void countPhoton(Photon* ph,
 
       #ifdef DOUBLE 
       // select the appropriate level (count_level)
-      tabCount = (double*)tabPhotons + count_level*NPSTKd*NBTHETAd*NBPHId*NLAMd;
+      tabCount = (double*)tabPhotons + count_level*JJJ;
       dweight = (double)weight;
       ds = make_double4(st.x, st.y, st.z, st.w);
       /*DatomicAdd(tabCount+(0*II+JJ), dweight*(ds.x+ds.y));
@@ -3223,7 +3224,7 @@ __device__ void countPhoton(Photon* ph,
       atomicAdd(tabCount+(3*II+JJ), dweight*ds.w);
 
       #else
-      tabCount = (float*)tabPhotons + count_level*NPSTKd*NBTHETAd*NBPHId*NLAMd;
+      tabCount = (float*)tabPhotons + count_level*JJJ;
       atomicAdd(tabCount+(0*II+JJ), weight * (st.x+st.y));
       atomicAdd(tabCount+(1*II+JJ), weight * (st.x-st.y));
       atomicAdd(tabCount+(2*II+JJ), weight * st.z);
@@ -3330,7 +3331,7 @@ __device__ void countPhoton(Photon* ph,
           #endif
 
           #ifdef DOUBLE 
-          tabCount = (double*)tabPhotons + count_level*NPSTKd*NBTHETAd*NBPHId*NLAMd;
+          tabCount = (double*)tabPhotons + count_level*JJJ;
           dweight = (double)weight;
           ds = make_double4(st.x, st.y, st.z, st.w);
           dwsca=(double)wsca;
@@ -3346,7 +3347,7 @@ __device__ void countPhoton(Photon* ph,
           atomicAdd(tabCount+(3*II+JJ), dweight * dwsca * dwabs * ds.w);
 
           #else
-          tabCount = (float*)tabPhotons + count_level*NPSTKd*NBTHETAd*NBPHId*NLAMd;
+          tabCount = (float*)tabPhotons + count_level*JJJ;
           atomicAdd(tabCount+(0*II+JJ), weight * wsca * wabs * (st.x+st.y));
           atomicAdd(tabCount+(1*II+JJ), weight * wsca * wabs * (st.x-st.y));
           atomicAdd(tabCount+(2*II+JJ), weight * wsca * wabs * st.z);
@@ -3628,7 +3629,7 @@ __device__ void display(const char* desc, Photon* ph) {
         #ifdef ALIS
         printf(" wsca=");
         for (int k=0; k<NLOWd; k++) printf("%7.5f ",ph->weight_sca[k]);
-        #ifndef ALT_PP
+        #if !defined(ALT_PP) && !defined(SPHERIQUE)
         printf(" nevt=%2d",ph->nevt);
         printf(" dtausca=");
         for (int k=0; k<NLOWd; k++) printf("%7.5f ",ph->tau_sca[k]);
