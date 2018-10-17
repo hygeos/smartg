@@ -1099,7 +1099,6 @@ def calculF(profile, N, DEPO, kind):
 
     nphases += 1   # include Rayleigh phase function
 
-    print(nphases, kind)
     # Initialize the cumulative distribution function
     if nphases > 0:
         shp = (nphases, N)
