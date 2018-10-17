@@ -431,7 +431,7 @@ extern "C" {
                   }//direction
                 } //LE
 
-                //Propagation of Lamberatian reflection with le=0
+                //Propagation of Lambertian reflection with le=0
 				surfaceLambertienne(&ph, 0, tabthv, tabphi, spectrum, &rngstate);
             } // Lambertian
            } // ENV=0
@@ -523,6 +523,9 @@ extern "C" {
                         // Only for downward photons count also them up to Bottom 
                         if (k==1) { 
                             // Final counting at the B 
+                             #ifdef ALT_PP                          
+                             if (ph_le.loc==OCEAN) move_pp2(&ph_le, prof_atm, prof_oc, 1, DOWNB , &rngstate); 
+                             #endif 
                             countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, DOWNB , errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
                         }
                       }//direction
@@ -559,6 +562,9 @@ extern "C" {
                     ph_le.ith = (ith + ith0)%NBTHETAd;
 				    surfaceLambertienne(&ph_le, 1, tabthv, tabphi, spectrum, &rngstate);
                     //  contribution to UP0M level
+                    #ifdef ALT_PP                          
+                    if (ph_le.loc==OCEAN) move_pp2(&ph_le, prof_atm, prof_oc, 1, UP0M, &rngstate); 
+                    #endif
                     countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0M,   errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
                 }
               }
