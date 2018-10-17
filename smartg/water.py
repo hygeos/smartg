@@ -701,7 +701,8 @@ class IOP_profile(IOP_base):
         # NEW !!!
 
         # NEW !!!
-        SPM = 10. # g/m3
+        SPM = 0. # g/m3
+        #SPM = 10. # g/m3
         gamma=0.5
         bbpnap650 = 10**(1.03*np.log10(SPM) - 2.06) # Neukermans et al 2012
         bbpnap = bbpnap650*(wav2/650.)**(-gamma)

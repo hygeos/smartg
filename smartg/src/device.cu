@@ -1205,7 +1205,8 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
         else ph->weight = 0.;
     }
 
-    if (BEERd == 0) ph->weight *= prof_atm[ph->layer+ilam].ssa;
+    if ((BEERd == 0) && (ph_loc == ATMOS)) ph->weight *= prof_atm[ph->layer+ilam].ssa;
+    //if (BEERd == 0) ph->weight *= prof_atm[ph->layer+ilam].ssa;
 }
 #endif // SPHERIQUE
 
@@ -1227,7 +1228,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
     int ilam; 
     struct Profile *prof;
     int  NL;
-	//int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
     if (ph->loc==OCEAN) {
         NL   = NOCEd+1;
         prof = prof_oc;
@@ -1375,7 +1376,10 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
         else ph->weight = 0.;
     }
 
-    if (BEERd == 0) ph->weight *= prof[ph->layer+ilam].ssa;
+    if ((BEERd == 0) && ((ph->loc == ATMOS) || (ph->loc == OCEAN))) {
+        ph->weight *= prof[ph->layer+ilam].ssa;
+        if (idx==0) printf("%d %d %d %f\n",ph->loc, ph->layer, ph->ilam, prof[ph->layer+ilam].ssa);
+    }
 }
 #endif // ALT_PP
 
@@ -3163,8 +3167,8 @@ __device__ void countPhoton(Photon* ph,
         ph->layer = 0;
         ph->nevt++;
         // ph->layer_prev[ph->nevt] = ph->layer;
-        if (ph->loc == ATMOS) ph->layer_prev[ph->nevt]   = ph->layer;
-        if (ph->loc == OCEAN || ph->loc == SURF0M) ph->layer_prev[ph->nevt]   = -ph->layer;
+        //if (ph->loc == ATMOS) ph->layer_prev[ph->nevt]   = ph->layer;
+        //if (ph->loc == OCEAN || ph->loc == SURF0M) ph->layer_prev[ph->nevt]   = -ph->layer;
         ph->vz_prev[ph->nevt] = ph->v.z;
         ph->epsilon_prev[ph->nevt] = 0.f;
         

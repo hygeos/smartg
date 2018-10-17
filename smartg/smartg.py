@@ -363,7 +363,7 @@ class Smartg(object):
              NBTHETA=45, NBPHI=90, NF=1e6,
              OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
              NBLOOP=None, progress=True,
-             le=None, flux=None, stdev=False, BEER=0, RR=1, WEIGHTRR=0.1, SZA_MAX=90., SUN_DISC=0,
+             le=None, flux=None, stdev=False, BEER=1, RR=1, WEIGHTRR=0.1, SZA_MAX=90., SUN_DISC=0,
              sensor=None, refraction=False, reflectance=True):
         '''
         Run a SMART-G simulation
@@ -1099,6 +1099,7 @@ def calculF(profile, N, DEPO, kind):
 
     nphases += 1   # include Rayleigh phase function
 
+    print(nphases, kind)
     # Initialize the cumulative distribution function
     if nphases > 0:
         shp = (nphases, N)
