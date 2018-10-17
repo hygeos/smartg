@@ -302,7 +302,7 @@ extern "C" {
                             #endif
                             #endif
                             #ifdef ALT_PP
-                            move_pp2(&ph_le, prof_atm, prof_oc, 1, count_level_le , &rngstate);
+                            if ((ph_le.loc==ATMOS) || (ph_le.loc==OCEAN)) move_pp2(&ph_le, prof_atm, prof_oc, 1, count_level_le , &rngstate);
                             #endif
 
                             // Finally count the virtual photon
@@ -379,7 +379,7 @@ extern "C" {
                             if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
                             #endif
                             #ifdef ALT_PP
-                            move_pp2(&ph_le, prof_atm, prof_oc, 1, UPTOA , &rngstate);
+                            if (ph_le.loc==ATMOS) move_pp2(&ph_le, prof_atm, prof_oc, 1, UPTOA, &rngstate);
                             #endif
                             // Final counting at the TOA
                             countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA , errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
@@ -387,6 +387,9 @@ extern "C" {
                         // Only for downward photons count also them up to Bottom 
                         if (k==1) { 
                             // Final counting at the B 
+                            #ifdef ALT_PP
+                            if (ph_le.loc==OCEAN) move_pp2(&ph_le, prof_atm, prof_oc, 1, DOWNB, &rngstate);
+                            #endif
                             countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, DOWNB , errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
                         }
                       }//direction
@@ -421,7 +424,7 @@ extern "C" {
                         if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
                         #endif
                         #ifdef ALT_PP
-                        move_pp2(&ph_le, prof_atm, prof_oc, 1, UPTOA , &rngstate);
+                        if (ph_le.loc==ATMOS) move_pp2(&ph_le, prof_atm, prof_oc, 1, UPTOA , &rngstate);
                         #endif
                         countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
                     }//direction
@@ -453,7 +456,7 @@ extern "C" {
                         if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
                         #endif
                         #ifdef ALT_PP
-                        move_pp2(&ph_le, prof_atm, prof_oc, 1, UPTOA , &rngstate);
+                        if (ph_le.loc==ATMOS) move_pp2(&ph_le, prof_atm, prof_oc, 1, UPTOA , &rngstate);
                         #endif
                         countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
                     }//direction
@@ -512,7 +515,7 @@ extern "C" {
                             if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
                             #endif
                             #ifdef ALT_PP
-                            move_pp2(&ph_le, prof_atm, prof_oc, 1, UPTOA , &rngstate);
+                            if (ph_le.loc==ATMOS) move_pp2(&ph_le, prof_atm, prof_oc, 1, UPTOA , &rngstate);
                             #endif
                             // Final counting at the TOA
                             countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA , errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
@@ -1245,7 +1248,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
     // cross lower layer
     if (vzn <= 0) sign_direction = -1;
     else sign_direction = 1;
-    //if (ph->loc==OCEAN) sign_direction *=-1;
+    int count=0;
 
     while (1) {
 
@@ -1263,7 +1266,8 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
             ph->loc = SPACE;
             break;
          }
-        } else {
+        } 
+        if (ph->loc == OCEAN) {
          if (ph->layer == NOCEd+1) {
             ph->loc = SEAFLOOR;
             ph->tau = 0.;
@@ -1356,7 +1360,11 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
     } // while loop
 
     if (le) {
-        if (( (count_level==UPTOA)  && (ph->loc==SPACE ) ) || ( (count_level==DOWN0P) && (ph->loc==SURF0P) )) ph->weight *= __expf(-(hph + h_cur));
+        if (( (count_level==UPTOA)  && (ph->loc==SPACE ) ) || 
+            ( (count_level==DOWN0P) && (ph->loc==SURF0P) ) ||
+            ( (count_level==UP0M)   && (ph->loc==SURF0M) ) ||
+            ( (count_level==DOWNB)  && (ph->loc==SEAFLOOR) ) ) 
+            ph->weight *= __expf(-(hph + h_cur));
         else ph->weight = 0.;
     }
 
@@ -2502,6 +2510,7 @@ __device__ void surfaceAgitee(Photon* ph, int le,
                     ph->loc = SPACE;
                 } else{
                     ph->loc = ATMOS;
+                    ph->layer = NATMd;
                 }
             } // else, no change of location
             else if (SINGLEd) ph->loc = REMOVED;
@@ -2512,6 +2521,7 @@ __device__ void surfaceAgitee(Photon* ph, int le,
                   ph->loc = ABSORBED;
                } else{
                   ph->loc = OCEAN;
+                  ph->layer = 0;
                }
             } // else, no change of location
             else if (SINGLEd) ph->loc = REMOVED;
@@ -2594,6 +2604,7 @@ __device__ void surfaceAgitee(Photon* ph, int le,
                 ph->loc = SPACE;
             } else{
                 ph->loc = ATMOS;
+                ph->layer = NATMd;
             }
          } else {
             // multiple transmissions (vz<0 after water->air transmission)
@@ -2607,6 +2618,7 @@ __device__ void surfaceAgitee(Photon* ph, int le,
                 ph->loc = ABSORBED;
               } else{
                 ph->loc = OCEAN;
+                ph->layer = 0;
               }
            } else {
               // multiple transmissions (vz<0 after water->air transmission)
@@ -2806,6 +2818,7 @@ __device__ void surfaceBRDF(Photon* ph, int le,
         ph->loc = SPACE;
     } else {
           ph->loc = ATMOS;
+          ph->layer = NATMd;
     }
 
     if (WAVE_SHADOWd) {
@@ -2944,7 +2957,8 @@ __device__ void surfaceLambertienne(Photon* ph, int le,
 	
     if (DIOPTREd!=4 && ((ph->loc == SURF0M) || (ph->loc == SURF0P))){
 	  bool test_s = ( SIMd == -1);
-	  ph->loc = SPACE*test_s + ATMOS*(!test_s);
+	  ph->loc = SPACE *test_s + ATMOS*(!test_s);
+      ph->layer = NATMd; 
     }
 	
     if (ph->loc != SEAFLOOR){
@@ -2973,6 +2987,7 @@ __device__ void surfaceLambertienne(Photon* ph, int le,
     else {
 	  ph->weight *= spectrum[ph->ilam].alb_seafloor;
       ph->loc = OCEAN;
+      ph->layer = NOCEd; 
     }
     
 }
