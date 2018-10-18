@@ -796,7 +796,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     }
 
     if(ph->loc == SURF0M){
-        ph->layer   = NOCEd;
+        ph->layer   = 0;
         ph->tau     = 0.F;
         ph->tau_abs = 0.F;
         epsilon     = 0.F;
@@ -812,7 +812,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     }
 
     if(ph->loc == SEAFLOOR){
-        ph->layer   = 0;
+        ph->layer   = NOCEd;
         ph->tau     = get_OD(BEERd, prof_oc[NOCEd +ph->ilam*(NOCEd+1)]);
         ph->tau_abs = prof_oc[NOCEd +ph->ilam*(NOCEd+1)].OD_abs;
         epsilon     = 0.F;
@@ -963,7 +963,6 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     #ifdef ALIS
     #if !defined(ALT_PP) && !defined(SPHERIQUE)
     ph->nevt = 0;
-    // ph->layer_prev[ph->nevt] = ph->layer;
     if (ph->loc == ATMOS) ph->layer_prev[ph->nevt]   = ph->layer;
     if (ph->loc == OCEAN || ph->loc == SURF0M) ph->layer_prev[ph->nevt]   = -ph->layer;
 
@@ -979,10 +978,8 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     // Init photon counters
     #ifdef ALIS
     for (int k=0; k<NLAMd; k++) atomicAdd(NPhotonsIn + NLAMd*ph->is + k, 1);
-    //for (int k=0; k<NLAMd; k++) atomicAdd(NPhotonsIn + k, 1);
     #else
     atomicAdd(NPhotonsIn + NLAMd*ph->is + ph->ilam, 1);
-    //atomicAdd(NPhotonsIn + ph->ilam, 1);
     #endif
 
     #ifdef BACK
@@ -1205,7 +1202,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
         else ph->weight = 0.;
     }
 
-    if ((BEERd == 0) && (ph_loc == ATMOS)) ph->weight *= prof_atm[ph->layer+ilam].ssa;
+    if ((BEERd == 0) && (ph->loc == ATMOS)) ph->weight *= prof_atm[ph->layer+ilam].ssa;
     //if (BEERd == 0) ph->weight *= prof_atm[ph->layer+ilam].ssa;
 }
 #endif // SPHERIQUE
