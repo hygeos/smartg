@@ -269,7 +269,7 @@ class TriangleMesh(Shape):
         if isinstance(vi, np.ndarray) and isinstance(P, np.ndarray):
             self.VertexIndex = vi
             self.p = P
-            self.ntris = len(np.atleast_1d(vi))/3
+            self.ntris = int(len(np.atleast_1d(vi))/3)
             self.nverts = np.amax(self.VertexIndex) + 1
             self.reftri = [None]*self.ntris
 

@@ -223,26 +223,62 @@ def Analyse_create_entity(entity, Theta):
     if (isinstance(entity, Entity)):
         E = []
         E = np.append(E, entity)
+        # Enable generic local visualization (part1)
+        if isinstance(E[0].geo, Plane):
+            GLXmin = min(E[0].geo.p1.x, E[0].geo.p2.x, E[0].geo.p3.x, E[0].geo.p4.x)
+            GLYmin = min(E[0].geo.p1.y, E[0].geo.p2.y, E[0].geo.p3.y, E[0].geo.p4.y)
+            GLZmin = min(E[0].geo.p1.z, E[0].geo.p2.z, E[0].geo.p3.z, E[0].geo.p4.z)
+            GLXmax = max(E[0].geo.p1.x, E[0].geo.p2.x, E[0].geo.p3.x, E[0].geo.p4.x)
+            GLYmax = max(E[0].geo.p1.y, E[0].geo.p2.y, E[0].geo.p3.y, E[0].geo.p4.y)
+            GLZmax = max(E[0].geo.p1.z, E[0].geo.p2.z, E[0].geo.p3.z, E[0].geo.p4.z)
+            GLEcaX = abs(GLXmin-GLXmax); GLEcaY = abs(GLYmin-GLYmax); GLEcaZ = abs(GLZmin-GLZmax);
+            GLEcaM = max(GLEcaX, GLEcaY, GLEcaZ)
+        # End (part1)
+            
     elif (all(isinstance(x, Entity) for x in entity)):
         E = entity
+        # Enable generic local visualization (part2)
+        # Be carful, if the local is greater than 100km the below need to be modified!
+        GLXmin = 100.; GLYmin = 100.; GLZmin = 100.; GLXmax = -100.; GLYmax = -100.; GLZmax = -100.;
+        for i in range(0, len(E)):
+            if E[i].transformation.transx < GLXmin :
+                GLXmin = E[i].transformation.transx
+            if E[i].transformation.transx > GLXmax :
+                GLXmax = E[i].transformation.transx
+            if E[i].transformation.transy < GLYmin :
+                GLYmin = E[i].transformation.transy
+            if E[i].transformation.transy > GLYmax :
+                GLYmax = E[i].transformation.transy
+            if E[i].transformation.transz < GLZmin :
+                GLZmin = E[i].transformation.transz
+            if E[i].transformation.transz > GLZmax :
+                GLZmax = E[i].transformation.transz
+        GLEcaX = abs(GLXmin-GLXmax); GLEcaY = abs(GLYmin-GLYmax); GLEcaZ = abs(GLZmin-GLZmax);
+        GLEcaM = max(GLEcaX, GLEcaY, GLEcaZ)
+        # End (part2)
     else:
         raise NameError('entity argument need to be an Entity objet or a list' + \
                         ' of Entity Object ')
 
-    atLeastOneInt = False
+    #atLeastOneInt = False
     t_hit = 9999.
     wsx = 120.*np.sin(Theta*(np.pi/180.)); wsy = 0.; wsz = 120.*np.cos(Theta*(np.pi/180.));
+    #wsx += E[0].transformation.transx; wsy += E[0].transformation.transy; wsz += E[0].transformation.transz;
     xs = np.linspace(0, wsx, 100)
-    ys = np.linspace(0, wsy, 100)
+    ys = np.linspace(0, wsy)
     zs = np.linspace(0, wsz, 100)
 
-    sunDirection = Normalize(Vector(-wsx, wsy, -wsz))
-
-    Photon = Ray(o = Point(wsx, wsy, wsz), \
-                 d = Vector( sunDirection.x, \
-                             sunDirection.y, \
-                             sunDirection.z ), \
-                 end = 120.)
+    sunDirection = Normalize(Vector(-wsx, wsy, -wsz)); LMir = 0;
+    TabPhoton = []; atLeastOneInt = []; xn = []; yn = []; zn = []; xr = []; yr = []; zr = [];
+    print ("size of E-2 = ", len(E)-2)
+    for i in range(0, len(E)):
+        if (E[i].name == "reflector"):
+            LMir += 1
+            atLeastOneInt = np.append(atLeastOneInt, False)
+            xn = np.append(xn, None); yn = np.append(yn, None); zn = np.append(zn, None);
+            xr = np.append(xr, None); yr = np.append(yr, None); zr = np.append(zr, None);      
+            TabPhoton = np.append(TabPhoton, Ray(o = Point(wsx+E[i].transformation.transx, wsy+E[i].transformation.transy, wsz+E[i].transformation.transz), \
+                                                 d = Vector( sunDirection.x, sunDirection.y, sunDirection.z ), end = 120.))
     
     # create the matplotlib figure
     fig = plt.figure()
@@ -280,23 +316,25 @@ def Analyse_create_entity(entity, Theta):
 
             PlaneMesh = TriangleMesh(tt, tt_inv, vi, P)
 
-            if(PlaneMesh.Intersect(Photon)):
-                atLeastOneInt = True
-                if (PlaneMesh.thit < t_hit):
-                    p_hit = PlaneMesh.dg.p
-                    t_hit = PlaneMesh.thit
-                    sunDistance = sunDirection*t_hit
-                    tnn = np.linspace(0, 1, 20)
-                    P1 = PlaneMesh.dg.p ; N1 = PlaneMesh.dg.nn;
-                    N1 = FaceForward(N1, sunDirection * -1)
-                    # For ploting the normal and the red ray
-                    xn = P1.x + tnn * N1.x
-                    yn = P1.y + tnn * N1.y
-                    zn = P1.z + tnn * N1.z
-                    tr = np.linspace(Photon.mint, t_hit, 100)
-                    xr = Photon.o.x + tr*Photon.d.x
-                    yr = Photon.o.y + tr*Photon.d.y
-                    zr = Photon.o.z + tr*Photon.d.z
+            for i in range(0, LMir):
+                if(PlaneMesh.Intersect(TabPhoton[i])):
+                    atLeastOneInt[i] = True
+                    if (PlaneMesh.thit < t_hit):
+                        p_hit = PlaneMesh.dg.p
+                        t_hit = PlaneMesh.thit
+                        sunDistance = sunDirection*t_hit
+                        tnn = np.linspace(0, 0.001, 20)
+                        P1 = PlaneMesh.dg.p ; N1 = PlaneMesh.dg.nn;
+                        N1 = FaceForward(N1, sunDirection * -1)
+                        # For ploting the normal and the red ray
+                        xn[i] = P1.x + tnn * N1.x
+                        yn[i] = P1.y + tnn * N1.y
+                        zn[i] = P1.z + tnn * N1.z
+                        #tr = np.linspace(Photon.mint, t_hit, 100)
+                        tr = np.linspace(t_hit*0.98, t_hit, 100)
+                        xr[i] = TabPhoton[i].o.x + tr*TabPhoton[i].d.x
+                        yr[i] = TabPhoton[i].o.y + tr*TabPhoton[i].d.y
+                        zr[i] = TabPhoton[i].o.z + tr*TabPhoton[i].d.z
 
             # Triangles mesh parameters for plot
 
@@ -348,40 +386,69 @@ def Analyse_create_entity(entity, Theta):
             z1 = myP.z
             
             ax.plot_surface(x1, y1, z1, rstride=1, cstride=1, color='b', alpha=0.5)
-            
-            if(S.Intersect(Photon)):
-                atLeastOneInt = True
-                if (S.thit < t_hit):
-                    p_hit = S.dg.p
-                    t_hit = S.thit
-                    sunDistance = sunDirection*t_hit
-                    tnn = np.linspace(0, 1, 20)
-                    P1 = S.dg.p ; N1 = S.dg.nn;
-                    N1 = FaceForward(N1, sunDirection * -1)
-                    # For ploting the normal and the red ray
-                    xn = P1.x + tnn * N1.x
-                    yn = P1.y + tnn * N1.y
-                    zn = P1.z + tnn * N1.z
-                    tr = np.linspace(Photon.mint, t_hit, 100)
-                    xr = Photon.o.x + tr*Photon.d.x
-                    yr = Photon.o.y + tr*Photon.d.y
-                    zr = Photon.o.z + tr*Photon.d.z
+
+            for i in range(0, LMir):
+                if(S.Intersect(TabPhoton[i])):
+                    atLeastOneInt[i] = True
+                    if (S.thit < t_hit):
+                        p_hit = S.dg.p
+                        t_hit = S.thit
+                        sunDistance = sunDirection*t_hit
+                        tnn = np.linspace(0, 0.001, 20)
+                        P1 = S.dg.p ; N1 = S.dg.nn;
+                        N1 = FaceForward(N1, sunDirection * -1)
+                        # For ploting the normal and the red ray
+                        xn[i] = P1.x + tnn * N1.x
+                        yn[i] = P1.y + tnn * N1.y
+                        zn[i] = P1.z + tnn * N1.z
+                        #tr = np.linspace(Photon.mint, t_hit, 100)
+                        tr = np.linspace(t_hit*0.98, t_hit, 100)
+                        xr[i] = TabPhoton[i].o.x + tr*TabPhoton[i].d.x
+                        yr[i] = TabPhoton[i].o.y + tr*TabPhoton[i].d.y
+                        zr[i] = TabPhoton[i].o.z + tr*TabPhoton[i].d.z
         else:
             raise NameError('This geometry is unknown!')
 
 
     # ==============================================
     # plot all the geometries
-    if (atLeastOneInt):
-        ax.plot(xn, yn, zn, color='g', linewidth=4)
-        ax.plot(xr, yr, zr, color='r', linewidth=2)
+    for i in range(0, LMir):
+        if (atLeastOneInt[i]):
+            ax.plot(xn[i], yn[i], zn[i], color='g', linewidth=1)
+            ax.plot(xr[i], yr[i], zr[i], color='r', linewidth=1)
+        else:
+            ax.plot(xs, ys, zs, color='y', linewidth=1)
+    # ax.scatter([0],[0],[0],color="g",s=10)
+    # Enable generic local visualization (part3)
+    if (len(E) == 1):
+        if (GLEcaZ == GLEcaM):
+            ax.set_zlim3d(E[0].transformation.transz+GLZmin, E[0].transformation.transz+GLZmax)
+        else:
+            TempVal = GLEcaM - GLEcaZ
+            ax.set_zlim3d(E[0].transformation.transz + GLZmin-(0.5*GLEcaM), E[0].transformation.transz + GLZmax+(0.5*GLEcaM))
+        if (GLEcaX == GLEcaM):
+            ax.set_xlim3d(E[0].transformation.transx+GLXmin, E[0].transformation.transx+GLXmax)
+        else:
+            TempVal = GLEcaM - GLEcaX
+            ax.set_xlim3d(E[0].transformation.transx+GLXmin-(0.5*GLEcaM), E[0].transformation.transx+GLXmax+(0.5*GLEcaM))
+        if (GLEcaY == GLEcaM):
+            ax.set_ylim3d(E[0].transformation.transy+GLYmin, E[0].transformation.transy+GLYmax)
+        else:
+            TempVal = GLEcaM - GLEcaY
+            ax.set_ylim3d(E[0].transformation.transy+GLYmin-(0.5*GLEcaM), E[0].transformation.transy+GLYmax+(0.5*GLEcaM)) 
     else:
-        ax.plot(xs, ys, zs, color='y', linewidth=4)
-        
-    ax.scatter([0],[0],[0],color="g",s=10)
-    ax.set_xlim3d(-20, 120)
-    ax.set_ylim3d(-20, 120)
-    ax.set_zlim3d(-20, 120)
+        ax.set_zlim3d(0, GLEcaM)
+        if (GLEcaX == GLEcaM):
+            ax.set_xlim3d(GLXmin, GLXmax)
+        else:
+            TempVal = GLEcaM - GLEcaX
+            ax.set_xlim3d(GLXmin-(0.5*GLEcaM), GLXmax+(0.5*GLEcaM))
+        if (GLEcaY == GLEcaM):
+            ax.set_ylim3d(GLYmin, GLYmax)
+        else:
+            TempVal = GLEcaM - GLEcaY
+            ax.set_ylim3d(GLYmin-(0.5*GLEcaM), GLYmax+(0.5*GLEcaM)) 
+    # End (part3)    
     ax.set_xlabel('X Label')
     ax.set_ylabel('Y Label')
     ax.set_zlabel('Z Label')
