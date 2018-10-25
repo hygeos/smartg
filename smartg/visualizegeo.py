@@ -215,7 +215,39 @@ class Entity(object):
             str(self.geo) + '\n' + \
             str(self.transformation)
 
+    
+def Ref_Fresnel(dirEnt, geoTrans):
+    '''
+    Simple Fresnel reflection
+    dirE : direction of the ray entering on the surface of reflection
+    geoTrans : transformation of the surface where there is reflection
+    '''
+    if isinstance(dirEnt, Vector) :
+        dirE = dirEnt
+    else :
+        raise Exception("the dirEnt argument must be a Vector class")
+    if isinstance(geoTrans, Transform) :
+        geoT = geoTrans
+    else :
+        raise Exception("the geoTrans argument must be a Transform class")
 
+    MyT = Transform()
+    RotPi = MyT.rotateZ(180.)
+    Aff(RotPi.m)
+    TT = geoT
+    invTT = TT.inverse(TT)
+    V1 = dirE
+    print("V1= (", V1.x, ", ", V1.y, ", ", V1.z, ")")
+    V2 = invTT[V1]
+    print("V2= (", V2.x, ", ", V2.y, ", ", V2.z, ")")
+    V2 = RotPi[V2]
+    print("V2AfPi= (", V2.x, ", ", V2.y, ", ", V2.z, ")")
+    V2 = Vector(V2.x*-1., V2.y*-1., V2.z*-1.)
+    print("V2Afminus= (", V2.x, ", ", V2.y, ", ", V2.z, ")")
+    V2 = TT[V2]
+    print("V2AfTT= (", V2.x, ", ", V2.y, ", ", V2.z, ")")
+    return V2
+    
 def Analyse_create_entity(entity, Theta):
     '''
     definition
@@ -261,15 +293,16 @@ def Analyse_create_entity(entity, Theta):
                         ' of Entity Object ')
 
     #atLeastOneInt = False
-    t_hit = 9999.
+    #t_hit = 9999.
     wsx = 120.*np.sin(Theta*(np.pi/180.)); wsy = 0.; wsz = 120.*np.cos(Theta*(np.pi/180.));
     #wsx += E[0].transformation.transx; wsy += E[0].transformation.transy; wsz += E[0].transformation.transz;
     xs = np.linspace(0, wsx, 100)
     ys = np.linspace(0, wsy)
     zs = np.linspace(0, wsz, 100)
 
-    sunDirection = Normalize(Vector(-wsx, wsy, -wsz)); LMir = 0;
+    sunDirection = Normalize(Vector(-wsx, wsy, -wsz)); LMir = 0; LMir2 = 0;
     TabPhoton = []; atLeastOneInt = []; xn = []; yn = []; zn = []; xr = []; yr = []; zr = [];
+    TabPhoton2 = [];atLeastOneInt2 = []; xr2 = []; yr2 = []; zr2 = [];
     print ("size of E-2 = ", len(E)-2)
     for i in range(0, len(E)):
         if (E[i].name == "reflector"):
@@ -278,8 +311,9 @@ def Analyse_create_entity(entity, Theta):
             xn = np.append(xn, None); yn = np.append(yn, None); zn = np.append(zn, None);
             xr = np.append(xr, None); yr = np.append(yr, None); zr = np.append(zr, None);      
             TabPhoton = np.append(TabPhoton, Ray(o = Point(wsx+E[i].transformation.transx, wsy+E[i].transformation.transy, wsz+E[i].transformation.transz), \
-                                                 d = Vector( sunDirection.x, sunDirection.y, sunDirection.z ), end = 120.))
-    
+                                                 d = Vector( sunDirection.x, sunDirection.y, sunDirection.z ), end = 1200.))
+
+    print("LMir =", LMir)
     # create the matplotlib figure
     fig = plt.figure()
     ax = fig.add_subplot(111, projection=Axes3D.name)
@@ -315,11 +349,15 @@ def Analyse_create_entity(entity, Theta):
                           Point(E[k].geo.p4.x, E[k].geo.p4.y, E[k].geo.p4.z)], dtype = Point)
 
             PlaneMesh = TriangleMesh(tt, tt_inv, vi, P)
-
+            
             for i in range(0, LMir):
+                t_hit = 9999.
                 if(PlaneMesh.Intersect(TabPhoton[i])):
-                    atLeastOneInt[i] = True
                     if (PlaneMesh.thit < t_hit):
+                        atLeastOneInt[i] = True
+                        LMir2 += 1
+                        xr2 = np.append(xr2, None); yr2 = np.append(yr2, None); zr2 = np.append(zr2, None); 
+                        atLeastOneInt2 = np.append(atLeastOneInt2, False)
                         p_hit = PlaneMesh.dg.p
                         t_hit = PlaneMesh.thit
                         sunDistance = sunDirection*t_hit
@@ -335,7 +373,30 @@ def Analyse_create_entity(entity, Theta):
                         xr[i] = TabPhoton[i].o.x + tr*TabPhoton[i].d.x
                         yr[i] = TabPhoton[i].o.y + tr*TabPhoton[i].d.y
                         zr[i] = TabPhoton[i].o.z + tr*TabPhoton[i].d.z
-
+                        vecTemp = Ref_Fresnel(dirEnt = TabPhoton[i].d, geoTrans = tt)
+                        print("TabPhoton.d = (", TabPhoton[i].d.x, ", ", TabPhoton[i].d.y, ", ", TabPhoton[i].d.z, ")")
+                        print("vecTemp = (", vecTemp.x, ", ", vecTemp.y, ", ", vecTemp.z, ")")
+                        TabPhoton2 = np.append(TabPhoton2, Ray(o=p_hit, d=vecTemp, end=120))
+                                               
+            if (E[k].name == "receptor"):
+                print("coucou")
+                print("LMir2 = ", LMir2)
+                for i in range(0, LMir2):
+                    t_hit = 9999.
+                    print("TabPhoton2[",i,"].phit =", TabPhoton2[i].o.x,
+                          TabPhoton2[i].o.y, TabPhoton2[i].o.z)
+                    if(PlaneMesh.Intersect(TabPhoton2[i])):
+                        atLeastOneInt2[i] = True
+                        if (PlaneMesh.thit < t_hit):
+                            print("PlaneMesh.thit=", PlaneMesh.thit, " and  t_hit=", t_hit)
+                            print("coucou num 2")
+                            p_hit = PlaneMesh.dg.p
+                            t_hit = PlaneMesh.thit
+                            tr = np.linspace(TabPhoton2[i].mint, t_hit, 100)
+                            xr2[i] = TabPhoton2[i].o.x + tr*TabPhoton2[i].d.x
+                            yr2[i] = TabPhoton2[i].o.y + tr*TabPhoton2[i].d.y
+                            zr2[i] = TabPhoton2[i].o.z + tr*TabPhoton2[i].d.z
+                        
             # Triangles mesh parameters for plot
 
             # First method :
@@ -414,10 +475,14 @@ def Analyse_create_entity(entity, Theta):
     # plot all the geometries
     for i in range(0, LMir):
         if (atLeastOneInt[i]):
-            ax.plot(xn[i], yn[i], zn[i], color='g', linewidth=1)
+            #ax.plot(xn[i], yn[i], zn[i], color='g', linewidth=1)
             ax.plot(xr[i], yr[i], zr[i], color='r', linewidth=1)
-        else:
-            ax.plot(xs, ys, zs, color='y', linewidth=1)
+        # else:
+        #     ax.plot(xs, ys, zs, color='y', linewidth=1)
+
+    for i in range(0, LMir2):
+        if (atLeastOneInt2[i]):
+            ax.plot(xr2[i], yr2[i], zr2[i], color='r', linewidth=1)
     # ax.scatter([0],[0],[0],color="g",s=10)
     # Enable generic local visualization (part3)
     if (len(E) == 1):
