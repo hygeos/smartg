@@ -90,11 +90,12 @@ def main():
             options.append('-DALIS')
         options.append('-DPHILOX')
 
-        options.extend([
-            '-gencode', 'arch=compute_30,code=compute_30',
-            '-gencode', 'arch=compute_50,code=compute_50',
-            '-gencode', 'arch=compute_60,code=compute_60',
-            ])
+        options.extend(sum([['-gencode', 'arch=compute_{i},code=compute_{i}'.format(i=i)]
+                            for i in [30, 32, 35, 37,
+                                      50, 52, 53,
+                                      60, 61, 62,
+                                      70, 72, 75
+                                     ]], []))
 
         binary = compile(src_device_content,
                        nvcc='nvcc',
