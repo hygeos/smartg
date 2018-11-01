@@ -17,7 +17,7 @@ import tarfile
 import fnmatch
 
 
-version = 'v0.9'
+version = 'v0.9.1'
 
 
 
@@ -124,6 +124,7 @@ def main():
         shasum = Popen(['git', 'rev-parse', 'HEAD'], stdout=PIPE).communicate()[0]
         fp.write(shasum.decode())
         fp.write(version)
+        fp.write('\n')
         fp.write(datetime.now().strftime('%Y%m%d:%H%M%S'))
         fp.write('\n')
     tar.add(version_file, arcname=join('smartg', version_file))

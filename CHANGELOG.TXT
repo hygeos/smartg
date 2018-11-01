@@ -1,0 +1,25 @@
+
+           ###########################
+           #                         #
+           #    SMART-G CHANGELOG    #
+           #                         #
+           ###########################
+
+v0.9.1
+------
+
+Release date: 2018-11-01
+
+* Add compilation support for additional architectures, including GeForce 20xx
+  series (Turing).
+* Fix OPAC phase function interpolation
+* Add aerosol altitude scaling options
+
+
+v0.9
+----
+
+Release date: 2018-09-21
+
+First public release.
+
