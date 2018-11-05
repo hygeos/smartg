@@ -688,7 +688,7 @@ class Smartg(object):
         FLUX = 0
         if flux is not None:
             LE=0
-            if flux== 'spherical' : 
+            if flux== 'planar' : 
                 FLUX = 1
             if flux== 'spherical' : 
                 FLUX = 2

@@ -19,7 +19,8 @@ def mdesc(desc, logI=False):
     sep2=desc.find('(')
     sep3=desc.find(')')
     if sep1 == 1 : stokes=desc[0:1]
-    else : stokes=desc[sep1-2:sep1]
+    elif sep1 == 2 : stokes=desc[sep1-2:sep1]
+    elif sep1 == 4 : stokes=desc[sep1-4:sep1]
     #stokes=desc[0:sep1]
     dir=desc[sep1+1:sep2-1]
 
@@ -442,9 +443,6 @@ def spectrum_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up 
         spectrum(U, sub='143', fig=fig1, color=color, **kwargs)
         spectrum(V, sub='144', fig=fig1, color=color, **kwargs)
         
-        Q.desc = mdesc(Q.desc)
-        U.desc = mdesc(U.desc)
-        V.desc = mdesc(V.desc)
         spectrum(lI, sub='141', fig=fig2, color=color, **kwargs)
         spectrum(DoLP, sub='142', fig=fig2, color=color, percent=True, **kwargs)
         spectrum(DoCP, sub='143', fig=fig2, color=color, percent=True, **kwargs)
@@ -788,29 +786,29 @@ def compare(mlut, mref, field='up (TOA)',errb=False, logI=False, U_sign=1, same_
             if logI and i==0:
                 if errb:
                     ax[1,i].errorbar(th,10**sp-10**refp, yerr=dsp,\
-                                 fmt=sym1+sym2,label=r'$\Phi=%.0f-%.0f$'%(phi0,180.-phi0),ecolor='k')
-                    ax[1,i].errorbar(-th,10**sm-10**refm,yerr=dsm,fmt=sym1+sym2,ecolor='k') 
+                                 fmt=sym1+sym2,label=r'$\Phi=%.0f-%.0f$'%(phi0,180.-phi0),ecolor='k',capsize=2)
+                    ax[1,i].errorbar(-th,10**sm-10**refm,yerr=dsm,fmt=sym1+sym2,ecolor='k',capsize=2) 
                 else:
                     ax[1,i].errorbar(th,10**sp-10**refp, \
-                                 fmt=sym1+sym2,label=r'$\Phi=%.0f-%.0f$'%(phi0,180.-phi0),ecolor='k')
-                    ax[1,i].errorbar(-th,10**sm-10**refm,fmt=sym1+sym2,ecolor='k') 
+                                 fmt=sym1+sym2,label=r'$\Phi=%.0f-%.0f$'%(phi0,180.-phi0),ecolor='k',capsize=2)
+                    ax[1,i].errorbar(-th,10**sm-10**refm,fmt=sym1+sym2,ecolor='k',capsize=2) 
     
             else:
                 if errb:
                     ax[1,i].errorbar(th,sp-refp, yerr=dsp,\
-                                 fmt=sym1+sym2,label=r'$\Phi=%.0f-%.0f$'%(phi0,180.-phi0),ecolor=sym1)
-                    ax[1,i].errorbar(-th,sm-refm,yerr=dsm,fmt=sym1+sym2,ecolor=sym1) 
+                                 fmt=sym1+sym2,label=r'$\Phi=%.0f-%.0f$'%(phi0,180.-phi0),ecolor=sym1,capsize=2)
+                    ax[1,i].errorbar(-th,sm-refm,yerr=dsm,fmt=sym1+sym2,ecolor=sym1,capsize=2) 
                 else:
                     ax[1,i].errorbar(th,sp-refp, \
-                                 fmt=sym1+sym2,label=r'$\Phi=%.0f-%.0f$'%(phi0,180.-phi0),ecolor=sym1)
-                    ax[1,i].errorbar(-th,sm-refm,fmt=sym1+sym2,ecolor=sym1) 
+                                 fmt=sym1+sym2,label=r'$\Phi=%.0f-%.0f$'%(phi0,180.-phi0),ecolor=sym1,capsize=2)
+                    ax[1,i].errorbar(-th,sm-refm,fmt=sym1+sym2,ecolor=sym1,capsize=2) 
             ax[1,i].set_ylim([-1*ema,ema])
             ax[1,i].set_xlim([-SZA_MAX,SZA_MAX])  
 
             if errb:
                 ax[2,i].errorbar(th,(sp-refp)/refp*100, yerr=dsp/abs(refp)*100, \
-                             fmt=sym1+sym2,label=r'$\Phi=%.0f-%.0f$'%(phi0,180.-phi0),ecolor=sym1)
-                ax[2,i].errorbar(-th,(sm-refm)/refm*100, yerr= dsm/abs(refm)*100,fmt=sym1+sym2,ecolor=sym1)  
+                             fmt=sym1+sym2,label=r'$\Phi=%.0f-%.0f$'%(phi0,180.-phi0),ecolor=sym1,capsize=2)
+                ax[2,i].errorbar(-th,(sm-refm)/refm*100, yerr= dsm/abs(refm)*100,fmt=sym1+sym2,ecolor=sym1,capsize=2)  
                 if (i==0 and errref is not None):
                     ax[2,0].plot(th,errref/refp*100,sym1+'-.')
                     ax[2,0].plot(th,-errref/refp*100,sym1+'-.')
@@ -818,8 +816,8 @@ def compare(mlut, mref, field='up (TOA)',errb=False, logI=False, U_sign=1, same_
                     ax[2,0].plot(-th,-errref/refm*100,sym1+'-.')
             else:
                 ax[2,i].errorbar(th,(sp-refp)/refp*100,\
-                             fmt=sym1+sym2,label=r'$\Phi=%.0f-%.0f$'%(phi0,180.-phi0),ecolor='k')
-                ax[2,i].errorbar(-th,(sm-refm)/refm*100,fmt=sym1+sym2,ecolor='k')  
+                             fmt=sym1+sym2,label=r'$\Phi=%.0f-%.0f$'%(phi0,180.-phi0),ecolor='k',capsize=2)
+                ax[2,i].errorbar(-th,(sm-refm)/refm*100,fmt=sym1+sym2,ecolor='k',capsize=2)  
             
             if i!=Nparam-1 : ax[2,i].set_ylim([-1*erma,erma])
             else : ax[2,i].set_ylim([-1*erma,erma])
