@@ -78,29 +78,37 @@ class IOP(IOP_base):
         self.aCDOM = aCDOM
         self.ALB = ALB
 
+        self.AW = read_aw(dir_aux)
+
     def calc(self, wav):
+        shp = [x.shape for x in [self.bp, self.bw, self.atot, self.ap, self.aw, self.aCDOM] if x is not None][0]
 
         # absorption
         if self.ap is None:
-            ap=0.
-        else: ap=self.ap
-
-        if self.atot is None:
-            if self.aw is None:
-                aw = read_aw(dir_aux)
-                self.aw = aw[Idx(wav)]
-            else : aw=self.aw
-            atot = aw + ap
-        else: atot=self.atot
+            ap = np.zeros(shp, dtype='float')
+        else:
+            ap = self.ap
 
         if self.aCDOM is None:
-            aCDOM = np.zeros_like(aw)
-        else : aCDOM= self.aCDOM
+            aCDOM = np.zeros(shp, dtype='float')
+        else:
+            aCDOM = self.aCDOM
+
+        if self.aw is None:
+            aw = self.AW[Idx(wav)]
+        else:
+            aw = self.aw
+
+        if self.atot is None:
+            atot = aw + ap + aCDOM
+        else:
+            atot = self.atot
 
         # scattering
         if self.bp is None:
-            bp = np.zeros_like(aw)
-        bp = self.bp
+            bp = np.zeros(shp, dtype='float')
+        else:
+            bp = self.bp
 
         if (self.phase is None) and ((np.array(bp) > 0).any()):
             raise Exception('No phase function has been provided, but bp>0')
@@ -108,11 +116,11 @@ class IOP(IOP_base):
         bw = self.bw
         if bw is None:
             bw = 19.3e-4*((wav[:]/550.)**-4.3)
-            bw = bw[:,None]  # add a dimension Z for broadcasting
+            bw = bw[:, None]  # add a dimension Z for broadcasting
 
         btot = bw + bp
 
-        FQYC = np.zeros_like(aw)
+        FQYC = np.zeros(shp, dtype='float')
 
         pro = MLUT()
 
