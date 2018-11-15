@@ -1,22 +1,40 @@
 import matplotlib
-matplotlib.use('Agg')
+#matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from pylab import subplots, setp
+
 import sys
-sys.path.append('..')
-from smartg import Smartg, reptran_merge
-from smartg import RoughSurface, LambSurface, FlatSurface, Environment
-from smartg import Profile, AeroOPAC, CloudOPAC, IOP_SPM, IOP_MM, IOP_AOS_WATER
-from tools.tools import SpecInt, SpecInt2, Irr, ReadREPTRAN_bands
-from tools.luts import LUT, MLUT, Idx, merge, read_lut_hdf, read_mlut_hdf, plot_polar, read_mlut
-from tools.smartg_view import smartg_view, input_view
+import imp
+if sys.version[0] == '2':
+    imp.reload(sys)
+    sys.setdefaultencoding('utf8')
+    import subprocess
+else:
+    from subprocess import check_output
+    
+# import sys
+# sys.path.append('..')
+
+from smartg.smartg import Smartg
+from smartg.smartg import LambSurface, RoughSurface, CusForward
+from smartg.atmosphere import AtmAFGL, AeroOPAC
+from smartg.tools.luts import merge
+from smartg.water import IOP_1
+
+# from smartg import Smartg, reptran_merge
+# from smartg import RoughSurface, LambSurface, FlatSurface, Environment
+# from smartg import Profile, AeroOPAC, CloudOPAC, IOP_SPM, IOP_MM, IOP_AOS_WATER
+
+from smartg.tools.tools import SpecInt, SpecInt2, Irr
+from smartg.tools.luts import LUT, MLUT, Idx, merge, read_mlut_hdf, plot_polar, read_mlut
+from smartg.tools.smartg_view import smartg_view, input_view
 import numpy as np
 from warnings import warn
 from warnings import filterwarnings
 
 
-option_save_pdf = False
+option_save_pdf = True
 
 
 ##########################################################################################
@@ -42,28 +60,28 @@ def compute_err (exact, approx, name_err):
     error = exact[:] - approx[:]
     relative_err = (exact[:]-approx[:])/exact[:]
     if name_err == 'RMSE':
-        for i in xrange (len(error)):
+        for i in range (len(error)):
             res = res + error[i]*error[i]
         res = res*(1./len(error))
         res = res**(1./2.)
     elif name_err == 'RRMSE':
-        for i in xrange (len(exact)):
+        for i in range (len(exact)):
             res = res + relative_err[i]*relative_err[i]
         res = res*(1./len(exact))
         res = (res**(1./2.))*100 # res in pourcentage
     elif name_err == 'MAE':
-        for i in xrange (len(error)):
+        for i in range (len(error)):
             res = res + abs(error[i])
         res = res*(1./len(error))
     elif name_err == 'MAPE':
-        for i in xrange (len(error)):
+        for i in range (len(error)):
             res = res + abs(relative_err[i])
         res = res*(1./len(error))*100 # res in pourcentage
     elif name_err == 'L1': 
-        for i in xrange (len(error)):
+        for i in range (len(error)):
             res = res + abs(error[i])
     elif name_err == 'L2':
-        for i in xrange (len(error)):
+        for i in range (len(error)):
             res = res + error[i]*error[i]
         res = res**(1./2.)
     elif name_err == 'Linf':
@@ -233,7 +251,7 @@ class Compare_error(object):
         green_err_vec = np.zeros(len(wl), dtype=np.float32)
         analysis = seuil
 
-        for k in xrange(len(wl)):
+        for k in range(len(wl)):
             Sref = self.reflut[field_Stoke].sub()[k,:,:]
             Ssim = self.simlut[field_Stoke].sub()[k,:,:]
             for indice2, value2 in enumerate([0., 120.]):
@@ -296,14 +314,14 @@ def test_val_ray_surf():
     stokes_TOA = ['I_up (TOA)', 'Q_up (TOA)', 'U_up (TOA)']
     stokes_Oplus = ['I_up (0+)', 'Q_up (0+)', 'U_up (0+)']
 
-    atm=Profile('afglms',lat=0., O3=0., NO2=False)
+    atm=AtmAFGL('afglms',lat=0., O3=0., NO2=False)
     surf=RoughSurface(SUR=1,NH2O=1.34,WIND=7.)
 
     ml30=read_mlut_hdf('auxdata/validation/ml30_AOS_I')
     ml60=read_mlut_hdf('auxdata/validation/ml60_AOS_I')
 
-    NBPHOTONS=1e5
-    S=Smartg(double=True)
+    NBPHOTONS=1e6
+    S=Smartg(double=True, debug_photon=False)
     ##########
     phi = np.array(ml30['I_up (0+)'].axes[1],dtype=np.float32)
     th = np.array(ml60['I_up (0+)'].axes[2],dtype=np.float32)
@@ -311,34 +329,34 @@ def test_val_ray_surf():
     le.update(phi=phi*np.pi/180)
     le.update(th=(th*np.pi/180))
 
-    m30=S.run(XGRID=128, XBLOCK=64, THVDEG=30., wl=wl, NBPHOTONS=NBPHOTONS, DEPO=0., le=le, NBLOOP=NBPHOTONS/1e3,
+    m30=S.run(XGRID=128, XBLOCK=64, THVDEG=30., wl=wl, NBPHOTONS=NBPHOTONS, DEPO=0., le=le, NBLOOP=NBPHOTONS/1e2,
                atm=atm, surf=surf, OUTPUT_LAYERS=3, stdev=True)
 
-    m60=S.run(THVDEG=60., wl=wl, NBPHOTONS=NBPHOTONS, DEPO=0., le=le, NBLOOP=NBPHOTONS/1e3,
+    m60=S.run(THVDEG=60., wl=wl, NBPHOTONS=NBPHOTONS, DEPO=0., le=le, NBLOOP=NBPHOTONS/1e2,
                atm=atm, surf=surf, OUTPUT_LAYERS=3, stdev=True)
 
     if option_save_pdf:
         h_l = compare_view3(m30, ml30, field='up (TOA)',vmax=0.4,emax=5e-4)
         with PdfPages('AOS1_ts30_TOA.pdf') as pdf:
-            for k in xrange(len(wl)):
+            for k in range(len(wl)):
                 pdf.savefig(h_l[k])
                 plt.close(h_l[k])
 
         h_l = compare_view3(m60, ml60, field='up (TOA)',vmax=0.4,emax=5e-4)
         with PdfPages('AOS1_ts60_TOA.pdf') as pdf:
-            for k in xrange(len(wl)):
+            for k in range(len(wl)):
                 pdf.savefig(h_l[k])
                 plt.close(h_l[k])
 
         h_l = compare_view3(m30, ml30, field='up (0+)',vmax=0.4,emax=5e-4)
         with PdfPages('AOS1_ts30_surface(O+).pdf') as pdf:
-            for k in xrange(len(wl)):
+            for k in range(len(wl)):
                 pdf.savefig(h_l[k])
                 plt.close(h_l[k])
 
         h_l = compare_view3(m60, ml60, field='up (0+)',vmax=0.4,emax=5e-4)
         with PdfPages('AOS1_ts60_surface(O+).pdf') as pdf:
-            for k in xrange(len(wl)):
+            for k in range(len(wl)):
                 pdf.savefig(h_l[k])
                 plt.close(h_l[k])
 
@@ -369,64 +387,64 @@ def test_val_ray_surf():
     C.cfig()
 
 
-def test_val_oce_surf():
-    '''
-    Validation test case with ocean + surface
-    '''
-    wl=[350.0525, 450.0666, 550.084, 650.099]
-    wl_paper=[350,450,550,650]
-    stokes_Oplus = ['I_up (0+)', 'Q_up (0+)', 'U_up (0+)']
+# def test_val_oce_surf():
+#     '''
+#     Validation test case with ocean + surface
+#     '''
+#     wl=[350.0525, 450.0666, 550.084, 650.099]
+#     wl_paper=[350,450,550,650]
+#     stokes_Oplus = ['I_up (0+)', 'Q_up (0+)', 'U_up (0+)']
 
-    water=IOP_AOS_WATER()
-    surf=RoughSurface(SUR=3,NH2O=1.34,WIND=7.)
+#     water=IOP_1(chl=1.) #IOP_AOS_WATER()
+#     surf=RoughSurface(SUR=3,NH2O=1.34,WIND=7.)
 
-    ml30=read_mlut('auxdata/validation/ml30_AOS_II.nc')
-    ml60=read_mlut('auxdata/validation/ml60_AOS_II.nc')
+#     ml30=read_mlut('auxdata/validation/ml30_AOS_II.nc')
+#     ml60=read_mlut('auxdata/validation/ml60_AOS_II.nc')
 
-    S1=Smartg(double=True)
-    NBPHOTONS=1e5
-    NBLOOP=NBPHOTONS/100
-    DEPO = 0.
-    phi = np.array(ml30['I_up (0+)'].axes[1]*np.pi/180,dtype=np.float32)
-    th = np.array(ml60['I_up (0+)'].axes[2]*np.pi/180,dtype=np.float32)
-    le={}
-    le.update(phi=phi)
-    le.update(th=th)
-    m30le=S1.run(THVDEG=30., wl=wl, NBPHOTONS=NBPHOTONS, DEPO=DEPO, le=le,
-            water=water,surf=surf, OUTPUT_LAYERS=3, stdev=True)
-    m60le=S1.run(THVDEG=60., wl=wl, NBPHOTONS=NBPHOTONS, DEPO=DEPO, le=le,
-            water=water,surf=surf, OUTPUT_LAYERS=3, stdev=True)
+#     S1=Smartg(double=True)
+#     NBPHOTONS=1e6
+#     NBLOOP=NBPHOTONS/100
+#     DEPO = 0.
+#     phi = np.array(ml30['I_up (0+)'].axes[1]*np.pi/180,dtype=np.float32)
+#     th = np.array(ml60['I_up (0+)'].axes[2]*np.pi/180,dtype=np.float32)
+#     le={}
+#     le.update(phi=phi)
+#     le.update(th=th)
+#     m30le=S1.run(THVDEG=30., wl=wl, NBPHOTONS=NBPHOTONS, DEPO=DEPO, le=le,
+#             water=water,surf=surf, OUTPUT_LAYERS=3, stdev=True)
+#     m60le=S1.run(THVDEG=60., wl=wl, NBPHOTONS=NBPHOTONS, DEPO=DEPO, le=le,
+#             water=water,surf=surf, OUTPUT_LAYERS=3, stdev=True)
     
-    if option_save_pdf:
-        h_l=compare_view3(m30le, ml30,field='up (0+)',vmax=0.1,emax=1e-3)
-        with PdfPages('AOSII_ts30_surface(O+).pdf') as pdf:
-            for k in xrange(len(wl)):
-                pdf.savefig(h_l[k])
-                plt.close(h_l[k])
+#     if option_save_pdf:
+#         h_l=compare_view3(m30le, ml30,field='up (0+)',vmax=0.1,emax=1e-3)
+#         with PdfPages('AOSII_ts30_surface(O+).pdf') as pdf:
+#             for k in xrange(len(wl)):
+#                 pdf.savefig(h_l[k])
+#                 plt.close(h_l[k])
 
-        h_l=compare_view3(m60le, ml60,field='up (0+)',vmax=0.1,emax=1e-3)
-        with PdfPages('AOSII_ts60_surface(O+).pdf') as pdf:
-            for k in xrange(len(wl)):
-                pdf.savefig(h_l[k])
-                plt.close(h_l[k])
+#         h_l=compare_view3(m60le, ml60,field='up (0+)',vmax=0.1,emax=1e-3)
+#         with PdfPages('AOSII_ts60_surface(O+).pdf') as pdf:
+#             for k in xrange(len(wl)):
+#                 pdf.savefig(h_l[k])
+#                 plt.close(h_l[k])
 
-    C = Compare_error(m30le, ml30, 4, 3)
-    for k in stokes_Oplus:
-        C.compare(k, 'MAE', 5e-3)
-    for k in stokes_Oplus:
-        C.compare(k, 'L1', 1.5e-1)
-    for k in stokes_Oplus:
-        C.compare(k, 'L2', 3e-2)
-    for k in stokes_Oplus:
-        C.compare(k, 'Linf', 1.8e-2)
-    if option_save_pdf:      
-        C.save('err_analysis_ts30_oce_surface(O+).pdf')
-    C.cfig()
+#     C = Compare_error(m30le, ml30, 4, 3)
+#     for k in stokes_Oplus:
+#         C.compare(k, 'MAE', 5e-3)
+#     for k in stokes_Oplus:
+#         C.compare(k, 'L1', 1.5e-1)
+#     for k in stokes_Oplus:
+#         C.compare(k, 'L2', 3e-2)
+#     for k in stokes_Oplus:
+#         C.compare(k, 'Linf', 1.8e-2)
+#     if option_save_pdf:      
+#         C.save('err_analysis_ts30_oce_surface(O+).pdf')
+#     C.cfig()
 
 ##########################################################################################
 
 
-# if __name__ == '__main__':
+if __name__ == '__main__':
 
-#     test_val_ray_surf()
-#     test_val_oce_surf()
+    test_val_ray_surf()
+    #test_val_oce_surf()
