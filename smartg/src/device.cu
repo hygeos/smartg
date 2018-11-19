@@ -1897,9 +1897,11 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 		// Launch the function geoTest to see if there are an intersection with the 
 		// geometry, return true/false and give the position phit of the intersection
 		// nObj = le nombre d'objets, si = 0 alors le test n'est pas nécessaire.
-		if (nObj > 0) {mytest = geoTest(ph->pos, ph->v, ph->locPrev, &phit, geoS, myObjets);}
+		if (nObj > 0) {
+			mytest = geoTest(ph->pos, ph->v, ph->locPrev, &phit, geoS, myObjets);
+			if (ph->direct == 0 && ph->pos.z == 120. && mytest == false && CFMODEd == 0) {ph->loc=NONE; return;}
+		}
 
-		if (ph->direct == 0 && ph->pos.z == 120. && mytest == false && CFMODEd == 0) {ph->loc=NONE; return;}
 		//if (ph->pos.z == 120. && mytest == false) {ph->loc=NONE; return;}
 		//if (ph->pos.z == 120. && mytest == true && geoS->type != 1) {ph->loc=NONE; return;}
 		//if (ph->pos.z < 1.2 && mytest == true && geoS->type == 3) {ph->loc=ABSORBED; return;}
