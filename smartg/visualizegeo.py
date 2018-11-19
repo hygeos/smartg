@@ -79,18 +79,18 @@ def cat_view(mlut, view = 'all'):
     view : what to print ? choice between : all, weight, number, errP and errAbs
     '''
     m = mlut
-    for i in range (1, 8):
+    for i in range (0, 8):
         if (view == 'all'):
-            print("CAT",i,": weight=", mlut['catWeightPh'][i-1], " number=", mlut['catNbPh'][i-1],
-                  " err(%)=", mlut['catErrP'][i-1], " errAbs=", mlut['catErrAbs'][i-1])
+            print("CAT",i+1,": weight=", mlut['catWeightPh'][i], " number=", mlut['catNbPh'][i],
+                  " err(%)=", mlut['catErrP'][i], " errAbs=", mlut['catErrAbs'][i])
         elif (view == 'weight'):
-            print("CAT",i,": weight=", mlut['catWeightPh'][i-1])
+            print("CAT",i+1,": weight=", mlut['catWeightPh'][i])
         elif (view == 'number'):
-            print("CAT",i,": number=", mlut['catNbPh'][i-1])
+            print("CAT",i+1,": number=", mlut['catNbPh'][i])
         elif (view == 'errP'):
-            print("CAT",i,": err(%)=", mlut['catErrP'][i-1])
+            print("CAT",i+1,": err(%)=", mlut['catErrP'][i])
         elif (view == 'errAbs'):
-            print("CAT",i,": errAbs=", mlut['catErrAbs'][i-1])
+            print("CAT",i+1,": errAbs=", mlut['catErrAbs'][i])
 
 
 class Mirror(object):
