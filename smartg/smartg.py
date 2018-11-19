@@ -1938,6 +1938,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
     NPhotonsInTot = gpuzeros((NSENSOR,NLAM), dtype=np.uint64)
     nbPhotonRecept = 0.
     if TC is not None:
+        # A supprimer sur device.cu avant de sup ici
         nbPhotonRecept = 0.
         nbPhotonReceptD = 0. ;  nbPhotonReceptS = 0.;
         nbPhotonReceptDM = 0.;  nbPhotonReceptSM = 0.;
@@ -1947,10 +1948,6 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         weightMirrorD = 0.
         weightMirrorS = 0.
         weightMirrorSSM = 0.;weightMirrorSS = 0.;
-        CAT0 = 0.; CAT1 = 0.; CAT2 = 0.; CAT3 = 0.; CAT4 = 0.;
-        CAT5 = 0.; CAT6 = 0.; CAT7 = 0.;
-        nCAT0 = 0.; nCAT1 = 0.; nCAT2 = 0.; nCAT3 = 0.; nCAT4 = 0.;
-        nCAT5 = 0.; nCAT6 = 0.; nCAT7 = 0.; wDir = 0.; wDiffu = 0.;
     
     # arrays for counting the output photons
     NPhotonsOut = gpuzeros((NLVL,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.uint64)
@@ -2005,58 +2002,52 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         np.set_printoptions(precision=5, linewidth=150)
 
         if TC is not None:
-            # print ("counter of photon intersect the geo is:", CounterIntObj[0])
-            # print ("sum of weight(1) of photons which intersect the receptor:", tabObjInfo[0, 0, 0])
-            # print ("sum of weight(2) of photons which intersect the receptor: \n", tabObjInfo[1, :, :])
-            # print ("counter from host (smartg) is:", Counter[0])
-            # print ("NPhotonsIn host (smartg) is:", NPhotonsIn)
-            
+            # Tableau de la repartition des poids (photons) sur la surface du recepteur
             tabMatRecep += tabObjInfo[1, :, :].get()
-            weightReceptD += tabObjInfo[0, 0, 0].get(); weightReceptS += tabObjInfo[0, 0, 1].get();
-            weightMirrorD += tabObjInfo[0, 0, 2].get(); weightMirrorS += tabObjInfo[0, 0, 3].get();
-            weightMirrorSSM += tabObjInfo[0, 0, 4].get(); weightMirrorSS += tabObjInfo[0, 0, 5].get();
-            
-            CAT0 += tabObjInfo[0, 0, 6].get(); CAT1 += tabObjInfo[0, 0, 7].get(); CAT2 += tabObjInfo[0, 0, 8].get();
-            CAT3 += tabObjInfo[0, 0, 9].get(); CAT4 += tabObjInfo[0, 0, 10].get(); CAT5 += tabObjInfo[0, 0, 11].get();
-            CAT6 += tabObjInfo[0, 0, 12].get(); CAT7 += tabObjInfo[0, 0, 13].get();
 
+            # A supprimer sur device.cu avant de sup ici
+            # weightReceptD += tabObjInfo[0, 0, 0].get(); weightReceptS += tabObjInfo[0, 0, 1].get();
+            # weightMirrorD += tabObjInfo[0, 0, 2].get(); weightMirrorS += tabObjInfo[0, 0, 3].get();
+            # weightMirrorSSM += tabObjInfo[0, 0, 4].get(); weightMirrorSS += tabObjInfo[0, 0, 5].get();
+
+            # Comptage des poids pour chaque categories
             vecCats[0] += tabObjInfo[0, 0, 6].get(); vecCats[4] += tabObjInfo[0, 0, 7].get(); vecCats[8] += tabObjInfo[0, 0, 8].get();
             vecCats[12] += tabObjInfo[0, 0, 9].get(); vecCats[16] += tabObjInfo[0, 0, 10].get(); vecCats[20] += tabObjInfo[0, 0, 11].get();
             vecCats[24] += tabObjInfo[0, 0, 12].get(); vecCats[28] += tabObjInfo[0, 0, 13].get();
-            
-            wDir += tabObjInfo[2, 0, 0].get(); wDiffu += tabObjInfo[2, 0, 1].get();
-            nCAT0 += tabObjInfo[2, 0, 2].get(); nCAT1 += tabObjInfo[2, 0, 3].get(); nCAT2 += tabObjInfo[2, 0, 4].get();
-            nCAT3 += tabObjInfo[2, 0, 5].get(); nCAT4 += tabObjInfo[2, 0, 6].get(); nCAT5 += tabObjInfo[2, 0, 7].get();
-            nCAT6 += tabObjInfo[2, 0, 8].get(); nCAT7 += tabObjInfo[2, 0, 9].get();
-        
+
+            # A supprimer sur device.cu avant de sup ici
+            # wDir += tabObjInfo[2, 0, 0].get(); wDiffu += tabObjInfo[2, 0, 1].get();
+
+            # Comptage du nombre de photons pour chaque categories
             vecCats[1] += tabObjInfo[2, 0, 2].get(); vecCats[5] += tabObjInfo[2, 0, 3].get(); vecCats[9] += tabObjInfo[2, 0, 4].get();
             vecCats[13] += tabObjInfo[2, 0, 5].get(); vecCats[17] += tabObjInfo[2, 0, 6].get(); vecCats[21] += tabObjInfo[2, 0, 7].get();
             vecCats[25] += tabObjInfo[2, 0, 8].get(); vecCats[29] += tabObjInfo[2, 0, 9].get();
-            
+
+            # A supprimer sur device.cu avant de sup ici
             nbPhotonReceptIniD = CounterIntObj[0] # number of dircet photons intersect the receptor by last kernel
             nbPhotonReceptIniS = CounterIntObj[1] # number of scattering photons intersect the receptor by last kernel
-            nbPhotonReceptD += nbPhotonReceptIniD
-            nbPhotonReceptS += nbPhotonReceptIniS
-        
-            nbPhotonReceptIniDM = CounterIntObj[2] # number of direct photons intersect the mirror by last kernel
-            nbPhotonReceptIniSM = CounterIntObj[3] # number of scattering photons intersect the mirror by last kernel
-            nbPhotonReceptDM += nbPhotonReceptIniDM
-            nbPhotonReceptSM += nbPhotonReceptIniSM
-        
-            nbPhotonReceptIniSSM = CounterIntObj[4] # number of scattering photons intersect the receptor and impacted by mirror by last kernel
-            nbPhotonReceptIniSS = CounterIntObj[5]  # number of scattering photons intersect the receptor and not impacted by mirror by last kernel
+            #nbPhotonReceptD += nbPhotonReceptIniD
+            #nbPhotonReceptS += nbPhotonReceptIniS
 
-            nbPhotonReceptSSM += nbPhotonReceptIniSSM
-            nbPhotonReceptSS += nbPhotonReceptIniSS
+            # A supprimer sur device.cu avant de sup ici
+            # nbPhotonReceptIniDM = CounterIntObj[2] # number of direct photons intersect the mirror by last kernel
+            # nbPhotonReceptIniSM = CounterIntObj[3] # number of scattering photons intersect the mirror by last kernel
+            # nbPhotonReceptDM += nbPhotonReceptIniDM
+            # nbPhotonReceptSM += nbPhotonReceptIniSM
 
-            nbPhotonReceptIniTEST = CounterIntObj[6] # number of scattering photons intersect the receptor and impacted by mirror by last kernel
-            nbPhotonReceptTEST += nbPhotonReceptIniTEST
+            # A supprimer sur device.cu avant de sup ici
+            # nbPhotonReceptIniSSM = CounterIntObj[4] # number of scattering photons intersect the receptor and impacted by mirror by last kernel
+            # nbPhotonReceptIniSS = CounterIntObj[5]  # number of scattering photons intersect the receptor and not impacted by mirror by last kernel
+
+            # A supprimer sur device.cu avant de sup ici
+            # nbPhotonReceptSSM += nbPhotonReceptIniSSM
+            # nbPhotonReceptSS += nbPhotonReceptIniSS
+
+            # A supprimer sur device.cu avant de sup ici
+            # nbPhotonReceptIniTEST = CounterIntObj[6] # number of scattering photons intersect the receptor and impacted by mirror by last kernel
+            # nbPhotonReceptTEST += nbPhotonReceptIniTEST
             nbPhotonRecept += nbPhotonReceptIniD + nbPhotonReceptIniS
 
-            # print("tab[1]=", CounterIntObj[1])
-            # print("weighttab[1]=", tabObjInfo[0, 0, 1])
-            # print("percentage diffus=", (tabObjInfo[0, 0, 1]*100)/(weightRecept+tabObjInfo[0, 0, 1].get()))
-            # print("percentage diffus on mirror=", (tabObjInfo[0, 0, 3]*100)/(tabObjInfo[0, 0, 3].get()+tabObjInfo[0, 0, 2].get()))
         
         L = NPhotonsIn   # number of photons launched by last kernel
         NPhotonsInTot += L
@@ -2073,15 +2064,10 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
             tabHistTot = H
         #!!!!!!!!!!!!!!!!!!!!!!!!!!!
         if TC is not None:
+            # A ameliorer
             print ("Avancement... NPhotonsIn host (smartg) is:", NPhotonsInTot)
             import sys
             print ("Avancement... NPhotonsIn host (smartg) is:", NPhotonsInTot, file = sys.stderr)
-            # print ("counter of photon intersect the geo is:", nbPhotonRecept+CounterIntObj[1].get())
-            # print ("sum of weight(1) of photons which intersect the receptor:", weightRecept+tabObjInfo[0, 0, 1].get())
-            # print("percentage direct=", (weightRecept*100)/(weightRecept+tabObjInfo[0, 0, 1].get()))
-            # print("percentage direct on mirror=", (tabObjInfo[0, 0, 2]*100)/(tabObjInfo[0, 0, 3].get()+tabObjInfo[0, 0, 2].get()))
-            # print ("NPhotonsIn host (smartg) is:", NPhotonsInTot)
-            # print ("counter from host (smartg) is:", Counter[0])
 
         N_simu += 1
         if stdev:
@@ -2099,75 +2085,57 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
     secs_cuda_clock = secs_cuda_clock*1e-3
 
     if TC is not None:
-        print("nb photon diffus", nbPhotonReceptS)
-        print("weight photon diffus", weightReceptS)
-        print("nb photon direct", nbPhotonReceptD)
-        print("weight photon direct", weightReceptD)
-    
-        print ("counter of photon intersect the geo is:", nbPhotonRecept)
-        print ("sum of weight(1) of photons which intersect the receptor:", weightReceptD+weightReceptS)
-    
-        print("percentage diffus=", (weightReceptS*100)/(weightReceptD+weightReceptS))
-        print("percentage diffus on mirror=", (weightMirrorS*100)/(weightMirrorS+weightMirrorD))
+        # A supprimer sur device.cu avant de sup ici
+        # print("nb photon diffus", nbPhotonReceptS)
+        # print("weight photon diffus", weightReceptS)
+        # print("nb photon direct", nbPhotonReceptD)
+        # print("weight photon direct", weightReceptD)
 
-        print("percentage direct=", (weightReceptD*100)/(weightReceptD+weightReceptS))
-        print("percentage direct on mirror=", (weightMirrorD*100)/(weightMirrorS+weightMirrorD))
-    
-        print ("NPhotonsIn host (smartg) is:", NPhotonsInTot)
-        print ("counter from host (smartg) is:", Counter[0])
+        # A supprimer sur device.cu avant de sup ici
+        # print ("counter of photon intersect the geo is:", nbPhotonRecept)
+        # print ("sum of weight(1) of photons which intersect the receptor:", weightReceptD+weightReceptS)
 
-        print("nb photon direct on mirror", nbPhotonReceptDM)
-        print("nb photon diffus on mirror", nbPhotonReceptSM)
-        print("weight photon direct on mirror", weightMirrorD)
-        print("weight photon diffus on mirror", weightMirrorS)
+        # A supprimer sur device.cu avant de sup ici
+        # print("percentage diffus=", (weightReceptS*100)/(weightReceptD+weightReceptS))
+        # print("percentage diffus on mirror=", (weightMirrorS*100)/(weightMirrorS+weightMirrorD))
 
-        print("nb photon diffus on receptor impacted by mirror", nbPhotonReceptSSM)
-        print("nb photon diffus on receptor not impacted by mirror", nbPhotonReceptSS)
-        print("weight diffus on receptor impacted by mirror", weightMirrorSSM)
-        print("weight diffus on receptor not impacted by mirror", weightMirrorSS)
-        print("=======TEST nbdirect impacted by mirror=", nbPhotonReceptTEST)
-        print("CAT0 =%f" % CAT0 + " +ou- %f%%" % (100.*(1./nCAT0**0.5)) + " / ou bien +ou- %f" % float(CAT0*(1./nCAT0**0.5)))
-        print("CAT1 =%f" % CAT1 + " +ou- %f%%" % (100.*(1./nCAT1**0.5)) + " / ou bien +ou- %f" % float(CAT1*(1./nCAT1**0.5)))
-        print("CAT2 =%f" % CAT2 + " +ou- %f%%" % (100.*(1./nCAT2**0.5)) + " / ou bien +ou- %f" % float(CAT2*(1./nCAT2**0.5)))
-        print("CAT3 =%f" % CAT3 + " +ou- %f%%" % (100.*(1./nCAT3**0.5)) + " / ou bien +ou- %f" % float(CAT3*(1./nCAT3**0.5)))
-        print("CAT4 =%f" % CAT4 + " +ou- %f%%" % (100.*(1./nCAT4**0.5)) + " / ou bien +ou- %f" % float(CAT4*(1./nCAT4**0.5)))
-        print("CAT5 =%f" % CAT5 + " +ou- %f%%" % (100.*(1./nCAT5**0.5)) + " / ou bien +ou- %f" % float(CAT5*(1./nCAT5**0.5)))
-        print("CAT6 =%f" % CAT6 + " +ou- %f%%" % (100.*(1./nCAT6**0.5)) + " / ou bien +ou- %f" % float(CAT6*(1./nCAT6**0.5)))
-        print("CAT7 =%f" % CAT7 + " +ou- %f%%" % (100.*(1./nCAT7**0.5)) + " / ou bien +ou- %f" % float(CAT7*(1./nCAT7**0.5)))
+        # A supprimer sur device.cu avant de sup ici
+        # print("percentage direct=", (weightReceptD*100)/(weightReceptD+weightReceptS))
+        # print("percentage direct on mirror=", (weightMirrorD*100)/(weightMirrorS+weightMirrorD))
+
+        # A supprimer sur device.cu avant de sup ici
+        # print ("NPhotonsIn host (smartg) is:", NPhotonsInTot)
+        # print ("counter from host (smartg) is:", Counter[0])
+
+        # A supprimer sur device.cu avant de sup ici
+        # print("nb photon direct on mirror", nbPhotonReceptDM)
+        # print("nb photon diffus on mirror", nbPhotonReceptSM)
+        # print("weight photon direct on mirror", weightMirrorD)
+        # print("weight photon diffus on mirror", weightMirrorS)
+
+        # A supprimer sur device.cu avant de sup ici
+        # print("nb photon diffus on receptor impacted by mirror", nbPhotonReceptSSM)
+        # print("nb photon diffus on receptor not impacted by mirror", nbPhotonReceptSS)
+        # print("weight diffus on receptor impacted by mirror", weightMirrorSSM)
+        # print("weight diffus on receptor not impacted by mirror", weightMirrorSS)
+        # print("=======TEST nbdirect impacted by mirror=", nbPhotonReceptTEST)
+
+        # Erreur relatives et absolues pour chaque categories
         for i in range (0, 8):
             if (vecCats[i*4] == 0 or vecCats[(i*4)+1] == 0):
                 vecCats[(i*4)+2] = 0.
                 vecCats[(i*4)+3] = 0.
             else:    
-                vecCats[(i*4)+2] = (100.*(1./vecCats[(i*4)+1]**0.5));
-                vecCats[(i*4)+3] = float(vecCats[i*4]*(1./vecCats[(i*4)+1]**0.5));
-        print("=======TEST nbdirect impacted by mirror=", nbPhotonReceptTEST)
-        print("CAT0 =%f" % vecCats[0] + " +ou- %f%%" % vecCats[2] + " / ou bien +ou- %f" % vecCats[3])
-        print("CAT1 =%f" % vecCats[4] + " +ou- %f%%" % vecCats[6] + " / ou bien +ou- %f" % vecCats[7])
-        print("CAT2 =%f" % vecCats[8] + " +ou- %f%%" % vecCats[10] + " / ou bien +ou- %f" % vecCats[11])
-        print("CAT3 =%f" % vecCats[12] + " +ou- %f%%" % vecCats[14] + " / ou bien +ou- %f" % vecCats[15])
-        print("CAT4 =%f" % vecCats[16] + " +ou- %f%%" % vecCats[18] + " / ou bien +ou- %f" % vecCats[19])
-        print("CAT5 =%f" % vecCats[20] + " +ou- %f%%" % vecCats[22] + " / ou bien +ou- %f" % vecCats[23])
-        print("CAT6 =%f" % vecCats[24] + " +ou- %f%%" % vecCats[26] + " / ou bien +ou- %f" % vecCats[27])
-        print("CAT7 =%f" % vecCats[28] + " +ou- %f%%" % vecCats[30] + " / ou bien +ou- %f" % vecCats[31])
-        
-        print("M (bleu) =", CAT0 + CAT1)
-        print("SGE (rouge) =", CAT2 + CAT3 + CAT6)
-        print("SGM (vert) =", CAT4 + CAT5 + CAT7)
-        print("=============== NB photons for each CAT ===============")
-        print("nCAT0 =", nCAT0)
-        print("nCAT1 =", nCAT1)
-        print("nCAT2 =", nCAT2)
-        print("nCAT3 =", nCAT3)
-        print("nCAT4 =", nCAT4)
-        print("nCAT5 =", nCAT5)
-        print("nCAT6 =", nCAT6)
-        print("nCAT7 =", nCAT7)   
-        print("nM (bleu) =", nCAT0 + nCAT1)
-        print("nSGE (rouge) =", nCAT2 + nCAT3 + nCAT6)
-        print("nSGM (vert) =", nCAT4 + nCAT5 + nCAT7)
-        print("nbPhontons direct =", wDir)
-        print("nbPhontons diffus =", wDiffu)
+                vecCats[(i*4)+2] = float((100.*(1./vecCats[(i*4)+1]**0.5)));
+                vecCats[(i*4)+3] = vecCats[i*4]*(1./vecCats[(i*4)+1]**0.5);
+
+        print("==== Verification ====")
+        print("Sans Cat : nombre de ph sur recept = ", nbPhotonRecept)
+        print("Avec Cat : nombre de ph sur recept = ", (np.uint64(vecCats[1] + vecCats[5] + vecCats[9] + vecCats[13] + \
+                                                                  vecCats[17] + vecCats[21] + vecCats[25] + vecCats[29])))
+        # A supprimer sur device.cu avant de sup ici        
+        # print("nbPhontons direct =", wDir)
+        # print("nbPhontons diffus =", wDiffu)
 
     else:
         nbPhotonRecept = CounterIntObj[0]
