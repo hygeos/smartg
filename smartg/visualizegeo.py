@@ -73,6 +73,25 @@ def receiver_view(mlut, w = False, logI=False, nameFile = 'plot'):
     plt.savefig(nameFile + '.pdf')  
 
 
+def cat_view(mlut, view = 'all'):
+    '''
+    mlut : mlut table
+    view : what to print ? choice between : all, weight, number, errP and errAbs
+    '''
+    m = mlut
+    for i in range (1, 8):
+        if (view == 'all'):
+            print("CAT",i,": weight=", mlut['catWeightPh'][i-1], " number=", mlut['catNbPh'][i-1],
+                  " err(%)=", mlut['catErrP'][i-1], " errAbs=", mlut['catErrAbs'][i-1])
+        elif (view == 'weight'):
+            print("CAT",i,": weight=", mlut['catWeightPh'][i-1])
+        elif (view == 'number'):
+            print("CAT",i,": number=", mlut['catNbPh'][i-1])
+        elif (view == 'errP'):
+            print("CAT",i,": err(%)=", mlut['catErrP'][i-1])
+        elif (view == 'errAbs'):
+            print("CAT",i,": errAbs=", mlut['catErrAbs'][i-1])
+
 
 class Mirror(object):
     '''
