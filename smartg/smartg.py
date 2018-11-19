@@ -618,7 +618,7 @@ class Smartg(object):
                     myObjects0['p3z'][i] = myObjects[i].geo.p4.z
 
                     normalBase = Normal(0, 0, 1);
-                    # Prise en compte des transfos de rot en X et Y
+                    # Prise en compte des transfos de rot en X, Y et Z
                     TpT0 = Transform()
                     TpRX0 = TpT0.rotateX(myObjects[i].transformation.rotx)
                     TpRY0 = TpT0.rotateY(myObjects[i].transformation.roty)
@@ -835,7 +835,7 @@ class Smartg(object):
                 nn1, nn2 = CoordinateSystem(nn3)
                 # Création d'une matrice appelé matrice de passage
                 mm2 = np.zeros((4,4), dtype=np.float64)
-                # Remplissage de la matrice de passage en fonction du repère (ee3 étant le nouvel axe z)
+                # Remplissage de la matrice de passage en fonction du repère (nn3 étant le nouvel axe z)
                 mm2[0,0] = nn1.x ; mm2[0,1] = nn2.x ; mm2[0,2] = nn3.x ; mm2[0,3] = 0. ;
                 mm2[1,0] = nn1.y ; mm2[1,1] = nn2.y ; mm2[1,2] = nn3.y ; mm2[1,3] = 0. ;
                 mm2[2,0] = nn1.z ; mm2[2,1] = nn2.z ; mm2[2,2] = nn3.z ; mm2[2,3] = 0. ;
@@ -869,6 +869,9 @@ class Smartg(object):
         else:
             nObj = 0
             myObjects0 = np.zeros(1, dtype=type_IObjets, order='C')
+            Pmin_x = None; Pmin_y = None; Pmin_z = None;
+            Pmax_x = None; Pmax_y = None; Pmax_z = None;
+            IsAtm = None; TC = None; nbCx = 10; nbCy = 10;
             
         myObjects0 = to_gpu(myObjects0)
 
@@ -1131,7 +1134,7 @@ class Smartg(object):
 
         # Loop and kernel call
         (NPhotonsInTot, tabPhotonsTot, tabDistTot, tabHistTot, errorcount, 
-         NPhotonsOutTot, sigma, Nkernel, secs_cuda_clock, cMatVisuRecep, CounterIntOb
+         NPhotonsOutTot, sigma, Nkernel, secs_cuda_clock, cMatVisuRecep, CounterIntOb, categories
         ) = loop_kernel(NBPHOTONS, faer, foce,
                         NLVL, NATM, NOCE, MAX_HIST, NLOW, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                         NLAM, NSENSOR, self.double, self.kernel, self.kernel2, p, X0, le, tab_sensor, spectrum,
@@ -1146,19 +1149,19 @@ class Smartg(object):
         # En rapport avec l'implémentation des objets (permet le visuel des res du recept)
         # POnePh = surfMir/CounterIntOb
         # cMatVisuRecep[:][:] = cMatVisuRecep[:][:] * ((surfMir)/(TC*TC*CounterIntOb))
-
-        cMatVisuRecep[:][:] = cMatVisuRecep[:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
-
-        # cMatVisuRecep[:][:] = cMatVisuRecep[:][:] * ((0.01*0.012*np.cos(33.8652 * (np.pi / 180)))/(TC*TC*CounterIntOb))
-        print("surfmir=", surfMir)
-        print("sufreal=", ((0.01*0.012))) #/np.cos(33.8652 * (np.pi / 180))))
-        print("sufreal2=", 0.01*0.012*np.cos( 33.8652 * (np.pi / 180) )  )
-        print("sufreal3=", 0.01*0.012*np.cos( 37.849999999999994 * (np.pi / 180) )  )    
+        if (nObj > 0):
+            cMatVisuRecep[:][:] = cMatVisuRecep[:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
+            # cMatVisuRecep[:][:] = cMatVisuRecep[:][:] * ((0.01*0.012*np.cos(33.8652 * (np.pi / 180)))/(TC*TC*CounterIntOb))
+            print("surfmir=", surfMir)
+            print("sufreal=", ((0.01*0.012))) #/np.cos(33.8652 * (np.pi / 180))))
+            print("sufreal2=", 0.01*0.012*np.cos( 33.8652 * (np.pi / 180) )  )
+            print("sufreal3=", 0.01*0.012*np.cos( 37.849999999999994 * (np.pi / 180) )  )    
         # finalization
         output = finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl[:], NPhotonsInTot, errorcount, NPhotonsOutTot,
                           OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, prof_oc,
                           sigma, THVDEG, reflectance, HORIZ, le=le, flux=flux, back=self.back, 
-                          SZA_MAX=SZA_MAX, SUN_DISC=SUN_DISC, hist=hist, cMatVisuRecep=cMatVisuRecep)
+                          SZA_MAX=SZA_MAX, SUN_DISC=SUN_DISC, hist=hist, cMatVisuRecep=cMatVisuRecep, cats = categories)
+        
         output.set_attr('processing time (s)', (datetime.now() - t0).total_seconds())
 
         p.finish('Done! | Received {:.1%} of {:.3g} photons ({:.1%})'.format(
@@ -1211,7 +1214,7 @@ def calcOmega(NBTHETA, NBPHI, SZA_MAX=90., SUN_DISC=0):
 def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
              OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, prof_oc,
              sigma, THVDEG, reflectance, HORIZ, le=None, flux=None,
-             back=False, SZA_MAX=90., SUN_DISC=0, hist=False, cMatVisuRecep = None):
+             back=False, SZA_MAX=90., SUN_DISC=0, hist=False, cMatVisuRecep = None, cats = None):
     '''
     create and return the final output
     '''
@@ -1458,8 +1461,26 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
                 m.add_lut(l, desc=d.replace('I_', 'flux_'))
 
     if (cMatVisuRecep is not None):
-        m.add_dataset('C_Receptor', cMatVisuRecep)
-
+        m.add_dataset('C_Receptor', cMatVisuRecep, ['Horizontal pixel', 'Vertical pixel'])
+        # tabCat = np.zeros((4, 8), dtype=np.float64)
+        # tabCat[0,0] =
+        
+        
+    if (cats is not None):
+        # catNbPh = np.zeros((8), dtype=np.float64)
+        # catWeightPh = np.zeros((8), dtype=np.float64)
+        # catErrP = np.zeros((8), dtype=np.float64)
+        # catErrAbs = np.zeros((8), dtype=np.float64)
+        # for i in range (0, 8):
+        #     catNbPh[i] = 
+        m.add_dataset('catWeightPh', np.array([cats[0], cats[4], cats[8], cats[12], cats[16], cats[20],
+                                               cats[24], cats[28]], dtype=np.float64), ['Categories'])
+        m.add_dataset('catNbPh', np.array([cats[1], cats[5], cats[9], cats[13], cats[17], cats[21],
+                                           cats[25], cats[29]], dtype=np.float64), ['Categories'])
+        m.add_dataset('catErrP', np.array([cats[2], cats[6], cats[10], cats[14], cats[18], cats[22], 
+                                           cats[26], cats[30]], dtype=np.float64), ['Categories'])
+        m.add_dataset('catErrAbs', np.array([cats[3], cats[7], cats[11], cats[15], cats[19], cats[23], 
+                                             cats[27], cats[31]], dtype=np.float64), ['Categories'])
     return m
 
 
@@ -1682,17 +1703,18 @@ def InitConst(surf, env, NATM, NOCE, mod,
     copy_to_device('SZA_MAXd', SZA_MAX, np.float32)
     copy_to_device('SUN_DISCd', SUN_DISC, np.float32)
     # copy en rapport avec les objets :
-    copy_to_device('nObj', nObj, np.int32)
-    copy_to_device('Pmin_x', Pmin_x, np.float32)
-    copy_to_device('Pmin_y', Pmin_y, np.float32)
-    copy_to_device('Pmin_z', Pmin_z, np.float32)
-    copy_to_device('Pmax_x', Pmax_x, np.float32)
-    copy_to_device('Pmax_y', Pmax_y, np.float32)
-    copy_to_device('Pmax_z', Pmax_z, np.float32)
-    copy_to_device('IsAtm', IsAtm, np.int32)
-    copy_to_device('TCd', TC, np.float32)
-    copy_to_device('nbCx', nbCx, np.int32)
-    copy_to_device('nbCy', nbCy, np.int32)   
+    if nObj != 0:
+        copy_to_device('nObj', nObj, np.int32)
+        copy_to_device('Pmin_x', Pmin_x, np.float32)
+        copy_to_device('Pmin_y', Pmin_y, np.float32)
+        copy_to_device('Pmin_z', Pmin_z, np.float32)
+        copy_to_device('Pmax_x', Pmax_x, np.float32)
+        copy_to_device('Pmax_y', Pmax_y, np.float32)
+        copy_to_device('Pmax_z', Pmax_z, np.float32)
+        copy_to_device('IsAtm', IsAtm, np.int32)
+        copy_to_device('TCd', TC, np.float32)
+        copy_to_device('nbCx', nbCx, np.int32)
+        copy_to_device('nbCy', nbCy, np.int32)   
     if cusForward != None:
         copy_to_device('CFXd', cusForward.dict['CFX'], np.float32)
         copy_to_device('CFYd', cusForward.dict['CFY'], np.float32)
@@ -1886,6 +1908,11 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
     tabObjInfo = gpuzeros((3, nbCx, nbCy), dtype=np.float64)
     tabMatRecep = np.zeros((nbCx, nbCy), dtype=np.float64)
     
+    # vecteur comprenant : weightPhotons, nbPhoton, err% et errAbs pour
+    # les 8 categories donc 4 x 8 valeurs = 32. vecCat[0], [1], [2] et [3]
+    # pour la categorie 1 et ainsi de suite...
+    vecCats = np.zeros((32), dtype=np.float64) 
+    
     # Initialize the array for error counting
     NERROR = 32
     errorcount = gpuzeros(NERROR, dtype='uint64')
@@ -1910,18 +1937,20 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
     NPhotonsIn = gpuzeros((NSENSOR,NLAM), dtype=np.uint64)
     NPhotonsInTot = gpuzeros((NSENSOR,NLAM), dtype=np.uint64)
     nbPhotonRecept = 0.
-    nbPhotonReceptD = 0. ;  nbPhotonReceptS = 0.;
-    nbPhotonReceptDM = 0.;  nbPhotonReceptSM = 0.;
-    nbPhotonReceptSSM = 0.; nbPhotonReceptSS = 0.; nbPhotonReceptTEST=0.;
-    weightReceptD = 0.
-    weightReceptS = 0.
-    weightMirrorD = 0.
-    weightMirrorS = 0.
-    weightMirrorSSM = 0.;weightMirrorSS = 0.;
-    CAT0 = 0.; CAT1 = 0.; CAT2 = 0.; CAT3 = 0.; CAT4 = 0.;
-    CAT5 = 0.; CAT6 = 0.; CAT7 = 0.;
-    nCAT0 = 0.; nCAT1 = 0.; nCAT2 = 0.; nCAT3 = 0.; nCAT4 = 0.;
-    nCAT5 = 0.; nCAT6 = 0.; nCAT7 = 0.; wDir = 0.; wDiffu = 0.;
+    if TC is not None:
+        nbPhotonRecept = 0.
+        nbPhotonReceptD = 0. ;  nbPhotonReceptS = 0.;
+        nbPhotonReceptDM = 0.;  nbPhotonReceptSM = 0.;
+        nbPhotonReceptSSM = 0.; nbPhotonReceptSS = 0.; nbPhotonReceptTEST=0.;
+        weightReceptD = 0.
+        weightReceptS = 0.
+        weightMirrorD = 0.
+        weightMirrorS = 0.
+        weightMirrorSSM = 0.;weightMirrorSS = 0.;
+        CAT0 = 0.; CAT1 = 0.; CAT2 = 0.; CAT3 = 0.; CAT4 = 0.;
+        CAT5 = 0.; CAT6 = 0.; CAT7 = 0.;
+        nCAT0 = 0.; nCAT1 = 0.; nCAT2 = 0.; nCAT3 = 0.; nCAT4 = 0.;
+        nCAT5 = 0.; nCAT6 = 0.; nCAT7 = 0.; wDir = 0.; wDiffu = 0.;
     
     # arrays for counting the output photons
     NPhotonsOut = gpuzeros((NLVL,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.uint64)
@@ -1948,6 +1977,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         tabphi = gpuzeros(1, dtype='float32')
 
     secs_cuda_clock = 0.
+    iopp = 1
     while(np.sum(NPhotonsInTot.get()) < NBPHOTONS):
         tabPhotons.fill(0.)
         NPhotonsOut.fill(0)
@@ -1973,53 +2003,60 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
 
         cuda.Context.synchronize()
         np.set_printoptions(precision=5, linewidth=150)
-        # print ("counter of photon intersect the geo is:", CounterIntObj[0])
-        # print ("sum of weight(1) of photons which intersect the receptor:", tabObjInfo[0, 0, 0])
-        # print ("sum of weight(2) of photons which intersect the receptor: \n", tabObjInfo[1, :, :])
-        # print ("counter from host (smartg) is:", Counter[0])
-        # print ("NPhotonsIn host (smartg) is:", NPhotonsIn)
 
-        tabMatRecep += tabObjInfo[1, :, :].get()
-        weightReceptD += tabObjInfo[0, 0, 0].get()
-        weightReceptS += tabObjInfo[0, 0, 1].get()
-        weightMirrorD += tabObjInfo[0, 0, 2].get()
-        weightMirrorS += tabObjInfo[0, 0, 3].get()
-        weightMirrorSSM += tabObjInfo[0, 0, 4].get()
-        weightMirrorSS += tabObjInfo[0, 0, 5].get()
-        CAT0 += tabObjInfo[0, 0, 6].get(); CAT1 += tabObjInfo[0, 0, 7].get(); CAT2 += tabObjInfo[0, 0, 8].get();
-        CAT3 += tabObjInfo[0, 0, 9].get(); CAT4 += tabObjInfo[0, 0, 10].get(); CAT5 += tabObjInfo[0, 0, 11].get();
-        CAT6 += tabObjInfo[0, 0, 12].get(); CAT7 += tabObjInfo[0, 0, 13].get();
-        
-        wDir += tabObjInfo[2, 0, 0].get(); wDiffu += tabObjInfo[2, 0, 1].get();
-        nCAT0 += tabObjInfo[2, 0, 2].get(); nCAT1 += tabObjInfo[2, 0, 3].get(); nCAT2 += tabObjInfo[2, 0, 4].get();
-        nCAT3 += tabObjInfo[2, 0, 5].get(); nCAT4 += tabObjInfo[2, 0, 6].get(); nCAT5 += tabObjInfo[2, 0, 7].get();
-        nCAT6 += tabObjInfo[2, 0, 8].get(); nCAT7 += tabObjInfo[2, 0, 9].get();
-        
-        
-        nbPhotonReceptIniD = CounterIntObj[0] # number of dircet photons intersect the receptor by last kernel
-        nbPhotonReceptIniS = CounterIntObj[1] # number of scattering photons intersect the receptor by last kernel
-        nbPhotonReceptD += nbPhotonReceptIniD
-        nbPhotonReceptS += nbPhotonReceptIniS
-        
-        nbPhotonReceptIniDM = CounterIntObj[2] # number of direct photons intersect the mirror by last kernel
-        nbPhotonReceptIniSM = CounterIntObj[3] # number of scattering photons intersect the mirror by last kernel
-        nbPhotonReceptDM += nbPhotonReceptIniDM
-        nbPhotonReceptSM += nbPhotonReceptIniSM
-        
-        nbPhotonReceptIniSSM = CounterIntObj[4] # number of scattering photons intersect the receptor and impacted by mirror by last kernel
-        nbPhotonReceptIniSS = CounterIntObj[5]  # number of scattering photons intersect the receptor and not impacted by mirror by last kernel
+        if TC is not None:
+            # print ("counter of photon intersect the geo is:", CounterIntObj[0])
+            # print ("sum of weight(1) of photons which intersect the receptor:", tabObjInfo[0, 0, 0])
+            # print ("sum of weight(2) of photons which intersect the receptor: \n", tabObjInfo[1, :, :])
+            # print ("counter from host (smartg) is:", Counter[0])
+            # print ("NPhotonsIn host (smartg) is:", NPhotonsIn)
+            
+            tabMatRecep += tabObjInfo[1, :, :].get()
+            weightReceptD += tabObjInfo[0, 0, 0].get(); weightReceptS += tabObjInfo[0, 0, 1].get();
+            weightMirrorD += tabObjInfo[0, 0, 2].get(); weightMirrorS += tabObjInfo[0, 0, 3].get();
+            weightMirrorSSM += tabObjInfo[0, 0, 4].get(); weightMirrorSS += tabObjInfo[0, 0, 5].get();
+            
+            CAT0 += tabObjInfo[0, 0, 6].get(); CAT1 += tabObjInfo[0, 0, 7].get(); CAT2 += tabObjInfo[0, 0, 8].get();
+            CAT3 += tabObjInfo[0, 0, 9].get(); CAT4 += tabObjInfo[0, 0, 10].get(); CAT5 += tabObjInfo[0, 0, 11].get();
+            CAT6 += tabObjInfo[0, 0, 12].get(); CAT7 += tabObjInfo[0, 0, 13].get();
 
-        nbPhotonReceptSSM += nbPhotonReceptIniSSM
-        nbPhotonReceptSS += nbPhotonReceptIniSS
+            vecCats[0] += tabObjInfo[0, 0, 6].get(); vecCats[4] += tabObjInfo[0, 0, 7].get(); vecCats[8] += tabObjInfo[0, 0, 8].get();
+            vecCats[12] += tabObjInfo[0, 0, 9].get(); vecCats[16] += tabObjInfo[0, 0, 10].get(); vecCats[20] += tabObjInfo[0, 0, 11].get();
+            vecCats[24] += tabObjInfo[0, 0, 12].get(); vecCats[28] += tabObjInfo[0, 0, 13].get();
+            
+            wDir += tabObjInfo[2, 0, 0].get(); wDiffu += tabObjInfo[2, 0, 1].get();
+            nCAT0 += tabObjInfo[2, 0, 2].get(); nCAT1 += tabObjInfo[2, 0, 3].get(); nCAT2 += tabObjInfo[2, 0, 4].get();
+            nCAT3 += tabObjInfo[2, 0, 5].get(); nCAT4 += tabObjInfo[2, 0, 6].get(); nCAT5 += tabObjInfo[2, 0, 7].get();
+            nCAT6 += tabObjInfo[2, 0, 8].get(); nCAT7 += tabObjInfo[2, 0, 9].get();
+        
+            vecCats[1] += tabObjInfo[2, 0, 2].get(); vecCats[5] += tabObjInfo[2, 0, 3].get(); vecCats[9] += tabObjInfo[2, 0, 4].get();
+            vecCats[13] += tabObjInfo[2, 0, 5].get(); vecCats[17] += tabObjInfo[2, 0, 6].get(); vecCats[21] += tabObjInfo[2, 0, 7].get();
+            vecCats[25] += tabObjInfo[2, 0, 8].get(); vecCats[29] += tabObjInfo[2, 0, 9].get();
+            
+            nbPhotonReceptIniD = CounterIntObj[0] # number of dircet photons intersect the receptor by last kernel
+            nbPhotonReceptIniS = CounterIntObj[1] # number of scattering photons intersect the receptor by last kernel
+            nbPhotonReceptD += nbPhotonReceptIniD
+            nbPhotonReceptS += nbPhotonReceptIniS
+        
+            nbPhotonReceptIniDM = CounterIntObj[2] # number of direct photons intersect the mirror by last kernel
+            nbPhotonReceptIniSM = CounterIntObj[3] # number of scattering photons intersect the mirror by last kernel
+            nbPhotonReceptDM += nbPhotonReceptIniDM
+            nbPhotonReceptSM += nbPhotonReceptIniSM
+        
+            nbPhotonReceptIniSSM = CounterIntObj[4] # number of scattering photons intersect the receptor and impacted by mirror by last kernel
+            nbPhotonReceptIniSS = CounterIntObj[5]  # number of scattering photons intersect the receptor and not impacted by mirror by last kernel
 
-        nbPhotonReceptIniTEST = CounterIntObj[6] # number of scattering photons intersect the receptor and impacted by mirror by last kernel
-        nbPhotonReceptTEST += nbPhotonReceptIniTEST
-        nbPhotonRecept += nbPhotonReceptIniD + nbPhotonReceptIniS
+            nbPhotonReceptSSM += nbPhotonReceptIniSSM
+            nbPhotonReceptSS += nbPhotonReceptIniSS
 
-        # print("tab[1]=", CounterIntObj[1])
-        # print("weighttab[1]=", tabObjInfo[0, 0, 1])
-        # print("percentage diffus=", (tabObjInfo[0, 0, 1]*100)/(weightRecept+tabObjInfo[0, 0, 1].get()))
-        # print("percentage diffus on mirror=", (tabObjInfo[0, 0, 3]*100)/(tabObjInfo[0, 0, 3].get()+tabObjInfo[0, 0, 2].get()))
+            nbPhotonReceptIniTEST = CounterIntObj[6] # number of scattering photons intersect the receptor and impacted by mirror by last kernel
+            nbPhotonReceptTEST += nbPhotonReceptIniTEST
+            nbPhotonRecept += nbPhotonReceptIniD + nbPhotonReceptIniS
+
+            # print("tab[1]=", CounterIntObj[1])
+            # print("weighttab[1]=", tabObjInfo[0, 0, 1])
+            # print("percentage diffus=", (tabObjInfo[0, 0, 1]*100)/(weightRecept+tabObjInfo[0, 0, 1].get()))
+            # print("percentage diffus on mirror=", (tabObjInfo[0, 0, 3]*100)/(tabObjInfo[0, 0, 3].get()+tabObjInfo[0, 0, 2].get()))
         
         L = NPhotonsIn   # number of photons launched by last kernel
         NPhotonsInTot += L
@@ -2035,15 +2072,16 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
             H = tabHist
             tabHistTot = H
         #!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        print ("Avancement... NPhotonsIn host (smartg) is:", NPhotonsInTot)
-        import sys
-        print ("Avancement... NPhotonsIn host (smartg) is:", NPhotonsInTot, file = sys.stderr)
-        # print ("counter of photon intersect the geo is:", nbPhotonRecept+CounterIntObj[1].get())
-        # print ("sum of weight(1) of photons which intersect the receptor:", weightRecept+tabObjInfo[0, 0, 1].get())
-        # print("percentage direct=", (weightRecept*100)/(weightRecept+tabObjInfo[0, 0, 1].get()))
-        # print("percentage direct on mirror=", (tabObjInfo[0, 0, 2]*100)/(tabObjInfo[0, 0, 3].get()+tabObjInfo[0, 0, 2].get()))
-        # print ("NPhotonsIn host (smartg) is:", NPhotonsInTot)
-        # print ("counter from host (smartg) is:", Counter[0])
+        if TC is not None:
+            print ("Avancement... NPhotonsIn host (smartg) is:", NPhotonsInTot)
+            import sys
+            print ("Avancement... NPhotonsIn host (smartg) is:", NPhotonsInTot, file = sys.stderr)
+            # print ("counter of photon intersect the geo is:", nbPhotonRecept+CounterIntObj[1].get())
+            # print ("sum of weight(1) of photons which intersect the receptor:", weightRecept+tabObjInfo[0, 0, 1].get())
+            # print("percentage direct=", (weightRecept*100)/(weightRecept+tabObjInfo[0, 0, 1].get()))
+            # print("percentage direct on mirror=", (tabObjInfo[0, 0, 2]*100)/(tabObjInfo[0, 0, 3].get()+tabObjInfo[0, 0, 2].get()))
+            # print ("NPhotonsIn host (smartg) is:", NPhotonsInTot)
+            # print ("counter from host (smartg) is:", Counter[0])
 
         N_simu += 1
         if stdev:
@@ -2060,59 +2098,79 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
                 'Launched {:.3g} photons'.format(sphot))
     secs_cuda_clock = secs_cuda_clock*1e-3
 
-
-    print("nb photon diffus", nbPhotonReceptS)
-    print("weight photon diffus", weightReceptS)
-    print("nb photon direct", nbPhotonReceptD)
-    print("weight photon direct", weightReceptD)
+    if TC is not None:
+        print("nb photon diffus", nbPhotonReceptS)
+        print("weight photon diffus", weightReceptS)
+        print("nb photon direct", nbPhotonReceptD)
+        print("weight photon direct", weightReceptD)
     
-    print ("counter of photon intersect the geo is:", nbPhotonRecept)
-    print ("sum of weight(1) of photons which intersect the receptor:", weightReceptD+weightReceptS)
+        print ("counter of photon intersect the geo is:", nbPhotonRecept)
+        print ("sum of weight(1) of photons which intersect the receptor:", weightReceptD+weightReceptS)
     
-    print("percentage diffus=", (weightReceptS*100)/(weightReceptD+weightReceptS))
-    print("percentage diffus on mirror=", (weightMirrorS*100)/(weightMirrorS+weightMirrorD))
+        print("percentage diffus=", (weightReceptS*100)/(weightReceptD+weightReceptS))
+        print("percentage diffus on mirror=", (weightMirrorS*100)/(weightMirrorS+weightMirrorD))
 
-    print("percentage direct=", (weightReceptD*100)/(weightReceptD+weightReceptS))
-    print("percentage direct on mirror=", (weightMirrorD*100)/(weightMirrorS+weightMirrorD))
+        print("percentage direct=", (weightReceptD*100)/(weightReceptD+weightReceptS))
+        print("percentage direct on mirror=", (weightMirrorD*100)/(weightMirrorS+weightMirrorD))
     
-    print ("NPhotonsIn host (smartg) is:", NPhotonsInTot)
-    print ("counter from host (smartg) is:", Counter[0])
+        print ("NPhotonsIn host (smartg) is:", NPhotonsInTot)
+        print ("counter from host (smartg) is:", Counter[0])
 
-    print("nb photon direct on mirror", nbPhotonReceptDM)
-    print("nb photon diffus on mirror", nbPhotonReceptSM)
-    print("weight photon direct on mirror", weightMirrorD)
-    print("weight photon diffus on mirror", weightMirrorS)
+        print("nb photon direct on mirror", nbPhotonReceptDM)
+        print("nb photon diffus on mirror", nbPhotonReceptSM)
+        print("weight photon direct on mirror", weightMirrorD)
+        print("weight photon diffus on mirror", weightMirrorS)
 
-    print("nb photon diffus on receptor impacted by mirror", nbPhotonReceptSSM)
-    print("nb photon diffus on receptor not impacted by mirror", nbPhotonReceptSS)
-    print("weight diffus on receptor impacted by mirror", weightMirrorSSM)
-    print("weight diffus on receptor not impacted by mirror", weightMirrorSS)
-    print("=======TEST nbdirect impacted by mirror=", nbPhotonReceptTEST)
-    print("CAT0 =%f" % CAT0 + " +ou- %f%%" % (1./nCAT0**0.5) + " / ou bien +ou- %f" % float(CAT0*(1./nCAT0**0.5)))
-    print("CAT1 =%f" % CAT1 + " +ou- %f%%" % (1./nCAT1**0.5) + " / ou bien +ou- %f" % float(CAT1*(1./nCAT1**0.5)))
-    print("CAT2 =%f" % CAT2 + " +ou- %f%%" % (1./nCAT2**0.5) + " / ou bien +ou- %f" % float(CAT2*(1./nCAT2**0.5)))
-    print("CAT3 =%f" % CAT3 + " +ou- %f%%" % (1./nCAT3**0.5) + " / ou bien +ou- %f" % float(CAT3*(1./nCAT3**0.5)))
-    print("CAT4 =%f" % CAT4 + " +ou- %f%%" % (1./nCAT4**0.5) + " / ou bien +ou- %f" % float(CAT4*(1./nCAT4**0.5)))
-    print("CAT5 =%f" % CAT5 + " +ou- %f%%" % (1./nCAT5**0.5) + " / ou bien +ou- %f" % float(CAT5*(1./nCAT5**0.5)))
-    print("CAT6 =%f" % CAT6 + " +ou- %f%%" % (1./nCAT6**0.5) + " / ou bien +ou- %f" % float(CAT6*(1./nCAT6**0.5)))
-    print("CAT7 =%f" % CAT7 + " +ou- %f%%" % (1./nCAT7**0.5) + " / ou bien +ou- %f" % float(CAT7*(1./nCAT7**0.5)))
-    print("M (bleu) =", CAT0 + CAT1)
-    print("SGE (rouge) =", CAT2 + CAT3 + CAT6)
-    print("SGM (vert) =", CAT4 + CAT5 + CAT7)
-    print("=============== NB photons for each CAT ===============")
-    print("nCAT0 =", nCAT0)
-    print("nCAT1 =", nCAT1)
-    print("nCAT2 =", nCAT2)
-    print("nCAT3 =", nCAT3)
-    print("nCAT4 =", nCAT4)
-    print("nCAT5 =", nCAT5)
-    print("nCAT6 =", nCAT6)
-    print("nCAT7 =", nCAT7)   
-    print("nM (bleu) =", nCAT0 + nCAT1)
-    print("nSGE (rouge) =", nCAT2 + nCAT3 + nCAT6)
-    print("nSGM (vert) =", nCAT4 + nCAT5 + nCAT7)
-    print("nbPhontons direct =", wDir)
-    print("nbPhontons diffus =", wDiffu)
+        print("nb photon diffus on receptor impacted by mirror", nbPhotonReceptSSM)
+        print("nb photon diffus on receptor not impacted by mirror", nbPhotonReceptSS)
+        print("weight diffus on receptor impacted by mirror", weightMirrorSSM)
+        print("weight diffus on receptor not impacted by mirror", weightMirrorSS)
+        print("=======TEST nbdirect impacted by mirror=", nbPhotonReceptTEST)
+        print("CAT0 =%f" % CAT0 + " +ou- %f%%" % (100.*(1./nCAT0**0.5)) + " / ou bien +ou- %f" % float(CAT0*(1./nCAT0**0.5)))
+        print("CAT1 =%f" % CAT1 + " +ou- %f%%" % (100.*(1./nCAT1**0.5)) + " / ou bien +ou- %f" % float(CAT1*(1./nCAT1**0.5)))
+        print("CAT2 =%f" % CAT2 + " +ou- %f%%" % (100.*(1./nCAT2**0.5)) + " / ou bien +ou- %f" % float(CAT2*(1./nCAT2**0.5)))
+        print("CAT3 =%f" % CAT3 + " +ou- %f%%" % (100.*(1./nCAT3**0.5)) + " / ou bien +ou- %f" % float(CAT3*(1./nCAT3**0.5)))
+        print("CAT4 =%f" % CAT4 + " +ou- %f%%" % (100.*(1./nCAT4**0.5)) + " / ou bien +ou- %f" % float(CAT4*(1./nCAT4**0.5)))
+        print("CAT5 =%f" % CAT5 + " +ou- %f%%" % (100.*(1./nCAT5**0.5)) + " / ou bien +ou- %f" % float(CAT5*(1./nCAT5**0.5)))
+        print("CAT6 =%f" % CAT6 + " +ou- %f%%" % (100.*(1./nCAT6**0.5)) + " / ou bien +ou- %f" % float(CAT6*(1./nCAT6**0.5)))
+        print("CAT7 =%f" % CAT7 + " +ou- %f%%" % (100.*(1./nCAT7**0.5)) + " / ou bien +ou- %f" % float(CAT7*(1./nCAT7**0.5)))
+        for i in range (0, 8):
+            if (vecCats[i*4] == 0 or vecCats[(i*4)+1] == 0):
+                vecCats[(i*4)+2] = 0.
+                vecCats[(i*4)+3] = 0.
+            else:    
+                vecCats[(i*4)+2] = (100.*(1./vecCats[(i*4)+1]**0.5));
+                vecCats[(i*4)+3] = float(vecCats[i*4]*(1./vecCats[(i*4)+1]**0.5));
+        print("=======TEST nbdirect impacted by mirror=", nbPhotonReceptTEST)
+        print("CAT0 =%f" % vecCats[0] + " +ou- %f%%" % vecCats[2] + " / ou bien +ou- %f" % vecCats[3])
+        print("CAT1 =%f" % vecCats[4] + " +ou- %f%%" % vecCats[6] + " / ou bien +ou- %f" % vecCats[7])
+        print("CAT2 =%f" % vecCats[8] + " +ou- %f%%" % vecCats[10] + " / ou bien +ou- %f" % vecCats[11])
+        print("CAT3 =%f" % vecCats[12] + " +ou- %f%%" % vecCats[14] + " / ou bien +ou- %f" % vecCats[15])
+        print("CAT4 =%f" % vecCats[16] + " +ou- %f%%" % vecCats[18] + " / ou bien +ou- %f" % vecCats[19])
+        print("CAT5 =%f" % vecCats[20] + " +ou- %f%%" % vecCats[22] + " / ou bien +ou- %f" % vecCats[23])
+        print("CAT6 =%f" % vecCats[24] + " +ou- %f%%" % vecCats[26] + " / ou bien +ou- %f" % vecCats[27])
+        print("CAT7 =%f" % vecCats[28] + " +ou- %f%%" % vecCats[30] + " / ou bien +ou- %f" % vecCats[31])
+        
+        print("M (bleu) =", CAT0 + CAT1)
+        print("SGE (rouge) =", CAT2 + CAT3 + CAT6)
+        print("SGM (vert) =", CAT4 + CAT5 + CAT7)
+        print("=============== NB photons for each CAT ===============")
+        print("nCAT0 =", nCAT0)
+        print("nCAT1 =", nCAT1)
+        print("nCAT2 =", nCAT2)
+        print("nCAT3 =", nCAT3)
+        print("nCAT4 =", nCAT4)
+        print("nCAT5 =", nCAT5)
+        print("nCAT6 =", nCAT6)
+        print("nCAT7 =", nCAT7)   
+        print("nM (bleu) =", nCAT0 + nCAT1)
+        print("nSGE (rouge) =", nCAT2 + nCAT3 + nCAT6)
+        print("nSGM (vert) =", nCAT4 + nCAT5 + nCAT7)
+        print("nbPhontons direct =", wDir)
+        print("nbPhontons diffus =", wDiffu)
+
+    else:
+        nbPhotonRecept = CounterIntObj[0]
     if stdev:
         # finalize the calculation of the standard deviation
         sigma = np.sqrt(sum_x2/N_simu - (sum_x/N_simu)**2)
@@ -2124,7 +2182,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
 
     #!!!!!!!!!!!!!!!!!!!!!!!!!!!
     return NPhotonsInTot.get(), tabPhotonsTot.get(), tabDistTot.get(), tabHistTot.get(), errorcount, \
-        NPhotonsOutTot.get(), sigma, N_simu, secs_cuda_clock, tabMatRecep, nbPhotonRecept.get()
+        NPhotonsOutTot.get(), sigma, N_simu, secs_cuda_clock, tabMatRecep, nbPhotonRecept.get(), vecCats
     #!!!!!!!!!!!!!!!!!!!!!!!!!!!
     #return NPhotonsInTot.get(), tabPhotonsTot.get(), errorcount, NPhotonsOutTot.get(), sigma, N_simu, secs_cuda_clock
 
