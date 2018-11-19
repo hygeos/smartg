@@ -81,12 +81,12 @@ def cat_view(mlut, view = 'all'):
     m = mlut
     for i in range (0, 8):
         if (view == 'all'):
-            print("CAT",i+1,": weight=", mlut['catWeightPh'][i], " number=", mlut['catNbPh'][i],
+            print("CAT",i+1,": weight=", mlut['catWeightPh'][i], " number=", np.uint64(mlut['catNbPh'][i]),
                   " err(%)=", mlut['catErrP'][i], " errAbs=", mlut['catErrAbs'][i])
         elif (view == 'weight'):
             print("CAT",i+1,": weight=", mlut['catWeightPh'][i])
         elif (view == 'number'):
-            print("CAT",i+1,": number=", mlut['catNbPh'][i])
+            print("CAT",i+1,": number=", np.uint64(mlut['catNbPh'][i]))
         elif (view == 'errP'):
             print("CAT",i+1,": err(%)=", mlut['catErrP'][i])
         elif (view == 'errAbs'):
