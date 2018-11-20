@@ -3935,13 +3935,15 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 		// atomicAdd(tabCountObj, weight);
 
 		// matrice -- > (1 (via dimJ*dimI), dimI, dimJ)
-		atomicAdd(tabCountObj+(nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+		//atomicAdd(tabCountObj+(nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+		atomicAdd(tabCountObj+(nbCy*indI)+indJ, weight);
 		// atomicAdd(tabCountObj+(2*nbCy*nbCx)+0, 1);
 	}
 	else if (ph->direct != 0 && geoS->type == 2)
 	{
 		// atomicAdd(tabCountObj+1, weight);
-		atomicAdd(tabCountObj+(nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+		//atomicAdd(tabCountObj+(nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+		atomicAdd(tabCountObj+(nbCy*indI)+indJ, weight);
 		// atomicAdd(tabCountObj+(2*nbCy*nbCx)+1, 1);
 		// if (ph->toucheMir == true)
 		// {
@@ -3964,136 +3966,136 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 	// Les septs catégories + la cat 0
 	if (ph->H == 0 && ph->E == 0 && ph->S == 0 && geoS->type == 2) 
 	{ // CAT 0 : aucun changement de trajectoire avant de toucher le R.
-		atomicAdd(tabCountObj+6, weight);
-		atomicAdd(tabCountObj+(2*nbCy*nbCx)+2, 1);
+		// atomicAdd(tabCountObj+6, weight);
+		// atomicAdd(tabCountObj+(2*nbCy*nbCx)+2, 1);
 		atomicAdd(wPhCat, weight);
 		atomicAdd(nbPhCat, 1);
 	}
 	else if ( ph->H > 0 && ph->E == 0 && ph->S == 0 && geoS->type == 2 )
 	{ // CAT 1 : only H avant de toucher le R.
-		atomicAdd(tabCountObj+7, weight);
-		atomicAdd(tabCountObj+(2*nbCy*nbCx)+3, 1);
+		// atomicAdd(tabCountObj+7, weight);
+		// atomicAdd(tabCountObj+(2*nbCy*nbCx)+3, 1);
 		atomicAdd(wPhCat+1, weight);
 		atomicAdd(nbPhCat+1, 1);
 	}
 	else if ( ph->H == 0 && ph->E > 0 && ph->S == 0 && geoS->type == 2 )
 	{ // CAT 2 : only E avant de toucher le R.
-		atomicAdd(tabCountObj+8, weight);
-		atomicAdd(tabCountObj+(2*nbCy*nbCx)+4, 1);
+		// atomicAdd(tabCountObj+8, weight);
+		// atomicAdd(tabCountObj+(2*nbCy*nbCx)+4, 1);
 		atomicAdd(wPhCat+2, weight);
 		atomicAdd(nbPhCat+2, 1);
 	}
 	else if ( ph->H == 0 && ph->E == 0 && ph->S > 0 && geoS->type == 2 )
 	{ // CAT 3 : only S avant de toucher le R.
-		atomicAdd(tabCountObj+9, weight);
-		atomicAdd(tabCountObj+(2*nbCy*nbCx)+5, 1);
+		// atomicAdd(tabCountObj+9, weight);
+		// atomicAdd(tabCountObj+(2*nbCy*nbCx)+5, 1);
 		atomicAdd(wPhCat+3, weight);
 		atomicAdd(nbPhCat+3, 1);
 	}
 	else if ( ph->H > 0 && ph->E == 0 && ph->S > 0 && geoS->type == 2 )
 	{ // CAT 4 : 2 proc. H et S avant de toucher le R.
-		atomicAdd(tabCountObj+10, weight);
-		atomicAdd(tabCountObj+(2*nbCy*nbCx)+6, 1);
+		// atomicAdd(tabCountObj+10, weight);
+		// atomicAdd(tabCountObj+(2*nbCy*nbCx)+6, 1);
 		atomicAdd(wPhCat+4, weight);
 		atomicAdd(nbPhCat+4, 1);
 	}
 	else if ( ph->H > 0 && ph->E > 0 && ph->S == 0 && geoS->type == 2 )
 	{ // CAT 5 : 2 proc. H et E avant de toucher le R.
-		atomicAdd(tabCountObj+11, weight);
-		atomicAdd(tabCountObj+(2*nbCy*nbCx)+7, 1);
+		// atomicAdd(tabCountObj+11, weight);
+		// atomicAdd(tabCountObj+(2*nbCy*nbCx)+7, 1);
 		//printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
 		atomicAdd(wPhCat+5, weight);
 		atomicAdd(nbPhCat+5, 1);
 	}
 	else if ( ph->H == 0 && ph->E > 0 && ph->S > 0 && geoS->type == 2 )
 	{ // CAT 6 : 2 proc. E et S avant de toucher le R.
-		atomicAdd(tabCountObj+12, weight);
-		atomicAdd(tabCountObj+(2*nbCy*nbCx)+8, 1);
+		// atomicAdd(tabCountObj+12, weight);
+		// atomicAdd(tabCountObj+(2*nbCy*nbCx)+8, 1);
 		atomicAdd(wPhCat+6, weight);
 		atomicAdd(nbPhCat+6, 1);
 	}	
 	else if ( ph->H > 0 && ph->E > 0 && ph->S > 0 && geoS->type == 2 )
 	{ // CAT 7 : 3 proc. H, E et S avant de toucher le R.
-		atomicAdd(tabCountObj+13, weight);
-		atomicAdd(tabCountObj+(2*nbCy*nbCx)+9, 1);
+		// atomicAdd(tabCountObj+13, weight);
+		// atomicAdd(tabCountObj+(2*nbCy*nbCx)+9, 1);
 		atomicAdd(wPhCat+7, weight);
 		atomicAdd(nbPhCat+7, 1);
 	}	
 	
 	#else
-	if (ph->direct == 0 && geoS->type == 2)
-	{
-		DatomicAdd(tabCountObj, weight);
+	// if (ph->direct == 0 && geoS->type == 2)
+	// {
+	// 	DatomicAdd(tabCountObj, weight);
 
-		// matrice -- > (1 (via dimJ*dimI), dimI, dimJ)
-		DatomicAdd(tabCountObj+(nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-		DatomicAdd(tabCountObj+(2*nbCy*nbCx)+0, 1);
-	}
-	else if (ph->direct != 0 && geoS->type == 2)
-	{
-		DatomicAdd(tabCountObj+1, weight);
-		DatomicAdd(tabCountObj+(nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-		DatomicAdd(tabCountObj+(2*nbCy*nbCx)+1, 1);
-		if (ph->toucheMir == true)
-		{
-			DatomicAdd(tabCountObj+4, weight);
-		}
-		else
-		{
-			DatomicAdd(tabCountObj+5, weight);
-		}
-	}
-	else if (ph->direct == 0 && geoS->type == 1)
-	{
-		DatomicAdd(tabCountObj+2, weight);
-	}
-	else if (ph->direct != 0 && geoS->type == 1)
-	{
-		DatomicAdd(tabCountObj+3, weight);
-	}
+	// 	// matrice -- > (1 (via dimJ*dimI), dimI, dimJ)
+	// 	DatomicAdd(tabCountObj+(nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+	// 	DatomicAdd(tabCountObj+(2*nbCy*nbCx)+0, 1);
+	// }
+	// else if (ph->direct != 0 && geoS->type == 2)
+	// {
+	// 	DatomicAdd(tabCountObj+1, weight);
+	// 	DatomicAdd(tabCountObj+(nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+	// 	DatomicAdd(tabCountObj+(2*nbCy*nbCx)+1, 1);
+	// 	if (ph->toucheMir == true)
+	// 	{
+	// 		DatomicAdd(tabCountObj+4, weight);
+	// 	}
+	// 	else
+	// 	{
+	// 		DatomicAdd(tabCountObj+5, weight);
+	// 	}
+	// }
+	// else if (ph->direct == 0 && geoS->type == 1)
+	// {
+	// 	DatomicAdd(tabCountObj+2, weight);
+	// }
+	// else if (ph->direct != 0 && geoS->type == 1)
+	// {
+	// 	DatomicAdd(tabCountObj+3, weight);
+	// }
 
-	// Les septs catégories + la cat 0
-	if (ph->H == 0 && ph->E == 0 && ph->S == 0 && geoS->type == 2) 
-	{ // CAT 0 : aucun changement de trajectoire avant de toucher le R.
-		DatomicAdd(tabCountObj+6, weight);
-		DatomicAdd(tabCountObj+(2*nbCy*nbCx)+2, 1);
-	}
-	else if ( ph->H > 0 && ph->E == 0 && ph->S == 0 && geoS->type == 2 )
-	{ // CAT 1 : only H avant de toucher le R.
-		DatomicAdd(tabCountObj+7, weight);
-		DatomicAdd(tabCountObj+(2*nbCy*nbCx)+3, 1);
-	}
-	else if ( ph->H == 0 && ph->E > 0 && ph->S == 0 && geoS->type == 2 )
-	{ // CAT 2 : only E avant de toucher le R.
-		DatomicAdd(tabCountObj+8, weight);
-		DatomicAdd(tabCountObj+(2*nbCy*nbCx)+4, 1);
-	}
-	else if ( ph->H == 0 && ph->E == 0 && ph->S > 0 && geoS->type == 2 )
-	{ // CAT 3 : only S avant de toucher le R.
-		DatomicAdd(tabCountObj+9, weight);
-		DatomicAdd(tabCountObj+(2*nbCy*nbCx)+5, 1);
-	}
-	else if ( ph->H > 0 && ph->E == 0 && ph->S > 0 && geoS->type == 2 )
-	{ // CAT 4 : 2 proc. H et S avant de toucher le R.
-		DatomicAdd(tabCountObj+10, weight);
-		DatomicAdd(tabCountObj+(2*nbCy*nbCx)+6, 1);
-	}
-	else if ( ph->H > 0 && ph->E > 0 && ph->S == 0 && geoS->type == 2 )
-	{ // CAT 5 : 2 proc. H et E avant de toucher le R.
-		DatomicAdd(tabCountObj+11, weight);
-		DatomicAdd(tabCountObj+(2*nbCy*nbCx)+7, 1);
-		//printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
-	}
-	else if ( ph->H == 0 && ph->E > 0 && ph->S > 0 && geoS->type == 2 )
-	{ // CAT 6 : 2 proc. E et S avant de toucher le R.
-		DatomicAdd(tabCountObj+12, weight);
-		DatomicAdd(tabCountObj+(2*nbCy*nbCx)+8, 1);
-	}	
-	else if ( ph->H > 0 && ph->E > 0 && ph->S > 0 && geoS->type == 2 )
-	{ // CAT 7 : 3 proc. H, E et S avant de toucher le R.
-		DatomicAdd(tabCountObj+13, weight);
-		DatomicAdd(tabCountObj+(2*nbCy*nbCx)+9, 1);
-	}
+	// // Les septs catégories + la cat 0
+	// if (ph->H == 0 && ph->E == 0 && ph->S == 0 && geoS->type == 2) 
+	// { // CAT 0 : aucun changement de trajectoire avant de toucher le R.
+	// 	DatomicAdd(tabCountObj+6, weight);
+	// 	DatomicAdd(tabCountObj+(2*nbCy*nbCx)+2, 1);
+	// }
+	// else if ( ph->H > 0 && ph->E == 0 && ph->S == 0 && geoS->type == 2 )
+	// { // CAT 1 : only H avant de toucher le R.
+	// 	DatomicAdd(tabCountObj+7, weight);
+	// 	DatomicAdd(tabCountObj+(2*nbCy*nbCx)+3, 1);
+	// }
+	// else if ( ph->H == 0 && ph->E > 0 && ph->S == 0 && geoS->type == 2 )
+	// { // CAT 2 : only E avant de toucher le R.
+	// 	DatomicAdd(tabCountObj+8, weight);
+	// 	DatomicAdd(tabCountObj+(2*nbCy*nbCx)+4, 1);
+	// }
+	// else if ( ph->H == 0 && ph->E == 0 && ph->S > 0 && geoS->type == 2 )
+	// { // CAT 3 : only S avant de toucher le R.
+	// 	DatomicAdd(tabCountObj+9, weight);
+	// 	DatomicAdd(tabCountObj+(2*nbCy*nbCx)+5, 1);
+	// }
+	// else if ( ph->H > 0 && ph->E == 0 && ph->S > 0 && geoS->type == 2 )
+	// { // CAT 4 : 2 proc. H et S avant de toucher le R.
+	// 	DatomicAdd(tabCountObj+10, weight);
+	// 	DatomicAdd(tabCountObj+(2*nbCy*nbCx)+6, 1);
+	// }
+	// else if ( ph->H > 0 && ph->E > 0 && ph->S == 0 && geoS->type == 2 )
+	// { // CAT 5 : 2 proc. H et E avant de toucher le R.
+	// 	DatomicAdd(tabCountObj+11, weight);
+	// 	DatomicAdd(tabCountObj+(2*nbCy*nbCx)+7, 1);
+	// 	//printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
+	// }
+	// else if ( ph->H == 0 && ph->E > 0 && ph->S > 0 && geoS->type == 2 )
+	// { // CAT 6 : 2 proc. E et S avant de toucher le R.
+	// 	DatomicAdd(tabCountObj+12, weight);
+	// 	DatomicAdd(tabCountObj+(2*nbCy*nbCx)+8, 1);
+	// }	
+	// else if ( ph->H > 0 && ph->E > 0 && ph->S > 0 && geoS->type == 2 )
+	// { // CAT 7 : 3 proc. H, E et S avant de toucher le R.
+	// 	DatomicAdd(tabCountObj+13, weight);
+	// 	DatomicAdd(tabCountObj+(2*nbCy*nbCx)+9, 1);
+	// }
 	#endif
 
 }

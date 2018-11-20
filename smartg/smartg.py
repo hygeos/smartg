@@ -1907,7 +1907,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
     #CounterIntObj = gpuzeros(7, dtype='uint64')
     nbPhCat = gpuzeros(8, dtype=np.uint64) # vector to fill the number of photons for  each categories
     wPhCat = gpuzeros(8, dtype=np.float64)  # vector to fill the weight of photons for each categories
-    tabObjInfo = gpuzeros((3, nbCx, nbCy), dtype=np.float64)
+    tabObjInfo = gpuzeros((1, nbCx, nbCy), dtype=np.float64)
     tabMatRecep = np.zeros((nbCx, nbCy), dtype=np.float64)
     
     # vecteur comprenant : weightPhotons, nbPhoton, err% et errAbs pour
@@ -2006,25 +2006,34 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
 
         if TC is not None:
             # Tableau de la repartition des poids (photons) sur la surface du recepteur
-            tabMatRecep += tabObjInfo[1, :, :].get()
+            tabMatRecep += tabObjInfo[0, :, :].get()
 
             # A supprimer sur device.cu avant de sup ici
             # weightReceptD += tabObjInfo[0, 0, 0].get(); weightReceptS += tabObjInfo[0, 0, 1].get();
             # weightMirrorD += tabObjInfo[0, 0, 2].get(); weightMirrorS += tabObjInfo[0, 0, 3].get();
             # weightMirrorSSM += tabObjInfo[0, 0, 4].get(); weightMirrorSS += tabObjInfo[0, 0, 5].get();
+            
+            # print("CAT1(weight)=", wPhCat[0], "CAT1(number)=", nbPhCat[0])
+            # print("CAT2(weight)=", wPhCat[1], "CAT2(number)=", nbPhCat[1])
+            # print("CAT3(weight)=", wPhCat[2], "CAT3(number)=", nbPhCat[2])
+            # print("CAT4(weight)=", wPhCat[3], "CAT4(number)=", nbPhCat[3])
+            # print("CAT5(weight)=", wPhCat[4], "CAT5(number)=", nbPhCat[4])
+            # print("CAT6(weight)=", wPhCat[5], "CAT6(number)=", nbPhCat[5])
+            # print("CAT7(weight)=", wPhCat[6], "CAT7(number)=", nbPhCat[6])
+            # print("CAT8(weight)=", wPhCat[7], "CAT8(number)=", nbPhCat[7])
+            # print("END")
+            # # Comptage des poids pour chaque categories
+            # vecCats[0] += wPhCat[0].get(); vecCats[4] += wPhCat[1].get(); vecCats[8] += wPhCat[2].get();
+            # vecCats[12] += wPhCat[3].get(); vecCats[16] += wPhCat[4].get(); vecCats[20] += wPhCat[5].get();
+            # vecCats[24] += wPhCat[6].get(); vecCats[28] += wPhCat[7].get();
 
-            # Comptage des poids pour chaque categories
-            vecCats[0] += tabObjInfo[0, 0, 6].get(); vecCats[4] += tabObjInfo[0, 0, 7].get(); vecCats[8] += tabObjInfo[0, 0, 8].get();
-            vecCats[12] += tabObjInfo[0, 0, 9].get(); vecCats[16] += tabObjInfo[0, 0, 10].get(); vecCats[20] += tabObjInfo[0, 0, 11].get();
-            vecCats[24] += tabObjInfo[0, 0, 12].get(); vecCats[28] += tabObjInfo[0, 0, 13].get();
+            # # A supprimer sur device.cu avant de sup ici
+            # # wDir += tabObjInfo[2, 0, 0].get(); wDiffu += tabObjInfo[2, 0, 1].get();
 
-            # A supprimer sur device.cu avant de sup ici
-            # wDir += tabObjInfo[2, 0, 0].get(); wDiffu += tabObjInfo[2, 0, 1].get();
-
-            # Comptage du nombre de photons pour chaque categories
-            vecCats[1] += tabObjInfo[2, 0, 2].get(); vecCats[5] += tabObjInfo[2, 0, 3].get(); vecCats[9] += tabObjInfo[2, 0, 4].get();
-            vecCats[13] += tabObjInfo[2, 0, 5].get(); vecCats[17] += tabObjInfo[2, 0, 6].get(); vecCats[21] += tabObjInfo[2, 0, 7].get();
-            vecCats[25] += tabObjInfo[2, 0, 8].get(); vecCats[29] += tabObjInfo[2, 0, 9].get();
+            # # Comptage du nombre de photons pour chaque categories
+            # vecCats[1] += nbPhCat[0].get(); vecCats[5] += nbPhCat[1].get(); vecCats[9] += nbPhCat[2].get();
+            # vecCats[13] += nbPhCat[3].get(); vecCats[17] += nbPhCat[4].get(); vecCats[21] += nbPhCat[5].get();
+            # vecCats[25] += nbPhCat[6].get(); vecCats[29] += nbPhCat[7].get();
 
             # A supprimer sur device.cu avant de sup ici
             # nbPhotonReceptIniD = CounterIntObj[0] # number of dircet photons intersect the receptor by last kernel
@@ -2123,8 +2132,12 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         # print("weight diffus on receptor not impacted by mirror", weightMirrorSS)
         # print("=======TEST nbdirect impacted by mirror=", nbPhotonReceptTEST)
 
-        # Erreur relatives et absolues pour chaque categories
         for i in range (0, 8):
+            # Comptage des poids pour chaque categories
+            vecCats[i*4] = wPhCat[i].get();
+            # Comptage du nombre de photons pour chaque categories
+            vecCats[(i*4)+1] = nbPhCat[i].get();
+            # Erreur relatives et absolues pour chaque categories
             if (vecCats[i*4] == 0 or vecCats[(i*4)+1] == 0):
                 vecCats[(i*4)+2] = 0.
                 vecCats[(i*4)+3] = 0.
@@ -2136,6 +2149,9 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         # print("Sans Cat : nombre de ph sur recept = ", nbPhotonRecept)
         print("Avec Cat : nombre de ph sur recept = ", (np.uint64(vecCats[1] + vecCats[5] + vecCats[9] + vecCats[13] + \
                                                                   vecCats[17] + vecCats[21] + vecCats[25] + vecCats[29])))
+        print("Avec Cat : poids de ph sur recept = ", (vecCats[0] + vecCats[4] + vecCats[8] + vecCats[12] + \
+                                                       vecCats[16] + vecCats[20] + vecCats[24] + vecCats[28]))
+        print("Sans Cat : poids de ph sur recept = ", np.sum(tabMatRecep))
         print("CAT1(weight)=", wPhCat[0], "CAT1(number)=", nbPhCat[0])
         print("CAT2(weight)=", wPhCat[1], "CAT2(number)=", nbPhCat[1])
         print("CAT3(weight)=", wPhCat[2], "CAT3(number)=", nbPhCat[2])
