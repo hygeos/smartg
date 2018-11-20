@@ -75,7 +75,7 @@ extern "C" {
 							 struct Spectrum *spectrum, float *X0,
 							 struct Phase *faer, struct Phase *foce,
 							 unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons, void *tabDist, void *tabHist, 
-							 unsigned long long *Counter, unsigned long long *CounterIntObj, void *tabObjInfo,
+							 unsigned long long *Counter, void *tabObjInfo,
 							 unsigned long long *NPhotonsIn,
 							 unsigned long long *NPhotonsOut,
 							 float *tabthv, float *tabphi, struct Sensor *tab_sensor,
@@ -653,43 +653,43 @@ extern "C" {
 			else if (geoStruc.material == 2) // Matte
 			{
 
-				if (ph.direct == 0 && isBackward(geoStruc.normalBase, ph.v))
-				{
-					atomicAdd(CounterIntObj, 1);
-					// display("ERROR", &ph);
-					if (ph.toucheMir == true)
-					  atomicAdd(CounterIntObj+6, 1);
-					// else
-					//   {
-					//     printf("=================\n");
-					//     printf("normalBase = (%f, %f, %f)\n", geoStruc.normalBase.x, geoStruc.normalBase.y, geoStruc.normalBase.z);
-					//     printf("isBacward :%s \n", isBackward(geoStruc.normalBase, ph.v) ? "true" : "false");
-					//     printf("normal = (%f, %f, %f), v = (%f, %f, %f)\n", geoStruc.normal.x, geoStruc.normal.y, geoStruc.normal.z, ph.v.x, ph.v.y, ph.v.z);
-					//     display("ERROR", &ph);
-					//   }
-				}
-				else if (ph.direct != 0 && isBackward(geoStruc.normalBase, ph.v))
-				{
-					if (ph.toucheMir == true)
-						atomicAdd(CounterIntObj+4, 1);
-					else
-						atomicAdd(CounterIntObj+5, 1);
+				// if (ph.direct == 0 && isBackward(geoStruc.normalBase, ph.v))
+				// {
+				// 	atomicAdd(CounterIntObj, 1);
+				// 	// display("ERROR", &ph);
+				// 	if (ph.toucheMir == true)
+				// 		atomicAdd(CounterIntObj+6, 1);
+				// 	// else
+				// 	//   {
+				// 	//     printf("=================\n");
+				// 	//     printf("normalBase = (%f, %f, %f)\n", geoStruc.normalBase.x, geoStruc.normalBase.y, geoStruc.normalBase.z);
+				// 	//     printf("isBacward :%s \n", isBackward(geoStruc.normalBase, ph.v) ? "true" : "false");
+				// 	//     printf("normal = (%f, %f, %f), v = (%f, %f, %f)\n", geoStruc.normal.x, geoStruc.normal.y, geoStruc.normal.z, ph.v.x, ph.v.y, ph.v.z);
+				// 	//     display("ERROR", &ph);
+				// 	//   }
+				// }
+				// else if (ph.direct != 0 && isBackward(geoStruc.normalBase, ph.v))
+				// {
+				// 	if (ph.toucheMir == true)
+				// 		atomicAdd(CounterIntObj+4, 1);
+				// 	else
+				// 		atomicAdd(CounterIntObj+5, 1);
 					
-					atomicAdd(CounterIntObj+1, 1);
-				}
+				// 	atomicAdd(CounterIntObj+1, 1);
+				// }
 				countPhotonObj3D(&ph, tabObjInfo, &geoStruc, nbPhCat, wPhCat);
 				ph.loc = ABSORBED;
 			} // End Matte
 			else if (geoStruc.material == 3) // Mirror
 			{
-				if (ph.direct == 0 && isBackward(geoStruc.normalBase, ph.v))
-				{
-					atomicAdd(CounterIntObj+2, 1);
-				}
-				else if (ph.direct != 0 && isBackward(geoStruc.normalBase, ph.v))
-				{
-					atomicAdd(CounterIntObj+3, 1);
-				}
+				// if (ph.direct == 0 && isBackward(geoStruc.normalBase, ph.v))
+				// {
+				// 	atomicAdd(CounterIntObj+2, 1);
+				// }
+				// else if (ph.direct != 0 && isBackward(geoStruc.normalBase, ph.v))
+				// {
+				// 	atomicAdd(CounterIntObj+3, 1);
+				// }
 				
 				countPhotonObj3D(&ph, tabObjInfo, &geoStruc, nbPhCat, wPhCat);
 				if (LEd == 1)

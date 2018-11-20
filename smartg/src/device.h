@@ -89,7 +89,8 @@ __global__ void launchKernel(
         unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons, void *tabDist, void *tabHist,
         //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         //unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons,
-        unsigned long long *Counter, unsigned long long *CounterIntObj, void *tabObjInfo,
+        unsigned long long *Counter, void *tabObjInfo,
+
         unsigned long long *NPhotonsIn,
         unsigned long long *NPhotonsOut,
         float *tabthv, float *tabphi,  struct Sensor *tab_sensor,

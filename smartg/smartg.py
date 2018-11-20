@@ -1134,7 +1134,7 @@ class Smartg(object):
 
         # Loop and kernel call
         (NPhotonsInTot, tabPhotonsTot, tabDistTot, tabHistTot, errorcount, 
-         NPhotonsOutTot, sigma, Nkernel, secs_cuda_clock, cMatVisuRecep, CounterIntOb, categories
+         NPhotonsOutTot, sigma, Nkernel, secs_cuda_clock, cMatVisuRecep, categories
         ) = loop_kernel(NBPHOTONS, faer, foce,
                         NLVL, NATM, NOCE, MAX_HIST, NLOW, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                         NLAM, NSENSOR, self.double, self.kernel, self.kernel2, p, X0, le, tab_sensor, spectrum,
@@ -1904,7 +1904,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
     nThreadsActive = gpuzeros(1, dtype='int32')
     Counter = gpuzeros(1, dtype='uint64')
     # Initializations linked to objects
-    CounterIntObj = gpuzeros(7, dtype='uint64')
+    #CounterIntObj = gpuzeros(7, dtype='uint64')
     nbPhCat = gpuzeros(8, dtype=np.uint64) # vector to fill the number of photons for  each categories
     wPhCat = gpuzeros(8, dtype=np.float64)  # vector to fill the weight of photons for each categories
     tabObjInfo = gpuzeros((3, nbCx, nbCy), dtype=np.float64)
@@ -1983,7 +1983,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         NPhotonsIn.fill(0)
         Counter.fill(0)
         # en rapport avec les objets
-        CounterIntObj.fill(0)
+        #CounterIntObj.fill(0)
         tabObjInfo.fill(0)
         
         start_cuda_clock = cuda.Event()
@@ -1993,7 +1993,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         # kernel launch
         kern(spectrum, X0, faer, foce,
              errorcount, nThreadsActive, tabPhotons, tabDist, tabHist,
-             Counter, CounterIntObj, tabObjInfo, NPhotonsIn, NPhotonsOut, tabthv, tabphi, tab_sensor,
+             Counter, tabObjInfo, NPhotonsIn, NPhotonsOut, tabthv, tabphi, tab_sensor,
              prof_atm, prof_oc, wl_proba_icdf, rng.state, myObjects0, nbPhCat, wPhCat,
              block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
         
@@ -2027,8 +2027,8 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
             vecCats[25] += tabObjInfo[2, 0, 8].get(); vecCats[29] += tabObjInfo[2, 0, 9].get();
 
             # A supprimer sur device.cu avant de sup ici
-            nbPhotonReceptIniD = CounterIntObj[0] # number of dircet photons intersect the receptor by last kernel
-            nbPhotonReceptIniS = CounterIntObj[1] # number of scattering photons intersect the receptor by last kernel
+            # nbPhotonReceptIniD = CounterIntObj[0] # number of dircet photons intersect the receptor by last kernel
+            # nbPhotonReceptIniS = CounterIntObj[1] # number of scattering photons intersect the receptor by last kernel
             #nbPhotonReceptD += nbPhotonReceptIniD
             #nbPhotonReceptS += nbPhotonReceptIniS
 
@@ -2049,7 +2049,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
             # A supprimer sur device.cu avant de sup ici
             # nbPhotonReceptIniTEST = CounterIntObj[6] # number of scattering photons intersect the receptor and impacted by mirror by last kernel
             # nbPhotonReceptTEST += nbPhotonReceptIniTEST
-            nbPhotonRecept += nbPhotonReceptIniD + nbPhotonReceptIniS
+            # nbPhotonRecept += nbPhotonReceptIniD + nbPhotonReceptIniS
 
         
         L = NPhotonsIn   # number of photons launched by last kernel
@@ -2133,7 +2133,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
                 vecCats[(i*4)+3] = vecCats[i*4]*(1./vecCats[(i*4)+1]**0.5);
 
         print("==== Verification ====")
-        print("Sans Cat : nombre de ph sur recept = ", nbPhotonRecept)
+        # print("Sans Cat : nombre de ph sur recept = ", nbPhotonRecept)
         print("Avec Cat : nombre de ph sur recept = ", (np.uint64(vecCats[1] + vecCats[5] + vecCats[9] + vecCats[13] + \
                                                                   vecCats[17] + vecCats[21] + vecCats[25] + vecCats[29])))
         print("CAT1(weight)=", wPhCat[0], "CAT1(number)=", nbPhCat[0])
@@ -2161,7 +2161,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
 
     #!!!!!!!!!!!!!!!!!!!!!!!!!!!
     return NPhotonsInTot.get(), tabPhotonsTot.get(), tabDistTot.get(), tabHistTot.get(), errorcount, \
-        NPhotonsOutTot.get(), sigma, N_simu, secs_cuda_clock, tabMatRecep, nbPhotonRecept.get(), vecCats
+        NPhotonsOutTot.get(), sigma, N_simu, secs_cuda_clock, tabMatRecep, vecCats
     #!!!!!!!!!!!!!!!!!!!!!!!!!!!
     #return NPhotonsInTot.get(), tabPhotonsTot.get(), errorcount, NPhotonsOutTot.get(), sigma, N_simu, secs_cuda_clock
 
