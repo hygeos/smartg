@@ -83,7 +83,9 @@ extern "C" {
 							 struct Profile *prof_oc,
 							 long long *wl_proba_icdf,
 							 void *rng_state,
-							 struct IObjets *myObjets
+							 struct IObjets *myObjets,
+							 unsigned long long *nbPhCat,
+							 double *wPhCat
 							 ) {
 
     // current thread index
@@ -675,7 +677,7 @@ extern "C" {
 					
 					atomicAdd(CounterIntObj+1, 1);
 				}
-				countPhotonObj3D(&ph, tabObjInfo, &geoStruc);
+				countPhotonObj3D(&ph, tabObjInfo, &geoStruc, nbPhCat, wPhCat);
 				ph.loc = ABSORBED;
 			} // End Matte
 			else if (geoStruc.material == 3) // Mirror
@@ -689,7 +691,7 @@ extern "C" {
 					atomicAdd(CounterIntObj+3, 1);
 				}
 				
-				countPhotonObj3D(&ph, tabObjInfo, &geoStruc);
+				countPhotonObj3D(&ph, tabObjInfo, &geoStruc, nbPhCat, wPhCat);
 				if (LEd == 1)
 				{				
 					int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
@@ -3877,7 +3879,7 @@ __device__ void surfaceRugueuse3D(Photon* ph, IGeo* geoS, struct RNG_State *rngs
 } // FUNCTION SURFACEAGITE3D
 
 
-__device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS)
+__device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsigned long long *nbPhCat, double *wPhCat)
 {
 	Transform transfo, invTransfo;
 	char myP[]="Point";
@@ -3930,76 +3932,92 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS)
 	#if __CUDA_ARCH__ >= 600
 	if (ph->direct == 0 && geoS->type == 2)
 	{
-		atomicAdd(tabCountObj, weight);
+		// atomicAdd(tabCountObj, weight);
 
 		// matrice -- > (1 (via dimJ*dimI), dimI, dimJ)
 		atomicAdd(tabCountObj+(nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-		atomicAdd(tabCountObj+(2*nbCy*nbCx)+0, 1);
+		// atomicAdd(tabCountObj+(2*nbCy*nbCx)+0, 1);
 	}
 	else if (ph->direct != 0 && geoS->type == 2)
 	{
-		atomicAdd(tabCountObj+1, weight);
+		// atomicAdd(tabCountObj+1, weight);
 		atomicAdd(tabCountObj+(nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-		atomicAdd(tabCountObj+(2*nbCy*nbCx)+1, 1);
-		if (ph->toucheMir == true)
-		{
-			atomicAdd(tabCountObj+4, weight);
-		}
-		else
-		{
-			atomicAdd(tabCountObj+5, weight);
-		}
+		// atomicAdd(tabCountObj+(2*nbCy*nbCx)+1, 1);
+		// if (ph->toucheMir == true)
+		// {
+		// 	atomicAdd(tabCountObj+4, weight);
+		// }
+		// else
+		// {
+		// 	atomicAdd(tabCountObj+5, weight);
+		// }
 	}
-	else if (ph->direct == 0 && geoS->type == 1)
-	{
-		atomicAdd(tabCountObj+2, weight);
-	}
-	else if (ph->direct != 0 && geoS->type == 1)
-	{
-		atomicAdd(tabCountObj+3, weight);
-	}
+	// else if (ph->direct == 0 && geoS->type == 1)
+	// {
+	// 	atomicAdd(tabCountObj+2, weight);
+	// }
+	// else if (ph->direct != 0 && geoS->type == 1)
+	// {
+	// 	atomicAdd(tabCountObj+3, weight);
+	// }
 
 	// Les septs catégories + la cat 0
 	if (ph->H == 0 && ph->E == 0 && ph->S == 0 && geoS->type == 2) 
 	{ // CAT 0 : aucun changement de trajectoire avant de toucher le R.
 		atomicAdd(tabCountObj+6, weight);
 		atomicAdd(tabCountObj+(2*nbCy*nbCx)+2, 1);
+		atomicAdd(wPhCat, weight);
+		atomicAdd(nbPhCat, 1);
 	}
 	else if ( ph->H > 0 && ph->E == 0 && ph->S == 0 && geoS->type == 2 )
 	{ // CAT 1 : only H avant de toucher le R.
 		atomicAdd(tabCountObj+7, weight);
 		atomicAdd(tabCountObj+(2*nbCy*nbCx)+3, 1);
+		atomicAdd(wPhCat+1, weight);
+		atomicAdd(nbPhCat+1, 1);
 	}
 	else if ( ph->H == 0 && ph->E > 0 && ph->S == 0 && geoS->type == 2 )
 	{ // CAT 2 : only E avant de toucher le R.
 		atomicAdd(tabCountObj+8, weight);
 		atomicAdd(tabCountObj+(2*nbCy*nbCx)+4, 1);
+		atomicAdd(wPhCat+2, weight);
+		atomicAdd(nbPhCat+2, 1);
 	}
 	else if ( ph->H == 0 && ph->E == 0 && ph->S > 0 && geoS->type == 2 )
 	{ // CAT 3 : only S avant de toucher le R.
 		atomicAdd(tabCountObj+9, weight);
 		atomicAdd(tabCountObj+(2*nbCy*nbCx)+5, 1);
+		atomicAdd(wPhCat+3, weight);
+		atomicAdd(nbPhCat+3, 1);
 	}
 	else if ( ph->H > 0 && ph->E == 0 && ph->S > 0 && geoS->type == 2 )
 	{ // CAT 4 : 2 proc. H et S avant de toucher le R.
 		atomicAdd(tabCountObj+10, weight);
 		atomicAdd(tabCountObj+(2*nbCy*nbCx)+6, 1);
+		atomicAdd(wPhCat+4, weight);
+		atomicAdd(nbPhCat+4, 1);
 	}
 	else if ( ph->H > 0 && ph->E > 0 && ph->S == 0 && geoS->type == 2 )
 	{ // CAT 5 : 2 proc. H et E avant de toucher le R.
 		atomicAdd(tabCountObj+11, weight);
 		atomicAdd(tabCountObj+(2*nbCy*nbCx)+7, 1);
 		//printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
+		atomicAdd(wPhCat+5, weight);
+		atomicAdd(nbPhCat+5, 1);
 	}
 	else if ( ph->H == 0 && ph->E > 0 && ph->S > 0 && geoS->type == 2 )
 	{ // CAT 6 : 2 proc. E et S avant de toucher le R.
 		atomicAdd(tabCountObj+12, weight);
 		atomicAdd(tabCountObj+(2*nbCy*nbCx)+8, 1);
+		atomicAdd(wPhCat+6, weight);
+		atomicAdd(nbPhCat+6, 1);
 	}	
 	else if ( ph->H > 0 && ph->E > 0 && ph->S > 0 && geoS->type == 2 )
 	{ // CAT 7 : 3 proc. H, E et S avant de toucher le R.
 		atomicAdd(tabCountObj+13, weight);
 		atomicAdd(tabCountObj+(2*nbCy*nbCx)+9, 1);
+		atomicAdd(wPhCat+7, weight);
+		atomicAdd(nbPhCat+7, 1);
 	}	
 	
 	#else

@@ -97,7 +97,9 @@ __global__ void launchKernel(
         struct Profile *prof_oc,
         long long *wl_proba_icdf,
         void *rng_state,
-		struct IObjets *myObjets
+		struct IObjets *myObjets,
+		unsigned long long *nbPhCat,
+		double *wPhCat
         );
 }
 
@@ -157,7 +159,7 @@ __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* 
 
 __device__ void surfaceRugueuse3D(Photon* ph, IGeo* geoS, struct RNG_State *rngstate);
 
-__device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS);
+__device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsigned long long *nbPhCat, double *wPhCat);
 
 __device__ void countPhoton(Photon* , struct Profile* prof_atm, struct Profile* prof_oc, float*, float *,
         int, unsigned long long*, void*, void*, void*, unsigned long long*);

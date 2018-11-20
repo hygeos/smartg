@@ -1905,6 +1905,8 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
     Counter = gpuzeros(1, dtype='uint64')
     # Initializations linked to objects
     CounterIntObj = gpuzeros(7, dtype='uint64')
+    nbPhCat = gpuzeros(8, dtype=np.uint64) # vector to fill the number of photons for  each categories
+    wPhCat = gpuzeros(8, dtype=np.float64)  # vector to fill the weight of photons for each categories
     tabObjInfo = gpuzeros((3, nbCx, nbCy), dtype=np.float64)
     tabMatRecep = np.zeros((nbCx, nbCy), dtype=np.float64)
     
@@ -1992,8 +1994,9 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         kern(spectrum, X0, faer, foce,
              errorcount, nThreadsActive, tabPhotons, tabDist, tabHist,
              Counter, CounterIntObj, tabObjInfo, NPhotonsIn, NPhotonsOut, tabthv, tabphi, tab_sensor,
-             prof_atm, prof_oc, wl_proba_icdf, rng.state, myObjects0,
+             prof_atm, prof_oc, wl_proba_icdf, rng.state, myObjects0, nbPhCat, wPhCat,
              block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
+        
         end_cuda_clock.record()
         end_cuda_clock.synchronize()
         secs_cuda_clock = secs_cuda_clock + start_cuda_clock.time_till(end_cuda_clock)
@@ -2133,6 +2136,14 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         print("Sans Cat : nombre de ph sur recept = ", nbPhotonRecept)
         print("Avec Cat : nombre de ph sur recept = ", (np.uint64(vecCats[1] + vecCats[5] + vecCats[9] + vecCats[13] + \
                                                                   vecCats[17] + vecCats[21] + vecCats[25] + vecCats[29])))
+        print("CAT1(weight)=", wPhCat[0], "CAT1(number)=", nbPhCat[0])
+        print("CAT2(weight)=", wPhCat[1], "CAT2(number)=", nbPhCat[1])
+        print("CAT3(weight)=", wPhCat[2], "CAT3(number)=", nbPhCat[2])
+        print("CAT4(weight)=", wPhCat[3], "CAT4(number)=", nbPhCat[3])
+        print("CAT5(weight)=", wPhCat[4], "CAT5(number)=", nbPhCat[4])
+        print("CAT6(weight)=", wPhCat[5], "CAT6(number)=", nbPhCat[5])
+        print("CAT7(weight)=", wPhCat[6], "CAT7(number)=", nbPhCat[6])
+        print("CAT8(weight)=", wPhCat[7], "CAT8(number)=", nbPhCat[7])
         # A supprimer sur device.cu avant de sup ici        
         # print("nbPhontons direct =", wDir)
         # print("nbPhontons diffus =", wDiffu)
