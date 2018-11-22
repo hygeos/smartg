@@ -1150,7 +1150,19 @@ class Smartg(object):
         # POnePh = surfMir/CounterIntOb
         # cMatVisuRecep[:][:] = cMatVisuRecep[:][:] * ((surfMir)/(TC*TC*CounterIntOb))
         if (nObj > 0):
-            cMatVisuRecep[:][:] = cMatVisuRecep[:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
+            sumNbCats = categories[1]+categories[5]+categories[9]+categories[13]+categories[17]+\
+                        categories[21]+categories[25]+categories[29];
+            print("sumNbCats=",sumNbCats)
+            print("NBPHOTONS=",NBPHOTONS)
+            cMatVisuRecep[0][:][:] = cMatVisuRecep[0][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
+            cMatVisuRecep[1][:][:] = cMatVisuRecep[1][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
+            cMatVisuRecep[2][:][:] = cMatVisuRecep[2][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
+            cMatVisuRecep[3][:][:] = cMatVisuRecep[3][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
+            cMatVisuRecep[4][:][:] = cMatVisuRecep[4][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
+            cMatVisuRecep[5][:][:] = cMatVisuRecep[5][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
+            cMatVisuRecep[6][:][:] = cMatVisuRecep[6][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
+            cMatVisuRecep[7][:][:] = cMatVisuRecep[7][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
+            cMatVisuRecep[8][:][:] = cMatVisuRecep[8][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
             # cMatVisuRecep[:][:] = cMatVisuRecep[:][:] * ((0.01*0.012*np.cos(33.8652 * (np.pi / 180)))/(TC*TC*CounterIntOb))
             print("surfmir=", surfMir)
             print("sufreal=", ((0.01*0.012))) #/np.cos(33.8652 * (np.pi / 180))))
@@ -1461,7 +1473,15 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
                 m.add_lut(l, desc=d.replace('I_', 'flux_'))
 
     if (cMatVisuRecep is not None):
-        m.add_dataset('C_Receptor', cMatVisuRecep, ['Horizontal pixel', 'Vertical pixel'])
+        m.add_dataset('C_Receptor', cMatVisuRecep[0][:][:], ['Horizontal pixel', 'Vertical pixel'])
+        m.add_dataset('C1_Receptor', cMatVisuRecep[1][:][:], ['Horizontal pixel', 'Vertical pixel'])
+        m.add_dataset('C2_Receptor', cMatVisuRecep[2][:][:], ['Horizontal pixel', 'Vertical pixel'])
+        m.add_dataset('C3_Receptor', cMatVisuRecep[3][:][:], ['Horizontal pixel', 'Vertical pixel'])
+        m.add_dataset('C4_Receptor', cMatVisuRecep[4][:][:], ['Horizontal pixel', 'Vertical pixel'])
+        m.add_dataset('C5_Receptor', cMatVisuRecep[5][:][:], ['Horizontal pixel', 'Vertical pixel'])
+        m.add_dataset('C6_Receptor', cMatVisuRecep[6][:][:], ['Horizontal pixel', 'Vertical pixel'])
+        m.add_dataset('C7_Receptor', cMatVisuRecep[7][:][:], ['Horizontal pixel', 'Vertical pixel'])
+        m.add_dataset('C8_Receptor', cMatVisuRecep[8][:][:], ['Horizontal pixel', 'Vertical pixel'])
         # tabCat = np.zeros((4, 8), dtype=np.float64)
         # tabCat[0,0] =
         
@@ -1907,8 +1927,8 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
     #CounterIntObj = gpuzeros(7, dtype='uint64')
     nbPhCat = gpuzeros(8, dtype=np.uint64) # vector to fill the number of photons for  each categories
     wPhCat = gpuzeros(8, dtype=np.float64)  # vector to fill the weight of photons for each categories
-    tabObjInfo = gpuzeros((1, nbCx, nbCy), dtype=np.float64)
-    tabMatRecep = np.zeros((nbCx, nbCy), dtype=np.float64)
+    tabObjInfo = gpuzeros((9, nbCx, nbCy), dtype=np.float64)
+    tabMatRecep = np.zeros((9, nbCx, nbCy), dtype=np.float64)
     
     # vecteur comprenant : weightPhotons, nbPhoton, err% et errAbs pour
     # les 8 categories donc 4 x 8 valeurs = 32. vecCat[0], [1], [2] et [3]
@@ -2006,7 +2026,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
 
         if TC is not None:
             # Tableau de la repartition des poids (photons) sur la surface du recepteur
-            tabMatRecep += tabObjInfo[0, :, :].get()
+            tabMatRecep += tabObjInfo[:, :, :].get()
 
             # A supprimer sur device.cu avant de sup ici
             # weightReceptD += tabObjInfo[0, 0, 0].get(); weightReceptS += tabObjInfo[0, 0, 1].get();
@@ -2164,8 +2184,6 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         # print("nbPhontons direct =", wDir)
         # print("nbPhontons diffus =", wDiffu)
 
-    else:
-        nbPhotonRecept = CounterIntObj[0]
     if stdev:
         # finalize the calculation of the standard deviation
         sigma = np.sqrt(sum_x2/N_simu - (sum_x/N_simu)**2)

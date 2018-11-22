@@ -45,11 +45,14 @@ def receiver_view(mlut, w = False, logI=False, nameFile = 'plot'):
     # print("MATRICE=", m['C_Receptor'].data.shape)
     # print("M00 =", m['C_Receptor'][0,0])
     if logI == False :
-        cax = plt.imshow(m['C_Receptor'][:,:]*1320, cmap=plt.get_cmap('jet'), interpolation='None', \
+        cax = plt.imshow(m*1320, cmap=plt.get_cmap('jet'), interpolation='None', \
                          extent = [-(wy*1000),(wy*1000),-(wx*1000),(wx*1000)])
+         # cax = plt.imshow(m['C_Receptor'][:,:]*1320, cmap=plt.get_cmap('jet'), interpolation='None', \
+         #                 extent = [-(wy*1000),(wy*1000),-(wx*1000),(wx*1000)])
     else:
         #print(("npmin=", np.amin(m['C_Receptor'][:,:])*1320)) 
-        m2 = m['C_Receptor'][:,:]#*1000
+        # m2 = m['C_Receptor'][:,:]#*1000
+        m2 = m
         if (np.amin(m2) < 0.00001):
             valmin = 0.00001
         else:
@@ -58,9 +61,12 @@ def receiver_view(mlut, w = False, logI=False, nameFile = 'plot'):
         inte = m2.sum()/1e7
         #print(("sum", m2.sum()))
         #print(("inte=", inte))
-        cax = plt.imshow(m['C_Receptor'][:,:]*1320, cmap=plt.get_cmap('jet'), \
-                         norm=mcolors.LogNorm(vmin=valmin*1320, vmax=np.amax(m['C_Receptor'][:,:]*1320)), \
+        cax = plt.imshow(m*1320, cmap=plt.get_cmap('jet'), \
+                         norm=mcolors.LogNorm(vmin=valmin*1320, vmax=np.amax(m*1320)), \
                          interpolation='None', extent = [-(wy*1000),(wy*1000),-(wx*1000),(wx*1000)])
+        # cax = plt.imshow(m['C_Receptor'][:,:]*1320, cmap=plt.get_cmap('jet'), \
+        #                  norm=mcolors.LogNorm(vmin=valmin*1320, vmax=np.amax(m['C_Receptor'][:,:]*1320)), \
+        #                  interpolation='None', extent = [-(wy*1000),(wy*1000),-(wx*1000),(wx*1000)])
 
     cbar = plt.colorbar()
     cbar.remove()

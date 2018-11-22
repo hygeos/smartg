@@ -3970,6 +3970,7 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 		// atomicAdd(tabCountObj+(2*nbCy*nbCx)+2, 1);
 		atomicAdd(wPhCat, weight);
 		atomicAdd(nbPhCat, 1);
+		atomicAdd(tabCountObj+(nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}
 	else if ( ph->H > 0 && ph->E == 0 && ph->S == 0 && geoS->type == 2 )
 	{ // CAT 1 : only H avant de toucher le R.
@@ -3977,6 +3978,7 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 		// atomicAdd(tabCountObj+(2*nbCy*nbCx)+3, 1);
 		atomicAdd(wPhCat+1, weight);
 		atomicAdd(nbPhCat+1, 1);
+		atomicAdd(tabCountObj+(2*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}
 	else if ( ph->H == 0 && ph->E > 0 && ph->S == 0 && geoS->type == 2 )
 	{ // CAT 2 : only E avant de toucher le R.
@@ -3984,6 +3986,7 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 		// atomicAdd(tabCountObj+(2*nbCy*nbCx)+4, 1);
 		atomicAdd(wPhCat+2, weight);
 		atomicAdd(nbPhCat+2, 1);
+		atomicAdd(tabCountObj+(3*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}
 	else if ( ph->H == 0 && ph->E == 0 && ph->S > 0 && geoS->type == 2 )
 	{ // CAT 3 : only S avant de toucher le R.
@@ -3991,6 +3994,7 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 		// atomicAdd(tabCountObj+(2*nbCy*nbCx)+5, 1);
 		atomicAdd(wPhCat+3, weight);
 		atomicAdd(nbPhCat+3, 1);
+		atomicAdd(tabCountObj+(4*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}
 	else if ( ph->H > 0 && ph->E == 0 && ph->S > 0 && geoS->type == 2 )
 	{ // CAT 4 : 2 proc. H et S avant de toucher le R.
@@ -3998,6 +4002,7 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 		// atomicAdd(tabCountObj+(2*nbCy*nbCx)+6, 1);
 		atomicAdd(wPhCat+4, weight);
 		atomicAdd(nbPhCat+4, 1);
+		atomicAdd(tabCountObj+(5*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}
 	else if ( ph->H > 0 && ph->E > 0 && ph->S == 0 && geoS->type == 2 )
 	{ // CAT 5 : 2 proc. H et E avant de toucher le R.
@@ -4006,6 +4011,7 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 		//printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
 		atomicAdd(wPhCat+5, weight);
 		atomicAdd(nbPhCat+5, 1);
+		atomicAdd(tabCountObj+(6*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}
 	else if ( ph->H == 0 && ph->E > 0 && ph->S > 0 && geoS->type == 2 )
 	{ // CAT 6 : 2 proc. E et S avant de toucher le R.
@@ -4013,6 +4019,7 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 		// atomicAdd(tabCountObj+(2*nbCy*nbCx)+8, 1);
 		atomicAdd(wPhCat+6, weight);
 		atomicAdd(nbPhCat+6, 1);
+		atomicAdd(tabCountObj+(7*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}	
 	else if ( ph->H > 0 && ph->E > 0 && ph->S > 0 && geoS->type == 2 )
 	{ // CAT 7 : 3 proc. H, E et S avant de toucher le R.
@@ -4020,6 +4027,7 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 		// atomicAdd(tabCountObj+(2*nbCy*nbCx)+9, 1);
 		atomicAdd(wPhCat+7, weight);
 		atomicAdd(nbPhCat+7, 1);
+		atomicAdd(tabCountObj+(8*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}	
 	
 	#else
