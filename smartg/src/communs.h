@@ -132,7 +132,6 @@ public:
 		// Initialement le photon n'est nulle part, il doit être initialisé
 		loc = NONE;
 		direct = 0;
-		toucheMir = false;
 		H = 0;
 		E = 0;
 		S = 0;
@@ -205,7 +204,6 @@ public:
     //float4x4 Mf;
     #endif
 	int direct;
-	bool toucheMir;
     int H, E, S;
 
 private:
