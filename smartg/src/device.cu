@@ -1127,7 +1127,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     #endif
 
 
-	if (nObj > 0 && CFMODEd == 0) // Pour l'instant marche que pour le mode forward
+	if (nObj > 0 && CFMODEd == 0) // Marche que pour le mode forward restreint
 	{		
 		/* ***************************************************************************************** */
 		/* Créer la surface en TOA qui visera un reflecteur avec prise en compte des transformations */
@@ -1136,7 +1136,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		// Valeurs de l'angle zenital Theta et l'angle azimutal Phi (ici Phi pour l'instant imposé à 0)
 		double sunTheta = 180-THDEGd, sunPhi=0;
 
-        // One fixed direction (for radiance)
+        // One fixed direction (for radiance) inverse of the initiale pos of the obj
 		double3 vdouble = make_double3(0., 0., -1.);
 		
 	    // Initialization of the orthogonal vector to the propagation
@@ -1171,7 +1171,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		TPhi = ThetaPhi.RotateZ(sunPhi);
 		ThetaPhi = TTheta * TPhi; // Regroupement des transformations		
 
-		// Application des transformation sur les vecteurs u et v en fonction de heta et Phi
+		// Application des transformation sur les vecteurs u et v en fonction de Theta et Phi
 		char myV[]="Vector";
 		vfloat = ThetaPhi(vfloat, myV);
 		ufloat = ThetaPhi(ufloat, myV);

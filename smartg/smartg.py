@@ -585,6 +585,15 @@ class Smartg(object):
             TC = 0.; nbCx = int(0); nbCy = int(0);
             pp1 = 0.; pp2 = 0.; pp3 = 0.; pp4 = 0.;
             surfMir = None
+            # Prendre en compte la direction du soleil avec l'angle zenithal et azimuth
+            vSun = Vector(0., 0., -1.)
+            tSunTheta = Transform(); tSunPhi = Transform(); tSunThethaPhi = Transform();
+            tSunTheta = tSunThethaPhi.rotateY(THVDEG) 
+            tSunPhi = tSunThethaPhi.rotateZ(PHVDEG)   # pas vérifié car valeur gene = 0
+            tSunThethaPhi = tSunTheta * tSunPhi
+            vSun = tSunThethaPhi[vSun]
+            vSun = Normalize(vSun)
+            print("Vsun=(", vSun.x, ', ', vSun.y, ', ', vSun.z, ')')
 
             # Début de la boucle pour la prise en compte de tous les objets
             for i in range (0, nObj):
@@ -681,11 +690,12 @@ class Smartg(object):
                     pp3 = myObjects[i].geo.p3
                     pp4 = myObjects[i].geo.p4
 
-                    # Prise en compte des transfos de rot en X et Y
+                    # Prise en compte des transfos de rot en X et Y et Z
                     TpT = Transform()
                     TpRX = TpT.rotateX(myObjects[i].transformation.rotx)
                     TpRY = TpT.rotateY(myObjects[i].transformation.roty)
-                    TpT = TpRX*TpRY
+                    TpRZ = TpT.rotateZ(myObjects[i].transformation.rotz)
+                    TpT = TpRX*TpRY*TpRZ
                     invTpT = TpT.inverse(TpT)
 
                     # Application des transfos sur les 4 points
@@ -694,51 +704,51 @@ class Smartg(object):
                     pp3 = TpT[pp3]
                     pp4 = TpT[pp4]
 
-                    # Création d'une normale (inverse à la normale du recepteur)
-                    ee3 = Normal(1., 0., 0.)
+                    # # Création d'une normale (inverse à la normale du recepteur)
+                    # ee3 = Normal(1., 0., 0.)
 
-                    # production de deux vecs permettant la création d'un repère orthogonal avec la normale ee3
-                    ee1, ee2 = CoordinateSystem(ee3)
+                    # # production de deux vecs permettant la création d'un repère orthogonal avec la normale ee3
+                    # ee1, ee2 = CoordinateSystem(ee3)
 
-                    # Création d'une matrice appelé matrice de passage
-                    mm = np.zeros((4,4), dtype=np.float64)
+                    # # Création d'une matrice appelé matrice de passage
+                    # mm = np.zeros((4,4), dtype=np.float64)
 
-                    # Remplissage de la matrice de passage en fonction du repère (ee3 étant le nouvel axe z)
-                    mm[0,0] = ee1.x ; mm[0,1] = ee2.x ; mm[0,2] = ee3.x ; mm[0,3] = 0. ;
-                    mm[1,0] = ee1.y ; mm[1,1] = ee2.y ; mm[1,2] = ee3.y ; mm[1,3] = 0. ;
-                    mm[2,0] = ee1.z ; mm[2,1] = ee2.z ; mm[2,2] = ee3.z ; mm[2,3] = 0. ;
-                    mm[3,0] = 0.    ; mm[3,1] = 0.    ; mm[3,2] = 0.    ; mm[3,3] = 1. ;
+                    # # Remplissage de la matrice de passage en fonction du repère (ee3 étant le nouvel axe z)
+                    # mm[0,0] = ee1.x ; mm[0,1] = ee2.x ; mm[0,2] = ee3.x ; mm[0,3] = 0. ;
+                    # mm[1,0] = ee1.y ; mm[1,1] = ee2.y ; mm[1,2] = ee3.y ; mm[1,3] = 0. ;
+                    # mm[2,0] = ee1.z ; mm[2,1] = ee2.z ; mm[2,2] = ee3.z ; mm[2,3] = 0. ;
+                    # mm[3,0] = 0.    ; mm[3,1] = 0.    ; mm[3,2] = 0.    ; mm[3,3] = 1. ;
 
-                    # Création de la transformation permettant le changement de base
-                    mmInv = np.transpose(mm)
-                    ooTw = Transform(m = mm, mInv = mmInv)
+                    # # Création de la transformation permettant le changement de base
+                    # mmInv = np.transpose(mm)
+                    # ooTw = Transform(m = mm, mInv = mmInv)
 
                     # ==================== direction solaire refléchi sur miroir v_n
-                    aRot = Transform()
-                    aRot = aRot.rotateZ(180)
+                    # aRot = Transform()
+                    # aRot = aRot.rotateZ(180)
          
-                    v_n = Vector(-np.sin(THVDEG * np.pi / 180), 0., -np.cos(THVDEG * np.pi / 180))
-                    v_n = Normalize(v_n)
+                    # v_n = Vector(-np.sin(THVDEG * np.pi / 180), 0., -np.cos(THVDEG * np.pi / 180))
+                    # v_n = Normalize(v_n)
                     
-                    v_n2 = invTpT[v_n]
-                    v_n2 = aRot[v_n2]
-                    v_n2 = Vector(-v_n2.x, -v_n2.y, -v_n2.z)
-                    v_n2 = TpT[v_n2]
+                    # v_n2 = invTpT[v_n]
+                    # v_n2 = aRot[v_n2]
+                    # v_n2 = Vector(-v_n2.x, -v_n2.y, -v_n2.z)
+                    # v_n2 = TpT[v_n2]
 
-                    v_n2 = Normalize(v_n2)
-                    v_n2 = ooTw[v_n2]
-                    v_n2 = Normalize(v_n2)
+                    # v_n2 = Normalize(v_n2)
+                    # v_n2 = ooTw[v_n2]
+                    # v_n2 = Normalize(v_n2)
                     # ====================
                     
                     # ====================
-                    timeRefDir1b = (-1.* pp1.z)/v_n.z
-                    timeRefDir2b = (-1.* pp2.z)/v_n.z
-                    timeRefDir3b = (-1.* pp3.z)/v_n.z
-                    timeRefDir4b = (-1.* pp4.z)/v_n.z
-                    pp1b = pp1 + v_n*timeRefDir1b
-                    pp2b = pp2 + v_n*timeRefDir2b
-                    pp3b = pp3 + v_n*timeRefDir3b
-                    pp4b = pp4 + v_n*timeRefDir4b
+                    timeRefDir1b = (-1.* pp1.z)/vSun.z
+                    timeRefDir2b = (-1.* pp2.z)/vSun.z
+                    timeRefDir3b = (-1.* pp3.z)/vSun.z
+                    timeRefDir4b = (-1.* pp4.z)/vSun.z
+                    pp1b = pp1 + vSun*timeRefDir1b
+                    pp2b = pp2 + vSun*timeRefDir2b
+                    pp3b = pp3 + vSun*timeRefDir3b
+                    pp4b = pp4 + vSun*timeRefDir4b
                     print ("pointbis", pp1b, pp2b, pp3b, pp4b)
                     TwoAAbis = abs((pp1b.x - pp4b.x)*(pp2b.y - pp3b.y)) + abs((pp2b.x - pp3b.x)*(pp1b.y - pp4b.y))
                     surfMirbis = TwoAAbis/2.
@@ -778,36 +788,36 @@ class Smartg(object):
                     # surfMirbisn = TwoAn/2.
                     # print ("surfMirn", surfMirbisn)
                     
-                    #=====================
-                    # Application du changement de base aux 4 points
-                    pp1 = ooTw[pp1]
-                    pp2 = ooTw[pp2]
-                    pp3 = ooTw[pp3]
-                    pp4 = ooTw[pp4]
+                    # #=====================
+                    # # Application du changement de base aux 4 points
+                    # pp1 = ooTw[pp1]
+                    # pp2 = ooTw[pp2]
+                    # pp3 = ooTw[pp3]
+                    # pp4 = ooTw[pp4]
                     
-                    # ====================
-                    timeRefDir1 = (-1.* pp1.z)/v_n2.z
-                    timeRefDir2 = (-1.* pp2.z)/v_n2.z
-                    timeRefDir3 = (-1.* pp3.z)/v_n2.z
-                    timeRefDir4 = (-1.* pp4.z)/v_n2.z
+                    # # ====================
+                    # timeRefDir1 = (-1.* pp1.z)/v_n2.z
+                    # timeRefDir2 = (-1.* pp2.z)/v_n2.z
+                    # timeRefDir3 = (-1.* pp3.z)/v_n2.z
+                    # timeRefDir4 = (-1.* pp4.z)/v_n2.z
 
-                    pp1 += v_n2*timeRefDir1
-                    pp2 += v_n2*timeRefDir2
-                    pp3 += v_n2*timeRefDir3
-                    pp4 += v_n2*timeRefDir4
-                    # ====================
-                    print (pp1, pp2, pp3, pp4)
+                    # pp1 += v_n2*timeRefDir1
+                    # pp2 += v_n2*timeRefDir2
+                    # pp3 += v_n2*timeRefDir3
+                    # pp4 += v_n2*timeRefDir4
+                    # # ====================
+                    # print (pp1, pp2, pp3, pp4)
 
-                    # Projection sur la surface de la base
-                    pp1.z = 0. ; pp2.z = 0. ; pp3.z = 0. ; pp4.z = 0.;
+                    # # Projection sur la surface de la base
+                    # pp1.z = 0. ; pp2.z = 0. ; pp3.z = 0. ; pp4.z = 0.;
 
-                    # Calcul de l'aire du quadrilatère projeté (si rot x et y actif alors le quadri peut être convexe!!)
-                    # la formule si-dessous fait le calcul exacte de l'aire d'un quadri convexe!! (donc général)
-                    TwoAA = abs((pp1.x - pp4.x)*(pp2.y - pp3.y)) + abs((pp2.x - pp3.x)*(pp1.y - pp4.y))
-                    surfMir = TwoAA/2 # TwoAA = l'aire du quadri convexe multiplié par 2
-                    print("surfMirRecept=", surfMir)
-                    surfMir = surfMirbis * np.cos(THVDEG * np.pi / 180)
-                    print("surfMirbisaftercos=", surfMir)
+                    # # Calcul de l'aire du quadrilatère projeté (si rot x et y actif alors le quadri peut être convexe!!)
+                    # # la formule si-dessous fait le calcul exacte de l'aire d'un quadri convexe!! (donc général)
+                    # TwoAA = abs((pp1.x - pp4.x)*(pp2.y - pp3.y)) + abs((pp2.x - pp3.x)*(pp1.y - pp4.y))
+                    # surfMir = TwoAA/2 # TwoAA = l'aire du quadri convexe multiplié par 2
+                    # print("surfMirRecept=", surfMir)
+                    # surfMir = surfMirbis * np.cos(THVDEG * np.pi / 180)
+                    # print("surfMirbisaftercos=", surfMir)
                     surfMir = surfMirbis
                     
                 elif (myObjects[i].name == "receptor"):
@@ -831,7 +841,8 @@ class Smartg(object):
                     raise NameError('You have to specify if your object is a reflector or a receptor!')
 
             if cusForward is not None:
-                nn3 = Normal(v_n)
+                # print("Vsun2=(", v_n.x, ', ', v_n.y, ', ', v_n.z, ')')
+                nn3 = Normal(vSun)
                 nn1, nn2 = CoordinateSystem(nn3)
                 # Création d'une matrice appelé matrice de passage
                 mm2 = np.zeros((4,4), dtype=np.float64)
@@ -853,7 +864,7 @@ class Smartg(object):
                 ppn2 = ooTwn[ppn2]
                 ppn3 = ooTwn[ppn3]
                 ppn4 = ooTwn[ppn4]
-                v_nn = ooTwn[v_n]
+                v_nn = ooTwn[vSun]
                 timen1 = (-1.* ppn1.z)/v_nn.z
                 timen2 = (-1.* ppn2.z)/v_nn.z
                 timen3 = (-1.* ppn3.z)/v_nn.z
