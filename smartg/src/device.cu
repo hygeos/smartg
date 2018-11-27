@@ -3955,50 +3955,51 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 	if (ph->H == 0 && ph->E == 0 && ph->S == 0) 
 	{ // CAT 1 : aucun changement de trajectoire avant de toucher le R.
 	    DatomicAdd(wPhCat, weight); // comptage poids
-		DatomicAdd(nbPhCat, 1);     // comptage nombre de photons
+		atomicAdd(nbPhCat, 1);     // comptage nombre de photons
 		DatomicAdd(tabCountObj+(nbCy*nbCx)+(nbCy*indI)+indJ, weight); // distri
 	}
 	else if ( ph->H > 0 && ph->E == 0 && ph->S == 0)
 	{ // CAT 2 : only H avant de toucher le R.
 		DatomicAdd(wPhCat+1, weight);
-		DatomicAdd(nbPhCat+1, 1);
+		atomicAdd(nbPhCat+1, 1);
 		DatomicAdd(tabCountObj+(2*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+		printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
 	}
 	else if ( ph->H == 0 && ph->E > 0 && ph->S == 0)
 	{ // CAT 3 : only E avant de toucher le R.
 		DatomicAdd(wPhCat+2, weight);
-		DatomicAdd(nbPhCat+2, 1);
+		atomicAdd(nbPhCat+2, 1);
 		DatomicAdd(tabCountObj+(3*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}
 	else if ( ph->H == 0 && ph->E == 0 && ph->S > 0)
 	{ // CAT 4 : only S avant de toucher le R.
 		DatomicAdd(wPhCat+3, weight);
-		DatomicAdd(nbPhCat+3, 1);
+		atomicAdd(nbPhCat+3, 1);
 		DatomicAdd(tabCountObj+(4*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}
 	else if ( ph->H > 0 && ph->E == 0 && ph->S > 0)
 	{ // CAT 5 : 2 proc. H et S avant de toucher le R.
 		DatomicAdd(wPhCat+4, weight);
-		DatomicAdd(nbPhCat+4, 1);
+		atomicAdd(nbPhCat+4, 1);
 		DatomicAdd(tabCountObj+(5*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}
 	else if ( ph->H > 0 && ph->E > 0 && ph->S == 0)
 	{ // CAT 6 : 2 proc. H et E avant de toucher le R.
 		DatomicAdd(wPhCat+5, weight);
-		DatomicAdd(nbPhCat+5, 1);
+		atomicAdd(nbPhCat+5, 1);
 		DatomicAdd(tabCountObj+(6*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
         //printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
 	}
 	else if ( ph->H == 0 && ph->E > 0 && ph->S > 0)
 	{ // CAT 7 : 2 proc. E et S avant de toucher le R.
 		DatomicAdd(wPhCat+6, weight);
-		DatomicAdd(nbPhCat+6, 1);
+		atomicAdd(nbPhCat+6, 1);
 		DatomicAdd(tabCountObj+(7*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}	
 	else if ( ph->H > 0 && ph->E > 0 && ph->S > 0)
 	{ // CAT 8 : 3 proc. H, E et S avant de toucher le R.
 		DatomicAdd(wPhCat+7, weight);
-		DatomicAdd(nbPhCat+7, 1);
+		atomicAdd(nbPhCat+7, 1);
 		DatomicAdd(tabCountObj+(8*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}
 	#endif
