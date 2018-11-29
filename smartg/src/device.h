@@ -38,6 +38,7 @@ __device__ __constant__ int NPSTKd;
 __device__ __constant__ int NLVLd;
 __device__ __constant__ int SIMd;
 __device__ __constant__ int LEd;
+__device__ __constant__ int ZIPd;
 __device__ __constant__ int FLUXd;
 //__device__ __constant__ int MId;
 __device__ __constant__ int SURd;
@@ -155,9 +156,12 @@ __device__ void surfaceBRDF(Photon*, int le, float* tabthv, float* tabphi, int c
 /* surfaceLambertienne
 * Reflexion sur une surface lambertienne
 */
-__device__ void surfaceLambertienne(Photon*, int le,
+__device__ void surfaceLambert(Photon*, int le,
                                     float* tabthv, float* tabphi, struct Spectrum *spectrum,
                                     struct RNG_State*);
+//__device__ void surfaceLambertienne(Photon*, int le,
+ //                                   float* tabthv, float* tabphi, struct Spectrum *spectrum,
+  //                                  struct RNG_State*);
 
 
 /* exit
@@ -211,6 +215,10 @@ __device__ float get_OD(int , struct Profile ) ;
 
 __device__ float Lambda(float , float ) ;
 __device__ double LambdaM(double , double ) ;
+
+__device__ void DirectionToUV(float, float, float3*, float3*) ;
+__device__ float3 LocalToGlobal(float3, float3, float3, float3) ;
+__device__ void MakeLocalFrame(float3, float3*, float3*, float3*) ;
 
 
 #ifdef PHILOX

@@ -258,13 +258,14 @@ extern "C" {
 			        else count_level_le = down_level;
 
                     // Double Loop on directions
-                    for (int iph=0; iph<NBPHId; iph++){
-                        for (int ith=0; ith<NBTHETAd; ith++){
-                            // Copy of the propagation photon to to the virtual, local estiumate photon
+                    for (int ith=0; ith<NBTHETAd; ith++){
+                        for (int iph=0; iph<NBPHId; iph++){
+                            // Copy of the propagation photon to to the virtual, local estimate photon
                             copyPhoton(&ph, &ph_le);
                             // Computation of the index of the direction
-                            ph_le.iph = (iph + iph0)%NBPHId;
                             ph_le.ith = (ith + ith0)%NBTHETAd;
+                            if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
+                            else ph_le.iph =  ph_le.ith;
 
                             /*#ifdef SPHERIQUE
                             // in case of atmospheric refraction determine the outgoing direction
@@ -279,8 +280,9 @@ extern "C" {
                                 move_sp(&ph_le, prof_atm, 1, UPTOA , &rngstate);
                                 dth = -acosf(dot(ph_le.v,v));
                                 copyPhoton(&ph, &ph_le);
-                                ph_le.iph = (iph + iph0)%NBPHId;
                                 ph_le.ith = (ith + ith0)%NBTHETAd;
+                                if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
+                                else ph_le.iph =  ph_le.ith;
                             }
                             else dth=0.F;
                             #endif*/
@@ -354,8 +356,9 @@ extern "C" {
                     for (int ith=0; ith<NBTHETAd; ith++){
                       for (int iph=0; iph<NBPHId; iph++){
                         copyPhoton(&ph, &ph_le);
-                        ph_le.iph = (iph + iph0)%NBPHId;
                         ph_le.ith = (ith + ith0)%NBTHETAd;
+                        if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
+                        else ph_le.iph =  ph_le.ith;
 
                         // Reflect or Tramsit the virtual photon, using le=1, and count_level for the scattering angle computation
                         if (BRDFd != 0)
@@ -415,9 +418,10 @@ extern "C" {
                   for (int ith=0; ith<NBTHETAd; ith++){
                     for (int iph=0; iph<NBPHId; iph++){
                         copyPhoton(&ph, &ph_le);
-                        ph_le.iph = (iph + iph0)%NBPHId;
                         ph_le.ith = (ith + ith0)%NBTHETAd;
-				        surfaceLambertienne(&ph_le, 1, tabthv, tabphi, spectrum, &rngstate);
+                        if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
+                        else ph_le.iph =  ph_le.ith;
+				        surfaceLambert(&ph_le, 1, tabthv, tabphi, spectrum, &rngstate);
                         // Only two levels for counting by definition
                         countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
                         #ifdef SPHERIQUE
@@ -432,7 +436,7 @@ extern "C" {
                 } //LE
 
                 //Propagation of Lambertian reflection with le=0
-				surfaceLambertienne(&ph, 0, tabthv, tabphi, spectrum, &rngstate);
+				surfaceLambert(&ph, 0, tabthv, tabphi, spectrum, &rngstate);
             } // Lambertian
            } // ENV=0
 
@@ -447,9 +451,10 @@ extern "C" {
                   for (int ith=0; ith<NBTHETAd; ith++){
                     for (int iph=0; iph<NBPHId; iph++){
                         copyPhoton(&ph, &ph_le);
-                        ph_le.iph = (iph + iph0)%NBPHId;
                         ph_le.ith = (ith + ith0)%NBTHETAd;
-				        surfaceLambertienne(&ph_le, 1, tabthv, tabphi, spectrum, &rngstate);
+                        if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
+                        else ph_le.iph =  ph_le.ith;
+				        surfaceLambert(&ph_le, 1, tabthv, tabphi, spectrum, &rngstate);
                         // Only two levels for counting by definition
                         countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
                         #ifdef SPHERIQUE
@@ -463,7 +468,7 @@ extern "C" {
                   }//direction
                  } //LE
                  //Propagation of Lambertian reflection with le=0
-                    surfaceLambertienne(&ph, 0, tabthv, tabphi, spectrum, &rngstate);
+                    surfaceLambert(&ph, 0, tabthv, tabphi, spectrum, &rngstate);
                 }// dis
                 else {
                  if (LEd == 1 && SIMd != -2) {
@@ -480,8 +485,9 @@ extern "C" {
                     for (int ith=0; ith<NBTHETAd; ith++){
                       for (int iph=0; iph<NBPHId; iph++){
                         copyPhoton(&ph, &ph_le);
-                        ph_le.iph = (iph + iph0)%NBPHId;
                         ph_le.ith = (ith + ith0)%NBTHETAd;
+                        if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
+                        else ph_le.iph =  ph_le.ith;
 
                         // Reflect or Tramsit the virtual photon, using le=1, and count_level for the scattering angle computation
                         if (BRDFd != 0)
@@ -558,9 +564,10 @@ extern "C" {
               for (int ith=0; ith<NBTHETAd; ith++){
                 for (int iph=0; iph<NBPHId; iph++){
                     copyPhoton(&ph, &ph_le);
-                    ph_le.iph = (iph + iph0)%NBPHId;
                     ph_le.ith = (ith + ith0)%NBTHETAd;
-				    surfaceLambertienne(&ph_le, 1, tabthv, tabphi, spectrum, &rngstate);
+                    if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
+                    else ph_le.iph =  ph_le.ith;
+				    surfaceLambert(&ph_le, 1, tabthv, tabphi, spectrum, &rngstate);
                     //  contribution to UP0M level
                     #ifdef ALT_PP                          
                     if (ph_le.loc==OCEAN) move_pp2(&ph_le, prof_atm, prof_oc, 1, UP0M, &rngstate); 
@@ -570,7 +577,7 @@ extern "C" {
               }
             } //LE
 
-			surfaceLambertienne(&ph, 0, tabthv, tabphi, spectrum, &rngstate);
+			surfaceLambert(&ph, 0, tabthv, tabphi, spectrum, &rngstate);
             #ifdef DEBUG_PHOTON
             display("SEAFLOOR", &ph);
             #endif
@@ -742,6 +749,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     float dz, dz_i, delta_i, epsilon;
     float cTh, sTh, phi;
     int ilayer;
+	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
 
     ph->nint = 0;
 	ph->weight = WEIGHTINIT;
@@ -836,12 +844,14 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
         epsilon = fabs(__fdividef(dz,dz_i));
 
         delta_i = fabs(get_OD(BEERd, prof_oc[ilayer+ph->ilam*(NOCEd+1)]) - get_OD(BEERd, prof_oc[ilayer-1+ph->ilam*(NOCEd+1)]));
-        ph->tau = epsilon * delta_i + (get_OD(BEERd, prof_oc[NOCEd+ph->ilam*(NOCEd+1)])-
-                                       get_OD(BEERd, prof_oc[ilayer+ph->ilam*(NOCEd+1)])); 
+        ph->tau = epsilon * delta_i + (get_OD(BEERd, prof_oc[0+ph->ilam*(NOCEd+1)])-
+                                       get_OD(BEERd, prof_oc[ilayer-1+ph->ilam*(NOCEd+1)])); 
 
         delta_i = fabs(prof_oc[ilayer+ph->ilam*(NOCEd+1)].OD_abs - prof_oc[ilayer-1+ph->ilam*(NOCEd+1)].OD_abs);
-        ph->tau_abs = epsilon * delta_i + (prof_oc[NOCEd+ph->ilam*(NOCEd+1)].OD_abs -
-                                           prof_oc[ilayer+ph->ilam*(NOCEd+1)].OD_abs); 
+        ph->tau_abs = epsilon * delta_i + (prof_oc[0+ph->ilam*(NOCEd+1)].OD_abs -
+                                           prof_oc[ilayer-1+ph->ilam*(NOCEd+1)].OD_abs); 
+
+        if(idx==0) printf("%i %f %f %f %f\n",ilayer, prof_oc[ilayer].z, ph->tau, delta_i, epsilon);
         #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
         int DL=(NLAMd-1)/(NLOWd-1);
         for (int k=0; k<NLOWd; k++) {
@@ -1225,7 +1235,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
     int ilam; 
     struct Profile *prof;
     int  NL;
-	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+	//int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
     if (ph->loc==OCEAN) {
         NL   = NOCEd+1;
         prof = prof_oc;
@@ -1262,7 +1272,6 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
         if (ph->loc == ATMOS) {
          if (ph->layer == NATMd+1) {
             ph->loc = SURF0P;
-            //ph->tau = 0.;
             ph->layer -= 1;  // next time photon enters move_pp2, it's at layers NATM
             break;
          }
@@ -1274,14 +1283,12 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
         if (ph->loc == OCEAN) {
          if (ph->layer == NOCEd+1) {
             ph->loc = SEAFLOOR;
-            //ph->tau = 0.;
             ph->layer -= 1;  // next time photon enters move_pp2, it's at layers NOCE
             break;
          }
          if (ph->layer <= 0) {
             ph->loc = SURF0M;
             ph->layer= 0;
-            //ph->tau  = get_OD(BEERd,prof[0+ilam]);
             break;
          }
         }
@@ -1375,7 +1382,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
 
     if ((BEERd == 0) && ((ph->loc == ATMOS) || (ph->loc == OCEAN))) {
         ph->weight *= prof[ph->layer+ilam].ssa;
-        if (idx==0) printf("%d %d %d %f\n",ph->loc, ph->layer, ph->ilam, prof[ph->layer+ilam].ssa);
+        //if (idx==0) printf("%d %d %d %f\n",ph->loc, ph->layer, ph->ilam, prof[ph->layer+ilam].ssa);
     }
 }
 #endif // ALT_PP
@@ -2139,15 +2146,11 @@ __device__ void surfaceAgitee(Photon* ph, int le,
     // Nz is the local vertical direction, the direction of the 2 others does not matter
     // because the azimuth is chosen randomly
 	float3 Nx, Ny, Nz;
-
 	Nz = ph->pos; // Nz is the vertical at the impact point
-
     // Ny is chosen arbitrarily by cross product of Nz with axis X = (1,0,0)
 	Ny = cross(Nz, make_float3(1.0,0.0,0.0));
-
     // Nx is the cross product of Ny and Nz
 	Nx = cross(Ny, Nz);
- 
 	// Normalization
 	Nx = normalize(Nx);
 	Ny = normalize(Ny);
@@ -2665,7 +2668,7 @@ __device__ void surfaceBRDF(Photon* ph, int le,
                               float* tabthv, float* tabphi, int count_level,
                               struct RNG_State *rngstate) {
 	
-	if( SIMd == -2){ // Atmosphère , la surface absorbe tous les photons
+	if( SIMd == -2){ // Atmosphere only, surface absorbs all
 		ph->loc = ABSORBED;
 		return;
 	}
@@ -2707,27 +2710,15 @@ __device__ void surfaceBRDF(Photon* ph, int le,
     // Nz is the local vertical direction, the direction of the 2 others does not matter
     // because the azimuth is chosen randomly
 	float3 Nx, Ny, Nz;
-
 	Nz = ph->pos; // Nz is the vertical at the impact point
-
     // Ny is chosen arbitrarily by cross product of Nz with axis X = (1,0,0)
 	Ny = cross(Nz, make_float3(1.0,0.0,0.0));
-
     // Nx is the cross product of Ny and Nz
 	Nx = cross(Ny, Nz);
- 
 	// Normalizatioin
 	Nx = normalize(Nx);
 	Ny = normalize(Ny);
 	Nz = normalize(Nz);
-
-    #ifdef DEBUG
-    // we check that there is no upward photon reaching surface0+
-    if ((ph->loc == SURF0P) && (dot(ph->v, ph->pos) > 0)) {
-        // upward photon when reaching the surface at (0+)
-        printf("Warning, vzn>0 (vzn=%f) with SURF0+ in surfaceBRDF\n", dot(ph->v, ph->pos));
-    }
-    #endif
     #endif
 
     sig2 = 0.003F + 0.00512f *WINDSPEEDd;
@@ -2850,155 +2841,102 @@ __device__ void surfaceBRDF(Photon* ph, int le,
 
 }
 
-/* surfaceLambertienne
-* Reflexion sur une surface lambertienne
-*/
-__device__ void surfaceLambertienne(Photon* ph, int le,
-                                    float* tabthv, float* tabphi, struct Spectrum *spectrum,
-                                    struct RNG_State *rngstate) {
+/* Surface Lambert */
+__device__ void surfaceLambert(Photon* ph, int le,
+                              float* tabthv, float* tabphi, struct Spectrum *spectrum,
+                              struct RNG_State *rngstate) {
 	
-	if( SIMd == -2){ 	// Atmosphère ou océan seuls, la surface absorbe tous les photons
+	if( SIMd == -2){ // Atmosphere only, surface absorbs all
 		ph->loc = ABSORBED;
 		return;
 	}
-	
     ph->nint += 1;
-	float3 u_n, v_n;	// Vecteur du photon après reflexion
-    float phi;
-    float cTh, sTh, cPhi, sPhi;
+	
+    float thv, phi;
+	float3 v_n, u_n; // photon outgoing direction in the LOCAL frame
 
+    #ifdef SPHERIQUE
+    // define 3 vectors Nx, Ny and Nz in cartesian coordinates which define a
+    // local orthonormal basis at the impact point.
+    // Nz is the local vertical direction, the direction of the 2 others does not matter
+    // because the azimuth is chosen randomly
+	float3 Nx, Ny, Nz;
+    MakeLocalFrame(ph->pos, &Nx, &Ny, &Nz);
+    #endif
+
+    /***************************************************/
+    /* Computation of outgoing direction */
+    /***************************************************/
     if (le) {
-        cTh  = cosf(tabthv[ph->ith]);  
-        phi  = tabphi[ph->iph];
-        //ph->weight *= cTh;
+     // Outgoing direction in GLOBAL frame
+     phi = tabphi[ph->iph];
+     thv = tabthv[ph->ith];
+     DirectionToUV(thv, phi, &ph->v, &ph->u);
+
+     #ifdef SPHERIQUE
+     float weight = dot(ph->v, Nz);
+     if ((weight <= 0.) && (ph->loc != SEAFLOOR)) { /*[Eq. 40]*/
+         ph->loc = ABSORBED;
+         return;
+     }
+     else ph->weight *= weight/fabs(ph->v.z); /*[Eq. 39]*/
+     #endif
     }
     else {
-        float ddis=0.0F;
-        if ((LEd==0) || (LEd==1 && RAND>ddis)) {
-            // Standard sampling
-	        cTh = sqrtf( RAND );
-	        phi = RAND*DEUXPI;
-        }
-        else {
-            // DDIS sampling , Buras and Mayer
-            float Om = 0.001;
-	        cTh = sqrtf(1.F-RAND*Om);
-            phi = RAND*DEUXPI;
-            ph->weight *= DEUXPI*(1. -sqrtf(1.F-Om));
-        }
+     // Cosine of the LOCAL zenith angle sampling for Lambertian reflector
+	 phi = RAND*DEUXPI;
+	 thv = acosf(sqrtf(RAND));
+     DirectionToUV(thv, phi, &v_n, &u_n);
+
+     // Computation of the outgoing direction in GLOBAL frame
+     #ifdef SPHERIQUE
+     if (ph->loc == SEAFLOOR) {
+         ph->v = v_n;
+         ph->u = u_n;
+     }
+     else {
+         /* LOCAL to GLOBAL frame */
+         ph->v = LocalToGlobal(Nx, Ny, Nz, v_n);
+         ph->u = LocalToGlobal(Nx, Ny, Nz, u_n);
+     }
+     #else
+     ph->v = v_n;
+     ph->u = u_n;
+     #endif
     }
 
-	sTh = sqrtf( 1.0F - cTh*cTh );
-	cPhi = __cosf(phi);
-	sPhi = __sinf(phi);
-	
-    #ifdef SPHERIQUE
-	float icp, isp, ict, ist;	// Sine & cosine of the impact angle
-    #endif
-	
-
-	#ifdef SPHERIQUE
-	
-    if (ph->loc != SEAFLOOR){
-
-	if( ph->pos.z > 0. ){
-		ict = __fdividef(ph->pos.z,RTER);
-		
-		if(ict>1.f){
-			ict = 1.f;
-		}
-		
-		ist = sqrtf( 1.f - ict*ict );
-		
-		if(ph->pos.x >= 0.f) ist = -ist;
-		
-		if( sqrtf(ph->pos.x*ph->pos.x + ph->pos.y*ph->pos.y)<1.e-6 ){
-			icp = 1.f;
-		}
-		else{
-			icp = __fdividef(ph->pos.x,sqrtf(ph->pos.x*ph->pos.x + ph->pos.y*ph->pos.y));
-			isp = sqrtf( 1.f - icp*icp );
-			
-			if( ph->pos.y < 0.f ) isp = -isp;
-		}
-	}
-	else{
-		ph->loc = ABSORBED;	
-		return;
-	}
-	
-	v_n.x= ict*icp*ph->v.x - ict*isp*ph->v.y + ist*ph->v.z;
-	v_n.y= isp*ph->v.x + icp*ph->v.y;
-	v_n.z= -icp*ist*ph->v.x + ist*isp*ph->v.y + ict*ph->v.z;
-	
-	u_n.x= ict*icp*ph->u.x - ict*isp*ph->u.y + ist*ph->u.z;
-	u_n.y= isp*ph->u.x + icp*ph->u.y;
-	u_n.z= -icp*ist*ph->u.x + ist*isp*ph->u.y + ict*ph->u.z;
-	
-	ph->v = v_n;
-	ph->u = u_n;
-
-    } // photon not seafloor
-	#endif //SPHERICAL
-
-	v_n.x = cPhi*sTh;
-	v_n.y = sPhi*sTh;
-	v_n.z = cTh;
-	
-	u_n.x = cPhi*cTh;
-	u_n.y = sPhi*cTh;
-	u_n.z = -sTh;
-
-    float4x4 L = make_float4x4(
+    /***************************************************/
+    /* Update of Stokes vector  */
+    /***************************************************/
+    // Reflection Matrix
+    float4x4 RL = make_float4x4(
                     0.5F, 0.5F, 0.F, 0.F,
                     0.5F, 0.5F, 0.F, 0.F,
                     0.0F, 0.0F, 0.F, 0.F,
                     0.0F, 0.0F, 0.F, 0.F 
             );
-    ph->stokes = mul(L,ph->stokes);
+    ph->stokes = mul(RL, ph->stokes); /*[Eq. 15,39]*/
 
     #ifdef BACK
-    ph->M = mul(ph->M,L);
+    ph->M = mul(ph->M, RL);
     #endif
-	ph->v = v_n;
-	ph->u = u_n;
-	
-    if (DIOPTREd!=4 && ((ph->loc == SURF0M) || (ph->loc == SURF0P))){
+
+    /***************************************************/
+    /* Update of photon location and weight */
+    /***************************************************/
+    if (ph->loc == SURF0P){
 	  bool test_s = ( SIMd == -1);
 	  ph->loc = SPACE *test_s + ATMOS*(!test_s);
       ph->layer = NATMd; 
+	  ph->weight *= spectrum[ph->ilam].alb_surface;  /*[Eq. 16,39]*/
     }
-	
-    if (ph->loc != SEAFLOOR){
-
-	  ph->weight *= spectrum[ph->ilam].alb_surface;
-      
-	  #ifdef SPHERIQUE
-	  /** Retour dans le repère d'origine **/
-	  // Re-projection vers le repères de direction de photon. L'angle à prendre pour la projection est -angleImpact
-	  isp = -isp;
-	  ist = -ist;
-	
-	  v_n.x= ict*icp*ph->v.x - ict*isp*ph->v.y + ist*ph->v.z;
-	  v_n.y= isp*ph->v.x + icp*ph->v.y;
-	  v_n.z= -icp*ist*ph->v.x + ist*isp*ph->v.y + ict*ph->v.z;
-	
-	  u_n.x= ict*icp*ph->u.x - ict*isp*ph->u.y + ist*ph->u.z;
-	  u_n.y= isp*ph->u.x + icp*ph->u.y;
-	  u_n.z= -icp*ist*ph->u.x + ist*isp*ph->u.y + ict*ph->u.z;
-	
-	  ph->v = v_n;
-	  ph->u = u_n;
-	  #endif
-    } // not seafloor 
-
     else {
-	  ph->weight *= spectrum[ph->ilam].alb_seafloor;
       ph->loc = OCEAN;
       ph->layer = NOCEd; 
+	  ph->weight *= spectrum[ph->ilam].alb_seafloor; /*[Eq. 16,39]*/
     }
-    
-}
+
+} //surfaceLambert
 
 
 __device__ void countPhoton(Photon* ph,
@@ -3107,7 +3045,7 @@ __device__ void countPhoton(Photon* ph,
     // Moreover we compute also final attenuation for LE 
     else {
         ith = ph->ith;
-        iphi= ph->iph;
+        if (!ZIPd) iphi= ph->iph;
         il  = ph->ilam;
 
         if (!(   (SIMd==-1) 
@@ -3115,7 +3053,8 @@ __device__ void countPhoton(Photon* ph,
               || (NOCEd==0 && count_level==UP0P)
              )
            ){
-        // Computation of final attenutation only in PP
+
+        // Computation of final attenutation only in fast PP
         #if !defined(SPHERIQUE) && !defined(ALT_PP)
         int layer_le;
         float tau_le;
@@ -3164,8 +3103,8 @@ __device__ void countPhoton(Photon* ph,
         ph->layer = 0;
         ph->nevt++;
         // ph->layer_prev[ph->nevt] = ph->layer;
-        //if (ph->loc == ATMOS) ph->layer_prev[ph->nevt]   = ph->layer;
-        //if (ph->loc == OCEAN || ph->loc == SURF0M) ph->layer_prev[ph->nevt]   = -ph->layer;
+        if (ph->loc == ATMOS) ph->layer_prev[ph->nevt]   = ph->layer;
+        if (ph->loc == OCEAN || ph->loc == SURF0M) ph->layer_prev[ph->nevt]   = -ph->layer;
         ph->vz_prev[ph->nevt] = ph->v.z;
         ph->epsilon_prev[ph->nevt] = 0.f;
         
@@ -3233,7 +3172,6 @@ __device__ void countPhoton(Photon* ph,
       #endif
 
       atomicAdd(NPhotonsOut + (((count_level*NSENSORd + is)*NLAMd + il)*NBTHETAd + ith)*NBPHId + iphi, 1);
-      //atomicAdd(NPhotonsOut + ((count_level*NLAMd + il)*NBTHETAd + ith)*NBPHId + iphi, 1);
 	}
 	else
 	{
@@ -3489,7 +3427,8 @@ __device__ void ComputePsiZenith(Photon* ph, float* psi, float phi)
         float uy_phi;
         float cos_psi;
         float sin_psi;
-        float eps=1e-4;
+        float eps=1e-2;
+        //float eps=1e-4;
 
         ux_phi  = cosf(phi);
         uy_phi  = sinf(phi);
@@ -3810,6 +3749,30 @@ __device__ double LambdaM(double avz, double sig2) {
         l  = 0.5*(s1*t1/dcot-t2);
     }
     return l;
+}
+
+__device__ void DirectionToUV(float th, float phi, float3* v, float3* u) {
+     *v = make_float3(cosf(phi) * sinf(th),
+                      sinf(phi) * sinf(th),
+                      cosf(th));  
+	 *u = make_float3(cosf(phi) * cosf(th),
+	                  sinf(phi) * cosf(th),
+	                  -sinf(th));
+}
+
+__device__ float3 LocalToGlobal(float3 Nx, float3 Ny, float3 Nz, float3 v) {
+     float3x3 B = make_float3x3(
+                Nx.x, Ny.x, Nz.x,
+                Nx.y, Ny.y, Nz.y,
+                Nx.z, Ny.z, Nz.z
+                );
+     return mul(B, v);
+}
+
+__device__ void MakeLocalFrame(float3 pos, float3* Nx, float3* Ny, float3* Nz) {
+	*Nz = normalize(pos); // Nz is the vertical at the impact point
+	*Ny = normalize(cross(*Nz, make_float3(1.0, 0.0, 0.0)));
+	*Nx = normalize(cross(*Ny, *Nz));
 }
 
 #ifdef PHILOX

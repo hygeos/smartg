@@ -444,8 +444,11 @@ class Smartg(object):
                   le={'th': <array-like>, 'phi': <array-like>}
                   or:
                   le={'th_deg': <array-like>, 'phi_deg': <array-like>}    # to provide angles in degrees
-                  angles can be provided as scalar, lists or 1-dim arrays
-                  default None: cone sampling
+                  The defaut output is two dimensional NBPHI x NBTHETA
+                  If 'zip' is present in the dictionary, then 'th' and 'phi' covary and the output is only
+                  one-dimensional NBTHETA, but user should verify that NBPHI==NBTHETA
+                  Angles can be provided as scalar, lists or 1-dim arrays
+                  Default None: cone sampling
                   NOTE: Overrides NBPHI and NBTHETA
 
             - alis_options : required if compiled already with the alis option. Dictionary, field 'nlow'
@@ -654,6 +657,7 @@ class Smartg(object):
 
         # Local Estimate option
         LE = 0
+        ZIP= 0
         if le is not None:
             LE = 1
             if not 'th' in le:
@@ -664,8 +668,15 @@ class Smartg(object):
                 le['phi'] = np.array(le['phi_deg'], dtype='float32').ravel() * np.pi/180.
             else:
                 le['phi'] = np.array(le['phi'], dtype='float32').ravel()
+
             NBTHETA =  le['th'].shape[0]
-            NBPHI   =  le['phi'].shape[0]
+            NBPHI   = le['phi'].shape[0]
+
+            if 'zip' in le:
+                if le['zip']:
+                    assert NBPHI==NBTHETA
+                    ZIP = 1
+                    NBPHI = 1 
 
         '''
         # Multiple Init Direction
@@ -712,7 +723,7 @@ class Smartg(object):
                        NBPHOTONS, NBLOOP, THVDEG, DEPO,
                        XBLOCK, XGRID, NLAM, SIM, NF,
                        NBTHETA, NBPHI, OUTPUT_LAYERS,
-                       RTER, LE, FLUX, NLVL, NPSTK,
+                       RTER, LE, ZIP, FLUX, NLVL, NPSTK,
                        NWLPROBA, BEER, RR, WEIGHTRR, NLOW, NJAC, 
                        NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, HIST)
 
@@ -838,9 +849,31 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
     m = MLUT()
 
     # add the axes
-    axnames  = ['Azimuth angles', 'Zenith angles']
-    axnames2 = ['None', 'Azimuth angles', 'Zenith angles']
+    axnames  = ['Zenith angles']
+    axnames2 = ['None', 'Zenith angles']
+    if hist : axnames3 = ['None', 'None', 'Zenith angles']
+    iphi     = slice(None)
     if hist : axnames3 = ['None', 'None', 'Azimuth angles', 'Zenith angles']
+    m.set_attr('zip', 'False')
+
+    if le is not None:
+        if 'zip' in le:
+            if le['zip'] : 
+                m.set_attr('zip', 'True')
+                iphi = 0
+            else:
+                axnames.insert(0, 'Azimuth angles')
+                axnames2.insert(1,'Azimuth angles')
+                if hist : axnames3.insert(2, 'Azimuth angles')
+        else:
+            axnames.insert(0, 'Azimuth angles')
+            axnames2.insert(1,'Azimuth angles')
+            if hist : axnames3.insert(2, 'Azimuth angles')
+    else:
+        axnames.insert(0, 'Azimuth angles')
+        axnames2.insert(1,'Azimuth angles')
+        if hist : axnames3.insert(2, 'Azimuth angles')
+
     m.add_axis('Zenith angles', tabTh*180./np.pi)
     m.add_axis('Azimuth angles', tabPhi*180./np.pi)
     if NLAM > 1:
@@ -860,85 +893,85 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
     else:
         isen=0
 
-    m.add_dataset('I_up (TOA)', tabFinal[UPTOA,0,isen,ilam,:,:], axnames)
-    m.add_dataset('Q_up (TOA)', tabFinal[UPTOA,1,isen,ilam,:,:], axnames)
-    m.add_dataset('U_up (TOA)', tabFinal[UPTOA,2,isen,ilam,:,:], axnames)
-    m.add_dataset('V_up (TOA)', tabFinal[UPTOA,3,isen,ilam,:,:], axnames)
+    m.add_dataset('I_up (TOA)', tabFinal[UPTOA,0,isen,ilam,iphi,:], axnames)
+    m.add_dataset('Q_up (TOA)', tabFinal[UPTOA,1,isen,ilam,iphi,:], axnames)
+    m.add_dataset('U_up (TOA)', tabFinal[UPTOA,2,isen,ilam,iphi,:], axnames)
+    m.add_dataset('V_up (TOA)', tabFinal[UPTOA,3,isen,ilam,iphi,:], axnames)
     if sigma is not None:
-        m.add_dataset('I_stdev_up (TOA)', sigma[UPTOA,0,isen,ilam,:,:], axnames)
-        m.add_dataset('Q_stdev_up (TOA)', sigma[UPTOA,1,isen,ilam,:,:], axnames)
-        m.add_dataset('U_stdev_up (TOA)', sigma[UPTOA,2,isen,ilam,:,:], axnames)
-        m.add_dataset('V_stdev_up (TOA)', sigma[UPTOA,3,isen,ilam,:,:], axnames)
-    m.add_dataset('N_up (TOA)', NPhotonsOutTot[UPTOA,isen,ilam,:,:], axnames)
-    m.add_dataset('cdist_up (TOA)', tabDistFinal[UPTOA,:,isen,:,:], axnames2)
-    if hist : m.add_dataset('disth_up (TOA)', tabHistFinal[UPTOA,:,:,isen,:,:],axnames3)
+        m.add_dataset('I_stdev_up (TOA)', sigma[UPTOA,0,isen,ilam,iphi,:], axnames)
+        m.add_dataset('Q_stdev_up (TOA)', sigma[UPTOA,1,isen,ilam,iphi,:], axnames)
+        m.add_dataset('U_stdev_up (TOA)', sigma[UPTOA,2,isen,ilam,iphi,:], axnames)
+        m.add_dataset('V_stdev_up (TOA)', sigma[UPTOA,3,isen,ilam,iphi,:], axnames)
+    m.add_dataset('N_up (TOA)', NPhotonsOutTot[UPTOA,isen,ilam,iphi,:], axnames)
+    m.add_dataset('cdist_up (TOA)', tabDistFinal[UPTOA,:,isen,iphi,:], axnames2)
+    if hist : m.add_dataset('disth_up (TOA)', tabHistFinal[UPTOA,:,:,isen,iphi,:],axnames3)
 
     if OUTPUT_LAYERS & 1:
-        m.add_dataset('I_down (0+)', tabFinal[DOWN0P,0,isen,ilam,:,:], axnames)
-        m.add_dataset('Q_down (0+)', tabFinal[DOWN0P,1,isen,ilam,:,:], axnames)
-        m.add_dataset('U_down (0+)', tabFinal[DOWN0P,2,isen,ilam,:,:], axnames)
-        m.add_dataset('V_down (0+)', tabFinal[DOWN0P,3,isen,ilam,:,:], axnames)
+        m.add_dataset('I_down (0+)', tabFinal[DOWN0P,0,isen,ilam,iphi,:], axnames)
+        m.add_dataset('Q_down (0+)', tabFinal[DOWN0P,1,isen,ilam,iphi,:], axnames)
+        m.add_dataset('U_down (0+)', tabFinal[DOWN0P,2,isen,ilam,iphi,:], axnames)
+        m.add_dataset('V_down (0+)', tabFinal[DOWN0P,3,isen,ilam,iphi,:], axnames)
         if sigma is not None:
-            m.add_dataset('I_stdev_down (0+)', sigma[DOWN0P,0,isen,ilam,:,:], axnames)
-            m.add_dataset('Q_stdev_down (0+)', sigma[DOWN0P,1,isen,ilam,:,:], axnames)
-            m.add_dataset('U_stdev_down (0+)', sigma[DOWN0P,2,isen,ilam,:,:], axnames)
-            m.add_dataset('V_stdev_down (0+)', sigma[DOWN0P,3,isen,ilam,:,:], axnames)
-        m.add_dataset('N_down (0+)', NPhotonsOutTot[DOWN0P,isen,ilam,:,:], axnames)
-        m.add_dataset('cdist_down (0+)', tabDistFinal[DOWN0P,:,isen,:,:],axnames2)
-        if hist : m.add_dataset('disth_down (0+)', tabHistFinal[DOWN0P,:,:,isen,:,:],axnames3)
+            m.add_dataset('I_stdev_down (0+)', sigma[DOWN0P,0,isen,ilam,iphi,:], axnames)
+            m.add_dataset('Q_stdev_down (0+)', sigma[DOWN0P,1,isen,ilam,iphi,:], axnames)
+            m.add_dataset('U_stdev_down (0+)', sigma[DOWN0P,2,isen,ilam,iphi,:], axnames)
+            m.add_dataset('V_stdev_down (0+)', sigma[DOWN0P,3,isen,ilam,iphi,:], axnames)
+        m.add_dataset('N_down (0+)', NPhotonsOutTot[DOWN0P,isen,ilam,iphi,:], axnames)
+        m.add_dataset('cdist_down (0+)', tabDistFinal[DOWN0P,:,isen,iphi,:],axnames2)
+        if hist : m.add_dataset('disth_down (0+)', tabHistFinal[DOWN0P,:,:,isen,iphi,:],axnames3)
 
-        m.add_dataset('I_up (0-)', tabFinal[UP0M,0,isen,ilam,:,:], axnames)
-        m.add_dataset('Q_up (0-)', tabFinal[UP0M,1,isen,ilam,:,:], axnames)
-        m.add_dataset('U_up (0-)', tabFinal[UP0M,2,isen,ilam,:,:], axnames)
-        m.add_dataset('V_up (0-)', tabFinal[UP0M,3,isen,ilam,:,:], axnames)
+        m.add_dataset('I_up (0-)', tabFinal[UP0M,0,isen,ilam,iphi,:], axnames)
+        m.add_dataset('Q_up (0-)', tabFinal[UP0M,1,isen,ilam,iphi,:], axnames)
+        m.add_dataset('U_up (0-)', tabFinal[UP0M,2,isen,ilam,iphi,:], axnames)
+        m.add_dataset('V_up (0-)', tabFinal[UP0M,3,isen,ilam,iphi,:], axnames)
         if sigma is not None:
-            m.add_dataset('I_stdev_up (0-)', sigma[UP0M,0,isen,ilam,:,:], axnames)
-            m.add_dataset('Q_stdev_up (0-)', sigma[UP0M,1,isen,ilam,:,:], axnames)
-            m.add_dataset('U_stdev_up (0-)', sigma[UP0M,2,isen,ilam,:,:], axnames)
-            m.add_dataset('V_stdev_up (0-)', sigma[UP0M,3,isen,ilam,:,:], axnames)
-        m.add_dataset('N_up (0-)', NPhotonsOutTot[UP0M,isen,ilam,:,:], axnames)
-        m.add_dataset('cdist_up (0-)', tabDistFinal[UP0M,:,isen,:,:],axnames2)
-        if hist : m.add_dataset('disth_up (0-)', tabHistFinal[UP0M,:,:,isen,:,:],axnames3)
+            m.add_dataset('I_stdev_up (0-)', sigma[UP0M,0,isen,ilam,iphi,:], axnames)
+            m.add_dataset('Q_stdev_up (0-)', sigma[UP0M,1,isen,ilam,iphi,:], axnames)
+            m.add_dataset('U_stdev_up (0-)', sigma[UP0M,2,isen,ilam,iphi,:], axnames)
+            m.add_dataset('V_stdev_up (0-)', sigma[UP0M,3,isen,ilam,iphi,:], axnames)
+        m.add_dataset('N_up (0-)', NPhotonsOutTot[UP0M,isen,ilam,iphi,:], axnames)
+        m.add_dataset('cdist_up (0-)', tabDistFinal[UP0M,:,isen,iphi,:],axnames2)
+        if hist : m.add_dataset('disth_up (0-)', tabHistFinal[UP0M,:,:,isen,iphi,:],axnames3)
 
     if OUTPUT_LAYERS & 2:
-        m.add_dataset('I_down (0-)', tabFinal[DOWN0M,0,isen,ilam,:,:], axnames)
-        m.add_dataset('Q_down (0-)', tabFinal[DOWN0M,1,isen,ilam,:,:], axnames)
-        m.add_dataset('U_down (0-)', tabFinal[DOWN0M,2,isen,ilam,:,:], axnames)
-        m.add_dataset('V_down (0-)', tabFinal[DOWN0M,3,isen,ilam,:,:], axnames)
+        m.add_dataset('I_down (0-)', tabFinal[DOWN0M,0,isen,ilam,iphi,:], axnames)
+        m.add_dataset('Q_down (0-)', tabFinal[DOWN0M,1,isen,ilam,iphi,:], axnames)
+        m.add_dataset('U_down (0-)', tabFinal[DOWN0M,2,isen,ilam,iphi,:], axnames)
+        m.add_dataset('V_down (0-)', tabFinal[DOWN0M,3,isen,ilam,iphi,:], axnames)
         if sigma is not None:
-            m.add_dataset('I_stdev_down (0-)', sigma[DOWN0M,0,isen,ilam,:,:], axnames)
-            m.add_dataset('Q_stdev_down (0-)', sigma[DOWN0M,1,isen,ilam,:,:], axnames)
-            m.add_dataset('U_stdev_down (0-)', sigma[DOWN0M,2,isen,ilam,:,:], axnames)
-            m.add_dataset('V_stdev_down (0-)', sigma[DOWN0M,3,isen,ilam,:,:], axnames)
-        m.add_dataset('N_down (0-)', NPhotonsOutTot[DOWN0M,isen,ilam,:,:], axnames)
-        m.add_dataset('cdist_down (0-)', tabDistFinal[DOWN0M,:,isen,:,:],axnames2)
-        if hist : m.add_dataset('disth_down (0-)', tabHistFinal[DOWN0M,:,:,isen,:,:],axnames3)
+            m.add_dataset('I_stdev_down (0-)', sigma[DOWN0M,0,isen,ilam,iphi,:], axnames)
+            m.add_dataset('Q_stdev_down (0-)', sigma[DOWN0M,1,isen,ilam,iphi,:], axnames)
+            m.add_dataset('U_stdev_down (0-)', sigma[DOWN0M,2,isen,ilam,iphi,:], axnames)
+            m.add_dataset('V_stdev_down (0-)', sigma[DOWN0M,3,isen,ilam,iphi,:], axnames)
+        m.add_dataset('N_down (0-)', NPhotonsOutTot[DOWN0M,isen,ilam,iphi,:], axnames)
+        m.add_dataset('cdist_down (0-)', tabDistFinal[DOWN0M,:,isen,iphi,:],axnames2)
+        if hist : m.add_dataset('disth_down (0-)', tabHistFinal[DOWN0M,:,:,isen,iphi,:],axnames3)
 
-        m.add_dataset('I_up (0+)', tabFinal[UP0P,0,isen,ilam,:,:], axnames)
-        m.add_dataset('Q_up (0+)', tabFinal[UP0P,1,isen,ilam,:,:], axnames)
-        m.add_dataset('U_up (0+)', tabFinal[UP0P,2,isen,ilam,:,:], axnames)
-        m.add_dataset('V_up (0+)', tabFinal[UP0P,3,isen,ilam,:,:], axnames)
+        m.add_dataset('I_up (0+)', tabFinal[UP0P,0,isen,ilam,iphi,:], axnames)
+        m.add_dataset('Q_up (0+)', tabFinal[UP0P,1,isen,ilam,iphi,:], axnames)
+        m.add_dataset('U_up (0+)', tabFinal[UP0P,2,isen,ilam,iphi,:], axnames)
+        m.add_dataset('V_up (0+)', tabFinal[UP0P,3,isen,ilam,iphi,:], axnames)
         if sigma is not None:
-            m.add_dataset('I_stdev_up (0+)', sigma[UP0P,0,isen,ilam,:,:], axnames)
-            m.add_dataset('Q_stdev_up (0+)', sigma[UP0P,1,isen,ilam,:,:], axnames)
-            m.add_dataset('U_stdev_up (0+)', sigma[UP0P,2,isen,ilam,:,:], axnames)
-            m.add_dataset('V_stdev_up (0+)', sigma[UP0P,3,isen,ilam,:,:], axnames)
-        m.add_dataset('N_up (0+)', NPhotonsOutTot[UP0P,isen,ilam,:,:], axnames)
-        m.add_dataset('cdist_up (0+)', tabDistFinal[UP0P,:,isen,:,:],axnames2)
-        if hist : m.add_dataset('disth_up (0+)', tabHistFinal[UP0P,:,:,isen,:,:],axnames3)
+            m.add_dataset('I_stdev_up (0+)', sigma[UP0P,0,isen,ilam,iphi,:], axnames)
+            m.add_dataset('Q_stdev_up (0+)', sigma[UP0P,1,isen,ilam,iphi,:], axnames)
+            m.add_dataset('U_stdev_up (0+)', sigma[UP0P,2,isen,ilam,iphi,:], axnames)
+            m.add_dataset('V_stdev_up (0+)', sigma[UP0P,3,isen,ilam,iphi,:], axnames)
+        m.add_dataset('N_up (0+)', NPhotonsOutTot[UP0P,isen,ilam,iphi,:], axnames)
+        m.add_dataset('cdist_up (0+)', tabDistFinal[UP0P,:,isen,iphi,:],axnames2)
+        if hist : m.add_dataset('disth_up (0+)', tabHistFinal[UP0P,:,:,isen,iphi,:],axnames3)
 
-        m.add_dataset('I_down (B)', tabFinal[DOWNB,0,isen,ilam,:,:], axnames)
-        m.add_dataset('Q_down (B)', tabFinal[DOWNB,1,isen,ilam,:,:], axnames)
-        m.add_dataset('U_down (B)', tabFinal[DOWNB,2,isen,ilam,:,:], axnames)
-        m.add_dataset('V_down (B)', tabFinal[DOWNB,3,isen,ilam,:,:], axnames)
+        m.add_dataset('I_down (B)', tabFinal[DOWNB,0,isen,ilam,iphi,:], axnames)
+        m.add_dataset('Q_down (B)', tabFinal[DOWNB,1,isen,ilam,iphi,:], axnames)
+        m.add_dataset('U_down (B)', tabFinal[DOWNB,2,isen,ilam,iphi,:], axnames)
+        m.add_dataset('V_down (B)', tabFinal[DOWNB,3,isen,ilam,iphi,:], axnames)
         if sigma is not None:
-            m.add_dataset('I_stdev_down (B)', sigma[DOWNB,0,isen,ilam,:,:], axnames)
-            m.add_dataset('Q_stdev_down (B)', sigma[DOWNB,1,isen,ilam,:,:], axnames)
-            m.add_dataset('U_stdev_down (B)', sigma[DOWNB,2,isen,ilam,:,:], axnames)
-            m.add_dataset('V_stdev_down (B)', sigma[DOWNB,3,isen,ilam,:,:], axnames)
-        m.add_dataset('N_down (B)', NPhotonsOutTot[DOWNB,isen,ilam,:,:], axnames)
-        m.add_dataset('cdist_down (B)', tabDistFinal[DOWNB,:,isen,:,:],axnames2)
-        if hist : m.add_dataset('disth_down (B)', tabHistFinal[DOWNB,:,:,isen,:,:],axnames3)
+            m.add_dataset('I_stdev_down (B)', sigma[DOWNB,0,isen,ilam,iphi,:], axnames)
+            m.add_dataset('Q_stdev_down (B)', sigma[DOWNB,1,isen,ilam,iphi,:], axnames)
+            m.add_dataset('U_stdev_down (B)', sigma[DOWNB,2,isen,ilam,iphi,:], axnames)
+            m.add_dataset('V_stdev_down (B)', sigma[DOWNB,3,isen,ilam,iphi,:], axnames)
+        m.add_dataset('N_down (B)', NPhotonsOutTot[DOWNB,isen,ilam,iphi,:], axnames)
+        m.add_dataset('cdist_down (B)', tabDistFinal[DOWNB,:,isen,iphi,:],axnames2)
+        if hist : m.add_dataset('disth_down (B)', tabHistFinal[DOWNB,:,:,isen,iphi,:],axnames3)
 
 
     # direct transmission
@@ -1163,7 +1196,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
                    NBPHOTONS, NBLOOP, THVDEG, DEPO,
                    XBLOCK, XGRID,NLAM, SIM, NF,
                    NBTHETA, NBPHI, OUTPUT_LAYERS,
-                   RTER, LE, FLUX, NLVL, NPSTK, NWLPROBA, BEER, RR, 
+                   RTER, LE, ZIP, FLUX, NLVL, NPSTK, NWLPROBA, BEER, RR, 
                    WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, HIST) :
 
     """
@@ -1203,6 +1236,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
     copy_to_device('NLAMd', NLAM, np.int32)
     copy_to_device('SIMd', SIM, np.int32)
     copy_to_device('LEd', LE, np.int32)
+    copy_to_device('ZIPd', ZIP, np.int32)
     copy_to_device('FLUXd', FLUX, np.int32)
     #copy_to_device('MId', MI, np.int32)
     copy_to_device('NLVLd', NLVL, np.int32)

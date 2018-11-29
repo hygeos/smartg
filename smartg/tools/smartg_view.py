@@ -21,7 +21,7 @@ def mdesc(desc, logI=False):
     if sep1 == 1 : stokes=desc[0:1]
     elif sep1 == 2 : stokes=desc[sep1-2:sep1]
     elif sep1 == 4 : stokes=desc[sep1-4:sep1]
-    #stokes=desc[0:sep1]
+    else : stokes=desc[0:sep1]
     dir=desc[sep1+1:sep2-1]
 
     if logI and stokes=='I':

@@ -1307,7 +1307,7 @@ def plot_polar(lut, index=None, vmin=None, vmax=None, rect='211', sub='212',
                 ax_cart.plot(-ax2, data[mirror_index,:],'--'+color)
 
     # add colorbar
-    fig.colorbar(im, orientation='horizontal', extend='both', ticks=np.linspace(vmin, vmax, 5))
+    fig.colorbar(im, orientation='horizontal', extend='both', ticks=np.linspace(vmin, vmax, 5), shrink=0.7)
     if lut.desc is not None:
         ax_polar.set_title(lut.desc, weight='bold', position=(0.05,0.97))
 
