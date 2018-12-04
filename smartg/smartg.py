@@ -593,7 +593,7 @@ class Smartg(object):
             tSunThethaPhi = tSunTheta * tSunPhi
             vSun = tSunThethaPhi[vSun]
             vSun = Normalize(vSun)
-            print("Vsun=(", vSun.x, ', ', vSun.y, ', ', vSun.z, ')')
+            # print("Vsun=(", vSun.x, ', ', vSun.y, ', ', vSun.z, ')')
 
             # Début de la boucle pour la prise en compte de tous les objets
             for i in range (0, nObj):
@@ -703,42 +703,6 @@ class Smartg(object):
                     pp2 = TpT[pp2]
                     pp3 = TpT[pp3]
                     pp4 = TpT[pp4]
-
-                    # # Création d'une normale (inverse à la normale du recepteur)
-                    # ee3 = Normal(1., 0., 0.)
-
-                    # # production de deux vecs permettant la création d'un repère orthogonal avec la normale ee3
-                    # ee1, ee2 = CoordinateSystem(ee3)
-
-                    # # Création d'une matrice appelé matrice de passage
-                    # mm = np.zeros((4,4), dtype=np.float64)
-
-                    # # Remplissage de la matrice de passage en fonction du repère (ee3 étant le nouvel axe z)
-                    # mm[0,0] = ee1.x ; mm[0,1] = ee2.x ; mm[0,2] = ee3.x ; mm[0,3] = 0. ;
-                    # mm[1,0] = ee1.y ; mm[1,1] = ee2.y ; mm[1,2] = ee3.y ; mm[1,3] = 0. ;
-                    # mm[2,0] = ee1.z ; mm[2,1] = ee2.z ; mm[2,2] = ee3.z ; mm[2,3] = 0. ;
-                    # mm[3,0] = 0.    ; mm[3,1] = 0.    ; mm[3,2] = 0.    ; mm[3,3] = 1. ;
-
-                    # # Création de la transformation permettant le changement de base
-                    # mmInv = np.transpose(mm)
-                    # ooTw = Transform(m = mm, mInv = mmInv)
-
-                    # ==================== direction solaire refléchi sur miroir v_n
-                    # aRot = Transform()
-                    # aRot = aRot.rotateZ(180)
-         
-                    # v_n = Vector(-np.sin(THVDEG * np.pi / 180), 0., -np.cos(THVDEG * np.pi / 180))
-                    # v_n = Normalize(v_n)
-                    
-                    # v_n2 = invTpT[v_n]
-                    # v_n2 = aRot[v_n2]
-                    # v_n2 = Vector(-v_n2.x, -v_n2.y, -v_n2.z)
-                    # v_n2 = TpT[v_n2]
-
-                    # v_n2 = Normalize(v_n2)
-                    # v_n2 = ooTw[v_n2]
-                    # v_n2 = Normalize(v_n2)
-                    # ====================
                     
                     # ====================
                     timeRefDir1b = (-1.* pp1.z)/vSun.z
@@ -749,75 +713,11 @@ class Smartg(object):
                     pp2b = pp2 + vSun*timeRefDir2b
                     pp3b = pp3 + vSun*timeRefDir3b
                     pp4b = pp4 + vSun*timeRefDir4b
-                    print ("pointbis", pp1b, pp2b, pp3b, pp4b)
+                    #print ("pointbis", pp1b, pp2b, pp3b, pp4b)
                     TwoAAbis = abs((pp1b.x - pp4b.x)*(pp2b.y - pp3b.y)) + abs((pp2b.x - pp3b.x)*(pp1b.y - pp4b.y))
                     surfMirbis = TwoAAbis/2.
-                    print ("surfMirbis", surfMirbis)
+                    #print ("surfMirbis", surfMirbis)
                     # ====================
-
-                    # nn3 = Normal(v_n)
-                    # nn1, nn2 = CoordinateSystem(nn3)
-                    # # Création d'une matrice appelé matrice de passage
-                    # mm2 = np.zeros((4,4), dtype=np.float64)
-                    # # Remplissage de la matrice de passage en fonction du repère (ee3 étant le nouvel axe z)
-                    # mm2[0,0] = nn1.x ; mm2[0,1] = nn2.x ; mm2[0,2] = nn3.x ; mm2[0,3] = 0. ;
-                    # mm2[1,0] = nn1.y ; mm2[1,1] = nn2.y ; mm2[1,2] = nn3.y ; mm2[1,3] = 0. ;
-                    # mm2[2,0] = nn1.z ; mm2[2,1] = nn2.z ; mm2[2,2] = nn3.z ; mm2[2,3] = 0. ;
-                    # mm2[3,0] = 0.    ; mm2[3,1] = 0.    ; mm2[3,2] = 0.    ; mm2[3,3] = 1. ;
-                    # ppn1 = pp1b
-                    # ppn2 = pp2b
-                    # ppn3 = pp3b
-                    # ppn4 = pp4b
-                    # # Création de la transformation permettant le changement de base
-                    # mm2Inv = np.transpose(mm2)
-                    # ooTwn = Transform(m = mm2, mInv = mm2Inv)
-                    # ppn1 = ooTwn[ppn1]
-                    # ppn2 = ooTwn[ppn2]
-                    # ppn3 = ooTwn[ppn3]
-                    # ppn4 = ooTwn[ppn4]
-                    # v_nn = ooTwn[v_n]
-                    # timen1 = (-1.* ppn1.z)/v_nn.z
-                    # timen2 = (-1.* ppn2.z)/v_nn.z
-                    # timen3 = (-1.* ppn3.z)/v_nn.z
-                    # timen4 = (-1.* ppn4.z)/v_nn.z
-                    # ppn1 += v_nn*timen1
-                    # ppn2 += v_nn*timen2
-                    # ppn3 += v_nn*timen3
-                    # ppn4 += v_nn*timen4
-                    # TwoAn = abs((ppn1.x - ppn4.x)*(ppn2.y - ppn3.y)) + abs((ppn2.x - ppn3.x)*(ppn1.y - ppn4.y))
-                    # surfMirbisn = TwoAn/2.
-                    # print ("surfMirn", surfMirbisn)
-                    
-                    # #=====================
-                    # # Application du changement de base aux 4 points
-                    # pp1 = ooTw[pp1]
-                    # pp2 = ooTw[pp2]
-                    # pp3 = ooTw[pp3]
-                    # pp4 = ooTw[pp4]
-                    
-                    # # ====================
-                    # timeRefDir1 = (-1.* pp1.z)/v_n2.z
-                    # timeRefDir2 = (-1.* pp2.z)/v_n2.z
-                    # timeRefDir3 = (-1.* pp3.z)/v_n2.z
-                    # timeRefDir4 = (-1.* pp4.z)/v_n2.z
-
-                    # pp1 += v_n2*timeRefDir1
-                    # pp2 += v_n2*timeRefDir2
-                    # pp3 += v_n2*timeRefDir3
-                    # pp4 += v_n2*timeRefDir4
-                    # # ====================
-                    # print (pp1, pp2, pp3, pp4)
-
-                    # # Projection sur la surface de la base
-                    # pp1.z = 0. ; pp2.z = 0. ; pp3.z = 0. ; pp4.z = 0.;
-
-                    # # Calcul de l'aire du quadrilatère projeté (si rot x et y actif alors le quadri peut être convexe!!)
-                    # # la formule si-dessous fait le calcul exacte de l'aire d'un quadri convexe!! (donc général)
-                    # TwoAA = abs((pp1.x - pp4.x)*(pp2.y - pp3.y)) + abs((pp2.x - pp3.x)*(pp1.y - pp4.y))
-                    # surfMir = TwoAA/2 # TwoAA = l'aire du quadri convexe multiplié par 2
-                    # print("surfMirRecept=", surfMir)
-                    # surfMir = surfMirbis * np.cos(THVDEG * np.pi / 180)
-                    # print("surfMirbisaftercos=", surfMir)
                     surfMir += surfMirbis
                     
                 elif (myObjects[i].name == "receptor"):
@@ -875,7 +775,7 @@ class Smartg(object):
                 ppn4 += v_nn*timen4
                 TwoAn = abs((ppn1.x - ppn4.x)*(ppn2.y - ppn3.y)) + abs((ppn2.x - ppn3.x)*(ppn1.y - ppn4.y))
                 surfMir = TwoAn/2.
-                print ("surfMirn", surfMir)
+                #print ("surfMirn", surfMir)
                     
         else:
             nObj = 0
@@ -1163,22 +1063,18 @@ class Smartg(object):
         if (nObj > 0):
             sumNbCats = categories[1]+categories[5]+categories[9]+categories[13]+categories[17]+\
                         categories[21]+categories[25]+categories[29];
-            print("sumNbCats=",sumNbCats)
-            print("NBPHOTONS=",NBPHOTONS)
-            cMatVisuRecep[0][:][:] = cMatVisuRecep[0][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
-            cMatVisuRecep[1][:][:] = cMatVisuRecep[1][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
-            cMatVisuRecep[2][:][:] = cMatVisuRecep[2][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
-            cMatVisuRecep[3][:][:] = cMatVisuRecep[3][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
-            cMatVisuRecep[4][:][:] = cMatVisuRecep[4][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
-            cMatVisuRecep[5][:][:] = cMatVisuRecep[5][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
-            cMatVisuRecep[6][:][:] = cMatVisuRecep[6][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
-            cMatVisuRecep[7][:][:] = cMatVisuRecep[7][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
-            cMatVisuRecep[8][:][:] = cMatVisuRecep[8][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
-            # cMatVisuRecep[:][:] = cMatVisuRecep[:][:] * ((0.01*0.012*np.cos(33.8652 * (np.pi / 180)))/(TC*TC*CounterIntOb))
-            print("surfmir=", surfMir)
-            print("sufreal=", ((0.01*0.012))) #/np.cos(33.8652 * (np.pi / 180))))
-            print("sufreal2=", 0.01*0.012*np.cos( 33.8652 * (np.pi / 180) )  )
-            print("sufreal3=", 0.01*0.012*np.cos( 37.849999999999994 * (np.pi / 180) )  )    
+            for i in range (0, 8):
+                cMatVisuRecep[i][:][:] = cMatVisuRecep[i][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
+            # cMatVisuRecep[0][:][:] = cMatVisuRecep[0][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
+            # cMatVisuRecep[1][:][:] = cMatVisuRecep[1][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
+            # cMatVisuRecep[2][:][:] = cMatVisuRecep[2][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
+            # cMatVisuRecep[3][:][:] = cMatVisuRecep[3][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
+            # cMatVisuRecep[4][:][:] = cMatVisuRecep[4][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
+            # cMatVisuRecep[5][:][:] = cMatVisuRecep[5][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
+            # cMatVisuRecep[6][:][:] = cMatVisuRecep[6][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
+            # cMatVisuRecep[7][:][:] = cMatVisuRecep[7][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
+            # cMatVisuRecep[8][:][:] = cMatVisuRecep[8][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
+            
         # finalization
         output = finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl[:], NPhotonsInTot, errorcount, NPhotonsOutTot,
                           OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, prof_oc,
@@ -1493,17 +1389,9 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
         m.add_dataset('C6_Receptor', cMatVisuRecep[6][:][:], ['Horizontal pixel', 'Vertical pixel'])
         m.add_dataset('C7_Receptor', cMatVisuRecep[7][:][:], ['Horizontal pixel', 'Vertical pixel'])
         m.add_dataset('C8_Receptor', cMatVisuRecep[8][:][:], ['Horizontal pixel', 'Vertical pixel'])
-        # tabCat = np.zeros((4, 8), dtype=np.float64)
-        # tabCat[0,0] =
         
         
     if (cats is not None):
-        # catNbPh = np.zeros((8), dtype=np.float64)
-        # catWeightPh = np.zeros((8), dtype=np.float64)
-        # catErrP = np.zeros((8), dtype=np.float64)
-        # catErrAbs = np.zeros((8), dtype=np.float64)
-        # for i in range (0, 8):
-        #     catNbPh[i] = 
         m.add_dataset('catWeightPh', np.array([cats[0], cats[4], cats[8], cats[12], cats[16], cats[20],
                                                cats[24], cats[28]], dtype=np.float64), ['Categories'])
         m.add_dataset('catNbPh', np.array([cats[1], cats[5], cats[9], cats[13], cats[17], cats[21],
@@ -1929,18 +1817,19 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         - nbPhotonsSorTot : Total number of outgoing photons
         - tabPhotonsTot : Total weight of all outgoing photons
         - tabDistTot    : Total distance traveled by photons in atmospheric layers
+        - tabMatRecep : Matrix containing the photon weight for each cell of the receiver
+        - vecCats : vector containing the photon's number/weight of each category
 
     """
     # Initializations
     nThreadsActive = gpuzeros(1, dtype='int32')
     Counter = gpuzeros(1, dtype='uint64')
+    
     # Initializations linked to objects
-    #CounterIntObj = gpuzeros(7, dtype='uint64')
     nbPhCat = gpuzeros(8, dtype=np.uint64) # vector to fill the number of photons for  each categories
     wPhCat = gpuzeros(8, dtype=np.float64)  # vector to fill the weight of photons for each categories
     tabObjInfo = gpuzeros((9, nbCx, nbCy), dtype=np.float64)
-    tabMatRecep = np.zeros((9, nbCx, nbCy), dtype=np.float64)
-    
+    tabMatRecep = np.zeros((9, nbCx, nbCy), dtype=np.float64)  
     # vecteur comprenant : weightPhotons, nbPhoton, err% et errAbs pour
     # les 8 categories donc 4 x 8 valeurs = 32. vecCat[0], [1], [2] et [3]
     # pour la categorie 1 et ainsi de suite...
@@ -1969,18 +1858,6 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
     # arrays for counting the input photons (per wavelength)
     NPhotonsIn = gpuzeros((NSENSOR,NLAM), dtype=np.uint64)
     NPhotonsInTot = gpuzeros((NSENSOR,NLAM), dtype=np.uint64)
-    nbPhotonRecept = 0.
-    if TC is not None:
-        # A supprimer sur device.cu avant de sup ici
-        nbPhotonRecept = 0.
-        nbPhotonReceptD = 0. ;  nbPhotonReceptS = 0.;
-        nbPhotonReceptDM = 0.;  nbPhotonReceptSM = 0.;
-        nbPhotonReceptSSM = 0.; nbPhotonReceptSS = 0.; nbPhotonReceptTEST=0.;
-        weightReceptD = 0.
-        weightReceptS = 0.
-        weightMirrorD = 0.
-        weightMirrorS = 0.
-        weightMirrorSSM = 0.;weightMirrorSS = 0.;
     
     # arrays for counting the output photons
     NPhotonsOut = gpuzeros((NLVL,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.uint64)
@@ -2014,7 +1891,6 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         NPhotonsIn.fill(0)
         Counter.fill(0)
         # en rapport avec les objets
-        #CounterIntObj.fill(0)
         tabObjInfo.fill(0)
         
         start_cuda_clock = cuda.Event()
@@ -2038,59 +1914,6 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         if TC is not None:
             # Tableau de la repartition des poids (photons) sur la surface du recepteur
             tabMatRecep += tabObjInfo[:, :, :].get()
-
-            # A supprimer sur device.cu avant de sup ici
-            # weightReceptD += tabObjInfo[0, 0, 0].get(); weightReceptS += tabObjInfo[0, 0, 1].get();
-            # weightMirrorD += tabObjInfo[0, 0, 2].get(); weightMirrorS += tabObjInfo[0, 0, 3].get();
-            # weightMirrorSSM += tabObjInfo[0, 0, 4].get(); weightMirrorSS += tabObjInfo[0, 0, 5].get();
-            
-            # print("CAT1(weight)=", wPhCat[0], "CAT1(number)=", nbPhCat[0])
-            # print("CAT2(weight)=", wPhCat[1], "CAT2(number)=", nbPhCat[1])
-            # print("CAT3(weight)=", wPhCat[2], "CAT3(number)=", nbPhCat[2])
-            # print("CAT4(weight)=", wPhCat[3], "CAT4(number)=", nbPhCat[3])
-            # print("CAT5(weight)=", wPhCat[4], "CAT5(number)=", nbPhCat[4])
-            # print("CAT6(weight)=", wPhCat[5], "CAT6(number)=", nbPhCat[5])
-            # print("CAT7(weight)=", wPhCat[6], "CAT7(number)=", nbPhCat[6])
-            # print("CAT8(weight)=", wPhCat[7], "CAT8(number)=", nbPhCat[7])
-            # print("END")
-            # # Comptage des poids pour chaque categories
-            # vecCats[0] += wPhCat[0].get(); vecCats[4] += wPhCat[1].get(); vecCats[8] += wPhCat[2].get();
-            # vecCats[12] += wPhCat[3].get(); vecCats[16] += wPhCat[4].get(); vecCats[20] += wPhCat[5].get();
-            # vecCats[24] += wPhCat[6].get(); vecCats[28] += wPhCat[7].get();
-
-            # # A supprimer sur device.cu avant de sup ici
-            # # wDir += tabObjInfo[2, 0, 0].get(); wDiffu += tabObjInfo[2, 0, 1].get();
-
-            # # Comptage du nombre de photons pour chaque categories
-            # vecCats[1] += nbPhCat[0].get(); vecCats[5] += nbPhCat[1].get(); vecCats[9] += nbPhCat[2].get();
-            # vecCats[13] += nbPhCat[3].get(); vecCats[17] += nbPhCat[4].get(); vecCats[21] += nbPhCat[5].get();
-            # vecCats[25] += nbPhCat[6].get(); vecCats[29] += nbPhCat[7].get();
-
-            # A supprimer sur device.cu avant de sup ici
-            # nbPhotonReceptIniD = CounterIntObj[0] # number of dircet photons intersect the receptor by last kernel
-            # nbPhotonReceptIniS = CounterIntObj[1] # number of scattering photons intersect the receptor by last kernel
-            #nbPhotonReceptD += nbPhotonReceptIniD
-            #nbPhotonReceptS += nbPhotonReceptIniS
-
-            # A supprimer sur device.cu avant de sup ici
-            # nbPhotonReceptIniDM = CounterIntObj[2] # number of direct photons intersect the mirror by last kernel
-            # nbPhotonReceptIniSM = CounterIntObj[3] # number of scattering photons intersect the mirror by last kernel
-            # nbPhotonReceptDM += nbPhotonReceptIniDM
-            # nbPhotonReceptSM += nbPhotonReceptIniSM
-
-            # A supprimer sur device.cu avant de sup ici
-            # nbPhotonReceptIniSSM = CounterIntObj[4] # number of scattering photons intersect the receptor and impacted by mirror by last kernel
-            # nbPhotonReceptIniSS = CounterIntObj[5]  # number of scattering photons intersect the receptor and not impacted by mirror by last kernel
-
-            # A supprimer sur device.cu avant de sup ici
-            # nbPhotonReceptSSM += nbPhotonReceptIniSSM
-            # nbPhotonReceptSS += nbPhotonReceptIniSS
-
-            # A supprimer sur device.cu avant de sup ici
-            # nbPhotonReceptIniTEST = CounterIntObj[6] # number of scattering photons intersect the receptor and impacted by mirror by last kernel
-            # nbPhotonReceptTEST += nbPhotonReceptIniTEST
-            # nbPhotonRecept += nbPhotonReceptIniD + nbPhotonReceptIniS
-
         
         L = NPhotonsIn   # number of photons launched by last kernel
         NPhotonsInTot += L
@@ -2106,9 +1929,8 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
             H = tabHist
             tabHistTot = H
         #!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        if TC is not None:
-            # A ameliorer
-            print ("Avancement... NPhotonsIn host (smartg) is:", NPhotonsInTot)
+        
+        if (TC is not None):
             import sys
             print ("Avancement... NPhotonsIn host (smartg) is:", NPhotonsInTot, file = sys.stderr)
 
@@ -2128,41 +1950,6 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
     secs_cuda_clock = secs_cuda_clock*1e-3
 
     if TC is not None:
-        # A supprimer sur device.cu avant de sup ici
-        # print("nb photon diffus", nbPhotonReceptS)
-        # print("weight photon diffus", weightReceptS)
-        # print("nb photon direct", nbPhotonReceptD)
-        # print("weight photon direct", weightReceptD)
-
-        # A supprimer sur device.cu avant de sup ici
-        # print ("counter of photon intersect the geo is:", nbPhotonRecept)
-        # print ("sum of weight(1) of photons which intersect the receptor:", weightReceptD+weightReceptS)
-
-        # A supprimer sur device.cu avant de sup ici
-        # print("percentage diffus=", (weightReceptS*100)/(weightReceptD+weightReceptS))
-        # print("percentage diffus on mirror=", (weightMirrorS*100)/(weightMirrorS+weightMirrorD))
-
-        # A supprimer sur device.cu avant de sup ici
-        # print("percentage direct=", (weightReceptD*100)/(weightReceptD+weightReceptS))
-        # print("percentage direct on mirror=", (weightMirrorD*100)/(weightMirrorS+weightMirrorD))
-
-        # A supprimer sur device.cu avant de sup ici
-        # print ("NPhotonsIn host (smartg) is:", NPhotonsInTot)
-        # print ("counter from host (smartg) is:", Counter[0])
-
-        # A supprimer sur device.cu avant de sup ici
-        # print("nb photon direct on mirror", nbPhotonReceptDM)
-        # print("nb photon diffus on mirror", nbPhotonReceptSM)
-        # print("weight photon direct on mirror", weightMirrorD)
-        # print("weight photon diffus on mirror", weightMirrorS)
-
-        # A supprimer sur device.cu avant de sup ici
-        # print("nb photon diffus on receptor impacted by mirror", nbPhotonReceptSSM)
-        # print("nb photon diffus on receptor not impacted by mirror", nbPhotonReceptSS)
-        # print("weight diffus on receptor impacted by mirror", weightMirrorSSM)
-        # print("weight diffus on receptor not impacted by mirror", weightMirrorSS)
-        # print("=======TEST nbdirect impacted by mirror=", nbPhotonReceptTEST)
-
         for i in range (0, 8):
             # Comptage des poids pour chaque categories
             vecCats[i*4] = wPhCat[i].get();
@@ -2176,24 +1963,12 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
                 vecCats[(i*4)+2] = float((100.*(1./vecCats[(i*4)+1]**0.5)));
                 vecCats[(i*4)+3] = vecCats[i*4]*(1./vecCats[(i*4)+1]**0.5);
 
-        print("==== Verification ====")
-        # print("Sans Cat : nombre de ph sur recept = ", nbPhotonRecept)
-        print("Avec Cat : nombre de ph sur recept = ", (np.uint64(vecCats[1] + vecCats[5] + vecCats[9] + vecCats[13] + \
-                                                                  vecCats[17] + vecCats[21] + vecCats[25] + vecCats[29])))
-        print("Avec Cat : poids de ph sur recept = ", (vecCats[0] + vecCats[4] + vecCats[8] + vecCats[12] + \
-                                                       vecCats[16] + vecCats[20] + vecCats[24] + vecCats[28]))
-        print("Sans Cat : poids de ph sur recept = ", np.sum(tabMatRecep))
-        print("CAT1(weight)=", wPhCat[0], "CAT1(number)=", nbPhCat[0])
-        print("CAT2(weight)=", wPhCat[1], "CAT2(number)=", nbPhCat[1])
-        print("CAT3(weight)=", wPhCat[2], "CAT3(number)=", nbPhCat[2])
-        print("CAT4(weight)=", wPhCat[3], "CAT4(number)=", nbPhCat[3])
-        print("CAT5(weight)=", wPhCat[4], "CAT5(number)=", nbPhCat[4])
-        print("CAT6(weight)=", wPhCat[5], "CAT6(number)=", nbPhCat[5])
-        print("CAT7(weight)=", wPhCat[6], "CAT7(number)=", nbPhCat[6])
-        print("CAT8(weight)=", wPhCat[7], "CAT8(number)=", nbPhCat[7])
-        # A supprimer sur device.cu avant de sup ici        
-        # print("nbPhontons direct =", wDir)
-        # print("nbPhontons diffus =", wDiffu)
+        # print("==== Verification ====")
+        # print("Avec Cat : nombre de ph sur recept = ", (np.uint64(vecCats[1] + vecCats[5] + vecCats[9] + vecCats[13] + \
+        #                                                           vecCats[17] + vecCats[21] + vecCats[25] + vecCats[29])))
+        # print("Avec Cat : poids de ph sur recept = ", (vecCats[0] + vecCats[4] + vecCats[8] + vecCats[12] + \
+        #                                                vecCats[16] + vecCats[20] + vecCats[24] + vecCats[28]))
+        # print("Sans Cat : poids de ph sur recept = ", np.sum(tabMatRecep[0,:,:]))
 
     if stdev:
         # finalize the calculation of the standard deviation
