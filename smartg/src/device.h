@@ -6,18 +6,8 @@
 *
 *			device.h
 *
-*	> Variables externes fichier device/kernel
-*	> Prototypes de device.cu
-*		> Modélisation phénomènes physiques
-*		> Initialisation de données dans le device
-*		> Fonctions liées au générateur aléatoire
-*
 ***********************************************************/
 
-
-/**********************************************************
-*	> Variables externes fichier device/kernel
-***********************************************************/
 
 __device__ __constant__ unsigned int NBLOOPd;
 __device__ __constant__ int NOCEd;
@@ -97,10 +87,6 @@ __global__ void launchKernel(
 }
 
 
-/**********************************************************
-*	> Modélisation phénomènes physiques
-***********************************************************/
-
 /* initPhoton
 */
 __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc,
@@ -109,12 +95,10 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
                            long long *wl_proba_icdf, float* tabthv, float* tabphi,
                            struct RNG_State*);
 
-// move, version sphérique
 #ifdef SPHERIQUE
 __device__ void move_sp(Photon*, struct Profile *prof_atm, int le, int count_level, struct RNG_State*);
 #endif
 
-// move new PP
 #ifdef ALT_PP
 __device__ void move_pp2(Photon*, struct Profile *prof_atm, struct Profile* prof_oc, int le, int count_level,
                         struct RNG_State*);
@@ -133,9 +117,6 @@ __device__ void choose_scatterer(Photon* ph,
 								 struct RNG_State*);
 
 
-/* Diffusion du photon par une molécule ou un aérosol
-* Modification des paramètres de stokes et des vecteurs U et V du photon (polarisation, vitesse)
-*/
 __device__ void scatter(Photon* ph,
         struct Profile *prof_atm, struct Profile *prof_oc,
         struct Phase *faer2, struct Phase *foce2,
@@ -144,36 +125,20 @@ __device__ void scatter(Photon* ph,
         struct RNG_State*);
 
 
-/* surfaceAgitee
-* Reflexion sur une surface agitée ou plane en fonction de la valeur de DIOPTRE
-*/
 __device__ void surfaceAgitee(Photon*, int le, float* tabthv, float* tabphi, int count_level,
                               struct RNG_State*);
 __device__ void surfaceBRDF(Photon*, int le, float* tabthv, float* tabphi, int count_level,
                               struct RNG_State*);
+__device__ void surfaceBRDF_old(Photon*, int le, float* tabthv, float* tabphi, int count_level,
+                              struct RNG_State*);
 
 
-/* surfaceLambertienne
-* Reflexion sur une surface lambertienne
-*/
 __device__ void surfaceLambert(Photon*, int le,
                                     float* tabthv, float* tabphi, struct Spectrum *spectrum,
                                     struct RNG_State*);
-//__device__ void surfaceLambertienne(Photon*, int le,
- //                                   float* tabthv, float* tabphi, struct Spectrum *spectrum,
-  //                                  struct RNG_State*);
 
-
-/* exit
-* Sauve les paramètres des photons sortis dans l'espace dans la boite correspondant à la direction de sortie
-*/
 __device__ void countPhoton(Photon* , struct Profile* prof_atm, struct Profile* prof_oc, float*, float *,
-        //!!!!!!!!!!!!!!!!!!!!!!!!!
         int, unsigned long long*, void*, void*, void*, unsigned long long*);
-        //!!!!!!!!!!!!!!!!!!!!!!!!!
-        //int, unsigned long long*, void*, unsigned long long*);
-
-
 
 // rotation of the stokes parameters by an angle psi
 __device__ void rotateStokes(float4 s, float psi, float4 *sr);
@@ -181,17 +146,19 @@ __device__ void rotateStokes(float4 s, float psi, float4 *sr);
 // rotation Matrix L by an angle psi
 __device__ void rotationM(float psi, float4x4 *L);
 
+// Rotation Matrix of angle theta around unit vector u
+__device__ void rotation3D_test(float, float3, float3x3*);
 
-/* ComputePsi
-*/
+// Rotation Matrix of angle theta around unit vector u
+__device__ float3x3 rotation3D(float, float3);
+
+/* ComputePsi */
 __device__ void ComputePsi(Photon*, float*, float);
 
-/* ComputePsiZenith
-*/
+/* ComputePsiZenith */
 __device__ void ComputePsiZenith(Photon* , float* , float);
 
-/* ComputeBox
-*/
+/* ComputeBox */
 __device__ int ComputeBox(int*, int*, int*, Photon*,
                            unsigned long long *errorcount, int count_level);
 
@@ -218,8 +185,11 @@ __device__ double LambdaM(double , double ) ;
 
 __device__ void DirectionToUV(float, float, float3*, float3*) ;
 __device__ float3 LocalToGlobal(float3, float3, float3, float3) ;
+__device__ float3 GlobalToLocal(float3, float3, float3, float3) ;
 __device__ void MakeLocalFrame(float3, float3*, float3*, float3*) ;
 
+/* Fresnel Reflection Matrix*/
+__device__ float4x4 FresnelR(float3, float3) ;
 
 #ifdef PHILOX
 /**********************************************************

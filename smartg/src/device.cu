@@ -342,7 +342,7 @@ extern "C" {
            // if not a Lambertian surface
 			if( DIOPTREd!=3 ) {
                 /* Surface Local Estimate (not evaluated if atmosphere only simulation)*/
-                if (LEd == 1 && SIMd != -2) {
+                if (LEd == 1 && SIMd != ATM_ONLY) {
                 ///* TEST Double LE */
                   int NK, count_level_le;
                   if (NOCEd==0) NK=1;
@@ -412,7 +412,7 @@ extern "C" {
 
             // Lambertian case
 			else { 
-                if (LEd == 1 && SIMd != -2) {
+                if (LEd == 1 && SIMd != ATM_ONLY) {
                   int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
                   int iph0 = idx%NBPHId;
                   for (int ith=0; ith<NBTHETAd; ith++){
@@ -445,7 +445,7 @@ extern "C" {
                 float dis=0;
                 dis = sqrtf((ph.pos.x-X0d)*(ph.pos.x-X0d) +(ph.pos.y-Y0d)*(ph.pos.y-Y0d));
                 if( dis > ENV_SIZEd) {
-                 if (LEd == 1 && SIMd != -2) {
+                 if (LEd == 1 && SIMd != ATM_ONLY) {
                   int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
                   int iph0 = idx%NBPHId;
                   for (int ith=0; ith<NBTHETAd; ith++){
@@ -471,7 +471,7 @@ extern "C" {
                     surfaceLambert(&ph, 0, tabthv, tabphi, spectrum, &rngstate);
                 }// dis
                 else {
-                 if (LEd == 1 && SIMd != -2) {
+                 if (LEd == 1 && SIMd != ATM_ONLY) {
                  ///* TEST Double LE */
                   int NK, count_level_le;
                   if (NOCEd==0) NK=1;
@@ -558,7 +558,7 @@ extern "C" {
         //
         // -> in SEAFLOOR
         if(ph.loc == SEAFLOOR){
-           if (LEd == 1 && SIMd != -2) {
+           if (LEd == 1 && SIMd != ATM_ONLY) {
               int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
               int iph0 = idx%NBPHId;
               for (int ith=0; ith<NBTHETAd; ith++){
@@ -1432,7 +1432,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             ph->tau = 0.F;
             ph->tau_abs = 0.F;
             ph->loc = SURF0M;
-            if (SIMd == 3){
+            if (SIMd == OCEAN_ONLY){
               ph->loc = SPACE;
             }
             ph->layer = NOCEd;
@@ -2081,7 +2081,7 @@ __device__ void surfaceAgitee(Photon* ph, int le,
                               float* tabthv, float* tabphi, int count_level,
                               struct RNG_State *rngstate) {
 	
-	if( SIMd == -2){ // Atmosphère , la surface absorbe tous les photons
+	if( SIMd == ATM_ONLY){ // Atmosphère , la surface absorbe tous les photons
 		ph->loc = ABSORBED;
 		return;
 	}
@@ -2517,7 +2517,7 @@ __device__ void surfaceAgitee(Photon* ph, int le,
         if (ph->loc == SURF0P) {
             if (vzn > 0) {  // avoid multiple reflexion above the surface
                 // SURF0P becomes ATM or SPACE
-                if( SIMd==-1 || SIMd==0 ){
+                if( SIMd==SURF_ONLY || SIMd==OCEAN_SURF ){
                     ph->loc = SPACE;
                 } else{
                     ph->loc = ATMOS;
@@ -2528,7 +2528,7 @@ __device__ void surfaceAgitee(Photon* ph, int le,
         } else {
             if (vzn < 0) {  // avoid multiple reflexion under the surface
                // SURF0M becomes OCEAN or ABSORBED
-               if( SIMd==1 ){
+               if( SIMd==SURF_ATM ){
                   ph->loc = ABSORBED;
                } else{
                   ph->loc = OCEAN;
@@ -2611,7 +2611,7 @@ __device__ void surfaceAgitee(Photon* ph, int le,
         if (ph->loc == SURF0M) {
          if (vzn > 0) {
             // SURF0P becomes ATM or SPACE
-            if( SIMd==-1 || SIMd==0 ){
+            if( SIMd==SURF_ONLY || SIMd==OCEAN_SURF ){
                 ph->loc = SPACE;
             } else{
                 ph->loc = ATMOS;
@@ -2625,7 +2625,7 @@ __device__ void surfaceAgitee(Photon* ph, int le,
         } else {
            if (vzn < 0) {  // avoid multiple reflexion under the surface
               // SURF0M becomes OCEAN or ABSORBED
-              if( SIMd==-1 || SIMd==1 ){
+              if( SIMd==SURF_ONLY || SIMd==SURF_ATM ){
                 ph->loc = ABSORBED;
               } else{
                 ph->loc = OCEAN;
@@ -2663,12 +2663,52 @@ __device__ void surfaceAgitee(Photon* ph, int le,
 
 }
 
+/* Fresnel Reflection Matrix*/
+__device__ float4x4 FresnelR(float3 vi, float3 vr) {
+
+    float cTh, sTh, cot, ncTh, ncot, theta, temp;
+    float rpa, rpe, rpape, rpa2, rpe2, rpape_c;
+    float4x4 R;
+    // Determination of the relative refractive index
+    // a: air, b: water , Mobley 2015 nind = nba = nb/na
+    // and sign for further computation
+    float nind = NH2Od;
+    // vector equation for determining the half direction h = sign(i dot o) (i + o)
+	float3 no = operator-(vr, vi);
+    // Normalization of the half direction vector
+    no=normalize(no);
+    // Incidence angle in the local frame
+    cTh   = fabs(dot(no, vi));
+    theta = acosf(fmin(1.F-VALMIN, fmax(-(1.F-VALMIN), cTh)));
+    sTh   = sinf(theta);
+    // Fresnel coefficients
+	temp    = __fdividef(sTh, nind);
+	cot     = sqrtf(1.0F - temp*temp);
+	ncTh    = nind*cTh;
+	ncot    = nind*cot;
+	rpa     = __fdividef(ncTh - cot, ncTh  + cot); // DR Mobley 2015 sign convention
+	rpe     = __fdividef(cTh - ncot, cTh + ncot);
+	rpa2    = rpa*rpa;
+	rpe2    = rpe*rpe;
+    rpape   = rpa*rpe;
+    rpape_c = 0.F;
+
+	R   = make_float4x4(
+	          rpa2, 0.  , 0.     , 0.,
+	          0.  , rpe2, 0.     , 0.,
+	          0.  , 0.  , rpape  , rpape_c,
+	          0.  , 0.  ,-rpape_c, rpape
+	          );
+
+    return R;
+}
+
 /* Surface BRDF */
-__device__ void surfaceBRDF(Photon* ph, int le,
+__device__ void surfaceBRDF_old(Photon* ph, int le,
                               float* tabthv, float* tabphi, int count_level,
                               struct RNG_State *rngstate) {
 	
-	if( SIMd == -2){ // Atmosphere only, surface absorbs all
+	if( SIMd == ATM_ONLY){ // Atmosphere only, surface absorbs all
 		ph->loc = ABSORBED;
 		return;
 	}
@@ -2744,8 +2784,8 @@ __device__ void surfaceBRDF(Photon* ph, int le,
     no=normalize(no);
 
     // Incidence angle in the local frame
-    cTh = fabs(-dot(no, ph->v));
-    theta = acosf( fmin(1.00F-VALMIN, fmax( -(1.F-VALMIN), cTh ) ));
+    cTh = fabs(dot(no, ph->v));
+    theta = acosf(fmin(1.F-VALMIN, fmax(-(1.F-VALMIN), cTh)));
 
     #ifdef SPHERIQUE
     // facet slope
@@ -2754,7 +2794,6 @@ __device__ void surfaceBRDF(Photon* ph, int le,
     cBeta = fabs(no.z);
     #endif
 
-	sTh = __sinf(theta);
 
     #ifdef SPHERIQUE
     // avz is the projection of V on the local vertical
@@ -2764,8 +2803,9 @@ __device__ void surfaceBRDF(Photon* ph, int le,
     #endif
 
 	// Rotation of Stokes parameters
+	sTh  = __sinf(theta);
     temp = __fdividef(dot(no, ph->u), sTh);
-	psi = acosf( fmin(1.00F, fmax( -1.F, temp ) ));	
+	psi  = acosf(fmin(1.F, fmax(-1.F, temp)));	
 
 	if( dot(no, cross(ph->u, ph->v)) <0 ){
 		psi = -psi;
@@ -2773,7 +2813,7 @@ __device__ void surfaceBRDF(Photon* ph, int le,
 
     rotateStokes(ph->stokes, psi, &ph->stokes);
     #ifdef BACK
-    float4x4 L = make_diag_float4x4 (1.F);
+    float4x4 L = make_diag_float4x4(1.F);
     rotationM(-psi,&L);
     #endif
 
@@ -2813,7 +2853,7 @@ __device__ void surfaceBRDF(Photon* ph, int le,
 	ph->u = operator/(operator-(no, cTh*ph->v), sTh);	
 
         // photon next location
-    if( SIMd==-1 || SIMd==0 ){
+    if( SIMd==SURF_ONLY || SIMd==OCEAN_SURF ){
         ph->loc = SPACE;
     } else {
           ph->loc = ATMOS;
@@ -2846,7 +2886,7 @@ __device__ void surfaceLambert(Photon* ph, int le,
                               float* tabthv, float* tabphi, struct Spectrum *spectrum,
                               struct RNG_State *rngstate) {
 	
-	if( SIMd == -2){ // Atmosphere only, surface absorbs all
+	if( SIMd == ATM_ONLY){ // Atmosphere only, surface absorbs all
 		ph->loc = ABSORBED;
 		return;
 	}
@@ -2925,7 +2965,7 @@ __device__ void surfaceLambert(Photon* ph, int le,
     /* Update of photon location and weight */
     /***************************************************/
     if (ph->loc == SURF0P){
-	  bool test_s = ( SIMd == -1);
+	  bool test_s = ( SIMd == SURF_ONLY);
 	  ph->loc = SPACE *test_s + ATMOS*(!test_s);
       ph->layer = NATMd; 
 	  ph->weight *= spectrum[ph->ilam].alb_surface;  /*[Eq. 16,39]*/
@@ -2937,6 +2977,168 @@ __device__ void surfaceLambert(Photon* ph, int le,
     }
 
 } //surfaceLambert
+
+
+/* Surface BRDF */
+__device__ void surfaceBRDF(Photon* ph, int le,
+                              float* tabthv, float* tabphi, int count_level,
+                              struct RNG_State *rngstate) {
+	
+	if( SIMd == ATM_ONLY){ // Atmosphere only, surface absorbs all
+		ph->loc = ABSORBED;
+		return;
+	}
+    ph->nint += 1;
+	
+    float thv, phi, psi;
+    float sig2, temp;
+	float3 vr; // photon outgoing direction in the LOCAL frame
+	float3 vi; // photon ingoing  direction in the LOCAL frame
+	float3 v , u;  // photon outgoing direction in the GLOBAL frame
+    float3 no_n, no; // normal to the facet LOCAL and GLOBAL frame
+    float3 w_ne, w_ol;
+    float cBeta2; //facet slope squared
+    float4x4 R; // Fresnel Reflection Matrix
+
+    #ifdef SPHERIQUE
+    // define 3 vectors Nx, Ny and Nz in cartesian coordinates which define a
+    // local orthonormal basis at the impact point.
+    // Nz is the local vertical direction, the direction of the 2 others does not matter
+    // because the azimuth is chosen randomly
+	float3 Nx, Ny, Nz;
+    float weight;
+    MakeLocalFrame(ph->pos, &Nx, &Ny, &Nz);
+    /* Transformation of ingoing direction in the local frame*/
+    vi = GlobalToLocal(Nx, Ny, Nz, ph->v);
+    #else
+    vi = ph->v;
+    #endif
+
+    /***************************************************/
+    /* Computation of outgoing direction */
+    /***************************************************/
+    if (le) {
+     // Outgoing direction in GLOBAL frame
+     phi = tabphi[ph->iph];
+     thv = tabthv[ph->ith];
+     DirectionToUV(thv, phi, &v, &u);
+     #ifdef SPHERIQUE
+     // Test if outgoing direction is in Earth s shadow
+     if ((dot(v, Nz) <= 0.) && (ph->loc != SEAFLOOR)) { /*[Eq. 40]*/
+         ph->loc = ABSORBED;
+         return;
+     }
+     /*Transformation in the local frame*/
+     vr = GlobalToLocal(Nx, Ny, Nz, v);
+     #else
+     vr = v;
+     #endif
+    }
+
+    else {
+     // Cosine of the LOCAL zenith angle sampling for Lambertian reflector
+	 phi = RAND*DEUXPI;
+	 thv = acosf(sqrtf(RAND));
+     DirectionToUV(thv, phi, &vr, &u);
+    }
+
+    // Computation of the outgoing direction in GLOBAL frame
+    #ifdef SPHERIQUE
+    if (ph->loc == SEAFLOOR) {
+         v = vr;
+    }
+    else {
+         /* LOCAL to GLOBAL frame */
+         v = LocalToGlobal(Nx, Ny, Nz, vr);
+    }
+    #else
+    v = vr;
+    #endif
+
+    /***************************************************/
+    /* Computation of slope and weight */
+    /***************************************************/
+	no_n   = operator-(vr, vi);
+    no_n   = normalize(no_n);
+    cBeta2 = no_n.z * no_n.z;
+    sig2   = 0.003F + 0.00512F * WINDSPEEDd;
+    if (le) ph->weight *= __fdividef( __expf(-(1.F-cBeta2)/(cBeta2*sig2)), 4.F * cBeta2*cBeta2 * fabs(vi.z) * fabs(v.z)  * sig2);
+    else    ph->weight *= __fdividef( __expf(-(1.F-cBeta2)/(cBeta2*sig2)), 4.F * cBeta2*cBeta2 * fabs(vi.z) * fabs(vr.z) * sig2);
+
+    if (WAVE_SHADOWd) {
+        // Add wave shadowing computed in the local frame
+        float LambdaR, LambdaS;
+        LambdaS = LambdaM(fabs(vi.z), sig2*0.5);
+        LambdaR = LambdaM(fabs(vr.z), sig2*0.5);
+        ph->weight *= __fdividef(1.F, 1.F + LambdaR + LambdaS);
+    }
+
+
+    /***************************************************/
+    /* Update of Stokes vector  */
+    /***************************************************/
+	// Psi determination
+    #ifdef SPHERIQUE
+    no   = LocalToGlobal(Nx, Ny, Nz, no_n);
+    #else
+    no   = no_n;
+    #endif
+    float cTh = fabs(dot(no, ph->v));
+    float theta = acosf(fmin(1.F-VALMIN, fmax(-(1.F-VALMIN), cTh)));
+    float sTh = sinf(theta);
+    temp = __fdividef(dot(no, ph->u), sTh);
+	psi  = acosf(fmin(1.F, fmax(-1.F, temp)));	
+	if(dot(no, cross(ph->u, ph->v)) < 0 ) psi = -psi;
+
+    /*w_ne = normalize(cross(ph->v, no));
+    w_ol = cross(ph->v, ph->u);
+    temp = dot(w_ol, w_ne);
+	psi  = acosf(fmin(1.F, fmax(-1.F, temp)));	
+	if(dot(no, cross(ph->u, ph->v)) < 0 ) psi = -psi;*/
+
+    // Stokes rotation
+    rotateStokes(ph->stokes, psi, &ph->stokes);
+    #ifdef BACK
+    float4x4 L;
+    rotationM(-psi, &L);
+    #endif
+
+    /*float3x3 M = rotation3D(psi, ph->v);
+    u = mul(M, ph->u);
+    M = rotation3D(acosf(dot(vr, -vi)), w_ne);
+    u = mul(M, u);*/
+
+    // Fresnel Matrix Multiplication
+    R = FresnelR(vi, vr);
+    ph->stokes = mul(R, ph->stokes);
+
+    #ifdef BACK
+    ph->M = mul(ph->M, mul(L, R));
+    #endif
+
+    /***************************************************/
+    /* Update of photon direction, location  */
+    /***************************************************/
+	u     = operator/(operator-(no, cTh*ph->v), sTh);	
+    ph->v = v;
+    ph->u = u;
+
+    if (SIMd==SURF_ONLY || SIMd==OCEAN_SURF){
+        ph->loc   = SPACE;
+    } else {
+        ph->loc   = ATMOS;
+        ph->layer = NATMd;
+    }
+
+    // Russian roulette for propagating photons 
+    if (!le && RRd==1) {
+		if (ph->weight < WEIGHTRRd){
+			if (RAND < __fdividef(ph->weight,WEIGHTRRd)) ph->weight = WEIGHTRRd;
+			else ph->loc = ABSORBED;
+		}
+    }
+
+} //surfaceBRDF
 
 
 __device__ void countPhoton(Photon* ph,
@@ -3048,7 +3250,7 @@ __device__ void countPhoton(Photon* ph,
         if (!ZIPd) iphi= ph->iph;
         il  = ph->ilam;
 
-        if (!(   (SIMd==-1) 
+        if (!(   (SIMd==SURF_ONLY) 
               || (NATMd==0 && (count_level==UPTOA || count_level==UP0P)) 
               || (NOCEd==0 && count_level==UP0P)
              )
@@ -3405,6 +3607,30 @@ __device__ void rotationM(float psi, float4x4 *L)
 		s2Psi, -s2Psi, __cosf(twopsi), 0.f,
         0.f, 0.f, 0.f, 1.f
 		);
+}
+
+// Rotation Matrix of angle theta around unit vector u
+__device__ float3x3 rotation3D(float theta, float3 u)
+{
+    // Rodrigues rotation formula
+    float ct=cosf(theta);
+    float st=sinf(theta);
+    float3x3 A, B, C, R;
+    A = make_diag_float3x3(1.F);
+    B = make_float3x3( 0.F,-u.z, u.y,
+                       u.z, 0.F,-u.x,
+                      -u.y, u.x, 0.F
+                     );
+    /*C = make_float3x3(u.x*u.x, u.x*u.y, u.x*u.z,
+                      u.x*u.y, u.y*u.y, u.y*u.z,
+                      u.x*u.z, u.y*u.z, u.z*u.z
+                     );*/
+    //R = add(add(mul(A, ct), mul(B, st)), mul(C, 1.F-ct)); 
+
+    C = mul(B, B);
+    R = add(add(A, mul(B, st)), mul(C, 1.F-ct)); 
+
+    return R;
 }
 
 
@@ -3765,6 +3991,15 @@ __device__ float3 LocalToGlobal(float3 Nx, float3 Ny, float3 Nz, float3 v) {
                 Nx.x, Ny.x, Nz.x,
                 Nx.y, Ny.y, Nz.y,
                 Nx.z, Ny.z, Nz.z
+                );
+     return mul(B, v);
+}
+
+__device__ float3 GlobalToLocal(float3 Nx, float3 Ny, float3 Nz, float3 v) {
+     float3x3 B = make_float3x3(
+                Nx.x, Nx.y, Nx.z,
+                Ny.x, Ny.y, Ny.z,
+                Nz.x, Nz.y, Nz.z
                 );
      return mul(B, v);
 }

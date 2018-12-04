@@ -332,6 +332,12 @@ inline __host__ __device__ float3x3 make_float3x3(float s)
     return make_float3x3(s, s, s, s, s, s, s, s, s);
 }
 
+inline __host__ __device__ float3x3 make_diag_float3x3(float s)
+{
+    float z = 0.;
+    return make_float3x3(s, z, z, z, s, z, z, z, s);
+}
+
 inline __host__ __device__ float3x3 make_float3x3(float3c r1, float3c r2, float3c r3)
 {
     return make_float3x3(r1.x, r1.y, r1.z, r2.x, r2.y, r2.z, r3.x, r3.y, r3.z);
@@ -1610,6 +1616,73 @@ inline __host__ __device__ float4 mul(float4x4 M, float4 v)
 	r.y = dot (M.r1, v);
 	r.z = dot (M.r2, v);
 	r.w = dot (M.r3, v);
+	return r;
+}
+
+// mutiplication matrix x scalar
+inline __host__ __device__ float3x3 mul(float3x3 &M, float f)
+{
+	float3x3 r;
+	for (int i = 0; i < 3; ++i)
+	{
+		for (int j = 0; j < 3; ++j)
+		{
+			r[i][j] = M[i][j] * f;
+		}
+	}
+	return r;
+}
+
+inline __host__ __device__ float4x4 mul(float4x4 &M, float f)
+{
+	float4x4 r;
+	for (int i = 0; i < 4; ++i)
+	{
+		for (int j = 0; j < 4; ++j)
+		{
+			r[i][j] = M[i][j] * f;
+		}
+	}
+	return r;
+}
+
+// addition matrix + matrix
+inline __host__ __device__ float2x2 add(const float2x2 &M1, const float2x2 &M2)
+{
+	float2x2 r;
+	for (int i = 0; i < 2; ++i)
+	{
+		for (int j = 0; j < 2; ++j)
+		{
+			r[i][j] = M1[i][j] + M2[i][j];
+		}
+	}
+	return r;
+}
+
+inline __host__ __device__ float3x3 add(const float3x3 &M1, const float3x3 &M2)
+{
+	float3x3 r;
+	for (int i = 0; i < 3; ++i)
+	{
+		for (int j = 0; j < 3; ++j)
+		{
+			r[i][j] = M1[i][j] + M2[i][j];
+		}
+	}
+	return r;
+}
+
+inline __host__ __device__ float4x4 add(const float4x4 &M1, const float4x4 &M2)
+{
+	float4x4 r;
+	for (int i = 0; i < 4; ++i)
+	{
+		for (int j = 0; j < 4; ++j)
+		{
+			r[i][j] = M1[i][j] * M2[i][j];
+		}
+	}
 	return r;
 }
 

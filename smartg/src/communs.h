@@ -57,6 +57,14 @@
 #define CHLFLUO     2
 
 
+/* Possible Simulations */
+#define ATM_ONLY      -2
+#define SURF_ONLY     -1
+#define OCEAN_SURF     0
+#define SURF_ATM       1
+#define OCEAN_SURF_ATM 2
+#define OCEAN_ONLY     3
+
 // test
 #define REMOVED     8
 
