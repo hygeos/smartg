@@ -584,7 +584,7 @@ class Smartg(object):
             myObjects0 = np.zeros(nObj, dtype=type_IObjets, order='C')
             TC = 0.; nbCx = int(0); nbCy = int(0);
             pp1 = 0.; pp2 = 0.; pp3 = 0.; pp4 = 0.;
-            surfMir = None
+            surfMir = 0.
             # Prendre en compte la direction du soleil avec l'angle zenithal et azimuth
             vSun = Vector(0., 0., -1.)
             tSunTheta = Transform(); tSunPhi = Transform(); tSunThethaPhi = Transform();
@@ -818,7 +818,7 @@ class Smartg(object):
                     # print("surfMirRecept=", surfMir)
                     # surfMir = surfMirbis * np.cos(THVDEG * np.pi / 180)
                     # print("surfMirbisaftercos=", surfMir)
-                    surfMir = surfMirbis
+                    surfMir += surfMirbis
                     
                 elif (myObjects[i].name == "receptor"):
                     myObjects0['type'][i] = 2 # pour reconnaitre le recept sur Cuda

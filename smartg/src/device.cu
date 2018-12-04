@@ -1148,7 +1148,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		TPhid = ThetaPhid.RotateZ(sunPhi);
 		ThetaPhid = TThetad * TPhid; // Regroupement des transformations		
 
-		// Application des transformation sur les vecteurs u et v en fonction de heta et Phi
+		// Application des transformation sur les vecteurs u et v en fonction de Theta et Phi
 		char myV[]="Vector";
 		vdouble = ThetaPhid(vdouble, myV);
 		udouble = ThetaPhid(udouble, myV);
@@ -1180,14 +1180,25 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		ph->u = ufloat;
         #endif // END IF DOUBLE OR FLOAT
 	
-		// Récupération de l'objet réflecteur (marche pour l'instant que pour un seul reflecteur)
-		IObjets objP;		
+		// Récupération de l'objet réflecteur
+		IObjets objP;
+		objP.type = 0;
+
+		// Permet de choisir aléatoirement un miroir
+		float randMirPrev = -1;
+		float randMir;		
 		for (int i=0; i<nObj; i++)
 		{
 			if (myObjets[i].type == 1) // if equal to reflector
-				objP = myObjets[i];
+			{
+				randMir = RAND;
+				if (randMir > randMirPrev)
+				{
+					randMirPrev = randMir;
+					objP = myObjets[i];
+				}
+			}
 		}
-
     
 		if (objP.type == 1) // S'il y a un réflecteur 
 		{
