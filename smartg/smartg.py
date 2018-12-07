@@ -1058,22 +1058,11 @@ class Smartg(object):
         attrs.update(self.common_attrs)
 
         # En rapport avec l'implémentation des objets (permet le visuel des res du recept)
-        # POnePh = surfMir/CounterIntOb
-        # cMatVisuRecep[:][:] = cMatVisuRecep[:][:] * ((surfMir)/(TC*TC*CounterIntOb))
         if (nObj > 0):
             sumNbCats = categories[1]+categories[5]+categories[9]+categories[13]+categories[17]+\
                         categories[21]+categories[25]+categories[29];
             for i in range (0, 8):
                 cMatVisuRecep[i][:][:] = cMatVisuRecep[i][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
-            # cMatVisuRecep[0][:][:] = cMatVisuRecep[0][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
-            # cMatVisuRecep[1][:][:] = cMatVisuRecep[1][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
-            # cMatVisuRecep[2][:][:] = cMatVisuRecep[2][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
-            # cMatVisuRecep[3][:][:] = cMatVisuRecep[3][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
-            # cMatVisuRecep[4][:][:] = cMatVisuRecep[4][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
-            # cMatVisuRecep[5][:][:] = cMatVisuRecep[5][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
-            # cMatVisuRecep[6][:][:] = cMatVisuRecep[6][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
-            # cMatVisuRecep[7][:][:] = cMatVisuRecep[7][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
-            # cMatVisuRecep[8][:][:] = cMatVisuRecep[8][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
             
         # finalization
         output = finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl[:], NPhotonsInTot, errorcount, NPhotonsOutTot,

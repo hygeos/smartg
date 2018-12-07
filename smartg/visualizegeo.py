@@ -22,11 +22,11 @@ import mpl_toolkits.mplot3d as mp3d
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from matplotlib import colors as mcolors
 
-def receiver_view(mlut, w = False, logI=False, nameFile = 'plot'):
+def receiver_view(disMatrix, w = False, logI=False, nameFile = None):
 
     '''
-    mlut : mlut table
-    w : the receiver size, in meter
+    disMatrix : numpy array with flux distribution at the receiver
+    w : the receiver size, in meter. Can be a scalar or a list with x and y values
     logI : enable log interval
     '''
     if w==False :
@@ -39,34 +39,23 @@ def receiver_view(mlut, w = False, logI=False, nameFile = 'plot'):
         wx = w
         wy = w
 
-    m = mlut
+    m = disMatrix
 
     plt.figure()
-    # print("MATRICE=", m['C_Receptor'].data.shape)
-    # print("M00 =", m['C_Receptor'][0,0])
+
     if logI == False :
         cax = plt.imshow(m*1320, cmap=plt.get_cmap('jet'), interpolation='None', \
                          extent = [-(wy*1000),(wy*1000),-(wx*1000),(wx*1000)])
-         # cax = plt.imshow(m['C_Receptor'][:,:]*1320, cmap=plt.get_cmap('jet'), interpolation='None', \
-         #                 extent = [-(wy*1000),(wy*1000),-(wx*1000),(wx*1000)])
     else:
-        #print(("npmin=", np.amin(m['C_Receptor'][:,:])*1320)) 
-        # m2 = m['C_Receptor'][:,:]#*1000
         m2 = m
         if (np.amin(m2) < 0.00001):
             valmin = 0.00001
         else:
             valmin = np.amin(m2)
-        #print(("maxval=", np.amax(m2)))
-        inte = m2.sum()/1e7
-        #print(("sum", m2.sum()))
-        #print(("inte=", inte))
+            
         cax = plt.imshow(m*1320, cmap=plt.get_cmap('jet'), \
                          norm=mcolors.LogNorm(vmin=valmin*1320, vmax=np.amax(m*1320)), \
                          interpolation='None', extent = [-(wy*1000),(wy*1000),-(wx*1000),(wx*1000)])
-        # cax = plt.imshow(m['C_Receptor'][:,:]*1320, cmap=plt.get_cmap('jet'), \
-        #                  norm=mcolors.LogNorm(vmin=valmin*1320, vmax=np.amax(m['C_Receptor'][:,:]*1320)), \
-        #                  interpolation='None', extent = [-(wy*1000),(wy*1000),-(wx*1000),(wx*1000)])
 
     cbar = plt.colorbar()
     cbar.remove()
@@ -76,7 +65,8 @@ def receiver_view(mlut, w = False, logI=False, nameFile = 'plot'):
     plt.xlabel(r'Horizontale position (m) -y axis-')
     plt.ylabel(r'Verticale position (m) -x axis-')
     plt.title('Receiver surface')
-    plt.savefig(nameFile + '.pdf')  
+    if (nameFile is not None):
+        plt.savefig(nameFile + '.pdf')  
 
 
 def cat_view(mlut, view = 'all'):
