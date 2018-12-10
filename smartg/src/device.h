@@ -57,6 +57,7 @@ __device__ __constant__ int NJACd;
 __device__ __constant__ int HISTd;
 __device__ __constant__ int NSENSORd;
 // copy en rapport avec les objets :
+#ifdef OBJ3D
 __device__ __constant__ int nObj;
 __device__ __constant__ float Pmin_x;
 __device__ __constant__ float Pmin_y;
@@ -68,6 +69,8 @@ __device__ __constant__ int IsAtm;
 __device__ __constant__ float TCd;
 __device__ __constant__ int nbCx;
 __device__ __constant__ int nbCy;
+#endif
+// custum forward
 __device__ __constant__ float CFXd;
 __device__ __constant__ float CFYd;
 __device__ __constant__ int CFMODEd;
@@ -89,18 +92,20 @@ __global__ void launchKernel(
         unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons, void *tabDist, void *tabHist,
         //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         //unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons,
-        unsigned long long *Counter, void *tabObjInfo,
-
+        unsigned long long *Counter,
         unsigned long long *NPhotonsIn,
         unsigned long long *NPhotonsOut,
         float *tabthv, float *tabphi,  struct Sensor *tab_sensor,
         struct Profile *prof_atm,
         struct Profile *prof_oc,
         long long *wl_proba_icdf,
-        void *rng_state,
+        void *rng_state
+		#ifdef OBJ3D
+		, void *tabObjInfo,
 		struct IObjets *myObjets,
 		unsigned long long *nbPhCat,
 		double *wPhCat
+		#endif
         );
 }
 
@@ -111,7 +116,11 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
                            struct Sensor *tab_sensor, struct Spectrum *spectrum,float *X0,
                            unsigned long long *NPhotonsIn,
                            long long *wl_proba_icdf, float* tabthv, float* tabphi,
-                           struct RNG_State*, struct IObjets *myObjets);
+                           struct RNG_State*
+						   #ifdef OBJ3D
+						   , struct IObjets *myObjets
+						   #endif
+	);
 
 #ifdef SPHERIQUE
 __device__ void move_sp(Photon*, struct Profile *prof_atm, int le, int count_level, struct RNG_State*);
@@ -124,7 +133,11 @@ __device__ void move_pp2(Photon*, struct Profile *prof_atm, struct Profile* prof
 
 // move, version plan parallèle
 __device__ void move_pp(Photon*, struct Profile *prof_atm, struct Profile* prof_oc,
-                        struct RNG_State*, IGeo *geoS, struct IObjets *myObjets, void *tabObjInfo);
+                        struct RNG_State*
+						#ifdef OBJ3D
+						, IGeo *geoS, struct IObjets *myObjets, void *tabObjInfo
+						#endif
+	);
 
 
 /* scatter */
@@ -155,12 +168,14 @@ __device__ void surfaceLambert(Photon*, int le,
                                     float* tabthv, float* tabphi, struct Spectrum *spectrum,
                                     struct RNG_State*);
 
+#ifdef OBJ3D
 __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* tabphi,
 									  struct Spectrum *spectrum, struct RNG_State*, IGeo* geoS);
 
 __device__ void surfaceRugueuse3D(Photon* ph, IGeo* geoS, struct RNG_State *rngstate);
 
 __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsigned long long *nbPhCat, double *wPhCat);
+#endif
 
 __device__ void countPhoton(Photon* , struct Profile* prof_atm, struct Profile* prof_oc, float*, float *,
         int, unsigned long long*, void*, void*, void*, unsigned long long*);
@@ -242,6 +257,7 @@ __device__ unsigned int randomPhilox4x32_7uint(philox4x32_ctr_t*, philox4x32_key
 *	> Fonctions liées à la création de géométries
 ***********************************************************/
 
-
+#ifdef OBJ3D
 __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo *GeoV , struct IObjets *myObjets);
+#endif
 #endif // DEVICE_H

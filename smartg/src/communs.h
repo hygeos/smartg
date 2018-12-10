@@ -131,10 +131,12 @@ public:
 	{
 		// Initialement le photon n'est nulle part, il doit être initialisé
 		loc = NONE;
+		#ifdef OBJ3D
 		direct = 0;
 		H = 0;
 		E = 0;
 		S = 0;
+		#endif
 	}
 	
     // Normalized direction vector
@@ -203,9 +205,10 @@ public:
     float4x4 M;
     //float4x4 Mf;
     #endif
+	#ifdef OBJ3D
 	int direct;
     int H, E, S;
-
+	#endif
 private:
 };
 
@@ -258,6 +261,7 @@ struct Sensor {
     int TYPE;     // sensor type: Radiance (0), Planar flux (1), Spherical Flux (2), default 0
 };
 
+#ifdef OBJ3D
 // En rapport avec l'implementation des objets
 #include "transform.h" // La structure IGeo a une classe transform comme attrib
 
@@ -333,4 +337,5 @@ struct IObjets {
 	float nBy;      /*   | normalBase apres transfo        */
 	float nBz;      /*  /                                  */
 };
+#endif //END OBJ3D
 #endif	// COMMUNS_H

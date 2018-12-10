@@ -309,7 +309,7 @@ class Smartg(object):
 
     def __init__(self, pp=True, debug=False,
                  debug_photon=False,
-                 double=False, alis=False, back=False, bias=True, alt_pp=False, rng='PHILOX'):
+                 double=False, alis=False, back=False, bias=True, alt_pp=False, obj3D = False, rng='PHILOX'):
         '''
         Initialization of the Smartg object
 
@@ -350,6 +350,7 @@ class Smartg(object):
         self.alis = alis
         self.rng = init_rng(rng)
         self.back= back
+        self.obj3D= obj3D
 
         #
         # compilation option
@@ -379,6 +380,9 @@ class Smartg(object):
         if bias:
             # bias sampling scheme for scattering and reflection/transmission
             options.append('-DBIAS')
+        if obj3D:
+            # 3D Object mode
+            options.append('-DOBJ3D')    
         options.append('-D'+rng)
 
         #
@@ -578,13 +582,7 @@ class Smartg(object):
         #
         # Les Objets
         #
-        if myObjects is not None:
-            # Initialisations
-            nObj = len(myObjects)
-            myObjects0 = np.zeros(nObj, dtype=type_IObjets, order='C')
-            TC = 0.; nbCx = int(0); nbCy = int(0);
-            pp1 = 0.; pp2 = 0.; pp3 = 0.; pp4 = 0.;
-            surfMir = 0.
+        if ((myObjects is not None) or (cusForward is not None)):
             # Prendre en compte la direction du soleil avec l'angle zenithal et azimuth
             vSun = Vector(0., 0., -1.)
             tSunTheta = Transform(); tSunPhi = Transform(); tSunThethaPhi = Transform();
@@ -593,7 +591,24 @@ class Smartg(object):
             tSunThethaPhi = tSunTheta * tSunPhi
             vSun = tSunThethaPhi[vSun]
             vSun = Normalize(vSun)
-            # print("Vsun=(", vSun.x, ', ', vSun.y, ', ', vSun.z, ')')
+            
+        if (myObjects is not None):
+            # Initialisations
+            if interval is not None:
+                Pmin_x = interval[0][0]
+                Pmin_y = interval[0][1]
+                Pmin_z = interval[0][2]
+                Pmax_x = interval[1][0]
+                Pmax_y = interval[1][1]
+                Pmax_z = interval[1][2]
+            else:
+                Pmin_x = -300; Pmin_y = -300; Pmin_z = 0;
+                Pmax_x = 300;  Pmax_y = 300; Pmax_z = 120;
+            nObj = len(myObjects)
+            myObjects0 = np.zeros(nObj, dtype=type_IObjets, order='C')
+            TC = 0.; nbCx = int(0); nbCy = int(0);
+            pp1 = 0.; pp2 = 0.; pp3 = 0.; pp4 = 0.;
+            surfMir = 0.
 
             # Début de la boucle pour la prise en compte de tous les objets
             for i in range (0, nObj):
@@ -739,43 +754,6 @@ class Smartg(object):
                     myObjects0['type'][i] = 3 # pour reconnaitre le recept sur Cuda
                 else:
                     raise NameError('You have to specify if your object is a reflector or a receptor!')
-
-            if cusForward is not None:
-                # print("Vsun2=(", v_n.x, ', ', v_n.y, ', ', v_n.z, ')')
-                nn3 = Normal(vSun)
-                nn1, nn2 = CoordinateSystem(nn3)
-                # Création d'une matrice appelé matrice de passage
-                mm2 = np.zeros((4,4), dtype=np.float64)
-                # Remplissage de la matrice de passage en fonction du repère (nn3 étant le nouvel axe z)
-                mm2[0,0] = nn1.x ; mm2[0,1] = nn2.x ; mm2[0,2] = nn3.x ; mm2[0,3] = 0. ;
-                mm2[1,0] = nn1.y ; mm2[1,1] = nn2.y ; mm2[1,2] = nn3.y ; mm2[1,3] = 0. ;
-                mm2[2,0] = nn1.z ; mm2[2,1] = nn2.z ; mm2[2,2] = nn3.z ; mm2[2,3] = 0. ;
-                mm2[3,0] = 0.    ; mm2[3,1] = 0.    ; mm2[3,2] = 0.    ; mm2[3,3] = 1. ;
-                xnn = float(cusForward.dict['CFX'])/2.
-                ynn = float(cusForward.dict['CFY'])/2.
-                ppn1 = Point(-xnn, -ynn, 0.)
-                ppn2 = Point(xnn, -ynn, 0.)
-                ppn3 = Point(-xnn, ynn, 0.)
-                ppn4 = Point(xnn, ynn, 0.)
-                # Création de la transformation permettant le changement de base
-                mm2Inv = np.transpose(mm2)
-                ooTwn = Transform(m = mm2, mInv = mm2Inv)
-                ppn1 = ooTwn[ppn1]
-                ppn2 = ooTwn[ppn2]
-                ppn3 = ooTwn[ppn3]
-                ppn4 = ooTwn[ppn4]
-                v_nn = ooTwn[vSun]
-                timen1 = (-1.* ppn1.z)/v_nn.z
-                timen2 = (-1.* ppn2.z)/v_nn.z
-                timen3 = (-1.* ppn3.z)/v_nn.z
-                timen4 = (-1.* ppn4.z)/v_nn.z
-                ppn1 += v_nn*timen1
-                ppn2 += v_nn*timen2
-                ppn3 += v_nn*timen3
-                ppn4 += v_nn*timen4
-                TwoAn = abs((ppn1.x - ppn4.x)*(ppn2.y - ppn3.y)) + abs((ppn2.x - ppn3.x)*(ppn1.y - ppn4.y))
-                surfMir = TwoAn/2.
-                #print ("surfMirn", surfMir)
                     
         else:
             nObj = 0
@@ -785,18 +763,43 @@ class Smartg(object):
             IsAtm = None; TC = None; nbCx = 10; nbCy = 10;
             
         myObjects0 = to_gpu(myObjects0)
-
-        if interval is not None:
-            Pmin_x = interval[0][0]
-            Pmin_y = interval[0][1]
-            Pmin_z = interval[0][2]
-            Pmax_x = interval[1][0]
-            Pmax_y = interval[1][1]
-            Pmax_z = interval[1][2]
-        else:
-            Pmin_x = -300; Pmin_y = -300; Pmin_z = 0;
-            Pmax_x = 300;  Pmax_y = 300; Pmax_z = 120;
         # END OBJ ===================================================
+
+        if cusForward is not None:
+            nn3 = Normal(vSun)
+            nn1, nn2 = CoordinateSystem(nn3)
+            # Création d'une matrice appelé matrice de passage
+            mm2 = np.zeros((4,4), dtype=np.float64)
+            # Remplissage de la matrice de passage en fonction du repère (nn3 étant le nouvel axe z)
+            mm2[0,0] = nn1.x ; mm2[0,1] = nn2.x ; mm2[0,2] = nn3.x ; mm2[0,3] = 0. ;
+            mm2[1,0] = nn1.y ; mm2[1,1] = nn2.y ; mm2[1,2] = nn3.y ; mm2[1,3] = 0. ;
+            mm2[2,0] = nn1.z ; mm2[2,1] = nn2.z ; mm2[2,2] = nn3.z ; mm2[2,3] = 0. ;
+            mm2[3,0] = 0.    ; mm2[3,1] = 0.    ; mm2[3,2] = 0.    ; mm2[3,3] = 1. ;
+            xnn = float(cusForward.dict['CFX'])/2.
+            ynn = float(cusForward.dict['CFY'])/2.
+            ppn1 = Point(-xnn, -ynn, 0.)
+            ppn2 = Point(xnn, -ynn, 0.)
+            ppn3 = Point(-xnn, ynn, 0.)
+            ppn4 = Point(xnn, ynn, 0.)
+            # Création de la transformation permettant le changement de base
+            mm2Inv = np.transpose(mm2)
+            ooTwn = Transform(m = mm2, mInv = mm2Inv)
+            ppn1 = ooTwn[ppn1]
+            ppn2 = ooTwn[ppn2]
+            ppn3 = ooTwn[ppn3]
+            ppn4 = ooTwn[ppn4]
+            v_nn = ooTwn[vSun]
+            timen1 = (-1.* ppn1.z)/v_nn.z
+            timen2 = (-1.* ppn2.z)/v_nn.z
+            timen3 = (-1.* ppn3.z)/v_nn.z
+            timen4 = (-1.* ppn4.z)/v_nn.z
+            ppn1 += v_nn*timen1
+            ppn2 += v_nn*timen2
+            ppn3 += v_nn*timen3
+            ppn4 += v_nn*timen4
+            TwoAn = abs((ppn1.x - ppn4.x)*(ppn2.y - ppn3.y)) + abs((ppn2.x - ppn3.x)*(ppn1.y - ppn4.y))
+            surfMir = TwoAn/2.
+
         
         #
         # initialization
@@ -1058,7 +1061,7 @@ class Smartg(object):
         attrs.update(self.common_attrs)
 
         # En rapport avec l'implémentation des objets (permet le visuel des res du recept)
-        if (nObj > 0):
+        if (nObj>0):
             sumNbCats = categories[1]+categories[5]+categories[9]+categories[13]+categories[17]+\
                         categories[21]+categories[25]+categories[29];
             for i in range (0, 8):
@@ -1887,12 +1890,20 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         start_cuda_clock.record()
 
         # kernel launch
-        kern(spectrum, X0, faer, foce,
-             errorcount, nThreadsActive, tabPhotons, tabDist, tabHist,
-             Counter, tabObjInfo, NPhotonsIn, NPhotonsOut, tabthv, tabphi, tab_sensor,
-             prof_atm, prof_oc, wl_proba_icdf, rng.state, myObjects0, nbPhCat, wPhCat,
-             block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
-        
+
+        if TC is not None:
+            kern(spectrum, X0, faer, foce,
+                 errorcount, nThreadsActive, tabPhotons, tabDist, tabHist,
+                 Counter, NPhotonsIn, NPhotonsOut, tabthv, tabphi, tab_sensor,
+                 prof_atm, prof_oc, wl_proba_icdf, rng.state, tabObjInfo, myObjects0, nbPhCat, wPhCat,
+                 block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
+        else:
+            kern(spectrum, X0, faer, foce,
+                 errorcount, nThreadsActive, tabPhotons, tabDist, tabHist,
+                 Counter, NPhotonsIn, NPhotonsOut, tabthv, tabphi, tab_sensor,
+                 prof_atm, prof_oc, wl_proba_icdf, rng.state,
+                 block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
+            
         end_cuda_clock.record()
         end_cuda_clock.synchronize()
         secs_cuda_clock = secs_cuda_clock + start_cuda_clock.time_till(end_cuda_clock)

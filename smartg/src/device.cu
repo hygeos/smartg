@@ -60,7 +60,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "device.h"
 #include "geometry.h"
 #include "transform.h"
+#ifdef OBJ3D
 #include "shapes.h"
+#endif
 #include <math.h>
 
 #include <helper_math.h>
@@ -75,17 +77,20 @@ extern "C" {
 							 struct Spectrum *spectrum, float *X0,
 							 struct Phase *faer, struct Phase *foce,
 							 unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons, void *tabDist, void *tabHist, 
-							 unsigned long long *Counter, void *tabObjInfo,
+							 unsigned long long *Counter,
 							 unsigned long long *NPhotonsIn,
 							 unsigned long long *NPhotonsOut,
 							 float *tabthv, float *tabphi, struct Sensor *tab_sensor,
 							 struct Profile *prof_atm,
 							 struct Profile *prof_oc,
 							 long long *wl_proba_icdf,
-							 void *rng_state,
+							 void *rng_state
+							 #ifdef OBJ3D
+							 , void *tabObjInfo,
 							 struct IObjets *myObjets,
 							 unsigned long long *nbPhCat,
 							 double *wPhCat
+							 #endif
 							 ) {
 
     // current thread index
@@ -135,9 +140,11 @@ extern "C" {
 	Photon ph, ph_le; 		// On associe une structure de photon au thread
 
 	//bool geoIntersect = false;  // S'il y a intersection avec une géométrie = true
+	#ifdef OBJ3D
 	IGeo geoStruc;
 	bigCount = 1;   // Initialisation de la variable globale bigCount (voir geometry.h)
-
+    #endif
+	
 	atomicAdd(nThreadsActive, 1);
 
 	// double3 dp1 = make_double3(12.54, 0., 47.2589);
@@ -153,29 +160,30 @@ extern "C" {
 
 		/* ************************************************************************************************** */
 		/* si on simule des objs on utilise cette astuce pour lancer exactement le nombre souhaité de photons */
-
+		#ifdef OBJ3D
 		// Si le nombre de ph lancés NBLOOPd > 256000 et que le compteur devient > (NBLOOPd-256000) alors
 		// on commence à diminuer le nombre de threads actif... ici à 999+1 = 1000 threads actif
-		if (nObj > 0 && (NBLOOPd > 50000) && idx > 999 && this_thread_active && Counter[0] >= (NBLOOPd-50000) && *nThreadsActive > 1000)
+		if ((NBLOOPd > 50000) && idx > 999 && this_thread_active && Counter[0] >= (NBLOOPd-50000) && *nThreadsActive > 1000)
 		{
 			this_thread_active = 0;
             atomicAdd(nThreadsActive, -1);
 		}
-		else if (nObj > 0 && (NBLOOPd > 5000) && idx > 99 && this_thread_active && Counter[0] >= (NBLOOPd-5000) && *nThreadsActive > 100)
+		else if ((NBLOOPd > 5000) && idx > 99 && this_thread_active && Counter[0] >= (NBLOOPd-5000) && *nThreadsActive > 100)
 		{
 			this_thread_active = 0;
             atomicAdd(nThreadsActive, -1);
 		}
-		else if(nObj > 0 && (NBLOOPd > 500) && idx > 9 && this_thread_active &&Counter[0] >= (NBLOOPd-500) && *nThreadsActive > 10)
+		else if((NBLOOPd > 500) && idx > 9 && this_thread_active &&Counter[0] >= (NBLOOPd-500) && *nThreadsActive > 10)
 		{
 			this_thread_active = 0;
             atomicAdd(nThreadsActive, -1);
 		}
-		else if(nObj > 0 && (NBLOOPd > 50) && idx > 0 && this_thread_active &&Counter[0] >= (NBLOOPd-50) && *nThreadsActive > 1)
+		else if((NBLOOPd > 50) && idx > 0 && this_thread_active &&Counter[0] >= (NBLOOPd-50) && *nThreadsActive > 1)
 		{
 			this_thread_active = 0;
             atomicAdd(nThreadsActive, -1);
 		}
+		#endif
         /* ************************************************************************************************** */
 		
 		// Avant ">" et maintenant ">=" car si Counter = au nombre de ph lancés NBLOOPd, il faut s'arrêter !
@@ -192,8 +200,12 @@ extern "C" {
         // Si le photon est à NONE on l'initialise et on le met à la localisation correspondant à la simulaiton en cours
         if((ph.loc == NONE) && this_thread_active){
 
-            initPhoton(&ph, prof_atm, prof_oc, tab_sensor, spectrum, X0, NPhotonsIn, wl_proba_icdf, tabthv, tabphi,
-                       &rngstate, myObjets);
+            initPhoton(&ph, prof_atm, prof_oc, tab_sensor, spectrum, X0, NPhotonsIn, wl_proba_icdf, tabthv, tabphi, &rngstate
+					   #ifdef OBJ3D
+					   , myObjets
+					   #endif
+				);
+			
             iloop = 1;
             #ifdef DEBUG_PHOTON
 			if (idx==0) {printf("\n");}
@@ -217,7 +229,11 @@ extern "C" {
         #ifdef ALT_PP
         move_pp2(&ph, prof_atm, prof_oc, 0, 0 , &rngstate);
         #else
-        move_pp(&ph, prof_atm, prof_oc, &rngstate, &geoStruc, myObjets, tabObjInfo);
+        move_pp(&ph, prof_atm, prof_oc, &rngstate
+				#ifdef OBJ3D
+				, &geoStruc, myObjets, tabObjInfo
+				#endif
+			);
         #endif
 
         #ifdef DEBUG_PHOTON
@@ -622,6 +638,7 @@ extern "C" {
 		// Reflection
         //
         // -> in OBJSURF
+		#ifdef OBJ3D
         if(ph.loc == OBJSURF)
 		{
 			if (geoStruc.type == 2) // this is a receiver
@@ -688,7 +705,8 @@ extern "C" {
             #endif
 		}
         __syncthreads();
-
+		#endif
+		
         //
         // count after surface:
         // count the photons leaving the surface towards the ocean or atmosphere
@@ -852,16 +870,24 @@ extern "C" {
 __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc, struct Sensor *tab_sensor,
                            struct Spectrum *spectrum, float *X0, unsigned long long *NPhotonsIn,
                            long long *wl_proba_icdf, float* tabthv, float* tabphi,
-                           struct RNG_State *rngstate, struct IObjets *myObjets) {
+                           struct RNG_State *rngstate
+						   #ifdef OBJ3D
+						   , struct IObjets *myObjets
+						   #endif
+	) {
     float dz, dz_i, delta_i, epsilon;
     float cTh, sTh, phi;
     int ilayer;
 	
 	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+	
+    #ifdef OBJ3D
 	ph->direct = 0;
 	ph->H = 0;
 	ph->E = 0;
 	ph->S = 0;
+    #endif
+	
     ph->nint = 0;
 	ph->weight = WEIGHTINIT;
 
@@ -895,9 +921,11 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
                           tab_sensor[ph->is].POSY,
                           tab_sensor[ph->is].POSZ);
 	
+	#ifdef OBJ3D
 	Transform TRotZ; char mPP[]="Point";
 	TRotZ = TRotZ.RotateZ(PHDEGd-180.);
 	ph->pos = TRotZ(ph->pos, mPP);
+	#endif
 	
     ph->loc = tab_sensor[ph->is].LOC;
 
@@ -1126,8 +1154,8 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     //ph->Mf= make_diag_float4x4 (1.F);
     #endif
 
-
-	if (nObj > 0 && CFMODEd == 0) // Marche que pour le mode forward restreint
+    #ifdef OBJ3D
+	if (CFMODEd == 0) // Marche que pour le mode forward restreint
 	{		
 		/* ***************************************************************************************** */
 		/* Créer la surface en TOA qui visera un reflecteur avec prise en compte des transformations */
@@ -1298,16 +1326,16 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 			#endif // END IF DOUBLE OR FLOAT
 		}
 		/* ***************************************************************************************** */		
-	} // END OBJ = 1 && CFMODE == 0
+	} // CFMODE == 0
 
-	if (CFMODEd == 1)
+	else if (CFMODEd == 1)
 	{
 		float3 cusForwPos = make_float3( ((CFXd * RAND) - 0.5*CFXd), ((CFYd * RAND) - 0.5*CFYd), 0.);
 		ph->pos.x += cusForwPos.x + 1.;
 		ph->pos.y += cusForwPos.y;
 		ph->pos.z = POSZd;
 	} //END CFMODEd == 1
-	
+    #endif //END OBJ3D
     }
 
 
@@ -1701,7 +1729,11 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
 
 
 __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc,
-                        struct RNG_State *rngstate, IGeo *geoS, struct IObjets *myObjets, void *tabObjInfo) {
+                        struct RNG_State *rngstate
+						#ifdef OBJ3D
+						, IGeo *geoS, struct IObjets *myObjets, void *tabObjInfo
+						#endif
+	) {
 
 	float delta_i=0.f, delta=0.f, epsilon;
 	float tauR, prev_tau, tauBis, phz; //rdist
@@ -1863,7 +1895,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 
     if (ph->loc == ATMOS) {
         float rdist;
-
+	    #ifdef OBJ3D
 		// ========================================================================================================
 		// Here geometry modification in the function move_pp
 		// ========================================================================================================
@@ -1875,11 +1907,10 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 		// Launch the function geoTest to see if there are an intersection with the 
 		// geometry, return true/false and give the position phit of the intersection
 		// nObj = le nombre d'objets, si = 0 alors le test n'est pas nécessaire.
-		if (nObj > 0) {
+	    if (nObj > 0){
 			mytest = geoTest(ph->pos, ph->v, ph->locPrev, &phit, geoS, myObjets);
 			if (ph->direct == 0 && ph->pos.z == 120. && mytest == false && CFMODEd == 0) {ph->loc=NONE; return;}
 		}
-
 		//if (ph->pos.z == 120. && mytest == false) {ph->loc=NONE; return;}
 		//if (ph->pos.z == 120. && mytest == true && geoS->type != 1) {ph->loc=NONE; return;}
 		//if (ph->pos.z < 1.2 && mytest == true && geoS->type == 3) {ph->loc=ABSORBED; return;}
@@ -2020,9 +2051,10 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 				return;
 			}
 			else {ph->loc = NONE;return;}
-		}	
+		}
 		// ========================================================================================================
-
+        #endif //END OBJ3D
+		
         // If tau<0 photon is reaching the surface 
         if(ph->tau < 0.F){
 
@@ -2175,9 +2207,10 @@ __device__ void scatter(Photon* ph,
 	struct Phase *func;
 	float P11, P12, P22, P33, P43, P44;
 
+	#ifdef OBJ3D
 	ph->direct += 1;
 	ph->S += 1;
-
+	#endif
 	
     if (le){
         /* in case of LE the photon units vectors, scattering angle and Psi rotation angle are determined by output zenith and azimuth angles*/
@@ -2566,8 +2599,11 @@ __device__ void surfaceAgitee(Photon* ph, int le,
 		return;
 	}
     ph->nint += 1;
+
+    #ifdef OBJ3D
 	ph->E += 1;
-	
+	#endif
+
 	// Réflexion sur le dioptre agité
 	float theta;	// Angle de deflection polaire de diffusion [rad]
 	float psi;		// Angle azimutal de diffusion [rad]
@@ -3199,8 +3235,11 @@ __device__ void surfaceBRDF_old(Photon* ph, int le,
 		return;
 	}
     ph->nint += 1;
+
+    #ifdef OBJ3D
 	ph->E += 1;
-	
+    #endif
+
 	// Réflexion sur le dioptre agité
 	float theta;	// Angle de deflection polaire de diffusion [rad]
 	float psi;		// Angle azimutal de diffusion [rad]
@@ -3382,8 +3421,11 @@ __device__ void surfaceLambert(Photon* ph, int le,
 	}
 
     ph->nint += 1;
+	
+	#ifdef OBJ3D
 	ph->direct += 1;
 	ph->E += 1;
+	#endif
   	
     float thv, phi;
 	float3 v_n, u_n; // photon outgoing direction in the LOCAL frame
@@ -3454,31 +3496,29 @@ __device__ void surfaceLambert(Photon* ph, int le,
     ph->M = mul(ph->M, RL);
     #endif
 
-	if (nObj == 0)
-	{
-		/***************************************************/
-		/* Update of photon location and weight */
-		/***************************************************/
-		if (ph->loc == SURF0P){
-			bool test_s = ( SIMd == SURF_ONLY);
-			ph->loc = SPACE*test_s + ATMOS*(!test_s);
-			ph->layer = NATMd;
-			ph->weight *= spectrum[ph->ilam].alb_surface;  /*[Eq. 16,39]*/
-		}
-		else
-		{
-			ph->loc = OCEAN;
-			ph->layer = NOCEd; 
-			ph->weight *= spectrum[ph->ilam].alb_seafloor; /*[Eq. 16,39]*/
-		}
+    #ifdef OBJ3D
+	ph->loc = ATMOS;
+	#else
+	/***************************************************/
+	/* Update of photon location and weight */
+	/***************************************************/
+	if (ph->loc == SURF0P){
+		bool test_s = ( SIMd == SURF_ONLY);
+		ph->loc = SPACE*test_s + ATMOS*(!test_s);
+		ph->layer = NATMd;
+		ph->weight *= spectrum[ph->ilam].alb_surface;  /*[Eq. 16,39]*/
 	}
 	else
 	{
-		ph->loc = ATMOS;
+		ph->loc = OCEAN;
+		ph->layer = NOCEd; 
+		ph->weight *= spectrum[ph->ilam].alb_seafloor; /*[Eq. 16,39]*/
 	}
+    #endif
 
 } //surfaceLambert
 
+#ifdef OBJ3D
 __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* tabphi,
 									  struct Spectrum *spectrum, struct RNG_State *rngstate, IGeo* geoS)
 {
@@ -4015,6 +4055,7 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 	#endif
     #endif
 }
+#endif
 
 
 __device__ void countPhoton(Photon* ph,
@@ -4081,8 +4122,9 @@ __device__ void countPhoton(Photon* ph,
        if (LEd == 0) {
           atomicAdd(errorcount+ERROR_THETA, 1);
 		  // Permet de visualiser les photons aux zenith dans le cas où il y a au moins un obj
-		  if (nObj == 0)
-		  	  return;
+		  #ifdef OBJ3D
+		  return;
+		  #endif
        }
        else {
           // Compute Psi in the special case of zenith
@@ -4955,7 +4997,7 @@ __device__ double DatomicAdd(double* address, double val)
 /**********************************************************
 *	> Fonctions liées à la création de géométries
 ***********************************************************/
-
+#ifdef OBJ3D
 /* geoTest
 * Vérifie s'il y a une intersection avec au moins un objet, si il y a intersection avec plusieurs objets alors
 * retourne les infos d'intersection de l'objet dans la distance de parcours est la plus proche
@@ -5100,3 +5142,4 @@ __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo 
 		*(phit) = make_float3(-1, -1, -1);
 		return false; }	
 } // FIN DE LA FONCTION GEOTEST()
+#endif
