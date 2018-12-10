@@ -198,8 +198,7 @@ __device__ void modifyUV( float3 v0, float3 u0, float cTh, float psi, float3 *v1
 __device__ float ComputeTheta(float3 v0, float3 v1);
 
 __device__ void ComputePsiLE(float3 u0,	float3 v0, float3 v1, float* psi, float3* u1);
-
-#ifdef DOUBLE
+#if defined(DOUBLE) && (__CUDA_ARCH__ < 600)
 __device__ double DatomicAdd(double* address, double val);
 #endif
 __device__ float get_OD(int , struct Profile ) ;  

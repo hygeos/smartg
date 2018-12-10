@@ -3892,18 +3892,17 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 	indI = floorf( (-(p_t.x/TCd)) + (sizeX/(2*TCd)) );
 	if (indJ == nbCy) indJ -= 1;
 	if (indI == nbCx) indI -= 1;
-	
-
-	tabCountObj = (double*)tabObjInfo;
-	
-	weight = (double)ph->weight;
 
 	if(isnan(weight))
 	{
 		printf("Care weight is nan !! \n");
 		return;
 	}
-
+	
+    #ifdef DOUBLE
+	tabCountObj = (double*)tabObjInfo;
+	weight = (double)ph->weight;
+	
 	#if __CUDA_ARCH__ >= 600
 	// All the beams reaching a receiver
 	atomicAdd(tabCountObj+(nbCy*indI)+indJ, weight);
@@ -4014,7 +4013,7 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 		DatomicAdd(tabCountObj+(8*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}
 	#endif
-
+    #endif
 }
 
 
@@ -4931,7 +4930,9 @@ __device__ unsigned int randomPhilox4x32_7uint(philox4x32_ctr_t* ctr, philox4x32
     //conversion d'un des mots generes sous forme d'unsigned int
     return (unsigned int) res[0];
 }
+#endif
 
+#if defined(DOUBLE) && (__CUDA_ARCH__ < 600)
 __device__ double DatomicAdd(double* address, double val)
 {
         unsigned long long int* address_as_ull =
