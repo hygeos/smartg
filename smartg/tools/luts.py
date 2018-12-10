@@ -2244,7 +2244,7 @@ def read_mlut_hdf5(filename, datasets=None, lazy=False, group=None):
     '''
     import h5py
 
-    ff = h5py.File(filename)
+    ff = h5py.File(filename,"r")
 
     if group:
         f = ff[group]
@@ -2266,7 +2266,11 @@ def read_mlut_hdf5(filename, datasets=None, lazy=False, group=None):
                 print('Missing -dimensions- Attr in dataset "{}" '.format(dataset))
                 raise Exception('Missing dimensions Attr in dataset')
             else:
-                dimensions = f['data'][dataset].attrs.get('dimensions').split(',')
+                dimensions = f['data'][dataset].attrs.get('dimensions')
+                if isinstance(dimensions, bytes):
+                    dimensions = dimensions.decode().split(',')
+                else:
+                    dimensions = dimensions.split(',')
                 axis_data.append(dimensions)
                 for aa in dimensions:
                     ls_axis.append(aa)
