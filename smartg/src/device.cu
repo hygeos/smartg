@@ -634,11 +634,11 @@ extern "C" {
          }
         __syncthreads();
 
+		#ifdef OBJ3D
 		//
 		// Reflection
         //
         // -> in OBJSURF
-		#ifdef OBJ3D
         if(ph.loc == OBJSURF)
 		{
 			if (geoStruc.type == 2) // this is a receiver
@@ -713,7 +713,12 @@ extern "C" {
         //
         count_level = -1;
         if ((loc_prev == SURF0M) || (loc_prev == SURF0P)) {
-            if ((ph.loc == ATMOS) || (ph.loc == SPACE) || (ph.loc == OBJSURF)) count_level = UP0P;
+            if ((ph.loc == ATMOS) || (ph.loc == SPACE)
+				#ifdef OBJ3D
+				|| (ph.loc == OBJSURF)
+				#endif
+				)
+				count_level = UP0P;
             if (ph.loc == OCEAN) count_level = DOWN0M;
         }
 		
@@ -1008,7 +1013,11 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
         #endif
     }
 
-    if((ph->loc == ATMOS) || (ph->loc == OBJSURF)){
+    if((ph->loc == ATMOS)
+	   #ifdef OBJ3D
+	   || (ph->loc == OBJSURF)
+	   #endif
+		){
         ilayer = 1;
         float POSZd_alt; 
         #ifdef SPHERIQUE
@@ -1070,7 +1079,13 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     }
 
     // Rotations of v and u in the detector direction THDEG,PHDEG
-	float cPh, sPh, THRAD, PHRAD;;
+
+	float cPh, sPh;
+	
+    #ifdef OBJ3D
+	float THRAD, PHRAD;
+	#endif
+	
     /*if (MId != 0) { // Multiple Init Direction
         if (MId <=0) { 
             // Random selection of Zenith init angle
@@ -1089,6 +1104,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
             ph->ith = __float2uint_rz(RAND * NT) + offset*NT;
             ph->iph = ph->ith;
         }
+		#ifdef OBJ3D
 		THRAD = DEUXPI/2. - tabthv[ph->ith];
 		PHRAD = DEUXPI/2. - tabphi[ph->iph];
         cTh = cosf(THRAD);
@@ -1097,18 +1113,24 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     
     ph->ith = 0;
     ph->iph = 0;
+
+	#ifdef OBJ3D
 	THRAD = tab_sensor[ph->is].THDEG*DEUXPI/360.;
 	PHRAD = tab_sensor[ph->is].PHDEG*DEUXPI/360.;
 	cTh = cosf(THRAD);
 	cPh = cosf(PHRAD);
-	
+
 	// Permet d'utiliser un angle azimuth variable
 	sTh = sinf(THRAD);
 	sPh = sinf(PHRAD);
+    #else 
+	cTh = cosf(tab_sensor[ph->is].THDEG*DEUXPI/360.);
+	cPh = cosf(tab_sensor[ph->is].PHDEG*DEUXPI/360.);
 	
-	// Attention! Marche parceque l'angle zenith compris entre 0 et 180
-    // sTh = sqrtf(1.F - cTh*cTh);
-    // sPh = sqrtf(1.F - cPh*cPh);
+	//Attention! Marche parceque l'angle zenith compris entre 0 et 180
+	sTh = sqrtf(1.F - cTh*cTh);
+	sPh = sqrtf(1.F - cPh*cPh);
+	#endif
 
 	float3x3 LTh = make_float3x3(
 		cTh,  0.F,  sTh,                
@@ -3055,12 +3077,13 @@ __device__ void surfaceAgitee(Photon* ph, int le,
             else if (SINGLEd) ph->loc = REMOVED;
         }
 
+		#ifdef OBJ3D
 		if (ph->loc == OBJSURF)
 		{
 			if (vzn > 0) {ph->loc = ATMOS;}
 			else {ph->loc = OCEAN;}
 		}
-
+		#endif
 
      } // Reflection
 
@@ -4191,7 +4214,11 @@ __device__ void countPhoton(Photon* ph,
             prof = prof_atm;
         }
         if ((count_level==DOWN0P) || (count_level==DOWN0M) || (count_level==UP0P) || (count_level==UP0M) ) {
-            if ((ph->loc == ATMOS) || (ph->loc == SURF0M) || (ph->loc == SURF0P) || (ph->loc == OBJSURF)) {
+            if ((ph->loc == ATMOS) || (ph->loc == SURF0M) || (ph->loc == SURF0P)
+				#ifdef OBJ3D
+				|| (ph->loc == OBJSURF)
+				#endif
+				) {
                 layer_le = NATMd;
                 layer_end= NATMd;
                 prof = prof_atm;
