@@ -228,23 +228,23 @@ def test_aerosols2(**kwargv):
         print(m.attrs['device'])
     return m.attrs
 
-def test_aerocloud(**kwargv):
-    '''
-    test with aerocloud
-    '''
-    if option_cuda_time == False:
-        print("==============================================")
-        print("test with aerocloud")
-        print("==============================================")
-    aer = AeroOPAC('maritime_clean', 0.1, 550.)
-    cloud = CloudOPAC('CUMA',[('wc.sol.mie',1.,12.68,2.,3.)], 5., 550.)
-    pro = AtmAFGL('afglss.dat', comp=[aer], cloud=cloud, grid='100[25]25[5]5[1]0')
-    m = Smartg(pp=False).run(NF=1e6, wl=490., atm=pro, NBPHOTONS=1e9,
-                     progress=False, **kwargv)
-    if option_cuda_time == False:
-        print(choose_attrs + " :", m.attrs[choose_attrs])
-        print(m.attrs['device'])
-    return m.attrs
+# def test_aerocloud(**kwargv):
+#     '''
+#     test with aerocloud
+#     '''
+#     if option_cuda_time == False:
+#         print("==============================================")
+#         print("test with aerocloud")
+#         print("==============================================")
+#     aer = AeroOPAC('maritime_clean', 0.1, 550.)
+#     cloud = CloudOPAC('CUMA',[('wc.sol.mie',1.,12.68,2.,3.)], 5., 550.)
+#     pro = AtmAFGL('afglss.dat', comp=[aer], cloud=cloud, grid='100[25]25[5]5[1]0')
+#     m = Smartg(pp=False).run(NF=1e6, wl=490., atm=pro, NBPHOTONS=1e9,
+#                      progress=False, **kwargv)
+#     if option_cuda_time == False:
+#         print(choose_attrs + " :", m.attrs[choose_attrs])
+#         print(m.attrs['device'])
+#     return m.attrs
 
 def test_atm_surf(**kwargv):
     '''
@@ -261,57 +261,57 @@ def test_atm_surf(**kwargv):
         print(m.attrs['device'])
     return m.attrs
 
-def test_atm_surf_ocean(**kwargv):
-    if option_cuda_time == False:
-        print("==============================================")
-        print("test_atm_surf_ocean")
-        print("==============================================")
-    m = Smartg(pp=False).run(wl=490., NF=1e6, NBPHOTONS=1e9,
-                     atm=Profile('afglms', aer=AeroOPAC('maritime_clean', 0.2, 550)),
-                     surf=RoughSurface(), NBTHETA=30, water=IOP_MM(chl=1., NANG=1000),
-                     progress=False, **kwargv)
-    if option_cuda_time == False:
-        print(choose_attrs + " :", m.attrs[choose_attrs])
-        print(m.attrs['device'])
-    return m.attrs
+# def test_atm_surf_ocean(**kwargv):
+#     if option_cuda_time == False:
+#         print("==============================================")
+#         print("test_atm_surf_ocean")
+#         print("==============================================")
+#     m = Smartg(pp=False).run(wl=490., NF=1e6, NBPHOTONS=1e9,
+#                      atm=Profile('afglms', aer=AeroOPAC('maritime_clean', 0.2, 550)),
+#                      surf=RoughSurface(), NBTHETA=30, water=IOP_MM(chl=1., NANG=1000),
+#                      progress=False, **kwargv)
+#     if option_cuda_time == False:
+#         print(choose_attrs + " :", m.attrs[choose_attrs])
+#         print(m.attrs['device'])
+#     return m.attrs
 
-def test_surf_ocean(**kwargv):
-    if option_cuda_time == False:
-        print("==============================================")
-        print("test_surf_ocean")
-        print("==============================================")
-    m = Smartg(pp=False).run(wl=490., NF=1e6, THVDEG=30., NBPHOTONS=1e9,
-                     surf=RoughSurface(), water=IOP_MM(1., pfwav=[400.]),
-                     progress=False, **kwargv)
-    if option_cuda_time == False:
-        print(choose_attrs + " :", m.attrs[choose_attrs])
-        print(m.attrs['device'])
-    return m.attrs
+# def test_surf_ocean(**kwargv):
+#     if option_cuda_time == False:
+#         print("==============================================")
+#         print("test_surf_ocean")
+#         print("==============================================")
+#     m = Smartg(pp=False).run(wl=490., NF=1e6, THVDEG=30., NBPHOTONS=1e9,
+#                      surf=RoughSurface(), water=IOP_MM(1., pfwav=[400.]),
+#                      progress=False, **kwargv)
+#     if option_cuda_time == False:
+#         print(choose_attrs + " :", m.attrs[choose_attrs])
+#         print(m.attrs['device'])
+#     return m.attrs
 
-def test_ocean(**kwargv):
-    if option_cuda_time == False:
-        print("==============================================")
-        print("test_ocean")
-        print("==============================================")
-    m = Smartg(pp=False).run(wl=560., NF=1e6, THVDEG=30., water=IOP_SPM(100.),
-                     NBPHOTONS=1e9, progress=False, **kwargv)
-    if option_cuda_time == False:
-        print(choose_attrs + " :", m.attrs[choose_attrs])
-        print(m.attrs['device'])
-    return m.attrs
+# def test_ocean(**kwargv):
+#     if option_cuda_time == False:
+#         print("==============================================")
+#         print("test_ocean")
+#         print("==============================================")
+#     m = Smartg(pp=False).run(wl=560., NF=1e6, THVDEG=30., water=IOP_SPM(100.),
+#                      NBPHOTONS=1e9, progress=False, **kwargv)
+#     if option_cuda_time == False:
+#         print(choose_attrs + " :", m.attrs[choose_attrs])
+#         print(m.attrs['device'])
+#     return m.attrs
 
-def test_oceanLE(**kwargv):
-    if option_cuda_time == False:
-        print("==============================================")
-        print("test_ocean with LE")
-        print("==============================================")
-    loc = {'phi':np.array([0]), 'th':np.array([1.57])}
-    m = Smartg().run(wl=560., NF=1e4, THVDEG=30., water=IOP_SPM(100.),
-                     NBPHOTONS=4e7, progress=False, le = loc, **kwargv)
-    if option_cuda_time == False:
-        print(choose_attrs + " :", m.attrs[choose_attrs])
-        print(m.attrs['device'])
-    return m.attrs
+# def test_oceanLE(**kwargv):
+#     if option_cuda_time == False:
+#         print("==============================================")
+#         print("test_ocean with LE")
+#         print("==============================================")
+#     loc = {'phi':np.array([0]), 'th':np.array([1.57])}
+#     m = Smartg().run(wl=560., NF=1e4, THVDEG=30., water=IOP_SPM(100.),
+#                      NBPHOTONS=4e7, progress=False, le = loc, **kwargv)
+#     if option_cuda_time == False:
+#         print(choose_attrs + " :", m.attrs[choose_attrs])
+#         print(m.attrs['device'])
+#     return m.attrs
 #==========================================================================
 
 #==========================================================================
