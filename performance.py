@@ -2,38 +2,149 @@
 # -*- coding: utf-8 -*-
 
 '''
-SMART-G examples
+SMART-G performance tests
 '''
-import smartg
-from smartg import Smartg, Profile, AeroOPAC, LambSurface, RoughSurface, CloudOPAC
-from smartg import IOP_MM, IOP_SPM, REPTRAN, reptran_merge, merge
-import numpy as np
-import sys
-import os
-import subprocess
+# matplotlib
 import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
+#matplotlib.use('Agg') # particular use
 from matplotlib.ticker import MaxNLocator
 from mpl_toolkits.mplot3d import Axes3D
-from matplotlib import cm
+import matplotlib.pyplot as plt
+from matplotlib import cm as cm
+from matplotlib.colors import LogNorm
+
+# smartg
+from smartg.smartg import Smartg
+from smartg.smartg import LambSurface, RoughSurface, CusForward
+from smartg.atmosphere import AtmAFGL, AeroOPAC, CloudOPAC
+from smartg.tools.luts import merge
+from smartg.water import IOP_1
+from smartg.tools.smartg_view import smartg_view, input_view
+
+# other import (for comparaison between commits, ...)
+import numpy as np
+import sys
+import imp
+import math
+import os
+import subprocess
+
+# other import in function of python version
+try:
+    # Python 2.7
+    reload(sys)
+    sys.setdefaultencoding('utf8')
+except NameError:
+    try:
+        # Python 3.4+
+        from importlib import reload
+    except ImportError:
+        # Python 3.0 - 3.3
+        from imp import reload
+        
+# smartg for 3D object
+import smartg.geometry
+from smartg.geometry import Vector, Point, Normal, Ray, BBox
+import smartg.transform
+from smartg.transform import Transform, Aff
+import smartg.visualizegeo
+from smartg.visualizegeo import receiver_view, Mirror, Plane, Spheric, Transformation, \
+    Entity, Analyse_create_entity, LambMirror, Matte, cat_view
+
+# *************************************************************************
+#                !!!  MODIFICATION --> GO PART 2 !!!
+# *************************************************************************
 
 #==========================================================================
-# CAN BE MODIFIED BUT NOT MANDATORY:
-#==========================================================================
+# PART1 CAN BE MODIFIED BUT NOT MANDATORY:
+#==========================================================================  
+def test_objForward(**kwargv):
+    '''
+    Basic Rayleigh example
+    '''
+    if option_cuda_time == False:
+        print("==============================================")
+        print("Basic Object in Forward mode")
+        print("==============================================")
+
+    # Creation des objets MirA, B, C et D et du recepteur Recept1
+    wRx = 0.006; wRy = 0.007
+    wMx = 0.004725; wMy = 0.00642
+    MirA = Entity(name = "reflector", \
+                  materialAV = Mirror(reflectivity = 0.88), \
+                  materialAR = Matte(reflectivity = 0.), \
+                  geo = Plane( p1 = Point(-wMx, -wMy, 0.),
+                               p2 = Point(wMx, -wMy, 0.),
+                               p3 = Point(-wMx, wMy, 0.),
+                               p4 = Point(wMx, wMy, 0.) ), \
+                  transformation = Transformation( rotation = np.array([0., 20.281725, 0.]), \
+                                                   translation = np.array([0.95, 0., 0.00517]) ))
+    
+
+    MirA = Entity(MirA);
+    MirA.transformation = Transformation( rotation = np.array([0., 20.281725, 0.]), \
+                                          translation = np.array([0.95, 0., 0.00517]) )
+    MirB = Entity(MirA);
+    MirB.transformation = Transformation( rotation = np.array([0., 29.460753, 0.]), \
+                                          translation = np.array([0.9, 0., 0.00517]) )
+    MirC = Entity(MirA);
+    MirC.transformation = Transformation( rotation = np.array([0., 35.129831, 0.]), \
+                                          translation = np.array([0.85, 0., 0.00517]) )
+    MirD = Entity(MirA);
+    MirD.transformation = Transformation( rotation = np.array([0., 38.715473, 0.]), \
+                                          translation = np.array([0.8, 0., 0.00517]) )
+    
+    Recept1 = Entity(name = "receptor", TC = 0.0005, \
+                     materialAV = Matte(reflectivity = 0.), \
+                     materialAR = Matte(reflectivity = 0.), \
+                     geo = Plane( p1 = Point(-wRx, -wRy, 0.),
+                                  p2 = Point(wRx, -wRy, 0.),
+                                  p3 = Point(-wRx, wRy, 0.),
+                                  p4 = Point(wRx, wRy, 0.) ), \
+                     transformation = Transformation( rotation = np.array([0., -101.5, 0.]), \
+                                                      translation = np.array([1., 0., 0.1065]) ))
+    
+    listobjs = [MirD, MirC, MirB, MirA, Recept1]
+    
+    # Creation d'un interval d'étude (BBox permettant d'éviter certains tests d'intersection)
+    Pmin = [-120., -120., -0.5]
+    Pmax = [120., 120., 121]
+    interval0 = [Pmin, Pmax]
+    
+    # angle zenithal du soleil 
+    solarDir = 14.3
+
+    # permet de lancer les photons depuis un rectangle en TOA
+    custumF = CusForward(CFX=0.5, CFY=0.05)
+    
+    aer = AeroOPAC('desert', 0.25, 550.)
+    pro = AtmAFGL('afglms', comp=[aer], P0 = 877, H2O=1.2)
+    
+    m = Smartg(debug_photon=False, double = True,
+               obj3D = True).run(surf = LambSurface(ALB=0.25),
+                                 THVDEG=solarDir, NF=1e6, wl=550., NBPHOTONS=1e8, NBLOOP = 2e7,
+                                 atm=pro, progress=False, myObjects=listobjs, BEER=1,
+                                 interval = interval0, IsAtm = 1, PHVDEG = 0., cusForward=custumF, **kwargv)
+    
+    if option_cuda_time == False:
+        print(choose_attrs + " :", m.attrs[choose_attrs])
+        print(m.attrs['device'])
+    
+    return m.attrs
+
 def test_rayleigh(**kwargv):
     '''
     Basic Rayleigh example
     '''
     if option_cuda_time == False:
-        print "=============================================="
-        print "Basic Rayleigh"
-        print "=============================================="
-    m = Smartg().run(NF=1e6, wl=400., NBPHOTONS=1e9,
-                     atm=Profile('afglt'), progress=False, **kwargv)
+        print("==============================================")
+        print("Basic Rayleigh")
+        print("==============================================")
+    m = Smartg(debug_photon=False, double = False).run(NF=1e6, wl=400., NBPHOTONS=1e8,
+                     atm=AtmAFGL('afglt'), progress=False, **kwargv)
     if option_cuda_time == False:
-        print choose_attrs + " :", m.attrs[choose_attrs]
-        print m.attrs['device']
+        print(choose_attrs + " :", m.attrs[choose_attrs])
+        print(m.attrs['device'])
     return m.attrs
 
 def test_rayleighLE(**kwargv):
@@ -41,15 +152,15 @@ def test_rayleighLE(**kwargv):
     LE Basic Rayleigh example
     '''
     if option_cuda_time == False:
-        print "=============================================="
-        print "Basic Rayleigh with LE"
-        print "=============================================="
+        print("==============================================")
+        print("Basic Rayleigh with LE")
+        print("==============================================")
     loc = {'phi':np.array([0]), 'th':np.array([1.57])}
-    m = Smartg().run(NF=1e6, le=loc, wl=400., NBPHOTONS=1e9,
-                     atm=Profile('afglt'), progress=False, **kwargv)
+    m = Smartg(double = False).run(NF=1e6, le=loc, wl=400., NBPHOTONS=1e9,
+                     atm=AtmAFGL('afglt'), progress=False, **kwargv)
     if option_cuda_time == False:
-        print choose_attrs + " :", m.attrs[choose_attrs]
-        print m.attrs['device']
+        print(choose_attrs + " :", m.attrs[choose_attrs])
+        print(m.attrs['device'])
     return m.attrs
 
 def test_sp(**kwargv):
@@ -57,14 +168,14 @@ def test_sp(**kwargv):
     Basic test in spherical
     '''
     if option_cuda_time == False:
-        print "=============================================="
-        print "Basic Rayleigh in spherical "
-        print "=============================================="
-    m = Smartg(pp=False).run(NF=1e6, wl=400., NBPHOTONS=1e9, 
-                             atm=Profile('afglt'), progress=False, **kwargv)
+        print("==============================================")
+        print("Basic Rayleigh in spherical ")
+        print("==============================================")
+    m = Smartg(pp=False, double = False).run(NF=1e6, wl=400., NBPHOTONS=1e9, 
+                             atm=AtmAFGL('afglt'), progress=False, **kwargv)
     if option_cuda_time == False:
-        print choose_attrs + " :", m.attrs[choose_attrs]
-        print m.attrs['device']
+        print(choose_attrs + " :", m.attrs[choose_attrs])
+        print(m.attrs['device'])
     return m.attrs
 
 def test_rayleigh_grid(**kwargv):
@@ -72,15 +183,15 @@ def test_rayleigh_grid(**kwargv):
     Use a custom atmosphere grid
     '''
     if option_cuda_time == False:
-        print "=============================================="
-        print "Rayleigh custom atmosphere grid "
-        print "=============================================="
-    pro = Profile('afglt', grid='100[75]25[5]10[1]0')
-    m = Smartg(pp=False).run(NF=1e6, wl=500., NBPHOTONS=1e9, 
+        print("==============================================")
+        print("Rayleigh custom atmosphere grid ")
+        print("==============================================")
+    pro = AtmAFGL('afglt', grid='100[75]25[5]10[1]0')
+    m = Smartg(pp=False, double = False).run(NF=1e6, wl=500., NBPHOTONS=1e9, 
                      atm=pro, progress=False, **kwargv)
     if option_cuda_time == False:
-        print choose_attrs + " :", m.attrs[choose_attrs]
-        print m.attrs['device']
+        print(choose_attrs + " :", m.attrs[choose_attrs])
+        print(m.attrs['device'])
     return m.attrs
 
 def test_aerosols(**kwargv):
@@ -88,16 +199,16 @@ def test_aerosols(**kwargv):
     test with aerosols
     '''
     if option_cuda_time == False:
-        print "=============================================="
-        print "test with aerosols"
-        print "=============================================="
+        print("==============================================")
+        print("test with aerosols")
+        print("==============================================")
     aer = AeroOPAC('maritime_clean', 0.4, 550.)
-    pro = Profile('afglms', aer=aer)
-    m = Smartg(pp=False).run(NF=1e6, wl=490., atm=pro, NBPHOTONS=1e9,
+    pro = AtmAFGL('afglms', comp=[aer])
+    m = Smartg(pp=False, double = False).run(NF=1e6, wl=490., atm=pro, NBPHOTONS=1e9,
                      progress=False, **kwargv)
     if option_cuda_time == False:
-        print choose_attrs + " :", m.attrs[choose_attrs]
-        print m.attrs['device']
+        print(choose_attrs + " :", m.attrs[choose_attrs])
+        print(m.attrs['device'])
     return m.attrs
 
 def test_aerosols2(**kwargv):
@@ -105,16 +216,16 @@ def test_aerosols2(**kwargv):
     test with aerosols2
     '''
     if option_cuda_time == False:
-        print "=============================================="
-        print "test with aerosols2"
-        print "=============================================="
+        print("==============================================")
+        print("test with aerosols2")
+        print("==============================================")
     aer = AeroOPAC('desert', 0.4, 550.)
-    pro = Profile('afglms', aer=aer)
-    m = Smartg().run(NF=1e6, wl=490., atm=pro, NBPHOTONS=1e9,
+    pro = AtmAFGL('afglms', comp=[aer])
+    m = Smartg(double = False).run(NF=1e6, wl=490., atm=pro, NBPHOTONS=1e9,
                      progress=False, **kwargv)
     if option_cuda_time == False:
-        print choose_attrs + " :", m.attrs[choose_attrs]
-        print m.attrs['device']
+        print(choose_attrs + " :", m.attrs[choose_attrs])
+        print(m.attrs['device'])
     return m.attrs
 
 def test_aerocloud(**kwargv):
@@ -122,17 +233,17 @@ def test_aerocloud(**kwargv):
     test with aerocloud
     '''
     if option_cuda_time == False:
-        print "=============================================="
-        print "test with aerocloud"
-        print "=============================================="
+        print("==============================================")
+        print("test with aerocloud")
+        print("==============================================")
     aer = AeroOPAC('maritime_clean', 0.1, 550.)
     cloud = CloudOPAC('CUMA',[('wc.sol.mie',1.,12.68,2.,3.)], 5., 550.)
-    pro = Profile('afglss.dat', aer=aer, cloud=cloud, grid='100[25]25[5]5[1]0')
+    pro = AtmAFGL('afglss.dat', comp=[aer], cloud=cloud, grid='100[25]25[5]5[1]0')
     m = Smartg(pp=False).run(NF=1e6, wl=490., atm=pro, NBPHOTONS=1e9,
                      progress=False, **kwargv)
     if option_cuda_time == False:
-        print choose_attrs + " :", m.attrs[choose_attrs]
-        print m.attrs['device']
+        print(choose_attrs + " :", m.attrs[choose_attrs])
+        print(m.attrs['device'])
     return m.attrs
 
 def test_atm_surf(**kwargv):
@@ -140,86 +251,90 @@ def test_atm_surf(**kwargv):
     atmosphere + lambertian surface of albedo 10%
     '''
     if option_cuda_time == False:
-        print "=============================================="
-        print "atmosphere + lambertian surface of albedo 10%"
-        print "=============================================="
-    m = Smartg(pp=False).run(wl=490., NF=1e6, NBPHOTONS=1e9, atm=Profile('afglms'),
+        print("==============================================")
+        print("atmosphere + lambertian surface of albedo 10%")
+        print("==============================================")
+    m = Smartg(pp=False, double = False).run(wl=490., NF=1e6, NBPHOTONS=1e9, atm=AtmAFGL('afglms'),
                      surf=LambSurface(ALB=0.1), progress=False, **kwargv)
     if option_cuda_time == False:
-        print choose_attrs + " :", m.attrs[choose_attrs]
-        print m.attrs['device']
+        print(choose_attrs + " :", m.attrs[choose_attrs])
+        print(m.attrs['device'])
     return m.attrs
 
 def test_atm_surf_ocean(**kwargv):
     if option_cuda_time == False:
-        print "=============================================="
-        print "test_atm_surf_ocean"
-        print "=============================================="
+        print("==============================================")
+        print("test_atm_surf_ocean")
+        print("==============================================")
     m = Smartg(pp=False).run(wl=490., NF=1e6, NBPHOTONS=1e9,
                      atm=Profile('afglms', aer=AeroOPAC('maritime_clean', 0.2, 550)),
                      surf=RoughSurface(), NBTHETA=30, water=IOP_MM(chl=1., NANG=1000),
                      progress=False, **kwargv)
     if option_cuda_time == False:
-        print choose_attrs + " :", m.attrs[choose_attrs]
-        print m.attrs['device']
+        print(choose_attrs + " :", m.attrs[choose_attrs])
+        print(m.attrs['device'])
     return m.attrs
 
 def test_surf_ocean(**kwargv):
     if option_cuda_time == False:
-        print "=============================================="
-        print "test_surf_ocean"
-        print "=============================================="
+        print("==============================================")
+        print("test_surf_ocean")
+        print("==============================================")
     m = Smartg(pp=False).run(wl=490., NF=1e6, THVDEG=30., NBPHOTONS=1e9,
                      surf=RoughSurface(), water=IOP_MM(1., pfwav=[400.]),
                      progress=False, **kwargv)
     if option_cuda_time == False:
-        print choose_attrs + " :", m.attrs[choose_attrs]
-        print m.attrs['device']
+        print(choose_attrs + " :", m.attrs[choose_attrs])
+        print(m.attrs['device'])
     return m.attrs
 
 def test_ocean(**kwargv):
     if option_cuda_time == False:
-        print "=============================================="
-        print "test_ocean"
-        print "=============================================="
+        print("==============================================")
+        print("test_ocean")
+        print("==============================================")
     m = Smartg(pp=False).run(wl=560., NF=1e6, THVDEG=30., water=IOP_SPM(100.),
                      NBPHOTONS=1e9, progress=False, **kwargv)
     if option_cuda_time == False:
-        print choose_attrs + " :", m.attrs[choose_attrs]
-        print m.attrs['device']
+        print(choose_attrs + " :", m.attrs[choose_attrs])
+        print(m.attrs['device'])
     return m.attrs
 
 def test_oceanLE(**kwargv):
     if option_cuda_time == False:
-        print "=============================================="
-        print "test_ocean with LE"
-        print "=============================================="
+        print("==============================================")
+        print("test_ocean with LE")
+        print("==============================================")
     loc = {'phi':np.array([0]), 'th':np.array([1.57])}
     m = Smartg().run(wl=560., NF=1e4, THVDEG=30., water=IOP_SPM(100.),
                      NBPHOTONS=4e7, progress=False, le = loc, **kwargv)
     if option_cuda_time == False:
-        print choose_attrs + " :", m.attrs[choose_attrs]
-        print m.attrs['device']
+        print(choose_attrs + " :", m.attrs[choose_attrs])
+        print(m.attrs['device'])
     return m.attrs
 #==========================================================================
 
 #==========================================================================
-# MODIFICATION HERE:
+# PART 2 MODIFICATION HERE:
 #==========================================================================
-if __name__ == '__main__':
-
+if __name__ == '__main__' and '__file__' in globals(): 
     #==========================================================
     # Some options:
     #==========================================================
     # If true launch a test with different grid/block sizes 
-    option_cuda_time = True
-    # if option_cuda_time=true use the following sizes 
+    option_cuda_time = False
+    # if option_cuda_time=true use the following sizes 512
     list_SG = [128, 256, 384, 512]
     list_SB = [32, 64, 128, 256, 384]
-    # Default size of XGRID(SG) and XBLOCK(SB)
-    # Generaly best performance: SG=128 and SB=64
-    SG = 128 
-    SB = 64  
+    
+    if (len(sys.argv) == 1):
+        # Default size of XGRID(SG) and XBLOCK(SB)
+        # Generaly best performance: SG=128 and SB=64
+        SG = 256 
+        SB = 256 
+    else:
+        SG = int(sys.argv[1])
+        SB = int(sys.argv[2])
     #==========================================================
 
     #==========================================================
@@ -239,14 +354,28 @@ if __name__ == '__main__':
     #==========================================================
     # Choose between 0, 1 and 2 (my_attrs[0, 1 or 2])
     #==========================================================
-    my_attrs = ['kernel time (s)', 'compilation_time',
-                'processing time (s)']
+    my_attrs = ['kernel time (s)', 'compilation_time', 'processing time (s)']
     choose_attrs = my_attrs[0]
     #==========================================================
 #==========================================================================
 
+    def test_rayleigh(**kwargv):
+        '''
+        Basic Rayleigh example
+        '''
+        if option_cuda_time == False:
+            print("==============================================")
+            print("Basic Rayleigh")
+            print("==============================================")
+        m = Smartg(debug_photon=False, double = False).run(NF=1e6, wl=400., NBPHOTONS=1e8,
+                         atm=AtmAFGL('afglt'), progress=False, **kwargv)
+        if option_cuda_time == False:
+            print(choose_attrs + " :", m.attrs[choose_attrs])
+            print(m.attrs['device'])
+        return m.attrs
+
 #==========================================================================
-# NO MODIFICATION IS NEEDED HERE:
+# PART 3 NO MODIFICATION IS NEEDED HERE:
 #==========================================================================
     #==========================================================
     # Some functions:
@@ -255,11 +384,11 @@ if __name__ == '__main__':
         '''
         Avoids some loss due to the kernel launch  
         '''
-        print "=============================================="
-        print "computation without measurement"
-        print "=============================================="
-        m = Smartg().run(NF=1e5, wl=400., NBPHOTONS=1e8,
-                         atm=Profile('afglt'), progress=False)
+        print("==============================================")
+        print("computation without measurement")
+        print("==============================================")
+        # m = Smartg(debug_photon=False).run(NF=1e5, wl=400., NBPHOTONS=1e6,
+        #                  atm=AtmAFGL('afglt'), progress=False)
 
     def cuda_block_time(var_list):
         '''
@@ -270,9 +399,9 @@ if __name__ == '__main__':
         list_z=[]
         # enumerate the list of XGRID sizes
         for indice, SG in enumerate(list_SG):
-            print "=============================================="
-            print "XGRID = ", SG
-            print "=============================================="
+            print("==============================================")
+            print("XGRID = ", SG)
+            print("==============================================")
             list_y.append(list_SB)
             # enumerate the list of XBLOCK sizes
             for indice2, SB in enumerate(list_SB):
@@ -283,15 +412,32 @@ if __name__ == '__main__':
                     var1 = m2[choose_attrs]
                 if var1 > m2[choose_attrs]:
                     var1 = m2[choose_attrs]
-                print choose_attrs + "(xblock", SB, ") =", m2[choose_attrs]
+                print(choose_attrs + "(xblock", SB, ") =", m2[choose_attrs])
         return var1, list_x, list_y, list_z
     #==========================================================
 
-    print "Number of commit given: ", len(list_commits)
+    print("Number of commit given: ", len(list_commits))
 
+    # La commande 'git rev-parse --abbrev-ref HEAD' permet de savoir
+    # l'où on se trouve ? Dans quelle branche ?
     my_branch = ['git', 'rev-parse', '--abbrev-ref', 'HEAD']
-    output = subprocess.Popen( my_branch, stdout=subprocess.PIPE )\
-                       .communicate()[0].rstrip('\n\r')
+
+    # Marche impec sur python 2 -->
+    if sys.version[0] == '2':
+        output = subprocess.Popen( my_branch, stdout=subprocess.PIPE )\
+                           .communicate()[0].rstrip('\n\r')
+    # Sur python 3 -->    
+    else:
+        # Créer une classe avec ce que renvoie la commande se trouvant
+        # dans la liste my_branch
+        output = subprocess.Popen(my_branch,stdout=subprocess.PIPE)
+        # Récupération du renvoie de la commande
+        output = output.stdout.read()
+        # Conversion en str car renvoie en binaire
+        output = output.decode("utf-8") 
+        # Enlever les espaces
+        output = output.rstrip('\n\r')
+        
     number_tests = len(list_tests)
     number_commits = len(list_commits)
     os.system("rm -f data.txt temp.pdf")
@@ -303,14 +449,14 @@ if __name__ == '__main__':
     # If there are no commit:
     #==========================================================
     if number_commits == 0:
-        print "No commit given, default use"
+        print("No commit given, default use")
         if output == "HEAD":
-            print "You're in a detached branch..."
+            print("You're in a detached branch...")
         else:
-            print "you're in: ", output
+            print("you're in: ", output)
             prepare_measure()
             x= [None] * number_tests
-            for i in xrange(0, number_tests):
+            for i in range(0, number_tests):
                 if option_cuda_time == False:
                     x[i] = list_tests[i](XGRID=SG, XBLOCK=SB)[choose_attrs]
                 else:
@@ -363,19 +509,24 @@ if __name__ == '__main__':
     # If there are only one commit
     #==========================================================
     elif number_commits == 1:
-        print "One commit Given"
+        print("One commit Given")
         if output == "HEAD":
-            print "you're in a detached branch..."
+            print("you're in a detached branch...")
         else:
-            print "you're in: ", output
+            print("you're in: ", output)
             nimp = os.system("git checkout " + list_commits[0])
-            reload(smartg)
-            from smartg import Smartg, Profile, AeroOPAC, LambSurface, RoughSurface, CloudOPAC
-            from smartg import IOP_MM, IOP_SPM, REPTRAN, reptran_merge, merge
+
+            for attr in dir(sys.modules['smartg.smartg']):
+                if attr not in ('__name__', '__file__'):
+                    delattr(sys.modules['smartg.smartg'], attr)
+
+            reload(sys.modules['smartg.smartg'])
+            from smartg.smartg import Smartg
+                
             if nimp == 0:
                 prepare_measure()
                 x = [None] * number_tests
-                for i in xrange(0, number_tests):
+                for i in range(0, number_tests):
                     if option_cuda_time == False:
                         x[i] = list_tests[i](XGRID=SG, XBLOCK=SB)[choose_attrs]
                     else:
@@ -429,26 +580,33 @@ if __name__ == '__main__':
     # If there are several commits
     #==========================================================
     else:
-        print "several commits"
+        print("several commits")
         if output == "HEAD":
-            print "you're in a detached branch..."
+            print("you're in a detached branch...")
         else:
             #==========================================
             # begining of the code
             #==========================================
-            print "you're in: ", output
+            print("you're in: ", output)
+            if (os.path.isfile("perf_data.txt")):
+                os.system("rm perf_data.txt")
             size_x = number_tests * number_commits
             x = [None] * size_x
-            for i in xrange(0, size_x, number_tests):
-                nimp = os.system("git checkout " + list_commits[i/number_tests])
-                reload(smartg)
-                from smartg import Smartg, Profile, AeroOPAC, LambSurface, RoughSurface, CloudOPAC
-                from smartg import IOP_MM, IOP_SPM, REPTRAN, reptran_merge, merge
+            for i in range(0, size_x, number_tests):
+                nimp = os.system("git checkout " + list_commits[int(i/number_tests)])
+                
+                for attr in dir(sys.modules['smartg.smartg']):
+                    if attr not in ('__name__', '__file__'):
+                        delattr(sys.modules['smartg.smartg'], attr)  
+                        
+                reload(sys.modules['smartg.smartg'])
+                from smartg.smartg import Smartg
+                
                 if nimp == 0:
-                    reload(smartg)
+                    # reload(smartg)
                     # if i == 0:
                     prepare_measure()
-                    for j in xrange(i, i+number_tests):
+                    for j in range(i, i+number_tests):
                         if option_cuda_time == False:
                             # x[0,1,2,...,size_x] and list_tests[0,1,...,number_tests]
                             x[j] = list_tests[j-i](XGRID=SG, XBLOCK=SB)[choose_attrs]
@@ -492,6 +650,7 @@ if __name__ == '__main__':
                             ax2.set_ylabel('XBLOCK')
                             ax2.set_xlabel('XGRID')
                             plt.savefig('commit' + str((i/number_tests)+1) + '_' + list_tests[j-i].__name__ + '.pdf')
+                    
                 else:
                     raise Exception("ERROR : Use git stash.")
                     os.system("git checkout " + output)
@@ -504,9 +663,9 @@ if __name__ == '__main__':
             fichier.write("commits")
             fichier.writelines([" %s" % item.__name__  for item  in list_tests])
             fichier.write("\n")
-            for i in xrange(0, number_commits):
+            for i in range(0, number_commits):
                 fichier.write(str(i+1))
-                for j in xrange(i, i+number_tests):
+                for j in range(i, i+number_tests):
                     fichier.write(" ")   
                     fichier.write(x[j+i*(number_tests-1)]) # x[1,2,3...]
                 fichier.write("\n")
@@ -536,26 +695,27 @@ if __name__ == '__main__':
             xbis = np.array(x, dtype = np.float64)
             idi = np.arange(int(number_tests), dtype = int)
             # Fill correctly the matrix Mat[i,j] with time values
-            for j in xrange(0, number_commits):
+            for j in range(0, number_commits):
                 Mat[idi, j] = xbis[(j*number_tests)+idi]
             # Loop bellow = tranformation in poucentage with reference = last commit
             Ref = Mat[idi, (number_commits-1)]
-            for j in xrange(0, number_commits):
-                Mat[idi, j] = ((Ref[idi]*100)/Mat[idi, j])-100
+            for j in range(0, number_commits):
+                #Mat[idi, j] = ((Ref[idi]*100)/Mat[idi, j])-100
+                Mat[idi, j] = ((Mat[idi, j]*100)/Ref[idi])-100
 
             commits_array = np.arange(1, number_commits+1, dtype = int)
             
             # Plot all tests and save in pdf
             fig3 = plt.figure()
             ax3 = fig3.add_subplot(111)
-            for i in xrange(0, number_tests):
+            for i in range(0, number_tests):
                 line3 = ax3.plot(commits_array, Mat[i, :], label=list_tests[i].__name__)
             plt.grid()
             plt.legend(loc='best', fancybox=True, framealpha=0.3)
             plt.axis(xmin=1, ymin = np.amin(Mat), xmax=number_commits, ymax = np.amax(Mat))
             ax3.xaxis.set_major_locator(MaxNLocator(integer=True))
             ax3.set_xlabel('Commits')
-            ax3.set_ylabel('percentage of gain (' + choose_attrs + ')')
+            ax3.set_ylabel('Coputational time evolution (' + choose_attrs + ')')
             ax3.set_yticks(list(plt.yticks()[0]) + [np.amin(Mat), np.amax(Mat)])
             ax3.axhline(0, color='black', lw=2)
             plt.savefig('perf_time_percentage.pdf')

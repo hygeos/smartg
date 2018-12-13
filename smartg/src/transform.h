@@ -2,7 +2,9 @@
 #ifndef _TRANSFORM_H_
 #define _TRANSFORM_H_
 
+#ifdef OBJ3D
 #include "geometry.h"
+#endif
 
 #include <math.h>
 #include <helper_math.h>
@@ -33,9 +35,11 @@ public:
 	inline __host__ __device__ float3 operator()(const float3 &c, const char* type) const;
 	inline __host__ __device__ void operator()(const float3 &c, float3 *ctrans,
 												 const char* type) const;
+	#ifdef OBJ3D
     inline __host__ __device__ Ray operator()(const Ray &r) const;
     inline __host__ __device__ void operator()(const Ray &r, Ray *rt) const;
     __host__ __device__ BBox operator()(const BBox &b) const;
+	#endif
     __host__ __device__ Transform operator*(const Transform &t2) const;
 
     __host__ __device__ const float4x4 &GetMatrix() const { return m; }
@@ -167,6 +171,7 @@ inline void Transform::operator()(const float3 &c, float3 *ctrans, const char* t
 	}
 }
 
+#ifdef OBJ3D
 inline Ray Transform::operator()(const Ray &r) const
 {
     Ray ret = r;
@@ -222,6 +227,7 @@ BBox Transform::operator()(const BBox &b) const
 	/* ret = ret.Union(ret, P+V1+V2+V3); */
     return ret;
 }
+#endif
 
 Transform Transform::operator*(const Transform &t2) const
 {

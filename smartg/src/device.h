@@ -253,11 +253,11 @@ __device__ float randomPhilox4x32_7float(philox4x32_ctr_t*, philox4x32_key_t*);
 __device__ unsigned int randomPhilox4x32_7uint(philox4x32_ctr_t*, philox4x32_key_t*);
 #endif
 
+#ifdef OBJ3D
 /**********************************************************
 *	> Fonctions liées à la création de géométries
 ***********************************************************/
 
-#ifdef OBJ3D
 __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo *GeoV , struct IObjets *myObjets);
 #endif
 #endif // DEVICE_H

@@ -58,11 +58,12 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "communs.h"
 #include "device.h"
-#include "geometry.h"
-#include "transform.h"
 #ifdef OBJ3D
+#include "geometry.h"
 #include "shapes.h"
 #endif
+#include "transform.h"
+
 #include <math.h>
 
 #include <helper_math.h>

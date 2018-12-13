@@ -1903,7 +1903,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
                  Counter, NPhotonsIn, NPhotonsOut, tabthv, tabphi, tab_sensor,
                  prof_atm, prof_oc, wl_proba_icdf, rng.state,
                  block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
-            
+
         end_cuda_clock.record()
         end_cuda_clock.synchronize()
         secs_cuda_clock = secs_cuda_clock + start_cuda_clock.time_till(end_cuda_clock)
