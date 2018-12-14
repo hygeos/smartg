@@ -659,12 +659,14 @@ extern "C" {
 							surfaceLambertienne3D(&ph_le, 1, tabthv, tabphi, spectrum,
 												  &rngstate, &geoStruc);			
 							// Only two levels for counting by definition
-							countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, NPhotonsOut);
+							countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0P,
+										errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
                             #ifdef SPHERIQUE
 							// for spherical case attenuation if performed usin move_sp
 							if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
 						    #endif
-							countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, NPhotonsOut);
+							countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA,
+										errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
 						}//direction
 					}//direction
 				} //LE
@@ -688,12 +690,14 @@ extern "C" {
 							ph_le.ith = (ith + ith0)%NBTHETAd;
 							surfaceRugueuse3D(&ph_le, &geoStruc, &rngstate);
 							// Only two levels for counting by definition
-							countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, NPhotonsOut);
+							countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0P,
+										errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
                             #ifdef SPHERIQUE
 							// for spherical case attenuation if performed usin move_sp
 							if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
 						    #endif
-							countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, NPhotonsOut);
+							countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA,
+										errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
 						}//direction
 					}//direction
 				} //LE
@@ -841,14 +845,18 @@ extern "C" {
       double4 ds = make_double4(s.x, s.y, s.z, s.w);
       double dwsca=(double)wsca;
       double dwabs=(double)wabs;
-      /*DatomicAdd(tabCount+(0*II+JJ), dwsca * dwabs * ds.x);
-      DatomicAdd(tabCount+(1*II+JJ), dwsca * dwabs * ds.y);
-      DatomicAdd(tabCount+(2*II+JJ), dwsca * dwabs * ds.z);
-      DatomicAdd(tabCount+(3*II+JJ), dwsca * dwabs * ds.w);*/
+
+	  #if __CUDA_ARCH__ >= 600
       atomicAdd(tabCount+(0*II+JJ), dwsca * dwabs * ds.x);
       atomicAdd(tabCount+(1*II+JJ), dwsca * dwabs * ds.y);
       atomicAdd(tabCount+(2*II+JJ), dwsca * dwabs * ds.z);
       atomicAdd(tabCount+(3*II+JJ), dwsca * dwabs * ds.w);
+	  #else
+	  DatomicAdd(tabCount+(0*II+JJ), dwsca * dwabs * ds.x);
+      DatomicAdd(tabCount+(1*II+JJ), dwsca * dwabs * ds.y);
+      DatomicAdd(tabCount+(2*II+JJ), dwsca * dwabs * ds.z);
+      DatomicAdd(tabCount+(3*II+JJ), dwsca * dwabs * ds.w);
+	  #endif
 
       #else
       float *tabCount = (float*)tabPhotons + count_level*NPSTKd*NBTHETAd*NBPHId*NLAMd*NSENSORd;
@@ -929,7 +937,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 	
 	#ifdef OBJ3D
 	Transform TRotZ; char mPP[]="Point";
-	TRotZ = TRotZ.RotateZ(PHDEGd-180.);
+	TRotZ = TRotZ.RotateZ(tab_sensor[ph->is].PHDEG-180.);
 	ph->pos = TRotZ(ph->pos, mPP);
 	#endif
 	
@@ -1185,7 +1193,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		/* ***************************************************************************************** */
         #ifdef DOUBLE
 		// Valeurs de l'angle zenital Theta et l'angle azimutal Phi (ici Phi pour l'instant imposé à 0)
-		double sunTheta = 180-THDEGd, sunPhi=0;
+		double sunTheta = 180-tab_sensor[ph->is].THDEG, sunPhi=0;
 
         // One fixed direction (for radiance) inverse of the initiale pos of the obj
 		double3 vdouble = make_double3(0., 0., -1.);
@@ -1208,7 +1216,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		ph->u = make_float3(float(udouble.x), float(udouble.y), float(udouble.z));
 		#else // IF NOT DOUBLE
 		// Valeurs de l'angle zenital Theta et l'angle azimutal Phi (ici Phi pour l'instant imposé à 0)
-		float sunTheta = 180-THDEGd, sunPhi=0;
+		float sunTheta = 180-tab_sensor[ph->is].THDEG, sunPhi=0;
 
         // One fixed direction (for radiance)
 		float3 vfloat = make_float3(0., 0., -1.);
@@ -1272,7 +1280,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 				Tid = Tid*TmRZd;}
 			if (objP.mvTz != 0) { // si diff de 0 alors il y a une translation en z
 				double timeOned;
-				timeOned = (POSZd-objP.mvTz)/vdouble.z;
+				timeOned = (tab_sensor[ph->is].POSZ-objP.mvTz)/vdouble.z;
 				posxd = timeOned*vdouble.x;
 				posyd = timeOned*vdouble.y;
 			} // Les Translations en x et y sont prises en compte à la fin
@@ -1296,7 +1304,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 			// On veut lancer les photons depuis TOA + prise en compte des transfos de translation en x et y			
 			posTransd.x +=  posxd + double(objP.mvTx);
 			posTransd.y +=  posyd + double(objP.mvTy);			
-			posTransd.z = POSZd;
+			posTransd.z = tab_sensor[ph->is].POSZ;
 			
 			// mise à jour de la position finale du photon
 			ph->pos=make_float3(float(posTransd.x), float(posTransd.y), float(posTransd.z));		
@@ -1318,7 +1326,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 				Ti = Ti*TmRZ;}
 			if (objP.mvTz != 0) { // si diff de 0 alors il y a une translation en z
 				float timeOne;
-				timeOne = (POSZd-objP.mvTz)/ph->v.z;
+				timeOne = (tab_sensor[ph->is].POSZ-objP.mvTz)/ph->v.z;
 				ph->pos.x = timeOne*ph->v.x;
 				ph->pos.y = timeOne*ph->v.y;
 			} // Les Translations en x et y sont prises en compte à la fin			
@@ -1342,7 +1350,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 			// On veut lancer les photons depuis TOA + prise en compte des transfos de translation en x et y
 			posTrans.x +=  ph->pos.x + objP.mvTx;
 			posTrans.y +=  ph->pos.y + objP.mvTy;			
-			posTrans.z = POSZd;
+			posTrans.z = tab_sensor[ph->is].POSZ;
 			
 			// mise à jour de la position finale du photon
 			ph->pos=posTrans;
@@ -1356,7 +1364,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		float3 cusForwPos = make_float3( ((CFXd * RAND) - 0.5*CFXd), ((CFYd * RAND) - 0.5*CFYd), 0.);
 		ph->pos.x += cusForwPos.x + 1.;
 		ph->pos.y += cusForwPos.y;
-		ph->pos.z = POSZd;
+		ph->pos.z = tab_sensor[ph->is].POSZ;
 	} //END CFMODEd == 1
     #endif //END OBJ3D
     }
@@ -3956,17 +3964,17 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 	indI = floorf( (-(p_t.x/TCd)) + (sizeX/(2*TCd)) );
 	if (indJ == nbCy) indJ -= 1;
 	if (indI == nbCx) indI -= 1;
+	
+    #ifdef DOUBLE
+	tabCountObj = (double*)tabObjInfo;
+	weight = (double)ph->weight;
 
 	if(isnan(weight))
 	{
 		printf("Care weight is nan !! \n");
 		return;
 	}
-	
-    #ifdef DOUBLE
-	tabCountObj = (double*)tabObjInfo;
-	weight = (double)ph->weight;
-	
+
 	#if __CUDA_ARCH__ >= 600
 	// All the beams reaching a receiver
 	atomicAdd(tabCountObj+(nbCy*indI)+indJ, weight);
