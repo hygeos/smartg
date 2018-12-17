@@ -2253,7 +2253,7 @@ def read_mlut_hdf5(filename, datasets=None, lazy=False, group=None):
 
     # set the list of dataset
     if datasets is None:
-        ls_datasets = f['data'].keys()
+        ls_datasets = list(f['data'].keys())
     else:
         ls_datasets = datasets
 
