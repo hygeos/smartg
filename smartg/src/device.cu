@@ -3443,9 +3443,6 @@ __device__ void surfaceBRDF_old(Photon* ph, int le,
 __device__ void surfaceLambert(Photon* ph, int le,
                               float* tabthv, float* tabphi, struct Spectrum *spectrum,
                               struct RNG_State *rngstate) {
-
-	ph->direct += 1;
-	ph->E += 1;
 	
 	if( SIMd == ATM_ONLY){ // Atmosphere only, surface absorbs all
 		ph->loc = ABSORBED;
@@ -3550,134 +3547,10 @@ __device__ void surfaceLambert(Photon* ph, int le,
 
 } //surfaceLambert
 
-#ifdef OBJ3D
-__device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* tabphi,
-									  struct Spectrum *spectrum, struct RNG_State *rngstate, IGeo* geoS)
-{
-	ph->nint += 1;
-
-	if (geoS->type == 1)
-	{
-		if (  isBackward( make_double3(geoS->normalBase.x, geoS->normalBase.y, geoS->normalBase.z),
-						  make_double3(ph->v.x, ph->v.y, ph->v.z) )  ) // AV
-		{ ph->H += 1; }
-		else { ph->E += 1; } // AR traité comme environnement
-	}
-	else if ( geoS->type == 2)
-	{ ph->E += 1; }
-	
-	float3 u_n, v_n;	// Vecteur du photon après reflexion
-    float phi;
-    float cTh, sTh, cPhi, sPhi;
-
-    if (le)
-	{
-		cTh  = cosf(tabthv[ph->ith]);  
-        phi  = tabphi[ph->iph];
-    }
-    else
-	{
-        float ddis=0.0F;
-        if ((LEd==0) || (LEd==1 && RAND>ddis))
-		{
-            // Standard sampling
-	        cTh = sqrtf( RAND );
-	        phi = RAND*DEUXPI;
-        }
-        else
-		{
-            // DDIS sampling , Buras and Mayer
-            float Om = 0.001;
-	        cTh = sqrtf(1.F-RAND*Om);
-            phi = RAND*DEUXPI;
-            ph->weight *= DEUXPI*(1. -sqrtf(1.F-Om));
-        }
-    }
-
-	sTh = sqrtf( 1.0F - cTh*cTh );
-	cPhi = __cosf(phi);
-	sPhi = __sinf(phi);
-	
-	/** calcul u,v new **/
-	v_n.x = cPhi*sTh;
-	v_n.y = sPhi*sTh;
-	v_n.z = cTh;
-	
-	u_n.x = cPhi*cTh;
-	u_n.y = sPhi*cTh;
-	u_n.z = -sTh;
-
-	// Depolarisation du Photon
-    float4x4 L = make_float4x4(
-                    0.5F, 0.5F, 0.F, 0.F,
-                    0.5F, 0.5F, 0.F, 0.F,
-                    0.0F, 0.0F, 0.F, 0.F,
-                    0.0F, 0.0F, 0.F, 0.F 
-		);
-    ph->stokes = mul(L,ph->stokes);
-
-    #ifdef BACK
-    ph->M = mul(ph->M,L);
-    #endif
-	
-	ph->locPrev = OBJSURF;
-	ph->loc = ATMOS;
-	
-	// // Unit vectors which form a second base and where e3 is the geo normal
-	float3 e1, e2, e3;
-	e3 = normalize(geoS->normal);         // be sure that e3 is normalized
-	coordinateSystem(e3, &e1, &e2);  // create e1, e2 orthogonal unit vectors 
-	// e1 = normalize(e1);
-	// e2 = normalize(e2);
-
-	// The passage matrix and his transpose tM, ie. for a vector X: $X = M X' and X' = tM X$
-	// - Works only if the two basis have the same origin
-	float4x4 M = make_float4x4(
-		e1.x, e2.x, e3.x, 0.f,
-		e1.y, e2.y, e3.y, 0.f,
-		e1.z, e2.z, e3.z, 0.f,
-		0.f , 0.f , 0.f , 1.f
-		);
-	float4x4 tM = transpose(M);
-		
-	// Create the transforms obect to world
-	Transform oTw(M, tM);
-	char myV[]="Vector";
-
-	// apply the transformation
-	v_n = oTw(v_n, myV);
-	u_n = oTw(u_n, myV);
-
-	// 
-	if ( (isnan(v_n.x)) || (isnan(v_n.y)) || (isnan(v_n.z)) || (isnan(u_n.x)) || (isnan(u_n.y)) || (isnan(u_n.z)) )
-	{
-		ph->loc = REMOVED;
-		return;
-	}
-	
-	// Update the value of u and v of the photon	
-	ph->v = v_n;
-	ph->u = u_n;
-
-	ph->weight *= geoS->reflectivity;
-		
-    if (!le)
-	{
-		if (RRd==1){
-			/* Russian roulette for propagating photons **/
-			if( ph->weight < WEIGHTRRd ){
-				if( RAND < __fdividef(ph->weight,WEIGHTRRd) ){ph->weight = WEIGHTRRd;}
-				else{ph->loc = ABSORBED;}
-			}
-		}
-	} // not le
-} // Function lamb3D
-
 /* Surface BRDF */
 __device__ void surfaceBRDF(Photon* ph, int le,
-                              float* tabthv, float* tabphi, int count_level,
-                              struct RNG_State *rngstate) {
-	
+							float* tabthv, float* tabphi, int count_level,
+							struct RNG_State *rngstate) {
 	if( SIMd == ATM_ONLY){ // Atmosphere only, surface absorbs all
 		ph->loc = ABSORBED;
 		return;
@@ -3834,6 +3707,128 @@ __device__ void surfaceBRDF(Photon* ph, int le,
 
 } //surfaceBRDF
 
+#ifdef OBJ3D
+__device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* tabphi,
+									  struct Spectrum *spectrum, struct RNG_State *rngstate, IGeo* geoS)
+{
+	ph->nint += 1;
+
+	if (geoS->type == 1)
+	{
+		if (  isBackward( make_double3(geoS->normalBase.x, geoS->normalBase.y, geoS->normalBase.z),
+						  make_double3(ph->v.x, ph->v.y, ph->v.z) )  ) // AV
+		{ ph->H += 1; }
+		else { ph->E += 1; } // AR traité comme environnement
+	}
+	else if ( geoS->type == 2)
+	{ ph->E += 1; }
+	
+	float3 u_n, v_n;	// Vecteur du photon après reflexion
+    float phi;
+    float cTh, sTh, cPhi, sPhi;
+
+    if (le)
+	{
+		cTh  = cosf(tabthv[ph->ith]);  
+        phi  = tabphi[ph->iph];
+    }
+    else
+	{
+        float ddis=0.0F;
+        if ((LEd==0) || (LEd==1 && RAND>ddis))
+		{
+            // Standard sampling
+	        cTh = sqrtf( RAND );
+	        phi = RAND*DEUXPI;
+        }
+        else
+		{
+            // DDIS sampling , Buras and Mayer
+            float Om = 0.001;
+	        cTh = sqrtf(1.F-RAND*Om);
+            phi = RAND*DEUXPI;
+            ph->weight *= DEUXPI*(1. -sqrtf(1.F-Om));
+        }
+    }
+
+	sTh = sqrtf( 1.0F - cTh*cTh );
+	cPhi = __cosf(phi);
+	sPhi = __sinf(phi);
+	
+	/** calcul u,v new **/
+	v_n.x = cPhi*sTh;
+	v_n.y = sPhi*sTh;
+	v_n.z = cTh;
+	
+	u_n.x = cPhi*cTh;
+	u_n.y = sPhi*cTh;
+	u_n.z = -sTh;
+
+	// Depolarisation du Photon
+    float4x4 L = make_float4x4(
+                    0.5F, 0.5F, 0.F, 0.F,
+                    0.5F, 0.5F, 0.F, 0.F,
+                    0.0F, 0.0F, 0.F, 0.F,
+                    0.0F, 0.0F, 0.F, 0.F 
+		);
+    ph->stokes = mul(L,ph->stokes);
+
+    #ifdef BACK
+    ph->M = mul(ph->M,L);
+    #endif
+	
+	ph->locPrev = OBJSURF;
+	ph->loc = ATMOS;
+	
+	// // Unit vectors which form a second base and where e3 is the geo normal
+	float3 e1, e2, e3;
+	e3 = normalize(geoS->normal);         // be sure that e3 is normalized
+	coordinateSystem(e3, &e1, &e2);  // create e1, e2 orthogonal unit vectors 
+	// e1 = normalize(e1);
+	// e2 = normalize(e2);
+
+	// The passage matrix and his transpose tM, ie. for a vector X: $X = M X' and X' = tM X$
+	// - Works only if the two basis have the same origin
+	float4x4 M = make_float4x4(
+		e1.x, e2.x, e3.x, 0.f,
+		e1.y, e2.y, e3.y, 0.f,
+		e1.z, e2.z, e3.z, 0.f,
+		0.f , 0.f , 0.f , 1.f
+		);
+	float4x4 tM = transpose(M);
+		
+	// Create the transforms obect to world
+	Transform oTw(M, tM);
+	char myV[]="Vector";
+
+	// apply the transformation
+	v_n = oTw(v_n, myV);
+	u_n = oTw(u_n, myV);
+
+	// 
+	if ( (isnan(v_n.x)) || (isnan(v_n.y)) || (isnan(v_n.z)) || (isnan(u_n.x)) || (isnan(u_n.y)) || (isnan(u_n.z)) )
+	{
+		ph->loc = REMOVED;
+		return;
+	}
+	
+	// Update the value of u and v of the photon	
+	ph->v = v_n;
+	ph->u = u_n;
+
+	ph->weight *= geoS->reflectivity;
+		
+    if (!le)
+	{
+		if (RRd==1){
+			/* Russian roulette for propagating photons **/
+			if( ph->weight < WEIGHTRRd ){
+				if( RAND < __fdividef(ph->weight,WEIGHTRRd) ){ph->weight = WEIGHTRRd;}
+				else{ph->loc = ABSORBED;}
+			}
+		}
+	} // not le
+} // Function lamb3D
 
 __device__ void surfaceRugueuse3D(Photon* ph, IGeo* geoS, struct RNG_State *rngstate)
 {
