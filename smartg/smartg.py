@@ -1066,7 +1066,7 @@ class Smartg(object):
                         categories[21]+categories[25]+categories[29];
             for i in range (0, 8):
                 cMatVisuRecep[i][:][:] = cMatVisuRecep[i][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
-            
+                
         # finalization
         output = finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl[:], NPhotonsInTot, errorcount, NPhotonsOutTot,
                           OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, prof_oc,
@@ -1962,13 +1962,9 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
             else:    
                 vecCats[(i*4)+2] = float((100.*(1./vecCats[(i*4)+1]**0.5)));
                 vecCats[(i*4)+3] = vecCats[i*4]*(1./vecCats[(i*4)+1]**0.5);
-
-        # print("==== Verification ====")
-        # print("Avec Cat : nombre de ph sur recept = ", (np.uint64(vecCats[1] + vecCats[5] + vecCats[9] + vecCats[13] + \
-        #                                                           vecCats[17] + vecCats[21] + vecCats[25] + vecCats[29])))
-        # print("Avec Cat : poids de ph sur recept = ", (vecCats[0] + vecCats[4] + vecCats[8] + vecCats[12] + \
-        #                                                vecCats[16] + vecCats[20] + vecCats[24] + vecCats[28]))
-        # print("Sans Cat : poids de ph sur recept = ", np.sum(tabMatRecep[0,:,:]))
+    else:
+        tabMatRecep = None
+        vecCats = None
 
     if stdev:
         # finalize the calculation of the standard deviation
