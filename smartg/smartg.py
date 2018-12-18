@@ -125,7 +125,7 @@ type_IObjets = [
     ('geo', 'int32'),         # 1 = sphere, 2 = plane, ...
     ('materialAV', 'int32'),  # 1 = LambMirror, 2 = Matte,
     ('materialAR', 'int32'),  # 3 = Mirror, ... (AV = avant, AR = Arriere)
-    ('type', 'int32'),        # 1 = reflector, 2 = receptor
+    ('type', 'int32'),        # 1 = reflector, 2 = receiver
     ('reflecAV', 'float32'),  # reflectivity of materialAV
     ('reflecAR', 'float32'),  # reflectivity of materialAR
     
@@ -735,7 +735,7 @@ class Smartg(object):
                     # ====================
                     surfMir += surfMirbis
                     
-                elif (myObjects[i].name == "receptor"):
+                elif (myObjects[i].name == "receiver"):
                     myObjects0['type'][i] = 2 # pour reconnaitre le recept sur Cuda
                     TC=myObjects[i].TC
                     sizeXmin = min(myObjects[i].geo.p1.x, myObjects[i].geo.p2.x,
@@ -753,7 +753,7 @@ class Smartg(object):
                 elif (myObjects[i].name == "surf"):
                     myObjects0['type'][i] = 3 # pour reconnaitre le recept sur Cuda
                 else:
-                    raise NameError('You have to specify if your object is a reflector or a receptor!')
+                    raise NameError('You have to specify if your object is a reflector or a receiver!')
                     
         else:
             nObj = 0
@@ -1372,15 +1372,15 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
                 m.add_lut(l, desc=d.replace('I_', 'flux_'))
 
     if (cMatVisuRecep is not None):
-        m.add_dataset('C_Receptor', cMatVisuRecep[0][:][:], ['Horizontal pixel', 'Vertical pixel'])
-        m.add_dataset('C1_Receptor', cMatVisuRecep[1][:][:], ['Horizontal pixel', 'Vertical pixel'])
-        m.add_dataset('C2_Receptor', cMatVisuRecep[2][:][:], ['Horizontal pixel', 'Vertical pixel'])
-        m.add_dataset('C3_Receptor', cMatVisuRecep[3][:][:], ['Horizontal pixel', 'Vertical pixel'])
-        m.add_dataset('C4_Receptor', cMatVisuRecep[4][:][:], ['Horizontal pixel', 'Vertical pixel'])
-        m.add_dataset('C5_Receptor', cMatVisuRecep[5][:][:], ['Horizontal pixel', 'Vertical pixel'])
-        m.add_dataset('C6_Receptor', cMatVisuRecep[6][:][:], ['Horizontal pixel', 'Vertical pixel'])
-        m.add_dataset('C7_Receptor', cMatVisuRecep[7][:][:], ['Horizontal pixel', 'Vertical pixel'])
-        m.add_dataset('C8_Receptor', cMatVisuRecep[8][:][:], ['Horizontal pixel', 'Vertical pixel'])
+        m.add_dataset('C_Receiver', cMatVisuRecep[0][:][:], ['Horizontal pixel', 'Vertical pixel'])
+        m.add_dataset('C1_Receiver', cMatVisuRecep[1][:][:], ['Horizontal pixel', 'Vertical pixel'])
+        m.add_dataset('C2_Receiver', cMatVisuRecep[2][:][:], ['Horizontal pixel', 'Vertical pixel'])
+        m.add_dataset('C3_Receiver', cMatVisuRecep[3][:][:], ['Horizontal pixel', 'Vertical pixel'])
+        m.add_dataset('C4_Receiver', cMatVisuRecep[4][:][:], ['Horizontal pixel', 'Vertical pixel'])
+        m.add_dataset('C5_Receiver', cMatVisuRecep[5][:][:], ['Horizontal pixel', 'Vertical pixel'])
+        m.add_dataset('C6_Receiver', cMatVisuRecep[6][:][:], ['Horizontal pixel', 'Vertical pixel'])
+        m.add_dataset('C7_Receiver', cMatVisuRecep[7][:][:], ['Horizontal pixel', 'Vertical pixel'])
+        m.add_dataset('C8_Receiver', cMatVisuRecep[8][:][:], ['Horizontal pixel', 'Vertical pixel'])
         
         
     if (cats is not None):
@@ -1800,7 +1800,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         - p: progress bar object
         - X0: initial coordinates of the photon entering the atmosphere
         - myObjetcs0 : gpu array containing the information of all the objects
-        - TC : if there is a receptor object, this is the size of 1 cell (result visualisation)
+        - TC : if there is a receiver object, this is the size of 1 cell (result visualisation)
         - nbCx, nbCy : number of cells in x and y directions
     --------------------------------------------------------------
     Returns :

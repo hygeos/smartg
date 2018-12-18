@@ -15,7 +15,7 @@ from matplotlib.colors import LogNorm
 
 # smartg
 from smartg.smartg import Smartg
-from smartg.smartg import LambSurface, RoughSurface, CusForward
+from smartg.smartg import LambSurface, RoughSurface
 from smartg.atmosphere import AtmAFGL, AeroOPAC, CloudOPAC
 from smartg.tools.luts import merge
 from smartg.water import IOP_1
@@ -41,15 +41,6 @@ except NameError:
     except ImportError:
         # Python 3.0 - 3.3
         from imp import reload
-        
-# smartg for 3D object
-import smartg.geometry
-from smartg.geometry import Vector, Point, Normal, Ray, BBox
-import smartg.transform
-from smartg.transform import Transform, Aff
-import smartg.visualizegeo
-from smartg.visualizegeo import receiver_view, Mirror, Plane, Spheric, Transformation, \
-    Entity, Analyse_create_entity, LambMirror, Matte, cat_view
 
 # *************************************************************************
 #                !!!  MODIFICATION --> GO PART 2 !!!
@@ -58,80 +49,6 @@ from smartg.visualizegeo import receiver_view, Mirror, Plane, Spheric, Transform
 #==========================================================================
 # PART1 CAN BE MODIFIED BUT NOT MANDATORY:
 #==========================================================================  
-def test_objForward(**kwargv):
-    '''
-    Basic Rayleigh example
-    '''
-    if option_cuda_time == False:
-        print("==============================================")
-        print("Basic Object in Forward mode")
-        print("==============================================")
-
-    # Creation des objets MirA, B, C et D et du recepteur Recept1
-    wRx = 0.006; wRy = 0.007
-    wMx = 0.004725; wMy = 0.00642
-    MirA = Entity(name = "reflector", \
-                  materialAV = Mirror(reflectivity = 0.88), \
-                  materialAR = Matte(reflectivity = 0.), \
-                  geo = Plane( p1 = Point(-wMx, -wMy, 0.),
-                               p2 = Point(wMx, -wMy, 0.),
-                               p3 = Point(-wMx, wMy, 0.),
-                               p4 = Point(wMx, wMy, 0.) ), \
-                  transformation = Transformation( rotation = np.array([0., 20.281725, 0.]), \
-                                                   translation = np.array([0.95, 0., 0.00517]) ))
-    
-
-    MirA = Entity(MirA);
-    MirA.transformation = Transformation( rotation = np.array([0., 20.281725, 0.]), \
-                                          translation = np.array([0.95, 0., 0.00517]) )
-    MirB = Entity(MirA);
-    MirB.transformation = Transformation( rotation = np.array([0., 29.460753, 0.]), \
-                                          translation = np.array([0.9, 0., 0.00517]) )
-    MirC = Entity(MirA);
-    MirC.transformation = Transformation( rotation = np.array([0., 35.129831, 0.]), \
-                                          translation = np.array([0.85, 0., 0.00517]) )
-    MirD = Entity(MirA);
-    MirD.transformation = Transformation( rotation = np.array([0., 38.715473, 0.]), \
-                                          translation = np.array([0.8, 0., 0.00517]) )
-    
-    Recept1 = Entity(name = "receptor", TC = 0.0005, \
-                     materialAV = Matte(reflectivity = 0.), \
-                     materialAR = Matte(reflectivity = 0.), \
-                     geo = Plane( p1 = Point(-wRx, -wRy, 0.),
-                                  p2 = Point(wRx, -wRy, 0.),
-                                  p3 = Point(-wRx, wRy, 0.),
-                                  p4 = Point(wRx, wRy, 0.) ), \
-                     transformation = Transformation( rotation = np.array([0., -101.5, 0.]), \
-                                                      translation = np.array([1., 0., 0.1065]) ))
-    
-    listobjs = [MirD, MirC, MirB, MirA, Recept1]
-    
-    # Creation d'un interval d'étude (BBox permettant d'éviter certains tests d'intersection)
-    Pmin = [-120., -120., -0.5]
-    Pmax = [120., 120., 121]
-    interval0 = [Pmin, Pmax]
-    
-    # angle zenithal du soleil 
-    solarDir = 14.3
-
-    # permet de lancer les photons depuis un rectangle en TOA
-    custumF = CusForward(CFX=0.5, CFY=0.05)
-    
-    aer = AeroOPAC('desert', 0.25, 550.)
-    pro = AtmAFGL('afglms', comp=[aer], P0 = 877, H2O=1.2)
-    
-    m = Smartg(debug_photon=False, double = True,
-               obj3D = True).run(surf = LambSurface(ALB=0.25),
-                                 THVDEG=solarDir, NF=1e6, wl=550., NBPHOTONS=1e8, NBLOOP = 2e7,
-                                 atm=pro, progress=False, myObjects=listobjs, BEER=1,
-                                 interval = interval0, IsAtm = 1, PHVDEG = 0., cusForward=custumF, **kwargv)
-    
-    if option_cuda_time == False:
-        print(choose_attrs + " :", m.attrs[choose_attrs])
-        print(m.attrs['device'])
-    
-    return m.attrs
-
 def test_rayleigh(**kwargv):
     '''
     Basic Rayleigh example
@@ -312,6 +229,90 @@ def test_atm_surf(**kwargv):
 #         print(choose_attrs + " :", m.attrs[choose_attrs])
 #         print(m.attrs['device'])
 #     return m.attrs
+
+def test_objForward(**kwargv):
+    '''
+    Basic Rayleigh example
+    '''
+    # smartg for 3D object
+    from smartg.smartg import CusForward
+    import smartg.geometry
+    from smartg.geometry import Vector, Point, Normal, Ray, BBox
+    import smartg.transform
+    from smartg.transform import Transform, Aff
+    import smartg.visualizegeo
+    from smartg.visualizegeo import receiver_view, Mirror, Plane, Spheric, Transformation, \
+        Entity, Analyse_create_entity, LambMirror, Matte, cat_view
+    
+    if option_cuda_time == False:
+        print("==============================================")
+        print("Basic Object in Forward mode")
+        print("==============================================")
+
+    # Creation des objets MirA, B, C et D et du recepteur Recept1
+    wRx = 0.006; wRy = 0.007
+    wMx = 0.004725; wMy = 0.00642
+    MirA = Entity(name = "reflector", \
+                  materialAV = Mirror(reflectivity = 0.88), \
+                  materialAR = Matte(reflectivity = 0.), \
+                  geo = Plane( p1 = Point(-wMx, -wMy, 0.),
+                               p2 = Point(wMx, -wMy, 0.),
+                               p3 = Point(-wMx, wMy, 0.),
+                               p4 = Point(wMx, wMy, 0.) ), \
+                  transformation = Transformation( rotation = np.array([0., 20.281725, 0.]), \
+                                                   translation = np.array([0.95, 0., 0.00517]) ))
+    
+
+    MirA = Entity(MirA);
+    MirA.transformation = Transformation( rotation = np.array([0., 20.281725, 0.]), \
+                                          translation = np.array([0.95, 0., 0.00517]) )
+    MirB = Entity(MirA);
+    MirB.transformation = Transformation( rotation = np.array([0., 29.460753, 0.]), \
+                                          translation = np.array([0.9, 0., 0.00517]) )
+    MirC = Entity(MirA);
+    MirC.transformation = Transformation( rotation = np.array([0., 35.129831, 0.]), \
+                                          translation = np.array([0.85, 0., 0.00517]) )
+    MirD = Entity(MirA);
+    MirD.transformation = Transformation( rotation = np.array([0., 38.715473, 0.]), \
+                                          translation = np.array([0.8, 0., 0.00517]) )
+    
+    Recept1 = Entity(name = "receiver", TC = 0.0005, \
+                     materialAV = Matte(reflectivity = 0.), \
+                     materialAR = Matte(reflectivity = 0.), \
+                     geo = Plane( p1 = Point(-wRx, -wRy, 0.),
+                                  p2 = Point(wRx, -wRy, 0.),
+                                  p3 = Point(-wRx, wRy, 0.),
+                                  p4 = Point(wRx, wRy, 0.) ), \
+                     transformation = Transformation( rotation = np.array([0., -101.5, 0.]), \
+                                                      translation = np.array([1., 0., 0.1065]) ))
+    
+    listobjs = [MirD, MirC, MirB, MirA, Recept1]
+    
+    # Creation d'un interval d'étude (BBox permettant d'éviter certains tests d'intersection)
+    Pmin = [-120., -120., -0.5]
+    Pmax = [120., 120., 121]
+    interval0 = [Pmin, Pmax]
+    
+    # angle zenithal du soleil 
+    solarDir = 14.3
+
+    # permet de lancer les photons depuis un rectangle en TOA
+    custumF = CusForward(CFX=0.5, CFY=0.05)
+    
+    aer = AeroOPAC('desert', 0.25, 550.)
+    pro = AtmAFGL('afglms', comp=[aer], P0 = 877, H2O=1.2)
+    
+    m = Smartg(debug_photon=False, double = True,
+               obj3D = True).run(surf = LambSurface(ALB=0.25),
+                                 THVDEG=solarDir, NF=1e6, wl=550., NBPHOTONS=1e8, NBLOOP = 2e7,
+                                 atm=pro, progress=False, myObjects=listobjs, BEER=1,
+                                 interval = interval0, IsAtm = 1, PHVDEG = 0., cusForward=custumF, **kwargv)
+    
+    if option_cuda_time == False:
+        print(choose_attrs + " :", m.attrs[choose_attrs])
+        print(m.attrs['device'])
+    
+    return m.attrs
 #==========================================================================
 
 #==========================================================================
@@ -516,12 +517,36 @@ if __name__ == '__main__' and '__file__' in globals():
             print("you're in: ", output)
             nimp = os.system("git checkout " + list_commits[0])
 
+            for attr in dir(sys.modules['smartg.atmosphere']):
+                if attr not in ('__name__', '__file__'):
+                    delattr(sys.modules['smartg.atmosphere'], attr)
+            reload(sys.modules['smartg.atmosphere'])
+
+            for attr in dir(sys.modules['smartg.water']):
+                if attr not in ('__name__', '__file__'):
+                    delattr(sys.modules['smartg.water'], attr)
+            reload(sys.modules['smartg.water'])
+
+            for attr in dir(sys.modules['smartg.tools.luts']):
+                if attr not in ('__name__', '__file__'):
+                    delattr(sys.modules['smartg.tools.luts'], attr)
+            reload(sys.modules['smartg.tools.luts'])
+
+            for attr in dir(sys.modules['smartg.tools.smartg_view']):
+                if attr not in ('__name__', '__file__'):
+                    delattr(sys.modules['smartg.tools.smartg_view'], attr)
+            reload(sys.modules['smartg.tools.smartg_view'])
+
             for attr in dir(sys.modules['smartg.smartg']):
                 if attr not in ('__name__', '__file__'):
-                    delattr(sys.modules['smartg.smartg'], attr)
-
+                    delattr(sys.modules['smartg.smartg'], attr)  
             reload(sys.modules['smartg.smartg'])
-            from smartg.smartg import Smartg
+                
+            from smartg.smartg import Smartg, LambSurface, RoughSurface
+            from smartg.atmosphere import AtmAFGL, AeroOPAC, CloudOPAC
+            from smartg.tools.luts import merge
+            from smartg.water import IOP_1
+            from smartg.tools.smartg_view import smartg_view, input_view
                 
             if nimp == 0:
                 prepare_measure()
@@ -594,13 +619,37 @@ if __name__ == '__main__' and '__file__' in globals():
             x = [None] * size_x
             for i in range(0, size_x, number_tests):
                 nimp = os.system("git checkout " + list_commits[int(i/number_tests)])
-                
+
+                for attr in dir(sys.modules['smartg.atmosphere']):
+                    if attr not in ('__name__', '__file__'):
+                        delattr(sys.modules['smartg.atmosphere'], attr)
+                reload(sys.modules['smartg.atmosphere'])
+
+                for attr in dir(sys.modules['smartg.water']):
+                    if attr not in ('__name__', '__file__'):
+                        delattr(sys.modules['smartg.water'], attr)
+                reload(sys.modules['smartg.water'])
+
+                for attr in dir(sys.modules['smartg.tools.luts']):
+                    if attr not in ('__name__', '__file__'):
+                        delattr(sys.modules['smartg.tools.luts'], attr)
+                reload(sys.modules['smartg.tools.luts'])
+
+                for attr in dir(sys.modules['smartg.tools.smartg_view']):
+                    if attr not in ('__name__', '__file__'):
+                        delattr(sys.modules['smartg.tools.smartg_view'], attr)
+                reload(sys.modules['smartg.tools.smartg_view'])
+
                 for attr in dir(sys.modules['smartg.smartg']):
                     if attr not in ('__name__', '__file__'):
                         delattr(sys.modules['smartg.smartg'], attr)  
-                        
                 reload(sys.modules['smartg.smartg'])
-                from smartg.smartg import Smartg
+                
+                from smartg.smartg import Smartg, LambSurface, RoughSurface
+                from smartg.atmosphere import AtmAFGL, AeroOPAC, CloudOPAC
+                from smartg.tools.luts import merge
+                from smartg.water import IOP_1
+                from smartg.tools.smartg_view import smartg_view, input_view
                 
                 if nimp == 0:
                     # reload(smartg)

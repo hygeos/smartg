@@ -386,7 +386,7 @@ def Analyse_create_entity(entity, Theta):
                         # print("vecTemp = (", vecTemp.x, ", ", vecTemp.y, ", ", vecTemp.z, ")")
                         TabPhoton2 = np.append(TabPhoton2, Ray(o=p_hit, d=vecTemp, end=120))
                                                
-            if (E[k].name == "receptor"):
+            if (E[k].name == "receiverr"):
                 for i in range(0, LMir2):
                     t_hit = 9999.
                     if(PlaneMesh.Intersect(TabPhoton2[i])):
@@ -531,7 +531,7 @@ if __name__ == '__main__':
                        transformation = Transformation( rotation = np.array([0., 0., 0.]), \
                                                         translation = np.array([0., 0., 0.]) ))
 
-    Recepteur1 = Entity(name = "receptor", \
+    Recepteur1 = Entity(name = "receiver", \
                         material = Mirror(reflectivity = 1., rugosity = 0.1), \
                         geo = Plane( p1 = Point(-10., -10., 0.),
                                      p2 = Point(-10., 10., 0.),
