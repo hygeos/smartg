@@ -219,7 +219,7 @@ __device__ double DatomicAdd(double* address, double val);
 __device__ float get_OD(int , struct Profile ) ;  
 
 __device__ float Lambda(float , float ) ;
-__device__ double LambdaM(double , double ) ;
+__device__ float LambdaM(float , float ) ;
 
 __device__ void DirectionToUV(float, float, float3*, float3*) ;
 __device__ float3 LocalToGlobal(float3, float3, float3, float3) ;

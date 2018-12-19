@@ -1385,8 +1385,8 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
     int sign_direction;
     int i_layer_fw, i_layer_bh; // index or layers forward and behind the photon
     float costh, sinth2;
-    float3 no;
     int ilam = ph->ilam*(NATMd+1);  // wavelength offset in optical thickness table
+    float3 no;
 
     if (ph->layer == 0) ph->layer = 1;
 
@@ -1524,9 +1524,8 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
             hph += h_cur;
             ph->pos = operator+(ph->pos, ph->v*d);
             ph->radius = length(ph->pos);
-            no  = operator/(ph->pos, ph->radius);
+            no = operator/(ph->pos, ph->radius);
             vzn = dot(ph->v, no);
-            //float psi=0.F;
             if (REFRACd) {
                 // We update photon direction at the interface due to refraction
                 // 1. sin_i just to verify if refraction occurs
@@ -3563,7 +3562,7 @@ __device__ void surfaceBRDF(Photon* ph, int le,
 	float3 vi; // photon ingoing  direction in the LOCAL frame
 	float3 v , u;  // photon outgoing direction in the GLOBAL frame
     float3 no_n, no; // normal to the facet LOCAL and GLOBAL frame
-    float3 w_ne, w_ol;
+    //float3 w_ne, w_ol;
     float cBeta2; //facet slope squared
     float4x4 R; // Fresnel Reflection Matrix
 
@@ -3573,7 +3572,7 @@ __device__ void surfaceBRDF(Photon* ph, int le,
     // Nz is the local vertical direction, the direction of the 2 others does not matter
     // because the azimuth is chosen randomly
 	float3 Nx, Ny, Nz;
-    float weight;
+    //float weight;
     MakeLocalFrame(ph->pos, &Nx, &Ny, &Nz);
     /* Transformation of ingoing direction in the local frame*/
     vi = GlobalToLocal(Nx, Ny, Nz, ph->v);
@@ -4919,16 +4918,16 @@ __device__ float Lambda(float avz, float sig) {
     return l;
 }
 
-__device__ double LambdaM(double avz, double sig2) {
+__device__ float LambdaM(float avz, float sig2) {
     // Mischenko implementation
-    double l;
+    float l;
     if (avz == 1.F) l = 0.;
     else {
-        double s1,s2,s3,xi,xxi,dcot,t1,t2;
-        s1 = __dsqrt_rn(2.*(double)sig2/(double)PI);
-        s3 = __drcp_rn(__dsqrt_rn(2.*(double)sig2));
+        float s1,s2,s3,xi,xxi,dcot,t1,t2;
+        s1 = __dsqrt_rn(2.*sig2/PI);
+        s3 = __drcp_rn(__dsqrt_rn(2.*sig2));
         s2 = s3*s3;
-        xi = (double)avz;
+        xi = avz;
         xxi=xi*xi;
         dcot =  xi *__drcp_rn(__dsqrt_rn(1.-xxi));
         t1 = exp(-dcot*dcot*s2);
