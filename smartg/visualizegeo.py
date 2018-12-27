@@ -386,7 +386,7 @@ def Analyse_create_entity(entity, Theta):
                         # print("vecTemp = (", vecTemp.x, ", ", vecTemp.y, ", ", vecTemp.z, ")")
                         TabPhoton2 = np.append(TabPhoton2, Ray(o=p_hit, d=vecTemp, end=120))
                                                
-            if (E[k].name == "receiverr"):
+            if (E[k].name == "receiver"):
                 for i in range(0, LMir2):
                     t_hit = 9999.
                     if(PlaneMesh.Intersect(TabPhoton2[i])):

@@ -50,6 +50,7 @@ public:
 	__host__ __device__ Transform RotateX(float angle);             // rot par rapport à X  
 	__host__ __device__ Transform RotateY(float angle);             // rot par rapport à Y  
 	__host__ __device__ Transform RotateZ(float angle);             // rot par rapport à Z
+	__host__ __device__ Transform Rotate(float angle, const float3 &axis);
 
 	private:
 	// Paramètres privés
@@ -324,6 +325,35 @@ Transform Transform::RotateZ(float angle) {
     return Transform(m, transpose(m));
 }
 
+Transform Transform::Rotate(float angle, const float3 &axis) {
+	
+	float3 a = normalize(axis);
+	
+	#if __CUDA_ARCH__ >= 200
+    float s = sin(radians(angle));
+    float c = cos(radians(angle));
+	#elif !defined(__CUDA_ARCH__)
+	float s = sinf(radians(angle));
+    float c = cosf(radians(angle));
+	#endif
+	
+	float4x4 m = make_diag_float4x4(1);
+	
+	m[0][0] = a.x * a.x + (1.f - a.x * a.x) * c;
+	m[0][1] = a.x * a.y * (1.f - c) - a.z * s;
+	m[0][2] = a.x * a.z * (1.f - c) + a.y * s;
+
+	m[1][0] = a.x * a.y * (1.f - c) + a.z * s;
+	m[1][1] = a.y * a.y + (1.f - a.y * a.y) * c;
+	m[1][2] = a.y * a.z * (1.f - c) - a.x * s;
+
+	m[2][0] = a.x * a.z * (1.f - c) - a.y * s;
+	m[2][1] = a.y * a.z * (1.f - c) + a.x * s;
+	m[2][2] = a.z * a.z + (1.f - a.z * a.z) * c;
+
+    return Transform(m, transpose(m));
+}
+
 //**************************************************************
 //**************************************************************
 //**************************************************************
@@ -357,6 +387,7 @@ public:
 	__host__ __device__ Transformd RotateX(double angle);               // rot par rapport à X  
 	__host__ __device__ Transformd RotateY(double angle);               // rot par rapport à Y  
 	__host__ __device__ Transformd RotateZ(double angle);               // rot par rapport à Z
+	__host__ __device__ Transformd Rotate(double angle, const double3 &axis);
 
 private:
 	// Paramètres privés
@@ -626,6 +657,35 @@ Transformd Transformd::RotateZ(double angle) {
 		sin_t,  cos_t, 0, 0,
 		0,          0, 1, 0,
 		0,          0, 0, 1);
+    return Transformd(m, transpose(m));
+}
+
+Transformd Transformd::Rotate(double angle, const double3 &axis) {
+	
+	double3 a = normalize(axis);
+	
+	#if __CUDA_ARCH__ >= 200
+    double s = sin(radiansd(angle));
+    double c = cos(radiansd(angle));
+	#elif !defined(__CUDA_ARCH__)
+	double s = sin(radiansd(angle));
+    double c = cos(radiansd(angle));
+	#endif
+	
+	double4x4 m = make_diag_double4x4(1);
+	
+	m[0][0] = a.x * a.x + (1. - a.x * a.x) * c;
+	m[0][1] = a.x * a.y * (1. - c) - a.z * s;
+	m[0][2] = a.x * a.z * (1. - c) + a.y * s;
+
+	m[1][0] = a.x * a.y * (1. - c) + a.z * s;
+	m[1][1] = a.y * a.y + (1. - a.y * a.y) * c;
+	m[1][2] = a.y * a.z * (1. - c) - a.x * s;
+
+	m[2][0] = a.x * a.z * (1. - c) - a.y * s;
+	m[2][1] = a.y * a.z * (1. - c) + a.x * s;
+	m[2][2] = a.z * a.z + (1. - a.z * a.z) * c;
+
     return Transformd(m, transpose(m));
 }
 // -------------------------------------------------------

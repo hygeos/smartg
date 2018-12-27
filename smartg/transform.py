@@ -76,6 +76,26 @@ class Transform(object):
         myM[1,0] = sin_t; myM[1,1] = cos_t;
         return Transform(myM, np.transpose(myM))
 
+    def rotate(self, angle, axis):
+        a = Vector(Normalize(axis))
+        s = np.sin(angle*(np.pi / 180.))
+        c = np.cos(angle*(np.pi / 180.))
+        myM = np.identity(4)
+
+        myM[0,0] = a.x*a.x+(1-a.x*a.x)*c;
+        myM[0,1] = a.x*a.y*(1-c)-a.z*s;
+        myM[0,2] = a.x*a.z*(1-c)+a.y*s;
+
+        myM[1,0] = a.x*a.y*(1-c)+a.z*s;
+        myM[1,1] = a.y*a.y+(1-a.y*a.y)*c;
+        myM[1,2] = a.y*a.z*(1-c)-a.x*s;
+
+        myM[2,0] = a.x*a.z*(1-c)-a.y*s;
+        myM[2,1] = a.y*a.z*(1-c)+a.x*s;
+        myM[2,2] = a.z*a.z+(1-a.z*a.z)*c;
+        
+        return Transform(myM, np.transpose(myM))
+
     def __mul__(self, T): 
         if (type(T) == Transform):
             return Transform(np.dot(self.m, T.m), np.dot(T.mInv, self.mInv))
