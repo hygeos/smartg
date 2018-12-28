@@ -291,15 +291,18 @@ class CusForward(object):
     '''
     Definition of CusForward (custum rectangular forward mode of surface X*Y)
 
-    CFX : size in X
-    CFY : size in Y
-    CFMODE : custum Forward = 1 -> activated
+    CFX : size in X (used ony for FF LMODE)
+    CFY : size in Y (used ony for FF LMODE)
+    LMODE (Launching mode) : RF = Restricted Forward or FF = Full Forward
+                             RF --> launch the photons such that the direct beams fill only reflector objects
+                             FF --> launch the photons in a rectangle from TOA whrere the beams at the center,
+                                    with the solar direction, targets the origin point (0,0,0)
     '''
-    def __init__(self, CFX=0., CFY=0., CFMODE = 1):
+    def __init__(self, CFX=0., CFY=0., LMODE = "RF"):
         self.dict = {
                 'CFX':   CFX,
                 'CFY':   CFY,
-                'CFMODE': CFMODE
+                'LMODE': LMODE
                 }
 
     def __str__(self):
@@ -337,6 +340,8 @@ class Smartg(object):
             - back : boolean, if True, run in backward mode, default forward mode
             
             - bias : boolean, if True, use the bias sampling scheme, default True
+
+            - obj3D : Set to True to enable simulation with 3D objects
 
             - alt_pp: boolean, if True new PP progation scheme is used
             
@@ -565,6 +570,9 @@ class Smartg(object):
             - IsAtm (effet uniquement si myObjects != None) : si égal à 0 , cela permet dans le cas sans atmosphère,
                       d'empêcher certaines fuites de photons.
 
+            - cusForward : None is the default mode (sun is a ponctual source targeting the origin (0,0,0)), else it
+                           enable to use the RF or FF launching mode (see the class CusForward) --> cusForward=CusForward(...)
+
         Return value:
         ------------
 
@@ -607,7 +615,7 @@ class Smartg(object):
                 Pmax_x = 300;  Pmax_y = 300; Pmax_z = 120;
             nObj = len(myObjects)
             myObjects0 = np.zeros(nObj, dtype=type_IObjets, order='C')
-            TC = 0.; nbCx = int(0); nbCy = int(0);
+            TC = None; nbCx = int(0); nbCy = int(0);
             pp1 = 0.; pp2 = 0.; pp3 = 0.; pp4 = 0.;
             surfMir = 0.
 
@@ -713,43 +721,44 @@ class Smartg(object):
                 if (myObjects[i].name == "reflector"):
                     myObjects0['type'][i] = 1 # pour reconnaitre le reflect sur Cuda
 
-                    # Etape cruciale pour la visualisation des résulats (mode forward et mixte uniquement)
+                    # Etape cruciale pour la visualisation des résulats (mode forward restreint uniquement)
+                    if (cusForward is not None):
+                        if (cusForward.dict['LMODE'] == "RF"):
+                            # Récupération des 4 points formant le rectangle représentant le reflecteur
+                            pp1 = myObjects[i].geo.p1
+                            pp2 = myObjects[i].geo.p2
+                            pp3 = myObjects[i].geo.p3
+                            pp4 = myObjects[i].geo.p4
 
-                    # Récupération des 4 points formant le rectangle représentant le reflecteur
-                    pp1 = myObjects[i].geo.p1
-                    pp2 = myObjects[i].geo.p2
-                    pp3 = myObjects[i].geo.p3
-                    pp4 = myObjects[i].geo.p4
+                            # Prise en compte des transfos de rot en X et Y et Z
+                            TpT = Transform()
+                            TpRX = TpT.rotateX(myObjects[i].transformation.rotx)
+                            TpRY = TpT.rotateY(myObjects[i].transformation.roty)
+                            TpRZ = TpT.rotateZ(myObjects[i].transformation.rotz)
+                            TpT = TpRX*TpRY*TpRZ
+                            invTpT = TpT.inverse(TpT)
 
-                    # Prise en compte des transfos de rot en X et Y et Z
-                    TpT = Transform()
-                    TpRX = TpT.rotateX(myObjects[i].transformation.rotx)
-                    TpRY = TpT.rotateY(myObjects[i].transformation.roty)
-                    TpRZ = TpT.rotateZ(myObjects[i].transformation.rotz)
-                    TpT = TpRX*TpRY*TpRZ
-                    invTpT = TpT.inverse(TpT)
+                            # Application des transfos sur les 4 points
+                            pp1 = TpT[pp1]
+                            pp2 = TpT[pp2]
+                            pp3 = TpT[pp3]
+                            pp4 = TpT[pp4]
 
-                    # Application des transfos sur les 4 points
-                    pp1 = TpT[pp1]
-                    pp2 = TpT[pp2]
-                    pp3 = TpT[pp3]
-                    pp4 = TpT[pp4]
-                    
-                    # ====================
-                    timeRefDir1b = (-1.* pp1.z)/vSun.z
-                    timeRefDir2b = (-1.* pp2.z)/vSun.z
-                    timeRefDir3b = (-1.* pp3.z)/vSun.z
-                    timeRefDir4b = (-1.* pp4.z)/vSun.z
-                    pp1b = pp1 + vSun*timeRefDir1b
-                    pp2b = pp2 + vSun*timeRefDir2b
-                    pp3b = pp3 + vSun*timeRefDir3b
-                    pp4b = pp4 + vSun*timeRefDir4b
-                    #print ("pointbis", pp1b, pp2b, pp3b, pp4b)
-                    TwoAAbis = abs((pp1b.x - pp4b.x)*(pp2b.y - pp3b.y)) + abs((pp2b.x - pp3b.x)*(pp1b.y - pp4b.y))
-                    surfMirbis = TwoAAbis/2.
-                    #print ("surfMirbis", surfMirbis)
-                    # ====================
-                    surfMir += surfMirbis
+                            # ====================
+                            timeRefDir1b = (-1.* pp1.z)/vSun.z
+                            timeRefDir2b = (-1.* pp2.z)/vSun.z
+                            timeRefDir3b = (-1.* pp3.z)/vSun.z
+                            timeRefDir4b = (-1.* pp4.z)/vSun.z
+                            pp1b = pp1 + vSun*timeRefDir1b
+                            pp2b = pp2 + vSun*timeRefDir2b
+                            pp3b = pp3 + vSun*timeRefDir3b
+                            pp4b = pp4 + vSun*timeRefDir4b
+                            #print ("pointbis", pp1b, pp2b, pp3b, pp4b)
+                            TwoAAbis = abs((pp1b.x - pp4b.x)*(pp2b.y - pp3b.y)) + abs((pp2b.x - pp3b.x)*(pp1b.y - pp4b.y))
+                            surfMirbis = TwoAAbis/2.
+                            #print ("surfMirbis", surfMirbis)
+                            # ====================
+                            surfMir += surfMirbis
                     
                 elif (myObjects[i].name == "receiver"):
                     myObjects0['type'][i] = 2 # pour reconnaitre le recept sur Cuda
@@ -770,51 +779,51 @@ class Smartg(object):
                     myObjects0['type'][i] = 3 # pour reconnaitre le recept sur Cuda
                 else:
                     raise NameError('You have to specify if your object is a reflector or a receiver!')
-                    
+                
+            myObjects0 = to_gpu(myObjects0)          
         else:
             nObj = 0
-            myObjects0 = np.zeros(1, dtype=type_IObjets, order='C')
+            myObjects0 = None #np.zeros(1, dtype=type_IObjets, order='C')
             Pmin_x = None; Pmin_y = None; Pmin_z = None;
             Pmax_x = None; Pmax_y = None; Pmax_z = None;
             IsAtm = None; TC = None; nbCx = 10; nbCy = 10;
-            
-        myObjects0 = to_gpu(myObjects0)
         # END OBJ ===================================================
 
         if cusForward is not None:
-            nn3 = Normal(vSun)
-            nn1, nn2 = CoordinateSystem(nn3)
-            # Création d'une matrice appelé matrice de passage
-            mm2 = np.zeros((4,4), dtype=np.float64)
-            # Remplissage de la matrice de passage en fonction du repère (nn3 étant le nouvel axe z)
-            mm2[0,0] = nn1.x ; mm2[0,1] = nn2.x ; mm2[0,2] = nn3.x ; mm2[0,3] = 0. ;
-            mm2[1,0] = nn1.y ; mm2[1,1] = nn2.y ; mm2[1,2] = nn3.y ; mm2[1,3] = 0. ;
-            mm2[2,0] = nn1.z ; mm2[2,1] = nn2.z ; mm2[2,2] = nn3.z ; mm2[2,3] = 0. ;
-            mm2[3,0] = 0.    ; mm2[3,1] = 0.    ; mm2[3,2] = 0.    ; mm2[3,3] = 1. ;
-            xnn = float(cusForward.dict['CFX'])/2.
-            ynn = float(cusForward.dict['CFY'])/2.
-            ppn1 = Point(-xnn, -ynn, 0.)
-            ppn2 = Point(xnn, -ynn, 0.)
-            ppn3 = Point(-xnn, ynn, 0.)
-            ppn4 = Point(xnn, ynn, 0.)
-            # Création de la transformation permettant le changement de base
-            mm2Inv = np.transpose(mm2)
-            ooTwn = Transform(m = mm2, mInv = mm2Inv)
-            ppn1 = ooTwn[ppn1]
-            ppn2 = ooTwn[ppn2]
-            ppn3 = ooTwn[ppn3]
-            ppn4 = ooTwn[ppn4]
-            v_nn = ooTwn[vSun]
-            timen1 = (-1.* ppn1.z)/v_nn.z
-            timen2 = (-1.* ppn2.z)/v_nn.z
-            timen3 = (-1.* ppn3.z)/v_nn.z
-            timen4 = (-1.* ppn4.z)/v_nn.z
-            ppn1 += v_nn*timen1
-            ppn2 += v_nn*timen2
-            ppn3 += v_nn*timen3
-            ppn4 += v_nn*timen4
-            TwoAn = abs((ppn1.x - ppn4.x)*(ppn2.y - ppn3.y)) + abs((ppn2.x - ppn3.x)*(ppn1.y - ppn4.y))
-            surfMir = TwoAn/2.
+            if (cusForward.dict['LMODE'] == "FF"):
+                nn3 = Normal(vSun)
+                nn1, nn2 = CoordinateSystem(nn3)
+                # Création d'une matrice appelé matrice de passage
+                mm2 = np.zeros((4,4), dtype=np.float64)
+                # Remplissage de la matrice de passage en fonction du repère (nn3 étant le nouvel axe z)
+                mm2[0,0] = nn1.x ; mm2[0,1] = nn2.x ; mm2[0,2] = nn3.x ; mm2[0,3] = 0. ;
+                mm2[1,0] = nn1.y ; mm2[1,1] = nn2.y ; mm2[1,2] = nn3.y ; mm2[1,3] = 0. ;
+                mm2[2,0] = nn1.z ; mm2[2,1] = nn2.z ; mm2[2,2] = nn3.z ; mm2[2,3] = 0. ;
+                mm2[3,0] = 0.    ; mm2[3,1] = 0.    ; mm2[3,2] = 0.    ; mm2[3,3] = 1. ;
+                xnn = float(cusForward.dict['CFX'])/2.
+                ynn = float(cusForward.dict['CFY'])/2.
+                ppn1 = Point(-xnn, -ynn, 0.)
+                ppn2 = Point(xnn, -ynn, 0.)
+                ppn3 = Point(-xnn, ynn, 0.)
+                ppn4 = Point(xnn, ynn, 0.)
+                # Création de la transformation permettant le changement de base
+                mm2Inv = np.transpose(mm2)
+                ooTwn = Transform(m = mm2, mInv = mm2Inv)
+                ppn1 = ooTwn[ppn1]
+                ppn2 = ooTwn[ppn2]
+                ppn3 = ooTwn[ppn3]
+                ppn4 = ooTwn[ppn4]
+                v_nn = ooTwn[vSun]
+                timen1 = (-1.* ppn1.z)/v_nn.z
+                timen2 = (-1.* ppn2.z)/v_nn.z
+                timen3 = (-1.* ppn3.z)/v_nn.z
+                timen4 = (-1.* ppn4.z)/v_nn.z
+                ppn1 += v_nn*timen1
+                ppn2 += v_nn*timen2
+                ppn3 += v_nn*timen3
+                ppn4 += v_nn*timen4
+                TwoAn = abs((ppn1.x - ppn4.x)*(ppn2.y - ppn3.y)) + abs((ppn2.x - ppn3.x)*(ppn1.y - ppn4.y))
+                surfMir = TwoAn/2.
 
         
         #
@@ -934,8 +943,8 @@ class Smartg(object):
         tab_sensor = to_gpu(tab_sensor)
 
         # cusForward definition
-        if cusForward is None:
-            cusForward = CusForward(CFX=0., CFY=0., CFMODE = 0)
+        # if cusForward is None:
+            # cusForward = CusForward(CFX=0., CFY=0., LMODE = "NONE")
             
         #
         # surface
@@ -1077,12 +1086,13 @@ class Smartg(object):
         attrs.update(self.common_attrs)
 
         # En rapport avec l'implémentation des objets (permet le visuel des res du recept)
-        if (nObj>0):
-            sumNbCats = categories[1]+categories[5]+categories[9]+categories[13]+categories[17]+\
-                        categories[21]+categories[25]+categories[29];
-            for i in range (0, 8):
-                cMatVisuRecep[i][:][:] = cMatVisuRecep[i][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
-                
+        if (TC is not None):
+            if (cusForward is not None):
+                for i in range (0, 8):
+                    cMatVisuRecep[i][:][:] = cMatVisuRecep[i][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
+            else:
+                cMatVisuRecep[:][:][:] = cMatVisuRecep[:][:][:]
+                                                                   
         # finalization
         output = finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl[:], NPhotonsInTot, errorcount, NPhotonsOutTot,
                           OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, prof_oc,
@@ -1639,13 +1649,19 @@ def InitConst(surf, env, NATM, NOCE, mod,
         copy_to_device('Pmax_y', Pmax_y, np.float32)
         copy_to_device('Pmax_z', Pmax_z, np.float32)
         copy_to_device('IsAtm', IsAtm, np.int32)
-        copy_to_device('TCd', TC, np.float32)
+        if TC is not None:
+            copy_to_device('TCd', TC, np.float32)
         copy_to_device('nbCx', nbCx, np.int32)
         copy_to_device('nbCy', nbCy, np.int32)   
     if cusForward != None:
-        copy_to_device('CFXd', cusForward.dict['CFX'], np.float32)
-        copy_to_device('CFYd', cusForward.dict['CFY'], np.float32)
-        copy_to_device('CFMODEd', cusForward.dict['CFMODE'], np.int32)
+        if (cusForward.dict['LMODE'] == "RF"):
+            copy_to_device('LMODEd', 1, np.int32)
+        if (cusForward.dict['LMODE'] == "FF"):
+            copy_to_device('CFXd', cusForward.dict['CFX'], np.float32)
+            copy_to_device('CFYd', cusForward.dict['CFY'], np.float32)
+            copy_to_device('LMODEd', 2, np.int32)
+    else:
+        copy_to_device('LMODEd', 0, np.int32)
         
 def init_profile(wl, prof, kind):
     '''
@@ -1815,7 +1831,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         - kern : kernel launching the transfert radiative
         - p: progress bar object
         - X0: initial coordinates of the photon entering the atmosphere
-        - myObjetcs0 : gpu array containing the information of all the objects
+        - myObjects0 : gpu array containing the information of all the objects
         - TC : if there is a receiver object, this is the size of 1 cell (result visualisation)
         - nbCx, nbCy : number of cells in x and y directions
     --------------------------------------------------------------
@@ -1834,19 +1850,28 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
     Counter = gpuzeros(1, dtype='uint64')
     
     # Initializations linked to objects
-    nbPhCat = gpuzeros(8, dtype=np.uint64) # vector to fill the number of photons for  each categories
-    if double :
-        wPhCat = gpuzeros(8, dtype=np.float64)  # vector to fill the weight of photons for each categories
-        tabObjInfo = gpuzeros((9, nbCx, nbCy), dtype=np.float64)
+    if TC is not None:
+        nbPhCat = gpuzeros(8, dtype=np.uint64) # vector to fill the number of photons for  each categories
+        if double:
+            wPhCat = gpuzeros(8, dtype=np.float64)  # vector to fill the weight of photons for each categories
+            tabObjInfo = gpuzeros((9, nbCx, nbCy), dtype=np.float64)
+        else:
+            wPhCat = gpuzeros(8, dtype=np.float32)
+            tabObjInfo = gpuzeros((9, nbCx, nbCy), dtype=np.float32)
+        tabMatRecep = np.zeros((9, nbCx, nbCy), dtype=np.float64)  
+        # vecteur comprenant : weightPhotons, nbPhoton, err% et errAbs pour
+        # les 8 categories donc 4 x 8 valeurs = 32. vecCat[0], [1], [2] et [3]
+        # pour la categorie 1 et ainsi de suite...
+        vecCats = np.zeros((32), dtype=np.float64) 
     else:
-        wPhCat = gpuzeros(8, dtype=np.float32)
-        tabObjInfo = gpuzeros((9, nbCx, nbCy), dtype=np.float32)
-    tabMatRecep = np.zeros((9, nbCx, nbCy), dtype=np.float64)  
-    # vecteur comprenant : weightPhotons, nbPhoton, err% et errAbs pour
-    # les 8 categories donc 4 x 8 valeurs = 32. vecCat[0], [1], [2] et [3]
-    # pour la categorie 1 et ainsi de suite...
-    vecCats = np.zeros((32), dtype=np.float64) 
-    
+        nbPhCat = gpuzeros(1, dtype=np.uint64)
+        if double:
+            wPhCat = gpuzeros(1, dtype=np.float64)
+            tabObjInfo = gpuzeros((1, 1, 1), dtype=np.float64)
+        else:
+            wPhCat = gpuzeros(1, dtype=np.float32)
+            tabObjInfo = gpuzeros((1, 1, 1), dtype=np.float32)
+            
     # Initialize the array for error counting
     NERROR = 32
     errorcount = gpuzeros(NERROR, dtype='uint64')
@@ -1912,7 +1937,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
 
         # kernel launch
 
-        if TC is not None:
+        if myObjects0 is not None:
             kern(spectrum, X0, faer, foce,
                  errorcount, nThreadsActive, tabPhotons, tabDist, tabHist,
                  Counter, NPhotonsIn, NPhotonsOut, tabthv, tabphi, tab_sensor,
@@ -1955,7 +1980,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
             tabHistTot = H
         #!!!!!!!!!!!!!!!!!!!!!!!!!!!
         
-        if (TC is not None):
+        if (myObjects0 is not None):
             import sys
             print ("Avancement... NPhotonsIn host (smartg) is:", NPhotonsInTot, file = sys.stderr)
 

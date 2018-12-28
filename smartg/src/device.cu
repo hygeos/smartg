@@ -1186,7 +1186,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     #endif
 
     #ifdef OBJ3D
-	if (CFMODEd == 0) // Marche que pour le mode forward restreint
+	if (LMODEd == 1) // Marche que pour le mode forward restreint
 	{		
 		/* ***************************************************************************************** */
 		/* Créer la surface en TOA qui visera un reflecteur avec prise en compte des transformations */
@@ -1338,16 +1338,17 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 			#endif // END IF DOUBLE OR FLOAT
 		}
 		/* ***************************************************************************************** */		
-	} // CFMODE == 0
-
-	else if (CFMODEd == 1)
+	} // LMODE == 1
+    #endif //END OBJ3D
+	
+	if (LMODEd == 2)
 	{
 		float3 cusForwPos = make_float3( ((CFXd * RAND) - 0.5*CFXd), ((CFYd * RAND) - 0.5*CFYd), 0.);
 		ph->pos.x += cusForwPos.x + 1.;
 		ph->pos.y += cusForwPos.y;
 		ph->pos.z = tab_sensor[ph->is].POSZ;
-	} //END CFMODEd == 1
-    #endif //END OBJ3D
+	} //END LMODEd == 2
+
     }
 
 
@@ -1920,7 +1921,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 		// nObj = le nombre d'objets, si = 0 alors le test n'est pas nécessaire.
 	    if (nObj > 0){
 			mytest = geoTest(ph->pos, ph->v, ph->locPrev, &phit, geoS, myObjets);
-			if (ph->direct == 0 && ph->pos.z == 120. && mytest == false && CFMODEd == 0) {ph->loc=NONE; return;}
+			if (ph->direct == 0 && ph->pos.z == 120. && mytest == false && LMODEd == 1) {ph->loc=NONE; return;}
 		}
 		//if (ph->pos.z == 120. && mytest == false) {ph->loc=NONE; return;}
 		//if (ph->pos.z == 120. && mytest == true && geoS->type != 1) {ph->loc=NONE; return;}
@@ -3505,9 +3506,6 @@ __device__ void surfaceLambert(Photon* ph, int le,
     ph->M = mul(ph->M, RL);
     #endif
 
-    #ifdef OBJ3D
-	ph->loc = ATMOS;
-	#else
 	/***************************************************/
 	/* Update of photon location and weight */
 	/***************************************************/
@@ -3523,7 +3521,6 @@ __device__ void surfaceLambert(Photon* ph, int le,
 		ph->layer = NOCEd; 
 		ph->weight *= spectrum[ph->ilam].alb_seafloor; /*[Eq. 16,39]*/
 	}
-    #endif
 
 } //surfaceLambert
 

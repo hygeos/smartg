@@ -22,12 +22,13 @@ import mpl_toolkits.mplot3d as mp3d
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from matplotlib import colors as mcolors
 
-def receiver_view(disMatrix, w = False, logI=False, nameFile = None):
+def receiver_view(disMatrix, w = False, logI=False, nameFile = None, MTOA = 1320):
 
     '''
     disMatrix : numpy array with flux distribution at the receiver
     w : the receiver size, in meter. Can be a scalar or a list with x and y values
     logI : enable log interval
+    MTOA : exitance at TOA (W/m2)
     '''
     if w==False :
         raise Exception("In receiver_view(), the receiver size w must be specified!")
@@ -44,7 +45,7 @@ def receiver_view(disMatrix, w = False, logI=False, nameFile = None):
     plt.figure()
 
     if logI == False :
-        cax = plt.imshow(m*1320, cmap=plt.get_cmap('jet'), interpolation='None', \
+        cax = plt.imshow(m*MTOA, cmap=plt.get_cmap('jet'), interpolation='None', \
                          extent = [-(wy*1000),(wy*1000),-(wx*1000),(wx*1000)])
     else:
         m2 = m
@@ -53,8 +54,8 @@ def receiver_view(disMatrix, w = False, logI=False, nameFile = None):
         else:
             valmin = np.amin(m2)
             
-        cax = plt.imshow(m*1320, cmap=plt.get_cmap('jet'), \
-                         norm=mcolors.LogNorm(vmin=valmin*1320, vmax=np.amax(m*1320)), \
+        cax = plt.imshow(m*MTOA, cmap=plt.get_cmap('jet'), \
+                         norm=mcolors.LogNorm(vmin=valmin*MTOA, vmax=np.amax(m*MTOA)), \
                          interpolation='None', extent = [-(wy*1000),(wy*1000),-(wx*1000),(wx*1000)])
 
     cbar = plt.colorbar()

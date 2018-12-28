@@ -73,7 +73,7 @@ __device__ __constant__ int nbCy;
 // custum forward
 __device__ __constant__ float CFXd;
 __device__ __constant__ float CFYd;
-__device__ __constant__ int CFMODEd;
+__device__ __constant__ int LMODEd;
 
 /**********************************************************
 *	> Prototypes de device.cu
