@@ -318,77 +318,79 @@ Triangle::Triangle(const Transform *o2w, const Transform *w2o,
 	p1 = a; p2 =b; p3 = c;
 }
 
+#ifndef DOUBLE
 // Méthode de Möller-Trumbore pour l'intersection rayon/triangle
-/* bool Triangle::Intersect(const Ray &ray, float *tHit, */
-/* 						 DifferentialGeometry *dg) const */
-/* { */
-/* 	float3 e1 = p2 - p1; */
-/* 	float3 e2 = p3 - p1; */
-/* 	float3 s1 = cross(ray.d, e2); */
-/*     float divisor = dot(s1, e1); */
+bool Triangle::Intersect(const Ray &ray, float *tHit,
+						 DifferentialGeometry *dg) const
+{
+	float3 e1 = p2 - p1;
+	float3 e2 = p3 - p1;
+	float3 s1 = cross(ray.d, e2);
+    float divisor = dot(s1, e1);
 
-/* 	if (divisor == 0.) */
-/* 	{return false;} */
-/* 	float invDivisor = 1.F/divisor; */
+	if (divisor == 0.)
+	{return false;}
+	float invDivisor = 1.F/divisor;
 
-/* 	// Calcul de la 1er composante des coordonnées baricentriques */
-/* 	float3 s = ray.o - p1; */
-/* 	float b1 = dot(s, s1) * invDivisor; */
+	// Calcul de la 1er composante des coordonnées baricentriques
+	float3 s = ray.o - p1;
+	float b1 = dot(s, s1) * invDivisor;
 
-/*     if (b1 < 0. || b1 > 1.) */
-/* 	{return false;} */
+    if (b1 < 0. || b1 > 1.)
+	{return false;}
 
-/*     // Calcul de la 2nd composante des coordonnées baricentriques */
-/*     float3 s2 = cross(s, e1); */
-/*     float b2 = dot(ray.d, s2) * invDivisor; */
-/* 	if (b2 < 0. || b1 + b2 > 1.) */
-/*         return false; */
+    // Calcul de la 2nd composante des coordonnées baricentriques
+    float3 s2 = cross(s, e1);
+    float b2 = dot(ray.d, s2) * invDivisor;
+	if (b2 < 0. || b1 + b2 > 1.)
+        return false;
 
-/*     // Calcul de temps t du rayon pour atteindre le point d'intersection */
-/*     float t = dot(e2, s2) * invDivisor; */
+    // Calcul de temps t du rayon pour atteindre le point d'intersection
+    float t = dot(e2, s2) * invDivisor;
 	
-/*     if (t < ray.mint || t > ray.maxt) */
-/*         return false; */
+    if (t < ray.mint || t > ray.maxt)
+        return false;
 
-/*     // Calcul des dérivée partielles du triangle */
-/* 	float3 dpdu, dpdv; */
-/* 	float3c uvsC0, uvsC1; // row1 and row2 */
-/* 	uvsC0 = make_float3c(0., 1., 1.); */
-/* 	uvsC1 = make_float3c(0., 0., 1.); */
+    // Calcul des dérivée partielles du triangle
+	float3 dpdu, dpdv;
+	float3c uvsC0, uvsC1; // row1 and row2
+	uvsC0 = make_float3c(0., 1., 1.);
+	uvsC1 = make_float3c(0., 0., 1.);
 		
-/*     // Calcul du Delta pour les dérivée partielles du triangle */
-/* 	float du1 = uvsC0[0] - uvsC0[2]; */
-/* 	float du2 = uvsC0[1] - uvsC0[2]; */
-/*     float dv1 = uvsC1[0] - uvsC1[2]; */
-/*     float dv2 = uvsC1[1] - uvsC1[2]; */
-/*     float3 dp1 = p1 - p3, dp2 = p2 - p3; */
-/*     float determinant = du1 * dv2 - dv1 * du2; */
+    // Calcul du Delta pour les dérivée partielles du triangle
+	float du1 = uvsC0[0] - uvsC0[2];
+	float du2 = uvsC0[1] - uvsC0[2];
+    float dv1 = uvsC1[0] - uvsC1[2];
+    float dv2 = uvsC1[1] - uvsC1[2];
+    float3 dp1 = p1 - p3, dp2 = p2 - p3;
+    float determinant = du1 * dv2 - dv1 * du2;
 
-/*     if (determinant == 0.) */
-/* 	{ */
-/*         // Gestion du cas où le déterminant est nul */
-/*         coordinateSystem(normalize(cross(e2, e1)), &dpdu, &dpdv); */
-/*     } */
-/*     else */
-/* 	{ */
-/*         double invdet = 1. / determinant; */
-/*         dpdu = (dv2 * dp1 - dv1 * dp2) * invdet; */
-/*         dpdv = (-du2 * dp1 + du1 * dp2) * invdet; */
-/*     } */
+    if (determinant == 0.)
+	{
+        // Gestion du cas où le déterminant est nul
+        coordinateSystem(normalize(cross(e2, e1)), &dpdu, &dpdv);
+    }
+    else
+	{
+        double invdet = 1. / determinant;
+        dpdu = (dv2 * dp1 - dv1 * dp2) * invdet;
+        dpdv = (-du2 * dp1 + du1 * dp2) * invdet;
+    }
 
-/*     // Interpolation des coordonnées paramétrique du triangle $(u,v)$ */
-/*     float b0 = 1 - b1 - b2; */
-/*     float tu = b0*uvsC0[0] + b1*uvsC0[1] + b2*uvsC0[2]; */
-/*     float tv = b0*uvsC1[0] + b1*uvsC1[1] + b2*uvsC1[2]; */
+    // Interpolation des coordonnées paramétrique du triangle $(u,v)$
+    float b0 = 1 - b1 - b2;
+    float tu = b0*uvsC0[0] + b1*uvsC0[1] + b2*uvsC0[2];
+    float tv = b0*uvsC1[0] + b1*uvsC1[1] + b2*uvsC1[2];
 
-/*     // Initialisation de  _DifferentialGeometry_ depuis les données paramétriques */
-/*     *dg = DifferentialGeometry(ray(t), dpdu, dpdv, tu, tv, this); */
+    // Initialisation de  _DifferentialGeometry_ depuis les données paramétriques
+    *dg = DifferentialGeometry(ray(t), dpdu, dpdv, tu, tv, this);
 
-/*     // mise a jour de _tHit_ */
-/* 	*tHit = t; */
-/* 	return true; */
-/* } */
+    // mise a jour de _tHit_
+	*tHit = t;
+	return true;
+}
 //*******************************************************************************
+#else
 // Méthode de Möller-Trumbore pour l'intersection rayon/triangle
 bool Triangle::Intersect(const Ray &ray, float *tHit,
 						 DifferentialGeometry *dg) const
@@ -468,6 +470,7 @@ bool Triangle::Intersect(const Ray &ray, float *tHit,
 	*tHit = float(t);
 	return true;
 }
+#endif
 
 __device__ BBox Triangle::ObjectBoundTriangle() const
 {

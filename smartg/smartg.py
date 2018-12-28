@@ -1835,8 +1835,12 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
     
     # Initializations linked to objects
     nbPhCat = gpuzeros(8, dtype=np.uint64) # vector to fill the number of photons for  each categories
-    wPhCat = gpuzeros(8, dtype=np.float64)  # vector to fill the weight of photons for each categories
-    tabObjInfo = gpuzeros((9, nbCx, nbCy), dtype=np.float64)
+    if double :
+        wPhCat = gpuzeros(8, dtype=np.float64)  # vector to fill the weight of photons for each categories
+        tabObjInfo = gpuzeros((9, nbCx, nbCy), dtype=np.float64)
+    else:
+        wPhCat = gpuzeros(8, dtype=np.float32)
+        tabObjInfo = gpuzeros((9, nbCx, nbCy), dtype=np.float32)
     tabMatRecep = np.zeros((9, nbCx, nbCy), dtype=np.float64)  
     # vecteur comprenant : weightPhotons, nbPhoton, err% et errAbs pour
     # les 8 categories donc 4 x 8 valeurs = 32. vecCat[0], [1], [2] et [3]
@@ -1900,6 +1904,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         Counter.fill(0)
         # en rapport avec les objets
         tabObjInfo.fill(0)
+        wPhCat.fill(0)
         
         start_cuda_clock = cuda.Event()
         end_cuda_clock = cuda.Event()
@@ -1930,6 +1935,10 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         if TC is not None:
             # Tableau de la repartition des poids (photons) sur la surface du recepteur
             tabMatRecep += tabObjInfo[:, :, :].get()
+            for i in range (0, 8):
+                # Comptage des poids pour chaque categories
+                vecCats[i*4] += wPhCat[i].get();
+
         
         L = NPhotonsIn   # number of photons launched by last kernel
         NPhotonsInTot += L
@@ -1967,8 +1976,8 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
 
     if TC is not None:
         for i in range (0, 8):
-            # Comptage des poids pour chaque categories
-            vecCats[i*4] = wPhCat[i].get();
+            # # Comptage des poids pour chaque categories
+            # vecCats[i*4] = wPhCat[i].get();
             # Comptage du nombre de photons pour chaque categories
             vecCats[(i*4)+1] = nbPhCat[i].get();
             # Erreur relatives et absolues pour chaque categories

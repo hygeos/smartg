@@ -90,7 +90,7 @@ extern "C" {
 							 , void *tabObjInfo,
 							 struct IObjets *myObjets,
 							 unsigned long long *nbPhCat,
-							 double *wPhCat
+							 void *wPhCat
 							 #endif
 							 ) {
 
@@ -3695,8 +3695,12 @@ __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* 
 
 	if (geoS->type == 1)
 	{
+		#ifdef DOUBLE
 		if (  isBackward( make_double3(geoS->normalBase.x, geoS->normalBase.y, geoS->normalBase.z),
 						  make_double3(ph->v.x, ph->v.y, ph->v.z) )  ) // AV
+		#else
+		if (isBackward(geoS->normalBase, ph->v))
+		#endif
 		{ ph->H += 1; }
 		else { ph->E += 1; } // AR traité comme environnement
 	}
@@ -3816,8 +3820,12 @@ __device__ void surfaceRugueuse3D(Photon* ph, IGeo* geoS, struct RNG_State *rngs
 
 	if (geoS->type == 1)
 	{
+		#ifdef DOUBLE
 		if (  isBackward( make_double3(geoS->normalBase.x, geoS->normalBase.y, geoS->normalBase.z),
 						  make_double3(ph->v.x, ph->v.y, ph->v.z) )  ) // AV
+		#else
+		if (isBackward(geoS->normalBase, ph->v))
+		#endif
 		{ ph->H += 1; }
 		else { ph->E += 1; } // AR traité comme environnement
 	}
@@ -3900,24 +3908,27 @@ __device__ void surfaceRugueuse3D(Photon* ph, IGeo* geoS, struct RNG_State *rngs
 } // FUNCTION SURFACEAGITE3D
 
 
-__device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsigned long long *nbPhCat, double *wPhCat)
+__device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsigned long long *nbPhCat, void *wPhCat)
 {
 	Transform transfo, invTransfo;
 	char myP[]="Point";
-	
-    double *tabCountObj;
-	double weight;
-	float3 p_t;
 
 	int indI = 0;
 	int indJ = 0;
+
+	float3 p_t;
 
 	float sizeX = nbCx*TCd;
 	float sizeY = nbCy*TCd;
 
 	// if (!isBackward(geoS->normalBase, ph->v)) return;
+	#ifdef DOUBLE
 	if (   isForward(  make_double3(geoS->normalBase.x, geoS->normalBase.y, geoS->normalBase.z),
-				  make_double3(ph->v.x, ph->v.y, ph->v.z)  )   ) return;
+				  make_double3(ph->v.x, ph->v.y, ph->v.z)  )   )
+	#else
+	if (isForward(geoS->normalBase, ph->v))
+	#endif
+		return;
 
 	p_t = ph->pos;
 	transfo = geoS->mvTF;
@@ -3941,7 +3952,12 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 	if (indI == nbCx) indI -= 1;
 	
     #ifdef DOUBLE
+	double *tabCountObj;
+	double *wPhCatC;
+	double weight;
+
 	tabCountObj = (double*)tabObjInfo;
+	wPhCatC = (double*)wPhCat;
 	weight = (double)ph->weight;
 
 	if(isnan(weight))
@@ -3957,50 +3973,50 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 	// Les huit catégories
 	if (ph->H == 0 && ph->E == 0 && ph->S == 0) 
 	{ // CAT 1 : aucun changement de trajectoire avant de toucher le R.
-	    atomicAdd(wPhCat, weight); // comptage poids
+	    atomicAdd(wPhCatC, weight); // comptage poids
 		atomicAdd(nbPhCat, 1);     // comptage nombre de photons
 		atomicAdd(tabCountObj+(nbCy*nbCx)+(nbCy*indI)+indJ, weight); // distri
 	}
 	else if ( ph->H > 0 && ph->E == 0 && ph->S == 0)
 	{ // CAT 2 : only H avant de toucher le R.
-		atomicAdd(wPhCat+1, weight);
+		atomicAdd(wPhCatC+1, weight);
 		atomicAdd(nbPhCat+1, 1);
 		atomicAdd(tabCountObj+(2*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}
 	else if ( ph->H == 0 && ph->E > 0 && ph->S == 0)
 	{ // CAT 3 : only E avant de toucher le R.
-		atomicAdd(wPhCat+2, weight);
+		atomicAdd(wPhCatC+2, weight);
 		atomicAdd(nbPhCat+2, 1);
 		atomicAdd(tabCountObj+(3*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}
 	else if ( ph->H == 0 && ph->E == 0 && ph->S > 0)
 	{ // CAT 4 : only S avant de toucher le R.
-		atomicAdd(wPhCat+3, weight);
+		atomicAdd(wPhCatC+3, weight);
 		atomicAdd(nbPhCat+3, 1);
 		atomicAdd(tabCountObj+(4*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}
 	else if ( ph->H > 0 && ph->E == 0 && ph->S > 0)
 	{ // CAT 5 : 2 proc. H et S avant de toucher le R.
-		atomicAdd(wPhCat+4, weight);
+		atomicAdd(wPhCatC+4, weight);
 		atomicAdd(nbPhCat+4, 1);
 		atomicAdd(tabCountObj+(5*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}
 	else if ( ph->H > 0 && ph->E > 0 && ph->S == 0)
 	{ // CAT 6 : 2 proc. H et E avant de toucher le R.
-		atomicAdd(wPhCat+5, weight);
+		atomicAdd(wPhCatC+5, weight);
 		atomicAdd(nbPhCat+5, 1);
 		atomicAdd(tabCountObj+(6*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
         //printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
 	}
 	else if ( ph->H == 0 && ph->E > 0 && ph->S > 0)
 	{ // CAT 7 : 2 proc. E et S avant de toucher le R.
-		atomicAdd(wPhCat+6, weight);
+		atomicAdd(wPhCatC+6, weight);
 		atomicAdd(nbPhCat+6, 1);
 		atomicAdd(tabCountObj+(7*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}	
 	else if ( ph->H > 0 && ph->E > 0 && ph->S > 0)
 	{ // CAT 8 : 3 proc. H, E et S avant de toucher le R.
-		atomicAdd(wPhCat+7, weight);
+		atomicAdd(wPhCatC+7, weight);
 		atomicAdd(nbPhCat+7, 1);
 		atomicAdd(tabCountObj+(8*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}	
@@ -4011,55 +4027,124 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 	// Les huit catégories
 	if (ph->H == 0 && ph->E == 0 && ph->S == 0) 
 	{ // CAT 1 : aucun changement de trajectoire avant de toucher le R.
-	    DatomicAdd(wPhCat, weight); // comptage poids
+	    DatomicAdd(wPhCatC, weight); // comptage poids
 		atomicAdd(nbPhCat, 1);     // comptage nombre de photons
 		DatomicAdd(tabCountObj+(nbCy*nbCx)+(nbCy*indI)+indJ, weight); // distri
 	}
 	else if ( ph->H > 0 && ph->E == 0 && ph->S == 0)
 	{ // CAT 2 : only H avant de toucher le R.
-		DatomicAdd(wPhCat+1, weight);
+		DatomicAdd(wPhCatC+1, weight);
 		atomicAdd(nbPhCat+1, 1);
 		DatomicAdd(tabCountObj+(2*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 		printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
 	}
 	else if ( ph->H == 0 && ph->E > 0 && ph->S == 0)
 	{ // CAT 3 : only E avant de toucher le R.
-		DatomicAdd(wPhCat+2, weight);
+		DatomicAdd(wPhCatC+2, weight);
 		atomicAdd(nbPhCat+2, 1);
 		DatomicAdd(tabCountObj+(3*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}
 	else if ( ph->H == 0 && ph->E == 0 && ph->S > 0)
 	{ // CAT 4 : only S avant de toucher le R.
-		DatomicAdd(wPhCat+3, weight);
+		DatomicAdd(wPhCatC+3, weight);
 		atomicAdd(nbPhCat+3, 1);
 		DatomicAdd(tabCountObj+(4*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}
 	else if ( ph->H > 0 && ph->E == 0 && ph->S > 0)
 	{ // CAT 5 : 2 proc. H et S avant de toucher le R.
-		DatomicAdd(wPhCat+4, weight);
+		DatomicAdd(wPhCatC+4, weight);
 		atomicAdd(nbPhCat+4, 1);
 		DatomicAdd(tabCountObj+(5*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}
 	else if ( ph->H > 0 && ph->E > 0 && ph->S == 0)
 	{ // CAT 6 : 2 proc. H et E avant de toucher le R.
-		DatomicAdd(wPhCat+5, weight);
+		DatomicAdd(wPhCatC+5, weight);
 		atomicAdd(nbPhCat+5, 1);
 		DatomicAdd(tabCountObj+(6*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
         //printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
 	}
 	else if ( ph->H == 0 && ph->E > 0 && ph->S > 0)
 	{ // CAT 7 : 2 proc. E et S avant de toucher le R.
-		DatomicAdd(wPhCat+6, weight);
+		DatomicAdd(wPhCatC+6, weight);
 		atomicAdd(nbPhCat+6, 1);
 		DatomicAdd(tabCountObj+(7*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}	
 	else if ( ph->H > 0 && ph->E > 0 && ph->S > 0)
 	{ // CAT 8 : 3 proc. H, E et S avant de toucher le R.
-		DatomicAdd(wPhCat+7, weight);
+		DatomicAdd(wPhCatC+7, weight);
 		atomicAdd(nbPhCat+7, 1);
 		DatomicAdd(tabCountObj+(8*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}
 	#endif
+    #else // IF not DOUBLE
+
+	float *tabCountObj;
+	float *wPhCatC;
+	float weight;
+	
+	tabCountObj = (float*)tabObjInfo;
+	wPhCatC = (float*)wPhCat;
+	weight = (float)ph->weight;
+
+	if(isnan(weight))
+	{
+		printf("Care weight is nan !! \n");
+		return;
+	}
+	
+	// All the beams reaching a receiver
+	atomicAdd(tabCountObj+(nbCy*indI)+indJ, weight);
+
+	// Les huit catégories
+	if (ph->H == 0 && ph->E == 0 && ph->S == 0) 
+	{ // CAT 1 : aucun changement de trajectoire avant de toucher le R.
+	    atomicAdd(wPhCatC, weight); // comptage poids
+		atomicAdd(nbPhCat, 1);     // comptage nombre de photons
+		atomicAdd(tabCountObj+(nbCy*nbCx)+(nbCy*indI)+indJ, weight); // distri
+	}
+	else if ( ph->H > 0 && ph->E == 0 && ph->S == 0)
+	{ // CAT 2 : only H avant de toucher le R.
+		atomicAdd(wPhCatC+1, weight);
+		atomicAdd(nbPhCat+1, 1);
+		atomicAdd(tabCountObj+(2*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+	}
+	else if ( ph->H == 0 && ph->E > 0 && ph->S == 0)
+	{ // CAT 3 : only E avant de toucher le R.
+		atomicAdd(wPhCatC+2, weight);
+		atomicAdd(nbPhCat+2, 1);
+		atomicAdd(tabCountObj+(3*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+	}
+	else if ( ph->H == 0 && ph->E == 0 && ph->S > 0)
+	{ // CAT 4 : only S avant de toucher le R.
+		atomicAdd(wPhCatC+3, weight);
+		atomicAdd(nbPhCat+3, 1);
+		atomicAdd(tabCountObj+(4*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+	}
+	else if ( ph->H > 0 && ph->E == 0 && ph->S > 0)
+	{ // CAT 5 : 2 proc. H et S avant de toucher le R.
+		atomicAdd(wPhCatC+4, weight);
+		atomicAdd(nbPhCat+4, 1);
+		atomicAdd(tabCountObj+(5*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+	}
+	else if ( ph->H > 0 && ph->E > 0 && ph->S == 0)
+	{ // CAT 6 : 2 proc. H et E avant de toucher le R.
+		atomicAdd(wPhCatC+5, weight);
+		atomicAdd(nbPhCat+5, 1);
+		atomicAdd(tabCountObj+(6*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+        //printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
+	}
+	else if ( ph->H == 0 && ph->E > 0 && ph->S > 0)
+	{ // CAT 7 : 2 proc. E et S avant de toucher le R.
+		atomicAdd(wPhCatC+6, weight);
+		atomicAdd(nbPhCat+6, 1);
+		atomicAdd(tabCountObj+(7*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+	}	
+	else if ( ph->H > 0 && ph->E > 0 && ph->S > 0)
+	{ // CAT 8 : 3 proc. H, E et S avant de toucher le R.
+		atomicAdd(wPhCatC+7, weight);
+		atomicAdd(nbPhCat+7, 1);
+		atomicAdd(tabCountObj+(8*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+	}	
     #endif
 }
 #endif
@@ -5115,8 +5200,12 @@ __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo 
 				GeoV->normal = faceForward(myDg.nn, -1.*R1.d);
 				GeoV->normalBase = make_float3(ObjT[i].nBx, ObjT[i].nBy, ObjT[i].nBz);
 				// if(isBackward(GeoV->normal, dir))
+				#ifdef DOUBLE
 				if(  isBackward( make_double3(GeoV->normalBase.x, GeoV->normalBase.y, GeoV->normalBase.z),
 								 make_double3(dir.x, dir.y, dir.z) )  )
+				#else
+				if(isBackward(GeoV->normalBase, dir))
+				#endif
 				{
 					GeoV->material = ObjT[i].materialAV;
 					GeoV->reflectivity = ObjT[i].reflectAV;
