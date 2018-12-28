@@ -1264,20 +1264,11 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 			#ifdef DOUBLE
 			// // Création des transformations depuis les valeurs python du reflecteur		
 			Transformd Tid;
-			double posxd, posyd; 
-			if (objP.mvRx != 0) { // si diff de 0 alors il y a une rot en x
-				Transformd TmRXd;
-				TmRXd = Tid.RotateX(objP.mvRx);
-				Tid = Tid*TmRXd;}
-			if (objP.mvRy != 0) { // si diff de 0 alors il y a une rot en y
-				Transformd TmRYd;
-				//TmRY = Ti.RotateY(objP.mvRy - (180-THDEGd)); // 180-THDEGd = Theta Sun in degree
-				TmRYd = Tid.RotateY(objP.mvRy);
-				Tid = Tid*TmRYd;}
-			if (objP.mvRz != 0) { // si diff de 0 alors il y a une rot en z
-				Transformd TmRZd;
-				TmRZd = Tid.RotateZ(objP.mvRz);
-				Tid = Tid*TmRZd;}
+			double posxd, posyd;
+
+			// add rotation transformation
+			Tid = DaddRotAndParseOrder(Tid, objP);
+
 			if (objP.mvTz != 0) { // si diff de 0 alors il y a une translation en z
 				double timeOned;
 				timeOned = (tab_sensor[ph->is].POSZ-objP.mvTz)/vdouble.z;
@@ -1310,20 +1301,10 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 			ph->pos=make_float3(float(posTransd.x), float(posTransd.y), float(posTransd.z));		
 			#else // IF NOT DOUBLE
 			// // Création des transformations depuis les valeurs python du reflecteur
-			Transform Ti;			
-			if (objP.mvRx != 0) { // si diff de 0 alors il y a une rot en x
-				Transform TmRX;
-				TmRX = Ti.RotateX(objP.mvRx);
-				Ti = Ti*TmRX;}
-			if (objP.mvRy != 0) { // si diff de 0 alors il y a une rot en y
-				Transform TmRY;
-				//TmRY = Ti.RotateY(objP.mvRy - (180-THDEGd)); // 180-THDEGd = Theta Sun in degree
-				TmRY = Ti.RotateY(objP.mvRy);
-				Ti = Ti*TmRY;}
-			if (objP.mvRz != 0) { // si diff de 0 alors il y a une rot en z
-				Transform TmRZ;
-				TmRZ = Ti.RotateZ(objP.mvRz);
-				Ti = Ti*TmRZ;}
+			Transform Ti;
+			// add rotation transformation
+			Ti = addRotAndParseOrder(Ti, objP);
+
 			if (objP.mvTz != 0) { // si diff de 0 alors il y a une translation en z
 				float timeOne;
 				timeOne = (tab_sensor[ph->is].POSZ-objP.mvTz)/ph->v.z;
@@ -5078,21 +5059,9 @@ __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo 
 			TmT = Ti.Translate(make_float3(ObjT[i].mvTx, ObjT[i].mvTy,
 										   ObjT[i].mvTz));
 			Ti = TmT; }
-		
-		if (ObjT[i].mvRx != 0) { // si diff de 0 alors il y a une rot en x
-			Transform TmRX;
-			TmRX = Ti.RotateX(ObjT[i].mvRx);
-			Ti = Ti*TmRX;}
-		if (ObjT[i].mvRy != 0) { // si diff de 0 alors il y a une rot en y
-			Transform TmRY;
-			TmRY = Ti.RotateY(ObjT[i].mvRy);
-			Ti = Ti*TmRY;}
-		if (ObjT[i].mvRz != 0) { // si diff de 0 alors il y a une rot en z
-			Transform TmRZ;
-			TmRZ = Ti.RotateZ(ObjT[i].mvRz);
-			Ti = Ti*TmRZ;}
 
-
+		// Add rotation tranformations
+		Ti = addRotAndParseOrder(Ti, ObjT[i]); //see the function
 		invTi = Ti.Inverse(Ti); // inverse de la tranformation
 		// ***********************************************************************
 		
@@ -5172,4 +5141,122 @@ __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo 
 		*(phit) = make_float3(-1, -1, -1);
 		return false; }	
 } // FIN DE LA FONCTION GEOTEST()
+
+
+
+__device__ Transform addRotAndParseOrder(Transform Ti, IObjets object)
+{
+	// Add the rotation tranformartions + Consider the rotation order
+	switch (object.rotOrder)
+	{
+	case XYZ:
+		if (object.mvRx != 0) // si diff de 0 alors il y a une rot en x
+			Ti = Ti*Ti.RotateX(object.mvRx);
+		if (object.mvRy != 0) // si diff de 0 alors il y a une rot en y
+			Ti = Ti*Ti.RotateY(object.mvRy);
+		if (object.mvRz != 0) // si diff de 0 alors il y a une rot en z
+			Ti = Ti*Ti.RotateZ(object.mvRz);
+		break;
+	case XZY:
+		if (object.mvRx != 0) // si diff de 0 alors il y a une rot en x
+			Ti = Ti*Ti.RotateX(object.mvRx);
+		if (object.mvRz != 0) // si diff de 0 alors il y a une rot en z
+			Ti = Ti*Ti.RotateZ(object.mvRz);
+		if (object.mvRy != 0) // si diff de 0 alors il y a une rot en y
+			Ti = Ti*Ti.RotateY(object.mvRy);
+		break;
+	case YXZ:
+		if (object.mvRy != 0) // si diff de 0 alors il y a une rot en y
+			Ti = Ti*Ti.RotateY(object.mvRy);
+		if (object.mvRx != 0) // si diff de 0 alors il y a une rot en x
+			Ti = Ti*Ti.RotateX(object.mvRx);
+		if (object.mvRz != 0) // si diff de 0 alors il y a une rot en z
+			Ti = Ti*Ti.RotateZ(object.mvRz);
+		break;
+	case YZX:
+		if (object.mvRy != 0) // si diff de 0 alors il y a une rot en y
+			Ti = Ti*Ti.RotateY(object.mvRy);
+		if (object.mvRz != 0) // si diff de 0 alors il y a une rot en z
+			Ti = Ti*Ti.RotateZ(object.mvRz);
+		if (object.mvRx != 0) // si diff de 0 alors il y a une rot en x
+			Ti = Ti*Ti.RotateX(object.mvRx);
+		break;
+	case ZXY:
+		if (object.mvRz != 0) // si diff de 0 alors il y a une rot en z
+			Ti = Ti*Ti.RotateZ(object.mvRz);
+		if (object.mvRx != 0) // si diff de 0 alors il y a une rot en x
+			Ti = Ti*Ti.RotateX(object.mvRx);
+		if (object.mvRy != 0) // si diff de 0 alors il y a une rot en y
+			Ti = Ti*Ti.RotateY(object.mvRy);
+		break;
+	case ZYX:
+		if (object.mvRz != 0) // si diff de 0 alors il y a une rot en z
+			Ti = Ti*Ti.RotateZ(object.mvRz);
+		if (object.mvRy != 0) // si diff de 0 alors il y a une rot en y
+			Ti = Ti*Ti.RotateY(object.mvRy);
+		if (object.mvRx != 0) // si diff de 0 alors il y a une rot en x
+			Ti = Ti*Ti.RotateX(object.mvRx);
+	default:
+		break;
+	}
+	return Ti;
+} // FIN DE LA FONCTION addRotAndParseOrder()
+
+__device__ Transformd DaddRotAndParseOrder(Transformd Tid, IObjets object)
+{
+	// Add the rotation tranformartions + Consider the rotation order
+	switch (object.rotOrder)
+	{
+	case XYZ:
+		if (object.mvRx != 0) // si diff de 0 alors il y a une rot en x
+			Tid = Tid*Tid.RotateX(object.mvRx);
+		if (object.mvRy != 0) // si diff de 0 alors il y a une rot en y
+			Tid = Tid*Tid.RotateY(object.mvRy);
+		if (object.mvRz != 0) // si diff de 0 alors il y a une rot en z
+			Tid = Tid*Tid.RotateZ(object.mvRz);
+		break;
+	case XZY:
+		if (object.mvRx != 0) // si diff de 0 alors il y a une rot en x
+			Tid = Tid*Tid.RotateX(object.mvRx);
+		if (object.mvRz != 0) // si diff de 0 alors il y a une rot en z
+			Tid = Tid*Tid.RotateZ(object.mvRz);
+		if (object.mvRy != 0) // si diff de 0 alors il y a une rot en y
+			Tid = Tid*Tid.RotateY(object.mvRy);
+		break;
+	case YXZ:
+		if (object.mvRy != 0) // si diff de 0 alors il y a une rot en y
+			Tid = Tid*Tid.RotateY(object.mvRy);
+		if (object.mvRx != 0) // si diff de 0 alors il y a une rot en x
+			Tid = Tid*Tid.RotateX(object.mvRx);
+		if (object.mvRz != 0) // si diff de 0 alors il y a une rot en z
+			Tid = Tid*Tid.RotateZ(object.mvRz);
+		break;
+	case YZX:
+		if (object.mvRy != 0) // si diff de 0 alors il y a une rot en y
+			Tid = Tid*Tid.RotateY(object.mvRy);
+		if (object.mvRz != 0) // si diff de 0 alors il y a une rot en z
+			Tid = Tid*Tid.RotateZ(object.mvRz);
+		if (object.mvRx != 0) // si diff de 0 alors il y a une rot en x
+			Tid = Tid*Tid.RotateX(object.mvRx);
+		break;
+	case ZXY:
+		if (object.mvRz != 0) // si diff de 0 alors il y a une rot en z
+			Tid = Tid*Tid.RotateZ(object.mvRz);
+		if (object.mvRx != 0) // si diff de 0 alors il y a une rot en x
+			Tid = Tid*Tid.RotateX(object.mvRx);
+		if (object.mvRy != 0) // si diff de 0 alors il y a une rot en y
+			Tid = Tid*Tid.RotateY(object.mvRy);
+		break;
+	case ZYX:
+		if (object.mvRz != 0) // si diff de 0 alors il y a une rot en z
+			Tid = Tid*Tid.RotateZ(object.mvRz);
+		if (object.mvRy != 0) // si diff de 0 alors il y a une rot en y
+			Tid = Tid*Tid.RotateY(object.mvRy);
+		if (object.mvRx != 0) // si diff de 0 alors il y a une rot en x
+			Tid = Tid*Tid.RotateX(object.mvRx);
+	default:
+		break;
+	}
+	return Tid;
+} // FIN DE LA FONCTION DaddRotAndParseOrder()
 #endif

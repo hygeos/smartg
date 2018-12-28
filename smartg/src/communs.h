@@ -89,6 +89,15 @@
 #define OUTPUT_BOA_DOWN_0P_UP_0M   1 // downward radiance at BOA above surface (0+) and upward radiance at BOA below surface (0-)
 #define OUTPUT_BOA_DOWN_0M_UP_0P   2 // downward radiance at BOA below surface (0-) and upward radiance at BOA above surface (0+)
 
+#ifdef OBJ3D
+// Rotation order
+#define XYZ  1
+#define XZY  2
+#define YXZ  3
+#define YZX  4
+#define ZXY  5
+#define ZYX  6
+#endif
 
 // pseudo-random number generator
 #ifdef PHILOX
@@ -328,6 +337,7 @@ struct IObjets {
 	float mvRx;     /*  \                                  */
 	float mvRy;     /*   | Transformation type rotation    */
 	float mvRz;     /*  /                                  */
+	int   rotOrder; /* rotation order: 1=XYZ; 2=XZY;...    */
 
 	float mvTx;     /*  \                                  */
 	float mvTy;     /*   | Transformation type translation */

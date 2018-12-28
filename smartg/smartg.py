@@ -153,6 +153,7 @@ type_IObjets = [
     ('mvRx', 'float32'),      # \
     ('mvRy', 'float32'),      #  | Transformation type rotation
     ('mvRz', 'float32'),      # /
+    ('rotOrder', 'int32'),    # rotation order: 1=XYZ; 2=XZY;...
 
     ('mvTx', 'float32'),      # \
     ('mvTy', 'float32'),      #  | tranformation type translation 
@@ -661,6 +662,21 @@ class Smartg(object):
                 myObjects0['mvRx'][i] = myObjects[i].transformation.rotx
                 myObjects0['mvRy'][i] = myObjects[i].transformation.roty
                 myObjects0['mvRz'][i] = myObjects[i].transformation.rotz
+
+                if (myObjects[i].transformation.rotOrder == "XYZ"):
+                    myObjects0['rotOrder'][i] = 1
+                elif(myObjects[i].transformation.rotOrder == "XZY"):
+                    myObjects0['rotOrder'][i] = 2
+                elif(myObjects[i].transformation.rotOrder == "YXZ"):
+                    myObjects0['rotOrder'][i] = 3
+                elif(myObjects[i].transformation.rotOrder == "YZX"):
+                    myObjects0['rotOrder'][i] = 4
+                elif(myObjects[i].transformation.rotOrder == "ZXY"):
+                    myObjects0['rotOrder'][i] = 5
+                elif(myObjects[i].transformation.rotOrder == "ZYX"):
+                    myObjects0['rotOrder'][i] = 6
+                else:
+                    raise NameError('Unknown rotation order')
 
                 myObjects0['mvTx'][i] = myObjects[i].transformation.transx
                 myObjects0['mvTy'][i] = myObjects[i].transformation.transy

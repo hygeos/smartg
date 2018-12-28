@@ -192,11 +192,13 @@ class Transformation():
     rotation in x, y and z in degrees
     translation in x, y and z in meters
     '''
-    def __init__(self, rotation = np.zeros(3, dtype=float), translation=np.zeros(3, dtype=float)):
+    def __init__(self, rotation = np.zeros(3, dtype=float), translation=np.zeros(3, dtype=float), \
+                 rotationOrder = "XYZ"):
         self.rotation = rotation
         self.rotx = rotation[0]
         self.roty = rotation[1]
         self.rotz = rotation[2]
+        self.rotOrder = rotationOrder
         self.translation = translation
         self.transx = translation[0]
         self.transy = translation[1]
@@ -303,13 +305,23 @@ def Analyse_create_entity(entity, Theta):
 
     #atLeastOneInt = False
     #t_hit = 9999.
-    wsx = 120.*np.sin(Theta*(np.pi/180.)); wsy = 0.; wsz = 120.*np.cos(Theta*(np.pi/180.));
+    # wsx = 120.*np.sin(Theta*(np.pi/180.)); wsy = 0.; wsz = 120.*np.cos(Theta*(np.pi/180.));
     #wsx += E[0].transformation.transx; wsy += E[0].transformation.transy; wsz += E[0].transformation.transz;
-    xs = np.linspace(0, wsx, 100)
-    ys = np.linspace(0, wsy)
-    zs = np.linspace(0, wsz, 100)
+    vSun = Vector(0., 0., -1.)
+    tSunTheta = Transform(); tSunPhi = Transform(); tSunThethaPhi = Transform();
+    tSunTheta = tSunThethaPhi.rotateY(Theta) 
+    tSunPhi = tSunThethaPhi.rotateZ(0)   # pas vérifié car valeur gene = 0
+    tSunThethaPhi = tSunTheta * tSunPhi
+    vSun = tSunThethaPhi[vSun]
+    vSun = Normalize(vSun)
+    
+    wsx = -vSun.x; wsy=-vSun.y; wsz=-vSun.z;
+    xs = np.linspace(0, 0.1*wsx, 100)
+    ys = np.linspace(0, 0.1*wsy)
+    zs = np.linspace(0, 0.1*wsz, 100)
 
-    sunDirection = Normalize(Vector(-wsx, wsy, -wsz)); LMir = 0; LMir2 = 0;
+    sunDirection = vSun
+    LMir = 0; LMir2 = 0;
     TabPhoton = []; atLeastOneInt = []; xn = []; yn = []; zn = []; xr = []; yr = []; zr = [];
     TabPhoton2 = [];atLeastOneInt2 = []; xr2 = []; yr2 = []; zr2 = [];
 
@@ -340,7 +352,23 @@ def Analyse_create_entity(entity, Theta):
         Rotz = tr.rotateZ(E[k].transformation.rotz)
 
         # total tt of all transform together
-        tt = Trans*Rotx*Roty*Rotz
+        tt = None
+        
+        if (E[k].transformation.rotOrder == "XYZ"):
+            tt = Trans*Rotx*Roty*Rotz
+        elif (E[k].transformation.rotOrder == "XZY"):
+            tt = Trans*Rotx*Rotz*Roty
+        elif (E[k].transformation.rotOrder == "YXZ"):
+            tt = Trans*Roty*Rotx*Rotz
+        elif (E[k].transformation.rotOrder == "YZX"):
+            tt = Trans*Roty*Rotz*Rotx
+        elif (E[k].transformation.rotOrder == "ZXY"):
+            tt = Trans*Rotz*Rotx*Roty
+        elif (E[k].transformation.rotOrder == "ZYX"):
+            tt = Trans*Rotz*Roty*Rotx
+        else:
+            raise NameError('Unknown rotation order')
+        
         tt_inv = tt.inverse(tt)
         
         # ===================================================================================
