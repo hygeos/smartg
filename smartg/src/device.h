@@ -56,8 +56,8 @@ __device__ __constant__ int NLOWd;
 __device__ __constant__ int NJACd;
 __device__ __constant__ int HISTd;
 __device__ __constant__ int NSENSORd;
-// copy en rapport avec les objets :
 #ifdef OBJ3D
+// copy en rapport avec les objets :
 __device__ __constant__ int nObj;
 __device__ __constant__ float Pmin_x;
 __device__ __constant__ float Pmin_y;
@@ -69,11 +69,13 @@ __device__ __constant__ int IsAtm;
 __device__ __constant__ float TCd;
 __device__ __constant__ int nbCx;
 __device__ __constant__ int nbCy;
-#endif
 // custum forward
 __device__ __constant__ float CFXd;
 __device__ __constant__ float CFYd;
+__device__ __constant__ float CFTXd;
+__device__ __constant__ float CFTYd;
 __device__ __constant__ int LMODEd;
+#endif
 
 /**********************************************************
 *	> Prototypes de device.cu

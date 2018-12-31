@@ -291,19 +291,23 @@ class CusForward(object):
     '''
     Definition of CusForward (custum rectangular forward mode of surface X*Y)
 
-    CFX : size in X (used ony for FF LMODE)
-    CFY : size in Y (used ony for FF LMODE)
+    CFX  : size in X (only for FF LMODE)
+    CFY  : size in Y (only for FF LMODE)
+    CFTX : Translation in x axis (only for FF LMODE)
+    CFTY : Translation in y axis (only for FF LMODE)
     LMODE (Launching mode) : RF = Restricted Forward or FF = Full Forward
                              RF --> launch the photons such that the direct beams fill only reflector objects
                              FF --> launch the photons in a rectangle from TOA whrere the beams at the center,
                                     with the solar direction, targets the origin point (0,0,0)
     '''
-    def __init__(self, CFX=0., CFY=0., LMODE = "RF"):
+    def __init__(self, CFX=0., CFY=0., CFTX = 0., CFTY = 0., LMODE = "RF"):
         self.dict = {
-                'CFX':   CFX,
-                'CFY':   CFY,
-                'LMODE': LMODE
-                }
+            'CFX':   CFX,
+            'CFY':   CFY,
+            'CFTX':   CFTX,
+            'CFTY':   CFTY,
+            'LMODE': LMODE
+        }
 
     def __str__(self):
         return 'CusForward=-CFX{CFX}-CFY{CFY}'.format(**self.dict)
@@ -942,9 +946,6 @@ class Smartg(object):
                   tab_sensor[i][k] = s.dict[k]
         tab_sensor = to_gpu(tab_sensor)
 
-        # cusForward definition
-        # if cusForward is None:
-            # cusForward = CusForward(CFX=0., CFY=0., LMODE = "NONE")
             
         #
         # surface
@@ -1651,17 +1652,16 @@ def InitConst(surf, env, NATM, NOCE, mod,
         copy_to_device('IsAtm', IsAtm, np.int32)
         if TC is not None:
             copy_to_device('TCd', TC, np.float32)
-        copy_to_device('nbCx', nbCx, np.int32)
-        copy_to_device('nbCy', nbCy, np.int32)   
-    if cusForward != None:
-        if (cusForward.dict['LMODE'] == "RF"):
+            copy_to_device('nbCx', nbCx, np.int32)
+            copy_to_device('nbCy', nbCy, np.int32)
+        if (  (cusForward != None) and (cusForward.dict['LMODE'] == "RF")  ):
             copy_to_device('LMODEd', 1, np.int32)
-        if (cusForward.dict['LMODE'] == "FF"):
+        if (  (cusForward != None) and (cusForward.dict['LMODE'] == "FF")  ):
             copy_to_device('CFXd', cusForward.dict['CFX'], np.float32)
             copy_to_device('CFYd', cusForward.dict['CFY'], np.float32)
+            copy_to_device('CFTXd', cusForward.dict['CFTX'], np.float32)
+            copy_to_device('CFTYd', cusForward.dict['CFTY'], np.float32)
             copy_to_device('LMODEd', 2, np.int32)
-    else:
-        copy_to_device('LMODEd', 0, np.int32)
         
 def init_profile(wl, prof, kind):
     '''

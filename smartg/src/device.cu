@@ -1339,16 +1339,16 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		}
 		/* ***************************************************************************************** */		
 	} // LMODE == 1
-    #endif //END OBJ3D
 	
 	if (LMODEd == 2)
 	{
 		float3 cusForwPos = make_float3( ((CFXd * RAND) - 0.5*CFXd), ((CFYd * RAND) - 0.5*CFYd), 0.);
-		ph->pos.x += cusForwPos.x + 1.;
-		ph->pos.y += cusForwPos.y;
+		ph->pos.x += cusForwPos.x + CFTXd;
+		ph->pos.y += cusForwPos.y + CFTYd;
 		ph->pos.z = tab_sensor[ph->is].POSZ;
 	} //END LMODEd == 2
-
+    #endif //END OBJ3D
+	
     }
 
 
