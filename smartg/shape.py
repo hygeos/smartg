@@ -4,7 +4,7 @@
 from . import geometry
 from .geometry import Vector, Point, Normal, Ray, BBox
 from .geometry import Dot, Cross, Normalize, CoordinateSystem, \
-    Distance, FaceForward
+    Distance, FaceForward, MaxDimension, Permute
 from . import diffgeom
 from .diffgeom import DifferentialGeometry
 from . import transform
@@ -172,7 +172,7 @@ class Triangle(Shape):
             invdet = 1./determinant
             myV1 = dp1*dv2
             myV2 = dp2*dv1
-            print(type(myV1), type(myV2))
+            # print(type(myV1), type(myV2))
             dpdu = ( dp1*dv2   - dp2*dv1) * invdet
             dpdv = (dp1*(-du2) + dp2*du1) * invdet
         
@@ -197,6 +197,100 @@ class TriangleM(Shape):
         Shape.__init__(self, ObjectToWorld = oTw, WorldToObject = wTo)
         self.p1 = a; self.p2 = b; self.p3 = c;
 
+    # def Intersect(self, r):
+    #     ray = Ray(r)
+
+    #     p1t = self.p1 - ray.o
+    #     p2t = self.p2 - ray.o
+    #     p3t = self.p3 - ray.o
+
+    #     kz = MaxDimension(  Vector( abs(ray.d.x), abs(ray.d.y), abs(ray.d.z) )  )
+        
+    #     kx = kz + 1
+    #     if(kx == 3):
+    #         kx = 0
+    #     ky = kx + 1
+    #     if(ky == 3):
+    #         ky = 0
+
+    #     d = Permute(ray.d, kx, ky, kz)
+    #     p1t = Permute(p1t, kx, ky, kz)
+    #     p2t = Permute(p2t, kx, ky, kz)
+    #     p3t = Permute(p3t, kx, ky, kz)
+        
+    #     sx = (d.x*-1)/d.z
+    #     sy = (d.y*-1)/d.z
+    #     sz = 1./d.z
+        
+    #     p1t.x = p1t.x + (sx*p1t.z)
+    #     p1t.y = p1t.y + (sx*p1t.z)
+    #     p2t.x = p2t.x + (sx*p2t.z)
+    #     p2t.y = p2t.y + (sx*p2t.z)
+    #     p3t.x = p3t.x + (sx*p3t.z)
+    #     p3t.y = p3t.y + (sx*p3t.z)
+         
+    #     e1 = (p2t.x * p3t.y) - (p2t.y * p3t.x)
+    #     e2 = (p3t.x * p1t.y) - (p3t.y * p1t.x)
+    #     e3 = (p1t.x * p2t.y) - (p1t.y * p2t.x)
+
+    #     # if( (e1 < -0.01 or e2 < -0.01 or e3 < -0.01) and
+    #     #     (e1 > 0.01 or e2 > 0.01 or e3 > 0.01) ):
+    #     #     return False
+
+    #     det = e1 + e2 + e3
+
+    #     if (det == 0):
+    #         return False
+
+    #     p1t.z = p1t.z * sz
+    #     p2t.z = p2t.z * sz
+    #     p3t.z = p3t.z * sz
+
+    #     tScaled = e1*p1t.z + e2*p2t.z + e3*p3t.z
+
+    #     if ( det < 0 and (tScaled >= 0 or tScaled > ray.maxt*det) ):
+    #         return False
+
+    #     invDet = 1./det
+    #     b1 = e1 * invDet
+    #     b2 = e2 * invDet
+    #     b3 = e3 * invDet
+
+    #     t = tScaled * invDet
+
+    #     # phit = (self.p1*b1) + (self.p2*b2)+ (self.p3*b3)
+
+    #     # compute triangle partial derivatives
+    #     uvs = np.array([[0., 0.], [1., 0.], [1., 1.]])
+
+    #     # compute deltas for triangle partial derivatives
+    #     du1 = uvs[0][0] - uvs[2][0]
+    #     du2 = uvs[1][0] - uvs[2][0]
+    #     dv1 = uvs[0][1] - uvs[2][1]
+    #     dv2 = uvs[1][1] - uvs[2][1]
+    #     dp1 = self.p1 - self.p3
+    #     dp2 = self.p2 - self.p3
+    #     determinant = du1 * dv2 - dv1 * du2
+
+    #     if (determinant == 0):
+    #         dpdu, dpdv = CoordinateSystem(Normalize(Cross(e2, e1)))
+    #     else:
+    #         invdet = 1./determinant
+    #         myV1 = dp1*dv2
+    #         myV2 = dp2*dv1
+    #         print(type(myV1), type(myV2))
+    #         dpdu = ( dp1*dv2   - dp2*dv1) * invdet
+    #         dpdv = (dp1*(-du2) + dp2*du1) * invdet
+
+    #     # interpolate $(u,v)$ triangle parametric coordinates
+    #     tu = b1*uvs[0][0] + b2*uvs[1][0] + b3*uvs[2][0]
+    #     tv = b1*uvs[0][1] + b2*uvs[1][1] + b3*uvs[2][1]
+            
+    #     self.dg = DifferentialGeometry(ray[t], dpdu, dpdv, tu, tv, self)
+    #     self.thit = t
+        
+    #     return True
+        
     def Intersect(self, r):
         ray = Ray(r)
         e1 = self.p2 - self.p1
@@ -211,7 +305,13 @@ class TriangleM(Shape):
         # compute the first barycentric coordinate
         s = ray.o - self.p1
         b1 = Dot(s, s1) * invDivisor
-        if (b1 < 0 or  b1 > 1):
+        # print("=====================")
+        # print("b1=", b1)
+        # print("s=", s)
+        # print("s1=", s1)
+        # print("Dot(s, s1)=", Dot(s, s1))
+        # print("invDivisor", invDivisor)
+        if (b1 < -0.00000001 or  b1 > 1):
             return False
 
         # compute the second barycentric coordinate
@@ -243,7 +343,7 @@ class TriangleM(Shape):
             invdet = 1./determinant
             myV1 = dp1*dv2
             myV2 = dp2*dv1
-            print(type(myV1), type(myV2))
+            # print(type(myV1), type(myV2))
             dpdu = ( dp1*dv2   - dp2*dv1) * invdet
             dpdv = (dp1*(-du2) + dp2*du1) * invdet
         

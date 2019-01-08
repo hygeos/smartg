@@ -336,7 +336,7 @@ bool Triangle::Intersect(const Ray &ray, float *tHit,
 	float3 s = ray.o - p1;
 	float b1 = dot(s, s1) * invDivisor;
 
-    if (b1 < 0. || b1 > 1.)
+    if (b1 < -0.0000001 || b1 > 1.)
 	{return false;}
 
     // Calcul de la 2nd composante des coordonnées baricentriques
@@ -414,7 +414,7 @@ bool Triangle::Intersect(const Ray &ray, float *tHit,
 	double3 s = dray_o - p1d;
 	double b1 = dot(s, s1) * invDivisor;
 
-    if (b1 < 0. || b1 > 1.)
+    if (b1 < -0.0000001 || b1 > 1.)
 	{return false;}
 
     // Calcul de la 2nd composante des coordonnées baricentriques

@@ -22,13 +22,14 @@ import mpl_toolkits.mplot3d as mp3d
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from matplotlib import colors as mcolors
 
-def receiver_view(disMatrix, w = False, logI=False, nameFile = None, MTOA = 1320):
+def receiver_view(disMatrix, w = False, logI=False, nameFile = None, MTOA = 1320, vmin=None):
 
     '''
-    disMatrix : numpy array with flux distribution at the receiver
-    w : the receiver size, in meter. Can be a scalar or a list with x and y values
+    disMatrix : 2D numpy array with flux distribution at the receiver
+    w : the receiver size, in kilometer. Can be a scalar or a list with x and y values
     logI : enable log interval
     MTOA : exitance at TOA (W/m2)
+    vmin = minimal distribution value (W/m2), not for log print
     '''
     if w==False :
         raise Exception("In receiver_view(), the receiver size w must be specified!")
@@ -46,7 +47,7 @@ def receiver_view(disMatrix, w = False, logI=False, nameFile = None, MTOA = 1320
 
     if logI == False :
         cax = plt.imshow(m*MTOA, cmap=plt.get_cmap('jet'), interpolation='None', \
-                         extent = [-(wy*1000),(wy*1000),-(wx*1000),(wx*1000)])
+                         vmin=vmin, extent = [-(wy*1000),(wy*1000),-(wx*1000),(wx*1000)])
     else:
         m2 = m
         if (np.amin(m2) < 0.00001):
@@ -260,9 +261,12 @@ def Ref_Fresnel(dirEnt, geoTrans):
     V2 = TT[V2]
     return V2
     
-def Analyse_create_entity(entity, Theta):
+def Analyse_create_entity(entity, Theta = None):
     '''
-    definition
+    Enable a 3D visualization of the created objects
+    entity : A list of objects (Entity classes)
+    Theta : the zenith angle of the sun (currently the azimuth is always assumed to be = 0)
+            If theta = None --> do not visualize the sun rays
     '''
     if (isinstance(entity, Entity)):
         E = []
@@ -310,7 +314,10 @@ def Analyse_create_entity(entity, Theta):
     #wsx += E[0].transformation.transx; wsy += E[0].transformation.transy; wsz += E[0].transformation.transz;
     vSun = Vector(0., 0., -1.)
     tSunTheta = Transform(); tSunPhi = Transform(); tSunThethaPhi = Transform();
-    tSunTheta = tSunThethaPhi.rotateY(Theta) 
+    if (Theta != None):
+        tSunTheta = tSunThethaPhi.rotateY(Theta)
+    else:
+        tSunTheta = tSunThethaPhi.rotateY(0)
     tSunPhi = tSunThethaPhi.rotateZ(0)   # pas vérifié car valeur gene = 0
     tSunThethaPhi = tSunTheta * tSunPhi
     vSun = tSunThethaPhi[vSun]
@@ -386,36 +393,37 @@ def Analyse_create_entity(entity, Theta):
                           Point(E[k].geo.p4.x, E[k].geo.p4.y, E[k].geo.p4.z)], dtype = Point)
 
             PlaneMesh = TriangleMesh(tt, tt_inv, vi, P)
-            
-            for i in range(0, LMir):
-                t_hit = 9999.
-                if(PlaneMesh.Intersect(TabPhoton[i])):
-                    if (PlaneMesh.thit < t_hit):
-                        atLeastOneInt[i] = True
-                        LMir2 += 1
-                        xr2 = np.append(xr2, None); yr2 = np.append(yr2, None); zr2 = np.append(zr2, None); 
-                        atLeastOneInt2 = np.append(atLeastOneInt2, False)
-                        p_hit = PlaneMesh.dg.p
-                        t_hit = PlaneMesh.thit
-                        sunDistance = sunDirection*t_hit
-                        tnn = np.linspace(0, 0.001, 20)
-                        P1 = PlaneMesh.dg.p ; N1 = PlaneMesh.dg.nn;
-                        N1 = FaceForward(N1, sunDirection * -1)
-                        # For ploting the normal and the red ray
-                        xn[i] = P1.x + tnn * N1.x
-                        yn[i] = P1.y + tnn * N1.y
-                        zn[i] = P1.z + tnn * N1.z
-                        #tr = np.linspace(Photon.mint, t_hit, 100)
-                        tr = np.linspace(t_hit*0.98, t_hit, 100)
-                        xr[i] = TabPhoton[i].o.x + tr*TabPhoton[i].d.x
-                        yr[i] = TabPhoton[i].o.y + tr*TabPhoton[i].d.y
-                        zr[i] = TabPhoton[i].o.z + tr*TabPhoton[i].d.z
-                        vecTemp = Ref_Fresnel(dirEnt = TabPhoton[i].d, geoTrans = tt)
-                        # print("TabPhoton.d = (", TabPhoton[i].d.x, ", ", TabPhoton[i].d.y, ", ", TabPhoton[i].d.z, ")")
-                        # print("vecTemp = (", vecTemp.x, ", ", vecTemp.y, ", ", vecTemp.z, ")")
-                        TabPhoton2 = np.append(TabPhoton2, Ray(o=p_hit, d=vecTemp, end=120))
+
+            if(E[k].name == "reflector" and Theta != None):
+                for i in range(0, LMir):
+                    t_hit = 9999.
+                    if(PlaneMesh.Intersect(TabPhoton[i])):
+                        if (PlaneMesh.thit < t_hit):
+                            atLeastOneInt[i] = True
+                            LMir2 += 1
+                            xr2 = np.append(xr2, None); yr2 = np.append(yr2, None); zr2 = np.append(zr2, None); 
+                            atLeastOneInt2 = np.append(atLeastOneInt2, False)
+                            p_hit = PlaneMesh.dg.p
+                            t_hit = PlaneMesh.thit
+                            sunDistance = sunDirection*t_hit
+                            tnn = np.linspace(0, 0.001, 20)
+                            P1 = PlaneMesh.dg.p ; N1 = PlaneMesh.dg.nn;
+                            N1 = FaceForward(N1, sunDirection * -1)
+                            # For ploting the normal and the red ray
+                            xn[i] = P1.x + tnn * N1.x
+                            yn[i] = P1.y + tnn * N1.y
+                            zn[i] = P1.z + tnn * N1.z
+                            #tr = np.linspace(Photon.mint, t_hit, 100)
+                            tr = np.linspace(t_hit*0.98, t_hit, 100)
+                            xr[i] = TabPhoton[i].o.x + tr*TabPhoton[i].d.x
+                            yr[i] = TabPhoton[i].o.y + tr*TabPhoton[i].d.y
+                            zr[i] = TabPhoton[i].o.z + tr*TabPhoton[i].d.z
+                            vecTemp = Ref_Fresnel(dirEnt = TabPhoton[i].d, geoTrans = tt)
+                            # print("TabPhoton.d = (", TabPhoton[i].d.x, ", ", TabPhoton[i].d.y, ", ", TabPhoton[i].d.z, ")")
+                            # print("vecTemp = (", vecTemp.x, ", ", vecTemp.y, ", ", vecTemp.z, ")")
+                            TabPhoton2 = np.append(TabPhoton2, Ray(o=p_hit, d=vecTemp, end=120))
                                                
-            if (E[k].name == "receiver"):
+            if (E[k].name == "receiver" and Theta != None):
                 for i in range(0, LMir2):
                     t_hit = 9999.
                     if(PlaneMesh.Intersect(TabPhoton2[i])):
@@ -548,6 +556,64 @@ def Analyse_create_entity(entity, Theta):
     # Show the geometries
     return ax
 
+def generateH(THEDEGS=0., PHIDEGS = 0., pH = [Point(0., 0., 0.)], pR = Point(0., 0., 0.), \
+              Hx = 0.001, Hy = 0.001, ref = 1):
+    '''
+    Enable to generate Heliostats
+    return a list of objects
+    pH : Coordinates of the center of heliostats (list of point classes)
+    pR : Coordinate of the center of the receiver (point class)
+    Hx : Heliostat size in x axis (care unit is kilometers)
+    Hy : Heliostat size in y axis (care unit is kilometers)
+    ref : reflectivity of the heliostats
+    '''
+    # calculate the sun direction vector
+    vSun = Vector(0., 0., -1.)
+    tSunTheta = Transform(); tSunPhi = Transform(); tSunThethaPhi = Transform();
+    tSunTheta = tSunThethaPhi.rotateY(THEDEGS) 
+    tSunPhi = tSunThethaPhi.rotateZ(PHIDEGS)   # pas vérifié car valeur gene = 0
+    tSunThethaPhi = tSunTheta * tSunPhi
+    vSun = tSunThethaPhi[vSun]
+    vSun = Normalize(vSun)
+    
+    lObj = []
+    Hxx = Hx/2
+    Hyy = Hy/2
+
+    objM = Entity(name = "reflector", \
+                  materialAV = Mirror(reflectivity = ref), \
+                  materialAR = Matte(reflectivity = 0.), \
+                  geo = Plane( p1 = Point(-Hxx, -Hyy, 0.),
+                               p2 = Point(Hxx, -Hyy, 0.),
+                               p3 = Point(-Hxx, Hyy, 0.),
+                               p4 = Point(Hxx, Hyy, 0.) ), \
+                  transformation = Transformation( rotation = np.array([0., 0., 0.]), \
+                                                   translation = np.array([0., 0., 0.]) ))
+    
+    for i in range (0, len(pH)):
+        vecHR = pH[i]-pR
+        vecHR = Normalize(vecHR)
+        vecNH = (vSun + vecHR)*(-0.5)
+        vecNH = Normalize(vecNH)
+        # the min operation avoid nan in case of arccos of something greater than 1
+        rotY = np.arccos(min(vecNH.z, 1))
+        rotYD = np.degrees(rotY)
+        # the min operation avoid nan in case of arccos of something greater than 1
+        rotZ = np.arccos(min(vecNH.x/np.sin(rotY), 1))
+        if (vecHR.y > 0):
+            rotZD = -1.*np.degrees(rotZ)
+        else:
+            rotZD = np.degrees(rotZ)
+        # print("rotZD =", rotZD)
+        objMi = Entity(objM);
+        objMi.transformation = Transformation( rotation = np.array([0., rotYD, rotZD]), \
+                                               translation = np.array([pH[i].x, pH[i].y, pH[i].z]), \
+                                               rotationOrder = "ZYX")
+        lObj.append(objMi)
+        
+    return lObj
+
+    
         
 if __name__ == '__main__':
 

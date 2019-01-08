@@ -59,6 +59,7 @@ class Vector(object):
 
     def Lengh(self):
         return math.sqrt(self.x*self.x + self.y*self.y + self.z*self.z) # L2 norm
+    
 #####################################################################################
 
 #####################################################################################
@@ -311,6 +312,30 @@ def FaceForward(a, b):
         return (a*-1) if (Dot(a, b) < 0) else a
     else:
         raise NameError('FaceForward args have to be Vector or Normal classes')
+
+
+def MaxDimension(v):
+    if isinstance(v, Vector):
+        val = 0
+        if (v.x > v.y):
+            if(v.x > v.z):
+                val = 0
+            else:
+                val = 2
+        else:
+            if(v.y > v.z):
+                val = 1
+            else:
+                val = 2
+        return int(val)
+    else:
+        raise NameError('v argument must be a Vector')
+        
+def Permute(v, xx, yy, zz):
+    if isinstance(v, Vector):
+        return Vector(v[xx], v[yy], v[zz])
+    else:
+        raise NameError('v argument must be a Vector')
 
 if __name__ == '__main__':
     
