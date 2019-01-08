@@ -412,7 +412,7 @@ class LUT(object):
             else:  # scalar
                 index0.append(0)
 
-        shp_res = np.zeros(1).reshape([1]*self.ndim)[index0].shape
+        shp_res = np.zeros(1).reshape([1]*self.ndim)[tuple(index0)].shape
 
         # determine the interpolation axes
         # and for those axes, determine the lower index (inf) and the weight

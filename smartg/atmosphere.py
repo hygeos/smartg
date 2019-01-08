@@ -1094,7 +1094,7 @@ def diff1(A, axis=0, samesize=True):
         B = np.zeros_like(A)
         key = [slice(None)]*A.ndim
         key[axis] = slice(1, None, None)
-        B[key] = np.diff(A, axis=axis)[:]
+        B[tuple(key)] = np.diff(A, axis=axis)[:]
         return B
     else:
         return np.diff(A, axis=axis)
