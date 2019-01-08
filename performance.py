@@ -297,7 +297,7 @@ def test_objForward(**kwargv):
     solarDir = 14.3
 
     # permet de lancer les photons depuis un rectangle en TOA
-    custumF = CusForward(CFX=0.5, CFY=0.05)
+    custumF = CusForward(CFX=0.5, CFY=0.05, CFTX=1., CFTY=0., LMODE = "FF")
     
     aer = AeroOPAC('desert', 0.25, 550.)
     pro = AtmAFGL('afglms', comp=[aer], P0 = 877, H2O=1.2)
