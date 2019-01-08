@@ -289,7 +289,9 @@ class Sensor(object):
 
 class CusForward(object):
     '''
-    Definition of CusForward (custum rectangular forward mode of surface X*Y)
+    Definition of CusForward 
+
+    Custum rectangular forward mode of surface X*Y
 
     CFX  : size in X (only for FF LMODE)
     CFY  : size in Y (only for FF LMODE)

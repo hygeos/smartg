@@ -25,6 +25,8 @@ from matplotlib import colors as mcolors
 def receiver_view(disMatrix, w = False, logI=False, nameFile = None, MTOA = 1320, vmin=None):
 
     '''
+    Definition of receiver_view
+
     disMatrix : 2D numpy array with flux distribution at the receiver
     w : the receiver size, in kilometer. Can be a scalar or a list with x and y values
     logI : enable log interval
@@ -73,6 +75,8 @@ def receiver_view(disMatrix, w = False, logI=False, nameFile = None, MTOA = 1320
 
 def cat_view(mlut, view = 'all'):
     '''
+    Definition of cat_view
+
     mlut : mlut table
     view : what to print ? choice between : all, weight, number, errP and errAbs
     '''
@@ -93,7 +97,11 @@ def cat_view(mlut, view = 'all'):
 
 class Mirror(object):
     '''
-    definition...
+    Definition of Mirror
+
+    Mirror material (fresnel reflection)
+    reflectivity : the albedo..
+    rigosity : not yet available
     '''
     def __init__(self, reflectivity = 1., rugosity = 0.):
         self.reflectivity = reflectivity
@@ -105,7 +113,10 @@ class Mirror(object):
 
 class LambMirror(object):
     '''
-    definition...
+    Definition of LambMirror
+
+    Lambertian Material, same probability of reflection in all the direction
+    inside the hemisphere of the normal of the object surface
     '''
     def __init__(self, reflectivity = 0.5):
         self.reflectivity = reflectivity
@@ -116,7 +127,9 @@ class LambMirror(object):
 
 class Matte(object):
     '''
-    definition...
+    Definition of Matte
+
+    Absorbant Material
     '''
     def __init__(self, reflectivity = 0.):
         self.reflectivity = reflectivity
@@ -127,7 +140,13 @@ class Matte(object):
 
 class Plane(object):
     '''
+    Definition of Plane
+
     Plane constructed with 4 points : p1, p2, p3, p4
+    p1 : x --> negative and y --> negative
+    p2 : x --> positive and y --> negative
+    p3 : x --> negative and y --> positive
+    p4 : x --> positive and y --> positive
     '''
     def __init__(self, p1 = Point(-0.5, -0.5, 0.), p2 = Point(0.5, -0.5, 0.), \
                  p3 = Point(-0.5, 0.5, 0.), p4 = Point(0.5, 0.5, 0.)):
@@ -163,6 +182,8 @@ class Plane(object):
 
 class Spheric(object):
     '''
+    Definition of Spheric
+
     Sphere constructed with --->
     radius : the radius of th e sphere
     radiusZ0 : take into account all the sphere -> radiusZ0 = -radius
@@ -191,8 +212,12 @@ class Spheric(object):
 
 class Transformation():
     '''
-    rotation in x, y and z in degrees
-    translation in x, y and z in meters
+    Definition of Transformation
+
+    Enable to move, rotate a given object
+    rotation      : 1D numpy array with 3 values for rotation in x, y and z (in degrees)
+    translation   : 1D numpy array with 3 values for translation in x, y and z (in kilometers)
+    rotationOrder : order of rotation, 6 choices : XYZ, XZY, YXZ, YZX, ZXY, ZYX
     '''
     def __init__(self, rotation = np.zeros(3, dtype=float), translation=np.zeros(3, dtype=float), \
                  rotationOrder = "XYZ"):
@@ -213,7 +238,14 @@ class Transformation():
     
 class Entity(object):
     '''
-    definition...
+    Definition of Entity
+
+    This class enable to create a 3D object
+    entity : Useful in case where we need a copy of a given object
+    name   : 2 choices --> reflector or receiver.
+             If receiver is chosen, smartg will count the distribution flux
+    TC     : Taille Cellules --> size of cells for the flux distribution.
+             Care the unit is the kilometer.
     '''
     def __init__(self, entity = None, name="reflector", TC = 0.01, materialAV=Matte(), \
                  materialAR=Matte(), geo=Plane(), transformation=Transformation()):
@@ -237,6 +269,8 @@ class Entity(object):
     
 def Ref_Fresnel(dirEnt, geoTrans):
     '''
+    Definition of Ref_Fresnel
+
     Simple Fresnel reflection
     dirE : direction of the ray entering on the surface of reflection
     geoTrans : transformation of the surface where there is reflection
@@ -263,6 +297,8 @@ def Ref_Fresnel(dirEnt, geoTrans):
     
 def Analyse_create_entity(entity, Theta = None):
     '''
+    Definition of Analyse_create_entity
+
     Enable a 3D visualization of the created objects
     entity : A list of objects (Entity classes)
     Theta : the zenith angle of the sun (currently the azimuth is always assumed to be = 0)
@@ -559,6 +595,8 @@ def Analyse_create_entity(entity, Theta = None):
 def generateH(THEDEGS=0., PHIDEGS = 0., pH = [Point(0., 0., 0.)], pR = Point(0., 0., 0.), \
               Hx = 0.001, Hy = 0.001, ref = 1):
     '''
+    Definition of generateH
+
     Enable to generate Heliostats
     return a list of objects
     pH : Coordinates of the center of heliostats (list of point classes)
