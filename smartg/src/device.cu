@@ -1011,7 +1011,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
         ph->tau_abs = epsilon * delta_i + (prof_oc[0+ph->ilam*(NOCEd+1)].OD_abs -
                                            prof_oc[ilayer-1+ph->ilam*(NOCEd+1)].OD_abs); 
 
-        if(idx==0) printf("%i %f %f %f %f\n",ilayer, prof_oc[ilayer].z, ph->tau, delta_i, epsilon);
+        //if(idx==0) printf("%i %f %f %f %f\n",ilayer, prof_oc[ilayer].z, ph->tau, delta_i, epsilon);
         #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
         int DL=(NLAMd-1)/(NLOWd-1);
         for (int k=0; k<NLOWd; k++) {
@@ -4990,12 +4990,12 @@ __device__ float LambdaM(float avz, float sig2) {
     if (avz == 1.F) l = 0.;
     else {
         float s1,s2,s3,xi,xxi,dcot,t1,t2;
-        s1 = __dsqrt_rn(2.*sig2/PI);
-        s3 = __drcp_rn(__dsqrt_rn(2.*sig2));
+        s1 = __fsqrt_rn(2.*sig2/PI);
+        s3 = __frcp_rn(__fsqrt_rn(2.*sig2));
         s2 = s3*s3;
         xi = avz;
         xxi=xi*xi;
-        dcot =  xi *__drcp_rn(__dsqrt_rn(1.-xxi));
+        dcot =  xi *__frcp_rn(__fsqrt_rn(1.-xxi));
         t1 = exp(-dcot*dcot*s2);
         t2 = erfc(dcot*s3);
         l  = 0.5*(s1*t1/dcot-t2);
