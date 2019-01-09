@@ -950,11 +950,6 @@ class Smartg(object):
                   tab_sensor[i][k] = s.dict[k]
         tab_sensor = to_gpu(tab_sensor)
 
-        # cusForward definition
-        if cusForward is None:
-            cusForward = CusForward(CFX=0., CFY=0., CFMODE = 2)
-            #cusForward = CusForward(CFX=0., CFY=0., CFMODE = 0)
-            
         #
         # surface
         #

@@ -893,7 +893,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     float cTh, sTh, phi;
     int ilayer;
 	
-	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+	//int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
 	
     #ifdef OBJ3D
 	ph->direct = 0;
