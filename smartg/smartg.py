@@ -1091,7 +1091,7 @@ class Smartg(object):
         # En rapport avec l'implémentation des objets (permet le visuel des res du recept)
         if (TC is not None):
             if (cusForward is not None):
-                for i in range (0, 8):
+                for i in range (0, 9):
                     cMatVisuRecep[i][:][:] = cMatVisuRecep[i][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
             else:
                 cMatVisuRecep[:][:][:] = cMatVisuRecep[:][:][:]

@@ -241,6 +241,7 @@ class Entity(object):
     Definition of Entity
 
     This class enable to create a 3D object
+
     entity : Useful in case where we need a copy of a given object
     name   : 2 choices --> reflector or receiver.
              If receiver is chosen, smartg will count the distribution flux
@@ -274,6 +275,8 @@ def Ref_Fresnel(dirEnt, geoTrans):
     Simple Fresnel reflection
     dirE : direction of the ray entering on the surface of reflection
     geoTrans : transformation of the surface where there is reflection
+
+    return a Vector class containing the direction of the reflected ray
     '''
     if isinstance(dirEnt, Vector) :
         dirE = dirEnt
@@ -294,19 +297,50 @@ def Ref_Fresnel(dirEnt, geoTrans):
     V2 = Vector(V2.x*-1., V2.y*-1., V2.z*-1.)
     V2 = TT[V2]
     return V2
+
+def ComputeSunDir(THEDEG=0, PHIDEG=0):
+    """
+    Definition of ComputeSunDir
+
+    Enable to compute the Sun direction from the zenith and azimuth angles
+
+    THEDEG : Sun zenith angle (degree)
+    PHIDEG : Sun azimuth angle (degree)
+
+    return a Vector class containing the normalized sun direction
+    """
+    # Initial position = normalized vector tagerting bottom
+    vIni = Vector(0., 0., -1.)
+    # creation of tranformations
+    tSunTheta = Transform(); tSunPhi = Transform(); tSunThethaPhi = Transform();
+    # Rotation in y axis with zenith angle
+    tSunTheta = tSunThethaPhi.rotateY(THEDEG)
+    # Rotation in z axis with azimuth angle
+    tSunPhi = tSunThethaPhi.rotateZ(PHIDEG)  # not verified, value usually = 0
+    tSunThethaPhi = tSunTheta * tSunPhi
     
-def Analyse_create_entity(entity, Theta = None):
+    vSun = tSunThethaPhi[vIni]
+    vSun = Normalize(vSun)
+    return vSun
+
+
+def Analyse_create_entity(ENTITY, THEDEG = None, PLANEDM = 'SM'):
     '''
     Definition of Analyse_create_entity
 
     Enable a 3D visualization of the created objects
-    entity : A list of objects (Entity classes)
-    Theta : the zenith angle of the sun (currently the azimuth is always assumed to be = 0)
-            If theta = None --> do not visualize the sun rays
+
+    ENTITY  : A list of objects (Entity classes)
+    THEDEG  : the zenith angle of the sun (currently the azimuth is always assumed to be = 0)
+              If THEDEG = None --> do not visualize the sun rays
+    PlaneDM : Plane Draw method, two choices 'FM' (First Method) or 'SM'(seconde Method)
+              By default 'SM', 'FM' is useful for debug issues
+
+    return a matplotlib fig
     '''
-    if (isinstance(entity, Entity)):
+    if (isinstance(ENTITY, Entity)):
         E = []
-        E = np.append(E, entity)
+        E = np.append(E, ENTITY)
         # Enable generic local visualization (part1)
         if isinstance(E[0].geo, Plane):
             GLXmin = min(E[0].geo.p1.x, E[0].geo.p2.x, E[0].geo.p3.x, E[0].geo.p4.x)
@@ -319,8 +353,8 @@ def Analyse_create_entity(entity, Theta = None):
             GLEcaM = max(GLEcaX, GLEcaY, GLEcaZ)
         # End (part1)
             
-    elif (all(isinstance(x, Entity) for x in entity)):
-        E = entity
+    elif (all(isinstance(x, Entity) for x in ENTITY)):
+        E = ENTITY
         # Enable generic local visualization (part2)
         # Be carful, if the local is greater than 100km the below need to be modified!
         GLXmin = 100.; GLYmin = 100.; GLZmin = 100.; GLXmax = -100.; GLYmax = -100.; GLZmax = -100.;
@@ -341,23 +375,12 @@ def Analyse_create_entity(entity, Theta = None):
         GLEcaM = max(GLEcaX, GLEcaY, GLEcaZ)
         # End (part2)
     else:
-        raise NameError('entity argument need to be an Entity objet or a list' + \
+        raise NameError('ENTITY argument need to be an Entity objet or a list' + \
                         ' of Entity Object ')
 
-    #atLeastOneInt = False
-    #t_hit = 9999.
-    # wsx = 120.*np.sin(Theta*(np.pi/180.)); wsy = 0.; wsz = 120.*np.cos(Theta*(np.pi/180.));
-    #wsx += E[0].transformation.transx; wsy += E[0].transformation.transy; wsz += E[0].transformation.transz;
-    vSun = Vector(0., 0., -1.)
-    tSunTheta = Transform(); tSunPhi = Transform(); tSunThethaPhi = Transform();
-    if (Theta != None):
-        tSunTheta = tSunThethaPhi.rotateY(Theta)
-    else:
-        tSunTheta = tSunThethaPhi.rotateY(0)
-    tSunPhi = tSunThethaPhi.rotateZ(0)   # pas vérifié car valeur gene = 0
-    tSunThethaPhi = tSunTheta * tSunPhi
-    vSun = tSunThethaPhi[vSun]
-    vSun = Normalize(vSun)
+    # calculate the sun direction vector
+    if (THEDEG != None): vSun = ComputeSunDir(THEDEG=THEDEG)
+    else : vSun = ComputeSunDir(THEDEG=0.)
     
     wsx = -vSun.x; wsy=-vSun.y; wsz=-vSun.z;
     xs = np.linspace(0, 0.1*wsx, 100)
@@ -427,12 +450,12 @@ def Analyse_create_entity(entity, Theta = None):
                           Point(E[k].geo.p2.x, E[k].geo.p2.y, E[k].geo.p2.z),
                           Point(E[k].geo.p3.x, E[k].geo.p3.y, E[k].geo.p3.z),
                           Point(E[k].geo.p4.x, E[k].geo.p4.y, E[k].geo.p4.z)], dtype = Point)
-
+            
             PlaneMesh = TriangleMesh(tt, tt_inv, vi, P)
 
-            if(E[k].name == "reflector" and Theta != None):
+            if(E[k].name == "reflector" and THEDEG != None):
                 for i in range(0, LMir):
-                    t_hit = 9999.
+                    t_hit = float('inf')
                     if(PlaneMesh.Intersect(TabPhoton[i])):
                         if (PlaneMesh.thit < t_hit):
                             atLeastOneInt[i] = True
@@ -459,9 +482,9 @@ def Analyse_create_entity(entity, Theta = None):
                             # print("vecTemp = (", vecTemp.x, ", ", vecTemp.y, ", ", vecTemp.z, ")")
                             TabPhoton2 = np.append(TabPhoton2, Ray(o=p_hit, d=vecTemp, end=120))
                                                
-            if (E[k].name == "receiver" and Theta != None):
+            if (E[k].name == "receiver" and THEDEG != None):
                 for i in range(0, LMir2):
-                    t_hit = 9999.
+                    t_hit = float('inf')
                     if(PlaneMesh.Intersect(TabPhoton2[i])):
                         atLeastOneInt2[i] = True
                         if (PlaneMesh.thit < t_hit):
@@ -473,39 +496,45 @@ def Analyse_create_entity(entity, Theta = None):
                             zr2[i] = TabPhoton2[i].o.z + tr*TabPhoton2[i].d.z
                         
             # Triangles mesh parameters for plot
-
-            # First method :
+            # First method (draw even if there is error with an object, useful for debug):
             # ----------------------------->
-            # for i in xrange(0, PlaneMesh.ntris):
-            #     Mat = np.array([[PlaneMesh.reftri[i].p1.x, PlaneMesh.reftri[i].p1.y, PlaneMesh.reftri[i].p1.z], \
-            #                     [PlaneMesh.reftri[i].p2.x, PlaneMesh.reftri[i].p2.y, PlaneMesh.reftri[i].p2.z], \
-            #                     [PlaneMesh.reftri[i].p3.x, PlaneMesh.reftri[i].p3.y, PlaneMesh.reftri[i].p3.z]])
-            #     face1 = mp3d.art3d.Poly3DCollection([Mat], alpha = 0.5, linewidths=0.2)
-            #     face1.set_facecolor(mcolors.to_rgba('grey'))
-            #     ax.add_collection3d(face1)
+            if (PLANEDM == 'FM'):
+                for i in range(0, PlaneMesh.ntris):
+                    Mat = np.array([[PlaneMesh.reftri[i].p1.x, PlaneMesh.reftri[i].p1.y, PlaneMesh.reftri[i].p1.z], \
+                                    [PlaneMesh.reftri[i].p2.x, PlaneMesh.reftri[i].p2.y, PlaneMesh.reftri[i].p2.z], \
+                                    [PlaneMesh.reftri[i].p3.x, PlaneMesh.reftri[i].p3.y, PlaneMesh.reftri[i].p3.z]])
+                    face1 = mp3d.art3d.Poly3DCollection([Mat], alpha = 0.75, linewidths=0.2)
+                    face1.set_facecolor(mcolors.to_rgba('grey'))
+                    ax.add_collection3d(face1)
 
             # Second method (better visual, avoid some matplotlib bugs):
-            # ----------------------------->           
-            Mat = np.array([[PlaneMesh.reftri[0].p1.x, PlaneMesh.reftri[0].p1.y, PlaneMesh.reftri[0].p1.z], \
-                            [PlaneMesh.reftri[0].p2.x, PlaneMesh.reftri[0].p2.y, PlaneMesh.reftri[0].p2.z], \
-                            [PlaneMesh.reftri[0].p3.x, PlaneMesh.reftri[0].p3.y, PlaneMesh.reftri[0].p3.z], \
-                            [PlaneMesh.reftri[1].p1.x, PlaneMesh.reftri[1].p1.y, PlaneMesh.reftri[1].p1.z], \
-                            [PlaneMesh.reftri[1].p2.x, PlaneMesh.reftri[1].p2.y, PlaneMesh.reftri[1].p2.z], \
-                            [PlaneMesh.reftri[1].p3.x, PlaneMesh.reftri[1].p3.y, PlaneMesh.reftri[1].p3.z]])
-
-            if (np.array_equal(Mat[:,0], np.full((6), Mat[0,0]))):
-                yy, zz = np.meshgrid(Mat[:,0], Mat[:,2])
-                xx = np.full((6,6), Mat[0,0])
-                ax.plot_surface(xx, yy, zz, color = mcolors.to_rgba('grey'), alpha = 0.15, \
-                                linewidth=0.2, antialiased=True)
-            elif (np.array_equal(Mat[:,1], np.full((6), Mat[0,1]))):
-                xx, zz = np.meshgrid(Mat[:,0], Mat[:,2])
-                yy = np.full((6,6), Mat[0,1])
-                ax.plot_surface(xx, yy, zz, color = mcolors.to_rgba('grey'), alpha = 0.15, \
-                                linewidth=0.2, antialiased=True)
-            else:
-                ax.plot_trisurf(Mat[:,0], Mat[:,1], Mat[:,2], color = mcolors.to_rgba('grey'), \
-                                alpha = 0.5, linewidth=0.2, antialiased=True)
+            # ----------------------------->
+            if (PLANEDM == 'SM'):
+                Mat = np.array([[PlaneMesh.reftri[0].p1.x, PlaneMesh.reftri[0].p1.y, PlaneMesh.reftri[0].p1.z], \
+                                [PlaneMesh.reftri[0].p2.x, PlaneMesh.reftri[0].p2.y, PlaneMesh.reftri[0].p2.z], \
+                                [PlaneMesh.reftri[0].p3.x, PlaneMesh.reftri[0].p3.y, PlaneMesh.reftri[0].p3.z], \
+                                [PlaneMesh.reftri[1].p1.x, PlaneMesh.reftri[1].p1.y, PlaneMesh.reftri[1].p1.z], \
+                                [PlaneMesh.reftri[1].p2.x, PlaneMesh.reftri[1].p2.y, PlaneMesh.reftri[1].p2.z], \
+                                [PlaneMesh.reftri[1].p3.x, PlaneMesh.reftri[1].p3.y, PlaneMesh.reftri[1].p3.z]])
+                
+                if (np.array_equal(Mat[:,0], np.full((6), Mat[0,0]))):
+                    yy, zz = np.meshgrid(Mat[:,0], Mat[:,2])
+                    xx = np.full((6,6), Mat[0,0])
+                    ax.plot_surface(xx, yy, zz, color = mcolors.to_rgba('grey'), alpha = 0.15, \
+                                    linewidth=0.2, antialiased=True)
+                elif (np.array_equal(Mat[:,1], np.full((6), Mat[0,1]))):
+                    xx, zz = np.meshgrid(Mat[:,0], Mat[:,2])
+                    yy = np.full((6,6), Mat[0,1])
+                    ax.plot_surface(xx, yy, zz, color = mcolors.to_rgba('grey'), alpha = 0.15, \
+                                    linewidth=0.2, antialiased=True)
+                elif (np.array_equal(Mat[:,2], np.full((6), Mat[0,2]))): # need to be verified
+                    xx, yy = np.meshgrid(Mat[:,0], Mat[:,1])
+                    zz = np.full((6,6), Mat[0,2])
+                    ax.plot_surface(xx, yy, zz, color = mcolors.to_rgba('grey'), alpha = 0.15, \
+                                    linewidth=0.2, antialiased=True)
+                else:
+                    ax.plot_trisurf(Mat[:,0], Mat[:,1], Mat[:,2], color = mcolors.to_rgba('grey'), \
+                                    alpha = 0.5, linewidth=0.2, antialiased=True)
 
         elif isinstance(E[k].geo, Spheric):
 
@@ -592,34 +621,32 @@ def Analyse_create_entity(entity, Theta = None):
     # Show the geometries
     return ax
 
-def generateH(THEDEGS=0., PHIDEGS = 0., pH = [Point(0., 0., 0.)], pR = Point(0., 0., 0.), \
-              Hx = 0.001, Hy = 0.001, ref = 1):
+def generateHfP(THEDEG=0., PHIDEG = 0., PH = [Point(0., 0., 0.)], PR = Point(0., 0., 0.), \
+                HSX = 0.001, HSY = 0.001, REF = 1):
     '''
-    Definition of generateH
+    Definition of generateHfP
 
-    Enable to generate Heliostats
+    Enable to generate well oriented Heliostats from their positions
+
+    THEDEG  : Sun zenith angle (degree)
+    PHIDEG  : Sun azimuth angle (degree)
+    PH : Coordinates of the center of heliostats (list of point classes)
+    PR : Coordinate of the center of the receiver (point class)
+    HSX : Heliostat size in x axis (kilometer)
+    HSY : Heliostat size in y axis (kilometer)
+    REF : reflectivity of the heliostats
+
     return a list of objects
-    pH : Coordinates of the center of heliostats (list of point classes)
-    pR : Coordinate of the center of the receiver (point class)
-    Hx : Heliostat size in x axis (care unit is kilometers)
-    Hy : Heliostat size in y axis (care unit is kilometers)
-    ref : reflectivity of the heliostats
     '''
     # calculate the sun direction vector
-    vSun = Vector(0., 0., -1.)
-    tSunTheta = Transform(); tSunPhi = Transform(); tSunThethaPhi = Transform();
-    tSunTheta = tSunThethaPhi.rotateY(THEDEGS) 
-    tSunPhi = tSunThethaPhi.rotateZ(PHIDEGS)   # pas vérifié car valeur gene = 0
-    tSunThethaPhi = tSunTheta * tSunPhi
-    vSun = tSunThethaPhi[vSun]
-    vSun = Normalize(vSun)
+    vSun = ComputeSunDir(THEDEG=THEDEG, PHIDEG=PHIDEG)
     
     lObj = []
-    Hxx = Hx/2
-    Hyy = Hy/2
+    Hxx = HSX/2
+    Hyy = HSY/2
 
     objM = Entity(name = "reflector", \
-                  materialAV = Mirror(reflectivity = ref), \
+                  materialAV = Mirror(reflectivity = REF), \
                   materialAR = Matte(reflectivity = 0.), \
                   geo = Plane( p1 = Point(-Hxx, -Hyy, 0.),
                                p2 = Point(Hxx, -Hyy, 0.),
@@ -628,21 +655,145 @@ def generateH(THEDEGS=0., PHIDEGS = 0., pH = [Point(0., 0., 0.)], pR = Point(0.,
                   transformation = Transformation( rotation = np.array([0., 0., 0.]), \
                                                    translation = np.array([0., 0., 0.]) ))
     
-    for i in range (0, len(pH)):
-        vecHR = pH[i]-pR
+    for i in range (0, len(PH)):
+        # 1) Find the normalized vector colinear (and same dir) to the normal of heliostat surface
+        vecHR = PH[i]-PR
         vecHR = Normalize(vecHR)
         vecNH = (vSun + vecHR)*(-0.5)
         vecNH = Normalize(vecNH)
-        # the min operation avoid nan in case of arccos of something greater than 1
-        rotY = np.arccos(min(vecNH.z, 1))
+
+        # 2) Apply the inverse rotation operations to find the necessary angles
+        # the min/max operations avoid nan in case of arccos of something greater than 1 or less than -1
+        if (vecNH.z > 0): vecNH.z = min(vecNH.z, 1)
+        if (vecNH.z < 0): vecNH.z = max(vecNH.z, -1)
+        rotY = np.arccos(vecNH.z)
         rotYD = np.degrees(rotY)
-        # the min operation avoid nan in case of arccos of something greater than 1
-        rotZ = np.arccos(min(vecNH.x/np.sin(rotY), 1))
+        # the min/max operations avoid nan in case of arccos of something greater than 1 or less than -1
+        opeZ = vecNH.x/np.sin(rotY)
+        if (opeZ > 0): opeZ = min(opeZ, 1)
+        if (opeZ < 0): opeZ = max(opeZ, -1)
+        rotZ = np.arccos(opeZ)
         if (vecHR.y > 0):
             rotZD = -1.*np.degrees(rotZ)
         else:
             rotZD = np.degrees(rotZ)
-        # print("rotZD =", rotZD)
+
+        # 3) Once the rotation angles have been found, create heliostat objects
+        objMi = Entity(objM);
+        objMi.transformation = Transformation( rotation = np.array([0., rotYD, rotZD]), \
+                                               translation = np.array([PH[i].x, PH[i].y, PH[i].z]), \
+                                               rotationOrder = "ZYX")
+        lObj.append(objMi)
+        
+    return lObj
+
+
+def generateHfA(THEDEG=0., PHIDEG = 0., PR = Point(0., 0., 50.), MINANG=0., \
+                MAXANG=360., GAPDEG = 5., FDRH = 0.1, NBH = 10, GAPDIST = 0.01, \
+                HSX = 0.001, HSY = 0.001, PILLH = 0.006, REF = 1):
+    '''
+    Definition of generateHfA
+
+    Enable to generate well oriented Heliostats from two angles [MINANG, MAXANG] 
+ 
+          y
+          ^ 
+          |/) ANG
+          ---> x
+
+    THEDEG  : Sun zenith angle (degree)
+    PHIDEG  : Sun azimuth angle (degree)
+    PR      : Coordinate of the center of the receiver (point class)
+            # Heliostats are filled between MINANG and MAXANG
+    MINANG  : min value of ANG (degree)
+    MAXANG  : max value of ANG (degree)
+    GAPDEG  : Fill heliostats every GAPDEG inside [MINANG, MAXANG] (degree)
+    FDRH    : First Distance Receiver-Heliostat (kilometer)
+    NBH     : number of heliostats to put every GAPDEG
+    GAPDIST : After FDRH, the gap between heliostats (kilometer)
+    HSX     : Heliostat size in x axis (kilometer)
+    HSY     : Heliostat size in y axis (kilometer)
+    PILLH   : Pillar height, distance Ground-Heliostat (kilometer)
+    REF     : reflectivity of the heliostats
+
+    return a list of objects
+    '''
+    # calculate the sun direction vector
+    vSun = ComputeSunDir(THEDEG=THEDEG, PHIDEG=PHIDEG)
+
+    lObj = []
+    Hxx = HSX/2
+    Hyy = HSY/2
+
+    objM = Entity(name = "reflector", \
+                  materialAV = Mirror(reflectivity = REF), \
+                  materialAR = Matte(), \
+                  geo = Plane( p1 = Point(-Hxx, -Hyy, 0.),
+                               p2 = Point(Hxx, -Hyy, 0.),
+                               p3 = Point(-Hxx, Hyy, 0.),
+                               p4 = Point(Hxx, Hyy, 0.) ), \
+                  transformation = Transformation( rotation = np.array([0., 0., 0.]), \
+                                                   translation = np.array([0., 0., 0.]) ))
+
+    lenpH = int(  ( (MAXANG-MINANG)/GAPDEG )*NBH  )
+    
+    # To avoid a given bug
+    if (MAXANG-MINANG < 360.000000001 and MAXANG-MINANG > 359.999999999):
+        nbI = int(lenpH/NBH)
+    else:
+        nbI = int(lenpH/NBH) + 1
+
+    print("Total number of Heliostats = ", nbI*NBH)
+    
+    pH = []
+    myRotZ = MINANG
+    RotZT = Transform()
+
+    if (MINANG != MAXANG):
+        for i in range (0, nbI):
+            Dhr = FDRH
+            for j in range (0, NBH):
+                myP = Point(Dhr, 0., 0.)
+                RotZT = RotZT.rotateZ(myRotZ)
+                myP=RotZT[myP]
+                pH.append( Point(myP.x, myP.y, myP.z+PILLH) )
+                #print(pH[(i*NBH)+j])
+                Dhr += GAPDIST
+            myRotZ += GAPDEG
+    else:
+        Dhr = FDRH
+        for j in range (0, NBH):
+            myP = Point(Dhr, 0., 0.)
+            RotZT = RotZT.rotateZ(myRotZ)
+            myP=RotZT[myP]
+            pH.append( Point(myP.x, myP.y, myP.z+PILLH) )
+            Dhr += GAPDIST      
+
+
+    for i in range (0, len(pH)):
+        # 1) Find the normalized vector colinear (and same dir) to the normal of heliostat surface
+        vecHR = pH[i]-PR
+        vecHR = Normalize(vecHR)
+        vecNH = (vSun + vecHR)*(-0.5)
+        vecNH = Normalize(vecNH)
+
+        # 2) Apply the inverse rotation operations to find the necessary angles
+        # the min/max operations avoid nan in case of arccos of something greater than 1 or less than -1
+        if (vecNH.z > 0): vecNH.z = min(vecNH.z, 1)
+        if (vecNH.z < 0): vecNH.z = max(vecNH.z, -1)
+        rotY = np.arccos(vecNH.z)
+        rotYD = np.degrees(rotY)
+        # the min/max operations avoid nan in case of arccos of something greater than 1 or less than -1
+        opeZ = vecNH.x/np.sin(rotY)
+        if (opeZ > 0): opeZ = min(opeZ, 1)
+        if (opeZ < 0): opeZ = max(opeZ, -1)
+        rotZ = np.arccos(opeZ)
+        if (vecHR.y > 0):
+            rotZD = -1.*np.degrees(rotZ)
+        else:
+            rotZD = np.degrees(rotZ)
+
+        # 3) Once the rotation angles have been found, create heliostat objects 
         objMi = Entity(objM);
         objMi.transformation = Transformation( rotation = np.array([0., rotYD, rotZD]), \
                                                translation = np.array([pH[i].x, pH[i].y, pH[i].z]), \
@@ -652,7 +803,6 @@ def generateH(THEDEGS=0., PHIDEGS = 0., pH = [Point(0., 0., 0.)], pR = Point(0.,
     return lObj
 
     
-        
 if __name__ == '__main__':
 
     Heliostat1 = Entity(name = "reflector", \
@@ -686,6 +836,6 @@ if __name__ == '__main__':
     print("Recept1 :", Recepteur1)
     print("Helio2 :", Heliostat2)
     
-    fig = Analyse_create_entity([Heliostat1, Recepteur1, Heliostat2], Theta = 0.)
+    fig = Analyse_create_entity([Heliostat1, Recepteur1, Heliostat2], THEDEG = 0.)
 
     plt.show(fig)

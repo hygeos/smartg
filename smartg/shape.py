@@ -140,7 +140,7 @@ class Triangle(Shape):
         # compute the first barycentric coordinate
         s = ray.o - self.p1
         b1 = Dot(s, s1) * invDivisor
-        if (b1 < 0 or  b1 > 1):
+        if (b1 < -0.00000001 or  b1 > 1.00000001): #b1 < 0 or  b1 > 1):
             return False
 
         # compute the second barycentric coordinate
@@ -311,7 +311,7 @@ class TriangleM(Shape):
         # print("s1=", s1)
         # print("Dot(s, s1)=", Dot(s, s1))
         # print("invDivisor", invDivisor)
-        if (b1 < -0.00000001 or  b1 > 1):
+        if (b1 < -0.00000001 or  b1 > 1.00000001):
             return False
 
         # compute the second barycentric coordinate
