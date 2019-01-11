@@ -73,26 +73,33 @@ def receiver_view(disMatrix, w = False, logI=False, nameFile = None, MTOA = 1320
         plt.savefig(nameFile + '.pdf')  
 
 
-def cat_view(mlut, view = 'all'):
+def cat_view(mlut, view = 'all', acc = 6):
     '''
     Definition of cat_view
 
     mlut : mlut table
     view : what to print ? choice between : all, weight, number, errP and errAbs
+    acc  : accuracy, number of decimal points to show (integer)
     '''
     m = mlut
+    lP = ["(  D  )", "(  H  )", "(  E  )", "(  A  )", "( H+A )", "( H+E )", "( E+A )", "(H+E+A)"]
+    intAcc = int(acc)
+    strAcc = str(intAcc)
+    # strAcc = "{0:." + strAcc + "}"
+    strAcc = "%." + strAcc + "f"
+    
     for i in range (0, 8):
         if (view == 'all'):
-            print("CAT",i+1,": weight=", mlut['catWeightPh'][i], " number=", np.uint64(mlut['catNbPh'][i]),
-                  " err(%)=", mlut['catErrP'][i], " errAbs=", mlut['catErrAbs'][i])
+            print("CAT",i+1, lP[i], ": weight=", strAcc % mlut['catWeightPh'][i], " number=", np.uint64(mlut['catNbPh'][i]),
+                  " err(%)=", strAcc % mlut['catErrP'][i], " errAbs=", strAcc % mlut['catErrAbs'][i])
         elif (view == 'weight'):
-            print("CAT",i+1,": weight=", mlut['catWeightPh'][i])
+            print("CAT",i+1,": weight=", strAcc % mlut['catWeightPh'][i])
         elif (view == 'number'):
             print("CAT",i+1,": number=", np.uint64(mlut['catNbPh'][i]))
         elif (view == 'errP'):
-            print("CAT",i+1,": err(%)=", mlut['catErrP'][i])
+            print("CAT",i+1,": err(%)=", strAcc % mlut['catErrP'][i])
         elif (view == 'errAbs'):
-            print("CAT",i+1,": errAbs=", mlut['catErrAbs'][i])
+            print("CAT",i+1,": errAbs=", strAcc % mlut['catErrAbs'][i])
 
 
 class Mirror(object):

@@ -669,8 +669,8 @@ class Smartg(object):
                     myObjects0['nBz'][i] = normalBase.z
                     
                 else:    # si l'objet est autre chose (inconnu)
-                    raise NameError('You geometry can be only spheric or plane, please' + \
-                                    ' choose between Spheric or Plane classes!')
+                    raise NameError("Your geometry can be only spheric or plane, please" + \
+                                    " choose between Spheric or Plane classes!")
 
                 # Affectation des transformations (rotations et translations)
                 myObjects0['mvRx'][i] = myObjects[i].transformation.rotx
