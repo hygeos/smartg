@@ -1748,7 +1748,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 	) {
 
 	float delta_i=0.f, delta=0.f, epsilon;
-	float tauR, prev_tau, tauBis, phz; //rdist
+	float tauR, tauBis, phz; //rdist
     int ilayer;
 	
     #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
@@ -1759,7 +1759,10 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
     float ab;
     #endif
 
+	#ifdef OBJ3D
+	float prev_tau;
 	prev_tau = ph->tau;        // previous value of tau photon
+	#endif
 	tauR = -logf(1.f - RAND);  // optical distance reached calculated randomly
 	ph->tau += (tauR*ph->v.z); // the value of tau photon at the reached point
 
