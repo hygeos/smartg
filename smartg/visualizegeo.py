@@ -28,10 +28,13 @@ def receiver_view(disMatrix, w = False, logI=False, nameFile = None, MTOA = 1320
     Definition of receiver_view
 
     disMatrix : 2D numpy array with flux distribution at the receiver
-    w : the receiver size, in kilometer. Can be a scalar or a list with x and y values
-    logI : enable log interval
-    MTOA : exitance at TOA (W/m2)
-    vmin = minimal distribution value (W/m2), not for log print
+    w         : The receiver size, in kilometer. Can be a scalar or a list with x
+                and y values
+    logI      : Enable log interval
+    nameFile  : By default None. If not None create a pdf file in auxdata directory
+                of the current print with the specified name
+    MTOA      : Radiant exitance at TOA (W/m2)
+    vmin      : Minimal distribution value (W/m2), not for log print
     '''
     if w==False :
         raise Exception("In receiver_view(), the receiver size w must be specified!")
@@ -78,8 +81,8 @@ def cat_view(mlut, view = 'all', acc = 6):
     Definition of cat_view
 
     mlut : mlut table
-    view : what to print ? choice between : all, weight, number, errP and errAbs
-    acc  : accuracy, number of decimal points to show (integer)
+    view : Several print choices : all, weight, number, errP and errAbs
+    acc  : Accuracy, number of decimal points to show (integer)
     '''
     m = mlut
     lP = ["(  D  )", "(  H  )", "(  E  )", "(  A  )", "( H+A )", "( H+E )", "( E+A )", "(H+E+A)"]
@@ -107,8 +110,9 @@ class Mirror(object):
     Definition of Mirror
 
     Mirror material (fresnel reflection)
-    reflectivity : the albedo..
-    rigosity : not yet available
+
+    reflectivity : the albedo of the object
+    rigosity     : not yet available
     '''
     def __init__(self, reflectivity = 1., rugosity = 0.):
         self.reflectivity = reflectivity
@@ -124,6 +128,8 @@ class LambMirror(object):
 
     Lambertian Material, same probability of reflection in all the direction
     inside the hemisphere of the normal of the object surface
+
+    reflectivity : the albedo of the object
     '''
     def __init__(self, reflectivity = 0.5):
         self.reflectivity = reflectivity
@@ -150,6 +156,7 @@ class Plane(object):
     Definition of Plane
 
     Plane constructed with 4 points : p1, p2, p3, p4
+
     p1 : x --> negative and y --> negative
     p2 : x --> positive and y --> negative
     p3 : x --> negative and y --> positive
@@ -192,10 +199,11 @@ class Spheric(object):
     Definition of Spheric
 
     Sphere constructed with --->
-    radius : the radius of th e sphere
+
+    radius   : the radius of th e sphere
     radiusZ0 : take into account all the sphere -> radiusZ0 = -radius
     radiusZ1 : take into account all the sphere -> radiusZ1 = +radius
-    phi : the value of phi, 360 degrees is the value of a full sphere
+    phi      : the value of phi, 360 degrees is the value of a full sphere
     '''
     def __init__(self, radius = 10., z0 = None, z1 = None, phi = 360.):
         self.radius = radius
@@ -222,9 +230,10 @@ class Transformation():
     Definition of Transformation
 
     Enable to move, rotate a given object
-    rotation      : 1D numpy array with 3 values for rotation in x, y and z (in degrees)
-    translation   : 1D numpy array with 3 values for translation in x, y and z (in kilometers)
-    rotationOrder : order of rotation, 6 choices : XYZ, XZY, YXZ, YZX, ZXY, ZYX
+
+    rotation      : 1D np array, 3 values for rotation in x, y and z (degree)
+    translation   : 1D np array, 3 values for translation in x, y and z (kilometer)
+    rotationOrder : Order of rotation, 6 choices : XYZ, XZY, YXZ, YZX, ZXY, ZYX
     '''
     def __init__(self, rotation = np.zeros(3, dtype=float), translation=np.zeros(3, dtype=float), \
                  rotationOrder = "XYZ"):
@@ -249,11 +258,11 @@ class Entity(object):
 
     This class enable to create a 3D object
 
-    entity : Useful in case where we need a copy of a given object
+    entity : By default None. But useful in case where we need a copy of a given
+             object
     name   : 2 choices --> reflector or receiver.
              If receiver is chosen, smartg will count the distribution flux
-    TC     : Taille Cellules --> size of cells for the flux distribution.
-             Care the unit is the kilometer.
+    TC     : Taille Cellules --> size of cells for the flux distribution (kilometer)
     '''
     def __init__(self, entity = None, name="reflector", TC = 0.01, materialAV=Matte(), \
                  materialAR=Matte(), geo=Plane(), transformation=Transformation()):
@@ -280,8 +289,9 @@ def Ref_Fresnel(dirEnt, geoTrans):
     Definition of Ref_Fresnel
 
     Simple Fresnel reflection
-    dirE : direction of the ray entering on the surface of reflection
-    geoTrans : transformation of the surface where there is reflection
+
+    dirE     : Direction of the ray entering on the surface of reflection
+    geoTrans : Transformation of the surface where there is reflection
 
     return a Vector class containing the direction of the reflected ray
     '''
@@ -338,10 +348,10 @@ def Analyse_create_entity(ENTITY, THEDEG = None, PLANEDM = 'SM'):
     Enable a 3D visualization of the created objects
 
     ENTITY  : A list of objects (Entity classes)
-    THEDEG  : the zenith angle of the sun (currently the azimuth is always assumed to be = 0)
-              If THEDEG = None --> do not visualize the sun rays
-    PlaneDM : Plane Draw method, two choices 'FM' (First Method) or 'SM'(seconde Method)
-              By default 'SM', 'FM' is useful for debug issues
+    THEDEG  : The zenith angle of the sun (currently the azimuth is always assumed
+              to be = 0). If THEDEG = None --> do not visualize the sun rays
+    PlaneDM : Plane Draw method, two choices 'FM' (First Method) or 'SM'(seconde
+              Method). By default 'SM', 'FM' is useful for debug issues
 
     return a matplotlib fig
     '''

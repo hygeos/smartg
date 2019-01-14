@@ -293,14 +293,16 @@ class CusForward(object):
 
     Custum rectangular forward mode of surface X*Y
 
-    CFX  : size in X (only for FF LMODE)
-    CFY  : size in Y (only for FF LMODE)
+    CFX  : Size in X (only for FF LMODE)
+    CFY  : Size in Y (only for FF LMODE)
     CFTX : Translation in x axis (only for FF LMODE)
     CFTY : Translation in y axis (only for FF LMODE)
-    LMODE (Launching mode) : RF = Restricted Forward or FF = Full Forward
-                             RF --> launch the photons such that the direct beams fill only reflector objects
-                             FF --> launch the photons in a rectangle from TOA whrere the beams at the center,
-                                    with the solar direction, targets the origin point (0,0,0)
+    LMODE (Launching mode) : RF = Restricted Forward OR FF = Full Forward
+                             RF --> Launch the photons such that the direct beams
+                                    fill only reflector objects
+                             FF --> Launch the photons in a rectangle from TOA
+                                    whrere the beams at the center, with the solar
+                                    dir, targets by default the origin point (0,0,0)
     '''
     def __init__(self, CFX=0., CFY=0., CFTX = 0., CFTY = 0., LMODE = "RF"):
         self.dict = {

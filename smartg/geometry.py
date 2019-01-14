@@ -6,8 +6,11 @@ import math
 #####################################################################################
 class Vector(object):
     '''
+    Definition of Vector
+
     Creation of the class vector
-    args: x, y and z directions
+
+    args : x, y and z directions
     '''
     def __init__(self, x = 0, y = 0, z = 0):
         if isinstance(x, Vector) or isinstance(x, Point) or isinstance(x, Normal):
@@ -65,8 +68,11 @@ class Vector(object):
 #####################################################################################
 class Point(object):
     '''
+    Definition of Point
+
     Creation of the class Point
-    args: x, y and z coordinates
+
+    args : x, y and z coordinates
     '''
     def __init__(self, x = 0, y = 0, z = 0):
         if isinstance(x, Vector) or isinstance(x, Point) or isinstance(x, Normal):
@@ -123,8 +129,11 @@ class Point(object):
 #####################################################################################
 class Normal(object):
     '''
+    Definition of Normal
+
     Creation of the class Normal
-    args: x, y and z directions
+
+    args : x, y and z directions
     '''
     def __init__(self, x = 0, y = 0, z = 0):
         if isinstance(x, Vector) or isinstance(x, Point) or isinstance(x, Normal):
@@ -184,8 +193,17 @@ class Normal(object):
 #####################################################################################
 class Ray(object):
     '''
+    Definition of Ray
+
     Creation of the class Ray
-    args: ...
+
+    o     : Reference point of the ray (Point class)
+    d     : Direction of the ray (Vector class)
+    t     : Initial time for the initial position of the ray
+            t = 0 means o = the initial position
+    start : Min value of t
+    end   : Max value of t
+
     '''
     def __init__(self, o = Point(), d = Vector(), t = 0, start = 0, end = float("inf")):
         if isinstance(o, Ray):
@@ -212,7 +230,12 @@ class Ray(object):
 #####################################################################################
 class BBox(object):
     '''
-    Creation of the bounding box class
+    Definition of Ray
+
+    Creation of the bounding box class thanks to 2 points
+    
+    p1 : First point (Point class)
+    p2 : Second point (Point class)
     '''
     def __init__(self, p1 = None, p2 = None):
         if (isinstance(p1, Point) or (p1 is None)) and \
