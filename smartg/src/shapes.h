@@ -253,7 +253,8 @@ bool Sphere::Intersect(const Ray &r, float *tHit, DifferentialGeometry *dg) cons
 
     // Initialisation de  _DifferentialGeometry_ depuis les données paramétriques
     const Transform &o2w = *ObjectToWorld;
-	char myP[]="Point", myN[]="Normal";
+	/* char myP[]="Point", myN[]="Normal"; */
+	int myP = 1, myN = 3;
     *dg = DifferentialGeometry(o2w(phit, myP), o2w(dpdu, myN), o2w(dpdv, myN), u, v, this);
 
     // mise a jour de _tHit_
@@ -474,7 +475,8 @@ bool Triangle::Intersect(const Ray &ray, float *tHit,
 
 __device__ BBox Triangle::ObjectBoundTriangle() const
 {
-	char myP[]="Point";
+	/* char myP[]="Point"; */
+	int myP = 1;
 	BBox objectBounds((*WorldToObject)(p1, myP), (*WorldToObject)(p2, myP));
 	return objectBounds.Union(objectBounds, (*WorldToObject)(p3, myP));
 }
@@ -530,7 +532,8 @@ TriangleMesh::TriangleMesh(const Transform *o2w, const Transform *w2o,
 	p = P;
 
 	// Applique les transformations sur le maillage
-	char myP[]="Point";
+	/* char myP[]="Point"; */
+	int myP = 1;
 	
 	for (int i = 0; i < nverts; ++i)
 		p[i] = (*ObjectToWorld)(p[i], myP);
@@ -573,7 +576,8 @@ bool TriangleMesh::Intersect(const Ray &ray, float* tHit,
 __device__ BBox TriangleMesh::ObjectBoundTriangleMesh() const
 {
 	BBox objectBounds;
-	char myP[]="Point";
+	/* char myP[]="Point"; */
+	int myP = 1;
     for (int i = 0; i < nverts; i++) {
 		float3 pW = (*WorldToObject)(p[i], myP);
 		objectBounds = objectBounds.Union(objectBounds, pW);}

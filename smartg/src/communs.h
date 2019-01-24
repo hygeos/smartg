@@ -224,6 +224,7 @@ public:
 	#ifdef OBJ3D
 	int direct;
     int H, E, S;
+	float weight_loss[4];
 	#endif
 private:
 };

@@ -29,7 +29,8 @@ from pycuda.compiler import SourceModule
 from pycuda.driver import module_from_buffer
 # bellow necessary for object incorporation
 import smartg.geometry
-from smartg.geometry import Vector, Point, Normal, Ray, BBox, CoordinateSystem, Normalize
+from smartg.geometry import Vector, Point, Normal, Ray, BBox, CoordinateSystem, \
+    Normalize, Dot
 import smartg.transform
 from smartg.transform import Transform, Aff
 import smartg.visualizegeo
@@ -701,7 +702,21 @@ class Smartg(object):
                     TpRX0 = TpT0.rotateX(myObjects[i].transformation.rotx)
                     TpRY0 = TpT0.rotateY(myObjects[i].transformation.roty)
                     TpRZ0 = TpT0.rotateZ(myObjects[i].transformation.rotz)
-                    TpT0 = TpRX0*TpRY0*TpRZ0
+                    if (myObjects[i].transformation.rotOrder == "XYZ"):
+                        TpT0 = TpRX0*TpRY0*TpRZ0
+                    elif(myObjects[i].transformation.rotOrder == "XZY"):
+                        TpT0 = TpRX0*TpRZ0*TpRY0
+                    elif(myObjects[i].transformation.rotOrder == "YXZ"):
+                        TpT0 = TpRY0*TpRX0*TpRZ0
+                    elif(myObjects[i].transformation.rotOrder == "YZX"):
+                        TpT0 = TpRY0*TpRZ*TpRX0
+                    elif(myObjects[i].transformation.rotOrder == "ZXY"):
+                        TpT0 = TpRZ0*TpRX0*TpRY0
+                    elif(myObjects[i].transformation.rotOrder == "ZYX"):
+                        TpT0 = TpRZ0*TpRY0*TpRX0
+                    else:
+                        raise NameError('Unknown rotation order')
+                    
                     normalBase = TpT0[normalBase]
                     myObjects0['nBx'][i] = normalBase.x
                     myObjects0['nBy'][i] = normalBase.y
@@ -775,34 +790,81 @@ class Smartg(object):
                             pp3 = myObjects[i].geo.p3
                             pp4 = myObjects[i].geo.p4
 
+                            # *********************************
+                            # First Method (simplest way) --->
+                            DotP = Dot(vSun*-1, normalBase)
+                            TwoAAbis = abs((pp1.x - pp4.x)*(pp2.y - pp3.y)) + abs((pp2.x - pp3.x)*(pp1.y - pp4.y))
+                            surfMirbis = (TwoAAbis/2.) * DotP
+                            # ********************************* END FM
+
+                            # *********************************
+                            # Second Method Hardest way --->
                             # Prise en compte des transfos de rot en X et Y et Z
-                            TpT = Transform()
-                            TpRX = TpT.rotateX(myObjects[i].transformation.rotx)
-                            TpRY = TpT.rotateY(myObjects[i].transformation.roty)
-                            TpRZ = TpT.rotateZ(myObjects[i].transformation.rotz)
-                            TpT = TpRX*TpRY*TpRZ
-                            invTpT = TpT.inverse(TpT)
+                            # TpT = Transform()
+                            # TpRX = TpT.rotateX(myObjects[i].transformation.rotx)
+                            # TpRY = TpT.rotateY(myObjects[i].transformation.roty)
+                            # TpRZ = TpT.rotateZ(myObjects[i].transformation.rotz)
+                            # if (myObjects[i].transformation.rotOrder == "XYZ"):
+                            #     TpT = TpRX*TpRY*TpRZ
+                            # elif(myObjects[i].transformation.rotOrder == "XZY"):
+                            #     TpT = TpRX*TpRZ*TpRY
+                            # elif(myObjects[i].transformation.rotOrder == "YXZ"):
+                            #     TpT = TpRY*TpRX*TpRZ
+                            # elif(myObjects[i].transformation.rotOrder == "YZX"):
+                            #     TpT = TpRY*TpRZ*TpRX
+                            # elif(myObjects[i].transformation.rotOrder == "ZXY"):
+                            #     TpT = TpRZ*TpRX*TpRY
+                            # elif(myObjects[i].transformation.rotOrder == "ZYX"):
+                            #     TpT = TpRZ*TpRY*TpRX
+                            # else:
+                            #     raise NameError('Unknown rotation order')
+                            # invTpT = TpT.inverse(TpT)
 
-                            # Application des transfos sur les 4 points
-                            pp1 = TpT[pp1]
-                            pp2 = TpT[pp2]
-                            pp3 = TpT[pp3]
-                            pp4 = TpT[pp4]
+                            # # Application des transfos sur les 4 points
+                            # pp1 = TpT[pp1]
+                            # pp2 = TpT[pp2]
+                            # pp3 = TpT[pp3]
+                            # pp4 = TpT[pp4]
 
-                            # ====================
-                            timeRefDir1b = (-1.* pp1.z)/vSun.z
-                            timeRefDir2b = (-1.* pp2.z)/vSun.z
-                            timeRefDir3b = (-1.* pp3.z)/vSun.z
-                            timeRefDir4b = (-1.* pp4.z)/vSun.z
-                            pp1b = pp1 + vSun*timeRefDir1b
-                            pp2b = pp2 + vSun*timeRefDir2b
-                            pp3b = pp3 + vSun*timeRefDir3b
-                            pp4b = pp4 + vSun*timeRefDir4b
-                            #print ("pointbis", pp1b, pp2b, pp3b, pp4b)
-                            TwoAAbis = abs((pp1b.x - pp4b.x)*(pp2b.y - pp3b.y)) + abs((pp2b.x - pp3b.x)*(pp1b.y - pp4b.y))
-                            surfMirbis = TwoAAbis/2.
-                            #print ("surfMirbis", surfMirbis)
-                            # ====================
+                            # # Création d'une matrice appelé matrice de passage
+                            # nn3 = Normal(vSun*-1)
+                            # nn1, nn2 = CoordinateSystem(nn3)
+                            # mm2 = np.zeros((4,4), dtype=np.float64)
+                            
+                            # # Remplissage de la matrice de passage en fonction du repère (nn3 étant le nouvel axe z)
+                            # mm2[0,0] = nn1.x ; mm2[0,1] = nn2.x ; mm2[0,2] = nn3.x ; mm2[0,3] = 0. ;
+                            # mm2[1,0] = nn1.y ; mm2[1,1] = nn2.y ; mm2[1,2] = nn3.y ; mm2[1,3] = 0. ;
+                            # mm2[2,0] = nn1.z ; mm2[2,1] = nn2.z ; mm2[2,2] = nn3.z ; mm2[2,3] = 0. ;
+                            # mm2[3,0] = 0.    ; mm2[3,1] = 0.    ; mm2[3,2] = 0.    ; mm2[3,3] = 1. ;
+                            
+                            # # Création de la transformation permettant le changement de base
+                            # mm2Inv = np.transpose(mm2)
+                            # ooTwn = Transform(m = mm2, mInv = mm2Inv)
+                            # wto = ooTwn.inverse(ooTwn)
+
+                            # # Appliquer le changement de base
+                            # pp1 = ooTwn[pp1]
+                            # pp2 = ooTwn[pp2]
+                            # pp3 = ooTwn[pp3]
+                            # pp4 = ooTwn[pp4]
+                            # v_nn = ooTwn[vSun]
+
+                            # # Projection dans le nouveau plan (x, y) avec le nouvel axe z perp à la dir solaire
+                            # timen1 = (-1.* pp1.z)/v_nn.z
+                            # timen2 = (-1.* pp2.z)/v_nn.z
+                            # timen3 = (-1.* pp3.z)/v_nn.z
+                            # timen4 = (-1.* pp4.z)/v_nn.z
+                            
+                            # pp1 += v_nn*timen1
+                            # pp2 += v_nn*timen2
+                            # pp3 += v_nn*timen3
+                            # pp4 += v_nn*timen4
+
+                            # # Calcul de l'aire de la surface suivant la formule de l'aire d'un quadri convexe
+                            # TwoAn = abs((pp1.x - pp4.x)*(pp2.y - pp3.y)) + abs((pp2.x - pp3.x)*(pp1.y - pp4.y))
+                            # surfMirbis = TwoAn/2.
+                            # ********************************* END SM
+                            
                             surfMir += surfMirbis
                     
                 elif (myObjects[i].name == "receiver"):
@@ -832,43 +894,56 @@ class Smartg(object):
             Pmin_x = None; Pmin_y = None; Pmin_z = None;
             Pmax_x = None; Pmax_y = None; Pmax_z = None;
             IsAtm = None; TC = None; nbCx = 10; nbCy = 10;
+            vSun = None
         # END OBJ ===================================================
 
         if cusForward is not None:
             if (cusForward.dict['LMODE'] == "FF"):
+                # Création d'une matrice appelé matrice de passage
                 nn3 = Normal(vSun)
                 nn1, nn2 = CoordinateSystem(nn3)
-                # Création d'une matrice appelé matrice de passage
                 mm2 = np.zeros((4,4), dtype=np.float64)
+                
                 # Remplissage de la matrice de passage en fonction du repère (nn3 étant le nouvel axe z)
                 mm2[0,0] = nn1.x ; mm2[0,1] = nn2.x ; mm2[0,2] = nn3.x ; mm2[0,3] = 0. ;
                 mm2[1,0] = nn1.y ; mm2[1,1] = nn2.y ; mm2[1,2] = nn3.y ; mm2[1,3] = 0. ;
                 mm2[2,0] = nn1.z ; mm2[2,1] = nn2.z ; mm2[2,2] = nn3.z ; mm2[2,3] = 0. ;
                 mm2[3,0] = 0.    ; mm2[3,1] = 0.    ; mm2[3,2] = 0.    ; mm2[3,3] = 1. ;
+
+                # Récupération des 4 points formant le rectangle en TOA
                 xnn = float(cusForward.dict['CFX'])/2.
                 ynn = float(cusForward.dict['CFY'])/2.
                 ppn1 = Point(-xnn, -ynn, 0.)
                 ppn2 = Point(xnn, -ynn, 0.)
                 ppn3 = Point(-xnn, ynn, 0.)
                 ppn4 = Point(xnn, ynn, 0.)
+                
                 # Création de la transformation permettant le changement de base
                 mm2Inv = np.transpose(mm2)
                 ooTwn = Transform(m = mm2, mInv = mm2Inv)
+
+                # # Application des transfos sur les 4 points
                 ppn1 = ooTwn[ppn1]
                 ppn2 = ooTwn[ppn2]
                 ppn3 = ooTwn[ppn3]
                 ppn4 = ooTwn[ppn4]
                 v_nn = ooTwn[vSun]
+                
+                # Projection dans le nouveau plan (x, y) avec le nouvel axe z perp à la dir solaire
                 timen1 = (-1.* ppn1.z)/v_nn.z
                 timen2 = (-1.* ppn2.z)/v_nn.z
                 timen3 = (-1.* ppn3.z)/v_nn.z
                 timen4 = (-1.* ppn4.z)/v_nn.z
+                
                 ppn1 += v_nn*timen1
                 ppn2 += v_nn*timen2
                 ppn3 += v_nn*timen3
                 ppn4 += v_nn*timen4
+                
+                # Calcul de l'aire de la surface suivant la formule de l'aire d'un quadri convexe
                 TwoAn = abs((ppn1.x - ppn4.x)*(ppn2.y - ppn3.y)) + abs((ppn2.x - ppn3.x)*(ppn1.y - ppn4.y))
                 surfMir = TwoAn/2.
+                
 
         
         #
@@ -1110,7 +1185,7 @@ class Smartg(object):
                   RTER, LE, ZIP, FLUX, NLVL, NPSTK,
                   NWLPROBA, BEER, RR, WEIGHTRR, NLOW, NJAC, 
                   NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusForward, nObj,
-                  Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, HIST)
+                  Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, vSun, HIST)
 
         # Initialize the progress bar
         p = Progress(NBPHOTONS, progress)
@@ -1120,7 +1195,7 @@ class Smartg(object):
 
         # Loop and kernel call
         (NPhotonsInTot, tabPhotonsTot, tabDistTot, tabHistTot, errorcount, 
-         NPhotonsOutTot, sigma, Nkernel, secs_cuda_clock, cMatVisuRecep, categories
+         NPhotonsOutTot, sigma, Nkernel, secs_cuda_clock, cMatVisuRecep, categories, vecLoss
         ) = loop_kernel(NBPHOTONS, faer, foce,
                         NLVL, NATM, NOCE, MAX_HIST, NLOW, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                         NLAM, NSENSOR, self.double, self.kernel, self.kernel2, p, X0, le, tab_sensor, spectrum,
@@ -1144,7 +1219,8 @@ class Smartg(object):
         output = finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl[:], NPhotonsInTot, errorcount, NPhotonsOutTot,
                           OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, prof_oc,
                           sigma, THVDEG, HORIZ, le=le, flux=flux, back=self.back, 
-                          SZA_MAX=SZA_MAX, SUN_DISC=SUN_DISC, hist=hist, cMatVisuRecep=cMatVisuRecep, cats = categories)
+                          SZA_MAX=SZA_MAX, SUN_DISC=SUN_DISC, hist=hist, cMatVisuRecep=cMatVisuRecep,
+                          cats = categories, losses=vecLoss)
         
         output.set_attr('processing time (s)', (datetime.now() - t0).total_seconds())
 
@@ -1198,7 +1274,8 @@ def calcOmega(NBTHETA, NBPHI, SZA_MAX=90., SUN_DISC=0):
 def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
              OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, prof_oc,
              sigma, THVDEG, HORIZ, le=None, flux=None,
-             back=False, SZA_MAX=90., SUN_DISC=0, hist=False, cMatVisuRecep = None, cats = None):
+             back=False, SZA_MAX=90., SUN_DISC=0, hist=False, cMatVisuRecep = None,
+             cats = None, losses = None):
     '''
     create and return the final output
     '''
@@ -1465,6 +1542,16 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
                                            cats[26], cats[30]], dtype=np.float64), ['Categories'])
         m.add_dataset('catErrAbs', np.array([cats[3], cats[7], cats[11], cats[15], cats[19], cats[23], 
                                              cats[27], cats[31]], dtype=np.float64), ['Categories'])
+
+    if (losses is not None):
+        ncos = losses[0]/losses[1]
+        nref = losses[2]/losses[0]
+        nspi = losses[3]/losses[2]
+        m.add_dataset('n_cos', np.array([ncos], dtype=np.float64), ['Cosine Efficiency'])
+        m.add_dataset('n_ref', np.array([nref], dtype=np.float64), ['Reflection Efficiency'])
+        m.add_dataset('n_spi', np.array([nspi], dtype=np.float64), ['Spillage Efficiency'])
+        m.add_dataset('n_opt', np.array([ncos*nref*nspi], dtype=np.float64), ['Optical Efficiency'])
+        
     return m
 
 
@@ -1601,7 +1688,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
               NBTHETA, NBPHI, OUTPUT_LAYERS,
               RTER, LE, ZIP, FLUX, NLVL, NPSTK, NWLPROBA, BEER, RR, 
               WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusForward, nObj,
-              Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, HIST) :
+              Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, vSun, HIST) :
     """
     Initialize the constants in python and send them to the device memory
 
@@ -1682,6 +1769,9 @@ def InitConst(surf, env, NATM, NOCE, mod,
         copy_to_device('Pmax_y', Pmax_y, np.float32)
         copy_to_device('Pmax_z', Pmax_z, np.float32)
         copy_to_device('IsAtm', IsAtm, np.int32)
+        copy_to_device('DIRSXd', vSun.x, np.float32)
+        copy_to_device('DIRSYd', vSun.y, np.float32)
+        copy_to_device('DIRSZd', vSun.z, np.float32)
         if TC is not None:
             copy_to_device('TCd', TC, np.float32)
             copy_to_device('nbCx', nbCx, np.int32)
@@ -1898,21 +1988,27 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         if double:
             wPhCat = gpuzeros(8, dtype=np.float64)  # vector to fill the weight of photons for each categories
             tabObjInfo = gpuzeros((9, nbCx, nbCy), dtype=np.float64)
+            wPhLoss = gpuzeros(4, dtype=np.float64)
         else:
             wPhCat = gpuzeros(8, dtype=np.float32)
             tabObjInfo = gpuzeros((9, nbCx, nbCy), dtype=np.float32)
+            wPhLoss = gpuzeros(4, dtype=np.float32)
         tabMatRecep = np.zeros((9, nbCx, nbCy), dtype=np.float64)  
         # vecteur comprenant : weightPhotons, nbPhoton, err% et errAbs pour
         # les 8 categories donc 4 x 8 valeurs = 32. vecCat[0], [1], [2] et [3]
         # pour la categorie 1 et ainsi de suite...
-        vecCats = np.zeros((32), dtype=np.float64) 
+        vecCats = np.zeros((32), dtype=np.float64)
+        # vector where: v[0]=Wi, v[1]=Wi/(n.dirS), v[2]=Wo, v[3]=Wr 
+        vecLoss = np.zeros((4), dtype=np.float64)
     else:
         nbPhCat = gpuzeros(1, dtype=np.uint64)
         if double:
             wPhCat = gpuzeros(1, dtype=np.float64)
+            wPhLoss = gpuzeros(1, dtype=np.float64)
             tabObjInfo = gpuzeros((1, 1, 1), dtype=np.float64)
         else:
             wPhCat = gpuzeros(1, dtype=np.float32)
+            wPhLoss = gpuzeros(1, dtype=np.float32)
             tabObjInfo = gpuzeros((1, 1, 1), dtype=np.float32)
             
     # Initialize the array for error counting
@@ -1973,6 +2069,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         # en rapport avec les objets
         tabObjInfo.fill(0)
         wPhCat.fill(0)
+        wPhLoss.fill(0)
         
         start_cuda_clock = cuda.Event()
         end_cuda_clock = cuda.Event()
@@ -1985,7 +2082,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
                  errorcount, nThreadsActive, tabPhotons, tabDist, tabHist,
                  Counter, NPhotonsIn, NPhotonsOut, tabthv, tabphi, tab_sensor,
                  prof_atm, prof_oc, wl_proba_icdf, rng.state, tabObjInfo, myObjects0, nbPhCat, wPhCat,
-                 block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
+                 wPhLoss, block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
         else:
             kern(spectrum, X0, faer, foce,
                  errorcount, nThreadsActive, tabPhotons, tabDist, tabHist,
@@ -2003,6 +2100,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         if TC is not None:
             # Tableau de la repartition des poids (photons) sur la surface du recepteur
             tabMatRecep += tabObjInfo[:, :, :].get()
+            vecLoss += wPhLoss[:].get()
             for i in range (0, 8):
                 # Comptage des poids pour chaque categories
                 vecCats[i*4] += wPhCat[i].get();
@@ -2058,6 +2156,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
     else:
         tabMatRecep = None
         vecCats = None
+        vecLoss = None
 
     if stdev:
         # finalize the calculation of the standard deviation
@@ -2070,7 +2169,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
 
     #!!!!!!!!!!!!!!!!!!!!!!!!!!!
     return NPhotonsInTot.get(), tabPhotonsTot.get(), tabDistTot.get(), tabHistTot.get(), errorcount, \
-        NPhotonsOutTot.get(), sigma, N_simu, secs_cuda_clock, tabMatRecep, vecCats
+        NPhotonsOutTot.get(), sigma, N_simu, secs_cuda_clock, tabMatRecep, vecCats, vecLoss
     #!!!!!!!!!!!!!!!!!!!!!!!!!!!
     #return NPhotonsInTot.get(), tabPhotonsTot.get(), errorcount, NPhotonsOutTot.get(), sigma, N_simu, secs_cuda_clock
 

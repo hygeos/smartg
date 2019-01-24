@@ -90,7 +90,8 @@ extern "C" {
 							 , void *tabObjInfo,
 							 struct IObjets *myObjets,
 							 unsigned long long *nbPhCat,
-							 void *wPhCat
+							 void *wPhCat,
+							 void *wPhLoss
 							 #endif
 							 ) {
 
@@ -151,6 +152,7 @@ extern "C" {
     //
     // main loop
     //
+	//#pragma unroll 2
 	while (*nThreadsActive > 0) {
 		iloop += 1;
 		
@@ -704,6 +706,9 @@ extern "C" {
 			if (geoStruc.type == 2) // this is a receiver
 			{ countPhotonObj3D(&ph, tabObjInfo, &geoStruc, nbPhCat, wPhCat);}
 
+			// For losses count
+			ph.weight_loss[0] = ph.weight;
+
 			if (geoStruc.material == 1) // Lambertian Mirror
 			{
 				if (LEd == 1)
@@ -763,6 +768,18 @@ extern "C" {
 				surfaceRugueuse3D(&ph, &geoStruc, &rngstate);
 			} // End Mirror
 			else {ph.loc = REMOVED;} // unknow material
+
+			__syncthreads();
+
+			ph.weight_loss[2] = ph.weight; // Weight value after relfection
+			if (geoStruc.type == 1 and ph.direct == 0 and ph.loc != REMOVED) // this is a reflector
+			{
+				if ( geoTestRec(ph.pos, ph.v, ph.locPrev, myObjets) )
+					ph.weight_loss[3] = ph.weight;
+				else
+					ph.weight_loss[3] = 0;
+				countLoss(&ph, &geoStruc, wPhLoss, tab_sensor);
+			}
 			
 			#ifdef DEBUG_PHOTON
 			display("OBJSURF", &ph);
@@ -959,6 +976,8 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 	ph->H = 0;
 	ph->E = 0;
 	ph->S = 0;
+	ph->weight_loss[0] = 0.F;
+	ph->weight_loss[1] = 0.F;
     #endif
 	
     ph->nint = 0;
@@ -995,7 +1014,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     ph->loc = tab_sensor[ph->is].LOC;
 	
 	#ifdef OBJ3D
-	Transform TRotZ; char mPP[]="Point";
+	Transform TRotZ; int mPP = 1; //char mPP[]="Point";
 	TRotZ = TRotZ.RotateZ(tab_sensor[ph->is].PHDEG-180.);
 	ph->pos = TRotZ(ph->pos, mPP);
 	#endif
@@ -1271,7 +1290,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		ThetaPhid = TThetad * TPhid; // Regroupement des transformations		
 
 		// Application des transformation sur les vecteurs u et v en fonction de Theta et Phi
-		char myV[]="Vector";
+		int myV = 2; //char myV[]="Vector";
 		vdouble = ThetaPhid(vdouble, myV);
 		udouble = ThetaPhid(udouble, myV);
 
@@ -1294,7 +1313,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		ThetaPhi = TTheta * TPhi; // Regroupement des transformations		
 
 		// Application des transformation sur les vecteurs u et v en fonction de Theta et Phi
-		char myV[]="Vector";
+		int myV = 2; //char myV[]="Vector";
 		vfloat = ThetaPhi(vfloat, myV);
 		ufloat = ThetaPhi(ufloat, myV);
 
@@ -1346,7 +1365,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 			double3 posTransd = make_double3(   (  ( (xMaxPd-xMinPd)*double(RAND) ) + xMinPd  ), (  ( (yMaxPd-yMinPd)*double(RAND) ) + yMinPd  ), 0.  );
 			
 			// Application des transfos de rot du miroir à cette entité
-			char myP[]="Point";		
+			int myP = 1; //char myP[]="Point";		
 			posTransd = Tid(posTransd, myP);
 			
 			// Projection des positions x et y suivant la direction solaire sur la surface de base de l'entité
@@ -1382,7 +1401,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 			float3 posTrans = make_float3(   (  ( (xMaxP-xMinP)*RAND ) + xMinP  ), (  ( (yMaxP-yMinP)*RAND ) + yMinP  ), 0.  );
 			
 			// Application des transfos de rot du miroir à cette entité
-			char myP[]="Point";
+			int myP = 1; //char myP[]="Point";
 			posTrans = Ti(posTrans, myP);
 			
 			// Projection des positions x et y suivant la direction solaire sur la surface de base de l'entité
@@ -2168,6 +2187,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 	    if (nObj > 0){
 			mytest = geoTest(ph->pos, ph->v, ph->locPrev, &phit, geoS, myObjets);
 			if (ph->direct == 0 && ph->pos.z == 120. && mytest == false && LMODEd == 1) {ph->loc=NONE; return;}
+			// if (ph->direct == 0 && IsAtm == 0 && mytest == false && LMODEd == 1) {ph->loc=NONE; return;}
 		}
 		//if (ph->pos.z == 120. && mytest == false) {ph->loc=NONE; return;}
 		//if (ph->pos.z == 120. && mytest == true && geoS->type != 1) {ph->loc=NONE; return;}
@@ -3682,6 +3702,7 @@ __device__ void surfaceLambert(Photon* ph, int le,
     ph->nint += 1;
 	
 	#ifdef OBJ3D
+	if(IsAtm == 0 && LMODEd == 1){ph->loc = NONE; return;}
 	ph->direct += 1;
 	ph->E += 1;
 	#endif
@@ -4032,7 +4053,7 @@ __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* 
 		
 	// Create the transforms obect to world
 	Transform oTw(M, tM);
-	char myV[]="Vector";
+	int myV = 2; //char myV[]="Vector";
 
 	// apply the transformation
 	v_n = oTw(v_n, myV);
@@ -4115,7 +4136,7 @@ __device__ void surfaceRugueuse3D(Photon* ph, IGeo* geoS, struct RNG_State *rngs
 	ph->M   = mul(ph->M,mul(L,R));
     #endif
 	Transform transfo, invTransfo, aRot;
-	char myV[]="Vector";
+	int myV = 2; //char myV[]="Vector";
 	transfo = geoS->mvTF;
 	aRot = aRot.RotateZ(180);
 	invTransfo = transfo.Inverse(transfo);
@@ -4156,11 +4177,50 @@ __device__ void surfaceRugueuse3D(Photon* ph, IGeo* geoS, struct RNG_State *rngs
 	
 } // FUNCTION SURFACEAGITE3D
 
+__device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, struct Sensor *tab_sensor)
+{
+
+	//ph->weight_loss[0] = ph->weight;
+	//ph->weight_loss[1] = fdividef(ph->weight, cosf(radians(fabsf((90 - geoS->mvR.y) - (90-14.3))))); *DEUXPI/360.
+	//ph->weight_loss[1] = fabsf( (90 - geoS->mvR.y) - (90-14.3) );
+	// ph->weight_loss[1] = fdividef(ph->weight_loss[0],
+	// 							  cosf(radians(geoS->mvR.y-(180 - tab_sensor[ph->is].THDEG))));
+
+	ph->weight_loss[1] = fdividef(ph->weight_loss[0],
+								  dot(geoS->normalBase, make_float3(-DIRSXd, -DIRSYd, -DIRSZd)));
+	#ifdef DOUBLE
+	double weightE, weightS;
+	double weightECos, weightSpi;
+	double *wPhLossC;
+	
+	wPhLossC = (double*)wPhLoss;
+	weightE = (double)ph->weight_loss[0];
+	weightS = (double)ph->weight_loss[2];
+	weightECos = (double)ph->weight_loss[1];
+	weightSpi = (double)ph->weight_loss[3];
+	#else
+	float weightE, weightS;
+	float weightECos, weightSpi;
+	float *wPhLossC;
+	
+	wPhLossC = (float*)wPhLoss;
+	weightE = (float)ph->weight_loss[0];
+	weightS = (float)ph->weight_loss[2];
+	weightECos = (float)ph->weight_loss[1];
+	weightSpi = (float)ph->weight_loss[3];
+	#endif
+
+	atomicAdd(wPhLossC, weightE);
+	atomicAdd(wPhLossC+1, weightECos);
+	atomicAdd(wPhLossC+2, weightS);
+	atomicAdd(wPhLossC+3, weightSpi);
+	//wPhLossC[1] = (double)dot(geoS->normalBase, make_float3(-DIRSXd, -DIRSYd, -DIRSZd));
+}
 
 __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsigned long long *nbPhCat, void *wPhCat)
 {
 	Transform transfo, invTransfo;
-	char myP[]="Point";
+	int myP = 1; //char myP[]="Point";
 
 	int indI = 0;
 	int indJ = 0;
@@ -4170,6 +4230,7 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 	float sizeX = nbCx*TCd;
 	float sizeY = nbCy*TCd;
 
+	// In order to be sure to not consider the photons coming behind the receiver
 	// if (!isBackward(geoS->normalBase, ph->v)) return;
 	#ifdef DOUBLE
 	if (   isForward(  make_double3(geoS->normalBase.x, geoS->normalBase.y, geoS->normalBase.z),
@@ -4255,7 +4316,8 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 		atomicAdd(wPhCatC+5, weight);
 		atomicAdd(nbPhCat+5, 1);
 		atomicAdd(tabCountObj+(6*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-        //printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
+        printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
+		//=(%f,%f)
 	}
 	else if ( ph->H == 0 && ph->E > 0 && ph->S > 0)
 	{ // CAT 7 : 2 proc. E et S avant de toucher le R.
@@ -4285,7 +4347,7 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 		DatomicAdd(wPhCatC+1, weight);
 		atomicAdd(nbPhCat+1, 1);
 		DatomicAdd(tabCountObj+(2*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-		printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
+		//printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
 	}
 	else if ( ph->H == 0 && ph->E > 0 && ph->S == 0)
 	{ // CAT 3 : only E avant de toucher le R.
@@ -5492,6 +5554,90 @@ __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo 
 } // FIN DE LA FONCTION GEOTEST()
 
 
+__device__ bool geoTestRec(float3 o, float3 dir, int phLocPrev, struct IObjets *ObjT)
+{
+	Ray R1(o, dir, 0); // initialisation du rayon pour l'étude d'intersection
+	// ******************interval d'étude******************
+	BBox interval(make_float3(Pmin_x, Pmin_y, Pmin_z),
+				  make_float3(Pmax_x, Pmax_y, Pmax_z));
+	
+	if (!interval.IntersectP(R1))
+	{
+		return false;
+	}
+	// *****************************************************
+	
+	// *************commun avec tous les objets*************
+	// bool myB = false;
+	float3 tempPhit; // Phit temporaire
+    // *****************************************************
+	
+	// *******Propre aux objets de type surface plane*******
+	int vi[6] = {0, 1, 2,  // vertices index for triangle 1
+				 2, 3, 1}; // vertices index for triangle 2
+	// *****************************************************
+
+	for (int i = 0; i < nObj; ++i)
+	{
+		if (ObjT[i].type == 2) // receiver
+		{
+			bool myBi = false;
+			float myTi = CUDART_INF_F;
+			DifferentialGeometry myDgi;
+			// *****************************First Step********************************
+			// prise en compte de tte les tranformations existantes de l'objet(i)
+			Transform Ti, invTi; // déclare la tranfo de l'objet i et son inverse
+
+			// si une valeur en x, y ou z diff de 0 alors il y a une translation
+			if (ObjT[i].mvTx != 0 or ObjT[i].mvTy != 0 or ObjT[i].mvTz != 0) {
+				Transform TmT;
+				TmT = Ti.Translate(make_float3(ObjT[i].mvTx, ObjT[i].mvTy,
+											   ObjT[i].mvTz));
+				Ti = TmT; }
+
+			// Add rotation tranformations
+			Ti = addRotAndParseOrder(Ti, ObjT[i]); //see the function
+			invTi = Ti.Inverse(Ti); // inverse de la tranformation
+			// ***********************************************************************
+		
+			// ******************************Second Step******************************
+			// on voit s'il y a une intersection avec l'objet(i)
+			if (ObjT[i].geo == 1) // cas d'un objet de type sphere
+			{
+				Sphere myObject(&Ti, &invTi, ObjT[i].myRad, ObjT[i].z0, ObjT[i].z1, ObjT[i].phi);
+
+				BBox myBBox = myObject.WorldBoundSphere();
+
+				if (myBBox.IntersectP(R1))
+					myBi = myObject.Intersect(R1, &myTi, &myDgi);
+			}
+			else if (ObjT[i].geo == 2) // cas d'un objet de type surface plane
+			{
+				// declaration of a table of float3 which contains P0, P1, P2, P3
+				float3 Pvec[4] = {make_float3(ObjT[i].p0x, ObjT[i].p0y, ObjT[i].p0z),
+								  make_float3(ObjT[i].p1x, ObjT[i].p1y, ObjT[i].p1z),
+								  make_float3(ObjT[i].p2x, ObjT[i].p2y, ObjT[i].p2z),
+								  make_float3(ObjT[i].p3x, ObjT[i].p3y, ObjT[i].p3z)};
+			
+				// Create the triangleMesh (2 = number of triangle ; 4 = number of vertices)
+				TriangleMesh myObject(&Ti, &invTi, 2, 4, vi, Pvec);
+			
+				BBox myBBox = myObject.WorldBoundTriangleMesh();
+				if (myBBox.IntersectP(R1))
+					myBi = myObject.Intersect(R1, &myTi, &myDgi);				
+			}
+			// ***********************************************************************
+
+			// ******************************third Step*******************************
+			tempPhit = R1(myTi); // valeur temporaire de phit
+			
+			if (myBi && ((fabs(tempPhit.x-o.x) > 1e-3) || (fabs(tempPhit.y-o.y) > 1e-3) ||
+				(fabs(tempPhit.z-o.z) > 1e-3)) )
+				return true;
+		}
+	} // FIN BOUCLE FOR (PARCOURANT LES OBJETS)
+	return false;
+}
 
 __device__ Transform addRotAndParseOrder(Transform Ti, IObjets object)
 {

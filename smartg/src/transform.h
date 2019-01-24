@@ -32,9 +32,9 @@ public:
     __host__ __device__ bool operator<(const Transform &t2) const;  // pas encore utilisée
     __host__ __device__ bool IsIdentity() const;                    // pas encore utilisée
 
-	inline __host__ __device__ float3 operator()(const float3 &c, const char* type) const;
+	inline __host__ __device__ float3 operator()(const float3 &c, const int type) const;
 	inline __host__ __device__ void operator()(const float3 &c, float3 *ctrans,
-												 const char* type) const;
+												 const int type) const;
 	#ifdef OBJ3D
     inline __host__ __device__ Ray operator()(const Ray &r) const;
     inline __host__ __device__ void operator()(const Ray &r, Ray *rt) const;
@@ -108,10 +108,12 @@ bool Transform::IsIdentity() const
 			m[3][2] == 0.f && m[3][3] == 1.f);
 }
 
-inline float3 Transform::operator()(const float3 &c, const char* type) const
+inline float3 Transform::operator()(const float3 &c, const int type) const
 {
 	float x = c.x, y = c.y, z = c.z;
-	if (compStr(type, "Point"))
+	/* const char P[6] = "Point", V[] = "Vector", N[] = "Normal"; */
+	
+	if (type == 1)
 	{
 		float xp = m[0][0]*x + m[0][1]*y + m[0][2]*z + m[0][3];
 		float yp = m[1][0]*x + m[1][1]*y + m[1][2]*z + m[1][3];
@@ -120,14 +122,14 @@ inline float3 Transform::operator()(const float3 &c, const char* type) const
 		if (wp == 1.) return make_float3(xp, yp, zp);
 		else          return make_float3(xp, yp, zp)/wp;
 	}
-	else if (compStr(type, "Vector"))
+	else if (type == 2)
 	{
 		float xv = m[0][0]*x + m[0][1]*y + m[0][2]*z;
 		float yv = m[1][0]*x + m[1][1]*y + m[1][2]*z;
 		float zv = m[2][0]*x + m[2][1]*y + m[2][2]*z;
 		return make_float3(xv, yv, zv);
 	}
-	else if (compStr(type, "Normal"))
+	else if (type == 3)
 	{
 		float xn = mInv[0][0]*x + mInv[1][0]*y + mInv[2][0]*z;
 		float yn = mInv[0][1]*x + mInv[1][1]*y + mInv[2][1]*z;
@@ -136,16 +138,18 @@ inline float3 Transform::operator()(const float3 &c, const char* type) const
 	}
 	else
 	{
-		printf("\"%s\" is an unknown type\n", type);
+		printf("\"%i\" is an unknown type \n", type);
+		printf(" P = \"lol\" \n");
 		printf("Please select a type between: Point, Vector and Normal.\n");
 		return c;
 	}
 }
 
-inline void Transform::operator()(const float3 &c, float3 *ctrans, const char* type) const
+inline void Transform::operator()(const float3 &c, float3 *ctrans, const int type) const
 {
 	float x = c.x, y = c.y, z = c.z;
-	if (compStr(type, "Point"))
+	/* const char P[6] = "Point", V[] = "Vector", N[] = "Normal"; */
+	if (type == 1)
 	{
 		ctrans->x = m[0][0]*x + m[0][1]*y + m[0][2]*z + m[0][3];
 		ctrans->y = m[1][0]*x + m[1][1]*y + m[1][2]*z + m[1][3];
@@ -153,13 +157,13 @@ inline void Transform::operator()(const float3 &c, float3 *ctrans, const char* t
 		float wp = m[3][0]*x + m[3][1]*y + m[3][2]*z + m[3][3];
 		if (wp != 1.) *ctrans /= wp;
 	}
-	else if (compStr(type, "Vector"))
+	else if (type == 2)
 	{
 		ctrans->x = m[0][0]*x + m[0][1]*y + m[0][2]*z;
 		ctrans->y = m[1][0]*x + m[1][1]*y + m[1][2]*z;
 		ctrans->z = m[2][0]*x + m[2][1]*y + m[2][2]*z;
 	}
-	else if (compStr(type, "Normal"))
+	else if (type == 3)
 	{
 		ctrans->x = mInv[0][0]*x + mInv[1][0]*y + mInv[2][0]*z;
 		ctrans->y = mInv[0][1]*x + mInv[1][1]*y + mInv[2][1]*z;
@@ -167,7 +171,7 @@ inline void Transform::operator()(const float3 &c, float3 *ctrans, const char* t
 	}
 	else
 	{
-		printf("\"%s\" is an unknown type\n", type);
+		printf("\"%i\" is an unknown type\n", type);
 		printf("Please select a type between: Point, Vector and Normal.\n");
 	}
 }
@@ -176,7 +180,8 @@ inline void Transform::operator()(const float3 &c, float3 *ctrans, const char* t
 inline Ray Transform::operator()(const Ray &r) const
 {
     Ray ret = r;
-	char myP[]="Point", myD[]="Vector";
+	/* char myP[]="Point", myD[]="Vector"; */
+	int myP = 1, myD = 2;
     (*this)(ret.o, &ret.o, myP);
     (*this)(ret.d, &ret.d, myD);
     return ret;
@@ -185,7 +190,8 @@ inline Ray Transform::operator()(const Ray &r) const
 
 inline void Transform::operator()(const Ray &r, Ray *rt) const
 {
-	char myP[]="Point", myD[]="Vector";
+	/* char myP[]="Point", myD[]="Vector"; */
+	int myP = 1, myD = 2;
     (*this)(r.o, &rt->o, myP);
     (*this)(r.d, &rt->d, myD);
     if (rt != &r)
@@ -201,7 +207,8 @@ inline void Transform::operator()(const Ray &r, Ray *rt) const
 BBox Transform::operator()(const BBox &b) const
 {
     const Transform &M = *this;
-	char myP[]="Point", myV[]="Vector";
+	int myP = 1, myV = 2;
+	/* char myP[]="Point", myV[]="Vector"; */
 
     // creation du point P et du vecteur V=(v1, v2, v3)
 	float3 P, V1, V2, V3;
@@ -371,9 +378,9 @@ public:
     __host__ __device__ bool operator<(const Transformd &t2) const;  // pas encore utilisée
     __host__ __device__ bool IsIdentity() const;                    // pas encore utilisée
 
-	inline __host__ __device__ double3 operator()(const double3 &c, const char* type) const;
+	inline __host__ __device__ double3 operator()(const double3 &c, const int type) const;
 	inline __host__ __device__ void operator()(const double3 &c, double3 *ctrans,
-											   const char* type) const;
+											   const int type) const;
     /* inline __host__ __device__ Ray operator()(const Ray &r) const; */
     /* inline __host__ __device__ void operator()(const Ray &r, Ray *rt) const; */
     /* __host__ __device__ BBox operator()(const BBox &b) const; */
@@ -445,10 +452,10 @@ bool Transformd::IsIdentity() const
 			m[3][2] == 0. && m[3][3] == 1.);
 }
 
-inline double3 Transformd::operator()(const double3 &c, const char* type) const
+inline double3 Transformd::operator()(const double3 &c, const int type) const
 {
 	double x = c.x, y = c.y, z = c.z;
-	if (compStr(type, "Point"))
+	if (type == 1)
 	{
 		double xp = m[0][0]*x + m[0][1]*y + m[0][2]*z + m[0][3];
 		double yp = m[1][0]*x + m[1][1]*y + m[1][2]*z + m[1][3];
@@ -457,14 +464,14 @@ inline double3 Transformd::operator()(const double3 &c, const char* type) const
 		if (wp == 1.) return make_double3(xp, yp, zp);
 		else          return make_double3(xp, yp, zp)/wp;
 	}
-	else if (compStr(type, "Vector"))
+	else if (type == 2)
 	{
 		double xv = m[0][0]*x + m[0][1]*y + m[0][2]*z;
 		double yv = m[1][0]*x + m[1][1]*y + m[1][2]*z;
 		double zv = m[2][0]*x + m[2][1]*y + m[2][2]*z;
 		return make_double3(xv, yv, zv);
 	}
-	else if (compStr(type, "Normal"))
+	else if (type == 3)
 	{
 		double xn = mInv[0][0]*x + mInv[1][0]*y + mInv[2][0]*z;
 		double yn = mInv[0][1]*x + mInv[1][1]*y + mInv[2][1]*z;
@@ -473,16 +480,16 @@ inline double3 Transformd::operator()(const double3 &c, const char* type) const
 	}
 	else
 	{
-		printf("\"%s\" is an unknown type\n", type);
+		printf("\"%i\" is an unknown type\n", type);
 		printf("Please select a type between: Point, Vector and Normal.\n");
 		return c;
 	}
 }
 
-inline void Transformd::operator()(const double3 &c, double3 *ctrans, const char* type) const
+inline void Transformd::operator()(const double3 &c, double3 *ctrans, const int type) const
 {
 	double x = c.x, y = c.y, z = c.z;
-	if (compStr(type, "Point"))
+	if (type == 1)
 	{
 		ctrans->x = m[0][0]*x + m[0][1]*y + m[0][2]*z + m[0][3];
 		ctrans->y = m[1][0]*x + m[1][1]*y + m[1][2]*z + m[1][3];
@@ -490,13 +497,13 @@ inline void Transformd::operator()(const double3 &c, double3 *ctrans, const char
 		double wp = m[3][0]*x + m[3][1]*y + m[3][2]*z + m[3][3];
 		if (wp != 1.) *ctrans /= wp;
 	}
-	else if (compStr(type, "Vector"))
+	else if (type == 2)
 	{
 		ctrans->x = m[0][0]*x + m[0][1]*y + m[0][2]*z;
 		ctrans->y = m[1][0]*x + m[1][1]*y + m[1][2]*z;
 		ctrans->z = m[2][0]*x + m[2][1]*y + m[2][2]*z;
 	}
-	else if (compStr(type, "Normal"))
+	else if (type == 3)
 	{
 		ctrans->x = mInv[0][0]*x + mInv[1][0]*y + mInv[2][0]*z;
 		ctrans->y = mInv[0][1]*x + mInv[1][1]*y + mInv[2][1]*z;
@@ -504,7 +511,7 @@ inline void Transformd::operator()(const double3 &c, double3 *ctrans, const char
 	}
 	else
 	{
-		printf("\"%s\" is an unknown type\n", type);
+		printf("\"%i\" is an unknown type\n", type);
 		printf("Please select a type between: Point, Vector and Normal.\n");
 	}
 }

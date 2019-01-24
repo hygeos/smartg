@@ -65,6 +65,9 @@ __device__ __constant__ float Pmin_z;
 __device__ __constant__ float Pmax_x;
 __device__ __constant__ float Pmax_y;
 __device__ __constant__ float Pmax_z;
+__device__ __constant__ float DIRSXd;
+__device__ __constant__ float DIRSYd;
+__device__ __constant__ float DIRSZd;
 __device__ __constant__ int IsAtm;
 __device__ __constant__ float TCd;
 __device__ __constant__ int nbCx;
@@ -106,7 +109,8 @@ __global__ void launchKernel(
 		, void *tabObjInfo,
 		struct IObjets *myObjets,
 		unsigned long long *nbPhCat,
-		void *wPhCat
+		void *wPhCat,
+		void *wPhLoss
 		#endif
         );
 }
@@ -179,6 +183,8 @@ __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* 
 									  struct Spectrum *spectrum, struct RNG_State*, IGeo* geoS);
 
 __device__ void surfaceRugueuse3D(Photon* ph, IGeo* geoS, struct RNG_State *rngstate);
+
+__device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, struct Sensor *tab_sensor);
 
 __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsigned long long *nbPhCat, void *wPhCat);
 #endif
@@ -264,7 +270,8 @@ __device__ unsigned int randomPhilox4x32_7uint(philox4x32_ctr_t*, philox4x32_key
 *	> Fonctions liées à la création de géométries
 ***********************************************************/
 
-__device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo *GeoV , struct IObjets *myObjets);
+__device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo *GeoV , struct IObjets *ObjT);
+__device__ bool geoTestRec(float3 o, float3 dir, int phLocPrev, struct IObjets *ObjT);
 __device__ Transform addRotAndParseOrder(Transform Ti, IObjets object);
 __device__ Transformd DaddRotAndParseOrder(Transformd Tid, IObjets object);
 #endif

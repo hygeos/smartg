@@ -392,8 +392,8 @@ def Analyse_create_entity(ENTITY, THEDEG = None, PLANEDM = 'SM'):
         GLEcaM = max(GLEcaX, GLEcaY, GLEcaZ)
         # End (part2)
     else:
-        raise NameError('ENTITY argument need to be an Entity objet or a list' + \
-                        ' of Entity Object ')
+        raise NameError('ENTITY argument needs to be an Entity object or a list' + \
+                        ' of Entity Objects ')
 
     # calculate the sun direction vector
     if (THEDEG != None): vSun = ComputeSunDir(THEDEG=THEDEG)
@@ -809,7 +809,6 @@ def generateHfA(THEDEG=0., PHIDEG = 0., PR = Point(0., 0., 50.), MINANG=0., \
             rotZD = -1.*np.degrees(rotZ)
         else:
             rotZD = np.degrees(rotZ)
-
         # 3) Once the rotation angles have been found, create heliostat objects 
         objMi = Entity(objM);
         objMi.transformation = Transformation( rotation = np.array([0., rotYD, rotZD]), \
