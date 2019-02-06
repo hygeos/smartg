@@ -458,7 +458,7 @@ def phase_view(mlut, ipha=None, fig=None, axarr=None, iw=0, kind='atm'):
     Options:
         ipha: absolute index of the phase function coming from Profile
         fig : fig object to be created or included in
-        axarr : system of axes (2,2) to be created on used
+        axarr : system of axes (2,2) to be created or used
         iw : in case of multi wavelength simulation, index of wavelength to be plotted
         kind : atmopsheric 'atm' or oceanic 'oc' phase function
     '''
@@ -590,32 +590,25 @@ def profile_view(mlut, fig=None, ax=None, iw=0, kind='atm', zmax=None):
         ylabel(r'$z (m)$')
         if zmax is None : zmax = min(-100.,z.data.min())
         ax.set_ylim(zmax,0)
-    ax.semilogx((Dtau/Dz)[:], z[:], 'k^-', label=r'$\sigma_{ext}^{tot}$')
+    ax.semilogx((Dtau/Dz)[:], z[:], 'k.-', label=r'$\sigma_{ext}^{tot}$')
     ax.set_title('Vertical profile'+labw)
     ax.grid()
     ax.legend()
+
     
-    try:        
-        i=0
+    try:
+        ni= np.unique(mlut['iphase_'+kind].__getitem__(key)) 
+        nf= mlut['iphase_'+kind].__getitem__(key) 
+        zf= mlut.axis('z_'+kind) [diff1(nf)==1]
         if kind=='atm':
-            xy=(1e-5,zmax*0.9)
-        else:
-            xy=(1e-4,zmax*0.9)
-        ax.annotate('%i'%(mlut['iphase_'+kind].sub().__getitem__(key)[0]),xy=xy)
-        for k in range(mlut.axes['z_'+kind].shape[0]):
-            i0 = mlut['iphase_'+kind].sub().__getitem__(key)[k]
-            if i0 != i :
-                zl = mlut.axes['z_'+kind][k]
-                if kind=='atm':
-                    ax.plot([1e-6,10],[zl,zl],'k--')
-                    #ax.plot([1e-6,10],[zl+1,zl+1],'k--')
-                    ax.annotate('%i'%i0,xy=(1e-5,zl-1))
-                else:
-                    ax.plot([1e-4,10],[zl,zl],'k--')
-                    #ax.plot([1e-6,10],[zl+1,zl+1],'k--')
-                    ax.annotate('%i'%i0,xy=(1e-4,zl-1))
-                i = i0
-            
+            for i,n in enumerate(ni[1:]):
+                ax.annotate('%i'%n, xy=(1e-5, zf[i]-zmax*0.03))
+                ax.plot([1e-6,10],[zf[i], zf[i]],'k--')
+        if kind=='oc':
+            for i,n in enumerate(ni[1:]):
+                ax.annotate('%i'%n, xy=(1e-4, zf[i]-zmax*0.03))
+                ax.plot([1e-4,10],[zf[i], zf[i]],'k--')
+
     except:
         return fig, ax
         

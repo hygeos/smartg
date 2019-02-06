@@ -110,6 +110,23 @@ type_Profile = [
     ('iphase', 'int32'),      # // phase function index
     ]
 
+type_Profile_3D = [
+    ('z',      'float32'),    # // altitude
+    ('i',      'int32'),      # // Box index
+    ('pmin',   ('float32',3)),  # // Box point pmin
+    ('pmax',   ('float32',3)),  # // Box point pmax
+    ('n',      'float32'),    # // refractive index
+    ('OD',     'float32'),    # // extinction coefficient
+    ('OD_sca', 'float32'),    # // scattering coefficient
+    ('OD_abs', 'float32'),    # // absorption coefficient
+    ('pmol',   'float32'),    # // probability of pure Rayleigh scattering event
+    ('ssa',    'float32'),    # // layer single scattering albedo
+    ('pine',   'float32'),    # // layer fraction of inelastic scattering
+    ('FQY1',   'float32'),    # // layer Fluorescence Quantum Yield of 1st specie
+    ('iphase', 'int32'),      # // phase function index
+    ('neighbour', ('int32', 6)),   # // neighbour boxes indices
+    ]
+
 type_Sensor = [
     ('POSX',   'float32'),    # // X position of the sensor
     ('POSY',   'float32'),    # // Y position of the sensor
@@ -321,7 +338,8 @@ class Smartg(object):
 
     def __init__(self, pp=True, debug=False,
                  debug_photon=False,
-                 double=False, alis=False, back=False, bias=True, alt_pp=False, obj3D = False, rng='PHILOX'):
+                 double=False, alis=False, back=False, bias=True, alt_pp=False, obj3D=False, 
+                 opt3D=False, rng='PHILOX'):
         '''
         Initialization of the Smartg object
 
@@ -351,6 +369,8 @@ class Smartg(object):
 
             - obj3D : Set to True to enable simulation with 3D objects
 
+            - opt3D : Set to True to enable simulation with 3D optical properties
+
             - alt_pp: boolean, if True new PP progation scheme is used
             
             - rng: choice of pseudo-random number generator:
@@ -365,6 +385,7 @@ class Smartg(object):
         self.rng = init_rng(rng)
         self.back= back
         self.obj3D= obj3D
+        self.opt3D= opt3D
 
         #
         # compilation option
@@ -377,6 +398,12 @@ class Smartg(object):
         if alt_pp:
             # new Plane Parallel propagation scheme
             options.append('-DALT_PP')
+        if opt3D:
+            # 3D optical properties enabled
+            # automatically ewith to ALT_PP
+            # for the moment inconsistent with OBJ3D
+            options.append('-DALT_PP')
+            options.append('-DOPT3D')
         if debug:
             # additional tests for debugging
             options.append('-DDEBUG')
@@ -916,11 +943,13 @@ class Smartg(object):
   
         if prof_atm is not None:
             faer = calculF(prof_atm, NF, DEPO, kind='atm')
-            prof_atm_gpu = init_profile(wl, prof_atm, 'atm')
+            if self.opt3D : prof_atm_gpu = init_profile(wl, prof_atm, 'atm', dtype=type_Profile_3D, OPT3D=True)
+            else     : prof_atm_gpu = init_profile(wl, prof_atm, 'atm', dtype=type_Profile)
             NATM = len(prof_atm.axis('z_atm')) - 1
         else:
             faer = gpuzeros(1, dtype='float32')
-            prof_atm_gpu = to_gpu(np.zeros(1, dtype=type_Profile))
+            if self.opt3D : prof_atm_gpu = to_gpu(np.zeros(1, dtype=type_Profile_3D, OPT3D=True))
+            else :     prof_atm_gpu = to_gpu(np.zeros(1, dtype=type_Profile))
             NATM = 0
 
 
@@ -968,10 +997,13 @@ class Smartg(object):
         if prof_oc is not None:
             foce = calculF(prof_oc, NF, DEPO_WATER, kind='oc')
             prof_oc_gpu = init_profile(wl, prof_oc, 'oc')
+            if self.opt3D : prof_oc_gpu = init_profile(wl, prof_oc, 'oc', dtype=type_Profile_3D)
+            else     : prof_oc_gpu = init_profile(wl, prof_oc, 'oc', dtype=type_Profile)
             NOCE = len(prof_oc.axis('z_oc')) - 1
         else:
             foce = gpuzeros(1, dtype='float32')
-            prof_oc_gpu = to_gpu(np.zeros(1, dtype=type_Profile))
+            if self.opt3D : prof_oc_gpu = to_gpu(np.zeros(1, dtype=type_Profile_3D))
+            else :     prof_oc_gpu = to_gpu(np.zeros(1, dtype=type_Profile))
             NOCE = 0
 
         #
@@ -1453,19 +1485,11 @@ def rayleigh(N, DEPO):
     cTh2LE = cThLE*cThLE
     T_demi = (3.0/2.0)
     P22 = T_demi*(DELTA+DELTA_PRIM)
-    #P11 = T_demi*(DELTA+DELTA_PRIM)
     P12 = T_demi*DELTA_PRIM
     P33bis = T_demi*DELTA
     P44bis = P33bis*DELTA_SECO
 
     # parameters equally spaced in scattering probabiliy [0, 1]
-    # pha['p_P11'][:] = P11
-    # pha['p_P12'][:] = P12
-    # pha['p_P22'][:] = T_demi*(DELTA*cTh2[:] + DELTA_PRIM)
-    # pha['p_P33'][:] = P33bis*cTh[:] # U
-    # pha['p_P44'][:] = P44bis*cTh[:] # V
-    # pha['p_ang'][:] = theta[:] # angle
-
     pha['p_P11'][:] = T_demi*(DELTA*cTh2[:] + DELTA_PRIM)
     pha['p_P12'][:] = P12
     pha['p_P22'][:] = P22
@@ -1479,12 +1503,6 @@ def rayleigh(N, DEPO):
     pha['a_P22'][:] = P22
     pha['a_P33'][:] = P33bis*cThLE[:]  # U
     pha['a_P44'][:] = P44bis*cThLE[:]  # V
-
-    # pha['a_P11'][:] = P11
-    # pha['a_P12'][:] = P12
-    # pha['a_P22'][:] = T_demi*(DELTA*cTh2LE[:] + DELTA_PRIM) 
-    # pha['a_P33'][:] = P33bis*cThLE[:]  # U
-    # pha['a_P44'][:] = P44bis*cThLE[:]  # V
 
     return pha
 
@@ -1666,7 +1684,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
             copy_to_device('CFTYd', cusForward.dict['CFTY'], np.float32)
             copy_to_device('LMODEd', 2, np.int32)
         
-def init_profile(wl, prof, kind):
+def init_profile(wl, prof, kind, OPT3D=False, dtype=type_Profile):
     '''
     take the profile as a MLUT, and setup the gpu structure
 
@@ -1676,14 +1694,15 @@ def init_profile(wl, prof, kind):
     # reformat to smartg format
 
     NLAY = len(prof.axis('z_'+kind)) - 1
-    shp = (len(wl), NLAY+1)
-    prof_gpu = np.zeros(shp, dtype=type_Profile, order='C')
+    if not OPT3D: shp = (len(wl), NLAY+1)
+    else : shp = (len(wl), NLAY)
+    prof_gpu = np.zeros(shp, dtype=dtype, order='C')
 
     if kind == "oc":
-        prof_gpu['z'][0,:] = prof.axis('z_'+kind)  * 1e-3 # to Km
+        if not OPT3D : prof_gpu['z'][0,:] = prof.axis('z_'+kind)  * 1e-3 # to Km
         prof_gpu['n'][0,:] = 1.34;
     else:
-        prof_gpu['z'][0,:] = prof.axis('z_'+kind)
+        if not OPT3D : prof_gpu['z'][0,:] = prof.axis('z_'+kind)
         prof_gpu['n'][:,:] = prof['n_'+kind].data[...]
     prof_gpu['z'][1:,:] = -999.      # other wavelengths are NaN
 
@@ -1698,7 +1717,21 @@ def init_profile(wl, prof, kind):
     #NEW !!!
     if 'iphase_'+kind in prof.datasets():
         prof_gpu['iphase'][:] = prof['iphase_'+kind].data[...]
-
+    if OPT3D : 
+        prof_gpu['neighbour'][:,:,0] = -5 
+        prof_gpu['neighbour'][:,:,1] = -5 
+        prof_gpu['neighbour'][:,:,2] = -5 
+        prof_gpu['neighbour'][:,:,3] = -5 
+        prof_gpu['neighbour'][:,:,4] = -1 
+        prof_gpu['neighbour'][:,:,5] = -2 
+        prof_gpu['pmin'][:,:,0] = -1000. 
+        prof_gpu['pmin'][:,:,1] = -1000. 
+        prof_gpu['pmin'][:,:,2] = 0. 
+        prof_gpu['pmax'][:,:,0] = 1000. 
+        prof_gpu['pmax'][:,:,1] = 1000. 
+        prof_gpu['pmax'][:,:,2] = 120. 
+        prof_gpu['i'][:,:] = 0
+        prof_gpu['z'][:,:] = 0.
     return to_gpu(prof_gpu)
 
 

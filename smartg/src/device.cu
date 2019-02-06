@@ -1571,6 +1571,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
 
 
 #ifdef ALT_PP
+ #ifndef OPT3D // 1D
 __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc, int le, int count_level,
                         struct RNG_State *rngstate) {
 
@@ -1736,8 +1737,163 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
         //if (idx==0) printf("%d %d %d %f\n",ph->loc, ph->layer, ph->ilam, prof[ph->layer+ilam].ssa);
     }
 }
-#endif // ALT_PP
 
+#else// OPT3D
+
+__device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc, int le, int count_level,
+                        struct RNG_State *rngstate) {
+
+    float tauRdm;
+    float hph = 0.;  // cumulative optical thickness
+    float vzn, h_cur, tau_cur, epsilon;
+    #ifndef ALIS
+    float h_cur_abs;
+    #endif
+    float d;
+    int ilam; 
+    struct Profile *prof;
+    int  NL;
+	float intTime0=0., intTime1=0.;
+	bool intersectBox;
+	float3 intersectPoint = make_float3(-1., -1., -1.);
+    int intersectNext=0;
+	//int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+
+    if (ph->loc==OCEAN) {
+        NL   = NOCEd+1;
+        prof = prof_oc;
+    }
+    if (ph->loc==ATMOS) {
+        NL   = NATMd+1;
+        prof = prof_atm;
+    }
+    ilam = ph->ilam*NL;  // wavelength offset in optical thickness table
+
+    if (ph->layer == 0) ph->layer = 1;
+
+    // Random Optical Thickness to go through
+    if (!le) tauRdm = -logf(1.F-RAND);
+    // if called with le mode, it serves to compute the transmission
+    // from photon last intercation position to TOA, thus 
+    // photon is forced to exit upward or downward and tauRdm is chosen to be an upper limit
+    else tauRdm = 1e6;
+
+    vzn = ph->v.z;
+    int count=0;
+
+    while (1) {
+
+        //
+        // stopping criteria
+        if (ph->layer == BOUNDARY_ABS){
+            ph->loc = ABSORBED;
+            break;
+        }
+        //
+        if (ph->loc == ATMOS) {
+         if (ph->layer == BOUNDARY_0P) {
+            ph->loc = SURF0P;
+            break;
+         }
+         if (ph->layer == BOUNDARY_TOA) {
+            ph->loc = SPACE;
+            break;
+         }
+        } 
+        if (ph->loc == OCEAN) {
+         if (ph->layer == BOUNDARY_FLOOR) {
+            ph->loc = SEAFLOOR;
+            break;
+         }
+         if (ph->layer == BOUNDARY_0M) {
+            ph->loc = SURF0M;
+            break;
+         }
+        }
+
+		Ray  Ray_cur(ph->pos, ph->v, 0);
+        BBox Box_cur(prof[ph->layer].pmin, prof[ph->layer].pmax);
+			
+        //
+        // calculate the distance d to the fw layer
+        // from the current position
+        //
+		Box_cur.IntersectP(Ray_cur, &intTime0, &intTime1);
+        intersectPoint = operator+(ph->pos, ph->v * intTime0);
+        //
+        // calculate the optical thicknesses h_cur and h_cur_abs to the next layer
+        // We compute the layer extinction coefficient of the layer DTau/Dz and multiply by the distance within the layer
+        //
+        tau_cur = get_OD(BEERd,prof[ph->layer+ilam]);
+        h_cur   = tau_cur * intTime0;
+        #ifndef ALIS
+        h_cur_abs = prof[ph->layer+ilam].OD_abs * intTime0;
+        #endif
+
+        //
+        // update photon position
+        //
+        if (hph + h_cur > tauRdm) {
+            // photon stops within the box
+            epsilon = (tauRdm - hph)/h_cur;
+            intTime0 *= epsilon;
+            ph->pos = operator+(ph->pos, ph->v * intTime0);
+            #ifndef ALIS
+            if (BEERd == 1) ph->weight *= __expf(-( epsilon * h_cur_abs));
+            #else
+            float tau;
+            if (ph->loc==ATMOS) ph->cdist_atm[ph->layer] += intTime0;
+            if (ph->loc==OCEAN) ph->cdist_oc[ ph->layer] += intTime0;
+            int DL=(NLAMd-1)/(NLOWd-1);
+            for (int k=0; k<NLOWd; k++) {
+                tau = get_OD(1,prof[ph->layer + k*DL*NL]);
+			    ph->weight_sca[k] *= exp(-(tau-tau_cur)*intTime0);
+            }
+            #endif
+            break;
+
+        } else {
+            // photon advances to the next layer
+            hph += h_cur;
+            ph->pos = intersectPoint;
+
+            #ifndef ALIS
+            if (BEERd == 1) ph->weight *= __expf(-( h_cur_abs));
+            #else
+            float tau;
+            if (ph->loc==ATMOS) ph->cdist_atm[ph->layer] += intTime0;
+            if (ph->loc==OCEAN) ph->cdist_oc[ ph->layer] += intTime0;
+            int DL=(NLAMd-1)/(NLOWd-1);
+            for (int k=0; k<NLOWd; k++) {
+                tau = get_OD(1,prof[ph->layer + k*DL*NL]);
+			    ph->weight_sca[k] *= __expf(-(tau-tau_cur)*intTime0);
+            }
+            #endif
+
+            // determine the index of the next potential box
+            //
+            ph->layer = GetNext(intersectPoint, prof[ph->layer].pmin);
+            count++;
+        } // photon advances to next layer
+
+    } // while loop
+
+    if (le) {
+        if (( (count_level==UPTOA)  && (ph->loc==SPACE ) ) || 
+            ( (count_level==DOWN0P) && (ph->loc==SURF0P) ) ||
+            ( (count_level==UP0M)   && (ph->loc==SURF0M) ) ||
+            ( (count_level==DOWNB)  && (ph->loc==SEAFLOOR) ) ) 
+            ph->weight *= __expf(-(hph + h_cur));
+        else ph->weight = 0.;
+    }
+
+    if ((BEERd == 0) && ((ph->loc == ATMOS) || (ph->loc == OCEAN))) {
+        ph->weight *= prof[ph->layer+ilam].ssa;
+        //if (idx==0) printf("%d %d %d %f\n",ph->loc, ph->layer, ph->ilam, prof[ph->layer+ilam].ssa);
+    }
+}
+ #endif // 3D
+#endif // ALT_PP
 
 
 __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc,
@@ -1904,8 +2060,6 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
     } // Ocean
 
 
-
-	
 
 
     if (ph->loc == ATMOS) {
@@ -5348,4 +5502,52 @@ __device__ Transformd DaddRotAndParseOrder(Transformd Tid, IObjets object)
 	}
 	return Tid;
 } // FIN DE LA FONCTION DaddRotAndParseOrder()
+#endif
+
+#ifdef OPT3D
+__device__ void GetFaceIndex(float3 pos, int *index)
+// en.wikipedia.org/wiki/Cube_mapping
+{
+  float absX = fabs(pos.x);
+  float absY = fabs(pos.y);
+  float absZ = fabs(pos.z);
+  
+  int isXPositive = pos.x > 0 ? 1 : 0;
+  int isYPositive = pos.y > 0 ? 1 : 0;
+  int isZPositive = pos.z > 0 ? 1 : 0;
+  
+  // POSITIVE X
+  if (isXPositive && absX >= absY && absX >= absZ) {
+    *index = 0;
+  }
+  // NEGATIVE X
+  if (!isXPositive && absX >= absY && absX >= absZ) {
+    *index = 1;
+  }
+  // POSITIVE Y
+  if (isYPositive && absY >= absX && absY >= absZ) {
+    *index = 2;
+  }
+  // NEGATIVE Y
+  if (!isYPositive && absY >= absX && absY >= absZ) {
+    *index = 3;
+  }
+  // POSITIVE Z
+  if (isZPositive && absZ >= absX && absZ >= absY) {
+    *index = 4;
+  }
+  // NEGATIVE Z
+  if (!isZPositive && absZ >= absX && absZ >= absY) {
+    *index = 5;
+  }
+}
+
+
+__device__ int GetNext(float3 pos, float3 pmin)
+{
+    float3 p=operator-(pos, pmin);
+    int ind;
+    GetFaceIndex(p, &ind);
+    return ind;
+}
 #endif

@@ -354,7 +354,7 @@ class AeroOPAC(object):
 
         return dtau, ssa
 
-    def phase(self, wav, Z, rh=None, NBTHETA=7201):
+    def phase(self, wav, Z, rh=None, NBTHETA=721):
         '''
         Phase function calculation at wavelength wav and altitudes Z
         relative humidity is rh
@@ -488,7 +488,7 @@ class AtmAFGL(Atmosphere):
                  P0=None, O3=None, H2O=None, NO2=True,
                  tauR=None,
                  pfwav=None, pfgrid=[100., 0.], prof_abs=None,
-                 prof_ray=None, prof_aer=None, RH_cst=None):
+                 prof_ray=None, prof_aer=None, RH_cst=None, US=True):
 
         self.lat = lat
         self.comp = comp
@@ -498,6 +498,7 @@ class AtmAFGL(Atmosphere):
         self.prof_ray = prof_ray
         self.prof_aer = prof_aer
         self.RH_cst = RH_cst
+        self.US = US
 
         self.tauR = tauR
         if tauR is not None:
@@ -535,7 +536,7 @@ class AtmAFGL(Atmosphere):
 
         # read afgl file
         prof = Profile_base(atm_filename, O3=O3,
-                            H2O=H2O, NO2=NO2, P0=P0, RH_cst=RH_cst)
+                            H2O=H2O, NO2=NO2, P0=P0, RH_cst=RH_cst, US=US)
 
         #
         # regrid profile if required
@@ -554,7 +555,7 @@ class AtmAFGL(Atmosphere):
         self.prof_red = prof.regrid(pfgrid)
 
 
-    def calc(self, wav, phase=True):
+    def calc(self, wav, phase=True, NBTHETA=721):
         '''
         Profile and phase function calculation at bands wav
 
@@ -572,7 +573,7 @@ class AtmAFGL(Atmosphere):
                 wav_pha = wav[:]
             else:
                 wav_pha = self.pfwav
-            pha = self.phase(wav_pha)
+            pha = self.phase(wav_pha, NBTHETA=NBTHETA)
 
             if pha is not None:
                 pha_, ipha = calc_iphase(pha, profile.axis('wavelength'), profile.axis('z_atm'))
@@ -748,7 +749,7 @@ class AtmAFGL(Atmosphere):
                         attrs={'description':
                                'Cumulated absorption optical thickness'})
 
-        with np.errstate(invalid='ignore'):
+        with np.errstate(invalid='ignore', divide='ignore'):
             pmol = dtaur/(dtaur + dtaua*ssa_p)
         pmol[np.isnan(pmol)] = 1.
         pro.add_dataset('pmol_atm', pmol,
@@ -756,7 +757,7 @@ class AtmAFGL(Atmosphere):
                         attrs={'description':
                                'Ratio of molecular scattering to total scattering of the layer'})
 
-        with np.errstate(invalid='ignore'):
+        with np.errstate(invalid='ignore', divide='ignore'):
             ssa = (dtaur+ dtaua*ssa_p)/diff1(tau_tot, axis=1)
         ssa[np.isnan(ssa)] = 1.
         pro.add_dataset('ssa_atm', ssa,
@@ -779,7 +780,7 @@ class AtmAFGL(Atmosphere):
         return pro
 
 
-    def phase(self, wav):
+    def phase(self, wav, NBTHETA=721):
         '''
         Phase functions calculation at bands, using reduced profile
         '''
@@ -793,7 +794,7 @@ class AtmAFGL(Atmosphere):
             dtau, ssa_p = comp.dtau_ssa(wav, self.pfgrid, rh=rh)
             dtau = dtau[:,1:][:,:,None,None]
             ssa_p = ssa_p[:,1:][:,:,None,None]
-            pha += comp.phase(wav, self.pfgrid, rh)*dtau*ssa_p
+            pha += comp.phase(wav, self.pfgrid, rh, NBTHETA=NBTHETA)*dtau*ssa_p
             norm += dtau*ssa_p
 
         if len(self.comp) > 0:
@@ -821,6 +822,12 @@ def read_phase(filename, standard=False, kind='atm'):
         pha[:,1] = data2[1] - data2[2]
         pha[:,2] = data2[3]
         pha[:,3] = data2[4]
+
+    # Normalization to Sum_-1_+1 P(mu) dmu = 2.
+    f = (pha[:,0] + pha[:,1])/2.
+    mu= np.cos(np.radians(theta))
+    Norm = np.trapz(f,-mu)
+    pha *= (2./Norm)
 
     P = LUT(pha.swapaxes(0, 1),  # stk, theta
             axes=[None, theta],
@@ -886,7 +893,7 @@ class Profile_base(object):
     - P0: sea surface pressure (hPa)
     - RH_cst: force Relative humidity to be constant, (defualt recalculated)
     '''
-    def __init__(self, atm_filename, O3=None, H2O=None, NO2=True, P0=None, RH_cst=None):
+    def __init__(self, atm_filename, O3=None, H2O=None, NO2=True, P0=None, RH_cst=None, US=True):
 
         if atm_filename is None:
             return
@@ -936,6 +943,27 @@ class Profile_base(object):
         self.dens_n2o = interp1d(datan2o[:,0] , datan2o[:,1])(self.z) * self.dens_air # CH4 density en cm-3
         datan2 = np.loadtxt(n2_filename, comments="#")
         self.dens_n2 = interp1d(datan2[:,0] , datan2[:,1])(self.z) * self.dens_air # CH4 density en cm-3
+
+        if US:
+            ch4_filename = join(dir_libradtran_atmmod, 'afglus_ch4_vmr.dat')
+            co_filename = join(dir_libradtran_atmmod, 'afglus_co_vmr.dat')
+            n2o_filename = join(dir_libradtran_atmmod, 'afglus_n2o_vmr.dat')
+            n2_filename = join(dir_libradtran_atmmod, 'afglus_n2_vmr.dat')
+            datach4 = np.loadtxt(ch4_filename, comments="#")
+            self.dens_ch4 = interp1d(datach4[:,0] , datach4[:,1])(self.z) * self.dens_air # CH4 density en cm-3
+            dataco = np.loadtxt(co_filename, comments="#")
+            self.dens_co = interp1d(dataco[:,0] , dataco[:,1])(self.z) * self.dens_air # CH4 density en cm-3
+            datan2o = np.loadtxt(n2o_filename, comments="#")
+            self.dens_n2o = interp1d(datan2o[:,0] , datan2o[:,1])(self.z) * self.dens_air # CH4 density en cm-3
+            datan2 = np.loadtxt(n2_filename, comments="#")
+            self.dens_n2 = interp1d(datan2[:,0] , datan2[:,1])(self.z) * self.dens_air # CH4 density en cm-3
+        else:
+            nz = data.shape[0]
+            self.dens_ch4 = [0] * nz
+            self.dens_co = [0] * nz
+            self.dens_n2o = [0] * nz
+            self.dens_n2 = [0] * nz
+
 
 
     def regrid(self, znew):

@@ -78,6 +78,13 @@
 #define DOWNB	5
 #define UP0M2	6
 
+#ifdef OPT3D
+    #define BOUNDARY_TOA   -1
+    #define BOUNDARY_0P    -2
+    #define BOUNDARY_0M    -3
+    #define BOUNDARY_FLOOR -4
+    #define BOUNDARY_ABS   -5
+#endif
 
 // List of errors
 #define ERROR_THETA      0
@@ -246,6 +253,7 @@ struct Phase {
 
 };
 
+#ifndef OPT3D
 struct Profile {
     float z;      // altitude
     float n;      // refractive index
@@ -258,6 +266,26 @@ struct Profile {
     float FQY1;   // Fluorescence like Quantum Yield of 1st specie of the layer
     int iphase;   // phase function index
 };
+#else
+#include <geometry.h>
+struct Profile {
+    float z;      // altitude
+    int i;        // Box index
+    float3 pmin;  // Box, pmin point
+    float3 pmax;  // Box, pmax point
+    float n;      // refractive index
+    float OD;     // extinction coefficient
+    float OD_sca; // scattering coefficient
+    float OD_abs; // absorption coefficient
+    float pmol;   // probability of pure Rayleigh scattering event
+    float ssa;    // single scattering albedo of the box
+    float pine;   // Fraction of inelastic scattering of the box
+    float FQY1;   // Fluorescence like Quantum Yield of 1st specie of the box
+    int iphase;   // phase function index
+    int neighbour[6]; // Neighbour boxes indices in order:
+                     // Positive X, Negative X, Positive Y, Negative Y, Positive Z, Negative Z
+};
+#endif
 
 struct Sensor {
     float POSX;   // X position of the sensor

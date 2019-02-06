@@ -133,6 +133,11 @@ __device__ void move_pp2(Photon*, struct Profile *prof_atm, struct Profile* prof
                         struct RNG_State*);
 #endif
 
+#ifdef OPT3D
+__device__ void GetFaceIndex(float3 pos, int *index);
+__device__ int GetNext(float3 pos, float3 pmin);
+#endif
+
 // move, version plan parallèle
 __device__ void move_pp(Photon*, struct Profile *prof_atm, struct Profile* prof_oc,
                         struct RNG_State*
