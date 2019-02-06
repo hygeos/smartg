@@ -6,7 +6,7 @@ from __future__ import print_function, division, absolute_import
 
 import warnings
 warnings.simplefilter("ignore",DeprecationWarning)
-from pylab import figure, subplot2grid, tight_layout, setp, subplots, xlabel, ylabel
+from pylab import figure, subplot2grid, tight_layout, setp, subplots, xlabel, ylabel, FormatStrFormatter
 import numpy as np
 np.seterr(invalid='ignore', divide='ignore') # ignore division by zero errors
 from smartg.tools.luts import plot_polar, transect2D, Idx
@@ -563,7 +563,7 @@ def profile_view(mlut, fig=None, ax=None, iw=0, kind='atm', zmax=None):
         if (np.max(Dtau_AbsG[:]) > 0.) : ax.semilogx((Dtau_AbsG/Dz)[:], z[:], 'g--',  label=r'$\sigma_{abs}^{gas}$')
         ax.semilogx((Dtau_ScaR/Dz)[:], z[:], 'b', label=r'$\sigma_{sca}^{R}$' )
         ax.set_xlim(1e-6,10)
-        xlabel(r'$(km^{-1})$')
+        xlabel('Vertical profile'+labw + r' $(km^{-1})$')
         ylabel(r'$z (km)$')
         if zmax is None : zmax = max(100.,z.data.max())
         ax.set_ylim(0,zmax)
@@ -586,32 +586,22 @@ def profile_view(mlut, fig=None, ax=None, iw=0, kind='atm', zmax=None):
         if (np.max(Dtau_AbsY[:]) > 0.) : ax.semilogx((Dtau_AbsY/Dz)[:], z[:], 'y--',label=r'$\sigma_{abs}^{y}$')
         if (np.max(Dtau_Ine[:])  > 0.) : ax.semilogx((Dtau_Ine/Dz)[:] , z[:], 'm:' ,label=r'$\sigma_{ine}^{}$')
         ax.set_xlim(1e-4,10)
-        xlabel(r'$(m^{-1})$')
+        xlabel('Vertical profile'+labw + r' $(m^{-1})$')
         ylabel(r'$z (m)$')
         if zmax is None : zmax = min(-100.,z.data.min())
         ax.set_ylim(zmax,0)
     ax.semilogx((Dtau/Dz)[:], z[:], 'k.-', label=r'$\sigma_{ext}^{tot}$')
-    ax.set_title('Vertical profile'+labw)
+    #ax.set_title('Vertical profile'+labw)
     ax.grid()
     ax.legend()
 
+    ax2 = ax.twiny()
+    nf= mlut['iphase_'+kind].__getitem__(key) 
+    ax2.plot(nf[1:], mlut.axis('z_'+kind)[1:], 'm-', drawstyle='steps-post', label='i')
+    ax2.set_xlabel('Phase Matrix index', color='m')
+    ax2.tick_params('x', colors='m')
+    ax2.xaxis.set_major_formatter(FormatStrFormatter('%i'))
     
-    try:
-        ni= np.unique(mlut['iphase_'+kind].__getitem__(key)) 
-        nf= mlut['iphase_'+kind].__getitem__(key) 
-        zf= mlut.axis('z_'+kind) [diff1(nf)==1]
-        if kind=='atm':
-            for i,n in enumerate(ni[1:]):
-                ax.annotate('%i'%n, xy=(1e-5, zf[i]-zmax*0.03))
-                ax.plot([1e-6,10],[zf[i], zf[i]],'k--')
-        if kind=='oc':
-            for i,n in enumerate(ni[1:]):
-                ax.annotate('%i'%n, xy=(1e-4, zf[i]-zmax*0.03))
-                ax.plot([1e-4,10],[zf[i], zf[i]],'k--')
-
-    except:
-        return fig, ax
-        
     return fig, ax
     
     
