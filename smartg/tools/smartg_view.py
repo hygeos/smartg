@@ -493,18 +493,29 @@ def phase_view(mlut, ipha=None, fig=None, axarr=None, iw=0, kind='atm'):
         if (np.max(P11[:]) > 0.) :axarr[0,0].semilogy(ang, P11,label='%3i'%i)
         axarr[0,0].set_title(r'$P_{11}$'+labw)
         axarr[0,0].grid()
+        axarr[0,0].set_xlim([0,180])
+        axarr[0,0].set_xticks([0,30,60,90,120,150,180])
         
         if (np.max(P11[:]) > 0.) :axarr[0,1].plot(ang, -P12/P11)
         axarr[0,1].set_title(r'-$P_{12}/P_{11}$')
         axarr[0,1].grid()
+        axarr[0,1].set_xlim([0,180])
+        axarr[0,1].set_xticks([0,30,60,90,120,150,180])
+
         
         if (np.max(P11[:]) > 0.) :axarr[1,0].plot(ang, P33/P11)
         axarr[1,0].set_title(r'$P_{33}/P_{11}$')
         axarr[1,0].grid()
+        axarr[1,0].set_xlim([0,180])
+        axarr[1,0].set_xlabel(r'$\theta$')
+        axarr[1,0].set_xticks([0,30,60,90,120,150,180])
                 
         if (np.max(P11[:]) > 0.) :axarr[1,1].plot(ang, P43/P11)
         axarr[1,1].set_title(r'$P_{43}/P_{11}$')
         axarr[1,1].grid()
+        axarr[1,1].set_xlim([0,180])
+        axarr[1,1].set_xlabel(r'$\theta$')
+        axarr[1,1].set_xticks([0,30,60,90,120,150,180])
     
     setp([a.get_xticklabels() for a in axarr[0, :]], visible=False)
     axarr[0,0].legend(loc='upper center',fontsize = 'medium',labelspacing=0.01)
