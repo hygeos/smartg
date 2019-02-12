@@ -8,12 +8,277 @@
 #include <limits>
 #include <stdio.h>
 
+#ifndef DEBUG
+#define myError(expr) ((void)0)
+#else
+#define myError(expr) ( (expr) ? \
+						(printf("Point, Vector or Normal indices error***\n")) : (0) )
+#endif
 
+#include <iterator>
 /**********************************************************
 *	> Classe(s) représentant géométriquement quelque chose
 *     - ex: Un Point, Un vecteur, une normal, un rayon...
 ***********************************************************/
 
+template <typename T>
+class Vector {
+// ========================================================
+// Classe Vector
+// ========================================================
+public:
+    // Vector Public Methods
+    __host__ __device__ Vector() { x = 0; y = 0; z = 0; }
+	
+    __host__ __device__ Vector(T xx, T yy, T zz)
+	{ x = xx; y = yy; z = zz; }
+
+	template <typename U>
+	__host__ __device__ Vector(U v)
+	{x = (T)v.x; y = (T)v.y; z = (T)v.z; }
+
+    __host__ __device__ Vector(const Vector<T>  &v)
+	{ x = v.x; y = v.y; z = v.z; }
+
+    __host__ __device__ Vector<T> &operator=(const Vector<T>  &v) {
+        x = v.x; y = v.y; z = v.z;
+        return *this;
+    }
+
+    __host__ __device__ Vector<T>  operator+(const Vector<T>  &v) const
+	{ return Vector<T>(x + v.x, y + v.y, z + v.z); }
+    
+    __host__ __device__ Vector<T>  operator+=(const Vector<T>  &v) {
+        x += v.x; y += v.y; z += v.z;
+        return *this;
+    }
+    __host__ __device__ Vector<T>  operator-(const Vector<T>  &v) const
+	{ return Vector<T>(x - v.x, y - v.y, z - v.z); }
+    
+    __host__ __device__ Vector<T> &operator-=(const Vector<T>  &v) {
+        x -= v.x; y -= v.y; z -= v.z;
+        return *this;
+    }
+
+	template <typename U>
+    __host__ __device__ Vector<T>  operator*(U f) const { return Vector<T>(f*x, f*y, f*z); }
+
+	template <typename U>
+    __host__ __device__ Vector<T> &operator*=(U f) {
+        x *= f; y *= f; z *= f;
+        return *this;
+    }
+
+	template <typename U>
+    __host__ __device__ Vector<T> operator/(U f) const {
+        float inv = 1.f / f;
+        return Vector<T>(x * inv, y * inv, z * inv);
+    }
+
+	template <typename U>
+    __host__ __device__ Vector<T> &operator/=(U f) {
+        float inv = 1.f / f;
+        x *= inv; y *= inv; z *= inv;
+        return *this;
+    }
+    __host__ __device__ Vector<T> operator-() const { return Vector<T>(-x, -y, -z); }
+	
+    __host__ __device__ T operator[](int idx) const {
+		myError((idx < 0) || (idx > 1));
+        return (&x)[idx];
+    }
+    
+    __host__ __device__ T &operator[](int idx) {
+		myError((idx < 0) || (idx > 1));
+        return (&x)[idx];
+    }
+
+    __host__ __device__ bool operator==(const Vector<T> &v) const
+	{ return x == v.x && y == v.y && z == v.z; }
+	
+    __host__ __device__ bool operator!=(const Vector<T> &v) const
+	{ return x != v.x || y != v.y || z != v.z; }
+
+    // Vector Public Attributs
+    T x, y, z;
+private:
+};
+
+typedef Vector<double> Vectord;
+typedef Vector<float> Vectorf;
+
+template <typename T>
+class Point {
+// ========================================================
+// Classe Point
+// ========================================================
+public:
+    // Point Public Methods
+    __host__ __device__ Point() { x = 0; y = 0; z = 0; }
+	
+    __host__ __device__ Point(T xx, T yy, T zz)
+	{ x = xx; y = yy; z = zz; }
+
+	template <typename U>
+	__host__ __device__ Point(U p)
+	{ x = (T)p.x; y = (T)p.y; z = (T)p.z; }
+
+    __host__ __device__ Point(const Point<T>  &p)
+	{ x = p.x; y = p.y; z = p.z; }
+    
+    __host__ __device__ Point<T> &operator=(const Point<T>  &p) {
+        x = p.x; y = p.y; z = p.z;
+        return *this;
+    }
+
+    __host__ __device__ Point<T>  operator+(const Point<T>  &p) const
+	{ return Point<T>(x + p.x, y + p.y, z + p.z); }
+    
+    __host__ __device__ Point<T>  operator+=(const Point<T>  &p) {
+        x += p.x; y += p.y; z += p.z;
+        return *this;
+    }
+    __host__ __device__ Point<T>  operator-(const Point<T>  &p) const
+	{ return Point<T>(x - p.x, y - p.y, z - p.z); }
+    
+    __host__ __device__ Point<T> &operator-=(const Point<T>  &p) {
+        x -= p.x; y -= p.y; z -= p.z;
+        return *this;
+    }
+
+	template <typename U>
+    __host__ __device__ Point<T>  operator*(U f) const { return Point<T>(f*x, f*y, f*z); }
+
+	template <typename U>
+    __host__ __device__ Point<T> &operator*=(U f) {
+        x *= f; y *= f; z *= f;
+        return *this;
+    }
+
+	template <typename U>
+    __host__ __device__ Point<T> operator/(U f) const {
+        float inv = 1.f / f;
+        return Point<T>(x * inv, y * inv, z * inv);
+    }
+
+	template <typename U>
+    __host__ __device__ Point<T> &operator/=(U f) {
+        float inv = 1.f / f;
+        x *= inv; y *= inv; z *= inv;
+        return *this;
+    }
+    __host__ __device__ Point<T> operator-() const { return Point<T>(-x, -y, -z); }
+	
+    __host__ __device__ T operator[](int idx) const {
+		myError((idx < 0) || (idx > 1));
+        return (&x)[idx];
+    }
+    
+    __host__ __device__ T &operator[](int idx) {
+		myError((idx < 0) || (idx > 1));
+        return (&x)[idx];
+    }
+
+    __host__ __device__ bool operator==(const Point<T> &p) const
+	{ return x == p.x && y == p.y && z == p.z; }
+	
+    __host__ __device__ bool operator!=(const Point<T> &p) const
+	{ return x != p.x || y != p.y || z != p.z; }
+
+    // Vector Public Data
+    T x, y, z;
+private:
+};
+
+typedef Point<double> Pointd;
+typedef Point<float> Pointf;
+
+
+template <typename T>
+class Normal {
+// ========================================================
+// Classe Normal
+// ========================================================
+public:
+    // Point Public Methods
+    __host__ __device__ Normal() { x = 0; y = 0; z = 0; }
+	
+    __host__ __device__ Normal(T xx, T yy, T zz)
+	{ x = xx; y = yy; z = zz; }
+
+	template <typename U>
+	__host__ __device__ Normal(U n)
+	{ x = (T)n.x; y = (T)n.y; z = (T)n.z; }
+
+    __host__ __device__ Normal(const Normal<T>  &n)
+	{ x = n.x; y = n.y; z = n.z; }
+    
+    __host__ __device__ Normal<T> &operator=(const Normal<T>  &n) {
+        x = n.x; y = n.y; z = n.z;
+        return *this;
+    }
+
+    __host__ __device__ Normal<T>  operator+(const Normal<T>  &n) const
+	{ return Normal<T>(x + n.x, y + n.y, z + n.z); }
+    
+    __host__ __device__ Normal<T>  operator+=(const Normal<T>  &n) {
+        x += n.x; y += n.y; z += n.z;
+        return *this;
+    }
+    __host__ __device__ Normal<T>  operator-(const Normal<T>  &n) const
+	{ return Normal<T>(x - n.x, y - n.y, z - n.z); }
+    
+    __host__ __device__ Normal<T> &operator-=(const Normal<T>  &n) {
+        x -= n.x; y -= n.y; z -= n.z;
+        return *this;
+    }
+
+	template <typename U>
+    __host__ __device__ Normal<T>  operator*(U f) const { return Normal<T>(f*x, f*y, f*z); }
+
+	template <typename U>
+    __host__ __device__ Normal<T> &operator*=(U f) {
+        x *= f; y *= f; z *= f;
+        return *this;
+    }
+
+	template <typename U>
+    __host__ __device__ Normal<T> operator/(U f) const {
+        float inv = 1.f / f;
+        return Normal<T>(x * inv, y * inv, z * inv);
+    }
+
+	template <typename U>
+    __host__ __device__ Normal<T> &operator/=(U f) {
+        float inv = 1.f / f;
+        x *= inv; y *= inv; z *= inv;
+        return *this;
+    }
+    __host__ __device__ Normal<T> operator-() const { return Normal<T>(-x, -y, -z); }
+	
+    __host__ __device__ T operator[](int idx) const {
+		myError((idx < 0) || (idx > 1));
+        return (&x)[idx];
+    }
+    
+    __host__ __device__ T &operator[](int idx) {
+		myError((idx < 0) || (idx > 1));
+        return (&x)[idx];
+    }
+
+    __host__ __device__ bool operator==(const Normal<T> &n) const
+	{ return x == n.x && y == n.y && z == n.z; }
+	
+    __host__ __device__ bool operator!=(const Normal<T> &n) const
+	{ return x != n.x || y != n.y || z != n.z; }
+
+    // Vector Public Data
+    T x, y, z;
+private:
+};
+
+typedef Normal<double> Normald;
+typedef Normal<float> Normalf;
 
 class Ray
 // ========================================================
@@ -40,24 +305,17 @@ public:
 		o = r.o; d = r.d;
 	}
 
-    #if __CUDA_ARCH__ >= 200
-	__device__ Ray(const float3 &origin, const float3 &direction,
-				   float start, float end = CUDART_INF_F, float t = 0.f)
+	__device__ Ray(const float3 &origin, const float3 &direction, float start,
+				   #if __CUDA_ARCH__ >= 200
+				   float end = CUDART_INF_F, float t = 0.f)
+		           #elif !defined(__CUDA_ARCH__)
+		           float end = std::numeric_limits<float>::max(), float t = 0.f)
+				   #endif
 	{
 		mint = start; maxt = end, time = t;
 		o = make_float3c(origin);
 		d = make_float3c(direction);
 	}
-    #elif !defined(__CUDA_ARCH__)
-    __host__ Ray(const float3 &origin, const float3 &direction,
-				 float start, float end = std::numeric_limits<float>::max(),
-				 float t = 0.f)
-	{
-		mint = start; maxt = end, time = t;
-		o = make_float3c(origin);
-		d = make_float3c(direction);
-	}
-    #endif
 
     __host__ __device__ float3 operator()(float t) const
 	{
