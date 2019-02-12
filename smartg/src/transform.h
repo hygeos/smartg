@@ -36,6 +36,12 @@ public:
 	inline __host__ __device__ void operator()(const float3 &c, float3 *ctrans,
 												 const int type) const;
 	#ifdef OBJ3D
+		inline __host__ __device__ float3 operator()(const Pointf &c) const;
+	inline __host__ __device__ float3 operator()(const Vectorf &c) const;
+	inline __host__ __device__ float3 operator()(const Normalf &c) const;
+	inline __host__ __device__ void operator()(const Pointf &c, float3 *ctrans) const;
+	inline __host__ __device__ void operator()(const Vectorf &c, float3 *ctrans) const;
+	inline __host__ __device__ void operator()(const Normalf &c, float3 *ctrans) const;
     inline __host__ __device__ Ray operator()(const Ray &r) const;
     inline __host__ __device__ void operator()(const Ray &r, Ray *rt) const;
     __host__ __device__ BBox operator()(const BBox &b) const;
@@ -111,8 +117,8 @@ bool Transform::IsIdentity() const
 inline float3 Transform::operator()(const float3 &c, const int type) const
 {
 	float x = c.x, y = c.y, z = c.z;
-	/* const char P[6] = "Point", V[] = "Vector", N[] = "Normal"; */
 	
+	/* 1 = Point, 2 = Vector and 3 = Normal */
 	if (type == 1)
 	{
 		float xp = m[0][0]*x + m[0][1]*y + m[0][2]*z + m[0][3];
@@ -148,7 +154,8 @@ inline float3 Transform::operator()(const float3 &c, const int type) const
 inline void Transform::operator()(const float3 &c, float3 *ctrans, const int type) const
 {
 	float x = c.x, y = c.y, z = c.z;
-	/* const char P[6] = "Point", V[] = "Vector", N[] = "Normal"; */
+
+	/* 1 = Point, 2 = Vector and 3 = Normal */
 	if (type == 1)
 	{
 		ctrans->x = m[0][0]*x + m[0][1]*y + m[0][2]*z + m[0][3];
@@ -177,23 +184,84 @@ inline void Transform::operator()(const float3 &c, float3 *ctrans, const int typ
 }
 
 #ifdef OBJ3D
+inline float3 Transform::operator()(const Pointf &c) const
+{
+	float x = c.x, y = c.y, z = c.z;
+	
+	float xp = m[0][0]*x + m[0][1]*y + m[0][2]*z + m[0][3];
+	float yp = m[1][0]*x + m[1][1]*y + m[1][2]*z + m[1][3];
+	float zp = m[2][0]*x + m[2][1]*y + m[2][2]*z + m[2][3];
+	float wp = m[3][0]*x + m[3][1]*y + m[3][2]*z + m[3][3];
+	
+	if (wp == 1.) return make_float3(xp, yp, zp);
+	else          return make_float3(xp, yp, zp)/wp;
+}
+
+inline float3 Transform::operator()(const Vectorf &c) const
+{
+	float x = c.x, y = c.y, z = c.z;
+	
+	float xv = m[0][0]*x + m[0][1]*y + m[0][2]*z;
+	float yv = m[1][0]*x + m[1][1]*y + m[1][2]*z;
+	float zv = m[2][0]*x + m[2][1]*y + m[2][2]*z;
+	
+	return make_float3(xv, yv, zv);
+}
+
+inline float3 Transform::operator()(const Normalf &c) const
+{
+	float x = c.x, y = c.y, z = c.z;
+
+	float xn = mInv[0][0]*x + mInv[1][0]*y + mInv[2][0]*z;
+	float yn = mInv[0][1]*x + mInv[1][1]*y + mInv[2][1]*z;
+	float zn = mInv[0][2]*x + mInv[1][2]*y + mInv[2][2]*z;
+	
+	return make_float3(xn, yn, zn);
+}
+
+inline void Transform::operator()(const Pointf &c, float3 *ctrans) const
+{
+	float x = c.x, y = c.y, z = c.z;
+
+	ctrans->x = m[0][0]*x + m[0][1]*y + m[0][2]*z + m[0][3];
+	ctrans->y = m[1][0]*x + m[1][1]*y + m[1][2]*z + m[1][3];
+	ctrans->z = m[2][0]*x + m[2][1]*y + m[2][2]*z + m[2][3];
+
+	float wp = m[3][0]*x + m[3][1]*y + m[3][2]*z + m[3][3];
+	if (wp != 1.) *ctrans /= wp;
+}
+
+inline void Transform::operator()(const Vectorf &c, float3 *ctrans) const
+{
+	float x = c.x, y = c.y, z = c.z;
+
+	ctrans->x = m[0][0]*x + m[0][1]*y + m[0][2]*z;
+	ctrans->y = m[1][0]*x + m[1][1]*y + m[1][2]*z;
+	ctrans->z = m[2][0]*x + m[2][1]*y + m[2][2]*z;
+}
+
+inline void Transform::operator()(const Normalf &c, float3 *ctrans) const
+{
+	float x = c.x, y = c.y, z = c.z;
+
+	ctrans->x = mInv[0][0]*x + mInv[1][0]*y + mInv[2][0]*z;
+	ctrans->y = mInv[0][1]*x + mInv[1][1]*y + mInv[2][1]*z;
+	ctrans->z = mInv[0][2]*x + mInv[1][2]*y + mInv[2][2]*z;
+}
+
 inline Ray Transform::operator()(const Ray &r) const
 {
     Ray ret = r;
-	/* char myP[]="Point", myD[]="Vector"; */
-	int myP = 1, myD = 2;
-    (*this)(ret.o, &ret.o, myP);
-    (*this)(ret.d, &ret.d, myD);
+	(*this)(Pointf(ret.o), &ret.o);
+    (*this)(Vectorf(ret.d), &ret.d);
     return ret;
 }
 
 
 inline void Transform::operator()(const Ray &r, Ray *rt) const
 {
-	/* char myP[]="Point", myD[]="Vector"; */
-	int myP = 1, myD = 2;
-    (*this)(r.o, &rt->o, myP);
-    (*this)(r.d, &rt->d, myD);
+	(*this)(Pointf(r.o), &rt->o);
+    (*this)(Vectorf(r.d), &rt->d);
     if (rt != &r)
 	{
         rt->mint = r.mint;
@@ -207,17 +275,15 @@ inline void Transform::operator()(const Ray &r, Ray *rt) const
 BBox Transform::operator()(const BBox &b) const
 {
     const Transform &M = *this;
-	int myP = 1, myV = 2;
-	/* char myP[]="Point", myV[]="Vector"; */
 
     // creation du point P et du vecteur V=(v1, v2, v3)
 	float3 P, V1, V2, V3;
 
 	// Application des transformations
-	P = M(b.pMin, myP);
-	V1 = M(make_float3(b.pMax.x-b.pMin.x, 0, 0), myV);
-	V2 = M(make_float3(0, b.pMax.y-b.pMin.y, 0), myV);
-	V3 = M(make_float3(0, 0, b.pMax.z-b.pMin.z), myV);
+	P = M(Pointf(b.pMin));
+	V1 = M(Vectorf(b.pMax.x-b.pMin.x, 0, 0));
+	V2 = M(Vectorf(0, b.pMax.y-b.pMin.y, 0));
+	V3 = M(Vectorf(0, 0, b.pMax.z-b.pMin.z));
 
 	// Creation de la box avec le 1er point P
 	BBox ret(P);
@@ -381,9 +447,17 @@ public:
 	inline __host__ __device__ double3 operator()(const double3 &c, const int type) const;
 	inline __host__ __device__ void operator()(const double3 &c, double3 *ctrans,
 											   const int type) const;
-    /* inline __host__ __device__ Ray operator()(const Ray &r) const; */
+	#ifdef OBJ3D
+		inline __host__ __device__ double3 operator()(const Pointd &c) const;
+	inline __host__ __device__ double3 operator()(const Vectord &c) const;
+	inline __host__ __device__ double3 operator()(const Normald &c) const;
+	inline __host__ __device__ void operator()(const Pointd &c, double3 *ctrans) const;
+	inline __host__ __device__ void operator()(const Vectord &c, double3 *ctrans) const;
+	inline __host__ __device__ void operator()(const Normald &c, double3 *ctrans) const;
+	/* inline __host__ __device__ Ray operator()(const Ray &r) const; */
     /* inline __host__ __device__ void operator()(const Ray &r, Ray *rt) const; */
     /* __host__ __device__ BBox operator()(const BBox &b) const; */
+	#endif
     __host__ __device__ Transformd operator*(const Transformd &t2) const;
 
     __host__ __device__ const double4x4 &GetMatrix() const { return m; }
@@ -455,6 +529,8 @@ bool Transformd::IsIdentity() const
 inline double3 Transformd::operator()(const double3 &c, const int type) const
 {
 	double x = c.x, y = c.y, z = c.z;
+
+	/* 1 = Point, 2 = Vector and 3 = Normal */
 	if (type == 1)
 	{
 		double xp = m[0][0]*x + m[0][1]*y + m[0][2]*z + m[0][3];
@@ -489,6 +565,8 @@ inline double3 Transformd::operator()(const double3 &c, const int type) const
 inline void Transformd::operator()(const double3 &c, double3 *ctrans, const int type) const
 {
 	double x = c.x, y = c.y, z = c.z;
+	
+	/* 1 = Point, 2 = Vector and 3 = Normal */
 	if (type == 1)
 	{
 		ctrans->x = m[0][0]*x + m[0][1]*y + m[0][2]*z + m[0][3];
@@ -516,61 +594,72 @@ inline void Transformd::operator()(const double3 &c, double3 *ctrans, const int 
 	}
 }
 
-/* inline Ray Transformd::operator()(const Ray &r) const */
-/* { */
-/*     Ray ret = r; */
-/* 	char myP[]="Point", myD[]="Vector"; */
-/*     (*this)(ret.o, &ret.o, myP); */
-/*     (*this)(ret.d, &ret.d, myD); */
-/*     return ret; */
-/* } */
+#ifdef OBJ3D
+inline double3 Transformd::operator()(const Pointd &c) const
+{
+	double x = c.x, y = c.y, z = c.z;
+	
+	double xp = m[0][0]*x + m[0][1]*y + m[0][2]*z + m[0][3];
+	double yp = m[1][0]*x + m[1][1]*y + m[1][2]*z + m[1][3];
+	double zp = m[2][0]*x + m[2][1]*y + m[2][2]*z + m[2][3];
+	double wp = m[3][0]*x + m[3][1]*y + m[3][2]*z + m[3][3];
+	
+	if (wp == 1.) return make_double3(xp, yp, zp);
+	else          return make_double3(xp, yp, zp)/wp;
+}
 
+inline double3 Transformd::operator()(const Vectord &c) const
+{
+	double x = c.x, y = c.y, z = c.z;
+	
+	double xv = m[0][0]*x + m[0][1]*y + m[0][2]*z;
+	double yv = m[1][0]*x + m[1][1]*y + m[1][2]*z;
+	double zv = m[2][0]*x + m[2][1]*y + m[2][2]*z;
+	
+	return make_double3(xv, yv, zv);
+}
 
-/* inline void Transformd::operator()(const Ray &r, Ray *rt) const */
-/* { */
-/* 	char myP[]="Point", myD[]="Vector"; */
-/*     (*this)(r.o, &rt->o, myP); */
-/*     (*this)(r.d, &rt->d, myD); */
-/*     if (rt != &r) */
-/* 	{ */
-/*         rt->mint = r.mint; */
-/*         rt->maxt = r.maxt; */
-/*         rt->time = r.time; */
-/*     } */
-/* } */
+inline double3 Transformd::operator()(const Normald &c) const
+{
+	double x = c.x, y = c.y, z = c.z;
 
-// les 8 coins d'une box peuvent être défini en fonction
-// d'un seul point et de ces trois vecteurs unitaires
-/* BBox Transformd::operator()(const BBox &b) const */
-/* { */
-/*     const Transformd &M = *this; */
-/* 	char myP[]="Point", myV[]="Vector"; */
+	double xn = mInv[0][0]*x + mInv[1][0]*y + mInv[2][0]*z;
+	double yn = mInv[0][1]*x + mInv[1][1]*y + mInv[2][1]*z;
+	double zn = mInv[0][2]*x + mInv[1][2]*y + mInv[2][2]*z;
+	
+	return make_double3(xn, yn, zn);
+}
 
-/*     // creation du point P et du vecteur V=(v1, v2, v3) */
-/* 	double3 P, V1, V2, V3; */
+inline void Transformd::operator()(const Pointd &c, double3 *ctrans) const
+{
+	double x = c.x, y = c.y, z = c.z;
 
-/* 	// Application des transformations */
-/* 	P = M(b.pMin, myP); */
-/* 	V1 = M(make_double3(b.pMax.x-b.pMin.x, 0, 0), myV); */
-/* 	V2 = M(make_double3(0, b.pMax.y-b.pMin.y, 0), myV); */
-/* 	V3 = M(make_double3(0, 0, b.pMax.z-b.pMin.z), myV); */
+	ctrans->x = m[0][0]*x + m[0][1]*y + m[0][2]*z + m[0][3];
+	ctrans->y = m[1][0]*x + m[1][1]*y + m[1][2]*z + m[1][3];
+	ctrans->z = m[2][0]*x + m[2][1]*y + m[2][2]*z + m[2][3];
 
-/* 	// Creation de la box avec le 1er point P */
-/* 	BBox ret(P); */
+	double wp = m[3][0]*x + m[3][1]*y + m[3][2]*z + m[3][3];
+	if (wp != 1.) *ctrans /= wp;
+}
 
-/*     // élargir la box en prenant une face du cube */
-/* 	// Face avec 4 points : P, P+V.x, P+V.y, P+(V.x, V.y) */
-/* 	ret = ret.Union(ret, P+V1); */
-/* 	ret = ret.Union(ret, P+V2); */
-/* 	ret = ret.Union(ret, P+V1+V2); */
+inline void Transformd::operator()(const Vectord &c, double3 *ctrans) const
+{
+	double x = c.x, y = c.y, z = c.z;
 
-/* 	// un point en z est suffisant (symétrie) */
-/* 	ret = ret.Union(ret, P+V3); */
-/* 	/\* ret = ret.Union(ret, P+V1+V3); *\/ */
-/* 	/\* ret = ret.Union(ret, P+V2+V3); *\/ */
-/* 	/\* ret = ret.Union(ret, P+V1+V2+V3); *\/ */
-/*     return ret; */
-/* } */
+	ctrans->x = m[0][0]*x + m[0][1]*y + m[0][2]*z;
+	ctrans->y = m[1][0]*x + m[1][1]*y + m[1][2]*z;
+	ctrans->z = m[2][0]*x + m[2][1]*y + m[2][2]*z;
+}
+
+inline void Transformd::operator()(const Normald &c, double3 *ctrans) const
+{
+	double x = c.x, y = c.y, z = c.z;
+
+	ctrans->x = mInv[0][0]*x + mInv[1][0]*y + mInv[2][0]*z;
+	ctrans->y = mInv[0][1]*x + mInv[1][1]*y + mInv[2][1]*z;
+	ctrans->z = mInv[0][2]*x + mInv[1][2]*y + mInv[2][2]*z;
+}
+#endif
 
 Transformd Transformd::operator*(const Transformd &t2) const
 {

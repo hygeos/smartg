@@ -152,7 +152,34 @@ extern "C" {
     //
     // main loop
     //
-	//#pragma unroll 2
+
+	// #ifdef OBJ3D
+	// if (idx == 0)
+	// {
+	// 	Vector<float> myVec1(1.f, 1.f, 1.f);
+	// 	Vector<float> myVec2(5.f, 5.f, 5.f);
+	// 	printf("vec1=(%f, %f, %f)\n", myVec1.x, myVec1.y, myVec1.z);
+	// 	printf("vec2=(%f, %f, %f)\n", myVec2.x, myVec2.y, myVec2.z);
+	// 	myVec1 -= myVec2;
+	// 	printf("vec1=(%f, %f, %f)\n", myVec1.x, myVec1.y, myVec1.z);
+	// 	float3 vecf= make_float3(3.f, 3.f, 3.f);
+	// 	Vector<float> myVec3(vecf);
+	// 	printf("vec3=(%f, %f, %f)\n", myVec3.x, myVec3.y, myVec3.z);
+	// 	for (int i = 0; i < 3; ++i)
+	// 	{
+	// 		printf("vec3[%i]=(%f)\n", i, myVec3[i]);
+	// 	}
+	// 	Vectord myVec4(0., 5.368, -2.511147);
+	// 	printf("vec4=(%lf, %lf, %lf)\n", myVec4.x, myVec4.y, myVec4.z);
+	// 	double3 vecd= make_double3(0., 5.368, -2.511147);
+	// 	Vectord myVec5(vecd);
+	// 	printf("vec5=(%lf, %lf, %lf)\n", myVec5.x, myVec5.y, myVec5.z);
+	// 	Pointd pd(0.88987, 0.368, -1.1147);
+	// 	Vectord myVec6(pd);
+	// 	printf("vec6=(%lf, %lf, %lf)\n", myVec6.x, myVec6.y, myVec6.z);
+	// }
+	// #endif
+
 	while (*nThreadsActive > 0) {
 		iloop += 1;
 		
@@ -1290,9 +1317,10 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		ThetaPhid = TThetad * TPhid; // Regroupement des transformations		
 
 		// Application des transformation sur les vecteurs u et v en fonction de Theta et Phi
-		int myV = 2; //char myV[]="Vector";
-		vdouble = ThetaPhid(vdouble, myV);
-		udouble = ThetaPhid(udouble, myV);
+		// int myV = 2;
+		//char myV[]="Vector";
+		vdouble = ThetaPhid(Vectord(vdouble));
+		udouble = ThetaPhid(Vectord(udouble));
 
 		ph->v = make_float3(float(vdouble.x), float(vdouble.y), float(vdouble.z));
 		ph->u = make_float3(float(udouble.x), float(udouble.y), float(udouble.z));
@@ -1313,9 +1341,8 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		ThetaPhi = TTheta * TPhi; // Regroupement des transformations		
 
 		// Application des transformation sur les vecteurs u et v en fonction de Theta et Phi
-		int myV = 2; //char myV[]="Vector";
-		vfloat = ThetaPhi(vfloat, myV);
-		ufloat = ThetaPhi(ufloat, myV);
+		vfloat = ThetaPhi(Vectorf(vfloat));
+		ufloat = ThetaPhi(Vectorf(ufloat));
 
 		ph->v = vfloat;
 		ph->u = ufloat;
@@ -1364,9 +1391,8 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 			// Tirer aléatoirement une position sur la surface du miroir dans sa position initiale
 			double3 posTransd = make_double3(   (  ( (xMaxPd-xMinPd)*double(RAND) ) + xMinPd  ), (  ( (yMaxPd-yMinPd)*double(RAND) ) + yMinPd  ), 0.  );
 			
-			// Application des transfos de rot du miroir à cette entité
-			int myP = 1; //char myP[]="Point";		
-			posTransd = Tid(posTransd, myP);
+			// Application des transfos de rot du miroir à cette entité	
+			posTransd = Tid(Pointd(posTransd));
 			
 			// Projection des positions x et y suivant la direction solaire sur la surface de base de l'entité
 			double timeTwod;
@@ -1401,8 +1427,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 			float3 posTrans = make_float3(   (  ( (xMaxP-xMinP)*RAND ) + xMinP  ), (  ( (yMaxP-yMinP)*RAND ) + yMinP  ), 0.  );
 			
 			// Application des transfos de rot du miroir à cette entité
-			int myP = 1; //char myP[]="Point";
-			posTrans = Ti(posTrans, myP);
+			posTrans = Ti(Pointf(posTrans));
 			
 			// Projection des positions x et y suivant la direction solaire sur la surface de base de l'entité
 			float timeTwo;
@@ -4053,11 +4078,10 @@ __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* 
 		
 	// Create the transforms obect to world
 	Transform oTw(M, tM);
-	int myV = 2; //char myV[]="Vector";
 
 	// apply the transformation
-	v_n = oTw(v_n, myV);
-	u_n = oTw(u_n, myV);
+	v_n = oTw(Vectorf(v_n));
+	u_n = oTw(Vectorf(u_n));
 
 	// 
 	if ( (isnan(v_n.x)) || (isnan(v_n.y)) || (isnan(v_n.z)) || (isnan(u_n.x)) || (isnan(u_n.y)) || (isnan(u_n.z)) )
@@ -4136,22 +4160,22 @@ __device__ void surfaceRugueuse3D(Photon* ph, IGeo* geoS, struct RNG_State *rngs
 	ph->M   = mul(ph->M,mul(L,R));
     #endif
 	Transform transfo, invTransfo, aRot;
-	int myV = 2; //char myV[]="Vector";
+	
 	transfo = geoS->mvTF;
 	aRot = aRot.RotateZ(180);
 	invTransfo = transfo.Inverse(transfo);
 	
-	v_n = invTransfo(v_n, myV);
-	u_n = invTransfo(u_n, myV);
+	v_n = invTransfo(Vectorf(v_n));
+	u_n = invTransfo(Vectorf(u_n));
 
-	v_n = aRot(v_n, myV);
-	u_n = aRot(u_n, myV);
+	v_n = aRot(Vectorf(v_n));
+	u_n = aRot(Vectorf(u_n));
 
 	v_n = make_float3(-v_n.x, -v_n.y, -v_n.z);
 	u_n = make_float3(-u_n.x, -u_n.y, -u_n.z);
 
-	v_n = transfo(v_n, myV);
-	u_n = transfo(u_n, myV);
+	v_n = transfo(Vectorf(v_n));
+	u_n = transfo(Vectorf(u_n));
 	
 	if ( (isnan(v_n.x)) || (isnan(v_n.y)) || (isnan(v_n.z)))
 	{
@@ -4220,7 +4244,6 @@ __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, struct Sensor *
 __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsigned long long *nbPhCat, void *wPhCat)
 {
 	Transform transfo, invTransfo;
-	int myP = 1; //char myP[]="Point";
 
 	int indI = 0;
 	int indJ = 0;
@@ -4243,7 +4266,7 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 	p_t = ph->pos;
 	transfo = geoS->mvTF;
 	invTransfo = transfo.Inverse(transfo);
-	p_t = invTransfo(p_t, myP);
+	p_t = invTransfo(Pointf(p_t));
 
     // ancienne implementation = mauvaise
     // Transform rotz;

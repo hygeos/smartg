@@ -37,9 +37,6 @@ public:
 	__host__ __device__ Vector(U v)
 	{x = (T)v.x; y = (T)v.y; z = (T)v.z; }
 
-    __host__ __device__ Vector(const Vector<T>  &v)
-	{ x = v.x; y = v.y; z = v.z; }
-
     __host__ __device__ Vector<T> &operator=(const Vector<T>  &v) {
         x = v.x; y = v.y; z = v.z;
         return *this;
@@ -122,9 +119,6 @@ public:
 	template <typename U>
 	__host__ __device__ Point(U p)
 	{ x = (T)p.x; y = (T)p.y; z = (T)p.z; }
-
-    __host__ __device__ Point(const Point<T>  &p)
-	{ x = p.x; y = p.y; z = p.z; }
     
     __host__ __device__ Point<T> &operator=(const Point<T>  &p) {
         x = p.x; y = p.y; z = p.z;
@@ -209,9 +203,6 @@ public:
 	template <typename U>
 	__host__ __device__ Normal(U n)
 	{ x = (T)n.x; y = (T)n.y; z = (T)n.z; }
-
-    __host__ __device__ Normal(const Normal<T>  &n)
-	{ x = n.x; y = n.y; z = n.z; }
     
     __host__ __device__ Normal<T> &operator=(const Normal<T>  &n) {
         x = n.x; y = n.y; z = n.z;
