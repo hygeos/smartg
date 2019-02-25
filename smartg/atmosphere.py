@@ -482,13 +482,21 @@ class AtmAFGL(Atmosphere):
         - pfgrid: altitude grid over which the phase function is calculated
           can be provided as an array of decreasing altitudes or a gridspec
           default value: [100, 0]
+
+        3D
+        - if OPTD3D is True return coefficient in (km-1), default return vertically integrated Optocal thicknesses from TOA
+           - if prof_3D is given then the 3D definition of Bounding Boxes(1 Point Bottom Left pmin, 1 Point Top Right pmax)
+             and 6 neighbours index (positive X, negative X, positive Y, negative Y, positive Z, negative Z) ais directly
+           - otherwise the profile with bounding box bounaries and neighbour indices is constructed with  the vertical profile connectivity
+             
     '''
     def __init__(self, atm_filename, comp=[],
                  grid=None, lat=45.,
                  P0=None, O3=None, H2O=None, NO2=True,
                  tauR=None,
                  pfwav=None, pfgrid=[100., 0.], prof_abs=None,
-                 prof_ray=None, prof_aer=None, RH_cst=None, US=True):
+                 prof_ray=None, prof_aer=None, RH_cst=None, US=True,
+                 OPT3D=False, prof_3D=None):
 
         self.lat = lat
         self.comp = comp
@@ -499,6 +507,8 @@ class AtmAFGL(Atmosphere):
         self.prof_aer = prof_aer
         self.RH_cst = RH_cst
         self.US = US
+        self.OPT3D = OPT3D
+        self.prof_3D = prof_3D
 
         self.tauR = tauR
         if tauR is not None:
@@ -536,7 +546,8 @@ class AtmAFGL(Atmosphere):
 
         # read afgl file
         prof = Profile_base(atm_filename, O3=O3,
-                            H2O=H2O, NO2=NO2, P0=P0, RH_cst=RH_cst, US=US)
+                            H2O=H2O, NO2=NO2, P0=P0, RH_cst=RH_cst, US=US, 
+                            OPT3D=OPT3D)
 
         #
         # regrid profile if required
@@ -635,9 +646,19 @@ class AtmAFGL(Atmosphere):
 
         # Rayleigh optical thickness
         dtaur = diff1(tauray, axis=1)
-        pro.add_dataset('OD_r', tauray, axnames=['wavelength', 'z_atm'],
-                        attrs={'description':
-                               'Cumulated rayleigh optical thickness'})
+        if not self.OPT3D : 
+            pro.add_dataset('OD_r', tauray, axnames=['wavelength', 'z_atm'],
+            attrs={'description':
+            'Cumulated rayleigh optical thickness'})
+        else:
+            if self.prof_ray is None:
+                ray_coef = abs(dtaur/dz)
+                ray_coef[~np.isfinite(ray_coef)] = 0.
+            else:
+                ray_coef = self.prof_ray
+            pro.add_dataset('OD_r', ray_coef, axnames=['wavelength', 'z_atm'],
+            attrs={'description':
+            'rayleigh scattering coefficient (km-1)'})
 
         #
         # Aerosol optical thickness and single scattering albedo
@@ -657,10 +678,21 @@ class AtmAFGL(Atmosphere):
             (dtaua, ssa_p) = self.prof_aer
             taua= np.cumsum(dtaua,axis=1)
 
-        pro.add_dataset('OD_p', taua,
-                        axnames=['wavelength', 'z_atm'],
-                        attrs={'description':
-                               'Cumulated particles optical thickness at each wavelength'})
+        if not self.OPT3D : 
+            pro.add_dataset('OD_p', taua,
+            axnames=['wavelength', 'z_atm'],
+            attrs={'description':
+            'Cumulated particles optical thickness at each wavelength'})
+        else:
+            if self.prof_aer is None:
+                aer_coef = abs(dtaua/dz)
+                aer_coef[~np.isfinite(aer_coef)] = 0.
+            else : (aer_coef, ssa_p) = self.prof_aer
+            pro.add_dataset('OD_p', aer_coef,
+            axnames=['wavelength', 'z_atm'],
+            attrs={'description':
+            'particles extinction coefficient (km-1)'})
+
         pro.add_dataset('ssa_p_atm', ssa_p, axnames=['wavelength', 'z_atm'],
                         attrs={'description':
                                'Particles single scattering albedo of the layer'})
@@ -717,37 +749,89 @@ class AtmAFGL(Atmosphere):
             taug = dtaug.apply(lambda x: np.cumsum(x, axis=1))
             #taug.attrs['description'] = 'Cumulated gaseous absorption optical thickness'
             #pro.add_lut(taug, desc='OD_g')
-            pro.add_dataset('OD_g', taug.data,
-                        axnames=['wavelength', 'z_atm'],
-                        attrs={'description': 'Cumulated gaseous absorption optical thickness'})
+            if not self.OPT3D:
+                pro.add_dataset('OD_g', taug.data,
+                axnames=['wavelength', 'z_atm'],
+                attrs={'description': 'Cumulated gaseous absorption optical thickness'})
+            else:
+                abs_coef = abs(dtaug.data/dz)
+                abs_coef[~np.isfinite(abs_coef)] = 0.
+                pro.add_dataset('OD_g', abs_coef, axnames=['wavelength', 'z_atm'],
+                  attrs={'description':
+                         'gaseous absorption coefficient (km-1)'})
 
         else:
             dtaug = self.prof_abs
             taug  = np.cumsum(dtaug,axis=1)
-            pro.add_dataset('OD_g', taug, axnames=['wavelength', 'z_atm'],
+            if not self.OPT3D:
+                pro.add_dataset('OD_g', taug, axnames=['wavelength', 'z_atm'],
                   attrs={'description':
                          'Cumulated gaseous absorption optical thickness'})
+
+            else: 
+                abs_coef = self.prof_abs
+                pro.add_dataset('OD_g', abs_coef, axnames=['wavelength', 'z_atm'],
+                  attrs={'description':
+                         'gaseous absorption coefficient (km-1)'})
+
 
         #
         # Total optical thickness and other parameters
         #
-        tau_tot = tauray + taua + taug[:,:]
-        pro.add_dataset('OD_atm', tau_tot,
+        if not self.OPT3D:
+            tau_tot = tauray + taua + taug[:,:]
+            pro.add_dataset('OD_atm', tau_tot,
                         axnames=['wavelength', 'z_atm'],
                         attrs={'description':
                                'Cumulated extinction optical thickness'})
 
-        tau_sca = np.cumsum(dtaur + dtaua*ssa_p, axis=1)
-        pro.add_dataset('OD_sca_atm', tau_sca,
+            tau_sca = np.cumsum(dtaur + dtaua*ssa_p, axis=1)
+            pro.add_dataset('OD_sca_atm', tau_sca,
                         axnames=['wavelength', 'z_atm'],
                         attrs={'description':
                                'Cumulated scattering optical thickness'})
 
-        tau_abs = np.cumsum(dtaug[:,:] + dtaua*(1-ssa_p), axis=1)
-        pro.add_dataset('OD_abs_atm', tau_abs,
+            tau_abs = np.cumsum(dtaug[:,:] + dtaua*(1-ssa_p), axis=1)
+            pro.add_dataset('OD_abs_atm', tau_abs,
                         axnames=['wavelength', 'z_atm'],
                         attrs={'description':
                                'Cumulated absorption optical thickness'})
+
+            with np.errstate(invalid='ignore', divide='ignore'):
+                ssa = (dtaur+ dtaua*ssa_p)/diff1(tau_tot, axis=1)
+            ssa[np.isnan(ssa)] = 1.
+            pro.add_dataset('ssa_atm', ssa,
+                        axnames=['wavelength', 'z_atm'],
+                        attrs={'description':
+                               'Single scattering albedo of the layer'})
+
+
+        else:
+            tot_coef = ray_coef + aer_coef + abs_coef[:,:]
+            pro.add_dataset('OD_atm', tot_coef,
+                        axnames=['wavelength', 'z_atm'],
+                        attrs={'description':
+                               'extinction coefficient (km-1)'})
+
+            sca_coef = ray_coef + aer_coef*ssa_p
+            pro.add_dataset('OD_sca_atm', sca_coef,
+                        axnames=['wavelength', 'z_atm'],
+                        attrs={'description':
+                               'scattering coefficient (km-1)'})
+
+            tabs_coef = abs_coef + aer_coef*(1.-ssa_p)
+            pro.add_dataset('OD_abs_atm', tabs_coef,
+                        axnames=['wavelength', 'z_atm'],
+                        attrs={'description':
+                               'total absorption coefficient (km-1)'})
+
+            with np.errstate(invalid='ignore', divide='ignore'):
+                ssa = (ray_coef+ aer_coef*ssa_p)/tot_coef
+            ssa[np.isnan(ssa)] = 1.
+            pro.add_dataset('ssa_atm', ssa,
+                        axnames=['wavelength', 'z_atm'],
+                        attrs={'description':
+                               'Single scattering albedo of the layer'})
 
         with np.errstate(invalid='ignore', divide='ignore'):
             pmol = dtaur/(dtaur + dtaua*ssa_p)
@@ -757,15 +841,7 @@ class AtmAFGL(Atmosphere):
                         attrs={'description':
                                'Ratio of molecular scattering to total scattering of the layer'})
 
-        with np.errstate(invalid='ignore', divide='ignore'):
-            ssa = (dtaur+ dtaua*ssa_p)/diff1(tau_tot, axis=1)
-        ssa[np.isnan(ssa)] = 1.
-        pro.add_dataset('ssa_atm', ssa,
-                        axnames=['wavelength', 'z_atm'],
-                        attrs={'description':
-                               'Single scattering albedo of the layer'})
 
-        #NEW !!! for coherence with ocean flurorescence/inelastic scattering
         pine = np.zeros_like(ssa)
         FQY1 = np.zeros_like(ssa)
         pro.add_dataset('pine_atm', pine,
@@ -776,7 +852,45 @@ class AtmAFGL(Atmosphere):
                         axnames=['wavelength', 'z_atm'],
                         attrs={'description':
                                'fluoresence quantum yield of the layer'})
-        #NEW !!!
+
+
+        # Pure 3D
+        #
+        if self.OPT3D:
+            if self.prof_3D is not None:
+
+                (ibox, pmin, pmax, neighbour) = self.prof_3D
+                pro.add_dataset('i_atm', ibox, axnames=['z_atm'])
+                pro.add_dataset('pmin_atm', pmin, axnames=['None', 'z_atm'])
+                pro.add_dataset('pmax_atm', pmax, axnames=['None', 'z_atm'])
+                pro.add_dataset('neighbour_atm', neighbour, axnames=['None', 'z_atm'])
+
+            else:
+                HLONG       = 99999999. # long horizontal distance (km)
+                BOUNDARY_ABS= -5  # see communs.h
+                BOUNDARY_BOA= -2  # see communs.h
+                BOUNDARY_TOA= -1  # see communs.h
+                pmin      = np.zeros((3, len(prof.z)), dtype=np.float32)
+                pmax      = np.zeros((3, len(prof.z)), dtype=np.float32)
+                neighbour = np.zeros((6, len(prof.z)), dtype=np.int32)
+                pmin[0:2, :] = -HLONG 
+                pmax[0:2, :] =  HLONG 
+                neighbour[0:4, :] = BOUNDARY_ABS 
+                pmin[2, 0]   =  self.prof.z[0] # TOA
+                pmin[2, 1:]  = prof.z[1:]
+                pmax[2, 0]   = self.prof.z.max()+1 # above TOA
+                pmax[2, 1:]  = prof.z[:-1]
+                neighbour[4, :2] = BOUNDARY_TOA  # +Z, first 2 layers top  neighbours are TOA
+                neighbour[5, -1] = BOUNDARY_BOA  # -Z  last layer bottom neighbour is BOA
+                # remaining neighbours follow a vertical profile connectivity
+                neighbour[4, 2:]  = np.arange(len(prof.z)-2, dtype=np.int32) + 1
+                neighbour[5, :-1] = np.arange(len(prof.z)-1, dtype=np.int32) + 1
+
+                pro.add_dataset('i_atm', np.arange(len(prof.z), dtype=np.int32), axnames=['z_atm'])
+                pro.add_dataset('pmin_atm', pmin, axnames=['None', 'z_atm'])
+                pro.add_dataset('pmax_atm', pmax, axnames=['None', 'z_atm'])
+                pro.add_dataset('neighbour_atm', neighbour, axnames=['None', 'z_atm'])
+
         return pro
 
 
@@ -827,7 +941,7 @@ def read_phase(filename, standard=False, kind='atm'):
     f = (pha[:,0] + pha[:,1])/2.
     mu= np.cos(np.radians(theta))
     Norm = np.trapz(f,-mu)
-    pha *= (2./Norm)
+    pha *= (2./abs(Norm))
 
     P = LUT(pha.swapaxes(0, 1),  # stk, theta
             axes=[None, theta],
@@ -893,7 +1007,7 @@ class Profile_base(object):
     - P0: sea surface pressure (hPa)
     - RH_cst: force Relative humidity to be constant, (defualt recalculated)
     '''
-    def __init__(self, atm_filename, O3=None, H2O=None, NO2=True, P0=None, RH_cst=None, US=True):
+    def __init__(self, atm_filename, O3=None, H2O=None, NO2=True, P0=None, RH_cst=None, US=True, OPT3D=False):
 
         if atm_filename is None:
             return
@@ -911,6 +1025,7 @@ class Profile_base(object):
         self.dens_co2 = data[:,7] # CO2 density in cm-3
         self.dens_no2 = data[:,8] # NO2 density in cm-3
         self.RH_cst   = RH_cst
+        self.OPT3D    = OPT3D
 
         # scale to specified total O3 content
         if O3 is not None:

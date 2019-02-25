@@ -113,8 +113,12 @@ type_Profile = [
 type_Profile_3D = [
     ('z',      'float32'),    # // altitude
     ('i',      'int32'),      # // Box index
-    ('pmin',   ('float32',3)),  # // Box point pmin
-    ('pmax',   ('float32',3)),  # // Box point pmax
+    ('pminx',  'float32'),    # // Box point pmin.x
+    ('pminy',  'float32'),    # // Box point pmin.y
+    ('pminz',  'float32'),    # // Box point pmin.z
+    ('pmaxx',  'float32'),    # // Box point pmax.x
+    ('pmaxy',  'float32'),    # // Box point pmax.y
+    ('pmaxz',  'float32'),    # // Box point pmax.z
     ('n',      'float32'),    # // refractive index
     ('OD',     'float32'),    # // extinction coefficient
     ('OD_sca', 'float32'),    # // scattering coefficient
@@ -124,7 +128,12 @@ type_Profile_3D = [
     ('pine',   'float32'),    # // layer fraction of inelastic scattering
     ('FQY1',   'float32'),    # // layer Fluorescence Quantum Yield of 1st specie
     ('iphase', 'int32'),      # // phase function index
-    ('neighbour', ('int32', 6)),   # // neighbour boxes indices
+    ('neighbour1', 'int32'),   # // neighbour box index +X
+    ('neighbour2', 'int32'),   # // neighbour box index -X
+    ('neighbour3', 'int32'),   # // neighbour box index +Y
+    ('neighbour4', 'int32'),   # // neighbour box index -Y
+    ('neighbour5', 'int32'),   # // neighbour box index +Z
+    ('neighbour6', 'int32'),   # // neighbour box index -Z
     ]
 
 type_Sensor = [
@@ -136,6 +145,7 @@ type_Sensor = [
     ('LOC',    'int32'),      # // localization (ATMOS=1, ...), see constant definitions in communs.h
     ('FOV',    'float32'),    # // sensor FOV (degree) 
     ('TYPE',   'int32'),      # // sensor type: Radiance (0), Planar flux (1), Spherical Flux (2), default 0
+    ('IBOX',   'int32'),      # // Box in which the sensor is
     ]
 
 type_IObjets = [
@@ -288,8 +298,9 @@ class Sensor(object):
     LOC: Localization (default SURF0P)
     FOV: Field of View (deg, default 0.)
     TYPE: Radiance (0), Planar flux (1), Spherical Flux (2), default 0
+    IBOX: Box index in which the sensor is (3D)
     '''
-    def __init__(self, POSX=0., POSY=0., POSZ=0., THDEG=0., PHDEG=180., LOC='SURF0P', FOV=0., TYPE=0):
+    def __init__(self, POSX=0., POSY=0., POSZ=0., THDEG=0., PHDEG=180., LOC='SURF0P', FOV=0., TYPE=0, IBOX=0):
         self.dict = {
                 'POSX':  POSX,
                 'POSY':  POSY,
@@ -298,7 +309,8 @@ class Sensor(object):
                 'PHDEG': PHDEG,
                 'LOC'  : LOC_CODE.index(LOC),
                 'FOV':   FOV,
-                'TYPE':  TYPE
+                'TYPE':  TYPE,
+                'IBOX':  IBOX
                 }
 
     def __str__(self):
@@ -508,7 +520,7 @@ class Smartg(object):
                 default None (no environment effect)
 
             - alis_options : required if compiled already with the alis option. Dictionary, field 'nlow'
-                is the number of wavelength to fit the spectral dependence of scattering, 
+                is the number of wavelength  where the spectral dependency of scattering is calculated, 
                 nlow-1 has to divide NW-1 where NW is the number of wavelengths, nlow has to be lesser than MAX_NLOW that is defined in communs.h,
                 optionnal field 'njac' is the number of perturbed profiles, default is zero (None): no Jacobian
 
@@ -569,10 +581,6 @@ class Smartg(object):
                   Angles can be provided as scalar, lists or 1-dim arrays
                   Default None: cone sampling
                   NOTE: Overrides NBPHI and NBTHETA
-
-            - alis_options : required if compiled already with the alis option. Dictionary, field 'nlow'
-                is the number of wavelength to fit the spectral dependence of scattering, 
-                nlow-1 has to divide NW-1 where NW is the number of wavelengths, nlow has to be lesser than MAX_NLOW that is defined in communs.h,
 
             - flux: if specified output is 'planar' or 'spherical' flux instead of radiance
 
@@ -952,7 +960,6 @@ class Smartg(object):
             else :     prof_atm_gpu = to_gpu(np.zeros(1, dtype=type_Profile))
             NATM = 0
 
-
         # computation of the impact point
         X0, tabTransDir = impactInit(prof_atm, NLAM, THVDEG, RTER, self.pp)
 
@@ -1086,7 +1093,9 @@ class Smartg(object):
             NWLPROBA = 0
 
         REFRAC = 0
-        if refraction: REFRAC=1
+        if refraction: 
+            REFRAC=1
+            fname='/home/did/RTC/SMART-G/smartg/refraction_LUT.nc'
 
         HORIZ = 1
         if (not self.pp and not reflectance): HORIZ = 0
@@ -1132,7 +1141,7 @@ class Smartg(object):
         # finalization
         output = finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl[:], NPhotonsInTot, errorcount, NPhotonsOutTot,
                           OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, prof_oc,
-                          sigma, THVDEG, reflectance, HORIZ, le=le, flux=flux, back=self.back, 
+                          sigma, THVDEG, HORIZ, le=le, flux=flux, back=self.back, 
                           SZA_MAX=SZA_MAX, SUN_DISC=SUN_DISC, hist=hist, cMatVisuRecep=cMatVisuRecep, cats = categories)
         
         output.set_attr('processing time (s)', (datetime.now() - t0).total_seconds())
@@ -1186,7 +1195,7 @@ def calcOmega(NBTHETA, NBPHI, SZA_MAX=90., SUN_DISC=0):
 
 def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
              OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, prof_oc,
-             sigma, THVDEG, reflectance, HORIZ, le=None, flux=None,
+             sigma, THVDEG, HORIZ, le=None, flux=None,
              back=False, SZA_MAX=90., SUN_DISC=0, hist=False, cMatVisuRecep = None, cats = None):
     '''
     create and return the final output
@@ -1694,8 +1703,7 @@ def init_profile(wl, prof, kind, OPT3D=False, dtype=type_Profile):
     # reformat to smartg format
 
     NLAY = len(prof.axis('z_'+kind)) - 1
-    if not OPT3D: shp = (len(wl), NLAY+1)
-    else : shp = (len(wl), NLAY)
+    shp = (len(wl), NLAY+1)
     prof_gpu = np.zeros(shp, dtype=dtype, order='C')
 
     if kind == "oc":
@@ -1711,27 +1719,24 @@ def init_profile(wl, prof, kind, OPT3D=False, dtype=type_Profile):
     prof_gpu['OD_abs'][:] = prof['OD_abs_'+kind].data[...]
     prof_gpu['pmol'][:] = prof['pmol_'+kind].data[...]
     prof_gpu['ssa'][:] = prof['ssa_'+kind].data[...]
-    #NEW !!!
     prof_gpu['pine'][:] = prof['pine_'+kind].data[...]
     prof_gpu['FQY1'][:] = prof['FQY1_'+kind].data[...]
-    #NEW !!!
     if 'iphase_'+kind in prof.datasets():
         prof_gpu['iphase'][:] = prof['iphase_'+kind].data[...]
     if OPT3D : 
-        prof_gpu['neighbour'][:,:,0] = -5 
-        prof_gpu['neighbour'][:,:,1] = -5 
-        prof_gpu['neighbour'][:,:,2] = -5 
-        prof_gpu['neighbour'][:,:,3] = -5 
-        prof_gpu['neighbour'][:,:,4] = -1 
-        prof_gpu['neighbour'][:,:,5] = -2 
-        prof_gpu['pmin'][:,:,0] = -1000. 
-        prof_gpu['pmin'][:,:,1] = -1000. 
-        prof_gpu['pmin'][:,:,2] = 0. 
-        prof_gpu['pmax'][:,:,0] = 1000. 
-        prof_gpu['pmax'][:,:,1] = 1000. 
-        prof_gpu['pmax'][:,:,2] = 120. 
-        prof_gpu['i'][:,:] = 0
-        prof_gpu['z'][:,:] = 0.
+        prof_gpu['neighbour1'][:,:] = prof['neighbour_'+kind].data[0,:] 
+        prof_gpu['neighbour2'][:,:] = prof['neighbour_'+kind].data[1,:] 
+        prof_gpu['neighbour3'][:,:] = prof['neighbour_'+kind].data[2,:] 
+        prof_gpu['neighbour4'][:,:] = prof['neighbour_'+kind].data[3,:] 
+        prof_gpu['neighbour5'][:,:] = prof['neighbour_'+kind].data[4,:] 
+        prof_gpu['neighbour6'][:,:] = prof['neighbour_'+kind].data[5,:] 
+        prof_gpu['pminx'][:,:] = prof['pmin_'+kind].data[0,:]
+        prof_gpu['pminy'][:,:] = prof['pmin_'+kind].data[1,:] 
+        prof_gpu['pminz'][:,:] = prof['pmin_'+kind].data[2,:] 
+        prof_gpu['pmaxx'][:,:] = prof['pmax_'+kind].data[0,:] 
+        prof_gpu['pmaxy'][:,:] = prof['pmax_'+kind].data[1,:] 
+        prof_gpu['pmaxz'][:,:] = prof['pmax_'+kind].data[2,:] 
+        prof_gpu['i'][:,:] = prof['i_'+kind].data[...]
     return to_gpu(prof_gpu)
 
 

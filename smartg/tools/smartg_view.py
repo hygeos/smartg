@@ -606,14 +606,17 @@ def profile_view(mlut, fig=None, ax=None, iw=0, kind='atm', zmax=None):
     ax.grid()
     ax.legend()
 
-    ax2 = ax.twiny()
-    nf= mlut['iphase_'+kind].__getitem__(key) 
-    ax2.plot(nf[1:], mlut.axis('z_'+kind)[1:], 'm-', drawstyle='steps-post', label='i')
-    ax2.set_xlabel('Phase Matrix index', color='m')
-    ax2.tick_params('x', colors='m')
-    ax2.xaxis.set_major_formatter(FormatStrFormatter('%i'))
+    try :
+        ax2 = ax.twiny()
+        nf= mlut['iphase_'+kind].__getitem__(key) 
+        ax2.plot(nf[1:], mlut.axis('z_'+kind)[1:], 'm-', drawstyle='steps-post', label='i')
+        ax2.set_xlabel('Phase Matrix index', color='m')
+        ax2.tick_params('x', colors='m')
+        ax2.xaxis.set_major_formatter(FormatStrFormatter('%i'))
+        return fig, ax
     
-    return fig, ax
+    except:
+        return fig, ax
     
     
 def input_view(mlut, iw=0, kind='atm', zmax=None, ipha=None):

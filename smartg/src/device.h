@@ -135,7 +135,6 @@ __device__ void move_pp2(Photon*, struct Profile *prof_atm, struct Profile* prof
 
 #ifdef OPT3D
 __device__ void GetFaceIndex(float3 pos, int *index);
-__device__ int GetNext(float3 pos, float3 pmin);
 #endif
 
 // move, version plan parallèle
@@ -158,7 +157,7 @@ __device__ void choose_scatterer(Photon* ph,
 __device__ void scatter(Photon* ph,
         struct Profile *prof_atm, struct Profile *prof_oc,
         struct Phase *faer2, struct Phase *foce2,
-        int le, float dth,
+        int le, float refrac_angle,
         float* tabthv, float* tabphi, int count_level,
         struct RNG_State*);
 
@@ -209,9 +208,9 @@ __device__ void ComputePsiZenith(Photon* , float* , float);
 __device__ int ComputeBox(int*, int*, int*, Photon*,
                            unsigned long long *errorcount, int count_level);
 
-#ifdef DEBUG_PHOTON
+//#ifdef DEBUG_PHOTON
 __device__ void display(const char* desc, Photon* ph);
-#endif
+//#endif
 
 __device__ void copyPhoton(Photon*, Photon*); 
 

@@ -33,7 +33,7 @@
 
 #define MAX_LOOP 1000000000
 #define MAX_NEVT 500 // Max number of scattering evts stored in photon in the ALIS procedure in basic plane parallel mode
-#define MAX_NLOW 1501 // Max number of wavelengths stored in the ALIS scattering correction
+#define MAX_NLOW 4001 // Max number of wavelengths stored in the ALIS scattering correction
 #define MAX_NLAYER 200 // Max number of vertical layers recorded in ALIS procedure in spherical or alternate PP mode
 #define MAX_HIST 1024*1024 // Max number of photon's histories
 
@@ -270,9 +270,13 @@ struct Profile {
 #include <geometry.h>
 struct Profile {
     float z;      // altitude
-    int i;        // Box index
-    float3 pmin;  // Box, pmin point
-    float3 pmax;  // Box, pmax point
+    int   i;      // Box index
+    float pminx;  // Box, pmin point
+    float pminy;  // Box, pmin point
+    float pminz;  // Box, pmin point
+    float pmaxx;  // Box, pmax point
+    float pmaxy;  // Box, pmax point
+    float pmaxz;  // Box, pmax point
     float n;      // refractive index
     float OD;     // extinction coefficient
     float OD_sca; // scattering coefficient
@@ -282,8 +286,14 @@ struct Profile {
     float pine;   // Fraction of inelastic scattering of the box
     float FQY1;   // Fluorescence like Quantum Yield of 1st specie of the box
     int iphase;   // phase function index
-    int neighbour[6]; // Neighbour boxes indices in order:
-                     // Positive X, Negative X, Positive Y, Negative Y, Positive Z, Negative Z
+    int neighbour1; 
+    int neighbour2; 
+    int neighbour3; 
+    int neighbour4; 
+    int neighbour5; 
+    int neighbour6; 
+                    // Neighbour boxes indices in order:
+                    // Positive X, Negative X, Positive Y, Negative Y, Positive Z, Negative Z
 };
 #endif
 
@@ -296,6 +306,7 @@ struct Sensor {
     int LOC;      // localization (ATMOS=1, ...), see constant definitions in communs.h
     float FOV;    // sensor FOV (degree) 
     int TYPE;     // sensor type: Radiance (0), Planar flux (1), Spherical Flux (2), default 0
+    int IBOX;     // box index in which the sensor is (3D)
 };
 
 #ifdef OBJ3D

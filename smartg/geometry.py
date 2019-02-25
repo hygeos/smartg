@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import math 
+import numpy as np
 
 #####################################################################################
 class Vector(object):
@@ -81,7 +82,7 @@ class Point(object):
             self.x = x; self.y = y; self.z = z;
 
     def __eq__(self, p2):
-        if isinstance(v2, Vector):
+        if isinstance(p2, Point):
             return (self.x==p2.x) and (self.y==p2.y) and (self.z==p2.z)
         else:
             raise NameError('Equality with a Point must be with another Point')
@@ -278,6 +279,66 @@ class BBox(object):
         else:
             raise NameError('arg1 of BBox union have to be BBox class')            
             
+    def get_vertices(self):
+        '''
+        get the 8 vertices of a BBox as a list of points.
+        p0==pMin, then next 3 points are in the plane
+        pMin.z,  the order being anti-clockwise.
+        Next 4 points are in the plane pMax.z, starting with point
+        just above p0, so pMax==p6
+        '''
+        return [
+            Point(self.pMin.x,self.pMin.y,self.pMin.z),
+            Point(self.pMax.x,self.pMin.y,self.pMin.z),
+            Point(self.pMax.x,self.pMax.y,self.pMin.z),
+            Point(self.pMin.x,self.pMax.y,self.pMin.z),
+            Point(self.pMin.x,self.pMin.y,self.pMax.z),
+            Point(self.pMax.x,self.pMin.y,self.pMax.z),
+            Point(self.pMax.x,self.pMax.y,self.pMax.z),
+            Point(self.pMin.x,self.pMax.y,self.pMax.z)
+        ]
+
+    def include_point(self, P):
+        '''
+        test if Point P is included in BBox
+        '''
+        return (P.x >= self.pMin.x) and (P.x <= self.pMax.x) and \
+               (P.y >= self.pMin.y) and (P.y <= self.pMax.y) and \
+               (P.z >= self.pMin.z) and (P.z <= self.pMax.z)
+
+
+def CommonVertices(BBox1, BBox2):
+    ''' 
+    return a list of boolean checking if vertices are common between BBoxes 
+    '''
+    return np.array(list((map(lambda x: x in BBox2.get_vertices(), BBox1.get_vertices()))))
+
+def CommonFace(BBox1, BBox2, Fill_value=None):
+    ''' 
+    return the face index of th BBox1 which is common to BBox2 with
+    the convention of index from 0 to 5, for +X,-X,+Y,-Y,+Z,-Z faces
+    # (en.wikipedia.org/wiki/Cube_mapping)
+    return Fill if there is no common face
+    '''
+    ok = CommonVertices(BBox1, BBox2)
+    if ok.sum()==4:
+        n  = np.arange(8)[ok]
+        if   np.array_equal(n, np.array([1,2,5,6])):
+            return 0
+        elif np.array_equal(n, np.array([0,3,4,7])):
+            return 1
+        elif np.array_equal(n, np.array([2,3,6,7])):
+            return 2
+        elif np.array_equal(n, np.array([0,1,4,5])):
+            return 3
+        elif np.array_equal(n, np.array([4,5,6,7])):
+            return 4
+        elif np.array_equal(n, np.array([0,1,2,3])):
+            return 5
+        else: return Fill_value
+
+    else :
+        return Fill_value
 
 #####################################################################################
 def Dot(a, b):

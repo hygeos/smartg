@@ -103,7 +103,6 @@ extern "C" {
 	int count_level;
 	int this_thread_active = 1;
 	unsigned long long iloop = 0;
-    float dth=0.F;
 
     struct RNG_State rngstate;
     #ifdef PHILOX
@@ -139,6 +138,7 @@ extern "C" {
 	unsigned long long nbPhotonsThr = 0; 	// Nombre de photons traités par le thread
 	
 	Photon ph, ph_le; 		// On associe une structure de photon au thread
+    float refrac_angle=0.F;
 
 	//bool geoIntersect = false;  // S'il y a intersection avec une géométrie = true
 	#ifdef OBJ3D
@@ -147,10 +147,6 @@ extern "C" {
     #endif
 	
 	atomicAdd(nThreadsActive, 1);
-
-	// double3 dp1 = make_double3(12.54, 0., 47.2589);
-	// double3 dp2 = make_double3(0.0025875, 547., 5.1111111);
-	// if (idx == 0) printf("double3 marche!! dp1=(%lf, %f, %f), dp2=(%f, %f, %f)", dp1.x, dp1.y, dp1.z, dp2.x, dp2.y, dp2.z);
 
     //
     // main loop
@@ -303,6 +299,10 @@ extern "C" {
                     up_level = UP0M;
 			        down_level = DOWNB;
 		        }
+                float phi, thv, cr;
+                float3 v,u;
+                float3 no = normalize(ph.pos);
+                float3x3 R;
 
                 // Loop on levels for counting (for upward and downward)
 			    for(int k=0; k<NK; k++){
@@ -319,29 +319,52 @@ extern "C" {
                             if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
                             else ph_le.iph =  ph_le.ith;
 
-                            /*#ifdef SPHERIQUE
+                            phi = tabphi[ph_le.iph];
+                            thv = tabthv[ph_le.ith];
+
                             // in case of atmospheric refraction determine the outgoing direction
                             if (REFRACd && ph_le.loc==ATMOS) {
-                                float phi = tabphi[ph_le.iph];
-                                float thv = tabthv[ph_le.ith];
-                                float3 v;
-                                v.x = cosf(phi) * sinf(thv);
-                                v.y = sinf(phi) * sinf(thv);
-                                v.z = cosf(thv);
+                                DirectionToUV(thv, phi, &v, &u);
+                                v = normalize(v);
+                                u = normalize(cross(no, v));
+                                /* the virtual photon is prepared for propagation in LE direction*/
                                 ph_le.v = v;
-                                move_sp(&ph_le, prof_atm, 1, UPTOA , &rngstate);
-                                dth = -acosf(dot(ph_le.v,v));
+                                int iter=0;
+                                refrac_angle=0.F;
+                                float ra=0.F;
+                                // propagation //
+                                while((iter < 1)) {
+                                   #ifdef SPHERIQUE
+                                   move_sp(&ph_le, prof_atm, 1, UPTOA , &rngstate);
+                                   #endif
+                                   ph_le.v = normalize(ph_le.v);
+                                   cr = dot(v, ph_le.v);
+                                   if (cr >= 1.F) cr=1.F;
+                                   refrac_angle = acosf(cr);
+                                   /* update the virtual photon direction to compensate for refraction*/
+                                   ph_le.v   = v;
+                                   ph_le.pos = ph.pos;
+                                   ra += refrac_angle;
+                                   R  = rotation3D(-ra, u);
+                                   if (idx==0) printf("BEFORE %i %f %f %f %f %f %f\n", iter, ph_le.v.x, ph_le.v.y, ph_le.v.z, ra*180./PI,  refrac_angle*180./PI, length(ph.pos)-RTER);
+                                   ph_le.v = mul(R, ph_le.v);
+                                   if (idx==0) printf("BEFORE %i %f %f %f %f %f %f\n", iter, ph_le.v.x, ph_le.v.y, ph_le.v.z, ra*180./PI,  refrac_angle*180./PI, length(ph.pos)-RTER);
+                                   iter++;
+                                }
+                                refrac_angle = 0.F;
+                                //refrac_angle = ra;
+
+                                /*create a new virtual photon */
                                 copyPhoton(&ph, &ph_le);
                                 ph_le.ith = (ith + ith0)%NBTHETAd;
                                 if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
                                 else ph_le.iph =  ph_le.ith;
                             }
-                            else dth=0.F;
-                            #endif*/
+                            else refrac_angle = 0.F;
 
                             // Scatter the virtual photon, using le=1, and count_level for the scattering angle computation
                             scatter(&ph_le, prof_atm, prof_oc, faer, foce,
-                                    1, dth, tabthv, tabphi,
+                                    1, refrac_angle, tabthv, tabphi,
                                     count_level_le, &rngstate);
 
                             #ifdef DEBUG_PHOTON
@@ -351,6 +374,14 @@ extern "C" {
 
                             #ifdef SPHERIQUE
                             if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, count_level_le , &rngstate);
+                            ph_le.v = normalize(ph_le.v);
+
+                            cr = dot(v, ph_le.v);
+                            if (cr >= 1.F) cr=1.F;
+                            refrac_angle = acosf(cr);
+
+                            if (idx==0 && REFRACd) printf("AFTER  %i %f %f %f %f %f %f\n", 0, ph_le.v.x, ph_le.v.y, ph_le.v.z, 0.F,  refrac_angle*180./PI, length(ph.pos)-RTER);
+
                             #ifdef DEBUG_PHOTON
                             display("MOVE LE", &ph_le);
                             #endif
@@ -929,11 +960,11 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     }
 	ph->wavel = spectrum[ph->ilam].lambda;
 
-    // Position and optical thicknesses initializations
-
+    // Position initialization
     ph->pos = make_float3(tab_sensor[ph->is].POSX,
                           tab_sensor[ph->is].POSY,
                           tab_sensor[ph->is].POSZ);
+    ph->loc = tab_sensor[ph->is].LOC;
 	
 	#ifdef OBJ3D
 	Transform TRotZ; char mPP[]="Point";
@@ -941,8 +972,6 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 	ph->pos = TRotZ(ph->pos, mPP);
 	#endif
 	
-    ph->loc = tab_sensor[ph->is].LOC;
-
     #ifdef SPHERIQUE
 	ph->radius = length(ph->pos);
     #endif
@@ -954,7 +983,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
         epsilon     = 0.F;
         ph->pos.z   = 0.F;
         #ifdef SPHERIQUE
-        ph->pos.z = RTER;
+        ph->pos.z   = RTER;
         #endif
         #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
         for (int k=0; k<NLOWd; k++) {
@@ -1027,13 +1056,15 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 	   || (ph->loc == OBJSURF)
 	   #endif
 		){
-        ilayer = 1;
         float POSZd_alt; 
         #ifdef SPHERIQUE
         POSZd_alt = tab_sensor[ph->is].POSZ - RTER;
         #else
         POSZd_alt = tab_sensor[ph->is].POSZ;
         #endif
+
+        #ifndef OPT3D
+        ilayer=1;
         while (( prof_atm[ilayer].z > POSZd_alt) && (ilayer < NATMd)) {
             ilayer++;
         }
@@ -1055,6 +1086,10 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
             ph->tau_sca[k] = epsilon * delta_i + (get_OD(1,prof_atm[NATMd + k*DL*(NATMd+1)])-
                                                   get_OD(1,prof_atm[ilayer + k*DL*(NATMd+1)]));
         }
+        #endif
+
+        #else
+        ph->layer = tab_sensor[ph->is].IBOX;
         #endif
     }
 
@@ -1559,7 +1594,8 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
     } // while loop
 
     if (le) {
-        if (( (count_level==UPTOA)  && (ph->loc==SPACE ) ) || ( (count_level==DOWN0P) && (ph->loc==SURF0P) )) ph->weight *= __expf(-(hph + h_cur));
+        if (( (count_level==UPTOA)  && (ph->loc==SPACE ) ) || ( (count_level==DOWN0P) && (ph->loc==SURF0P) )) ph->weight *= __expf(-hph);
+        //if (( (count_level==UPTOA)  && (ph->loc==SPACE ) ) || ( (count_level==DOWN0P) && (ph->loc==SURF0P) )) ph->weight *= __expf(-(hph + h_cur));
         else ph->weight = 0.;
     }
 
@@ -1624,7 +1660,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
         if (ph->loc == ATMOS) {
          if (ph->layer == NATMd+1) {
             ph->loc = SURF0P;
-            ph->layer -= 1;  // next time photon enters move_pp2, it's at layers NATM
+            ph->layer -= 1;  // next time photon enters , it's at layers NATM
             break;
          }
          if (ph->layer <= 0) {
@@ -1635,7 +1671,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
         if (ph->loc == OCEAN) {
          if (ph->layer == NOCEd+1) {
             ph->loc = SEAFLOOR;
-            ph->layer -= 1;  // next time photon enters move_pp2, it's at layers NOCE
+            ph->layer -= 1;  // next time photon enters , it's at layers NOCE
             break;
          }
          if (ph->layer <= 0) {
@@ -1728,7 +1764,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
             ( (count_level==DOWN0P) && (ph->loc==SURF0P) ) ||
             ( (count_level==UP0M)   && (ph->loc==SURF0M) ) ||
             ( (count_level==DOWNB)  && (ph->loc==SEAFLOOR) ) ) 
-            ph->weight *= __expf(-(hph + h_cur));
+            ph->weight *= __expf(-hph);
         else ph->weight = 0.;
     }
 
@@ -1745,7 +1781,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
 
     float tauRdm;
     float hph = 0.;  // cumulative optical thickness
-    float vzn, h_cur, tau_cur, epsilon;
+    float vzn, h_cur, coef_cur, epsilon;
     #ifndef ALIS
     float h_cur_abs;
     #endif
@@ -1757,7 +1793,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
 	bool intersectBox;
 	float3 intersectPoint = make_float3(-1., -1., -1.);
     int intersectNext=0;
-	//int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
 
     if (ph->loc==OCEAN) {
         NL   = NOCEd+1;
@@ -1778,13 +1814,15 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
     // photon is forced to exit upward or downward and tauRdm is chosen to be an upper limit
     else tauRdm = 1e6;
 
-    vzn = ph->v.z;
     int count=0;
 
-    while (1) {
+    while (count<1000) {
+    //while (1) {
 
         //
         // stopping criteria
+        if (ph->loc == REMOVED) break;
+        //
         if (ph->layer == BOUNDARY_ABS){
             ph->loc = ABSORBED;
             break;
@@ -1811,23 +1849,25 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
          }
         }
 
-		Ray  Ray_cur(ph->pos, ph->v, 0);
-        BBox Box_cur(prof[ph->layer].pmin, prof[ph->layer].pmax);
-			
+		Ray Ray_cur(ph->pos, ph->v, 0);
+        float3 pmin = make_float3(prof[ph->layer].pminx, prof[ph->layer].pminy, prof[ph->layer].pminz);
+        float3 pmax = make_float3(prof[ph->layer].pmaxx, prof[ph->layer].pmaxy, prof[ph->layer].pmaxz);
+        BBox Box_cur(pmin, pmax);
         //
         // calculate the distance d to the fw layer
         // from the current position
         //
 		Box_cur.IntersectP(Ray_cur, &intTime0, &intTime1);
-        intersectPoint = operator+(ph->pos, ph->v * intTime0);
+        intersectPoint = operator+(ph->pos, ph->v * intTime1);
+        
         //
         // calculate the optical thicknesses h_cur and h_cur_abs to the next layer
-        // We compute the layer extinction coefficient of the layer DTau/Dz and multiply by the distance within the layer
+        // We get the layer extinction coefficient and multiply by the distance within the layer
         //
-        tau_cur = get_OD(BEERd,prof[ph->layer+ilam]);
-        h_cur   = tau_cur * intTime0;
+        coef_cur = get_OD(BEERd,prof[ph->layer+ilam]);
+        h_cur    = coef_cur * intTime1;
         #ifndef ALIS
-        h_cur_abs = prof[ph->layer+ilam].OD_abs * intTime0;
+        h_cur_abs = prof[ph->layer+ilam].OD_abs * intTime1;
         #endif
 
         //
@@ -1836,18 +1876,18 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
         if (hph + h_cur > tauRdm) {
             // photon stops within the box
             epsilon = (tauRdm - hph)/h_cur;
-            intTime0 *= epsilon;
-            ph->pos = operator+(ph->pos, ph->v * intTime0);
+            intTime1 *= epsilon;
+            ph->pos = operator+(ph->pos, ph->v * intTime1);
             #ifndef ALIS
             if (BEERd == 1) ph->weight *= __expf(-( epsilon * h_cur_abs));
             #else
-            float tau;
-            if (ph->loc==ATMOS) ph->cdist_atm[ph->layer] += intTime0;
-            if (ph->loc==OCEAN) ph->cdist_oc[ ph->layer] += intTime0;
+            float coef;
+            if (ph->loc==ATMOS) ph->cdist_atm[ph->layer] += intTime1;
+            if (ph->loc==OCEAN) ph->cdist_oc[ ph->layer] += intTime1;
             int DL=(NLAMd-1)/(NLOWd-1);
             for (int k=0; k<NLOWd; k++) {
-                tau = get_OD(1,prof[ph->layer + k*DL*NL]);
-			    ph->weight_sca[k] *= exp(-(tau-tau_cur)*intTime0);
+                coef = get_OD(1,prof[ph->layer + k*DL*NL]);
+			    ph->weight_sca[k] *= exp(-(coef-coef_cur)*intTime1);
             }
             #endif
             break;
@@ -1860,19 +1900,38 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
             #ifndef ALIS
             if (BEERd == 1) ph->weight *= __expf(-( h_cur_abs));
             #else
-            float tau;
-            if (ph->loc==ATMOS) ph->cdist_atm[ph->layer] += intTime0;
-            if (ph->loc==OCEAN) ph->cdist_oc[ ph->layer] += intTime0;
+            float coef;
+            if (ph->loc==ATMOS) ph->cdist_atm[ph->layer] += intTime1;
+            if (ph->loc==OCEAN) ph->cdist_oc[ ph->layer] += intTime1;
             int DL=(NLAMd-1)/(NLOWd-1);
             for (int k=0; k<NLOWd; k++) {
-                tau = get_OD(1,prof[ph->layer + k*DL*NL]);
-			    ph->weight_sca[k] *= __expf(-(tau-tau_cur)*intTime0);
+                coef = get_OD(1,prof[ph->layer + k*DL*NL]);
+			    ph->weight_sca[k] *= __expf(-(coef-coef_cur)*intTime1);
             }
             #endif
 
             // determine the index of the next potential box
             //
-            ph->layer = GetNext(intersectPoint, prof[ph->layer].pmin);
+            float3 p=ph->pos;
+            operator-=(p, operator+(pmin*0.5, pmax*0.5));
+            p.x = __fdividef(p.x, fabs(pmax.x-pmin.x));
+            p.y = __fdividef(p.y, fabs(pmax.y-pmin.y));
+            p.z = __fdividef(p.z, fabs(pmax.z-pmin.z));
+            int ind;
+            GetFaceIndex(p, &ind);
+            int tmp=ph->layer;
+            switch(ind)
+            {
+                 case 0: ph->layer = prof[ph->layer].neighbour1; break;
+                 case 1: ph->layer = prof[ph->layer].neighbour2; break;
+                 case 2: ph->layer = prof[ph->layer].neighbour3; break;
+                 case 3: ph->layer = prof[ph->layer].neighbour4; break;
+                 case 4: ph->layer = prof[ph->layer].neighbour5; break;
+                 case 5: ph->layer = prof[ph->layer].neighbour6; break;
+                 default: ph->loc = REMOVED;
+            }
+            //if (idx==0) printf("Apres %d %d %d %d %f %d %f %f %f %f %f %f %f %f %f %f %f %f\n",ph->nint, ph->loc, ph->layer, tmp, ph->v.z, ind, p.x, p.y, p.z, 
+             //       ph->pos.x, ph->pos.y, ph->pos.z, pmin.x, pmax.x, pmin.y, pmax.y, pmin.z, pmax.z);
             count++;
         } // photon advances to next layer
 
@@ -1883,13 +1942,13 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
             ( (count_level==DOWN0P) && (ph->loc==SURF0P) ) ||
             ( (count_level==UP0M)   && (ph->loc==SURF0M) ) ||
             ( (count_level==DOWNB)  && (ph->loc==SEAFLOOR) ) ) 
-            ph->weight *= __expf(-(hph + h_cur));
+            ph->weight *= __expf(-hph);
+            //ph->weight *= __expf(-(hph + h_cur));
         else ph->weight = 0.;
     }
 
     if ((BEERd == 0) && ((ph->loc == ATMOS) || (ph->loc == OCEAN))) {
         ph->weight *= prof[ph->layer+ilam].ssa;
-        //if (idx==0) printf("%d %d %d %f\n",ph->loc, ph->layer, ph->ilam, prof[ph->layer+ilam].ssa);
     }
 }
  #endif // 3D
@@ -2365,17 +2424,18 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 __device__ void scatter(Photon* ph,
        struct Profile *prof_atm, struct Profile *prof_oc,
         struct Phase *faer, struct Phase *foce,
-        int le, float dth,
+        int le, float refrac_angle,
         float* tabthv, float* tabphi, int count_level,
         struct RNG_State *rngstate) {
 
 	float cTh=0.f;
 	float zang=0.f, theta=0.f;
 	int iang, ilay, ipha;
-	float psi, sign;
+	float psi, sign=1.F;
 	struct Phase *func;
 	float P11, P12, P22, P33, P43, P44;
 
+	//int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
 	#ifdef OBJ3D
 	ph->direct += 1;
 	ph->S += 1;
@@ -2385,16 +2445,22 @@ __device__ void scatter(Photon* ph,
         /* in case of LE the photon units vectors, scattering angle and Psi rotation angle are determined by output zenith and azimuth angles*/
         float thv, phi;
         float3 v;
-        float EPS = 1e-12;
+        //float EPS = 1e-12;
 
         if (count_level==DOWN0P || count_level==DOWNB) sign = -1.0F;
-        else sign = 1.0F;
         phi = tabphi[ph->iph];
-        thv = tabthv[ph->ith] + dth;
-        if (thv < EPS) thv = EPS;
+        thv = tabthv[ph->ith];
+        //if (thv < EPS) thv = EPS;
         v.x = cosf(phi) * sinf(thv);
         v.y = sinf(phi) * sinf(thv);
         v.z = sign * cosf(thv);
+        if (refrac_angle != 0.F) {
+          float3 no = normalize(ph->pos);
+          float3 u  = normalize(cross(no, v));
+          float3x3 R=rotation3D(-refrac_angle, u);
+          /* update the virtual photon direction to compensate for refraction*/
+          v = mul(R, v);
+        }
         theta = ComputeTheta(ph->v, v);
         cTh = __cosf(theta);
 		if (cTh < -1.0) cTh = -1.0;
@@ -4329,20 +4395,16 @@ __device__ void countPhoton(Photon* ph,
 	 double4 ds;                         // Stokes vector casted to double 
      #ifdef ALIS
       double dwsca, dwabs;                // General ALIS variables 
-      //!!!!!!!!!
       #if ( defined(SPHERIQUE) || defined(ALT_PP) )
        double *tabCount2;                  // Specific ALIS counting array pointer for path implementation (cumulative distances)
       #endif
      #endif
-     //!!!!!!!!!
 
     // Declaration for single
     #else                              
      float *tabCount; 
-     //!!!!!!!!!
      #if ( defined(SPHERIQUE) || defined(ALT_PP) ) && defined(ALIS)
       float *tabCount2;
-     //!!!!!!!!!
      #endif
     #endif
 
@@ -4502,7 +4564,8 @@ __device__ void countPhoton(Photon* ph,
     float weight_irr = fabs(ph->v.z);
     // In Forward mode, and in case of spherical flux, update the weight
 	if (FLUXd==2 && LEd==0 & weight_irr > 0.001f) weight /= weight_irr;
-    if (count_level == UPTOA && HORIZd == 0) weight *= weight_irr;
+    if (count_level == UPTOA && HORIZd == 0 && LEd == 1) weight *= weight_irr;
+    //if (count_level == UPTOA && HORIZd == 0) weight *= weight_irr;
 
     #ifdef DEBUG
 	int idx = blockIdx.x *blockDim.x + threadIdx.x;
@@ -4633,6 +4696,8 @@ __device__ void countPhoton(Photon* ph,
           #else
           // Computation of the absorption along photon history with cumulative distances in layers
           wabs = 0.F;
+
+          #ifndef OPT3D // in 1D cumulative absorption OD
           for (int n=1; n<(NATMd+1); n++){
               wabs += abs(__fdividef(prof_atm[n   + il*(NATMd+1)].OD_abs -
                                      prof_atm[n-1 + il*(NATMd+1)].OD_abs,
@@ -4643,8 +4708,20 @@ __device__ void countPhoton(Photon* ph,
                                      prof_oc[n-1 + il*(NOCEd+1)].OD_abs,
                                      prof_oc[n].z  - prof_oc[n-1].z) ) * ph->cdist_oc[n];
           }
-          wabs = exp(-wabs);
+
+          #else // in 3D absorption coefficient
+          for (int n=0; n<(NATMd+1); n++){
+              wabs += prof_atm[n + il*(NATMd+1)].OD_abs * ph->cdist_atm[n];
+          }
+          for (int n=0; n<(NOCEd+1); n++){
+              wabs += prof_oc[ n + il*(NOCEd+1)].OD_abs * ph->cdist_oc[n];
+          }
           #endif
+
+          wabs = exp(-wabs);
+
+          #endif // Fast 1D
+
 
           #ifdef DOUBLE 
           tabCount = (double*)tabPhotons + count_level*JJJ;
@@ -4800,11 +4877,11 @@ __device__ float3x3 rotation3D(float theta, float3 u)
                        u.z, 0.F,-u.x,
                       -u.y, u.x, 0.F
                      );
-    /*C = make_float3x3(u.x*u.x, u.x*u.y, u.x*u.z,
+    C = make_float3x3(u.x*u.x, u.x*u.y, u.x*u.z,
                       u.x*u.y, u.y*u.y, u.y*u.z,
                       u.x*u.z, u.y*u.z, u.z*u.z
-                     );*/
-    //R = add(add(mul(A, ct), mul(B, st)), mul(C, 1.F-ct)); 
+                     );
+    R = add(add(mul(A, ct), mul(B, st)), mul(C, 1.F-ct)); 
 
     C = mul(B, B);
     R = add(add(A, mul(B, st)), mul(C, 1.F-ct)); 
@@ -4930,7 +5007,7 @@ __device__ int ComputeBox(int* ith, int* iphi, int* il,
     return 1;
 }
 
-#ifdef DEBUG_PHOTON
+//#ifdef DEBUG_PHOTON
 __device__ void display(const char* desc, Photon* ph) {
     //
     // display the status of the photon (only for thread 0)
@@ -4990,7 +5067,7 @@ __device__ void display(const char* desc, Photon* ph) {
         printf("\n");
     }
 }
-#endif
+//#endif
 
 __device__ void modifyUV( float3 v0, float3 u0, float cTh, float psi, float3 *v1, float3 *u1){ 
     float sTh, cPsi, sPsi;
@@ -5542,12 +5619,4 @@ __device__ void GetFaceIndex(float3 pos, int *index)
   }
 }
 
-
-__device__ int GetNext(float3 pos, float3 pmin)
-{
-    float3 p=operator-(pos, pmin);
-    int ind;
-    GetFaceIndex(p, &ind);
-    return ind;
-}
 #endif
