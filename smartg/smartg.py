@@ -406,13 +406,15 @@ class Smartg(object):
         # options = ['-g', '-G']
         if not pp:
             # spherical shell calculation
+            # automatically with ALT_PP (for eventually ocean propagation)
             options.append('-DSPHERIQUE')
+            options.append('-DALT_PP')
         if alt_pp:
             # new Plane Parallel propagation scheme
             options.append('-DALT_PP')
         if opt3D:
             # 3D optical properties enabled
-            # automatically ewith to ALT_PP
+            # automatically with ALT_PP
             # for the moment inconsistent with OBJ3D
             options.append('-DALT_PP')
             options.append('-DOPT3D')

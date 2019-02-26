@@ -212,16 +212,17 @@ extern "C" {
         }
 
         //
-		// Deplacement
+		// Move 
 		//
-		// -> Si OCEAN ou ATMOS
+		// -> if OCEAN or ATMOS
 		loc_prev = ph.loc;
-		if( (ph.loc == ATMOS) || (ph.loc == OCEAN)){
+
+		/*if( (ph.loc == ATMOS) || (ph.loc == OCEAN)){
         #ifdef SPHERIQUE
         if (ph.loc == ATMOS)
            move_sp(&ph, prof_atm, 0, 0 , &rngstate);
         else 
-        #endif
+        #else
 
         #ifdef ALT_PP
         move_pp2(&ph, prof_atm, prof_oc, 0, 0 , &rngstate);
@@ -232,11 +233,42 @@ extern "C" {
 				#endif
 			);
         #endif
+        #endif*/
+        //--------------------------
+		if(ph.loc == ATMOS) {
+           #ifdef SPHERIQUE
+           move_sp(&ph, prof_atm, 0, 0 , &rngstate);
+           #else
+            #ifdef ALT_PP
+           move_pp2(&ph, prof_atm, prof_oc, 0, 0 , &rngstate);
+            #else
+           move_pp(&ph, prof_atm, prof_oc, &rngstate
+				#ifdef OBJ3D
+				, &geoStruc, myObjets, tabObjInfo
+				#endif
+			    );
+            #endif
+           #endif
+        }
+
+		if(ph.loc == OCEAN) {
+           #ifdef ALT_PP
+           move_pp2(&ph, prof_atm, prof_oc, 0, 0 , &rngstate);
+           #else
+           move_pp(&ph, prof_atm, prof_oc, &rngstate
+				#ifdef OBJ3D
+				, &geoStruc, myObjets, tabObjInfo
+				#endif
+			    );
+           #endif
+            }
+        //--------------------------
 
         #ifdef DEBUG_PHOTON
+		if( (ph.loc == ATMOS) || (ph.loc == OCEAN)){
 		display("MOVE", &ph);
-        #endif
 		}
+        #endif
 
         //
         // count after move:
@@ -346,13 +378,12 @@ extern "C" {
                                    ph_le.pos = ph.pos;
                                    ra += refrac_angle;
                                    R  = rotation3D(-ra, u);
-                                   if (idx==0) printf("BEFORE %i %f %f %f %f %f %f\n", iter, ph_le.v.x, ph_le.v.y, ph_le.v.z, ra*180./PI,  refrac_angle*180./PI, length(ph.pos)-RTER);
+                                   //if (idx==0) printf("BEFORE %i %f %f %f %f %f %f\n", iter, ph_le.v.x, ph_le.v.y, ph_le.v.z, ra*180./PI,  refrac_angle*180./PI, length(ph.pos)-RTER);
                                    ph_le.v = mul(R, ph_le.v);
-                                   if (idx==0) printf("BEFORE %i %f %f %f %f %f %f\n", iter, ph_le.v.x, ph_le.v.y, ph_le.v.z, ra*180./PI,  refrac_angle*180./PI, length(ph.pos)-RTER);
+                                   //if (idx==0) printf("BEFORE %i %f %f %f %f %f %f\n", iter, ph_le.v.x, ph_le.v.y, ph_le.v.z, ra*180./PI,  refrac_angle*180./PI, length(ph.pos)-RTER);
                                    iter++;
                                 }
-                                refrac_angle = 0.F;
-                                //refrac_angle = ra;
+                                refrac_angle = ra;
 
                                 /*create a new virtual photon */
                                 copyPhoton(&ph, &ph_le);
@@ -374,20 +405,13 @@ extern "C" {
 
                             #ifdef SPHERIQUE
                             if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, count_level_le , &rngstate);
-                            ph_le.v = normalize(ph_le.v);
-
-                            cr = dot(v, ph_le.v);
-                            if (cr >= 1.F) cr=1.F;
-                            refrac_angle = acosf(cr);
-
-                            if (idx==0 && REFRACd) printf("AFTER  %i %f %f %f %f %f %f\n", 0, ph_le.v.x, ph_le.v.y, ph_le.v.z, 0.F,  refrac_angle*180./PI, length(ph.pos)-RTER);
-
                             #ifdef DEBUG_PHOTON
                             display("MOVE LE", &ph_le);
                             #endif
-                            #endif
-                            #ifdef ALT_PP
-                            if ((ph_le.loc==ATMOS) || (ph_le.loc==OCEAN)) move_pp2(&ph_le, prof_atm, prof_oc, 1, count_level_le , &rngstate);
+                            #else
+                             #ifdef ALT_PP
+                             if ((ph_le.loc==ATMOS) || (ph_le.loc==OCEAN)) move_pp2(&ph_le, prof_atm, prof_oc, 1, count_level_le , &rngstate);
+                             #endif
                             #endif
 
                             // Finally count the virtual photon
@@ -463,9 +487,10 @@ extern "C" {
                         if (k==0) { 
                             #ifdef SPHERIQUE
                             if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
-                            #endif
-                            #ifdef ALT_PP
+                            #else
+                             #ifdef ALT_PP
                             if (ph_le.loc==ATMOS) move_pp2(&ph_le, prof_atm, prof_oc, 1, UPTOA, &rngstate);
+                             #endif
                             #endif
                             // Final counting at the TOA
                             countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA , errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
@@ -509,9 +534,10 @@ extern "C" {
                         countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
                         #ifdef SPHERIQUE
                         if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
-                        #endif
-                        #ifdef ALT_PP
-                        if (ph_le.loc==ATMOS) move_pp2(&ph_le, prof_atm, prof_oc, 1, UPTOA , &rngstate);
+                        #else
+                         #ifdef ALT_PP
+                         if (ph_le.loc==ATMOS) move_pp2(&ph_le, prof_atm, prof_oc, 1, UPTOA , &rngstate);
+                         #endif
                         #endif
                         countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
                     }//direction
@@ -541,9 +567,10 @@ extern "C" {
                         countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
                         #ifdef SPHERIQUE
                         if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
-                        #endif
-                        #ifdef ALT_PP
-                        if (ph_le.loc==ATMOS) move_pp2(&ph_le, prof_atm, prof_oc, 1, UPTOA , &rngstate);
+                        #else
+                         #ifdef ALT_PP
+                         if (ph_le.loc==ATMOS) move_pp2(&ph_le, prof_atm, prof_oc, 1, UPTOA , &rngstate);
+                         #endif
                         #endif
                         countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
                     }//direction
@@ -601,9 +628,10 @@ extern "C" {
                         if (k==0) { 
                             #ifdef SPHERIQUE
                             if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
-                            #endif
-                            #ifdef ALT_PP
-                            if (ph_le.loc==ATMOS) move_pp2(&ph_le, prof_atm, prof_oc, 1, UPTOA , &rngstate);
+                            #else
+                             #ifdef ALT_PP
+                             if (ph_le.loc==ATMOS) move_pp2(&ph_le, prof_atm, prof_oc, 1, UPTOA , &rngstate);
+                             #endif
                             #endif
                             // Final counting at the TOA
                             countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA , errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
