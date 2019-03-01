@@ -8,7 +8,10 @@ from os.path import join, dirname, exists, basename
 from glob import glob
 from smartg.tools.luts import MLUT, LUT, Idx
 from smartg.tools.phase import calc_iphase
-from smartg.tools.third_party_utils import change_altitude_grid
+try:
+    from smartg.tools.third_party_utils import change_altitude_grid
+except ModuleNotFoundError:
+    pass
 from scipy.interpolate import interp1d
 from scipy.integrate import simps
 from scipy.constants import codata
