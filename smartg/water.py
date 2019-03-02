@@ -138,6 +138,7 @@ class IOP(IOP_base):
 
         #dz = np.diff(self.Z)
         dz = diff1(self.Z)
+        #dz = np.ediff1d(self.Z, to_begin=0)
 
         tau_w   = - (aw   + bw  ) * dz
         tau_p   = - (ap + bp  ) * dz

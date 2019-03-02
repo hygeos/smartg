@@ -355,10 +355,11 @@ extern "C" {
                             thv = tabthv[ph_le.ith];
 
                             // in case of atmospheric refraction determine the outgoing direction
+                            //if (0) {
                             if (REFRACd && ph_le.loc==ATMOS) {
                                 DirectionToUV(thv, phi, &v, &u);
                                 v = normalize(v);
-                                u = normalize(cross(no, v));
+                                u = normalize(cross(v, no));
                                 /* the virtual photon is prepared for propagation in LE direction*/
                                 ph_le.v = v;
                                 int iter=0;
@@ -368,19 +369,18 @@ extern "C" {
                                 while((iter < 1)) {
                                    #ifdef SPHERIQUE
                                    move_sp(&ph_le, prof_atm, 1, UPTOA , &rngstate);
+                                   if (ph_le.loc != SPACE) break;
                                    #endif
                                    ph_le.v = normalize(ph_le.v);
-                                   cr = dot(v, ph_le.v);
+                                   cr = fabs(dot(v, ph_le.v));
                                    if (cr >= 1.F) cr=1.F;
-                                   refrac_angle = acosf(cr);
+                                   ra += acosf(cr);
+                                   //if (idx==0) printf("TOA    %i %f %f %f %f %f %f %d\n", iter, ph_le.v.x, ph_le.v.y, ph_le.v.z, acosf(cr)*180./PI, ra*180./PI, length(ph_le.pos)-RTER, ph_le.loc);
                                    /* update the virtual photon direction to compensate for refraction*/
+                                   copyPhoton(&ph, &ph_le);
                                    ph_le.v   = v;
-                                   ph_le.pos = ph.pos;
-                                   ra += refrac_angle;
-                                   R  = rotation3D(-ra, u);
-                                   //if (idx==0) printf("BEFORE %i %f %f %f %f %f %f\n", iter, ph_le.v.x, ph_le.v.y, ph_le.v.z, ra*180./PI,  refrac_angle*180./PI, length(ph.pos)-RTER);
+                                   R  = rotation3D(ra, u);
                                    ph_le.v = mul(R, ph_le.v);
-                                   //if (idx==0) printf("BEFORE %i %f %f %f %f %f %f\n", iter, ph_le.v.x, ph_le.v.y, ph_le.v.z, ra*180./PI,  refrac_angle*180./PI, length(ph.pos)-RTER);
                                    iter++;
                                 }
                                 refrac_angle = ra;
@@ -1431,7 +1431,8 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
     int i_layer_fw, i_layer_bh; // index or layers forward and behind the photon
     float costh, sinth2;
     int ilam = ph->ilam*(NATMd+1);  // wavelength offset in optical thickness table
-    float3 no;
+    float3 no, v0, u0;
+	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
 
     if (ph->layer == 0) ph->layer = 1;
 
@@ -1450,6 +1451,10 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
     if (vzn <= 0) sign_direction = -1;
     else sign_direction = 1;
 
+    if (REFRACd) {
+        v0=ph->v;
+        u0=ph->u;
+    }
     while (1) {
 
         //
@@ -1574,34 +1579,26 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
             if (REFRACd) {
                 // We update photon direction at the interface due to refraction
                 // 1. sin_i just to verify if refraction occurs
-                float sTh  = sqrtf(1.F - vzn*vzn);
+                float s1    = sqrtf(1.F - vzn*vzn);
+                if (s1 > 1.F) s1=1.F;
                 // 2. determine old and new refraction indices from old and new layer indices
-                float nind = __fdividef(prof_atm[i_layer_fw+ilam].n, prof_atm[i_layer_bh+ilam].n);
-                float sign;
-                if (nind > 1) sign=1;
-                else sign=-1.F;
-                if (sTh!=0.F && nind!=1.F) { // in case of refraction
-                  float3 v1;
-                  float3 n = sign*no; // See convention as for Rough Surface 
-                  float cTh  = -dot(n, ph->v);
-	              if( sTh<=nind){ // no total reflection
-                    sTh  = sqrtf(1.F - cTh*cTh);
-                    // 3. Snell Descartes law :
-		            float temp = __fdividef(sTh,nind);
-		            float cot  = sqrtf(1.F - temp*temp);
-                    float alpha= __fdividef(cTh, nind) - cot;
-                    // 4. Update photons direction cosines and u
-                    v1=operator+(operator/(ph->v, nind), alpha*n);
-                    ph->v = v1;
-                    vzn = dot(ph->v, no);
+                float nind  = __fdividef(prof_atm[i_layer_fw+ilam].n, prof_atm[i_layer_bh+ilam].n);
+                float i2, alpha = 0.F; // emergent direction, deviation angle
+                if (s1!=0.F && nind!=1.F) { // in case of refraction
+                  float3 u = normalize(cross(ph->v, no)); // unit vector around which one turns
+	              if((s1 <= nind) || (nind > 1.F)) {
+                      i2 = s1/nind;
+                      if (i2 > 1.F) i2=1.F;
+                      i2 = asinf(i2); 
                   }
-                  else { //in case of total reflection we continue with refraction but tangent direction
-                    v1=operator+(ph->v, (2*cTh)*n);
-                    ph->v = v1;
-                    vzn = dot(ph->v, no);
-                  } // no total reflection 
+                  else i2 = DEUXPI/4.; //in case of total reflection the emergent direction is tangent
+                  alpha   = i2 - asinf(s1);
+                  float3x3 R=rotation3D(alpha, u);
+                  ph->v = mul(R, ph->v);
+                  //if(idx==0 && !le) printf("MOVE1 %f %i %i %f %f %f %f %f %f\n",ph->radius-RTER, i_layer_bh, i_layer_fw, nind, asinf(s1), i2, alpha, vzn, dot(ph->v, no));
+                  //if(idx==0 && !le) printf("MOVE2 %f %f %f %f %f %f %f %f %f\n--\n",no.x, no.y, no.z, u.x, u.y, u.z, ph->v.x, ph->v.y, ph->v.z);
+                  vzn = dot(ph->v, no);
                 } // no refraction computation necessary
-
             } // No Refraction
 
             #ifndef ALIS
@@ -1621,14 +1618,19 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
 
     } // while loop
 
+    if (REFRACd) {
+        float psi;
+        ComputePsiLE(u0, v0, ph->v, &psi, &ph->u); 
+		// Stokes vector rotation
+		rotateStokes(ph->stokes, psi, &ph->stokes);
+    }
+
     if (le) {
         if (( (count_level==UPTOA)  && (ph->loc==SPACE ) ) || ( (count_level==DOWN0P) && (ph->loc==SURF0P) )) ph->weight *= __expf(-hph);
-        //if (( (count_level==UPTOA)  && (ph->loc==SPACE ) ) || ( (count_level==DOWN0P) && (ph->loc==SURF0P) )) ph->weight *= __expf(-(hph + h_cur));
         else ph->weight = 0.;
     }
 
     if ((BEERd == 0) && (ph->loc == ATMOS)) ph->weight *= prof_atm[ph->layer+ilam].ssa;
-    //if (BEERd == 0) ph->weight *= prof_atm[ph->layer+ilam].ssa;
 }
 #endif // SPHERIQUE
 
@@ -2473,19 +2475,17 @@ __device__ void scatter(Photon* ph,
         /* in case of LE the photon units vectors, scattering angle and Psi rotation angle are determined by output zenith and azimuth angles*/
         float thv, phi;
         float3 v;
-        //float EPS = 1e-12;
 
         if (count_level==DOWN0P || count_level==DOWNB) sign = -1.0F;
         phi = tabphi[ph->iph];
         thv = tabthv[ph->ith];
-        //if (thv < EPS) thv = EPS;
         v.x = cosf(phi) * sinf(thv);
         v.y = sinf(phi) * sinf(thv);
         v.z = sign * cosf(thv);
         if (refrac_angle != 0.F) {
           float3 no = normalize(ph->pos);
-          float3 u  = normalize(cross(no, v));
-          float3x3 R=rotation3D(-refrac_angle, u);
+          float3 u  = normalize(cross(v, no));
+          float3x3 R=rotation3D(refrac_angle, u);
           /* update the virtual photon direction to compensate for refraction*/
           v = mul(R, v);
         }
@@ -2758,9 +2758,7 @@ __device__ void scatter(Photon* ph,
 		if (ph->scatterer != CHLFLUO) { modifyUV( ph->v, ph->u, cTh, psi, &ph->v, &ph->u) ;}
 	}
     else {
-		
-        ph->weight /= fabs(ph->v.z); 
-
+        if (HORIZd) ph->weight /= fabs(ph->v.z); 
     }
 
 	ph->scatterer = UNDEF;
@@ -4592,7 +4590,7 @@ __device__ void countPhoton(Photon* ph,
     float weight_irr = fabs(ph->v.z);
     // In Forward mode, and in case of spherical flux, update the weight
 	if (FLUXd==2 && LEd==0 & weight_irr > 0.001f) weight /= weight_irr;
-    if (count_level == UPTOA && HORIZd == 0 && LEd == 1) weight *= weight_irr;
+    //if (count_level == UPTOA && HORIZd == 0 && LEd == 1) weight *= weight_irr;
     //if (count_level == UPTOA && HORIZd == 0) weight *= weight_irr;
 
     #ifdef DEBUG

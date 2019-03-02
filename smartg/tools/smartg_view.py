@@ -561,7 +561,8 @@ def profile_view(mlut, fig=None, ax=None, iw=0, kind='atm', zmax=None):
     Dz = z.apply(func)
     Dz = Dz.apply(abs,'Dz')
     Dtau     = sign * mlut['OD_'+kind    ].sub().__getitem__(key).apply(func,'Dtau')
-    Dtau_Sca = sign * mlut['OD_sca_'+kind    ].sub().__getitem__(key).apply(func,'Dtau_Sca')
+    Dtau_Sca = sign * mlut['OD_sca_'+kind].sub().__getitem__(key).apply(func,'Dtau_Sca')
+    Dtau_Abs = sign * mlut['OD_abs_'+kind].sub().__getitem__(key).apply(func,'Dtau_Abs')
     if kind=='atm':
         Dtau_ExtA = sign * mlut['OD_p'].sub().__getitem__(key).apply(func,'Dtau_ExtA')
         Dtau_ScaR = sign * mlut['OD_r'].sub().__getitem__(key).apply(func,'Dtau_ScaR')
@@ -602,6 +603,7 @@ def profile_view(mlut, fig=None, ax=None, iw=0, kind='atm', zmax=None):
         if zmax is None : zmax = min(-100.,z.data.min())
         ax.set_ylim(zmax,0)
     ax.semilogx((Dtau/Dz)[:], z[:], 'k.-', label=r'$\sigma_{ext}^{tot}$')
+    ax.semilogx((Dtau_Abs/Dz)[:], z[:], 'k.--', label=r'$\sigma_{abs}^{tot}$')
     #ax.set_title('Vertical profile'+labw)
     ax.grid()
     ax.legend()
