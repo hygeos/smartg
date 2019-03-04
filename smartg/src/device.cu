@@ -4305,7 +4305,7 @@ __device__ void Obj3DRoughSurf(Photon* ph, IGeo* geoS, struct RNG_State *rngstat
 	// ********************************************************************
 	float G2, dotViN;
 	dotViN = dot(v_i, macroFnormal_n);
-	if (WAVE_SHADOWd)
+	if (geoS->shadow) // if we consider Shadowing-Masking effect
 	{
 		// float G1_i, tTheta_i = __fdividef(sTheta_i, cTheta_i);
 		float G1_i, cTheta_iN=-dotViN, sTheta_iN, tTheta_iN;
@@ -4331,11 +4331,11 @@ __device__ void Obj3DRoughSurf(Photon* ph, IGeo* geoS, struct RNG_State *rngstat
 	// ********************************************************************
 
 	// ***************************************************************************************************
-	// Weighting
+	// Weighting according to Walter et al. 2007
 	// ***************************************************************************************************
 	float dotViM;
 	dotViM = dot(v_i, microFnormal_m);
-	ph->weight *= __fdividef(fabsf(dotViM)*G2, fabsf(dotViN)*fabsf(dot(microFnormal_m, macroFnormal_n))); // Walter et al. 2007
+	ph->weight *= __fdividef(fabsf(dotViM)*G2, fabsf(dotViN)*fabsf(dot(microFnormal_m, macroFnormal_n)));
 	ph->weight *= geoS->reflectivity;
 	// ***************************************************************************************************
 
@@ -4346,12 +4346,12 @@ __device__ void Obj3DRoughSurf(Photon* ph, IGeo* geoS, struct RNG_State *rngstat
 	ph->u = u_o;
 	if (ph->loc == OBJSURF)
 	{
-		if (ph->v.z > 0.)
+		if (isForward(geoS->normalBase, ph->v))
 		{
 		ph->locPrev = OBJSURF;
 		ph->loc = ATMOS;
 		}
-		else if (SINGLEd)//SINGLEd)
+		else if (true) //SINGLEd) for now always SINGLE = True
 			ph->loc = REMOVED;
 	}
 	else
@@ -5726,12 +5726,14 @@ __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo 
 					GeoV->material = ObjT[i].materialAV;
 					GeoV->reflectivity = ObjT[i].reflectAV;
 					GeoV->roughness = ObjT[i].roughAV;
+					GeoV->shadow = ObjT[i].shdAV;
 				}
 				else
 				{
 					GeoV->material = ObjT[i].materialAR; //AR
 					GeoV->reflectivity = ObjT[i].reflectAR;
 					GeoV->roughness = ObjT[i].roughAR;
+					GeoV->shadow = ObjT[i].shdAR;
 				}
 				*(phit) = tempPhit;
 				GeoV->mvTF = Ti;

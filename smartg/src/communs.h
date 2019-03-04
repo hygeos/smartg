@@ -325,18 +325,20 @@ struct IGeo
 		material = -1;
 		reflectivity = -1.;
 		roughness = -1.;
+		shadow = -1;
 		type = -1.;
 		mvR = make_float3(0, 0, 0);
 		normalBase = make_float3(0., 0., 0.);
 	}
 
-	__device__ IGeo(float3 nn, int mat, float ref, float rough,
+	__device__ IGeo(float3 nn, int mat, float ref, float rough, int shd,
 					int typ, float3 mvRt, float3 nB)
 	{
 		normal = nn;
 		material = mat;
 		reflectivity = ref;
 		roughness = rough;
+		shadow = shd;
 		type = typ;
 		mvR = mvRt;
 		normalBase = nB;
@@ -347,6 +349,7 @@ struct IGeo
 	int material;       /* material of the object         */
 	float reflectivity; /* albedo of the object           */
 	float roughness;    /* roughness of the object        */
+	int shadow;         /* shadow option of the object    */
     Transform mvTF;     /* transformation of the object   */
 	int type;           /* 1 = reflector, 2 = receiver    */
 	float3 mvR;         /* rotation angles in x, y, z     */
@@ -361,6 +364,8 @@ struct IObjets {
 	float reflectAR;/* reflectivity of the materialAR      */
 	float roughAV;  /* roughness of the materialAV         */
 	float roughAR;  /* roughness of the materialAR         */
+	int shdAV;      /* shadow option of the materialAV     */
+	int shdAR;      /* shadow option of the materialAR     */
 	
 	float p0x;      /* \             \                     */
 	float p0y;      /*  | point p0    \                    */

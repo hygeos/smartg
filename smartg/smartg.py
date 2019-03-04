@@ -158,6 +158,8 @@ type_IObjets = [
     ('reflecAR', 'float32'),  # reflectivity of materialAR
     ('roughAV', 'float32'),   # roughness of materialAV
     ('roughAR', 'float32'),   # roughness of materialAR
+    ('shdAV', 'int32'),       # shadow option of materialAV, 0=false, 1=true
+    ('shdAR', 'int32'),       # shadow option of materialAR
     
     ('p0x', 'float32'),       # \            \
     ('p0y', 'float32'),       #  | point p0   \
@@ -757,33 +759,43 @@ class Smartg(object):
                     myObjects0['materialAV'][i] = 1
                     myObjects0['reflecAV'][i] = myObjects[i].materialAV.reflectivity
                     myObjects0['roughAV'][i] = 0
+                    myObjects0['shdAV'][i] = 0
                 elif isinstance(myObjects[i].materialAV, Matte):
                     myObjects0['materialAV'][i] = 2
                     myObjects0['reflecAV'][i] = myObjects[i].materialAV.reflectivity
                     myObjects0['roughAV'][i] = myObjects[i].materialAV.roughness
+                    myObjects0['shdAV'][i] = 0
                 elif isinstance(myObjects[i].materialAV, Mirror):
                     myObjects0['materialAV'][i] = 3
                     myObjects0['reflecAV'][i] = myObjects[i].materialAV.reflectivity
                     myObjects0['roughAV'][i] = myObjects[i].materialAV.roughness
+                    myObjects0['shdAV'][i] = int(myObjects[i].materialAV.shadow)
                 else:
                     myObjects0['materialAV'][i] = 0
                     myObjects0['roughAV'][i] = 0
+                    myObjects0['roughAV'][i] = 0
+                    myObjects0['shdAV'][i] = 0
 
                 if isinstance(myObjects[i].materialAR, LambMirror):
                     myObjects0['materialAR'][i] = 1
                     myObjects0['reflecAR'][i] = myObjects[i].materialAR.reflectivity
                     myObjects0['roughAR'][i] = 0
+                    myObjects0['shdAR'][i] = 0
                 elif isinstance(myObjects[i].materialAR, Matte):
                     myObjects0['materialAR'][i] = 2
                     myObjects0['reflecAR'][i] = myObjects[i].materialAR.reflectivity
                     myObjects0['roughAR'][i] = myObjects[i].materialAR.roughness
+                    myObjects0['shdAR'][i] = 0
                 elif isinstance(myObjects[i].materialAR, Mirror):
                     myObjects0['materialAR'][i] = 3
                     myObjects0['reflecAR'][i] = myObjects[i].materialAR.reflectivity
                     myObjects0['roughAR'][i] = myObjects[i].materialAR.roughness
+                    myObjects0['shdAR'][i] = int(myObjects[i].materialAR.shadow)
                 else:
                     myObjects0['materialAR'][i] = 0
                     myObjects0['reflecAR'][i] = 0
+                    myObjects0['roughAR'][i] = 0
+                    myObjects0['shdAR'][i] = 0
                     
                 # Deux possibilités : l'objet est un reflecteur ou un recepteur   
                 if (myObjects[i].name == "reflector"):
