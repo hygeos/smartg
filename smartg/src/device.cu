@@ -548,7 +548,7 @@ extern "C" {
             } // Lambertian (DIOPTRE=!3)
            } // ENV=0
 
-           // Environment effects, no LE computed yet
+           // Environment effects
            else {
                 float dis=0;
                 dis = sqrtf((ph.pos.x-X0d)*(ph.pos.x-X0d) +(ph.pos.y-Y0d)*(ph.pos.y-Y0d));
