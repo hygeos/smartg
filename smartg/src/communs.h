@@ -104,6 +104,9 @@
 #define YZX  4
 #define ZXY  5
 #define ZYX  6
+
+#define HELIOSTAT 1
+#define RECEIVER  2 
 #endif
 
 // pseudo-random number generator
@@ -321,37 +324,43 @@ struct IGeo
 		normal = make_float3(0., 0., 0.);
 		material = -1;
 		reflectivity = -1.;
+		roughness = -1.;
 		type = -1.;
 		mvR = make_float3(0, 0, 0);
 		normalBase = make_float3(0., 0., 0.);
 	}
 
-	__device__ IGeo(float3 nn, int mat, float ref, int typ, float3 mvRt, float3 nB)
+	__device__ IGeo(float3 nn, int mat, float ref, float rough,
+					int typ, float3 mvRt, float3 nB)
 	{
 		normal = nn;
 		material = mat;
 		reflectivity = ref;
+		roughness = rough;
 		type = typ;
 		mvR = mvRt;
 		normalBase = nB;
 	}
 	
-        float3 normal;      /* la normale de l'objet          */
-        float3 normalBase;  /* la normale de base de l'objet  */
-	int material;       /* la matière de l'objet          */
-	float reflectivity; /* l'albedo de l'objet            */
-    Transform mvTF;     /* Transformation de l'objet      */
-	int type;           /* 1 = reflector, 2 = receptor    */
-	float3 mvR;           /* rotation angles in x, y, z     */
+	float3 normal;      /* normal at the surface impact   */
+	float3 normalBase;  /* front(AV) surface normal       */
+	int material;       /* material of the object         */
+	float reflectivity; /* albedo of the object           */
+	float roughness;    /* roughness of the object        */
+    Transform mvTF;     /* transformation of the object   */
+	int type;           /* 1 = reflector, 2 = receiver    */
+	float3 mvR;         /* rotation angles in x, y, z     */
 };
 
 struct IObjets {
     int geo;        /* 1 = sphere, 2 = plane, ...          */
 	int materialAV; /* 1 = LambMirror, 2 = Matte,          */
 	int materialAR;	/* 3 = Mirror, ...                     */
-	int type;       /* 1 = reflector, 2 = receptor         */
+	int type;       /* 1 = reflector, 2 = receiver         */
 	float reflectAV;/* reflectivity of the materialAV      */
 	float reflectAR;/* reflectivity of the materialAR      */
+	float roughAV;  /* roughness of the materialAV         */
+	float roughAR;  /* roughness of the materialAR         */
 	
 	float p0x;      /* \             \                     */
 	float p0y;      /*  | point p0    \                    */

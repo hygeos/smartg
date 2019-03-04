@@ -792,7 +792,8 @@ extern "C" {
 						}//direction
 					}//direction
 				} //LE
-				surfaceRugueuse3D(&ph, &geoStruc, &rngstate);
+				// surfaceRugueuse3D(&ph, &geoStruc, &rngstate);
+				Obj3DRoughSurf(&ph, &geoStruc, &rngstate);
 			} // End Mirror
 			else {ph.loc = REMOVED;} // unknow material
 
@@ -4201,15 +4202,175 @@ __device__ void surfaceRugueuse3D(Photon* ph, IGeo* geoS, struct RNG_State *rngs
 	
 } // FUNCTION SURFACEAGITE3D
 
+
+__device__ void Obj3DRoughSurf(Photon* ph, IGeo* geoS, struct RNG_State *rngstate)
+{
+    ph->nint += 1;
+	
+	float3 v_i = ph->v;                    // - direction of the incoming photon
+	float3 u_i = ph->u;                    // - perp direction of the incoming photon
+
+	// Find if the photon come from the front(1) or back(-1) of the obj surface
+	// geoS->normalBase is the obj normal of the front surface
+	int sign = (isBackward(geoS->normalBase, ph->v)) ? 1 : -1;
+	
+	if (geoS->type == HELIOSTAT)
+	{
+		if (sign > 0) { ph->H += 1; }
+		else { ph->E += 1; } // Back heliostat surface considered as environnement
+	}
+	else if ( geoS->type == RECEIVER)
+	{ ph->E += 1; }
+
+	float cTheta_i;                        // - cos of the angle between normal m and the
+	                                       //   direction of the incoming photon v
+	float sTheta_i;                        // - sin of theta_i
+	float3 macroFnormal_n = geoS->normal;  // - the (big) macrofacet normal n
+	float alpha = geoS->roughness;         // - Slope error or rugosity parameter
+	float3 microFnormal_m;                 // - the (small) random microfacet normal m
+	float theta_m, phi_m;                  // - theta_m and phi_m respectively the azi
+	                                       //   and zen angles between normals n and m
+	float tTheta_m;                        // - tan(theta_m)
+	float cTheta_m, sTheta_m;              // - cos and sin of theta_m
+	float cPhi_m, sPhi_m;                  // - cos and sin of phi_m
+
+	// alpha = sqrtf(0.003F + 0.00512f *WINDSPEEDd);
+	// The initial normal of the obj before transfo is colinear to the z axis,
+	// then create the transfo inverse for the direction v_i and simplify sampling
+	Transform transfo=geoS->mvTF, invTransfo;
+    invTransfo = transfo.Inverse(transfo);
+	
+	// Incident direction v if obj normal colinear to z axis
+	float3 v_iInv = invTransfo(Vectorf(v_i));
+
+	// ***********************************************************************************
+	// Beckmann sampling of theta_m, phi_m to get cTheta_i, sTheta_i -> Walter et al. 2007
+	// ***********************************************************************************
+	int iter=0;
+	cTheta_i = -1.F;
+	while (cTheta_i <= 0)
+	{
+		iter++;
+		if (iter >= 100) {ph->loc = NONE; return;}
+		tTheta_m = alpha*sqrtf(-__logf(RAND) );
+		theta_m = atanf(tTheta_m);
+		phi_m   = DEUXPI * RAND;
+		
+		// find the normal of the microfacet m thanks to thata_m and phi_m sampling
+		cTheta_m = __cosf(theta_m); sTheta_m = __sinf(theta_m);
+		cPhi_m = __cosf(phi_m); sPhi_m = __sinf(phi_m);
+		microFnormal_m = make_float3( sTheta_m*cPhi_m,  sTheta_m*sPhi_m, cTheta_m );
+		microFnormal_m *= sign;
+		cTheta_i = -dot( microFnormal_m, v_iInv);
+		cTheta_i = clamp(cTheta_i, -1.F, 1.F);
+	}
+	// Inverse transfo has been used in sampling then come back to "real basis"
+	microFnormal_m = transfo(Normalf(microFnormal_m));
+	
+	// Less expensive than find theta from arcos and apply the sin
+	sTheta_i = sqrtf( fmaxf(0.F,  1.F-(cTheta_i*cTheta_i)) );
+	// ***********************************************************************************
+
+	// ********************************************************
+	// Rotation of the stokes vector
+	// ********************************************************
+	// Compute the psi angle of the rotation matrix L
+	float4x4 L; float psi;	
+	psi = computePsiFN(u_i, v_i, microFnormal_m, sTheta_i);
+	rotationM(psi, &L); // fill the rotation matrix L
+
+	// Reflection matrix R
+	float4x4 R; float sR;
+	//R = computeRefMat(1.33, cTheta_i, sTheta_i);
+	refMat(1.33, cTheta_i, sTheta_i, &R, &sR);
+
+	// Muller matrix for reflection
+	float4x4 Mu_r; // Mu_r = (1/scaR)*R*L -> Ramon et al. 2019
+	Mu_r = mul(R, L); // relfection totale scaR = 1
+		
+	// update the stokes vector
+	ph->stokes = mul(Mu_r, ph->stokes); //S_l = Mu_r*S_l-1
+	// ********************************************************
+
+	// ********************************************
+	// Reflection of the direction v and perp dir u
+	// ********************************************
+	float3 v_o, u_o; // outcoming directions
+	v_o = specularFNC(ph->v, microFnormal_m, cTheta_i);
+	u_o = (microFnormal_m-cTheta_i*v_o)/sTheta_i;
+	// ********************************************
+
+	// ********************************************************************
+	// Shadowing-Masking Function G2
+	// ********************************************************************
+	float G2, dotViN;
+	dotViN = dot(v_i, macroFnormal_n);
+	if (WAVE_SHADOWd)
+	{
+		// float G1_i, tTheta_i = __fdividef(sTheta_i, cTheta_i);
+		float G1_i, cTheta_iN=-dotViN, sTheta_iN, tTheta_iN;
+		sTheta_iN = sqrtf(fmaxf( 0.F,  1.F - (cTheta_iN*cTheta_iN) ));
+		tTheta_iN = __fdividef(sTheta_iN, cTheta_iN);
+		int xsiPos; // positive characteristic function	
+		xsiPos = ( __fdividef(dot(v_i, microFnormal_m), dotViN) > 0) ? 1 : 0;
+		G1_i = xsiPos * G1W(alpha, tTheta_iN);//tTheta_i);
+		if (G1_i < VALMIN) { ph->loc = ABSORBED; return; }
+	
+		float G1_o, dotVoN, cTheta_oN, sTheta_oN, tTheta_oN;
+		dotVoN = dot(v_o, macroFnormal_n);
+		cTheta_oN = dotVoN; //dot( microFnormal_m, v_o);
+		sTheta_oN = sqrtf(fmaxf( 0.F,  1.F - (cTheta_oN*cTheta_oN) ));
+		tTheta_oN = __fdividef(sTheta_oN, cTheta_oN);	
+		xsiPos = ( __fdividef(dot(v_o, microFnormal_m), dotVoN) > 0) ? 1 : 0;
+		G1_o = xsiPos * G1W(alpha, tTheta_oN);
+		if (G1_o < VALMIN) { ph->loc = ABSORBED; return; }
+		G2 = fminf(G1_i*G1_o, 1.F);
+		int idx = blockIdx.x *blockDim.x + threadIdx.x;
+	}
+	else { G2 = 1.F; }
+	// ********************************************************************
+
+	// ***************************************************************************************************
+	// Weighting
+	// ***************************************************************************************************
+	float dotViM;
+	dotViM = dot(v_i, microFnormal_m);
+	ph->weight *= __fdividef(fabsf(dotViM)*G2, fabsf(dotViN)*fabsf(dot(microFnormal_m, macroFnormal_n))); // Walter et al. 2007
+	ph->weight *= geoS->reflectivity;
+	// ***************************************************************************************************
+
+	// **********************************************
+	// update photon directions u, v and location
+	// **********************************************
+	ph->v = v_o;
+	ph->u = u_o;
+	if (ph->loc == OBJSURF)
+	{
+		if (ph->v.z > 0.)
+		{
+		ph->locPrev = OBJSURF;
+		ph->loc = ATMOS;
+		}
+		else if (SINGLEd)//SINGLEd)
+			ph->loc = REMOVED;
+	}
+	else
+		ph->loc = REMOVED;
+	// **********************************************
+	
+	if (RRd==1){
+		/* Russian roulette for propagating photons **/
+		if( ph->weight < WEIGHTRRd ){
+			if( RAND < __fdividef(ph->weight,WEIGHTRRd) ){ph->weight = WEIGHTRRd;}
+			else{ph->loc = ABSORBED;}
+		}
+	}
+	
+} // FUNCTION OBJ3DROUGHSURF
+
 __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, struct Sensor *tab_sensor)
 {
-
-	//ph->weight_loss[0] = ph->weight;
-	//ph->weight_loss[1] = fdividef(ph->weight, cosf(radians(fabsf((90 - geoS->mvR.y) - (90-14.3))))); *DEUXPI/360.
-	//ph->weight_loss[1] = fabsf( (90 - geoS->mvR.y) - (90-14.3) );
-	// ph->weight_loss[1] = fdividef(ph->weight_loss[0],
-	// 							  cosf(radians(geoS->mvR.y-(180 - tab_sensor[ph->is].THDEG))));
-
+	// Find the incident flux at the mirror before the cosine effect
 	ph->weight_loss[1] = fdividef(ph->weight_loss[0],
 								  dot(geoS->normalBase, make_float3(-DIRSXd, -DIRSYd, -DIRSZd)));
 	#ifdef DOUBLE
@@ -4217,11 +4378,12 @@ __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, struct Sensor *
 	double weightECos, weightSpi;
 	double *wPhLossC;
 	
-	wPhLossC = (double*)wPhLoss;
-	weightE = (double)ph->weight_loss[0];
-	weightS = (double)ph->weight_loss[2];
-	weightECos = (double)ph->weight_loss[1];
-	weightSpi = (double)ph->weight_loss[3];
+	wPhLossC = (double*)wPhLoss;              // - table comprinsing different weights
+	weightE = (double)ph->weight_loss[0];     // - incident flux after cos effect
+	weightS = (double)ph->weight_loss[2];     // - flux reflected after considering ref loss
+	weightECos = (double)ph->weight_loss[1];  // - incident flux before cos effect
+	weightSpi = (double)ph->weight_loss[3];   // - flux weight if the reflected flux Ws succeed the
+	                                          //   intersection test with the receiver (spi loss)
 	#else
 	float weightE, weightS;
 	float weightECos, weightSpi;
@@ -4238,7 +4400,6 @@ __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, struct Sensor *
 	atomicAdd(wPhLossC+1, weightECos);
 	atomicAdd(wPhLossC+2, weightS);
 	atomicAdd(wPhLossC+3, weightSpi);
-	//wPhLossC[1] = (double)dot(geoS->normalBase, make_float3(-DIRSXd, -DIRSYd, -DIRSZd));
 }
 
 __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsigned long long *nbPhCat, void *wPhCat)
@@ -5329,6 +5490,16 @@ __device__ float Lambda(float avz, float sig) {
     return l;
 }
 
+__device__ float G1W(float alpha, float tanTheta) {
+	// approx proposed by Walter et al. 2007
+	float a, a2;
+	a = __fdividef(1.F, alpha*tanTheta);
+	a2 = a*a;
+
+	if (a >= 1.6f) return 1.F;
+	return ( (3.535*a + 2.181*a2)/(1 + 2.276*a + 2.577*a2) );
+}
+
 __device__ float LambdaM(float avz, float sig2) {
     // Mischenko implementation
     float l;
@@ -5554,11 +5725,13 @@ __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo 
 				{
 					GeoV->material = ObjT[i].materialAV;
 					GeoV->reflectivity = ObjT[i].reflectAV;
+					GeoV->roughness = ObjT[i].roughAV;
 				}
 				else
 				{
 					GeoV->material = ObjT[i].materialAR; //AR
 					GeoV->reflectivity = ObjT[i].reflectAR;
+					GeoV->roughness = ObjT[i].roughAR;
 				}
 				*(phit) = tempPhit;
 				GeoV->mvTF = Ti;

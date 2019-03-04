@@ -184,6 +184,8 @@ __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* 
 
 __device__ void surfaceRugueuse3D(Photon* ph, IGeo* geoS, struct RNG_State *rngstate);
 
+__device__ void Obj3DRoughSurf(Photon* ph, IGeo* geoS, struct RNG_State *rngstate);
+
 __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, struct Sensor *tab_sensor);
 
 __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsigned long long *nbPhCat, void *wPhCat);
@@ -231,6 +233,7 @@ __device__ double DatomicAdd(double* address, double val);
 __device__ float get_OD(int , struct Profile ) ;  
 
 __device__ float Lambda(float , float ) ;
+__device__ float G1W(float , float ) ;
 __device__ float LambdaM(float , float ) ;
 
 __device__ void DirectionToUV(float, float, float3*, float3*) ;

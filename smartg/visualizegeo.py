@@ -109,30 +109,32 @@ class Mirror(object):
     '''
     Definition of Mirror
 
-    Mirror material (fresnel reflection)
+    Glossy/specular material as pure and higler polihed aluminum, siler
+    behing glass mirror, ...
 
     reflectivity : the albedo of the object
-    rigosity     : not yet available
+    roughness    : equal to alpha parameter according to Walter et al. 2007
     '''
-    def __init__(self, reflectivity = 1., rugosity = 0.):
+    def __init__(self, reflectivity = 1., roughness = 0.):
         self.reflectivity = reflectivity
-        self.rugosity = rugosity
+        self.roughness = roughness
 
     def __str__(self):
         return 'Material -> Mirror : ' \
-            'reflectivity=' + str(self.reflectivity) + ', rugosity=' + str(self.rugosity)
+            'reflectivity=' + str(self.reflectivity) + ', roughness=' + str(self.roughness)
 
 class LambMirror(object):
     '''
     Definition of LambMirror
 
-    Lambertian Material, same probability of reflection in all the direction
+    Lambertian material, same probability of reflection in all the direction
     inside the hemisphere of the normal of the object surface
 
     reflectivity : the albedo of the object
     '''
     def __init__(self, reflectivity = 0.5):
         self.reflectivity = reflectivity
+        
 
     def __str__(self):
         return 'Material -> Lambertian Mirror : ' \
@@ -142,14 +144,18 @@ class Matte(object):
     '''
     Definition of Matte
 
-    Absorbant Material
-    '''
-    def __init__(self, reflectivity = 0.):
-        self.reflectivity = reflectivity
+    Diffuse material as Concrete, plastic, dust, ...
 
+    reflectivity : the albedo of the object
+    roughness    : not yet available
+    '''
+    def __init__(self, reflectivity = 0., roughness = 0.):
+        self.reflectivity = reflectivity
+        self.roughness = roughness
+        
     def __str__(self):
         return 'Material -> Matte : ' \
-            'reflectivity=' + str(self.reflectivity)
+            'reflectivity=' + str(self.reflectivity) + ', roughness=' + str(self.roughness)
 
 class Plane(object):
     '''
@@ -822,7 +828,7 @@ def generateHfA(THEDEG=0., PHIDEG = 0., PR = Point(0., 0., 50.), MINANG=0., \
 if __name__ == '__main__':
 
     Heliostat1 = Entity(name = "reflector", \
-                       material = Mirror(reflectivity = 1., rugosity = 0.1), \
+                       material = Mirror(reflectivity = 1., roughness = 0.1), \
                        geo = Plane( p1 = Point(-10., -10., 0.),
                                     p2 = Point(-10., 10., 0.),
                                     p3 = Point(10., -10., 0.),
@@ -831,7 +837,7 @@ if __name__ == '__main__':
                                                         translation = np.array([0., 0., 0.]) ))
 
     Recepteur1 = Entity(name = "receiver", \
-                        material = Mirror(reflectivity = 1., rugosity = 0.1), \
+                        material = Mirror(reflectivity = 1., roughness = 0.1), \
                         geo = Plane( p1 = Point(-10., -10., 0.),
                                      p2 = Point(-10., 10., 0.),
                                      p3 = Point(10., -10., 0.),
@@ -839,7 +845,7 @@ if __name__ == '__main__':
                         transformation = Transformation( rotation = np.array([45., 0., 0.]), \
                                                          translation = np.array([0., -10., 80.]) ))
     Heliostat2 = Entity(name = "reflector", \
-                        material = Mirror(reflectivity = 1., rugosity = 0.1), \
+                        material = Mirror(reflectivity = 1., roughness = 0.1), \
                         geo = Spheric( radius = 20.,
                                        z0 = -0.,
                                        z1 = 20.,

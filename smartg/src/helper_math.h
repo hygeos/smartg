@@ -2337,6 +2337,36 @@ inline __host__ __device__ float4 mul(float4x4 M, float4 v)
 	return r;
 }
 
+inline __host__ __device__ float2x2 mul2(float2x2 M, float f)
+{
+	float2x2 M2 = make_float2x2(
+		M[0][0]*f,  M[0][1]*f,
+		M[1][0]*f,  M[1][1]*f
+		);
+	return M2;
+}
+
+inline __host__ __device__ float3x3 mul2(float3x3 M, float f)
+{
+	float3x3 M2 = make_float3x3(
+		M[0][0]*f,  M[0][1]*f, M[0][2]*f,
+		M[1][0]*f,  M[1][1]*f, M[1][2]*f,
+		M[2][0]*f,  M[2][1]*f, M[2][2]*f
+		);
+	return M2;
+}
+
+inline __host__ __device__ float4x4 mul2(float4x4 M, float f)
+{
+	float4x4 M2 = make_float4x4(
+		M[0][0]*f,  M[0][1]*f, M[0][2]*f, M[0][3]*f,
+		M[1][0]*f,  M[1][1]*f, M[1][2]*f, M[1][3]*f,
+		M[2][0]*f,  M[2][1]*f, M[2][2]*f, M[2][3]*f,
+		M[3][0]*f,  M[3][1]*f, M[3][2]*f, M[3][3]*f
+		);
+	return M2;
+}
+
 // mutiplication matrix x scalar
 inline __host__ __device__ float3x3 mul(float3x3 &M, float f)
 {
@@ -3211,6 +3241,96 @@ inline __host__ __device__ void coordinateSystem(const double3 &v1, double3 *v2,
         *v2 = make_double3(0., v1.z * invLen, -v1.y * invLen);
     }
     *v3 = cross(v1, *v2);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// computePsiFN function
+// - Compute the angle psi of the rotation matrix given the incident direction
+//   v, the incident perp direction u, the normal m of the surface impact and
+//   the sinus of the angle between the normal m and the direction v sTheta
+////////////////////////////////////////////////////////////////////////////////
+
+inline __device__ float computePsiFN(float3 u, float3 v, float3 m, float sTheta)
+{
+	float3 crossUV = cross(u, v);
+	float psi;
+
+    psi = __fdividef(dot(m, u), sTheta);
+	psi = acosf( clamp(psi, -1.F, 1.F) );
+	
+    return (dot(m, crossUV) < 0) ? -psi : psi;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// computeRefMat function
+// - Compute the reflection matrix given refraction index, the cosinus and sinus
+//   of the angle theta (between the normal of the surface impact and the dir v)
+////////////////////////////////////////////////////////////////////////////////
+
+inline __device__ float4x4 computeRefMat(float nind, float cTheta, float sTheta)
+{
+	float cot, ncot, ncTh, rpar, rper, rpar2, rper2, rparper;
+
+	cot = __fdividef(sTheta, nind);
+	cot = sqrtf( 1.0F - cot*cot );
+	ncTh = nind*cTheta;
+	ncot = nind*cot;
+	rpar = __fdividef(ncTh-cot, ncTh+cot); // DR Mobley 2015 sign convention
+	rper = __fdividef(cTheta-ncot, cTheta+ncot);
+	rpar2 = rpar*rpar;
+	rper2 = rper*rper;
+	rparper = rpar * rper;
+
+	// Fill and return the reflection matrix
+	return make_float4x4(
+		rpar2, 0.   , 0.     , 0.     ,
+		0.   , rper2, 0.     , 0.     ,
+		0.   , 0.   , rparper, 0.     ,
+		0.   , 0.   , 0.     , rparper 
+		);
+}
+
+//******************************************************************************
+inline __device__ void refMat(float nind, float cTheta, float sTheta, float4x4 *R, float *scaR)
+{
+	float cot, ncot, ncTh, rpar, rper, rpar2, rper2, rparper;
+
+	cot = __fdividef(sTheta, nind);
+	cot = sqrtf( 1.0F - cot*cot );
+	ncTh = nind*cTheta;
+	ncot = nind*cot;
+	rpar = __fdividef(ncTh-cot, ncTh+cot); // DR Mobley 2015 sign convention
+	rper = __fdividef(cTheta-ncot, cTheta+ncot);
+	rpar2 = rpar*rpar;
+	rper2 = rper*rper;
+	rparper = rpar * rper;
+
+	// Fill the reflection matrix
+    *R= make_float4x4(
+		rpar2, 0.   , 0.     , 0.     ,
+		0.   , rper2, 0.     , 0.     ,
+		0.   , 0.   , rparper, 0.     ,
+		0.   , 0.   , 0.     , rparper 
+		);
+
+	*scaR = __fdividef(rpar2+rper2, 2.F);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// specularFN function
+// - Compute the specular reflection by giving the incoming direction and the
+//   normal of the surface (and the cosine of the angle bet v and the normal)
+////////////////////////////////////////////////////////////////////////////////
+
+inline __device__ float3 specularFN(float3 vi, float3 n)
+{
+	float3 v = make_float3(-vi.x, -vi.y, -vi.z);
+	return vi + n*(2*dot(n, v));
+}
+
+inline __device__ float3 specularFNC(float3 vi, float3 n, float cTheta)
+{
+	return vi + (2.F*cTheta)*n;
 }
 
 #endif
