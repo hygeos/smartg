@@ -3713,7 +3713,10 @@ __device__ void surfaceLambert(Photon* ph, int le,
          ph->loc = ABSORBED;
          return;
      }
-     else ph->weight *= weight/fabs(ph->v.z); /*[Eq. 39]*/
+     else {
+         if (HORIZd) ph->weight *= weight/fabs(ph->v.z); /*[Eq. 39]*/
+         else ph->weight *= weight;
+     }
      #endif
     }
     else {
