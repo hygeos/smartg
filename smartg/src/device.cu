@@ -2212,15 +2212,19 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 		// nObj = le nombre d'objets, si = 0 alors le test n'est pas nécessaire.
 	    if (nObj > 0){
 			mytest = geoTest(ph->pos, ph->v, ph->locPrev, &phit, geoS, myObjets);
-			if (ph->direct == 0 && ph->pos.z == 120. && mytest == false && LMODEd == 1) {ph->loc=NONE; return;}
-			// if (ph->direct == 0 && IsAtm == 0 && mytest == false && LMODEd == 1) {ph->loc=NONE; return;}
+			if (!mytest && LMODEd == 1 &&  ph->pos.z >= (120.F-VALMIN) && ph->direct == 0) {ph->loc=NONE; return;}
+			if (mytest && phit.z > -VALMIN && phit.z < (120.F+VALMIN) && IsAtm == 0)
+			{
+				ph->tau = 0.F;
+				ph->loc = OBJSURF;
+				ph->pos = phit;
+				return;
+			}
 		}
-		//if (ph->pos.z == 120. && mytest == false) {ph->loc=NONE; return;}
-		//if (ph->pos.z == 120. && mytest == true && geoS->type != 1) {ph->loc=NONE; return;}
-		//if (ph->pos.z < 1.2 && mytest == true && geoS->type == 3) {ph->loc=ABSORBED; return;}
+		
 		// if mytest = true (intersection with the geometry) and the position of the intersection is in
 		// the atmosphere (0 < Z < 120), then: Begin to analyse is there is really an intersection
-		if(mytest && phit.z >= 0.F && phit.z <= 120.F)
+		if(mytest && phit.z > -VALMIN && phit.z < (120.F+VALMIN) && IsAtm == 1)
 		{
 			float tauHit = 0.f; // Optical depth distance (from the initial position of the photon to phit)
 			int ilayer2 = ph->layer;
@@ -2276,14 +2280,11 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 				tauHit += (length(phit, oldP)/fabs(prof_atm[ilayer2 - 1].z - prof_atm[ilayer2].z))*delta_i;
 			}
 
-
 			// if tauHit (optical distance to hit the geometry) < tauR, then: there is interaction.
-			if (tauHit < tauR || IsAtm == 0) // IsAtm == 0 (without atm for objects) -> we don't care about tau
+			if (tauHit < tauR)
 			{
-				// to see
 				ph->layer = ilayer2;
-				if (IsAtm == 0) ph->weight *= 1;
-				else if (BEERd == 0) ph->weight *= prof_atm[ph->layer+ph->ilam*(NATMd+1)].ssa;
+				if (BEERd == 0) ph->weight *= prof_atm[ph->layer+ph->ilam*(NATMd+1)].ssa;
 				else
 				{ // We compute the cumulated absorption OT at the new postion of the photon
 					// see move photon paper eq 11
@@ -2298,63 +2299,43 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 				ph->tau = prev_tau + tauHit * ph->v.z;  // update the value of tau photon
 				ph->pos = phit;                         // update the position of the photon
 				return;
-				
-				// Photon phBis;
-				
-				// phBis.weight = 1.;
-				// phBis.pos = phit;
-				// if (IsAtm == 0) phBis.weight = ph->weight * 1;
-				// else if (BEERd == 0) phBis.weight =  ph->weight * prof_atm[ph->layer+ph->ilam*(NATMd+1)].ssa;
-				// else
-				// { // We compute the cumulated absorption OT at the new postion of the photon
-				// 	// see move photon paper eq 11
-				// 	ab = prof_atm[NATMd+ph->ilam*(NATMd+1)].OD_abs - 
-				// 		(epsilon * (prof_atm[ilayer2+ph->ilam*(NATMd+1)].OD_abs - prof_atm[ilayer2-1+ph->ilam*(NATMd+1)].OD_abs) +
-				// 		 prof_atm[ilayer2-1+ph->ilam*(NATMd+1)].OD_abs);
-				// 	// absorption between start and stop
-				// 	phBis.weight = ph->weight * exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
-				// }
-				// //atomicAdd(CounterIntObj, 1);
-				// phBis.v = ph->v;
-				// countPhotonObj3D(&phBis, tabObjInfo, geoS);
-				
 			}
 		} // End of mytest = true
-
+		
 		// Case where atm is false in special case with objetcs
 		// if there is not an intersect with an objet we have a special treatment
-		if (nObj > 0 && IsAtm == 0 && !mytest)
+		if (nObj > 0 && !mytest && IsAtm == 0)
 		{
-			BBox boite(make_float3(Pmin_x, Pmin_y, Pmin_z), make_float3(Pmax_x, Pmax_y, Pmax_z));
+			BBox boite(make_float3(-12000., -12000., 0.F), make_float3(12000.F, 12000.F, 120.F));
 			Ray Rayon(ph->pos, ph->v, 0);
-			float intTime0=0., intTime1=0.;
+			float intTime0=-10.F, intTime1=-10.F;
 			bool intersectBox;
-			float3 intersectPoint = make_float3(-1., -1., -1.);
+			float3 intersectPoint = make_float3(-1.F, -1.F, -1.F);
 			
-			intersectBox = boite.IntersectP(Rayon, &intTime0, &intTime1);
+			intersectBox = boite.IntersectP(Rayon, &intTime0, &intTime1);		 
 			
-			if (intersectBox && intTime0 < 0.) {intersectPoint = Rayon.o * intTime1;}
-			else if (intersectBox && intTime0 >= 0.) {intersectPoint = Rayon.o * intTime0;}
-			else {printf("error1 in move_pp geo!! \n"); return;}
-
-			if (intersectPoint.z > 119.999)
-			{
+			if (!intersectBox) {printf("error1 in move_pp geo!! \n"); return;}
+			
+			intersectPoint = Rayon(intTime1);
+			
+			if (intersectPoint.z >= (120-VALMIN))
+			{			
 				ph->loc = SPACE;
 				ph->layer = 0;
-				ph->weight *= 1;
 				return;
 			}
-			else if (intersectPoint.z < 0.0001)
+			else if (intersectPoint.z <= VALMIN)
 			{
 				ph->loc = SURF0P;
 				ph->tau = 0.F;
 				ph->tau_abs = 0.F;
-				ph->pos.z = 0.;
+				ph->pos.x = intersectPoint.x;
+				ph->pos.y = intersectPoint.y;
+				ph->pos.z = 0.F;
 				ph->layer = NATMd;
-				ph->weight *= 1;
 				return;
 			}
-			else {ph->loc = NONE;return;}
+			else {ph->loc = ABSORBED;return;}
 		}
 		// ========================================================================================================
         #endif //END OBJ3D
@@ -4303,29 +4284,39 @@ __device__ void Obj3DRoughSurf(Photon* ph, IGeo* geoS, struct RNG_State *rngstat
 	// ********************************************************************
 	// Shadowing-Masking Function G2
 	// ********************************************************************
-	float G2, dotViN;
+	float G2, dotViN, dotViM;
 	dotViN = dot(v_i, macroFnormal_n);
+	dotViM = dot(v_i, microFnormal_m);
 	if (geoS->shadow) // if we consider Shadowing-Masking effect
 	{
-		// float G1_i, tTheta_i = __fdividef(sTheta_i, cTheta_i);
 		float G1_i, cTheta_iN=-dotViN, sTheta_iN, tTheta_iN;
 		sTheta_iN = sqrtf(fmaxf( 0.F,  1.F - (cTheta_iN*cTheta_iN) ));
 		tTheta_iN = __fdividef(sTheta_iN, cTheta_iN);
-		int xsiPos; // positive characteristic function	
-		xsiPos = ( __fdividef(dot(v_i, microFnormal_m), dotViN) > 0) ? 1 : 0;
-		G1_i = xsiPos * G1W(alpha, tTheta_iN);//tTheta_i);
-		if (G1_i < VALMIN) { ph->loc = ABSORBED; return; }
-	
+		int xsiPi, xsiPo; // positive characteristic function	
+		xsiPi = ( __fdividef(dotViM, dotViN) > 0) ? 1 : 0;
+		if (xsiPi == 0) { ph->loc = ABSORBED; return; }
+		G1_i = G1W(alpha, tTheta_iN);
+		
 		float G1_o, dotVoN, cTheta_oN, sTheta_oN, tTheta_oN;
 		dotVoN = dot(v_o, macroFnormal_n);
 		cTheta_oN = dotVoN; //dot( microFnormal_m, v_o);
 		sTheta_oN = sqrtf(fmaxf( 0.F,  1.F - (cTheta_oN*cTheta_oN) ));
 		tTheta_oN = __fdividef(sTheta_oN, cTheta_oN);	
-		xsiPos = ( __fdividef(dot(v_o, microFnormal_m), dotVoN) > 0) ? 1 : 0;
-		G1_o = xsiPos * G1W(alpha, tTheta_oN);
-		if (G1_o < VALMIN) { ph->loc = ABSORBED; return; }
-		G2 = fminf(G1_i*G1_o, 1.F);
-		int idx = blockIdx.x *blockDim.x + threadIdx.x;
+		xsiPo = ( __fdividef(dot(v_o, microFnormal_m), dotVoN) > 0) ? 1 : 0;
+		if (xsiPo == 0) { ph->loc = ABSORBED; return; }
+		G1_o = G1W(alpha, tTheta_oN);
+
+		// Several methods possible, we choose to compute from G1
+		// Bellow best approximation than G2 = G1_i*G1_o
+		// G2 = 1/(1 + LambO + LambI) and G1_[i or o] = 1/(1 + Lamb[i or o]) then
+		// G2 = 1/(1/G1_i + 1/G1_o - 1) -->
+		float invG1_i, invG1_o;
+		invG1_i = fdividef(1.F, G1_i);
+		invG1_o = fdividef(1.F, G1_o);
+		G2 = fdividef(1.F, invG1_i + invG1_o - 1.F);
+
+		// Be sure that G2 is <= 1
+		G2 = fminf(G2, 1.F);
 	}
 	else { G2 = 1.F; }
 	// ********************************************************************
@@ -4333,8 +4324,6 @@ __device__ void Obj3DRoughSurf(Photon* ph, IGeo* geoS, struct RNG_State *rngstat
 	// ***************************************************************************************************
 	// Weighting according to Walter et al. 2007
 	// ***************************************************************************************************
-	float dotViM;
-	dotViM = dot(v_i, microFnormal_m);
 	ph->weight *= __fdividef(fabsf(dotViM)*G2, fabsf(dotViN)*fabsf(dot(microFnormal_m, macroFnormal_n)));
 	ph->weight *= geoS->reflectivity;
 	// ***************************************************************************************************
@@ -5497,7 +5486,17 @@ __device__ float G1W(float alpha, float tanTheta) {
 	a2 = a*a;
 
 	if (a >= 1.6f) return 1.F;
-	return ( (3.535*a + 2.181*a2)/(1 + 2.276*a + 2.577*a2) );
+	return ( (3.535F*a + 2.181F*a2)/(1 + 2.276F*a + 2.577F*a2) );
+}
+
+__device__ float LambB(float alpha, float tanTheta) {
+	// Beckmann Lambda approx proposed by Eric Heitz 2014
+	float a, a2;
+	a = __fdividef(1.F, alpha*fabsf(tanTheta));
+	a2 = a*a;
+
+	if (a >= 1.6F) return 0.F;
+	return (1 - 1.259F*a + 0.396F*a2) / (3.535F*a + 2.181F*a2);
 }
 
 __device__ float LambdaM(float avz, float sig2) {

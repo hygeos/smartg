@@ -8,6 +8,21 @@
 #include <limits>
 #include <stdio.h>
 
+#if __CUDA_ARCH__ >= 200
+__device__ float machine_eps_flt() {
+    typedef union {
+        int i32;
+        float f32;
+    } flt_32;
+
+    flt_32 s;
+
+    s.f32 = 1.;
+    s.i32++;
+    return (s.f32 - 1.);
+}
+#endif
+
 #ifndef DEBUG
 #define myError(expr) ((void)0)
 #else
@@ -285,9 +300,9 @@ public:
         #elif !defined(__CUDA_ARCH__)
 		maxt = std::numeric_limits<float>::max();
         #endif
-		mint = 0.f; time = 0.f;
-		o = make_float3c(0., 0., 0.);
-		d = make_float3c(0., 0., 0.);
+		mint = 0.F; time = 0.F;
+		o = make_float3c(0.F, 0.F, 0.F);
+		d = make_float3c(0.F, 0.F, 0.F);
 	}
 
 	__host__ __device__ Ray(const Ray &r)
@@ -296,11 +311,11 @@ public:
 		o = r.o; d = r.d;
 	}
 
-	__device__ Ray(const float3 &origin, const float3 &direction, float start,
+	__device__ Ray(const float3 &origin, const float3 &direction, float start=0.F,
 				   #if __CUDA_ARCH__ >= 200
-				   float end = CUDART_INF_F, float t = 0.f)
+				   float end = CUDART_INF_F, float t = 0.F)
 		           #elif !defined(__CUDA_ARCH__)
-		           float end = std::numeric_limits<float>::max(), float t = 0.f)
+		           float end = std::numeric_limits<float>::max(), float t = 0.F)
 				   #endif
 	{
 		mint = start; maxt = end, time = t;
@@ -409,17 +424,29 @@ public:
 	__host__ __device__ bool IntersectP(const Ray &ray, float *hitt0 = NULL,
 										float *hitt1 = NULL) const
 	{
-		float t0 = 0., t1 = ray.maxt; //float epsi = (std::numeric_limits<float>::epsilon() * 0.5);
+		float t0 = 0.F, gamma3;
+        #if __CUDA_ARCH__ >= 200
+		float epsi = machine_eps_flt() * 0.5;
+		float t1 = CUDART_INF_F;
+		#elif !defined(__CUDA_ARCH__)
+		float epsi = (std::numeric_limits<float>::epsilon() * 0.5);
+		float t1 = std::numeric_limits<float>::max();
+		#endif
+
+		gamma3 = (3*epsi)/(1 - 3*epsi);
 
 		for (int i = 0; i < 3; ++i)
 		{
             // Update interval for _i_th bounding box slab
-			float invRayDir = 1.f / ray.d[i];
+			float invRayDir = 1.F / ray.d[i];
 			float tNear = (pMin[i] - ray.o[i]) * invRayDir;
 			float tFar  = (pMax[i] - ray.o[i]) * invRayDir;
+			
 			// Update parametric interval from slab intersection $t$s
 			if (tNear > tFar) {swap(&tNear, &tFar);}
-			//tFar *= 1 + 2 * ( (3*epsi)/( 1-(3*epsi) ) );
+			
+			// Update _tFar_ to ensure robust ray--bounds intersection
+			tFar *= 1 + 2*gamma3;
 			t0 = tNear > t0 ? tNear : t0;
 			t1 = tFar  < t1 ? tFar  : t1;
 			if (t0 > t1) {return false;}

@@ -1804,6 +1804,8 @@ def InitConst(surf, env, NATM, NOCE, mod,
             copy_to_device('CFTXd', cusForward.dict['CFTX'], np.float32)
             copy_to_device('CFTYd', cusForward.dict['CFTY'], np.float32)
             copy_to_device('LMODEd', 2, np.int32)
+        if (cusForward == None):
+            copy_to_device('LMODEd', 0, np.int32)
         
 def init_profile(wl, prof, kind, OPT3D=False, dtype=type_Profile):
     '''
