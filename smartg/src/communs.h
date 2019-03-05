@@ -105,8 +105,9 @@
 #define ZXY  5
 #define ZYX  6
 
-#define HELIOSTAT 1
-#define RECEIVER  2 
+#define PERFECT_MIRROR -1
+#define HELIOSTAT       1
+#define RECEIVER        2
 #endif
 
 // pseudo-random number generator
@@ -326,19 +327,21 @@ struct IGeo
 		reflectivity = -1.;
 		roughness = -1.;
 		shadow = -1;
+		nind = -1;
 		type = -1.;
 		mvR = make_float3(0, 0, 0);
 		normalBase = make_float3(0., 0., 0.);
 	}
 
 	__device__ IGeo(float3 nn, int mat, float ref, float rough, int shd,
-					int typ, float3 mvRt, float3 nB)
+					float n, int typ, float3 mvRt, float3 nB)
 	{
 		normal = nn;
 		material = mat;
 		reflectivity = ref;
 		roughness = rough;
 		shadow = shd;
+		nind = n;
 		type = typ;
 		mvR = mvRt;
 		normalBase = nB;
@@ -350,6 +353,7 @@ struct IGeo
 	float reflectivity; /* albedo of the object           */
 	float roughness;    /* roughness of the object        */
 	int shadow;         /* shadow option of the object    */
+	float nind;         /* refractive index of the object */
     Transform mvTF;     /* transformation of the object   */
 	int type;           /* 1 = reflector, 2 = receiver    */
 	float3 mvR;         /* rotation angles in x, y, z     */
@@ -366,6 +370,8 @@ struct IObjets {
 	float roughAR;  /* roughness of the materialAR         */
 	int shdAV;      /* shadow option of the materialAV     */
 	int shdAR;      /* shadow option of the materialAR     */
+	float nindAV;   /* refractive index of the materialAV  */
+	float nindAR;   /* refractive index of the materialAR  */
 	
 	float p0x;      /* \             \                     */
 	float p0y;      /*  | point p0    \                    */

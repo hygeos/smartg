@@ -3333,4 +3333,17 @@ inline __device__ float3 specularFNC(float3 vi, float3 n, float cTheta)
 	return vi + (2.F*cTheta)*n;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// perfect_mirrorRM function
+////////////////////////////////////////////////////////////////////////////////
+inline __device__ float4x4 perfect_mirrorRF()
+{
+	// Fill and return the reflection matrix of a perfect mirror
+	return make_float4x4(
+		1.F, 0. , 0.  , 0.  ,
+		0. , 1.F, 0.  , 0.  ,
+		0. , 0. , -1.F, 0.  ,
+		0. , 0. , 0.  , -1.F 
+		);
+}
 #endif

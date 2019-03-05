@@ -115,16 +115,22 @@ class Mirror(object):
     reflectivity : the albedo of the object
     roughness    : equal to alpha parameter according to Walter et al. 2007
     shadow       : Shadowing-Masking effect
+    nind         : relative refractive index air/material, by default
+                   is None -> case of perfect mirror (nind = infinity) 
     '''
-    def __init__(self, reflectivity = 1., roughness = 0., shadow = False):
+    def __init__(self, reflectivity = 1., roughness = 0., shadow = False, nind = None):
         self.reflectivity = reflectivity
-        self.roughness = roughness
-        self.shadow = shadow
+        self.roughness    = roughness
+        self.shadow       = shadow
+        if nind is None:
+            self.nind     = -1
+        else:
+            self.nind     = nind
 
     def __str__(self):
         return 'Material -> Mirror : ' \
             'reflectivity=' + str(self.reflectivity) + ', roughness=' + str(self.roughness) \
-            + ', shadow=' + str(self.shadow)
+            + ', shadow=' + str(self.shadow) + ', nind=' + str(self.nind)
 
 class LambMirror(object):
     '''

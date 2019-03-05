@@ -4214,8 +4214,8 @@ __device__ void Obj3DRoughSurf(Photon* ph, IGeo* geoS, struct RNG_State *rngstat
 	float tTheta_m;                        // - tan(theta_m)
 	float cTheta_m, sTheta_m;              // - cos and sin of theta_m
 	float cPhi_m, sPhi_m;                  // - cos and sin of phi_m
+	float nind = geoS->nind;               // - relative refractive index air/obj
 
-	// alpha = sqrtf(0.003F + 0.00512f *WINDSPEEDd);
 	// The initial normal of the obj before transfo is colinear to the z axis,
 	// then create the transfo inverse for the direction v_i and simplify sampling
 	Transform transfo=geoS->mvTF, invTransfo;
@@ -4262,9 +4262,12 @@ __device__ void Obj3DRoughSurf(Photon* ph, IGeo* geoS, struct RNG_State *rngstat
 
 	// Reflection matrix R
 	float4x4 R; float sR;
-	//R = computeRefMat(1.33, cTheta_i, sTheta_i);
-	refMat(1.33, cTheta_i, sTheta_i, &R, &sR);
-
+	if (nind == PERFECT_MIRROR) {R = perfect_mirrorRF(); sR = 1.F;}
+	else
+	{
+		//R = computeRefMat(1.33, cTheta_i, sTheta_i);
+		refMat(nind, cTheta_i, sTheta_i, &R, &sR);
+	}
 	// Muller matrix for reflection
 	float4x4 Mu_r; // Mu_r = (1/scaR)*R*L -> Ramon et al. 2019
 	Mu_r = mul(R, L); // relfection totale scaR = 1
@@ -5726,6 +5729,7 @@ __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo 
 					GeoV->reflectivity = ObjT[i].reflectAV;
 					GeoV->roughness = ObjT[i].roughAV;
 					GeoV->shadow = ObjT[i].shdAV;
+					GeoV->nind = ObjT[i].nindAV;
 				}
 				else
 				{
@@ -5733,6 +5737,7 @@ __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo 
 					GeoV->reflectivity = ObjT[i].reflectAR;
 					GeoV->roughness = ObjT[i].roughAR;
 					GeoV->shadow = ObjT[i].shdAR;
+					GeoV->nind = ObjT[i].nindAR;
 				}
 				*(phit) = tempPhit;
 				GeoV->mvTF = Ti;
