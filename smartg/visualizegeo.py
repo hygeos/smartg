@@ -116,9 +116,11 @@ class Mirror(object):
     roughness    : equal to alpha parameter according to Walter et al. 2007
     shadow       : Shadowing-Masking effect
     nind         : relative refractive index air/material, by default
-                   is None -> case of perfect mirror (nind = infinity) 
+                   is None -> case of perfect mirror (nind = infinity)
+    distribution : for now two choices --> "Beckmann" or "GGX"
     '''
-    def __init__(self, reflectivity = 1., roughness = 0., shadow = False, nind = None):
+    def __init__(self, reflectivity = 1., roughness = 0., shadow = False, nind = None,
+                 distribution = "Beckmann"):
         self.reflectivity = reflectivity
         self.roughness    = roughness
         self.shadow       = shadow
@@ -126,11 +128,18 @@ class Mirror(object):
             self.nind     = -1
         else:
             self.nind     = nind
+        if distribution == "Beckmann":
+            self.distribution = 1
+        elif distribution == "GGX":
+            self.distribution = 2
+        else:
+            NameError('Please choose a distribution between str(Beckmann) or str(GGX)')
 
     def __str__(self):
         return 'Material -> Mirror : ' \
             'reflectivity=' + str(self.reflectivity) + ', roughness=' + str(self.roughness) \
-            + ', shadow=' + str(self.shadow) + ', nind=' + str(self.nind)
+            + ', shadow=' + str(self.shadow) + ', nind=' + str(self.nind) \
+            + ', distribution=' + str(self.distribution)
 
 class LambMirror(object):
     '''

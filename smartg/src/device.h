@@ -233,7 +233,8 @@ __device__ double DatomicAdd(double* address, double val);
 __device__ float get_OD(int , struct Profile ) ;  
 
 __device__ float Lambda(float , float ) ;
-__device__ float G1W(float , float ) ;
+__device__ float G1B(float , float ) ;
+__device__ float G1GGX(float , float ) ;
 __device__ float LambB(float , float );
 __device__ float LambdaM(float , float ) ;
 

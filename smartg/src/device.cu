@@ -183,10 +183,9 @@ extern "C" {
 	while (*nThreadsActive > 0) {
 		iloop += 1;
 		
-
+		#ifdef OBJ3D
 		/* ************************************************************************************************** */
 		/* si on simule des objs on utilise cette astuce pour lancer exactement le nombre souhaité de photons */
-		#ifdef OBJ3D
 		// Si le nombre de ph lancés NBLOOPd > 256000 et que le compteur devient > (NBLOOPd-256000) alors
 		// on commence à diminuer le nombre de threads actif... ici à 999+1 = 1000 threads actif
 		if ((NBLOOPd > 50000) && idx > 999 && this_thread_active && Counter[0] >= (NBLOOPd-50000) && *nThreadsActive > 1000)
@@ -4227,15 +4226,17 @@ __device__ void Obj3DRoughSurf(Photon* ph, IGeo* geoS, struct RNG_State *rngstat
 	// ***********************************************************************************
 	// Beckmann sampling of theta_m, phi_m to get cTheta_i, sTheta_i -> Walter et al. 2007
 	// ***********************************************************************************
-	int iter=0;
+	int iter=0; float rand1, rand2;
 	cTheta_i = -1.F;
 	while (cTheta_i <= 0)
 	{
 		iter++;
 		if (iter >= 100) {ph->loc = NONE; return;}
-		tTheta_m = alpha*sqrtf(-__logf(RAND) );
+		rand1 = RAND; rand2 = RAND;
+		if (geoS->dist == DIST_GGX) {tTheta_m = fdividef(alpha*sqrtf(rand1), sqrtf(1 - rand1));}
+		else {tTheta_m = alpha*sqrtf(-__logf(rand1) );} //Beckmann
 		theta_m = atanf(tTheta_m);
-		phi_m   = DEUXPI * RAND;
+		phi_m   = DEUXPI * rand2;
 		
 		// find the normal of the microfacet m thanks to thata_m and phi_m sampling
 		cTheta_m = __cosf(theta_m); sTheta_m = __sinf(theta_m);
@@ -4280,7 +4281,7 @@ __device__ void Obj3DRoughSurf(Photon* ph, IGeo* geoS, struct RNG_State *rngstat
 	// Reflection of the direction v and perp dir u
 	// ********************************************
 	float3 v_o, u_o; // outcoming directions
-	v_o = specularFNC(ph->v, microFnormal_m, cTheta_i);
+	v_o = specularFNC(v_i, microFnormal_m, cTheta_i);
 	u_o = (microFnormal_m-cTheta_i*v_o)/sTheta_i;
 	// ********************************************
 
@@ -4298,7 +4299,8 @@ __device__ void Obj3DRoughSurf(Photon* ph, IGeo* geoS, struct RNG_State *rngstat
 		int xsiPi, xsiPo; // positive characteristic function	
 		xsiPi = ( __fdividef(dotViM, dotViN) > 0) ? 1 : 0;
 		if (xsiPi == 0) { ph->loc = ABSORBED; return; }
-		G1_i = G1W(alpha, tTheta_iN);
+		if (geoS->dist == DIST_GGX){G1_i = G1GGX(alpha*alpha, tTheta_iN*tTheta_iN);}
+		else {G1_i = G1B(alpha, tTheta_iN);} // Beckmann
 		
 		float G1_o, dotVoN, cTheta_oN, sTheta_oN, tTheta_oN;
 		dotVoN = dot(v_o, macroFnormal_n);
@@ -4307,8 +4309,9 @@ __device__ void Obj3DRoughSurf(Photon* ph, IGeo* geoS, struct RNG_State *rngstat
 		tTheta_oN = __fdividef(sTheta_oN, cTheta_oN);	
 		xsiPo = ( __fdividef(dot(v_o, microFnormal_m), dotVoN) > 0) ? 1 : 0;
 		if (xsiPo == 0) { ph->loc = ABSORBED; return; }
-		G1_o = G1W(alpha, tTheta_oN);
-
+		if (geoS->dist == DIST_GGX){G1_o = G1GGX(alpha*alpha, tTheta_oN*tTheta_oN);}
+		else{G1_o = G1B(alpha, tTheta_oN);} // Beckmann
+		
 		// Several methods possible, we choose to compute from G1
 		// Bellow best approximation than G2 = G1_i*G1_o
 		// G2 = 1/(1 + LambO + LambI) and G1_[i or o] = 1/(1 + Lamb[i or o]) then
@@ -5482,14 +5485,19 @@ __device__ float Lambda(float avz, float sig) {
     return l;
 }
 
-__device__ float G1W(float alpha, float tanTheta) {
-	// approx proposed by Walter et al. 2007
+__device__ float G1B(float alpha, float tanTheta) {
+	// approx proposed by Walter et al. 2007 for Beckmann dist
 	float a, a2;
 	a = __fdividef(1.F, alpha*tanTheta);
 	a2 = a*a;
 
 	if (a >= 1.6f) return 1.F;
 	return ( (3.535F*a + 2.181F*a2)/(1 + 2.276F*a + 2.577F*a2) );
+}
+
+__device__ float G1GGX(float alpha2, float tan2Theta) {
+	// proposed by Walter et al. 2007 for GGX dist
+	return fdividef(2, 1 + sqrtf(1 + alpha2*tan2Theta ));
 }
 
 __device__ float LambB(float alpha, float tanTheta) {
@@ -5730,6 +5738,7 @@ __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo 
 					GeoV->roughness = ObjT[i].roughAV;
 					GeoV->shadow = ObjT[i].shdAV;
 					GeoV->nind = ObjT[i].nindAV;
+					GeoV->dist = ObjT[i].distAV;
 				}
 				else
 				{
@@ -5738,6 +5747,7 @@ __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo 
 					GeoV->roughness = ObjT[i].roughAR;
 					GeoV->shadow = ObjT[i].shdAR;
 					GeoV->nind = ObjT[i].nindAR;
+					GeoV->dist = ObjT[i].distAR;
 				}
 				*(phit) = tempPhit;
 				GeoV->mvTF = Ti;

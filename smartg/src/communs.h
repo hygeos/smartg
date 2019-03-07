@@ -105,9 +105,13 @@
 #define ZXY  5
 #define ZYX  6
 
-#define PERFECT_MIRROR -1
+#define PERFECT_MIRROR -1.F
+
 #define HELIOSTAT       1
 #define RECEIVER        2
+
+#define DIST_BECKMANN   1
+#define DIST_GGX        2
 #endif
 
 // pseudo-random number generator
@@ -328,13 +332,14 @@ struct IGeo
 		roughness = -1.;
 		shadow = -1;
 		nind = -1;
+		dist = -1;
 		type = -1.;
 		mvR = make_float3(0, 0, 0);
 		normalBase = make_float3(0., 0., 0.);
 	}
 
 	__device__ IGeo(float3 nn, int mat, float ref, float rough, int shd,
-					float n, int typ, float3 mvRt, float3 nB)
+					float n, int dd, int typ, float3 mvRt, float3 nB)
 	{
 		normal = nn;
 		material = mat;
@@ -342,6 +347,7 @@ struct IGeo
 		roughness = rough;
 		shadow = shd;
 		nind = n;
+		dist = dd;
 		type = typ;
 		mvR = mvRt;
 		normalBase = nB;
@@ -354,6 +360,7 @@ struct IGeo
 	float roughness;    /* roughness of the object        */
 	int shadow;         /* shadow option of the object    */
 	float nind;         /* refractive index of the object */
+	int dist;           /* distribution: Beckmann, GGX,.. */
     Transform mvTF;     /* transformation of the object   */
 	int type;           /* 1 = reflector, 2 = receiver    */
 	float3 mvR;         /* rotation angles in x, y, z     */
@@ -372,6 +379,8 @@ struct IObjets {
 	int shdAR;      /* shadow option of the materialAR     */
 	float nindAV;   /* refractive index of the materialAV  */
 	float nindAR;   /* refractive index of the materialAR  */
+	int distAV;     /* distribution used for materialAV    */
+	int distAR;     /* distribution used for materialAR    */
 	
 	float p0x;      /* \             \                     */
 	float p0y;      /*  | point p0    \                    */
