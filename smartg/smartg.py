@@ -18,7 +18,7 @@ from os.path import dirname, realpath, join, exists
 from warnings import warn
 from smartg.albedo import Albedo_cst
 from smartg.tools.progress import Progress
-from smartg.tools.luts import MLUT
+from luts.luts import MLUT
 from scipy.interpolate import interp1d
 import subprocess
 from collections import OrderedDict

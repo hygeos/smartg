@@ -9,7 +9,7 @@ warnings.simplefilter("ignore",DeprecationWarning)
 from pylab import figure, subplot2grid, tight_layout, setp, subplots, xlabel, ylabel, FormatStrFormatter
 import numpy as np
 np.seterr(invalid='ignore', divide='ignore') # ignore division by zero errors
-from smartg.tools.luts import plot_polar, transect2D, Idx
+from luts.luts import plot_polar, transect2D, Idx
 from smartg.atmosphere import diff1
 from smartg.water import diff2
 

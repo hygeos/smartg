@@ -4,7 +4,7 @@
 
 from __future__ import print_function, division, absolute_import
 import numpy as np
-from smartg.tools.luts import LUT, MLUT
+from luts.luts import LUT, MLUT
 from os.path import dirname, join
 from smartg.config import dir_libradtran_reptran
 from scipy.interpolate import interp1d

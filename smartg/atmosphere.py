@@ -6,7 +6,7 @@ from __future__ import print_function, division, absolute_import
 import numpy as np
 from os.path import join, dirname, exists, basename
 from glob import glob
-from smartg.tools.luts import MLUT, LUT, Idx
+from luts.luts import MLUT, LUT, Idx
 from smartg.tools.phase import calc_iphase
 try:
     from smartg.tools.third_party_utils import change_altitude_grid

@@ -19,7 +19,6 @@ else:
 from smartg.smartg import Smartg
 from smartg.smartg import LambSurface, RoughSurface, CusForward
 from smartg.atmosphere import AtmAFGL, AeroOPAC
-from smartg.tools.luts import merge
 from smartg.water import IOP_1
 
 # from smartg import Smartg, reptran_merge
@@ -27,7 +26,7 @@ from smartg.water import IOP_1
 # from smartg import Profile, AeroOPAC, CloudOPAC, IOP_SPM, IOP_MM, IOP_AOS_WATER
 
 from smartg.tools.tools import SpecInt, SpecInt2, Irr
-from smartg.tools.luts import LUT, MLUT, Idx, merge, read_mlut_hdf, plot_polar, read_mlut
+from luts.luts import LUT, MLUT, Idx, merge, read_mlut_hdf, plot_polar, read_mlut
 from smartg.tools.smartg_view import smartg_view, input_view
 import numpy as np
 from warnings import warn

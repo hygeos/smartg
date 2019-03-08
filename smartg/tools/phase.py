@@ -4,7 +4,7 @@
 from __future__ import print_function, division
 from numpy import sin, cos, pi
 import numpy as np
-from .luts import LUT
+from luts.luts import LUT
 
 def fournierForand(ang, n, mu):
     '''

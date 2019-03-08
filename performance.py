@@ -17,7 +17,7 @@ from matplotlib.colors import LogNorm
 from smartg.smartg import Smartg
 from smartg.smartg import LambSurface, RoughSurface
 from smartg.atmosphere import AtmAFGL, AeroOPAC, CloudOPAC
-from smartg.tools.luts import merge
+from luts.luts import merge
 from smartg.water import IOP_1
 from smartg.tools.smartg_view import smartg_view, input_view
 
@@ -544,7 +544,7 @@ if __name__ == '__main__' and '__file__' in globals():
                 
             from smartg.smartg import Smartg, LambSurface, RoughSurface
             from smartg.atmosphere import AtmAFGL, AeroOPAC, CloudOPAC
-            from smartg.tools.luts import merge
+            from luts.luts import merge
             from smartg.water import IOP_1
             from smartg.tools.smartg_view import smartg_view, input_view
                 
@@ -647,7 +647,7 @@ if __name__ == '__main__' and '__file__' in globals():
                 
                 from smartg.smartg import Smartg, LambSurface, RoughSurface
                 from smartg.atmosphere import AtmAFGL, AeroOPAC, CloudOPAC
-                from smartg.tools.luts import merge
+                from luts.luts import merge
                 from smartg.water import IOP_1
                 from smartg.tools.smartg_view import smartg_view, input_view
                 

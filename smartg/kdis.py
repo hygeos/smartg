@@ -3,7 +3,7 @@
 
 from __future__ import print_function, division, absolute_import
 import numpy as np
-from smartg.tools.luts import LUT, MLUT
+from luts.luts import LUT, MLUT
 import sys
 from os.path import dirname, join, exists
 from scipy.interpolate import interp1d

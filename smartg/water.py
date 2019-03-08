@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import print_function, division, absolute_import
-from smartg.tools.luts import MLUT, LUT, Idx
+from luts.luts import MLUT, LUT, Idx
 from smartg.atmosphere import diff1
 import numpy as np
 from warnings import warn

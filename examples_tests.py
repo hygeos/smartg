@@ -8,7 +8,7 @@ SMART-G examples
 from __future__ import print_function, division, absolute_import
 from smartg.smartg import Smartg, LambSurface, RoughSurface
 from smartg.atmosphere import AtmAFGL, AeroOPAC
-from smartg.tools.luts import merge
+from luts.luts import merge
 from smartg.reptran import REPTRAN, reduce_reptran
 from smartg.water import IOP_1
 import numpy as np

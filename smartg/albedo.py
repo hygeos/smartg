@@ -3,7 +3,7 @@
 
 from __future__ import print_function, division, absolute_import
 import numpy as np
-from smartg.tools.luts import LUT, Idx
+from luts.luts import LUT, Idx
 
 class Albedo_cst(object):
     '''

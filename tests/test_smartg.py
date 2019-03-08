@@ -11,7 +11,7 @@ from smartg.smartg import Smartg, RoughSurface, LambSurface
 from smartg.smartg import Environment, Albedo_cst
 from smartg.atmosphere import AtmAFGL, AeroOPAC, CloudOPAC, read_phase
 from smartg.water import IOP_Rw, IOP_1, IOP
-from smartg.tools.luts import read_mlut, Idx
+from luts.luts import read_mlut, Idx
 import numpy as np
 from itertools import product
 from unittest import skip
