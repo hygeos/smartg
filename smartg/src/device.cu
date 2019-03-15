@@ -4648,7 +4648,10 @@ __device__ void countPhoton(Photon* ph,
         void *tabPhotons, void *tabDist, void *tabHist, unsigned long long *NPhotonsOut
         ) {
 
-    if (count_level < 0 || ph->loc==REMOVED || ph->loc==ABSORBED) {
+    // test single scattering
+    if (count_level < 0 || ph->loc==REMOVED || ph->loc==ABSORBED ||
+                                               ((ph->nint!=1) && SSd) ) {
+    //if (count_level < 0 || ph->loc==REMOVED || ph->loc==ABSORBED) {
         // don't count anything
         return;
     }

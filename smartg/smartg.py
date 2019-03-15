@@ -499,9 +499,10 @@ class Smartg(object):
              RTER=6371., wl_proba=None,
              NBTHETA=45, NBPHI=90, NF=1e6,
              OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
-             NBLOOP=None, progress=True,
+             NBLOOP=None, progress=True, 
              le=None, flux=None, stdev=False, BEER=1, RR=1, WEIGHTRR=0.1, SZA_MAX=90., SUN_DISC=0,
-             sensor=None, refraction=False, reflectance=True, myObjects=None, interval = None, IsAtm = 1, cusForward = None):
+             sensor=None, refraction=False, reflectance=True, myObjects=None, interval = None,
+             IsAtm = 1, cusForward = None, SS=False):
         '''
         Run a SMART-G simulation
 
@@ -626,6 +627,8 @@ class Smartg(object):
 
             - cusForward : None is the default mode (sun is a ponctual source targeting the origin (0,0,0)), else it
                            enable to use the RF or FF launching mode (see the class CusForward) --> cusForward=CusForward(...)
+
+            - SS : Single Scattering only: Default False
 
         Return value:
         ------------
@@ -1218,13 +1221,14 @@ class Smartg(object):
         HORIZ = 1
         if (not self.pp and not reflectance): HORIZ = 0
 
+
         # initialization of the constants
         InitConst(surf, env, NATM, NOCE, self.mod,
                   NBPHOTONS, NBLOOP, THVDEG, DEPO,
                   XBLOCK, XGRID, NLAM, SIM, NF,
                   NBTHETA, NBPHI, OUTPUT_LAYERS,
                   RTER, LE, ZIP, FLUX, NLVL, NPSTK,
-                  NWLPROBA, BEER, RR, WEIGHTRR, NLOW, NJAC, 
+                  NWLPROBA, BEER, SS, RR, WEIGHTRR, NLOW, NJAC, 
                   NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusForward, nObj,
                   Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, vSun, HIST)
 
@@ -1727,7 +1731,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
               NBPHOTONS, NBLOOP, THVDEG, DEPO,
               XBLOCK, XGRID,NLAM, SIM, NF,
               NBTHETA, NBPHI, OUTPUT_LAYERS,
-              RTER, LE, ZIP, FLUX, NLVL, NPSTK, NWLPROBA, BEER, RR, 
+              RTER, LE, ZIP, FLUX, NLVL, NPSTK, NWLPROBA, BEER, SS, RR, 
               WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusForward, nObj,
               Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, vSun, HIST) :
     """
@@ -1773,6 +1777,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
     copy_to_device('NLVLd', NLVL, np.int32)
     copy_to_device('NPSTKd', NPSTK, np.int32)
     copy_to_device('BEERd', BEER, np.int32)
+    copy_to_device('SSd', 1 if SS else 0, np.int32)
     copy_to_device('RRd', RR, np.int32)
     copy_to_device('WEIGHTRRd', WEIGHTRR, np.float32)
     copy_to_device('NLOWd', NLOW, np.int32)
