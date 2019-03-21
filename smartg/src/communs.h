@@ -232,7 +232,7 @@ public:
 	#ifdef OBJ3D
 	int direct;
     int H, E, S;
-	float weight_loss[4];
+	float weight_loss[5];
 	#endif
 private:
 };

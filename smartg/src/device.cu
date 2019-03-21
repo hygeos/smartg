@@ -729,7 +729,7 @@ extern "C" {
         // -> in OBJSURF
         if(ph.loc == OBJSURF)
 		{
-			if (geoStruc.type == 2) // this is a receiver
+			if (geoStruc.type == RECEIVER) // this is a receiver
 			{ countPhotonObj3D(&ph, tabObjInfo, &geoStruc, nbPhCat, wPhCat);}
 
 			// For losses count
@@ -766,6 +766,10 @@ extern "C" {
 			else if (geoStruc.material == 2) // Matte
 			{
 				ph.loc = ABSORBED;
+				ph.weight = 0.F;
+				if (geoStruc.type == HELIOSTAT) ph.H+=1;
+				else if (geoStruc.type == RECEIVER) ph.E+=1;
+				ph.weight_loss[0] = 0.F;
 			} // End Matte
 			else if (geoStruc.material == 3) // Mirror
 			{	
@@ -799,12 +803,15 @@ extern "C" {
 			__syncthreads();
 
 			ph.weight_loss[2] = ph.weight; // Weight value after relfection
-			if (geoStruc.type == 1 and ph.direct == 0 and ph.loc != REMOVED) // this is a reflector
+			if (ph.H > 1 and geoStruc.type != RECEIVER) ph.weight_loss[4] = ph.weight_loss[3];
+			if (geoStruc.type == HELIOSTAT and ph.direct == 0 and ph.loc != REMOVED) // this is a reflector
 			{
-				if ( geoTestRec(ph.pos, ph.v, ph.locPrev, myObjets) )
+				if ( ph.loc == ABSORBED)
+					ph.weight_loss[3] = 0.F;
+				else if ( geoTestRec(ph.pos, ph.v, ph.locPrev, myObjets) )
 					ph.weight_loss[3] = ph.weight;
 				else
-					ph.weight_loss[3] = 0;
+					ph.weight_loss[3] = 0.F;
 				countLoss(&ph, &geoStruc, wPhLoss, tab_sensor);
 			}
 			
@@ -1005,6 +1012,9 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 	ph->S = 0;
 	ph->weight_loss[0] = 0.F;
 	ph->weight_loss[1] = 0.F;
+	ph->weight_loss[2] = 0.F;
+	ph->weight_loss[3] = 0.F;
+	ph->weight_loss[4] = 0.F;
     #endif
 	
     ph->nint = 0;
@@ -2279,6 +2289,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 				tauHit += (length(phit, oldP)/fabs(prof_atm[ilayer2 - 1].z - prof_atm[ilayer2].z))*delta_i;
 			}
 
+
 			// if tauHit (optical distance to hit the geometry) < tauR, then: there is interaction.
 			if (tauHit < tauR)
 			{
@@ -2287,13 +2298,22 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 				else
 				{ // We compute the cumulated absorption OT at the new postion of the photon
 					// see move photon paper eq 11
+					tauBis =  get_OD(BEERd, prof_atm[NATMd + ph->ilam *(NATMd+1)]) - (prev_tau + tauHit * ph->v.z);
+					delta_i= fabs(get_OD(BEERd, prof_atm[ilayer2+ph->ilam*(NATMd+1)]) - get_OD(BEERd, prof_atm[ilayer2-1+ph->ilam*(NATMd+1)]));
+					delta= fabs(tauBis - get_OD(BEERd, prof_atm[ilayer2-1+ph->ilam*(NATMd+1)])) ;
+					epsilon = __fdividef(delta, delta_i);
+					
 					ab = prof_atm[NATMd+ph->ilam*(NATMd+1)].OD_abs - 
 						(epsilon * (prof_atm[ilayer2+ph->ilam*(NATMd+1)].OD_abs - prof_atm[ilayer2-1+ph->ilam*(NATMd+1)].OD_abs) +
 						 prof_atm[ilayer2-1+ph->ilam*(NATMd+1)].OD_abs);
 					// absorption between start and stop
 					ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
 					ph->tau_abs = ab;
+					//ph->weight *= exp(-fabs(tauHit));
+					//prof_atm[NATMd + ph->ilam *(NATMd+1)].OD_sca;
+					
 				}
+				
 				ph->loc = OBJSURF;                      // update of the loc of the photon 
 				ph->tau = prev_tau + tauHit * ph->v.z;  // update the value of tau photon
 				ph->pos = phit;                         // update the position of the photon
@@ -4226,26 +4246,37 @@ __device__ void Obj3DRoughSurf(Photon* ph, IGeo* geoS, struct RNG_State *rngstat
 	// ***********************************************************************************
 	// Beckmann sampling of theta_m, phi_m to get cTheta_i, sTheta_i -> Walter et al. 2007
 	// ***********************************************************************************
-	int iter=0; float rand1, rand2;
-	cTheta_i = -1.F;
-	while (cTheta_i <= 0)
+	if (alpha > VALMIN) // Roughness > zero --> roughness surface
 	{
-		iter++;
-		if (iter >= 100) {ph->loc = NONE; return;}
-		rand1 = RAND; rand2 = RAND;
-		if (geoS->dist == DIST_GGX) {tTheta_m = fdividef(alpha*sqrtf(rand1), sqrtf(1 - rand1));}
-		else {tTheta_m = alpha*sqrtf(-__logf(rand1) );} //Beckmann
-		theta_m = atanf(tTheta_m);
-		phi_m   = DEUXPI * rand2;
+		int iter=0; float rand1, rand2;
+		cTheta_i = -1.F;
+		while (cTheta_i <= 0)
+		{
+			iter++;
+			if (iter >= 100) {ph->loc = NONE; return;}
+			rand1 = RAND; rand2 = RAND;
+			if (geoS->dist == DIST_GGX) {tTheta_m = fdividef(alpha*sqrtf(rand1), sqrtf(1 - rand1));}
+			else {tTheta_m = alpha*sqrtf(-__logf(rand1) );} //Beckmann
+			theta_m = atanf(tTheta_m);
+			phi_m   = DEUXPI * rand2;
 		
-		// find the normal of the microfacet m thanks to thata_m and phi_m sampling
-		cTheta_m = __cosf(theta_m); sTheta_m = __sinf(theta_m);
-		cPhi_m = __cosf(phi_m); sPhi_m = __sinf(phi_m);
-		microFnormal_m = make_float3( sTheta_m*cPhi_m,  sTheta_m*sPhi_m, cTheta_m );
+			// find the normal of the microfacet m thanks to thata_m and phi_m sampling
+			cTheta_m = __cosf(theta_m); sTheta_m = __sinf(theta_m);
+			cPhi_m = __cosf(phi_m); sPhi_m = __sinf(phi_m);
+			microFnormal_m = make_float3( sTheta_m*cPhi_m,  sTheta_m*sPhi_m, cTheta_m );
+			microFnormal_m *= sign;
+			cTheta_i = -dot( microFnormal_m, v_iInv);
+			cTheta_i = clamp(cTheta_i, -1.F, 1.F);
+		}
+	}
+	else // Roughness equal zero (or very very close) --> perfect flat surface
+	{
+		microFnormal_m = make_float3(0.F, 0.F, 1.F);
 		microFnormal_m *= sign;
 		cTheta_i = -dot( microFnormal_m, v_iInv);
 		cTheta_i = clamp(cTheta_i, -1.F, 1.F);
 	}
+	
 	// Inverse transfo has been used in sampling then come back to "real basis"
 	microFnormal_m = transfo(Normalf(microFnormal_m));
 	
@@ -4370,7 +4401,7 @@ __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, struct Sensor *
 								  dot(geoS->normalBase, make_float3(-DIRSXd, -DIRSYd, -DIRSZd)));
 	#ifdef DOUBLE
 	double weightE, weightS;
-	double weightECos, weightSpi;
+	double weightECos, weightSpi, weightBlo;
 	double *wPhLossC;
 	
 	wPhLossC = (double*)wPhLoss;              // - table comprinsing different weights
@@ -4379,22 +4410,31 @@ __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, struct Sensor *
 	weightECos = (double)ph->weight_loss[1];  // - incident flux before cos effect
 	weightSpi = (double)ph->weight_loss[3];   // - flux weight if the reflected flux Ws succeed the
 	                                          //   intersection test with the receiver (spi loss)
+	weightBlo = (double)ph->weight_loss[4];   // - Wspi which is blocked by another object
 	#else
 	float weightE, weightS;
-	float weightECos, weightSpi;
+	float weightECos, weightSpi, weightBlo;
 	float *wPhLossC;
+	
+	//prof_atm[NATMd + ph->ilam *(NATMd+1)].OD;
 	
 	wPhLossC = (float*)wPhLoss;
 	weightE = (float)ph->weight_loss[0];
 	weightS = (float)ph->weight_loss[2];
 	weightECos = (float)ph->weight_loss[1];
 	weightSpi = (float)ph->weight_loss[3];
+	weightBlo = (float)ph->weight_loss[4];
 	#endif
 
-	atomicAdd(wPhLossC, weightE);
-	atomicAdd(wPhLossC+1, weightECos);
-	atomicAdd(wPhLossC+2, weightS);
-	atomicAdd(wPhLossC+3, weightSpi);
+	if (ph->H < 2) // If this is the first time that a photon is reaching a heliostat
+	{
+		atomicAdd(wPhLossC, weightE);       // We
+		atomicAdd(wPhLossC+1, weightECos);  // We/cos(Theta)
+		atomicAdd(wPhLossC+2, weightS);     // Ws
+		atomicAdd(wPhLossC+3, weightSpi);   // Wspi
+	}
+	else
+		atomicAdd(wPhLossC+4, weightBlo);   // Wblo where blocking efficiency = (Wspi-Wblo)/Wspi
 }
 
 __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsigned long long *nbPhCat, void *wPhCat)

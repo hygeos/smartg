@@ -674,7 +674,7 @@ class Smartg(object):
             myObjects0 = np.zeros(nObj, dtype=type_IObjets, order='C')
             TC = None; nbCx = int(0); nbCy = int(0);
             pp1 = 0.; pp2 = 0.; pp3 = 0.; pp4 = 0.;
-            surfMir = 0.
+            surfMir = 0.; nb_H = 0; zAlt_H = 0.; totS_H = 0.;
 
             # Début de la boucle pour la prise en compte de tous les objets
             for i in range (0, nObj):
@@ -824,6 +824,15 @@ class Smartg(object):
                 # Deux possibilités : l'objet est un reflecteur ou un recepteur   
                 if (myObjects[i].name == "reflector"):
                     myObjects0['type'][i] = 1 # pour reconnaitre le reflect sur Cuda
+
+                    # If this is a heliostat (which at least a mirror material)
+                    if (  isinstance(myObjects[i].geo, Plane) and \
+                          ( isinstance(myObjects[i].materialAR, Mirror) or \
+                            isinstance(myObjects[i].materialAV, Mirror) )  ):
+                        nb_H += 1
+                        zAlt_H += myObjects[i].transformation.transz
+                        totS_H += abs(myObjects[i].geo.p1.x)*abs(myObjects[i].geo.p1.y)*4;
+                        
 
                     # Etape cruciale pour la visualisation des résulats (mode forward restreint uniquement)
                     if (cusForward is not None):
@@ -1253,19 +1262,22 @@ class Smartg(object):
         attrs.update(self.common_attrs)
 
         # En rapport avec l'implémentation des objets (permet le visuel des res du recept)
+        dicSTP = None # tuple incorporating parameters for Solar Tower Power applications
         if (TC is not None):
             if (cusForward is not None):
                 for i in range (0, 9):
                     cMatVisuRecep[i][:][:] = cMatVisuRecep[i][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
             else:
                 cMatVisuRecep[:][:][:] = cMatVisuRecep[:][:][:]
-                                                                   
+            MZAlt_H = zAlt_H/nb_H
+            dicSTP = {"nb_H":nb_H, "totS_H":totS_H, "surfTOA":surfMir, "MZAlt_H":MZAlt_H, "vSun":vSun}
+            
         # finalization
         output = finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl[:], NPhotonsInTot, errorcount, NPhotonsOutTot,
                           OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, prof_oc,
                           sigma, THVDEG, HORIZ, le=le, flux=flux, back=self.back, 
                           SZA_MAX=SZA_MAX, SUN_DISC=SUN_DISC, hist=hist, cMatVisuRecep=cMatVisuRecep,
-                          cats = categories, losses=vecLoss)
+                          cats = categories, losses=vecLoss, dicSTP=dicSTP)
         
         output.set_attr('processing time (s)', (datetime.now() - t0).total_seconds())
 
@@ -1320,7 +1332,7 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
              OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, prof_oc,
              sigma, THVDEG, HORIZ, le=None, flux=None,
              back=False, SZA_MAX=90., SUN_DISC=0, hist=False, cMatVisuRecep = None,
-             cats = None, losses = None):
+             cats = None, losses = None, dicSTP = None):
     '''
     create and return the final output
     '''
@@ -1589,13 +1601,39 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
                                              cats[27], cats[31]], dtype=np.float64), ['Categories'])
 
     if (losses is not None):
-        ncos = losses[0]/losses[1]
-        nref = losses[2]/losses[0]
-        nspi = losses[3]/losses[2]
+        # find the atm layer where the mean heliostats z altitude is located
+        Ci = 0
+        while(prof_atm.axis('z_atm')[Ci] > dicSTP["MZAlt_H"]):
+            Ci += 1
+        
+        # extinction optical thickness distance between start to end (here end is the mean z altitude of heliostats)
+        tau_ext = (prof_atm['OD_atm'].data[0][Ci] -  prof_atm['OD_atm'].data[0][Ci-1]) * (dicSTP["MZAlt_H"]/prof_atm.axis('z_atm')[Ci-1])
+        tau_ext = prof_atm['OD_atm'].data[0][Ci] - tau_ext
+
+        # Beer-Lamber law to find the transmisttance
+        Tr_tau = np.exp(-abs(tau_ext/-dicSTP["vSun"].z))
+        
+        # theoric computation of the total power collected by all the heliostats (here the sun flux density is equal to 1) 
+        P_pyt = Tr_tau*dicSTP["totS_H"]    
+
+        # collecte the weight from the photons reaching the heliostats if there is not cos effect (cuda), then convert to power
+        P_cud = (losses[1]*dicSTP["surfTOA"])/float(NPhotonsInTot)
+
+        # we can now compute the shadow efficiency
+        nsha = max(0, min(P_cud/P_pyt, 1))
+        
+        ncos = max(0, min(losses[0]/losses[1], 1))
+        nref = max(0, min(losses[2]/losses[0], 1))
+        nspi = max(0, min(losses[3]/losses[2], 1))
+        nblo = max(0, min((losses[3]-losses[4])/losses[3], 1))
+        natm = max(0, min(cats[4]/(losses[3]-losses[4]), 1))
+        m.add_dataset('n_sha', np.array([nsha], dtype=np.float64), ['Shadow Efficiency'])
         m.add_dataset('n_cos', np.array([ncos], dtype=np.float64), ['Cosine Efficiency'])
         m.add_dataset('n_ref', np.array([nref], dtype=np.float64), ['Reflection Efficiency'])
         m.add_dataset('n_spi', np.array([nspi], dtype=np.float64), ['Spillage Efficiency'])
-        m.add_dataset('n_opt', np.array([ncos*nref*nspi], dtype=np.float64), ['Optical Efficiency'])
+        m.add_dataset('n_atmo', np.array([natm], dtype=np.float64), ['Atmospheric Efficiency'])
+        m.add_dataset('n_blo', np.array([nblo], dtype=np.float64), ['blocking Efficiency'])
+        m.add_dataset('n_opt', np.array([nsha*ncos*nref*nspi*natm*nblo], dtype=np.float64), ['Optical Efficiency'])
         
     return m
 
@@ -2036,18 +2074,18 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         if double:
             wPhCat = gpuzeros(8, dtype=np.float64)  # vector to fill the weight of photons for each categories
             tabObjInfo = gpuzeros((9, nbCx, nbCy), dtype=np.float64)
-            wPhLoss = gpuzeros(4, dtype=np.float64)
+            wPhLoss = gpuzeros(5, dtype=np.float64)
         else:
             wPhCat = gpuzeros(8, dtype=np.float32)
             tabObjInfo = gpuzeros((9, nbCx, nbCy), dtype=np.float32)
-            wPhLoss = gpuzeros(4, dtype=np.float32)
+            wPhLoss = gpuzeros(5, dtype=np.float32)
         tabMatRecep = np.zeros((9, nbCx, nbCy), dtype=np.float64)  
         # vecteur comprenant : weightPhotons, nbPhoton, err% et errAbs pour
         # les 8 categories donc 4 x 8 valeurs = 32. vecCat[0], [1], [2] et [3]
         # pour la categorie 1 et ainsi de suite...
         vecCats = np.zeros((32), dtype=np.float64)
         # vector where: v[0]=Wi, v[1]=Wi/(n.dirS), v[2]=Wo, v[3]=Wr 
-        vecLoss = np.zeros((4), dtype=np.float64)
+        vecLoss = np.zeros((5), dtype=np.float64)
     else:
         nbPhCat = gpuzeros(1, dtype=np.uint64)
         if double:
