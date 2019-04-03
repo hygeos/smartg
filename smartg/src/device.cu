@@ -1142,7 +1142,10 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		){
         float POSZd_alt; 
         #ifdef SPHERIQUE
-        POSZd_alt = tab_sensor[ph->is].POSZ - RTER;
+        float3 rad = make_float3(tab_sensor[ph->is].POSX,
+                           tab_sensor[ph->is].POSY,
+                           tab_sensor[ph->is].POSZ);
+        POSZd_alt = length(rad) - RTER;
         #else
         POSZd_alt = tab_sensor[ph->is].POSZ;
         #endif
