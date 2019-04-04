@@ -244,27 +244,14 @@ extern "C" {
 		//
 		// -> if OCEAN or ATMOS
 		loc_prev = ph.loc;
-
-		/*if( (ph.loc == ATMOS) || (ph.loc == OCEAN)){
-        #ifdef SPHERIQUE
-        if (ph.loc == ATMOS)
-           move_sp(&ph, prof_atm, 0, 0 , &rngstate);
-        else 
-        #else
-
-        #ifdef ALT_PP
-        move_pp2(&ph, prof_atm, prof_oc, 0, 0 , &rngstate);
-        #else
-        move_pp(&ph, prof_atm, prof_oc, &rngstate
-				#ifdef OBJ3D
-				, &geoStruc, myObjets, tabObjInfo
-				#endif
-			);
-        #endif
-        #endif*/
         //--------------------------
 		if(ph.loc == ATMOS) {
            #ifdef SPHERIQUE
+           if ((ph.nint==0) && FFSd) {
+               copyPhoton(&ph, &ph_le);
+               move_sp(&ph_le, prof_atm, 1, UPTOA , &rngstate);
+               ph.taumax = ph_le.taumax;
+           }
            move_sp(&ph, prof_atm, 0, 0 , &rngstate);
            #else
             #ifdef ALT_PP
@@ -1245,6 +1232,10 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     ph->ith = 0;
     ph->iph = 0;
 
+    //
+    ph->taumax = 0.F;
+    //
+
 	#ifdef OBJ3D
 	THRAD = tab_sensor[ph->is].THDEG*DEUXPI/360.;
 	PHRAD = tab_sensor[ph->is].PHDEG*DEUXPI/360.;
@@ -1494,7 +1485,14 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
     if (ph->layer == 0) ph->layer = 1;
 
     // Random Optical Thickness to go through
-    if (!le) tauRdm = -logf(1.F-RAND);
+    //if (!le) tauRdm = -logf(1.F-RAND);
+    if (!le) {
+        if ((ph->taumax != 0.F) && (ph->nint==0)) {
+            tauRdm = -logf(1.F-RAND*(1.F-exp(-ph->taumax)));
+            ph->weight *= (1.F-exp(-ph->taumax));
+        }
+        else tauRdm = -logf(1.F-RAND);
+    }
     // if called with le mode, it serves to compute the transmission
     // from photon last intercation position to TOA, thus 
     // photon is forced to exit upward or downward and tauRdm is chosen to be an upper limit
@@ -1685,6 +1683,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
     if (le) {
         if (( (count_level==UPTOA)  && (ph->loc==SPACE ) ) || ( (count_level==DOWN0P) && (ph->loc==SURF0P) )) ph->weight *= __expf(-hph);
         else ph->weight = 0.;
+        if (ph->loc==SPACE) ph->taumax = hph;
     }
 
     if ((BEERd == 0) && (ph->loc == ATMOS)) ph->weight *= prof_atm[ph->layer+ilam].ssa;

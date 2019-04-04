@@ -183,6 +183,9 @@ public:
     int iph;
     int ith;
 
+    // Maximum OT along the path to space 
+    float taumax;
+
     // Sensor index
     int is;
 	

@@ -31,6 +31,7 @@ __device__ __constant__ int LEd;
 __device__ __constant__ int ZIPd;
 __device__ __constant__ int FLUXd;
 //__device__ __constant__ int MId;
+__device__ __constant__ int FFSd;
 __device__ __constant__ int SURd;
 __device__ __constant__ int BRDFd;
 __device__ __constant__ int DIOPTREd;

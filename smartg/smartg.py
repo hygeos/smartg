@@ -502,7 +502,7 @@ class Smartg(object):
              NBLOOP=None, progress=True, 
              le=None, flux=None, stdev=False, BEER=1, RR=1, WEIGHTRR=0.1, SZA_MAX=90., SUN_DISC=0,
              sensor=None, refraction=False, reflectance=True, myObjects=None, interval = None,
-             IsAtm = 1, cusForward = None, SS=False):
+             IsAtm = 1, cusForward = None, SS=False, FFS=False):
         '''
         Run a SMART-G simulation
 
@@ -629,6 +629,8 @@ class Smartg(object):
                            enable to use the RF or FF launching mode (see the class CusForward) --> cusForward=CusForward(...)
 
             - SS : Single Scattering only: Default False
+
+            - FFS : Forced First Scattering (for use in spherical limb geometry only): Default False
 
         Return value:
         ------------
@@ -1214,6 +1216,7 @@ class Smartg(object):
             if flux== 'spherical' : 
                 FLUX = 2
 
+
         if wl_proba is not None:
             assert wl_proba.dtype == 'int64'
             wl_proba_icdf = to_gpu(wl_proba)
@@ -1236,7 +1239,7 @@ class Smartg(object):
                   NBPHOTONS, NBLOOP, THVDEG, DEPO,
                   XBLOCK, XGRID, NLAM, SIM, NF,
                   NBTHETA, NBPHI, OUTPUT_LAYERS,
-                  RTER, LE, ZIP, FLUX, NLVL, NPSTK,
+                  RTER, LE, ZIP, FLUX, FFS, NLVL, NPSTK,
                   NWLPROBA, BEER, SS, RR, WEIGHTRR, NLOW, NJAC, 
                   NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusForward, nObj,
                   Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, vSun, HIST)
@@ -1769,7 +1772,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
               NBPHOTONS, NBLOOP, THVDEG, DEPO,
               XBLOCK, XGRID,NLAM, SIM, NF,
               NBTHETA, NBPHI, OUTPUT_LAYERS,
-              RTER, LE, ZIP, FLUX, NLVL, NPSTK, NWLPROBA, BEER, SS, RR, 
+              RTER, LE, ZIP, FLUX, FFS, NLVL, NPSTK, NWLPROBA, BEER, SS, RR, 
               WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusForward, nObj,
               Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, vSun, HIST) :
     """
@@ -1811,6 +1814,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
     copy_to_device('LEd', LE, np.int32)
     copy_to_device('ZIPd', ZIP, np.int32)
     copy_to_device('FLUXd', FLUX, np.int32)
+    copy_to_device('FFSd', 1 if FFS else 0, np.int32)
     #copy_to_device('MId', MI, np.int32)
     copy_to_device('NLVLd', NLVL, np.int32)
     copy_to_device('NPSTKd', NPSTK, np.int32)
