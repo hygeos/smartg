@@ -653,11 +653,11 @@ class Smartg(object):
         if ((myObjects is not None) or (cusForward is not None)):
             # Prendre en compte la direction du soleil avec l'angle zenithal et azimuth
             vSun = Vector(0., 0., -1.)
-            tSunTheta = Transform(); tSunPhi = Transform(); tSunThethaPhi = Transform();
-            tSunTheta = tSunThethaPhi.rotateY(THVDEG) 
-            tSunPhi = tSunThethaPhi.rotateZ(PHVDEG)   # pas vérifié car valeur gene = 0
-            tSunThethaPhi = tSunTheta * tSunPhi
-            vSun = tSunThethaPhi[vSun]
+            tSunTheta = Transform(); tSunPhi = Transform();
+            tSunTheta = tSunTheta.rotateY(THVDEG)
+            vSun = tSunTheta[vSun]
+            tSunPhi = tSunPhi.rotateZ(PHVDEG)
+            vSun = tSunPhi[vSun] 
             vSun = Normalize(vSun)
             
         if (myObjects is not None):

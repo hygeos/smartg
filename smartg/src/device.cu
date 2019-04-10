@@ -1306,7 +1306,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		/* ***************************************************************************************** */
         #ifdef DOUBLE
 		// Valeurs de l'angle zenital Theta et l'angle azimutal Phi (ici Phi pour l'instant imposé à 0)
-		double sunTheta = 180-tab_sensor[ph->is].THDEG, sunPhi=0;
+		double sunTheta = 180-tab_sensor[ph->is].THDEG, sunPhi=tab_sensor[ph->is].PHDEG-180;
 
         // One fixed direction (for radiance) inverse of the initiale pos of the obj
 		double3 vdouble = make_double3(0., 0., -1.);
@@ -1315,22 +1315,19 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		double3 udouble = make_double3(-1., 0., 0.);
 		
 		// Creation des tranformations (pour le calcul de la direction du photon)	
-		Transformd ThetaPhid, TThetad, TPhid;
-		TThetad = ThetaPhid.RotateY(sunTheta);
-		TPhid = ThetaPhid.RotateZ(sunPhi);
-		ThetaPhid = TThetad * TPhid; // Regroupement des transformations		
+		Transformd TThetad, TPhid;
+		TThetad = TThetad.RotateY(sunTheta);
+		TPhid = TPhid.RotateZ(sunPhi);		
 
 		// Application des transformation sur les vecteurs u et v en fonction de Theta et Phi
-		// int myV = 2;
-		//char myV[]="Vector";
-		vdouble = ThetaPhid(Vectord(vdouble));
-		udouble = ThetaPhid(Vectord(udouble));
+		vdouble = TPhid(   Vectord(  TThetad( Vectord(vdouble) )  )   );
+		udouble = TPhid(   Vectord(  TThetad( Vectord(udouble) )  )   );
 
 		ph->v = make_float3(float(vdouble.x), float(vdouble.y), float(vdouble.z));
 		ph->u = make_float3(float(udouble.x), float(udouble.y), float(udouble.z));
 		#else // IF NOT DOUBLE
 		// Valeurs de l'angle zenital Theta et l'angle azimutal Phi (ici Phi pour l'instant imposé à 0)
-		float sunTheta = 180-tab_sensor[ph->is].THDEG, sunPhi=0;
+		float sunTheta = 180-tab_sensor[ph->is].THDEG, sunPhi=tab_sensor[ph->is].PHDEG-180;
 
         // One fixed direction (for radiance)
 		float3 vfloat = make_float3(0., 0., -1.);
@@ -1339,14 +1336,13 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		float3 ufloat = make_float3(-1., 0., 0.);
 		
 		//Creation des tranformations (pour le calcul de la direction du photon)
-		Transform ThetaPhi, TTheta, TPhi;
-		TTheta = ThetaPhi.RotateY(sunTheta);
-		TPhi = ThetaPhi.RotateZ(sunPhi);
-		ThetaPhi = TTheta * TPhi; // Regroupement des transformations		
+		Transform TTheta, TPhi;
+		TTheta = TTheta.RotateY(sunTheta);
+		TPhi = TPhi.RotateZ(sunPhi);		
 
 		// Application des transformation sur les vecteurs u et v en fonction de Theta et Phi
-		vfloat = ThetaPhi(Vectorf(vfloat));
-		ufloat = ThetaPhi(Vectorf(ufloat));
+		vfloat = TPhi(   Vectorf(  TTheta( Vectorf(vfloat) )  )   );
+		ufloat = TPhi(   Vectorf(  TTheta( Vectorf(ufloat) )  )   );
 
 		ph->v = vfloat;
 		ph->u = ufloat;
@@ -4485,12 +4481,15 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
     #ifdef DOUBLE
 	double *tabCountObj;
 	double *wPhCatC;
+	double4 stokes;
 	double weight;
 
 	tabCountObj = (double*)tabObjInfo;
 	wPhCatC = (double*)wPhCat;
+	stokes = make_double4(ph->stokes.x, ph->stokes.y, ph->stokes.z, ph->stokes.w);
 	weight = (double)ph->weight;
-
+	weight = weight * double(stokes.x + stokes.y);
+	
 	if(isnan(weight))
 	{
 		printf("Care weight is nan !! \n");
@@ -4617,7 +4616,8 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 	tabCountObj = (float*)tabObjInfo;
 	wPhCatC = (float*)wPhCat;
 	weight = (float)ph->weight;
-
+	weight = weight * float(ph->stokes.x + ph->stokes.y);
+	
 	if(isnan(weight))
 	{
 		printf("Care weight is nan !! \n");

@@ -98,7 +98,7 @@ class Transform(object):
 
     def __mul__(self, T): 
         if (type(T) == Transform):
-            return Transform(np.dot(self.m, T.m), np.dot(T.mInv, self.mInv))
+            return Transform(np.dot(self.m, T.m), np.dot(self.mInv, T.mInv))
         else:
             raise NameError('mul accepted only with Transform')
 

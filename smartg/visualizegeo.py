@@ -352,20 +352,23 @@ def ComputeSunDir(THEDEG=0, PHIDEG=0):
     """
     # Initial position = normalized vector tagerting bottom
     vIni = Vector(0., 0., -1.)
-    # creation of tranformations
-    tSunTheta = Transform(); tSunPhi = Transform(); tSunThethaPhi = Transform();
-    # Rotation in y axis with zenith angle
-    tSunTheta = tSunThethaPhi.rotateY(THEDEG)
-    # Rotation in z axis with azimuth angle
-    tSunPhi = tSunThethaPhi.rotateZ(PHIDEG)  # not verified, value usually = 0
-    tSunThethaPhi = tSunTheta * tSunPhi
     
-    vSun = tSunThethaPhi[vIni]
+    # creation of tranformation
+    tSunTheta = Transform(); tSunPhi = Transform()
+    
+    # Rotation in y axis with zenith angle
+    tSunTheta = tSunTheta.rotateY(THEDEG)
+    vSun = tSunTheta[vIni]
+    
+    # Rotation in z axis with azimuth angle
+    tSunPhi = tSunPhi.rotateZ(PHIDEG)
+    vSun = tSunPhi[vSun]
     vSun = Normalize(vSun)
+    
     return vSun
 
 
-def Analyse_create_entity(ENTITY, THEDEG = None, PLANEDM = 'SM'):
+def Analyse_create_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM'):
     '''
     Definition of Analyse_create_entity
 
@@ -420,8 +423,7 @@ def Analyse_create_entity(ENTITY, THEDEG = None, PLANEDM = 'SM'):
                         ' of Entity Objects ')
 
     # calculate the sun direction vector
-    if (THEDEG != None): vSun = ComputeSunDir(THEDEG=THEDEG)
-    else : vSun = ComputeSunDir(THEDEG=0.)
+    vSun = ComputeSunDir(THEDEG=THEDEG, PHIDEG=PHIDEG)
     
     wsx = -vSun.x; wsy=-vSun.y; wsz=-vSun.z;
     xs = np.linspace(0, 0.1*wsx, 100)
