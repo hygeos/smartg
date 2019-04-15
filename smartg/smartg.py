@@ -35,7 +35,7 @@ import smartg.transform
 from smartg.transform import Transform, Aff
 import smartg.visualizegeo
 from smartg.visualizegeo import Mirror, Plane, Spheric, Transformation, \
-    Entity, Analyse_create_entity, LambMirror, Matte
+    Entity, Analyse_create_entity, LambMirror, Matte, convertVtoAngles
 
 
 # set up directories
@@ -309,18 +309,25 @@ class Sensor(object):
     TYPE: Radiance (0), Planar flux (1), Spherical Flux (2), default 0
     IBOX: Box index in which the sensor is (3D)
     '''
-    def __init__(self, POSX=0., POSY=0., POSZ=0., THDEG=0., PHDEG=180., LOC='SURF0P', FOV=0., TYPE=0, IBOX=0):
+    def __init__(self, POSX=0., POSY=0., POSZ=0., THDEG=0., PHDEG=180.,
+                 LOC='SURF0P', FOV=0., TYPE=0, IBOX=0, V = None):
+
+        if (isinstance(V, Vector)):
+            THDEG, PHDEG = convertVtoAngles(V)
+        elif (V != None):
+            raise NameError('V argument must be a Vector')
+        
         self.dict = {
-                'POSX':  POSX,
-                'POSY':  POSY,
-                'POSZ':  POSZ,
-                'THDEG': THDEG,
-                'PHDEG': PHDEG,
-                'LOC'  : LOC_CODE.index(LOC),
-                'FOV':   FOV,
-                'TYPE':  TYPE,
-                'IBOX':  IBOX
-                }
+            'POSX':  POSX,
+            'POSY':  POSY,
+            'POSZ':  POSZ,
+            'THDEG': THDEG,
+            'PHDEG': PHDEG,
+            'LOC'  : LOC_CODE.index(LOC),
+            'FOV':   FOV,
+            'TYPE':  TYPE,
+            'IBOX':  IBOX
+        }
 
     def __str__(self):
         return 'SENSOR=-POSX{POSX}-POSY{POSY}-POSZ{POSZ}-THETA={THDEG:.3f}-PHI={PHDEG:.3f}'.format(**self.dict)

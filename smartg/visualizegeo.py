@@ -844,6 +844,112 @@ def generateHfA(THEDEG=0., PHIDEG = 0., PR = Point(0., 0., 50.), MINANG=0., \
         
     return lObj
 
+
+def convertVtoAngles(v, TYPE="Sensor"):
+    """
+    Definition of the function convertVtoAngles
+
+    coordinate system convention:
+
+      y
+      ^   x : right; y : front; z : top
+      |
+    z X -- > x
+
+    The description of a direction by a vector v is
+    converted by the description by 2 angles: Theta and Phi
+
+    Arg:
+    v     : A direction described by Vector class object
+
+    TYPE  : By default TYPE=str(Sensor) where we look from (0,0,0) to
+            (x,y,z) but we can be in Sun case i.e. TYPE=str(Sun) and
+            where we look at the opposite side : from (x,y,z) to (0,0,0)
+
+    Return Theta and Phi in degrees:
+    Theta : Zenith angle, start at Z+ in plane ZX going
+            in the trigonometric direction arround y axis
+
+    Phi   : Azimuth angle, start at X+ in plane XY going in
+            the trigonométric direction arround z axis
+    """
+    if isinstance(v, Vector):
+        # First be sure that the vector v is normalized
+        if (TYPE == "Sensor"):
+            v = Normalize(v)
+        elif (TYPE == "Sun"):
+            v = Normalize(-v) # Sun we look at the oposite side
+        else:
+            raise NameError('TYPE arg must be str(Sensor) or str(Sun)')       
+        np.clip(v.z, -1, 1) # Avoid error due to float precision
+
+        # Compute the Y rotation (Theta)
+        rotY = np.arccos(v.z)
+
+        # Compute the Z rotation (Phi) which is more complex
+        opZ = v.x/np.sin(rotY)
+        np.clip(opZ, -1, 1) # Avoid error due to float precision
+        rotZ = np.sign(v.y) * np.arccos(opZ)
+        if(rotZ < 0) : rotZ += 2*np.pi
+        if(rotZ == 0 and v.x < 0): rotZ += np.pi
+
+        # Convert the values in radians to degrees
+        Theta = np.degrees(rotY)
+        Phi = np.degrees(rotZ)
+        
+        return Theta, Phi
+    else:
+        raise NameError('v argument must be a Vector')
+
+
+def convertAnglestoV(THETA=0., PHI=0., TYPE="Sensor"):
+    """
+    Definition of the function convertVtoAngles
+
+    coordinate system convention:
+
+      y
+      ^   x : right; y : front; z : top
+      |
+    z X -- > x
+
+    The description of a direction by 2 angles THETA and PHI is
+    converted by the description a vector v
+
+    Arg:
+    Theta : Zenith angle in degree, start at Z+ in plane ZX going
+            in the trigonometric direction arround y axis
+
+    Phi   : Azimuth angle in degree, start at X+ in plane XY going in
+            the trigonométric direction arround z axis
+
+    TYPE  : By default TYPE=str(Sensor) where we look from (0,0,0) to
+            (x,y,z) but we can be in Sun case i.e. TYPE=str(Sun) and
+            where we look at the opposite side : from (x,y,z) to (0,0,0)
+
+    Return a vector v:
+    v     : A direction described by Vector class object
+    """
+    if (TYPE == "Sensor"):
+        # By default the vector v = (0, 0, 1) for THETA=0 and PHI=0
+        v = Vector(0, 0, 1)
+    elif (TYPE == "Sun"):
+        # By default the vector v = (0, 0, -1) for THETA=0 and PHI=0
+        v = Vector(0, 0, -1)
+    else:
+        raise NameError('TYPE arg must be str(Sensor) or str(Sun)')
+    
+    # Creation of the transform object
+    TT = Transform()
+
+    # Take the zenith angle for the first rotation in Y axis
+    v = TT.rotateY(THETA)[v]
+
+    # Take the azimuth angle for the second rotation in Z axis
+    v = TT.rotateZ(PHI)[v]
+    
+    return v
+
     
 if __name__ == '__main__':
 

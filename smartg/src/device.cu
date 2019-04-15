@@ -4285,10 +4285,15 @@ __device__ void Obj3DRoughSurf(Photon* ph, IGeo* geoS, struct RNG_State *rngstat
 	// ********************************************************
 	// Rotation of the stokes vector
 	// ********************************************************
-	// Compute the psi angle of the rotation matrix L
-	float4x4 L; float psi;	
+	// Compute psi angle and rotation matrix L in (For/Back)ward mode
+	float psi; float4x4 LF;
 	psi = computePsiFN(u_i, v_i, microFnormal_m, sTheta_i);
-	rotationM(psi, &L); // fill the rotation matrix L
+	rotationM(psi, &LF); // fill the rotation matrix LF (forward mode)
+	
+	#ifdef BACK
+	float4x4 LB;
+	rotationM(-psi, &LB); // fill the rotation matrix LB (backward mode)
+	#endif
 
 	// Reflection matrix R
 	float4x4 R; float sR;
@@ -4298,11 +4303,16 @@ __device__ void Obj3DRoughSurf(Photon* ph, IGeo* geoS, struct RNG_State *rngstat
 		//R = computeRefMat(1.33, cTheta_i, sTheta_i);
 		refMat(nind, cTheta_i, sTheta_i, &R, &sR);
 	}
-	// Muller matrix for reflection
+	
+	// Muller matrix for reflection (forward mode)
 	float4x4 Mu_r; // Mu_r = (1/scaR)*R*L -> Ramon et al. 2019
-	Mu_r = mul(R, L); // relfection totale scaR = 1
-		
-	// update the stokes vector
+	Mu_r = mul(R, LF); // relfection totale scaR = 1
+	
+    #ifdef BACK
+    ph->M = mul(ph->M, mul(LB, R));
+	#endif
+	
+	// update the stokes vector (forward mode)
 	ph->stokes = mul(Mu_r, ph->stokes); //S_l = Mu_r*S_l-1
 	// ********************************************************
 
