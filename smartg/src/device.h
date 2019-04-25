@@ -252,6 +252,8 @@ __device__ void MakeLocalFrame(float3, float3*, float3*, float3*) ;
 /* Fresnel Reflection Matrix*/
 __device__ float4x4 FresnelR(float3, float3) ;
 
+__device__ float checkerboard(float3) ;
+
 #ifdef PHILOX
 /**********************************************************
 *	> Fonctions liées au générateur aléatoire

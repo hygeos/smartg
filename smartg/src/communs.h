@@ -240,7 +240,6 @@ public:
 private:
 };
 
-
 struct Spectrum {
     float lambda;
     float alb_surface;

@@ -459,7 +459,7 @@ extern "C" {
            // Eventually evaluate Downward 0+ and Upward 0- radiance
 
            // if not environment effects 
-           if( ENVd==0 ) { 
+           if( (ENVd==0) || (ENVd==2)) { 
 
            // if not a Lambertian surface
 			if( DIOPTREd!=3 ) {
@@ -564,7 +564,7 @@ extern "C" {
            } // ENV=0
 
            // Environment effects
-           else {
+           else if (ENVd==1) {
                 float dis=0;
                 dis = sqrtf((ph.pos.x-X0d)*(ph.pos.x-X0d) +(ph.pos.y-Y0d)*(ph.pos.y-Y0d));
                 if( dis > ENV_SIZEd) {
@@ -3843,6 +3843,9 @@ __device__ void surfaceLambert(Photon* ph, int le,
 		ph->loc = SPACE*test_s + ATMOS*(!test_s);
 		ph->layer = NATMd;
 		ph->weight *= spectrum[ph->ilam].alb_surface;  /*[Eq. 16,39]*/
+        if (ENVd==2) {
+            ph->weight *= checkerboard(ph->pos);
+        }
 	}
 	else
 	{
@@ -3852,6 +3855,15 @@ __device__ void surfaceLambert(Photon* ph, int le,
 	}
 
 } //surfaceLambert
+
+
+__device__ float checkerboard(float3 pos) {
+        float dis = ENV_SIZEd;
+        int testx = lroundf((pos.x + 1e6)/dis);
+        int testy = lroundf((pos.y + 1e6)/dis);
+        int freq = 2;
+        return (((testx%freq)==0) && (X0d==1.F)) != !(((testy%freq)==1) && (Y0d==1.F));
+}
 
 /* Surface BRDF */
 __device__ void surfaceBRDF(Photon* ph, int le,

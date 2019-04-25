@@ -16,7 +16,7 @@ from smartg.atmosphere import Atmosphere
 from smartg.water import IOP_base
 from os.path import dirname, realpath, join, exists
 from warnings import warn
-from smartg.albedo import Albedo_cst
+from smartg.albedo import Albedo_cst, Albedo_spectrum_map 
 from smartg.tools.progress import Progress
 from luts.luts import MLUT
 from scipy.interpolate import interp1d
@@ -279,11 +279,14 @@ class Environment(object):
     '''
     Stores the smartg parameters relative the the environment effect
 
-    ENV: activate environment effect (default 0, deactivated)
-    ENV_SIZE, X0, Y0: radius and position of the adjacency effect circle
-    ALB: albedo model
+    ENV: environment effect (default 0: deactivated, 1: horizontal cst albedo ALB outside an horizontal disk, 
+                             water is inside, lambertian ALB is outside.
+                             2: ALB map2D modulated by checkerboard spatial function)
+    ENV_SIZE, X0, Y0: radius and position of the circle outside which ALB model is applied for case 1),
+                             size of the spatial pattern (in km), and in the direction X and or Y applied (
+                             X=1, applied to X, X=0 Not applied to X; idem for Y)
+    ALB: albedo spectral model
 
-    NB: water is inside, lambertian is outside.
     '''
     def __init__(self, ENV=0, ENV_SIZE=0., X0=0., Y0=0., ALB=Albedo_cst(0.5)):
         self.dict = {
@@ -542,7 +545,7 @@ class Smartg(object):
 
 
     def run(self, wl,
-             atm=None, surf=None, water=None, env=None, alis_options=None,
+             atm=None, surf=None, water=None, env=None, map2D=None, alis_options=None,
              NBPHOTONS=1e9, DEPO=0.0279, DEPO_WATER= 0.0906, THVDEG=0., PHVDEG=0., SEED=-1,
              RTER=6371., wl_proba=None,
              NBTHETA=45, NBPHI=90, NF=1e6,
@@ -1209,13 +1212,18 @@ class Smartg(object):
                 spectrum['alb_surface'] = -999.
         else:
             assert surf is not None
-            spectrum['alb_surface'] = env.alb.get(wl[:])
+            mapalb = env.alb.get(wl[:])
+            if mapalb.ndim==3:
+                mapalb = to_gpu(mapalb)
+            else:
+                spectrum['alb_surface'] = env.alb.get(wl[:])
 
         if water is None:
             spectrum['alb_seafloor'] = -999.
         else:
             spectrum['alb_seafloor'] = prof_oc['albedo_seafloor'].data[...]
         spectrum = to_gpu(spectrum)
+
 
         # Local Estimate option
         LE = 0
