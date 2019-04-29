@@ -1907,7 +1907,9 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
 	bool intersectBox;
 	float3 intersectPoint = make_float3(-1., -1., -1.);
     int intersectNext=0;
+    int next_layer;
 	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+
 
     if (ph->loc==OCEAN) {
         NL   = NOCEd+1;
@@ -1920,6 +1922,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
     ilam = ph->ilam*NL;  // wavelength offset in optical thickness table
 
     if (ph->layer == 0) ph->layer = 1;
+    next_layer = ph->layer;
 
     // Random Optical Thickness to go through
     if (!le) tauRdm = -logf(1.F-RAND);
@@ -1937,29 +1940,35 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
         // stopping criteria
         if (ph->loc == REMOVED) break;
         //
-        if (ph->layer == BOUNDARY_ABS){
+        if (next_layer == BOUNDARY_ABS){
             ph->loc = ABSORBED;
             break;
         }
         //
         if (ph->loc == ATMOS) {
-         if (ph->layer == BOUNDARY_0P) {
+         if (next_layer == BOUNDARY_0P) {
             ph->loc = SURF0P;
             break;
          }
-         if (ph->layer == BOUNDARY_TOA) {
+         else if (next_layer == BOUNDARY_TOA) {
             ph->loc = SPACE;
             break;
          }
+         else {
+             ph->layer = next_layer;
+         }
         } 
         if (ph->loc == OCEAN) {
-         if (ph->layer == BOUNDARY_FLOOR) {
+         if (next_layer == BOUNDARY_FLOOR) {
             ph->loc = SEAFLOOR;
             break;
          }
-         if (ph->layer == BOUNDARY_0M) {
+         else if (next_layer == BOUNDARY_0M) {
             ph->loc = SURF0M;
             break;
+         }
+         else {
+             ph->layer = next_layer;
          }
         }
 
@@ -2036,12 +2045,12 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
             int tmp=ph->layer;
             switch(ind)
             {
-                 case 0: ph->layer = prof[ph->layer].neighbour1; break;
-                 case 1: ph->layer = prof[ph->layer].neighbour2; break;
-                 case 2: ph->layer = prof[ph->layer].neighbour3; break;
-                 case 3: ph->layer = prof[ph->layer].neighbour4; break;
-                 case 4: ph->layer = prof[ph->layer].neighbour5; break;
-                 case 5: ph->layer = prof[ph->layer].neighbour6; break;
+                 case 0: next_layer = prof[ph->layer].neighbour1; break;
+                 case 1: next_layer = prof[ph->layer].neighbour2; break;
+                 case 2: next_layer = prof[ph->layer].neighbour3; break;
+                 case 3: next_layer = prof[ph->layer].neighbour4; break;
+                 case 4: next_layer = prof[ph->layer].neighbour5; break;
+                 case 5: next_layer = prof[ph->layer].neighbour6; break;
                  default: ph->loc = REMOVED;
             }
             //if (idx==0) printf("Apres %d %d %d %d %f %d %f %f %f %f %f %f %f %f %f %f %f %f\n",ph->nint, ph->loc, ph->layer, tmp, ph->v.z, ind, p.x, p.y, p.z, 
@@ -3841,7 +3850,9 @@ __device__ void surfaceLambert(Photon* ph, int le,
 	if (ph->loc == SURF0P){
 		bool test_s = ( SIMd == SURF_ONLY);
 		ph->loc = SPACE*test_s + ATMOS*(!test_s);
+        #ifndef OPT3D
 		ph->layer = NATMd;
+        #endif
 		ph->weight *= spectrum[ph->ilam].alb_surface;  /*[Eq. 16,39]*/
         if (ENVd==2) {
             ph->weight *= checkerboard(ph->pos);
@@ -3850,7 +3861,9 @@ __device__ void surfaceLambert(Photon* ph, int le,
 	else
 	{
 		ph->loc = OCEAN;
+        #ifndef OPT3D
 		ph->layer = NOCEd; 
+        #endif
 		ph->weight *= spectrum[ph->ilam].alb_seafloor; /*[Eq. 16,39]*/
 	}
 
