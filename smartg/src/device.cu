@@ -1447,15 +1447,47 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		/* ***************************************************************************************** */		
 	} // LMODE == 1
 	
-	if (LMODEd == 2)
+	if (LMODEd == 2) // Full Forward mode
 	{
 		float3 cusForwPos = make_float3( ((CFXd * RAND) - 0.5*CFXd), ((CFYd * RAND) - 0.5*CFYd), 0.);
 		ph->pos.x += cusForwPos.x + CFTXd;
 		ph->pos.y += cusForwPos.y + CFTYd;
 		ph->pos.z = tab_sensor[ph->is].POSZ;
 	} //END LMODEd == 2
+
+	if (LMODEd == 3) // cusBackward mode
+	{
+		// Sampling of alpha and beta angles
+		float alpha = ALDEGd, beta=BETDEGd;
+		alpha = (RAND-0.5)*0.5*alpha; beta = (RAND-0.5)*0.5*beta;
+		
+		// One fixed direction (for radiance)
+		float3 vfloat = make_float3(0., 0., 1.);
+		
+		// Initialization of the orthogonal vector to the propagation
+		float3 ufloat = make_float3(1., 0., 0.);
+		
+		// Creation of transforms to consider alpha and beta for the computation of photon dirs
+		Transform Talpha, Tbeta;
+		Talpha = Talpha.RotateY(alpha); Tbeta = Tbeta.RotateX(beta);
+		
+		// Apply transforms to vector u and v in function to alpha and beta
+		vfloat = Tbeta(   Vectorf(  Talpha( Vectorf(vfloat) )  )   );
+		ufloat = Tbeta(   Vectorf(  Talpha( Vectorf(ufloat) )  )   );
+		
+		// Creation of transforms to consider theta and phi for the computation of photon dirs
+		Transform TTheta, TPhi;
+		TTheta = TTheta.RotateY(tab_sensor[ph->is].THDEG);
+		TPhi = TPhi.RotateZ(tab_sensor[ph->is].PHDEG);		
+
+		// Apply transforms to vector u and v in function to theta and phi
+		vfloat = TPhi(   Vectorf(  TTheta( Vectorf(vfloat) )  )   );
+		ufloat = TPhi(   Vectorf(  TTheta( Vectorf(ufloat) )  )   );
+
+		// update of u and v
+		ph->v = vfloat; ph->u = ufloat;
+	} //END LMODEd == 3
     #endif //END OBJ3D
-	
     }
 
 
@@ -4459,13 +4491,13 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 
 	// In order to be sure to not consider the photons coming behind the receiver
 	// if (!isBackward(geoS->normalBase, ph->v)) return;
-	#ifdef DOUBLE
-	if (   isForward(  make_double3(geoS->normalBase.x, geoS->normalBase.y, geoS->normalBase.z),
-				  make_double3(ph->v.x, ph->v.y, ph->v.z)  )   )
-	#else
-	if (isForward(geoS->normalBase, ph->v))
-	#endif
-		return;
+	// #ifdef DOUBLE
+	// if (   isForward(  make_double3(geoS->normalBase.x, geoS->normalBase.y, geoS->normalBase.z),
+	// 			  make_double3(ph->v.x, ph->v.y, ph->v.z)  )   )
+	// #else
+	// if (isForward(geoS->normalBase, ph->v))
+	// #endif
+	// 	return;
 
 	p_t = ph->pos;
 	transfo = geoS->mvTF;

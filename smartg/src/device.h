@@ -74,11 +74,15 @@ __device__ __constant__ int IsAtm;
 __device__ __constant__ float TCd;
 __device__ __constant__ int nbCx;
 __device__ __constant__ int nbCy;
-// custum forward
+// custum forward or custum backward
 __device__ __constant__ float CFXd;
 __device__ __constant__ float CFYd;
 __device__ __constant__ float CFTXd;
 __device__ __constant__ float CFTYd;
+__device__ __constant__ float THDEGd;
+__device__ __constant__ float PHDEGd;
+__device__ __constant__ float ALDEGd;
+__device__ __constant__ float BETDEGd;
 __device__ __constant__ int LMODEd;
 #endif
 

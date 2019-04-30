@@ -35,7 +35,7 @@ import smartg.transform
 from smartg.transform import Transform, Aff
 import smartg.visualizegeo
 from smartg.visualizegeo import Mirror, Plane, Spheric, Transformation, \
-    Entity, Analyse_create_entity, LambMirror, Matte, convertVtoAngles
+    Entity, Analyse_create_entity, LambMirror, Matte, convertVtoAngles, convertAnglestoV
 
 
 # set up directories
@@ -331,7 +331,7 @@ class Sensor(object):
 
     def __str__(self):
         return 'SENSOR=-POSX{POSX}-POSY{POSY}-POSZ{POSZ}-THETA={THDEG:.3f}-PHI={PHDEG:.3f}'.format(**self.dict)
-
+        
 class CusForward(object):
     '''
     Definition of CusForward 
@@ -357,11 +357,45 @@ class CusForward(object):
             'CFTY':   CFTY,
             'LMODE': LMODE
         }
+        
+    def __str__(self):
+        return 'CusForward=-CFX{CFX}-CFY{CFY}-CFTX{CFTX}-CFTY{CFTY}'.format(**self.dict) + \
+            '-LMODE{LMODE}'.format(**self.dict)
+
+class CusBackward(object):
+    '''
+    Definition of CusBackward 
+
+    POS     : Position (X,Y,Z) in cartesian coordinates, default origin (class Point)
+    TH,PH   : Direction (theta, phi) of zenith and azimuth angles of viewing direction
+              (Zenith> 90 for downward looking, <90 for upward, default Zenith)
+    AL, BET : Launch in a solid angle where alpha is the angle in plane ZX and BETA in
+              plane ZY, both starting at Z+ and going in the trigonometric direction
+              respectively arround the axis Y and X 
+    V       : Direction but represented by a Vector type, if not None replace TH, PH
+    LMODE (Launching mode) : B = Backward
+    '''
+    def __init__(self, POS = Point(0., 0., 0.), THDEG = 0., PHDEG = 0., V = None,
+                 ALDEG = None, BETDEG = None, LMODE = "B"):
+
+        if (isinstance(V, Vector)):
+            THDEG, PHDEG = convertVtoAngles(V)
+        elif (V != None):
+            raise NameError('V argument must be a Vector')
+        
+        self.dict = {
+            'POS':    POS,
+            'THDEG':  THDEG,
+            'PHDEG':  PHDEG,
+            'ALDEG':  ALDEG,
+            'BETDEG': BETDEG,
+            'LMODE':  LMODE
+        }
 
     def __str__(self):
-        return 'CusForward=-CFX{CFX}-CFY{CFY}'.format(**self.dict)
-
-
+        return 'CusBackward:-POS={POS}-THDEG={THDEG}-PHDEG={PHDEG}'.format(**self.dict) + \
+            '-ALDEG={ALDEG}-BETDEG={BETDEG}-LMODE={LMODE}'.format(**self.dict)
+    
 class Smartg(object):
 
     def __init__(self, pp=True, debug=False,
@@ -509,7 +543,7 @@ class Smartg(object):
              NBLOOP=None, progress=True, 
              le=None, flux=None, stdev=False, BEER=1, RR=1, WEIGHTRR=0.1, SZA_MAX=90., SUN_DISC=0,
              sensor=None, refraction=False, reflectance=True, myObjects=None, interval = None,
-             IsAtm = 1, cusForward = None, SS=False, FFS=False):
+             IsAtm = 1, cusL = None, SS=False, FFS=False):
         '''
         Run a SMART-G simulation
 
@@ -632,8 +666,8 @@ class Smartg(object):
             - IsAtm (effet uniquement si myObjects != None) : si égal à 0 , cela permet dans le cas sans atmosphère,
                       d'empêcher certaines fuites de photons.
 
-            - cusForward : None is the default mode (sun is a ponctual source targeting the origin (0,0,0)), else it
-                           enable to use the RF or FF launching mode (see the class CusForward) --> cusForward=CusForward(...)
+            - cusL : None is the default mode (sun is a ponctual source targeting the origin (0,0,0)), else it
+                      enable to use the RF, FF or B launching mode (see the class CusForward) --> cusL=CusForward(...)
 
             - SS : Single Scattering only: Default False
 
@@ -653,29 +687,31 @@ class Smartg(object):
             M = Smartg().run(wl=400., NBPHOTONS=1e7, atm=Profile('afglt'))
             M['I_up (TOA)'][:,:] contains the top of atmosphere radiance/reflectance
         '''
-        
         #
         # Les Objets
         #
-        if ((myObjects is not None) or (cusForward is not None)):
+        
+        # First check if back option is activated in case of the use of cusBackward launching mode
+        if (cusL is not None):
+            if (cusL.dict['LMODE'] == "B" and self.back == False):
+                raise NameError('CusBackward can be use only with the compilation option back=True')
+            elif (sensor != None):
+                raise NameError('The use of sensor(s) and a custum launching mode' + \
+                                ' (cusForward or cusBackward) is prohibited!')
+            elif (cusL.dict['LMODE'] == "B"):
+                sensor = Sensor(POSX=cusL.dict['POS'].x, POSY=cusL.dict['POS'].y, POSZ=cusL.dict['POS'].z,
+                                THDEG=cusL.dict['THDEG'], PHDEG=cusL.dict['PHDEG'], LOC='ATMOS')
+        
+        if ((myObjects is not None) or (cusL is not None)):
             # Prendre en compte la direction du soleil avec l'angle zenithal et azimuth
-            vSun = Vector(0., 0., -1.)
-            tSunTheta = Transform(); tSunPhi = Transform();
-            tSunTheta = tSunTheta.rotateY(THVDEG)
-            vSun = tSunTheta[vSun]
-            tSunPhi = tSunPhi.rotateZ(PHVDEG)
-            vSun = tSunPhi[vSun] 
+            vSun = convertAnglestoV(THETA=THVDEG, PHI=PHVDEG, TYPE="Sun") 
             vSun = Normalize(vSun)
             
         if (myObjects is not None):
             # Initialisations
             if interval is not None:
-                Pmin_x = interval[0][0]
-                Pmin_y = interval[0][1]
-                Pmin_z = interval[0][2]
-                Pmax_x = interval[1][0]
-                Pmax_y = interval[1][1]
-                Pmax_z = interval[1][2]
+                Pmin_x = interval[0][0];Pmin_y = interval[0][1];Pmin_z = interval[0][2];
+                Pmax_x = interval[1][0];Pmax_y = interval[1][1];Pmax_z = interval[1][2];
             else:
                 Pmin_x = -300; Pmin_y = -300; Pmin_z = 0;
                 Pmax_x = 300;  Pmax_y = 300; Pmax_z = 120;
@@ -844,8 +880,8 @@ class Smartg(object):
                         
 
                     # Etape cruciale pour la visualisation des résulats (mode forward restreint uniquement)
-                    if (cusForward is not None):
-                        if (cusForward.dict['LMODE'] == "RF"):
+                    if (cusL is not None):
+                        if (cusL.dict['LMODE'] == "RF"):
                             # Récupération des 4 points formant le rectangle représentant le reflecteur
                             pp1 = myObjects[i].geo.p1
                             pp2 = myObjects[i].geo.p2
@@ -959,8 +995,8 @@ class Smartg(object):
             vSun = None
         # END OBJ ===================================================
 
-        if cusForward is not None:
-            if (cusForward.dict['LMODE'] == "FF"):
+        if cusL is not None:
+            if (cusL.dict['LMODE'] == "FF"):
                 # Création d'une matrice appelé matrice de passage
                 nn3 = Normal(vSun)
                 nn1, nn2 = CoordinateSystem(nn3)
@@ -973,8 +1009,8 @@ class Smartg(object):
                 mm2[3,0] = 0.    ; mm2[3,1] = 0.    ; mm2[3,2] = 0.    ; mm2[3,3] = 1. ;
 
                 # Récupération des 4 points formant le rectangle en TOA
-                xnn = float(cusForward.dict['CFX'])/2.
-                ynn = float(cusForward.dict['CFY'])/2.
+                xnn = float(cusL.dict['CFX'])/2.
+                ynn = float(cusL.dict['CFY'])/2.
                 ppn1 = Point(-xnn, -ynn, 0.)
                 ppn2 = Point(xnn, -ynn, 0.)
                 ppn3 = Point(-xnn, ynn, 0.)
@@ -1248,7 +1284,7 @@ class Smartg(object):
                   NBTHETA, NBPHI, OUTPUT_LAYERS,
                   RTER, LE, ZIP, FLUX, FFS, NLVL, NPSTK,
                   NWLPROBA, BEER, SS, RR, WEIGHTRR, NLOW, NJAC, 
-                  NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusForward, nObj,
+                  NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj,
                   Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, vSun, HIST)
 
         # Initialize the progress bar
@@ -1272,16 +1308,23 @@ class Smartg(object):
         attrs.update(self.common_attrs)
 
         # En rapport avec l'implémentation des objets (permet le visuel des res du recept)
-        dicSTP = None # tuple incorporating parameters for Solar Tower Power applications
         if (TC is not None):
-            if (cusForward is not None):
+            if (cusL is None):
+                cMatVisuRecep[:][:][:] = cMatVisuRecep[:][:][:]
+            elif (cusL.dict['LMODE'] != "B"):
                 for i in range (0, 9):
                     cMatVisuRecep[i][:][:] = cMatVisuRecep[i][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
             else:
                 cMatVisuRecep[:][:][:] = cMatVisuRecep[:][:][:]
-            MZAlt_H = zAlt_H/nb_H
-            dicSTP = {"nb_H":nb_H, "totS_H":totS_H, "surfTOA":surfMir, "MZAlt_H":MZAlt_H, "vSun":vSun}
             
+            # If there are no heliostats --> there is no STP and then no analyses of optical losses
+            if (nb_H <= 0):
+                dicSTP = None; vecLoss = None;
+            else:
+                MZAlt_H = zAlt_H/nb_H
+                # dicSTP : tuple incorporating parameters for Solar Tower Power applications
+                dicSTP = {"nb_H":nb_H, "totS_H":totS_H, "surfTOA":surfMir, "MZAlt_H":MZAlt_H, "vSun":vSun}
+                
         # finalization
         output = finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl[:], NPhotonsInTot, errorcount, NPhotonsOutTot,
                           OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, prof_oc,
@@ -1780,7 +1823,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
               XBLOCK, XGRID,NLAM, SIM, NF,
               NBTHETA, NBPHI, OUTPUT_LAYERS,
               RTER, LE, ZIP, FLUX, FFS, NLVL, NPSTK, NWLPROBA, BEER, SS, RR, 
-              WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusForward, nObj,
+              WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj,
               Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, vSun, HIST) :
     """
     Initialize the constants in python and send them to the device memory
@@ -1871,15 +1914,21 @@ def InitConst(surf, env, NATM, NOCE, mod,
             copy_to_device('TCd', TC, np.float32)
             copy_to_device('nbCx', nbCx, np.int32)
             copy_to_device('nbCy', nbCy, np.int32)
-        if (  (cusForward != None) and (cusForward.dict['LMODE'] == "RF")  ):
+        if (  (cusL != None) and (cusL.dict['LMODE'] == "RF")  ):
             copy_to_device('LMODEd', 1, np.int32)
-        if (  (cusForward != None) and (cusForward.dict['LMODE'] == "FF")  ):
-            copy_to_device('CFXd', cusForward.dict['CFX'], np.float32)
-            copy_to_device('CFYd', cusForward.dict['CFY'], np.float32)
-            copy_to_device('CFTXd', cusForward.dict['CFTX'], np.float32)
-            copy_to_device('CFTYd', cusForward.dict['CFTY'], np.float32)
+        if (  (cusL != None) and (cusL.dict['LMODE'] == "FF")  ):
+            copy_to_device('CFXd', cusL.dict['CFX'], np.float32)
+            copy_to_device('CFYd', cusL.dict['CFY'], np.float32)
+            copy_to_device('CFTXd', cusL.dict['CFTX'], np.float32)
+            copy_to_device('CFTYd', cusL.dict['CFTY'], np.float32)
             copy_to_device('LMODEd', 2, np.int32)
-        if (cusForward == None):
+        if (  (cusL != None) and (cusL.dict['LMODE'] == "B")  ):
+            copy_to_device('THDEGd', cusL.dict['THDEG'], np.float32)
+            copy_to_device('PHDEGd', cusL.dict['PHDEG'], np.float32)
+            copy_to_device('ALDEGd', cusL.dict['ALDEG'], np.float32)
+            copy_to_device('BETDEGd', cusL.dict['BETDEG'], np.float32)
+            copy_to_device('LMODEd', 3, np.int32)
+        if (cusL == None):
             copy_to_device('LMODEd', 0, np.int32)
         
 def init_profile(wl, prof, kind, OPT3D=False, dtype=type_Profile):
