@@ -109,15 +109,15 @@ class Mirror(object):
     '''
     Definition of Mirror
 
-    Glossy/specular material as pure and higler polihed aluminum, siler
-    behing glass mirror, ...
+    Glossy/specular material as pure and highly polished aluminum, silver
+    behind glass mirror, ...
 
-    reflectivity : the albedo of the object
-    roughness    : equal to alpha parameter according to Walter et al. 2007
-    shadow       : Shadowing-Masking effect
-    nind         : relative refractive index air/material, by default
+    reflectivity : The albedo of the object
+    roughness    : Equal to alpha parameter according to Walter et al. 2007
+    shadow       : Shadowing-Masking effect, by default not considered
+    nind         : Relative refractive index air/material, by default
                    is None -> case of perfect mirror (nind = infinity)
-    distribution : for now two choices --> "Beckmann" or "GGX"
+    distribution : Two choices --> "Beckmann" or "GGX"
     '''
     def __init__(self, reflectivity = 1., roughness = 0., shadow = False, nind = None,
                  distribution = "Beckmann"):
@@ -148,7 +148,7 @@ class LambMirror(object):
     Lambertian material, same probability of reflection in all the direction
     inside the hemisphere of the normal of the object surface
 
-    reflectivity : the albedo of the object
+    reflectivity : The albedo of the object
     '''
     def __init__(self, reflectivity = 0.5):
         self.reflectivity = reflectivity
@@ -164,8 +164,8 @@ class Matte(object):
 
     Diffuse material as Concrete, plastic, dust, ...
 
-    reflectivity : the albedo of the object
-    roughness    : not yet available
+    reflectivity : The albedo of the object
+    roughness    : Not yet available
     '''
     def __init__(self, reflectivity = 0., roughness = 0.):
         self.reflectivity = reflectivity
@@ -224,10 +224,10 @@ class Spheric(object):
 
     Sphere constructed with --->
 
-    radius   : the radius of th e sphere
-    radiusZ0 : take into account all the sphere -> radiusZ0 = -radius
-    radiusZ1 : take into account all the sphere -> radiusZ1 = +radius
-    phi      : the value of phi, 360 degrees is the value of a full sphere
+    radius   : The radius of th e sphere
+    radiusZ0 : Take into account all the sphere -> radiusZ0 = -radius
+    radiusZ1 : Take into account all the sphere -> radiusZ1 = +radius
+    phi      : The value of phi, 360 degrees is the value of a full sphere
     '''
     def __init__(self, radius = 10., z0 = None, z1 = None, phi = 360.):
         self.radius = radius
@@ -328,44 +328,24 @@ def Ref_Fresnel(dirEnt, geoTrans):
     else :
         raise Exception("the geoTrans argument must be a Transform class")
 
-    MyT = Transform()
-    RotPi = MyT.rotateZ(180.)
+    # Default value of the surface plane normal
+    NN = Vector(0., 0., 1)
+    
+    # Real value of the normal after considering transformation
     TT = geoT
-    invTT = TT.inverse(TT)
-    V1 = dirE
-    V2 = invTT[V1]
-    V2 = RotPi[V2]
-    V2 = Vector(V2.x*-1., V2.y*-1., V2.z*-1.)
-    V2 = TT[V2]
-    return V2
+    NN = TT[NN]
 
-def ComputeSunDir(THEDEG=0, PHIDEG=0):
-    """
-    Definition of ComputeSunDir
+    # Information needed from the incoming ray
+    V = dirE
+    V = Vector(-V.x, -V.y, -V.z)
+    
+    # Use the equation of Fresnel reflection (plenty explained in pbrtv3 book)
+    V = dirE + NN*(2*Dot(NN, V))
 
-    Enable to compute the Sun direction from the zenith and azimuth angles
-
-    THEDEG : Sun zenith angle (degree)
-    PHIDEG : Sun azimuth angle (degree)
-
-    return a Vector class containing the normalized sun direction
-    """
-    # Initial position = normalized vector tagerting bottom
-    vIni = Vector(0., 0., -1.)
+    # Be sure V is normalized
+    V = Normalize(V)
     
-    # creation of tranformation
-    tSunTheta = Transform(); tSunPhi = Transform()
-    
-    # Rotation in y axis with zenith angle
-    tSunTheta = tSunTheta.rotateY(THEDEG)
-    vSun = tSunTheta[vIni]
-    
-    # Rotation in z axis with azimuth angle
-    tSunPhi = tSunPhi.rotateZ(PHIDEG)
-    vSun = tSunPhi[vSun]
-    vSun = Normalize(vSun)
-    
-    return vSun
+    return V
 
 
 def Analyse_create_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM'):
@@ -375,8 +355,8 @@ def Analyse_create_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM'):
     Enable a 3D visualization of the created objects
 
     ENTITY  : A list of objects (Entity classes)
-    THEDEG  : The zenith angle of the sun (currently the azimuth is always assumed
-              to be = 0). If THEDEG = None --> do not visualize the sun rays
+    THEDEG  : The zenith angle of the sun
+    PHIDEG  : The azimuth angle of the sun
     PlaneDM : Plane Draw method, two choices 'FM' (First Method) or 'SM'(seconde
               Method). By default 'SM', 'FM' is useful for debug issues
 
@@ -423,11 +403,11 @@ def Analyse_create_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM'):
                         ' of Entity Objects ')
 
     # calculate the sun direction vector
-    vSun = ComputeSunDir(THEDEG=THEDEG, PHIDEG=PHIDEG)
+    vSun = convertAnglestoV(THETA=THEDEG, PHI=PHIDEG, TYPE="Sun")
     
     wsx = -vSun.x; wsy=-vSun.y; wsz=-vSun.z;
     xs = np.linspace(0, 0.1*wsx, 100)
-    ys = np.linspace(0, 0.1*wsy)
+    ys = np.linspace(0, 0.1*wsy, 100)
     zs = np.linspace(0, 0.1*wsz, 100)
 
     sunDirection = vSun
@@ -463,7 +443,6 @@ def Analyse_create_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM'):
 
         # total tt of all transform together
         tt = None
-        
         if (E[k].transformation.rotOrder == "XYZ"):
             tt = Trans*Rotx*Roty*Rotz
         elif (E[k].transformation.rotOrder == "XZY"):
@@ -682,7 +661,7 @@ def generateHfP(THEDEG=0., PHIDEG = 0., PH = [Point(0., 0., 0.)], PR = Point(0.,
     return a list of objects
     '''
     # calculate the sun direction vector
-    vSun = ComputeSunDir(THEDEG=THEDEG, PHIDEG=PHIDEG)
+    vSun = convertAnglestoV(THETA=THEDEG, PHI=PHIDEG, TYPE="Sun")
     
     lObj = []
     Hxx = HSX/2
@@ -706,20 +685,18 @@ def generateHfP(THEDEG=0., PHIDEG = 0., PH = [Point(0., 0., 0.)], PR = Point(0.,
         vecNH = Normalize(vecNH)
 
         # 2) Apply the inverse rotation operations to find the necessary angles
-        # the min/max operations avoid nan in case of arccos of something greater than 1 or less than -1
-        if (vecNH.z > 0): vecNH.z = min(vecNH.z, 1)
-        if (vecNH.z < 0): vecNH.z = max(vecNH.z, -1)
+        # Avoid nan value in case of arccos of something greater than 1 or less than -1
+        vecNH.z = np.clip(vecNH.z, -1, 1)
         rotY = np.arccos(vecNH.z)
         rotYD = np.degrees(rotY)
-        # the min/max operations avoid nan in case of arccos of something greater than 1 or less than -1
-        opeZ = vecNH.x/np.sin(rotY)
-        if (opeZ > 0): opeZ = min(opeZ, 1)
-        if (opeZ < 0): opeZ = max(opeZ, -1)
+        # Avoid nan value in extreme case of 0/0
+        if (vecNH.x == 0 and rotY == 0): opeZ = 0
+        else: opeZ = vecNH.x/np.sin(rotY)
+        # Avoid nan value in case of arccos of something greater than 1 or less than -1
+        opeZ = np.clip(opeZ, -1, 1)
         rotZ = np.arccos(opeZ)
-        if (vecHR.y > 0):
-            rotZD = -1.*np.degrees(rotZ)
-        else:
-            rotZD = np.degrees(rotZ)
+        if (vecHR.y > 0): rotZD = -1.*np.degrees(rotZ)
+        else: rotZD = np.degrees(rotZ)
 
         # 3) Once the rotation angles have been found, create heliostat objects
         objMi = Entity(objM);
@@ -762,7 +739,7 @@ def generateHfA(THEDEG=0., PHIDEG = 0., PR = Point(0., 0., 50.), MINANG=0., \
     return a list of objects
     '''
     # calculate the sun direction vector
-    vSun = ComputeSunDir(THEDEG=THEDEG, PHIDEG=PHIDEG)
+    vSun = convertAnglestoV(THETA=THEDEG, PHI=PHIDEG, TYPE="Sun")
 
     lObj = []
     Hxx = HSX/2
@@ -821,15 +798,15 @@ def generateHfA(THEDEG=0., PHIDEG = 0., PR = Point(0., 0., 50.), MINANG=0., \
         vecNH = Normalize(vecNH)
 
         # 2) Apply the inverse rotation operations to find the necessary angles
-        # the min/max operations avoid nan in case of arccos of something greater than 1 or less than -1
-        if (vecNH.z > 0): vecNH.z = min(vecNH.z, 1)
-        if (vecNH.z < 0): vecNH.z = max(vecNH.z, -1)
+        # Avoid nan value in case of arccos of something greater than 1 or less than -1
+        vecNH.z = np.clip(vecNH.z, -1, 1)
         rotY = np.arccos(vecNH.z)
         rotYD = np.degrees(rotY)
-        # the min/max operations avoid nan in case of arccos of something greater than 1 or less than -1
-        opeZ = vecNH.x/np.sin(rotY)
-        if (opeZ > 0): opeZ = min(opeZ, 1)
-        if (opeZ < 0): opeZ = max(opeZ, -1)
+        # Avoid nan value in extreme case of 0/0
+        if (vecNH.x == 0 and rotY ==0): opeZ = 0
+        else: opeZ = vecNH.x/np.sin(rotY)
+        # Avoid nan value in case of arccos of something greater than 1 or less than -1
+        opeZ = np.clip(opeZ, -1, 1)
         rotZ = np.arccos(opeZ)
         if (vecHR.y > 0):
             rotZD = -1.*np.degrees(rotZ)
@@ -930,7 +907,7 @@ def convertAnglestoV(THETA=0., PHI=0., TYPE="Sensor"):
             (x,y,z) but we can be in Sun case i.e. TYPE=str(Sun) and
             where we look at the opposite side : from (x,y,z) to (0,0,0)
 
-    Return a vector v:
+    Return a normalized vector v:
     v     : A direction described by Vector class object
     """
     if (TYPE == "Sensor"):
@@ -950,6 +927,9 @@ def convertAnglestoV(THETA=0., PHI=0., TYPE="Sensor"):
 
     # Take the azimuth angle for the second rotation in Z axis
     v = TT.rotateZ(PHI)[v]
+
+    # Be sure v is normalized
+    v = Normalize(v)
     
     return v
 
