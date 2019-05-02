@@ -1317,13 +1317,13 @@ class Smartg(object):
             else:
                 cMatVisuRecep[:][:][:] = cMatVisuRecep[:][:][:]
             
-            # If there are no heliostats --> there is no STP and then no analyses of optical losses
-            if (nb_H <= 0):
-                dicSTP = None; vecLoss = None;
-            else:
-                MZAlt_H = zAlt_H/nb_H
-                # dicSTP : tuple incorporating parameters for Solar Tower Power applications
-                dicSTP = {"nb_H":nb_H, "totS_H":totS_H, "surfTOA":surfMir, "MZAlt_H":MZAlt_H, "vSun":vSun}
+        # If there are no heliostats --> there is no STP and then no analyses of optical losses
+        if (nb_H <= 0):
+            dicSTP = None; vecLoss = None;
+        else:
+            MZAlt_H = zAlt_H/nb_H
+            # dicSTP : tuple incorporating parameters for Solar Tower Power applications
+            dicSTP = {"nb_H":nb_H, "totS_H":totS_H, "surfTOA":surfMir, "MZAlt_H":MZAlt_H, "vSun":vSun}
                 
         # finalization
         output = finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl[:], NPhotonsInTot, errorcount, NPhotonsOutTot,
