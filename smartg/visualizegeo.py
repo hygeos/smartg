@@ -22,6 +22,9 @@ import mpl_toolkits.mplot3d as mp3d
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from matplotlib import colors as mcolors
 
+import re, six
+from itertools import dropwhile
+
 def receiver_view(disMatrix, w = False, logI=False, nameFile = None, MTOA = 1320, vmin=None):
 
     '''
@@ -933,6 +936,56 @@ def convertAnglestoV(THETA=0., PHI=0., TYPE="Sensor"):
     
     return v
 
+def is_comment(s):
+    """
+    function to check if a line
+    starts with some character.
+    Here # for comment
+    """
+    # return true if a line starts with #
+    return s.startswith('#')
+
+def extractPoints(filename):
+    """
+    Definition of the function extractPoints
+
+    filename : Name of the file (str type) and its location (absolute of
+               relative path) containing the x, y and z positions of
+               heliostats. The format of the file must contain at least a
+               first comment begining by '#', then an empty line and
+               finally each lines with the x, y and z coordinates of each
+               heliostats seperated by a comma.
+
+    return : List of class point containing the coordinates of heliostats
+    """
+    # First check if filename is an str type
+    if not isinstance(filename, six.string_types) :
+        raise NameError('filename must be an str type!')
+
+    # Check if filename can be read, if yes read it
+    try:
+        with open(filename, "r") as file:
+            for curline in dropwhile(is_comment, file):
+                insideFile = file.read()
+    except FileNotFoundError:
+        print(filename + ' has been not found')
+    except IOError:
+        print("Enter/Exit error with " + filename)
+            
+    # Looking for a float and fill it in listVal
+    listVal = re.findall(r"-?[0-9]+\.?[0-9]*", insideFile)
+        
+    # Number of dimension and number of heliostats
+    nbDim = 3 # x, y and z --> 3 dim
+    nbH = int(len(listVal)/nbDim)
+
+    # # Fill the x, y and z coordinates into a list of Point classes
+    lPH = []
+    for i in range (0, nbH):
+        lPH.append(  Point( float(listVal[i*nbDim]), float(listVal[(i*nbDim)+1]),
+                            float(listVal[(i*nbDim)+2]) )  )
+
+    return lPH
     
 if __name__ == '__main__':
 
