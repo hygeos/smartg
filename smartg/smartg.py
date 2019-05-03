@@ -992,7 +992,7 @@ class Smartg(object):
             Pmin_x = None; Pmin_y = None; Pmin_z = None;
             Pmax_x = None; Pmax_y = None; Pmax_z = None;
             IsAtm = None; TC = None; nbCx = 10; nbCy = 10;
-            vSun = None
+            vSun = None; nb_H = 0
         # END OBJ ===================================================
 
         if cusL is not None:
