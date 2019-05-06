@@ -401,7 +401,7 @@ class Smartg(object):
     def __init__(self, pp=True, debug=False,
                  debug_photon=False,
                  double=False, alis=False, back=False, bias=True, alt_pp=False, obj3D=False, 
-                 opt3D=False, rng='PHILOX'):
+                 opt3D=False, new_cards=False, rng='PHILOX'):
         '''
         Initialization of the Smartg object
 
@@ -432,6 +432,9 @@ class Smartg(object):
             - obj3D : Set to True to enable simulation with 3D objects
 
             - opt3D : Set to True to enable simulation with 3D optical properties
+
+            - new_cards: If True, enable the use the fast double precision atomicAdd (work
+                         only with the newest nividia arch i.e. >= 6.0)
 
             - alt_pp: boolean, if True new PP progation scheme is used
             
@@ -487,8 +490,12 @@ class Smartg(object):
             options.append('-DBIAS')
         if obj3D:
             # 3D Object mode
-            options.append('-DOBJ3D')    
+            options.append('-DOBJ3D')
+        if new_cards:
+            # Fast double atomic add for newest cards
+            options.append('-DNEW_CARDS')
         options.append('-D'+rng)
+            
 
         #
         # compile the kernel or load binary

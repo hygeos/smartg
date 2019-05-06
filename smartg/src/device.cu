@@ -943,7 +943,7 @@ extern "C" {
       double dwsca=(double)wsca;
       double dwabs=(double)wabs;
 
-	  #if __CUDA_ARCH__ >= 600
+	  #if NEW_CARDS
       atomicAdd(tabCount+(0*II+JJ), dwsca * dwabs * ds.x);
       atomicAdd(tabCount+(1*II+JJ), dwsca * dwabs * ds.y);
       atomicAdd(tabCount+(2*II+JJ), dwsca * dwabs * ds.z);
@@ -4538,7 +4538,7 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 		return;
 	}
 
-	#if __CUDA_ARCH__ >= 600
+	#if NEW_CARDS
 	// All the beams reaching a receiver
 	atomicAdd(tabCountObj+(nbCy*indI)+indJ, weight);
 
@@ -4947,7 +4947,7 @@ __device__ void countPhoton(Photon* ph,
       dweight = (double)weight;
       ds = make_double4(st.x, st.y, st.z, st.w);
 
-	  #if __CUDA_ARCH__ >= 600
+	  #if NEW_CARDS
 	  // If GTX 1000 or more recent use native double atomic add
       atomicAdd(tabCount+(0*II+JJ), dweight*(ds.x+ds.y));
       atomicAdd(tabCount+(1*II+JJ), dweight*(ds.x-ds.y));
@@ -5087,7 +5087,7 @@ __device__ void countPhoton(Photon* ph,
           dwsca=(double)wsca;
           dwabs=(double)wabs;
 
-		  #if __CUDA_ARCH__ >= 600
+		  #if NEW_CARDS
           atomicAdd(tabCount+(0*II+JJ), dweight * dwsca * dwabs * (ds.x+ds.y));
           atomicAdd(tabCount+(1*II+JJ), dweight * dwsca * dwabs * (ds.x-ds.y));
 		  atomicAdd(tabCount+(2*II+JJ), dweight * dwsca * dwabs * ds.z);
@@ -5683,7 +5683,7 @@ __device__ unsigned int randomPhilox4x32_7uint(philox4x32_ctr_t* ctr, philox4x32
 }
 #endif
 
-#if defined(DOUBLE) && (__CUDA_ARCH__ < 600)
+#if defined(DOUBLE) && !defined(NEW_CARDS)
 __device__ double DatomicAdd(double* address, double val)
 {
         unsigned long long int* address_as_ull =
