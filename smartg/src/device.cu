@@ -4492,24 +4492,8 @@ __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, struct Sensor *
 __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsigned long long *nbPhCat, void *wPhCat)
 {
 	Transform transfo, invTransfo;
-
-	int indI = 0;
-	int indJ = 0;
-
-	float3 p_t;
-
-	float sizeX = nbCx*TCd;
-	float sizeY = nbCy*TCd;
-
-	// In order to be sure to not consider the photons coming behind the receiver
-	// if (!isBackward(geoS->normalBase, ph->v)) return;
-	// #ifdef DOUBLE
-	// if (   isForward(  make_double3(geoS->normalBase.x, geoS->normalBase.y, geoS->normalBase.z),
-	// 			  make_double3(ph->v.x, ph->v.y, ph->v.z)  )   )
-	// #else
-	// if (isForward(geoS->normalBase, ph->v))
-	// #endif
-	// 	return;
+	int indI = 0; int indJ = 0;
+	float3 p_t; float sizeX = nbCx*TCd; float sizeY = nbCy*TCd;
 
 	p_t = ph->pos;
 	transfo = geoS->mvTF;
@@ -4537,12 +4521,20 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 	double *wPhCatC;
 	double4 stokes;
 	double weight;
-
 	tabCountObj = (double*)tabObjInfo;
 	wPhCatC = (double*)wPhCat;
 	stokes = make_double4(ph->stokes.x, ph->stokes.y, ph->stokes.z, ph->stokes.w);
 	weight = (double)ph->weight;
 	weight = weight * double(stokes.x + stokes.y);
+    #else // If not DOUBLE
+	float *tabCountObj;
+	float *wPhCatC;
+	float weight;
+	tabCountObj = (float*)tabObjInfo;
+	wPhCatC = (float*)wPhCat;
+	weight = (float)ph->weight;
+	weight = weight * float(ph->stokes.x + ph->stokes.y);
+	#endif
 	
 	if(isnan(weight))
 	{
@@ -4550,7 +4542,8 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 		return;
 	}
 
-	#if __CUDA_ARCH__ >= 600
+
+	#if !defined(DOUBLE) || (defined(DOUBLE) && __CUDA_ARCH__ >= 600)
 	// All the beams reaching a receiver
 	atomicAdd(tabCountObj+(nbCy*indI)+indJ, weight);
 
@@ -4604,9 +4597,8 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 		atomicAdd(wPhCatC+7, weight);
 		atomicAdd(nbPhCat+7, 1);
 		atomicAdd(tabCountObj+(8*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-	}	
-	
-	#else
+	}		
+    #else // If DOUBLE and not a new nvidia card
 	DatomicAdd(tabCountObj+(nbCy*indI)+indJ, weight);
 
 	// Les huit catégories
@@ -4660,80 +4652,9 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 		atomicAdd(nbPhCat+7, 1);
 		DatomicAdd(tabCountObj+(8*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}
-	#endif
-    #else // IF not DOUBLE
-
-	float *tabCountObj;
-	float *wPhCatC;
-	float weight;
-	
-	tabCountObj = (float*)tabObjInfo;
-	wPhCatC = (float*)wPhCat;
-	weight = (float)ph->weight;
-	weight = weight * float(ph->stokes.x + ph->stokes.y);
-	
-	if(isnan(weight))
-	{
-		printf("Care weight is nan !! \n");
-		return;
-	}
-	
-	// All the beams reaching a receiver
-	atomicAdd(tabCountObj+(nbCy*indI)+indJ, weight);
-
-	// Les huit catégories
-	if (ph->H == 0 && ph->E == 0 && ph->S == 0) 
-	{ // CAT 1 : aucun changement de trajectoire avant de toucher le R.
-	    atomicAdd(wPhCatC, weight); // comptage poids
-		atomicAdd(nbPhCat, 1);     // comptage nombre de photons
-		atomicAdd(tabCountObj+(nbCy*nbCx)+(nbCy*indI)+indJ, weight); // distri
-	}
-	else if ( ph->H > 0 && ph->E == 0 && ph->S == 0)
-	{ // CAT 2 : only H avant de toucher le R.
-		atomicAdd(wPhCatC+1, weight);
-		atomicAdd(nbPhCat+1, 1);
-		atomicAdd(tabCountObj+(2*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-	}
-	else if ( ph->H == 0 && ph->E > 0 && ph->S == 0)
-	{ // CAT 3 : only E avant de toucher le R.
-		atomicAdd(wPhCatC+2, weight);
-		atomicAdd(nbPhCat+2, 1);
-		atomicAdd(tabCountObj+(3*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-	}
-	else if ( ph->H == 0 && ph->E == 0 && ph->S > 0)
-	{ // CAT 4 : only S avant de toucher le R.
-		atomicAdd(wPhCatC+3, weight);
-		atomicAdd(nbPhCat+3, 1);
-		atomicAdd(tabCountObj+(4*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-	}
-	else if ( ph->H > 0 && ph->E == 0 && ph->S > 0)
-	{ // CAT 5 : 2 proc. H et S avant de toucher le R.
-		atomicAdd(wPhCatC+4, weight);
-		atomicAdd(nbPhCat+4, 1);
-		atomicAdd(tabCountObj+(5*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-	}
-	else if ( ph->H > 0 && ph->E > 0 && ph->S == 0)
-	{ // CAT 6 : 2 proc. H et E avant de toucher le R.
-		atomicAdd(wPhCatC+5, weight);
-		atomicAdd(nbPhCat+5, 1);
-		atomicAdd(tabCountObj+(6*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-        //printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
-	}
-	else if ( ph->H == 0 && ph->E > 0 && ph->S > 0)
-	{ // CAT 7 : 2 proc. E et S avant de toucher le R.
-		atomicAdd(wPhCatC+6, weight);
-		atomicAdd(nbPhCat+6, 1);
-		atomicAdd(tabCountObj+(7*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-	}	
-	else if ( ph->H > 0 && ph->E > 0 && ph->S > 0)
-	{ // CAT 8 : 3 proc. H, E et S avant de toucher le R.
-		atomicAdd(wPhCatC+7, weight);
-		atomicAdd(nbPhCat+7, 1);
-		atomicAdd(tabCountObj+(8*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-	}	
-    #endif
+    #endif // End of !defined(DOUBLE) || (defined(DOUBLE) && defined(NEW_CARDS))
 }
-#endif
+#endif // End OBJ3D
 
 
 __device__ void countPhoton(Photon* ph,
