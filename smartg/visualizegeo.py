@@ -31,6 +31,14 @@ def receiver_view(disMatrix, w = False, logI=False, nameFile = None, MTOA = 1320
     '''
     Definition of receiver_view
 
+    Display the distribution of the radiant flux at a given receiver in the relative
+    coordinates i.e. the coordinates specific to the object (which move with the
+    object if there is a use of transformation)
+
+        ^ x
+        |     Print with the following cordinate system
+    y <--    
+
     disMatrix : 2D numpy array with flux distribution at the receiver
     w         : The receiver size, in kilometer. Can be a scalar or a list with x
                 and y values
@@ -58,7 +66,7 @@ def receiver_view(disMatrix, w = False, logI=False, nameFile = None, MTOA = 1320
 
     if logI == False :
         cax = plt.imshow(m*MTOA, cmap=plt.get_cmap('jet'), interpolation=interpol, \
-                         vmin=vmin, vmax=vmax, extent = [-(wy*1000),(wy*1000),-(wx*1000),(wx*1000)])
+                         vmin=vmin, vmax=vmax, extent = [(wy*1000),-(wy*1000),-(wx*1000),(wx*1000)])
     else:
         m2 = m
         if (np.amin(m2) < 0.00001):
@@ -68,15 +76,14 @@ def receiver_view(disMatrix, w = False, logI=False, nameFile = None, MTOA = 1320
             
         cax = plt.imshow(m*MTOA, cmap=plt.get_cmap('jet'), \
                          norm=mcolors.LogNorm(vmin=valmin*MTOA, vmax=np.amax(m*MTOA)), \
-                         interpolation=interpol, extent = [-(wy*1000),(wy*1000),-(wx*1000),(wx*1000)])
+                         interpolation=interpol, extent = [(wy*1000),-(wy*1000),-(wx*1000),(wx*1000)])
 
     cbar = plt.colorbar()
     cbar.remove()
     cbar = plt.colorbar(cax)
     cbar.set_label(r'Irradiance (W m$^{-2}$)', fontsize = 12)
-
-    plt.xlabel(r'Horizontale position (m) -y axis-')
-    plt.ylabel(r'Verticale position (m) -x axis-')
+    plt.xlabel(r'Position (m) in relative y axis')
+    plt.ylabel(r'Position (m) in relative x axis')
     plt.title('Receiver surface')
     if (nameFile is not None):
         plt.savefig(nameFile + '.pdf')  
@@ -882,6 +889,8 @@ def convertVtoAngles(v, TYPE="Sensor"):
         # Convert the values in radians to degrees
         Theta = np.degrees(rotY)
         Phi = np.degrees(rotZ)
+
+        print("Theta=", Theta, "Phi=", Phi)
         
         return Theta, Phi
     else:
