@@ -4466,6 +4466,7 @@ __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, struct Sensor *
 	weightBlo = (float)ph->weight_loss[4];
 	#endif
 
+    #if !defined(DOUBLE) || (defined(DOUBLE) && defined(NEW_CARDS))
 	if (ph->H < 2) // If this is the first time that a photon is reaching a heliostat
 	{
 		atomicAdd(wPhLossC, weightE);       // We
@@ -4475,6 +4476,17 @@ __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, struct Sensor *
 	}
 	else
 		atomicAdd(wPhLossC+4, weightBlo);   // Wblo where blocking efficiency = (Wspi-Wblo)/Wspi
+	#else
+	if (ph->H < 2) // If this is the first time that a photon is reaching a heliostat
+	{
+		DatomicAdd(wPhLossC, weightE);       // We
+		DatomicAdd(wPhLossC+1, weightECos);  // We/cos(Theta)
+		DatomicAdd(wPhLossC+2, weightS);     // Ws
+		DatomicAdd(wPhLossC+3, weightSpi);   // Wspi
+	}
+	else
+		DatomicAdd(wPhLossC+4, weightBlo);   // Wblo where blocking efficiency = (Wspi-Wblo)/Wspi
+	#endif
 }
 
 __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsigned long long *nbPhCat, void *wPhCat)
