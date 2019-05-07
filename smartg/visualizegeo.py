@@ -25,7 +25,8 @@ from matplotlib import colors as mcolors
 import re, six
 from itertools import dropwhile
 
-def receiver_view(disMatrix, w = False, logI=False, nameFile = None, MTOA = 1320, vmin=None):
+def receiver_view(disMatrix, w = False, logI=False, nameFile = None, MTOA = 1320,
+                  vmin=None, vmax=None, interpol='none'):
 
     '''
     Definition of receiver_view
@@ -38,6 +39,8 @@ def receiver_view(disMatrix, w = False, logI=False, nameFile = None, MTOA = 1320
                 of the current print with the specified name
     MTOA      : Radiant exitance at TOA (W/m2)
     vmin      : Minimal distribution value (W/m2), not for log print
+    vmax      : Maximal distribution value (W/m2), not for log print
+    interpol  : Interpolations for imshow/matshow, i.e. nearest, bilinear, bicubic, ...
     '''
     if w==False :
         raise Exception("In receiver_view(), the receiver size w must be specified!")
@@ -54,8 +57,8 @@ def receiver_view(disMatrix, w = False, logI=False, nameFile = None, MTOA = 1320
     plt.figure()
 
     if logI == False :
-        cax = plt.imshow(m*MTOA, cmap=plt.get_cmap('jet'), interpolation='None', \
-                         vmin=vmin, extent = [-(wy*1000),(wy*1000),-(wx*1000),(wx*1000)])
+        cax = plt.imshow(m*MTOA, cmap=plt.get_cmap('jet'), interpolation=interpol, \
+                         vmin=vmin, vmax=vmax, extent = [-(wy*1000),(wy*1000),-(wx*1000),(wx*1000)])
     else:
         m2 = m
         if (np.amin(m2) < 0.00001):
@@ -65,7 +68,7 @@ def receiver_view(disMatrix, w = False, logI=False, nameFile = None, MTOA = 1320
             
         cax = plt.imshow(m*MTOA, cmap=plt.get_cmap('jet'), \
                          norm=mcolors.LogNorm(vmin=valmin*MTOA, vmax=np.amax(m*MTOA)), \
-                         interpolation='None', extent = [-(wy*1000),(wy*1000),-(wx*1000),(wx*1000)])
+                         interpolation=interpol, extent = [-(wy*1000),(wy*1000),-(wx*1000),(wx*1000)])
 
     cbar = plt.colorbar()
     cbar.remove()
