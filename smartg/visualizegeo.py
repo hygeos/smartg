@@ -868,7 +868,7 @@ def convertVtoAngles(v, TYPE="Sensor"):
         if (TYPE == "Sensor"):
             v = Normalize(v)
         elif (TYPE == "Sun"):
-            v = Normalize(-v) # Sun we look at the oposite side
+            v = Normalize(Vector(-v.x, -v.y, -v.z)) # Sun we look at the oposite side
         else:
             raise NameError('TYPE arg must be str(Sensor) or str(Sun)')       
         v.z = np.clip(v.z, -1, 1) # Avoid error due to float precision
