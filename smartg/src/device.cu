@@ -270,6 +270,11 @@ extern "C" {
 		if (LEd ==0) countPhoton(&ph, prof_atm, prof_oc, tabthv, tabphi, count_level,
             errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
 
+		#if defined(BACK)
+		if (count_level == UPTOA and LMODEd == 4) // the photon reach TOA
+		{ countPhotonObj3D(&ph, tabObjInfo, &geoStruc, nbPhCat, wPhCat);}
+        #endif
+
 		__syncthreads();
 		
 		//
@@ -673,7 +678,8 @@ extern "C" {
         // -> in OBJSURF
         if(ph.loc == OBJSURF)
 		{
-			if (geoStruc.type == RECEIVER) // this is a receiver
+
+			if (geoStruc.type == RECEIVER and LMODEd != 4) // this is a receiver
 			{ countPhotonObj3D(&ph, tabObjInfo, &geoStruc, nbPhCat, wPhCat);}
 
 			// For losses count
@@ -1256,6 +1262,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     #endif
 
     #ifdef OBJ3D
+    #if !defined(BACK)
 	if (LMODEd == 1) // Marche que pour le mode forward restreint
 	{		
 		/* ***************************************************************************************** */
@@ -1411,8 +1418,8 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		ph->pos.y += cusForwPos.y + CFTYd;
 		ph->pos.z = tab_sensor[ph->is].POSZ;
 	} //END LMODEd == 2
-
-	if (LMODEd == 3) // cusBackward mode
+    #else // else if Backward modes
+	if (LMODEd == 3 or LMODEd == 4) // common part between mode B and BR (cusBackward)
 	{
 		// Sampling of alpha and beta angles
 		float alpha = ALDEGd, beta=BETDEGd;
@@ -1443,7 +1450,32 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 
 		// update of u and v
 		ph->v = vfloat; ph->u = ufloat;
-	} //END LMODEd == 3
+	} //END LMODEd == 3 or LMODEd == 4
+	if (LMODEd == 4) // LMODE = "BR" Backward with receiver
+	{
+		// Collect the receiver object
+		IObjets objP;
+		objP = myObjets[nObj];
+		
+		Transform TR; // declare the transformation of the receiver
+
+		// If x, y or z values are different to 0 then there is a translation
+		if (objP.mvTx != 0 or objP.mvTy != 0 or objP.mvTz != 0) {
+			Transform TmT;
+			TmT = TR.Translate(make_float3(objP.mvTx, objP.mvTy, objP.mvTz));
+			TR = TmT; }
+
+		// Add rotation tranformations
+		TR = addRotAndParseOrder(TR, objP); //see the function
+
+		float sizeX = nbCx*TCd; float sizeY = nbCy*TCd;
+		Pointf p_t(sizeX*0.5 - (RAND*sizeX), sizeY*0.5 - (RAND*sizeY), 0.);
+		ph->posIni = make_float3(p_t.x, p_t.y, p_t.z);
+		
+		// Apply transfo and update the value of the photon position
+		ph->pos = TR(p_t);
+	} //END LMODEd == 4
+	#endif // END !defined(BACK)
     #endif //END OBJ3D
     }
 
@@ -4491,15 +4523,37 @@ __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, struct Sensor *
 
 __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsigned long long *nbPhCat, void *wPhCat)
 {
-	Transform transfo, invTransfo;
 	int indI = 0; int indJ = 0;
 	float3 p_t; float sizeX = nbCx*TCd; float sizeY = nbCy*TCd;
-
+	
+    #if defined(BACK)
+	if (LMODEd == 4)
+	{
+		float ANGD = 0.2666;
+		double cosANGD, cosPHSUN;
+		cosANGD = cos(radiansd(ANGD));
+		double3 vecSUN = make_double3(-DIRSXd, -DIRSYd, -DIRSZd);
+		double3 vecPH = make_double3(ph->v.x, ph->v.y, ph->v.z);
+		cosPHSUN = dot(vecSUN, vecPH);
+		p_t = ph->posIni;
+		if (cosPHSUN < cosANGD) {return;}
+	}
+	else
+	{
+		Transform transfo, invTransfo;
+		p_t = ph->pos;
+		transfo = geoS->mvTF;
+		invTransfo = transfo.Inverse(transfo);
+		p_t = invTransfo(Pointf(p_t));
+	}
+	#else
+	Transform transfo, invTransfo;
 	p_t = ph->pos;
 	transfo = geoS->mvTF;
 	invTransfo = transfo.Inverse(transfo);
 	p_t = invTransfo(Pointf(p_t));
-
+	#endif
+	
     // ancienne implementation = mauvaise
     // Transform rotz;
 	// rotz = rotz.RotateZ(0);
@@ -4583,7 +4637,7 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 		atomicAdd(wPhCatC+5, weight);
 		atomicAdd(nbPhCat+5, 1);
 		atomicAdd(tabCountObj+(6*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-        printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
+        //printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
 		//=(%f,%f)
 	}
 	else if ( ph->H == 0 && ph->E > 0 && ph->S > 0)

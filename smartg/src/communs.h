@@ -237,6 +237,9 @@ public:
     int H, E, S;
 	float weight_loss[5];
 	#endif
+    #if defined(BACK) &&  defined(OBJ3D)
+	float3 posIni;
+	#endif
 private:
 };
 

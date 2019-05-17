@@ -366,15 +366,23 @@ class CusBackward(object):
               plane ZY, both starting at Z+ and going in the trigonometric direction
               respectively arround the axis Y and X 
     V       : Direction but represented by a Vector type, if not None replace TH, PH
-    LMODE (Launching mode) : B = Backward
+    LMODE (Launching mode) : B = basic Backward, BR = Backward with receiver
+                             B -> Launch the photons from a given point in a given
+                                  direction (eventually can choose a ramdom vector
+                                  in a solid angle arround a given direction delimited
+                                  by the angles ALDEG and BETDEG)
+                             B -> Launch the photons from a given receiver (plane obj)
+                                  in a given direction (also eventually can choose a
+                                  ramdom vector in a solid angle delimited by ALDEG and
+                                  BETDEG)
     '''
     def __init__(self, POS = Point(0., 0., 0.), THDEG = 0., PHDEG = 0., V = None,
-                 ALDEG = None, BETDEG = None, LMODE = "B"):
+                 ALDEG = 0., BETDEG = 0., REC = None, LMODE = "B"):
 
-        if (isinstance(V, Vector)):
-            THDEG, PHDEG = convertVtoAngles(V)
-        elif (V != None):
-            raise NameError('V argument must be a Vector')
+        if (isinstance(V, Vector)): THDEG, PHDEG = convertVtoAngles(V)
+        elif (V != None): raise NameError('V argument must be a Vector')
+        if LMODE == "BR" and not isinstance(REC, Entity):
+            raise NameError('In BR LMODE you have to specify a receiver!')
         
         self.dict = {
             'POS':    POS,
@@ -382,6 +390,7 @@ class CusBackward(object):
             'PHDEG':  PHDEG,
             'ALDEG':  ALDEG,
             'BETDEG': BETDEG,
+            'REC':    REC,
             'LMODE':  LMODE
         }
 
@@ -689,12 +698,21 @@ class Smartg(object):
             elif (cusL.dict['LMODE'] == "B"):
                 sensor = Sensor(POSX=cusL.dict['POS'].x, POSY=cusL.dict['POS'].y, POSZ=cusL.dict['POS'].z,
                                 THDEG=cusL.dict['THDEG'], PHDEG=cusL.dict['PHDEG'], LOC='ATMOS')
+            elif (cusL.dict['LMODE'] == "BR"):
+                sensor = Sensor(POSX=cusL.dict['REC'].transformation.transx,
+                                POSY=cusL.dict['REC'].transformation.transy,
+                                POSZ=cusL.dict['REC'].transformation.transz,
+                                THDEG=cusL.dict['THDEG'], PHDEG=cusL.dict['PHDEG'], LOC='ATMOS')
+            # if (cusL.dict['LMODE'] == "BR"):
+            #     if myObjects == None: myObjects = True
         
         if ((myObjects is not None) or (cusL is not None)):
             # Prendre en compte la direction du soleil avec l'angle zenithal et azimuth
             vSun = convertAnglestoV(THETA=THVDEG, PHI=PHVDEG, TYPE="Sun") 
             vSun = Normalize(vSun)
-            
+            if (myObjects is None):
+                myObjects0 = np.zeros(1, dtype=type_IObjets, order='C')
+                
         if (myObjects is not None):
             # Initialisations
             if interval is not None:
@@ -704,8 +722,45 @@ class Smartg(object):
                 Pmin_x = -300; Pmin_y = -300; Pmin_z = 0;
                 Pmax_x = 300;  Pmax_y = 300; Pmax_z = 120;
             nObj = len(myObjects)
-            myObjects0 = np.zeros(nObj, dtype=type_IObjets, order='C')
-            TC = None; nbCx = int(0); nbCy = int(0);
+            if cusL != None and cusL.dict['LMODE'] == "BR":
+                myObjects0 = np.zeros(nObj+1, dtype=type_IObjets, order='C')
+                TC=cusL.dict['REC'].TC
+                sizeXmin = min(cusL.dict['REC'].geo.p1.x, cusL.dict['REC'].geo.p2.x,
+                               cusL.dict['REC'].geo.p3.x, cusL.dict['REC'].geo.p4.x)
+                sizeXmax = max(cusL.dict['REC'].geo.p1.x, cusL.dict['REC'].geo.p2.x,
+                               cusL.dict['REC'].geo.p3.x, cusL.dict['REC'].geo.p4.x)
+                sizeX = sizeXmax - sizeXmin
+                sizeYmin = min(cusL.dict['REC'].geo.p1.y, cusL.dict['REC'].geo.p2.y,
+                               cusL.dict['REC'].geo.p3.y, cusL.dict['REC'].geo.p4.y)
+                sizeYmax = max(cusL.dict['REC'].geo.p1.y, cusL.dict['REC'].geo.p2.y,
+                               cusL.dict['REC'].geo.p3.y, cusL.dict['REC'].geo.p4.y)
+                sizeY = sizeYmax - sizeYmin
+                nbCx = int(sizeX/TC)
+                nbCy = int(sizeY/TC)
+                myObjects0['mvRx'][nObj] = cusL.dict['REC'].transformation.rotx
+                myObjects0['mvRy'][nObj] = cusL.dict['REC'].transformation.roty
+                myObjects0['mvRz'][nObj] = cusL.dict['REC'].transformation.rotz
+                if (cusL.dict['REC'].transformation.rotOrder == "XYZ"):
+                    myObjects0['rotOrder'][nObj] = 1
+                elif(cusL.dict['REC'].transformation.rotOrder == "XZY"):
+                    myObjects0['rotOrder'][nObj] = 2
+                elif(cusL.dict['REC'].transformation.rotOrder == "YXZ"):
+                    myObjects0['rotOrder'][nObj] = 3
+                elif(cusL.dict['REC'].transformation.rotOrder == "YZX"):
+                    myObjects0['rotOrder'][nObj] = 4
+                elif(cusL.dict['REC'].transformation.rotOrder == "ZXY"):
+                    myObjects0['rotOrder'][nObj] = 5
+                elif(cusL.dict['REC'].transformation.rotOrder == "ZYX"):
+                    myObjects0['rotOrder'][nObj] = 6
+                else:
+                    raise NameError('Unknown rotation order')
+                myObjects0['mvTx'][nObj] = cusL.dict['REC'].transformation.transx
+                myObjects0['mvTy'][nObj] = cusL.dict['REC'].transformation.transy
+                myObjects0['mvTz'][nObj] = cusL.dict['REC'].transformation.transz
+            else:
+                myObjects0 = np.zeros(nObj, dtype=type_IObjets, order='C')
+                TC = None; nbCx = int(0); nbCy = int(0);
+                
             pp1 = 0.; pp2 = 0.; pp3 = 0.; pp4 = 0.;
             surfMir = 0.; nb_H = 0; zAlt_H = 0.; totS_H = 0.;
 
@@ -1304,11 +1359,11 @@ class Smartg(object):
         if (TC is not None):
             if (cusL is None):
                 cMatVisuRecep[:][:][:] = cMatVisuRecep[:][:][:]
-            elif (cusL.dict['LMODE'] != "B"):
+            elif (cusL.dict['LMODE'] != "B" and cusL.dict['LMODE'] != "BR"):
                 for i in range (0, 9):
                     cMatVisuRecep[i][:][:] = cMatVisuRecep[i][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
             else:
-                cMatVisuRecep[:][:][:] = cMatVisuRecep[:][:][:]
+                cMatVisuRecep[:][:][:] = cMatVisuRecep[:][:][:]/(TC*TC*NBPHOTONS)
             
         # If there are no heliostats --> there is no STP and then no analyses of optical losses
         if (nb_H <= 0):
@@ -1916,12 +1971,15 @@ def InitConst(surf, env, NATM, NOCE, mod,
             copy_to_device('CFTXd', cusL.dict['CFTX'], np.float32)
             copy_to_device('CFTYd', cusL.dict['CFTY'], np.float32)
             copy_to_device('LMODEd', 2, np.int32)
-        if (  (cusL != None) and (cusL.dict['LMODE'] == "B")  ):
+        if (  (cusL != None) and (cusL.dict['LMODE'] == "B" or cusL.dict['LMODE'] == "BR")  ):
             copy_to_device('THDEGd', cusL.dict['THDEG'], np.float32)
             copy_to_device('PHDEGd', cusL.dict['PHDEG'], np.float32)
             copy_to_device('ALDEGd', cusL.dict['ALDEG'], np.float32)
             copy_to_device('BETDEGd', cusL.dict['BETDEG'], np.float32)
+        if (  (cusL != None) and (cusL.dict['LMODE'] == "B")  ):    
             copy_to_device('LMODEd', 3, np.int32)
+        if (  (cusL != None) and (cusL.dict['LMODE'] == "BR")  ):
+            copy_to_device('LMODEd', 4, np.int32)
         if (cusL == None):
             copy_to_device('LMODEd', 0, np.int32)
         
