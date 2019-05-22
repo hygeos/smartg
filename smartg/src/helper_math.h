@@ -34,8 +34,9 @@
 #ifndef DEBUG
 #define myError(expr) ((void)0)
 #else
-#define myError(expr) ( (expr) ? \
+//#define myError(expr) ( (expr) ? \
 						(printf("vector or matrice indices error***\n")) : (0) )
+#define myError(expr) ((void)0)
 #endif
 
 typedef unsigned int uint;
@@ -2434,7 +2435,33 @@ inline __host__ __device__ float4x4 add(const float4x4 &M1, const float4x4 &M2)
 	return r;
 }
 
+inline __host__ __device__ double3x3 add(const double3x3 &M1, const double3x3 &M2)
+{
+	double3x3 r;
+	for (int i = 0; i < 3; ++i)
+	{
+		for (int j = 0; j < 3; ++j)
+		{
+			r[i][j] = M1[i][j] + M2[i][j];
+		}
+	}
+	return r;
+}
 //******************************************************************************
+// mutiplication matrix x scalar
+inline __host__ __device__ double3x3 mul(double3x3 &M, double f)
+{
+	double3x3 r;
+	for (int i = 0; i < 3; ++i)
+	{
+		for (int j = 0; j < 3; ++j)
+		{
+			r[i][j] = M[i][j] * f;
+		}
+	}
+	return r;
+}
+
 inline __host__ __device__ double2 mul(double2x2 M, double2 v)
 {
 	double2 r;

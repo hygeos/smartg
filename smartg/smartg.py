@@ -402,7 +402,7 @@ class CusBackward(object):
 class Smartg(object):
 
     def __init__(self, pp=True, debug=False,
-                 debug_photon=False,
+                 verbose_photon=False,
                  double=False, alis=False, back=False, bias=True, alt_pp=False, obj3D=False, 
                  opt3D=False, new_cards=False, rng='PHILOX'):
         '''
@@ -422,7 +422,7 @@ class Smartg(object):
 
             - debug: set to True to activate debug mode (optional stdout if problems are detected)
 
-            - debug_photon: activate the display of photon path for the thread 0
+            - verbose_photon: activate the display of photon path for the thread 0
 
             - double : accumulate photons table in double precision, default single
 
@@ -477,8 +477,8 @@ class Smartg(object):
         if debug:
             # additional tests for debugging
             options.append('-DDEBUG')
-        if debug_photon:
-            options.append('-DDEBUG_PHOTON')
+        if verbose_photon:
+            options.append('-DVERBOSE_PHOTON')
         if double:
             # counting in double precision
             # ! slows down processing
@@ -553,7 +553,7 @@ class Smartg(object):
              NBLOOP=None, progress=True, 
              le=None, flux=None, stdev=False, BEER=1, RR=1, WEIGHTRR=0.1, SZA_MAX=90., SUN_DISC=0,
              sensor=None, refraction=False, reflectance=True, myObjects=None, interval = None,
-             IsAtm = 1, cusL = None, SS=False, FFS=False):
+             IsAtm = 1, cusL = None, SS=False, FFS=False, DIRECT=False):
         '''
         Run a SMART-G simulation
 
@@ -682,6 +682,8 @@ class Smartg(object):
             - SS : Single Scattering only: Default False
 
             - FFS : Forced First Scattering (for use in spherical limb geometry only): Default False
+
+            - DIRECT : Include directly transmitted photons: Default False
 
         Return value:
         ------------
@@ -1297,7 +1299,7 @@ class Smartg(object):
                   NBPHOTONS, NBLOOP, THVDEG, DEPO,
                   XBLOCK, XGRID, NLAM, SIM, NF,
                   NBTHETA, NBPHI, OUTPUT_LAYERS,
-                  RTER, LE, ZIP, FLUX, FFS, NLVL, NPSTK,
+                  RTER, LE, ZIP, FLUX, FFS, DIRECT, NLVL, NPSTK,
                   NWLPROBA, BEER, SS, RR, WEIGHTRR, NLOW, NJAC, 
                   NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj,
                   Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, vSun, HIST)
@@ -1450,7 +1452,7 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
     axnames2 = ['None', 'Zenith angles']
     if hist : axnames3 = ['None', 'None', 'Zenith angles']
     iphi     = slice(None)
-    if hist : axnames3 = ['None', 'None', 'Azimuth angles', 'Zenith angles']
+    #if hist : axnames3 = ['None', 'None', 'Azimuth angles', 'Zenith angles']
     m.set_attr('zip', 'False')
 
     if le is not None:
@@ -1837,7 +1839,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
               NBPHOTONS, NBLOOP, THVDEG, DEPO,
               XBLOCK, XGRID,NLAM, SIM, NF,
               NBTHETA, NBPHI, OUTPUT_LAYERS,
-              RTER, LE, ZIP, FLUX, FFS, NLVL, NPSTK, NWLPROBA, BEER, SS, RR, 
+              RTER, LE, ZIP, FLUX, FFS, DIRECT, NLVL, NPSTK, NWLPROBA, BEER, SS, RR, 
               WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj,
               Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, vSun, HIST) :
     """
@@ -1880,6 +1882,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
     copy_to_device('ZIPd', ZIP, np.int32)
     copy_to_device('FLUXd', FLUX, np.int32)
     copy_to_device('FFSd', 1 if FFS else 0, np.int32)
+    copy_to_device('DIRECTd', 1 if DIRECT else 0, np.int32)
     #copy_to_device('MId', MI, np.int32)
     copy_to_device('NLVLd', NLVL, np.int32)
     copy_to_device('NPSTKd', NPSTK, np.int32)

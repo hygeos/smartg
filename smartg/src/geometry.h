@@ -26,8 +26,9 @@ __device__ float machine_eps_flt() {
 #ifndef DEBUG
 #define myError(expr) ((void)0)
 #else
-#define myError(expr) ( (expr) ? \
+//#define myError(expr) ( (expr) ? \
 						(printf("Point, Vector or Normal indices error***\n")) : (0) )
+#define myError(expr) ((void)0)
 #endif
 
 #include <iterator>

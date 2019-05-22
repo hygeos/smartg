@@ -32,6 +32,7 @@ __device__ __constant__ int ZIPd;
 __device__ __constant__ int FLUXd;
 //__device__ __constant__ int MId;
 __device__ __constant__ int FFSd;
+__device__ __constant__ int DIRECTd;
 __device__ __constant__ int SURd;
 __device__ __constant__ int BRDFd;
 __device__ __constant__ int DIOPTREd;
@@ -211,6 +212,8 @@ __device__ void rotation3D_test(float, float3, float3x3*);
 
 // Rotation Matrix of angle theta around unit vector u
 __device__ float3x3 rotation3D(float, float3);
+// Rotation Matrix of angle theta around unit vector u
+__device__ double3x3 rotation3D(double, double3);
 
 /* ComputePsi */
 __device__ void ComputePsi(Photon*, float*, float);
@@ -222,7 +225,7 @@ __device__ void ComputePsiZenith(Photon* , float* , float);
 __device__ int ComputeBox(int*, int*, int*, Photon*,
                            unsigned long long *errorcount, int count_level);
 
-//#ifdef DEBUG_PHOTON
+//#ifdef VERBOSE_PHOTON
 __device__ void display(const char* desc, Photon* ph);
 //#endif
 

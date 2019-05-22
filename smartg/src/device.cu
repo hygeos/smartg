@@ -232,7 +232,7 @@ extern "C" {
 				);
 			
             iloop = 1;
-            #ifdef DEBUG_PHOTON
+            #ifdef VERBOSE_PHOTON
 			if (idx==0) {printf("\n");}
             display("INIT", &ph);
             #endif
@@ -279,7 +279,7 @@ extern "C" {
             }
         //--------------------------
 
-        #ifdef DEBUG_PHOTON
+        #ifdef VERBOSE_PHOTON
 		if( (ph.loc == ATMOS) || (ph.loc == OCEAN)){
 		display("MOVE", &ph);
 		}
@@ -298,7 +298,7 @@ extern "C" {
             nbPhotonsThr++;
             // reset the photon location (always)
             ph.loc = NONE;
-            #ifdef DEBUG_PHOTON
+            #ifdef VERBOSE_PHOTON
             display("SPACE", &ph);
             #endif
 
@@ -327,7 +327,7 @@ extern "C" {
 			/* Choose the scatterer */
             choose_scatterer(&ph, prof_atm, prof_oc,  spectrum, 
 							 &rngstate); 
-            #ifdef DEBUG_PHOTON
+            #ifdef VERBOSE_PHOTON
             display("CHOOSE SCAT", &ph);
             #endif
 
@@ -370,8 +370,11 @@ extern "C" {
                             thv = tabthv[ph_le.ith];
 
                             // in case of atmospheric refraction determine the outgoing direction
-                            //if (0) {
+                            #ifdef DEBUG
+                            if (REFRACd && ph_le.loc==ATMOS && ph_le.nint==0) {
+                            #else
                             if (REFRACd && ph_le.loc==ATMOS) {
+                            #endif
                                 DirectionToUV(thv, phi, &v, &u);
                                 v = normalize(v);
                                 u = normalize(cross(v, no));
@@ -381,7 +384,7 @@ extern "C" {
                                 refrac_angle=0.F;
                                 float ra=0.F;
                                 // propagation //
-                                while((iter < 1)) {
+                                while((iter < 0)) {
                                    #ifdef SPHERIQUE
                                    move_sp(&ph_le, prof_atm, 1, UPTOA , &rngstate);
                                    if (ph_le.loc != SPACE) break;
@@ -413,14 +416,14 @@ extern "C" {
                                     1, refrac_angle, tabthv, tabphi,
                                     count_level_le, &rngstate);
 
-                            #ifdef DEBUG_PHOTON
+                            #ifdef VERBOSE_PHOTON
                             if (k==0) display("SCATTER LE UP", &ph_le);
                             else display("SCATTER LE DOWN", &ph_le);
                             #endif
 
                             #ifdef SPHERIQUE
                             if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, count_level_le , &rngstate);
-                            #ifdef DEBUG_PHOTON
+                            #ifdef VERBOSE_PHOTON
                             display("MOVE LE", &ph_le);
                             #endif
                             #else
@@ -442,7 +445,7 @@ extern "C" {
             scatter(&ph, prof_atm, prof_oc, faer, foce,
                     0, 0.F, tabthv, tabphi, 0,
                     &rngstate);
-            #ifdef DEBUG_PHOTON
+            #ifdef VERBOSE_PHOTON
             display("SCATTER", &ph);
             #endif
 
@@ -490,7 +493,7 @@ extern "C" {
                             surfaceAgitee(&ph_le, 1, tabthv, tabphi,
                                       count_level_le, &rngstate);
 
-                        #ifdef DEBUG_PHOTON
+                        #ifdef VERBOSE_PHOTON
                         if (k==0) display("SURFACE LE UP", &ph_le);
                         else display("SURFACE LE DOWN", &ph_le);
                         #endif
@@ -621,7 +624,7 @@ extern "C" {
                             surfaceAgitee(&ph_le, 1, tabthv, tabphi,
                                       count_level_le, &rngstate);
 
-                        #ifdef DEBUG_PHOTON
+                        #ifdef VERBOSE_PHOTON
                         if (k==0) display("SURFACE LE UP", &ph_le);
                         else display("SURFACE LE DOWN", &ph_le);
                         #endif
@@ -631,7 +634,7 @@ extern "C" {
 
                         // Only for upward photons count also them up to TOA
 
-                        #ifdef DEBUG_PHOTON
+                        #ifdef VERBOSE_PHOTON
                         if (k==0) display("SURFACE LE UP", &ph_le);
                         else display("SURFACE LE DOWN", &ph_le);
                         #endif
@@ -671,7 +674,7 @@ extern "C" {
                 } //dis
            } // ENV=1
 
-           #ifdef DEBUG_PHOTON
+           #ifdef VERBOSE_PHOTON
            display("SURFACE", &ph);
            #endif
 		}
@@ -703,7 +706,7 @@ extern "C" {
             } //LE
 
 			surfaceLambert(&ph, 0, tabthv, tabphi, spectrum, &rngstate);
-            #ifdef DEBUG_PHOTON
+            #ifdef VERBOSE_PHOTON
             display("SEAFLOOR", &ph);
             #endif
          }
@@ -802,7 +805,7 @@ extern "C" {
 				countLoss(&ph, &geoStruc, wPhLoss, tab_sensor);
 			}
 			
-			#ifdef DEBUG_PHOTON
+			#ifdef VERBOSE_PHOTON
 			display("OBJSURF", &ph);
             #endif
 		}
@@ -1508,12 +1511,11 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
     float costh, sinth2;
     int ilam = ph->ilam*(NATMd+1);  // wavelength offset in optical thickness table
     float3 no, v0, u0;
-	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+	//int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
 
     if (ph->layer == 0) ph->layer = 1;
 
     // Random Optical Thickness to go through
-    //if (!le) tauRdm = -logf(1.F-RAND);
     if (!le) {
         if ((ph->taumax != 0.F) && (ph->nint==0)) {
             tauRdm = -logf(1.F-RAND*(1.F-exp(-ph->taumax)));
@@ -1526,6 +1528,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
     // photon is forced to exit upward or downward and tauRdm is chosen to be an upper limit
     else tauRdm = 1e6;
 
+    ph->radius = length(ph->pos);
     vzn = __fdividef( dot(ph->v, ph->pos), ph->radius);
 
     // a priori value for sign_direction:
@@ -1659,27 +1662,73 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
             ph->radius = length(ph->pos);
             no = operator/(ph->pos, ph->radius);
             vzn = dot(ph->v, no);
-            if (REFRACd) {
+            /*if (REFRACd) {
+            //if (REFRACd && ph->nint<=1) {
+                double3 vv = normalize(make_double3((double)ph->v.x,(double)ph->v.y,(double)ph->v.z));
+                double3 nono = normalize(make_double3((double)no.x,(double)no.y,(double)no.z));
+                double3 uu = normalize(cross(nono, vv)); // unit vector around which one turns
                 // We update photon direction at the interface due to refraction
                 // 1. sin_i just to verify if refraction occurs
-                float s1    = sqrtf(1.F - vzn*vzn);
-                if (s1 > 1.F) s1=1.F;
+                double s1    = sqrt(1. - (double)vzn*(double)vzn);
+                if (s1 > 1.) s1=1.;
                 // 2. determine old and new refraction indices from old and new layer indices
-                float nind  = __fdividef(prof_atm[i_layer_fw+ilam].n, prof_atm[i_layer_bh+ilam].n);
-                float i2, alpha = 0.F; // emergent direction, deviation angle
-                if (s1!=0.F && nind!=1.F) { // in case of refraction
-                  float3 u = normalize(cross(ph->v, no)); // unit vector around which one turns
-	              if((s1 <= nind) || (nind > 1.F)) {
-                      i2 = s1/nind;
-                      if (i2 > 1.F) i2=1.F;
-                      i2 = asinf(i2); 
+                double nind  = __ddiv_rn(prof_atm[i_layer_fw+ilam].n, prof_atm[i_layer_bh+ilam].n);
+                double i2, alpha = 0.; // emergent direction, deviation angle
+                if (s1!=0. && nind!=1.) { // in case of refraction
+	              if((s1 <= nind) || (nind > 1.)) {
+                      i2 = __ddiv_rn(s1, nind);
+                      if (i2 > 1.) i2=1.;
+                      i2 = asin(i2); 
                   }
                   else i2 = DEUXPI/4.; //in case of total reflection the emergent direction is tangent
-                  alpha   = i2 - asinf(s1);
+                  double i3 = asin(p0/prof_atm[ph->layer-sign_direction+ilam].n/(double)ph->radius);
+                  alpha   = fabs(i2 - asin(s1));
+                  double alpha3   = fabs(i3 - asin(s1));
+                  double3x3 R=rotation3D(alpha, uu);
+                  //double3x3 R=rotation3D(alpha3, uu);
+                  double3 v2 = normalize(mul(R, vv));
+                  //float3 v2 = operator+(operator*(ph->v, cos(alpha)), operator*(cross(u, ph->v), sin(alpha)));
+                  if(idx==0 ) printf("%i %i %i %f %e %e %e %e %e %e %e %e %e %e %e %e\n", le, ph->is, ph->nint, ph->radius-RTER, 
+                                          nind, asin(s1)*360/DEUXPI, 
+                                          i2*360/DEUXPI, alpha*360/DEUXPI, vv.x, vv.y, vv.z, v2.x, v2.y, v2.z,
+                                          acos(dot(v2,vv))*360/DEUXPI, vzn);
+                  ph->v = make_float3((float)v2.x,(float)v2.y,(float)v2.z);
+                  vzn = dot(ph->v, no);
+                } // no refraction computation necessary
+            } // No Refraction*/
+
+            #ifdef DEBUG
+            if (REFRACd && ph->nint==0) {
+            #else
+            if (REFRACd)  {
+            #endif
+                float3 u = normalize(cross(no, ph->v)); // unit vector around which one turns
+                // We update photon direction at the interface due to refraction
+                // 1. sin_i just to verify if refraction occurs
+                float s1    = sqrt(1. - vzn*vzn);
+                if (s1 > 1.) s1=1.;
+                // 2. determine old and new refraction indices from old and new layer indices
+                float nind  = __fdividef(prof_atm[i_layer_fw+ilam].n, prof_atm[i_layer_bh+ilam].n);
+                float i2, alpha = 0.; // emergent direction, deviation angle
+                if (s1!=0. && nind!=1.) { // in case of refraction
+	              if((s1 <= nind) || (nind > 1.)) {
+                      i2 = __fdividef(s1, nind);
+                      if (i2 > 1.) i2=1.;
+                      i2 = asin(i2); 
+                      alpha   = fabs(i2 - asin(s1));
+                  }
+                  //else i2 = DEUXPI/4.; //in case of total reflection the emergent direction is tangent
+                  //alpha   = fabs(i2 - asin(s1));
+                  else alpha=0.F;
                   float3x3 R=rotation3D(alpha, u);
-                  ph->v = mul(R, ph->v);
-                  //if(idx==0 && !le) printf("MOVE1 %f %i %i %f %f %f %f %f %f\n",ph->radius-RTER, i_layer_bh, i_layer_fw, nind, asinf(s1), i2, alpha, vzn, dot(ph->v, no));
-                  //if(idx==0 && !le) printf("MOVE2 %f %f %f %f %f %f %f %f %f\n--\n",no.x, no.y, no.z, u.x, u.y, u.z, ph->v.x, ph->v.y, ph->v.z);
+                  //if (ph->nint >0) R=make_diag_float3x3(1.F);
+                  float3 v2 = normalize(mul(R, ph->v));
+                  //if (ph->nint>0 && alpha > 1e-4 && idx==0) printf("PB%f\n", alpha, vzn);
+                  //if(idx==0  && ph->nint>1 && le==0) printf("%i %i %i %f %e %e %e %e %e\n", le, ph->is, ph->nint, ph->radius-RTER, 
+                  //                        nind, asin(s1)*360/DEUXPI, i2*360/DEUXPI, alpha*360/DEUXPI, vzn);
+                  //if (ph->nint >0) ph->v = v2;
+                  //if (ph->nint==0) ph->v = v2;
+                  ph->v = v2;
                   vzn = dot(ph->v, no);
                 } // no refraction computation necessary
             } // No Refraction
@@ -1701,7 +1750,11 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
 
     } // while loop
 
-    if (REFRACd) {
+        #ifdef DEBUG
+        if (REFRACd && ph->nint==0) {
+        #else
+        if (REFRACd)  {
+        #endif
         float psi;
         ComputePsiLE(u0, v0, ph->v, &psi, &ph->u); 
 		// Stokes vector rotation
@@ -1711,7 +1764,8 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
     if (le) {
         if (( (count_level==UPTOA)  && (ph->loc==SPACE ) ) || ( (count_level==DOWN0P) && (ph->loc==SURF0P) )) ph->weight *= __expf(-hph);
         else ph->weight = 0.;
-        if (ph->loc==SPACE) ph->taumax = hph;
+        //if (ph->loc==SPACE) ph->taumax = hph;
+        if (ph->loc==SPACE || ph->loc==SURF0P) ph->taumax = hph;
     }
 
     if ((BEERd == 0) && (ph->loc == ATMOS)) ph->weight *= prof_atm[ph->layer+ilam].ssa;
@@ -2654,19 +2708,6 @@ __device__ void scatter(Photon* ph,
 					fpsi= RAND * fpsi_cond_max;
 					fpsi_cond = (1.F + DoLP * K * cosf(2*(psi-gamma)) )/DEUXPI;
 					if (niter >= 100) {
-						// safety check
-                        #ifdef DEBUG
-						printf("Warning, photon rejected in scatter while loop\n");
-						printf("%i  S=(%f,%f), DoLP, gamma=(%f,%f) psi,theta=(%f,%f) \n",
-							   niter,
-							   Q,
-							   U,
-							   DoLP,
-							   gamma,
-							   psi/PI*180,
-							   theta/PI*180
-							   );
-                        #endif
 						ph->loc = NONE;
 						break;
 					}
@@ -3019,14 +3060,6 @@ __device__ void surfaceAgitee(Photon* ph, int le,
 	Ny = normalize(Ny);
 	Nz = normalize(Nz);
 
-    #ifdef DEBUG
-    // we check that there is no upward photon reaching surface0+
-    if ((ph->loc == SURF0P) && (dot(ph->v, ph->pos) > 0)) {
-        // upward photon when reaching the surface at (0+)
-        printf("Warning, vzn>0 (vzn=%f) with SURF0+ in surfaceAgitee, %f %f %f %f %f %f\n", dot(ph->v, ph->pos),Nz.x,Nz.y,Nz.z, ph->pos.x,ph->pos.y,ph->pos.z);
-    }
-    #endif
-
     /* Compute the photon v vector in the local frame */
     v_l.x = dot(ph->v,Nx);
     v_l.y = dot(ph->v,Ny);
@@ -3075,18 +3108,6 @@ __device__ void surfaceAgitee(Photon* ph, int le,
         while (theta >= DEMIPI) {
            iter++;
            if (iter >= 100) {
-                // safety check
-                #ifdef DEBUG
-                printf("Warning, photon rejected in RoughSurface while loop\n");
-                printf("%i  V=(%f,%f,%f) beta,alpha=(%f,%f) \n",
-                        iter,
-                        ph->v.x,
-                        ph->v.y,
-                        ph->v.z,
-                        beta/PI*180,
-                        alpha/PI*180
-                      );
-                #endif
                 ph->loc = NONE;
                 break;
            }
@@ -4778,7 +4799,7 @@ __device__ void countPhoton(Photon* ph,
     }
 
     // don't count the photons directly transmitted
-    if (ph->nint == 0) {
+    if (ph->nint == 0 && DIRECTd==0) {
         return;
     }
 
@@ -4960,14 +4981,6 @@ __device__ void countPhoton(Photon* ph,
 	if (FLUXd==2 && LEd==0 & weight_irr > 0.001f) weight /= weight_irr;
     //if (count_level == UPTOA && HORIZd == 0 && LEd == 1) weight *= weight_irr;
     //if (count_level == UPTOA && HORIZd == 0) weight *= weight_irr;
-
-    #ifdef DEBUG
-	int idx = blockIdx.x *blockDim.x + threadIdx.x;
-    if (isnan(weight)) printf("(idx=%d) Error, weight is NaN, %d\n", idx,ph->loc);
-    if (isnan(st.x)) printf("(idx=%d) Error, s1 is NaN\n", idx);
-    if (isnan(st.y)) printf("(idx=%d) Error, s2 is NaN\n", idx);
-    if (isnan(st.z)) printf("(idx=%d) Error, s3 is NaN\n", idx);
-    #endif
 
     II = NBTHETAd*NBPHId*NLAMd*NSENSORd;
     JJJ= NPSTKd*II;
@@ -5271,14 +5284,29 @@ __device__ float3x3 rotation3D(float theta, float3 u)
                        u.z, 0.F,-u.x,
                       -u.y, u.x, 0.F
                      );
-    C = make_float3x3(u.x*u.x, u.x*u.y, u.x*u.z,
-                      u.x*u.y, u.y*u.y, u.y*u.z,
-                      u.x*u.z, u.y*u.z, u.z*u.z
-                     );
-    R = add(add(mul(A, ct), mul(B, st)), mul(C, 1.F-ct)); 
-
     C = mul(B, B);
     R = add(add(A, mul(B, st)), mul(C, 1.F-ct)); 
+
+    return R;
+}
+
+// Rotation Matrix of angle theta around unit vector u
+__device__ double3x3 rotation3D(double theta, double3 u)
+{
+    // Rodrigues rotation formula
+    double ct=cos(theta);
+    double st=sin(theta);
+    double3x3 I, K, K2, R;
+    I = make_double3x3(1., 0., 0.,
+                       0., 1., 0.,
+                       0., 0., 1.
+                      );
+    K = make_double3x3(0.,-u.z, u.y,
+                       u.z, 0.,-u.x,
+                      -u.y, u.x, 0.
+                      );
+    K2 = mul(K, K);
+    R  = add(add(I, mul(K, st)), mul(K2, 1.-ct));
 
     return R;
 }
@@ -5401,7 +5429,7 @@ __device__ int ComputeBox(int* ith, int* iphi, int* il,
     return 1;
 }
 
-//#ifdef DEBUG_PHOTON
+//#ifdef VERBOSE_PHOTON
 __device__ void display(const char* desc, Photon* ph) {
     //
     // display the status of the photon (only for thread 0)
