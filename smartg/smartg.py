@@ -28,12 +28,9 @@ from smartg.bandset import BandSet
 from pycuda.compiler import SourceModule
 from pycuda.driver import module_from_buffer
 # bellow necessary for object incorporation
-import smartg.geometry
 from smartg.geometry import Vector, Point, Normal, Ray, BBox, CoordinateSystem, \
     Normalize, Dot
-import smartg.transform
 from smartg.transform import Transform, Aff
-import smartg.visualizegeo
 from smartg.visualizegeo import Mirror, Plane, Spheric, Transformation, \
     Entity, Analyse_create_entity, LambMirror, Matte, convertVtoAngles, convertAnglestoV
 
@@ -41,14 +38,7 @@ from smartg.visualizegeo import Mirror, Plane, Spheric, Transformation, \
 # set up directories
 dir_root = dirname(dirname(realpath(__file__)))
 dir_src = join(dir_root, 'smartg/src/')
-dir_bin = join(dir_root, 'bin/')
 src_device = join(dir_src, 'device.cu')
-binnames = { # keys are (PP, ALIS)
-        (True , False): join(dir_bin, 'pp.cubin'),
-        (True , True ): join(dir_bin, 'pp.alis.cubin'),
-        (False, False): join(dir_bin, 'sp.cubin'),
-        (False, True ): join(dir_bin, 'sp.alis.cubin'),
-        }
 
 # constants definition
 # (should match #defines in src/communs.h)
@@ -500,28 +490,18 @@ class Smartg(object):
         # compile the kernel or load binary
         #
         time_before_compilation = datetime.now()
-        if exists(src_device):
 
-            # load device.cu
-            src_device_content = open(src_device).read()
+        # load device.cu
+        src_device_content = open(src_device).read()
 
-            # kernel compilation
-            self.mod = SourceModule(src_device_content,
-                               nvcc='nvcc',
-                               options=options,
-                               no_extern_c=True,
-                               cache_dir='/tmp/',
-                               include_dirs=[dir_src,
-                                   join(dir_src, 'incRNGs/Random123/')])
-        else:
-            binname = binnames[(pp, alis)]
-            if exists(binname):
-                # load existing binary
-                print('Loading binary', binname)
-                self.mod = module_from_buffer(open(binname, 'rb').read())
-
-            else:
-                raise IOError('Could not find {} or {}.'.format(src_device, binname))
+        # kernel compilation
+        self.mod = SourceModule(src_device_content,
+                           nvcc='nvcc',
+                           options=options,
+                           no_extern_c=True,
+                           cache_dir='/tmp/',
+                           include_dirs=[dir_src,
+                               join(dir_src, 'incRNGs/Random123/')])
 
         # load the kernel
         self.kernel = self.mod.get_function('launchKernel')
