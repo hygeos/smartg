@@ -5,6 +5,43 @@
            #                         #
            ###########################
 
+v0.9.2
+------
+
+Release date: 2019-05-23
+
+* Source code release !
+  This release now includes the source code for the kernel instead of binaries.
+  This allows for more flexilibity with respect to compilation options.
+
+* New! 3D objects (in development)
+    - 3D objects require smartg option Smartg(opt3D=True) and work in either forward or backward mode
+    - Designed to simulate a solar tower power plant
+    - Please check notebooks/demo_notebook_objects.ipynb
+    - The following features are implemented:
+        -> Reflectors (mirrors with optional roughness)
+        -> Receivers with flux distribution map (direct, diffuse...)
+        -> Custom photon launching options (target an area or specific objects:
+           see option Smartg().run(cusL=...))
+        -> Utilities to quickly generate a 3D scene with heliostats and a tower
+           (see smartg/visualizegeo.py)
+
+* New! Refraction and limb geometry
+    - Please check notebooks/demo_notebook.ipynb
+
+* ALIS method is now validated and extended to water
+    - Please check notebooks/Validation_smartg_compilation.ipynb
+      which compiles all validation exercises for Smart-G and an example of
+      perturbative Jacobians
+
+* Locale estimate: add 'zip' option to allow for non-cartesian product of
+  output angles
+
+* Notebooks have been extended
+
+* New! 3D atmosphere (in development - undocumented)
+
+
 v0.9.1
 ------
 
