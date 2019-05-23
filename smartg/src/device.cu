@@ -1277,6 +1277,22 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		
 	    // Initialization of the orthogonal vector to the propagation
 		double3 udouble = make_double3(-1., 0., 0.);
+
+		if (SUN_DISCd != 0)
+		{
+			double PHconed, THconed;
+			PHconed = RAND*360;
+			// Sampling between 0 and SUN_DISCd degrees uniformly following mu² -> acos(sqrt())
+			THconed = (    acos(   sqrt(1-(  RAND*(1-cos(radiansd(SUN_DISCd)))  ))   )*180    )/PI;
+
+			// Creation of transforms to consider alpha and beta for the computation of photon dirs
+			Transformd TPHconed, TTHconed;
+			TPHconed = TPHconed.RotateZ(PHconed); TTHconed = TTHconed.RotateY(THconed);
+		
+			// Apply transforms to vector u and v in function to alpha and beta
+			vdouble = TPHconed(   Vectord(  TTHconed( Vectord(vdouble) )  )   );
+			udouble = TPHconed(   Vectord(  TTHconed( Vectord(udouble) )  )   );
+		}
 		
 		// Creation des tranformations (pour le calcul de la direction du photon)	
 		Transformd TThetad, TPhid;
@@ -1298,6 +1314,21 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		
 	    // Initialization of the orthogonal vector to the propagation
 		float3 ufloat = make_float3(-1., 0., 0.);
+
+		if (SUN_DISCd != 0)
+		{
+			float PHcone, THcone;
+			PHcone = RAND*360;
+			THcone = (    acosf(   sqrtf(1-(  RAND*(1-cosf(radians(SUN_DISCd)))  ))   )*180    )/PI;
+
+			// Creation of transforms to consider alpha and beta for the computation of photon dirs
+			Transform TPHcone, TTHcone;
+			TPHcone = TPHcone.RotateZ(PHcone); TTHcone = TTHcone.RotateY(THcone);
+		
+			// Apply transforms to vector u and v in function to alpha and beta
+			vfloat = TPHcone(   Vectorf(  TTHcone( Vectorf(vfloat) )  )   );
+			ufloat = TPHcone(   Vectorf(  TTHcone( Vectorf(ufloat) )  )   );
+		}
 		
 		//Creation des tranformations (pour le calcul de la direction du photon)
 		Transform TTheta, TPhi;
@@ -1417,6 +1448,44 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		ph->pos.x += cusForwPos.x + CFTXd;
 		ph->pos.y += cusForwPos.y + CFTYd;
 		ph->pos.z = tab_sensor[ph->is].POSZ;
+
+		if (SUN_DISCd != 0)
+		{
+			// Valeurs de l'angle zenital Theta et l'angle azimutal Phi (ici Phi pour l'instant imposé à 0)
+			double sunTheta = 180-tab_sensor[ph->is].THDEG, sunPhi=tab_sensor[ph->is].PHDEG-180;
+
+			// One fixed direction (for radiance) inverse of the initiale pos of the obj
+			double3 vdouble = make_double3(0., 0., -1.);
+		
+			// Initialization of the orthogonal vector to the propagation
+			double3 udouble = make_double3(-1., 0., 0.);
+		
+			double PHconed, THconed;
+			PHconed = RAND*360;
+			THconed = (    acos(   sqrt(1-(  RAND*(1-cos(radiansd(SUN_DISCd)))  ))   )*180    )/PI;
+
+			// Creation of transforms to consider alpha and beta for the computation of photon dirs
+			Transformd TPHconed, TTHconed;
+			TPHconed = TPHconed.RotateZ(PHconed); TTHconed = TTHconed.RotateY(THconed);
+		
+			// Apply transforms to vector u and v in function to alpha and beta
+			vdouble = TPHconed(   Vectord(  TTHconed( Vectord(vdouble) )  )   );
+			udouble = TPHconed(   Vectord(  TTHconed( Vectord(udouble) )  )   );
+
+			// Creation des tranformations (pour le calcul de la direction du photon)	
+			Transformd TThetad, TPhid;
+			TThetad = TThetad.RotateY(sunTheta);
+			TPhid = TPhid.RotateZ(sunPhi);		
+
+			// Application des transformation sur les vecteurs u et v en fonction de Theta et Phi
+			vdouble = TPhid(   Vectord(  TThetad( Vectord(vdouble) )  )   );
+			udouble = TPhid(   Vectord(  TThetad( Vectord(udouble) )  )   );
+
+			ph->v = make_float3(float(vdouble.x), float(vdouble.y), float(vdouble.z));
+			ph->u = make_float3(float(udouble.x), float(udouble.y), float(udouble.z));
+		}
+		
+		
 	} //END LMODEd == 2
     #else // else if Backward modes
 	if (LMODEd == 3 or LMODEd == 4) // common part between mode B and BR (cusBackward)
@@ -4529,9 +4598,8 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
     #if defined(BACK)
 	if (LMODEd == 4)
 	{
-		float ANGD = 0.2666;
 		double cosANGD, cosPHSUN;
-		cosANGD = cos(radiansd(ANGD));
+		cosANGD = min(cos(radiansd(double(SUN_DISCd))), double(1));
 		double3 vecSUN = make_double3(-DIRSXd, -DIRSYd, -DIRSZd);
 		double3 vecPH = make_double3(ph->v.x, ph->v.y, ph->v.z);
 		cosPHSUN = dot(vecSUN, vecPH);
@@ -4547,6 +4615,16 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 		p_t = invTransfo(Pointf(p_t));
 	}
 	#else
+	//In order to be sure to not consider the photons coming behind the receiver
+	if (!isBackward(geoS->normalBase, ph->v)) return;
+	#ifdef DOUBLE
+	if (   isForward(  make_double3(geoS->normalBase.x, geoS->normalBase.y, geoS->normalBase.z),
+				  make_double3(ph->v.x, ph->v.y, ph->v.z)  )   )
+	#else
+	if (isForward(geoS->normalBase, ph->v))
+	#endif
+		return;
+	
 	Transform transfo, invTransfo;
 	p_t = ph->pos;
 	transfo = geoS->mvTF;
