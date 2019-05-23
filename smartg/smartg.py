@@ -403,7 +403,7 @@ class Smartg(object):
 
     def __init__(self, pp=True, debug=False,
                  verbose_photon=False,
-                 double=False, alis=False, back=False, bias=True, alt_pp=False, obj3D=False, 
+                 double=True, alis=False, back=False, bias=True, alt_pp=False, obj3D=False, 
                  opt3D=False, rng='PHILOX'):
         '''
         Initialization of the Smartg object
@@ -424,7 +424,7 @@ class Smartg(object):
 
             - verbose_photon: activate the display of photon path for the thread 0
 
-            - double : accumulate photons table in double precision, default single
+            - double : accumulate photons table in double precision, default double
                     This operation is much faster on GPUs with ARCH >= 600
                     (Pascal architecture, like GeForce 10xx or greater)
 
