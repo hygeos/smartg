@@ -7,6 +7,7 @@
 
 
 **Quick Summary**
+
 The SMART-G software can be used for free for non-commercial purposes. If you
 want to use the software for commercial purposes, please contact us.
 
