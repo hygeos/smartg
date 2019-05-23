@@ -404,7 +404,7 @@ class Smartg(object):
     def __init__(self, pp=True, debug=False,
                  verbose_photon=False,
                  double=False, alis=False, back=False, bias=True, alt_pp=False, obj3D=False, 
-                 opt3D=False, new_cards=False, rng='PHILOX'):
+                 opt3D=False, rng='PHILOX'):
         '''
         Initialization of the Smartg object
 
@@ -425,22 +425,21 @@ class Smartg(object):
             - verbose_photon: activate the display of photon path for the thread 0
 
             - double : accumulate photons table in double precision, default single
+                    This operation is much faster on GPUs with ARCH >= 600
+                    (Pascal architecture, like GeForce 10xx or greater)
 
             - alis : boolean, if present implement the ALIS method (Emde et al. 2010) for treating gaseous absorption and perturbed profile
 
             - back : boolean, if True, run in backward mode, default forward mode
-            
+
             - bias : boolean, if True, use the bias sampling scheme, default True
 
             - obj3D : Set to True to enable simulation with 3D objects
 
             - opt3D : Set to True to enable simulation with 3D optical properties
 
-            - new_cards: If True, enable the use the fast double precision atomicAdd (work
-                         only with the newest nividia arch i.e. >= 6.0)
-
             - alt_pp: boolean, if True new PP progation scheme is used
-            
+
             - rng: choice of pseudo-random number generator:
                    * PHILOX
                    * CURAND_PHILOX
@@ -494,11 +493,8 @@ class Smartg(object):
         if obj3D:
             # 3D Object mode
             options.append('-DOBJ3D')
-        if new_cards:
-            # Fast double atomic add for newest cards
-            options.append('-DNEW_CARDS')
         options.append('-D'+rng)
-            
+
 
         #
         # compile the kernel or load binary

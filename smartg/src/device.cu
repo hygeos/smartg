@@ -900,7 +900,7 @@ extern "C" {
       double dwsca=(double)wsca;
       double dwabs=(double)wabs;
 
-	  #if NEW_CARDS
+	  #if __CUDA_ARCH__ >= 600
       atomicAdd(tabCount+(0*II+JJ), dwsca * dwabs * ds.x);
       atomicAdd(tabCount+(1*II+JJ), dwsca * dwabs * ds.y);
       atomicAdd(tabCount+(2*II+JJ), dwsca * dwabs * ds.z);
@@ -4466,7 +4466,7 @@ __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, struct Sensor *
 	weightBlo = (float)ph->weight_loss[4];
 	#endif
 
-    #if !defined(DOUBLE) || (defined(DOUBLE) && defined(NEW_CARDS))
+    #if !defined(DOUBLE) || (defined(DOUBLE) && (__CUDA_ARCH__ >= 600))
 	if (ph->H < 2) // If this is the first time that a photon is reaching a heliostat
 	{
 		atomicAdd(wPhLossC, weightE);       // We
@@ -4550,7 +4550,7 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 		return;
 	}
 
-	#if NEW_CARDS
+	#if __CUDA_ARCH__ >= 600
 	// All the beams reaching a receiver
 	atomicAdd(tabCountObj+(nbCy*indI)+indJ, weight);
 
@@ -4951,7 +4951,7 @@ __device__ void countPhoton(Photon* ph,
       dweight = (double)weight;
       ds = make_double4(st.x, st.y, st.z, st.w);
 
-	  #if NEW_CARDS
+	  #if __CUDA_ARCH__ >= 600
 	  // If GTX 1000 or more recent use native double atomic add
       atomicAdd(tabCount+(0*II+JJ), dweight*(ds.x+ds.y));
       atomicAdd(tabCount+(1*II+JJ), dweight*(ds.x-ds.y));
@@ -5091,7 +5091,7 @@ __device__ void countPhoton(Photon* ph,
           dwsca=(double)wsca;
           dwabs=(double)wabs;
 
-		  #if NEW_CARDS
+		  #if __CUDA_ARCH__ >= 600
           atomicAdd(tabCount+(0*II+JJ), dweight * dwsca * dwabs * (ds.x+ds.y));
           atomicAdd(tabCount+(1*II+JJ), dweight * dwsca * dwabs * (ds.x-ds.y));
 		  atomicAdd(tabCount+(2*II+JJ), dweight * dwsca * dwabs * ds.z);
@@ -5702,7 +5702,7 @@ __device__ unsigned int randomPhilox4x32_7uint(philox4x32_ctr_t* ctr, philox4x32
 }
 #endif
 
-#if defined(DOUBLE) && !defined(NEW_CARDS)
+#if defined(DOUBLE) && !(__CUDA_ARCH__ >= 600)
 __device__ double DatomicAdd(double* address, double val)
 {
         unsigned long long int* address_as_ull =
