@@ -8,8 +8,7 @@ release script for SMART-G
 from __future__ import print_function, absolute_import, division
 from os.path import exists, join, dirname, realpath
 from os import mkdir, remove, makedirs
-from pycuda.compiler import compile
-from smartg.smartg import dir_src, binnames, dir_bin, src_device, dir_root
+from smartg.smartg import dir_src, src_device, dir_root
 from smartg.smartg import Smartg
 from subprocess import Popen, PIPE
 from datetime import datetime
@@ -17,24 +16,25 @@ import tarfile
 import fnmatch
 
 
-version = 'v0.9.1'
+version = 'v0.9.2'
 
 
 
 def main():
 
     target = join(dir_root, 'release/target/smartg-{}.tar.gz'.format(version))
+    tar_root = 'smartg-{}'.format(version)
     skiplist = [
             'NOTES.TXT',
             'TODO.TXT',
             'performance.py',
-            'smartg/src/*',
-            'auxdata/validation/*',
-            'smartg/tools/water/*',
-            'notebooks/demo_notebook_ALIS.ipynb',
+            'notebooks/Validation_obj3DSurfaceRoughness.ipynb',
             'validation.py',
-            '.gitignore',
             'release.py',
+            'scripts/*',
+            'auxdata/validation/*',
+            '.gitmodules',
+            'luts',   # will be dealt with separately
             ]
 
     if exists(target):
@@ -47,14 +47,6 @@ def main():
         # raise Exception('error, repository is dirty :(')
 
     #
-    # initialization
-    #
-    if not exists(dir_bin):
-        mkdir(dir_bin)
-
-    src_device_content = open(src_device).read()
-
-    #
     # copy files to the tar
     #
     if not exists(dirname(target)):
@@ -62,61 +54,22 @@ def main():
     tar = tarfile.open(target, 'w:gz')
     nskip = 0
     for f in Popen(['git', 'ls-files'], stdout=PIPE).communicate()[0].decode('utf-8').split('\n'):
-
-        skip = (len(f) == 0)
-        for p in skiplist:
-            if fnmatch.fnmatch(f, p):
-                skip = True
-        if skip:
+        if (len(f) == 0) or (True in [fnmatch.fnmatch(f, p) for p in skiplist]):
             # print 'skippd "{}"'.format(f)
             nskip += 1
             continue
 
         print('adding "{}"'.format(f))
-        tar.add(f, arcname=join('smartg', f))
+        tar.add(f, arcname=join(tar_root, f))
+
+    # Add luts
+    subm = 'luts'
+    for f in Popen('cd {} ; git ls-files'.format(subm), stdout=PIPE, shell=True).communicate()[0].decode('utf-8').split('\n'):
+        if len(f) == 0:
+            continue
+        tar.add(join(subm, f), arcname=join(tar_root, subm, f))
 
     print('skipped {} files'.format(nskip))
-
-    #
-    # compilation for pp and sp
-    #
-    for binopts in binnames.keys():
-        print('Compilation binary {} with options {} ...'.format(binnames[binopts], binopts))
-
-        options = []
-        if not binopts[0]:
-            options.append('-DSPHERIQUE')
-        if binopts[1]:
-            options.append('-DALIS')
-        options.append('-DPHILOX')
-
-        options.extend(sum([['-gencode', 'arch=compute_{i},code=compute_{i}'.format(i=i)]
-                            for i in [30, 32, 35, 37,
-                                      50, 52, 53,
-                                      60, 61, 62,
-                                      70, 72, 75
-                                     ]], []))
-
-        binary = compile(src_device_content,
-                       nvcc='nvcc',
-                       options=options,
-                       no_extern_c=True,
-                       cache_dir='/tmp/',
-                         include_dirs=[dir_src, dir_src+'incRNGs/Random123/',],
-                       target='fatbin')
-
-        binname = binnames[binopts]
-        if exists(binname):
-            print('Warning: removing {}'.format(binname))
-            remove(binname)
-        with open(binname, 'wb') as f:
-            f.write(binary)
-            print('wrote', binname)
-
-        assert binname.startswith(dir_root)
-        reldir = binname[len(dir_root)+1:]
-        tar.add(reldir, arcname=join('smartg', reldir))
-
 
     # write git commit in version.txt
     version_file = 'version.txt'
@@ -127,7 +80,7 @@ def main():
         fp.write('\n')
         fp.write(datetime.now().strftime('%Y%m%d:%H%M%S'))
         fp.write('\n')
-    tar.add(version_file, arcname=join('smartg', version_file))
+    tar.add(version_file, arcname=join(tar_root, version_file))
     tar.close()
 
     print('created', target)
