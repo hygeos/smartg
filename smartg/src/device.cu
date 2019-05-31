@@ -5208,13 +5208,19 @@ __device__ void countPhoton(Photon* ph,
           tabCount2   = (double*)tabDist     + count_level*KK;
           for (int n=0; n<NOCEd; n++){
             LL = n*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+	        #if NEW_CARDS
             atomicAdd(tabCount2+LL, (double)ph->cdist_oc[n]);
-            //DatomicAdd(tabCount2+LL, (double)ph->cdist_oc[n]);
+            #else
+            DatomicAdd(tabCount2+LL, (double)ph->cdist_oc[n]);
+            #endif
           }
           for (int n=0; n<NATMd; n++){
             LL = (n+NOCEd)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+	        #if NEW_CARDS
             atomicAdd(tabCount2+LL, (double)ph->cdist_atm[n]);
-            //DatomicAdd(tabCount2+LL, (double)ph->cdist_atm[n]);
+            #else
+            DatomicAdd(tabCount2+LL, (double)ph->cdist_atm[n]);
+            #endif
           }
        #else
           tabCount2   = (float*)tabDist     + count_level*KK;
