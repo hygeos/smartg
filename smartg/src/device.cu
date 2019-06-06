@@ -270,7 +270,7 @@ extern "C" {
 		if (LEd ==0) countPhoton(&ph, prof_atm, prof_oc, tabthv, tabphi, count_level,
             errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
 
-		#if defined(BACK)
+		#if defined(BACK) && defined(OBJ3D)
 		if (count_level == UPTOA and LMODEd == 4) // the photon reach TOA
 		{ countPhotonObj3D(&ph, tabObjInfo, &geoStruc, nbPhCat, wPhCat);}
         #endif
@@ -1133,7 +1133,8 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     // Direction initialization
     if (tab_sensor[ph->is].TYPE != 0) {
         // Standard sampling of zenith angle for lambertian emittor (for planar flux)
-	    cTh = sqrtf(1.F-RAND*sinf(tab_sensor[ph->is].FOV*DEUXPI/360.));
+        float sThmin = sinf(radiansd(tab_sensor[ph->is].FOV));
+	    cTh = sqrtf(1.F-RAND*sThmin*sThmin);
         // for spherical flux, adjust weight as a function of cTh
         float weight_irr = fabs(cTh);
         if (tab_sensor[ph->is].TYPE == 2 && weight_irr > 0.001f) ph->weight /= weight_irr;
@@ -1462,7 +1463,10 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		
 			double PHconed, THconed;
 			PHconed = RAND*360;
-			THconed = (    acos(   sqrt(1-(  RAND*(1-cos(radiansd(SUN_DISCd)))  ))   )*180    )/PI;
+			//THconed = (    acos(   sqrt(1-(  RAND*(1-cos(radiansd(SUN_DISCd)))  ))   )*180    )/PI;
+            double c2 = cos(radiansd(SUN_DISCd))*cos(radiansd(SUN_DISCd));
+			THconed = acos( sqrt( RAND*(1-c2) + c2 ))*180    /PI;
+			//THconed = acos( sqrt( RAND*(cos(radiansd(SUN_DISCd))*cos(radiansd(SUN_DISCd)))))*180    /PI;
 
 			// Creation of transforms to consider alpha and beta for the computation of photon dirs
 			Transformd TPHconed, TTHconed;

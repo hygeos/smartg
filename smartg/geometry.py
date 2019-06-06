@@ -16,6 +16,8 @@ class Vector(object):
     def __init__(self, x = 0, y = 0, z = 0):
         if isinstance(x, Vector) or isinstance(x, Point) or isinstance(x, Normal):
             self.x = x.x; self.y = x.y; self.z = x.z;
+        elif isinstance(x, np.ndarray):
+            self.x = x[0]; self.y = x[1]; self.z = x[2]
         else: 
             self.x = x; self.y = y; self.z = z;
 
@@ -61,8 +63,11 @@ class Vector(object):
     def __str__(self):
         return '(' + str(self.x) + ', ' + str(self.y) + ', ' + str(self.z) + ')'
 
-    def Lengh(self):
+    def Length(self):
         return math.sqrt(self.x*self.x + self.y*self.y + self.z*self.z) # L2 norm
+
+    def asarr(self):
+        return np.array([self.x, self.y, self.z])
     
 #####################################################################################
 
@@ -154,7 +159,7 @@ class Normal(object):
         else:
             raise NameError('Addition with a Normal must be with another Normal')
 
-    def __sub__(self):
+    def __sub__(self, n2):
         if isinstance(n2, Normal):
             return Vector(self.x-n2.x, self.y-n2.y, self.z-n2.z)
         elif n2 == 0:
@@ -187,7 +192,7 @@ class Normal(object):
     def __str__(self):
         return '(' + str(self.x) + ', ' + str(self.y) + ', ' + str(self.z) + ')'
 
-    def Lengh(self):
+    def Length(self):
         return math.sqrt(self.x*self.x + self.y*self.y + self.z*self.z) # L2 norm
 #####################################################################################
 
@@ -360,7 +365,7 @@ def Cross(a, b):
 
 def Normalize(v):
     if isinstance(v, Vector) or isinstance(v, Normal):
-        return v / v.Lengh()
+        return v / v.Length()
     else:
         raise NameError('Normalize argument have to be Vector or Normal class')
 
@@ -379,7 +384,7 @@ def CoordinateSystem(v1):
 
 def Distance(p1, p2):
     if isinstance(p1, Point) and isinstance(p2, Point):
-        return (p1 - p2).Lengh()
+        return (p1 - p2).Length()
     else:
         raise NameError('Distance arguments have to be Point classes)')
 
@@ -396,6 +401,25 @@ def FaceForward(a, b):
         return (a*-1) if (Dot(a, b) < 0) else a
     else:
         raise NameError('FaceForward args have to be Vector or Normal classes')
+
+def rotation3D(theta, u):
+    ''' 
+    rotation matrix of an angle theta in degree around unit vector u
+    '''
+    # Rodrigues rotation formula
+    ct = np.cos(np.radians(theta))
+    st = np.sqrt(1-ct*ct)
+    A = np.zeros((3,3))
+    for k in range(3) : A[k,k] = 1.
+    B = np.zeros((3,3))
+    B[0,1] = -u.z
+    B[0,2] =  u.y
+    B[1,0] =  u.z
+    B[1,2] = -u.x
+    B[2,0] = -u.y
+    B[2,1] =  u.x
+    C = B.dot(B)
+    return A + B*st + C*(1-ct)
 
 
 def MaxDimension(v):
@@ -433,9 +457,9 @@ if __name__ == '__main__':
     print("Dot(a, c) =", Dot(a, c))
     print("Dot(a, b) =", Dot(a, Vector(b)))
     print("Cross(a, c) =", Cross(a, c))
-    print("Lengh(a) =", a.Lengh())
+    print("Length(a) =", a.Length())
     print("normalize(a) =", Normalize(a))
-    print("Lengh of Normalize(a) =", Normalize(a).Lengh())
+    print("Length of Normalize(a) =", Normalize(a).Length())
 
     v1 = Vector(2, 1, 0)
     v2, v3 = CoordinateSystem(v1)

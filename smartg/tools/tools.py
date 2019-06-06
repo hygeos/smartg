@@ -109,7 +109,7 @@ def Int(wi, wb, ex, we, dl, M=None, field=None, lim=[400.,700.]):
     M  : optional LUT or MLUT with 3D (lambda,phi,theta) or 1D (lambda) radiative field to spectrally integrate
     field : optional field of MLUT (ex: 'I_up (TOA'), if None, the extraterrestrial irradiance is integrated
     lim: spectral boundaries for integration
-    
+
     returns
     spectrally integrated intensity and averaged intensity
     spectrally integrated daily quanta and average daily quanta
@@ -121,15 +121,15 @@ def Int(wi, wb, ex, we, dl, M=None, field=None, lim=[400.,700.]):
             tab = L.data
         else : 
             tab = M.data
-        
+
         if tab.ndim == 3 :
             R = np.rollaxis(tab,0,3)
             E = LUT(sum(R[:,:,ok] * ex.data[ok] * we.data[ok] * dl.data[ok], axis=2), \
-                axes=[L.axes[1], L.axes[2]], desc='E_'+L.desc, \
-                names=[L.names[1], L.names[2]], attrs=L.attrs)
+                    axes=[L.axes[1], L.axes[2]], desc='E_'+L.desc, \
+                    names=[L.names[1], L.names[2]], attrs=L.attrs)
             Q = LUT(sum(R[:,:,ok] * wi.data[ok] * ex.data[ok] * we.data[ok] * dl.data[ok], axis=2) , \
-                axes=[L.axes[1], L.axes[2]], desc='Q_'+L.desc, \
-                names=[L.names[1], L.names[2]], attrs=L.attrs)
+                    axes=[L.axes[1], L.axes[2]], desc='Q_'+L.desc, \
+                    names=[L.names[1], L.names[2]], attrs=L.attrs)
         else:
 
             E = sum(tab[ok] * ex.data[ok] * we.data[ok] * dl.data[ok])
@@ -138,7 +138,7 @@ def Int(wi, wb, ex, we, dl, M=None, field=None, lim=[400.,700.]):
 
         E = sum(ex.data[ok] * we.data[ok] * dl.data[ok])
         Q = sum(ex.data[ok] * wi.data[ok] * we.data[ok] * dl.data[ok])
-    
+
     norm = sum(we.data[ok] * dl.data[ok])
     E *= 1e-3 # from mW/m2/nm to W/m2/nm 
     Eavg = E/norm
@@ -146,9 +146,9 @@ def Int(wi, wb, ex, we, dl, M=None, field=None, lim=[400.,700.]):
         # Einstein/m2/day
 
     Qavg = Q/norm
-        
+
     return E, Eavg, Q, Qavg
-    
+
 def nInt(wi, wb, ex, we, dl, M=None, field=None, lim=[400.,700.]):
     '''
     all input vectors have same length, coming from REPTRAN
@@ -160,7 +160,7 @@ def nInt(wi, wb, ex, we, dl, M=None, field=None, lim=[400.,700.]):
     M  : optional LUT or MLUT with 3D (lambda,phi,theta) or 1D (lambda) radiative field to spectrally integrate
     field : optional field of MLUT (ex: 'I_up (TOA'), if None, the extraterrestrial irradiance is integrated
     lim: spectral boundaries for integration
-    
+
     returns
     spectrally integrated intensity and averaged intensity
     spectrally integrated daily quanta and average daily quanta
@@ -172,15 +172,15 @@ def nInt(wi, wb, ex, we, dl, M=None, field=None, lim=[400.,700.]):
             tab = L.data
         else : 
             tab = M.data
-        
+
         if tab.ndim == 3 :
             R = np.rollaxis(tab,0,3)
             E = LUT(sum(R[:,:,ok] * ex.data[ok] * we.data[ok] * dl.data[ok], axis=2), \
-                axes=[L.axes[1], L.axes[2]], desc='E_'+L.desc, \
-                names=[L.names[1], L.names[2]], attrs=L.attrs)
+                    axes=[L.axes[1], L.axes[2]], desc='E_'+L.desc, \
+                    names=[L.names[1], L.names[2]], attrs=L.attrs)
             Q = LUT(sum(R[:,:,ok] * wi.data[ok] * ex.data[ok] * we.data[ok] * dl.data[ok], axis=2) , \
-                axes=[L.axes[1], L.axes[2]], desc='Q_'+L.desc, \
-                names=[L.names[1], L.names[2]], attrs=L.attrs)
+                    axes=[L.axes[1], L.axes[2]], desc='Q_'+L.desc, \
+                    names=[L.names[1], L.names[2]], attrs=L.attrs)
         else:
 
             E = sum(tab[ok] * ex.data[ok] * we.data[ok] * dl.data[ok])
@@ -189,7 +189,7 @@ def nInt(wi, wb, ex, we, dl, M=None, field=None, lim=[400.,700.]):
 
         E = sum(ex.data[ok] * we.data[ok] * dl.data[ok])
         Q = sum(ex.data[ok] * wi.data[ok] * we.data[ok] * dl.data[ok])
-    
+
     norm = sum(we.data[ok] * dl.data[ok])
     E *= 1e-3 # from mW/m2/nm to W/m2/nm 
     Eavg = E/norm
@@ -197,7 +197,7 @@ def nInt(wi, wb, ex, we, dl, M=None, field=None, lim=[400.,700.]):
         # Einstein/m2/day
 
     Qavg = Q/norm
-        
+
     return E, Eavg, Q, Qavg
 
 
@@ -211,7 +211,7 @@ def SpecInt(wi, wb, ex, we, dl, M=None, field=None, lim=[400.,700.]):
     dl : input bandwidths of bands (nm)
     M  : optional LUT or MLUT with 3D (lambda,phi,theta) or 1D (lambda) radiative field to spectrally integrate
     lim: spectral boundaries for integration
-    
+
     returns
     spectrally integrated intensity
     '''
@@ -226,8 +226,8 @@ def SpecInt(wi, wb, ex, we, dl, M=None, field=None, lim=[400.,700.]):
         if tab.ndim == 3 :
             R = np.rollaxis(tab,0,3)
             E = LUT(sum(R[:,:,ok] * we.data[ok] * dl.data[ok], axis=2), \
-                axes=[L.axes[1], L.axes[2]], desc=L.desc, \
-                names=[L.names[1], L.names[2]], attrs={'LAMBDA':lim[0]})
+                    axes=[L.axes[1], L.axes[2]], desc=L.desc, \
+                    names=[L.names[1], L.names[2]], attrs={'LAMBDA':lim[0]})
         else:
             E = sum(tab[ok] * we.data[ok] * dl.data[ok])
     else:
@@ -285,5 +285,5 @@ def Int2(wi, wb, ex, we, dl, M=None, field=None, lim=[400.,700.], DL=1., Irradia
                 Eavg.append(SpherIrr(E2))
                 Qint.append(SpherIrr(Q1))
                 Qavg.append(SpherIrr(Q2))
-                
+
     return l, Eint, Eavg, Qint, Qavg

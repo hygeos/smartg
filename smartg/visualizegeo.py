@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from . import geometry
-from .geometry import Vector, Point, Normal, Ray, BBox
+from .geometry import Vector, Point, Normal, Ray, BBox, rotation3D
 from .geometry import Dot, Cross, Normalize, CoordinateSystem, \
     Distance, FaceForward
 from . import diffgeom
@@ -835,7 +835,7 @@ def generateHfA(THEDEG=0., PHIDEG = 0., PR = Point(0., 0., 50.), MINANG=0., \
     return lObj
 
 
-def convertVtoAngles(v, TYPE="Sensor"):
+def convertVtoAngles(v, TYPE="Sensor", verbose=False):
     """
     Definition of the function convertVtoAngles
 
@@ -890,7 +890,7 @@ def convertVtoAngles(v, TYPE="Sensor"):
         Theta = np.degrees(rotY)
         Phi = np.degrees(rotZ)
 
-        print("Theta=", Theta, "Phi=", Phi)
+        if verbose : print("Theta=", Theta, "Phi=", Phi)
         
         return Theta, Phi
     else:
@@ -998,6 +998,87 @@ def extractPoints(filename):
                             float(listVal[(i*nbDim)+2]) )  )
 
     return lPH
+
+def random_equal_area_geometries(theta_in_degrees, phi_in_degrees, fov_radius_in_degrees=0.265, N=1):	# central direction
+    '''
+    equal area geometries inside a circle of radius fov_radius centred 
+    phis, thetas are the angular coordinates in degrees w.r.t. the center of the circle		
+    '''
+    mum = np.cos(np.radians(fov_radius_in_degrees))
+    # random sampling of theta according to equal area sampling
+    ct=np.sqrt(1. - np.random.rand(N) * (1-mum**2))
+    t = np.degrees(np.arccos(ct))
+    # uniform sampling for azimuth
+    p=np.random.rand(N) * 360.
+    # unit vector around which to rotate all previous directions
+    u=Normalize(Cross(convertAnglestoV(), convertAnglestoV(THETA=theta_in_degrees, PHI=phi_in_degrees)))
+    # rotation matrix calculation
+    R=rotation3D(theta_in_degrees,u)
+    # new directions
+    t2 = np.zeros_like(t)
+    p2 = np.zeros_like(p)
+    for k in range(N):
+        v = convertAnglestoV(THETA=t[k],PHI=p[k]).asarr()
+        vv = Vector(R.dot(v))
+        t2[k],p2[k] = convertVtoAngles(vv)
+
+    return {'th_deg': t2, 'phi_deg': p2, 'zip':True}
+
+
+def packed_geometries(theta_in_degrees, phi_in_degrees, fov_radius_in_degrees=0.265):	# central direction
+    '''
+    optimal packing of 19 equal small circles in a unit circle
+    xs, ys are the coordinates of the small circle centers
+    phis, thetas are the angular coordinates in degrees w.r.t. the center of the unit circle		
+    '''
+    xs = np.array([-0.205604646759568224693193969093,
+        0.205604646759568224693193969093,
+        -0.561722341219392118229847722909,
+        0.561722341219392118229847722909,
+        -0.205604646759568224693193969093,
+        0.205604646759568224693193969093,
+        -0.767326987978960342923041692002,
+        0.767326987978960342923041692002,
+        -0.411209293519136449386387938185,
+        0.000000000000000000000000000000,
+        0.411209293519136449386387938185,
+        -0.767326987978960342923041692002,
+        0.767326987978960342923041692002,
+        -0.205604646759568224693193969093,
+        0.205604646759568224693193969093,
+        -0.561722341219392118229847722909,
+        0.561722341219392118229847722909,
+        -0.205604646759568224693193969093,
+        0.205604646759568224693193969093
+        ])
+    phis = phi_in_degrees + fov_radius_in_degrees*xs			    
+
+    ys = np.array([-0.767326987978960342923041692002, 
+        -0.767326987978960342923041692002,
+        -0.561722341219392118229847722909,
+        -0.561722341219392118229847722909,
+        -0.356117694459823893536653753817,
+        -0.356117694459823893536653753817,
+        -0.205604646759568224693193969093,
+        -0.205604646759568224693193969093,
+        0.000000000000000000000000000000,
+        0.000000000000000000000000000000,
+        0.000000000000000000000000000000,
+        0.205604646759568224693193969093,
+        0.205604646759568224693193969093,
+        0.356117694459823893536653753817,
+        0.356117694459823893536653753817,
+        0.561722341219392118229847722909,
+        0.561722341219392118229847722909,
+        0.767326987978960342923041692002,
+        0.767326987978960342923041692002
+        ])
+    thetas = theta_in_degrees + fov_radius_in_degrees*ys
+    le={'th_deg':thetas, 'phi_deg':phis, 'zip':True}
+
+    return le
+
+
     
 if __name__ == '__main__':
 
