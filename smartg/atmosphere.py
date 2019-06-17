@@ -308,6 +308,24 @@ class AeroOPAC(object):
         self.densities = data[::-1,1:]  # vertical profile of mass concentration (g/m3)
                                         # (zopac, species)
 
+    def set_densities(self, Z, densities, species=None) :
+        '''
+        assign densities vertical profiles of each specie in the list
+        Arguments:
+            Z: altitude in km (M) (increasing order)
+            densities : array of specie density profile (MxN) in g/m3
+            species: list of  OPAC species name (N), if none self.species is used
+        '''
+        if species is not None:
+            self.species = []
+            for s in species:
+                self.species.append(Species(s+'.mie'))
+        assert len(self.species) == densities.shape[1]
+
+        self.zopac = Z
+        self.densities = densities
+
+
     def dtau_ssa(self, wav, Z, rh=None):
         '''
         returns a profile of optical thickness and single scattering albedo at
