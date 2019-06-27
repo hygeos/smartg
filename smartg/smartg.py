@@ -8,7 +8,7 @@ Speed-up Monte Carlo Advanced Radiative Transfer Code using GPU
 '''
 
 
-
+import os
 import numpy as np
 from datetime import datetime
 from numpy import pi
@@ -18,6 +18,7 @@ from os.path import dirname, realpath, join, exists
 from warnings import warn
 from smartg.albedo import Albedo_cst, Albedo_spectrum_map 
 from smartg.tools.progress import Progress
+from smartg.tools.modified_environ import modified_environ
 from luts.luts import MLUT
 from scipy.interpolate import interp1d
 import subprocess
@@ -403,7 +404,7 @@ class Smartg(object):
     def __init__(self, pp=True, debug=False,
                  verbose_photon=False,
                  double=True, alis=False, back=False, bias=True, alt_pp=False, obj3D=False, 
-                 opt3D=False, rng='PHILOX'):
+                 opt3D=False, device=None, rng='PHILOX'):
         '''
         Initialization of the Smartg object
 
@@ -442,8 +443,19 @@ class Smartg(object):
             - rng: choice of pseudo-random number generator:
                    * PHILOX
                    * CURAND_PHILOX
+
+            - device: device number (str or int) to be set to CUDA_DEVICE environment variable for use by 'import pycuda.autoinit'
+                      see https://documen.tician.de/pycuda/util.html
+                      Please note that after the first pycuda.autoinit, the device used by pycuda will not change.
         '''
-        import pycuda.autoinit
+        assert not ((device is not None) and ('CUDA_DEVICE' in os.environ)), "Can not use the 'device' option while the CUDA_DEVICE is set"
+
+        if device is not None:
+            env_modif = {'CUDA_DEVICE': str(device)}
+        else:
+            env_modif = {}
+        with modified_environ(**env_modif):
+            import pycuda.autoinit
 
         self.pp = pp
         self.double = double
@@ -523,8 +535,11 @@ class Smartg(object):
         self.common_attrs['compilation_time'] = (datetime.now()
                         - time_before_compilation).total_seconds()
         self.common_attrs['device'] = pycuda.autoinit.device.name()
+        try:
+            self.common_attrs['device_number'] = pycuda.autoinit.device.get_attributes()[pycuda._driver.device_attribute.MULTI_GPU_BOARD_GROUP_ID]
+        except AttributeError:
+            self.common_attrs['device_number'] = 'undefined'
         self.common_attrs['pycuda_version'] = pycuda.VERSION_TEXT
-        #self.common_attrs['cuda_version'] = '.'.join(map(str, pycuda.driver.get_version()))        
         self.common_attrs['cuda_version'] = '.'.join(str(pycuda.driver.get_driver_version()))
         self.common_attrs.update(get_git_attrs())
 
