@@ -513,7 +513,9 @@ class Smartg(object):
         time_before_compilation = datetime.now()
 
         # load device.cu
-        src_device_content = open(src_device).read()
+        src_device_content = open(
+            src_device, encoding='ascii', errors='ignore'
+            ).read()
 
         # kernel compilation
         self.mod = SourceModule(src_device_content,
