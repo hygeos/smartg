@@ -23,4 +23,4 @@ Examples are provided in the script `examples_tests.py` and in the [sample noteb
 [jupyter notebook](http://jupyter.org) has nice possibilities for interactive development and visualization, in particular if you are using a remote cuda computer. Sample notebooks are provided in the folder [notebooks](notebooks).
 
 # Tests
-Run the command `nosetests` or the provided notebooks.
+Run the command `pytest` or the provided notebooks.
