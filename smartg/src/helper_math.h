@@ -30,6 +30,7 @@
 #define HELPER_MATH_H
 
 #include "cuda_runtime.h"
+#include <math_constants.h>
 
 #ifndef DEBUG
 #define myError(expr) ((void)0)
@@ -3001,11 +3002,11 @@ inline __device__ __host__ bool isBackward(double3 a, double3 b)
 ////////////////////////////////////////////////////////////////////////////////
 
 inline __device__ __host__ float radians(float deg) {
-    return ((float)PI/180.f) * deg;
+    return (PI/180.f) * deg;
 }
 
 inline __device__ __host__ double radiansd(double deg) {
-    return ((double)PI/180.) * deg;
+    return (CUDART_PI/180.) * deg;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

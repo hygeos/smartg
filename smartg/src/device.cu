@@ -20,6 +20,7 @@
 
 #include <math.h>
 
+#include <math_constants.h>
 #include <helper_math.h>
 #include <stdio.h>
 /**********************************************************
@@ -1452,7 +1453,8 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 
 		if (SUN_DISCd != 0)
 		{
-			// Valeurs de l'angle zenital Theta et l'angle azimutal Phi (ici Phi pour l'instant imposé à 0)
+			
+			// Sun zenith angle (theta) and sun azimuth angle (phi)
 			double sunTheta = 180-tab_sensor[ph->is].THDEG, sunPhi=tab_sensor[ph->is].PHDEG-180;
 
 			// One fixed direction (for radiance) inverse of the initiale pos of the obj
@@ -1462,29 +1464,35 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 			double3 udouble = make_double3(-1., 0., 0.);
 		
 			double PHconed, THconed;
-			PHconed = RAND*360;
-			//THconed = (    acos(   sqrt(1-(  RAND*(1-cos(radiansd(SUN_DISCd)))  ))   )*180    )/PI;
-            double c2 = cos(radiansd(SUN_DISCd))*cos(radiansd(SUN_DISCd));
-			THconed = acos( sqrt( RAND*(1-c2) + c2 ))*180    /PI;
-			//THconed = acos( sqrt( RAND*(cos(radiansd(SUN_DISCd))*cos(radiansd(SUN_DISCd)))))*180    /PI;
 
-			// Creation of transforms to consider alpha and beta for the computation of photon dirs
+			// disk cone sampling
+			// Mixte between disk sampling (Dunn & Shultis 2011) and cone sampling 
+			double rd, Rd;
+			PHconed = 360*RAND;
+			Rd = tan(radiansd(SUN_DISCd));
+			rd = Rd*sqrt(RAND);
+			THconed = atan(rd)*180/PI;
+
+			// Lambertian cone sampling, see Dutré 2003
+			// double sinTHCone, sinTH;
+			// PHconed = 360*RAND;
+			// sinTHCone = sin(radiansd(SUN_DISCd));
+			// sinTH = sqrt(RAND)*sinTHCone;
+			// THconed = asin(sinTH)*180./CUDART_PI;
+
+			// Transformations to consider the solar cone sampling	
 			Transformd TPHconed, TTHconed;
-			TPHconed = TPHconed.RotateZ(PHconed); TTHconed = TTHconed.RotateY(THconed);
-		
-			// Apply transforms to vector u and v in function to alpha and beta
+			TPHconed = TPHconed.RotateZ(PHconed); TTHconed = TTHconed.RotateY(THconed);		
 			vdouble = TPHconed(   Vectord(  TTHconed( Vectord(vdouble) )  )   );
 			udouble = TPHconed(   Vectord(  TTHconed( Vectord(udouble) )  )   );
 
-			// Creation des tranformations (pour le calcul de la direction du photon)	
+            // Transformations to consider the sun direction
 			Transformd TThetad, TPhid;
-			TThetad = TThetad.RotateY(sunTheta);
-			TPhid = TPhid.RotateZ(sunPhi);		
-
-			// Application des transformation sur les vecteurs u et v en fonction de Theta et Phi
+			TThetad = TThetad.RotateY(sunTheta); TPhid = TPhid.RotateZ(sunPhi);
 			vdouble = TPhid(   Vectord(  TThetad( Vectord(vdouble) )  )   );
 			udouble = TPhid(   Vectord(  TThetad( Vectord(udouble) )  )   );
 
+			// Update the values of u and v
 			ph->v = make_float3(float(vdouble.x), float(vdouble.y), float(vdouble.z));
 			ph->u = make_float3(float(udouble.x), float(udouble.y), float(udouble.z));
 		}
@@ -2373,8 +2381,8 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 		// nObj = le nombre d'objets, si = 0 alors le test n'est pas nécessaire.
 	    if (nObj > 0){
 			mytest = geoTest(ph->pos, ph->v, ph->locPrev, &phit, geoS, myObjets);
-			if (!mytest && LMODEd == 1 &&  ph->pos.z >= (120.F-VALMIN) && ph->direct == 0) {ph->loc=NONE; return;}
-			if (mytest && phit.z > -VALMIN && phit.z < (120.F+VALMIN) && IsAtm == 0)
+			if (!mytest && LMODEd == 1 &&  ph->pos.z >= (120.F-VALMIN5) && ph->direct == 0) {ph->loc=NONE; return;}
+			if (mytest && phit.z > -VALMIN5 && phit.z < (120.F+VALMIN5) && IsAtm == 0)
 			{
 				ph->tau = 0.F;
 				ph->loc = OBJSURF;
@@ -2382,11 +2390,13 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 				return;
 			}
 		}
-		
+
 		// if mytest = true (intersection with the geometry) and the position of the intersection is in
 		// the atmosphere (0 < Z < 120), then: Begin to analyse is there is really an intersection
-		if(mytest && phit.z > -VALMIN && phit.z < (120.F+VALMIN) && IsAtm == 1)
+		if(mytest && phit.z > -VALMIN5 && phit.z < (120.F+VALMIN5) && IsAtm == 1)
 		{
+	        // if phit.z < 0 then correct the value to 0 (there is no object below the surface)
+	        //if (phit.z < 0) phit.z =0;
 			float tauHit = 0.f; // Optical depth distance (from the initial position of the photon to phit)
 			int ilayer2 = ph->layer;
 			if (ilayer2==0) {ilayer2=1;} // Be sure that we're not out of the atmosphere
@@ -5797,8 +5807,8 @@ __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo 
 {
 	Ray R1(o, dir, 0); // initialisation du rayon pour l'étude d'intersection
 	// ******************interval d'étude******************
-	BBox interval(make_float3(Pmin_x, Pmin_y, Pmin_z),
-				  make_float3(Pmax_x, Pmax_y, Pmax_z));
+	BBox interval(make_float3(Pmin_x-VALMIN, Pmin_y-VALMIN, Pmin_z-VALMIN),
+				  make_float3(Pmax_x+VALMIN, Pmax_y+VALMIN, Pmax_z+VALMIN));
 	
 	if (!interval.IntersectP(R1))
 	{
@@ -5834,7 +5844,9 @@ __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo 
 		   car s'il y a une rotation, alors le repère change (axe x ou y ou z) !!! */
 
 		// si une valeur en x, y ou z diff de 0 alors il y a une translation
-		if (ObjT[i].mvTx != 0 or ObjT[i].mvTy != 0 or ObjT[i].mvTz != 0) {
+		if ( (ObjT[i].mvTx>VALMIN and ObjT[i].mvTx<-VALMIN) or
+			 (ObjT[i].mvTy>VALMIN and ObjT[i].mvTy>-VALMIN) or
+			 (ObjT[i].mvTz>VALMIN and ObjT[i].mvTy>-VALMIN)) {
 			Transform TmT;
 			TmT = Ti.Translate(make_float3(ObjT[i].mvTx, ObjT[i].mvTy,
 										   ObjT[i].mvTz));

@@ -25,6 +25,10 @@
 
 // THRESHOLD for SMALL ANGLE VALUE
 #define VALMIN 0.000001F
+#define VALMIN2 0.000002F
+#define VALMIN3 0.000003F
+#define VALMIN4 0.000004F
+#define VALMIN5 0.000005F
 
 /* Mathématiques */
 #define PI 3.1415927F
