@@ -116,7 +116,7 @@ __global__ void launchKernel(
 		, void *tabObjInfo,
 		struct IObjets *myObjets,
 		unsigned long long *nbPhCat,
-		void *wPhCat,
+		void *wPhCat, void *wPhCat2,
 		void *wPhLoss
 		#endif
         );
@@ -195,7 +195,7 @@ __device__ void Obj3DRoughSurf(Photon* ph, IGeo* geoS, struct RNG_State *rngstat
 
 __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, struct Sensor *tab_sensor);
 
-__device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsigned long long *nbPhCat, void *wPhCat);
+__device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsigned long long *nbPhCat, void *wPhCat, void *wPhCat2);
 #endif
 
 __device__ void countPhoton(Photon* , struct Profile* prof_atm, struct Profile* prof_oc, float*, float *,

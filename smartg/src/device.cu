@@ -45,7 +45,7 @@ extern "C" {
 							 , void *tabObjInfo,
 							 struct IObjets *myObjets,
 							 unsigned long long *nbPhCat,
-							 void *wPhCat,
+							 void *wPhCat, void *wPhCat2,
 							 void *wPhLoss
 							 #endif
 							 ) {
@@ -273,7 +273,7 @@ extern "C" {
 
 		#if defined(BACK) && defined(OBJ3D)
 		if (count_level == UPTOA and LMODEd == 4) // the photon reach TOA
-		{ countPhotonObj3D(&ph, tabObjInfo, &geoStruc, nbPhCat, wPhCat);}
+		{ countPhotonObj3D(&ph, tabObjInfo, &geoStruc, nbPhCat, wPhCat, wPhCat2);}
         #endif
 
 		__syncthreads();
@@ -671,7 +671,7 @@ extern "C" {
 		{
 
 			if (geoStruc.type == RECEIVER and LMODEd != 4) // this is a receiver
-			{ countPhotonObj3D(&ph, tabObjInfo, &geoStruc, nbPhCat, wPhCat);}
+			{ countPhotonObj3D(&ph, tabObjInfo, &geoStruc, nbPhCat, wPhCat, wPhCat2);}
 
 			// For losses count
 			ph.weight_loss[0] = ph.weight;
@@ -1455,13 +1455,13 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		
 			double PHconed, THconed;
 
-			// disk cone sampling
-			// Mixte between disk sampling (Dunn & Shultis 2011) and cone sampling 
-			double rd, Rd;
-			PHconed = 360*RAND;
-			Rd = tan(radiansd(SUN_DISCd));
-			rd = Rd*sqrt(RAND);
-			THconed = atan(rd)*180/PI;
+			// // disk cone sampling
+			// // Mixte between disk sampling (Dunn & Shultis 2011) and cone sampling 
+			// double rd, Rd;
+			// PHconed = 360*RAND;
+			// Rd = tan(radiansd(SUN_DISCd));
+			// rd = Rd*sqrt(RAND);
+			// THconed = atan(rd)*180/PI;
 
 			// Lambertian cone sampling, see Dutré 2003
 			// double sinTHCone, sinTH;
@@ -1469,6 +1469,12 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 			// sinTHCone = sin(radiansd(SUN_DISCd));
 			// sinTH = sqrt(RAND)*sinTHCone;
 			// THconed = asin(sinTH)*180./CUDART_PI;
+
+            // Isotropic cone sampling, see Dutré 2003
+			double cosTHCone;
+			PHconed = 360*RAND;
+			cosTHCone = cos(radiansd(SUN_DISCd));
+			THconed = acos(RAND*(cosTHCone-1)+1)*180./CUDART_PI;
 
 			// Transformations to consider the solar cone sampling	
 			Transformd TPHconed, TTHconed;
@@ -4594,7 +4600,7 @@ __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, struct Sensor *
 	#endif
 }
 
-__device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsigned long long *nbPhCat, void *wPhCat)
+__device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsigned long long *nbPhCat, void *wPhCat, void *wPhCat2)
 {
 	int indI = 0; int indJ = 0;
 	float3 p_t; float sizeX = nbCx*TCd; float sizeY = nbCy*TCd;
@@ -4654,24 +4660,27 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 	
     #ifdef DOUBLE
 	double *tabCountObj;
-	double *wPhCatC;
+	double *wPhCatC, *wPhCatC2;
 	double4 stokes;
-	double weight;
+	double weight, weight2;
 	tabCountObj = (double*)tabObjInfo;
 	wPhCatC = (double*)wPhCat;
+	wPhCatC2 = (double*)wPhCat2;
 	stokes = make_double4(ph->stokes.x, ph->stokes.y, ph->stokes.z, ph->stokes.w);
 	weight = (double)ph->weight;
 	weight = weight * double(stokes.x + stokes.y);
     #else // If not DOUBLE
 	float *tabCountObj;
-	float *wPhCatC;
-	float weight;
+	float *wPhCatC, *wPhCatC;
+	float weight, weight2;
 	tabCountObj = (float*)tabObjInfo;
 	wPhCatC = (float*)wPhCat;
+	wPhCatC2 = (float*)wPhCat2;
 	weight = (float)ph->weight;
 	weight = weight * float(ph->stokes.x + ph->stokes.y);
 	#endif
-	
+	weight2 = weight * weight;
+
 	if(isnan(weight))
 	{
 		printf("Care weight is nan !! \n");
@@ -4686,37 +4695,37 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 	// Les huit catégories
 	if (ph->H == 0 && ph->E == 0 && ph->S == 0) 
 	{ // CAT 1 : aucun changement de trajectoire avant de toucher le R.
-	    atomicAdd(wPhCatC, weight); // comptage poids
+	    atomicAdd(wPhCatC, weight); atomicAdd(wPhCatC2, weight2);// comptage poids
 		atomicAdd(nbPhCat, 1);     // comptage nombre de photons
 		atomicAdd(tabCountObj+(nbCy*nbCx)+(nbCy*indI)+indJ, weight); // distri
 	}
 	else if ( ph->H > 0 && ph->E == 0 && ph->S == 0)
 	{ // CAT 2 : only H avant de toucher le R.
-		atomicAdd(wPhCatC+1, weight);
+		atomicAdd(wPhCatC+1, weight); atomicAdd(wPhCatC2+1, weight2);
 		atomicAdd(nbPhCat+1, 1);
 		atomicAdd(tabCountObj+(2*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}
 	else if ( ph->H == 0 && ph->E > 0 && ph->S == 0)
 	{ // CAT 3 : only E avant de toucher le R.
-		atomicAdd(wPhCatC+2, weight);
+		atomicAdd(wPhCatC+2, weight); atomicAdd(wPhCatC2+2, weight2);
 		atomicAdd(nbPhCat+2, 1);
 		atomicAdd(tabCountObj+(3*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}
 	else if ( ph->H == 0 && ph->E == 0 && ph->S > 0)
 	{ // CAT 4 : only S avant de toucher le R.
-		atomicAdd(wPhCatC+3, weight);
+		atomicAdd(wPhCatC+3, weight); atomicAdd(wPhCatC2+3, weight2);
 		atomicAdd(nbPhCat+3, 1);
 		atomicAdd(tabCountObj+(4*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}
 	else if ( ph->H > 0 && ph->E == 0 && ph->S > 0)
 	{ // CAT 5 : 2 proc. H et S avant de toucher le R.
-		atomicAdd(wPhCatC+4, weight);
+		atomicAdd(wPhCatC+4, weight); atomicAdd(wPhCatC2+4, weight2);
 		atomicAdd(nbPhCat+4, 1);
 		atomicAdd(tabCountObj+(5*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}
 	else if ( ph->H > 0 && ph->E > 0 && ph->S == 0)
 	{ // CAT 6 : 2 proc. H et E avant de toucher le R.
-		atomicAdd(wPhCatC+5, weight);
+		atomicAdd(wPhCatC+5, weight); atomicAdd(wPhCatC2+5, weight2);
 		atomicAdd(nbPhCat+5, 1);
 		atomicAdd(tabCountObj+(6*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
         //printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
@@ -4724,13 +4733,13 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 	}
 	else if ( ph->H == 0 && ph->E > 0 && ph->S > 0)
 	{ // CAT 7 : 2 proc. E et S avant de toucher le R.
-		atomicAdd(wPhCatC+6, weight);
+		atomicAdd(wPhCatC+6, weight); atomicAdd(wPhCatC2+6, weight2);
 		atomicAdd(nbPhCat+6, 1);
 		atomicAdd(tabCountObj+(7*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}	
 	else if ( ph->H > 0 && ph->E > 0 && ph->S > 0)
 	{ // CAT 8 : 3 proc. H, E et S avant de toucher le R.
-		atomicAdd(wPhCatC+7, weight);
+		atomicAdd(wPhCatC+7, weight); atomicAdd(wPhCatC2+7, weight2);
 		atomicAdd(nbPhCat+7, 1);
 		atomicAdd(tabCountObj+(8*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}		
@@ -4740,51 +4749,51 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 	// Les huit catégories
 	if (ph->H == 0 && ph->E == 0 && ph->S == 0) 
 	{ // CAT 1 : aucun changement de trajectoire avant de toucher le R.
-	    DatomicAdd(wPhCatC, weight); // comptage poids
+	    DatomicAdd(wPhCatC, weight); DatomicAdd(wPhCatC2, weight2);// comptage poids
 		atomicAdd(nbPhCat, 1);     // comptage nombre de photons
 		DatomicAdd(tabCountObj+(nbCy*nbCx)+(nbCy*indI)+indJ, weight); // distri
 	}
 	else if ( ph->H > 0 && ph->E == 0 && ph->S == 0)
 	{ // CAT 2 : only H avant de toucher le R.
-		DatomicAdd(wPhCatC+1, weight);
+		DatomicAdd(wPhCatC+1, weight); DatomicAdd(wPhCatC2+1, weight2);
 		atomicAdd(nbPhCat+1, 1);
 		DatomicAdd(tabCountObj+(2*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 		//printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
 	}
 	else if ( ph->H == 0 && ph->E > 0 && ph->S == 0)
 	{ // CAT 3 : only E avant de toucher le R.
-		DatomicAdd(wPhCatC+2, weight);
+		DatomicAdd(wPhCatC+2, weight); DatomicAdd(wPhCatC2+2, weight2);
 		atomicAdd(nbPhCat+2, 1);
 		DatomicAdd(tabCountObj+(3*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}
 	else if ( ph->H == 0 && ph->E == 0 && ph->S > 0)
 	{ // CAT 4 : only S avant de toucher le R.
-		DatomicAdd(wPhCatC+3, weight);
+		DatomicAdd(wPhCatC+3, weight); DatomicAdd(wPhCatC2+3, weight2);
 		atomicAdd(nbPhCat+3, 1);
 		DatomicAdd(tabCountObj+(4*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}
 	else if ( ph->H > 0 && ph->E == 0 && ph->S > 0)
 	{ // CAT 5 : 2 proc. H et S avant de toucher le R.
-		DatomicAdd(wPhCatC+4, weight);
+		DatomicAdd(wPhCatC+4, weight); DatomicAdd(wPhCatC2+4, weight2);
 		atomicAdd(nbPhCat+4, 1);
 		DatomicAdd(tabCountObj+(5*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}
 	else if ( ph->H > 0 && ph->E > 0 && ph->S == 0)
 	{ // CAT 6 : 2 proc. H et E avant de toucher le R.
-		DatomicAdd(wPhCatC+5, weight);
+		DatomicAdd(wPhCatC+5, weight); DatomicAdd(wPhCatC2+5, weight2);
 		atomicAdd(nbPhCat+5, 1);
 		DatomicAdd(tabCountObj+(6*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
         //printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
 	}
 	else if ( ph->H == 0 && ph->E > 0 && ph->S > 0)
 	{ // CAT 7 : 2 proc. E et S avant de toucher le R.
-		DatomicAdd(wPhCatC+6, weight);
+		DatomicAdd(wPhCatC+6, weight); DatomicAdd(wPhCatC2+6, weight2);
 		atomicAdd(nbPhCat+6, 1);
 		DatomicAdd(tabCountObj+(7*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}	
 	else if ( ph->H > 0 && ph->E > 0 && ph->S > 0)
 	{ // CAT 8 : 3 proc. H, E et S avant de toucher le R.
-		DatomicAdd(wPhCatC+7, weight);
+		DatomicAdd(wPhCatC+7, weight); DatomicAdd(wPhCatC2+7, weight2);
 		atomicAdd(nbPhCat+7, 1);
 		DatomicAdd(tabCountObj+(8*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}
@@ -5836,7 +5845,7 @@ __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo 
 		// si une valeur en x, y ou z diff de 0 alors il y a une translation
 		if ( (ObjT[i].mvTx>VALMIN and ObjT[i].mvTx<-VALMIN) or
 			 (ObjT[i].mvTy>VALMIN and ObjT[i].mvTy>-VALMIN) or
-			 (ObjT[i].mvTz>VALMIN and ObjT[i].mvTy>-VALMIN)) {
+			 (ObjT[i].mvTz>VALMIN and ObjT[i].mvTz>-VALMIN)) {
 			Transform TmT;
 			TmT = Ti.Translate(make_float3(ObjT[i].mvTx, ObjT[i].mvTy,
 										   ObjT[i].mvTz));

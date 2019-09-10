@@ -1381,7 +1381,58 @@ class Smartg(object):
                     cMatVisuRecep[i][:][:] = cMatVisuRecep[i][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
             else:
                 cMatVisuRecep[:][:][:] = cMatVisuRecep[:][:][:]/(TC*TC*NBPHOTONS)
+
+            print("S2=", TC*TC*nbCx*nbCy)
+            for i in range (0, 8):
+                categories[(i*5)] *= ((surfMir)/(NBPHOTONS))*1000*1000
+                categories[(i*5)+3] *= ((surfMir)/(NBPHOTONS))*1000*1000
+
+            #invMyN = surfMir/((TC*TC*nbCx*nbCy + 0.000485352)*NBPHOTONS)
+            #myN = ((TC*TC*nbCx*nbCy + 0.000485352)*NBPHOTONS)/surfMir
+            # invMyN = surfMir/(TC*TC*nbCx*nbCy*NBPHOTONS)
+            # myN = ((TC*TC*nbCx*nbCy)*NBPHOTONS)/surfMir
+            #myK = 1 + (0.000485352/(TC*TC*nbCx*nbCy))
+            # myK = 1
+            # myK2 = myK * myK
+            # myN = categories[1]+categories[6]+categories[11]+categories[16]+categories[21]+categories[26]+categories[31]+categories[36]
+            # if (myN != 0):
+            #     invMyN = 1./(categories[1]+categories[6]+categories[11]+categories[16]+categories[21]+categories[26]+categories[31]+categories[36])
+            # else:
+            #     invMyN = 0.
             
+            # totW = categories[0]+categories[5]+categories[10]+categories[15]+categories[20]+categories[25]+categories[30]+categories[35]
+            # totW2 = categories[4]+categories[9]+categories[14]+categories[19]+categories[24]+categories[29]+categories[34]+categories[39]
+            # totW = invMyN * totW
+            # totW2 = invMyN * totW2
+            # trueS = np.sqrt(  (myN/(myN-1)) * ( totW2 - (totW*totW) )  )
+            # trueS = trueS/np.sqrt(myN)
+            # trueSP = (trueS/totW)*100
+            # print("trueS=", trueS, "trueSP=", trueSP)
+
+            # for i in range (0, 8):
+            #     # categories[(i*5)] = invMyN * myK * categories[(i*5)] 
+            #     # categories[(i*5)+4] = invMyN * myK2 * categories[(i*5)+4]
+            #     myN = categories[(i*5)+1]/0.90767
+            #     if (myN != 0):
+            #         invMyN = 0.90767/categories[(i*5)+1]
+            #     else:
+            #         invMyN = 0.
+            #     categories[(i*5)] = invMyN * categories[(i*5)]
+            #     categories[(i*5)+4] = invMyN * categories[(i*5)+4]
+        
+            # for i in range (0, 8):
+            #     # Erreur relatives et absolues pour chaque categories
+            #     if (categories[(i*5)] == 0 or categories[(i*5)+4] == 0):
+            #         categories[(i*5)+2] = 0. # relative err
+            #         categories[(i*5)+3] = 0. # abs err
+            #     else:
+            #         #myN = categories[(i*5)+1]
+            #         myS = np.sqrt(  (myN/(myN-1)) * ( categories[(i*5)+4] - (categories[(i*5)]*categories[(i*5)]) )  )
+            #         print("S=", myS, "Zbar=", categories[(i*5)], "Z2bar=", categories[(i*5)+4], "Z2bar-Zbar2=",
+            #               categories[(i*5)+4]-(categories[(i*5)]*categories[(i*5)]))
+            #         categories[(i*5)+3] = myS/np.sqrt(myN)
+            #         categories[(i*5)+2] = (categories[(i*5)+3]/categories[(i*5)])*100
+
         # If there are no heliostats --> there is no STP and then no analyses of optical losses
         if (nb_H <= 0):
             dicSTP = None; vecLoss = None;
@@ -1709,14 +1760,16 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
         
         
     if (cats is not None):
-        m.add_dataset('catWeightPh', np.array([cats[0], cats[4], cats[8], cats[12], cats[16], cats[20],
-                                               cats[24], cats[28]], dtype=np.float64), ['Categories'])
-        m.add_dataset('catNbPh', np.array([cats[1], cats[5], cats[9], cats[13], cats[17], cats[21],
-                                           cats[25], cats[29]], dtype=np.float64), ['Categories'])
-        m.add_dataset('catErrP', np.array([cats[2], cats[6], cats[10], cats[14], cats[18], cats[22], 
-                                           cats[26], cats[30]], dtype=np.float64), ['Categories'])
-        m.add_dataset('catErrAbs', np.array([cats[3], cats[7], cats[11], cats[15], cats[19], cats[23], 
-                                             cats[27], cats[31]], dtype=np.float64), ['Categories'])
+        m.add_dataset('catWeightPh', np.array([cats[0], cats[5], cats[10], cats[15], cats[20], cats[25],
+                                               cats[30], cats[35]], dtype=np.float64), ['Categories'])
+        m.add_dataset('catNbPh', np.array([cats[1], cats[6], cats[11], cats[16], cats[21], cats[26],
+                                           cats[31], cats[36]], dtype=np.float64), ['Categories'])
+        m.add_dataset('catErrP', np.array([cats[2], cats[7], cats[12], cats[17], cats[22], cats[27], 
+                                           cats[32], cats[37]], dtype=np.float64), ['Categories'])
+        m.add_dataset('catErrAbs', np.array([cats[3], cats[8], cats[13], cats[18], cats[23], cats[28], 
+                                             cats[33], cats[38]], dtype=np.float64), ['Categories'])
+        m.add_dataset('catWeightPh2', np.array([cats[4], cats[9], cats[14], cats[19], cats[24], cats[29], 
+                                                cats[34], cats[39]], dtype=np.float64), ['Categories'])
 
     if (losses is not None):
         # find the atm layer where the mean heliostats z altitude is located
@@ -2202,30 +2255,34 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         nbPhCat = gpuzeros(8, dtype=np.uint64) # vector to fill the number of photons for  each categories
         if double:
             wPhCat = gpuzeros(8, dtype=np.float64)  # vector to fill the weight of photons for each categories
+            wPhCat2 = gpuzeros(8, dtype=np.float64)  # sum of squared photons weight for each cats
             tabObjInfo = gpuzeros((9, nbCx, nbCy), dtype=np.float64)
             wPhLoss = gpuzeros(5, dtype=np.float64)
         else:
             wPhCat = gpuzeros(8, dtype=np.float32)
+            wPhCat2 = gpuzeros(8, dtype=np.float32)
             tabObjInfo = gpuzeros((9, nbCx, nbCy), dtype=np.float32)
             wPhLoss = gpuzeros(5, dtype=np.float32)
         tabMatRecep = np.zeros((9, nbCx, nbCy), dtype=np.float64)  
         # vecteur comprenant : weightPhotons, nbPhoton, err% et errAbs pour
         # les 8 categories donc 4 x 8 valeurs = 32. vecCat[0], [1], [2] et [3]
         # pour la categorie 1 et ainsi de suite...
-        vecCats = np.zeros((32), dtype=np.float64)
+        vecCats = np.zeros((40), dtype=np.float64)
         # vector where: v[0]=Wi, v[1]=Wi/(n.dirS), v[2]=Wo, v[3]=Wr 
         vecLoss = np.zeros((5), dtype=np.float64)
     else:
         nbPhCat = gpuzeros(1, dtype=np.uint64)
         if double:
             wPhCat = gpuzeros(1, dtype=np.float64)
+            wPhCat2 = gpuzeros(1, dtype=np.float64)
             wPhLoss = gpuzeros(1, dtype=np.float64)
             tabObjInfo = gpuzeros((1, 1, 1), dtype=np.float64)
         else:
             wPhCat = gpuzeros(1, dtype=np.float32)
+            wPhCat2 = gpuzeros(1, dtype=np.float32)
             wPhLoss = gpuzeros(1, dtype=np.float32)
             tabObjInfo = gpuzeros((1, 1, 1), dtype=np.float32)
-            
+        
     # Initialize the array for error counting
     NERROR = 32
     errorcount = gpuzeros(NERROR, dtype='uint64')
@@ -2284,6 +2341,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         # en rapport avec les objets
         tabObjInfo.fill(0)
         wPhCat.fill(0)
+        wPhCat2.fill(0)
         wPhLoss.fill(0)
         
         start_cuda_clock = cuda.Event()
@@ -2297,7 +2355,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
                  errorcount, nThreadsActive, tabPhotons, tabDist, tabHist,
                  Counter, NPhotonsIn, NPhotonsOut, tabthv, tabphi, tab_sensor,
                  prof_atm, prof_oc, wl_proba_icdf, rng.state, tabObjInfo, myObjects0, nbPhCat, wPhCat,
-                 wPhLoss, block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
+                 wPhCat2, wPhLoss, block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
         else:
             kern(spectrum, X0, faer, foce,
                  errorcount, nThreadsActive, tabPhotons, tabDist, tabHist,
@@ -2318,8 +2376,8 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
             vecLoss += wPhLoss[:].get()
             for i in range (0, 8):
                 # Comptage des poids pour chaque categories
-                vecCats[i*4] += wPhCat[i].get();
-
+                vecCats[i*5] += wPhCat[i].get();
+                vecCats[(i*5)+4] += wPhCat2[i].get();
         
         L = NPhotonsIn   # number of photons launched by last kernel
         NPhotonsInTot += L
@@ -2358,16 +2416,16 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
     if TC is not None:
         for i in range (0, 8):
             # # Comptage des poids pour chaque categories
-            # vecCats[i*4] = wPhCat[i].get();
+            # vecCats[i*5] = wPhCat[i].get();
             # Comptage du nombre de photons pour chaque categories
-            vecCats[(i*4)+1] = nbPhCat[i].get();
+            vecCats[(i*5)+1] = nbPhCat[i].get();
             # Erreur relatives et absolues pour chaque categories
-            if (vecCats[i*4] == 0 or vecCats[(i*4)+1] == 0):
-                vecCats[(i*4)+2] = 0.
-                vecCats[(i*4)+3] = 0.
+            if (vecCats[i*5] == 0 or vecCats[(i*5)+1] == 0):
+                vecCats[(i*5)+2] = 0.
+                vecCats[(i*5)+3] = 0.
             else:    
-                vecCats[(i*4)+2] = float((100.*(1./vecCats[(i*4)+1]**0.5)));
-                vecCats[(i*4)+3] = vecCats[i*4]*(1./vecCats[(i*4)+1]**0.5);
+                vecCats[(i*5)+2] = float((100.*(1./vecCats[(i*5)+1]**0.5)));
+                vecCats[(i*5)+3] = vecCats[i*5]*(1./vecCats[(i*5)+1]**0.5);
     else:
         tabMatRecep = None
         vecCats = None
