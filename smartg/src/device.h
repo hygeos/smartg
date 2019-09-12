@@ -83,7 +83,6 @@ __device__ __constant__ float CFTYd;
 __device__ __constant__ float THDEGd;
 __device__ __constant__ float PHDEGd;
 __device__ __constant__ float ALDEGd;
-__device__ __constant__ float BETDEGd;
 __device__ __constant__ int LMODEd;
 #endif
 

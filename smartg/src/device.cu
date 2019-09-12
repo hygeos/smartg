@@ -1498,9 +1498,9 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     #else // else if Backward modes
 	if (LMODEd == 3 or LMODEd == 4) // common part between mode B and BR (cusBackward)
 	{
-		// Sampling of alpha and beta angles
-		float alpha = ALDEGd, beta=BETDEGd;
-		alpha = (RAND-0.5)*0.5*alpha; beta = (RAND-0.5)*0.5*beta;
+		// // Sampling of alpha and beta angles
+		// float alpha = ALDEGd, beta=BETDEGd;
+		// alpha = (RAND-0.5)*alpha; beta = (RAND-0.5)*beta;
 		
 		// One fixed direction (for radiance)
 		float3 vfloat = make_float3(0., 0., 1.);
@@ -1508,13 +1508,19 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		// Initialization of the orthogonal vector to the propagation
 		float3 ufloat = make_float3(1., 0., 0.);
 		
-		// Creation of transforms to consider alpha and beta for the computation of photon dirs
-		Transform Talpha, Tbeta;
-		Talpha = Talpha.RotateY(alpha); Tbeta = Tbeta.RotateX(beta);
+		double PHconed, THconed, cosTHconed;
+		PHconed = 360.*RAND;
+
+		cosTHconed = cos(radiansd(ALDEGd));
+		THconed = acos(RAND*(cosTHconed - 1) + 1)*180./CUDART_PI;
 		
-		// Apply transforms to vector u and v in function to alpha and beta
-		vfloat = Tbeta(   Vectorf(  Talpha( Vectorf(vfloat) )  )   );
-		ufloat = Tbeta(   Vectorf(  Talpha( Vectorf(ufloat) )  )   );
+		// Creation of transforms
+		Transform TPHconed, TTHconed;
+		TPHconed = TPHconed.RotateZ(PHconed); TTHconed = TTHconed.RotateY(THconed);
+		
+		// Apply transforms to vector u and v
+		vfloat = TPHconed(   Vectorf(  TTHconed( Vectorf(vfloat) )  )   );
+		ufloat = TPHconed(   Vectorf(  TTHconed( Vectorf(ufloat) )  )   );
 		
 		// Creation of transforms to consider theta and phi for the computation of photon dirs
 		Transform TTheta, TPhi;

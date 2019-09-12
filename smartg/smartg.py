@@ -363,22 +363,19 @@ class CusBackward(object):
     POS     : Position (X,Y,Z) in cartesian coordinates, default origin (class Point)
     TH,PH   : Direction (theta, phi) of zenith and azimuth angles of viewing direction
               (Zenith> 90 for downward looking, <90 for upward, default Zenith)
-    AL, BET : Launch in a solid angle where alpha is the angle in plane ZX and BETA in
-              plane ZY, both starting at Z+ and going in the trigonometric direction
-              respectively arround the axis Y and X 
+    ALDEG   : Launch in a solid angle where alpha is the half-angle of the cone
     V       : Direction but represented by a Vector type, if not None replace TH, PH
     LMODE (Launching mode) : B = basic Backward, BR = Backward with receiver
                              B -> Launch the photons from a given point in a given
                                   direction (eventually can choose a ramdom vector
                                   in a solid angle arround a given direction delimited
-                                  by the angles ALDEG and BETDEG)
+                                  by the half-angle ALDEG)
                              B -> Launch the photons from a given receiver (plane obj)
                                   in a given direction (also eventually can choose a
-                                  ramdom vector in a solid angle delimited by ALDEG and
-                                  BETDEG)
+                                  ramdom vector in a solid angle delimited by ALDEG)
     '''
     def __init__(self, POS = Point(0., 0., 0.), THDEG = 0., PHDEG = 0., V = None,
-                 ALDEG = 0., BETDEG = 0., REC = None, LMODE = "B"):
+                 ALDEG = 0., REC = None, LMODE = "B"):
 
         if (isinstance(V, Vector)): THDEG, PHDEG = convertVtoAngles(V)
         elif (V != None): raise NameError('V argument must be a Vector')
@@ -390,14 +387,13 @@ class CusBackward(object):
             'THDEG':  THDEG,
             'PHDEG':  PHDEG,
             'ALDEG':  ALDEG,
-            'BETDEG': BETDEG,
             'REC':    REC,
             'LMODE':  LMODE
         }
 
     def __str__(self):
         return 'CusBackward:-POS={POS}-THDEG={THDEG}-PHDEG={PHDEG}'.format(**self.dict) + \
-            '-ALDEG={ALDEG}-BETDEG={BETDEG}-LMODE={LMODE}'.format(**self.dict)
+            '-ALDEG={ALDEG}-LMODE={LMODE}'.format(**self.dict)
     
 class Smartg(object):
 
@@ -1382,7 +1378,6 @@ class Smartg(object):
             else:
                 cMatVisuRecep[:][:][:] = cMatVisuRecep[:][:][:]/(TC*TC*NBPHOTONS)
 
-            print("S2=", TC*TC*nbCx*nbCy)
             for i in range (0, 8):
                 categories[(i*5)] *= ((surfMir)/(NBPHOTONS))*1000*1000
                 categories[(i*5)+3] *= ((surfMir)/(NBPHOTONS))*1000*1000
@@ -2045,7 +2040,6 @@ def InitConst(surf, env, NATM, NOCE, mod,
             copy_to_device('THDEGd', cusL.dict['THDEG'], np.float32)
             copy_to_device('PHDEGd', cusL.dict['PHDEG'], np.float32)
             copy_to_device('ALDEGd', cusL.dict['ALDEG'], np.float32)
-            copy_to_device('BETDEGd', cusL.dict['BETDEG'], np.float32)
         if (  (cusL != None) and (cusL.dict['LMODE'] == "B")  ):    
             copy_to_device('LMODEd', 3, np.int32)
         if (  (cusL != None) and (cusL.dict['LMODE'] == "BR")  ):
