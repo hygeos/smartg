@@ -1375,12 +1375,13 @@ class Smartg(object):
             elif (cusL.dict['LMODE'] != "B" and cusL.dict['LMODE'] != "BR"):
                 for i in range (0, 9):
                     cMatVisuRecep[i][:][:] = cMatVisuRecep[i][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
+                for i in range (0, 8):
+                    categories[(i*5)] *= ((surfMir)/(TC*TC*nbCx*nbCy*NBPHOTONS))
+                    categories[(i*5)+3] *= ((surfMir)/(TC*TC*nbCx*nbCy*NBPHOTONS))
+                    # categories[(i*5)] *= ((surfMir)/(TC*TC*nbCx*nbCy))
+                    # categories[(i*5)+3] *= ((surfMir)/(TC*TC*nbCx*nbCy))
             else:
                 cMatVisuRecep[:][:][:] = cMatVisuRecep[:][:][:]/(TC*TC*NBPHOTONS)
-
-            for i in range (0, 8):
-                categories[(i*5)] *= ((surfMir)/(NBPHOTONS))*1000*1000
-                categories[(i*5)+3] *= ((surfMir)/(NBPHOTONS))*1000*1000
 
             #invMyN = surfMir/((TC*TC*nbCx*nbCy + 0.000485352)*NBPHOTONS)
             #myN = ((TC*TC*nbCx*nbCy + 0.000485352)*NBPHOTONS)/surfMir
@@ -2418,8 +2419,17 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
                 vecCats[(i*5)+2] = 0.
                 vecCats[(i*5)+3] = 0.
             else:    
-                vecCats[(i*5)+2] = float((100.*(1./vecCats[(i*5)+1]**0.5)));
-                vecCats[(i*5)+3] = vecCats[i*5]*(1./vecCats[(i*5)+1]**0.5);
+                # vecCats[(i*5)+2] = float((100.*(1./vecCats[(i*5)+1]**0.5)));
+                # vecCats[(i*5)+3] = vecCats[i*5]*(1./vecCats[(i*5)+1]**0.5);
+                #nBis = vecCats[(i*5)+1]/(vecCats[(i*5)+1]-1)
+                #nBis = 31092.85784/(31092.85784-1)
+                nBis = NBPHOTONS/(NBPHOTONS-1)
+                sum2Z = (vecCats[i*5]*vecCats[i*5])/NBPHOTONS
+                sumZ2 = vecCats[(i*5)+4]
+                # vecCats[(i*5)+3] = (nBis * (vecCats[(i*5)+4] - (vecCats[i*5]*vecCats[i*5])/31092.85784))**0.5
+                # vecCats[(i*5)+2] = (vecCats[(i*5)+3]/vecCats[i*5])*100
+                vecCats[(i*5)+3] = (nBis * (sumZ2 - sum2Z))**0.5
+                vecCats[(i*5)+2] = (vecCats[(i*5)+3]/vecCats[i*5])*100
     else:
         tabMatRecep = None
         vecCats = None
