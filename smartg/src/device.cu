@@ -593,16 +593,6 @@ extern "C" {
                         countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, count_level_le, errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
 
                         // Only for upward photons count also them up to TOA
-
-                        #ifdef VERBOSE_PHOTON
-                        if (k==0) display("SURFACE LE UP", &ph_le);
-                        else display("SURFACE LE DOWN", &ph_le);
-                        #endif
-
-                        // Count the photon up to the counting levels (at the surface UP0P or DOW0M)
-                        countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, count_level_le, errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
-
-                        // Only for upward photons count also them up to TOA
                         if (k==0) { 
                             #ifdef SPHERIQUE
                             if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
@@ -5222,7 +5212,7 @@ __device__ void countPhoton(Photon* ph,
           tabCount2   = (double*)tabDist     + count_level*KK;
           for (int n=0; n<NOCEd; n++){
             LL = n*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
-	        #if NEW_CARDS
+            #if __CUDA_ARCH__ >= 600
             atomicAdd(tabCount2+LL, (double)ph->cdist_oc[n]);
             #else
             DatomicAdd(tabCount2+LL, (double)ph->cdist_oc[n]);
@@ -5230,7 +5220,7 @@ __device__ void countPhoton(Photon* ph,
           }
           for (int n=0; n<NATMd; n++){
             LL = (n+NOCEd)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
-	        #if NEW_CARDS
+            #if __CUDA_ARCH__ >= 600
             atomicAdd(tabCount2+LL, (double)ph->cdist_atm[n]);
             #else
             DatomicAdd(tabCount2+LL, (double)ph->cdist_atm[n]);
