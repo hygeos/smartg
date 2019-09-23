@@ -1378,56 +1378,8 @@ class Smartg(object):
                 for i in range (0, 8):
                     categories[(i*5)] *= ((surfMir)/(TC*TC*nbCx*nbCy*NBPHOTONS))
                     categories[(i*5)+3] *= ((surfMir)/(TC*TC*nbCx*nbCy*NBPHOTONS))
-                    # categories[(i*5)] *= ((surfMir)/(TC*TC*nbCx*nbCy))
-                    # categories[(i*5)+3] *= ((surfMir)/(TC*TC*nbCx*nbCy))
             else:
                 cMatVisuRecep[:][:][:] = cMatVisuRecep[:][:][:]/(TC*TC*NBPHOTONS)
-
-            #invMyN = surfMir/((TC*TC*nbCx*nbCy + 0.000485352)*NBPHOTONS)
-            #myN = ((TC*TC*nbCx*nbCy + 0.000485352)*NBPHOTONS)/surfMir
-            # invMyN = surfMir/(TC*TC*nbCx*nbCy*NBPHOTONS)
-            # myN = ((TC*TC*nbCx*nbCy)*NBPHOTONS)/surfMir
-            #myK = 1 + (0.000485352/(TC*TC*nbCx*nbCy))
-            # myK = 1
-            # myK2 = myK * myK
-            # myN = categories[1]+categories[6]+categories[11]+categories[16]+categories[21]+categories[26]+categories[31]+categories[36]
-            # if (myN != 0):
-            #     invMyN = 1./(categories[1]+categories[6]+categories[11]+categories[16]+categories[21]+categories[26]+categories[31]+categories[36])
-            # else:
-            #     invMyN = 0.
-            
-            # totW = categories[0]+categories[5]+categories[10]+categories[15]+categories[20]+categories[25]+categories[30]+categories[35]
-            # totW2 = categories[4]+categories[9]+categories[14]+categories[19]+categories[24]+categories[29]+categories[34]+categories[39]
-            # totW = invMyN * totW
-            # totW2 = invMyN * totW2
-            # trueS = np.sqrt(  (myN/(myN-1)) * ( totW2 - (totW*totW) )  )
-            # trueS = trueS/np.sqrt(myN)
-            # trueSP = (trueS/totW)*100
-            # print("trueS=", trueS, "trueSP=", trueSP)
-
-            # for i in range (0, 8):
-            #     # categories[(i*5)] = invMyN * myK * categories[(i*5)] 
-            #     # categories[(i*5)+4] = invMyN * myK2 * categories[(i*5)+4]
-            #     myN = categories[(i*5)+1]/0.90767
-            #     if (myN != 0):
-            #         invMyN = 0.90767/categories[(i*5)+1]
-            #     else:
-            #         invMyN = 0.
-            #     categories[(i*5)] = invMyN * categories[(i*5)]
-            #     categories[(i*5)+4] = invMyN * categories[(i*5)+4]
-        
-            # for i in range (0, 8):
-            #     # Erreur relatives et absolues pour chaque categories
-            #     if (categories[(i*5)] == 0 or categories[(i*5)+4] == 0):
-            #         categories[(i*5)+2] = 0. # relative err
-            #         categories[(i*5)+3] = 0. # abs err
-            #     else:
-            #         #myN = categories[(i*5)+1]
-            #         myS = np.sqrt(  (myN/(myN-1)) * ( categories[(i*5)+4] - (categories[(i*5)]*categories[(i*5)]) )  )
-            #         print("S=", myS, "Zbar=", categories[(i*5)], "Z2bar=", categories[(i*5)+4], "Z2bar-Zbar2=",
-            #               categories[(i*5)+4]-(categories[(i*5)]*categories[(i*5)]))
-            #         categories[(i*5)+3] = myS/np.sqrt(myN)
-            #         categories[(i*5)+2] = (categories[(i*5)+3]/categories[(i*5)])*100
 
         # If there are no heliostats --> there is no STP and then no analyses of optical losses
         if (nb_H <= 0):
@@ -2371,8 +2323,8 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
             vecLoss += wPhLoss[:].get()
             for i in range (0, 8):
                 # Comptage des poids pour chaque categories
-                vecCats[i*5] += wPhCat[i].get();
-                vecCats[(i*5)+4] += wPhCat2[i].get();
+                vecCats[i*5] += wPhCat[i].get();       # sum of wi
+                vecCats[(i*5)+4] += wPhCat2[i].get();  # sum of wi^2
         
         L = NPhotonsIn   # number of photons launched by last kernel
         NPhotonsInTot += L
@@ -2410,8 +2362,6 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
 
     if TC is not None:
         for i in range (0, 8):
-            # # Comptage des poids pour chaque categories
-            # vecCats[i*5] = wPhCat[i].get();
             # Comptage du nombre de photons pour chaque categories
             vecCats[(i*5)+1] = nbPhCat[i].get();
             # Erreur relatives et absolues pour chaque categories
@@ -2419,15 +2369,9 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
                 vecCats[(i*5)+2] = 0.
                 vecCats[(i*5)+3] = 0.
             else:    
-                # vecCats[(i*5)+2] = float((100.*(1./vecCats[(i*5)+1]**0.5)));
-                # vecCats[(i*5)+3] = vecCats[i*5]*(1./vecCats[(i*5)+1]**0.5);
-                #nBis = vecCats[(i*5)+1]/(vecCats[(i*5)+1]-1)
-                #nBis = 31092.85784/(31092.85784-1)
                 nBis = NBPHOTONS/(NBPHOTONS-1)
                 sum2Z = (vecCats[i*5]*vecCats[i*5])/NBPHOTONS
                 sumZ2 = vecCats[(i*5)+4]
-                # vecCats[(i*5)+3] = (nBis * (vecCats[(i*5)+4] - (vecCats[i*5]*vecCats[i*5])/31092.85784))**0.5
-                # vecCats[(i*5)+2] = (vecCats[(i*5)+3]/vecCats[i*5])*100
                 vecCats[(i*5)+3] = (nBis * (sumZ2 - sum2Z))**0.5
                 vecCats[(i*5)+2] = (vecCats[(i*5)+3]/vecCats[i*5])*100
     else:
