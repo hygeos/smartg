@@ -5625,6 +5625,8 @@ __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
     ph_le->pos = ph->pos; // float3
     ph_le->nint = ph->nint;
     ph_le->is = ph->is;
+    ph_le->iph = ph->iph;
+    ph_le->ith = ph->ith;
     #ifdef SPHERIQUE
     ph_le->radius = ph->radius;
     #endif
