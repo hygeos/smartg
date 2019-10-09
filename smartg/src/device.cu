@@ -5648,9 +5648,17 @@ __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
     #endif
 
     #ifdef BACK
-    int kk;
-    for (kk=0; kk<16; kk++) ph_le->M[kk] = ph->M[kk];
-    //for (kk=0; kk<16; kk++) ph_le->Mf[kk] = ph->Mf[kk];
+    int ii,jj;
+    for (ii=0; ii<4; ii++){
+        for (jj=0; jj<4; jj++) {
+            ph_le->M[ii][jj] = ph->M[ii][jj];
+        }
+    }
+    /*for (ii=0; ii<4; ii++){
+        for (jj=0; jj<4; jj++) {
+            ph_le->Mf[ii][jj] = ph->Mf[ii][jj];
+        }
+    }*/
     #endif
 
 }

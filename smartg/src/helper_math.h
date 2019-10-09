@@ -2430,7 +2430,7 @@ inline __host__ __device__ float4x4 add(const float4x4 &M1, const float4x4 &M2)
 	{
 		for (int j = 0; j < 4; ++j)
 		{
-			r[i][j] = M1[i][j] * M2[i][j];
+			r[i][j] = M1[i][j] + M2[i][j];
 		}
 	}
 	return r;
