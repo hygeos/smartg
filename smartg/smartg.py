@@ -538,7 +538,7 @@ class Smartg(object):
         except AttributeError:
             self.common_attrs['device_number'] = 'undefined'
         self.common_attrs['pycuda_version'] = pycuda.VERSION_TEXT
-        self.common_attrs['cuda_version'] = '.'.join(str(pycuda.driver.get_driver_version()))
+        self.common_attrs['cuda_version'] = '.'.join([str(x) for x in pycuda.driver.get_version()])
         self.common_attrs.update(get_git_attrs())
 
 
