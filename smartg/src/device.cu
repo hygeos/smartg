@@ -307,7 +307,7 @@ extern "C" {
 			        down_level = DOWNB;
 		        }
                 float phi, thv, cr;
-                float3 v,u;
+                float3 v,u,uu;
                 float3 no = normalize(ph.pos);
                 float3x3 R;
 
@@ -337,9 +337,11 @@ extern "C" {
                             #endif
                                 DirectionToUV(thv, phi, &v, &u);
                                 v = normalize(v);
-                                u = normalize(cross(v, no));
+                                u = normalize(u);
                                 /* the virtual photon is prepared for propagation in LE direction*/
                                 ph_le.v = v;
+                                ph_le.u = u;
+                                uu = normalize(cross(v, no));
                                 int iter=0;
                                 refrac_angle=0.F;
                                 float ra=0.F;
@@ -357,7 +359,8 @@ extern "C" {
                                    /* update the virtual photon direction to compensate for refraction*/
                                    copyPhoton(&ph, &ph_le);
                                    ph_le.v   = v;
-                                   R  = rotation3D(ra, u);
+                                   ph_le.u   = u;
+                                   R  = rotation3D(ra, uu);
                                    ph_le.v = mul(R, ph_le.v);
                                    iter++;
                                 }
@@ -1580,7 +1583,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
     float costh, sinth2;
     int ilam = ph->ilam*(NATMd+1);  // wavelength offset in optical thickness table
     float3 no, v0, u0;
-	//int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
 
     if (ph->layer == 0) ph->layer = 1;
 
@@ -1731,47 +1734,13 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
             ph->radius = length(ph->pos);
             no = operator/(ph->pos, ph->radius);
             vzn = dot(ph->v, no);
-            /*if (REFRACd) {
-            //if (REFRACd && ph->nint<=1) {
-                double3 vv = normalize(make_double3((double)ph->v.x,(double)ph->v.y,(double)ph->v.z));
-                double3 nono = normalize(make_double3((double)no.x,(double)no.y,(double)no.z));
-                double3 uu = normalize(cross(nono, vv)); // unit vector around which one turns
-                // We update photon direction at the interface due to refraction
-                // 1. sin_i just to verify if refraction occurs
-                double s1    = sqrt(1. - (double)vzn*(double)vzn);
-                if (s1 > 1.) s1=1.;
-                // 2. determine old and new refraction indices from old and new layer indices
-                double nind  = __ddiv_rn(prof_atm[i_layer_fw+ilam].n, prof_atm[i_layer_bh+ilam].n);
-                double i2, alpha = 0.; // emergent direction, deviation angle
-                if (s1!=0. && nind!=1.) { // in case of refraction
-	              if((s1 <= nind) || (nind > 1.)) {
-                      i2 = __ddiv_rn(s1, nind);
-                      if (i2 > 1.) i2=1.;
-                      i2 = asin(i2); 
-                  }
-                  else i2 = DEUXPI/4.; //in case of total reflection the emergent direction is tangent
-                  double i3 = asin(p0/prof_atm[ph->layer-sign_direction+ilam].n/(double)ph->radius);
-                  alpha   = fabs(i2 - asin(s1));
-                  double alpha3   = fabs(i3 - asin(s1));
-                  double3x3 R=rotation3D(alpha, uu);
-                  //double3x3 R=rotation3D(alpha3, uu);
-                  double3 v2 = normalize(mul(R, vv));
-                  //float3 v2 = operator+(operator*(ph->v, cos(alpha)), operator*(cross(u, ph->v), sin(alpha)));
-                  if(idx==0 ) printf("%i %i %i %f %e %e %e %e %e %e %e %e %e %e %e %e\n", le, ph->is, ph->nint, ph->radius-RTER, 
-                                          nind, asin(s1)*360/DEUXPI, 
-                                          i2*360/DEUXPI, alpha*360/DEUXPI, vv.x, vv.y, vv.z, v2.x, v2.y, v2.z,
-                                          acos(dot(v2,vv))*360/DEUXPI, vzn);
-                  ph->v = make_float3((float)v2.x,(float)v2.y,(float)v2.z);
-                  vzn = dot(ph->v, no);
-                } // no refraction computation necessary
-            } // No Refraction*/
 
             #ifdef DEBUG
             if (REFRACd && ph->nint==0) {
             #else
             if (REFRACd)  {
             #endif
-                float3 u = normalize(cross(no, ph->v)); // unit vector around which one turns
+                float3 uu = normalize(cross(no, ph->v)); // unit vector around which one turns
                 // We update photon direction at the interface due to refraction
                 // 1. sin_i just to verify if refraction occurs
                 float s1    = sqrt(1. - vzn*vzn);
@@ -1789,14 +1758,10 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
                   //else i2 = DEUXPI/4.; //in case of total reflection the emergent direction is tangent
                   //alpha   = fabs(i2 - asin(s1));
                   else alpha=0.F;
-                  float3x3 R=rotation3D(alpha, u);
-                  //if (ph->nint >0) R=make_diag_float3x3(1.F);
+                  float3x3 R=rotation3D(alpha, uu);
                   float3 v2 = normalize(mul(R, ph->v));
-                  //if (ph->nint>0 && alpha > 1e-4 && idx==0) printf("PB%f\n", alpha, vzn);
                   //if(idx==0  && ph->nint>1 && le==0) printf("%i %i %i %f %e %e %e %e %e\n", le, ph->is, ph->nint, ph->radius-RTER, 
                   //                        nind, asin(s1)*360/DEUXPI, i2*360/DEUXPI, alpha*360/DEUXPI, vzn);
-                  //if (ph->nint >0) ph->v = v2;
-                  //if (ph->nint==0) ph->v = v2;
                   ph->v = v2;
                   vzn = dot(ph->v, no);
                 } // no refraction computation necessary
@@ -1825,15 +1790,15 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
         if (REFRACd)  {
         #endif
         float psi;
+        // Update phtton u vector
         ComputePsiLE(u0, v0, ph->v, &psi, &ph->u); 
-		// Stokes vector rotation
-		rotateStokes(ph->stokes, psi, &ph->stokes);
+        //if(idx==0 && le==0) printf("-----\n%d %e %e %e %e %e %e\n",ph->nint,  u0.x, u0.y, u0.z, ph->u.x, ph->u.y, ph->u.z);
+        //if(idx==0 && le==0) printf("%e %e %e %e %e %e %e\n",  v0.x, v0.y, v0.z, ph->v.x, ph->v.y, ph->v.z, psi);
     }
 
     if (le) {
         if (( (count_level==UPTOA)  && (ph->loc==SPACE ) ) || ( (count_level==DOWN0P) && (ph->loc==SURF0P) )) ph->weight *= __expf(-hph);
         else ph->weight = 0.;
-        //if (ph->loc==SPACE) ph->taumax = hph;
         if (ph->loc==SPACE || ph->loc==SURF0P) ph->taumax = hph;
     }
 
@@ -5545,6 +5510,7 @@ __device__ void modifyUV( float3 v0, float3 u0, float cTh, float psi, float3 *v1
 
 __device__ void ComputePsiLE( float3 u0, float3 v0, float3 v1, float* psi, float3* u1){
 	float prod_scal, den, y1, cpsi, spsi;	
+	//float EPS6 = 1e-5;	
 	float EPS6 = 1e-4;	
 	float3 w0, w1;
 
@@ -5555,7 +5521,8 @@ __device__ void ComputePsiLE( float3 u0, float3 v0, float3 v1, float* psi, float
 	den = length(w1); // Euclidean length also called L2-norm
 	if (den < EPS6) {
 		prod_scal =  dot(v0, v1);
-		if (prod_scal < 0.0)
+		/*if (prod_scal < 0.0)*/
+		if (prod_scal > 0.0)
 			w1 = w0;       // diffusion vers l'avant
 		else{ w1 = -w0; }   // diffusion vers l'arriere
 	}
