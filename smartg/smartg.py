@@ -396,54 +396,53 @@ class CusBackward(object):
             '-ALDEG={ALDEG}-LMODE={LMODE}'.format(**self.dict)
     
 class Smartg(object):
+    '''
+    Initialization of the Smartg object
 
+    Performs the compilation and loading of the kernel.
+    This class is :esigned so split compilation and kernel loading from the
+    code execution: in case of successive smartg executions, the kernel
+    loading time is not repeated.
+
+    Arguments:
+        - pp:
+            True: use plane parallel geometry (default)
+            False: use spherical shell geometry
+
+        Compilation flags, not available if the kernel is provided as a binary:
+
+        - debug: set to True to activate debug mode (optional stdout if problems are detected)
+
+        - verbose_photon: activate the display of photon path for the thread 0
+
+        - double : accumulate photons table in double precision, default double
+                This operation is much faster on GPUs with ARCH >= 600
+                (Pascal architecture, like GeForce 10xx or greater)
+
+        - alis : boolean, if present implement the ALIS method (Emde et al. 2010) for treating gaseous absorption and perturbed profile
+
+        - back : boolean, if True, run in backward mode, default forward mode
+
+        - bias : boolean, if True, use the bias sampling scheme, default True
+
+        - obj3D : Set to True to enable simulation with 3D objects
+
+        - opt3D : Set to True to enable simulation with 3D optical properties
+
+        - alt_pp: boolean, if True new PP progation scheme is used
+
+        - rng: choice of pseudo-random number generator:
+                * PHILOX
+                * CURAND_PHILOX
+
+        - device: device number (str or int) to be set to CUDA_DEVICE environment variable for use by 'import pycuda.autoinit'
+                    see https://documen.tician.de/pycuda/util.html
+                    Please note that after the first pycuda.autoinit, the device used by pycuda will not change.
+    '''
     def __init__(self, pp=True, debug=False,
                  verbose_photon=False,
                  double=True, alis=False, back=False, bias=True, alt_pp=False, obj3D=False, 
                  opt3D=False, device=None, rng='PHILOX'):
-        '''
-        Initialization of the Smartg object
-
-        Performs the compilation and loading of the kernel.
-        This class is :esigned so split compilation and kernel loading from the
-        code execution: in case of successive smartg executions, the kernel
-        loading time is not repeated.
-
-        Arguments:
-            - pp:
-                True: use plane parallel geometry (default)
-                False: use spherical shell geometry
-
-            Compilation flags, not available if the kernel is provided as a binary:
-
-            - debug: set to True to activate debug mode (optional stdout if problems are detected)
-
-            - verbose_photon: activate the display of photon path for the thread 0
-
-            - double : accumulate photons table in double precision, default double
-                    This operation is much faster on GPUs with ARCH >= 600
-                    (Pascal architecture, like GeForce 10xx or greater)
-
-            - alis : boolean, if present implement the ALIS method (Emde et al. 2010) for treating gaseous absorption and perturbed profile
-
-            - back : boolean, if True, run in backward mode, default forward mode
-
-            - bias : boolean, if True, use the bias sampling scheme, default True
-
-            - obj3D : Set to True to enable simulation with 3D objects
-
-            - opt3D : Set to True to enable simulation with 3D optical properties
-
-            - alt_pp: boolean, if True new PP progation scheme is used
-
-            - rng: choice of pseudo-random number generator:
-                   * PHILOX
-                   * CURAND_PHILOX
-
-            - device: device number (str or int) to be set to CUDA_DEVICE environment variable for use by 'import pycuda.autoinit'
-                      see https://documen.tician.de/pycuda/util.html
-                      Please note that after the first pycuda.autoinit, the device used by pycuda will not change.
-        '''
         assert not ((device is not None) and ('CUDA_DEVICE' in os.environ)), "Can not use the 'device' option while the CUDA_DEVICE is set"
 
         if device is not None:
