@@ -8,6 +8,7 @@ import pycuda.autoinit
 import numpy
 import numpy.linalg as la
 from pycuda.compiler import SourceModule
+from pycuda.gpuarray import zeros as gpuzeros
 
 
 def test_pycuda():
@@ -34,3 +35,17 @@ def test_pycuda():
 
     numpy.testing.assert_allclose(dest-a*b, 0)
     print('Used', pycuda.autoinit.device.name())
+
+
+def test_atomic_add():
+    mod = SourceModule("""
+    __global__ void mykernel(int *a)
+    {
+        atomicAdd(a, 1);
+    }
+    """)
+    mykernel = mod.get_function("mykernel")
+    a = gpuzeros(1, dtype='int32')
+    mykernel(a, block=(256, 1, 1), grid=(256, 1, 1))
+    assert a == 256*256
+    print('Used', a, pycuda.autoinit.device.name())
