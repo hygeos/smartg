@@ -396,48 +396,46 @@ class CusBackward(object):
             '-ALDEG={ALDEG}-LMODE={LMODE}'.format(**self.dict)
     
 class Smartg(object):
-    '''
-    Initialization of the Smartg object
+    '''Initialization of the Smartg object
 
     Performs the compilation and loading of the kernel.
-    This class is :esigned so split compilation and kernel loading from the
+    This class is designed so split compilation and kernel loading from the
     code execution: in case of successive smartg executions, the kernel
     loading time is not repeated.
 
-    Arguments:
-        - pp:
+    Args:
+
+        pp: plane parallel or spherical
             True: use plane parallel geometry (default)
             False: use spherical shell geometry
 
-        Compilation flags, not available if the kernel is provided as a binary:
+        debug: set to True to activate debug mode (optional stdout if problems are detected)
 
-        - debug: set to True to activate debug mode (optional stdout if problems are detected)
+        verbose_photon: activate the display of photon path for the thread 0
 
-        - verbose_photon: activate the display of photon path for the thread 0
+        double: accumulate photons table in double precision, default double
+            This operation is much faster on GPUs with ARCH >= 600
+            (Pascal architecture, like GeForce 10xx or greater)
 
-        - double : accumulate photons table in double precision, default double
-                This operation is much faster on GPUs with ARCH >= 600
-                (Pascal architecture, like GeForce 10xx or greater)
+        alis: boolean, if present implement the ALIS method (Emde et al. 2010) for treating gaseous absorption and perturbed profile
 
-        - alis : boolean, if present implement the ALIS method (Emde et al. 2010) for treating gaseous absorption and perturbed profile
+        back: boolean, if True, run in backward mode, default forward mode
 
-        - back : boolean, if True, run in backward mode, default forward mode
+        bias: boolean, if True, use the bias sampling scheme, default True
 
-        - bias : boolean, if True, use the bias sampling scheme, default True
+        obj3D: Set to True to enable simulation with 3D objects
 
-        - obj3D : Set to True to enable simulation with 3D objects
+        opt3D: Set to True to enable simulation with 3D optical properties
 
-        - opt3D : Set to True to enable simulation with 3D optical properties
+        alt_pp: boolean, if True new PP progation scheme is used
 
-        - alt_pp: boolean, if True new PP progation scheme is used
+        rng: choice of pseudo-random number generator:
+            * PHILOX
+            * CURAND_PHILOX
 
-        - rng: choice of pseudo-random number generator:
-                * PHILOX
-                * CURAND_PHILOX
-
-        - device: device number (str or int) to be set to CUDA_DEVICE environment variable for use by 'import pycuda.autoinit'
-                    see https://documen.tician.de/pycuda/util.html
-                    Please note that after the first pycuda.autoinit, the device used by pycuda will not change.
+        device: device number (str or int) to be set to CUDA_DEVICE environment variable for use by 'import pycuda.autoinit'
+            see https://documen.tician.de/pycuda/util.html
+            Please note that after the first pycuda.autoinit, the device used by pycuda will not change.
     '''
     def __init__(self, pp=True, debug=False,
                  verbose_photon=False,
@@ -557,10 +555,10 @@ class Smartg(object):
 
         Arguments:
 
-            - wl: a scalar or list/array of wavelengths (in nm)
+            wl: a scalar or list/array of wavelengths (in nm)
                   or a list of REPTRAN or KDIS IBANDS
 
-            - atm: Profile object
+            atm: Profile object
                 default None (no atmosphere)
                 Example:
                     # clear atmosphere, AFGL midlatitude summer
@@ -568,70 +566,71 @@ class Smartg(object):
                     # AFGL tropical with maritime clear aerosols AOT(550)=0.3
                     AtmAFGL('afglt', aer=[AeroOPAC('maritime_clean', 0.3, 550.)])
 
-            - surf: Surface object
-                default None (no surface)
-                RoughSurface(WIND=5.)  # wind-roughened ocean surface
-                FlatSurface()          # flat air-water interface
-                LambSurface(ALB=0.1)   # Lambertian surface of albedo 0.1
+            surf: Surface object
 
-            - water: water object, providing options relative to the ocean surface
+                * default None (no surface)
+                * RoughSurface(WIND=5.)  # wind-roughened ocean surface
+                * FlatSurface()          # flat air-water interface
+                * LambSurface(ALB=0.1)   # Lambertian surface of albedo 0.1
+
+            water: water object, providing options relative to the ocean surface
                 default None (no ocean)
 
-            - env: environment effect object (a.k.a. adjacency effect)
+            env: environment effect object (a.k.a. adjacency effect)
                 default None (no environment effect)
 
-            - alis_options : required if compiled already with the alis option. Dictionary, field 'nlow'
+            alis_options : required if compiled already with the alis option. Dictionary, field 'nlow'
                 is the number of wavelength  where the spectral dependency of scattering is calculated, 
                 nlow-1 has to divide NW-1 where NW is the number of wavelengths, nlow has to be lesser than MAX_NLOW that is defined in communs.h,
                 optionnal field 'njac' is the number of perturbed profiles, default is zero (None): no Jacobian
 
-            - NBPHOTONS: number of photons launched
+            NBPHOTONS: number of photons launched
 
-            - DEPO: (Air) Rayleigh depolarization ratio
+            DEPO: (Air) Rayleigh depolarization ratio
 
-            - DEPO_WATER: (Water) Rayleigh depolarization ratio
+            DEPO_WATER: (Water) Rayleigh depolarization ratio
 
-            - THVDEG: zenith angle of the observer in degrees
+            THVDEG: zenith angle of the observer in degrees
                 the result corresponds to various positions of the sun
                 NOTE: in plane parallel geometry, due to Fermat's principle, we
                 can exchange the positions of the sun and observer.
 
-            - PHVDEG: azimuth angle of the observer in degrees
+            PHVDEG: azimuth angle of the observer in degrees
                 the result corresponds to various positions of the sun
                 NOTE: It can be very useful to modify only this value instead
                       of all the positions of all the objects
 
-            - SEED: integer used to initiate the series of random numbers
+            SEED: integer used to initiate the series of random numbers
                 default: based on clock time
 
-            - RTER: earth radius in km
+            RTER: earth radius in km
 
-            - wl_proba: inversed cumulative distribution function for wavelength selection
+            wl_proba: inversed cumulative distribution function for wavelength selection
                         (it is the result of function ICDF(proba, N))
 
-            - NBTHETA: number of zenith angles in output
+            NBTHETA: number of zenith angles in output
 
-            - NBPHI: number of azimuth angles in output
+            NBPHI: number of azimuth angles in output
 
-            - NF: number of discretization of :
+            NF: number of discretization of :
                     * the inversed aerosol phase functions
                     * the inversed ocean phase functions
                     * the inversed probability of each wavelength occurence
 
-            - OUTPUT_LAYERS: control the output layers. Add the following values:
+            OUTPUT_LAYERS: control the output layers. Add the following values:
                 0: top of atmosphere only (TOA)
                 1: add output layers at (0+, down) and (0-, up)
                 2: add output layers at (0-, down) and (0+, up)
                 Example: OUTPUT_LAYERS=3 to use all output layers.
 
-            - XBLOCK and XGRID: control the number of blocks and grid size for
+            XBLOCK and XGRID: control the number of blocks and grid size for
               the GPU execution
 
-            - NBLOOP: number of photons launched in one kernel run
+            NBLOOP: number of photons launched in one kernel run
 
-            - progress: whether to show a progress bar (True/False)
+            progress: whether to show a progress bar (True/False)
 
-            - le: Local Estimate method activation
+            le: Local Estimate method activation
                   Provide output geometries in radians like so:
                   le={'th': <array-like>, 'phi': <array-like>}
                   or:
@@ -643,45 +642,45 @@ class Smartg(object):
                   Default None: cone sampling
                   NOTE: Overrides NBPHI and NBTHETA
 
-            - flux: if specified output is 'planar' or 'spherical' flux instead of radiance
+            flux: if specified output is 'planar' or 'spherical' flux instead of radiance
 
-            - stdev: calculate the standard deviation between each kernel run
+            stdev: calculate the standard deviation between each kernel run
 
-            - RR: Russian Roulette ON  = 1
+            RR: Russian Roulette ON  = 1
                                    OFF = 0
 
-            - WEIGHTRR threshold weight to apply the Russian Roulette
+            WEIGHTRR threshold weight to apply the Russian Roulette
 
-            - BEER: if BEER=1 compute absorption using Beer-Lambert law, otherwise compute it with the Single scattering albedo
+            BEER: if BEER=1 compute absorption using Beer-Lambert law, otherwise compute it with the Single scattering albedo
                 (BEER automatically set to 1 if ALIS is chosen)
 
-            - SZA_MAX : Maximum SZA for solar BOXES in case a Regulard grid and cone sampling
+            SZA_MAX : Maximum SZA for solar BOXES in case a Regulard grid and cone sampling
 
-            - SUN_DISC : Angular size of the Sun disc in degree, 0 (default means no angular size)
+            SUN_DISC : Angular size of the Sun disc in degree, 0 (default means no angular size)
 
-            - sensor : sensor object or list, backward mode (from sensor to source), back should be set to True in the smartg constructor
+            sensor : sensor object or list, backward mode (from sensor to source), back should be set to True in the smartg constructor
 
-            - refraction : include atmospheric refraction
+            refraction : include atmospheric refraction
 
-            - reflectance : if flux is None, output is in reflectance units if True,(for plane parallel atmosphere). Otherwise
+            reflectance : if flux is None, output is in reflectance units if True,(for plane parallel atmosphere). Otherwise
                 is is in radiance units with Solar irradiance set to PI (default False)
             
-            - myObjects : liste d'objets (objets de classe entity)
+            myObjects : liste d'objets (objets de classe entity)
         
-            - interval : liste composée de deux listes [[pxmin, pymin, pzmin], [[pxmin, pymin, pzmin]]
+            interval : liste composée de deux listes [[pxmin, pymin, pzmin], [[pxmin, pymin, pzmin]]
                          interval définit l'interval d'études des objets délimitée par deux points (pmin et pmax).
 
-            - IsAtm (effet uniquement si myObjects != None) : si égal à 0 , cela permet dans le cas sans atmosphère,
+            IsAtm (effet uniquement si myObjects != None) : si égal à 0 , cela permet dans le cas sans atmosphère,
                       d'empêcher certaines fuites de photons.
 
-            - cusL : None is the default mode (sun is a ponctual source targeting the origin (0,0,0)), else it
+            cusL : None is the default mode (sun is a ponctual source targeting the origin (0,0,0)), else it
                       enable to use the RF, FF or B launching mode (see the class CusForward) --> cusL=CusForward(...)
 
-            - SMAX : Maximum Scattering oorder: Default 1e6
+            SMAX : Maximum Scattering oorder: Default 1e6
 
-            - FFS : Forced First Scattering (for use in spherical limb geometry only): Default False
+            FFS : Forced First Scattering (for use in spherical limb geometry only): Default False
 
-            - DIRECT : Include directly transmitted photons: Default False
+            DIRECT : Include directly transmitted photons: Default False
 
         Return value:
         ------------
