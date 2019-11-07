@@ -320,7 +320,7 @@ def test_val_ray_surf():
     ml60=read_mlut_hdf('auxdata/validation/ml60_AOS_I')
 
     NBPHOTONS=1e6
-    S=Smartg(double=True, debug_photon=False)
+    S=Smartg(double=True)
     ##########
     phi = np.array(ml30['I_up (0+)'].axes[1],dtype=np.float32)
     th = np.array(ml60['I_up (0+)'].axes[2],dtype=np.float32)
