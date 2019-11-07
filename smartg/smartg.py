@@ -2294,6 +2294,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         wPhCat.fill(0)
         wPhCat2.fill(0)
         wPhLoss.fill(0)
+        nThreadsActive.fill(XBLOCK*XGRID)
         
         start_cuda_clock = cuda.Event()
         end_cuda_clock = cuda.Event()

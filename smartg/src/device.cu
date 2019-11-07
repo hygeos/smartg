@@ -101,8 +101,7 @@ extern "C" {
 	IGeo geoStruc;
 	bigCount = 1;   // Initialisation de la variable globale bigCount (voir geometry.h)
     #endif
-	
-	atomicAdd(nThreadsActive, 1);
+
 
     //
     // main loop
@@ -135,7 +134,7 @@ extern "C" {
 	// }
 	// #endif
 
-	while (*nThreadsActive > 0) {
+	while (this_thread_active > 0 and nThreadsActive[0] > 0) {
 		iloop += 1;
 		
 		#ifdef OBJ3D
@@ -143,39 +142,36 @@ extern "C" {
 		/* si on simule des objs on utilise cette astuce pour lancer exactement le nombre souhaité de photons */
 		// Si le nombre de ph lancés NBLOOPd > 256000 et que le compteur devient > (NBLOOPd-256000) alors
 		// on commence à diminuer le nombre de threads actif... ici à 999+1 = 1000 threads actif
-		if ((NBLOOPd > 50000) && idx > 999 && this_thread_active && Counter[0] >= (NBLOOPd-50000) && *nThreadsActive > 1000)
+		if ((NBLOOPd > 50000) && idx > 999 && this_thread_active && Counter[0] >= (NBLOOPd-50000) && *nThreadsActive > 1000 && ph.loc == NONE)
 		{
 			this_thread_active = 0;
             atomicAdd(nThreadsActive, -1);
 		}
-		else if ((NBLOOPd > 5000) && idx > 99 && this_thread_active && Counter[0] >= (NBLOOPd-5000) && *nThreadsActive > 100)
+		else if ((NBLOOPd > 5000) && idx > 99 && this_thread_active && Counter[0] >= (NBLOOPd-5000) && *nThreadsActive > 100 && ph.loc == NONE)
 		{
 			this_thread_active = 0;
             atomicAdd(nThreadsActive, -1);
 		}
-		else if((NBLOOPd > 500) && idx > 9 && this_thread_active &&Counter[0] >= (NBLOOPd-500) && *nThreadsActive > 10)
+		else if((NBLOOPd > 500) && idx > 9 && this_thread_active &&Counter[0] >= (NBLOOPd-500) && *nThreadsActive > 10 && ph.loc == NONE)
 		{
 			this_thread_active = 0;
             atomicAdd(nThreadsActive, -1);
 		}
-		else if((NBLOOPd > 50) && idx > 0 && this_thread_active &&Counter[0] >= (NBLOOPd-50) && *nThreadsActive > 1)
+		else if((NBLOOPd > 50) && idx > 0 && this_thread_active &&Counter[0] >= (NBLOOPd-50) && *nThreadsActive > 1 && ph.loc == NONE)
 		{
 			this_thread_active = 0;
             atomicAdd(nThreadsActive, -1);
 		}
 		#endif
         /* ************************************************************************************************** */
-		
-		// Avant ">" et maintenant ">=" car si Counter = au nombre de ph lancés NBLOOPd, il faut s'arrêter !
-        if (((Counter[0] >= NBLOOPd)
-			 && this_thread_active
-			 && (ph.loc == NONE))
-			|| (iloop > MAX_LOOP)  // avoid infinite loop
-                                       // when photons don't end
-			) {
-            this_thread_active = 0;
-            atomicAdd(nThreadsActive, -1);
-        }
+
+
+		if ((this_thread_active == 1 and Counter[0] >= NBLOOPd and ph.loc == NONE) or (iloop > MAX_LOOP))
+		{
+			this_thread_active = 0;
+            atomicSub(nThreadsActive, 1);
+		}
+
 		
         // Si le photon est à NONE on l'initialise et on le met à la localisation correspondant à la simulaiton en cours
         if((ph.loc == NONE) && this_thread_active){
@@ -744,8 +740,6 @@ extern "C" {
 			} // End Mirror
 			else {ph.loc = REMOVED;} // unknow material
 
-			__syncthreads();
-
 			ph.weight_loss[2] = ph.weight; // Weight value after relfection
 			if (ph.H > 1 and geoStruc.type != RECEIVER) ph.weight_loss[4] = ph.weight_loss[3];
 			if (geoStruc.type == HELIOSTAT and ph.direct == 0 and ph.loc != REMOVED) // this is a reflector
@@ -804,15 +798,18 @@ extern "C" {
 		//nbPhotonsThr = 1;
 		// if (idx == 0) printf("nombre de photons par thread : %llu et counter : %d\n", nbPhotonsThr, Counter[0]);
 
-		atomicAdd(Counter, nbPhotonsThr);
-		nbPhotonsThr = 0;
-		__syncthreads();
-		
+
+
+		if (this_thread_active == 1) 
+		{
+		    atomicAdd(Counter, nbPhotonsThr);
+			nbPhotonsThr = 0;
+			   
+	    }		
 	// }
 	}
 
-	// Après la boucle on rassemble les nombres de photons traités par chaque thread
-	atomicAdd(Counter, nbPhotonsThr);
+	// // Après la boucle on rassemble les nombres de photons traités par chaque thread
 	
     if (ph.loc != NONE) {
         atomicAdd(errorcount+ERROR_MAX_LOOP, 1);
