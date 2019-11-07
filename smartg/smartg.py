@@ -550,7 +550,7 @@ class Smartg(object):
              NBLOOP=None, progress=True, 
              le=None, flux=None, stdev=False, BEER=1, RR=1, WEIGHTRR=0.1, SZA_MAX=90., SUN_DISC=0,
              sensor=None, refraction=False, reflectance=True, myObjects=None, interval = None,
-             IsAtm = 1, cusL = None, SS=False, FFS=False, DIRECT=False):
+             IsAtm = 1, cusL = None, SMAX=1e6, FFS=False, DIRECT=False):
         '''
         Run a SMART-G simulation
 
@@ -676,7 +676,7 @@ class Smartg(object):
             - cusL : None is the default mode (sun is a ponctual source targeting the origin (0,0,0)), else it
                       enable to use the RF, FF or B launching mode (see the class CusForward) --> cusL=CusForward(...)
 
-            - SS : Single Scattering only: Default False
+            - SMAX : Maximum Scattering oorder: Default 1e6
 
             - FFS : Forced First Scattering (for use in spherical limb geometry only): Default False
 
@@ -1117,7 +1117,7 @@ class Smartg(object):
         NLVL = 6
 
         # warning! values defined in communs.h 
-        MAX_HIST = 1024*1024
+        MAX_HIST = 2048*1024
 
         # number of Stokes parameters of the radiation field
         NPSTK = 4
@@ -1343,7 +1343,7 @@ class Smartg(object):
                   XBLOCK, XGRID, NLAM, SIM, NF,
                   NBTHETA, NBPHI, OUTPUT_LAYERS,
                   RTER, LE, ZIP, FLUX, FFS, DIRECT, NLVL, NPSTK,
-                  NWLPROBA, BEER, SS, RR, WEIGHTRR, NLOW, NJAC, 
+                  NWLPROBA, BEER, SMAX, RR, WEIGHTRR, NLOW, NJAC, 
                   NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj,
                   Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, vSun, HIST)
 
@@ -1496,7 +1496,10 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
     # add the axes
     axnames  = ['Zenith angles']
     axnames2 = ['None', 'Zenith angles']
-    if hist : axnames3 = ['None', 'None', 'Zenith angles']
+    if hist : 
+        axnames3 = ['None', 'None', 'Zenith angles']
+        m.add_dataset('Nphotons_in',  NPhotonsInTot)
+        m.add_dataset('Nphotons_out',  NPhotonsOutTot)
     iphi     = slice(None)
     #if hist : axnames3 = ['None', 'None', 'Azimuth angles', 'Zenith angles']
     m.set_attr('zip', 'False')
@@ -1887,7 +1890,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
               NBPHOTONS, NBLOOP, THVDEG, DEPO,
               XBLOCK, XGRID,NLAM, SIM, NF,
               NBTHETA, NBPHI, OUTPUT_LAYERS,
-              RTER, LE, ZIP, FLUX, FFS, DIRECT, NLVL, NPSTK, NWLPROBA, BEER, SS, RR, 
+              RTER, LE, ZIP, FLUX, FFS, DIRECT, NLVL, NPSTK, NWLPROBA, BEER, SMAX, RR, 
               WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj,
               Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, vSun, HIST) :
     """
@@ -1935,7 +1938,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
     copy_to_device('NLVLd', NLVL, np.int32)
     copy_to_device('NPSTKd', NPSTK, np.int32)
     copy_to_device('BEERd', BEER, np.int32)
-    copy_to_device('SSd', 1 if SS else 0, np.int32)
+    copy_to_device('SMAXd', SMAX, np.int32)
     copy_to_device('RRd', RR, np.int32)
     copy_to_device('WEIGHTRRd', WEIGHTRR, np.float32)
     copy_to_device('NLOWd', NLOW, np.int32)
@@ -2236,7 +2239,8 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
     
     if (NATM+NOCE >0) : tabDistTot = gpuzeros((NLVL,NATM+NOCE,NSENSOR,NBTHETA,NBPHI), dtype=np.float64)
     else : tabDistTot = gpuzeros((NLVL,1,NSENSOR,NBTHETA,NBPHI), dtype=np.float64)
-    if hist : tabHistTot = gpuzeros((NLVL,MAX_HIST,(NATM+NOCE+NPSTK+NLOW),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
+    if hist : tabHistTot = gpuzeros((NLVL,MAX_HIST,(NATM+NOCE+NPSTK+NLOW+1),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
+    #if hist : tabHistTot = gpuzeros((NLVL,MAX_HIST,(NATM+NOCE+NPSTK+NLOW),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
     else : tabHistTot = gpuzeros((1), dtype=np.float32)
 
     # Initialize of the parameters
@@ -2266,7 +2270,8 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         if (NATM+NOCE >0) : tabDist = gpuzeros((NLVL,NATM+NOCE,NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
         else : tabDist = gpuzeros((NLVL,1,NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
 
-    if hist : tabHist = gpuzeros((NLVL,MAX_HIST,(NATM+NOCE+NPSTK+NLOW),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
+    if hist : tabHist = gpuzeros((NLVL,MAX_HIST,(NATM+NOCE+NPSTK+NLOW+1),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
+    #if hist : tabHist = gpuzeros((NLVL,MAX_HIST,(NATM+NOCE+NPSTK+NLOW),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
     else : tabHist = gpuzeros((1), dtype=np.float32)
 
     # local estimates angles

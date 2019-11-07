@@ -1790,10 +1790,17 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
         if (REFRACd)  {
         #endif
         float psi;
-        // Update phtton u vector
+        // Update photon u vector
         ComputePsiLE(u0, v0, ph->v, &psi, &ph->u); 
-        //if(idx==0 && le==0) printf("-----\n%d %e %e %e %e %e %e\n",ph->nint,  u0.x, u0.y, u0.z, ph->u.x, ph->u.y, ph->u.z);
-        //if(idx==0 && le==0) printf("%e %e %e %e %e %e %e\n",  v0.x, v0.y, v0.z, ph->v.x, ph->v.y, ph->v.z, psi);
+
+        if (psi!=0.F) {
+		 rotateStokes(ph->stokes, psi, &ph->stokes);
+         #ifdef BACK
+		 float4x4 L;
+		 rotationM(-psi,&L);
+		 ph->M   = mul(ph->M,L);
+         #endif
+        }
     }
 
     if (le) {
@@ -4782,8 +4789,7 @@ __device__ void countPhoton(Photon* ph,
         ) {
 
     // test single scattering
-    if (count_level < 0 || ph->loc==REMOVED || ph->loc==ABSORBED ||
-                                               ((ph->nint!=1) && SSd) ) {
+    if (count_level < 0 || ph->loc==REMOVED || ph->loc==ABSORBED || ph->nint>SMAXd ) {
     //if (count_level < 0 || ph->loc==REMOVED || ph->loc==ABSORBED) {
         // don't count anything
         return;
@@ -5096,15 +5102,15 @@ __device__ void countPhoton(Photon* ph,
           wabs = 0.F;
 
           #ifndef OPT3D // in 1D cumulative absorption OD
-          for (int n=1; n<(NATMd+1); n++){
-              wabs += abs(__fdividef(prof_atm[n   + il*(NATMd+1)].OD_abs -
-                                     prof_atm[n-1 + il*(NATMd+1)].OD_abs,
-                                     prof_atm[n].z  - prof_atm[n-1].z) ) * ph->cdist_atm[n];
+          for (int n=0; n<NATMd; n++){
+              wabs += abs(__fdividef(prof_atm[n+1   + il*(NATMd+1)].OD_abs -
+                                     prof_atm[n + il*(NATMd+1)].OD_abs,
+                                     prof_atm[n+1].z  - prof_atm[n].z) ) * ph->cdist_atm[n+1];
           }
-          for (int n=1; n<(NOCEd+1); n++){
-              wabs += abs(__fdividef(prof_oc[n   + il*(NOCEd+1)].OD_abs -
-                                     prof_oc[n-1 + il*(NOCEd+1)].OD_abs,
-                                     prof_oc[n].z  - prof_oc[n-1].z) ) * ph->cdist_oc[n];
+          for (int n=0; n<NOCEd; n++){
+              wabs += abs(__fdividef(prof_oc[n+1   + il*(NOCEd+1)].OD_abs -
+                                     prof_oc[n + il*(NOCEd+1)].OD_abs,
+                                     prof_oc[n+1].z  - prof_oc[n].z) ) * ph->cdist_oc[n+1];
           }
 
           #else // in 3D absorption coefficient
@@ -5154,38 +5160,46 @@ __device__ void countPhoton(Photon* ph,
      } //  if HISTd==0
 
      #if ( defined(SPHERIQUE) || defined(ALT_PP) )
-     unsigned long long K   = NBTHETAd*NBPHId*NSENSORd;
+     unsigned long long K   = NBTHETAd*NBPHId*NSENSORd; /* number of potential output per photon*/
      unsigned long long KK  = K*NATMd;
      unsigned long long LL;
-     if (HISTd==1) { // Histories stored for absorption computation afterward (only spherical or alt_pp)
-          unsigned long long counter2=atomicAdd(NPhotonsOut + (((count_level*NSENSORd + is)*NLAMd + 0)*NBTHETAd + ith)*NBPHId + iphi, 1);
+     if (HISTd==1 && count_level==UPTOA) { // Histories stored for absorption computation afterward (only spherical or alt_pp)
+          int idx = blockIdx.x * blockDim.x + threadIdx.x;
+          unsigned long long counter2;
+          counter2=atomicAdd(NPhotonsOut, 1);
+          //unsigned long long counter2=atomicAdd(NPhotonsOut + (((count_level*NSENSORd + is)*NLAMd + 0)*NBTHETAd + ith)*NBPHId + iphi, 1);
           if (counter2 >= MAX_HIST) return;
-          //int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
-          unsigned long long KK2 = K*(NATMd+4+NLOWd);
-          unsigned long long KKK2= KK2 * MAX_HIST;
+          unsigned long long KK2 = K*(NATMd+NOCEd+4+NLOWd+1); /* Number of information per local estmate photon (Record length)*/
+          //unsigned long long KK2 = K*(NATMd+NOCEd+4+NLOWd); /* Number of information per local estmate photon (Record length)*/
+          unsigned long long KKK2= KK2 * MAX_HIST; /* Number of individual information per vertical Level (Number of Records)*/
           unsigned long long LL2;
-          tabCount3   = (float*)tabHist     + count_level*KKK2;
+          tabCount3   = (float*)tabHist     ; /* we position the pointer at the good vertical level*/
+          //tabCount3   = (float*)tabHist     + count_level*KKK2; /* we position the pointer at the good vertical level*/
           for (int n=0; n<NOCEd; n++){
+                /* The offset is the number of previous writing (counter2) * Record Length
+                   + the offset of the individual information  + the place of the physical quantity */
                 LL2 = counter2*KK2 +  n*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
-                atomicAdd(tabCount3+LL2, ph->cdist_oc[n]);
+                atomicAdd(tabCount3+LL2, ph->cdist_oc[n+1]);
           }
           for (int n=0; n<NATMd; n++){
                 LL2 = counter2*KK2 +  (n+NOCEd)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
-                atomicAdd(tabCount3+LL2, ph->cdist_atm[n]);
+                atomicAdd(tabCount3+LL2, ph->cdist_atm[n+1]);
           }
-          LL2 = counter2*KK2 +  (NATMd+0)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          LL2 = counter2*KK2 +  (NATMd+NOCEd+0)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           atomicAdd(tabCount3+LL2, weight * (st.x+st.y));
-          LL2 = counter2*KK2 +  (NATMd+1)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          LL2 = counter2*KK2 +  (NATMd+NOCEd+1)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           atomicAdd(tabCount3+LL2, weight * (st.x-st.y));
-          LL2 = counter2*KK2 +  (NATMd+2)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          LL2 = counter2*KK2 +  (NATMd+NOCEd+2)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           atomicAdd(tabCount3+LL2, weight * (st.z));
-          LL2 = counter2*KK2 +  (NATMd+3)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          LL2 = counter2*KK2 +  (NATMd+NOCEd+3)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           atomicAdd(tabCount3+LL2, weight * (st.w));
 
           for (int n=0; n<NLOWd; n++){
-                LL2 = counter2*KK2 +  (n+NATMd+4)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+                LL2 = counter2*KK2 +  (n+NATMd+NOCEd+4)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
                 atomicAdd(tabCount3+LL2, weight_sca[n]);
           }
+          LL2 = counter2*KK2 +  (NLOWd+NATMd+NOCEd+4)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          atomicAdd(tabCount3+LL2, double(K));
        } // HISTd==1
 
        #ifdef DOUBLE
@@ -5193,28 +5207,28 @@ __device__ void countPhoton(Photon* ph,
           for (int n=0; n<NOCEd; n++){
             LL = n*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
             #if __CUDA_ARCH__ >= 600
-            atomicAdd(tabCount2+LL, (double)ph->cdist_oc[n]);
+            atomicAdd(tabCount2+LL, (double)ph->cdist_oc[n+1]);
             #else
-            DatomicAdd(tabCount2+LL, (double)ph->cdist_oc[n]);
+            DatomicAdd(tabCount2+LL, (double)ph->cdist_oc[n+1]);
             #endif
           }
           for (int n=0; n<NATMd; n++){
             LL = (n+NOCEd)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
             #if __CUDA_ARCH__ >= 600
-            atomicAdd(tabCount2+LL, (double)ph->cdist_atm[n]);
+            atomicAdd(tabCount2+LL, (double)ph->cdist_atm[n+1]);
             #else
-            DatomicAdd(tabCount2+LL, (double)ph->cdist_atm[n]);
+            DatomicAdd(tabCount2+LL, (double)ph->cdist_atm[n+1]);
             #endif
           }
        #else
           tabCount2   = (float*)tabDist     + count_level*KK;
           for (int n=0; n<NOCEd; n++){
             LL = n*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
-            atomicAdd(tabCount2+LL, (double)ph->cdist_oc[n]);
+            atomicAdd(tabCount2+LL, (double)ph->cdist_oc[n+1]);
           }
           for (int n=0; n<NATMd; n++){
             LL = (n+NOCEd)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
-            atomicAdd(tabCount2+LL, ph->cdist_atm[n]);
+            atomicAdd(tabCount2+LL, ph->cdist_atm[n+1]);
           }
        #endif
       #endif // SPHERIQUE or ALT_PP
