@@ -23,6 +23,7 @@
 #include <math_constants.h>
 #include <helper_math.h>
 #include <stdio.h>
+#include <cuda_fp16.h>
 /**********************************************************
 *	> Kernel
 ***********************************************************/
@@ -4828,6 +4829,7 @@ __device__ void countPhoton(Photon* ph,
 
     #if ( defined(SPHERIQUE) || defined(ALT_PP) ) && defined(ALIS)
      float *tabCount3; // Specific ALIS counting array pointer for path implementation (distances histograms)
+     //__half *tabCount3; // Specific ALIS counting array pointer for path implementation (distances histograms)
     #endif
 
     // We dont count UPTOA photons leaving in boxes outside SZA range
@@ -5173,39 +5175,47 @@ __device__ void countPhoton(Photon* ph,
           int idx = blockIdx.x * blockDim.x + threadIdx.x;
           unsigned long long counter2;
           counter2=atomicAdd(NPhotonsOut, 1);
-          //unsigned long long counter2=atomicAdd(NPhotonsOut + (((count_level*NSENSORd + is)*NLAMd + 0)*NBTHETAd + ith)*NBPHId + iphi, 1);
           if (counter2 >= MAX_HIST) return;
           unsigned long long KK2 = K*(NATMd+NOCEd+4+NLOWd+1); /* Number of information per local estmate photon (Record length)*/
           //unsigned long long KK2 = K*(NATMd+NOCEd+4+NLOWd); /* Number of information per local estmate photon (Record length)*/
           unsigned long long KKK2= KK2 * MAX_HIST; /* Number of individual information per vertical Level (Number of Records)*/
           unsigned long long LL2;
+          //tabCount3   = (__half*)tabHist     ; /* we position the pointer at the good vertical level*/
           tabCount3   = (float*)tabHist     ; /* we position the pointer at the good vertical level*/
           //tabCount3   = (float*)tabHist     + count_level*KKK2; /* we position the pointer at the good vertical level*/
           for (int n=0; n<NOCEd; n++){
                 /* The offset is the number of previous writing (counter2) * Record Length
                    + the offset of the individual information  + the place of the physical quantity */
                 LL2 = counter2*KK2 +  n*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
-                atomicAdd(tabCount3+LL2, ph->cdist_oc[n+1]);
+                //atomicAdd(tabCount3+LL2, ph->cdist_oc[n+1]);
+                tabCount3[LL2]= ph->cdist_oc[n+1];
           }
           for (int n=0; n<NATMd; n++){
                 LL2 = counter2*KK2 +  (n+NOCEd)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
-                atomicAdd(tabCount3+LL2, ph->cdist_atm[n+1]);
+                //atomicAdd(tabCount3+LL2, ph->cdist_atm[n+1]);
+                tabCount3[LL2]= ph->cdist_atm[n+1];
           }
           LL2 = counter2*KK2 +  (NATMd+NOCEd+0)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
-          atomicAdd(tabCount3+LL2, weight * (st.x+st.y));
+          //atomicAdd(tabCount3+LL2, weight * (st.x+st.y));
+          tabCount3[LL2]= weight * (st.x+st.y);
           LL2 = counter2*KK2 +  (NATMd+NOCEd+1)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
-          atomicAdd(tabCount3+LL2, weight * (st.x-st.y));
+          //atomicAdd(tabCount3+LL2, weight * (st.x-st.y));
+          tabCount3[LL2]= weight * (st.x-st.y);
           LL2 = counter2*KK2 +  (NATMd+NOCEd+2)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
-          atomicAdd(tabCount3+LL2, weight * (st.z));
+          //atomicAdd(tabCount3+LL2, weight * (st.z));
+          tabCount3[LL2]= weight * (st.z);
           LL2 = counter2*KK2 +  (NATMd+NOCEd+3)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
-          atomicAdd(tabCount3+LL2, weight * (st.w));
+          //atomicAdd(tabCount3+LL2, weight * (st.w));
+          tabCount3[LL2]= weight * (st.w);
 
           for (int n=0; n<NLOWd; n++){
                 LL2 = counter2*KK2 +  (n+NATMd+NOCEd+4)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
                 atomicAdd(tabCount3+LL2, weight_sca[n]);
+                tabCount3[LL2]= weight_sca[n];
           }
           LL2 = counter2*KK2 +  (NLOWd+NATMd+NOCEd+4)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
-          atomicAdd(tabCount3+LL2, double(K));
+          //atomicAdd(tabCount3+LL2, 1.);
+          tabCount3[LL2]= 1.F;
        } // HISTd==1
 
        #ifdef DOUBLE
