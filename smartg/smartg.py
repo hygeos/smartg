@@ -1368,10 +1368,12 @@ class Smartg(object):
         attrs.update(self.common_attrs)
 
         # En rapport avec l'implémentation des objets (permet le visuel des res du recept)
+        weightR = 0 # for the attenuation loss
         if (TC is not None):
             if (cusL is None):
                 cMatVisuRecep[:][:][:] = cMatVisuRecep[:][:][:]
             elif (cusL.dict['LMODE'] != "B" and cusL.dict['LMODE'] != "BR"):
+                weightR = categories[5] # for the att loss, weight of cat2 absorbed by the receiver
                 for i in range (0, 9):
                     cMatVisuRecep[i][:][:] = cMatVisuRecep[i][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
                 for i in range (0, 8):
@@ -1386,7 +1388,7 @@ class Smartg(object):
         else:
             MZAlt_H = zAlt_H/nb_H
             # dicSTP : tuple incorporating parameters for Solar Tower Power applications
-            dicSTP = {"nb_H":nb_H, "totS_H":totS_H, "surfTOA":surfMir, "MZAlt_H":MZAlt_H, "vSun":vSun}
+            dicSTP = {"nb_H":nb_H, "totS_H":totS_H, "surfTOA":surfMir, "MZAlt_H":MZAlt_H, "vSun":vSun, "wRec":weightR}
                 
         # finalization
         output = finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl[:], NPhotonsInTot, errorcount, NPhotonsOutTot,
@@ -1747,7 +1749,7 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
         nref = max(0, min(losses[2]/losses[0], 1))
         nspi = max(0, min(losses[3]/losses[2], 1))
         nblo = max(0, min((losses[3]-losses[4])/losses[3], 1))
-        natm = max(0, min(cats[4]/(losses[3]-losses[4]), 1))
+        natm = max(0, min(dicSTP["wRec"]/(losses[3]-losses[4]), 1))
         m.add_dataset('n_sha', np.array([nsha], dtype=np.float64), ['Shadow Efficiency'])
         m.add_dataset('n_cos', np.array([ncos], dtype=np.float64), ['Cosine Efficiency'])
         m.add_dataset('n_ref', np.array([nref], dtype=np.float64), ['Reflection Efficiency'])
