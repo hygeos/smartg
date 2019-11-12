@@ -4397,7 +4397,7 @@ __device__ void Obj3DRoughSurf(Photon* ph, IGeo* geoS, struct RNG_State *rngstat
 	microFnormal_m = transfo(Normalf(microFnormal_m));
 	
 	// Less expensive than find theta from arcos and apply the sin
-	sTheta_i = sqrtf( fmaxf(0.F,  1.F-(cTheta_i*cTheta_i)) );
+	sTheta_i = sqrtf( fmaxf(VALMIN,  1.F-(cTheta_i*cTheta_i)) );
 	// ***********************************************************************************
 
 	// ********************************************************
