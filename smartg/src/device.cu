@@ -269,7 +269,7 @@ extern "C" {
 
 		#if defined(BACK) && defined(OBJ3D)
 		if (count_level == UPTOA and LMODEd == 4) // the photon reach TOA
-		{ countPhotonObj3D(&ph, tabObjInfo, &geoStruc, nbPhCat, wPhCat, wPhCat2);}
+		{ countPhotonObj3D(&ph, tabObjInfo, &geoStruc, nbPhCat, wPhCat, wPhCat2, prof_atm);}
         #endif
 
 		__syncthreads();
@@ -670,7 +670,7 @@ extern "C" {
 		{
 
 			if (geoStruc.type == RECEIVER and LMODEd != 4) // this is a receiver
-			{ countPhotonObj3D(&ph, tabObjInfo, &geoStruc, nbPhCat, wPhCat, wPhCat2);}
+			{ countPhotonObj3D(&ph, tabObjInfo, &geoStruc, nbPhCat, wPhCat, wPhCat2, prof_atm);}
 
 			// For losses count
 			ph.weight_loss[0] = ph.weight;
@@ -4575,12 +4575,12 @@ __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, struct Sensor *
 	#endif
 }
 
-__device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsigned long long *nbPhCat, void *wPhCat, void *wPhCat2)
+__device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsigned long long *nbPhCat, void *wPhCat, void *wPhCat2, struct Profile *prof_atm)
 {
 	int indI = 0; int indJ = 0;
 	float3 p_t; float sizeX = nbCx*TCd; float sizeY = nbCy*TCd;
 	
-    #if defined(BACK)
+    #if defined(BACK)	
 	if (LMODEd == 4)
 	{
 		double cosANGD, cosPHSUN;
@@ -4662,6 +4662,15 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 		return;
 	}
 
+	if (LEd == 1)
+	{
+		float tau_le;
+		tau_le = prof_atm[(NATMd)+ph->ilam * (NATMd+1)].OD;
+		// if BEER=0, photon variable tau corresponds to extinction
+		if (BEERd == 0) {weight *= expf(-fabs(__fdividef(tau_le - ph->tau, ph->v.z)));}
+		// if BEER=1, photon variable tau corresponds to scattering only, need to add photon absorption
+		else {weight *= expf(-fabs(__fdividef(tau_le - (ph->tau+ph->tau_abs), ph->v.z)));} 
+	}
 
 	#if !defined(DOUBLE) || (defined(DOUBLE) && __CUDA_ARCH__ >= 600)
 	// All the beams reaching a receiver
@@ -5638,7 +5647,16 @@ __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
         }
     }*/
     #endif
-
+	
+	#ifdef OBJ3D
+	ph_le->direct = ph->direct;
+	ph_le->H = ph->H; ph_le->H = ph->E; ph_le->H = ph->S;
+	for (int k=0; k<5; k++) ph_le->weight_loss[k] = ph->weight_loss[k];
+	#endif
+	
+    #if defined(BACK) && defined(OBJ3D)
+	ph_le->posIni = ph->posIni;
+	#endif
 }
 
 __device__ float get_OD(int BEERd, struct Profile prof) {  
