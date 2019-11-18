@@ -839,99 +839,52 @@ extern "C" {
 ***********************************************************/
 
 extern "C" {
-	__global__ void launchKernel2( void *tabPhotons, float *tabHist, struct Profile *prof_atm, 
-            unsigned long long *NPhotonsOut
-							 ) {
+__global__ void launchKernel2 (unsigned long long NPHOTON, unsigned long long NLAYER, unsigned long long NWVL,
+        unsigned long long NTHREAD, unsigned long long NGROUP, unsigned long long NBUNCH, unsigned long long NP_REST, unsigned long long NWVL_LOW,
+        double *res, double *ab, float *cd, float *S, float *weight, unsigned char *iw_low, float *ww_low)
+{
+  const unsigned long long idx = threadIdx.x + blockDim.x * blockIdx.x;
+  unsigned long long n,nstart,nstop,ns;
+  unsigned long long iw,ig,l,s,iram;
+  unsigned long long nl,li;
+  double wabs; // absorption OD of a photon at the current wavelength;
+  float wsca1,wsca2,wsca;
+  unsigned long long iw1,iw2;
 
-    // current thread index
-	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
-    int DL  = (NATMd-1)/(NLOWd-1);
-    // Wavelength index (high resolution)
-    int il = idx%1000;
-    // Wavelength index (low resolution)
-    int ik = il/DL;
+  if (idx<NTHREAD) {
+    iw = idx%NWVL ; // index of current wavelength
+    ig = idx%NGROUP ;   // index of current group
+    nstart = ig    *NBUNCH; // Start index of the photon's stack
+    nstop  = (ig+1)*NBUNCH + (ig==(NGROUP-1))*NP_REST; // end index of photon's stack
+                                    // last group has some remaining phton's
+    iw1 = iw_low[iw];    // bracketing indices of low resolution wavelength grid
+    iw2 = iw1+1;
 
-    int KK2 = NBTHETAd*NBPHId*NSENSORd*(NATMd+4+NLOWd);
-    //int KK2 = NBTHETAd*NBPHId*(NATMd+4+NLOWd);
-    int KKK2= KK2 * MAX_HIST;
-    unsigned long long LL,LLL;
-    int ith=0;
-    int iphi=0;
-    int is=0;
-    unsigned long long counter2=0, NPH;
-    float wabs,wsca,a,b;
-    int count_level = UPTOA;
-    unsigned long long II = NBTHETAd*NBPHId*NLAMd*NSENSORd;
-    //unsigned long long II = NBTHETAd*NBPHId*NLAMd;
-    unsigned long long JJ = is*NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi;
-    //unsigned long long JJ = il*NBTHETAd*NBPHId + ith*NBPHId + iphi;
-    NPH = NPhotonsOut[(((count_level*NSENSORd + is)*NLAMd + 0)*NBTHETAd + ith)*NBPHId + iphi];
-    //NPH = NPhotonsOut[((count_level*NLAMd + 0)*NBTHETAd + ith)*NBPHId + iphi];
-    // Start Loop on photons;
-    while (counter2< NPH) {
-      LL =  counter2*NSENSORd*NBTHETAd*NBPHId*(NATMd+4+NLOWd) +  count_level*KKK2;
-      //LL =  counter2*NBTHETAd*NBPHId*(NATMd+4+NLOWd) +  count_level*KKK2;
-      // Get scattering corrections factors
-      a=tabHist[LL +  (ik+  NATMd+4)*NBTHETAd*NBPHId + ith*NBPHId + iphi];
-      //if (a==0) break;
-      b=tabHist[LL +  (ik+1+NATMd+4)*NBTHETAd*NBPHId + ith*NBPHId + iphi];
-      if (il != NLAMd-1) wsca = __fdividef((il-ik*DL)*1.0f,DL*1.0f) * (b - a) + a;
-      else wsca = tabHist[LL +(NLOWd-1+NATMd+4)*NBTHETAd*NBPHId + ith*NBPHId + iphi];
-
-      // Computation of the absorption along photon history with cumulative distances CD in layers
-      // tabHist from 0 to NATMd-1 stores CD
-      wabs = 0.F;
-      for (int n=0; n<(NATMd); n++){
-        LLL = LL +  n*NBTHETAd*NBPHId + ith*NBPHId + iphi;
-        wabs += abs(__fdividef(prof_atm[n+1   + il*(NATMd+1)].OD_abs -
-                               prof_atm[n + il*(NATMd+1)].OD_abs,
-                               prof_atm[n+1].z  - prof_atm[n].z) ) * tabHist[LLL];
-      }
-
-      // Get I,Q,U,V;
-      float4 s = make_float4(tabHist[LL +  (NATMd+0)*NBTHETAd*NBPHId + ith*NBPHId + iphi],
-                             tabHist[LL +  (NATMd+1)*NBTHETAd*NBPHId + ith*NBPHId + iphi],
-                             tabHist[LL +  (NATMd+2)*NBTHETAd*NBPHId + ith*NBPHId + iphi],
-                             tabHist[LL +  (NATMd+3)*NBTHETAd*NBPHId + ith*NBPHId + iphi]);
-
-      #ifdef DOUBLE 
-      double *tabCount = (double*)tabPhotons + count_level*NPSTKd*NBTHETAd*NBPHId*NLAMd*NSENSORd;
-      //double *tabCount = (double*)tabPhotons + count_level*NPSTKd*NBTHETAd*NBPHId*NLAMd;
-      double4 ds = make_double4(s.x, s.y, s.z, s.w);
-      double dwsca=(double)wsca;
-      double dwabs=(double)wabs;
-
-	  #if __CUDA_ARCH__ >= 600
-      atomicAdd(tabCount+(0*II+JJ), dwsca * dwabs * ds.x);
-      atomicAdd(tabCount+(1*II+JJ), dwsca * dwabs * ds.y);
-      atomicAdd(tabCount+(2*II+JJ), dwsca * dwabs * ds.z);
-      atomicAdd(tabCount+(3*II+JJ), dwsca * dwabs * ds.w);
-	  #else
-	  DatomicAdd(tabCount+(0*II+JJ), dwsca * dwabs * ds.x);
-      DatomicAdd(tabCount+(1*II+JJ), dwsca * dwabs * ds.y);
-      DatomicAdd(tabCount+(2*II+JJ), dwsca * dwabs * ds.z);
-      DatomicAdd(tabCount+(3*II+JJ), dwsca * dwabs * ds.w);
-	  #endif
-
-      #else
-      float *tabCount = (float*)tabPhotons + count_level*NPSTKd*NBTHETAd*NBPHId*NLAMd*NSENSORd;
-      //float *tabCount = (float*)tabPhotons + count_level*NPSTKd*NBTHETAd*NBPHId*NLAMd;
-      atomicAdd(tabCount+(0*II+JJ), wsca * wabs * s.x);
-      atomicAdd(tabCount+(1*II+JJ), wsca * wabs * s.y);
-      atomicAdd(tabCount+(2*II+JJ), wsca * wabs * s.z);
-      atomicAdd(tabCount+(3*II+JJ), wsca * wabs * s.w);
-      #endif    
-      counter2++;
+    for (n=nstart;n<nstop;n++) { // Loop on photon number
+        //interpolating scattering 'low resolution' weights 
+        wsca1 = weight[iw1+NWVL_LOW*n];
+        wsca2 = weight[iw2+NWVL_LOW*n];
+        wsca  = ww_low[iw] * (wsca2-wsca1) + wsca1;
+        //start the computation of absorption weights
+        wabs = 0.;
+        for (l=0;l<NLAYER;l++) { // Loop on vertical layer
+            nl = l   + NLAYER*n;
+            li = iw  + NWVL*l;
+            wabs += (double)cd[nl] * ab[li];
+        }
+        for (s=0;s<4;s++) {
+            ns = s + 4*n;
+            atomicAdd(res+iw+NWVL*s, (double)S[ns] * exp(-wabs) * (double)wsca);
+        }
     }
-
-} /* launchKernel2*/
-} /* extern C*/
-
+  }
+}
+}
 
 
 
 /**********************************************************
-*	> Phyisical Processes
+*	> Physical Processes
 ***********************************************************/
 /* initPhoton
 */
