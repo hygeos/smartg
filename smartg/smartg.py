@@ -464,7 +464,8 @@ class Smartg(object):
         # compilation option
         #
         options = []
-        # options = ['-g', '-G']
+        #options = ['-G']
+        #options = ['-g', '-G']
         if not pp:
             # spherical shell calculation
             # automatically with ALT_PP (for eventually ocean propagation)
@@ -1117,7 +1118,7 @@ class Smartg(object):
         NLVL = 6
 
         # warning! values defined in communs.h 
-        MAX_HIST = 8192 * 4096
+        MAX_HIST = 4096 * 4096
 
         # number of Stokes parameters of the radiation field
         NPSTK = 4
@@ -1499,9 +1500,9 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
     axnames  = ['Zenith angles']
     axnames2 = ['None', 'Zenith angles']
     if hist : 
-        axnames3 = ['None', 'None', 'Zenith angles']
+        axnames3 = ['N', 'Info', 'Zenith angles']
         m.add_dataset('Nphotons_in',  NPhotonsInTot)
-        m.add_dataset('Nphotons_out',  NPhotonsOutTot)
+        #m.add_dataset('Nphotons_out',  NPhotonsOutTot)
     iphi     = slice(None)
     #if hist : axnames3 = ['None', 'None', 'Azimuth angles', 'Zenith angles']
     m.set_attr('zip', 'False')
@@ -2242,7 +2243,6 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
     
     if (NATM+NOCE >0) : tabDistTot = gpuzeros((NLVL,NATM+NOCE,NSENSOR,NBTHETA,NBPHI), dtype=np.float64)
     else : tabDistTot = gpuzeros((NLVL,1,NSENSOR,NBTHETA,NBPHI), dtype=np.float64)
-    #if hist : tabHistTot = gpuzeros((MAX_HIST,(NATM+NOCE+NPSTK+NLOW+1),NSENSOR,NBTHETA,NBPHI), dtype=np.float16)
     if hist : tabHistTot = gpuzeros((MAX_HIST,(NATM+NOCE+NPSTK+NLOW+1),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
     else : tabHistTot = gpuzeros((1), dtype=np.float32)
 
@@ -2273,7 +2273,6 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         if (NATM+NOCE >0) : tabDist = gpuzeros((NLVL,NATM+NOCE,NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
         else : tabDist = gpuzeros((NLVL,1,NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
 
-    #if hist : tabHist = gpuzeros((MAX_HIST,(NATM+NOCE+NPSTK+NLOW+1),NSENSOR,NBTHETA,NBPHI), dtype=np.float16)
     if hist : tabHist = gpuzeros((MAX_HIST,(NATM+NOCE+NPSTK+NLOW+1),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
     else : tabHist = gpuzeros((1), dtype=np.float32)
 
@@ -2341,13 +2340,10 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         S = tabPhotons   # sum of weights for the last kernel
         tabPhotonsTot += S
         
-        #!!!!!!!!!!!!!!!!!!!!!!!!!!!
         T = tabDist
         tabDistTot += T
         if hist :
-            H = tabHist
-            tabHistTot = H
-        #!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            tabHistTot = tabHist
         
         if (myObjects0 is not None):
             import sys
@@ -2396,11 +2392,8 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
     else:
         sigma = None
 
-    #!!!!!!!!!!!!!!!!!!!!!!!!!!!
     return NPhotonsInTot.get(), tabPhotonsTot.get(), tabDistTot.get(), tabHistTot.get(), errorcount, \
         NPhotonsOutTot.get(), sigma, N_simu, secs_cuda_clock, tabMatRecep, vecCats, vecLoss
-    #!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    #return NPhotonsInTot.get(), tabPhotonsTot.get(), errorcount, NPhotonsOutTot.get(), sigma, N_simu, secs_cuda_clock
 
 
 def impactInit(prof_atm, NLAM, THVDEG, Rter, pp):

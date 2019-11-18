@@ -969,6 +969,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 	ph->stokes.w = 0.F;
 
 	ph->scatterer = UNDEF;
+	ph->nrrs = 0;
 	
     // Sensor index initialization
     ph->is = __float2uint_rz(RAND * NSENSORd);
@@ -2928,7 +2929,8 @@ __device__ void scatter(Photon* ph,
         if (HORIZd) ph->weight /= fabs(ph->v.z); 
     }
 
-	ph->scatterer = UNDEF;
+	//ph->scatterer = UNDEF;
+	if(!le) ph->scatterer = UNDEF;
 	
 }
 
@@ -2951,6 +2953,7 @@ __device__ void choose_scatterer(Photon* ph,
 		/* Elastic scattering    */
 		if ( pmol < RAND ){
 			ph->scatterer = RAY; // Rayleigh index
+            ph->nrrs +=1; //  RRS
 		} else {
 			ph->scatterer = PTCLE;	; // particle index
 		}	
@@ -4829,7 +4832,6 @@ __device__ void countPhoton(Photon* ph,
 
     #if ( defined(SPHERIQUE) || defined(ALT_PP) ) && defined(ALIS)
      float *tabCount3; // Specific ALIS counting array pointer for path implementation (distances histograms)
-     //__half *tabCount3; // Specific ALIS counting array pointer for path implementation (distances histograms)
     #endif
 
     // We dont count UPTOA photons leaving in boxes outside SZA range
@@ -5180,7 +5182,6 @@ __device__ void countPhoton(Photon* ph,
           //unsigned long long KK2 = K*(NATMd+NOCEd+4+NLOWd); /* Number of information per local estmate photon (Record length)*/
           unsigned long long KKK2= KK2 * MAX_HIST; /* Number of individual information per vertical Level (Number of Records)*/
           unsigned long long LL2;
-          //tabCount3   = (__half*)tabHist     ; /* we position the pointer at the good vertical level*/
           tabCount3   = (float*)tabHist     ; /* we position the pointer at the good vertical level*/
           //tabCount3   = (float*)tabHist     + count_level*KKK2; /* we position the pointer at the good vertical level*/
           for (int n=0; n<NOCEd; n++){
@@ -5215,7 +5216,7 @@ __device__ void countPhoton(Photon* ph,
           }
           LL2 = counter2*KK2 +  (NLOWd+NATMd+NOCEd+4)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           //atomicAdd(tabCount3+LL2, 1.);
-          tabCount3[LL2]= 1.F;
+          tabCount3[LL2]= (float)(ph->nrrs>=1);
        } // HISTd==1
 
        #ifdef DOUBLE
@@ -5619,6 +5620,7 @@ __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
     ph_le->wavel = ph->wavel;
     ph_le->ilam = ph->ilam;
 	ph_le->scatterer=ph->scatterer;
+	ph_le->nrrs=ph->nrrs;
     ph_le->pos = ph->pos; // float3
     ph_le->nint = ph->nint;
     ph_le->is = ph->is;
