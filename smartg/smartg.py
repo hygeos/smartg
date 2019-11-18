@@ -1119,6 +1119,7 @@ class Smartg(object):
 
         # warning! values defined in communs.h 
         MAX_HIST = 4096 * 4096
+        MAX_NLOW = 101
 
         # number of Stokes parameters of the radiation field
         NPSTK = 4
@@ -1138,7 +1139,7 @@ class Smartg(object):
             wl = BandSet(wl)
         NLAM = wl.size
 
-        NLOW=1
+        NLOW=0
         hist=False
         HIST=0
         NJAC=0
@@ -1150,6 +1151,8 @@ class Smartg(object):
             if (alis_options['nlow'] ==-1) : NLOW=NLAM
             else: NLOW=alis_options['nlow']
             BEER=1
+            assert (NLOW <= MAX_NLOW)
+        
         if hist : HIST=1
 
         if surf is not None:
@@ -1400,7 +1403,14 @@ class Smartg(object):
         
         output.set_attr('processing time (s)', (datetime.now() - t0).total_seconds())
 
-        p.finish('Done! | Received {:.1%} of {:.3g} photons ({:.1%})'.format(
+        if self.alis:
+            p.finish('Done! | Received {:.1%} of {:.3g} photons ({:.1%})'.format(
+            np.sum(NPhotonsOutTot[0,...])/float(np.sum(NPhotonsInTot)),
+            np.sum(NPhotonsInTot)/float(NLAM),
+            np.sum(NPhotonsInTot)/float(NBPHOTONS)/float(NLAM),
+            ))
+        else:
+            p.finish('Done! | Received {:.1%} of {:.3g} photons ({:.1%})'.format(
             np.sum(NPhotonsOutTot[0,...])/float(np.sum(NPhotonsInTot)),
             np.sum(NPhotonsInTot),
             np.sum(NPhotonsInTot)/float(NBPHOTONS),
@@ -2286,7 +2296,8 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
 
     secs_cuda_clock = 0.
     iopp = 1
-    while(np.sum(NPhotonsInTot.get()) < NBPHOTONS):
+    alis_norm = NLAM if NLOW!=0 else 1
+    while((np.sum(NPhotonsInTot.get())/alis_norm) < NBPHOTONS):
         tabPhotons.fill(0.)
         NPhotonsOut.fill(0)
         NPhotonsIn.fill(0)
@@ -2359,7 +2370,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
             sum_x2 += (SoverL)**2
 
         # update of the progression Bar
-        sphot = np.sum(NPhotonsInTot.get())
+        sphot = np.sum(NPhotonsInTot.get())/alis_norm
         p.update(sphot,
                 'Launched {:.3g} photons'.format(sphot))
     secs_cuda_clock = secs_cuda_clock*1e-3
