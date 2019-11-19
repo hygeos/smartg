@@ -723,7 +723,7 @@ extern "C" {
 							copyPhoton(&ph, &ph_le);
 							ph_le.iph = (iph + iph0)%NBPHId;
 							ph_le.ith = (ith + ith0)%NBTHETAd;
-							surfaceRugueuse3D(&ph_le, &geoStruc, &rngstate);
+							Obj3DRoughSurf(&ph_le, 1, tabthv, tabphi, &geoStruc, &rngstate);
 							// Only two levels for counting by definition
 							countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0P,
 										errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
@@ -737,7 +737,7 @@ extern "C" {
 					}//direction
 				} //LE
 				// surfaceRugueuse3D(&ph, &geoStruc, &rngstate);
-				Obj3DRoughSurf(&ph, &geoStruc, &rngstate);
+				Obj3DRoughSurf(&ph, 0, tabthv, tabphi, &geoStruc, &rngstate);
 			} // End Mirror
 			else {ph.loc = REMOVED;} // unknow material
 
@@ -4323,12 +4323,13 @@ __device__ void surfaceRugueuse3D(Photon* ph, IGeo* geoS, struct RNG_State *rngs
 } // FUNCTION SURFACEAGITE3D
 
 
-__device__ void Obj3DRoughSurf(Photon* ph, IGeo* geoS, struct RNG_State *rngstate)
+__device__ void Obj3DRoughSurf(Photon* ph, int le, float* tabthv, float* tabphi, IGeo* geoS, struct RNG_State *rngstate)
 {
     ph->nint += 1;
 	
 	float3 v_i = ph->v;                    // - direction of the incoming photon
 	float3 u_i = ph->u;                    // - perp direction of the incoming photon
+	float3 v_o, u_o;                       // outcoming directions
 
 	// Find if the photon come from the front(1) or back(-1) of the obj surface
 	// geoS->normalBase is the obj normal of the front surface
@@ -4354,54 +4355,76 @@ __device__ void Obj3DRoughSurf(Photon* ph, IGeo* geoS, struct RNG_State *rngstat
 	float cTheta_m, sTheta_m;              // - cos and sin of theta_m
 	float cPhi_m, sPhi_m;                  // - cos and sin of phi_m
 	float nind = geoS->nind;               // - relative refractive index air/obj
+	float3 h_r;                             // half-direction for reflection used in LE
+	float thv, phi;                        // used only in LE
 
-	// The initial normal of the obj before transfo is colinear to the z axis,
-	// then create the transfo inverse for the direction v_i and simplify sampling
-	Transform transfo=geoS->mvTF, invTransfo;
-    invTransfo = transfo.Inverse(transfo);
-	
-	// Incident direction v if obj normal colinear to z axis
-	float3 v_iInv = invTransfo(Vectorf(v_i));
-
-	// ***********************************************************************************
-	// Beckmann sampling of theta_m, phi_m to get cTheta_i, sTheta_i -> Walter et al. 2007
-	// ***********************************************************************************
-	if (alpha > VALMIN) // Roughness > zero --> roughness surface
+	if (le == 0)
 	{
-		int iter=0; float rand1, rand2;
-		cTheta_i = -1.F;
-		while (cTheta_i <= 0)
-		{
-			iter++;
-			if (iter >= 100) {ph->loc = NONE; return;}
-			rand1 = RAND; rand2 = RAND;
-			if (geoS->dist == DIST_GGX) {tTheta_m = fdividef(alpha*sqrtf(rand1), sqrtf(1 - rand1));}
-			else {tTheta_m = alpha*sqrtf(-__logf(rand1) );} //Beckmann
-			theta_m = atanf(tTheta_m);
-			phi_m   = DEUXPI * rand2;
+		// The initial normal of the obj before transfo is colinear to the z axis,
+		// then create the transfo inverse for the direction v_i and simplify sampling
+		Transform transfo=geoS->mvTF, invTransfo;
+		invTransfo = transfo.Inverse(transfo);
 		
-			// find the normal of the microfacet m thanks to thata_m and phi_m sampling
-			cTheta_m = __cosf(theta_m); sTheta_m = __sinf(theta_m);
-			cPhi_m = __cosf(phi_m); sPhi_m = __sinf(phi_m);
-			microFnormal_m = make_float3( sTheta_m*cPhi_m,  sTheta_m*sPhi_m, cTheta_m );
+		// Incident direction v if obj normal colinear to z axis
+		float3 v_iInv = invTransfo(Vectorf(v_i));
+		
+		// ***********************************************************************************
+		// Beckmann sampling of theta_m, phi_m to get cTheta_i, sTheta_i -> Walter et al. 2007
+		// ***********************************************************************************
+		if (alpha > VALMIN) // Roughness > zero --> roughness surface
+		{
+			int iter=0; float rand1, rand2;
+			cTheta_i = -1.F;
+			while (cTheta_i <= 0)
+			{
+				iter++;
+				if (iter >= 100) {ph->loc = NONE; return;}
+				rand1 = RAND; rand2 = RAND;
+				if (geoS->dist == DIST_GGX) {tTheta_m = fdividef(alpha*sqrtf(rand1), sqrtf(1 - rand1));}
+				else {tTheta_m = alpha*sqrtf(-__logf(rand1) );} //Beckmann
+				theta_m = atanf(tTheta_m);
+				phi_m   = DEUXPI * rand2;
+		
+				// find the normal of the microfacet m thanks to thata_m and phi_m sampling
+				cTheta_m = __cosf(theta_m); sTheta_m = __sinf(theta_m);
+				cPhi_m = __cosf(phi_m); sPhi_m = __sinf(phi_m);
+				microFnormal_m = make_float3( sTheta_m*cPhi_m,  sTheta_m*sPhi_m, cTheta_m );
+				microFnormal_m *= sign;
+				cTheta_i = -dot( microFnormal_m, v_iInv);
+				cTheta_i = clamp(cTheta_i, -1.F, 1.F);
+			}
+		}
+		else // Roughness equal zero (or very very close) --> perfect flat surface
+		{
+			microFnormal_m = make_float3(0.F, 0.F, 1.F);
 			microFnormal_m *= sign;
 			cTheta_i = -dot( microFnormal_m, v_iInv);
 			cTheta_i = clamp(cTheta_i, -1.F, 1.F);
 		}
-	}
-	else // Roughness equal zero (or very very close) --> perfect flat surface
+	
+		// Inverse transfo has been used in sampling then come back to "real basis"
+		microFnormal_m = transfo(Normalf(microFnormal_m));
+	} // end le==0 
+	else // else if le==1 -->
 	{
-		microFnormal_m = make_float3(0.F, 0.F, 1.F);
-		microFnormal_m *= sign;
-		cTheta_i = -dot( microFnormal_m, v_iInv);
-		cTheta_i = clamp(cTheta_i, -1.F, 1.F);
-	}
-	
-	// Inverse transfo has been used in sampling then come back to "real basis"
-	microFnormal_m = transfo(Normalf(microFnormal_m));
-	
+		phi = tabphi[ph->iph]; thv = tabthv[ph->ith];
+		v_o.x = cosf(phi) * sinf(thv);
+		v_o.y = sinf(phi) * sinf(thv);
+		v_o.z = cosf(thv);
+		// If macro normal isn't in the same hemisphere as v_o=-vSun, then no contribution
+		//if(isBackward(macroFnormal_n, v_o)) {ph->weight=0.; return;};
+		h_r = v_o - v_i;
+	    h_r = normalize(h_r);
+		microFnormal_m = h_r;
+		// Exclude facets whose normal are not on the same side as incoming photons
+		if(isForward(microFnormal_m, v_i)) {ph->loc=REMOVED; return;};
+		cTheta_i = dot(microFnormal_m, -v_i);
+		cTheta_m = dot(microFnormal_m, macroFnormal_n);
+	} // end le==1
+
 	// Less expensive than find theta from arcos and apply the sin
 	sTheta_i = sqrtf( fmaxf(VALMIN,  1.F-(cTheta_i*cTheta_i)) );
+
 	// ***********************************************************************************
 
 	// ********************************************************
@@ -4414,6 +4437,7 @@ __device__ void Obj3DRoughSurf(Photon* ph, IGeo* geoS, struct RNG_State *rngstat
 	
 	#ifdef BACK
 	float4x4 LB;
+	float4x4 L = make_diag_float4x4 (1.F);
 	rotationM(-psi, &LB); // fill the rotation matrix LB (backward mode)
 	#endif
 
@@ -4429,7 +4453,12 @@ __device__ void Obj3DRoughSurf(Photon* ph, IGeo* geoS, struct RNG_State *rngstat
 	// Muller matrix for reflection (forward mode)
 	float4x4 Mu_r; // Mu_r = (1/scaR)*R*L -> Ramon et al. 2019
 	Mu_r = mul(R, LF); // relfection totale scaR = 1
-	
+
+    #ifndef BIAS
+	ph->weight *= ph->stokes.x + ph->stokes.y;
+	ph->stokes /= ph->stokes.x + ph->stokes.y; 
+    #endif
+
     #ifdef BACK
     ph->M = mul(ph->M, mul(LB, R));
 	#endif
@@ -4441,8 +4470,7 @@ __device__ void Obj3DRoughSurf(Photon* ph, IGeo* geoS, struct RNG_State *rngstat
 	// ********************************************
 	// Reflection of the direction v and perp dir u
 	// ********************************************
-	float3 v_o, u_o; // outcoming directions
-	v_o = specularFNC(v_i, microFnormal_m, cTheta_i);
+	if (le == 0) { v_o = specularFNC(v_i, microFnormal_m, cTheta_i);}
 	u_o = (microFnormal_m-cTheta_i*v_o)/sTheta_i;
 	// ********************************************
 
@@ -4459,7 +4487,7 @@ __device__ void Obj3DRoughSurf(Photon* ph, IGeo* geoS, struct RNG_State *rngstat
 		tTheta_iN = __fdividef(sTheta_iN, cTheta_iN);
 		int xsiPi, xsiPo; // positive characteristic function	
 		xsiPi = ( __fdividef(dotViM, dotViN) > 0) ? 1 : 0;
-		if (xsiPi == 0) { ph->loc = ABSORBED; return; }
+		if (xsiPi == 0 and le == 0) { ph->loc = ABSORBED; return; }
 		if (geoS->dist == DIST_GGX){G1_i = G1GGX(alpha*alpha, tTheta_iN*tTheta_iN);}
 		else {G1_i = G1B(alpha, tTheta_iN);} // Beckmann
 		
@@ -4469,7 +4497,7 @@ __device__ void Obj3DRoughSurf(Photon* ph, IGeo* geoS, struct RNG_State *rngstat
 		sTheta_oN = sqrtf(fmaxf( 0.F,  1.F - (cTheta_oN*cTheta_oN) ));
 		tTheta_oN = __fdividef(sTheta_oN, cTheta_oN);	
 		xsiPo = ( __fdividef(dot(v_o, microFnormal_m), dotVoN) > 0) ? 1 : 0;
-		if (xsiPo == 0) { ph->loc = ABSORBED; return; }
+		if (xsiPo == 0 and le == 0) { ph->loc = ABSORBED; return; }
 		if (geoS->dist == DIST_GGX){G1_o = G1GGX(alpha*alpha, tTheta_oN*tTheta_oN);}
 		else{G1_o = G1B(alpha, tTheta_oN);} // Beckmann
 		
@@ -4488,39 +4516,83 @@ __device__ void Obj3DRoughSurf(Photon* ph, IGeo* geoS, struct RNG_State *rngstat
 	else { G2 = 1.F; }
 	// ********************************************************************
 
-	// ***************************************************************************************************
-	// Weighting according to Walter et al. 2007
-	// ***************************************************************************************************
-	ph->weight *= __fdividef(fabsf(dotViM)*G2, fabsf(dotViN)*fabsf(dot(microFnormal_m, macroFnormal_n)));
-	ph->weight *= geoS->reflectivity;
-	// ***************************************************************************************************
-
-	// **********************************************
-	// update photon directions u, v and location
-	// **********************************************
-	ph->v = v_o;
-	ph->u = u_o;
-	if (ph->loc == OBJSURF)
+	if (le == 0)
 	{
-		if (isForward(geoS->normalBase, ph->v))
+		// ***************************************************************************************************
+		// Weighting according to Walter et al. 2007
+		// ***************************************************************************************************
+		ph->weight *= __fdividef(fabsf(dotViM)*G2, fabsf(dotViN)*fabsf(dot(microFnormal_m, macroFnormal_n)));
+		ph->weight *= geoS->reflectivity;
+		// ***************************************************************************************************
+
+		// **********************************************
+		// update photon directions u, v and location
+		// **********************************************
+		ph->v = v_o;
+		ph->u = u_o;
+		if (ph->loc == OBJSURF)
 		{
+			if (isForward(geoS->normalBase, ph->v))
+			{
+				ph->locPrev = OBJSURF;
+				ph->loc = ATMOS;
+			}
+			else if (true) //SINGLEd) for now always SINGLE = True
+				ph->loc = REMOVED;
+		}
+		else
+			ph->loc = REMOVED;
+		// **********************************************
+	
+		if (RRd==1){
+			/* Russian roulette for propagating photons **/
+			if( ph->weight < WEIGHTRRd ){
+				if( RAND < __fdividef(ph->weight,WEIGHTRRd) ){ph->weight = WEIGHTRRd;}
+				else{ph->loc = ABSORBED;}
+			}
+		}
+	} // end le==0
+	else // le==1
+	{
+		float cTheta2_m, cTheta_o, alph2, sTheta_m, tTheta2_m, p_m;
+		int xsiP_mn;
+
+		cTheta2_m = cTheta_m*cTheta_m;
+		cTheta_o = dot(macroFnormal_n, v_o);
+		sTheta_m = sqrtf(fmaxf(0.F, 1.F-cTheta2_m));
+		alph2 = alpha*alpha;
+		tTheta2_m = sTheta_m/fmaxf(VALMIN, cTheta_m);
+		tTheta2_m = tTheta2_m*tTheta2_m;
+		xsiP_mn = ( cTheta_m > 0) ? 1 : 0; //( (pSca_mn) > 0) ? 1 : 0;
+
+		
+
+		if (geoS->dist == DIST_GGX and xsiP_mn)
+		{
+			// pdf without the pi, but be careful no validation with GGX!!
+			p_m = __fdividef(alph2, cTheta2_m*cTheta2_m*(alph2 + tTheta2_m)*(alph2 + tTheta2_m));
+		}
+		else if (geoS->dist == DIST_BECKMANN and xsiP_mn)
+		{
+			// pdf without the pi (mistake in ramon et al 2019 formulation?)
+			//p_m = __fdividef( __expf(-(1.F-cTheta2_m)/(cTheta2_m*alph2)) , cTheta2_m*cTheta2_m * alph2);
+			p_m = __fdividef( __expf(-(tTheta2_m/alph2)) , cTheta2_m*cTheta2_m * alph2);
+		}
+		else // if xsiP_mn == 0 --> p_m=0 then:
+		{
+			ph->weight = 0.F; ph->locPrev = OBJSURF; ph->loc = ATMOS; return;
+		}
+
+		//float jac, p_o;
+		//p_o = __fdividef(p_m * fabs(cTheta_i), fabs(cTheta_o));
+		//jac = __fdividef(1.F, 4.F * fabs(cTheta_i));
+		//p_o *= G2; // normalization
+		//ph->weight *= __fdividef(p_o * jac, fabs(cTheta_i));
+		ph->weight *= __fdividef(p_m*G2, 4.F*fabs(cTheta_o)*fabs(cTheta_i));
+		ph->weight *= geoS->reflectivity;
 		ph->locPrev = OBJSURF;
 		ph->loc = ATMOS;
-		}
-		else if (true) //SINGLEd) for now always SINGLE = True
-			ph->loc = REMOVED;
-	}
-	else
-		ph->loc = REMOVED;
-	// **********************************************
-	
-	if (RRd==1){
-		/* Russian roulette for propagating photons **/
-		if( ph->weight < WEIGHTRRd ){
-			if( RAND < __fdividef(ph->weight,WEIGHTRRd) ){ph->weight = WEIGHTRRd;}
-			else{ph->loc = ABSORBED;}
-		}
-	}
+	} //end le==1
 	
 } // FUNCTION OBJ3DROUGHSURF
 

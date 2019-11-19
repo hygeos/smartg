@@ -190,7 +190,7 @@ __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* 
 
 __device__ void surfaceRugueuse3D(Photon* ph, IGeo* geoS, struct RNG_State *rngstate);
 
-__device__ void Obj3DRoughSurf(Photon* ph, IGeo* geoS, struct RNG_State *rngstate);
+__device__ void Obj3DRoughSurf(Photon* ph, int le, float* tabthv, float* tabphi, IGeo* geoS, struct RNG_State *rngstate);
 
 __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, struct Sensor *tab_sensor);
 
