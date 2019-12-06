@@ -83,6 +83,7 @@ __device__ __constant__ float CFTYd;
 __device__ __constant__ float THDEGd;
 __device__ __constant__ float PHDEGd;
 __device__ __constant__ float ALDEGd;
+__device__ __constant__ int TYPEd;
 __device__ __constant__ int LMODEd;
 #endif
 
@@ -194,7 +195,7 @@ __device__ void Obj3DRoughSurf(Photon* ph, int le, float* tabthv, float* tabphi,
 
 __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, struct Sensor *tab_sensor);
 
-__device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsigned long long *nbPhCat, void *wPhCat, void *wPhCat2, struct Profile *prof_atm);
+__device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geoS, unsigned long long *nbPhCat, void *wPhCat, void *wPhCat2, struct Profile *prof_atm);
 #endif
 
 __device__ void countPhoton(Photon* , struct Profile* prof_atm, struct Profile* prof_oc, float*, float *,

@@ -270,7 +270,7 @@ extern "C" {
 
 		#if defined(BACK) && defined(OBJ3D)
 		if (count_level == UPTOA and LMODEd == 4) // the photon reach TOA
-		{ countPhotonObj3D(&ph, tabObjInfo, &geoStruc, nbPhCat, wPhCat, wPhCat2, prof_atm);}
+		{ countPhotonObj3D(&ph, 0, tabObjInfo, &geoStruc, nbPhCat, wPhCat, wPhCat2, prof_atm);}
         #endif
 
 		__syncthreads();
@@ -393,6 +393,9 @@ extern "C" {
                             #endif
 
                             // Finally count the virtual photon
+							#if defined(BACK) && defined(OBJ3D)
+							countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc, nbPhCat, wPhCat, wPhCat2, prof_atm);
+							#endif
                             countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, count_level_le,
                                     errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
 
@@ -671,7 +674,7 @@ extern "C" {
 		{
 
 			if (geoStruc.type == RECEIVER and LMODEd != 4) // this is a receiver
-			{ countPhotonObj3D(&ph, tabObjInfo, &geoStruc, nbPhCat, wPhCat, wPhCat2, prof_atm);}
+			{ countPhotonObj3D(&ph, 0, tabObjInfo, &geoStruc, nbPhCat, wPhCat, wPhCat2, prof_atm);}
 
 			// For losses count
 			ph.weight_loss[0] = ph.weight;
@@ -1443,40 +1446,53 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		ph->pos.y += cusForwPos.y + CFTYd;
 		ph->pos.z = tab_sensor[ph->is].POSZ;
 
-		if (SUN_DISCd != 0)
+		if (ALDEGd != 0)
 		{
 			
 			// Sun zenith angle (theta) and sun azimuth angle (phi)
 			double sunTheta = 180-tab_sensor[ph->is].THDEG, sunPhi=tab_sensor[ph->is].PHDEG-180;
 
 			// One fixed direction (for radiance) inverse of the initiale pos of the obj
-			double3 vdouble = make_double3(0., 0., -1.);
-		
+			double3 vdouble = make_double3(0., 0., -1.);	
+
 			// Initialization of the orthogonal vector to the propagation
 			double3 udouble = make_double3(-1., 0., 0.);
 		
 			double PHconed, THconed;
 
-			// // disk cone sampling
-			// // Mixte between disk sampling (Dunn & Shultis 2011) and cone sampling 
-			// double rd, Rd;
-			// PHconed = 360*RAND;
-			// Rd = tan(radiansd(SUN_DISCd));
-			// rd = Rd*sqrt(RAND);
-			// THconed = atan(rd)*180/PI;
+			if (TYPEd == 1)
+			{
+				// Lambertian cone sampling, see Dutré 2003
+				double sinTHCone, sinTH;
+				PHconed = 360*RAND;
+				sinTHCone = sin(radiansd(ALDEGd));
+				sinTH = sqrt(RAND)*sinTHCone;
+				THconed = asin(sinTH)*180./CUDART_PI;
+			}
+			if (TYPEd == 2)
+			{
+				// Isotropic cone sampling, see Dutré 2003
+				double cosTHCone;
+				PHconed = 360*RAND;
+				cosTHCone = cos(radiansd(ALDEGd));
+				THconed = acos(RAND*(cosTHCone-1)+1)*180./CUDART_PI;
+			}
+			if (TYPEd == 3)
+			{
+				//disk cone sampling
+				//Mixte between disk sampling (Dunn & Shultis 2011) and cone sampling 
+				double rd, Rd;
+				PHconed = 360*RAND;
+				Rd = tan(radiansd(ALDEGd));
+				rd = Rd*sqrt(RAND);
+				THconed = atan(rd)*180/PI;
 
-			// Lambertian cone sampling, see Dutré 2003
-			// double sinTHCone, sinTH;
-			// PHconed = 360*RAND;
-			// sinTHCone = sin(radiansd(SUN_DISCd));
-			// sinTH = sqrt(RAND)*sinTHCone;
-			// THconed = asin(sinTH)*180./CUDART_PI;
-
-            // Isotropic cone sampling, see Dutré 2003
-			double cosTHCone;
-			PHconed = 360*RAND;
-			cosTHCone = cos(radiansd(SUN_DISCd));
-			THconed = acos(RAND*(cosTHCone-1)+1)*180./CUDART_PI;
+				// // Use of the model of koepke limb model (only with disk cone sampling
+				// double Gamm;
+				// Gamm = GammaL(550., rd/Rd);
+				// ph->weight *= Gamm;
+				// ph->weight /= 0.856117;
+			}
 
 			// Transformations to consider the solar cone sampling	
 			Transformd TPHconed, TTHconed;
@@ -1499,42 +1515,58 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 	} //END LMODEd == 2
     #else // else if Backward modes
 	if (LMODEd == 3 or LMODEd == 4) // common part between mode B and BR (cusBackward)
-	{
-		// // Sampling of alpha and beta angles
-		// float alpha = ALDEGd, beta=BETDEGd;
-		// alpha = (RAND-0.5)*alpha; beta = (RAND-0.5)*beta;
-		
+	{		
 		// One fixed direction (for radiance)
-		float3 vfloat = make_float3(0., 0., 1.);
+		double3 vdouble2 = make_double3(0., 0., 1.);
 		
 		// Initialization of the orthogonal vector to the propagation
-		float3 ufloat = make_float3(1., 0., 0.);
+		double3 udouble2 = make_double3(1., 0., 0.);
 		
-		double PHconed, THconed, cosTHconed;
-		PHconed = 360.*RAND;
+		double PHconed, THconed;
 
-		cosTHconed = cos(radiansd(ALDEGd));
-		THconed = acos(RAND*(cosTHconed - 1) + 1)*180./CUDART_PI;
+		if (TYPEd == 1)
+		{
+			// Lambertian cone sampling, see Dutré 2003
+			double sinTHCone, sinTH;
+			PHconed = 360*RAND;
+			sinTHCone = sin(radiansd(ALDEGd));
+			sinTH = sqrt(RAND)*sinTHCone;
+			THconed = asin(sinTH)*180./CUDART_PI;
+		}
+		else if (TYPEd == 2)
+		{
+			// Isotropic cone sampling, see Dutré 2003
+			double cosTHconed;
+			PHconed = 360*RAND;
+			cosTHconed = cos(radiansd(ALDEGd));
+			THconed = acos(RAND*(cosTHconed-1)+1)*180./CUDART_PI;
+			ph->weight *= cos(radiansd(THconed));
+			//THconed = acos(  sqrt( 1 - RAND*(1 - cosTHconed*cosTHconed) )  )*180./CUDART_PI; //lambertian
+		}
 		
 		// Creation of transforms
-		Transform TPHconed, TTHconed;
+		Transformd TPHconed, TTHconed;
 		TPHconed = TPHconed.RotateZ(PHconed); TTHconed = TTHconed.RotateY(THconed);
 		
 		// Apply transforms to vector u and v
-		vfloat = TPHconed(   Vectorf(  TTHconed( Vectorf(vfloat) )  )   );
-		ufloat = TPHconed(   Vectorf(  TTHconed( Vectorf(ufloat) )  )   );
+		vdouble2 = TPHconed(   Vectord(  TTHconed( Vectord(vdouble2) )  )   );
+		udouble2 = TPHconed(   Vectord(  TTHconed( Vectord(udouble2) )  )   );
+
 		
 		// Creation of transforms to consider theta and phi for the computation of photon dirs
-		Transform TTheta, TPhi;
+		Transformd TTheta, TPhi;
 		TTheta = TTheta.RotateY(tab_sensor[ph->is].THDEG);
 		TPhi = TPhi.RotateZ(tab_sensor[ph->is].PHDEG);		
 
 		// Apply transforms to vector u and v in function to theta and phi
-		vfloat = TPhi(   Vectorf(  TTheta( Vectorf(vfloat) )  )   );
-		ufloat = TPhi(   Vectorf(  TTheta( Vectorf(ufloat) )  )   );
+		vdouble2 = TPhi(   Vectord(  TTheta( Vectord(vdouble2) )  )   );
+		udouble2 = TPhi(   Vectord(  TTheta( Vectord(udouble2) )  )   );
 
 		// update of u and v
-		ph->v = vfloat; ph->u = ufloat;
+		ph->vecIni = vdouble2;
+		ph->v = make_float3(float(vdouble2.x), float(vdouble2.y), float(vdouble2.z));
+		ph->u = make_float3(float(udouble2.x), float(udouble2.y), float(udouble2.z));
+
 	} //END LMODEd == 3 or LMODEd == 4
 	if (LMODEd == 4) // LMODE = "BR" Backward with receiver
 	{
@@ -2645,7 +2677,6 @@ __device__ void scatter(Photon* ph,
 	float psi, sign=1.F;
 	struct Phase *func;
 	float P11, P12, P22, P33, P43, P44;
-
 	//int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
 	#ifdef OBJ3D
 	ph->direct += 1;
@@ -4651,21 +4682,37 @@ __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, struct Sensor *
 	#endif
 }
 
-__device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsigned long long *nbPhCat, void *wPhCat, void *wPhCat2, struct Profile *prof_atm)
+__device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geoS, unsigned long long *nbPhCat, void *wPhCat, void *wPhCat2, struct Profile *prof_atm)
 {
 	int indI = 0; int indJ = 0;
 	float3 p_t; float sizeX = nbCx*TCd; float sizeY = nbCy*TCd;
 	
     #if defined(BACK)	
-	if (LMODEd == 4)
+	if (LMODEd == 4 and le == 0 )
 	{
 		double cosANGD, cosPHSUN;
-		cosANGD = min(cos(radiansd(double(SUN_DISCd))), double(1));
+		cosANGD = cos( radiansd( double(SUN_DISCd) )  );
 		double3 vecSUN = make_double3(-DIRSXd, -DIRSYd, -DIRSZd);
-		double3 vecPH = make_double3(ph->v.x, ph->v.y, ph->v.z);
-		cosPHSUN = dot(vecSUN, vecPH);
+		double3 vecPH=make_double3(ph->v.x, ph->v.y, ph->v.z);
+
+		// double tauE = 0.09682134880306427;
+		// double difT;
+
+		if (ph->H == 0 and ph->S == 0 and ph->E == 0)
+		{
+			vecPH = ph->vecIni;
+			cosPHSUN = dot(vecSUN, vecPH);
+			//difT = exp(-tauE)/exp(-tauE/cosPHSUN);
+			//ph->weight *= difT;	
+		}    
+		else
+		{
+			cosPHSUN = dot(vecSUN, vecPH);
+		}
+		ph->weight /= cosPHSUN;
 		p_t = ph->posIni;
-		if (cosPHSUN < cosANGD) {return;}
+		if ((cosANGD-0.00000001173) > cosPHSUN) {return;}
+		if (cosANGD > cosPHSUN and SUN_DISCd < 1 and ph->H == 0 and ph->S == 0 and ph->E == 0) {ph->weight *= 0.3;}
 	}
 	else
 	{
@@ -4738,7 +4785,7 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 		return;
 	}
 
-	if (LEd == 1)
+	if (le == 1)
 	{
 		float tau_le;
 		tau_le = prof_atm[(NATMd)+ph->ilam * (NATMd+1)].OD;
@@ -4748,116 +4795,124 @@ __device__ void countPhotonObj3D(Photon* ph, void *tabObjInfo, IGeo* geoS, unsig
 		else {weight *= expf(-fabs(__fdividef(tau_le - (ph->tau+ph->tau_abs), ph->v.z)));} 
 	}
 
-	#if !defined(DOUBLE) || (defined(DOUBLE) && __CUDA_ARCH__ >= 600)
-	// All the beams reaching a receiver
-	atomicAdd(tabCountObj+(nbCy*indI)+indJ, weight);
-
-	// Les huit catégories
-	if (ph->H == 0 && ph->E == 0 && ph->S == 0) 
-	{ // CAT 1 : aucun changement de trajectoire avant de toucher le R.
-	    atomicAdd(wPhCatC, weight); atomicAdd(wPhCatC2, weight2);// comptage poids
-		atomicAdd(nbPhCat, 1);     // comptage nombre de photons
-		atomicAdd(tabCountObj+(nbCy*nbCx)+(nbCy*indI)+indJ, weight); // distri
-	}
-	else if ( ph->H > 0 && ph->E == 0 && ph->S == 0)
-	{ // CAT 2 : only H avant de toucher le R.
-		atomicAdd(wPhCatC+1, weight); atomicAdd(wPhCatC2+1, weight2);
-		atomicAdd(nbPhCat+1, 1);
-		atomicAdd(tabCountObj+(2*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-	}
-	else if ( ph->H == 0 && ph->E > 0 && ph->S == 0)
-	{ // CAT 3 : only E avant de toucher le R.
-		atomicAdd(wPhCatC+2, weight); atomicAdd(wPhCatC2+2, weight2);
-		atomicAdd(nbPhCat+2, 1);
-		atomicAdd(tabCountObj+(3*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-	}
-	else if ( ph->H == 0 && ph->E == 0 && ph->S > 0)
-	{ // CAT 4 : only S avant de toucher le R.
-		atomicAdd(wPhCatC+3, weight); atomicAdd(wPhCatC2+3, weight2);
-		atomicAdd(nbPhCat+3, 1);
-		atomicAdd(tabCountObj+(4*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-	}
-	else if ( ph->H > 0 && ph->E == 0 && ph->S > 0)
-	{ // CAT 5 : 2 proc. H et S avant de toucher le R.
-		atomicAdd(wPhCatC+4, weight); atomicAdd(wPhCatC2+4, weight2);
-		atomicAdd(nbPhCat+4, 1);
-		atomicAdd(tabCountObj+(5*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-	}
-	else if ( ph->H > 0 && ph->E > 0 && ph->S == 0)
-	{ // CAT 6 : 2 proc. H et E avant de toucher le R.
-		atomicAdd(wPhCatC+5, weight); atomicAdd(wPhCatC2+5, weight2);
-		atomicAdd(nbPhCat+5, 1);
-		atomicAdd(tabCountObj+(6*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-        //printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
-		//=(%f,%f)
-	}
-	else if ( ph->H == 0 && ph->E > 0 && ph->S > 0)
-	{ // CAT 7 : 2 proc. E et S avant de toucher le R.
-		atomicAdd(wPhCatC+6, weight); atomicAdd(wPhCatC2+6, weight2);
-		atomicAdd(nbPhCat+6, 1);
-		atomicAdd(tabCountObj+(7*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-	}	
-	else if ( ph->H > 0 && ph->E > 0 && ph->S > 0)
+	if ( le == 1)
 	{ // CAT 8 : 3 proc. H, E et S avant de toucher le R.
-		atomicAdd(wPhCatC+7, weight); atomicAdd(wPhCatC2+7, weight2);
-		atomicAdd(nbPhCat+7, 1);
-		atomicAdd(tabCountObj+(8*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-	}		
-    #else // If DOUBLE and not a new nvidia card
-	DatomicAdd(tabCountObj+(nbCy*indI)+indJ, weight);
+		atomicAdd(wPhCatC+5, weight);// atomicAdd(wPhCatC2+5, weight2);
+		// atomicAdd(nbPhCat+5, 1);
+		//atomicAdd(tabCountObj+(6*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+	}
+	if (le == 0) {
+        #if !defined(DOUBLE) || (defined(DOUBLE) && __CUDA_ARCH__ >= 600)
+		// All the beams reaching a receiver
+		atomicAdd(tabCountObj+(nbCy*indI)+indJ, weight);	
 
-	// Les huit catégories
-	if (ph->H == 0 && ph->E == 0 && ph->S == 0) 
-	{ // CAT 1 : aucun changement de trajectoire avant de toucher le R.
-	    DatomicAdd(wPhCatC, weight); DatomicAdd(wPhCatC2, weight2);// comptage poids
-		atomicAdd(nbPhCat, 1);     // comptage nombre de photons
-		DatomicAdd(tabCountObj+(nbCy*nbCx)+(nbCy*indI)+indJ, weight); // distri
+		// Les huit catégories
+		if (ph->H == 0 && ph->E == 0 && ph->S == 0) 
+		{ // CAT 1 : aucun changement de trajectoire avant de toucher le R.
+			atomicAdd(wPhCatC, weight); atomicAdd(wPhCatC2, weight2);// comptage poids
+			atomicAdd(nbPhCat, 1);     // comptage nombre de photons
+			atomicAdd(tabCountObj+(nbCy*nbCx)+(nbCy*indI)+indJ, weight); // distri
+		}
+		else if ( ph->H > 0 && ph->E == 0 && ph->S == 0)
+		{ // CAT 2 : only H avant de toucher le R.
+			atomicAdd(wPhCatC+1, weight); atomicAdd(wPhCatC2+1, weight2);
+			atomicAdd(nbPhCat+1, 1);
+			atomicAdd(tabCountObj+(2*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+		}
+		else if ( ph->H == 0 && ph->E > 0 && ph->S == 0)
+		{ // CAT 3 : only E avant de toucher le R.
+			atomicAdd(wPhCatC+2, weight); atomicAdd(wPhCatC2+2, weight2);
+			atomicAdd(nbPhCat+2, 1);
+			atomicAdd(tabCountObj+(3*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+		}
+		else if ( ph->H == 0 && ph->E == 0 && ph->S > 0)
+		{ // CAT 4 : only S avant de toucher le R.
+			atomicAdd(wPhCatC+3, weight); atomicAdd(wPhCatC2+3, weight2);
+			atomicAdd(nbPhCat+3, 1);
+			atomicAdd(tabCountObj+(4*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+		}
+		else if ( ph->H > 0 && ph->E == 0 && ph->S > 0)
+		{ // CAT 5 : 2 proc. H et S avant de toucher le R.
+			atomicAdd(wPhCatC+4, weight); atomicAdd(wPhCatC2+4, weight2);
+			atomicAdd(nbPhCat+4, 1);
+			atomicAdd(tabCountObj+(5*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+		}
+		else if ( ph->H > 0 && ph->E > 0 && ph->S == 0)
+		{ // CAT 6 : 2 proc. H et E avant de toucher le R.
+			atomicAdd(wPhCatC+5, weight); atomicAdd(wPhCatC2+5, weight2);
+			atomicAdd(nbPhCat+5, 1);
+			atomicAdd(tabCountObj+(6*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+			//printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
+			//=(%f,%f)
+		}
+		else if ( ph->H == 0 && ph->E > 0 && ph->S > 0)
+		{ // CAT 7 : 2 proc. E et S avant de toucher le R.
+			atomicAdd(wPhCatC+6, weight); atomicAdd(wPhCatC2+6, weight2);
+			atomicAdd(nbPhCat+6, 1);
+			atomicAdd(tabCountObj+(7*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+		}	
+		else if ( ph->H > 0 && ph->E > 0 && ph->S > 0)
+		{ // CAT 8 : 3 proc. H, E et S avant de toucher le R.
+			atomicAdd(wPhCatC+7, weight); atomicAdd(wPhCatC2+7, weight2);
+			atomicAdd(nbPhCat+7, 1);
+			atomicAdd(tabCountObj+(8*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+		}		
+        #else // If DOUBLE and not a new nvidia card
+		DatomicAdd(tabCountObj+(nbCy*indI)+indJ, weight);
+
+		// Les huit catégories
+		if (ph->H == 0 && ph->E == 0 && ph->S == 0) 
+		{ // CAT 1 : aucun changement de trajectoire avant de toucher le R.
+			DatomicAdd(wPhCatC;, weight); DatomicAdd(wPhCatC2, weight2);// comptage poids
+			atomicAdd(nbPhCat, 1);     // comptage nombre de photons
+			DatomicAdd(tabCountObj+(nbCy*nbCx)+(nbCy*indI)+indJ, weight); // distri
+		}
+		else if ( ph->H > 0 && ph->E == 0 && ph->S == 0)
+		{ // CAT 2 : only H avant de toucher le R.
+			DatomicAdd(wPhCatC+1, weight); DatomicAdd(wPhCatC2+1, weight2);
+			atomicAdd(nbPhCat+1, 1);
+			DatomicAdd(tabCountObj+(2*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+			//printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
+		}
+		else if ( ph->H == 0 && ph->E > 0 && ph->S == 0)
+		{ // CAT 3 : only E avant de toucher le R.
+			DatomicAdd(wPhCatC+2, weight); DatomicAdd(wPhCatC2+2, weight2);
+			atomicAdd(nbPhCat+2, 1);
+			DatomicAdd(tabCountObj+(3*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+		}
+		else if ( ph->H == 0 && ph->E == 0 && ph->S > 0)
+		{ // CAT 4 : only S avant de toucher le R.
+			DatomicAdd(wPhCatC+3, weight); DatomicAdd(wPhCatC2+3, weight2);
+			atomicAdd(nbPhCat+3, 1);
+			DatomicAdd(tabCountObj+(4*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+		}
+		else if ( ph->H > 0 && ph->E == 0 && ph->S > 0)
+		{ // CAT 5 : 2 proc. H et S avant de toucher le R.
+			DatomicAdd(wPhCatC+4, weight); DatomicAdd(wPhCatC2+4, weight2);
+			atomicAdd(nbPhCat+4, 1);
+			DatomicAdd(tabCountObj+(5*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+		}
+		else if ( ph->H > 0 && ph->E > 0 && ph->S == 0)
+		{ // CAT 6 : 2 proc. H et E avant de toucher le R.
+			DatomicAdd(wPhCatC+5, weight); DatomicAdd(wPhCatC2+5, weight2);
+			atomicAdd(nbPhCat+5, 1);
+			DatomicAdd(tabCountObj+(6*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+			//printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
+		}
+		else if ( ph->H == 0 && ph->E > 0 && ph->S > 0)
+		{ // CAT 7 : 2 proc. E et S avant de toucher le R.
+			DatomicAdd(wPhCatC+6, weight); DatomicAdd(wPhCatC2+6, weight2);
+			atomicAdd(nbPhCat+6, 1);
+			DatomicAdd(tabCountObj+(7*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+		}	
+		else if ( ph->H > 0 && ph->E > 0 && ph->S > 0)
+		{ // CAT 8 : 3 proc. H, E et S avant de toucher le R.
+			DatomicAdd(wPhCatC+7, weight); DatomicAdd(wPhCatC2+7, weight2);
+			atomicAdd(nbPhCat+7, 1);
+			DatomicAdd(tabCountObj+(8*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+		}
+        #endif // End of !defined(DOUBLE) || (defined(DOUBLE) && defined(NEW_CARDS))
 	}
-	else if ( ph->H > 0 && ph->E == 0 && ph->S == 0)
-	{ // CAT 2 : only H avant de toucher le R.
-		DatomicAdd(wPhCatC+1, weight); DatomicAdd(wPhCatC2+1, weight2);
-		atomicAdd(nbPhCat+1, 1);
-		DatomicAdd(tabCountObj+(2*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-		//printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
-	}
-	else if ( ph->H == 0 && ph->E > 0 && ph->S == 0)
-	{ // CAT 3 : only E avant de toucher le R.
-		DatomicAdd(wPhCatC+2, weight); DatomicAdd(wPhCatC2+2, weight2);
-		atomicAdd(nbPhCat+2, 1);
-		DatomicAdd(tabCountObj+(3*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-	}
-	else if ( ph->H == 0 && ph->E == 0 && ph->S > 0)
-	{ // CAT 4 : only S avant de toucher le R.
-		DatomicAdd(wPhCatC+3, weight); DatomicAdd(wPhCatC2+3, weight2);
-		atomicAdd(nbPhCat+3, 1);
-		DatomicAdd(tabCountObj+(4*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-	}
-	else if ( ph->H > 0 && ph->E == 0 && ph->S > 0)
-	{ // CAT 5 : 2 proc. H et S avant de toucher le R.
-		DatomicAdd(wPhCatC+4, weight); DatomicAdd(wPhCatC2+4, weight2);
-		atomicAdd(nbPhCat+4, 1);
-		DatomicAdd(tabCountObj+(5*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-	}
-	else if ( ph->H > 0 && ph->E > 0 && ph->S == 0)
-	{ // CAT 6 : 2 proc. H et E avant de toucher le R.
-		DatomicAdd(wPhCatC+5, weight); DatomicAdd(wPhCatC2+5, weight2);
-		atomicAdd(nbPhCat+5, 1);
-		DatomicAdd(tabCountObj+(6*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-        //printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
-	}
-	else if ( ph->H == 0 && ph->E > 0 && ph->S > 0)
-	{ // CAT 7 : 2 proc. E et S avant de toucher le R.
-		DatomicAdd(wPhCatC+6, weight); DatomicAdd(wPhCatC2+6, weight2);
-		atomicAdd(nbPhCat+6, 1);
-		DatomicAdd(tabCountObj+(7*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-	}	
-	else if ( ph->H > 0 && ph->E > 0 && ph->S > 0)
-	{ // CAT 8 : 3 proc. H, E et S avant de toucher le R.
-		DatomicAdd(wPhCatC+7, weight); DatomicAdd(wPhCatC2+7, weight2);
-		atomicAdd(nbPhCat+7, 1);
-		DatomicAdd(tabCountObj+(8*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-	}
-    #endif // End of !defined(DOUBLE) || (defined(DOUBLE) && defined(NEW_CARDS))
 }
 #endif // End OBJ3D
 
@@ -5529,7 +5584,7 @@ __device__ int ComputeBox(int* ith, int* iphi, int* il,
     return 1;
 }
 
-//#ifdef VERBOSE_PHOTON
+#ifdef VERBOSE_PHOTON
 __device__ void display(const char* desc, Photon* ph) {
     //
     // display the status of the photon (only for thread 0)
@@ -5589,7 +5644,7 @@ __device__ void display(const char* desc, Photon* ph) {
         printf("\n");
     }
 }
-//#endif
+#endif
 
 __device__ void modifyUV( float3 v0, float3 u0, float cTh, float psi, float3 *v1, float3 *u1){ 
     float sTh, cPsi, sPsi;

@@ -244,6 +244,7 @@ public:
 	#endif
     #if defined(BACK) &&  defined(OBJ3D)
 	float3 posIni;
+	double3 vecIni;
 	#endif
 private:
 };

@@ -336,6 +336,8 @@ class CusForward(object):
     CFY  : Size in Y (only for FF LMODE)
     CFTX : Translation in x axis (only for FF LMODE)
     CFTY : Translation in y axis (only for FF LMODE)
+    FOV  : Field of view or half-angle of the sun (only for FF LMODE)
+    TYPE : Sampling type, 2 choices: 'lambertian' or 'isotropic' (only for FF LMODE)
     LMODE (Launching mode) : RF = Restricted Forward OR FF = Full Forward
                              RF --> Launch the photons such that the direct beams
                                     fill only reflector objects
@@ -343,18 +345,26 @@ class CusForward(object):
                                     whrere the beams at the center, with the solar
                                     dir, targets by default the origin point (0,0,0)
     '''
-    def __init__(self, CFX=0., CFY=0., CFTX = 0., CFTY = 0., LMODE = "RF"):
+    def __init__(self, CFX=0., CFY=0., CFTX = 0., CFTY = 0., FOV = 0., TYPE = "lambertian", LMODE = "RF"):
+
+        if (TYPE == "lambertian"): TYPE = 1
+        elif (TYPE == "isotropic"): TYPE = 2
+        elif (TYPE == "disk"): TYPE = 3
+        else: raise NameError('You must choose lambertian or isotropic sampling')
+
         self.dict = {
             'CFX':   CFX,
             'CFY':   CFY,
-            'CFTX':   CFTX,
-            'CFTY':   CFTY,
+            'CFTX':  CFTX,
+            'CFTY':  CFTY,
+            'FOV':   FOV,
+            'TYPE':  TYPE,
             'LMODE': LMODE
         }
         
     def __str__(self):
         return 'CusForward=-CFX{CFX}-CFY{CFY}-CFTX{CFTX}-CFTY{CFTY}'.format(**self.dict) + \
-            '-LMODE{LMODE}'.format(**self.dict)
+            '-FOV{FOV}-TYPE{TYPE}-LMODE{LMODE}'.format(**self.dict)
 
 class CusBackward(object):
     '''
@@ -365,6 +375,8 @@ class CusBackward(object):
               (Zenith> 90 for downward looking, <90 for upward, default Zenith)
     ALDEG   : Launch in a solid angle where alpha is the half-angle of the cone
     V       : Direction but represented by a Vector type, if not None replace TH, PH
+    REC     : Receiver object must be specified in and only in BR mode
+    TYPE    : Sampling type : 2 choices: 'lambertian' or 'isotropic' (only BR mode)
     LMODE (Launching mode) : B = basic Backward, BR = Backward with receiver
                              B -> Launch the photons from a given point in a given
                                   direction (eventually can choose a ramdom vector
@@ -375,25 +387,29 @@ class CusBackward(object):
                                   ramdom vector in a solid angle delimited by ALDEG)
     '''
     def __init__(self, POS = Point(0., 0., 0.), THDEG = 0., PHDEG = 0., V = None,
-                 ALDEG = 0., REC = None, LMODE = "B"):
+                 ALDEG = 0., REC = None, TYPE = "lambertian", LMODE = "B"):
 
         if (isinstance(V, Vector)): THDEG, PHDEG = convertVtoAngles(V)
         elif (V != None): raise NameError('V argument must be a Vector')
         if LMODE == "BR" and not isinstance(REC, Entity):
             raise NameError('In BR LMODE you have to specify a receiver!')
-        
+        if (TYPE == "lambertian"): TYPE = 1
+        elif (TYPE == "isotropic"): TYPE = 2
+        else: raise NameError('You must choose lambertian or isotropic sampling')
+
         self.dict = {
             'POS':    POS,
             'THDEG':  THDEG,
             'PHDEG':  PHDEG,
             'ALDEG':  ALDEG,
             'REC':    REC,
+            'TYPE':   TYPE,
             'LMODE':  LMODE
         }
 
     def __str__(self):
         return 'CusBackward:-POS={POS}-THDEG={THDEG}-PHDEG={PHDEG}'.format(**self.dict) + \
-            '-ALDEG={ALDEG}-LMODE={LMODE}'.format(**self.dict)
+            '-ALDEG={ALDEG}-TYPE{TYPE}-LMODE={LMODE}'.format(**self.dict)
     
 class Smartg(object):
     '''Initialization of the Smartg object
@@ -709,15 +725,19 @@ class Smartg(object):
                                 ' (cusForward or cusBackward) is prohibited!')
             elif (cusL.dict['LMODE'] == "B"):
                 sensor = Sensor(POSX=cusL.dict['POS'].x, POSY=cusL.dict['POS'].y, POSZ=cusL.dict['POS'].z,
-                                THDEG=cusL.dict['THDEG'], PHDEG=cusL.dict['PHDEG'], LOC='ATMOS')
+                                THDEG=cusL.dict['THDEG'], PHDEG=cusL.dict['PHDEG'], LOC='ATMOS',
+                                FOV=0.0, TYPE=0)
+                                #FOV=cusL.dict['ALDEG'], TYPE=cusL.dict['TYPE'])
             elif (cusL.dict['LMODE'] == "BR"):
                 sensor = Sensor(POSX=cusL.dict['REC'].transformation.transx,
                                 POSY=cusL.dict['REC'].transformation.transy,
                                 POSZ=cusL.dict['REC'].transformation.transz,
-                                THDEG=cusL.dict['THDEG'], PHDEG=cusL.dict['PHDEG'], LOC='ATMOS')
+                                THDEG=cusL.dict['THDEG'], PHDEG=cusL.dict['PHDEG'], LOC='ATMOS',
+                                FOV=0.0, TYPE=0)
+                                #FOV=cusL.dict['ALDEG'], TYPE=cusL.dict['TYPE'])
             # if (cusL.dict['LMODE'] == "BR"):
             #     if myObjects == None: myObjects = True
-        
+        print("TYPE=", cusL.dict['TYPE'])
         if ((myObjects is not None) or (cusL is not None)):
             # Prendre en compte la direction du soleil avec l'angle zenithal et azimuth
             vSun = convertAnglestoV(THETA=THVDEG, PHI=PHVDEG, TYPE="Sun") 
@@ -1204,8 +1224,14 @@ class Smartg(object):
             elif ((SIM == -1) or (SIM == 0)):  
                 sensor2 = [Sensor(THDEG=180.-THVDEG, PHDEG=PHVDEG+180., LOC='SURF0P')] 
             else:
-                sensor2 = [Sensor(POSX=X0.get()[0], POSY=X0.get()[1], POSZ=X0.get()[2], THDEG=180.-THVDEG, PHDEG=PHVDEG+180., LOC='ATMOS')] 
-
+                if (cusL is not None): # for FF mode
+                    sensor2 = [Sensor(POSX=X0.get()[0], POSY=X0.get()[1], POSZ=X0.get()[2],
+                                      THDEG=180.-THVDEG, PHDEG=PHVDEG+180., LOC='ATMOS')]
+                                      #FOV=0.0, TYPE=0)]
+                                      #FOV=cusL.dict['FOV'], TYPE=cusL.dict['TYPE'])]
+                else:
+                    sensor2 = [Sensor(POSX=X0.get()[0], POSY=X0.get()[1], POSZ=X0.get()[2], THDEG=180.-THVDEG, PHDEG=PHVDEG+180., LOC='ATMOS')]
+            
         if isinstance(sensor, Sensor):
             sensor2=[sensor]
         if isinstance(sensor, list):
@@ -1374,7 +1400,10 @@ class Smartg(object):
         weightR = 0 # for the attenuation loss
         if (TC is not None):
             if (cusL is None):
-                cMatVisuRecep[:][:][:] = cMatVisuRecep[:][:][:]
+                cMatVisuRecep[:][:][:] = (cMatVisuRecep[:][:][:]*nbCx*nbCy)/NBPHOTONS
+                for i in range (0, 8):
+                    categories[(i*5)] /= NBPHOTONS
+                    categories[(i*5)+3] /= NBPHOTONS
             elif (cusL.dict['LMODE'] != "B" and cusL.dict['LMODE'] != "BR"):
                 weightR = categories[5] # for the att loss, weight of cat2 absorbed by the receiver
                 for i in range (0, 9):
@@ -1383,8 +1412,20 @@ class Smartg(object):
                     categories[(i*5)] *= ((surfMir)/(TC*TC*nbCx*nbCy*NBPHOTONS))
                     categories[(i*5)+3] *= ((surfMir)/(TC*TC*nbCx*nbCy*NBPHOTONS))
             else:
-                cMatVisuRecep[:][:][:] = cMatVisuRecep[:][:][:]/(TC*TC*NBPHOTONS)
-
+                normBR = 2
+                if (cusL.dict['TYPE'] == 1):
+                    normBR = 1-np.cos(np.radians(cusL.dict['ALDEG'])) #lambertian sampling normalization
+                elif (cusL.dict['TYPE'] == 2):
+                    normBR = 2*(1-np.cos(np.radians(cusL.dict['ALDEG']))) #isotropic sampling normalization
+                cMatVisuRecep[:][:][:] = (cMatVisuRecep[:][:][:]*nbCx*nbCy*normBR)/(NBPHOTONS*2*(1-np.cos(np.radians(SUN_DISC)))) #np.tan(np.radians(SUN_DISC))**2)#0.0046426*0.0046426)#TC*TC*NBPHOTONS)
+                for i in range (0, 8):
+                    if i != 5 :
+                        categories[(i*5)] /= NBPHOTONS*2*(1-np.cos(np.radians(SUN_DISC)))/normBR#np.tan(np.radians(SUN_DISC))**2#0.0046426*0.0046426
+                        categories[(i*5)+3] /= NBPHOTONS*2*(1-np.cos(np.radians(SUN_DISC)))/normBR#np.tan(np.radians(SUN_DISC))**2#0.0046426*0.0046426
+                    else :
+                        categories[(i*5)] /= NBPHOTONS#categories[(i*5)+1]/2
+                        categories[(i*5)+3] /= NBPHOTONS#categories[(i*5)+1]/2
+        print("NBPHOTONS=", NBPHOTONS)
         # If there are no heliostats --> there is no STP and then no analyses of optical losses
         if (nb_H <= 0):
             dicSTP = None; vecLoss = None;
@@ -2003,11 +2044,14 @@ def InitConst(surf, env, NATM, NOCE, mod,
             copy_to_device('CFYd', cusL.dict['CFY'], np.float32)
             copy_to_device('CFTXd', cusL.dict['CFTX'], np.float32)
             copy_to_device('CFTYd', cusL.dict['CFTY'], np.float32)
+            copy_to_device('ALDEGd', cusL.dict['FOV'], np.float32)
+            copy_to_device('TYPEd', cusL.dict['TYPE'], np.int32)
             copy_to_device('LMODEd', 2, np.int32)
         if (  (cusL != None) and (cusL.dict['LMODE'] == "B" or cusL.dict['LMODE'] == "BR")  ):
             copy_to_device('THDEGd', cusL.dict['THDEG'], np.float32)
             copy_to_device('PHDEGd', cusL.dict['PHDEG'], np.float32)
             copy_to_device('ALDEGd', cusL.dict['ALDEG'], np.float32)
+            copy_to_device('TYPEd', cusL.dict['TYPE'], np.int32)
         if (  (cusL != None) and (cusL.dict['LMODE'] == "B")  ):    
             copy_to_device('LMODEd', 3, np.int32)
         if (  (cusL != None) and (cusL.dict['LMODE'] == "BR")  ):

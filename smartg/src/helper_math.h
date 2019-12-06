@@ -3374,4 +3374,17 @@ inline __device__ float4x4 perfect_mirrorRF()
 		0. , 0. , 0.  , -1.F 
 		);
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// Gamma function of limb model (see Koepke et al. 2000)
+////////////////////////////////////////////////////////////////////////////////
+inline __device__ double GammaL( double lambd, double r)
+{
+	double Beta, G;
+	Beta = ( 3*(6.63e-34)*(2.998e+8)*(pow(2., 0.25)) )/( 8*(1.38e-23)*(lambd*1e-9)*5740 );
+
+	G = ( 1 + (Beta*sqrt(1- r*r)) ) / (1+Beta);
+	return G;
+}
 #endif
+
