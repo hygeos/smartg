@@ -104,37 +104,6 @@ extern "C" {
     #endif
 
 
-    //
-    // main loop
-    //
-
-	// #ifdef OBJ3D
-	// if (idx == 0)
-	// {
-	// 	Vector<float> myVec1(1.f, 1.f, 1.f);
-	// 	Vector<float> myVec2(5.f, 5.f, 5.f);
-	// 	printf("vec1=(%f, %f, %f)\n", myVec1.x, myVec1.y, myVec1.z);
-	// 	printf("vec2=(%f, %f, %f)\n", myVec2.x, myVec2.y, myVec2.z);
-	// 	myVec1 -= myVec2;
-	// 	printf("vec1=(%f, %f, %f)\n", myVec1.x, myVec1.y, myVec1.z);
-	// 	float3 vecf= make_float3(3.f, 3.f, 3.f);
-	// 	Vector<float> myVec3(vecf);
-	// 	printf("vec3=(%f, %f, %f)\n", myVec3.x, myVec3.y, myVec3.z);
-	// 	for (int i = 0; i < 3; ++i)
-	// 	{
-	// 		printf("vec3[%i]=(%f)\n", i, myVec3[i]);
-	// 	}
-	// 	Vectord myVec4(0., 5.368, -2.511147);
-	// 	printf("vec4=(%lf, %lf, %lf)\n", myVec4.x, myVec4.y, myVec4.z);
-	// 	double3 vecd= make_double3(0., 5.368, -2.511147);
-	// 	Vectord myVec5(vecd);
-	// 	printf("vec5=(%lf, %lf, %lf)\n", myVec5.x, myVec5.y, myVec5.z);
-	// 	Pointd pd(0.88987, 0.368, -1.1147);
-	// 	Vectord myVec6(pd);
-	// 	printf("vec6=(%lf, %lf, %lf)\n", myVec6.x, myVec6.y, myVec6.z);
-	// }
-	// #endif
-
 	while (this_thread_active > 0 and nThreadsActive[0] > 0) {
 		iloop += 1;
 		
@@ -501,6 +470,14 @@ extern "C" {
 
             // Lambertian case
 			else { 
+                #ifdef SIF
+			    /* Choose the scatterer */
+                choose_emitter(&ph, prof_atm, prof_oc,  spectrum, 
+							 &rngstate); 
+                #ifdef VERBOSE_PHOTON
+                display("CHOOSE EMITTER", &ph);
+                #endif
+                #endif
                 if (LEd == 1 && SIMd != ATM_ONLY) {
                   int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
                   int iph0 = idx%NBPHId;
@@ -835,55 +812,6 @@ extern "C" {
 
 
 /**********************************************************
-*	> Kernel 2 : Wavelength dependent absorption summation
-***********************************************************/
-
-extern "C" {
-__global__ void launchKernel2 (unsigned long long NPHOTON, unsigned long long NLAYER, unsigned long long NWVL,
-        unsigned long long NTHREAD, unsigned long long NGROUP, unsigned long long NBUNCH, unsigned long long NP_REST, unsigned long long NWVL_LOW,
-        double *res, double *ab, float *cd, float *S, float *weight, unsigned char *iw_low, float *ww_low)
-{
-  const unsigned long long idx = threadIdx.x + blockDim.x * blockIdx.x;
-  unsigned long long n,nstart,nstop,ns;
-  unsigned long long iw,ig,l,s,iram;
-  unsigned long long nl,li;
-  double wabs; // absorption OD of a photon at the current wavelength;
-  float wsca1,wsca2,wsca;
-  unsigned long long iw1,iw2;
-
-  if (idx<NTHREAD) {
-    iw = idx%NWVL ; // index of current wavelength
-    ig = idx%NGROUP ;   // index of current group
-    nstart = ig    *NBUNCH; // Start index of the photon's stack
-    nstop  = (ig+1)*NBUNCH + (ig==(NGROUP-1))*NP_REST; // end index of photon's stack
-                                    // last group has some remaining phton's
-    iw1 = iw_low[iw];    // bracketing indices of low resolution wavelength grid
-    iw2 = iw1+1;
-
-    for (n=nstart;n<nstop;n++) { // Loop on photon number
-        //interpolating scattering 'low resolution' weights 
-        wsca1 = weight[iw1+NWVL_LOW*n];
-        wsca2 = weight[iw2+NWVL_LOW*n];
-        wsca  = ww_low[iw] * (wsca2-wsca1) + wsca1;
-        //start the computation of absorption weights
-        wabs = 0.;
-        for (l=0;l<NLAYER;l++) { // Loop on vertical layer
-            nl = l   + NLAYER*n;
-            li = iw  + NWVL*l;
-            wabs += (double)cd[nl] * ab[li];
-        }
-        for (s=0;s<4;s++) {
-            ns = s + 4*n;
-            atomicAdd(res+iw+NWVL*s, (double)S[ns] * exp(-wabs) * (double)wsca);
-        }
-    }
-  }
-}
-}
-
-
-
-/**********************************************************
 *	> Physical Processes
 ***********************************************************/
 /* initPhoton
@@ -916,6 +844,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     #endif
 	
     ph->nint = 0;
+    ph->nref = 0;
 	ph->weight = WEIGHTINIT;
 
 	// Stokes parameters initialization according to natural sunlight
@@ -960,7 +889,8 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     #endif
 
     if(ph->loc == SURF0P){
-        ph->layer   = NATMd;
+        //ph->layer   = NATMd;
+        ph->layer   = NATMd-1;
         ph->tau     = 0.F;
         ph->tau_abs = 0.F;
         epsilon     = 0.F;
@@ -1011,6 +941,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
             ilayer++;
         }
         ph->layer = ilayer;
+        #if !defined(ALT_PP) && !defined(SPHERIQUE)
         dz_i    = fabs(prof_oc[ilayer].z - prof_oc[ilayer-1].z);
         dz      = fabs(tab_sensor[ph->is].POSZ - prof_oc[ilayer-1].z) ;
         epsilon = fabs(__fdividef(dz,dz_i));
@@ -1022,6 +953,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
         delta_i = fabs(prof_oc[ilayer+ph->ilam*(NOCEd+1)].OD_abs - prof_oc[ilayer-1+ph->ilam*(NOCEd+1)].OD_abs);
         ph->tau_abs = epsilon * delta_i + (prof_oc[0+ph->ilam*(NOCEd+1)].OD_abs -
                                            prof_oc[ilayer-1+ph->ilam*(NOCEd+1)].OD_abs); 
+        #endif
 
         //if(idx==0) printf("%i %f %f %f %f\n",ilayer, prof_oc[ilayer].z, ph->tau, delta_i, epsilon);
         #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
@@ -1054,7 +986,11 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
         while (( prof_atm[ilayer].z > POSZd_alt) && (ilayer < NATMd)) {
             ilayer++;
         }
+        //if (POSZd_alt==0.)ph->layer = NATMd-1;
+        //else ph->layer = ilayer;
         ph->layer = ilayer;
+
+        #if !defined(ALT_PP) && !defined(SPHERIQUE)
         dz_i    = fabs(prof_atm[ilayer-1].z - prof_atm[ilayer].z);
         dz      = fabs(POSZd_alt - prof_atm[ilayer].z) ;
         epsilon = fabs(__fdividef(dz,dz_i));
@@ -1065,6 +1001,8 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
         delta_i = fabs(prof_atm[ilayer+ph->ilam*(NATMd+1)].OD_abs - prof_atm[ilayer-1+ph->ilam*(NATMd+1)].OD_abs);
         ph->tau_abs = epsilon * delta_i + (prof_atm[NATMd+ph->ilam*(NATMd+1)].OD_abs -
                                            prof_atm[ilayer+ph->ilam*(NATMd+1)].OD_abs); 
+        #endif
+
         #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
         int DL=(NLAMd-1)/(NLOWd-1);
         for (int k=0; k<NLOWd; k++) {
@@ -1117,31 +1055,6 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 	float THRAD, PHRAD;
 	#endif
 	
-    /*if (MId != 0) { // Multiple Init Direction
-        if (MId <=0) { 
-            // Random selection of Zenith init angle
-            ph->ith = __float2uint_rz(RAND * NBTHETAd);
-            // Random selection of Azimuth init angle
-            if (MId == -1) ph->iph = __float2uint_rz(RAND * NBPHId);
-            else {
-                ph->iph = ph->ith; // Zip option iph follows ith;
-            }
-        }
-        else {
-            // Random selection of Zenith and (zipped) Azimuth init angles according to MId and NLAMd
-            int NL = NLAMd/MId;
-            int NT = NBTHETAd/MId;
-            int offset = ph->ilam/NL;
-            ph->ith = __float2uint_rz(RAND * NT) + offset*NT;
-            ph->iph = ph->ith;
-        }
-		#ifdef OBJ3D
-		THRAD = DEUXPI/2. - tabthv[ph->ith];
-		PHRAD = DEUXPI/2. - tabphi[ph->iph];
-        cTh = cosf(THRAD);
-        cPh = cosf(PHRAD);
-    }*/
-    
     ph->ith = 0;
     ph->iph = 0;
 
@@ -1197,6 +1110,10 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     for (int k=0; k<(NOCEd+1); k++) ph->cdist_oc[k] = 0.F;
     #endif
     for (int k=0; k<NLOWd; k++) ph->weight_sca[k] = 1.0F;
+    ph->nsif = 0;
+    #ifdef SIF
+	ph->emitter = UNDEF;
+    #endif
     #endif
 
     // Init photon counters
@@ -2916,10 +2833,52 @@ __device__ void scatter(Photon* ph,
         if (HORIZd) ph->weight /= fabs(ph->v.z); 
     }
 
-	//ph->scatterer = UNDEF;
 	if(!le) ph->scatterer = UNDEF;
 	
 }
+
+#ifdef SIF
+__device__ void choose_emitter(Photon* ph,
+        struct Profile *prof_atm, struct Profile *prof_oc,
+		struct Spectrum *spectrum,
+        struct RNG_State *rngstate) {
+
+  
+	float pfluo;
+    float fAPAR=0.5;
+    float QY=0.1; //Fluoresecnce yield
+    float fluo_p=1.F; // Fluo power normalization
+	
+	if(ph->loc==SURF0P){
+		/* SIF probability */
+		if ( (fAPAR*QY) > RAND && (ph->nsif==0)){
+			ph->emitter = SIF_EM; // SIF index
+            ph->nsif = 1;
+		    /* Compute fluorescence power*/
+            // PAR
+            float PAR=0.F;
+            int il=0;
+            while ( spectrum[il].lambda <= 700.){
+                if (spectrum[il].lambda >= 400.) PAR += ph->weight_sca[il];
+                il++;
+            }
+	        ph->weight *= PAR * fluo_p;
+            // reinitialization
+            ph->nint = 0;
+            ph->nref = 0;
+            ph->nrrs = 0;
+            for (int k=0; k<NLOWd; k++) ph->weight_sca[k] = 1.F;
+            for (int k=0; k<NATMd; k++) ph->cdist_atm[k] = 0.F;
+            for (int k=0; k<NOCEd; k++) ph->cdist_oc[k] = 0.F;
+		} else {
+			ph->emitter = SOLAR_REF; // SOLAR reflection index
+            ph->nref += 1;
+            ph->nint += 1;
+		}	
+	}
+}
+#endif
+
 
 
 __device__ void choose_scatterer(Photon* ph,
@@ -2940,7 +2899,7 @@ __device__ void choose_scatterer(Photon* ph,
 		/* Elastic scattering    */
 		if ( pmol < RAND ){
 			ph->scatterer = RAY; // Rayleigh index
-            ph->nrrs +=1; //  RRS
+            if (RAND >fRRS_air(ph->wavel, 50.F)) ph->nrrs +=1; //  RRS probability, averaged directional
 		} else {
 			ph->scatterer = PTCLE;	; // particle index
 		}	
@@ -3816,7 +3775,10 @@ __device__ void surfaceLambert(Photon* ph, int le,
 		return;
 	}
 
+    #ifndef SIF
     ph->nint += 1;
+    ph->nref += 1;
+	#endif
 	
 	#ifdef OBJ3D
 	if(IsAtm == 0 && LMODEd == 1){ph->loc = NONE; return;}
@@ -3905,10 +3867,21 @@ __device__ void surfaceLambert(Photon* ph, int le,
         #ifndef OPT3D
 		ph->layer = NATMd;
         #endif
+        #ifndef SIF
 		ph->weight *= spectrum[ph->ilam].alb_surface;  /*[Eq. 16,39]*/
         if (ENVd==2) {
             ph->weight *= checkerboard(ph->pos);
         }
+        ph->nref+=1;
+        #else
+        if (ph->emitter==SOLAR_REF){
+		    ph->weight *= spectrum[ph->ilam].alb_surface;  /*[Eq. 16,39]*/
+            if (ENVd==2) {
+                ph->weight *= checkerboard(ph->pos);
+            }
+            ph->nref+=1;
+        }
+        #endif
 	}
 	else
 	{
@@ -3919,6 +3892,9 @@ __device__ void surfaceLambert(Photon* ph, int le,
 		ph->weight *= spectrum[ph->ilam].alb_seafloor; /*[Eq. 16,39]*/
 	}
 
+    #ifdef SIF
+	if(!le) ph->emitter = UNDEF;
+    #endif
 } //surfaceLambert
 
 
@@ -5268,7 +5244,7 @@ __device__ void countPhoton(Photon* ph,
           unsigned long long counter2;
           counter2=atomicAdd(NPhotonsOut, 1);
           if (counter2 >= MAX_HIST) return;
-          unsigned long long KK2 = K*(NATMd+NOCEd+4+NLOWd+1); /* Number of information per local estmate photon (Record length)*/
+          unsigned long long KK2 = K*(NATMd+NOCEd+4+NLOWd+3); /* Number of information per local estmate photon (Record length)*/
           //unsigned long long KK2 = K*(NATMd+NOCEd+4+NLOWd); /* Number of information per local estmate photon (Record length)*/
           unsigned long long KKK2= KK2 * MAX_HIST; /* Number of individual information per vertical Level (Number of Records)*/
           unsigned long long LL2;
@@ -5301,12 +5277,15 @@ __device__ void countPhoton(Photon* ph,
 
           for (int n=0; n<NLOWd; n++){
                 LL2 = counter2*KK2 +  (n+NATMd+NOCEd+4)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
-                atomicAdd(tabCount3+LL2, weight_sca[n]);
+                //atomicAdd(tabCount3+LL2, weight_sca[n]);
                 tabCount3[LL2]= weight_sca[n];
           }
           LL2 = counter2*KK2 +  (NLOWd+NATMd+NOCEd+4)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
-          //atomicAdd(tabCount3+LL2, 1.);
           tabCount3[LL2]= (float)(ph->nrrs>=1);
+          LL2 = counter2*KK2 +  (NLOWd+NATMd+NOCEd+4+1)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          tabCount3[LL2]= (float)(ph->nref);
+          LL2 = counter2*KK2 +  (NLOWd+NATMd+NOCEd+4+2)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          tabCount3[LL2]= (float)(ph->nsif);
        } // HISTd==1
 
        #ifdef DOUBLE
@@ -5603,6 +5582,15 @@ __device__ void display(const char* desc, Photon* ph) {
         printf(" delta=");
         for (int k=0; k<ph->nevt+1; k++) printf("%7.5f ",ph->epsilon_prev[k]);
         #endif
+        #ifdef SIF
+        switch(ph->emitter) {
+            case -1: printf("emitter =   UNDEF"); break;
+            case 0: printf("emitter =     SIF"); break;
+            case 1: printf("emitter =   SOLAR_REF"); break;
+            default:
+                    printf("emitter =   UNDEF");
+        }
+        #endif
         #endif
         printf("\n");
     }
@@ -5713,6 +5701,7 @@ __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
 	ph_le->nrrs=ph->nrrs;
     ph_le->pos = ph->pos; // float3
     ph_le->nint = ph->nint;
+    ph_le->nref = ph->nref;
     ph_le->is = ph->is;
     ph_le->iph = ph->iph;
     ph_le->ith = ph->ith;
@@ -5734,6 +5723,10 @@ __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
     for (k=0; k<(NOCEd+1); k++) ph_le->cdist_oc[k]  = ph->cdist_oc[k];
     #endif
     for (k=0; k<NLOWd; k++) ph_le->weight_sca[k] = ph->weight_sca[k];
+    ph_le->nsif = ph->nsif;
+    #ifdef SIF
+    ph_le->emitter = ph->emitter;
+    #endif
     #endif
 
     #ifdef BACK
@@ -5853,6 +5846,61 @@ __device__ void MakeLocalFrame(float3 pos, float3* Nx, float3* Ny, float3* Nz) {
 	*Ny = normalize(cross(*Nz, make_float3(1.0, 0.0, 0.0)));
 	*Nx = normalize(cross(*Ny, *Nz));
 }
+
+
+/*Functions for RRS*/
+
+//Bates, Planel. Space Sa., Vol.32, No.6, pp. 785-790. 1984 
+__device__ float Fk_N2(float lam){
+    /*
+    lam in nm
+    */
+    return 1.034 + __fdividef(3.170*1e-4, lam*lam*1e-6);
+}
+
+__device__ float Epsilon_N2(float lam){
+    /*
+    lam in nm
+    */
+    return (Fk_N2(lam) -1.F) * 4.5;;
+}
+
+__device__ float Fk_O2(float lam){
+    /*
+    lam in nm
+    */
+    return 1.096 + __fdividef(1.385*1e-3, lam*lam*1e-6)  
+                 + __fdividef(1.448*1e-4, lam*lam*lam*lam*1e-12) ;
+}
+
+__device__ float Epsilon_O2(float lam){
+    /*
+    lam in nm
+    */
+    return (Fk_O2(lam) -1.F) * 4.5;;
+}
+
+__device__ float Epsilon_air(float lam){
+    /*
+    lam in nm
+    */
+    return Epsilon_N2(lam) * X_N2 + Epsilon_O2(lam) * X_O2;
+}
+
+// Kattawar, Astrophysical Journalo, Part 1, vol. 243, Feb. 1, 1981, p. 1049-1057.
+__device__ float fRRS_air(float lam, float theta){
+    /*
+    lam in nm
+    theta in deg
+    */
+    float eps = Epsilon_air(lam);
+    float ct  = cosf(theta*DEUXPI/360.);
+    float num = (180.+13.*eps) + (180.+eps)*ct*ct;
+    float den = (180.+52.*eps) + (180.+4.*eps)*ct*ct;
+    return __fdividef(num, den);
+}
+
+/*---------------*/
 
 #ifdef PHILOX
 

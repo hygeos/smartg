@@ -22,6 +22,8 @@
 ***********************************************************/
 
 #define WEIGHTINIT 1.F
+#define X_O2 0.212 // vol mixing ratio of O2 for RRS
+#define X_N2 0.788 // vol mixing ratio of N2 for RRS
 
 // THRESHOLD for SMALL ANGLE VALUE
 #define VALMIN 0.000001F
@@ -39,7 +41,7 @@
 #define MAX_NEVT 500 // Max number of scattering evts stored in photon in the ALIS procedure in basic plane parallel mode
 #define MAX_NLOW 101 // Max number of wavelengths stored in the ALIS scattering correction
 #define MAX_NLAYER 200 // Max number of vertical layers recorded in ALIS procedure in spherical or alternate PP mode
-#define MAX_HIST 4096*4096 // Max number of photon's histories
+#define MAX_HIST 2048*2048 // Max number of photon's histories
 
 
 
@@ -61,6 +63,9 @@
 #define PTCLE       1
 #define CHLFLUO     2
 
+/* Possible Emitters */
+#define SOLAR_REF   0
+#define SIF_EM         1
 
 /* Possible Simulations */
 #define ATM_ONLY      -2
@@ -210,12 +215,18 @@ public:
     // Cartesian coordinates of the photon
     float3 pos;
 
+    #ifdef SIF
+	// emitter
+    short int emitter;
+    #endif
 	// scatterer
 	short int scatterer;
-	short int nrrs; // Number of Atmospheric Rotational Raman Scattering
+	unsigned short nrrs; // Number of Atmospheric Rotational Raman Scattering
 
     // Number of interaction (scattering or reflection/transmission)
     unsigned short nint;
+    // Number of reflection
+    unsigned short nref;
 
     #ifdef ALIS
     #if !defined(ALT_PP) && !defined(SPHERIQUE)
@@ -229,6 +240,7 @@ public:
     float cdist_oc[MAX_NLAYER];
     #endif
     float weight_sca[MAX_NLOW]; // Table of scattering weigths for Importance Sampling correction
+    unsigned short nsif;
     #endif
 
     #ifdef SPHERIQUE

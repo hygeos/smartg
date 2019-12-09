@@ -463,14 +463,20 @@ class Smartg(object):
             * PHILOX
             * CURAND_PHILOX
 
-        device: device number (str or int) to be set to CUDA_DEVICE environment variable for use by 'import pycuda.autoinit'
+        - device: device number (str or int) to be set to CUDA_DEVICE environment variable for use by 'import pycuda.autoinit'
             see https://documen.tician.de/pycuda/util.html
             Please note that after the first pycuda.autoinit, the device used by pycuda will not change.
+        - sif : boolean, if True Sun Induced Fluorescence included, default False
+
+        - rng: choice of pseudo-random number generator:
+                * PHILOX
+                * CURAND_PHILOX
+
     '''
     def __init__(self, pp=True, debug=False,
                  verbose_photon=False,
                  double=True, alis=False, back=False, bias=True, alt_pp=False, obj3D=False, 
-                 opt3D=False, device=None, rng='PHILOX'):
+                 opt3D=False, device=None, sif=False, rng='PHILOX'):
         assert not ((device is not None) and ('CUDA_DEVICE' in os.environ)), "Can not use the 'device' option while the CUDA_DEVICE is set"
 
         if device is not None:
@@ -492,7 +498,7 @@ class Smartg(object):
         # compilation option
         #
         options = []
-        #options = ['-G']
+        ##options = ['-G']
         #options = ['-g', '-G']
         if not pp:
             # spherical shell calculation
@@ -519,6 +525,8 @@ class Smartg(object):
             options.append('-DDOUBLE')
         if alis:
             options.append('-DALIS')
+        if sif:
+            options.append('-DSIF')
         if back:
             # backward mode
             options.append('-DBACK')
@@ -552,7 +560,7 @@ class Smartg(object):
 
         # load the kernel
         self.kernel = self.mod.get_function('launchKernel')
-        self.kernel2 = self.mod.get_function('launchKernel2')
+        #self.kernel2 = self.mod.get_function('launchKernel2')
 
         #
         # common attributes
@@ -801,7 +809,7 @@ class Smartg(object):
         NLVL = 6
 
         # warning! values defined in communs.h 
-        MAX_HIST = 4096 * 4096
+        MAX_HIST = 2048 * 2048
         MAX_NLOW = 101
 
         # number of Stokes parameters of the radiation field
@@ -1052,7 +1060,7 @@ class Smartg(object):
          NPhotonsOutTot, sigma, Nkernel, secs_cuda_clock, cMatVisuRecep, vecLoss, matCats
         ) = loop_kernel(NBPHOTONS, faer, foce,
                         NLVL, NATM, NOCE, MAX_HIST, NLOW, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
-                        NLAM, NSENSOR, self.double, self.kernel, self.kernel2, p, X0, le, tab_sensor, spectrum,
+                        NLAM, NSENSOR, self.double, self.kernel, None, p, X0, le, tab_sensor, spectrum,
                         prof_atm_gpu, prof_oc_gpu,
                         wl_proba_icdf, stdev, self.rng, myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, hist=hist)
 
@@ -1944,7 +1952,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
     
     if (NATM+NOCE >0) : tabDistTot = gpuzeros((NLVL,NATM+NOCE,NSENSOR,NBTHETA,NBPHI), dtype=np.float64)
     else : tabDistTot = gpuzeros((NLVL,1,NSENSOR,NBTHETA,NBPHI), dtype=np.float64)
-    if hist : tabHistTot = gpuzeros((MAX_HIST,(NATM+NOCE+NPSTK+NLOW+1),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
+    if hist : tabHistTot = gpuzeros((MAX_HIST,(NATM+NOCE+NPSTK+NLOW+3),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
     else : tabHistTot = gpuzeros((1), dtype=np.float32)
 
     # Initialize of the parameters
@@ -1974,7 +1982,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         if (NATM+NOCE >0) : tabDist = gpuzeros((NLVL,NATM+NOCE,NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
         else : tabDist = gpuzeros((NLVL,1,NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
 
-    if hist : tabHist = gpuzeros((MAX_HIST,(NATM+NOCE+NPSTK+NLOW+1),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
+    if hist : tabHist = gpuzeros((MAX_HIST,(NATM+NOCE+NPSTK+NLOW+3),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
     else : tabHist = gpuzeros((1), dtype=np.float32)
 
     # local estimates angles

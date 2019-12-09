@@ -169,6 +169,12 @@ __device__ void choose_scatterer(Photon* ph,
 								 struct Spectrum *spectrum,
 								 struct RNG_State*);
 
+#ifdef SIF
+__device__ void choose_emitter(Photon* ph,
+        struct Profile *prof_atm, struct Profile *prof_oc,
+		struct Spectrum *spectrum,
+        struct RNG_State *rngstate);
+#endif
 
 __device__ void scatter(Photon* ph,
         struct Profile *prof_atm, struct Profile *prof_oc,
@@ -251,6 +257,14 @@ __device__ float G1B(float , float ) ;
 __device__ float G1GGX(float , float ) ;
 __device__ float LambB(float , float );
 __device__ float LambdaM(float , float ) ;
+
+/* RRS functions */
+__device__ float Fk_N2(float);
+__device__ float Fk_O2(float);
+__device__ float Epsilon_N2(float);
+__device__ float Epsilon_O2(float);
+__device__ float Epsilon_air(float);
+__device__ float fRRS_air(float, float);
 
 __device__ void DirectionToUV(float, float, float3*, float3*) ;
 __device__ float3 LocalToGlobal(float3, float3, float3, float3) ;
