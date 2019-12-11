@@ -105,16 +105,15 @@ extern "C" {
 __global__ void launchKernel(
         struct Spectrum *spectrum, float *X0,
         struct Phase *faer, struct Phase *foce2,
-        //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons, void *tabDist, void *tabHist,
-        //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        //unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons,
         unsigned long long *Counter,
         unsigned long long *NPhotonsIn,
         unsigned long long *NPhotonsOut,
         float *tabthv, float *tabphi,  struct Sensor *tab_sensor,
         struct Profile *prof_atm,
         struct Profile *prof_oc,
+        struct Cell *cell_atm,
+        struct Cell *cell_oc,
         long long *wl_proba_icdf,
         void *rng_state
 		, void *tabObjInfo,
@@ -145,8 +144,11 @@ __device__ void move_sp(Photon*, struct Profile *prof_atm, int le, int count_lev
 #endif
 
 #ifdef ALT_PP
-__device__ void move_pp2(Photon*, struct Profile *prof_atm, struct Profile* prof_oc, int le, int count_level,
-                        struct RNG_State*);
+__device__ void move_pp2(Photon*, struct Profile *prof_atm, struct Profile* prof_oc, 
+        #ifdef OPT3D
+        struct Cell *cell_atm, struct Cell *cell_oc,
+        #endif
+        int le, int count_level, struct RNG_State*);
 #endif
 
 #ifdef OPT3D
@@ -166,6 +168,9 @@ __device__ void move_pp(Photon*, struct Profile *prof_atm, struct Profile* prof_
 
 __device__ void choose_scatterer(Photon* ph,
 								 struct Profile *prof_atm, struct Profile *prof_oc,
+                                 #ifdef OPT3D
+                                 struct Cell *cell_atm, struct Cell *cell_oc,
+                                 #endif
 								 struct Spectrum *spectrum,
 								 struct RNG_State*);
 
@@ -178,6 +183,9 @@ __device__ void choose_emitter(Photon* ph,
 
 __device__ void scatter(Photon* ph,
         struct Profile *prof_atm, struct Profile *prof_oc,
+        #ifdef OPT3D
+        struct Cell *cell_atm, struct Cell *cell_oc,
+        #endif
         struct Phase *faer2, struct Phase *foce2,
         int le, float refrac_angle,
         float* tabthv, float* tabphi, int count_level,

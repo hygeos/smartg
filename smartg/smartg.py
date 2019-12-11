@@ -103,24 +103,14 @@ type_Profile = [
     ('iphase', 'int32'),      # // phase function index
     ]
 
-type_Profile_3D = [
-    ('z',      'float32'),    # // altitude
-    ('i',      'int32'),      # // Box index
+type_Cell = [
+    ('iopt',     'int32'),    # // Optical properties index
     ('pminx',  'float32'),    # // Box point pmin.x
     ('pminy',  'float32'),    # // Box point pmin.y
     ('pminz',  'float32'),    # // Box point pmin.z
     ('pmaxx',  'float32'),    # // Box point pmax.x
     ('pmaxy',  'float32'),    # // Box point pmax.y
     ('pmaxz',  'float32'),    # // Box point pmax.z
-    ('n',      'float32'),    # // refractive index
-    ('OD',     'float32'),    # // extinction coefficient
-    ('OD_sca', 'float32'),    # // scattering coefficient
-    ('OD_abs', 'float32'),    # // absorption coefficient
-    ('pmol',   'float32'),    # // probability of pure Rayleigh scattering event
-    ('ssa',    'float32'),    # // layer single scattering albedo
-    ('pine',   'float32'),    # // layer fraction of inelastic scattering
-    ('FQY1',   'float32'),    # // layer Fluorescence Quantum Yield of 1st specie
-    ('iphase', 'int32'),      # // phase function index
     ('neighbour1', 'int32'),   # // neighbour box index +X
     ('neighbour2', 'int32'),   # // neighbour box index -X
     ('neighbour3', 'int32'),   # // neighbour box index +Y
@@ -586,7 +576,8 @@ class Smartg(object):
              OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
              NBLOOP=None, progress=True, 
              le=None, flux=None, stdev=False, BEER=1, RR=1, WEIGHTRR=0.1, SZA_MAX=90., SUN_DISC=0,
-             sensor=None, refraction=False, reflectance=True, myObjects=None, interval = None,
+             sensor=None, refraction=False, reflectance=True, cell_atm=None, cell_oc=None,
+             myObjects=None, interval = None,
              IsAtm = 1, cusL = None, SMAX=1e6, FFS=False, DIRECT=False):
         '''
         Run a SMART-G simulation
@@ -785,14 +776,6 @@ class Smartg(object):
 
             # If we are in RF mode don't forget to update the value of surfLPH
             if (surfLPH_RF is not None): surfLPH = surfLPH_RF
-        else:
-            myObjects0 = None #np.zeros(1, dtype=type_IObjets, order='C')
-            myGObj0 = None
-            myRObj0 = None
-            nObj = 0; nGObj=0; nRObj=0; Pmin_x = None; Pmin_y = None; Pmin_z = None;
-            Pmax_x = None; Pmax_y = None; Pmax_z = None;
-            IsAtm = None; TC = None; nbCx = 10; nbCy = 10; nb_H = 0
-        # END OBJ ===================================================
 
         if NBPHI%2 == 1:
             warn('Odd number of azimuth')
@@ -824,7 +807,6 @@ class Smartg(object):
         attrs.update({'XBLOCK': XBLOCK})
         attrs.update({'XGRID': XGRID})
         attrs.update({'NPHOTONS': '{:g}'.format(NBPHOTONS)})
-
 
         if not isinstance(wl, BandSet):
             wl = BandSet(wl)
@@ -876,13 +858,12 @@ class Smartg(object):
   
         if prof_atm is not None:
             faer = calculF(prof_atm, NF, DEPO, kind='atm')
-            if self.opt3D : prof_atm_gpu = init_profile(wl, prof_atm, 'atm', dtype=type_Profile_3D, OPT3D=True)
-            else     : prof_atm_gpu = init_profile(wl, prof_atm, 'atm', dtype=type_Profile)
+            prof_atm_gpu, cell_atm_gpu = init_profile(wl, prof_atm, 'atm', cell=cell_atm)
             NATM = len(prof_atm.axis('z_atm')) - 1
         else:
             faer = gpuzeros(1, dtype='float32')
-            if self.opt3D : prof_atm_gpu = to_gpu(np.zeros(1, dtype=type_Profile_3D, OPT3D=True))
-            else :     prof_atm_gpu = to_gpu(np.zeros(1, dtype=type_Profile))
+            prof_atm_gpu = to_gpu(np.zeros(1, dtype=type_Profile))
+            cell_atm_gpu = to_gpu(np.zeros(1, dtype=type_Cell))
             NATM = 0
 
         # computation of the impact point
@@ -934,14 +915,12 @@ class Smartg(object):
 
         if prof_oc is not None:
             foce = calculF(prof_oc, NF, DEPO_WATER, kind='oc')
-            prof_oc_gpu = init_profile(wl, prof_oc, 'oc')
-            if self.opt3D : prof_oc_gpu = init_profile(wl, prof_oc, 'oc', dtype=type_Profile_3D)
-            else     : prof_oc_gpu = init_profile(wl, prof_oc, 'oc', dtype=type_Profile)
+            prof_oc_gpu = init_profile(wl, prof_oc, 'oc', cell=cell_oc)
             NOCE = len(prof_oc.axis('z_oc')) - 1
         else:
             foce = gpuzeros(1, dtype='float32')
-            if self.opt3D : prof_oc_gpu = to_gpu(np.zeros(1, dtype=type_Profile_3D))
-            else :     prof_oc_gpu = to_gpu(np.zeros(1, dtype=type_Profile))
+            prof_oc_gpu = to_gpu(np.zeros(1, dtype=type_Profile))
+            cell_oc_gpu = to_gpu(np.zeros(1, dtype=type_Cell))
             NOCE = 0
 
         #
@@ -1061,7 +1040,7 @@ class Smartg(object):
         ) = loop_kernel(NBPHOTONS, faer, foce,
                         NLVL, NATM, NOCE, MAX_HIST, NLOW, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                         NLAM, NSENSOR, self.double, self.kernel, None, p, X0, le, tab_sensor, spectrum,
-                        prof_atm_gpu, prof_oc_gpu,
+                        prof_atm_gpu, prof_oc_gpu, cell_atm_gpu, cell_oc_gpu,
                         wl_proba_icdf, stdev, self.rng, myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, hist=hist)
 
         attrs['kernel time (s)'] = secs_cuda_clock
@@ -1725,24 +1704,25 @@ def InitConst(surf, env, NATM, NOCE, mod,
         if (cusL == None):
             copy_to_device('LMODEd', 0, np.int32)
         
-def init_profile(wl, prof, kind, OPT3D=False, dtype=type_Profile):
+def init_profile(wl, prof, kind, cell=None):
     '''
     take the profile as a MLUT, and setup the gpu structure
-
     kind = 'atm' or 'oc' for atmosphere or ocean
+    
+    cell: eventually a cell array of type_Cell type for 3D , default None (1D)
     '''
 
     # reformat to smartg format
 
     NLAY = len(prof.axis('z_'+kind)) - 1
     shp = (len(wl), NLAY+1)
-    prof_gpu = np.zeros(shp, dtype=dtype, order='C')
+    prof_gpu = np.zeros(shp, dtype=type_Profile, order='C')
 
     if kind == "oc":
-        if not OPT3D : prof_gpu['z'][0,:] = prof.axis('z_'+kind)  * 1e-3 # to Km
+        if cell is None : prof_gpu['z'][0,:] = prof.axis('z_'+kind)  * 1e-3 # to Km
         prof_gpu['n'][0,:] = 1.34;
     else:
-        if not OPT3D : prof_gpu['z'][0,:] = prof.axis('z_'+kind)
+        if cell is None : prof_gpu['z'][0,:] = prof.axis('z_'+kind)
         prof_gpu['n'][:,:] = prof['n_'+kind].data[...]
     prof_gpu['z'][1:,:] = -999.      # other wavelengths are NaN
 
@@ -1755,21 +1735,9 @@ def init_profile(wl, prof, kind, OPT3D=False, dtype=type_Profile):
     prof_gpu['FQY1'][:] = prof['FQY1_'+kind].data[...]
     if 'iphase_'+kind in prof.datasets():
         prof_gpu['iphase'][:] = prof['iphase_'+kind].data[...]
-    if OPT3D : 
-        prof_gpu['neighbour1'][:,:] = prof['neighbour_'+kind].data[0,:] 
-        prof_gpu['neighbour2'][:,:] = prof['neighbour_'+kind].data[1,:] 
-        prof_gpu['neighbour3'][:,:] = prof['neighbour_'+kind].data[2,:] 
-        prof_gpu['neighbour4'][:,:] = prof['neighbour_'+kind].data[3,:] 
-        prof_gpu['neighbour5'][:,:] = prof['neighbour_'+kind].data[4,:] 
-        prof_gpu['neighbour6'][:,:] = prof['neighbour_'+kind].data[5,:] 
-        prof_gpu['pminx'][:,:] = prof['pmin_'+kind].data[0,:]
-        prof_gpu['pminy'][:,:] = prof['pmin_'+kind].data[1,:] 
-        prof_gpu['pminz'][:,:] = prof['pmin_'+kind].data[2,:] 
-        prof_gpu['pmaxx'][:,:] = prof['pmax_'+kind].data[0,:] 
-        prof_gpu['pmaxy'][:,:] = prof['pmax_'+kind].data[1,:] 
-        prof_gpu['pmaxz'][:,:] = prof['pmax_'+kind].data[2,:] 
-        prof_gpu['i'][:,:] = prof['i_'+kind].data[...]
-    return to_gpu(prof_gpu)
+    if cell is None : cell = np.zeros(1, dtype=type_Cell)
+        
+    return to_gpu(prof_gpu), to_gpu(cell)
 
 
 
@@ -1886,7 +1854,7 @@ def get_git_attrs():
 def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
                 NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                 NLAM, NSENSOR, double, kern, kern2, p, X0, le, tab_sensor, spectrum,
-                prof_atm, prof_oc, wl_proba_icdf, stdev, rng, myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, hist=False):
+                prof_atm, prof_oc, cell_atm, cell_oc, wl_proba_icdf, stdev, rng, myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, hist=False):
     """
     launch the kernel several time until the targeted number of photons injected is reached
 
@@ -2016,7 +1984,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         kern(spectrum, X0, faer, foce,
              errorcount, nThreadsActive, tabPhotons, tabDist, tabHist,
              Counter, NPhotonsIn, NPhotonsOut, tabthv, tabphi, tab_sensor,
-             prof_atm, prof_oc, wl_proba_icdf, rng.state, tabObjInfo,
+             prof_atm, prof_oc, cell_atm, cell_oc, wl_proba_icdf, rng.state, tabObjInfo,
              myObjects0, myGObj0, myRObj0, nbPhCat, wPhCat, wPhCat2,
              wPhLoss, block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
 

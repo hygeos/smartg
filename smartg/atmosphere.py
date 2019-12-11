@@ -611,7 +611,10 @@ class AtmAFGL(Atmosphere):
                 pha_, ipha = calc_iphase(pha, profile.axis('wavelength'), profile.axis('z_atm'))
                 profile.add_axis('theta_atm', pha.axes[-1])
                 profile.add_dataset('phase_atm', pha_, ['iphase', 'stk', 'theta_atm'])
-                profile.add_dataset('iphase_atm', ipha, ['wavelength', 'z_atm'])
+                if not self.OPT3D:
+                    profile.add_dataset('iphase_atm', ipha, ['wavelength', 'z_atm'])
+                else :
+                    profile.add_dataset('iphase_atm', ipha, ['wavelength', 'iopt'])
 
         return profile
 
@@ -677,7 +680,7 @@ class AtmAFGL(Atmosphere):
                 ray_coef[~np.isfinite(ray_coef)] = 0.
             else:
                 ray_coef = self.prof_ray
-            pro.add_dataset('OD_r', ray_coef, axnames=['wavelength', 'z_atm'],
+            pro.add_dataset('OD_r', ray_coef, axnames=['wavelength', 'iopt'],
             attrs={'description':
             'rayleigh scattering coefficient (km-1)'})
 
@@ -710,11 +713,16 @@ class AtmAFGL(Atmosphere):
                 aer_coef[~np.isfinite(aer_coef)] = 0.
             else : (aer_coef, ssa_p) = self.prof_aer
             pro.add_dataset('OD_p', aer_coef,
-            axnames=['wavelength', 'z_atm'],
+            axnames=['wavelength', 'iopt'],
             attrs={'description':
             'particles extinction coefficient (km-1)'})
 
-        pro.add_dataset('ssa_p_atm', ssa_p, axnames=['wavelength', 'z_atm'],
+        if not self.OPT3D:
+            pro.add_dataset('ssa_p_atm', ssa_p, axnames=['wavelength', 'z_atm'],
+                        attrs={'description':
+                               'Particles single scattering albedo of the layer'})
+        else :
+            pro.add_dataset('ssa_p_atm', ssa_p, axnames=['wavelength', 'iopt'],
                         attrs={'description':
                                'Particles single scattering albedo of the layer'})
 
@@ -777,7 +785,7 @@ class AtmAFGL(Atmosphere):
             else:
                 abs_coef = abs(dtaug.data/dz)
                 abs_coef[~np.isfinite(abs_coef)] = 0.
-                pro.add_dataset('OD_g', abs_coef, axnames=['wavelength', 'z_atm'],
+                pro.add_dataset('OD_g', abs_coef, axnames=['wavelength', 'iopt'],
                   attrs={'description':
                          'gaseous absorption coefficient (km-1)'})
 
@@ -791,7 +799,7 @@ class AtmAFGL(Atmosphere):
 
             else: 
                 abs_coef = self.prof_abs
-                pro.add_dataset('OD_g', abs_coef, axnames=['wavelength', 'z_atm'],
+                pro.add_dataset('OD_g', abs_coef, axnames=['wavelength', 'iopt'],
                   attrs={'description':
                          'gaseous absorption coefficient (km-1)'})
 
@@ -830,19 +838,19 @@ class AtmAFGL(Atmosphere):
         else:
             tot_coef = ray_coef + aer_coef + abs_coef[:,:]
             pro.add_dataset('OD_atm', tot_coef,
-                        axnames=['wavelength', 'z_atm'],
+                        axnames=['wavelength', 'iopt'],
                         attrs={'description':
                                'extinction coefficient (km-1)'})
 
             sca_coef = ray_coef + aer_coef*ssa_p
             pro.add_dataset('OD_sca_atm', sca_coef,
-                        axnames=['wavelength', 'z_atm'],
+                        axnames=['wavelength', 'iopt'],
                         attrs={'description':
                                'scattering coefficient (km-1)'})
 
             tabs_coef = abs_coef + aer_coef*(1.-ssa_p)
             pro.add_dataset('OD_abs_atm', tabs_coef,
-                        axnames=['wavelength', 'z_atm'],
+                        axnames=['wavelength', 'iopt'],
                         attrs={'description':
                                'total absorption coefficient (km-1)'})
 
@@ -850,27 +858,43 @@ class AtmAFGL(Atmosphere):
                 ssa = (ray_coef+ aer_coef*ssa_p)/tot_coef
             ssa[np.isnan(ssa)] = 1.
             pro.add_dataset('ssa_atm', ssa,
-                        axnames=['wavelength', 'z_atm'],
+                        axnames=['wavelength', 'iopt'],
                         attrs={'description':
                                'Single scattering albedo of the layer'})
 
         with np.errstate(invalid='ignore', divide='ignore'):
             pmol = dtaur/(dtaur + dtaua*ssa_p)
         pmol[np.isnan(pmol)] = 1.
-        pro.add_dataset('pmol_atm', pmol,
+        if not self.OPT3D:
+            pro.add_dataset('pmol_atm', pmol,
                         axnames=['wavelength', 'z_atm'],
+                        attrs={'description':
+                               'Ratio of molecular scattering to total scattering of the layer'})
+        else :
+            pro.add_dataset('pmol_atm', pmol,
+                        axnames=['wavelength', 'iopt'],
                         attrs={'description':
                                'Ratio of molecular scattering to total scattering of the layer'})
 
 
         pine = np.zeros_like(ssa)
         FQY1 = np.zeros_like(ssa)
-        pro.add_dataset('pine_atm', pine,
+        if not self.OPT3D:
+            pro.add_dataset('pine_atm', pine,
                         axnames=['wavelength', 'z_atm'],
                         attrs={'description':
                                'fraction of inelastic scattering of the layer'})
-        pro.add_dataset('FQY1_atm', FQY1,
+            pro.add_dataset('FQY1_atm', FQY1,
                         axnames=['wavelength', 'z_atm'],
+                        attrs={'description':
+                               'fluoresence quantum yield of the layer'})
+        else :
+            pro.add_dataset('pine_atm', pine,
+                        axnames=['wavelength', 'iopt'],
+                        attrs={'description':
+                               'fraction of inelastic scattering of the layer'})
+            pro.add_dataset('FQY1_atm', FQY1,
+                        axnames=['wavelength', 'iopt'],
                         attrs={'description':
                                'fluoresence quantum yield of the layer'})
 
@@ -881,10 +905,10 @@ class AtmAFGL(Atmosphere):
             if self.prof_3D is not None:
 
                 (ibox, pmin, pmax, neighbour) = self.prof_3D
-                pro.add_dataset('i_atm', ibox, axnames=['z_atm'])
-                pro.add_dataset('pmin_atm', pmin, axnames=['None', 'z_atm'])
-                pro.add_dataset('pmax_atm', pmax, axnames=['None', 'z_atm'])
-                pro.add_dataset('neighbour_atm', neighbour, axnames=['None', 'z_atm'])
+                pro.add_dataset('iopt_atm', ibox, axnames=['icell'])
+                pro.add_dataset('pmin_atm', pmin, axnames=['None', 'icell'])
+                pro.add_dataset('pmax_atm', pmax, axnames=['None', 'icell'])
+                pro.add_dataset('neighbour_atm', neighbour, axnames=['None', 'icell'])
 
             else:
                 HLONG       = 99999999. # long horizontal distance (km)
@@ -907,10 +931,10 @@ class AtmAFGL(Atmosphere):
                 neighbour[4, 2:]  = np.arange(len(prof.z)-2, dtype=np.int32) + 1
                 neighbour[5, :-1] = np.arange(len(prof.z)-1, dtype=np.int32) + 1
 
-                pro.add_dataset('i_atm', np.arange(len(prof.z), dtype=np.int32), axnames=['z_atm'])
-                pro.add_dataset('pmin_atm', pmin, axnames=['None', 'z_atm'])
-                pro.add_dataset('pmax_atm', pmax, axnames=['None', 'z_atm'])
-                pro.add_dataset('neighbour_atm', neighbour, axnames=['None', 'z_atm'])
+                pro.add_dataset('iopt_atm', np.arange(len(prof.z), dtype=np.int32), axnames=['icell'])
+                pro.add_dataset('pmin_atm', pmin, axnames=['None', 'icell'])
+                pro.add_dataset('pmax_atm', pmax, axnames=['None', 'icell'])
+                pro.add_dataset('neighbour_atm', neighbour, axnames=['None', 'icell'])
 
         return pro
 

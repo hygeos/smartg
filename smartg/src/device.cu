@@ -40,6 +40,8 @@ extern "C" {
 							 float *tabthv, float *tabphi, struct Sensor *tab_sensor,
 							 struct Profile *prof_atm,
 							 struct Profile *prof_oc,
+                             struct Cell *cell_atm,
+                             struct Cell *cell_oc,
 							 long long *wl_proba_icdf,
 							 void *rng_state
 							 , void *tabObjInfo,
@@ -176,7 +178,11 @@ extern "C" {
            move_sp(&ph, prof_atm, 0, 0 , &rngstate);
            #else
             #ifdef ALT_PP
-           move_pp2(&ph, prof_atm, prof_oc, 0, 0 , &rngstate);
+           move_pp2(&ph, prof_atm, prof_oc, 
+                   #ifdef OPT3D
+                   cell_atm, cell_oc,
+                   #endif
+                   0, 0 , &rngstate);
             #else
            move_pp(&ph, prof_atm, prof_oc, &rngstate
 				#ifdef OBJ3D
@@ -189,7 +195,11 @@ extern "C" {
 
 		if(ph.loc == OCEAN) {
            #ifdef ALT_PP
-           move_pp2(&ph, prof_atm, prof_oc, 0, 0 , &rngstate);
+           move_pp2(&ph, prof_atm, prof_oc, 
+                   #ifdef OPT3D
+                   cell_atm, cell_oc,
+                   #endif
+                   0, 0 , &rngstate);
            #else
            move_pp(&ph, prof_atm, prof_oc, &rngstate
 				#ifdef OBJ3D
@@ -251,8 +261,11 @@ extern "C" {
 		if( ((ph.loc == ATMOS) || (ph.loc == OCEAN)) ) {
 
 			/* Choose the scatterer */
-            choose_scatterer(&ph, prof_atm, prof_oc,  spectrum, 
-							 &rngstate); 
+            choose_scatterer(&ph, prof_atm, prof_oc,
+                        #ifdef OPT3D
+                        cell_atm, cell_oc,
+                        #endif
+						spectrum, &rngstate); 
             #ifdef VERBOSE_PHOTON
             display("CHOOSE SCAT", &ph);
             #endif
@@ -341,7 +354,11 @@ extern "C" {
                             else refrac_angle = 0.F;
 
                             // Scatter the virtual photon, using le=1, and count_level for the scattering angle computation
-                            scatter(&ph_le, prof_atm, prof_oc, faer, foce,
+                            scatter(&ph_le, prof_atm, prof_oc, 
+                                    #ifdef OPT3D
+                                    cell_atm, cell_oc,
+                                    #endif
+                                    faer, foce,
                                     1, refrac_angle, tabthv, tabphi,
                                     count_level_le, &rngstate);
 
@@ -357,7 +374,12 @@ extern "C" {
                             #endif
                             #else
                              #ifdef ALT_PP
-                             if ((ph_le.loc==ATMOS) || (ph_le.loc==OCEAN)) move_pp2(&ph_le, prof_atm, prof_oc, 1, count_level_le , &rngstate);
+                             if ((ph_le.loc==ATMOS) || (ph_le.loc==OCEAN)) 
+                                 move_pp2(&ph_le, prof_atm, prof_oc, 
+                                         #ifdef OPT3D
+                                         cell_atm, cell_oc,
+                                         #endif
+                                         1, count_level_le , &rngstate);
                              #endif
                             #endif
 
@@ -374,7 +396,11 @@ extern "C" {
             } // LE
 
             /* Scattering Propagation , using le=0 and propagation photon */
-            scatter(&ph, prof_atm, prof_oc, faer, foce,
+            scatter(&ph, prof_atm, prof_oc, 
+                    #ifdef OPT3D
+                    cell_atm, cell_oc,
+                    #endif
+                    faer, foce,
                     0, 0.F, tabthv, tabphi, 0,
                     &rngstate);
             #ifdef VERBOSE_PHOTON
@@ -439,7 +465,12 @@ extern "C" {
                             if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
                             #else
                              #ifdef ALT_PP
-                            if (ph_le.loc==ATMOS) move_pp2(&ph_le, prof_atm, prof_oc, 1, UPTOA, &rngstate);
+                            if (ph_le.loc==ATMOS) 
+                                move_pp2(&ph_le, prof_atm, prof_oc,
+                                         #ifdef OPT3D
+                                         cell_atm, cell_oc,
+                                         #endif
+                                        1, UPTOA, &rngstate);
                              #endif
                             #endif
                             // Final counting at the TOA
@@ -449,7 +480,12 @@ extern "C" {
                         if (k==1) { 
                             // Final counting at the B 
                             #ifdef ALT_PP
-                            if (ph_le.loc==OCEAN) move_pp2(&ph_le, prof_atm, prof_oc, 1, DOWNB, &rngstate);
+                            if (ph_le.loc==OCEAN) 
+                                move_pp2(&ph_le, prof_atm, prof_oc, 
+                                         #ifdef OPT3D
+                                         cell_atm, cell_oc,
+                                         #endif
+                                        1, DOWNB, &rngstate);
                             #endif
                             countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, DOWNB , errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
                         }
@@ -471,7 +507,7 @@ extern "C" {
             // Lambertian case
 			else { 
                 #ifdef SIF
-			    /* Choose the scatterer */
+			    /* Choose the emitter */
                 choose_emitter(&ph, prof_atm, prof_oc,  spectrum, 
 							 &rngstate); 
                 #ifdef VERBOSE_PHOTON
@@ -494,7 +530,12 @@ extern "C" {
                         if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
                         #else
                          #ifdef ALT_PP
-                         if (ph_le.loc==ATMOS) move_pp2(&ph_le, prof_atm, prof_oc, 1, UPTOA , &rngstate);
+                         if (ph_le.loc==ATMOS) 
+                             move_pp2(&ph_le, prof_atm, prof_oc, 
+                                      #ifdef OPT3D
+                                      cell_atm, cell_oc,
+                                      #endif
+                                      1, UPTOA , &rngstate);
                          #endif
                         #endif
                         countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
@@ -527,7 +568,11 @@ extern "C" {
                         if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
                         #else
                          #ifdef ALT_PP
-                         if (ph_le.loc==ATMOS) move_pp2(&ph_le, prof_atm, prof_oc, 1, UPTOA , &rngstate);
+                         if (ph_le.loc==ATMOS) move_pp2(&ph_le, prof_atm, prof_oc, 
+                                 #ifdef OPT3D
+                                 cell_atm, cell_oc,
+                                 #endif
+                                 1, UPTOA , &rngstate);
                          #endif
                         #endif
                         countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
@@ -578,7 +623,11 @@ extern "C" {
                             if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
                             #else
                              #ifdef ALT_PP
-                             if (ph_le.loc==ATMOS) move_pp2(&ph_le, prof_atm, prof_oc, 1, UPTOA , &rngstate);
+                             if (ph_le.loc==ATMOS) move_pp2(&ph_le, prof_atm, prof_oc, 
+                                     #ifdef OPT3D
+                                     cell_atm, cell_oc,
+                                     #endif
+                                     1, UPTOA , &rngstate);
                              #endif
                             #endif
                             // Final counting at the TOA
@@ -588,7 +637,11 @@ extern "C" {
                         if (k==1) { 
                             // Final counting at the B 
                              #ifdef ALT_PP                          
-                             if (ph_le.loc==OCEAN) move_pp2(&ph_le, prof_atm, prof_oc, 1, DOWNB , &rngstate); 
+                             if (ph_le.loc==OCEAN) move_pp2(&ph_le, prof_atm, prof_oc, 
+                                     #ifdef OPT3D
+                                     cell_atm, cell_oc,
+                                     #endif
+                                     1, DOWNB , &rngstate); 
                              #endif 
                             countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, DOWNB , errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
                         }
@@ -628,7 +681,11 @@ extern "C" {
 				    surfaceLambert(&ph_le, 1, tabthv, tabphi, spectrum, &rngstate);
                     //  contribution to UP0M level
                     #ifdef ALT_PP                          
-                    if (ph_le.loc==OCEAN) move_pp2(&ph_le, prof_atm, prof_oc, 1, UP0M, &rngstate); 
+                    if (ph_le.loc==OCEAN) move_pp2(&ph_le, prof_atm, prof_oc, 
+                            #ifdef OPT3D
+                            cell_atm, cell_oc,
+                            #endif
+                            1, UP0M, &rngstate); 
                     #endif
                     countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0M,   errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
                 }
@@ -1889,8 +1946,8 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
 
 #else// OPT3D
 
-__device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc, int le, int count_level,
-                        struct RNG_State *rngstate) {
+__device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc, struct Cell *cell_atm, struct Cell *cell_oc,
+                        int le, int count_level, struct RNG_State *rngstate) {
 
     float tauRdm;
     float hph = 0.;  // cumulative optical thickness
@@ -1901,6 +1958,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
     float d;
     int ilam; 
     struct Profile *prof;
+    struct Cell *cell;
     int  NL;
 	float intTime0=0., intTime1=0.;
 	bool intersectBox;
@@ -1913,10 +1971,12 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
     if (ph->loc==OCEAN) {
         NL   = NOCEd+1;
         prof = prof_oc;
+        cell = cell_oc;
     }
     if (ph->loc==ATMOS) {
         NL   = NATMd+1;
         prof = prof_atm;
+        cell = cell_atm;
     }
     ilam = ph->ilam*NL;  // wavelength offset in optical thickness table
 
@@ -1972,8 +2032,8 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
         }
 
 		Ray Ray_cur(ph->pos, ph->v, 0);
-        float3 pmin = make_float3(prof[ph->layer].pminx, prof[ph->layer].pminy, prof[ph->layer].pminz);
-        float3 pmax = make_float3(prof[ph->layer].pmaxx, prof[ph->layer].pmaxy, prof[ph->layer].pmaxz);
+        float3 pmin = make_float3(cell[ph->layer].pminx, cell[ph->layer].pminy, cell[ph->layer].pminz);
+        float3 pmax = make_float3(cell[ph->layer].pmaxx, cell[ph->layer].pmaxy, cell[ph->layer].pmaxz);
         BBox Box_cur(pmin, pmax);
         //
         // calculate the distance d to the fw layer
@@ -1986,10 +2046,18 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
         // calculate the optical thicknesses h_cur and h_cur_abs to the next layer
         // We get the layer extinction coefficient and multiply by the distance within the layer
         //
+        #ifndef OPT3D
         coef_cur = get_OD(BEERd,prof[ph->layer+ilam]);
+        #else
+        coef_cur = get_OD(BEERd,prof[cell[ph->layer].iopt+ilam]);
+        #endif
         h_cur    = coef_cur * intTime1;
         #ifndef ALIS
-        h_cur_abs = prof[ph->layer+ilam].OD_abs * intTime1;
+         #ifndef OPT3D
+         h_cur_abs = prof[ph->layer+ilam].OD_abs * intTime1;
+         #else
+         h_cur_abs = prof[cell[ph->layer].iopt+ilam].OD_abs * intTime1;
+         #endif
         #endif
 
         //
@@ -2044,12 +2112,12 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
             int tmp=ph->layer;
             switch(ind)
             {
-                 case 0: next_layer = prof[ph->layer].neighbour1; break;
-                 case 1: next_layer = prof[ph->layer].neighbour2; break;
-                 case 2: next_layer = prof[ph->layer].neighbour3; break;
-                 case 3: next_layer = prof[ph->layer].neighbour4; break;
-                 case 4: next_layer = prof[ph->layer].neighbour5; break;
-                 case 5: next_layer = prof[ph->layer].neighbour6; break;
+                 case 0: next_layer = cell[ph->layer].neighbour1; break;
+                 case 1: next_layer = cell[ph->layer].neighbour2; break;
+                 case 2: next_layer = cell[ph->layer].neighbour3; break;
+                 case 3: next_layer = cell[ph->layer].neighbour4; break;
+                 case 4: next_layer = cell[ph->layer].neighbour5; break;
+                 case 5: next_layer = cell[ph->layer].neighbour6; break;
                  default: ph->loc = REMOVED;
             }
             //if (idx==0) printf("Apres %d %d %d %d %f %d %f %f %f %f %f %f %f %f %f %f %f %f\n",ph->nint, ph->loc, ph->layer, tmp, ph->v.z, ind, p.x, p.y, p.z, 
@@ -2070,7 +2138,11 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
     }
 
     if ((BEERd == 0) && ((ph->loc == ATMOS) || (ph->loc == OCEAN))) {
+        #ifndef OPT3D
         ph->weight *= prof[ph->layer+ilam].ssa;
+        #else
+        ph->weight *= prof[cell[ph->layer].iopt+ilam].ssa;
+        #endif
     }
 }
  #endif // 3D
@@ -2539,6 +2611,9 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 
 __device__ void scatter(Photon* ph,
        struct Profile *prof_atm, struct Profile *prof_oc,
+        #ifdef OPT3D
+        struct Cell *cell_atm, struct Cell *cell_oc,
+        #endif
         struct Phase *faer, struct Phase *foce,
         int le, float refrac_angle,
         float* tabthv, float* tabphi, int count_level,
@@ -2585,8 +2660,11 @@ __device__ void scatter(Photon* ph,
     /* Scattering in atmosphere */
 	if(ph->loc!=OCEAN){
 
+            #ifndef OPT3D
 			ilay = ph->layer + ph->ilam*(NATMd+1); // atm layer index
-			
+            #else
+			ilay = cell_atm[ph->layer].iopt + ph->ilam*(NATMd+1); // atm layer index
+            #endif
 			func = faer; // atm phases
 			
 			/************************************/
@@ -2599,8 +2677,11 @@ __device__ void scatter(Photon* ph,
 	/* Scattering in ocean */
 	else {
 
+            #ifndef OPT3D
 			ilay = ph->layer + ph->ilam*(NOCEd+1); // oce layer index
-
+            #else
+			ilay = cell_oc[ph->layer].iopt + ph->ilam*(NOCEd+1); // oce layer index
+            #endif
 			func = foce; // oce phases
 			
 			if (ph->scatterer == RAY){ipha  = 0;}	// Rayleigh index
@@ -2883,6 +2964,9 @@ __device__ void choose_emitter(Photon* ph,
 
 __device__ void choose_scatterer(Photon* ph,
         struct Profile *prof_atm, struct Profile *prof_oc,
+        #ifdef OPT3D
+        struct Cell *cell_atm, struct Cell *cell_oc,
+        #endif
 		struct Spectrum *spectrum,
         struct RNG_State *rngstate) {
 
@@ -2895,7 +2979,11 @@ __device__ void choose_scatterer(Photon* ph,
 	
 	if(ph->loc!=OCEAN){
 		/* Scattering in atmosphere */
+        #ifndef OPT3D
 		pmol = 1.f - prof_atm[ph->layer+ph->ilam*(NATMd+1)].pmol;
+        #else
+		pmol = 1.f - prof_atm[cell_atm[ph->layer].iopt+ph->ilam*(NATMd+1)].pmol;
+        #endif
 		/* Elastic scattering    */
 		if ( pmol < RAND ){
 			ph->scatterer = RAY; // Rayleigh index
@@ -2905,8 +2993,13 @@ __device__ void choose_scatterer(Photon* ph,
 		}	
 	}else{
 		/* Scattering in ocean */
+        #ifndef OPT3D
 		pmol = 1.f - prof_oc[ph->layer+ph->ilam*(NOCEd+1)].pmol;
 		pine = 1.f - prof_oc[ph->layer+ph->ilam*(NOCEd+1)].pine;
+        #else
+		pmol = 1.f - prof_oc[cell_oc[ph->layer].iopt+ph->ilam*(NOCEd+1)].pmol;
+		pine = 1.f - prof_oc[cell_oc[ph->layer].iopt+ph->ilam*(NOCEd+1)].pine;
+        #endif
 
 		if (pine  < RAND){
 			/* inelastic scattering    */
