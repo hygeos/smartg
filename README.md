@@ -24,6 +24,9 @@ Examples are provided in the [sample notebooks](notebooks).
 ## Tests
 Run the command `pytest` or the provided notebooks.
 
+## Hardware tested
+GeForce GTX 660 Ti (unused for a while), GeForce GeForce GTX 970, GeForce GTX 1070, GeForce TITAN V, Quadro P2000
+
 ## Documentation
 
 Use the provided makefile:
