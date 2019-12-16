@@ -737,7 +737,6 @@ class Smartg(object):
                                 #FOV=cusL.dict['ALDEG'], TYPE=cusL.dict['TYPE'])
             # if (cusL.dict['LMODE'] == "BR"):
             #     if myObjects == None: myObjects = True
-        print("TYPE=", cusL.dict['TYPE'])
         if ((myObjects is not None) or (cusL is not None)):
             # Prendre en compte la direction du soleil avec l'angle zenithal et azimuth
             vSun = convertAnglestoV(THETA=THVDEG, PHI=PHVDEG, TYPE="Sun") 
@@ -1425,7 +1424,7 @@ class Smartg(object):
                     else :
                         categories[(i*5)] /= NBPHOTONS#categories[(i*5)+1]/2
                         categories[(i*5)+3] /= NBPHOTONS#categories[(i*5)+1]/2
-        print("NBPHOTONS=", NBPHOTONS)
+
         # If there are no heliostats --> there is no STP and then no analyses of optical losses
         if (nb_H <= 0):
             dicSTP = None; vecLoss = None;
