@@ -1,10 +1,9 @@
 /*
- * Copyright 2011-2019 HYGEOS
+ * Copyright 2011-2020 HYGEOS
  *
  * This file is subject to the Smart-G licence.
  * Please see LICENCE.TXT for further details.
  */
-
 
 /**********************************************************
 *	> Includes
@@ -24,6 +23,8 @@
 #include <helper_math.h>
 #include <stdio.h>
 #include <cuda_fp16.h>
+/*****/
+#define _FLIP(x) (x%2==0 ? x+1 : x-1)
 /**********************************************************
 *	> Kernel
 ***********************************************************/
@@ -1961,9 +1962,9 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
     struct Cell *cell;
     int  NL;
 	float intTime0=0., intTime1=0.;
-	bool intersectBox;
 	float3 intersectPoint = make_float3(-1., -1., -1.);
-    int intersectNext=0;
+	bool intersectBox;
+    float3 pmin, pmax ;
     int next_layer;
 	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
 
@@ -1980,7 +1981,6 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
     }
     ilam = ph->ilam*NL;  // wavelength offset in optical thickness table
 
-    if (ph->layer == 0) ph->layer = 1;
     next_layer = ph->layer;
 
     // Random Optical Thickness to go through
@@ -1994,7 +1994,6 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
 
     while (count<1000) {
     //while (1) {
-
         //
         // stopping criteria
         if (ph->loc == REMOVED) break;
@@ -2032,14 +2031,19 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
         }
 
 		Ray Ray_cur(ph->pos, ph->v, 0);
-        float3 pmin = make_float3(cell[ph->layer].pminx, cell[ph->layer].pminy, cell[ph->layer].pminz);
-        float3 pmax = make_float3(cell[ph->layer].pmaxx, cell[ph->layer].pmaxy, cell[ph->layer].pmaxz);
+        pmin = make_float3(cell[ph->layer].pminx, cell[ph->layer].pminy, cell[ph->layer].pminz);
+        pmax = make_float3(cell[ph->layer].pmaxx, cell[ph->layer].pmaxy, cell[ph->layer].pmaxz);
         BBox Box_cur(pmin, pmax);
         //
         // calculate the distance d to the fw layer
         // from the current position
         //
-		Box_cur.IntersectP(Ray_cur, &intTime0, &intTime1);
+		intersectBox = Box_cur.IntersectP(Ray_cur, &intTime0, &intTime1);
+		/*if (idx==0) {
+            //printf("error1 in move_pp geo!!\n"); 
+            printf("Avant %d %d %d %d %f %f %f %f %f %f %f %f %f %f\n",ph->nint, ph->loc, ph->layer, next_layer, ph->v.z,
+            ph->pos.x, ph->pos.y, ph->pos.z, pmin.x, pmax.x, pmin.y, pmax.y, pmin.z, pmax.z);
+        }*/
         intersectPoint = operator+(ph->pos, ph->v * intTime1);
         
         //
@@ -2072,11 +2076,11 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
             if (BEERd == 1) ph->weight *= __expf(-( epsilon * h_cur_abs));
             #else
             float coef;
-            if (ph->loc==ATMOS) ph->cdist_atm[ph->layer] += intTime1;
-            if (ph->loc==OCEAN) ph->cdist_oc[ ph->layer] += intTime1;
+            if (ph->loc==ATMOS) ph->cdist_atm[cell[ph->layer].iopt] += intTime1;
+            if (ph->loc==OCEAN) ph->cdist_oc[ cell[ph->layer].iopt] += intTime1;
             int DL=(NLAMd-1)/(NLOWd-1);
             for (int k=0; k<NLOWd; k++) {
-                coef = get_OD(1,prof[ph->layer + k*DL*NL]);
+                coef = get_OD(1,prof[cell[ph->layer].iopt + k*DL*NL]);
 			    ph->weight_sca[k] *= exp(-(coef-coef_cur)*intTime1);
             }
             #endif
@@ -2091,11 +2095,11 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
             if (BEERd == 1) ph->weight *= __expf(-( h_cur_abs));
             #else
             float coef;
-            if (ph->loc==ATMOS) ph->cdist_atm[ph->layer] += intTime1;
-            if (ph->loc==OCEAN) ph->cdist_oc[ ph->layer] += intTime1;
+            if (ph->loc==ATMOS) ph->cdist_atm[cell[ph->layer].iopt] += intTime1;
+            if (ph->loc==OCEAN) ph->cdist_oc[ cell[ph->layer].iopt] += intTime1;
             int DL=(NLAMd-1)/(NLOWd-1);
             for (int k=0; k<NLOWd; k++) {
-                coef = get_OD(1,prof[ph->layer + k*DL*NL]);
+                coef = get_OD(1,prof[cell[ph->layer].iopt + k*DL*NL]);
 			    ph->weight_sca[k] *= __expf(-(coef-coef_cur)*intTime1);
             }
             #endif
@@ -2109,7 +2113,6 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
             p.z = __fdividef(p.z, fabs(pmax.z-pmin.z));
             int ind;
             GetFaceIndex(p, &ind);
-            int tmp=ph->layer;
             switch(ind)
             {
                  case 0: next_layer = cell[ph->layer].neighbour1; break;
@@ -2120,9 +2123,21 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
                  case 5: next_layer = cell[ph->layer].neighbour6; break;
                  default: ph->loc = REMOVED;
             }
-            //if (idx==0) printf("Apres %d %d %d %d %f %d %f %f %f %f %f %f %f %f %f %f %f %f\n",ph->nint, ph->loc, ph->layer, tmp, ph->v.z, ind, p.x, p.y, p.z, 
-             //       ph->pos.x, ph->pos.y, ph->pos.z, pmin.x, pmax.x, pmin.y, pmax.y, pmin.z, pmax.z);
             count++;
+            
+            // in case of periodic boundaries
+            /*if (next_layer >= 0) {
+                GetFaceMiddlePoint(ind, pmin, pmax, &p);
+                float3 pmin_next = make_float3(cell[next_layer].pminx, cell[next_layer].pminy, cell[next_layer].pminz);
+                float3 pmax_next = make_float3(cell[next_layer].pmaxx, cell[next_layer].pmaxy, cell[next_layer].pmaxz);
+                float3 p_next;
+                GetFaceMiddlePoint(_FLIP(ind), pmin_next, pmax_next, &p_next);
+                if (idx==0) printf("Apres %d %d %d %d %f %d %d %f %f %f %f %f %f %f %f %f\n",ph->nint, ph->loc, ph->layer, next_layer, ph->v.z, ind, 
+                    _FLIP(ind), p_next.x, p_next.y, p_next.z, 
+                    ph->pos.x, ph->pos.y, ph->pos.z,  p.x, p.y, p.z);
+                // translation of the photon to the next layer
+                operator+=(ph->pos, operator-(p_next,p));
+            }*/
         } // photon advances to next layer
 
     } // while loop
@@ -2949,6 +2964,7 @@ __device__ void choose_emitter(Photon* ph,
             ph->nref = 0;
             ph->nrrs = 0;
             for (int k=0; k<NLOWd; k++) ph->weight_sca[k] = 1.F;
+            //for (int k=0; k<NATM_ABSd; k++) ph->cdist_atm[k] = 0.F;
             for (int k=0; k<NATMd; k++) ph->cdist_atm[k] = 0.F;
             for (int k=0; k<NOCEd; k++) ph->cdist_oc[k] = 0.F;
 		} else {
@@ -5285,6 +5301,8 @@ __device__ void countPhoton(Photon* ph,
           #else // in 3D absorption coefficient
           for (int n=0; n<(NATMd+1); n++){
               wabs += prof_atm[n + il*(NATMd+1)].OD_abs * ph->cdist_atm[n];
+          //for (int n=0; n<(NATM_ABSd+1); n++){
+           //   wabs += prof_atm[n + il*(NATMd+1)].OD_abs * ph->cdist_atm[n];
           }
           for (int n=0; n<(NOCEd+1); n++){
               wabs += prof_oc[ n + il*(NOCEd+1)].OD_abs * ph->cdist_oc[n];
@@ -6402,6 +6420,18 @@ __device__ Transformd DaddRotAndParseOrder(Transformd Tid, IObjets object)
 #endif
 
 #ifdef OPT3D
+__device__ void GetFaceMiddlePoint(int ind, float3 pmin, float3 pmax, float3 *p)
+{
+    if (ind==0) *p = make_float3(pmax.x, (pmin.y+pmax.y)/2., (pmin.z+pmax.z)/2.);
+    if (ind==1) *p = make_float3(pmin.x, (pmin.y+pmax.y)/2., (pmin.z+pmax.z)/2.);
+    if (ind==2) *p = make_float3((pmin.x+pmax.x)/2., pmax.y, (pmin.z+pmax.z)/2.);
+    if (ind==3) *p = make_float3((pmin.x+pmax.x)/2., pmin.y, (pmin.z+pmax.z)/2.);
+    if (ind==4) *p = make_float3((pmin.x+pmax.x)/2., (pmin.y+pmax.y)/2., pmax.z);
+    if (ind==5) *p = make_float3((pmin.x+pmax.x)/2., (pmin.y+pmax.y)/2., pmin.z);
+}
+
+
+
 __device__ void GetFaceIndex(float3 pos, int *index)
 // en.wikipedia.org/wiki/Cube_mapping
 {

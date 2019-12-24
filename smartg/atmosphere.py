@@ -27,8 +27,6 @@ if sys.version_info[:2] >= (3, 0):
     xrange = range
 
 
-
-
 class Species(object):
     '''
     Optical properties of one species
@@ -472,20 +470,25 @@ class AtmAFGL(Atmosphere):
             'afglms', 'afglmw', 'afglss', 'afglsw', 'afglt',
             'afglus', 'afglus_ch4_vmr', 'afglus_co_vmr', 'afglus_n2_vmr',
             'afglus_n2o_vmr', 'afglus_no2', 'mcclams', 'mcclamw'
-        - comp: list of components objects (aerosol, clouds)
-        - grid: new grid altitudes (list of decreasing altitudes in km)
-        - lat: latitude (for Rayleigh optical depth calculation, default=45.)
-        - P0: Sea surface pressure
-              (default: SSP from AFGL)
 
+   Keywords:
+        - comp: list of components particles objects (aerosol, clouds)
+        - grid: new grid altitudes (list of decreasing altitudes in km), if None, the default AFGL grid is kept
+        - lat: latitude (for Rayleigh optical depth calculation, default=45.)
+        - P0: Sea surface pressure (default: SSP from AFGL)
         Gaseous absorption:
         - O3: total ozone column (Dobson units),
           or None to use atmospheric profile value (default)
         - H2O: total water vapour column (g.cm-2), or None to use atmospheric
           profile value (default)
         - NO2: activate NO2 absorption (default True)
-        - tauR: Rayleigh optical thickness, default None computed
+        - tauR: Rayleigh optical thickness, default None: computed
           from atmospheric profile and wavelength
+
+        User specified optical properties:
+            One can specify directly the optical properties of the medium:
+            in 1D it corresponds to vertical profile
+            in 3D is is just an optical properties index, it must be completed by the cells grid
         - prof_abs: the gaseous absorption optical thickness profile  provided by user
                     if directly used, it shortcuts any further gaseous absorption computation
                     array of dimension (NWavelength,NZ)
@@ -494,7 +497,9 @@ class AtmAFGL(Atmosphere):
                     array of dimension (NWavelength,NZ)
         - prof_aer: a tuple (ext,ssa) the aerosol extinction optical thickness profile and single scattering albedo arrays  
                     provided by user, each array has dimensions (NWavelength,NZ)
-                    if directly used, it shortcuts any further rayleigh scattering computation
+                    if directly used, it shortcuts any further particles scattering computation
+        - prof_phases: a tuple (iphase, phases ) where iphase is the phase matrix indices profile (NWavelength,NZ), 
+                       and  phases is a list of phase matrices LUT (as outputs of the 'read_phase' utility) 
         - RH_cst :  force relative humidity o be constant, default (None, recalculated)
 
         Phase functions definition:
@@ -504,20 +509,25 @@ class AtmAFGL(Atmosphere):
           can be provided as an array of decreasing altitudes or a gridspec
           default value: [100, 0]
 
-        3D
-        - if OPTD3D is True return coefficient in (km-1), default return vertically integrated Optocal thicknesses from TOA
-           - if prof_3D is given then the 3D definition of Bounding Boxes(1 Point Bottom Left pmin, 1 Point Top Right pmax)
-             and 6 neighbours index (positive X, negative X, positive Y, negative Y, positive Z, negative Z) ais directly
-           - otherwise the profile with bounding box bounaries and neighbour indices is constructed with  the vertical profile connectivity
+        3D:
+        - if cells is present: then atmosphere is 3D
+           Cells represent the 3D definition of  atmosphere
+           1) 'iopt' gives the number of the optical property corresponding to the cells; iopt(Ncell)
+           2) Bounding Boxes(1 Point Bottom Left pmin, 1 Point Top Right pmax) of the cells; pmin(3,Ncell); pmax(3,Ncell)
+           and 6 neighbours index (positive X, negative X, positive Y, negative Y, positive Z, negative Z); neighbour(6,Ncell)
+           it returns coefficients in (km-1) instead of optical thicknesses
              
+   Outputs:
+        By default return vertically integrated optical thicknesses from TOA
     '''
     def __init__(self, atm_filename, comp=[],
                  grid=None, lat=45.,
                  P0=None, O3=None, H2O=None, NO2=True,
                  tauR=None,
                  pfwav=None, pfgrid=[100., 0.], prof_abs=None,
-                 prof_ray=None, prof_aer=None, RH_cst=None, US=True,
-                 OPT3D=False, prof_3D=None):
+                 prof_ray=None, prof_aer=None, prof_phases=None,
+                 RH_cst=None, US=True,
+                 cells=None):
 
         self.lat = lat
         self.comp = comp
@@ -526,10 +536,11 @@ class AtmAFGL(Atmosphere):
         self.prof_abs = prof_abs
         self.prof_ray = prof_ray
         self.prof_aer = prof_aer
+        self.prof_phases = prof_phases
         self.RH_cst = RH_cst
         self.US = US
-        self.OPT3D = OPT3D
-        self.prof_3D = prof_3D
+        self.OPT3D = cells is not None
+        if self.OPT3D : self.cells = cells
 
         self.tauR = tauR
         if tauR is not None:
@@ -545,7 +556,7 @@ class AtmAFGL(Atmosphere):
         if (not exists(atm_filename)) and (not atm_filename.endswith('.dat')):
             atm_filename += '.dat'
 
-        crs_O3_filename = join(dir_libradtran_crs, 'crs_O3_UBremen_cf.dat')
+        crs_O3_filename  = join(dir_libradtran_crs, 'crs_O3_UBremen_cf.dat')
         crs_NO2_filename = join(dir_libradtran_crs, 'crs_NO2_UBremen_cf.dat')
 
         # read crs ozone file
@@ -567,8 +578,8 @@ class AtmAFGL(Atmosphere):
 
         # read afgl file
         prof = Profile_base(atm_filename, O3=O3,
-                            H2O=H2O, NO2=NO2, P0=P0, RH_cst=RH_cst, US=US, 
-                            OPT3D=OPT3D)
+                            H2O=H2O, NO2=NO2, P0=P0, RH_cst=RH_cst, US=US
+                            )
 
         #
         # regrid profile if required
@@ -899,42 +910,31 @@ class AtmAFGL(Atmosphere):
                                'fluoresence quantum yield of the layer'})
 
 
+
+        if self.prof_phases is not None:
+            ipha, phases = self.prof_phases
+            pha = np.stack([p.data for p in phases])
+            if not self.OPT3D:
+                pro.add_dataset('iphase_atm', ipha, axnames=['wavelength', 'z_atm'],
+                        attrs={'description':
+                               'index of phase matrix'})
+            else :
+                pro.add_dataset('iphase_atm', ipha, axnames=['wavelength', 'iopt'],
+                        attrs={'description':
+                               'index of phase matrix'})
+            pro.add_axis('theta_atm', phases[0].axis('theta_atm'))
+            pro.add_dataset('phase_atm', pha, axnames=['iphase', 'stk', 'theta_atm'],
+                    attrs={'description':
+                           'phase matrices'})
+
         # Pure 3D
         #
         if self.OPT3D:
-            if self.prof_3D is not None:
-
-                (ibox, pmin, pmax, neighbour) = self.prof_3D
-                pro.add_dataset('iopt_atm', ibox, axnames=['icell'])
-                pro.add_dataset('pmin_atm', pmin, axnames=['None', 'icell'])
-                pro.add_dataset('pmax_atm', pmax, axnames=['None', 'icell'])
-                pro.add_dataset('neighbour_atm', neighbour, axnames=['None', 'icell'])
-
-            else:
-                HLONG       = 99999999. # long horizontal distance (km)
-                BOUNDARY_ABS= -5  # see communs.h
-                BOUNDARY_BOA= -2  # see communs.h
-                BOUNDARY_TOA= -1  # see communs.h
-                pmin      = np.zeros((3, len(prof.z)), dtype=np.float32)
-                pmax      = np.zeros((3, len(prof.z)), dtype=np.float32)
-                neighbour = np.zeros((6, len(prof.z)), dtype=np.int32)
-                pmin[0:2, :] = -HLONG 
-                pmax[0:2, :] =  HLONG 
-                neighbour[0:4, :] = BOUNDARY_ABS 
-                pmin[2, 0]   =  self.prof.z[0] # TOA
-                pmin[2, 1:]  = prof.z[1:]
-                pmax[2, 0]   = self.prof.z.max()+1 # above TOA
-                pmax[2, 1:]  = prof.z[:-1]
-                neighbour[4, :2] = BOUNDARY_TOA  # +Z, first 2 layers top  neighbours are TOA
-                neighbour[5, -1] = BOUNDARY_BOA  # -Z  last layer bottom neighbour is BOA
-                # remaining neighbours follow a vertical profile connectivity
-                neighbour[4, 2:]  = np.arange(len(prof.z)-2, dtype=np.int32) + 1
-                neighbour[5, :-1] = np.arange(len(prof.z)-1, dtype=np.int32) + 1
-
-                pro.add_dataset('iopt_atm', np.arange(len(prof.z), dtype=np.int32), axnames=['icell'])
-                pro.add_dataset('pmin_atm', pmin, axnames=['None', 'icell'])
-                pro.add_dataset('pmax_atm', pmax, axnames=['None', 'icell'])
-                pro.add_dataset('neighbour_atm', neighbour, axnames=['None', 'icell'])
+            (iopt, pmin, pmax, neighbour) = self.cells
+            pro.add_dataset('iopt_atm', iopt, axnames=['icell'])
+            pro.add_dataset('pmin_atm', pmin, axnames=['None', 'icell'])
+            pro.add_dataset('pmax_atm', pmax, axnames=['None', 'icell'])
+            pro.add_dataset('neighbour_atm', neighbour, axnames=['None', 'icell'])
 
         return pro
 
@@ -1052,13 +1052,13 @@ class Profile_base(object):
     - P0: sea surface pressure (hPa)
     - RH_cst: force Relative humidity to be constant, (defualt recalculated)
     '''
-    def __init__(self, atm_filename, O3=None, H2O=None, NO2=True, P0=None, RH_cst=None, US=True, OPT3D=False):
+    def __init__(self, atm_filename, O3=None, H2O=None, NO2=True, P0=None, RH_cst=None, US=True):
 
         if atm_filename is None:
             return
         self.atm_filename = atm_filename
 
-        data = np.loadtxt(atm_filename, comments="#")
+        data = np.loadtxt(atm_filename, dtype=np.float32, comments="#")
 
         self.z        = data[:,0] # Altitude in km
         self.P        = data[:,1] # pressure in hPa
@@ -1070,7 +1070,6 @@ class Profile_base(object):
         self.dens_co2 = data[:,7] # CO2 density in cm-3
         self.dens_no2 = data[:,8] # NO2 density in cm-3
         self.RH_cst   = RH_cst
-        self.OPT3D    = OPT3D
 
         # scale to specified total O3 content
         if O3 is not None:

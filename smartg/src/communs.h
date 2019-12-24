@@ -40,7 +40,8 @@
 #define MAX_LOOP 1000000000
 #define MAX_NEVT 500 // Max number of scattering evts stored in photon in the ALIS procedure in basic plane parallel mode
 #define MAX_NLOW 101 // Max number of wavelengths stored in the ALIS scattering correction
-#define MAX_NLAYER 200 // Max number of vertical layers recorded in ALIS procedure in spherical or alternate PP mode
+#define MAX_NLAYER 3000 // Max number of vertical layers recorded in ALIS procedure in spherical or alternate PP mode
+//#define MAX_NLAYER 200 // Max number of vertical layers recorded in ALIS procedure in spherical or alternate PP mode
 #define MAX_HIST 2048*2048 // Max number of photon's histories
 
 
@@ -301,7 +302,8 @@ struct Profile {
 };
 #include <geometry.h>
 struct Cell {
-    int   iopt;   // Optical properties index
+    int   iopt;   // Optical scattering properties index
+    //int   iabs;   // Optical absorbing properties index
     float pminx;  // Box, pmin point
     float pminy;  // Box, pmin point
     float pminz;  // Box, pmin point

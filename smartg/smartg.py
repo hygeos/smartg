@@ -104,7 +104,8 @@ type_Profile = [
     ]
 
 type_Cell = [
-    ('iopt',     'int32'),    # // Optical properties index
+    ('iopt',     'int32'),    # // Optical scattering properties index
+    #('iabs',     'int32'),    # // Optical absorbing properties index
     ('pminx',  'float32'),    # // Box point pmin.x
     ('pminy',  'float32'),    # // Box point pmin.y
     ('pminz',  'float32'),    # // Box point pmin.z
@@ -128,7 +129,7 @@ type_Sensor = [
     ('LOC',    'int32'),      # // localization (ATMOS=1, ...), see constant definitions in communs.h
     ('FOV',    'float32'),    # // sensor FOV (degree) 
     ('TYPE',   'int32'),      # // sensor type: Radiance (0), Planar flux (1), Spherical Flux (2), default 0
-    ('IBOX',   'int32'),      # // Box in which the sensor is
+    ('ICELL',  'int32'),      # // Box in which the sensor is
     ]
 
 type_IObjets = [
@@ -305,10 +306,10 @@ class Sensor(object):
     LOC: Localization (default SURF0P)
     FOV: Field of View (deg, default 0.)
     TYPE: Radiance (0), Planar flux (1), Spherical Flux (2), default 0
-    IBOX: Box index in which the sensor is (3D)
+    ICELL: Box index in which the sensor is (3D)
     '''
     def __init__(self, POSX=0., POSY=0., POSZ=0., THDEG=0., PHDEG=180.,
-                 LOC='SURF0P', FOV=0., TYPE=0, IBOX=0, V = None):
+                 LOC='SURF0P', FOV=0., TYPE=0, ICELL=0, V = None):
 
         if (isinstance(V, Vector)):
             THDEG, PHDEG = convertVtoAngles(V)
@@ -324,7 +325,7 @@ class Sensor(object):
             'LOC'  : LOC_CODE.index(LOC),
             'FOV':   FOV,
             'TYPE':  TYPE,
-            'IBOX':  IBOX
+            'ICELL': ICELL
         }
 
     def __str__(self):
@@ -576,7 +577,7 @@ class Smartg(object):
              OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
              NBLOOP=None, progress=True, 
              le=None, flux=None, stdev=False, BEER=1, RR=1, WEIGHTRR=0.1, SZA_MAX=90., SUN_DISC=0,
-             sensor=None, refraction=False, reflectance=True, cell_atm=None, cell_oc=None,
+             sensor=None, refraction=False, reflectance=True,
              myObjects=None, interval = None,
              IsAtm = 1, cusL = None, SMAX=1e6, FFS=False, DIRECT=False):
         '''
@@ -858,13 +859,18 @@ class Smartg(object):
   
         if prof_atm is not None:
             faer = calculF(prof_atm, NF, DEPO, kind='atm')
-            prof_atm_gpu, cell_atm_gpu = init_profile(wl, prof_atm, 'atm', cell=cell_atm)
+            prof_atm_gpu, cell_atm_gpu = init_profile(wl, prof_atm, 'atm')
             NATM = len(prof_atm.axis('z_atm')) - 1
+            #if 'iopt' in prof_atm.datasets():
+            #    NATM_ABS = len(np.unique(prof_atm['iabs_atm'].data))
+            #else:
+            #    NATM_ABS = NATM
         else:
             faer = gpuzeros(1, dtype='float32')
             prof_atm_gpu = to_gpu(np.zeros(1, dtype=type_Profile))
             cell_atm_gpu = to_gpu(np.zeros(1, dtype=type_Cell))
             NATM = 0
+            #NATM_ABS = 0
 
         # computation of the impact point
         X0, tabTransDir = impactInit(prof_atm, NLAM, THVDEG, RTER, self.pp)
@@ -915,7 +921,7 @@ class Smartg(object):
 
         if prof_oc is not None:
             foce = calculF(prof_oc, NF, DEPO_WATER, kind='oc')
-            prof_oc_gpu = init_profile(wl, prof_oc, 'oc', cell=cell_oc)
+            prof_oc_gpu = init_profile(wl, prof_oc, 'oc')
             NOCE = len(prof_oc.axis('z_oc')) - 1
         else:
             foce = gpuzeros(1, dtype='float32')
@@ -1328,6 +1334,13 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
             m.add_lut(prof_atm['pine_atm'])
             m.add_lut(prof_atm['FQY1_atm'])
 
+        if 'neighbour_atm' in prof_atm.datasets():
+            m.add_lut(prof_atm['iopt_atm'])
+            #m.add_lut(prof_atm['iabs_atm'])
+            m.add_lut(prof_atm['pmin_atm'])
+            m.add_lut(prof_atm['pmax_atm'])
+            m.add_lut(prof_atm['neighbour_atm'])
+
     # write ocean profiles
     if prof_oc is not None:
         m.add_lut(prof_oc['OD_w'])
@@ -1349,6 +1362,13 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
             m.add_lut(prof_oc['pine_oc'])
             m.add_lut(prof_oc['FQY1_oc'])
         m.add_lut(prof_oc['albedo_seafloor'])
+
+        if 'neighbour_oc' in prof_oc.datasets():
+            m.add_lut(prof_oc['iopt_oc'])
+            #m.add_lut(prof_oc['iabs_oc'])
+            m.add_lut(prof_oc['pmin_oc'])
+            m.add_lut(prof_oc['pmax_oc'])
+            m.add_lut(prof_oc['neighbour_oc'])
 
     # write the error )count
     err = errorcount.get()
@@ -1615,6 +1635,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
     copy_to_device('OUTPUT_LAYERSd', OUTPUT_LAYERS, np.uint32)
     copy_to_device('NF', NF, np.uint32)
     copy_to_device('NATMd', NATM, np.int32)
+    #copy_to_device('NATM_ABSd', NATM_ABS, np.int32)
     copy_to_device('XBLOCKd', XBLOCK, np.int32)
     copy_to_device('YBLOCKd', 1, np.int32)
     copy_to_device('XGRIDd', XGRID, np.int32)
@@ -1704,26 +1725,35 @@ def InitConst(surf, env, NATM, NOCE, mod,
         if (cusL == None):
             copy_to_device('LMODEd', 0, np.int32)
         
-def init_profile(wl, prof, kind, cell=None):
+def init_profile(wl, prof, kind):
     '''
     take the profile as a MLUT, and setup the gpu structure
     kind = 'atm' or 'oc' for atmosphere or ocean
-    
-    cell: eventually a cell array of type_Cell type for 3D , default None (1D)
     '''
 
+    NREF = len(prof.axis('z_'+kind))
     # reformat to smartg format
-
-    NLAY = len(prof.axis('z_'+kind)) - 1
-    shp = (len(wl), NLAY+1)
+    if 'iopt_'+kind in prof.datasets(): 
+        NLAY = len(prof['OD_'+kind].data[0,:])
+    else:
+        NLAY = len(prof.axis('z_'+kind))
+    shp = (len(wl), NLAY)
     prof_gpu = np.zeros(shp, dtype=type_Profile, order='C')
 
     if kind == "oc":
-        if cell is None : prof_gpu['z'][0,:] = prof.axis('z_'+kind)  * 1e-3 # to Km
+        if 'iopt_oc' not in prof.datasets():
+            prof_gpu['z'][0,:] = prof.axis('z_'+kind)  * 1e-3 # to Km
+            cell_gpu = np.zeros(1, dtype=type_Cell)
+        else: 
+            cell_gpu = np.zeros(len(prof['iopt_oc'].data), dtype=type_Cell)
         prof_gpu['n'][0,:] = 1.34;
     else:
-        if cell is None : prof_gpu['z'][0,:] = prof.axis('z_'+kind)
-        prof_gpu['n'][:,:] = prof['n_'+kind].data[...]
+        if 'iopt_atm' not in prof.datasets():
+            prof_gpu['z'][0,:] = prof.axis('z_'+kind)
+            prof_gpu['n'][:,:] = prof['n_'+kind].data[...]
+            cell_gpu = np.zeros(1, dtype=type_Cell)
+        else:
+            cell_gpu = np.zeros(len(prof['iopt_atm'].data), dtype=type_Cell)
     prof_gpu['z'][1:,:] = -999.      # other wavelengths are NaN
 
     prof_gpu['OD'][:,:] = prof['OD_'+kind].data[...]
@@ -1735,9 +1765,24 @@ def init_profile(wl, prof, kind, cell=None):
     prof_gpu['FQY1'][:] = prof['FQY1_'+kind].data[...]
     if 'iphase_'+kind in prof.datasets():
         prof_gpu['iphase'][:] = prof['iphase_'+kind].data[...]
-    if cell is None : cell = np.zeros(1, dtype=type_Cell)
+
+    if len(cell_gpu)>1:
+        cell_gpu['iopt'][:]  = prof['iopt_'+kind].data[...]
+        #cell_gpu['iabs'][:]  = prof['iabs_'+kind].data[...]
+        cell_gpu['pminx'][:] = prof['pmin_'+kind].data[0,:]
+        cell_gpu['pminy'][:] = prof['pmin_'+kind].data[1,:]
+        cell_gpu['pminz'][:] = prof['pmin_'+kind].data[2,:]
+        cell_gpu['pmaxx'][:] = prof['pmax_'+kind].data[0,:]
+        cell_gpu['pmaxy'][:] = prof['pmax_'+kind].data[1,:]
+        cell_gpu['pmaxz'][:] = prof['pmax_'+kind].data[2,:]
+        cell_gpu['neighbour1'][:] = prof['neighbour_'+kind].data[0,:]
+        cell_gpu['neighbour2'][:] = prof['neighbour_'+kind].data[1,:]
+        cell_gpu['neighbour3'][:] = prof['neighbour_'+kind].data[2,:]
+        cell_gpu['neighbour4'][:] = prof['neighbour_'+kind].data[3,:]
+        cell_gpu['neighbour5'][:] = prof['neighbour_'+kind].data[4,:]
+        cell_gpu['neighbour6'][:] = prof['neighbour_'+kind].data[5,:]
         
-    return to_gpu(prof_gpu), to_gpu(cell)
+    return to_gpu(prof_gpu), to_gpu(cell_gpu)
 
 
 
@@ -1918,8 +1963,10 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
     errorcount = gpuzeros(NERROR, dtype='uint64')
 
     
+    #if (NATM_ABS+NOCE >0) : tabDistTot = gpuzeros((NLVL,NATM_ABS+NOCE,NSENSOR,NBTHETA,NBPHI), dtype=np.float64)
     if (NATM+NOCE >0) : tabDistTot = gpuzeros((NLVL,NATM+NOCE,NSENSOR,NBTHETA,NBPHI), dtype=np.float64)
     else : tabDistTot = gpuzeros((NLVL,1,NSENSOR,NBTHETA,NBPHI), dtype=np.float64)
+    #if hist : tabHistTot = gpuzeros((MAX_HIST,(NATM_ABS+NOCE+NPSTK+NLOW+3),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
     if hist : tabHistTot = gpuzeros((MAX_HIST,(NATM+NOCE+NPSTK+NLOW+3),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
     else : tabHistTot = gpuzeros((1), dtype=np.float32)
 
@@ -1943,10 +1990,12 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
 
     if double:
         tabPhotons = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float64)
+        #if (NATM_ABS+NOCE >0) : tabDist = gpuzeros((NLVL,NATM_ABS+NOCE,NSENSOR,NBTHETA,NBPHI), dtype=np.float64)
         if (NATM+NOCE >0) : tabDist = gpuzeros((NLVL,NATM+NOCE,NSENSOR,NBTHETA,NBPHI), dtype=np.float64)
         else : tabDist = gpuzeros((NLVL,1,NSENSOR,NBTHETA,NBPHI), dtype=np.float64)
     else:
         tabPhotons = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float32)
+        #if (NATM_ABS+NOCE >0) : tabDist = gpuzeros((NLVL,NATM_ABS+NOCE,NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
         if (NATM+NOCE >0) : tabDist = gpuzeros((NLVL,NATM+NOCE,NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
         else : tabDist = gpuzeros((NLVL,1,NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
 

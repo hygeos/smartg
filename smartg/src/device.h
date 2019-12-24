@@ -14,6 +14,7 @@ __device__ __constant__ int NOCEd;
 __device__ __constant__ unsigned int OUTPUT_LAYERSd;
 __device__ __constant__ unsigned int NF;
 __device__ __constant__ int NATMd;
+//__device__ __constant__ int NATM_ABSd;
 __device__ __constant__ float WINDSPEEDd;
 __device__ __constant__ float NH2Od;
 
@@ -153,6 +154,7 @@ __device__ void move_pp2(Photon*, struct Profile *prof_atm, struct Profile* prof
 
 #ifdef OPT3D
 __device__ void GetFaceIndex(float3 pos, int *index);
+__device__ void GetFaceMiddlePoint(int ind, float3 pmin, float3 pmax, float3 *p);
 #endif
 
 // move, version plan parallèle
