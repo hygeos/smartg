@@ -861,16 +861,11 @@ class Smartg(object):
             faer = calculF(prof_atm, NF, DEPO, kind='atm')
             prof_atm_gpu, cell_atm_gpu = init_profile(wl, prof_atm, 'atm')
             NATM = len(prof_atm.axis('z_atm')) - 1
-            #if 'iopt' in prof_atm.datasets():
-            #    NATM_ABS = len(np.unique(prof_atm['iabs_atm'].data))
-            #else:
-            #    NATM_ABS = NATM
         else:
             faer = gpuzeros(1, dtype='float32')
             prof_atm_gpu = to_gpu(np.zeros(1, dtype=type_Profile))
             cell_atm_gpu = to_gpu(np.zeros(1, dtype=type_Cell))
             NATM = 0
-            #NATM_ABS = 0
 
         # computation of the impact point
         X0, tabTransDir = impactInit(prof_atm, NLAM, THVDEG, RTER, self.pp)
@@ -1635,7 +1630,6 @@ def InitConst(surf, env, NATM, NOCE, mod,
     copy_to_device('OUTPUT_LAYERSd', OUTPUT_LAYERS, np.uint32)
     copy_to_device('NF', NF, np.uint32)
     copy_to_device('NATMd', NATM, np.int32)
-    #copy_to_device('NATM_ABSd', NATM_ABS, np.int32)
     copy_to_device('XBLOCKd', XBLOCK, np.int32)
     copy_to_device('YBLOCKd', 1, np.int32)
     copy_to_device('XGRIDd', XGRID, np.int32)
@@ -1963,10 +1957,8 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
     errorcount = gpuzeros(NERROR, dtype='uint64')
 
     
-    #if (NATM_ABS+NOCE >0) : tabDistTot = gpuzeros((NLVL,NATM_ABS+NOCE,NSENSOR,NBTHETA,NBPHI), dtype=np.float64)
     if (NATM+NOCE >0) : tabDistTot = gpuzeros((NLVL,NATM+NOCE,NSENSOR,NBTHETA,NBPHI), dtype=np.float64)
     else : tabDistTot = gpuzeros((NLVL,1,NSENSOR,NBTHETA,NBPHI), dtype=np.float64)
-    #if hist : tabHistTot = gpuzeros((MAX_HIST,(NATM_ABS+NOCE+NPSTK+NLOW+3),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
     if hist : tabHistTot = gpuzeros((MAX_HIST,(NATM+NOCE+NPSTK+NLOW+3),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
     else : tabHistTot = gpuzeros((1), dtype=np.float32)
 
@@ -1990,12 +1982,10 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
 
     if double:
         tabPhotons = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float64)
-        #if (NATM_ABS+NOCE >0) : tabDist = gpuzeros((NLVL,NATM_ABS+NOCE,NSENSOR,NBTHETA,NBPHI), dtype=np.float64)
         if (NATM+NOCE >0) : tabDist = gpuzeros((NLVL,NATM+NOCE,NSENSOR,NBTHETA,NBPHI), dtype=np.float64)
         else : tabDist = gpuzeros((NLVL,1,NSENSOR,NBTHETA,NBPHI), dtype=np.float64)
     else:
         tabPhotons = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float32)
-        #if (NATM_ABS+NOCE >0) : tabDist = gpuzeros((NLVL,NATM_ABS+NOCE,NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
         if (NATM+NOCE >0) : tabDist = gpuzeros((NLVL,NATM+NOCE,NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
         else : tabDist = gpuzeros((NLVL,1,NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
 
@@ -2124,11 +2114,11 @@ def impactInit(prof_atm, NLAM, THVDEG, Rter, pp):
     '''
     if prof_atm is None:
         Hatm = 0.
-        NATM = 0
+        natm = 0
     else:
         Zatm = prof_atm.axis('z_atm')
         Hatm = Zatm[0]
-        NATM = len(Zatm)-1
+        natm = len(Zatm)-1
 
     vx = -np.sin(THVDEG * np.pi / 180)
     vy = 0.
@@ -2142,14 +2132,16 @@ def impactInit(prof_atm, NLAM, THVDEG, Rter, pp):
         x0 = Hatm*np.tan(THVDEG*np.pi/180.)
         y0 = 0.
 
-        if NATM != 0:
+        if natm != 0:
             for ilam in range(NLAM):
                 if prof_atm['OD_atm'].ndim == 2:
                     # lam, z
-                    tautot[ilam] = prof_atm['OD_atm'][ilam, NATM]/np.cos(THVDEG*pi/180.)
+                    #tautot[ilam] = prof_atm['OD_atm'][ilam, natm]/np.cos(THVDEG*pi/180.)
+                    tautot[ilam] = prof_atm['OD_atm'][ilam, -1]/np.cos(THVDEG*pi/180.)
                 elif prof_atm['OD_atm'].ndim == 1:
                     # z
-                    tautot[ilam] = prof_atm['OD_atm'][NATM]/np.cos(THVDEG*pi/180.)
+                    #tautot[ilam] = prof_atm['OD_atm'][natm]/np.cos(THVDEG*pi/180.)
+                    tautot[ilam] = prof_atm['OD_atm'][-1]/np.cos(THVDEG*pi/180.)
                 else:
                     raise Exception('invalid number of dimensions in prof_atm')
     else:
@@ -2173,7 +2165,7 @@ def impactInit(prof_atm, NLAM, THVDEG, Rter, pp):
         xph = x0
         yph = y0
         zph = z0
-        for i in range(1, NATM+1):
+        for i in range(1, natm+1):
             # V is the direction vector, X is the position vector, D is the
             # distance to the next layer and R is the position vector at the
             # next layer
