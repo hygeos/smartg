@@ -513,7 +513,8 @@ class AtmAFGL(Atmosphere):
         - if cells is present: then atmosphere is 3D
            Cells represent the 3D definition of  atmosphere
            1) 'iopt' gives the number of the optical property corresponding to the cells; iopt(Ncell)
-           2) Bounding Boxes(1 Point Bottom Left pmin, 1 Point Top Right pmax) of the cells; pmin(3,Ncell); pmax(3,Ncell)
+           2) 'iabs' gives the number of the absorption property corresponding to the cells; iabs(Ncell)
+           3) Bounding Boxes(1 Point Bottom Left pmin, 1 Point Top Right pmax) of the cells; pmin(3,Ncell); pmax(3,Ncell)
            and 6 neighbours index (positive X, negative X, positive Y, negative Y, positive Z, negative Z); neighbour(6,Ncell)
            it returns coefficients in (km-1) instead of optical thicknesses
              
@@ -913,7 +914,6 @@ class AtmAFGL(Atmosphere):
 
         if self.prof_phases is not None:
             ipha, phases = self.prof_phases
-            pha = np.stack([p.data for p in phases])
             if not self.OPT3D:
                 pro.add_dataset('iphase_atm', ipha, axnames=['wavelength', 'z_atm'],
                         attrs={'description':
@@ -922,7 +922,12 @@ class AtmAFGL(Atmosphere):
                 pro.add_dataset('iphase_atm', ipha, axnames=['wavelength', 'iopt'],
                         attrs={'description':
                                'index of phase matrix'})
-            pro.add_axis('theta_atm', phases[0].axis('theta_atm'))
+
+            # set the number of scattering angles to the maximum
+            ip  = np.array([p.axis('theta_atm').size for p in phases]).argmax()
+            theta = phases[ip].axis('theta_atm')
+            pha = np.stack([p[:,Idx(theta)] for p in phases])
+            pro.add_axis('theta_atm', theta)
             pro.add_dataset('phase_atm', pha, axnames=['iphase', 'stk', 'theta_atm'],
                     attrs={'description':
                            'phase matrices'})
@@ -930,8 +935,9 @@ class AtmAFGL(Atmosphere):
         # Pure 3D
         #
         if self.OPT3D:
-            (iopt, pmin, pmax, neighbour) = self.cells
+            (iopt, iabs, pmin, pmax, neighbour) = self.cells
             pro.add_dataset('iopt_atm', iopt, axnames=['icell'])
+            pro.add_dataset('iabs_atm', iabs, axnames=['icell'])
             pro.add_dataset('pmin_atm', pmin, axnames=['None', 'icell'])
             pro.add_dataset('pmax_atm', pmax, axnames=['None', 'icell'])
             pro.add_dataset('neighbour_atm', neighbour, axnames=['None', 'icell'])
@@ -1090,6 +1096,7 @@ class Profile_base(object):
         #
         # read standard US atmospheres for other gases
         #
+        '''
         ch4_filename = join(dir_libradtran_atmmod, 'afglus_ch4_vmr.dat')
         co_filename = join(dir_libradtran_atmmod, 'afglus_co_vmr.dat')
         n2o_filename = join(dir_libradtran_atmmod, 'afglus_n2o_vmr.dat')
@@ -1102,6 +1109,7 @@ class Profile_base(object):
         self.dens_n2o = interp1d(datan2o[:,0] , datan2o[:,1])(self.z) * self.dens_air # CH4 density en cm-3
         datan2 = np.loadtxt(n2_filename, comments="#")
         self.dens_n2 = interp1d(datan2[:,0] , datan2[:,1])(self.z) * self.dens_air # CH4 density en cm-3
+        '''
 
         if US:
             ch4_filename = join(dir_libradtran_atmmod, 'afglus_ch4_vmr.dat')
@@ -1306,3 +1314,145 @@ def isnumeric(x):
     except TypeError:
         return False
 
+def get_o2_abs(z, wl, afgl='afglus', DOWNLOAD=False, P0=None, verbose=False, zint=None):
+    '''
+    return vertical profile of O2 absorption coefficient
+    
+    Inputs:
+        wl : 1D array of wavlength (nm)
+        z  : 1D array of altitude in descending order (km)
+
+    Keywords:
+        afgl : string describing which AFGL standard atmosphere, default 'afglus'
+        DOWNLOAD: Download HITRAN lines parameters, Default False
+        P0 : surface pressure (hPa), default None: uses AFGL
+        zint : vertical grid to interpolate into, default None, use z
+
+
+    Outputs:
+        2D array (NW, NZ) of absorption coefficient in km-1), (in grid zint if present, otherwise z)
+    '''
+    import hapi
+    from Voigt_gpu import absorptionCoefficient_Voigt_gpu
+    #Connect to HITRAN database
+    hapi.db_begin('data')
+    vmin = 1e7/wl.max()
+    vmax = 1e7/wl.min()
+    NW   = wl.size
+    dv   = (vmax-vmin)/NW
+    if DOWNLOAD:
+        hapi.fetch('O2i1',7,1,vmin-100,vmax+100)
+        hapi.fetch('O2i2',7,2,vmin-100,vmax+100)
+        hapi.fetch('O2i3',7,3,vmin-100,vmax+100)  
+    if P0 is None : atm = AtmAFGL(afgl, grid=z, O3=0., NO2=False)
+    else :          atm = AtmAFGL(afgl, grid=z, O3=0., NO2=False, P0=P0)
+    NLE = atm.prof.z.size
+    # prepare array for o2 absorption coefficients
+    ao2 = np.zeros((NW+5,NLE), dtype=np.float64)
+    # compute O2 absorption coefficient with 'GPU' version of HAPI Voigt profile function
+    j=0
+    for p,t,o2,z in zip(atm.prof.P,atm.prof.T,atm.prof.dens_o2,atm.prof.z):
+        nuo2,coefo2 = absorptionCoefficient_Voigt_gpu(SourceTables=['O2i1','O2i2','O2i3'],
+            HITRAN_units=True,
+            OmegaRange=[vmin,vmax],OmegaStep=dv,GammaL='gamma_self',
+            Environment={'p':p/1013.,'T':t})
+        ao2[:nuo2.size,j] = coefo2 * o2 * 1e5
+        j=j+1
+        if verbose : print('level %f completed'%z)
+    wlabs=(1e7/nuo2)
+    # back to increasing wavelengths
+    wlabs = wlabs[::-1]
+    ao2   = ao2[:nuo2.size,:]
+    ao2   = ao2[::-1,:]
+    #interpolation into the solar grid
+    ab    = LUT(ao2, axes=[wlabs, atm.prof.z], names=['wavelength', 'z'] )
+    
+    if zint is None : return ab[Idx(wl, fill_value='extrema'),:]
+    else : 
+        zint2, wl2 = np.meshgrid(zint, wl)
+        return ab[Idx(wl2  , fill_value='extrema'),
+                  Idx(zint2, fill_value='extrema')]
+
+
+
+def get_co2_abs(z, wl, afgl='afglus', DOWNLOAD=False, P0=None, verbose=False, zint=None):
+    '''
+    return vertical profile of O2 absorption coefficient
+    
+    Inputs:
+        wl : 1D array of wavlength (nm)
+        z  : 1D array of altitude in descending order (km)
+
+    Keywords:
+        afgl : string describing which AFGL standard atmosphere, default 'afglus'
+        DOWNLOAD: Download HITRAN lines parameters, Default False
+        P0 : surface pressure (hPa), default None: uses AFGL
+        zint : vertical grid to interpolate into, default None, use z
+
+    Outputs:
+        2D array (NW, NZ) of absorption coefficient in km-1), (in grid zint if present, otherwise z)
+    '''
+    import hapi
+    from Voigt_gpu import absorptionCoefficient_Voigt_gpu
+    #Connect to HITRAN database
+    hapi.db_begin('data')
+    vmin = 1e7/wl.max()
+    vmax = 1e7/wl.min()
+    NW   = wl.size
+    dv   = (vmax-vmin)/NW
+    if DOWNLOAD:
+        hapi.fetch('CO2i1',2,1,vmin-100,vmax+100)
+        hapi.fetch('CO2i2',2,2,vmin-100,vmax+100)
+        hapi.fetch('CO2i3',2,3,vmin-100,vmax+100)  
+    if P0 is None : atm = AtmAFGL(afgl, grid=z, O3=0., NO2=False)
+    else :          atm = AtmAFGL(afgl, grid=z, O3=0., NO2=False, P0=P0)
+    NLE = atm.prof.z.size
+    # prepare array for co2 absorption coefficients
+    aco2 = np.zeros((NW+5,NLE), dtype=np.float64)
+    # compute CO2 absorption coefficient with 'GPU' version of HAPI Voigt profile function
+    j=0
+    for p,t,co2,z in zip(atm.prof.P,atm.prof.T,atm.prof.dens_co2,atm.prof.z):
+        nuco2,coefco2 = absorptionCoefficient_Voigt_gpu(SourceTables=['CO2i1','CO2i2','CO2i3'],
+            HITRAN_units=True,
+            OmegaRange=[vmin,vmax],OmegaStep=dv,GammaL='gamma_self',
+            Environment={'p':p/1013.,'T':t})
+        aco2[:nuco2.size,j] = coefco2 * co2 * 1e5
+        j=j+1
+        if verbose : print('level %f completed'%z)
+    wlabs=(1e7/nuco2)
+    # back to increasing wavelengths
+    wlabs = wlabs[::-1]
+    aco2   = aco2[:nuco2.size,:]
+    aco2   = aco2[::-1,:]
+    #interpolation into the solar grid
+    ab    = LUT(aco2, axes=[wlabs, atm.prof.z], names=['wavelength', 'z'] )
+    
+    if zint is None : return ab[Idx(wl, fill_value='extrema'),:]
+    else : 
+        zint2, wl2 = np.meshgrid(zint, wl)
+        return ab[Idx(wl2  , fill_value='extrema'),
+                  Idx(zint2, fill_value='extrema')]
+
+
+def od2k(prof, dataset, axis=1, zreverse=False):
+    '''
+    From integrated Optical Depth to vertical coefficient in km-1)
+
+    Inputs:
+        prof : atmosphere profile (MLUT) as computed by calc method of AtmAFGL
+        dataset : name of the dataset to be processed
+
+    Keywords:
+        axis : number of the vertical dimension, default 1
+        zreverse : invert the vertical axis, default False
+
+    Outputs:
+        2D array (NW, NZ) of vertical coefficient (km-1)
+    '''
+    ot = diff1(prof[dataset].data.astype(np.float32), axis=axis)
+    dz = diff1(prof.axis('z_atm')).astype(np.float32)
+    k  = abs(ot/dz)
+    k[np.isnan(k)] = 0
+    sl = slice(None,None,-1 if zreverse else 1)
+    
+    return k[:,sl]

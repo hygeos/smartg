@@ -1164,8 +1164,10 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     ph->vz_prev[ph->nevt]      = ph->v.z;
     ph->epsilon_prev[ph->nevt] = epsilon;
     #else
-    for (int k=0; k<(NATMd+1); k++) ph->cdist_atm[k]= 0.F;
-    for (int k=0; k<(NOCEd+1); k++) ph->cdist_oc[k] = 0.F;
+    for (int k=0; k<(NATM_ABSd+1); k++) ph->cdist_atm[k]= 0.F;
+    for (int k=0; k<(NOCE_ABSd+1); k++) ph->cdist_oc[k] = 0.F;
+    //for (int k=0; k<(NATMd+1); k++) ph->cdist_atm[k]= 0.F;
+    //for (int k=0; k<(NOCEd+1); k++) ph->cdist_oc[k] = 0.F;
     #endif
     for (int k=0; k<NLOWd; k++) ph->weight_sca[k] = 1.0F;
     ph->nsif = 0;
@@ -1992,8 +1994,12 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
 
     int count=0;
 
-    while (count<1000) {
+    while (count<501) {
     //while (1) {
+        //if (idx==0 && count >= 495) printf("%d %d %d %d %g %g\n",ph->loc, ph->layer, next_layer, count, (double)intTime0, (double)intTime1);
+        if (count >= 500) {
+            ph->loc=REMOVED; 
+            break;}
         //
         // stopping criteria
         if (ph->loc == REMOVED) break;
@@ -2039,24 +2045,19 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
         // from the current position
         //
 		intersectBox = Box_cur.IntersectP(Ray_cur, &intTime0, &intTime1);
+        if (intTime1==0) intTime1=1e-4;
         intersectPoint = operator+(ph->pos, ph->v * intTime1);
         
         //
         // calculate the optical thicknesses h_cur and h_cur_abs to the next layer
         // We get the layer extinction coefficient and multiply by the distance within the layer
         //
-        #ifndef OPT3D
-        coef_cur = get_OD(BEERd,prof[ph->layer+ilam]);
-        #else
         coef_cur = get_OD(BEERd,prof[cell[ph->layer].iopt+ilam]);
-        #endif
+
         h_cur    = coef_cur * intTime1;
+
         #ifndef ALIS
-         #ifndef OPT3D
-         h_cur_abs = prof[ph->layer+ilam].OD_abs * intTime1;
-         #else
-         h_cur_abs = prof[cell[ph->layer].iopt+ilam].OD_abs * intTime1;
-         #endif
+        h_cur_abs = prof[cell[ph->layer].iopt+ilam].OD_abs * intTime1;
         #endif
 
         //
@@ -2071,8 +2072,8 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
             if (BEERd == 1) ph->weight *= __expf(-( epsilon * h_cur_abs));
             #else
             float coef;
-            if (ph->loc==ATMOS) ph->cdist_atm[cell[ph->layer].iopt] += intTime1;
-            if (ph->loc==OCEAN) ph->cdist_oc[ cell[ph->layer].iopt] += intTime1;
+            if (ph->loc==ATMOS) ph->cdist_atm[cell[ph->layer].iabs] += intTime1;
+            if (ph->loc==OCEAN) ph->cdist_oc[ cell[ph->layer].iabs] += intTime1;
             int DL=(NLAMd-1)/(NLOWd-1);
             for (int k=0; k<NLOWd; k++) {
                 coef = get_OD(1,prof[cell[ph->layer].iopt + k*DL*NL]);
@@ -2090,8 +2091,8 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
             if (BEERd == 1) ph->weight *= __expf(-( h_cur_abs));
             #else
             float coef;
-            if (ph->loc==ATMOS) ph->cdist_atm[cell[ph->layer].iopt] += intTime1;
-            if (ph->loc==OCEAN) ph->cdist_oc[ cell[ph->layer].iopt] += intTime1;
+            if (ph->loc==ATMOS) ph->cdist_atm[cell[ph->layer].iabs] += intTime1;
+            if (ph->loc==OCEAN) ph->cdist_oc[ cell[ph->layer].iabs] += intTime1;
             int DL=(NLAMd-1)/(NLOWd-1);
             for (int k=0; k<NLOWd; k++) {
                 coef = get_OD(1,prof[cell[ph->layer].iopt + k*DL*NL]);
@@ -2986,8 +2987,10 @@ __device__ void choose_emitter(Photon* ph,
             ph->nref = 0;
             ph->nrrs = 0;
             for (int k=0; k<NLOWd; k++) ph->weight_sca[k] = 1.F;
-            for (int k=0; k<NATMd+1; k++) ph->cdist_atm[k] = 0.F;
-            for (int k=0; k<NOCEd+1; k++) ph->cdist_oc[k] = 0.F;
+            for (int k=0; k<NATM_ABSd+1; k++) ph->cdist_atm[k] = 0.F;
+            //for (int k=0; k<NATMd+1; k++) ph->cdist_atm[k] = 0.F;
+            //for (int k=0; k<NOCEd+1; k++) ph->cdist_oc[k] = 0.F;
+            for (int k=0; k<NOCE_ABSd+1; k++) ph->cdist_oc[k] = 0.F;
 		} else {
 			ph->emitter = SOLAR_REF; // SOLAR reflection index
             ph->nref += 1;
@@ -5300,7 +5303,8 @@ __device__ void countPhoton(Photon* ph,
               wabs *= exp(-fabs(__fdividef(tau_abs2 - tau_abs1 , ph->vz_prev[n+1])));
           }
 
-          #else
+          #else // fast 1D
+
           // Computation of the absorption along photon history with cumulative distances in layers
           wabs = 0.F;
 
@@ -5317,19 +5321,23 @@ __device__ void countPhoton(Photon* ph,
           }
 
           #else // in 3D absorption coefficient
-          //for (int n=0; n<(NATMd+1); n++){
-              //wabs += prof_atm[n + il*(NATMd+1)].OD_abs * ph->cdist_atm[n];
-          for (int n=0; n<(NATMd); n++){
+          /*for (int n=0; n<(NATMd); n++){
+              wabs += prof_atm[n+1 + il*(NATMd+1)].OD_abs * ph->cdist_atm[n];
+          }*/
+          for (int n=0; n<(NATM_ABSd); n++){
               wabs += prof_atm[n+1 + il*(NATMd+1)].OD_abs * ph->cdist_atm[n];
           }
-          for (int n=0; n<(NOCEd); n++){
+          /*for (int n=0; n<(NOCEd); n++){
+              wabs += prof_oc[ n+1 + il*(NOCEd+1)].OD_abs * ph->cdist_oc[n];
+          }*/
+          for (int n=0; n<(NOCE_ABSd); n++){
               wabs += prof_oc[ n+1 + il*(NOCEd+1)].OD_abs * ph->cdist_oc[n];
           }
           #endif
 
           wabs = exp(-wabs);
 
-          #endif // Fast 1D
+          #endif // alt 1D
 
 
           #ifdef DOUBLE 
@@ -5366,53 +5374,54 @@ __device__ void countPhoton(Photon* ph,
 
      #if ( defined(SPHERIQUE) || defined(ALT_PP) )
      unsigned long long K   = NBTHETAd*NBPHId*NSENSORd; /* number of potential output per photon*/
-     unsigned long long KK  = K*NATMd;
      unsigned long long LL;
      if (HISTd==1 && count_level==UPTOA) { // Histories stored for absorption computation afterward (only spherical or alt_pp)
           //int idx = blockIdx.x * blockDim.x + threadIdx.x;
           unsigned long long counter2;
           counter2=atomicAdd(NPhotonsOut, 1);
           if (counter2 >= MAX_HIST) return;
-          unsigned long long KK2 = K*(NATMd+NOCEd+4+NLOWd+3); /* Number of information per local estmate photon (Record length)*/
-          //unsigned long long KK2 = K*(NATMd+NOCEd+4+NLOWd); /* Number of information per local estmate photon (Record length)*/
+          unsigned long long KK2 = K*(NATM_ABSd+NOCE_ABSd+4+NLOWd+3); /* Number of information per local estmate photon (Record length)*/
+          //unsigned long long KK2 = K*(NATMd+NOCEd+4+NLOWd+3); /* Number of information per local estmate photon (Record length)*/
           //unsigned long long KKK2= KK2 * MAX_HIST; /* Number of individual information per vertical Level (Number of Records)*/
           unsigned long long LL2;
           tabCount3   = (float*)tabHist     ; /* we position the pointer at the good vertical level*/
           //tabCount3   = (float*)tabHist     + count_level*KKK2; /* we position the pointer at the good vertical level*/
-          for (int n=0; n<NOCEd; n++){
+          for (int n=0; n<NOCE_ABSd; n++){
                 /* The offset is the number of previous writing (counter2) * Record Length
                    + the offset of the individual information  + the place of the physical quantity */
                 LL2 = counter2*KK2 +  n*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
                 tabCount3[LL2]= ph->cdist_oc[n+1];
           }
-          for (int n=0; n<NATMd; n++){
-                LL2 = counter2*KK2 +  (n+NOCEd)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          //for (int n=0; n<NATMd; n++){
+          for (int n=0; n<NATM_ABSd; n++){
+                LL2 = counter2*KK2 +  (n+NOCE_ABSd)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
                 tabCount3[LL2]= ph->cdist_atm[n+1];
           }
-          LL2 = counter2*KK2 +  (NATMd+NOCEd+0)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          LL2 = counter2*KK2 +  (NATM_ABSd+NOCE_ABSd+0)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= weight * (st.x+st.y);
-          LL2 = counter2*KK2 +  (NATMd+NOCEd+1)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          LL2 = counter2*KK2 +  (NATM_ABSd+NOCE_ABSd+1)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= weight * (st.x-st.y);
-          LL2 = counter2*KK2 +  (NATMd+NOCEd+2)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          LL2 = counter2*KK2 +  (NATM_ABSd+NOCE_ABSd+2)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= weight * (st.z);
-          LL2 = counter2*KK2 +  (NATMd+NOCEd+3)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          LL2 = counter2*KK2 +  (NATM_ABSd+NOCE_ABSd+3)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= weight * (st.w);
 
           for (int n=0; n<NLOWd; n++){
-                LL2 = counter2*KK2 +  (n+NATMd+NOCEd+4)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+                LL2 = counter2*KK2 +  (n+NATM_ABSd+NOCE_ABSd+4)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
                 tabCount3[LL2]= weight_sca[n];
           }
-          LL2 = counter2*KK2 +  (NLOWd+NATMd+NOCEd+4)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          LL2 = counter2*KK2 +  (NLOWd+NATM_ABSd+NOCE_ABSd+4)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= (float)(ph->nrrs>=1);
-          LL2 = counter2*KK2 +  (NLOWd+NATMd+NOCEd+4+1)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          LL2 = counter2*KK2 +  (NLOWd+NATM_ABSd+NOCE_ABSd+4+1)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= (float)(ph->nref);
-          LL2 = counter2*KK2 +  (NLOWd+NATMd+NOCEd+4+2)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          LL2 = counter2*KK2 +  (NLOWd+NATM_ABSd+NOCE_ABSd+4+2)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= (float)(ph->nsif);
        } // HISTd==1
 
+       unsigned long long KK  = K*(NATM_ABSd+NOCE_ABSd);
        #ifdef DOUBLE
           tabCount2   = (double*)tabDist     + count_level*KK;
-          for (int n=0; n<NOCEd; n++){
+          for (int n=0; n<NOCE_ABSd; n++){
             LL = n*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
             #if __CUDA_ARCH__ >= 600
             atomicAdd(tabCount2+LL, (double)ph->cdist_oc[n+1]);
@@ -5420,8 +5429,8 @@ __device__ void countPhoton(Photon* ph,
             DatomicAdd(tabCount2+LL, (double)ph->cdist_oc[n+1]);
             #endif
           }
-          for (int n=0; n<NATMd; n++){
-            LL = (n+NOCEd)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          for (int n=0; n<NATM_ABSd; n++){
+            LL = (n+NOCE_ABSd)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
             #if __CUDA_ARCH__ >= 600
             atomicAdd(tabCount2+LL, (double)ph->cdist_atm[n+1]);
             #else
@@ -5430,15 +5439,15 @@ __device__ void countPhoton(Photon* ph,
           }
        #else
           tabCount2   = (float*)tabDist     + count_level*KK;
-          for (int n=0; n<NOCEd; n++){
+          for (int n=0; n<NOCE_ABSd; n++){
             LL = n*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
             atomicAdd(tabCount2+LL, (double)ph->cdist_oc[n+1]);
           }
-          for (int n=0; n<NATMd; n++){
-            LL = (n+NOCEd)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          for (int n=0; n<NATM_ABSd; n++){
+            LL = (n+NOCE_ABSd)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
             atomicAdd(tabCount2+LL, ph->cdist_atm[n+1]);
           }
-       #endif
+       #endif 
       #endif // SPHERIQUE or ALT_PP
 
     } // correct output box
@@ -5841,8 +5850,10 @@ __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
     for (k=0; k<kmax; k++) ph_le->epsilon_prev[k] = ph->epsilon_prev[k];
     for (k=0; k<NLOWd; k++) ph_le->tau_sca[k] = ph->tau_sca[k];
     #else
-    for (k=0; k<(NATMd+1); k++) ph_le->cdist_atm[k] = ph->cdist_atm[k];
-    for (k=0; k<(NOCEd+1); k++) ph_le->cdist_oc[k]  = ph->cdist_oc[k];
+    for (k=0; k<(NATM_ABSd+1); k++) ph_le->cdist_atm[k] = ph->cdist_atm[k];
+    //for (k=0; k<(NATMd+1); k++) ph_le->cdist_atm[k] = ph->cdist_atm[k];
+    //for (k=0; k<(NOCEd+1); k++) ph_le->cdist_oc[k]  = ph->cdist_oc[k];
+    for (k=0; k<(NOCE_ABSd+1); k++) ph_le->cdist_oc[k]  = ph->cdist_oc[k];
     #endif
     for (k=0; k<NLOWd; k++) ph_le->weight_sca[k] = ph->weight_sca[k];
     ph_le->nsif = ph->nsif;

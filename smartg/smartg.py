@@ -105,7 +105,7 @@ type_Profile = [
 
 type_Cell = [
     ('iopt',     'int32'),    # // Optical scattering properties index
-    #('iabs',     'int32'),    # // Optical absorbing properties index
+    ('iabs',     'int32'),    # // Optical absorbing properties index
     ('pminx',  'float32'),    # // Box point pmin.x
     ('pminy',  'float32'),    # // Box point pmin.y
     ('pminz',  'float32'),    # // Box point pmin.z
@@ -489,7 +489,7 @@ class Smartg(object):
         # compilation option
         #
         options = []
-        ##options = ['-G']
+        #options = ['-G']
         #options = ['-g', '-G']
         if not pp:
             # spherical shell calculation
@@ -861,11 +861,15 @@ class Smartg(object):
             faer = calculF(prof_atm, NF, DEPO, kind='atm')
             prof_atm_gpu, cell_atm_gpu = init_profile(wl, prof_atm, 'atm')
             NATM = len(prof_atm.axis('z_atm')) - 1
+            if self.opt3D : 
+                NATM_ABS = prof_atm['iabs_atm'].data.max().astype(np.int32)
+            else : NATM_ABS = NATM
         else:
             faer = gpuzeros(1, dtype='float32')
             prof_atm_gpu = to_gpu(np.zeros(1, dtype=type_Profile))
             cell_atm_gpu = to_gpu(np.zeros(1, dtype=type_Cell))
             NATM = 0
+            NATM_ABS = 0
 
         # computation of the impact point
         X0, tabTransDir = impactInit(prof_atm, NLAM, THVDEG, RTER, self.pp)
@@ -916,13 +920,16 @@ class Smartg(object):
 
         if prof_oc is not None:
             foce = calculF(prof_oc, NF, DEPO_WATER, kind='oc')
-            prof_oc_gpu = init_profile(wl, prof_oc, 'oc')
+            prof_oc_gpu, cell_oc_gpu = init_profile(wl, prof_oc, 'oc')
             NOCE = len(prof_oc.axis('z_oc')) - 1
+            if self.opt3D : NOCE_ABS = prof_oc['iabs_oc'].data.max().astype(np.int32)
+            else : NOCE_ABS = NOCE
         else:
             foce = gpuzeros(1, dtype='float32')
             prof_oc_gpu = to_gpu(np.zeros(1, dtype=type_Profile))
             cell_oc_gpu = to_gpu(np.zeros(1, dtype=type_Cell))
             NOCE = 0
+            NOCE_ABS = 0
 
         #
         # albedo and adjacency effect
@@ -1019,7 +1026,7 @@ class Smartg(object):
 
 
         # initialization of the constants
-        InitConst(surf, env, NATM, NOCE, self.mod,
+        InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, self.mod,
                   NBPHOTONS, NBLOOP, THVDEG, DEPO,
                   XBLOCK, XGRID, NLAM, SIM, NF,
                   NBTHETA, NBPHI, OUTPUT_LAYERS,
@@ -1039,7 +1046,7 @@ class Smartg(object):
         (NPhotonsInTot, tabPhotonsTot, tabDistTot, tabHistTot, errorcount, 
          NPhotonsOutTot, sigma, Nkernel, secs_cuda_clock, cMatVisuRecep, vecLoss, matCats
         ) = loop_kernel(NBPHOTONS, faer, foce,
-                        NLVL, NATM, NOCE, MAX_HIST, NLOW, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
+                        NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX_HIST, NLOW, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                         NLAM, NSENSOR, self.double, self.kernel, None, p, X0, le, tab_sensor, spectrum,
                         prof_atm_gpu, prof_oc_gpu, cell_atm_gpu, cell_oc_gpu,
                         wl_proba_icdf, stdev, self.rng, myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, hist=hist)
@@ -1162,7 +1169,7 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
 
     # swapaxes : (th, phi) -> (phi, theta)
     tabFinal = tabFinal.swapaxes(4,5)
-    tabDistFinal = tabDistFinal.swapaxes(3,4)
+    if len(tabDistFinal) >1 : tabDistFinal = tabDistFinal.swapaxes(3,4)
     if hist : tabHistFinal = tabHistFinal.swapaxes(3,4)
     NPhotonsOutTot = NPhotonsOutTot.swapaxes(3,4)
     if sigma is not None:
@@ -1234,7 +1241,7 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
         m.add_dataset('U_stdev_up (TOA)', sigma[UPTOA,2,isen,ilam,iphi,:], axnames)
         m.add_dataset('V_stdev_up (TOA)', sigma[UPTOA,3,isen,ilam,iphi,:], axnames)
     m.add_dataset('N_up (TOA)', NPhotonsOutTot[UPTOA,isen,ilam,iphi,:], axnames)
-    m.add_dataset('cdist_up (TOA)', tabDistFinal[UPTOA,:,isen,iphi,:], axnames2)
+    if len(tabDistFinal) > 1: m.add_dataset('cdist_up (TOA)', tabDistFinal[UPTOA,:,isen,iphi,:], axnames2)
     if hist : m.add_dataset('disth_up (TOA)', tabHistFinal[:,:,isen,iphi,:],axnames3)
     #if hist : m.add_dataset('disth_down (0+)', tabHistFinal[UPTOA,:,:,isen,iphi,:],axnames3)
 
@@ -1249,7 +1256,7 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
             m.add_dataset('U_stdev_down (0+)', sigma[DOWN0P,2,isen,ilam,iphi,:], axnames)
             m.add_dataset('V_stdev_down (0+)', sigma[DOWN0P,3,isen,ilam,iphi,:], axnames)
         m.add_dataset('N_down (0+)', NPhotonsOutTot[DOWN0P,isen,ilam,iphi,:], axnames)
-        m.add_dataset('cdist_down (0+)', tabDistFinal[DOWN0P,:,isen,iphi,:],axnames2)
+        if len(tabDistFinal) > 1: m.add_dataset('cdist_down (0+)', tabDistFinal[DOWN0P,:,isen,iphi,:],axnames2)
         #if hist : m.add_dataset('disth_down (0+)', tabHistFinal[DOWN0P,:,:,isen,iphi,:],axnames3)
 
         m.add_dataset('I_up (0-)', tabFinal[UP0M,0,isen,ilam,iphi,:], axnames)
@@ -1262,7 +1269,7 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
             m.add_dataset('U_stdev_up (0-)', sigma[UP0M,2,isen,ilam,iphi,:], axnames)
             m.add_dataset('V_stdev_up (0-)', sigma[UP0M,3,isen,ilam,iphi,:], axnames)
         m.add_dataset('N_up (0-)', NPhotonsOutTot[UP0M,isen,ilam,iphi,:], axnames)
-        m.add_dataset('cdist_up (0-)', tabDistFinal[UP0M,:,isen,iphi,:],axnames2)
+        if len(tabDistFinal) > 1: m.add_dataset('cdist_up (0-)', tabDistFinal[UP0M,:,isen,iphi,:],axnames2)
         #if hist : m.add_dataset('disth_up (0-)', tabHistFinal[UP0M,:,:,isen,iphi,:],axnames3)
 
     if OUTPUT_LAYERS & 2:
@@ -1276,7 +1283,7 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
             m.add_dataset('U_stdev_down (0-)', sigma[DOWN0M,2,isen,ilam,iphi,:], axnames)
             m.add_dataset('V_stdev_down (0-)', sigma[DOWN0M,3,isen,ilam,iphi,:], axnames)
         m.add_dataset('N_down (0-)', NPhotonsOutTot[DOWN0M,isen,ilam,iphi,:], axnames)
-        m.add_dataset('cdist_down (0-)', tabDistFinal[DOWN0M,:,isen,iphi,:],axnames2)
+        if len(tabDistFinal) > 1: m.add_dataset('cdist_down (0-)', tabDistFinal[DOWN0M,:,isen,iphi,:],axnames2)
         #if hist : m.add_dataset('disth_down (0-)', tabHistFinal[DOWN0M,:,:,isen,iphi,:],axnames3)
 
         m.add_dataset('I_up (0+)', tabFinal[UP0P,0,isen,ilam,iphi,:], axnames)
@@ -1289,7 +1296,7 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
             m.add_dataset('U_stdev_up (0+)', sigma[UP0P,2,isen,ilam,iphi,:], axnames)
             m.add_dataset('V_stdev_up (0+)', sigma[UP0P,3,isen,ilam,iphi,:], axnames)
         m.add_dataset('N_up (0+)', NPhotonsOutTot[UP0P,isen,ilam,iphi,:], axnames)
-        m.add_dataset('cdist_up (0+)', tabDistFinal[UP0P,:,isen,iphi,:],axnames2)
+        if len(tabDistFinal) > 1: m.add_dataset('cdist_up (0+)', tabDistFinal[UP0P,:,isen,iphi,:],axnames2)
         #if hist : m.add_dataset('disth_up (0+)', tabHistFinal[UP0P,:,:,isen,iphi,:],axnames3)
 
         m.add_dataset('I_down (B)', tabFinal[DOWNB,0,isen,ilam,iphi,:], axnames)
@@ -1302,7 +1309,7 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
             m.add_dataset('U_stdev_down (B)', sigma[DOWNB,2,isen,ilam,iphi,:], axnames)
             m.add_dataset('V_stdev_down (B)', sigma[DOWNB,3,isen,ilam,iphi,:], axnames)
         m.add_dataset('N_down (B)', NPhotonsOutTot[DOWNB,isen,ilam,iphi,:], axnames)
-        m.add_dataset('cdist_down (B)', tabDistFinal[DOWNB,:,isen,iphi,:],axnames2)
+        if len(tabDistFinal) > 1: m.add_dataset('cdist_down (B)', tabDistFinal[DOWNB,:,isen,iphi,:],axnames2)
         #if hist : m.add_dataset('disth_down (B)', tabHistFinal[DOWNB,:,:,isen,iphi,:],axnames3)
 
 
@@ -1331,7 +1338,7 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
 
         if 'neighbour_atm' in prof_atm.datasets():
             m.add_lut(prof_atm['iopt_atm'])
-            #m.add_lut(prof_atm['iabs_atm'])
+            m.add_lut(prof_atm['iabs_atm'])
             m.add_lut(prof_atm['pmin_atm'])
             m.add_lut(prof_atm['pmax_atm'])
             m.add_lut(prof_atm['neighbour_atm'])
@@ -1360,7 +1367,7 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
 
         if 'neighbour_oc' in prof_oc.datasets():
             m.add_lut(prof_oc['iopt_oc'])
-            #m.add_lut(prof_oc['iabs_oc'])
+            m.add_lut(prof_oc['iabs_oc'])
             m.add_lut(prof_oc['pmin_oc'])
             m.add_lut(prof_oc['pmax_oc'])
             m.add_lut(prof_oc['neighbour_oc'])
@@ -1590,7 +1597,7 @@ def calculF(profile, N, DEPO, kind):
     return to_gpu(phase_H)
 
 
-def InitConst(surf, env, NATM, NOCE, mod,
+def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
               NBPHOTONS, NBLOOP, THVDEG, DEPO,
               XBLOCK, XGRID,NLAM, SIM, NF,
               NBTHETA, NBPHI, OUTPUT_LAYERS,
@@ -1627,9 +1634,11 @@ def InitConst(surf, env, NATM, NOCE, mod,
     # copy constants to device
     copy_to_device('NBLOOPd', NBLOOP, np.uint32)
     copy_to_device('NOCEd', NOCE, np.int32)
+    copy_to_device('NOCE_ABSd', NOCE_ABS, np.int32)
     copy_to_device('OUTPUT_LAYERSd', OUTPUT_LAYERS, np.uint32)
     copy_to_device('NF', NF, np.uint32)
     copy_to_device('NATMd', NATM, np.int32)
+    copy_to_device('NATM_ABSd', NATM_ABS, np.int32)
     copy_to_device('XBLOCKd', XBLOCK, np.int32)
     copy_to_device('YBLOCKd', 1, np.int32)
     copy_to_device('XGRIDd', XGRID, np.int32)
@@ -1762,7 +1771,7 @@ def init_profile(wl, prof, kind):
 
     if len(cell_gpu)>1:
         cell_gpu['iopt'][:]  = prof['iopt_'+kind].data[...]
-        #cell_gpu['iabs'][:]  = prof['iabs_'+kind].data[...]
+        cell_gpu['iabs'][:]  = prof['iabs_'+kind].data[...]
         cell_gpu['pminx'][:] = prof['pmin_'+kind].data[0,:]
         cell_gpu['pminy'][:] = prof['pmin_'+kind].data[1,:]
         cell_gpu['pminz'][:] = prof['pmin_'+kind].data[2,:]
@@ -1890,7 +1899,7 @@ def get_git_attrs():
     return R
 
  
-def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
+def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX_HIST, NLOW,
                 NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                 NLAM, NSENSOR, double, kern, kern2, p, X0, le, tab_sensor, spectrum,
                 prof_atm, prof_oc, cell_atm, cell_oc, wl_proba_icdf, stdev, rng, myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, hist=False):
@@ -1957,9 +1966,9 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
     errorcount = gpuzeros(NERROR, dtype='uint64')
 
     
-    if (NATM+NOCE >0) : tabDistTot = gpuzeros((NLVL,NATM+NOCE,NSENSOR,NBTHETA,NBPHI), dtype=np.float64)
-    else : tabDistTot = gpuzeros((NLVL,1,NSENSOR,NBTHETA,NBPHI), dtype=np.float64)
-    if hist : tabHistTot = gpuzeros((MAX_HIST,(NATM+NOCE+NPSTK+NLOW+3),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
+    if ((NATM+NOCE >0) and (NATM_ABS+NOCE_ABS <500) and alis) : tabDistTot = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI), dtype=np.float64)
+    else : tabDistTot = gpuzeros((1), dtype=np.float64)
+    if hist : tabHistTot = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+3),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
     else : tabHistTot = gpuzeros((1), dtype=np.float32)
 
     # Initialize of the parameters
@@ -1982,14 +1991,14 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
 
     if double:
         tabPhotons = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float64)
-        if (NATM+NOCE >0) : tabDist = gpuzeros((NLVL,NATM+NOCE,NSENSOR,NBTHETA,NBPHI), dtype=np.float64)
-        else : tabDist = gpuzeros((NLVL,1,NSENSOR,NBTHETA,NBPHI), dtype=np.float64)
+        if ((NATM+NOCE >0) and (NATM_ABS+NOCE_ABS <500) and alis) : tabDist = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI), dtype=np.float64)
+        else : tabDist = gpuzeros((1), dtype=np.float64)
     else:
         tabPhotons = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float32)
-        if (NATM+NOCE >0) : tabDist = gpuzeros((NLVL,NATM+NOCE,NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
-        else : tabDist = gpuzeros((NLVL,1,NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
+        if ((NATM+NOCE >0) and (NATM_ABS+NOCE_ABS <500) and alis) : tabDist = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
+        else : tabDist = gpuzeros((1), dtype=np.float32)
 
-    if hist : tabHist = gpuzeros((MAX_HIST,(NATM+NOCE+NPSTK+NLOW+3),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
+    if hist : tabHist = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+3),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
     else : tabHist = gpuzeros((1), dtype=np.float32)
 
     # local estimates angles
