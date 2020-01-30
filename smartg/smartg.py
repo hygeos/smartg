@@ -189,6 +189,16 @@ type_IObjets = [
     ('nBx', 'float32'),       # \
     ('nBy', 'float32'),       #  | normalBase de l'obj apres trans 
     ('nBz', 'float32'),       # /
+
+    ('indG', 'int32'),
+
+    ('bPminx', 'float32'),
+    ('bPminy', 'float32'),
+    ('bPminz', 'float32'),
+
+    ('bPmaxx', 'float32'),
+    ('bPmaxy', 'float32'),
+    ('bPmaxz', 'float32'),
     ]
 
 class FlatSurface(object):
@@ -792,7 +802,7 @@ class Smartg(object):
                 myObjects0 = np.zeros(nObj, dtype=type_IObjets, order='C')
                 TC = None; nbCx = int(0); nbCy = int(0);
                 
-            pp1 = 0.; pp2 = 0.; pp3 = 0.; pp4 = 0.;
+            pp1 = 0.; pp2 = 0.; pp3 = 0.; pp4 = 0.; nGroup = int(0);
             surfMir = 0.; nb_H = 0; zAlt_H = 0.; totS_H = 0.;
 
             # Début de la boucle pour la prise en compte de tous les objets
@@ -826,12 +836,12 @@ class Smartg(object):
                     myObjects0['p3y'][i] = myObjects[i].geo.p4.y
                     myObjects0['p3z'][i] = myObjects[i].geo.p4.z
 
-                    normalBase = Normal(0, 0, 1);
+                    normalBase = Vector(0, 0, 1);
                     # Prise en compte des transfos de rot en X, Y et Z
                     TpT0 = Transform()
-                    TpRX0 = TpT0.rotateX(myObjects[i].transformation.rotx)
-                    TpRY0 = TpT0.rotateY(myObjects[i].transformation.roty)
-                    TpRZ0 = TpT0.rotateZ(myObjects[i].transformation.rotz)
+                    TpRX0 = TpT0.rotateX(myObjects[i].transformation.rotation[0])
+                    TpRY0 = TpT0.rotateY(myObjects[i].transformation.rotation[1])
+                    TpRZ0 = TpT0.rotateZ(myObjects[i].transformation.rotation[2])
                     if (myObjects[i].transformation.rotOrder == "XYZ"):
                         TpT0 = TpRX0*TpRY0*TpRZ0
                     elif(myObjects[i].transformation.rotOrder == "XZY"):
@@ -848,6 +858,8 @@ class Smartg(object):
                         raise NameError('Unknown rotation order')
                     
                     normalBase = TpT0[normalBase]
+                    normalBase = Normalize(normalBase)
+                    #print("normalbase =", normalBase)
                     myObjects0['nBx'][i] = normalBase.x
                     myObjects0['nBy'][i] = normalBase.y
                     myObjects0['nBz'][i] = normalBase.z
@@ -855,6 +867,17 @@ class Smartg(object):
                 else:    # si l'objet est autre chose (inconnu)
                     raise NameError("Your geometry can be only spheric or plane, please" + \
                                     " choose between Spheric or Plane classes!")
+
+                # In develepemnt Group, Pmin and Pmax
+                myObjects0['indG'][i] = myObjects[i].indGroup
+                myObjects0['bPminx'][i] = myObjects[i].bboxGPmin.x
+                myObjects0['bPminy'][i] = myObjects[i].bboxGPmin.y
+                myObjects0['bPminz'][i] = myObjects[i].bboxGPmin.z
+                myObjects0['bPmaxx'][i] = myObjects[i].bboxGPmax.x
+                myObjects0['bPmaxy'][i] = myObjects[i].bboxGPmax.y
+                myObjects0['bPmaxz'][i] = myObjects[i].bboxGPmax.z
+                if (nGroup < myObjects[i].indGroup):
+                    nGroup = myObjects[i].indGroup
 
                 # Affectation des transformations (rotations et translations)
                 myObjects0['mvRx'][i] = myObjects[i].transformation.rotx
@@ -1071,16 +1094,18 @@ class Smartg(object):
 
         if cusL is not None:
             if (cusL.dict['LMODE'] == "FF"):
-                # Création d'une matrice appelé matrice de passage
-                nn3 = Normal(vSun)
-                nn1, nn2 = CoordinateSystem(nn3)
-                mm2 = np.zeros((4,4), dtype=np.float64)
+
+                DotNN = Dot(vSun*-1, Vector(0., 0., 1.))
+                # # Création d'une matrice appelé matrice de passage
+                # nn3 = Normal(vSun)
+                # nn1, nn2 = CoordinateSystem(nn3)
+                # mm2 = np.zeros((4,4), dtype=np.float64)
                 
-                # Remplissage de la matrice de passage en fonction du repère (nn3 étant le nouvel axe z)
-                mm2[0,0] = nn1.x ; mm2[0,1] = nn2.x ; mm2[0,2] = nn3.x ; mm2[0,3] = 0. ;
-                mm2[1,0] = nn1.y ; mm2[1,1] = nn2.y ; mm2[1,2] = nn3.y ; mm2[1,3] = 0. ;
-                mm2[2,0] = nn1.z ; mm2[2,1] = nn2.z ; mm2[2,2] = nn3.z ; mm2[2,3] = 0. ;
-                mm2[3,0] = 0.    ; mm2[3,1] = 0.    ; mm2[3,2] = 0.    ; mm2[3,3] = 1. ;
+                # # Remplissage de la matrice de passage en fonction du repère (nn3 étant le nouvel axe z)
+                # mm2[0,0] = nn1.x ; mm2[0,1] = nn2.x ; mm2[0,2] = nn3.x ; mm2[0,3] = 0. ;
+                # mm2[1,0] = nn1.y ; mm2[1,1] = nn2.y ; mm2[1,2] = nn3.y ; mm2[1,3] = 0. ;
+                # mm2[2,0] = nn1.z ; mm2[2,1] = nn2.z ; mm2[2,2] = nn3.z ; mm2[2,3] = 0. ;
+                # mm2[3,0] = 0.    ; mm2[3,1] = 0.    ; mm2[3,2] = 0.    ; mm2[3,3] = 1. ;
 
                 # Récupération des 4 points formant le rectangle en TOA
                 xnn = float(cusL.dict['CFX'])/2.
@@ -1090,31 +1115,36 @@ class Smartg(object):
                 ppn3 = Point(-xnn, ynn, 0.)
                 ppn4 = Point(xnn, ynn, 0.)
                 
-                # Création de la transformation permettant le changement de base
-                mm2Inv = np.transpose(mm2)
-                ooTwn = Transform(m = mm2, mInv = mm2Inv)
+                # # Création de la transformation permettant le changement de base
+                # mm2Inv = np.transpose(mm2)
+                # ooTwn = Transform(m = mm2, mInv = mm2Inv)
 
-                # # Application des transfos sur les 4 points
-                ppn1 = ooTwn[ppn1]
-                ppn2 = ooTwn[ppn2]
-                ppn3 = ooTwn[ppn3]
-                ppn4 = ooTwn[ppn4]
-                v_nn = ooTwn[vSun]
+                # # # Application des transfos sur les 4 points
+                # ppn1 = ooTwn[ppn1]
+                # ppn2 = ooTwn[ppn2]
+                # ppn3 = ooTwn[ppn3]
+                # ppn4 = ooTwn[ppn4]
+                # v_nn = ooTwn[vSun]
                 
-                # Projection dans le nouveau plan (x, y) avec le nouvel axe z perp à la dir solaire
-                timen1 = (-1.* ppn1.z)/v_nn.z
-                timen2 = (-1.* ppn2.z)/v_nn.z
-                timen3 = (-1.* ppn3.z)/v_nn.z
-                timen4 = (-1.* ppn4.z)/v_nn.z
+                # # Projection dans le nouveau plan (x, y) avec le nouvel axe z perp à la dir solaire
+                # timen1 = (-1.* ppn1.z)/v_nn.z
+                # timen2 = (-1.* ppn2.z)/v_nn.z
+                # timen3 = (-1.* ppn3.z)/v_nn.z
+                # timen4 = (-1.* ppn4.z)/v_nn.z
                 
-                ppn1 += v_nn*timen1
-                ppn2 += v_nn*timen2
-                ppn3 += v_nn*timen3
-                ppn4 += v_nn*timen4
+                # ppn1 += v_nn*timen1
+                # ppn2 += v_nn*timen2
+                # ppn3 += v_nn*timen3
+                # ppn4 += v_nn*timen4
                 
-                # Calcul de l'aire de la surface suivant la formule de l'aire d'un quadri convexe
-                TwoAn = abs((ppn1.x - ppn4.x)*(ppn2.y - ppn3.y)) + abs((ppn2.x - ppn3.x)*(ppn1.y - ppn4.y))
-                surfMir = TwoAn/2.
+                # # Calcul de l'aire de la surface suivant la formule de l'aire d'un quadri convexe
+                # TwoAn = abs((ppn1.x - ppn4.x)*(ppn2.y - ppn3.y)) + abs((ppn2.x - ppn3.x)*(ppn1.y - ppn4.y))
+                # surfMir = TwoAn/2.
+
+                # # Calcul de l'aire de la surface suivant la formule de l'aire d'un quadri convexe
+                # TwoAn = abs((ppn1.x - ppn4.x)*(ppn2.y - ppn3.y)) + abs((ppn2.x - ppn3.x)*(ppn1.y - ppn4.y))
+                # surfMir = (TwoAn/2.) * DotNN
+                surfMir = float(cusL.dict['CFX'])*float(cusL.dict['CFY'])*DotNN
                 
 
         
@@ -1373,7 +1403,8 @@ class Smartg(object):
                   RTER, LE, ZIP, FLUX, FFS, DIRECT, NLVL, NPSTK,
                   NWLPROBA, BEER, SMAX, RR, WEIGHTRR, NLOW, NJAC, 
                   NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj,
-                  Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, vSun, HIST)
+                  Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm,
+                  TC, nbCx, nbCy, vSun, nGroup, HIST)
 
         # Initialize the progress bar
         p = Progress(NBPHOTONS, progress)
@@ -1795,6 +1826,18 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
 
         # we can now compute the shadow efficiency
         nsha = max(0, min(P_cud/P_pyt, 1))
+        print("Tr_tau = ", Tr_tau)
+        print("P_pyt = Tr_tau*dicSTP[totS_H] = ", P_pyt)
+        print ("P_cud = (Wcos*Stoa)/nph =", P_cud)
+        print ("P_cud/P_pyt", P_cud/P_pyt)
+        # print(dicSTP["surfTOA"])
+        # print(float(NPhotonsInTot))
+        print("wi", losses[0])
+        print("wicos", losses[1])
+        print("wo=", losses[2])
+        print("wspi=", losses[3])
+        print("wblo=", losses[4])
+        print("dicSTP[wRec]=", dicSTP["wRec"])
         
         ncos = max(0, min(losses[0]/losses[1], 1))
         nref = max(0, min(losses[2]/losses[0], 1))
@@ -1808,6 +1851,7 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
         m.add_dataset('n_atmo', np.array([natm], dtype=np.float64), ['Atmospheric Efficiency'])
         m.add_dataset('n_blo', np.array([nblo], dtype=np.float64), ['blocking Efficiency'])
         m.add_dataset('n_opt', np.array([nsha*ncos*nref*nspi*natm*nblo], dtype=np.float64), ['Optical Efficiency'])
+        m.add_dataset('n_tr', np.array([Tr_tau], dtype=np.float64), ['transmission from TOA to H'])
         
     return m
 
@@ -1945,7 +1989,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
               NBTHETA, NBPHI, OUTPUT_LAYERS,
               RTER, LE, ZIP, FLUX, FFS, DIRECT, NLVL, NPSTK, NWLPROBA, BEER, SMAX, RR, 
               WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj,
-              Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, vSun, HIST) :
+              Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, vSun, nGroup, HIST) :
     """
     Initialize the constants in python and send them to the device memory
 
@@ -1964,6 +2008,12 @@ def InitConst(surf, env, NATM, NOCE, mod,
     THV = THVDEG * np.pi/180.
     STHV = np.sin(THV)
     CTHV = np.cos(THV)
+
+    PZd = 120.
+    tTemp = PZd/-vSun.z
+    PXd = -vSun.x * tTemp
+    PYd = -vSun.y * tTemp
+    print(PXd, PYd, PZd)
 
     def copy_to_device(name, scalar, dtype):
         cuda.memcpy_htod(mod.get_global(name)[0], np.array([scalar], dtype=dtype))
@@ -2022,6 +2072,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
     # copy en rapport avec les objets :
     if nObj != 0:
         copy_to_device('nObj', nObj, np.int32)
+        copy_to_device('nGroup', nGroup, np.int32)
         copy_to_device('Pmin_x', Pmin_x, np.float32)
         copy_to_device('Pmin_y', Pmin_y, np.float32)
         copy_to_device('Pmin_z', Pmin_z, np.float32)
@@ -2032,6 +2083,9 @@ def InitConst(surf, env, NATM, NOCE, mod,
         copy_to_device('DIRSXd', vSun.x, np.float32)
         copy_to_device('DIRSYd', vSun.y, np.float32)
         copy_to_device('DIRSZd', vSun.z, np.float32)
+        copy_to_device('PXd', PXd, np.float32)
+        copy_to_device('PYd', PYd, np.float32)
+        copy_to_device('PZd', PZd, np.float32)
         if TC is not None:
             copy_to_device('TCd', TC, np.float32)
             copy_to_device('nbCx', nbCx, np.int32)

@@ -62,6 +62,7 @@ __device__ __constant__ int NSENSORd;
 #ifdef OBJ3D
 // copy en rapport avec les objets :
 __device__ __constant__ int nObj;
+__device__ __constant__ int nGroup;
 __device__ __constant__ float Pmin_x;
 __device__ __constant__ float Pmin_y;
 __device__ __constant__ float Pmin_z;
@@ -71,6 +72,9 @@ __device__ __constant__ float Pmax_z;
 __device__ __constant__ float DIRSXd;
 __device__ __constant__ float DIRSYd;
 __device__ __constant__ float DIRSZd;
+__device__ __constant__ float PXd;
+__device__ __constant__ float PYd;
+__device__ __constant__ float PZd;
 __device__ __constant__ int IsAtm;
 __device__ __constant__ float TCd;
 __device__ __constant__ int nbCx;

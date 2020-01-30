@@ -116,6 +116,8 @@
 
 #define DIST_BECKMANN   1
 #define DIST_GGX        2
+
+#define maxNG 1000
 #endif
 
 // pseudo-random number generator
@@ -426,6 +428,16 @@ struct IObjets {
 	float nBx;      /*  \                                  */
 	float nBy;      /*   | normalBase apres transfo        */
 	float nBz;      /*  /                                  */
+
+	int indG;
+
+	float bPminx;
+	float bPminy;
+	float bPminz;
+
+	float bPmaxx;
+	float bPmaxy;
+	float bPmaxz;
 };
 #endif //END OBJ3D
 #endif	// COMMUNS_H
