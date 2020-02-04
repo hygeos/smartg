@@ -343,9 +343,10 @@ class Heliostat(object):
     HSX           : Heliostat size in x direction
     HSY           : Heliostat size in y direction
     CURVE_FL      : Focal length : A curved heliostat is possible if curveFL is given
+    REF           : Reflectivity of the heliostat
     '''
     def __init__(self, POS = Point(0., 0., 0.), SPX=int(2), SPY=int(2), HSX=0.02,
-                 HSY=0.02, CURVE_FL=None):
+                 HSY=0.02, CURVE_FL=None, REF=1.):
         # Be sure that we split a heliostat by at least 2
         if (SPX*SPY < 2):
             raise Exception("The number of facets must be >= 2!")
@@ -358,11 +359,13 @@ class Heliostat(object):
         self.hSx = HSX
         self.hSy = HSY
         self.curveFL = CURVE_FL
+        self.ref = REF
 
     def __str__(self):
         return "POS=" + str(self.pos) + '; ' + "SPX=" + str(self.sPx) + '; ' + \
                 "SPY=" + str(self.sPy) + '; ' + "HSX=" + str(self.hSx) + '; ' + \
-                "HSY=" + str(self.hSy)  + '; ' + "CURVE_FL=" + str(self.curveFL)
+                "HSY=" + str(self.hSy)  + '; ' + "CURVE_FL=" + str(self.curveFL) + \
+                '; ' + "REF=" + str(self.ref)
 
 def findRots(UI=None, UO=None, vecNF=None):
     '''
@@ -508,7 +511,7 @@ def generateLEfH(HELIO = Heliostat(), PR = None, THEDEG = 0., PHIDEG = 0., INDEX
     wMx = SFX/2; wMy = SFY/2 # Size of a facet divided by 2
     # Create one facet to be ready to clone other facets
     F1 = Entity(name = "reflector", \
-                materialAV = Mirror(reflectivity = 0.88), \
+                materialAV = Mirror(reflectivity = HELIO.ref), \
                 materialAR = Matte(), \
                 geo = Plane( p1 = Point(-wMx, -wMy, 0.),
                              p2 = Point(wMx, -wMy, 0.),
@@ -952,483 +955,59 @@ def generateHfP(THEDEG=0., PHIDEG = 0., PH = [Point(0., 0., 0.)], PR = Point(0.,
     HSX : Heliostat size in x axis (kilometer)
     HSY : Heliostat size in y axis (kilometer)
     REF : reflectivity of the heliostats
-    HTYPE : Heliostat type, now none or 'sanlucar120' (PS10) 
+    HTYPE : If specified must be a class heliostat
 
-    return a list of objects
+    return a list of entity object
     '''
-    # calculate the sun direction vector
-    vSun = convertAnglestoV(THETA=THEDEG, PHI=PHIDEG, TYPE="Sun")
     
     lObj = []
-    Hxx = HSX/2
-    Hyy = HSY/2
 
-    objM = Entity(name = "reflector", \
-                  materialAV = Mirror(reflectivity = REF), \
-                  materialAR = Matte(reflectivity = 0.), \
-                  geo = Plane( p1 = Point(-Hxx, -Hyy, 0.),
-                               p2 = Point(Hxx, -Hyy, 0.),
-                               p3 = Point(-Hxx, Hyy, 0.),
-                               p4 = Point(Hxx, Hyy, 0.) ), \
-                  transformation = Transformation( rotation = np.array([0., 0., 0.]), \
-                                                   translation = np.array([0., 0., 0.]) ))
+    # Case where the heliostat is totally plane
+    if (HTYPE is None):
+        # compute the sun direction vector
+        vSun = convertAnglestoV(THETA=THEDEG, PHI=PHIDEG, TYPE="Sun")
 
-
-    for i in range (0, len(PH)):
-        # 1) Find the normalized vector colinear (and same dir) to the normal of heliostat surface
-        vecHR = PH[i]-PR
-        vecHR = Normalize(vecHR)
-        vecNH = (vSun + vecHR)*(-0.5)
-        vecNH = Normalize(vecNH)
-
-        # 2) Apply the inverse rotation operations to find the necessary angles
-        # Avoid nan value in case of arccos of something greater than 1 or less than -1
-        vecNH.z = np.clip(vecNH.z, -1, 1)
-        # New method in test :
-        nC = Vector(0., 0., 0.)
-        loop = int(0)
-        TT2 = Transform()
-        rotY = 0; rotZ =0; opeZ=0;
-        while (abs(nC.x - vecNH.x) > 1e-3 or abs(nC.y - vecNH.y) > 1e-3 or abs(nC.z - vecNH.z) > 1e-3):
-                loop += int(1)
-                if loop > 5:
-                    raise NameError('we cannot find rotations for a given heliotat!')
-                if (loop == 1):
-                    rotY = np.arccos(vecNH.z)
-                    if (vecNH.x == 0 and rotY == 0):
-                        opeZ = 0
-                    else:
-                        opeZ = vecNH.x/np.sin(rotY)
-                    opeZ = np.clip(opeZ, -1, 1)
-                    rotZ = np.arccos(opeZ)
-                elif(loop == 2):
-                    rotY = np.arccos(vecNH.z)
-                    if (vecNH.x == 0 and rotY == 0):
-                        opeZ = 0
-                    else:
-                        opeZ = vecNH.x/np.sin(rotY)
-                    opeZ = np.clip(opeZ, -1, 1)
-                    rotZ = -np.arccos(opeZ)
-                elif(loop == 3):
-                    rotY = -np.arccos(vecNH.z)
-                    if (vecNH.x == 0 and rotY == 0):
-                        opeZ = 0
-                    else:
-                        opeZ = vecNH.x/np.sin(rotY)
-                    opeZ = np.clip(opeZ, -1, 1)
-                    rotZ = np.arccos(opeZ)
-                elif(loop == 4):
-                    rotY = -np.arccos(vecNH.z)
-                    if (vecNH.x == 0 and rotY == 0):
-                        opeZ = 0
-                    else:
-                        opeZ = vecNH.x/np.sin(rotY)
-                    opeZ = np.clip(opeZ, -1, 1)
-                    rotZ = -np.arccos(opeZ)
-                rotYD = np.degrees(rotY)
-                rotZD = np.degrees(rotZ)
-                TTZ2 = TT2.rotateZ(rotZD)
-                TTY2 = TT2.rotateY(rotYD)
-                TTT2 = TTZ2*TTY2
-                nC = Vector(0., 0., 1.)
-                nC = TTT2[nC]
-                nC= Normalize(nC)
-        # rotY = np.arccos(vecNH.z)
-        # rotYD = np.degrees(rotY)
-        # # Avoid nan value in extreme case of 0/0
-        # if (vecNH.x == 0 and rotY == 0): opeZ = 0
-        # else: opeZ = vecNH.x/np.sin(rotY)
-        # # Avoid nan value in case of arccos of something greater than 1 or less than -1
-        # opeZ = np.clip(opeZ, -1, 1)
-        # rotZ = np.arccos(opeZ)
-        # if (vecHR.y > 0): rotZD = -1.*np.degrees(rotZ)
-        # else: rotZD = np.degrees(rotZ)
-
-        # 3) Once the rotation angles have been found, create heliostat objects
-        objMi = Entity(objM);
-        objMi.transformation = Transformation( rotation = np.array([0., rotYD, rotZD]), \
-                                               translation = np.array([PH[i].x, PH[i].y, PH[i].z]), \
-                                               rotationOrder = "ZYX")
-        lObj.append(objMi)
-
-
-    if (HTYPE == None):
-        return lObj
-    elif (HTYPE == "sanlucar120"):
-
-        lRot = []; lRot2 = []; PH_OA = [];
-        for i in range (0, len(PH)):
-            vS2 = PR - PH[i]
-            vS2 = Vector(vS2.x, vS2.y, vS2.z)
-            vS2 = Normalize(vS2)
-            vRH2 = Vector(vS2.x, vS2.y, vS2.z)
-            vN2 = Vector(vS2.x, vS2.y, vS2.z)
-            nC = Vector(0., 0., 0.)
-            loop = int(0)
-            TTH = Transform()
-            rotY = 0; rotZ =0; opeZ=0;
-            while (abs(nC.x - vN2.x) > 1e-3 or abs(nC.y - vN2.y) > 1e-3 or abs(nC.z - vN2.z) > 1e-3):
-                loop += int(1)
-                if loop > 5:
-                    raise NameError('we cannot find rotations for a given heliotat!')
-                if (loop == 1):
-                    rotY = np.arccos(vN2.z)
-                    if (vN2.x == 0 and rotY == 0):
-                        opeZ = 0
-                    else:
-                        opeZ = vN2.x/np.sin(rotY)
-                    opeZ = np.clip(opeZ, -1, 1)
-                    rotZ = np.arccos(opeZ)
-                elif(loop == 2):
-                    rotY = np.arccos(vN2.z)
-                    if (vN2.x == 0 and rotY == 0):
-                        opeZ = 0
-                    else:
-                        opeZ = vN2.x/np.sin(rotY)
-                    opeZ = np.clip(opeZ, -1, 1)
-                    rotZ = -np.arccos(opeZ)
-                elif(loop == 3):
-                    rotY = -np.arccos(vN2.z)
-                    if (vN2.x == 0 and rotY == 0):
-                        opeZ = 0
-                    else:
-                        opeZ = vN2.x/np.sin(rotY)
-                    opeZ = np.clip(opeZ, -1, 1)
-                    rotZ = np.arccos(opeZ)
-                elif(loop == 4):
-                    rotY = -np.arccos(vN2.z)
-                    if (vN2.x == 0 and rotY == 0):
-                        opeZ = 0
-                    else:
-                        opeZ = vN2.x/np.sin(rotY)
-                    opeZ = np.clip(opeZ, -1, 1)
-                    rotZ = -np.arccos(opeZ)
-
-                rotYD = np.degrees(rotY)
-                rotZD = np.degrees(rotZ)
-                TTHZ = TTH.rotateZ(rotZD)
-                TTHY = TTH.rotateY(rotYD)
-                TTTH = TTHZ*TTHY
-                invTTTH = TTH.inverse(TTTH)
-                nC = Vector(0., 0., 1.)
-                nC = TTTH[nC]
-                nC= Normalize(nC)
-
-            lRot.append([rotYD, 0., rotZD, TTTH, invTTTH])
-
-        matF = [[None, None, None, None], [None, None, None, None], [None, None, None, None],
-                [None, None, None, None], [None, None, None, None], [None, None, None, None],
-                [None, None, None, None]]
-
-        for i in range (0, 7):
-            for j in range (0, 4):
-                matF[i][j] = Point(-0.00405+i*0.00135, -0.004815+j*0.00321, 0.)
-        #PH_OA2 = []
-        for k in range (0, len(PH)):
-            # Creation of the transform object
-            for i in range (0, 7):
-                for j in range (0, 4):
-                    PP = matF[i][j]
-                    # PP = lRot[k][3][PP]
-                    PH_OA.append(PP)
-                    # PP.x += PH[k].x; PP.y += PH[k].y; PP.z += PH[k].z;
-                    # PH_OA2.append(PP)
-
-        for i in range (0, len(PH_OA)):
-            # 1) Find the normalized vector colinear (and same dir) to the normal of heliostat surface
-            dist = (PH[int(i/28)] - PR).Length()
-            nPR = Point(0., 0., dist)
-            vHR2 = PH_OA[i] - nPR
-            # print("v =", vHR2)
-            vHR2 = Vector(vHR2.x, vHR2.y, vHR2.z)
-            vHR2 = Normalize(vHR2)
-            # print(vHR2)
-            vS2 = Vector(0., 0., -1.)
-            vN2 = (vS2 + vHR2)*(-0.5)
-            # vN2 = (vN2 - vS2)*(0.5)
-            vN2 = Normalize(vN2)
-            #print("vN2 = ", vN2)
-
-            # New method in test :
-            nC = Vector(0., 0., 0.)
-            loop = int(0)
-            TT2 = Transform()
-            rotY = 0; rotZ =0; opeZ=0;
-            while (abs(nC.x - vN2.x) > 1e-4 or abs(nC.y - vN2.y) > 1e-4 or abs(nC.z - vN2.z) > 1e-4):
-                loop += int(1)
-                if loop > 5:
-                    raise NameError('we cannot find rotations for a given heliotat!')
-                if (loop == 1):
-                    rotY = np.arccos(vN2.z)
-                    if (vN2.x == 0 and rotY == 0):
-                        opeZ = 0
-                    else:
-                        opeZ = vN2.x/np.sin(rotY)
-                    opeZ = np.clip(opeZ, -1, 1)
-                    rotZ = np.arccos(opeZ)
-                elif(loop == 2):
-                    rotY = np.arccos(vN2.z)
-                    if (vN2.x == 0 and rotY == 0):
-                        opeZ = 0
-                    else:
-                        opeZ = vN2.x/np.sin(rotY)
-                    opeZ = np.clip(opeZ, -1, 1)
-                    rotZ = -np.arccos(opeZ)
-                elif(loop == 3):
-                    rotY = -np.arccos(vN2.z)
-                    if (vN2.x == 0 and rotY == 0):
-                        opeZ = 0
-                    else:
-                        opeZ = vN2.x/np.sin(rotY)
-                    opeZ = np.clip(opeZ, -1, 1)
-                    rotZ = np.arccos(opeZ)
-                elif(loop == 4):
-                    rotY = -np.arccos(vN2.z)
-                    if (vN2.x == 0 and rotY == 0):
-                        opeZ = 0
-                    else:
-                        opeZ = vN2.x/np.sin(rotY)
-                    opeZ = np.clip(opeZ, -1, 1)
-                    rotZ = -np.arccos(opeZ)
-
-                rotYD = np.degrees(rotY)
-                rotZD = np.degrees(rotZ)
-                TTZ2 = TT2.rotateZ(rotZD)
-                TTY2 = TT2.rotateY(rotYD)
-                TTT2 = TTZ2*TTY2
-                invTTT2 = TT2.inverse(TTT2)
-                nC = Vector(0., 0., 1.)
-                nC = TTT2[nC]
-                nC= Normalize(nC)
-
-            #print("rotZD=", rotZD, "rotYD=", rotYD)
-            lRot2.append([rotYD, 0., rotZD, TTT2, invTTT2])
-
-
-
-        lObj2 = []; PH2 = [];
-        mat = [[None, None, None, None], [None, None, None, None], [None, None, None, None],
-               [None, None, None, None], [None, None, None, None], [None, None, None, None],
-               [None, None, None, None]]
-
-        PH_min = []; PH_max = [];
-
-        objM2 = Entity(name = "reflector", \
-                       materialAV = Mirror(reflectivity = REF), \
-                       materialAR = Matte(reflectivity = 0.), \
-                       geo = Plane( p1 = Point(-0.00067, -0.0016, 0.),
-                                    p2 = Point(0.00067, -0.0016, 0.),
-                                    p3 = Point(-0.00067, 0.0016, 0.),
-                                    p4 = Point(0.00067, 0.0016, 0.) ), \
-                       transformation = Transformation( rotation = np.array([0., 0., 0.]), \
-                                                        translation = np.array([0., 0., 0.]) ))
-        for i in range (0, 7):
-            for j in range (0, 4):
-                mat[i][j] = Point(-0.00405+i*0.00135, -0.004815+j*0.00321, 0.)
-                
-        vecX = []; vecY = []; vecZ = [];
-        for k in range (0, len(PH)):
-            # Creation of the transform object
-            TT = Transform()
-            TTX = TT.rotateX(lObj[k].transformation.rotation[0])
-            TTY = TT.rotateY(lObj[k].transformation.rotation[1])
-            TTZ = TT.rotateZ(lObj[k].transformation.rotation[2])
-            vecXT = Vector(1., 0., 0.); vecYT = Vector(0., 1., 0.); vecZT = Vector(0., 0., 1.);
-            TTZYX = TTZ*TTY*TTX
-            vecXT = TTZYX[vecXT]; vecYT = TTZYX[vecYT]; vecZT = TTZYX[vecZT];
-            vecXT = Normalize(vecXT); vecYT = Normalize(vecYT); vecZT = Normalize(vecZT);
-            vecX.append(vecXT); vecY.append(vecYT); vecZ.append(vecZT);
-            for i in range (0, 7):
-                for j in range (0, 4):
-                    PP = mat[i][j]
-                    PP = TTZYX[PP]
-                    PP.x += PH[k].x; PP.y += PH[k].y; PP.z += PH[k].z;
-                    PH2.append(PP)
-
+        Hxx = HSX/2; Hyy = HSY/2
+        objM = Entity(name = "reflector", \
+                      materialAV = Mirror(reflectivity = REF), \
+                      materialAR = Matte(reflectivity = 0.), \
+                      geo = Plane( p1 = Point(-Hxx, -Hyy, 0.),
+                                   p2 = Point(Hxx, -Hyy, 0.),
+                                   p3 = Point(-Hxx, Hyy, 0.),
+                                   p4 = Point(Hxx, Hyy, 0.) ), \
+                      transformation = Transformation( rotation = np.array([0., 0., 0.]), \
+                                                       translation = np.array([0., 0., 0.]) ))
 
 
         for i in range (0, len(PH)):
             # 1) Find the normalized vector colinear (and same dir) to the normal of heliostat surface
             vecHR = PH[i]-PR
             vecHR = Normalize(vecHR)
-            vecNHB = (vSun + vecHR)*(-0.5)
-            vecNHB = Vector(vecNHB.x, vecNHB.y, vecNHB.z)
-            vecNHB = Normalize(vecNHB)
-            # print("rotx = ", lObj[i].transformation.rotation[0], "roty = ", lObj[i].transformation.rotation[1], \
-            #       "rotz = ", lObj[i].transformation.rotation[2])
-            # print("vecXi=", vecX[i])
-            # print("vecYi=", vecY[i])
-            # print("vecZi=", vecZ[i])
-            # print("vecNHB=", vecNHB)
-            nn3 = vecZ[i]#Vector(vecNHB)
-            vecNHB = vecZ[i]
-            nn1 = vecX[i]; nn2 = vecY[i];
-            #nn1, nn2 = CoordinateSystem(nn3)
-            mm2 = np.zeros((4,4), dtype=np.float64)
-            # Remplissage de la matrice de passage en fonction du repère (nn3 étant le nouvel axe z)
-            mm2[0,0] = nn1.x ; mm2[0,1] = nn2.x ; mm2[0,2] = nn3.x ; mm2[0,3] = 0. ;
-            mm2[1,0] = nn1.y ; mm2[1,1] = nn2.y ; mm2[1,2] = nn3.y ; mm2[1,3] = 0. ;
-            mm2[2,0] = nn1.z ; mm2[2,1] = nn2.z ; mm2[2,2] = nn3.z ; mm2[2,3] = 0. ;
-            mm2[3,0] = 0.    ; mm2[3,1] = 0.    ; mm2[3,2] = 0.    ; mm2[3,3] = 1. ;
 
-            # Création de la transformation permettant le changement de base
-            mm2Inv = np.transpose(mm2)
-            wTo = Transform(m = mm2, mInv = mm2Inv)
-            oTw = Transform(m = mm2Inv, mInv = mm2)
+            # 2) Find the necessary rotations to apply on the heliostat to reflect to the receiver
+            rInfo = findRots(UI=vSun, UO=vecHR)
+            rotYD = rInfo[0]; rotZD = rInfo[1];
 
-            # 2) Apply the inverse rotation operations to find the necessary angles
-            for j in range (0, 28):
-                # New method in test :
-                #print("vec1=", vecNHB)
-                vecNH = oTw[vecNHB]
-                #print("vecwTo=", vecNH)
-                vecNH = lRot2[28*i+j][3][vecNH]
-                #print("vecrot=", vecNH)
-                vecNH = wTo[vecNH]
-                #print("vecoTw=", vecNH)
-                vecNH = Normalize(vecNH)
-                #print("vecnorm=", vecNH, "\n\n")
-                nC = Vector(0., 0., 0.)
-                loop = int(0)
-                TT2 = Transform()
-                rotY = 0; rotZ =0; opeZ=0;
-                while (abs(nC.x - vecNH.x) > 1e-3 or abs(nC.y - vecNH.y) > 1e-3 or abs(nC.z - vecNH.z) > 1e-3):
-                    loop += int(1)
-                    if loop > 5:
-                        raise NameError('we cannot find rotations for a given heliotat!')
-                    if (loop == 1):
-                        rotY = np.arccos(vecNH.z)
-                        if (vecNH.x == 0 and rotY == 0):
-                            opeZ = 0
-                        else:
-                            opeZ = vecNH.x/np.sin(rotY)
-                        opeZ = np.clip(opeZ, -1, 1)
-                        rotZ = np.arccos(opeZ)
-                    elif(loop == 2):
-                        rotY = np.arccos(vecNH.z)
-                        if (vecNH.x == 0 and rotY == 0):
-                            opeZ = 0
-                        else:
-                            opeZ = vecNH.x/np.sin(rotY)
-                        opeZ = np.clip(opeZ, -1, 1)
-                        rotZ = -np.arccos(opeZ)
-                    elif(loop == 3):
-                        rotY = -np.arccos(vecNH.z)
-                        if (vecNH.x == 0 and rotY == 0):
-                            opeZ = 0
-                        else:
-                            opeZ = vecNH.x/np.sin(rotY)
-                        opeZ = np.clip(opeZ, -1, 1)
-                        rotZ = np.arccos(opeZ)
-                    elif(loop == 4):
-                        rotY = -np.arccos(vecNH.z)
-                        if (vecNH.x == 0 and rotY == 0):
-                            opeZ = 0
-                        else:
-                            opeZ = vecNH.x/np.sin(rotY)
-                        opeZ = np.clip(opeZ, -1, 1)
-                        rotZ = -np.arccos(opeZ)
-                    rotYD = np.degrees(rotY)
-                    rotZD = np.degrees(rotZ)
-                    TTZ2 = TT2.rotateZ(rotZD)
-                    TTY2 = TT2.rotateY(rotYD)
-                    TTT2 = TTZ2*TTY2
-                    nC = Vector(0., 0., 1.)
-                    nC = TTT2[nC]
-                    nC= Normalize(nC)
-
-                # 3) Once the rotation angles have been found, create heliostat objects
-                objMi2 = Entity(objM2);
-                objMi2.transformation = Transformation( rotation = np.array([0., rotYD, rotZD]), \
-                                                        translation = np.array([PH2[28*i+j].x, PH2[28*i+j].y, PH2[28*i+j].z]), \
-                                                        rotationOrder = "ZYX")
-                objMi2.indGroup = int(i+1)
-                tempPP = PH[objMi2.indGroup-1]
-                objMi2.bboxGPmin = Point(tempPP.x-0.007, tempPP.y-0.007, tempPP.z-0.007)
-                objMi2.bboxGPmax = Point(tempPP.x+0.007, tempPP.y+0.007, tempPP.z+0.007)
-                lObj2.append(objMi2)
-            
-
-
-        # for i in range (0, len(PH2)):
-        #     # 1) Find the normalized vector colinear (and same dir) to the normal of heliostat surface
-        #     vecHR = PH2[i]-PR
-        #     vecHR = Normalize(vecHR)
-        #     vecNH = (vSun + vecHR)*(-0.5)
-        #     vecNH = Normalize(vecNH)
-        #     # 2) Apply the inverse rotation operations to find the necessary angles
-        #     # Avoid nan value in case of arccos of something greater than 1 or less than -1
-        #     vecNH.z = np.clip(vecNH.z, -1, 1)
-        #     # New method in test :
-        #     nC = Vector(0., 0., 0.)
-        #     loop = int(0)
-        #     TT2 = Transform()
-        #     rotY = 0; rotZ =0; opeZ=0;
-        #     while (abs(nC.x - vecNH.x) > 1e-3 or abs(nC.y - vecNH.y) > 1e-3 or abs(nC.z - vecNH.z) > 1e-3):
-        #         loop += int(1)
-        #         if loop > 5:
-        #             raise NameError('we cannot find rotations for a given heliotat!')
-        #         if (loop == 1):
-        #             rotY = np.arccos(vecNH.z)
-        #             if (vecNH.x == 0 and rotY == 0):
-        #                 opeZ = 0
-        #             else:
-        #                 opeZ = vecNH.x/np.sin(rotY)
-        #             opeZ = np.clip(opeZ, -1, 1)
-        #             rotZ = np.arccos(opeZ)
-        #         elif(loop == 2):
-        #             rotY = np.arccos(vecNH.z)
-        #             if (vecNH.x == 0 and rotY == 0):
-        #                 opeZ = 0
-        #             else:
-        #                 opeZ = vecNH.x/np.sin(rotY)
-        #             opeZ = np.clip(opeZ, -1, 1)
-        #             rotZ = -np.arccos(opeZ)
-        #         elif(loop == 3):
-        #             rotY = -np.arccos(vecNH.z)
-        #             if (vecNH.x == 0 and rotY == 0):
-        #                 opeZ = 0
-        #             else:
-        #                 opeZ = vecNH.x/np.sin(rotY)
-        #             opeZ = np.clip(opeZ, -1, 1)
-        #             rotZ = np.arccos(opeZ)
-        #         elif(loop == 4):
-        #             rotY = -np.arccos(vecNH.z)
-        #             if (vecNH.x == 0 and rotY == 0):
-        #                 opeZ = 0
-        #             else:
-        #                 opeZ = vecNH.x/np.sin(rotY)
-        #             opeZ = np.clip(opeZ, -1, 1)
-        #             rotZ = -np.arccos(opeZ)
-
-        #         rotYD = np.degrees(rotY)
-        #         rotZD = np.degrees(rotZ)
-        #         TTZ2 = TT2.rotateZ(rotZD)
-        #         TTY2 = TT2.rotateY(rotYD)
-        #         TTT2 = TTZ2*TTY2
-        #         nC = Vector(0., 0., 1.)
-        #         nC = TTT2[nC]
-        #         nC= Normalize(nC)
-        #         # if (Dot(nC, vecNH) < 0): 
-        #         #     nC = Vector(0., 0., 0.) 
-
-        #     # 3) Once the rotation angles have been found, create heliostat objects
-        #     objMi2 = Entity(objM2);
-        #     objMi2.transformation = Transformation( rotation = np.array([0., rotYD, rotZD]), \
-        #                                             translation = np.array([PH2[i].x, PH2[i].y, PH2[i].z]), \
-        #                                             rotationOrder = "ZYX")
-        #     objMi2.indGroup = int(int(i/28) + 1)
-        #     tempPP = PH[objMi2.indGroup-1]
-        #     # objMi2.bboxGPmin = PH_min[objMi2.indGroup-1]
-        #     # objMi2.bboxGPmax = PH_max[objMi2.indGroup-1]
-        #     objMi2.bboxGPmin = Point(tempPP.x-0.007, tempPP.y-0.007, tempPP.z-0.007)
-        #     objMi2.bboxGPmax = Point(tempPP.x+0.007, tempPP.y+0.007, tempPP.z+0.007)
-        #     lObj2.append(objMi2)
+            # 3) Once the rotation angles have been found, create heliostat objects
+            objMi = Entity(objM);
+            objMi.transformation = Transformation( rotation = np.array([0., rotYD, rotZD]), \
+                                                   translation = np.array([PH[i].x, PH[i].y, PH[i].z]), \
+                                                   rotationOrder = "ZYX")
+            lObj.append(objMi)
+    # Case where the heliostat is composed by facets (i.g. to consider the curvature)
+    elif(isinstance(HTYPE, Heliostat)):
+        # Take the commun parameters of all heliostats
+        SPX = HTYPE.sPx; SPY = HTYPE.sPy; HSX = HTYPE.hSx; HSY = HTYPE.hSy; CURVE_FL = HTYPE.curveFL;
         
-        return lObj2
-
+        # Generate all the facets and store them as entity object in a list 
+        for i in range (0, len(PH)):
+            H0 = Heliostat(SPX = SPX, SPY = SPY, HSX = HSX, HSY = HSY, CURVE_FL=CURVE_FL, POS = PH[i])
+            TLE = generateLEfH(HELIO=H0, PR = PR, THEDEG=THEDEG, PHIDEG=PHIDEG, INDEX=i+1)
+            lObj.extend(TLE)
     else:
-        raise NameError('Unknown HTYPE!')
+        raise NameError('If HTYPE is specified it must be a Heliostat class!')
+
+    return lObj
 
 
 def generateHfA(THEDEG=0., PHIDEG = 0., PR = Point(0., 0., 50.), MINANG=0., \
