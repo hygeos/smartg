@@ -16,11 +16,15 @@ class Transform(object):
     '''
 
     def __init__(self, m = np.identity(4), mInv = None):
-        self.m = m
-        if (mInv is None):
-            self.mInv = inv(self.m)
+        if (isinstance(m, Transform)):
+            self.m = m.m
+            self.mInv = m.mInv
         else:
-            self.mInv = mInv
+            self.m = m
+            if (mInv is None):
+                self.mInv = inv(self.m)
+            else:
+                self.mInv = mInv
 
     def __eq__(self, t):
         if isinstance(t, Transform):

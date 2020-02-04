@@ -121,7 +121,6 @@ def cat_view(mlut, view = 'all', acc = 6, MTOA = 1320):
         elif (view == 'errAbs'):
             print("CAT",i+1,": errAbs=", strAcc % (mlut['catErrAbs'][i]*MTOA))
 
-
 class Mirror(object):
     '''
     Definition of Mirror
@@ -297,7 +296,7 @@ class Entity(object):
     '''
     Definition of Entity
 
-    This class enable to create a 3D object
+    This class enables the creation a 3D object
 
     entity : By default None. But useful in case where we need a copy of a given
              object
@@ -332,7 +331,278 @@ class Entity(object):
             str(self.geo) + '\n' + \
             str(self.transformation)
 
+class Heliostat(object):
+    '''
+    Definition of Heliostat
     
+    This class enables the creation of heliostats i.e. a group of facets:
+
+    POS           : Heliostat position stored in a Point class
+    SPX, SPY      : The heliostat is splited in facets : SPx -> the number of time
+                    we split in the x direction, SPy -> the same in y direction
+    HSX           : Heliostat size in x direction
+    HSY           : Heliostat size in y direction
+    CURVE_FL      : Focal length : A curved heliostat is possible if curveFL is given
+    '''
+    def __init__(self, POS = Point(0., 0., 0.), SPX=int(2), SPY=int(2), HSX=0.02,
+                 HSY=0.02, CURVE_FL=None):
+        # Be sure that we split a heliostat by at least 2
+        if (SPX*SPY < 2):
+            raise Exception("The number of facets must be >= 2!")
+        # Be sure that SPX and SPY are integer values
+        if not ( isinstance(SPX, int) and isinstance(SPY, int) ):
+            raise Exception("SPx and SPy must be integers")
+        self.pos = POS
+        self.sPx = SPX
+        self.sPy = SPY
+        self.hSx = HSX
+        self.hSy = HSY
+        self.curveFL = CURVE_FL
+
+    def __str__(self):
+        return "POS=" + str(self.pos) + '; ' + "SPX=" + str(self.sPx) + '; ' + \
+                "SPY=" + str(self.sPy) + '; ' + "HSX=" + str(self.hSx) + '; ' + \
+                "HSY=" + str(self.hSy)  + '; ' + "CURVE_FL=" + str(self.curveFL)
+
+def findRots(UI=None, UO=None, vecNF=None):
+    '''
+    Description of the function findRots:
+
+    ===ARGS:
+    UI    : Direction of the incoming ray or sun direction
+    UO    : Opposite direction of the outcoming ray / direction from receiver to facet
+    vecNF : Normal of the reflection surface, if given UI and UO are not needed
+
+    ===RETURN:
+    Return a list with rotation information, to reflect UI to -UO:
+    list[0] -> rotYD : Rotation in Y direction
+    list[0] -> rotZD : Rotation in Z direction
+    list[2] -> TTT   : Rotation transform object 
+    '''
+    # 1)Find the normal of the facet but filled in a vector class
+    if vecNF is not None:
+        vNF = Vector(vecNF)
+    else:
+        vNF = (UI + UO)*(-0.5)
+    vNF = Normalize(vNF)
+    vNF.z = np.clip(vNF.z, -1, 1) # Avoid nan value in next operations
+
+    # 2) Apply the inverse rotation operations to find the necessary angles
+    # 2.a) Initialisation
+    loop = int(0); TT = Transform(); rotY = 0; rotZ =0; opeZ=0;
+    # The initial value of the facet normal is (0, 0, 1) but forced to (0, 0, 0)
+    # to be sure to activate the while loop below
+    vNF_initial = Vector(0., 0., 0.)
+
+    # 2.b) Rotations are found in the loop bellow, at the end we check if after applying
+    #      the transform to the initial normal of the facet 'vNF_initial' we have the same
+    #      value as the known well oriented facet normal 'vecNF'. If no rotation has been
+    #      found an error message will appear
+    while (abs(vNF_initial.x - vNF.x) > 1e-4 or abs(vNF_initial.y - vNF.y) > 1e-4 or 
+           abs(vNF_initial.z - vNF.z) > 1e-4):
+        loop += int(1)
+        if loop > 5:
+            raise NameError('No rotation has been found!')
+        if (loop == 1):
+            rotY = np.arccos(vNF.z)
+            if (vNF.x == 0 and rotY == 0):
+                opeZ = 0
+            else:
+                opeZ = vNF.x/np.sin(rotY)
+            opeZ = np.clip(opeZ, -1, 1)
+            rotZ = np.arccos(opeZ)
+        elif(loop == 2):
+            rotY = np.arccos(vNF.z)
+            if (vNF.x == 0 and rotY == 0):
+                opeZ = 0
+            else:
+                opeZ = vNF.x/np.sin(rotY)
+            opeZ = np.clip(opeZ, -1, 1)
+            rotZ = -np.arccos(opeZ)
+        elif(loop == 3):
+            rotY = -np.arccos(vNF.z)
+            if (vNF.x == 0 and rotY == 0):
+                opeZ = 0
+            else:
+                opeZ = vNF.x/np.sin(rotY)
+            opeZ = np.clip(opeZ, -1, 1)
+            rotZ = np.arccos(opeZ)
+        elif(loop == 4):
+            rotY = -np.arccos(vNF.z)
+            if (vNF.x == 0 and rotY == 0):
+                opeZ = 0
+            else:
+                opeZ = vNF.x/np.sin(rotY)
+            opeZ = np.clip(opeZ, -1, 1)
+            rotZ = -np.arccos(opeZ)
+        rotYD = np.degrees(rotY)
+        rotZD = np.degrees(rotZ)
+        TTZ = TT.rotateZ(rotZD)
+        TTY = TT.rotateY(rotYD)
+        TTT = TTZ*TTY
+        vNF_initial = Vector(0., 0., 1.)
+        vNF_initial = TTT[vNF_initial]
+        vNF_initial = Normalize(vNF_initial)
+
+    return [rotYD, rotZD, TTT]
+
+def generateLEfH(HELIO = Heliostat(), PR = None, THEDEG = 0., PHIDEG = 0., INDEX = 0):
+    '''
+    Definition of the function generateLEfH
+    This function enables the conversion of an object heliostat to a list of 
+    well oriented plane entity / facets to reflect to a given receiver
+
+    ===ARGS:
+    HELIO          : A heliostat class object
+    THEDEG, PHIDEG : The theta and phi angles in degrees for the sun direction
+    PR             : A class Point with the position of the receiver receiver
+    
+    ===RETURN:
+    List of all well oriented plane entity / facets
+
+    Convention -> here an example of a heliostat splited in 4 in x and y
+    directions, the matrices used below follow this:
+
+         j0   j1   j2   j3
+       ---------------------
+    i0 |f00 |f01 |f02 |f03 |    i, j           : matrix indices
+       ---------------------    f00, f10, ...  : facet 0, 1, ...
+    i1 |f10 |f11 |f12 |f13 |  
+       -----------------------> y
+    i2 |f20 |f21 |f22 |f23 |
+       ----------|----------
+    i3 |f30 |f31 |f32 |f33 |
+       ----------|----------
+                 x
+    '''
+
+    # Be sure that the correct agrs have been given
+    if not isinstance(HELIO, Heliostat):
+        raise Exception("HELIO must be a Heliostat class!")
+    if not isinstance(PR, Point):
+        raise Exception("The receiver position 'PR' must be a Point class!")
+
+    # Direction of the sun (from (x,y,z) to (0,0,0))
+    vSun = convertAnglestoV(THETA=THEDEG, PHI=PHIDEG, TYPE="Sun")
+    # Heliostat is splited in facets in x and y directions
+    SPX = HELIO.sPx; SPY = HELIO.sPy;
+    # Size in x and y of a given facet
+    SFX = HELIO.hSx/SPX; SFY = HELIO.hSy/SPY
+    # Focal length or distance between heliostat and receiver
+    FL = HELIO.curveFL
+    # Position of the heliostat
+    POSH = Point(HELIO.pos.x, HELIO.pos.y, HELIO.pos.z)
+    # Receiver assumed position or the assumed focal length point.
+    # Needed to curve the heliostat
+    if (FL is not None):
+        APOSR = Point(0., 0., 0.+FL)
+    else:
+        PHTEMP = Point(POSH)
+        DTEMP = (PHTEMP - PR).Length()
+        APOSR = Point(0., 0., 0.+DTEMP)
+    # For the bounding box
+    bboxDist = np.sqrt(HELIO.hSx*HELIO.hSx + HELIO.hSy*HELIO.hSy)/2
+        
+    # Initialisation
+    LF = [] # List of facets
+    wMx = SFX/2; wMy = SFY/2 # Size of a facet divided by 2
+    # Create one facet to be ready to clone other facets
+    F1 = Entity(name = "reflector", \
+                materialAV = Mirror(reflectivity = 0.88), \
+                materialAR = Matte(), \
+                geo = Plane( p1 = Point(-wMx, -wMy, 0.),
+                             p2 = Point(wMx, -wMy, 0.),
+                             p3 = Point(-wMx, wMy, 0.),
+                             p4 = Point(wMx, wMy, 0.) ), \
+                transformation = Transformation( rotation = np.array([0., 0., 0.]), \
+                                                 translation = np.array([0., 0., 0.]) ))
+    
+    # Find the positions of facets and store them in matrix MPF[i][j]
+    MPF = np.zeros((SPX, SPY), dtype="object") # Matrix of Point object of each facets
+    for i in range (0, SPX):
+        for j in range (0, SPY):
+            MPF[i][j] = Point(-(HELIO.hSx/2.) + (i*SFX) + wMx, -(HELIO.hSy/2.) + (j*SFY) + wMy, 0.)
+
+    # Find transform in function of focal length (for the curve)
+    MTF = np.zeros((SPX, SPY), dtype="object") # Matrix of Transform object of each facets
+    for i in range (0, SPX):
+        for j in range (0, SPY):
+            UI = Point(0., 0., 0.) - APOSR
+            UI = Normalize(UI)
+            UO = MPF[i][j] - APOSR
+            UO = Normalize(UO)
+            RINF  = findRots(UI=UI, UO=UO)
+            MTF[i][j] = Transform(RINF[2])
+
+
+    # Find the general heliostat rotation transform (like helistat is a unique facet)
+    TT = Transform()
+    UI = Vector(vSun.x, vSun.y, vSun.z); UO = POSH - PR;
+    UI = Normalize(UI); UO = Normalize(UO);
+    RINF2  = findRots(UI=UI, UO=UO)
+    TTZY = RINF2[2]
+
+    # Apply the general rotation transform to each facet point and then apply translation.
+    # This gives the final position of each facet after rotation and translation of
+    # the heliostat, stored in the matrix MPFAT 
+    MPFAT = np.zeros((SPX, SPY), dtype="object") # equals to MPF after application of transform
+    for i in range (0, SPX):
+        for j in range (0, SPY):
+            tempP = Point(MPF[i][j])
+            tempP = TTZY[tempP]
+            tempP.x += POSH.x; tempP.y += POSH.y; tempP.z += POSH.z;
+            MPFAT[i][j] = Point(tempP)
+
+    # Write the initial coordinate system in term of vectors (x, y and z)
+    vecX = Vector(1., 0., 0.); vecY = Vector(0., 1., 0.); vecZ = Vector(0., 0., 1.);
+
+    # Apply the general rotation transform to find the new coordinate system of the heliostat
+    vecX = TTZY[vecX]; vecY = TTZY[vecY]; vecZ = TTZY[vecZ];
+    vecX = Normalize(vecX); vecY = Normalize(vecY); vecZ = Normalize(vecZ);
+
+    # Create the transformation matrix allowing to move between the 2 coordinate systems
+    nn1 = vecX; nn2 = vecY;nn3 = vecZ; 
+    mm2 = np.zeros((4,4), dtype=np.float64)
+    # Fill the transformation matrix (nn3 is the new z axis)
+    mm2[0,0] = nn1.x ; mm2[0,1] = nn2.x ; mm2[0,2] = nn3.x ; mm2[0,3] = 0. ;
+    mm2[1,0] = nn1.y ; mm2[1,1] = nn2.y ; mm2[1,2] = nn3.y ; mm2[1,3] = 0. ;
+    mm2[2,0] = nn1.z ; mm2[2,1] = nn2.z ; mm2[2,2] = nn3.z ; mm2[2,3] = 0. ;
+    mm2[3,0] = 0.    ; mm2[3,1] = 0.    ; mm2[3,2] = 0.    ; mm2[3,3] = 1. ;
+    # Now create the transform object with the transformation matrix and its inverse
+    mm2Inv = np.transpose(mm2)
+    wTo = Transform(m = mm2, mInv = mm2Inv) # move from world/initial to object∕new basis
+    oTw = Transform(m = mm2Inv, mInv = mm2) # move from object∕new to world/initial basis
+
+    # The normal of the heliostat vecNH = z axis of the new coordinate system
+    vecNH = Vector(vecZ) # stored as a vector for transformation purposes
+    for i in range (0, SPX):
+        for j in range (0, SPY):
+            # come back to the initial coordinate system
+            vecNF = oTw[vecNH]
+            # apply the transform of the facet to consider the curve effect
+            vecNF = MTF[i][j][vecNF]
+            # Now we return to the new coordinate system, which gives
+            # then the normal of the facet (not heliostat) stored in MTF[i][j]
+            vecNF = wTo[vecNF]
+            vecNF = Normalize(vecNF)
+    
+            # Find the rotation transform
+            RINF3 = findRots(vecNF=vecNF)
+
+            # Once the rotation angles have been found, create the facet as entity object
+            tempF1 = Entity(F1)
+            tempF1.transformation = Transformation( rotation = np.array([0., RINF3[0], RINF3[1]]), \
+                                                    translation = np.array([MPFAT[i][j].x, MPFAT[i][j].y, MPFAT[i][j].z]), \
+                                                    rotationOrder = "ZYX")
+            tempF1.indGroup = int(INDEX)
+            tempPP = Point(POSH)
+            
+            tempF1.bboxGPmin = Point(tempPP.x-bboxDist, tempPP.y-bboxDist, tempPP.z-bboxDist)
+            tempF1.bboxGPmax = Point(tempPP.x+bboxDist, tempPP.y+bboxDist, tempPP.z+bboxDist)
+            LF.append(tempF1)
+
+    return LF
+
 def Ref_Fresnel(dirEnt, geoTrans):
     '''
     Definition of Ref_Fresnel
