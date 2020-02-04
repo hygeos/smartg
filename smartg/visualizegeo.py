@@ -1001,8 +1001,8 @@ def generateHfP(THEDEG=0., PHIDEG = 0., PH = [Point(0., 0., 0.)], PR = Point(0.,
         
         # Generate all the facets and store them as entity object in a list 
         for i in range (0, len(PH)):
-            H0 = Heliostat(SPX = SPX, SPY = SPY, HSX = HSX, HSY = HSY, CURVE_FL=CURVE_FL, POS = PH[i])
-            TLE = generateLEfH(HELIO=H0, PR = PR, THEDEG=THEDEG, PHIDEG=PHIDEG, INDEX=i+1)
+            H0 = Heliostat(SPX=SPX, SPY=SPY, HSX=HSX, HSY=HSY, CURVE_FL=CURVE_FL, POS=PH[i], REF=REF)
+            TLE = generateLEfH(HELIO=H0, PR=PR, THEDEG=THEDEG, PHIDEG=PHIDEG, INDEX=i+1)
             lObj.extend(TLE)
     else:
         raise NameError('If HTYPE is specified it must be a Heliostat class!')
@@ -1012,7 +1012,7 @@ def generateHfP(THEDEG=0., PHIDEG = 0., PH = [Point(0., 0., 0.)], PR = Point(0.,
 
 def generateHfA(THEDEG=0., PHIDEG = 0., PR = Point(0., 0., 50.), MINANG=0., \
                 MAXANG=360., GAPDEG = 5., FDRH = 0.1, NBH = 10, GAPDIST = 0.01, \
-                HSX = 0.001, HSY = 0.001, PILLH = 0.006, REF = 1):
+                HSX = 0.001, HSY = 0.001, PILLH = 0.006, REF = 1, HTYPE=None):
     '''
     Definition of generateHfA
 
@@ -1037,26 +1037,12 @@ def generateHfA(THEDEG=0., PHIDEG = 0., PR = Point(0., 0., 50.), MINANG=0., \
     HSY     : Heliostat size in y axis (kilometer)
     PILLH   : Pillar height, distance Ground-Heliostat (kilometer)
     REF     : reflectivity of the heliostats
+    HTYPE : If specified must be a class heliostat
 
     return a list of objects
     '''
-    # calculate the sun direction vector
-    vSun = convertAnglestoV(THETA=THEDEG, PHI=PHIDEG, TYPE="Sun")
 
-    lObj = []
-    Hxx = HSX/2
-    Hyy = HSY/2
-
-    objM = Entity(name = "reflector", \
-                  materialAV = Mirror(reflectivity = REF), \
-                  materialAR = Matte(), \
-                  geo = Plane( p1 = Point(-Hxx, -Hyy, 0.),
-                               p2 = Point(Hxx, -Hyy, 0.),
-                               p3 = Point(-Hxx, Hyy, 0.),
-                               p4 = Point(Hxx, Hyy, 0.) ), \
-                  transformation = Transformation( rotation = np.array([0., 0., 0.]), \
-                                                   translation = np.array([0., 0., 0.]) ))
-
+    # I) Find the position of all heliostats
     lenpH = int(  ( (MAXANG-MINANG)/GAPDEG )*NBH  )
     
     # To avoid a given bug
@@ -1079,7 +1065,6 @@ def generateHfA(THEDEG=0., PHIDEG = 0., PR = Point(0., 0., 50.), MINANG=0., \
                 RotZT = RotZT.rotateZ(myRotZ)
                 myP=RotZT[myP]
                 pH.append( Point(myP.x, myP.y, myP.z+PILLH) )
-                #print(pH[(i*NBH)+j])
                 Dhr += GAPDIST
             myRotZ += GAPDEG
     else:
@@ -1092,34 +1077,54 @@ def generateHfA(THEDEG=0., PHIDEG = 0., PR = Point(0., 0., 50.), MINANG=0., \
             Dhr += GAPDIST      
 
 
-    for i in range (0, len(pH)):
-        # 1) Find the normalized vector colinear (and same dir) to the normal of heliostat surface
-        vecHR = pH[i]-PR
-        vecHR = Normalize(vecHR)
-        vecNH = (vSun + vecHR)*(-0.5)
-        vecNH = Normalize(vecNH)
+    # II) Creation of heliostats
+    lObj = []
 
-        # 2) Apply the inverse rotation operations to find the necessary angles
-        # Avoid nan value in case of arccos of something greater than 1 or less than -1
-        vecNH.z = np.clip(vecNH.z, -1, 1)
-        rotY = np.arccos(vecNH.z)
-        rotYD = np.degrees(rotY)
-        # Avoid nan value in extreme case of 0/0
-        if (vecNH.x == 0 and rotY ==0): opeZ = 0
-        else: opeZ = vecNH.x/np.sin(rotY)
-        # Avoid nan value in case of arccos of something greater than 1 or less than -1
-        opeZ = np.clip(opeZ, -1, 1)
-        rotZ = np.arccos(opeZ)
-        if (vecHR.y > 0):
-            rotZD = -1.*np.degrees(rotZ)
-        else:
-            rotZD = np.degrees(rotZ)
-        # 3) Once the rotation angles have been found, create heliostat objects 
-        objMi = Entity(objM);
-        objMi.transformation = Transformation( rotation = np.array([0., rotYD, rotZD]), \
-                                               translation = np.array([pH[i].x, pH[i].y, pH[i].z]), \
-                                               rotationOrder = "ZYX")
-        lObj.append(objMi)
+    # Case where the heliostat is totally plane
+    if (HTYPE is None):
+        # calculate the sun direction vector
+        vSun = convertAnglestoV(THETA=THEDEG, PHI=PHIDEG, TYPE="Sun")
+
+        Hxx = HSX/2; Hyy = HSY/2
+        objM = Entity(name = "reflector", \
+                      materialAV = Mirror(reflectivity = REF), \
+                      materialAR = Matte(), \
+                      geo = Plane( p1 = Point(-Hxx, -Hyy, 0.),
+                                   p2 = Point(Hxx, -Hyy, 0.),
+                                   p3 = Point(-Hxx, Hyy, 0.),
+                                   p4 = Point(Hxx, Hyy, 0.) ), \
+                      transformation = Transformation( rotation = np.array([0., 0., 0.]), \
+                                                       translation = np.array([0., 0., 0.]) ))
+
+        for i in range (0, len(pH)):
+            # 1) The vector of the photon after a reflection (here the opposite direction) 
+            vecHR = pH[i]-PR
+            vecHR = Normalize(vecHR)
+
+            # 2) The incoming (vSun) and outcoming (vecHR) directions are known then find
+            #    the rotation angles
+            rInfo = findRots(UI=vSun, UO=vecHR)
+            rotYD = rInfo[0]; rotZD = rInfo[1];
+
+            # 3) Once the rotation angles have been found, create heliostat objects 
+            objMi = Entity(objM);
+            objMi.transformation = Transformation( rotation = np.array([0., rotYD, rotZD]), \
+                                                   translation = np.array([pH[i].x, pH[i].y, pH[i].z]), \
+                                                   rotationOrder = "ZYX")
+            lObj.append(objMi)
+        
+    # Case where the heliostat is composed by facets (i.g. to consider the curvature)
+    elif(isinstance(HTYPE, Heliostat)):
+        # Take the commun parameters of all heliostats
+        SPX = HTYPE.sPx; SPY = HTYPE.sPy; HSX = HTYPE.hSx; HSY = HTYPE.hSy; CURVE_FL = HTYPE.curveFL;
+        
+        # Generate all the facets and store them as entity object in a list 
+        for i in range (0, len(pH)):
+            H0 = Heliostat(SPX=SPX, SPY=SPY, HSX=HSX, HSY=HSY, CURVE_FL=CURVE_FL, POS=pH[i], REF=REF)
+            TLE = generateLEfH(HELIO=H0, PR=PR, THEDEG=THEDEG, PHIDEG=PHIDEG, INDEX=i+1)
+            lObj.extend(TLE)
+    else:
+        raise NameError('If HTYPE is specified it must be a Heliostat class!')
         
     return lObj
 
@@ -1184,7 +1189,6 @@ def convertVtoAngles(v, TYPE="Sensor", verbose=False):
         return Theta, Phi
     else:
         raise NameError('v argument must be a Vector')
-
 
 def convertAnglestoV(THETA=0., PHI=0., TYPE="Sensor"):
     """
