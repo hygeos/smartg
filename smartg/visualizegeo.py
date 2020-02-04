@@ -1164,25 +1164,11 @@ def convertVtoAngles(v, TYPE="Sensor", verbose=False):
         elif (TYPE == "Sun"):
             v = Normalize(Vector(-v.x, -v.y, -v.z)) # Sun we look at the oposite side
         else:
-            raise NameError('TYPE arg must be str(Sensor) or str(Sun)')       
-        v.z = np.clip(v.z, -1, 1) # Avoid error due to float precision
+            raise NameError('TYPE arg must be str(Sensor) or str(Sun)')
 
-        # Compute the Y rotation (Theta)
-        rotY = np.arccos(v.z)
-        
-        # Avoid error due to float precision
-        if (v.x == 0 and rotY == 0): opZ = 0.
-        else: opZ = v.x/np.sin(rotY)
-        opZ = np.clip(opZ, -1, 1)
-
-        # Compute the Z rotation (Phi) which is more complex
-        rotZ = np.sign(v.y) * np.arccos(opZ)
-        if(rotZ < 0) : rotZ += 2*np.pi
-        if(rotZ == 0 and v.x < 0): rotZ += np.pi
-        
-        # Convert the values in radians to degrees
-        Theta = np.degrees(rotY)
-        Phi = np.degrees(rotZ)
+        # Find rotations in Y and Z direction (see the function findRots)
+        rInfo = findRots(vecNF=v)
+        Theta = rInfo[0]; Phi = rInfo[1];
 
         if verbose : print("Theta=", Theta, "Phi=", Phi)
         
