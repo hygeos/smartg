@@ -729,47 +729,11 @@ class Smartg(object):
             M = Smartg().run(wl=400., NBPHOTONS=1e7, atm=Profile('afglt'))
             M['I_up (TOA)'][:,:] contains the top of atmosphere radiance/reflectance
         '''
-        #
-        # Les Objets
-        #
-        
-        if ((myObjects is not None) or (cusL is not None)):
-            # Prendre en compte la direction du soleil avec l'angle zenithal et azimuth
-            vSun = convertAnglestoV(THETA=THVDEG, PHI=PHVDEG, TYPE="Sun") 
-            vSun = Normalize(vSun)
-            # if (myObjects is None):
-            #     myObjects0 = np.zeros(1, dtype=type_IObjets, order='C')
 
-                
-        if (myObjects is not None):
-            # Initialisations
-            # ind = 0; myGObj = myObjects.copy();
-            # myObjects = []; nGObj = len(myGObj);
-            # myGObj0 = np.zeros(nGObj+1, dtype=type_IObjets, order='C')
-            # for i in range (0, len(myGObj)):
-            #     if isinstance(myGObj[i], GroupE):
-                    
-            #     LISTOB[i].append(ind)
-            #     ind += LISTOB[i][0]
-            #     LISTE.extend(LISTOB[i][1])
-            if interval is not None:
-                Pmin_x = interval[0][0];Pmin_y = interval[0][1];Pmin_z = interval[0][2];
-                Pmax_x = interval[1][0];Pmax_y = interval[1][1];Pmax_z = interval[1][2];
-            else:
-                Pmin_x = -300; Pmin_y = -300; Pmin_z = 0;
-                Pmax_x = 300;  Pmax_y = 300; Pmax_z = 120;
 
-            (nObj, nGroup, surfMir, nb_H, zAlt_H, totS_H, TC, nbCx, nbCy,
-             nbCy, myObjects0) = initObj(LOBJ=myObjects, CUSL=cusL)
-        else:
-            nObj = 0
-            myObjects0 = None #np.zeros(1, dtype=type_IObjets, order='C')
-            Pmin_x = None; Pmin_y = None; Pmin_z = None;
-            Pmax_x = None; Pmax_y = None; Pmax_z = None;
-            IsAtm = None; TC = None; nbCx = 10; nbCy = 10;
-            vSun = None; nb_H = 0
-        # END OBJ ===================================================
-
+        # Compute the sun direction as vector 
+        vSun = convertAnglestoV(THETA=THVDEG, PHI=PHVDEG, TYPE="Sun") 
+        vSun = Normalize(vSun)
 
         # First check if back option is activated in case of the use of cusBackward launching mode
         if (cusL is not None):
@@ -790,24 +754,48 @@ class Smartg(object):
                                 THDEG=cusL.dict['THDEG'], PHDEG=cusL.dict['PHDEG'], LOC='ATMOS',
                                 FOV=0.0, TYPE=0)
                                 #FOV=cusL.dict['ALDEG'], TYPE=cusL.dict['TYPE'])
-            # if (cusL.dict['LMODE'] == "BR"):
-            #     if myObjects == None: myObjects = True
             elif (cusL.dict['LMODE'] == "FF"):
-
+                # The projected surface at TOA where the photons are launched
                 DotNN = Dot(vSun*-1, Vector(0., 0., 1.))
+                surfLPH = float(cusL.dict['CFX'])*float(cusL.dict['CFY'])*DotNN
 
-                # Récupération des 4 points formant le rectangle en TOA
-                xnn = float(cusL.dict['CFX'])/2.
-                ynn = float(cusL.dict['CFY'])/2.
-                ppn1 = Point(-xnn, -ynn, 0.)
-                ppn2 = Point(xnn, -ynn, 0.)
-                ppn3 = Point(-xnn, ynn, 0.)
-                ppn4 = Point(xnn, ynn, 0.)
-                surfMir = float(cusL.dict['CFX'])*float(cusL.dict['CFY'])*DotNN
-        
         #
         # initialization
         #              
+        
+        # Begin initialization with OBJ ============================
+        if (myObjects is not None):
+            # ind = 0; myGObj = myObjects.copy();
+            # myObjects = []; nGObj = len(myGObj);
+            # myGObj0 = np.zeros(nGObj+1, dtype=type_IObjets, order='C')
+            # for i in range (0, len(myGObj)):
+            #     if isinstance(myGObj[i], GroupE):
+                    
+            #     LISTOB[i].append(ind)
+            #     ind += LISTOB[i][0]
+            #     LISTE.extend(LISTOB[i][1])
+
+            # Main bounding box initialization
+            if interval is not None:
+                Pmin_x = interval[0][0];Pmin_y = interval[0][1];Pmin_z = interval[0][2];
+                Pmax_x = interval[1][0];Pmax_y = interval[1][1];Pmax_z = interval[1][2];
+            else:
+                Pmin_x = -300; Pmin_y = -300; Pmin_z = 0;
+                Pmax_x = 300;  Pmax_y = 300; Pmax_z = 120;
+
+            # Initiliaze all the parameters linked with 3D objects
+            (nObj, nGroup, surfLPH_RF, nb_H, zAlt_H, totS_H, TC, nbCx, nbCy,
+             nbCy, myObjects0) = initObj(LOBJ=myObjects, CUSL=cusL)
+
+            # If we are in RF mode don't forget to update the value of surfLPH
+            if (surfLPH_RF is not None): surfLPH = surfLPH_RF
+        else:
+            myObjects0 = None #np.zeros(1, dtype=type_IObjets, order='C')
+            nObj = 0; Pmin_x = None; Pmin_y = None; Pmin_z = None;
+            Pmax_x = None; Pmax_y = None; Pmax_z = None;
+            IsAtm = None; TC = None; nbCx = 10; nbCy = 10; nb_H = 0
+        # END OBJ ===================================================
+
         if NBPHI%2 == 1:
             warn('Odd number of azimuth')
 
@@ -1094,10 +1082,10 @@ class Smartg(object):
             elif (cusL.dict['LMODE'] != "B" and cusL.dict['LMODE'] != "BR"):
                 weightR = categories[5] # for the att loss, weight of cat2 absorbed by the receiver
                 for i in range (0, 9):
-                    cMatVisuRecep[i][:][:] = cMatVisuRecep[i][:][:] * ((surfMir)/(TC*TC*NBPHOTONS))
+                    cMatVisuRecep[i][:][:] = cMatVisuRecep[i][:][:] * ((surfLPH)/(TC*TC*NBPHOTONS))
                 for i in range (0, 8):
-                    categories[(i*5)] *= ((surfMir)/(TC*TC*nbCx*nbCy*NBPHOTONS))
-                    categories[(i*5)+3] *= ((surfMir)/(TC*TC*nbCx*nbCy*NBPHOTONS))
+                    categories[(i*5)] *= ((surfLPH)/(TC*TC*nbCx*nbCy*NBPHOTONS))
+                    categories[(i*5)+3] *= ((surfLPH)/(TC*TC*nbCx*nbCy*NBPHOTONS))
             else:
                 normBR = 2
                 if (cusL.dict['TYPE'] == 1):
@@ -1119,7 +1107,7 @@ class Smartg(object):
         else:
             MZAlt_H = zAlt_H/nb_H
             # dicSTP : tuple incorporating parameters for Solar Tower Power applications
-            dicSTP = {"nb_H":nb_H, "totS_H":totS_H, "surfTOA":surfMir, "MZAlt_H":MZAlt_H, "vSun":vSun, "wRec":weightR}
+            dicSTP = {"nb_H":nb_H, "totS_H":totS_H, "surfTOA":surfLPH, "MZAlt_H":MZAlt_H, "vSun":vSun, "wRec":weightR}
                 
         # finalization
         output = finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl[:], NPhotonsInTot, errorcount, NPhotonsOutTot,
@@ -2401,8 +2389,11 @@ def initObj(LOBJ, CUSL=None):
         LOBJGPU = np.zeros(nObj, dtype=type_IObjets, order='C')
         TC = None; nbCx = int(0); nbCy = int(0);
 
+    # Initialization before the coming loop
     pp1 = 0.; pp2 = 0.; pp3 = 0.; pp4 = 0.; nGroup = int(0);
-    surfLPH = 0.; nb_H = 0; zAlt_H = 0.; totS_H = 0.;
+    nb_H = 0; zAlt_H = 0.; totS_H = 0.;
+    if (CUSL != None and CUSL.dict['LMODE'] == "RF"): surfLPH = 0;
+    else: surfLPH = None;
 
     # Begining of the loop to consider all objects
     for i in range (0, nObj):
