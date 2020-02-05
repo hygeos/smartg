@@ -33,7 +33,8 @@ from smartg.geometry import Vector, Point, Normal, Ray, BBox, CoordinateSystem, 
     Normalize, Dot
 from smartg.transform import Transform, Aff
 from smartg.visualizegeo import Mirror, Plane, Spheric, Transformation, \
-    Entity, Analyse_create_entity, LambMirror, Matte, convertVtoAngles, convertAnglestoV
+    Entity, Analyse_create_entity, LambMirror, Matte, convertVtoAngles, \
+    convertAnglestoV, GroupE
 
 
 # set up directories
@@ -200,6 +201,12 @@ type_IObjets = [
     ('bPmaxy', 'float32'),
     ('bPmaxz', 'float32'),
     ]
+
+type_GObj = [
+    ('nObj', 'int32'),        # Number of objects in this group
+    ('index', 'int32'),       # Index at the table of IObjects where
+                              # we start to fill the objects of the group
+]
 
 class FlatSurface(object):
     '''
@@ -726,6 +733,44 @@ class Smartg(object):
         # Les Objets
         #
         
+        if ((myObjects is not None) or (cusL is not None)):
+            # Prendre en compte la direction du soleil avec l'angle zenithal et azimuth
+            vSun = convertAnglestoV(THETA=THVDEG, PHI=PHVDEG, TYPE="Sun") 
+            vSun = Normalize(vSun)
+            # if (myObjects is None):
+            #     myObjects0 = np.zeros(1, dtype=type_IObjets, order='C')
+
+                
+        if (myObjects is not None):
+            # Initialisations
+            # ind = 0; myGObj = myObjects.copy();
+            # myObjects = []; nGObj = len(myGObj);
+            # myGObj0 = np.zeros(nGObj+1, dtype=type_IObjets, order='C')
+            # for i in range (0, len(myGObj)):
+            #     if isinstance(myGObj[i], GroupE):
+                    
+            #     LISTOB[i].append(ind)
+            #     ind += LISTOB[i][0]
+            #     LISTE.extend(LISTOB[i][1])
+            if interval is not None:
+                Pmin_x = interval[0][0];Pmin_y = interval[0][1];Pmin_z = interval[0][2];
+                Pmax_x = interval[1][0];Pmax_y = interval[1][1];Pmax_z = interval[1][2];
+            else:
+                Pmin_x = -300; Pmin_y = -300; Pmin_z = 0;
+                Pmax_x = 300;  Pmax_y = 300; Pmax_z = 120;
+
+            (nObj, nGroup, surfMir, nb_H, zAlt_H, totS_H, TC, nbCx, nbCy,
+             nbCy, myObjects0) = initObj(LOBJ=myObjects, CUSL=cusL)
+        else:
+            nObj = 0
+            myObjects0 = None #np.zeros(1, dtype=type_IObjets, order='C')
+            Pmin_x = None; Pmin_y = None; Pmin_z = None;
+            Pmax_x = None; Pmax_y = None; Pmax_z = None;
+            IsAtm = None; TC = None; nbCx = 10; nbCy = 10;
+            vSun = None; nb_H = 0
+        # END OBJ ===================================================
+
+
         # First check if back option is activated in case of the use of cusBackward launching mode
         if (cusL is not None):
             if (cusL.dict['LMODE'] == "B" and self.back == False):
@@ -747,365 +792,9 @@ class Smartg(object):
                                 #FOV=cusL.dict['ALDEG'], TYPE=cusL.dict['TYPE'])
             # if (cusL.dict['LMODE'] == "BR"):
             #     if myObjects == None: myObjects = True
-        if ((myObjects is not None) or (cusL is not None)):
-            # Prendre en compte la direction du soleil avec l'angle zenithal et azimuth
-            vSun = convertAnglestoV(THETA=THVDEG, PHI=PHVDEG, TYPE="Sun") 
-            vSun = Normalize(vSun)
-            if (myObjects is None):
-                myObjects0 = np.zeros(1, dtype=type_IObjets, order='C')
-                
-        if (myObjects is not None):
-            # Initialisations
-            if interval is not None:
-                Pmin_x = interval[0][0];Pmin_y = interval[0][1];Pmin_z = interval[0][2];
-                Pmax_x = interval[1][0];Pmax_y = interval[1][1];Pmax_z = interval[1][2];
-            else:
-                Pmin_x = -300; Pmin_y = -300; Pmin_z = 0;
-                Pmax_x = 300;  Pmax_y = 300; Pmax_z = 120;
-            nObj = len(myObjects)
-            if cusL != None and cusL.dict['LMODE'] == "BR":
-                myObjects0 = np.zeros(nObj+1, dtype=type_IObjets, order='C')
-                TC=cusL.dict['REC'].TC
-                sizeXmin = min(cusL.dict['REC'].geo.p1.x, cusL.dict['REC'].geo.p2.x,
-                               cusL.dict['REC'].geo.p3.x, cusL.dict['REC'].geo.p4.x)
-                sizeXmax = max(cusL.dict['REC'].geo.p1.x, cusL.dict['REC'].geo.p2.x,
-                               cusL.dict['REC'].geo.p3.x, cusL.dict['REC'].geo.p4.x)
-                sizeX = sizeXmax - sizeXmin
-                sizeYmin = min(cusL.dict['REC'].geo.p1.y, cusL.dict['REC'].geo.p2.y,
-                               cusL.dict['REC'].geo.p3.y, cusL.dict['REC'].geo.p4.y)
-                sizeYmax = max(cusL.dict['REC'].geo.p1.y, cusL.dict['REC'].geo.p2.y,
-                               cusL.dict['REC'].geo.p3.y, cusL.dict['REC'].geo.p4.y)
-                sizeY = sizeYmax - sizeYmin
-                nbCx = int(sizeX/TC)
-                nbCy = int(sizeY/TC)
-                myObjects0['mvRx'][nObj] = cusL.dict['REC'].transformation.rotx
-                myObjects0['mvRy'][nObj] = cusL.dict['REC'].transformation.roty
-                myObjects0['mvRz'][nObj] = cusL.dict['REC'].transformation.rotz
-                if (cusL.dict['REC'].transformation.rotOrder == "XYZ"):
-                    myObjects0['rotOrder'][nObj] = 1
-                elif(cusL.dict['REC'].transformation.rotOrder == "XZY"):
-                    myObjects0['rotOrder'][nObj] = 2
-                elif(cusL.dict['REC'].transformation.rotOrder == "YXZ"):
-                    myObjects0['rotOrder'][nObj] = 3
-                elif(cusL.dict['REC'].transformation.rotOrder == "YZX"):
-                    myObjects0['rotOrder'][nObj] = 4
-                elif(cusL.dict['REC'].transformation.rotOrder == "ZXY"):
-                    myObjects0['rotOrder'][nObj] = 5
-                elif(cusL.dict['REC'].transformation.rotOrder == "ZYX"):
-                    myObjects0['rotOrder'][nObj] = 6
-                else:
-                    raise NameError('Unknown rotation order')
-                myObjects0['mvTx'][nObj] = cusL.dict['REC'].transformation.transx
-                myObjects0['mvTy'][nObj] = cusL.dict['REC'].transformation.transy
-                myObjects0['mvTz'][nObj] = cusL.dict['REC'].transformation.transz
-            else:
-                myObjects0 = np.zeros(nObj, dtype=type_IObjets, order='C')
-                TC = None; nbCx = int(0); nbCy = int(0);
-                
-            pp1 = 0.; pp2 = 0.; pp3 = 0.; pp4 = 0.; nGroup = int(0);
-            surfMir = 0.; nb_H = 0; zAlt_H = 0.; totS_H = 0.;
-
-            # Début de la boucle pour la prise en compte de tous les objets
-            for i in range (0, nObj):
-
-                # Pour l'instant 2 choix possibles : surface Sphérique ou Plane
-                if isinstance(myObjects[i].geo, Spheric):    # si l'objet est une sphère
-                    myObjects0['geo'][i] = 1 # reconnaitre la forme sphérique sur Cuda
-                    
-                    myObjects0['myRad'][i] = myObjects[i].geo.radius
-                    myObjects0['z0'][i] = myObjects[i].geo.z0
-                    myObjects0['z1'][i] = myObjects[i].geo.z1
-                    myObjects0['phi'][i] = myObjects[i].geo.phi
-                    
-                elif isinstance(myObjects[i].geo, Plane):    # si l'objet est une surface plane
-                    myObjects0['geo'][i] = 2 # reconnaitre la forme plane sur Cuda
-                    
-                    myObjects0['p0x'][i] = myObjects[i].geo.p1.x
-                    myObjects0['p0y'][i] = myObjects[i].geo.p1.y
-                    myObjects0['p0z'][i] = myObjects[i].geo.p1.z
-                    
-                    myObjects0['p1x'][i] = myObjects[i].geo.p2.x
-                    myObjects0['p1y'][i] = myObjects[i].geo.p2.y
-                    myObjects0['p1z'][i] = myObjects[i].geo.p2.z
-                    
-                    myObjects0['p2x'][i] = myObjects[i].geo.p3.x
-                    myObjects0['p2y'][i] = myObjects[i].geo.p3.y
-                    myObjects0['p2z'][i] = myObjects[i].geo.p3.z
-                    
-                    myObjects0['p3x'][i] = myObjects[i].geo.p4.x
-                    myObjects0['p3y'][i] = myObjects[i].geo.p4.y
-                    myObjects0['p3z'][i] = myObjects[i].geo.p4.z
-
-                    normalBase = Vector(0, 0, 1);
-                    # Prise en compte des transfos de rot en X, Y et Z
-                    TpT0 = Transform()
-                    TpRX0 = TpT0.rotateX(myObjects[i].transformation.rotation[0])
-                    TpRY0 = TpT0.rotateY(myObjects[i].transformation.rotation[1])
-                    TpRZ0 = TpT0.rotateZ(myObjects[i].transformation.rotation[2])
-                    if (myObjects[i].transformation.rotOrder == "XYZ"):
-                        TpT0 = TpRX0*TpRY0*TpRZ0
-                    elif(myObjects[i].transformation.rotOrder == "XZY"):
-                        TpT0 = TpRX0*TpRZ0*TpRY0
-                    elif(myObjects[i].transformation.rotOrder == "YXZ"):
-                        TpT0 = TpRY0*TpRX0*TpRZ0
-                    elif(myObjects[i].transformation.rotOrder == "YZX"):
-                        TpT0 = TpRY0*TpRZ*TpRX0
-                    elif(myObjects[i].transformation.rotOrder == "ZXY"):
-                        TpT0 = TpRZ0*TpRX0*TpRY0
-                    elif(myObjects[i].transformation.rotOrder == "ZYX"):
-                        TpT0 = TpRZ0*TpRY0*TpRX0
-                    else:
-                        raise NameError('Unknown rotation order')
-                    
-                    normalBase = TpT0[normalBase]
-                    normalBase = Normalize(normalBase)
-                    #print("normalbase =", normalBase)
-                    myObjects0['nBx'][i] = normalBase.x
-                    myObjects0['nBy'][i] = normalBase.y
-                    myObjects0['nBz'][i] = normalBase.z
-                    
-                else:    # si l'objet est autre chose (inconnu)
-                    raise NameError("Your geometry can be only spheric or plane, please" + \
-                                    " choose between Spheric or Plane classes!")
-
-                # In develepemnt Group, Pmin and Pmax
-                myObjects0['indG'][i] = myObjects[i].indGroup
-                myObjects0['bPminx'][i] = myObjects[i].bboxGPmin.x
-                myObjects0['bPminy'][i] = myObjects[i].bboxGPmin.y
-                myObjects0['bPminz'][i] = myObjects[i].bboxGPmin.z
-                myObjects0['bPmaxx'][i] = myObjects[i].bboxGPmax.x
-                myObjects0['bPmaxy'][i] = myObjects[i].bboxGPmax.y
-                myObjects0['bPmaxz'][i] = myObjects[i].bboxGPmax.z
-                if (nGroup < myObjects[i].indGroup):
-                    nGroup = myObjects[i].indGroup
-
-                # Affectation des transformations (rotations et translations)
-                myObjects0['mvRx'][i] = myObjects[i].transformation.rotx
-                myObjects0['mvRy'][i] = myObjects[i].transformation.roty
-                myObjects0['mvRz'][i] = myObjects[i].transformation.rotz
-
-                if (myObjects[i].transformation.rotOrder == "XYZ"):
-                    myObjects0['rotOrder'][i] = 1
-                elif(myObjects[i].transformation.rotOrder == "XZY"):
-                    myObjects0['rotOrder'][i] = 2
-                elif(myObjects[i].transformation.rotOrder == "YXZ"):
-                    myObjects0['rotOrder'][i] = 3
-                elif(myObjects[i].transformation.rotOrder == "YZX"):
-                    myObjects0['rotOrder'][i] = 4
-                elif(myObjects[i].transformation.rotOrder == "ZXY"):
-                    myObjects0['rotOrder'][i] = 5
-                elif(myObjects[i].transformation.rotOrder == "ZYX"):
-                    myObjects0['rotOrder'][i] = 6
-                else:
-                    raise NameError('Unknown rotation order')
-
-                myObjects0['mvTx'][i] = myObjects[i].transformation.transx
-                myObjects0['mvTy'][i] = myObjects[i].transformation.transy
-                myObjects0['mvTz'][i] = myObjects[i].transformation.transz
-
-                # Prendre en compte le matériau de l'objet
-                
-                if isinstance(myObjects[i].materialAV, LambMirror):
-                    myObjects0['materialAV'][i] = 1
-                    myObjects0['reflecAV'][i] = myObjects[i].materialAV.reflectivity
-                    myObjects0['roughAV'][i] = 0
-                    myObjects0['shdAV'][i] = 0
-                    myObjects0['nindAV'][i] = 1
-                    myObjects0['distAV'][i] = 0
-                elif isinstance(myObjects[i].materialAV, Matte):
-                    myObjects0['materialAV'][i] = 2
-                    myObjects0['reflecAV'][i] = myObjects[i].materialAV.reflectivity
-                    myObjects0['roughAV'][i] = myObjects[i].materialAV.roughness
-                    myObjects0['shdAV'][i] = 0
-                    myObjects0['nindAV'][i] = 1
-                    myObjects0['distAV'][i] = 0
-                elif isinstance(myObjects[i].materialAV, Mirror):
-                    myObjects0['materialAV'][i] = 3
-                    myObjects0['reflecAV'][i] = myObjects[i].materialAV.reflectivity
-                    myObjects0['roughAV'][i] = myObjects[i].materialAV.roughness
-                    myObjects0['shdAV'][i] = int(myObjects[i].materialAV.shadow)
-                    myObjects0['nindAV'][i] = myObjects[i].materialAV.nind
-                    myObjects0['distAV'][i] = myObjects[i].materialAV.distribution
-                else:
-                    myObjects0['materialAV'][i] = 0
-                    myObjects0['roughAV'][i] = 0
-                    myObjects0['roughAV'][i] = 0
-                    myObjects0['shdAV'][i] = 0
-                    myObjects0['nindAV'][i] = 1
-                    myObjects0['distAV'][i] = 0
-
-                if isinstance(myObjects[i].materialAR, LambMirror):
-                    myObjects0['materialAR'][i] = 1
-                    myObjects0['reflecAR'][i] = myObjects[i].materialAR.reflectivity
-                    myObjects0['roughAR'][i] = 0
-                    myObjects0['shdAR'][i] = 0
-                    myObjects0['nindAR'][i] = 1
-                    myObjects0['distAR'][i] = 0
-                elif isinstance(myObjects[i].materialAR, Matte):
-                    myObjects0['materialAR'][i] = 2
-                    myObjects0['reflecAR'][i] = myObjects[i].materialAR.reflectivity
-                    myObjects0['roughAR'][i] = myObjects[i].materialAR.roughness
-                    myObjects0['shdAR'][i] = 0
-                    myObjects0['nindAR'][i] = 1
-                    myObjects0['distAR'][i] = 0
-                elif isinstance(myObjects[i].materialAR, Mirror):
-                    myObjects0['materialAR'][i] = 3
-                    myObjects0['reflecAR'][i] = myObjects[i].materialAR.reflectivity
-                    myObjects0['roughAR'][i] = myObjects[i].materialAR.roughness
-                    myObjects0['shdAR'][i] = int(myObjects[i].materialAR.shadow)
-                    myObjects0['nindAR'][i] = myObjects[i].materialAR.nind
-                    myObjects0['distAR'][i] = myObjects[i].materialAR.distribution
-                else:
-                    myObjects0['materialAR'][i] = 0
-                    myObjects0['reflecAR'][i] = 0
-                    myObjects0['roughAR'][i] = 0
-                    myObjects0['shdAR'][i] = 0
-                    myObjects0['nindAR'][i] = 1
-                    myObjects0['distAR'][i] = 0
-                    
-                # Deux possibilités : l'objet est un reflecteur ou un recepteur   
-                if (myObjects[i].name == "reflector"):
-                    myObjects0['type'][i] = 1 # pour reconnaitre le reflect sur Cuda
-
-                    # If this is a heliostat (which at least a mirror material)
-                    if (  isinstance(myObjects[i].geo, Plane) and \
-                          ( isinstance(myObjects[i].materialAR, Mirror) or \
-                            isinstance(myObjects[i].materialAV, Mirror) )  ):
-                        nb_H += 1
-                        zAlt_H += myObjects[i].transformation.transz
-                        totS_H += abs(myObjects[i].geo.p1.x)*abs(myObjects[i].geo.p1.y)*4;
-                        
-
-                    # Etape cruciale pour la visualisation des résulats (mode forward restreint uniquement)
-                    if (cusL is not None):
-                        if (cusL.dict['LMODE'] == "RF"):
-                            # Récupération des 4 points formant le rectangle représentant le reflecteur
-                            pp1 = myObjects[i].geo.p1
-                            pp2 = myObjects[i].geo.p2
-                            pp3 = myObjects[i].geo.p3
-                            pp4 = myObjects[i].geo.p4
-
-                            # *********************************
-                            # First Method (simplest way) --->
-                            DotP = Dot(vSun*-1, normalBase)
-                            TwoAAbis = abs((pp1.x - pp4.x)*(pp2.y - pp3.y)) + abs((pp2.x - pp3.x)*(pp1.y - pp4.y))
-                            surfMirbis = (TwoAAbis/2.) * DotP
-                            # ********************************* END FM
-
-                            # *********************************
-                            # Second Method Hardest way --->
-                            # Prise en compte des transfos de rot en X et Y et Z
-                            # TpT = Transform()
-                            # TpRX = TpT.rotateX(myObjects[i].transformation.rotx)
-                            # TpRY = TpT.rotateY(myObjects[i].transformation.roty)
-                            # TpRZ = TpT.rotateZ(myObjects[i].transformation.rotz)
-                            # if (myObjects[i].transformation.rotOrder == "XYZ"):
-                            #     TpT = TpRX*TpRY*TpRZ
-                            # elif(myObjects[i].transformation.rotOrder == "XZY"):
-                            #     TpT = TpRX*TpRZ*TpRY
-                            # elif(myObjects[i].transformation.rotOrder == "YXZ"):
-                            #     TpT = TpRY*TpRX*TpRZ
-                            # elif(myObjects[i].transformation.rotOrder == "YZX"):
-                            #     TpT = TpRY*TpRZ*TpRX
-                            # elif(myObjects[i].transformation.rotOrder == "ZXY"):
-                            #     TpT = TpRZ*TpRX*TpRY
-                            # elif(myObjects[i].transformation.rotOrder == "ZYX"):
-                            #     TpT = TpRZ*TpRY*TpRX
-                            # else:
-                            #     raise NameError('Unknown rotation order')
-                            # invTpT = TpT.inverse(TpT)
-
-                            # # Application des transfos sur les 4 points
-                            # pp1 = TpT[pp1]
-                            # pp2 = TpT[pp2]
-                            # pp3 = TpT[pp3]
-                            # pp4 = TpT[pp4]
-
-                            # # Création d'une matrice appelé matrice de passage
-                            # nn3 = Normal(vSun*-1)
-                            # nn1, nn2 = CoordinateSystem(nn3)
-                            # mm2 = np.zeros((4,4), dtype=np.float64)
-                            
-                            # # Remplissage de la matrice de passage en fonction du repère (nn3 étant le nouvel axe z)
-                            # mm2[0,0] = nn1.x ; mm2[0,1] = nn2.x ; mm2[0,2] = nn3.x ; mm2[0,3] = 0. ;
-                            # mm2[1,0] = nn1.y ; mm2[1,1] = nn2.y ; mm2[1,2] = nn3.y ; mm2[1,3] = 0. ;
-                            # mm2[2,0] = nn1.z ; mm2[2,1] = nn2.z ; mm2[2,2] = nn3.z ; mm2[2,3] = 0. ;
-                            # mm2[3,0] = 0.    ; mm2[3,1] = 0.    ; mm2[3,2] = 0.    ; mm2[3,3] = 1. ;
-                            
-                            # # Création de la transformation permettant le changement de base
-                            # mm2Inv = np.transpose(mm2)
-                            # ooTwn = Transform(m = mm2, mInv = mm2Inv)
-                            # wto = ooTwn.inverse(ooTwn)
-
-                            # # Appliquer le changement de base
-                            # pp1 = ooTwn[pp1]
-                            # pp2 = ooTwn[pp2]
-                            # pp3 = ooTwn[pp3]
-                            # pp4 = ooTwn[pp4]
-                            # v_nn = ooTwn[vSun]
-
-                            # # Projection dans le nouveau plan (x, y) avec le nouvel axe z perp à la dir solaire
-                            # timen1 = (-1.* pp1.z)/v_nn.z
-                            # timen2 = (-1.* pp2.z)/v_nn.z
-                            # timen3 = (-1.* pp3.z)/v_nn.z
-                            # timen4 = (-1.* pp4.z)/v_nn.z
-                            
-                            # pp1 += v_nn*timen1
-                            # pp2 += v_nn*timen2
-                            # pp3 += v_nn*timen3
-                            # pp4 += v_nn*timen4
-
-                            # # Calcul de l'aire de la surface suivant la formule de l'aire d'un quadri convexe
-                            # TwoAn = abs((pp1.x - pp4.x)*(pp2.y - pp3.y)) + abs((pp2.x - pp3.x)*(pp1.y - pp4.y))
-                            # surfMirbis = TwoAn/2.
-                            # ********************************* END SM
-                            
-                            surfMir += surfMirbis
-                    
-                elif (myObjects[i].name == "receiver"):
-                    myObjects0['type'][i] = 2 # pour reconnaitre le recept sur Cuda
-                    TC=myObjects[i].TC
-                    sizeXmin = min(myObjects[i].geo.p1.x, myObjects[i].geo.p2.x,
-                                   myObjects[i].geo.p3.x, myObjects[i].geo.p4.x)
-                    sizeXmax = max(myObjects[i].geo.p1.x, myObjects[i].geo.p2.x,
-                                   myObjects[i].geo.p3.x, myObjects[i].geo.p4.x)
-                    sizeX = sizeXmax - sizeXmin
-                    sizeYmin = min(myObjects[i].geo.p1.y, myObjects[i].geo.p2.y,
-                                   myObjects[i].geo.p3.y, myObjects[i].geo.p4.y)
-                    sizeYmax = max(myObjects[i].geo.p1.y, myObjects[i].geo.p2.y,
-                                   myObjects[i].geo.p3.y, myObjects[i].geo.p4.y)
-                    sizeY = sizeYmax - sizeYmin
-                    nbCx = int(sizeX/TC)
-                    nbCy = int(sizeY/TC)
-                elif (myObjects[i].name == "surf"):
-                    myObjects0['type'][i] = 3 # pour reconnaitre le recept sur Cuda
-                else:
-                    raise NameError('You have to specify if your object is a reflector or a receiver!')
-                
-            myObjects0 = to_gpu(myObjects0)          
-        else:
-            nObj = 0
-            myObjects0 = None #np.zeros(1, dtype=type_IObjets, order='C')
-            Pmin_x = None; Pmin_y = None; Pmin_z = None;
-            Pmax_x = None; Pmax_y = None; Pmax_z = None;
-            IsAtm = None; TC = None; nbCx = 10; nbCy = 10;
-            vSun = None; nb_H = 0
-        # END OBJ ===================================================
-
-        if cusL is not None:
-            if (cusL.dict['LMODE'] == "FF"):
+            elif (cusL.dict['LMODE'] == "FF"):
 
                 DotNN = Dot(vSun*-1, Vector(0., 0., 1.))
-                # # Création d'une matrice appelé matrice de passage
-                # nn3 = Normal(vSun)
-                # nn1, nn2 = CoordinateSystem(nn3)
-                # mm2 = np.zeros((4,4), dtype=np.float64)
-                
-                # # Remplissage de la matrice de passage en fonction du repère (nn3 étant le nouvel axe z)
-                # mm2[0,0] = nn1.x ; mm2[0,1] = nn2.x ; mm2[0,2] = nn3.x ; mm2[0,3] = 0. ;
-                # mm2[1,0] = nn1.y ; mm2[1,1] = nn2.y ; mm2[1,2] = nn3.y ; mm2[1,3] = 0. ;
-                # mm2[2,0] = nn1.z ; mm2[2,1] = nn2.z ; mm2[2,2] = nn3.z ; mm2[2,3] = 0. ;
-                # mm2[3,0] = 0.    ; mm2[3,1] = 0.    ; mm2[3,2] = 0.    ; mm2[3,3] = 1. ;
 
                 # Récupération des 4 points formant le rectangle en TOA
                 xnn = float(cusL.dict['CFX'])/2.
@@ -1114,39 +803,7 @@ class Smartg(object):
                 ppn2 = Point(xnn, -ynn, 0.)
                 ppn3 = Point(-xnn, ynn, 0.)
                 ppn4 = Point(xnn, ynn, 0.)
-                
-                # # Création de la transformation permettant le changement de base
-                # mm2Inv = np.transpose(mm2)
-                # ooTwn = Transform(m = mm2, mInv = mm2Inv)
-
-                # # # Application des transfos sur les 4 points
-                # ppn1 = ooTwn[ppn1]
-                # ppn2 = ooTwn[ppn2]
-                # ppn3 = ooTwn[ppn3]
-                # ppn4 = ooTwn[ppn4]
-                # v_nn = ooTwn[vSun]
-                
-                # # Projection dans le nouveau plan (x, y) avec le nouvel axe z perp à la dir solaire
-                # timen1 = (-1.* ppn1.z)/v_nn.z
-                # timen2 = (-1.* ppn2.z)/v_nn.z
-                # timen3 = (-1.* ppn3.z)/v_nn.z
-                # timen4 = (-1.* ppn4.z)/v_nn.z
-                
-                # ppn1 += v_nn*timen1
-                # ppn2 += v_nn*timen2
-                # ppn3 += v_nn*timen3
-                # ppn4 += v_nn*timen4
-                
-                # # Calcul de l'aire de la surface suivant la formule de l'aire d'un quadri convexe
-                # TwoAn = abs((ppn1.x - ppn4.x)*(ppn2.y - ppn3.y)) + abs((ppn2.x - ppn3.x)*(ppn1.y - ppn4.y))
-                # surfMir = TwoAn/2.
-
-                # # Calcul de l'aire de la surface suivant la formule de l'aire d'un quadri convexe
-                # TwoAn = abs((ppn1.x - ppn4.x)*(ppn2.y - ppn3.y)) + abs((ppn2.x - ppn3.x)*(ppn1.y - ppn4.y))
-                # surfMir = (TwoAn/2.) * DotNN
                 surfMir = float(cusL.dict['CFX'])*float(cusL.dict['CFY'])*DotNN
-                
-
         
         #
         # initialization
@@ -2683,3 +2340,278 @@ class RNG_CURAND_PHILOX(object):
         setup(self.state, block=(XBLOCK,1,1), grid=(XGRID, 1, 1))
 
         return SEED
+
+def initObj(LOBJ, CUSL=None):
+    '''
+    Definition of the function LOBJ
+
+    ===ARGS:
+    LOBJ : List of objects
+    CUSL : Custom lanching mode class (i.g. cusForward())
+    
+    ===RETURN:
+    nObj      : The number of Objects
+    nGroup    : The number of object groups
+    surfLPH   : Surface where photons are launched, in backward = None
+    nb_H      : The number of heliostats (or heliostat facets)
+    zAlt_H    : Sum of z altitude of all heliostats (or heliostat facets)
+    totS_H    : The total surface of heliostats
+    TC        : Receiver cell size
+    nbCx      : The number of receiver cells in x direction 
+    nbCy      : The number of receiver cells in y direction
+    LOBJGPU   : GPU array of objects of type 'type_IObjets'
+    '''
+    nObj = len(LOBJ)
+    if CUSL != None and CUSL.dict['LMODE'] == "BR":
+        LOBJ0 = np.zeros(nObj+1, dtype=type_IObjets, order='C')
+        TC=CUSL.dict['REC'].TC
+        sizeXmin = min(CUSL.dict['REC'].geo.p1.x, CUSL.dict['REC'].geo.p2.x,
+                       CUSL.dict['REC'].geo.p3.x, CUSL.dict['REC'].geo.p4.x)
+        sizeXmax = max(CUSL.dict['REC'].geo.p1.x, CUSL.dict['REC'].geo.p2.x,
+                       CUSL.dict['REC'].geo.p3.x, CUSL.dict['REC'].geo.p4.x)
+        sizeX = sizeXmax - sizeXmin
+        sizeYmin = min(CUSL.dict['REC'].geo.p1.y, CUSL.dict['REC'].geo.p2.y,
+                       CUSL.dict['REC'].geo.p3.y, CUSL.dict['REC'].geo.p4.y)
+        sizeYmax = max(CUSL.dict['REC'].geo.p1.y, CUSL.dict['REC'].geo.p2.y,
+                       CUSL.dict['REC'].geo.p3.y, CUSL.dict['REC'].geo.p4.y)
+        sizeY = sizeYmax - sizeYmin
+        nbCx = int(sizeX/TC)
+        nbCy = int(sizeY/TC)
+        LOBJ0['mvRx'][nObj] = CUSL.dict['REC'].transformation.rotx
+        LOBJ0['mvRy'][nObj] = CUSL.dict['REC'].transformation.roty
+        LOBJ0['mvRz'][nObj] = CUSL.dict['REC'].transformation.rotz
+        if (CUSL.dict['REC'].transformation.rotOrder == "XYZ"):
+            LOBJ0['rotOrder'][nObj] = 1
+        elif(CUSL.dict['REC'].transformation.rotOrder == "XZY"):
+            LOBJ0['rotOrder'][nObj] = 2
+        elif(CUSL.dict['REC'].transformation.rotOrder == "YXZ"):
+            LOBJ0['rotOrder'][nObj] = 3
+        elif(CUSL.dict['REC'].transformation.rotOrder == "YZX"):
+            LOBJ0['rotOrder'][nObj] = 4
+        elif(CUSL.dict['REC'].transformation.rotOrder == "ZXY"):
+            LOBJ0['rotOrder'][nObj] = 5
+        elif(CUSL.dict['REC'].transformation.rotOrder == "ZYX"):
+            LOBJ0['rotOrder'][nObj] = 6
+        else:
+            raise NameError('Unknown rotation order')
+        LOBJ0['mvTx'][nObj] = CUSL.dict['REC'].transformation.transx
+        LOBJ0['mvTy'][nObj] = CUSL.dict['REC'].transformation.transy
+        LOBJ0['mvTz'][nObj] = CUSL.dict['REC'].transformation.transz
+    else:
+        LOBJ0 = np.zeros(nObj, dtype=type_IObjets, order='C')
+        TC = None; nbCx = int(0); nbCy = int(0);
+
+    pp1 = 0.; pp2 = 0.; pp3 = 0.; pp4 = 0.; nGroup = int(0);
+    surfMir = 0.; nb_H = 0; zAlt_H = 0.; totS_H = 0.;
+
+    # Début de la boucle pour la prise en compte de tous les objets
+    for i in range (0, nObj):
+
+        # Pour l'instant 2 choix possibles : surface Sphérique ou Plane
+        if isinstance(LOBJ[i].geo, Spheric):    # si l'objet est une sphère
+            LOBJ0['geo'][i] = 1 # reconnaitre la forme sphérique sur Cuda
+
+            LOBJ0['myRad'][i] = LOBJ[i].geo.radius
+            LOBJ0['z0'][i] = LOBJ[i].geo.z0
+            LOBJ0['z1'][i] = LOBJ[i].geo.z1
+            LOBJ0['phi'][i] = LOBJ[i].geo.phi
+
+        elif isinstance(LOBJ[i].geo, Plane):    # si l'objet est une surface plane
+            LOBJ0['geo'][i] = 2 # reconnaitre la forme plane sur Cuda
+
+            LOBJ0['p0x'][i] = LOBJ[i].geo.p1.x
+            LOBJ0['p0y'][i] = LOBJ[i].geo.p1.y
+            LOBJ0['p0z'][i] = LOBJ[i].geo.p1.z
+
+            LOBJ0['p1x'][i] = LOBJ[i].geo.p2.x
+            LOBJ0['p1y'][i] = LOBJ[i].geo.p2.y
+            LOBJ0['p1z'][i] = LOBJ[i].geo.p2.z
+
+            LOBJ0['p2x'][i] = LOBJ[i].geo.p3.x
+            LOBJ0['p2y'][i] = LOBJ[i].geo.p3.y
+            LOBJ0['p2z'][i] = LOBJ[i].geo.p3.z
+
+            LOBJ0['p3x'][i] = LOBJ[i].geo.p4.x
+            LOBJ0['p3y'][i] = LOBJ[i].geo.p4.y
+            LOBJ0['p3z'][i] = LOBJ[i].geo.p4.z
+
+            normalBase = Vector(0, 0, 1);
+            # Prise en compte des transfos de rot en X, Y et Z
+            TpT0 = Transform()
+            TpRX0 = TpT0.rotateX(LOBJ[i].transformation.rotation[0])
+            TpRY0 = TpT0.rotateY(LOBJ[i].transformation.rotation[1])
+            TpRZ0 = TpT0.rotateZ(LOBJ[i].transformation.rotation[2])
+            if (LOBJ[i].transformation.rotOrder == "XYZ"):
+                TpT0 = TpRX0*TpRY0*TpRZ0
+            elif(LOBJ[i].transformation.rotOrder == "XZY"):
+                TpT0 = TpRX0*TpRZ0*TpRY0
+            elif(LOBJ[i].transformation.rotOrder == "YXZ"):
+                TpT0 = TpRY0*TpRX0*TpRZ0
+            elif(LOBJ[i].transformation.rotOrder == "YZX"):
+                TpT0 = TpRY0*TpRZ*TpRX0
+            elif(LOBJ[i].transformation.rotOrder == "ZXY"):
+                TpT0 = TpRZ0*TpRX0*TpRY0
+            elif(LOBJ[i].transformation.rotOrder == "ZYX"):
+                TpT0 = TpRZ0*TpRY0*TpRX0
+            else:
+                raise NameError('Unknown rotation order')
+
+            normalBase = TpT0[normalBase]
+            normalBase = Normalize(normalBase)
+            #print("normalbase =", normalBase)
+            LOBJ0['nBx'][i] = normalBase.x
+            LOBJ0['nBy'][i] = normalBase.y
+            LOBJ0['nBz'][i] = normalBase.z
+
+        else:    # si l'objet est autre chose (inconnu)
+            raise NameError("Your geometry can be only spheric or plane, please" + \
+                            " choose between Spheric or Plane classes!")
+
+        # In develepemnt Group, Pmin and Pmax
+        LOBJ0['indG'][i] = LOBJ[i].indGroup
+        LOBJ0['bPminx'][i] = LOBJ[i].bboxGPmin.x
+        LOBJ0['bPminy'][i] = LOBJ[i].bboxGPmin.y
+        LOBJ0['bPminz'][i] = LOBJ[i].bboxGPmin.z
+        LOBJ0['bPmaxx'][i] = LOBJ[i].bboxGPmax.x
+        LOBJ0['bPmaxy'][i] = LOBJ[i].bboxGPmax.y
+        LOBJ0['bPmaxz'][i] = LOBJ[i].bboxGPmax.z
+        if (nGroup < LOBJ[i].indGroup):
+            nGroup = LOBJ[i].indGroup
+
+        # Affectation des transformations (rotations et translations)
+        LOBJ0['mvRx'][i] = LOBJ[i].transformation.rotx
+        LOBJ0['mvRy'][i] = LOBJ[i].transformation.roty
+        LOBJ0['mvRz'][i] = LOBJ[i].transformation.rotz
+
+        if (LOBJ[i].transformation.rotOrder == "XYZ"):
+            LOBJ0['rotOrder'][i] = 1
+        elif(LOBJ[i].transformation.rotOrder == "XZY"):
+            LOBJ0['rotOrder'][i] = 2
+        elif(LOBJ[i].transformation.rotOrder == "YXZ"):
+            LOBJ0['rotOrder'][i] = 3
+        elif(LOBJ[i].transformation.rotOrder == "YZX"):
+            LOBJ0['rotOrder'][i] = 4
+        elif(LOBJ[i].transformation.rotOrder == "ZXY"):
+            LOBJ0['rotOrder'][i] = 5
+        elif(LOBJ[i].transformation.rotOrder == "ZYX"):
+            LOBJ0['rotOrder'][i] = 6
+        else:
+            raise NameError('Unknown rotation order')
+
+        LOBJ0['mvTx'][i] = LOBJ[i].transformation.transx
+        LOBJ0['mvTy'][i] = LOBJ[i].transformation.transy
+        LOBJ0['mvTz'][i] = LOBJ[i].transformation.transz
+
+        # Prendre en compte le matériau de l'objet
+
+        if isinstance(LOBJ[i].materialAV, LambMirror):
+            LOBJ0['materialAV'][i] = 1
+            LOBJ0['reflecAV'][i] = LOBJ[i].materialAV.reflectivity
+            LOBJ0['roughAV'][i] = 0
+            LOBJ0['shdAV'][i] = 0
+            LOBJ0['nindAV'][i] = 1
+            LOBJ0['distAV'][i] = 0
+        elif isinstance(LOBJ[i].materialAV, Matte):
+            LOBJ0['materialAV'][i] = 2
+            LOBJ0['reflecAV'][i] = LOBJ[i].materialAV.reflectivity
+            LOBJ0['roughAV'][i] = LOBJ[i].materialAV.roughness
+            LOBJ0['shdAV'][i] = 0
+            LOBJ0['nindAV'][i] = 1
+            LOBJ0['distAV'][i] = 0
+        elif isinstance(LOBJ[i].materialAV, Mirror):
+            LOBJ0['materialAV'][i] = 3
+            LOBJ0['reflecAV'][i] = LOBJ[i].materialAV.reflectivity
+            LOBJ0['roughAV'][i] = LOBJ[i].materialAV.roughness
+            LOBJ0['shdAV'][i] = int(LOBJ[i].materialAV.shadow)
+            LOBJ0['nindAV'][i] = LOBJ[i].materialAV.nind
+            LOBJ0['distAV'][i] = LOBJ[i].materialAV.distribution
+        else:
+            LOBJ0['materialAV'][i] = 0
+            LOBJ0['roughAV'][i] = 0
+            LOBJ0['roughAV'][i] = 0
+            LOBJ0['shdAV'][i] = 0
+            LOBJ0['nindAV'][i] = 1
+            LOBJ0['distAV'][i] = 0
+
+        if isinstance(LOBJ[i].materialAR, LambMirror):
+            LOBJ0['materialAR'][i] = 1
+            LOBJ0['reflecAR'][i] = LOBJ[i].materialAR.reflectivity
+            LOBJ0['roughAR'][i] = 0
+            LOBJ0['shdAR'][i] = 0
+            LOBJ0['nindAR'][i] = 1
+            LOBJ0['distAR'][i] = 0
+        elif isinstance(LOBJ[i].materialAR, Matte):
+            LOBJ0['materialAR'][i] = 2
+            LOBJ0['reflecAR'][i] = LOBJ[i].materialAR.reflectivity
+            LOBJ0['roughAR'][i] = LOBJ[i].materialAR.roughness
+            LOBJ0['shdAR'][i] = 0
+            LOBJ0['nindAR'][i] = 1
+            LOBJ0['distAR'][i] = 0
+        elif isinstance(LOBJ[i].materialAR, Mirror):
+            LOBJ0['materialAR'][i] = 3
+            LOBJ0['reflecAR'][i] = LOBJ[i].materialAR.reflectivity
+            LOBJ0['roughAR'][i] = LOBJ[i].materialAR.roughness
+            LOBJ0['shdAR'][i] = int(LOBJ[i].materialAR.shadow)
+            LOBJ0['nindAR'][i] = LOBJ[i].materialAR.nind
+            LOBJ0['distAR'][i] = LOBJ[i].materialAR.distribution
+        else:
+            LOBJ0['materialAR'][i] = 0
+            LOBJ0['reflecAR'][i] = 0
+            LOBJ0['roughAR'][i] = 0
+            LOBJ0['shdAR'][i] = 0
+            LOBJ0['nindAR'][i] = 1
+            LOBJ0['distAR'][i] = 0
+
+        # Deux possibilités : l'objet est un reflecteur ou un recepteur   
+        if (LOBJ[i].name == "reflector"):
+            LOBJ0['type'][i] = 1 # pour reconnaitre le reflect sur Cuda
+
+            # If this is a heliostat (which at least a mirror material)
+            if (  isinstance(LOBJ[i].geo, Plane) and \
+                  ( isinstance(LOBJ[i].materialAR, Mirror) or \
+                    isinstance(LOBJ[i].materialAV, Mirror) )  ):
+                nb_H += 1
+                zAlt_H += LOBJ[i].transformation.transz
+                totS_H += abs(LOBJ[i].geo.p1.x)*abs(LOBJ[i].geo.p1.y)*4;
+
+
+            # Etape cruciale pour la visualisation des résulats (mode forward restreint uniquement)
+            if (CUSL is not None):
+                if (CUSL.dict['LMODE'] == "RF"):
+                    # Récupération des 4 points formant le rectangle représentant le reflecteur
+                    pp1 = LOBJ[i].geo.p1
+                    pp2 = LOBJ[i].geo.p2
+                    pp3 = LOBJ[i].geo.p3
+                    pp4 = LOBJ[i].geo.p4
+
+                    # *********************************
+                    # First Method (simplest way) --->
+                    DotP = Dot(vSun*-1, normalBase)
+                    TwoAAbis = abs((pp1.x - pp4.x)*(pp2.y - pp3.y)) + abs((pp2.x - pp3.x)*(pp1.y - pp4.y))
+                    surfMirbis = (TwoAAbis/2.) * DotP
+                    # ********************************* END FM
+                    surfMir += surfMirbis
+
+        elif (LOBJ[i].name == "receiver"):
+            LOBJ0['type'][i] = 2 # pour reconnaitre le recept sur Cuda
+            TC=LOBJ[i].TC
+            sizeXmin = min(LOBJ[i].geo.p1.x, LOBJ[i].geo.p2.x,
+                           LOBJ[i].geo.p3.x, LOBJ[i].geo.p4.x)
+            sizeXmax = max(LOBJ[i].geo.p1.x, LOBJ[i].geo.p2.x,
+                           LOBJ[i].geo.p3.x, LOBJ[i].geo.p4.x)
+            sizeX = sizeXmax - sizeXmin
+            sizeYmin = min(LOBJ[i].geo.p1.y, LOBJ[i].geo.p2.y,
+                           LOBJ[i].geo.p3.y, LOBJ[i].geo.p4.y)
+            sizeYmax = max(LOBJ[i].geo.p1.y, LOBJ[i].geo.p2.y,
+                           LOBJ[i].geo.p3.y, LOBJ[i].geo.p4.y)
+            sizeY = sizeYmax - sizeYmin
+            nbCx = int(sizeX/TC)
+            nbCy = int(sizeY/TC)
+        elif (LOBJ[i].name == "surf"):
+            LOBJ0['type'][i] = 3 # pour reconnaitre le recept sur Cuda
+        else:
+            raise NameError('You have to specify if your object is a reflector or a receiver!')
+
+    LOBJ0 = to_gpu(LOBJ0)
+
+    return nObj, nGroup, surfMir, nb_H, zAlt_H, totS_H, TC, nbCx, nbCy, nbCy, LOBJ0

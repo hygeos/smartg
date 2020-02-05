@@ -367,6 +367,26 @@ class Heliostat(object):
                 "HSY=" + str(self.hSy)  + '; ' + "CURVE_FL=" + str(self.curveFL) + \
                 '; ' + "REF=" + str(self.ref)
 
+class GroupE(object):
+    '''
+    Definition of GroupE
+
+    This class is a group of entity objects
+
+    LE   : List of entity objects
+    BBOX : List with Pmin and Pmax (Point classes) to construct a custum
+           bounding box, if None -> take Pmin and Pmax of LE[0]
+    '''
+    def __init__(self, LE=[Entity()], BBOX=None):
+        self.le  = LE
+        self.nob = len(LE)
+        if BBOX is None:
+            self.bboxGPmin = LE[0].bboxGPmin
+            self.bboxGPmax = LE[0].bboxGPmax
+        else:
+            self.bboxGPmin = BBOX[0]
+            self.bboxGPmax = BBOX[1]           
+
 def findRots(UI=None, UO=None, vecNF=None):
     '''
     Description of the function findRots:
