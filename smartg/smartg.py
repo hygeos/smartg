@@ -733,6 +733,7 @@ class Smartg(object):
         vSun = Normalize(vSun)
 
         # First check if back option is activated in case of the use of cusBackward launching mode
+        surfLPH = 0;
         if (cusL is not None):
             if (cusL.dict['LMODE'] == "B" and self.back == False):
                 raise NameError('CusBackward can be use only with the compilation option back=True')
@@ -772,7 +773,7 @@ class Smartg(object):
 
             # Initiliaze all the parameters linked with 3D objects
             (nGObj, nObj, nRObj, surfLPH_RF, nb_H, zAlt_H, totS_H, TC, nbCx, nbCy,
-             nbCy, myObjects0, myGObj0, myRObj0) = initObj(LGOBJ=myObjects, CUSL=cusL)
+             myObjects0, myGObj0, myRObj0) = initObj(LGOBJ=myObjects, vSun=vSun, CUSL=cusL)
 
             # If we are in RF mode don't forget to update the value of surfLPH
             if (surfLPH_RF is not None): surfLPH = surfLPH_RF
@@ -2319,13 +2320,14 @@ class RNG_CURAND_PHILOX(object):
 
         return SEED
 
-def initObj(LGOBJ, CUSL=None):
+def initObj(LGOBJ, vSun, CUSL=None):
     '''
     Definition of the function LOBJ
 
     ===ARGS:
     LGOBJ : List of object groups
     CUSL  : Custom lanching mode class (i.g. cusForward())
+    vSun  : Vector with the sun direction (needed in RF mode)
     
     ===RETURN:
     nGObj     : The number of groups
@@ -2604,4 +2606,4 @@ def initObj(LGOBJ, CUSL=None):
     LOBJGPU = to_gpu(LOBJGPU)
     LROBJGPU = to_gpu(LROBJGPU)
 
-    return nGObj, nObj, nRObj, surfLPH, nb_H, zAlt_H, totS_H, TC, nbCx, nbCy, nbCy, LOBJGPU, LGOBJGPU, LROBJGPU
+    return nGObj, nObj, nRObj, surfLPH, nb_H, zAlt_H, totS_H, TC, nbCx, nbCy, LOBJGPU, LGOBJGPU, LROBJGPU
