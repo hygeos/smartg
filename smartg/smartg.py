@@ -765,16 +765,24 @@ class Smartg(object):
         
         # Begin initialization with OBJ ============================
         if (myObjects is not None):
-            # ind = 0; myGObj = myObjects.copy();
-            # myObjects = []; nGObj = len(myGObj);
-            # myGObj0 = np.zeros(nGObj+1, dtype=type_IObjets, order='C')
-            # for i in range (0, len(myGObj)):
-            #     if isinstance(myGObj[i], GroupE):
-                    
-            #     LISTOB[i].append(ind)
-            #     ind += LISTOB[i][0]
-            #     LISTE.extend(LISTOB[i][1])
+            ind = 0; myGObj = myObjects.copy();
+            myObjects = []; nGObj = len(myGObj);
 
+            myGObj0 = np.zeros(nGObj, dtype=type_GObj, order='C')
+            for i in range (0, len(myGObj)):
+                myGObj0['index'][i] = ind 
+                if isinstance(myGObj[i], GroupE):
+                    myGObj0['nObj'][i] = myGObj[i].nob
+                    ind += myGObj[i].nob
+                    myObjects.extend(myGObj[i].le)
+                elif isinstance(myGObj[i], Entity):
+                    myGObj0['nObj'][i] = 1
+                    ind += 1
+                    myObjects.append(myGObj[i])
+                else:
+                    raise NameError('In myObjects list, only Entity and GroupE classes are autorised!')
+            myGObj0 = to_gpu(myGObj0)
+            
             # Main bounding box initialization
             if interval is not None:
                 Pmin_x = interval[0][0];Pmin_y = interval[0][1];Pmin_z = interval[0][2];
@@ -791,7 +799,7 @@ class Smartg(object):
             if (surfLPH_RF is not None): surfLPH = surfLPH_RF
         else:
             myObjects0 = None #np.zeros(1, dtype=type_IObjets, order='C')
-            nObj = 0; Pmin_x = None; Pmin_y = None; Pmin_z = None;
+            nObj = 0; nGObj=0; Pmin_x = None; Pmin_y = None; Pmin_z = None;
             Pmax_x = None; Pmax_y = None; Pmax_z = None;
             IsAtm = None; TC = None; nbCx = 10; nbCy = 10; nb_H = 0
         # END OBJ ===================================================
@@ -1047,7 +1055,7 @@ class Smartg(object):
                   NBTHETA, NBPHI, OUTPUT_LAYERS,
                   RTER, LE, ZIP, FLUX, FFS, DIRECT, NLVL, NPSTK,
                   NWLPROBA, BEER, SMAX, RR, WEIGHTRR, NLOW, NJAC, 
-                  NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj,
+                  NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj, nGObj,
                   Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm,
                   TC, nbCx, nbCy, vSun, nGroup, HIST)
 
@@ -1064,7 +1072,7 @@ class Smartg(object):
                         NLVL, NATM, NOCE, MAX_HIST, NLOW, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                         NLAM, NSENSOR, self.double, self.kernel, self.kernel2, p, X0, le, tab_sensor, spectrum,
                         prof_atm_gpu, prof_oc_gpu,
-                        wl_proba_icdf, stdev, self.rng, myObjects0, TC, nbCx, nbCy, hist=hist)
+                        wl_proba_icdf, stdev, self.rng, myObjects0, TC, nbCx, nbCy, myGObj0,hist=hist)
 
         attrs['kernel time (s)'] = secs_cuda_clock
         attrs['number of kernel iterations'] = Nkernel
@@ -1633,7 +1641,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
               XBLOCK, XGRID,NLAM, SIM, NF,
               NBTHETA, NBPHI, OUTPUT_LAYERS,
               RTER, LE, ZIP, FLUX, FFS, DIRECT, NLVL, NPSTK, NWLPROBA, BEER, SMAX, RR, 
-              WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj,
+              WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj, nGObj,
               Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, vSun, nGroup, HIST) :
     """
     Initialize the constants in python and send them to the device memory
@@ -1717,6 +1725,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
     # copy en rapport avec les objets :
     if nObj != 0:
         copy_to_device('nObj', nObj, np.int32)
+        copy_to_device('nGObj', nGObj, np.int32)
         copy_to_device('nGroup', nGroup, np.int32)
         copy_to_device('Pmin_x', Pmin_x, np.float32)
         copy_to_device('Pmin_y', Pmin_y, np.float32)
@@ -1918,7 +1927,7 @@ def get_git_attrs():
 def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
                 NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                 NLAM, NSENSOR, double, kern, kern2, p, X0, le, tab_sensor, spectrum,
-                prof_atm, prof_oc, wl_proba_icdf, stdev, rng, myObjects0, TC, nbCx, nbCy, hist=False):
+                prof_atm, prof_oc, wl_proba_icdf, stdev, rng, myObjects0, TC, nbCx, nbCy, myGObj0, hist=False):
     """
     launch the kernel several time until the targeted number of photons injected is reached
 
@@ -2060,7 +2069,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
             kern(spectrum, X0, faer, foce,
                  errorcount, nThreadsActive, tabPhotons, tabDist, tabHist,
                  Counter, NPhotonsIn, NPhotonsOut, tabthv, tabphi, tab_sensor,
-                 prof_atm, prof_oc, wl_proba_icdf, rng.state, tabObjInfo, myObjects0, nbPhCat, wPhCat,
+                 prof_atm, prof_oc, wl_proba_icdf, rng.state, tabObjInfo, myObjects0, myGObj0, nbPhCat, wPhCat,
                  wPhCat2, wPhLoss, block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
         else:
             kern(spectrum, X0, faer, foce,

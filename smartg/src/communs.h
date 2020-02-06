@@ -439,5 +439,11 @@ struct IObjets {
 	float bPmaxy;
 	float bPmaxz;
 };
+
+struct GObj {
+	int nObj;       /* Number of objects in this group     */
+	int index;      /* Starting index in IObjects table    */
+};
+
 #endif //END OBJ3D
 #endif	// COMMUNS_H

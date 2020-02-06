@@ -62,6 +62,7 @@ __device__ __constant__ int NSENSORd;
 #ifdef OBJ3D
 // copy en rapport avec les objets :
 __device__ __constant__ int nObj;
+__device__ __constant__ int nGObj;
 __device__ __constant__ int nGroup;
 __device__ __constant__ float Pmin_x;
 __device__ __constant__ float Pmin_y;
@@ -119,6 +120,7 @@ __global__ void launchKernel(
 		#ifdef OBJ3D
 		, void *tabObjInfo,
 		struct IObjets *myObjets,
+		struct GObj *myGObj,
 		unsigned long long *nbPhCat,
 		void *wPhCat, void *wPhCat2,
 		void *wPhLoss
@@ -156,7 +158,7 @@ __device__ void GetFaceIndex(float3 pos, int *index);
 __device__ void move_pp(Photon*, struct Profile *prof_atm, struct Profile* prof_oc,
                         struct RNG_State*
 						#ifdef OBJ3D
-						, IGeo *geoS, struct IObjets *myObjets, void *tabObjInfo
+						, IGeo *geoS, struct IObjets *myObjets, struct GObj *myGObj, void *tabObjInfo
 						#endif
 	);
 
@@ -290,7 +292,7 @@ __device__ unsigned int randomPhilox4x32_7uint(philox4x32_ctr_t*, philox4x32_key
 *	> Fonctions liées à la création de géométries
 ***********************************************************/
 
-__device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo *GeoV , struct IObjets *ObjT);
+__device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo *GeoV , struct IObjets *ObjT, struct GObj *myGObj);
 __device__ bool geoTestRec(float3 o, float3 dir, int phLocPrev, struct IObjets *ObjT);
 __device__ Transform addRotAndParseOrder(Transform Ti, IObjets object);
 __device__ Transformd DaddRotAndParseOrder(Transformd Tid, IObjets object);
