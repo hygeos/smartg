@@ -677,6 +677,9 @@ def Analyse_create_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM'):
 
     return a matplotlib fig
     '''
+    
+    ENTITY = convertLGtoLE(ENTITY)
+
     if (isinstance(ENTITY, Entity)):
         E = []
         E = np.append(E, ENTITY)
@@ -974,7 +977,7 @@ def generateHfP(THEDEG=0., PHIDEG = 0., PH = [Point(0., 0., 0.)], PR = Point(0.,
     REF : reflectivity of the heliostats
     HTYPE : If specified must be a class heliostat
 
-    return a list of entity object
+    return a list with Entity/GroupE object
     '''
     
     lObj = []
@@ -983,6 +986,7 @@ def generateHfP(THEDEG=0., PHIDEG = 0., PH = [Point(0., 0., 0.)], PR = Point(0.,
     if (HTYPE is None):
         # compute the sun direction vector
         vSun = convertAnglestoV(THETA=THEDEG, PHI=PHIDEG, TYPE="Sun")
+        bboxDist = np.sqrt(HSX*HSX + HSY*HSY)/2
 
         Hxx = HSX/2; Hyy = HSY/2
         objM = Entity(name = "reflector", \
@@ -1007,6 +1011,8 @@ def generateHfP(THEDEG=0., PHIDEG = 0., PH = [Point(0., 0., 0.)], PR = Point(0.,
 
             # 3) Once the rotation angles have been found, create heliostat objects
             objMi = Entity(objM);
+            objMi.bboxGPmin = Point(PH[i].x-bboxDist, PH[i].y-bboxDist, PH[i].z-bboxDist)
+            objMi.bboxGPmax = Point(PH[i].x+bboxDist, PH[i].y+bboxDist, PH[i].z+bboxDist)
             objMi.transformation = Transformation( rotation = np.array([0., rotYD, rotZD]), \
                                                    translation = np.array([PH[i].x, PH[i].y, PH[i].z]), \
                                                    rotationOrder = "ZYX")
@@ -1020,7 +1026,8 @@ def generateHfP(THEDEG=0., PHIDEG = 0., PH = [Point(0., 0., 0.)], PR = Point(0.,
         for i in range (0, len(PH)):
             H0 = Heliostat(SPX=SPX, SPY=SPY, HSX=HSX, HSY=HSY, CURVE_FL=CURVE_FL, POS=PH[i], REF=REF)
             TLE = generateLEfH(HELIO=H0, PR=PR, THEDEG=THEDEG, PHIDEG=PHIDEG)
-            lObj.extend(TLE)
+            GTEMP = GroupE(LE = TLE)
+            lObj.append(GTEMP)
     else:
         raise NameError('If HTYPE is specified it must be a Heliostat class!')
 
@@ -1056,7 +1063,7 @@ def generateHfA(THEDEG=0., PHIDEG = 0., PR = Point(0., 0., 50.), MINANG=0., \
     REF     : reflectivity of the heliostats
     HTYPE : If specified must be a class heliostat
 
-    return a list of objects
+    return a list with Entity/GroupE objects
     '''
 
     # I) Find the position of all heliostats
@@ -1101,6 +1108,7 @@ def generateHfA(THEDEG=0., PHIDEG = 0., PR = Point(0., 0., 50.), MINANG=0., \
     if (HTYPE is None):
         # calculate the sun direction vector
         vSun = convertAnglestoV(THETA=THEDEG, PHI=PHIDEG, TYPE="Sun")
+        bboxDist = np.sqrt(HSX*HSX + HSY*HSY)/2
 
         Hxx = HSX/2; Hyy = HSY/2
         objM = Entity(name = "reflector", \
@@ -1125,6 +1133,8 @@ def generateHfA(THEDEG=0., PHIDEG = 0., PR = Point(0., 0., 50.), MINANG=0., \
 
             # 3) Once the rotation angles have been found, create heliostat objects 
             objMi = Entity(objM);
+            objMi.bboxGPmin = Point(pH[i].x-bboxDist, pH[i].y-bboxDist, pH[i].z-bboxDist)
+            objMi.bboxGPmax = Point(pH[i].x+bboxDist, pH[i].y+bboxDist, pH[i].z+bboxDist)
             objMi.transformation = Transformation( rotation = np.array([0., rotYD, rotZD]), \
                                                    translation = np.array([pH[i].x, pH[i].y, pH[i].z]), \
                                                    rotationOrder = "ZYX")
@@ -1139,12 +1149,34 @@ def generateHfA(THEDEG=0., PHIDEG = 0., PR = Point(0., 0., 50.), MINANG=0., \
         for i in range (0, len(pH)):
             H0 = Heliostat(SPX=SPX, SPY=SPY, HSX=HSX, HSY=HSY, CURVE_FL=CURVE_FL, POS=pH[i], REF=REF)
             TLE = generateLEfH(HELIO=H0, PR=PR, THEDEG=THEDEG, PHIDEG=PHIDEG)
-            lObj.extend(TLE)
+            GTEMP = GroupE(LE = TLE)
+            lObj.append(GTEMP)
     else:
         raise NameError('If HTYPE is specified it must be a Heliostat class!')
         
     return lObj
 
+def convertLGtoLE(LGOBJ):
+    '''
+    Definition of the function convertLGtoLE
+    
+    ==== ARGS:
+    LGOBJ : List containing Entity and GroupE objects
+
+    ==== RETURN:
+    LOBJ  : List with only Entity object
+    '''
+    nGObj=len(LGOBJ); LOBJ=[];
+
+    for i in range (0, nGObj):
+        if isinstance(LGOBJ[i], GroupE):
+            LOBJ.extend(LGOBJ[i].le)
+        elif isinstance(LGOBJ[i], Entity):
+            LOBJ.append(LGOBJ[i])
+        else:
+            raise NameError('In the list, only Entity and GroupE classes are autorised!')
+
+    return LOBJ
 
 def convertVtoAngles(v, TYPE="Sensor", verbose=False):
     """
