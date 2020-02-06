@@ -190,22 +190,19 @@ type_IObjets = [
     ('nBx', 'float32'),       # \
     ('nBy', 'float32'),       #  | normalBase de l'obj apres trans 
     ('nBz', 'float32'),       # /
-
-    ('indG', 'int32'),
-
-    ('bPminx', 'float32'),
-    ('bPminy', 'float32'),
-    ('bPminz', 'float32'),
-
-    ('bPmaxx', 'float32'),
-    ('bPmaxy', 'float32'),
-    ('bPmaxz', 'float32'),
     ]
 
 type_GObj = [
     ('nObj', 'int32'),        # Number of objects in this group
     ('index', 'int32'),       # Index at the table of IObjects where
                               # we start to fill the objects of the group
+
+    ('bPminx', 'float32'),    #\
+    ('bPminy', 'float32'),    # |
+    ('bPminz', 'float32'),    # | Bounding box of the group        
+    ('bPmaxx', 'float32'),    # |
+    ('bPmaxy', 'float32'),    # |
+    ('bPmaxz', 'float32'),    #/
 ]
 
 class FlatSurface(object):
@@ -765,35 +762,17 @@ class Smartg(object):
         
         # Begin initialization with OBJ ============================
         if (myObjects is not None):
-            ind = 0; myGObj = myObjects.copy();
-            myObjects = []; nGObj = len(myGObj);
-
-            myGObj0 = np.zeros(nGObj, dtype=type_GObj, order='C')
-            for i in range (0, len(myGObj)):
-                myGObj0['index'][i] = ind 
-                if isinstance(myGObj[i], GroupE):
-                    myGObj0['nObj'][i] = myGObj[i].nob
-                    ind += myGObj[i].nob
-                    myObjects.extend(myGObj[i].le)
-                elif isinstance(myGObj[i], Entity):
-                    myGObj0['nObj'][i] = 1
-                    ind += 1
-                    myObjects.append(myGObj[i])
-                else:
-                    raise NameError('In myObjects list, only Entity and GroupE classes are autorised!')
-            myGObj0 = to_gpu(myGObj0)
-            
             # Main bounding box initialization
             if interval is not None:
                 Pmin_x = interval[0][0];Pmin_y = interval[0][1];Pmin_z = interval[0][2];
                 Pmax_x = interval[1][0];Pmax_y = interval[1][1];Pmax_z = interval[1][2];
             else:
-                Pmin_x = -300; Pmin_y = -300; Pmin_z = 0;
-                Pmax_x = 300;  Pmax_y = 300; Pmax_z = 120;
+                Pmin_x = -100000; Pmin_y = -100000; Pmin_z = 0;
+                Pmax_x = 100000;  Pmax_y = 100000; Pmax_z = 120;
 
             # Initiliaze all the parameters linked with 3D objects
-            (nObj, nGroup, surfLPH_RF, nb_H, zAlt_H, totS_H, TC, nbCx, nbCy,
-             nbCy, myObjects0) = initObj(LOBJ=myObjects, CUSL=cusL)
+            (nGObj, nObj, surfLPH_RF, nb_H, zAlt_H, totS_H, TC, nbCx, nbCy,
+             nbCy, myObjects0, myGObj0) = initObj(LGOBJ=myObjects, CUSL=cusL)
 
             # If we are in RF mode don't forget to update the value of surfLPH
             if (surfLPH_RF is not None): surfLPH = surfLPH_RF
@@ -1057,7 +1036,7 @@ class Smartg(object):
                   NWLPROBA, BEER, SMAX, RR, WEIGHTRR, NLOW, NJAC, 
                   NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj, nGObj,
                   Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm,
-                  TC, nbCx, nbCy, vSun, nGroup, HIST)
+                  TC, nbCx, nbCy, vSun, HIST)
 
         # Initialize the progress bar
         p = Progress(NBPHOTONS, progress)
@@ -1642,7 +1621,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
               NBTHETA, NBPHI, OUTPUT_LAYERS,
               RTER, LE, ZIP, FLUX, FFS, DIRECT, NLVL, NPSTK, NWLPROBA, BEER, SMAX, RR, 
               WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj, nGObj,
-              Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, vSun, nGroup, HIST) :
+              Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, vSun, HIST) :
     """
     Initialize the constants in python and send them to the device memory
 
@@ -1726,7 +1705,6 @@ def InitConst(surf, env, NATM, NOCE, mod,
     if nObj != 0:
         copy_to_device('nObj', nObj, np.int32)
         copy_to_device('nGObj', nGObj, np.int32)
-        copy_to_device('nGroup', nGroup, np.int32)
         copy_to_device('Pmin_x', Pmin_x, np.float32)
         copy_to_device('Pmin_y', Pmin_y, np.float32)
         copy_to_device('Pmin_z', Pmin_z, np.float32)
@@ -2338,17 +2316,17 @@ class RNG_CURAND_PHILOX(object):
 
         return SEED
 
-def initObj(LOBJ, CUSL=None):
+def initObj(LGOBJ, CUSL=None):
     '''
     Definition of the function LOBJ
 
     ===ARGS:
-    LOBJ : List of objects
-    CUSL : Custom lanching mode class (i.g. cusForward())
+    LGOBJ : List of object groups
+    CUSL  : Custom lanching mode class (i.g. cusForward())
     
     ===RETURN:
+    nGObj     : The number of Groups
     nObj      : The number of Objects
-    nGroup    : The number of object groups
     surfLPH   : Surface where photons are launched, in backward = None
     nb_H      : The number of heliostats (or heliostat facets)
     zAlt_H    : Sum of z altitude of all heliostats (or heliostat facets)
@@ -2357,8 +2335,35 @@ def initObj(LOBJ, CUSL=None):
     nbCx      : The number of receiver cells in x direction 
     nbCy      : The number of receiver cells in y direction
     LOBJGPU   : GPU array of objects of type 'type_IObjets'
+    LGOBJGPU  : GPU array of objects of type 'type_GObj'
     '''
+
+    ind = 0; LOBJ = []; nGObj = len(LGOBJ);
+    LGOBJGPU = np.zeros(nGObj, dtype=type_GObj, order='C')
+
+    # Creation of a list with only Entity objects and creation
+    # of a GPU table with object groups parameters
+
+    for i in range (0, nGObj):
+        LGOBJGPU['index'][i] = ind 
+        LGOBJGPU['bPminx'][i] = LGOBJ[i].bboxGPmin.x; LGOBJGPU['bPminy'][i] = LGOBJ[i].bboxGPmin.y;
+        LGOBJGPU['bPminz'][i] = LGOBJ[i].bboxGPmin.z; LGOBJGPU['bPmaxx'][i] = LGOBJ[i].bboxGPmax.x;
+        LGOBJGPU['bPmaxy'][i] = LGOBJ[i].bboxGPmax.y; LGOBJGPU['bPmaxz'][i] = LGOBJ[i].bboxGPmax.z;
+        if isinstance(LGOBJ[i], GroupE):
+            LGOBJGPU['nObj'][i] = LGOBJ[i].nob
+            ind += LGOBJ[i].nob
+            LOBJ.extend(LGOBJ[i].le)
+        elif isinstance(LGOBJ[i], Entity):
+            LGOBJGPU['nObj'][i] = 1
+            ind += 1
+            LOBJ.append(LGOBJ[i])
+        else:
+            raise NameError('In myObjects list, only Entity and GroupE classes are autorised!')
+
+    LGOBJGPU = to_gpu(LGOBJGPU)
+
     nObj = len(LOBJ)
+
     if CUSL != None and CUSL.dict['LMODE'] == "BR":
         LOBJGPU = np.zeros(nObj+1, dtype=type_IObjets, order='C')
         TC=CUSL.dict['REC'].TC
@@ -2399,7 +2404,7 @@ def initObj(LOBJ, CUSL=None):
         TC = None; nbCx = int(0); nbCy = int(0);
 
     # Initialization before the coming loop
-    pp1 = 0.; pp2 = 0.; pp3 = 0.; pp4 = 0.; nGroup = int(0);
+    pp1 = 0.; pp2 = 0.; pp3 = 0.; pp4 = 0.;
     nb_H = 0; zAlt_H = 0.; totS_H = 0.;
     if (CUSL != None and CUSL.dict['LMODE'] == "RF"): surfLPH = 0;
     else: surfLPH = None;
@@ -2465,17 +2470,6 @@ def initObj(LOBJ, CUSL=None):
             raise NameError("Your geometry can be only spheric or plane, please" + \
                             " choose between Spheric or Plane classes!")
         # ====
-
-        # In develepemnt Group, Pmin and Pmax
-        LOBJGPU['indG'][i] = LOBJ[i].indGroup
-        LOBJGPU['bPminx'][i] = LOBJ[i].bboxGPmin.x
-        LOBJGPU['bPminy'][i] = LOBJ[i].bboxGPmin.y
-        LOBJGPU['bPminz'][i] = LOBJ[i].bboxGPmin.z
-        LOBJGPU['bPmaxx'][i] = LOBJ[i].bboxGPmax.x
-        LOBJGPU['bPmaxy'][i] = LOBJ[i].bboxGPmax.y
-        LOBJGPU['bPmaxz'][i] = LOBJ[i].bboxGPmax.z
-        if (nGroup < LOBJ[i].indGroup):
-            nGroup = LOBJ[i].indGroup
 
         # ==== Affectation of transformations (rotations and translations)
         LOBJGPU['mvRx'][i] = LOBJ[i].transformation.rotx
@@ -2587,4 +2581,4 @@ def initObj(LOBJ, CUSL=None):
         # ====
 
     LOBJGPU = to_gpu(LOBJGPU)
-    return nObj, nGroup, surfLPH, nb_H, zAlt_H, totS_H, TC, nbCx, nbCy, nbCy, LOBJGPU
+    return nGObj, nObj, surfLPH, nb_H, zAlt_H, totS_H, TC, nbCx, nbCy, nbCy, LOBJGPU, LGOBJGPU

@@ -5957,12 +5957,12 @@ __device__ double DatomicAdd(double* address, double val)
 
 
 /**********************************************************
-*	> Fonctions liées à la création de géométries
+*	> Functions linked to the creation of geometries
 ***********************************************************/
 #ifdef OBJ3D
 /* geoTest
-* Vérifie s'il y a une intersection avec au moins un objet, si il y a intersection avec plusieurs objets alors
-* retourne les infos d'intersection de l'objet dans la distance de parcours est la plus proche
+* Check if there is an intersection with at least an object, in case with intersections with
+* several objects return the intersection information of the object with the smallest traveled distance
 */
 __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo *GeoV, struct IObjets *ObjT, struct GObj *myGObj)
 {
@@ -5979,357 +5979,135 @@ __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo 
 	}
 	// *****************************************************
 	
-	// *************commun avec tous les objets*************
+	// ***************common to all objects*****************
 	float myT = CUDART_INF_F; // myT = time
 	bool myB = false;
 	DifferentialGeometry myDg;
-	float3 tempPhit; // Phit temporaire
+	float3 tempPhit; // Temporary variable of Phit
     // *****************************************************
 	
-	// *******Propre aux objets de type surface plane*******
+	// *************Specific to plane objects***************
 	int vi[6] = {0, 1, 2,  // vertices index for triangle 1
 				 2, 3, 1}; // vertices index for triangle 2
-	Transform nothing; // transformation "nulle"
-	// *****************************************************
-
-	// **************** Group optimization *****************
-	int testG[maxNG];  // if nb group is > to maxNG you need 
-	int bboxG[maxNG];  // to increase this cte
-	for (int i = 0; i < maxNG; ++i)
-	{
-		testG[i] = 0;
-		bboxG[i] = 1;
-	}
+	Transform nothing; // "None" tranformation
 	// *****************************************************
 
 	for (int i = 0; i < nGObj; ++i)
 	{	
 		int IND = myGObj[i].index;  // Index
-		int NE  = myGObj[i].nObj;  // Number of entity in the group i
+		int NE  = myGObj[i].nObj;   // Number of entity in the group i
 
-		// ******************************Second Step******************************
-		// cas d'un objet de type surface plane
-		if (NE > 0) // If more than one entity in the group i
-		{	
-			// We test firstly the bounding box of the group
-			BBox bboxG(make_float3(ObjT[IND].bPminx, ObjT[IND].bPminy, ObjT[IND].bPminz),
-					   make_float3(ObjT[IND].bPmaxx, ObjT[IND].bPmaxy, ObjT[IND].bPmaxz));
+		// We test firstly the bounding box of the group
+		BBox bboxG(make_float3(myGObj[i].bPminx, myGObj[i].bPminy, myGObj[i].bPminz),
+				   make_float3(myGObj[i].bPmaxx, myGObj[i].bPmaxy, myGObj[i].bPmaxz));
+
 			
-			// If the test with bboxG is ok then perform intersection test with all the obj inside
-			if (bboxG.IntersectP(R1))
+		// If the test with bboxG is ok then perform intersection test with all the obj inside
+		if (bboxG.IntersectP(R1))
+		{
+			for (int j = 0; j < NE; ++j)
 			{
-				for (int l = 0; l < NE; ++l)
+				float myTj = CUDART_INF_F;
+				bool myBj = false;
+				DifferentialGeometry myDgj;
+				// *****************************First Step********************************
+				// Consider all the transformation of object (j)
+				Transform Tj, invTj; // Declaration of the tranform and its inverse
+
+				/* !!! We note that it is crucial to begin with the translation because if there
+				   is a rotation then the coordinate system change (x or y or z axis) !!! */
+
+				// If a value in x, y or z is diff of 0 then there is a translation
+				if ( (ObjT[IND+j].mvTx>VALMIN and ObjT[IND+j].mvTx<-VALMIN) or
+					 (ObjT[IND+j].mvTy>VALMIN and ObjT[IND+j].mvTy>-VALMIN) or
+					 (ObjT[IND+j].mvTz>VALMIN and ObjT[IND+j].mvTz>-VALMIN)) {
+					Transform TmT;
+					TmT = Tj.Translate(make_float3(ObjT[IND+j].mvTx, ObjT[IND+j].mvTy,
+												   ObjT[IND+j].mvTz));
+					Tj = TmT; }
+
+				// Add rotation tranformations
+				Tj = addRotAndParseOrder(Tj, ObjT[IND+j]); //see the function
+				invTj = Tj.Inverse(Tj); // inverse of the transform
+
+				// ******************************Second Step******************************
+				// See if there is an intersection with object(j)
+				if (ObjT[i].geo == 1) // Case with a spherical object
 				{
-					float myTj = CUDART_INF_F;
-					bool myBj = false;
-					DifferentialGeometry myDgj;
-					// *****************************First Step********************************
-					// prise en compte de tte les tranformations existantes de l'objet(i)
-					Transform Tj, invTj; // déclare la tranfo de l'objet i et son inverse
+					Sphere myObject(&Tj, &invTj, ObjT[IND+j].myRad, ObjT[IND+j].z0,
+									ObjT[IND+j].z1, ObjT[IND+j].phi);
+		
+					BBox myBBox = myObject.WorldBoundSphere();
 
-					/* !!! Nous notons qu'il est important de commencer avec la translation
-					   car s'il y a une rotation, alors le repère change (axe x ou y ou z) !!! */
-
-					// si une valeur en x, y ou z diff de 0 alors il y a une translation
-					if ( (ObjT[IND+l].mvTx>VALMIN and ObjT[IND+l].mvTx<-VALMIN) or
-						 (ObjT[IND+l].mvTy>VALMIN and ObjT[IND+l].mvTy>-VALMIN) or
-						 (ObjT[IND+l].mvTz>VALMIN and ObjT[IND+l].mvTz>-VALMIN)) {
-						Transform TmT;
-						TmT = Tj.Translate(make_float3(ObjT[IND+l].mvTx, ObjT[IND+l].mvTy,
-												   ObjT[IND+l].mvTz));
-						Tj = TmT; }
-
-					// Add rotation tranformations
-					Tj = addRotAndParseOrder(Tj, ObjT[IND+l]); //see the function
-					invTj = Tj.Inverse(Tj); // inverse de la tranformation
+					if (myBBox.IntersectP(R1))
+						myBj = myObject.Intersect(R1, &myTj, &myDgj);
+				}
+				else if (ObjT[i].geo == 2) // Case with a plane object
+				{
 					// declaration of a table of float3 which contains P0, P1, P2, P3
-					float3 Pvec[4] = {make_float3(ObjT[IND+l].p0x, ObjT[IND+l].p0y, ObjT[IND+l].p0z),
-									  make_float3(ObjT[IND+l].p1x, ObjT[IND+l].p1y, ObjT[IND+l].p1z),
-									  make_float3(ObjT[IND+l].p2x, ObjT[IND+l].p2y, ObjT[IND+l].p2z),
-									  make_float3(ObjT[IND+l].p3x, ObjT[IND+l].p3y, ObjT[IND+l].p3z)};
+					float3 Pvec[4] = {make_float3(ObjT[IND+j].p0x, ObjT[IND+j].p0y, ObjT[IND+j].p0z),
+									  make_float3(ObjT[IND+j].p1x, ObjT[IND+j].p1y, ObjT[IND+j].p1z),
+									  make_float3(ObjT[IND+j].p2x, ObjT[IND+j].p2y, ObjT[IND+j].p2z),
+									  make_float3(ObjT[IND+j].p3x, ObjT[IND+j].p3y, ObjT[IND+j].p3z)};
 					
 					// Create the triangleMesh (2 = number of triangle ; 4 = number of vertices)
 					TriangleMesh myObject(&Tj, &invTj, 2, 4, vi, Pvec);
 				
 					BBox myBBox = myObject.WorldBoundTriangleMesh();
 					if (myBBox.IntersectP(R1))
-						myBj = myObject.Intersect(R1, &myTj, &myDgj);
+						myBj = myObject.Intersect(R1, &myTj, &myDgj);				
+				}
 
-					if (myBj & (myT > myTj))
+				// ******************************third Step*******************************
+				// If there are intersection with several objects -> this insure that we
+				// keep the nearest object from the initial point of the photon
+				if (myBj & (myT > myTj))
+				{
+					tempPhit = R1(myTj);
+					if ((fabs(tempPhit.x-o.x) > 1e-3) || (fabs(tempPhit.y-o.y) > 1e-3) ||
+						(fabs(tempPhit.z-o.z) > 1e-3) || (phLocPrev != OBJSURF))
 					{
-						tempPhit = R1(myTj);
-						if ((fabs(tempPhit.x-o.x) > 1e-3) || (fabs(tempPhit.y-o.y) > 1e-3) ||
-							(fabs(tempPhit.z-o.z) > 1e-3) || (phLocPrev != OBJSURF))
+						myB = true;
+						myT = myTj;
+						myDg = myDgj;
+						GeoV->normal = faceForward(myDg.nn, -1.*R1.d);
+						GeoV->normalBase = make_float3(ObjT[IND+j].nBx, ObjT[IND+j].nBy, ObjT[IND+j].nBz);
+						if(  isBackward( make_double3(GeoV->normalBase.x, GeoV->normalBase.y, GeoV->normalBase.z),
+										 make_double3(dir.x, dir.y, dir.z) )  )
 						{
-							myB = true;
-							myT = myTj;
-							myDg = myDgj;
-							GeoV->normal = faceForward(myDg.nn, -1.*R1.d);
-							GeoV->normalBase = make_float3(ObjT[IND+l].nBx, ObjT[IND+l].nBy, ObjT[IND+l].nBz);
-							if(  isBackward( make_double3(GeoV->normalBase.x, GeoV->normalBase.y, GeoV->normalBase.z),
-											 make_double3(dir.x, dir.y, dir.z) )  )
-							{
-								GeoV->material = ObjT[IND+l].materialAV;
-								GeoV->reflectivity = ObjT[IND+l].reflectAV;
-								GeoV->roughness = ObjT[IND+l].roughAV;
-								GeoV->shadow = ObjT[IND+l].shdAV;
-								GeoV->nind = ObjT[IND+l].nindAV;
-								GeoV->dist = ObjT[IND+l].distAV;
-							}
-							else
-							{
-								GeoV->material = ObjT[IND+l].materialAR; //AR
-								GeoV->reflectivity = ObjT[IND+l].reflectAR;
-								GeoV->roughness = ObjT[IND+l].roughAR;
-								GeoV->shadow = ObjT[IND+l].shdAR;
-								GeoV->nind = ObjT[IND+l].nindAR;
-								GeoV->dist = ObjT[IND+l].distAR;
-							}
-							*(phit) = tempPhit;
-							GeoV->mvTF = Tj;
-							GeoV->type = ObjT[IND+l].type;
-							GeoV->mvR = make_float3(ObjT[IND+l].mvRx, ObjT[IND+l].mvRy, ObjT[IND+l].mvRz);
+							GeoV->material = ObjT[IND+j].materialAV;
+							GeoV->reflectivity = ObjT[IND+j].reflectAV;
+							GeoV->roughness = ObjT[IND+j].roughAV;
+							GeoV->shadow = ObjT[IND+j].shdAV;
+							GeoV->nind = ObjT[IND+j].nindAV;
+							GeoV->dist = ObjT[IND+j].distAV;
 						}
+						else
+						{
+							GeoV->material = ObjT[IND+j].materialAR; //AR
+							GeoV->reflectivity = ObjT[IND+j].reflectAR;
+							GeoV->roughness = ObjT[IND+j].roughAR;
+							GeoV->shadow = ObjT[IND+j].shdAR;
+							GeoV->nind = ObjT[IND+j].nindAR;
+							GeoV->dist = ObjT[IND+j].distAR;
+						}
+						*(phit) = tempPhit;
+						GeoV->mvTF = Tj;
+						GeoV->type = ObjT[IND+j].type;
+						GeoV->mvR = make_float3(ObjT[IND+j].mvRx, ObjT[IND+j].mvRy, ObjT[IND+j].mvRz);
 					}
-				} // END for l
-			} // END if !(testG[ObjT[i].indG] == 1 and bboxG[ObjT[i].indG] == 0) 
-		} // END if (ObjT[i].geo == 2 and ObjT[i].indG > 0)
+				}
+			} // END for j loop (traveling entity objects)
+		} // END intersection test with the group bounding box
 		// ***********************************************************************
-	} // FIN BOUCLE FOR (PARCOURANT LES OBJETS)
-	
-	// if (ObjT[nObj-1].geo == 2)
-	// {
-	// 	float myTr = CUDART_INF_F;
-	// 	bool myBr = false;
-	// 	DifferentialGeometry myDgr;
-	// 	// *****************************First Step********************************
-	// 	// prise en compte de tte les tranformations existantes de l'objet(i)
-	// 	Transform Tr, invTr; // déclare la tranfo de l'objet i et son inverse
+	} // END FOR i LOOP (traveling object groups)
 
-	// 	/* !!! Nous notons qu'il est important de commencer avec la translation
-	// 	   car s'il y a une rotation, alors le repère change (axe x ou y ou z) !!! */
-
-	// 	// si une valeur en x, y ou z diff de 0 alors il y a une translation
-	// 	if ( (ObjT[nObj-1].mvTx>VALMIN and ObjT[nObj-1].mvTx<-VALMIN) or
-	// 		 (ObjT[nObj-1].mvTy>VALMIN and ObjT[nObj-1].mvTy>-VALMIN) or
-	// 		 (ObjT[nObj-1].mvTz>VALMIN and ObjT[nObj-1].mvTz>-VALMIN)) {
-	// 		Transform TmTr;
-	// 		TmTr = Tr.Translate(make_float3(ObjT[nObj-1].mvTx, ObjT[nObj-1].mvTy,
-	// 									   ObjT[nObj-1].mvTz));
-	// 		Tr = TmTr; }
-
-	// 	// Add rotation tranformations
-	// 	Tr = addRotAndParseOrder(Tr, ObjT[nObj-1]); //see the function
-	// 	invTr = Tr.Inverse(Tr); // inverse de la tranformation
-	// 	// declaration of a table of float3 which contains P0, P1, P2, P3
-	// 	float3 Pvecr[4] = {make_float3(ObjT[nObj-1].p0x, ObjT[nObj-1].p0y, ObjT[nObj-1].p0z),
-	// 					  make_float3(ObjT[nObj-1].p1x, ObjT[nObj-1].p1y, ObjT[nObj-1].p1z),
-	// 					  make_float3(ObjT[nObj-1].p2x, ObjT[nObj-1].p2y, ObjT[nObj-1].p2z),
-	// 					  make_float3(ObjT[nObj-1].p3x, ObjT[nObj-1].p3y, ObjT[nObj-1].p3z)};
-					
-	// 	// Create the triangleMesh (2 = number of triangle ; 4 = number of vertices)
-	// 	TriangleMesh myObject(&Tr, &invTr, 2, 4, vi, Pvecr);
-				
-	// 	BBox myBBox = myObject.WorldBoundTriangleMesh();
-	// 	if (myBBox.IntersectP(R1))
-	// 		myBr = myObject.Intersect(R1, &myTr, &myDgr);
-
-	// 	if (myBr & (myT > myTr))
-	// 	{
-	// 		tempPhit = R1(myTr);
-	// 		if ((fabs(tempPhit.x-o.x) > 1e-3) || (fabs(tempPhit.y-o.y) > 1e-3) ||
-	// 			(fabs(tempPhit.z-o.z) > 1e-3) || (phLocPrev != OBJSURF))
-	// 		{
-	// 			myB = true;
-	// 			myT = myTr;
-	// 			myDg = myDgr;
-	// 			GeoV->normal = faceForward(myDg.nn, -1.*R1.d);
-	// 			GeoV->normalBase = make_float3(ObjT[nObj-1].nBx, ObjT[nObj-1].nBy, ObjT[nObj-1].nBz);
-	// 			if(  isBackward( make_double3(GeoV->normalBase.x, GeoV->normalBase.y, GeoV->normalBase.z),
-	// 							 make_double3(dir.x, dir.y, dir.z) )  )
-	// 			{
-	// 				GeoV->material = ObjT[nObj-1].materialAV;
-	// 				GeoV->reflectivity = ObjT[nObj-1].reflectAV;
-	// 				GeoV->roughness = ObjT[nObj-1].roughAV;
-	// 				GeoV->shadow = ObjT[nObj-1].shdAV;
-	// 				GeoV->nind = ObjT[nObj-1].nindAV;
-	// 				GeoV->dist = ObjT[nObj-1].distAV;
-	// 			}
-	// 			else
-	// 			{
-	// 				GeoV->material = ObjT[nObj-1].materialAR; //AR
-	// 				GeoV->reflectivity = ObjT[nObj-1].reflectAR;
-	// 				GeoV->roughness = ObjT[nObj-1].roughAR;
-	// 				GeoV->shadow = ObjT[nObj-1].shdAR;
-	// 				GeoV->nind = ObjT[nObj-1].nindAR;
-	// 				GeoV->dist = ObjT[nObj-1].distAR;
-	// 			}
-	// 			*(phit) = tempPhit;
-	// 			GeoV->mvTF = Tr;
-	// 			GeoV->type = ObjT[nObj-1].type;
-	// 			GeoV->mvR = make_float3(ObjT[nObj-1].mvRx, ObjT[nObj-1].mvRy, ObjT[nObj-1].mvRz);
-	// 		}
-	// 	}
-	// }
-
-	if (myB) { // Il y a intersection avec au moins un objet
+	if (myB) { // If there is an intersection with at least one object
 		return true; }
-	else { // Il y a pas d'intersection avec un objet
+	else { // If there is not a single intersection
 		*(phit) = make_float3(-1, -1, -1);
 		return false; }	
-} // FIN DE LA FONCTION GEOTEST()
-
-
-
-
-
-
-// __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo *GeoV, struct IObjets *ObjT)
-// {
-// 	Ray R1(o, dir, 0); // initialisation du rayon pour l'étude d'intersection
-// 	// ******************interval d'étude******************
-// 	BBox interval(make_float3(Pmin_x-VALMIN, Pmin_y-VALMIN, Pmin_z-VALMIN),
-// 				  make_float3(Pmax_x+VALMIN, Pmax_y+VALMIN, Pmax_z+VALMIN));
-	
-// 	if (!interval.IntersectP(R1))
-// 	{
-// 		*(phit) = make_float3(-1, -1, -1);
-// 	    GeoV->normal = make_float3(0, 0, 0);
-// 		return false;
-// 	}
-// 	// *****************************************************
-	
-// 	// *************commun avec tous les objets*************
-// 	float myT = CUDART_INF_F; // myT = time
-// 	bool myB = false;
-// 	DifferentialGeometry myDg;
-// 	float3 tempPhit; // Phit temporaire
-//     // *****************************************************
-	
-// 	// *******Propre aux objets de type surface plane*******
-// 	int vi[6] = {0, 1, 2,  // vertices index for triangle 1
-// 				 2, 3, 1}; // vertices index for triangle 2
-// 	Transform nothing; // transformation "nulle"
-// 	// *****************************************************
-
-// 	for (int i = 0; i < nObj; ++i)
-// 	{
-// 		float myTi = CUDART_INF_F;
-// 		bool myBi = false;
-// 		DifferentialGeometry myDgi;
-// 		// *****************************First Step********************************
-// 		// prise en compte de tte les tranformations existantes de l'objet(i)
-// 		Transform Ti, invTi; // déclare la tranfo de l'objet i et son inverse
-
-// 		/* !!! Nous notons qu'il est important de commencer avec la translation
-// 		   car s'il y a une rotation, alors le repère change (axe x ou y ou z) !!! */
-
-// 		// si une valeur en x, y ou z diff de 0 alors il y a une translation
-// 		if ( (ObjT[i].mvTx>VALMIN and ObjT[i].mvTx<-VALMIN) or
-// 			 (ObjT[i].mvTy>VALMIN and ObjT[i].mvTy>-VALMIN) or
-// 			 (ObjT[i].mvTz>VALMIN and ObjT[i].mvTz>-VALMIN)) {
-// 			Transform TmT;
-// 			TmT = Ti.Translate(make_float3(ObjT[i].mvTx, ObjT[i].mvTy,
-// 										   ObjT[i].mvTz));
-// 			Ti = TmT; }
-
-// 		// Add rotation tranformations
-// 		Ti = addRotAndParseOrder(Ti, ObjT[i]); //see the function
-// 		invTi = Ti.Inverse(Ti); // inverse de la tranformation
-// 		// ***********************************************************************
-		
-// 		// ******************************Second Step******************************
-// 		// on voit s'il y a une intersection avec l'objet(i)
-// 		if (ObjT[i].geo == 1) // cas d'un objet de type sphere
-// 		{
-// 			Sphere myObject(&Ti, &invTi, ObjT[i].myRad, ObjT[i].z0,
-// 							ObjT[i].z1, ObjT[i].phi);
-		
-// 			BBox myBBox = myObject.WorldBoundSphere();
-
-// 			if (myBBox.IntersectP(R1))
-// 				myBi = myObject.Intersect(R1, &myTi, &myDgi);
-// 		}
-// 		else if (ObjT[i].geo == 2) // cas d'un objet de type surface plane
-// 		{
-// 			// declaration of a table of float3 which contains P0, P1, P2, P3
-// 			float3 Pvec[4] = {make_float3(ObjT[i].p0x, ObjT[i].p0y, ObjT[i].p0z),
-// 							  make_float3(ObjT[i].p1x, ObjT[i].p1y, ObjT[i].p1z),
-// 							  make_float3(ObjT[i].p2x, ObjT[i].p2y, ObjT[i].p2z),
-// 							  make_float3(ObjT[i].p3x, ObjT[i].p3y, ObjT[i].p3z)};
-			
-// 			// Create the triangleMesh (2 = number of triangle ; 4 = number of vertices)
-// 			TriangleMesh myObject(&Ti, &invTi, 2, 4, vi, Pvec);
-			
-// 			BBox myBBox = myObject.WorldBoundTriangleMesh();
-// 			if (myBBox.IntersectP(R1))
-// 				myBi = myObject.Intersect(R1, &myTi, &myDgi);				
-// 		}
-// 		// ***********************************************************************
-		
-// 		// ******************************third Step*******************************
-// 		// s'il y a intersection avec plusieurs objets, assure qu'on garde l'objet
-// 		// le plus proche du point de départ du photon
-// 		if (myBi & (myT > myTi)) // si intercect objet(i) + time(i-1) > time(i)
-// 		{ // si objet(i) plus proche que objet(i-1) alors remplacement des données
-// 		    tempPhit = R1(myTi); // valeur temporaire de phit
-			
-// 			// this condition enable to correct an important bug in case of reflection
-// 			// Without this condition, the photon where the initial position is assimilated to phit
-// 			// will be reflected...
-// 			if ((fabs(tempPhit.x-o.x) > 1e-3) || (fabs(tempPhit.y-o.y) > 1e-3) ||
-// 				(fabs(tempPhit.z-o.z) > 1e-3) || (phLocPrev != OBJSURF))
-// 			{
-// 				myB = true;
-// 				myT = myTi;
-// 				myDg = myDgi;
-// 				//GeoV->material = ObjT[i].material;
-// 				//GeoV->reflectivity = ObjT[i].reflect;
-// 				GeoV->normal = faceForward(myDg.nn, -1.*R1.d);
-// 				GeoV->normalBase = make_float3(ObjT[i].nBx, ObjT[i].nBy, ObjT[i].nBz);
-// 				// if(isBackward(GeoV->normal, dir))
-// 				#ifdef DOUBLE
-// 				if(  isBackward( make_double3(GeoV->normalBase.x, GeoV->normalBase.y, GeoV->normalBase.z),
-// 								 make_double3(dir.x, dir.y, dir.z) )  )
-// 				#else
-// 				if(isBackward(GeoV->normalBase, dir))
-// 				#endif
-// 				{
-// 					GeoV->material = ObjT[i].materialAV;
-// 					GeoV->reflectivity = ObjT[i].reflectAV;
-// 					GeoV->roughness = ObjT[i].roughAV;
-// 					GeoV->shadow = ObjT[i].shdAV;
-// 					GeoV->nind = ObjT[i].nindAV;
-// 					GeoV->dist = ObjT[i].distAV;
-// 				}
-// 				else
-// 				{
-// 					GeoV->material = ObjT[i].materialAR; //AR
-// 					GeoV->reflectivity = ObjT[i].reflectAR;
-// 					GeoV->roughness = ObjT[i].roughAR;
-// 					GeoV->shadow = ObjT[i].shdAR;
-// 					GeoV->nind = ObjT[i].nindAR;
-// 					GeoV->dist = ObjT[i].distAR;
-// 				}
-// 				*(phit) = tempPhit;
-// 				GeoV->mvTF = Ti;
-// 				GeoV->type = ObjT[i].type;
-// 				GeoV->mvR = make_float3(ObjT[i].mvRx, ObjT[i].mvRy, ObjT[i].mvRz);
-// 			}
-// 		}
-// 		// ***********************************************************************
-// 	} // FIN BOUCLE FOR (PARCOURANT LES OBJETS)
-	
-// 	if (myB) { // Il y a intersection avec au moins un objet
-// 		return true; }
-// 	else { // Il y a pas d'intersection avec un objet
-// 		*(phit) = make_float3(-1, -1, -1);
-// 		return false; }	
-// } // FIN DE LA FONCTION GEOTEST()
-
-
-
-
+} // END OF THE FUNCTION GEOTEST()
 
 __device__ bool geoTestRec(float3 o, float3 dir, int phLocPrev, struct IObjets *ObjT)
 {
@@ -6472,7 +6250,7 @@ __device__ Transform addRotAndParseOrder(Transform Ti, IObjets object)
 		break;
 	}
 	return Ti;
-} // FIN DE LA FONCTION addRotAndParseOrder()
+} // END OF THE FUNCTION addRotAndParseOrder()
 
 __device__ Transformd DaddRotAndParseOrder(Transformd Tid, IObjets object)
 {
@@ -6530,7 +6308,7 @@ __device__ Transformd DaddRotAndParseOrder(Transformd Tid, IObjets object)
 		break;
 	}
 	return Tid;
-} // FIN DE LA FONCTION DaddRotAndParseOrder()
+} // END OF THE FUNCTION DaddRotAndParseOrder()
 #endif
 
 #ifdef OPT3D

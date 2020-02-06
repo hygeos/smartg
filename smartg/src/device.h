@@ -63,7 +63,6 @@ __device__ __constant__ int NSENSORd;
 // copy en rapport avec les objets :
 __device__ __constant__ int nObj;
 __device__ __constant__ int nGObj;
-__device__ __constant__ int nGroup;
 __device__ __constant__ float Pmin_x;
 __device__ __constant__ float Pmin_y;
 __device__ __constant__ float Pmin_z;

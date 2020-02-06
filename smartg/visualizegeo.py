@@ -303,16 +303,15 @@ class Entity(object):
     name   : 2 choices --> reflector or receiver.
              If receiver is chosen, smartg will count the distribution flux
     TC     : Taille Cellules --> size of cells for the flux distribution (kilometer)
-    indGroup : in development...
     bboxGPmin/max : in development...
     '''
     def __init__(self, entity = None, name="reflector", TC = 0.01, materialAV=Matte(), \
                  materialAR=Matte(), geo=Plane(), transformation=Transformation(), \
-                 indGroup = int(0), bboxGPmin = Point(-100000., -100000., 0.), bboxGPmax = Point(100000., 100000., 120.)):
+                 bboxGPmin = Point(-100000., -100000., 0.), bboxGPmax = Point(100000., 100000., 120.)):
         if isinstance(entity, Entity) :
             self.name = entity.name; self.TC = entity.TC; self.materialAV = entity.materialAV;
             self.materialAR = entity.materialAR; self.geo = entity.geo ;
-            self.transformation = entity.transformation; self.indGroup = entity.indGroup;
+            self.transformation = entity.transformation;
             self.bboxGPmin = entity.bboxGPmin; self.bboxGPmax = entity.bboxGPmax;
         else:
             self.name = name
@@ -321,7 +320,6 @@ class Entity(object):
             self.materialAR = materialAR
             self.geo = geo
             self.transformation = transformation
-            self.indGroup = indGroup
             self.bboxGPmin = bboxGPmin
             self.bboxGPmax = bboxGPmax
 
@@ -469,7 +467,7 @@ def findRots(UI=None, UO=None, vecNF=None):
 
     return [rotYD, rotZD, TTT]
 
-def generateLEfH(HELIO = Heliostat(), PR = None, THEDEG = 0., PHIDEG = 0., INDEX = 0):
+def generateLEfH(HELIO = Heliostat(), PR = None, THEDEG = 0., PHIDEG = 0.):
     '''
     Definition of the function generateLEfH
     This function enables the conversion of an object heliostat to a list of 
@@ -617,7 +615,6 @@ def generateLEfH(HELIO = Heliostat(), PR = None, THEDEG = 0., PHIDEG = 0., INDEX
             tempF1.transformation = Transformation( rotation = np.array([0., RINF3[0], RINF3[1]]), \
                                                     translation = np.array([MPFAT[i][j].x, MPFAT[i][j].y, MPFAT[i][j].z]), \
                                                     rotationOrder = "ZYX")
-            tempF1.indGroup = int(INDEX)
             tempPP = Point(POSH)
             
             tempF1.bboxGPmin = Point(tempPP.x-bboxDist, tempPP.y-bboxDist, tempPP.z-bboxDist)
@@ -1022,7 +1019,7 @@ def generateHfP(THEDEG=0., PHIDEG = 0., PH = [Point(0., 0., 0.)], PR = Point(0.,
         # Generate all the facets and store them as entity object in a list 
         for i in range (0, len(PH)):
             H0 = Heliostat(SPX=SPX, SPY=SPY, HSX=HSX, HSY=HSY, CURVE_FL=CURVE_FL, POS=PH[i], REF=REF)
-            TLE = generateLEfH(HELIO=H0, PR=PR, THEDEG=THEDEG, PHIDEG=PHIDEG, INDEX=i+1)
+            TLE = generateLEfH(HELIO=H0, PR=PR, THEDEG=THEDEG, PHIDEG=PHIDEG)
             lObj.extend(TLE)
     else:
         raise NameError('If HTYPE is specified it must be a Heliostat class!')
@@ -1141,7 +1138,7 @@ def generateHfA(THEDEG=0., PHIDEG = 0., PR = Point(0., 0., 50.), MINANG=0., \
         # Generate all the facets and store them as entity object in a list 
         for i in range (0, len(pH)):
             H0 = Heliostat(SPX=SPX, SPY=SPY, HSX=HSX, HSY=HSY, CURVE_FL=CURVE_FL, POS=pH[i], REF=REF)
-            TLE = generateLEfH(HELIO=H0, PR=PR, THEDEG=THEDEG, PHIDEG=PHIDEG, INDEX=i+1)
+            TLE = generateLEfH(HELIO=H0, PR=PR, THEDEG=THEDEG, PHIDEG=PHIDEG)
             lObj.extend(TLE)
     else:
         raise NameError('If HTYPE is specified it must be a Heliostat class!')
