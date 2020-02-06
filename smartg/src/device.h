@@ -63,6 +63,7 @@ __device__ __constant__ int NSENSORd;
 // copy en rapport avec les objets :
 __device__ __constant__ int nObj;
 __device__ __constant__ int nGObj;
+__device__ __constant__ int nRObj;
 __device__ __constant__ float Pmin_x;
 __device__ __constant__ float Pmin_y;
 __device__ __constant__ float Pmin_z;
@@ -120,6 +121,7 @@ __global__ void launchKernel(
 		, void *tabObjInfo,
 		struct IObjets *myObjets,
 		struct GObj *myGObj,
+		struct IObjets *myRObj,
 		unsigned long long *nbPhCat,
 		void *wPhCat, void *wPhCat2,
 		void *wPhLoss

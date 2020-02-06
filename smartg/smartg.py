@@ -771,14 +771,16 @@ class Smartg(object):
                 Pmax_x = 100000;  Pmax_y = 100000; Pmax_z = 120;
 
             # Initiliaze all the parameters linked with 3D objects
-            (nGObj, nObj, surfLPH_RF, nb_H, zAlt_H, totS_H, TC, nbCx, nbCy,
-             nbCy, myObjects0, myGObj0) = initObj(LGOBJ=myObjects, CUSL=cusL)
+            (nGObj, nObj, nRObj, surfLPH_RF, nb_H, zAlt_H, totS_H, TC, nbCx, nbCy,
+             nbCy, myObjects0, myGObj0, myRObj0) = initObj(LGOBJ=myObjects, CUSL=cusL)
 
             # If we are in RF mode don't forget to update the value of surfLPH
             if (surfLPH_RF is not None): surfLPH = surfLPH_RF
         else:
             myObjects0 = None #np.zeros(1, dtype=type_IObjets, order='C')
-            nObj = 0; nGObj=0; Pmin_x = None; Pmin_y = None; Pmin_z = None;
+            myGObj0 = None
+            myRObj0 = None
+            nObj = 0; nGObj=0; nRobj=0; Pmin_x = None; Pmin_y = None; Pmin_z = None;
             Pmax_x = None; Pmax_y = None; Pmax_z = None;
             IsAtm = None; TC = None; nbCx = 10; nbCy = 10; nb_H = 0
         # END OBJ ===================================================
@@ -1034,7 +1036,7 @@ class Smartg(object):
                   NBTHETA, NBPHI, OUTPUT_LAYERS,
                   RTER, LE, ZIP, FLUX, FFS, DIRECT, NLVL, NPSTK,
                   NWLPROBA, BEER, SMAX, RR, WEIGHTRR, NLOW, NJAC, 
-                  NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj, nGObj,
+                  NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj, nGObj, nRObj,
                   Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm,
                   TC, nbCx, nbCy, vSun, HIST)
 
@@ -1051,7 +1053,7 @@ class Smartg(object):
                         NLVL, NATM, NOCE, MAX_HIST, NLOW, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                         NLAM, NSENSOR, self.double, self.kernel, self.kernel2, p, X0, le, tab_sensor, spectrum,
                         prof_atm_gpu, prof_oc_gpu,
-                        wl_proba_icdf, stdev, self.rng, myObjects0, TC, nbCx, nbCy, myGObj0,hist=hist)
+                        wl_proba_icdf, stdev, self.rng, myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, hist=hist)
 
         attrs['kernel time (s)'] = secs_cuda_clock
         attrs['number of kernel iterations'] = Nkernel
@@ -1620,7 +1622,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
               XBLOCK, XGRID,NLAM, SIM, NF,
               NBTHETA, NBPHI, OUTPUT_LAYERS,
               RTER, LE, ZIP, FLUX, FFS, DIRECT, NLVL, NPSTK, NWLPROBA, BEER, SMAX, RR, 
-              WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj, nGObj,
+              WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj, nGObj, nRObj,
               Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, vSun, HIST) :
     """
     Initialize the constants in python and send them to the device memory
@@ -1705,6 +1707,7 @@ def InitConst(surf, env, NATM, NOCE, mod,
     if nObj != 0:
         copy_to_device('nObj', nObj, np.int32)
         copy_to_device('nGObj', nGObj, np.int32)
+        copy_to_device('nRObj', nRObj, np.int32)
         copy_to_device('Pmin_x', Pmin_x, np.float32)
         copy_to_device('Pmin_y', Pmin_y, np.float32)
         copy_to_device('Pmin_z', Pmin_z, np.float32)
@@ -1905,7 +1908,7 @@ def get_git_attrs():
 def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
                 NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                 NLAM, NSENSOR, double, kern, kern2, p, X0, le, tab_sensor, spectrum,
-                prof_atm, prof_oc, wl_proba_icdf, stdev, rng, myObjects0, TC, nbCx, nbCy, myGObj0, hist=False):
+                prof_atm, prof_oc, wl_proba_icdf, stdev, rng, myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, hist=False):
     """
     launch the kernel several time until the targeted number of photons injected is reached
 
@@ -2047,7 +2050,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
             kern(spectrum, X0, faer, foce,
                  errorcount, nThreadsActive, tabPhotons, tabDist, tabHist,
                  Counter, NPhotonsIn, NPhotonsOut, tabthv, tabphi, tab_sensor,
-                 prof_atm, prof_oc, wl_proba_icdf, rng.state, tabObjInfo, myObjects0, myGObj0, nbPhCat, wPhCat,
+                 prof_atm, prof_oc, wl_proba_icdf, rng.state, tabObjInfo, myObjects0, myGObj0, myRObj0, nbPhCat, wPhCat,
                  wPhCat2, wPhLoss, block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
         else:
             kern(spectrum, X0, faer, foce,
@@ -2325,8 +2328,9 @@ def initObj(LGOBJ, CUSL=None):
     CUSL  : Custom lanching mode class (i.g. cusForward())
     
     ===RETURN:
-    nGObj     : The number of Groups
-    nObj      : The number of Objects
+    nGObj     : The number of groups
+    nObj      : The number of objects
+    nRObj     : The number of receiver objects
     surfLPH   : Surface where photons are launched, in backward = None
     nb_H      : The number of heliostats (or heliostat facets)
     zAlt_H    : Sum of z altitude of all heliostats (or heliostat facets)
@@ -2336,9 +2340,10 @@ def initObj(LGOBJ, CUSL=None):
     nbCy      : The number of receiver cells in y direction
     LOBJGPU   : GPU array of objects of type 'type_IObjets'
     LGOBJGPU  : GPU array of objects of type 'type_GObj'
+    LROBJGPU  : GPU array of only receiver objects of type 'type_IObjets'
     '''
 
-    ind = 0; LOBJ = []; nGObj = len(LGOBJ);
+    ind = 0; LOBJ = []; nGObj = len(LGOBJ); nRObj = 0; INDROBJ = [];
     LGOBJGPU = np.zeros(nGObj, dtype=type_GObj, order='C')
 
     # Creation of a list with only Entity objects and creation
@@ -2399,6 +2404,8 @@ def initObj(LGOBJ, CUSL=None):
         LOBJGPU['mvTx'][nObj] = CUSL.dict['REC'].transformation.transx
         LOBJGPU['mvTy'][nObj] = CUSL.dict['REC'].transformation.transy
         LOBJGPU['mvTz'][nObj] = CUSL.dict['REC'].transformation.transz
+
+        INDROBJ.append(nObj) # For the creation of GPU table with only receivers
     else:
         LOBJGPU = np.zeros(nObj, dtype=type_IObjets, order='C')
         TC = None; nbCx = int(0); nbCy = int(0);
@@ -2409,6 +2416,7 @@ def initObj(LGOBJ, CUSL=None):
     if (CUSL != None and CUSL.dict['LMODE'] == "RF"): surfLPH = 0;
     else: surfLPH = None;
 
+    # ********************************************
     # Begining of the loop to consider all objects
     for i in range (0, nObj):
         # ==== At this moment only 2 choices -> spherical or plane surface
@@ -2573,12 +2581,27 @@ def initObj(LGOBJ, CUSL=None):
             nbCx = int(sizeX/TC)
             nbCy = int(sizeY/TC)
 
+            INDROBJ.append(i) # For the creation of GPU table with only receivers
+
         # This part is currently under development
         elif (LOBJ[i].name == "env"):
             LOBJGPU['type'][i] = 3 
         else:
             raise NameError('You have to specify if your object is a reflector or a receiver!')
         # ====
+    # End of the loop
+    # ********************************************
+    
+    # Creation of GPU table with only receivers
+    nRObj = len(INDROBJ)
+    if nRObj > 0:
+        LROBJGPU = np.zeros(nRObj, dtype=type_IObjets, order='C')
+        for i in range (0, nRObj):
+            LROBJGPU[:][i] = LOBJGPU[:][INDROBJ[i]]
+    else:
+        LROBJGPU = np.zeros(1, dtype=type_IObjets, order='C')
 
     LOBJGPU = to_gpu(LOBJGPU)
-    return nGObj, nObj, surfLPH, nb_H, zAlt_H, totS_H, TC, nbCx, nbCy, nbCy, LOBJGPU, LGOBJGPU
+    LROBJGPU = to_gpu(LROBJGPU)
+
+    return nGObj, nObj, nRObj, surfLPH, nb_H, zAlt_H, totS_H, TC, nbCx, nbCy, nbCy, LOBJGPU, LGOBJGPU, LROBJGPU

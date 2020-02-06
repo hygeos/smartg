@@ -46,6 +46,7 @@ extern "C" {
 							 , void *tabObjInfo,
 							 struct IObjets *myObjets,
 							 struct GObj *myGObj,
+							 struct IObjets *myRObj,
 							 unsigned long long *nbPhCat,
 							 void *wPhCat, void *wPhCat2,
 							 void *wPhLoss
@@ -751,7 +752,7 @@ extern "C" {
 			{
 				if ( ph.loc == ABSORBED)
 					ph.weight_loss[3] = 0.F;
-				else if ( geoTestRec(ph.pos, ph.v, ph.locPrev, myObjets) )
+				else if ( geoTestRec(ph.pos, ph.v, ph.locPrev, myRObj) )
 					ph.weight_loss[3] = ph.weight;
 				else
 					ph.weight_loss[3] = 0.F;
@@ -6132,64 +6133,61 @@ __device__ bool geoTestRec(float3 o, float3 dir, int phLocPrev, struct IObjets *
 				 2, 3, 1}; // vertices index for triangle 2
 	// *****************************************************
 
-	for (int i = 0; i < nObj; ++i)
+	for (int i = 0; i < nRObj; ++i)
 	{
-		if (ObjT[i].type == 2) // receiver
-		{
-			bool myBi = false;
-			float myTi = CUDART_INF_F;
-			DifferentialGeometry myDgi;
-			// *****************************First Step********************************
-			// prise en compte de tte les tranformations existantes de l'objet(i)
-			Transform Ti, invTi; // déclare la tranfo de l'objet i et son inverse
+		bool myBi = false;
+		float myTi = CUDART_INF_F;
+		DifferentialGeometry myDgi;
+		// *****************************First Step********************************
+		// prise en compte de tte les tranformations existantes de l'objet(i)
+		Transform Ti, invTi; // déclare la tranfo de l'objet i et son inverse
 
-			// si une valeur en x, y ou z diff de 0 alors il y a une translation
-			if (ObjT[i].mvTx != 0 or ObjT[i].mvTy != 0 or ObjT[i].mvTz != 0) {
-				Transform TmT;
-				TmT = Ti.Translate(make_float3(ObjT[i].mvTx, ObjT[i].mvTy,
-											   ObjT[i].mvTz));
-				Ti = TmT; }
+		// si une valeur en x, y ou z diff de 0 alors il y a une translation
+		if (ObjT[i].mvTx != 0 or ObjT[i].mvTy != 0 or ObjT[i].mvTz != 0) {
+			Transform TmT;
+			TmT = Ti.Translate(make_float3(ObjT[i].mvTx, ObjT[i].mvTy,
+										   ObjT[i].mvTz));
+			Ti = TmT; }
 
-			// Add rotation tranformations
-			Ti = addRotAndParseOrder(Ti, ObjT[i]); //see the function
-			invTi = Ti.Inverse(Ti); // inverse de la tranformation
-			// ***********************************************************************
+		// Add rotation tranformations
+		Ti = addRotAndParseOrder(Ti, ObjT[i]); //see the function
+		invTi = Ti.Inverse(Ti); // inverse de la tranformation
+		// ***********************************************************************
 		
-			// ******************************Second Step******************************
-			// on voit s'il y a une intersection avec l'objet(i)
-			if (ObjT[i].geo == 1) // cas d'un objet de type sphere
-			{
-				Sphere myObject(&Ti, &invTi, ObjT[i].myRad, ObjT[i].z0, ObjT[i].z1, ObjT[i].phi);
+		// ******************************Second Step******************************
+		// on voit s'il y a une intersection avec l'objet(i)
+		if (ObjT[i].geo == 1) // cas d'un objet de type sphere
+		{
+			Sphere myObject(&Ti, &invTi, ObjT[i].myRad, ObjT[i].z0, ObjT[i].z1, ObjT[i].phi);
 
-				BBox myBBox = myObject.WorldBoundSphere();
+			BBox myBBox = myObject.WorldBoundSphere();
 
-				if (myBBox.IntersectP(R1))
-					myBi = myObject.Intersect(R1, &myTi, &myDgi);
-			}
-			else if (ObjT[i].geo == 2) // cas d'un objet de type surface plane
-			{
-				// declaration of a table of float3 which contains P0, P1, P2, P3
-				float3 Pvec[4] = {make_float3(ObjT[i].p0x, ObjT[i].p0y, ObjT[i].p0z),
-								  make_float3(ObjT[i].p1x, ObjT[i].p1y, ObjT[i].p1z),
-								  make_float3(ObjT[i].p2x, ObjT[i].p2y, ObjT[i].p2z),
-								  make_float3(ObjT[i].p3x, ObjT[i].p3y, ObjT[i].p3z)};
-			
-				// Create the triangleMesh (2 = number of triangle ; 4 = number of vertices)
-				TriangleMesh myObject(&Ti, &invTi, 2, 4, vi, Pvec);
-			
-				BBox myBBox = myObject.WorldBoundTriangleMesh();
-				if (myBBox.IntersectP(R1))
-					myBi = myObject.Intersect(R1, &myTi, &myDgi);				
-			}
-			// ***********************************************************************
-
-			// ******************************third Step*******************************
-			tempPhit = R1(myTi); // valeur temporaire de phit
-			
-			if (myBi && ((fabs(tempPhit.x-o.x) > 1e-3) || (fabs(tempPhit.y-o.y) > 1e-3) ||
-				(fabs(tempPhit.z-o.z) > 1e-3)) )
-				return true;
+			if (myBBox.IntersectP(R1))
+				myBi = myObject.Intersect(R1, &myTi, &myDgi);
 		}
+		else if (ObjT[i].geo == 2) // cas d'un objet de type surface plane
+		{
+			// declaration of a table of float3 which contains P0, P1, P2, P3
+			float3 Pvec[4] = {make_float3(ObjT[i].p0x, ObjT[i].p0y, ObjT[i].p0z),
+							  make_float3(ObjT[i].p1x, ObjT[i].p1y, ObjT[i].p1z),
+							  make_float3(ObjT[i].p2x, ObjT[i].p2y, ObjT[i].p2z),
+							  make_float3(ObjT[i].p3x, ObjT[i].p3y, ObjT[i].p3z)};
+			
+			// Create the triangleMesh (2 = number of triangle ; 4 = number of vertices)
+			TriangleMesh myObject(&Ti, &invTi, 2, 4, vi, Pvec);
+			
+			BBox myBBox = myObject.WorldBoundTriangleMesh();
+			if (myBBox.IntersectP(R1))
+				myBi = myObject.Intersect(R1, &myTi, &myDgi);				
+		}
+		// ***********************************************************************
+
+		// ******************************third Step*******************************
+		tempPhit = R1(myTi); // valeur temporaire de phit
+			
+		if (myBi && ((fabs(tempPhit.x-o.x) > 1e-3) || (fabs(tempPhit.y-o.y) > 1e-3) ||
+					 (fabs(tempPhit.z-o.z) > 1e-3)) )
+			return true;
 	} // FIN BOUCLE FOR (PARCOURANT LES OBJETS)
 	return false;
 }
