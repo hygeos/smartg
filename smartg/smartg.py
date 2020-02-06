@@ -781,7 +781,7 @@ class Smartg(object):
             myObjects0 = None #np.zeros(1, dtype=type_IObjets, order='C')
             myGObj0 = None
             myRObj0 = None
-            nObj = 0; nGObj=0; nRobj=0; Pmin_x = None; Pmin_y = None; Pmin_z = None;
+            nObj = 0; nGObj=0; nRObj=0; Pmin_x = None; Pmin_y = None; Pmin_z = None;
             Pmax_x = None; Pmax_y = None; Pmax_z = None;
             IsAtm = None; TC = None; nbCx = 10; nbCy = 10; nb_H = 0
         # END OBJ ===================================================
@@ -1461,19 +1461,6 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
 
         # we can now compute the shadow efficiency
         nsha = max(0, min(P_cud/P_pyt, 1))
-        print("Tr_tau = ", Tr_tau)
-        print("P_pyt = Tr_tau*dicSTP[totS_H] = ", P_pyt)
-        print ("P_cud = (Wcos*Stoa)/nph =", P_cud)
-        print ("P_cud/P_pyt", P_cud/P_pyt)
-        # print(dicSTP["surfTOA"])
-        # print(float(NPhotonsInTot))
-        print("wi", losses[0])
-        print("wicos", losses[1])
-        print("wo=", losses[2])
-        print("wspi=", losses[3])
-        print("wblo=", losses[4])
-        print("dicSTP[wRec]=", dicSTP["wRec"])
-        
         ncos = max(0, min(losses[0]/losses[1], 1))
         nref = max(0, min(losses[2]/losses[0], 1))
         nspi = max(0, min(losses[3]/losses[2], 1))
@@ -1648,7 +1635,6 @@ def InitConst(surf, env, NATM, NOCE, mod,
     tTemp = PZd/-vSun.z
     PXd = -vSun.x * tTemp
     PYd = -vSun.y * tTemp
-    print(PXd, PYd, PZd)
 
     def copy_to_device(name, scalar, dtype):
         cuda.memcpy_htod(mod.get_global(name)[0], np.array([scalar], dtype=dtype))
