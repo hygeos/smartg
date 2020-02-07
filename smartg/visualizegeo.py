@@ -342,9 +342,10 @@ class Heliostat(object):
     HSY           : Heliostat size in y direction
     CURVE_FL      : Focal length : A curved heliostat is possible if curveFL is given
     REF           : Reflectivity of the heliostat
+    ROUGH         : Roughness of the heliostat
     '''
     def __init__(self, POS = Point(0., 0., 0.), SPX=int(2), SPY=int(2), HSX=0.02,
-                 HSY=0.02, CURVE_FL=None, REF=1.):
+                 HSY=0.02, CURVE_FL=None, REF=1., ROUGH=0):
         # Be sure that we split a heliostat by at least 2
         if (SPX*SPY < 2):
             raise Exception("The number of facets must be >= 2!")
@@ -358,12 +359,13 @@ class Heliostat(object):
         self.hSy = HSY
         self.curveFL = CURVE_FL
         self.ref = REF
+        self.rough = ROUGH
 
     def __str__(self):
         return "POS=" + str(self.pos) + '; ' + "SPX=" + str(self.sPx) + '; ' + \
                 "SPY=" + str(self.sPy) + '; ' + "HSX=" + str(self.hSx) + '; ' + \
                 "HSY=" + str(self.hSy)  + '; ' + "CURVE_FL=" + str(self.curveFL) + \
-                '; ' + "REF=" + str(self.ref)
+                '; ' + "REF=" + str(self.ref) + '; ' + "ROUGH=" + str(self.rough)
 
 class GroupE(object):
     '''
@@ -401,16 +403,14 @@ def findRots(UI=None, UO=None, vecNF=None):
     list[2] -> TTT   : Rotation transform object 
     '''
     # 1)Find the normal of the facet but filled in a vector class
-    if vecNF is not None:
-        vNF = Vector(vecNF)
-    else:
-        vNF = (UI + UO)*(-0.5)
+    if vecNF is not None: vNF = Vector(vecNF)
+    else: vNF = (UI + UO)*(-0.5)
     vNF = Normalize(vNF)
     vNF.z = np.clip(vNF.z, -1, 1) # Avoid nan value in next operations
 
     # 2) Apply the inverse rotation operations to find the necessary angles
     # 2.a) Initialisation
-    loop = int(0); TT = Transform(); rotY = 0; rotZ =0; opeZ=0;
+    loop=int(0); TT=Transform(); rotY=0; rotZ=0; opeZ=0;
     # The initial value of the facet normal is (0, 0, 1) but forced to (0, 0, 0)
     # to be sure to activate the while loop below
     vNF_initial = Vector(0., 0., 0.)
@@ -422,52 +422,81 @@ def findRots(UI=None, UO=None, vecNF=None):
     while (abs(vNF_initial.x - vNF.x) > 1e-4 or abs(vNF_initial.y - vNF.y) > 1e-4 or 
            abs(vNF_initial.z - vNF.z) > 1e-4):
         loop += int(1)
-        if loop > 5:
+        if loop > 4:
             raise NameError('No rotation has been found!')
+
         if (loop == 1):
             rotY = np.arccos(vNF.z)
-            if (vNF.x == 0 and rotY == 0):
-                opeZ = 0
-            else:
-                opeZ = vNF.x/np.sin(rotY)
+            if (vNF.x == 0 and rotY == 0): opeZ = 0
+            else: opeZ = vNF.x/np.sin(rotY)
             opeZ = np.clip(opeZ, -1, 1)
             rotZ = np.arccos(opeZ)
         elif(loop == 2):
             rotY = np.arccos(vNF.z)
-            if (vNF.x == 0 and rotY == 0):
-                opeZ = 0
-            else:
-                opeZ = vNF.x/np.sin(rotY)
+            if (vNF.x == 0 and rotY == 0): opeZ = 0
+            else: opeZ = vNF.x/np.sin(rotY)
             opeZ = np.clip(opeZ, -1, 1)
             rotZ = -np.arccos(opeZ)
         elif(loop == 3):
             rotY = -np.arccos(vNF.z)
-            if (vNF.x == 0 and rotY == 0):
-                opeZ = 0
-            else:
-                opeZ = vNF.x/np.sin(rotY)
+            if (vNF.x == 0 and rotY == 0): opeZ = 0
+            else: opeZ = vNF.x/np.sin(rotY)
             opeZ = np.clip(opeZ, -1, 1)
             rotZ = np.arccos(opeZ)
         elif(loop == 4):
             rotY = -np.arccos(vNF.z)
-            if (vNF.x == 0 and rotY == 0):
-                opeZ = 0
-            else:
-                opeZ = vNF.x/np.sin(rotY)
+            if (vNF.x == 0 and rotY == 0): opeZ = 0
+            else: opeZ = vNF.x/np.sin(rotY)
             opeZ = np.clip(opeZ, -1, 1)
             rotZ = -np.arccos(opeZ)
-        rotYD = np.degrees(rotY)
-        rotZD = np.degrees(rotZ)
-        TTZ = TT.rotateZ(rotZD)
-        TTY = TT.rotateY(rotYD)
+ 
+        rotYD = np.degrees(rotY); rotZD = np.degrees(rotZ);
+        TTZ = TT.rotateZ(rotZD); TTY = TT.rotateY(rotYD);
         TTT = TTZ*TTY
-        vNF_initial = Vector(0., 0., 1.)
-        vNF_initial = TTT[vNF_initial]
-        vNF_initial = Normalize(vNF_initial)
+        vNF_initial = Normalize(TTT[Vector(0., 0., 1.)])
 
     return [rotYD, rotZD, TTT]
 
-def generateLEfH(HELIO = Heliostat(), PR = None, THEDEG = 0., PHIDEG = 0.):
+def generateMTF(HELIO=Heliostat(), PR = Point(0., 0., 0.)):
+    '''
+    Under development...
+
+    Giving a heliostat 'HELIO' and the position of a receiver 'PR'
+    -->
+    This function enables the computation of the transforms of each
+    facets to curve the heliostat allowing facets to reflect in the
+    center of the receiver (For the moment only on-axis method)
+    '''
+
+    # Heliostat is splited in facets in x and y directions
+    SPX = HELIO.sPx; SPY = HELIO.sPy;
+    # Size in x and y of a given facet
+    SFX = HELIO.hSx/SPX; SFY = HELIO.hSy/SPY
+    wMx = SFX/2; wMy = SFY/2 # Size of a facet divided by 2
+
+    POSH = Point(HELIO.pos.x, HELIO.pos.y, HELIO.pos.z)
+    APOSR = Point(0., 0., 0.+(POSH - PR).Length())
+
+    # Find the positions of facets and store them in matrix MPF[i][j]
+    MPF = np.zeros((SPX, SPY), dtype="object") # Matrix of Point object of each facets
+    for i in range (0, SPX):
+        for j in range (0, SPY):
+            MPF[i][j] = Point(-(HELIO.hSx/2.) + (i*SFX) + wMx, -(HELIO.hSy/2.) + (j*SFY) + wMy, 0.)
+
+    # Find transform in function of focal length (for the curve)
+    MTF = np.zeros((SPX, SPY), dtype="object") # Matrix of Transform object of each facets
+    for i in range (0, SPX):
+        for j in range (0, SPY):
+            UI = Point(0., 0., 0.) - APOSR
+            UI = Normalize(UI)
+            UO = MPF[i][j] - APOSR
+            UO = Normalize(UO)
+            RINF  = findRots(UI=UI, UO=UO)
+            MTF[i][j] = Transform(RINF[2])
+
+    return MTF
+
+def generateLEfH(HELIO = Heliostat(), PR = None, THEDEG = 0., PHIDEG = 0., MTF=None):
     '''
     Definition of the function generateLEfH
     This function enables the conversion of an object heliostat to a list of 
@@ -477,6 +506,7 @@ def generateLEfH(HELIO = Heliostat(), PR = None, THEDEG = 0., PHIDEG = 0.):
     HELIO          : A heliostat class object
     THEDEG, PHIDEG : The theta and phi angles in degrees for the sun direction
     PR             : A class Point with the position of the receiver receiver
+    MTF            : Under development
     
     ===RETURN:
     List of all well oriented plane entity / facets
@@ -496,7 +526,6 @@ def generateLEfH(HELIO = Heliostat(), PR = None, THEDEG = 0., PHIDEG = 0.):
        ----------|----------
                  x
     '''
-
     # Be sure that the correct agrs have been given
     if not isinstance(HELIO, Heliostat):
         raise Exception("HELIO must be a Heliostat class!")
@@ -529,7 +558,7 @@ def generateLEfH(HELIO = Heliostat(), PR = None, THEDEG = 0., PHIDEG = 0.):
     wMx = SFX/2; wMy = SFY/2 # Size of a facet divided by 2
     # Create one facet to be ready to clone other facets
     F1 = Entity(name = "reflector", \
-                materialAV = Mirror(reflectivity = HELIO.ref), \
+                materialAV = Mirror(reflectivity = HELIO.ref, roughness = HELIO.rough), \
                 materialAR = Matte(), \
                 geo = Plane( p1 = Point(-wMx, -wMy, 0.),
                              p2 = Point(wMx, -wMy, 0.),
@@ -545,15 +574,16 @@ def generateLEfH(HELIO = Heliostat(), PR = None, THEDEG = 0., PHIDEG = 0.):
             MPF[i][j] = Point(-(HELIO.hSx/2.) + (i*SFX) + wMx, -(HELIO.hSy/2.) + (j*SFY) + wMy, 0.)
 
     # Find transform in function of focal length (for the curve)
-    MTF = np.zeros((SPX, SPY), dtype="object") # Matrix of Transform object of each facets
-    for i in range (0, SPX):
-        for j in range (0, SPY):
-            UI = Point(0., 0., 0.) - APOSR
-            UI = Normalize(UI)
-            UO = MPF[i][j] - APOSR
-            UO = Normalize(UO)
-            RINF  = findRots(UI=UI, UO=UO)
-            MTF[i][j] = Transform(RINF[2])
+    if MTF is None:
+        MTF = np.zeros((SPX, SPY), dtype="object") # Matrix of Transform object of each facets
+        for i in range (0, SPX):
+            for j in range (0, SPY):
+                UI = Point(0., 0., 0.) - APOSR
+                UI = Normalize(UI)
+                UO = MPF[i][j] - APOSR
+                UO = Normalize(UO)
+                RINF  = findRots(UI=UI, UO=UO)
+                MTF[i][j] = Transform(RINF[2])
 
 
     # Find the general heliostat rotation transform (like helistat is a unique facet)
@@ -962,7 +992,7 @@ def Analyse_create_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM'):
     return ax
 
 def generateHfP(THEDEG=0., PHIDEG = 0., PH = [Point(0., 0., 0.)], PR = Point(0., 0., 0.), \
-                HSX = 0.001, HSY = 0.001, REF = 1, HTYPE = None):
+                HSX = 0.001, HSY = 0.001, REF = 1, ROUGH=0, HTYPE = None, LMTF = None):
     '''
     Definition of generateHfP
 
@@ -970,16 +1000,16 @@ def generateHfP(THEDEG=0., PHIDEG = 0., PH = [Point(0., 0., 0.)], PR = Point(0.,
 
     THEDEG  : Sun zenith angle (degree)
     PHIDEG  : Sun azimuth angle (degree)
-    PH : Coordinates of the center of heliostats (list of point classes)
-    PR : Coordinate of the center of the receiver (point class)
-    HSX : Heliostat size in x axis (kilometer)
-    HSY : Heliostat size in y axis (kilometer)
-    REF : reflectivity of the heliostats
-    HTYPE : If specified must be a class heliostat
-
+    PH      : Coordinates of the center of heliostats (list of point classes)
+    PR      : Coordinate of the center of the receiver (point class)
+    HSX     : Heliostat size in x axis (kilometer)
+    HSY     : Heliostat size in y axis (kilometer)
+    REF     : reflectivity of the heliostats
+    HTYPE   : If specified must be a class heliostat
+    LMTF    : Under development
     return a list with Entity/GroupE object
     '''
-    
+
     lObj = []
 
     # Case where the heliostat is totally plane
@@ -1025,7 +1055,8 @@ def generateHfP(THEDEG=0., PHIDEG = 0., PH = [Point(0., 0., 0.)], PR = Point(0.,
         # Generate all the facets and store them as entity object in a list 
         for i in range (0, len(PH)):
             H0 = Heliostat(SPX=SPX, SPY=SPY, HSX=HSX, HSY=HSY, CURVE_FL=CURVE_FL, POS=PH[i], REF=REF)
-            TLE = generateLEfH(HELIO=H0, PR=PR, THEDEG=THEDEG, PHIDEG=PHIDEG)
+            if LMTF is None: TLE = generateLEfH(HELIO=H0, PR=PR, THEDEG=THEDEG, PHIDEG=PHIDEG)
+            else: TLE = generateLEfH(HELIO=H0, PR=PR, THEDEG=THEDEG, PHIDEG=PHIDEG, MTF = LMTF[i])
             GTEMP = GroupE(LE = TLE)
             lObj.append(GTEMP)
     else:
@@ -1036,7 +1067,7 @@ def generateHfP(THEDEG=0., PHIDEG = 0., PH = [Point(0., 0., 0.)], PR = Point(0.,
 
 def generateHfA(THEDEG=0., PHIDEG = 0., PR = Point(0., 0., 50.), MINANG=0., \
                 MAXANG=360., GAPDEG = 5., FDRH = 0.1, NBH = 10, GAPDIST = 0.01, \
-                HSX = 0.001, HSY = 0.001, PILLH = 0.006, REF = 1, HTYPE=None):
+                HSX = 0.001, HSY = 0.001, PILLH = 0.006, REF = 1, ROUGH=0, HTYPE=None, LMTF = None):
     '''
     Definition of generateHfA
 
@@ -1112,7 +1143,7 @@ def generateHfA(THEDEG=0., PHIDEG = 0., PR = Point(0., 0., 50.), MINANG=0., \
 
         Hxx = HSX/2; Hyy = HSY/2
         objM = Entity(name = "reflector", \
-                      materialAV = Mirror(reflectivity = REF), \
+                      materialAV = Mirror(reflectivity = REF, roughness = ROUGH), \
                       materialAR = Matte(), \
                       geo = Plane( p1 = Point(-Hxx, -Hyy, 0.),
                                    p2 = Point(Hxx, -Hyy, 0.),
@@ -1147,8 +1178,9 @@ def generateHfA(THEDEG=0., PHIDEG = 0., PR = Point(0., 0., 50.), MINANG=0., \
         
         # Generate all the facets and store them as entity object in a list 
         for i in range (0, len(pH)):
-            H0 = Heliostat(SPX=SPX, SPY=SPY, HSX=HSX, HSY=HSY, CURVE_FL=CURVE_FL, POS=pH[i], REF=REF)
-            TLE = generateLEfH(HELIO=H0, PR=PR, THEDEG=THEDEG, PHIDEG=PHIDEG)
+            H0 = Heliostat(SPX=SPX, SPY=SPY, HSX=HSX, HSY=HSY, CURVE_FL=CURVE_FL, POS=pH[i], REF=REF, ROUGH=ROUGH)
+            if LMTF is None: TLE = generateLEfH(HELIO=H0, PR=PR, THEDEG=THEDEG, PHIDEG=PHIDEG)
+            else: TLE = generateLEfH(HELIO=H0, PR=PR, THEDEG=THEDEG, PHIDEG=PHIDEG, MTF = LMTF[i])
             GTEMP = GroupE(LE = TLE)
             lObj.append(GTEMP)
     else:
