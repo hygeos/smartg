@@ -42,7 +42,6 @@ extern "C" {
 							 struct Profile *prof_oc,
 							 long long *wl_proba_icdf,
 							 void *rng_state
-							 #ifdef OBJ3D
 							 , void *tabObjInfo,
 							 struct IObjets *myObjets,
 							 struct GObj *myGObj,
@@ -50,7 +49,6 @@ extern "C" {
 							 unsigned long long *nbPhCat,
 							 void *wPhCat, void *wPhCat2,
 							 void *wPhLoss
-							 #endif
 							 ) {
 
     // current thread index

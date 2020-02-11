@@ -117,7 +117,6 @@ __global__ void launchKernel(
         struct Profile *prof_oc,
         long long *wl_proba_icdf,
         void *rng_state
-		#ifdef OBJ3D
 		, void *tabObjInfo,
 		struct IObjets *myObjets,
 		struct GObj *myGObj,
@@ -125,7 +124,6 @@ __global__ void launchKernel(
 		unsigned long long *nbPhCat,
 		void *wPhCat, void *wPhCat2,
 		void *wPhLoss
-		#endif
         );
 }
 

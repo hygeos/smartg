@@ -1049,7 +1049,7 @@ class Smartg(object):
 
         # Loop and kernel call
         (NPhotonsInTot, tabPhotonsTot, tabDistTot, tabHistTot, errorcount, 
-         NPhotonsOutTot, sigma, Nkernel, secs_cuda_clock, cMatVisuRecep, categories, vecLoss
+         NPhotonsOutTot, sigma, Nkernel, secs_cuda_clock, cMatVisuRecep, vecLoss, matCats
         ) = loop_kernel(NBPHOTONS, faer, foce,
                         NLVL, NATM, NOCE, MAX_HIST, NLOW, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                         NLAM, NSENSOR, self.double, self.kernel, self.kernel2, p, X0, le, tab_sensor, spectrum,
@@ -1061,50 +1061,26 @@ class Smartg(object):
         attrs['seed'] = SEED
         attrs.update(self.common_attrs)
 
-        # En rapport avec l'implémentation des objets (permet le visuel des res du recept)
-        weightR = 0 # for the attenuation loss
+        # If there is a receiver -> normalization of the signal collected
         if (TC is not None):
-            if (cusL is None):
-                cMatVisuRecep[:][:][:] = (cMatVisuRecep[:][:][:]*nbCx*nbCy)/NBPHOTONS
-                for i in range (0, 8):
-                    categories[(i*5)] /= NBPHOTONS
-                    categories[(i*5)+3] /= NBPHOTONS
-            elif (cusL.dict['LMODE'] != "B" and cusL.dict['LMODE'] != "BR"):
-                weightR = categories[5] # for the att loss, weight of cat2 absorbed by the receiver
-                for i in range (0, 9):
-                    cMatVisuRecep[i][:][:] = cMatVisuRecep[i][:][:] * ((surfLPH)/(TC*TC*NBPHOTONS))
-                for i in range (0, 8):
-                    categories[(i*5)] *= ((surfLPH)/(TC*TC*nbCx*nbCy*NBPHOTONS))
-                    categories[(i*5)+3] *= ((surfLPH)/(TC*TC*nbCx*nbCy*NBPHOTONS))
-            else:
-                normBR = 2
-                if (cusL.dict['TYPE'] == 1):
-                    normBR = 1-np.cos(np.radians(cusL.dict['ALDEG'])) #lambertian sampling normalization
-                elif (cusL.dict['TYPE'] == 2):
-                    normBR = 2*(1-np.cos(np.radians(cusL.dict['ALDEG']))) #isotropic sampling normalization
-                cMatVisuRecep[:][:][:] = (cMatVisuRecep[:][:][:]*nbCx*nbCy*normBR)/(NBPHOTONS*2*(1-np.cos(np.radians(SUN_DISC)))) #np.tan(np.radians(SUN_DISC))**2)#0.0046426*0.0046426)#TC*TC*NBPHOTONS)
-                for i in range (0, 8):
-                    if i != 5 :
-                        categories[(i*5)] /= NBPHOTONS*2*(1-np.cos(np.radians(SUN_DISC)))/normBR#np.tan(np.radians(SUN_DISC))**2#0.0046426*0.0046426
-                        categories[(i*5)+3] /= NBPHOTONS*2*(1-np.cos(np.radians(SUN_DISC)))/normBR#np.tan(np.radians(SUN_DISC))**2#0.0046426*0.0046426
-                    else :
-                        categories[(i*5)] /= NBPHOTONS#categories[(i*5)+1]/2
-                        categories[(i*5)+3] /= NBPHOTONS#categories[(i*5)+1]/2
+            cMatVisuRecep, matCats = normalizeRecIrr(cMatVisuRecep=cMatVisuRecep, matCats=matCats,
+                nbCx=nbCx, nbCy=nbCy, NBPHOTONS=NBPHOTONS, surfLPH=surfLPH, TC=TC, cusL=cusL,
+                SUN_DISC=SUN_DISC)
 
         # If there are no heliostats --> there is no STP and then no analyses of optical losses
-        if (nb_H <= 0):
-            dicSTP = None; vecLoss = None;
+        if (nb_H <= 0 or cusL.dict['LMODE'] != "FF" or TC is None): # Losses only in FF mode for the moment
+            dicSTP = None; vecLoss = None; weightR=0
         else:
-            MZAlt_H = zAlt_H/nb_H
+            MZAlt_H = zAlt_H/nb_H; weightR=matCats[2, 1];
             # dicSTP : tuple incorporating parameters for Solar Tower Power applications
-            dicSTP = {"nb_H":nb_H, "totS_H":totS_H, "surfTOA":surfLPH, "MZAlt_H":MZAlt_H, "vSun":vSun, "wRec":weightR}
+            dicSTP = {"nb_H":nb_H, "totS_H":totS_H, "surfTOA":surfLPH, "MZAlt_H":MZAlt_H, "vSun":vSun, "wRec":matCats[2, 1]}
                 
         # finalization
         output = finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl[:], NPhotonsInTot, errorcount, NPhotonsOutTot,
                           OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, prof_oc,
                           sigma, THVDEG, HORIZ, le=le, flux=flux, back=self.back, 
                           SZA_MAX=SZA_MAX, SUN_DISC=SUN_DISC, hist=hist, cMatVisuRecep=cMatVisuRecep,
-                          cats = categories, losses=vecLoss, dicSTP=dicSTP)
+                          losses=vecLoss, dicSTP=dicSTP, matCats=matCats)
         
         output.set_attr('processing time (s)', (datetime.now() - t0).total_seconds())
 
@@ -1166,7 +1142,7 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
              OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, prof_oc,
              sigma, THVDEG, HORIZ, le=None, flux=None,
              back=False, SZA_MAX=90., SUN_DISC=0, hist=False, cMatVisuRecep = None,
-             cats = None, losses = None, dicSTP = None):
+             losses = None, dicSTP = None, matCats=None):
     '''
     create and return the final output
     '''
@@ -1425,20 +1401,27 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
         m.add_dataset('C5_Receiver', cMatVisuRecep[5][:][:], ['Horizontal pixel', 'Vertical pixel'])
         m.add_dataset('C6_Receiver', cMatVisuRecep[6][:][:], ['Horizontal pixel', 'Vertical pixel'])
         m.add_dataset('C7_Receiver', cMatVisuRecep[7][:][:], ['Horizontal pixel', 'Vertical pixel'])
-        m.add_dataset('C8_Receiver', cMatVisuRecep[8][:][:], ['Horizontal pixel', 'Vertical pixel'])
-        
-        
-    if (cats is not None):
-        m.add_dataset('catWeightPh', np.array([cats[0], cats[5], cats[10], cats[15], cats[20], cats[25],
-                                               cats[30], cats[35]], dtype=np.float64), ['Categories'])
-        m.add_dataset('catNbPh', np.array([cats[1], cats[6], cats[11], cats[16], cats[21], cats[26],
-                                           cats[31], cats[36]], dtype=np.float64), ['Categories'])
-        m.add_dataset('catErrP', np.array([cats[2], cats[7], cats[12], cats[17], cats[22], cats[27], 
-                                           cats[32], cats[37]], dtype=np.float64), ['Categories'])
-        m.add_dataset('catErrAbs', np.array([cats[3], cats[8], cats[13], cats[18], cats[23], cats[28], 
-                                             cats[33], cats[38]], dtype=np.float64), ['Categories'])
-        m.add_dataset('catWeightPh2', np.array([cats[4], cats[9], cats[14], cats[19], cats[24], cats[29], 
-                                                cats[34], cats[39]], dtype=np.float64), ['Categories'])
+        m.add_dataset('C8_Receiver', cMatVisuRecep[8][:][:], ['Horizontal pixel', 'Vertical pixel'])        
+
+    if (matCats is not None):
+        m.add_dataset('cat_PhNb', matCats[:,0], ['CAT'], attrs={'description':
+            'Photons number received (sum of all cats indice 0) +\n' + \
+            '       for each cats (from indice 1 to 8)'})
+        m.add_dataset('cat_w', matCats[:,1], ['CAT'], attrs={'description':
+            'Sum of photons weight (sum of all cats indice 0) +\n' + \
+            '       for each cats (from indice 1 to 8)'})
+        m.add_dataset('cat_w2', matCats[:,2], ['CAT'], attrs={'description':
+            'Sum of Photons weight^2 (sum of all cats indice 0) +\n' + \
+            '       for each cats (from indice 1 to 8)'})
+        m.add_dataset('cat_irr', matCats[:,3], ['CAT'], attrs={'description':
+            'Irradiance at the receiver, must multiply by E_TOA, result is in W/m^2\n' + \
+            '       (sum of all cats indice 0) for each cats (from indice 1 to 8)'})
+        m.add_dataset('cat_errAbs', matCats[:,4], ['CAT'], attrs={'description':
+            'Relative error of the intensity (sum of all cats indice 0) +\n' + \
+            '       for each cats (from indice 1 to 8)'})
+        m.add_dataset('cat_err%', matCats[:,5], ['CAT'], attrs={'description':
+            'Absolute error of the irradiance,  must multiply by E_TOA,\n' + \
+            'result is in W/m^2 (sum of all cats indice 0) + \nfor each cats (from indice 1 to 8)'})
 
     if (losses is not None):
         # find the atm layer where the mean heliostats z altitude is located
@@ -1931,38 +1914,28 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
     nThreadsActive = gpuzeros(1, dtype='int32')
     Counter = gpuzeros(1, dtype='uint64')
     
-    # Initializations linked to objects
+    if double : FDTYPE=np.float64
+    else : FDTYPE=np.float32
+
+    # If a receiver object is used then : initialize matrix and vectors for gains and losses
     if TC is not None:
         nbPhCat = gpuzeros(8, dtype=np.uint64) # vector to fill the number of photons for  each categories
-        if double:
-            wPhCat = gpuzeros(8, dtype=np.float64)  # vector to fill the weight of photons for each categories
-            wPhCat2 = gpuzeros(8, dtype=np.float64)  # sum of squared photons weight for each cats
-            tabObjInfo = gpuzeros((9, nbCx, nbCy), dtype=np.float64)
-            wPhLoss = gpuzeros(5, dtype=np.float64)
-        else:
-            wPhCat = gpuzeros(8, dtype=np.float32)
-            wPhCat2 = gpuzeros(8, dtype=np.float32)
-            tabObjInfo = gpuzeros((9, nbCx, nbCy), dtype=np.float32)
-            wPhLoss = gpuzeros(5, dtype=np.float32)
-        tabMatRecep = np.zeros((9, nbCx, nbCy), dtype=np.float64)  
-        # vecteur comprenant : weightPhotons, nbPhoton, err% et errAbs pour
-        # les 8 categories donc 4 x 8 valeurs = 32. vecCat[0], [1], [2] et [3]
-        # pour la categorie 1 et ainsi de suite...
-        vecCats = np.zeros((40), dtype=np.float64)
-        # vector where: v[0]=Wi, v[1]=Wi/(n.dirS), v[2]=Wo, v[3]=Wr 
+        wPhCat = gpuzeros(8, dtype=FDTYPE)  # vector to fill the weight of photons for each categories
+        wPhCat2 = gpuzeros(8, dtype=FDTYPE)  # sum of squared photons weight for each cats
+        tabObjInfo = gpuzeros((9, nbCx, nbCy), dtype=FDTYPE)
+        wPhLoss = gpuzeros(5, dtype=FDTYPE)
+        tabMatRecep = np.zeros((9, nbCx, nbCy), dtype=np.float64)
+        # Matrix where lines : l0 = SumCats, l1=cat1, l2=cat2, ... l8=cat8
+        # And columns : c0=nbPhotons , c1=weight, c2=weight2, c3=irradiance(in watt), c4=errAbs, c5=err%
+        matCats = np.zeros((9, 6), dtype=np.float64)
+        # vector where: v[0]=Wi, v[1]=Wi/(n.dirS), v[2]=Wo, v[3]=Wr
         vecLoss = np.zeros((5), dtype=np.float64)
     else:
         nbPhCat = gpuzeros(1, dtype=np.uint64)
-        if double:
-            wPhCat = gpuzeros(1, dtype=np.float64)
-            wPhCat2 = gpuzeros(1, dtype=np.float64)
-            wPhLoss = gpuzeros(1, dtype=np.float64)
-            tabObjInfo = gpuzeros((1, 1, 1), dtype=np.float64)
-        else:
-            wPhCat = gpuzeros(1, dtype=np.float32)
-            wPhCat2 = gpuzeros(1, dtype=np.float32)
-            wPhLoss = gpuzeros(1, dtype=np.float32)
-            tabObjInfo = gpuzeros((1, 1, 1), dtype=np.float32)
+        wPhCat = gpuzeros(1, dtype=FDTYPE)
+        wPhCat2 = gpuzeros(1, dtype=FDTYPE)
+        wPhLoss = gpuzeros(1, dtype=FDTYPE)
+        tabObjInfo = gpuzeros((1, 1, 1), dtype=FDTYPE)
         
     # Initialize the array for error counting
     NERROR = 32
@@ -2032,19 +2005,12 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         start_cuda_clock.record()
 
         # kernel launch
-
-        if myObjects0 is not None:
-            kern(spectrum, X0, faer, foce,
-                 errorcount, nThreadsActive, tabPhotons, tabDist, tabHist,
-                 Counter, NPhotonsIn, NPhotonsOut, tabthv, tabphi, tab_sensor,
-                 prof_atm, prof_oc, wl_proba_icdf, rng.state, tabObjInfo, myObjects0, myGObj0, myRObj0, nbPhCat, wPhCat,
-                 wPhCat2, wPhLoss, block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
-        else:
-            kern(spectrum, X0, faer, foce,
-                 errorcount, nThreadsActive, tabPhotons, tabDist, tabHist,
-                 Counter, NPhotonsIn, NPhotonsOut, tabthv, tabphi, tab_sensor,
-                 prof_atm, prof_oc, wl_proba_icdf, rng.state,
-                 block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
+        kern(spectrum, X0, faer, foce,
+             errorcount, nThreadsActive, tabPhotons, tabDist, tabHist,
+             Counter, NPhotonsIn, NPhotonsOut, tabthv, tabphi, tab_sensor,
+             prof_atm, prof_oc, wl_proba_icdf, rng.state, tabObjInfo,
+             myObjects0, myGObj0, myRObj0, nbPhCat, wPhCat, wPhCat2,
+             wPhLoss, block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
 
         end_cuda_clock.record()
         end_cuda_clock.synchronize()
@@ -2057,10 +2023,12 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
             # Tableau de la repartition des poids (photons) sur la surface du recepteur
             tabMatRecep += tabObjInfo[:, :, :].get()
             vecLoss += wPhLoss[:].get()
+            matCats[0,1] += np.sum(wPhCat[:].get())
+            matCats[0,2] += np.sum(wPhCat2[:].get())
             for i in range (0, 8):
                 # Comptage des poids pour chaque categories
-                vecCats[i*5] += wPhCat[i].get();       # sum of wi
-                vecCats[(i*5)+4] += wPhCat2[i].get();  # sum of wi^2
+                matCats[i+1,1] += wPhCat[i].get();    # sum of wi
+                matCats[i+1,2] += wPhCat2[i].get();   # sum of wi²
         
         L = NPhotonsIn   # number of photons launched by last kernel
         NPhotonsInTot += L
@@ -2073,10 +2041,6 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         tabDistTot += T
         if hist :
             tabHistTot = tabHist
-        
-        if (myObjects0 is not None):
-            import sys
-            # print ("Avancement... NPhotonsIn host (smartg) is:", NPhotonsInTot, file = sys.stderr)
 
         N_simu += 1
         if stdev:
@@ -2091,26 +2055,26 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         sphot = np.sum(NPhotonsInTot.get())/alis_norm
         p.update(sphot,
                 'Launched {:.3g} photons'.format(sphot))
+    # END WHILE LOOP
     secs_cuda_clock = secs_cuda_clock*1e-3
 
-    if TC is not None:
-        for i in range (0, 8):
-            # Comptage du nombre de photons pour chaque categories
-            vecCats[(i*5)+1] = nbPhCat[i].get();
-            # Erreur relatives et absolues pour chaque categories
-            if (vecCats[i*5] == 0 or vecCats[(i*5)+1] == 0):
-                vecCats[(i*5)+2] = 0.
-                vecCats[(i*5)+3] = 0.
-            else:    
-                nBis = NBPHOTONS/(NBPHOTONS-1)
-                sum2Z = (vecCats[i*5]*vecCats[i*5])/NBPHOTONS
-                sumZ2 = vecCats[(i*5)+4]
-                vecCats[(i*5)+3] = (nBis * (sumZ2 - sum2Z))**0.5
-                vecCats[(i*5)+2] = (vecCats[(i*5)+3]/vecCats[i*5])*100
+    if TC is not None: # If there is a receiver obj
+        nBis = NBPHOTONS/(NBPHOTONS-1)
+        # Count the total number of photons received and also for each cats
+        matCats[0,0] = np.sum(nbPhCat[:].get())
+        for i in range (0, 8): # Here for each cats
+            matCats[i+1,0] = nbPhCat[i].get();
+        
+        # Relative and absolute error for sum of cats and also for each cats
+        for i in range (0, 9):
+            if (matCats[i,0] != 0 and matCats[i,1] != 0):
+                # Monte carlo err computation see the book of Dunn and Shultis
+                sum2Z = (matCats[i,1]*matCats[i,1])/NBPHOTONS
+                sumZ2 = matCats[i,2]
+                matCats[i,4] = (nBis * (sumZ2 - sum2Z))**0.5 # errAbs not normalized
+                matCats[i,5] = (matCats[i,4]/matCats[i,1])*100 # err%
     else:
-        tabMatRecep = None
-        vecCats = None
-        vecLoss = None
+        tabMatRecep = None; vecLoss = None; matCats = None;
 
     if stdev:
         # finalize the calculation of the standard deviation
@@ -2122,7 +2086,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NOCE, MAX_HIST, NLOW,
         sigma = None
 
     return NPhotonsInTot.get(), tabPhotonsTot.get(), tabDistTot.get(), tabHistTot.get(), errorcount, \
-        NPhotonsOutTot.get(), sigma, N_simu, secs_cuda_clock, tabMatRecep, vecCats, vecLoss
+        NPhotonsOutTot.get(), sigma, N_simu, secs_cuda_clock, tabMatRecep, vecLoss, matCats
 
 
 def impactInit(prof_atm, NLAM, THVDEG, Rter, pp):
@@ -2593,3 +2557,51 @@ def initObj(LGOBJ, vSun, CUSL=None):
     LROBJGPU = to_gpu(LROBJGPU)
 
     return nGObj, nObj, nRObj, surfLPH, nb_H, zAlt_H, totS_H, TC, nbCx, nbCy, LOBJGPU, LGOBJGPU, LROBJGPU
+
+def normalizeRecIrr(cMatVisuRecep, matCats, nbCx, nbCy, NBPHOTONS, surfLPH, TC, cusL, SUN_DISC):
+    '''
+    Description of the function normalizeRecIrr
+
+    This function enables the normalization of the signal collected
+    by a given receiver, to get the irradiance in W/m² a multiplication by 
+    the sun irradiance at TOA remain still needed.
+
+    ==== ARGS:
+    cMatVisuRecep : Matrix containing the signal weight collected by each
+                    cell of a given receiver
+    matCats       : Matrix containing the total signal collected (not splited
+                    in cells) + the signal collected by each categories (see
+                    moulana et al. 2019)
+    nbCx          : Number of receiver cells in x direction
+    nbCy          : Number of receiver cells in y direction
+    NBPHOTONS     : The total number of launched photons
+    TC            : Size of a square cell, (TC -> french word 'Taille Cellule') 
+    cusL          : Custum launching mode class (see cusForward, cusBackward)
+    SUN_DISC      : The half-angle of the sun solid angle
+
+    === RETURN:
+    cMatVisuRecep : With normalized values
+    matCats       : With normalized values
+    '''
+    if (cusL is None):
+        cMatVisuRecep[:][:][:] = (cMatVisuRecep[:][:][:]*nbCx*nbCy)/NBPHOTONS
+        for i in range (0, 9):
+            matCats[i,3] = matCats[i,1]/NBPHOTONS # intensity
+            matCats[i,4] /= NBPHOTONS # Absolute err
+    elif (cusL.dict['LMODE'] == "FF" or cusL.dict['LMODE'] == "RF"):
+        for i in range (0, 9):
+            cMatVisuRecep[i][:][:] = cMatVisuRecep[i][:][:] * ((surfLPH)/(TC*TC*NBPHOTONS))
+            matCats[i,3] = matCats[i,1] * ((surfLPH)/(TC*TC*nbCx*nbCy*NBPHOTONS))
+            matCats[i,4] *= ((surfLPH)/(TC*TC*nbCx*nbCy*NBPHOTONS))
+    elif (cusL.dict['LMODE'] == "B" or cusL.dict['LMODE'] == "BR"):
+        normBR = 2
+        #lambertian sampling normalization
+        if (cusL.dict['TYPE'] == 1): normBR = 1-np.cos(np.radians(cusL.dict['ALDEG']))
+        #isotropic sampling normalization
+        elif (cusL.dict['TYPE'] == 2): normBR = 2*(1-np.cos(np.radians(cusL.dict['ALDEG'])))
+        cMatVisuRecep[:][:][:] = (cMatVisuRecep[:][:][:]*nbCx*nbCy*normBR)/(NBPHOTONS*2*(1-np.cos(np.radians(SUN_DISC))))
+        for i in range (0, 9):
+            matCats[i,3] = (matCats[i,1]*normBR)/(NBPHOTONS*2*(1-np.cos(np.radians(SUN_DISC))))
+            matCats[i,4] /= NBPHOTONS*2*(1-np.cos(np.radians(SUN_DISC)))/normBR
+
+    return cMatVisuRecep, matCats

@@ -89,13 +89,13 @@ def receiver_view(disMatrix, w = False, logI=False, nameFile = None, MTOA = 1320
         plt.savefig(nameFile + '.pdf')  
 
 
-def cat_view(mlut, view = 'all', acc = 6, MTOA = 1320):
+def cat_view(mlut, acc = 6, MTOA = 1320, NCL ="68%"):
     '''
     Definition of cat_view
 
     mlut : mlut table
-    view : Several print choices : all, weight, number, errP and errAbs
     acc  : Accuracy, number of decimal points to show (integer)
+    NCL  : Nominal Confidence Limit
     '''
     m = mlut
     lP = ["(  D  )", "(  H  )", "(  E  )", "(  A  )", "( H+A )", "( H+E )", "( E+A )", "(H+E+A)"]
@@ -103,23 +103,21 @@ def cat_view(mlut, view = 'all', acc = 6, MTOA = 1320):
     strAcc = str(intAcc)
     # strAcc = "{0:." + strAcc + "}"
     strAcc = "%." + strAcc + "f"
+    if (NCL == "68%"): ld = 1
+    elif (NCL == "87%"): ld = 1.5
+    elif (NCL == "95%"): ld = 2
+    elif (NCL == "99%"): ld = 3
+    elif (NCL == "99.99%"): ld = 4
 
-    print("**************************************************")
-    print("Intensity in power unit (Watt) for each categories")
-    print("Irradiance(W/m²)=Intensity(W)/receiverSurface(m²)")
-    print("**************************************************")
+    print("**********************************************************")
+    print("Irradiance in flux unit (Watt/meter²) for each categories")
+    print("Intensity(W) = Irradiance(W/m²) * receiverSurface(m²)")
+    print("**********************************************************")
+    print("SUM_CATS      " + ": irradiance=", strAcc % (mlut['cat_irr'][0]*MTOA), " number_ph=", np.uint64(mlut['cat_PhNb'][0]),
+                  " errAbs=", strAcc % (mlut['cat_errAbs'][0]*MTOA*ld), " err(%)=", strAcc % (mlut['cat_err%'][0]*ld))
     for i in range (0, 8):
-        if (view == 'all'):
-            print("CAT",i+1, lP[i], ": weight=", strAcc % (mlut['catWeightPh'][i]*MTOA), " number=", np.uint64(mlut['catNbPh'][i]),
-                  " err(%)=", strAcc % mlut['catErrP'][i], " errAbs=", strAcc % (mlut['catErrAbs'][i]*MTOA))
-        elif (view == 'weight'):
-            print("CAT",i+1,": weight=", strAcc % (mlut['catWeightPh'][i]*MTOA))
-        elif (view == 'number'):
-            print("CAT",i+1,": number=", np.uint64(mlut['catNbPh'][i]))
-        elif (view == 'errP'):
-            print("CAT",i+1,": err(%)=", strAcc % mlut['catErrP'][i])
-        elif (view == 'errAbs'):
-            print("CAT",i+1,": errAbs=", strAcc % (mlut['catErrAbs'][i]*MTOA))
+        print("CAT",i+1, lP[i], ": irradiance=", strAcc % (mlut['cat_irr'][i+1]*MTOA), " number_ph=", np.uint64(mlut['cat_PhNb'][i+1]),
+              " errAbs=", strAcc % (mlut['cat_errAbs'][i+1]*MTOA*ld), " err(%)=", strAcc % (mlut['cat_err%'][i+1]*ld))
 
 class Mirror(object):
     '''
