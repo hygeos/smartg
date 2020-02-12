@@ -1065,7 +1065,8 @@ def generateHfP(THEDEG=0., PHIDEG = 0., PH = [Point(0., 0., 0.)], PR = Point(0.,
 
 def generateHfA(THEDEG=0., PHIDEG = 0., PR = Point(0., 0., 50.), MINANG=0., \
                 MAXANG=360., GAPDEG = 5., FDRH = 0.1, NBH = 10, GAPDIST = 0.01, \
-                HSX = 0.001, HSY = 0.001, PILLH = 0.006, REF = 1, ROUGH=0, HTYPE=None, LMTF = None):
+                HSX = 0.001, HSY = 0.001, PILLH = 0.006, REF = 1, ROUGH=0,
+                HTYPE=None, LMTF = None, RLPH = False):
     '''
     Definition of generateHfA
 
@@ -1090,7 +1091,8 @@ def generateHfA(THEDEG=0., PHIDEG = 0., PR = Point(0., 0., 50.), MINANG=0., \
     HSY     : Heliostat size in y axis (kilometer)
     PILLH   : Pillar height, distance Ground-Heliostat (kilometer)
     REF     : reflectivity of the heliostats
-    HTYPE : If specified must be a class heliostat
+    HTYPE   : If specified must be a class heliostat
+    RLPH    : I true return also the list with heliostat positions
 
     return a list with Entity/GroupE objects
     '''
@@ -1183,8 +1185,11 @@ def generateHfA(THEDEG=0., PHIDEG = 0., PR = Point(0., 0., 50.), MINANG=0., \
             lObj.append(GTEMP)
     else:
         raise NameError('If HTYPE is specified it must be a Heliostat class!')
-        
-    return lObj
+    
+    if (RLPH):
+        return lObj, pH
+    else:
+        return lObj
 
 def convertLGtoLE(LGOBJ):
     '''

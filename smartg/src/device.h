@@ -215,9 +215,10 @@ __device__ void surfaceRugueuse3D(Photon* ph, IGeo* geoS, struct RNG_State *rngs
 
 __device__ void Obj3DRoughSurf(Photon* ph, int le, float* tabthv, float* tabphi, IGeo* geoS, struct RNG_State *rngstate);
 
-__device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, struct Sensor *tab_sensor);
+__device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss);
 
-__device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geoS, unsigned long long *nbPhCat, void *wPhCat, void *wPhCat2, struct Profile *prof_atm);
+__device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geoS, unsigned long long *nbPhCat,
+								 void *wPhCat, void *wPhCat2, struct Profile *prof_atm, void *wPhLoss);
 #endif
 
 __device__ void countPhoton(Photon* , struct Profile* prof_atm, struct Profile* prof_oc, float*, float *,
