@@ -1142,23 +1142,23 @@ class Profile_base(object):
         z = self.z
         prof.z = znew
         try:
-            prof.P = interp1d(z, self.P)(znew)
+            prof.P = interp1d(z, self.P, bounds_error=False, fill_value=(1012., 1e-5))(znew)
         except ValueError:
             print('Error interpolating ({}, {}) -> ({}, {})'.format(z[0], z[-1], znew[0], znew[-1]))
             print('atm_filename = {}'.format(self.atm_filename))
             raise
-        prof.T = interp1d(z, self.T)(znew)
+        prof.T = interp1d(z, self.T, fill_value='extrapolate')(znew)
 
-        prof.dens_air = interp1d(z, self.dens_air)  (znew)
-        prof.dens_o3  = interp1d(z, self.dens_o3)  (znew)
-        prof.dens_o2  = interp1d(z, self.dens_o2)  (znew)
-        prof.dens_h2o = interp1d(z, self.dens_h2o)  (znew)
-        prof.dens_co2 = interp1d(z, self.dens_co2)  (znew)
-        prof.dens_no2 = interp1d(z, self.dens_no2)  (znew)
-        prof.dens_ch4 = interp1d(z, self.dens_ch4)  (znew)
-        prof.dens_co  = interp1d(z, self.dens_co)  (znew)
-        prof.dens_n2o = interp1d(z, self.dens_n2o)  (znew)
-        prof.dens_n2 = interp1d(z, self.dens_n2)  (znew)
+        prof.dens_air = interp1d(z, self.dens_air, bounds_error=False, fill_value=(0., 0.))  (znew)
+        prof.dens_o3  = interp1d(z, self.dens_o3, bounds_error=False, fill_value=(0., 0.))  (znew)
+        prof.dens_o2  = interp1d(z, self.dens_o2, bounds_error=False, fill_value=(0., 0.))  (znew)
+        prof.dens_h2o = interp1d(z, self.dens_h2o, bounds_error=False, fill_value=(0., 0.))  (znew)
+        prof.dens_co2 = interp1d(z, self.dens_co2, bounds_error=False, fill_value=(0., 0.))  (znew)
+        prof.dens_no2 = interp1d(z, self.dens_no2, bounds_error=False, fill_value=(0., 0.))  (znew)
+        prof.dens_ch4 = interp1d(z, self.dens_ch4, bounds_error=False, fill_value=(0., 0.))  (znew)
+        prof.dens_co  = interp1d(z, self.dens_co, bounds_error=False, fill_value=(0., 0.))  (znew)
+        prof.dens_n2o = interp1d(z, self.dens_n2o, bounds_error=False, fill_value=(0., 0.))  (znew)
+        prof.dens_n2  = interp1d(z, self.dens_n2, bounds_error=False, fill_value=(0., 0.))  (znew)
         prof.RH_cst   = self.RH_cst
 
         return prof

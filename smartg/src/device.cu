@@ -2426,7 +2426,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 					delta= fabs(tauBis - get_OD(BEERd, prof_atm[ilayer2-1+ph->ilam*(NATMd+1)])) ;
 					epsilon = __fdividef(delta, delta_i);
 					
-					ab = prof_atm[NATMd+ph->ilam*(NATMd+1)].OD_abs - 
+					float ab = prof_atm[NATMd+ph->ilam*(NATMd+1)].OD_abs - 
 						(epsilon * (prof_atm[ilayer2+ph->ilam*(NATMd+1)].OD_abs - prof_atm[ilayer2-1+ph->ilam*(NATMd+1)].OD_abs) +
 						 prof_atm[ilayer2-1+ph->ilam*(NATMd+1)].OD_abs);
 					// absorption between start and stop
@@ -5379,6 +5379,7 @@ __device__ void countPhoton(Photon* ph,
           //int idx = blockIdx.x * blockDim.x + threadIdx.x;
           unsigned long long counter2;
           counter2=atomicAdd(NPhotonsOut, 1);
+          //counter2=atomicAdd(NPhotonsOut+is, 1);
           if (counter2 >= MAX_HIST) return;
           unsigned long long KK2 = K*(NATM_ABSd+NOCE_ABSd+4+NLOWd+3); /* Number of information per local estmate photon (Record length)*/
           //unsigned long long KK2 = K*(NATMd+NOCEd+4+NLOWd+3); /* Number of information per local estmate photon (Record length)*/
