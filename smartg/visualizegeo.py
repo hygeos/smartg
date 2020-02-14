@@ -119,6 +119,95 @@ def cat_view(mlut, acc = 6, MTOA = 1320, NCL ="68%"):
         print("CAT",i+1, lP[i], ": irradiance=", strAcc % (mlut['cat_irr'][i+1]*MTOA), " number_ph=", np.uint64(mlut['cat_PhNb'][i+1]),
               " errAbs=", strAcc % (mlut['cat_errAbs'][i+1]*MTOA*ld), " err(%)=", strAcc % (mlut['cat_err%'][i+1]*ld))
 
+def nopt_view(mlut, back=False, acc = 6, NCL="68%"):
+    '''
+    Definition of nopt_view
+    '''
+    m = mlut
+    # Number of photons launched
+    NPH = float(m.attrs['NPHOTONS'])
+    # n/(n-1)
+    NBIS = NPH/(NPH-1)
+    k = m['n_cte'][0]
+
+    intAcc = int(acc)
+    strAcc = str(intAcc)
+    strAcc = "%." + strAcc + "f"
+    if (NCL == "68%"): ld = 1
+    elif (NCL == "87%"): ld = 1.5
+    elif (NCL == "95%"): ld = 2
+    elif (NCL == "99%"): ld = 3
+    elif (NCL == "99.99%"): ld = 4
+
+    print("**********************************************")
+    print(" Optical Efficiencies")
+    print("**********************************************")
+
+    if(back == False): # Forward mode ->
+        # Sum of weights
+        w0 = m['wLoss'][0]; w1 = m['wLoss'][1]; w2 = m['wLoss'][2];
+        w3 = m['wLoss'][3]; w4 = m['wLoss'][4]; w5 = m['cat_w'][2];
+        # Sum of (weights²)
+        w0_2 = m['wLoss2'][0]; w1_2 = m['wLoss2'][1]; w2_2 = m['wLoss2'][2];
+        w3_2 = m['wLoss2'][3]; w4_2 = m['wLoss2'][4]; w5_2 = m['cat_w2'][2];
+        # (Sum of weights)² divided by the number of photons
+        sum2Z = [(w0*w0)/NPH, (w1*w1)/NPH, (w2*w2)/NPH, (w3*w3)/NPH, (w4*w4)/NPH, (w5*w5)/NPH]
+        # Sum of (weights²)
+        sumZ2 = [w0_2, w1_2, w2_2, w3_2, w4_2, w5_2]
+        dw = []
+        for i in range (0, len(sum2Z)):
+            dw_temp = ld*NBIS*(sumZ2[i]-sum2Z[i])**0.5
+            dw.append(dw_temp)
+        nopt = Clamp(k*w5, 0, 1)
+        nsha = Clamp(k*w1, 0, 1); ncos = Clamp(w0/w1, 0, 1); nref = Clamp(w2/w0, 0, 1);
+        nspi = Clamp(w3/w2, 0, 1); nblo = Clamp(1-(w4/w3), 0, 1); natm = Clamp(w5/(w3-w4), 0, 1);
+        
+        d_nopt = abs(k)*dw[5]; d_nsha = abs(k)*dw[1]
+        d_ncos = abs(1./w1)*dw[0] + abs(-w0/w1**2)*dw[1]
+        d_nref = abs(1./w0)*dw[2] + abs(-w2/w0**2)*dw[0]
+        d_nspi = abs(1./w2)*dw[3] + abs(-w3/w2**2)*dw[2]
+        d_nblo = abs(-1./w3)*dw[4] + abs(w4/w3**2)*dw[3]
+        d_natm = abs(1./(w3-w4))*dw[5] + abs(-w5/(w3-w4)**2)*dw[3] + abs(w5/(w3-w4)**2)*dw[4]
+        print("nopt =", strAcc % nopt, ", errAbs =", strAcc % d_nopt, ", err% =", strAcc % ((d_nopt/nopt)*100))
+        print("nsha =", strAcc % nsha, ", errAbs =", strAcc % d_nsha, ", err% =", strAcc % ((d_nsha/nsha)*100))
+        print("ncos =", strAcc % ncos, ", errAbs =", strAcc % d_ncos, ", err% =", strAcc % ((d_ncos/ncos)*100))
+        print("nref =", strAcc % nref, ", errAbs =", strAcc % d_nref, ", err% =", strAcc % ((d_nref/nref)*100))
+        print("nspi =", strAcc % nspi, ", errAbs =", strAcc % d_nspi, ", err% =", strAcc % ((d_nspi/nspi)*100))
+        print("nblo =", strAcc % nblo, ", errAbs =", strAcc % d_nblo, ", err% =", strAcc % ((d_nblo/nblo)*100))
+        print("natm =", strAcc % natm, ", errAbs =", strAcc % d_natm, ", err% =", strAcc % ((d_natm/natm)*100))
+    else: # Backward mode ->
+        # Sum of weights
+        w0 = m['wLoss'][0]; w1 = m['wLoss'][1]; w2 = m['wLoss'][2]; w3 = m['cat_w'][2];
+        # Sum of (weights²)
+        w0_2 = m['wLoss2'][0]; w1_2 = m['wLoss2'][1]; w2_2 = m['wLoss2'][2]; w3_2 = m['cat_w2'][2];
+        # (Sum of weights)² divided by the number of photons
+        sum2Z = [(w0*w0)/NPH, (w1*w1)/NPH, (w2*w2)/NPH, (w3*w3)/NPH]
+        # Sum of (weights²)
+        sumZ2 = [w0_2, w1_2, w2_2, w3_2]
+        dw = []
+        for i in range (0, len(sum2Z)):
+            dw_temp = ld*NBIS*(sumZ2[i]-sum2Z[i])**0.5
+            dw.append(dw_temp)
+        nopt = Clamp(k*w3, 0, 1)
+        ncos = Clamp(w2/w1, 0, 1); nref = Clamp(w2/w0, 0, 1);
+        nsbsa = Clamp((k*w3)/(ncos*nref), 0, 1)
+
+        d_nopt = abs(k)*dw[3]
+        d_ncos = abs(1./w1)*dw[2] + abs(-w2/(w1*w1))*dw[1]
+        d_nref = abs(1./w0)*dw[2] + abs(-w2/(w0*w0))*dw[0]
+
+        # d_nsbsa = abs(k/(ncos*nref))*dw[3] + abs((-k*w3)/(ncos*ncos*nref))*d_ncos + \
+        #           abs((-k*w3)/(ncos*nref*nref))*d_nref
+
+        d_nsbsa = abs((k*w1*w0)/(w2*w2))*dw[3] + abs((k*w3*w0)/(w2*w2))*dw[1] + \
+                  abs((k*w3*w1)/(w2*w2))*dw[0] + abs((-2.*k*w1*w0)/(w2*w2*w2))*dw[2]
+        print("nopt =", strAcc % nopt, ", errAbs =", strAcc % d_nopt, ", err% =", strAcc % ((d_nopt/nopt)*100))
+        print("ncos =", strAcc % ncos, ", errAbs =", strAcc % d_ncos, ", err% =", strAcc % ((d_ncos/ncos)*100))
+        print("nref =", strAcc % nref, ", errAbs =", strAcc % d_nref, ", err% =", strAcc % ((d_nref/nref)*100))
+        print("nsbsa =", strAcc % nsbsa, ", errAbs =", strAcc % d_nsbsa, ", err% =", strAcc % ((d_nsbsa/nsbsa)*100))
+        print("naatm =", strAcc % m['n_aatm'][0], " -> analytic approx of natm")
+
+
 class Mirror(object):
     '''
     Definition of Mirror
@@ -320,6 +409,7 @@ class Entity(object):
             self.transformation = transformation
             self.bboxGPmin = bboxGPmin
             self.bboxGPmax = bboxGPmax
+        self.check = "Entity"
 
     def __str__(self):
         return 'The entity is a ' + str(self.name) + ' with the following carac:\n' + \
@@ -383,7 +473,8 @@ class GroupE(object):
             self.bboxGPmax = LE[0].bboxGPmax
         else:
             self.bboxGPmin = BBOX[0]
-            self.bboxGPmax = BBOX[1]           
+            self.bboxGPmax = BBOX[1]
+        self.check = "GroupE"
 
 def findRots(UI=None, UO=None, vecNF=None):
     '''
@@ -691,7 +782,7 @@ def Ref_Fresnel(dirEnt, geoTrans):
     return V
 
 
-def Analyse_create_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM'):
+def Analyse_create_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYCOLOR = 'r', SR_VIEW=1):
     '''
     Definition of Analyse_create_entity
 
@@ -702,6 +793,8 @@ def Analyse_create_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM'):
     PHIDEG  : The azimuth angle of the sun
     PlaneDM : Plane Draw method, two choices 'FM' (First Method) or 'SM'(seconde
               Method). By default 'SM', 'FM' is useful for debug issues
+    RAYCOLR : Sun rays color i.g. 'r', 'b', ...
+    SR_VIEW : Split the number of sun rays that can be seen in the figure
 
     return a matplotlib fig
     '''
@@ -771,7 +864,7 @@ def Analyse_create_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM'):
                                                  d = Vector( sunDirection.x, sunDirection.y, sunDirection.z ), end = 1200.))
 
     # create the matplotlib figure
-    fig = plt.figure()
+    fig = plt.figure()#figsize=[128, 96])
     ax = fig.add_subplot(111, projection=Axes3D.name)
     ax.scatter([-1,1], [-1,1], [-1,1], alpha=0.0)
     
@@ -945,13 +1038,14 @@ def Analyse_create_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM'):
 
     # ==============================================
     # plot all the geometries
+    
     for i in range(0, LMir):
-        if (atLeastOneInt[i]):
-            ax.plot(xr[i], yr[i], zr[i], color='r', linewidth=1)
+        if (atLeastOneInt[i] and i%SR_VIEW ==0):
+            ax.plot(xr[i], yr[i], zr[i], color=RAYCOLOR, linewidth=1)
 
     for i in range(0, LMir2):
-        if (atLeastOneInt2[i]):
-            ax.plot(xr2[i], yr2[i], zr2[i], color='r', linewidth=1)
+        if (atLeastOneInt2[i] and i%SR_VIEW ==0):
+            ax.plot(xr2[i], yr2[i], zr2[i], color=RAYCOLOR, linewidth=1)
 
     # Enable generic local visualization (part3)
     if (len(E) == 1):
@@ -987,7 +1081,8 @@ def Analyse_create_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM'):
     ax.set_ylabel('Y Label')
     ax.set_zlabel('Z Label')
     # Show the geometries
-    return ax
+    fig = ax.get_figure()
+    return fig
 
 def generateHfP(THEDEG=0., PHIDEG = 0., PH = [Point(0., 0., 0.)], PR = Point(0., 0., 0.), \
                 HSX = 0.001, HSY = 0.001, REF = 1, ROUGH=0, HTYPE = None, LMTF = None):
@@ -1046,7 +1141,7 @@ def generateHfP(THEDEG=0., PHIDEG = 0., PH = [Point(0., 0., 0.)], PR = Point(0.,
                                                    rotationOrder = "ZYX")
             lObj.append(objMi)
     # Case where the heliostat is composed by facets (i.g. to consider the curvature)
-    elif(isinstance(HTYPE, Heliostat)):
+    else:
         # Take the commun parameters of all heliostats
         SPX = HTYPE.sPx; SPY = HTYPE.sPy; HSX = HTYPE.hSx; HSY = HTYPE.hSy; CURVE_FL = HTYPE.curveFL;
         
@@ -1057,8 +1152,6 @@ def generateHfP(THEDEG=0., PHIDEG = 0., PH = [Point(0., 0., 0.)], PR = Point(0.,
             else: TLE = generateLEfH(HELIO=H0, PR=PR, THEDEG=THEDEG, PHIDEG=PHIDEG, MTF = LMTF[i])
             GTEMP = GroupE(LE = TLE)
             lObj.append(GTEMP)
-    else:
-        raise NameError('If HTYPE is specified it must be a Heliostat class!')
 
     return lObj
 
@@ -1172,7 +1265,7 @@ def generateHfA(THEDEG=0., PHIDEG = 0., PR = Point(0., 0., 50.), MINANG=0., \
             lObj.append(objMi)
         
     # Case where the heliostat is composed by facets (i.g. to consider the curvature)
-    elif(isinstance(HTYPE, Heliostat)):
+    else:
         # Take the commun parameters of all heliostats
         SPX = HTYPE.sPx; SPY = HTYPE.sPy; HSX = HTYPE.hSx; HSY = HTYPE.hSy; CURVE_FL = HTYPE.curveFL;
         
@@ -1183,8 +1276,6 @@ def generateHfA(THEDEG=0., PHIDEG = 0., PR = Point(0., 0., 50.), MINANG=0., \
             else: TLE = generateLEfH(HELIO=H0, PR=PR, THEDEG=THEDEG, PHIDEG=PHIDEG, MTF = LMTF[i])
             GTEMP = GroupE(LE = TLE)
             lObj.append(GTEMP)
-    else:
-        raise NameError('If HTYPE is specified it must be a Heliostat class!')
     
     if (RLPH):
         return lObj, pH

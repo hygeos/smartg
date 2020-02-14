@@ -786,9 +786,9 @@ class Smartg(object):
             if (surfLPH_RF is not None): surfLPH = surfLPH_RF
 
         else:
-            myObjects0 = to_gpu(np.zeros(1, dtype=np.float32, order='C'))
-            myGObj0 = to_gpu(np.zeros(1, dtype=np.float32, order='C'))
-            myRObj0 = to_gpu(np.zeros(1, dtype=np.float32, order='C'))
+            myObjects0 = gpuzeros(1, dtype='int32')
+            myGObj0 = gpuzeros(1, dtype='int32')
+            myRObj0 = gpuzeros(1, dtype='int32')
             nObj = 0; nGObj=0; nRObj=0; Pmin_x = None; Pmin_y = None; Pmin_z = None;
             Pmax_x = None; Pmax_y = None; Pmax_z = None;
             IsAtm = None; TC = None; nbCx = 10; nbCy = 10; nb_H = 0
@@ -1061,7 +1061,7 @@ class Smartg(object):
 
         # Loop and kernel call
         (NPhotonsInTot, tabPhotonsTot, tabDistTot, tabHistTot, errorcount, 
-         NPhotonsOutTot, sigma, Nkernel, secs_cuda_clock, cMatVisuRecep, vecLoss, matCats
+         NPhotonsOutTot, sigma, Nkernel, secs_cuda_clock, cMatVisuRecep, vecLoss, matCats, matLoss
         ) = loop_kernel(NBPHOTONS, faer, foce,
                         NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX_HIST, NLOW, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                         NLAM, NSENSOR, self.double, self.kernel, None, p, X0, le, tab_sensor, spectrum,
@@ -1092,7 +1092,7 @@ class Smartg(object):
                           OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, prof_oc,
                           sigma, THVDEG, HORIZ, le=le, flux=flux, back=self.back, 
                           SZA_MAX=SZA_MAX, SUN_DISC=SUN_DISC, hist=hist, cMatVisuRecep=cMatVisuRecep,
-                          losses=vecLoss, dicSTP=dicSTP, matCats=matCats)
+                          losses=vecLoss, dicSTP=dicSTP, matCats=matCats, matLoss=matLoss)
         
         output.set_attr('processing time (s)', (datetime.now() - t0).total_seconds())
 
@@ -1154,7 +1154,7 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
              OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, prof_oc,
              sigma, THVDEG, HORIZ, le=None, flux=None,
              back=False, SZA_MAX=90., SUN_DISC=0, hist=False, cMatVisuRecep = None,
-             losses = None, dicSTP = None, matCats=None):
+             losses = None, dicSTP = None, matCats=None, matLoss=None):
     '''
     create and return the final output
     '''
@@ -1491,6 +1491,7 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
             nsbsa = P_cud/(P_pyt*ncos*nref)
             m.add_dataset('n_sbsa', np.array([nsbsa], dtype=np.float64), ['Shadow, blocking, spillage, atmos Efficiencies'])
             m.add_dataset('n_opt', np.array([ncos*nref*nsbsa], dtype=np.float64), ['Optical Efficiency'])
+            k = P_cud/(matCats[2,1]*P_pyt)
         else:
             # collecte the weight from the photons reaching the heliostats if there is not cos effect (cuda), then convert to power
             P_cud = (losses[1]*dicSTP["surfTOA"])/float(NPhotonsInTot)
@@ -1506,9 +1507,13 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
             m.add_dataset('n_blo', np.array([nblo], dtype=np.float64), ['blocking Efficiency'])
             m.add_dataset('n_opt', np.array([nsha*ncos*nref*nspi*natm*nblo], dtype=np.float64), ['Optical Efficiency'])
             m.add_dataset('n_atmo', np.array([natm], dtype=np.float64), ['Atmospheric Efficiency'])
+            k = dicSTP["surfTOA"]/(float(NPhotonsInTot)*P_pyt)
+        m.add_dataset('n_cte', np.array([k], dtype=np.float64), ['Constante used for losses error'])
         m.add_dataset('n_cos', np.array([ncos], dtype=np.float64), ['Cosine Efficiency'])
         m.add_dataset('n_ref', np.array([nref], dtype=np.float64), ['Reflection Efficiency'])
-        
+        m.add_dataset('wLoss', np.array(matLoss[:,0], dtype=np.float64), ['Vector with opt weights'])
+        m.add_dataset('wLoss2', np.array(matLoss[:,1], dtype=np.float64), ['Vector with opt weights²'])
+
     return m
 
 
@@ -1990,17 +1995,20 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         wPhCat2 = gpuzeros(8, dtype=FDTYPE)  # sum of squared photons weight for each cats
         tabObjInfo = gpuzeros((9, nbCx, nbCy), dtype=FDTYPE)
         wPhLoss = gpuzeros(5, dtype=FDTYPE)
+        wPhLoss2 = gpuzeros(5, dtype=FDTYPE)
         tabMatRecep = np.zeros((9, nbCx, nbCy), dtype=np.float64)
         # Matrix where lines : l0 = SumCats, l1=cat1, l2=cat2, ... l8=cat8
         # And columns : c0=nbPhotons , c1=weight, c2=weight2, c3=irradiance(in watt), c4=errAbs, c5=err%
         matCats = np.zeros((9, 6), dtype=np.float64)
         # vector where: v[0]=Wi, v[1]=Wi/(n.dirS), v[2]=Wo, v[3]=Wr
         vecLoss = np.zeros((5), dtype=np.float64)
+        matLoss = np.zeros((5, 2), dtype=np.float64)
     else:
         nbPhCat = gpuzeros(1, dtype=np.uint64)
         wPhCat = gpuzeros(1, dtype=FDTYPE)
         wPhCat2 = gpuzeros(1, dtype=FDTYPE)
         wPhLoss = gpuzeros(1, dtype=FDTYPE)
+        wPhLoss2 = gpuzeros(1, dtype=FDTYPE)
         tabObjInfo = gpuzeros((1, 1, 1), dtype=FDTYPE)
         
     # Initialize the array for error counting
@@ -2064,6 +2072,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         wPhCat.fill(0)
         wPhCat2.fill(0)
         wPhLoss.fill(0)
+        wPhLoss2.fill(0)
         nThreadsActive.fill(XBLOCK*XGRID)
         
         start_cuda_clock = cuda.Event()
@@ -2076,7 +2085,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
              Counter, NPhotonsIn, NPhotonsOut, tabthv, tabphi, tab_sensor,
              prof_atm, prof_oc, cell_atm, cell_oc, wl_proba_icdf, rng.state, tabObjInfo,
              myObjects0, myGObj0, myRObj0, nbPhCat, wPhCat, wPhCat2,
-             wPhLoss, block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
+             wPhLoss, wPhLoss2, block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
 
         end_cuda_clock.record()
         end_cuda_clock.synchronize()
@@ -2089,6 +2098,8 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
             # Tableau de la repartition des poids (photons) sur la surface du recepteur
             tabMatRecep += tabObjInfo[:, :, :].get()
             vecLoss += wPhLoss[:].get()
+            matLoss[:,0] += wPhLoss[:].get()
+            matLoss[:,1] += wPhLoss2[:].get()
             matCats[0,1] += np.sum(wPhCat[:].get())
             matCats[0,2] += np.sum(wPhCat2[:].get())
             for i in range (0, 8):
@@ -2140,7 +2151,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
                 matCats[i,4] = (nBis * (sumZ2 - sum2Z))**0.5 # errAbs not normalized
                 matCats[i,5] = (matCats[i,4]/matCats[i,1])*100 # err%
     else:
-        tabMatRecep = None; vecLoss = None; matCats = None;
+        tabMatRecep = None; vecLoss = None; matCats = None; matLoss=None
 
     if stdev:
         # finalize the calculation of the standard deviation
@@ -2152,7 +2163,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         sigma = None
 
     return NPhotonsInTot.get(), tabPhotonsTot.get(), tabDistTot.get(), tabHistTot.get(), errorcount, \
-        NPhotonsOutTot.get(), sigma, N_simu, secs_cuda_clock, tabMatRecep, vecLoss, matCats
+        NPhotonsOutTot.get(), sigma, N_simu, secs_cuda_clock, tabMatRecep, vecLoss, matCats, matLoss
 
 
 def impactInit(prof_atm, NLAM, THVDEG, Rter, pp):
@@ -2374,11 +2385,11 @@ def initObj(LGOBJ, vSun, CUSL=None):
         LGOBJGPU['bPminx'][i] = LGOBJ[i].bboxGPmin.x; LGOBJGPU['bPminy'][i] = LGOBJ[i].bboxGPmin.y;
         LGOBJGPU['bPminz'][i] = LGOBJ[i].bboxGPmin.z; LGOBJGPU['bPmaxx'][i] = LGOBJ[i].bboxGPmax.x;
         LGOBJGPU['bPmaxy'][i] = LGOBJ[i].bboxGPmax.y; LGOBJGPU['bPmaxz'][i] = LGOBJ[i].bboxGPmax.z;
-        if isinstance(LGOBJ[i], GroupE):
+        if (LGOBJ[i].check == "GroupE"):
             LGOBJGPU['nObj'][i] = LGOBJ[i].nob
             ind += LGOBJ[i].nob
             LOBJ.extend(LGOBJ[i].le)
-        elif isinstance(LGOBJ[i], Entity):
+        elif (LGOBJ[i].check == "Entity"):
             LGOBJGPU['nObj'][i] = 1
             ind += 1
             LOBJ.append(LGOBJ[i])

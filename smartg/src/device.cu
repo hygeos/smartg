@@ -51,7 +51,8 @@ extern "C" {
 							 struct IObjets *myRObj,
 							 unsigned long long *nbPhCat,
 							 void *wPhCat, void *wPhCat2,
-							 void *wPhLoss
+							 void *wPhLoss,
+							 void *wPhLoss2
 							 ) {
 
     // current thread index
@@ -250,7 +251,7 @@ extern "C" {
 
 		#if defined(BACK) && defined(OBJ3D)
 		if (count_level == UPTOA and LMODEd == 4) // the photon reach TOA
-		{ countPhotonObj3D(&ph, 0, tabObjInfo, &geoStruc, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss);}
+		{ countPhotonObj3D(&ph, 0, tabObjInfo, &geoStruc, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2);}
         #endif
 
 		__syncthreads();
@@ -386,7 +387,7 @@ extern "C" {
 
                             // Finally count the virtual photon
 							#if defined(BACK) && defined(OBJ3D)
-							 countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss);
+							 countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2);
 							#endif
                             countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, count_level_le,
                                     errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
@@ -709,7 +710,7 @@ extern "C" {
 		{
 
 			if (geoStruc.type == RECEIVER and LMODEd != 4) // this is a receiver
-			{ countPhotonObj3D(&ph, 0, tabObjInfo, &geoStruc, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss);}
+			{ countPhotonObj3D(&ph, 0, tabObjInfo, &geoStruc, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2);}
 
 			// For losses count
 			ph.weight_loss[0] = ph.weight;
@@ -791,7 +792,7 @@ extern "C" {
 					ph.weight_loss[3] = ph.weight;
 				else
 					ph.weight_loss[3] = 0.F;
-				countLoss(&ph, &geoStruc, wPhLoss);
+				countLoss(&ph, &geoStruc, wPhLoss, wPhLoss2);
 			}
 			#endif
 
@@ -4692,7 +4693,7 @@ __device__ void Obj3DRoughSurf(Photon* ph, int le, float* tabthv, float* tabphi,
 	
 } // FUNCTION OBJ3DROUGHSURF
 
-__device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss)
+__device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, void *wPhLoss2)
 {
 	// Find the incident flux at the mirror before the cosine effect
 	#ifdef BACK
@@ -4705,66 +4706,68 @@ __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss)
 
 	#ifdef DOUBLE
 	double weightE, weightS, weightECos;
-	double *wPhLossC;
+	double *wPhLossC; double *wPhLossC2; double4 stokes;
 	
-	wPhLossC = (double*)wPhLoss;              // - table comprinsing different weights
-	weightE = (double)ph->weight_loss[0];     // - incident flux after cos effect
-	weightS = (double)ph->weight_loss[2];     // - flux reflected after considering ref loss
-	weightECos = (double)ph->weight_loss[1];  // - incident flux before cos effect
+	stokes = make_double4(ph->stokes.x, ph->stokes.y, ph->stokes.z, ph->stokes.w);
+
+	wPhLossC = (double*)wPhLoss; wPhLossC2 = (double*)wPhLoss2;          // - table comprinsing different weights
+	weightE = (double)ph->weight_loss[0]*double(stokes.x + stokes.y);    // - incident flux after cos effect
+	weightS = (double)ph->weight_loss[2]*double(stokes.x + stokes.y);    // - flux reflected after considering ref loss
+	weightECos = (double)ph->weight_loss[1]*double(stokes.x + stokes.y); // - incident flux before cos effect
 	#ifndef BACK
 	double weightSpi, weightBlo;
-	weightSpi = (double)ph->weight_loss[3];   // - flux weight if the reflected flux Ws succeed the
-	                                          //   intersection test with the receiver (spi loss)
-	weightBlo = (double)ph->weight_loss[4];   // - Wspi which is blocked by another object
+	weightSpi = (double)ph->weight_loss[3]*double(stokes.x + stokes.y);  // - flux weight if the reflected flux Ws succeed the
+	                                                                     //   intersection test with the receiver (spi loss)
+	weightBlo = (double)ph->weight_loss[4]*double(stokes.x + stokes.y);  // - Wspi which is blocked by another object
 	#endif
 	#else
 	float weightE, weightS, weightECos;
 	float *wPhLossC;
 	
 	wPhLossC = (float*)wPhLoss;
-	weightE = (float)ph->weight_loss[0];
-	weightS = (float)ph->weight_loss[2];
-	weightECos = (float)ph->weight_loss[1];
+	weightE = (float)ph->weight_loss[0]*float(ph->stokes.x + ph->stokes.y);
+	weightS = (float)ph->weight_loss[2]*float(ph->stokes.x + ph->stokes.y);
+	weightECos = (float)ph->weight_loss[1]*float(ph->stokes.x + ph->stokes.y);
 	#ifndef BACK
 	float weightSpi, weightBlo;
-	weightSpi = (float)ph->weight_loss[3];
-	weightBlo = (float)ph->weight_loss[4];
+	weightSpi = (float)ph->weight_loss[3]*float(ph->stokes.x + ph->stokes.y);
+	weightBlo = (float)ph->weight_loss[4]*float(ph->stokes.x + ph->stokes.y);
 	#endif
 	#endif
 
     #if !defined(DOUBLE) || (defined(DOUBLE) && (__CUDA_ARCH__ >= 600))
 	if (ph->H < 2) // If this is the first time that a photon is reaching a heliostat
 	{
-		atomicAdd(wPhLossC, weightE);       // We
-		atomicAdd(wPhLossC+1, weightECos);  // We/cos(Theta)
-		atomicAdd(wPhLossC+2, weightS);     // Ws
+		atomicAdd(wPhLossC, weightE); atomicAdd(wPhLossC2, weightE*weightE);               // We and We²
+		atomicAdd(wPhLossC+1, weightECos); atomicAdd(wPhLossC2+1, weightECos*weightECos);  // (We/cos(Theta)) and (We/cos(Theta))²
+		atomicAdd(wPhLossC+2, weightS); atomicAdd(wPhLossC2+2, weightS*weightS);           // Ws and Ws²
 		#ifndef BACK
-		atomicAdd(wPhLossC+3, weightSpi);   // Wspi
+		atomicAdd(wPhLossC+3, weightSpi); atomicAdd(wPhLossC2+3, weightSpi*weightSpi);     // Wspi and Wspi²
 		#endif
 	}
 	#ifndef BACK
 	else
-		atomicAdd(wPhLossC+4, weightBlo);   // Wblo where blocking efficiency = (Wspi-Wblo)/Wspi
+		atomicAdd(wPhLossC+4, weightBlo); atomicAdd(wPhLossC2+4, weightBlo*weightBlo);     // Wblo and Wblo²
 	#endif
     #else
 	if (ph->H < 2) // If this is the first time that a photon is reaching a heliostat
 	{
-		DatomicAdd(wPhLossC, weightE);       // We
-		DatomicAdd(wPhLossC+1, weightECos);  // We/cos(Theta)
-		DatomicAdd(wPhLossC+2, weightS);     // Ws
+		DatomicAdd(wPhLossC, weightE); DatomicAdd(wPhLossC2, weightE*weightE);
+		DatomicAdd(wPhLossC+1, weightECos); DatomicAdd(wPhLossC2+1, weightECos*weightECos);
+		DatomicAdd(wPhLossC+2, weightS); DatomicAdd(wPhLossC2+2, weightS*weightS);
 		#ifndef BACK
-		DatomicAdd(wPhLossC+3, weightSpi);   // Wspi
+		DatomicAdd(wPhLossC+3, weightSpi); DatomicAdd(wPhLossC2+3, weightSpi*weightSpi);
 		#endif
 	}
 	#ifndef BACK
 	else
-		DatomicAdd(wPhLossC+4, weightBlo);   // Wblo where blocking efficiency = (Wspi-Wblo)/Wspi
+		DatomicAdd(wPhLossC+4, weightBlo); DatomicAdd(wPhLossC2+4, weightBlo*weightBlo);
 	#endif
 	#endif
 }
 
 __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geoS, unsigned long long *nbPhCat,
-				void *wPhCat, void *wPhCat2, struct Profile *prof_atm, void *wPhLoss)
+		void *wPhCat, void *wPhCat2, struct Profile *prof_atm, void *wPhLoss, void *wPhLoss2)
 {
 	int indI = 0; int indJ = 0;
 	float3 p_t; float sizeX = nbCx*TCd; float sizeY = nbCy*TCd;
@@ -4796,7 +4799,7 @@ __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geo
 		if ((cosANGD-0.00000001173) > cosPHSUN) {return;}
 		if (cosANGD > cosPHSUN and SUN_DISCd < 1 and ph->H == 0 and ph->S == 0 and ph->E == 0) {ph->weight *= 0.3;}
 		if (ph->direct == 0)
-			countLoss(ph, geoS, wPhLoss);
+			countLoss(ph, geoS, wPhLoss, wPhLoss2);
 	}
 	else
 	{
