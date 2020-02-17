@@ -1113,7 +1113,7 @@ def generateHfP(THEDEG=0., PHIDEG = 0., PH = [Point(0., 0., 0.)], PR = Point(0.,
 
         Hxx = HSX/2; Hyy = HSY/2
         objM = Entity(name = "reflector", \
-                      materialAV = Mirror(reflectivity = REF), \
+                      materialAV = Mirror(reflectivity = REF, roughness = ROUGH), \
                       materialAR = Matte(reflectivity = 0.), \
                       geo = Plane( p1 = Point(-Hxx, -Hyy, 0.),
                                    p2 = Point(Hxx, -Hyy, 0.),
@@ -1147,7 +1147,7 @@ def generateHfP(THEDEG=0., PHIDEG = 0., PH = [Point(0., 0., 0.)], PR = Point(0.,
         
         # Generate all the facets and store them as entity object in a list 
         for i in range (0, len(PH)):
-            H0 = Heliostat(SPX=SPX, SPY=SPY, HSX=HSX, HSY=HSY, CURVE_FL=CURVE_FL, POS=PH[i], REF=REF)
+            H0 = Heliostat(SPX=SPX, SPY=SPY, HSX=HSX, HSY=HSY, CURVE_FL=CURVE_FL, POS=PH[i], REF=REF, ROUGH=ROUGH)
             if LMTF is None: TLE = generateLEfH(HELIO=H0, PR=PR, THEDEG=THEDEG, PHIDEG=PHIDEG)
             else: TLE = generateLEfH(HELIO=H0, PR=PR, THEDEG=THEDEG, PHIDEG=PHIDEG, MTF = LMTF[i])
             GTEMP = GroupE(LE = TLE)
