@@ -871,8 +871,10 @@ class Smartg(object):
         #          
         if isinstance(atm, Atmosphere):
             prof_atm = atm.calc(wl)
-        else:
+        elif (atm is None):
             prof_atm = atm
+        else:
+            raise NameError('atm must be an Atmosphere class or equal to None!')
   
         if prof_atm is not None:
             faer = calculF(prof_atm, NF, DEPO, kind='atm')
@@ -906,11 +908,12 @@ class Smartg(object):
                                       #FOV=cusL.dict['FOV'], TYPE=cusL.dict['TYPE'])]
                 else:
                     sensor2 = [Sensor(POSX=X0.get()[0], POSY=X0.get()[1], POSZ=X0.get()[2], THDEG=180.-THVDEG, PHDEG=PHVDEG+180., LOC='ATMOS')]
-            
-        if isinstance(sensor, Sensor):
+        elif isinstance(sensor, Sensor):
             sensor2=[sensor]
-        if isinstance(sensor, list):
+        elif isinstance(sensor, list):
             sensor2=sensor
+        else:
+            raise NameError('sensor must be a Sensor class, a list or Sensor classes or equal to None!')
 
         NSENSOR=len(sensor2)
 
@@ -932,8 +935,10 @@ class Smartg(object):
         #
         if isinstance(water, IOP_base):
             prof_oc = water.calc(wl)
-        else:
+        elif(water is None):
             prof_oc = water
+        else:
+            raise NameError('water must be an IOP_base class or equal to None!')
 
         if prof_oc is not None:
             foce = calculF(prof_oc, NF, DEPO_WATER, kind='oc')
@@ -1061,7 +1066,7 @@ class Smartg(object):
 
         # Loop and kernel call
         (NPhotonsInTot, tabPhotonsTot, tabDistTot, tabHistTot, errorcount, 
-         NPhotonsOutTot, sigma, Nkernel, secs_cuda_clock, cMatVisuRecep, vecLoss, matCats, matLoss
+         NPhotonsOutTot, sigma, Nkernel, secs_cuda_clock, cMatVisuRecep, matCats, matLoss
         ) = loop_kernel(NBPHOTONS, faer, foce,
                         NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX_HIST, NLOW, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                         NLAM, NSENSOR, self.double, self.kernel, None, p, X0, le, tab_sensor, spectrum,
@@ -1085,14 +1090,14 @@ class Smartg(object):
             dicSTP = {"nb_H":nb_H, "totS_H":totS_H, "surfTOA":surfLPH, "MZAlt_H":MZAlt_H, "vSun":vSun, "wRec":matCats[2, 1],
                       "SREC":SREC, "LPH":cusL.dict['LPH'], "LPR":cusL.dict['LPR']}
         else: # If there are no heliostats --> there is no STP and then no analyses of optical losses
-            dicSTP = None; vecLoss = None; weightR=0
+            dicSTP = None; matLoss = None; weightR=0
                 
         # finalization
         output = finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl[:], NPhotonsInTot, errorcount, NPhotonsOutTot,
                           OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, prof_oc,
                           sigma, THVDEG, HORIZ, le=le, flux=flux, back=self.back, 
                           SZA_MAX=SZA_MAX, SUN_DISC=SUN_DISC, hist=hist, cMatVisuRecep=cMatVisuRecep,
-                          losses=vecLoss, dicSTP=dicSTP, matCats=matCats, matLoss=matLoss)
+                          dicSTP=dicSTP, matCats=matCats, matLoss=matLoss)
         
         output.set_attr('processing time (s)', (datetime.now() - t0).total_seconds())
 
@@ -1154,7 +1159,7 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
              OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, prof_oc,
              sigma, THVDEG, HORIZ, le=None, flux=None,
              back=False, SZA_MAX=90., SUN_DISC=0, hist=False, cMatVisuRecep = None,
-             losses = None, dicSTP = None, matCats=None, matLoss=None):
+             dicSTP = None, matCats=None, matLoss=None):
     '''
     create and return the final output
     '''
@@ -1449,7 +1454,7 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
             'Absolute error of the irradiance,  must multiply by E_TOA,\n' + \
             'result is in W/m^2 (sum of all cats indice 0) + \nfor each cats (from indice 1 to 8)'})
 
-    if (losses is not None):
+    if (matLoss is not None):
         
         # Find the extinction between TOA and heliostats
         if ((dicSTP["LPH"] is None) or (dicSTP["LPR"] is None)):
@@ -1478,8 +1483,8 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
         m.add_dataset('n_tr', np.array([Tr_tau], dtype=np.float64), ['transmission from TOA to H'])
         if (back):
             P_cud = matCats[2, 3]*dicSTP["SREC"] # power collected by the reciever
-            ncos = max(0, min(losses[2]/losses[1], 1))
-            nref = max(0, min(losses[2]/losses[0], 1))
+            ncos = max(0, min(matLoss[2,0]/matLoss[1,0], 1))
+            nref = max(0, min(matLoss[2,0]/matLoss[0,0], 1))
             # === Under developement ->
             if ((dicSTP["LPH"] is not None) and (dicSTP["LPR"] is not None)):
                 naatm=0
@@ -1494,14 +1499,14 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
             k = P_cud/(matCats[2,1]*P_pyt)
         else:
             # collecte the weight from the photons reaching the heliostats if there is not cos effect (cuda), then convert to power
-            P_cud = (losses[1]*dicSTP["surfTOA"])/float(NPhotonsInTot)
+            P_cud = (matLoss[1,0]*dicSTP["surfTOA"])/float(NPhotonsInTot)
             # we can now compute the shadow efficiency
             nsha = max(0, min(P_cud/P_pyt, 1))
-            ncos = max(0, min(losses[0]/losses[1], 1))
-            nref = max(0, min(losses[2]/losses[0], 1))
-            nspi = max(0, min(losses[3]/losses[2], 1))
-            nblo = max(0, min((losses[3]-losses[4])/losses[3], 1))
-            natm = max(0, min(dicSTP["wRec"]/(losses[3]-losses[4]), 1))
+            ncos = max(0, min(matLoss[0,0]/matLoss[1,0], 1))
+            nref = max(0, min(matLoss[2,0]/matLoss[0,0], 1))
+            nspi = max(0, min(matLoss[3,0]/matLoss[2,0], 1))
+            nblo = max(0, min((matLoss[3,0]-matLoss[4,0])/matLoss[3,0], 1))
+            natm = max(0, min(dicSTP["wRec"]/(matLoss[3,0]-matLoss[4,0]), 1))
             m.add_dataset('n_sha', np.array([nsha], dtype=np.float64), ['Shadow Efficiency'])
             m.add_dataset('n_spi', np.array([nspi], dtype=np.float64), ['Spillage Efficiency'])
             m.add_dataset('n_blo', np.array([nblo], dtype=np.float64), ['blocking Efficiency'])
@@ -2001,7 +2006,6 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         # And columns : c0=nbPhotons , c1=weight, c2=weight2, c3=irradiance(in watt), c4=errAbs, c5=err%
         matCats = np.zeros((9, 6), dtype=np.float64)
         # vector where: v[0]=Wi, v[1]=Wi/(n.dirS), v[2]=Wo, v[3]=Wr
-        vecLoss = np.zeros((5), dtype=np.float64)
         matLoss = np.zeros((5, 2), dtype=np.float64)
     else:
         nbPhCat = gpuzeros(1, dtype=np.uint64)
@@ -2097,7 +2101,6 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         if TC is not None:
             # Tableau de la repartition des poids (photons) sur la surface du recepteur
             tabMatRecep += tabObjInfo[:, :, :].get()
-            vecLoss += wPhLoss[:].get()
             matLoss[:,0] += wPhLoss[:].get()
             matLoss[:,1] += wPhLoss2[:].get()
             matCats[0,1] += np.sum(wPhCat[:].get())
@@ -2151,7 +2154,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
                 matCats[i,4] = (nBis * (sumZ2 - sum2Z))**0.5 # errAbs not normalized
                 matCats[i,5] = (matCats[i,4]/matCats[i,1])*100 # err%
     else:
-        tabMatRecep = None; vecLoss = None; matCats = None; matLoss=None
+        tabMatRecep = None; matCats = None; matLoss=None
 
     if stdev:
         # finalize the calculation of the standard deviation
@@ -2163,7 +2166,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         sigma = None
 
     return NPhotonsInTot.get(), tabPhotonsTot.get(), tabDistTot.get(), tabHistTot.get(), errorcount, \
-        NPhotonsOutTot.get(), sigma, N_simu, secs_cuda_clock, tabMatRecep, vecLoss, matCats, matLoss
+        NPhotonsOutTot.get(), sigma, N_simu, secs_cuda_clock, tabMatRecep, matCats, matLoss
 
 
 def impactInit(prof_atm, NLAM, THVDEG, Rter, pp):
@@ -2551,6 +2554,8 @@ def initObj(LGOBJ, vSun, CUSL=None):
             LOBJGPU['shdAV'][i] = int(LOBJ[i].materialAV.shadow)
             LOBJGPU['nindAV'][i] = LOBJ[i].materialAV.nind
             LOBJGPU['distAV'][i] = LOBJ[i].materialAV.distribution
+        else:
+            raise NameError('Unknown material AV')
 
         # 1) Back part of the object (AR for the french word 'ARriere')
         # Initialization
@@ -2569,6 +2574,8 @@ def initObj(LGOBJ, vSun, CUSL=None):
             LOBJGPU['shdAR'][i] = int(LOBJ[i].materialAR.shadow)
             LOBJGPU['nindAR'][i] = LOBJ[i].materialAR.nind
             LOBJGPU['distAR'][i] = LOBJ[i].materialAR.distribution
+        else:
+            raise NameError('Unknown material AR')
         # ====
 
         # ==== 2 possibilities : the object is a relfector or a receiver
