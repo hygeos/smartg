@@ -778,6 +778,15 @@ class Smartg(object):
             # If we are in RF mode don't forget to update the value of surfLPH
             if (surfLPH_RF is not None): surfLPH = surfLPH_RF
 
+        else:
+            myObjects0 = to_gpu(np.zeros(1, dtype=np.float32, order='C'))
+            myGObj0 = to_gpu(np.zeros(1, dtype=np.float32, order='C'))
+            myRObj0 = to_gpu(np.zeros(1, dtype=np.float32, order='C'))
+            nObj = 0; nGObj=0; nRObj=0; Pmin_x = None; Pmin_y = None; Pmin_z = None;
+            Pmax_x = None; Pmax_y = None; Pmax_z = None;
+            IsAtm = None; TC = None; nbCx = 10; nbCy = 10; nb_H = 0
+        # END OBJ ===================================================
+
         if NBPHI%2 == 1:
             warn('Odd number of azimuth')
 
@@ -794,7 +803,8 @@ class Smartg(object):
 
         # warning! values defined in communs.h 
         MAX_HIST = 2048 * 2048
-        MAX_NLOW = 101
+        #MAX_NLOW = 101
+        MAX_NLOW = 401
 
         # number of Stokes parameters of the radiation field
         NPSTK = 4
@@ -1049,7 +1059,7 @@ class Smartg(object):
                         NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX_HIST, NLOW, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                         NLAM, NSENSOR, self.double, self.kernel, None, p, X0, le, tab_sensor, spectrum,
                         prof_atm_gpu, prof_oc_gpu, cell_atm_gpu, cell_oc_gpu,
-                        wl_proba_icdf, stdev, self.rng, myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, hist=hist)
+                        wl_proba_icdf, stdev, self.rng, self.alis, myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, hist=hist)
 
         attrs['kernel time (s)'] = secs_cuda_clock
         attrs['number of kernel iterations'] = Nkernel
@@ -1902,7 +1912,7 @@ def get_git_attrs():
 def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX_HIST, NLOW,
                 NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                 NLAM, NSENSOR, double, kern, kern2, p, X0, le, tab_sensor, spectrum,
-                prof_atm, prof_oc, cell_atm, cell_oc, wl_proba_icdf, stdev, rng, myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, hist=False):
+                prof_atm, prof_oc, cell_atm, cell_oc, wl_proba_icdf, stdev, rng, alis, myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, hist=False):
     """
     launch the kernel several time until the targeted number of photons injected is reached
 

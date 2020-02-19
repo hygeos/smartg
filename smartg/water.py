@@ -160,10 +160,12 @@ class IOP(IOP_base):
         with np.errstate(invalid='ignore'):
             pmol    = bw/(bw   + bp)
         pmol[np.isnan(pmol)]   = 1.
+        pmol[~np.isfinite(pmol)] = 1.
 
         with np.errstate(invalid='ignore'):
             pine = tau_ine/tau_sca
         pine[np.isnan(pine)] = 0.
+        pine[~np.isfinite(pine)] = 0.
 
         with np.errstate(invalid='ignore'):
             ssa = tau_sca/tau_tot
