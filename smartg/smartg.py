@@ -1084,11 +1084,11 @@ class Smartg(object):
                 nbCx=nbCx, nbCy=nbCy, NBPHOTONS=NBPHOTONS, surfLPH=surfLPH, TC=TC, cusL=cusL,
                 SUN_DISC=SUN_DISC)
 
-        if (nb_H > 0 and (cusL.dict['LMODE'] == "FF" or cusL.dict['LMODE'] == "BR") and TC is not None):
+        if (nb_H > 0 and TC is not None and (cusL is not None) and(cusL.dict['LMODE'] == "FF" or cusL.dict['LMODE'] == "BR")):
             MZAlt_H = zAlt_H/nb_H; weightR=matCats[2, 1]; SREC=TC*TC*nbCx*nbCy;
             # dicSTP : tuple incorporating parameters for Solar Tower Power applications
             dicSTP = {"nb_H":nb_H, "totS_H":totS_H, "surfTOA":surfLPH, "MZAlt_H":MZAlt_H, "vSun":vSun, "wRec":matCats[2, 1],
-                      "SREC":SREC, "LPH":cusL.dict['LPH'], "LPR":cusL.dict['LPR']}
+                      "SREC":SREC, "LPH":cusL.dict['LPH'], "LPR":cusL.dict['LPR'], "prog":progress}
         else: # If there are no heliostats --> there is no STP and then no analyses of optical losses
             dicSTP = None; matLoss = None; weightR=0
                 
@@ -1435,89 +1435,78 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
         m.add_dataset('C8_Receiver', cMatVisuRecep[8][:][:], ['Horizontal pixel', 'Vertical pixel'])        
 
     if (matCats is not None):
-        m.add_dataset('cat_PhNb', matCats[:,0], ['CAT'], attrs={'description':
+        m.add_axis('Categories', np.array([0, 1, 2, 3, 4, 5, 6, 7, 8], dtype=np.int32))
+        m.add_dataset('cat_PhNb', matCats[:,0], ['Categories'], attrs={'description':
             'Photons number received (sum of all cats indice 0) +\n' + \
             '       for each cats (from indice 1 to 8)'})
-        m.add_dataset('cat_w', matCats[:,1], ['CAT'], attrs={'description':
+        m.add_dataset('cat_w', matCats[:,1], ['Categories'], attrs={'description':
             'Sum of photons weight (sum of all cats indice 0) +\n' + \
             '       for each cats (from indice 1 to 8)'})
-        m.add_dataset('cat_w2', matCats[:,2], ['CAT'], attrs={'description':
+        m.add_dataset('cat_w2', matCats[:,2], ['Categories'], attrs={'description':
             'Sum of Photons weight^2 (sum of all cats indice 0) +\n' + \
             '       for each cats (from indice 1 to 8)'})
-        m.add_dataset('cat_irr', matCats[:,3], ['CAT'], attrs={'description':
+        m.add_dataset('cat_irr', matCats[:,3], ['Categories'], attrs={'description':
             'Irradiance at the receiver, must multiply by E_TOA, result is in W/m^2\n' + \
             '       (sum of all cats indice 0) for each cats (from indice 1 to 8)'})
-        m.add_dataset('cat_errAbs', matCats[:,4], ['CAT'], attrs={'description':
+        m.add_dataset('cat_errAbs', matCats[:,4], ['Categories'], attrs={'description':
             'Relative error of the intensity (sum of all cats indice 0) +\n' + \
             '       for each cats (from indice 1 to 8)'})
-        m.add_dataset('cat_err%', matCats[:,5], ['CAT'], attrs={'description':
+        m.add_dataset('cat_err%', matCats[:,5], ['Categories'], attrs={'description':
             'Absolute error of the irradiance,  must multiply by E_TOA,\n' + \
             'result is in W/m^2 (sum of all cats indice 0) + \nfor each cats (from indice 1 to 8)'})
 
     if (matLoss is not None):
-        
-        # Find the extinction between TOA and heliostats
-        if ((dicSTP["LPH"] is None) or (dicSTP["LPR"] is None)):
-            # find the atm layer where the mean heliostats z altitude is located
-            Ci = 0
-            while(prof_atm.axis('z_atm')[Ci] > dicSTP["MZAlt_H"]):
-                Ci += 1
-        
-            # extinction optical thickness distance between start to end (here end is the mean z altitude of heliostats)
-            tau_ext = (prof_atm['OD_atm'].data[0][Ci] -  prof_atm['OD_atm'].data[0][Ci-1]) * (dicSTP["MZAlt_H"]/prof_atm.axis('z_atm')[Ci-1])
-            tau_ext = prof_atm['OD_atm'].data[0][Ci] - tau_ext
+        m.add_dataset('wLoss', np.array(matLoss[:,0], dtype=np.float64), ['index'])
+        m.add_dataset('wLoss2', np.array(matLoss[:,1], dtype=np.float64), ['index'])
 
+        # To consider also the multispectral case
+        if (NLAM > 1) : lwl = len(wl)
+        else : lwl = 1
+
+        # ======== Find the extinction between TOA and heliostats
+        tau_ext = np.zeros(lwl, dtype=np.float64)
+        Tr_tau = np.zeros(lwl, dtype=np.float64)
+        P_pyt = np.zeros(lwl, dtype=np.float64)
+
+        # find the atm layer where the mean heliostats z altitude is located
+        Ci = 0
+        while(prof_atm.axis('z_atm')[Ci] > dicSTP["MZAlt_H"]):
+            Ci += 1
+
+        for i in range (0, lwl):
+            tau_ext[i] = (prof_atm['OD_atm'].data[i,Ci] -  prof_atm['OD_atm'].data[i,Ci-1]) * \
+                         (dicSTP["MZAlt_H"]/prof_atm.axis('z_atm')[Ci-1])
+            tau_ext[i] = prof_atm['OD_atm'].data[i,Ci] - tau_ext[i]
             # Beer-Lamber law to find the transmisttance
-            Tr_tau = np.exp(-abs(tau_ext/-dicSTP["vSun"].z))
-        else: # This is under developement ->
-            SUM_Tr_tau = 0
-            for i in range (0, len(dicSTP["LPH"])):
-                time = (120. - dicSTP["LPH"][i].z)/dicSTP["vSun"].z
-                PSUN_TOA = dicSTP["LPH"][i] + (dicSTP["vSun"]*time)
-                SUM_Tr_tau += findExtinction(PSUN_TOA, dicSTP["LPH"][i], prof_atm)
-            Tr_tau = SUM_Tr_tau/len(dicSTP["LPH"])
-        
-        # theoric computation of the total power collected by all the heliostats (here the sun flux density is equal to 1) 
-        P_pyt = Tr_tau*dicSTP["totS_H"]    
+            Tr_tau[i] = np.exp(-abs(tau_ext[i]/-dicSTP["vSun"].z))
+            # theoric computation of the total power collected by all the heliostats
+            P_pyt[i] = Tr_tau[i]*dicSTP["totS_H"]
+        # Save results
+        m.add_dataset('n_tr', Tr_tau, ['wavelength'])
+        m.add_dataset('powc_H', P_pyt, ['wavelength'])
+        # ========
 
-        m.add_dataset('n_tr', np.array([Tr_tau], dtype=np.float64), ['transmission from TOA to H'])
+        # Compute the constant needed for the calculation of the optical efficiencies
         if (back):
             P_cud = matCats[2, 3]*dicSTP["SREC"] # power collected by the reciever
-            ncos = max(0, min(matLoss[2,0]/matLoss[1,0], 1))
-            nref = max(0, min(matLoss[2,0]/matLoss[0,0], 1))
-            # === Under developement ->
+            # === Here allows the calculation of the analytical approx of n_atm ->
             if ((dicSTP["LPH"] is not None) and (dicSTP["LPR"] is not None)):
-                naatm=0
-                for i in range (len(dicSTP["LPH"])):
-                    naatm += findExtinction(dicSTP["LPH"][i], dicSTP["LPR"][0], prof_atm)
-                naatm /= len(dicSTP["LPH"])
-                m.add_dataset('n_aatm', np.array([naatm], dtype=np.float64), ['Atmospheric Approx Efficiency'])
+                naatm = np.zeros(lwl, dtype=np.float64)
+                p = Progress(lwl-1, dicSTP["prog"])
+                for j in range (0, lwl):
+                    SUM_naatm=0
+                    p.update(j+1, 'n_aatm computed : {:.3g} / {:.3g}'.format(j+1, lwl))
+                    for i in range (len(dicSTP["LPH"])):
+                        SUM_naatm += findExtinction(dicSTP["LPH"][i], dicSTP["LPR"][0], prof_atm, j)
+                    naatm[j] = SUM_naatm/len(dicSTP["LPH"])
+                p.finish('Done! | Analytic approx of n_atm computed for {:.3g} wavelengths'.format(lwl))
+                m.add_dataset('n_aatm', naatm, ['wavelength'])
             # ===
-            nsbsa = P_cud/(P_pyt*ncos*nref)
-            m.add_dataset('n_sbsa', np.array([nsbsa], dtype=np.float64), ['Shadow, blocking, spillage, atmos Efficiencies'])
-            m.add_dataset('n_opt', np.array([ncos*nref*nsbsa], dtype=np.float64), ['Optical Efficiency'])
-            k = P_cud/(matCats[2,1]*P_pyt)
+            k = P_cud/matCats[2,1]
         else:
-            # collecte the weight from the photons reaching the heliostats if there is not cos effect (cuda), then convert to power
-            P_cud = (matLoss[1,0]*dicSTP["surfTOA"])/float(NPhotonsInTot)
-            # we can now compute the shadow efficiency
-            nsha = max(0, min(P_cud/P_pyt, 1))
-            ncos = max(0, min(matLoss[0,0]/matLoss[1,0], 1))
-            nref = max(0, min(matLoss[2,0]/matLoss[0,0], 1))
-            nspi = max(0, min(matLoss[3,0]/matLoss[2,0], 1))
-            nblo = max(0, min((matLoss[3,0]-matLoss[4,0])/matLoss[3,0], 1))
-            natm = max(0, min(dicSTP["wRec"]/(matLoss[3,0]-matLoss[4,0]), 1))
-            m.add_dataset('n_sha', np.array([nsha], dtype=np.float64), ['Shadow Efficiency'])
-            m.add_dataset('n_spi', np.array([nspi], dtype=np.float64), ['Spillage Efficiency'])
-            m.add_dataset('n_blo', np.array([nblo], dtype=np.float64), ['blocking Efficiency'])
-            m.add_dataset('n_opt', np.array([nsha*ncos*nref*nspi*natm*nblo], dtype=np.float64), ['Optical Efficiency'])
-            m.add_dataset('n_atmo', np.array([natm], dtype=np.float64), ['Atmospheric Efficiency'])
-            k = dicSTP["surfTOA"]/(float(NPhotonsInTot)*P_pyt)
-        m.add_dataset('n_cte', np.array([k], dtype=np.float64), ['Constante used for losses error'])
-        m.add_dataset('n_cos', np.array([ncos], dtype=np.float64), ['Cosine Efficiency'])
-        m.add_dataset('n_ref', np.array([nref], dtype=np.float64), ['Reflection Efficiency'])
-        m.add_dataset('wLoss', np.array(matLoss[:,0], dtype=np.float64), ['Vector with opt weights'])
-        m.add_dataset('wLoss2', np.array(matLoss[:,1], dtype=np.float64), ['Vector with opt weights²'])
+            # Constante k allows the normalization of counted weights in unit propor to power unit 
+            k = dicSTP["surfTOA"]/np.sum(NPhotonsInTot)
+        m.set_attr('n_cte', str(k))
 
     return m
 
@@ -1758,9 +1747,9 @@ def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
             copy_to_device('TCd', TC, np.float32)
             copy_to_device('nbCx', nbCx, np.int32)
             copy_to_device('nbCy', nbCy, np.int32)
-        if (  (cusL != None) and (cusL.dict['LMODE'] == "RF")  ):
+        if (  (cusL is not None) and (cusL.dict['LMODE'] == "RF")  ):
             copy_to_device('LMODEd', 1, np.int32)
-        if (  (cusL != None) and (cusL.dict['LMODE'] == "FF")  ):
+        if (  (cusL is not None) and (cusL.dict['LMODE'] == "FF")  ):
             copy_to_device('CFXd', cusL.dict['CFX'], np.float32)
             copy_to_device('CFYd', cusL.dict['CFY'], np.float32)
             copy_to_device('CFTXd', cusL.dict['CFTX'], np.float32)
@@ -1768,16 +1757,16 @@ def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
             copy_to_device('ALDEGd', cusL.dict['FOV'], np.float32)
             copy_to_device('TYPEd', cusL.dict['TYPE'], np.int32)
             copy_to_device('LMODEd', 2, np.int32)
-        if (  (cusL != None) and (cusL.dict['LMODE'] == "B" or cusL.dict['LMODE'] == "BR")  ):
+        if (  (cusL is not None) and (cusL.dict['LMODE'] == "B" or cusL.dict['LMODE'] == "BR")  ):
             copy_to_device('THDEGd', cusL.dict['THDEG'], np.float32)
             copy_to_device('PHDEGd', cusL.dict['PHDEG'], np.float32)
             copy_to_device('ALDEGd', cusL.dict['ALDEG'], np.float32)
             copy_to_device('TYPEd', cusL.dict['TYPE'], np.int32)
-        if (  (cusL != None) and (cusL.dict['LMODE'] == "B")  ):    
+        if (  (cusL is not None) and (cusL.dict['LMODE'] == "B")  ):    
             copy_to_device('LMODEd', 3, np.int32)
-        if (  (cusL != None) and (cusL.dict['LMODE'] == "BR")  ):
+        if (  (cusL is not None) and (cusL.dict['LMODE'] == "BR")  ):
             copy_to_device('LMODEd', 4, np.int32)
-        if (cusL == None):
+        if (cusL is None):
             copy_to_device('LMODEd', 0, np.int32)
         
 def init_profile(wl, prof, kind):
@@ -2693,7 +2682,7 @@ def normalizeRecIrr(cMatVisuRecep, matCats, nbCx, nbCy, NBPHOTONS, surfLPH, TC, 
     return cMatVisuRecep, matCats
 
 
-def findExtinction(IP, FP, prof_atm):
+def findExtinction(IP, FP, prof_atm, W_IND = int(0)):
     '''
     Description of the function findAtmLoss
 
@@ -2705,6 +2694,7 @@ def findExtinction(IP, FP, prof_atm):
     IP       : Initial position (Point class)
     FP       : Final position (Point class)
     prof_atm : Atmosphere profil class
+    W_IND    : wavelength index (default = 0)
 
     ==== RETURN:
     n_ext   : Extinction between IP and FP
@@ -2733,7 +2723,7 @@ def findExtinction(IP, FP, prof_atm):
     # Case with only 1 layer: n = 1
     if (FP.z >= prof_atm.axis('z_atm')[ilayer2] and FP.z < prof_atm.axis('z_atm')[ilayer2-1]):
         # delta_i is: Delta(tau)1 = |tau(i-1) - tau(i)|
-        delta_i = abs(prof_atm['OD_atm'].data[0][ilayer2-1] - prof_atm['OD_atm'].data[0][ilayer2])
+        delta_i = abs(prof_atm['OD_atm'].data[W_IND, ilayer2-1] - prof_atm['OD_atm'].data[W_IND, ilayer2])
         # tauHit = (Delat(D1)/Delat(Z1))*delta_i
         tauHit += ((IP - FP).Length()/abs(prof_atm.axis('z_atm')[ilayer2-1]-prof_atm.axis('z_atm')[ilayer2]))*delta_i
     else: # Case with several layers: n >= 2
@@ -2756,7 +2746,7 @@ def findExtinction(IP, FP, prof_atm):
             else:
                 timeT = abs(prof_atm.axis('z_atm')[ilayer-1] - oldP.z)/abs(Vec.z)
             newP = oldP + (Vec*timeT);
-            delta_i = abs(prof_atm['OD_atm'].data[0][ilayer]-prof_atm['OD_atm'].data[0][ilayer-1])
+            delta_i = abs(prof_atm['OD_atm'].data[W_IND, ilayer]-prof_atm['OD_atm'].data[W_IND, ilayer-1])
             tauHit += ((newP - oldP).Length()/abs(prof_atm.axis('z_atm')[ilayer-1]-prof_atm.axis('z_atm')[ilayer]))*delta_i
         
             if(higher): # the photon come from higher layer
@@ -2766,7 +2756,7 @@ def findExtinction(IP, FP, prof_atm):
             oldP = newP # Update the position of the photon
         
         # Calculate and add the last tau distance when ilayer is equal to ilayer2
-        delta_i = abs(prof_atm['OD_atm'].data[0][ilayer2]-prof_atm['OD_atm'].data[0][ilayer2-1])
+        delta_i = abs(prof_atm['OD_atm'].data[W_IND, ilayer2]-prof_atm['OD_atm'].data[W_IND, ilayer2-1])
         tauHit += ((FP - oldP).Length()/abs(prof_atm.axis('z_atm')[ilayer2-1]-prof_atm.axis('z_atm')[ilayer2]))*delta_i
 
     n_ext = np.exp(-abs(tauHit))

@@ -119,7 +119,7 @@ def cat_view(mlut, acc = 6, MTOA = 1320, NCL ="68%"):
         print("CAT",i+1, lP[i], ": irradiance=", strAcc % (mlut['cat_irr'][i+1]*MTOA), " number_ph=", np.uint64(mlut['cat_PhNb'][i+1]),
               " errAbs=", strAcc % (mlut['cat_errAbs'][i+1]*MTOA*ld), " err(%)=", strAcc % (mlut['cat_err%'][i+1]*ld))
 
-def nopt_view(mlut, back=False, acc = 6, NCL="68%"):
+def nopt_view(mlut, back=False, acc = 6, NCL="68%", fl_TOA=None, NAATM=False):
     '''
     Definition of nopt_view
     '''
@@ -128,7 +128,16 @@ def nopt_view(mlut, back=False, acc = 6, NCL="68%"):
     NPH = float(m.attrs['NPHOTONS'])
     # n/(n-1)
     NBIS = NPH/(NPH-1)
-    k = m['n_cte'][0]
+
+    if(fl_TOA is None):
+        powc_H = m['powc_H'].data
+    else:
+        powc_H = 0.
+        for i in range (0, len(fl_TOA)):
+            powc_H += m['powc_H'].data[i]*fl_TOA[i]
+        powc_H /= np.sum(fl_TOA)
+
+    k = float(m.attrs['n_cte'])/powc_H
 
     intAcc = int(acc)
     strAcc = str(intAcc)
@@ -159,7 +168,8 @@ def nopt_view(mlut, back=False, acc = 6, NCL="68%"):
             dw_temp = ld*NBIS*(sumZ2[i]-sum2Z[i])**0.5
             dw.append(dw_temp)
         nopt = Clamp(k*w5, 0, 1)
-        nsha = Clamp(k*w1, 0, 1); ncos = Clamp(w0/w1, 0, 1); nref = Clamp(w2/w0, 0, 1);
+        #nsha = Clamp(k*w1, 0, 1); ncos = Clamp(w0/w1, 0, 1); nref = Clamp(w2/w0, 0, 1);
+        nsha = k*w1; ncos = Clamp(w0/w1, 0, 1); nref = Clamp(w2/w0, 0, 1);
         nspi = Clamp(w3/w2, 0, 1); nblo = Clamp(1-(w4/w3), 0, 1); natm = Clamp(w5/(w3-w4), 0, 1);
         
         d_nopt = abs(k)*dw[5]; d_nsha = abs(k)*dw[1]
@@ -205,7 +215,15 @@ def nopt_view(mlut, back=False, acc = 6, NCL="68%"):
         print("ncos =", strAcc % ncos, ", errAbs =", strAcc % d_ncos, ", err% =", strAcc % ((d_ncos/ncos)*100))
         print("nref =", strAcc % nref, ", errAbs =", strAcc % d_nref, ", err% =", strAcc % ((d_nref/nref)*100))
         print("nsbsa =", strAcc % nsbsa, ", errAbs =", strAcc % d_nsbsa, ", err% =", strAcc % ((d_nsbsa/nsbsa)*100))
-        print("naatm =", strAcc % m['n_aatm'][0], " -> analytic approx of natm")
+        if (NAATM):
+            if(fl_TOA is None):
+                naatm = m['n_aatm'].data
+            else:
+                naatm=0.
+                for i in range (0, len(fl_TOA)):
+                    naatm += m['n_aatm'].data[i]*fl_TOA[i]
+                naatm /= np.sum(fl_TOA)
+                print("naatm =", strAcc % naatm, " -> analytic approx of natm")
 
 
 class Mirror(object):

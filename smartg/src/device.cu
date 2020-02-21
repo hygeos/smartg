@@ -4722,9 +4722,9 @@ __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, void *wPhLoss2)
 	#endif
 	#else
 	float weightE, weightS, weightECos;
-	float *wPhLossC;
+	float *wPhLossC; float *wPhLossC2;
 	
-	wPhLossC = (float*)wPhLoss;
+	wPhLossC = (float*)wPhLoss; wPhLossC2 = (float*)wPhLoss2;
 	weightE = (float)ph->weight_loss[0]*float(ph->stokes.x + ph->stokes.y);
 	weightS = (float)ph->weight_loss[2]*float(ph->stokes.x + ph->stokes.y);
 	weightECos = (float)ph->weight_loss[1]*float(ph->stokes.x + ph->stokes.y);
@@ -4856,7 +4856,7 @@ __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geo
 	weight = weight * double(stokes.x + stokes.y);
     #else // If not DOUBLE
 	float *tabCountObj;
-	float *wPhCatC, *wPhCatC;
+	float *wPhCatC, *wPhCatC2;
 	float weight, weight2;
 	tabCountObj = (float*)tabObjInfo;
 	wPhCatC = (float*)wPhCat;
