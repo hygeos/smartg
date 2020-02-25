@@ -1424,21 +1424,16 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
                 m.add_lut(l, desc=d.replace('I_', 'flux_'))
 
     if (cMatVisuRecep is not None):
-        m.add_dataset('C_Receiver', cMatVisuRecep[0][:][:], ['Horizontal pixel', 'Vertical pixel'])
-        m.add_dataset('C1_Receiver', cMatVisuRecep[1][:][:], ['Horizontal pixel', 'Vertical pixel'])
-        m.add_dataset('C2_Receiver', cMatVisuRecep[2][:][:], ['Horizontal pixel', 'Vertical pixel'])
-        m.add_dataset('C3_Receiver', cMatVisuRecep[3][:][:], ['Horizontal pixel', 'Vertical pixel'])
-        m.add_dataset('C4_Receiver', cMatVisuRecep[4][:][:], ['Horizontal pixel', 'Vertical pixel'])
-        m.add_dataset('C5_Receiver', cMatVisuRecep[5][:][:], ['Horizontal pixel', 'Vertical pixel'])
-        m.add_dataset('C6_Receiver', cMatVisuRecep[6][:][:], ['Horizontal pixel', 'Vertical pixel'])
-        m.add_dataset('C7_Receiver', cMatVisuRecep[7][:][:], ['Horizontal pixel', 'Vertical pixel'])
-        m.add_dataset('C8_Receiver', cMatVisuRecep[8][:][:], ['Horizontal pixel', 'Vertical pixel'])
-        m.set_attr('S_REC', str(dicSTP["SREC"]))
-        m.set_attr('S_RCELL', str(dicSTP["TC"]))
-
-    if (matCats is not None):
         # Indice 0 = Sum of all Cats, then cat1 to cat8, def of cats -> see Moulana et al, 2019
         m.add_axis('Categories', np.array([0, 1, 2, 3, 4, 5, 6, 7, 8], dtype=np.int32))
+        var_x, var_y = np.shape(cMatVisuRecep[0][:][:])
+        x_indices = np.arange(var_x); y_indices = np.arange(var_y);
+        m.add_axis('X_Cell_Index', x_indices); m.add_axis('Y_Cell_Index', y_indices);
+        m.add_dataset('C_Receiver', cMatVisuRecep[:][:][:], ['Categories', 'X_Cell_Index', 'Y_Cell_Index'])
+        m.set_attr('S_Receiver', str(dicSTP["SREC"])) # Receiver surface in km²
+        m.set_attr('S_Cell', str(dicSTP["TC"]))       # Cell surface in km²
+
+    if (matCats is not None):
         m.add_dataset('cat_PhNb', matCats[:,0], ['Categories'])
         m.add_dataset('cat_w', matCats[:,1], ['Categories'])
         m.add_dataset('cat_w2', matCats[:,2], ['Categories'])

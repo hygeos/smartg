@@ -25,8 +25,8 @@ from matplotlib import colors as mcolors
 import re, six
 from itertools import dropwhile
 
-def receiver_view(disMatrix, w = False, logI=False, nameFile = None, MTOA = 1320,
-                  vmin=None, vmax=None, interpol='none'):
+def receiver_view(MLUT, CAT = int(0), LOG_I=False, NAME_FILE = None, MTOA = 1320,
+                  VMIN=None, VMAX=None, INT='none', W_VIEW = 'W'):
 
     '''
     Definition of receiver_view
@@ -39,34 +39,40 @@ def receiver_view(disMatrix, w = False, logI=False, nameFile = None, MTOA = 1320
         |     Print with the following cordinate system
     y <--    
 
-    disMatrix : 2D numpy array with flux distribution at the receiver
-    w         : The receiver size, in kilometer. Can be a scalar or a list with x
-                and y values
-    logI      : Enable log interval
-    nameFile  : By default None. If not None create a pdf file in auxdata directory
+    MLUT      : SMART-G return LUT
+    CAT       : By default = 0 (sum of all cats), else from cat 1 to 8
+    LOG_I     : Enable log interval
+    NAME_FILE : By default None. If not None create a pdf file in auxdata directory
                 of the current print with the specified name
-    MTOA      : Radiant exitance at TOA (W/m2)
-    vmin      : Minimal distribution value (W/m2), not for log print
-    vmax      : Maximal distribution value (W/m2), not for log print
-    interpol  : Interpolations for imshow/matshow, i.e. nearest, bilinear, bicubic, ...
-    '''
-    if w==False :
-        raise Exception("In receiver_view(), the receiver size w must be specified!")
-        
-    if isinstance(w, (list, tuple)):
-        wx= w[0]
-        wy= w[1]
-    else:
-        wx = w
-        wy = w
+    MTOA      : Radiant exitance at TOA (Unit depending on W_VIEW, by default W/m2)
+    VMIN      : Minimal distribution value (Unit depending on W_VIEW), not for log print
+    VMAX      : Maximal distribution value (Unit depending on W_VIEW), not for log print
+    INT       : Interpolations for imshow/matshow, i.e. nearest, bilinear, bicubic, ...
+    W_VIEW    : Choices between "W" for Watt, "kW" for kiloWatt or "MW" for MegaWatt
 
-    m = disMatrix
+    '''
+
+    m = MLUT['C_Receiver'][CAT,:,:]
+    # Size of a Cell where the Cell surface = S_Cell*S_Cell
+    S_Cell = float(MLUT.attrs['S_Cell']) * 1e3 # mult by 1e3 to convert km to m
+    wx = (MLUT.axes['X_Cell_Index'].size * S_Cell)/ 2.
+    wy = (MLUT.axes['Y_Cell_Index'].size * S_Cell)/ 2.
+    C_Surf = S_Cell*S_Cell
+
+    if( W_VIEW == "W"):
+        k = 1.; STRUNIT = "W";
+    elif ( W_VIEW == "kW"):
+        k = 1e-3; STRUNIT = "kW";
+    elif ( W_VIEW == "MW"):
+        k = 1e-6; STRUNIT = "MW";
+    else :
+        raise NameError('Unkonwn argument for W_VIEW!')
 
     plt.figure()
 
-    if logI == False :
-        cax = plt.imshow(m*MTOA, cmap=plt.get_cmap('jet'), interpolation=interpol, \
-                         vmin=vmin, vmax=vmax, extent = [(wy*1000),-(wy*1000),-(wx*1000),(wx*1000)])
+    if LOG_I == False :
+        cax = plt.imshow((k*m*MTOA)/C_Surf, cmap=plt.get_cmap('jet'), interpolation=INT, \
+                         vmin=VMIN, vmax=VMAX, extent = [wy,-wy,-wx,wx])
     else:
         m2 = m
         if (np.amin(m2) < 0.00001):
@@ -74,32 +80,32 @@ def receiver_view(disMatrix, w = False, logI=False, nameFile = None, MTOA = 1320
         else:
             valmin = np.amin(m2)
             
-        cax = plt.imshow(m*MTOA, cmap=plt.get_cmap('jet'), \
+        cax = plt.imshow((k*m*MTOA)/C_Surf, cmap=plt.get_cmap('jet'), \
                          norm=mcolors.LogNorm(vmin=valmin*MTOA, vmax=np.amax(m*MTOA)), \
-                         interpolation=interpol, extent = [(wy*1000),-(wy*1000),-(wx*1000),(wx*1000)])
+                         interpolation=INT, extent = [wy,-wy,-wx,wx])
 
     cbar = plt.colorbar()
     cbar.remove()
     cbar = plt.colorbar(cax)
-    cbar.set_label(r'Irradiance (W m$^{-2}$)', fontsize = 12)
+    cbar.set_label(r'Irradiance ('+STRUNIT+'.m$^{-2}$)', fontsize = 12)
     plt.xlabel(r'Position (m) in relative y axis')
     plt.ylabel(r'Position (m) in relative x axis')
     plt.title('Receiver surface')
-    if (nameFile is not None):
-        plt.savefig(nameFile + '.pdf')  
+    if (NAME_FILE is not None):
+        plt.savefig(NAME_FILE + '.pdf')  
 
 
-def cat_view(mlut, acc = 6, MTOA = 1320, NCL = "68%", UNIT = "FLUX", W_VIEW = "W"):
+def cat_view(MLUT, ACC = 6, MTOA = 1320, NCL = "68%", UNIT = "FLUX", W_VIEW = "W"):
     '''
     Definition of cat_view
 
-    mlut   : mlut table
-    acc    : Accuracy, number of decimal points to show (integer)
+    MLUT   : SMART-G return LUT
+    ACC    : Accuracy, number of decimal points to show (integer)
     NCL    : Nominal Confidence Limit
     UNIT   : Choice between 'POW' (Watt) and 'FLUX' (Watt/meter²)
     W_VIEW : Choices between "W" for Watt, "kW" for kiloWatt or "MW" for MegaWatt 
     '''
-    m = mlut
+    m = MLUT
 
     if( W_VIEW == "W"):
         k = 1.; STRUNIT = "Watt";
@@ -112,13 +118,13 @@ def cat_view(mlut, acc = 6, MTOA = 1320, NCL = "68%", UNIT = "FLUX", W_VIEW = "W
     if (UNIT == "POW"):
         cst = 1.*k; STRPRINT = "Power in " + STRUNIT + " for each categories"
     elif (UNIT == "FLUX"):
-        cst = (1.*k)/(float(m.attrs['S_REC'])*1e6)
+        cst = (1.*k)/(float(m.attrs['S_Receiver'])*1e6)
         STRPRINT = "Irradiance in " + STRUNIT + "/meter² for each categories"
     else:
         raise NameError('Unkonwn argument for UNIT!')
 
     lP = ["(  D  )", "(  H  )", "(  E  )", "(  A  )", "( H+A )", "( H+E )", "( E+A )", "(H+E+A)"]
-    intAcc = int(acc)
+    intAcc = int(ACC)
     strAcc = str(intAcc)
     strAcc = "%." + strAcc + "f"
     if (NCL == "68%"): ld = 1
@@ -130,17 +136,19 @@ def cat_view(mlut, acc = 6, MTOA = 1320, NCL = "68%", UNIT = "FLUX", W_VIEW = "W
     print("**********************************************************")
     print(STRPRINT)
     print("**********************************************************")
-    print("SUM_CATS      " + ": irradiance=", strAcc % (mlut['cat_irr'][0]*MTOA*cst), " number_ph=", np.uint64(mlut['cat_PhNb'][0]),
-                  " errAbs=", strAcc % (mlut['cat_errAbs'][0]*MTOA*ld*cst), " err(%)=", strAcc % (mlut['cat_err%'][0]*ld))
+    print("SUM_CATS      " + ": irradiance=", strAcc % (m['cat_irr'][0]*MTOA*cst), " number_ph=", np.uint64(m['cat_PhNb'][0]),
+                  " errAbs=", strAcc % (m['cat_errAbs'][0]*MTOA*ld*cst), " err(%)=", strAcc % (m['cat_err%'][0]*ld))
     for i in range (0, 8):
-        print("CAT",i+1, lP[i], ": irradiance=", strAcc % (mlut['cat_irr'][i+1]*MTOA*cst), " number_ph=", np.uint64(mlut['cat_PhNb'][i+1]),
-              " errAbs=", strAcc % (mlut['cat_errAbs'][i+1]*MTOA*ld*cst), " err(%)=", strAcc % (mlut['cat_err%'][i+1]*ld))
+        print("CAT",i+1, lP[i], ": irradiance=", strAcc % (m['cat_irr'][i+1]*MTOA*cst), " number_ph=", np.uint64(m['cat_PhNb'][i+1]),
+              " errAbs=", strAcc % (m['cat_errAbs'][i+1]*MTOA*ld*cst), " err(%)=", strAcc % (m['cat_err%'][i+1]*ld))
 
-def nopt_view(mlut, back=False, acc = 6, NCL="68%", fl_TOA=None, NAATM=False):
+def nopt_view(MLUT, BACK=False, ACC = 6, NCL="68%", fl_TOA=None, NAATM=False):
     '''
     Definition of nopt_view
+
+    In progress...
     '''
-    m = mlut
+    m = MLUT
     # Number of photons launched
     NPH = float(m.attrs['NPHOTONS'])
     # n/(n-1)
@@ -156,7 +164,7 @@ def nopt_view(mlut, back=False, acc = 6, NCL="68%", fl_TOA=None, NAATM=False):
 
     k = float(m.attrs['n_cte'])/powc_H
 
-    intAcc = int(acc)
+    intAcc = int(ACC)
     strAcc = str(intAcc)
     strAcc = "%." + strAcc + "f"
     if (NCL == "68%"): ld = 1
@@ -169,7 +177,7 @@ def nopt_view(mlut, back=False, acc = 6, NCL="68%", fl_TOA=None, NAATM=False):
     print(" Optical Efficiencies")
     print("**********************************************")
 
-    if(back == False): # Forward mode ->
+    if(BACK == False): # Forward mode ->
         # Sum of weights
         w0 = m['wLoss'][0]; w1 = m['wLoss'][1]; w2 = m['wLoss'][2];
         w3 = m['wLoss'][3]; w4 = m['wLoss'][4]; w5 = m['cat_w'][2];
@@ -185,8 +193,7 @@ def nopt_view(mlut, back=False, acc = 6, NCL="68%", fl_TOA=None, NAATM=False):
             dw_temp = ld*NBIS*(sumZ2[i]-sum2Z[i])**0.5
             dw.append(dw_temp)
         nopt = Clamp(k*w5, 0, 1)
-        #nsha = Clamp(k*w1, 0, 1); ncos = Clamp(w0/w1, 0, 1); nref = Clamp(w2/w0, 0, 1);
-        nsha = k*w1; ncos = Clamp(w0/w1, 0, 1); nref = Clamp(w2/w0, 0, 1);
+        nsha = Clamp(k*w1, 0, 1); ncos = Clamp(w0/w1, 0, 1); nref = Clamp(w2/w0, 0, 1);
         nspi = Clamp(w3/w2, 0, 1); nblo = Clamp(1-(w4/w3), 0, 1); natm = Clamp(w5/(w3-w4), 0, 1);
         
         d_nopt = abs(k)*dw[5]; d_nsha = abs(k)*dw[1]
