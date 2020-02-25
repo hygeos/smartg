@@ -89,19 +89,37 @@ def receiver_view(disMatrix, w = False, logI=False, nameFile = None, MTOA = 1320
         plt.savefig(nameFile + '.pdf')  
 
 
-def cat_view(mlut, acc = 6, MTOA = 1320, NCL ="68%"):
+def cat_view(mlut, acc = 6, MTOA = 1320, NCL = "68%", UNIT = "FLUX", W_VIEW = "W"):
     '''
     Definition of cat_view
 
-    mlut : mlut table
-    acc  : Accuracy, number of decimal points to show (integer)
-    NCL  : Nominal Confidence Limit
+    mlut   : mlut table
+    acc    : Accuracy, number of decimal points to show (integer)
+    NCL    : Nominal Confidence Limit
+    UNIT   : Choice between 'POW' (Watt) and 'FLUX' (Watt/meter²)
+    W_VIEW : Choices between "W" for Watt, "kW" for kiloWatt or "MW" for MegaWatt 
     '''
     m = mlut
+
+    if( W_VIEW == "W"):
+        k = 1.; STRUNIT = "Watt";
+    elif ( W_VIEW == "kW"):
+        k = 1e-3; STRUNIT = "kiloWatt";
+    elif ( W_VIEW == "MW"):
+        k = 1e-6; STRUNIT = "MegaWatt";
+    else :
+        raise NameError('Unkonwn argument for W_VIEW!')
+    if (UNIT == "POW"):
+        cst = 1.*k; STRPRINT = "Power in " + STRUNIT + " for each categories"
+    elif (UNIT == "FLUX"):
+        cst = (1.*k)/(float(m.attrs['S_REC'])*1e6)
+        STRPRINT = "Irradiance in " + STRUNIT + "/meter² for each categories"
+    else:
+        raise NameError('Unkonwn argument for UNIT!')
+
     lP = ["(  D  )", "(  H  )", "(  E  )", "(  A  )", "( H+A )", "( H+E )", "( E+A )", "(H+E+A)"]
     intAcc = int(acc)
     strAcc = str(intAcc)
-    # strAcc = "{0:." + strAcc + "}"
     strAcc = "%." + strAcc + "f"
     if (NCL == "68%"): ld = 1
     elif (NCL == "87%"): ld = 1.5
@@ -110,14 +128,13 @@ def cat_view(mlut, acc = 6, MTOA = 1320, NCL ="68%"):
     elif (NCL == "99.99%"): ld = 4
 
     print("**********************************************************")
-    print("Irradiance in flux unit (Watt/meter²) for each categories")
-    print("Intensity(W) = Irradiance(W/m²) * receiverSurface(m²)")
+    print(STRPRINT)
     print("**********************************************************")
-    print("SUM_CATS      " + ": irradiance=", strAcc % (mlut['cat_irr'][0]*MTOA), " number_ph=", np.uint64(mlut['cat_PhNb'][0]),
-                  " errAbs=", strAcc % (mlut['cat_errAbs'][0]*MTOA*ld), " err(%)=", strAcc % (mlut['cat_err%'][0]*ld))
+    print("SUM_CATS      " + ": irradiance=", strAcc % (mlut['cat_irr'][0]*MTOA*cst), " number_ph=", np.uint64(mlut['cat_PhNb'][0]),
+                  " errAbs=", strAcc % (mlut['cat_errAbs'][0]*MTOA*ld*cst), " err(%)=", strAcc % (mlut['cat_err%'][0]*ld))
     for i in range (0, 8):
-        print("CAT",i+1, lP[i], ": irradiance=", strAcc % (mlut['cat_irr'][i+1]*MTOA), " number_ph=", np.uint64(mlut['cat_PhNb'][i+1]),
-              " errAbs=", strAcc % (mlut['cat_errAbs'][i+1]*MTOA*ld), " err(%)=", strAcc % (mlut['cat_err%'][i+1]*ld))
+        print("CAT",i+1, lP[i], ": irradiance=", strAcc % (mlut['cat_irr'][i+1]*MTOA*cst), " number_ph=", np.uint64(mlut['cat_PhNb'][i+1]),
+              " errAbs=", strAcc % (mlut['cat_errAbs'][i+1]*MTOA*ld*cst), " err(%)=", strAcc % (mlut['cat_err%'][i+1]*ld))
 
 def nopt_view(mlut, back=False, acc = 6, NCL="68%", fl_TOA=None, NAATM=False):
     '''
@@ -178,6 +195,7 @@ def nopt_view(mlut, back=False, acc = 6, NCL="68%", fl_TOA=None, NAATM=False):
         d_nspi = abs(1./w2)*dw[3] + abs(-w3/w2**2)*dw[2]
         d_nblo = abs(-1./w3)*dw[4] + abs(w4/w3**2)*dw[3]
         d_natm = abs(1./(w3-w4))*dw[5] + abs(-w5/(w3-w4)**2)*dw[3] + abs(w5/(w3-w4)**2)*dw[4]
+
         print("nopt =", strAcc % nopt, ", errAbs =", strAcc % d_nopt, ", err% =", strAcc % ((d_nopt/nopt)*100))
         print("nsha =", strAcc % nsha, ", errAbs =", strAcc % d_nsha, ", err% =", strAcc % ((d_nsha/nsha)*100))
         print("ncos =", strAcc % ncos, ", errAbs =", strAcc % d_ncos, ", err% =", strAcc % ((d_ncos/ncos)*100))
@@ -206,15 +224,14 @@ def nopt_view(mlut, back=False, acc = 6, NCL="68%", fl_TOA=None, NAATM=False):
         d_ncos = abs(1./w1)*dw[2] + abs(-w2/(w1*w1))*dw[1]
         d_nref = abs(1./w0)*dw[2] + abs(-w2/(w0*w0))*dw[0]
 
-        # d_nsbsa = abs(k/(ncos*nref))*dw[3] + abs((-k*w3)/(ncos*ncos*nref))*d_ncos + \
-        #           abs((-k*w3)/(ncos*nref*nref))*d_nref
-
         d_nsbsa = abs((k*w1*w0)/(w2*w2))*dw[3] + abs((k*w3*w0)/(w2*w2))*dw[1] + \
                   abs((k*w3*w1)/(w2*w2))*dw[0] + abs((-2.*k*w1*w0)/(w2*w2*w2))*dw[2]
+
         print("nopt =", strAcc % nopt, ", errAbs =", strAcc % d_nopt, ", err% =", strAcc % ((d_nopt/nopt)*100))
         print("ncos =", strAcc % ncos, ", errAbs =", strAcc % d_ncos, ", err% =", strAcc % ((d_ncos/ncos)*100))
         print("nref =", strAcc % nref, ", errAbs =", strAcc % d_nref, ", err% =", strAcc % ((d_nref/nref)*100))
         print("nsbsa =", strAcc % nsbsa, ", errAbs =", strAcc % d_nsbsa, ", err% =", strAcc % ((d_nsbsa/nsbsa)*100))
+
         if (NAATM):
             if(fl_TOA is None):
                 naatm = m['n_aatm'].data

@@ -1080,15 +1080,15 @@ class Smartg(object):
 
         # If there is a receiver -> normalization of the signal collected
         if (TC is not None):
-            cMatVisuRecep, matCats = normalizeRecIrr(cMatVisuRecep=cMatVisuRecep, matCats=matCats,
+            cMatVisuRecep, matCats, n_cte = normalizeRecIrr(cMatVisuRecep=cMatVisuRecep, matCats=matCats,
                 nbCx=nbCx, nbCy=nbCy, NBPHOTONS=NBPHOTONS, surfLPH=surfLPH, TC=TC, cusL=cusL,
                 SUN_DISC=SUN_DISC)
 
-        if (nb_H > 0 and TC is not None and (cusL is not None) and(cusL.dict['LMODE'] == "FF" or cusL.dict['LMODE'] == "BR")):
+        if (nb_H > 0 and TC is not None and cusL is not None):
             MZAlt_H = zAlt_H/nb_H; weightR=matCats[2, 1]; SREC=TC*TC*nbCx*nbCy;
             # dicSTP : tuple incorporating parameters for Solar Tower Power applications
             dicSTP = {"nb_H":nb_H, "totS_H":totS_H, "surfTOA":surfLPH, "MZAlt_H":MZAlt_H, "vSun":vSun, "wRec":matCats[2, 1],
-                      "SREC":SREC, "LPH":cusL.dict['LPH'], "LPR":cusL.dict['LPR'], "prog":progress}
+                      "SREC":SREC, "TC":TC, "LPH":cusL.dict['LPH'], "LPR":cusL.dict['LPR'], "prog":progress, "n_cte":n_cte}
         else: # If there are no heliostats --> there is no STP and then no analyses of optical losses
             dicSTP = None; matLoss = None; weightR=0
                 
@@ -1432,32 +1432,24 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
         m.add_dataset('C5_Receiver', cMatVisuRecep[5][:][:], ['Horizontal pixel', 'Vertical pixel'])
         m.add_dataset('C6_Receiver', cMatVisuRecep[6][:][:], ['Horizontal pixel', 'Vertical pixel'])
         m.add_dataset('C7_Receiver', cMatVisuRecep[7][:][:], ['Horizontal pixel', 'Vertical pixel'])
-        m.add_dataset('C8_Receiver', cMatVisuRecep[8][:][:], ['Horizontal pixel', 'Vertical pixel'])        
+        m.add_dataset('C8_Receiver', cMatVisuRecep[8][:][:], ['Horizontal pixel', 'Vertical pixel'])
+        m.set_attr('S_REC', str(dicSTP["SREC"]))
+        m.set_attr('S_RCELL', str(dicSTP["TC"]))
 
     if (matCats is not None):
+        # Indice 0 = Sum of all Cats, then cat1 to cat8, def of cats -> see Moulana et al, 2019
         m.add_axis('Categories', np.array([0, 1, 2, 3, 4, 5, 6, 7, 8], dtype=np.int32))
-        m.add_dataset('cat_PhNb', matCats[:,0], ['Categories'], attrs={'description':
-            'Photons number received (sum of all cats indice 0) +\n' + \
-            '       for each cats (from indice 1 to 8)'})
-        m.add_dataset('cat_w', matCats[:,1], ['Categories'], attrs={'description':
-            'Sum of photons weight (sum of all cats indice 0) +\n' + \
-            '       for each cats (from indice 1 to 8)'})
-        m.add_dataset('cat_w2', matCats[:,2], ['Categories'], attrs={'description':
-            'Sum of Photons weight^2 (sum of all cats indice 0) +\n' + \
-            '       for each cats (from indice 1 to 8)'})
-        m.add_dataset('cat_irr', matCats[:,3], ['Categories'], attrs={'description':
-            'Irradiance at the receiver, must multiply by E_TOA, result is in W/m^2\n' + \
-            '       (sum of all cats indice 0) for each cats (from indice 1 to 8)'})
-        m.add_dataset('cat_errAbs', matCats[:,4], ['Categories'], attrs={'description':
-            'Relative error of the intensity (sum of all cats indice 0) +\n' + \
-            '       for each cats (from indice 1 to 8)'})
-        m.add_dataset('cat_err%', matCats[:,5], ['Categories'], attrs={'description':
-            'Absolute error of the irradiance,  must multiply by E_TOA,\n' + \
-            'result is in W/m^2 (sum of all cats indice 0) + \nfor each cats (from indice 1 to 8)'})
+        m.add_dataset('cat_PhNb', matCats[:,0], ['Categories'])
+        m.add_dataset('cat_w', matCats[:,1], ['Categories'])
+        m.add_dataset('cat_w2', matCats[:,2], ['Categories'])
+        m.add_dataset('cat_irr', matCats[:,3], ['Categories'])
+        m.add_dataset('cat_errAbs', matCats[:,4], ['Categories'])
+        m.add_dataset('cat_err%', matCats[:,5], ['Categories'])
 
     if (matLoss is not None):
         m.add_dataset('wLoss', np.array(matLoss[:,0], dtype=np.float64), ['index'])
         m.add_dataset('wLoss2', np.array(matLoss[:,1], dtype=np.float64), ['index'])
+        m.set_attr('n_cte', str(dicSTP["n_cte"]))
 
         # To consider also the multispectral case
         if (NLAM > 1) : lwl = len(wl)
@@ -1480,33 +1472,25 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
             # Beer-Lamber law to find the transmisttance
             Tr_tau[i] = np.exp(-abs(tau_ext[i]/-dicSTP["vSun"].z))
             # theoric computation of the total power collected by all the heliostats
-            P_pyt[i] = Tr_tau[i]*dicSTP["totS_H"]
+            P_pyt[i] = Tr_tau[i]*dicSTP["totS_H"]*1e6 # mult by 1e6 to convert km² to m²
         # Save results
         m.add_dataset('n_tr', Tr_tau, ['wavelength'])
         m.add_dataset('powc_H', P_pyt, ['wavelength'])
         # ========
 
-        # Compute the constant needed for the calculation of the optical efficiencies
-        if (back):
-            P_cud = matCats[2, 3]*dicSTP["SREC"] # power collected by the reciever
-            # === Here allows the calculation of the analytical approx of n_atm ->
-            if ((dicSTP["LPH"] is not None) and (dicSTP["LPR"] is not None)):
-                naatm = np.zeros(lwl, dtype=np.float64)
-                p = Progress(lwl-1, dicSTP["prog"])
-                for j in range (0, lwl):
-                    SUM_naatm=0
-                    p.update(j+1, 'n_aatm computed : {:.3g} / {:.3g}'.format(j+1, lwl))
-                    for i in range (len(dicSTP["LPH"])):
-                        SUM_naatm += findExtinction(dicSTP["LPH"][i], dicSTP["LPR"][0], prof_atm, j)
-                    naatm[j] = SUM_naatm/len(dicSTP["LPH"])
-                p.finish('Done! | Analytic approx of n_atm computed for {:.3g} wavelengths'.format(lwl))
-                m.add_dataset('n_aatm', naatm, ['wavelength'])
-            # ===
-            k = P_cud/matCats[2,1]
-        else:
-            # Constante k allows the normalization of counted weights in unit propor to power unit 
-            k = dicSTP["surfTOA"]/np.sum(NPhotonsInTot)
-        m.set_attr('n_cte', str(k))
+        # === Here allows the calculation of the analytical approx of n_atm in backward ->
+        if (back and (dicSTP["LPH"] is not None) and (dicSTP["LPR"] is not None)):
+            naatm = np.zeros(lwl, dtype=np.float64)
+            p = Progress(lwl-1, dicSTP["prog"])
+            for j in range (0, lwl):
+                SUM_naatm=0
+                p.update(j+1, 'n_aatm computed : {:.3g} / {:.3g}'.format(j+1, lwl))
+                for i in range (len(dicSTP["LPH"])):
+                    SUM_naatm += findExtinction(dicSTP["LPH"][i], dicSTP["LPR"][0], prof_atm, j)
+                naatm[j] = SUM_naatm/len(dicSTP["LPH"])
+            p.finish('Done! | Analytic approx of n_atm computed for {:.3g} wavelengths'.format(lwl))
+            m.add_dataset('n_aatm', naatm, ['wavelength'])
+        # ===
 
     return m
 
@@ -2638,7 +2622,7 @@ def normalizeRecIrr(cMatVisuRecep, matCats, nbCx, nbCy, NBPHOTONS, surfLPH, TC, 
     Description of the function normalizeRecIrr
 
     This function enables the normalization of the signal collected
-    by a given receiver, to get the irradiance in W/m² a multiplication by 
+    by a given receiver, to get the collected Power in Watt a multiplication by 
     the sun irradiance at TOA remain still needed.
 
     ==== ARGS:
@@ -2657,29 +2641,44 @@ def normalizeRecIrr(cMatVisuRecep, matCats, nbCx, nbCy, NBPHOTONS, surfLPH, TC, 
     === RETURN:
     cMatVisuRecep : With normalized values
     matCats       : With normalized values
+    normC         : Constant enabling normalization
     '''
+    S_rec = TC*TC*nbCx*nbCy # receiver surface in km²
+    S_rec_m = S_rec * 1e6   # receiver surface in m²
+
+    # Normalize intensities such that only a mult by E_TOA is still needed to obtain power unit
     if (cusL is None):
-        cMatVisuRecep[:][:][:] = (cMatVisuRecep[:][:][:]*nbCx*nbCy)/NBPHOTONS
+        normC = 1./NBPHOTONS
+        # Weights -> propor to w/m², mult by S_rec_m is needed to get something propor to watt unit
+        normC *= S_rec_m
+        cMatVisuRecep[:][:][:] = cMatVisuRecep[:][:][:]*normC
         for i in range (0, 9):
-            matCats[i,3] = matCats[i,1]/NBPHOTONS # intensity
-            matCats[i,4] /= NBPHOTONS # Absolute err
+            matCats[i,3] = matCats[i,1]*normC # intensity
+            matCats[i,4] *= normC # Absolute err
     elif (cusL.dict['LMODE'] == "FF" or cusL.dict['LMODE'] == "RF"):
+        # Here results are already propor to watt unit
+        normC = (surfLPH*1e6)/NBPHOTONS  # Here multiply by 1e6 to convert km² to m²
         for i in range (0, 9):
-            cMatVisuRecep[i][:][:] = cMatVisuRecep[i][:][:] * ((surfLPH)/(TC*TC*NBPHOTONS))
-            matCats[i,3] = matCats[i,1] * ((surfLPH)/(TC*TC*nbCx*nbCy*NBPHOTONS))
-            matCats[i,4] *= ((surfLPH)/(TC*TC*nbCx*nbCy*NBPHOTONS))
+            cMatVisuRecep[i][:][:] = cMatVisuRecep[i][:][:]*normC
+            matCats[i,3] = matCats[i,1]*normC
+            matCats[i,4] *= normC
     elif (cusL.dict['LMODE'] == "B" or cusL.dict['LMODE'] == "BR"):
         normBR = 2
         #lambertian sampling normalization
         if (cusL.dict['TYPE'] == 1): normBR = 1-np.cos(np.radians(cusL.dict['ALDEG']))
         #isotropic sampling normalization
         elif (cusL.dict['TYPE'] == 2): normBR = 2*(1-np.cos(np.radians(cusL.dict['ALDEG'])))
-        cMatVisuRecep[:][:][:] = (cMatVisuRecep[:][:][:]*nbCx*nbCy*normBR)/(NBPHOTONS*2*(1-np.cos(np.radians(SUN_DISC))))
+        normC = normBR/(NBPHOTONS*2*(1-np.cos(np.radians(SUN_DISC))))
+        # Weights -> propor to w/m², mult by S_rec_m is needed to get something propor to watt unit
+        normC *= S_rec_m
+        cMatVisuRecep[:][:][:] = cMatVisuRecep[:][:][:]*normC
         for i in range (0, 9):
-            matCats[i,3] = (matCats[i,1]*normBR)/(NBPHOTONS*2*(1-np.cos(np.radians(SUN_DISC))))
-            matCats[i,4] /= NBPHOTONS*2*(1-np.cos(np.radians(SUN_DISC)))/normBR
+            matCats[i,3] = matCats[i,1]*normC
+            matCats[i,4] *= normC
+    else:
+        raise NameError('Unknown launching mode!')
 
-    return cMatVisuRecep, matCats
+    return cMatVisuRecep, matCats, normC
 
 
 def findExtinction(IP, FP, prof_atm, W_IND = int(0)):
