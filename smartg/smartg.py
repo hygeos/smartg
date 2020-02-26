@@ -871,10 +871,10 @@ class Smartg(object):
         #          
         if isinstance(atm, Atmosphere):
             prof_atm = atm.calc(wl)
-        elif (atm is None):
+        elif (isinstance(atm, MLUT) or (atm is None)):
             prof_atm = atm
         else:
-            raise NameError('atm must be an Atmosphere class or equal to None!')
+            raise NameError('atm must be an Atmosphere class or an MLUT class or equal to None!')
   
         if prof_atm is not None:
             faer = calculF(prof_atm, NF, DEPO, kind='atm')
