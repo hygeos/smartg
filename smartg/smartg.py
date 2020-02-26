@@ -2511,17 +2511,19 @@ def initObj(LGOBJ, vSun, CUSL=None):
         LOBJGPU['nindAV'][i] = 1; LOBJGPU['distAV'][i] = 0
         # Commun to all materials
         LOBJGPU['reflecAV'][i] = LOBJ[i].materialAV.reflectivity
-        LOBJGPU['roughAV'][i] = LOBJ[i].materialAV.roughness
         # Particularity of each material
         if isinstance(LOBJ[i].materialAV, LambMirror):
             LOBJGPU['materialAV'][i] = 1
+            LOBJGPU['roughAV'][i] = 0.
         elif isinstance(LOBJ[i].materialAV, Matte):
             LOBJGPU['materialAV'][i] = 2
+            LOBJGPU['roughAV'][i] = LOBJ[i].materialAV.roughness
         elif isinstance(LOBJ[i].materialAV, Mirror):
             LOBJGPU['materialAV'][i] = 3
             LOBJGPU['shdAV'][i] = int(LOBJ[i].materialAV.shadow)
             LOBJGPU['nindAV'][i] = LOBJ[i].materialAV.nind
             LOBJGPU['distAV'][i] = LOBJ[i].materialAV.distribution
+            LOBJGPU['roughAV'][i] = LOBJ[i].materialAV.roughness
         else:
             raise NameError('Unknown material AV')
 
@@ -2531,17 +2533,19 @@ def initObj(LGOBJ, vSun, CUSL=None):
         LOBJGPU['nindAR'][i] = 1; LOBJGPU['distAR'][i] = 0
         # Commun to all materials
         LOBJGPU['reflecAR'][i] = LOBJ[i].materialAR.reflectivity
-        LOBJGPU['roughAR'][i] = LOBJ[i].materialAR.roughness
         # Particularity of each material
         if isinstance(LOBJ[i].materialAR, LambMirror):
             LOBJGPU['materialAR'][i] = 1
+            LOBJGPU['roughAR'][i] = 0.
         elif isinstance(LOBJ[i].materialAR, Matte):
             LOBJGPU['materialAR'][i] = 2
+            LOBJGPU['roughAR'][i] = LOBJ[i].materialAR.roughness
         elif isinstance(LOBJ[i].materialAR, Mirror):
             LOBJGPU['materialAR'][i] = 3
             LOBJGPU['shdAR'][i] = int(LOBJ[i].materialAR.shadow)
             LOBJGPU['nindAR'][i] = LOBJ[i].materialAR.nind
             LOBJGPU['distAR'][i] = LOBJ[i].materialAR.distribution
+            LOBJGPU['roughAR'][i] = LOBJ[i].materialAR.roughness
         else:
             raise NameError('Unknown material AR')
         # ====

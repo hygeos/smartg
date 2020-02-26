@@ -4219,98 +4219,95 @@ __device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* 
 	}
 	else if ( geoS->type == 2)
 	{ ph->E += 1; }
-	
-	float3 u_n, v_n;	// Vecteur du photon après reflexion
-    float phi;
-    float cTh, sTh, cPhi, sPhi;
 
+
+	float thv, phi;
+
+	/***************************************************/
+    /* Computation of outgoing direction */
+    /***************************************************/
     if (le)
 	{
-		cTh  = cosf(tabthv[ph->ith]);  
-        phi  = tabphi[ph->iph];
+		// Outgoing direction in GLOBAL frame
+		phi = tabphi[ph->iph];
+		thv = tabthv[ph->ith];
+		DirectionToUV(thv, phi, &ph->v, &ph->u);
+
+		float weight = dot(ph->v, geoS->normalBase);
+		if (weight <= 0.)
+		{
+			ph->loc = ABSORBED;
+			return;
+		}
+		ph->weight *= weight/fabs(ph->v.z);
     }
     else
 	{
-        float ddis=0.0F;
-        if ((LEd==0) || (LEd==1 && RAND>ddis))
+		float3 v_n, u_n; // photon outgoing direction in the LOCAL frame
+
+		// Cosine of the LOCAL zenith angle sampling for Lambertian reflector
+		phi = RAND*DEUXPI;
+		thv = acosf(sqrtf(RAND));
+		DirectionToUV(thv, phi, &v_n, &u_n);
+
+		float3 vecX, vecY, vecZ;
+		vecX=make_float3(1., 0., 0.);
+		vecY=make_float3(0., 1., 0.);
+		vecZ=make_float3(0., 0., 1.);
+   
+		Transform transfo=geoS->mvTF;
+		vecX=transfo(Vectorf(vecX)); vecX=normalize(vecX);
+		vecY=transfo(Vectorf(vecY)); vecY=normalize(vecY);
+		vecZ=transfo(Vectorf(vecZ)); vecZ=normalize(vecZ);
+
+		float4x4 M = make_float4x4(
+			vecX.x, vecY.x, vecZ.x, 0.f,
+			vecX.y, vecY.y, vecZ.y, 0.f,
+			vecX.z, vecY.z, vecZ.z, 0.f,
+			0.f , 0.f , 0.f , 1.f
+			);
+
+		float4x4 tM = transpose(M);	
+		Transform wTo(M, tM);
+
+		// apply the transformation
+		v_n = wTo(Vectorf(v_n));
+		u_n = wTo(Vectorf(u_n));
+
+		if ( (isnan(v_n.x)) || (isnan(v_n.y)) || (isnan(v_n.z)) || 
+			 (isnan(u_n.x)) || (isnan(u_n.y)) || (isnan(u_n.z)) )
 		{
-            // Standard sampling
-	        cTh = sqrtf( RAND );
-	        phi = RAND*DEUXPI;
-        }
-        else
-		{
-            // DDIS sampling , Buras and Mayer
-            float Om = 0.001;
-	        cTh = sqrtf(1.F-RAND*Om);
-            phi = RAND*DEUXPI;
-            ph->weight *= DEUXPI*(1. -sqrtf(1.F-Om));
-        }
+			ph->loc = REMOVED;
+			return;
+		}
+	
+		// Update the value of u and v of the photon	
+		ph->v = v_n;
+		ph->u = u_n;
     }
 
-	sTh = sqrtf( 1.0F - cTh*cTh );
-	cPhi = __cosf(phi);
-	sPhi = __sinf(phi);
-	
-	/** calcul u,v new **/
-	v_n.x = cPhi*sTh;
-	v_n.y = sPhi*sTh;
-	v_n.z = cTh;
-	
-	u_n.x = cPhi*cTh;
-	u_n.y = sPhi*cTh;
-	u_n.z = -sTh;
 
-	// Depolarisation du Photon
-    float4x4 L = make_float4x4(
+    /***************************************************/
+    /* Update of Stokes vector  */
+    /***************************************************/
+    // Reflection Matrix
+	float4x4 RL = make_float4x4(
                     0.5F, 0.5F, 0.F, 0.F,
                     0.5F, 0.5F, 0.F, 0.F,
                     0.0F, 0.0F, 0.F, 0.F,
                     0.0F, 0.0F, 0.F, 0.F 
-		);
-    ph->stokes = mul(L,ph->stokes);
+            );
+    ph->stokes = mul(RL, ph->stokes); /*[Eq. 15,39]*/
 
     #ifdef BACK
-    ph->M = mul(ph->M,L);
+    ph->M = mul(ph->M, RL);
     #endif
 	
+	/***************************************************/
+	/* Update of photon location and weight */
+	/***************************************************/
 	ph->locPrev = OBJSURF;
 	ph->loc = ATMOS;
-	
-	// // Unit vectors which form a second base and where e3 is the geo normal
-	float3 e1, e2, e3;
-	e3 = normalize(geoS->normal);         // be sure that e3 is normalized
-	coordinateSystem(e3, &e1, &e2);  // create e1, e2 orthogonal unit vectors 
-	// e1 = normalize(e1);
-	// e2 = normalize(e2);
-
-	// The passage matrix and his transpose tM, ie. for a vector X: $X = M X' and X' = tM X$
-	// - Works only if the two basis have the same origin
-	float4x4 M = make_float4x4(
-		e1.x, e2.x, e3.x, 0.f,
-		e1.y, e2.y, e3.y, 0.f,
-		e1.z, e2.z, e3.z, 0.f,
-		0.f , 0.f , 0.f , 1.f
-		);
-	float4x4 tM = transpose(M);
-		
-	// Create the transforms obect to world
-	Transform oTw(M, tM);
-
-	// apply the transformation
-	v_n = oTw(Vectorf(v_n));
-	u_n = oTw(Vectorf(u_n));
-
-	// 
-	if ( (isnan(v_n.x)) || (isnan(v_n.y)) || (isnan(v_n.z)) || (isnan(u_n.x)) || (isnan(u_n.y)) || (isnan(u_n.z)) )
-	{
-		ph->loc = REMOVED;
-		return;
-	}
-	
-	// Update the value of u and v of the photon	
-	ph->v = v_n;
-	ph->u = u_n;
 
 	ph->weight *= geoS->reflectivity;
 		
