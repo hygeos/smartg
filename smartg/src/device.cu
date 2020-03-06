@@ -6555,6 +6555,7 @@ __device__ float F2_rtls(float ths, float thv, float phi ){  //  rossthick-lispa
 
 __device__ float BRDF(int ilam, float3 v0, float3 v1, struct Spectrum *spectrum ){  //  general BRDF
     float wbrdf = 1.;
+	int idx = blockIdx.x *blockDim.x + threadIdx.x;
     if (DIOPTREd>3) {
         float dph = 0.;
         float th0 = acos(fabs(v0.z));
@@ -6573,7 +6574,7 @@ __device__ float BRDF(int ilam, float3 v0, float3 v1, struct Spectrum *spectrum 
             default:
                 wbrdf = 1.;
         }
+        if (wbrdf==0.) printf("%f %f %f %f %f\n",th0,th1,dph,F1_rtls(th0,th1,dph),F2_rtls(th0,th1,dph));
     }
-
     return wbrdf;
 }
