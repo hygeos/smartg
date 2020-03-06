@@ -424,8 +424,9 @@ extern "C" {
            // if not environment effects 
            if( (ENVd==0) || (ENVd==2)) { 
 
-           // if not a Lambertian surface
-			if( DIOPTREd!=3 ) {
+           // if not a Lambertian or land BRDF surface
+			//if( DIOPTREd!=3 ) {
+			if( DIOPTREd<3 ) {
                 /* Surface Local Estimate (not evaluated if atmosphere only simulation)*/
                 if (LEd == 1 && SIMd != ATM_ONLY) {
                 ///* TEST Double LE */
@@ -450,7 +451,7 @@ extern "C" {
                             surfaceBRDF(&ph_le, 1, tabthv, tabphi,
                                       count_level_le, &rngstate);
                         else 
-                            surfaceAgitee(&ph_le, 1, tabthv, tabphi,
+                            surfaceWaterRough(&ph_le, 1, tabthv, tabphi,
                                       count_level_le, &rngstate);
 
                         #ifdef VERBOSE_PHOTON
@@ -501,7 +502,7 @@ extern "C" {
 				    surfaceBRDF(&ph, 0, tabthv, tabphi,
                               count_level, &rngstate);
                 else
-				    surfaceAgitee(&ph, 0, tabthv, tabphi,
+				    surfaceWaterRough(&ph, 0, tabthv, tabphi,
                               count_level, &rngstate);
             } // Not lambertian
 
@@ -608,7 +609,7 @@ extern "C" {
                             surfaceBRDF(&ph_le, 1, tabthv, tabphi,
                                       count_level_le, &rngstate);
                         else
-                            surfaceAgitee(&ph_le, 1, tabthv, tabphi,
+                            surfaceWaterRough(&ph_le, 1, tabthv, tabphi,
                                       count_level_le, &rngstate);
 
                         #ifdef VERBOSE_PHOTON
@@ -655,7 +656,7 @@ extern "C" {
                     if (BRDFd != 0)
                         surfaceBRDF(&ph, 0, tabthv, tabphi, count_level, &rngstate);
                     else
-                        surfaceAgitee(&ph, 0, tabthv, tabphi, count_level, &rngstate);
+                        surfaceWaterRough(&ph, 0, tabthv, tabphi, count_level, &rngstate);
                 } //dis
            } // ENV=1
 
@@ -726,7 +727,7 @@ extern "C" {
 							copyPhoton(&ph, &ph_le);
 							ph_le.iph = (iph + iph0)%NBPHId;
 							ph_le.ith = (ith + ith0)%NBTHETAd;
-							surfaceLambertienne3D(&ph_le, 1, tabthv, tabphi, spectrum,
+							surfaceLambert3D(&ph_le, 1, tabthv, tabphi, spectrum,
 												  &rngstate, &geoStruc);			
 							// Only two levels for counting by definition
 							countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0P,
@@ -740,7 +741,7 @@ extern "C" {
 						}//direction
 					}//direction
 				} //LE
-				surfaceLambertienne3D(&ph, 0, tabthv, tabphi, spectrum,
+				surfaceLambert3D(&ph, 0, tabthv, tabphi, spectrum,
 									  &rngstate, &geoStruc);
 			} // END Lambertian Mirror
 			else if (geoStruc.material == 2) // Matte
@@ -3104,11 +3105,11 @@ __device__ void choose_scatterer(Photon* ph,
 }
 
 
-__device__ void surfaceAgitee(Photon* ph, int le,
+__device__ void surfaceWaterRough(Photon* ph, int le,
                               float* tabthv, float* tabphi, int count_level,
                               struct RNG_State *rngstate) {
 
-	if( SIMd == ATM_ONLY){ // Atmosphère , la surface absorbe tous les photons
+	if( SIMd == ATM_ONLY){ // Atmosphere only, surface absorbs all. 
 		ph->loc = ABSORBED;
 		return;
 	}
@@ -3118,19 +3119,19 @@ __device__ void surfaceAgitee(Photon* ph, int le,
 	ph->E += 1;
 	#endif
 
-	// Réflexion sur le dioptre agité
-	float theta;	// Angle de deflection polaire de diffusion [rad]
-	float psi;		// Angle azimutal de diffusion [rad]
-	float cTh, sTh;	//cos et sin de l'angle d'incidence du photon sur le dioptre
+	// Reflection rough dioptre
+	float theta;	// reflection polar angle[rad]
+	float psi;		// reflection azimuth angle [rad]
+	float cTh, sTh;	// cos and sin of photon incident angle on the dioptre
 	
 	float sig, sig2  ;
-	float beta = 0.F;	// Angle par rapport à la verticale du vecteur normal à une facette de vagues 
+	float beta = 0.F;	// polar angle of the facet normal 
 	float sBeta;
 	float cBeta;
 	
-	float alpha ;	//Angle azimutal du vecteur normal a une facette de vagues
+	float alpha ;	// azimuth angle of the facet normal
 	
-	float nind; // relative index of refrection 
+	float nind; // relative index of refraction 
 	float temp;
 	
     // coordinates of the normal to the wave facet in the original axis
@@ -3920,6 +3921,7 @@ __device__ void surfaceLambert(Photon* ph, int le,
   	
     float thv, phi;
 	float3 v_n, u_n; // photon outgoing direction in the LOCAL frame
+    float3 v0=ph->v;
 
     #ifdef SPHERIQUE
     // define 3 vectors Nx, Ny and Nz in cartesian coordinates which define a
@@ -4000,7 +4002,7 @@ __device__ void surfaceLambert(Photon* ph, int le,
 		ph->layer = NATMd;
         #endif
         #ifndef SIF
-		ph->weight *= spectrum[ph->ilam].alb_surface;  /*[Eq. 16,39]*/
+        ph->weight *= spectrum[ph->ilam].alb_surface * BRDF(ph->ilam, -v0, ph->v, spectrum);  /*[Eq. 16,39]*/
         if (ENVd==2) {
             ph->weight *= checkerboard(ph->pos);
         }
@@ -4008,7 +4010,7 @@ __device__ void surfaceLambert(Photon* ph, int le,
         ph->nint+=1;
         #else
         if (ph->emitter==SOLAR_REF){
-		    ph->weight *= spectrum[ph->ilam].alb_surface;  /*[Eq. 16,39]*/
+            ph->weight *= spectrum[ph->ilam].alb_surface * BRDF(ph->ilam, -v0, ph->v, spectrum);  /*[Eq. 16,39]*/
             if (ENVd==2) {
                 ph->weight *= checkerboard(ph->pos);
             }
@@ -4201,7 +4203,7 @@ __device__ void surfaceBRDF(Photon* ph, int le,
 } //surfaceBRDF
 
 #ifdef OBJ3D
-__device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* tabphi,
+__device__ void surfaceLambert3D(Photon* ph, int le, float* tabthv, float* tabphi,
 									  struct Spectrum *spectrum, struct RNG_State *rngstate, IGeo* geoS)
 {
 	ph->nint += 1;
@@ -6512,3 +6514,66 @@ __device__ void GetFaceIndex(float3 pos, int *index)
 }
 
 #endif
+
+//########## Ross Thick Li-Sparse  ##############"
+
+__device__ float F1_rtls(float ths, float thv, float phi ){  //  rossthick-lisparse, only F1
+    if (phi < 0.) phi += DEUXPI; 
+    if (phi > PI) phi = DEUXPI - phi; 
+    float cos_xi = cos(ths) * cos(thv) + sin(ths) * sin(thv) * cos(phi);
+    float xi = acos(cos_xi);
+    float mm = 1./cos(thv) + 1./cos(ths);
+    float tthv = tan(thv);
+    float tths = tan(ths);
+
+    float cos_t = 2./mm * sqrt(tthv*tthv + tths*tths - 2.*tthv*tths * cos(phi) + pow(tthv *tths * sin(phi),2) );
+    cos_t = fmin(cos_t, 1.);
+    float t = acos(cos_t);
+    float sin_t = sin(t);
+    float big_O = mm*(t - sin_t*cos_t)/PI;
+            
+    // geometric kernel
+    float F1 = big_O-(1./cos(thv) + 1./cos(ths)) + (1. + cos_xi)/(cos(thv)*cos(ths))/2.;
+
+    return F1;
+}
+
+
+__device__ float F2_rtls(float ths, float thv, float phi ){  //  rossthick-lisparse, only F2
+    if (phi < 0.) phi += DEUXPI; 
+    if (phi > PI) phi = DEUXPI - phi; 
+    float cos_xi = cos(ths) * cos(thv) + sin(ths) * sin(thv) * cos(phi);
+    float xi = acos(cos_xi);
+
+    // volume-scattering kernel
+    float F2 = (((PI/2. -xi)*cos_xi + sin(xi))/(cos(thv) + cos(ths))) - PI/4.;
+
+    return F2;
+}
+
+// ################ BRDF ##############################
+
+__device__ float BRDF(int ilam, float3 v0, float3 v1, struct Spectrum *spectrum ){  //  general BRDF
+    float wbrdf = 1.;
+    if (DIOPTREd>3) {
+        float dph = 0.;
+        float th0 = acos(fabs(v0.z));
+        float th1 = acos(fabs(v1.z));
+        float2 v0xy  = make_float2(v0);
+        float2 v1xy  = make_float2(v1);
+        v0xy/=length(v0xy);
+        v1xy/=length(v1xy);
+        if (th0!=0. && th1!=0.) dph = acos(dot(v0xy,v1xy));
+        switch(DIOPTREd) {
+            case 4: // RossThick Li-Sparse
+                wbrdf = 1. + spectrum[ilam].k1p_surface*F1_rtls(th0,th1,dph) +
+                    spectrum[ilam].k2p_surface*F2_rtls(th0,th1,dph);
+                break;
+
+            default:
+                wbrdf = 1.;
+        }
+    }
+
+    return wbrdf;
+}

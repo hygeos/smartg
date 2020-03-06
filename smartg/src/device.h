@@ -196,7 +196,7 @@ __device__ void scatter(Photon* ph,
         struct RNG_State*);
 
 
-__device__ void surfaceAgitee(Photon*, int le, float* tabthv, float* tabphi, int count_level,
+__device__ void surfaceWaterRough(Photon*, int le, float* tabthv, float* tabphi, int count_level,
                               struct RNG_State*);
 __device__ void surfaceBRDF(Photon*, int le, float* tabthv, float* tabphi, int count_level,
                               struct RNG_State*);
@@ -209,7 +209,7 @@ __device__ void surfaceLambert(Photon*, int le,
                                     struct RNG_State*);
 
 #ifdef OBJ3D
-__device__ void surfaceLambertienne3D(Photon* ph, int le, float* tabthv, float* tabphi,
+__device__ void surfaceLambert3D(Photon* ph, int le, float* tabthv, float* tabphi,
 									  struct Spectrum *spectrum, struct RNG_State*, IGeo* geoS);
 
 __device__ void surfaceRugueuse3D(Photon* ph, IGeo* geoS, struct RNG_State *rngstate);
@@ -289,6 +289,10 @@ __device__ float4x4 FresnelR(float3, float3) ;
 
 __device__ float checkerboard(float3) ;
 
+__device__ float F1_rtls(float , float , float );  //  rossthick-lisparse, only F1
+__device__ float F2_rtls(float , float , float );  //  rossthick-lisparse, only F2
+
+__device__ float BRDF(int, float3, float3 , struct Spectrum* );  //  general BRDF
 #ifdef PHILOX
 /**********************************************************
 *	> Fonctions liées au générateur aléatoire

@@ -269,6 +269,8 @@ struct Spectrum {
     float lambda;
     float alb_surface;
     float alb_seafloor;
+    float k1p_surface;
+    float k2p_surface;
 };
 
 struct Phase {

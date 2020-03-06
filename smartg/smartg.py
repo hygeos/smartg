@@ -88,6 +88,8 @@ type_Spectrum = [
     ('lambda'      , 'float32'),
     ('alb_surface' , 'float32'),
     ('alb_seafloor', 'float32'),
+    ('k1p_surface' , 'float32'),
+    ('k2p_surface' , 'float32'),
     ]
 
 type_Profile = [
@@ -203,7 +205,6 @@ class FlatSurface(object):
     Arguments:
         SUR: Processes at the surface dioptre
             # 1 Forced reflection
-            # 2 Forced transmission
             # 3 Reflection and transmission
         NH2O: Relative refarctive index air/water
     '''
@@ -228,7 +229,6 @@ class RoughSurface(object):
         WIND: wind speed (m/s)
         SUR: Processes at the surface dioptre
             # 1 Forced reflection
-            # 2 Forced transmission
             # 3 Reflection and transmission
         NH2O: Relative refarctive index air/water
         WAVE_SHADOW : include wave shadowing effect (default not)
@@ -253,22 +253,45 @@ class RoughSurface(object):
 class LambSurface(object):
     '''
     Definition of a lambertian reflector
-
-    ALB: Albedo of the reflector
+    ALB: albedo spectral model
     '''
-    def __init__(self, ALB=0.5):
+    def __init__(self, ALB=Albedo_cst(0.5)):
         self.dict = {
                 'SUR': 1,
                 'DIOPTRE': 3,
-                'SURFALB': ALB,
                 'WINDSPEED': -999.,
                 'NH2O': -999.,
                 'WAVE_SHADOW': 0,
                 'BRDF': 1,
                 'SINGLE': 1,
                 }
+        self.alb = ALB
     def __str__(self):
         return 'LAMBSUR-ALB={SURFALB}'.format(**self.dict)
+
+
+class RTLSSurface(object):
+    '''
+    Definition of a Ross-Thick Li-Sparse reflector
+    kp = (k0 , k1p, k2p): a tuple of
+        k0 : Spectral Albedo of the isotropic (lambertian) kernel
+        k1p: Spectral relative weight the F1 (geometric) kernel (=K1/K0)
+        k2p: Spectral relative weight the F2 (volumetric) kernel(=K2/K0)
+    '''
+    def __init__(self, kp=(Albedo_cst(0.5), Albedo_cst(0.0), Albedo_cst(0.0))):
+        self.dict = {
+                'SUR': 1,
+                'DIOPTRE': 4,
+                'WINDSPEED': -999.,
+                'NH2O': -999.,
+                'WAVE_SHADOW': 0,
+                'BRDF': 1,
+                'SINGLE': 1,
+                }
+        self.kp = kp
+        self.alb= None
+    def __str__(self):
+        return 'RTLS-ALB={SURFALB}'.format(**self.dict)
 
 
 class Environment(object):
@@ -608,7 +631,7 @@ class Smartg(object):
                 * default None (no surface)
                 * RoughSurface(WIND=5.)  # wind-roughened ocean surface
                 * FlatSurface()          # flat air-water interface
-                * LambSurface(ALB=0.1)   # Lambertian surface of albedo 0.1
+                * LambSurface(ALB=Alb_cst(0.1))   # Lambertian surface of constant albedo 0.1
 
             water: water object, providing options relative to the ocean surface
                 default None (no ocean)
@@ -924,13 +947,6 @@ class Smartg(object):
         tab_sensor = to_gpu(tab_sensor)
 
         #
-        # surface
-        #
-        if surf is None:
-            # default surface parameters
-            surf = FlatSurface()
-
-        #
         # ocean
         #
         if isinstance(water, IOP_base):
@@ -961,8 +977,15 @@ class Smartg(object):
         if env is None:
             # default values (no environment effect)
             env = Environment()
-            if 'SURFALB' in surf.dict:
-                spectrum['alb_surface'] = surf.dict['SURFALB']
+            if surf is not None :
+                if surf.alb is not None:
+                    spectrum['alb_surface'] = surf.alb.get(wl[:])
+                elif surf.kp is not None:
+                    spectrum['alb_surface'] = surf.kp[0].get(wl[:])
+                    spectrum['k1p_surface'] = surf.kp[1][:]
+                    spectrum['k2p_surface'] = surf.kp[2][:]
+                else:
+                    spectrum['alb_surface'] = -999.
             else:
                 spectrum['alb_surface'] = -999.
         else:
@@ -1002,23 +1025,6 @@ class Smartg(object):
                     assert NBPHI==NBTHETA
                     ZIP = 1
                     NBPHI = 1 
-
-        '''
-        # Multiple Init Direction
-        MI = 0
-        if mi is not None:
-            MI = 1
-            if not 'th' in mi:
-                mi['th'] = np.array(mi['th_deg'], dtype='float32').ravel() * np.pi/180.
-            else:
-                mi['th'] = np.array(mi['th'], dtype='float32').ravel()
-            if not 'phi' in le:
-                mi['phi'] = np.array(mi['phi_deg'], dtype='float32').ravel() * np.pi/180.
-            else:
-                mi['phi'] = np.array(mi['phi'], dtype='float32').ravel()
-            NBTHETA0 =  mi['th'].shape[0]
-            NBPHI0   =  mi['phi'].shape[0]
-         '''
 
 
         FLUX = 0
