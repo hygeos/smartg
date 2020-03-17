@@ -246,6 +246,8 @@ class RoughSurface(object):
                 'BRDF': 1 if BRDF else 0,
                 'SINGLE': 1 if SINGLE else 0,
                 }
+        self.alb=None
+        self.kp=None
     def __str__(self):
         return 'ROUGHSUR={SUR}-WIND={WINDSPEED}-DI={DIOPTRE}-WAVE_SHADOW={WAVE_SHADOW}-BRDF={BRDF}-SINGLE={SINGLE}'.format(**self.dict)
 
@@ -951,7 +953,7 @@ class Smartg(object):
         #
         if isinstance(water, IOP_base):
             prof_oc = water.calc(wl)
-        elif(water is None):
+        elif(isinstance(water, MLUT) or (water is None)):
             prof_oc = water
         else:
             raise NameError('water must be an IOP_base class or equal to None!')
