@@ -4884,9 +4884,9 @@ __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geo
 	if ( le == 1)
 	{ // CAT 8 : 3 proc. H, E et S avant de toucher le R.
 		#if !defined(DOUBLE) || (defined(DOUBLE) && __CUDA_ARCH__ >= 600)
-		atomicAdd(wPhCatC+5, weight);// atomicAdd(wPhCatC2+5, weight2);
+		atomicAdd(wPhCatC+5, weight); atomicAdd(wPhCatC2+5, weight2);
 		#else
-		DatomicAdd(wPhCatC+5, weight);
+		DatomicAdd(wPhCatC+5, weight); DatomicAdd(wPhCatC2+5, weight2);
 		#endif
 		// atomicAdd(nbPhCat+5, 1);
 		//atomicAdd(tabCountObj+(6*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
