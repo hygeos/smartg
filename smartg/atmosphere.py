@@ -1258,18 +1258,31 @@ def g(lat, z) :
             + (7.254 * 1e-11 + 1e-13 * np.cos(2*lat*np.pi/180.)) * z**2
             - (1.517 * 1e-17 + 6 * 1e-20 * np.cos(2*lat*np.pi/180.)) * z**3)
 
-def rod(lam, co2, lat, z, P):
-    ''' Rayleigh optical depth (N wavelengths x M layers)
-        lam : um (N)
+def rod(lam, co2, lat, z, P, pressure='surface'):
+    """
+    Rayleigh optical depth from Bodhaine et al, 99 (N wavelengths x M layers)
+        lam : wavelength in um (N)
         co2 : ppm (M)
         lat : deg (scalar)
-        z : m (M)
-        P : hPa (M)
-    '''
+        z : altitude in m (M)
+        P : pressure in hPa (M)
+            (surface or sea-level)
+        pressure: str
+            - 'surface': P provided at altitude z
+            - 'sea-level': P provided at altitude 0
+    """
     Avogadro = codata.value('Avogadro constant')
-    MA = ma(co2).reshape((1,-1))
-    G = g(lat, z)
-    return raycrs(lam, co2) * P*1e3 * Avogadro/MA/G
+    zs = 0.73737 * z + 5517.56  # effective mass-weighted altitude
+    G = g(lat, zs)
+    # air pressure at the pixel (i.e. at altitude) in hPa
+    if pressure == 'sea-level':
+        Psurf = (P * (1. - 0.0065 * z / 288.15) ** 5.255) * 1000.  # air pressure at pixel location in dyn / cm2, which is hPa * 1000
+    elif pressure == 'surface':
+        Psurf = P
+    else:
+        raise ValueError(f'Invalid pressure type ({pressure})')
+
+    return raycrs(lam, co2) * Psurf * Avogadro/ma(co2)/G
 
 def refractivity(lam,P,T,co2):
     ''' Refractivity of air
