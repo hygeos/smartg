@@ -1258,7 +1258,7 @@ def g(lat, z) :
             + (7.254 * 1e-11 + 1e-13 * np.cos(2*lat*np.pi/180.)) * z**2
             - (1.517 * 1e-17 + 6 * 1e-20 * np.cos(2*lat*np.pi/180.)) * z**3)
 
-def rod(lam, co2, lat, z, P, pressure='surface'):
+def rod(lam, co2=400., lat=45., z=0., P=1013.25, pressure='surface'):
     """
     Rayleigh optical depth from Bodhaine et al, 99 (N wavelengths x M layers)
         lam : wavelength in um (N)
