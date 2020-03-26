@@ -2686,7 +2686,7 @@ def normalizeRecIrr(cMatVisuRecep, matCats, nbCx, nbCy, NBPHOTONS, surfLPH, TC, 
     elif (cusL.dict['LMODE'] == "B" or cusL.dict['LMODE'] == "BR"):
         normBR = 2
         #lambertian sampling normalization
-        if (cusL.dict['TYPE'] == 1): normBR = 1-np.cos(np.radians(cusL.dict['ALDEG']))
+        if (cusL.dict['TYPE'] == 1): normBR = (1-np.cos(np.radians(2*cusL.dict['ALDEG'])))/2.
         #isotropic sampling normalization
         elif (cusL.dict['TYPE'] == 2): normBR = 2*(1-np.cos(np.radians(cusL.dict['ALDEG'])))
         normC = normBR/(NBPHOTONS*2*(1-np.cos(np.radians(SUN_DISC))))
