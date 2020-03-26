@@ -1097,7 +1097,13 @@ class Smartg(object):
             # dicSTP : tuple incorporating parameters for Solar Tower Power applications
             dicSTP = {"nb_H":nb_H, "totS_H":totS_H, "surfTOA":surfLPH, "MZAlt_H":MZAlt_H, "vSun":vSun, "wRec":matCats[2, 1],
                       "SREC":SREC, "TC":TC, "LPH":cusL.dict['LPH'], "LPR":cusL.dict['LPR'], "prog":progress, "n_cte":n_cte}
-        else: # If there are no heliostats --> there is no STP and then no analyses of optical losses
+        # If there are no heliostats --> no analyses of optical losses
+        elif(TC is not None and cusL is not None):
+            weightR=matCats[2, 1]; SREC=TC*TC*nbCx*nbCy; matLoss = None
+            dicSTP = {"vSun":vSun, "wRec":matCats[2, 1], "SREC":SREC, "TC":TC, "LPH":cusL.dict['LPH'],
+                      "LPR":cusL.dict['LPR'], "prog":progress, "n_cte":n_cte}
+        # If there are no heliostats and receiver --> there is no STP
+        else: 
             dicSTP = None; matLoss = None; weightR=0
                 
         # finalization
