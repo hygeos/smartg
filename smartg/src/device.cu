@@ -904,6 +904,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 	ph->weight_loss[2] = 0.F;
 	ph->weight_loss[3] = 0.F;
 	ph->weight_loss[4] = 0.F;
+	ph->v_i = make_float3(-DIRSXd, -DIRSYd, -DIRSZd);
     #endif
 	
     ph->nint = 0;
@@ -4208,7 +4209,7 @@ __device__ void surfaceLambert3D(Photon* ph, int le, float* tabthv, float* tabph
 {
 	ph->nint += 1;
 
-	if (geoS->type == 1)
+	if (geoS->type == HELIOSTAT)
 	{
 		#ifdef DOUBLE
 		if (  isBackward( make_double3(geoS->normalBase.x, geoS->normalBase.y, geoS->normalBase.z),
@@ -4218,8 +4219,9 @@ __device__ void surfaceLambert3D(Photon* ph, int le, float* tabthv, float* tabph
 		#endif
 		{ ph->H += 1; }
 		else { ph->E += 1; } // AR traité comme environnement
+        if (ph->direct == 0) {ph->v_i = make_float3(-ph->v.x, -ph->v.y, -ph->v.z);}
 	}
-	else if ( geoS->type == 2)
+	else if ( geoS->type == RECEIVER)
 	{ ph->E += 1; }
 
 
@@ -4435,6 +4437,7 @@ __device__ void Obj3DRoughSurf(Photon* ph, int le, float* tabthv, float* tabphi,
 	{
 		if (sign > 0) { ph->H += 1; }
 		else { ph->E += 1; } // Back heliostat surface considered as environnement
+		if (ph->direct == 0) {ph->v_i = make_float3(-ph->v.x, -ph->v.y, -ph->v.z);}
 	}
 	else if ( geoS->type == RECEIVER)
 	{ ph->E += 1; }
@@ -4697,10 +4700,10 @@ __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, void *wPhLoss2)
 	// Find the incident flux at the mirror before the cosine effect
 	#ifdef BACK
 	ph->weight_loss[1] = double(ph->weight_loss[2])/dot(make_double3(geoS->normalBase.x, geoS->normalBase.y, geoS->normalBase.z),
-														make_double3(-DIRSXd, -DIRSYd, -DIRSZd));
+														make_double3(ph->v_i.x, ph->v_i.y, ph->v_i.z));
 	#else
 	ph->weight_loss[1] = double(ph->weight_loss[0])/dot(make_double3(geoS->normalBase.x, geoS->normalBase.y, geoS->normalBase.z),
-														make_double3(-DIRSXd, -DIRSYd, -DIRSZd));
+														make_double3(ph->v_i.x, ph->v_i.y, ph->v_i.z));
 	#endif
 
 	#ifdef DOUBLE

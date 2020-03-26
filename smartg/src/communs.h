@@ -257,6 +257,7 @@ public:
 	int direct;
     int H, E, S;
 	float weight_loss[5];
+	float3 v_i; // for STP opt efficiency
 	#endif
     #if defined(BACK) &&  defined(OBJ3D)
 	float3 posIni;
