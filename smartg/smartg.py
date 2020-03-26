@@ -380,7 +380,7 @@ class CusForward(object):
 
         if (TYPE == "lambertian"): TYPE = 1
         elif (TYPE == "isotropic"): TYPE = 2
-        elif (TYPE == "disk"): TYPE = 3
+        elif (TYPE == "disk"): TYPE = 3 # in development
         else: raise NameError('You must choose lambertian or isotropic sampling')
 
         self.dict = {
@@ -2671,6 +2671,14 @@ def normalizeRecIrr(cMatVisuRecep, matCats, nbCx, nbCy, NBPHOTONS, surfLPH, TC, 
     elif (cusL.dict['LMODE'] == "FF" or cusL.dict['LMODE'] == "RF"):
         # Here results are already propor to watt unit
         normC = (surfLPH*1e6)/NBPHOTONS  # Here multiply by 1e6 to convert km² to m²
+        normFF = 1.
+        #lambertian sampling normalization
+        if (cusL.dict['LMODE'] == "FF" and cusL.dict['TYPE'] == 1):
+            normFF = ( 1-np.cos(np.radians(2*cusL.dict['FOV'])) ) / (4*( 1-np.cos(np.radians(cusL.dict['FOV'])) ))
+        #isotropic sampling normalization
+        elif (cusL.dict['LMODE'] == "FF" and cusL.dict['TYPE'] == 2):
+            normFF = 1.
+        normC *= normFF
         for i in range (0, 9):
             cMatVisuRecep[i][:][:] = cMatVisuRecep[i][:][:]*normC
             matCats[i,3] = matCats[i,1]*normC

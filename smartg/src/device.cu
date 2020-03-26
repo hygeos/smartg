@@ -1415,6 +1415,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 				PHconed = 360*RAND;
 				cosTHCone = cos(radiansd(ALDEGd));
 				THconed = acos(RAND*(cosTHCone-1)+1)*180./CUDART_PI;
+				ph->weight *= cos(radiansd(THconed));
 			}
 			if (TYPEd == 3)
 			{
@@ -4796,7 +4797,7 @@ __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geo
 		{
 			cosPHSUN = dot(vecSUN, vecPH);
 		}
-		ph->weight /= cosPHSUN;
+
 		p_t = ph->posIni;
 		if ((cosANGD-0.00000001173) > cosPHSUN) {return;}
 		if (cosANGD > cosPHSUN and SUN_DISCd < 1 and ph->H == 0 and ph->S == 0 and ph->E == 0) {ph->weight *= 0.3;}
