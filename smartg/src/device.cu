@@ -1378,90 +1378,70 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 	if (LMODEd == 2) // Full Forward mode
 	{
 		float3 cusForwPos = make_float3( ((CFXd * RAND) - 0.5*CFXd), ((CFYd * RAND) - 0.5*CFYd), 0.);
-		// ph->pos.x += cusForwPos.x + CFTXd;
-		// ph->pos.y += cusForwPos.y + CFTYd;
-		// ph->pos.z = tab_sensor[ph->is].POSZ;
 		ph->pos.x = PXd + cusForwPos.x + CFTXd;
 		ph->pos.y = PYd + cusForwPos.y + CFTYd;
 		ph->pos.z = PZd;
 
 		if (ALDEGd != 0)
 		{
-			
-			// Sun zenith angle (theta) and sun azimuth angle (phi)
-			double sunTheta = 180-tab_sensor[ph->is].THDEG, sunPhi=tab_sensor[ph->is].PHDEG-180;
-
-			// One fixed direction (for radiance) inverse of the initiale pos of the obj
-			double3 vdouble = make_double3(0., 0., -1.);	
-
-			// Initialization of the orthogonal vector to the propagation
-			double3 udouble = make_double3(-1., 0., 0.);
-		
-			double PHconed, THconed;
+			// Initialization of the cosine vector (v), the orthogonal vector (u), ...
+			float3 vfloat = make_float3(0., 0., -1.); float3 ufloat = make_float3(-1., 0., 0.);
+			float PHcone, THcone, sunTheta = 180-tab_sensor[ph->is].THDEG, sunPhi=tab_sensor[ph->is].PHDEG-180;
 
 			if (TYPEd == 1)
 			{
 				// Lambertian cone sampling, see Dutré 2003
-				double sinTHCone, sinTH;
-				PHconed = 360*RAND;
-				sinTHCone = sin(radiansd(ALDEGd));
-				sinTH = sqrt(RAND)*sinTHCone;
-				THconed = asin(sinTH)*180./CUDART_PI;
+				float sinTHCone, sinTH;
+				PHcone = 360*RAND;
+				sinTHCone = __sinf(radians(ALDEGd));
+				sinTH = sqrtf(RAND)*sinTHCone;
+				THcone = asinf(sinTH)*180./CUDART_PI_F;
 			}
 			if (TYPEd == 2)
 			{
 				// Isotropic cone sampling, see Dutré 2003
-				double cosTHCone;
-				PHconed = 360*RAND;
-				cosTHCone = cos(radiansd(ALDEGd));
-				THconed = acos(RAND*(cosTHCone-1)+1)*180./CUDART_PI;
-				ph->weight *= cos(radiansd(THconed));
+				float cosTHCone;
+				PHcone = 360*RAND;
+				cosTHCone = __cosf(radians(ALDEGd));
+				THcone = acosf(RAND*(cosTHCone-1)+1)*180./CUDART_PI_F;
+				ph->weight *= __cosf(radians(THcone));
 			}
-			if (TYPEd == 3)
+			if (TYPEd == 3) //in development
 			{
 				//disk cone sampling
 				//Mixte between disk sampling (Dunn & Shultis 2011) and cone sampling 
-				double rd, Rd;
-				PHconed = 360*RAND;
-				Rd = tan(radiansd(ALDEGd));
-				rd = Rd*sqrt(RAND);
-				THconed = atan(rd)*180/PI;
-
-				// // Use of the model of koepke limb model (only with disk cone sampling
-				// double Gamm;
+				float rd, Rd;
+				PHcone = 360*RAND;
+				Rd = __tanf(radians(ALDEGd));
+				rd = Rd*sqrtf(RAND);
+				THcone = atanf(rd)*180/CUDART_PI_F;
+				// // Use of the koepke limb model
+				// float Gamm;
 				// Gamm = GammaL(550., rd/Rd);
-				// ph->weight *= Gamm;
-				// ph->weight /= 0.856117;
+				// ph->weight*=Gamm;
 			}
-
 			// Transformations to consider the solar cone sampling	
-			Transformd TPHconed, TTHconed;
-			TPHconed = TPHconed.RotateZ(PHconed); TTHconed = TTHconed.RotateY(THconed);		
-			vdouble = TPHconed(   Vectord(  TTHconed( Vectord(vdouble) )  )   );
-			udouble = TPHconed(   Vectord(  TTHconed( Vectord(udouble) )  )   );
-
+			Transform TPHcone, TTHcone;
+			TPHcone = TPHcone.RotateZ(PHcone); TTHcone = TTHcone.RotateY(THcone);		
+			vfloat = TPHcone(   Vectorf(  TTHcone( Vectorf(vfloat) )  )   );
+			ufloat = TPHcone(   Vectorf(  TTHcone( Vectorf(ufloat) )  )   );
             // Transformations to consider the sun direction
-			Transformd TThetad, TPhid;
-			TThetad = TThetad.RotateY(sunTheta); TPhid = TPhid.RotateZ(sunPhi);
-			vdouble = TPhid(   Vectord(  TThetad( Vectord(vdouble) )  )   );
-			udouble = TPhid(   Vectord(  TThetad( Vectord(udouble) )  )   );
+			Transform TTheta, TPhi;
+			TTheta = TTheta.RotateY(sunTheta); TPhi = TPhi.RotateZ(sunPhi);
+			vfloat = TPhi(   Vectorf(  TTheta( Vectorf(vfloat) )  )   );
+			ufloat = TPhi(   Vectorf(  TTheta( Vectorf(ufloat) )  )   );
 
 			// Update the values of u and v
-			ph->v = make_float3(float(vdouble.x), float(vdouble.y), float(vdouble.z));
-			ph->u = make_float3(float(udouble.x), float(udouble.y), float(udouble.z));
-		}
-		
-		
+			ph->v = make_float3(vfloat.x, vfloat.y, vfloat.z);
+			ph->u = make_float3(ufloat.x, ufloat.y, ufloat.z);
+		} // END ALDEGd != 0
+
 	} //END LMODEd == 2
     #else // else if Backward modes
 	if (LMODEd == 3 or LMODEd == 4) // common part between mode B and BR (cusBackward)
 	{		
-		// One fixed direction (for radiance)
-		double3 vdouble2 = make_double3(0., 0., 1.);
-		
-		// Initialization of the orthogonal vector to the propagation
-		double3 udouble2 = make_double3(1., 0., 0.);
-		
+		// Initialization of the cosine vector (v), the orthogonal vector (u), ...
+		double3 vdouble2 = make_double3(0., 0., 1.); double3 udouble2 = make_double3(1., 0., 0.);
 		double PHconed, THconed;
 
 		if (TYPEd == 1)
@@ -1481,7 +1461,6 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 			cosTHconed = cos(radiansd(ALDEGd));
 			THconed = acos(RAND*(cosTHconed-1)+1)*180./CUDART_PI;
 			ph->weight *= cos(radiansd(THconed));
-			//THconed = acos(  sqrt( 1 - RAND*(1 - cosTHconed*cosTHconed) )  )*180./CUDART_PI; //lambertian
 		}
 		
 		// Creation of transforms
@@ -1492,7 +1471,6 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		vdouble2 = TPHconed(   Vectord(  TTHconed( Vectord(vdouble2) )  )   );
 		udouble2 = TPHconed(   Vectord(  TTHconed( Vectord(udouble2) )  )   );
 
-		
 		// Creation of transforms to consider theta and phi for the computation of photon dirs
 		Transformd TTheta, TPhi;
 		TTheta = TTheta.RotateY(tab_sensor[ph->is].THDEG);
@@ -1503,7 +1481,6 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		udouble2 = TPhi(   Vectord(  TTheta( Vectord(udouble2) )  )   );
 
 		// update of u and v
-		ph->vecIni = vdouble2;
 		ph->v = make_float3(float(vdouble2.x), float(vdouble2.y), float(vdouble2.z));
 		ph->u = make_float3(float(udouble2.x), float(udouble2.y), float(udouble2.z));
 
@@ -4778,29 +4755,21 @@ __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geo
     #if defined(BACK)	
 	if (LMODEd == 4 and le == 0 )
 	{
+	    // Use also double precison operations due to simple precison limit 
 		double cosANGD, cosPHSUN;
-		cosANGD = cos( radiansd( double(SUN_DISCd) )  );
 		double3 vecSUN = make_double3(-DIRSXd, -DIRSYd, -DIRSZd);
-		double3 vecPH=make_double3(ph->v.x, ph->v.y, ph->v.z);
-
-		// double tauE = 0.09682134880306427;
-		// double difT;
-
-		if (ph->H == 0 and ph->S == 0 and ph->E == 0)
-		{
-			vecPH = ph->vecIni;
-			cosPHSUN = dot(vecSUN, vecPH);
-			//difT = exp(-tauE)/exp(-tauE/cosPHSUN);
-			//ph->weight *= difT;	
-		}    
-		else
-		{
-			cosPHSUN = dot(vecSUN, vecPH);
-		}
-
+		double3 vecPH = make_double3(ph->v.x, ph->v.y, ph->v.z);
+		double esp = 0.00000001173, esp7 = 0.00000008211;
+		
+		cosANGD = cos( radiansd( SUN_DISCd )  );
+		cosPHSUN = dot(vecSUN, vecPH);
 		p_t = ph->posIni;
-		if ((cosANGD-0.00000001173) > cosPHSUN) {return;}
-		if (cosANGD > cosPHSUN and SUN_DISCd < 1 and ph->H == 0 and ph->S == 0 and ph->E == 0) {ph->weight *= 0.3;}
+
+		if (cosPHSUN < cosANGD-esp7) {return;}
+		// This trick reduce the small error due to the simple precion limit on the direct radiation
+		if (cosANGD >= cosPHSUN and SUN_DISCd < 1 and ph->H == 0 and ph->S == 0 and ph->E == 0) {ph->weight *= 0.15;}
+		else if (cosANGD-esp > cosPHSUN and SUN_DISCd < 1 and ph->S == 0 and ph->E == 0) {ph->weight *= 0.6;}
+
 		if (ph->direct == 0)
 			countLoss(ph, geoS, wPhLoss, wPhLoss2);
 	}

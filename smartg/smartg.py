@@ -1730,9 +1730,9 @@ def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
         copy_to_device('Pmax_y', Pmax_y, np.float32)
         copy_to_device('Pmax_z', Pmax_z, np.float32)
         copy_to_device('IsAtm', IsAtm, np.int32)
-        copy_to_device('DIRSXd', vSun.x, np.float32)
-        copy_to_device('DIRSYd', vSun.y, np.float32)
-        copy_to_device('DIRSZd', vSun.z, np.float32)
+        copy_to_device('DIRSXd', vSun.x, np.float64)
+        copy_to_device('DIRSYd', vSun.y, np.float64)
+        copy_to_device('DIRSZd', vSun.z, np.float64)
         copy_to_device('PXd', PXd, np.float32)
         copy_to_device('PYd', PYd, np.float32)
         copy_to_device('PZd', PZd, np.float32)
@@ -2673,7 +2673,7 @@ def normalizeRecIrr(cMatVisuRecep, matCats, nbCx, nbCy, NBPHOTONS, surfLPH, TC, 
         normC = (surfLPH*1e6)/NBPHOTONS  # Here multiply by 1e6 to convert km² to m²
         normFF = 1.
         #lambertian sampling normalization
-        if (cusL.dict['LMODE'] == "FF" and cusL.dict['TYPE'] == 1):
+        if (cusL.dict['LMODE'] == "FF" and cusL.dict['TYPE'] == 1 and cusL.dict['FOV'] > 0):
             normFF = ( 1-np.cos(np.radians(2*cusL.dict['FOV'])) ) / (4*( 1-np.cos(np.radians(cusL.dict['FOV'])) ))
         #isotropic sampling normalization
         elif (cusL.dict['LMODE'] == "FF" and cusL.dict['TYPE'] == 2):
