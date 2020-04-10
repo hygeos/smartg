@@ -1978,9 +1978,9 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
 
     int count=0;
 
-    while (count<501) {
-    //while (1) {
-        //if (idx==0 && count >= 495) printf("%d %d %d %d %g %g\n",ph->loc, ph->layer, next_layer, count, (double)intTime0, (double)intTime1);
+    //while (count<501) {
+    while (1) {
+        if (count >= 400) printf("%d %d %d %d %d %g %g\n",idx, ph->loc, ph->layer, next_layer, count, (double)intTime0, (double)intTime1);
         if (count >= 500) {
             ph->loc=REMOVED; 
             break;}

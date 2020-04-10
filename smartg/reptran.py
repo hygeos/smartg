@@ -92,7 +92,8 @@ class REPTRAN_IBAND(object):
                 crs_mol = readCRS(crs_filename, self._iband)
 
                 # interpolation du profil vertical de temperature de reference dans les LUT
-                f = interp1d(crs_mol.pressure,crs_mol.t_ref)
+                f = interp1d(crs_mol.pressure,crs_mol.t_ref, fill_value='extrapolate')
+                #f = interp1d(crs_mol.pressure,crs_mol.t_ref)
 
                 # ecart en temperature par rapport au profil de reference (ou P de reference est en Pa et P AFGL en hPa)
                 dT = T - f(P*100)
