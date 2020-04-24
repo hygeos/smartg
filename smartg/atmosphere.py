@@ -1278,7 +1278,7 @@ def rod(lam, co2=400., lat=45., z=0., P=1013.25, pressure='surface'):
     if pressure == 'sea-level':
         Psurf = (P * (1. - 0.0065 * z / 288.15) ** 5.255) * 1000.  # air pressure at pixel location in dyn / cm2, which is hPa * 1000
     elif pressure == 'surface':
-        Psurf = P
+        Psurf = P * 1000.  # convert to dyn/cm2
     else:
         raise ValueError(f'Invalid pressure type ({pressure})')
 
