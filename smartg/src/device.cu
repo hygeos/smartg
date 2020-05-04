@@ -18,7 +18,6 @@
 #include "transform.h"
 
 #include <math.h>
-
 #include <math_constants.h>
 #include <helper_math.h>
 #include <stdio.h>
@@ -1382,7 +1381,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		ph->pos.y = PYd + cusForwPos.y + CFTYd;
 		ph->pos.z = PZd;
 
-		if (ALDEGd != 0)
+		if (ALDEGd > 1e-6)
 		{
 			// Initialization of the cosine vector (v), the orthogonal vector (u), ...
 			float3 vfloat = make_float3(0., 0., -1.); float3 ufloat = make_float3(-1., 0., 0.);
@@ -1404,7 +1403,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 				PHcone = 360*RAND;
 				cosTHCone = __cosf(radians(ALDEGd));
 				THcone = acosf(RAND*(cosTHCone-1)+1)*180./CUDART_PI_F;
-				ph->weight *= __cosf(radians(THcone));
+				//ph->weight *= __cosf(radians(THcone));
 			}
 			if (TYPEd == 3) //in development
 			{
@@ -1430,11 +1429,16 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 			TTheta = TTheta.RotateY(sunTheta); TPhi = TPhi.RotateZ(sunPhi);
 			vfloat = TPhi(   Vectorf(  TTheta( Vectorf(vfloat) )  )   );
 			ufloat = TPhi(   Vectorf(  TTheta( Vectorf(ufloat) )  )   );
-
+			
 			// Update the values of u and v
 			ph->v = make_float3(vfloat.x, vfloat.y, vfloat.z);
 			ph->u = make_float3(ufloat.x, ufloat.y, ufloat.z);
-		} // END ALDEGd != 0
+
+			if (TYPEd == 2)
+			{
+				ph->weight *= dot(ph->v, make_float3(0., 0., -1.));
+			}
+		} // END ALDEGd > 0
 
 	} //END LMODEd == 2
     #else // else if Backward modes

@@ -192,10 +192,14 @@ def nopt_view(MLUT, BACK=False, ACC = 6, NCL="68%", fl_TOA=None, NAATM=False):
         for i in range (0, len(sum2Z)):
             dw_temp = ld*NBIS*(sumZ2[i]-sum2Z[i])**0.5
             dw.append(dw_temp)
-        nopt = Clamp(k*w5, 0, 1)
+            
+        k_s = k/float(m.attrs['n_cos']);
+        nsha_n = Clamp(k_s*w0, 0, 1); ncos_n = float(m.attrs['n_cos']);
+        nopt = Clamp(k*w5, 0, 1);
         nsha = Clamp(k*w1, 0, 1); ncos = Clamp(w0/w1, 0, 1); nref = Clamp(w2/w0, 0, 1);
         nspi = Clamp(w3/w2, 0, 1); nblo = Clamp(1-(w4/w3), 0, 1); natm = Clamp(w5/(w3-w4), 0, 1);
-        
+
+        d_nsha_n = abs(k_s)*dw[0]
         d_nopt = abs(k)*dw[5]; d_nsha = abs(k)*dw[1]
         d_ncos = abs(1./w1)*dw[0] + abs(-w0/w1**2)*dw[1]
         d_nref = abs(1./w0)*dw[2] + abs(-w2/w0**2)*dw[0]
@@ -205,7 +209,9 @@ def nopt_view(MLUT, BACK=False, ACC = 6, NCL="68%", fl_TOA=None, NAATM=False):
 
         print("nopt =", strAcc % nopt, ", errAbs =", strAcc % d_nopt, ", err% =", strAcc % ((d_nopt/nopt)*100))
         print("nsha =", strAcc % nsha, ", errAbs =", strAcc % d_nsha, ", err% =", strAcc % ((d_nsha/nsha)*100))
+        print("nsha_n =", strAcc % nsha_n, ", errAbs =", strAcc % d_nsha_n, ", err% =", strAcc % ((d_nsha_n/nsha_n)*100))
         print("ncos =", strAcc % ncos, ", errAbs =", strAcc % d_ncos, ", err% =", strAcc % ((d_ncos/ncos)*100))
+        print("ncos_n =", strAcc % ncos_n, ", errAbs =", strAcc % 0, ", err% =", strAcc % 0)
         print("nref =", strAcc % nref, ", errAbs =", strAcc % d_nref, ", err% =", strAcc % ((d_nref/nref)*100))
         print("nspi =", strAcc % nspi, ", errAbs =", strAcc % d_nspi, ", err% =", strAcc % ((d_nspi/nspi)*100))
         print("nblo =", strAcc % nblo, ", errAbs =", strAcc % d_nblo, ", err% =", strAcc % ((d_nblo/nblo)*100))

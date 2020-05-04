@@ -787,7 +787,10 @@ class Smartg(object):
             elif (cusL.dict['LMODE'] == "FF"):
                 # The projected surface at TOA where the photons are launched
                 DotNN = Dot(vSun*-1, Vector(0., 0., 1.))
-                surfLPH = float(cusL.dict['CFX'])*float(cusL.dict['CFY'])*DotNN
+                if (cusL.dict['TYPE'] == 2 and cusL.dict['FOV'] > 1e-6): #isotropic
+                    surfLPH = float(cusL.dict['CFX'])*float(cusL.dict['CFY'])
+                else:
+                    surfLPH = float(cusL.dict['CFX'])*float(cusL.dict['CFY'])*DotNN
 
         #
         # initialization
@@ -805,7 +808,7 @@ class Smartg(object):
 
             # Initiliaze all the parameters linked with 3D objects
             (nGObj, nObj, nRObj, surfLPH_RF, nb_H, zAlt_H, totS_H, TC, nbCx, nbCy,
-             myObjects0, myGObj0, myRObj0) = initObj(LGOBJ=myObjects, vSun=vSun, CUSL=cusL)
+             myObjects0, myGObj0, myRObj0, n_cos) = initObj(LGOBJ=myObjects, vSun=vSun, CUSL=cusL)
 
             # If we are in RF mode don't forget to update the value of surfLPH
             if (surfLPH_RF is not None): surfLPH = surfLPH_RF
@@ -1095,7 +1098,7 @@ class Smartg(object):
         if (nb_H > 0 and TC is not None and cusL is not None):
             MZAlt_H = zAlt_H/nb_H; weightR=matCats[2, 1]; SREC=TC*TC*nbCx*nbCy;
             # dicSTP : tuple incorporating parameters for Solar Tower Power applications
-            dicSTP = {"nb_H":nb_H, "totS_H":totS_H, "surfTOA":surfLPH, "MZAlt_H":MZAlt_H, "vSun":vSun, "wRec":matCats[2, 1],
+            dicSTP = {"nb_H":nb_H, "n_cos": n_cos, "totS_H":totS_H, "surfTOA":surfLPH, "MZAlt_H":MZAlt_H, "vSun":vSun, "wRec":matCats[2, 1],
                       "SREC":SREC, "TC":TC, "LPH":cusL.dict['LPH'], "LPR":cusL.dict['LPR'], "prog":progress, "n_cte":n_cte}
         # If there are no heliostats --> no analyses of optical losses
         elif(TC is not None and cusL is not None):
@@ -1459,7 +1462,8 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
         m.add_dataset('wLoss', np.array(matLoss[:,0], dtype=np.float64), ['index'])
         m.add_dataset('wLoss2', np.array(matLoss[:,1], dtype=np.float64), ['index'])
         m.set_attr('n_cte', str(dicSTP["n_cte"]))
-
+        m.set_attr('n_cos', str(dicSTP["n_cos"]))
+        
         # To consider also the multispectral case
         if (NLAM > 1) : lwl = len(wl)
         else : lwl = 1
@@ -2428,7 +2432,7 @@ def initObj(LGOBJ, vSun, CUSL=None):
 
     # Initialization before the coming loop
     pp1 = 0.; pp2 = 0.; pp3 = 0.; pp4 = 0.;
-    nb_H = 0; zAlt_H = 0.; totS_H = 0.;
+    nb_H = 0; zAlt_H = 0.; totS_H = 0.; ncos=0.;
     if (CUSL != None and CUSL.dict['LMODE'] == "RF"): surfLPH = 0;
     else: surfLPH = None;
 
@@ -2576,6 +2580,7 @@ def initObj(LGOBJ, vSun, CUSL=None):
                 nb_H += 1
                 zAlt_H += LOBJ[i].transformation.transz
                 totS_H += abs(LOBJ[i].geo.p1.x)*abs(LOBJ[i].geo.p1.y)*4;
+                ncos += Dot(normalBase, Vector(-vSun.x, -vSun.y, -vSun.z))
 
             # Crucial step for the result visualization in RF mode
             if (CUSL is not None and CUSL.dict['LMODE'] == "RF"):
@@ -2627,8 +2632,12 @@ def initObj(LGOBJ, vSun, CUSL=None):
 
     LOBJGPU = to_gpu(LOBJGPU)
     LROBJGPU = to_gpu(LROBJGPU)
+    # update the value of ncos
+    n_cos = ncos/nb_H
+    #print("ncos=", ncos/nb_H, "nbH=", nb_H)
 
-    return nGObj, nObj, nRObj, surfLPH, nb_H, zAlt_H, totS_H, TC, nbCx, nbCy, LOBJGPU, LGOBJGPU, LROBJGPU
+    return nGObj, nObj, nRObj, surfLPH, nb_H, zAlt_H, totS_H, TC, nbCx, nbCy, LOBJGPU, \
+        LGOBJGPU, LROBJGPU, n_cos
 
 def normalizeRecIrr(cMatVisuRecep, matCats, nbCx, nbCy, NBPHOTONS, surfLPH, TC, cusL, SUN_DISC):
     '''
@@ -2673,10 +2682,10 @@ def normalizeRecIrr(cMatVisuRecep, matCats, nbCx, nbCy, NBPHOTONS, surfLPH, TC, 
         normC = (surfLPH*1e6)/NBPHOTONS  # Here multiply by 1e6 to convert km² to m²
         normFF = 1.
         #lambertian sampling normalization
-        if (cusL.dict['LMODE'] == "FF" and cusL.dict['TYPE'] == 1 and cusL.dict['FOV'] > 0):
+        if (cusL.dict['LMODE'] == "FF" and cusL.dict['TYPE'] == 1 and cusL.dict['FOV'] > 1e-6):
             normFF = ( 1-np.cos(np.radians(2*cusL.dict['FOV'])) ) / (4*( 1-np.cos(np.radians(cusL.dict['FOV'])) ))
         #isotropic sampling normalization
-        elif (cusL.dict['LMODE'] == "FF" and cusL.dict['TYPE'] == 2):
+        elif (cusL.dict['LMODE'] == "FF" and cusL.dict['TYPE'] == 2 and cusL.dict['FOV'] > 1e-6):
             normFF = 1.
         normC *= normFF
         for i in range (0, 9):
