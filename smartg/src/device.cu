@@ -802,9 +802,17 @@ extern "C" {
 				if ( ph.loc == ABSORBED)
 					ph.weight_loss[3] = 0.F;
 				else if ( geoTestRec(ph.pos, ph.v, ph.locPrev, myRObj) )
+				{
 					ph.weight_loss[3] = ph.weight;
+					if (geoTestMir(ph.pos, ph.v, myObjets, myGObj)) ph.weight_loss[5] = ph.weight;
+					else ph.weight_loss[5] = 0.F;
+							
+				}
 				else
+				{
 					ph.weight_loss[3] = 0.F;
+					ph.weight_loss[5] = 0.F;
+				}
 				countLoss(&ph, &geoStruc, wPhLoss, wPhLoss2);
 			}
 			#endif
@@ -4758,10 +4766,14 @@ __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, void *wPhLoss2)
 	weightS = (double)ph->weight_loss[2]*double(stokes.x + stokes.y);    // - flux reflected after considering ref loss
 	weightECos = (double)ph->weight_loss[1]*double(stokes.x + stokes.y); // - incident flux before cos effect
 	#ifndef BACK
-	double weightSpi, weightBlo;
+	double weightSpi, weightBlo, w_B, w_spib, w_Bb, w_ref;
 	weightSpi = (double)ph->weight_loss[3]*double(stokes.x + stokes.y);  // - flux weight if the reflected flux Ws succeed the
 	                                                                     //   intersection test with the receiver (spi loss)
 	weightBlo = (double)ph->weight_loss[4]*double(stokes.x + stokes.y);  // - Wspi which is blocked by another object
+	w_B = double(ph->weight_loss[3]-ph->weight_loss[5])*double(ph->stokes.x + ph->stokes.y);
+	w_Bb = double(ph->weight_loss[5])*double(ph->stokes.x + ph->stokes.y);
+	w_spib = double(ph->weight_loss[2]-ph->weight_loss[3])*double(ph->stokes.x + ph->stokes.y);
+	w_ref = double(ph->weight_loss[0]-ph->weight_loss[2])*double(ph->stokes.x + ph->stokes.y);
 	#endif
 	#else
 	float weightE, weightS, weightECos;
@@ -4772,9 +4784,13 @@ __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, void *wPhLoss2)
 	weightS = (float)ph->weight_loss[2]*float(ph->stokes.x + ph->stokes.y);
 	weightECos = (float)ph->weight_loss[1]*float(ph->stokes.x + ph->stokes.y);
 	#ifndef BACK
-	float weightSpi, weightBlo;
+	float weightSpi, weightBlo, w_B, w_spib, w_Bb, w_ref;
 	weightSpi = (float)ph->weight_loss[3]*float(ph->stokes.x + ph->stokes.y);
 	weightBlo = (float)ph->weight_loss[4]*float(ph->stokes.x + ph->stokes.y);
+	w_B = float(ph->weight_loss[3]-ph->weight_loss[5])*float(ph->stokes.x + ph->stokes.y);
+	w_Bb = float(ph->weight_loss[5])*float(ph->stokes.x + ph->stokes.y);
+	w_spib = float(ph->weight_loss[2]-ph->weight_loss[3])*float(ph->stokes.x + ph->stokes.y);
+	w_ref = float(ph->weight_loss[0]-ph->weight_loss[2])*float(ph->stokes.x + ph->stokes.y);
 	#endif
 	#endif
 
@@ -4786,6 +4802,10 @@ __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, void *wPhLoss2)
 		atomicAdd(wPhLossC+2, weightS); atomicAdd(wPhLossC2+2, weightS*weightS);           // Ws and Ws²
 		#ifndef BACK
 		atomicAdd(wPhLossC+3, weightSpi); atomicAdd(wPhLossC2+3, weightSpi*weightSpi);     // Wspi and Wspi²
+		atomicAdd(wPhLossC+5, w_B); atomicAdd(wPhLossC2+5, w_B*w_B);
+		atomicAdd(wPhLossC+6, w_Bb); atomicAdd(wPhLossC2+6, w_Bb*w_Bb);
+		atomicAdd(wPhLossC+7, w_spib); atomicAdd(wPhLossC2+7, w_spib*w_spib);
+		atomicAdd(wPhLossC+8, w_ref); atomicAdd(wPhLossC2+8, w_ref*w_ref);
 		#endif
 	}
 	#ifndef BACK
@@ -4800,6 +4820,10 @@ __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, void *wPhLoss2)
 		DatomicAdd(wPhLossC+2, weightS); DatomicAdd(wPhLossC2+2, weightS*weightS);
 		#ifndef BACK
 		DatomicAdd(wPhLossC+3, weightSpi); DatomicAdd(wPhLossC2+3, weightSpi*weightSpi);
+		DatomicAdd(wPhLossC+5, w_B); DatomicAdd(wPhLossC2+5, w_B*w_B);
+		DatomicAdd(wPhLossC+6, w_Bb); DatomicAdd(wPhLossC2+6, w_Bb*w_Bb);
+		DatomicAdd(wPhLossC+7, w_spib); DatomicAdd(wPhLossC2+7, w_spib*w_spib);
+		DatomicAdd(wPhLossC+8, w_ref); DatomicAdd(wPhLossC2+8, w_ref*w_ref);
 		#endif
 	}
 	#ifndef BACK
@@ -4993,7 +5017,7 @@ __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geo
 			atomicAdd(nbPhCat, 1);     // comptage nombre de photons
 			DatomicAdd(tabCountObj+(nbCy*nbCx)+(nbCy*indI)+indJ, weight); // distri
 		}
-		else if ( ph->H > 0 && ph->E == 0 && ph->S == 0)
+		else if ( ph->H > 1 && ph->E == 0 && ph->S == 0)
 		{ // CAT 2 : only H avant de toucher le R.
 			DatomicAdd(wPhCatC+1, weight); DatomicAdd(wPhCatC2+1, weight2);
 			atomicAdd(nbPhCat+1, 1);
@@ -6223,7 +6247,7 @@ __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo 
 
 				// ******************************Second Step******************************
 				// See if there is an intersection with object(j)
-				if (ObjT[i].geo == 1) // Case with a spherical object
+				if (ObjT[IND+j].geo == 1) // Case with a spherical object
 				{
 					Sphere myObject(&Tj, &invTj, ObjT[IND+j].myRad, ObjT[IND+j].z0,
 									ObjT[IND+j].z1, ObjT[IND+j].phi);
@@ -6233,7 +6257,7 @@ __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo 
 					if (myBBox.IntersectP(R1))
 						myBj = myObject.Intersect(R1, &myTj, &myDgj);
 				}
-				else if (ObjT[i].geo == 2) // Case with a plane object
+				else if (ObjT[IND+j].geo == 2) // Case with a plane object
 				{
 					// declaration of a table of float3 which contains P0, P1, P2, P3
 					float3 Pvec[4] = {make_float3(ObjT[IND+j].p0x, ObjT[IND+j].p0y, ObjT[IND+j].p0z),
@@ -6299,6 +6323,77 @@ __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo 
 		*(phit) = make_float3(-1, -1, -1);
 		return false; }	
 } // END OF THE FUNCTION GEOTEST()
+
+__device__ bool geoTestMir(float3 o, float3 dir, struct IObjets *ObjT, struct GObj *myGObj)
+{
+	Ray R1(o, dir, 0.001); // initialisation du rayon pour l'étude d'intersection
+	
+	// *************Specific to plane objects***************
+	int vi[6] = {0, 1, 2,  // vertices index for triangle 1
+				 2, 3, 1}; // vertices index for triangle 2
+	float3 tempPhit; // Phit temporaire
+	// *****************************************************
+	
+	for (int i = 0; i < nGObj; ++i)
+	{	
+		int IND = myGObj[i].index;  // Index
+		int NE  = myGObj[i].nObj;   // Number of entity in the group i
+
+		// We test firstly the bounding box of the group
+		BBox bboxG(make_float3(myGObj[i].bPminx, myGObj[i].bPminy, myGObj[i].bPminz),
+				   make_float3(myGObj[i].bPmaxx, myGObj[i].bPmaxy, myGObj[i].bPmaxz));
+		
+		// If the test with bboxG is ok then perform intersection test with all the obj inside
+		if (bboxG.IntersectP(R1))
+		{
+			for (int j = 0; j < NE; ++j)
+			{
+				float myTj = CUDART_INF_F;
+				bool myBj = false;
+				DifferentialGeometry myDgj;
+				// *****************************First Step********************************
+				// Consider all the transformation of object (j)
+				Transform Tj, invTj; // Declaration of the tranform and its inverse
+
+				/* !!! We note that it is crucial to begin with the translation because if there
+				   is a rotation then the coordinate system change (x or y or z axis) !!! */
+
+				// If a value in x, y or z is diff of 0 then there is a translation
+				if ( (ObjT[IND+j].mvTx>VALMIN and ObjT[IND+j].mvTx<-VALMIN) or
+					 (ObjT[IND+j].mvTy>VALMIN and ObjT[IND+j].mvTy>-VALMIN) or
+					 (ObjT[IND+j].mvTz>VALMIN and ObjT[IND+j].mvTz>-VALMIN)) {
+					Transform TmT;
+					TmT = Tj.Translate(make_float3(ObjT[IND+j].mvTx, ObjT[IND+j].mvTy,
+												   ObjT[IND+j].mvTz));
+					Tj = TmT; }
+
+				// Add rotation tranformations
+				Tj = addRotAndParseOrder(Tj, ObjT[IND+j]); //see the function
+				invTj = Tj.Inverse(Tj); // inverse of the transform
+
+				// ******************************Second Step******************************
+				// See if there is an intersection with object(j)
+			    if (ObjT[IND+j].geo == 2 and ObjT[IND+j].type == HELIOSTAT) // Case with a plane object
+				{
+					// declaration of a table of float3 which contains P0, P1, P2, P3
+					float3 Pvec[4] = {make_float3(ObjT[IND+j].p0x, ObjT[IND+j].p0y, ObjT[IND+j].p0z),
+									  make_float3(ObjT[IND+j].p1x, ObjT[IND+j].p1y, ObjT[IND+j].p1z),
+									  make_float3(ObjT[IND+j].p2x, ObjT[IND+j].p2y, ObjT[IND+j].p2z),
+									  make_float3(ObjT[IND+j].p3x, ObjT[IND+j].p3y, ObjT[IND+j].p3z)};
+					
+					// Create the triangleMesh (2 = number of triangle ; 4 = number of vertices)
+					TriangleMesh myObject(&Tj, &invTj, 2, 4, vi, Pvec);
+				
+					BBox myBBox = myObject.WorldBoundTriangleMesh();
+					if (myBBox.IntersectP(R1)) myBj = myObject.Intersect(R1, &myTj, &myDgj);
+					if(myBj)
+						return true;
+				}
+			}// END FOR j LOOP
+		}// END BBOX TEST
+	}// END FOR i LOOP
+	return false;
+} // END geoTestMir FUNCTION
 
 __device__ bool geoTestRec(float3 o, float3 dir, int phLocPrev, struct IObjets *ObjT)
 {

@@ -181,25 +181,40 @@ def nopt_view(MLUT, BACK=False, ACC = 6, NCL="68%", fl_TOA=None, NAATM=False):
         # Sum of weights
         w0 = m['wLoss'][0]; w1 = m['wLoss'][1]; w2 = m['wLoss'][2];
         w3 = m['wLoss'][3]; w4 = m['wLoss'][4]; w5 = m['cat_w'][2];
+        wB = m['wLoss'][5]; wBb = m['wLoss'][6]; wspib = m['wLoss'][7];
+        wref = m['wLoss'][8];
         # Sum of (weights²)
         w0_2 = m['wLoss2'][0]; w1_2 = m['wLoss2'][1]; w2_2 = m['wLoss2'][2];
         w3_2 = m['wLoss2'][3]; w4_2 = m['wLoss2'][4]; w5_2 = m['cat_w2'][2];
+        wB_2 = m['wLoss2'][5]; wBb_2 = m['wLoss2'][6]; wspib_2 = m['wLoss2'][7];
+        wref_2 = m['wLoss2'][8];
         # (Sum of weights)² divided by the number of photons
-        sum2Z = [(w0*w0)/NPH, (w1*w1)/NPH, (w2*w2)/NPH, (w3*w3)/NPH, (w4*w4)/NPH, (w5*w5)/NPH]
+        sum2Z = [(w0*w0)/NPH, (w1*w1)/NPH, (w2*w2)/NPH, (w3*w3)/NPH, (w4*w4)/NPH, \
+                 (w5*w5)/NPH, (wB*wB)/NPH, (wBb*wBb)/NPH, (wspib*wspib)/NPH, (wref*wref)/NPH]
         # Sum of (weights²)
-        sumZ2 = [w0_2, w1_2, w2_2, w3_2, w4_2, w5_2]
+        sumZ2 = [w0_2, w1_2, w2_2, w3_2, w4_2, w5_2, wB_2, wBb_2, wspib_2, wref_2]
         dw = []
         for i in range (0, len(sum2Z)):
             dw_temp = ld*NBIS*(sumZ2[i]-sum2Z[i])**0.5
             dw.append(dw_temp)
             
-        k_s = k/float(m.attrs['n_cos']);
-        nsha_n = Clamp(k_s*w0, 0, 1); ncos_n = float(m.attrs['n_cos']);
         nopt = Clamp(k*w5, 0, 1);
         nsha = Clamp(k*w1, 0, 1); ncos = Clamp(w0/w1, 0, 1); nref = Clamp(w2/w0, 0, 1);
         nspi = Clamp(w3/w2, 0, 1); nblo = Clamp(1-(w4/w3), 0, 1); natm = Clamp(w5/(w3-w4), 0, 1);
 
+        k_s = k/float(m.attrs['n_cos']);
+        nsha_n = Clamp(k_s*w0, 0, 1); ncos_n = float(m.attrs['n_cos']);
+        nblo_n = Clamp(wB/w3, 0, 1); natm_n = Clamp(w5/wB, 0, 1);
+        nspi_n = Clamp(1-(wspib/w2), 0, 1); nblo_n2 = Clamp(1-(wBb/w3), 0, 1);
+        nref_n = Clamp(1-(wref/w0), 0, 1);
+
         d_nsha_n = abs(k_s)*dw[0]
+        d_nblo_n = abs(1./w3)*dw[6] + abs(-wB/w3**2)*dw[3]
+        d_natm_n = abs(1./wB)*dw[5] + abs(-w5/wB**2)*dw[6]
+        d_nblo_n2 = abs(-1./w3)*dw[7] + abs(wBb/w3**2)*dw[3]
+        d_nspi_n = abs(-1./w2)*dw[8] + abs(wspib/w2**2)*dw[2]
+        d_nref_n = abs(-1./w0)*dw[9] + abs(wref/w0**2)*dw[0]
+
         d_nopt = abs(k)*dw[5]; d_nsha = abs(k)*dw[1]
         d_ncos = abs(1./w1)*dw[0] + abs(-w0/w1**2)*dw[1]
         d_nref = abs(1./w0)*dw[2] + abs(-w2/w0**2)*dw[0]
@@ -213,9 +228,14 @@ def nopt_view(MLUT, BACK=False, ACC = 6, NCL="68%", fl_TOA=None, NAATM=False):
         print("ncos =", strAcc % ncos, ", errAbs =", strAcc % d_ncos, ", err% =", strAcc % ((d_ncos/ncos)*100))
         print("ncos_n =", strAcc % ncos_n, ", errAbs =", strAcc % 0, ", err% =", strAcc % 0)
         print("nref =", strAcc % nref, ", errAbs =", strAcc % d_nref, ", err% =", strAcc % ((d_nref/nref)*100))
+        print("nref_n =", strAcc % nref_n, ", errAbs =", strAcc % d_nref_n, ", err% =", strAcc % ((d_nref_n/nref_n)*100))
         print("nspi =", strAcc % nspi, ", errAbs =", strAcc % d_nspi, ", err% =", strAcc % ((d_nspi/nspi)*100))
+        print("nspi_n =", strAcc % nspi_n, ", errAbs =", strAcc % d_nspi_n, ", err% =", strAcc % ((d_nspi_n/nspi_n)*100))
         print("nblo =", strAcc % nblo, ", errAbs =", strAcc % d_nblo, ", err% =", strAcc % ((d_nblo/nblo)*100))
+        print("nblo_n =", strAcc % nblo_n, ", errAbs =", strAcc % d_nblo_n, ", err% =", strAcc % ((d_nblo_n/nblo_n)*100))
+        print("nblo_n2 =", strAcc % nblo_n2, ", errAbs =", strAcc % d_nblo_n2, ", err% =", strAcc % ((d_nblo_n2/nblo_n2)*100))
         print("natm =", strAcc % natm, ", errAbs =", strAcc % d_natm, ", err% =", strAcc % ((d_natm/natm)*100))
+        print("natm_n =", strAcc % natm_n, ", errAbs =", strAcc % d_natm_n, ", err% =", strAcc % ((d_natm_n/natm_n)*100))
     else: # Backward mode ->
         # Sum of weights
         w0 = m['wLoss'][0]; w1 = m['wLoss'][1]; w2 = m['wLoss'][2]; w3 = m['cat_w'][2];

@@ -323,6 +323,7 @@ __device__ unsigned int randomPhilox4x32_7uint(philox4x32_ctr_t*, philox4x32_key
 ***********************************************************/
 
 __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo *GeoV , struct IObjets *ObjT, struct GObj *myGObj);
+__device__ bool geoTestMir(float3 o, float3 dir, struct IObjets *ObjT, struct GObj *myGObj);
 __device__ bool geoTestRec(float3 o, float3 dir, int phLocPrev, struct IObjets *ObjT);
 __device__ Transform addRotAndParseOrder(Transform Ti, IObjets object);
 __device__ Transformd DaddRotAndParseOrder(Transformd Tid, IObjets object);

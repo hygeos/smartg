@@ -1986,14 +1986,15 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         wPhCat = gpuzeros(8, dtype=FDTYPE)  # vector to fill the weight of photons for each categories
         wPhCat2 = gpuzeros(8, dtype=FDTYPE)  # sum of squared photons weight for each cats
         tabObjInfo = gpuzeros((9, nbCx, nbCy), dtype=FDTYPE)
-        wPhLoss = gpuzeros(5, dtype=FDTYPE)
-        wPhLoss2 = gpuzeros(5, dtype=FDTYPE)
+        wPhLoss = gpuzeros(9, dtype=FDTYPE)
+        wPhLoss2 = gpuzeros(9, dtype=FDTYPE)
         tabMatRecep = np.zeros((9, nbCx, nbCy), dtype=np.float64)
         # Matrix where lines : l0 = SumCats, l1=cat1, l2=cat2, ... l8=cat8
         # And columns : c0=nbPhotons , c1=weight, c2=weight2, c3=irradiance(in watt), c4=errAbs, c5=err%
         matCats = np.zeros((9, 6), dtype=np.float64)
-        # vector where: v[0]=Wi, v[1]=Wi/(n.dirS), v[2]=Wo, v[3]=Wr
-        matLoss = np.zeros((5, 2), dtype=np.float64)
+        # Matrix where: M[0,0]=W_I, M[1,0]=W_I/(n.dirS), M[2,0]=W_O, M[3,0]=W_S, M[4,0]=W_BLO, M[5,0]=W_B
+        # and : M[0,1]=W_I², M[1,1]=(W_I/(n.dirS))², M[2,1]=W_O², M[3,1]=W_S², M[4,1]=W_BLO², M[5,1]=W_B²
+        matLoss = np.zeros((9, 2), dtype=np.float64)
     else:
         nbPhCat = gpuzeros(1, dtype=np.uint64)
         wPhCat = gpuzeros(1, dtype=FDTYPE)
@@ -2086,14 +2087,16 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         np.set_printoptions(precision=5, linewidth=150)
 
         if TC is not None:
-            # Tableau de la repartition des poids (photons) sur la surface du recepteur
+            # Matrix with the photon weights distribution on the receiver surface
             tabMatRecep += tabObjInfo[:, :, :].get()
+            # Fill the matrix malLoss with the photon weights for losses estimates
             matLoss[:,0] += wPhLoss[:].get()
             matLoss[:,1] += wPhLoss2[:].get()
+            # Begin to fill the matrix matCats
             matCats[0,1] += np.sum(wPhCat[:].get())
             matCats[0,2] += np.sum(wPhCat2[:].get())
             for i in range (0, 8):
-                # Comptage des poids pour chaque categories
+                # Count the photon weights for each category
                 matCats[i+1,1] += wPhCat[i].get();    # sum of wi
                 matCats[i+1,2] += wPhCat2[i].get();   # sum of wi²
         
