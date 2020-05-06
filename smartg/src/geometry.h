@@ -422,6 +422,53 @@ public:
                 pt.y >= pMin.y && pt.y <= pMax.y &&
                 pt.z >= pMin.z && pt.z <= pMax.z);
     }
+
+    __host__ __device__ bool AlmostInside(const float3 &pt) const
+	{
+        float EPS = 1e-4;
+        return (pt.x >= (pMin.x-EPS) && pt.x <= (pMax.x+EPS) &&
+                pt.y >= (pMin.y-EPS) && pt.y <= (pMax.y+EPS) &&
+                pt.z >= (pMin.z-EPS) && pt.z <= (pMax.z+EPS));
+    }
+
+    __host__ __device__ float3 RoundInside(const float3 &pt)
+	{
+        float3 ret;
+		#if __CUDA_ARCH__ >= 200
+        ret =  make_float3(
+               fmin(fmax(pt.x, pMin.x), pMax.x),
+               fmin(fmax(pt.y, pMin.y), pMax.y),
+               fmin(fmax(pt.z, pMin.z), pMax.z));
+		#elif !defined(__CUDA_ARCH__)
+        ret =  make_float3(
+               min(max(pt.x, pMin.x), pMax.x),
+               min(max(pt.y, pMin.y), pMax.y),
+               min(max(pt.z, pMin.z), pMax.z));
+		#endif
+		return ret;
+    }
+
+
+    __host__ __device__ float3 RoundAlmostInside(const float3 &pt)
+	{
+        float EPS = 1e-5;
+        float3 ret;
+		#if __CUDA_ARCH__ >= 200
+        ret =  make_float3(
+               fmin(fmax(pt.x, pMin.x+EPS), pMax.x-EPS),
+               fmin(fmax(pt.y, pMin.y+EPS), pMax.y-EPS),
+               fmin(fmax(pt.z, pMin.z+EPS), pMax.z-EPS));
+		#elif !defined(__CUDA_ARCH__)
+        ret =  make_float3(
+               min(max(pt.x, pMin.x+EPS), pMax.x-EPS),
+               min(max(pt.y, pMin.y+EPS), pMax.y-EPS),
+               min(max(pt.z, pMin.z+EPS), pMax.z-EPS));
+		#endif
+		return ret;
+    }
+
+
+
 	__host__ __device__ bool IntersectP(const Ray &ray, float *hitt0 = NULL,
 										float *hitt1 = NULL) const
 	{
@@ -439,7 +486,9 @@ public:
 		for (int i = 0; i < 3; ++i)
 		{
             // Update interval for _i_th bounding box slab
-			float invRayDir = 1.F / ray.d[i];
+            float invRayDir;
+			if(ray.d[i] != 0.) invRayDir = 1.F / ray.d[i];
+            else invRayDir  = 1e32;
 			float tNear = (pMin[i] - ray.o[i]) * invRayDir;
 			float tFar  = (pMax[i] - ray.o[i]) * invRayDir;
 			

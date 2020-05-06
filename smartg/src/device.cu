@@ -52,6 +52,9 @@ extern "C" {
 							 void *wPhCat, void *wPhCat2,
 							 void *wPhLoss,
 							 void *wPhLoss2
+                             /*#ifdef TIME
+                             , unsigned long long *time_spent
+                             #endif*/
 							 ) {
 
     // current thread index
@@ -170,6 +173,9 @@ extern "C" {
 		loc_prev = ph.loc;
         //--------------------------
 		if(ph.loc == ATMOS) {
+           #ifdef VERBOSE_PHOTON
+		   display("MOVE_START", &ph);
+           #endif
            #ifdef SPHERIQUE
            if ((ph.nint==0) && FFSd) {
                copyPhoton(&ph, &ph_le);
@@ -191,10 +197,16 @@ extern "C" {
 				#endif
 			    );
             #endif
+           #ifdef VERBOSE_PHOTON
+		   display("MOVE_STOP", &ph);
+           #endif
            #endif
         }
 
 		if(ph.loc == OCEAN) {
+           #ifdef VERBOSE_PHOTON
+		   display("MOVE_START", &ph);
+           #endif
            #ifdef ALT_PP
            move_pp2(&ph, prof_atm, prof_oc, 
                    #ifdef OPT3D
@@ -207,15 +219,13 @@ extern "C" {
 				   , &geoStruc, myObjets, myGObj, tabObjInfo
 				#endif
 			    );
+           #ifdef VERBOSE_PHOTON
+		   display("MOVE_STOP", &ph);
+           #endif
            #endif
             }
         //--------------------------
 
-        #ifdef VERBOSE_PHOTON
-		if( (ph.loc == ATMOS) || (ph.loc == OCEAN)){
-		display("MOVE", &ph);
-		}
-        #endif
 
         //
         // count after move:
@@ -526,6 +536,9 @@ extern "C" {
                         if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
                         else ph_le.iph =  ph_le.ith;
 				        surfaceLambert(&ph_le, 1, tabthv, tabphi, spectrum, &rngstate);
+                        #ifdef VERBOSE_PHOTON
+                        display("SURFACE LE UP", &ph_le);
+                        #endif
                         // Only two levels for counting by definition
                         countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
                         #ifdef SPHERIQUE
@@ -1140,7 +1153,8 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 	
 	//Attention! Marche parceque l'angle zenith compris entre 0 et 180
 	sTh = sqrtf(1.F - cTh*cTh);
-	sPh = sqrtf(1.F - cPh*cPh);
+	//sPh = sqrtf(1.F - cPh*cPh);
+	sPh = sinf(tab_sensor[ph->is].PHDEG*DEUXPI/360.);
 	#endif
 
 	float3x3 LTh = make_float3x3(
@@ -1955,7 +1969,6 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
 	float3 intersectPoint = make_float3(-1., -1., -1.);
 	bool intersectBox;
     float3 pmin, pmax ;
-    int next_layer;
 	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
 
 
@@ -1971,8 +1984,6 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
     }
     ilam = ph->ilam*NL;  // wavelength offset in optical thickness table
 
-    next_layer = ph->layer;
-
     // Random Optical Thickness to go through
     if (!le) tauRdm = -logf(1.F-RAND);
     // if called with le mode, it serves to compute the transmission
@@ -1980,23 +1991,34 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
     // photon is forced to exit upward or downward and tauRdm is chosen to be an upper limit
     else tauRdm = 1e6;
 
+    // Init photon position
     int count=0;
+    int next_layer=ph->layer;
+    pmin = make_float3(cell[ph->layer].pminx, cell[ph->layer].pminy, cell[ph->layer].pminz);
+    pmax = make_float3(cell[ph->layer].pmaxx, cell[ph->layer].pmaxy, cell[ph->layer].pmaxz);
+    BBox Box_ini(pmin, pmax);
+    ph->pos = Box_ini.RoundAlmostInside(ph->pos);
+    //if (!Box_ini.AlmostInside(ph->pos) && ph->layer>=0 ) {
+    //if (!Box_ini.Inside(ph->pos) && ph->layer>=0 ) {
+        //if (idx==0) printf("%d %d %d %d %d %g %g %g %g %g %f %f %f %g %g\n",idx, ph->loc, ph->layer, next_layer, 
+         //     count, (double)intTime0, (double)intTime1, ph->pos.x, ph->pos.y, ph->pos.z
+          //    ,ph->v.x, ph->v.y,ph->v.z,pmin.z, pmax.z);
+         //ph->loc = REMOVED;
+         //return;
+    //}   
 
-    //while (count<501) {
     while (1) {
-        if (count >= 400) printf("%d %d %d %d %d %g %g\n",idx, ph->loc, ph->layer, next_layer, count, (double)intTime0, (double)intTime1);
+        // avoid infinite loop
         if (count >= 500) {
             ph->loc=REMOVED; 
             break;}
-        //
-        // stopping criteria
         if (ph->loc == REMOVED) break;
-        //
+
+        // Update photon location if exit and cell number
         if (next_layer == BOUNDARY_ABS){
             ph->loc = ABSORBED;
             break;
         }
-        //
         if (ph->loc == ATMOS) {
          if (next_layer == BOUNDARY_0P) {
             ph->loc = SURF0P;
@@ -2024,24 +2046,32 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
          }
         }
 
+        // Intersection with current cell boundaries
 		Ray Ray_cur(ph->pos, ph->v, 0);
         pmin = make_float3(cell[ph->layer].pminx, cell[ph->layer].pminy, cell[ph->layer].pminz);
         pmax = make_float3(cell[ph->layer].pmaxx, cell[ph->layer].pmaxy, cell[ph->layer].pmaxz);
         BBox Box_cur(pmin, pmax);
-        //
-        // calculate the distance d to the fw layer
-        // from the current position
-        //
 		intersectBox = Box_cur.IntersectP(Ray_cur, &intTime0, &intTime1);
-        if (intTime1==0) intTime1=1e-4;
-        intersectPoint = operator+(ph->pos, ph->v * intTime1);
+
+        //if (intTime1 !=0) { // the photon is not already on a boundary
+        if (intersectBox) { // the photon is not already on a boundary
+        intersectPoint = Box_cur.RoundAlmostInside(operator+(ph->pos, ph->v * intTime1));
+        //if ((!Box_cur.AlmostInside(ph->pos) || (intTime0 == intTime1)) &&
+        //if ((!Box_cur.Inside(ph->pos) || (intTime0 == intTime1)) &&
+         //       (ph->layer>=0)) {
+                //(ph->layer>=0)) {
+            //if (idx==0 && count>=0) printf("%d %d %d %d %d %g %g %f %f %f %f %f %f\n",idx, ph->loc, ph->layer, next_layer, 
+             //      count, (double)intTime0, (double)intTime1, ph->pos.x, ph->pos.y, ph->pos.z
+              //    ,ph->v.x, ph->v.y,ph->v.z);
+          //  ph->loc = REMOVED;
+           // break;
+        //}
         
         //
         // calculate the optical thicknesses h_cur and h_cur_abs to the next layer
         // We get the layer extinction coefficient and multiply by the distance within the layer
         //
         coef_cur = get_OD(BEERd,prof[cell[ph->layer].iopt+ilam]);
-
         h_cur    = coef_cur * intTime1;
 
         #ifndef ALIS
@@ -2108,7 +2138,9 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
                  default: ph->loc = REMOVED;
             }
             count++;
-            
+            if (idx==0 && count>=0) printf("YES %d %d %d %d %d %g %g %f %f %f %f %f %f\n",idx, ph->loc, ph->layer, next_layer, 
+                  count, (double)intTime0, (double)intTime1, ph->pos.x, ph->pos.y, ph->pos.z
+                  ,ph->v.x, ph->v.y,ph->v.z);
             // in case of periodic boundaries
             /*if (next_layer >= 0) {
                 GetFaceMiddlePoint(ind, pmin, pmax, &p);
@@ -2123,6 +2155,33 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
                 operator+=(ph->pos, operator-(p_next,p));
             }*/
         } // photon advances to next layer
+
+        } // Intersection True
+
+        else { //InterSection False
+            // determine the index of the next potential box
+            float3 p=ph->pos;
+            operator-=(p, operator+(pmin*0.5, pmax*0.5));
+            p.x = __fdividef(p.x, fabs(pmax.x-pmin.x));
+            p.y = __fdividef(p.y, fabs(pmax.y-pmin.y));
+            p.z = __fdividef(p.z, fabs(pmax.z-pmin.z));
+            int ind;
+            GetFaceIndex(p, &ind);
+            switch(ind)
+            {
+                 case 0: next_layer = cell[ph->layer].neighbour1; break;
+                 case 1: next_layer = cell[ph->layer].neighbour2; break;
+                 case 2: next_layer = cell[ph->layer].neighbour3; break;
+                 case 3: next_layer = cell[ph->layer].neighbour4; break;
+                 case 4: next_layer = cell[ph->layer].neighbour5; break;
+                 case 5: next_layer = cell[ph->layer].neighbour6; break;
+                 default: ph->loc = REMOVED;
+            }
+            count++;
+            //if (idx==0 && count>=0) printf("NO  %d %d %d %d %d %g %g %f %f %f %f %f %f\n",idx, ph->loc, ph->layer, next_layer, 
+             //     count, (double)intTime0, (double)intTime1, ph->pos.x, ph->pos.y, ph->pos.z
+              //    ,ph->v.x, ph->v.y,ph->v.z);
+        }
 
     } // while loop
 
@@ -6532,7 +6591,7 @@ __device__ float F2_rtls(float ths, float thv, float phi ){  //  rossthick-lispa
 
 __device__ float BRDF(int ilam, float3 v0, float3 v1, struct Spectrum *spectrum ){  //  general BRDF
     float wbrdf = 1.;
-	int idx = blockIdx.x *blockDim.x + threadIdx.x;
+	//int idx = blockIdx.x *blockDim.x + threadIdx.x;
     if (DIOPTREd>3) {
         float dph = 0.;
         float th0 = acos(fabs(v0.z));
@@ -6551,7 +6610,7 @@ __device__ float BRDF(int ilam, float3 v0, float3 v1, struct Spectrum *spectrum 
             default:
                 wbrdf = 1.;
         }
-        if (wbrdf==0.) printf("%f %f %f %f %f\n",th0,th1,dph,F1_rtls(th0,th1,dph),F2_rtls(th0,th1,dph));
+        //if (wbrdf==0.) printf("%f %f %f %f %f\n",th0,th1,dph,F1_rtls(th0,th1,dph),F2_rtls(th0,th1,dph));
     }
     return wbrdf;
 }

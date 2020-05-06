@@ -560,6 +560,7 @@ class Smartg(object):
             # 3D Object mode
             options.append('-DOBJ3D')
         options.append('-D'+rng)
+        #options.append('-lineinfo')
 
 
         #
@@ -987,8 +988,8 @@ class Smartg(object):
                     spectrum['alb_surface'] = surf.alb.get(wl[:])
                 elif surf.kp is not None:
                     spectrum['alb_surface'] = surf.kp[0].get(wl[:])
-                    spectrum['k1p_surface'] = surf.kp[1][:]
-                    spectrum['k2p_surface'] = surf.kp[2][:]
+                    spectrum['k1p_surface'] = surf.kp[1].get(wl[:])
+                    spectrum['k2p_surface'] = surf.kp[2].get(wl[:])
                 else:
                     spectrum['alb_surface'] = -999.
             else:

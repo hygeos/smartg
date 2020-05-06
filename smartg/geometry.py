@@ -236,7 +236,7 @@ class Ray(object):
 #####################################################################################
 class BBox(object):
     '''
-    Definition of Ray
+    Definition of Bounding Box
 
     Creation of the bounding box class thanks to 2 points
     
@@ -310,6 +310,31 @@ class BBox(object):
         return (P.x >= self.pMin.x) and (P.x <= self.pMax.x) and \
                (P.y >= self.pMin.y) and (P.y <= self.pMax.y) and \
                (P.z >= self.pMin.z) and (P.z <= self.pMax.z)
+
+
+    def IntersectP(self, Ray) :
+        '''
+        test if Ray Ray intersects the BBox and finds both intersection points
+        '''
+        t0 = 0.
+        epsi = 1e-32 * 0.5
+        t1 = 1e32;
+        gamma3 = (3*epsi)/(1 - 3*epsi)
+        for i in range(3):
+            if Ray.d[i]!= 0 :
+                invRayDir = 1. / Ray.d[i]
+            else: invRayDir=1e32
+            tNear = (self.pMin[i] - Ray.o[i]) * invRayDir
+            tFar  = (self.pMax[i] - Ray.o[i]) * invRayDir
+            if (tNear > tFar):
+                tmp  = tNear
+                tNear= tFar
+                tFar = tmp
+            tFar *= 1 + 2*gamma3
+            t0 = tNear if tNear > t0 else t0
+            t1 = tFar  if  tFar < t1 else t1
+            if (t0 > t1) : return 0, 0, False
+        return t0, t1, True
 
 
 def CommonVertices(BBox1, BBox2):
