@@ -2637,8 +2637,10 @@ def initObj(LGOBJ, vSun, CUSL=None):
     LOBJGPU = to_gpu(LOBJGPU)
     LROBJGPU = to_gpu(LROBJGPU)
     # update the value of ncos
-    n_cos = ncos/nb_H
-    #print("ncos=", ncos/nb_H, "nbH=", nb_H)
+    if nb_H > 0:
+        n_cos = ncos/nb_H
+    else:
+        n_cos = 1
 
     return nGObj, nObj, nRObj, surfLPH, nb_H, zAlt_H, totS_H, TC, nbCx, nbCy, LOBJGPU, \
         LGOBJGPU, LROBJGPU, n_cos
