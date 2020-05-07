@@ -285,6 +285,7 @@ public:
 
     __host__ __device__ bool Intersect(const Ray &ray, float* tHit,
 									   DifferentialGeometry *dg) const;
+	__host__ __device__ bool IntersectP(const Ray &ray) const;
     __host__ __device__ float Area() const;
 
 private:
@@ -389,6 +390,39 @@ bool Triangle::Intersect(const Ray &ray, float *tHit,
 	*tHit = t;
 	return true;
 }
+// Méthode de Möller-Trumbore pour l'intersection rayon/triangle
+bool Triangle::IntersectP(const Ray &ray) const
+{
+	float3 e1 = p2 - p1;
+	float3 e2 = p3 - p1;
+	float3 s1 = cross(ray.d, e2);
+    float divisor = dot(s1, e1);
+
+	if (divisor == 0.)
+	{return false;}
+	float invDivisor = 1.F/divisor;
+
+	// Calcul de la 1er composante des coordonnées baricentriques
+	float3 s = ray.o - p1;
+	float b1 = dot(s, s1) * invDivisor;
+
+    if (b1 < -0.0000001 || b1 > 1.0000001)
+	{return false;}
+
+    // Calcul de la 2nd composante des coordonnées baricentriques
+    float3 s2 = cross(s, e1);
+    float b2 = dot(ray.d, s2) * invDivisor;
+	if (b2 < 0. || b1 + b2 > 1.)
+        return false;
+
+    // Calcul de temps t du rayon pour atteindre le point d'intersection
+    float t = dot(e2, s2) * invDivisor;
+	
+    if (t < ray.mint || t > ray.maxt)
+        return false;
+
+	return true;
+}
 //*******************************************************************************
 #else
 // Méthode de Möller-Trumbore pour l'intersection rayon/triangle
@@ -470,6 +504,46 @@ bool Triangle::Intersect(const Ray &ray, float *tHit,
 	*tHit = float(t);
 	return true;
 }
+
+// Möller-Trumbore for ray/triangle intersection simple bool test
+bool Triangle::IntersectP(const Ray &ray) const
+{
+	double3 p1d = make_double3(double(p1.x), double(p1.y), double(p1.z));
+	double3 p2d = make_double3(double(p2.x), double(p2.y), double(p2.z));
+	double3 p3d = make_double3(double(p3.x), double(p3.y), double(p3.z));
+	double3 dray_o = make_double3(double(ray.o.x), double(ray.o.y), double(ray.o.z));
+	double3 dray_d = make_double3(double(ray.d.x), double(ray.d.y), double(ray.d.z));
+	
+	double3 e1 = p2d - p1d;
+	double3 e2 = p3d - p1d;
+	double3 s1 = cross(dray_d, e2);
+    double divisor = dot(s1, e1);
+
+	if (divisor == 0.)
+	{return false;}
+	double invDivisor = 1./divisor;
+
+	// Calcul de la 1er composante des coordonnées baricentriques
+	double3 s = dray_o - p1d;
+	double b1 = dot(s, s1) * invDivisor;
+
+    if (b1 < -0.0000000001 || b1 > 1.0000000001)
+	{return false;}
+
+    // Calcul de la 2nd composante des coordonnées baricentriques
+    double3 s2 = cross(s, e1);
+    double b2 = dot(dray_d, s2) * invDivisor;
+	if (b2 < 0. || b1 + b2 > 1.)
+        return false;
+
+    // Calcul de temps t du rayon pour atteindre le point d'intersection
+    double t = dot(e2, s2) * invDivisor;
+	
+    if (t < ray.mint || t > ray.maxt)
+        return false;
+
+	return true;
+}
 #endif
 
 __device__ BBox Triangle::ObjectBoundTriangle() const
@@ -506,6 +580,7 @@ public:
 
     __host__ __device__ bool Intersect(const Ray &ray, float* tHit,
 									   DifferentialGeometry *dg) const;
+	__host__ __device__ bool IntersectP(const Ray &ray) const;
     __host__ __device__ float Area() const;
 	float3 *p;
 private:
@@ -565,6 +640,22 @@ bool TriangleMesh::Intersect(const Ray &ray, float* tHit,
 		}
 	}
 	return dgbool;
+}
+
+bool TriangleMesh::IntersectP(const Ray &ray) const
+{
+	Transform nothing;
+	for (int i = 0; i < ntris; ++i)
+	{
+		/* // créer le triangle i en fonction de *vi et *P	 */
+		float3 PA = p[vertexIndex[3*i]];
+		float3 PB = p[vertexIndex[3*i + 1]];
+		float3 PC = p[vertexIndex[3*i + 2]];
+		Triangle rt(&nothing, &nothing, PA, PB, PC);
+		if (rt.IntersectP(ray))
+			return true;
+	}
+	return false;
 }
 
 __device__ BBox TriangleMesh::ObjectBoundTriangleMesh() const

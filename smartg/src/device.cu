@@ -801,7 +801,7 @@ extern "C" {
 				if (ph.H > 1) ph.weight_loss[4] = ph.weight_loss[3];
 				if ( ph.loc == ABSORBED)
 					ph.weight_loss[3] = 0.F;
-				else if ( geoTestRec(ph.pos, ph.v, ph.locPrev, myRObj) )
+				else if ( geoTestRec(ph.pos, ph.v, myRObj) )
 				{
 					ph.weight_loss[3] = ph.weight;
 					if (geoTestMir(ph.pos, ph.v, myObjets, myGObj)) ph.weight_loss[5] = ph.weight;
@@ -6326,12 +6326,12 @@ __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo 
 
 __device__ bool geoTestMir(float3 o, float3 dir, struct IObjets *ObjT, struct GObj *myGObj)
 {
-	Ray R1(o, dir, 0.001); // initialisation du rayon pour l'étude d'intersection
+	// Initialization of the ray for the intersection study
+	Ray R1(o, dir, 0.0001); // 0.0001 -> ray begin 10cm further in direction "dir"
 	
 	// *************Specific to plane objects***************
 	int vi[6] = {0, 1, 2,  // vertices index for triangle 1
 				 2, 3, 1}; // vertices index for triangle 2
-	float3 tempPhit; // Phit temporaire
 	// *****************************************************
 	
 	for (int i = 0; i < nGObj; ++i)
@@ -6348,9 +6348,7 @@ __device__ bool geoTestMir(float3 o, float3 dir, struct IObjets *ObjT, struct GO
 		{
 			for (int j = 0; j < NE; ++j)
 			{
-				float myTj = CUDART_INF_F;
 				bool myBj = false;
-				DifferentialGeometry myDgj;
 				// *****************************First Step********************************
 				// Consider all the transformation of object (j)
 				Transform Tj, invTj; // Declaration of the tranform and its inverse
@@ -6373,9 +6371,9 @@ __device__ bool geoTestMir(float3 o, float3 dir, struct IObjets *ObjT, struct GO
 
 				// ******************************Second Step******************************
 				// See if there is an intersection with object(j)
-			    if (ObjT[IND+j].geo == 2 and ObjT[IND+j].type == HELIOSTAT) // Case with a plane object
+			    if (ObjT[IND+j].geo == 2 and ObjT[IND+j].type == HELIOSTAT)
 				{
-					// declaration of a table of float3 which contains P0, P1, P2, P3
+					// Declaration of a table of float3 which contains P0, P1, P2, P3
 					float3 Pvec[4] = {make_float3(ObjT[IND+j].p0x, ObjT[IND+j].p0y, ObjT[IND+j].p0z),
 									  make_float3(ObjT[IND+j].p1x, ObjT[IND+j].p1y, ObjT[IND+j].p1z),
 									  make_float3(ObjT[IND+j].p2x, ObjT[IND+j].p2y, ObjT[IND+j].p2z),
@@ -6385,9 +6383,8 @@ __device__ bool geoTestMir(float3 o, float3 dir, struct IObjets *ObjT, struct GO
 					TriangleMesh myObject(&Tj, &invTj, 2, 4, vi, Pvec);
 				
 					BBox myBBox = myObject.WorldBoundTriangleMesh();
-					if (myBBox.IntersectP(R1)) myBj = myObject.Intersect(R1, &myTj, &myDgj);
-					if(myBj)
-						return true;
+					if (myBBox.IntersectP(R1)) myBj = myObject.IntersectP(R1);
+					if(myBj) return true;
 				}
 			}// END FOR j LOOP
 		}// END BBOX TEST
@@ -6395,25 +6392,19 @@ __device__ bool geoTestMir(float3 o, float3 dir, struct IObjets *ObjT, struct GO
 	return false;
 } // END geoTestMir FUNCTION
 
-__device__ bool geoTestRec(float3 o, float3 dir, int phLocPrev, struct IObjets *ObjT)
+__device__ bool geoTestRec(float3 o, float3 dir, struct IObjets *ObjT)
 {
-	Ray R1(o, dir, 0); // initialisation du rayon pour l'étude d'intersection
-	// ******************interval d'étude******************
+	// Initialization of the ray for the intersection study
+	Ray R1(o, dir, 0.0001); // 0.0001 -> ray begin 10cm further in direction "dir"
+	// ******************interval of study******************
 	BBox interval(make_float3(Pmin_x, Pmin_y, Pmin_z),
 				  make_float3(Pmax_x, Pmax_y, Pmax_z));
 	
 	if (!interval.IntersectP(R1))
-	{
 		return false;
-	}
 	// *****************************************************
 	
-	// *************commun avec tous les objets*************
-	// bool myB = false;
-	float3 tempPhit; // Phit temporaire
-    // *****************************************************
-	
-	// *******Propre aux objets de type surface plane*******
+	// *************Specific to plane objects***************
 	int vi[6] = {0, 1, 2,  // vertices index for triangle 1
 				 2, 3, 1}; // vertices index for triangle 2
 	// *****************************************************
@@ -6421,14 +6412,17 @@ __device__ bool geoTestRec(float3 o, float3 dir, int phLocPrev, struct IObjets *
 	for (int i = 0; i < nRObj; ++i)
 	{
 		bool myBi = false;
-		float myTi = CUDART_INF_F;
-		DifferentialGeometry myDgi;
 		// *****************************First Step********************************
-		// prise en compte de tte les tranformations existantes de l'objet(i)
-		Transform Ti, invTi; // déclare la tranfo de l'objet i et son inverse
+		// Consider all the transformation of object (i)
+		Transform Ti, invTi; // Declaration of the tranform and its inverse
 
-		// si une valeur en x, y ou z diff de 0 alors il y a une translation
-		if (ObjT[i].mvTx != 0 or ObjT[i].mvTy != 0 or ObjT[i].mvTz != 0) {
+		/* !!! We note that it is crucial to begin with the translation because if there
+		   is a rotation then the coordinate system change (x or y or z axis) !!! */
+
+		// If a value in x, y or z is diff of 0 then there is a translation
+		if ( (ObjT[i].mvTx>VALMIN and ObjT[i].mvTx<-VALMIN) or
+			 (ObjT[i].mvTy>VALMIN and ObjT[i].mvTy>-VALMIN) or
+			 (ObjT[i].mvTz>VALMIN and ObjT[i].mvTz>-VALMIN)) {
 			Transform TmT;
 			TmT = Ti.Translate(make_float3(ObjT[i].mvTx, ObjT[i].mvTy,
 										   ObjT[i].mvTz));
@@ -6436,23 +6430,14 @@ __device__ bool geoTestRec(float3 o, float3 dir, int phLocPrev, struct IObjets *
 
 		// Add rotation tranformations
 		Ti = addRotAndParseOrder(Ti, ObjT[i]); //see the function
-		invTi = Ti.Inverse(Ti); // inverse de la tranformation
+		invTi = Ti.Inverse(Ti); // inverse of the transform
 		// ***********************************************************************
 		
 		// ******************************Second Step******************************
-		// on voit s'il y a une intersection avec l'objet(i)
-		if (ObjT[i].geo == 1) // cas d'un objet de type sphere
+	    // See if there is an intersection with an object
+		if (ObjT[i].geo == 2 and ObjT[i].type == RECEIVER)
 		{
-			Sphere myObject(&Ti, &invTi, ObjT[i].myRad, ObjT[i].z0, ObjT[i].z1, ObjT[i].phi);
-
-			BBox myBBox = myObject.WorldBoundSphere();
-
-			if (myBBox.IntersectP(R1))
-				myBi = myObject.Intersect(R1, &myTi, &myDgi);
-		}
-		else if (ObjT[i].geo == 2) // cas d'un objet de type surface plane
-		{
-			// declaration of a table of float3 which contains P0, P1, P2, P3
+			// Declaration of a table of float3 which contains P0, P1, P2, P3
 			float3 Pvec[4] = {make_float3(ObjT[i].p0x, ObjT[i].p0y, ObjT[i].p0z),
 							  make_float3(ObjT[i].p1x, ObjT[i].p1y, ObjT[i].p1z),
 							  make_float3(ObjT[i].p2x, ObjT[i].p2y, ObjT[i].p2z),
@@ -6463,17 +6448,11 @@ __device__ bool geoTestRec(float3 o, float3 dir, int phLocPrev, struct IObjets *
 			
 			BBox myBBox = myObject.WorldBoundTriangleMesh();
 			if (myBBox.IntersectP(R1))
-				myBi = myObject.Intersect(R1, &myTi, &myDgi);				
+				myBi = myObject.IntersectP(R1);	
+			if (myBi) return true;
 		}
 		// ***********************************************************************
-
-		// ******************************third Step*******************************
-		tempPhit = R1(myTi); // valeur temporaire de phit
-			
-		if (myBi && ((fabs(tempPhit.x-o.x) > 1e-3) || (fabs(tempPhit.y-o.y) > 1e-3) ||
-					 (fabs(tempPhit.z-o.z) > 1e-3)) )
-			return true;
-	} // FIN BOUCLE FOR (PARCOURANT LES OBJETS)
+	} // END FOR LOOP
 	return false;
 }
 
