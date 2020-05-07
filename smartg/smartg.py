@@ -1986,15 +1986,15 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         wPhCat = gpuzeros(8, dtype=FDTYPE)  # vector to fill the weight of photons for each categories
         wPhCat2 = gpuzeros(8, dtype=FDTYPE)  # sum of squared photons weight for each cats
         tabObjInfo = gpuzeros((9, nbCx, nbCy), dtype=FDTYPE)
-        wPhLoss = gpuzeros(9, dtype=FDTYPE)
-        wPhLoss2 = gpuzeros(9, dtype=FDTYPE)
+        wPhLoss = gpuzeros(7, dtype=FDTYPE)
+        wPhLoss2 = gpuzeros(7, dtype=FDTYPE)
         tabMatRecep = np.zeros((9, nbCx, nbCy), dtype=np.float64)
         # Matrix where lines : l0 = SumCats, l1=cat1, l2=cat2, ... l8=cat8
         # And columns : c0=nbPhotons , c1=weight, c2=weight2, c3=irradiance(in watt), c4=errAbs, c5=err%
         matCats = np.zeros((9, 6), dtype=np.float64)
-        # Matrix where: M[0,0]=W_I, M[1,0]=W_I/(n.dirS), M[2,0]=W_O, M[3,0]=W_S, M[4,0]=W_BLO, M[5,0]=W_B
-        # and : M[0,1]=W_I², M[1,1]=(W_I/(n.dirS))², M[2,1]=W_O², M[3,1]=W_S², M[4,1]=W_BLO², M[5,1]=W_B²
-        matLoss = np.zeros((9, 2), dtype=np.float64)
+        # Matrix where: M[0,0]=W_I, M[1,0]=W_rhoM, M[2,0]=W_rhoP, M[3,0]=W_SP, M[4,0]=W_SM, M[5,0]=W_BM, M[6,0]=W_BP
+        # and : M[0,1]=W_I², M[1,1]=W_rhoM², M[2,1]=W_rhoP², M[3,1]=W_SP², M[4,1]=W_SM², M[5,1]=W_BM², M[6,1]=W_BP²
+        matLoss = np.zeros((7, 2), dtype=np.float64)
     else:
         nbPhCat = gpuzeros(1, dtype=np.uint64)
         wPhCat = gpuzeros(1, dtype=FDTYPE)

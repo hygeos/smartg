@@ -256,7 +256,7 @@ public:
 	#ifdef OBJ3D
 	int direct;
     int H, E, S;
-	float weight_loss[6];
+	float weight_loss[3];
 	float3 v_i; // for STP opt efficiency
 	#endif
     #if defined(BACK) &&  defined(OBJ3D)

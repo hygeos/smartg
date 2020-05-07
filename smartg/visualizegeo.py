@@ -179,86 +179,64 @@ def nopt_view(MLUT, BACK=False, ACC = 6, NCL="68%", fl_TOA=None, NAATM=False):
 
     if(BACK == False): # Forward mode ->
         # Sum of weights
+        # w0=wI, w1=wrhoM, w2=wrhoP, w3=wSM, w4=wSP, w5=wBM, w6=wBP, w7=wREC
         w0 = m['wLoss'][0]; w1 = m['wLoss'][1]; w2 = m['wLoss'][2];
-        w3 = m['wLoss'][3]; w4 = m['wLoss'][4]; w5 = m['cat_w'][2];
-        wB = m['wLoss'][5]; wBb = m['wLoss'][6]; wspib = m['wLoss'][7];
-        wref = m['wLoss'][8];
+        w3 = m['wLoss'][3]; w4 = m['wLoss'][4]; w5 = m['wLoss'][5]; 
+        w6 = m['wLoss'][6]; w7 = m['cat_w'][2];
         # Sum of (weights²)
         w0_2 = m['wLoss2'][0]; w1_2 = m['wLoss2'][1]; w2_2 = m['wLoss2'][2];
-        w3_2 = m['wLoss2'][3]; w4_2 = m['wLoss2'][4]; w5_2 = m['cat_w2'][2];
-        wB_2 = m['wLoss2'][5]; wBb_2 = m['wLoss2'][6]; wspib_2 = m['wLoss2'][7];
-        wref_2 = m['wLoss2'][8];
+        w3_2 = m['wLoss2'][3]; w4_2 = m['wLoss2'][4]; w5_2 = m['wLoss2'][5]; 
+        w6_2 = m['wLoss2'][6]; w7_2 = m['cat_w2'][2];
         # (Sum of weights)² divided by the number of photons
         sum2Z = [(w0*w0)/NPH, (w1*w1)/NPH, (w2*w2)/NPH, (w3*w3)/NPH, (w4*w4)/NPH, \
-                 (w5*w5)/NPH, (wB*wB)/NPH, (wBb*wBb)/NPH, (wspib*wspib)/NPH, (wref*wref)/NPH]
+                 (w5*w5)/NPH, (w6*w6)/NPH, (w7*w7)/NPH]
         # Sum of (weights²)
-        sumZ2 = [w0_2, w1_2, w2_2, w3_2, w4_2, w5_2, wB_2, wBb_2, wspib_2, wref_2]
+        sumZ2 = [w0_2, w1_2, w2_2, w3_2, w4_2, w5_2, w6_2, w7_2]
         dw = []
         for i in range (0, len(sum2Z)):
             dw_temp = ld*NBIS*(sumZ2[i]-sum2Z[i])**0.5
             dw.append(dw_temp)
-            
-        nopt = Clamp(k*w5, 0, 1);
-        nsha = Clamp(k*w1, 0, 1); ncos = Clamp(w0/w1, 0, 1); nref = Clamp(w2/w0, 0, 1);
-        nspi = Clamp(w3/w2, 0, 1); nblo = Clamp(1-(w4/w3), 0, 1); natm = Clamp(w5/(w3-w4), 0, 1);
+        
+        nopt=Clamp(k*w7, 0, 1);k_s = k/float(m.attrs['n_cos']);
+        ncos=float(m.attrs['n_cos']);nsha=Clamp(k_s*w0, 0, 1);nref=Clamp(1-(w1/w0), 0, 1);
+        nspi=Clamp(1-(w3/w2), 0, 1);nblo=Clamp(1-(w5/w4), 0, 1);natm=Clamp(w7/w6, 0, 1)
 
-        k_s = k/float(m.attrs['n_cos']);
-        nsha_n = Clamp(k_s*w0, 0, 1); ncos_n = float(m.attrs['n_cos']);
-        nblo_n = Clamp(wB/w3, 0, 1); natm_n = Clamp(w5/wB, 0, 1);
-        nspi_n = Clamp(1-(wspib/w2), 0, 1); nblo_n2 = Clamp(1-(wBb/w3), 0, 1);
-        nref_n = Clamp(1-(wref/w0), 0, 1);
-
-        d_nsha_n = abs(k_s)*dw[0]
-        d_nblo_n = abs(1./w3)*dw[6] + abs(-wB/w3**2)*dw[3]
-        d_natm_n = abs(1./wB)*dw[5] + abs(-w5/wB**2)*dw[6]
-        d_nblo_n2 = abs(-1./w3)*dw[7] + abs(wBb/w3**2)*dw[3]
-        d_nspi_n = abs(-1./w2)*dw[8] + abs(wspib/w2**2)*dw[2]
-        d_nref_n = abs(-1./w0)*dw[9] + abs(wref/w0**2)*dw[0]
-
-        d_nopt = abs(k)*dw[5]; d_nsha = abs(k)*dw[1]
-        d_ncos = abs(1./w1)*dw[0] + abs(-w0/w1**2)*dw[1]
-        d_nref = abs(1./w0)*dw[2] + abs(-w2/w0**2)*dw[0]
-        d_nspi = abs(1./w2)*dw[3] + abs(-w3/w2**2)*dw[2]
-        d_nblo = abs(-1./w3)*dw[4] + abs(w4/w3**2)*dw[3]
-        d_natm = abs(1./(w3-w4))*dw[5] + abs(-w5/(w3-w4)**2)*dw[3] + abs(w5/(w3-w4)**2)*dw[4]
+        d_nopt=abs(k)*dw[7];d_ncos=0.;d_nsha=abs(k_s)*dw[0];
+        d_nref=abs(-1./w0)*dw[1] + abs(w1/w0**2)*dw[0]
+        d_nspi=abs(-1./w2)*dw[3] + abs(w3/w2**2)*dw[2]
+        d_nblo=abs(-1./w4)*dw[5] + abs(w5/w4**2)*dw[4]
+        d_natm=abs(1./w6)*dw[7] + abs(w7/w6**2)*dw[6]
 
         print("nopt =", strAcc % nopt, ", errAbs =", strAcc % d_nopt, ", err% =", strAcc % ((d_nopt/nopt)*100))
-        print("nsha =", strAcc % nsha, ", errAbs =", strAcc % d_nsha, ", err% =", strAcc % ((d_nsha/nsha)*100))
-        print("nsha_n =", strAcc % nsha_n, ", errAbs =", strAcc % d_nsha_n, ", err% =", strAcc % ((d_nsha_n/nsha_n)*100))
         print("ncos =", strAcc % ncos, ", errAbs =", strAcc % d_ncos, ", err% =", strAcc % ((d_ncos/ncos)*100))
-        print("ncos_n =", strAcc % ncos_n, ", errAbs =", strAcc % 0, ", err% =", strAcc % 0)
+        print("nsha =", strAcc % nsha, ", errAbs =", strAcc % d_nsha, ", err% =", strAcc % ((d_nsha/nsha)*100))
         print("nref =", strAcc % nref, ", errAbs =", strAcc % d_nref, ", err% =", strAcc % ((d_nref/nref)*100))
-        print("nref_n =", strAcc % nref_n, ", errAbs =", strAcc % d_nref_n, ", err% =", strAcc % ((d_nref_n/nref_n)*100))
         print("nspi =", strAcc % nspi, ", errAbs =", strAcc % d_nspi, ", err% =", strAcc % ((d_nspi/nspi)*100))
-        print("nspi_n =", strAcc % nspi_n, ", errAbs =", strAcc % d_nspi_n, ", err% =", strAcc % ((d_nspi_n/nspi_n)*100))
         print("nblo =", strAcc % nblo, ", errAbs =", strAcc % d_nblo, ", err% =", strAcc % ((d_nblo/nblo)*100))
-        print("nblo_n =", strAcc % nblo_n, ", errAbs =", strAcc % d_nblo_n, ", err% =", strAcc % ((d_nblo_n/nblo_n)*100))
-        print("nblo_n2 =", strAcc % nblo_n2, ", errAbs =", strAcc % d_nblo_n2, ", err% =", strAcc % ((d_nblo_n2/nblo_n2)*100))
         print("natm =", strAcc % natm, ", errAbs =", strAcc % d_natm, ", err% =", strAcc % ((d_natm/natm)*100))
-        print("natm_n =", strAcc % natm_n, ", errAbs =", strAcc % d_natm_n, ", err% =", strAcc % ((d_natm_n/natm_n)*100))
     else: # Backward mode ->
         # Sum of weights
-        w0 = m['wLoss'][0]; w1 = m['wLoss'][1]; w2 = m['wLoss'][2]; w3 = m['cat_w'][2];
+        # w0=wI, w1=wrhoM, w2=wREC
+        w0=m['wLoss'][0];w1=m['wLoss'][1];w2=m['cat_w'][2];
         # Sum of (weights²)
-        w0_2 = m['wLoss2'][0]; w1_2 = m['wLoss2'][1]; w2_2 = m['wLoss2'][2]; w3_2 = m['cat_w2'][2];
+        w0_2=m['wLoss2'][0];w1_2=m['wLoss2'][1];w2_2=m['cat_w2'][2];
         # (Sum of weights)² divided by the number of photons
-        sum2Z = [(w0*w0)/NPH, (w1*w1)/NPH, (w2*w2)/NPH, (w3*w3)/NPH]
+        sum2Z = [(w0*w0)/NPH, (w1*w1)/NPH, (w2*w2)/NPH]
         # Sum of (weights²)
-        sumZ2 = [w0_2, w1_2, w2_2, w3_2]
+        sumZ2 = [w0_2, w1_2, w2_2]
         dw = []
         for i in range (0, len(sum2Z)):
             dw_temp = ld*NBIS*(sumZ2[i]-sum2Z[i])**0.5
             dw.append(dw_temp)
-        nopt = Clamp(k*w3, 0, 1)
-        ncos = Clamp(w2/w1, 0, 1); nref = Clamp(w2/w0, 0, 1);
-        nsbsa = Clamp((k*w3)/(ncos*nref), 0, 1)
+        nopt = Clamp(k*w2, 0, 1);ncos=float(m.attrs['n_cos']);nref=Clamp(1-(w1/w0), 0, 1);
+        nsbsa = Clamp((k*w2)/(ncos*nref), 0, 1);
 
-        d_nopt = abs(k)*dw[3]
-        d_ncos = abs(1./w1)*dw[2] + abs(-w2/(w1*w1))*dw[1]
-        d_nref = abs(1./w0)*dw[2] + abs(-w2/(w0*w0))*dw[0]
+        d_nopt=abs(k)*dw[2];d_ncos = 0.;
+        d_nref=abs(-1./w0)*dw[1] + abs(w1/w0**2)*dw[0]
 
-        d_nsbsa = abs((k*w1*w0)/(w2*w2))*dw[3] + abs((k*w3*w0)/(w2*w2))*dw[1] + \
-                  abs((k*w3*w1)/(w2*w2))*dw[0] + abs((-2.*k*w1*w0)/(w2*w2*w2))*dw[2]
+        d_nsbsa=abs(k/(ncos*(1-(w1/w0))))*dw[2] + \
+                 abs((k*w2)/(ncos*w0*(1-(w1/w0))**2))*dw[1] + \
+                 abs((-k*w2*w1)/(ncos*w0*w0*(1-(w1/w0))**2))
 
         print("nopt =", strAcc % nopt, ", errAbs =", strAcc % d_nopt, ", err% =", strAcc % ((d_nopt/nopt)*100))
         print("ncos =", strAcc % ncos, ", errAbs =", strAcc % d_ncos, ", err% =", strAcc % ((d_ncos/ncos)*100))
