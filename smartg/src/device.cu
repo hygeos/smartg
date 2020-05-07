@@ -2396,7 +2396,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 		// geometry, return true/false and give the position phit of the intersection
 		// nObj = le nombre d'objets, si = 0 alors le test n'est pas nécessaire.
 	    if (nObj > 0){
-			mytest = geoTest(ph->pos, ph->v, ph->locPrev, &phit, geoS, myObjets, myGObj);
+			mytest = geoTest(ph->pos, ph->v, &phit, geoS, myObjets, myGObj);
 			if (!mytest && LMODEd == 1 &&  ph->pos.z >= (120.F-VALMIN5) && ph->direct == 0) {ph->loc=NONE; return;}
 			if (mytest && phit.z > -VALMIN5 && phit.z < (120.F+VALMIN5) && IsAtm == 0)
 			{
@@ -6179,19 +6179,16 @@ __device__ double DatomicAdd(double* address, double val)
 * Check if there is an intersection with at least an object, in case with intersections with
 * several objects return the intersection information of the object with the smallest traveled distance
 */
-__device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo *GeoV, struct IObjets *ObjT, struct GObj *myGObj)
+__device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct IObjets *ObjT, struct GObj *myGObj)
 {
-	Ray R1(o, dir, 0); // initialisation du rayon pour l'étude d'intersection
-	// ******************interval d'étude******************
+	// Initialization of the ray for the intersection study
+	Ray R1(o, dir, 0.0001); // 0.0001 -> ray begin 10cm further in direction "dir"
+
+	// ******************interval of study******************
 	BBox interval(make_float3(Pmin_x-VALMIN, Pmin_y-VALMIN, Pmin_z-VALMIN),
 				  make_float3(Pmax_x+VALMIN, Pmax_y+VALMIN, Pmax_z+VALMIN));
-	
 	if (!interval.IntersectP(R1))
-	{
-		*(phit) = make_float3(-1, -1, -1);
-	    GeoV->normal = make_float3(0, 0, 0);
 		return false;
-	}
 	// *****************************************************
 	
 	// ***************common to all objects*****************
@@ -6204,7 +6201,6 @@ __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo 
 	// *************Specific to plane objects***************
 	int vi[6] = {0, 1, 2,  // vertices index for triangle 1
 				 2, 3, 1}; // vertices index for triangle 2
-	Transform nothing; // "None" tranformation
 	// *****************************************************
 
 	for (int i = 0; i < nGObj; ++i)
@@ -6279,50 +6275,42 @@ __device__ bool geoTest(float3 o, float3 dir, int phLocPrev, float3* phit, IGeo 
 				if (myBj & (myT > myTj))
 				{
 					tempPhit = R1(myTj);
-					if ((fabs(tempPhit.x-o.x) > 1e-3) || (fabs(tempPhit.y-o.y) > 1e-3) ||
-						(fabs(tempPhit.z-o.z) > 1e-3) || (phLocPrev != OBJSURF))
+					myB = true;
+					myT = myTj;
+					myDg = myDgj;
+					GeoV->normal = faceForward(myDg.nn, -1.*R1.d);
+					GeoV->normalBase = make_float3(ObjT[IND+j].nBx, ObjT[IND+j].nBy, ObjT[IND+j].nBz);
+					if(  isBackward( make_double3(GeoV->normalBase.x, GeoV->normalBase.y, GeoV->normalBase.z),
+									 make_double3(dir.x, dir.y, dir.z) )  )
 					{
-						myB = true;
-						myT = myTj;
-						myDg = myDgj;
-						GeoV->normal = faceForward(myDg.nn, -1.*R1.d);
-						GeoV->normalBase = make_float3(ObjT[IND+j].nBx, ObjT[IND+j].nBy, ObjT[IND+j].nBz);
-						if(  isBackward( make_double3(GeoV->normalBase.x, GeoV->normalBase.y, GeoV->normalBase.z),
-										 make_double3(dir.x, dir.y, dir.z) )  )
-						{
-							GeoV->material = ObjT[IND+j].materialAV;
-							GeoV->reflectivity = ObjT[IND+j].reflectAV;
-							GeoV->roughness = ObjT[IND+j].roughAV;
-							GeoV->shadow = ObjT[IND+j].shdAV;
-							GeoV->nind = ObjT[IND+j].nindAV;
-							GeoV->dist = ObjT[IND+j].distAV;
-						}
-						else
-						{
-							GeoV->material = ObjT[IND+j].materialAR; //AR
-							GeoV->reflectivity = ObjT[IND+j].reflectAR;
-							GeoV->roughness = ObjT[IND+j].roughAR;
-							GeoV->shadow = ObjT[IND+j].shdAR;
-							GeoV->nind = ObjT[IND+j].nindAR;
-							GeoV->dist = ObjT[IND+j].distAR;
-						}
-						*(phit) = tempPhit;
-						GeoV->mvTF = Tj;
-						GeoV->type = ObjT[IND+j].type;
-						GeoV->mvR = make_float3(ObjT[IND+j].mvRx, ObjT[IND+j].mvRy, ObjT[IND+j].mvRz);
+						GeoV->material = ObjT[IND+j].materialAV;
+						GeoV->reflectivity = ObjT[IND+j].reflectAV;
+						GeoV->roughness = ObjT[IND+j].roughAV;
+						GeoV->shadow = ObjT[IND+j].shdAV;
+						GeoV->nind = ObjT[IND+j].nindAV;
+						GeoV->dist = ObjT[IND+j].distAV;
 					}
+					else
+					{
+						GeoV->material = ObjT[IND+j].materialAR; //AR
+						GeoV->reflectivity = ObjT[IND+j].reflectAR;
+						GeoV->roughness = ObjT[IND+j].roughAR;
+						GeoV->shadow = ObjT[IND+j].shdAR;
+						GeoV->nind = ObjT[IND+j].nindAR;
+						GeoV->dist = ObjT[IND+j].distAR;
+					}
+					*(phit) = tempPhit;
+					GeoV->mvTF = Tj;
+					GeoV->type = ObjT[IND+j].type;
+					GeoV->mvR = make_float3(ObjT[IND+j].mvRx, ObjT[IND+j].mvRy, ObjT[IND+j].mvRz);
 				}
-			} // END for j loop (traveling entity objects)
+			} // END FOR j LOOP (traveling entity objects)
 		} // END intersection test with the group bounding box
 		// ***********************************************************************
 	} // END FOR i LOOP (traveling object groups)
-
-	if (myB) { // If there is an intersection with at least one object
-		return true; }
-	else { // If there is not a single intersection
-		*(phit) = make_float3(-1, -1, -1);
-		return false; }	
-} // END OF THE FUNCTION GEOTEST()
+	if (myB) return true; // If there is an intersection with at least one object
+	else return false; // If there is not a single intersection
+} // END OF THE FUNCTION geoTest()
 
 __device__ bool geoTestMir(float3 o, float3 dir, struct IObjets *ObjT, struct GObj *myGObj)
 {
@@ -6390,7 +6378,7 @@ __device__ bool geoTestMir(float3 o, float3 dir, struct IObjets *ObjT, struct GO
 		}// END BBOX TEST
 	}// END FOR i LOOP
 	return false;
-} // END geoTestMir FUNCTION
+} // END OF THE FUNCTION geoTestMir()
 
 __device__ bool geoTestRec(float3 o, float3 dir, struct IObjets *ObjT)
 {
@@ -6454,7 +6442,7 @@ __device__ bool geoTestRec(float3 o, float3 dir, struct IObjets *ObjT)
 		// ***********************************************************************
 	} // END FOR LOOP
 	return false;
-}
+} // END OF THE FUNCTION geoTestRec()
 
 __device__ Transform addRotAndParseOrder(Transform Ti, IObjets object)
 {
