@@ -4505,7 +4505,7 @@ __device__ void Obj3DRoughSurf(Photon* ph, int le, float* tabthv, float* tabphi,
 		invTransfo = transfo.Inverse(transfo);
 		
 		// Incident direction v if obj normal colinear to z axis
-		float3 v_iInv = invTransfo(Vectorf(v_i));
+		float3 v_iInv = normalize(invTransfo(Vectorf(v_i)));
 		
 		// ***********************************************************************************
 		// Beckmann sampling of theta_m, phi_m to get cTheta_i, sTheta_i -> Walter et al. 2007
@@ -4894,17 +4894,17 @@ __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geo
 	    // Use also double precison operations due to simple precison limit 
 		double cosANGD, cosPHSUN;
 		double3 vecSUN = make_double3(-DIRSXd, -DIRSYd, -DIRSZd);
-		double3 vecPH = make_double3(ph->v.x, ph->v.y, ph->v.z);
+		double3 vecPH = normalize(make_double3(ph->v.x, ph->v.y, ph->v.z));
 		double esp = 0.00000001173, esp7 = 0.00000008211;
 		
 		cosANGD = cos( radiansd( SUN_DISCd )  );
 		cosPHSUN = dot(vecSUN, vecPH);
 		p_t = ph->posIni;
 
-		if (cosPHSUN < cosANGD-esp7) {return;}
-		// This trick reduce the small error due to the simple precion limit on the direct radiation
-		if (cosANGD >= cosPHSUN and SUN_DISCd < 1 and ph->H == 0 and ph->S == 0 and ph->E == 0) {ph->weight *= 0.15;}
-		else if (cosANGD-esp > cosPHSUN and SUN_DISCd < 1 and ph->S == 0 and ph->E == 0) {ph->weight *= 0.6;}
+		if (cosPHSUN < cosANGD) {return;}
+		// // This trick reduce the small error due to the simple precion limit on the direct radiation
+		// if (cosANGD >= cosPHSUN and SUN_DISCd < 1 and ph->H == 0 and ph->S == 0 and ph->E == 0) {ph->weight *= 0.15;}
+		// else if (cosANGD-esp > cosPHSUN and SUN_DISCd < 1 and ph->S == 0 and ph->E == 0) {ph->weight *= 0.6;}
 
 		if (ph->direct == 0)
 			countLoss(ph, geoS, wPhLoss, wPhLoss2);
