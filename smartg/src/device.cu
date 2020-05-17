@@ -798,11 +798,16 @@ extern "C" {
 			{
 				ph.weight_loss[1] = 0.F;
 				ph.weight_loss[2] = 0.F;
-				if ( geoTestRec(ph.pos, ph.v, myRObj) )
-				{
-					ph.weight_loss[1] = ph.weight; // w_SP
-					if (geoTestMir(ph.pos, ph.v, myObjets, myGObj)) ph.weight_loss[2] = ph.weight; // w_SM
-							
+				ph.weight_loss[3] = 0.F;
+				// Look if the ray is blocked by an obj located between the ref point and the rec
+				if (geoTestMir(ph.pos, ph.v, myObjets, myGObj))
+					ph.weight_loss[1] = ph.weight; // w_BM
+				else
+				{   // If the ray is not blocked look if the ray miss or not the rec
+					if ( geoTestRec(ph.pos, ph.v, myRObj) )
+						ph.weight_loss[2] = ph.weight; // w_SP
+					else
+						ph.weight_loss[3] = ph.weight; // w_SM
 				}
 				countLoss(&ph, &geoStruc, wPhLoss, wPhLoss2);
 			}
@@ -914,7 +919,6 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 	ph->weight_loss[1] = 0.F;
 	ph->weight_loss[2] = 0.F;
 	ph->weight_loss[3] = 0.F;
-	ph->weight_loss[4] = 0.F;
 	ph->v_i = make_float3(-DIRSXd, -DIRSYd, -DIRSZd);
     #endif
 	
@@ -4735,95 +4739,6 @@ __device__ void Obj3DRoughSurf(Photon* ph, int le, float* tabthv, float* tabphi,
 	
 } // FUNCTION OBJ3DROUGHSURF
 
-// __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, void *wPhLoss2)
-// {
-// 	// Find the incident flux at the mirror before the cosine effect
-// 	#ifdef BACK
-// 	ph->weight_loss[1] = double(ph->weight_loss[2])/dot(make_double3(geoS->normalBase.x, geoS->normalBase.y, geoS->normalBase.z),
-// 														make_double3(ph->v_i.x, ph->v_i.y, ph->v_i.z));
-// 	#else
-// 	ph->weight_loss[1] = double(ph->weight_loss[0])/dot(make_double3(geoS->normalBase.x, geoS->normalBase.y, geoS->normalBase.z),
-// 														make_double3(ph->v_i.x, ph->v_i.y, ph->v_i.z));
-// 	#endif
-
-// 	#ifdef DOUBLE
-// 	double weightE, weightS, weightECos;
-// 	double *wPhLossC; double *wPhLossC2; double4 stokes;
-	
-// 	stokes = make_double4(ph->stokes.x, ph->stokes.y, ph->stokes.z, ph->stokes.w);
-
-// 	wPhLossC = (double*)wPhLoss; wPhLossC2 = (double*)wPhLoss2;          // - table comprinsing different weights
-// 	weightE = (double)ph->weight_loss[0]*double(stokes.x + stokes.y);    // - incident flux after cos effect
-// 	weightS = (double)ph->weight_loss[2]*double(stokes.x + stokes.y);    // - flux reflected after considering ref loss
-// 	weightECos = (double)ph->weight_loss[1]*double(stokes.x + stokes.y); // - incident flux before cos effect
-// 	#ifndef BACK
-// 	double weightSpi, weightBlo, w_B, w_spib, w_Bb, w_ref;
-// 	weightSpi = (double)ph->weight_loss[3]*double(stokes.x + stokes.y);  // - flux weight if the reflected flux Ws succeed the
-// 	                                                                     //   intersection test with the receiver (spi loss)
-// 	weightBlo = (double)ph->weight_loss[4]*double(stokes.x + stokes.y);  // - Wspi which is blocked by another object
-// 	w_B = double(ph->weight_loss[3]-ph->weight_loss[5])*double(ph->stokes.x + ph->stokes.y);
-// 	w_Bb = double(ph->weight_loss[5])*double(ph->stokes.x + ph->stokes.y);
-// 	w_spib = double(ph->weight_loss[2]-ph->weight_loss[3])*double(ph->stokes.x + ph->stokes.y);
-// 	w_ref = double(ph->weight_loss[0]-ph->weight_loss[2])*double(ph->stokes.x + ph->stokes.y);
-// 	#endif
-// 	#else
-// 	float weightE, weightS, weightECos;
-// 	float *wPhLossC; float *wPhLossC2;
-	
-// 	wPhLossC = (float*)wPhLoss; wPhLossC2 = (float*)wPhLoss2;
-// 	weightE = (float)ph->weight_loss[0]*float(ph->stokes.x + ph->stokes.y);
-// 	weightS = (float)ph->weight_loss[2]*float(ph->stokes.x + ph->stokes.y);
-// 	weightECos = (float)ph->weight_loss[1]*float(ph->stokes.x + ph->stokes.y);
-// 	#ifndef BACK
-// 	float weightSpi, weightBlo, w_B, w_spib, w_Bb, w_ref;
-// 	weightSpi = (float)ph->weight_loss[3]*float(ph->stokes.x + ph->stokes.y);
-// 	weightBlo = (float)ph->weight_loss[4]*float(ph->stokes.x + ph->stokes.y);
-// 	w_B = float(ph->weight_loss[3]-ph->weight_loss[5])*float(ph->stokes.x + ph->stokes.y);
-// 	w_Bb = float(ph->weight_loss[5])*float(ph->stokes.x + ph->stokes.y);
-// 	w_spib = float(ph->weight_loss[2]-ph->weight_loss[3])*float(ph->stokes.x + ph->stokes.y);
-// 	w_ref = float(ph->weight_loss[0]-ph->weight_loss[2])*float(ph->stokes.x + ph->stokes.y);
-// 	#endif
-// 	#endif
-
-//     #if !defined(DOUBLE) || (defined(DOUBLE) && (__CUDA_ARCH__ >= 600))
-// 	if (ph->H < 2) // If this is the first time that a photon is reaching a heliostat
-// 	{
-// 		atomicAdd(wPhLossC, weightE); atomicAdd(wPhLossC2, weightE*weightE);               // We and We²
-// 		atomicAdd(wPhLossC+1, weightECos); atomicAdd(wPhLossC2+1, weightECos*weightECos);  // (We/cos(Theta)) and (We/cos(Theta))²
-// 		atomicAdd(wPhLossC+2, weightS); atomicAdd(wPhLossC2+2, weightS*weightS);           // Ws and Ws²
-// 		#ifndef BACK
-// 		atomicAdd(wPhLossC+3, weightSpi); atomicAdd(wPhLossC2+3, weightSpi*weightSpi);     // Wspi and Wspi²
-// 		atomicAdd(wPhLossC+5, w_B); atomicAdd(wPhLossC2+5, w_B*w_B);
-// 		atomicAdd(wPhLossC+6, w_Bb); atomicAdd(wPhLossC2+6, w_Bb*w_Bb);
-// 		atomicAdd(wPhLossC+7, w_spib); atomicAdd(wPhLossC2+7, w_spib*w_spib);
-// 		atomicAdd(wPhLossC+8, w_ref); atomicAdd(wPhLossC2+8, w_ref*w_ref);
-// 		#endif
-// 	}
-// 	#ifndef BACK
-// 	else
-// 		atomicAdd(wPhLossC+4, weightBlo); atomicAdd(wPhLossC2+4, weightBlo*weightBlo);     // Wblo and Wblo²
-// 	#endif
-//     #else
-// 	if (ph->H < 2) // If this is the first time that a photon is reaching a heliostat
-// 	{
-// 		DatomicAdd(wPhLossC, weightE); DatomicAdd(wPhLossC2, weightE*weightE);
-// 		DatomicAdd(wPhLossC+1, weightECos); DatomicAdd(wPhLossC2+1, weightECos*weightECos);
-// 		DatomicAdd(wPhLossC+2, weightS); DatomicAdd(wPhLossC2+2, weightS*weightS);
-// 		#ifndef BACK
-// 		DatomicAdd(wPhLossC+3, weightSpi); DatomicAdd(wPhLossC2+3, weightSpi*weightSpi);
-// 		DatomicAdd(wPhLossC+5, w_B); DatomicAdd(wPhLossC2+5, w_B*w_B);
-// 		DatomicAdd(wPhLossC+6, w_Bb); DatomicAdd(wPhLossC2+6, w_Bb*w_Bb);
-// 		DatomicAdd(wPhLossC+7, w_spib); DatomicAdd(wPhLossC2+7, w_spib*w_spib);
-// 		DatomicAdd(wPhLossC+8, w_ref); DatomicAdd(wPhLossC2+8, w_ref*w_ref);
-// 		#endif
-// 	}
-// 	#ifndef BACK
-// 	else
-// 		DatomicAdd(wPhLossC+4, weightBlo); DatomicAdd(wPhLossC2+4, weightBlo*weightBlo);
-// 	#endif
-// 	#endif
-// }
-
 __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, void *wPhLoss2)
 {
 	#ifdef DOUBLE
@@ -4835,11 +4750,10 @@ __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, void *wPhLoss2)
 	#ifndef BACK
 	double w_rhoP, w_SM, w_SP, w_BM, w_BP;
 	w_rhoP = double(geoS->reflectivity)*w_I;                         // - reflected flux weight
-	w_SP = double(ph->weight_loss[1])*double(stokes.x + stokes.y);   // - reflected part that shouldn't miss the receiver
-	w_SM = w_rhoP-w_SP;                                              // - flux weight lost due ti spillage
-	w_BM = double(ph->weight_loss[2])*double(stokes.x + stokes.y);   // - flux weight lost due to blocking effect
-	w_BP = w_SP-w_BM;                                                // - reflected part that should reach the receiver
-	                                                                 //   accounting for blo and spi but not atm attenuation
+	w_BM = double(ph->weight_loss[1])*double(stokes.x + stokes.y);   // - flux weight lost due to blocking effect
+	w_BP = w_rhoP-w_BM;
+	w_SP = double(ph->weight_loss[2])*double(stokes.x + stokes.y);
+	w_SM = double(ph->weight_loss[3])*double(stokes.x + stokes.y);   // - flux weight lost due to spillage
 	#endif
 	#else
 	float *wPhLossC; float *wPhLossC2; float w_I, w_rhoM;
@@ -4849,10 +4763,10 @@ __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, void *wPhLoss2)
 	#ifndef BACK
 	float w_rhoP, w_SM, w_SP, w_BM, w_BP;
 	w_rhoP = float(geoS->reflectivity)*w_I;
-	w_SP = float(ph->weight_loss[1])*float(ph->stokes.x + ph->stokes.y);
-	w_SM = w_rhoP-w_SP;
-	w_BM = float(ph->weight_loss[2])*float(ph->stokes.x + ph->stokes.y);
-	w_BP = w_SP-w_BM;	
+	w_BM = float(ph->weight_loss[1])*(ph->stokes.x + ph->stokes.y);   // - flux weight lost due to blocking effect
+	w_BP = w_rhoP-w_BM;
+	w_SP = float(ph->weight_loss[2])*(ph->stokes.x + ph->stokes.y);
+	w_SM = float(ph->weight_loss[3])*(ph->stokes.x + ph->stokes.y);   // - flux weight lost due to spillage	
 	#endif
 	#endif
     
@@ -4863,20 +4777,20 @@ __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, void *wPhLoss2)
 		atomicAdd(wPhLossC+1, w_rhoM); atomicAdd(wPhLossC2+1, w_rhoM*w_rhoM);
 		#ifndef BACK
 		atomicAdd(wPhLossC+2, w_rhoP); atomicAdd(wPhLossC2+2, w_rhoP*w_rhoP);
-		atomicAdd(wPhLossC+3, w_SM); atomicAdd(wPhLossC2+3, w_SM*w_SM);
-		atomicAdd(wPhLossC+4, w_SP); atomicAdd(wPhLossC2+4, w_SP*w_SP);
-		atomicAdd(wPhLossC+5, w_BM); atomicAdd(wPhLossC2+5, w_BM*w_BM);
-		atomicAdd(wPhLossC+6, w_BP); atomicAdd(wPhLossC2+6, w_BP*w_BP);
+		atomicAdd(wPhLossC+3, w_BM); atomicAdd(wPhLossC2+3, w_BM*w_BM);
+		atomicAdd(wPhLossC+4, w_BP); atomicAdd(wPhLossC2+4, w_BP*w_BP);
+		atomicAdd(wPhLossC+5, w_SM); atomicAdd(wPhLossC2+5, w_SM*w_SM);
+		atomicAdd(wPhLossC+6, w_SP); atomicAdd(wPhLossC2+6, w_SP*w_SP);
         #endif // END BACK
         #else // double and old nvidia card
 		DatomicAdd(wPhLossC, w_I); DatomicAdd(wPhLossC2, w_I*w_I);
 		DatomicAdd(wPhLossC+1, w_rhoM); DatomicAdd(wPhLossC2+1, w_rhoM*w_rhoM);
 		#ifndef BACK
 		DatomicAdd(wPhLossC+2, w_rhoP); DatomicAdd(wPhLossC2+2, w_rhoP*w_rhoP);
-		DatomicAdd(wPhLossC+3, w_SM); DatomicAdd(wPhLossC2+3, w_SM*w_SM);
-		DatomicAdd(wPhLossC+4, w_SP); DatomicAdd(wPhLossC2+4, w_SP*w_SP);
-		DatomicAdd(wPhLossC+5, w_BM); DatomicAdd(wPhLossC2+5, w_BM*w_BM);
-		DatomicAdd(wPhLossC+6, w_BP); DatomicAdd(wPhLossC2+6, w_BP*w_BP);
+		DatomicAdd(wPhLossC+3, w_BM); DatomicAdd(wPhLossC2+3, w_BM*w_BM);
+		DatomicAdd(wPhLossC+4, w_BP); DatomicAdd(wPhLossC2+4, w_BP*w_BP);
+		DatomicAdd(wPhLossC+5, w_SM); DatomicAdd(wPhLossC2+5, w_SM*w_SM);
+		DatomicAdd(wPhLossC+6, w_SP); DatomicAdd(wPhLossC2+6, w_SP*w_SP);
 		#endif // END BACK
         #endif // END !defined(DOUBLE) || (defined(DOUBLE) && (__CUDA_ARCH__ >= 600))
 	}

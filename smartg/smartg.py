@@ -1992,8 +1992,8 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         # Matrix where lines : l0 = SumCats, l1=cat1, l2=cat2, ... l8=cat8
         # And columns : c0=nbPhotons , c1=weight, c2=weight2, c3=irradiance(in watt), c4=errAbs, c5=err%
         matCats = np.zeros((9, 6), dtype=np.float64)
-        # Matrix where: M[0,0]=W_I, M[1,0]=W_rhoM, M[2,0]=W_rhoP, M[3,0]=W_SP, M[4,0]=W_SM, M[5,0]=W_BM, M[6,0]=W_BP
-        # and : M[0,1]=W_I², M[1,1]=W_rhoM², M[2,1]=W_rhoP², M[3,1]=W_SP², M[4,1]=W_SM², M[5,1]=W_BM², M[6,1]=W_BP²
+        # Matrix where: M[0,0]=W_I, M[1,0]=W_rhoM, M[2,0]=W_rhoP, M[3,0]=W_BM, M[4,0]=W_BP, M[5,0]=W_SM, M[6,0]=W_SP
+        # and : M[0,1]=W_I², M[1,1]=W_rhoM², M[2,1]=W_rhoP², M[3,1]=W_BM², M[4,1]=W_BP², M[5,1]=W_SM², M[6,1]=W_SP²
         matLoss = np.zeros((7, 2), dtype=np.float64)
     else:
         nbPhCat = gpuzeros(1, dtype=np.uint64)

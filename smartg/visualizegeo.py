@@ -179,7 +179,7 @@ def nopt_view(MLUT, BACK=False, ACC = 6, NCL="68%", fl_TOA=None, NAATM=False):
 
     if(BACK == False): # Forward mode ->
         # Sum of weights
-        # w0=wI, w1=wrhoM, w2=wrhoP, w3=wSM, w4=wSP, w5=wBM, w6=wBP, w7=wREC
+        # w0=wI, w1=wrhoM, w2=wrhoP, w3=wBM, w4=wBP, w5=wSM, w6=wSP, w7=wREC
         w0 = m['wLoss'][0]; w1 = m['wLoss'][1]; w2 = m['wLoss'][2];
         w3 = m['wLoss'][3]; w4 = m['wLoss'][4]; w5 = m['wLoss'][5]; 
         w6 = m['wLoss'][6]; w7 = m['cat_w'][2];
@@ -199,20 +199,20 @@ def nopt_view(MLUT, BACK=False, ACC = 6, NCL="68%", fl_TOA=None, NAATM=False):
         
         nopt=Clamp(k*w7, 0, 1);k_s = k/float(m.attrs['n_cos']);
         ncos=float(m.attrs['n_cos']);nsha=Clamp(k_s*w0, 0, 1);nref=Clamp(1-(w1/w0), 0, 1);
-        nspi=Clamp(1-(w3/w2), 0, 1);nblo=Clamp(1-(w5/w4), 0, 1);natm=Clamp(w7/w6, 0, 1)
+        nblo=Clamp(1-(w3/w2), 0, 1);nspi=Clamp(1-(w5/w4), 0, 1);natm=Clamp(w7/w6, 0, 1)
 
         d_nopt=abs(k)*dw[7];d_ncos=0.;d_nsha=abs(k_s)*dw[0];
         d_nref=abs(-1./w0)*dw[1] + abs(w1/w0**2)*dw[0]
-        d_nspi=abs(-1./w2)*dw[3] + abs(w3/w2**2)*dw[2]
-        d_nblo=abs(-1./w4)*dw[5] + abs(w5/w4**2)*dw[4]
+        d_nblo=abs(-1./w2)*dw[3] + abs(w3/w2**2)*dw[2]
+        d_nspi=abs(-1./w4)*dw[5] + abs(w5/w4**2)*dw[4]
         d_natm=abs(1./w6)*dw[7] + abs(w7/w6**2)*dw[6]
 
         print("nopt =", strAcc % nopt, ", errAbs =", strAcc % d_nopt, ", err% =", strAcc % ((d_nopt/nopt)*100))
         print("ncos =", strAcc % ncos, ", errAbs =", strAcc % d_ncos, ", err% =", strAcc % ((d_ncos/ncos)*100))
         print("nsha =", strAcc % nsha, ", errAbs =", strAcc % d_nsha, ", err% =", strAcc % ((d_nsha/nsha)*100))
         print("nref =", strAcc % nref, ", errAbs =", strAcc % d_nref, ", err% =", strAcc % ((d_nref/nref)*100))
-        print("nspi =", strAcc % nspi, ", errAbs =", strAcc % d_nspi, ", err% =", strAcc % ((d_nspi/nspi)*100))
         print("nblo =", strAcc % nblo, ", errAbs =", strAcc % d_nblo, ", err% =", strAcc % ((d_nblo/nblo)*100))
+        print("nspi =", strAcc % nspi, ", errAbs =", strAcc % d_nspi, ", err% =", strAcc % ((d_nspi/nspi)*100))
         print("natm =", strAcc % natm, ", errAbs =", strAcc % d_natm, ", err% =", strAcc % ((d_natm/natm)*100))
     else: # Backward mode ->
         # Sum of weights
