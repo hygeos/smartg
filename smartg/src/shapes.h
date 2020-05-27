@@ -285,7 +285,10 @@ public:
 
     __host__ __device__ bool Intersect(const Ray &ray, float* tHit,
 									   DifferentialGeometry *dg) const;
+	__device__ bool Intersect2(const Ray &ray, float* tHit,
+									   DifferentialGeometry *dg) const;
 	__host__ __device__ bool IntersectP(const Ray &ray) const;
+	__device__ bool IntersectP2(const Ray &ray) const;
     __host__ __device__ float Area() const;
 
 private:
@@ -317,6 +320,172 @@ Triangle::Triangle(const Transform *o2w, const Transform *w2o,
 	: Shape(o2w, w2o)
 {
 	p1 = a; p2 =b; p3 = c;
+}
+
+__device__ bool Triangle::Intersect2(const Ray &ray, float *tHit,
+									DifferentialGeometry *dg) const
+{
+	/* float3 p0t, p1t, p2t; */
+	/* p0t = p1 - ray.o; p1t = p2 - ray.o; p2t = p3 - ray.o; */
+	
+	/* int kz = MaxDim( make_float3(abs(ray.d.x),abs(ray.d.y),abs(ray.d.z)) ); */
+	/* int kx = kz + 1; */
+	/* if(kx == 3) kx = 0; */
+	/* int ky = kx+1; */
+	/* if(ky == 3) ky = 0; */
+	/* float3 d = Permute(ray.d, kx, ky, kz); */
+	/* p0t = Permute(p0t, kx, ky, kz); */
+	/* p1t = Permute(p1t, kx, ky, kz); */
+	/* p2t = Permute(p2t, kx, ky, kz); */
+
+	/* float Sx=-d.x/d.z; float Sy=-d.y/d.z; float Sz=1.F/d.z; */
+	/* p0t.x += Sx*p0t.z; p0t.y += Sy*p0t.z; */
+	/* p1t.x += Sx*p1t.z; p1t.y += Sy*p1t.z; */
+	/* p2t.x += Sx*p2t.z; p2t.y += Sy*p2t.z; */
+
+	/* float e0 = p1t.x * p2t.y - p1t.y * p2t.x; */
+	/* float e1 = p2t.x * p0t.y - p2t.y * p0t.x; */
+	/* float e2 = p0t.x * p1t.y - p0t.y * p1t.x; */
+
+	/* if ( e0 == 0.F || e1 == 0.F || e2 == 0.F ) */
+	/* { */
+	/* 	double p2txp1ty = (double)p2t.x * (double)p1t.y; */
+	/* 	double p2typ1tx = (double)p2t.y * (double)p1t.x; */
+	/* 	e0 = (float)(p2typ1tx - p2txp1ty); */
+	/* 	double p0txp2ty = (double)p0t.x * (double)p2t.y; */
+	/* 	double p0typ2tx = (double)p0t.y * (double)p2t.x; */
+	/* 	e1 = (float)(p0typ2tx - p0txp2ty); */
+	/* 	double p1txp0ty = (double)p1t.x * (double)p0t.y; */
+	/* 	double p1typ0tx = (double)p1t.y * (double)p0t.x; */
+	/* 	e2 = (float)(p1typ0tx - p1txp0ty); */
+	/* } */
+
+	/* if((e0<0 || e1<0 || e2<0) && (e0>0 || e1>0 || e2>0)) */
+	/* 	return false; */
+	/* float det = e0 + e1 + e2; */
+	/* if(det == 0) return false; */
+
+	/* p0t *= Sz; p1t *= Sz; p2t *= Sz; */
+	/* float tScaled = e0*p0t.z + e1*p1t.z + e2*p2t.z; */
+	/* if(det < 0 && (tScaled >= 0 || tScaled < ray.maxt*det)) */
+	/* 	return false; */
+	/* else if (det > 0 && (tScaled <= 0 || tScaled > ray.maxt*det)) */
+	/* 	return false; */
+
+	/* float invDet = 1/det; */
+	/* //float b0 = e0*invDet; float b1 = e1*invDet; float b2 = e2*invDet; */
+	/* float t = tScaled*invDet; */
+
+	/* if (t < ray.mint || t > ray.maxt) */
+    /*     return false; */
+
+	/* float maxZt = max( abs(p0t.z), max( abs(p1t.z), abs(p2t.z) )  ); */
+	/* float eps = machine_eps_flt() * 0.5; */
+	/* float deltaZ = Gamma_eps(3, eps) * maxZt; */
+
+	/* float maxXt = max( abs(p0t.x), max( abs(p1t.x), abs(p2t.x) )  ); */
+	/* float maxYt = max( abs(p0t.y), max( abs(p1t.y), abs(p2t.y) )  ); */
+	/* float deltaX = Gamma_eps(5, eps) * (maxXt + maxZt); */
+	/* float deltaY = Gamma_eps(5, eps) * (maxYt + maxZt); */
+
+	/* float deltaE = 2*(Gamma_eps(2, eps)*maxXt*maxYt + */
+	/* 				  deltaY*maxXt + deltaX*maxYt); */
+	/* float maxE = max( abs(e0), max( abs(e1), abs(e2) )  ); */
+	/* float deltaT = 3*(Gamma_eps(3, eps)*maxE*maxZt + deltaE*maxZt + */
+	/* 				  deltaZ*maxE)*abs(invDet); */
+	/* if(t <= deltaT) return false; */
+
+	/* float3 dpdu, dpdv; */
+	/* float2 uv[3]; */
+	/* uv[0] = make_float2(0,0); */
+	/* uv[1] = make_float2(1,0); */
+	/* uv[2] = make_float2(1,1); */
+	
+	/* float2 duv02 = uv[0]-uv[2], duv12 = uv[1]-uv[2]; */
+	/* float3 dp02 = p1-p3, dp12=p2-p3; */
+	/* float determinant = duv02.x*duv12.y - duv02.y*duv12.x; */
+	/* bool degenerateUV = abs(determinant) < 1e-8; */
+	/* if(!degenerateUV) */
+	/* { */
+	/* 	float invdet = 1/ determinant; */
+	/* 	dpdu */
+	/* } */
+	return true;
+}
+
+__device__ bool Triangle::IntersectP2(const Ray &ray) const
+{
+	float3 p0t, p1t, p2t;
+	p0t = p1 - ray.o; p1t = p2 - ray.o; p2t = p3 - ray.o;
+	
+	int kz = MaxDim( make_float3(abs(ray.d.x),abs(ray.d.y),abs(ray.d.z)) );
+	int kx = kz + 1;
+	if(kx == 3) kx = 0;
+	int ky = kx+1;
+	if(ky == 3) ky = 0;
+	float3 d = Permute(ray.d, kx, ky, kz);
+	p0t = Permute(p0t, kx, ky, kz);
+	p1t = Permute(p1t, kx, ky, kz);
+	p2t = Permute(p2t, kx, ky, kz);
+
+	float Sx=-d.x/d.z; float Sy=-d.y/d.z; float Sz=1.F/d.z;
+	p0t.x += Sx*p0t.z; p0t.y += Sy*p0t.z;
+	p1t.x += Sx*p1t.z; p1t.y += Sy*p1t.z;
+	p2t.x += Sx*p2t.z; p2t.y += Sy*p2t.z;
+
+	float e0 = p1t.x * p2t.y - p1t.y * p2t.x;
+	float e1 = p2t.x * p0t.y - p2t.y * p0t.x;
+	float e2 = p0t.x * p1t.y - p0t.y * p1t.x;
+
+	if ( e0 == 0.F || e1 == 0.F || e2 == 0.F )
+	{
+		double p2txp1ty = (double)p2t.x * (double)p1t.y;
+		double p2typ1tx = (double)p2t.y * (double)p1t.x;
+		e0 = (float)(p2typ1tx - p2txp1ty);
+		double p0txp2ty = (double)p0t.x * (double)p2t.y;
+		double p0typ2tx = (double)p0t.y * (double)p2t.x;
+		e1 = (float)(p0typ2tx - p0txp2ty);
+		double p1txp0ty = (double)p1t.x * (double)p0t.y;
+		double p1typ0tx = (double)p1t.y * (double)p0t.x;
+		e2 = (float)(p1typ0tx - p1txp0ty);
+	}
+
+	if((e0<0 || e1<0 || e2<0) && (e0>0 || e1>0 || e2>0))
+		return false;
+	float det = e0 + e1 + e2;
+	if(det == 0) return false;
+
+	p0t *= Sz; p1t *= Sz; p2t *= Sz;
+	float tScaled = e0*p0t.z + e1*p1t.z + e2*p2t.z;
+	if(det < 0 && (tScaled >= 0 || tScaled < ray.maxt*det))
+		return false;
+	else if (det > 0 && (tScaled <= 0 || tScaled > ray.maxt*det))
+		return false;
+
+	float invDet = 1/det;
+	//float b0 = e0*invDet; float b1 = e1*invDet; float b2 = e2*invDet;
+	float t = tScaled*invDet;
+
+	if (t < ray.mint || t > ray.maxt)
+        return false;
+
+	float maxZt = max( abs(p0t.z), max( abs(p1t.z), abs(p2t.z) )  );
+	float eps = machine_eps_flt() * 0.5;
+	float deltaZ = Gamma_eps(3, eps) * maxZt;
+
+	float maxXt = max( abs(p0t.x), max( abs(p1t.x), abs(p2t.x) )  );
+	float maxYt = max( abs(p0t.y), max( abs(p1t.y), abs(p2t.y) )  );
+	float deltaX = Gamma_eps(5, eps) * (maxXt + maxZt);
+	float deltaY = Gamma_eps(5, eps) * (maxYt + maxZt);
+
+	float deltaE = 2*(Gamma_eps(2, eps)*maxXt*maxYt +
+					  deltaY*maxXt + deltaX*maxYt);
+	float maxE = max( abs(e0), max( abs(e1), abs(e2) )  );
+	float deltaT = 3*(Gamma_eps(3, eps)*maxE*maxZt + deltaE*maxZt +
+					  deltaZ*maxE)*abs(invDet);
+	if(t <= deltaT) return false;
+
+	return true;
 }
 
 #ifndef DOUBLE
@@ -581,6 +750,7 @@ public:
     __host__ __device__ bool Intersect(const Ray &ray, float* tHit,
 									   DifferentialGeometry *dg) const;
 	__host__ __device__ bool IntersectP(const Ray &ray) const;
+	__device__ bool IntersectP2(const Ray &ray) const;
     __host__ __device__ float Area() const;
 	float3 *p;
 private:
@@ -653,6 +823,22 @@ bool TriangleMesh::IntersectP(const Ray &ray) const
 		float3 PC = p[vertexIndex[3*i + 2]];
 		Triangle rt(&nothing, &nothing, PA, PB, PC);
 		if (rt.IntersectP(ray))
+			return true;
+	}
+	return false;
+}
+
+__device__ bool TriangleMesh::IntersectP2(const Ray &ray) const
+{
+	Transform nothing;
+	for (int i = 0; i < ntris; ++i)
+	{
+		/* // créer le triangle i en fonction de *vi et *P	 */
+		float3 PA = p[vertexIndex[3*i]];
+		float3 PB = p[vertexIndex[3*i + 1]];
+		float3 PC = p[vertexIndex[3*i + 2]];
+		Triangle rt(&nothing, &nothing, PA, PB, PC);
+		if (rt.IntersectP2(ray))
 			return true;
 	}
 	return false;

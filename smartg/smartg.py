@@ -375,7 +375,7 @@ class CusForward(object):
                                     whrere the beams at the center, with the solar
                                     dir, targets by default the origin point (0,0,0)
     '''
-    def __init__(self, CFX=0., CFY=0., CFTX = 0., CFTY = 0., FOV = 0., TYPE = "lambertian",
+    def __init__(self, CFX=0., CFY=0., CFTX = 0., CFTY = 0., CFTZ= 0., FOV = 0., TYPE = "isotropic",
                  LMODE = "RF", LPH=None, LPR=None):
 
         if (TYPE == "lambertian"): TYPE = 1
@@ -388,6 +388,7 @@ class CusForward(object):
             'CFY':   CFY,
             'CFTX':  CFTX,
             'CFTY':  CFTY,
+            'CFTZ':  CFTZ,
             'FOV':   FOV,
             'TYPE':  TYPE,
             'LMODE': LMODE,
@@ -397,7 +398,7 @@ class CusForward(object):
         }
         
     def __str__(self):
-        return 'CusForward=-CFX{CFX}-CFY{CFY}-CFTX{CFTX}-CFTY{CFTY}'.format(**self.dict) + \
+        return 'CusForward=-CFX{CFX}-CFY{CFY}-CFTX{CFTX}-CFTY{CFTY}-CFTZ{CFTZ}'.format(**self.dict) + \
             '-FOV{FOV}-TYPE{TYPE}-LMODE{LMODE}'.format(**self.dict)
 
 class CusBackward(object):
@@ -1662,7 +1663,7 @@ def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
     STHV = np.sin(THV)
     CTHV = np.cos(THV)
 
-    PZd = 120.
+    PZd = 120.+cusL.dict['CFTZ']
     tTemp = PZd/-vSun.z
     PXd = -vSun.x * tTemp
     PYd = -vSun.y * tTemp

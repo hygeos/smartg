@@ -725,7 +725,6 @@ extern "C" {
 			if (geoStruc.type == RECEIVER and LMODEd != 4) // this is a receiver
 			{ countPhotonObj3D(&ph, 0, tabObjInfo, &geoStruc, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2);}
 
-			// For losses count
 			ph.weight_loss[0] = ph.weight;
 
 			if (geoStruc.material == 1) // Lambertian Mirror
@@ -1398,6 +1397,8 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		ph->pos.y = PYd + cusForwPos.y + CFTYd;
 		ph->pos.z = PZd;
 
+		if(PZd<120.) ph->loc = ATMOS;
+
 		if (ALDEGd > 1e-6)
 		{
 			// Initialization of the cosine vector (v), the orthogonal vector (u), ...
@@ -1448,8 +1449,8 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 			ufloat = TPhi(   Vectorf(  TTheta( Vectorf(ufloat) )  )   );
 			
 			// Update the values of u and v
-			ph->v = make_float3(vfloat.x, vfloat.y, vfloat.z);
-			ph->u = make_float3(ufloat.x, ufloat.y, ufloat.z);
+			ph->v = normalize(make_float3(vfloat.x, vfloat.y, vfloat.z));
+			ph->u = normalize(make_float3(ufloat.x, ufloat.y, ufloat.z));
 
 			if (TYPEd == 2)
 			{
@@ -4359,16 +4360,16 @@ __device__ void surfaceLambert3D(Photon* ph, int le, float* tabthv, float* tabph
 
 	ph->weight *= geoS->reflectivity;
 		
-    if (!le)
-	{
-		if (RRd==1){
-			/* Russian roulette for propagating photons **/
-			if( ph->weight < WEIGHTRRd ){
-				if( RAND < __fdividef(ph->weight,WEIGHTRRd) ){ph->weight = WEIGHTRRd;}
-				else{ph->loc = ABSORBED;}
-			}
-		}
-	} // not le
+    // if (!le)
+	// {
+	// 	if (RRd==1){
+	// 		/* Russian roulette for propagating photons **/
+	// 		if( ph->weight < WEIGHTRRd ){
+	// 			if( RAND < __fdividef(ph->weight,WEIGHTRRd) ){ph->weight = WEIGHTRRd;}
+	// 			else{ph->loc = ABSORBED;}
+	// 		}
+	// 	}
+	// } // not le
 } // Function lamb3D
 
 __device__ void surfaceRugueuse3D(Photon* ph, IGeo* geoS, struct RNG_State *rngstate)
@@ -4454,13 +4455,13 @@ __device__ void surfaceRugueuse3D(Photon* ph, IGeo* geoS, struct RNG_State *rngs
 	
 	ph->weight *= geoS->reflectivity;
 	
-	if (RRd==1){
-		/* Russian roulette for propagating photons **/
-		if( ph->weight < WEIGHTRRd ){
-			if( RAND < __fdividef(ph->weight,WEIGHTRRd) ){ph->weight = WEIGHTRRd;}
-			else{ph->loc = ABSORBED;}
-		}
-	}
+	// if (RRd==1){
+	// 	/* Russian roulette for propagating photons **/
+	// 	if( ph->weight < WEIGHTRRd ){
+	// 		if( RAND < __fdividef(ph->weight,WEIGHTRRd) ){ph->weight = WEIGHTRRd;}
+	// 		else{ph->loc = ABSORBED;}
+	// 	}
+	// }
 	
 } // FUNCTION SURFACEAGITE3D
 
@@ -4472,20 +4473,6 @@ __device__ void Obj3DRoughSurf(Photon* ph, int le, float* tabthv, float* tabphi,
 	float3 v_i = ph->v;                    // - direction of the incoming photon
 	float3 u_i = ph->u;                    // - perp direction of the incoming photon
 	float3 v_o, u_o;                       // outcoming directions
-
-	// Find if the photon come from the front(1) or back(-1) of the obj surface
-	// geoS->normalBase is the obj normal of the front surface
-	int sign = (isBackward(geoS->normalBase, ph->v)) ? 1 : -1;
-	
-	if (geoS->type == HELIOSTAT)
-	{
-		if (sign > 0) { ph->H += 1; }
-		else { ph->E += 1; } // Back heliostat surface considered as environnement
-		if (ph->direct == 0) {ph->v_i = make_float3(-ph->v.x, -ph->v.y, -ph->v.z);}
-	}
-	else if ( geoS->type == RECEIVER)
-	{ ph->E += 1; }
-
 	float cTheta_i;                        // - cos of the angle between normal m and the
 	                                       //   direction of the incoming photon v
 	float sTheta_i;                        // - sin of theta_i
@@ -4498,8 +4485,20 @@ __device__ void Obj3DRoughSurf(Photon* ph, int le, float* tabthv, float* tabphi,
 	float cTheta_m, sTheta_m;              // - cos and sin of theta_m
 	float cPhi_m, sPhi_m;                  // - cos and sin of phi_m
 	float nind = geoS->nind;               // - relative refractive index air/obj
-	float3 h_r;                             // half-direction for reflection used in LE
+	float3 h_r;                            // half-direction for reflection used in LE
 	float thv, phi;                        // used only in LE
+
+	// Find if the photon come from the front(1) or back(-1) of the obj surface
+	// geoS->normalBase is the obj normal of the front surface
+	int sign = (isBackward(macroFnormal_n, v_i)) ? 1 : -1;
+	
+	if (geoS->type == HELIOSTAT)
+	{
+		if (sign > 0) { ph->H += 1; }
+		else { ph->E += 1; } // Back heliostat surface considered as environnement
+	}
+	else if ( geoS->type == RECEIVER)
+	{ ph->E += 1; }
 
 	if (le == 0)
 	{
@@ -4532,7 +4531,7 @@ __device__ void Obj3DRoughSurf(Photon* ph, int le, float* tabthv, float* tabphi,
 				cTheta_m = __cosf(theta_m); sTheta_m = __sinf(theta_m);
 				cPhi_m = __cosf(phi_m); sPhi_m = __sinf(phi_m);
 				microFnormal_m = make_float3( sTheta_m*cPhi_m,  sTheta_m*sPhi_m, cTheta_m );
-				microFnormal_m *= sign;
+				microFnormal_m *= sign; microFnormal_m = normalize(microFnormal_m);
 				cTheta_i = -dot( microFnormal_m, v_iInv);
 				cTheta_i = clamp(cTheta_i, -1.F, 1.F);
 			}
@@ -4546,7 +4545,8 @@ __device__ void Obj3DRoughSurf(Photon* ph, int le, float* tabthv, float* tabphi,
 		}
 	
 		// Inverse transfo has been used in sampling then come back to "real basis"
-		microFnormal_m = transfo(Normalf(microFnormal_m));
+		//microFnormal_m = normalize(transfo(Normalf(microFnormal_m)));
+		microFnormal_m = normalize(transfo(Vectorf(microFnormal_m)));
 	} // end le==0 
 	else // else if le==1 -->
 	{
@@ -4615,6 +4615,7 @@ __device__ void Obj3DRoughSurf(Photon* ph, int le, float* tabthv, float* tabphi,
 	// ********************************************
 	if (le == 0) { v_o = specularFNC(v_i, microFnormal_m, cTheta_i);}
 	u_o = (microFnormal_m-cTheta_i*v_o)/sTheta_i;
+	v_o = normalize(v_o); u_o = normalize(u_o);
 	// ********************************************
 
 	// ********************************************************************
@@ -4687,13 +4688,14 @@ __device__ void Obj3DRoughSurf(Photon* ph, int le, float* tabthv, float* tabphi,
 			ph->loc = REMOVED;
 		// **********************************************
 	
-		if (RRd==1){
-			/* Russian roulette for propagating photons **/
-			if( ph->weight < WEIGHTRRd ){
-				if( RAND < __fdividef(ph->weight,WEIGHTRRd) ){ph->weight = WEIGHTRRd;}
-				else{ph->loc = ABSORBED;}
-			}
-		}
+		// if (RRd==1){
+		// 	/* Russian roulette for propagating photons **/
+		// 	if( ph->weight < WEIGHTRRd ){
+		// 		if( RAND < __fdividef(ph->weight,WEIGHTRRd) ){ph->weight = WEIGHTRRd;}
+		// 		else{ph->loc = ABSORBED;}
+		// 	}
+		// }
+		// ph->weight_loss[0] = ph->weight/0.88;
 	} // end le==0
 	else // le==1
 	{
@@ -4745,7 +4747,7 @@ __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, void *wPhLoss2)
 	double *wPhLossC; double *wPhLossC2; double4 stokes; double w_I, w_rhoM;
 	stokes = make_double4(ph->stokes.x, ph->stokes.y, ph->stokes.z, ph->stokes.w);
 	wPhLossC = (double*)wPhLoss; wPhLossC2 = (double*)wPhLoss2;      // - table comprinsing different weights
-	w_I = (double)ph->weight_loss[0]*double(stokes.x + stokes.y);    // - incident flux weight after cos effect
+	w_I = double(ph->weight_loss[0])*double(stokes.x + stokes.y);    // - incident flux weight after cos effect
 	w_rhoM = double(1-geoS->reflectivity)*w_I;                       // - flux weight lost due to reflectivity
 	#ifndef BACK
 	double w_rhoP, w_SM, w_SP, w_BM, w_BP;
@@ -4758,15 +4760,15 @@ __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, void *wPhLoss2)
 	#else
 	float *wPhLossC; float *wPhLossC2; float w_I, w_rhoM;
 	wPhLossC = (float*)wPhLoss; wPhLossC2 = (float*)wPhLoss2;	
-	w_I = (float)ph->weight_loss[0]*float(ph->stokes.x + ph->stokes.y);
+	w_I = ph->weight_loss[0]*float(ph->stokes.x + ph->stokes.y);
 	w_rhoM = float(1-geoS->reflectivity)*w_I;
 	#ifndef BACK
 	float w_rhoP, w_SM, w_SP, w_BM, w_BP;
 	w_rhoP = float(geoS->reflectivity)*w_I;
-	w_BM = float(ph->weight_loss[1])*(ph->stokes.x + ph->stokes.y);   // - flux weight lost due to blocking effect
+	w_BM = ph->weight_loss[1]*(ph->stokes.x + ph->stokes.y);   // - flux weight lost due to blocking effect
 	w_BP = w_rhoP-w_BM;
-	w_SP = float(ph->weight_loss[2])*(ph->stokes.x + ph->stokes.y);
-	w_SM = float(ph->weight_loss[3])*(ph->stokes.x + ph->stokes.y);   // - flux weight lost due to spillage	
+	w_SP = ph->weight_loss[2]*(ph->stokes.x + ph->stokes.y);
+	w_SM = ph->weight_loss[3]*(ph->stokes.x + ph->stokes.y);   // - flux weight lost due to spillage	
 	#endif
 	#endif
     
@@ -5924,7 +5926,7 @@ __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
 	#ifdef OBJ3D
 	ph_le->direct = ph->direct;
 	ph_le->H = ph->H; ph_le->H = ph->E; ph_le->H = ph->S;
-	for (int k=0; k<5; k++) ph_le->weight_loss[k] = ph->weight_loss[k];
+	for (int k=0; k<4; k++) ph_le->weight_loss[k] = ph->weight_loss[k];
 	#endif
 	
     #if defined(BACK) && defined(OBJ3D)
@@ -6145,7 +6147,7 @@ __device__ double DatomicAdd(double* address, double val)
 __device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct IObjets *ObjT, struct GObj *myGObj)
 {
 	// Initialization of the ray for the intersection study
-	Ray R1(o, dir, 0.0001); // 0.0001 -> ray begin 10cm further in direction "dir"
+	Ray R1(o, dir, 0.0005); // 0.0001 -> ray begin 10cm further in direction "dir"
 
 	// ******************interval of study******************
 	BBox interval(make_float3(Pmin_x-VALMIN, Pmin_y-VALMIN, Pmin_z-VALMIN),
@@ -6229,7 +6231,7 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct I
 				
 					BBox myBBox = myObject.WorldBoundTriangleMesh();
 					if (myBBox.IntersectP(R1))
-						myBj = myObject.Intersect(R1, &myTj, &myDgj);				
+						myBj = myObject.Intersect(R1, &myTj, &myDgj);
 				}
 
 				// ******************************third Step*******************************
@@ -6278,7 +6280,7 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct I
 __device__ bool geoTestMir(float3 o, float3 dir, struct IObjets *ObjT, struct GObj *myGObj)
 {
 	// Initialization of the ray for the intersection study
-	Ray R1(o, dir, 0.0001); // 0.0001 -> ray begin 10cm further in direction "dir"
+	Ray R1(o, dir, 0.0005); // 0.0001 -> ray begin 10cm further in direction "dir"
 	
 	// *************Specific to plane objects***************
 	int vi[6] = {0, 1, 2,  // vertices index for triangle 1
@@ -6334,7 +6336,7 @@ __device__ bool geoTestMir(float3 o, float3 dir, struct IObjets *ObjT, struct GO
 					TriangleMesh myObject(&Tj, &invTj, 2, 4, vi, Pvec);
 				
 					BBox myBBox = myObject.WorldBoundTriangleMesh();
-					if (myBBox.IntersectP(R1)) myBj = myObject.IntersectP(R1);
+					if (myBBox.IntersectP(R1)) myBj = myObject.IntersectP2(R1);
 					if(myBj) return true;
 				}
 			}// END FOR j LOOP
@@ -6346,7 +6348,7 @@ __device__ bool geoTestMir(float3 o, float3 dir, struct IObjets *ObjT, struct GO
 __device__ bool geoTestRec(float3 o, float3 dir, struct IObjets *ObjT)
 {
 	// Initialization of the ray for the intersection study
-	Ray R1(o, dir, 0.0001); // 0.0001 -> ray begin 10cm further in direction "dir"
+	Ray R1(o, dir, 0.0005); // 0.0001 -> ray begin 10cm further in direction "dir"
 	// ******************interval of study******************
 	BBox interval(make_float3(Pmin_x, Pmin_y, Pmin_z),
 				  make_float3(Pmax_x, Pmax_y, Pmax_z));

@@ -3387,5 +3387,24 @@ inline __device__ double GammaL( double lambd, double r)
 	G = ( 1 + (Beta*sqrt(1- r*r)) ) / (1+Beta);
 	return G;
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// other useful functions
+////////////////////////////////////////////////////////////////////////////////
+__device__ float Gamma_eps(int n, float eps)
+{
+	return (n * eps) / (1 - n * eps);
+}
+
+__device__ float3 Permute(float3 v, int x, int y, int z)
+{
+	float3c u = make_float3c(v.x, v.y, v.z);
+	return make_float3(u[x], u[y], u[z]);
+}
+
+__device__ int MaxDim(float3 v)
+{
+	return (v.x>v.y) ? ((v.x>v.z)?0:2) : ((v.y>v.z)?1:2);
+}
 #endif
 
