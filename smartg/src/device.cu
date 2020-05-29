@@ -6211,6 +6211,8 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct I
 					BBox myBBox = myObject.WorldBoundTriangleMesh();
 					if (myBBox.IntersectP(R1))
 						myBj = myObject.Intersect2(R1, &myTj, &myDgj);
+					if(myBj)
+						myDgj.nn = faceForward(make_float3(ObjT[IND+j].nBx, ObjT[IND+j].nBy, ObjT[IND+j].nBz), -1.*R1.d);
 				}
 
 				// ******************************third Step*******************************
@@ -6222,8 +6224,7 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct I
 					myB = true;
 					myT = myTj;
 					myDg = myDgj;
-					//GeoV->normal = faceForward(myDg.nn, -1.*R1.d);
-					GeoV->normal = faceForward(make_float3(ObjT[IND+j].nBx, ObjT[IND+j].nBy, ObjT[IND+j].nBz), -1.*R1.d);
+					GeoV->normal = faceForward(myDg.nn, -1.*R1.d);
 					GeoV->normalBase = make_float3(ObjT[IND+j].nBx, ObjT[IND+j].nBy, ObjT[IND+j].nBz);
 					if(  isBackward( make_double3(GeoV->normalBase.x, GeoV->normalBase.y, GeoV->normalBase.z),
 									 make_double3(dir.x, dir.y, dir.z) )  )
@@ -6381,7 +6382,7 @@ __device__ bool geoTestRec(float3 o, float3 dir, struct IObjets *ObjT)
 			
 			BBox myBBox = myObject.WorldBoundTriangleMesh();
 			if (myBBox.IntersectP(R1))
-				myBi = myObject.IntersectP(R1);	
+				myBi = myObject.IntersectP2(R1);	
 			if (myBi) return true;
 		}
 		// ***********************************************************************

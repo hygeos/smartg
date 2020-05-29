@@ -540,73 +540,69 @@ __device__ bool Triangle::Intersect2(const Ray &ray, float *tHit,
 
 __device__ bool Triangle::IntersectP2(const Ray &ray) const
 {
-	float3 p0t, p1t, p2t;
-	p0t = p1 - ray.o; p1t = p2 - ray.o; p2t = p3 - ray.o;
+    double3 p0t, p1t, p2t;
+	double3 P0, P1, P2;
+
+	P0 = make_double3(p1.x, p1.y, p1.z);
+	P1 = make_double3(p2.x, p2.y, p2.z);
+	P2 = make_double3(p3.x, p3.y, p3.z);
+
+	double3 p_o, p_d;
+	p_o = make_double3(ray.o.x, ray.o.y, ray.o.z);
+	p_d = make_double3(ray.d.x, ray.d.y, ray.d.z);
+
+	p0t = P0 - p_o; p1t = P1 - p_o; p2t = P2 - p_o;
 	
-	int kz = MaxDim( make_float3(abs(ray.d.x),abs(ray.d.y),abs(ray.d.z)) );
+	int kz = MaxDim( make_double3(abs(p_d.x),abs(p_d.y),abs(p_d.z)) );
 	int kx = kz + 1;
 	if(kx == 3) kx = 0;
 	int ky = kx+1;
 	if(ky == 3) ky = 0;
-	float3 d = Permute(ray.d, kx, ky, kz);
+	double3 d = Permute(p_d, kx, ky, kz);
 	p0t = Permute(p0t, kx, ky, kz);
 	p1t = Permute(p1t, kx, ky, kz);
 	p2t = Permute(p2t, kx, ky, kz);
 
-	float Sx=-d.x/d.z; float Sy=-d.y/d.z; float Sz=1.F/d.z;
+	double Sx=-d.x/d.z; double Sy=-d.y/d.z; double Sz=1.F/d.z;
 	p0t.x += Sx*p0t.z; p0t.y += Sy*p0t.z;
 	p1t.x += Sx*p1t.z; p1t.y += Sy*p1t.z;
 	p2t.x += Sx*p2t.z; p2t.y += Sy*p2t.z;
 
-	float e0 = p1t.x * p2t.y - p1t.y * p2t.x;
-	float e1 = p2t.x * p0t.y - p2t.y * p0t.x;
-	float e2 = p0t.x * p1t.y - p0t.y * p1t.x;
-
-	if ( e0 == 0.F || e1 == 0.F || e2 == 0.F )
-	{
-		double p2txp1ty = (double)p2t.x * (double)p1t.y;
-		double p2typ1tx = (double)p2t.y * (double)p1t.x;
-		e0 = (float)(p2typ1tx - p2txp1ty);
-		double p0txp2ty = (double)p0t.x * (double)p2t.y;
-		double p0typ2tx = (double)p0t.y * (double)p2t.x;
-		e1 = (float)(p0typ2tx - p0txp2ty);
-		double p1txp0ty = (double)p1t.x * (double)p0t.y;
-		double p1typ0tx = (double)p1t.y * (double)p0t.x;
-		e2 = (float)(p1typ0tx - p1txp0ty);
-	}
+	double e0 = p1t.x * p2t.y - p1t.y * p2t.x;
+	double e1 = p2t.x * p0t.y - p2t.y * p0t.x;
+	double e2 = p0t.x * p1t.y - p0t.y * p1t.x;
 
 	if((e0<0 || e1<0 || e2<0) && (e0>0 || e1>0 || e2>0))
 		return false;
-	float det = e0 + e1 + e2;
+	double det = e0 + e1 + e2;
 	if(det == 0) return false;
 
 	p0t *= Sz; p1t *= Sz; p2t *= Sz;
-	float tScaled = e0*p0t.z + e1*p1t.z + e2*p2t.z;
+	double tScaled = e0*p0t.z + e1*p1t.z + e2*p2t.z;
 	if(det < 0 && (tScaled >= 0 || tScaled < ray.maxt*det))
 		return false;
 	else if (det > 0 && (tScaled <= 0 || tScaled > ray.maxt*det))
 		return false;
 
-	float invDet = 1/det;
-	//float b0 = e0*invDet; float b1 = e1*invDet; float b2 = e2*invDet;
-	float t = tScaled*invDet;
+	double invDet = 1/det;
+	double t = tScaled*invDet;
 
 	if (t < ray.mint || t > ray.maxt)
         return false;
 
-	float maxZt = max( abs(p0t.z), max( abs(p1t.z), abs(p2t.z) )  );
-	float eps = machine_eps_flt() * 0.5;
-	float deltaZ = Gamma_eps(3, eps) * maxZt;
+	double maxZt = max( abs(p0t.z), max( abs(p1t.z), abs(p2t.z) )  );
+	double eps = machine_eps_flt() * 0.5;
+	double deltaZ = Gamma_eps(3, eps) * maxZt;
 
-	float maxXt = max( abs(p0t.x), max( abs(p1t.x), abs(p2t.x) )  );
-	float maxYt = max( abs(p0t.y), max( abs(p1t.y), abs(p2t.y) )  );
-	float deltaX = Gamma_eps(5, eps) * (maxXt + maxZt);
-	float deltaY = Gamma_eps(5, eps) * (maxYt + maxZt);
+	double maxXt = max( abs(p0t.x), max( abs(p1t.x), abs(p2t.x) )  );
+	double maxYt = max( abs(p0t.y), max( abs(p1t.y), abs(p2t.y) )  );
+	double deltaX = Gamma_eps(5, eps) * (maxXt + maxZt);
+	double deltaY = Gamma_eps(5, eps) * (maxYt + maxZt);
 
-	float deltaE = 2*(Gamma_eps(2, eps)*maxXt*maxYt +
+	double deltaE = 2*(Gamma_eps(2, eps)*maxXt*maxYt +
 					  deltaY*maxXt + deltaX*maxYt);
-	float maxE = max( abs(e0), max( abs(e1), abs(e2) )  );
-	float deltaT = 3*(Gamma_eps(3, eps)*maxE*maxZt + deltaE*maxZt +
+	double maxE = max( abs(e0), max( abs(e1), abs(e2) )  );
+	double deltaT = 3*(Gamma_eps(3, eps)*maxE*maxZt + deltaE*maxZt +
 					  deltaZ*maxE)*abs(invDet);
 	if(t <= deltaT) return false;
 
