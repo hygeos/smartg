@@ -21,6 +21,18 @@ __device__ float machine_eps_flt() {
     s.i32++;
     return (s.f32 - 1.);
 }
+__device__ float machine_eps_dbl() {
+    typedef union {
+        long long i64;
+        double d64;
+    } dbl_64;
+
+    dbl_64 s;
+
+    s.d64 = 1.;
+    s.i64++;
+    return (s.d64 - 1.);
+}
 #endif
 
 #ifndef DEBUG

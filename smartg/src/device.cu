@@ -4744,8 +4744,9 @@ __device__ void Obj3DRoughSurf(Photon* ph, int le, float* tabthv, float* tabphi,
 __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, void *wPhLoss2)
 {
 	#ifdef DOUBLE
-	double *wPhLossC; double *wPhLossC2; double4 stokes; double w_I, w_rhoM;
-	stokes = make_double4(ph->stokes.x, ph->stokes.y, ph->stokes.z, ph->stokes.w);
+	double *wPhLossC; double *wPhLossC2; double2 stokes; double w_I, w_rhoM;
+	if (IsAtm == 1)stokes = make_double2(ph->stokes.x, ph->stokes.y);
+	else stokes = make_double2(0.5, 0.5);
 	wPhLossC = (double*)wPhLoss; wPhLossC2 = (double*)wPhLoss2;      // - table comprinsing different weights
 	w_I = double(ph->weight_loss[0])*double(stokes.x + stokes.y);    // - incident flux weight after cos effect
 	w_rhoM = double(1-geoS->reflectivity)*w_I;                       // - flux weight lost due to reflectivity
@@ -4757,18 +4758,20 @@ __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, void *wPhLoss2)
 	w_SP = double(ph->weight_loss[2])*double(stokes.x + stokes.y);
 	w_SM = double(ph->weight_loss[3])*double(stokes.x + stokes.y);   // - flux weight lost due to spillage
 	#endif
-	#else
-	float *wPhLossC; float *wPhLossC2; float w_I, w_rhoM;
+    #else // FLOAT
+	float *wPhLossC; float *wPhLossC2; float2 stokes; float w_I, w_rhoM;
+	if (IsAtm == 1)stokes = make_float2(ph->stokes.x, ph->stokes.y);
+	else stokes = make_float2(0.5, 0.5);
 	wPhLossC = (float*)wPhLoss; wPhLossC2 = (float*)wPhLoss2;	
-	w_I = ph->weight_loss[0]*float(ph->stokes.x + ph->stokes.y);
+	w_I = ph->weight_loss[0]*float(stokes.x + stokes.y);
 	w_rhoM = float(1-geoS->reflectivity)*w_I;
 	#ifndef BACK
 	float w_rhoP, w_SM, w_SP, w_BM, w_BP;
 	w_rhoP = float(geoS->reflectivity)*w_I;
-	w_BM = ph->weight_loss[1]*(ph->stokes.x + ph->stokes.y);   // - flux weight lost due to blocking effect
+	w_BM = ph->weight_loss[1]*(stokes.x + stokes.y);   // - flux weight lost due to blocking effect
 	w_BP = w_rhoP-w_BM;
-	w_SP = ph->weight_loss[2]*(ph->stokes.x + ph->stokes.y);
-	w_SM = ph->weight_loss[3]*(ph->stokes.x + ph->stokes.y);   // - flux weight lost due to spillage	
+	w_SP = ph->weight_loss[2]*(stokes.x + stokes.y);
+	w_SM = ph->weight_loss[3]*(stokes.x + stokes.y);   // - flux weight lost due to spillage	
 	#endif
 	#endif
     
@@ -4811,19 +4814,13 @@ __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geo
 		double cosANGD, cosPHSUN;
 		double3 vecSUN = make_double3(-DIRSXd, -DIRSYd, -DIRSZd);
 		double3 vecPH = normalize(make_double3(ph->v.x, ph->v.y, ph->v.z));
-		double esp = 0.00000001173, esp7 = 0.00000008211;
 		
 		cosANGD = cos( radiansd( SUN_DISCd )  );
 		cosPHSUN = dot(vecSUN, vecPH);
 		p_t = ph->posIni;
 
 		if (cosPHSUN < cosANGD) {return;}
-		// // This trick reduce the small error due to the simple precion limit on the direct radiation
-		// if (cosANGD >= cosPHSUN and SUN_DISCd < 1 and ph->H == 0 and ph->S == 0 and ph->E == 0) {ph->weight *= 0.15;}
-		// else if (cosANGD-esp > cosPHSUN and SUN_DISCd < 1 and ph->S == 0 and ph->E == 0) {ph->weight *= 0.6;}
-
-		if (ph->direct == 0)
-			countLoss(ph, geoS, wPhLoss, wPhLoss2);
+		if (ph->direct == 0){countLoss(ph, geoS, wPhLoss, wPhLoss2);}
 	}
 	else
 	{
@@ -4851,50 +4848,32 @@ __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geo
 	p_t = invTransfo(Pointf(p_t));
 	#endif
 	
-    // ancienne implementation = mauvaise
-    // Transform rotz;
-	// rotz = rotz.RotateZ(0);
-	// p_t = rotz(p_t, myP);
-	// indJ = floorf((p_t.x/TCd) + (sizeX/(2*TCd)));
-	// indI = ceilf((p_t.y/TCd) + (sizeY/(2*TCd)));
-	// if (indJ == nbCx) indJ -= 1;
-	// indI = (nbCy-1) - (indI-1);
-
-    // new implementation = bonne
-    // x (axe vers le haut ^); y (axe vers la gauche <--)
+    // x (axis from bot to the top ^); y (axis from right to the left <--)
 	indJ = floorf( (-(p_t.y/TCd)) + (sizeY/(2*TCd)) );
 	indI = floorf( (-(p_t.x/TCd)) + (sizeX/(2*TCd)) );
 	if (indJ == nbCy) indJ -= 1;
 	if (indI == nbCx) indI -= 1;
 	
     #ifdef DOUBLE
-	double *tabCountObj;
-	double *wPhCatC, *wPhCatC2;
-	double4 stokes;
-	double weight, weight2;
+	double *tabCountObj, *wPhCatC, *wPhCatC2;
+	double2 stokes; double weight, weight2;
+	if (IsAtm == 1) stokes = make_double2(ph->stokes.x, ph->stokes.y);
+	else stokes = make_double2(0.5, 0.5);
 	tabCountObj = (double*)tabObjInfo;
-	wPhCatC = (double*)wPhCat;
-	wPhCatC2 = (double*)wPhCat2;
-	stokes = make_double4(ph->stokes.x, ph->stokes.y, ph->stokes.z, ph->stokes.w);
-	weight = (double)ph->weight;
-	weight = weight * double(stokes.x + stokes.y);
+	wPhCatC = (double*)wPhCat; wPhCatC2 = (double*)wPhCat2;
+	weight = double(ph->weight) * double(stokes.x + stokes.y);
     #else // If not DOUBLE
-	float *tabCountObj;
-	float *wPhCatC, *wPhCatC2;
-	float weight, weight2;
+	float *tabCountObj, *wPhCatC, *wPhCatC2;
+	float2 stokes; float weight, weight2;
+	if (IsAtm == 1) stokes = make_float2(ph->stokes.x, ph->stokes.y);
+	else stokes = make_float2(0.5, 0.5);
 	tabCountObj = (float*)tabObjInfo;
-	wPhCatC = (float*)wPhCat;
-	wPhCatC2 = (float*)wPhCat2;
-	weight = (float)ph->weight;
-	weight = weight * float(ph->stokes.x + ph->stokes.y);
+	wPhCatC = (float*)wPhCat; wPhCatC2 = (float*)wPhCat2;
+	weight = ph->weight * float(stokes.x + stokes.y);
 	#endif
 	weight2 = weight * weight;
 
-	if(isnan(weight))
-	{
-		printf("Care weight is nan !! \n");
-		return;
-	}
+	if(isnan(weight)){printf("Care weight is nan !! \n");return;}
 
 	if (le == 1)
 	{
@@ -6231,7 +6210,7 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct I
 				
 					BBox myBBox = myObject.WorldBoundTriangleMesh();
 					if (myBBox.IntersectP(R1))
-						myBj = myObject.Intersect(R1, &myTj, &myDgj);
+						myBj = myObject.Intersect2(R1, &myTj, &myDgj);
 				}
 
 				// ******************************third Step*******************************
@@ -6243,7 +6222,8 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct I
 					myB = true;
 					myT = myTj;
 					myDg = myDgj;
-					GeoV->normal = faceForward(myDg.nn, -1.*R1.d);
+					//GeoV->normal = faceForward(myDg.nn, -1.*R1.d);
+					GeoV->normal = faceForward(make_float3(ObjT[IND+j].nBx, ObjT[IND+j].nBy, ObjT[IND+j].nBz), -1.*R1.d);
 					GeoV->normalBase = make_float3(ObjT[IND+j].nBx, ObjT[IND+j].nBy, ObjT[IND+j].nBz);
 					if(  isBackward( make_double3(GeoV->normalBase.x, GeoV->normalBase.y, GeoV->normalBase.z),
 									 make_double3(dir.x, dir.y, dir.z) )  )

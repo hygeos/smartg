@@ -3406,5 +3406,20 @@ __device__ int MaxDim(float3 v)
 {
 	return (v.x>v.y) ? ((v.x>v.z)?0:2) : ((v.y>v.z)?1:2);
 }
+__device__ double Gamma_eps(int n, double eps)
+{
+	return (n * eps) / (1 - n * eps);
+}
+
+__device__ double3 Permute(double3 v, int x, int y, int z)
+{
+	double3c u = make_double3c(v.x, v.y, v.z);
+	return make_double3(u[x], u[y], u[z]);
+}
+
+__device__ int MaxDim(double3 v)
+{
+	return (v.x>v.y) ? ((v.x>v.z)?0:2) : ((v.y>v.z)?1:2);
+}
 #endif
 
