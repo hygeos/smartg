@@ -1666,7 +1666,7 @@ def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
     if (  (cusL is not None) and (cusL.dict['LMODE'] == "FF")  ):
         PZd = 120.+cusL.dict['CFTZ']
     else:
-        pZd = 120.
+        PZd = 120.
     tTemp = PZd/-vSun.z
     PXd = -vSun.x * tTemp
     PYd = -vSun.y * tTemp

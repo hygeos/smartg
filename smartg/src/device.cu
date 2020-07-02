@@ -4961,7 +4961,7 @@ __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geo
 			atomicAdd(nbPhCat, 1);     // comptage nombre de photons
 			DatomicAdd(tabCountObj+(nbCy*nbCx)+(nbCy*indI)+indJ, weight); // distri
 		}
-		else if ( ph->H > 1 && ph->E == 0 && ph->S == 0)
+		else if ( ph->H > 0 && ph->E == 0 && ph->S == 0)
 		{ // CAT 2 : only H avant de toucher le R.
 			DatomicAdd(wPhCatC+1, weight); DatomicAdd(wPhCatC2+1, weight2);
 			atomicAdd(nbPhCat+1, 1);
