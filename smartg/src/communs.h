@@ -64,6 +64,7 @@
 #define RAY         0
 #define PTCLE       1
 #define CHLFLUO     2
+#define VRS         3
 
 /* Possible Emitters */
 #define SOLAR_REF   0
@@ -224,6 +225,7 @@ public:
 	// scatterer
 	short int scatterer;
 	unsigned short nrrs; // Number of Atmospheric Rotational Raman Scattering
+	unsigned short nvrs; // Number of Oceanic Vibrational Raman Scattering
 
     // Number of interaction (scattering or reflection/transmission)
     unsigned short nint;

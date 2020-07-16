@@ -767,7 +767,7 @@ class Smartg(object):
         vSun = Normalize(vSun)
 
         # First check if back option is activated in case of the use of cusBackward launching mode
-        surfLPH = 0;
+        surfLPH = 0
         if (cusL is not None):
             if (cusL.dict['LMODE'] == "B" and self.back == False):
                 raise NameError('CusBackward can be use only with the compilation option back=True')
@@ -802,11 +802,11 @@ class Smartg(object):
         if (myObjects is not None):
             # Main bounding box initialization
             if interval is not None:
-                Pmin_x = interval[0][0];Pmin_y = interval[0][1];Pmin_z = interval[0][2];
-                Pmax_x = interval[1][0];Pmax_y = interval[1][1];Pmax_z = interval[1][2];
+                Pmin_x = interval[0][0];Pmin_y = interval[0][1];Pmin_z = interval[0][2]
+                Pmax_x = interval[1][0];Pmax_y = interval[1][1];Pmax_z = interval[1][2]
             else:
-                Pmin_x = -100000; Pmin_y = -100000; Pmin_z = 0;
-                Pmax_x = 100000;  Pmax_y = 100000; Pmax_z = 120;
+                Pmin_x = -100000; Pmin_y = -100000; Pmin_z = 0
+                Pmax_x = 100000;  Pmax_y = 100000; Pmax_z = 120
 
             # Initiliaze all the parameters linked with 3D objects
             (nGObj, nObj, nRObj, surfLPH_RF, nb_H, zAlt_H, totS_H, TC, nbCx, nbCy,
@@ -819,8 +819,8 @@ class Smartg(object):
             myObjects0 = gpuzeros(1, dtype='int32')
             myGObj0 = gpuzeros(1, dtype='int32')
             myRObj0 = gpuzeros(1, dtype='int32')
-            nObj = 0; nGObj=0; nRObj=0; Pmin_x = None; Pmin_y = None; Pmin_z = None;
-            Pmax_x = None; Pmax_y = None; Pmax_z = None;
+            nObj = 0; nGObj=0; nRObj=0; Pmin_x = None; Pmin_y = None; Pmin_z = None
+            Pmax_x = None; Pmax_y = None; Pmax_z = None
             IsAtm = None; TC = None; nbCx = 10; nbCy = 10; nb_H = 0
         # END OBJ ===================================================
 
@@ -1054,7 +1054,7 @@ class Smartg(object):
         REFRAC = 0
         if refraction: 
             REFRAC=1
-            fname='/home/did/RTC/SMART-G/smartg/refraction_LUT.nc'
+            #fname='/home/did/RTC/SMART-G/smartg/refraction_LUT.nc'
 
         HORIZ = 1
         if (not self.pp and not reflectance): HORIZ = 0
@@ -1098,18 +1098,18 @@ class Smartg(object):
                 SUN_DISC=SUN_DISC)
 
         if (nb_H > 0 and TC is not None and cusL is not None):
-            MZAlt_H = zAlt_H/nb_H; weightR=matCats[2, 1]; SREC=TC*TC*nbCx*nbCy;
+            MZAlt_H = zAlt_H/nb_H; SREC=TC*TC*nbCx*nbCy #; weightR=matCats[2, 1]
             # dicSTP : tuple incorporating parameters for Solar Tower Power applications
             dicSTP = {"nb_H":nb_H, "n_cos": n_cos, "totS_H":totS_H, "surfTOA":surfLPH, "MZAlt_H":MZAlt_H, "vSun":vSun, "wRec":matCats[2, 1],
                       "SREC":SREC, "TC":TC, "LPH":cusL.dict['LPH'], "LPR":cusL.dict['LPR'], "prog":progress, "n_cte":n_cte}
         # If there are no heliostats --> no analyses of optical losses
         elif(TC is not None and cusL is not None):
-            weightR=matCats[2, 1]; SREC=TC*TC*nbCx*nbCy; matLoss = None
+            SREC=TC*TC*nbCx*nbCy; matLoss = None #;weightR=matCats[2, 1]
             dicSTP = {"vSun":vSun, "wRec":matCats[2, 1], "SREC":SREC, "TC":TC, "LPH":cusL.dict['LPH'],
                       "LPR":cusL.dict['LPR'], "prog":progress, "n_cte":n_cte}
         # If there are no heliostats and receiver --> there is no STP
         else: 
-            dicSTP = None; matLoss = None; weightR=0
+            dicSTP = None; matLoss = None #; weightR=0
                 
         # finalization
         output = finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl[:], NPhotonsInTot, errorcount, NPhotonsOutTot,
@@ -1182,7 +1182,7 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
     '''
     create and return the final output
     '''
-    (NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI) = tabPhotonsTot.shape
+    (_,_,NSENSOR,NLAM,NBTHETA,NBPHI) = tabPhotonsTot.shape
     #(NLVL,NPSTK,NLAM,NBTHETA,NBPHI) = tabPhotonsTot.shape
 
     # normalization in case of radiance
@@ -1446,8 +1446,8 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
         # Indice 0 = Sum of all Cats, then cat1 to cat8, def of cats -> see Moulana et al, 2019
         m.add_axis('Categories', np.array([0, 1, 2, 3, 4, 5, 6, 7, 8], dtype=np.int32))
         var_x, var_y = np.shape(cMatVisuRecep[0][:][:])
-        x_indices = np.arange(var_x); y_indices = np.arange(var_y);
-        m.add_axis('X_Cell_Index', x_indices); m.add_axis('Y_Cell_Index', y_indices);
+        x_indices = np.arange(var_x); y_indices = np.arange(var_y)
+        m.add_axis('X_Cell_Index', x_indices); m.add_axis('Y_Cell_Index', y_indices)
         m.add_dataset('C_Receiver', cMatVisuRecep[:][:][:], ['Categories', 'X_Cell_Index', 'Y_Cell_Index'])
         m.set_attr('S_Receiver', str(dicSTP["SREC"])) # Receiver surface in km²
         m.set_attr('S_Cell', str(dicSTP["TC"]))       # Cell surface in km²
@@ -1519,12 +1519,12 @@ def rayleigh(N, DEPO):
     pha = np.zeros(N, dtype=type_Phase, order='C')
 
     GAMA = DEPO / (2- DEPO)
-    DELTA = np.float32((1.0 - GAMA) / (1.0 + 2.0 *GAMA));
-    DELTA_PRIM = np.float32(GAMA / (1.0 + 2.0*GAMA));
-    DELTA_SECO = np.float32((1.0 - 3.0*GAMA) / (1.0 - GAMA));
-    BETA  = np.float32(3./2. * DELTA_PRIM);
-    ALPHA = np.float32(1./8. * DELTA);
-    A = np.float32(1. + BETA / (3.0 * ALPHA));
+    DELTA = np.float32((1.0 - GAMA) / (1.0 + 2.0 *GAMA))
+    DELTA_PRIM = np.float32(GAMA / (1.0 + 2.0*GAMA))
+    DELTA_SECO = np.float32((1.0 - 3.0*GAMA) / (1.0 - GAMA))
+    BETA  = np.float32(3./2. * DELTA_PRIM)
+    ALPHA = np.float32(1./8. * DELTA)
+    A = np.float32(1. + BETA / (3.0 * ALPHA))
 
     i = np.arange(int(N), dtype=np.float32)
     thetaLE = np.linspace(0., pi, int(N), endpoint=True, dtype=np.float64)
@@ -1575,7 +1575,8 @@ def calculF(profile, N, DEPO, kind):
     else:
         nphases = 0
 
-    nphases += 1   # include Rayleigh phase function
+    nphases += 2    # include Rayleigh and VRS phase function
+    #nphases += 1   # include Rayleigh phase function
 
     # Initialize the cumulative distribution function
     if nphases > 0:
@@ -1591,8 +1592,13 @@ def calculF(profile, N, DEPO, kind):
         assert angles[-1] < 3.15   # assert that angles are in radians
         dtheta = np.diff(angles)
 
-    idx = 1
-    for ipha in range(nphases-1):
+    # Set VRS phase function
+    phase_H[1,:] = rayleigh(N, 0.17)
+
+    idx = 2
+    #idx = 1
+    for ipha in range(nphases-2):
+    #for ipha in range(nphases-1):
 
         phase = profile[name_phase][ipha, :, :]  # ipha, stk, theta
 
@@ -1777,7 +1783,7 @@ def init_profile(wl, prof, kind):
     kind = 'atm' or 'oc' for atmosphere or ocean
     '''
 
-    NREF = len(prof.axis('z_'+kind))
+    #NREF = len(prof.axis('z_'+kind))
     # reformat to smartg format
     if 'iopt_'+kind in prof.datasets(): 
         NLAY = len(prof['OD_'+kind].data[0,:])
@@ -1792,7 +1798,7 @@ def init_profile(wl, prof, kind):
             cell_gpu = np.zeros(1, dtype=type_Cell)
         else: 
             cell_gpu = np.zeros(len(prof['iopt_oc'].data), dtype=type_Cell)
-        prof_gpu['n'][0,:] = 1.34;
+        prof_gpu['n'][0,:] = 1.34
     else:
         if 'iopt_atm' not in prof.datasets():
             prof_gpu['z'][0,:] = prof.axis('z_'+kind)
@@ -2014,7 +2020,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
     
     if ((NATM+NOCE >0) and (NATM_ABS+NOCE_ABS <500) and alis) : tabDistTot = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI), dtype=np.float64)
     else : tabDistTot = gpuzeros((1), dtype=np.float64)
-    if hist : tabHistTot = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+3),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
+    if hist : tabHistTot = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+4),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
     else : tabHistTot = gpuzeros((1), dtype=np.float32)
 
     # Initialize of the parameters
@@ -2044,7 +2050,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         if ((NATM+NOCE >0) and (NATM_ABS+NOCE_ABS <500) and alis) : tabDist = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
         else : tabDist = gpuzeros((1), dtype=np.float32)
 
-    if hist : tabHist = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+3),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
+    if hist : tabHist = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+4),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
     else : tabHist = gpuzeros((1), dtype=np.float32)
 
     # local estimates angles
@@ -2056,7 +2062,6 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         tabphi = gpuzeros(1, dtype='float32')
 
     secs_cuda_clock = 0.
-    iopp = 1
     alis_norm = NLAM if NLOW!=0 else 1
     while((np.sum(NPhotonsInTot.get())/alis_norm) < NBPHOTONS):
         tabPhotons.fill(0.)
@@ -2101,8 +2106,8 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
             matCats[0,2] += np.sum(wPhCat2[:].get())
             for i in range (0, 8):
                 # Count the photon weights for each category
-                matCats[i+1,1] += wPhCat[i].get();    # sum of wi
-                matCats[i+1,2] += wPhCat2[i].get();   # sum of wi²
+                matCats[i+1,1] += wPhCat[i].get()    # sum of wi
+                matCats[i+1,2] += wPhCat2[i].get()   # sum of wi
         
         L = NPhotonsIn   # number of photons launched by last kernel
         NPhotonsInTot += L
@@ -2137,7 +2142,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         # Count the total number of photons received and also for each cats
         matCats[0,0] = np.sum(nbPhCat[:].get())
         for i in range (0, 8): # Here for each cats
-            matCats[i+1,0] = nbPhCat[i].get();
+            matCats[i+1,0] = nbPhCat[i].get()
         
         # Relative and absolute error for sum of cats and also for each cats
         for i in range (0, 9):
@@ -2371,7 +2376,7 @@ def initObj(LGOBJ, vSun, CUSL=None):
     LROBJGPU  : GPU array of only receiver objects of type 'type_IObjets'
     '''
 
-    ind = 0; LOBJ = []; nGObj = len(LGOBJ); nRObj = 0; INDROBJ = [];
+    ind = 0; LOBJ = []; nGObj = len(LGOBJ); nRObj = 0; INDROBJ = []
     LGOBJGPU = np.zeros(nGObj, dtype=type_GObj, order='C')
 
     # Creation of a list with only Entity objects and creation
@@ -2379,9 +2384,9 @@ def initObj(LGOBJ, vSun, CUSL=None):
 
     for i in range (0, nGObj):
         LGOBJGPU['index'][i] = ind 
-        LGOBJGPU['bPminx'][i] = LGOBJ[i].bboxGPmin.x; LGOBJGPU['bPminy'][i] = LGOBJ[i].bboxGPmin.y;
-        LGOBJGPU['bPminz'][i] = LGOBJ[i].bboxGPmin.z; LGOBJGPU['bPmaxx'][i] = LGOBJ[i].bboxGPmax.x;
-        LGOBJGPU['bPmaxy'][i] = LGOBJ[i].bboxGPmax.y; LGOBJGPU['bPmaxz'][i] = LGOBJ[i].bboxGPmax.z;
+        LGOBJGPU['bPminx'][i] = LGOBJ[i].bboxGPmin.x; LGOBJGPU['bPminy'][i] = LGOBJ[i].bboxGPmin.y
+        LGOBJGPU['bPminz'][i] = LGOBJ[i].bboxGPmin.z; LGOBJGPU['bPmaxx'][i] = LGOBJ[i].bboxGPmax.x
+        LGOBJGPU['bPmaxy'][i] = LGOBJ[i].bboxGPmax.y; LGOBJGPU['bPmaxz'][i] = LGOBJ[i].bboxGPmax.z
         if (LGOBJ[i].check == "GroupE"):
             LGOBJGPU['nObj'][i] = LGOBJ[i].nob
             ind += LGOBJ[i].nob
@@ -2436,13 +2441,13 @@ def initObj(LGOBJ, vSun, CUSL=None):
         INDROBJ.append(nObj) # For the creation of GPU table with only receivers
     else:
         LOBJGPU = np.zeros(nObj, dtype=type_IObjets, order='C')
-        TC = None; nbCx = int(0); nbCy = int(0);
+        TC = None; nbCx = int(0); nbCy = int(0)
 
     # Initialization before the coming loop
-    pp1 = 0.; pp2 = 0.; pp3 = 0.; pp4 = 0.;
-    nb_H = 0; zAlt_H = 0.; totS_H = 0.; ncos=0.;
-    if (CUSL != None and CUSL.dict['LMODE'] == "RF"): surfLPH = 0;
-    else: surfLPH = None;
+    pp1 = 0.; pp2 = 0.; pp3 = 0.; pp4 = 0.
+    nb_H = 0; zAlt_H = 0.; totS_H = 0.; ncos=0.
+    if (CUSL != None and CUSL.dict['LMODE'] == "RF"): surfLPH = 0
+    else: surfLPH = None
 
     # ********************************************
     # Begining of the loop to consider all objects
@@ -2473,7 +2478,7 @@ def initObj(LGOBJ, vSun, CUSL=None):
 
             # Get the normal of the plane Object after considering transform
             # 1) The intial normal is known ->
-            normalBase = Vector(0, 0, 1);
+            normalBase = Vector(0, 0, 1)
 
             # 2) Consider the rotation transform in X, Y et Z
             TpT0 = Transform()
@@ -2487,7 +2492,7 @@ def initObj(LGOBJ, vSun, CUSL=None):
             elif(LOBJ[i].transformation.rotOrder == "YXZ"):
                 TpT0 = TpRY0*TpRX0*TpRZ0
             elif(LOBJ[i].transformation.rotOrder == "YZX"):
-                TpT0 = TpRY0*TpRZ*TpRX0
+                TpT0 = TpRY0*TpRZ0*TpRX0
             elif(LOBJ[i].transformation.rotOrder == "ZXY"):
                 TpT0 = TpRZ0*TpRX0*TpRY0
             elif(LOBJ[i].transformation.rotOrder == "ZYX"):
@@ -2555,7 +2560,7 @@ def initObj(LGOBJ, vSun, CUSL=None):
 
         # 1) Back part of the object (AR for the french word 'ARriere')
         # Initialization
-        LOBJGPU['materialAR'][i] = 0; LOBJGPU['shdAR'][i] = 0;
+        LOBJGPU['materialAR'][i] = 0; LOBJGPU['shdAR'][i] = 0
         LOBJGPU['nindAR'][i] = 1; LOBJGPU['distAR'][i] = 0
         # Commun to all materials
         LOBJGPU['reflecAR'][i] = LOBJ[i].materialAR.reflectivity
@@ -2587,7 +2592,7 @@ def initObj(LGOBJ, vSun, CUSL=None):
                     isinstance(LOBJ[i].materialAV, Mirror) )  ):
                 nb_H += 1
                 zAlt_H += LOBJ[i].transformation.transz
-                totS_H += abs(LOBJ[i].geo.p1.x)*abs(LOBJ[i].geo.p1.y)*4;
+                totS_H += abs(LOBJ[i].geo.p1.x)*abs(LOBJ[i].geo.p1.y)*4
                 ncos += Dot(normalBase, Vector(-vSun.x, -vSun.y, -vSun.z))
 
             # Crucial step for the result visualization in RF mode
@@ -2757,7 +2762,7 @@ def findExtinction(IP, FP, prof_atm, W_IND = int(0)):
         
     # Initialization
     tauHit = 0. # Optical depth distance (from IP to FP)
-    ilayer2 = lay;
+    ilayer2 = lay
 
     # Case with only 1 layer: n = 1
     if (FP.z >= prof_atm.axis('z_atm')[ilayer2] and FP.z < prof_atm.axis('z_atm')[ilayer2-1]):
@@ -2784,7 +2789,7 @@ def findExtinction(IP, FP, prof_atm, W_IND = int(0)):
                 timeT = abs(prof_atm.axis('z_atm')[ilayer] - oldP.z)/abs(Vec.z)
             else:
                 timeT = abs(prof_atm.axis('z_atm')[ilayer-1] - oldP.z)/abs(Vec.z)
-            newP = oldP + (Vec*timeT);
+            newP = oldP + (Vec*timeT)
             delta_i = abs(prof_atm['OD_atm'].data[W_IND, ilayer]-prof_atm['OD_atm'].data[W_IND, ilayer-1])
             tauHit += ((newP - oldP).Length()/abs(prof_atm.axis('z_atm')[ilayer-1]-prof_atm.axis('z_atm')[ilayer]))*delta_i
         

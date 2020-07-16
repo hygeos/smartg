@@ -6,6 +6,7 @@ import numpy as np
 import sys
 sys.path.insert(0, '/home/did/RTC/SMART-G/')
 from smartg.rrs import L2d_inv, is_odd
+from smartg.vrs import V2d_inv
 from luts.luts import LUT
 import scipy.constants as cst
 from scipy.interpolate import interp1d
@@ -61,7 +62,7 @@ class BandSet(object):
         return tau_mol
 
 
-def spectral_grids(lmin, lmax, datas, dl=None, dls=None):
+def spectral_grids(lmin, lmax, datas, dl=None, dls=None, Raman='RRS', unit='mW/m2/nm'):
     '''
     inputs:
         lmin  : lambda min (nm)
@@ -71,11 +72,14 @@ def spectral_grids(lmin, lmax, datas, dl=None, dls=None):
     keywords:
         dl : high spectral resolution for absorption features # nm (default, None, same as datas)
         dls: low  spectral resolution for scattering features # nm (default None), NWS=1
+        Raman: 'RRS' or 'VRS'
+        unit: solar irradiance unit 'photons/cm2/s/nm' or 'mW/m2/nm'
     '''
     ## Solar spectrum input data ##
     wl0 = datas[:,0]
+    E0  = datas[:,1]
     # from mW/m2/nm to photons/cm2/s/nm
-    E0  = datas[:,1] * 1e-3 * 1e-4  / (cst.h *cst.c)  * (wl0*1e-9)
+    if (unit=='photons/cm2/s/nm') : E0  *= 1e-3 * 1e-4  / (cst.h *cst.c)  * (wl0*1e-9)
     
     ## High spectral resolution grid (for absorption features)
     if dl is None:
@@ -89,21 +93,26 @@ def spectral_grids(lmin, lmax, datas, dl=None, dls=None):
         NW  = int((lmax-lmin)/dl) + 1
         wl  = np.linspace(lmin, lmax, num=NW) # wavelength grid
         
-    ## RRS excitation wavelength grid for 243°K
-    wl_RRS, _ = L2d_inv(wl, 90., 243.)
-    lmin_RRS  = wl_RRS.min()
-    lmax_RRS  = wl_RRS.max()
+    if Raman=='RRS':
+        ## RRS excitation wavelength grid for scattering angle of 90 deg and 243°K
+        wl_RS, _ = L2d_inv(wl, 90., 243.)
+    else:
+        ## VRS excitation wavelength grid
+        wl_RS, _ = V2d_inv(wl)
+
+    lmin_RS  = min(wl_RS.min(), wl.min())
+    lmax_RS  = max(wl_RS.max(), wl.max())
     
     # Solar spectrum LUT building
-    ii = np.where(( wl0>lmin_RRS) & (wl0 <lmax_RRS))
+    ii = np.where(( wl0>=lmin_RS) & (wl0 <=lmax_RS))
     Es_LUT = LUT(E0[ii], axes=[wl0[ii]], names=['wavelength'], desc='Es')
     
     # low spectral resolution for scattering computations # nm 
     if dls is not None:
-        NWS = int((lmax_RRS - lmin_RRS)/dls) 
+        NWS = int((lmax_RS - lmin_RS)/dls) 
         NWS = NWS if is_odd(NWS) else NWS+1
     else : NWS=1
-    wls = np.linspace(lmin_RRS, lmax_RRS, num=NWS)
+    wls = np.linspace(lmin_RS, lmax_RS, num=NWS)
     
     # parameters for 1D linear interpolation of wl in wls
     if NWS>1:
@@ -119,4 +128,4 @@ def spectral_grids(lmin, lmax, datas, dl=None, dls=None):
         iwls_in = np.array([0], dtype=np.int8)
         wwls_in = np.array([0], dtype=np.float32)
     
-    return wl, wls, wl_RRS, Es_LUT, iwls_in, wwls_in
+    return wl, wls, wl_RS, Es_LUT, iwls_in, wwls_in

@@ -933,6 +933,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 
 	ph->scatterer = UNDEF;
 	ph->nrrs = 0;
+	ph->nvrs = 0;
 	
     // Sensor index initialization
     ph->is = __float2uint_rz(RAND * NSENSORd);
@@ -2733,7 +2734,7 @@ __device__ void scatter(Photon* ph,
 			/* Rayleigh or ptcle scattering */
 			/************************************/
 			if( ph->scatterer == RAY ){ipha  = 0;}   // Rayleigh index
-			else if(ph->scatterer == PTCLE ){ipha  = prof_atm[ilay].iphase + 1;} // particle index
+			else if(ph->scatterer == PTCLE ){ipha  = prof_atm[ilay].iphase + 2;} // particle index
 		
 		}
 	/* Scattering in ocean */
@@ -2747,12 +2748,13 @@ __device__ void scatter(Photon* ph,
 			func = foce; // oce phases
 			
 			if (ph->scatterer == RAY){ipha  = 0;}	// Rayleigh index
-			else if(ph->scatterer == PTCLE ){ ipha  = prof_oc[ilay].iphase + 1;} // particle index
+			else if(ph->scatterer == VRS ){ ipha  = 1;} // VRS index
+			else if(ph->scatterer == PTCLE ){ ipha  = prof_oc[ilay].iphase + 2;} // particle index
 
     }
 
 
-	if ( (ph->scatterer == RAY) || (ph->scatterer == PTCLE) ){
+	if ( (ph->scatterer == RAY) || (ph->scatterer == PTCLE) || (ph->scatterer == VRS)){
 
 		if(!le) {
 
@@ -2909,7 +2911,7 @@ __device__ void scatter(Photon* ph,
 		}
 
     #ifdef ALIS
-	if ( (ph->scatterer == RAY) or (ph->scatterer == PTCLE) ){
+	if ( (ph->scatterer == RAY) or (ph->scatterer == PTCLE) or (ph->scatterer == VRS)){
         Profile *prof;                                             
         #ifdef OPT3D
         Cell *cell;
@@ -2944,9 +2946,9 @@ __device__ void scatter(Photon* ph,
 			iang = __float2int_rd(zang);
 			zang = zang - iang;
             #ifndef OPT3D
-			int ipharef = prof[ph->layer+ph->ilam*(layer_end+1)].iphase + 1; 
+			int ipharef = prof[ph->layer+ph->ilam*(layer_end+1)].iphase + 2; 
             #else
-			int ipharef = prof[cell[ph->layer].iopt+ph->ilam*(layer_end+1)].iphase + 1; 
+			int ipharef = prof[cell[ph->layer].iopt+ph->ilam*(layer_end+1)].iphase + 2; 
             #endif
 			// Phase functions of particles and molecules, and mixture of both at reference wavelength
 			P11_aer_ref = (1-zang)*func[ipharef*NF+iang].a_P11 + zang*func[ipharef*NF+iang+1].a_P11;
@@ -2970,10 +2972,10 @@ __device__ void scatter(Photon* ph,
             #endif
 			if (pmol < 1.) {
                 #ifndef OPT3D
-				int iphak    = prof[ph->layer + k*DL*(layer_end+1)].iphase + 1; 
+				int iphak    = prof[ph->layer + k*DL*(layer_end+1)].iphase + 2; 
 				float pmol_k = prof[ph->layer + k*DL*(layer_end+1)].pmol;
                 #else
-				int iphak    = prof[cell[ph->layer].iopt + k*DL*(layer_end+1)].iphase + 1; 
+				int iphak    = prof[cell[ph->layer].iopt + k*DL*(layer_end+1)].iphase + 2; 
 				float pmol_k = prof[cell[ph->layer].iopt + k*DL*(layer_end+1)].pmol;
                 #endif
 				// Phase functions of particles  at other wavelengths, molecular is supposed to be constant with wavelength
@@ -3037,6 +3039,7 @@ __device__ void choose_emitter(Photon* ph,
             ph->nint = 0;
             ph->nref = 0;
             ph->nrrs = 0;
+            ph->nvrs = 0;
             for (int k=0; k<NLOWd; k++) ph->weight_sca[k] = 1.F;
             for (int k=0; k<NATM_ABSd+1; k++) ph->cdist_atm[k] = 0.F;
             //for (int k=0; k<NATMd+1; k++) ph->cdist_atm[k] = 0.F;
@@ -3093,12 +3096,16 @@ __device__ void choose_scatterer(Photon* ph,
         #endif
 
 		if (pine  < RAND){
-			/* inelastic scattering    */
-			ph->scatterer =CHLFLUO ;
+			/* Fluorescence    */
+            ph->scatterer =CHLFLUO ;
 		}else{
-			/* Elastic scattering    */
+			/* Molecular scattering    */
 			if ( pmol < RAND ){
 				ph->scatterer = RAY; // Rayleigh index
+                if (RAND >fVRS(ph->wavel)) { //  VRS probability
+			        //ph->scatterer = VRS ;
+                    ph->nvrs +=1;
+                }
 			} else {
 				ph->scatterer = PTCLE;	; // particle index
 			}
@@ -3768,7 +3775,7 @@ __device__ float4x4 FresnelR(float3 vi, float3 vr) {
 }
 
 /* Surface BRDF */
-__device__ void surfaceBRDF_old(Photon* ph, int le,
+__device__ void surfaceBRDF(Photon* ph, int le,
                               float* tabthv, float* tabphi, int count_level,
                               struct RNG_State *rngstate) {
 	
@@ -4072,6 +4079,8 @@ __device__ void surfaceLambert(Photon* ph, int le,
 		ph->layer = NOCEd; 
         #endif
 		ph->weight *= spectrum[ph->ilam].alb_seafloor; /*[Eq. 16,39]*/
+        ph->nref+=1;
+        ph->nint+=1;
 	}
 
     #ifdef SIF
@@ -4089,7 +4098,7 @@ __device__ float checkerboard(float3 pos) {
 }
 
 /* Surface BRDF */
-__device__ void surfaceBRDF(Photon* ph, int le,
+__device__ void surfaceBRDF_new(Photon* ph, int le,
 							float* tabthv, float* tabphi, int count_level,
 							struct RNG_State *rngstate) {
 	if( SIMd == ATM_ONLY){ // Atmosphere only, surface absorbs all
@@ -5406,7 +5415,7 @@ __device__ void countPhoton(Photon* ph,
           counter2=atomicAdd(NPhotonsOut, 1);
           //counter2=atomicAdd(NPhotonsOut+is, 1);
           if (counter2 >= MAX_HIST) return;
-          unsigned long long KK2 = K*(NATM_ABSd+NOCE_ABSd+4+NLOWd+3); /* Number of information per local estmate photon (Record length)*/
+          unsigned long long KK2 = K*(NATM_ABSd+NOCE_ABSd+4+NLOWd+4); /* Number of information per local estmate photon (Record length)*/
           //unsigned long long KK2 = K*(NATMd+NOCEd+4+NLOWd+3); /* Number of information per local estmate photon (Record length)*/
           //unsigned long long KKK2= KK2 * MAX_HIST; /* Number of individual information per vertical Level (Number of Records)*/
           unsigned long long LL2;
@@ -5442,6 +5451,8 @@ __device__ void countPhoton(Photon* ph,
           tabCount3[LL2]= (float)(ph->nref);
           LL2 = counter2*KK2 +  (NLOWd+NATM_ABSd+NOCE_ABSd+4+2)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= (float)(ph->nsif);
+          LL2 = counter2*KK2 +  (NLOWd+NATM_ABSd+NOCE_ABSd+4+3)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          tabCount3[LL2]= (float)(ph->nvrs>=1);
        } // HISTd==1
 
        unsigned long long KK  = K*(NATM_ABSd+NOCE_ABSd);
@@ -5467,7 +5478,7 @@ __device__ void countPhoton(Photon* ph,
           tabCount2   = (float*)tabDist     + count_level*KK;
           for (int n=0; n<NOCE_ABSd; n++){
             LL = n*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
-            atomicAdd(tabCount2+LL, (double)ph->cdist_oc[n+1]);
+            atomicAdd(tabCount2+LL, ph->cdist_oc[n+1]);
           }
           for (int n=0; n<NATM_ABSd; n++){
             LL = (n+NOCE_ABSd)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
@@ -5708,6 +5719,7 @@ __device__ void display(const char* desc, Photon* ph) {
             case 0: printf("scatterer =     RAY"); break;
             case 1: printf("scatterer =   PTCLE"); break;
             case 2: printf("scatterer = CHLFLUO"); break;
+            case 3: printf("scatterer = VRS"); break;
             default:
                     printf("scatterer =   UNDEF");
         }
@@ -5856,6 +5868,7 @@ __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
     ph_le->ilam = ph->ilam;
 	ph_le->scatterer=ph->scatterer;
 	ph_le->nrrs=ph->nrrs;
+	ph_le->nvrs=ph->nvrs;
     ph_le->pos = ph->pos; // float3
     ph_le->nint = ph->nint;
     ph_le->nref = ph->nref;
@@ -6056,6 +6069,17 @@ __device__ float fRRS_air(float lam, float theta){
     float ct  = cosf(theta*DEUXPI/360.);
     float num = (180.+13.*eps) + (180.+eps)*ct*ct;
     float den = (180.+52.*eps) + (180.+4.*eps)*ct*ct;
+    return __fdividef(num, den);
+}
+
+
+// Zhai et al., 2015, Optics Express. , ratio of b_VRS over bw
+__device__ float fVRS(float lam){
+    /*
+    lam in nm
+    */
+    float num = 2.7e-4 * pow(488.F/lam, 5.3F);
+    float den = 1.93e-3 * pow(550.F/lam, 4.32F);
     return __fdividef(num, den);
 }
 

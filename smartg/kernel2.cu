@@ -2,8 +2,8 @@
 extern "C" {
 __global__ void reduce_absorption_gpu(unsigned long long NPHOTON, unsigned long long NLAYER, unsigned long long NWVL, 
         unsigned long long NTHREAD, unsigned long long NGROUP, unsigned long long NBUNCH, unsigned long long NP_REST, unsigned long long NWVL_LOW,
-        double *res, double *res_sca, double *res_rrs, double *res_sif, float *ab, float *al, float *cd, float *S, float *weight, 
-        unsigned char *nrrs, unsigned char *nref, unsigned char *nsif, unsigned char *iw_low, float *ww_low)
+        double *res, double *res_sca, double *res_rrs, double *res_sif, double *res_vrs, float *ab, float *al, float *cd, float *S, float *weight, 
+        unsigned char *nrrs, unsigned char *nref, unsigned char *nsif, unsigned char *nvrs, unsigned char *iw_low, float *ww_low)
 {
   const unsigned long long idx = threadIdx.x + blockDim.x * blockIdx.x;
   unsigned long long n,nstart,nstop,ns;
@@ -42,6 +42,7 @@ __global__ void reduce_absorption_gpu(unsigned long long NPHOTON, unsigned long 
             if (!nsif[n])             atomicAdd(res_sca+iw+NWVL*s, (double)S[ns] *              (double)wsca * walb);
             if ( nrrs[n] && !nsif[n]) atomicAdd(res_rrs+iw+NWVL*s, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
             if ( nsif[n])             atomicAdd(res_sif+iw+NWVL*s, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
+            if ( nvrs[n] && !nsif[n]) atomicAdd(res_vrs+iw+NWVL*s, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
         }
     }
   }

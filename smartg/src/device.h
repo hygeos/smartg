@@ -198,9 +198,9 @@ __device__ void scatter(Photon* ph,
 
 __device__ void surfaceWaterRough(Photon*, int le, float* tabthv, float* tabphi, int count_level,
                               struct RNG_State*);
-__device__ void surfaceBRDF(Photon*, int le, float* tabthv, float* tabphi, int count_level,
+__device__ void surfaceBRDF_new(Photon*, int le, float* tabthv, float* tabphi, int count_level,
                               struct RNG_State*);
-__device__ void surfaceBRDF_old(Photon*, int le, float* tabthv, float* tabphi, int count_level,
+__device__ void surfaceBRDF(Photon*, int le, float* tabthv, float* tabphi, int count_level,
                               struct RNG_State*);
 
 
@@ -278,6 +278,9 @@ __device__ float Epsilon_N2(float);
 __device__ float Epsilon_O2(float);
 __device__ float Epsilon_air(float);
 __device__ float fRRS_air(float, float);
+
+/* VRS functions */
+__device__ float fVRS(float);
 
 __device__ void DirectionToUV(float, float, float3*, float3*) ;
 __device__ float3 LocalToGlobal(float3, float3, float3, float3) ;
