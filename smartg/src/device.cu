@@ -1144,6 +1144,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     //
 
     #if defined(THERMAL) && !defined(BACK) // THERMAL FORWARD
+    ph->scatterer = THERMAL_EM;
     // 1D plane parallel forward thermal initialization
     if (NCELLPROBA !=0) ph->layer = cell_proba_icdf[__float2uint_rz(RAND * NCELLPROBA) + ph->ilam*NCELLPROBA];
     else {
@@ -1154,17 +1155,6 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     dz  = fabs(prof_atm[ph->layer-1].z - prof_atm[ph->layer].z);
     ph->pos   = make_float3(0., 0., RAND *dz + prof_atm[ph->layer].z);
     ph->loc   = ATMOS;
-    // isotropic point source
-	cTh = 1.0-2.0*RAND;
-	sTh = sqrtf(1.F - cTh*cTh);
-	phi = RAND*DEUXPI;
-	ph->v.x   = cosf(phi)*sTh;
-	ph->v.y   = sinf(phi)*sTh;
-	ph->v.z   = cTh;
-	// Initialization of the orthogonal vector to the propagation
-	ph->u.x   = cosf(phi)*cTh;
-	ph->u.y   = sinf(phi)*cTh;
-	ph->u.z   = -sTh;
 
     #else // NON THERMAL FORWARD
 	#ifdef OBJ3D
@@ -1817,6 +1807,9 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
  #ifndef OPT3D // 1D
 __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc, int le, int count_level,
                         struct RNG_State *rngstate) {
+
+
+    if (!le && ph->scatterer == THERMAL_EM) return;
 
     float tauRdm;
     float hph = 0.;  // cumulative optical thickness
@@ -2900,7 +2893,7 @@ __device__ void scatter(Photon* ph,
 
 	}
 
-	else if (ph->scatterer == CHLFLUO){ 
+	else if ((ph->scatterer == CHLFLUO) || (ph->scatterer == THERMAL_EM)){ 
 
 		/////////////////
 		// Fluorescence
@@ -2935,7 +2928,7 @@ __device__ void scatter(Photon* ph,
 								   0.0F, 0.0F, 0.F, 0.F 
 								   );
 		ph->stokes = mul(L,ph->stokes);
-		}
+	}
 
     #ifdef ALIS
 	if ( (ph->scatterer == RAY) or (ph->scatterer == PTCLE) or (ph->scatterer == VRS)){
@@ -3026,7 +3019,7 @@ __device__ void scatter(Photon* ph,
 				else{ph->loc = ABSORBED;}
 			}
 		}
-		if (ph->scatterer != CHLFLUO) { modifyUV( ph->v, ph->u, cTh, psi, &ph->v, &ph->u) ;}
+		if ((ph->scatterer != CHLFLUO) && (ph->scatterer != THERMAL_EM)) { modifyUV( ph->v, ph->u, cTh, psi, &ph->v, &ph->u) ;}
 	}
     else {
         if (HORIZd) ph->weight /= fabs(ph->v.z); 
@@ -3092,8 +3085,13 @@ __device__ void choose_scatterer(Photon* ph,
         struct RNG_State *rngstate) {
 
 	//int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
-	
+    
+    #ifndef THERMAL
     ph->nint += 1;
+    #else
+    if (ph->scatterer!=THERMAL_EM) ph->nint +=1;
+    else return;
+    #endif
   
 	float pmol;
 	float pine;
@@ -5747,6 +5745,7 @@ __device__ void display(const char* desc, Photon* ph) {
             case 1: printf("scatterer =   PTCLE"); break;
             case 2: printf("scatterer = CHLFLUO"); break;
             case 3: printf("scatterer = VRS"); break;
+            case 4: printf("scatterer = THERMAL_EM"); break;
             default:
                     printf("scatterer =   UNDEF");
         }
@@ -5950,7 +5949,7 @@ __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
 	
     #if defined(BACK) && defined(OBJ3D)
 	ph_le->posIni = ph->posIni;
-	#endif
+    #endif
 }
 
 __device__ float get_OD(int BEERd, struct Profile prof) {  

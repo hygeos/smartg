@@ -68,10 +68,11 @@
 #define PTCLE       1
 #define CHLFLUO     2
 #define VRS         3
+#define THERMAL_EM  4
 
-/* Possible Emitters */
+/* Possible Emitters (surface)*/
 #define SOLAR_REF   0
-#define SIF_EM         1
+#define SIF_EM      1
 
 /* Possible Simulations */
 #define ATM_ONLY      -2
@@ -258,12 +259,14 @@ public:
     float4x4 M;
     //float4x4 Mf;
     #endif
+
 	#ifdef OBJ3D
 	int direct;
     int H, E, S;
 	float weight_loss[4];
 	float3 v_i; // for STP opt efficiency
 	#endif
+
     #if defined(BACK) &&  defined(OBJ3D)
 	float3 posIni;
 	#endif
