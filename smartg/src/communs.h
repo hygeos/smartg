@@ -20,6 +20,9 @@
 /**********************************************************
 *	> Constantes
 ***********************************************************/
+#define SPEED_OF_LIGHT 299792458.0
+#define PLANCK 6.62607015e-34
+#define BOLTZMANN 1.380649e-23
 
 #define WEIGHTINIT 1.F
 #define X_O2 0.212 // vol mixing ratio of O2 for RRS
@@ -296,6 +299,7 @@ struct Phase {
 struct Profile {
     float z;      // altitude
     float n;      // refractive index
+    float T;      // Temperature
     float OD;    // cumulated extinction optical thickness (from top)
     float OD_sca; // cumulated scattering optical thickness (from top)
     float OD_abs; // cumulated absorption optical thickness (from top)

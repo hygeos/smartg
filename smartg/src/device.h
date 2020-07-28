@@ -49,6 +49,7 @@ __device__ __constant__ float CTHVd;	//cosThetaView_Host
 
 __device__ __constant__ float RTER;
 __device__ __constant__ int NWLPROBA;
+__device__ __constant__ int NCELLPROBA;
 __device__ __constant__ int REFRACd;
 __device__ __constant__ int HORIZd;
 __device__ __constant__ float SZA_MAXd;
@@ -117,6 +118,7 @@ __global__ void launchKernel(
         struct Cell *cell_atm,
         struct Cell *cell_oc,
         long long *wl_proba_icdf,
+        long long *cell_proba_icdf,
         void *rng_state
 		, void *tabObjInfo,
 		struct IObjets *myObjets,
@@ -135,7 +137,7 @@ __global__ void launchKernel(
 __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc,
                            struct Sensor *tab_sensor, struct Spectrum *spectrum,float *X0,
                            unsigned long long *NPhotonsIn,
-                           long long *wl_proba_icdf, float* tabthv, float* tabphi,
+                           long long *wl_proba_icdf, long long *cell_proba_icdf, float* tabthv, float* tabphi,
                            struct RNG_State*
 						   #ifdef OBJ3D
 						   , struct IObjets *myObjets
@@ -296,6 +298,7 @@ __device__ float F1_rtls(float , float , float );  //  rossthick-lisparse, only 
 __device__ float F2_rtls(float , float , float );  //  rossthick-lisparse, only F2
 
 __device__ float BRDF(int, float3, float3 , struct Spectrum* );  //  general BRDF
+__device__ float BPlanck(float, float );
 #ifdef PHILOX
 /**********************************************************
 *	> Fonctions liées au générateur aléatoire

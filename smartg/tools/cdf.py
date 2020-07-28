@@ -44,3 +44,13 @@ def ICDF(P, N=None):
     return ICDF
 
 
+def ICDF2D(P, N=500):
+    ''' Calculate ICDF when P is 2D
+    Loop over first axis
+    '''
+    #assert P.ndims==2
+    ll = []
+    for k in range(P.shape[0]):
+       ll.append(ICDF(P[k,:], N=N)) 
+
+    return np.stack(ll)

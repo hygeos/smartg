@@ -126,6 +126,8 @@ class IOP(IOP_base):
 
         pro.add_axis('wavelength', wav[:])
         pro.add_axis('z_oc', -self.Z)
+        pro.add_dataset('T_oc', np.array([280.]*len(self.Z), dtype='float32'),
+                        ['z_oc'])
 
         if self.phase is not None:
 
@@ -237,6 +239,8 @@ class IOP_Rw(IOP_base):
         pro.add_axis('z_oc', np.zeros(2))
         shp = (len(wav), 2)
 
+        pro.add_dataset('T_oc', np.array([280., 280.], dtype='float32'),
+                        ['z_oc'])
         pro.add_dataset('OD_oc', np.zeros(shp, dtype='float32'),
                         ['wavelength', 'z_oc'])
         pro.add_dataset('OD_w', np.zeros(shp, dtype='float32'),
@@ -387,6 +391,7 @@ class IOP_1(IOP_base):
         pro = MLUT()
         pro.add_axis('wavelength', wav[:])
         pro.add_axis('z_oc', np.array([0., -self.depth]))
+        pro.add_dataset('T_oc', np.array([280., 280.], dtype='float32'), ['z_oc'])
 
         if phase:
             if self.pfwav is None:
@@ -750,6 +755,8 @@ class IOP_profile(IOP_base):
         pro = MLUT()
         pro.add_axis('wavelength', wav[:])
         pro.add_axis('z_oc', -self.z)
+        pro.add_dataset('T_oc', np.array([280.]*len(self.z), dtype='float32'), ['z_oc'])
+
 
         if phase:
             if self.pfwav is None:

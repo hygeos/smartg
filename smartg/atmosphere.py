@@ -15,6 +15,7 @@ except ModuleNotFoundError:
 from scipy.interpolate import interp1d
 from scipy.integrate import simps
 from scipy.constants import codata
+from scipy.constants import speed_of_light, Planck, Boltzmann
 from smartg.bandset import BandSet
 import netCDF4
 from smartg.config import NPSTK, dir_libradtran_opac
@@ -657,6 +658,11 @@ class AtmAFGL(Atmosphere):
                         attrs={'description':
                                'atmospheric refractive index'})
 
+
+        pro.add_dataset('T_atm', self.prof.T, axnames=['z_atm'],
+                        attrs={'description':
+                               'temperature (K)'})
+        
         #
         # Rayleigh optical thickness
         #
@@ -931,7 +937,6 @@ class AtmAFGL(Atmosphere):
             pro.add_dataset('phase_atm', pha, axnames=['iphase', 'stk', 'theta_atm'],
                     attrs={'description':
                            'phase matrices'})
-
         # Pure 3D
         #
         if self.OPT3D:
@@ -1063,18 +1068,39 @@ class Profile_base(object):
         if atm_filename is None:
             return
         self.atm_filename = atm_filename
+        with open(atm_filename) as f:
+            lines = f.readlines()
 
-        data = np.loadtxt(atm_filename, dtype=np.float32, comments="#")
+        desc = None
+        n=0
+        for line in lines:
+            if ('z(km)' in line) and ('p(mb)' in line) and ('T(K)' in line) and ('air(cm-3)' in line) :
+                desc = line
+                break
+            else:
+                n+=1
 
-        self.z        = data[:,0] # Altitude in km
-        self.P        = data[:,1] # pressure in hPa
-        self.T        = data[:,2] # temperature in K
-        self.dens_air = data[:,3] # Air density in cm-3
-        self.dens_o3  = data[:,4] # Ozone density in cm-3
-        self.dens_o2  = data[:,5] # O2 density in cm-3
-        self.dens_h2o = data[:,6] # H2O density in cm-3
-        self.dens_co2 = data[:,7] # CO2 density in cm-3
-        self.dens_no2 = data[:,8] # NO2 density in cm-3
+        if desc is not None:
+            data = np.loadtxt(atm_filename, dtype=np.float32, comments="#", skiprows=n)
+            self.z        = data[:,0] # Altitude in km
+            self.P        = data[:,1] # pressure in hPa
+            self.T        = data[:,2] # temperature in K
+            self.dens_air = data[:,3] # Air density in cm-3
+            data2 = np.zeros((data.shape[0], 5))
+            for i,gas in enumerate(['o3','o2','h2o','co2','no2']):
+                try : 
+                    ind = desc.split().index(gas+'(cm-3)')
+                    data2[:,i] = data[:, ind-1]
+                except ValueError:
+                    data2[:,i] = 0.
+            self.dens_o3  = data2[:,0] # Ozone density in cm-3
+            self.dens_o2  = data2[:,1] # O2 density in cm-3
+            self.dens_h2o = data2[:,2] # H2O density in cm-3
+            self.dens_co2 = data2[:,3] # CO2 densiraise NameError('Invalid atmospheric file format')ty in cm-3
+            self.dens_no2 = data2[:,4] # NO2 density in cm-3
+        else:
+            raise NameError('Invalid atmospheric file format')
+
         self.RH_cst   = RH_cst
 
         # scale to specified total O3 content
@@ -1390,7 +1416,7 @@ def get_o2_abs(z, wl, afgl='afglus', DOWNLOAD=False, P0=None, verbose=False, zin
 
 def get_co2_abs(z, wl, afgl='afglus', DOWNLOAD=False, P0=None, verbose=False, zint=None):
     '''
-    return vertical profile of O2 absorption coefficient
+    return vertical profile of CO2 absorption coefficient
     
     Inputs:
         wl : 1D array of wavlength (nm)
@@ -1469,3 +1495,10 @@ def od2k(prof, dataset, axis=1, zreverse=False):
     sl = slice(None,None,-1 if zreverse else 1)
     
     return k[:,sl]
+
+
+def BPlanck(wav, T):
+    a = 2.0*Planck*speed_of_light**2
+    b = Planck*speed_of_light/(wav*Boltzmann*T)
+    intensity = a/ ( (wav**5) * (np.exp(b) - 1.0) )
+    return intensity

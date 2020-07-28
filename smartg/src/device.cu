@@ -43,6 +43,7 @@ extern "C" {
                              struct Cell *cell_atm,
                              struct Cell *cell_oc,
 							 long long *wl_proba_icdf,
+							 long long *cell_proba_icdf,
 							 void *rng_state
 							 , void *tabObjInfo,
 							 struct IObjets *myObjets,
@@ -152,7 +153,8 @@ extern "C" {
         // Si le photon est à NONE on l'initialise et on le met à la localisation correspondant à la simulaiton en cours
         if((ph.loc == NONE) && this_thread_active){
 
-            initPhoton(&ph, prof_atm, prof_oc, tab_sensor, spectrum, X0, NPhotonsIn, wl_proba_icdf, tabthv, tabphi, &rngstate
+            initPhoton(&ph, prof_atm, prof_oc, tab_sensor, spectrum, X0, NPhotonsIn, wl_proba_icdf, cell_proba_icdf,
+                       tabthv, tabphi, &rngstate
 					   #ifdef OBJ3D
 					   , myObjets
 					   #endif
@@ -897,7 +899,7 @@ extern "C" {
 
 __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc, struct Sensor *tab_sensor,
                            struct Spectrum *spectrum, float *X0, unsigned long long *NPhotonsIn,
-                           long long *wl_proba_icdf, float* tabthv, float* tabphi,
+                           long long *wl_proba_icdf, long long *cell_proba_icdf, float* tabthv, float* tabphi,
                            struct RNG_State *rngstate
 						   #ifdef OBJ3D
 						   , struct IObjets *myObjets
@@ -1141,6 +1143,30 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     ph->taumax = 0.F;
     //
 
+    #if defined(THERMAL) && !defined(BACK) // THERMAL FORWARD
+    // 1D plane parallel forward thermal initialization
+    if (NCELLPROBA !=0) ph->layer = cell_proba_icdf[__float2uint_rz(RAND * NCELLPROBA) + ph->ilam*NCELLPROBA];
+    else {
+        ph->layer = __float2uint_rz(RAND * NATMd);
+        float kabs= fabs(prof_atm[NATMd+ph->ilam*(NATMd+1)].OD_abs - prof_atm[ph->layer+ph->ilam*(NATMd+1)].OD_abs)/dz; 
+        ph->weight= 1./(2*DEUXPI) * kabs *  BPlanck(ph->wavel*1e-9, prof_atm[ph->layer].T) ;
+    }
+    dz  = fabs(prof_atm[ph->layer-1].z - prof_atm[ph->layer].z);
+    ph->pos   = make_float3(0., 0., RAND *dz + prof_atm[ph->layer].z);
+    ph->loc   = ATMOS;
+    // isotropic point source
+	cTh = 1.0-2.0*RAND;
+	sTh = sqrtf(1.F - cTh*cTh);
+	phi = RAND*DEUXPI;
+	ph->v.x   = cosf(phi)*sTh;
+	ph->v.y   = sinf(phi)*sTh;
+	ph->v.z   = cTh;
+	// Initialization of the orthogonal vector to the propagation
+	ph->u.x   = cosf(phi)*cTh;
+	ph->u.y   = sinf(phi)*cTh;
+	ph->u.z   = -sTh;
+
+    #else // NON THERMAL FORWARD
 	#ifdef OBJ3D
 	THRAD = tab_sensor[ph->is].THDEG*DEUXPI/360.;
 	PHRAD = tab_sensor[ph->is].PHDEG*DEUXPI/360.;
@@ -1158,8 +1184,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 	sTh = sqrtf(1.F - cTh*cTh);
 	//sPh = sqrtf(1.F - cPh*cPh);
 	sPh = sinf(tab_sensor[ph->is].PHDEG*DEUXPI/360.);
-	#endif
-
+    #endif
 	float3x3 LTh = make_float3x3(
 		cTh,  0.F,  sTh,                
 		0.F,  1.F,  0.F,                 
@@ -1175,6 +1200,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 	ph->u = mul(LTh,ph->u);
 	ph->u = mul(LPh,ph->u);
 
+    #endif // THERMAL/NON THERMAL FORWARD
 
     // init specific ALIS quantities
     #ifdef ALIS
@@ -1209,6 +1235,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     ph->M = make_diag_float4x4 (1.F);
     //ph->Mf= make_diag_float4x4 (1.F);
     #endif
+
 
     #ifdef OBJ3D
     #if !defined(BACK)
@@ -6645,4 +6672,12 @@ __device__ float BRDF(int ilam, float3 v0, float3 v1, struct Spectrum *spectrum 
         //if (wbrdf==0.) printf("%f %f %f %f %f\n",th0,th1,dph,F1_rtls(th0,th1,dph),F2_rtls(th0,th1,dph));
     }
     return wbrdf;
+}
+
+//##########" Planck Radiance ################"
+__device__ float BPlanck(float wav, float T) {
+    float a = 2.0*PLANCK*pow(SPEED_OF_LIGHT, 2);
+    float b = PLANCK*SPEED_OF_LIGHT/(wav*BOLTZMANN*T);
+    float intensity = a/((pow(wav, 5)) * (exp(b) - 1.0));
+return intensity;
 }

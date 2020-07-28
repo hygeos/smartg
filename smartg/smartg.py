@@ -12,15 +12,17 @@ import os
 import numpy as np
 from datetime import datetime
 from numpy import pi
-from smartg.atmosphere import Atmosphere
+from smartg.atmosphere import Atmosphere, od2k, BPlanck
 from smartg.water import IOP_base
 from os.path import dirname, realpath, join, exists
 from warnings import warn
 from smartg.albedo import Albedo_cst, Albedo_spectrum_map 
 from smartg.tools.progress import Progress
+from smartg.tools.cdf import ICDF2D
 from smartg.tools.modified_environ import modified_environ
-from luts.luts import MLUT
+from luts.luts import LUT, MLUT
 from scipy.interpolate import interp1d
+from scipy.integrate import simps
 import subprocess
 from collections import OrderedDict
 from pycuda.gpuarray import to_gpu, zeros as gpuzeros
@@ -95,6 +97,7 @@ type_Spectrum = [
 type_Profile = [
     ('z',      'float32'),    # // altitude
     ('n',      'float32'),    # // refractive index
+    ('T',      'float32'),    # // temperature
     ('OD',     'float32'),    # // cumulated extinction optical thickness (from top)
     ('OD_sca', 'float32'),    # // cumulated scattering optical thickness (from top)
     ('OD_abs', 'float32'),    # // cumulated absorption optical thickness (from top)
@@ -500,7 +503,7 @@ class Smartg(object):
     def __init__(self, pp=True, debug=False,
                  verbose_photon=False,
                  double=True, alis=False, back=False, bias=True, alt_pp=False, obj3D=False, 
-                 opt3D=False, device=None, sif=False, rng='PHILOX'):
+                 opt3D=False, device=None, sif=False, thermal=False, rng='PHILOX'):
         assert not ((device is not None) and ('CUDA_DEVICE' in os.environ)), "Can not use the 'device' option while the CUDA_DEVICE is set"
 
         if device is not None:
@@ -515,6 +518,7 @@ class Smartg(object):
         self.alis = alis
         self.rng = init_rng(rng)
         self.back= back
+        self.thermal=thermal
         self.obj3D= obj3D
         self.opt3D= opt3D
 
@@ -551,6 +555,9 @@ class Smartg(object):
             options.append('-DALIS')
         if sif:
             options.append('-DSIF')
+        if thermal:
+            # thermal source
+            options.append('-DTHERMAL')
         if back:
             # backward mode
             options.append('-DBACK')
@@ -606,7 +613,7 @@ class Smartg(object):
     def run(self, wl,
              atm=None, surf=None, water=None, env=None, map2D=None, alis_options=None,
              NBPHOTONS=1e9, DEPO=0.0279, DEPO_WATER= 0.0906, THVDEG=0., PHVDEG=0., SEED=-1,
-             RTER=6371., wl_proba=None,
+             RTER=6371., wl_proba=None, cell_proba=None,
              NBTHETA=45, NBPHI=90, NF=1e6,
              OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
              NBLOOP=None, progress=True, 
@@ -671,6 +678,9 @@ class Smartg(object):
 
             wl_proba: inversed cumulative distribution function for wavelength selection
                         (it is the result of function ICDF(proba, N))
+
+            cell_proba: inversed cumulative distribution function for cell selection
+                        (it is the result of function ICDF2(proba, N))
 
             NBTHETA: number of zenith angles in output
 
@@ -1051,10 +1061,27 @@ class Smartg(object):
             wl_proba_icdf = gpuzeros(1, dtype='int64')
             NWLPROBA = 0
 
+        if cell_proba is not None:
+            if (cell_proba == 'auto') and not self.back and self.thermal:
+                kabs = od2k(prof_atm, 'OD_abs_atm')
+                z = -prof_atm.axis('z_atm')
+                B = BPlanck(wl[:, None], prof_atm['T_atm'].data[None, :])
+                Emission     = LUT(kabs * B, axes = [wl, z], names= ['wavelength','z_atm'])
+                Norm_Emission = (4*np.pi) * Emission.reduce(np.sum, 'z_atm')
+                P_Emission   = Emission * (4*np.pi) / Norm_Emission
+                cell_proba_icdf   = to_gpu(ICDF2D(P_Emission.data).T)
+                NCELLPROBA = cell_proba_icdf.shape[0]
+            else:
+                assert cell_proba.shape[1] == NLAM
+                cell_proba_icdf = to_gpu(cell_proba)
+                NCELLPROBA = cell_proba.shape[0]
+        else:
+            cell_proba_icdf = gpuzeros(1, dtype='int64')
+            NCELLPROBA = 0
+
         REFRAC = 0
         if refraction: 
             REFRAC=1
-            #fname='/home/did/RTC/SMART-G/smartg/refraction_LUT.nc'
 
         HORIZ = 1
         if (not self.pp and not reflectance): HORIZ = 0
@@ -1066,7 +1093,7 @@ class Smartg(object):
                   XBLOCK, XGRID, NLAM, SIM, NF,
                   NBTHETA, NBPHI, OUTPUT_LAYERS,
                   RTER, LE, ZIP, FLUX, FFS, DIRECT, NLVL, NPSTK,
-                  NWLPROBA, BEER, SMAX, RR, WEIGHTRR, NLOW, NJAC, 
+                  NWLPROBA, NCELLPROBA, BEER, SMAX, RR, WEIGHTRR, NLOW, NJAC, 
                   NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj, nGObj, nRObj,
                   Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm,
                   TC, nbCx, nbCy, vSun, HIST)
@@ -1084,7 +1111,7 @@ class Smartg(object):
                         NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX_HIST, NLOW, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                         NLAM, NSENSOR, self.double, self.kernel, None, p, X0, le, tab_sensor, spectrum,
                         prof_atm_gpu, prof_oc_gpu, cell_atm_gpu, cell_oc_gpu,
-                        wl_proba_icdf, stdev, self.rng, self.alis, myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, hist=hist)
+                        wl_proba_icdf, cell_proba_icdf, stdev, self.rng, self.alis, myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, hist=hist)
 
         attrs['kernel time (s)'] = secs_cuda_clock
         attrs['number of kernel iterations'] = Nkernel
@@ -1361,6 +1388,7 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
     # write atmospheric profiles
     if prof_atm is not None:
         m.add_lut(prof_atm['n_atm'])
+        m.add_lut(prof_atm['T_atm'])
         m.add_lut(prof_atm['OD_r'])
         m.add_lut(prof_atm['OD_p'])
         m.add_lut(prof_atm['OD_g'])
@@ -1386,6 +1414,7 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
 
     # write ocean profiles
     if prof_oc is not None:
+        m.add_lut(prof_oc['T_oc'])
         m.add_lut(prof_oc['OD_w'])
         m.add_lut(prof_oc['OD_p_oc'])
         m.add_lut(prof_oc['OD_y'])
@@ -1647,7 +1676,7 @@ def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
               NBPHOTONS, NBLOOP, THVDEG, DEPO,
               XBLOCK, XGRID,NLAM, SIM, NF,
               NBTHETA, NBPHI, OUTPUT_LAYERS,
-              RTER, LE, ZIP, FLUX, FFS, DIRECT, NLVL, NPSTK, NWLPROBA, BEER, SMAX, RR, 
+              RTER, LE, ZIP, FLUX, FFS, DIRECT, NLVL, NPSTK, NWLPROBA, NCELLPROBA,  BEER, SMAX, RR, 
               WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj, nGObj, nRObj,
               Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, vSun, HIST) :
     """
@@ -1729,6 +1758,7 @@ def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
     copy_to_device('CTHVd', CTHV, np.float32)
     copy_to_device('RTER', RTER, np.float32)
     copy_to_device('NWLPROBA', NWLPROBA, np.int32)
+    copy_to_device('NCELLPROBA', NCELLPROBA, np.int32)
     copy_to_device('REFRACd', REFRAC, np.int32)
     copy_to_device('HORIZd', HORIZ, np.int32)
     copy_to_device('SZA_MAXd', SZA_MAX, np.float32)
@@ -1795,6 +1825,7 @@ def init_profile(wl, prof, kind):
     if kind == "oc":
         if 'iopt_oc' not in prof.datasets():
             prof_gpu['z'][0,:] = prof.axis('z_'+kind)  * 1e-3 # to Km
+            prof_gpu['T'][0,:] = prof['T_'+kind].data[:]
             cell_gpu = np.zeros(1, dtype=type_Cell)
         else: 
             cell_gpu = np.zeros(len(prof['iopt_oc'].data), dtype=type_Cell)
@@ -1802,6 +1833,7 @@ def init_profile(wl, prof, kind):
     else:
         if 'iopt_atm' not in prof.datasets():
             prof_gpu['z'][0,:] = prof.axis('z_'+kind)
+            prof_gpu['T'][0,:] = prof['T_'+kind].data[:]
             prof_gpu['n'][:,:] = prof['n_'+kind].data[...]
             cell_gpu = np.zeros(1, dtype=type_Cell)
         else:
@@ -1951,7 +1983,7 @@ def get_git_attrs():
 def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX_HIST, NLOW,
                 NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                 NLAM, NSENSOR, double, kern, kern2, p, X0, le, tab_sensor, spectrum,
-                prof_atm, prof_oc, cell_atm, cell_oc, wl_proba_icdf, stdev, rng, alis, myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, hist=False):
+                prof_atm, prof_oc, cell_atm, cell_oc, wl_proba_icdf, cell_proba_icdf,  stdev, rng, alis, myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, hist=False):
     """
     launch the kernel several time until the targeted number of photons injected is reached
 
@@ -2084,7 +2116,8 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         kern(spectrum, X0, faer, foce,
              errorcount, nThreadsActive, tabPhotons, tabDist, tabHist,
              Counter, NPhotonsIn, NPhotonsOut, tabthv, tabphi, tab_sensor,
-             prof_atm, prof_oc, cell_atm, cell_oc, wl_proba_icdf, rng.state, tabObjInfo,
+             prof_atm, prof_oc, cell_atm, cell_oc, wl_proba_icdf, cell_proba_icdf, 
+             rng.state, tabObjInfo,
              myObjects0, myGObj0, myRObj0, nbPhCat, wPhCat, wPhCat2,
              wPhLoss, wPhLoss2, block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
 

@@ -5,14 +5,16 @@
 from __future__ import print_function, division, absolute_import
 import numpy as np
 from luts.luts import LUT, MLUT
+from smartg.atmosphere import od2k, BPlanck
 from os.path import dirname, join
+from scipy.integrate import quad, simps
 from smartg.config import dir_libradtran_reptran
 from scipy.interpolate import interp1d
 import netCDF4
 from smartg.tools.interp import interp2, interp3
 
 
-def reduce_reptran(mlut, ibands, use_solar=False, integrated=False):
+def reduce_reptran(mlut, ibands, use_solar=False, integrated=False, extern_weights=None):
     '''
     Compute the final spectral signal from mlut output of smart_g and
     REPTRAN_IBAND_LIST weights
@@ -22,6 +24,10 @@ def reduce_reptran(mlut, ibands, use_solar=False, integrated=False):
     for l in mlut:
         for pref in ['I_','Q_','U_','V_','transmission','flux'] :
             if pref in l.desc:
+                if extern_weights is not None:
+                    tmp = l.desc
+                    l = l*extern_weights 
+                    l.desc = tmp
                 if use_solar : lr = (l*we*ex*dl).reduce(np.sum,'wavelength',grouping=wb.data)
                 else         : lr = (l*we*dl   ).reduce(np.sum,'wavelength',grouping=wb.data)
                 if integrated: lr = lr/norm
@@ -30,6 +36,34 @@ def reduce_reptran(mlut, ibands, use_solar=False, integrated=False):
                 res.add_lut(lr, desc=l.desc)
     res.attrs = mlut.attrs
     return res
+
+
+def Emission(mlut, ibands):
+    '''
+    Return Thermal emission
+    '''
+    bsgroup = ibands.get_groups()
+    kabs    = od2k(mlut, 'OD_abs_atm') * 1e-3 # m-1
+    z       = -mlut.axis('z_atm') * 1e3 # m
+    wmin = np.unique([ib.band.wmin for ib in ibands.l])
+    wmax = np.unique([ib.band.wmax for ib in ibands.l])
+    Avg_B  = np.zeros((len(wmin), len(z)))
+    for i,(wmin,wmax) in enumerate(zip(wmin,wmax)):    
+        for j,T in enumerate(mlut['T_atm'].data):
+            lmin, lmax = wmin*1e-9, wmax*1e-9 # m
+            dl         = wmax-wmin # nm
+            Avg_B[i,j] = quad(BPlanck, lmin, lmax, args=T)[0]/(dl)
+    Emission = LUT(kabs * Avg_B[bsgroup, :], 
+               axes = [mlut.axis('wavelength'), z], 
+               names= ['wavelength','z_atm'])
+    return Emission
+
+
+def Avg_Emission(mlut, ibands):
+    '''
+    Return vertically integrated Thermal emission
+    '''
+    return (4*np.pi)*Emission(mlut, ibands).reduce(simps, 'z_atm', x=-mlut.axis('z_atm') * 1e3)
 
 
 
@@ -171,7 +205,10 @@ class REPTRAN(object):
     def _readFileGeneral(self):
         nc = netCDF4.Dataset(self.filename)
         self.wvl = nc.variables['wvl'][:] # the wavelength grid
-        self.extra = nc.variables['extra'][:] # the extra terrestrial solar irradiance for the walength grid
+        if 'extra' in nc.variables.keys():
+            self.extra = nc.variables['extra'][:] # the extra terrestrial solar irradiance for the walength grid
+        else:
+            self.extra = np.ones_like(self.wvl)
         self.wvl_integral = nc.variables['wvl_integral'][:] # the wavelength integral (width) of each sensor channel
         self.nwvl_in_band = nc.variables['nwvl_in_band'][:] # the number of internal bands (representative bands) in each sensor channel
         self.iwvl = nc.variables['iwvl'][:] # the indices of the internal bands within the wavelength grid for each sensor channel
@@ -260,6 +297,17 @@ class REPTRAN_IBAND_LIST(object):
         norm_dl = (we*dl).reduce(np.sum,'wavelength',grouping=wb.data)
         norm = we.reduce(np.sum,'wavelength',grouping=wb.data)
         return we, wb, ex, dl, norm, norm_dl 
+
+
+    def get_groups(self):
+        '''
+        '''
+        bsgroup=[]
+        for iband in self.l:
+            bsgroup.append(iband.band.band)
+        bsgroup = np.array(bsgroup)
+        return bsgroup-bsgroup[0]
+
         
     def get_names(self):
         '''
