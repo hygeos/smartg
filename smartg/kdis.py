@@ -37,7 +37,7 @@ def reduce_kdis(mlut, ibands, use_solar=False, integrated=False, extern_weights=
 
 
 
-def Emission(mlut, ibands):
+def Kdis_Emission(mlut, ibands):
     '''
     Return Thermal emission
     '''
@@ -59,11 +59,11 @@ def Emission(mlut, ibands):
     return Emission
 
 
-def Avg_Emission(mlut, ibands):
+def Kdis_Avg_Emission(mlut, ibands):
     '''
     Return vertically integrated Thermal emission
     '''
-    return (4*np.pi)*Emission(mlut, ibands).reduce(simps, 'z_atm', x=-mlut.axis('z_atm') * 1e3)
+    return (4*np.pi)*Kdis_Emission(mlut, ibands).reduce(simps, 'z_atm', x=-mlut.axis('z_atm') * 1e3)
 
 
 class KDIS(object):

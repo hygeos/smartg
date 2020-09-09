@@ -233,9 +233,14 @@ extern "C" {
         // count after move:
         // count the photons in space and reaching surface from above or below
         //
-		count_level = -1;
+		count_level = NOCOUNT;
+        #if defined(THERMAL) && defined(BACK)
+		if ((ph.loc == SOURCE) || (ph.loc == SPACE)) {
+            if (ph.loc == SOURCE) count_level = UPTOA;
+        #else
 		if (ph.loc == SPACE) {
             count_level = UPTOA;
+        #endif
 			
             // increment the photon counter
             // (for this thread)
@@ -243,7 +248,7 @@ extern "C" {
             // reset the photon location (always)
             ph.loc = NONE;
             #ifdef VERBOSE_PHOTON
-            display("SPACE", &ph);
+            display("SPACE/SOURCE", &ph);
             #endif
 
         } else if ((ph.loc == SURF0P) && (loc_prev != SURF0P)) {
@@ -1149,11 +1154,19 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     if (NCELLPROBA !=0) ph->layer = cell_proba_icdf[__float2uint_rz(RAND * NCELLPROBA) + ph->ilam*NCELLPROBA];
     else {
         ph->layer = __float2uint_rz(RAND * NATMd);
-        float kabs= fabs(prof_atm[NATMd+ph->ilam*(NATMd+1)].OD_abs - prof_atm[ph->layer+ph->ilam*(NATMd+1)].OD_abs)/dz; 
-        ph->weight= 1./(2*DEUXPI) * kabs *  BPlanck(ph->wavel*1e-9, prof_atm[ph->layer].T) ;
+        //float tabs= fabs(prof_atm[ph->layer+1+ph->ilam*(NATMd+1)].OD_abs - prof_atm[ph->layer+ph->ilam*(NATMd+1)].OD_abs); 
+        dz  = fabs(prof_atm[ph->layer-1].z - prof_atm[ph->layer].z);
+        float kabs= fabs(prof_atm[ph->layer-1+ph->ilam*(NATMd+1)].OD_abs - prof_atm[ph->layer+ph->ilam*(NATMd+1)].OD_abs); 
+        kabs /= dz;
+        ph->weight= (2*DEUXPI) * kabs *  BPlanck(ph->wavel*1e-9, prof_atm[ph->layer].T) ;
     }
     dz  = fabs(prof_atm[ph->layer-1].z - prof_atm[ph->layer].z);
+    #ifdef SPHERIQUE
+    ph->pos   = make_float3(0., 0., RAND *dz + prof_atm[ph->layer].z + RTER);
+    ph->radius = length(ph->pos);
+    #else
     ph->pos   = make_float3(0., 0., RAND *dz + prof_atm[ph->layer].z);
+    #endif
     ph->loc   = ATMOS;
 
     #else // NON THERMAL FORWARD
@@ -2713,7 +2726,26 @@ __device__ void scatter(Photon* ph,
 	ph->direct += 1;
 	ph->S += 1;
 	#endif
-	
+    
+    #if defined(THERMAL) && defined(BACK)
+    // Absorption thermal in backward mode: end of photon s life    
+    //if ((ph->scatterer == THERMAL_EM) && (ph->nint>0)) {
+    if (ph->scatterer == THERMAL_EM) {
+	    if(ph->loc!=OCEAN){
+            float tabs= fabs(prof_atm[ph->layer-1+ph->ilam*(NATMd+1)].OD_abs - prof_atm[ph->layer+ph->ilam*(NATMd+1)].OD_abs); 
+            //float tabs= fabs(prof_atm[ph->layer-1+ph->ilam*(NATMd+1)].OD_abs - prof_atm[ph->layer+ph->ilam*(NATMd+1)].OD_abs); 
+            ph->weight= (2*DEUXPI) * tabs *  BPlanck(ph->wavel*1e-9, prof_atm[ph->layer].T); 
+        }
+	    else{
+            float tabs= fabs(prof_oc[ph->layer+1+ph->ilam*(NOCEd+1)].OD_abs - prof_oc[ph->layer+ph->ilam*(NOCEd+1)].OD_abs); 
+            //float tabs= fabs(prof_oc[ph->layer-1+ph->ilam*(NOCEd+1)].OD_abs - prof_oc[ph->layer+ph->ilam*(NOCEd+1)].OD_abs); 
+            ph->weight= (2*DEUXPI) * tabs *  BPlanck(ph->wavel*1e-9, prof_oc[ph->layer].T); 
+        }
+        ph->loc = SOURCE;
+        return;
+    }
+    #endif
+
     if (le){
         /* in case of LE the photon units vectors, scattering angle and Psi rotation angle are determined by output zenith and azimuth angles*/
         float thv, phi;
@@ -3089,14 +3121,27 @@ __device__ void choose_scatterer(Photon* ph,
     #ifndef THERMAL
     ph->nint += 1;
     #else
+    // in forward thermal mode, A thermal emission is not counted as interaction and choose_scatterer does not do anything
+    // #ifndef BACK
     if (ph->scatterer!=THERMAL_EM) ph->nint +=1;
     else return;
     #endif
+    //#endif
   
 	float pmol;
 	float pine;
 	
 	if(ph->loc!=OCEAN){
+        /* Absorption in atmosphere */
+        #if defined(THERMAL) && defined(BACK)
+        float ssa = prof_atm[ph->layer+ph->ilam*(NATMd+1)].ssa;
+		if ( ssa < RAND ) {
+            ph->scatterer = THERMAL_EM;
+            ph->nint -=1;
+            return;
+        }
+        #endif
+
 		/* Scattering in atmosphere */
         #ifndef OPT3D
 		pmol = 1.f - prof_atm[ph->layer+ph->ilam*(NATMd+1)].pmol;
@@ -3111,6 +3156,12 @@ __device__ void choose_scatterer(Photon* ph,
 			ph->scatterer = PTCLE;	; // particle index
 		}	
 	}else{
+        /* Absorption in ocean */
+        #if defined(THERMAL) && defined(BACK)
+        float ssa = prof_oc[ph->layer+ph->ilam*(NOCEd+1)].ssa;
+		if ( ssa < RAND ) ph->scatterer = THERMAL_EM;
+        #endif
+
 		/* Scattering in ocean */
         #ifndef OPT3D
 		pmol = 1.f - prof_oc[ph->layer+ph->ilam*(NOCEd+1)].pmol;
@@ -5760,6 +5811,7 @@ __device__ void display(const char* desc, Photon* ph) {
             case 7: printf(" loc=SEAFLOOR"); break;
             case 8: printf(" loc= OBJSURF"); break;
 		    case 9: printf(" loc= REMOVED"); break;
+		    case 10: printf("loc= SOURCE"); break;
             default:
                     printf(" loc=UNDEFINED");
         }

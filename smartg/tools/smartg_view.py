@@ -837,3 +837,174 @@ def compare(mlut, mref, field='up (TOA)',errb=False, logI=False, U_sign=1, same_
             ax[2,i].set_xlabel(zenith_title)
     return fig
 
+
+def compare_spectrum(mlut, mref, field='up (TOA)',errb=False, logI=False, U_sign=1, same_U_convention=True, U_symetry=True,
+                  Nparam=4, vmax=None, vmin=None, emax=None, ermax=None, same_azimuth_convention=True,
+                  azimuth=[0.,90.], title='', LMIN=None, LMAX=None, lambda_title=r'$\lambda$ (nm)', errref=None):
+    '''
+    compare the results of two smartg runs : mlut vs mref in two different azimuth planes
+    outputs: a figure
+    keywords:
+        field : name of the output level to be compared 
+        errb  : error bar visible for mlut : should have been run with the stdev option
+        LogI  : plot Intensity in log scale
+        U_sign: change sign for U
+        same_U_convention: mlut and mref have the same convention for U
+        U_symetry:  U changes sign convention for the  two halves of the plane
+        Nparam: number of parameters :  by defaut 4 for I,Q,U, DoLP; 5 adds V:, 2 keeps only I and DoLP 
+        vmin,vmax: min and max values for parameters: list of length Nparam
+        emax: max absolute error scale : length Nparam
+        ermax: max relative error scale (in percent) : length Nparam
+        same_azimuth_convention: mlut and mref have the same azimuth convention
+        azimuth: list of azimuths
+        title: plot title
+        SZA_MAX: SZA max for the comparison
+        errref : eventually intensity absolute error on refence points
+    '''
+
+    from pylab import subplots
+    if vmax is None : vmax=[0.1]*Nparam 
+    if vmin is None : vmin=[-0.1]*Nparam 
+    if emax is None : emax=[0.1]*Nparam
+    if ermax is None : ermax=[0.1]*Nparam
+    stokesT = ['I','Q','U','V']
+    stokes=stokesT[:Nparam-1]
+    signT = [1,1,U_sign*1,1,1] # sign convention for both mluts
+    sign=signT[:Nparam-1]+[1]
+    if same_U_convention: diffsignT = [1,1,1,1,1]    # sign convention difference
+    else: diffsignT = [1,1,-1,1,1]
+    diffsign=diffsignT[:Nparam-1]+[1]
+    if U_symetry: symetryT=[1,1,1,1,1]
+    else: symetryT=[1,1,-1,1,1]
+    symetry=symetryT[:Nparam-1]+[1]
+    fig,ax = subplots(3,Nparam, sharey=False,sharex=True,gridspec_kw=dict(hspace=0.2,wspace=0.3))
+    fig.set_size_inches(Nparam*3,8)
+    fig.set_dpi=600
+    fig.suptitle(title)
+    
+    for i in range(Nparam):
+        if i!=Nparam-1 :
+            S = mlut[stokes[i] + '_' + field]
+            wav = S.axis('wavelength')   
+            Sref = mref[stokes[i] + '_' + field]
+            S.desc = mdesc(S.desc)
+            if errb : E = mlut[stokes[i] + '_' + 'stdev' + '_' + field]
+            if logI and stokes[i]=='I':
+                S=S.apply(np.log10)
+                Sref=Sref.apply(np.log10)
+                S.desc=r'$log_{10}$ '+S.desc
+        else:
+            I=mlut['I' + '_' + field]
+            Q=mlut['Q' + '_' + field]
+            U=mlut['U' + '_' + field]
+            Ip= ((Q*Q+U*U).apply(np.sqrt))
+            S= (Ip/I) * 100
+            S.desc= r'$DoLP' + I.desc[1:3] + I.desc[4:] + '$'
+            S.desc= 'DoLP' + I.desc[1:]
+            S.desc = mdesc(S.desc)
+            
+            if errb: 
+                dI=mlut['I' + '_' + 'stdev' + '_' + field]
+                dQ=mlut['Q' + '_' + 'stdev' + '_' + field]
+                dU=mlut['U' + '_' + 'stdev' + '_' + field]
+                dIp= ((dQ*dQ+dU*dU).apply(np.sqrt))
+                E = (dI/I + dIp/Ip) * S
+            Iref=mref['I' + '_' + field]
+            Qref=mref['Q' + '_' + field]
+            Uref=mref['U' + '_' + field]
+            Sref= (((Qref*Qref+Uref*Uref).apply(np.sqrt))/Iref) * 100           
+     
+        if LMIN is None:
+            LMIN=wav.min()
+        if LMAX is None:
+            LMAX=wav.max()
+        vmi=vmin[i]
+        vma=vmax[i]
+        ema=emax[i]
+        erma=ermax[i]
+
+        sym1s = ['r', 'g','b','m']
+        sym2s = ['-','-','-','-']
+        labrefs=['ref.','','','']
+        for k in range(len(azimuth)):
+            phi0 = azimuth[k]
+            sym1 = sym1s[k]
+            sym2 = sym2s[k]
+            labref = labrefs[k]
+
+            # both points at their own abscissas
+            if same_azimuth_convention:
+                if S.names.index('Azimuth angles') == 0: # check right order of axes
+                    refp = sign[i]*Sref[Idx(phi0,round=True),:] # reference for >0 view angle
+                    sp   = diffsign[i]*sign[i]*S[Idx(phi0),:]       #     simulation for >0 view angle
+                    if errb:
+                        dsp  = E[Idx(phi0),:]         #     simulation error for >0 view angle
+                    else:
+                        dsp = 0
+                else:
+                    refp = sign[i]*Sref.swapaxes(0,1)[Idx(phi0,round=True),:] #      reference for <0 view angle
+                    sp   = diffsign[i]*sign[i]*S.swapaxes(0,1)[Idx(phi0),:]       #     simulation for >0 view angle
+                    if errb:
+                        dsp  = E.swapaxes(0,1)[Idx(phi0),:]         #     simulation error for >0 view angle
+                    else:
+                        dsp = 0
+                        
+            else:
+                refp = sign[i]*Sref[Idx(180.-phi0,round=True),:] # reference for >0 view angle
+                sp   = diffsign[i]*sign[i]*S[Idx(phi0),:]       #     simulation for >0 view angle
+                if errb:
+                    dsp  = E[Idx(phi0),:]         #     simulation error for >0 view angle
+                else:
+                    dsp = 0
+                    
+            ax[0,i].plot(wav,refp,'k'+'.',label=labref)
+            ax[0,i].errorbar(wav,sp, fmt=sym1+'', \
+                        label=r'$\Phi=%.0f$'%(phi0))
+            ax[0,i].set_ylim([vmi, vma])
+            ax[0,i].set_xlim([LMIN,LMAX])  
+            ax[0,i].ticklabel_format(axis='y', style='sci', scilimits=(-2,2))
+            
+            if logI and i==0:
+                if errb:
+                    ax[1,i].errorbar(wav,10**sp-10**refp, yerr=dsp,\
+                                 fmt=sym1+sym2,label=r'$\Phi=%.0f$'%(phi0),ecolor='k',capsize=2)
+                else:
+                    ax[1,i].errorbar(wav,10**sp-10**refp, \
+                                 fmt=sym1+sym2,label=r'$\Phi=%.0f$'%(phi0),ecolor='k',capsize=2)
+    
+            else:
+                if errb:
+                    ax[1,i].errorbar(wav,sp-refp, yerr=dsp,\
+                                 fmt=sym1+sym2,label=r'$\Phi=%.0f$'%(phi0),ecolor=sym1,capsize=2)
+                else:
+                    ax[1,i].errorbar(wav,sp-refp, \
+                                 fmt=sym1+sym2,label=r'$\Phi=%.0f$'%(phi0),ecolor=sym1,capsize=2)
+            ax[1,i].set_ylim([-1*ema,ema])
+            ax[1,i].set_xlim([LMIN,LMAX])  
+
+            if errb:
+                ax[2,i].errorbar(wav,(sp-refp)/refp*100, yerr=dsp/abs(refp)*100, \
+                             fmt=sym1+sym2,label=r'$\Phi=%.0f$'%(phi0),ecolor=sym1,capsize=2)
+                if (i==0 and errref is not None):
+                    ax[2,0].plot(wav,errref/refp*100,sym1+'-.')
+                    ax[2,0].plot(wav,-errref/refp*100,sym1+'-.')
+            else:
+                ax[2,i].errorbar(wav,(sp-refp)/refp*100,\
+                             fmt=sym1+sym2,label=r'$\Phi=%.0f$'%(phi0),ecolor='k',capsize=2)
+            
+            if i!=Nparam-1 : ax[2,i].set_ylim([-1*erma,erma])
+            else : ax[2,i].set_ylim([-1*erma,erma])
+                
+            ax[2,i].set_xlim([LMIN, LMAX])    
+            ax[1,i].plot([LMIN,LMAX],[0.,0.],'k--')
+            ax[2,i].plot([LMIN,LMAX],[0.,0.],'k--')
+            ax[1,i].ticklabel_format(axis='y', style='sci', scilimits=(-2,2))
+
+            ax[0,i].set_title(S.desc)   
+            if i==0: 
+ 
+                ax[0,i].legend(loc='upper center',fontsize = 8,labelspacing=0.0)
+                ax[1,i].set_ylabel(r'$\Delta$')
+                ax[2,i].set_ylabel(r'$\Delta (\%)$')
+            ax[2,i].set_xlabel(lambda_title)
+    return fig

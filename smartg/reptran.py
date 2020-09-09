@@ -38,7 +38,7 @@ def reduce_reptran(mlut, ibands, use_solar=False, integrated=False, extern_weigh
     return res
 
 
-def Emission(mlut, ibands):
+def Reptran_Emission(mlut, ibands):
     '''
     Return Thermal emission
     '''
@@ -59,11 +59,11 @@ def Emission(mlut, ibands):
     return Emission
 
 
-def Avg_Emission(mlut, ibands):
+def Reptran_Avg_Emission(mlut, ibands):
     '''
     Return vertically integrated Thermal emission
     '''
-    return (4*np.pi)*Emission(mlut, ibands).reduce(simps, 'z_atm', x=-mlut.axis('z_atm') * 1e3)
+    return (4*np.pi)*Reptran_Emission(mlut, ibands).reduce(simps, 'z_atm', x=-mlut.axis('z_atm') * 1e3)
 
 
 

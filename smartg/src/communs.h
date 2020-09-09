@@ -60,6 +60,8 @@
 #define OCEAN       6
 #define SEAFLOOR    7
 #define OBJSURF     8
+#define REMOVED     9
+#define SOURCE      10
 
 
 /* Possible Scatterers */
@@ -82,10 +84,8 @@
 #define OCEAN_SURF_ATM 2
 #define OCEAN_ONLY     3
 
-// test
-#define REMOVED     9
-
 // indexing of the output levels
+#define NOCOUNT -1
 #define UPTOA   0
 #define DOWN0P	1
 #define DOWN0M	2

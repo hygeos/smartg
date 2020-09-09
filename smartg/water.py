@@ -10,6 +10,7 @@ from smartg.albedo import Albedo_cst
 from os.path import realpath, dirname, join
 from smartg.config import NPSTK
 from smartg.tools.phase import fournierForand, integ_phase, calc_iphase
+from smartg.bandset import BandSet
 from smartg.config import dir_auxdata as dir_aux
 
 def diff2(x):
@@ -83,6 +84,9 @@ class IOP(IOP_base):
     def calc(self, wav):
         shp = [x.shape for x in [self.bp, self.bw, self.atot, self.ap, self.aw, self.aCDOM] if x is not None][0]
 
+        if not isinstance(wav, BandSet):
+            wav = BandSet(wav)
+        wav = np.array(wav)
         # absorption
         if self.ap is None:
             ap = np.zeros(shp, dtype='float')
@@ -234,6 +238,10 @@ class IOP_Rw(IOP_base):
         '''
         Profile and phase function calculation at bands wav (nm)
         '''
+        if not isinstance(wav, BandSet):
+            wav = BandSet(wav)
+        wav = np.array(wav)
+
         pro = MLUT()
         pro.add_axis('wavelength', wav[:])
         pro.add_axis('z_oc', np.zeros(2))
@@ -316,6 +324,10 @@ class IOP_1(IOP_base):
         coef_trunc: integrate (normalized to 2) of the truncated phase function
         -> scattering coefficient has to be multiplied by coef_trunc/2.
         '''
+        if not isinstance(wav, BandSet):
+            wav = BandSet(wav)
+        wav = np.array(wav)
+
 
         chl = self.chl
 
@@ -387,6 +399,9 @@ class IOP_1(IOP_base):
 
         wav: wavelength in nm
         '''
+        if not isinstance(wav, BandSet):
+            wav = BandSet(wav)
+
         wav = np.array(wav)
         pro = MLUT()
         pro.add_axis('wavelength', wav[:])
@@ -503,6 +518,10 @@ class IOP_1(IOP_base):
         as a MLUT
         Bp is the backscattering ratio
         '''
+        if not isinstance(wav, BandSet):
+            wav = BandSet(wav)
+        wav = np.array(wav)
+
         nwav = len(wav)
 
         # particles phase function
@@ -641,6 +660,10 @@ class IOP_profile(IOP_base):
         p1 and R1 are parameters explained in Zhai et al. 2017, related to particles extinction
         R2 is related to CDOM absorption
         '''
+        if not isinstance(wav, BandSet):
+            wav = BandSet(wav)
+        wav = np.array(wav)
+
         chl = self.chl
         chl2, wav2 = np.meshgrid(chl,wav)
 
@@ -751,6 +774,9 @@ class IOP_profile(IOP_base):
 
         wav: wavelength in nm
         '''
+        if not isinstance(wav, BandSet):
+            wav = BandSet(wav)
+
         wav = np.array(wav)
         pro = MLUT()
         pro.add_axis('wavelength', wav[:])
