@@ -342,6 +342,8 @@ struct Sensor {
     float FOV;    // sensor FOV (degree) 
     int TYPE;     // sensor type: Radiance (0), Planar flux (1), Spherical Flux (2), default 0
     int IBOX;     // box index in which the sensor is (3D)
+    int ILAM_0;   // wavelength start index that the sensor sees
+    int ILAM_1;   // wavelength stop  index that the sensor sees
 };
 
 #ifdef OBJ3D

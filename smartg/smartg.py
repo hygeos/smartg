@@ -135,6 +135,8 @@ type_Sensor = [
     ('FOV',    'float32'),    # // sensor FOV (degree) 
     ('TYPE',   'int32'),      # // sensor type: Radiance (0), Planar flux (1), Spherical Flux (2), default 0
     ('ICELL',  'int32'),      # // Box in which the sensor is
+    ('ILAM_0', 'int32'),      # // Wavelength start index that the sensor 'sees' (default -1 : all) 
+    ('ILAM_1', 'int32'),      # // Wavelength stop  index that the sensor 'sees' (default -1 : all) 
     ]
 
 type_IObjets = [
@@ -337,7 +339,7 @@ class Sensor(object):
     ICELL: Box index in which the sensor is (3D)
     '''
     def __init__(self, POSX=0., POSY=0., POSZ=0., THDEG=0., PHDEG=180.,
-                 LOC='SURF0P', FOV=0., TYPE=0, ICELL=0, V = None):
+                 LOC='SURF0P', FOV=0., TYPE=0, ICELL=0, ILAM_0=-1, ILAM_1=-1, V = None):
 
         if (isinstance(V, Vector)):
             THDEG, PHDEG = convertVtoAngles(V)
@@ -353,7 +355,9 @@ class Sensor(object):
             'LOC'  : LOC_CODE.index(LOC),
             'FOV':   FOV,
             'TYPE':  TYPE,
-            'ICELL': ICELL
+            'ICELL': ICELL,
+            'ILAM_0': ILAM_0,
+            'ILAM_1': ILAM_1
         }
 
     def __str__(self):
@@ -1906,6 +1910,8 @@ def multi_profiles(profs, kind='atm'):
                     else: data = np.concatenate((data, M[d].data[:]), axis=0)
                     k=k+1
                 pro.add_dataset(d, data, ['iphase', 'stk', 'theta_'+kind])
+            elif d==('T_'+kind) :
+                pro.add_dataset(d, first[d].data[:], ['z_'+kind])
             else:
                 imax=0
                 k=0

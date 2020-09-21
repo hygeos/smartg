@@ -951,7 +951,12 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
         // NJACd=0 : no jacobian -> one unperturbed profile
         ph->ilam = __float2uint_rz(RAND * NLAMd/(NJACd+1));
         #else
-        ph->ilam = __float2uint_rz(RAND * NLAMd);
+        // All sensors see the same wavelengths
+        if (tab_sensor[ph->is].ILAM_0 == -1) ph->ilam = __float2uint_rz(RAND * NLAMd);
+        // Each sensor is associated a range of wavelengths
+        else ph->ilam =  __float2uint_rz(RAND * (tab_sensor[ph->is].ILAM_1 - tab_sensor[ph->is].ILAM_0))
+                         + tab_sensor[ph->is].ILAM_0;
+        //ph->ilam = __float2uint_rz(RAND * NLAMd);
         #endif
     } else {
         ph->ilam = wl_proba_icdf[__float2uint_rz(RAND * NWLPROBA)];
