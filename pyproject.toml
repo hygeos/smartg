@@ -1,18 +1,19 @@
 [tool.poetry]
-name = "smart-g"
+name = "smartg"
 version = "0.1.0"
 description = "SMART-G radiative transfer code"
-authors = ["François Steinmetz <fs@hygeos.com>"]
+authors = ["Didier Ramon <dr@hygeos.com>",
+           "François Steinmetz <fs@hygeos.com>"]
 
 [tool.poetry.dependencies]
 python = "^3.6"
-luts = {git = "git@gitlab.com:hygeos/luts.git"}
 progressbar2 = "^3.53.1"
 pycuda = "^2019.1.2"
 matplotlib = "^3.3.2"
 notebook = "^6.1.4"
 ipywidgets = "^7.5.1"
 sphinx = "^3.2.1"
+luts = "^1.0.0"
 
 [tool.poetry.dev-dependencies]
 pytest = "^6.0.2"
