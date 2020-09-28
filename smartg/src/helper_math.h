@@ -55,42 +55,42 @@ typedef unsigned short ushort;
 // host implementations of CUDA functions
 ////////////////////////////////////////////////////////////////////////////////
 
-inline float fminf(float a, float b)
+inline __host__ __device__ float fminf(float a, float b)
 {
     return a < b ? a : b;
 }
 
-inline float fmaxf(float a, float b)
+inline __host__ __device__ float fmaxf(float a, float b)
 {
     return a > b ? a : b;
 }
 
-inline int max(int a, int b)
+inline __host__ __device__ int max(int a, int b)
 {
     return a > b ? a : b;
 }
 
-inline int min(int a, int b)
+inline __host__ __device__ int min(int a, int b)
 {
     return a < b ? a : b;
 }
 
-inline float rsqrtf(float x)
+inline __host__ __device__ float rsqrtf(float x)
 {
     return 1.0f / sqrtf(x);
 }
 //******************************************************************************
-inline double fmin(double a, double b)
+inline __host__ __device__ double fmin(double a, double b)
 {
     return a < b ? a : b;
 }
 
-inline double fmax(double a, double b)
+inline __host__ __device__ double fmax(double a, double b)
 {
     return a > b ? a : b;
 }
 
-inline double rsqrt(double x)
+inline __host__ __device__ double rsqrt(double x)
 {
     return 1.0 / sqrt(x);
 }
