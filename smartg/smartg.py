@@ -90,6 +90,7 @@ type_Spectrum = [
     ('lambda'      , 'float32'),
     ('alb_surface' , 'float32'),
     ('alb_seafloor', 'float32'),
+    ('alb_env',      'float32'),
     ('k1p_surface' , 'float32'),
     ('k2p_surface' , 'float32'),
     ]

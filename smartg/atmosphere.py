@@ -1072,6 +1072,7 @@ class Profile_base(object):
             lines = f.readlines()
 
         desc = None
+        desc = ''
         n=0
         for line in lines:
             if ('z(km)' in line) and ('p(mb)' in line) and ('T(K)' in line) and ('air(cm-3)' in line) :
@@ -1079,6 +1080,7 @@ class Profile_base(object):
                 break
             else:
                 n+=1
+        if desc=='' : n = 0
 
         if desc is not None:
             data = np.loadtxt(atm_filename, dtype=np.float32, comments="#", skiprows=n)

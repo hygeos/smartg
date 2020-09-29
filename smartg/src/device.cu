@@ -117,8 +117,9 @@ extern "C" {
 		#ifdef OBJ3D
 		/* ************************************************************************************************** */
 		/* si on simule des objs on utilise cette astuce pour lancer exactement le nombre souhaité de photons */
-		// Si le nombre de ph lancés NBLOOPd > 256000 et que le compteur devient > (NBLOOPd-256000) alors
-		// on commence à diminuer le nombre de threads actif... ici à 999+1 = 1000 threads actif
+		/* Si le nombre de ph lancés NBLOOPd > 256000 et que le compteur devient > (NBLOOPd-256000) alors     */
+		/* on commence à diminuer le nombre de threads actif... ici à 999+1 = 1000 threads actif              */
+        /* ************************************************************************************************** */
 		if ((NBLOOPd > 50000) && idx > 999 && this_thread_active && Counter[0] >= (NBLOOPd-50000) && *nThreadsActive > 1000 && ph.loc == NONE)
 		{
 			this_thread_active = 0;
@@ -140,17 +141,23 @@ extern "C" {
             atomicAdd(nThreadsActive, -1);
 		}
 		#endif
-        /* ************************************************************************************************** */
 
 
+        /* Termination rule */
+        /* Active threads are deactivated if general loop counter has reached maximum or individual loop counter iloop imaximum exceeded*/
+        /* Photons should be new ones (loc==None)*/
 		if ((this_thread_active == 1 and Counter[0] >= NBLOOPd and ph.loc == NONE) or (iloop > MAX_LOOP))
 		{
 			this_thread_active = 0;
             atomicSub(nThreadsActive, 1);
 		}
 
-		
-        // Si le photon est à NONE on l'initialise et on le met à la localisation correspondant à la simulaiton en cours
+        
+        /*--------------------------------------------------------------------------------------------------------  */
+        /*                      INIT                                                                                */
+        /*--------------------------------------------------------------------------------------------------------  */
+        /*       It concerns new photons (LOC == NONE)                                                              */
+        /*--------------------------------------------------------------------------------------------------------  */
         if((ph.loc == NONE) && this_thread_active){
 
             initPhoton(&ph, prof_atm, prof_oc, tab_sensor, spectrum, X0, NPhotonsIn, wl_proba_icdf, cell_proba_icdf,
@@ -160,7 +167,7 @@ extern "C" {
 					   #endif
 				);
 			
-            iloop = 1;
+            iloop = 1; // individual photon loop counter initialized
             #ifdef VERBOSE_PHOTON
 			if (idx==0) {printf("\n");}
             display("INIT", &ph);
@@ -168,99 +175,133 @@ extern "C" {
 
         }
 
-        //
-		// Move 
-		//
-		// -> if OCEAN or ATMOS
-		loc_prev = ph.loc;
+        /*--------------------------------------------------------------------------------------------------------  */
+        /*                      MOVE                                                                                */
+        /*--------------------------------------------------------------------------------------------------------  */
+        /*       It concerns photons in OCEAN or ATMOS                                                              */
+        /*--------------------------------------------------------------------------------------------------------  */
+        loc_prev = ph.loc;
+
+        //--------------------------
+        // Move
         //--------------------------
 		if(ph.loc == ATMOS) {
            #ifdef VERBOSE_PHOTON
 		   display("MOVE_START", &ph);
            #endif
+
            #ifdef SPHERIQUE
+           /* Forced First Scattering option only for spherical mode*/
+           /* in case of first scattering    */
+           /* a virtual photon is propagated until TOA*/
+           /* the maximum optical thickness seen by the real photon is recorded */
            if ((ph.nint==0) && FFSd) {
                copyPhoton(&ph, &ph_le);
                move_sp(&ph_le, prof_atm, 1, UPTOA , &rngstate);
                ph.taumax = ph_le.taumax;
            }
+           /* the photon moves in spherical shell */
+           /* it eventually uses the taumax as computed previously for Forced First Scattering*/
            move_sp(&ph, prof_atm, 0, 0 , &rngstate);
-           #else
-            #ifdef ALT_PP
-           move_pp2(&ph, prof_atm, prof_oc, 
+
+           #else // Plane Parallel
+            #ifdef ALT_PP // Alternative PP move mode (very similar to Spherical move mode)
+            move_pp2(&ph, prof_atm, prof_oc, 
                    #ifdef OPT3D
                    cell_atm, cell_oc,
                    #endif
                    0, 0 , &rngstate);
-            #else
-           move_pp(&ph, prof_atm, prof_oc, &rngstate
+            #else // Fast PP move mode
+            move_pp(&ph, prof_atm, prof_oc, &rngstate
 				#ifdef OBJ3D
 				   , &geoStruc, myObjets, myGObj, tabObjInfo
 				#endif
 			    );
+            #endif // ALT or FAST
+
+            #ifdef VERBOSE_PHOTON
+		    display("MOVE_STOP", &ph);
             #endif
-           #ifdef VERBOSE_PHOTON
-		   display("MOVE_STOP", &ph);
-           #endif
-           #endif
+
+           #endif // SP or PP
         }
 
 		if(ph.loc == OCEAN) {
            #ifdef VERBOSE_PHOTON
 		   display("MOVE_START", &ph);
            #endif
-           #ifdef ALT_PP
+
+           #ifdef ALT_PP // Alternative PP move mode
            move_pp2(&ph, prof_atm, prof_oc, 
                    #ifdef OPT3D
                    cell_atm, cell_oc,
                    #endif
                    0, 0 , &rngstate);
-           #else
+           #else // Fast PP mode
            move_pp(&ph, prof_atm, prof_oc, &rngstate
 				#ifdef OBJ3D
 				   , &geoStruc, myObjets, myGObj, tabObjInfo
 				#endif
-			    );
+                );
+
            #ifdef VERBOSE_PHOTON
 		   display("MOVE_STOP", &ph);
            #endif
-           #endif
+
+           #endif // ALT or FAST
             }
+
+
         //--------------------------
-
-
-        //
         // count after move:
-        // count the photons in space and reaching surface from above or below
+        // count the photons finishing in space (or source for thermal backward) 
+        // and/or reaching surface from above or below
+        //--------------------------
+        count_level = NOCOUNT; // Initialize the counting level
+
         //
-		count_level = NOCOUNT;
+        // 1- Final counting level determination
+        //
         #if defined(THERMAL) && defined(BACK)
+        /* in the specific Thermal case in backward mode*/
+        /* we count the photons in the artificial 'TOA' box*/
+        /* if they have reached the SOURCE */
 		if ((ph.loc == SOURCE) || (ph.loc == SPACE)) {
             if (ph.loc == SOURCE) count_level = UPTOA;
-        #else
+
+        #else // The general case
+        /* photons having reached SPACE are counted in the TOA level*/
 		if (ph.loc == SPACE) {
             count_level = UPTOA;
-        #endif
-			
-            // increment the photon counter
-            // (for this thread)
+        #endif // Thermal backward or general
+            
+            /* Terminating photon life */
+            // increment the photon counter (for this thread)
             nbPhotonsThr++;
-            // reset the photon location (always)
+            // reset the photon location
             ph.loc = NONE;
+
             #ifdef VERBOSE_PHOTON
             display("SPACE/SOURCE", &ph);
             #endif
 
+        //
+        // 2- Intermediate counting level determination
+        //
         } else if ((ph.loc == SURF0P) && (loc_prev != SURF0P)) {
+            /* Passing through the surface interface, downward */
             count_level = DOWN0P;
         } else if ((ph.loc == SURF0M) && (loc_prev != SURF0M)) {
+            /* Passing through the surface interface, upward */
             count_level = UP0M; 
         } else if (ph.loc == SEAFLOOR) {
+            /* reaching seafloor */
             count_level = DOWNB;
         }
 
-		// count the photons
-        
+        //
+		// 3- Count the photons
+        //
 		/* Cone Sampling */
 		if (LEd ==0) countPhoton(&ph, prof_atm, prof_oc, tabthv, tabphi, count_level,
             errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
@@ -270,34 +311,43 @@ extern "C" {
 		{ countPhotonObj3D(&ph, 0, tabObjInfo, &geoStruc, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2);}
         #endif
 
-		__syncthreads();
-		
-		//
-		// Scatter
-		//
-		// -> dans ATMOS ou OCEAN
-		if( ((ph.loc == ATMOS) || (ph.loc == OCEAN)) ) {
 
-			/* Choose the scatterer */
+		__syncthreads();
+        
+
+        /*--------------------------------------------------------------------------------------------------------  */
+        /*                      SCATTER                                                                             */
+        /*--------------------------------------------------------------------------------------------------------  */
+        /*       It concerns photons in OCEAN or ATMOS                                                              */
+        /*--------------------------------------------------------------------------------------------------------  */
+		if( ((ph.loc == ATMOS) || (ph.loc == OCEAN)) ) {
+            //
+		    // 1- Choose the scatterer
+            //
             choose_scatterer(&ph, prof_atm, prof_oc,
                         #ifdef OPT3D
                         cell_atm, cell_oc,
                         #endif
-						spectrum, &rngstate); 
+                        spectrum, &rngstate); 
+
             #ifdef VERBOSE_PHOTON
             display("CHOOSE SCAT", &ph);
             #endif
 
-            /* Scattering Local Estimate */
+            //
+		    // 2- Scattering Local Estimate (LE)
+            //
             if (LEd == 1) {
 			    int NK, up_level, down_level, count_level_le;
-			    int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
-			    int iph0 = idx%NBPHId;
+			    int ith0 = idx%NBTHETAd; //index shifts in LE zenith and azimuth angles
+                int iph0 = idx%NBPHId;
+                /* Two levels for counting if photon is in ATMOS, 1) up TOA and 2) down 0+*/
 			    if (ph.loc == ATMOS) {
 			        NK=2;
 			        up_level = UPTOA;
 			        down_level = DOWN0P;
 		        }
+                /* Two levels for counting if photon is in OCEAN, 1) up 0- and 2) down Bottom*/
 			    if (ph.loc == OCEAN) {
 			        NK=2;
                     up_level = UP0M;
@@ -308,28 +358,35 @@ extern "C" {
                 float3 no = normalize(ph.pos);
                 float3x3 R;
 
-                // Loop on levels for counting (for upward and downward)
+                /* Loop on levels for counting (upward and downward) */
 			    for(int k=0; k<NK; k++){
 			        if (k==0) count_level_le = up_level;
 			        else count_level_le = down_level;
 
-                    // Double Loop on directions
+                    // Double Loop on directions (zenith ang azimuths)
                     for (int ith=0; ith<NBTHETAd; ith++){
                         for (int iph=0; iph<NBPHId; iph++){
+
+
                             // Copy of the propagation photon to to the virtual, local estimate photon
                             copyPhoton(&ph, &ph_le);
-                            // Computation of the index of the direction
+                            // Computation of the indices of the direction
                             ph_le.ith = (ith + ith0)%NBTHETAd;
                             if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
                             else ph_le.iph =  ph_le.ith;
-
+                            // azimuth and zenith LE
                             phi = tabphi[ph_le.iph];
                             thv = tabthv[ph_le.ith];
 
+                            //
+                            // 2-1 Estimation of the refraction angle
+                            //
                             // in case of atmospheric refraction determine the outgoing direction
                             #ifdef DEBUG
+                            /* DEBUG mode : refraction along the Line Of Sigth (LOS) only */
                             if (REFRACd && ph_le.loc==ATMOS && ph_le.nint==0) {
                             #else
+                            /* general mode : refraction in all moves*/
                             if (REFRACd && ph_le.loc==ATMOS) {
                             #endif
                                 DirectionToUV(thv, phi, &v, &u);
@@ -344,34 +401,42 @@ extern "C" {
                                 float ra=0.F;
                                 // propagation //
                                 while((iter < 0)) {
+                                   /* propagation of the LE photon until TOA to estimate refraction angle */
                                    #ifdef SPHERIQUE
                                    move_sp(&ph_le, prof_atm, 1, UPTOA , &rngstate);
                                    if (ph_le.loc != SPACE) break;
                                    #endif
+                                   /* the photon direction is extracted when when it comes out at the TOA */
                                    ph_le.v = normalize(ph_le.v);
+                                   /* deviation angle from scattering point to the TOA*/
                                    cr = fabs(dot(v, ph_le.v));
                                    if (cr >= 1.F) cr=1.F;
+                                   /* refraction angle */
                                    ra += acosf(cr);
-                                   //if (idx==0) printf("TOA    %i %f %f %f %f %f %f %d\n", iter, ph_le.v.x, ph_le.v.y, ph_le.v.z, acosf(cr)*180./PI, ra*180./PI, length(ph_le.pos)-RTER, ph_le.loc);
-                                   /* update the virtual photon direction to compensate for refraction*/
+                                   /* New virtual photon direction to compensate for refraction*/
                                    copyPhoton(&ph, &ph_le);
                                    ph_le.v   = v;
                                    ph_le.u   = u;
+                                   /* We rotate the direction of the new LE photon around the unit vector uu, perpendicular
+                                   to the current direction and the local vertical  by an angle equal to the refraction angle */
                                    R  = rotation3D(ra, uu);
                                    ph_le.v = mul(R, ph_le.v);
                                    iter++;
                                 }
                                 refrac_angle = ra;
 
-                                /*create a new virtual photon */
+                                /*Re-create the virtual photon for LE*/
                                 copyPhoton(&ph, &ph_le);
                                 ph_le.ith = (ith + ith0)%NBTHETAd;
                                 if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
                                 else ph_le.iph =  ph_le.ith;
-                            }
-                            else refrac_angle = 0.F;
+                            } // Atmospheric refraction
 
-                            // Scatter the virtual photon, using le=1, and count_level for the scattering angle computation
+                            else refrac_angle = 0.F; // if no refraction option is chosen
+
+                            //
+                            // 2-2 Scatter the virtual photon, using le=1, and count_level for the scattering angle computation
+                            //
                             scatter(&ph_le, prof_atm, prof_oc, 
                                     #ifdef OPT3D
                                     cell_atm, cell_oc,
@@ -386,22 +451,29 @@ extern "C" {
                             #endif
 
                             #ifdef SPHERIQUE
+                            /* in spherical mode (ATMOS only), move the virtual photon until the counting level to calculate 
+                            the extinction along the final path */
                             if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, count_level_le , &rngstate);
+
                             #ifdef VERBOSE_PHOTON
                             display("MOVE LE", &ph_le);
                             #endif
+
                             #else
                              #ifdef ALT_PP
+                            /* in alternative PP mode (for ATMOS or OCEAN), move the virtual photon until the counting level to calculate 
+                            the extinction along the final path */
                              if ((ph_le.loc==ATMOS) || (ph_le.loc==OCEAN)) 
                                  move_pp2(&ph_le, prof_atm, prof_oc, 
                                          #ifdef OPT3D
                                          cell_atm, cell_oc,
                                          #endif
                                          1, count_level_le , &rngstate);
-                             #endif
-                            #endif
+                             #endif // ALT PP
+                            #endif // Spherical
 
                             // Finally count the virtual photon
+                            /* in FAST PP mode the final extinction until the counting level is done in the countPhoton function */
 							#if defined(BACK) && defined(OBJ3D)
 							 countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2);
 							#endif
@@ -413,7 +485,10 @@ extern "C" {
                 } // levels
             } // LE
 
-            /* Scattering Propagation , using le=0 and propagation photon */
+            
+            //
+		    // 3- Scattering of the propagation photon (&ph and le=0 in scatter call)
+            //
             scatter(&ph, prof_atm, prof_oc, 
                     #ifdef OPT3D
                     cell_atm, cell_oc,
@@ -421,48 +496,67 @@ extern "C" {
                     faer, foce,
                     0, 0.F, tabthv, tabphi, 0,
                     &rngstate);
+
             #ifdef VERBOSE_PHOTON
             display("SCATTER", &ph);
             #endif
 
-		} // photon in ATMOS or OCEAN
+        } // photon in ATMOS or OCEAN
+        
+
+
 		__syncthreads();
 
 
-        //
-		// Reflection
-        //
-        // -> in SURFACE
+        /*--------------------------------------------------------------------------------------------------------  */
+        /*                      SURFACES  (1/2)                                                                     */
+        /*--------------------------------------------------------------------------------------------------------  */
+        /*       It concerns photons in SURF0M , SURF0P                                                             */
+        /*--------------------------------------------------------------------------------------------------------  */
         loc_prev = ph.loc;
         if ((ph.loc == SURF0M) || (ph.loc == SURF0P)){
            // Eventually evaluate Downward 0+ and Upward 0- radiance
 
-           // if not environment effects 
-           if( (ENVd==0) || (ENVd==2)) { 
+           /* Define distance form the photon surface impact coordinates and the center of the ENV zone X0d,Y0d */
+           float dis = sqrtf((ph.pos.x-X0d)*(ph.pos.x-X0d) +(ph.pos.y-Y0d)*(ph.pos.y-Y0d));
 
-           // if not a Lambertian or land BRDF surface
-			//if( DIOPTREd!=3 ) {
+           ////////////////////////////
+           // if no environment effects 
+           // OR
+           // photon is reflected by the target:
+           // dis <= ENV_SIZEd if ENVd=1 (Environment outside disk) or dis >= ENV_SIZEd if ENVd=-1 (Environment inside disk)
+           ////////////////////////////
+           if( (ENVd==0) || ((ENVd==1) && (dis<=ENV_SIZEd) || (ENVd==-1) && (dis>=ENV_SIZEd)) ) { 
+
+            ////////////////////////////
+            // if Air-Sea Interface 
+            ////////////////////////////
 			if( DIOPTREd<3 ) {
-                /* Surface Local Estimate (not evaluated if atmosphere only simulation)*/
+                //
+		        // 1- Surface Local Estimate (not evaluated if atmosphere only simulation)*/
+                //
                 if (LEd == 1 && SIMd != ATM_ONLY) {
-                ///* TEST Double LE */
                   int NK, count_level_le;
-                  if (NOCEd==0) NK=1;
-                  else NK=2;
+                  if (NOCEd==0) NK=1; // if there is no ocean, just one level for contribution of surface to LE : up 0+ 
+                  else NK=2; // otherwise 2 : up 0+ and down 0-
                   int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
                   int iph0 = idx%NBPHId;
+
+                  /* Loop on levels for counting (upward and downward) */
                   for(int k=0; k<NK; k++){
                     if (k==0) count_level_le = UP0P;
                     else count_level_le = DOWN0M;
 
+                    /* Double loop on zenith and azimuth LE */
                     for (int ith=0; ith<NBTHETAd; ith++){
                       for (int iph=0; iph<NBPHId; iph++){
+                        // copy propagation to virtual photon
                         copyPhoton(&ph, &ph_le);
                         ph_le.ith = (ith + ith0)%NBTHETAd;
                         if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
                         else ph_le.iph =  ph_le.ith;
 
-                        // Reflect or Tramsit the virtual photon, using le=1, and count_level for the scattering angle computation
+                        // Reflect or Tramsit the virtual photon, using le=1 and count_level
                         if (BRDFd != 0)
                             surfaceBRDF(&ph_le, 1, tabthv, tabphi,
                                       count_level_le, &rngstate);
@@ -478,8 +572,9 @@ extern "C" {
                         // Count the photon up to the counting levels (at the surface UP0P or DOW0M)
                         countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, count_level_le, errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
 
-                        // Only for upward photons count also them up to TOA
+                        // Only for upward photons in Atmopshere, count also them up to TOA
                         if (k==0) { 
+                            // Final extinction computation n the atmosphere for SP and ALT_PP move mode
                             #ifdef SPHERIQUE
                             if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
                             #else
@@ -492,12 +587,12 @@ extern "C" {
                                         1, UPTOA, &rngstate);
                              #endif
                             #endif
-                            // Final counting at the TOA
+                            // Final extinction computation in FAST PP move mode and counting at the TOA for all move modes
                             countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA , errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
                         }
-                        // Only for downward photons count also them up to Bottom 
+                        // Only for downward photons in Ocean, count also them up to Bottom 
                         if (k==1) { 
-                            // Final counting at the B 
+                            // Final extinction computation in the ocean for ALT_PP move mode
                             #ifdef ALT_PP
                             if (ph_le.loc==OCEAN) 
                                 move_pp2(&ph_le, prof_atm, prof_oc, 
@@ -506,6 +601,7 @@ extern "C" {
                                          #endif
                                         1, DOWNB, &rngstate);
                             #endif
+                            // Final extinction computation in FAST PP move mode and counting at the Bottom for all move modes
                             countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, DOWNB , errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
                         }
                       }//direction
@@ -513,41 +609,62 @@ extern "C" {
                   }// counting levels
                 } //LE
 
-                // Propagation of photon using le=0
+                //
+		        // 3- REflection/Transmission of the propagation photon (&ph and le=0 in scatter call)
+                //
                 if (BRDFd != 0)
 				    surfaceBRDF(&ph, 0, tabthv, tabphi,
                               count_level, &rngstate);
                 else
 				    surfaceWaterRough(&ph, 0, tabthv, tabphi,
                               count_level, &rngstate);
-            } // Not lambertian
+            } // Air-Sea interface 
 
 
-            // Lambertian case
+            ////////////////////////////
+            // BRDF interface
+            ////////////////////////////
 			else { 
                 #ifdef SIF
-			    /* Choose the emitter */
+                /* if Sun Induced Fluorescence is activated*/
+			    /* Choose the emitter : Fluorescence or Solar reflection*/
                 choose_emitter(&ph, prof_atm, prof_oc,  spectrum, 
-							 &rngstate); 
+                             &rngstate); 
+
                 #ifdef VERBOSE_PHOTON
                 display("CHOOSE EMITTER", &ph);
                 #endif
+
                 #endif
+
+                //
+		        // 1- Surface Local Estimate (not evaluated if atmosphere only simulation)*/
+                //
                 if (LEd == 1 && SIMd != ATM_ONLY) {
                   int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
                   int iph0 = idx%NBPHId;
+
+                  /* Double loop on zenith and azimuth LE */
                   for (int ith=0; ith<NBTHETAd; ith++){
                     for (int iph=0; iph<NBPHId; iph++){
                         copyPhoton(&ph, &ph_le);
                         ph_le.ith = (ith + ith0)%NBTHETAd;
                         if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
                         else ph_le.iph =  ph_le.ith;
-				        surfaceLambert(&ph_le, 1, tabthv, tabphi, spectrum, &rngstate);
+
+                        /* LE for BRDF type*/
+                        surfaceLambert(&ph_le, 1, tabthv, tabphi, spectrum, &rngstate);
+
                         #ifdef VERBOSE_PHOTON
                         display("SURFACE LE UP", &ph_le);
                         #endif
-                        // Only two levels for counting by definition
+
+                        // Only two levels for counting by definition (up 0+ and up TOA)
+                        // 1) up 0+ for all move modes
                         countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
+
+                        // 2) up TOA for all move modes, need final extinction computation
+                        // Final extinction computation in the atmosphere for SP and ALT_PP move mode
                         #ifdef SPHERIQUE
                         if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
                         #else
@@ -560,32 +677,50 @@ extern "C" {
                                       1, UPTOA , &rngstate);
                          #endif
                         #endif
+
+                        // Final extinction computation in FAST PP move mode and counting at the TOA for all move modes
                         countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
+
                     }//direction
                   }//direction
                 } //LE
-				//Propagation of Lambertian reflection with le=0
-				surfaceLambert(&ph, 0, tabthv, tabphi, spectrum, &rngstate);
-            } // Lambertian (DIOPTRE=!3)
-           } // ENV=0
 
+                //
+		        // 2- Surface for propagation photon for the BRDF interface
+                //
+                surfaceLambert(&ph, 0, tabthv, tabphi, spectrum, &rngstate);
+
+            } // BRDF interface (DIOPTRE=!3)
+           } // No environment effects or interaction with the target
+
+
+           ////////////////////////////
            // Environment effects
-           else if (ENVd==1) {
-                float dis=0;
-                dis = sqrtf((ph.pos.x-X0d)*(ph.pos.x-X0d) +(ph.pos.y-Y0d)*(ph.pos.y-Y0d));
-                if( dis > ENV_SIZEd) {
-                 if (LEd == 1 && SIMd != ATM_ONLY) {
-                  int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
-                  int iph0 = idx%NBPHId;
-                  for (int ith=0; ith<NBTHETAd; ith++){
+           // photon is reflected by the environment:
+           // dis > ENV_SIZEd if ENVd=1 (Environment outside disk) or dis < ENV_SIZEd if ENVd=-1 (Environment inside disk)
+           ////////////////////////////
+           else if( ((ENVd==1) && (dis>ENV_SIZEd) || (ENVd==-1) && (dis<ENV_SIZEd)) ) { 
+                //
+		        // 1- Surface Local Estimate (not evaluated if atmosphere only simulation)*/
+                //
+                if (LEd == 1 && SIMd != ATM_ONLY) {
+                 int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
+                 int iph0 = idx%NBPHId;
+
+                 /* Double loop on zenith and azimuths LE*/
+                 for (int ith=0; ith<NBTHETAd; ith++){
                     for (int iph=0; iph<NBPHId; iph++){
                         copyPhoton(&ph, &ph_le);
                         ph_le.ith = (ith + ith0)%NBTHETAd;
                         if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
                         else ph_le.iph =  ph_le.ith;
-				        surfaceLambert(&ph_le, 1, tabthv, tabphi, spectrum, &rngstate);
+
+                        /* LE for BRDF type*/
+                        surfaceLambert(&ph_le, 1, tabthv, tabphi, spectrum, &rngstate);
+
                         // Only two levels for counting by definition
                         countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
+
                         #ifdef SPHERIQUE
                         if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
                         #else
@@ -599,108 +734,48 @@ extern "C" {
                         #endif
                         countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
                     }//direction
-                  }//direction
-                 } //LE
-                 //Propagation of Lambertian reflection with le=0
-                    surfaceLambert(&ph, 0, tabthv, tabphi, spectrum, &rngstate);
-                }// dis
-                else {
-                 if (LEd == 1 && SIMd != ATM_ONLY) {
-                 ///* TEST Double LE */
-                  int NK, count_level_le;
-                  if (NOCEd==0) NK=1;
-                  else NK=2;
-                  int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
-                  int iph0 = idx%NBPHId;
-                  for(int k=0; k<NK; k++){
-                    if (k==0) count_level_le = UP0P;
-                    else count_level_le = DOWN0M;
+                 }//direction
+                } //LE
 
-                    for (int ith=0; ith<NBTHETAd; ith++){
-                      for (int iph=0; iph<NBPHId; iph++){
-                        copyPhoton(&ph, &ph_le);
-                        ph_le.ith = (ith + ith0)%NBTHETAd;
-                        if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
-                        else ph_le.iph =  ph_le.ith;
-
-                        // Reflect or Tramsit the virtual photon, using le=1, and count_level for the scattering angle computation
-                        if (BRDFd != 0)
-                            surfaceBRDF(&ph_le, 1, tabthv, tabphi,
-                                      count_level_le, &rngstate);
-                        else
-                            surfaceWaterRough(&ph_le, 1, tabthv, tabphi,
-                                      count_level_le, &rngstate);
-
-                        #ifdef VERBOSE_PHOTON
-                        if (k==0) display("SURFACE LE UP", &ph_le);
-                        else display("SURFACE LE DOWN", &ph_le);
-                        #endif
-
-                        // Count the photon up to the counting levels (at the surface UP0P or DOW0M)
-                        countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, count_level_le, errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
-
-                        // Only for upward photons count also them up to TOA
-                        if (k==0) { 
-                            #ifdef SPHERIQUE
-                            if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
-                            #else
-                             #ifdef ALT_PP
-                             if (ph_le.loc==ATMOS) move_pp2(&ph_le, prof_atm, prof_oc, 
-                                     #ifdef OPT3D
-                                     cell_atm, cell_oc,
-                                     #endif
-                                     1, UPTOA , &rngstate);
-                             #endif
-                            #endif
-                            // Final counting at the TOA
-                            countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA , errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
-                        }
-                        // Only for downward photons count also them up to Bottom 
-                        if (k==1) { 
-                            // Final counting at the B 
-                             #ifdef ALT_PP                          
-                             if (ph_le.loc==OCEAN) move_pp2(&ph_le, prof_atm, prof_oc, 
-                                     #ifdef OPT3D
-                                     cell_atm, cell_oc,
-                                     #endif
-                                     1, DOWNB , &rngstate); 
-                             #endif 
-                            countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, DOWNB , errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
-                        }
-                      }//direction
-                    }//direction
-                  }// counting levels
-                 } //LE
-                // Propagation of photon using le=0
-                    if (BRDFd != 0)
-                        surfaceBRDF(&ph, 0, tabthv, tabphi, count_level, &rngstate);
-                    else
-                        surfaceWaterRough(&ph, 0, tabthv, tabphi, count_level, &rngstate);
-                } //dis
-           } // ENV=1
+                //
+		        // 2- Surface for Propagation photon*/
+                //
+                surfaceLambert(&ph, 0, tabthv, tabphi, spectrum, &rngstate);
+           } // photon interaction with the environment 
 
            #ifdef VERBOSE_PHOTON
            display("SURFACE", &ph);
            #endif
-		}
+
+        } // Photon at the surface (SURF0P or SURF0M)
+
 
 		__syncthreads();
 
-        //
-		// Reflection
-        //
-        // -> in SEAFLOOR
+
+        /*--------------------------------------------------------------------------------------------------------  */
+        /*                      SURFACES  (2/2)                                                                     */
+        /*--------------------------------------------------------------------------------------------------------  */
+        /*       It concerns photons in SEAFLOOR                                                                    */
+        /*--------------------------------------------------------------------------------------------------------  */
         if(ph.loc == SEAFLOOR){
+           //
+		   // 1- Seafloor Local Estimate*/
+           //
            if (LEd == 1 && SIMd != ATM_ONLY) {
               int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
               int iph0 = idx%NBPHId;
+              /* Double loop on zenith and azimuth LE*/
               for (int ith=0; ith<NBTHETAd; ith++){
                 for (int iph=0; iph<NBPHId; iph++){
                     copyPhoton(&ph, &ph_le);
                     ph_le.ith = (ith + ith0)%NBTHETAd;
                     if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
                     else ph_le.iph =  ph_le.ith;
-				    surfaceLambert(&ph_le, 1, tabthv, tabphi, spectrum, &rngstate);
+
+                    /* LE on SEAFLOOR*/
+                    surfaceLambert(&ph_le, 1, tabthv, tabphi, spectrum, &rngstate);
+
                     //  contribution to UP0M level
                     #ifdef ALT_PP                          
                     if (ph_le.loc==OCEAN) move_pp2(&ph_le, prof_atm, prof_oc, 
@@ -710,22 +785,34 @@ extern "C" {
                             1, UP0M, &rngstate); 
                     #endif
                     countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0M,   errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
-                }
-              }
+
+                } // directions
+              } // directions
             } //LE
 
-			surfaceLambert(&ph, 0, tabthv, tabphi, spectrum, &rngstate);
-            #ifdef VERBOSE_PHOTON
-            display("SEAFLOOR", &ph);
-            #endif
-         }
+           //
+		   // 2- Seafloor propagation*/
+           //
+           surfaceLambert(&ph, 0, tabthv, tabphi, spectrum, &rngstate);
+
+           #ifdef VERBOSE_PHOTON
+           display("SEAFLOOR", &ph);
+           #endif
+
+         } // Seafloor
+
+
+
         __syncthreads();
 
+
+
 		#ifdef OBJ3D
-		//
-		// Reflection
-        //
-        // -> in OBJSURF
+        /*--------------------------------------------------------------------------------------------------------  */
+        /*                      SURFACE OBJECTS                                                                     */
+        /*--------------------------------------------------------------------------------------------------------  */
+        /*       It concerns photons in OBJSURF                                                                     */
+        /*--------------------------------------------------------------------------------------------------------  */
         if(ph.loc == OBJSURF)
 		{
 
@@ -825,11 +912,14 @@ extern "C" {
 		}
         __syncthreads();
 		#endif
-		
-        //
+        /*--------------------------------------------------------------------------------------------------------  */
+        
+        
+
+        //--------------------------
         // count after surface:
         // count the photons leaving the surface towards the ocean or atmosphere
-        //
+        //--------------------------
         count_level = -1;
         if ((loc_prev == SURF0M) || (loc_prev == SURF0P)) {
             if ((ph.loc == ATMOS) || (ph.loc == SPACE)
@@ -844,39 +934,38 @@ extern "C" {
         /* Cone Sampling */
         if (LEd == 0) countPhoton(&ph, prof_atm, prof_oc, tabthv, tabphi, count_level, errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
 
+
+        //--------------------------
+        // Final counts
+        //--------------------------
+
+        /* absorbed photons during their life are terimnated and initialized again, they are counted*/
 		if(ph.loc == ABSORBED){
 			ph.loc = NONE;
 			nbPhotonsThr++;
 		}
+        /* removed photons during their life are terimnated and initialized again, they are NOT counted*/
 		if(ph.loc == REMOVED){
 			ph.loc = NONE;
-		}
+        }
+        
+
 		__syncthreads();
-
-		
-
-        // from time to time, transfer the per-thread photon counter to the
-        // global counter
-        // if (nbPhotonsThr % 100 == 0) {
-        //     atomicAdd(Counter, nbPhotonsThr);
-        //     nbPhotonsThr = 0;
-        // }
-		//nbPhotonsThr = 1;
-		// if (idx == 0) printf("nombre de photons par thread : %llu et counter : %d\n", nbPhotonsThr, Counter[0]);
-
 
 
 		if (this_thread_active == 1) 
 		{
 		    atomicAdd(Counter, nbPhotonsThr);
 			nbPhotonsThr = 0;
-			   
-	    }		
-	// }
-	}
+        }		
 
-	// // Après la boucle on rassemble les nombres de photons traités par chaque thread
+	} // Main While loop on active threads
+
 	
+    //--------------------------
+    // Error counts
+    //--------------------------
+
     if (ph.loc != NONE) {
         atomicAdd(errorcount+ERROR_MAX_LOOP, 1);
     }
@@ -2181,9 +2270,9 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
                  default: ph->loc = REMOVED;
             }
             count++;
-            if (idx==0 && count>=0) printf("YES %d %d %d %d %d %g %g %f %f %f %f %f %f\n",idx, ph->loc, ph->layer, next_layer, 
-                  count, (double)intTime0, (double)intTime1, ph->pos.x, ph->pos.y, ph->pos.z
-                  ,ph->v.x, ph->v.y,ph->v.z);
+            //if (idx==0 && count>=0) printf("YES %d %d %d %d %d %g %g %f %f %f %f %f %f\n",idx, ph->loc, ph->layer, next_layer, 
+             //     count, (double)intTime0, (double)intTime1, ph->pos.x, ph->pos.y, ph->pos.z
+              //    ,ph->v.x, ph->v.y,ph->v.z);
             // in case of periodic boundaries
             /*if (next_layer >= 0) {
                 GetFaceMiddlePoint(ind, pmin, pmax, &p);
@@ -4042,6 +4131,7 @@ __device__ void surfaceLambert(Photon* ph, int le,
                               float* tabthv, float* tabphi, struct Spectrum *spectrum,
                               struct RNG_State *rngstate) {
 	
+    //int idx = blockIdx.x * blockDim.x + threadIdx.x;
 	if( SIMd == ATM_ONLY){ // Atmosphere only, surface absorbs all
 		ph->loc = ABSORBED;
 		return;
@@ -4086,6 +4176,7 @@ __device__ void surfaceLambert(Photon* ph, int le,
          else ph->weight *= weight;
      }
      #endif
+      
     }
     else {
      // Cosine of the LOCAL zenith angle sampling for Lambertian reflector

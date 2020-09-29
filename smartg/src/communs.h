@@ -277,6 +277,7 @@ struct Spectrum {
     float lambda;
     float alb_surface;
     float alb_seafloor;
+    float alb_env;
     float k1p_surface;
     float k2p_surface;
 };
