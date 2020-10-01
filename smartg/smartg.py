@@ -315,7 +315,7 @@ class Environment(object):
     ALB: albedo spectral model
 
     '''
-    def __init__(self, ENV=0, ENV_SIZE=0., X0=0., Y0=0., ALB=Albedo_cst(0.5)):
+    def __init__(self, ENV=0, ENV_SIZE=1.e6, X0=0., Y0=0., ALB=Albedo_cst(0.0)):
         self.dict = {
                 'ENV': ENV,
                 'ENV_SIZE': ENV_SIZE,
@@ -1012,11 +1012,17 @@ class Smartg(object):
                 spectrum['alb_surface'] = -999.
         else:
             assert surf is not None
+            if surf.alb is not None:
+               spectrum['alb_surface'] = surf.alb.get(wl[:])
+            elif surf.kp is not None:
+               spectrum['alb_surface'] = surf.kp[0].get(wl[:])
+               spectrum['k1p_surface'] = surf.kp[1].get(wl[:])
+               spectrum['k2p_surface'] = surf.kp[2].get(wl[:])
             mapalb = env.alb.get(wl[:])
             if mapalb.ndim==3:
                 mapalb = to_gpu(mapalb)
             else:
-                spectrum['alb_surface'] = env.alb.get(wl[:])
+                spectrum['alb_env'] = env.alb.get(wl[:])
 
         if water is None:
             spectrum['alb_seafloor'] = -999.
@@ -2059,7 +2065,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
     
     if ((NATM+NOCE >0) and (NATM_ABS+NOCE_ABS <500) and alis) : tabDistTot = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI), dtype=np.float64)
     else : tabDistTot = gpuzeros((1), dtype=np.float64)
-    if hist : tabHistTot = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+4),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
+    if hist : tabHistTot = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+5),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
     else : tabHistTot = gpuzeros((1), dtype=np.float32)
 
     # Initialize of the parameters
@@ -2089,7 +2095,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         if ((NATM+NOCE >0) and (NATM_ABS+NOCE_ABS <500) and alis) : tabDist = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
         else : tabDist = gpuzeros((1), dtype=np.float32)
 
-    if hist : tabHist = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+4),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
+    if hist : tabHist = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+5),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
     else : tabHist = gpuzeros((1), dtype=np.float32)
 
     # local estimates angles

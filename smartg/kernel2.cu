@@ -3,13 +3,13 @@ extern "C" {
 __global__ void reduce_absorption_gpu(unsigned long long NPHOTON, unsigned long long NLAYER, unsigned long long NWVL, 
         unsigned long long NTHREAD, unsigned long long NGROUP, unsigned long long NBUNCH, unsigned long long NP_REST, unsigned long long NWVL_LOW,
         double *res, double *res_sca, double *res_rrs, double *res_sif, double *res_vrs, float *ab, float *al, float *cd, float *S, float *weight, 
-        unsigned char *nrrs, unsigned char *nref, unsigned char *nsif, unsigned char *nvrs, unsigned char *iw_low, float *ww_low)
+        unsigned char *nrrs, unsigned char *nref, unsigned char *nsif, unsigned char *nvrs, unsigned char *nenv, unsigned char *iw_low, float *ww_low)
 {
   const unsigned long long idx = threadIdx.x + blockDim.x * blockIdx.x;
   unsigned long long n,nstart,nstop,ns;
   unsigned long long iw,ig,l,s,iram;
   unsigned long long nl,li;
-  double wabs, walb0, walb; // absorption and albedo high resolution weigths
+  double wabs, walb0, walb1,walb; // absorption and albedo high resolution weigths
   float wsca1,wsca2,wsca;
   unsigned long long iw1,iw2;
 
@@ -21,7 +21,8 @@ __global__ void reduce_absorption_gpu(unsigned long long NPHOTON, unsigned long 
                                     // last group has some remaining phton's
     iw1 = iw_low[iw];    // bracketing indices of low resolution wavelength grid
     iw2 = iw1+1;
-    walb0= (double)al[iw];
+    walb0= (double)al[iw]; // albedo of surface
+    walb1= (double)al[iw +NWVL]; // albedo of surface (environment)
 
     for (n=nstart;n<nstop;n++) { // Loop on photon number
         //interpolating scattering 'low resolution' weights 
@@ -35,7 +36,8 @@ __global__ void reduce_absorption_gpu(unsigned long long NPHOTON, unsigned long 
             li = iw  + NWVL*l;
             wabs += (double)cd[nl] * (double)ab[li];
         }
-        walb = pow(walb0, (double)nref[n]);
+        walb  = pow(walb0, (double)nref[n]);
+        walb *= pow(walb1, (double)nenv[n]);
         for (s=0;s<4;s++) {
             ns = s + 4*n;
             if (!nsif[n])             atomicAdd(res    +iw+NWVL*s, (double)S[ns] * exp(-wabs) * (double)wsca * walb);

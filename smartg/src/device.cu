@@ -526,7 +526,7 @@ extern "C" {
            // photon is reflected by the target:
            // dis <= ENV_SIZEd if ENVd=1 (Environment outside disk) or dis >= ENV_SIZEd if ENVd=-1 (Environment inside disk)
            ////////////////////////////
-           if( (ENVd==0) || ((ENVd==1) && (dis<=ENV_SIZEd) || (ENVd==-1) && (dis>=ENV_SIZEd)) ) { 
+           if( (ENVd==0) || ((ENVd==1) && (dis<=ENV_SIZEd)) || ((ENVd==-1) && (dis>=ENV_SIZEd)) ) { 
 
             ////////////////////////////
             // if Air-Sea Interface 
@@ -637,6 +637,7 @@ extern "C" {
 
                 #endif
 
+                ph.env = 0;
                 //
 		        // 1- Surface Local Estimate (not evaluated if atmosphere only simulation)*/
                 //
@@ -699,7 +700,8 @@ extern "C" {
            // photon is reflected by the environment:
            // dis > ENV_SIZEd if ENVd=1 (Environment outside disk) or dis < ENV_SIZEd if ENVd=-1 (Environment inside disk)
            ////////////////////////////
-           else if( ((ENVd==1) && (dis>ENV_SIZEd) || (ENVd==-1) && (dis<ENV_SIZEd)) ) { 
+           else if( ((ENVd==1) && (dis>ENV_SIZEd)) || ((ENVd==-1) && (dis<ENV_SIZEd)) ) { 
+                ph.env = 1;
                 //
 		        // 1- Surface Local Estimate (not evaluated if atmosphere only simulation)*/
                 //
@@ -762,6 +764,7 @@ extern "C" {
            //
 		   // 1- Seafloor Local Estimate*/
            //
+           ph.env = 0;
            if (LEd == 1 && SIMd != ATM_ONLY) {
               int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
               int iph0 = idx%NBPHId;
@@ -1019,6 +1022,8 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 	
     ph->nint = 0;
     ph->nref = 0;
+    ph->nenv = 0;
+    ph->env  = 0;
 	ph->weight = WEIGHTINIT;
 
 	// Stokes parameters initialization according to natural sunlight
@@ -3184,6 +3189,7 @@ __device__ void choose_emitter(Photon* ph,
             // reinitialization
             ph->nint = 0;
             ph->nref = 0;
+            ph->nenv = 0;
             ph->nrrs = 0;
             ph->nvrs = 0;
             for (int k=0; k<NLOWd; k++) ph->weight_sca[k] = 1.F;
@@ -3193,7 +3199,8 @@ __device__ void choose_emitter(Photon* ph,
             for (int k=0; k<NOCE_ABSd+1; k++) ph->cdist_oc[k] = 0.F;
 		} else {
 			ph->emitter = SOLAR_REF; // SOLAR reflection index
-            ph->nref += 1;
+            if (ph->env) ph->nenv +=1;
+            else ph->nref += 1;
             ph->nint += 1;
 		}	
 	}
@@ -4131,7 +4138,7 @@ __device__ void surfaceLambert(Photon* ph, int le,
                               float* tabthv, float* tabphi, struct Spectrum *spectrum,
                               struct RNG_State *rngstate) {
 	
-    //int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
 	if( SIMd == ATM_ONLY){ // Atmosphere only, surface absorbs all
 		ph->loc = ABSORBED;
 		return;
@@ -4227,19 +4234,31 @@ __device__ void surfaceLambert(Photon* ph, int le,
 		ph->layer = NATMd;
         #endif
         #ifndef SIF
-        ph->weight *= spectrum[ph->ilam].alb_surface * BRDF(ph->ilam, -v0, ph->v, spectrum);  /*[Eq. 16,39]*/
+        if (ph->env) {
+            ph->nenv +=1;
+            ph->weight *= spectrum[ph->ilam].alb_env;
+        }
+        else        {
+            ph->nref += 1;
+            ph->weight *= spectrum[ph->ilam].alb_surface * BRDF(ph->ilam, -v0, ph->v, spectrum);  /*[Eq. 16,39]*/
+        }
         if (ENVd==2) {
             ph->weight *= checkerboard(ph->pos);
         }
-        ph->nref+=1;
         ph->nint+=1;
         #else
         if (ph->emitter==SOLAR_REF){
-            ph->weight *= spectrum[ph->ilam].alb_surface * BRDF(ph->ilam, -v0, ph->v, spectrum);  /*[Eq. 16,39]*/
+            if (ph->env) {
+                ph->nenv +=1;
+                ph->weight *= spectrum[ph->ilam].alb_env;
+            }
+            else        {
+                ph->nref += 1;
+                ph->weight *= spectrum[ph->ilam].alb_surface * BRDF(ph->ilam, -v0, ph->v, spectrum);  /*[Eq. 16,39]*/
+            }
             if (ENVd==2) {
                 ph->weight *= checkerboard(ph->pos);
             }
-            ph->nref+=1;
             ph->nint+=1;
         }
         #endif
@@ -5587,7 +5606,7 @@ __device__ void countPhoton(Photon* ph,
           counter2=atomicAdd(NPhotonsOut, 1);
           //counter2=atomicAdd(NPhotonsOut+is, 1);
           if (counter2 >= MAX_HIST) return;
-          unsigned long long KK2 = K*(NATM_ABSd+NOCE_ABSd+4+NLOWd+4); /* Number of information per local estmate photon (Record length)*/
+          unsigned long long KK2 = K*(NATM_ABSd+NOCE_ABSd+4+NLOWd+5); /* Number of information per local estmate photon (Record length)*/
           //unsigned long long KK2 = K*(NATMd+NOCEd+4+NLOWd+3); /* Number of information per local estmate photon (Record length)*/
           //unsigned long long KKK2= KK2 * MAX_HIST; /* Number of individual information per vertical Level (Number of Records)*/
           unsigned long long LL2;
@@ -5625,6 +5644,8 @@ __device__ void countPhoton(Photon* ph,
           tabCount3[LL2]= (float)(ph->nsif);
           LL2 = counter2*KK2 +  (NLOWd+NATM_ABSd+NOCE_ABSd+4+3)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= (float)(ph->nvrs>=1);
+          LL2 = counter2*KK2 +  (NLOWd+NATM_ABSd+NOCE_ABSd+4+4)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          tabCount3[LL2]= (float)(ph->nenv);
        } // HISTd==1
 
        unsigned long long KK  = K*(NATM_ABSd+NOCE_ABSd);
@@ -6046,6 +6067,8 @@ __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
     ph_le->pos = ph->pos; // float3
     ph_le->nint = ph->nint;
     ph_le->nref = ph->nref;
+    ph_le->nenv = ph->nenv;
+    ph_le->env = ph->env;
     ph_le->is = ph->is;
     ph_le->iph = ph->iph;
     ph_le->ith = ph->ith;

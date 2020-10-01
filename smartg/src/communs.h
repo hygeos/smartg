@@ -211,7 +211,8 @@ public:
     float4 stokes;
 
     int layer;
-    // float prop_aer;		// Aerosol proportion within the photon current layer
+
+    int env;    // = 1 if reflected by environment, otherwise 0
 	
     float tau;	// vertical coordinate in optical depth (extinction or scattering depending on BEER keyword)
                 // atmosphere : positive values
@@ -235,6 +236,8 @@ public:
     unsigned short nint;
     // Number of reflection
     unsigned short nref;
+    // Number of reflection on environment
+    unsigned short nenv;
 
     #ifdef ALIS
     #if !defined(ALT_PP) && !defined(SPHERIQUE)
