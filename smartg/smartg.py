@@ -43,7 +43,7 @@ from smartg.visualizegeo import Mirror, Plane, Spheric, Transformation, \
 dir_root = dirname(dirname(realpath(__file__)))
 dir_src = join(dir_root, 'smartg/src/')
 src_device = join(dir_src, 'device.cu')
-
+src_kernel2 = join(dir_src, 'kernel2.cu')
 # constants definition
 # (should match #defines in src/communs.h)
 SPACE    =  0
@@ -598,6 +598,7 @@ class Smartg(object):
         # load the kernel
         self.kernel = self.mod.get_function('launchKernel')
         #self.kernel2 = self.mod.get_function('launchKernel2')
+        self.kernel2 = self.mod.get_function('reduce_absorption_gpu')
 
         #
         # common attributes
@@ -613,6 +614,83 @@ class Smartg(object):
         self.common_attrs['pycuda_version'] = pycuda.VERSION_TEXT
         self.common_attrs['cuda_version'] = '.'.join([str(x) for x in pycuda.driver.get_version()])
         self.common_attrs.update(get_git_attrs())
+
+
+    def reduce_histories(self, m, wls, wl, sigma, alb_in=None, XBLOCK=512, XGRID=512, verbose=False):
+        NWS   = wls.size
+        NL    = sigma.shape[1]
+        w     = m[:, NL+4:-5]
+        ngood = np.sum(w[:,0]!=0)
+
+        S       = np.zeros((ngood,4),dtype=np.float32) 
+        cd      = m[:ngood,     :NL  ]
+        S[:,:4] = m[:ngood, NL  :NL+4]
+        w       = m[:ngood, NL+4:-5  ]
+        nrrs    = m[:ngood,      -5  ]
+        nref    = m[:ngood,      -4  ]
+        nsif    = m[:ngood,      -3  ]
+        nvrs    = m[:ngood,      -2  ]
+        nenv    = m[:ngood,      -1  ]
+
+        NT      = XBLOCK*XGRID       # Maximum Number of threads
+        NPHOTON = cd.shape[0]        # Number of photons
+
+        NLAYER  = sigma.shape[1]     # Number of vertical layer
+        NWVL    = sigma.shape[0]     # Number of wavelength for absorption and output
+        NGROUP  = NT//NWVL           # Number of groups of photons
+        NTHREAD = NGROUP*NWVL        # Number of threads used
+        NBUNCH  = NPHOTON//NGROUP    # Number of photons per group
+        NP_REST = NPHOTON%(NGROUP*NBUNCH) # Number of additional photons in the last group
+        NWVL_LOW = NWS
+
+        f  =  interp1d(wls,np.linspace(0, NWVL_LOW-1, num=NWVL_LOW))
+        iw =  f(wl)
+        iwls_in = np.floor(iw).astype(np.int8)        # index of lower wls value in the wls array, 
+        wwls_in = (iw-iwls_in).astype(np.float32)  # floating proportion between iwls and iwls+1
+        # special case for NLOW
+        ii = np.where(iwls_in==(NWVL_LOW-1))
+        iwls_in[ii] = NWVL_LOW-2
+        wwls_in[ii] = 1.
+
+        if verbose : 
+            fmt = 'Max Number of Threads : {}\nNumber of Threads : {}\n'
+            fmt+= 'Number of groups of photons: {}\nNumber of photons : {}\n'
+            fmt+= 'Number of layer: {}\nNumber of wavelength for absorption and output : {}\n'    
+            fmt+= 'Number of photons per group : {}\nNumber of additional photons in the last group : {}\n'
+            fmt+= 'Number of wavelength for scattering correction : {}\n'
+            print(fmt.format(NT, NTHREAD, NGROUP, NPHOTON, NLAYER, NWVL, NBUNCH, NP_REST, NWVL_LOW))
+
+        if alb_in is None  : alb_in = np.zeros(2*NWVL, dtype=np.float32)
+
+        sigma_ab_in  = np.zeros((NLAYER, NWVL), order='C', dtype=np.float32)
+        sigma_ab_in[:,:]  = sigma.swapaxes(0,1)
+
+        cd_in        = cd.reshape((NPHOTON, NLAYER), order='C').astype(np.float32)
+        S_in         = S.reshape((NPHOTON, 4),       order='C').astype(np.float32)
+        weight_in    = w.reshape((NPHOTON, NWVL_LOW),order='C').astype(np.float32)
+        nrrs_in      = nrrs.reshape(NPHOTON,order='C').astype(np.int8)
+        nsif_in      = nsif.reshape(NPHOTON,order='C').astype(np.int8)
+        nref_in      = nref.reshape(NPHOTON,order='C').astype(np.int8)
+        nvrs_in      = nvrs.reshape(NPHOTON,order='C').astype(np.int8)
+        nenv_in      = nenv.reshape(NPHOTON,order='C').astype(np.int8)
+
+        res_out      = gpuzeros((4, NWVL),   dtype=np.float64)
+        res_sca      = gpuzeros((4, NWVL),   dtype=np.float64)
+        res_rrs      = gpuzeros((4, NWVL),   dtype=np.float64)
+        res_sif      = gpuzeros((4, NWVL),   dtype=np.float64)
+        res_vrs      = gpuzeros((4, NWVL),   dtype=np.float64)
+
+        self.kernel2(np.int64(NPHOTON), np.int64(NLAYER), np.int64(NWVL), 
+                          np.int64(NTHREAD), np.int64(NGROUP), np.int64(NBUNCH), 
+                          np.int64(NP_REST), np.int64(NWVL_LOW),
+                          res_out, res_sca, res_rrs, res_sif, res_vrs, 
+                          to_gpu(sigma_ab_in), to_gpu(alb_in), to_gpu(cd_in),
+                          to_gpu(S_in), to_gpu(weight_in), to_gpu(nrrs_in), 
+                          to_gpu(nref_in), to_gpu(nsif_in), to_gpu(nvrs_in),
+                          to_gpu(nenv_in), to_gpu(iwls_in), to_gpu(wwls_in), 
+                          block=(XBLOCK,1,1),grid=(XGRID,1,1))
+        return res_out.get()
+    
 
 
     def run(self, wl,
@@ -1221,13 +1299,10 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
     create and return the final output
     '''
     (_,_,NSENSOR,NLAM,NBTHETA,NBPHI) = tabPhotonsTot.shape
-    #(NLVL,NPSTK,NLAM,NBTHETA,NBPHI) = tabPhotonsTot.shape
 
     # normalization in case of radiance
     # (broadcast everything to dimensions (LVL,NPSTK,SENSOR,LAM,THETA,PHI))
-    ## (broadcast everything to dimensions (LVL,NPSTK,LAM,THETA,PHI))
     norm_npho = NPhotonsInTot.reshape((1,1,NSENSOR,NLAM,1,1))
-    #norm_npho = NPhotonsInTot.reshape((1,1,-1,1,1))
     if flux is None:
         if le!=None : 
             tabTh = le['th']
@@ -1322,7 +1397,6 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
     m.add_dataset('N_up (TOA)', NPhotonsOutTot[UPTOA,isen,ilam,iphi,:], axnames)
     if len(tabDistFinal) > 1: m.add_dataset('cdist_up (TOA)', tabDistFinal[UPTOA,:,isen,iphi,:], axnames2)
     if hist : m.add_dataset('disth_up (TOA)', tabHistFinal[:,:,isen,iphi,:],axnames3)
-    #if hist : m.add_dataset('disth_down (0+)', tabHistFinal[UPTOA,:,:,isen,iphi,:],axnames3)
 
     if OUTPUT_LAYERS & 1:
         m.add_dataset('I_down (0+)', tabFinal[DOWN0P,0,isen,ilam,iphi,:], axnames)
@@ -1336,7 +1410,6 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
             m.add_dataset('V_stdev_down (0+)', sigma[DOWN0P,3,isen,ilam,iphi,:], axnames)
         m.add_dataset('N_down (0+)', NPhotonsOutTot[DOWN0P,isen,ilam,iphi,:], axnames)
         if len(tabDistFinal) > 1: m.add_dataset('cdist_down (0+)', tabDistFinal[DOWN0P,:,isen,iphi,:],axnames2)
-        #if hist : m.add_dataset('disth_down (0+)', tabHistFinal[DOWN0P,:,:,isen,iphi,:],axnames3)
 
         m.add_dataset('I_up (0-)', tabFinal[UP0M,0,isen,ilam,iphi,:], axnames)
         m.add_dataset('Q_up (0-)', tabFinal[UP0M,1,isen,ilam,iphi,:], axnames)
@@ -1349,7 +1422,6 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
             m.add_dataset('V_stdev_up (0-)', sigma[UP0M,3,isen,ilam,iphi,:], axnames)
         m.add_dataset('N_up (0-)', NPhotonsOutTot[UP0M,isen,ilam,iphi,:], axnames)
         if len(tabDistFinal) > 1: m.add_dataset('cdist_up (0-)', tabDistFinal[UP0M,:,isen,iphi,:],axnames2)
-        #if hist : m.add_dataset('disth_up (0-)', tabHistFinal[UP0M,:,:,isen,iphi,:],axnames3)
 
     if OUTPUT_LAYERS & 2:
         m.add_dataset('I_down (0-)', tabFinal[DOWN0M,0,isen,ilam,iphi,:], axnames)
@@ -1363,7 +1435,6 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
             m.add_dataset('V_stdev_down (0-)', sigma[DOWN0M,3,isen,ilam,iphi,:], axnames)
         m.add_dataset('N_down (0-)', NPhotonsOutTot[DOWN0M,isen,ilam,iphi,:], axnames)
         if len(tabDistFinal) > 1: m.add_dataset('cdist_down (0-)', tabDistFinal[DOWN0M,:,isen,iphi,:],axnames2)
-        #if hist : m.add_dataset('disth_down (0-)', tabHistFinal[DOWN0M,:,:,isen,iphi,:],axnames3)
 
         m.add_dataset('I_up (0+)', tabFinal[UP0P,0,isen,ilam,iphi,:], axnames)
         m.add_dataset('Q_up (0+)', tabFinal[UP0P,1,isen,ilam,iphi,:], axnames)
@@ -1376,7 +1447,6 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
             m.add_dataset('V_stdev_up (0+)', sigma[UP0P,3,isen,ilam,iphi,:], axnames)
         m.add_dataset('N_up (0+)', NPhotonsOutTot[UP0P,isen,ilam,iphi,:], axnames)
         if len(tabDistFinal) > 1: m.add_dataset('cdist_up (0+)', tabDistFinal[UP0P,:,isen,iphi,:],axnames2)
-        #if hist : m.add_dataset('disth_up (0+)', tabHistFinal[UP0P,:,:,isen,iphi,:],axnames3)
 
         m.add_dataset('I_down (B)', tabFinal[DOWNB,0,isen,ilam,iphi,:], axnames)
         m.add_dataset('Q_down (B)', tabFinal[DOWNB,1,isen,ilam,iphi,:], axnames)
@@ -1389,7 +1459,6 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
             m.add_dataset('V_stdev_down (B)', sigma[DOWNB,3,isen,ilam,iphi,:], axnames)
         m.add_dataset('N_down (B)', NPhotonsOutTot[DOWNB,isen,ilam,iphi,:], axnames)
         if len(tabDistFinal) > 1: m.add_dataset('cdist_down (B)', tabDistFinal[DOWNB,:,isen,iphi,:],axnames2)
-        #if hist : m.add_dataset('disth_down (B)', tabHistFinal[DOWNB,:,:,isen,iphi,:],axnames3)
 
 
     # direct transmission
@@ -2063,8 +2132,10 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
     errorcount = gpuzeros(NERROR, dtype='uint64')
 
     
-    if ((NATM+NOCE >0) and (NATM_ABS+NOCE_ABS <500) and alis) : tabDistTot = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI), dtype=np.float64)
-    else : tabDistTot = gpuzeros((1), dtype=np.float64)
+    if ((NATM+NOCE >0) and (NATM_ABS+NOCE_ABS <500) and alis) : 
+        tabDistTot = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI), dtype=np.float64)
+    else : 
+        tabDistTot = gpuzeros((1), dtype=np.float64)
     if hist : tabHistTot = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+5),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
     else : tabHistTot = gpuzeros((1), dtype=np.float32)
 
@@ -2852,3 +2923,5 @@ def findExtinction(IP, FP, prof_atm, W_IND = int(0)):
     n_ext = np.exp(-abs(tauHit))
 
     return n_ext
+
+

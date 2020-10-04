@@ -760,7 +760,8 @@ class AtmAFGL(Atmosphere):
             if not (tau_o3.data >= 0).all():
                 warn('Negative values in tau_o3 ({}%, min value is {}, set to 0)'.format(
                     100.*np.sum(tau_o3.data<0)/float(tau_o3.data.size),
-                    tau_o3.data[tau_o3.data == np.amin(tau_o3.data)][0]
+                    tau_o3.data[tau_o3.data == np.amin(tau_o3.data)]
+                    #tau_o3.data[tau_o3.data == np.amin(tau_o3.data)][0]
                     ))
             tau_o3.data[tau_o3.data < 0] = 0
 
