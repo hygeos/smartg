@@ -616,80 +616,6 @@ class Smartg(object):
         self.common_attrs.update(get_git_attrs())
 
 
-    def reduce_histories(self, m, wls, wl, sigma, alb_in=None, XBLOCK=512, XGRID=512, verbose=False):
-        NWS   = wls.size
-        NL    = sigma.shape[1]
-        w     = m[:, NL+4:-5]
-        ngood = np.sum(w[:,0]!=0)
-
-        S       = np.zeros((ngood,4),dtype=np.float32) 
-        cd      = m[:ngood,     :NL  ]
-        S[:,:4] = m[:ngood, NL  :NL+4]
-        w       = m[:ngood, NL+4:-5  ]
-        nrrs    = m[:ngood,      -5  ]
-        nref    = m[:ngood,      -4  ]
-        nsif    = m[:ngood,      -3  ]
-        nvrs    = m[:ngood,      -2  ]
-        nenv    = m[:ngood,      -1  ]
-
-        NT      = XBLOCK*XGRID       # Maximum Number of threads
-        NPHOTON = cd.shape[0]        # Number of photons
-
-        NLAYER  = sigma.shape[1]     # Number of vertical layer
-        NWVL    = sigma.shape[0]     # Number of wavelength for absorption and output
-        NGROUP  = NT//NWVL           # Number of groups of photons
-        NTHREAD = NGROUP*NWVL        # Number of threads used
-        NBUNCH  = NPHOTON//NGROUP    # Number of photons per group
-        NP_REST = NPHOTON%(NGROUP*NBUNCH) # Number of additional photons in the last group
-        NWVL_LOW = NWS
-
-        f  =  interp1d(wls,np.linspace(0, NWVL_LOW-1, num=NWVL_LOW))
-        iw =  f(wl)
-        iwls_in = np.floor(iw).astype(np.int8)        # index of lower wls value in the wls array, 
-        wwls_in = (iw-iwls_in).astype(np.float32)  # floating proportion between iwls and iwls+1
-        # special case for NLOW
-        ii = np.where(iwls_in==(NWVL_LOW-1))
-        iwls_in[ii] = NWVL_LOW-2
-        wwls_in[ii] = 1.
-
-        if verbose : 
-            fmt = 'Max Number of Threads : {}\nNumber of Threads : {}\n'
-            fmt+= 'Number of groups of photons: {}\nNumber of photons : {}\n'
-            fmt+= 'Number of layer: {}\nNumber of wavelength for absorption and output : {}\n'    
-            fmt+= 'Number of photons per group : {}\nNumber of additional photons in the last group : {}\n'
-            fmt+= 'Number of wavelength for scattering correction : {}\n'
-            print(fmt.format(NT, NTHREAD, NGROUP, NPHOTON, NLAYER, NWVL, NBUNCH, NP_REST, NWVL_LOW))
-
-        if alb_in is None  : alb_in = np.zeros(2*NWVL, dtype=np.float32)
-
-        sigma_ab_in  = np.zeros((NLAYER, NWVL), order='C', dtype=np.float32)
-        sigma_ab_in[:,:]  = sigma.swapaxes(0,1)
-
-        cd_in        = cd.reshape((NPHOTON, NLAYER), order='C').astype(np.float32)
-        S_in         = S.reshape((NPHOTON, 4),       order='C').astype(np.float32)
-        weight_in    = w.reshape((NPHOTON, NWVL_LOW),order='C').astype(np.float32)
-        nrrs_in      = nrrs.reshape(NPHOTON,order='C').astype(np.int8)
-        nsif_in      = nsif.reshape(NPHOTON,order='C').astype(np.int8)
-        nref_in      = nref.reshape(NPHOTON,order='C').astype(np.int8)
-        nvrs_in      = nvrs.reshape(NPHOTON,order='C').astype(np.int8)
-        nenv_in      = nenv.reshape(NPHOTON,order='C').astype(np.int8)
-
-        res_out      = gpuzeros((4, NWVL),   dtype=np.float64)
-        res_sca      = gpuzeros((4, NWVL),   dtype=np.float64)
-        res_rrs      = gpuzeros((4, NWVL),   dtype=np.float64)
-        res_sif      = gpuzeros((4, NWVL),   dtype=np.float64)
-        res_vrs      = gpuzeros((4, NWVL),   dtype=np.float64)
-
-        self.kernel2(np.int64(NPHOTON), np.int64(NLAYER), np.int64(NWVL), 
-                          np.int64(NTHREAD), np.int64(NGROUP), np.int64(NBUNCH), 
-                          np.int64(NP_REST), np.int64(NWVL_LOW),
-                          res_out, res_sca, res_rrs, res_sif, res_vrs, 
-                          to_gpu(sigma_ab_in), to_gpu(alb_in), to_gpu(cd_in),
-                          to_gpu(S_in), to_gpu(weight_in), to_gpu(nrrs_in), 
-                          to_gpu(nref_in), to_gpu(nsif_in), to_gpu(nvrs_in),
-                          to_gpu(nenv_in), to_gpu(iwls_in), to_gpu(wwls_in), 
-                          block=(XBLOCK,1,1),grid=(XGRID,1,1))
-        return res_out.get()
     
 
 
@@ -933,7 +859,6 @@ class Smartg(object):
 
         # warning! values defined in communs.h 
         MAX_HIST = 2048 * 2048
-        #MAX_NLOW = 101
         MAX_NLOW = 401
 
         # number of Stokes parameters of the radiation field
@@ -1198,7 +1123,7 @@ class Smartg(object):
          NPhotonsOutTot, sigma, Nkernel, secs_cuda_clock, cMatVisuRecep, matCats, matLoss
         ) = loop_kernel(NBPHOTONS, faer, foce,
                         NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX_HIST, NLOW, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
-                        NLAM, NSENSOR, self.double, self.kernel, None, p, X0, le, tab_sensor, spectrum,
+                        NLAM, NSENSOR, self.double, self.kernel, self.kernel2, p, X0, le, tab_sensor, spectrum,
                         prof_atm_gpu, prof_oc_gpu, cell_atm_gpu, cell_oc_gpu,
                         wl_proba_icdf, cell_proba_icdf, stdev, self.rng, self.alis, myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, hist=hist)
 
@@ -2035,31 +1960,80 @@ def reduce_diff(m, varnames, delta=None):
     return res
 
 
+def reduce_histories(kernel2, tabHist, wl, sigma, NLOW, alb_in=None, XBLOCK=512, XGRID=512, verbose=False):
+   NL    = sigma.shape[1]
+   w     = tabHist[:, NL+4:-5]
+   ngood = np.sum(w[:,0]!=0)
 
-def get_git_attrs():
-    R = {}
+   S       = np.zeros((ngood,4),dtype=np.float32) 
+   cd      = tabHist[:ngood,     :NL  ]
+   S[:,:4] = tabHist[:ngood, NL  :NL+4]
+   w       = tabHist[:ngood, NL+4:-5  ]
+   nrrs    = tabHist[:ngood,      -5  ]
+   nref    = tabHist[:ngood,      -4  ]
+   nsif    = tabHist[:ngood,      -3  ]
+   nvrs    = tabHist[:ngood,      -2  ]
+   nenv    = tabHist[:ngood,      -1  ]
 
-    # check current commit
-    p = subprocess.Popen(['git', 'rev-parse', 'HEAD'],
-                         stdout=subprocess.PIPE,
-                         stderr=subprocess.PIPE)
-    if p.wait():
-        return {}
-    else:
-        shasum = p.communicate()[0].strip()
-        R.update({'git_commit_ref': shasum})
+   NT      = XBLOCK*XGRID       # Maximum Number of threads
+   NPHOTON = cd.shape[0]        # Number of photons
 
-    # check if repo is dirty
-    p = subprocess.Popen(['git', 'status', '--porcelain',
-                          '--untracked-files=no'],
-                          stdout=subprocess.PIPE,
-                          stderr=subprocess.PIPE)
-    if p.wait():
-        return {}
-    else:
-        is_dirty = len(p.communicate()[0]) != 0
-        R.update({'git_dirty_repo': int(is_dirty)})
-    return R
+   NLAYER  = sigma.shape[1]     # Number of vertical layer
+   NWVL    = sigma.shape[0]     # Number of wavelength for absorption and output
+   NGROUP  = NT//NWVL           # Number of groups of photons
+   NTHREAD = NGROUP*NWVL        # Number of threads used
+   NBUNCH  = NPHOTON//NGROUP    # Number of photons per group
+   NP_REST = NPHOTON%(NGROUP*NBUNCH) # Number of additional photons in the last group
+
+   wls= np.linspace(wl[0], wl[-1], num=NLOW, dtype=np.float32)
+   f  =  interp1d(wls,np.linspace(0, NLOW-1, num=NLOW))
+   iw =  f(wl)
+   iwls_in = np.floor(iw).astype(np.int8)        # index of lower wls value in the wls array, 
+   wwls_in = (iw-iwls_in).astype(np.float32)  # floating proportion between iwls and iwls+1
+   # special case for NLOW
+   ii = np.where(iwls_in==(NLOW-1))
+   iwls_in[ii] = NLOW-2
+   wwls_in[ii] = 1.
+
+   if verbose : 
+       fmt = 'Max Number of Threads : {}\nNumber of Threads : {}\n'
+       fmt+= 'Number of groups of photons: {}\nNumber of photons : {}\n'
+       fmt+= 'Number of layer: {}\nNumber of wavelength for absorption and output : {}\n'    
+       fmt+= 'Number of photons per group : {}\nNumber of additional photons in the last group : {}\n'
+       fmt+= 'Number of wavelength for scattering correction : {}\n'
+       print(fmt.format(NT, NTHREAD, NGROUP, NPHOTON, NLAYER, NWVL, NBUNCH, NP_REST, NLOW))
+
+   if alb_in is None  : alb_in = np.zeros(2*NWVL, dtype=np.float32)
+
+   sigma_ab_in  = np.zeros((NLAYER, NWVL), order='C', dtype=np.float32)
+   sigma_ab_in[:,:]  = sigma.swapaxes(0,1)
+
+   cd_in        = cd.reshape((NPHOTON, NLAYER), order='C').astype(np.float32)
+   S_in         = S.reshape((NPHOTON, 4),       order='C').astype(np.float32)
+   weight_in    = w.reshape((NPHOTON, NLOW),order='C').astype(np.float32)
+   nrrs_in      = nrrs.reshape(NPHOTON,order='C').astype(np.int8)
+   nsif_in      = nsif.reshape(NPHOTON,order='C').astype(np.int8)
+   nref_in      = nref.reshape(NPHOTON,order='C').astype(np.int8)
+   nvrs_in      = nvrs.reshape(NPHOTON,order='C').astype(np.int8)
+   nenv_in      = nenv.reshape(NPHOTON,order='C').astype(np.int8)
+
+   res_out      = gpuzeros((4, NWVL),   dtype=np.float64)
+   res_sca      = gpuzeros((4, NWVL),   dtype=np.float64)
+   res_rrs      = gpuzeros((4, NWVL),   dtype=np.float64)
+   res_sif      = gpuzeros((4, NWVL),   dtype=np.float64)
+   res_vrs      = gpuzeros((4, NWVL),   dtype=np.float64)
+
+   kernel2(np.int64(NPHOTON), np.int64(NLAYER), np.int64(NWVL), 
+                     np.int64(NTHREAD), np.int64(NGROUP), np.int64(NBUNCH), 
+                     np.int64(NP_REST), np.int64(NLOW),
+                     res_out, res_sca, res_rrs, res_sif, res_vrs, 
+                     to_gpu(sigma_ab_in), to_gpu(alb_in), to_gpu(cd_in),
+                     to_gpu(S_in), to_gpu(weight_in), to_gpu(nrrs_in), 
+                     to_gpu(nref_in), to_gpu(nsif_in), to_gpu(nvrs_in),
+                     to_gpu(nenv_in), to_gpu(iwls_in), to_gpu(wwls_in), 
+                     block=(XBLOCK,1,1),grid=(XGRID,1,1))
+   return res_out.get()
+
 
  
 def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX_HIST, NLOW,
@@ -2080,7 +2054,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         - NBTHETA : Number of intervals in zenith
         - NLAM : Number of wavelengths
         - options : compilation options
-        - kern : kernel launching the transfert radiative
+        - kern : kernel launching the radiative transfer
         - p: progress bar object
         - X0: initial coordinates of the photon entering the atmosphere
         - myObjects0 : gpu array containing the information of all the objects
@@ -2136,8 +2110,16 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         tabDistTot = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI), dtype=np.float64)
     else : 
         tabDistTot = gpuzeros((1), dtype=np.float64)
-    if hist : tabHistTot = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+5),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
-    else : tabHistTot = gpuzeros((1), dtype=np.float32)
+
+    #if hist : tabHistTot = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+5),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
+    if hist : 
+        tabHistTot = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+5),1,1,1), dtype=np.float32)
+        dz    = abs(np.diff(prof_atm.get()['z'][0,:]))
+        sigma = np.diff(prof_atm.get()['OD_abs'][:,:])/dz
+        # TODO add oceanic absorption
+        wl = spectrum.get()['lambda'][:]
+    else :
+        tabHistTot = gpuzeros((1), dtype=np.float32)
 
     # Initialize of the parameters
     tabPhotonsTot = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float64)
@@ -2159,15 +2141,22 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
 
     if double:
         tabPhotons = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float64)
-        if ((NATM+NOCE >0) and (NATM_ABS+NOCE_ABS <500) and alis) : tabDist = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI), dtype=np.float64)
-        else : tabDist = gpuzeros((1), dtype=np.float64)
+        if ((NATM+NOCE >0) and (NATM_ABS+NOCE_ABS <500) and alis) : 
+            tabDist = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI), dtype=np.float64)
+        else :
+            tabDist = gpuzeros((1), dtype=np.float64)
     else:
         tabPhotons = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float32)
-        if ((NATM+NOCE >0) and (NATM_ABS+NOCE_ABS <500) and alis) : tabDist = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
-        else : tabDist = gpuzeros((1), dtype=np.float32)
+        if ((NATM+NOCE >0) and (NATM_ABS+NOCE_ABS <500) and alis) : 
+            tabDist = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
+        else : 
+            tabDist = gpuzeros((1), dtype=np.float32)
 
-    if hist : tabHist = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+5),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
-    else : tabHist = gpuzeros((1), dtype=np.float32)
+    if hist : 
+        tabHist = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+5),1,1,1), dtype=np.float32)
+        #tabHist = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+5),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
+    else : 
+        tabHist = gpuzeros((1), dtype=np.float32)
 
     # local estimates angles
     if le != None:
@@ -2231,12 +2220,15 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
 
         NPhotonsOutTot += NPhotonsOut
         S = tabPhotons   # sum of weights for the last kernel
-        tabPhotonsTot += S
+        if(~hist) : 
+            tabPhotonsTot += S
         
         T = tabDist
         tabDistTot += T
         if hist :
             tabHistTot = tabHist
+            res = reduce_histories(kern2, np.squeeze(tabHist.get()), wl, sigma, NLOW)[:,None,:,None,None]
+            tabPhotonsTot[0,:,:,:,:,:] += to_gpu(res)
 
         N_simu += 1
         if stdev:
@@ -2283,6 +2275,32 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
 
     return NPhotonsInTot.get(), tabPhotonsTot.get(), tabDistTot.get(), tabHistTot.get(), errorcount, \
         NPhotonsOutTot.get(), sigma, N_simu, secs_cuda_clock, tabMatRecep, matCats, matLoss
+
+
+def get_git_attrs():
+    R = {}
+
+    # check current commit
+    p = subprocess.Popen(['git', 'rev-parse', 'HEAD'],
+                         stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE)
+    if p.wait():
+        return {}
+    else:
+        shasum = p.communicate()[0].strip()
+        R.update({'git_commit_ref': shasum})
+
+    # check if repo is dirty
+    p = subprocess.Popen(['git', 'status', '--porcelain',
+                          '--untracked-files=no'],
+                          stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE)
+    if p.wait():
+        return {}
+    else:
+        is_dirty = len(p.communicate()[0]) != 0
+        R.update({'git_dirty_repo': int(is_dirty)})
+    return R
 
 
 def impactInit(prof_atm, NLAM, THVDEG, Rter, pp):
