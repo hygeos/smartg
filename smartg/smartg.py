@@ -1321,7 +1321,8 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
         m.add_dataset('V_stdev_up (TOA)', sigma[UPTOA,3,isen,ilam,iphi,:], axnames)
     m.add_dataset('N_up (TOA)', NPhotonsOutTot[UPTOA,isen,ilam,iphi,:], axnames)
     if len(tabDistFinal) > 1: m.add_dataset('cdist_up (TOA)', tabDistFinal[UPTOA,:,isen,iphi,:], axnames2)
-    if hist : m.add_dataset('disth_up (TOA)', tabHistFinal[:,:,isen,iphi,:],axnames3)
+    #if hist : m.add_dataset('disth_up (TOA)', tabHistFinal[:,:,isen,iphi,:],axnames3)
+    #if hist : m.add_dataset('disth_up (TOA)', np.squeeze(tabHistFinal[:,:,isen,iphi,:]))
 
     if OUTPUT_LAYERS & 1:
         m.add_dataset('I_down (0+)', tabFinal[DOWN0P,0,isen,ilam,iphi,:], axnames)
@@ -1960,7 +1961,7 @@ def reduce_diff(m, varnames, delta=None):
     return res
 
 
-def reduce_histories(kernel2, tabHist, wl, sigma, NLOW, alb_in=None, XBLOCK=512, XGRID=512, verbose=False):
+def reduce_histories(kernel2, tabHist, wl, sigma, NLOW, NBTHETA=1, alb_in=None, XBLOCK=512, XGRID=512, verbose=False):
    NL    = sigma.shape[1]
    w     = tabHist[:, NL+4:-5]
    ngood = np.sum(w[:,0]!=0)
@@ -1968,12 +1969,13 @@ def reduce_histories(kernel2, tabHist, wl, sigma, NLOW, alb_in=None, XBLOCK=512,
    S       = np.zeros((ngood,4),dtype=np.float32) 
    cd      = tabHist[:ngood,     :NL  ]
    S[:,:4] = tabHist[:ngood, NL  :NL+4]
-   w       = tabHist[:ngood, NL+4:-5  ]
-   nrrs    = tabHist[:ngood,      -5  ]
-   nref    = tabHist[:ngood,      -4  ]
-   nsif    = tabHist[:ngood,      -3  ]
-   nvrs    = tabHist[:ngood,      -2  ]
-   nenv    = tabHist[:ngood,      -1  ]
+   w       = tabHist[:ngood, NL+4:-6  ]
+   nrrs    = tabHist[:ngood,      -6  ]
+   nref    = tabHist[:ngood,      -5  ]
+   nsif    = tabHist[:ngood,      -4  ]
+   nvrs    = tabHist[:ngood,      -3  ]
+   nenv    = tabHist[:ngood,      -2  ]
+   ith     = tabHist[:ngood,      -1  ]
 
    NT      = XBLOCK*XGRID       # Maximum Number of threads
    NPHOTON = cd.shape[0]        # Number of photons
@@ -2016,21 +2018,22 @@ def reduce_histories(kernel2, tabHist, wl, sigma, NLOW, alb_in=None, XBLOCK=512,
    nref_in      = nref.reshape(NPHOTON,order='C').astype(np.int8)
    nvrs_in      = nvrs.reshape(NPHOTON,order='C').astype(np.int8)
    nenv_in      = nenv.reshape(NPHOTON,order='C').astype(np.int8)
+   ith_in       = ith.reshape( NPHOTON,order='C').astype(np.int8)
 
-   res_out      = gpuzeros((4, NWVL),   dtype=np.float64)
-   res_sca      = gpuzeros((4, NWVL),   dtype=np.float64)
-   res_rrs      = gpuzeros((4, NWVL),   dtype=np.float64)
-   res_sif      = gpuzeros((4, NWVL),   dtype=np.float64)
-   res_vrs      = gpuzeros((4, NWVL),   dtype=np.float64)
+   res_out      = gpuzeros((4, NWVL, NBTHETA),   dtype=np.float64)
+   res_sca      = gpuzeros((4, NWVL, NBTHETA),   dtype=np.float64)
+   res_rrs      = gpuzeros((4, NWVL, NBTHETA),   dtype=np.float64)
+   res_sif      = gpuzeros((4, NWVL, NBTHETA),   dtype=np.float64)
+   res_vrs      = gpuzeros((4, NWVL, NBTHETA),   dtype=np.float64)
 
    kernel2(np.int64(NPHOTON), np.int64(NLAYER), np.int64(NWVL), 
                      np.int64(NTHREAD), np.int64(NGROUP), np.int64(NBUNCH), 
-                     np.int64(NP_REST), np.int64(NLOW),
+                     np.int64(NP_REST), np.int64(NLOW), np.int64(NBTHETA),
                      res_out, res_sca, res_rrs, res_sif, res_vrs, 
                      to_gpu(sigma_ab_in), to_gpu(alb_in), to_gpu(cd_in),
                      to_gpu(S_in), to_gpu(weight_in), to_gpu(nrrs_in), 
                      to_gpu(nref_in), to_gpu(nsif_in), to_gpu(nvrs_in),
-                     to_gpu(nenv_in), to_gpu(iwls_in), to_gpu(wwls_in), 
+                     to_gpu(nenv_in), to_gpu(ith_in), to_gpu(iwls_in), to_gpu(wwls_in), 
                      block=(XBLOCK,1,1),grid=(XGRID,1,1))
    return res_out.get()
 
@@ -2111,9 +2114,10 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
     else : 
         tabDistTot = gpuzeros((1), dtype=np.float64)
 
-    #if hist : tabHistTot = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+5),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
+    #if hist : tabHistTot = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+6),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
     if hist : 
-        tabHistTot = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+5),1,1,1), dtype=np.float32)
+        #tabHistTot = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+6),1,NBTHETA,1), dtype=np.float32)
+        tabHistTot = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+6),1,1,1), dtype=np.float32)
         dz    = abs(np.diff(prof_atm.get()['z'][0,:]))
         sigma = np.diff(prof_atm.get()['OD_abs'][:,:])/dz
         # TODO add oceanic absorption
@@ -2153,8 +2157,9 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
             tabDist = gpuzeros((1), dtype=np.float32)
 
     if hist : 
-        tabHist = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+5),1,1,1), dtype=np.float32)
-        #tabHist = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+5),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
+        #tabHist = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+6),1,NBTHETA,1), dtype=np.float32)
+        tabHist = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+6),1,1,1), dtype=np.float32)
+        #tabHist = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+6),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
     else : 
         tabHist = gpuzeros((1), dtype=np.float32)
 
@@ -2227,7 +2232,8 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         tabDistTot += T
         if hist :
             tabHistTot = tabHist
-            res = reduce_histories(kern2, np.squeeze(tabHist.get()), wl, sigma, NLOW)[:,None,:,None,None]
+            res = reduce_histories(kern2, np.squeeze(tabHist.get()), wl, sigma, NLOW,
+                                  NBTHETA=NBTHETA)[:,None,:,:,None]
             tabPhotonsTot[0,:,:,:,:,:] += to_gpu(res)
 
         N_simu += 1

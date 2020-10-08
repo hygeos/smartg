@@ -5604,10 +5604,10 @@ __device__ void countPhoton(Photon* ph,
           //int idx = blockIdx.x * blockDim.x + threadIdx.x;
           unsigned long long counter2;
           counter2=atomicAdd(NPhotonsOut, 1);
-          //counter2=atomicAdd(NPhotonsOut+is, 1);
           if (counter2 >= MAX_HIST) return;
-          unsigned long long KK2 = K*(NATM_ABSd+NOCE_ABSd+4+NLOWd+5); /* Number of information per local estmate photon (Record length)*/
-          //unsigned long long KK2 = K*(NATMd+NOCEd+4+NLOWd+3); /* Number of information per local estmate photon (Record length)*/
+          unsigned long long KK2 = NATM_ABSd+NOCE_ABSd+4+NLOWd+6; /* Number of information per local estmate photon (Record length)*/
+          //unsigned long long KK2 = K*(NATM_ABSd+NOCE_ABSd+4+NLOWd+5); /* Number of information per local estmate photon (Record length)*/
+          //unsigned long long KK2 = K*(NATMd+NOCEd+4+NLOWd+5); /* Number of information per local estmate photon (Record length)*/
           //unsigned long long KKK2= KK2 * MAX_HIST; /* Number of individual information per vertical Level (Number of Records)*/
           unsigned long long LL2;
           tabCount3   = (float*)tabHist     ; /* we position the pointer at the good vertical level*/
@@ -5615,37 +5615,42 @@ __device__ void countPhoton(Photon* ph,
           for (int n=0; n<NOCE_ABSd; n++){
                 /* The offset is the number of previous writing (counter2) * Record Length
                    + the offset of the individual information  + the place of the physical quantity */
-                LL2 = counter2*KK2 +  n*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+                LL2 = counter2*KK2 +  n;
+                //LL2 = counter2*KK2 +  n*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
                 tabCount3[LL2]= ph->cdist_oc[n+1];
           }
           //for (int n=0; n<NATMd; n++){
           for (int n=0; n<NATM_ABSd; n++){
-                LL2 = counter2*KK2 +  (n+NOCE_ABSd)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+                LL2 = counter2*KK2 +  n+NOCE_ABSd;
+                //LL2 = counter2*KK2 +  (n+NOCE_ABSd)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
                 tabCount3[LL2]= ph->cdist_atm[n+1];
           }
-          LL2 = counter2*KK2 +  (NATM_ABSd+NOCE_ABSd+0)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          LL2 = counter2*KK2 +  NATM_ABSd+NOCE_ABSd+0;
+          //LL2 = counter2*KK2 +  (NATM_ABSd+NOCE_ABSd+0)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= weight * (st.x+st.y);
-          LL2 = counter2*KK2 +  (NATM_ABSd+NOCE_ABSd+1)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          LL2 = counter2*KK2 +  NATM_ABSd+NOCE_ABSd+1;
           tabCount3[LL2]= weight * (st.x-st.y);
-          LL2 = counter2*KK2 +  (NATM_ABSd+NOCE_ABSd+2)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          LL2 = counter2*KK2 +  NATM_ABSd+NOCE_ABSd+2;
           tabCount3[LL2]= weight * (st.z);
-          LL2 = counter2*KK2 +  (NATM_ABSd+NOCE_ABSd+3)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          LL2 = counter2*KK2 +  NATM_ABSd+NOCE_ABSd+3;
           tabCount3[LL2]= weight * (st.w);
 
           for (int n=0; n<NLOWd; n++){
-                LL2 = counter2*KK2 +  (n+NATM_ABSd+NOCE_ABSd+4)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+                LL2 = counter2*KK2 + n+NATM_ABSd+NOCE_ABSd+4;
                 tabCount3[LL2]= weight_sca[n];
           }
-          LL2 = counter2*KK2 +  (NLOWd+NATM_ABSd+NOCE_ABSd+4)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          LL2 = counter2*KK2 +  NLOWd+NATM_ABSd+NOCE_ABSd+4;
           tabCount3[LL2]= (float)(ph->nrrs>=1);
-          LL2 = counter2*KK2 +  (NLOWd+NATM_ABSd+NOCE_ABSd+4+1)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          LL2 = counter2*KK2 +  NLOWd+NATM_ABSd+NOCE_ABSd+4+1;
           tabCount3[LL2]= (float)(ph->nref);
-          LL2 = counter2*KK2 +  (NLOWd+NATM_ABSd+NOCE_ABSd+4+2)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          LL2 = counter2*KK2 +  NLOWd+NATM_ABSd+NOCE_ABSd+4+2;
           tabCount3[LL2]= (float)(ph->nsif);
-          LL2 = counter2*KK2 +  (NLOWd+NATM_ABSd+NOCE_ABSd+4+3)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          LL2 = counter2*KK2 +  NLOWd+NATM_ABSd+NOCE_ABSd+4+3;
           tabCount3[LL2]= (float)(ph->nvrs>=1);
-          LL2 = counter2*KK2 +  (NLOWd+NATM_ABSd+NOCE_ABSd+4+4)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          LL2 = counter2*KK2 +  NLOWd+NATM_ABSd+NOCE_ABSd+4+4;
           tabCount3[LL2]= (float)(ph->nenv);
+          LL2 = counter2*KK2 +  NLOWd+NATM_ABSd+NOCE_ABSd+4+5;
+          tabCount3[LL2]= (float)(ph->ith);
        } // HISTd==1
 
        unsigned long long KK  = K*(NATM_ABSd+NOCE_ABSd);
@@ -6859,9 +6864,11 @@ return intensity;
 
 extern "C" {
 __global__ void reduce_absorption_gpu(unsigned long long NPHOTON, unsigned long long NLAYER, unsigned long long NWVL, 
-        unsigned long long NTHREAD, unsigned long long NGROUP, unsigned long long NBUNCH, unsigned long long NP_REST, unsigned long long NWVL_LOW,
+        unsigned long long NTHREAD, unsigned long long NGROUP, unsigned long long NBUNCH, 
+        unsigned long long NP_REST, unsigned long long NWVL_LOW, unsigned long long NBTHETA,
         double *res, double *res_sca, double *res_rrs, double *res_sif, double *res_vrs, float *ab, float *al, float *cd, float *S, float *weight, 
-        unsigned char *nrrs, unsigned char *nref, unsigned char *nsif, unsigned char *nvrs, unsigned char *nenv, unsigned char *iw_low, float *ww_low)
+        unsigned char *nrrs, unsigned char *nref, unsigned char *nsif, unsigned char *nvrs, unsigned char *nenv, unsigned char *ith, 
+        unsigned char *iw_low, float *ww_low)
 {
   const unsigned long long idx = threadIdx.x + blockDim.x * blockIdx.x;
   unsigned long long n,nstart,nstop,ns;
@@ -6870,6 +6877,7 @@ __global__ void reduce_absorption_gpu(unsigned long long NPHOTON, unsigned long 
   double wabs, walb0, walb1,walb; // absorption and albedo high resolution weigths
   float wsca1,wsca2,wsca;
   unsigned long long iw1,iw2;
+  unsigned long long offset;
 
   if (idx<NTHREAD) {
     iw = idx%NWVL ; // index of current wavelength
@@ -6898,11 +6906,13 @@ __global__ void reduce_absorption_gpu(unsigned long long NPHOTON, unsigned long 
         walb *= pow(walb1, (double)nenv[n]);
         for (s=0;s<4;s++) {
             ns = s + 4*n;
-            if (!nsif[n])             atomicAdd(res    +iw+NWVL*s, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
-            if (!nsif[n])             atomicAdd(res_sca+iw+NWVL*s, (double)S[ns] *              (double)wsca * walb);
-            if ( nrrs[n] && !nsif[n]) atomicAdd(res_rrs+iw+NWVL*s, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
-            if ( nsif[n])             atomicAdd(res_sif+iw+NWVL*s, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
-            if ( nvrs[n] && !nsif[n]) atomicAdd(res_vrs+iw+NWVL*s, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
+            //offset = iw + NWVL*s + NWVL*NBTHETA*ith[n]; 
+            offset = ith[n] + NBTHETA*iw + NWVL*NBTHETA*s; 
+            if (!nsif[n])             atomicAdd(res    +offset, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
+            if (!nsif[n])             atomicAdd(res_sca+offset, (double)S[ns] *              (double)wsca * walb);
+            if ( nrrs[n] && !nsif[n]) atomicAdd(res_rrs+offset, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
+            if ( nsif[n])             atomicAdd(res_sif+offset, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
+            if ( nvrs[n] && !nsif[n]) atomicAdd(res_vrs+offset, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
         }
     }
   }
