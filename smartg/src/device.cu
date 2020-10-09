@@ -6792,7 +6792,7 @@ __device__ float F1_rtls(float ths, float thv, float phi ){  //  rossthick-lispa
     float tths = tan(ths);
 
     float cos_t = 2./mm * sqrt(tthv*tthv + tths*tths - 2.*tthv*tths * cos(phi) + pow(tthv *tths * sin(phi),2) );
-    cos_t = fmin(cos_t, 1.);
+    cos_t = min(cos_t, 1.);
     float t = acos(cos_t);
     float sin_t = sin(t);
     float big_O = mm*(t - sin_t*cos_t)/PI;
