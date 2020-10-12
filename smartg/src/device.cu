@@ -745,6 +745,13 @@ extern "C" {
                 surfaceLambert(&ph, 0, tabthv, tabphi, spectrum, &rngstate);
            } // photon interaction with the environment 
 
+           else {
+                //
+		        // When rare numerical problem at the surface/env boundary*/
+                //
+               ph.loc = REMOVED;
+           }
+
            #ifdef VERBOSE_PHOTON
            display("SURFACE", &ph);
            #endif
