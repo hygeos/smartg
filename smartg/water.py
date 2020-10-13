@@ -67,7 +67,8 @@ class IOP(IOP_base):
     '''
     def __init__(self, phase=None, bp=None, bw=None,
                  atot=None, ap=None, aw=None, aCDOM=None,
-                 Z=[0, 10000], ALB=Albedo_cst(0.)):
+                 Z=[0, -10000], ALB=Albedo_cst(0.)):
+                 #Z=[0, 10000], ALB=Albedo_cst(0.)):
 
         self.Z = np.array(Z, dtype='float')
         self.bp = bp
@@ -129,7 +130,8 @@ class IOP(IOP_base):
         pro = MLUT()
 
         pro.add_axis('wavelength', wav[:])
-        pro.add_axis('z_oc', -self.Z)
+        pro.add_axis('z_oc', self.Z)
+        #pro.add_axis('z_oc', -self.Z)
         pro.add_dataset('T_oc', np.array([280.]*len(self.Z), dtype='float32'),
                         ['z_oc'])
 
@@ -142,9 +144,8 @@ class IOP(IOP_base):
             pro.add_dataset('phase_oc', pha_, ['iphase', 'stk', 'theta_oc'])
             pro.add_dataset('iphase_oc', ipha, ['wavelength', 'z_oc'])
 
-        #dz = np.diff(self.Z)
-        dz = diff1(self.Z)
-        #dz = np.ediff1d(self.Z, to_begin=0)
+        dz = - diff1(self.Z)
+        #dz = diff1(self.Z)
 
         tau_w   = - (aw   + bw  ) * dz
         tau_p   = - (ap + bp  ) * dz
@@ -628,7 +629,8 @@ class IOP_profile(IOP_base):
          
         #2. Derive Euphotic Depth and make vertical grid
         Zmax= min(DEPTH, 5*Zeu)
-        self.z = np.linspace(0, Zmax, num=NLAYER+1)
+        self.z = - np.linspace(0, Zmax, num=NLAYER+1)
+        #self.z = np.linspace(0, Zmax, num=NLAYER+1)
 
         #3. Introduce reduced concentration chi and reduced depth zeta
         # Stratified Trophic case 1 parametrization
@@ -640,11 +642,12 @@ class IOP_profile(IOP_base):
         self.chi_max  = 1.572
         self.zeta_max = 0.969
         self.Dzeta    = 0.393
-        zeta = self.z/Zeu
+        zeta = abs(self.z/Zeu)
         chl  = self.chls*self.chi(zeta)/self.chi(0.)
         chl[chl<0.]=1e-8
         self.chl = chl
-        self.chlmean = np.trapz(chl,self.z)/DEPTH
+        self.chlmean = np.trapz(chl,-self.z)/DEPTH
+        #self.chlmean = np.trapz(chl,self.z)/DEPTH
 
     def chi(self, zeta):
         return self.chi_b - self.s*zeta + self.chi_max*np.exp(-((zeta-self.zeta_max)/self.Dzeta)**2)
@@ -780,7 +783,8 @@ class IOP_profile(IOP_base):
         wav = np.array(wav)
         pro = MLUT()
         pro.add_axis('wavelength', wav[:])
-        pro.add_axis('z_oc', -self.z)
+        pro.add_axis('z_oc', self.z)
+        #pro.add_axis('z_oc', -self.z)
         pro.add_dataset('T_oc', np.array([280.]*len(self.z), dtype='float32'), ['z_oc'])
 
 
@@ -805,7 +809,8 @@ class IOP_profile(IOP_base):
 
         iop = self.calc_iop(wav, coef_trunc=coef_trunc)
 
-        dz   = diff1(self.z)
+        dz   = -diff1(self.z)
+        #dz   = diff1(self.z)
         zeros = np.zeros((len(wav),1))
         for key in iop.keys():
             iop[key] = np.append(zeros, iop[key][:,:-1], axis=1)
@@ -926,8 +931,8 @@ class IOP_profile(IOP_base):
         # create output MLUT
         result = MLUT()
         result.add_axis('wav_phase_oc', wav)
-        #result.add_axis('z_phase_oc', np.array([0.]))
-        result.add_axis('z_phase_oc', -self.z[:-1])
+        result.add_axis('z_phase_oc', self.z[:-1])
+        #result.add_axis('z_phase_oc', -self.z[:-1])
         result.add_axis('theta_oc', ang*180./np.pi)
         result.add_dataset('phase', pha, ['wav_phase_oc', 'z_phase_oc', 'stk', 'theta_oc'])
         result.add_dataset('coef_trunc', integ_ff[:,:], ['wav_phase_oc', 'z_phase_oc'])

@@ -855,10 +855,15 @@ extern "C" {
 										errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
 						}//direction
 					}//direction
-				} //LE
+                } //LE
+                
+                //
+		        // obsjsurf propagation*/
+                //
 				surfaceLambert3D(&ph, 0, tabthv, tabphi, spectrum,
-									  &rngstate, &geoStruc);
-			} // END Lambertian Mirror
+                                      &rngstate, &geoStruc);
+            } // END Lambertian Mirror
+
 			else if (geoStruc.material == 2) // Matte
 			{
 				ph.loc = ABSORBED;
@@ -866,7 +871,8 @@ extern "C" {
 				if (geoStruc.type == HELIOSTAT) ph.H+=1;
 				else if (geoStruc.type == RECEIVER) ph.E+=1;
 				ph.weight_loss[0] = 0.F;
-			} // End Matte
+            } // End Matte
+
 			else if (geoStruc.material == 3) // Mirror
 			{	
 				if (LEd == 1)
@@ -890,10 +896,14 @@ extern "C" {
 										errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
 						}//direction
 					}//direction
-				} //LE
-				// surfaceRugueuse3D(&ph, &geoStruc, &rngstate);
+                } //LE
+
+                //
+		        // obsjsurf propagation*/
+                //
 				Obj3DRoughSurf(&ph, 0, tabthv, tabphi, &geoStruc, &rngstate);
-			} // End Mirror
+            } // End Mirror
+
 			else {ph.loc = REMOVED;} // unknow material
 
 			#ifndef BACK
@@ -1026,10 +1036,14 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 	ph->weight_loss[3] = 0.F;
 	ph->v_i = make_float3(-DIRSXd, -DIRSYd, -DIRSZd);
     #endif
-	
-    ph->nint = 0;
-    ph->nref = 0;
-    ph->nenv = 0;
+    
+    /* Interaction counters*/
+    ph->nint = 0; // total
+    ph->nref = 0; // reflection on surface (main)
+    ph->nenv = 0; // reflection on surface (environment)
+	ph->nrrs = 0; // number of RRS events
+    ph->nvrs = 0; // number of VRS events
+
     ph->env  = 0;
 	ph->weight = WEIGHTINIT;
 
@@ -1040,31 +1054,49 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 	ph->stokes.w = 0.F;
 
 	ph->scatterer = UNDEF;
-	ph->nrrs = 0;
-	ph->nvrs = 0;
 	
     // Sensor index initialization
     ph->is = __float2uint_rz(RAND * NSENSORd);
 
-    // Wavelength initialization
+    /* ------------------------------ */
+    // Wavelength index initialization
+    /* ------------------------------ */
+
+    /* 1/ Uniform distribution of the wavelengths */
     if (NWLPROBA == 0) { 
         #ifdef ALIS
-        // NJACd=0 : no jacobian -> one unperturbed profile
+        // The starting wavelength index is chosen randomly among the available ones
+        // if NJACd = 0: no jacobian -> one unperturbed profile
+        // otherwise the 'real' wavelengths number is limited to NLAMd/NJACd
+        // other indices correspond to the repetition of the initial wavelengths
+        // several times (NJACd) for perturbed atmospheric or oceanic profiles
         ph->ilam = __float2uint_rz(RAND * NLAMd/(NJACd+1));
         #else
-        // All sensors see the same wavelengths
+
+        // Case of all sensors seeing the same wavelengths
         if (tab_sensor[ph->is].ILAM_0 == -1) ph->ilam = __float2uint_rz(RAND * NLAMd);
-        // Each sensor is associated a range of wavelengths
-        else ph->ilam =  __float2uint_rz(RAND * (tab_sensor[ph->is].ILAM_1 - tab_sensor[ph->is].ILAM_0))
+        // Case of each sensor is associated a range of wavelengths
+        else ph->ilam =  __float2uint_rz(RAND * 
+                         (tab_sensor[ph->is].ILAM_1 - tab_sensor[ph->is].ILAM_0))
                          + tab_sensor[ph->is].ILAM_0;
-        //ph->ilam = __float2uint_rz(RAND * NLAMd);
         #endif
-    } else {
+
+    } 
+    
+    /* 2/ Pre-defined distribution of the wavelengths */
+    else {
         ph->ilam = wl_proba_icdf[__float2uint_rz(RAND * NWLPROBA)];
     }
-	ph->wavel = spectrum[ph->ilam].lambda;
 
+	ph->wavel = spectrum[ph->ilam].lambda;
+    /* ------------------------------ */
+
+
+    /* ------------------------------ */
     // Position initialization
+    /* ------------------------------ */
+
+    // Read and define posiion using sensor attributes
     ph->pos = make_float3(tab_sensor[ph->is].POSX,
                           tab_sensor[ph->is].POSY,
                           tab_sensor[ph->is].POSZ);
@@ -1080,45 +1112,35 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 	ph->radius = length(ph->pos);
     #endif
 
-    if(ph->loc == SURF0P){
-        //ph->layer   = NATMd;
-        ph->layer   = NATMd-1;
+    // Surface
+    if((ph->loc == SURF0P) || (ph->loc == SURF0M)){
+        if (ph->loc == SURF0P) ph->layer   = NATMd-1;
+        else                   ph->layer   = 0;
+
+        // Fast Move Mode additional initialization
         ph->tau     = 0.F;
         ph->tau_abs = 0.F;
         epsilon     = 0.F;
-        ph->pos.z   = 0.F;
-        #ifdef SPHERIQUE
-        ph->pos.z   = RTER;
-        #endif
+
+        // FAST Move Mode ALIS specific additional initialization
         #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
-        for (int k=0; k<NLOWd; k++) {
-            ph->tau_sca[k] = 0.F;
-        }
+        for (int k=0; k<NLOWd; k++) ph->tau_sca[k] = 0.F;
         #endif
     }
 
-    if(ph->loc == SURF0M){
-        ph->layer   = 0;
-        ph->tau     = 0.F;
-        ph->tau_abs = 0.F;
-        epsilon     = 0.F;
-        ph->pos.z   = 0.F;
-        #ifdef SPHERIQUE
-        ph->pos.z = RTER;
-        #endif
-        #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
-        for (int k=0; k<NLOWd; k++) {
-            ph->tau_sca[k] = 0.F; ;
-        }
-        #endif
-    }
-
+    // Seafloor
     if(ph->loc == SEAFLOOR){
         ph->layer   = NOCEd;
+        ph->pos.z   = prof_oc[NOCEd].z;
+        
+        // Fast Move Mode additional initialization
+        #if !defined(ALT_PP) && !defined(SPHERIQUE)
         ph->tau     = get_OD(BEERd, prof_oc[NOCEd +ph->ilam*(NOCEd+1)]);
         ph->tau_abs = prof_oc[NOCEd +ph->ilam*(NOCEd+1)].OD_abs;
         epsilon     = 0.F;
-        ph->pos.z   = prof_oc[NOCEd].z;
+        #endif
+
+        // FAST Move Mode ALIS specific additional initialization
         #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
         int DL=(NLAMd-1)/(NLOWd-1);
         for (int k=0; k<NLOWd; k++) {
@@ -1127,27 +1149,66 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
         #endif
     }
 
+    ///////////////////////////////////////
+    // Ocean
+    /////////////////////////////////////
+    /* Internally Z is negative in the ocean */
+    /* OD ARE NEGATIVE also */
+    /*
+    ^ Z        layer index i
+    |                      0           SURF 0+
+    |  0=z[SURF]======================|==============|===========|===|==========
+    |                      1          |              |           |   |
+    |      ---------------------------|--------------|-----------|---|----------
+    |                      2          |              |           |   |
+    |      ---------------------------|--------------|-----------|---|----------
+    |                      .          |              |           |   |
+    |                      .          |              |           |   |
+    |                      .          |              |           |   |
+    |      ---------------------------|--------------|-----------|---|----------
+    |                      i-1        |             \|/          |  \|/
+    |    z[i-1]-----------------------|--------------v-OD[i-1]--\|/--v--tau[i-1]
+    |    z.................i..........|...................tau(z).v..............
+    |    z[i]-------------------------|-----------------------------------------
+    |                      .          |                                      
+    |                      .          |                                     
+    |                      .          |                                     
+    |      ---------------------------|-----------------------------------------
+    |                      NOCE-1     |                                     
+    |      ---------------------------|-----------------------------------------
+    |                      NOCE      \|/                                     
+    |    z[NOCE]______________________v__OD[NOCE]_______________________________
+           ////////////////////// SEAFLOOR /////////////////////////////////////
+    */
     if(ph->loc == OCEAN){
+        /* Determine layer index from vertical position */
         ilayer = 1;
         while (( prof_oc[ilayer].z > tab_sensor[ph->is].POSZ) && (ilayer < NOCEd)) {
             ilayer++;
         }
         ph->layer = ilayer;
-        #if !defined(ALT_PP) && !defined(SPHERIQUE)
-        dz_i    = fabs(prof_oc[ilayer].z - prof_oc[ilayer-1].z);
-        dz      = fabs(tab_sensor[ph->is].POSZ - prof_oc[ilayer-1].z) ;
-        epsilon = fabs(__fdividef(dz,dz_i));
 
-        delta_i = fabs(get_OD(BEERd, prof_oc[ilayer+ph->ilam*(NOCEd+1)]) - get_OD(BEERd, prof_oc[ilayer-1+ph->ilam*(NOCEd+1)]));
+        // Fast Move Mode additional initialization
+        // partial geometrical thickness in the layer (from top) : 
+        //      epsilon = (z[i-1]-z)/(z[i-1]-z[i]) ; 0<epsilon<1
+        // optical thickness of the layer delta[i] = OD[i-1] - OD[i]
+        // partial optical thickness in the layer (from top) : epsilon * delta[i]
+        // tau(z) = tau[i-1] - epsilon * delta[i]
+        // tau[i-1] = OD[i-1]
+        #if !defined(ALT_PP) && !defined(SPHERIQUE)
+        dz_i    = fabs(prof_oc[ilayer-1].z - prof_oc[ilayer].z);
+        dz      = fabs(prof_oc[ilayer-1].z - tab_sensor[ph->is].POSZ) ; // Distance from the layer top
+        epsilon = fabs(__fdividef(dz,dz_i));
+        delta_i = fabs(get_OD(BEERd, prof_oc[ilayer-1+ph->ilam*(NOCEd+1)]) 
+                     - get_OD(BEERd, prof_oc[ilayer  +ph->ilam*(NOCEd+1)]));
         ph->tau = epsilon * delta_i + (get_OD(BEERd, prof_oc[0+ph->ilam*(NOCEd+1)])-
                                        get_OD(BEERd, prof_oc[ilayer-1+ph->ilam*(NOCEd+1)])); 
-
         delta_i = fabs(prof_oc[ilayer+ph->ilam*(NOCEd+1)].OD_abs - prof_oc[ilayer-1+ph->ilam*(NOCEd+1)].OD_abs);
         ph->tau_abs = epsilon * delta_i + (prof_oc[0+ph->ilam*(NOCEd+1)].OD_abs -
                                            prof_oc[ilayer-1+ph->ilam*(NOCEd+1)].OD_abs); 
         #endif
 
-        //if(idx==0) printf("%i %f %f %f %f\n",ilayer, prof_oc[ilayer].z, ph->tau, delta_i, epsilon);
+        // FAST Move Mode ALIS specific additional initialization
         #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
         int DL=(NLAMd-1)/(NLOWd-1);
         for (int k=0; k<NLOWd; k++) {
@@ -1158,12 +1219,43 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
         #endif
     }
 
+    /////////////////////////////////////
+    // Atmosphere or object near surface
+    /////////////////////////////////////
+    /*
+    Z          layer index i
+    ^                      0           TOA
+    |  HTOA===========================|==============|==========================
+    |                      1          |              |
+    |      ---------------------------|--------------|--------------------------
+    |                      2          |              |
+    |      ---------------------------|--------------|--------------------------
+    |                      .          |              |
+    |                      .          |              |
+    |                      .          |              |
+    |      ---------------------------|--------------|--------------------------
+    |                      i-1        |              |  
+    |    z[i-1]-----------------------|--------------|--------------------------
+    |    z.................i..........|.............\|/...............tau(z)....
+    |    z[i]-------------------------|--------------v---OD[i]------/|\-----tau[i]
+    |                      .          |                              |    /|\
+    |                      .          |                              |     |
+    |                      .          |                              |     |
+    |      ---------------------------|------------------------------|-----|----
+    |                      NATM-1     |                              |     |
+    |      ---------------------------|------------------------------|-----|----
+    |                      NATM      \|/                             |     | 
+    |    z[NATM]______________________v__OD[NATM]____________________|_____|____
+           /////////////////////////////////////////////////////////////////////
+    */
     if((ph->loc == ATMOS)
 	   #ifdef OBJ3D
 	   || (ph->loc == OBJSURF)
 	   #endif
 		){
-        float POSZd_alt; 
+
+        // Altitude determination
+        float POSZd_alt;
         #ifdef SPHERIQUE
         float3 rad = make_float3(tab_sensor[ph->is].POSX,
                            tab_sensor[ph->is].POSY,
@@ -1173,37 +1265,58 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
         POSZd_alt = tab_sensor[ph->is].POSZ;
         #endif
 
+        /* Determine layer index */
+        /* if 3D atmospheric properties mode (OPT3D) is not chosen*/
         #ifndef OPT3D
-        ilayer=1;
+        ilayer=1;   // initialization in the UPPER layer just below TOA
+                    // the layer LOWER bound altitude is prof_atm[ilayer].z 
+                    // So while this altitude is above sensor altitude we continue to go down
         while (( prof_atm[ilayer].z > POSZd_alt) && (ilayer < NATMd)) {
             ilayer++;
         }
-        //if (POSZd_alt==0.)ph->layer = NATMd-1;
-        //else ph->layer = ilayer;
         ph->layer = ilayer;
 
+        // Fast Move Mode additional initialization
         #if !defined(ALT_PP) && !defined(SPHERIQUE)
+        // partial geometrical thickness in the layer (from bottom) : 
+        //      epsilon = (z-z[i])/(z[i-1]-z[i]) ; 0<epsilon<1
+        // optical thickness of the layer delta[i] = OD[i] - OD[i-1]
+        // partial optical thickness in the layer (from bottom) : epsilon * delta[i]
+        // tau(z) = tau[i] + epsilon * delta[i]
+        // tau[i] = OD[NATM] - OD[i]
         dz_i    = fabs(prof_atm[ilayer-1].z - prof_atm[ilayer].z);
-        dz      = fabs(POSZd_alt - prof_atm[ilayer].z) ;
+        dz      = fabs(POSZd_alt - prof_atm[ilayer].z) ; 
         epsilon = fabs(__fdividef(dz,dz_i));
+        delta_i = fabs(get_OD(BEERd, prof_atm[ilayer+ph->ilam*(NATMd+1)]) 
+                     - get_OD(BEERd, prof_atm[ilayer-1+ph->ilam*(NATMd+1)]));
+        ph->tau =   get_OD(BEERd, prof_atm[NATMd+ph->ilam*(NATMd+1)]) //
+                  - get_OD(BEERd, prof_atm[ilayer+ph->ilam*(NATMd+1)])
+                  + epsilon * delta_i; 
 
-        delta_i = fabs(get_OD(BEERd, prof_atm[ilayer+ph->ilam*(NATMd+1)]) - get_OD(BEERd, prof_atm[ilayer-1+ph->ilam*(NATMd+1)]));
-        ph->tau = epsilon * delta_i + (get_OD(BEERd, prof_atm[NATMd+ph->ilam*(NATMd+1)])-
-                                       get_OD(BEERd, prof_atm[ilayer+ph->ilam*(NATMd+1)])); 
-        delta_i = fabs(prof_atm[ilayer+ph->ilam*(NATMd+1)].OD_abs - prof_atm[ilayer-1+ph->ilam*(NATMd+1)].OD_abs);
-        ph->tau_abs = epsilon * delta_i + (prof_atm[NATMd+ph->ilam*(NATMd+1)].OD_abs -
-                                           prof_atm[ilayer+ph->ilam*(NATMd+1)].OD_abs); 
+        // Same scheme for absorption optical thickness
+        delta_i = fabs(prof_atm[ilayer+ph->ilam*(NATMd+1)].OD_abs 
+                     - prof_atm[ilayer-1+ph->ilam*(NATMd+1)].OD_abs);
+        ph->tau_abs =   prof_atm[NATMd+ph->ilam*(NATMd+1)].OD_abs
+                      - prof_atm[ilayer+ph->ilam*(NATMd+1)].OD_abs
+                      + epsilon * delta_i; 
         #endif
 
+        // FAST Move Mode ALIS specific additional initialization
         #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
+        // Index interval of the wavelengths where to compute scattering corrections
         int DL=(NLAMd-1)/(NLOWd-1);
+        // Loop on correction wavelength indices
         for (int k=0; k<NLOWd; k++) {
-            delta_i = fabs(get_OD(BEERd, prof_atm[ilayer+k*DL*(NATMd+1)]) - get_OD(BEERd, prof_atm[ilayer-1+k*DL*(NATMd+1)]));
-            ph->tau_sca[k] = epsilon * delta_i + (get_OD(1,prof_atm[NATMd + k*DL*(NATMd+1)])-
-                                                  get_OD(1,prof_atm[ilayer + k*DL*(NATMd+1)]));
+            delta_i = fabs(get_OD(BEERd, prof_atm[ilayer+k*DL*(NATMd+1)]) 
+                         - get_OD(BEERd, prof_atm[ilayer-1+k*DL*(NATMd+1)]));
+            ph->tau_sca[k] = get_OD(1,prof_atm[NATMd + k*DL*(NATMd+1)])
+                           - get_OD(1,prof_atm[ilayer + k*DL*(NATMd+1)])
+                           + epsilon * delta_i;
         }
         #endif
 
+        /* OPT3D cell initialization */
+        /* in the case of OPT3D, the user specifies the layer (cell) initial index in the inputs */
         #else
         ph->layer = tab_sensor[ph->is].IBOX;
         #endif

@@ -225,19 +225,27 @@ public:
 	// emitter
     short int emitter;
     #endif
-	// scatterer
-	short int scatterer;
-	unsigned short nrrs; // Number of Atmospheric Rotational Raman Scattering
-	unsigned short nvrs; // Number of Oceanic Vibrational Raman Scattering
 
+	// scatterer encountered
+	short int scatterer;
+
+    /* Counters */
     // Number of interaction (scattering or reflection/transmission)
     unsigned short nint;
     // Number of reflection
     unsigned short nref;
     // Number of reflection on environment
     unsigned short nenv;
+    // Number of Atmospheric Rotational Raman Scattering
+	unsigned short nrrs; 
+    // Number of Oceanic Vibrational Raman Scattering
+	unsigned short nvrs;
 
+    /* ---------------------*/
+    /*       ALIS specific  */
+    /* ---------------------*/
     #ifdef ALIS
+    /* FAST Move Mode */
     #if !defined(ALT_PP) && !defined(SPHERIQUE)
     unsigned short nevt;  // Number  of events (including exit)
     short layer_prev[MAX_NEVT]; // History of layer where events occured
@@ -245,18 +253,22 @@ public:
     float epsilon_prev[MAX_NEVT]; // History of proportion (between 0 and 1) within the layer where events occured
     float tau_sca[MAX_NLOW]; // Table of verical scattering OD of the photon for Importance Sampling correction
     #else
+    /* STANDARD Move Mode */
     float cdist_atm[MAX_NLAYER]; // Table of cumulative distance per layer
     float cdist_oc[MAX_NLAYER];
     #endif
+
     float weight_sca[MAX_NLOW]; // Table of scattering weigths for Importance Sampling correction
-    unsigned short nsif;
+    unsigned short nsif; // this SIF counter should be present even if SIF is not activated
     #endif
+    /* ---------------------*/
 
     #ifdef SPHERIQUE
     float radius;
     #endif
 
     #ifdef BACK
+    // Cumulative Mueller Matrix
     float4x4 M;
     //float4x4 Mf;
     #endif
