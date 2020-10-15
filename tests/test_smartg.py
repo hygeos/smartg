@@ -11,7 +11,9 @@ from smartg.smartg import Smartg, RoughSurface, LambSurface
 from smartg.atmosphere import AtmAFGL, AeroOPAC, CloudOPAC
 from smartg.water import IOP_1
 from smartg.reptran import REPTRAN, reduce_reptran
+from smartg.tools.smartg_view import smartg_view
 import os
+from . import conftest
 os.environ['PATH'] += ':/usr/local/cuda/bin'
 
 NBPHOTONS = 1e4
@@ -34,9 +36,11 @@ def sg(request):
 def test_compile(pp, back):
     Smartg(pp=pp, back=back)
 
-def test_basic():
+def test_basic(request):
     ''' Most basic test '''
-    Smartg().run(500., atm=AtmAFGL('afglms'), NBPHOTONS=NBPHOTONS)
+    m = Smartg().run(500., atm=AtmAFGL('afglms'), NBPHOTONS=NBPHOTONS)
+    smartg_view(m)
+    conftest.savefig(request)
 
 @pytest.mark.parametrize('wav', wav_list)
 def test_atm(sg, wav):
