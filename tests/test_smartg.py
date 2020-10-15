@@ -5,7 +5,6 @@
 SMART-G test suite using pytest
 '''
 
-import sys
 import pytest
 import numpy as np
 from smartg.smartg import Smartg, RoughSurface, LambSurface
@@ -29,6 +28,11 @@ def sg(request):
     '''
     return Smartg(pp=request.param)
 
+
+@pytest.mark.parametrize('pp', [True, False])
+@pytest.mark.parametrize('back', [True, False])
+def test_compile(pp, back):
+    Smartg(pp=pp, back=back)
 
 def test_basic():
     ''' Most basic test '''

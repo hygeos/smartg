@@ -9,6 +9,8 @@ import numpy
 import numpy.linalg as la
 from pycuda.compiler import SourceModule
 from pycuda.gpuarray import zeros as gpuzeros
+import os
+os.environ['PATH'] += ':/usr/local/cuda/bin'
 
 
 def test_pycuda():
