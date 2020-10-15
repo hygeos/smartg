@@ -1830,7 +1830,8 @@ def init_profile(wl, prof, kind):
 
     if kind == "oc":
         if 'iopt_oc' not in prof.datasets():
-            prof_gpu['z'][0,:] = prof.axis('z_'+kind)  * 1e-3 # to Km
+            prof_gpu['z'][0,:] = prof.axis('z_'+kind)
+            #prof_gpu['z'][0,:] = prof.axis('z_'+kind)  * 1e-3 # to Km
             prof_gpu['T'][0,:] = prof['T_'+kind].data[:]
             cell_gpu = np.zeros(1, dtype=type_Cell)
         else: 

@@ -24,10 +24,13 @@
 #include <cuda_fp16.h>
 /*****/
 #define _FLIP(x) (x%2==0 ? x+1 : x-1)
-/**********************************************************
-*	> Kernel
-***********************************************************/
 
+
+/****************************************************************************************************/
+/****************************************************************************************************/
+/****************************    MAIN KERNEL     ****************************************************/
+/****************************************************************************************************/
+/****************************************************************************************************/
 
 extern "C" {
 	__global__ void launchKernel(
@@ -60,9 +63,6 @@ extern "C" {
 
     // current thread index
 	int idx = blockIdx.x *blockDim.x + threadIdx.x;
-	// Old thred index :
-	// int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
-	// int idx = (blockIdx.x * gridDim.y + blockIdx.y) * blockDim.x * blockDim.y + (threadIdx.x * blockDim.y + threadIdx.y);
 	int loc_prev;
 	int count_level;
 	int this_thread_active = 1;
@@ -97,14 +97,11 @@ extern "C" {
     rngstate.state = ((curandStatePhilox4_32_10_t *)rng_state)[idx];
     #endif
 
+	unsigned long long nbPhotonsThr = 0;  // Number of photons processed by the thread
 	
-	// Création de variable propres à chaque thread
-	unsigned long long nbPhotonsThr = 0; 	// Nombre de photons traités par le thread
-	
-	Photon ph, ph_le; 		// On associe une structure de photon au thread
+	Photon ph, ph_le; 	// Photons structure for prapagation and Local Estimate (virtual photon)	
     float refrac_angle=0.F;
 
-	//bool geoIntersect = false;  // S'il y a intersection avec une géométrie = true
 	#ifdef OBJ3D
 	IGeo geoStruc;
 	bigCount = 1;   // Initialisation de la variable globale bigCount (voir geometry.h)
@@ -1005,25 +1002,35 @@ extern "C" {
 
 
 
-/**********************************************************
-*	> Physical Processes
-***********************************************************/
-/* initPhoton
-*/
+/****************************************************************************************************/
+/****************************************************************************************************/
+/****************************    PHYSICAL PROCESSES    **********************************************/
+/****************************************************************************************************/
+/****************************************************************************************************/
 
-__device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc, struct Sensor *tab_sensor,
-                           struct Spectrum *spectrum, float *X0, unsigned long long *NPhotonsIn,
-                           long long *wl_proba_icdf, long long *cell_proba_icdf, float* tabthv, float* tabphi,
+
+
+/*--------------------------------------------------------------------------------------------------*/
+/*                      INIT PHOTONS                                                                */
+/*--------------------------------------------------------------------------------------------------*/
+
+__device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc, 
+                           struct Sensor *tab_sensor, struct Spectrum *spectrum, 
+                           float *X0, unsigned long long *NPhotonsIn,
+                           long long *wl_proba_icdf, long long *cell_proba_icdf, 
+                           float* tabthv, float* tabphi,
                            struct RNG_State *rngstate
 						   #ifdef OBJ3D
 						   , struct IObjets *myObjets
 						   #endif
 	) {
-    float dz, dz_i, delta_i, epsilon;
     float cTh, sTh, phi;
     int ilayer;
+    #if !defined(ALT_PP) && !defined(SPHERIQUE)
+    float dz, dz_i, delta_i, epsilon;
+    #endif
 	
-	//int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
 	
     #ifdef OBJ3D
 	ph->direct = 0;
@@ -1164,7 +1171,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
         // Fast Move Mode additional initialization
         // partial geometrical thickness in the layer (from top) : 
         //      epsilon = (z[i-1]-z)/(z[i-1]-z[i]) ; 0<epsilon<1
-        // optical thickness of the layer delta[i] = OD[i-1] - OD[i]
+        // optical thickness of the layer delta[i] = OD[i-1] - OD[i], delta[i]>0
         // partial optical thickness in the layer (from top) : epsilon * delta[i]
         // tau(z) = tau[i-1] - epsilon * delta[i]
         // tau[i-1] = OD[i-1]
@@ -1186,7 +1193,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
         for (int k=0; k<NLOWd; k++) {
             delta_i = fabs(get_OD(BEERd, prof_oc[ilayer-1+k*DL*(NOCEd+1)])
                          - get_OD(BEERd, prof_oc[ilayer  +k*DL*(NOCEd+1)]));
-            ph->tau_sca[k] = get_OD(1,prof_oc[ilayer-1 + k*DL*(NOCEd+1)])) - epsilon * delta_i;
+            ph->tau_sca[k] = get_OD(1,prof_oc[ilayer-1 + k*DL*(NOCEd+1)]) - epsilon * delta_i;
         }
         #endif
     }
@@ -1327,7 +1334,6 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
         // Fast Move Mode additional initialization
         ph->tau     = 0.F;
         ph->tau_abs = 0.F;
-        epsilon = 0.F;
 
         // FAST Move Mode ALIS specific additional initialization
         #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
@@ -1386,6 +1392,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 	#endif
 
     /* THERMAL FORWARD specific case */
+    /* !!!!! DEV               !!!!!!*/
     #if defined(THERMAL) && !defined(BACK) 
     ph->scatterer = THERMAL_EM;
     // 1D plane parallel forward thermal initialization
@@ -1393,7 +1400,8 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     else {
         ph->layer = __float2uint_rz(RAND * NATMd);
         dz  = fabs(prof_atm[ph->layer-1].z - prof_atm[ph->layer].z);
-        float kabs= fabs(prof_atm[ph->layer-1+ph->ilam*(NATMd+1)].OD_abs - prof_atm[ph->layer+ph->ilam*(NATMd+1)].OD_abs); 
+        float kabs= fabs(prof_atm[ph->layer-1+ph->ilam*(NATMd+1)].OD_abs 
+                       - prof_atm[ph->layer  +ph->ilam*(NATMd+1)].OD_abs); 
         kabs /= dz;
         ph->weight= (2*DEUXPI) * kabs *  BPlanck(ph->wavel*1e-9, prof_atm[ph->layer].T) ;
     }
@@ -1450,7 +1458,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     /* Fast Move Mode */
     #ifdef ALIS
     /* we record an event list where layers indices in the ocean
-    are counted negative for differenting them from atmospheric layers*/
+    are counted negative for differentiating them from atmospheric layers*/
     #if !defined(ALT_PP) && !defined(SPHERIQUE)
     ph->nevt = 0;
     if (ph->loc == ATMOS) ph->layer_prev[ph->nevt]   = ph->layer;
@@ -1480,10 +1488,10 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     //   General photons counters initialization
     /* ----------------------------------------------------------------------------------------- */
     #ifdef ALIS
-    // a photon launched in ALIS represent all the wavelenghts, so increment all wavelength boxes
+    // a photon launched in ALIS represent all the wavelengths, so increment all wavelength boxes
     for (int k=0; k<NLAMd; k++) atomicAdd(NPhotonsIn + NLAMd*ph->is + k, 1);
     #else
-    // in general increment the randomly chosent particular wavelength box
+    // in general increment the randomly chosen particular wavelength box
     atomicAdd(NPhotonsIn + NLAMd*ph->is + ph->ilam, 1);
     #endif
 
@@ -1819,6 +1827,13 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     }
 
 
+/*--------------------------------------------------------------------------------------------------*/
+/*                      MOVE PHOTONS                                                                */
+/*--------------------------------------------------------------------------------------------------*/
+/*                      1) Spherical mode                                                           */
+/*                      (ATMOS)
+/*--------------------------------------------------------------------------------------------------*/
+
 #ifdef SPHERIQUE
 __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_level,
                         struct RNG_State *rngstate) {
@@ -1827,7 +1842,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
     float hph = 0.;  // cumulative optical thickness
     float vzn, delta1, h_cur, tau_cur, epsilon, AMF;
     #ifndef ALIS
-    float h_cur_abs;
+    float h_cur_abs, tau_cur_abs;
     #endif
     float d;
     float rat;
@@ -1836,11 +1851,14 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
     float costh, sinth2;
     int ilam = ph->ilam*(NATMd+1);  // wavelength offset in optical thickness table
     float3 no, v0, u0;
-	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+	//int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
 
     if (ph->layer == 0) ph->layer = 1;
 
     // Random Optical Thickness to go through
+    // Two cases : (i) Forced First Scattering (taumax!=0 and no interaction yet)
+    // the random optical thickness draw is biased (limited to tau_max)
+    // (ii): general case, the classical exponential probability law is used 
     if (!le) {
         if ((ph->taumax != 0.F) && (ph->nint==0)) {
             tauRdm = -logf(1.F-RAND*(1.F-exp(-ph->taumax)));
@@ -1848,8 +1866,8 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
         }
         else tauRdm = -logf(1.F-RAND);
     }
-    // if called with le mode, it serves to compute the transmission
-    // from photon last intercation position to TOA, thus 
+    // if called with LE mode, it serves to compute the transmission
+    // from photon last interaction position to TOA, thus 
     // photon is forced to exit upward or downward and tauRdm is chosen to be an upper limit
     else tauRdm = 1e6;
 
@@ -1863,6 +1881,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
     else sign_direction = 1;
 
     if (REFRACd) {
+        // we store initial photon direction
         v0=ph->v;
         u0=ph->u;
     }
@@ -1954,43 +1973,63 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
         tau_cur = abs(get_OD(BEERd,prof_atm[i_layer_bh+ilam]) - get_OD(BEERd,prof_atm[i_layer_fw+ilam]));
         h_cur   = tau_cur * AMF;
         #ifndef ALIS
-        h_cur_abs = abs(prof_atm[i_layer_bh+ilam].OD_abs - prof_atm[i_layer_fw+ilam].OD_abs) *AMF;
+        tau_cur_abs = abs(prof_atm[i_layer_bh+ilam].OD_abs - prof_atm[i_layer_fw+ilam].OD_abs) ;
+        h_cur_abs = tau_cur_abs * AMF;
         #endif
 
         //
-        // update photon position
+        // update photon position (two cases)
         //
+
+        // 1. photon stops within the layer
         if (hph + h_cur > tauRdm) {
-            // photon stops within the layer
+            // fraction of maximum optical depth traveled in the final layer
             epsilon = (tauRdm - hph)/h_cur;
+            // length traveled in the final layer
             d *= epsilon;
+            // AMF the final layer
             AMF*= epsilon;
+
+            // photon is located at his final position
             ph->pos = operator+(ph->pos, ph->v*d);
             ph->radius = length(ph->pos);
             #ifndef ALIS
+            // in the general case absorption is computed until final position if BEER
             if (BEERd == 1) ph->weight *= __expf(-( epsilon * h_cur_abs));
             #else
+            // for ALIS case record cumulative distances and scatering corrections
             float tau;
             ph->cdist_atm[ph->layer] += d;
             int DL=(NLAMd-1)/(NLOWd-1);
             for (int k=0; k<NLOWd; k++) {
-                tau = abs(get_OD(1,prof_atm[i_layer_bh + k*DL*(NATMd+1)]) - get_OD(1,prof_atm[i_layer_fw + k*DL*(NATMd+1)]));
+                tau = abs(get_OD(1,prof_atm[i_layer_bh + k*DL*(NATMd+1)]) 
+                        - get_OD(1,prof_atm[i_layer_fw + k*DL*(NATMd+1)]));
 			    ph->weight_sca[k] *= exp(-(tau-tau_cur)*AMF);
             }
             #endif
             break;
 
-        } else {
-            // photon advances to the next layer
+        } 
+        
+        // 2. photon advances to the next layer
+        else {
+            // cumulative OD is updated by the total OD of the current layer
             hph += h_cur;
+            // photon is located at his new position
             ph->pos = operator+(ph->pos, ph->v*d);
             ph->radius = length(ph->pos);
+            // update local vertical
             no = operator/(ph->pos, ph->radius);
             vzn = dot(ph->v, no);
 
+            //
+            // REFRACTION
+            //
             #ifdef DEBUG
+            // Compute refraction for the Line of Sight only
             if (REFRACd && ph->nint==0) {
             #else
+            // Compute refraction everywhere
             if (REFRACd)  {
             #endif
                 float3 uu = normalize(cross(no, ph->v)); // unit vector around which one turns
@@ -2008,26 +2047,27 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
                       i2 = asin(i2); 
                       alpha   = fabs(i2 - asin(s1));
                   }
-                  //else i2 = DEUXPI/4.; //in case of total reflection the emergent direction is tangent
-                  //alpha   = fabs(i2 - asin(s1));
                   else alpha=0.F;
+                  // we rotate around uu which lies in the vertical plane, by the deviation angle
                   float3x3 R=rotation3D(alpha, uu);
+                  // new photon direction 
                   float3 v2 = normalize(mul(R, ph->v));
-                  //if(idx==0  && ph->nint>1 && le==0) printf("%i %i %i %f %e %e %e %e %e\n", le, ph->is, ph->nint, ph->radius-RTER, 
-                  //                        nind, asin(s1)*360/DEUXPI, i2*360/DEUXPI, alpha*360/DEUXPI, vzn);
                   ph->v = v2;
                   vzn = dot(ph->v, no);
                 } // no refraction computation necessary
             } // No Refraction
 
             #ifndef ALIS
+            // in the general case absorption is computed until new position if BEER
             if (BEERd == 1) ph->weight *= __expf(-( h_cur_abs));
             #else
+            // for ALIS case record cumulative distances and scatering corrections
             float tau;
             ph->cdist_atm[ph->layer] += d;
             int DL=(NLAMd-1)/(NLOWd-1);
             for (int k=0; k<NLOWd; k++) {
-                tau = abs(get_OD(1,prof_atm[i_layer_bh + k*DL*(NATMd+1)]) - get_OD(1,prof_atm[i_layer_fw + k*DL*(NATMd+1)]));
+                tau = abs(get_OD(1,prof_atm[i_layer_bh + k*DL*(NATMd+1)]) 
+                        - get_OD(1,prof_atm[i_layer_fw + k*DL*(NATMd+1)]));
 			    ph->weight_sca[k] *= __expf(-(tau-tau_cur)*AMF);
             }
             #endif
@@ -2037,11 +2077,12 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
 
     } // while loop
 
-        #ifdef DEBUG
-        if (REFRACd && ph->nint==0) {
-        #else
-        if (REFRACd)  {
-        #endif
+    // update u vector
+    #ifdef DEBUG
+    if (REFRACd && ph->nint==0) {
+    #else
+    if (REFRACd)  {
+    #endif
         float psi;
         // Update photon u vector
         ComputePsiLE(u0, v0, ph->v, &psi, &ph->u); 
@@ -2056,21 +2097,36 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
         }
     }
 
+    // LE mode used to compute transmission
     if (le) {
-        if (( (count_level==UPTOA)  && (ph->loc==SPACE ) ) || ( (count_level==DOWN0P) && (ph->loc==SURF0P) )) ph->weight *= __expf(-hph);
+        // if the transmission to be evaluated is toward TOA and the photon is not in SPACE
+        // it has been stopped somewhere (hidden) and thus transmission is zero (weight=0)
+        // same reasoning for a transmission toward the surface and the photon location not at the surface
+        // we also update taumax of the photon to be eventually used in the Forced First Scattering mode
+        if (( (count_level==UPTOA)  && (ph->loc==SPACE ) ) || 
+            ( (count_level==DOWN0P) && (ph->loc==SURF0P) )) ph->weight *= __expf(-hph);
         else ph->weight = 0.;
         if (ph->loc==SPACE || ph->loc==SURF0P) ph->taumax = hph;
     }
 
+    // in case of propagation, if the photon is still in the atmosphere
+    // compute the absorption using Single Scattering Albedo if BEER=0
     if ((BEERd == 0) && (ph->loc == ATMOS)) ph->weight *= prof_atm[ph->layer+ilam].ssa;
 }
 #endif // SPHERIQUE
 
 
 
+/*--------------------------------------------------------------------------------------------------*/
+/*                      MOVE PHOTONS                                                                */
+/*--------------------------------------------------------------------------------------------------*/
+/*                      2) Plane Parrallel 1D Standard mode                                         */
+/*                      (OCEAN or ATMOS)
+/*--------------------------------------------------------------------------------------------------*/
 #ifdef ALT_PP
  #ifndef OPT3D // 1D
-__device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc, int le, int count_level,
+__device__ void move_pp2(Photon* ph, struct Profile *prof_atm, 
+                        struct Profile *prof_oc, int le, int count_level,
                         struct RNG_State *rngstate) {
 
 
@@ -2080,7 +2136,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
     float hph = 0.;  // cumulative optical thickness
     float vzn, h_cur, tau_cur, epsilon, AMF;
     #ifndef ALIS
-    float h_cur_abs;
+    float h_cur_abs, tau_cur_abs;
     #endif
     float d;
     int sign_direction;
@@ -2088,7 +2144,8 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
     int ilam; 
     struct Profile *prof;
     int  NL;
-	//int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+    
+    // use profile corresponding to photon location
     if (ph->loc==OCEAN) {
         NL   = NOCEd+1;
         prof = prof_oc;
@@ -2122,25 +2179,33 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
         //
         // stopping criteria
         //
+        // 1. Photon in atmosphere
         if (ph->loc == ATMOS) {
          if (ph->layer == NATMd+1) {
+            // photon has reached surface
             ph->loc = SURF0P;
             ph->layer -= 1;  // next time photon enters , it's at layers NATM
             break;
          }
          if (ph->layer <= 0) {
+            // photon has reached TOA
             ph->loc = SPACE;
             break;
          }
         } 
+
+        // 2. Photon in ocean
         if (ph->loc == OCEAN) {
          if (ph->layer == NOCEd+1) {
+            // photon has reached seafloor
             ph->loc = SEAFLOOR;
             ph->layer -= 1;  // next time photon enters , it's at layers NOCE
             break;
          }
          if (ph->layer <= 0) {
-            ph->loc = SURF0M;
+            // photon has reached surface
+            if (SIMd!=3) ph->loc = SURF0M;
+            else ph->loc = SPACE;
             ph->layer= 0;
             break;
          }
@@ -2169,19 +2234,23 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
 
         //
         // calculate the optical thicknesses h_cur and h_cur_abs to the next layer
-        // We compute the layer extinction coefficient of the layer DTau/Dz and multiply by the distance within the layer
+        // We compute the layer extinction coefficient of the layer DTau/Dz 
+        // and multiply by the distance within the layer
         //
-        tau_cur = abs(get_OD(BEERd,prof[i_layer_bh+ilam]) - get_OD(BEERd,prof[i_layer_fw+ilam]));
+        tau_cur = abs(get_OD(BEERd,prof[i_layer_bh+ilam]) 
+                    - get_OD(BEERd,prof[i_layer_fw+ilam]));
         h_cur   = tau_cur * AMF;
         #ifndef ALIS
-        h_cur_abs = abs(prof[i_layer_bh+ilam].OD_abs - prof[i_layer_fw+ilam].OD_abs) *AMF;
+        tau_cur_abs = abs(prof[i_layer_bh+ilam].OD_abs - prof[i_layer_fw+ilam].OD_abs);
+        h_cur_abs = tau_cur_abs * AMF;
         #endif
 
         //
         // update photon position
+        // (See comments as for move_sp)
         //
+        // 1. photon stops within the layer
         if (hph + h_cur > tauRdm) {
-            // photon stops within the layer
             epsilon = (tauRdm - hph)/h_cur;
             d *= epsilon;
             AMF*= epsilon;
@@ -2194,14 +2263,17 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
             if (ph->loc==OCEAN) ph->cdist_oc[ ph->layer] += d;
             int DL=(NLAMd-1)/(NLOWd-1);
             for (int k=0; k<NLOWd; k++) {
-                tau = abs(get_OD(1,prof[i_layer_bh + k*DL*NL]) - get_OD(1,prof[i_layer_fw + k*DL*NL]));
+                tau = abs(get_OD(1,prof[i_layer_bh + k*DL*NL]) 
+                        - get_OD(1,prof[i_layer_fw + k*DL*NL]));
 			    ph->weight_sca[k] *= exp(-(tau-tau_cur)*AMF);
             }
             #endif
             break;
 
-        } else {
-            // photon advances to the next layer
+        } 
+        
+        // 2. photon advances to the next layer
+        else {
             hph += h_cur;
             ph->pos = operator+(ph->pos, ph->v*d);
 
@@ -2213,7 +2285,8 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
             if (ph->loc==OCEAN) ph->cdist_oc[ ph->layer] += d;
             int DL=(NLAMd-1)/(NLOWd-1);
             for (int k=0; k<NLOWd; k++) {
-                tau = abs(get_OD(1,prof[i_layer_bh + k*DL*NL]) - get_OD(1,prof[i_layer_fw + k*DL*NL]));
+                tau = abs(get_OD(1,prof[i_layer_bh + k*DL*NL]) 
+                        - get_OD(1,prof[i_layer_fw + k*DL*NL]));
 			    ph->weight_sca[k] *= __expf(-(tau-tau_cur)*AMF);
             }
             #endif
@@ -2224,31 +2297,46 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
 
     } // while loop
 
+    // if the transmission to be evaluated is toward TOA and the photon is not in SPACE
+    // it has been stopped somewhere (hidden) and thus transmission is zero (weight=0)
+    // same reasoning for a transmission toward the surface 0+ and the photon location not at the surface 0+
+    // same reasoning for a transmission toward the surface 0- and the photon location not at the surface 0-
+    // same reasoning for a transmission toward the seafloor  and the photon location not at the seafloor
     if (le) {
         if (( (count_level==UPTOA)  && (ph->loc==SPACE ) ) || 
             ( (count_level==DOWN0P) && (ph->loc==SURF0P) ) ||
             ( (count_level==UP0M)   && (ph->loc==SURF0M) ) ||
+            ( (count_level==UP0M)   && (ph->loc==SPACE) && (SIMd==3) ) ||
             ( (count_level==DOWNB)  && (ph->loc==SEAFLOOR) ) ) 
             ph->weight *= __expf(-hph);
         else ph->weight = 0.;
     }
 
+    // in case of propagation, if the photon is still in the atmosphere or ocean
+    // compute the absorption using Single Scattering Albedo if BEER=0
     if ((BEERd == 0) && ((ph->loc == ATMOS) || (ph->loc == OCEAN))) {
         ph->weight *= prof[ph->layer+ilam].ssa;
-        //if (idx==0) printf("%d %d %d %f\n",ph->loc, ph->layer, ph->ilam, prof[ph->layer+ilam].ssa);
     }
 }
 
-#else// OPT3D
 
-__device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc, struct Cell *cell_atm, struct Cell *cell_oc,
+
+/*--------------------------------------------------------------------------------------------------*/
+/*                      MOVE PHOTONS                                                                */
+/*--------------------------------------------------------------------------------------------------*/
+/*                      3) Plane Parrallel 3D Standard mode                                         */
+/*                      (OCEAN or ATMOS)                                                            */
+/*--------------------------------------------------------------------------------------------------*/
+#else// OPT3D
+__device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc, 
+                         struct Cell *cell_atm, struct Cell *cell_oc,
                         int le, int count_level, struct RNG_State *rngstate) {
 
     float tauRdm;
     float hph = 0.;  // cumulative optical thickness
     float vzn, h_cur, coef_cur, epsilon;
     #ifndef ALIS
-    float h_cur_abs;
+    float h_cur_abs, tau_cur_abs;
     #endif
     float d;
     int ilam; 
@@ -2259,7 +2347,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
 	float3 intersectPoint = make_float3(-1., -1., -1.);
 	bool intersectBox;
     float3 pmin, pmax ;
-	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+	//int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
 
 
     if (ph->loc==OCEAN) {
@@ -2481,22 +2569,25 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
             ( (count_level==UP0M)   && (ph->loc==SURF0M) ) ||
             ( (count_level==DOWNB)  && (ph->loc==SEAFLOOR) ) ) 
             ph->weight *= __expf(-hph);
-            //ph->weight *= __expf(-(hph + h_cur));
         else ph->weight = 0.;
     }
 
     if ((BEERd == 0) && ((ph->loc == ATMOS) || (ph->loc == OCEAN))) {
-        #ifndef OPT3D
-        ph->weight *= prof[ph->layer+ilam].ssa;
-        #else
         ph->weight *= prof[cell[ph->layer].iopt+ilam].ssa;
-        #endif
     }
 }
  #endif // 3D
 #endif // ALT_PP
 
 
+
+/*--------------------------------------------------------------------------------------------------*/
+/*                      MOVE PHOTONS                                                                */
+/*--------------------------------------------------------------------------------------------------*/
+/*                      4) Plane Parrallel 1D Fast mode                                             */
+/*                      (OCEAN or ATMOS)                                                            */
+/*--------------------------------------------------------------------------------------------------*/
+#if !defined(ALT_PP) && !defined(SPHERIQUE)
 __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc,
                         struct RNG_State *rngstate
 						#ifdef OBJ3D
@@ -2504,162 +2595,193 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 						#endif
 	) {
 
+    // tau is the main vertical coordinate in this mode
 	float delta_i=0.f, delta=0.f, epsilon;
 	float tauR, tauBis, phz; //rdist
     int ilayer;
 	
-    #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
+    #ifdef ALIS
+    // ALIS scattering correction
     float dsca_dl, dsca_dl0=-ph->tau ;
     int DL=(NLAMd-1)/(NLOWd-1);
-    #endif
-    #ifndef ALIS
+    #else
     float ab;
     #endif
 
 	#ifdef OBJ3D
 	float prev_tau;
 	prev_tau = ph->tau;        // previous value of tau photon
-	#endif
-	tauR = -logf(1.f - RAND);  // optical distance reached calculated randomly
-	ph->tau += (tauR*ph->v.z); // the value of tau photon at the reached point
+    #endif
+  
+    // Optical depth sampling
+	tauR = -logf(1.f - RAND);
+	ph->tau += (tauR*ph->v.z); // the value of tau is updated
+
+    // 1. OCEAN case
+        // partial geometrical thickness in the layer (from top) : 
+        // epsilon = (z[i-1]-z)/(z[i-1]-z[i]) ; 0<epsilon<1
+        // optical thickness of the layer delta[i] = OD[i-1] - OD[i], delta[i] >0
+        // partial optical thickness in the layer (from top) : epsilon * delta[i]
+        // tau(z) = tau[i-1] - epsilon * delta[i]
+        // tau[i-1] = OD[i-1]
+        // **********************************************************
+        // **** tau(z) = OD[i-1] - epsilon * (OD[i-1] - OD[i])  *****
+        // **********************************************************
 
 	if (ph->loc == OCEAN){  
         // If tau>0 photon is reaching the surface 
         if (ph->tau > 0) {
-
+            ph->layer = 1;
+            epsilon   = 0.F;
             #ifndef ALIS
+            // in the general case absorption using BEER law
             if (BEERd == 1) {// absorption between start and stop
-                ab =  0.F;
+                ab =  0.F; // absorption OD at the surface
+                // absorption between current photon tau_abs and final value ab
                 ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
             }
             #else
-
-            #if !defined(ALT_PP) && !defined(SPHERIQUE)
+            // for ALIS scattering correction between 
+            // old an new position for the reference (propagation) wavelength
+            // this is included in dsca_dl0
+            // for other wavelengths it is dsca_dl[k]
+            // scattering correction is the differential attenuation between
+            // wavelengths (weight_sca[k])
+            // finally update of the spectral tau_sca to the surface values : here 0 
             dsca_dl0 += 0.F;
             for (int k=0; k<NLOWd; k++) {
-                dsca_dl = 0.F;
-                dsca_dl -= ph->tau_sca[k]; 
+                dsca_dl =- ph->tau_sca[k]; 
+                dsca_dl += 0.F;
                 ph->weight_sca[k] *= exp(-__fdividef(fabs(dsca_dl)-fabs(dsca_dl0),  fabs(ph->v.z)));
                 ph->tau_sca[k] = 0.F;
             }
             #endif
 
-            #endif
-
+            // update of the reference wavelength photon tau and tau_abs values to the surface values : here 0 
             ph->tau = 0.F;
             ph->tau_abs = 0.F;
+            // location update
             ph->loc = SURF0M;
             if (SIMd == OCEAN_ONLY){
               ph->loc = SPACE;
             }
-            ph->layer = NOCEd;
 
             // move the photon forward up to the surface
             // the linear distance is ph->z/ph->vz
             operator+=(ph->pos, ph->v * fabs(ph->pos.z/ph->v.z));
 
-            #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
+            #ifdef ALIS 
+            // complete the records for this event
             ph->nevt++;
             ph->layer_prev[ph->nevt] = -ph->layer;
             ph->vz_prev[ph->nevt] = ph->v.z;
-            ph->epsilon_prev[ph->nevt] = 1.f;
+            ph->epsilon_prev[ph->nevt] = epsilon;
             #endif
            return;
-        }
-        // If tau<TAUOCEAN photon is reaching the sea bottom
-        else if( ph->tau < get_OD(BEERd, prof_oc[NOCEd + ph->ilam *(NOCEd+1)]) ){
+        } // Surface
 
+        // If tau<TAU_OCEAN photon is reaching the sea bottom
+        else if( ph->tau < get_OD(BEERd, prof_oc[NOCEd + ph->ilam *(NOCEd+1)]) ){
+            ph->layer = NOCEd;
+            epsilon   = 1.F;
             #ifndef ALIS
             if (BEERd == 1) {// absorption between start and stop
+                // at the seafloor ab=TAU_OCEAN_ABS
                 ab = prof_oc[NOCEd + ph->ilam *(NOCEd+1)].OD_abs;
                 ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
             }
             #else
-
-            #if !defined(ALT_PP) && !defined(SPHERIQUE)
+            // at the seafloor tau_sca=TAU_OCEAN
             dsca_dl0 += get_OD(1,prof_oc[NOCEd + ph->ilam*(NOCEd+1)]) ; 
             for (int k=0; k<NLOWd; k++) {
-                dsca_dl = get_OD(1,prof_oc[NOCEd + k*DL*(NOCEd+1)]);
-                dsca_dl -= ph->tau_sca[k]; 
+                dsca_dl =- ph->tau_sca[k]; 
+                dsca_dl += get_OD(1,prof_oc[NOCEd + k*DL*(NOCEd+1)]);
                 ph->weight_sca[k] *= exp(-__fdividef(fabs(dsca_dl) - fabs(dsca_dl0), fabs(ph->v.z)));
                 ph->tau_sca[k] = get_OD(1,prof_oc[NOCEd + k*DL*(NOCEd+1)]);
             }
             #endif
 
-            #endif
-
+            // as usual updates
             ph->loc = SEAFLOOR;
             ph->tau = get_OD(BEERd, prof_oc[NOCEd + ph->ilam *(NOCEd+1)]);
             ph->tau_abs = prof_oc[NOCEd + ph->ilam *(NOCEd+1)].OD_abs;
-            ph->layer = 0;
 
 			// move the photon forward down to the seafloor
             operator+=(ph->pos, ph->v * fabs( (ph->pos.z - prof_oc[NOCEd].z) /ph->v.z));
 
-            #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
+            #ifdef ALIS
             ph->nevt++;
             ph->layer_prev[ph->nevt] = -ph->layer;
             ph->vz_prev[ph->nevt] = ph->v.z;
-            ph->epsilon_prev[ph->nevt] = 0.f;
+            ph->epsilon_prev[ph->nevt] = epsilon;
             #endif
             return;
-        }
+        }   // Seafloor 
+        
+        // Photon is still in the OCEAN
+        else {
+            //computing photons final layer number
+            ilayer = 1;
+            while (( get_OD(BEERd, prof_oc[ilayer+ ph->ilam *(NOCEd+1)]) > (ph->tau)) && (ilayer < NOCEd)) {
+                ilayer++;
+            }
+            ph->layer = ilayer;
 
-        //computing photons layer number
-        ilayer = 1;
-        while (( get_OD(BEERd, prof_oc[ilayer+ ph->ilam *(NOCEd+1)]) > (ph->tau)) && (ilayer < NOCEd)) {
-            ilayer++;
-        }
-        ph->layer = ilayer;
-
-        delta_i= fabs(get_OD(BEERd, prof_oc[ilayer+ph->ilam*(NOCEd+1)]) - get_OD(BEERd, prof_oc[ilayer-1+ph->ilam*(NOCEd+1)]));
-        delta= fabs(ph->tau - get_OD(BEERd, prof_oc[ilayer-1+ph->ilam*(NOCEd+1)])) ;
-        epsilon = __fdividef(delta,delta_i);
-
-
-        #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
-        ph->nevt++;
-        ph->layer_prev[ph->nevt] = -ph->layer;
-        ph->vz_prev[ph->nevt] = ph->v.z;
-        ph->epsilon_prev[ph->nevt] = epsilon;
-        #endif
+            // computing fine position within the layer
+            // layer Optical thickness
+            delta_i= fabs(get_OD(BEERd, prof_oc[ilayer-1+ph->ilam*(NOCEd+1)]) 
+                        - get_OD(BEERd, prof_oc[ilayer  +ph->ilam*(NOCEd+1)]));
+            // optical thickness between position andd top of layer
+            delta= fabs(ph->tau - get_OD(BEERd, prof_oc[ilayer-1+ph->ilam*(NOCEd+1)])) ;
+            // fractional optical thickness
+            epsilon = __fdividef(delta,delta_i);
             
-        #ifndef ALIS
-        if (BEERd == 0) ph->weight *= prof_oc[ph->layer+ph->ilam*(NOCEd+1)].ssa;
-        else { // We compute the cumulated absorption OT at the new postion of the photon
-            // photon new position in the layer
-            ab = prof_oc[ilayer-1+ph->ilam*(NOCEd+1)].OD_abs + epsilon * (prof_oc[ilayer+ph->ilam*(NOCEd+1)].OD_abs - prof_oc[ilayer-1+ph->ilam*(NOCEd+1)].OD_abs);
-            // absorption between start and stop
-            ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
-            ph->tau_abs = ab;
-        }
-        #else
+            #ifndef ALIS
+            // General case absorption using Single scattering albedo
+            if (BEERd == 0) ph->weight *= prof_oc[ph->layer+ph->ilam*(NOCEd+1)].ssa;
+            else { // We compute the cumulated absorption OT at the new postion of the photon
+                // photon new position in the layer
+                ab = prof_oc[ilayer-1+ph->ilam*(NOCEd+1)].OD_abs 
+                     - epsilon * 
+                     (prof_oc[ilayer-1+ph->ilam*(NOCEd+1)].OD_abs 
+                    - prof_oc[ilayer  +ph->ilam*(NOCEd+1)].OD_abs);
+                // absorption between start and stop
+                ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
+                // update photon absorption tau
+                ph->tau_abs = ab;
+            }
+            #else
+            // ALIS specific computations
+            ph->nevt++;
+            ph->layer_prev[ph->nevt] = -ph->layer;
+            ph->vz_prev[ph->nevt] = ph->v.z;
+            ph->epsilon_prev[ph->nevt] = epsilon;
+            // cumulated scattering OD at reference wavelength
+            //dsca_dl0 += get_OD(1,prof_oc[NOCEd + ph->ilam*(NOCEd+1)]) - 
+             //   (epsilon * (get_OD(1,prof_oc[ilayer+ph->ilam*(NOCEd+1)]) - get_OD(1,prof_oc[ilayer-1+ph->ilam*(NOCEd+1)])) +
+              //  get_OD(1,prof_oc[ilayer-1+ph->ilam*(NOCEd+1)]));
+            dsca_dl0 +=   get_OD(1,prof_oc[ilayer-1+ph->ilam*(NOCEd+1)])
+                        - epsilon * 
+                         (get_OD(1,prof_oc[ilayer-1+ph->ilam*(NOCEd+1)]) 
+                        - get_OD(1,prof_oc[ilayer  +ph->ilam*(NOCEd+1)])); 
+            for (int k=0; k<NLOWd; k++) {
+                dsca_dl = - ph->tau_sca[k]; 
+                float tautmp =   get_OD(1,prof_oc[ilayer-1+k*DL*(NOCEd+1)]) 
+                               - epsilon * 
+                                (get_OD(1,prof_oc[ilayer-1+k*DL*(NOCEd+1)]) 
+                               - get_OD(1,prof_oc[ilayer  +k*DL*(NOCEd+1)])) ;
+                dsca_dl += tautmp;
+                ph->weight_sca[k] *= exp(-__fdividef(fabs(dsca_dl) -fabs(dsca_dl0), fabs(ph->v.z)));
+                ph->tau_sca[k] = tautmp;
+            }
+            #endif
 
-        #if !defined(ALT_PP) && !defined(SPHERIQUE)
-        // cumulated scattering OD at reference wavelength
-        dsca_dl0 += get_OD(1,prof_oc[NOCEd + ph->ilam*(NOCEd+1)]) - 
-            (epsilon * (get_OD(1,prof_oc[ilayer+ph->ilam*(NOCEd+1)]) - get_OD(1,prof_oc[ilayer-1+ph->ilam*(NOCEd+1)])) +
-            get_OD(1,prof_oc[ilayer-1+ph->ilam*(NOCEd+1)]));
-        for (int k=0; k<NLOWd; k++) {
-           // cumulated scattering relative OD wrt reference wavelength
-            float tautmp = get_OD(1,prof_oc[NOCEd + k*DL*(NOCEd+1)]) - 
-                (epsilon * (get_OD(1,prof_oc[ilayer+k*DL*(NOCEd+1)]) - get_OD(1,prof_oc[ilayer-1+k*DL*(NOCEd+1)])) +
-                get_OD(1,prof_oc[ilayer-1+k*DL*(NOCEd+1)])) ;
-            dsca_dl  = tautmp - ph->tau_sca[k]; 
-            ph->weight_sca[k] *= exp(-__fdividef(fabs(dsca_dl) -fabs(dsca_dl0), fabs(ph->v.z)));
-            ph->tau_sca[k] = tautmp;
-        }
-        #endif
-
-        #endif
-		
-        // calculate new photon position
-        phz =  prof_oc[ilayer-1].z + epsilon * ( prof_oc[ilayer].z - prof_oc[ilayer-1].z); 
-		// move the photon to new position
-		operator+=(ph->pos, ph->v * fabs( (ph->pos.z - phz) / ph->v.z));
-
+            // calculate new photon position
+            phz =  prof_oc[ilayer-1].z + epsilon * ( prof_oc[ilayer].z - prof_oc[ilayer-1].z); 
+            // move the photon to new position
+            operator+=(ph->pos, ph->v * fabs( (ph->pos.z - phz) / ph->v.z));
+        } // photon still in ocean
     } // Ocean
-
 
 
 
@@ -2818,27 +2940,36 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 		}
 		// ========================================================================================================
         #endif //END OBJ3D
-		
+
+
+
+		// partial geometrical thickness in the layer (from bottom) : 
+        // epsilon = (z-z[i])/(z[i-1]-z[i]) ; 0<epsilon<1
+        // optical thickness of the layer delta[i] = OD[i] - OD[i-1] delta[i]>0
+        // partial optical thickness in the layer (from bottom) : epsilon * delta[i]
+        // tau(z) = tau[i] + epsilon * delta[i]
+        // tau[i] = OD[NATM] - OD[i]
+        // **********************************************************
+        // * tau(z) = OD[NATM] - OD[i] + epsilon * (OD[i] - OD[i-1])*
+        // **********************************************************
+
         // If tau<0 photon is reaching the surface 
         if(ph->tau < 0.F){
-
+            ph->layer = NATMd;
+            epsilon = 0.F;
             #ifndef ALIS
             if (BEERd == 1) {// absorption between start and stop
                 ab =  0.F;
                 ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
             }
             #else
-
-            #if !defined(ALT_PP) && !defined(SPHERIQUE)
             dsca_dl0 += 0.F;
             for (int k=0; k<NLOWd; k++) {
-                dsca_dl = 0.F;
-                dsca_dl -= ph->tau_sca[k]; 
+                dsca_dl = - ph->tau_sca[k]; 
+                dsca_dl += 0.F;
                 ph->weight_sca[k] *= exp(-__fdividef(fabs(dsca_dl)-fabs(dsca_dl0),  fabs(ph->v.z)));
                 ph->tau_sca[k] = 0.F;
             }
-            #endif
-
             #endif
 
             ph->loc = SURF0P;
@@ -2847,115 +2978,131 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             // move the photon forward down to the surface
             // the linear distance is ph->z/ph->vz
             operator+=(ph->pos, ph->v * fabs(ph->pos.z/ph->v.z));
-            ph->pos.z = 0.;
-            ph->layer = NATMd;
+            ph->pos.z = 0.F;
 
-            #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
+            #ifdef ALIS 
             ph->nevt++;
             ph->layer_prev[ph->nevt] = ph->layer;
             ph->vz_prev[ph->nevt] = ph->v.z;
-            ph->epsilon_prev[ph->nevt] = 1.f;
+            ph->epsilon_prev[ph->nevt] = epsilon;
             #endif
         return;
         }
+
+
         // If tau>TAUATM photon is reaching space
         else if( ph->tau > get_OD(BEERd, prof_atm[NATMd + ph->ilam *(NATMd+1)]) ){
-
+            ph->layer = 0;
+            epsilon = 0.F;
             #ifndef ALIS
 		    if (BEERd == 1) {// absorption between start and stop
                 ab = prof_atm[NATMd + ph->ilam *(NATMd+1)].OD_abs;
                 ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
             }
             #else
-
-            #if !defined(ALT_PP) && !defined(SPHERIQUE)
             dsca_dl0 += get_OD(1,prof_atm[NATMd + ph->ilam*(NATMd+1)]) ; 
             for (int k=0; k<NLOWd; k++) {
-                dsca_dl = get_OD(1,prof_atm[NATMd + k*DL*(NATMd+1)]);
-                dsca_dl -= ph->tau_sca[k]; 
+                dsca_dl = - ph->tau_sca[k]; 
+                dsca_dl += get_OD(1,prof_atm[NATMd + k*DL*(NATMd+1)]);
                 ph->weight_sca[k] *= exp(-__fdividef(fabs(dsca_dl) - fabs(dsca_dl0), fabs(ph->v.z)));
                 ph->tau_sca[k] = get_OD(1,prof_atm[NATMd + k*DL*(NATMd+1)]);
             }
             #endif
 
-            #endif
-
             ph->loc = SPACE;
-            ph->layer = 0;
 
-            #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
+            #ifdef ALIS
             ph->nevt++;
             ph->layer_prev[ph->nevt] = ph->layer;
             ph->vz_prev[ph->nevt] = ph->v.z;
-            ph->epsilon_prev[ph->nevt] = 0.f;
+            ph->epsilon_prev[ph->nevt] = epsilon;
             #endif
 
             return;
         }
-        
-        // Sinon il reste dans l'atmosphère, et va subit une nouvelle diffusion
-        // Calcul de la layer dans laquelle se trouve le photon
-        tauBis =  get_OD(BEERd, prof_atm[NATMd + ph->ilam *(NATMd+1)]) - ph->tau;
-        ilayer = 1;
-        
-        while (( get_OD(BEERd, prof_atm[ilayer+ ph->ilam *(NATMd+1)]) < (tauBis)) && (ilayer < NATMd)) {
-            ilayer++;
-        }
-        
-        ph->layer = ilayer;
 
-        delta_i= fabs(get_OD(BEERd, prof_atm[ilayer+ph->ilam*(NATMd+1)]) - get_OD(BEERd, prof_atm[ilayer-1+ph->ilam*(NATMd+1)]));
-        delta= fabs(tauBis - get_OD(BEERd, prof_atm[ilayer-1+ph->ilam*(NATMd+1)])) ;
-        epsilon = __fdividef(delta,delta_i);
 
-        #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
-        ph->nevt++;
-        ph->layer_prev[ph->nevt] = ph->layer;
-        ph->vz_prev[ph->nevt] = ph->v.z;
-        ph->epsilon_prev[ph->nevt] = epsilon;
-        #endif
+        // Photon is still in the ATMOSPHERE
+        else {
+            tauBis =  get_OD(BEERd, prof_atm[NATMd + ph->ilam *(NATMd+1)]) - ph->tau;
+            ilayer = 1;
+            
+            while (( get_OD(BEERd, prof_atm[ilayer+ ph->ilam *(NATMd+1)]) < (tauBis)) && (ilayer < NATMd)) {
+                ilayer++;
+            }
+            
+            ph->layer = ilayer;
 
-        #ifndef ALIS
-        if (BEERd == 0) ph->weight *= prof_atm[ph->layer+ph->ilam*(NATMd+1)].ssa;
-        else { // We compute the cumulated absorption OT at the new postion of the photon
-            // photon new position in the layer
-            ab = prof_atm[NATMd+ph->ilam*(NATMd+1)].OD_abs - 
-                (epsilon * (prof_atm[ilayer+ph->ilam*(NATMd+1)].OD_abs - prof_atm[ilayer-1+ph->ilam*(NATMd+1)].OD_abs) +
-                prof_atm[ilayer-1+ph->ilam*(NATMd+1)].OD_abs);
-            // absorption between start and stop
-            ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
-            ph->tau_abs = ab;
-        }
-        #else
+            delta_i= fabs(get_OD(BEERd, prof_atm[ilayer  +ph->ilam*(NATMd+1)]) 
+                        - get_OD(BEERd, prof_atm[ilayer-1+ph->ilam*(NATMd+1)]));
+            //delta= fabs(tauBis - get_OD(BEERd, prof_atm[ilayer-1+ph->ilam*(NATMd+1)])) ;
+            delta= ph->tau - (get_OD(BEERd, prof_atm[NATMd + ph->ilam *(NATMd+1)])
+                            - get_OD(BEERd, prof_atm[ilayer + ph->ilam *(NATMd+1)]));
+            epsilon = __fdividef(delta,delta_i);
 
-        #if !defined(ALT_PP) && !defined(SPHERIQUE)
-        // cumulated scattering OD at reference wavelength
-        dsca_dl0 += get_OD(1,prof_atm[NATMd + ph->ilam*(NATMd+1)]) - 
-            (epsilon * (get_OD(1,prof_atm[ilayer+ph->ilam*(NATMd+1)]) - get_OD(1,prof_atm[ilayer-1+ph->ilam*(NATMd+1)])) +
-            get_OD(1,prof_atm[ilayer-1+ph->ilam*(NATMd+1)]));
-        for (int k=0; k<NLOWd; k++) {
-           // cumulated scattering relative OD wrt reference wavelength
-            float tautmp = get_OD(1,prof_atm[NATMd + k*DL*(NATMd+1)]) - 
-                (epsilon * (get_OD(1,prof_atm[ilayer+k*DL*(NATMd+1)]) - get_OD(1,prof_atm[ilayer-1+k*DL*(NATMd+1)])) +
-                get_OD(1,prof_atm[ilayer-1+k*DL*(NATMd+1)])) ;
-            dsca_dl  = tautmp - ph->tau_sca[k]; 
-            ph->weight_sca[k] *= exp(-__fdividef(fabs(dsca_dl) -fabs(dsca_dl0), fabs(ph->v.z)));
-            ph->tau_sca[k] = tautmp;
-        }
-        #endif
 
-        #endif
+            #ifndef ALIS
+            if (BEERd == 0) ph->weight *= prof_atm[ph->layer+ph->ilam*(NATMd+1)].ssa;
+            else { // We compute the cumulated absorption OT at the new postion of the photon
+                // photon new position in the layer
+                ab = prof_atm[NATMd+ ph->ilam*(NATMd+1)].OD_abs - 
+                     prof_atm[ilayer+ph->ilam*(NATMd+1)].OD_abs +
+                     epsilon * 
+                     (prof_atm[ilayer  +ph->ilam*(NATMd+1)].OD_abs 
+                    - prof_atm[ilayer-1+ph->ilam*(NATMd+1)].OD_abs) ;
+                // absorption between start and stop
+                ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
+                ph->tau_abs = ab;
+            }
 
-        // calculate new photon position
-        phz = epsilon * (prof_atm[ilayer].z - prof_atm[ilayer-1].z) + prof_atm[ilayer-1].z; 
-		rdist=  fabs(__fdividef(phz-ph->pos.z, ph->v.z));
-        operator+= (ph->pos, ph->v*rdist);
-        ph->pos.z = phz;
+            #else
+            ph->nevt++;
+            ph->layer_prev[ph->nevt] = ph->layer;
+            ph->vz_prev[ph->nevt] = ph->v.z;
+            ph->epsilon_prev[ph->nevt] = epsilon;
+            // cumulated scattering OD at reference wavelength
+            //dsca_dl0 += get_OD(1,prof_atm[NATMd + ph->ilam*(NATMd+1)]) - 
+            //   (epsilon * (get_OD(1,prof_atm[ilayer+ph->ilam*(NATMd+1)]) - get_OD(1,prof_atm[ilayer-1+ph->ilam*(NATMd+1)])) +
+            //  get_OD(1,prof_atm[ilayer-1+ph->ilam*(NATMd+1)]));
+            dsca_dl0 += get_OD(1,prof_atm[NATMd+ ph->ilam*(NATMd+1)]) - 
+                        get_OD(1,prof_atm[ilayer+ph->ilam*(NATMd+1)]) +
+                        epsilon * 
+                        (get_OD(1,prof_atm[ilayer  +ph->ilam*(NATMd+1)]) 
+                       - get_OD(1,prof_atm[ilayer-1+ph->ilam*(NATMd+1)])) ;
+            for (int k=0; k<NLOWd; k++) {
+            // cumulated scattering relative OD wrt reference wavelength
+                dsca_dl  = - ph->tau_sca[k]; 
+                float tautmp = get_OD(1,prof_atm[NATMd+ k*DL*(NATMd+1)]) - 
+                               get_OD(1,prof_atm[ilayer+k*DL*(NATMd+1)]) +
+                               epsilon * 
+                               (get_OD(1,prof_atm[ilayer  +k*DL*(NATMd+1)]) 
+                              - get_OD(1,prof_atm[ilayer-1+k*DL*(NATMd+1)])) ;
+                dsca_dl += tautmp; 
+                ph->weight_sca[k] *= exp(-__fdividef(fabs(dsca_dl) -fabs(dsca_dl0), fabs(ph->v.z)));
+                ph->tau_sca[k] = tautmp;
+            }
+            #endif
+
+            // calculate new photon position
+            phz = epsilon * (prof_atm[ilayer].z - prof_atm[ilayer-1].z) + prof_atm[ilayer-1].z; 
+            rdist=  fabs(__fdividef(phz-ph->pos.z, ph->v.z));
+            operator+= (ph->pos, ph->v*rdist);
+            ph->pos.z = phz;
+        } // photon still in atmosphere
 
     } //ATMOS
 
 }
+#endif // move_pp Fast Move Mode
 
+
+
+
+/*--------------------------------------------------------------------------------------------------*/
+/*                      SCATTER                                                                     */
+/*--------------------------------------------------------------------------------------------------*/
+/*                      (ATMOS OR OCEAN)
+/*--------------------------------------------------------------------------------------------------*/
 
 __device__ void scatter(Photon* ph,
        struct Profile *prof_atm, struct Profile *prof_oc,
@@ -2981,16 +3128,13 @@ __device__ void scatter(Photon* ph,
     
     #if defined(THERMAL) && defined(BACK)
     // Absorption thermal in backward mode: end of photon s life    
-    //if ((ph->scatterer == THERMAL_EM) && (ph->nint>0)) {
     if (ph->scatterer == THERMAL_EM) {
 	    if(ph->loc!=OCEAN){
             float tabs= fabs(prof_atm[ph->layer-1+ph->ilam*(NATMd+1)].OD_abs - prof_atm[ph->layer+ph->ilam*(NATMd+1)].OD_abs); 
-            //float tabs= fabs(prof_atm[ph->layer-1+ph->ilam*(NATMd+1)].OD_abs - prof_atm[ph->layer+ph->ilam*(NATMd+1)].OD_abs); 
             ph->weight= (2*DEUXPI) * tabs *  BPlanck(ph->wavel*1e-9, prof_atm[ph->layer].T); 
         }
 	    else{
             float tabs= fabs(prof_oc[ph->layer+1+ph->ilam*(NOCEd+1)].OD_abs - prof_oc[ph->layer+ph->ilam*(NOCEd+1)].OD_abs); 
-            //float tabs= fabs(prof_oc[ph->layer-1+ph->ilam*(NOCEd+1)].OD_abs - prof_oc[ph->layer+ph->ilam*(NOCEd+1)].OD_abs); 
             ph->weight= (2*DEUXPI) * tabs *  BPlanck(ph->wavel*1e-9, prof_oc[ph->layer].T); 
         }
         ph->loc = SOURCE;
@@ -2999,7 +3143,8 @@ __device__ void scatter(Photon* ph,
     #endif
 
     if (le){
-        /* in case of LE the photon units vectors, scattering angle and Psi rotation angle are determined by output zenith and azimuth angles*/
+        /* in case of LE the photon units vectors, scattering angle and Psi rotation angles
+         are determined by output zenith and azimuth angles*/
         float thv, phi;
         float3 v;
 
@@ -4291,7 +4436,7 @@ __device__ void surfaceLambert(Photon* ph, int le,
                               float* tabthv, float* tabphi, struct Spectrum *spectrum,
                               struct RNG_State *rngstate) {
 	
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    //int idx = blockIdx.x * blockDim.x + threadIdx.x;
 	if( SIMd == ATM_ONLY){ // Atmosphere only, surface absorbs all
 		ph->loc = ABSORBED;
 		return;

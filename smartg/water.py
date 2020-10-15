@@ -68,7 +68,6 @@ class IOP(IOP_base):
     def __init__(self, phase=None, bp=None, bw=None,
                  atot=None, ap=None, aw=None, aCDOM=None,
                  Z=[0, -10000], ALB=Albedo_cst(0.)):
-                 #Z=[0, 10000], ALB=Albedo_cst(0.)):
 
         self.Z = np.array(Z, dtype='float')
         self.bp = bp
@@ -131,7 +130,6 @@ class IOP(IOP_base):
 
         pro.add_axis('wavelength', wav[:])
         pro.add_axis('z_oc', self.Z)
-        #pro.add_axis('z_oc', -self.Z)
         pro.add_dataset('T_oc', np.array([280.]*len(self.Z), dtype='float32'),
                         ['z_oc'])
 
@@ -145,7 +143,6 @@ class IOP(IOP_base):
             pro.add_dataset('iphase_oc', ipha, ['wavelength', 'z_oc'])
 
         dz = - diff1(self.Z)
-        #dz = diff1(self.Z)
 
         tau_w   = - (aw   + bw  ) * dz
         tau_p   = - (ap + bp  ) * dz
