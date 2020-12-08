@@ -626,7 +626,7 @@ class Smartg(object):
              NBTHETA=45, NBPHI=90, NF=1e6,
              OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
              NBLOOP=None, progress=True, 
-             le=None, flux=None, stdev=False, BEER=1, RR=1, WEIGHTRR=0.1, SZA_MAX=90., SUN_DISC=0,
+             le=None, flux=None, stdev=False, BEER=1, RR=0, WEIGHTRR=0.1, SZA_MAX=90., SUN_DISC=0,
              sensor=None, refraction=False, reflectance=True,
              myObjects=None, interval = None,
              IsAtm = 1, cusL = None, SMAX=1e6, FFS=False, DIRECT=False):
@@ -1021,16 +1021,18 @@ class Smartg(object):
                spectrum['alb_surface'] = surf.kp[0].get(wl[:])
                spectrum['k1p_surface'] = surf.kp[1].get(wl[:])
                spectrum['k2p_surface'] = surf.kp[2].get(wl[:])
-            mapalb = env.alb.get(wl[:])
-            if mapalb.ndim==3:
-                mapalb = to_gpu(mapalb)
-            else:
-                spectrum['alb_env'] = env.alb.get(wl[:])
+            #mapalb = env.alb.get(wl[:])
+            #if mapalb.ndim==3:
+            #    mapalb = to_gpu(mapalb)
+            #else:
+            #    spectrum['alb_env'] = env.alb.get(wl[:])
+            spectrum['alb_env'] = env.alb.get(wl[:])
 
         if water is None:
             spectrum['alb_seafloor'] = -999.
         else:
             spectrum['alb_seafloor'] = prof_oc['albedo_seafloor'].data[...]
+
         spectrum = to_gpu(spectrum)
 
 
@@ -1065,6 +1067,8 @@ class Smartg(object):
                 FLUX = 1
             if flux== 'spherical' : 
                 FLUX = 2
+            if flux== 'tilted planar' : 
+                FLUX = 3
 
 
         if wl_proba is not None:
@@ -1964,6 +1968,7 @@ def reduce_diff(m, varnames, delta=None):
 
 def reduce_histories(kernel2, tabHist, wl, sigma, NLOW, NBTHETA=1, alb_in=None, XBLOCK=512, XGRID=512, verbose=False):
    NL    = sigma.shape[1]
+   #w     = tabHist[:, NL+4:-6]
    w     = tabHist[:, NL+4:-5]
    ngood = np.sum(w[:,0]!=0)
 

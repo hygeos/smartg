@@ -196,6 +196,7 @@ extern "C" {
                copyPhoton(&ph, &ph_le);
                move_sp(&ph_le, prof_atm, 1, UPTOA , &rngstate);
                ph.taumax = ph_le.taumax;
+               //if (idx==0)printf("%d %f\n",ph.is,ph.taumax);
            }
            /* the photon moves in spherical shell */
            /* it eventually uses the taumax as computed previously for Forced First Scattering*/
@@ -379,13 +380,7 @@ extern "C" {
                             // 2-1 Estimation of the refraction angle
                             //
                             // in case of atmospheric refraction determine the outgoing direction
-                            #ifdef DEBUG
-                            /* DEBUG mode : refraction along the Line Of Sigth (LOS) only */
-                            if (REFRACd && ph_le.loc==ATMOS && ph_le.nint==0) {
-                            #else
-                            /* general mode : refraction in all moves*/
                             if (REFRACd && ph_le.loc==ATMOS) {
-                            #endif
                                 DirectionToUV(thv, phi, &v, &u);
                                 v = normalize(v);
                                 u = normalize(u);
@@ -397,6 +392,7 @@ extern "C" {
                                 refrac_angle=0.F;
                                 float ra=0.F;
                                 // propagation //
+                                //while((iter < 1)) {
                                 while((iter < 0)) {
                                    /* propagation of the LE photon until TOA to estimate refraction angle */
                                    #ifdef SPHERIQUE
@@ -1030,7 +1026,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     float dz, dz_i, delta_i, epsilon;
     #endif
 	
-	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+	//int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
 	
     #ifdef OBJ3D
 	ph->direct = 0;
@@ -2027,7 +2023,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
             //
             #ifdef DEBUG
             // Compute refraction for the Line of Sight only
-            if (REFRACd && ph->nint==0) {
+            if (REFRACd && (!le || (le && FFSd && ph->nint==0))) {
             #else
             // Compute refraction everywhere
             if (REFRACd)  {
@@ -2079,7 +2075,8 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
 
     // update u vector
     #ifdef DEBUG
-    if (REFRACd && ph->nint==0) {
+    if (REFRACd && (!le || (le && FFSd && ph->nint==0))) {
+    //if (REFRACd && ph->nint==0 && !le) {
     #else
     if (REFRACd)  {
     #endif
@@ -5493,7 +5490,6 @@ __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geo
 		}
 		else if ( ph->H == 0 && ph->E > 0 && ph->S > 0)
 		{ // CAT 7 : 2 proc. E et S avant de toucher le R.
-			DatomicAdd(wPhCatC+6, weight); DatomicAdd(wPhCatC2+6, weight2);
 			atomicAdd(nbPhCat+6, 1);
 			DatomicAdd(tabCountObj+(7*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 		}	
@@ -5707,6 +5703,12 @@ __device__ void countPhoton(Photon* ph,
 	if (FLUXd==2 && LEd==0 & weight_irr > 0.001f) weight /= weight_irr;
     //if (count_level == UPTOA && HORIZd == 0 && LEd == 1) weight *= weight_irr;
     //if (count_level == UPTOA && HORIZd == 0) weight *= weight_irr;
+    if (FLUXd==3 && LEd==0) {
+        float mu = sqrtf(2.F)/2.F;
+        float3 tilted = make_float3(1.F, 0.F, 0.F);
+        //float3 tilted = make_float3(0.F, 0.F, 1.F);
+        if (dot(ph->v, tilted)>=0 ) weight=0.F;
+    }
 
     II = NBTHETAd*NBPHId*NLAMd*NSENSORd;
     JJJ= NPSTKd*II;
@@ -6123,8 +6125,9 @@ __device__ int ComputeBox(int* ith, int* iphi, int* il,
     #ifndef SPHERIQUE
 	*ith = __float2int_rd(__fdividef(acosf(fabsf(photon->v.z)) * NBTHETAd, DEMIPI));
     #else
-    if (count_level==UPTOA) *ith = __float2int_rd(__fdividef(acosf(photon->v.z) * NBTHETAd, SZA_MAXd/90.*DEMIPI));
-    else                    *ith = __float2int_rd(__fdividef(acosf(fabsf(photon->v.z)) * NBTHETAd, DEMIPI));
+    //if (count_level==UPTOA) *ith = __float2int_rd(__fdividef((acosf(photon->v.z) + (90.F-SZA_MAXd)*DEMIPI/90.) * NBTHETAd, SZA_MAXd/90.*DEMIPI));
+    if (count_level==UPTOA) *ith = __float2int_rd(__fdividef((acosf(photon->v.z) - 0.F)                            * NBTHETAd, SZA_MAXd/90.*DEMIPI));
+    else                    *ith = __float2int_rd(__fdividef( acosf(fabsf(photon->v.z)) * NBTHETAd, DEMIPI));
     #endif
 
 

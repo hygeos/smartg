@@ -47,6 +47,7 @@ class Species(object):
         fname = join(dir_libradtran_opac, 'optprop', species+'.cdf')
         if not exists(fname):
             raise Exception('file {} does not exist'.format(fname))
+        self.fname = fname
 
         nc = netCDF4.Dataset(fname)
 
@@ -221,6 +222,15 @@ class Species(object):
         P.data[:,:,1,:] = P0-P1
 
         return P.sub()[Idx(wav),:,:,:]
+
+
+    @staticmethod
+    def list():
+        '''
+        list standard species files in opac
+        '''
+        files = glob(join(dir_libradtran_opac, 'optprop', '*.cdf'))
+        return map(lambda x: basename(x)[:-4], files)
 
 
 class AeroOPAC(object):
@@ -453,6 +463,31 @@ class CloudOPAC(AeroOPAC):
         self.densities = np.array([  0.,   1.,   1.,   0., 0.], dtype='f')[:,None]
         self.ssa = None
         self._phase = phase
+
+
+class CompOPAC(AeroOPAC):
+    '''
+    Single species, localized using a profile density, z,
+    and a RH profile
+
+    wav_clip: if True, don't raise Error upon interpolation error in
+    wavelength, use the extrema values
+
+    Example: CompOPAC('inso.mie', atm.prof.RH(), density, atm.prof.z, 10., 550.)
+             # total optical thickness of 10 at 550 nm
+    '''
+    def __init__(self, species, rh, density, z, tau_ref, w_ref,
+                 phase=None, wav_clip=False):
+        self.reff = None
+        self.rh = rh
+        self.tau_ref = tau_ref
+        self.w_ref = w_ref
+        self.species = [Species(species+'.mie', wav_clip=wav_clip)]
+        self.zopac     =  z
+        self.densities = density[:,None]
+        self.ssa = None
+        self._phase = phase
+
 
 
 class Atmosphere(object):
@@ -975,6 +1010,22 @@ class AtmAFGL(Atmosphere):
             return pha
         else:
             return None
+
+
+    def calc_split(self, wav, phase=True, NBTHETA=721):
+        '''
+        compute optical properties and return the vertical profiles
+        prof_abs, prof_aer, prof_ray and prof_phases the alternative inputs of the AtmAFGL
+        '''
+        pro = self.calc(wav=wav, phase=phase, NBTHETA=NBTHETA)
+        pro_aer = diff1(pro['OD_p'].data.astype(np.float32), axis=1)
+        ssa_aer = pro['ssa_p_atm'].data
+        pro_ray = diff1(pro['OD_r'].data.astype(np.float32), axis=1)
+        pro_abs = diff1(pro['OD_g'].data.astype(np.float32), axis=1)
+        pro_iphase = pro['iphase_atm'].data
+        pro_phases = [pro['phase_atm'].sub({'iphase':i}) for i in range(pro_iphase.max()+1)]
+
+        return pro_abs, pro_ray, (pro_aer, ssa_aer), (pro_iphase, pro_phases)
 
 
 def read_phase(filename, standard=False, kind='atm'):
