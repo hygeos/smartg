@@ -307,11 +307,14 @@ class Environment(object):
     Stores the smartg parameters relative the the environment effect
 
     ENV: environment effect (default 0: deactivated, 1: horizontal cst albedo ALB outside an horizontal disk, 
-                             water is inside, lambertian ALB is outside.
-                             2: ALB map2D modulated by checkerboard spatial function)
-    ENV_SIZE, X0, Y0: radius and position of the circle outside which ALB model is applied for case 1),
+                             water is inside, lambertian ALB is outside. if -1 it is the opposite.
+                             2: ALB is a gaussian centred on X0,Y0 with a maximum of ALB_SURF and a
+                             asymptotic value of ALB of the environement. The square of the sigma is ENV_SIZE.
+                             3: ALB map2D modulated by checkerboard spatial function)
+    ENV_SIZE, X0, Y0: radius and position of the circle outside which ALB model is applied for abs(ENV)=1,
+                             The square of the sigma of the gaussian (ENV=2),
                              size of the spatial pattern (in km), and in the direction X and or Y applied (
-                             X=1, applied to X, X=0 Not applied to X; idem for Y)
+                             X=1, applied to X, X=0 Not applied to X; idem for Y), for ENV=3
     ALB: albedo spectral model
 
     '''
@@ -859,7 +862,7 @@ class Smartg(object):
 
         # warning! values defined in communs.h 
         MAX_HIST = 2048 * 2048
-        MAX_NLOW = 401
+        MAX_NLOW = 801
 
         # number of Stokes parameters of the radiation field
         NPSTK = 4
@@ -1930,6 +1933,7 @@ def multi_profiles(profs, kind='atm'):
                 if data.ndim==1 : pro.add_dataset(d, data, ['wavelength'])
     return pro
 
+
 def reduce_diff(m, varnames, delta=None):
     '''
     Reduce finite differences run in ALIS mode, to obtain Jacobians (with finite differences) or sensitivities
@@ -2231,6 +2235,9 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
 
         NPhotonsOutTot += NPhotonsOut
         S = tabPhotons   # sum of weights for the last kernel
+        #test=S.get()
+        #if np.isnan(test).any(): 
+         #   print('pb Nan')
         if(~hist) : 
             tabPhotonsTot += S
         

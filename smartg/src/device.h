@@ -232,7 +232,7 @@ __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geo
 								 void *wPhCat, void *wPhCat2, struct Profile *prof_atm, void *wPhLoss, void *wPhLoss2);
 #endif
 
-__device__ void countPhoton(Photon* , struct Profile* prof_atm, struct Profile* prof_oc, float*, float *,
+__device__ void countPhoton(Photon* , struct Spectrum* spectrum, struct Profile* prof_atm, struct Profile* prof_oc, float*, float *,
         int, unsigned long long*, void*, void*, void*, unsigned long long*);
 
 // rotation of the stokes parameters by an angle psi
@@ -300,6 +300,7 @@ __device__ void MakeLocalFrame(float3, float3*, float3*, float3*) ;
 /* Fresnel Reflection Matrix*/
 __device__ float4x4 FresnelR(float3, float3) ;
 
+__device__ float gauss_albedo(float3, float, float) ;
 __device__ float checkerboard(float3) ;
 
 __device__ float F1_rtls(float , float , float );  //  rossthick-lisparse, only F1

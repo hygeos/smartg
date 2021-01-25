@@ -301,7 +301,7 @@ extern "C" {
 		// 3- Count the photons
         //
 		/* Cone Sampling */
-		if (LEd ==0) countPhoton(&ph, prof_atm, prof_oc, tabthv, tabphi, count_level,
+		if (LEd ==0) countPhoton(&ph, spectrum, prof_atm, prof_oc, tabthv, tabphi, count_level,
             errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
 
 		#if defined(BACK) && defined(OBJ3D)
@@ -470,7 +470,7 @@ extern "C" {
 							#if defined(BACK) && defined(OBJ3D)
 							 countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2);
 							#endif
-                            countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, count_level_le,
+                            countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, count_level_le,
                                     errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
 
                         } //directions
@@ -519,7 +519,9 @@ extern "C" {
            // photon is reflected by the target:
            // dis <= ENV_SIZEd if ENVd=1 (Environment outside disk) or dis >= ENV_SIZEd if ENVd=-1 (Environment inside disk)
            ////////////////////////////
-           if( (ENVd==0) || ((ENVd==1) && (dis<=ENV_SIZEd)) || ((ENVd==-1) && (dis>=ENV_SIZEd)) ) { 
+           //if( (ENVd==0) || ((ENVd==1) && (dis<=ENV_SIZEd)) || ((ENVd==-1) && (dis>=ENV_SIZEd)) ) { 
+           if( (ENVd==0) || (ENVd==2) || 
+               ((ENVd==1) && (dis<=ENV_SIZEd)) || ((ENVd==-1) && (dis>=ENV_SIZEd)) || ph.loc==SURF0M ) { 
 
             ////////////////////////////
             // if Air-Sea Interface 
@@ -563,7 +565,7 @@ extern "C" {
                         #endif
 
                         // Count the photon up to the counting levels (at the surface UP0P or DOW0M)
-                        countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, count_level_le, errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
+                        countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, count_level_le, errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
 
                         // Only for upward photons in Atmopshere, count also them up to TOA
                         if (k==0) { 
@@ -581,7 +583,7 @@ extern "C" {
                              #endif
                             #endif
                             // Final extinction computation in FAST PP move mode and counting at the TOA for all move modes
-                            countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA , errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
+                            countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA , errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
                         }
                         // Only for downward photons in Ocean, count also them up to Bottom 
                         if (k==1) { 
@@ -595,7 +597,7 @@ extern "C" {
                                         1, DOWNB, &rngstate);
                             #endif
                             // Final extinction computation in FAST PP move mode and counting at the Bottom for all move modes
-                            countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, DOWNB , errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
+                            countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, DOWNB , errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
                         }
                       }//direction
                     }//direction
@@ -655,7 +657,7 @@ extern "C" {
 
                         // Only two levels for counting by definition (up 0+ and up TOA)
                         // 1) up 0+ for all move modes
-                        countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
+                        countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
 
                         // 2) up TOA for all move modes, need final extinction computation
                         // Final extinction computation in the atmosphere for SP and ALT_PP move mode
@@ -673,7 +675,7 @@ extern "C" {
                         #endif
 
                         // Final extinction computation in FAST PP move mode and counting at the TOA for all move modes
-                        countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
+                        countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
 
                     }//direction
                   }//direction
@@ -714,7 +716,7 @@ extern "C" {
                         surfaceLambert(&ph_le, 1, tabthv, tabphi, spectrum, &rngstate);
 
                         // Only two levels for counting by definition
-                        countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
+                        countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
 
                         #ifdef SPHERIQUE
                         if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
@@ -727,7 +729,7 @@ extern "C" {
                                  1, UPTOA , &rngstate);
                          #endif
                         #endif
-                        countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
+                        countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
                     }//direction
                  }//direction
                 } //LE
@@ -787,7 +789,7 @@ extern "C" {
                             #endif
                             1, UP0M, &rngstate); 
                     #endif
-                    countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0M,   errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
+                    countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UP0M,   errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
 
                 } // directions
               } // directions
@@ -838,13 +840,13 @@ extern "C" {
 							surfaceLambert3D(&ph_le, 1, tabthv, tabphi, spectrum,
 												  &rngstate, &geoStruc);			
 							// Only two levels for counting by definition
-							countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0P,
+							countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UP0P,
 										errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
                             #ifdef SPHERIQUE
 							// for spherical case attenuation if performed usin move_sp
 							if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
 						    #endif
-							countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA,
+							countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA,
 										errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
 						}//direction
 					}//direction
@@ -879,13 +881,13 @@ extern "C" {
 							ph_le.ith = (ith + ith0)%NBTHETAd;
 							Obj3DRoughSurf(&ph_le, 1, tabthv, tabphi, &geoStruc, &rngstate);
 							// Only two levels for counting by definition
-							countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UP0P,
+							countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UP0P,
 										errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
                             #ifdef SPHERIQUE
 							// for spherical case attenuation if performed usin move_sp
 							if (ph_le.loc==ATMOS) move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
 						    #endif
-							countPhoton(&ph_le, prof_atm, prof_oc, tabthv, tabphi, UPTOA,
+							countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA,
 										errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
 						}//direction
 					}//direction
@@ -945,7 +947,7 @@ extern "C" {
         }
 		
         /* Cone Sampling */
-        if (LEd == 0) countPhoton(&ph, prof_atm, prof_oc, tabthv, tabphi, count_level, errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
+        if (LEd == 0) countPhoton(&ph, spectrum, prof_atm, prof_oc, tabthv, tabphi, count_level, errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
 
 
         //--------------------------
@@ -1044,6 +1046,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     ph->nint = 0; // total
     ph->nref = 0; // reflection on surface (main)
     ph->nenv = 0; // reflection on surface (environment)
+    ph->nsfl = 0; // reflection on seafloor 
 	ph->nrrs = 0; // number of RRS events
     ph->nvrs = 0; // number of VRS events
 
@@ -2248,7 +2251,8 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm,
         //
         // 1. photon stops within the layer
         if (hph + h_cur > tauRdm) {
-            epsilon = (tauRdm - hph)/h_cur;
+            if (h_cur !=0.F) epsilon = (tauRdm - hph)/h_cur;
+            else epsilon =1.F;
             d *= epsilon;
             AMF*= epsilon;
             ph->pos = operator+(ph->pos, ph->v*d);
@@ -3483,8 +3487,8 @@ __device__ void choose_emitter(Photon* ph,
 	        ph->weight *= PAR * fluo_p;
             // reinitialization
             ph->nint = 0;
-            ph->nref = 0;
             ph->nenv = 0;
+            ph->nref = 0;
             ph->nrrs = 0;
             ph->nvrs = 0;
             for (int k=0; k<NLOWd; k++) ph->weight_sca[k] = 1.F;
@@ -4535,10 +4539,11 @@ __device__ void surfaceLambert(Photon* ph, int le,
         }
         else        {
             ph->nref += 1;
-            ph->weight *= spectrum[ph->ilam].alb_surface * BRDF(ph->ilam, -v0, ph->v, spectrum);  /*[Eq. 16,39]*/
-        }
-        if (ENVd==2) {
-            ph->weight *= checkerboard(ph->pos);
+            ph->weight *=  BRDF(ph->ilam, -v0, ph->v, spectrum);
+            if (abs(ENVd)<2) ph->weight *= spectrum[ph->ilam].alb_surface;  /*[Eq. 16,39]*/
+            if (ENVd==2) ph->weight *= gauss_albedo(ph->pos, X0d, Y0d) * (spectrum[ph->ilam].alb_surface - spectrum[ph->ilam].alb_env) +
+                    spectrum[ph->ilam].alb_env;
+            if (ENVd==3) ph->weight *= checkerboard(ph->pos) * spectrum[ph->ilam].alb_surface;
         }
         ph->nint+=1;
         #else
@@ -4549,10 +4554,11 @@ __device__ void surfaceLambert(Photon* ph, int le,
             }
             else        {
                 ph->nref += 1;
-                ph->weight *= spectrum[ph->ilam].alb_surface * BRDF(ph->ilam, -v0, ph->v, spectrum);  /*[Eq. 16,39]*/
-            }
-            if (ENVd==2) {
-                ph->weight *= checkerboard(ph->pos);
+                ph->weight *=  BRDF(ph->ilam, -v0, ph->v, spectrum);
+                if (abs(ENVd)<2) ph->weight *= spectrum[ph->ilam].alb_surface;  /*[Eq. 16,39]*/
+                if (ENVd==2) ph->weight *= gauss_albedo(ph->pos, X0d, Y0d) * (spectrum[ph->ilam].alb_surface - spectrum[ph->ilam].alb_env) +
+                    spectrum[ph->ilam].alb_env;
+                if (ENVd==3) ph->weight *= checkerboard(ph->pos) * spectrum[ph->ilam].alb_surface;
             }
             ph->nint+=1;
         }
@@ -4565,7 +4571,7 @@ __device__ void surfaceLambert(Photon* ph, int le,
 		ph->layer = NOCEd; 
         #endif
 		ph->weight *= spectrum[ph->ilam].alb_seafloor; /*[Eq. 16,39]*/
-        ph->nref+=1;
+        ph->nsfl+=1;
         ph->nint+=1;
 	}
 
@@ -4582,6 +4588,12 @@ __device__ float checkerboard(float3 pos) {
         int freq = 2;
         return (((testx%freq)==0) && (X0d==1.F)) != !(((testy%freq)==1) && (Y0d==1.F));
 }
+
+__device__ float gauss_albedo(float3 pos, float X0, float Y0) {
+        float dis2 = (pos.x-X0)*(pos.x-X0) + (pos.y-Y0)*(pos.y-Y0);
+        return expf(-dis2/ENV_SIZEd);
+}
+
 
 /* Surface BRDF */
 __device__ void surfaceBRDF_new(Photon* ph, int le,
@@ -5505,7 +5517,7 @@ __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geo
 #endif // End OBJ3D
 
 
-__device__ void countPhoton(Photon* ph,
+__device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
         struct Profile *prof_atm, struct Profile *prof_oc,
         float *tabthv, float *tabphi,
         int count_level,
@@ -5513,10 +5525,19 @@ __device__ void countPhoton(Photon* ph,
         void *tabPhotons, void *tabDist, void *tabHist, unsigned long long *NPhotonsOut
         ) {
 
-    // test single scattering
+
+    // test single scattering or photons removed
     if (count_level < 0 || ph->loc==REMOVED || ph->loc==ABSORBED || ph->nint>SMAXd ) {
     //if (count_level < 0 || ph->loc==REMOVED || ph->loc==ABSORBED) {
         // don't count anything
+        return;
+    }
+
+    // don't count photons with nof finite results
+    if (!isfinite(ph->stokes.x) || !isfinite(ph->stokes.y) ||
+        !isfinite(ph->stokes.z) || !isfinite(ph->stokes.w) ||
+        !isfinite(ph->weight) )  {
+        //printf("%d %g\n",ph->ilam, ph->weight);    
         return;
     }
 
@@ -5524,7 +5545,7 @@ __device__ void countPhoton(Photon* ph,
     if (ph->nint == 0 && DIRECTd==0) {
         return;
     }
-
+    
     // Declaration for double
     #ifdef DOUBLE 
      double *tabCount;                   // pointer to the "counting" array:
@@ -5719,6 +5740,9 @@ __device__ void countPhoton(Photon* ph,
 	{
       JJ = is*NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi;
 
+      //int idx = blockIdx.x * blockDim.x + threadIdx.x;
+      //if(idx==0 && count_level==UPTOA) printf("%g %g %g\n", weight, st.x, st.y, JJ);
+
       #ifdef DOUBLE 
       // select the appropriate level (count_level)
       tabCount = (double*)tabPhotons + count_level*JJJ;
@@ -5864,6 +5888,21 @@ __device__ void countPhoton(Photon* ph,
 
           #endif // alt 1D
 
+          // reflection on surface (main)
+          if (ph->nref !=0 && spectrum[ph->ilam].alb_surface != 0.F) 
+              wabs *= pow(__fdividef(spectrum[il].alb_surface,
+                                 spectrum[ph->ilam].alb_surface),
+                      (float)ph->nref);
+          // reflection on surface (environment)
+          if (ph->nenv !=0 && spectrum[ph->ilam].alb_env != 0.F) 
+              wabs *= pow(__fdividef(spectrum[il].alb_env,
+                                 spectrum[ph->ilam].alb_env),
+                      (float)ph->nenv);
+          // reflection on seafloor
+          if (ph->nsfl !=0 && spectrum[ph->ilam].alb_seafloor != 0.F) 
+              wabs *= pow(__fdividef(spectrum[il].alb_seafloor,
+                                 spectrum[ph->ilam].alb_seafloor),
+                      (float)ph->nsfl);
 
           #ifdef DOUBLE 
           tabCount = (double*)tabPhotons + count_level*JJJ;
@@ -6373,6 +6412,7 @@ __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
     ph_le->pos = ph->pos; // float3
     ph_le->nint = ph->nint;
     ph_le->nref = ph->nref;
+    ph_le->nsfl = ph->nsfl;
     ph_le->nenv = ph->nenv;
     ph_le->env = ph->env;
     ph_le->is = ph->is;

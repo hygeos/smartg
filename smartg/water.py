@@ -66,8 +66,8 @@ class IOP(IOP_base):
         NOTE: first item in dimension Z is not used
     '''
     def __init__(self, phase=None, bp=None, bw=None,
-                 atot=None, ap=None, aw=None, aCDOM=None,
-                 Z=[0, -10000], ALB=Albedo_cst(0.)):
+                 atot=None, ap=None, aw=None, aCDOM=None, Bp=None,
+                 Z=[0, -10000], NANG=721, ang_trunc=5., pfwav=None, ALB=Albedo_cst(0.)):
 
         self.Z = np.array(Z, dtype='float')
         self.bp = bp
@@ -77,12 +77,18 @@ class IOP(IOP_base):
         self.aw = aw
         self.phase = phase
         self.aCDOM = aCDOM
+        self.Bp  = Bp
         self.ALB = ALB
+        self.NANG= NANG
+        self.ang_trunc= ang_trunc
+        self.coef_trunc = None
+        self.NLAYER = len(Z)
+        self.pfwav = pfwav
 
         self.AW = read_aw(dir_aux)
 
     def calc(self, wav):
-        shp = [x.shape for x in [self.bp, self.bw, self.atot, self.ap, self.aw, self.aCDOM] if x is not None][0]
+        shp = [x.shape for x in [self.bp, self.bw, self.atot, self.ap, self.aw, self.aCDOM, self.Bp] if x is not None][0]
 
         if not isinstance(wav, BandSet):
             wav = BandSet(wav)
@@ -114,15 +120,18 @@ class IOP(IOP_base):
         else:
             bp = self.bp
 
-        if (self.phase is None) and ((np.array(bp) > 0).any()):
-            raise Exception('No phase function has been provided, but bp>0')
+        if self.pfwav is None:
+            self.pfwav = wav
+
+        if (self.phase is None) and (self.Bp is None) and ((np.array(bp) > 0).any()):
+            raise Exception('No phase function nor Bp has been provided, but bp>0')
+
 
         bw = self.bw
         if bw is None:
             bw = 19.3e-4*((wav[:]/550.)**-4.3)
             bw = bw[:, None]  # add a dimension Z for broadcasting
 
-        btot = bw + bp
 
         FQYC = np.zeros(shp, dtype='float')
 
@@ -132,6 +141,12 @@ class IOP(IOP_base):
         pro.add_axis('z_oc', self.Z)
         pro.add_dataset('T_oc', np.array([280.]*len(self.Z), dtype='float32'),
                         ['z_oc'])
+
+        if (self.phase is None) and (self.Bp is not None) and ((np.array(bp) > 0).any()):
+            self.phase, self.coef_trunc = self.calc_phase(self.pfwav[:])
+            bp *= self.coef_trunc.data
+
+        btot = bw + bp
 
         if self.phase is not None:
 
@@ -221,6 +236,52 @@ class IOP(IOP_base):
                         self.ALB.get(wav),
                         ['wavelength'])
         return pro
+
+
+
+    def calc_phase(self, wav):
+        '''
+        Calculate the phase function and associated truncation factor
+        as a MLUT
+        '''
+        nwav = len(wav)
+        nz   = self.NLAYER
+
+        # particles phase function
+        # see Park & Ruddick, 05
+        # https://odnature.naturalsciences.be/downloads/publications/park_appliedoptics_2005.pdf
+        ang = np.linspace(0, np.pi, self.NANG, dtype='float64')    # angle in radians
+        ff1 = fournierForand(ang, 1.117,3.695)[None,None,:]
+        ff2 = fournierForand(ang, 1.05, 3.259)[None,None,:]
+
+        itronc = int(self.NANG * self.ang_trunc/180.)
+        pha = np.zeros((nwav, nz, NPSTK, self.NANG), dtype='float64')
+        r1 = ((self.Bp - 0.002)/0.028)[:,:,None]
+
+        pha[:,:,0,:] = 0.5*(r1*ff1 + (1-r1)*ff2)
+
+        # truncate
+        pha[:,:,0,:itronc] = pha[:,:,0,itronc][:,:,None]
+
+        pha[:,:,1,:] = pha[:,:,0,:]
+        pha[:,:,2,:] = 0.
+        pha[:,:,3,:] = 0.
+
+        pha[:,:,:,0] = 0.
+
+        # normalize
+        integ_ff = integ_phase(ang, (pha[:,:,0,:] + pha[:,:,1,:])/2.)
+        pha *= 2./integ_ff[:,:,None,None]
+
+        P = LUT(pha,  # stk, theta
+            axes=[wav, self.Z, None, np.rad2deg(ang)],
+            names=['wav_phase_oc', 'z_phase_oc', 'stk', 'theta_oc'],
+           )
+        coef_trunc = LUT(integ_ff[:,:], axes=[wav, self.Z], names=['wav_phase_oc', 'z_phase_oc'])
+
+        return P, coef_trunc
+
+
 
 
 class IOP_Rw(IOP_base):
