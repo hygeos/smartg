@@ -1394,17 +1394,17 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     /* !!!!! DEV               !!!!!!*/
     #if defined(THERMAL) && !defined(BACK) 
     ph->scatterer = THERMAL_EM;
+    float dz  = fabs(prof_atm[ph->layer-1].z - prof_atm[ph->layer].z);
     // 1D plane parallel forward thermal initialization
     if (NCELLPROBA !=0) ph->layer = cell_proba_icdf[__float2uint_rz(RAND * NCELLPROBA) + ph->ilam*NCELLPROBA];
     else {
         ph->layer = __float2uint_rz(RAND * NATMd);
-        dz  = fabs(prof_atm[ph->layer-1].z - prof_atm[ph->layer].z);
+        //float dz  = fabs(prof_atm[ph->layer-1].z - prof_atm[ph->layer].z);
         float kabs= fabs(prof_atm[ph->layer-1+ph->ilam*(NATMd+1)].OD_abs 
                        - prof_atm[ph->layer  +ph->ilam*(NATMd+1)].OD_abs); 
         kabs /= dz;
         ph->weight= (2*DEUXPI) * kabs *  BPlanck(ph->wavel*1e-9, prof_atm[ph->layer].T) ;
     }
-    dz  = fabs(prof_atm[ph->layer-1].z - prof_atm[ph->layer].z);
     #ifdef SPHERIQUE
     ph->pos   = make_float3(0., 0., RAND *dz + prof_atm[ph->layer].z + RTER);
     ph->radius = length(ph->pos);
