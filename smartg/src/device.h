@@ -301,7 +301,7 @@ __device__ void MakeLocalFrame(float3, float3*, float3*, float3*) ;
 __device__ float4x4 FresnelR(float3, float3) ;
 
 __device__ float gauss_albedo(float3, float, float) ;
-__device__ float checkerboard(float3) ;
+__device__ int checkerboard(float3, float, float) ;
 
 __device__ float F1_rtls(float , float , float );  //  rossthick-lisparse, only F1
 __device__ float F2_rtls(float , float , float );  //  rossthick-lisparse, only F2

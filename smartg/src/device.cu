@@ -518,9 +518,11 @@ extern "C" {
            // OR
            // photon is reflected by the target:
            // dis <= ENV_SIZEd if ENVd=1 (Environment outside disk) or dis >= ENV_SIZEd if ENVd=-1 (Environment inside disk)
+           // or if ENV==2 it is a exponentially decreasing albedo between target and environment
+           // or if ENV==3 and checkerboard return white square of albedo map
            ////////////////////////////
-           //if( (ENVd==0) || ((ENVd==1) && (dis<=ENV_SIZEd)) || ((ENVd==-1) && (dis>=ENV_SIZEd)) ) { 
            if( (ENVd==0) || (ENVd==2) || 
+               ((ENVd==3) && checkerboard(ph.pos, X0d, Y0d)) ||
                ((ENVd==1) && (dis<=ENV_SIZEd)) || ((ENVd==-1) && (dis>=ENV_SIZEd)) || ph.loc==SURF0M ) { 
 
             ////////////////////////////
@@ -695,7 +697,9 @@ extern "C" {
            // photon is reflected by the environment:
            // dis > ENV_SIZEd if ENVd=1 (Environment outside disk) or dis < ENV_SIZEd if ENVd=-1 (Environment inside disk)
            ////////////////////////////
-           else if( ((ENVd==1) && (dis>ENV_SIZEd)) || ((ENVd==-1) && (dis<ENV_SIZEd)) ) { 
+           else if( ((ENVd==1) && (dis>ENV_SIZEd)) || 
+                    ((ENVd==3) && !checkerboard(ph.pos, X0d, Y0d)) ||
+                    ((ENVd==-1) && (dis<ENV_SIZEd)) ) { 
                 ph.env = 1;
                 //
 		        // 1- Surface Local Estimate (not evaluated if atmosphere only simulation)*/
@@ -1394,12 +1398,15 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     /* !!!!! DEV               !!!!!!*/
     #if defined(THERMAL) && !defined(BACK) 
     ph->scatterer = THERMAL_EM;
-    float dz  = fabs(prof_atm[ph->layer-1].z - prof_atm[ph->layer].z);
+    float dz;
     // 1D plane parallel forward thermal initialization
-    if (NCELLPROBA !=0) ph->layer = cell_proba_icdf[__float2uint_rz(RAND * NCELLPROBA) + ph->ilam*NCELLPROBA];
+    if (NCELLPROBA !=0) {
+        ph->layer = cell_proba_icdf[__float2uint_rz(RAND * NCELLPROBA) + ph->ilam*NCELLPROBA];
+        dz  = fabs(prof_atm[ph->layer-1].z - prof_atm[ph->layer].z);
+    } 
     else {
         ph->layer = __float2uint_rz(RAND * NATMd);
-        //float dz  = fabs(prof_atm[ph->layer-1].z - prof_atm[ph->layer].z);
+        dz  = fabs(prof_atm[ph->layer-1].z - prof_atm[ph->layer].z);
         float kabs= fabs(prof_atm[ph->layer-1+ph->ilam*(NATMd+1)].OD_abs 
                        - prof_atm[ph->layer  +ph->ilam*(NATMd+1)].OD_abs); 
         kabs /= dz;
@@ -2329,12 +2336,12 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm,
 /*                      (OCEAN or ATMOS)                                                            */
 /*--------------------------------------------------------------------------------------------------*/
 #else// OPT3D
-__device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc, 
+__device__ void move_pp2_bak(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc, 
                          struct Cell *cell_atm, struct Cell *cell_oc,
                         int le, int count_level, struct RNG_State *rngstate) {
 
-    float tauRdm;
-    float hph = 0.;  // cumulative optical thickness
+    float tauRdm;    // Sample optical thickness
+    float hph = 0.;  // Cumulative optical thickness
     float vzn, h_cur, coef_cur, epsilon;
     #ifndef ALIS
     float h_cur_abs, tau_cur_abs;
@@ -2434,7 +2441,8 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
 
         //if (intTime1 !=0) { // the photon is not already on a boundary
         if (intersectBox) { // the photon is not already on a boundary
-        intersectPoint = Box_cur.RoundAlmostInside(operator+(ph->pos, ph->v * intTime1));
+        //intersectPoint = Box_cur.RoundAlmostInside(operator+(ph->pos, ph->v * intTime1));
+        intersectPoint = operator+(ph->pos, ph->v * intTime1);
         //if ((!Box_cur.AlmostInside(ph->pos) || (intTime0 == intTime1)) &&
         //if ((!Box_cur.Inside(ph->pos) || (intTime0 == intTime1)) &&
          //       (ph->layer>=0)) {
@@ -2580,6 +2588,220 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
  #endif // 3D
 #endif // ALT_PP
 
+#ifdef ALT_PP
+#ifdef OPT3D
+//!!!!!!!!!!!!!!!!!!!! DEV !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+__device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc, 
+                         struct Cell *cell_atm, struct Cell *cell_oc,
+                        int le, int count_level, struct RNG_State *rngstate) {
+
+    float tauRdm;    // Sample optical thickness
+    float hph = 0.;  // Cumulative optical thickness
+    float vzn, h_cur, coef_cur, epsilon;
+    #ifndef ALIS
+    float h_cur_abs, tau_cur_abs;
+    #endif
+    float d;
+    int ilam; 
+    struct Profile *prof;
+    struct Cell *cell;
+    int  NL;
+	float intTime0=0., intTime1=0.;
+	float3 intersectPoint;
+	bool intersectBox;
+    float3 pmin, pmax ;
+	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+
+    if (ph->loc==OCEAN) {
+        NL   = NOCEd+1;
+        prof = prof_oc;
+        cell = cell_oc;
+    }
+    if (ph->loc==ATMOS) {
+        NL   = NATMd+1;
+        prof = prof_atm;
+        cell = cell_atm;
+    }
+    ilam = ph->ilam*NL;  // wavelength offset in optical thickness table
+
+    // Random Optical Thickness to go through
+    if (!le) tauRdm = -logf(1.F-RAND);
+    // if called with le mode, it serves to compute the transmission
+    // from photon last intercation position to TOA, thus 
+    // photon is forced to exit upward or downward and tauRdm is chosen to be an upper limit
+    else tauRdm = 1e6;
+
+    // Init photon cell
+    int count=0;
+    int next_layer=ph->layer;
+
+    while (1) {
+        // avoid infinite loop
+        if (count >= 500) ph->loc=REMOVED; 
+
+        // stop propagating useless photons
+        if (ph->loc == REMOVED) break;
+
+        // identify absorbed photons and stop propagating them
+        if (next_layer == BOUNDARY_ABS){
+            ph->loc = ABSORBED;
+            break;
+        }
+
+        // Update photon location, and cell number if still in atmosphere
+        if (ph->loc == ATMOS) {
+         if (next_layer == BOUNDARY_0P) {
+            ph->loc = SURF0P;
+            break;
+         }
+         else if (next_layer == BOUNDARY_TOA) {
+            ph->loc = SPACE;
+            break;
+         }
+         else {
+             ph->layer = next_layer;
+         }
+        } 
+
+        // Update photon location, and cell number if still in ocean
+        if (ph->loc == OCEAN) {
+         if (next_layer == BOUNDARY_FLOOR) {
+            ph->loc = SEAFLOOR;
+            break;
+         }
+         else if (next_layer == BOUNDARY_0M) {
+            ph->loc = SURF0M;
+            break;
+         }
+         else {
+             ph->layer = next_layer;
+         }
+        }
+
+        // Intersection with current cell boundaries
+		Ray Ray_cur(ph->pos, ph->v, 0);
+        pmin = make_float3(cell[ph->layer].pminx, cell[ph->layer].pminy, cell[ph->layer].pminz);
+        pmax = make_float3(cell[ph->layer].pmaxx, cell[ph->layer].pmaxy, cell[ph->layer].pmaxz);
+        BBox Box_cur(pmin, pmax);
+		intersectBox = Box_cur.IntersectP(Ray_cur, &intTime0, &intTime1);
+
+        if (intersectBox) { // the photon is not already on a boundary
+        //
+        intersectPoint = operator+(ph->pos, ph->v * intTime1);
+        // calculate the optical thicknesses h_cur and h_cur_abs to the next layer
+        // We get the layer extinction coefficient and multiply by the distance within the layer
+        //
+        coef_cur = get_OD(BEERd,prof[cell[ph->layer].iopt+ilam]);
+        h_cur    = coef_cur * intTime1;
+
+        #ifndef ALIS
+        h_cur_abs = prof[cell[ph->layer].iopt+ilam].OD_abs * intTime1;
+        #endif
+
+        //
+        // update photon position
+        //
+        if (hph + h_cur > tauRdm) {
+            // photon stops within the box
+            epsilon = (tauRdm - hph)/h_cur;
+            intTime1 *= epsilon;
+            ph->pos = operator+(ph->pos, ph->v * intTime1);
+            #ifndef ALIS
+            if (BEERd == 1) ph->weight *= __expf(-( epsilon * h_cur_abs));
+            #else
+            float coef;
+            if (ph->loc==ATMOS) ph->cdist_atm[cell[ph->layer].iabs] += intTime1;
+            if (ph->loc==OCEAN) ph->cdist_oc[ cell[ph->layer].iabs] += intTime1;
+            int DL=(NLAMd-1)/(NLOWd-1);
+            for (int k=0; k<NLOWd; k++) {
+                coef = get_OD(1,prof[cell[ph->layer].iopt + k*DL*NL]);
+			    ph->weight_sca[k] *= exp(-(coef-coef_cur)*intTime1);
+            }
+            #endif
+            break;
+
+        } else {
+            // photon advances to the next layer
+            hph += h_cur;
+            ph->pos = intersectPoint;
+
+            #ifndef ALIS
+            if (BEERd == 1) ph->weight *= __expf(-( h_cur_abs));
+            #else
+            float coef;
+            if (ph->loc==ATMOS) ph->cdist_atm[cell[ph->layer].iabs] += intTime1;
+            if (ph->loc==OCEAN) ph->cdist_oc[ cell[ph->layer].iabs] += intTime1;
+            int DL=(NLAMd-1)/(NLOWd-1);
+            for (int k=0; k<NLOWd; k++) {
+                coef = get_OD(1,prof[cell[ph->layer].iopt + k*DL*NL]);
+			    ph->weight_sca[k] *= __expf(-(coef-coef_cur)*intTime1);
+            }
+            #endif
+
+            // determine the index of the next potential box
+            //
+            float3 p=ph->pos;
+            operator-=(p, operator+(pmin*0.5, pmax*0.5));
+            p.x = __fdividef(p.x, fabs(pmax.x-pmin.x));
+            p.y = __fdividef(p.y, fabs(pmax.y-pmin.y));
+            p.z = __fdividef(p.z, fabs(pmax.z-pmin.z));
+            int ind;
+            GetFaceIndex(p, &ind);
+            switch(ind)
+            {
+                 case 0: next_layer = cell[ph->layer].neighbour1; break;
+                 case 1: next_layer = cell[ph->layer].neighbour2; break;
+                 case 2: next_layer = cell[ph->layer].neighbour3; break;
+                 case 3: next_layer = cell[ph->layer].neighbour4; break;
+                 case 4: next_layer = cell[ph->layer].neighbour5; break;
+                 case 5: next_layer = cell[ph->layer].neighbour6; break;
+                 default: ph->loc = REMOVED;
+            }
+            count++;
+        } // photon advances to next layer
+
+        } // Intersection True
+
+        else { //InterSection False
+            // determine the index of the next potential box
+            float3 p=ph->pos;
+            operator-=(p, operator+(pmin*0.5, pmax*0.5));
+            p.x = __fdividef(p.x, fabs(pmax.x-pmin.x));
+            p.y = __fdividef(p.y, fabs(pmax.y-pmin.y));
+            p.z = __fdividef(p.z, fabs(pmax.z-pmin.z));
+            int ind;
+            GetFaceIndex(p, &ind);
+            switch(ind)
+            {
+                 case 0: next_layer = cell[ph->layer].neighbour1; break;
+                 case 1: next_layer = cell[ph->layer].neighbour2; break;
+                 case 2: next_layer = cell[ph->layer].neighbour3; break;
+                 case 3: next_layer = cell[ph->layer].neighbour4; break;
+                 case 4: next_layer = cell[ph->layer].neighbour5; break;
+                 case 5: next_layer = cell[ph->layer].neighbour6; break;
+                 default: ph->loc = REMOVED;
+            }
+            count++;
+        }
+
+    } // while loop
+
+    if (le) {
+        if (( (count_level==UPTOA)  && (ph->loc==SPACE ) ) || 
+            ( (count_level==DOWN0P) && (ph->loc==SURF0P) ) ||
+            ( (count_level==UP0M)   && (ph->loc==SURF0M) ) ||
+            ( (count_level==DOWNB)  && (ph->loc==SEAFLOOR) ) ) 
+            ph->weight *= __expf(-hph);
+        else ph->weight = 0.;
+    }
+
+    if ((BEERd == 0) && ((ph->loc == ATMOS) || (ph->loc == OCEAN))) {
+        ph->weight *= prof[cell[ph->layer].iopt+ilam].ssa;
+    }
+}
+ #endif // 3D
+#endif // ALT_PP
+//!!!!!!!!!!!!!!!!!!!! DEV !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 
 /*--------------------------------------------------------------------------------------------------*/
@@ -4540,10 +4762,9 @@ __device__ void surfaceLambert(Photon* ph, int le,
         else        {
             ph->nref += 1;
             ph->weight *=  BRDF(ph->ilam, -v0, ph->v, spectrum);
-            if (abs(ENVd)<2) ph->weight *= spectrum[ph->ilam].alb_surface;  /*[Eq. 16,39]*/
+            if (abs(ENVd)!=2) ph->weight *= spectrum[ph->ilam].alb_surface;  /*[Eq. 16,39]*/
             if (ENVd==2) ph->weight *= gauss_albedo(ph->pos, X0d, Y0d) * (spectrum[ph->ilam].alb_surface - spectrum[ph->ilam].alb_env) +
                     spectrum[ph->ilam].alb_env;
-            if (ENVd==3) ph->weight *= checkerboard(ph->pos) * spectrum[ph->ilam].alb_surface;
         }
         ph->nint+=1;
         #else
@@ -4555,10 +4776,9 @@ __device__ void surfaceLambert(Photon* ph, int le,
             else        {
                 ph->nref += 1;
                 ph->weight *=  BRDF(ph->ilam, -v0, ph->v, spectrum);
-                if (abs(ENVd)<2) ph->weight *= spectrum[ph->ilam].alb_surface;  /*[Eq. 16,39]*/
+                if (abs(ENVd)!=2) ph->weight *= spectrum[ph->ilam].alb_surface;  /*[Eq. 16,39]*/
                 if (ENVd==2) ph->weight *= gauss_albedo(ph->pos, X0d, Y0d) * (spectrum[ph->ilam].alb_surface - spectrum[ph->ilam].alb_env) +
                     spectrum[ph->ilam].alb_env;
-                if (ENVd==3) ph->weight *= checkerboard(ph->pos) * spectrum[ph->ilam].alb_surface;
             }
             ph->nint+=1;
         }
@@ -4581,12 +4801,12 @@ __device__ void surfaceLambert(Photon* ph, int le,
 } //surfaceLambert
 
 
-__device__ float checkerboard(float3 pos) {
+__device__ int checkerboard(float3 pos, float X0, float Y0) {
         float dis = ENV_SIZEd;
-        int testx = lroundf((pos.x + 1e6)/dis);
-        int testy = lroundf((pos.y + 1e6)/dis);
-        int freq = 2;
-        return (((testx%freq)==0) && (X0d==1.F)) != !(((testy%freq)==1) && (Y0d==1.F));
+        int freq  = 2;
+        int testx = abs(__float2int_rn((pos.x-X0)/dis)%freq);
+        int testy = abs(__float2int_rn((pos.y-Y0)/dis)%freq);
+        return ( (testx==0) && (testy==1)  ) || ( (testx==1) && (testy==0)  );
 }
 
 __device__ float gauss_albedo(float3 pos, float X0, float Y0) {

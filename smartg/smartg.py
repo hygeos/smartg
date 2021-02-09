@@ -313,8 +313,7 @@ class Environment(object):
                              3: ALB map2D modulated by checkerboard spatial function)
     ENV_SIZE, X0, Y0: radius and position of the circle outside which ALB model is applied for abs(ENV)=1,
                              The square of the sigma of the gaussian (ENV=2),
-                             size of the spatial pattern (in km), and in the direction X and or Y applied (
-                             X=1, applied to X, X=0 Not applied to X; idem for Y), for ENV=3
+                             size of the spatial pattern (in km), origin of the checkerboard at X0,Y0 for ENV=3
     ALB: albedo spectral model
 
     '''
@@ -1972,8 +1971,8 @@ def reduce_diff(m, varnames, delta=None):
 
 def reduce_histories(kernel2, tabHist, wl, sigma, NLOW, NBTHETA=1, alb_in=None, XBLOCK=512, XGRID=512, verbose=False):
    NL    = sigma.shape[1]
-   #w     = tabHist[:, NL+4:-6]
-   w     = tabHist[:, NL+4:-5]
+   w     = tabHist[:, NL+4:-6]
+   #w     = tabHist[:, NL+4:-5]
    ngood = np.sum(w[:,0]!=0)
 
    S       = np.zeros((ngood,4),dtype=np.float32) 
@@ -2045,7 +2044,7 @@ def reduce_histories(kernel2, tabHist, wl, sigma, NLOW, NBTHETA=1, alb_in=None, 
                      to_gpu(nref_in), to_gpu(nsif_in), to_gpu(nvrs_in),
                      to_gpu(nenv_in), to_gpu(ith_in), to_gpu(iwls_in), to_gpu(wwls_in), 
                      block=(XBLOCK,1,1),grid=(XGRID,1,1))
-   return res_out.get()
+   return res_out.get(), res_sca.get(), res_rrs.get(), res_sif.get(), res_vrs.get()
 
 
  
@@ -2130,6 +2129,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         tabHistTot = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+6),1,1,1), dtype=np.float32)
         dz    = abs(np.diff(prof_atm.get()['z'][0,:]))
         sigma = np.diff(prof_atm.get()['OD_abs'][:,:])/dz
+        alb_in= np.concatenate([spectrum.get()['alb_surface'][:], spectrum.get()['alb_env'][:]])
         # TODO add oceanic absorption
         wl = spectrum.get()['lambda'][:]
     else :
@@ -2245,9 +2245,13 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         tabDistTot += T
         if hist :
             tabHistTot = tabHist
-            res = reduce_histories(kern2, np.squeeze(tabHist.get()), wl, sigma, NLOW,
-                                  NBTHETA=NBTHETA)[:,None,:,:,None]
-            tabPhotonsTot[0,:,:,:,:,:] += to_gpu(res)
+            res,res_sca,res_rrs,res_sif,res_vrs = reduce_histories(kern2, np.squeeze(tabHist.get()), wl, sigma, NLOW,
+                                  NBTHETA=NBTHETA, alb_in=alb_in)
+            tabPhotonsTot[0,:,:,:,:,:] += to_gpu(res[:,None,:,:,None])
+            tabPhotonsTot[1,:,:,:,:,:] += to_gpu(res_sca[:,None,:,:,None])
+            tabPhotonsTot[2,:,:,:,:,:] += to_gpu(res_rrs[:,None,:,:,None])
+            tabPhotonsTot[3,:,:,:,:,:] += to_gpu(res_sif[:,None,:,:,None])
+            tabPhotonsTot[4,:,:,:,:,:] += to_gpu(res_vrs[:,None,:,:,None])
 
         N_simu += 1
         if stdev:
