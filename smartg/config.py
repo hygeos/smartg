@@ -26,7 +26,7 @@ dir_libradtran_reptran =  join(dir_libradtran, 'data/correlated_k/reptran/')
 dir_libradtran_opac =  join(dir_libradtran, 'data/aerosol/OPAC/')
 dir_libradtran_atmmod = join(dir_libradtran, 'data/atmmod/')
 dir_libradtran_crs = join(dir_libradtran, 'data/crs/')
-libradtran_version = '2.0.2'
+libradtran_version = '2.0.4'
 
 
 
@@ -52,9 +52,9 @@ def check_libradtran():
     cmds.append(('wget http://www.meteo.physik.uni-muenchen.de/\~libradtran/lib/exe/fetch.php\?media\=download:optprop_v2.1.tar.gz -O optprop_v2.1.tar.gz', dir_libradtran))
     cmds.append(('tar xzvf optprop_v2.1.tar.gz', dir_libradtran))
     cmds.append(('rm -fv optprop_v2.1.tar.gz', dir_libradtran))
-    cmds.append(('wget http://www.meteo.physik.uni-muenchen.de/~libradtran/lib/exe/fetch.php?media=download:reptran_2015_all.tar.gz -O reptran_2015_all.tar.gz', dir_libradtran))
-    cmds.append(('tar xzvf reptran_2015_all.tar.gz', dir_libradtran))
-    cmds.append(('rm -fv reptran_2015_all.tar.gz', dir_libradtran))
+    cmds.append(('wget http://www.meteo.physik.uni-muenchen.de/~libradtran/lib/exe/fetch.php?media=download:reptran_2017_all.tar.gz -O reptran_2017_all.tar.gz', dir_libradtran))
+    cmds.append(('tar xzvf reptran_2017_all.tar.gz', dir_libradtran))
+    cmds.append(('rm -fv reptran_2017_all.tar.gz', dir_libradtran))
 
     print('Libradtran base directory does not exist:')
     print(dir_libradtran)
