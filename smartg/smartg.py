@@ -1551,6 +1551,57 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
     return m
 
 
+def isotropic(N):
+    '''
+    isotropic phase function, incl. cumulative
+    over N angles
+    '''
+    phase_H = np.zeros(N, dtype=type_Phase, order='C')
+    angles = np.linspace(0., pi, int(N), endpoint=True, dtype=np.float64)
+    scum = [0]
+    norm = 0.5
+    phase= np.zeros((4,N), dtype='float64') 
+    phase[0,:] = 0.5/norm
+    phase[1,:] = 0.5/norm
+    phase[2,:] = 0.5/norm
+    phase[3,:] = 0.5/norm
+    pm = phase[1, :] + phase[0, :]
+    sin = np.sin(angles)
+    dtheta = np.diff(angles)
+    tmp = dtheta * ((sin[:-1] * pm[:-1] + sin[1:] * pm[1:]) / 3.
+                    + (sin[:-1] * pm[1:] + sin[1:] * pm[:-1])/6.) * np.pi * 2.
+    scum = np.append(scum,tmp)
+    scum = np.cumsum(scum)
+    scum /= scum[-1]
+
+    # probability between 0 and 1
+    z = (np.arange(N, dtype='float64')+1)/N
+    angN = (np.arange(N, dtype='float64'))/(N-1)*np.pi
+    f1 = interp1d(angles, phase[0,:])
+    f2 = interp1d(angles, phase[1,:])
+    f3 = interp1d(angles, phase[2,:])
+    f4 = interp1d(angles, phase[3,:])
+
+    # parameters equally spaced in scattering probability
+    phase_H['p_P11'][:] = interp1d(scum, phase[0,:])(z)  # I par P11
+    phase_H['p_P22'][:] = interp1d(scum, phase[1,:])(z)  # I per P22
+    phase_H['p_P33'][:] = interp1d(scum, phase[2,:])(z)  # U P33
+    phase_H['p_P43'][:] = interp1d(scum, phase[3,:])(z)  # V P43
+    phase_H['p_P44'][:] = interp1d(scum, phase[2,:])(z)  # V P44= P33
+    phase_H['p_ang'][:] = interp1d(scum, angles)(z) # angle
+
+    # parameters equally spaced in scattering angle [0, 180]
+    phase_H['a_P11'][:] = f1(angN)  # I par P11
+    phase_H['a_P22'][:] = f2(angN)  # I per P22
+    phase_H['a_P33'][:] = f3(angN)  # U P33
+    phase_H['a_P43'][:] = f4(angN)  # V P43
+    phase_H['a_P44'][:] = f3(angN)  # V P44=P33
+
+
+    return phase_H
+
+
+
 def rayleigh(N, DEPO):
     '''
     Rayleigh phase function, incl. cumulative
@@ -1626,8 +1677,9 @@ def calculF(profile, N, DEPO, kind):
         shp = (1, N)
     phase_H = np.zeros(shp, dtype=type_Phase, order='C')
 
-    # Set Rayleigh phase function
-    phase_H[0,:] = rayleigh(N, DEPO)
+    # Set Rayleigh phase function or isotropic if DEPO <0
+    if DEPO >=0 : phase_H[0,:] = rayleigh(N, DEPO)
+    else : phase_H[0,:]        = isotropic(N)
     if 'theta_'+kind in profile.axes:
         angles = profile.axis('theta_'+kind) * pi/180.
         assert angles[-1] < 3.15   # assert that angles are in radians
