@@ -7468,12 +7468,20 @@ __global__ void reduce_absorption_gpu(unsigned long long NPHOTON, unsigned long 
         for (s=0;s<4;s++) {
             ns = s + 4*n;
             //offset = iw + NWVL*s + NWVL*NBTHETA*ith[n]; 
-            offset = ith[n] + NBTHETA*iw + NWVL*NBTHETA*s; 
+            offset = ith[n] + NBTHETA*iw + NWVL*NBTHETA*s;
+	    #if defined(DOUBLE) && !(__CUDA_ARCH__ >= 600)
+	    if (!nsif[n])             DatomicAdd(res    +offset, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
+            if (!nsif[n])             DatomicAdd(res_sca+offset, (double)S[ns] *              (double)wsca * walb);
+            if ( nrrs[n] && !nsif[n]) DatomicAdd(res_rrs+offset, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
+            if ( nsif[n])             DatomicAdd(res_sif+offset, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
+            if ( nvrs[n] && !nsif[n]) DatomicAdd(res_vrs+offset, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
+	    #else
             if (!nsif[n])             atomicAdd(res    +offset, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
             if (!nsif[n])             atomicAdd(res_sca+offset, (double)S[ns] *              (double)wsca * walb);
             if ( nrrs[n] && !nsif[n]) atomicAdd(res_rrs+offset, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
             if ( nsif[n])             atomicAdd(res_sif+offset, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
             if ( nvrs[n] && !nsif[n]) atomicAdd(res_vrs+offset, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
+	    #endif
         }
     }
   }
