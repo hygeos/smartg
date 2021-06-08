@@ -170,7 +170,6 @@ class Species(object):
 
         if (self._nrh_reff > 1) and (self._rh_or_reff == 'rh'):
             # drop first altitude element
-
             P = LUT(
                 np.zeros((nlam_tabulated, len(rh)-1, NPSTK, NBTHETA), dtype='float32')+np.NaN,
                 axes=[lam_tabulated, None, None, theta],
@@ -180,13 +179,14 @@ class Species(object):
             for irh_, rh_ in enumerate(rh[1:]):
 
                 irh = Idx(rh_, round=True, fill_value='extrema')
-                P.sub()[Idx(wav),:,:]
+                #P.sub()[Idx(wav),:,:]
 
                 # interpolate each tabulated wavelength
                 for ilam in range(nlam_tabulated):
                     for istk in range(NPSTK):
                         th = self._theta[ilam,irh,istk,:]
                         nth = self._ntheta[ilam,irh,istk]
+                        #P.data[ilam,irh_,istk,:] = np.interp(theta, th[:nth], self._phase[ilam,irh,istk,:nth]) 
                         P.data[ilam,irh_,istk,:] = interp1d(
                                 th[:nth],
                                 self._phase[ilam,irh,istk,:nth])(theta)
@@ -210,6 +210,7 @@ class Species(object):
                     th = self._theta[ilam,irh,istk,:]
                     nth = self._ntheta[ilam,irh,istk]
                     irh_ = 0
+                    #P.data[ilam,irh_,istk,:] = np.interp(theta, th[:nth], self._phase[ilam,irh,istk,:nth])
                     P.data[ilam,irh_,istk,:] = interp1d(
                             th[:nth],
                             self._phase[ilam,irh,istk,:nth])(theta)
@@ -222,6 +223,50 @@ class Species(object):
         P.data[:,:,1,:] = P0-P1
 
         return P.sub()[Idx(wav),:,:,:]
+    
+    
+    def phaseOpti(self, wav, rh, NBTHETA, reff=None):
+        '''
+        phase function of species at wavelengths wav
+        resampled over NBTHETA angles
+        '''
+
+        theta = np.linspace(0., 180., num=NBTHETA)
+        
+        if (self._nrh_reff > 1) and (self._rh_or_reff == 'rh'):
+            P = LUT( np.zeros((len(wav), len(rh)-1, NPSTK, NBTHETA), dtype='float32')+np.NaN,
+                     axes=[wav, None, None, theta],
+                     names=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
+                    )  # nlam_tabulated, nrh, stk, NBTHETA
+            lRh = rh[1:]
+        else:
+            P = LUT( np.zeros((len(wav), 1, NPSTK, NBTHETA), dtype='float32')+np.NaN,
+                     axes=[wav, None, None, theta],
+                     names=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
+                    )  # nlam_tabulated, nrh, stk, NBTHETA
+            lRh = [1]
+            
+        for irh_, rh_ in enumerate(lRh):
+            if (self._nrh_reff > 1) and (self._rh_or_reff == 'rh'):
+                irh = Idx(rh_, round=True, fill_value='extrema')
+            elif (self._rh_or_reff == 'reff') and (reff is not None):
+                irh = Idx(reff, round=True).index(self._phase.axes[1])
+            else:
+                irh = 0
+            for ilam in range(len(wav)):
+                    for istk in range(NPSTK):
+                        th = self._theta[ilam,irh,istk,:]
+                        nth = self._ntheta[ilam,irh,istk]
+                        P.data[ilam,irh_,istk,:] = interp1d(th[:nth],
+                                                            self._phase[ilam,irh,istk,:nth])(theta)
+
+        # convert I, Q into Ipar, Iper
+        P0 = P.data[:,:,0,:].copy()
+        P1 = P.data[:,:,1,:].copy()
+        P.data[:,:,0,:] = P0+P1
+        P.data[:,:,1,:] = P0-P1
+
+        return P
 
 
     @staticmethod
@@ -384,12 +429,13 @@ class AeroOPAC(object):
 
         return dtau, ssa
 
-    def phase(self, wav, Z, rh=None, NBTHETA=721):
+    def phase(self, wav, Z, rh=None, NBTHETA=721, phaseOpti=False):
         '''
         Phase function calculation at wavelength wav and altitudes Z
         relative humidity is rh
         angle resampling over NBTHETA angles
         '''
+
         if self._phase is not None:
             if self._phase.ndim == 2:
                 # convert to 4-dim by inserting empty dimensions wav_phase
@@ -403,6 +449,7 @@ class AeroOPAC(object):
                 return pha
             else:
                 return self._phase
+
 
         P = 0.
         dssa = 0.
@@ -422,14 +469,17 @@ class AeroOPAC(object):
             dssa_ = dtau_*ssa  # NLAM, ALTITUDE
             dssa_ = dssa_[:,1:,None,None]
             dssa += dssa_
-            P += s.phase(wav, rh, NBTHETA, reff=self.reff)*dssa_  # (NLAM, ALTITUDE-1, NPSTK, NBTHETA)
+            if not phaseOpti:
+                P += s.phase(wav, rh, NBTHETA, reff=self.reff)*dssa_  # (NLAM, ALTITUDE-1, NPSTK, NBTHETA)
+            else:
+                P += s.phaseOpti(wav, rh, NBTHETA, reff=self.reff)*dssa_
 
         with np.errstate(divide='ignore'):
             P.data /= dssa
         P.data[np.isnan(P.data)] = 0.
 
         P.axes[1] = average(Z)
-
+    
         return P
 
     @staticmethod
@@ -635,7 +685,7 @@ class AtmAFGL(Atmosphere):
         self.prof_red = prof.regrid(pfgrid)
 
 
-    def calc(self, wav, phase=True, NBTHETA=721):
+    def calc(self, wav, phase=True, NBTHETA=721, phaseOpti=False):
         '''
         Profile and phase function calculation at bands wav
 
@@ -647,14 +697,13 @@ class AtmAFGL(Atmosphere):
             wav = BandSet(wav)
 
         profile = self.profile(wav)
-
         if phase:
             if self.pfwav is None:
                 wav_pha = wav[:]
             else:
                 wav_pha = self.pfwav
-            pha = self.phase(wav_pha, NBTHETA=NBTHETA)
-
+            pha = self.phase(wav_pha, NBTHETA=NBTHETA, phaseOpti=phaseOpti)
+            
             if pha is not None:
                 pha_, ipha = calc_iphase(pha, profile.axis('wavelength'), profile.axis('z_atm'))
                 profile.add_axis('theta_atm', pha.axes[-1])
@@ -986,7 +1035,7 @@ class AtmAFGL(Atmosphere):
         return pro
 
 
-    def phase(self, wav, NBTHETA=721):
+    def phase(self, wav, NBTHETA=721, phaseOpti=False):
         '''
         Phase functions calculation at bands, using reduced profile
         '''
@@ -1000,9 +1049,8 @@ class AtmAFGL(Atmosphere):
             dtau, ssa_p = comp.dtau_ssa(wav, self.pfgrid, rh=rh)
             dtau = dtau[:,1:][:,:,None,None]
             ssa_p = ssa_p[:,1:][:,:,None,None]
-            pha += comp.phase(wav, self.pfgrid, rh, NBTHETA=NBTHETA)*dtau*ssa_p
+            pha += comp.phase(wav, self.pfgrid, rh, NBTHETA=NBTHETA, phaseOpti=phaseOpti)*dtau*ssa_p
             norm += dtau*ssa_p
-
         if len(self.comp) > 0:
             pha /= norm
             pha.data[np.isnan(pha.data)] = 0.
@@ -1072,7 +1120,8 @@ def trapzinterp(y, x, xnew, samesize=True):
 
     # y values in the new grid
     ynew = interp1d(x, y, kind='linear', bounds_error=False, fill_value=0.)(xnew)
-
+    #ynew = np.interp(xnew, x, y, left=0., right=0.)
+                     
     # indices of xnew in x
     idx = np.searchsorted(x, xnew)
 
@@ -1198,12 +1247,16 @@ class Profile_base(object):
             n2_filename = join(dir_libradtran_atmmod, 'afglus_n2_vmr.dat')
             datach4 = np.loadtxt(ch4_filename, comments="#")
             self.dens_ch4 = interp1d(datach4[:,0] , datach4[:,1])(self.z) * self.dens_air # CH4 density en cm-3
+            #self.dens_ch4 = np.interp(self.z, datach4[:,0] , datach4[:,1]) * self.dens_air # CH4 density en cm-3
             dataco = np.loadtxt(co_filename, comments="#")
             self.dens_co = interp1d(dataco[:,0] , dataco[:,1])(self.z) * self.dens_air # CH4 density en cm-3
+            #self.dens_co = np.interp(self.z, dataco[:,0] , dataco[:,1]) * self.dens_air # CH4 density en cm-3
             datan2o = np.loadtxt(n2o_filename, comments="#")
             self.dens_n2o = interp1d(datan2o[:,0] , datan2o[:,1])(self.z) * self.dens_air # CH4 density en cm-3
+            #self.dens_n2o = np.interp(self.z, datan2o[:,0] , datan2o[:,1]) * self.dens_air # CH4 density en cm-3
             datan2 = np.loadtxt(n2_filename, comments="#")
             self.dens_n2 = interp1d(datan2[:,0] , datan2[:,1])(self.z) * self.dens_air # CH4 density en cm-3
+            #self.dens_n2 = np.interp(self.z, datan2[:,0] , datan2[:,1]) * self.dens_air # CH4 density en cm-3
         else:
             nz = data.shape[0]
             self.dens_ch4 = [0] * nz
@@ -1223,11 +1276,12 @@ class Profile_base(object):
         prof.z = znew
         try:
             prof.P = interp1d(z, self.P, bounds_error=False, fill_value=(1012., 1e-5))(znew)
+            #prof.P = np.interp(znew, z, self.P, right=1012., left=1e-5)
         except ValueError:
             print('Error interpolating ({}, {}) -> ({}, {})'.format(z[0], z[-1], znew[0], znew[-1]))
             print('atm_filename = {}'.format(self.atm_filename))
             raise
-        prof.T = interp1d(z, self.T, fill_value='extrapolate')(znew)
+        prof.T = interp1d(z, self.T, fill_value='extrapolate')(znew) # No found np.interp with extrapolate
 
         prof.dens_air = interp1d(z, self.dens_air, bounds_error=False, fill_value=(0., 0.))  (znew)
         prof.dens_o3  = interp1d(z, self.dens_o3, bounds_error=False, fill_value=(0., 0.))  (znew)
@@ -1239,6 +1293,17 @@ class Profile_base(object):
         prof.dens_co  = interp1d(z, self.dens_co, bounds_error=False, fill_value=(0., 0.))  (znew)
         prof.dens_n2o = interp1d(z, self.dens_n2o, bounds_error=False, fill_value=(0., 0.))  (znew)
         prof.dens_n2  = interp1d(z, self.dens_n2, bounds_error=False, fill_value=(0., 0.))  (znew)
+        
+        # prof.dens_air = np.interp(znew, z, self.dens_air, right=0., left=0.)
+        # prof.dens_o3  = np.interp(znew, z, self.dens_o3, right=0., left=0.)
+        # prof.dens_o2  = np.interp(znew, z, self.dens_o2, right=0., left=0.)
+        # prof.dens_h2o = np.interp(znew, z, self.dens_h2o, right=0., left=0.)
+        # prof.dens_co2 = np.interp(znew, z, self.dens_co2, right=0., left=0.)
+        # prof.dens_no2 = np.interp(znew, z, self.dens_no2, right=0., left=0.)
+        # prof.dens_ch4 = np.interp(znew, z, self.dens_ch4, right=0., left=0.)
+        # prof.dens_co  = np.interp(znew, z, self.dens_co, right=0., left=0.)
+        # prof.dens_n2o = np.interp(znew, z, self.dens_n2o, right=0., left=0.)
+        # prof.dens_n2  = np.interp(znew, z, self.dens_n2, right=0., left=0.)
         prof.RH_cst   = self.RH_cst
 
         return prof
