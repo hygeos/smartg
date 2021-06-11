@@ -257,8 +257,9 @@ class Species(object):
                     for istk in range(NPSTK):
                         th = self._theta[ilam,irh,istk,:]
                         nth = self._ntheta[ilam,irh,istk]
-                        P.data[ilam,irh_,istk,:] = interp1d(th[:nth],
-                                                            self._phase[ilam,irh,istk,:nth])(theta)
+                        P.data[ilam,irh_,istk,:] = np.interp(theta, th[:nth], self._phase[ilam,irh,istk,:nth], period=np.inf)
+                        # P.data[ilam,irh_,istk,:] = interp1d(th[:nth],
+                        #                                     self._phase[ilam,irh,istk,:nth])(theta)
 
         # convert I, Q into Ipar, Iper
         P0 = P.data[:,:,0,:].copy()
@@ -645,9 +646,11 @@ class AtmAFGL(Atmosphere):
 
         crs_O3_filename  = join(dir_libradtran_crs, 'crs_O3_UBremen_cf.dat')
         crs_NO2_filename = join(dir_libradtran_crs, 'crs_NO2_UBremen_cf.dat')
-
+        
         # read crs ozone file
-        _crs_chappuis = np.loadtxt(crs_O3_filename, comments="#")
+        #_crs_chappuis = np.loadtxt(crs_O3_filename, comments="#")
+        _crs_chappuis = pd.read_csv(crs_O3_filename, comment="#", header=None, sep='\s+', dtype=float).values
+        #_crs_chappuis = np.genfromtxt(crs_O3_filename, comments="#")
         self.crs_chappuis = LUT(
                 _crs_chappuis[:,1:],
                 axes=[_crs_chappuis[:,0], None],
@@ -655,7 +658,9 @@ class AtmAFGL(Atmosphere):
                 )
 
         # read crs no2 file
-        _crs_no2 = np.loadtxt(crs_NO2_filename, comments="#")
+        #_crs_no2 = np.loadtxt(crs_NO2_filename, comments="#")
+        #_crs_no2 = np.genfromtxt(crs_NO2_filename, comments="#")
+        _crs_no2 = pd.read_csv(crs_NO2_filename, comment="#", header=None, sep='\s+', dtype=float).values
         self.crs_no2 = LUT(
                 _crs_no2[:,1:],
                 axes=[_crs_no2[:,0], None],
@@ -685,6 +690,7 @@ class AtmAFGL(Atmosphere):
         self.prof_red = prof.regrid(pfgrid)
 
 
+
     def calc(self, wav, phase=True, NBTHETA=721, phaseOpti=False):
         '''
         Profile and phase function calculation at bands wav
@@ -693,10 +699,12 @@ class AtmAFGL(Atmosphere):
 
         Returns: profile + phase function MLUT
         '''
+        
         if not isinstance(wav, BandSet):
             wav = BandSet(wav)
-
+            
         profile = self.profile(wav)
+        
         if phase:
             if self.pfwav is None:
                 wav_pha = wav[:]
@@ -712,7 +720,6 @@ class AtmAFGL(Atmosphere):
                     profile.add_dataset('iphase_atm', ipha, ['wavelength', 'z_atm'])
                 else :
                     profile.add_dataset('iphase_atm', ipha, ['wavelength', 'iopt'])
-
         return profile
 
 
@@ -828,10 +835,13 @@ class AtmAFGL(Atmosphere):
                         attrs={'description':
                                'Particles single scattering albedo of the layer'})
 
+
+            
         if self.prof_abs is None:
             #
             # Ozone optical thickness
             #
+            
             T0 = 273.15  # in K
             T = LUT(prof.T, names=['temperature'])
             tau_o3  = self.crs_chappuis.sub()[Idx(wav, fill_value='extrema'), 0]
@@ -872,8 +882,7 @@ class AtmAFGL(Atmosphere):
                 tau_mol = wav.calc_profile(self.prof) * dz
             else:
                 tau_mol = np.zeros((len(wav), len(prof.z)), dtype='float32') * dz
-
-
+                
             #
             # Total gaseous optical thickness
             #
@@ -906,7 +915,7 @@ class AtmAFGL(Atmosphere):
                   attrs={'description':
                          'gaseous absorption coefficient (km-1)'})
 
-
+                
         #
         # Total optical thickness and other parameters
         #
@@ -979,7 +988,7 @@ class AtmAFGL(Atmosphere):
                         attrs={'description':
                                'Ratio of molecular scattering to total scattering of the layer'})
 
-
+            
         pine = np.zeros_like(ssa)
         FQY1 = np.zeros_like(ssa)
         if not self.OPT3D:
@@ -1000,7 +1009,6 @@ class AtmAFGL(Atmosphere):
                         axnames=['wavelength', 'iopt'],
                         attrs={'description':
                                'fluoresence quantum yield of the layer'})
-
 
 
         if self.prof_phases is not None:
@@ -1045,6 +1053,7 @@ class AtmAFGL(Atmosphere):
         pha = 0.
         norm = 0.
         rh = self.prof_red.RH()
+
         for comp in self.comp:
             dtau, ssa_p = comp.dtau_ssa(wav, self.pfgrid, rh=rh)
             dtau = dtau[:,1:][:,:,None,None]
@@ -1058,7 +1067,6 @@ class AtmAFGL(Atmosphere):
             return pha
         else:
             return None
-
 
     def calc_split(self, wav, phase=True, NBTHETA=721):
         '''
@@ -1184,7 +1192,8 @@ class Profile_base(object):
         if desc=='' : n = 0
 
         if desc is not None:
-            data = np.loadtxt(atm_filename, dtype=np.float32, comments="#", skiprows=n)
+            #data = np.loadtxt(atm_filename, dtype=np.float32, comments="#", skiprows=n)
+            data = pd.read_csv(atm_filename, comment="#", header=None, sep='\s+', dtype=np.float32, skiprows=n).values
             self.z        = data[:,0] # Altitude in km
             self.P        = data[:,1] # pressure in hPa
             self.T        = data[:,2] # temperature in K
@@ -1245,16 +1254,20 @@ class Profile_base(object):
             co_filename = join(dir_libradtran_atmmod, 'afglus_co_vmr.dat')
             n2o_filename = join(dir_libradtran_atmmod, 'afglus_n2o_vmr.dat')
             n2_filename = join(dir_libradtran_atmmod, 'afglus_n2_vmr.dat')
-            datach4 = np.loadtxt(ch4_filename, comments="#")
+            #datach4 = np.loadtxt(ch4_filename, comments="#")
+            datach4 = pd.read_csv(ch4_filename, comment="#", header=None, sep='\s+', dtype=float).values
             self.dens_ch4 = interp1d(datach4[:,0] , datach4[:,1])(self.z) * self.dens_air # CH4 density en cm-3
             #self.dens_ch4 = np.interp(self.z, datach4[:,0] , datach4[:,1]) * self.dens_air # CH4 density en cm-3
-            dataco = np.loadtxt(co_filename, comments="#")
+            #dataco = np.loadtxt(co_filename, comments="#")
+            dataco = pd.read_csv(co_filename, comment="#", header=None, sep='\s+', dtype=float).values
             self.dens_co = interp1d(dataco[:,0] , dataco[:,1])(self.z) * self.dens_air # CH4 density en cm-3
             #self.dens_co = np.interp(self.z, dataco[:,0] , dataco[:,1]) * self.dens_air # CH4 density en cm-3
-            datan2o = np.loadtxt(n2o_filename, comments="#")
+            #datan2o = np.loadtxt(n2o_filename, comments="#")
+            datan2o = pd.read_csv(n2o_filename, comment="#", header=None, sep='\s+', dtype=float).values
             self.dens_n2o = interp1d(datan2o[:,0] , datan2o[:,1])(self.z) * self.dens_air # CH4 density en cm-3
             #self.dens_n2o = np.interp(self.z, datan2o[:,0] , datan2o[:,1]) * self.dens_air # CH4 density en cm-3
-            datan2 = np.loadtxt(n2_filename, comments="#")
+            #datan2 = np.loadtxt(n2_filename, comments="#")
+            datan2 = pd.read_csv(n2_filename, comment="#", header=None, sep='\s+', dtype=float).values
             self.dens_n2 = interp1d(datan2[:,0] , datan2[:,1])(self.z) * self.dens_air # CH4 density en cm-3
             #self.dens_n2 = np.interp(self.z, datan2[:,0] , datan2[:,1]) * self.dens_air # CH4 density en cm-3
         else:
