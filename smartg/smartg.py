@@ -1959,7 +1959,7 @@ def multi_profiles(profs, kind='atm'):
                 im = np.unique(M[d].data).max() + 1
                 if k==0 : data =  M[d].data[:] + imax
                 else: data = np.concatenate((data, M[d].data[:] + imax), axis=0)
-                imax=im 
+                imax+=im 
                 k=k+1
             pro.add_dataset(d, data, ['wavelength', 'z_'+kind])
         else:
