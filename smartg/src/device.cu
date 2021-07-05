@@ -62,7 +62,7 @@ extern "C" {
 							 ) {
 
     // current thread index
-	int idx = blockIdx.x *blockDim.x + threadIdx.x;
+	unsigned int idx = blockIdx.x *blockDim.x + threadIdx.x;
 	int loc_prev;
 	int count_level;
 	int this_thread_active = 1;
