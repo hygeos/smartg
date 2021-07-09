@@ -1154,6 +1154,9 @@ class Smartg(object):
             SREC=TC*TC*nbCx*nbCy; matLoss = None #;weightR=matCats[2, 1]
             dicSTP = {"vSun":vSun, "wRec":matCats[2, 1], "SREC":SREC, "TC":TC, "LPH":cusL.dict['LPH'],
                       "LPR":cusL.dict['LPR'], "prog":progress, "n_cte":n_cte}
+        elif(TC is not None):
+            SREC=TC*TC*nbCx*nbCy; matLoss = None
+            dicSTP = {"vSun":vSun, "SREC":SREC, "TC":TC, "n_cte":n_cte}
         # If there are no heliostats and receiver --> there is no STP
         else: 
             dicSTP = None; matLoss = None #; weightR=0
