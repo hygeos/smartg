@@ -175,7 +175,6 @@ class Species(object):
                 axes=[lam_tabulated, None, None, theta],
                 names=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
                 )  # nlam_tabulated, nrh, stk, NBTHETA
-
             for irh_, rh_ in enumerate(rh[1:]):
 
                 irh = Idx(rh_, round=True, fill_value='extrema')
@@ -232,16 +231,27 @@ class Species(object):
         '''
 
         theta = np.linspace(0., 180., num=NBTHETA)
+        lam_tabulated = np.array(self._phase.axis('lam'))
+
+        # The optimisation consists to not interpolate at all wavelengths of lam_tabulated,
+        # but only the wavelengths of lam_tabulated closely in the range of np.min(wav) and np.max(wav)
+        range_ind = np.array([np.argwhere((lam_tabulated <= np.min(wav)))[-1][0],
+                              np.argwhere((lam_tabulated >= np.max(wav)))[0][0]])
+        ilam_tabulated = np.arange(len(lam_tabulated), dtype=int)
+        ilam_opti = np.concatenate(np.argwhere((ilam_tabulated >= range_ind[0]) &
+                                               (ilam_tabulated <= range_ind[1])))
+        lam_opti = lam_tabulated[ilam_opti]
+        nlam_opti = len(lam_opti)
         
         if (self._nrh_reff > 1) and (self._rh_or_reff == 'rh'):
-            P = LUT( np.zeros((len(wav), len(rh)-1, NPSTK, NBTHETA), dtype='float32')+np.NaN,
-                     axes=[wav, None, None, theta],
+            P = LUT( np.zeros((nlam_opti, len(rh)-1, NPSTK, NBTHETA), dtype='float32')+np.NaN,
+                     axes=[lam_opti, None, None, theta],
                      names=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
                     )  # nlam_tabulated, nrh, stk, NBTHETA
             lRh = rh[1:]
         else:
-            P = LUT( np.zeros((len(wav), 1, NPSTK, NBTHETA), dtype='float32')+np.NaN,
-                     axes=[wav, None, None, theta],
+            P = LUT( np.zeros((nlam_opti, 1, NPSTK, NBTHETA), dtype='float32')+np.NaN,
+                     axes=[lam_opti, None, None, theta],
                      names=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
                     )  # nlam_tabulated, nrh, stk, NBTHETA
             lRh = [1]
@@ -253,13 +263,12 @@ class Species(object):
                 irh = Idx(reff, round=True).index(self._phase.axes[1])
             else:
                 irh = 0
-            for ilam in range(len(wav)):
+            for idd, ilam in enumerate(ilam_opti):
                     for istk in range(NPSTK):
                         th = self._theta[ilam,irh,istk,:]
                         nth = self._ntheta[ilam,irh,istk]
-                        P.data[ilam,irh_,istk,:] = np.interp(theta, th[:nth], self._phase[ilam,irh,istk,:nth], period=np.inf)
-                        # P.data[ilam,irh_,istk,:] = interp1d(th[:nth],
-                        #                                     self._phase[ilam,irh,istk,:nth])(theta)
+                        P.data[idd,irh_,istk,:] = np.interp(theta, th[:nth], self._phase[ilam,irh,istk,:nth], period=np.inf)
+                        # P.data[idd,irh_,istk,:] = interp1d(th[:nth], self._phase[ilam,irh,istk,:nth])(theta)
 
         # convert I, Q into Ipar, Iper
         P0 = P.data[:,:,0,:].copy()
@@ -267,7 +276,8 @@ class Species(object):
         P.data[:,:,0,:] = P0+P1
         P.data[:,:,1,:] = P0-P1
 
-        return P
+        if (nlam_opti == 1): return P
+        else : return P.sub()[Idx(wav),:,:,:]
 
 
     @staticmethod
@@ -455,7 +465,8 @@ class AeroOPAC(object):
         P = 0.
         dssa = 0.
         dtau = 0.
-
+        
+        
         for i, s in enumerate(self.species):
             # integrate density along altitude
             dens = trapzinterp(
