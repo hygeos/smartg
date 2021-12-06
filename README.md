@@ -6,14 +6,19 @@ SMART-G is a radiative transfer code using a Monte-Carlo technique to simulate t
 ## Installation
 SMART-G is written in python and cuda, and uses the [pycuda](http://mathema.tician.de/software/pycuda/) library. Python3 is recommended.
 
-We recommend to use the [anaconda python distribution](https://www.anaconda.com/download/). You can optionnally create a dedicated [environment](https://conda.io/docs/user-guide/tasks/manage-environments.html) (`conda create -n smartg python=3`) and then activate it.
+We recommend to use the [anaconda python distribution](https://www.anaconda.com/download/). You can create a dedicated [environment](https://conda.io/docs/user-guide/tasks/manage-environments.html) for SMART-G, or use your current environment.
 
 ### Using conda
 
 The smartg dependencies can be installed on anaconda with the following command:
 
 ```
-conda install -c conda-forge lukepfister::pycuda numpy scipy nose notebook matplotlib netcdf4 progressbar2 pyhdf
+  # create a new environment and activate it (optional but recommended)
+  conda create -n smartg -c conda-forge mamba
+  conda activate smartg
+
+  # install all SMART-G dependencies
+  mamba env update -f environment.yml
 ```
 
 ### Using poetry

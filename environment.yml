@@ -1,0 +1,21 @@
+# to update current environment:
+# mamba env update -f environment.yml
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python>3
+  - pytest
+  - pytest-xdist
+  - pytest-html
+  - progressbar2
+  - matplotlib
+  - pycuda
+  - nbformat
+  - nbconvert
+  - jupyterlab
+  - notebook
+  - ipywidgets
+  - pip
+  - pip:
+    - luts
