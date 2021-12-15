@@ -101,34 +101,34 @@ def smartg_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (T
             if logI:
                 lI=I.apply(np.log10)
                 lI.desc = mdesc(I.desc, logI=logI)
-                plot_polar(lI,  index=ind, rect='421', sub='423', fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
+                plot_polar(lI,  index=ind, rect=421, sub=423, fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
             else:
                 I.desc = mdesc(I.desc)
-                plot_polar(I,  index=ind, rect='421', sub='423', fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
+                plot_polar(I,  index=ind, rect=421, sub=423, fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
             Q.desc = mdesc(Q.desc)
             U.desc = mdesc(U.desc)
-            plot_polar(Q,  index=ind, rect='422', sub='424', fig=fig, cmap=cmap)
-            plot_polar(U,  index=ind, rect='425', sub='427', fig=fig, cmap=cmap)
+            plot_polar(Q,  index=ind, rect=422, sub=424, fig=fig, cmap=cmap)
+            plot_polar(U,  index=ind, rect=425, sub=427, fig=fig, cmap=cmap)
             if Circ:
                 V.desc = mdesc(V.desc)
-                plot_polar(V, index=ind, rect='426', sub='428', fig=fig, cmap=cmap)
+                plot_polar(V, index=ind, rect=426, sub=428, fig=fig, cmap=cmap)
             else:
-                plot_polar(DoP, index=ind, rect='426', sub='428', fig=fig, vmin=Pmin, vmax=Pmax, cmap=cmap)
+                plot_polar(DoP, index=ind, rect=426, sub=428, fig=fig, vmin=Pmin, vmax=Pmax, cmap=cmap)
         else:
             # show only I and PR
             if fig is None: fig = figure(figsize=(9, 4.5))
             if logI:
                 lI=I.apply(np.log10)
                 lI.desc = mdesc(I.desc, logI=logI)
-                plot_polar(lI,  index=ind, rect='221', sub='223', fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
+                plot_polar(lI,  index=ind, rect=221, sub=223, fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
             else:
                 I.desc = mdesc(I.desc)
-                plot_polar(I,  index=ind, rect='221', sub='223', fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
+                plot_polar(I,  index=ind, rect=221, sub=223, fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
 
             if Circ:
-                plot_polar(DoCP, index=ind, rect='222', sub='224', fig=fig, vmin=0, vmax=Pmax, cmap=cmap)
+                plot_polar(DoCP, index=ind, rect=222, sub=224, fig=fig, vmin=0, vmax=Pmax, cmap=cmap)
             else:
-                plot_polar(DoP, index=ind, rect='222', sub='224', fig=fig, vmin=Pmin, vmax=Pmax, cmap=cmap)
+                plot_polar(DoP, index=ind, rect=222, sub=224, fig=fig, vmin=Pmin, vmax=Pmax, cmap=cmap)
 
         return fig
 
@@ -142,19 +142,19 @@ def smartg_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (T
         Q.desc = mdesc(Q.desc)
         U.desc = mdesc(U.desc)
         V.desc = mdesc(V.desc)
-        plot_polar(I,  index=ind, rect='241', sub='245', fig=fig1, cmap=cmap, vmin=Imin, vmax=Imax)
-        plot_polar(Q,  index=ind, rect='242', sub='246', fig=fig1, cmap=cmap)
-        plot_polar(U,  index=ind, rect='243', sub='247', fig=fig1, cmap=cmap)
-        plot_polar(V,  index=ind, rect='244', sub='248', fig=fig1, cmap=cmap)
+        plot_polar(I,  index=ind, rect=241, sub=245, fig=fig1, cmap=cmap, vmin=Imin, vmax=Imax)
+        plot_polar(Q,  index=ind, rect=242, sub=246, fig=fig1, cmap=cmap)
+        plot_polar(U,  index=ind, rect=243, sub=247, fig=fig1, cmap=cmap)
+        plot_polar(V,  index=ind, rect=244, sub=248, fig=fig1, cmap=cmap)
         
         fig2 = figure(figsize=(16, 4))
         Q.desc = mdesc(Q.desc)
         U.desc = mdesc(U.desc)
         V.desc = mdesc(V.desc)
-        plot_polar(lI,  index=ind, rect='241', sub='245', fig=fig2, cmap=cmap)
-        plot_polar(DoLP,  index=ind, rect='242', sub='246', fig=fig2, vmin=Pmin, vmax=Pmax, cmap=cmap)
-        plot_polar(DoCP,  index=ind, rect='243', sub='247', fig=fig2, vmin=Pmin, vmax=Pmax, cmap=cmap)
-        plot_polar(DoP,  index=ind, rect='244', sub='248', fig=fig2, vmin=Pmin, vmax=Pmax, cmap=cmap)
+        plot_polar(lI,  index=ind, rect=241, sub=245, fig=fig2, cmap=cmap)
+        plot_polar(DoLP,  index=ind, rect=242, sub=246, fig=fig2, vmin=Pmin, vmax=Pmax, cmap=cmap)
+        plot_polar(DoCP,  index=ind, rect=243, sub=247, fig=fig2, vmin=Pmin, vmax=Pmax, cmap=cmap)
+        plot_polar(DoP,  index=ind, rect=244, sub=248, fig=fig2, vmin=Pmin, vmax=Pmax, cmap=cmap)
         #plot_polar(AoLP,  index=ind, rect='244', sub='248', fig=fig2, vmin=-180, vmax=180, cmap=cmap)
 
         return fig1, fig2
