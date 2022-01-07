@@ -311,6 +311,7 @@ class Environment(object):
                              2: ALB is a gaussian centred on X0,Y0 with a maximum of ALB_SURF and a
                              asymptotic value of ALB of the environement. The square of the sigma is ENV_SIZE.
                              3: ALB map2D modulated by checkerboard spatial function)
+                             4: same as 1 but for a band defined as Abs(X) <= ENV_SIZE, -4 for Abs(X)>= ENV_SIZE
     ENV_SIZE, X0, Y0: radius and position of the circle outside which ALB model is applied for abs(ENV)=1,
                              The square of the sigma of the gaussian (ENV=2),
                              size of the spatial pattern (in km), origin of the checkerboard at X0,Y0 for ENV=3
@@ -631,7 +632,7 @@ class Smartg(object):
              le=None, flux=None, stdev=False, BEER=1, RR=0, WEIGHTRR=0.1, SZA_MAX=90., SUN_DISC=0,
              sensor=None, refraction=False, reflectance=True,
              myObjects=None, interval = None,
-             IsAtm = 1, cusL = None, SMAX=1e6, FFS=False, DIRECT=False):
+             IsAtm = 1, cusL = None, SMIN=0, SMAX=1e6, FFS=False, DIRECT=False):
         '''
         Run a SMART-G simulation
 
@@ -761,7 +762,9 @@ class Smartg(object):
             cusL : None is the default mode (sun is a ponctual source targeting the origin (0,0,0)), else it
                       enable to use the RF, FF or B launching mode (see the class CusForward) --> cusL=CusForward(...)
 
-            SMAX : Maximum Scattering oorder: Default 1e6
+            SMIN : Minimum Scattering order: Default 0
+
+            SMAX : Maximum Scattering order: Default 1e6
 
             FFS : Forced First Scattering (for use in spherical limb geometry only): Default False
 
@@ -1113,7 +1116,7 @@ class Smartg(object):
                   XBLOCK, XGRID, NLAM, SIM, NF,
                   NBTHETA, NBPHI, OUTPUT_LAYERS,
                   RTER, LE, ZIP, FLUX, FFS, DIRECT, NLVL, NPSTK,
-                  NWLPROBA, NCELLPROBA, BEER, SMAX, RR, WEIGHTRR, NLOW, NJAC, 
+                  NWLPROBA, NCELLPROBA, BEER, SMIN, SMAX, RR, WEIGHTRR, NLOW, NJAC, 
                   NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj, nGObj, nRObj,
                   Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm,
                   TC, nbCx, nbCy, vSun, HIST)
@@ -1743,7 +1746,7 @@ def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
               NBPHOTONS, NBLOOP, THVDEG, DEPO,
               XBLOCK, XGRID,NLAM, SIM, NF,
               NBTHETA, NBPHI, OUTPUT_LAYERS,
-              RTER, LE, ZIP, FLUX, FFS, DIRECT, NLVL, NPSTK, NWLPROBA, NCELLPROBA,  BEER, SMAX, RR, 
+              RTER, LE, ZIP, FLUX, FFS, DIRECT, NLVL, NPSTK, NWLPROBA, NCELLPROBA,  BEER, SMIN, SMAX, RR, 
               WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj, nGObj, nRObj,
               Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, vSun, HIST) :
     """
@@ -1801,6 +1804,7 @@ def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
     copy_to_device('NLVLd', NLVL, np.int32)
     copy_to_device('NPSTKd', NPSTK, np.int32)
     copy_to_device('BEERd', BEER, np.int32)
+    copy_to_device('SMINd', SMIN, np.int32)
     copy_to_device('SMAXd', SMAX, np.int32)
     copy_to_device('RRd', RR, np.int32)
     copy_to_device('WEIGHTRRd', WEIGHTRR, np.float32)

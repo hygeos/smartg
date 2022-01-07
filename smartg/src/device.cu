@@ -520,10 +520,13 @@ extern "C" {
            // dis <= ENV_SIZEd if ENVd=1 (Environment outside disk) or dis >= ENV_SIZEd if ENVd=-1 (Environment inside disk)
            // or if ENV==2 it is a exponentially decreasing albedo between target and environment
            // or if ENV==3 and checkerboard return white square of albedo map
+           // or abs(X) <= ENV_SIZEd if ENVd=4 (Environment outside disk) 
+           // or abs(X) >= ENV_SIZEd if ENVd=-4 (Environment inside disk)
            ////////////////////////////
            if( (ENVd==0) || (ENVd==2) || 
                ((ENVd==3) && checkerboard(ph.pos, X0d, Y0d)) ||
-               ((ENVd==1) && (dis<=ENV_SIZEd)) || ((ENVd==-1) && (dis>=ENV_SIZEd)) || ph.loc==SURF0M ) { 
+               ((ENVd==1) && (dis<=ENV_SIZEd)) || ((ENVd==-1) && (dis>=ENV_SIZEd)) || 
+               ((ENVd==4) && (abs(ph.pos.x)<=ENV_SIZEd)) || ((ENVd==-4) && (abs(ph.pos.x)>=ENV_SIZEd)) || ph.loc==SURF0M ) { 
 
             ////////////////////////////
             // if Air-Sea Interface 
@@ -699,7 +702,9 @@ extern "C" {
            ////////////////////////////
            else if( ((ENVd==1) && (dis>ENV_SIZEd)) || 
                     ((ENVd==3) && !checkerboard(ph.pos, X0d, Y0d)) ||
-                    ((ENVd==-1) && (dis<ENV_SIZEd)) ) { 
+                    ((ENVd==-1) && (dis<ENV_SIZEd)) || 
+                    ((ENVd==4) && (abs(ph.pos.x)>ENV_SIZEd)) || 
+                    ((ENVd==-4) && (abs(ph.pos.x)<ENV_SIZEd)) ) { 
                 ph.env = 1;
                 //
 		        // 1- Surface Local Estimate (not evaluated if atmosphere only simulation)*/
@@ -5747,7 +5752,7 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
 
 
     // test single scattering or photons removed
-    if (count_level < 0 || ph->loc==REMOVED || ph->loc==ABSORBED || ph->nint>SMAXd ) {
+    if (count_level < 0 || ph->loc==REMOVED || ph->loc==ABSORBED || ph->nint>SMAXd || ph->nint<SMINd) {
     //if (count_level < 0 || ph->loc==REMOVED || ph->loc==ABSORBED) {
         // don't count anything
         return;
