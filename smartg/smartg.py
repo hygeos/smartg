@@ -2902,13 +2902,14 @@ def normalizeRecIrr(cMatVisuRecep, matCats, nbCx, nbCy, NBPHOTONS, surfLPH, TC, 
 
     # Normalize intensities such that only a mult by E_TOA is still needed to obtain power unit
     if (cusL is None):
-        normC = 1./NBPHOTONS
-        # Weights -> propor to w/m², mult by S_rec_m is needed to get something propor to watt unit
-        normC *= S_rec_m
-        cMatVisuRecep[:][:][:] = cMatVisuRecep[:][:][:]*normC
-        for i in range (0, 9):
-            matCats[i,3] = matCats[i,1]*normC # intensity
-            matCats[i,4] *= normC # Absolute err
+        normC = 1.
+        # normC = 1./NBPHOTONS
+        # # Weights -> propor to w/m², mult by S_rec_m is needed to get something propor to watt unit
+        # normC *= S_rec_m
+        # cMatVisuRecep[:][:][:] = cMatVisuRecep[:][:][:]*normC
+        # for i in range (0, 9):
+        #     matCats[i,3] = matCats[i,1]*normC # intensity
+        #     matCats[i,4] *= normC # Absolute err
     elif (cusL.dict['LMODE'] == "FF" or cusL.dict['LMODE'] == "RF"):
         # Here results are already propor to watt unit
         normC = (surfLPH*1e6)/NBPHOTONS  # Here multiply by 1e6 to convert km² to m²
