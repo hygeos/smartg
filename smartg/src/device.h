@@ -264,6 +264,10 @@ __device__ int ComputeBox(int*, int*, int*, Photon*,
 __device__ void display(const char* desc, Photon* ph);
 //#endif
 
+#ifdef OBJ3D
+__device__ void copyIGeo(IGeo* strucG, IGeo* strucG_le);
+#endif
+
 __device__ void copyPhoton(Photon*, Photon*); 
 
 __device__ void modifyUV( float3 v0, float3 u0, float cTh, float psi, float3 *v1, float3 *u1) ;
