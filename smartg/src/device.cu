@@ -6791,7 +6791,7 @@ __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
 	
 	#ifdef OBJ3D
 	ph_le->direct = ph->direct;
-	ph_le->H = ph->H; ph_le->H = ph->E; ph_le->H = ph->S;
+	ph_le->H = ph->H; ph_le->E = ph->E; ph_le->S = ph->S;
 	for (int k=0; k<4; k++) ph_le->weight_loss[k] = ph->weight_loss[k];
 	#endif
 	
