@@ -307,7 +307,7 @@ extern "C" {
             errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut);
 
 		#if defined(BACK) && defined(OBJ3D)
-		if (count_level == UPTOA and LMODEd == 4) // the photon reach TOA
+		if (count_level == UPTOA and LMODEd == 4 and LEd == 0) // the photon reach TOA
 		{ countPhotonObj3D(&ph, 0, tabObjInfo, &geoStruc, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2);}
         #endif
 
@@ -472,11 +472,8 @@ extern "C" {
 							#if defined(OBJ3D)
                             mask_le = false;
                             copyIGeo(&geoStruc, &geoStruc_le);
-                            if (!geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj))
-                            {
-							    countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2);
-                            }
-                            else { mask_le = true; }
+                            mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj);
+                            if (!mask_le and count_level_le == UPTOA and LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2); }
 							#endif
                             if (!mask_le) {countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, count_level_le, errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut); }
 
@@ -614,6 +611,9 @@ extern "C" {
                             #endif // END not spheric
                             // Final extinction computation in FAST PP move mode and counting at the TOA for all move modes
                             if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA , errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut); }
+                            #ifdef OBJ3D
+                            if (!mask_le and LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2); }
+                            #endif
                         }
                         // Only for downward photons in Ocean, count also them up to Bottom 
                         if (k==1) { 
@@ -729,6 +729,9 @@ extern "C" {
                         #endif // END not spheric
                         // Final extinction computation in FAST PP move mode and counting at the TOA for all move modes
                         if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut); }
+                        #ifdef OBJ3D
+                        if (!mask_le and LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2); }
+                        #endif
 
                     }//direction
                   }//direction
@@ -805,6 +808,9 @@ extern "C" {
                         #endif // END ALT_PP
                         #endif // END not spheric
                         if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut); }
+                        #ifdef OBJ3D
+                        if (!mask_le and LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2); }
+                        #endif
                     }//direction
                  }//direction
                 } //LE
@@ -904,7 +910,7 @@ extern "C" {
         if(ph.loc == OBJSURF)
 		{
 
-			if (geoStruc.type == RECEIVER and LMODEd != 4) // this is a receiver
+			if (geoStruc.type == RECEIVER and LMODEd != 4 and LEd == 0) // this is a receiver
 			{ countPhotonObj3D(&ph, 0, tabObjInfo, &geoStruc, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2);}
 
 			ph.weight_loss[0] = ph.weight;
@@ -926,7 +932,6 @@ extern "C" {
                             mask_le = false;
                             copyIGeo(&geoStruc, &geoStruc_le);
                             mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj);
-                            if (mask_le) {ph_le.weight = 0.;}
                             if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UP0P, errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut); }
                             #ifdef SPHERIQUE
 							// for spherical case attenuation if performed usin move_sp
@@ -938,6 +943,7 @@ extern "C" {
                             }
 						    #endif
 							if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut); }
+                            if (!mask_le and LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2); }
 						}//direction
 					}//direction
                 } //LE
@@ -986,6 +992,7 @@ extern "C" {
                             }
 						    #endif
 							if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist, NPhotonsOut); }
+                            if (!mask_le and LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2); }
                             
 						}//direction
 					}//direction
@@ -5554,6 +5561,7 @@ __device__ void Obj3DRoughSurf(Photon* ph, int le, float* tabthv, float* tabphi,
 		//jac = __fdividef(1.F, 4.F * fabs(cTheta_i));
 		//p_o *= G2; // normalization
 		//ph->weight *= __fdividef(p_o * jac, fabs(cTheta_i));
+
 		ph->weight *= __fdividef(p_m*G2, 4.F*fabs(cTheta_o)*fabs(cTheta_i));
 		ph->weight *= geoS->reflectivity;
 		ph->locPrev = OBJSURF;
@@ -5633,16 +5641,24 @@ __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geo
 	{
 	    // Use also double precison operations due to simple precison limit 
 		double cosANGD, cosPHSUN;
-		double3 vecSUN = make_double3(-DIRSXd, -DIRSYd, -DIRSZd);
+		double3 vecSUN = normalize(make_double3(-DIRSXd, -DIRSYd, -DIRSZd));
 		double3 vecPH = normalize(make_double3(ph->v.x, ph->v.y, ph->v.z));
 		
 		cosANGD = cos( radiansd( SUN_DISCd )  );
 		cosPHSUN = dot(vecSUN, vecPH);
 		p_t = ph->posIni;
+        
+        // Below an orther method normally for efficient with small angle. Verification is needed
+        /* double angleBis = atan2(length(cross(vecSUN, vecPH)), cosPHSUN)*180./CUDART_PI;
+        if(angleBis > double(SUN_DISCd)) { return; } */
 
 		if (cosPHSUN < cosANGD) {return;}
 		if (ph->direct == 0){countLoss(ph, geoS, wPhLoss, wPhLoss2);}
 	}
+    else if (LMODEd == 4 and le == 1)
+    {
+        p_t = ph->posIni;
+    }
 	else
 	{
 		Transform transfo, invTransfo;
@@ -5692,141 +5708,140 @@ __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geo
 	wPhCatC = (float*)wPhCat; wPhCatC2 = (float*)wPhCat2;
 	weight = ph->weight * float(stokes.x + stokes.y);
 	#endif
-	weight2 = weight * weight;
-
-	if(isnan(weight)){printf("Care weight is nan !! \n");return;}
 
 	if (le == 1)
 	{
-		float tau_le;
-		tau_le = prof_atm[(NATMd)+ph->ilam * (NATMd+1)].OD;
-		// if BEER=0, photon variable tau corresponds to extinction
-		if (BEERd == 0) {weight *= expf(-fabs(__fdividef(tau_le - ph->tau, ph->v.z)));}
-		// if BEER=1, photon variable tau corresponds to scattering only, need to add photon absorption
-		else {weight *= expf(-fabs(__fdividef(tau_le - (ph->tau+ph->tau_abs), ph->v.z)));} 
+        // Normally count only case where count level is UPTOA
+        int layer_le;
+        float tau_le;
+        Profile *prof;
+        int layer_end;
+
+        // define correct start and end layers and profiles for LE
+        layer_le = 0; 
+        layer_end= NATMd;
+        prof = prof_atm;
+        
+        // First get the extinction optical depth at the counting level
+        tau_le = prof[(layer_end-layer_le) + ph->ilam *(layer_end+1)].OD;
+        // if BEER=0, photon variable tau corresponds to extinction
+        if (BEERd == 0) weight *= expf(-fabs(__fdividef(tau_le - ph->tau, ph->v.z))); // LE attenuation to count_level
+        // if BEER=1, photon variable tau corresponds to scattering only, need to add photon absorption variable
+        else weight *= expf(-fabs(__fdividef(tau_le - (ph->tau+ph->tau_abs), ph->v.z))); // LE attenuation to count_level
 	}
 
-	if ( le == 1)
-	{ // CAT 8 : 3 proc. H, E et S avant de toucher le R.
-		#if !defined(DOUBLE) || (defined(DOUBLE) && __CUDA_ARCH__ >= 600)
+    weight2 = weight * weight;
+	if(isnan(weight)){printf("Care weight is nan !! \n");return;}
+
+    #if !defined(DOUBLE) || (defined(DOUBLE) && __CUDA_ARCH__ >= 600)
+	// All the beams reaching a receiver
+	atomicAdd(tabCountObj+(nbCy*indI)+indJ, weight);	
+
+	// Les huit catégories
+	if (ph->H == 0 && ph->E == 0 && ph->S == 0) 
+	{ // CAT 1 : aucun changement de trajectoire avant de toucher le R.
+		atomicAdd(wPhCatC, weight); atomicAdd(wPhCatC2, weight2);// comptage poids
+		atomicAdd(nbPhCat, 1);     // comptage nombre de photons
+		atomicAdd(tabCountObj+(nbCy*nbCx)+(nbCy*indI)+indJ, weight); // distri
+	}
+	else if ( ph->H > 0 && ph->E == 0 && ph->S == 0)
+	{ // CAT 2 : only H avant de toucher le R.
+		atomicAdd(wPhCatC+1, weight); atomicAdd(wPhCatC2+1, weight2);
+		atomicAdd(nbPhCat+1, 1);
+		atomicAdd(tabCountObj+(2*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+	}
+	else if ( ph->H == 0 && ph->E > 0 && ph->S == 0)
+	{ // CAT 3 : only E avant de toucher le R.
+		atomicAdd(wPhCatC+2, weight); atomicAdd(wPhCatC2+2, weight2);
+		atomicAdd(nbPhCat+2, 1);
+		atomicAdd(tabCountObj+(3*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+	}
+	else if ( ph->H == 0 && ph->E == 0 && ph->S > 0)
+	{ // CAT 4 : only S avant de toucher le R.
+		atomicAdd(wPhCatC+3, weight); atomicAdd(wPhCatC2+3, weight2);
+		atomicAdd(nbPhCat+3, 1);
+		atomicAdd(tabCountObj+(4*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+	}
+	else if ( ph->H > 0 && ph->E == 0 && ph->S > 0)
+	{ // CAT 5 : 2 proc. H et S avant de toucher le R.
+		atomicAdd(wPhCatC+4, weight); atomicAdd(wPhCatC2+4, weight2);
+		atomicAdd(nbPhCat+4, 1);
+		atomicAdd(tabCountObj+(5*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+	}
+	else if ( ph->H > 0 && ph->E > 0 && ph->S == 0)
+	{ // CAT 6 : 2 proc. H et E avant de toucher le R.
 		atomicAdd(wPhCatC+5, weight); atomicAdd(wPhCatC2+5, weight2);
-		#else
+		atomicAdd(nbPhCat+5, 1);
+		atomicAdd(tabCountObj+(6*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+		//printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
+		//=(%f,%f)
+	}
+	else if ( ph->H == 0 && ph->E > 0 && ph->S > 0)
+	{ // CAT 7 : 2 proc. E et S avant de toucher le R.
+		atomicAdd(wPhCatC+6, weight); atomicAdd(wPhCatC2+6, weight2);
+		atomicAdd(nbPhCat+6, 1);
+		atomicAdd(tabCountObj+(7*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+	}	
+	else if ( ph->H > 0 && ph->E > 0 && ph->S > 0)
+	{ // CAT 8 : 3 proc. H, E et S avant de toucher le R.
+		atomicAdd(wPhCatC+7, weight); atomicAdd(wPhCatC2+7, weight2);
+		atomicAdd(nbPhCat+7, 1);
+		atomicAdd(tabCountObj+(8*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+	}		
+    #else // If DOUBLE and not a new nvidia card
+	DatomicAdd(tabCountObj+(nbCy*indI)+indJ, weight);
+
+	// Les huit catégories
+	if (ph->H == 0 && ph->E == 0 && ph->S == 0) 
+	{ // CAT 1 : aucun changement de trajectoire avant de toucher le R.
+		DatomicAdd(wPhCatC, weight); DatomicAdd(wPhCatC2, weight2);// comptage poids
+		atomicAdd(nbPhCat, 1);     // comptage nombre de photons
+		DatomicAdd(tabCountObj+(nbCy*nbCx)+(nbCy*indI)+indJ, weight); // distri
+	}
+	else if ( ph->H > 0 && ph->E == 0 && ph->S == 0)
+	{ // CAT 2 : only H avant de toucher le R.
+		DatomicAdd(wPhCatC+1, weight); DatomicAdd(wPhCatC2+1, weight2);
+		atomicAdd(nbPhCat+1, 1);
+		DatomicAdd(tabCountObj+(2*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+		//printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
+	}
+	else if ( ph->H == 0 && ph->E > 0 && ph->S == 0)
+	{ // CAT 3 : only E avant de toucher le R.
+		DatomicAdd(wPhCatC+2, weight); DatomicAdd(wPhCatC2+2, weight2);
+		atomicAdd(nbPhCat+2, 1);
+		DatomicAdd(tabCountObj+(3*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+	}
+	else if ( ph->H == 0 && ph->E == 0 && ph->S > 0)
+	{ // CAT 4 : only S avant de toucher le R.
+		DatomicAdd(wPhCatC+3, weight); DatomicAdd(wPhCatC2+3, weight2);
+		atomicAdd(nbPhCat+3, 1);
+		DatomicAdd(tabCountObj+(4*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+	}
+	else if ( ph->H > 0 && ph->E == 0 && ph->S > 0)
+	{ // CAT 5 : 2 proc. H et S avant de toucher le R.
+		DatomicAdd(wPhCatC+4, weight); DatomicAdd(wPhCatC2+4, weight2);
+		atomicAdd(nbPhCat+4, 1);
+		DatomicAdd(tabCountObj+(5*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+	}
+	else if ( ph->H > 0 && ph->E > 0 && ph->S == 0)
+	{ // CAT 6 : 2 proc. H et E avant de toucher le R.
 		DatomicAdd(wPhCatC+5, weight); DatomicAdd(wPhCatC2+5, weight2);
-		#endif
-		// atomicAdd(nbPhCat+5, 1);
-		//atomicAdd(tabCountObj+(6*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+		atomicAdd(nbPhCat+5, 1);
+		DatomicAdd(tabCountObj+(6*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+		//printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
 	}
-	if (le == 0) {
-        #if !defined(DOUBLE) || (defined(DOUBLE) && __CUDA_ARCH__ >= 600)
-		// All the beams reaching a receiver
-		atomicAdd(tabCountObj+(nbCy*indI)+indJ, weight);	
-
-		// Les huit catégories
-		if (ph->H == 0 && ph->E == 0 && ph->S == 0) 
-		{ // CAT 1 : aucun changement de trajectoire avant de toucher le R.
-			atomicAdd(wPhCatC, weight); atomicAdd(wPhCatC2, weight2);// comptage poids
-			atomicAdd(nbPhCat, 1);     // comptage nombre de photons
-			atomicAdd(tabCountObj+(nbCy*nbCx)+(nbCy*indI)+indJ, weight); // distri
-		}
-		else if ( ph->H > 0 && ph->E == 0 && ph->S == 0)
-		{ // CAT 2 : only H avant de toucher le R.
-			atomicAdd(wPhCatC+1, weight); atomicAdd(wPhCatC2+1, weight2);
-			atomicAdd(nbPhCat+1, 1);
-			atomicAdd(tabCountObj+(2*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-		}
-		else if ( ph->H == 0 && ph->E > 0 && ph->S == 0)
-		{ // CAT 3 : only E avant de toucher le R.
-			atomicAdd(wPhCatC+2, weight); atomicAdd(wPhCatC2+2, weight2);
-			atomicAdd(nbPhCat+2, 1);
-			atomicAdd(tabCountObj+(3*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-		}
-		else if ( ph->H == 0 && ph->E == 0 && ph->S > 0)
-		{ // CAT 4 : only S avant de toucher le R.
-			atomicAdd(wPhCatC+3, weight); atomicAdd(wPhCatC2+3, weight2);
-			atomicAdd(nbPhCat+3, 1);
-			atomicAdd(tabCountObj+(4*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-		}
-		else if ( ph->H > 0 && ph->E == 0 && ph->S > 0)
-		{ // CAT 5 : 2 proc. H et S avant de toucher le R.
-			atomicAdd(wPhCatC+4, weight); atomicAdd(wPhCatC2+4, weight2);
-			atomicAdd(nbPhCat+4, 1);
-			atomicAdd(tabCountObj+(5*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-		}
-		else if ( ph->H > 0 && ph->E > 0 && ph->S == 0)
-		{ // CAT 6 : 2 proc. H et E avant de toucher le R.
-			atomicAdd(wPhCatC+5, weight); atomicAdd(wPhCatC2+5, weight2);
-			atomicAdd(nbPhCat+5, 1);
-			atomicAdd(tabCountObj+(6*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-			//printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
-			//=(%f,%f)
-		}
-		else if ( ph->H == 0 && ph->E > 0 && ph->S > 0)
-		{ // CAT 7 : 2 proc. E et S avant de toucher le R.
-			atomicAdd(wPhCatC+6, weight); atomicAdd(wPhCatC2+6, weight2);
-			atomicAdd(nbPhCat+6, 1);
-			atomicAdd(tabCountObj+(7*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-		}	
-		else if ( ph->H > 0 && ph->E > 0 && ph->S > 0)
-		{ // CAT 8 : 3 proc. H, E et S avant de toucher le R.
-			atomicAdd(wPhCatC+7, weight); atomicAdd(wPhCatC2+7, weight2);
-			atomicAdd(nbPhCat+7, 1);
-			atomicAdd(tabCountObj+(8*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-		}		
-        #else // If DOUBLE and not a new nvidia card
-		DatomicAdd(tabCountObj+(nbCy*indI)+indJ, weight);
-
-		// Les huit catégories
-		if (ph->H == 0 && ph->E == 0 && ph->S == 0) 
-		{ // CAT 1 : aucun changement de trajectoire avant de toucher le R.
-			DatomicAdd(wPhCatC, weight); DatomicAdd(wPhCatC2, weight2);// comptage poids
-			atomicAdd(nbPhCat, 1);     // comptage nombre de photons
-			DatomicAdd(tabCountObj+(nbCy*nbCx)+(nbCy*indI)+indJ, weight); // distri
-		}
-		else if ( ph->H > 0 && ph->E == 0 && ph->S == 0)
-		{ // CAT 2 : only H avant de toucher le R.
-			DatomicAdd(wPhCatC+1, weight); DatomicAdd(wPhCatC2+1, weight2);
-			atomicAdd(nbPhCat+1, 1);
-			DatomicAdd(tabCountObj+(2*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-			//printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
-		}
-		else if ( ph->H == 0 && ph->E > 0 && ph->S == 0)
-		{ // CAT 3 : only E avant de toucher le R.
-			DatomicAdd(wPhCatC+2, weight); DatomicAdd(wPhCatC2+2, weight2);
-			atomicAdd(nbPhCat+2, 1);
-			DatomicAdd(tabCountObj+(3*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-		}
-		else if ( ph->H == 0 && ph->E == 0 && ph->S > 0)
-		{ // CAT 4 : only S avant de toucher le R.
-			DatomicAdd(wPhCatC+3, weight); DatomicAdd(wPhCatC2+3, weight2);
-			atomicAdd(nbPhCat+3, 1);
-			DatomicAdd(tabCountObj+(4*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-		}
-		else if ( ph->H > 0 && ph->E == 0 && ph->S > 0)
-		{ // CAT 5 : 2 proc. H et S avant de toucher le R.
-			DatomicAdd(wPhCatC+4, weight); DatomicAdd(wPhCatC2+4, weight2);
-			atomicAdd(nbPhCat+4, 1);
-			DatomicAdd(tabCountObj+(5*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-		}
-		else if ( ph->H > 0 && ph->E > 0 && ph->S == 0)
-		{ // CAT 6 : 2 proc. H et E avant de toucher le R.
-			DatomicAdd(wPhCatC+5, weight); DatomicAdd(wPhCatC2+5, weight2);
-			atomicAdd(nbPhCat+5, 1);
-			DatomicAdd(tabCountObj+(6*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-			//printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
-		}
-		else if ( ph->H == 0 && ph->E > 0 && ph->S > 0)
-		{ // CAT 7 : 2 proc. E et S avant de toucher le R.
-			atomicAdd(nbPhCat+6, 1);
-			DatomicAdd(tabCountObj+(7*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-		}	
-		else if ( ph->H > 0 && ph->E > 0 && ph->S > 0)
-		{ // CAT 8 : 3 proc. H, E et S avant de toucher le R.
-			DatomicAdd(wPhCatC+7, weight); DatomicAdd(wPhCatC2+7, weight2);
-			atomicAdd(nbPhCat+7, 1);
-			DatomicAdd(tabCountObj+(8*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-		}
-        #endif // End of !defined(DOUBLE) || (defined(DOUBLE) && defined(NEW_CARDS))
+	else if ( ph->H == 0 && ph->E > 0 && ph->S > 0)
+	{ // CAT 7 : 2 proc. E et S avant de toucher le R.
+		atomicAdd(nbPhCat+6, 1);
+		DatomicAdd(tabCountObj+(7*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+	}	
+	else if ( ph->H > 0 && ph->E > 0 && ph->S > 0)
+	{ // CAT 8 : 3 proc. H, E et S avant de toucher le R.
+		DatomicAdd(wPhCatC+7, weight); DatomicAdd(wPhCatC2+7, weight2);
+		atomicAdd(nbPhCat+7, 1);
+		DatomicAdd(tabCountObj+(8*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}
+    #endif // End of !defined(DOUBLE) || (defined(DOUBLE) && defined(NEW_CARDS))
 }
 #endif // End OBJ3D
 
