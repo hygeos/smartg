@@ -924,8 +924,9 @@ extern "C" {
 					for (int ith=0; ith<NBTHETAd; ith++){
 						for (int iph=0; iph<NBPHId; iph++){
 							copyPhoton(&ph, &ph_le);
-							ph_le.iph = (iph + iph0)%NBPHId;
-							ph_le.ith = (ith + ith0)%NBTHETAd;
+                            ph_le.ith = (ith + ith0)%NBTHETAd;
+                            if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
+                            else ph_le.iph =  ph_le.ith;
 							surfaceLambert3D(&ph_le, 1, tabthv, tabphi, spectrum,
 												  &rngstate, &geoStruc);			
 							// Only two levels for counting by definition
@@ -973,8 +974,9 @@ extern "C" {
 					for (int ith=0; ith<NBTHETAd; ith++){
 						for (int iph=0; iph<NBPHId; iph++){
 							copyPhoton(&ph, &ph_le);
-							ph_le.iph = (iph + iph0)%NBPHId;
 							ph_le.ith = (ith + ith0)%NBTHETAd;
+                            if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
+                            else ph_le.iph =  ph_le.ith;
 							Obj3DRoughSurf(&ph_le, 1, tabthv, tabphi, &geoStruc, &rngstate);
 							// Only two levels for counting by definition
                             mask_le = false;
