@@ -1142,10 +1142,13 @@ class Smartg(object):
         attrs.update(self.common_attrs)
 
         # If there is a receiver -> normalization of the signal collected
-        if (TC is not None):
+        if (TC is not None and le is None):
             cMatVisuRecep, matCats, n_cte = normalizeRecIrr(cMatVisuRecep=cMatVisuRecep, matCats=matCats,
                 nbCx=nbCx, nbCy=nbCy, NBPHOTONS=NBPHOTONS, surfLPH=surfLPH, TC=TC, cusL=cusL,
                 SUN_DISC=SUN_DISC)
+        # If LE
+        elif(le is not None):
+            n_cte = 1./NBPHOTONS
 
         if (nb_H > 0 and TC is not None and cusL is not None):
             MZAlt_H = zAlt_H/nb_H; SREC=TC*TC*nbCx*nbCy #; weightR=matCats[2, 1]
@@ -1156,7 +1159,7 @@ class Smartg(object):
         elif(TC is not None and cusL is not None):
             SREC=TC*TC*nbCx*nbCy; matLoss = None #;weightR=matCats[2, 1]
             dicSTP = {"vSun":vSun, "wRec":matCats[2, 1], "SREC":SREC, "TC":TC, "LPH":cusL.dict['LPH'],
-                      "LPR":cusL.dict['LPR'], "prog":progress, "n_cte":n_cte}
+                      "LPR":cusL.dict['LPR'], "prog":progress, "n_cte":n_cte, "ALDEG":cusL.dict['ALDEG']}
         elif(TC is not None):
             SREC=TC*TC*nbCx*nbCy; matLoss = None
             dicSTP = {"vSun":vSun, "SREC":SREC, "TC":TC, "n_cte":n_cte}
@@ -1498,6 +1501,9 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
         m.add_dataset('C_Receiver', cMatVisuRecep[:][:][:], ['Categories', 'X_Cell_Index', 'Y_Cell_Index'])
         m.set_attr('S_Receiver', str(dicSTP["SREC"])) # Receiver surface in km²
         m.set_attr('S_Cell', str(dicSTP["TC"]))       # Cell surface in km²
+        # half-angle of the receiver solid angle
+        if (back == True) : m.set_attr('ALDEG', str(dicSTP["ALDEG"]))
+        else : m.set_attr('ALDEG', str(90))
 
     if (matCats is not None):
         m.add_dataset('cat_PhNb', matCats[:,0], ['Categories'])
@@ -2341,7 +2347,10 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
                 # Monte carlo err computation see the book of Dunn and Shultis
                 sum2Z = (matCats[i,1]*matCats[i,1])/NBPHOTONS
                 sumZ2 = matCats[i,2]
-                matCats[i,4] = (nBis * (sumZ2 - sum2Z))**0.5 # errAbs not normalized
+                if (le is None):
+                    matCats[i,4] = (nBis * (sumZ2 - sum2Z))**0.5 # errAbs not normalized
+                else:
+                    matCats[i,4] = (nBis * abs(sumZ2 - sum2Z))**0.5
                 matCats[i,5] = (matCats[i,4]/matCats[i,1])*100 # err%
     else:
         tabMatRecep = None; matCats = None; matLoss=None

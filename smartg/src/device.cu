@@ -5502,11 +5502,11 @@ __device__ void Obj3DRoughSurf(Photon* ph, int le, float* tabthv, float* tabphi,
 	} // end le==0
 	else // le==1
 	{
-		float cTheta2_m, cTheta_o, alph2, sTheta_m, tTheta2_m, p_m;
+		float cTheta2_m, alph2, sTheta_m, tTheta2_m, p_m;
 		int xsiP_mn;
 
 		cTheta2_m = cTheta_m*cTheta_m;
-		cTheta_o = fabs(dot(v_o, macroFnormal_n));
+		//cTheta_o = fabs(dot(v_o, macroFnormal_n));
 		sTheta_m = sqrtf(fmaxf(0.F, 1.F-cTheta2_m));
 		alph2 = alpha*alpha;
 		tTheta2_m = sTheta_m/fmaxf(VALMIN, cTheta_m);
@@ -7067,7 +7067,7 @@ __device__ double DatomicAdd(double* address, double val)
 __device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct IObjets *ObjT, struct GObj *myGObj)
 {
 	// Initialization of the ray for the intersection study
-	Ray R1(o, dir, 0.0005); // 0.0001 -> ray begin 10cm further in direction "dir"
+	Ray R1(o, dir, 0.00025); // 0.0001 -> ray begin 10cm further in direction "dir"
 
 	// ******************interval of study******************
 	BBox interval(make_float3(Pmin_x-VALMIN, Pmin_y-VALMIN, Pmin_z-VALMIN),
@@ -7202,7 +7202,7 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct I
 __device__ bool geoTestMir(float3 o, float3 dir, struct IObjets *ObjT, struct GObj *myGObj)
 {
 	// Initialization of the ray for the intersection study
-	Ray R1(o, dir, 0.0005); // 0.0001 -> ray begin 10cm further in direction "dir"
+	Ray R1(o, dir, 0.00025); // 0.0001 -> ray begin 10cm further in direction "dir"
 	
 	// *************Specific to plane objects***************
 	int vi[6] = {0, 1, 2,  // vertices index for triangle 1
@@ -7270,7 +7270,7 @@ __device__ bool geoTestMir(float3 o, float3 dir, struct IObjets *ObjT, struct GO
 __device__ bool geoTestRec(float3 o, float3 dir, struct IObjets *ObjT)
 {
 	// Initialization of the ray for the intersection study
-	Ray R1(o, dir, 0.0005); // 0.0001 -> ray begin 10cm further in direction "dir"
+	Ray R1(o, dir, 0.00025); // 0.0001 -> ray begin 10cm further in direction "dir"
 	// ******************interval of study******************
 	BBox interval(make_float3(Pmin_x, Pmin_y, Pmin_z),
 				  make_float3(Pmax_x, Pmax_y, Pmax_z));

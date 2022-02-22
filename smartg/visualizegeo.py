@@ -95,18 +95,23 @@ def receiver_view(MLUT, CAT = int(0), LOG_I=False, NAME_FILE = None, MTOA = 1320
         plt.savefig(NAME_FILE + '.pdf')  
 
 
-def cat_view(MLUT, ACC = 6, MTOA = 1320, NCL = "68%", UNIT = "FLUX", W_VIEW = "W"):
+def cat_view(MLUT, ACC = 6, MTOA = 1320, NCL = "68%", UNIT = "FLUX_DENSITY", W_VIEW = "W", LE = False, PRINT=True):
     '''
     Definition of cat_view
 
     MLUT   : SMART-G return LUT
     ACC    : Accuracy, number of decimal points to show (integer)
     NCL    : Nominal Confidence Limit
-    UNIT   : Choice between 'POW' (Watt) and 'FLUX' (Watt/meter²)
-    W_VIEW : Choices between "W" for Watt, "kW" for kiloWatt or "MW" for MegaWatt 
+    UNIT   : Choice between 'FLUX' (Watt), 'FLUX_DENSITY' (Watt/meter²) and RADIANCE (Watt/meter²/sr)
+    W_VIEW : Choices between "W" for Watt, "kW" for kiloWatt or "MW" for MegaWatt
+    PRINT  : print results
     '''
     m = MLUT
-
+    
+    SZA = m.axes['Zenith angles'][0]
+    NPH = float(m.attrs['NPHOTONS'])
+    ALDEG = (float(m.attrs['ALDEG']))
+    
     if( W_VIEW == "W"):
         k = 1.; STRUNIT = "Watt";
     elif ( W_VIEW == "kW"):
@@ -115,13 +120,33 @@ def cat_view(MLUT, ACC = 6, MTOA = 1320, NCL = "68%", UNIT = "FLUX", W_VIEW = "W
         k = 1e-6; STRUNIT = "MegaWatt";
     else :
         raise NameError('Unkonwn argument for W_VIEW!')
-    if (UNIT == "POW"):
-        cst = 1.*k; STRPRINT = "Power in " + STRUNIT + " for each categories"
-    elif (UNIT == "FLUX"):
-        cst = (1.*k)/(float(m.attrs['S_Receiver'])*1e6)
-        STRPRINT = "Irradiance in " + STRUNIT + "/meter² for each categories"
+
+    if (LE is False):
+        if (UNIT == "FLUX"):
+            cst = 1.*k; STRPRINT = "Flux in " + STRUNIT + " for each categories"
+        elif (UNIT == "FLUX_DENSITY"):
+            cst = (1.*k)/(float(m.attrs['S_Receiver'])*1e6)
+            STRPRINT = "Irradiance in " + STRUNIT + "/meter² for each categories"
+        elif (UNIT == "RADIANCE"):
+            cst = (1.*k)/(float(m.attrs['S_Receiver'])*1e6)
+            cst *= 2./(np.pi*(1 - np.cos(np.radians(2*ALDEG))))
+            STRPRINT = "Radiance in " + STRUNIT + "/meter²/sr for each categories"
+        else:
+            raise NameError('Unkonwn argument for UNIT!')
+        MF = m['cat_irr'][:]
     else:
-        raise NameError('Unkonwn argument for UNIT!')
+        if (UNIT == "FLUX"):
+            cst = 1.*k; STRPRINT = "Flux in " + STRUNIT + " for each categories"
+        elif (UNIT == "FLUX_DENSITY"):
+            cst = ((1.*k)/(np.pi*NPH))*np.cos(np.radians(SZA))
+            cst *= (np.pi*(1 - np.cos(np.radians(2*ALDEG))))/2.
+            STRPRINT = "Irradiance in " + STRUNIT + "/meter² for each categories"
+        elif (UNIT == "RADIANCE"):
+            cst = ((1.*k)/(np.pi*NPH))*np.cos(np.radians(SZA))
+            STRPRINT = "Radiance in " + STRUNIT + "/meter²/sr for each categories"
+        else:
+            raise NameError('Unkonwn argument for UNIT!')
+        MF = m['cat_w'][:]
 
     lP = ["(  D  )", "(  H  )", "(  E  )", "(  A  )", "( H+A )", "( H+E )", "( E+A )", "(H+E+A)"]
     intAcc = int(ACC)
@@ -133,14 +158,23 @@ def cat_view(MLUT, ACC = 6, MTOA = 1320, NCL = "68%", UNIT = "FLUX", W_VIEW = "W
     elif (NCL == "99%"): ld = 3
     elif (NCL == "99.99%"): ld = 4
 
-    print("**********************************************************")
-    print(STRPRINT)
-    print("**********************************************************")
-    print("SUM_CATS      " + ": irradiance=", strAcc % (m['cat_irr'][0]*MTOA*cst), " number_ph=", np.uint64(m['cat_PhNb'][0]),
-                  " errAbs=", strAcc % (m['cat_errAbs'][0]*MTOA*ld*cst), " err(%)=", strAcc % (m['cat_err%'][0]*ld))
-    for i in range (0, 8):
-        print("CAT",i+1, lP[i], ": irradiance=", strAcc % (m['cat_irr'][i+1]*MTOA*cst), " number_ph=", np.uint64(m['cat_PhNb'][i+1]),
-              " errAbs=", strAcc % (m['cat_errAbs'][i+1]*MTOA*ld*cst), " err(%)=", strAcc % (m['cat_err%'][i+1]*ld))
+    mat = np.zeros((9,4), dtype="float64")
+    for i in range (0, 9):
+        mat[i,0] = MF[i]*MTOA*cst
+        mat[i,1] = m['cat_PhNb'][i]
+        mat[i,2] = m['cat_errAbs'][i]*MTOA*ld*cst
+        mat[i,3] = m['cat_err%'][i]*ld
+
+    if (PRINT == True):
+        print("**********************************************************")
+        print(STRPRINT)
+        print("**********************************************************")
+        print("SUM_CATS      " + ": irradiance=", strAcc % (MF[0]*MTOA*cst), " number_ph=", np.uint64(m['cat_PhNb'][0]),
+              " errAbs=", strAcc % (m['cat_errAbs'][0]*MTOA*ld*cst), " err(%)=", strAcc % (m['cat_err%'][0]*ld))
+        for i in range (0, 8):
+            print("CAT",i+1, lP[i], ": irradiance=", strAcc % (MF[i+1]*MTOA*cst), " number_ph=", np.uint64(m['cat_PhNb'][i+1]),
+                  " errAbs=", strAcc % (m['cat_errAbs'][i+1]*MTOA*ld*cst), " err(%)=", strAcc % (m['cat_err%'][i+1]*ld))
+    return mat
 
 def nopt_view(MLUT, BACK=False, ACC = 6, NCL="68%", fl_TOA=None, NAATM=False):
     '''
