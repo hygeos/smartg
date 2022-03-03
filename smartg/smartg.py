@@ -1154,7 +1154,7 @@ class Smartg(object):
             MZAlt_H = zAlt_H/nb_H; SREC=TC*TC*nbCx*nbCy #; weightR=matCats[2, 1]
             # dicSTP : tuple incorporating parameters for Solar Tower Power applications
             dicSTP = {"nb_H":nb_H, "n_cos": n_cos, "totS_H":totS_H, "surfTOA":surfLPH, "MZAlt_H":MZAlt_H, "vSun":vSun, "wRec":matCats[2, 1],
-                      "SREC":SREC, "TC":TC, "LPH":cusL.dict['LPH'], "LPR":cusL.dict['LPR'], "prog":progress, "n_cte":n_cte}
+                      "SREC":SREC, "TC":TC, "LPH":cusL.dict['LPH'], "LPR":cusL.dict['LPR'], "prog":progress, "n_cte":n_cte, "ALDEG":cusL.dict['ALDEG']}
         # If there are no heliostats --> no analyses of optical losses
         elif(TC is not None and cusL is not None):
             SREC=TC*TC*nbCx*nbCy; matLoss = None #;weightR=matCats[2, 1]
