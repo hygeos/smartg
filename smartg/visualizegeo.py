@@ -822,6 +822,118 @@ def generateLEfH(HELIO = Heliostat(), PR = None, THEDEG = 0., PHIDEG = 0., MTF=N
 
     return LF
 
+def generateBox(dimXYZ=[0.05, 0.05, 0.05], pos=Point(0., 0., 0.), matAV = "LambMirror",
+        ref=[1., 1., 1., 1., 1., 1.], rough=[0.2, 0.2, 0.2, 0.2, 0.2, 0.2], rotZ = 0., gap=0.0001):
+    """
+    Description of the function :
+    This function creates a box/building. The faces composing the box are
+    following the convention used by Didier for 3D atm in SMART-G:
+    Face 0 : Right. In the face -> (top Y+ ; right Z-)
+    Face 1 : Left.  In the face -> (top Y+ ; right Z+)
+    Face 2 : Back.  In the face -> (top Z- ; right X+)
+    Face 3 : Front. In the face -> (top Z+ ; right X+)
+    Face 4 : Top.   In the face -> (top Y+ ; right X+)
+    Face 5 : Bot.   In the face -> (top Y+ ; right X-)
+    
+    !! BE CAREFUL !! origin is at the centre of Face 5, not a the center of the box !!
+    
+    ===ARGS:
+    dimXYZ : List with the dimensions of the box in x, y and z
+    pos    : Point class with the localisation of the box, where origin is the center of F5
+    matAV  : We can choose between "LambMirror" or "Mirror" for constant material in each faces,
+             or a list of the material classes (Matte(), LambMirror() and Mirror()) for the 6 faces
+    ref    : If matAV is "LambMirror" or "Mirror", we can specify the reflectivity of the faces
+    rough  : If matAV is "Mirror" we can specify the roughness of the faces
+    rotZ   : Global rotation of the box in the Z axis, in degrees (only global rotation in Z is enabled)
+    gap    : gap to add in the global bounding box, can be sometimes useful for very small objects
+    
+    ===RETURN:
+    Return a group of objects (i.e. a GroupE class composed of plane objects)
+    """
+    
+    # Material AV = front part (i.e. part outside the box) of Face 0 to Face 5,
+    # back part (i.e. part inside the box) will be definite as matte (totally absorbant)
+    matAVL = []
+    if (matAV == "Mirror") :
+        for i in range (0, 6):
+            matAVL.append(Mirror(reflectivity = ref[i], roughness=rough[i]))
+    elif (matAV == "LambMirror") :
+        for i in range (0, 6):
+            matAVL.append(LambMirror(reflectivity = ref[i]))
+    else :
+        matAVL = matAV
+        
+    
+    # === Commun parameters ===
+    # Compute the half dimensions in X, Y and Z
+    wMx = dimXYZ[0]/2.; wMy = dimXYZ[1]/2.; wMz = dimXYZ[2]/2.
+    
+    # With the global Z rotation, 4 translations are needed in the direction after the rotation, for Face 0 to 3 
+    TT = Transform(); TT = TT.rotateZ(rotZ)
+    TX = Vector(1., 0., 0.); TX = TT[TX]; TX = Normalize(TX)*wMx
+    TY = Vector(0., 1., 0.); TY = TT[TY]; TY = Normalize(TY)*wMy
+    
+    # Initialize a numpy array list of Points (p1 to p4 to construct a face) for all faces (from face 0 to 5)
+    p1_F = np.empty(6, dtype=object); p2_F = np.empty(6, dtype=object); p3_F = np.empty(6, dtype=object); p4_F = np.empty(6, dtype=object)
+    
+    # Initialisze rotation needed to orient correctly each face
+    rotX_F = np.zeros(6, dtype='float64'); rotY_F = np.zeros(6, dtype='float64')
+    rotZ_F = np.full(6, rotZ) # for Z rotation it is the same value for all faces
+    
+    # Initialize translation variables of all faces
+    transX_F = np.zeros(6, dtype='float64'); transY_F = np.zeros(6, dtype='float64'); transZ_F = np.zeros(6, dtype='float64')
+    # === End commun parameters ===
+    
+    
+    # Face 0 unique parameters
+    p1_F[0] = Point(-wMz, -wMy, 0.); p2_F[0] = Point(wMz, -wMy, 0.); p3_F[0] = Point(-wMz, wMy, 0.); p4_F[0] = Point(wMz, wMy, 0.)
+    rotX_F[0] = 0.; rotY_F[0] = 90.
+    transX_F[0] = pos.x+TX.x; transY_F[0] = pos.y+TX.y; transZ_F[0] = pos.z + wMz
+    
+    # Face 1 unique parameters
+    p1_F[1] = Point(-wMz, -wMy, 0.); p2_F[1] = Point(wMz, -wMy, 0.); p3_F[1] = Point(-wMz, wMy, 0.); p4_F[1] = Point(wMz, wMy, 0.)
+    rotX_F[1] = 0.; rotY_F[1] = -90.
+    transX_F[1] = pos.x-TX.x; transY_F[1] = pos.y-TX.y; transZ_F[1] = pos.z + wMz
+    
+    # Face 2 unique parameters
+    p1_F[2] = Point(-wMx, -wMz, 0.); p2_F[2] = Point(wMx, -wMz, 0.); p3_F[2] = Point(-wMx, wMz, 0.); p4_F[2] = Point(wMx, wMz, 0.)
+    rotX_F[2] = -90.; rotY_F[2] = 0.
+    transX_F[2] = pos.x+TY.x; transY_F[2] = pos.y+TY.y; transZ_F[2] = pos.z + wMz
+    
+    # Face 3 unique parameters
+    p1_F[3] = Point(-wMx, -wMz, 0.); p2_F[3] = Point(wMx, -wMz, 0.); p3_F[3] = Point(-wMx, wMz, 0.); p4_F[3] = Point(wMx, wMz, 0.)
+    rotX_F[3] = 90.; rotY_F[3] = 0.
+    transX_F[3] = pos.x-TY.x; transY_F[3] = pos.y-TY.y; transZ_F[3] = pos.z + wMz
+    
+    # Face 4 unique parameters
+    p1_F[4] = Point(-wMx, -wMy, 0.); p2_F[4] = Point(wMx, -wMy, 0.); p3_F[4] = Point(-wMx, wMy, 0.); p4_F[4] = Point(wMx, wMy, 0.)
+    rotX_F[4] = 0.; rotY_F[4] = 0.
+    transX_F[4] = pos.x; transY_F[4] = pos.y; transZ_F[4] = pos.z + 2*wMz
+    
+    # Face 5 unique parameters
+    p1_F[5] = Point(-wMx, -wMy, 0.); p2_F[5] = Point(wMx, -wMy, 0.); p3_F[5] = Point(-wMx, wMy, 0.); p4_F[5] = Point(wMx, wMy, 0.)
+    rotX_F[5] = 0.; rotY_F[5] = 180.
+    transX_F[5] = pos.x; transY_F[5] = pos.y; transZ_F[5] = pos.z
+    
+    # Create the faces and incorporate them in a list
+    LOBJ = []
+    for i in range (0, 6):
+        F = Entity(name = "reflector", \
+                   materialAV = matAVL[i], \
+                   materialAR = Matte(), \
+                   geo = Plane( p1 = p1_F[i], p2 = p2_F[i], p3 = p3_F[i], p4 = p4_F[i] ), \
+                   transformation = Transformation( rotation = np.array([rotX_F[i], rotY_F[i], rotZ_F[i]]),
+                                                    translation = np.array([transX_F[i], transY_F[i], transZ_F[i]]), rotationOrder="ZXY" ))
+        LOBJ.append(F)
+    
+    # Create a group of object with a global bounding box (can improve significantly the computational time!)
+    maxXY = max(pos.x, 2*max(wMx, wMy))
+    p_min = Point( pos.x - maxXY - gap, pos.y - maxXY - gap, pos.z - gap)
+    p_max = Point( pos.x + maxXY + gap, pos.y + maxXY + gap, pos.z + 2*wMz + gap )
+    GOBJ = GroupE(LE = LOBJ, BBOX = [p_min, p_max])
+    
+    return GOBJ
+
 def Ref_Fresnel(dirEnt, geoTrans):
     '''
     Definition of Ref_Fresnel
