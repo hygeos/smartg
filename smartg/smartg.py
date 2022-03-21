@@ -1129,7 +1129,7 @@ class Smartg(object):
 
         # Loop and kernel call
         (NPhotonsInTot, tabPhotonsTot, tabDistTot, tabHistTot, errorcount, 
-         NPhotonsOutTot, sigma, Nkernel, secs_cuda_clock, cMatVisuRecep, matCats, matLoss
+         NPhotonsOutTot, sigma, Nkernel, secs_cuda_clock, cMatVisuRecep, matCats, matLoss, wPhCats, wPhCats2
         ) = loop_kernel(NBPHOTONS, faer, foce,
                         NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX_HIST, NLOW, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                         NLAM, NSENSOR, self.double, self.kernel, self.kernel2, p, X0, le, tab_sensor, spectrum,
@@ -1149,17 +1149,22 @@ class Smartg(object):
         # If LE
         elif(le is not None):
             n_cte = 1./NBPHOTONS
+            
 
         if (nb_H > 0 and TC is not None and cusL is not None):
             MZAlt_H = zAlt_H/nb_H; SREC=TC*TC*nbCx*nbCy #; weightR=matCats[2, 1]
             # dicSTP : tuple incorporating parameters for Solar Tower Power applications
+            if(self.back) : ALDEG = cusL.dict['ALDEG']
+            else : ALDEG = 0.
             dicSTP = {"nb_H":nb_H, "n_cos": n_cos, "totS_H":totS_H, "surfTOA":surfLPH, "MZAlt_H":MZAlt_H, "vSun":vSun, "wRec":matCats[2, 1],
-                      "SREC":SREC, "TC":TC, "LPH":cusL.dict['LPH'], "LPR":cusL.dict['LPR'], "prog":progress, "n_cte":n_cte, "ALDEG":cusL.dict['ALDEG']}
+                      "SREC":SREC, "TC":TC, "LPH":cusL.dict['LPH'], "LPR":cusL.dict['LPR'], "prog":progress, "n_cte":n_cte, "ALDEG":ALDEG}
         # If there are no heliostats --> no analyses of optical losses
         elif(TC is not None and cusL is not None):
             SREC=TC*TC*nbCx*nbCy; matLoss = None #;weightR=matCats[2, 1]
+            if(self.back) : ALDEG = cusL.dict['ALDEG']
+            else : ALDEG = 0.
             dicSTP = {"vSun":vSun, "wRec":matCats[2, 1], "SREC":SREC, "TC":TC, "LPH":cusL.dict['LPH'],
-                      "LPR":cusL.dict['LPR'], "prog":progress, "n_cte":n_cte, "ALDEG":cusL.dict['ALDEG']}
+                      "LPR":cusL.dict['LPR'], "prog":progress, "n_cte":n_cte, "ALDEG":ALDEG}
         elif(TC is not None):
             SREC=TC*TC*nbCx*nbCy; matLoss = None
             dicSTP = {"vSun":vSun, "SREC":SREC, "TC":TC, "n_cte":n_cte}
@@ -1172,7 +1177,7 @@ class Smartg(object):
                           OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, prof_oc,
                           sigma, THVDEG, HORIZ, le=le, flux=flux, back=self.back, 
                           SZA_MAX=SZA_MAX, SUN_DISC=SUN_DISC, hist=hist, cMatVisuRecep=cMatVisuRecep,
-                          dicSTP=dicSTP, matCats=matCats, matLoss=matLoss)
+                          dicSTP=dicSTP, matCats=matCats, matLoss=matLoss, wPhCats=wPhCats, wPhCats2=wPhCats2)
         
         output.set_attr('processing time (s)', (datetime.now() - t0).total_seconds())
 
@@ -1234,7 +1239,7 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
              OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, prof_oc,
              sigma, THVDEG, HORIZ, le=None, flux=None,
              back=False, SZA_MAX=90., SUN_DISC=0, hist=False, cMatVisuRecep = None,
-             dicSTP = None, matCats=None, matLoss=None):
+             dicSTP = None, matCats=None, matLoss=None, wPhCats=None, wPhCats2=None):
     '''
     create and return the final output
     '''
@@ -1512,11 +1517,19 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
         m.add_dataset('cat_irr', matCats[:,3], ['Categories'])
         m.add_dataset('cat_errAbs', matCats[:,4], ['Categories'])
         m.add_dataset('cat_err%', matCats[:,5], ['Categories'])
+        
+        axe_wPh = ['Categories']
+  
+        if (NLAM > 1): axe_wPh.append('wavelength')
+        m.add_dataset('wPhCats', wPhCats[:][:], [None, 'wavelength'])
+        m.add_dataset('wPhCats2', wPhCats2[:][:], [None, 'wavelength'])
+        m.add_dataset('norm_npho', norm_npho[0,0,0,:,0,0], ['wavelength'])
+        
+        m.set_attr('n_cte', str(dicSTP["n_cte"]))
 
     if (matLoss is not None):
         m.add_dataset('wLoss', np.array(matLoss[:,0], dtype=np.float64), ['index'])
         m.add_dataset('wLoss2', np.array(matLoss[:,1], dtype=np.float64), ['index'])
-        m.set_attr('n_cte', str(dicSTP["n_cte"]))
         m.set_attr('n_cos', str(dicSTP["n_cos"]))
         
         # To consider also the multispectral case
@@ -2158,22 +2171,28 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
     # If a receiver object is used then : initialize matrix and vectors for gains and losses
     if TC is not None:
         nbPhCat = gpuzeros(8, dtype=np.uint64) # vector to fill the number of photons for  each categories
-        wPhCat = gpuzeros(8, dtype=FDTYPE)  # vector to fill the weight of photons for each categories
-        wPhCat2 = gpuzeros(8, dtype=FDTYPE)  # sum of squared photons weight for each cats
+        wPhCat = gpuzeros((8, NLAM), dtype=FDTYPE)  # vector to fill the weight of photons for each categories
+        wPhCatTot = gpuzeros((8, NLAM), dtype=FDTYPE)
+        wPhCat2 = gpuzeros((8, NLAM), dtype=FDTYPE)  # sum of squared photons weight for each cats
+        wPhCat2Tot = gpuzeros((8, NLAM), dtype=FDTYPE)
         tabObjInfo = gpuzeros((9, nbCx, nbCy), dtype=FDTYPE)
         wPhLoss = gpuzeros(7, dtype=FDTYPE)
         wPhLoss2 = gpuzeros(7, dtype=FDTYPE)
         tabMatRecep = np.zeros((9, nbCx, nbCy), dtype=np.float64)
+        
         # Matrix where lines : l0 = SumCats, l1=cat1, l2=cat2, ... l8=cat8
-        # And columns : c0=nbPhotons , c1=weight, c2=weight2, c3=irradiance(in watt), c4=errAbs, c5=err%
+        # And columns : c0=nbPhotons , c1=weight, c2=weight2, c3=flux(in watt), c4=errAbs, c5=err%
         matCats = np.zeros((9, 6), dtype=np.float64)
+        
         # Matrix where: M[0,0]=W_I, M[1,0]=W_rhoM, M[2,0]=W_rhoP, M[3,0]=W_BM, M[4,0]=W_BP, M[5,0]=W_SM, M[6,0]=W_SP
         # and : M[0,1]=W_I², M[1,1]=W_rhoM², M[2,1]=W_rhoP², M[3,1]=W_BM², M[4,1]=W_BP², M[5,1]=W_SM², M[6,1]=W_SP²
         matLoss = np.zeros((7, 2), dtype=np.float64)
     else:
-        nbPhCat = gpuzeros(1, dtype=np.uint64)
-        wPhCat = gpuzeros(1, dtype=FDTYPE)
-        wPhCat2 = gpuzeros(1, dtype=FDTYPE)
+        nbPhCat = gpuzeros((1, 1), dtype=np.uint64)
+        wPhCat = gpuzeros((1, 1), dtype=FDTYPE)
+        wPhCat2 = gpuzeros((1, 1), dtype=FDTYPE)
+        wPhCatTot = gpuzeros((1, 1), dtype=FDTYPE)
+        wPhCat2Tot = gpuzeros((1, 1), dtype=FDTYPE)
         wPhLoss = gpuzeros(1, dtype=FDTYPE)
         wPhLoss2 = gpuzeros(1, dtype=FDTYPE)
         tabObjInfo = gpuzeros((1, 1, 1), dtype=FDTYPE)
@@ -2288,12 +2307,14 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
             matLoss[:,0] += wPhLoss[:].get()
             matLoss[:,1] += wPhLoss2[:].get()
             # Begin to fill the matrix matCats
-            matCats[0,1] += np.sum(wPhCat[:].get())
-            matCats[0,2] += np.sum(wPhCat2[:].get())
+            matCats[0,1] += np.sum(wPhCat[:, :].get())
+            matCats[0,2] += np.sum(wPhCat2[:, :].get())
+            wPhCatTot += wPhCat
+            wPhCat2Tot += wPhCat2
             for i in range (0, 8):
                 # Count the photon weights for each category
-                matCats[i+1,1] += wPhCat[i].get()    # sum of wi
-                matCats[i+1,2] += wPhCat2[i].get()   # sum of wi
+                matCats[i+1,1] += np.sum(wPhCat[i, :].get())    # sum of wi
+                matCats[i+1,2] += np.sum(wPhCat2[i, :].get())   # sum of wi
         
         L = NPhotonsIn   # number of photons launched by last kernel
         NPhotonsInTot += L
@@ -2365,7 +2386,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         sigma = None
 
     return NPhotonsInTot.get(), tabPhotonsTot.get(), tabDistTot.get(), tabHistTot.get(), errorcount, \
-        NPhotonsOutTot.get(), sigma, N_simu, secs_cuda_clock, tabMatRecep, matCats, matLoss
+        NPhotonsOutTot.get(), sigma, N_simu, secs_cuda_clock, tabMatRecep, matCats, matLoss, wPhCatTot.get(), wPhCat2Tot.get()
 
 
 def get_git_attrs():

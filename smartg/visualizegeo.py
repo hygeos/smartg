@@ -95,7 +95,8 @@ def receiver_view(MLUT, CAT = int(0), LOG_I=False, NAME_FILE = None, MTOA = 1320
         plt.savefig(NAME_FILE + '.pdf')  
 
 
-def cat_view(MLUT, ACC = 6, MTOA = 1320, NCL = "68%", UNIT = "FLUX_DENSITY", W_VIEW = "W", LE = False, PRINT=True):
+def cat_view(MLUT, ACC = 6, MTOA = 1320, NCL = "68%", UNIT = "FLUX_DENSITY", W_VIEW = "W",
+             LE = False, WL_INT = True, PRINT=True):
     '''
     Definition of cat_view
 
@@ -104,12 +105,15 @@ def cat_view(MLUT, ACC = 6, MTOA = 1320, NCL = "68%", UNIT = "FLUX_DENSITY", W_V
     NCL    : Nominal Confidence Limit
     UNIT   : Choice between 'FLUX' (Watt), 'FLUX_DENSITY' (Watt/meter²) and RADIANCE (Watt/meter²/sr)
     W_VIEW : Choices between "W" for Watt, "kW" for kiloWatt or "MW" for MegaWatt
+    WL_INT : If True -> Flux is already integrated, for exemple the case where wl_proba is used 
     PRINT  : print results
     '''
     m = MLUT
     
     SZA = m.axes['Zenith angles'][0]
-    NPH = float(m.attrs['NPHOTONS'])
+    isWaveAxis = 'wavelength' in m['wPhCats'].names
+    if (isWaveAxis and (WL_INT == False)): NPH = m["norm_npho"][:]
+    else : NPH = float(m.attrs['NPHOTONS'])
     ALDEG = (float(m.attrs['ALDEG']))
     
     if( W_VIEW == "W"):
@@ -133,7 +137,13 @@ def cat_view(MLUT, ACC = 6, MTOA = 1320, NCL = "68%", UNIT = "FLUX_DENSITY", W_V
             STRPRINT = "Radiance in " + STRUNIT + "/meter²/sr for each categories"
         else:
             raise NameError('Unkonwn argument for UNIT!')
-        MF = m['cat_irr'][:]
+        
+        if (isWaveAxis and WL_INT == False):
+            MF = m['wPhCats'][:,:]
+            cst*=float(m.attrs['n_cte'])
+            cst*=np.sum(NPH) / NPH[:]
+        else:
+            MF = m['cat_irr'][:]
     else:
         if (UNIT == "FLUX"):
             cst = 1.*k; STRPRINT = "Flux in " + STRUNIT + " for each categories"
@@ -146,7 +156,8 @@ def cat_view(MLUT, ACC = 6, MTOA = 1320, NCL = "68%", UNIT = "FLUX_DENSITY", W_V
             STRPRINT = "Radiance in " + STRUNIT + "/meter²/sr for each categories"
         else:
             raise NameError('Unkonwn argument for UNIT!')
-        MF = m['cat_w'][:]
+        if (isWaveAxis and WL_INT == False): MF = m['wPhCats'][:,:]
+        else : MF = m['cat_w'][:]
 
     lP = ["(  D  )", "(  H  )", "(  E  )", "(  A  )", "( H+A )", "( H+E )", "( E+A )", "(H+E+A)"]
     intAcc = int(ACC)
@@ -159,12 +170,43 @@ def cat_view(MLUT, ACC = 6, MTOA = 1320, NCL = "68%", UNIT = "FLUX_DENSITY", W_V
     elif (NCL == "99.99%"): ld = 4
 
     mat = np.zeros((9,4), dtype="float64")
-    for i in range (0, 9):
-        mat[i,0] = MF[i]*MTOA*cst
-        mat[i,1] = m['cat_PhNb'][i]
-        mat[i,2] = m['cat_errAbs'][i]*MTOA*ld*cst
-        mat[i,3] = m['cat_err%'][i]*ld
+    
+    if (isWaveAxis and WL_INT == False):
+        sum2Z = (MF[:,:].sum(axis=0) * MF[:,:].sum(axis=0))/NPH[:]
+        sumZ2 = m['wPhCats2'][:,:].sum(axis=0)
+        nBis = NPH[:] / (NPH[:] - 1)
+        errA = (nBis * abs(sumZ2 - sum2Z))**0.5
+        mat[0,2] = np.max(errA[:]*MTOA[:]*cst)
+        
+        for i in range (0, 8):
+            mat[i+1,0] = np.sum(MF[i,:]*MTOA[:]*cst)
+            mat[0,0] += np.sum(MF[i,:]*MTOA[:]*cst)
+            sum2Z = (MF[i,:] * MF[i,:])/NPH[:]
+            sumZ2 = m['wPhCats2'][i,:]
+            errA = (nBis * abs(sumZ2 - sum2Z))**0.5
+            mat[i+1,2] = np.max(errA[:]*MTOA[:]*cst)
+            mat[i+1,3] = (mat[i+1,2]/mat[i+1,0])*100
+        
+        mat[0,3] = (mat[0,2]/mat[0,0])*100
 
+    else:        
+        for i in range (0, 9):
+            mat[i,0] = MF[i]*MTOA*cst
+            mat[i,1] = m['cat_PhNb'][i]
+            mat[i,2] = m['cat_errAbs'][i]*MTOA*ld*cst
+            mat[i,3] = m['cat_err%'][i]*ld
+            
+    if (PRINT == True):
+        print("**********************************************************")
+        print(STRPRINT)
+        print("**********************************************************")
+        print("SUM_CATS      " + ": irradiance=", strAcc % (mat[0,0]), " number_ph=", np.uint64(mat[0,1]),
+              " errAbs=", strAcc % (mat[0,2]*ld), " err(%)=", strAcc % (mat[0,3]*ld))
+        for i in range (0, 8):
+            print("CAT",i+1, lP[i], ": irradiance=", strAcc % (mat[i+1,0]), " number_ph=", np.uint64(mat[i+1,1]),
+                  " errAbs=", strAcc % (mat[i+1,2]*ld), " err(%)=", strAcc % (mat[i+1,3]*ld))
+    return mat
+""" 
     if (PRINT == True):
         print("**********************************************************")
         print(STRPRINT)
@@ -173,8 +215,8 @@ def cat_view(MLUT, ACC = 6, MTOA = 1320, NCL = "68%", UNIT = "FLUX_DENSITY", W_V
               " errAbs=", strAcc % (m['cat_errAbs'][0]*MTOA*ld*cst), " err(%)=", strAcc % (m['cat_err%'][0]*ld))
         for i in range (0, 8):
             print("CAT",i+1, lP[i], ": irradiance=", strAcc % (MF[i+1]*MTOA*cst), " number_ph=", np.uint64(m['cat_PhNb'][i+1]),
-                  " errAbs=", strAcc % (m['cat_errAbs'][i+1]*MTOA*ld*cst), " err(%)=", strAcc % (m['cat_err%'][i+1]*ld))
-    return mat
+                  " errAbs=", strAcc % (m['cat_errAbs'][i+1]*MTOA*ld*cst), " err(%)=", strAcc % (m['cat_err%'][i+1]*ld)) """
+
 
 def nopt_view(MLUT, BACK=False, ACC = 6, NCL="68%", fl_TOA=None, NAATM=False):
     '''
