@@ -1518,11 +1518,20 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
         m.add_dataset('cat_errAbs', matCats[:,4], ['Categories'])
         m.add_dataset('cat_err%', matCats[:,5], ['Categories'])
         
+        arrWC = np.zeros((9, NLAM), dtype=np.float64)
+        arrWC2 = np.zeros((9, NLAM), dtype=np.float64)
+            
+        arrWC[0, ilam] = np.sum(wPhCats[:, ilam], axis=0)
+        arrWC[1:, ilam] = wPhCats[:, ilam]
+        
+        arrWC2[0, ilam] = np.sum(wPhCats2[:, ilam], axis=0)
+        arrWC2[1:, ilam] = wPhCats2[:, ilam]
+        
         axe_wPh = ['Categories']
-  
         if (NLAM > 1): axe_wPh.append('wavelength')
-        m.add_dataset('wPhCats', wPhCats[:][:], [None, 'wavelength'])
-        m.add_dataset('wPhCats2', wPhCats2[:][:], [None, 'wavelength'])
+            
+        m.add_dataset('wPhCats', arrWC[:,ilam], axe_wPh)
+        m.add_dataset('wPhCats2', arrWC2[:,ilam], axe_wPh)
         m.add_dataset('norm_npho', norm_npho[0,0,0,:,0,0], ['wavelength'])
         
         m.set_attr('n_cte', str(dicSTP["n_cte"]))
