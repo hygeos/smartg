@@ -1,5 +1,7 @@
 import numpy as np
 from scipy.interpolate import interp1d
+import matplotlib.pyplot as plt
+from luts.luts import Idx
 
 def Get_3Dcells_indices(NX, NY, NZ):
     '''
@@ -138,3 +140,94 @@ def locate_3Dregular_cells(xgrid,ygrid,zgrid,x,y,z):
             np.floor(interp1d(zgrid, np.arange(len(zgrid)))(z)).astype(int)),
                      dims = (len(xgrid)-1, len(ygrid)-1, len(zgrid)-1))
 
+
+def satellite_view(mlut, Nx, Ny, x0, y0, wl, interp_name='none',
+                   color_bar='Blues_r', fig_size=(8,8), font_size=int(18),
+                   vmin = None, vmax = None, scale=False, save_file=None):
+    """
+    Description: The function give a 'satellite' 2D image of the SMART-G 3D atm return results
+
+    ===Parameters:
+    mlut        : SMART-G return MLUT object
+    Nx, Ny      : Number of sensors in x and y axis
+    x0, y0      : x and y arrays with x and y cell boundary positions of the domain
+    wl          : Wavelength
+    interp_name : Interpolations for imshow/matshow, i.e. nearest, bilinear, bicubic, ...
+    color_bar   : Bar color of the figure, i.g 'Blues_r', 'jet', ...
+    fig_size    : A tuple with width and height of the figure in inches
+    vmin, vmax  : Color bar interval
+    scale       : If True scale between 0 and 1 (or between vmin and vmax if not None)
+    font_size   : Font size of the figure
+    save_file   : If not None, save the generated image in pdf, i.g. save_file = 'test', save as 'test.pdf'
+    """
+    # Force the use of only 'I_up (TOA), TODO add the option to choose between I, Q, U, V
+    stokes_name = 'I_up (TOA)'
+
+    # First check the Azimuth and Zenith angles dimensions exist, if not the case return an error message
+    if ("Azimuth angles" or "Zenith angles") not in mlut[stokes_name].names:
+        raise NameError("The Azimuth angles and/or Zenith angles dimension(s) are/is missing")
+
+    # The number of dimensions in the LUT
+    axis_number = len(mlut[stokes_name].names)
+    
+    ind = [slice(None)]*axis_number # if axis_number = 3, tuple(ind) equivalent to [:,:,:]
+
+    # Two last indices for axis Azimuth angles and Zenith angles forced to 0 (consider we have only one sun position)
+    ind[-1] = 0; ind[-2] = 0 # TODO Consider also the case where several sun position are given
+
+    # if Azimuth dim or Zenith dim > 1 -> return an error message. TODO to remove once the option above is added
+    if ((mlut.axes["Azimuth angles"].size or mlut.axes["Zenith angles"].size) > 1):
+        raise NameError("Dimension size > 1 is not authorized for both Azimuth and Zenith angles")
+
+    # If we have the wavelength dimension
+    if "wavelength" in mlut[stokes_name].names:
+        ind[-3] = Idx(wl) # TODO Enable a default value, for example for the monochromatique case
+
+
+    # Check if the product of Nx and Ny is equal to the number of sensors
+    if "sensor index" in mlut[stokes_name].names:
+        sensor_number = mlut.axes["sensor index"].size
+    else:
+        sensor_number = int(1)
+    if (Nx*Ny != sensor_number):
+        raise NameError("The product of Nx and Ny must be equal to the number of sensors!")
+
+
+    # Convert the 1D results to a 2D matrix. The order of Nx and Ny below is very important!
+    matrix = mlut[stokes_name][tuple(ind)].reshape(Ny,Nx)
+    # The variable matrix is now in the following form:
+    # - x0 ... xn
+    # y0
+    #  :
+    # yn
+
+    # By default in the imshow function, the origin (origin='upper') i.e matrix[0,0] is at the upper left,
+    # and we want the origin at bottom left (origin='lower).
+    plt.figure(figsize=fig_size)
+    plt.rcParams.update({'font.size':font_size})
+
+    # Deal with all the possibilties where vmin, vmax and scale are used
+    if scale:
+        vmin_scale = 0.; vmax_scale = 1.
+        if vmin is not None : vmin_scale = vmin
+        if vmax is not None : vmax_scale = vmax
+        matrix = np.interp(matrix, (matrix.min(), matrix.max()), (vmin_scale, vmax_scale))
+
+    # Now call the function imshow for the 2D drawing
+    img = plt.imshow(matrix, vmin=vmin, vmax=vmax, origin='lower', cmap=plt.get_cmap(color_bar),
+                     interpolation=interp_name, extent=[x0.min(),x0.max(),y0.min(),y0.max()])
+
+    # Color bar parametrization
+    cbar = plt.colorbar(img, shrink=0.7, orientation='vertical')
+    cbar.set_label(r''+ stokes_name, fontsize = font_size)
+
+    # Labels for x and y axes
+    plt.xlabel(r'X (km)')
+    plt.ylabel(r'Y (km)')
+
+    # If the option save_file is used, save the file in pdf
+    if (save_file is not None):
+        # Deal with the case where we have not specified the '.pdf' at the end
+        if not save_file.endswith('.pdf'):
+            save_file += '.pdf'
+        plt.savefig(save_file)
