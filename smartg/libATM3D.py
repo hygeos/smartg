@@ -427,11 +427,14 @@ def create_sensors(grid3D, POSZ=120., THDEG=180., PHDEG=180., FOV=0., TYPE=0., L
         # TODO consider a possible variability between sensors (positions, viewing angles, etc.)
 
         g = grid3D
+
+        # Arrays with sizes of cells in x and y axes
+        sizes_x = (g.xgrid[1:] - g.xgrid[:-1])/2.
+        sizes_y = (g.ygrid[1:] - g.ygrid[:-1])/2.
+
         # x and y sensors position into the 3Dgrid
-        Dx = g.xgrid[1]-g.xgrid[0]
-        Dy = g.ygrid[1]-g.ygrid[0]
-        x0     = np.linspace(-g.Nx*Dx/2., (g.Nx*Dx/2)-Dx, num=g.Nx) + (Dx/2.)
-        y0     = np.linspace(-g.Ny*Dy/2., (g.Ny*Dy/2)-Dy, num=g.Ny) + (Dy/2.)
+        x0  = g.xgrid[:-1] + sizes_x
+        y0  = g.ygrid[:-1] + sizes_y
 
         xx,yy  = np.meshgrid(x0, y0)
         zz     = np.zeros_like(xx) + POSZ
