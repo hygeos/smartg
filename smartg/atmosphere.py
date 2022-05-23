@@ -650,6 +650,14 @@ class AtmAFGL(Atmosphere):
         #
         # init directories
         #
+        # TODO Trick bellow to improve
+        if atm_filename == "ATM3D":
+            Nopt = grid.size
+            atm_arr = np.zeros((Nopt,9))
+            atm_arr[:,0] = np.arange(Nopt)[::-1]
+            np.savetxt('./tmp.dat', atm_arr)
+            atm_filename = "./tmp.dat"
+
         if dirname(atm_filename) == '':
             atm_filename = join(dir_libradtran_atmmod, atm_filename)
         if (not exists(atm_filename)) and (not atm_filename.endswith('.dat')):
