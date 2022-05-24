@@ -22,6 +22,19 @@ def is_sorted(arr):
     """
     return np.all(np.diff(arr) >= 0)
 
+def is_same_cell_size(grid):
+    """
+    Description: Check if a given grid constains cells with the same size
+
+    === Paramerter:
+    grid : Numpy 1D array
+
+    === Return:
+    Boolean
+    """
+
+    return (np.max(grid[1:]-grid[:-1]) - np.min(grid[1:]-grid[:-1]) < 10e-6)
+
 def create_1d_grid(cell_number, cell_size, loc="centered"):
     """
     Description : Create a 1 dimensional grid profil
@@ -317,24 +330,23 @@ def locate_3Dregular_cells(xgrid,ygrid,zgrid,x,y,z):
                      dims = (len(xgrid)-1, len(ygrid)-1, len(zgrid)-1))
 
 
-def satellite_view(mlut, Nx, Ny, x0, y0, wl, interp_name='none',
+def satellite_view(mlut, xgrid, ygrid, wl, interp_name='none',
                    color_bar='Blues_r', fig_size=(8,8), font_size=int(18),
                    vmin = None, vmax = None, scale=False, save_file=None):
     """
     Description: The function give a 'satellite' 2D image of the SMART-G 3D atm return results
 
     ===Parameters:
-    mlut        : SMART-G return MLUT object
-    Nx, Ny      : Number of sensors in x and y axis
-    x0, y0      : x and y arrays with x and y cell boundary positions of the domain
-    wl          : Wavelength
-    interp_name : Interpolations for imshow/matshow, i.e. nearest, bilinear, bicubic, ...
-    color_bar   : Bar color of the figure, i.g 'Blues_r', 'jet', ...
-    fig_size    : A tuple with width and height of the figure in inches
-    vmin, vmax  : Color bar interval
-    scale       : If True scale between 0 and 1 (or between vmin and vmax if not None)
-    font_size   : Font size of the figure
-    save_file   : If not None, save the generated image in pdf, i.g. save_file = 'test', save as 'test.pdf'
+    mlut         : SMART-G return MLUT object
+    xgrid, ygrid : Numpy array with grid profil in the x and y axes
+    wl           : Wavelength
+    interp_name  : Interpolations for imshow/matshow, i.e. nearest, bilinear, bicubic, ...
+    color_bar    : Bar color of the figure, i.g 'Blues_r', 'jet', ...
+    fig_size     : A tuple with width and height of the figure in inches
+    vmin, vmax   : Color bar interval
+    scale        : If True scale between 0 and 1 (or between vmin and vmax if not None)
+    font_size    : Font size of the figure
+    save_file    : If not None, save the generated image in pdf, i.g. save_file = 'test', save as 'test.pdf'
     """
     # Force the use of only 'I_up (TOA), TODO add the option to choose between I, Q, U, V
     stokes_name = 'I_up (TOA)'
@@ -361,6 +373,7 @@ def satellite_view(mlut, Nx, Ny, x0, y0, wl, interp_name='none',
 
 
     # Check if the product of Nx and Ny is equal to the number of sensors
+    Nx = xgrid.size-1; Ny = ygrid.size-1 # Number of sensors in x and y axis
     if "sensor index" in mlut[stokes_name].names:
         sensor_number = mlut.axes["sensor index"].size
     else:
@@ -389,9 +402,17 @@ def satellite_view(mlut, Nx, Ny, x0, y0, wl, interp_name='none',
         if vmax is not None : vmax_scale = vmax
         matrix = np.interp(matrix, (matrix.min(), matrix.max()), (vmin_scale, vmax_scale))
 
-    # Now call the function imshow for the 2D drawing
-    img = plt.imshow(matrix, vmin=vmin, vmax=vmax, origin='lower', cmap=plt.get_cmap(color_bar),
-                     interpolation=interp_name, extent=[x0.min(),x0.max(),y0.min(),y0.max()])
+
+    # Call the function imshow for the 2D drawing (or pcolormesh if we have different cell size in x or y axis)
+    if (is_same_cell_size(xgrid) and is_same_cell_size(ygrid)):
+        img = plt.imshow(matrix, vmin=vmin, vmax=vmax, origin='lower', cmap=plt.get_cmap(color_bar),
+                         interpolation=interp_name, extent=[xgrid.min(),xgrid.max(),ygrid.min(),ygrid.max()])
+    else:
+        if (interp_name != 'none'):
+            print("Warning: the interp_name variable cannot be used (and then ignored) when using pcolormesh!" + 
+            " i.e. when we have a cell size varying along the x or y axis.")
+        img = plt.pcolormesh(xgrid, ygrid, matrix, vmin=vmin, vmax=vmax, cmap=plt.get_cmap(color_bar))
+        plt.axis('scaled') # x and y axes with the same scaling
 
     # Color bar parametrization
     cbar = plt.colorbar(img, shrink=0.7, orientation='vertical')
@@ -546,8 +567,8 @@ class Atm3D(object):
     If wls.size is equal to 1 and wl_ref is None, take wls as reference wavelength
     """
 
-    def __init__(self, atm_filename, grid_3d, cloud_3d, wls, wl_ref = None,
-    lat=45, P0=None, O3=None, H2O=None, NO2=True, tauR=None):
+    def __init__(self, atm_filename, grid_3d, wls, wl_ref = None,
+    lat=45, P0=None, O3=None, H2O=None, NO2=True, tauR=None, cloud_3d=None, cloud_indices=None, cld_ext_coeff=None):
 
         possible_atm_filename = ['afglms', 'afglmw', 'afglss', 'afglsw', 'afglt', 'afglus',
          'afglus_ch4_vmr', 'afglus_co_vmr', 'afglus_n2_vmr', 'afglus_n2o_vmr', 'afglus_no2',
@@ -558,9 +579,6 @@ class Atm3D(object):
 
         if (not isinstance(grid_3d, Grid3D)):
             raise NameError('grid_3d variable must be a Grid3D object!')
-
-        if (not isinstance(cloud_3d, Cloud3D)):
-            raise NameError('cloud_3d variable must be a Cloud3D object!')
 
         if (not isinstance(wls, np. ndarray)):
             raise NameError('wls must be a numpy array!')
@@ -573,7 +591,6 @@ class Atm3D(object):
 
         self.atm_filename = atm_filename
         self.grid_3d      = grid_3d
-        self.cloud_3d     = cloud_3d 
         self.wls          = wls
         if (wls.size == 1 and wl_ref is None): 
             self.wl_ref   = wls[0]
@@ -582,9 +599,45 @@ class Atm3D(object):
 
         # Calculate the 1d extinction rayleigh coefficient and store it as attribut
         znew = grid_3d.zGRID[::-1]
-        ext_ray = od2k(AtmAFGL(atm_filename, lat=lat, P0=P0, O3=O3, NO2=NO2, tauR=tauR,
+        ext_ray = od2k(AtmAFGL(atm_filename, lat=lat, P0=P0, O3=O3, H2O=H2O, NO2=NO2, tauR=tauR,
                                grid=znew).calc(wls, phase=False), 'OD_r')
         self.ext_rayleigh = ext_ray
+
+        # Ensure that we don't use the class cloud_3d and the variables cloud_indices and cld_ext_coeff in the same time
+        if ( cloud_3d is not None
+             and (cloud_indices is not None or cld_ext_coeff is not None) ):
+             raise NameError('cloud_3d and variables cloud_indices and cld_ext_coeff cannot be used a the same time!')
+        if ( cloud_3d is None
+             and (cloud_indices is None or cld_ext_coeff is None) ):
+             raise NameError('If cloud_3d is None, then both variables cloud_indices and cld_ext_coeff must be given!')
+
+        # If the class cloud_3d has been set then compute the variables cell_indices and cld_ext_coeff
+        if (cloud_3d is not None and isinstance(cloud_3d, Cloud3D)):
+            self.cloud_indices = cloud_3d.get_cell_indices()
+            self.cld_ext_coeff = cloud_3d.get_ext_coeff()
+        elif (cloud_3d is not None and not isinstance(cloud_3d, Cloud3D)):
+            raise NameError('cloud_3d variable must be a Cloud3D object!')
+
+        # If we choose...
+        if (cloud_indices is not None):
+            self.cloud_indices = cloud_indices
+        
+        if (cld_ext_coeff is not None):
+            self.cld_ext_coeff = cld_ext_coeff
+
+        # === Cell indices in SMART-G + consider boundaries:
+        # The "-1" is here because 3DMCPOL files indices start at 1 intead of 0 for SMART-G
+        cloud_indices_new = self.cloud_indices-1
+        # Look if we have xy boundaries
+        # Below we look on the x axis, but works also if we check on the y axis
+        is_boundaryxy = grid_3d.Nx < grid_3d.NX
+
+        # Update the cloud_indices (for the x and y axes) if they are xy boundaries
+        if (is_boundaryxy): cloud_indices_new[:,:2]+=1
+
+        # Finally update the attribut
+        self.cloud_indices = cloud_indices_new
+        # ===
 
         # TODO -> calulate the 1d aer extinction coeff ??
 
@@ -594,15 +647,7 @@ class Atm3D(object):
         In progress...
         """
         # The "-1" is here because 3DMCPOL files indices start at 1 intead of 0 for SMART-G
-        cloud_indices = self.cloud_3d.get_cell_indices()-1
-
-        # Look if we have xy boundaries
-        # Below we look on the x axis, but works also if we check on the y axis
-        is_boundaryxy = self.grid_3d.Nx < self.grid_3d.NX
-
-        # Update the cloud_indices if they are xy boundaries
-        if (is_boundaryxy):
-            cloud_indices[:,:2]+=1
+        cloud_indices = self.cloud_indices
 
         # 1d xyz indices where there are clouds
         cloud_1d_indices = np.ravel_multi_index((cloud_indices[:,0], cloud_indices[:,1], cloud_indices[:,2]),
@@ -616,7 +661,7 @@ class Atm3D(object):
 
     def get_grid(self):
 
-        nb_unique_cells = self.cloud_3d.get_cell_indices().shape[0]
+        nb_unique_cells = self.cloud_indices.shape[0]
         Nopt = self.grid_3d.NZ + 1 + nb_unique_cells
 
         return np.arange(Nopt)
@@ -629,7 +674,7 @@ class Atm3D(object):
         if (cloud_MLUT is not None and not isinstance(cloud_MLUT, MLUT)):
             raise NameError('The given cloud_MLUT variable is not an MLUT object!')
 
-        ext_cld = self.cloud_3d.get_ext_coeff()
+        ext_cld = self.cld_ext_coeff
 
         if cloud_MLUT is None:
             # In this case, we just take the same ext coeff for each wl
@@ -660,7 +705,7 @@ class Atm3D(object):
         return a tuple with the phase matrix indices to choose, and a list of phase matrix LUT.
         """
 
-        nb_unique_cells = self.cloud_3d.get_cell_indices().shape[0]
+        nb_unique_cells = self.cloud_indices.shape[0]
         Nopt = self.grid_3d.NZ + 1 + nb_unique_cells
         
         ipha3D = np.zeros((self.wls.size, Nopt), dtype=np.int32) # only one matrix for all cells, then always index 0
@@ -674,15 +719,7 @@ class Atm3D(object):
     def get_cells_info(self):
 
         # The "-1" is here because 3DMCPOL files indices start at 1 intead of 0 for SMART-G
-        cloud_indices = self.cloud_3d.get_cell_indices()-1
-
-        # Look if we have xy boundaries
-        # Below we look on the x axis, but works also if we check on the y axis
-        is_boundaryxy = self.grid_3d.Nx < self.grid_3d.NX
-
-        # Update the cloud_indices if they are xy boundaries
-        if (is_boundaryxy):
-            cloud_indices[:,:2]+=1
+        cloud_indices = self.cloud_indices
 
         # 1d xyz indices where there are clouds
         cloud_1d_indices = np.ravel_multi_index((cloud_indices[:,0], cloud_indices[:,1], cloud_indices[:,2]),
