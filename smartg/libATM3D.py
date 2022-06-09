@@ -191,6 +191,19 @@ class Cloud3D(object): # TODO transform to Read_cloud_3D
 
         return cell_indices
 
+    def get_reff(self):
+        """
+        In progress...
+        """
+
+        # Read only the disired column
+        reff = pd.read_csv(self.file_name, skiprows = 3, header=None, usecols=[4], sep='\s+', dtype=float).values
+
+        # If there are empty dimensions remove them
+        reff = np.squeeze(reff)
+
+        return reff
+
 
 def Get_3Dcells_indices(NX, NY, NZ):
     '''
@@ -626,7 +639,7 @@ class Atm3D(object):
             self.cld_ext_coeff = cld_ext_coeff
 
         # === Cell indices in SMART-G + consider boundaries:
-        # The "-1" is here because 3DMCPOL files indices start at 1 intead of 0 for SMART-G
+        # The "-1" is here because IPRT input cloud file indices start at 1 intead of 0 for SMART-G
         cloud_indices_new = self.cloud_indices-1
         # Look if we have xy boundaries
         # Below we look on the x axis, but works also if we check on the y axis
@@ -646,7 +659,6 @@ class Atm3D(object):
         Consider all the grid cells with non commun opt property + 1d atm
         In progress...
         """
-        # The "-1" is here because 3DMCPOL files indices start at 1 intead of 0 for SMART-G
         cloud_indices = self.cloud_indices
 
         # 1d xyz indices where there are clouds
@@ -718,7 +730,6 @@ class Atm3D(object):
 
     def get_cells_info(self):
 
-        # The "-1" is here because 3DMCPOL files indices start at 1 intead of 0 for SMART-G
         cloud_indices = self.cloud_indices
 
         # 1d xyz indices where there are clouds
