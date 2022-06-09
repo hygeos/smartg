@@ -2691,13 +2691,231 @@ __device__ void move_pp2_bak(Photon* ph, struct Profile *prof_atm, struct Profil
  #endif // 3D
 #endif // ALT_PP
 
+// #ifdef ALT_PP
+// #ifdef OPT3D
+// //!!!!!!!!!!!!!!!!!!!! DEV !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+// __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc, 
+//                          struct Cell *cell_atm, struct Cell *cell_oc,
+//                         int le, int count_level, struct RNG_State *rngstate) {
+
+//     float tauRdm;    // Sample optical thickness
+//     float hph = 0.;  // Cumulative optical thickness
+//     float vzn, h_cur, coef_cur, epsilon;
+//     #ifndef ALIS
+//     float h_cur_abs, tau_cur_abs;
+//     #endif
+//     float d;
+//     int ilam; 
+//     struct Profile *prof;
+//     struct Cell *cell;
+//     int  NL;
+// 	float intTime0=0., intTime1=0.;
+// 	float3 intersectPoint;
+// 	bool intersectBox;
+//     float3 pmin, pmax ;
+// 	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+
+//     if (ph->loc==OCEAN) {
+//         NL   = NOCEd+1;
+//         prof = prof_oc;
+//         cell = cell_oc;
+//     }
+//     if (ph->loc==ATMOS) {
+//         NL   = NATMd+1;
+//         prof = prof_atm;
+//         cell = cell_atm;
+//     }
+//     ilam = ph->ilam*NL;  // wavelength offset in optical thickness table
+
+//     // Random Optical Thickness to go through
+//     if (!le) tauRdm = -logf(1.F-RAND);
+//     // if called with le mode, it serves to compute the transmission
+//     // from photon last intercation position to TOA, thus 
+//     // photon is forced to exit upward or downward and tauRdm is chosen to be an upper limit
+//     else tauRdm = 1e6;
+
+//     // Init photon cell
+//     int count=0;
+//     int next_layer=ph->layer;
+
+//     while (1) {
+//         // avoid infinite loop
+//         if (count >= 500) ph->loc=REMOVED; 
+
+//         // stop propagating useless photons
+//         if (ph->loc == REMOVED) break;
+
+//         // identify absorbed photons and stop propagating them
+//         if (next_layer == BOUNDARY_ABS){
+//             ph->loc = ABSORBED;
+//             break;
+//         }
+
+//         // Update photon location, and cell number if still in atmosphere
+//         if (ph->loc == ATMOS) {
+//          if (next_layer == BOUNDARY_0P) {
+//             ph->loc = SURF0P;
+//             break;
+//          }
+//          else if (next_layer == BOUNDARY_TOA) {
+//             ph->loc = SPACE;
+//             break;
+//          }
+//          else {
+//              ph->layer = next_layer;
+//          }
+//         } 
+
+//         // Update photon location, and cell number if still in ocean
+//         if (ph->loc == OCEAN) {
+//          if (next_layer == BOUNDARY_FLOOR) {
+//             ph->loc = SEAFLOOR;
+//             break;
+//          }
+//          else if (next_layer == BOUNDARY_0M) {
+//             ph->loc = SURF0M;
+//             break;
+//          }
+//          else {
+//              ph->layer = next_layer;
+//          }
+//         }
+
+//         // Intersection with current cell boundaries
+// 		Ray Ray_cur(ph->pos, ph->v, 0);
+//         pmin = make_float3(cell[ph->layer].pminx, cell[ph->layer].pminy, cell[ph->layer].pminz);
+//         pmax = make_float3(cell[ph->layer].pmaxx, cell[ph->layer].pmaxy, cell[ph->layer].pmaxz);
+//         BBox Box_cur(pmin, pmax);
+// 		intersectBox = Box_cur.IntersectP(Ray_cur, &intTime0, &intTime1);
+
+//         if (intersectBox) { // the photon is not already on a boundary
+//         //
+//         intersectPoint = operator+(ph->pos, ph->v * intTime1);
+//         // calculate the optical thicknesses h_cur and h_cur_abs to the next layer
+//         // We get the layer extinction coefficient and multiply by the distance within the layer
+//         //
+//         coef_cur = get_OD(BEERd,prof[cell[ph->layer].iopt+ilam]);
+//         h_cur    = coef_cur * intTime1;
+
+//         #ifndef ALIS
+//         h_cur_abs = prof[cell[ph->layer].iopt+ilam].OD_abs * intTime1;
+//         #endif
+
+//         //
+//         // update photon position
+//         //
+//         if (hph + h_cur > tauRdm) {
+//             // photon stops within the box
+//             epsilon = (tauRdm - hph)/h_cur;
+//             intTime1 *= epsilon;
+//             ph->pos = operator+(ph->pos, ph->v * intTime1);
+//             #ifndef ALIS
+//             if (BEERd == 1) ph->weight *= __expf(-( epsilon * h_cur_abs));
+//             #else
+//             float coef;
+//             if (ph->loc==ATMOS) ph->cdist_atm[cell[ph->layer].iabs] += intTime1;
+//             if (ph->loc==OCEAN) ph->cdist_oc[ cell[ph->layer].iabs] += intTime1;
+//             int DL=(NLAMd-1)/(NLOWd-1);
+//             for (int k=0; k<NLOWd; k++) {
+//                 coef = get_OD(1,prof[cell[ph->layer].iopt + k*DL*NL]);
+// 			    ph->weight_sca[k] *= exp(-(coef-coef_cur)*intTime1);
+//             }
+//             #endif
+//             break;
+
+//         } else {
+//             // photon advances to the next layer
+//             hph += h_cur;
+//             ph->pos = intersectPoint;
+
+//             #ifndef ALIS
+//             if (BEERd == 1) ph->weight *= __expf(-( h_cur_abs));
+//             #else
+//             float coef;
+//             if (ph->loc==ATMOS) ph->cdist_atm[cell[ph->layer].iabs] += intTime1;
+//             if (ph->loc==OCEAN) ph->cdist_oc[ cell[ph->layer].iabs] += intTime1;
+//             int DL=(NLAMd-1)/(NLOWd-1);
+//             for (int k=0; k<NLOWd; k++) {
+//                 coef = get_OD(1,prof[cell[ph->layer].iopt + k*DL*NL]);
+// 			    ph->weight_sca[k] *= __expf(-(coef-coef_cur)*intTime1);
+//             }
+//             #endif
+
+//             // determine the index of the next potential box
+//             //
+//             float3 p=ph->pos;
+//             operator-=(p, operator+(pmin*0.5, pmax*0.5));
+//             p.x = __fdividef(p.x, fabs(pmax.x-pmin.x));
+//             p.y = __fdividef(p.y, fabs(pmax.y-pmin.y));
+//             p.z = __fdividef(p.z, fabs(pmax.z-pmin.z));
+//             int ind;
+//             GetFaceIndex(p, &ind);
+//             switch(ind)
+//             {
+//                  case 0: next_layer = cell[ph->layer].neighbour1; break;
+//                  case 1: next_layer = cell[ph->layer].neighbour2; break;
+//                  case 2: next_layer = cell[ph->layer].neighbour3; break;
+//                  case 3: next_layer = cell[ph->layer].neighbour4; break;
+//                  case 4: next_layer = cell[ph->layer].neighbour5; break;
+//                  case 5: next_layer = cell[ph->layer].neighbour6; break;
+//                  default: ph->loc = REMOVED;
+//             }
+//             count++;
+//         } // photon advances to next layer
+
+//         } // Intersection True
+
+//         else { //InterSection False
+//             // determine the index of the next potential box
+//             float3 p=ph->pos;
+//             operator-=(p, operator+(pmin*0.5, pmax*0.5));
+//             p.x = __fdividef(p.x, fabs(pmax.x-pmin.x));
+//             p.y = __fdividef(p.y, fabs(pmax.y-pmin.y));
+//             p.z = __fdividef(p.z, fabs(pmax.z-pmin.z));
+//             int ind;
+//             GetFaceIndex(p, &ind);
+//             switch(ind)
+//             {
+//                  case 0: next_layer = cell[ph->layer].neighbour1; break;
+//                  case 1: next_layer = cell[ph->layer].neighbour2; break;
+//                  case 2: next_layer = cell[ph->layer].neighbour3; break;
+//                  case 3: next_layer = cell[ph->layer].neighbour4; break;
+//                  case 4: next_layer = cell[ph->layer].neighbour5; break;
+//                  case 5: next_layer = cell[ph->layer].neighbour6; break;
+//                  default: ph->loc = REMOVED;
+//             }
+//             count++;
+//         }
+
+//     } // while loop
+
+//     if (le) {
+//         if (( (count_level==UPTOA)  && (ph->loc==SPACE ) ) || 
+//             ( (count_level==DOWN0P) && (ph->loc==SURF0P) ) ||
+//             ( (count_level==UP0M)   && (ph->loc==SURF0M) ) ||
+//             ( (count_level==DOWNB)  && (ph->loc==SEAFLOOR) ) ) 
+//             ph->weight *= __expf(-hph);
+//         else ph->weight = 0.;
+//     }
+
+//     if ((BEERd == 0) && ((ph->loc == ATMOS) || (ph->loc == OCEAN))) {
+//         ph->weight *= prof[cell[ph->layer].iopt+ilam].ssa;
+//     }
+// }
+//  #endif // 3D
+// #endif // ALT_PP
+// //!!!!!!!!!!!!!!!!!!!! DEV !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+
+
+//!!!!!!!!!!!!!!!!!!!! DEV MM!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 #ifdef ALT_PP
 #ifdef OPT3D
-//!!!!!!!!!!!!!!!!!!!! DEV !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc, 
                          struct Cell *cell_atm, struct Cell *cell_oc,
-                        int le, int count_level, struct RNG_State *rngstate) {
-
+                        int le, int count_level, struct RNG_State *rngstate)
+{
     float tauRdm;    // Sample optical thickness
     float hph = 0.;  // Cumulative optical thickness
     float vzn, h_cur, coef_cur, epsilon;
@@ -2715,12 +2933,14 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
     float3 pmin, pmax ;
 	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
 
-    if (ph->loc==OCEAN) {
+    if (ph->loc==OCEAN)
+    {
         NL   = NOCEd+1;
         prof = prof_oc;
         cell = cell_oc;
     }
-    if (ph->loc==ATMOS) {
+    if (ph->loc==ATMOS)
+    {
         NL   = NATMd+1;
         prof = prof_atm;
         cell = cell_atm;
@@ -2738,47 +2958,40 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
     int count=0;
     int next_layer=ph->layer;
 
-    while (1) {
-        // avoid infinite loop
-        if (count >= 500) ph->loc=REMOVED; 
+    // Variables to compute the travelled distance of photons
+    float distX=0; float distY=0;
+    
+    // XY travelled distance limit in kilometers
+    float limXY=1000;
 
-        // stop propagating useless photons
-        if (ph->loc == REMOVED) break;
+    while (1)
+    {
+        // Stop the removed photon
+        if (ph->loc == REMOVED) {return;}
 
-        // identify absorbed photons and stop propagating them
-        if (next_layer == BOUNDARY_ABS){
-            ph->loc = ABSORBED;
-            break;
-        }
+        // If the travelled distance (in x or y axis) exceeds 1000 kilometers then absorb the photon
+        if (fmax(distX, distY) >= limXY) {ph->loc=ABSORBED; return;}
+
+        // Normally we will never get an infinite loop, but just a security
+        if (count >= 100000) { printf("Warning! Count limit has been exceeded!"); ph->loc=REMOVED; return; }
+
+        // Identify absorbed photons and stop propagating them
+        if (next_layer == BOUNDARY_ABS) { ph->loc = ABSORBED; return; }
 
         // Update photon location, and cell number if still in atmosphere
-        if (ph->loc == ATMOS) {
-         if (next_layer == BOUNDARY_0P) {
-            ph->loc = SURF0P;
-            break;
-         }
-         else if (next_layer == BOUNDARY_TOA) {
-            ph->loc = SPACE;
-            break;
-         }
-         else {
-             ph->layer = next_layer;
-         }
-        } 
+        if (ph->loc == ATMOS)
+        {
+            if (next_layer == BOUNDARY_0P) { ph->loc = SURF0P; break; }
+            else if (next_layer == BOUNDARY_TOA) { ph->loc = SPACE; break; }
+            else { ph->layer = next_layer; }
+        }
 
         // Update photon location, and cell number if still in ocean
-        if (ph->loc == OCEAN) {
-         if (next_layer == BOUNDARY_FLOOR) {
-            ph->loc = SEAFLOOR;
-            break;
-         }
-         else if (next_layer == BOUNDARY_0M) {
-            ph->loc = SURF0M;
-            break;
-         }
-         else {
-             ph->layer = next_layer;
-         }
+        if (ph->loc == OCEAN)
+        {
+            if (next_layer == BOUNDARY_FLOOR) { ph->loc = SEAFLOOR; break; }
+            else if (next_layer == BOUNDARY_0M) { ph->loc = SURF0M; break; }
+            else { ph->layer = next_layer; }
         }
 
         // Intersection with current cell boundaries
@@ -2788,123 +3001,174 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
         BBox Box_cur(pmin, pmax);
 		intersectBox = Box_cur.IntersectP(Ray_cur, &intTime0, &intTime1);
 
-        if (intersectBox) { // the photon is not already on a boundary
-        //
-        intersectPoint = operator+(ph->pos, ph->v * intTime1);
-        // calculate the optical thicknesses h_cur and h_cur_abs to the next layer
-        // We get the layer extinction coefficient and multiply by the distance within the layer
-        //
-        coef_cur = get_OD(BEERd,prof[cell[ph->layer].iopt+ilam]);
-        h_cur    = coef_cur * intTime1;
+        // Case where the photon is blocked in a box corner... avoid infinite loop
+        if (intTime1 <= 0) {ph->loc=REMOVED; return;}
 
-        #ifndef ALIS
-        h_cur_abs = prof[cell[ph->layer].iopt+ilam].OD_abs * intTime1;
-        #endif
+        if (intersectBox)
+        {   // the photon is not already on a boundary
+            intersectPoint = operator+(ph->pos, ph->v * intTime1);
 
-        //
-        // update photon position
-        //
-        if (hph + h_cur > tauRdm) {
-            // photon stops within the box
-            epsilon = (tauRdm - hph)/h_cur;
-            intTime1 *= epsilon;
-            ph->pos = operator+(ph->pos, ph->v * intTime1);
-            #ifndef ALIS
-            if (BEERd == 1) ph->weight *= __expf(-( epsilon * h_cur_abs));
-            #else
-            float coef;
-            if (ph->loc==ATMOS) ph->cdist_atm[cell[ph->layer].iabs] += intTime1;
-            if (ph->loc==OCEAN) ph->cdist_oc[ cell[ph->layer].iabs] += intTime1;
-            int DL=(NLAMd-1)/(NLOWd-1);
-            for (int k=0; k<NLOWd; k++) {
-                coef = get_OD(1,prof[cell[ph->layer].iopt + k*DL*NL]);
-			    ph->weight_sca[k] *= exp(-(coef-coef_cur)*intTime1);
-            }
-            #endif
-            break;
-
-        } else {
-            // photon advances to the next layer
-            hph += h_cur;
-            ph->pos = intersectPoint;
-
-            #ifndef ALIS
-            if (BEERd == 1) ph->weight *= __expf(-( h_cur_abs));
-            #else
-            float coef;
-            if (ph->loc==ATMOS) ph->cdist_atm[cell[ph->layer].iabs] += intTime1;
-            if (ph->loc==OCEAN) ph->cdist_oc[ cell[ph->layer].iabs] += intTime1;
-            int DL=(NLAMd-1)/(NLOWd-1);
-            for (int k=0; k<NLOWd; k++) {
-                coef = get_OD(1,prof[cell[ph->layer].iopt + k*DL*NL]);
-			    ph->weight_sca[k] *= __expf(-(coef-coef_cur)*intTime1);
-            }
-            #endif
-
-            // determine the index of the next potential box
+            // calculate the optical thicknesses h_cur and h_cur_abs to the next layer
+            // We get the layer extinction coefficient and multiply by the distance within the layer
             //
-            float3 p=ph->pos;
-            operator-=(p, operator+(pmin*0.5, pmax*0.5));
-            p.x = __fdividef(p.x, fabs(pmax.x-pmin.x));
-            p.y = __fdividef(p.y, fabs(pmax.y-pmin.y));
-            p.z = __fdividef(p.z, fabs(pmax.z-pmin.z));
-            int ind;
-            GetFaceIndex(p, &ind);
-            switch(ind)
-            {
-                 case 0: next_layer = cell[ph->layer].neighbour1; break;
-                 case 1: next_layer = cell[ph->layer].neighbour2; break;
-                 case 2: next_layer = cell[ph->layer].neighbour3; break;
-                 case 3: next_layer = cell[ph->layer].neighbour4; break;
-                 case 4: next_layer = cell[ph->layer].neighbour5; break;
-                 case 5: next_layer = cell[ph->layer].neighbour6; break;
-                 default: ph->loc = REMOVED;
-            }
-            count++;
-        } // photon advances to next layer
+            coef_cur = get_OD(BEERd,prof[cell[ph->layer].iopt+ilam]);
+            h_cur    = coef_cur * intTime1;
 
-        } // Intersection True
+            #ifndef ALIS
+            h_cur_abs = prof[cell[ph->layer].iopt+ilam].OD_abs * intTime1;
+            #endif
 
-        else { //InterSection False
-            // determine the index of the next potential box
-            float3 p=ph->pos;
-            operator-=(p, operator+(pmin*0.5, pmax*0.5));
-            p.x = __fdividef(p.x, fabs(pmax.x-pmin.x));
-            p.y = __fdividef(p.y, fabs(pmax.y-pmin.y));
-            p.z = __fdividef(p.z, fabs(pmax.z-pmin.z));
-            int ind;
-            GetFaceIndex(p, &ind);
-            switch(ind)
+            //
+            // update photon position
+            //
+            if (hph + h_cur > tauRdm)
             {
-                 case 0: next_layer = cell[ph->layer].neighbour1; break;
-                 case 1: next_layer = cell[ph->layer].neighbour2; break;
-                 case 2: next_layer = cell[ph->layer].neighbour3; break;
-                 case 3: next_layer = cell[ph->layer].neighbour4; break;
-                 case 4: next_layer = cell[ph->layer].neighbour5; break;
-                 case 5: next_layer = cell[ph->layer].neighbour6; break;
-                 default: ph->loc = REMOVED;
+                // photon stops within the box
+                epsilon = (tauRdm - hph)/h_cur;
+
+                intTime1 *= epsilon;
+                ph->pos = operator+(ph->pos, ph->v * intTime1);
+                #ifndef ALIS
+                if (BEERd == 1) ph->weight *= __expf(-( epsilon * h_cur_abs));
+                #else
+                float coef;
+                if (ph->loc==ATMOS) ph->cdist_atm[cell[ph->layer].iabs] += intTime1;
+                if (ph->loc==OCEAN) ph->cdist_oc[ cell[ph->layer].iabs] += intTime1;
+                int DL=(NLAMd-1)/(NLOWd-1);
+                for (int k=0; k<NLOWd; k++)
+                {
+                    coef = get_OD(1,prof[cell[ph->layer].iopt + k*DL*NL]);
+			        ph->weight_sca[k] *= exp(-(coef-coef_cur)*intTime1);
+                }
+                #endif
+                break;
             }
-            count++;
-        }
+            else // photon advances to the next layer
+            {
+                // Update the photon travelled distance in the x and y axes
+                distX += fabs(intersectPoint.x - ph->pos.x);
+                distY += fabs(intersectPoint.y - ph->pos.y);
+
+                hph += h_cur; 
+                ph->pos = intersectPoint;
+
+                // Ensure the z position is not negative
+                if (ph->pos.z < 0) ph->pos.z = 0;
+
+                #ifndef ALIS
+                if (BEERd == 1) ph->weight *= __expf(-( h_cur_abs));
+                #else
+                float coef;
+                if (ph->loc==ATMOS) ph->cdist_atm[cell[ph->layer].iabs] += intTime1;
+                if (ph->loc==OCEAN) ph->cdist_oc[ cell[ph->layer].iabs] += intTime1;
+                int DL=(NLAMd-1)/(NLOWd-1);
+                for (int k=0; k<NLOWd; k++)
+                {
+                    coef = get_OD(1,prof[cell[ph->layer].iopt + k*DL*NL]);
+			        ph->weight_sca[k] *= __expf(-(coef-coef_cur)*intTime1);
+                }
+                #endif
+
+
+                int ind;
+                GetFaceIndexMM(ph->pos, pmin, pmax, &ind);
+                switch(ind)
+                {
+                    case 0:
+                        next_layer = cell[ph->layer].neighbour1;
+                        if (next_layer >= 0)
+                        {
+                            ph->pos.x = cell[next_layer].pminx; // For robustness + periodic cond considered
+                            if (ph->pos.y < cell[next_layer].pminy) ph->pos.y = cell[next_layer].pminy+VALMIN;
+                            if (ph->pos.y > cell[next_layer].pmaxy) ph->pos.y = cell[next_layer].pmaxy-VALMIN;
+                            if (ph->pos.z < cell[next_layer].pminz) ph->pos.z = cell[next_layer].pminz+VALMIN;
+                            if (ph->pos.z > cell[next_layer].pmaxz) ph->pos.z = cell[next_layer].pmaxz-VALMIN;
+                        }
+                        break;
+                    case 1:
+                        next_layer = cell[ph->layer].neighbour2;
+                        if (next_layer >= 0)
+                        {
+                            ph->pos.x = cell[next_layer].pmaxx;
+                            if (ph->pos.y < cell[next_layer].pminy) ph->pos.y = cell[next_layer].pminy+VALMIN;
+                            if (ph->pos.y > cell[next_layer].pmaxy) ph->pos.y = cell[next_layer].pmaxy-VALMIN;
+                            if (ph->pos.z < cell[next_layer].pminz) ph->pos.z = cell[next_layer].pminz+VALMIN;
+                            if (ph->pos.z > cell[next_layer].pmaxz) ph->pos.z = cell[next_layer].pmaxz-VALMIN;
+                        }
+                        break;
+                    case 2:
+                        next_layer = cell[ph->layer].neighbour3;
+                        if (next_layer >= 0)
+                        {
+                            ph->pos.y = cell[next_layer].pminy;
+                            if (ph->pos.x < cell[next_layer].pminx) ph->pos.x = cell[next_layer].pminx+VALMIN;
+                            if (ph->pos.x > cell[next_layer].pmaxx) ph->pos.x = cell[next_layer].pmaxx-VALMIN;
+                            if (ph->pos.z < cell[next_layer].pminz) ph->pos.z = cell[next_layer].pminz+VALMIN;
+                            if (ph->pos.z > cell[next_layer].pmaxz) ph->pos.z = cell[next_layer].pmaxz-VALMIN;
+                        }
+                        break;
+                    case 3:
+                        next_layer = cell[ph->layer].neighbour4;
+                        if (next_layer >= 0)
+                        {
+                            ph->pos.y = cell[next_layer].pmaxy;
+                            if (ph->pos.x < cell[next_layer].pminx) ph->pos.x = cell[next_layer].pminx+VALMIN;
+                            if (ph->pos.x > cell[next_layer].pmaxx) ph->pos.x = cell[next_layer].pmaxx-VALMIN;
+                            if (ph->pos.z < cell[next_layer].pminz) ph->pos.z = cell[next_layer].pminz+VALMIN;
+                            if (ph->pos.z > cell[next_layer].pmaxz) ph->pos.z = cell[next_layer].pmaxz-VALMIN;
+                        }
+                        break;
+                    case 4:
+                        next_layer = cell[ph->layer].neighbour5;
+                        if (next_layer >= 0)
+                        {
+                            ph->pos.z = cell[next_layer].pminz;
+                            if (ph->pos.x < cell[next_layer].pminx) ph->pos.x = cell[next_layer].pminx+VALMIN;
+                            if (ph->pos.x > cell[next_layer].pmaxx) ph->pos.x = cell[next_layer].pmaxx-VALMIN;
+                            if (ph->pos.z < cell[next_layer].pminz) ph->pos.z = cell[next_layer].pminz+VALMIN;
+                            if (ph->pos.z > cell[next_layer].pmaxz) ph->pos.z = cell[next_layer].pmaxz-VALMIN;
+                        }
+                        break;
+                    case 5:
+                        next_layer = cell[ph->layer].neighbour6;
+                        if (next_layer >= 0)
+                        {
+                            ph->pos.z = cell[next_layer].pmaxz;
+                            if (ph->pos.x < cell[next_layer].pminx) ph->pos.x = cell[next_layer].pminx+VALMIN;
+                            if (ph->pos.x > cell[next_layer].pmaxx) ph->pos.x = cell[next_layer].pmaxx-VALMIN;
+                            if (ph->pos.z < cell[next_layer].pminz) ph->pos.z = cell[next_layer].pminz+VALMIN;
+                            if (ph->pos.z > cell[next_layer].pmaxz) ph->pos.z = cell[next_layer].pmaxz-VALMIN;
+                        }
+                        break;
+                    default:
+                        ph->loc = REMOVED; return;
+                }
+                count++;
+            } // photon advances to next layer
+
+        } // End Intersection True
+        else //InterSection False == impossible
+        {  ph->loc = REMOVED; return; }
 
     } // while loop
 
-    if (le) {
-        if (( (count_level==UPTOA)  && (ph->loc==SPACE ) ) || 
-            ( (count_level==DOWN0P) && (ph->loc==SURF0P) ) ||
-            ( (count_level==UP0M)   && (ph->loc==SURF0M) ) ||
-            ( (count_level==DOWNB)  && (ph->loc==SEAFLOOR) ) ) 
-            ph->weight *= __expf(-hph);
-        else ph->weight = 0.;
+    if (le)
+    {
+        if (    ( (count_level==UPTOA)  && (ph->loc==SPACE ) )
+            ||  ( (count_level==DOWN0P) && (ph->loc==SURF0P) )
+            ||  ( (count_level==UP0M)   && (ph->loc==SURF0M) )
+            ||  ( (count_level==DOWNB)  && (ph->loc==SEAFLOOR) ) ) 
+            { ph->weight *= __expf(-hph); }
+        else { ph->weight = 0.; }
     }
 
-    if ((BEERd == 0) && ((ph->loc == ATMOS) || (ph->loc == OCEAN))) {
-        ph->weight *= prof[cell[ph->layer].iopt+ilam].ssa;
-    }
+    if ( (BEERd == 0) && ((ph->loc == ATMOS) || (ph->loc == OCEAN)) )
+    { ph->weight *= prof[cell[ph->layer].iopt+ilam].ssa; }
 }
- #endif // 3D
+#endif // 3D
 #endif // ALT_PP
-//!!!!!!!!!!!!!!!!!!!! DEV !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+//!!!!!!!!!!!!!!!!!!!! DEV MM !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
 
 
 /*--------------------------------------------------------------------------------------------------*/
@@ -4387,7 +4651,9 @@ __device__ void surfaceWaterRough(Photon* ph, int le,
                     ph->loc = SPACE;
                 } else{
                     ph->loc = ATMOS;
+                    #ifndef OPT3D
                     ph->layer = NATMd;
+                    #endif
                 }
             } // else, no change of location
             else if (SINGLEd) ph->loc = REMOVED;
@@ -4398,7 +4664,9 @@ __device__ void surfaceWaterRough(Photon* ph, int le,
                   ph->loc = ABSORBED;
                } else{
                   ph->loc = OCEAN;
+                  #ifdef OPT3D
                   ph->layer = 0;
+                  #endif
                }
             } // else, no change of location
             else if (SINGLEd) ph->loc = REMOVED;
@@ -4488,7 +4756,9 @@ __device__ void surfaceWaterRough(Photon* ph, int le,
                 ph->loc = SPACE;
             } else{
                 ph->loc = ATMOS;
+                #ifndef OPT3D
                 ph->layer = NATMd;
+                #endif
             }
          } else {
             // multiple transmissions (vz<0 after water->air transmission)
@@ -4502,7 +4772,9 @@ __device__ void surfaceWaterRough(Photon* ph, int le,
                 ph->loc = ABSORBED;
               } else{
                 ph->loc = OCEAN;
+                #ifndef OPT3D
                 ph->layer = 0;
+                #endif
               }
            } else {
               // multiple transmissions (vz<0 after water->air transmission)
@@ -4733,7 +5005,9 @@ __device__ void surfaceBRDF(Photon* ph, int le,
         ph->loc = SPACE;
     } else {
           ph->loc = ATMOS;
+          #ifdef OPT3D
           ph->layer = NATMd;
+          #endif
     }
 
     if (WAVE_SHADOWd) {
@@ -5065,7 +5339,9 @@ __device__ void surfaceBRDF_new(Photon* ph, int le,
         ph->loc   = SPACE;
     } else {
         ph->loc   = ATMOS;
+        #ifndef OPT3D
         ph->layer = NATMd;
+        #endif
     }
 
     // Russian roulette for propagating photons 
@@ -7496,6 +7772,27 @@ __device__ void GetFaceIndex(float3 pos, int *index)
   if (!isZPositive && absZ >= absX && absZ >= absY) {
     *index = 5;
   }
+}
+
+__device__ void GetFaceIndexMM(float3 pos, float3 pmin, float3 pmax, int *index)
+{
+    float dF0 = fabs(pmax.x - pos.x);
+    float dF1 = fabs(pmin.x - pos.x);
+    float dF2 = fabs(pmax.y - pos.y);
+    float dF3 = fabs(pmin.y - pos.y);
+    float dF4 = fabs(pmax.z - pos.z);
+    float dF5 = fabs(pmin.z - pos.z);
+
+    float dF_min = CUDART_INF_F;
+
+    if (dF0 < dF_min) {*index = 0; dF_min = dF0;}
+    if (dF1 < dF_min) {*index = 1; dF_min = dF1;}
+    if (dF2 < dF_min) {*index = 2; dF_min = dF2;}
+    if (dF3 < dF_min) {*index = 3; dF_min = dF3;}
+    if (dF4 < dF_min) {*index = 4; dF_min = dF4;}
+    if (dF5 < dF_min) {*index = 5; dF_min = dF5;}
+
+    if (dF_min > 1e-5) *index = -1;
 }
 
 #endif

@@ -167,6 +167,7 @@ __device__ void move_pp2(Photon*, struct Profile *prof_atm, struct Profile* prof
 
 #ifdef OPT3D
 __device__ void GetFaceIndex(float3 pos, int *index);
+__device__ void GetFaceIndexMM(float3 pos, float3 pmin, float3 pmax, int *index);
 __device__ void GetFaceMiddlePoint(int ind, float3 pmin, float3 pmax, float3 *p);
 #endif
 
