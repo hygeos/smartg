@@ -2,13 +2,15 @@
 import numpy as np
 from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
-from luts.luts import Idx, MLUT
+from luts.luts import Idx, MLUT, LUT
 import pandas as pd
 from pathlib import Path
 import os
 
 from smartg.atmosphere import AtmAFGL, CloudOPAC, od2k
 from smartg.smartg import Sensor
+
+import xarray as xr
 
 def is_sorted(arr):
     """
@@ -105,16 +107,67 @@ def extend_1d_grid(grid, extend_value, type='length'):
     return extended_grid
     
 
+def read_IPRT_cloud(filename, nb_theta=721):
+        """
+        Description: Read the monochromatic cloud IPRT netcdf file (670 nm) with the phase matrix,
+        where the number of theta is variying with the effective radius. Convert to LUT object but
+        with a constant number of theta this time.
 
-class Cloud3D(object): # TODO transform to Read_cloud_3D
+        === Parameters:
+        filename : File name with path location of the monochromatic phase matrix IPRT netcdf cloud file.
+        nb_theta : Number of theta discretization between 0 and 180 degrees.
+        === Return:
+        MLUT object with the cloud phase matrix but with a constant theta number = nb_theta
+        """
+
+        ds = xr.open_dataset(filename)
+        
+        # Phase matrix (wl=670nm, reff, stk, ntheta)
+        phase = ds["phase"][:, :, :, :].data
+
+        NBSTK = 4
+        NBTHETA = nb_theta
+        NBREFF = ds["reff"].size
+        theta = np.linspace(0., 180., num=NBTHETA)
+        reff = ds["reff"].data
+        wavelength = np.array([670.])
+
+        P = LUT( np.full((1, NBREFF, NBSTK, NBTHETA), np.NaN, dtype=np.float32),
+                 axes=[wavelength, reff, None, theta],
+                 names=['wav_phase', 'reff', 'stk', 'theta_atm'],
+                 desc="phase_atm" )
+
+        for ireff in range(NBREFF):
+                for istk in range (NBSTK):
+                        # ntheta (wl, reff, stk)
+                        nth = ds["ntheta"][0, ireff, istk].data
+
+                        # theta (wl, reff, stk, ntheta)
+                        th = ds["theta"][0, ireff, istk, :].data
+
+                        P.data[0, ireff, istk, :] = np.interp(theta, th[:nth], phase[0,ireff,istk,:nth],
+                                                              period=np.inf)
+
+        # convert I, Q into Ipar, Iper
+        P0 = P.data[0,:,0,:].copy()
+        P1 = P.data[0,:,1,:].copy()
+        P.data[0,:,0,:] = P0+P1
+        P.data[0,:,1,:] = P0-P1
+
+        return P
+
+
+class Cloud3D(object):
     """
     Description: Represent a 3D cloud profil
 
     === Attribut:
-    file_name : File name with path location. File following the convention of 3DMCPOL cloud files.
+    file_name : File name with path location. File following the convention of IPRT cloud files
+                with exctintion coefficient and reff of each cloud cell.
+    phase     : LUT object with the cloud phase Matrix depending on wl, reff, stk, and theta
     """
 
-    def __init__(self, file_name):
+    def __init__(self, file_name, phase):
 
         # Check that the file exists and readable
         if (not Path(file_name).exists()):
@@ -123,7 +176,15 @@ class Cloud3D(object): # TODO transform to Read_cloud_3D
             raise NameError("The given file cannot be read!")
         else:
             self.file_name = file_name
-            
+
+        # Check if phase is a LUT object with the correct axes
+        if (not isinstance(phase, LUT)):
+            raise NameError("phase must be a LUT object!")
+        elif (not all([item in phase.names for item in ['wav_phase', 'reff', 'stk', 'theta_atm']])):
+            raise NameError("Phase matrix must have 4 dimensions: wav_phase, reff, stk and theta_atm")
+        else:
+            self.phase = phase
+
 
     def get_xyz_grid(self):
         """
@@ -581,7 +642,8 @@ class Atm3D(object):
     """
 
     def __init__(self, atm_filename, grid_3d, wls, wl_ref = None,
-    lat=45, P0=None, O3=None, H2O=None, NO2=True, tauR=None, cloud_3d=None, cloud_indices=None, cld_ext_coeff=None):
+    lat=45, P0=None, O3=None, H2O=None, NO2=True, tauR=None, cloud_3d=None,
+    cloud_indices=None, cld_ext_coeff=None, cld_reff=None):
 
         possible_atm_filename = ['afglms', 'afglmw', 'afglss', 'afglsw', 'afglt', 'afglus',
          'afglus_ch4_vmr', 'afglus_co_vmr', 'afglus_n2_vmr', 'afglus_n2o_vmr', 'afglus_no2',
@@ -618,16 +680,19 @@ class Atm3D(object):
 
         # Ensure that we don't use the class cloud_3d and the variables cloud_indices and cld_ext_coeff in the same time
         if ( cloud_3d is not None
-             and (cloud_indices is not None or cld_ext_coeff is not None) ):
-             raise NameError('cloud_3d and variables cloud_indices and cld_ext_coeff cannot be used a the same time!')
+             and (cloud_indices is not None or cld_ext_coeff is not None or cld_reff) ):
+             raise NameError('cloud_3d and variables cloud_indices, cld_ext_coeff or cld_reff ' + 
+             'cannot be used a the same time!')
         if ( cloud_3d is None
              and (cloud_indices is None or cld_ext_coeff is None) ):
-             raise NameError('If cloud_3d is None, then both variables cloud_indices and cld_ext_coeff must be given!')
+             raise NameError('If cloud_3d is None, cloud_indices, cld_ext_coeff and cld_reff must be given!')
 
         # If the class cloud_3d has been set then compute the variables cell_indices and cld_ext_coeff
         if (cloud_3d is not None and isinstance(cloud_3d, Cloud3D)):
             self.cloud_indices = cloud_3d.get_cell_indices()
             self.cld_ext_coeff = cloud_3d.get_ext_coeff()
+            self.cld_reff = cloud_3d.get_reff()
+            self.cloud_3d = cloud_3d
         elif (cloud_3d is not None and not isinstance(cloud_3d, Cloud3D)):
             raise NameError('cloud_3d variable must be a Cloud3D object!')
 
@@ -637,6 +702,9 @@ class Atm3D(object):
         
         if (cld_ext_coeff is not None):
             self.cld_ext_coeff = cld_ext_coeff
+        
+        if (cld_reff is not None):
+            self.cld_reff = cld_reff
 
         # === Cell indices in SMART-G + consider boundaries:
         # The "-1" is here because IPRT input cloud file indices start at 1 intead of 0 for SMART-G
@@ -710,7 +778,7 @@ class Atm3D(object):
 
         return ext_cld_3d
 
-    def get_phase_prof(self, species='wc.sol', reff=2.):
+    def get_phase_prof_old(self, species='wc.sol', reff=2., wl_phase=None):
         """
         For the moment only one phase matrix for all cells containing clouds
         In progress..
@@ -720,13 +788,108 @@ class Atm3D(object):
         nb_unique_cells = self.cloud_indices.shape[0]
         Nopt = self.grid_3d.NZ + 1 + nb_unique_cells
         
+        # TODO s'inspirer de la fonction calc_iphase dans tools/phase.py
         ipha3D = np.zeros((self.wls.size, Nopt), dtype=np.int32) # only one matrix for all cells, then always index 0
 
         cld = CloudOPAC(species, reff, 2., 3., 1., self.wl_ref) # reff = 2 here but previouly we took 5, why ?
         # Create phase matrix and store it in LUT object (function of stokes and theta)
-        pha_cld = AtmAFGL(self.atm_filename, comp=[cld]).calc(self.wl_ref)['phase_atm'].sub()[0,:,:]
+        pha_cld_tmp = AtmAFGL(self.atm_filename, comp=[cld], pfwav=wl_phase).calc(self.wls)['phase_atm']
+        pha_cld = []
 
-        return (ipha3D, [pha_cld])
+        # if wl_phase is not None:
+        #     for i in range (0, wl_phase.size):
+        #         pha_cld.append(pha_cld_tmp.sub()[Idx(wl_phase[i]),:,:])
+        # else:
+        #     for i in range (0, self.wls.size):
+        #         pha_cld.append(pha_cld_tmp.sub()[i,:,:])
+
+        # Calculate the phase for each wl_phase if given else for each wls
+        if wl_phase is not None: nwav = len(wl_phase)
+        else: nwav = len(self.wls)
+        
+        for i in range (0, nwav):
+            pha_cld.append(pha_cld_tmp.sub()[i,:,:])
+        
+
+
+        return (ipha3D, pha_cld)
+
+    def get_phase_prof(self, species='wc.sol', wl_phase=None):
+        """
+        For the moment only one phase matrix for all cells containing clouds
+        In progress..
+        return a tuple with the phase matrix indices to choose, and a list of phase matrix LUT.
+        """
+
+        cld_reff = self.cld_reff
+        cld_reff_unique = np.unique(cld_reff)
+        nreff_unique = cld_reff_unique.size
+
+        if wl_phase is not None: wav = wl_phase
+        else: wav = self.wls
+        nwav = len(wav)
+
+        # Get the LUT of the phase matrix in function of the effective radius and theta
+        # Loop only on the unique cld_reff
+        pha_cld = []
+        for iwav in range (0, nwav):
+            for ireff in range (0, nreff_unique):
+                cld = CloudOPAC(species, cld_reff_unique[ireff], 2., 3., 1., self.wl_ref)
+                pha_cld.append(AtmAFGL(self.atm_filename, comp=[cld]).calc([wav[iwav]],
+                 phaseOpti=True)['phase_atm'].sub()[0,:,:])
+    
+        # ===== 2) phase matrix indice to take for all cloud cells
+        # Obtain the correct indices from the unique radii phase matrix
+        cld_phase_indices = np.full(cld_reff.size, np.NaN, dtype=np.int32)
+        for ireff in range (0, nreff_unique):
+            cld_phase_indices[np.squeeze(np.argwhere( cld_reff == cld_reff_unique[ireff]))] = ireff
+
+        # Concatenate Rayleigh plan parallel + cloud
+        cld_phase_indices = np.concatenate([np.zeros(self.grid_3d.NZ+1, dtype=np.int32), cld_phase_indices[:]])
+
+        # Consider the wl dimension
+        cld_phase_indices_wl = np.zeros((nwav, cld_phase_indices.size), dtype=np.int32)
+
+        for iwav in range (0, nwav):
+            cld_phase_indices_wl[iwav,:] = cld_phase_indices[:] + (iwav*nreff_unique)
+
+        ipha3D = cld_phase_indices_wl
+
+        return (ipha3D, pha_cld)
+
+    def get_phase_prof_IPRT(self):
+        """
+        In progress...
+        """
+
+        # ===== 1) Calcul des matrices de phases
+        # Get the cloud effective radii
+        cld_reff = self.cld_reff
+        cld_reff_unique = np.unique(cld_reff)
+        nreff_unique = cld_reff_unique.size
+
+        # Get the MLUT of the monochromatic phase matrix in function of the effective radius and theta
+        phase_670 = self.cloud_3d.phase
+        luts = []
+
+        # Loop only on the unique cld_reff
+        for ireff in range (0, nreff_unique):
+            luts.append(phase_670.sub()[0,Idx(cld_reff_unique[ireff]), :, :])
+
+        # ===== 2) phase matrix indices to take for all cloud cells
+        # Obtain the correct indices from the unique radii phase matrix
+        cld_phase_indices = np.full(cld_reff.size, np.NaN, dtype=np.int32)
+        for ireff in range (0, nreff_unique):
+            cld_phase_indices[np.squeeze(np.argwhere( cld_reff == cld_reff_unique[ireff]))] = ireff
+
+        # Concatenate Rayleigh plan parallel + cloud
+        cld_phase_indices = np.concatenate([np.zeros(self.grid_3d.NZ+1, dtype=np.int32), cld_phase_indices[:]])
+
+        # Consider the wl dimension (even if its equal to 1)
+        cld_phase_indices_wl = np.zeros((1, cld_phase_indices.size), dtype=np.int32)
+        cld_phase_indices_wl[0,:] = cld_phase_indices[:]
+
+        return (cld_phase_indices_wl, luts)
 
     def get_cells_info(self):
 
