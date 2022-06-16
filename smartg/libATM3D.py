@@ -1,4 +1,6 @@
-#from re import I
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 import numpy as np
 from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
@@ -105,19 +107,18 @@ def extend_1d_grid(grid, extend_value, type='length'):
         raise NameError("Unkown extend type!")
 
     return extended_grid
-    
 
-def read_IPRT_cloud(filename, nb_theta=721):
+
+def read_cld_nth_cte(filename, nb_theta=721):
         """
-        Description: Read the monochromatic cloud IPRT netcdf file (670 nm) with the phase matrix,
-        where the number of theta is variying with the effective radius. Convert to LUT object but
-        with a constant number of theta this time.
+        Description: Read libRatran water cloud files (i.g. wc.sol.mie.cdf) or monochromatic IPRT netcdf cloud file,
+        and convert to LUT object with a constant theta discretisation i.e. nb_theta = cte.
 
         === Parameters:
-        filename : File name with path location of the monochromatic phase matrix IPRT netcdf cloud file.
+        filename : File name with path location of netcdf cloud file.
         nb_theta : Number of theta discretization between 0 and 180 degrees.
         === Return:
-        MLUT object with the cloud phase matrix but with a constant theta number = nb_theta
+        LUT object with the cloud phase matrix but with a constant theta number = nb_theta
         """
 
         ds = xr.open_dataset(filename)
@@ -125,34 +126,35 @@ def read_IPRT_cloud(filename, nb_theta=721):
         # Phase matrix (wl=670nm, reff, stk, ntheta)
         phase = ds["phase"][:, :, :, :].data
 
-        NBSTK = 4
+        NBSTK   = 4
         NBTHETA = nb_theta
-        NBREFF = ds["reff"].size
+        NBREFF  = ds["reff"].size
+        NWAV    = ds["wavelen"].size
         theta = np.linspace(0., 180., num=NBTHETA)
         reff = ds["reff"].data
-        wavelength = np.array([670.])
+        wavelength = ds["wavelen"].data*1e3
 
-        P = LUT( np.full((1, NBREFF, NBSTK, NBTHETA), np.NaN, dtype=np.float32),
+        P = LUT( np.full((NWAV, NBREFF, NBSTK, NBTHETA), np.NaN, dtype=np.float32),
                  axes=[wavelength, reff, None, theta],
                  names=['wav_phase', 'reff', 'stk', 'theta_atm'],
                  desc="phase_atm" )
 
-        for ireff in range(NBREFF):
+        for iwav in range (0, NWAV):
+            for ireff in range(NBREFF):
                 for istk in range (NBSTK):
-                        # ntheta (wl, reff, stk)
-                        nth = ds["ntheta"][0, ireff, istk].data
+                    # ntheta (wl, reff, stk)
+                    nth = ds["ntheta"][iwav, ireff, istk].data
 
-                        # theta (wl, reff, stk, ntheta)
-                        th = ds["theta"][0, ireff, istk, :].data
+                    # theta (wl, reff, stk, ntheta)
+                    th = ds["theta"][iwav, ireff, istk, :].data
 
-                        P.data[0, ireff, istk, :] = np.interp(theta, th[:nth], phase[0,ireff,istk,:nth],
-                                                              period=np.inf)
+                    P.data[iwav, ireff, istk, :] = np.interp(theta, th[:nth], phase[iwav,ireff,istk,:nth],  period=np.inf)
 
         # convert I, Q into Ipar, Iper
-        P0 = P.data[0,:,0,:].copy()
-        P1 = P.data[0,:,1,:].copy()
-        P.data[0,:,0,:] = P0+P1
-        P.data[0,:,1,:] = P0-P1
+        P0 = P.data[:,:,0,:].copy()
+        P1 = P.data[:,:,1,:].copy()
+        P.data[:,:,0,:] = P0+P1
+        P.data[:,:,1,:] = P0-P1
 
         return P
 
@@ -162,20 +164,18 @@ class Cloud3D(object):
     Description: Represent a 3D cloud profil
 
     === Attribut:
-    file_name : File name with path location. File following the convention of IPRT cloud files
-                with exctintion coefficient and reff of each cloud cell.
-    phase     : LUT object with the cloud phase Matrix depending on wl, reff, stk, and theta
+    phase               : LUT object with the cloud phase Matrix depending on wl, reff, stk, and theta
+    file_name           : File name with path location. File following the convention of IPRT cloud files
+                          with exctintion coefficient and reff of each cloud cell.
+
+    === Others if given circumvent variables read from file_name
+    xyz_grids           : List with in the indices 0, 1 and 2 the 1D arrays with respectively the x, y and z grid profils
+    ext_coeff           : Numpy 1D array with the cloud extinction coefficient
+    cell_indices        : Numpy 3D array with the cloud xyz indices
+    reff                : Numpy 1D array with the cloud effective radii
     """
 
-    def __init__(self, file_name, phase):
-
-        # Check that the file exists and readable
-        if (not Path(file_name).exists()):
-            raise NameError("The given file does not exists!")
-        elif (not os.access(file_name, os.R_OK)):
-            raise NameError("The given file cannot be read!")
-        else:
-            self.file_name = file_name
+    def __init__(self, phase, file_name=None, xyz_grids=None, ext_coeff=None, cell_indices=None, reff=None):
 
         # Check if phase is a LUT object with the correct axes
         if (not isinstance(phase, LUT)):
@@ -185,6 +185,26 @@ class Cloud3D(object):
         else:
             self.phase = phase
 
+        # Check (if not set to None) that the file exists and is readable
+        if (file_name is None):
+            self.file_name = None
+        elif (not Path(file_name).exists()):
+            raise NameError("The given file does not exists!")
+        elif (not os.access(file_name, os.R_OK)):
+            raise NameError("The given file cannot be read!")
+        else:
+            self.file_name = file_name
+        
+        # If file_name is None, all other variables must be specified
+        if  ( (file_name is None)
+              and ( xyz_grids and ext_coeff is None and cell_indices is None and reff is None) ):
+            raise NameError("If file_name is set to None all other varaibles must be given!")
+
+        # TODO adds checks on the varaibles bellow (if we have np.arrays, ...)
+        self.xyz_grids    = xyz_grids
+        self.ext_coeff    = ext_coeff
+        self.cell_indices = cell_indices
+        self.reff         = reff 
 
     def get_xyz_grid(self):
         """
@@ -193,6 +213,9 @@ class Cloud3D(object):
         === Return:
         xgrid, ygrid, zgrid : Three 1D arrays with the x, y and z grid profils.
         """
+
+        # First check if we have already the xyz grids
+        if (self.xyz_grids is not None): return self.xyz_grids[0], self.xyz_grids[1], self.xyz_grids[2]
 
         # Read only the needed information, the two first rows.
         # Be careful ! The second row have a greater dimension than the first one. Then -> two steps of reading.
@@ -228,6 +251,9 @@ class Cloud3D(object):
         ext_coeff : Numpy 1D array with the cloud extinction coefficient
         """
 
+        # First check if we have already the ext_coeff
+        if (self.ext_coeff is not None) : return self.ext_coeff
+
         # Read only the disired column
         ext_coeff = pd.read_csv(self.file_name, skiprows = 3, header=None, usecols=[3], sep='\s+', dtype=float).values
 
@@ -244,6 +270,9 @@ class Cloud3D(object):
         cell_indices : Numpy 3D array with the cloud xyz indices
         """
 
+        # First check if we have already the cell_indices
+        if (self.cell_indices is not None): return self.cell_indices
+
         # Read only the disired column
         cell_indices = pd.read_csv(self.file_name, skiprows = 3, header=None, usecols=[0,1,2], sep='\s+', dtype=float).values
 
@@ -256,6 +285,9 @@ class Cloud3D(object):
         """
         In progress...
         """
+
+        # First check if we have already reff
+        if (self.reff is not None): return self.reff
 
         # Read only the disired column
         reff = pd.read_csv(self.file_name, skiprows = 3, header=None, usecols=[4], sep='\s+', dtype=float).values
@@ -814,7 +846,7 @@ class Atm3D(object):
 
         return (ipha3D, pha_cld)
 
-    def get_phase_prof(self, species='wc.sol', wl_phase=None):
+    def get_phase_prof(self, species='wc.sol', wl_phase=None, phaseOpti=False):
         """
         For the moment only one phase matrix for all cells containing clouds
         In progress..
@@ -836,7 +868,7 @@ class Atm3D(object):
             for ireff in range (0, nreff_unique):
                 cld = CloudOPAC(species, cld_reff_unique[ireff], 2., 3., 1., self.wl_ref)
                 pha_cld.append(AtmAFGL(self.atm_filename, comp=[cld]).calc([wav[iwav]],
-                 phaseOpti=True)['phase_atm'].sub()[0,:,:])
+                 phaseOpti=phaseOpti)['phase_atm'].sub()[0,:,:])
     
         # ===== 2) phase matrix indice to take for all cloud cells
         # Obtain the correct indices from the unique radii phase matrix
@@ -890,6 +922,50 @@ class Atm3D(object):
         cld_phase_indices_wl[0,:] = cld_phase_indices[:]
 
         return (cld_phase_indices_wl, luts)
+
+    def get_phase_prof_OPAC(self, wl_phase=None):
+        """
+        In progress...
+        """
+
+        # ===== 1) Calcul des matrices de phases
+        # Get the cloud effective radii
+        cld_reff = self.cld_reff
+        cld_reff_unique = np.unique(cld_reff)
+        nreff_unique = cld_reff_unique.size
+
+        if wl_phase is not None: wav = wl_phase
+        else: wav = self.wls
+        nwav = len(wav)
+
+        # Get the MLUT of the monochromatic phase matrix in function of the effective radius and theta
+        phase = self.cloud_3d.phase
+        luts = []
+
+        for iwav in range (0, nwav):
+            # Loop only on the unique cld_reff
+            for ireff in range (0, nreff_unique):
+                luts.append(phase.sub()[Idx(wav[iwav]),Idx(cld_reff_unique[ireff]), :, :])
+
+        # ===== 2) phase matrix indices to take for all cloud cells
+        # Obtain the correct indices from the unique radii phase matrix
+        cld_phase_indices = np.full(cld_reff.size, np.NaN, dtype=np.int32)
+        for ireff in range (0, nreff_unique):
+            cld_phase_indices[np.squeeze(np.argwhere( cld_reff == cld_reff_unique[ireff]))] = ireff
+
+        # Concatenate Rayleigh plan parallel + cloud
+        cld_phase_indices = np.concatenate([np.zeros(self.grid_3d.NZ+1, dtype=np.int32), cld_phase_indices[:]])
+
+        # Consider the wl dimension (even if its equal to 1)
+        cld_phase_indices_wl = np.zeros((nwav, cld_phase_indices.size), dtype=np.int32)
+
+        for iwav in range (0, nwav):
+            cld_phase_indices_wl[iwav,:] = cld_phase_indices[:] + (iwav*nreff_unique)
+
+        ipha3D = cld_phase_indices_wl
+
+        return (ipha3D, luts)
+
 
     def get_cells_info(self):
 
