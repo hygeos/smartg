@@ -164,18 +164,21 @@ class Cloud3D(object):
     Description: Represent a 3D cloud profil
 
     === Attribut:
-    phase               : LUT object with the cloud phase Matrix depending on wl, reff, stk, and theta
-    file_name           : File name with path location. File following the convention of IPRT cloud files
-                          with exctintion coefficient and reff of each cloud cell.
+    phase                : LUT object with the cloud phase Matrix depending on wl, reff, stk, and theta
+    file_name            : File name with path location. File following the convention of IPRT cloud files
+                           with exctintion coefficient and reff of each cloud cell.
+    loc_xgrid, loc_ygrid : Grid location. By default an str: "centered" i.e. the grid center is at coordinate 0.
+                           Or give a scalar with the starting position of the grid.
 
     === Others if given circumvent variables read from file_name
-    xyz_grids           : List with in the indices 0, 1 and 2 the 1D arrays with respectively the x, y and z grid profils
-    ext_coeff           : Numpy 1D array with the cloud extinction coefficient
-    cell_indices        : Numpy 3D array with the cloud xyz indices
-    reff                : Numpy 1D array with the cloud effective radii
+    xyz_grids            : List with in the indices 0, 1 and 2 the 1D arrays with respectively the x, y and z grid profils
+    ext_coeff            : Numpy 1D array with the cloud extinction coefficient
+    cell_indices         : Numpy 3D array with the cloud xyz indices
+    reff                 : Numpy 1D array with the cloud effective radii
     """
 
-    def __init__(self, phase, file_name=None, xyz_grids=None, ext_coeff=None, cell_indices=None, reff=None):
+    def __init__(self, phase, file_name=None, loc_xgrid = "centered", loc_ygrid = "centered",
+                 xyz_grids=None, ext_coeff=None, cell_indices=None, reff=None):
 
         # Check if phase is a LUT object with the correct axes
         if (not isinstance(phase, LUT)):
@@ -197,11 +200,13 @@ class Cloud3D(object):
         
         # If file_name is None, all other variables must be specified
         if  ( (file_name is None)
-              and ( xyz_grids and ext_coeff is None and cell_indices is None and reff is None) ):
-            raise NameError("If file_name is set to None all other varaibles must be given!")
+              and ( xyz_grids is None or ext_coeff is None or cell_indices is None or reff is None) ):
+            raise NameError("If file_name is set to None all other variables must be given!")
 
         # TODO adds checks on the varaibles bellow (if we have np.arrays, ...)
         self.xyz_grids    = xyz_grids
+        self.loc_xgrid    = loc_xgrid
+        self.loc_ygrid    = loc_ygrid
         self.ext_coeff    = ext_coeff
         self.cell_indices = cell_indices
         self.reff         = reff 
@@ -235,8 +240,8 @@ class Cloud3D(object):
         Dy = contentB[1]
 
         # Create x and y grid
-        xgrid = create_1d_grid(Nx, Dx)
-        ygrid = create_1d_grid(Ny, Dy)
+        xgrid = create_1d_grid(Nx, Dx, loc=self.loc_xgrid)
+        ygrid = create_1d_grid(Ny, Dy, loc=self.loc_ygrid)
 
         # Grid in the z axis can be directly read from the file
         zgrid = contentB[2:]
@@ -437,8 +442,8 @@ def locate_3Dregular_cells(xgrid,ygrid,zgrid,x,y,z):
 
 
 def satellite_view(mlut, xgrid, ygrid, wl, interp_name='none',
-                   color_bar='Blues_r', fig_size=(8,8), font_size=int(18),
-                   vmin = None, vmax = None, scale=False, save_file=None):
+                   color_bar='Blues_r', color_reverse=False, fig_size=(8,8), font_size=int(18),
+                   vmin = None, vmax = None, scale=False, save_file=None, stk="I", factor=1):
     """
     Description: The function give a 'satellite' 2D image of the SMART-G 3D atm return results
 
@@ -454,8 +459,18 @@ def satellite_view(mlut, xgrid, ygrid, wl, interp_name='none',
     font_size    : Font size of the figure
     save_file    : If not None, save the generated image in pdf, i.g. save_file = 'test', save as 'test.pdf'
     """
-    # Force the use of only 'I_up (TOA), TODO add the option to choose between I, Q, U, V
-    stokes_name = 'I_up (TOA)'
+
+    # Choose between I, Q, U and V
+    if (stk == "I"):
+        stokes_name = 'I_up (TOA)'
+    elif (stk == "Q"):
+        stokes_name = 'Q_up (TOA)'
+    elif (stk == "U"):
+        stokes_name = 'U_up (TOA)'
+    elif (stk == "V"):
+        stokes_name = 'V_up (TOA)'
+    else: 
+        raise NameError("Unknown stk!")
 
     # First check the Azimuth and Zenith angles dimensions exist, if not the case return an error message
     if ("Azimuth angles" or "Zenith angles") not in mlut[stokes_name].names:
@@ -489,7 +504,7 @@ def satellite_view(mlut, xgrid, ygrid, wl, interp_name='none',
 
 
     # Convert the 1D results to a 2D matrix. The order of Nx and Ny below is very important!
-    matrix = mlut[stokes_name][tuple(ind)].reshape(Ny,Nx)
+    matrix = mlut[stokes_name][tuple(ind)].reshape(Ny,Nx)*factor
     # The variable matrix is now in the following form:
     # - x0 ... xn
     # y0
@@ -510,14 +525,16 @@ def satellite_view(mlut, xgrid, ygrid, wl, interp_name='none',
 
 
     # Call the function imshow for the 2D drawing (or pcolormesh if we have different cell size in x or y axis)
+    if (color_reverse): cmap = plt.get_cmap(color_bar).reversed()
+    else: cmap = plt.get_cmap(color_bar)
     if (is_same_cell_size(xgrid) and is_same_cell_size(ygrid)):
-        img = plt.imshow(matrix, vmin=vmin, vmax=vmax, origin='lower', cmap=plt.get_cmap(color_bar),
+        img = plt.imshow(matrix, vmin=vmin, vmax=vmax, origin='lower', cmap=cmap,
                          interpolation=interp_name, extent=[xgrid.min(),xgrid.max(),ygrid.min(),ygrid.max()])
     else:
         if (interp_name != 'none'):
             print("Warning: the interp_name variable cannot be used (and then ignored) when using pcolormesh!" + 
             " i.e. when we have a cell size varying along the x or y axis.")
-        img = plt.pcolormesh(xgrid, ygrid, matrix, vmin=vmin, vmax=vmax, cmap=plt.get_cmap(color_bar))
+        img = plt.pcolormesh(xgrid, ygrid, matrix, vmin=vmin, vmax=vmax, cmap=cmap)
         plt.axis('scaled') # x and y axes with the same scaling
 
     # Color bar parametrization
@@ -673,9 +690,8 @@ class Atm3D(object):
     If wls.size is equal to 1 and wl_ref is None, take wls as reference wavelength
     """
 
-    def __init__(self, atm_filename, grid_3d, wls, wl_ref = None,
-    lat=45, P0=None, O3=None, H2O=None, NO2=True, tauR=None, cloud_3d=None,
-    cloud_indices=None, cld_ext_coeff=None, cld_reff=None):
+    def __init__(self, atm_filename, grid_3d, cloud_3d, wls, wl_ref = None,
+    lat=45, P0=None, O3=None, H2O=None, NO2=True, tauR=None, mol_sca_coeff=None, mol_abs_coeff=None):
 
         possible_atm_filename = ['afglms', 'afglmw', 'afglss', 'afglsw', 'afglt', 'afglus',
          'afglus_ch4_vmr', 'afglus_co_vmr', 'afglus_n2_vmr', 'afglus_n2o_vmr', 'afglus_no2',
@@ -686,6 +702,9 @@ class Atm3D(object):
 
         if (not isinstance(grid_3d, Grid3D)):
             raise NameError('grid_3d variable must be a Grid3D object!')
+
+        if (not isinstance(cloud_3d, Cloud3D)):
+            raise NameError('cloud_3d variable must be a Cloud3D object!')
 
         if (not isinstance(wls, np. ndarray)):
             raise NameError('wls must be a numpy array!')
@@ -698,6 +717,8 @@ class Atm3D(object):
 
         self.atm_filename = atm_filename
         self.grid_3d      = grid_3d
+        self.phase         = cloud_3d.phase
+        self.cloud_3d      = cloud_3d
         self.wls          = wls
         if (wls.size == 1 and wl_ref is None): 
             self.wl_ref   = wls[0]
@@ -706,37 +727,19 @@ class Atm3D(object):
 
         # Calculate the 1d extinction rayleigh coefficient and store it as attribut
         znew = grid_3d.zGRID[::-1]
-        ext_ray = od2k(AtmAFGL(atm_filename, lat=lat, P0=P0, O3=O3, H2O=H2O, NO2=NO2, tauR=tauR,
-                               grid=znew).calc(wls, phase=False), 'OD_r')
+        atm_1d = AtmAFGL(atm_filename, lat=lat, P0=P0, O3=O3, H2O=H2O, NO2=NO2, tauR=tauR,
+                               grid=znew).calc(wls, phase=False)
+        ext_ray = od2k(atm_1d, 'OD_r')
+        mol_abs = od2k(atm_1d, 'OD_g')
         self.ext_rayleigh = ext_ray
+        self.molecular_abs_coeff = mol_abs
 
-        # Ensure that we don't use the class cloud_3d and the variables cloud_indices and cld_ext_coeff in the same time
-        if ( cloud_3d is not None
-             and (cloud_indices is not None or cld_ext_coeff is not None or cld_reff) ):
-             raise NameError('cloud_3d and variables cloud_indices, cld_ext_coeff or cld_reff ' + 
-             'cannot be used a the same time!')
-        if ( cloud_3d is None
-             and (cloud_indices is None or cld_ext_coeff is None) ):
-             raise NameError('If cloud_3d is None, cloud_indices, cld_ext_coeff and cld_reff must be given!')
+        if mol_sca_coeff is not None : self.ext_rayleigh = mol_sca_coeff
+        if mol_abs_coeff is not None : self.molecular_abs_coeff = mol_abs_coeff
 
-        # If the class cloud_3d has been set then compute the variables cell_indices and cld_ext_coeff
-        if (cloud_3d is not None and isinstance(cloud_3d, Cloud3D)):
-            self.cloud_indices = cloud_3d.get_cell_indices()
-            self.cld_ext_coeff = cloud_3d.get_ext_coeff()
-            self.cld_reff = cloud_3d.get_reff()
-            self.cloud_3d = cloud_3d
-        elif (cloud_3d is not None and not isinstance(cloud_3d, Cloud3D)):
-            raise NameError('cloud_3d variable must be a Cloud3D object!')
-
-        # If we choose...
-        if (cloud_indices is not None):
-            self.cloud_indices = cloud_indices
-        
-        if (cld_ext_coeff is not None):
-            self.cld_ext_coeff = cld_ext_coeff
-        
-        if (cld_reff is not None):
-            self.cld_reff = cld_reff
+        self.cld_ext_coeff = cloud_3d.get_ext_coeff()
+        self.cld_reff      = cloud_3d.get_reff()
+        self.cloud_indices = cloud_3d.get_cell_indices() # update if performed bellow
 
         # === Cell indices in SMART-G + consider boundaries:
         # The "-1" is here because IPRT input cloud file indices start at 1 intead of 0 for SMART-G
@@ -770,6 +773,23 @@ class Atm3D(object):
             self.ext_rayleigh[:,self.grid_3d.NZ-self.grid_3d.idz[cloud_1d_indices]]], axis=1)
 
         return ext_rayleigh_3d
+
+    def get_molecular_abs(self):
+        """
+        Consider all the grid cells with non commun opt property + 1d atm
+        In progress...
+        """
+        cloud_indices = self.cloud_indices
+
+        # 1d xyz indices where there are clouds
+        cloud_1d_indices = np.ravel_multi_index((cloud_indices[:,0], cloud_indices[:,1], cloud_indices[:,2]),
+                                                 dims=(self.grid_3d.NX, self.grid_3d.NY, self.grid_3d.NZ))
+
+        # calculate the 3d molecular coefficient
+        mol_abs_coeff_3d = np.concatenate([self.molecular_abs_coeff,
+            self.molecular_abs_coeff[:,self.grid_3d.NZ-self.grid_3d.idz[cloud_1d_indices]]], axis=1)
+
+        return mol_abs_coeff_3d
 
     def get_grid(self):
 
@@ -901,7 +921,7 @@ class Atm3D(object):
         nreff_unique = cld_reff_unique.size
 
         # Get the MLUT of the monochromatic phase matrix in function of the effective radius and theta
-        phase_670 = self.cloud_3d.phase
+        phase_670 = self.phase
         luts = []
 
         # Loop only on the unique cld_reff
@@ -939,7 +959,7 @@ class Atm3D(object):
         nwav = len(wav)
 
         # Get the MLUT of the monochromatic phase matrix in function of the effective radius and theta
-        phase = self.cloud_3d.phase
+        phase = self.phase
         luts = []
 
         for iwav in range (0, nwav):
