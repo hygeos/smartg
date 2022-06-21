@@ -1055,9 +1055,9 @@ class AtmAFGL(Atmosphere):
             (iopt, iabs, pmin, pmax, neighbour) = self.cells
             pro.add_dataset('iopt_atm', iopt, axnames=['icell'])
             pro.add_dataset('iabs_atm', iabs, axnames=['icell'])
-            pro.add_dataset('pmin_atm', pmin, axnames=['None', 'icell'])
-            pro.add_dataset('pmax_atm', pmax, axnames=['None', 'icell'])
-            pro.add_dataset('neighbour_atm', neighbour, axnames=['None', 'icell'])
+            pro.add_dataset('pmin_atm', pmin, axnames=['xyz', 'icell'])
+            pro.add_dataset('pmax_atm', pmax, axnames=['xyz', 'icell'])
+            pro.add_dataset('neighbour_atm', neighbour, axnames=['faces', 'icell'])
 
         return pro
 
