@@ -2139,7 +2139,7 @@ def reduce_histories(kernel2, tabHist, wl, sigma, NLOW, NBTHETA=1, alb_in=None, 
                      to_gpu(nref_in), to_gpu(nsif_in), to_gpu(nvrs_in),
                      to_gpu(nenv_in), to_gpu(ith_in), to_gpu(iwls_in), to_gpu(wwls_in), 
                      block=(XBLOCK,1,1),grid=(XGRID,1,1))
-   return res_out.get(), res_sca.get(), res_rrs.get(), res_sif.get(), res_vrs.get()
+   return res_out, res_sca, res_rrs, res_sif, res_vrs
 
 
  
@@ -2350,11 +2350,18 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
             tabHistTot = tabHist
             res,res_sca,res_rrs,res_sif,res_vrs = reduce_histories(kern2, np.squeeze(tabHist.get()), wl, sigma, NLOW,
                                   NBTHETA=NBTHETA, alb_in=alb_in)
-            tabPhotonsTot[0,:,:,:,:,:] += to_gpu(res[:,None,:,:,None])
-            tabPhotonsTot[1,:,:,:,:,:] += to_gpu(res_sca[:,None,:,:,None])
-            tabPhotonsTot[2,:,:,:,:,:] += to_gpu(res_rrs[:,None,:,:,None])
-            tabPhotonsTot[3,:,:,:,:,:] += to_gpu(res_sif[:,None,:,:,None])
-            tabPhotonsTot[4,:,:,:,:,:] += to_gpu(res_vrs[:,None,:,:,None])
+            if NBTHETA>1:
+                tabPhotonsTot[0,:,:,:,:,:] += res[:,None,:,:,None]
+                tabPhotonsTot[1,:,:,:,:,:] += res_sca[:,None,:,:,None]
+                tabPhotonsTot[2,:,:,:,:,:] += res_rrs[:,None,:,:,None]
+                tabPhotonsTot[3,:,:,:,:,:] += res_sif[:,None,:,:,None]
+                tabPhotonsTot[4,:,:,:,:,:] += res_vrs[:,None,:,:,None]
+            else :
+                tabPhotonsTot[0,:,:,:,:,:] += res[:,None,:,None]
+                tabPhotonsTot[1,:,:,:,:,:] += res_sca[:,None,:,None]
+                tabPhotonsTot[2,:,:,:,:,:] += res_rrs[:,None,:,None]
+                tabPhotonsTot[3,:,:,:,:,:] += res_sif[:,None,:,None]
+                tabPhotonsTot[4,:,:,:,:,:] += res_vrs[:,None,:,None]
 
         N_simu += 1
         if stdev:

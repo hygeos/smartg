@@ -7888,57 +7888,67 @@ __global__ void reduce_absorption_gpu(unsigned long long NPHOTON, unsigned long 
         unsigned char *nrrs, unsigned char *nref, unsigned char *nsif, unsigned char *nvrs, unsigned char *nenv, unsigned char *ith, 
         unsigned char *iw_low, float *ww_low)
 {
-  const unsigned long long idx = threadIdx.x + blockDim.x * blockIdx.x;
-  unsigned long long n,nstart,nstop,ns;
-  unsigned long long iw,ig,l,s;
-  unsigned long long nl,li;
-  double wabs, walb0, walb1,walb; // absorption and albedo high resolution weigths
-  float wsca1,wsca2,wsca;
-  unsigned long long iw1,iw2;
-  unsigned long long offset;
-
-  if (idx<NTHREAD) {
-    iw = idx%NWVL ; // index of current wavelength
-    ig = idx/NWVL ;   // index of current group
-    nstart = ig    *NBUNCH; // Start index of the photon's stack
-    nstop  = (ig+1)*NBUNCH + (ig==(NGROUP-1))*NP_REST; // end index of photon's stack
-                                    // last group has some remaining phton's
-    iw1 = iw_low[iw];    // bracketing indices of low resolution wavelength grid
-    iw2 = iw1+1;
-    walb0= (double)al[iw]; // albedo of surface
-    walb1= (double)al[iw +NWVL]; // albedo of surface (environment)
-
-    for (n=nstart;n<nstop;n++) { // Loop on photon number
-        //interpolating scattering 'low resolution' weights 
-        wsca1 = weight[iw1+NWVL_LOW*n]; 
-        wsca2 = weight[iw2+NWVL_LOW*n]; 
-        wsca  = ww_low[iw] * (wsca2-wsca1) + wsca1;
-        //start the computation of absorption weights
-        wabs = 0.;
-        for (l=0;l<NLAYER;l++) { // Loop on vertical layer
-            nl = l   + NLAYER*n;
-            li = iw  + NWVL*l;
-            wabs += (double)cd[nl] * (double)ab[li];
-        }
-        walb  = pow(walb0, (double)nref[n]);
-        walb *= pow(walb1, (double)nenv[n]);
-        for (s=0;s<4;s++) {
-            ns = s + 4*n;
-            //offset = iw + NWVL*s + NWVL*NBTHETA*ith[n]; 
-            offset = ith[n] + NBTHETA*iw + NWVL*NBTHETA*s;
-	    #if defined(DOUBLE) && !(__CUDA_ARCH__ >= 600)
-	    if (!nsif[n])             DatomicAdd(res    +offset, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
-            if (!nsif[n])             DatomicAdd(res_sca+offset, (double)S[ns] *              (double)wsca * walb);
-            if ( nrrs[n] && !nsif[n]) DatomicAdd(res_rrs+offset, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
-            if ( nsif[n])             DatomicAdd(res_sif+offset, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
-            if ( nvrs[n] && !nsif[n]) DatomicAdd(res_vrs+offset, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
-	    #else
-            if (!nsif[n])             atomicAdd(res    +offset, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
-            if (!nsif[n])             atomicAdd(res_sca+offset, (double)S[ns] *              (double)wsca * walb);
-            if ( nrrs[n] && !nsif[n]) atomicAdd(res_rrs+offset, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
-            if ( nsif[n])             atomicAdd(res_sif+offset, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
-            if ( nvrs[n] && !nsif[n]) atomicAdd(res_vrs+offset, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
-	    #endif
+    const unsigned long long idx = threadIdx.x + blockDim.x * blockIdx.x;
+    unsigned long long n,nstart,nstop,ns;
+    unsigned long long iw,ig,l,s;
+    unsigned long long nl,li;
+    double wabs, walb0, walb1, walb, Jwalb, Jwabs; // absorption and albedo high resolution weigths
+    float wsca1,wsca2,wsca;
+    unsigned long long iw1,iw2;
+    unsigned long long offset;
+  
+    if (idx<NTHREAD) {
+      iw = idx%NWVL ; // index of current wavelength
+      ig = idx/NWVL ;   // index of current group
+      nstart = ig    *NBUNCH; // Start index of the photon's stack
+      nstop  = (ig+1)*NBUNCH + (ig==(NGROUP-1))*NP_REST; // end index of photon's stack
+                                      // last group has some remaining phton's
+      iw1 = iw_low[iw];    // bracketing indices of low resolution wavelength grid
+      iw2 = iw1+1;
+      walb0= (double)al[iw]; // albedo of surface
+      walb1= (double)al[iw +NWVL]; // albedo of surface (environment)
+  
+      for (n=nstart;n<nstop;n++) { // Loop on photon number
+          //interpolating scattering 'low resolution' weights 
+          wsca1 = weight[iw1+NWVL_LOW*n]; 
+          wsca2 = weight[iw2+NWVL_LOW*n]; 
+          wsca  = ww_low[iw] * (wsca2-wsca1) + wsca1;
+          //start the computation of absorption weights
+          wabs = 0.;
+          for (l=0;l<NLAYER;l++) { // Loop on vertical layer
+              nl = l   + NLAYER*n;
+              li = iw  + NWVL*l;
+              wabs += (double)cd[nl] * (double)ab[li];
+          }
+          Jwabs = -(double)cd[0];
+          //Jwabs = (double)cd[NLAYER-1];
+          walb  = pow(walb0, (double)nref[n]);
+          Jwalb = (double)nref[n] * pow(walb0, (double)(nref[n]-1));
+          walb *= pow(walb1, (double)nenv[n]);
+          Jwalb*= pow(walb1, (double)nenv[n]);
+          for (s=0;s<4;s++) {
+              ns = s + 4*n;
+              //offset = iw + NWVL*s + NWVL*NBTHETA*ith[n]; 
+              offset = ith[n] + NBTHETA*iw + NWVL*NBTHETA*s;
+          #if defined(DOUBLE) && !(__CUDA_ARCH__ >= 600)
+              if (!nsif[n])             DatomicAdd(res    +offset, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
+              if (!nrrs[n] && !nsif[n]) DatomicAdd(res_sca+offset, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
+              //if (!nsif[n])             DatomicAdd(res_sca+offset, (double)S[ns] *              (double)wsca * walb);
+              if ( nrrs[n] && !nsif[n]) DatomicAdd(res_rrs+offset, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
+              if (!nsif[n])             DatomicAdd(res_sif+offset, (double)S[ns] * Jwabs * exp(-wabs) * (double)wsca * walb);
+              //if ( nsif[n])             DatomicAdd(res_sif+offset, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
+              if (!nsif[n])             DatomicAdd(res_vrs+offset, (double)S[ns] * exp(-wabs) * (double)wsca *Jwalb);
+              //if ( nvrs[n] && !nsif[n]) DatomicAdd(res_vrs+offset, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
+          #else
+              if (!nsif[n])             atomicAdd(res    +offset, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
+              if (!nrrs[n] && !nsif[n]) atomicAdd(res_sca+offset, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
+              //if (!nsif[n])             atomicAdd(res_sca+offset, (double)S[ns] *              (double)wsca * walb);
+              if ( nrrs[n] && !nsif[n]) atomicAdd(res_rrs+offset, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
+              if (!nsif[n])             atomicAdd(res_sif+offset, (double)S[ns] * Jwabs * exp(-wabs) * (double)wsca * walb);
+              //if ( nsif[n])             atomicAdd(res_sif+offset, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
+              if (!nsif[n])             atomicAdd(res_vrs+offset, (double)S[ns] * exp(-wabs) * (double)wsca *Jwalb);
+              //if ( nvrs[n] && !nsif[n]) atomicAdd(res_vrs+offset, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
+          #endif
         }
     }
   }
