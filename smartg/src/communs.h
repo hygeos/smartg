@@ -242,6 +242,8 @@ public:
 	unsigned short nrrs; 
     // Number of Oceanic Vibrational Raman Scattering
 	unsigned short nvrs;
+    // Ocean interaction
+	unsigned short iocean;
 
     /* ---------------------*/
     /*       ALIS specific  */

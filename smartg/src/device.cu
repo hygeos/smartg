@@ -1156,6 +1156,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     ph->nsfl = 0; // reflection on seafloor 
 	ph->nrrs = 0; // number of RRS events
     ph->nvrs = 0; // number of VRS events
+    ph->iocean = 0; // Presence of ocean
 
     ph->env  = 0;
 	ph->weight = WEIGHTINIT;
@@ -1269,6 +1270,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     if(ph->loc == OCEAN){
         /* Determine layer index from vertical position */
         ilayer = 1;
+        ph->iocean = 1;
         while (( prof_oc[ilayer].z > tab_sensor[ph->is].POSZ) && (ilayer < NOCEd)) {
             ilayer++;
         }
@@ -4080,6 +4082,7 @@ __device__ void choose_emitter(Photon* ph,
             ph->nref = 0;
             ph->nrrs = 0;
             ph->nvrs = 0;
+            ph->iocean = 0;
             for (int k=0; k<NLOWd; k++) ph->weight_sca[k] = 1.F;
             for (int k=0; k<NATM_ABSd+1; k++) ph->cdist_atm[k] = 0.F;
             //for (int k=0; k<NATMd+1; k++) ph->cdist_atm[k] = 0.F;
@@ -4664,6 +4667,7 @@ __device__ void surfaceWaterRough(Photon* ph, int le,
                   ph->loc = ABSORBED;
                } else{
                   ph->loc = OCEAN;
+                  ph->iocean = 1;
                   #ifdef OPT3D
                   ph->layer = 0;
                   #endif
@@ -4676,7 +4680,7 @@ __device__ void surfaceWaterRough(Photon* ph, int le,
 		if (ph->loc == OBJSURF)
 		{
 			if (vzn > 0) {ph->loc = ATMOS;}
-			else {ph->loc = OCEAN;}
+			else {ph->loc = OCEAN; ph->iocean = 1;}
 		}
 		#endif
 
@@ -4772,6 +4776,7 @@ __device__ void surfaceWaterRough(Photon* ph, int le,
                 ph->loc = ABSORBED;
               } else{
                 ph->loc = OCEAN;
+                ph->iocean = 1;
                 #ifndef OPT3D
                 ph->layer = 0;
                 #endif
@@ -6160,7 +6165,8 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
 
 
     // test single scattering or photons removed
-    if (count_level < 0 || ph->loc==REMOVED || ph->loc==ABSORBED || ph->nint>SMAXd || ph->nint<SMINd) {
+    if (count_level < 0 || ph->loc==REMOVED || ph->loc==ABSORBED || 
+        ph->nint>SMAXd || ph->nint<SMINd || (OCEAN_INTERACTIONd>=0 && ph->iocean!=OCEAN_INTERACTIONd)) {
     //if (count_level < 0 || ph->loc==REMOVED || ph->loc==ABSORBED) {
         // don't count anything
         return;

@@ -632,7 +632,8 @@ class Smartg(object):
              le=None, flux=None, stdev=False, BEER=1, RR=0, WEIGHTRR=0.1, SZA_MAX=90., SUN_DISC=0,
              sensor=None, refraction=False, reflectance=True,
              myObjects=None, interval = None,
-             IsAtm = 1, cusL = None, SMIN=0, SMAX=1e6, FFS=False, DIRECT=False):
+             IsAtm = 1, cusL = None, SMIN=0, SMAX=1e6, FFS=False, DIRECT=False,
+             OCEAN_INTERACTION=None):
         '''
         Run a SMART-G simulation
 
@@ -769,6 +770,8 @@ class Smartg(object):
             FFS : Forced First Scattering (for use in spherical limb geometry only): Default False
 
             DIRECT : Include directly transmitted photons: Default False
+
+            OCEAN_INTERACTION : select photons that interact with ocean : Default None, no selection
 
         Return value:
         ------------
@@ -1115,7 +1118,7 @@ class Smartg(object):
                   NBPHOTONS, NBLOOP, THVDEG, DEPO,
                   XBLOCK, XGRID, NLAM, SIM, NF,
                   NBTHETA, NBPHI, OUTPUT_LAYERS,
-                  RTER, LE, ZIP, FLUX, FFS, DIRECT, NLVL, NPSTK,
+                  RTER, LE, ZIP, FLUX, FFS, DIRECT, OCEAN_INTERACTION, NLVL, NPSTK,
                   NWLPROBA, NCELLPROBA, BEER, SMIN, SMAX, RR, WEIGHTRR, NLOW, NJAC, 
                   NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj, nGObj, nRObj,
                   Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm,
@@ -1774,7 +1777,8 @@ def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
               NBPHOTONS, NBLOOP, THVDEG, DEPO,
               XBLOCK, XGRID,NLAM, SIM, NF,
               NBTHETA, NBPHI, OUTPUT_LAYERS,
-              RTER, LE, ZIP, FLUX, FFS, DIRECT, NLVL, NPSTK, NWLPROBA, NCELLPROBA,  BEER, SMIN, SMAX, RR, 
+              RTER, LE, ZIP, FLUX, FFS, DIRECT, OCEAN_INTERACTION, 
+              NLVL, NPSTK, NWLPROBA, NCELLPROBA,  BEER, SMIN, SMAX, RR, 
               WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj, nGObj, nRObj,
               Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, vSun, HIST) :
     """
@@ -1828,6 +1832,10 @@ def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
     copy_to_device('FLUXd', FLUX, np.int32)
     copy_to_device('FFSd', 1 if FFS else 0, np.int32)
     copy_to_device('DIRECTd', 1 if DIRECT else 0, np.int32)
+    if OCEAN_INTERACTION is None:
+        copy_to_device('OCEAN_INTERACTIONd', -1, np.int32)
+    else:
+        copy_to_device('OCEAN_INTERACTIONd', 1 if OCEAN_INTERACTION else 0, np.int32)
     #copy_to_device('MId', MI, np.int32)
     copy_to_device('NLVLd', NLVL, np.int32)
     copy_to_device('NPSTKd', NPSTK, np.int32)
