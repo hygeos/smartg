@@ -104,10 +104,10 @@ class IOP(IOP_base):
         else:
             aCDOM = self.aCDOM
 
-        if self.aw is None:
+        aw = self.aw
+        if aw is None:
             aw = self.AW[Idx(wav)]
-        else:
-            aw = self.aw
+            aw = aw[:,None]
 
         if self.atot is None:
             atot = aw + ap + aCDOM
