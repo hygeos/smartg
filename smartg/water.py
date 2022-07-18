@@ -93,11 +93,16 @@ class IOP(IOP_base):
         if not isinstance(wav, BandSet):
             wav = BandSet(wav)
         wav = np.array(wav)
+
         # absorption
         if self.ap is None:
             ap = np.zeros(shp, dtype='float')
         else:
             ap = self.ap
+        
+        # multilayer case
+        NZ = ap.size//wav.size
+        wav2 = np.stack([wav]*NZ,axis=1)
 
         if self.aCDOM is None:
             aCDOM = np.zeros(shp, dtype='float')
@@ -106,8 +111,7 @@ class IOP(IOP_base):
 
         aw = self.aw
         if aw is None:
-            aw = self.AW[Idx(wav)]
-            aw = aw[:,None]
+            aw = self.AW[Idx(wav2)]
 
         if self.atot is None:
             atot = aw + ap + aCDOM
@@ -126,12 +130,9 @@ class IOP(IOP_base):
         if (self.phase is None) and (self.Bp is None) and ((np.array(bp) > 0).any()):
             raise Exception('No phase function nor Bp has been provided, but bp>0')
 
-
         bw = self.bw
         if bw is None:
-            bw = 19.3e-4*((wav[:]/550.)**-4.3)
-            bw = bw[:, None]  # add a dimension Z for broadcasting
-
+            bw = 19.3e-4*((wav2/550.)**-4.3)
 
         FQYC = np.zeros(shp, dtype='float')
 
@@ -157,8 +158,7 @@ class IOP(IOP_base):
             pro.add_dataset('phase_oc', pha_, ['iphase', 'stk', 'theta_oc'])
             pro.add_dataset('iphase_oc', ipha, ['wavelength', 'z_oc'])
 
-        dz = - diff1(self.Z)
-
+        dz = - diff1(self.Z) * aw/aw
         tau_w   = - (aw   + bw  ) * dz
         tau_p   = - (ap + bp  ) * dz
         tau_y   = - (aCDOM             ) * dz
@@ -166,7 +166,6 @@ class IOP(IOP_base):
         tau_sca = - (btot              ) * dz
         tau_abs = - (atot              ) * dz
         tau_ine = - (ap * FQYC) * dz
-
 
         with np.errstate(invalid='ignore'):
             ssa_w   = bw/(aw   + bw)
