@@ -46,6 +46,7 @@ extern "C" {
                              struct Cell *cell_atm,
                              struct Cell *cell_oc,
 							 long long *wl_proba_icdf,
+							 long long *sensor_proba_icdf,
 							 long long *cell_proba_icdf,
 							 void *rng_state
 							 , void *tabObjInfo,
@@ -159,7 +160,8 @@ extern "C" {
         /*--------------------------------------------------------------------------------------------------------  */
         if((ph.loc == NONE) && this_thread_active){
 
-            initPhoton(&ph, prof_atm, prof_oc, tab_sensor, spectrum, X0, NPhotonsIn, wl_proba_icdf, cell_proba_icdf,
+            initPhoton(&ph, prof_atm, prof_oc, tab_sensor, spectrum, X0, NPhotonsIn, wl_proba_icdf, sensor_proba_icdf, 
+                       cell_proba_icdf,
                        tabthv, tabphi, &rngstate
 					   #ifdef OBJ3D
 					   , myObjets
@@ -1122,7 +1124,7 @@ extern "C" {
 __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc, 
                            struct Sensor *tab_sensor, struct Spectrum *spectrum, 
                            float *X0, unsigned long long *NPhotonsIn,
-                           long long *wl_proba_icdf, long long *cell_proba_icdf, 
+                           long long *wl_proba_icdf, long long *sensor_proba_icdf, long long *cell_proba_icdf, 
                            float* tabthv, float* tabphi,
                            struct RNG_State *rngstate
 						   #ifdef OBJ3D
@@ -1178,7 +1180,8 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     ph->iph = 0;
 	
     // Sensor index initialization
-    ph->is = __float2uint_rz(RAND * NSENSORd);
+    if (NSENSORPROBA == 0)  ph->is = __float2uint_rz(RAND * NSENSORd);
+    else ph->is = sensor_proba_icdf[__float2uint_rz(RAND * NSENSORPROBA)];
 
     /* ----------------------------------------------------------------------------------------- */
     // Wavelength index initialization

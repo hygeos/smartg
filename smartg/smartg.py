@@ -625,7 +625,7 @@ class Smartg(object):
     def run(self, wl,
              atm=None, surf=None, water=None, env=None, map2D=None, alis_options=None,
              NBPHOTONS=1e9, DEPO=0.0279, DEPO_WATER= 0.0906, THVDEG=0., PHVDEG=0., SEED=-1,
-             RTER=6371., wl_proba=None, cell_proba=None,
+             RTER=6371., wl_proba=None, sensor_proba=None, cell_proba=None,
              NBTHETA=45, NBPHI=90, NF=1e6,
              OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
              NBLOOP=None, progress=True, 
@@ -690,6 +690,9 @@ class Smartg(object):
             RTER: earth radius in km
 
             wl_proba: inversed cumulative distribution function for wavelength selection
+                        (it is the result of function ICDF(proba, N))
+
+            sensor_proba: inversed cumulative distribution function for sensor selection
                         (it is the result of function ICDF(proba, N))
 
             cell_proba: inversed cumulative distribution function for cell selection
@@ -1087,6 +1090,14 @@ class Smartg(object):
             wl_proba_icdf = gpuzeros(1, dtype='int64')
             NWLPROBA = 0
 
+        if sensor_proba is not None:
+            assert sensor_proba.dtype == 'int64'
+            sensor_proba_icdf = to_gpu(sensor_proba)
+            NSENSORPROBA = len(sensor_proba_icdf)
+        else:
+            sensor_proba_icdf = gpuzeros(1, dtype='int64')
+            NSENSORPROBA = 0
+
         if cell_proba is not None:
             if (cell_proba == 'auto') and not self.back and self.thermal:
                 kabs = od2k(prof_atm, 'OD_abs_atm')
@@ -1119,7 +1130,7 @@ class Smartg(object):
                   XBLOCK, XGRID, NLAM, SIM, NF,
                   NBTHETA, NBPHI, OUTPUT_LAYERS,
                   RTER, LE, ZIP, FLUX, FFS, DIRECT, OCEAN_INTERACTION, NLVL, NPSTK,
-                  NWLPROBA, NCELLPROBA, BEER, SMIN, SMAX, RR, WEIGHTRR, NLOW, NJAC, 
+                  NWLPROBA, NSENSORPROBA, NCELLPROBA, BEER, SMIN, SMAX, RR, WEIGHTRR, NLOW, NJAC, 
                   NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj, nGObj, nRObj,
                   Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm,
                   TC, nbCx, nbCy, vSun, HIST)
@@ -1137,7 +1148,7 @@ class Smartg(object):
                         NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX_HIST, NLOW, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                         NLAM, NSENSOR, self.double, self.kernel, self.kernel2, p, X0, le, tab_sensor, spectrum,
                         prof_atm_gpu, prof_oc_gpu, cell_atm_gpu, cell_oc_gpu,
-                        wl_proba_icdf, cell_proba_icdf, stdev, self.rng, self.alis, myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, hist=hist)
+                        wl_proba_icdf, sensor_proba_icdf, cell_proba_icdf, stdev, self.rng, self.alis, myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, hist=hist)
 
         attrs['kernel time (s)'] = secs_cuda_clock
         attrs['number of kernel iterations'] = Nkernel
@@ -1778,7 +1789,7 @@ def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
               XBLOCK, XGRID,NLAM, SIM, NF,
               NBTHETA, NBPHI, OUTPUT_LAYERS,
               RTER, LE, ZIP, FLUX, FFS, DIRECT, OCEAN_INTERACTION, 
-              NLVL, NPSTK, NWLPROBA, NCELLPROBA,  BEER, SMIN, SMAX, RR, 
+              NLVL, NPSTK, NWLPROBA, NSENSORPROBA, NCELLPROBA,  BEER, SMIN, SMAX, RR, 
               WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj, nGObj, nRObj,
               Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, vSun, HIST) :
     """
@@ -1865,6 +1876,7 @@ def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
     copy_to_device('CTHVd', CTHV, np.float32)
     copy_to_device('RTER', RTER, np.float32)
     copy_to_device('NWLPROBA', NWLPROBA, np.int32)
+    copy_to_device('NSENSORPROBA', NSENSORPROBA, np.int32)
     copy_to_device('NCELLPROBA', NCELLPROBA, np.int32)
     copy_to_device('REFRACd', REFRAC, np.int32)
     copy_to_device('HORIZd', HORIZ, np.int32)
@@ -2146,7 +2158,7 @@ def reduce_histories(kernel2, tabHist, wl, sigma, NLOW, NBTHETA=1, alb_in=None, 
 def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX_HIST, NLOW,
                 NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                 NLAM, NSENSOR, double, kern, kern2, p, X0, le, tab_sensor, spectrum,
-                prof_atm, prof_oc, cell_atm, cell_oc, wl_proba_icdf, cell_proba_icdf,  stdev, rng, alis, myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, hist=False):
+                prof_atm, prof_oc, cell_atm, cell_oc, wl_proba_icdf, sensor_proba_icdf, cell_proba_icdf,  stdev, rng, alis, myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, hist=False):
     """
     launch the kernel several time until the targeted number of photons injected is reached
 
@@ -2305,7 +2317,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         kern(spectrum, X0, faer, foce,
              errorcount, nThreadsActive, tabPhotons, tabDist, tabHist,
              Counter, NPhotonsIn, NPhotonsOut, tabthv, tabphi, tab_sensor,
-             prof_atm, prof_oc, cell_atm, cell_oc, wl_proba_icdf, cell_proba_icdf, 
+             prof_atm, prof_oc, cell_atm, cell_oc, wl_proba_icdf, sensor_proba_icdf, cell_proba_icdf, 
              rng.state, tabObjInfo,
              myObjects0, myGObj0, myRObj0, nbPhCat, wPhCat, wPhCat2,
              wPhLoss, wPhLoss2, block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
