@@ -950,7 +950,8 @@ class Smartg(object):
             NATM_ABS = 0
 
         # computation of the impact point
-        X0, tabTransDir = impactInit(prof_atm, NLAM, THVDEG, RTER, self.pp)
+        X0, _ = impactInit(prof_atm, NLAM, THVDEG, RTER, self.pp)
+        #X0, tabTransDir = impactInit(prof_atm, NLAM, THVDEG, RTER, self.pp)
 
         # sensor definition
         if sensor is None:
@@ -1142,7 +1143,7 @@ class Smartg(object):
         SEED = self.rng.setup(SEED, XBLOCK, XGRID)
 
         # Loop and kernel call
-        (NPhotonsInTot, tabPhotonsTot, tabDistTot, tabHistTot, errorcount, 
+        (NPhotonsInTot, tabPhotonsTot, tabDistTot, tabHistTot, tabTransDir, errorcount, 
          NPhotonsOutTot, sigma, Nkernel, secs_cuda_clock, cMatVisuRecep, matCats, matLoss, wPhCats, wPhCats2
         ) = loop_kernel(NBPHOTONS, faer, foce,
                         NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX_HIST, NLOW, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
@@ -1327,10 +1328,12 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
     m.add_axis('Zenith angles', tabTh*180./np.pi)
     m.add_axis('Azimuth angles', tabPhi*180./np.pi)
     
+    axnames4=[]
     if NLAM > 1:
         m.add_axis('wavelength', wl)
         ilam = slice(None)
         axnames.insert(0, 'wavelength')
+        axnames4.insert(0, 'wavelength')
     else:
         m.set_attr('wavelength', str(wl))
         ilam = 0
@@ -1341,6 +1344,7 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
         axnames.insert(0, 'sensor index')
         axnames2.insert(1, 'sensor index')
         if hist: axnames3.insert(2, 'sensor index')
+        axnames4.insert(0, 'sensor index')
     else:
         isen=0
 
@@ -1422,8 +1426,9 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
 
 
     # direct transmission
-    m.add_dataset('direct transmission', tabTransDir,
-                   axnames=['wavelength'])
+    # m.add_dataset('direct transmission', tabTransDir,
+    #               axnames=['wavelength'])
+    m.add_dataset('direct transmission', np.exp(-tabTransDir[isen,ilam]), axnames4)
 
     # write atmospheric profiles
     if prof_atm is not None:
@@ -2230,6 +2235,10 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
     NERROR = 32
     errorcount = gpuzeros(NERROR, dtype='uint64')
 
+    if (NATM >0):
+        tabTransDir = gpuzeros((NSENSOR,NLAM), dtype=np.float64)
+    else :
+        tabTransDir = gpuzeros((1), dtype=np.float64)
     
     if ((NATM+NOCE >0) and (NATM_ABS+NOCE_ABS <500) and alis) : 
         tabDistTot = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI), dtype=np.float64)
@@ -2315,7 +2324,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
 
         # kernel launch
         kern(spectrum, X0, faer, foce,
-             errorcount, nThreadsActive, tabPhotons, tabDist, tabHist,
+             errorcount, nThreadsActive, tabPhotons, tabDist, tabHist, tabTransDir,
              Counter, NPhotonsIn, NPhotonsOut, tabthv, tabphi, tab_sensor,
              prof_atm, prof_oc, cell_atm, cell_oc, wl_proba_icdf, sensor_proba_icdf, cell_proba_icdf, 
              rng.state, tabObjInfo,
@@ -2421,7 +2430,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
     else:
         sigma = None
 
-    return NPhotonsInTot.get(), tabPhotonsTot.get(), tabDistTot.get(), tabHistTot.get(), errorcount, \
+    return NPhotonsInTot.get(), tabPhotonsTot.get(), tabDistTot.get(), tabHistTot.get(), tabTransDir.get(), errorcount, \
         NPhotonsOutTot.get(), sigma, N_simu, secs_cuda_clock, tabMatRecep, matCats, matLoss, wPhCatTot.get(), wPhCat2Tot.get()
 
 

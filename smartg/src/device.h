@@ -112,7 +112,7 @@ __global__ void launchKernel(
         struct Spectrum *spectrum, float *X0,
         struct Phase *faer, struct Phase *foce2,
         unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons, void *tabDist, void *tabHist,
-        unsigned long long *Counter,
+        void *tabTransDir, unsigned long long *Counter,
         unsigned long long *NPhotonsIn,
         unsigned long long *NPhotonsOut,
         float *tabthv, float *tabphi,  struct Sensor *tab_sensor,
@@ -239,7 +239,7 @@ __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geo
 #endif
 
 __device__ void countPhoton(Photon* , struct Spectrum* spectrum, struct Profile* prof_atm, struct Profile* prof_oc, float*, float *,
-        int, unsigned long long*, void*, void*, void*, unsigned long long*);
+        int, unsigned long long*, void*, void*, void*, void*, unsigned long long*);
 
 // rotation of the stokes parameters by an angle psi
 __device__ void rotateStokes(float4 s, float psi, float4 *sr);
