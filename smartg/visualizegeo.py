@@ -97,7 +97,7 @@ def receiver_view(SMLUT, CAT = int(0), LOG_I=False, NAME_FILE = None, MTOA = 132
         plt.savefig(NAME_FILE + '.pdf')  
 
 
-def cat_view(SMLUT, MTOA = 1320, NCL = "68%", UNIT = "FLUX_DENSITY", W_VIEW = "W",
+def cat_view(SMLUT, MTOA = 1320, NCL = "68%", UNIT = "FLUX_DENSITY", W_VIEW = "W", M_VIEW = "m",
              LE = False, WL_INT = True, norm = None, PRINT=True, ACC = 6):
     '''
     Definition of cat_view: The function take the photon weight collected by a receiver available from
@@ -110,6 +110,7 @@ def cat_view(SMLUT, MTOA = 1320, NCL = "68%", UNIT = "FLUX_DENSITY", W_VIEW = "W
     NCL    : Nominal Confidence Limit (for the error)
     UNIT   : Choice between 'FLUX' (Watt), 'FLUX_DENSITY' (Watt/meter²) and RADIANCE (Watt/meter²/sr)
     W_VIEW : Choices between "W" for Watt, "kW" for kiloWatt or "MW" for MegaWatt
+    M_VIEW : Choices between "cm" for centimeter, "m" for meter,  "km" for kilometer, ...
     LE     : If the SMART-G simulation used the Local Estimate (LE) method, then must be set to True
     WL_INT : If True -> Flux is already integrated, for exemple the case where wl_proba is used
     norm   : When kato or reptran (in dev) is used, this is the norm term here: _,_,_,_,norm,_ = bands.get_weights()
@@ -158,8 +159,12 @@ def cat_view(SMLUT, MTOA = 1320, NCL = "68%", UNIT = "FLUX_DENSITY", W_VIEW = "W
         MF = m['wPhCats']; MF2 = m['wPhCats2']
         
     
-    # The disired unit between Watt, kiloWatt and MegaWatt
-    if( W_VIEW == "W"):
+    # The disired unit of measurement between Watt, kiloWatt, MegaWatt...
+    if(W_VIEW == "uW"):
+       k = 1e6; STRUNIT = "microWatt"
+    elif( W_VIEW == "mW"):
+        k = 1e3; STRUNIT = "milliWatt"
+    elif( W_VIEW == "W"):
         k = 1.; STRUNIT = "Watt"
     elif ( W_VIEW == "kW"):
         k = 1e-3; STRUNIT = "kiloWatt"
@@ -168,15 +173,29 @@ def cat_view(SMLUT, MTOA = 1320, NCL = "68%", UNIT = "FLUX_DENSITY", W_VIEW = "W
     else :
         raise NameError('Unkonwn argument for W_VIEW!')
 
+    # The disired unit of measurement of length (centimeter, meter, ...)
+    if(M_VIEW == "mm"):
+       kl = 1e-3*1e-3; STRUNITL = "millimeter"
+    elif( M_VIEW == "cm"):
+        kl = 1e-2*1e-2; STRUNITL = "centimeter"
+    elif( M_VIEW == "dm"):
+        kl = 1e-1*1e-1; STRUNITL = "decimeter"
+    elif( M_VIEW == "m"):
+        kl = 1.; STRUNITL = "meter"
+    elif ( M_VIEW == "km"):
+        kl = 1e3*1e3; STRUNITL = "kilometer"
+    else :
+        raise NameError('Unkonwn argument for M_VIEW!')
+
     # Consideration of the case without and with LE (the normalization is different)
     if (LE is False): # Without LE
         if (UNIT == "FLUX"):
             cst = 1.*k; STRPRINT = "Flux in " + STRUNIT + " for each categories"
         elif (UNIT == "FLUX_DENSITY"):
-            cst = (1.*k)/(float(m.attrs['S_Receiver'])*1e6)
+            cst = (1.*k*kl)/(float(m.attrs['S_Receiver'])*1e6)
             STRPRINT = "Irradiance in " + STRUNIT + "/meter² for each categories"
         elif (UNIT == "RADIANCE"):
-            cst = (1.*k)/(float(m.attrs['S_Receiver'])*1e6)
+            cst = (1.*k*kl)/(float(m.attrs['S_Receiver'])*1e6)
             cst *= 2./(np.pi*(1 - np.cos(np.radians(2*ALDEG))))
             STRPRINT = "Radiance in " + STRUNIT + "/meter²/sr for each categories"
         else:
@@ -191,12 +210,12 @@ def cat_view(SMLUT, MTOA = 1320, NCL = "68%", UNIT = "FLUX_DENSITY", W_VIEW = "W
         if (UNIT == "FLUX"):
             cst = 1.*k; STRPRINT = "Flux in " + STRUNIT + " for each categories"
         elif (UNIT == "FLUX_DENSITY"):
-            cst = ((1.*k)/(np.pi*NPH))*np.cos(np.radians(SZA))
+            cst = ((1.*k*kl)/(np.pi*NPH))*np.cos(np.radians(SZA))
             cst *= (np.pi*(1 - np.cos(np.radians(2*ALDEG))))/2.
-            STRPRINT = "Irradiance in " + STRUNIT + "/meter² for each categories"
+            STRPRINT = "Irradiance in " + STRUNIT + "/" + STRUNITL + "² for each categories"
         elif (UNIT == "RADIANCE"):
-            cst = ((1.*k)/(np.pi*NPH))*np.cos(np.radians(SZA))
-            STRPRINT = "Radiance in " + STRUNIT + "/meter²/sr for each categories"
+            cst = ((1.*k*kl)/(np.pi*NPH))*np.cos(np.radians(SZA))
+            STRPRINT = "Radiance in " + STRUNIT + "/" + STRUNITL + "²/sr for each categories"
         else:
             raise NameError('Unkonwn argument for UNIT!')
     
