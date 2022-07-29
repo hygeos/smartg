@@ -1727,6 +1727,48 @@ def convertAnglestoV(THETA=0., PHI=0., TYPE="Sensor"):
     
     return v
 
+def rotate_vector(vector, rot_x, rot_y, rot_z, rot_order="xyz"):
+    """
+    Definition of the function rotate_vector
+
+    coordinate system convention:
+
+      y
+      ^   x : right; y : front; z : top
+      |
+    z X -- > x
+
+    Given a vector and rotations to perform to this vector in degrees
+    in the x,y,z axes, with in option the rotation order
+
+    Arg:
+    vector    : A direction described by Vector class object
+    rotx,y,z  : Rotations in x,y and z in degrees
+    rot_order : str with the order of rotations i.g. 'xyz', zxy', ...
+
+    Return:
+    rotated_vector : The rotated (normalized) direction (also a Vector class)
+    """
+    TT = Transform()
+    if rot_order == "XYZ":
+        TT = TT.rotateX(rot_x)*TT.rotateY(rot_y)*TT.rotateZ(rot_z)
+    elif rot_order == "XZY":
+        TT = TT.rotateX(rot_x)*TT.rotateZ(rot_z)*TT.rotateY(rot_y)
+    elif rot_order == "YXZ":
+        TT = TT.rotateY(rot_y)*TT.rotateX(rot_x)*TT.rotateZ(rot_z)
+    elif rot_order == "YZX":
+        TT = TT.rotateY(rot_y)*TT.rotateZ(rot_z)*TT.rotateX(rot_x)
+    elif rot_order == "ZXY":
+        TT = TT.rotateZ(rot_z)*TT.rotateX(rot_x)*TT.rotateY(rot_y)
+    elif rot_order == "ZYX":
+        TT = TT.rotateZ(rot_z)*TT.rotateY(rot_y)*TT.rotateX(rot_x)
+    else:
+        raise NameError("Unknown rot_order value!")
+    rotated_vector = TT[vector]
+    rotated_vector = Normalize(rotated_vector)
+
+    return rotated_vector
+
 def is_comment(s):
     """
     function to check if a line
