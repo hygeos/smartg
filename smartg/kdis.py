@@ -518,7 +518,7 @@ class KDIS_IBAND(object):
             values = np.concatenate( (np.array([P]), np.array([T]), np.array([C])), axis=0).T
             #print(values)
             #print(interpn(points, tab, values))
-            datamol +=  interpn(points, tab, values)
+            datamol +=  interpn(points, tab, values) * densmol[:,ispecie_c]
 
         for ig in range(self.band.kdis.nsp):
             specie = self.band.kdis.species[ig]
