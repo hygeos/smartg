@@ -366,6 +366,34 @@ class Sensor(object):
 
     def __str__(self):
         return 'SENSOR=-POSX{POSX}-POSY{POSY}-POSZ{POSZ}-THETA={THDEG:.3f}-PHI={PHDEG:.3f}'.format(**self.dict)
+
+class StdevLim(object):
+    '''
+    Definition of the class StdevLim
+
+    err_abs_min : minimum absolute error
+    err_rel_min : minimum relative error in percentage
+    nb_loop_min : minimum loop number
+    stk         : stoke vector to consider (I = 0, Q = 1, U = 2, V = 3)
+    loc         : integer, if UPTOA->0, DOWN0->1, DOWN0M->2, UP0P->3, UP0M->4 or DOWNB->5
+    verbose     : if True, for each loop print the max absolute and relative errors
+    '''
+
+    def __init__(self, err_abs_min=float(0), err_rel_min=float(0), nb_loop_min=int(10),
+     stk=int(0), loc=int(0), verbose=False):
+      
+        self.dict = {
+            'err_abs_min':  err_abs_min,
+            'err_rel_min':  err_rel_min,
+            'nb_loop_min':  nb_loop_min,
+            'stk'        :  stk,
+            'loc'        :  loc,
+            'verbose'    :  verbose
+        }
+
+    def __str__(self):
+        return 'StdevLim: err_abs_min={err_abs_min}; err_rel_min={err_rel_min:.2f};' + \
+        ' nb_loop_min={nb_loop_min}; stk={stk}; loc={loc}; verbose={verbose}'.format(**self.dict)
         
 class CusForward(object):
     '''
@@ -629,7 +657,8 @@ class Smartg(object):
              NBTHETA=45, NBPHI=90, NF=1e6,
              OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
              NBLOOP=None, progress=True, 
-             le=None, flux=None, stdev=False, BEER=1, RR=0, WEIGHTRR=0.1, SZA_MAX=90., SUN_DISC=0,
+             le=None, flux=None, stdev=False, stdev_lim=None,
+             BEER=1, RR=0, WEIGHTRR=0.1, SZA_MAX=90., SUN_DISC=0,
              sensor=None, refraction=False, reflectance=True,
              myObjects=None, interval = None,
              IsAtm = 1, cusL = None, SMIN=0, SMAX=1e6, FFS=False, DIRECT=False,
@@ -735,6 +764,8 @@ class Smartg(object):
             flux: if specified output is 'planar' or 'spherical' flux instead of radiance
 
             stdev: calculate the standard deviation between each kernel run
+
+            stdev_lim : Stdevlim class, can only be activated if stdev=True
 
             RR: Russian Roulette ON  = 1
                                    OFF = 0
@@ -1149,7 +1180,7 @@ class Smartg(object):
                         NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX_HIST, NLOW, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                         NLAM, NSENSOR, self.double, self.kernel, self.kernel2, p, X0, le, tab_sensor, spectrum,
                         prof_atm_gpu, prof_oc_gpu, cell_atm_gpu, cell_oc_gpu,
-                        wl_proba_icdf, sensor_proba_icdf, cell_proba_icdf, stdev, self.rng, self.alis, myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, hist=hist)
+                        wl_proba_icdf, sensor_proba_icdf, cell_proba_icdf, stdev, stdev_lim, self.rng, self.alis, myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, hist=hist)
 
         attrs['kernel time (s)'] = secs_cuda_clock
         attrs['number of kernel iterations'] = Nkernel
@@ -2163,7 +2194,7 @@ def reduce_histories(kernel2, tabHist, wl, sigma, NLOW, NBTHETA=1, alb_in=None, 
 def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX_HIST, NLOW,
                 NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                 NLAM, NSENSOR, double, kern, kern2, p, X0, le, tab_sensor, spectrum,
-                prof_atm, prof_oc, cell_atm, cell_oc, wl_proba_icdf, sensor_proba_icdf, cell_proba_icdf,  stdev, rng, alis, myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, hist=False):
+                prof_atm, prof_oc, cell_atm, cell_oc, wl_proba_icdf, sensor_proba_icdf, cell_proba_icdf,  stdev, stdev_lim, rng, alis, myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, hist=False):
     """
     launch the kernel several time until the targeted number of photons injected is reached
 
@@ -2266,6 +2297,8 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         # finally we extrapolate in 1/sqrt(N_simu)
         sum_x = 0.
         sum_x2 = 0.
+
+
 
     # arrays for counting the input photons (per wavelength)
     NPhotonsIn = gpuzeros((NSENSOR,NLAM), dtype=np.uint64)
@@ -2392,6 +2425,37 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
             SoverL = S.get()/L.get()
             sum_x += SoverL
             sum_x2 += (SoverL)**2
+
+            if stdev_lim is not None:
+                sigma_bis = np.sqrt(sum_x2/N_simu - (sum_x/N_simu)**2)
+                sigma_bis /= np.sqrt(N_simu)
+                sigma_bis[np.isnan(sigma_bis)] = 0
+
+                abs_min = stdev_lim.dict['err_abs_min']
+                rel_min = stdev_lim.dict['err_rel_min']
+                min_loop = stdev_lim.dict['nb_loop_min']
+                stk_stdev = stdev_lim.dict['stk']
+                loc_stdev = stdev_lim.dict['loc']
+
+                avg = sum_x/N_simu
+                err_rel = (sigma_bis / avg)*100
+                err_rel[np.isnan(err_rel)] = 0
+
+                if (stdev_lim.dict['verbose']):
+                    print("max rel_err = ", np.max(err_rel[loc_stdev,stk_stdev,:,:,:,:]),
+                          "; max abs_err = ", np.max(sigma_bis[loc_stdev,stk_stdev,:,:,:,:]))
+
+                if (N_simu >= min_loop and (np.max(sigma_bis[loc_stdev,stk_stdev,:,:,:,:]) <= abs_min )):
+                    # update of the progression Bar
+                    sphot = np.sum(NPhotonsInTot.get())/alis_norm
+                    p.update(sphot,'Launched {:.3g} photons'.format(sphot))
+                    break
+
+                if (N_simu >= min_loop and (np.max(sigma_bis[loc_stdev,stk_stdev,:,:,:,:]) <= rel_min )):
+                    # update of the progression Bar
+                    sphot = np.sum(NPhotonsInTot.get())/alis_norm
+                    p.update(sphot,'Launched {:.3g} photons'.format(sphot))
+                    break
 
         # update of the progression Bar
         sphot = np.sum(NPhotonsInTot.get())/alis_norm
