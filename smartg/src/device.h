@@ -128,6 +128,7 @@ __global__ void launchKernel(
 		struct IObjets *myObjets,
 		struct GObj *myGObj,
 		struct IObjets *myRObj,
+                struct Spectrum_obj *mySPECTObj,
 		unsigned long long *nbPhCat,
 		void *wPhCat, void *wPhCat2,
 		void *wPhLoss,
@@ -178,9 +179,10 @@ __device__ void GetFaceMiddlePoint(int ind, float3 pmin, float3 pmax, float3 *p)
 // move, version plan parallèle
 __device__ void move_pp(Photon*, struct Profile *prof_atm, struct Profile* prof_oc,
                         struct RNG_State*
-						#ifdef OBJ3D
-						, IGeo *geoS, struct IObjets *myObjets, struct GObj *myGObj, void *tabObjInfo
-						#endif
+			#ifdef OBJ3D
+			, IGeo *geoS, struct IObjets *myObjets, struct GObj *myGObj,
+                         struct Spectrum_obj *mySPECTObj, void *tabObjInfo
+			#endif
 	);
 
 
@@ -347,7 +349,8 @@ __device__ unsigned int randomPhilox4x32_7uint(philox4x32_ctr_t*, philox4x32_key
 *	> Fonctions liées à la création de géométries
 ***********************************************************/
 
-__device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV , struct IObjets *ObjT, struct GObj *myGObj);
+__device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV , struct IObjets *ObjT,
+                        struct GObj *myGObj, struct Spectrum_obj *mySPECTObj, int ilam);
 __device__ bool geoTestMir(float3 o, float3 dir, struct IObjets *ObjT, struct GObj *myGObj);
 __device__ bool geoTestRec(float3 o, float3 dir, struct IObjets *ObjT);
 __device__ Transform addRotAndParseOrder(Transform Ti, IObjets object);

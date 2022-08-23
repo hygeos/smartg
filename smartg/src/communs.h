@@ -368,6 +368,11 @@ struct Sensor {
 // En rapport avec l'implementation des objets
 #include "transform.h" // La structure IGeo a une classe transform comme attrib
 
+struct Spectrum_obj {
+    float reflectAV;
+    float reflectAR;
+};
+
 struct IGeo
 {	
     __device__ IGeo()

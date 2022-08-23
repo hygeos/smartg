@@ -140,13 +140,18 @@ type_Sensor = [
     ('ILAM_1', 'int32'),      # // Wavelength stop  index that the sensor 'sees' (default -1 : all) 
     ]
 
+type_Spectrum_obj = [
+    ('reflectAV', 'float32'),
+    ('reflectAR', 'float32'),
+]
+
 type_IObjets = [
     ('geo', 'int32'),         # 1 = sphere, 2 = plane, ...
     ('materialAV', 'int32'),  # 1 = LambMirror, 2 = Matte,
     ('materialAR', 'int32'),  # 3 = Mirror, ... (AV = avant, AR = Arriere)
     ('type', 'int32'),        # 1 = reflector, 2 = receiver
-    ('reflecAV', 'float32'),  # reflectivity of materialAV
-    ('reflecAR', 'float32'),  # reflectivity of materialAR
+    ('reflectAV', 'float32'),  # reflectivity of materialAV
+    ('reflectAR', 'float32'),  # reflectivity of materialAR
     ('roughAV', 'float32'),   # roughness of materialAV
     ('roughAR', 'float32'),   # roughness of materialAR
     ('shdAV', 'int32'),       # shadow option of materialAV, 0=false, 1=true
@@ -871,7 +876,7 @@ class Smartg(object):
 
             # Initiliaze all the parameters linked with 3D objects
             (nGObj, nObj, nRObj, surfLPH_RF, nb_H, zAlt_H, totS_H, TC, nbCx, nbCy,
-             myObjects0, myGObj0, myRObj0, n_cos) = initObj(LGOBJ=myObjects, vSun=vSun, CUSL=cusL)
+             myObjects0, myGObj0, myRObj0, mySPECTObj0, n_cos) = initObj(LGOBJ=myObjects, vSun=vSun, wl=wl, CUSL=cusL)
 
             # If we are in RF mode don't forget to update the value of surfLPH
             if (surfLPH_RF is not None): surfLPH = surfLPH_RF
@@ -880,6 +885,7 @@ class Smartg(object):
             myObjects0 = gpuzeros(1, dtype='int32')
             myGObj0 = gpuzeros(1, dtype='int32')
             myRObj0 = gpuzeros(1, dtype='int32')
+            mySPECTObj0 = gpuzeros(1, dtype='int32') # normally 2 dims: obj dim + wl dim
             nObj = 0; nGObj=0; nRObj=0; Pmin_x = None; Pmin_y = None; Pmin_z = None
             Pmax_x = None; Pmax_y = None; Pmax_z = None
             IsAtm = None; TC = None; nbCx = 10; nbCy = 10; nb_H = 0
@@ -1180,7 +1186,8 @@ class Smartg(object):
                         NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX_HIST, NLOW, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                         NLAM, NSENSOR, self.double, self.kernel, self.kernel2, p, X0, le, tab_sensor, spectrum,
                         prof_atm_gpu, prof_oc_gpu, cell_atm_gpu, cell_oc_gpu,
-                        wl_proba_icdf, sensor_proba_icdf, cell_proba_icdf, stdev, stdev_lim, self.rng, self.alis, myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, hist=hist)
+                        wl_proba_icdf, sensor_proba_icdf, cell_proba_icdf, stdev, stdev_lim, self.rng, self.alis,
+                        myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, mySPECTObj0, hist=hist)
 
         attrs['kernel time (s)'] = secs_cuda_clock
         attrs['number of kernel iterations'] = Nkernel
@@ -2194,7 +2201,8 @@ def reduce_histories(kernel2, tabHist, wl, sigma, NLOW, NBTHETA=1, alb_in=None, 
 def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX_HIST, NLOW,
                 NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                 NLAM, NSENSOR, double, kern, kern2, p, X0, le, tab_sensor, spectrum,
-                prof_atm, prof_oc, cell_atm, cell_oc, wl_proba_icdf, sensor_proba_icdf, cell_proba_icdf,  stdev, stdev_lim, rng, alis, myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, hist=False):
+                prof_atm, prof_oc, cell_atm, cell_oc, wl_proba_icdf, sensor_proba_icdf, cell_proba_icdf,
+                stdev, stdev_lim, rng, alis, myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, mySPECTObj0, hist=False):
     """
     launch the kernel several time until the targeted number of photons injected is reached
 
@@ -2361,7 +2369,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
              Counter, NPhotonsIn, NPhotonsOut, tabthv, tabphi, tab_sensor,
              prof_atm, prof_oc, cell_atm, cell_oc, wl_proba_icdf, sensor_proba_icdf, cell_proba_icdf, 
              rng.state, tabObjInfo,
-             myObjects0, myGObj0, myRObj0, nbPhCat, wPhCat, wPhCat2,
+             myObjects0, myGObj0, myRObj0, mySPECTObj0, nbPhCat, wPhCat, wPhCat2,
              wPhLoss, wPhLoss2, block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
 
         end_cuda_clock.record()
@@ -2707,13 +2715,14 @@ class RNG_CURAND_PHILOX(object):
 
         return SEED
 
-def initObj(LGOBJ, vSun, CUSL=None):
+def initObj(LGOBJ, vSun, wl, CUSL=None):
     '''
     Definition of the function LOBJ
 
     ===ARGS:
     LGOBJ : List of object groups
     CUSL  : Custom lanching mode class (i.g. cusForward())
+    wl    : A scalar or list/array of wavelengths (in nm) or a list of REPTRAN or KDIS IBANDS
     vSun  : Vector with the sun direction (needed in RF mode)
     
     ===RETURN:
@@ -2730,6 +2739,7 @@ def initObj(LGOBJ, vSun, CUSL=None):
     LOBJGPU   : GPU array of objects of type 'type_IObjets'
     LGOBJGPU  : GPU array of objects of type 'type_GObj'
     LROBJGPU  : GPU array of only receiver objects of type 'type_IObjets'
+    LROBJSPECT: GPU array of objects of type 'type_Spectrum_obj'
     '''
 
     ind = 0; LOBJ = []; nGObj = len(LGOBJ); nRObj = 0; INDROBJ = []
@@ -2798,6 +2808,12 @@ def initObj(LGOBJ, vSun, CUSL=None):
     else:
         LOBJGPU = np.zeros(nObj, dtype=type_IObjets, order='C')
         TC = None; nbCx = int(0); nbCy = int(0)
+    
+    # To consider the spectral variability of objs reflectivity
+    nObjTotal = LOBJGPU.size
+    if not isinstance(wl, BandSet): wl = BandSet(wl)
+    NLAM = wl.size
+    LOBJSPECT = np.zeros((nObjTotal*NLAM), dtype=type_Spectrum_obj, order='C')
 
     # Initialization before the coming loop
     pp1 = 0.; pp2 = 0.; pp3 = 0.; pp4 = 0.
@@ -2897,7 +2913,14 @@ def initObj(LGOBJ, vSun, CUSL=None):
         LOBJGPU['materialAV'][i] = 0; LOBJGPU['shdAV'][i] = 0
         LOBJGPU['nindAV'][i] = 1; LOBJGPU['distAV'][i] = 0
         # Commun to all materials
-        LOBJGPU['reflecAV'][i] = LOBJ[i].materialAV.reflectivity
+        # LOBJGPU['reflectAV'][i] = LOBJ[i].materialAV.reflectivity
+        LOBJGPU['reflectAV'][i] = 0
+        if (np.array(LOBJ[i].materialAV.reflectivity).size == 1):
+            LOBJSPECT['reflectAV'][(i*NLAM):((i*NLAM)+NLAM)] = np.full((NLAM), LOBJ[i].materialAV.reflectivity)
+        elif (LOBJ[i].materialAV.reflectivity.size != NLAM):
+            raise NameError('The number of reflectivities must be equal to the number of wavelengths!')
+        else:
+            LOBJSPECT['reflectAV'][(i*NLAM):((i*NLAM)+NLAM)] = LOBJ[i].materialAV.reflectivity[:]
         # Particularity of each material
         if isinstance(LOBJ[i].materialAV, LambMirror):
             LOBJGPU['materialAV'][i] = 1
@@ -2919,7 +2942,14 @@ def initObj(LGOBJ, vSun, CUSL=None):
         LOBJGPU['materialAR'][i] = 0; LOBJGPU['shdAR'][i] = 0
         LOBJGPU['nindAR'][i] = 1; LOBJGPU['distAR'][i] = 0
         # Commun to all materials
-        LOBJGPU['reflecAR'][i] = LOBJ[i].materialAR.reflectivity
+        #LOBJGPU['reflectAR'][i] = LOBJ[i].materialAR.reflectivity
+        LOBJGPU['reflectAR'][i] = 0
+        if (np.array(LOBJ[i].materialAR.reflectivity).size == 1):
+            LOBJSPECT['reflectAR'][(i*NLAM):((i*NLAM)+NLAM)] = np.full((NLAM), LOBJ[i].materialAR.reflectivity)
+        elif (LOBJ[i].materialAR.reflectivity.size != NLAM):
+            raise NameError('The number of reflectivities must be equal to the number of wavelengths!')
+        else:
+            LOBJSPECT['reflectAR'][(i*NLAM):((i*NLAM)+NLAM)] = LOBJ[i].materialAR.reflectivity[:]
         # Particularity of each material
         if isinstance(LOBJ[i].materialAR, LambMirror):
             LOBJGPU['materialAR'][i] = 1
@@ -3001,6 +3031,7 @@ def initObj(LGOBJ, vSun, CUSL=None):
 
     LOBJGPU = to_gpu(LOBJGPU)
     LROBJGPU = to_gpu(LROBJGPU)
+    LOBJSPECT = to_gpu(LOBJSPECT)
     # update the value of ncos
     if nb_H > 0:
         n_cos = ncos/nb_H
@@ -3008,7 +3039,7 @@ def initObj(LGOBJ, vSun, CUSL=None):
         n_cos = 1
 
     return nGObj, nObj, nRObj, surfLPH, nb_H, zAlt_H, totS_H, TC, nbCx, nbCy, LOBJGPU, \
-        LGOBJGPU, LROBJGPU, n_cos
+        LGOBJGPU, LROBJGPU, LOBJSPECT, n_cos
 
 def normalizeRecIrr(cMatVisuRecep, matCats, nbCx, nbCy, NBPHOTONS, surfLPH, TC, cusL, SUN_DISC):
     '''

@@ -53,6 +53,7 @@ extern "C" {
 							 struct IObjets *myObjets,
 							 struct GObj *myGObj,
 							 struct IObjets *myRObj,
+                             struct Spectrum_obj *mySPECTObj,
 							 unsigned long long *nbPhCat,
 							 void *wPhCat, void *wPhCat2,
 							 void *wPhLoss,
@@ -216,7 +217,7 @@ extern "C" {
             #else // Fast PP move mode
             move_pp(&ph, prof_atm, prof_oc, &rngstate
 				#ifdef OBJ3D
-				   , &geoStruc, myObjets, myGObj, tabObjInfo
+				   , &geoStruc, myObjets, myGObj, mySPECTObj, tabObjInfo
 				#endif
 			    );
             #endif // ALT or FAST
@@ -242,7 +243,7 @@ extern "C" {
            #else // Fast PP mode
            move_pp(&ph, prof_atm, prof_oc, &rngstate
 				#ifdef OBJ3D
-				   , &geoStruc, myObjets, myGObj, tabObjInfo
+				   , &geoStruc, myObjets, myGObj, mySPECTObj, tabObjInfo
 				#endif
                 );
 
@@ -474,7 +475,7 @@ extern "C" {
 							#if defined(OBJ3D)
                             mask_le = false;
                             copyIGeo(&geoStruc, &geoStruc_le);
-                            mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj);
+                            mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
                             if (!mask_le and count_level_le == UPTOA and LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2); }
 							#endif
                             if (!mask_le) {countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, count_level_le, errorcount, tabPhotons, tabDist, tabHist, tabTransDir, NPhotonsOut); }
@@ -579,7 +580,7 @@ extern "C" {
                         #ifdef OBJ3D
                         mask_le = false;
                         copyIGeo(&geoStruc, &geoStruc_le);
-                        mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj);
+                        mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
                         #endif
                         if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, count_level_le, errorcount, tabPhotons, tabDist, tabHist, tabTransDir, NPhotonsOut); }
 
@@ -592,7 +593,7 @@ extern "C" {
                                 move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
                                 #ifdef OBJ3D
                                 mask_le = false;
-                                mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj);
+                                mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
                                 #endif
                             }
                             #else // if not spheric
@@ -606,7 +607,7 @@ extern "C" {
                                         1, UPTOA, &rngstate);
                                 #ifdef OBJ3D
                                 mask_le = false;
-                                mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj);
+                                mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
                                 #endif        
                             }
                             #endif // END ALT_PP
@@ -630,7 +631,7 @@ extern "C" {
                                         1, DOWNB, &rngstate);
                                 #ifdef OBJ3D
                                 mask_le = false;
-                                mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj);
+                                mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
                                 #endif
                             }
                             #endif // END ALT_PP
@@ -698,7 +699,7 @@ extern "C" {
                         #ifdef OBJ3D
                         mask_le = false;
                         copyIGeo(&geoStruc, &geoStruc_le);
-                        mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj);
+                        mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
                         #endif
                         if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, tabDist, tabHist, tabTransDir, NPhotonsOut); }
 
@@ -710,7 +711,7 @@ extern "C" {
                             move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
                             #ifdef OBJ3D
                             mask_le = false;
-                            mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj);
+                            mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
                             #endif
                         }
                         #else // if not spheric
@@ -724,7 +725,7 @@ extern "C" {
                                       1, UPTOA , &rngstate);
                             #ifdef OBJ3D
                             mask_le = false;
-                            mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj);
+                            mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
                             #endif
                         }
                         #endif // END ALT_PP
@@ -781,7 +782,7 @@ extern "C" {
                         #ifdef OBJ3D
                         mask_le = false;
                         copyIGeo(&geoStruc, &geoStruc_le);
-                        mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj);
+                        mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
                         #endif
                         if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, tabDist, tabHist, tabTransDir, NPhotonsOut); }
                         #ifdef SPHERIQUE
@@ -790,7 +791,7 @@ extern "C" {
                             move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
                             #ifdef OBJ3D
                             mask_le = false;
-                            mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj);
+                            mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
                             #endif
                         }
                         #else // if not spheric
@@ -804,7 +805,7 @@ extern "C" {
                                     1, UPTOA , &rngstate);
                             #ifdef OBJ3D
                             mask_le = false;
-                            mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj);
+                            mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
                             #endif
                         }
                         #endif // END ALT_PP
@@ -876,7 +877,7 @@ extern "C" {
                         #ifdef OBJ3D
                         mask_le = false;
                         copyIGeo(&geoStruc, &geoStruc_le);
-                        mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj)
+                        mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam)
                         #endif
                     } 
                     #endif
@@ -934,7 +935,7 @@ extern "C" {
 							// Only two levels for counting by definition
                             mask_le = false;
                             copyIGeo(&geoStruc, &geoStruc_le);
-                            mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj);
+                            mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
                             if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UP0P, errorcount, tabPhotons, tabDist, tabHist, tabTransDir, NPhotonsOut); }
                             #ifdef SPHERIQUE
 							// for spherical case attenuation if performed usin move_sp
@@ -942,7 +943,7 @@ extern "C" {
                             {
                                 mask_le = false;
                                 move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
-                                mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj);
+                                mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
                             }
 						    #endif
 							if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist, tabTransDir, NPhotonsOut); }
@@ -983,7 +984,7 @@ extern "C" {
 							// Only two levels for counting by definition
                             mask_le = false;
                             copyIGeo(&geoStruc, &geoStruc_le);
-                            mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj);
+                            mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
                             if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UP0P, errorcount, tabPhotons, tabDist, tabHist, tabTransDir, NPhotonsOut); }
                             #ifdef SPHERIQUE
 							// for spherical case attenuation if performed usin move_sp
@@ -992,7 +993,7 @@ extern "C" {
                             {
                                 mask_le = false;
                                 move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
-                                mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj);
+                                mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
                             }
 						    #endif
 							if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist, tabTransDir, NPhotonsOut); }
@@ -3187,7 +3188,8 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
 __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc,
                         struct RNG_State *rngstate
 						#ifdef OBJ3D
-						, IGeo *geoS, struct IObjets *myObjets, struct GObj *myGObj, void *tabObjInfo
+						, IGeo *geoS, struct IObjets *myObjets, struct GObj *myGObj,
+                        struct Spectrum_obj *mySPECTObj, void *tabObjInfo
 						#endif
 	) {
 
@@ -3396,7 +3398,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 		// geometry, return true/false and give the position phit of the intersection
 		// nObj = le nombre d'objets, si = 0 alors le test n'est pas nécessaire.
 	    if (nObj > 0){
-			mytest = geoTest(ph->pos, ph->v, &phit, geoS, myObjets, myGObj);
+			mytest = geoTest(ph->pos, ph->v, &phit, geoS, myObjets, myGObj, mySPECTObj, ph->ilam);
 			if (!mytest && LMODEd == 1 &&  ph->pos.z >= (120.F-VALMIN5) && ph->direct == 0) {ph->loc=NONE; return;}
 			if (mytest && phit.z > -VALMIN5 && phit.z < (120.F+VALMIN5) && IsAtm == 0)
 			{
@@ -7360,7 +7362,8 @@ __device__ double DatomicAdd(double* address, double val)
 * Check if there is an intersection with at least an object, in case with intersections with
 * several objects return the intersection information of the object with the smallest traveled distance
 */
-__device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct IObjets *ObjT, struct GObj *myGObj)
+__device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct IObjets *ObjT,
+                        struct GObj *myGObj, struct Spectrum_obj *mySPECTObj, int ilam)
 {
 	// Initialization of the ray for the intersection study
 	Ray R1(o, dir, 0.00025); // 0.0001 -> ray begin 10cm further in direction "dir"
@@ -7467,7 +7470,8 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct I
 									 make_double3(dir.x, dir.y, dir.z) )  )
 					{
 						GeoV->material = ObjT[IND+j].materialAV;
-						GeoV->reflectivity = ObjT[IND+j].reflectAV;
+						//GeoV->reflectivity = ObjT[IND+j].reflectAV;
+                        GeoV->reflectivity = mySPECTObj[(IND+j)*NLAMd + ilam].reflectAV;
 						GeoV->roughness = ObjT[IND+j].roughAV;
 						GeoV->shadow = ObjT[IND+j].shdAV;
 						GeoV->nind = ObjT[IND+j].nindAV;
@@ -7476,7 +7480,8 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct I
 					else
 					{
 						GeoV->material = ObjT[IND+j].materialAR; //AR
-						GeoV->reflectivity = ObjT[IND+j].reflectAR;
+						//GeoV->reflectivity = ObjT[IND+j].reflectAR;
+                        GeoV->reflectivity = mySPECTObj[(IND+j)*NLAMd + ilam].reflectAR;
 						GeoV->roughness = ObjT[IND+j].roughAR;
 						GeoV->shadow = ObjT[IND+j].shdAR;
 						GeoV->nind = ObjT[IND+j].nindAR;
