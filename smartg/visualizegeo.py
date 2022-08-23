@@ -27,6 +27,8 @@ from matplotlib import colors as mcolors
 import re, six
 from itertools import dropwhile
 
+from scipy import interpolate
+
 def receiver_view(SMLUT, CAT = int(0), LOG_I=False, NAME_FILE = None, MTOA = 1320,
                   VMIN=None, VMAX=None, INT='none', W_VIEW = 'W'):
 
@@ -1768,6 +1770,33 @@ def rotate_vector(vector, rot_x, rot_y, rot_z, rot_order="xyz"):
     rotated_vector = Normalize(rotated_vector)
 
     return rotated_vector
+
+
+def interpolate_refls_from_wls (wls, refls, wls_new, extrapolate=False):
+    """
+        Definition: Giving a set of wavelengths (wls) and reflectivities (refls),
+                    get the interpolated reflectivities folowing the new set of wavelengths (wls_total)
+    
+    ==== ARGS:
+    wls     : List/array of wavelengths
+    refls   : List/array with reflectivities at each wavelength of wls 
+    wls_new : List/array of the new wavelengths where we want to interpolate
+
+    ==== RETURN:
+    refls_new : numpy array with the interpolated reflectivities
+    """
+
+    if extrapolate: f = interpolate.interp1d(wls, refls, fill_value='extrapolate')
+    else : f = interpolate.interp1d(wls, refls, fill_value=(refls[0],refls[-1]), bounds_error=False)
+
+    refls_new = f(wls_new)
+
+    # Ensure relfectivities are between 0 and 1
+    refls_new[refls_new<0] = 0
+    refls_new[refls_new>1] = 1
+
+    return refls_new
+
 
 def is_comment(s):
     """
