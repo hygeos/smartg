@@ -958,7 +958,7 @@ def generateLEfH(HELIO = Heliostat(), PR = None, THEDEG = 0., PHIDEG = 0., MTF=N
     return LF
 
 def generateBox(dimXYZ=[0.05, 0.05, 0.05], pos=Point(0., 0., 0.), matAV = "LambMirror",
-        ref=[1., 1., 1., 1., 1., 1.], rough=[0.2, 0.2, 0.2, 0.2, 0.2, 0.2], rotZ = 0., gap=0.0001):
+        ref=[1., 1., 1., 1., 1., 1.], rough=[0.2, 0.2, 0.2, 0.2, 0.2, 0.2], rotZ = 0., gap=0.0001, obj_type="environment"):
     """
     Description of the function :
     This function creates a box/building. The faces composing the box are
@@ -973,14 +973,15 @@ def generateBox(dimXYZ=[0.05, 0.05, 0.05], pos=Point(0., 0., 0.), matAV = "LambM
     !! BE CAREFUL !! origin is at the centre of Face 5, not a the center of the box !!
     
     ===ARGS:
-    dimXYZ : List with the dimensions of the box in x, y and z
-    pos    : Point class with the localisation of the box, where origin is the center of F5
-    matAV  : We can choose between "LambMirror" or "Mirror" for constant material in each faces,
-             or a list of the material classes (Matte(), LambMirror() and Mirror()) for the 6 faces
-    ref    : If matAV is "LambMirror" or "Mirror", we can specify the reflectivity of the faces
-    rough  : If matAV is "Mirror" we can specify the roughness of the faces
-    rotZ   : Global rotation of the box in the Z axis, in degrees (only global rotation in Z is enabled)
-    gap    : gap to add in the global bounding box, can be sometimes useful for very small objects
+    dimXYZ   : List with the dimensions of the box in x, y and z
+    pos      : Point class with the localisation of the box, where origin is the center of F5
+    matAV    : We can choose between "LambMirror" or "Mirror" for constant material in each faces,
+               or a list of the material classes (Matte(), LambMirror() and Mirror()) for the 6 faces
+    ref      : If matAV is "LambMirror" or "Mirror", we can specify the reflectivity of the faces
+    rough    : If matAV is "Mirror" we can specify the roughness of the faces
+    rotZ     : Global rotation of the box in the Z axis, in degrees (only global rotation in Z is enabled)
+    gap      : gap to add in the global bounding box, can be sometimes useful for very small objects
+    obj_type : choice between: 'environment', 'reflector' and 'receiver'
     
     ===RETURN:
     Return a group of objects (i.e. a GroupE class composed of plane objects)
@@ -1053,7 +1054,7 @@ def generateBox(dimXYZ=[0.05, 0.05, 0.05], pos=Point(0., 0., 0.), matAV = "LambM
     # Create the faces and incorporate them in a list
     LOBJ = []
     for i in range (0, 6):
-        F = Entity(name = "reflector", \
+        F = Entity(name = obj_type, \
                    materialAV = matAVL[i], \
                    materialAR = Matte(), \
                    geo = Plane( p1 = p1_F[i], p2 = p2_F[i], p3 = p3_F[i], p4 = p4_F[i] ), \

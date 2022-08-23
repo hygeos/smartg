@@ -3012,7 +3012,7 @@ def initObj(LGOBJ, vSun, wl, CUSL=None):
             INDROBJ.append(i) # For the creation of GPU table with only receivers
 
         # This part is currently under development
-        elif (LOBJ[i].name == "env"):
+        elif (LOBJ[i].name == "environment"):
             LOBJGPU['type'][i] = 3 
         else:
             raise NameError('You have to specify if your object is a reflector or a receiver!')

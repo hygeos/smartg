@@ -123,6 +123,7 @@
 
 #define HELIOSTAT       1
 #define RECEIVER        2
+#define ENVIRONMENT     3
 
 #define DIST_BECKMANN   1
 #define DIST_GGX        2

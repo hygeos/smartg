@@ -964,7 +964,7 @@ extern "C" {
 				ph.loc = ABSORBED;
 				ph.weight = 0.F;
 				if (geoStruc.type == HELIOSTAT) ph.H+=1;
-				else if (geoStruc.type == RECEIVER) ph.E+=1;
+				else if (geoStruc.type == RECEIVER or geoStruc.type == ENVIRONMENT) ph.E+=1;
 				ph.weight_loss[0] = 0.F;
             } // End Matte
 
@@ -5383,7 +5383,7 @@ __device__ void surfaceLambert3D(Photon* ph, int le, float* tabthv, float* tabph
 		else { ph->E += 1; } // AR traité comme environnement
         if (ph->direct == 0) {ph->v_i = make_float3(-ph->v.x, -ph->v.y, -ph->v.z);}
 	}
-	else if ( geoS->type == RECEIVER)
+	else if ( geoS->type == RECEIVER or geoS->type == ENVIRONMENT)
 	{ ph->E += 1; }
 
 
@@ -5493,7 +5493,7 @@ __device__ void surfaceRugueuse3D(Photon* ph, IGeo* geoS, struct RNG_State *rngs
 {
     ph->nint += 1;
 
-	if (geoS->type == 1)
+	if (geoS->type == HELIOSTAT)
 	{
 		#ifdef DOUBLE
 		if (  isBackward( make_double3(geoS->normalBase.x, geoS->normalBase.y, geoS->normalBase.z),
@@ -5504,7 +5504,7 @@ __device__ void surfaceRugueuse3D(Photon* ph, IGeo* geoS, struct RNG_State *rngs
 		{ ph->H += 1; }
 		else { ph->E += 1; } // AR traité comme environnement
 	}
-	else if ( geoS->type == 2)
+	else if ( geoS->type == RECEIVER or geoS->type == ENVIRONMENT)
 	{ ph->E += 1; }
 	
 	float3 u_n, v_n;	// Vecteur du photon après reflexion
@@ -5615,7 +5615,7 @@ __device__ void Obj3DRoughSurf(Photon* ph, int le, float* tabthv, float* tabphi,
 		if (sign > 0) { ph->H += 1; }
 		else { ph->E += 1; } // Back heliostat surface considered as environnement
 	}
-	else if ( geoS->type == RECEIVER)
+	else if ( geoS->type == RECEIVER or geoS->type == ENVIRONMENT)
 	{ ph->E += 1; }
 
 	if (le == 0)
