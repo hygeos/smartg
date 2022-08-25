@@ -580,6 +580,7 @@ class AtmAFGL(Atmosphere):
         - H2O: total water vapour column (g.cm-2), or None to use atmospheric
           profile value (default)
         - NO2: activate NO2 absorption (default True)
+        - O3_H2O_alt : altitude of H2O and O3 values, by default None and scale from z=0km
         - tauR: Rayleigh optical thickness, default None: computed
           from atmospheric profile and wavelength
 
@@ -622,6 +623,7 @@ class AtmAFGL(Atmosphere):
     def __init__(self, atm_filename, comp=[],
                  grid=None, lat=45.,
                  P0=None, O3=None, H2O=None, NO2=True,
+                 O3_H2O_alt=None,
                  tauR=None,
                  pfwav=None, pfgrid=[100., 0.], prof_abs=None,
                  prof_ray=None, prof_aer=None, prof_phases=None,
@@ -689,7 +691,7 @@ class AtmAFGL(Atmosphere):
 
         # read afgl file
         prof = Profile_base(atm_filename, O3=O3,
-                            H2O=H2O, NO2=NO2, P0=P0, RH_cst=RH_cst, US=US
+                            H2O=H2O, NO2=NO2, P0=P0, RH_cst=RH_cst, US=US, O3_H2O_alt=O3_H2O_alt
                             )
 
         #
@@ -1191,7 +1193,7 @@ class Profile_base(object):
     - P0: sea surface pressure (hPa)
     - RH_cst: force Relative humidity to be constant, (defualt recalculated)
     '''
-    def __init__(self, atm_filename, O3=None, H2O=None, NO2=True, P0=None, RH_cst=None, US=True):
+    def __init__(self, atm_filename, O3=None, H2O=None, NO2=True, P0=None, RH_cst=None, US=True, O3_H2O_alt=None):
 
         if atm_filename is None:
             return
@@ -1236,13 +1238,27 @@ class Profile_base(object):
 
         # scale to specified total O3 content
         if O3 is not None:
-            self.dens_o3 *= 2.69e16 * O3 / (simps(self.dens_o3, -self.z) * 1e5)
+            if O3_H2O_alt is None:
+                self.dens_o3 *= 2.69e16 * O3 / (simps(self.dens_o3, -self.z) * 1e5)
+            else:
+                f_dens_o3 = interp1d(self.z, self.dens_o3, fill_value='extrapolate')
+                z_alt = np.append(self.z[self.z>O3_H2O_alt], O3_H2O_alt)
+                dens_o3_alt = f_dens_o3(z_alt)
+                o3_afgl = (simps(dens_o3_alt, -z_alt) * 1e5)/2.69e16
+                self.dens_o3 *= O3/o3_afgl
 
         # scale to total H2O content
         if H2O is not None:
             M_H2O = 18.015 # g/mol
             Avogadro = codata.value('Avogadro constant')
-            self.dens_h2o *= H2O/ M_H2O * Avogadro / (simps(self.dens_h2o, -self.z) * 1e5)
+            if O3_H2O_alt is None:
+                self.dens_h2o *= H2O/ M_H2O * Avogadro / (simps(self.dens_h2o, -self.z) * 1e5)
+            else:
+                f_dens_h2o = interp1d(self.z, self.dens_h2o, fill_value='extrapolate')
+                z_alt = np.append(self.z[self.z>O3_H2O_alt], O3_H2O_alt)
+                dens_h2o_alt = f_dens_h2o(z_alt)
+                h2o_afgl = (simps(dens_h2o_alt, -z_alt) * 1e5 * M_H2O)/Avogadro
+                self.dens_h2o *= H2O/h2o_afgl
 
         if P0 is not None:
             self.P *= P0/self.P[-1]
