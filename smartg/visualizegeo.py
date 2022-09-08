@@ -1861,6 +1861,9 @@ def random_equal_area_geometries(theta_in_degrees, phi_in_degrees, fov_radius_in
     t = np.degrees(np.arccos(ct))
     # uniform sampling for azimuth
     p=np.random.rand(N) * 360.
+    # deal with the particular case theta = 0 deg
+    if (theta_in_degrees == 0):
+        return {'th_deg': t, 'phi_deg': p, 'zip':True}
     # unit vector around which to rotate all previous directions
     u=Normalize(Cross(convertAnglestoV(), convertAnglestoV(THETA=theta_in_degrees, PHI=phi_in_degrees)))
     # rotation matrix calculation
