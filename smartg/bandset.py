@@ -3,8 +3,8 @@
 
 from __future__ import print_function, division
 import numpy as np
-import sys
-sys.path.insert(0, '/home/did/RTC/SMART-G/')
+# import sys
+# sys.path.insert(0, '/home/did/RTC/SMART-G/')
 from smartg.rrs import L2d_inv, is_odd
 from smartg.vrs import V2d_inv
 from luts.luts import LUT
@@ -29,12 +29,16 @@ class BandSet(object):
         except:
             self.use_reptran_kdis = False
 
+        self.type_wav = False
         if self.use_reptran_kdis:
             self.wav = [x.w for x in wav]
             self.data = wav
+            self.type_wav = type(wav[0])
         else:
             self.wav = wav
             self.data = None
+            self.type_wav =None
+        
 
         assert isinstance(self.wav, (float, list, np.ndarray))
         self.wav = np.array(self.wav, dtype='float32')

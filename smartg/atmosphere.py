@@ -901,8 +901,10 @@ class AtmAFGL(Atmosphere):
             #
             if wav.use_reptran_kdis:
                 tau_mol = wav.calc_profile(self.prof) * dz
-                tau_o3.data[:] = 0.
-                tau_no2.data[:] = 0.
+                # If not reptran (i.e. Kdis case) we set 03 and NO2 to 0 (already calculated in Kdis)
+                if not (str(wav.type_wav) == "<class 'smartg.reptran.REPTRAN_IBAND'>"):
+                    tau_o3.data[:] = 0.
+                    tau_no2.data[:] = 0.
             else:
                 tau_mol = np.zeros((len(wav), len(prof.z)), dtype='float32') * dz
                 
