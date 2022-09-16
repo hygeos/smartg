@@ -187,7 +187,10 @@ def cat_view(SMLUT, MTOA = 1320, NCL = "68%", UNIT = "FLUX_DENSITY", W_VIEW = "W
             cst*= float(m.attrs['n_cte'])
     else: # With LE
         if (UNIT == "FLUX"):
-            cst = 1.*k; STRPRINT = "Flux in " + STRUNIT + " for each categories"
+            cst = ((1.*k*kl)/(np.pi*NPH))*np.cos(np.radians(SZA))
+            cst *= (np.pi*(1 - np.cos(np.radians(2*ALDEG))))/2.
+            cst *= (float(m.attrs['S_Receiver'])*1e6)
+            STRPRINT = "Flux in " + STRUNIT + " for each categories"
         elif (UNIT == "FLUX_DENSITY"):
             cst = ((1.*k*kl)/(np.pi*NPH))*np.cos(np.radians(SZA))
             cst *= (np.pi*(1 - np.cos(np.radians(2*ALDEG))))/2.
