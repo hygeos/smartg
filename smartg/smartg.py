@@ -1345,6 +1345,9 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
     #if hist : axnames3 = ['None', 'None', 'Azimuth angles', 'Zenith angles']
     m.set_attr('zip', 'False')
 
+    if le is not None: m.set_attr('LE', int(1))
+    else: m.set_attr('LE', int(0))
+
     if le is not None:
         if 'zip' in le:
             if le['zip'] : 
