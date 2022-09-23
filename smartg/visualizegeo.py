@@ -302,7 +302,12 @@ def cat_view(SMLUT, MTOA = 1320, NCL = "68%", UNIT = "FLUX_DENSITY", W_VIEW = "W
     output.add_lut(rel_err_LUT_N, desc='RelativeErr')
 
     if (kdis_rep_bands is not None):
-        output.add_lut(MF_N_int, desc=UNIT+str("_int"))
+        output.add_lut(MF_N_int, desc=UNIT+"_int")
+        MF_N_tot = LUT(np.sum(MF_N_int[:,:], axis=1),
+                       axes=[np.array([0, 1, 2, 3, 4, 5, 6, 7, 8], dtype=np.float64)],
+                       names=["Categories"])
+        output.add_lut(MF_N_tot, desc=UNIT+"_tot")
+        output.add_lut(abs_err_LUT_int, desc="AbsoluteErr_tot")
 
     # If print == True ->
     if (PRINT == True):
@@ -633,12 +638,14 @@ class Entity(object):
     '''
     def __init__(self, entity = None, name="reflector", TC = 0.01, materialAV=Matte(), \
                  materialAR=Matte(), geo=Plane(), transformation=Transformation(), \
-                 bboxGPmin = Point(-100000., -100000., 0.), bboxGPmax = Point(100000., 100000., 120.)):
+                 bboxGPmin = Point(-100000., -100000., 0.), bboxGPmax = Point(100000., 100000., 120.),
+                 color = 'grey', alpha_color = 0.5):
         if isinstance(entity, Entity) :
             self.name = entity.name; self.TC = entity.TC; self.materialAV = entity.materialAV;
             self.materialAR = entity.materialAR; self.geo = entity.geo ;
             self.transformation = entity.transformation;
             self.bboxGPmin = entity.bboxGPmin; self.bboxGPmax = entity.bboxGPmax;
+            self.color = entity.color; self.alpha_color = alpha_color;
         else:
             self.name = name
             self.TC = TC
@@ -648,6 +655,8 @@ class Entity(object):
             self.transformation = transformation
             self.bboxGPmin = bboxGPmin
             self.bboxGPmax = bboxGPmax
+            self.color = color
+            self.alpha_color = alpha_color
         self.check = "Entity"
 
     def __str__(self):
@@ -982,7 +991,8 @@ def generateLEfH(HELIO = Heliostat(), PR = None, THEDEG = 0., PHIDEG = 0., MTF=N
     return LF
 
 def generateBox(dimXYZ=[0.05, 0.05, 0.05], pos=Point(0., 0., 0.), matAV = "LambMirror",
-        ref=[1., 1., 1., 1., 1., 1.], rough=[0.2, 0.2, 0.2, 0.2, 0.2, 0.2], rotZ = 0., gap=0.0001, obj_type="environment"):
+        ref=[1., 1., 1., 1., 1., 1.], rough=[0.2, 0.2, 0.2, 0.2, 0.2, 0.2], rotZ = 0., gap=0.0001,
+        obj_type="environment", colors=None, alpha_color=None):
     """
     Description of the function :
     This function creates a box/building. The faces composing the box are
@@ -1006,6 +1016,7 @@ def generateBox(dimXYZ=[0.05, 0.05, 0.05], pos=Point(0., 0., 0.), matAV = "LambM
     rotZ     : Global rotation of the box in the Z axis, in degrees (only global rotation in Z is enabled)
     gap      : gap to add in the global bounding box, can be sometimes useful for very small objects
     obj_type : choice between: 'environment', 'reflector' and 'receiver'
+    colors   : list of str with face colors
     
     ===RETURN:
     Return a group of objects (i.e. a GroupE class composed of plane objects)
@@ -1022,7 +1033,10 @@ def generateBox(dimXYZ=[0.05, 0.05, 0.05], pos=Point(0., 0., 0.), matAV = "LambM
             matAVL.append(LambMirror(reflectivity = ref[i]))
     else :
         matAVL = matAV
-        
+
+    # colors
+    if colors is None : colors = ['grey', 'grey', 'grey', 'grey', 'grey', 'grey']
+    if alpha_color is None : alpha_color = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
     
     # === Commun parameters ===
     # Compute the half dimensions in X, Y and Z
@@ -1079,6 +1093,8 @@ def generateBox(dimXYZ=[0.05, 0.05, 0.05], pos=Point(0., 0., 0.), matAV = "LambM
     LOBJ = []
     for i in range (0, 6):
         F = Entity(name = obj_type, \
+                   color = colors[i], \
+                   alpha_color = alpha_color[i], \
                    materialAV = matAVL[i], \
                    materialAR = Matte(), \
                    geo = Plane( p1 = p1_F[i], p2 = p2_F[i], p3 = p3_F[i], p4 = p4_F[i] ), \
@@ -1134,19 +1150,23 @@ def Ref_Fresnel(dirEnt, geoTrans):
     return V
 
 
-def Analyse_create_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYCOLOR = 'r', SR_VIEW=1):
+def Analyse_create_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYCOLOR = 'r', SR_VIEW=1,
+                          xyz_limit = None, show_rays=True, rs_fac = 1):
     '''
     Definition of Analyse_create_entity
 
     Enable a 3D visualization of the created objects
 
-    ENTITY  : A list of objects (Entity classes)
-    THEDEG  : The zenith angle of the sun
-    PHIDEG  : The azimuth angle of the sun
-    PlaneDM : Plane Draw method, two choices 'FM' (First Method) or 'SM'(seconde
-              Method). By default 'SM', 'FM' is useful for debug issues
-    RAYCOLR : Sun rays color i.g. 'r', 'b', ...
-    SR_VIEW : Split the number of sun rays that can be seen in the figure
+    ENTITY    : A list of objects (Entity classes)
+    THEDEG    : The zenith angle of the sun
+    PHIDEG    : The azimuth angle of the sun
+    PlaneDM   : Plane Draw method, two choices 'FM' (First Method) or 'SM'(seconde
+                Method). By default 'SM', 'FM' is useful for debug issues
+    RAYCOLR   : Sun rays color i.g. 'r', 'b', ...
+    SR_VIEW   : Split the number of sun rays that can be seen in the figure
+    xyz_limit : By default None and automatically choose x,y,z view limits,
+                or can be forced by giving a dictionnary with x,y,z values (in km),
+                i.g. {'x_min': 0., 'x_max': 10., 'y_min': 0., 'y_max':10., 'z_min': 0., 'z_max':10.}
 
     return a matplotlib fig
     '''
@@ -1286,7 +1306,7 @@ def Analyse_create_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYC
                             yn[i] = P1.y + tnn * N1.y
                             zn[i] = P1.z + tnn * N1.z
                             #tr = np.linspace(Photon.mint, t_hit, 100)
-                            tr = np.linspace(t_hit*0.98, t_hit, 100)
+                            tr = np.linspace(t_hit*0.98*(1/rs_fac), t_hit, 100)
                             xr[i] = TabPhoton[i].o.x + tr*TabPhoton[i].d.x
                             yr[i] = TabPhoton[i].o.y + tr*TabPhoton[i].d.y
                             zr[i] = TabPhoton[i].o.z + tr*TabPhoton[i].d.z
@@ -1316,8 +1336,8 @@ def Analyse_create_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYC
                     Mat = np.array([[PlaneMesh.reftri[i].p1.x, PlaneMesh.reftri[i].p1.y, PlaneMesh.reftri[i].p1.z], \
                                     [PlaneMesh.reftri[i].p2.x, PlaneMesh.reftri[i].p2.y, PlaneMesh.reftri[i].p2.z], \
                                     [PlaneMesh.reftri[i].p3.x, PlaneMesh.reftri[i].p3.y, PlaneMesh.reftri[i].p3.z]])
-                    face1 = mp3d.art3d.Poly3DCollection([Mat], alpha = 0.75, linewidths=0.2)
-                    face1.set_facecolor(mcolors.to_rgba('grey'))
+                    face1 = mp3d.art3d.Poly3DCollection([Mat], alpha = E[k].alpha_color, linewidths=0.2)
+                    face1.set_facecolor(mcolors.to_rgba(E[k].color))
                     ax.add_collection3d(face1)
 
             # Second method (better visual, avoid some matplotlib bugs):
@@ -1333,20 +1353,20 @@ def Analyse_create_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYC
                 if (np.array_equal(Mat[:,0], np.full((6), Mat[0,0]))):
                     yy, zz = np.meshgrid(Mat[:,0], Mat[:,2])
                     xx = np.full((6,6), Mat[0,0])
-                    ax.plot_surface(xx, yy, zz, color = mcolors.to_rgba('grey'), alpha = 0.15, \
+                    ax.plot_surface(xx, yy, zz, color = mcolors.to_rgba(E[k].color), alpha = E[k].alpha_color, \
                                     linewidth=0.2, antialiased=True)
                 elif (np.array_equal(Mat[:,1], np.full((6), Mat[0,1]))):
                     xx, zz = np.meshgrid(Mat[:,0], Mat[:,2])
                     yy = np.full((6,6), Mat[0,1])
-                    ax.plot_surface(xx, yy, zz, color = mcolors.to_rgba('grey'), alpha = 0.15, \
+                    ax.plot_surface(xx, yy, zz, color = mcolors.to_rgba(E[k].color), alpha = E[k].alpha_color, \
                                     linewidth=0.2, antialiased=True)
                 elif (np.array_equal(Mat[:,2], np.full((6), Mat[0,2]))): # need to be verified
                     xx, yy = np.meshgrid(Mat[:,0], Mat[:,1])
                     zz = np.full((6,6), Mat[0,2])
-                    ax.plot_surface(xx, yy, zz, color = mcolors.to_rgba('grey'), alpha = 0.15, \
+                    ax.plot_surface(xx, yy, zz, color = mcolors.to_rgba(E[k].color), alpha = E[k].alpha_color, \
                                     linewidth=0.2, antialiased=True)
                 else:
-                    ax.plot_trisurf(Mat[:,0], Mat[:,1], Mat[:,2], color = mcolors.to_rgba('grey'), \
+                    ax.plot_trisurf(Mat[:,0], Mat[:,1], Mat[:,2], color = mcolors.to_rgba(E[k].color), \
                                     alpha = 0.5, linewidth=0.2, antialiased=True)
 
         elif isinstance(E[k].geo, Spheric):
@@ -1363,11 +1383,12 @@ def Analyse_create_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYC
             y1 = myP.y
             z1 = myP.z
             
-            ax.plot_surface(x1, y1, z1, rstride=1, cstride=1, color='b', alpha=0.5)
+            ax.plot_surface(x1, y1, z1, rstride=1, cstride=1, color=E[k].color, alpha=E[k].alpha_color)
 
             for i in range(0, LMir):
                 if(S.Intersect(TabPhoton[i])):
                     atLeastOneInt[i] = True
+                    t_hit = float('inf')
                     if (S.thit < t_hit):
                         p_hit = S.dg.p
                         t_hit = S.thit
@@ -1380,7 +1401,7 @@ def Analyse_create_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYC
                         yn[i] = P1.y + tnn * N1.y
                         zn[i] = P1.z + tnn * N1.z
                         #tr = np.linspace(Photon.mint, t_hit, 100)
-                        tr = np.linspace(t_hit*0.98, t_hit, 100)
+                        tr = np.linspace(t_hit*0.98*(1/rs_fac), t_hit, 100)
                         xr[i] = TabPhoton[i].o.x + tr*TabPhoton[i].d.x
                         yr[i] = TabPhoton[i].o.y + tr*TabPhoton[i].d.y
                         zr[i] = TabPhoton[i].o.z + tr*TabPhoton[i].d.z
@@ -1390,17 +1411,21 @@ def Analyse_create_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYC
 
     # ==============================================
     # plot all the geometries
-    
-    for i in range(0, LMir):
-        if (atLeastOneInt[i] and i%SR_VIEW ==0):
-            ax.plot(xr[i], yr[i], zr[i], color=RAYCOLOR, linewidth=1)
+    if (show_rays):
+        for i in range(0, LMir):
+            if (atLeastOneInt[i] and i%SR_VIEW ==0):
+                ax.plot(xr[i], yr[i], zr[i], color=RAYCOLOR, linewidth=1*rs_fac)
 
-    for i in range(0, LMir2):
-        if (atLeastOneInt2[i] and i%SR_VIEW ==0):
-            ax.plot(xr2[i], yr2[i], zr2[i], color=RAYCOLOR, linewidth=1)
+        for i in range(0, LMir2):
+            if (atLeastOneInt2[i] and i%SR_VIEW ==0):
+                ax.plot(xr2[i], yr2[i], zr2[i], color=RAYCOLOR, linewidth=1*rs_fac)
 
-    # Enable generic local visualization (part3)
-    if (len(E) == 1):
+    if (xyz_limit is not None):
+        ax.set_xlim3d(xyz_limit['x_min'], xyz_limit['x_max'])
+        ax.set_ylim3d(xyz_limit['y_min'], xyz_limit['y_max'])
+        ax.set_zlim3d(xyz_limit['z_min'], xyz_limit['z_max'])
+    # Enable generic local visualization (part3)   
+    elif (len(E) == 1):
         if (GLEcaZ == GLEcaM):
             ax.set_zlim3d(E[0].transformation.transz+GLZmin, E[0].transformation.transz+GLZmax)
         else:
