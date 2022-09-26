@@ -289,6 +289,98 @@ class Species(object):
         return map(lambda x: basename(x)[:-4], files)
 
 
+
+class SpeciesUser(Species):
+    def __init__(self, name, ext, ssa, phase):
+        lam   = ext.axis('wavelength')
+        lamp  = phase.axis('wavelength')
+        nlam  = lam.size
+        nlamp = lamp.size
+        theta = phase.axis('theta_atm')
+        ntheta= theta.size
+        self.name = name
+        self._rh_or_reff = 'rh' 
+        self._nrh_reff = 1 # no RH dependence
+        self._ext = LUT(
+            ext.data[:, None],
+            axes=[lam, None],
+            names=['lam', self._rh_or_reff])
+        self._ssa = LUT(
+            ssa.data[:, None],
+            axes=[lam, None],
+            names=['lam', self._rh_or_reff])
+        # scattering angle in degrees (nlam, nhum, nphamat, nthetamax)
+        self._theta = LUT(
+            np.tile(theta,(nlamp,1,4,1)),
+            axes=[lamp, None, None, None],
+            names=['lam', self._rh_or_reff, 'stk', 'nthetamax'])
+        # phase matrix (nlam, nhum, nphamat, nthetamax)
+        self._phase = LUT(
+            phase.data[:,None,:,:],
+            axes=[lamp, None, None, None],
+            names=['lam', self._rh_or_reff, 'stk', 'nthetamax'])
+        # number of scattering angles (nlam, nhum, nphamat)     
+        self._ntheta = LUT(
+            np.ones((nlamp, 1, 4), dtype=np.int32)*ntheta,
+            axes=[lamp, None, None],
+            names=['lam', self._rh_or_reff, 'stk'])
+        
+
+    def ext_ssa(self, wav):
+        ''' 
+        returns the extinction coefficient and single scattering albedo of
+        each layer
+            (N x 1) if species does not depend on rh
+
+        parameters:
+            wav: array of wavelength in nm (N wavelengths)
+        '''
+        assert isiterable(wav)
+
+        # wavelength interpolation
+        ext = self._ext[Idx(wav), 0]
+        ssa = self._ssa[Idx(wav), 0]
+
+        # create empty dimension for rh
+        ext = ext[:,None]
+        ssa = ssa[:,None]
+        
+        return ext, ssa
+    
+    def phase(self, wav, NBTHETA, phaseOpti=False):
+        '''
+        phase function of species at wavelengths wav
+        resampled over NBTHETA angles
+        '''
+        theta = np.linspace(0., 180., num=NBTHETA)
+        lam_tabulated = self._phase.axis('lam')
+        nlam_tabulated = len(lam_tabulated)
+
+        P = LUT(
+            np.zeros((nlam_tabulated, 1, 4, NBTHETA), dtype='float32')+np.NaN,
+            axes=[lam_tabulated, None, None, theta],
+            names=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
+            )  # nlam_tabulated, nrh, stk, NBTHETA
+
+        # interpolate each tabulated wavelength
+        for ilam in range(nlam_tabulated):
+            for istk in range(4):
+                th = self._theta[ilam,0,istk,:]
+                nth = self._ntheta[ilam,0,istk]
+                P.data[ilam,0,istk,:] = interp1d(
+                        th[:nth],
+                        self._phase[ilam,0,istk,:nth])(theta)
+
+        # convert I, Q into Ipar, Iper
+        P0 = P.data[:,:,0,:].copy()
+        P1 = P.data[:,:,1,:].copy()
+        P.data[:,:,0,:] = P0+P1
+        P.data[:,:,1,:] = P0-P1
+
+        return P.sub()[Idx(wav),:,:,:]
+
+
+
 class AeroOPAC(object):
     '''
     Initialize the Aerosol OPAC model
@@ -549,6 +641,124 @@ class CompOPAC(AeroOPAC):
         self.densities = density[:,None]
         self.ssa = None
         self._phase = phase
+
+
+class CompUser(object):
+    '''
+    Single species, localized using a profile density, z
+
+    wav_clip: if True, don't raise Error upon interpolation error in
+    wavelength, use the extrema values
+
+    Example: CompUser(density, atm.prof.z, 10., 550.)
+             # total optical thickness of 10 at 550 nm
+    '''
+    def __init__(self, species, density, z, tau_ref, w_ref, phase=None, ssa=None, wav_clip=False):
+        self.tau_ref = tau_ref
+        self.w_ref = w_ref
+        self.z     =  z
+        self.zopac     =  z
+        self.densities = density[:,None]/np.trapz(density, x=-z)
+        self._phase = phase
+        self.species=[species]
+        self.ssa = ssa
+
+
+    def dtau_ssa(self, wav, Z, rh):
+        '''
+        returns a profile of optical thickness and single scattering albedo at
+        each wavelength
+        (N wavelengths x M layers)
+
+        Arguments:
+        wav: wavelength in nm (N)
+             (scalar or array)
+        Z: altitude in km (M)
+        '''
+        dtau = 0.
+        dtau_ref = 0.
+        ssa = 0.
+        dZ = -diff1(Z)
+        w0 = np.array([self.w_ref], dtype='float32')
+        for i, s in enumerate(self.species):
+            # integrate density along altitude
+            dens = trapzinterp(
+                    self.densities[:,i],
+                    self.zopac, Z
+                    )
+            ext, ssa_ = s.ext_ssa(wav)
+            dtau_ = ext * dens * dZ
+            dtau += dtau_
+
+            ssa += dtau_ * ssa_
+
+            ext, ssa_ = s.ext_ssa(w0)
+            dtau_ref += ext * dens * dZ
+
+        ssa[dtau!=0] /= dtau[dtau!=0]
+
+        # apply scaling factor to get the required optical thickness at the
+        # specified wavelength
+        dtau *= self.tau_ref/np.sum(dtau_ref)
+
+        # force ssa
+        if self.ssa is not None:
+            if self.ssa.ndim == 0: # scalar
+                ssa[:,:] = self.ssa
+            else:
+                ssa[:,:] = self.ssa[:,None]
+
+        return dtau, ssa
+
+
+    def phase(self, wav, Z, rh, NBTHETA=721, phaseOpti=False):
+        '''
+        Phase function calculation at wavelength wav and altitudes Z
+        relative humidity is rh
+        angle resampling over NBTHETA angles
+        '''
+
+        if self._phase is not None:
+            if self._phase.ndim == 2:
+                # convert to 4-dim by inserting empty dimensions wav_phase
+                # and z_phase
+                assert self._phase.names == ['stk', 'theta_atm']
+                pha = LUT(self._phase.data[None,None,:,:],
+                          names = ['wav_phase', 'z_phase'] + self._phase.names,
+                          axes = [np.array([wav[0]]), np.array([0.])] + self._phase.axes,
+                         )
+
+                return pha
+            else:
+                return self._phase
+
+        P = 0.
+        dssa = 0.
+        dtau = 0.
+
+        for i, s in enumerate(self.species):
+            # integrate density along altitude
+            dens = trapzinterp(
+                    self.densities[:,i],
+                    self.zopac, Z)
+
+            # optical properties of the current species
+            ext, ssa = s.ext_ssa(wav)
+            dtau_ = ext * dens * (-diff1(Z))
+            dtau += dtau_
+
+            dssa_ = dtau_*ssa  # NLAM, ALTITUDE
+            dssa_ = dssa_[:,1:,None,None]
+            dssa += dssa_
+
+            P += s.phase(wav, NBTHETA)*dssa_  # (NLAM, ALTITUDE-1, NPSTK, NBTHETA)
+
+        with np.errstate(divide='ignore'):
+            P.data /= dssa
+        P.data[np.isnan(P.data)] = 0.
+
+        P.axes[1] = (Z[1:]+Z[:-1])/2.
+        return P
 
 
 
@@ -1083,6 +1293,7 @@ class AtmAFGL(Atmosphere):
             dtau, ssa_p = comp.dtau_ssa(wav, self.pfgrid, rh=rh)
             dtau = dtau[:,1:][:,:,None,None]
             ssa_p = ssa_p[:,1:][:,:,None,None]
+            aa=comp.phase(wav, self.pfgrid, rh, NBTHETA=NBTHETA, phaseOpti=phaseOpti)
             pha += comp.phase(wav, self.pfgrid, rh, NBTHETA=NBTHETA, phaseOpti=phaseOpti)*dtau*ssa_p
             norm += dtau*ssa_p
         if len(self.comp) > 0:

@@ -987,8 +987,8 @@ class Smartg(object):
             NATM_ABS = 0
 
         # computation of the impact point
-        X0, _ = impactInit(prof_atm, NLAM, THVDEG, RTER, self.pp)
-        #X0, tabTransDir = impactInit(prof_atm, NLAM, THVDEG, RTER, self.pp)
+        #X0, _ = impactInit(prof_atm, NLAM, THVDEG, RTER, self.pp)
+        X0, tabTransDir_analytic = impactInit(prof_atm, NLAM, THVDEG, RTER, self.pp)
 
         # sensor definition
         if sensor is None:
@@ -1223,7 +1223,7 @@ class Smartg(object):
                 
         # finalization
         output = finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl[:], NPhotonsInTot, errorcount, NPhotonsOutTot,
-                          OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, prof_oc,
+                          OUTPUT_LAYERS, tabTransDir, tabTransDir_analytic, SIM, attrs, prof_atm, prof_oc,
                           sigma, THVDEG, HORIZ, le=le, flux=flux, back=self.back, 
                           SZA_MAX=SZA_MAX, SUN_DISC=SUN_DISC, hist=hist, cMatVisuRecep=cMatVisuRecep,
                           dicSTP=dicSTP, matCats=matCats, matLoss=matLoss, wPhCats=wPhCats, wPhCats2=wPhCats2)
@@ -1285,7 +1285,7 @@ def calcOmega(NBTHETA, NBPHI, SZA_MAX=90., SUN_DISC=0):
 
 
 def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
-             OUTPUT_LAYERS, tabTransDir, SIM, attrs, prof_atm, prof_oc,
+             OUTPUT_LAYERS, tabTransDir, tabTransDir_analytic, SIM, attrs, prof_atm, prof_oc,
              sigma, THVDEG, HORIZ, le=None, flux=None,
              back=False, SZA_MAX=90., SUN_DISC=0, hist=False, cMatVisuRecep = None,
              dicSTP = None, matCats=None, matLoss=None, wPhCats=None, wPhCats2=None):
@@ -1463,9 +1463,9 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
 
 
     # direct transmission
-    # m.add_dataset('direct transmission', tabTransDir,
-    #               axnames=['wavelength'])
-    m.add_dataset('direct transmission', np.exp(-tabTransDir[isen,ilam]), axnames4)
+    m.add_dataset('direct transmission', tabTransDir_analytic,
+                   axnames=['wavelength'])
+    m.add_dataset('direct transmission (dev)', np.exp(-tabTransDir[isen,ilam]), axnames4)
 
     # write atmospheric profiles
     if prof_atm is not None:

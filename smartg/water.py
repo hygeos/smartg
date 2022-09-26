@@ -390,7 +390,7 @@ class IOP_1(IOP_base):
         chl = self.chl
 
         # pure water absorption
-        aw = self.aw[Idx(wav[:])]
+        aw = self.aw[Idx(wav[:], fill_value='extrema')]
 
         # phytoplankton absorption
         aphy = (self.BRICAUD['A'][Idx(wav, fill_value='extrema')]
