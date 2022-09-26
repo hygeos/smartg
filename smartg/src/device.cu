@@ -553,7 +553,8 @@ extern "C" {
            if( (ENVd==0) || (ENVd==2) || 
                ((ENVd==3) && checkerboard(ph.pos, X0d, Y0d)) ||
                ((ENVd==1) && (dis<=ENV_SIZEd)) || ((ENVd==-1) && (dis>=ENV_SIZEd)) || 
-               ((ENVd==4) && (abs(ph.pos.x)<=ENV_SIZEd)) || ((ENVd==-4) && (abs(ph.pos.x)>=ENV_SIZEd)) || ph.loc==SURF0M ) { 
+               ((ENVd==4) && (abs(ph.pos.x)<=ENV_SIZEd)) || ((ENVd==-4) && (abs(ph.pos.x)>=ENV_SIZEd)) 
+               || ph.loc==SURF0M ) { 
 
             ////////////////////////////
             // if Air-Sea Interface 
@@ -810,7 +811,8 @@ extern "C" {
                     ((ENVd==3) && !checkerboard(ph.pos, X0d, Y0d)) ||
                     ((ENVd==-1) && (dis<ENV_SIZEd)) || 
                     ((ENVd==4) && (abs(ph.pos.x)>ENV_SIZEd)) || 
-                    ((ENVd==-4) && (abs(ph.pos.x)<ENV_SIZEd)) ) { 
+                    ((ENVd==-4) && (abs(ph.pos.x)<ENV_SIZEd)) ||
+                    ((ENVd==5)) ) { 
                 ph.env = 1;
                 //
 		        // 1- Surface Local Estimate (not evaluated if atmosphere only simulation)*/
@@ -2063,7 +2065,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
     float costh, sinth2;
     int ilam = ph->ilam*(NATMd+1);  // wavelength offset in optical thickness table
     float3 no, v0, u0;
-	//int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
 
     if (ph->layer == 0) ph->layer = 1;
 
@@ -2325,6 +2327,9 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
     // in case of propagation, if the photon is still in the atmosphere
     // compute the absorption using Single Scattering Albedo if BEER=0
     if ((BEERd == 0) && (ph->loc == ATMOS)) ph->weight *= prof_atm[ph->layer+ilam].ssa;
+
+    // TEST
+    //if (!le && (ph->loc==SURF0P) && (idx==0)) printf("%f %f %f %f\n", ph->pos.x, ph->pos.y, ph->pos.z, ph->radius);
 }
 #endif // SPHERIQUE
 

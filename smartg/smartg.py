@@ -16,7 +16,7 @@ from smartg.atmosphere import Atmosphere, od2k, BPlanck
 from smartg.water import IOP_base
 from os.path import dirname, realpath, join, exists
 from warnings import warn
-from smartg.albedo import Albedo_cst, Albedo_spectrum_map 
+from smartg.albedo import Albedo_cst, Albedo_map 
 from smartg.tools.progress import Progress
 from smartg.tools.cdf import ICDF2D
 from smartg.tools.modified_environ import modified_environ
@@ -67,6 +67,9 @@ UP0M = 4
 DOWNB = 5
 
 #
+MAX_NREF = 10
+
+#
 # type definitions (should match cuda struct definitions)
 #
 type_Phase = [
@@ -86,14 +89,21 @@ type_Phase = [
     ('a_P44', 'float32'),  # /
     ]
 
-type_Spectrum = [
+type_Spectrum = np.dtype([
     ('lambda'      , 'float32'),
     ('alb_surface' , 'float32'),
     ('alb_seafloor', 'float32'),
     ('alb_env',      'float32'),
     ('k1p_surface' , 'float32'),
     ('k2p_surface' , 'float32'),
-    ]
+    ('alb_envs' , 'float32', MAX_NREF),
+    ])
+
+type_EnvMap = np.dtype([
+    ('x',      'float32'),    # // x coordinate on the ground
+    ('y',      'float32'),    # // y coordinate on the ground
+    ('env_map',   'int32'),   # // environment index map
+])
 
 type_Profile = [
     ('z',      'float32'),    # // altitude
@@ -323,7 +333,8 @@ class Environment(object):
     ALB: albedo spectral model
 
     '''
-    def __init__(self, ENV=0, ENV_SIZE=1.e6, X0=0., Y0=0., ALB=Albedo_cst(0.0)):
+    def __init__(self, ENV=0, ENV_SIZE=1.e6, X0=0., Y0=0., ALB=Albedo_cst(0.0), NENV=1,
+                NXENVMAP=0, NYENVMAP=0):
         self.dict = {
                 'ENV': ENV,
                 'ENV_SIZE': ENV_SIZE,
@@ -331,6 +342,9 @@ class Environment(object):
                 'Y0': Y0,
                 }
         self.alb = ALB
+        self.NENV= NENV
+        self.NXENVMAP= NXENVMAP
+        self.NYENVMAP= NYENVMAP
 
     def __str__(self):
         return 'ENV={ENV_SIZE}-X={X0:.1f}-Y={Y0:.1f}'.format(**self.dict)
@@ -1070,12 +1084,21 @@ class Smartg(object):
                spectrum['alb_surface'] = surf.kp[0].get(wl[:])
                spectrum['k1p_surface'] = surf.kp[1].get(wl[:])
                spectrum['k2p_surface'] = surf.kp[2].get(wl[:])
-            #mapalb = env.alb.get(wl[:])
-            #if mapalb.ndim==3:
-            #    mapalb = to_gpu(mapalb)
-            #else:
-            #    spectrum['alb_env'] = env.alb.get(wl[:])
-            spectrum['alb_env'] = env.alb.get(wl[:])
+            albenv = env.alb.get(wl[:])
+            if albenv.ndim==2:
+                env.NENV = albenv.shape[1]
+                spectrum['alb_envs'][:,:env.NENV] = albenv
+                shp = env.alb.map.data.shape
+                env.NXENVMAP = shp[0]
+                env.NYENVMAP = shp[1]
+                envmap = np.zeros(shp, dtype=type_EnvMap)
+                Y, X = np.meshgrid(env.alb.map.axis('Y'), env.alb.map.axis('X'))
+                envmap['x'] = X
+                envmap['y'] = Y
+                envmap['env_map']=env.alb.get_map(X,Y)
+                envmap = to_gpu(envmap)
+            else:
+                spectrum['alb_env'] = albenv
 
         if water is None:
             spectrum['alb_seafloor'] = -999.
@@ -1914,6 +1937,9 @@ def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
         copy_to_device('ENV_SIZEd', env.dict['ENV_SIZE'], np.float32)
         copy_to_device('X0d', env.dict['X0'], np.float32)
         copy_to_device('Y0d', env.dict['Y0'], np.float32)
+        copy_to_device('NENVd', env.NENV, np.int32)
+        copy_to_device('NXENVMAPd', env.NXENVMAP, np.int32)
+        copy_to_device('NYENVMAPd', env.NYENVMAP, np.int32)
     copy_to_device('STHVd', STHV, np.float32)
     copy_to_device('CTHVd', CTHV, np.float32)
     copy_to_device('RTER', RTER, np.float32)

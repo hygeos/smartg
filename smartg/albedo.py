@@ -44,14 +44,20 @@ class Albedo_spectrum(object):
         return self.data[Idx(wl)]
 
 
-class Albedo_spectrum_map(object):
+class Albedo_map(object):
     '''
-    Albedo map of Albedo_spectrum:
+    Albedo map of Albedo objects:
 
-    R spectral albedo, lam in nm, x in km, y in km
+    Albedo index (2D), x in km, y in km, Alist: list of Albedo objects
     '''
-    def __init__(self, R, lam, x, y):
-        self.data = LUT(R, axes=[lam, x, y], names=['wavelength', 'X', 'Y'])
+    def __init__(self, Ai, lam, x, y, Alist):
+        self.map = LUT(Ai, axes=[x, y], names=['X', 'Y'])
+        self.list = Alist
+        self.NALB = len(Alist)
 
     def get(self, wl):
-        return self.data[Idx(wl), :, :]
+        return np.stack([ALB.get(wl) for ALB in self.list]).T
+
+    def get_map(self, x0, y0):
+        return self.map[Idx(x0, round=True, fill_value='extrema'),
+                        Idx(y0, round=True, fill_value='extrema')].astype(int)

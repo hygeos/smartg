@@ -45,6 +45,9 @@ __device__ __constant__ int ENVd;
 __device__ __constant__ float ENV_SIZEd;		// Size of target in km
 __device__ __constant__ float X0d;		// position of the target in x (km)
 __device__ __constant__ float Y0d;		// position of the target in y (km)
+__device__ __constant__ int NENVd;
+__device__ __constant__ int NXENVMAPd;
+__device__ __constant__ int NYENVMAPd;
 __device__ __constant__ float STHVd;	//sinThetaView_Host
 __device__ __constant__ float CTHVd;	//cosThetaView_Host
 
