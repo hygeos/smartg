@@ -131,9 +131,6 @@ def cat_view(SMLUT, MTOA = 1320, NCL = "68%", UNIT = "FLUX_DENSITY", W_VIEW = "W
     output.add_axis('Categories', m.axes['Categories'])
     
     # Parameters not dependant on the wavelength
-    LE = bool(int(m.attrs['LE']))
-    if LE: SZA = m.axes['Zenith angles'][0] # for the moment we assume only one direction in LE
-    else: SZA = float(m.attrs['VZA'])
     ALDEG = (float(m.attrs['ALDEG']))
 
     # Parameters needed in case kdis or reptran is used
@@ -166,40 +163,23 @@ def cat_view(SMLUT, MTOA = 1320, NCL = "68%", UNIT = "FLUX_DENSITY", W_VIEW = "W
     elif ( M_VIEW == "km"): kl = 1e3*1e3  ; STRUNITL = "kilometer"
     else : raise NameError('Unkonwn argument for M_VIEW!')
 
-    # Consideration of the case without and with LE (the normalization is different)
-    if (LE is False): # Without LE
-        if (UNIT == "FLUX"):
-            cst = 1.*k; STRPRINT = "Flux in " + STRUNIT + " for each categories"
-        elif (UNIT == "FLUX_DENSITY"):
-            cst = (1.*k*kl)/(float(m.attrs['S_Receiver'])*1e6)
-            STRPRINT = "Irradiance in " + STRUNIT + "/meter² for each categories"
-        elif (UNIT == "RADIANCE"):
-            cst = (1.*k*kl)/(float(m.attrs['S_Receiver'])*1e6)
-            cst *= 2./(np.pi*(1 - np.cos(np.radians(2*ALDEG))))
-            STRPRINT = "Radiance in " + STRUNIT + "/meter²/sr for each categories"
-        else:
-            raise NameError('Unkonwn argument for UNIT!')
+    if (UNIT == "FLUX"):
+        cst = 1.*k; STRPRINT = "Flux in " + STRUNIT + " for each categories"
+    elif (UNIT == "FLUX_DENSITY"):
+        cst = (1.*k*kl)/(float(m.attrs['S_Receiver'])*1e6)
+        STRPRINT = "Irradiance in " + STRUNIT + "/meter² for each categories"
+    elif (UNIT == "RADIANCE"):
+        cst = (1.*k*kl)/(float(m.attrs['S_Receiver'])*1e6)
+        cst *= 2./(np.pi*(1 - np.cos(np.radians(2*ALDEG))))
+        STRPRINT = "Radiance in " + STRUNIT + "/meter²/sr for each categories"
+    else:
+        raise NameError('Unkonwn argument for UNIT!')
         
-        if (isWaveAxis):
-            cst*=float(m.attrs['n_cte'])
-            cst*=np.sum(NPH) / NPH[:]
-        else:
-            cst*= float(m.attrs['n_cte'])
-    else: # With LE
-        if (UNIT == "FLUX"):
-            cst = ((1.*k*kl)/(np.pi*NPH))*np.cos(np.radians(SZA))
-            cst *= (np.pi*(1 - np.cos(np.radians(2*ALDEG))))/2.
-            cst *= (float(m.attrs['S_Receiver'])*1e6)
-            STRPRINT = "Flux in " + STRUNIT + " for each categories"
-        elif (UNIT == "FLUX_DENSITY"):
-            cst = ((1.*k*kl)/(np.pi*NPH))*np.cos(np.radians(SZA))
-            cst *= (np.pi*(1 - np.cos(np.radians(2*ALDEG))))/2.
-            STRPRINT = "Irradiance in " + STRUNIT + "/" + STRUNITL + "² for each categories"
-        elif (UNIT == "RADIANCE"):
-            cst = ((1.*k*kl)/(np.pi*NPH))*np.cos(np.radians(SZA))
-            STRPRINT = "Radiance in " + STRUNIT + "/" + STRUNITL + "²/sr for each categories"
-        else:
-            raise NameError('Unkonwn argument for UNIT!')
+    if (isWaveAxis):
+        cst*=float(m.attrs['n_cte'])
+        cst*=np.sum(NPH) / NPH[:]
+    else:
+        cst*= float(m.attrs['n_cte'])
     
     # Normlalized intensity
     if (isWaveAxis):

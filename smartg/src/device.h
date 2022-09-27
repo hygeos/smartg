@@ -153,9 +153,9 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
                            long long *wl_proba_icdf, long long *sensor_proba_icdf, 
                            long long *cell_proba_icdf, float* tabthv, float* tabphi,
                            struct RNG_State*
-						   #ifdef OBJ3D
-						   , struct IObjets *myObjets
-						   #endif
+			   #ifdef OBJ3D
+			   , float*, float*, struct IObjets *myObjets
+			   #endif
 	);
 
 #ifdef SPHERIQUE
@@ -237,7 +237,8 @@ __device__ void Obj3DRoughSurf(Photon* ph, int le, float* tabthv, float* tabphi,
 __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, void*wPhLoss2);
 
 __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geoS, unsigned long long *nbPhCat,
-								 void *wPhCat, void *wPhCat2, struct Profile *prof_atm, void *wPhLoss, void *wPhLoss2);
+				 void *wPhCat, void *wPhCat2, struct Profile *prof_atm, void *wPhLoss,
+                                 void *wPhLoss2, float* tabthv, float* tabphi);
 #endif
 
 __device__ void countPhoton(Photon* , struct Spectrum* spectrum, struct Profile* prof_atm, struct Profile* prof_oc, float*, float *,
@@ -305,6 +306,9 @@ __device__ float fRRS_air(float, float);
 __device__ float fVRS(float);
 
 __device__ void DirectionToUV(float, float, float3*, float3*) ;
+#ifdef OBJ3D
+__device__ void DirectionToUV2(float, float, float3*, float3*, struct RNG_State*) ;
+#endif
 __device__ float3 LocalToGlobal(float3, float3, float3, float3) ;
 __device__ float3 GlobalToLocal(float3, float3, float3, float3) ;
 __device__ void MakeLocalFrame(float3, float3*, float3*, float3*) ;
@@ -314,6 +318,8 @@ __device__ float4x4 FresnelR(float3, float3) ;
 
 __device__ float gauss_albedo(float3, float, float) ;
 __device__ int checkerboard(float3, float, float) ;
+
+__device__ void findRots(float3, float*, float*);
 
 __device__ float F1_rtls(float , float , float );  //  rossthick-lisparse, only F1
 __device__ float F2_rtls(float , float , float );  //  rossthick-lisparse, only F2

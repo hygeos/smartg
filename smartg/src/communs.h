@@ -128,6 +128,9 @@
 #define DIST_BECKMANN   1
 #define DIST_GGX        2
 
+#define NTHLE          180
+#define NPHILE         720
+
 /* #define maxNG 1000 */
 #endif
 

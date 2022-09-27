@@ -453,15 +453,15 @@ class CusBackward(object):
     TH,PH   : Direction (theta, phi) of zenith and azimuth angles of viewing direction
               (Zenith> 90 for downward looking, <90 for upward, default Zenith)
     ALDEG   : Launch in a solid angle where alpha is the half-angle of the cone
-    V       : Direction but represented by a Vector type, if not None replace TH, PH
+    V       : Receveir normal but represented by a Vector type, if not None replace TH, PH
     REC     : Receiver object must be specified in and only in BR mode
     TYPE    : Sampling type : 2 choices: 'lambertian' or 'isotropic' (only BR mode)
     LMODE (Launching mode) : B = basic Backward, BR = Backward with receiver
-                             B -> Launch the photons from a given point in a given
+                             B->  Launch the photons from a given point in a given
                                   direction (eventually can choose a ramdom vector
                                   in a solid angle arround a given direction delimited
                                   by the half-angle ALDEG)
-                             B -> Launch the photons from a given receiver (plane obj)
+                             BR-> Launch the photons from a given receiver (plane obj)
                                   in a given direction (also eventually can choose a
                                   ramdom vector in a solid angle delimited by ALDEG)
     '''
@@ -1195,14 +1195,10 @@ class Smartg(object):
         attrs.update(self.common_attrs)
 
         # If there is a receiver -> normalization of the signal collected
-        if (TC is not None and le is None):
+        if (TC is not None):
             cMatVisuRecep, matCats, n_cte = normalizeRecIrr(cMatVisuRecep=cMatVisuRecep, matCats=matCats,
                 nbCx=nbCx, nbCy=nbCy, NBPHOTONS=NBPHOTONS, surfLPH=surfLPH, TC=TC, cusL=cusL,
-                SUN_DISC=SUN_DISC)
-        # If LE
-        elif(le is not None):
-            n_cte = 1./NBPHOTONS
-            
+                SUN_DISC=SUN_DISC, LE=LE)
 
         if (nb_H > 0 and TC is not None and cusL is not None):
             MZAlt_H = zAlt_H/nb_H; SREC=TC*TC*nbCx*nbCy #; weightR=matCats[2, 1]
@@ -3044,7 +3040,7 @@ def initObj(LGOBJ, vSun, wl, CUSL=None):
     return nGObj, nObj, nRObj, surfLPH, nb_H, zAlt_H, totS_H, TC, nbCx, nbCy, LOBJGPU, \
         LGOBJGPU, LROBJGPU, LOBJSPECT, n_cos
 
-def normalizeRecIrr(cMatVisuRecep, matCats, nbCx, nbCy, NBPHOTONS, surfLPH, TC, cusL, SUN_DISC):
+def normalizeRecIrr(cMatVisuRecep, matCats, nbCx, nbCy, NBPHOTONS, surfLPH, TC, cusL, SUN_DISC, LE):
     '''
     Description of the function normalizeRecIrr
 
@@ -3064,6 +3060,7 @@ def normalizeRecIrr(cMatVisuRecep, matCats, nbCx, nbCy, NBPHOTONS, surfLPH, TC, 
     TC            : Size of a square cell, (TC -> french word 'Taille Cellule') 
     cusL          : Custum launching mode class (see cusForward, cusBackward)
     SUN_DISC      : The half-angle of the sun solid angle
+    LE            : boolean indicating if we are in LE mode
 
     === RETURN:
     cMatVisuRecep : With normalized values
@@ -3104,7 +3101,10 @@ def normalizeRecIrr(cMatVisuRecep, matCats, nbCx, nbCy, NBPHOTONS, surfLPH, TC, 
         if (cusL.dict['TYPE'] == 1): normBR = (1-np.cos(np.radians(2*cusL.dict['ALDEG'])))/2.
         #isotropic sampling normalization
         elif (cusL.dict['TYPE'] == 2): normBR = 2*(1-np.cos(np.radians(cusL.dict['ALDEG'])))
-        normC = normBR/(NBPHOTONS*2*(1-np.cos(np.radians(SUN_DISC))))
+
+        if not LE: normC = normBR/(NBPHOTONS*2*(1-np.cos(np.radians(SUN_DISC))))
+        else: normC = normBR/NBPHOTONS
+
         # Weights -> propor to w/m², mult by S_rec_m is needed to get something propor to watt unit
         normC *= S_rec_m
         cMatVisuRecep[:][:][:] = cMatVisuRecep[:][:][:]*normC
