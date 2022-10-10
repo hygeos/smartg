@@ -1673,3 +1673,167 @@ def BPlanck(wav, T):
     b = Planck*speed_of_light/(wav*Boltzmann*T)
     intensity = a/ ( (wav**5) * (np.exp(b) - 1.0) )
     return intensity
+
+
+def generatePro_multi(pro_models, b_wav, aots, atm='afglt', factor=None,
+                      pfwav=None, P0=None, O3=None, H2O=None, wl_ref=550., grid=None, O3_H2O_alt=None):
+    """
+    This function return an atmosphere profile giving a list of several atmosphere profiles. Different profiles can be
+    merged together, and a possible mix can be considered by correctly ajusting the aots and factor parameters.
+
+    ===ARGS:
+    pro_models : List of atmosphere profiles (from the smartg atmAFGL function)
+    b_wav      : Kdis bands or list of wavelenghts
+    wl_ref     : Wavelenght used as reference for calculations
+    aots       : List of aot of each profile in pro_models at the wavelenght wl_ref
+    atm        : The atmAFGL atmosphere used
+    factor     : List of factors in order to consider the mixing of models
+    pfwav      : List of wavelenghts where the phase functions are computed
+    P0         : Surface pressure
+    O3         : Scale ozone vertical column (Dobson units)
+    H2O        : Scale Water vertical column
+    grid       : Shape of vertical atm layers
+
+    ===RETURN:
+    pro_atm_tot : A unique atmosphere profile
+
+    ===Exemple:
+    pro_modelA = atmAFGL('urban', ...)
+    pro_modelB = atmAFGL('desert', ...)
+    A,B = functionToGetAB(...)
+    proFinal = ([pro_modelA, pro_modelB], b_wav, aots=[0.05, 0.5], atm='afgus', factor=[A, B],
+                      pfwav=[550.], P0=1013.25, O3=300., H2O=2., wl_ref=550., grid=None)
+    """
+    
+    if not isinstance(b_wav, BandSet): b_wav_BS = BandSet(b_wav)
+    else : b_wav_BS = b_wav
+    if (pfwav is None): wav = b_wav_BS
+    else: wav = pfwav
+    s_z = len(pro_models[0].axis('z_atm')); s_wav=len(wav);
+    
+    aot_pro = []; assa_pro=[]; Dz=[]; apf=[]; aec_pro=[]
+    aec_pro_lut = []; assa_pro_lut=[];assa_pro_bis=[]; saec_pro=[]
+    APF_top=[]; APF_bot=[]; assa_top=[]; sumAOT_models=0;
+    n_models=len(pro_models)
+    if factor is None:
+        factor=np.full(n_models, 1, dtype=int)
+    
+    for j in range (0, n_models):
+        sumAOT_models += aots[j]*factor[j]
+        aot_pro.append(diff1(pro_models[j][ 'OD_p' ].data*factor[j], axis=1))
+        assa_pro.append(pro_models[j][ 'ssa_p_atm' ].data)
+        Dz.append(diff1(pro_models[j].axis( 'z_atm' )))
+        apf.append(pro_models[j][ 'phase_atm' ].data[ :, None, :, :])
+        aec_pro.append(aot_pro[j]/Dz[j])
+        assa_pro[j][~np.isfinite( assa_pro[j] )] = 1.; aec_pro[j][~np.isfinite( aec_pro[j] )] = 0.;
+
+        # If pfwav is given this enables to avoid some useless calculations
+        if (pfwav is not None):
+            aec_pro_lut.append(LUT(aec_pro[j], names=[ 'wav_phase', 'z_phase'], 
+                                axes=[ b_wav_BS[:], pro_models[0].axis('z_atm')]))
+            assa_pro_lut.append(LUT(assa_pro[j], names=[ 'wav_phase', 'z_phase'], 
+                                axes=[ b_wav_BS[:], pro_models[0].axis('z_atm')]))
+            aec_pro[j] = np.zeros((s_wav, s_z), dtype=np.float64);
+            assa_pro_bis.append(np.zeros((s_wav, s_z), dtype=np.float64));
+            for i in range (0, s_wav):
+                aec_pro[j][i,:]  = aec_pro_lut[j][Idx(pfwav[i]),:]
+                assa_pro_bis[j][i,:]  = assa_pro_lut[j][Idx(pfwav[i]),:]
+        else:
+            assa_pro_bis.append(assa_pro[j])
+
+        saec_pro.append((aec_pro[j]*assa_pro_bis[j])[:, :, np.newaxis, np.newaxis]) 
+        APF_top.append(apf[j]*saec_pro[j])
+        APF_bot.append(saec_pro[j])
+        assa_top.append(aot_pro[j]*assa_pro[j])
+    
+    sAPF_top=APF_top[0]; sAPF_bot = APF_bot[0]; sAOT=aot_pro[0]; s_assa_top=assa_top[0]
+    if n_models > 1:
+        for k in range (0, n_models-1):
+            sAPF_top+=APF_top[k+1]
+            sAPF_bot+= APF_bot[k+1]
+            sAOT+=aot_pro[k+1]
+            s_assa_top+=assa_top[k+1]
+            
+    apf_tot = sAPF_top/sAPF_bot
+    pha_tot = LUT( apf_tot, names=[ 'wav_phase', 'z_phase', 'stk', 'theta_atm'], 
+              axes=[ wav[:], pro_models[0].axis('z_atm'), None, pro_models[0].axis('theta_atm') ] )
+    # ============================================================
+    
+    # Compute the AOT and SSA of the mix model
+    aot_pro_tot  = sAOT
+    aot_pro_tot[~np.isfinite(aot_pro_tot)] = 0.
+    assa_pro_tot = s_assa_top/aot_pro_tot
+    assa_pro_tot[~np.isfinite(assa_pro_tot)] = 1.
+    
+    # Create the LUT profile of the mix model
+    pro_atm_tot = AtmAFGL(atm, comp=[AeroOPAC('desert', sumAOT_models, wl_ref, phase=pha_tot) ], O3=O3, H2O=H2O, P0=P0, 
+                          grid=grid, pfwav=wav[:], prof_aer=(aot_pro_tot,assa_pro_tot), O3_H2O_alt=O3_H2O_alt).calc(b_wav, phaseOpti=True)
+    return pro_atm_tot
+
+
+def compute_AB_coeff(AOT_OBS_wl1, AOT_OBS_wl2, AOT_modelA_wl1, AOT_modelA_wl2, AOT_modelB_wl1, AOT_modelB_wl2):
+    """
+    This function give the A, B factors to multiply with the AOTs of reference models (desert, continental clean, ...),
+    in order to get a mix profile with AOTs and Angstrom coefficient in good agreement with observation.
+
+    ===ARGS:
+    AOT_OBS_wli    : Observaton AOT (scalar) at wavelenght wli
+    AOT_modelX_wli : AOT (scalar) at wavelenght wli of the model X
+
+    ===RETURN:
+    A, B : factors of model A and B
+    """
+
+    ratioA = AOT_modelA_wl2/AOT_modelA_wl1
+    B = (AOT_OBS_wl2 - AOT_OBS_wl1*ratioA) / (AOT_modelB_wl2 - AOT_modelB_wl1*ratioA)
+    A = (AOT_OBS_wl1 - B*AOT_modelB_wl1) / AOT_modelA_wl1
+    
+    return A, B
+
+
+
+def get_AB_coeff(modelA, modelB, wl1, wl2, AOT_OBS_wl1, AOT_OBS_wl2,
+                 aot_refA=0.05, aot_refB=0.5, atm='afglt', P0=None,
+                 O3=None, H2O=None, wl_ref=550., grid=None, O3_H2O_alt=None):
+
+    """
+    This function give the A, B factors to multiply with the AOTs of reference models (desert, continental clean, ...),
+    in order to get a mix profile with AOTs and Angstrom coefficient in good agreement with observation.
+
+    ===ARGS:
+    modelA      : First OPAC model to use for the mix (i.g. 'desert', 'urban', ...)
+    modelB      : Second OPAC model to use for the mix
+    wli         : Observation wavelenghts i used for mixing
+    AOT_OBS_wli : Obsevaton AOT (scalar) at wavelenght wli at z=0 or if O3_H2O_alt not none at z=O3_H2O_alt
+    aot_refA/B  : reference AOT for model A and B at z=0
+    atm         : The atmAFGL atmosphere used
+    P0          : Surface pressure
+    O3          : Scale ozone vertical column (Dobson units)
+    wl_ref      : Wavelenght used as reference for some calculations
+    grid        : Shape of vertical atm layers
+    O3_H2O_alt  : altitude of H2O and O3 values, by default None and scale from z=0km
+
+    ===RETURN:
+    A, B : factors of model A and B
+    """
+
+    prof_MA = AtmAFGL(atm, comp=[AeroOPAC(modelA, aot_refA, wl_ref)],
+                      O3=O3, P0=P0, H2O=H2O, grid=grid, O3_H2O_alt=O3_H2O_alt).calc([wl1, wl2], phase=False, phaseOpti=True)
+
+    prof_MB = AtmAFGL(atm, comp=[AeroOPAC(modelB, aot_refB, wl_ref)],
+                      O3=O3, P0=P0, H2O=H2O, grid=grid, O3_H2O_alt=O3_H2O_alt).calc([wl1, wl2], phase=False, phaseOpti=True)
+
+    # Compute AOT of the 2 models at the 2 wavelenghts (wl1 and wl2)
+    if (O3_H2O_alt is None): alt = -1
+    else: alt = Idx(O3_H2O_alt)
+    AOT_modelA_wl1 = prof_MA['OD_p'][Idx(wl1), alt]; AOT_modelA_wl2 = prof_MA['OD_p'][Idx(wl2), alt];
+    AOT_modelB_wl1 = prof_MB['OD_p'][Idx(wl1), alt]; AOT_modelB_wl2 = prof_MB['OD_p'][Idx(wl2), alt];
+
+    # print(alt)
+    # print("MA (w1\w2)", prof_MA['OD_p'][Idx(wl1), alt], prof_MA['OD_p'][Idx(wl2), alt])
+    # print("MB (w1\w2)", prof_MB['OD_p'][Idx(wl1), alt], prof_MB['OD_p'][Idx(wl2), alt])
+
+    # Compute now the AOT of the mixted model at the 2 wl and the A and B parameters to know the proportion of each model
+    A, B = compute_AB_coeff(AOT_OBS_wl1, AOT_OBS_wl2, AOT_modelA_wl1, AOT_modelA_wl2, AOT_modelB_wl1, AOT_modelB_wl2)
+
+    return A, B
