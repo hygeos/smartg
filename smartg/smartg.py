@@ -102,7 +102,7 @@ type_Spectrum = np.dtype([
 type_EnvMap = np.dtype([
     ('x',      'float32'),    # // x coordinate on the ground
     ('y',      'float32'),    # // y coordinate on the ground
-    ('env_map',   'int32'),   # // environment index map
+    ('env_index',   'int32'),   # // environment index map
 ])
 
 type_Profile = [
@@ -1061,6 +1061,7 @@ class Smartg(object):
         # albedo and adjacency effect
         #
         spectrum = np.zeros(NLAM, dtype=type_Spectrum)
+        envmap = np.zeros(1, dtype=type_EnvMap)
         spectrum['lambda'] = wl[:]
         if env is None:
             # default values (no environment effect)
@@ -1091,11 +1092,12 @@ class Smartg(object):
                 shp = env.alb.map.data.shape
                 env.NXENVMAP = shp[0]
                 env.NYENVMAP = shp[1]
+                size = shp[0]*shp[1]
                 envmap = np.zeros(shp, dtype=type_EnvMap)
                 Y, X = np.meshgrid(env.alb.map.axis('Y'), env.alb.map.axis('X'))
                 envmap['x'] = X
                 envmap['y'] = Y
-                envmap['env_map']=env.alb.get_map(X,Y)
+                envmap['env_index']=env.alb.get_map(X,Y)
                 envmap = to_gpu(envmap)
             else:
                 spectrum['alb_env'] = albenv
@@ -1207,7 +1209,7 @@ class Smartg(object):
          NPhotonsOutTot, sigma, Nkernel, secs_cuda_clock, cMatVisuRecep, matCats, matLoss, wPhCats, wPhCats2
         ) = loop_kernel(NBPHOTONS, faer, foce,
                         NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX_HIST, NLOW, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
-                        NLAM, NSENSOR, self.double, self.kernel, self.kernel2, p, X0, le, tab_sensor, spectrum,
+                        NLAM, NSENSOR, self.double, self.kernel, self.kernel2, p, X0, le, tab_sensor, envmap, spectrum,
                         prof_atm_gpu, prof_oc_gpu, cell_atm_gpu, cell_oc_gpu,
                         wl_proba_icdf, sensor_proba_icdf, cell_proba_icdf, stdev, stdev_lim, self.rng, self.alis,
                         myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, mySPECTObj0, hist=hist)
@@ -2225,7 +2227,7 @@ def reduce_histories(kernel2, tabHist, wl, sigma, NLOW, NBTHETA=1, alb_in=None, 
  
 def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX_HIST, NLOW,
                 NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
-                NLAM, NSENSOR, double, kern, kern2, p, X0, le, tab_sensor, spectrum,
+                NLAM, NSENSOR, double, kern, kern2, p, X0, le, tab_sensor, envmap, spectrum,
                 prof_atm, prof_oc, cell_atm, cell_oc, wl_proba_icdf, sensor_proba_icdf, cell_proba_icdf,
                 stdev, stdev_lim, rng, alis, myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, mySPECTObj0, hist=False):
     """
@@ -2389,7 +2391,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         start_cuda_clock.record()
 
         # kernel launch
-        kern(spectrum, X0, faer, foce,
+        kern(envmap, spectrum, X0, faer, foce,
              errorcount, nThreadsActive, tabPhotons, tabDist, tabHist, tabTransDir,
              Counter, NPhotonsIn, NPhotonsOut, tabthv, tabphi, tab_sensor,
              prof_atm, prof_oc, cell_atm, cell_oc, wl_proba_icdf, sensor_proba_icdf, cell_proba_icdf, 

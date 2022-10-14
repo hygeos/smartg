@@ -112,6 +112,7 @@ __device__ __constant__ int LMODEd;
 
 extern "C" {
 __global__ void launchKernel(
+        struct EnvMap *envmap,
         struct Spectrum *spectrum, float *X0,
         struct Phase *faer, struct Phase *foce2,
         unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons, void *tabDist, void *tabHist,
@@ -226,7 +227,8 @@ __device__ void surfaceBRDF(Photon*, int le, float* tabthv, float* tabphi, int c
 
 
 __device__ void surfaceLambert(Photon*, int le,
-                                    float* tabthv, float* tabphi, struct Spectrum *spectrum,
+                                    float* tabthv, float* tabphi, struct EnvMap *envmap,
+                                    struct Spectrum *spectrum,
                                     struct RNG_State*);
 
 #ifdef OBJ3D
@@ -296,6 +298,8 @@ __device__ float G1B(float , float ) ;
 __device__ float G1GGX(float , float ) ;
 __device__ float LambB(float , float );
 __device__ float LambdaM(float , float ) ;
+
+__device__ unsigned long GetEnvIndex(float3 , struct EnvMap*);
 
 /* RRS functions */
 __device__ float Fk_N2(float);

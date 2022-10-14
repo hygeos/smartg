@@ -34,6 +34,7 @@
 
 extern "C" {
 	__global__ void launchKernel(
+                             struct EnvMap *envmap,
 							 struct Spectrum *spectrum, float *X0,
 							 struct Phase *faer, struct Phase *foce,
 							 unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons, void *tabDist, void *tabHist, 
@@ -735,7 +736,7 @@ extern "C" {
                                        #else
                                        tabthv, tabphi,
                                        #endif
-                                       spectrum, &rngstate);
+                                       envmap, spectrum, &rngstate);
 
                         #ifdef VERBOSE_PHOTON
                         display("SURFACE LE UP", &ph_le);
@@ -796,7 +797,7 @@ extern "C" {
                                #else
                                tabthv, tabphi,
                                #endif
-                               spectrum, &rngstate);
+                               envmap, spectrum, &rngstate);
 
             } // BRDF interface (DIOPTRE=!3)
            } // No environment effects or interaction with the target
@@ -836,7 +837,7 @@ extern "C" {
                                        #else
                                        tabthv, tabphi,
                                        #endif
-                                       spectrum, &rngstate);
+                                       envmap, spectrum, &rngstate);
 
                         // Only two levels for counting by definition
                         #ifdef OBJ3D
@@ -887,7 +888,7 @@ extern "C" {
                                #else
                                tabthv, tabphi,
                                #endif
-                               spectrum, &rngstate);
+                               envmap, spectrum, &rngstate);
            } // photon interaction with the environment 
 
            else {
@@ -935,7 +936,7 @@ extern "C" {
                                    #else
                                    tabthv, tabphi,
                                    #endif
-                                   spectrum, &rngstate);
+                                   envmap, spectrum, &rngstate);
 
                     //  contribution to UP0M level
                     #ifdef ALT_PP                          
@@ -968,7 +969,7 @@ extern "C" {
                           #else
                           tabthv, tabphi,
                           #endif
-                          spectrum, &rngstate);
+                          envmap, spectrum, &rngstate);
 
            #ifdef VERBOSE_PHOTON
            display("SEAFLOOR", &ph);
@@ -5145,10 +5146,11 @@ __device__ void surfaceBRDF(Photon* ph, int le,
 
 /* Surface Lambert */
 __device__ void surfaceLambert(Photon* ph, int le,
-                              float* tabthv, float* tabphi, struct Spectrum *spectrum,
+                              float* tabthv, float* tabphi, struct EnvMap *envmap,
+                              struct Spectrum *spectrum,
                               struct RNG_State *rngstate) {
 	
-    //int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
 	if( SIMd == ATM_ONLY){ // Atmosphere only, surface absorbs all
 		ph->loc = ABSORBED;
 		return;
@@ -5246,7 +5248,12 @@ __device__ void surfaceLambert(Photon* ph, int le,
         #ifndef SIF
         if (ph->env) {
             ph->nenv +=1;
-            ph->weight *= spectrum[ph->ilam].alb_env;
+            if (ENVd==5) {
+                int idenv = GetEnvIndex(ph->pos, envmap);
+                int ispec=envmap[idenv].env_index;
+                ph->weight *= spectrum[ph->ilam].alb_envs[ispec];
+            }
+            else ph->weight *= spectrum[ph->ilam].alb_env;
         }
         else        {
             ph->nref += 1;
@@ -8101,14 +8108,41 @@ __device__ float BRDF(int ilam, float3 v0, float3 v1, struct Spectrum *spectrum 
         //if (wbrdf==0.) printf("%f %f %f %f %f\n",th0,th1,dph,F1_rtls(th0,th1,dph),F2_rtls(th0,th1,dph));
     }
     return wbrdf;
-}
+};
 
 //##########" Planck Radiance ################"
 __device__ float BPlanck(float wav, float T) {
     float a = 2.0*PLANCK*pow(SPEED_OF_LIGHT, 2);
-    float b = PLANCK*SPEED_OF_LIGHT/(wav*BOLTZMANN*T);
+    float b = PLANCK*SPEED_OF_LIGHT/(wav*BOLTZMANN*T);; 
     float intensity = a/((pow(wav, 5)) * (exp(b) - 1.0));
 return intensity;
+}
+
+
+// Get Envmap index at the surface
+__device__ unsigned long GetEnvIndex(float3 pos, struct EnvMap *envmap) {
+    unsigned int idx = blockIdx.x *blockDim.x + threadIdx.x;
+    unsigned long res=1;
+    int resi, resj;
+    
+    for(int i=0; i<NXENVMAPd; i++) {
+        if (pos.x < envmap[i*NYENVMAPd].x) 
+        {resi=i; break;}
+    }
+    if (resi>=NXENVMAPd) resi = NXENVMAPd-1;
+
+    for(int j=0; j<(NYENVMAPd); j++) {
+        if (pos.y < envmap[j].y) 
+        {resj=j; break;}
+    }
+    if (resj>=NYENVMAPd) resj = NYENVMAPd-1;
+
+    res = (unsigned long)resi*NYENVMAPd + (unsigned long)resj;
+
+    /*if (idx==0) printf("%f %f %d %d %d %f %f %d\n",pos.x, pos.y, resi, resj, res,
+        envmap[res].x, envmap[res].y, envmap[res].env_index);*/
+    
+    return res;
 }
 
 

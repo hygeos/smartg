@@ -308,7 +308,7 @@ struct Spectrum {
 struct EnvMap {
     float x;
     float y;
-    int env_map;
+    int env_index;
 };
 
 struct Phase {

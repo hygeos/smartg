@@ -650,7 +650,7 @@ class CompUser(object):
     wav_clip: if True, don't raise Error upon interpolation error in
     wavelength, use the extrema values
 
-    Example: CompUser(density, atm.prof.z, 10., 550.)
+    Example: CompUser(species, density, atm.prof.z, 10., 550.)
              # total optical thickness of 10 at 550 nm
     '''
     def __init__(self, species, density, z, tau_ref, w_ref, phase=None, ssa=None, wav_clip=False):
