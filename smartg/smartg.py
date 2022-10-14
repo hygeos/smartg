@@ -1097,8 +1097,7 @@ class Smartg(object):
                 Y, X = np.meshgrid(env.alb.map.axis('Y'), env.alb.map.axis('X'))
                 envmap['x'] = X
                 envmap['y'] = Y
-                envmap['env_index']=env.alb.get_map(X,Y)
-                envmap = to_gpu(envmap)
+                envmap['env_index']=env.alb.get_map(X,Y)         
             else:
                 spectrum['alb_env'] = albenv
 
@@ -1107,6 +1106,7 @@ class Smartg(object):
         else:
             spectrum['alb_seafloor'] = prof_oc['albedo_seafloor'].data[...]
 
+        envmap = to_gpu(envmap)
         spectrum = to_gpu(spectrum)
 
 
