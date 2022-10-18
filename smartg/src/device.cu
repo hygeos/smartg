@@ -5251,14 +5251,20 @@ __device__ void surfaceLambert(Photon* ph, int le,
             if (ENVd==5) {
                 int idenv = GetEnvIndex(ph->pos, envmap);
                 int ispec=envmap[idenv].env_index;
+                #ifndef ALIS
                 ph->weight *= spectrum[ph->ilam].alb_envs[ispec];
+                #endif
             }
+            #ifndef ALIS
             else ph->weight *= spectrum[ph->ilam].alb_env;
+            #endif
         }
         else        {
             ph->nref += 1;
             ph->weight *=  BRDF(ph->ilam, -v0, ph->v, spectrum);
+            #ifndef ALIS
             if (abs(ENVd)!=2) ph->weight *= spectrum[ph->ilam].alb_surface;  /*[Eq. 16,39]*/
+            #endif
             if (ENVd==2) ph->weight *= gauss_albedo(ph->pos, X0d, Y0d) * (spectrum[ph->ilam].alb_surface - spectrum[ph->ilam].alb_env) +
                     spectrum[ph->ilam].alb_env;
         }
@@ -5267,12 +5273,16 @@ __device__ void surfaceLambert(Photon* ph, int le,
         if (ph->emitter==SOLAR_REF){
             if (ph->env) {
                 ph->nenv +=1;
+                #ifndef ALIS
                 ph->weight *= spectrum[ph->ilam].alb_env;
+                #endif
             }
             else        {
                 ph->nref += 1;
                 ph->weight *=  BRDF(ph->ilam, -v0, ph->v, spectrum);
+                #ifndef ALIS
                 if (abs(ENVd)!=2) ph->weight *= spectrum[ph->ilam].alb_surface;  /*[Eq. 16,39]*/
+                #endif
                 if (ENVd==2) ph->weight *= gauss_albedo(ph->pos, X0d, Y0d) * (spectrum[ph->ilam].alb_surface - spectrum[ph->ilam].alb_env) +
                     spectrum[ph->ilam].alb_env;
             }
@@ -5286,7 +5296,9 @@ __device__ void surfaceLambert(Photon* ph, int le,
         #ifndef OPT3D
 		ph->layer = NOCEd; 
         #endif
+        #ifndef  ALIS
 		ph->weight *= spectrum[ph->ilam].alb_seafloor; /*[Eq. 16,39]*/
+        #endif
         ph->nsfl+=1;
         ph->nint+=1;
 	}
@@ -6510,10 +6522,10 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
       // select the appropriate level (count_level)
       tabCount = (double*)tabPhotons + count_level*JJJ;
       tabCountT= (double*)tabTransDir;
+      tabCountT[TT] = (double)ph->taumax;
       dweight = (double)weight;
       ds = make_double4(st.x, st.y, st.z, st.w);
 
-      tabCountT[TT] = (double)ph->taumax;
 
 	  #if __CUDA_ARCH__ >= 600
 	  // If GTX 1000 or more recent use native double atomic add
@@ -8126,13 +8138,13 @@ __device__ unsigned long GetEnvIndex(float3 pos, struct EnvMap *envmap) {
     int resi, resj;
     
     for(int i=0; i<NXENVMAPd; i++) {
-        if (pos.x < envmap[i*NYENVMAPd].x) 
+        if ((pos.x-X0d) < envmap[i*NYENVMAPd].x) 
         {resi=i; break;}
     }
     if (resi>=NXENVMAPd) resi = NXENVMAPd-1;
 
     for(int j=0; j<(NYENVMAPd); j++) {
-        if (pos.y < envmap[j].y) 
+        if ((pos.y-Y0d) < envmap[j].y) 
         {resj=j; break;}
     }
     if (resj>=NYENVMAPd) resj = NYENVMAPd-1;

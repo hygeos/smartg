@@ -247,7 +247,7 @@ class REPTRAN(object):
         return a REPTRAN_IBAND_LIST for Smartg.run() method
         '''
         ik_l=[]
-        if not isinstance(lmin,list):
+        if not isinstance(lmin,(list,np.ndarray)):
             lmin=[lmin]
             lmax=[lmax]
         for k in self.bands():
@@ -271,7 +271,12 @@ class REPTRAN_IBAND_LIST(object):
 
     def get_weights(self):
         '''
-        return weights, wavelengths, solarflux, band width and normalization in postprocessing
+        return weights, wavelengths, solarflux, bandwidth, bandwidth weighted normalization in postprocessing
+        as MLUT objects
+
+        Outputs:
+        weights, wavelengths, solarflux, bandwidth, norm_bandwidth , norm
+
         '''
         we_l=[]
         ex_l=[]
