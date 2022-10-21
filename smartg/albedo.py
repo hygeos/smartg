@@ -29,7 +29,7 @@ class Albedo_speclib(object):
         self.data = LUT(data[:,1]/100., axes=[data[:,0]*1000.], names=['wavelength'])
 
     def get(self, wl):
-        return self.data[Idx(wl)]
+        return self.data[Idx(wl, fill_value='extrapolate')]
 
 class Albedo_spectrum(object):
     '''
@@ -50,7 +50,7 @@ class Albedo_map(object):
 
     Albedo index (2D), x in km, y in km, Alist: list of Albedo objects
     '''
-    def __init__(self, Ai, lam, x, y, Alist):
+    def __init__(self, Ai, x, y, Alist):
         self.map = LUT(Ai, axes=[x, y], names=['X', 'Y'])
         self.list = Alist
         self.NALB = len(Alist)
@@ -61,3 +61,5 @@ class Albedo_map(object):
     def get_map(self, x0, y0):
         return self.map[Idx(x0, round=True, fill_value='extrema'),
                         Idx(y0, round=True, fill_value='extrema')].astype(int)
+
+

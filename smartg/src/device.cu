@@ -1236,6 +1236,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     ph->nint = 0; // total
     ph->nref = 0; // reflection on surface (main)
     ph->nenv = 0; // reflection on surface (environment)
+    for(int k=0; k<NENVd; k++) ph->nenvs[k]=0; // reflection on 2D environments
     ph->nsfl = 0; // reflection on seafloor 
 	ph->nrrs = 0; // number of RRS events
     ph->nvrs = 0; // number of VRS events
@@ -4188,6 +4189,7 @@ __device__ void choose_emitter(Photon* ph,
             ph->nint = 0;
             ph->nenv = 0;
             ph->nref = 0;
+            for (int k=0; k<NENVd; k++) ph->nenvs[k]=0;
             ph->nrrs = 0;
             ph->nvrs = 0;
             ph->iocean = 0;
@@ -5251,20 +5253,15 @@ __device__ void surfaceLambert(Photon* ph, int le,
             if (ENVd==5) {
                 int idenv = GetEnvIndex(ph->pos, envmap);
                 int ispec=envmap[idenv].env_index;
-                #ifndef ALIS
+                ph->nenvs[ispec]+=1;
                 ph->weight *= spectrum[ph->ilam].alb_envs[ispec];
-                #endif
             }
-            #ifndef ALIS
             else ph->weight *= spectrum[ph->ilam].alb_env;
-            #endif
         }
         else        {
             ph->nref += 1;
             ph->weight *=  BRDF(ph->ilam, -v0, ph->v, spectrum);
-            #ifndef ALIS
             if (abs(ENVd)!=2) ph->weight *= spectrum[ph->ilam].alb_surface;  /*[Eq. 16,39]*/
-            #endif
             if (ENVd==2) ph->weight *= gauss_albedo(ph->pos, X0d, Y0d) * (spectrum[ph->ilam].alb_surface - spectrum[ph->ilam].alb_env) +
                     spectrum[ph->ilam].alb_env;
         }
@@ -5273,16 +5270,12 @@ __device__ void surfaceLambert(Photon* ph, int le,
         if (ph->emitter==SOLAR_REF){
             if (ph->env) {
                 ph->nenv +=1;
-                #ifndef ALIS
                 ph->weight *= spectrum[ph->ilam].alb_env;
-                #endif
             }
             else        {
                 ph->nref += 1;
                 ph->weight *=  BRDF(ph->ilam, -v0, ph->v, spectrum);
-                #ifndef ALIS
                 if (abs(ENVd)!=2) ph->weight *= spectrum[ph->ilam].alb_surface;  /*[Eq. 16,39]*/
-                #endif
                 if (ENVd==2) ph->weight *= gauss_albedo(ph->pos, X0d, Y0d) * (spectrum[ph->ilam].alb_surface - spectrum[ph->ilam].alb_env) +
                     spectrum[ph->ilam].alb_env;
             }
@@ -5296,9 +5289,7 @@ __device__ void surfaceLambert(Photon* ph, int le,
         #ifndef OPT3D
 		ph->layer = NOCEd; 
         #endif
-        #ifndef  ALIS
 		ph->weight *= spectrum[ph->ilam].alb_seafloor; /*[Eq. 16,39]*/
-        #endif
         ph->nsfl+=1;
         ph->nint+=1;
 	}
@@ -6668,16 +6659,30 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
 
           #endif // alt 1D
 
+          // reflection on surface 
+          // specific case of albedo 2D map
+          if (0) {
+          //if (ENVd==5) {
+            for (int n=0; n<NENVd; n++){
+                if (ph->nenvs[n] !=0 && spectrum[ph->ilam].alb_envs[n] != 0.F) 
+                    wabs *= pow(__fdividef(spectrum[il].alb_envs[n],
+                                 spectrum[ph->ilam].alb_envs[n]),
+                      (float)ph->nenvs[n]);
+            }
+          }
+
+          else {
           // reflection on surface (main)
-          if (ph->nref !=0 && spectrum[ph->ilam].alb_surface != 0.F) 
+            if (ph->nref !=0 && spectrum[ph->ilam].alb_surface != 0.F) 
               wabs *= pow(__fdividef(spectrum[il].alb_surface,
                                  spectrum[ph->ilam].alb_surface),
                       (float)ph->nref);
           // reflection on surface (environment)
-          if (ph->nenv !=0 && spectrum[ph->ilam].alb_env != 0.F) 
+            if (ph->nenv !=0 && spectrum[ph->ilam].alb_env != 0.F) 
               wabs *= pow(__fdividef(spectrum[il].alb_env,
                                  spectrum[ph->ilam].alb_env),
                       (float)ph->nenv);
+          }
           // reflection on seafloor
           if (ph->nsfl !=0 && spectrum[ph->ilam].alb_seafloor != 0.F) 
               wabs *= pow(__fdividef(spectrum[il].alb_seafloor,
@@ -7212,6 +7217,7 @@ __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
     ph_le->nref = ph->nref;
     ph_le->nsfl = ph->nsfl;
     ph_le->nenv = ph->nenv;
+    for (int k=0; k<NENVd; k++) ph_le->nenvs[k] = ph->nenvs[k];
     ph_le->env = ph->env;
     ph_le->iocean = ph->iocean;
     ph_le->is = ph->is;
@@ -8133,26 +8139,28 @@ return intensity;
 
 // Get Envmap index at the surface
 __device__ unsigned long GetEnvIndex(float3 pos, struct EnvMap *envmap) {
-    unsigned int idx = blockIdx.x *blockDim.x + threadIdx.x;
-    unsigned long res=1;
-    int resi, resj;
+    //unsigned int idx = blockIdx.x *blockDim.x + threadIdx.x;
+    unsigned long res;
+    int resi=NXENVMAPd-1, resj=NYENVMAPd-1;
+    int i,j;
     
-    for(int i=0; i<NXENVMAPd; i++) {
+    for(i=0; i<(NXENVMAPd-1); i++) {
         if ((pos.x-X0d) < envmap[i*NYENVMAPd].x) 
         {resi=i; break;}
     }
-    if (resi>=NXENVMAPd) resi = NXENVMAPd-1;
 
-    for(int j=0; j<(NYENVMAPd); j++) {
+    //if (resi>=NXENVMAPd) resi = NXENVMAPd-1;
+
+    for(j=0; j<(NYENVMAPd-1); j++) {
         if ((pos.y-Y0d) < envmap[j].y) 
         {resj=j; break;}
     }
-    if (resj>=NYENVMAPd) resj = NYENVMAPd-1;
+    //if (resj>=NYENVMAPd) resj = NYENVMAPd-1;
 
     res = (unsigned long)resi*NYENVMAPd + (unsigned long)resj;
 
-    /*if (idx==0) printf("%f %f %d %d %d %f %f %d\n",pos.x, pos.y, resi, resj, res,
-        envmap[res].x, envmap[res].y, envmap[res].env_index);*/
+    //if (idx==0) printf("%f %f %d %d %d %f %f %d\n",pos.x, pos.y, resi, resj, res,
+     //  envmap[res].x, envmap[res].y, envmap[res].env_index);
     
     return res;
 }

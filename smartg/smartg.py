@@ -327,6 +327,8 @@ class Environment(object):
                              asymptotic value of ALB of the environement. The square of the sigma is ENV_SIZE.
                              3: ALB map2D modulated by checkerboard spatial function)
                              4: same as 1 but for a band defined as Abs(X) <= ENV_SIZE, -4 for Abs(X)>= ENV_SIZE
+                             5: 2D horizontal map of albedos for th whole surface, need ALB to be ALbedo_map object
+                                in that case the surface keyword of Smartg run method is not unused
     ENV_SIZE, X0, Y0: radius and position of the circle outside which ALB model is applied for abs(ENV)=1,
                              The square of the sigma of the gaussian (ENV=2),
                              size of the spatial pattern (in km), origin of the checkerboard at X0,Y0 for ENV=3
@@ -670,7 +672,7 @@ class Smartg(object):
 
 
     def run(self, wl,
-             atm=None, surf=None, water=None, env=None, map2D=None, alis_options=None,
+             atm=None, surf=None, water=None, env=None, alis_options=None,
              NBPHOTONS=1e9, DEPO=0.0279, DEPO_WATER= 0.0906, THVDEG=0., PHVDEG=0., SEED=-1,
              RTER=6371., wl_proba=None, sensor_proba=None, cell_proba=None,
              NBTHETA=45, NBPHI=90, NF=1e6,
@@ -1094,7 +1096,8 @@ class Smartg(object):
                 env.NYENVMAP = shp[1]
                 size = shp[0]*shp[1]
                 envmap = np.zeros(shp, dtype=type_EnvMap)
-                Y, X = np.meshgrid(env.alb.map.axis('Y'), env.alb.map.axis('X'))
+                X, Y = np.meshgrid(env.alb.map.axis('X'), env.alb.map.axis('Y'), indexing='ij')
+                #Y, X = np.meshgrid(env.alb.map.axis('Y'), env.alb.map.axis('X'))
                 envmap['x'] = X
                 envmap['y'] = Y
                 envmap['env_index']=env.alb.get_map(X,Y)         

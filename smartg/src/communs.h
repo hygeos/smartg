@@ -241,6 +241,8 @@ public:
     unsigned short nref;
     // Number of reflection on environment
     unsigned short nenv;
+    // Number of reflection on 2D environments
+    unsigned short nenvs[MAX_NREF];
     // Number of reflection on seafloor
     unsigned short nsfl;
     // Number of Atmospheric Rotational Raman Scattering
