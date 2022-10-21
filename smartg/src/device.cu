@@ -6661,8 +6661,7 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
 
           // reflection on surface 
           // specific case of albedo 2D map
-          if (0) {
-          //if (ENVd==5) {
+          if (ENVd==5) {
             for (int n=0; n<NENVd; n++){
                 if (ph->nenvs[n] !=0 && spectrum[ph->ilam].alb_envs[n] != 0.F) 
                     wabs *= pow(__fdividef(spectrum[il].alb_envs[n],
