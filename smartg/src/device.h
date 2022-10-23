@@ -299,7 +299,7 @@ __device__ float G1GGX(float , float ) ;
 __device__ float LambB(float , float );
 __device__ float LambdaM(float , float ) ;
 
-__device__ unsigned long GetEnvIndex(float3 , struct EnvMap*);
+__device__ int GetEnvIndex(float3 , struct EnvMap*);
 
 /* RRS functions */
 __device__ float Fk_N2(float);

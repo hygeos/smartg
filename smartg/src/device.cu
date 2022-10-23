@@ -554,7 +554,8 @@ extern "C" {
            if( (ENVd==0) || (ENVd==2) || 
                ((ENVd==3) && checkerboard(ph.pos, X0d, Y0d)) ||
                ((ENVd==1) && (dis<=ENV_SIZEd)) || ((ENVd==-1) && (dis>=ENV_SIZEd)) || 
-               ((ENVd==4) && (abs(ph.pos.x)<=ENV_SIZEd)) || ((ENVd==-4) && (abs(ph.pos.x)>=ENV_SIZEd)) 
+               ((ENVd==4) && (abs(ph.pos.x)<=ENV_SIZEd)) || ((ENVd==-4) && (abs(ph.pos.x)>=ENV_SIZEd)) ||
+               ((ENVd==5) && (GetEnvIndex(ph.pos, envmap)<0))
                || ph.loc==SURF0M ) { 
 
             ////////////////////////////
@@ -813,7 +814,8 @@ extern "C" {
                     ((ENVd==-1) && (dis<ENV_SIZEd)) || 
                     ((ENVd==4) && (abs(ph.pos.x)>ENV_SIZEd)) || 
                     ((ENVd==-4) && (abs(ph.pos.x)<ENV_SIZEd)) ||
-                    ((ENVd==5)) ) { 
+                    ((ENVd==5) && (GetEnvIndex(ph.pos, envmap)>=0))) 
+                    { 
                 ph.env = 1;
                 //
 		        // 1- Surface Local Estimate (not evaluated if atmosphere only simulation)*/
@@ -5251,8 +5253,7 @@ __device__ void surfaceLambert(Photon* ph, int le,
         if (ph->env) {
             ph->nenv +=1;
             if (ENVd==5) {
-                int idenv = GetEnvIndex(ph->pos, envmap);
-                int ispec=envmap[idenv].env_index;
+                int ispec = GetEnvIndex(ph->pos, envmap);
                 ph->nenvs[ispec]+=1;
                 ph->weight *= spectrum[ph->ilam].alb_envs[ispec];
             }
@@ -8137,10 +8138,10 @@ return intensity;
 
 
 // Get Envmap index at the surface
-__device__ unsigned long GetEnvIndex(float3 pos, struct EnvMap *envmap) {
+__device__ int GetEnvIndex(float3 pos, struct EnvMap *envmap) {
     //unsigned int idx = blockIdx.x *blockDim.x + threadIdx.x;
     unsigned long res;
-    int resi=NXENVMAPd-1, resj=NYENVMAPd-1;
+    int resi=NXENVMAPd-1, resj=NYENVMAPd-1, ispec;
     int i,j;
     
     for(i=0; i<(NXENVMAPd-1); i++) {
@@ -8160,8 +8161,9 @@ __device__ unsigned long GetEnvIndex(float3 pos, struct EnvMap *envmap) {
 
     //if (idx==0) printf("%f %f %d %d %d %f %f %d\n",pos.x, pos.y, resi, resj, res,
      //  envmap[res].x, envmap[res].y, envmap[res].env_index);
-    
-    return res;
+    ispec=envmap[res].env_index;
+
+    return ispec;
 }
 
 
