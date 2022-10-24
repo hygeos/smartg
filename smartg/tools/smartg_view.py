@@ -395,34 +395,34 @@ def spectrum_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up 
             if logI:
                 lI=I.apply(np.log10)
                 lI.desc = mdesc(I.desc, logI=logI)
-                spectrum(lI, sub='221', fig=fig, color=color,  **kwargs)
+                spectrum(lI, sub=221, fig=fig, color=color,  **kwargs)
             else:
                 I.desc = mdesc(I.desc)
-                spectrum(I,  sub='221', fig=fig, color=color,   **kwargs)
+                spectrum(I,  sub=221, fig=fig, color=color,   **kwargs)
             Q.desc = mdesc(Q.desc)
             U.desc = mdesc(U.desc)
-            spectrum(Q, sub='222', fig=fig, color=color, **kwargs)
-            spectrum(U, sub='223', fig=fig, color=color, **kwargs)
+            spectrum(Q, sub=222, fig=fig, color=color, **kwargs)
+            spectrum(U, sub=223, fig=fig, color=color, **kwargs)
             if Circ:
                 V.desc = mdesc(V.desc)
-                spectrum(V, sub='224', fig=fig, color=color, **kwargs)
+                spectrum(V, sub=224, fig=fig, color=color, **kwargs)
             else:
-                spectrum(DoP, sub='224', fig=fig,  color=color, percent=True, **kwargs)
+                spectrum(DoP, sub=224, fig=fig,  color=color, percent=True, **kwargs)
         else:
             # show only I and PR
             if fig is None: fig = figure(figsize=(8, 4))
             if logI:
                 lI=I.apply(np.log10)
                 lI.desc = mdesc(I.desc, logI=logI)
-                spectrum(lI, sub='121', fig=fig, color=color,   **kwargs)
+                spectrum(lI, sub=121, fig=fig, color=color,   **kwargs)
             else:
                 I.desc = mdesc(I.desc)
-                spectrum(I, sub='121', fig=fig, color=color,  **kwargs)
+                spectrum(I, sub=121, fig=fig, color=color,  **kwargs)
 
             if Circ:
-                spectrum(DoCP, sub='122', fig=fig,  color=color, percent=True, **kwargs)
+                spectrum(DoCP, sub=122, fig=fig,  color=color, percent=True, **kwargs)
             else:
-                spectrum(DoP, sub='122', fig=fig, color=color, percent=True, **kwargs)
+                spectrum(DoP, sub=122, fig=fig, color=color, percent=True, **kwargs)
 
         return fig
 
@@ -438,15 +438,15 @@ def spectrum_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up 
         Q.desc = mdesc(Q.desc)
         U.desc = mdesc(U.desc)
         V.desc = mdesc(V.desc)
-        spectrum(I, sub='141', fig=fig1, color=color,  **kwargs)
-        spectrum(Q, sub='142', fig=fig1, color=color, **kwargs)
-        spectrum(U, sub='143', fig=fig1, color=color, **kwargs)
-        spectrum(V, sub='144', fig=fig1, color=color, **kwargs)
+        spectrum(I, sub=141, fig=fig1, color=color,  **kwargs)
+        spectrum(Q, sub=142, fig=fig1, color=color, **kwargs)
+        spectrum(U, sub=143, fig=fig1, color=color, **kwargs)
+        spectrum(V, sub=144, fig=fig1, color=color, **kwargs)
         
-        spectrum(lI, sub='141', fig=fig2, color=color, **kwargs)
-        spectrum(DoLP, sub='142', fig=fig2, color=color, percent=True, **kwargs)
-        spectrum(DoCP, sub='143', fig=fig2, color=color, percent=True, **kwargs)
-        spectrum(DoP, sub='144', fig=fig2, color=color, percent=True, **kwargs)
+        spectrum(lI, sub=141, fig=fig2, color=color, **kwargs)
+        spectrum(DoLP, sub=142, fig=fig2, color=color, percent=True, **kwargs)
+        spectrum(DoCP, sub=143, fig=fig2, color=color, percent=True, **kwargs)
+        spectrum(DoP, sub=144, fig=fig2, color=color, percent=True, **kwargs)
         #spectrum(AoLP, index=ind,  sub=144, fig=fig2, color=color, **kwargs)
 
         return fig1, fig2

@@ -540,6 +540,8 @@ extern "C" {
 
            /* Define distance form the photon surface impact coordinates and the center of the ENV zone X0d,Y0d */
            float dis = sqrtf((ph.pos.x-X0d)*(ph.pos.x-X0d) +(ph.pos.y-Y0d)*(ph.pos.y-Y0d));
+           int ispec=0;
+           if (ENVd==5) ispec = GetEnvIndex(ph.pos, envmap);
 
            ////////////////////////////
            // if no environment effects 
@@ -550,12 +552,13 @@ extern "C" {
            // or if ENV==3 and checkerboard return white square of albedo map
            // or abs(X) <= ENV_SIZEd if ENVd=4 (Environment outside disk) 
            // or abs(X) >= ENV_SIZEd if ENVd=-4 (Environment inside disk)
+           // if ENV==5 and ispec <0 (Map 2D environement, points to surface land or ocean seafloor if photon is reaching ocean bottom)
            ////////////////////////////
            if( (ENVd==0) || (ENVd==2) || 
                ((ENVd==3) && checkerboard(ph.pos, X0d, Y0d)) ||
                ((ENVd==1) && (dis<=ENV_SIZEd)) || ((ENVd==-1) && (dis>=ENV_SIZEd)) || 
                ((ENVd==4) && (abs(ph.pos.x)<=ENV_SIZEd)) || ((ENVd==-4) && (abs(ph.pos.x)>=ENV_SIZEd)) ||
-               ((ENVd==5) && (GetEnvIndex(ph.pos, envmap)<0))
+               ((ENVd==5) && (ispec<0))
                || ph.loc==SURF0M ) { 
 
             ////////////////////////////
@@ -808,13 +811,14 @@ extern "C" {
            // Environment effects
            // photon is reflected by the environment:
            // dis > ENV_SIZEd if ENVd=1 (Environment outside disk) or dis < ENV_SIZEd if ENVd=-1 (Environment inside disk)
+           // if ENV==5 and ispec >=0 (Map 2D environement, points to land environment index)
            ////////////////////////////
            else if( ((ENVd==1) && (dis>ENV_SIZEd)) || 
                     ((ENVd==3) && !checkerboard(ph.pos, X0d, Y0d)) ||
                     ((ENVd==-1) && (dis<ENV_SIZEd)) || 
                     ((ENVd==4) && (abs(ph.pos.x)>ENV_SIZEd)) || 
                     ((ENVd==-4) && (abs(ph.pos.x)<ENV_SIZEd)) ||
-                    ((ENVd==5) && (GetEnvIndex(ph.pos, envmap)>=0))) 
+                    ((ENVd==5) && (ispec>=0))) 
                     { 
                 ph.env = 1;
                 //
@@ -5290,8 +5294,15 @@ __device__ void surfaceLambert(Photon* ph, int le,
         #ifndef OPT3D
 		ph->layer = NOCEd; 
         #endif
-		ph->weight *= spectrum[ph->ilam].alb_seafloor; /*[Eq. 16,39]*/
-        ph->nsfl+=1;
+        if (ENVd==5) {
+            int ispec = -GetEnvIndex(ph->pos, envmap);
+            ph->nenvs[ispec]+=1;
+            ph->weight *= spectrum[ph->ilam].alb_envs[ispec];
+        }
+		else {
+            ph->weight *= spectrum[ph->ilam].alb_seafloor; /*[Eq. 16,39]*/
+            ph->nsfl+=1;
+        }
         ph->nint+=1;
 	}
 
