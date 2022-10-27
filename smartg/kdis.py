@@ -407,7 +407,7 @@ class KDIS(object):
         '''
         ik_l=[]
 
-        if not isinstance(lmin,list):
+        if not isinstance(lmin,(list,np.ndarray)):
             lmin=[lmin]
             lmax=[lmax]
         for k in self.bands():

@@ -1461,6 +1461,7 @@ class Profile_base(object):
                 dens_o3_alt = f_dens_o3(z_alt)
                 o3_afgl = (simps(dens_o3_alt, -z_alt) * 1e5)/2.69e16
                 self.dens_o3 *= O3/o3_afgl
+            if O3==0 : self.dens_o3[:] = 0.
 
         # scale to total H2O content
         if H2O is not None:
@@ -1474,6 +1475,7 @@ class Profile_base(object):
                 dens_h2o_alt = f_dens_h2o(z_alt)
                 h2o_afgl = (simps(dens_h2o_alt, -z_alt) * 1e5 * M_H2O)/Avogadro
                 self.dens_h2o *= H2O/h2o_afgl
+            if H2O==0 : self.dens_h2o[:] = 0.
 
         if P0 is not None:
             self.P *= P0/self.P[-1]
