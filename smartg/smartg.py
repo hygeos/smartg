@@ -2338,7 +2338,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
     if (NATM >0):
         tabTransDir = gpuzeros((NSENSOR,NLAM), dtype=np.float64)
     else :
-        tabTransDir = gpuzeros((1), dtype=np.float64)
+        tabTransDir = gpuzeros((1,1), dtype=np.float64)
     
     if ((NATM+NOCE >0) and (NATM_ABS+NOCE_ABS <500) and alis) : 
         tabDistTot = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI), dtype=np.float64)
