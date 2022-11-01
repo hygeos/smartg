@@ -96,6 +96,7 @@ type_Spectrum = np.dtype([
     ('alb_env',      'float32'),
     ('k1p_surface' , 'float32'),
     ('k2p_surface' , 'float32'),
+    ('k3p_surface' , 'float32'),
     ('alb_envs' , 'float32', MAX_NREF),
     ])
 
@@ -311,10 +312,39 @@ class RTLSSurface(object):
                 'BRDF': 1,
                 'SINGLE': 1,
                 }
+        self.kp = kp+(Albedo_cst(0.0),)
+        self.alb= None
+    def __str__(self):
+        return 'RTLS-ALB={SURFALB}'.format(**self.dict)
+
+
+class RPVSurface(object):
+    '''
+    Definition of a RPV reflector:
+    "Rahman, H., M. M. Verstraete, and B. Pinty, (1993) Coupled surface-atmosphere reflectance (CSAR) model. 
+    1. Model description and inversion on synthetic data, JGR, 98, 20,779-20,789."
+
+    kp = (r0 , k, bt, rc): a tuple of
+        r0 : Normalization 
+        k: Minnaert exponent
+        bt: Henyey-Greenstein asymetry parameter
+        rc: Hotpsot parameter
+    '''
+    def __init__(self, kp=(Albedo_cst(0.5), Albedo_cst(1.0), Albedo_cst(0.0), Albedo_cst(0.0))):
+        self.dict = {
+                'SUR': 1,
+                'DIOPTRE': 5,
+                'WINDSPEED': -999.,
+                'NH2O': -999.,
+                'WAVE_SHADOW': 0,
+                'BRDF': 1,
+                'SINGLE': 1,
+                }
         self.kp = kp
         self.alb= None
     def __str__(self):
         return 'RTLS-ALB={SURFALB}'.format(**self.dict)
+
 
 
 class Environment(object):
@@ -327,7 +357,7 @@ class Environment(object):
                              asymptotic value of ALB of the environement. The square of the sigma is ENV_SIZE.
                              3: ALB map2D modulated by checkerboard spatial function)
                              4: same as 1 but for a band defined as Abs(X) <= ENV_SIZE, -4 for Abs(X)>= ENV_SIZE
-                             5: 2D horizontal map of albedos for th whole surface, need ALB to be ALbedo_map object
+                             5: 2D horizontal map of albedos for the whole surface, need ALB to be ALbedo_map object
                                 in that case the surface keyword of Smartg run method is not unused
     ENV_SIZE, X0, Y0: radius and position of the circle outside which ALB model is applied for abs(ENV)=1,
                              The square of the sigma of the gaussian (ENV=2),
@@ -1075,6 +1105,7 @@ class Smartg(object):
                     spectrum['alb_surface'] = surf.kp[0].get(wl[:])
                     spectrum['k1p_surface'] = surf.kp[1].get(wl[:])
                     spectrum['k2p_surface'] = surf.kp[2].get(wl[:])
+                    spectrum['k3p_surface'] = surf.kp[3].get(wl[:])
                 else:
                     spectrum['alb_surface'] = -999.
             else:
@@ -1083,10 +1114,11 @@ class Smartg(object):
             assert surf is not None
             if surf.alb is not None:
                spectrum['alb_surface'] = surf.alb.get(wl[:])
-            elif surf.kp is not None:
+            elif surf.kp is not None :
                spectrum['alb_surface'] = surf.kp[0].get(wl[:])
                spectrum['k1p_surface'] = surf.kp[1].get(wl[:])
                spectrum['k2p_surface'] = surf.kp[2].get(wl[:])
+               spectrum['k3p_surface'] = surf.kp[3].get(wl[:])
             albenv = env.alb.get(wl[:])
             if albenv.ndim==2:
                 env.NENV = albenv.shape[1]
@@ -1097,7 +1129,6 @@ class Smartg(object):
                 size = shp[0]*shp[1]
                 envmap = np.zeros(shp, dtype=type_EnvMap)
                 X, Y = np.meshgrid(env.alb.map.axis('X'), env.alb.map.axis('Y'), indexing='ij')
-                #Y, X = np.meshgrid(env.alb.map.axis('Y'), env.alb.map.axis('X'))
                 envmap['x'] = X
                 envmap['y'] = Y
                 envmap['env_index']=env.alb.get_map(X,Y)         

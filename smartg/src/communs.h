@@ -304,6 +304,7 @@ struct Spectrum {
     float alb_env;
     float k1p_surface;
     float k2p_surface;
+    float k3p_surface;
     float alb_envs[MAX_NREF];
 };
 

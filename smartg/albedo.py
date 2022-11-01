@@ -47,8 +47,19 @@ class Albedo_spectrum(object):
 class Albedo_map(object):
     '''
     Albedo map of Albedo objects:
+    A 2D horizontal map of spectral albedos can be constructed
+    Spectral albedos are limited to a MAX_NREF=10 different kind, could be extended
+    They should be defined using Albedo_cst, Albedo_spectrum or Albedo_speclib classes
+
+    The horizontal grid for the 2D map of albedo is rectangular
+    and x and y boundaries on the surface (in km) are encoded in monotonic np.arrays whose values 
+    are the upper limit of the rectangles:
+    if x = [x0, x1, x2, ..., xn], the the limits are [-Inf, x0], [x0, x1], ..., [xn-1, xn], 
+    with xn big enough to be considered as +Inf 
 
     Albedo index (2D), x in km, y in km, Alist: list of Albedo objects
+    we assigned each rectangle an index in Alb_list, in a 2D array of shape (len(x),len(y))
+    Negative indices are for the surf properties.
     '''
     def __init__(self, Ai, x, y, Alist):
         self.map = LUT(Ai, axes=[x, y], names=['X', 'Y'])

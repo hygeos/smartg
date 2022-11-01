@@ -8154,19 +8154,31 @@ __device__ int GetEnvIndex(float3 pos, struct EnvMap *envmap) {
     unsigned long res;
     int resi=NXENVMAPd-1, resj=NYENVMAPd-1, ispec;
     int i,j;
+    float posx = pos.x;
+    float posy = pos.y;
+    #ifdef SPHERIQUE
+    // Origin of env map grid in geocentric frame
+    float3 ref = make_float3(0.F, 0.F, RTER);
+    float dist = acosf(dot(ref, pos)/(RTER*RTER)) * RTER; // distance on Earth between point and origin
+    float distXY = sqrtf(pos.x*pos.x+pos.y*pos.y); // planar distance between projected point on plane Z=0 and origin
+    if (distXY !=0.) {
+        posx=pos.x*dist/distXY;
+        posy=pos.y*dist/distXY;
+    }
+    #endif
     
     for(i=0; i<(NXENVMAPd-1); i++) {
-        if ((pos.x-X0d) < envmap[i*NYENVMAPd].x) 
+        if ((posx-X0d) < envmap[i*NYENVMAPd].x) 
+        //if ((pos.x-X0d) < envmap[i*NYENVMAPd].x) 
         {resi=i; break;}
     }
 
-    //if (resi>=NXENVMAPd) resi = NXENVMAPd-1;
 
     for(j=0; j<(NYENVMAPd-1); j++) {
-        if ((pos.y-Y0d) < envmap[j].y) 
+        if ((posy-Y0d) < envmap[j].y) 
+        //if ((pos.y-Y0d) < envmap[j].y) 
         {resj=j; break;}
     }
-    //if (resj>=NYENVMAPd) resj = NYENVMAPd-1;
 
     res = (unsigned long)resi*NYENVMAPd + (unsigned long)resj;
 
