@@ -1295,7 +1295,6 @@ class AtmAFGL(Atmosphere):
             dtau, ssa_p = comp.dtau_ssa(wav, self.pfgrid, rh=rh)
             dtau = dtau[:,1:][:,:,None,None]
             ssa_p = ssa_p[:,1:][:,:,None,None]
-            aa=comp.phase(wav, self.pfgrid, rh, NBTHETA=NBTHETA, phaseOpti=phaseOpti)
             pha += comp.phase(wav, self.pfgrid, rh, NBTHETA=NBTHETA, phaseOpti=phaseOpti)*dtau*ssa_p
             norm += dtau*ssa_p
         if len(self.comp) > 0:
