@@ -291,7 +291,8 @@ class Species(object):
 
 
 class SpeciesUser(Species):
-    def __init__(self, name, ext, ssa, phase):
+    def __init__(self, name, ext, ssa, phase, fill_value=None):
+        #Species.__init__(self, species='inso.mie', wav_clip=wav_clip)
         lam   = ext.axis('wavelength')
         lamp  = phase.axis('wavelength')
         nlam  = lam.size
@@ -299,6 +300,7 @@ class SpeciesUser(Species):
         theta = phase.axis('theta_atm')
         ntheta= theta.size
         self.name = name
+        self.fill_value = fill_value
         self._rh_or_reff = 'rh' 
         self._nrh_reff = 1 # no RH dependence
         self._ext = LUT(
@@ -338,8 +340,8 @@ class SpeciesUser(Species):
         assert isiterable(wav)
 
         # wavelength interpolation
-        ext = self._ext[Idx(wav), 0]
-        ssa = self._ssa[Idx(wav), 0]
+        ext = self._ext[Idx(wav, fill_value=self.fill_value), 0]
+        ssa = self._ssa[Idx(wav, fill_value=self.fill_value), 0]
 
         # create empty dimension for rh
         ext = ext[:,None]
