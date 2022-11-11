@@ -2052,3 +2052,211 @@ def get_AB_coeff(modelA, modelB, wl1, wl2, AOT_OBS_wl1, AOT_OBS_wl2,
     A, B = compute_AB_coeff(AOT_OBS_wl1, AOT_OBS_wl2, AOT_modelA_wl1, AOT_modelA_wl2, AOT_modelB_wl1, AOT_modelB_wl2)
 
     return A, B
+
+
+def check_date (dates, year):
+    """
+    Description: Make sure the parameter "dates" does not have dates of different years and
+                 make sure the unique year of all the dates is equal to the "year" parameter
+
+    ===Parameters:
+    dates : Numpy array or list of dates at format "yyyy:mm:dd"
+    year  : Interger at format yyyy
+    """
+
+    date_list = []
+    dates_unique = np.unique(dates)
+    for date in dates_unique: date_list.append(date.split(':')[-1])
+    date_list = np.unique(date_list)
+
+    if date_list.size != 1: raise NameError('Since the return result is with a "day of year" dimension, " \
+                                        + " a file on several years of data is not authorised!')
+    if int(date_list) != year: raise NameError('The chosen year and the data year are not the same!')
+
+    return
+
+def read_Aeronet_AOD(file, year):
+    """
+    Description: Extraction of AOD data from Aeronet file
+                 and incoporate them in a LUT object
+
+    === Parameters:
+    file : Extinction AOD aeronet file (finishing by .aod)
+    year : The year for 'Day_of_Year(Fraction)' dimension creation
+
+    === Return
+    LUT object with extinction AOD in function of Day_of_Year(Fraction) and wavelength
+    """
+
+    AOD = pd.read_csv(file, sep=',', skiprows=6)
+    NTIME_AOD = AOD.index.size
+
+    check_date (dates=AOD["Date(dd:mm:yyyy)"].values, year=year)
+
+    wav_ext = []
+    for key in AOD.keys():
+        if 'AOD_Extinction-Total' in key:
+            str_bis = key.split('[')
+            wav_ext.append(float(str_bis[1][:-3]))
+    wav_ext = np.unique(wav_ext)        
+    NWAV_EXT = len(wav_ext)
+
+    mat_ext = np.zeros((NTIME_AOD, NWAV_EXT), dtype=np.float64)
+    for itime in range (0, NTIME_AOD):
+        ind = (AOD.index == itime)
+        for iwav, wav in enumerate(wav_ext):
+            key = 'AOD_Extinction-Total[' + str(int(wav)) + 'nm]'
+            mat_ext[itime, iwav] = AOD[ind][key]
+
+    AOD_ext_lut = LUT(mat_ext, axes=[AOD["Day_of_Year(Fraction)"].values, wav_ext],
+                      names=['Day_of_Year(Fraction)', 'wavelength'])
+
+    return AOD_ext_lut
+    
+def read_Aeronet_SSA(file, year):
+    """
+    Description: Extraction of SSA data from Aeronet file
+                 and incoporate them in a LUT object
+
+    === Parameters:
+    file : Single scattering albedo aeronet file (finishing by .ssa)
+    year : The year for 'Day_of_Year(Fraction)' dimension creation
+
+    === Return
+    LUT object with SSA in function of Day_of_Year(Fraction) and wavelength
+    """
+    SSA = pd.read_csv(file, sep=',', skiprows=6)
+    NTIME_SSA = SSA.index.size
+
+    check_date (dates=SSA["Date(dd:mm:yyyy)"].values, year=year)
+
+    wav_ssa = []
+    for key in SSA.keys():
+        if 'Single_Scattering_Albedo' in key:
+            str_bis = key.split('[')
+            wav_ssa.append(float(str_bis[1][:-3]))
+    wav_ssa = np.unique(wav_ssa)        
+    NWAV_SSA = len(wav_ssa)
+
+    mat_ssa = np.zeros((NTIME_SSA, NWAV_SSA), dtype=np.float64)
+    for itime in range (0, NTIME_SSA):
+        ind = (SSA.index == itime)
+        for iwav, wav in enumerate(wav_ssa):
+            key = 'Single_Scattering_Albedo[' + str(int(wav)) + 'nm]'
+            mat_ssa[itime, iwav] = SSA[ind][key]
+
+    SSA_lut = LUT(mat_ssa, axes=[SSA["Day_of_Year(Fraction)"].values, wav_ssa],
+                  names=['Day_of_Year(Fraction)', 'wavelength'])
+
+    return SSA_lut
+
+def read_Aeronet_PFN(file, year):
+    """
+    Description: Extraction of PFN data from Aeronet file
+                 and incoporate them in a LUT object
+
+    === Parameters:
+    file : Phase matrix aeronet file (finishing by .pfn)
+    year : The year for 'Day_of_Year(Fraction)' dimension creation
+
+    === Return
+    LUT object with PFN in function of Day_of_Year(Fraction), wavelength and thetha_atm
+    """
+    PFN = pd.read_csv(file, sep=',', skiprows=6)
+    PFN = PFN[PFN['Phase_Function_Mode']=='Total'] # take only total of fine + coarse
+    NTIME_PFN = PFN.index.size
+
+    check_date (dates=PFN["Date(dd:mm:yyyy)"].values, year=year)
+
+    ang = []; wav_pfn = []
+    for key in PFN.keys():
+        if '0000' in key:
+            str_bis = key.split('[')
+            ang.append(float(str_bis[0]))
+            wav_pfn.append(float(str_bis[1][:-3]))
+    ang = np.unique(ang)[::-1]
+    wav_pfn = np.unique(wav_pfn)
+    NANG = len(ang)
+    NWAV_PFN = len(wav_pfn)
+
+    mat_pfn = np.zeros((NTIME_PFN, NWAV_PFN, NANG), dtype=np.float64)
+    for itime in range (0, NTIME_PFN):
+        ind = (PFN.index == itime)
+        for iwav, wav in enumerate(wav_pfn):
+            for iang, ag in enumerate(ang):
+                ang_str = "%.6f" % float(ag)
+                key = ang_str + "[" + str(int(wav)) + 'nm]'
+                mat_pfn[itime, iwav, iang] = PFN[ind][key]
+    
+    phase_lut = LUT(mat_pfn, axes=[PFN["Day_of_Year(Fraction)"].values, wav_pfn, ang],
+                    names=['Day_of_Year(Fraction)', 'wavelength', 'theta_atm'])
+
+    return phase_lut
+
+
+def atm_pro_from_aeronet(date, time, aod_file, ssa_file, pfn_file, b_wav, pfwav=None,
+                         z_profil=np.linspace(100., 0., num=101), dens = None,
+                         atm_name="afglt", P0=None, O3=None, H2O=None, O3_H2O_alt=None,
+                         fill_value_time=None):
+    """
+    Description: In progress...
+
+    === Parameters:
+    date            : Date in the following format -> "yyyy-mm-dd"
+    time            : Time in the following format -> "hh:mm:ss"
+    AOD_file        : Extinction AOD aeronet file (finishing by .aod)
+    ssa_file        : Single scattering albedo aeronet file (finishing by .ssa)
+    pfn_file        : Phase matrix aeronet file (finishing by .pfn)
+    bwav            : Kdis bands or list of wavelenghts
+    pfwav           : List of wavelenghts where the phase functions are computed
+    z_profil        : Altitude grid profil
+    dens            : aerosol density in funtion of z_profil
+    atm_name        : The atmAFGL atmosphere used
+    P0              : Surface pressure
+    O3              : Scale ozone vertical column (Dobson units)
+    H2O             : Scale Water vertical column
+    O3_H2O_alt      : Altitude of H2O and O3 values, by default None and scale from z=0km
+    fill_value_time : Passed to interp1d for time interpolation e.g "fill_value='extrema'"
+
+    === return
+    SMART-G atmosphere profil MLUT
+    """
+
+    pd_date = pd.Timestamp(date + " " + time)
+    nb_sec_day = 24*60*60 # number of seconds in one day
+    day_frac = 1 - ( (nb_sec_day - (pd_date.hour*60*60 + pd_date.minute*60 + pd_date.second)) / nb_sec_day )
+    day_year_frac = pd_date.day_of_year + day_frac
+    year = pd_date.year
+
+    aod_lut = read_Aeronet_AOD(aod_file, year=year)
+    ssa_lut = read_Aeronet_SSA(ssa_file, year=year)
+    pfn_lut = read_Aeronet_PFN(pfn_file, year=year)
+       
+    aod_lut = aod_lut.sub({"Day_of_Year(Fraction)": Idx(day_year_frac, fill_value=fill_value_time)})
+    ssa_lut = ssa_lut.sub({"Day_of_Year(Fraction)": Idx(day_year_frac, fill_value=fill_value_time)})
+    pfn_lut = pfn_lut.sub({"Day_of_Year(Fraction)": Idx(day_year_frac, fill_value=fill_value_time)})
+    pfn_data = np.stack([pfn_lut[:,:]]*4, axis=1)
+    pfn_data[:,2:3,:]=0.
+    wav_pfn = pfn_lut.axes[0]
+    ang_pfn = pfn_lut.axes[1]
+    pfn_lut=LUT(pfn_data, axes=[wav_pfn, None, ang_pfn], names=['wavelength', 'None', 'theta_atm'])
+
+    if not isinstance(b_wav, BandSet): b_wav_BS = BandSet(b_wav)
+    else : b_wav_BS = b_wav
+    b_wav_unique = np.unique(b_wav_BS)
+    if (pfwav is None): pf_wav = b_wav_unique
+    else: pf_wav = pfwav
+
+    ext_interp = LUT(aod_lut[Idx(b_wav_unique, fill_value='extrapolate')], axes=[b_wav_unique], names=['wavelength'])
+    ssa_interp = LUT(ssa_lut[Idx(b_wav_unique, fill_value='extrapolate')], axes=[b_wav_unique], names=['wavelength'])
+    pfn_interp = LUT(pfn_lut[Idx(b_wav_unique, fill_value='extrapolate'), :, :], axes=[b_wav_unique, None, ang_pfn], names=['wavelength', 'None', 'theta_atm'])
+    aeronet_specie = SpeciesUser(name='aeronet', ext=ext_interp, ssa=ssa_interp, phase=pfn_interp, fill_value='extrema')
+
+
+    if dens is None: D=0.33; aero_dens = np.exp(-(z_profil-5)**2/D**2)
+    else: aero_dens = dens
+
+    comp  = CompUser(aeronet_specie, aero_dens, z_profil, aod_lut[0], aod_lut.axes[0][0])
+    atm_pro = AtmAFGL(atm_name, grid=z_profil, P0=P0, O3=O3, H2O=H2O, comp=[comp], pfwav=pf_wav, O3_H2O_alt=O3_H2O_alt).calc(b_wav_BS, phaseOpti=True)
+
+    return atm_pro
