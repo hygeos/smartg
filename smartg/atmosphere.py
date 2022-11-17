@@ -2249,9 +2249,6 @@ def atm_pro_from_aeronet(date, time, aod_file, ssa_file, pfn_file, b_wav, pfwav=
     if (np.any(ext_interp < 0)):
         print("Warning: AOD interpolation have values < 0, those values will be set to 0.")
         ext_interp[ext_interp < 0] = 0
-    else:
-        print("AOD pass")
-        print(ext_interp)
 
     f_ssa      = interp1d(ssa_lut.axes[0], ssa_lut[:], fill_value='extrapolate')
     ssa_interp = f_ssa(b_wav_unique)
@@ -2458,9 +2455,6 @@ def atm_pro_from_aeronet_opti2(date, time, aod_file, ssa_file, pfn_file, b_wav, 
     if (np.any(ext_interp < 0)):
         print("Warning: AOD interpolation have values < 0, those values will be set to 0.")
         ext_interp[ext_interp < 0] = 0
-    else:
-        print("AOD pass")
-        print(ext_interp)
 
     f_ssa      = interp1d(ssa_lut.axes[0], ssa_lut[:], fill_value='extrapolate')
     ssa_interp = f_ssa(b_wav_unique)
