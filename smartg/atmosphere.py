@@ -1308,7 +1308,7 @@ class AtmAFGL(Atmosphere):
     def calc_split(self, wav, phase=True, NBTHETA=721):
         '''
         compute optical properties and return the vertical profiles
-        prof_abs, prof_aer, prof_ray and prof_phases the alternative inputs of the AtmAFGL
+        prof_abs, prof_ray, prof_aer, and prof_phases the alternative inputs of the AtmAFGL
         '''
         pro = self.calc(wav=wav, phase=phase, NBTHETA=NBTHETA)
         pro_aer = diff1(pro['OD_p'].data.astype(np.float32), axis=1)
@@ -1523,12 +1523,15 @@ class Profile_base(object):
             datan2 = pd.read_csv(n2_filename, comment="#", header=None, sep='\s+', dtype=float).values
             self.dens_n2 = interp1d(datan2[:,0] , datan2[:,1])(self.z) * self.dens_air # CH4 density en cm-3
             #self.dens_n2 = np.interp(self.z, datan2[:,0] , datan2[:,1]) * self.dens_air # CH4 density en cm-3
+            #
+            self.dens_so2 = np.zeros_like(self.dens_air)
         else:
             nz = data.shape[0]
             self.dens_ch4 = [0] * nz
             self.dens_co = [0] * nz
             self.dens_n2o = [0] * nz
             self.dens_n2 = [0] * nz
+            self.dens_so2 = [0] * nz
 
 
 
@@ -1559,6 +1562,7 @@ class Profile_base(object):
         prof.dens_co  = interp1d(z, self.dens_co, bounds_error=False, fill_value=(0., 0.))  (znew)
         prof.dens_n2o = interp1d(z, self.dens_n2o, bounds_error=False, fill_value=(0., 0.))  (znew)
         prof.dens_n2  = interp1d(z, self.dens_n2, bounds_error=False, fill_value=(0., 0.))  (znew)
+        prof.dens_so2 = interp1d(z, self.dens_so2, bounds_error=False, fill_value=(0., 0.))  (znew)
         
         # prof.dens_air = np.interp(znew, z, self.dens_air, right=0., left=0.)
         # prof.dens_o3  = np.interp(znew, z, self.dens_o3, right=0., left=0.)

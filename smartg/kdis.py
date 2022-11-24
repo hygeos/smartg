@@ -23,7 +23,7 @@ def reduce_kdis(mlut, ibands, use_solar=False, integrated=False, extern_weights=
     we, wb, ex, dl, norm, norm_dl = ibands.get_weights()
     res = MLUT()
     for l in mlut:
-        for pref in ['I_','Q_','U_','V_','transmission','flux'] :
+        for pref in ['I_','Q_','U_','V_','N_','transmission','flux'] :
              if pref in l.desc:
                 if extern_weights is not None:
                     tmp = l.desc
@@ -484,10 +484,12 @@ class KDIS_IBAND(object):
         various gases stored in densmol
         '''
 
-        species = ['h2o', 'co2', 'o3', 'n2o', 'co', 'ch4', 'o2', 'n2']
+        species = ['h2o', 'co2', 'o3', 'no2', 'co', 'ch4', 'o2', 'n2', 'n2o', 'so2']
+        #species = ['h2o', 'co2', 'o3', 'n2o', 'co', 'ch4', 'o2', 'n2']
         T = prof.T
         P = prof.P
-        Ngas = 8
+        Ngas = 10
+        #Ngas = 8
         M = len(T)
         datamol = np.zeros(M, np.float)
 
@@ -500,6 +502,8 @@ class KDIS_IBAND(object):
         densmol[:,5] = prof.dens_ch4
         densmol[:,6] = prof.dens_o2
         densmol[:,7] = prof.dens_n2
+        densmol[:,8] = prof.dens_n2o
+        densmol[:,9] = prof.dens_so2
 
     
         # for each gas
