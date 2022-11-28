@@ -486,24 +486,24 @@ class KDIS_IBAND(object):
 
         species = ['h2o', 'co2', 'o3', 'no2', 'co', 'ch4', 'o2', 'n2', 'n2o', 'so2']
         #species = ['h2o', 'co2', 'o3', 'n2o', 'co', 'ch4', 'o2', 'n2']
-        T = prof.T
-        P = prof.P
+        T = prof.T.copy()
+        P = prof.P.copy()
         Ngas = 10
         #Ngas = 8
         M = len(T)
         datamol = np.zeros(M, np.float)
 
         densmol = np.zeros((M, Ngas), np.float)
-        densmol[:,0] = prof.dens_h2o
-        densmol[:,1] = prof.dens_co2
-        densmol[:,2] = prof.dens_o3
-        densmol[:,3] = prof.dens_no2
-        densmol[:,4] = prof.dens_co
-        densmol[:,5] = prof.dens_ch4
-        densmol[:,6] = prof.dens_o2
-        densmol[:,7] = prof.dens_n2
-        densmol[:,8] = prof.dens_n2o
-        densmol[:,9] = prof.dens_so2
+        densmol[:,0] = prof.dens_h2o[:]
+        densmol[:,1] = prof.dens_co2[:]
+        densmol[:,2] = prof.dens_o3[:]
+        densmol[:,3] = prof.dens_no2[:]
+        densmol[:,4] = prof.dens_co[:]
+        densmol[:,5] = prof.dens_ch4[:]
+        densmol[:,6] = prof.dens_o2[:]
+        densmol[:,7] = prof.dens_n2[:]
+        densmol[:,8] = prof.dens_n2o[:]
+        densmol[:,9] = prof.dens_so2[:]
 
     
         # for each gas
@@ -516,7 +516,7 @@ class KDIS_IBAND(object):
             if self.band.kdis.c_desc == "density":
                 C = densmol[:,ispecie_c] 
             elif self.band.kdis.c_desc == "molar_fraction":
-                C = densmol[:,ispecie_c] / prof.dens_air 
+                C = densmol[:,ispecie_c] / prof.dens_air.copy()
             C[C>np.max(self.band.kdis.c)]=np.max(self.band.kdis.c)*0.99
             C[C<np.min(self.band.kdis.c)]=np.min(self.band.kdis.c)*1.01            
             P[P>np.max(self.band.kdis.p)]=np.max(self.band.kdis.p)*0.99

@@ -1399,6 +1399,7 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
     iphi     = slice(None)
     #if hist : axnames3 = ['None', 'None', 'Azimuth angles', 'Zenith angles']
     m.set_attr('zip', 'False')
+    m.set_attr('NPhotonIn_sum', np.sum(NPhotonsInTot))
 
     if le is not None: m.set_attr('LE', int(1))
     else: m.set_attr('LE', int(0))
@@ -2520,7 +2521,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
                     p.update(sphot,'Launched {:.3g} photons'.format(sphot))
                     break
 
-                if (N_simu >= min_loop and (np.max(sigma_bis[loc_stdev,stk_stdev,:,:,:,:]) <= rel_min )):
+                if (N_simu >= min_loop and (np.max(err_rel[loc_stdev,stk_stdev,:,:,:,:]) <= rel_min )):
                     # update of the progression Bar
                     sphot = np.sum(NPhotonsInTot.get())/alis_norm
                     p.update(sphot,'Launched {:.3g} photons'.format(sphot))
