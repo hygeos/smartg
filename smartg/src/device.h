@@ -330,6 +330,10 @@ __device__ void findRots(float3, float*, float*);
 
 __device__ float F1_rtls(float , float , float );  //  rossthick-lisparse, only F1
 __device__ float F2_rtls(float , float , float );  //  rossthick-lisparse, only F2
+//########## RPV  ##############"
+__device__ float Minnaert_rpv(float , float , float );  //  RPV, only Minnaert
+__device__ float HG_rpv(float , float );  //  RPV, only HG
+__device__ float H_rpv(float , float );  //  RPV, only H
 
 __device__ float BRDF(int, float3, float3 , struct Spectrum* );  //  general BRDF
 __device__ float BPlanck(float, float );

@@ -1522,13 +1522,13 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
         if len(tabDistFinal) > 1: m.add_dataset('cdist_down (B)', tabDistFinal[DOWNB,:,isen,iphi,:],axnames2)
 
 
-    # direct transmission
-    m.add_dataset('direct transmission', tabTransDir_analytic,
-                   axnames=['wavelength'])
-    m.add_dataset('direct transmission (dev)', np.exp(-tabTransDir[isen,ilam]), axnames4)
-
     # write atmospheric profiles
     if prof_atm is not None:
+        # direct transmission
+        m.add_dataset('direct transmission', tabTransDir_analytic,
+                   axnames=['wavelength'])
+        m.add_dataset('direct transmission (dev)', np.exp(-tabTransDir[isen,ilam]), axnames4)
+
         m.add_lut(prof_atm['n_atm'])
         m.add_lut(prof_atm['T_atm'])
         m.add_lut(prof_atm['OD_r'])

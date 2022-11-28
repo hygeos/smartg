@@ -8075,6 +8075,22 @@ __device__ void findRots(float3 vecNF, float *th, float *ph)
     *ph = float(rotZ);
 }
 
+
+//########## RPV  ##############"
+__device__ float Minnaert_rpv(float mui, float mur, float k){  //  RPV, only Minnaert
+    return pow(mui * mur, k-1.F)/pow(mui+mur, 1.F-k);
+}
+
+__device__ float HG_rpv(float cosg, float bigTheta){  //  RPV, only HG
+    float bT2 = bigTheta*bigTheta;
+    return (1.F - bT2)/pow(1.F + bT2 + 2.F*bigTheta*cosg, 1.5F);
+}
+
+__device__ float H_rpv(float rhoc, float G){  //  RPV, only H
+    return 1.F + (1.F - rhoc)/(1.F + G);
+}
+
+
 //########## Ross Thick Li-Sparse  ##############"
 
 __device__ float F1_rtls(float ths, float thv, float phi ){  //  rossthick-lisparse, only F1
@@ -8118,8 +8134,10 @@ __device__ float BRDF(int ilam, float3 v0, float3 v1, struct Spectrum *spectrum 
 	//int idx = blockIdx.x *blockDim.x + threadIdx.x;
     if (DIOPTREd>3) {
         float dph = 0.;
-        float th0 = acos(fabs(v0.z));
-        float th1 = acos(fabs(v1.z));
+        float mu0 = fabs(v0.z);
+        float mu1 = fabs(v1.z);
+        float th0 = acos(mu0);
+        float th1 = acos(mu1);
         float2 v0xy  = make_float2(v0);
         float2 v1xy  = make_float2(v1);
         v0xy/=length(v0xy);
@@ -8130,6 +8148,17 @@ __device__ float BRDF(int ilam, float3 v0, float3 v1, struct Spectrum *spectrum 
                 wbrdf = 1. + spectrum[ilam].k1p_surface*F1_rtls(th0,th1,dph) +
                     spectrum[ilam].k2p_surface*F2_rtls(th0,th1,dph);
                 break;
+
+            case 5: // RPV
+                float cosg = mu0*mu1 + sqrtf(1.F-mu0*mu0)*sqrtf(1.F-mu1*mu1)*cosf(dph);
+                float t0 = tanf(th0);
+                float t1 = tanf(th1);
+                float G = sqrtf(t0*t0 + t1*t1 - 2.F*t0*t1*cosf(dph));
+                wbrdf = Minnaert_rpv(fabs(v0.z), fabs(v1.z), spectrum[ilam].k1p_surface) *
+                        HG_rpv(cosg, spectrum[ilam].k2p_surface) *
+                        H_rpv(spectrum[ilam].k3p_surface, G);
+                break;
+
 
             default:
                 wbrdf = 1.;
