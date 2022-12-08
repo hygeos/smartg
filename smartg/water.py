@@ -109,9 +109,10 @@ class IOP(IOP_base):
         else:
             aCDOM = self.aCDOM
 
-        aw = self.aw
-        if aw is None:
+        if self.aw is None:
             aw = self.AW[Idx(wav2)]
+        else:
+            aw = self.aw
 
         if self.atot is None:
             atot = aw + ap + aCDOM
@@ -158,7 +159,8 @@ class IOP(IOP_base):
             pro.add_dataset('phase_oc', pha_, ['iphase', 'stk', 'theta_oc'])
             pro.add_dataset('iphase_oc', ipha, ['wavelength', 'z_oc'])
 
-        dz = - diff1(self.Z) * aw/aw
+        dz = - diff1(self.Z)
+        #dz = - diff1(self.Z) * aw/aw
         tau_w   = - (aw   + bw  ) * dz
         tau_p   = - (ap + bp  ) * dz
         tau_y   = - (aCDOM             ) * dz
