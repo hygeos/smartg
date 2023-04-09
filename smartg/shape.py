@@ -170,8 +170,8 @@ class Triangle(Shape):
             dpdu, dpdv = CoordinateSystem(Normalize(Cross(e2, e1)))
         else:
             invdet = 1./determinant
-            myV1 = dp1*dv2
-            myV2 = dp2*dv1
+            # myV1 = dp1*dv2
+            # myV2 = dp2*dv1
             # print(type(myV1), type(myV2))
             dpdu = ( dp1*dv2   - dp2*dv1) * invdet
             dpdv = (dp1*(-du2) + dp2*du1) * invdet
@@ -197,100 +197,101 @@ class TriangleM(Shape):
         Shape.__init__(self, ObjectToWorld = oTw, WorldToObject = wTo)
         self.p1 = a; self.p2 = b; self.p3 = c;
 
-    # def Intersect(self, r):
-    #     ray = Ray(r)
+    def Intersect_old(self, r):
+        ray = Ray(r)
 
-    #     p1t = self.p1 - ray.o
-    #     p2t = self.p2 - ray.o
-    #     p3t = self.p3 - ray.o
+        p1t = self.p1 - ray.o
+        p2t = self.p2 - ray.o
+        p3t = self.p3 - ray.o
 
-    #     kz = MaxDimension(  Vector( abs(ray.d.x), abs(ray.d.y), abs(ray.d.z) )  )
+        kz = MaxDimension(  Vector( abs(ray.d.x), abs(ray.d.y), abs(ray.d.z) )  )
         
-    #     kx = kz + 1
-    #     if(kx == 3):
-    #         kx = 0
-    #     ky = kx + 1
-    #     if(ky == 3):
-    #         ky = 0
+        kx = kz + 1
+        if(kx == 3):
+            kx = 0
+        ky = kx + 1
+        if(ky == 3):
+            ky = 0
 
-    #     d = Permute(ray.d, kx, ky, kz)
-    #     p1t = Permute(p1t, kx, ky, kz)
-    #     p2t = Permute(p2t, kx, ky, kz)
-    #     p3t = Permute(p3t, kx, ky, kz)
+        d = Permute(ray.d, kx, ky, kz)
+        p1t = Permute(p1t, kx, ky, kz)
+        p2t = Permute(p2t, kx, ky, kz)
+        p3t = Permute(p3t, kx, ky, kz)
         
-    #     sx = (d.x*-1)/d.z
-    #     sy = (d.y*-1)/d.z
-    #     sz = 1./d.z
+        sx = (d.x*-1)/d.z
+        sy = (d.y*-1)/d.z
+        sz = 1./d.z
         
-    #     p1t.x = p1t.x + (sx*p1t.z)
-    #     p1t.y = p1t.y + (sx*p1t.z)
-    #     p2t.x = p2t.x + (sx*p2t.z)
-    #     p2t.y = p2t.y + (sx*p2t.z)
-    #     p3t.x = p3t.x + (sx*p3t.z)
-    #     p3t.y = p3t.y + (sx*p3t.z)
+        p1t.x = p1t.x + (sx*p1t.z)
+        p1t.y = p1t.y + (sx*p1t.z)
+        p2t.x = p2t.x + (sx*p2t.z)
+        p2t.y = p2t.y + (sx*p2t.z)
+        p3t.x = p3t.x + (sx*p3t.z)
+        p3t.y = p3t.y + (sx*p3t.z)
          
-    #     e1 = (p2t.x * p3t.y) - (p2t.y * p3t.x)
-    #     e2 = (p3t.x * p1t.y) - (p3t.y * p1t.x)
-    #     e3 = (p1t.x * p2t.y) - (p1t.y * p2t.x)
+        e1 = (p2t.x * p3t.y) - (p2t.y * p3t.x)
+        e2 = (p3t.x * p1t.y) - (p3t.y * p1t.x)
+        e3 = (p1t.x * p2t.y) - (p1t.y * p2t.x)
 
-    #     # if( (e1 < -0.01 or e2 < -0.01 or e3 < -0.01) and
-    #     #     (e1 > 0.01 or e2 > 0.01 or e3 > 0.01) ):
-    #     #     return False
+        # if( (e1 < -0.01 or e2 < -0.01 or e3 < -0.01) and
+        #     (e1 > 0.01 or e2 > 0.01 or e3 > 0.01) ):
+        #     return False
 
-    #     det = e1 + e2 + e3
+        det = e1 + e2 + e3
 
-    #     if (det == 0):
-    #         return False
+        if (det == 0):
+            return False
 
-    #     p1t.z = p1t.z * sz
-    #     p2t.z = p2t.z * sz
-    #     p3t.z = p3t.z * sz
+        p1t.z = p1t.z * sz
+        p2t.z = p2t.z * sz
+        p3t.z = p3t.z * sz
 
-    #     tScaled = e1*p1t.z + e2*p2t.z + e3*p3t.z
+        tScaled = e1*p1t.z + e2*p2t.z + e3*p3t.z
 
-    #     if ( det < 0 and (tScaled >= 0 or tScaled > ray.maxt*det) ):
-    #         return False
+        if ( det < 0 and (tScaled >= 0 or tScaled > ray.maxt*det) ):
+            return False
 
-    #     invDet = 1./det
-    #     b1 = e1 * invDet
-    #     b2 = e2 * invDet
-    #     b3 = e3 * invDet
+        invDet = 1./det
+        b1 = e1 * invDet
+        b2 = e2 * invDet
+        b3 = e3 * invDet
 
-    #     t = tScaled * invDet
+        t = tScaled * invDet
 
-    #     # phit = (self.p1*b1) + (self.p2*b2)+ (self.p3*b3)
+        # phit = (self.p1*b1) + (self.p2*b2)+ (self.p3*b3)
 
-    #     # compute triangle partial derivatives
-    #     uvs = np.array([[0., 0.], [1., 0.], [1., 1.]])
+        # compute triangle partial derivatives
+        uvs = np.array([[0., 0.], [1., 0.], [1., 1.]])
 
-    #     # compute deltas for triangle partial derivatives
-    #     du1 = uvs[0][0] - uvs[2][0]
-    #     du2 = uvs[1][0] - uvs[2][0]
-    #     dv1 = uvs[0][1] - uvs[2][1]
-    #     dv2 = uvs[1][1] - uvs[2][1]
-    #     dp1 = self.p1 - self.p3
-    #     dp2 = self.p2 - self.p3
-    #     determinant = du1 * dv2 - dv1 * du2
+        # compute deltas for triangle partial derivatives
+        du1 = uvs[0][0] - uvs[2][0]
+        du2 = uvs[1][0] - uvs[2][0]
+        dv1 = uvs[0][1] - uvs[2][1]
+        dv2 = uvs[1][1] - uvs[2][1]
+        dp1 = self.p1 - self.p3
+        dp2 = self.p2 - self.p3
+        determinant = du1 * dv2 - dv1 * du2
 
-    #     if (determinant == 0):
-    #         dpdu, dpdv = CoordinateSystem(Normalize(Cross(e2, e1)))
-    #     else:
-    #         invdet = 1./determinant
-    #         myV1 = dp1*dv2
-    #         myV2 = dp2*dv1
-    #         print(type(myV1), type(myV2))
-    #         dpdu = ( dp1*dv2   - dp2*dv1) * invdet
-    #         dpdv = (dp1*(-du2) + dp2*du1) * invdet
+        if (determinant == 0):
+            dpdu, dpdv = CoordinateSystem(Normalize(Cross(e2, e1)))
+        else:
+            invdet = 1./determinant
+            # myV1 = dp1*dv2
+            # myV2 = dp2*dv1
+            # print(type(myV1), type(myV2))
+            dpdu = ( dp1*dv2   - dp2*dv1) * invdet
+            dpdv = (dp1*(-du2) + dp2*du1) * invdet
 
-    #     # interpolate $(u,v)$ triangle parametric coordinates
-    #     tu = b1*uvs[0][0] + b2*uvs[1][0] + b3*uvs[2][0]
-    #     tv = b1*uvs[0][1] + b2*uvs[1][1] + b3*uvs[2][1]
+        # interpolate $(u,v)$ triangle parametric coordinates
+        tu = b1*uvs[0][0] + b2*uvs[1][0] + b3*uvs[2][0]
+        tv = b1*uvs[0][1] + b2*uvs[1][1] + b3*uvs[2][1]
             
-    #     self.dg = DifferentialGeometry(ray[t], dpdu, dpdv, tu, tv, self)
-    #     self.thit = t
+        self.dg = DifferentialGeometry(ray[t], dpdu, dpdv, tu, tv, self)
+        self.thit = t
         
-    #     return True
+        return True
         
+    # TODO bellow must be corrected
     def Intersect(self, r):
         ray = Ray(r)
         e1 = self.p2 - self.p1
@@ -366,7 +367,7 @@ class TriangleMesh(Shape):
     '''
     def __init__(self, oTw, wTo, vi, P):
         Shape.__init__(self, ObjectToWorld = oTw, WorldToObject = wTo)
-        if isinstance(vi, np.ndarray) and isinstance(P, np.ndarray):
+        if isinstance(vi, np.ndarray):
             self.VertexIndex = vi
             self.p = P
             self.ntris = int(len(np.atleast_1d(vi))/3)
@@ -377,9 +378,9 @@ class TriangleMesh(Shape):
                 self.p[i] = self.oTw[P[i]]
             
             for i in range(0, self.ntris):
-                PointA = Point(self.p[self.VertexIndex[3*i]])
-                PointB = Point(self.p[self.VertexIndex[3*i + 1]])
-                PointC = Point(self.p[self.VertexIndex[3*i + 2]])
+                PointA = self.p[self.VertexIndex[3*i]]
+                PointB = self.p[self.VertexIndex[3*i + 1]]
+                PointC = self.p[self.VertexIndex[3*i + 2]]
                 self.reftri[i] = TriangleM(Transform(), Transform(), PointA, PointB, PointC)
         else:
             raise NameError('error: vi or/and P are not numpy array***')
@@ -388,7 +389,7 @@ class TriangleMesh(Shape):
         self.dg = None
         self.thit = float("inf")
         for i in range(0, self.ntris):
-            mybool = self.reftri[i].Intersect(r)
+            mybool = self.reftri[i].Intersect_old(r)
             if mybool:
                 TriThit = self.reftri[i].thit
                 if self.thit > TriThit:
