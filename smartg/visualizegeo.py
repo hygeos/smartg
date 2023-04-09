@@ -164,14 +164,14 @@ def cat_view(SMLUT, MTOA = 1320, NCL = "68%", UNIT = "FLUX_DENSITY", W_VIEW = "W
     else : raise NameError('Unkonwn argument for M_VIEW!')
 
     if (UNIT == "FLUX"):
-        cst = 1.*k; STRPRINT = "Flux in " + STRUNIT + " for each categories"
+        cst = 1.*k; STRPRINT = "Flux in " + STRUNIT + " for each categories"; STRTY = "flux"
     elif (UNIT == "FLUX_DENSITY"):
         cst = (1.*k*kl)/(float(m.attrs['S_Receiver'])*1e6)
-        STRPRINT = "Irradiance in " + STRUNIT + "/meter² for each categories"
+        STRPRINT = "Irradiance in " + STRUNIT + "/meter² for each categories"; STRTY = "irradiance"
     elif (UNIT == "RADIANCE"):
         cst = (1.*k*kl)/(float(m.attrs['S_Receiver'])*1e6)
         cst *= 2./(np.pi*(1 - np.cos(np.radians(2*ALDEG))))
-        STRPRINT = "Radiance in " + STRUNIT + "/meter²/sr for each categories"
+        STRPRINT = "Radiance in " + STRUNIT + "/meter²/sr for each categories"; STRTY = "radiance"
     else:
         raise NameError('Unkonwn argument for UNIT!')
         
@@ -312,10 +312,10 @@ def cat_view(SMLUT, MTOA = 1320, NCL = "68%", UNIT = "FLUX_DENSITY", W_VIEW = "W
         print("**********************************************************")
         print(STRPRINT)
         print("**********************************************************")
-        print("SUM_CATS      " + ": irradiance=", strAcc % (mat[0,0]), " number_ph=", np.uint64(mat[0,1]),
+        print("SUM_CATS      " + ": " + STRTY + "=", strAcc % (mat[0,0]), " number_ph=", np.uint64(mat[0,1]),
               " errAbs=", strAcc % (mat[0,2]), " err(%)=", strAcc % (mat[0,3]*ld))
         for i in range (0, 8):
-            print("CAT",i+1, lP[i], ": irradiance=", strAcc % (mat[i+1,0]), " number_ph=", np.uint64(mat[i+1,1]),
+            print("CAT",i+1, lP[i], ": " + STRTY + "=", strAcc % (mat[i+1,0]), " number_ph=", np.uint64(mat[i+1,1]),
                   " errAbs=", strAcc % (mat[i+1,2]), " err(%)=", strAcc % (mat[i+1,3]*ld))
     return output
 
@@ -429,7 +429,7 @@ def nopt_view(SMLUT, BACK=False, ACC = 6, NCL="68%", fl_TOA=None, NAATM=False):
                 for i in range (0, len(fl_TOA)):
                     naatm += m['n_aatm'].data[i]*fl_TOA[i]
                 naatm /= np.sum(fl_TOA)
-                print("naatm =", strAcc % naatm, " -> analytic approx of natm")
+            print("naatm =", strAcc % naatm, " -> analytic approx of natm")
 
 
 class Mirror(object):
