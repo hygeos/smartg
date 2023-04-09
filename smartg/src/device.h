@@ -85,6 +85,7 @@ __device__ __constant__ double DIRSZd;
 __device__ __constant__ float PXd;
 __device__ __constant__ float PYd;
 __device__ __constant__ float PZd;
+__device__ __constant__ float ZTOAd;
 __device__ __constant__ int IsAtm;
 __device__ __constant__ float TCd;
 __device__ __constant__ int nbCx;

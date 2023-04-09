@@ -1910,7 +1910,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		ph->pos.y = PYd + cusForwPos.y + CFTYd;
 		ph->pos.z = PZd;
 
-		if(PZd<120.) ph->loc = ATMOS;
+		if(PZd<ZTOAd) ph->loc = ATMOS;
 
 		if (ALDEGd > 1e-6)
 		{
@@ -3508,8 +3508,8 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 		// nObj = le nombre d'objets, si = 0 alors le test n'est pas nécessaire.
 	    if (nObj > 0){
 			mytest = geoTest(ph->pos, ph->v, &phit, geoS, myObjets, myGObj, mySPECTObj, ph->ilam);
-			if (!mytest && LMODEd == 1 &&  ph->pos.z >= (120.F-VALMIN5) && ph->direct == 0) {ph->loc=NONE; return;}
-			if (mytest && phit.z > -VALMIN5 && phit.z < (120.F+VALMIN5) && IsAtm == 0)
+			if (!mytest && LMODEd == 1 &&  ph->pos.z >= (ZTOAd-VALMIN5) && ph->direct == 0) {ph->loc=NONE; return;}
+			if (mytest && phit.z > -VALMIN5 && phit.z < (ZTOAd+VALMIN5) && IsAtm == 0)
 			{
 				ph->tau = 0.F;
 				ph->loc = OBJSURF;
@@ -3520,7 +3520,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 
 		// if mytest = true (intersection with the geometry) and the position of the intersection is in
 		// the atmosphere (0 < Z < 120), then: Begin to analyse is there is really an intersection
-		if(mytest && phit.z > -VALMIN5 && phit.z < (120.F+VALMIN5) && IsAtm == 1)
+		if(mytest && phit.z > -VALMIN5 && phit.z < (ZTOAd+VALMIN5) && IsAtm == 1)
 		{
 	        // if phit.z < 0 then correct the value to 0 (there is no object below the surface)
 	        //if (phit.z < 0) phit.z =0;
@@ -3614,7 +3614,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 		// if there is not an intersect with an objet we have a special treatment
 		if (nObj > 0 && !mytest && IsAtm == 0)
 		{
-			BBox boite(make_float3(-12000., -12000., 0.F), make_float3(12000.F, 12000.F, 120.F));
+			BBox boite(make_float3(-1200000., -1200000., 0.F), make_float3(12000.F, 12000.F, ZTOAd));
 			Ray Rayon(ph->pos, ph->v, 0);
 			float intTime0=-10.F, intTime1=-10.F;
 			bool intersectBox;
@@ -3626,7 +3626,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 			
 			intersectPoint = Rayon(intTime1);
 			
-			if (intersectPoint.z >= (120-VALMIN))
+			if (intersectPoint.z >= (ZTOAd-VALMIN))
 			{			
 				ph->loc = SPACE;
 				ph->layer = 0;

@@ -1017,6 +1017,11 @@ class Smartg(object):
             prof_atm = atm
         else:
             raise NameError('atm must be an Atmosphere class or an MLUT class or equal to None!')
+
+        if (isinstance(atm, MLUT)):
+            ZTOA = atm.axes['z_atm'][0]
+        else:
+            ZTOA = 120.
   
         if prof_atm is not None:
             faer = calculF(prof_atm, NF, DEPO, kind='atm')
@@ -1230,7 +1235,7 @@ class Smartg(object):
                   NWLPROBA, NSENSORPROBA, NCELLPROBA, BEER, SMIN, SMAX, RR, WEIGHTRR, NLOW, NJAC, 
                   NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj, nGObj, nRObj,
                   Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm,
-                  TC, nbCx, nbCy, vSun, HIST)
+                  TC, nbCx, nbCy, vSun, HIST, ZTOA)
 
         # Initialize the progress bar
         p = Progress(NBPHOTONS, progress)
@@ -1256,7 +1261,7 @@ class Smartg(object):
         # If there is a receiver -> normalization of the signal collected
         if (TC is not None):
             cMatVisuRecep, matCats, n_cte = normalizeRecIrr(cMatVisuRecep=cMatVisuRecep, matCats=matCats,
-                nbCx=nbCx, nbCy=nbCy, NBPHOTONS=NBPHOTONS, surfLPH=surfLPH, TC=TC, cusL=cusL,
+                nbCx=nbCx, nbCy=nbCy, NBPHOTONS=float(np.sum(NPhotonsInTot)), surfLPH=surfLPH, TC=TC, cusL=cusL,
                 SUN_DISC=SUN_DISC, LE=LE)
 
         if (nb_H > 0 and TC is not None and cusL is not None):
@@ -1893,7 +1898,7 @@ def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
               RTER, LE, ZIP, FLUX, FFS, DIRECT, OCEAN_INTERACTION, 
               NLVL, NPSTK, NWLPROBA, NSENSORPROBA, NCELLPROBA,  BEER, SMIN, SMAX, RR, 
               WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj, nGObj, nRObj,
-              Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, vSun, HIST) :
+              Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, vSun, HIST, ZTOA) :
     """
     Initialize the constants in python and send them to the device memory
 
@@ -1914,9 +1919,9 @@ def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
     CTHV = np.cos(THV)
 
     if (  (cusL is not None) and (cusL.dict['LMODE'] == "FF")  ):
-        PZd = 120.+cusL.dict['CFTZ']
+        PZd = ZTOA+cusL.dict['CFTZ']
     else:
-        PZd = 120.
+        PZd = ZTOA
     tTemp = PZd/-vSun.z
     PXd = -vSun.x * tTemp
     PYd = -vSun.y * tTemp
@@ -2005,6 +2010,7 @@ def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
         copy_to_device('PXd', PXd, np.float32)
         copy_to_device('PYd', PYd, np.float32)
         copy_to_device('PZd', PZd, np.float32)
+        copy_to_device('ZTOAd', ZTOA, np.float32)
         if TC is not None:
             copy_to_device('TCd', TC, np.float32)
             copy_to_device('nbCx', nbCx, np.int32)
@@ -2527,10 +2533,33 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
                     p.update(sphot,'Launched {:.3g} photons'.format(sphot))
                     break
 
-        # update of the progression Bar
-        sphot = np.sum(NPhotonsInTot.get())/alis_norm
-        p.update(sphot,
-                'Launched {:.3g} photons'.format(sphot))
+        if TC is not None and stdev_lim is not None:
+            NBPHOTONS_tmp = np.sum(NPhotonsInTot.get())
+            nBis = NBPHOTONS_tmp/(NBPHOTONS_tmp-1)
+            sum2Z = (matCats[0,1]*matCats[0,1])/NBPHOTONS_tmp
+            sumZ2 = matCats[0,2]
+            if (le is None): num = (nBis * (sumZ2 - sum2Z))**0.5
+            else: num = (nBis * abs(sumZ2 - sum2Z))**0.5
+            den = matCats[0,1]
+            err_p_tmp = (num/den)*100
+            min_loop = stdev_lim.dict['nb_loop_min']
+            rel_min = stdev_lim.dict['err_rel_min']
+
+            if (stdev_lim.dict['verbose']):
+                print("relative_err =", err_p_tmp)
+
+            # update of the progression Bar
+            sphot = np.sum(NPhotonsInTot.get())/alis_norm
+            p.update(sphot,"Launched {:.3g} photons; err[%%] = {:.5f}".format(sphot, err_p_tmp))
+
+            if (N_simu >= min_loop and err_p_tmp <= rel_min):
+                NBPHOTONS = NBPHOTONS_tmp
+                break
+        else:
+            # update of the progression Bar
+            sphot = np.sum(NPhotonsInTot.get())/alis_norm
+            p.update(sphot,
+                    'Launched {:.3g} photons'.format(sphot))
     # END WHILE LOOP
     secs_cuda_clock = secs_cuda_clock*1e-3
 
