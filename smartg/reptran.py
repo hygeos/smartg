@@ -242,15 +242,20 @@ class REPTRAN(object):
         for i in range(self.nbands()):
             yield self.band(i)
 
-    def to_smartg(self, include='', lmin=-np.inf, lmax=np.inf):
+    def to_smartg(self, include='', lmin=-np.inf, lmax=np.inf,band_indices=None ):
         '''
         return a REPTRAN_IBAND_LIST for Smartg.run() method
         '''
         ik_l=[]
+        if band_indices is None:
+            bl = self.bands()
+        else:
+            bl = [self.band(i) for i in band_indices]
+            
         if not isinstance(lmin,(list,np.ndarray)):
             lmin=[lmin]
             lmax=[lmax]
-        for k in self.bands():
+        for k in bl:
             if (include in k.name):
                 for ii in range(len(lmin)):
                     if (k.wmin >= lmin[ii]) and (k.wmax <= lmax[ii]):
