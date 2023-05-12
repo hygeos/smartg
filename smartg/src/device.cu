@@ -1329,13 +1329,33 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     /* ----------------------------------------------------------------------------------------- */
     // Position initialization
     /* ----------------------------------------------------------------------------------------- */
-
-    // Read and define posiion using sensor attributes
+    #ifdef OPT3D
+    if (cell_sized > 0)
+    {
+        // We assume here that the sensor positions are constant in the z axis
+        float xy_cell_side_length = cell_sized-VALMIN2;
+        float xy_cell_side_half_length = xy_cell_side_length/2.;
+        float sensor_posx_min = tab_sensor[ph->is].POSX - xy_cell_side_half_length;
+        float sensor_posy_min = tab_sensor[ph->is].POSY - xy_cell_side_half_length;
+        ph->pos = make_float3(sensor_posx_min + RAND*xy_cell_side_length,
+                            sensor_posy_min + RAND*xy_cell_side_length,
+                            tab_sensor[ph->is].POSZ);
+    }
+    else
+    {
+        // Read and define posiion using sensor attributes
+        ph->pos = make_float3(tab_sensor[ph->is].POSX,
+                            tab_sensor[ph->is].POSY,
+                            tab_sensor[ph->is].POSZ);
+    }
+    #else
+    //Read and define posiion using sensor attributes
     ph->pos = make_float3(tab_sensor[ph->is].POSX,
                           tab_sensor[ph->is].POSY,
                           tab_sensor[ph->is].POSZ);
-    ph->loc = tab_sensor[ph->is].LOC;
-	
+    #endif
+	ph->loc = tab_sensor[ph->is].LOC;
+
 	#ifdef OBJ3D
 	Transform TRotZ; int mPP = 1; //char mPP[]="Point";
 	TRotZ = TRotZ.RotateZ(tab_sensor[ph->is].PHDEG-180.);

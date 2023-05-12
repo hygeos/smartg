@@ -394,7 +394,7 @@ class Sensor(object):
     ICELL: Box index in which the sensor is (3D)
     '''
     def __init__(self, POSX=0., POSY=0., POSZ=0., THDEG=0., PHDEG=180.,
-                 LOC='SURF0P', FOV=0., TYPE=0, ICELL=0, ILAM_0=-1, ILAM_1=-1, V = None):
+                 LOC='SURF0P', FOV=0., TYPE=0, ICELL=0, ILAM_0=-1, ILAM_1=-1, V = None, CELL_SIZE = -1):
 
         if (isinstance(V, Vector)):
             THDEG, PHDEG = convertVtoAngles(V)
@@ -414,6 +414,7 @@ class Sensor(object):
             'ILAM_0': ILAM_0,
             'ILAM_1': ILAM_1
         }
+        self.cell_size = CELL_SIZE
 
     def __str__(self):
         return 'SENSOR=-POSX{POSX}-POSY{POSY}-POSZ{POSZ}-THETA={THDEG:.3f}-PHI={PHDEG:.3f}'.format(**self.dict)
@@ -1225,7 +1226,6 @@ class Smartg(object):
         HORIZ = 1
         if (not self.pp and not reflectance): HORIZ = 0
 
-
         # initialization of the constants
         InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, self.mod,
                   NBPHOTONS, NBLOOP, THVDEG, DEPO,
@@ -1235,7 +1235,7 @@ class Smartg(object):
                   NWLPROBA, NSENSORPROBA, NCELLPROBA, BEER, SMIN, SMAX, RR, WEIGHTRR, NLOW, NJAC, 
                   NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj, nGObj, nRObj,
                   Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm,
-                  TC, nbCx, nbCy, vSun, HIST, ZTOA)
+                  TC, nbCx, nbCy, vSun, HIST, ZTOA, sensor2[0].cell_size)
 
         # Initialize the progress bar
         p = Progress(NBPHOTONS, progress)
@@ -1898,7 +1898,7 @@ def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
               RTER, LE, ZIP, FLUX, FFS, DIRECT, OCEAN_INTERACTION, 
               NLVL, NPSTK, NWLPROBA, NSENSORPROBA, NCELLPROBA,  BEER, SMIN, SMAX, RR, 
               WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj, nGObj, nRObj,
-              Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, vSun, HIST, ZTOA) :
+              Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, vSun, HIST, ZTOA, cell_size) :
     """
     Initialize the constants in python and send them to the device memory
 
@@ -1950,6 +1950,7 @@ def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
     copy_to_device('FLUXd', FLUX, np.int32)
     copy_to_device('FFSd', 1 if FFS else 0, np.int32)
     copy_to_device('DIRECTd', 1 if DIRECT else 0, np.int32)
+    copy_to_device('cell_sized', cell_size, np.float32)
     if OCEAN_INTERACTION is None:
         copy_to_device('OCEAN_INTERACTIONd', -1, np.int32)
     else:
