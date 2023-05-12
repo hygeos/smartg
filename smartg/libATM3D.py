@@ -169,6 +169,7 @@ class Cloud3D(object):
                            with exctintion coefficient and reff of each cloud cell.
     loc_xgrid, loc_ygrid : Grid location. By default an str: "centered" i.e. the grid center is at coordinate 0.
                            Or give a scalar with the starting position of the grid.
+    reff_acc             : interger with decimal accuracy of reff. By default None then do not replace the read reff values
 
     === Others if given circumvent variables read from file_name
     xyz_grids            : List with in the indices 0, 1 and 2 the 1D arrays with respectively the x, y and z grid profils
@@ -177,7 +178,7 @@ class Cloud3D(object):
     reff                 : Numpy 1D array with the cloud effective radii
     """
 
-    def __init__(self, phase, file_name=None, loc_xgrid = "centered", loc_ygrid = "centered",
+    def __init__(self, phase, file_name=None, loc_xgrid = "centered", loc_ygrid = "centered", reff_acc = None,
                  xyz_grids=None, ext_coeff=None, cell_indices=None, reff=None):
 
         # Check if phase is a LUT object with the correct axes
@@ -209,7 +210,8 @@ class Cloud3D(object):
         self.loc_ygrid    = loc_ygrid
         self.ext_coeff    = ext_coeff
         self.cell_indices = cell_indices
-        self.reff         = reff 
+        self.reff         = reff
+        self.reff_acc     = reff_acc
 
     def get_xyz_grid(self):
         """
@@ -284,6 +286,9 @@ class Cloud3D(object):
         # If there are empty dimensions remove them and ensure that we have interger type
         cell_indices = np.squeeze(cell_indices.astype(np.int32))
 
+        # We need to have 2 dimensions, a numpy array as list of another numpy arrays with the x, y and z indices
+        if(cell_indices.ndim == 1): cell_indices = np.array([cell_indices])
+
         return cell_indices
 
     def get_reff(self):
@@ -296,6 +301,7 @@ class Cloud3D(object):
 
         # Read only the disired column
         reff = pd.read_csv(self.file_name, skiprows = 3, header=None, usecols=[4], sep='\s+', dtype=float).values
+        if self.reff_acc is not None: reff = np.around(reff, decimals=self.reff_acc)
 
         # If there are empty dimensions remove them
         reff = np.squeeze(reff)
@@ -443,7 +449,7 @@ def locate_3Dregular_cells(xgrid,ygrid,zgrid,x,y,z):
 
 def satellite_view(mlut, xgrid, ygrid, wl, interp_name='none',
                    color_bar='Blues_r', color_reverse=False, fig_size=(8,8), font_size=int(18),
-                   vmin = None, vmax = None, scale=False, save_file=None, stk="I", factor=1):
+                   vmin = None, vmax = None, scale=False, save_file=None, stk="I", factor=1, mat_force=None):
     """
     Description: The function give a 'satellite' 2D image of the SMART-G 3D atm return results
 
@@ -458,6 +464,7 @@ def satellite_view(mlut, xgrid, ygrid, wl, interp_name='none',
     scale        : If True scale between 0 and 1 (or between vmin and vmax if not None)
     font_size    : Font size of the figure
     save_file    : If not None, save the generated image in pdf, i.g. save_file = 'test', save as 'test.pdf'
+    mat_force    : Force matrix = mat_force
     """
 
     # Choose between I, Q, U and V
@@ -504,7 +511,8 @@ def satellite_view(mlut, xgrid, ygrid, wl, interp_name='none',
 
 
     # Convert the 1D results to a 2D matrix. The order of Nx and Ny below is very important!
-    matrix = mlut[stokes_name][tuple(ind)].reshape(Ny,Nx)*factor
+    if (mat_force is None): matrix = mlut[stokes_name][tuple(ind)].reshape(Ny,Nx)*factor
+    else: matrix = mat_force
     # The variable matrix is now in the following form:
     # - x0 ... xn
     # y0
@@ -553,7 +561,7 @@ def satellite_view(mlut, xgrid, ygrid, wl, interp_name='none',
         plt.savefig(save_file)
 
 
-def create_sensors(grid3D, POSZ=120., THDEG=180., PHDEG=180., FOV=0., TYPE=0., LOC='ATMOS'):
+def create_sensors(grid3D, POSZ=120., THDEG=180., PHDEG=180., FOV=0., TYPE=0., LOC='ATMOS', CELL_SIZE=-1):
         """
         Description : Create a list of sensors
 
@@ -587,7 +595,7 @@ def create_sensors(grid3D, POSZ=120., THDEG=180., PHDEG=180., FOV=0., TYPE=0., L
         sensors=[]
         for POSX,POSY,ICELL in zip(xx.ravel(), yy.ravel(), icells):
             sensors.append(Sensor(POSX=POSX, POSY=POSY, POSZ=POSZ, FOV=FOV, TYPE=TYPE,
-                                  THDEG=THDEG, PHDEG=PHDEG, LOC=LOC, ICELL=ICELL))
+                                  THDEG=THDEG, PHDEG=PHDEG, LOC=LOC, ICELL=ICELL, CELL_SIZE=CELL_SIZE))
         
         return x0, y0, sensors, icells
 
@@ -866,7 +874,7 @@ class Atm3D(object):
 
         return (ipha3D, pha_cld)
 
-    def get_phase_prof(self, species='wc.sol', wl_phase=None, phaseOpti=False):
+    def get_phase_prof(self, species='wc.sol', wl_phase=None, phaseOpti=False, nb_theta=721):
         """
         For the moment only one phase matrix for all cells containing clouds
         In progress..
@@ -888,7 +896,7 @@ class Atm3D(object):
             for ireff in range (0, nreff_unique):
                 cld = CloudOPAC(species, cld_reff_unique[ireff], 2., 3., 1., self.wl_ref)
                 pha_cld.append(AtmAFGL(self.atm_filename, comp=[cld]).calc([wav[iwav]],
-                 phaseOpti=phaseOpti)['phase_atm'].sub()[0,:,:])
+                 phaseOpti=phaseOpti, NBTHETA=nb_theta)['phase_atm'].sub()[0,:,:])
     
         # ===== 2) phase matrix indice to take for all cloud cells
         # Obtain the correct indices from the unique radii phase matrix
