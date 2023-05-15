@@ -12,6 +12,9 @@ import os
 from smartg.atmosphere import AtmAFGL, CloudOPAC, od2k
 from smartg.smartg import Sensor
 
+import matplotlib.gridspec as gridspec
+import matplotlib.ticker as ticker
+
 import xarray as xr
 
 def is_sorted(arr):
@@ -38,6 +41,33 @@ def is_same_cell_size(grid):
     """
 
     return (np.max(grid[1:]-grid[:-1]) - np.min(grid[1:]-grid[:-1]) < 10e-6)
+
+class OOMFormatter(ticker.ScalarFormatter):
+    def __init__(self, order=0, fformat="%2.2f", offset=True, mathText=True):
+        self.oom = order
+        self.fformat = fformat
+        ticker.ScalarFormatter.__init__(self,useOffset=offset,useMathText=mathText)
+    def _set_order_of_magnitude(self):
+        self.orderOfMagnitude = self.oom
+    def _set_format(self, vmin=None, vmax=None):
+        self.format = self.fformat
+        if self._useMathText:
+             self.format = r'$\mathdefault{%s}$' % self.format
+
+def find_order(mat):
+    return np.math.floor(np.math.log(np.max(np.abs(mat)), 10))
+
+def find_order_or_none(mat, cb_sform):
+    if cb_sform : return OOMFormatter(find_order(mat))
+    else        : return None
+
+def get_tv(vmin, vmax, mat):
+    if vmin is None: vmintv = np.min(mat)
+    else: vmintv = vmin
+    if vmax is None: vmaxtv = np.max(mat)
+    else: vmaxtv = vmax
+    tv = np.linspace(vmintv, vmaxtv, 9, endpoint=True)
+    return tv
 
 def create_1d_grid(cell_number, cell_size, loc="centered"):
     """
@@ -449,7 +479,8 @@ def locate_3Dregular_cells(xgrid,ygrid,zgrid,x,y,z):
 
 def satellite_view(mlut, xgrid, ygrid, wl, interp_name='none',
                    color_bar='Blues_r', color_reverse=False, fig_size=(8,8), font_size=int(18),
-                   vmin = None, vmax = None, scale=False, save_file=None, stk="I", factor=1, mat_force=None):
+                   vmin = None, vmax = None, scale=False, save_file=None, stk="I", factor=1,
+                   mat_force=None, cb_shrink=0.9, cb_sform = True):
     """
     Description: The function give a 'satellite' 2D image of the SMART-G 3D atm return results
 
@@ -464,28 +495,34 @@ def satellite_view(mlut, xgrid, ygrid, wl, interp_name='none',
     scale        : If True scale between 0 and 1 (or between vmin and vmax if not None)
     font_size    : Font size of the figure
     save_file    : If not None, save the generated image in pdf, i.g. save_file = 'test', save as 'test.pdf'
-    mat_force    : Force matrix = mat_force
+    mat_force    : Force matrix = mat_force (can be a list of matrix, max len = 4)
+    cb_shrink    : Color bar shrink value
+    cb_sform     : Use scientific form for color bar values
     """
 
-    # Choose between I, Q, U and V
-    if (stk == "I"):
-        stokes_name = 'I_up (TOA)'
-    elif (stk == "Q"):
-        stokes_name = 'Q_up (TOA)'
-    elif (stk == "U"):
-        stokes_name = 'U_up (TOA)'
-    elif (stk == "V"):
-        stokes_name = 'V_up (TOA)'
-    else: 
-        raise NameError("Unknown stk!")
+    if not isinstance(stk, list):
+        stk = [stk]
 
+    stokes_name = []
+    for stokes in stk:
+        # Choose between I, Q, U and V
+        if (stokes == "I"):
+            stokes_name.append('I_up (TOA)')
+        elif (stokes == "Q"):
+            stokes_name.append('Q_up (TOA)')
+        elif (stokes == "U"):
+            stokes_name.append('U_up (TOA)')
+        elif (stokes == "V"):
+            stokes_name.append('V_up (TOA)')
+        else: 
+            raise NameError("Unknown stk!")
+        
     # First check the Azimuth and Zenith angles dimensions exist, if not the case return an error message
-    if ("Azimuth angles" or "Zenith angles") not in mlut[stokes_name].names:
+    if ("Azimuth angles" or "Zenith angles") not in mlut[stokes_name[0]].names:
         raise NameError("The Azimuth angles and/or Zenith angles dimension(s) are/is missing")
 
-    # The number of dimensions in the LUT
-    axis_number = len(mlut[stokes_name].names)
-    
+    axis_number = len(mlut[stokes_name[0]].names)
+
     ind = [slice(None)]*axis_number # if axis_number = 3, tuple(ind) equivalent to [:,:,:]
 
     # Two last indices for axis Azimuth angles and Zenith angles forced to 0 (consider we have only one sun position)
@@ -496,69 +533,162 @@ def satellite_view(mlut, xgrid, ygrid, wl, interp_name='none',
         raise NameError("Dimension size > 1 is not authorized for both Azimuth and Zenith angles")
 
     # If we have the wavelength dimension
-    if "wavelength" in mlut[stokes_name].names:
+    if "wavelength" in mlut[stokes_name[0]].names:
         ind[-3] = Idx(wl) # TODO Enable a default value, for example for the monochromatique case
 
 
     # Check if the product of Nx and Ny is equal to the number of sensors
     Nx = xgrid.size-1; Ny = ygrid.size-1 # Number of sensors in x and y axis
-    if "sensor index" in mlut[stokes_name].names:
+    if "sensor index" in mlut[stokes_name[0]].names:
         sensor_number = mlut.axes["sensor index"].size
     else:
         sensor_number = int(1)
     if (Nx*Ny != sensor_number):
         raise NameError("The product of Nx and Ny must be equal to the number of sensors!")
 
-
     # Convert the 1D results to a 2D matrix. The order of Nx and Ny below is very important!
-    if (mat_force is None): matrix = mlut[stokes_name][tuple(ind)].reshape(Ny,Nx)*factor
-    else: matrix = mat_force
+    if (mat_force is None):
+        matrix = []
+        for name in stokes_name:
+            matrix.append(mlut[name][tuple(ind)].reshape(Ny,Nx)*factor)
+    else:
+        matrix = mat_force
+        if not isinstance(matrix, list): matrix = [matrix]
     # The variable matrix is now in the following form:
     # - x0 ... xn
     # y0
     #  :
     # yn
 
-    # By default in the imshow function, the origin (origin='upper') i.e matrix[0,0] is at the upper left,
-    # and we want the origin at bottom left (origin='lower).
-    plt.figure(figsize=fig_size)
-    plt.rcParams.update({'font.size':font_size})
+    print(matrix[0].shape)
+
+    if not isinstance(vmin, list): vmin = [vmin]
+    if not isinstance(vmax, list): vmax = [vmax]
+    if len(vmin) == 1: vmin = [vmin[0], vmin[0], vmin[0], vmin[0]]
+    if len(vmax) == 1: vmax = [vmax[0], vmax[0], vmax[0], vmax[0]]
 
     # Deal with all the possibilties where vmin, vmax and scale are used
     if scale:
-        vmin_scale = 0.; vmax_scale = 1.
-        if vmin is not None : vmin_scale = vmin
-        if vmax is not None : vmax_scale = vmax
-        matrix = np.interp(matrix, (matrix.min(), matrix.max()), (vmin_scale, vmax_scale))
+        for idm, mat in enumerate (matrix):
+            vmin_scale = 0.; vmax_scale = 1.
+            if vmin[idm] is not None : vmin_scale = vmin[idm]
+            if vmax[idm] is not None : vmax_scale = vmax[idm]
+            matrix[idm] = np.interp(mat, (mat.min(), mat.max()), (vmin_scale, vmax_scale))
+
+    plt.rcParams.update({'font.size':font_size})
+    if not isinstance(color_bar, list): color_bar = [color_bar]
+    if not isinstance(color_reverse, list): color_reverse = [color_reverse]
+    if len(color_bar) == 1: color_bar = [color_bar[0], color_bar[0], color_bar[0], color_bar[0]]
+    if len(color_reverse) == 1: color_reverse = [color_reverse[0], color_reverse[0], color_reverse[0], color_reverse[0]]
+    cmaps = []
+    for idcb, cbar in enumerate(color_bar):
+        cmaps.append(plt.get_cmap(cbar))
+        if (color_reverse[idcb]): cmaps[idcb] = plt.get_cmap(cbar).reversed()
+
+    if len(matrix) == 1:
+        if fig_size is None: fig_size = (6,4)
+        plt.figure(figsize=fig_size, constrained_layout=True)
+
+        # By default in the imshow function, the origin (origin='upper') i.e matrix[0,0] is at the upper left,
+        # and we want the origin at bottom left (origin='lower).
+        if (is_same_cell_size(xgrid) and is_same_cell_size(ygrid)):
+            img = plt.imshow(matrix[0], vmin=vmin[0], vmax=vmax[0], origin='lower', cmap=cmaps[0],
+                            interpolation=interp_name)#, extent=[xgrid.min(),xgrid.max(),ygrid.min(),ygrid.max()])
+        else:
+            if (interp_name != 'none'):
+                print("Warning: the interp_name variable cannot be used (and then ignored) when using pcolormesh!" + 
+                " i.e. when we have a cell size varying along the x or y axis.")
+            img = plt.pcolormesh(xgrid, ygrid, matrix[0], vmin=vmin[0], vmax=vmax[0], cmap=cmaps[0])
+            plt.axis('scaled') # x and y axes with the same scaling
+        
+        cbar = plt.colorbar(img, shrink=cb_shrink, orientation='vertical', format=find_order_or_none(matrix[0], cb_sform), ticks=get_tv(vmin[0], vmax[0], matrix[0]))
+        cbar.set_label(r''+ stokes_name[0], fontsize = font_size)
+
+        plt.xlabel(r'X (km)')
+        plt.ylabel(r'Y (km)')
+
+    elif len(matrix) == 2:
+        if fig_size is None: fig_size = (12,4)
+        fig, axs = plt.subplots(1,2, figsize=fig_size, constrained_layout=True, sharex=True, sharey=True)
+
+        cax1 = axs[0].imshow(matrix[0], vmin=vmin[0], vmax=vmax[0], origin='lower', cmap=cmaps[0],
+                    interpolation=interp_name, extent=[xgrid.min(),xgrid.max(),ygrid.min(),ygrid.max()])
+        
+        cbar1 = fig.colorbar(cax1, ax=axs[0], shrink=cb_shrink, orientation='vertical', format=find_order_or_none(matrix[0], cb_sform), ticks=get_tv(vmin[0], vmax[0], matrix[0]))
+        cbar1.set_label(r''+ stokes_name[0], fontsize = font_size)
+
+        cax2 = axs[1].imshow(matrix[1], vmin=vmin[1], vmax=vmax[1], origin='lower', cmap=cmaps[1],
+                    interpolation=interp_name, extent=[xgrid.min(),xgrid.max(),ygrid.min(),ygrid.max()])
+        
+        cbar2 = fig.colorbar(cax2, ax=axs[1], shrink=cb_shrink, orientation='vertical', format=find_order_or_none(matrix[1], cb_sform), ticks=get_tv(vmin[1], vmax[1], matrix[1]))
+        cbar2.set_label(r''+ stokes_name[1], fontsize = font_size)
+
+        axs[0].set_xlim(xgrid[0], xgrid[-1])
+        axs[1].set_ylim(ygrid[0], ygrid[-1])
+
+        axs[0].set_ylabel(r'Y (km)')
+        fig.supxlabel(r'X (km)')
+
+    elif len(matrix) == 3:
+        if fig_size is None: fig_size = (12,8)
+        fig = plt.figure(figsize=fig_size)
+        gs = gridspec.GridSpec(4, 4, figure=fig)
+
+        ax1 = plt.subplot(gs[:2, :2])
+        cax1 = ax1.imshow(matrix[0], vmin=vmin[0], vmax=vmax[0], origin='lower', cmap=cmaps[0],
+                        interpolation=interp_name, extent=[xgrid.min(),xgrid.max(),ygrid.min(),ygrid.max()])
+        cbar1 = plt.colorbar(cax1, ax=ax1, shrink=cb_shrink, orientation='vertical', format=find_order_or_none(matrix[0], cb_sform), ticks=get_tv(vmin[0], vmax[0], matrix[0]))
+        cbar1.set_label(r''+ stokes_name[0], fontsize = font_size)
+        ax1.set_xlim(xgrid[0], xgrid[-1])
+
+        ax2 = plt.subplot(gs[:2, 2:], sharey=ax1)
+        plt.setp(ax2.get_yticklabels(), visible=False)
+        cax2 = ax2.imshow(matrix[1], vmin=vmin[1], vmax=vmax[1], origin='lower', cmap=cmaps[1],
+                        interpolation=interp_name, extent=[xgrid.min(),xgrid.max(),ygrid.min(),ygrid.max()])
+        cbar2 = plt.colorbar(cax2, ax=ax2, shrink=cb_shrink, orientation='vertical', format=find_order_or_none(matrix[1], cb_sform), ticks=get_tv(vmin[1], vmax[1], matrix[1]))
+        cbar2.set_label(r''+ stokes_name[1], fontsize = font_size)
+        ax2.set_xlim(xgrid[0], xgrid[-1])
+
+        ax3 = plt.subplot(gs[2:4, 1:3])
+        cax3 = ax3.imshow(matrix[2], vmin=vmin[2], vmax=vmax[2], origin='lower', cmap=cmaps[2],
+                        interpolation=interp_name, extent=[xgrid.min(),xgrid.max(),ygrid.min(),ygrid.max()])
+        cbar3 = plt.colorbar(cax3, ax=ax3, shrink=cb_shrink, orientation='vertical', format=find_order_or_none(matrix[2], cb_sform), ticks=get_tv(vmin[2], vmax[2], matrix[2]))
+        cbar3.set_label(r''+ stokes_name[2], fontsize = font_size)
+        ax3.set_xlim(xgrid[0], xgrid[-1])
+
+        ax1.set_ylabel(r'Y (km)')
+        ax3.set_ylabel(r'Y (km)')
+        ax3.set_xlabel(r'X (km)')
+
+        gs.tight_layout(fig)
 
 
-    # Call the function imshow for the 2D drawing (or pcolormesh if we have different cell size in x or y axis)
-    if (color_reverse): cmap = plt.get_cmap(color_bar).reversed()
-    else: cmap = plt.get_cmap(color_bar)
-    if (is_same_cell_size(xgrid) and is_same_cell_size(ygrid)):
-        img = plt.imshow(matrix, vmin=vmin, vmax=vmax, origin='lower', cmap=cmap,
-                         interpolation=interp_name, extent=[xgrid.min(),xgrid.max(),ygrid.min(),ygrid.max()])
+    elif len(matrix) == 4:
+        if fig_size is None: fig_size = (12,8)
+        fig, axs = plt.subplots(2,2, figsize=fig_size, constrained_layout=True, sharex=True, sharey=True)
+        plt.rcParams.update({'font.size':font_size})
+        for i in range (0, 2):
+            for j in range (0, 2):
+                print(matrix[i*2+j].shape)
+                cax = axs[i,j].imshow(matrix[i*2+j], vmin=vmin[i*2+j], vmax=vmax[i*2+j], origin='lower', cmap=cmaps[i*2+j],
+                        interpolation=interp_name)#, extent=[xgrid.min(),xgrid.max(),ygrid.min(),ygrid.max()])
+                cbar = fig.colorbar(cax, ax=axs[i,j], shrink=cb_shrink, orientation='vertical', format=find_order_or_none(matrix[i*2+j], cb_sform), ticks=get_tv(vmin[i*2+j], vmax[i*2+j], matrix[i*2+j]))
+                cbar.set_label(r''+ stokes_name[i*2+j], fontsize = font_size)
+                #axs[i,j].set_xlim(xgrid[0], xgrid[-1])
+
+        fig.supxlabel(r'X (km)')
+        fig.supylabel(r'Y (km)')
     else:
-        if (interp_name != 'none'):
-            print("Warning: the interp_name variable cannot be used (and then ignored) when using pcolormesh!" + 
-            " i.e. when we have a cell size varying along the x or y axis.")
-        img = plt.pcolormesh(xgrid, ygrid, matrix, vmin=vmin, vmax=vmax, cmap=cmap)
-        plt.axis('scaled') # x and y axes with the same scaling
-
-    # Color bar parametrization
-    cbar = plt.colorbar(img, shrink=0.7, orientation='vertical')
-    cbar.set_label(r''+ stokes_name, fontsize = font_size)
-
-    # Labels for x and y axes
-    plt.xlabel(r'X (km)')
-    plt.ylabel(r'Y (km)')
-
+        raise NameError("Give more than 4 stk is not authorized!")
+    
     # If the option save_file is used, save the file in pdf
     if (save_file is not None):
         # Deal with the case where we have not specified the '.pdf' at the end
         if not save_file.endswith('.pdf'):
             save_file += '.pdf'
         plt.savefig(save_file)
+
+
 
 def get_sensors_pos_icells_from_3Dgrid(grid3D, POSZ):
     g = grid3D
