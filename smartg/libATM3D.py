@@ -560,8 +560,30 @@ def satellite_view(mlut, xgrid, ygrid, wl, interp_name='none',
             save_file += '.pdf'
         plt.savefig(save_file)
 
+def get_sensors_pos_icells_from_3Dgrid(grid3D, POSZ):
+    g = grid3D
+    # Arrays with sizes of cells in x and y axes
+    sizes_x = (g.xgrid[1:] - g.xgrid[:-1])/2.
+    sizes_y = (g.ygrid[1:] - g.ygrid[:-1])/2.
 
-def create_sensors(grid3D, POSZ=120., THDEG=180., PHDEG=180., FOV=0., TYPE=0., LOC='ATMOS', CELL_SIZE=-1):
+    # x and y sensors position into the 3Dgrid
+    x0  = g.xgrid[:-1] + sizes_x
+    y0  = g.ygrid[:-1] + sizes_y
+
+    xx,yy  = np.meshgrid(x0, y0)
+    zz     = np.zeros_like(xx) + POSZ
+    icells = locate_3Dregular_cells(g.xGRID, g.yGRID, g.zGRID, xx.ravel(), yy.ravel(), zz.ravel())
+
+    return x0, y0, xx, yy, icells
+
+def find_id(val, grid):
+    id = None
+    for i in range (0, len(grid)-1):
+        if (val > grid[i] and val <= grid[i+1]): id = i
+    if id is None: raise NameError("An id cannot be found!")
+    return id
+
+def create_sensors(grid3D, POSZ=120., THDEG=180., PHDEG=180., FOV=0., TYPE=0., LOC='ATMOS', CELL_SIZE=-1, grid3D_atm=None):
         """
         Description : Create a list of sensors
 
@@ -572,30 +594,40 @@ def create_sensors(grid3D, POSZ=120., THDEG=180., PHDEG=180., FOV=0., TYPE=0., L
         FOV          : Field of View (deg, default 0.)
         TYPE         : Radiance (0), Planar flux (1), Spherical Flux (2), default 0
         LOC          : Localization (default ATMOS)
+        grid3D_atm   : To know the true intial bbox of sensors in case we have a different grid for atm
 
         === Return:
         List of Sensor classes
         """
         # TODO consider a possible variability between sensors (positions, viewing angles, etc.)
-
-        g = grid3D
-
-        # Arrays with sizes of cells in x and y axes
-        sizes_x = (g.xgrid[1:] - g.xgrid[:-1])/2.
-        sizes_y = (g.ygrid[1:] - g.ygrid[:-1])/2.
-
-        # x and y sensors position into the 3Dgrid
-        x0  = g.xgrid[:-1] + sizes_x
-        y0  = g.ygrid[:-1] + sizes_y
-
-        xx,yy  = np.meshgrid(x0, y0)
-        zz     = np.zeros_like(xx) + POSZ
-        icells = locate_3Dregular_cells(g.xGRID, g.yGRID, g.zGRID, xx.ravel(), yy.ravel(), zz.ravel())
+        x0, y0, xx, yy, icells = get_sensors_pos_icells_from_3Dgrid(grid3D, POSZ)
 
         sensors=[]
         for POSX,POSY,ICELL in zip(xx.ravel(), yy.ravel(), icells):
             sensors.append(Sensor(POSX=POSX, POSY=POSY, POSZ=POSZ, FOV=FOV, TYPE=TYPE,
                                   THDEG=THDEG, PHDEG=PHDEG, LOC=LOC, ICELL=ICELL, CELL_SIZE=CELL_SIZE))
+            
+        if grid3D_atm is not None:
+            _, _, xx_atm, yy_atm, icells_atm = get_sensors_pos_icells_from_3Dgrid(grid3D_atm, POSZ)
+            sensors_atm=[]
+            for POSX,POSY,ICELL in zip(xx_atm.ravel(), yy_atm.ravel(), icells_atm):
+                sensors_atm.append(Sensor(POSX=POSX, POSY=POSY, POSZ=POSZ, FOV=FOV, TYPE=TYPE,
+                                          THDEG=THDEG, PHDEG=PHDEG, LOC=LOC, ICELL=ICELL, CELL_SIZE=CELL_SIZE))
+            sensors_new = []
+            for isens in range (0, len(sensors)):
+                posx = sensors[isens].dict['POSX'].copy()
+                idx = find_id(posx, grid3D_atm.xgrid)
+                posy = sensors[isens].dict['POSY'].copy()
+                idy = find_id(posy, grid3D_atm.ygrid)
+                sens_tmp = Sensor()
+                sens_tmp.dict = sensors_atm[idx+grid3D_atm.Nx*idy].dict.copy()
+                sens_tmp.dict['POSX'] = posx
+                sens_tmp.dict['POSY'] = posy
+                sens_tmp.cell_size = sensors_atm[idx+grid3D_atm.Nx*idy].cell_size
+                sensors_new.append(sens_tmp)
+
+            # replace now the sensor list by the corrected one
+            sensors = sensors_new.copy()
         
         return x0, y0, sensors, icells
 
