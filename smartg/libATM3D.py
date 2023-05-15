@@ -906,10 +906,8 @@ class Atm3D(object):
 
         return (ipha3D, pha_cld)
 
-    def get_phase_prof(self, species='wc.sol', wl_phase=None, phaseOpti=False, nb_theta=721):
+    def get_phase_prof_OPAC(self, species='wc.sol', wl_phase=None, phaseOpti=False, nb_theta=721):
         """
-        For the moment only one phase matrix for all cells containing clouds
-        In progress..
         return a tuple with the phase matrix indices to choose, and a list of phase matrix LUT.
         """
 
@@ -983,7 +981,7 @@ class Atm3D(object):
 
         return (cld_phase_indices_wl, luts)
 
-    def get_phase_prof_OPAC(self, wl_phase=None):
+    def get_phase_prof(self, wl_phase=None):
         """
         In progress...
         """
