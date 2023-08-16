@@ -422,17 +422,19 @@ class Sensor(object):
 class StdevLim(object):
     '''
     Definition of the class StdevLim
+    !!! Be careful. For the moment, it does not work correctly with kdis and reptran !!!
 
-    err_abs_min : minimum absolute error
+    err_abs_min : minimum absolute error. Stop sim if max abs error <= err_abs_min
     err_rel_min : minimum relative error in percentage
     nb_loop_min : minimum loop number
     stk         : stoke vector to consider (I = 0, Q = 1, U = 2, V = 3)
     loc         : integer, if UPTOA->0, DOWN0->1, DOWN0M->2, UP0P->3, UP0M->4 or DOWNB->5
     verbose     : if True, for each loop print the max absolute and relative errors
+    format      : print format for abs and rel max values
     '''
 
     def __init__(self, err_abs_min=float(0), err_rel_min=float(0), nb_loop_min=int(10),
-     stk=int(0), loc=int(0), verbose=False):
+     stk=int(0), loc=int(0), verbose=False, format=".5e"):
       
         self.dict = {
             'err_abs_min':  err_abs_min,
@@ -440,7 +442,8 @@ class StdevLim(object):
             'nb_loop_min':  nb_loop_min,
             'stk'        :  stk,
             'loc'        :  loc,
-            'verbose'    :  verbose
+            'verbose'    :  verbose,
+            'format'     :  format
         }
 
     def __str__(self):
@@ -2495,6 +2498,8 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
                 tabPhotonsTot[4,:,:,:,:,:] += res_vrs[:,None,:,None]
 
         N_simu += 1
+
+        sphot = np.sum(NPhotonsInTot.get())/alis_norm
         if stdev:
             (NSENSOR,NLAM) = NPhotonsIn.shape
             L = L.reshape((1,1,NSENSOR,NLAM,1,1))   # broadcast to tabPhotonsTot
@@ -2513,25 +2518,20 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
                 min_loop = stdev_lim.dict['nb_loop_min']
                 stk_stdev = stdev_lim.dict['stk']
                 loc_stdev = stdev_lim.dict['loc']
+                format_std = stdev_lim.dict['format']
 
                 avg = sum_x/N_simu
                 err_rel = (sigma_bis / avg)*100
                 err_rel[np.isnan(err_rel)] = 0
+                max_rerr = np.max(err_rel[loc_stdev,stk_stdev,:,:,:,:])
+                max_aerr = np.max(sigma_bis[loc_stdev,stk_stdev,:,:,:,:])
 
                 if (stdev_lim.dict['verbose']):
-                    print("max rel_err = ", np.max(err_rel[loc_stdev,stk_stdev,:,:,:,:]),
-                          "; max abs_err = ", np.max(sigma_bis[loc_stdev,stk_stdev,:,:,:,:]))
+                    print(f"max rel_err = {max_rerr:{format_std}}; max abs_err = {max_aerr:{format_std}}")
 
-                if (N_simu >= min_loop and (np.max(sigma_bis[loc_stdev,stk_stdev,:,:,:,:]) <= abs_min )):
+                if ( (N_simu >= min_loop and max_aerr <= abs_min) or (N_simu >= min_loop and max_rerr <= rel_min) ):
                     # update of the progression Bar
-                    sphot = np.sum(NPhotonsInTot.get())/alis_norm
-                    p.update(sphot,'Launched {:.3g} photons'.format(sphot))
-                    break
-
-                if (N_simu >= min_loop and (np.max(err_rel[loc_stdev,stk_stdev,:,:,:,:]) <= rel_min )):
-                    # update of the progression Bar
-                    sphot = np.sum(NPhotonsInTot.get())/alis_norm
-                    p.update(sphot,'Launched {:.3g} photons'.format(sphot))
+                    p.update(sphot, f"Launched {sphot:.3g} photons; err[abs] = {max_aerr:{format_std}}; err[rel] = {max_rerr:{format_std}};")
                     break
 
         if TC is not None and stdev_lim is not None:
@@ -2547,20 +2547,21 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
             rel_min = stdev_lim.dict['err_rel_min']
 
             if (stdev_lim.dict['verbose']):
-                print("relative_err =", err_p_tmp)
+                print(f"relative_err = {err_p_tmp:{format_std}}")
 
             # update of the progression Bar
-            sphot = np.sum(NPhotonsInTot.get())/alis_norm
-            p.update(sphot,"Launched {:.3g} photons; err[%%] = {:.5f}".format(sphot, err_p_tmp))
+            p.update(sphot, f"Launched {sphot:.3g} photons; err[rel] = {err_p_tmp:{format_std}};")
 
             if (N_simu >= min_loop and err_p_tmp <= rel_min):
                 NBPHOTONS = NBPHOTONS_tmp
-                break
+                break  
+        elif (stdev and stdev_lim is not None):
+            # update of the progression Bar
+            p.update(sphot, f"Launched {sphot:.3g} photons; err[abs] = {max_aerr:{format_std}}; err[rel] = {max_rerr:{format_std}};")
         else:
             # update of the progression Bar
-            sphot = np.sum(NPhotonsInTot.get())/alis_norm
-            p.update(sphot,
-                    'Launched {:.3g} photons'.format(sphot))
+            p.update(sphot, 'Launched {:.3g} photons'.format(sphot))
+            
     # END WHILE LOOP
     secs_cuda_clock = secs_cuda_clock*1e-3
 
