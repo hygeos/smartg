@@ -3088,7 +3088,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
     // if called with le mode, it serves to compute the transmission
     // from photon last intercation position to TOA, thus 
     // photon is forced to exit upward or downward and tauRdm is chosen to be an upper limit
-    else tauRdm = 1e6;
+    else tauRdm = 1e7;
 
     // Init photon cell
     int count=0;
@@ -3100,16 +3100,20 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
     // XY travelled distance limit in kilometers
     float limXY=1000;
 
+    ph->v = normalize(ph->v);
+
+
     while (1)
     {
         // Stop the removed photon
         if (ph->loc == REMOVED) {return;}
 
         // If the travelled distance (in x or y axis) exceeds 1000 kilometers then absorb the photon
-        if (fmax(distX, distY) >= limXY) {ph->loc=ABSORBED; return;}
+        //if (fmax(distX, distY) >= limXY) {ph->loc=ABSORBED; return;}
+
 
         // Normally we will never get an infinite loop, but just a security
-        if (count >= 100000) { printf("Warning! Count limit has been exceeded!"); ph->loc=REMOVED; return; }
+        if (count >= 10000000) { printf("Warning! Count limit has been exceeded!"); ph->loc=REMOVED; return; }
 
         // Identify absorbed photons and stop propagating them
         if (next_layer == BOUNDARY_ABS) { ph->loc = ABSORBED; return; }
@@ -3131,7 +3135,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
         }
 
         // Intersection with current cell boundaries
-		Ray Ray_cur(ph->pos, ph->v, 0);
+		Ray Ray_cur(ph->pos, ph->v, 0.);
         pmin = make_float3(cell[ph->layer].pminx, cell[ph->layer].pminy, cell[ph->layer].pminz);
         pmax = make_float3(cell[ph->layer].pmaxx, cell[ph->layer].pmaxy, cell[ph->layer].pmaxz);
         BBox Box_cur(pmin, pmax);
@@ -3151,7 +3155,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
             h_cur    = coef_cur * intTime1;
 
             #ifndef ALIS
-            h_cur_abs = prof[cell[ph->layer].iopt+ilam].OD_abs * intTime1;
+            h_cur_abs = prof[cell[ph->layer].iabs+ilam].OD_abs * intTime1;
             #endif
 
             //
@@ -6378,7 +6382,7 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
     unsigned long long II, JJ, JJJ, TT;
 
 
-    if ((theta != 0.F) && (theta!= acosf(-1.F))) {
+    if ((double)ph->v.x * (double)ph->u.y - (double)ph->v.y * (double)ph->u.x != 0.) {
        ComputePsi(ph, &psi, theta);
     }
     else {
@@ -8020,7 +8024,7 @@ __device__ void GetFaceIndexMM(float3 pos, float3 pmin, float3 pmax, int *index)
     if (dF4 < dF_min) {*index = 4; dF_min = dF4;}
     if (dF5 < dF_min) {*index = 5; dF_min = dF5;}
 
-    if (dF_min > 1e-5) *index = -1;
+    if (dF_min > 1e-3) *index = -1;
 }
 
 #endif
