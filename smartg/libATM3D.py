@@ -208,11 +208,13 @@ class Cloud3D(object):
     reff                 : Numpy 1D array with the cloud effective radii
     """
 
-    def __init__(self, phase, file_name=None, loc_xgrid = "centered", loc_ygrid = "centered", reff_acc = None,
+    def __init__(self, phase=None, file_name=None, loc_xgrid = "centered", loc_ygrid = "centered", reff_acc = None,
                  xyz_grids=None, ext_coeff=None, cell_indices=None, reff=None):
 
+        if (phase is None):
+            self.phase = phase
         # Check if phase is a LUT object with the correct axes
-        if (not isinstance(phase, LUT)):
+        elif (not isinstance(phase, LUT)):
             raise NameError("phase must be a LUT object!")
         elif (not all([item in phase.names for item in ['wav_phase', 'reff', 'stk', 'theta_atm']])):
             raise NameError("Phase matrix must have 4 dimensions: wav_phase, reff, stk and theta_atm")
@@ -480,7 +482,7 @@ def locate_3Dregular_cells(xgrid,ygrid,zgrid,x,y,z):
 def satellite_view(mlut, xgrid, ygrid, wl, interp_name='none',
                    color_bar='Blues_r', color_reverse=False, fig_size=(8,8), font_size=int(18),
                    vmin = None, vmax = None, scale=False, save_file=None, stk="I", factor=1,
-                   mat_force=None, cb_shrink=0.9, cb_sform = True):
+                   mat_force=None, cb_shrink=0.9, cb_sform = True, fig_title=None):
     """
     Description: The function give a 'satellite' 2D image of the SMART-G 3D atm return results
 
@@ -498,6 +500,7 @@ def satellite_view(mlut, xgrid, ygrid, wl, interp_name='none',
     mat_force    : Force matrix = mat_force (can be a list of matrix, max len = 4)
     cb_shrink    : Color bar shrink value
     cb_sform     : Use scientific form for color bar values
+    fig_title    : add a title to the figure
     """
 
     if not isinstance(stk, list):
@@ -560,8 +563,6 @@ def satellite_view(mlut, xgrid, ygrid, wl, interp_name='none',
     #  :
     # yn
 
-    print(matrix[0].shape)
-
     if not isinstance(vmin, list): vmin = [vmin]
     if not isinstance(vmax, list): vmax = [vmax]
     if len(vmin) == 1: vmin = [vmin[0], vmin[0], vmin[0], vmin[0]]
@@ -582,18 +583,23 @@ def satellite_view(mlut, xgrid, ygrid, wl, interp_name='none',
     if len(color_reverse) == 1: color_reverse = [color_reverse[0], color_reverse[0], color_reverse[0], color_reverse[0]]
     cmaps = []
     for idcb, cbar in enumerate(color_bar):
-        cmaps.append(plt.get_cmap(cbar))
+        if not isinstance(cbar, str):
+            cmaps.append(cbar)
+        else:
+            cmaps.append(plt.get_cmap(cbar))
         if (color_reverse[idcb]): cmaps[idcb] = plt.get_cmap(cbar).reversed()
 
     if len(matrix) == 1:
         if fig_size is None: fig_size = (6,4)
         plt.figure(figsize=fig_size, constrained_layout=True)
+        if fig_title is not None : plt.title(fig_title)
+
 
         # By default in the imshow function, the origin (origin='upper') i.e matrix[0,0] is at the upper left,
         # and we want the origin at bottom left (origin='lower).
         if (is_same_cell_size(xgrid) and is_same_cell_size(ygrid)):
             img = plt.imshow(matrix[0], vmin=vmin[0], vmax=vmax[0], origin='lower', cmap=cmaps[0],
-                            interpolation=interp_name)#, extent=[xgrid.min(),xgrid.max(),ygrid.min(),ygrid.max()])
+                             interpolation=interp_name, extent=[xgrid.min(),xgrid.max(),ygrid.min(),ygrid.max()])
         else:
             if (interp_name != 'none'):
                 print("Warning: the interp_name variable cannot be used (and then ignored) when using pcolormesh!" + 
@@ -610,6 +616,7 @@ def satellite_view(mlut, xgrid, ygrid, wl, interp_name='none',
     elif len(matrix) == 2:
         if fig_size is None: fig_size = (12,4)
         fig, axs = plt.subplots(1,2, figsize=fig_size, constrained_layout=True, sharex=True, sharey=True)
+        if fig_title is not None : fig.suptitle(fig_title)
 
         cax1 = axs[0].imshow(matrix[0], vmin=vmin[0], vmax=vmax[0], origin='lower', cmap=cmaps[0],
                     interpolation=interp_name, extent=[xgrid.min(),xgrid.max(),ygrid.min(),ygrid.max()])
@@ -633,6 +640,7 @@ def satellite_view(mlut, xgrid, ygrid, wl, interp_name='none',
         if fig_size is None: fig_size = (12,8)
         fig = plt.figure(figsize=fig_size)
         gs = gridspec.GridSpec(4, 4, figure=fig)
+        if fig_title is not None : fig.suptitle(fig_title)
 
         ax1 = plt.subplot(gs[:2, :2])
         cax1 = ax1.imshow(matrix[0], vmin=vmin[0], vmax=vmax[0], origin='lower', cmap=cmaps[0],
@@ -666,10 +674,10 @@ def satellite_view(mlut, xgrid, ygrid, wl, interp_name='none',
     elif len(matrix) == 4:
         if fig_size is None: fig_size = (12,8)
         fig, axs = plt.subplots(2,2, figsize=fig_size, constrained_layout=True, sharex=True, sharey=True)
+        if fig_title is not None : fig.suptitle(fig_title)
         plt.rcParams.update({'font.size':font_size})
         for i in range (0, 2):
             for j in range (0, 2):
-                print(matrix[i*2+j].shape)
                 cax = axs[i,j].imshow(matrix[i*2+j], vmin=vmin[i*2+j], vmax=vmax[i*2+j], origin='lower', cmap=cmaps[i*2+j],
                         interpolation=interp_name)#, extent=[xgrid.min(),xgrid.max(),ygrid.min(),ygrid.max()])
                 cbar = fig.colorbar(cax, ax=axs[i,j], shrink=cb_shrink, orientation='vertical', format=find_order_or_none(matrix[i*2+j], cb_sform), ticks=get_tv(vmin[i*2+j], vmax[i*2+j], matrix[i*2+j]))
@@ -860,7 +868,7 @@ class Atm3D(object):
     If wls.size is equal to 1 and wl_ref is None, take wls as reference wavelength
     """
 
-    def __init__(self, atm_filename, grid_3d, cloud_3d, wls, wl_ref = None,
+    def __init__(self, atm_filename, grid_3d, wls, cloud_3d=None, wl_ref = None,
     lat=45, P0=None, O3=None, H2O=None, NO2=True, tauR=None, mol_sca_coeff=None, mol_abs_coeff=None):
 
         possible_atm_filename = ['afglms', 'afglmw', 'afglss', 'afglsw', 'afglt', 'afglus',
@@ -873,8 +881,33 @@ class Atm3D(object):
         if (not isinstance(grid_3d, Grid3D)):
             raise NameError('grid_3d variable must be a Grid3D object!')
 
-        if (not isinstance(cloud_3d, Cloud3D)):
+        if (cloud_3d is None):
+            self.phase         = None
+            self.cloud_3d      = None
+            self.cld_ext_coeff = None
+            self.cld_reff      = None
+            self.cloud_indices = None
+        elif (not isinstance(cloud_3d, Cloud3D)):
             raise NameError('cloud_3d variable must be a Cloud3D object!')
+        else:
+            self.phase         = cloud_3d.phase
+            self.cloud_3d      = cloud_3d
+            self.cld_ext_coeff = cloud_3d.get_ext_coeff()
+            self.cld_reff      = cloud_3d.get_reff()
+            self.cloud_indices = cloud_3d.get_cell_indices() # update if performed bellow
+
+            # === Cell indices in SMART-G + consider boundaries:
+            # The "-1" is here because IPRT input cloud file indices start at 1 intead of 0 for SMART-G
+            cloud_indices_new = self.cloud_indices-1
+            # Look if we have xy boundaries
+            # Below we look on the x axis, but works also if we check on the y axis
+            is_boundaryxy = grid_3d.Nx < grid_3d.NX
+
+            # Update the cloud_indices (for the x and y axes) if they are xy boundaries
+            if (is_boundaryxy): cloud_indices_new[:,:2]+=1
+
+            # Finally update the attribut
+            self.cloud_indices = cloud_indices_new
 
         if (not isinstance(wls, np. ndarray)):
             raise NameError('wls must be a numpy array!')
@@ -887,13 +920,9 @@ class Atm3D(object):
 
         self.atm_filename = atm_filename
         self.grid_3d      = grid_3d
-        self.phase         = cloud_3d.phase
-        self.cloud_3d      = cloud_3d
         self.wls          = wls
-        if (wls.size == 1 and wl_ref is None): 
-            self.wl_ref   = wls[0]
-        else:
-            self.wl_ref   = wl_ref
+        if (wls.size == 1 and wl_ref is None): self.wl_ref   = wls[0]
+        else                                 : self.wl_ref   = wl_ref
 
         # Calculate the 1d extinction rayleigh coefficient and store it as attribut
         znew = grid_3d.zGRID[::-1]
@@ -906,23 +935,6 @@ class Atm3D(object):
 
         if mol_sca_coeff is not None : self.ext_rayleigh = mol_sca_coeff
         if mol_abs_coeff is not None : self.molecular_abs_coeff = mol_abs_coeff
-
-        self.cld_ext_coeff = cloud_3d.get_ext_coeff()
-        self.cld_reff      = cloud_3d.get_reff()
-        self.cloud_indices = cloud_3d.get_cell_indices() # update if performed bellow
-
-        # === Cell indices in SMART-G + consider boundaries:
-        # The "-1" is here because IPRT input cloud file indices start at 1 intead of 0 for SMART-G
-        cloud_indices_new = self.cloud_indices-1
-        # Look if we have xy boundaries
-        # Below we look on the x axis, but works also if we check on the y axis
-        is_boundaryxy = grid_3d.Nx < grid_3d.NX
-
-        # Update the cloud_indices (for the x and y axes) if they are xy boundaries
-        if (is_boundaryxy): cloud_indices_new[:,:2]+=1
-
-        # Finally update the attribut
-        self.cloud_indices = cloud_indices_new
         # ===
 
         # TODO -> calulate the 1d aer extinction coeff ??
@@ -932,15 +944,18 @@ class Atm3D(object):
         Consider all the grid cells with non commun opt property + 1d atm
         In progress...
         """
-        cloud_indices = self.cloud_indices
+        if (self.cloud_3d is None):
+            ext_rayleigh_3d = self.ext_rayleigh
+        else:
+            cloud_indices = self.cloud_indices
 
-        # 1d xyz indices where there are clouds
-        cloud_1d_indices = np.ravel_multi_index((cloud_indices[:,0], cloud_indices[:,1], cloud_indices[:,2]),
-                                                 dims=(self.grid_3d.NX, self.grid_3d.NY, self.grid_3d.NZ))
+            # 1d xyz indices where there are clouds
+            cloud_1d_indices = np.ravel_multi_index((cloud_indices[:,0], cloud_indices[:,1], cloud_indices[:,2]),
+                                                    dims=(self.grid_3d.NX, self.grid_3d.NY, self.grid_3d.NZ))
 
-        # calculate the 3d rayleigh extinction coefficient
-        ext_rayleigh_3d = np.concatenate([self.ext_rayleigh,
-            self.ext_rayleigh[:,self.grid_3d.NZ-self.grid_3d.idz[cloud_1d_indices]]], axis=1)
+            # calculate the 3d rayleigh extinction coefficient
+            ext_rayleigh_3d = np.concatenate([self.ext_rayleigh,
+                self.ext_rayleigh[:,self.grid_3d.NZ-self.grid_3d.idz[cloud_1d_indices]]], axis=1)
 
         return ext_rayleigh_3d
 
@@ -949,22 +964,29 @@ class Atm3D(object):
         Consider all the grid cells with non commun opt property + 1d atm
         In progress...
         """
-        cloud_indices = self.cloud_indices
 
-        # 1d xyz indices where there are clouds
-        cloud_1d_indices = np.ravel_multi_index((cloud_indices[:,0], cloud_indices[:,1], cloud_indices[:,2]),
-                                                 dims=(self.grid_3d.NX, self.grid_3d.NY, self.grid_3d.NZ))
+        if (self.cloud_3d is None):
+            mol_abs_coeff_3d = self.molecular_abs_coeff
+        else: # if there are clouds
+            cloud_indices = self.cloud_indices
 
-        # calculate the 3d molecular coefficient
-        mol_abs_coeff_3d = np.concatenate([self.molecular_abs_coeff,
-            self.molecular_abs_coeff[:,self.grid_3d.NZ-self.grid_3d.idz[cloud_1d_indices]]], axis=1)
+            # 1d xyz indices where there are clouds
+            cloud_1d_indices = np.ravel_multi_index((cloud_indices[:,0], cloud_indices[:,1], cloud_indices[:,2]),
+                                                    dims=(self.grid_3d.NX, self.grid_3d.NY, self.grid_3d.NZ))
+
+            # calculate the 3d molecular coefficient
+            mol_abs_coeff_3d = np.concatenate([self.molecular_abs_coeff,
+                self.molecular_abs_coeff[:,self.grid_3d.NZ-self.grid_3d.idz[cloud_1d_indices]]], axis=1)
 
         return mol_abs_coeff_3d
 
     def get_grid(self):
 
-        nb_unique_cells = self.cloud_indices.shape[0]
-        Nopt = self.grid_3d.NZ + 1 + nb_unique_cells
+        if( self.cloud_3d is None):
+            Nopt = self.grid_3d.NZ + 1
+        else:
+            nb_unique_cells = self.cloud_indices.shape[0]
+            Nopt = self.grid_3d.NZ + 1 + nb_unique_cells
 
         return np.arange(Nopt)
 
@@ -1036,7 +1058,7 @@ class Atm3D(object):
 
         return (ipha3D, pha_cld)
 
-    def get_phase_prof_OPAC(self, species='wc.sol', wl_phase=None, phaseOpti=False, nb_theta=721):
+    def get_phase_prof_OPAC(self, species='wc.sol', wl_phase=None, phaseOpti=False, nb_theta=721, AOD=1.):
         """
         return a tuple with the phase matrix indices to choose, and a list of phase matrix LUT.
         """
@@ -1054,7 +1076,7 @@ class Atm3D(object):
         pha_cld = []
         for iwav in range (0, nwav):
             for ireff in range (0, nreff_unique):
-                cld = CloudOPAC(species, cld_reff_unique[ireff], 2., 3., 1., self.wl_ref)
+                cld = CloudOPAC(species, cld_reff_unique[ireff], 2., 3., AOD, self.wl_ref)
                 pha_cld.append(AtmAFGL(self.atm_filename, comp=[cld]).calc([wav[iwav]],
                  phaseOpti=phaseOpti, NBTHETA=nb_theta)['phase_atm'].sub()[0,:,:])
     
@@ -1128,6 +1150,10 @@ class Atm3D(object):
 
         # Get the MLUT of the monochromatic phase matrix in function of the effective radius and theta
         phase = self.phase
+
+        if (phase is None):
+            raise NameError("Phase matrix is none. This method cannot be used! Use instead: get_phase_prof_OPAC().")
+
         luts = []
 
         for iwav in range (0, nwav):
@@ -1157,20 +1183,23 @@ class Atm3D(object):
 
     def get_cells_info(self):
 
-        cloud_indices = self.cloud_indices
+        if (self.cloud_3d is None):
+            Nopt = self.grid_3d.NZ + 1
+        else:
+            cloud_indices = self.cloud_indices
 
-        # 1d xyz indices where there are clouds
-        cloud_1d_indices = np.ravel_multi_index((cloud_indices[:,0], cloud_indices[:,1], cloud_indices[:,2]),
-                                                 dims=(self.grid_3d.NX, self.grid_3d.NY, self.grid_3d.NZ))
+            # 1d xyz indices where there are clouds
+            cloud_1d_indices = np.ravel_multi_index((cloud_indices[:,0], cloud_indices[:,1], cloud_indices[:,2]),
+                                                    dims=(self.grid_3d.NX, self.grid_3d.NY, self.grid_3d.NZ))
 
-        nb_unique_cells = cloud_indices.shape[0]
-        Nopt = self.grid_3d.NZ + 1 + nb_unique_cells
+            nb_unique_cells = cloud_indices.shape[0]
+            Nopt = self.grid_3d.NZ + 1 + nb_unique_cells
 
         iopt        = np.zeros(self.grid_3d.NCELL, dtype=np.int32)
         iabs        = np.zeros_like(iopt)
         iopt[:]     = np.arange(Nopt)[self.grid_3d.NZ-self.grid_3d.idz] # Scattering depending on Z for clear atmosphere (Rayleigh)
         iabs[:]     = np.arange(Nopt)[self.grid_3d.NZ-self.grid_3d.idz] # Absorption depending on Z only
 
-        iopt[cloud_1d_indices] = self.grid_3d.NZ + 1 + np.arange(cloud_1d_indices.size)
+        if (self.cloud_3d is not None): iopt[cloud_1d_indices] = self.grid_3d.NZ + 1 + np.arange(cloud_1d_indices.size)
 
         return (iopt, iabs, self.grid_3d.pmin, self.grid_3d.pmax, self.grid_3d.neigh)
