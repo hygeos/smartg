@@ -88,7 +88,7 @@ def seclect_iprt_IQUV(model_val, z_alti, thetas=None, phis=None, inv_thetas=Fals
 def select_and_plot_polar_iprt(model_val, z_alti, thetas=None, phis=None, inv_thetas=False, inv_phis=False, change_U_sign=False,
                                maxI=None, maxQ=None, maxU=None, maxV=None,  cmapI=None, cmapQ=None, cmapU=None, cmapV=None,
                                forceIQUV = None, title=None, save_fig=None, sym=False, I_index=int(6), va_index=int(4),
-                               phi_index=int(5), outputIQUV=False, avoid_plot=False):
+                               phi_index=int(5), outputIQUV=False, outputIQUVstd=False, avoid_plot=False):
     """
     Description: Select U,Q,U and V results from IPRT matrix results, then plot the results
 
@@ -111,6 +111,7 @@ def select_and_plot_polar_iprt(model_val, z_alti, thetas=None, phis=None, inv_th
     va_index        : Same as I_index but with va (VZA)
     phi_index       : Same as I_index but with phi (VAA)
     outputIQUV      : If True, retrun I, Q, U and V values
+    outputIQUVstd   : If True, retrun I, Q, U and V stdev values
     avoid_plot      : Do not plot, can be useful if we only want to get the I, Q, U and V values
 
     === Retrun
@@ -140,6 +141,12 @@ def select_and_plot_polar_iprt(model_val, z_alti, thetas=None, phis=None, inv_th
     valQ = np.zeros((NTH, NPH))
     valU = np.zeros((NTH, NPH))
     valV = np.zeros((NTH, NPH))
+
+    if outputIQUVstd:
+        valIstd = np.zeros((NTH, NPH_D))
+        valQstd = np.zeros((NTH, NPH_D))
+        valUstd = np.zeros((NTH, NPH_D))
+        valVstd = np.zeros((NTH, NPH_D))
     
     if change_U_sign: U_sign = int(-1)
     else            : U_sign = int(1)
@@ -161,7 +168,12 @@ def select_and_plot_polar_iprt(model_val, z_alti, thetas=None, phis=None, inv_th
                 valI[indi,indj] =  model_val[i, I_index]
                 valQ[indi,indj] =  model_val[i, I_index+1]
                 valU[indi,indj] =  model_val[i, I_index+2]*U_sign
-                valV[indi,indj] =  model_val[i, I_index+3]  
+                valV[indi,indj] =  model_val[i, I_index+3]
+                if (outputIQUVstd): 
+                    valIstd[indi,indj] =  model_val[i, I_index+4]
+                    valQstd[indi,indj] =  model_val[i, I_index+5]
+                    valUstd[indi,indj] =  model_val[i, I_index+6]
+                    valVstd[indi,indj] =  model_val[i, I_index+7] 
 
     if sym:
         for i in range(NTH):
@@ -170,6 +182,7 @@ def select_and_plot_polar_iprt(model_val, z_alti, thetas=None, phis=None, inv_th
                     valQ[i,NPH_D+j] =  valQ[i,NPH_D-j-1]
                     valU[i,NPH_D+j] =  valU[i,NPH_D-j-1]
                     valV[i,NPH_D+j] =  valV[i,NPH_D-j-1]
+
 
     if not avoid_plot:
         plt.rcParams.update({'font.size':13})
@@ -226,7 +239,12 @@ def select_and_plot_polar_iprt(model_val, z_alti, thetas=None, phis=None, inv_th
         fig.tight_layout()
         if save_fig is not None: plt.savefig(save_fig, fontsize=15)
 
-    if outputIQUV: return valI[:,0:NPH_D], valQ[:,0:NPH_D], valU[:,0:NPH_D], valV[:,0:NPH_D]
+    if outputIQUV and outputIQUVstd: 
+        return valI[:,0:NPH_D], valQ[:,0:NPH_D], valU[:,0:NPH_D], valV[:,0:NPH_D], valIstd, valQstd, valUstd, valVstd
+    elif (outputIQUV):
+        return valI[:,0:NPH_D], valQ[:,0:NPH_D], valU[:,0:NPH_D], valV[:,0:NPH_D]
+    elif (outputIQUVstd) :
+        valIstd, valQstd, valUstd, valVstd
 
 def convert_SGout_to_IPRTout(lm, lU_sign, case_name, depol, lalt, SZA, SAA, lVZA, lVAA, file_name, output_layer=None):
     """
@@ -374,3 +392,29 @@ def compute_deltam(obs, mod, print_res=True):
                 delta_m[i] = 0.
         if print_res: print(stk[i], f"{delta_m[i]:.3f}")
     return delta_m
+
+
+
+def groupIQUV(lI, lQ, lU, lV):
+
+    NBVAL = int(0)
+    I_tot = lI[0].flatten()
+    Q_tot = lQ[0].flatten()
+    U_tot = lU[0].flatten()
+    V_tot = lV[0].flatten()
+
+    for i in range (len(lI)):
+        NBVAL += round(lI[i].shape[0]*lI[i].shape[1])
+        if (i > 0):
+            I_tot = np.concatenate((I_tot, lI[i].flatten()))
+            Q_tot = np.concatenate((Q_tot, lQ[i].flatten()))
+            U_tot = np.concatenate((U_tot, lU[i].flatten()))
+            V_tot = np.concatenate((V_tot, lV[i].flatten()))
+
+    IQUV_smartg_ref_tot = np.zeros((4,NBVAL), dtype=np.float32)
+    IQUV_smartg_ref_tot[0,:] = I_tot
+    IQUV_smartg_ref_tot[1,:] = Q_tot
+    IQUV_smartg_ref_tot[2,:] = U_tot
+    IQUV_smartg_ref_tot[3,:] = V_tot
+
+    return IQUV_smartg_ref_tot

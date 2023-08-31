@@ -10,7 +10,7 @@ import pandas as pd
 import numpy as np
 import glob
 
-from smartg.iprt import convert_SGout_to_IPRTout, select_and_plot_polar_iprt, compute_deltam, seclect_iprt_IQUV, plot_iprt_radiances
+from smartg.iprt import convert_SGout_to_IPRTout, select_and_plot_polar_iprt, compute_deltam, seclect_iprt_IQUV, plot_iprt_radiances, groupIQUV
 from smartg.libATM3D import read_cld_nth_cte
 from smartg.tools.phase import calc_iphase
 from luts.luts import LUT
@@ -22,7 +22,9 @@ os.environ['PATH'] += ':/usr/local/cuda/bin'
 
 
 # Global variable(s)
-SEED = 1e8
+SEED = -1
+STDFAC = 4
+
 import subprocess
 RGP = subprocess.Popen(['git', 'rev-parse', '--show-toplevel'], stdout=subprocess.PIPE).communicate()[0].rstrip().decode('utf-8') # root path from smartg git project
 
@@ -32,7 +34,7 @@ def S1DF():
     '''
     Backward compilation in 1D
     '''
-    return Smartg(alt_pp=True, back=False, double=True, bias=True, device=1)
+    return Smartg(alt_pp=True, back=False, double=True, bias=True)
 
 
 def test_A2(request, S1DF):
@@ -120,42 +122,38 @@ def test_A2(request, S1DF):
     conftest.savefig(request, bbox_inches='tight')
 
     # === Compute the delta_m values and analyse them with the previous saved validated ones
-    # MYSTIC total IQUV
-    I_mystic = np.concatenate((I_mystic_0km, I_mystic_1km), axis=0)
-    Q_mystic = np.concatenate((Q_mystic_0km, Q_mystic_1km), axis=0)
-    U_mystic = np.concatenate((U_mystic_0km, U_mystic_1km), axis=0)
-    V_mystic = np.concatenate((V_mystic_0km, V_mystic_1km), axis=0)
+    # MYSTIC and calculated SMART-G total IQUV
+    IQUV_smartg_tot = groupIQUV(lI=[I_smartg_0km, I_smartg_1km], lQ=[Q_smartg_0km, Q_smartg_1km], lU=[U_smartg_0km, U_smartg_1km], lV=[V_smartg_0km, V_smartg_1km])
+    IQUV_mystic_tot = groupIQUV(lI=[I_mystic_0km, I_mystic_1km], lQ=[Q_mystic_0km, Q_mystic_1km], lU=[U_mystic_0km, U_mystic_1km], lV=[V_mystic_0km, V_mystic_1km])
 
     # SMARTG ref results
     smartg_a2_ref = pd.read_csv(RGP + "/tests/IPRT_data/phaseA/smartg_ref_res/iprt_case_a2_smartg_ref.dat", header=None, sep=r'\s+', dtype=float, comment="#").values
-    I_smartg_0km_ref, Q_smartg_0km_ref, U_smartg_0km_ref, V_smartg_0km_ref = select_and_plot_polar_iprt(smartg_a2_ref, 0., change_U_sign=True, outputIQUV=True, avoid_plot=True)
-    I_smartg_1km_ref, Q_smartg_1km_ref, U_smartg_1km_ref, V_smartg_1km_ref = select_and_plot_polar_iprt(smartg_a2_ref, 1., change_U_sign=True, inv_thetas=True, outputIQUV=True, avoid_plot=True)
-    I_smartg_ref = np.concatenate((I_smartg_0km_ref, I_smartg_1km_ref), axis=0)
-    Q_smartg_ref = np.concatenate((Q_smartg_0km_ref, Q_smartg_1km_ref), axis=0)
-    U_smartg_ref = np.concatenate((U_smartg_0km_ref, U_smartg_1km_ref), axis=0)
-    V_smartg_ref = np.concatenate((V_smartg_0km_ref, V_smartg_1km_ref), axis=0)
-
-    # SMARTG results calculated during the test
-    I_smartg = np.concatenate((I_smartg_0km, I_smartg_1km), axis=0)
-    Q_smartg = np.concatenate((Q_smartg_0km, Q_smartg_1km), axis=0)
-    U_smartg = np.concatenate((U_smartg_0km, U_smartg_1km), axis=0)
-    V_smartg = np.concatenate((V_smartg_0km, V_smartg_1km), axis=0)
+    I_smartg_0km_ref, Q_smartg_0km_ref, U_smartg_0km_ref, V_smartg_0km_ref, I_smartg_std_0km_ref, Q_smartg_std_0km_ref, U_smartg_std_0km_ref, V_smartg_std_0km_ref \
+          = select_and_plot_polar_iprt(smartg_a2_ref, 0., change_U_sign=True, outputIQUV=True, outputIQUVstd=True, avoid_plot=True)
+    I_smartg_1km_ref, Q_smartg_1km_ref, U_smartg_1km_ref, V_smartg_1km_ref, I_smartg_std_1km_ref, Q_smartg_std_1km_ref, U_smartg_std_1km_ref, V_smartg_std_1km_ref \
+          = select_and_plot_polar_iprt(smartg_a2_ref, 1., change_U_sign=True, inv_thetas=True, outputIQUVstd=True, outputIQUV=True, avoid_plot=True)
+    
+    IQUV_smartg_ref_tot = groupIQUV(lI=[I_smartg_0km_ref, I_smartg_1km_ref], lQ=[Q_smartg_0km_ref, Q_smartg_1km_ref], lU=[U_smartg_0km_ref, U_smartg_1km_ref], lV=[V_smartg_0km_ref, V_smartg_1km_ref])
+    IQUV_smartg_std_ref_tot = groupIQUV(lI=[I_smartg_std_0km_ref, I_smartg_std_1km_ref], lQ=[Q_smartg_std_0km_ref, Q_smartg_std_1km_ref],
+                                        lU=[U_smartg_std_0km_ref, U_smartg_std_1km_ref], lV=[V_smartg_std_0km_ref, V_smartg_std_1km_ref])
 
     # Compute the delta_m values from the ref smartg results
-    delta_m_ref = compute_deltam(obs=[I_mystic, Q_mystic, U_mystic, V_mystic], mod=[I_smartg_ref, Q_smartg_ref, U_smartg_ref, V_smartg_ref], print_res=False)
+    print("ref delta_m:")
+    delta_m_ref = compute_deltam(obs=IQUV_mystic_tot, mod=IQUV_smartg_ref_tot, print_res=True)
+
+    # Compute the delta_m values from the ref smartg results +- err
+    delta_m_ref_P = compute_deltam(obs=IQUV_mystic_tot, mod=IQUV_smartg_ref_tot+STDFAC*IQUV_smartg_std_ref_tot, print_res=False)
+    delta_m_ref_M = compute_deltam(obs=IQUV_mystic_tot, mod=IQUV_smartg_ref_tot-STDFAC*IQUV_smartg_std_ref_tot, print_res=False)
 
     # Compute the delta_m values from the smartg test results
-    delta_m = compute_deltam(obs=[I_mystic, Q_mystic, U_mystic, V_mystic], mod=[I_smartg, Q_smartg, U_smartg, V_smartg], print_res=False)
-
-    # Max diff tolerated between ref values and test values (note: even if same SEED is used there is still a sligh difference due to atomicAdd functions in CUDA)
-    errPercent=10
-    maxDiffIQUV = np.abs(delta_m_ref*errPercent/100)
+    print("calculated delta_m:")
+    delta_m = compute_deltam(obs=IQUV_mystic_tot, mod=IQUV_smartg_tot, print_res=True)
 
     # Check if the the test is ok by comparing smartg ref and smartg test
-    assert not ( (delta_m[0] > delta_m_ref[0]+maxDiffIQUV[0]) or (delta_m[0] < delta_m_ref[0]-maxDiffIQUV[0]) ), f'Problem with I values, get {delta_m[0]:.5f} instead of {delta_m_ref[0]:.5f} +- {errPercent:.0f} per cent'
-    assert not ( (delta_m[1] > delta_m_ref[1]+maxDiffIQUV[1]) or (delta_m[1] < delta_m_ref[1]-maxDiffIQUV[1]) ), f'Problem with Q values, get {delta_m[1]:.5f} instead of {delta_m_ref[1]:.5f} +- {errPercent:.0f} per cent'
-    assert not ( (delta_m[2] > delta_m_ref[2]+maxDiffIQUV[2]) or (delta_m[2] < delta_m_ref[2]-maxDiffIQUV[2]) ), f'Problem with U values, get {delta_m[2]:.5f} instead of {delta_m_ref[2]:.5f} +- {errPercent:.0f} per cent'
-    assert not ( (delta_m[3] > delta_m_ref[3]+maxDiffIQUV[3]) or (delta_m[3] < delta_m_ref[3]-maxDiffIQUV[3]) ), f'Problem with V values, get {delta_m[3]:.5f} instead of {delta_m_ref[3]:.5f} +- {errPercent:.0f} per cent'
+    IQUV_name = ['I', 'Q', 'U', 'V']
+    for istk, stk in enumerate(IQUV_name):
+        maxVal = max(delta_m_ref[istk], delta_m_ref_P[istk], delta_m_ref_M[istk])
+        assert not ( delta_m[istk] > maxVal ), f'Problem with {stk} values, get {delta_m[istk]:.5f}. {stk} must be < to {maxVal:.5f}'
 
 def test_A5_pp(request, S1DF):
     # === Atmosphere profil
@@ -251,35 +249,44 @@ def test_A5_pp(request, S1DF):
                         xlabel= 'VZA [deg]', IQUVyMin=IQUVyMin, IQUVyMax=IQUVyMax, title='transmittance  MYSTIC-red SMARTG-blue')
     conftest.savefig(request, bbox_inches='tight')
 
-    IQUVS_pp_tot = np.concatenate((IQUVS_pp_tot, IQUVS_pp))
-    IQUVM_pp_tot = np.concatenate((IQUVM_pp_tot, IQUVM_pp))
+    IQUVS_pp_tot = np.concatenate((IQUVS_pp_tot, IQUVS_pp), axis=1)
+    IQUVM_pp_tot = np.concatenate((IQUVM_pp_tot, IQUVM_pp), axis=1)
 
     # === Compute the delta_m values and analyse them with the previous saved validated ones
     # SMARTG ref results
     smartg_a5_pp_ref = pd.read_csv(RGP + "/tests/IPRT_data/phaseA/smartg_ref_res/iprt_case_a5_smartg_pp_ref.dat", header=None, sep=r'\s+', dtype=float, comment="#").values
     IQUVS_with_std_ref = seclect_iprt_IQUV(smartg_a5_pp_ref, 1., change_U_sign=False, inv_thetas=True, stdev=True)
     IQUVS_pp_ref = np.zeros((4,NVZA), dtype=np.float32)
-    for i in range (0, 4): IQUVS_pp_ref[i,:]=np.concatenate((IQUVS_with_std_ref[i][:,1], IQUVS_with_std_ref[i][::-1,0]))
+    IQUVS_pp_std_ref = np.zeros((4,NVZA), dtype=np.float32)
+    for i in range (0, 4): 
+        IQUVS_pp_ref[i,:]     = np.concatenate((IQUVS_with_std_ref[i][:,1], IQUVS_with_std_ref[i][::-1,0]))
+        IQUVS_pp_std_ref[i,:] = np.concatenate((IQUVS_with_std_ref[i+4][:,1], IQUVS_with_std_ref[i+4][::-1,0]))
     IQUVS_pp_ref_tot = IQUVS_pp_ref.copy()
+    IQUVS_pp_std_ref_tot = IQUVS_pp_std_ref.copy()
     IQUVS_with_std_ref = seclect_iprt_IQUV(smartg_a5_pp_ref, 0., change_U_sign=False, inv_thetas=True, stdev=True)
-    for i in range (0, 4): IQUVS_pp_ref[i,:]=np.concatenate((IQUVS_with_std_ref[i][:,1], IQUVS_with_std_ref[i][::-1,0]))
-    IQUVS_pp_ref_tot = np.concatenate((IQUVS_pp_ref_tot, IQUVS_pp_ref))
+    for i in range (0, 4):
+        IQUVS_pp_ref[i,:]     = np.concatenate((IQUVS_with_std_ref[i][:,1], IQUVS_with_std_ref[i][::-1,0]))
+        IQUVS_pp_std_ref[i,:] = np.concatenate((IQUVS_with_std_ref[i+4][:,1], IQUVS_with_std_ref[i+4][::-1,0]))
+    IQUVS_pp_ref_tot = np.concatenate((IQUVS_pp_ref_tot, IQUVS_pp_ref), axis=1)
+    IQUVS_pp_std_ref_tot = np.concatenate((IQUVS_pp_std_ref_tot, IQUVS_pp_std_ref), axis=1)
 
     # Compute the delta_m values from the ref smartg results
-    delta_m_ref = compute_deltam(obs=IQUVM_pp_tot, mod=IQUVS_pp_ref_tot, print_res=False)
+    print("ref delta_m:")
+    delta_m_ref = compute_deltam(obs=IQUVM_pp_tot, mod=IQUVS_pp_ref_tot, print_res=True)
+
+    # Compute the delta_m values from the ref smartg results +- err
+    delta_m_ref_P = compute_deltam(obs=IQUVM_pp_tot, mod=IQUVS_pp_ref_tot+STDFAC*IQUVS_pp_std_ref_tot, print_res=False)
+    delta_m_ref_M = compute_deltam(obs=IQUVM_pp_tot, mod=IQUVS_pp_ref_tot-STDFAC*IQUVS_pp_std_ref_tot, print_res=False)
 
     # Compute the delta_m values from the smartg test results
-    delta_m = compute_deltam(obs=IQUVM_pp_tot, mod=IQUVS_pp_tot, print_res=False)
+    print("calculated delta_m:")
+    delta_m = compute_deltam(obs=IQUVM_pp_tot, mod=IQUVS_pp_tot, print_res=True)
 
-    # Max diff tolerated between ref values and test values (note: even if same SEED is used there is still a sligh difference due to atomicAdd functions in CUDA)
-    errPercent=10
-    maxDiffIQUV = np.abs(delta_m_ref*errPercent/100)
-
-    # Check if the the test is ok by comparing smartg ref and smartg test
-    assert not ( (delta_m[0] > delta_m_ref[0]+maxDiffIQUV[0]) or (delta_m[0] < delta_m_ref[0]-maxDiffIQUV[0]) ), f'Problem with I values, get {delta_m[0]:.5f} instead of {delta_m_ref[0]:.5f} +- {errPercent:.0f} per cent'
-    assert not ( (delta_m[1] > delta_m_ref[1]+maxDiffIQUV[1]) or (delta_m[1] < delta_m_ref[1]-maxDiffIQUV[1]) ), f'Problem with Q values, get {delta_m[1]:.5f} instead of {delta_m_ref[1]:.5f} +- {errPercent:.0f} per cent'
-    assert not ( (delta_m[2] > delta_m_ref[2]+maxDiffIQUV[2]) or (delta_m[2] < delta_m_ref[2]-maxDiffIQUV[2]) ), f'Problem with U values, get {delta_m[2]:.5f} instead of {delta_m_ref[2]:.5f} +- {errPercent:.0f} per cent'
-    assert not ( (delta_m[3] > delta_m_ref[3]+maxDiffIQUV[3]) or (delta_m[3] < delta_m_ref[3]-maxDiffIQUV[3]) ), f'Problem with V values, get {delta_m[3]:.5f} instead of {delta_m_ref[3]:.5f} +- {errPercent:.0f} per cent'
+     # Check if the the test is ok by comparing smartg ref and smartg test
+    IQUV_name = ['I', 'Q', 'U', 'V']
+    for istk, stk in enumerate(IQUV_name):
+        maxVal = max(delta_m_ref[istk], delta_m_ref_P[istk], delta_m_ref_M[istk])
+        assert not ( delta_m[istk] > maxVal ), f'Problem with {stk} values, get {delta_m[istk]:.5f}. {stk} must be < to {maxVal:.5f}'
 
 
 def test_A5_al(request, S1DF):
@@ -376,35 +383,44 @@ def test_A5_al(request, S1DF):
                         xlabel= 'VZA [deg]', IQUVyMin=IQUVyMin, IQUVyMax=IQUVyMax, title='transmittance  MYSTIC-red SMARTG-blue')
     conftest.savefig(request, bbox_inches='tight')
 
-    IQUVS_al_tot = np.concatenate((IQUVS_al_tot, IQUVS_al))
-    IQUVM_al_tot = np.concatenate((IQUVM_al_tot, IQUVM_al))
+    IQUVS_al_tot = np.concatenate((IQUVS_al_tot, IQUVS_al), axis=1)
+    IQUVM_al_tot = np.concatenate((IQUVM_al_tot, IQUVM_al), axis=1)
 
     # === Compute the delta_m values and analyse them with the previous saved validated ones
     # SMARTG ref results
     smartg_a5_al_ref = pd.read_csv(RGP + "/tests/IPRT_data/phaseA/smartg_ref_res/iprt_case_a5_smartg_al_ref.dat", header=None, sep=r'\s+', dtype=float, comment="#").values
     IQUVS_with_std_ref = seclect_iprt_IQUV(smartg_a5_al_ref, 1., change_U_sign=False, inv_thetas=True, stdev=True)
     IQUVS_al_ref = np.zeros((4,NVAA), dtype=np.float32)
-    for i in range (0, 4): IQUVS_al_ref[i,:]=IQUVS_with_std_ref[i][0,:]
+    IQUVS_al_std_ref = np.zeros((4,NVAA), dtype=np.float32)
+    for i in range (0, 4): 
+        IQUVS_al_ref[i,:]     = IQUVS_with_std_ref[i][0,:]
+        IQUVS_al_std_ref[i,:] = IQUVS_with_std_ref[i+4][0,:]
     IQUVS_al_ref_tot = IQUVS_al_ref.copy()
+    IQUVS_al_std_ref_tot = IQUVS_al_std_ref.copy()
     IQUVS_with_std_ref = seclect_iprt_IQUV(smartg_a5_al_ref, 0., change_U_sign=False, inv_thetas=True, stdev=True)
-    for i in range (0, 4): IQUVS_al_ref[i,:]=IQUVS_with_std_ref[i][0,:]
-    IQUVS_al_ref_tot = np.concatenate((IQUVS_al_ref_tot, IQUVS_al_ref))
+    for i in range (0, 4):
+        IQUVS_al_ref[i,:]     = IQUVS_with_std_ref[i][0,:]
+        IQUVS_al_std_ref[i,:] = IQUVS_with_std_ref[i+4][0,:]
+    IQUVS_al_ref_tot = np.concatenate((IQUVS_al_ref_tot, IQUVS_al_ref), axis=1)
+    IQUVS_al_std_ref_tot = np.concatenate((IQUVS_al_std_ref_tot, IQUVS_al_std_ref), axis=1)
 
     # Compute the delta_m values from the ref smartg results
-    delta_m_ref = compute_deltam(obs=IQUVM_al_tot, mod=IQUVS_al_ref_tot, print_res=False)
+    print("ref delta_m:")
+    delta_m_ref = compute_deltam(obs=IQUVM_al_tot, mod=IQUVS_al_ref_tot, print_res=True)
+
+    # Compute the delta_m values from the ref smartg results +- err
+    delta_m_ref_P = compute_deltam(obs=IQUVM_al_tot, mod=IQUVS_al_ref_tot+STDFAC*IQUVS_al_std_ref_tot, print_res=False)
+    delta_m_ref_M = compute_deltam(obs=IQUVM_al_tot, mod=IQUVS_al_ref_tot-STDFAC*IQUVS_al_std_ref_tot, print_res=False)
 
     # Compute the delta_m values from the smartg test results
-    delta_m = compute_deltam(obs=IQUVM_al_tot, mod=IQUVS_al_tot, print_res=False)
+    print("calculated delta_m:")
+    delta_m = compute_deltam(obs=IQUVM_al_tot, mod=IQUVS_al_tot, print_res=True)
 
-    # Max diff tolerated between ref values and test values (note: even if same SEED is used there is still a sligh difference due to atomicAdd functions in CUDA)
-    errPercent=10
-    maxDiffIQUV = np.abs(delta_m_ref*errPercent/100)
-
-    # Check if the the test is ok by comparing smartg ref and smartg test
-    assert not ( (delta_m[0] > delta_m_ref[0]+maxDiffIQUV[0]) or (delta_m[0] < delta_m_ref[0]-maxDiffIQUV[0]) ), f'Problem with I values, get {delta_m[0]:.5f} instead of {delta_m_ref[0]:.5f} +- {errPercent:.0f} per cent'
-    assert not ( (delta_m[1] > delta_m_ref[1]+maxDiffIQUV[1]) or (delta_m[1] < delta_m_ref[1]-maxDiffIQUV[1]) ), f'Problem with Q values, get {delta_m[1]:.5f} instead of {delta_m_ref[1]:.5f} +- {errPercent:.0f} per cent'
-    assert not ( (delta_m[2] > delta_m_ref[2]+maxDiffIQUV[2]) or (delta_m[2] < delta_m_ref[2]-maxDiffIQUV[2]) ), f'Problem with U values, get {delta_m[2]:.5f} instead of {delta_m_ref[2]:.5f} +- {errPercent:.0f} per cent'
-    assert not ( (delta_m[3] > delta_m_ref[3]+maxDiffIQUV[3]) or (delta_m[3] < delta_m_ref[3]-maxDiffIQUV[3]) ), f'Problem with V values, get {delta_m[3]:.5f} instead of {delta_m_ref[3]:.5f} +- {errPercent:.0f} per cent'
+     # Check if the the test is ok by comparing smartg ref and smartg test
+    IQUV_name = ['I', 'Q', 'U', 'V']
+    for istk, stk in enumerate(IQUV_name):
+        maxVal = max(delta_m_ref[istk], delta_m_ref_P[istk], delta_m_ref_M[istk])
+        assert not ( delta_m[istk] > maxVal ), f'Problem with {stk} values, get {delta_m[istk]:.5f}. {stk} must be < to {maxVal:.5f}'
 
 # Remove tmp files
 tmpFiles = glob.glob(RGP + "/tests/tmp_phaseA*")
