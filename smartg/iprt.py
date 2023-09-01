@@ -85,16 +85,17 @@ def seclect_iprt_IQUV(model_val, z_alti, thetas=None, phis=None, inv_thetas=Fals
         return I, Q, U, V, Istd, Qstd, Ustd, Vstd
 
 
-def select_and_plot_polar_iprt(model_val, z_alti, thetas=None, phis=None, inv_thetas=False, inv_phis=False, change_U_sign=False,
+def select_and_plot_polar_iprt(model_val, z_alti, depol=None, thetas=None, phis=None, inv_thetas=False, inv_phis=False, change_U_sign=False,
                                maxI=None, maxQ=None, maxU=None, maxV=None,  cmapI=None, cmapQ=None, cmapU=None, cmapV=None,
                                forceIQUV = None, title=None, save_fig=None, sym=False, I_index=int(6), va_index=int(4),
-                               phi_index=int(5), outputIQUV=False, outputIQUVstd=False, avoid_plot=False):
+                               phi_index=int(5), z_index=int(1), depol_index=int(0), outputIQUV=False, outputIQUVstd=False, avoid_plot=False):
     """
     Description: Select U,Q,U and V results from IPRT matrix results, then plot the results
 
     === Parameters:
     model_val       : Matrix with the model values (read from IPRT phase A result files)
     z_alti          : Keep only results at this z_alti
+    depol           : depolarisation factor
     thetas          : Keep only results with these theta values
     phis            : Same as thetas but with phi values
     inv_thetas      : Inverse the vector with theta values
@@ -122,13 +123,15 @@ def select_and_plot_polar_iprt(model_val, z_alti, thetas=None, phis=None, inv_th
     if thetas is None:
         s_thetas = []
         for i in range (0, NBS):
-            if (model_val[i, 1] ==z_alti): s_thetas.append(model_val[i,va_index])
+            cond_z_depol = (depol is None and (model_val[i, z_index] == z_alti)) or (depol is not None and ((model_val[i, z_index] == z_alti) and (model_val[i, depol_index] == depol)))
+            if (cond_z_depol): s_thetas.append(model_val[i,va_index])
         thetas = np.sort(np.unique(np.array(s_thetas)))
     
     if phis is None:
         s_phis = []
         for i in range (0, NBS):
-            if (model_val[i, 1] ==z_alti): s_phis.append(model_val[i,phi_index])
+            cond_z_depol = (depol is None and (model_val[i, z_index] == z_alti)) or (depol is not None and ((model_val[i, z_index] == z_alti) and (model_val[i, depol_index] == depol)))
+            if (cond_z_depol): s_phis.append(model_val[i,phi_index])
         phis = np.sort(np.unique(np.array(s_phis)))
     
     if sym: phis = np.concatenate((phis, phis+180))
@@ -158,9 +161,10 @@ def select_and_plot_polar_iprt(model_val, z_alti, thetas=None, phis=None, inv_th
         valV[:,0:NPH_D] = forceIQUV[3]
     else:
         for i in range (0, NBS):
-            if (model_val[i, 1] == z_alti 
-                    and True in (thetas == model_val[i,va_index])
-                    and True in (phis == model_val[i,phi_index])):
+            cond_z_depol = (depol is None and (model_val[i, z_index] == z_alti)) or (depol is not None and ((model_val[i, z_index] == z_alti) and (model_val[i, depol_index] == depol)))
+            if (cond_z_depol
+                and True in (thetas == model_val[i,va_index])
+                and True in (phis == model_val[i,phi_index])  ):
                 if inv_thetas: indi = int(np.argwhere(thetas == model_val[i,va_index]))
                 else         : indi = NTH-1-int(np.argwhere(thetas == model_val[i,va_index]))
                 if inv_phis  : indj = NPH_D-1-int(np.argwhere(phis[0:NPH_D] == model_val[i,phi_index]))
