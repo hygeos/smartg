@@ -8,7 +8,6 @@ from smartg.smartg import Smartg, Sensor, LambSurface, Albedo_cst
 from smartg.atmosphere import AtmAFGL
 import pandas as pd
 import numpy as np
-import glob
 
 from smartg.iprt import convert_SGout_to_IPRTout, select_and_plot_polar_iprt, compute_deltam, seclect_iprt_IQUV, plot_iprt_radiances, groupIQUV
 from smartg.libATM3D import read_cld_nth_cte
@@ -19,7 +18,11 @@ import os
 from . import conftest
 os.environ['PATH'] += ':/usr/local/cuda/bin'
 
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
 
+from tempfile import TemporaryDirectory
+from pathlib import Path
 
 # Global variable(s)
 SEED = -1
@@ -70,55 +73,81 @@ def test_A2(request, S1DF):
     mA2F = S1DF.run(THVDEG=SZA, PHVDEG=PHI_0, wl=550., NBPHOTONS=1e7, NBLOOP=1e6, atm=atm, OUTPUT_LAYERS=int(1),
                     le=le, surf=surf, XBLOCK = 64, XGRID = 1024, BEER=1, DEPO=0.03, stdev=True, SEED=SEED)
 
-    # === Convert smartg output to iprt ascii output format (Forward, U must be multiplied by -1)
-    tmp_file_a2 = RGP + "/tests/tmp_phaseA_a2.dat"
-    convert_SGout_to_IPRTout(lm=[mA2F, mA2F], lU_sign=[-1, -1], case_name="A2", depol=0.03, lalt=[0., 1.], SZA=50., SAA=0., lVZA=[180.-VZA, VZA],
-                             lVAA=[VAA, VAA], file_name= tmp_file_a2, output_layer=['_down (0+)', '_up (TOA)'])
-    
-    # === Plot and comparison with MYSTIC (to save in the report)
-    smartg_a2 = pd.read_csv(tmp_file_a2, header=None, sep=r'\s+', dtype=float, comment="#").values
-    mystic_a2 = pd.read_csv(RGP + "/tests/IPRT_data/phaseA/iprt_case_a2_mystic.dat", header=None, sep=r'\s+', dtype=float, comment="#").values
-    avoidP=False
-    # 0km of altitude
-    title = "IPRT case A2 - depol = 0.03 - 0km - SMARTG"
-    I_smartg_0km, Q_smartg_0km, U_smartg_0km, V_smartg_0km = select_and_plot_polar_iprt(smartg_a2, 0., title=title, change_U_sign=True, sym=True, outputIQUV=True, avoid_plot=avoidP)
+    with TemporaryDirectory() as tmpdir:
+        # === Convert smartg output to iprt ascii output format (Forward, U must be multiplied by -1)
+        #tmp_file_a2 = RGP + "/tests/tmp_phaseA_a2.dat"
+        tmp_file_a2 = Path(tmpdir)/'a2.dat'
+        convert_SGout_to_IPRTout(lm=[mA2F, mA2F], lU_sign=[-1, -1], case_name="A2", ldepol=[0.03, 0.03], lalt=[0., 1.], lSZA=[50., 50.], lSAA=[0., 0.], lVZA=[180.-VZA, VZA],
+                                lVAA=[VAA, VAA], file_name= tmp_file_a2, output_layer=['_down (0+)', '_up (TOA)'])
+        
+        # === Plot and comparison with MYSTIC (to save in the report)
+        smartg_a2 = pd.read_csv(tmp_file_a2, header=None, sep=r'\s+', dtype=float, comment="#").values
+        mystic_a2 = pd.read_csv(RGP + "/tests/IPRT_data/phaseA/iprt_case_a2_mystic.dat", header=None, sep=r'\s+', dtype=float, comment="#").values
+        avoidP=False
+        # 0km of altitude
+        title = "IPRT case A2 - depol = 0.03 - 0km - SMARTG"
+        I_smartg_0km, Q_smartg_0km, U_smartg_0km, V_smartg_0km = select_and_plot_polar_iprt(smartg_a2, 0., title=title, change_U_sign=True, sym=True, outputIQUV=True, avoid_plot=avoidP, save_fig=Path(tmpdir)/'a2_0km_smartg.png')
+        # conftest.savefig(request, bbox_inches='tight')
+
+        title = "IPRT case A2 - depol = 0.03 - 0km - MYSTIC"
+        I_mystic_0km, Q_mystic_0km, U_mystic_0km, V_mystic_0km = select_and_plot_polar_iprt(mystic_a2, 0., title=title, change_U_sign=True, sym=True, outputIQUV=True, avoid_plot=avoidP, save_fig=Path(tmpdir)/'a2_0km_mystic.png')
+        # conftest.savefig(request, bbox_inches='tight')
+
+        I_val = I_mystic_0km-I_smartg_0km
+        Q_val = Q_mystic_0km-Q_smartg_0km
+        U_val = U_mystic_0km-U_smartg_0km
+        V_val = V_mystic_0km-V_smartg_0km
+        maxI = max(np.abs(np.min(I_val)), np.abs(np.max(I_val)))
+        maxQ = max(np.abs(np.min(Q_val)), np.abs(np.max(Q_val)))
+        maxU = max(np.abs(np.min(U_val)), np.abs(np.max(U_val)))
+        maxV = max(np.abs(np.min(V_val)), np.abs(np.max(V_val)))
+        title = "IPRT case A2 - depol = 0.03 - 0km - dif (MYSTIC-SMARTG)"
+        select_and_plot_polar_iprt(mystic_a2, 0., title=title, forceIQUV=[I_val, Q_val, U_val, V_val], maxI=maxI, maxQ=maxQ, maxU=maxU, maxV=maxV, cmapI='RdBu_r', avoid_plot=avoidP, save_fig=Path(tmpdir)/'a2_0km_dif.png')
+
+        imgs = []
+        imgs.append(mpimg.imread(Path(tmpdir)/'a2_0km_smartg.png'))
+        imgs.append(mpimg.imread(Path(tmpdir)/'a2_0km_mystic.png'))
+        imgs.append(mpimg.imread(Path(tmpdir)/'a2_0km_dif.png'))
+
+    plt.close('all')
+    fig, axs = plt.subplots(3,1, figsize=(12,12))
+    for i in range (0, 3):
+        axs[i].axis('off')
+        axs[i].imshow(imgs[i])
+    fig.tight_layout()
     conftest.savefig(request, bbox_inches='tight')
 
-    title = "IPRT case A2 - depol = 0.03 - 0km - MYSTIC"
-    I_mystic_0km, Q_mystic_0km, U_mystic_0km, V_mystic_0km = select_and_plot_polar_iprt(mystic_a2, 0., title=title, change_U_sign=True, sym=True, outputIQUV=True, avoid_plot=avoidP)
-    conftest.savefig(request, bbox_inches='tight')
+    with TemporaryDirectory() as tmpdir:
+        # 1km of altitude (TOA)
+        title = "IPRT case A2 - depol = 0.03 - 1km - SMARTG"
+        I_smartg_1km, Q_smartg_1km, U_smartg_1km, V_smartg_1km = select_and_plot_polar_iprt(smartg_a2, 1., title=title, change_U_sign=True, inv_thetas=True,sym=True, outputIQUV=True, avoid_plot=avoidP, save_fig=Path(tmpdir)/"a2_1km_smartg.png")
 
-    I_val = I_mystic_0km-I_smartg_0km
-    Q_val = Q_mystic_0km-Q_smartg_0km
-    U_val = U_mystic_0km-U_smartg_0km
-    V_val = V_mystic_0km-V_smartg_0km
-    maxI = max(np.abs(np.min(I_val)), np.abs(np.max(I_val)))
-    maxQ = max(np.abs(np.min(Q_val)), np.abs(np.max(Q_val)))
-    maxU = max(np.abs(np.min(U_val)), np.abs(np.max(U_val)))
-    maxV = max(np.abs(np.min(V_val)), np.abs(np.max(V_val)))
-    title = "IPRT case A2 - depol = 0.03 - 0km - dif (MYSTIC-SMARTG)"
-    select_and_plot_polar_iprt(mystic_a2, 0., title=title, forceIQUV=[I_val, Q_val, U_val, V_val], maxI=maxI, maxQ=maxQ, maxU=maxU, maxV=maxV, cmapI='RdBu_r', avoid_plot=avoidP)
-    conftest.savefig(request, bbox_inches='tight')
+        title = "IPRT case A2 - depol = 0.03 - 1km - MYSTIC"
+        I_mystic_1km, Q_mystic_1km, U_mystic_1km, V_mystic_1km = select_and_plot_polar_iprt(mystic_a2, 1., title=title, change_U_sign=True, inv_thetas=True, sym=True, outputIQUV=True, avoid_plot=avoidP, save_fig=Path(tmpdir)/"a2_1km_mystic.png")
 
-    # 1km of altitude (TOA)
-    title = "IPRT case A2 - depol = 0.03 - 1km - SMARTG"
-    I_smartg_1km, Q_smartg_1km, U_smartg_1km, V_smartg_1km = select_and_plot_polar_iprt(smartg_a2, 1., title=title, change_U_sign=True, inv_thetas=True,sym=True, outputIQUV=True, avoid_plot=avoidP)
-    conftest.savefig(request, bbox_inches='tight')
+        I_val = I_mystic_1km-I_smartg_1km
+        Q_val = Q_mystic_1km-Q_smartg_1km
+        U_val = U_mystic_1km-U_smartg_1km
+        V_val = V_mystic_1km-V_smartg_1km
+        maxI = max(np.abs(np.min(I_val)), np.abs(np.max(I_val)))
+        maxQ = max(np.abs(np.min(Q_val)), np.abs(np.max(Q_val)))
+        maxU = max(np.abs(np.min(U_val)), np.abs(np.max(U_val)))
+        maxV = max(np.abs(np.min(V_val)), np.abs(np.max(V_val)))
+        title = "IPRT case A2 - depol = 0.03 - 1km - dif (MYSTIC-SMARTG)"
+        select_and_plot_polar_iprt(mystic_a2, 1., title=title, forceIQUV=[I_val, Q_val, U_val, V_val], maxI=maxI, maxQ=maxQ, maxU=maxU, maxV=maxV, cmapI='RdBu_r', avoid_plot=avoidP, save_fig=Path(tmpdir)/"a2_1km_dif.png")
 
-    title = "IPRT case A2 - depol = 0.03 - 1km - MYSTIC"
-    I_mystic_1km, Q_mystic_1km, U_mystic_1km, V_mystic_1km = select_and_plot_polar_iprt(mystic_a2, 1., title=title, change_U_sign=True, inv_thetas=True, sym=True, outputIQUV=True, avoid_plot=avoidP)
-    conftest.savefig(request, bbox_inches='tight')
+        imgs = []
+        imgs.append(mpimg.imread(Path(tmpdir)/'a2_1km_smartg.png'))
+        imgs.append(mpimg.imread(Path(tmpdir)/'a2_1km_mystic.png'))
+        imgs.append(mpimg.imread(Path(tmpdir)/'a2_1km_dif.png'))
 
-    I_val = I_mystic_1km-I_smartg_1km
-    Q_val = Q_mystic_1km-Q_smartg_1km
-    U_val = U_mystic_1km-U_smartg_1km
-    V_val = V_mystic_1km-V_smartg_1km
-    maxI = max(np.abs(np.min(I_val)), np.abs(np.max(I_val)))
-    maxQ = max(np.abs(np.min(Q_val)), np.abs(np.max(Q_val)))
-    maxU = max(np.abs(np.min(U_val)), np.abs(np.max(U_val)))
-    maxV = max(np.abs(np.min(V_val)), np.abs(np.max(V_val)))
-    title = "IPRT case A2 - depol = 0.03 - 1km - dif (MYSTIC-SMARTG)"
-    select_and_plot_polar_iprt(mystic_a2, 1., title=title, forceIQUV=[I_val, Q_val, U_val, V_val], maxI=maxI, maxQ=maxQ, maxU=maxU, maxV=maxV, cmapI='RdBu_r', avoid_plot=avoidP)
+    plt.close('all')
+    fig, axs = plt.subplots(3,1, figsize=(12,12)) #12,8
+
+    for i in range (0, 3):
+        axs[i].axis('off')
+        axs[i].imshow(imgs[i])
+    fig.tight_layout()
     conftest.savefig(request, bbox_inches='tight')
 
     # === Compute the delta_m values and analyse them with the previous saved validated ones
@@ -196,13 +225,14 @@ def test_A5_pp(request, S1DF):
     mA5F_pp = S1DF.run(THVDEG=SZA, PHVDEG=PHI_0, wl=800., NBPHOTONS=1e7, NBLOOP=1e6, NF=NTH,atm=pro, OUTPUT_LAYERS=int(1),
                        le=le, surf=surf, XBLOCK = 64, XGRID = 1024, BEER=1, DEPO=0.03, stdev=True, SEED=SEED)
     
-    # === Convert smartg output to iprt ascii output format 
-    tmp_file_a5_pp = RGP + "/tests/tmp_phaseA_a5_pp.dat"
-    convert_SGout_to_IPRTout(lm=[mA5F_pp, mA5F_pp], lU_sign=[-1, -1], case_name="A5", depol=0.03, lalt=[0., 1.], SZA=50., SAA=0., lVZA=[VZA, VZA],
-                             lVAA=[VAA, VAA], file_name=tmp_file_a5_pp, output_layer=['_down (0+)', '_up (TOA)'])
-    
-    # === Plot and comparison with MYSTIC (to save in the report)
-    smartg_a5_pp = pd.read_csv(tmp_file_a5_pp, header=None, sep=r'\s+', dtype=float, comment="#").values
+    with TemporaryDirectory() as tmpdir:
+        # === Convert smartg output to iprt ascii output format 
+        tmp_file_a5_pp =  Path(tmpdir)/'a5_pp.dat'
+        convert_SGout_to_IPRTout(lm=[mA5F_pp, mA5F_pp], lU_sign=[-1, -1], case_name="A5", ldepol=[0.03, 0.03], lalt=[0., 1.], lSZA=[50., 50.], lSAA=[0., 0.], lVZA=[VZA, VZA],
+                                lVAA=[VAA, VAA], file_name=tmp_file_a5_pp, output_layer=['_down (0+)', '_up (TOA)'])
+        
+        # === Plot and comparison with MYSTIC (to save in the report)
+        smartg_a5_pp = pd.read_csv(tmp_file_a5_pp, header=None, sep=r'\s+', dtype=float, comment="#").values
     mystic_a5_pp = pd.read_csv(RGP + "/tests/IPRT_data/phaseA/iprt_case_a5_pp_mystic.dat", header=None, sep=r'\s+', dtype=float, comment="#").values
     VZAn = np.sort(np.concatenate((VZA-180, 180-VZA)))
     NVZA = len(VZAn)
@@ -330,13 +360,14 @@ def test_A5_al(request, S1DF):
     mA5F_al = S1DF.run(THVDEG=SZA, PHVDEG=PHI_0, wl=800., NBPHOTONS=1e7, NBLOOP=1e6, NF=NTH,atm=pro, OUTPUT_LAYERS=int(1),
                        le=le, surf=surf, XBLOCK = 64, XGRID = 1024, BEER=1, DEPO=0.03, stdev=True, SEED=SEED)
     
-    # === Convert smartg output to iprt ascii output format 
-    tmp_file_a5_al = RGP + "/tests/tmp_phaseA_a5_al.dat"
-    convert_SGout_to_IPRTout(lm=[mA5F_al, mA5F_al], lU_sign=[-1, -1], case_name="A5", depol=0.03, lalt=[0., 1.], SZA=50., SAA=0., lVZA=[VZA, VZA],
-                             lVAA=[VAA, VAA], file_name=tmp_file_a5_al, output_layer=['_down (0+)', '_up (TOA)'])
-    
-    # === Plot and comparison with MYSTIC (to save in the report)
-    smartg_a5_al = pd.read_csv(tmp_file_a5_al, header=None, sep=r'\s+', dtype=float, comment="#").values
+    with TemporaryDirectory() as tmpdir:
+        # === Convert smartg output to iprt ascii output format 
+        tmp_file_a5_al = Path(tmpdir)/'a5_al.dat'
+        convert_SGout_to_IPRTout(lm=[mA5F_al, mA5F_al], lU_sign=[-1, -1], case_name="A5", ldepol=[0.03, 0.03], lalt=[0., 1.], lSZA=[50., 50.], lSAA=[0., 0.], lVZA=[VZA, VZA],
+                                lVAA=[VAA, VAA], file_name=tmp_file_a5_al, output_layer=['_down (0+)', '_up (TOA)'])
+        
+        # === Plot and comparison with MYSTIC (to save in the report)
+        smartg_a5_al = pd.read_csv(tmp_file_a5_al, header=None, sep=r'\s+', dtype=float, comment="#").values
     mystic_a5_al = pd.read_csv(RGP + "/tests/IPRT_data/phaseA/iprt_case_a5_al_mystic.dat", header=None, sep=r'\s+', dtype=float, comment="#").values
     VAAn = VAA
     NVAA = len(VAAn)
@@ -422,6 +453,3 @@ def test_A5_al(request, S1DF):
         maxVal = max(delta_m_ref[istk], delta_m_ref_P[istk], delta_m_ref_M[istk])
         assert not ( delta_m[istk] > maxVal ), f'Problem with {stk} values, get {delta_m[istk]:.5f}. {stk} must be < to {maxVal:.5f}'
 
-# Remove tmp files
-tmpFiles = glob.glob(RGP + "/tests/tmp_phaseA*")
-for f in tmpFiles: os.remove(f)

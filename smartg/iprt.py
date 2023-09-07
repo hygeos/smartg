@@ -241,16 +241,16 @@ def select_and_plot_polar_iprt(model_val, z_alti, depol=None, thetas=None, phis=
         ax[3].grid(axis='both', linewidth=1.5, linestyle=':', color='black', alpha=0.5)
         
         fig.tight_layout()
-        if save_fig is not None: plt.savefig(save_fig, fontsize=15)
+        if save_fig is not None: plt.savefig(save_fig)
 
-    if outputIQUV and outputIQUVstd: 
+    if outputIQUV and outputIQUVstd:
         return valI[:,0:NPH_D], valQ[:,0:NPH_D], valU[:,0:NPH_D], valV[:,0:NPH_D], valIstd, valQstd, valUstd, valVstd
     elif (outputIQUV):
         return valI[:,0:NPH_D], valQ[:,0:NPH_D], valU[:,0:NPH_D], valV[:,0:NPH_D]
     elif (outputIQUVstd) :
         valIstd, valQstd, valUstd, valVstd
 
-def convert_SGout_to_IPRTout(lm, lU_sign, case_name, depol, lalt, SZA, SAA, lVZA, lVAA, file_name, output_layer=None):
+def convert_SGout_to_IPRTout(lm, lU_sign, case_name, ldepol, lalt, lSZA, lSAA, lVZA, lVAA, file_name, output_layer=None):
     """
     Description: Convert SMART-G output into IPRT ascii output format
 
@@ -258,10 +258,10 @@ def convert_SGout_to_IPRTout(lm, lU_sign, case_name, depol, lalt, SZA, SAA, lVZA
     lm           : List of SMART-G output (MLUT object)
     lU_sign      : List with multiplication to perform to U of each output
     case_name    : The IPRT case name
-    depol        : Depol float value
+    ldepol       : List of Depol values
     lalt         : List with the viewing altitude of each output
-    SZA          : Sun Zenith Angle (float)
-    SAA          : Sun Azimuth Angle (float)
+    lSZA         : List of Sun Zenith Angles
+    lSAA         : List of Sun Azimuth Angles
     lVZA         : List or numpy 1d array with VZA values
     lVAA         : Same as lVZA but with VAA values
     file_name    : The name of the ascci file to be created
@@ -272,9 +272,8 @@ def convert_SGout_to_IPRTout(lm, lU_sign, case_name, depol, lalt, SZA, SAA, lVZA
     output += "# RT model: SMARTG\n"
     output += "# depol altitude sza saa va phi I Q U V Istd Qstd Ustd Vstd\n"
 
-    fac = np.cos(np.radians(SZA))/np.pi
-
     for im, m in enumerate(lm):
+        fac = np.cos(np.radians(lSZA[im]))/np.pi
         VZA = lVZA[im]
         VAA = lVAA[im]
         if output_layer is None:
@@ -292,7 +291,7 @@ def convert_SGout_to_IPRTout(lm, lU_sign, case_name, depol, lalt, SZA, SAA, lVZA
                 Q_std = m['Q_stdev'+output_layeri][iaa,iza]*fac
                 U_std = m['U_stdev'+output_layeri][iaa,iza]*fac
                 V_std = m['V_stdev'+output_layeri][iaa,iza]*fac
-                output+= f"{depol:.1f} {lalt[im]:.1f} {SZA:.1f} {SAA:.1f} {za:.1f} {aa:.1f} {I:.5e} " + \
+                output+= f"{ldepol[im]:.2f} {lalt[im]:.1f} {lSZA[im]:.1f} {lSAA[im]:.1f} {za:.1f} {aa:.1f} {I:.5e} " + \
                          f"{Q:.5e} {U:.5e} {V:.5e} {I_std:.5e} {Q_std:.5e} {U_std:.5e} {V_std:.5e}\n"
 
     with open(file_name, 'w') as f:
