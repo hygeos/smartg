@@ -14,7 +14,7 @@ except ModuleNotFoundError:
     pass
 from scipy.interpolate import interp1d
 from scipy.integrate import simps
-from scipy.constants import codata
+from scipy import constants
 from scipy.constants import speed_of_light, Planck, Boltzmann
 from smartg.bandset import BandSet
 import netCDF4
@@ -1467,7 +1467,7 @@ class Profile_base(object):
         # scale to total H2O content
         if H2O is not None:
             M_H2O = 18.015 # g/mol
-            Avogadro = codata.value('Avogadro constant')
+            Avogadro = constants.value('Avogadro constant')
             if O3_H2O_alt is None:
                 self.dens_h2o *= H2O/ M_H2O * Avogadro / (simps(self.dens_h2o, -self.z) * 1e5)
             else:
@@ -1603,7 +1603,7 @@ def FO2(lam):
 def vapor_pressure(T):
     T0=273.15
     A=T0/T
-    Avogadro = codata.value('Avogadro constant')
+    Avogadro = constants.value('Avogadro constant')
     M_H2O=18.015
     mh2o=M_H2O/Avogadro
     return A*np.exp(18.916758 - A * (14.845878 + A*2.4918766))/mh2o/1.e6
@@ -1650,7 +1650,7 @@ def raycrs(lam, co2):
         co2 : ppm ((M)
     '''
     LAM = lam.reshape((-1,1))
-    Avogadro = codata.value('Avogadro constant')
+    Avogadro = constants.value('Avogadro constant')
     Ns = Avogadro/22.4141 * 273.15/288.15 * 1e-3
     nn2 = n_air(lam, co2)**2
     return (24*np.pi**3 * (nn2-1)**2/(LAM*1e-4)**4/Ns**2/(nn2+2)**2 * Fair(lam, co2))
@@ -1686,7 +1686,7 @@ def rod(lam, co2=400., lat=45., z=0., P=1013.25, pressure='surface'):
             - 'surface': P provided at altitude z
             - 'sea-level': P provided at altitude 0
     """
-    Avogadro = codata.value('Avogadro constant')
+    Avogadro = constants.value('Avogadro constant')
     zs = 0.73737 * z + 5517.56  # effective mass-weighted altitude
     G = g(lat, zs)
     # air pressure at the pixel (i.e. at altitude) in hPa

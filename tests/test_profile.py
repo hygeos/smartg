@@ -5,7 +5,13 @@ import pytest
 from smartg.atmosphere import AtmAFGL, AeroOPAC, CloudOPAC
 import numpy as np
 
-
+try:
+    from smartg.tools.third_party_utils import change_altitude_grid
+except ModuleNotFoundError:
+    exist_third_party_utils = False
+    pass
+else:
+    exist_third_party_utils = True
 '''
 Test profile calculation
 '''
@@ -30,11 +36,12 @@ def test_profile2(wav):
                   pfgrid=[100., 10., 0.])
     atm.calc(wav)
 
+@pytest.mark.skipif(exist_third_party_utils == False, reason="require third_party_utils external file")
 def test_profile3(wav):
     atm = AtmAFGL('afglms',
-                  comp=[AeroOPAC('desert', 0.1, 550.)],
-                  grid='100[20]10[1]0',
-                  pfgrid=[100., 10., 0.])
+                comp=[AeroOPAC('desert', 0.1, 550.)],
+                grid='100[20]10[1]0',
+                pfgrid=[100., 10., 0.])
     atm.calc(wav)
 
 def test_profile4(wav):
