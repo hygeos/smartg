@@ -15,7 +15,7 @@ from smartg.tools.phase import calc_iphase
 from luts.luts import LUT
 
 import os
-from . import conftest
+from tests import conftest
 os.environ['PATH'] += ':/usr/local/cuda/bin'
 
 import matplotlib.pyplot as plt
@@ -24,12 +24,49 @@ import matplotlib.image as mpimg
 from tempfile import TemporaryDirectory
 from pathlib import Path
 
+import logging
+
 # Global variable(s)
 SEED = -1
 STDFAC = 4
 
 import subprocess
 RGP = subprocess.Popen(['git', 'rev-parse', '--show-toplevel'], stdout=subprocess.PIPE).communicate()[0].rstrip().decode('utf-8') # root path from smartg git project
+
+
+# Create log file
+Path(os.path.join(RGP, "tests/logs/")).mkdir(parents=True, exist_ok=True)
+# logging.basicConfig(filename=RGP + "/tests/logs/iprt_phaseA{}.log".format(now),
+#                     # level=logging.WARNING,
+#                     level=logging.DEBUG,
+#                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+# Create a named logger
+logger = logging.getLogger('test_phaseA')
+logger.setLevel(logging.INFO)
+
+# Create a console handler
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.ERROR)
+
+# Set the formatter for the console handler
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+datefmt='%m/%d/%Y %I:%M:%S%p')
+console_handler.setFormatter(formatter)
+
+# Add the console handler to the logger
+logger.addHandler(console_handler)
+
+# Create a file handler
+file_handler = logging.FileHandler(RGP + "/tests/logs/iprt_phaseA.log", mode='w')
+file_handler.setLevel(logging.INFO)
+
+# Set the formatter for the file handler
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%m/%d/%Y %I:%M:%S%p')
+file_handler.setFormatter(formatter)
+
+# Add the file handler to the logger
+logger.addHandler(file_handler)
 
 
 @pytest.fixture(scope='module')
@@ -41,6 +78,7 @@ def S1DF():
 
 
 def test_A2(request, S1DF):
+    print("=== Test A2:")
     # === Atmosphere profil
     mol_sca = np.array([0., 0.1])[None,:]
     mol_abs = np.array([0., 0.])[None,:]
@@ -167,16 +205,16 @@ def test_A2(request, S1DF):
                                         lU=[U_smartg_std_0km_ref, U_smartg_std_1km_ref], lV=[V_smartg_std_0km_ref, V_smartg_std_1km_ref])
 
     # Compute the delta_m values from the ref smartg results
-    print("ref delta_m:")
-    delta_m_ref = compute_deltam(obs=IQUV_mystic_tot, mod=IQUV_smartg_ref_tot, print_res=True)
+    delta_m_ref = compute_deltam(obs=IQUV_mystic_tot, mod=IQUV_smartg_ref_tot, print_res=False)
+    logger.info(f'A2 - I={delta_m_ref[0]:.3f}; Q={delta_m_ref[1]:.3f}; U={delta_m_ref[2]:.3f}; V={delta_m_ref[3]:.3f} - ref delta_m:')
 
     # Compute the delta_m values from the ref smartg results +- err
     delta_m_ref_P = compute_deltam(obs=IQUV_mystic_tot, mod=IQUV_smartg_ref_tot+STDFAC*IQUV_smartg_std_ref_tot, print_res=False)
     delta_m_ref_M = compute_deltam(obs=IQUV_mystic_tot, mod=IQUV_smartg_ref_tot-STDFAC*IQUV_smartg_std_ref_tot, print_res=False)
 
     # Compute the delta_m values from the smartg test results
-    print("calculated delta_m:")
-    delta_m = compute_deltam(obs=IQUV_mystic_tot, mod=IQUV_smartg_tot, print_res=True)
+    delta_m = compute_deltam(obs=IQUV_mystic_tot, mod=IQUV_smartg_tot, print_res=False)
+    logger.info(f'A2 - I={delta_m[0]:.3f}; Q={delta_m[1]:.3f}; U={delta_m[2]:.3f}; V={delta_m[3]:.3f} - calculated delta_m')
 
     # Check if the the test is ok by comparing smartg ref and smartg test
     IQUV_name = ['I', 'Q', 'U', 'V']
@@ -185,6 +223,7 @@ def test_A2(request, S1DF):
         assert not ( delta_m[istk] > maxVal ), f'Problem with {stk} values, get {delta_m[istk]:.5f}. {stk} must be < to {maxVal:.5f}'
 
 def test_A5_pp(request, S1DF):
+    print("=== Test A5 principal plane:")
     # === Atmosphere profil
     z = np.array([1., 0.])
     mol_sca = np.array([0., 0.])[None,:]
@@ -301,16 +340,16 @@ def test_A5_pp(request, S1DF):
     IQUVS_pp_std_ref_tot = np.concatenate((IQUVS_pp_std_ref_tot, IQUVS_pp_std_ref), axis=1)
 
     # Compute the delta_m values from the ref smartg results
-    print("ref delta_m:")
-    delta_m_ref = compute_deltam(obs=IQUVM_pp_tot, mod=IQUVS_pp_ref_tot, print_res=True)
+    delta_m_ref = compute_deltam(obs=IQUVM_pp_tot, mod=IQUVS_pp_ref_tot, print_res=False)
+    logger.info(f'A5_pp - I={delta_m_ref[0]:.3f}; Q={delta_m_ref[1]:.3f}; U={delta_m_ref[2]:.3f}; V={delta_m_ref[3]:.3f} - ref delta_m:')
 
     # Compute the delta_m values from the ref smartg results +- err
     delta_m_ref_P = compute_deltam(obs=IQUVM_pp_tot, mod=IQUVS_pp_ref_tot+STDFAC*IQUVS_pp_std_ref_tot, print_res=False)
     delta_m_ref_M = compute_deltam(obs=IQUVM_pp_tot, mod=IQUVS_pp_ref_tot-STDFAC*IQUVS_pp_std_ref_tot, print_res=False)
 
     # Compute the delta_m values from the smartg test results
-    print("calculated delta_m:")
-    delta_m = compute_deltam(obs=IQUVM_pp_tot, mod=IQUVS_pp_tot, print_res=True)
+    delta_m = compute_deltam(obs=IQUVM_pp_tot, mod=IQUVS_pp_tot, print_res=False)
+    logger.info(f'A5_pp - I={delta_m[0]:.3f}; Q={delta_m[1]:.3f}; U={delta_m[2]:.3f}; V={delta_m[3]:.3f} - calculated delta_m:')
 
      # Check if the the test is ok by comparing smartg ref and smartg test
     IQUV_name = ['I', 'Q', 'U', 'V']
@@ -320,6 +359,7 @@ def test_A5_pp(request, S1DF):
 
 
 def test_A5_al(request, S1DF):
+    print("=== Test A5 almucantar:")
     # === Atmosphere profil
     z = np.array([1., 0.])
     mol_sca = np.array([0., 0.])[None,:]
@@ -436,16 +476,16 @@ def test_A5_al(request, S1DF):
     IQUVS_al_std_ref_tot = np.concatenate((IQUVS_al_std_ref_tot, IQUVS_al_std_ref), axis=1)
 
     # Compute the delta_m values from the ref smartg results
-    print("ref delta_m:")
-    delta_m_ref = compute_deltam(obs=IQUVM_al_tot, mod=IQUVS_al_ref_tot, print_res=True)
+    delta_m_ref = compute_deltam(obs=IQUVM_al_tot, mod=IQUVS_al_ref_tot, print_res=False)
+    logger.info(f'A5_al - I={delta_m_ref[0]:.3f}; Q={delta_m_ref[1]:.3f}; U={delta_m_ref[2]:.3f}; V={delta_m_ref[3]:.3f} - ref delta_m:')
 
     # Compute the delta_m values from the ref smartg results +- err
     delta_m_ref_P = compute_deltam(obs=IQUVM_al_tot, mod=IQUVS_al_ref_tot+STDFAC*IQUVS_al_std_ref_tot, print_res=False)
     delta_m_ref_M = compute_deltam(obs=IQUVM_al_tot, mod=IQUVS_al_ref_tot-STDFAC*IQUVS_al_std_ref_tot, print_res=False)
 
     # Compute the delta_m values from the smartg test results
-    print("calculated delta_m:")
-    delta_m = compute_deltam(obs=IQUVM_al_tot, mod=IQUVS_al_tot, print_res=True)
+    delta_m = compute_deltam(obs=IQUVM_al_tot, mod=IQUVS_al_tot, print_res=False)
+    logger.info(f'A5_al - I={delta_m[0]:.3f}; Q={delta_m[1]:.3f}; U={delta_m[2]:.3f}; V={delta_m[3]:.3f} - calculated delta_m:')
 
      # Check if the the test is ok by comparing smartg ref and smartg test
     IQUV_name = ['I', 'Q', 'U', 'V']
