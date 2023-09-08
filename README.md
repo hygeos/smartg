@@ -43,9 +43,14 @@ Examples are provided in the [sample notebooks](notebooks).
 
 ## Tests
 Run the command `pytest tests` or the provided notebooks.
+Exemple of pytest.ini file:
+```
+[pytest]
+addopts= --html=test_reportv1.html --self-contained-html --capture=tee-sys -v
+```
 
 ## Hardware tested
-GeForce GTX 660 Ti (unused for a while), GeForce GeForce GTX 970, GeForce GTX 1070, GeForce TITAN V, Quadro P2000, GeForce RTX 2080 Ti
+GeForce GTX 660 Ti (unused for a while), GeForce GTX 970 (unused for a while), GeForce GTX 1070, GeForce TITAN V, Quadro P2000, GeForce RTX 2080 Ti, Geforce RTX 3070, Geforce RTX 3090, Geforce RTX 4090
 
 ## Documentation
 
