@@ -43,7 +43,7 @@ Examples are provided in the [sample notebooks](notebooks).
 
 ## Tests
 Run the command `pytest tests` or the provided notebooks.
-Exemple of pytest.ini file:
+Example of pytest.ini file:
 ```
 [pytest]
 addopts= --html=test_reportv1.html --self-contained-html --capture=tee-sys -v
