@@ -7,7 +7,7 @@ SMART-G test suite using pytest
 
 import pytest
 import numpy as np
-from smartg.smartg import Smartg, RoughSurface, LambSurface
+from smartg.smartg import Smartg, RoughSurface, LambSurface, Albedo_cst
 from smartg.atmosphere import AtmAFGL, AeroOPAC, CloudOPAC
 from smartg.water import IOP_1
 from smartg.reptran import REPTRAN, reduce_reptran
@@ -61,7 +61,7 @@ def test_cloud(sg, wav):
 
 @pytest.mark.parametrize('wav', wav_list)
 @pytest.mark.parametrize('thv', [0., 40.])
-@pytest.mark.parametrize('surf', [RoughSurface(WIND=2.), LambSurface(ALB=0.2)])
+@pytest.mark.parametrize('surf', [RoughSurface(WIND=2.), LambSurface(ALB=Albedo_cst(0.2))])
 def test_atm_surf(sg, wav, surf, thv):
     atm = AtmAFGL('afglt', comp=[AeroOPAC('desert', 0.1, 550.)])
 
@@ -72,19 +72,19 @@ def test_atm_surf(sg, wav, surf, thv):
            NBPHOTONS=NBPHOTONS)
 
 
-def test_surf_iop1_1(sg):
+def test_surf_iop1_1():
     surf = RoughSurface(WIND=10.)
     water = IOP_1(chl=1.)
-    sg.run([400., 500.], surf=surf, water=water, NBPHOTONS=NBPHOTONS)
+    Smartg().run([400., 500.], surf=surf, water=water, NBPHOTONS=NBPHOTONS)
 
 
-def test_atm_surf_iop1(sg):
+def test_atm_surf_iop1():
     atm = AtmAFGL('afglt', comp=[AeroOPAC('desert', 0.1, 550.)],
                   pfwav=[500., 600.], pfgrid=[100., 5., 0.])
     surf = RoughSurface(WIND=10.)
     water = IOP_1(chl=1., pfwav=np.array([450, 550, 650, 750]))
     wav = np.linspace(400, 800, 12)
-    sg.run(wav, atm=atm, surf=surf, water=water, NBPHOTONS=NBPHOTONS)
+    Smartg().run(wav, atm=atm, surf=surf, water=water, NBPHOTONS=NBPHOTONS)
 
 
 def test_reptran(sg):
@@ -123,5 +123,6 @@ def test_rng(rng):
         surf=surf,
         NBPHOTONS=NBPHOTONS)
 
+
 def test_adjacency():
-    raise NotImplementedError
+    pytest.skip("Cannot test this, it is still in progress.")

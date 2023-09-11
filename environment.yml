@@ -5,15 +5,15 @@ channels:
   - defaults
 dependencies:
   - python>3
-  - numpy<1.24
-  - pandas<2.1
-  - openpyxl
-  - pytest
+  - numpy<1.24   # import numpy
+  - pandas<2.1   # import pandas
+  - openpyxl     # from openpyxl import Workbook
+  - pytest       # import pytest
   - pytest-xdist
   - pytest-html
-  - progressbar2
-  - matplotlib
-  - pycuda
+  - progressbar2 # from progressbar import ProgressBar, Percentage, Bar
+  - matplotlib   # import matplotlib
+  - pycuda       # import pycuda
   - nbformat
   - nbconvert
   - jupyterlab
