@@ -877,6 +877,7 @@ class Smartg(object):
             M['I_up (TOA)'][:,:] contains the top of atmosphere radiance/reflectance
         '''
 
+        if (not self.pp and water is not None): raise NameError("Ocean + spherical atm is not allowed! Still in progress...")
 
         # Compute the sun direction as vector 
         vSun = convertAnglestoV(THETA=THVDEG, PHI=PHVDEG, TYPE="Sun") 

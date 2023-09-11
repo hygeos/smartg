@@ -42,12 +42,12 @@ Examples are provided in the [sample notebooks](notebooks).
 [jupyter notebook](http://jupyter.org) has nice possibilities for interactive development and visualization, in particular if you are using a remote cuda computer. Sample notebooks are provided in the folder [notebooks](notebooks).
 
 ## Tests
-Run the command `pytest tests` or the provided notebooks.
 Example of pytest.ini file:
 ```
 [pytest]
 addopts= --html=test_reportv1.html --self-contained-html --capture=tee-sys -v
 ```
+Run the command `pytest tests/test_cuda.py tests/test_profile.py tests/test_smartg.py` to check that SMART-G is correctly running.
 
 ## Hardware tested
 GeForce GTX 660 Ti (unused for a while), GeForce GTX 970 (unused for a while), GeForce GTX 1070, GeForce TITAN V, Quadro P2000, GeForce RTX 2080 Ti, Geforce RTX 3070, Geforce RTX 3090, Geforce RTX 4090
