@@ -1,6 +1,9 @@
 import nbformat
 from nbconvert.preprocessors import ExecutePreprocessor
 
+# import os
+from os.path import join, dirname, realpath
+ROOTPATH = dirname(dirname(realpath(__file__)))
 
 def test_demo_notebook():
     """
@@ -10,4 +13,4 @@ def test_demo_notebook():
         nb = nbformat.read(f, as_version=4)
     
     ep = ExecutePreprocessor(timeout=600, kernel_name='python3')
-    ep.preprocess(nb)
+    ep.preprocess(nb, {'metadata': {'path': join(ROOTPATH, 'notebooks/')}})
