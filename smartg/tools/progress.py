@@ -76,7 +76,7 @@ class Progress_progressbar2(object):
         '''
         self.max = max
         self.label = FormatLabel('')
-        self.pbar = ProgressBar(widgets=[self.label, ' ', Percentage(), Bar(), ETA()], maxval=max).start()
+        self.pbar = ProgressBar(widgets=[self.label, ' ', Percentage(), Bar(), ETA()], max_value=max).start()
 
     def update(self, value, message=''):
 
