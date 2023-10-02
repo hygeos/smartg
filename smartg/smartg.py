@@ -1873,22 +1873,51 @@ def calculF(profile, N, DEPO, kind):
         f3 = interp1d(angles, phase[2,:])
         f4 = interp1d(angles, phase[3,:])
 
-        # parameters equally spaced in scattering probability
-        # phase_H['p_P11'][idx, :] = interp1d(scum, phase[1,:])(z)  # I par P11
-        # phase_H['p_P22'][idx, :] = interp1d(scum, phase[0,:])(z)  # I per P22
-        phase_H['p_P11'][idx, :] = interp1d(scum, phase[0,:])(z)  # I par P11
-        phase_H['p_P22'][idx, :] = interp1d(scum, phase[1,:])(z)  # I per P22
-        phase_H['p_P33'][idx, :] = interp1d(scum, phase[2,:])(z)  # U P33
-        phase_H['p_P43'][idx, :] = interp1d(scum, phase[3,:])(z)  # V P43
-        phase_H['p_P44'][idx, :] = interp1d(scum, phase[2,:])(z)  # V P44= P33
-        phase_H['p_ang'][idx, :] = interp1d(scum, angles)(z) # angle
+        if (len(phase[:,0]) == 4): # spherical particle
+            # parameters equally spaced in scattering probability
+            # phase_H['p_P11'][idx, :] = interp1d(scum, phase[1,:])(z)  # I par P11
+            # phase_H['p_P22'][idx, :] = interp1d(scum, phase[0,:])(z)  # I per P22
+            phase_H['p_P11'][idx, :] = interp1d(scum, phase[0,:])(z)  # I par P11
+            phase_H['p_P22'][idx, :] = interp1d(scum, phase[1,:])(z)  # I per P22
+            phase_H['p_P33'][idx, :] = interp1d(scum, phase[2,:])(z)  # U P33
+            phase_H['p_P43'][idx, :] = interp1d(scum, phase[3,:])(z)  # V P43
+            phase_H['p_P44'][idx, :] = interp1d(scum, phase[2,:])(z)  # V P44= P33
+            phase_H['p_ang'][idx, :] = interp1d(scum, angles)(z) # angle
 
-        # parameters equally spaced in scattering angle [0, 180]
-        phase_H['a_P11'][idx, :] = f1(angN)  # I par P11
-        phase_H['a_P22'][idx, :] = f2(angN)  # I per P22
-        phase_H['a_P33'][idx, :] = f3(angN)  # U P33
-        phase_H['a_P43'][idx, :] = f4(angN)  # V P43
-        phase_H['a_P44'][idx, :] = f3(angN)  # V P44=P33
+            # parameters equally spaced in scattering angle [0, 180]
+            phase_H['a_P11'][idx, :] = f1(angN)  # I par P11
+            phase_H['a_P22'][idx, :] = f2(angN)  # I per P22
+            phase_H['a_P33'][idx, :] = f3(angN)  # U P33
+            phase_H['a_P43'][idx, :] = f4(angN)  # V P43
+            phase_H['a_P44'][idx, :] = f3(angN)  # V P44=P33
+        else: # non spherical particle
+            f5 = interp1d(angles, phase[4,:])
+            f6 = interp1d(angles, phase[5,:])
+
+            scum = [0]
+            pm = 0.5*(phase[0, :] + 2*phase[1, :] + phase[4, :])
+            sin = np.sin(angles)
+            tmp = dtheta * ((sin[:-1] * pm[:-1] + sin[1:] * pm[1:]) / 3.
+                            + (sin[:-1] * pm[1:] + sin[1:] * pm[:-1])/6.) * np.pi * 2.
+            scum = np.append(scum,tmp)
+            scum = np.cumsum(scum)
+            scum /= scum[-1]
+
+            phase_H['p_P11'][idx, :] = interp1d(scum, phase[0,:])(z)  # I P11
+            phase_H['p_P22'][idx, :] = interp1d(scum, phase[4,:])(z)  # I P22
+            phase_H['p_P12'][idx, :] = interp1d(scum, phase[1,:])(z)  # P12=P21
+            phase_H['p_P33'][idx, :] = interp1d(scum, phase[2,:])(z)  # U P33
+            phase_H['p_P43'][idx, :] = interp1d(scum, phase[3,:])(z)  # V P43
+            phase_H['p_P44'][idx, :] = interp1d(scum, phase[5,:])(z)  # V P44= P33
+            phase_H['p_ang'][idx, :] = interp1d(scum, angles)(z) # angle
+
+            phase_H['a_P11'][idx, :] = f1(angN)  # I par P11
+            phase_H['a_P22'][idx, :] = f5(angN)  # I per P22
+            phase_H['a_P12'][idx, :] = f2(angN)  # I per P22
+            phase_H['a_P33'][idx, :] = f3(angN)  # U P33
+            phase_H['a_P43'][idx, :] = f4(angN)  # V P43
+            phase_H['a_P44'][idx, :] = f6(angN)  # V P44=P33
+            #phase_H['a_P33'][idx, :] = f6(angN)  # V P44=P33
 
         idx += 1
 

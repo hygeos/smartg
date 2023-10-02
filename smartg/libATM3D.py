@@ -139,14 +139,15 @@ def extend_1d_grid(grid, extend_value, type='length'):
     return extended_grid
 
 
-def read_cld_nth_cte(filename, nb_theta=721):
+def read_cld_nth_cte(filename, nb_theta=int(721)):
         """
         Description: Read libRatran water cloud files (i.g. wc.sol.mie.cdf) or monochromatic IPRT netcdf cloud file,
         and convert to LUT object with a constant theta discretisation i.e. nb_theta = cte.
 
         === Parameters:
-        filename : File name with path location of netcdf cloud file.
-        nb_theta : Number of theta discretization between 0 and 180 degrees.
+        filename  : File name with path location of netcdf cloud file.
+        nb_theta  : Number of theta discretization between 0 and 180 degrees.
+        normalize : Normalize such that the integral of P0 is equal to 2
         === Return:
         LUT object with the cloud phase matrix but with a constant theta number = nb_theta
         """
@@ -156,7 +157,7 @@ def read_cld_nth_cte(filename, nb_theta=721):
         # Phase matrix (wl=670nm, reff, stk, ntheta)
         phase = ds["phase"][:, :, :, :].data
 
-        NBSTK   = 4
+        NBSTK   = ds.nphamat.size
         NBTHETA = nb_theta
         NBREFF  = ds["reff"].size
         NWAV    = ds["wavelen"].size
@@ -180,12 +181,22 @@ def read_cld_nth_cte(filename, nb_theta=721):
 
                     P.data[iwav, ireff, istk, :] = np.interp(theta, th[:nth], phase[iwav,ireff,istk,:nth],  period=np.inf)
 
-        # convert I, Q into Ipar, Iper
-        P0 = P.data[:,:,0,:].copy()
-        P1 = P.data[:,:,1,:].copy()
-        P.data[:,:,0,:] = P0+P1
-        P.data[:,:,1,:] = P0-P1
-
+        if (NBSTK == 4): # spherical particles
+            # convert I, Q into Ipar, Iper
+            P0 = P.data[:,:,0,:].copy()
+            P1 = P.data[:,:,1,:].copy()
+            P.data[:,:,0,:] = P0+P1
+            P.data[:,:,1,:] = P0-P1
+        elif (NBSTK) == 6: # non spherical particles
+            # note: the sign of P43/P34 affects only the sign of V, since V=0 for rayleigh scattering it does not matter 
+            P0 = P.data[:,:,0,:].copy()
+            P1 = P.data[:,:,1,:].copy()
+            P4 = P.data[:,:,4,:].copy()
+            P.data[:,:,0,:] = 0.5*(P0+2*P1+P4) # P11
+            P.data[:,:,1,:] = 0.5*(P0-P4)      # P12=P21
+            P.data[:,:,4,:] = 0.5*(P0-2*P1+P4) # P22
+        else:
+            raise NameError("Number of unique phase components is different than 4 or 6!")
         return P
 
 
