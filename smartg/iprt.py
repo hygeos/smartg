@@ -5,6 +5,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
 
+from luts.luts import Idx
+
 
 
 def seclect_iprt_IQUV(model_val, z_alti, thetas=None, phis=None, inv_thetas=False, inv_phis=False, change_U_sign=False,
@@ -85,8 +87,8 @@ def seclect_iprt_IQUV(model_val, z_alti, thetas=None, phis=None, inv_thetas=Fals
         return I, Q, U, V, Istd, Qstd, Ustd, Vstd
 
 
-def select_and_plot_polar_iprt(model_val, z_alti, depol=None, thetas=None, phis=None, inv_thetas=False, inv_phis=False, change_U_sign=False,
-                               maxI=None, maxQ=None, maxU=None, maxV=None,  cmapI=None, cmapQ=None, cmapU=None, cmapV=None,
+def select_and_plot_polar_iprt(model_val, z_alti, depol=None, thetas=None, phis=None, inv_thetas=False, inv_phis=False, change_Q_sign=False, change_U_sign=False,
+                               change_V_sign=False, maxI=None, maxQ=None, maxU=None, maxV=None,  cmapI=None, cmapQ=None, cmapU=None, cmapV=None,
                                forceIQUV = None, title=None, save_fig=None, sym=False, I_index=int(6), va_index=int(4),
                                phi_index=int(5), z_index=int(1), depol_index=int(0), outputIQUV=False, outputIQUVstd=False, avoid_plot=False):
     """
@@ -101,6 +103,7 @@ def select_and_plot_polar_iprt(model_val, z_alti, depol=None, thetas=None, phis=
     inv_thetas      : Inverse the vector with theta values
     inv_phis        : Same as inv_thetas but with phi values
     change_U_sign   : multiply by -1 the U results (can be useful since in backward and forward the convention change)
+    change_V_sign   : same as change_U_sign but with V
     maxI,...,maxV   : We can specify the max values in I, Q, U and V for the plots
     cmapI,...,cmapV : We can specify a specific color map for I, Q, U or/and V results
     forceIQUV       : Circumvent the result selection of model_val by giving direclty the I, Q, U and V values (list of matrices)
@@ -150,9 +153,13 @@ def select_and_plot_polar_iprt(model_val, z_alti, depol=None, thetas=None, phis=
         valQstd = np.zeros((NTH, NPH_D))
         valUstd = np.zeros((NTH, NPH_D))
         valVstd = np.zeros((NTH, NPH_D))
-    
+
+    if change_Q_sign: Q_sign = int(-1)
+    else            : Q_sign = int(1) 
     if change_U_sign: U_sign = int(-1)
     else            : U_sign = int(1)
+    if change_V_sign: V_sign = int(-1)
+    else            : V_sign = int(1)
 
     if forceIQUV is not None:
         valI[:,0:NPH_D] = forceIQUV[0]
@@ -170,9 +177,9 @@ def select_and_plot_polar_iprt(model_val, z_alti, depol=None, thetas=None, phis=
                 if inv_phis  : indj = NPH_D-1-int(np.argwhere(phis[0:NPH_D] == model_val[i,phi_index]))
                 else         : indj = int(np.argwhere(phis[0:NPH_D] == model_val[i,phi_index]))
                 valI[indi,indj] =  model_val[i, I_index]
-                valQ[indi,indj] =  model_val[i, I_index+1]
+                valQ[indi,indj] =  model_val[i, I_index+1]*Q_sign
                 valU[indi,indj] =  model_val[i, I_index+2]*U_sign
-                valV[indi,indj] =  model_val[i, I_index+3]
+                valV[indi,indj] =  model_val[i, I_index+3]*V_sign
                 if (outputIQUVstd): 
                     valIstd[indi,indj] =  model_val[i, I_index+4]
                     valQstd[indi,indj] =  model_val[i, I_index+5]
@@ -199,7 +206,7 @@ def select_and_plot_polar_iprt(model_val, z_alti, depol=None, thetas=None, phis=
             minI=-maxI
         if maxQ is None: maxQ = max(np.abs(np.min(valQ)), np.abs(np.max(valQ)))
         if maxU is None: maxU = max(np.abs(np.min(valU)), np.abs(np.max(valU)))
-        if maxV is None: maxV = 1e-5
+        if maxV is None: maxV = max(np.abs(np.min(valV)), np.abs(np.max(valV)))
 
         if cmapI is None: cmapI = "jet"
         if cmapQ is None: cmapQ = "RdBu_r"
@@ -250,7 +257,7 @@ def select_and_plot_polar_iprt(model_val, z_alti, depol=None, thetas=None, phis=
     elif (outputIQUVstd) :
         valIstd, valQstd, valUstd, valVstd
 
-def convert_SGout_to_IPRTout(lm, lU_sign, case_name, ldepol, lalt, lSZA, lSAA, lVZA, lVAA, file_name, output_layer=None):
+def convert_SGout_to_IPRTout(lm, lU_sign, case_name, ldepol, lalt, lSZA, lSAA, lVZA, lVAA, file_name, output_layer=None, interp=False):
     """
     Description: Convert SMART-G output into IPRT ascii output format
 
@@ -282,15 +289,26 @@ def convert_SGout_to_IPRTout(lm, lU_sign, case_name, ldepol, lalt, lSZA, lSAA, l
             output_layeri = output_layer[im]
         for iza, za, in enumerate(VZA):
             for iaa, aa, in enumerate(VAA):
-                I = m['I'+output_layeri][iaa,iza]*fac
-                Q = m['Q'+output_layeri][iaa,iza]*fac
-                U = m['U'+output_layeri][iaa,iza]*fac*lU_sign[im]
-                V = m['V'+output_layeri][iaa,iza]*fac
+                if not interp:
+                    I = m['I'+output_layeri][iaa,iza]*fac
+                    Q = m['Q'+output_layeri][iaa,iza]*fac
+                    U = m['U'+output_layeri][iaa,iza]*fac*lU_sign[im]
+                    V = m['V'+output_layeri][iaa,iza]*fac
 
-                I_std = m['I_stdev'+output_layeri][iaa,iza]*fac
-                Q_std = m['Q_stdev'+output_layeri][iaa,iza]*fac
-                U_std = m['U_stdev'+output_layeri][iaa,iza]*fac
-                V_std = m['V_stdev'+output_layeri][iaa,iza]*fac
+                    I_std = m['I_stdev'+output_layeri][iaa,iza]*fac
+                    Q_std = m['Q_stdev'+output_layeri][iaa,iza]*fac
+                    U_std = m['U_stdev'+output_layeri][iaa,iza]*fac
+                    V_std = m['V_stdev'+output_layeri][iaa,iza]*fac
+                else:
+                    I = m['I'+output_layeri][Idx(aa),Idx(za)]*fac
+                    Q = m['Q'+output_layeri][Idx(aa),Idx(za)]*fac
+                    U = m['U'+output_layeri][Idx(aa),Idx(za)]*fac*lU_sign[im]
+                    V = m['V'+output_layeri][Idx(aa),Idx(za)]*fac
+
+                    I_std = m['I_stdev'+output_layeri][Idx(aa),Idx(za)]*fac
+                    Q_std = m['Q_stdev'+output_layeri][Idx(aa),Idx(za)]*fac
+                    U_std = m['U_stdev'+output_layeri][Idx(aa),Idx(za)]*fac
+                    V_std = m['V_stdev'+output_layeri][Idx(aa),Idx(za)]*fac
                 output+= f"{ldepol[im]:.2f} {lalt[im]:.1f} {lSZA[im]:.1f} {lSAA[im]:.1f} {za:.1f} {aa:.1f} {I:.5e} " + \
                          f"{Q:.5e} {U:.5e} {V:.5e} {I_std:.5e} {Q_std:.5e} {U_std:.5e} {V_std:.5e}\n"
 
