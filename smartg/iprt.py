@@ -5,7 +5,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
 
-from luts.luts import Idx
+from luts.luts import Idx, LUT
+import xarray as xr
 
 
 
@@ -439,3 +440,81 @@ def groupIQUV(lI, lQ, lU, lV):
     IQUV_smartg_ref_tot[3,:] = V_tot
 
     return IQUV_smartg_ref_tot
+
+def read_phase_nth_cte(filename, nb_theta=int(721), convert_IparIper=True, normalize=False):
+    """
+    Description: Read libRatran aerosol/cloud files (i.g. wc.sol.mie.cdf) or monochromatic IPRT netcdf aerosol/cloud files,
+    and convert to LUT object with a constant theta discretisation i.e. nb_theta = cte.
+
+    === Parameters:
+    filename         : File name with path location of netcdf file.
+    nb_theta         : Number of theta discretization between 0 and 180 degrees.
+    convert_IparIper : Convert IQUV phase matrix into IparIperUV phase matrix
+    normalize        : Normalize such that the integral of P0 is equal to 2
+    === Return:
+    LUT object with the cloud phase matrix but with a constant theta number = nb_theta
+    """
+
+    ds = xr.open_dataset(filename)
+
+    if 'hum' in ds.variables: 
+        rh_reff = ds["hum"].data
+        rh_or_reff = 'rh'
+    elif 'reff' in ds.variables:
+        rh_reff = ds["reff"].data
+        rh_or_reff = 'reff'
+    else:
+        raise Exception('Error')
+    
+    phase = ds["phase"][:, :, :, :].data
+
+    NBSTK   = ds.nphamat.size
+    NBTHETA = nb_theta
+    NBRH_OR_REFF  = rh_reff.size
+    NWAV    = ds["wavelen"].size
+    theta = np.linspace(0., 180., num=NBTHETA)
+    wavelength = ds["wavelen"].data*1e3
+
+    P = LUT( np.full((NWAV, NBRH_OR_REFF, NBSTK, NBTHETA), np.NaN, dtype=np.float32),
+                axes=[wavelength, rh_reff, None, theta],
+                names=['wav_phase', rh_or_reff, 'stk', 'theta_atm'],
+                desc="phase_atm" )
+
+    for iwav in range (0, NWAV):
+        for irhreff in range(NBRH_OR_REFF):
+            for istk in range (NBSTK):
+                # ntheta (wl, reff, stk)
+                nth = ds["ntheta"][iwav, irhreff, istk].data
+
+                # theta (wl, reff, stk, ntheta)
+                th = ds["theta"][iwav, irhreff, istk, :].data
+
+                P.data[iwav, irhreff, istk, :] = np.interp(theta, th[:nth], phase[iwav,irhreff,istk,:nth],  period=np.inf)
+
+    if (convert_IparIper):
+        # convert I, Q into Ipar, Iper
+        if (NBSTK == 4): # spherical particles
+            P0 = P.data[:,:,0,:].copy()
+            P1 = P.data[:,:,1,:].copy()
+            P.data[:,:,0,:] = P0+P1
+            P.data[:,:,1,:] = P0-P1
+        elif (NBSTK) == 6: # non spherical particles
+            # note: the sign of P43/P34 affects only the sign of V, since V=0 for rayleigh scattering it does not matter 
+            P0 = P.data[:,:,0,:].copy()
+            P1 = P.data[:,:,1,:].copy()
+            P4 = P.data[:,:,4,:].copy()
+            P.data[:,:,0,:] = 0.5*(P0+2*P1+P4) # P11
+            P.data[:,:,1,:] = 0.5*(P0-P4)      # P12=P21
+            P.data[:,:,4,:] = 0.5*(P0-2*P1+P4) # P22
+        else:
+            raise NameError("Number of unique phase components is different than 4 or 6!")
+        
+        if normalize:
+            for iwav in range (0, NWAV):
+                for irhreff in range (0, NBRH_OR_REFF):
+                    # Note: from Ipar Iper phase, if NBSTK=4 -> P0=(P11+P12)/2, and if NBSTK=6 -> P0=(P11+P22+2*P12)/2
+                    f = P0[iwav, irhreff,:]
+                    mu= np.cos(np.radians(theta))
+                    Norm = np.trapz(f,-mu)
+                    P.data[iwav,irhreff,:,:] *= 2./abs(Norm)
+    return P
