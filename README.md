@@ -45,7 +45,7 @@ Examples are provided in the [sample notebooks](notebooks).
 Example of pytest.ini file:
 ```
 [pytest]
-addopts= --html=test_reportv1.html --self-contained-html --capture=tee-sys -v
+addopts= --html=test_reportv1.html --self-contained-html -s -v
 ```
 Run the command `pytest tests/test_cuda.py tests/test_profile.py tests/test_smartg.py` to check that SMART-G is correctly running.
 

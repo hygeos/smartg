@@ -19,6 +19,7 @@ dependencies:
   - jupyterlab
   - notebook
   - ipywidgets
+  - ipympl
   - pyhdf
   - pip
   - pip:
