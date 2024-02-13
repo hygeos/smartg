@@ -621,11 +621,11 @@ class Entity(object):
                  bboxGPmin = Point(-100000., -100000., 0.), bboxGPmax = Point(100000., 100000., 120.),
                  color = 'grey', alpha_color = 0.5):
         if isinstance(entity, Entity) :
-            self.name = entity.name; self.TC = entity.TC; self.materialAV = entity.materialAV;
-            self.materialAR = entity.materialAR; self.geo = entity.geo ;
-            self.transformation = entity.transformation;
-            self.bboxGPmin = entity.bboxGPmin; self.bboxGPmax = entity.bboxGPmax;
-            self.color = entity.color; self.alpha_color = alpha_color;
+            self.name = entity.name; self.TC = entity.TC; self.materialAV = entity.materialAV
+            self.materialAR = entity.materialAR; self.geo = entity.geo 
+            self.transformation = entity.transformation
+            self.bboxGPmin = entity.bboxGPmin; self.bboxGPmax = entity.bboxGPmax
+            self.color = entity.color; self.alpha_color = alpha_color
         else:
             self.name = name
             self.TC = TC
@@ -644,6 +644,26 @@ class Entity(object):
             str(self.material) + '\n' + \
             str(self.geo) + '\n' + \
             str(self.transformation)
+    
+    def get_transformation(self):
+        tr = Transform()
+        Trans = tr.translate(Vector(self.transformation.transx, self.transformation.transy, \
+                                    self.transformation.transz))
+        Rotx = tr.rotateX(self.transformation.rotx)
+        Roty = tr.rotateY(self.transformation.roty)
+        Rotz = tr.rotateZ(self.transformation.rotz)
+
+        # total tt of all transform together
+        tt = None
+        if   (self.transformation.rotOrder == "XYZ"): tt = Trans*Rotx*Roty*Rotz
+        elif (self.transformation.rotOrder == "XZY"): tt = Trans*Rotx*Rotz*Roty
+        elif (self.transformation.rotOrder == "YXZ"): tt = Trans*Roty*Rotx*Rotz
+        elif (self.transformation.rotOrder == "YZX"): tt = Trans*Roty*Rotz*Rotx
+        elif (self.transformation.rotOrder == "ZXY"): tt = Trans*Rotz*Rotx*Roty
+        elif (self.transformation.rotOrder == "ZYX"): tt = Trans*Rotz*Roty*Rotx
+        else: raise NameError('Unknown rotation order')
+
+        return tt
 
 class Heliostat(object):
     '''
@@ -1440,6 +1460,232 @@ def Analyse_create_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYC
     # Show the geometries
     fig = ax.get_figure()
     return fig
+
+
+def visualize_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYCOLOR = 'r', SR_VIEW=1,
+                               xyz_limit = None, show_rays=True, rs_fac = 1):
+    '''
+    Definition of visualize_entity
+
+    Enable a 3D visualization of the created objects
+
+    ENTITY    : A list of objects (Entity classes)
+    THEDEG    : The zenith angle of the sun
+    PHIDEG    : The azimuth angle of the sun
+    PlaneDM   : Plane Draw method, two choices 'FM' (First Method) or 'SM'(seconde
+                Method). By default 'SM', 'FM' is useful for debug issues
+    RAYCOLR   : Sun rays color i.g. 'r', 'b', ...
+    SR_VIEW   : Split the number of sun rays that can be seen in the figure
+    xyz_limit : By default None and automatically choose x,y,z view limits,
+                or can be forced by giving a dictionnary with x,y,z values (in km),
+                i.g. {'x_min': 0., 'x_max': 10., 'y_min': 0., 'y_max':10., 'z_min': 0., 'z_max':10.}
+
+    return a matplotlib fig
+    '''
+    
+    ENTITY = convertLGtoLE(ENTITY)
+
+    if (isinstance(ENTITY, Entity)):
+        E = []
+        E = np.append(E, ENTITY)
+        # Enable generic local visualization (part1)
+        if isinstance(E[0].geo, Plane):
+            GLXmin = min(E[0].geo.p1.x, E[0].geo.p2.x, E[0].geo.p3.x, E[0].geo.p4.x)
+            GLYmin = min(E[0].geo.p1.y, E[0].geo.p2.y, E[0].geo.p3.y, E[0].geo.p4.y)
+            GLZmin = min(E[0].geo.p1.z, E[0].geo.p2.z, E[0].geo.p3.z, E[0].geo.p4.z)
+            GLXmax = max(E[0].geo.p1.x, E[0].geo.p2.x, E[0].geo.p3.x, E[0].geo.p4.x)
+            GLYmax = max(E[0].geo.p1.y, E[0].geo.p2.y, E[0].geo.p3.y, E[0].geo.p4.y)
+            GLZmax = max(E[0].geo.p1.z, E[0].geo.p2.z, E[0].geo.p3.z, E[0].geo.p4.z)
+            GLEcaX = abs(GLXmin-GLXmax); GLEcaY = abs(GLYmin-GLYmax); GLEcaZ = abs(GLZmin-GLZmax);
+            GLEcaM = max(GLEcaX, GLEcaY, GLEcaZ)
+        # End (part1)
+            
+    elif (all(isinstance(x, Entity) for x in ENTITY)):
+        E = ENTITY
+        # Enable generic local visualization (part2)
+        # Be carful, if the local is greater than 100km the code below need to be modified!
+        GLXmin = 100.; GLYmin = 100.; GLZmin = 100.; GLXmax = -100.; GLYmax = -100.; GLZmax = -100.
+        for i in range(0, len(E)):
+            if E[i].transformation.transx < GLXmin : GLXmin = E[i].transformation.transx
+            if E[i].transformation.transx > GLXmax : GLXmax = E[i].transformation.transx
+            if E[i].transformation.transy < GLYmin : GLYmin = E[i].transformation.transy
+            if E[i].transformation.transy > GLYmax : GLYmax = E[i].transformation.transy
+            if E[i].transformation.transz < GLZmin : GLZmin = E[i].transformation.transz
+            if E[i].transformation.transz > GLZmax : GLZmax = E[i].transformation.transz
+        GLEcaX = abs(GLXmin-GLXmax); GLEcaY = abs(GLYmin-GLYmax); GLEcaZ = abs(GLZmin-GLZmax)
+        GLEcaM = max(GLEcaX, GLEcaY, GLEcaZ)
+        # End (part2)
+    else:
+        raise NameError('ENTITY argument needs to be an Entity object or a list' + \
+                        ' of Entity Objects ')
+
+    # calculate the sun direction vector
+    vSun = convertAnglestoV(THETA=THEDEG, PHI=PHIDEG, TYPE="Sun")
+    wsx = -vSun.x; wsy=-vSun.y; wsz=-vSun.z
+
+    lplaneMesh = []
+    lMir_int = int(0)
+    E_rec = []; E_ref = []
+    for i in range(0, len(E)):
+        if (E[i].name == "reflector"): E_ref.append(E[i])
+        if (E[i].name == "receiver") : E_rec.append(E[i])
+
+    nbRef = len(E_ref)
+    xr = [None]*nbRef; yr = [None]*nbRef; zr = [None]*nbRef
+    atLeastOneInt = [False]*nbRef
+    TabPhoton2 = []
+
+    for k in range (0, len(E_ref)):
+        # Get the transformation
+        tt = E_ref[k].get_transformation()
+        tt_inv = tt.inverse(tt)
+
+        photon_pos = Point(wsx+E_ref[k].transformation.transx, wsy+E_ref[k].transformation.transy, wsz+E_ref[k].transformation.transz)
+        photon = Ray(o = photon_pos, d = vSun, end = 1200.)
+    
+        if isinstance(E_ref[k].geo, Plane):
+            # Vertex triangle indices
+            vi = np.array([0, 1, 2,                   # indices or triangle 1
+                           2, 3, 1], dtype=np.int32)  # indices of triangle 2
+
+            # List of points of the plane
+            P = np.array([Point(E_ref[k].geo.p1.x, E_ref[k].geo.p1.y, E_ref[k].geo.p1.z),
+                          Point(E_ref[k].geo.p2.x, E_ref[k].geo.p2.y, E_ref[k].geo.p2.z),
+                          Point(E_ref[k].geo.p3.x, E_ref[k].geo.p3.y, E_ref[k].geo.p3.z),
+                          Point(E_ref[k].geo.p4.x, E_ref[k].geo.p4.y, E_ref[k].geo.p4.z)], dtype = Point)
+            
+            PlaneMesh = TriangleMesh(tt, tt_inv, vi, P)
+            lplaneMesh.append(PlaneMesh)
+
+            if(THEDEG != None and PlaneMesh.Intersect(photon) and PlaneMesh.thit < float('inf')):
+                atLeastOneInt[k] = True
+                lMir_int += int(1)
+                p_hit = PlaneMesh.dg.p
+                t_hit = PlaneMesh.thit
+                tr = np.linspace(t_hit*0.98*(1/rs_fac), t_hit, 100)
+                xr[k] = photon.o.x + tr*photon.d.x
+                yr[k] = photon.o.y + tr*photon.d.y
+                zr[k] = photon.o.z + tr*photon.d.z
+                vecTemp = Ref_Fresnel(dirEnt = photon.d, geoTrans = tt)
+                TabPhoton2 = np.append(TabPhoton2, Ray(o=p_hit, d=vecTemp, end=120))
+
+        else: raise NameError('This geometry is unknown or not yet accepted!')
+
+
+    xr2 = [None]*lMir_int; yr2 = [None]*lMir_int; zr2 = [None]*lMir_int
+    atLeastOneInt2 = [False]*lMir_int
+
+    for k in range (0, len(E_rec)):
+        # Get the transformation
+        tt = E_rec[k].get_transformation()
+        tt_inv = tt.inverse(tt)
+
+        if isinstance(E_rec[k].geo, Plane):
+            # Vertex triangle indices
+            vi = np.array([0, 1, 2,                   # indices or triangle 1
+                           2, 3, 1], dtype=np.int32)  # indices of triangle 2
+
+            # List of points of the plane
+            P = np.array([Point(E_rec[k].geo.p1.x, E_rec[k].geo.p1.y, E_rec[k].geo.p1.z),
+                          Point(E_rec[k].geo.p2.x, E_rec[k].geo.p2.y, E_rec[k].geo.p2.z),
+                          Point(E_rec[k].geo.p3.x, E_rec[k].geo.p3.y, E_rec[k].geo.p3.z),
+                          Point(E_rec[k].geo.p4.x, E_rec[k].geo.p4.y, E_rec[k].geo.p4.z)], dtype = Point)
+            
+            PlaneMesh = TriangleMesh(tt, tt_inv, vi, P)
+            lplaneMesh.append(PlaneMesh)
+
+            for i in range(0, lMir_int):
+                if(THEDEG != None and PlaneMesh.Intersect(TabPhoton2[i]) and PlaneMesh.thit < float('inf')):
+                    atLeastOneInt2[i] = True
+                    p_hit = PlaneMesh.dg.p
+                    t_hit = PlaneMesh.thit
+                    tr = np.linspace(TabPhoton2[i].mint, t_hit, 100)
+                    xr2[i] = TabPhoton2[i].o.x + tr*TabPhoton2[i].d.x
+                    yr2[i] = TabPhoton2[i].o.y + tr*TabPhoton2[i].d.y
+                    zr2[i] = TabPhoton2[i].o.z + tr*TabPhoton2[i].d.z
+
+    # create the matplotlib figure
+    fig = plt.figure()#figsize=[128, 96])
+    ax = fig.add_subplot(111, projection=Axes3D.name)
+    ax.scatter([-1,1], [-1,1], [-1,1], alpha=0.0)
+
+    for pMesh in lplaneMesh:
+        # Triangles mesh parameters for plot
+        # First method (draw even if there is error with an object, useful for debug):
+        # ----------------------------->
+        if (PLANEDM == 'FM'):
+            for i in range(0, pMesh.ntris):
+                Mat = np.array([[pMesh.reftri[i].p1.x, pMesh.reftri[i].p1.y, pMesh.reftri[i].p1.z], \
+                                [pMesh.reftri[i].p2.x, pMesh.reftri[i].p2.y, pMesh.reftri[i].p2.z], \
+                                [pMesh.reftri[i].p3.x, pMesh.reftri[i].p3.y, pMesh.reftri[i].p3.z]])
+                face1 = mp3d.art3d.Poly3DCollection([Mat], alpha = E[k].alpha_color, linewidths=0.2)
+                face1.set_facecolor(mcolors.to_rgba(E[k].color))
+                ax.add_collection3d(face1)
+
+        # Second method (better visual, avoid some matplotlib bugs):
+        # ----------------------------->
+        if (PLANEDM == 'SM'):
+            Mat = np.array([[pMesh.reftri[0].p1.x, pMesh.reftri[0].p1.y, pMesh.reftri[0].p1.z], \
+                            [pMesh.reftri[0].p2.x, pMesh.reftri[0].p2.y, pMesh.reftri[0].p2.z], \
+                            [pMesh.reftri[0].p3.x, pMesh.reftri[0].p3.y, pMesh.reftri[0].p3.z], \
+                            [pMesh.reftri[1].p1.x, pMesh.reftri[1].p1.y, pMesh.reftri[1].p1.z], \
+                            [pMesh.reftri[1].p2.x, pMesh.reftri[1].p2.y, pMesh.reftri[1].p2.z], \
+                            [pMesh.reftri[1].p3.x, pMesh.reftri[1].p3.y, pMesh.reftri[1].p3.z]])
+            
+            if (np.array_equal(Mat[:,0], np.full((6), Mat[0,0]))):
+                yy, zz = np.meshgrid(Mat[:,0], Mat[:,2])
+                xx = np.full((6,6), Mat[0,0])
+                ax.plot_surface(xx, yy, zz, color = mcolors.to_rgba(E[k].color), alpha = E[k].alpha_color, \
+                                linewidth=0.2, antialiased=True)
+            elif (np.array_equal(Mat[:,1], np.full((6), Mat[0,1]))):
+                xx, zz = np.meshgrid(Mat[:,0], Mat[:,2])
+                yy = np.full((6,6), Mat[0,1])
+                ax.plot_surface(xx, yy, zz, color = mcolors.to_rgba(E[k].color), alpha = E[k].alpha_color, \
+                                linewidth=0.2, antialiased=True)
+            elif (np.array_equal(Mat[:,2], np.full((6), Mat[0,2]))): # need to be verified
+                xx, yy = np.meshgrid(Mat[:,0], Mat[:,1])
+                zz = np.full((6,6), Mat[0,2])
+                ax.plot_surface(xx, yy, zz, color = mcolors.to_rgba(E[k].color), alpha = E[k].alpha_color, \
+                                linewidth=0.2, antialiased=True)
+            else:
+                ax.plot_trisurf(Mat[:,0], Mat[:,1], Mat[:,2], color = mcolors.to_rgba(E[k].color), \
+                                alpha = 0.5, linewidth=0.2, antialiased=True)
+
+    # ==============================================
+    # plot all the geometries
+    if (show_rays):
+        for i in range(0, nbRef):
+            if (atLeastOneInt[i] and i%SR_VIEW ==0): ax.plot(xr[i], yr[i], zr[i], color=RAYCOLOR, linewidth=1*rs_fac)
+
+        for i in range(0, lMir_int):
+            if (atLeastOneInt2[i] and i%SR_VIEW ==0): ax.plot(xr2[i], yr2[i], zr2[i], color=RAYCOLOR, linewidth=1*rs_fac)
+
+    if (xyz_limit is not None):
+        ax.set_xlim3d(xyz_limit['x_min'], xyz_limit['x_max'])
+        ax.set_ylim3d(xyz_limit['y_min'], xyz_limit['y_max'])
+        ax.set_zlim3d(xyz_limit['z_min'], xyz_limit['z_max'])
+    # Enable generic local visualization (part3)   
+    elif (len(E) == 1):
+        if (GLEcaZ == GLEcaM): ax.set_zlim3d(E[0].transformation.transz+GLZmin, E[0].transformation.transz+GLZmax)
+        else                 : ax.set_zlim3d(E[0].transformation.transz + GLZmin-(0.5*GLEcaM), E[0].transformation.transz + GLZmax+(0.5*GLEcaM))
+        if (GLEcaX == GLEcaM): ax.set_xlim3d(E[0].transformation.transx+GLXmin, E[0].transformation.transx+GLXmax)
+        else                 : ax.set_xlim3d(E[0].transformation.transx+GLXmin-(0.5*GLEcaM), E[0].transformation.transx+GLXmax+(0.5*GLEcaM))
+        if (GLEcaY == GLEcaM): ax.set_ylim3d(E[0].transformation.transy+GLYmin, E[0].transformation.transy+GLYmax)
+        else                 : ax.set_ylim3d(E[0].transformation.transy+GLYmin-(0.5*GLEcaM), E[0].transformation.transy+GLYmax+(0.5*GLEcaM)) 
+    else:
+        ax.set_zlim3d(0, GLEcaM)
+        if (GLEcaX == GLEcaM): ax.set_xlim3d(GLXmin, GLXmax)
+        else                 : ax.set_xlim3d(GLXmin-(0.5*GLEcaM), GLXmax+(0.5*GLEcaM))
+        if (GLEcaY == GLEcaM): ax.set_ylim3d(GLYmin, GLYmax)
+        else                 : ax.set_ylim3d(GLYmin-(0.5*GLEcaM), GLYmax+(0.5*GLEcaM)) 
+    # End (part3)    
+    ax.set_xlabel('X Label')
+    ax.set_ylabel('Y Label')
+    ax.set_zlabel('Z Label')
+    # Show the geometries
+    fig = ax.get_figure()
+    return fig
+
 
 def generateHfP(THEDEG=0., PHIDEG = 0., PH = [Point(0., 0., 0.)], PR = Point(0., 0., 0.), \
                 HSX = 0.001, HSY = 0.001, REF = 1, ROUGH=0, HTYPE = None, LMTF = None):
