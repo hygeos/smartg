@@ -389,7 +389,7 @@ class TriangleMesh(Shape):
         self.dg = None
         self.thit = float("inf")
         for i in range(0, self.ntris):
-            mybool = self.reftri[i].Intersect_old(r)
+            mybool = self.reftri[i].Intersect(r)
             if mybool:
                 TriThit = self.reftri[i].thit
                 if self.thit > TriThit:
