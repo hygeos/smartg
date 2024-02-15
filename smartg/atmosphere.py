@@ -1973,6 +1973,7 @@ def generatePro_multi(pro_models, b_wav, aots, atm='afglt', factor=None,
             s_assa_top+=assa_top[k+1]
             
     apf_tot = sAPF_top/sAPF_bot
+    apf_tot[np.isnan(apf_tot)] = 0.
     pha_tot = LUT( apf_tot, names=[ 'wav_phase', 'z_phase', 'stk', 'theta_atm'], 
               axes=[ wav[:], pro_models[0].axis('z_atm'), None, pro_models[0].axis('theta_atm') ] )
     # ============================================================
@@ -1984,8 +1985,12 @@ def generatePro_multi(pro_models, b_wav, aots, atm='afglt', factor=None,
     assa_pro_tot[~np.isfinite(assa_pro_tot)] = 1.
     
     # Create the LUT profile of the mix model
-    pro_atm_tot = AtmAFGL(atm, comp=[AeroOPAC('desert', sumAOT_models, wl_ref, phase=pha_tot) ], O3=O3, H2O=H2O, P0=P0, 
-                          grid=grid, pfwav=wav[:], prof_aer=(aot_pro_tot,assa_pro_tot), O3_H2O_alt=O3_H2O_alt).calc(b_wav, phaseOpti=True)
+    pro_atm_tot = AtmAFGL(atm, O3=O3, H2O=H2O, P0=P0, grid=grid, pfwav=wav[:], prof_aer=(aot_pro_tot,assa_pro_tot), O3_H2O_alt=O3_H2O_alt).calc(b_wav, phase=False)
+    pha_atm, ipha_atm = calc_iphase(pha_tot, np.array(wav[:]), grid)
+    pro_atm_tot.add_axis('theta_atm', pha_tot.axes[-1])
+    pro_atm_tot.add_dataset('phase_atm', pha_atm, ['iphase', 'stk', 'theta_atm'])
+    pro_atm_tot.add_dataset('iphase_atm', ipha_atm, ['wavelength', 'z_atm'])
+
     return pro_atm_tot
 
 
