@@ -222,8 +222,10 @@ def absorptionCoefficient_Voigt_gpu(Components=None,SourceTables=None,partitionF
     Xsect = np.zeros(number_of_points)
        
     # reference temperature and pressure
-    Tref = hapi.__FloatType__(296.) # K
-    pref = hapi.__FloatType__(1.) # atm
+    # Tref = hapi.__FloatType__(296.) # K
+    # pref = hapi.__FloatType__(1.) # atm
+    Tref = np.float64(296.) # K
+    pref = np.float64(1.) # atm
     
     # actual temperature and pressure
     T = Environment['T'] # K
@@ -247,7 +249,8 @@ def absorptionCoefficient_Voigt_gpu(Components=None,SourceTables=None,partitionF
         
     # precalculation of volume concentration
     if HITRAN_units:
-        factor = hapi.__FloatType__(1.0)
+        #factor = hapi.__FloatType__(1.0)
+        factor = np.float64(1.0)
     else:
         factor = hapi.volumeConcentration(p,T) 
         
