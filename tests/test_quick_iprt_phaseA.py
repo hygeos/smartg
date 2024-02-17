@@ -205,7 +205,7 @@ def test_A1(request, S1DF, S1DB):
                                 lVZA=[VZA_boa_dep0, VZA_toa_dep0, 180.-VZA_dep003, VZA_dep003, 180.-VZA_dep01, VZA_dep01], lVAA=[VAA_boa_dep0, VAA_toa_dep0, VAA_dep003, VAA_dep003, VAA_dep01, VAA_dep01],
                                 file_name=tmp_file_a1, output_layer=['_up (TOA)', '_up (TOA)', '_down (0+)', '_up (TOA)', '_down (0+)', '_up (TOA)'])
         
-        smartg_a1 = pd.read_csv(tmp_file_a1, header=None, sep='\s+', dtype=float, comment="#").values
+        smartg_a1 = pd.read_csv(tmp_file_a1, header=None, sep=r'\s+', dtype=float, comment="#").values
         mystic_a1 = pd.read_csv(ROOTPATH + "/tests/IPRT_data/phaseA/iprt_case_a1_mystic.dat", header=None, sep=r'\s+', dtype=float, comment="#").values
         avoidP=False
 

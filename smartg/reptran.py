@@ -7,7 +7,7 @@ import numpy as np
 from luts.luts import LUT, MLUT
 from smartg.atmosphere import od2k, BPlanck
 from os.path import dirname, join
-from scipy.integrate import quad, simps
+from scipy.integrate import quad, simpson
 from smartg.config import dir_libradtran_reptran
 from scipy.interpolate import interp1d
 import netCDF4
@@ -63,7 +63,7 @@ def Reptran_Avg_Emission(mlut, ibands):
     '''
     Return vertically integrated Thermal emission
     '''
-    return (4*np.pi)*Reptran_Emission(mlut, ibands).reduce(simps, 'z_atm', x=-mlut.axis('z_atm') * 1e3)
+    return (4*np.pi)*Reptran_Emission(mlut, ibands).reduce(simpson, 'z_atm', x=-mlut.axis('z_atm') * 1e3)
 
 
 
@@ -99,7 +99,7 @@ class REPTRAN_IBAND(object):
         P = prof.P
         M = len(T)
 
-        densmol = np.zeros((M, Nmol), np.float)
+        densmol = np.zeros((M, Nmol), np.float64)
         densmol[:,0] = prof.dens_h2o
         densmol[:,1] = prof.dens_co2
         densmol[:,2] = prof.dens_o3
@@ -111,7 +111,7 @@ class REPTRAN_IBAND(object):
 
         xh2o = prof.dens_h2o/prof.dens_air
 
-        datamol = np.zeros(M, np.float)
+        datamol = np.zeros(M, np.float64)
 
         assert len(prof.T) == len(prof.P)
 
@@ -217,7 +217,7 @@ class REPTRAN(object):
 
         self.band_names = []
         for bname in nc.variables['band_name']:  # the names of the sensor channels
-            self.band_names.append(str(bname.tostring()).replace(' ', ''))
+            self.band_names.append(str(bname.tobytes()).replace(' ', ''))
 
     def nbands(self):
         '''

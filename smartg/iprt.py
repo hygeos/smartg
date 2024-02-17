@@ -68,10 +68,10 @@ def seclect_iprt_IQUV(model_val, z_alti, thetas=None, phis=None, inv_thetas=Fals
         if (model_val[i, z_index] == z_alti 
                 and True in (thetas == model_val[i,va_index])
                 and True in (phis == model_val[i,phi_index])):
-            if inv_thetas: indi = int(np.argwhere(thetas == model_val[i,va_index]))
-            else         : indi = NTH-1-int(np.argwhere(thetas == model_val[i,va_index]))
-            if inv_phis  : indj = NPH-1-int(np.argwhere(phis == model_val[i,phi_index]))
-            else         : indj = int(np.argwhere(phis == model_val[i,phi_index]))
+            if inv_thetas: indi = int(np.squeeze(np.argwhere(thetas == model_val[i,va_index])))
+            else         : indi = NTH-1-int(np.squeeze(np.argwhere(thetas == model_val[i,va_index])))
+            if inv_phis  : indj = NPH-1-int(np.squeeze(np.argwhere(phis == model_val[i,phi_index])))
+            else         : indj = int(np.squeeze(np.argwhere(phis == model_val[i,phi_index])))
             I[indi,indj] =  model_val[i, I_index]
             Q[indi,indj] =  model_val[i, I_index+1]
             U[indi,indj] =  model_val[i, I_index+2]*U_sign
@@ -173,10 +173,10 @@ def select_and_plot_polar_iprt(model_val, z_alti, depol=None, thetas=None, phis=
             if (cond_z_depol
                 and True in (thetas == model_val[i,va_index])
                 and True in (phis == model_val[i,phi_index])  ):
-                if inv_thetas: indi = int(np.argwhere(thetas == model_val[i,va_index]))
-                else         : indi = NTH-1-int(np.argwhere(thetas == model_val[i,va_index]))
-                if inv_phis  : indj = NPH_D-1-int(np.argwhere(phis[0:NPH_D] == model_val[i,phi_index]))
-                else         : indj = int(np.argwhere(phis[0:NPH_D] == model_val[i,phi_index]))
+                if inv_thetas: indi = int(np.squeeze(np.argwhere(thetas == model_val[i,va_index])))
+                else         : indi = NTH-1-int(np.squeeze(np.argwhere(thetas == model_val[i,va_index])))
+                if inv_phis  : indj = NPH_D-1-int(np.squeeze(np.argwhere(phis[0:NPH_D] == model_val[i,phi_index])))
+                else         : indj = int(np.squeeze(np.argwhere(phis[0:NPH_D] == model_val[i,phi_index])))
                 valI[indi,indj] =  model_val[i, I_index]
                 valQ[indi,indj] =  model_val[i, I_index+1]*Q_sign
                 valU[indi,indj] =  model_val[i, I_index+2]*U_sign

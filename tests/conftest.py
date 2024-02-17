@@ -163,4 +163,4 @@ def pytest_runtest_makereport(item):
         for a in getattr(item, 'extras', []):
             extra.append(pytest_html.extras.extra(*a))
 
-        report.extra = extra
+        report.extras = extra

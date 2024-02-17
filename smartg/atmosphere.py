@@ -13,7 +13,7 @@ try:
 except ModuleNotFoundError:
     pass
 from scipy.interpolate import interp1d
-from scipy.integrate import simps
+from scipy.integrate import simpson
 from scipy import constants
 from scipy.constants import speed_of_light, Planck, Boltzmann
 from smartg.bandset import BandSet
@@ -882,7 +882,7 @@ class AtmAFGL(Atmosphere):
         
         # read crs ozone file
         #_crs_chappuis = np.loadtxt(crs_O3_filename, comments="#")
-        _crs_chappuis = pd.read_csv(crs_O3_filename, comment="#", header=None, sep='\s+', dtype=float).values
+        _crs_chappuis = pd.read_csv(crs_O3_filename, comment="#", header=None, sep=r'\s+', dtype=float).values
         #_crs_chappuis = np.genfromtxt(crs_O3_filename, comments="#")
         self.crs_chappuis = LUT(
                 _crs_chappuis[:,1:],
@@ -893,7 +893,7 @@ class AtmAFGL(Atmosphere):
         # read crs no2 file
         #_crs_no2 = np.loadtxt(crs_NO2_filename, comments="#")
         #_crs_no2 = np.genfromtxt(crs_NO2_filename, comments="#")
-        _crs_no2 = pd.read_csv(crs_NO2_filename, comment="#", header=None, sep='\s+', dtype=float).values
+        _crs_no2 = pd.read_csv(crs_NO2_filename, comment="#", header=None, sep=r'\s+', dtype=float).values
         self.crs_no2 = LUT(
                 _crs_no2[:,1:],
                 axes=[_crs_no2[:,0], None],
@@ -1327,7 +1327,7 @@ def read_phase(filename, standard=False, kind='atm'):
 
     standard: standard phase function definition, otherwise Smart-g definition
     '''
-    data2 = pd.read_csv(filename, sep='\s+', header=None)
+    data2 = pd.read_csv(filename, sep=r'\s+', header=None)
 
     theta = np.array(data2[0])
     pha   = np.array(data2[[1,2,3,4]])
@@ -1430,7 +1430,7 @@ class Profile_base(object):
 
         if desc is not None:
             #data = np.loadtxt(atm_filename, dtype=np.float32, comments="#", skiprows=n)
-            data = pd.read_csv(atm_filename, comment="#", header=None, sep='\s+', dtype=np.float32, skiprows=n).values
+            data = pd.read_csv(atm_filename, comment="#", header=None, sep=r'\s+', dtype=np.float32, skiprows=n).values
             self.z        = data[:,0] # Altitude in km
             self.P        = data[:,1] # pressure in hPa
             self.T        = data[:,2] # temperature in K
@@ -1455,12 +1455,12 @@ class Profile_base(object):
         # scale to specified total O3 content
         if O3 is not None:
             if O3_H2O_alt is None:
-                self.dens_o3 *= 2.69e16 * O3 / (simps(self.dens_o3, -self.z) * 1e5)
+                self.dens_o3 *= 2.69e16 * O3 / (simpson(y=self.dens_o3, x=-self.z) * 1e5)
             else:
                 f_dens_o3 = interp1d(self.z, self.dens_o3, fill_value='extrapolate')
                 z_alt = np.append(self.z[self.z>O3_H2O_alt], O3_H2O_alt)
                 dens_o3_alt = f_dens_o3(z_alt)
-                o3_afgl = (simps(dens_o3_alt, -z_alt) * 1e5)/2.69e16
+                o3_afgl = (simpson(dens_o3_alt, -z_alt) * 1e5)/2.69e16
                 self.dens_o3 *= O3/o3_afgl
             if O3==0 : self.dens_o3[:] = 0.
 
@@ -1469,12 +1469,12 @@ class Profile_base(object):
             M_H2O = 18.015 # g/mol
             Avogadro = constants.value('Avogadro constant')
             if O3_H2O_alt is None:
-                self.dens_h2o *= H2O/ M_H2O * Avogadro / (simps(self.dens_h2o, -self.z) * 1e5)
+                self.dens_h2o *= H2O/ M_H2O * Avogadro / (simpson(y=self.dens_h2o, x=-self.z) * 1e5)
             else:
                 f_dens_h2o = interp1d(self.z, self.dens_h2o, fill_value='extrapolate')
                 z_alt = np.append(self.z[self.z>O3_H2O_alt], O3_H2O_alt)
                 dens_h2o_alt = f_dens_h2o(z_alt)
-                h2o_afgl = (simps(dens_h2o_alt, -z_alt) * 1e5 * M_H2O)/Avogadro
+                h2o_afgl = (simpson(y=dens_h2o_alt, x=-z_alt) * 1e5 * M_H2O)/Avogadro
                 self.dens_h2o *= H2O/h2o_afgl
             if H2O==0 : self.dens_h2o[:] = 0.
 
@@ -1508,19 +1508,19 @@ class Profile_base(object):
             n2o_filename = join(dir_libradtran_atmmod, 'afglus_n2o_vmr.dat')
             n2_filename = join(dir_libradtran_atmmod, 'afglus_n2_vmr.dat')
             #datach4 = np.loadtxt(ch4_filename, comments="#")
-            datach4 = pd.read_csv(ch4_filename, comment="#", header=None, sep='\s+', dtype=float).values
+            datach4 = pd.read_csv(ch4_filename, comment="#", header=None, sep=r'\s+', dtype=float).values
             self.dens_ch4 = interp1d(datach4[:,0] , datach4[:,1])(self.z) * self.dens_air # CH4 density en cm-3
             #self.dens_ch4 = np.interp(self.z, datach4[:,0] , datach4[:,1]) * self.dens_air # CH4 density en cm-3
             #dataco = np.loadtxt(co_filename, comments="#")
-            dataco = pd.read_csv(co_filename, comment="#", header=None, sep='\s+', dtype=float).values
+            dataco = pd.read_csv(co_filename, comment="#", header=None, sep=r'\s+', dtype=float).values
             self.dens_co = interp1d(dataco[:,0] , dataco[:,1])(self.z) * self.dens_air # CH4 density en cm-3
             #self.dens_co = np.interp(self.z, dataco[:,0] , dataco[:,1]) * self.dens_air # CH4 density en cm-3
             #datan2o = np.loadtxt(n2o_filename, comments="#")
-            datan2o = pd.read_csv(n2o_filename, comment="#", header=None, sep='\s+', dtype=float).values
+            datan2o = pd.read_csv(n2o_filename, comment="#", header=None, sep=r'\s+', dtype=float).values
             self.dens_n2o = interp1d(datan2o[:,0] , datan2o[:,1])(self.z) * self.dens_air # CH4 density en cm-3
             #self.dens_n2o = np.interp(self.z, datan2o[:,0] , datan2o[:,1]) * self.dens_air # CH4 density en cm-3
             #datan2 = np.loadtxt(n2_filename, comments="#")
-            datan2 = pd.read_csv(n2_filename, comment="#", header=None, sep='\s+', dtype=float).values
+            datan2 = pd.read_csv(n2_filename, comment="#", header=None, sep=r'\s+', dtype=float).values
             self.dens_n2 = interp1d(datan2[:,0] , datan2[:,1])(self.z) * self.dens_air # CH4 density en cm-3
             #self.dens_n2 = np.interp(self.z, datan2[:,0] , datan2[:,1]) * self.dens_air # CH4 density en cm-3
             #

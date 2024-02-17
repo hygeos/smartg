@@ -269,8 +269,8 @@ class Cloud3D(object):
 
         # Read only the needed information, the two first rows.
         # Be careful ! The second row have a greater dimension than the first one. Then -> two steps of reading.
-        contentA = pd.read_csv(self.file_name, skiprows = 1, nrows = 1, header=None, sep='\s+', dtype=float).values
-        contentB = pd.read_csv(self.file_name, skiprows = 2, nrows = 1, header=None, sep='\s+', dtype=float).values
+        contentA = pd.read_csv(self.file_name, skiprows = 1, nrows = 1, header=None, sep=r'\s+', dtype=float).values
+        contentB = pd.read_csv(self.file_name, skiprows = 2, nrows = 1, header=None, sep=r'\s+', dtype=float).values
 
         # If there are empty dimensions remove them
         contentA = np.squeeze(contentA)
@@ -324,7 +324,7 @@ class Cloud3D(object):
         if (self.cell_indices is not None): return self.cell_indices
 
         # Read only the disired column
-        cell_indices = pd.read_csv(self.file_name, skiprows = 3, header=None, usecols=[0,1,2], sep='\s+', dtype=float).values
+        cell_indices = pd.read_csv(self.file_name, skiprows = 3, header=None, usecols=[0,1,2], sep=r'\s+', dtype=float).values
 
         # If there are empty dimensions remove them and ensure that we have interger type
         cell_indices = np.squeeze(cell_indices.astype(np.int32))
@@ -343,7 +343,7 @@ class Cloud3D(object):
         if (self.reff is not None): return self.reff
 
         # Read only the disired column
-        reff = pd.read_csv(self.file_name, skiprows = 3, header=None, usecols=[4], sep='\s+', dtype=float).values
+        reff = pd.read_csv(self.file_name, skiprows = 3, header=None, usecols=[4], sep=r'\s+', dtype=float).values
         if self.reff_acc is not None: reff = np.around(reff, decimals=self.reff_acc)
 
         # If there are empty dimensions remove them

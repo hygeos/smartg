@@ -2819,7 +2819,7 @@ class RNG_CURAND_PHILOX(object):
         # get state size
         s = gpuzeros(1, dtype='int32')
         self.mod.get_function('get_state_size')(s, block=(1, 1, 1), grid=(1, 1, 1))
-        self.STATE_SIZE = int(s.get())  # size in bytes
+        self.STATE_SIZE = int(np.squeeze(s.get()))  # size in bytes
 
     def setup(self, SEED, XBLOCK, XGRID):
         if SEED == -1:
@@ -3247,7 +3247,7 @@ def findExtinction(IP, FP, prof_atm, W_IND = int(0)):
 
     This function enables the calculation of the extinction
     between an initial point 'IP' to a final point 'FP'
-    \!/ === ONLY VALID WITH A 1D PP ATM ===
+    === ONLY VALID WITH A 1D PP ATM ===
 
     ==== ARGS:
     IP       : Initial position (Point class)

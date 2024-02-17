@@ -4,24 +4,25 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - python>3
-  - numpy<1.24   # import numpy
-  - pandas<2.1   # import pandas
-  - openpyxl     # from openpyxl import Workbook
-  - pytest       # import pytest
-  - pytest-xdist
-  - pytest-html
-  - progressbar2 # from progressbar import ProgressBar, Percentage, Bar
-  - matplotlib   # import matplotlib
-  - pycuda       # import pycuda
-  - nbformat
-  - nbconvert
-  - jupyterlab
-  - notebook
-  - ipywidgets
-  - ipympl
-  - pyhdf
-  - pip
+  - python<3.12
+  - numpy<=1.26.4        # import numpy
+  - pandas<=2.2.0        # import pandas
+  - pyarrow<=15.0.0
+  - openpyxl<=3.1.2      # from openpyxl import Workbook
+  - pytest<=8.0.0        # import pytest
+  - pytest-xdist<=3.5.0
+  - pytest-html<=4.1.1
+  - progressbar2<4.3     # from progressbar import ProgressBar, Percentage, Bar
+  - matplotlib<=3.8.3    # import matplotlib
+  - pycuda<=2024.1       # import pycuda
+  - nbformat<=5.9.2
+  - nbconvert<=7.16.0
+  - jupyterlab<=4.1.1
+  - notebook<=7.1.0
+  - ipywidgets<=8.1.2
+  - ipympl<=0.9.3
+  - pyhdf<=0.11.3
+  - pip<=24.0
   - pip:
     - luts
     - hitran-api

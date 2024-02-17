@@ -2093,7 +2093,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
     float costh, sinth2;
     int ilam = ph->ilam*(NATMd+1);  // wavelength offset in optical thickness table
     float3 no, v0, u0;
-	int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+	//int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
 
     if (ph->layer == 0) ph->layer = 1;
 
@@ -5182,7 +5182,7 @@ __device__ void surfaceLambert(Photon* ph, int le,
                               struct Spectrum *spectrum,
                               struct RNG_State *rngstate) {
 	
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    //int idx = blockIdx.x * blockDim.x + threadIdx.x;
 	if( SIMd == ATM_ONLY){ // Atmosphere only, surface absorbs all
 		ph->loc = ABSORBED;
 		return;
@@ -8169,11 +8169,13 @@ __device__ float BRDF(int ilam, float3 v0, float3 v1, struct Spectrum *spectrum 
         if (th0!=0. && th1!=0.) dph = acos(dot(v0xy,v1xy));
         switch(DIOPTREd) {
             case 4: // RossThick Li-Sparse
+            {
                 wbrdf = 1. + spectrum[ilam].k1p_surface*F1_rtls(th0,th1,dph) +
                     spectrum[ilam].k2p_surface*F2_rtls(th0,th1,dph);
                 break;
-
+            }
             case 5: // RPV
+            {
                 float cosg = mu0*mu1 + sqrtf(1.F-mu0*mu0)*sqrtf(1.F-mu1*mu1)*cosf(dph);
                 float t0 = tanf(th0);
                 float t1 = tanf(th1);
@@ -8183,9 +8185,11 @@ __device__ float BRDF(int ilam, float3 v0, float3 v1, struct Spectrum *spectrum 
                         H_rpv(spectrum[ilam].k3p_surface, G);
                 break;
 
-
+            }
             default:
+            {
                 wbrdf = 1.;
+            }
         }
         //if (wbrdf==0.) printf("%f %f %f %f %f\n",th0,th1,dph,F1_rtls(th0,th1,dph),F2_rtls(th0,th1,dph));
     }
