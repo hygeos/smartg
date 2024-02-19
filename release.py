@@ -16,7 +16,7 @@ import tarfile
 import fnmatch
 
 
-version = 'v0.9.2'
+version = 'v0.9.3'
 
 
 
