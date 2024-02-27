@@ -36,6 +36,11 @@ The dependencies are installed in the current environment from the definitions i
 Atmospheric profiles created in atmosphere.py are based on data included in the [libRadtran](http://www.libradtran.org/) library.
 This auxiliary data can be automatically installed using the config.py script (`python smartg/config.py`)
 
+Some auxiliary data must be downloaded using the following command:
+```
+$ make auxdata_all
+```
+
 ## Examples
 Examples are provided in the [sample notebooks](notebooks).
 

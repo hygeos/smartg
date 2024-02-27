@@ -6,7 +6,7 @@ from __future__ import print_function, division, absolute_import
 import numpy as np
 from os.path import join, dirname, exists, basename
 from glob import glob
-from luts.luts import MLUT, LUT, Idx
+from luts.luts import MLUT, LUT, Idx, read_mlut
 from smartg.tools.phase import calc_iphase
 try:
     from smartg.tools.third_party_utils import change_altitude_grid
@@ -21,6 +21,7 @@ import netCDF4
 from smartg.config import NPSTK, dir_libradtran_opac
 from smartg.config import dir_libradtran_atmmod
 from smartg.config import dir_libradtran_crs
+from smartg.config import dir_auxdata
 from warnings import warn
 import sys
 import pandas as pd
@@ -44,68 +45,42 @@ class Species(object):
 
         self.name = species
         self.wav_clip = wav_clip
-        fname = join(dir_libradtran_opac, 'optprop', species+'.cdf')
+        fname = join(dir_auxdata, 'aerosols/OPAC', species+'.nc')
         if not exists(fname):
             raise Exception('file {} does not exist'.format(fname))
         self.fname = fname
 
-        nc = netCDF4.Dataset(fname)
+        s_mlut = read_mlut(fname)
+        axe_names = list(s_mlut.axes.keys())
 
-        self._wav = nc.variables["wavelen"][:]*1e3  # wavelength (converted µm -> nm)
+        # wavelength in nm
+        self._wav = s_mlut.axes["wav"]
 
-        if 'hum' in nc.variables: 
-            self._rh_reff = nc.variables['hum'][:]
+        if 'rh' in axe_names: 
+            self._rh_reff = s_mlut.axes["rh"]
             self._rh_or_reff = 'rh'
-        elif 'reff' in nc.variables:
-            self._rh_reff = nc.variables['reff'][:]
+        elif 'reff' in axe_names:
+            self._rh_reff = s_mlut.axes["reff"]
             self._rh_or_reff = 'reff'
         else:
             raise Exception('Error')
         self._nrh_reff = len(self._rh_reff)
 
-        # density in g/cm^3
-        # note: bypass the dimension lambda
-        # constant values for all wavelengths
-        self._rho = LUT(
-                nc.variables["rho"][0,:],
-                axes = [self._rh_reff],
-                names = [self._rh_or_reff],
-            )
+        # density in g/cm^3 (reff/rh)
+        self._rho = s_mlut["rho"]
 
-        # extinction coefficient (nlam, rh) in km^-1/(g/m^3)
-        self._ext = LUT(
-                    np.array(nc.variables['ext'][:]),
-                    axes = [self._wav, self._rh_reff],
-                    names = ['lambda', self._rh_or_reff],
-                )
+        # extinction coefficient (wav, reff/rh) in km^-1/(g/m^3)
+        self._ext = s_mlut["ext"]
 
-        # single scattering albedo (nlam, nhum)
-        self._ssa = LUT(
-                    np.array(nc.variables['ssa']),
-                    axes = [self._wav, self._rh_reff],
-                    names = ['lambda', self._rh_or_reff],
-                )
+        # single scattering albedo (wav, reff/rh)
+        self._ssa = s_mlut["ssa"]
 
-        # scattering angle in degrees (nlam, nhum, nphamat, nthetamax)
-        self._theta = LUT(
-            nc.variables['theta'][:],
-            axes=[self._wav, self._rh_reff, None, None],
-            names=['lam', self._rh_or_reff, 'stk', 'nthetamax'])
+        # scattering angle in degrees
+        self._theta = s_mlut.axes["wav"]
 
+        # phase matrix (wav, reff/rh, stk, theta)
+        self._phase = s_mlut["phase"]
 
-        # phase matrix (nlam, nhum, nphamat, nthetamax)
-        self._phase = LUT(
-            nc.variables['phase'][:],
-            axes=[self._wav, self._rh_reff, None, None],
-            names=['lam', self._rh_or_reff, 'stk', 'nthetamax'])
-
-        # number of scattering angles (nlam, nhum, nphamat)
-        self._ntheta = LUT(
-                nc.variables['ntheta'][:],
-                axes=[self._wav, self._rh_reff, None],
-                names=['lam', self._rh_or_reff, 'nthetamax'])
-
-        nc.close()
 
     def ext_ssa(self, wav, rh=None, reff=None):
         '''
@@ -158,126 +133,67 @@ class Species(object):
 
         return ext, ssa
 
-    def phase(self, wav, rh, NBTHETA, reff=None):
+    def phase(self, wav, rh, NBTHETA, reff=None, conv_Iparper=False):
         '''
         phase function of species at wavelengths wav
         resampled over NBTHETA angles
         '''
 
         theta = np.linspace(0., 180., num=NBTHETA)
-        lam_tabulated = self._phase.axis('lam')
-        nlam_tabulated = len(lam_tabulated)
+        lam_tabulated = np.array(self._phase.axis('wav'))
+        nwav = len(wav)
+
+        if ( (np.max(wav) > np.max(lam_tabulated)) or
+             (np.min(wav) < np.min(lam_tabulated)) ):
+            fv = 'extrema' if self.wav_clip else None
+            phase_bis = self._phase.sub()[Idx(wav, fill_value=fv),:,:,:]
+        else:
+            # The optimisation consists to not interpolate at all wavelengths of lam_tabulated,
+            # but only the wavelengths of lam_tabulated closely in the range of np.min(wav) and np.max(wav)
+            range_ind = np.array([np.argwhere((lam_tabulated <= np.min(wav)))[-1][0],
+                                np.argwhere((lam_tabulated >= np.max(wav)))[0][0]])
+            ilam_tabulated = np.arange(len(lam_tabulated), dtype=int)
+            ilam_opti = np.concatenate(np.argwhere((ilam_tabulated >= range_ind[0]) &
+                                                (ilam_tabulated <= range_ind[1])))
+
+            if len(ilam_opti) > 1 : phase_bis = self._phase.sub()[ilam_opti,:,:,:].sub()[Idx(wav),:,:,:]
+            else                  : phase_bis = self._phase.sub()[ilam_opti,:,:,:]
+
+        if (NBTHETA != len(phase_bis.axes[3])): phase_bis = phase_bis.sub()[:,:,:,Idx(theta)]
 
         if (self._nrh_reff > 1) and (self._rh_or_reff == 'rh'):
             # drop first altitude element
             P = LUT(
-                np.zeros((nlam_tabulated, len(rh)-1, NPSTK, NBTHETA), dtype='float32')+np.NaN,
-                axes=[lam_tabulated, None, None, theta],
+                np.zeros((nwav, len(rh)-1, NPSTK, NBTHETA), dtype='float32')+np.NaN,
+                axes=[wav, None, None, theta],
                 names=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
                 )  # nlam_tabulated, nrh, stk, NBTHETA
+            
             for irh_, rh_ in enumerate(rh[1:]):
-
                 irh = Idx(rh_, round=True, fill_value='extrema')
-                #P.sub()[Idx(wav),:,:]
-
-                # interpolate each tabulated wavelength
-                for ilam in range(nlam_tabulated):
-                    for istk in range(NPSTK):
-                        th = self._theta[ilam,irh,istk,:]
-                        nth = self._ntheta[ilam,irh,istk]
-                        #P.data[ilam,irh_,istk,:] = np.interp(theta, th[:nth], self._phase[ilam,irh,istk,:nth]) 
-                        P.data[ilam,irh_,istk,:] = interp1d(
-                                th[:nth],
-                                self._phase[ilam,irh,istk,:nth])(theta)
-
+                P.data[:,irh_,:,:] = phase_bis.sub()[:,irh,:,:].data
 
         else: # phase function does not depend on rh
             P = LUT(
-                np.zeros((nlam_tabulated, 1, NPSTK, NBTHETA), dtype='float32')+np.NaN,
-                axes=[lam_tabulated, None, None, theta],
+                np.zeros((nwav, 1, NPSTK, NBTHETA), dtype='float32')+np.NaN,
+                axes=[wav, None, None, theta],
                 names=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
                 )  # nlam_tabulated, nrh, stk, NBTHETA
-
+            
             if (self._rh_or_reff == 'reff') and (reff is not None):
                 irh = Idx(reff, round=True).index(self._phase.axes[1])
             else:
                 irh = 0
+            P.data[:,0,:,:] = phase_bis[:,irh,:,:].data
 
-            # interpolate each tabulated wavelength
-            for ilam in range(nlam_tabulated):
-                for istk in range(NPSTK):
-                    th = self._theta[ilam,irh,istk,:]
-                    nth = self._ntheta[ilam,irh,istk]
-                    irh_ = 0
-                    #P.data[ilam,irh_,istk,:] = np.interp(theta, th[:nth], self._phase[ilam,irh,istk,:nth])
-                    P.data[ilam,irh_,istk,:] = interp1d(
-                            th[:nth],
-                            self._phase[ilam,irh,istk,:nth])(theta)
+        if conv_Iparper:
+            # convert I, Q into Ipar, Iper
+            P0 = P.data[:,:,0,:].copy()
+            P1 = P.data[:,:,1,:].copy()
+            P.data[:,:,0,:] = P0+P1
+            P.data[:,:,1,:] = P0-P1
 
-
-        # convert I, Q into Ipar, Iper
-        P0 = P.data[:,:,0,:].copy()
-        P1 = P.data[:,:,1,:].copy()
-        P.data[:,:,0,:] = P0+P1
-        P.data[:,:,1,:] = P0-P1
-
-        return P.sub()[Idx(wav),:,:,:]
-    
-    
-    def phaseOpti(self, wav, rh, NBTHETA, reff=None):
-        '''
-        phase function of species at wavelengths wav
-        resampled over NBTHETA angles
-        '''
-
-        theta = np.linspace(0., 180., num=NBTHETA)
-        lam_tabulated = np.array(self._phase.axis('lam'))
-
-        # The optimisation consists to not interpolate at all wavelengths of lam_tabulated,
-        # but only the wavelengths of lam_tabulated closely in the range of np.min(wav) and np.max(wav)
-        range_ind = np.array([np.argwhere((lam_tabulated <= np.min(wav)))[-1][0],
-                              np.argwhere((lam_tabulated >= np.max(wav)))[0][0]])
-        ilam_tabulated = np.arange(len(lam_tabulated), dtype=int)
-        ilam_opti = np.concatenate(np.argwhere((ilam_tabulated >= range_ind[0]) &
-                                               (ilam_tabulated <= range_ind[1])))
-        lam_opti = lam_tabulated[ilam_opti]
-        nlam_opti = len(lam_opti)
-        
-        if (self._nrh_reff > 1) and (self._rh_or_reff == 'rh'):
-            P = LUT( np.zeros((nlam_opti, len(rh)-1, NPSTK, NBTHETA), dtype='float32')+np.NaN,
-                     axes=[lam_opti, None, None, theta],
-                     names=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
-                    )  # nlam_tabulated, nrh, stk, NBTHETA
-            lRh = rh[1:]
-        else:
-            P = LUT( np.zeros((nlam_opti, 1, NPSTK, NBTHETA), dtype='float32')+np.NaN,
-                     axes=[lam_opti, None, None, theta],
-                     names=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
-                    )  # nlam_tabulated, nrh, stk, NBTHETA
-            lRh = [1]
-            
-        for irh_, rh_ in enumerate(lRh):
-            if (self._nrh_reff > 1) and (self._rh_or_reff == 'rh'):
-                irh = Idx(rh_, round=True, fill_value='extrema')
-            elif (self._rh_or_reff == 'reff') and (reff is not None):
-                irh = Idx(reff, round=True).index(self._phase.axes[1])
-            else:
-                irh = 0
-            for idd, ilam in enumerate(ilam_opti):
-                    for istk in range(NPSTK):
-                        th = self._theta[ilam,irh,istk,:]
-                        nth = self._ntheta[ilam,irh,istk]
-                        P.data[idd,irh_,istk,:] = np.interp(theta, th[:nth], self._phase[ilam,irh,istk,:nth], period=np.inf)
-                        # P.data[idd,irh_,istk,:] = interp1d(th[:nth], self._phase[ilam,irh,istk,:nth])(theta)
-
-        # convert I, Q into Ipar, Iper
-        P0 = P.data[:,:,0,:].copy()
-        P1 = P.data[:,:,1,:].copy()
-        P.data[:,:,0,:] = P0+P1
-        P.data[:,:,1,:] = P0-P1
-
-        if (nlam_opti == 1): return P
-        else : return P.sub()[Idx(wav),:,:,:]
+        return P
 
 
     @staticmethod
@@ -285,20 +201,14 @@ class Species(object):
         '''
         list standard species files in opac
         '''
-        files = glob(join(dir_libradtran_opac, 'optprop', '*.cdf'))
+        files = glob(join(dir_auxdata, 'aerosols/OPAC', '*.nc'))
         return map(lambda x: basename(x)[:-4], files)
 
 
 
 class SpeciesUser(Species):
     def __init__(self, name, ext, ssa, phase, fill_value=None):
-        #Species.__init__(self, species='inso.mie', wav_clip=wav_clip)
         lam   = ext.axis('wavelength')
-        lamp  = phase.axis('wavelength')
-        nlam  = lam.size
-        nlamp = lamp.size
-        theta = phase.axis('theta_atm')
-        ntheta= theta.size
         self.name = name
         self.fill_value = fill_value
         self._rh_or_reff = 'rh' 
@@ -306,26 +216,18 @@ class SpeciesUser(Species):
         self._ext = LUT(
             ext.data[:, None],
             axes=[lam, None],
-            names=['lam', self._rh_or_reff])
+            names=['wav', self._rh_or_reff])
         self._ssa = LUT(
             ssa.data[:, None],
             axes=[lam, None],
-            names=['lam', self._rh_or_reff])
+            names=['wav', self._rh_or_reff])
         # scattering angle in degrees (nlam, nhum, nphamat, nthetamax)
-        self._theta = LUT(
-            np.tile(theta,(nlamp,1,4,1)),
-            axes=[lamp, None, None, None],
-            names=['lam', self._rh_or_reff, 'stk', 'nthetamax'])
+        self._theta = phase.axis('theta_atm')
         # phase matrix (nlam, nhum, nphamat, nthetamax)
         self._phase = LUT(
             phase.data[:,None,:,:],
-            axes=[lamp, None, None, None],
-            names=['lam', self._rh_or_reff, 'stk', 'nthetamax'])
-        # number of scattering angles (nlam, nhum, nphamat)     
-        self._ntheta = LUT(
-            np.ones((nlamp, 1, 4), dtype=np.int32)*ntheta,
-            axes=[lamp, None, None],
-            names=['lam', self._rh_or_reff, 'stk'])
+            axes=[phase.axis('wavelength'), None, None, None],
+            names=['wav', self._rh_or_reff, 'stk', 'theta'])
         
 
     def ext_ssa(self, wav):
@@ -349,37 +251,47 @@ class SpeciesUser(Species):
         
         return ext, ssa
     
-    def phase(self, wav, NBTHETA, phaseOpti=False):
+    
+    def phase(self, wav, NBTHETA, conv_Iparper=True):
         '''
         phase function of species at wavelengths wav
         resampled over NBTHETA angles
         '''
+
         theta = np.linspace(0., 180., num=NBTHETA)
-        lam_tabulated = self._phase.axis('lam')
-        nlam_tabulated = len(lam_tabulated)
+
+        lam_tabulated = np.array(self._phase.axis('wav'))
+        # The optimisation consists to not interpolate at all wavelengths of lam_tabulated,
+        # but only the wavelengths of lam_tabulated closely in the range of np.min(wav) and np.max(wav)
+        range_ind = np.array([np.argwhere((lam_tabulated <= np.min(wav)))[-1][0],
+                              np.argwhere((lam_tabulated >= np.max(wav)))[0][0]])
+        ilam_tabulated = np.arange(len(lam_tabulated), dtype=int)
+        ilam_opti = np.concatenate(np.argwhere((ilam_tabulated >= range_ind[0]) &
+                                               (ilam_tabulated <= range_ind[1])))
+ 
+        nwav = len(wav)
+
+        if len(ilam_opti) > 1 : phase_bis = self._phase.sub()[ilam_opti,:,:,:].sub()[Idx(wav),:,:,:]
+        else                  : phase_bis = self._phase.sub()[ilam_opti,:,:,:]
+
+        if (NBTHETA != len(phase_bis.axes[3])): phase_bis = phase_bis.sub()[:,:,:,Idx(theta)]
 
         P = LUT(
-            np.zeros((nlam_tabulated, 1, 4, NBTHETA), dtype='float32')+np.NaN,
-            axes=[lam_tabulated, None, None, theta],
+            np.zeros((nwav, 1, NPSTK, NBTHETA), dtype='float32')+np.NaN,
+            axes=[wav, None, None, theta],
             names=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
             )  # nlam_tabulated, nrh, stk, NBTHETA
+        
+        P.data[:,0,:,:] = phase_bis[:,0,:,:].data
 
-        # interpolate each tabulated wavelength
-        for ilam in range(nlam_tabulated):
-            for istk in range(4):
-                th = self._theta[ilam,0,istk,:]
-                nth = self._ntheta[ilam,0,istk]
-                P.data[ilam,0,istk,:] = interp1d(
-                        th[:nth],
-                        self._phase[ilam,0,istk,:nth])(theta)
+        if conv_Iparper:
+            # convert I, Q into Ipar, Iper
+            P0 = P.data[:,:,0,:].copy()
+            P1 = P.data[:,:,1,:].copy()
+            P.data[:,:,0,:] = P0+P1
+            P.data[:,:,1,:] = P0-P1
 
-        # convert I, Q into Ipar, Iper
-        P0 = P.data[:,:,0,:].copy()
-        P1 = P.data[:,:,1,:].copy()
-        P.data[:,:,0,:] = P0+P1
-        P.data[:,:,1,:] = P0-P1
-
-        return P.sub()[Idx(wav),:,:,:]
+        return P
 
 
 
@@ -447,7 +359,7 @@ class AeroOPAC(object):
         #
         self.species = []
         for s in species:
-            self.species.append(Species(s+'.mie'))
+            self.species.append(Species(s+'_sol_mie'))
 
         #
         # read profile of mass concentrations
@@ -534,7 +446,7 @@ class AeroOPAC(object):
 
         return dtau, ssa
 
-    def phase(self, wav, Z, rh=None, NBTHETA=721, phaseOpti=False):
+    def phase(self, wav, Z, rh=None, NBTHETA=721, conv_Iparper=False):
         '''
         Phase function calculation at wavelength wav and altitudes Z
         relative humidity is rh
@@ -575,10 +487,7 @@ class AeroOPAC(object):
             dssa_ = dtau_*ssa  # NLAM, ALTITUDE
             dssa_ = dssa_[:,1:,None,None]
             dssa += dssa_
-            if not phaseOpti:
-                P += s.phase(wav, rh, NBTHETA, reff=self.reff)*dssa_  # (NLAM, ALTITUDE-1, NPSTK, NBTHETA)
-            else:
-                P += s.phaseOpti(wav, rh, NBTHETA, reff=self.reff)*dssa_
+            P += s.phase(wav, rh, NBTHETA, reff=self.reff, conv_Iparper=conv_Iparper)*dssa_  # (NLAM, ALTITUDE-1, NPSTK, NBTHETA)
 
         with np.errstate(divide='ignore'):
             P.data /= dssa
@@ -614,7 +523,7 @@ class CloudOPAC(AeroOPAC):
         self.reff = reff
         self.tau_ref = tau_ref
         self.w_ref = w_ref
-        self.species = [Species(species+'.mie', wav_clip=wav_clip)]
+        self.species = [Species(species.split('.sol')[0]+'_sol_mie', wav_clip=wav_clip)]
         self.zopac     = np.array([zmax, zmax, zmin, zmin, 0.], dtype='f')
         self.densities = np.array([  0.,   1.,   1.,   0., 0.], dtype='f')[:,None]
         self.ssa = None
@@ -655,7 +564,7 @@ class CompUser(object):
     Example: CompUser(species, density, atm.prof.z, 10., 550.)
              # total optical thickness of 10 at 550 nm
     '''
-    def __init__(self, species, density, z, tau_ref, w_ref, phase=None, ssa=None, wav_clip=False):
+    def __init__(self, species, density, z, tau_ref, w_ref, phase=None, ssa=None):
         self.tau_ref = tau_ref
         self.w_ref = w_ref
         self.z     =  z
@@ -666,7 +575,7 @@ class CompUser(object):
         self.ssa = ssa
 
 
-    def dtau_ssa(self, wav, Z, rh):
+    def dtau_ssa(self, wav, Z):
         '''
         returns a profile of optical thickness and single scattering albedo at
         each wavelength
@@ -713,7 +622,7 @@ class CompUser(object):
         return dtau, ssa
 
 
-    def phase(self, wav, Z, rh, NBTHETA=721, phaseOpti=False):
+    def phase(self, wav, Z, NBTHETA=721, conv_Iparper=True):
         '''
         Phase function calculation at wavelength wav and altitudes Z
         relative humidity is rh
@@ -753,7 +662,7 @@ class CompUser(object):
             dssa_ = dssa_[:,1:,None,None]
             dssa += dssa_
 
-            P += s.phase(wav, NBTHETA)*dssa_  # (NLAM, ALTITUDE-1, NPSTK, NBTHETA)
+            P += s.phase(wav, NBTHETA, conv_Iparper=conv_Iparper)*dssa_  # (NLAM, ALTITUDE-1, NPSTK, NBTHETA)
 
         with np.errstate(divide='ignore'):
             P.data /= dssa
@@ -924,7 +833,7 @@ class AtmAFGL(Atmosphere):
 
 
 
-    def calc(self, wav, phase=True, NBTHETA=721, phaseOpti=False):
+    def calc(self, wav, phase=True, NBTHETA=721):
         '''
         Profile and phase function calculation at bands wav
 
@@ -943,7 +852,7 @@ class AtmAFGL(Atmosphere):
                 wav_pha = wav[:]
             else:
                 wav_pha = self.pfwav
-            pha = self.phase(wav_pha, NBTHETA=NBTHETA, phaseOpti=phaseOpti)
+            pha = self.phase(wav_pha, NBTHETA=NBTHETA)
             
             if pha is not None:
                 pha_, ipha = calc_iphase(pha, profile.axis('wavelength'), profile.axis('z_atm'))
@@ -1280,7 +1189,7 @@ class AtmAFGL(Atmosphere):
         return pro
 
 
-    def phase(self, wav, NBTHETA=721, phaseOpti=False):
+    def phase(self, wav, NBTHETA=721):
         '''
         Phase functions calculation at bands, using reduced profile
         '''
@@ -1295,7 +1204,7 @@ class AtmAFGL(Atmosphere):
             dtau, ssa_p = comp.dtau_ssa(wav, self.pfgrid, rh=rh)
             dtau = dtau[:,1:][:,:,None,None]
             ssa_p = ssa_p[:,1:][:,:,None,None]
-            pha += comp.phase(wav, self.pfgrid, rh, NBTHETA=NBTHETA, phaseOpti=phaseOpti)*dtau*ssa_p
+            pha += comp.phase(wav, self.pfgrid, rh, NBTHETA=NBTHETA)*dtau*ssa_p
             norm += dtau*ssa_p
         if len(self.comp) > 0:
             pha /= norm
@@ -2041,10 +1950,10 @@ def get_AB_coeff(modelA, modelB, wl1, wl2, AOT_OBS_wl1, AOT_OBS_wl2,
     """
 
     prof_MA = AtmAFGL(atm, comp=[AeroOPAC(modelA, aot_refA, wl_ref)],
-                      O3=O3, P0=P0, H2O=H2O, grid=grid, O3_H2O_alt=O3_H2O_alt).calc([wl1, wl2], phase=False, phaseOpti=True)
+                      O3=O3, P0=P0, H2O=H2O, grid=grid, O3_H2O_alt=O3_H2O_alt).calc([wl1, wl2], phase=False)
 
     prof_MB = AtmAFGL(atm, comp=[AeroOPAC(modelB, aot_refB, wl_ref)],
-                      O3=O3, P0=P0, H2O=H2O, grid=grid, O3_H2O_alt=O3_H2O_alt).calc([wl1, wl2], phase=False, phaseOpti=True)
+                      O3=O3, P0=P0, H2O=H2O, grid=grid, O3_H2O_alt=O3_H2O_alt).calc([wl1, wl2], phase=False)
 
     # Compute AOT of the 2 models at the 2 wavelenghts (wl1 and wl2)
     if (O3_H2O_alt is None): alt = -1
@@ -2290,7 +2199,7 @@ def atm_pro_from_aeronet(date, time, aod_file, ssa_file, pfn_file, b_wav, pfwav=
     else: aero_dens = dens
 
     comp  = CompUser(aeronet_specie, aero_dens, z_profil, aod_lut[0], aod_lut.axes[0][0])
-    atm_pro = AtmAFGL(atm_name, grid=z_profil, P0=P0, O3=O3, H2O=H2O, comp=[comp], pfwav=pf_wav, O3_H2O_alt=O3_H2O_alt).calc(b_wav_BS, phaseOpti=True)
+    atm_pro = AtmAFGL(atm_name, grid=z_profil, P0=P0, O3=O3, H2O=H2O, comp=[comp], pfwav=pf_wav, O3_H2O_alt=O3_H2O_alt).calc(b_wav_BS)
 
     return atm_pro
 
@@ -2391,7 +2300,7 @@ def atm_pro_from_aeronet_opti(date, time, aod_file, ssa_file, pfn_file, b_wav, p
     else: aero_dens = dens
 
     comp  = CompUser(aeronet_specie, aero_dens, z_profil, aod_lut[0], aod_lut.axes[0][0])
-    atm_pro = AtmAFGL(atm_name, grid=z_profil, P0=P0, O3=O3, H2O=H2O, comp=[comp], pfwav=pf_wav, O3_H2O_alt=O3_H2O_alt).calc(b_wav_BS, phaseOpti=True)
+    atm_pro = AtmAFGL(atm_name, grid=z_profil, P0=P0, O3=O3, H2O=H2O, comp=[comp], pfwav=pf_wav, O3_H2O_alt=O3_H2O_alt).calc(b_wav_BS)
 
     # TODO finish the development below (for computational time optimisation).
     # ext_tot = np.zeros((len(ext_interp_lut.axes[0]), len(z_profil)), dtype=np.float64)
