@@ -6,6 +6,15 @@
            ###########################
 
 
+v0.9.4
+------
+Release date: 2024-02-27
+
+* Bug corrections
+    - bug in generatePro_multi visible when using pfwav corrected
+    - bug when using pfgrid in the calculation of the phase matrix corrected
+
+
 v0.9.3
 ------
 

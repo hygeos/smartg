@@ -493,7 +493,7 @@ class AeroOPAC(object):
             P.data /= dssa
         P.data[np.isnan(P.data)] = 0.
 
-        P.axes[1] = average(Z)
+        P.axes[1] = Z[1:]
     
         return P
 
@@ -1803,7 +1803,7 @@ def BPlanck(wav, T):
 
 
 def generatePro_multi(pro_models, b_wav, aots, atm='afglt', factor=None,
-                      pfwav=None, P0=None, O3=None, H2O=None, wl_ref=550., grid=None, O3_H2O_alt=None):
+                      pfwav=None, P0=None, O3=None, H2O=None, grid=None, O3_H2O_alt=None):
     """
     This function return an atmosphere profile giving a list of several atmosphere profiles. Different profiles can be
     merged together, and a possible mix can be considered by correctly ajusting the aots and factor parameters.
@@ -1895,7 +1895,7 @@ def generatePro_multi(pro_models, b_wav, aots, atm='afglt', factor=None,
     
     # Create the LUT profile of the mix model
     pro_atm_tot = AtmAFGL(atm, O3=O3, H2O=H2O, P0=P0, grid=grid, pfwav=wav[:], prof_aer=(aot_pro_tot,assa_pro_tot), O3_H2O_alt=O3_H2O_alt).calc(b_wav, phase=False)
-    pha_atm, ipha_atm = calc_iphase(pha_tot, np.array(wav[:]), grid)
+    pha_atm, ipha_atm = calc_iphase(pha_tot, b_wav, grid)
     pro_atm_tot.add_axis('theta_atm', pha_tot.axes[-1])
     pro_atm_tot.add_dataset('phase_atm', pha_atm, ['iphase', 'stk', 'theta_atm'])
     pro_atm_tot.add_dataset('iphase_atm', ipha_atm, ['wavelength', 'z_atm'])
