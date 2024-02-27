@@ -584,7 +584,7 @@ class AeroOPAC(object):
             P.data /= dssa
         P.data[np.isnan(P.data)] = 0.
 
-        P.axes[1] = average(Z)
+        P.axes[1] = Z[1:]
     
         return P
 
