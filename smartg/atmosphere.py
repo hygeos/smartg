@@ -18,7 +18,7 @@ from scipy import constants
 from scipy.constants import speed_of_light, Planck, Boltzmann
 from smartg.bandset import BandSet
 import netCDF4
-from smartg.config import NPSTK, dir_libradtran_opac
+from smartg.config import dir_libradtran_opac
 from smartg.config import dir_libradtran_atmmod
 from smartg.config import dir_libradtran_crs
 from smartg.config import dir_auxdata
@@ -133,7 +133,7 @@ class Species(object):
 
         return ext, ssa
 
-    def phase(self, wav, rh, NBTHETA, reff=None, conv_Iparper=False):
+    def phase(self, wav, rh, NBTHETA, reff=None, conv_Iparper=True):
         '''
         phase function of species at wavelengths wav
         resampled over NBTHETA angles
@@ -142,6 +142,10 @@ class Species(object):
         theta = np.linspace(0., 180., num=NBTHETA)
         lam_tabulated = np.array(self._phase.axis('wav'))
         nwav = len(wav)
+
+        # Number of independant components of the phase Matrix
+        # Spheric particles -> 4, non spheric particles -> 6
+        nphamat = self._phase.shape[2]
 
         if ( (np.max(wav) > np.max(lam_tabulated)) or
              (np.min(wav) < np.min(lam_tabulated)) ):
@@ -164,18 +168,18 @@ class Species(object):
         if (self._nrh_reff > 1) and (self._rh_or_reff == 'rh'):
             # drop first altitude element
             P = LUT(
-                np.zeros((nwav, len(rh)-1, NPSTK, NBTHETA), dtype='float32')+np.NaN,
+                np.zeros((nwav, len(rh)-1, 6, NBTHETA), dtype='float32')+np.NaN,
                 axes=[wav, None, None, theta],
                 names=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
                 )  # nlam_tabulated, nrh, stk, NBTHETA
             
             for irh_, rh_ in enumerate(rh[1:]):
                 irh = Idx(rh_, round=True, fill_value='extrema')
-                P.data[:,irh_,:,:] = phase_bis.sub()[:,irh,:,:].data
+                P.data[:,irh_,0:nphamat,:] = phase_bis.sub()[:,irh,:,:].data
 
         else: # phase function does not depend on rh
             P = LUT(
-                np.zeros((nwav, 1, NPSTK, NBTHETA), dtype='float32')+np.NaN,
+                np.zeros((nwav, 1, 6, NBTHETA), dtype='float32')+np.NaN,
                 axes=[wav, None, None, theta],
                 names=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
                 )  # nlam_tabulated, nrh, stk, NBTHETA
@@ -184,14 +188,28 @@ class Species(object):
                 irh = Idx(reff, round=True).index(self._phase.axes[1])
             else:
                 irh = 0
-            P.data[:,0,:,:] = phase_bis[:,irh,:,:].data
+            P.data[:,0,0:nphamat,:] = phase_bis[:,irh,:,:].data
 
         if conv_Iparper:
             # convert I, Q into Ipar, Iper
-            P0 = P.data[:,:,0,:].copy()
-            P1 = P.data[:,:,1,:].copy()
-            P.data[:,:,0,:] = P0+P1
-            P.data[:,:,1,:] = P0-P1
+            if (nphamat == 4): # spherical particles
+                P.data[:,:,4,:] = P.data[:,:,0,:].copy()
+                P.data[:,:,5,:] = P.data[:,:,2,:].copy()
+                P0 = P.data[:,:,0,:].copy()
+                P1 = P.data[:,:,1,:].copy()
+                P4 = P.data[:,:,4,:].copy()
+                P.data[:,:,0,:] = 0.5*(P0+2*P1+P4) # P11
+                P.data[:,:,1,:] = 0.5*(P0-P4)      # P12=P21
+                P.data[:,:,4,:] = 0.5*(P0-2*P1+P4) # P22
+            elif (nphamat == 6): # non spherical particles
+                # note: the sign of P43/P34 affects only the sign of V,
+                # since V=0 for rayleigh scattering it does not matter 
+                P0 = P.data[:,:,0,:].copy()
+                P1 = P.data[:,:,1,:].copy()
+                P4 = P.data[:,:,4,:].copy()
+                P.data[:,:,0,:] = 0.5*(P0+2*P1+P4) # P11
+                P.data[:,:,1,:] = 0.5*(P0-P4)      # P12=P21
+                P.data[:,:,4,:] = 0.5*(P0-2*P1+P4) # P22
 
         return P
 
@@ -268,6 +286,10 @@ class SpeciesUser(Species):
         ilam_tabulated = np.arange(len(lam_tabulated), dtype=int)
         ilam_opti = np.concatenate(np.argwhere((ilam_tabulated >= range_ind[0]) &
                                                (ilam_tabulated <= range_ind[1])))
+        
+        # Number of independant components of the phase Matrix
+        # Spheric particles -> 4, non spheric particles -> 6
+        nphamat = self._phase.shape[2]
  
         nwav = len(wav)
 
@@ -277,19 +299,33 @@ class SpeciesUser(Species):
         if (NBTHETA != len(phase_bis.axes[3])): phase_bis = phase_bis.sub()[:,:,:,Idx(theta)]
 
         P = LUT(
-            np.zeros((nwav, 1, NPSTK, NBTHETA), dtype='float32')+np.NaN,
+            np.zeros((nwav, 1, 6, NBTHETA), dtype='float32')+np.NaN,
             axes=[wav, None, None, theta],
             names=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
             )  # nlam_tabulated, nrh, stk, NBTHETA
         
-        P.data[:,0,:,:] = phase_bis[:,0,:,:].data
+        P.data[:,0,0:nphamat,:] = phase_bis[:,0,:,:].data
 
         if conv_Iparper:
             # convert I, Q into Ipar, Iper
-            P0 = P.data[:,:,0,:].copy()
-            P1 = P.data[:,:,1,:].copy()
-            P.data[:,:,0,:] = P0+P1
-            P.data[:,:,1,:] = P0-P1
+            if (nphamat == 4): # spherical particles
+                P.data[:,:,4,:] = P.data[:,:,0,:].copy()
+                P.data[:,:,5,:] = P.data[:,:,2,:].copy()
+                P0 = P.data[:,:,0,:].copy()
+                P1 = P.data[:,:,1,:].copy()
+                P4 = P.data[:,:,4,:].copy()
+                P.data[:,:,0,:] = 0.5*(P0+2*P1+P4) # P11
+                P.data[:,:,1,:] = 0.5*(P0-P4)      # P12=P21
+                P.data[:,:,4,:] = 0.5*(P0-2*P1+P4) # P22
+            elif (nphamat == 6): # non spherical particles
+                # note: the sign of P43/P34 affects only the sign of V,
+                # since V=0 for rayleigh scattering it does not matter 
+                P0 = P.data[:,:,0,:].copy()
+                P1 = P.data[:,:,1,:].copy()
+                P4 = P.data[:,:,4,:].copy()
+                P.data[:,:,0,:] = 0.5*(P0+2*P1+P4) # P11
+                P.data[:,:,1,:] = 0.5*(P0-P4)      # P12=P21
+                P.data[:,:,4,:] = 0.5*(P0-2*P1+P4) # P22
 
         return P
 
@@ -363,7 +399,8 @@ class AeroOPAC(object):
         #
         self.species = []
         for s in species:
-            self.species.append(Species(s+'_sol_mie'))
+            if 'spheroids' in s : self.species.append(Species(s+'_sol_tmatrix'))
+            else                : self.species.append(Species(s+'_sol_mie'))
 
 
     def set_densities(self, Z, densities, species=None) :
@@ -377,14 +414,15 @@ class AeroOPAC(object):
         if species is not None:
             self.species = []
             for s in species:
-                self.species.append(Species(s+'.mie'))
+                if 'spheroids' in s : self.species.append(Species(s+'_sol_tmatrix'))
+                else                : self.species.append(Species(s+'_sol_mie'))
         assert len(self.species) == densities.shape[1]
 
         self.dens_mlut = MLUT()
         self.dens_mlut.add_axis('z_opac', Z)
 
         for ispe, spe in enumerate(self.species):
-            name = spe.name.split('_')[0]
+            name = spe.name.split('_sol')[0]
             self.dens_mlut.add_dataset('dens_'+name, densities[:,ispe], axnames=['z_opac'],
                             attrs={'description': 'mass density in mircrogramme per cubic merter'})
 
@@ -411,7 +449,7 @@ class AeroOPAC(object):
         for s in self.species:
             # integrate density along altitude
             dens = trapzinterp(
-                    self.dens_mlut['dens_'+s.name.split('_')[0]][:],
+                    self.dens_mlut['dens_'+s.name.split('_sol')[0]][:],
                     self.dens_mlut.axes['z_opac'], Z
                     )
             ext, ssa_ = s.ext_ssa(wav, rh, reff=self.reff)
@@ -438,7 +476,7 @@ class AeroOPAC(object):
 
         return dtau, ssa
 
-    def phase(self, wav, Z, rh=None, NBTHETA=721, conv_Iparper=False):
+    def phase(self, wav, Z, rh=None, NBTHETA=721, conv_Iparper=True):
         '''
         Phase function calculation at wavelength wav and altitudes Z
         relative humidity is rh
@@ -468,7 +506,7 @@ class AeroOPAC(object):
         for s in self.species:
             # integrate density along altitude
             dens = trapzinterp(
-                    self.dens_mlut['dens_'+s.name.split('_')[0]][:],
+                    self.dens_mlut['dens_'+s.name.split('_sol')[0]][:],
                     self.dens_mlut.axes['z_opac'], Z)
 
             # optical properties of the current species
@@ -518,7 +556,7 @@ class CloudOPAC(AeroOPAC):
         self.species = [Species(species.split('.sol')[0]+'_sol_mie', wav_clip=wav_clip)]
         self.dens_mlut = MLUT()
         self.dens_mlut.add_axis('z_opac', np.array([zmax, zmax, zmin, zmin, 0.], dtype='f'))
-        self.dens_mlut.add_dataset('dens_'+self.species[0].name.split('_')[0], np.array([  0.,   1.,   1.,   0., 0.], dtype='f'), axnames=['z_opac'],
+        self.dens_mlut.add_dataset('dens_'+self.species[0].name.split('_sol')[0], np.array([  0.,   1.,   1.,   0., 0.], dtype='f'), axnames=['z_opac'],
                                    attrs={'description': 'mass density in gramme per cubic merter'})
         self.ssa = None
         self._phase = phase
@@ -544,7 +582,7 @@ class CompOPAC(AeroOPAC):
         self.species = [Species(species+'.mie', wav_clip=wav_clip)]
         self.dens_mlut = MLUT()
         self.dens_mlut.add_axis('z_opac', z)
-        self.dens_mlut.add_dataset('dens_'+self.species[0].name.split('_')[0], density, axnames=['z_opac'],
+        self.dens_mlut.add_dataset('dens_'+self.species[0].name.split('_sol')[0], density, axnames=['z_opac'],
                                    attrs={'description': 'mass density in gramme per cubic merter'})
         self.ssa = None
         self._phase = phase
@@ -565,7 +603,7 @@ class CompUser(object):
         self.w_ref = w_ref
         self.dens_mlut = MLUT()
         self.dens_mlut.add_axis('z_opac', z)
-        self.dens_mlut.add_dataset('dens_'+species.name.split('_')[0], density/np.trapz(density, x=-z), axnames=['z_opac'],
+        self.dens_mlut.add_dataset('dens_'+species.name.split('_sol')[0], density/np.trapz(density, x=-z), axnames=['z_opac'],
                                    attrs={'description': 'mass density in gramme per cubic merter'})
         self._phase = phase
         self.species=[species]
@@ -591,7 +629,7 @@ class CompUser(object):
         for s in self.species:
             # integrate density along altitude
             dens = trapzinterp(
-                    self.dens_mlut['dens_'+s.name.split('_')[0]][:],
+                    self.dens_mlut['dens_'+s.name.split('_sol')[0]][:],
                     self.dens_mlut.axes['z_opac'], Z
                     )
             ext, ssa_ = s.ext_ssa(wav)
@@ -647,7 +685,7 @@ class CompUser(object):
         for s in self.species:
             # integrate density along altitude
             dens = trapzinterp(
-                    self.dens_mlut['dens_'+s.name.split('_')[0]][:],
+                    self.dens_mlut['dens_'+s.name.split('_sol')[0]][:],
                     self.dens_mlut.axes['z_opac'], Z)
 
             # optical properties of the current species
