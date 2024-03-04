@@ -326,32 +326,36 @@ class AeroOPAC(object):
         self.reff = None
         self._phase = phase
 
-        if ssa is None:
-            self.ssa = None
-        else:
-            self.ssa = np.array(ssa)
+        if ssa is None : self.ssa = None
+        else           : self.ssa = np.array(ssa)
 
-        if dirname(filename) == '':
-            self.filename = join(dir_libradtran_opac, 'standard_aerosol_files', filename)
-        else:
-            self.filename = filename
-        if not filename.endswith('.dat'):
-            self.filename += '.dat'
+        if dirname(filename) == '' : self.filename = join(dir_auxdata, 'aerosols/OPAC_vertical_dist', filename)
+        else                       : self.filename = filename
+
+        if not filename.endswith('.nc') : self.filename += '.nc'
 
         self.basename = basename(self.filename)
-        if self.basename.endswith('.dat'):
-            self.basename = self.basename[:-4]
+        if self.basename.endswith('.nc') : self.basename = self.basename.split('.nc')[0]
 
         assert exists(self.filename), '{} does not exist'.format(self.filename)
 
         #
-        # read list of species
+        # read mlut with aer component mass densities
         #
-        species = None
-        for line in open(self.filename,'r').readlines():
-            if 'z(km)' in line:
-                species = line.split()[2:]
-                break
+
+        self.dens_mlut = read_mlut(self.filename)
+
+        zopac = self.dens_mlut.axes['z_opac']
+        if zmin is None : zmin = zopac[0]
+        if zmax is None : zmax = zopac[-1]
+
+        # scale zopac between zmin and zmax
+        self.dens_mlut.axes['z_opac'] = zmin + (zmax-zmin)*(zopac - zopac[0])/(zopac[-1] - zopac[0])
+
+        #
+        # read list of species (i.e. aer components)
+        #
+        species = [spe.split('dens_')[1] for spe in self.dens_mlut.datasets()]
         assert species is not None
 
         #
@@ -361,23 +365,6 @@ class AeroOPAC(object):
         for s in species:
             self.species.append(Species(s+'_sol_mie'))
 
-        #
-        # read profile of mass concentrations
-        #
-        data = np.loadtxt(self.filename)
-
-        self.zopac = data[::-1,0]   # altitude in km (increasing)
-
-        if zmin is None:
-            zmin = self.zopac[0]
-        if zmax is None:
-            zmax = self.zopac[-1]
-
-        # scale zopac between zmin and zmax
-        self.zopac = zmin + (zmax-zmin)*(self.zopac - self.zopac[0])/(self.zopac[-1] - self.zopac[0])
-
-        self.densities = data[::-1,1:]  # vertical profile of mass concentration (g/m3)
-                                        # (zopac, species)
 
     def set_densities(self, Z, densities, species=None) :
         '''
@@ -393,8 +380,13 @@ class AeroOPAC(object):
                 self.species.append(Species(s+'.mie'))
         assert len(self.species) == densities.shape[1]
 
-        self.zopac = Z
-        self.densities = densities
+        self.dens_mlut = MLUT()
+        self.dens_mlut.add_axis('z_opac', Z)
+
+        for ispe, spe in enumerate(self.species):
+            name = spe.name.split('_')[0]
+            self.dens_mlut.add_dataset('dens_'+name, densities[:,ispe], axnames=['z_opac'],
+                            attrs={'description': 'mass density in mircrogramme per cubic merter'})
 
 
     def dtau_ssa(self, wav, Z, rh=None):
@@ -416,11 +408,11 @@ class AeroOPAC(object):
         ssa = 0.
         dZ = -diff1(Z)
         w0 = np.array([self.w_ref], dtype='float32')
-        for i, s in enumerate(self.species):
+        for s in self.species:
             # integrate density along altitude
             dens = trapzinterp(
-                    self.densities[:,i],
-                    self.zopac, Z
+                    self.dens_mlut['dens_'+s.name.split('_')[0]][:],
+                    self.dens_mlut.axes['z_opac'], Z
                     )
             ext, ssa_ = s.ext_ssa(wav, rh, reff=self.reff)
             dtau_ = ext * dens * dZ
@@ -473,11 +465,11 @@ class AeroOPAC(object):
         dtau = 0.
         
         
-        for i, s in enumerate(self.species):
+        for s in self.species:
             # integrate density along altitude
             dens = trapzinterp(
-                    self.densities[:,i],
-                    self.zopac, Z)
+                    self.dens_mlut['dens_'+s.name.split('_')[0]][:],
+                    self.dens_mlut.axes['z_opac'], Z)
 
             # optical properties of the current species
             ext, ssa = s.ext_ssa(wav, rh, reff=self.reff)
@@ -524,8 +516,10 @@ class CloudOPAC(AeroOPAC):
         self.tau_ref = tau_ref
         self.w_ref = w_ref
         self.species = [Species(species.split('.sol')[0]+'_sol_mie', wav_clip=wav_clip)]
-        self.zopac     = np.array([zmax, zmax, zmin, zmin, 0.], dtype='f')
-        self.densities = np.array([  0.,   1.,   1.,   0., 0.], dtype='f')[:,None]
+        self.dens_mlut = MLUT()
+        self.dens_mlut.add_axis('z_opac', np.array([zmax, zmax, zmin, zmin, 0.], dtype='f'))
+        self.dens_mlut.add_dataset('dens_'+self.species[0].name.split('_')[0], np.array([  0.,   1.,   1.,   0., 0.], dtype='f'), axnames=['z_opac'],
+                                   attrs={'description': 'mass density in gramme per cubic merter'})
         self.ssa = None
         self._phase = phase
 
@@ -548,8 +542,10 @@ class CompOPAC(AeroOPAC):
         self.tau_ref = tau_ref
         self.w_ref = w_ref
         self.species = [Species(species+'.mie', wav_clip=wav_clip)]
-        self.zopac     =  z
-        self.densities = density[:,None]
+        self.dens_mlut = MLUT()
+        self.dens_mlut.add_axis('z_opac', z)
+        self.dens_mlut.add_dataset('dens_'+self.species[0].name.split('_')[0], density, axnames=['z_opac'],
+                                   attrs={'description': 'mass density in gramme per cubic merter'})
         self.ssa = None
         self._phase = phase
 
@@ -567,9 +563,10 @@ class CompUser(object):
     def __init__(self, species, density, z, tau_ref, w_ref, phase=None, ssa=None):
         self.tau_ref = tau_ref
         self.w_ref = w_ref
-        self.z     =  z
-        self.zopac     =  z
-        self.densities = density[:,None]/np.trapz(density, x=-z)
+        self.dens_mlut = MLUT()
+        self.dens_mlut.add_axis('z_opac', z)
+        self.dens_mlut.add_dataset('dens_'+species.name.split('_')[0], density/np.trapz(density, x=-z), axnames=['z_opac'],
+                                   attrs={'description': 'mass density in gramme per cubic merter'})
         self._phase = phase
         self.species=[species]
         self.ssa = ssa
@@ -591,11 +588,11 @@ class CompUser(object):
         ssa = 0.
         dZ = -diff1(Z)
         w0 = np.array([self.w_ref], dtype='float32')
-        for i, s in enumerate(self.species):
+        for s in self.species:
             # integrate density along altitude
             dens = trapzinterp(
-                    self.densities[:,i],
-                    self.zopac, Z
+                    self.dens_mlut['dens_'+s.name.split('_')[0]][:],
+                    self.dens_mlut.axes['z_opac'], Z
                     )
             ext, ssa_ = s.ext_ssa(wav)
             dtau_ = ext * dens * dZ
@@ -647,11 +644,11 @@ class CompUser(object):
         dssa = 0.
         dtau = 0.
 
-        for i, s in enumerate(self.species):
+        for s in self.species:
             # integrate density along altitude
             dens = trapzinterp(
-                    self.densities[:,i],
-                    self.zopac, Z)
+                    self.dens_mlut['dens_'+s.name.split('_')[0]][:],
+                    self.dens_mlut.axes['z_opac'], Z)
 
             # optical properties of the current species
             ext, ssa = s.ext_ssa(wav)
