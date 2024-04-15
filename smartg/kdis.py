@@ -491,9 +491,9 @@ class KDIS_IBAND(object):
         Ngas = 10
         #Ngas = 8
         M = len(T)
-        datamol = np.zeros(M, np.float)
+        datamol = np.zeros(M, np.float64)
 
-        densmol = np.zeros((M, Ngas), np.float)
+        densmol = np.zeros((M, Ngas), np.float64)
         densmol[:,0] = prof.dens_h2o[:]
         densmol[:,1] = prof.dens_co2[:]
         densmol[:,2] = prof.dens_o3[:]
