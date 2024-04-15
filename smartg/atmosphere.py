@@ -1838,7 +1838,7 @@ def BPlanck(wav, T):
 
 
 def generatePro_multi(pro_models, b_wav, aots, atm='afglt', factor=None,
-                      pfwav=None, P0=None, O3=None, H2O=None, grid=None, O3_H2O_alt=None):
+                      pfwav=None, P0=None, O3=None, H2O=None, O3_H2O_alt=None):
     """
     This function return an atmosphere profile giving a list of several atmosphere profiles. Different profiles can be
     merged together, and a possible mix can be considered by correctly ajusting the aots and factor parameters.
@@ -1854,7 +1854,7 @@ def generatePro_multi(pro_models, b_wav, aots, atm='afglt', factor=None,
     P0         : Surface pressure
     O3         : Scale ozone vertical column (Dobson units)
     H2O        : Scale Water vertical column
-    grid       : Shape of vertical atm layers
+    O3_H2O_alt  : altitude of H2O and O3 values, by default None and scale from z=0km
 
     ===RETURN:
     pro_atm_tot : A unique atmosphere profile
@@ -1871,11 +1871,11 @@ def generatePro_multi(pro_models, b_wav, aots, atm='afglt', factor=None,
     else : b_wav_BS = b_wav
     if (pfwav is None): wav = b_wav_BS
     else: wav = pfwav
-    s_z = len(pro_models[0].axis('z_atm')); s_wav=len(wav);
+    s_z = len(pro_models[0].axis('z_atm')); s_wav=len(wav)
     
     aot_pro = []; assa_pro=[]; Dz=[]; apf=[]; aec_pro=[]
     aec_pro_lut = []; assa_pro_lut=[];assa_pro_bis=[]; saec_pro=[]
-    APF_top=[]; APF_bot=[]; assa_top=[]; sumAOT_models=0;
+    APF_top=[]; APF_bot=[]; assa_top=[]; sumAOT_models=0
     n_models=len(pro_models)
     if factor is None:
         factor=np.full(n_models, 1, dtype=int)
@@ -1887,7 +1887,7 @@ def generatePro_multi(pro_models, b_wav, aots, atm='afglt', factor=None,
         Dz.append(diff1(pro_models[j].axis( 'z_atm' )))
         apf.append(pro_models[j][ 'phase_atm' ].data[ :, None, :, :])
         aec_pro.append(aot_pro[j]/Dz[j])
-        assa_pro[j][~np.isfinite( assa_pro[j] )] = 1.; aec_pro[j][~np.isfinite( aec_pro[j] )] = 0.;
+        assa_pro[j][~np.isfinite( assa_pro[j] )] = 1.; aec_pro[j][~np.isfinite( aec_pro[j] )] = 0.
 
         # If pfwav is given this enables to avoid some useless calculations
         if (pfwav is not None):
@@ -1896,7 +1896,7 @@ def generatePro_multi(pro_models, b_wav, aots, atm='afglt', factor=None,
             assa_pro_lut.append(LUT(assa_pro[j], names=[ 'wav_phase', 'z_phase'], 
                                 axes=[ b_wav_BS[:], pro_models[0].axis('z_atm')]))
             aec_pro[j] = np.zeros((s_wav, s_z), dtype=np.float64);
-            assa_pro_bis.append(np.zeros((s_wav, s_z), dtype=np.float64));
+            assa_pro_bis.append(np.zeros((s_wav, s_z), dtype=np.float64))
             for i in range (0, s_wav):
                 aec_pro[j][i,:]  = aec_pro_lut[j][Idx(pfwav[i]),:]
                 assa_pro_bis[j][i,:]  = assa_pro_lut[j][Idx(pfwav[i]),:]
@@ -1929,8 +1929,9 @@ def generatePro_multi(pro_models, b_wav, aots, atm='afglt', factor=None,
     assa_pro_tot[~np.isfinite(assa_pro_tot)] = 1.
     
     # Create the LUT profile of the mix model
-    pro_atm_tot = AtmAFGL(atm, O3=O3, H2O=H2O, P0=P0, grid=grid, pfwav=wav[:], prof_aer=(aot_pro_tot,assa_pro_tot), O3_H2O_alt=O3_H2O_alt).calc(b_wav, phase=False)
-    pha_atm, ipha_atm = calc_iphase(pha_tot, b_wav, grid)
+    pro_atm_tot = AtmAFGL(atm, O3=O3, H2O=H2O, P0=P0, grid=pro_models[0].axis('z_atm'), pfwav=wav[:],
+                          prof_aer=(aot_pro_tot,assa_pro_tot), O3_H2O_alt=O3_H2O_alt).calc(b_wav, phase=False)
+    pha_atm, ipha_atm = calc_iphase(pha_tot, b_wav_BS[:], pro_models[0].axis('z_atm'))
     pro_atm_tot.add_axis('theta_atm', pha_tot.axes[-1])
     pro_atm_tot.add_dataset('phase_atm', pha_atm, ['iphase', 'stk', 'theta_atm'])
     pro_atm_tot.add_dataset('iphase_atm', ipha_atm, ['wavelength', 'z_atm'])
