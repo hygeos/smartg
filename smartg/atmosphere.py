@@ -330,6 +330,202 @@ class SpeciesUser(Species):
         return P
 
 
+class AeroOPAC2(object):
+    def __init__(self, filename, tau_ref, w_ref, H_mix_min=None, H_mix_max=None, 
+                 H_free_min=None, H_free_max=None, H_stra_min=None, H_stra_max=None,
+                 Z_mix=None, Z_free=None, Z_stra=None, ssa=None, phase=None):
+        self.tau_ref = tau_ref
+        if (np.isscalar(w_ref) or
+            (isinstance(w_ref, np.ndarray) and w_ref.ndim == 0) ) : self.w_ref = np.array([w_ref])
+        else                                                      : self.w_ref = np.array(w_ref)
+        self._phase = phase
+
+        if ssa is None : self.ssa = None
+        else           : self.ssa = np.array(ssa)
+
+        if dirname(filename) == '' : self.filename = join(dir_auxdata, 'new_aer/aerosols/OPAC/mixtures', filename)
+        else                       : self.filename = filename
+        if not filename.endswith('.nc') : self.filename += '.nc'
+
+        assert exists(self.filename), '{} does not exist'.format(self.filename)
+
+        self.mixture = read_mlut(self.filename)
+        self.free_tropo = None
+        self.strato = None
+
+        if H_mix_min is None : H_mix_min = float(self.mixture.attrs['H_mix_min'])
+        if H_mix_max is None : H_mix_max = float(self.mixture.attrs['H_mix_max'])
+        if H_free_min is None : H_free_min = float(self.mixture.attrs['H_free_min'])
+        if H_free_max is None : H_free_max = float(self.mixture.attrs['H_free_max'])
+        if H_stra_min is None : H_stra_min = float(self.mixture.attrs['H_stra_min'])
+        if H_stra_max is None : H_stra_max = float(self.mixture.attrs['H_stra_max'])
+
+        if Z_mix is None : Z_mix = float(self.mixture.attrs['Z_mix'])
+        if Z_free is None : Z_free = float(self.mixture.attrs['Z_free'])
+        if Z_stra is None :
+            if self.mixture.attrs['Z_stra'] == '99' : Z_stra = 1e6 # -> OPAC Z=99 for constant vertical dist
+            else                                    : Z_stra = float(self.mixture.attrs['Z_stra'])
+
+        self.vert_content = []
+        self.H_min = []
+        self.H_max =[]
+        self.Z_sh =[]
+
+        if (H_mix_max-H_mix_min > 1e-6):
+            self.vert_content.append(self.mixture)
+            self.H_min.append(H_mix_min)
+            self.H_max.append(H_mix_max)
+            self.Z_sh.append(Z_mix)
+        if (H_free_max-H_free_min > 1e-6):
+            filename_tmp = join(dir_auxdata, 'new_aer/aerosols/OPAC/free_troposphere/free_troposphere_sol.nc')
+            self.free_tropo = read_mlut(filename_tmp)
+            self.vert_content.append(self.free_tropo)
+            self.H_min.append(H_free_min)
+            self.H_max.append(H_free_max)
+            self.Z_sh.append(Z_free)
+        if (H_stra_max-H_stra_min > 1e-6):
+            filename_tmp = join(dir_auxdata, 'new_aer/aerosols/OPAC/stratosphere/stratosphere_sol.nc')
+            self.strato = read_mlut(filename_tmp)
+            self.vert_content.append(self.strato)
+            self.H_min.append(H_stra_min)
+            self.H_max.append(H_stra_max)
+            self.Z_sh.append(Z_stra)
+        
+    def dtau_ssa(self, wav, Z, rh):
+
+        # print(rh)
+        # print(Z)
+        # print(wav)
+        dtau = np.zeros((len(wav), len(Z)), dtype=np.float32)
+        dtau_ref = np.zeros((1, len(Z)), dtype=np.float32)
+        ssa = np.zeros_like(dtau)
+
+        for icont, cont in enumerate(self.vert_content):           
+            ext_ = cont['ext'].swapaxes('hum', 'wav').sub()[:,Idx(rh[:])][Idx(wav),:]
+            ext_ref_ = cont['ext'].swapaxes('hum', 'wav').sub()[:,Idx(rh[:])][Idx(self.w_ref),:]
+            ssa_ = cont['ssa'].swapaxes('hum', 'wav').sub()[:,Idx(rh[:])][Idx(wav),:]
+            dtau_ = np.zeros_like(dtau)
+            dtau_ref_ = np.zeros_like(dtau_ref)
+            h1 = np.maximum(self.H_min[icont], Z[1:])
+            h2 = np.minimum(self.H_max[icont], Z[:-1])
+            cond = h2>h1
+            # print(cond)
+            dtau_[:,1:][:,cond] = ext_[:,1:][:,cond] * get_aer_dist_integral(self.Z_sh[icont], h1[cond], h2[cond])
+            dtau += dtau_
+            ssa += dtau_*ssa_
+            dtau_ref_[:,1:][:,cond] = ext_ref_[:,1:][:,cond] * get_aer_dist_integral(self.Z_sh[icont], h1[cond], h2[cond])
+            dtau_ref += dtau_ref_
+
+        ssa[dtau!=0] /= dtau[dtau!=0]
+
+        #apply scaling factor to get the required optical thickness at the
+        # specified wavelength
+        if self.tau_ref is not None: dtau *= self.tau_ref/np.sum(dtau_ref)
+
+        return dtau, ssa
+    
+    
+    def phase(self, wav, Z, rh, NBTHETA=721, conv_Iparper=True):
+        '''
+        Phase function calculation at wavelength wav and altitudes Z
+        relative humidity is rh
+        angle resampling over NBTHETA angles
+        '''
+
+        if self._phase is not None:
+            if self._phase.ndim == 2:
+                # convert to 4-dim by inserting empty dimensions wav_phase
+                # and z_phase
+                assert self._phase.names == ['stk', 'theta_atm']
+                pha = LUT(self._phase.data[None,None,:,:],
+                          names = ['wav_phase', 'z_phase'] + self._phase.names,
+                          axes = [np.array([wav[0]]), np.array([0.])] + self._phase.axes,
+                         )
+
+                return pha
+            else:
+                return self._phase
+
+        theta = np.linspace(0., 180., num=NBTHETA)
+        lam_tabulated = np.array(self.mixture.axis('wav'))
+        nwav = len(wav)
+
+        P_tot = 0.
+        dssa = 0.
+        for icont, cont in enumerate(self.vert_content):    
+            # Number of independant components of the phase Matrix
+            # Spheric particles -> 4, non spheric particles -> 6
+            nphamat = cont['phase'].shape[2]
+
+            if ( (np.max(wav) > np.max(lam_tabulated)) or
+                (np.min(wav) < np.min(lam_tabulated)) ):
+                phase_bis = cont['phase'].swapaxes('wav', 'hum').sub()[Idx(wav),:,:,:]
+            else:
+                # The optimisation consists to not interpolate at all wavelengths of lam_tabulated,
+                # but only the wavelengths of lam_tabulated closely in the range of np.min(wav) and np.max(wav)
+                range_ind = np.array([np.argwhere((lam_tabulated <= np.min(wav)))[-1][0],
+                                    np.argwhere((lam_tabulated >= np.max(wav)))[0][0]])
+                ilam_tabulated = np.arange(len(lam_tabulated), dtype=int)
+                ilam_opti = np.concatenate(np.argwhere((ilam_tabulated >= range_ind[0]) &
+                                                    (ilam_tabulated <= range_ind[1])))
+
+                if len(ilam_opti) > 1 : phase_bis = cont['phase'].swapaxes('wav', 'hum').sub()[ilam_opti,:,:,:].sub()[Idx(wav),:,:,:]
+                else                  : phase_bis = cont['phase'].swapaxes('wav', 'hum').sub()[ilam_opti,:,:,:]
+
+            if (NBTHETA != len(phase_bis.axes[3])): phase_bis = phase_bis.sub()[:,:,:,Idx(theta)]
+
+            P = LUT(
+                np.zeros((nwav, len(rh)-1, 6, NBTHETA), dtype='float32')+np.NaN,
+                axes=[wav, None, None, theta],
+                names=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
+                )  # nlam_tabulated, nrh, stk, NBTHETA
+            
+            for irh_, rh_ in enumerate(rh[1:]):
+                irh = Idx(rh_, round=True, fill_value='extrema')
+                P.data[:,irh_,0:nphamat,:] = phase_bis.sub()[:,irh,:,:].data
+
+
+            if conv_Iparper:
+                # convert I, Q into Ipar, Iper
+                if (nphamat == 4): # spherical particles
+                    P.data[:,:,4,:] = P.data[:,:,0,:].copy()
+                    P.data[:,:,5,:] = P.data[:,:,2,:].copy()
+                    P0 = P.data[:,:,0,:].copy()
+                    P1 = P.data[:,:,1,:].copy()
+                    P4 = P.data[:,:,4,:].copy()
+                    P.data[:,:,0,:] = 0.5*(P0+2*P1+P4) # P11
+                    P.data[:,:,1,:] = 0.5*(P0-P4)      # P12=P21
+                    P.data[:,:,4,:] = 0.5*(P0-2*P1+P4) # P22
+                elif (nphamat == 6): # non spherical particles
+                    # note: the sign of P43/P34 affects only the sign of V,
+                    # since V=0 for rayleigh scattering it does not matter 
+                    P0 = P.data[:,:,0,:].copy()
+                    P1 = P.data[:,:,1,:].copy()
+                    P4 = P.data[:,:,4,:].copy()
+                    P.data[:,:,0,:] = 0.5*(P0+2*P1+P4) # P11
+                    P.data[:,:,1,:] = 0.5*(P0-P4)      # P12=P21
+                    P.data[:,:,4,:] = 0.5*(P0-2*P1+P4) # P22
+
+         
+            ext_ = cont['ext'].swapaxes('hum', 'wav').sub()[:,Idx(rh)][Idx(wav),:]
+            ssa_ = cont['ssa'].swapaxes('hum', 'wav').sub()[:,Idx(rh)][Idx(wav),:]
+            dtau_ =  np.zeros((len(wav), len(Z)), dtype=np.float32)
+            h1 = np.maximum(self.H_min[icont], Z[1:])
+            h2 = np.minimum(self.H_max[icont], Z[:-1])
+            cond = h2>h1
+            dtau_[:,1:][:,cond] = ext_[:,1:][:,cond] * get_aer_dist_integral(self.Z_sh[icont], h1[cond], h2[cond])
+            dssa_ = dtau_*ssa_ # NLAM, ALTITUDE
+            dssa_ = dssa_[:,1:,None,None]
+            dssa += dssa_
+            P_tot+= P*dssa_
+
+        
+        with np.errstate(divide='ignore'):
+            P_tot.data /= dssa
+        P_tot.data[np.isnan(P_tot.data)] = 0.
+        P_tot.axes[1] = Z[1:]
+        return P_tot
+
 
 class AeroOPAC(object):
     '''
@@ -868,7 +1064,7 @@ class AtmAFGL(Atmosphere):
 
 
 
-    def calc(self, wav, phase=True, NBTHETA=721):
+    def calc(self, wav, phase=True, NBTHETA=721, conv_Iparper=True):
         '''
         Profile and phase function calculation at bands wav
 
@@ -887,10 +1083,11 @@ class AtmAFGL(Atmosphere):
                 wav_pha = wav[:]
             else:
                 wav_pha = self.pfwav
-            pha = self.phase(wav_pha, NBTHETA=NBTHETA)
+            pha = self.phase(wav_pha, NBTHETA=NBTHETA, conv_Iparper=conv_Iparper)
             
             if pha is not None:
                 pha_, ipha = calc_iphase(pha, profile.axis('wavelength'), profile.axis('z_atm'))
+                print('pass')
                 profile.add_axis('theta_atm', pha.axes[-1])
                 profile.add_dataset('phase_atm', pha_, ['iphase', 'stk', 'theta_atm'])
                 if not self.OPT3D:
@@ -1224,7 +1421,7 @@ class AtmAFGL(Atmosphere):
         return pro
 
 
-    def phase(self, wav, NBTHETA=721):
+    def phase(self, wav, NBTHETA=721, conv_Iparper=True):
         '''
         Phase functions calculation at bands, using reduced profile
         '''
@@ -1239,7 +1436,7 @@ class AtmAFGL(Atmosphere):
             dtau, ssa_p = comp.dtau_ssa(wav, self.pfgrid, rh=rh)
             dtau = dtau[:,1:][:,:,None,None]
             ssa_p = ssa_p[:,1:][:,:,None,None]
-            pha += comp.phase(wav, self.pfgrid, rh, NBTHETA=NBTHETA)*dtau*ssa_p
+            pha += comp.phase(wav, self.pfgrid, rh, NBTHETA=NBTHETA, conv_Iparper=conv_Iparper)*dtau*ssa_p
             norm += dtau*ssa_p
         if len(self.comp) > 0:
             pha /= norm
@@ -1837,6 +2034,10 @@ def BPlanck(wav, T):
     return intensity
 
 
+def get_aer_dist_integral(Z, H_min, H_max):
+    return (-(Z)*np.exp(-H_max/Z) + (Z)*np.exp(-H_min/Z))
+
+
 def generatePro_multi(pro_models, b_wav, aots, atm='afglt', factor=None,
                       pfwav=None, P0=None, O3=None, H2O=None, O3_H2O_alt=None):
     """
@@ -2005,6 +2206,50 @@ def get_AB_coeff(modelA, modelB, wl1, wl2, AOT_OBS_wl1, AOT_OBS_wl2,
     A, B = compute_AB_coeff(AOT_OBS_wl1, AOT_OBS_wl2, AOT_modelA_wl1, AOT_modelA_wl2, AOT_modelB_wl1, AOT_modelB_wl2)
 
     return A, B
+
+def get_AB_coeff2(modelA, modelB, wl1, wl2, AOT_OBS_wl1, AOT_OBS_wl2,
+                 aot_refA=0.05, aot_refB=0.5, atm='afglt', P0=None,
+                 O3=None, H2O=None, wl_ref=550., grid=None, O3_H2O_alt=None, return_zgrid=False):
+
+    """
+    This function give the A, B factors to multiply with the AOTs of reference models (desert, continental clean, ...),
+    in order to get a mix profile with AOTs and Angstrom coefficient in good agreement with observation.
+
+    ===ARGS:
+    modelA       : First OPAC model to use for the mix (i.g. 'desert', 'urban', ...)
+    modelB       : Second OPAC model to use for the mix
+    wli          : Observation wavelenghts i used for mixing
+    AOT_OBS_wli  : Obsevaton AOT (scalar) at wavelenght wli at z=0 or if O3_H2O_alt not none at z=O3_H2O_alt
+    aot_refA/B   : reference AOT for model A and B at z=0
+    atm          : The atmAFGL atmosphere used
+    P0           : Surface pressure
+    O3           : Scale ozone vertical column (Dobson units)
+    wl_ref       : Wavelenght used as reference for some calculations
+    grid         : Shape of vertical atm layers
+    O3_H2O_alt   : altitude of H2O and O3 values, by default None and scale from z=0km
+    return_zgrid : return the z grid used
+
+    ===RETURN:
+    A, B : factors of model A and B
+    """
+
+    prof_MA = AtmAFGL(atm, comp=[AeroOPAC2(modelA+'_sol', aot_refA, wl_ref)],
+                      O3=O3, P0=P0, H2O=H2O, grid=grid, O3_H2O_alt=O3_H2O_alt).calc([wl1, wl2], phase=False)
+
+    prof_MB = AtmAFGL(atm, comp=[AeroOPAC2(modelB+'_sol', aot_refB, wl_ref)],
+                      O3=O3, P0=P0, H2O=H2O, grid=grid, O3_H2O_alt=O3_H2O_alt).calc([wl1, wl2], phase=False)
+
+    # Compute AOT of the 2 models at the 2 wavelenghts (wl1 and wl2)
+    if (O3_H2O_alt is None): alt = -1
+    else: alt = Idx(O3_H2O_alt)
+    AOT_modelA_wl1 = prof_MA['OD_p'][Idx(wl1), alt]; AOT_modelA_wl2 = prof_MA['OD_p'][Idx(wl2), alt]
+    AOT_modelB_wl1 = prof_MB['OD_p'][Idx(wl1), alt]; AOT_modelB_wl2 = prof_MB['OD_p'][Idx(wl2), alt]
+
+    # Compute now the AOT of the mixted model at the 2 wl and the A and B parameters to know the proportion of each model
+    A, B = compute_AB_coeff(AOT_OBS_wl1, AOT_OBS_wl2, AOT_modelA_wl1, AOT_modelA_wl2, AOT_modelB_wl1, AOT_modelB_wl2)
+
+    if return_zgrid : return A, B, prof_MA.axes['z_atm']
+    else : return A, B
 
 
 def check_date (dates, year):
