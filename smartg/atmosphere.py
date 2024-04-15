@@ -1087,7 +1087,6 @@ class AtmAFGL(Atmosphere):
             
             if pha is not None:
                 pha_, ipha = calc_iphase(pha, profile.axis('wavelength'), profile.axis('z_atm'))
-                print('pass')
                 profile.add_axis('theta_atm', pha.axes[-1])
                 profile.add_dataset('phase_atm', pha_, ['iphase', 'stk', 'theta_atm'])
                 if not self.OPT3D:
@@ -2038,6 +2037,33 @@ def get_aer_dist_integral(Z, H_min, H_max):
     return (-(Z)*np.exp(-H_max/Z) + (Z)*np.exp(-H_min/Z))
 
 
+def conv_pha3D_to_pha4D(lut_pha_3D, lut_ipha, pfwav=None):
+    """
+    Description: Convert from smartg 3D phase matrix convention to 4D
+
+    ===ARGS:
+    lut_pha_3D : 3D phase matrix LUT (iphase, stk, theta)
+    lut_ipha   : First index of lut_pha_3D depending on wl and z
+
+    ===RETURN:
+    phase : numpy array with the 4D phase matrix (wl, z, stk, theta)
+
+    """
+    if pfwav is not None : nwav = len(pfwav)
+    else                 : nwav = lut_ipha.shape[0]
+    nz   = lut_ipha.shape[1]
+    nth = lut_pha_3D.shape[-1]
+    
+    phase = np.zeros((nwav, nz, 6, nth), dtype=np.float64)
+    for iw in range(0, nwav):
+        for iz in range (0, nz):
+            if pfwav is not None : ipha = lut_ipha[Idx(pfwav[iw]), iz]
+            else                 : ipha = lut_ipha[iw, iz]
+            phase[iw,iz,:,:] = lut_pha_3D[round(ipha),:,:]
+
+    return phase
+
+
 def generatePro_multi(pro_models, b_wav, aots, atm='afglt', factor=None,
                       pfwav=None, P0=None, O3=None, H2O=None, O3_H2O_alt=None):
     """
@@ -2086,7 +2112,9 @@ def generatePro_multi(pro_models, b_wav, aots, atm='afglt', factor=None,
         aot_pro.append(diff1(pro_models[j][ 'OD_p' ].data*factor[j], axis=1))
         assa_pro.append(pro_models[j][ 'ssa_p_atm' ].data)
         Dz.append(diff1(pro_models[j].axis( 'z_atm' )))
-        apf.append(pro_models[j][ 'phase_atm' ].data[ :, None, :, :])
+        #apf.append(pro_models[j][ 'phase_atm' ].data[ :, None, :, :])
+        apf.append(conv_pha3D_to_pha4D(pro_models[j][ 'phase_atm' ],
+                                       pro_models[j][ 'iphase_atm' ], pfwav=pfwav))
         aec_pro.append(aot_pro[j]/Dz[j])
         assa_pro[j][~np.isfinite( assa_pro[j] )] = 1.; aec_pro[j][~np.isfinite( aec_pro[j] )] = 0.
 
