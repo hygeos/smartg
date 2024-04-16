@@ -331,6 +331,34 @@ class SpeciesUser(Species):
 
 
 class AeroOPAC2(object):
+    '''
+    Initialize the Aerosol OPAC model
+
+    Args:
+        filename: name of the aerosol file.
+                  If no directory is specified, assume directory
+                  auxdata/new_aer/aerosols/OPAC/mixtures
+                  aerosol files can be:
+                      'antarctic', 'antarctic_spheric', 'arctic', 'continental_average',
+                      'continental_clean', 'continental_polluted',
+                      'desert', 'desert_spheric',
+                      'maritime_clean', 'maritime_polluted', 'mineral_transported'
+                      'maritime_tropical', 'urban'
+
+        tau_ref: optical thickness at wavelength wref
+        w_ref: reference wavelength (nm) for aot
+        H_mix_min/max : force min and max altitude of the mixture
+        H_free_min/max : force min and max altitude of free troposphere
+        H_stra_min/max : force min and max altitude of stratosphere
+        ssa: force particle single scattering albedo
+             (scalar or 1-d array-like for multichromatic)
+
+        phase: LUT of phase function
+               (can be read from file with read_phase)
+
+        Example: AeroOPAC('maritime_clean', 0.1, 550.).calc(400.)
+    '''
+
     def __init__(self, filename, tau_ref, w_ref, H_mix_min=None, H_mix_max=None, 
                  H_free_min=None, H_free_max=None, H_stra_min=None, H_stra_max=None,
                  Z_mix=None, Z_free=None, Z_stra=None, ssa=None, phase=None):
@@ -345,7 +373,8 @@ class AeroOPAC2(object):
 
         if dirname(filename) == '' : self.filename = join(dir_auxdata, 'new_aer/aerosols/OPAC/mixtures', filename)
         else                       : self.filename = filename
-        if not filename.endswith('.nc') : self.filename += '.nc'
+        if (not "_sol" in filename) and (not filename.endswith('.nc')) : self.filename = self.filename + '_sol.nc'
+        elif (not filename.endswith('.nc'))                            : self.filename += '.nc'
 
         assert exists(self.filename), '{} does not exist'.format(self.filename)
 
@@ -525,7 +554,17 @@ class AeroOPAC2(object):
         P_tot.data[np.isnan(P_tot.data)] = 0.
         P_tot.axes[1] = Z[1:]
         return P_tot
-
+    
+    @staticmethod
+    def list():
+        '''
+        list standard aerosol files in opac
+        '''
+        files = glob(join(dir_auxdata, 'new_aer/aerosols/OPAC/mixtures/*.nc'))
+        for ifile in range (0, len(files)):
+            files[ifile] = basename(files[ifile]).replace('_sol.nc', '')
+        return files
+    
 
 class AeroOPAC(object):
     '''
@@ -2261,10 +2300,10 @@ def get_AB_coeff2(modelA, modelB, wl1, wl2, AOT_OBS_wl1, AOT_OBS_wl2,
     A, B : factors of model A and B
     """
 
-    prof_MA = AtmAFGL(atm, comp=[AeroOPAC2(modelA+'_sol', aot_refA, wl_ref)],
+    prof_MA = AtmAFGL(atm, comp=[AeroOPAC2(modelA, aot_refA, wl_ref)],
                       O3=O3, P0=P0, H2O=H2O, grid=grid, O3_H2O_alt=O3_H2O_alt).calc([wl1, wl2], phase=False)
 
-    prof_MB = AtmAFGL(atm, comp=[AeroOPAC2(modelB+'_sol', aot_refB, wl_ref)],
+    prof_MB = AtmAFGL(atm, comp=[AeroOPAC2(modelB, aot_refB, wl_ref)],
                       O3=O3, P0=P0, H2O=H2O, grid=grid, O3_H2O_alt=O3_H2O_alt).calc([wl1, wl2], phase=False)
 
     # Compute AOT of the 2 models at the 2 wavelenghts (wl1 and wl2)
