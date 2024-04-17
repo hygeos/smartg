@@ -350,6 +350,7 @@ class AeroOPAC2(object):
         H_mix_min/max : force min and max altitude of the mixture
         H_free_min/max : force min and max altitude of free troposphere
         H_stra_min/max : force min and max altitude of stratosphere
+        rh_mix/free/stra : force rh of mixture/free tropo/strato
         ssa: force particle single scattering albedo
              (scalar or 1-d array-like for multichromatic)
 
@@ -361,7 +362,9 @@ class AeroOPAC2(object):
 
     def __init__(self, filename, tau_ref, w_ref, H_mix_min=None, H_mix_max=None, 
                  H_free_min=None, H_free_max=None, H_stra_min=None, H_stra_max=None,
-                 Z_mix=None, Z_free=None, Z_stra=None, ssa=None, phase=None):
+                 Z_mix=None, Z_free=None, Z_stra=None, ssa=None, phase=None,
+                 rh_mix=None, rh_free=None, rh_stra=None):
+        
         self.tau_ref = tau_ref
         if (np.isscalar(w_ref) or
             (isinstance(w_ref, np.ndarray) and w_ref.ndim == 0) ) : self.w_ref = np.array([w_ref])
@@ -396,6 +399,8 @@ class AeroOPAC2(object):
             if self.mixture.attrs['Z_stra'] == '99' : Z_stra = 1e6 # -> OPAC Z=99 for constant vertical dist
             else                                    : Z_stra = float(self.mixture.attrs['Z_stra'])
 
+
+        self.force_rh = [rh_mix, rh_free, rh_stra]
         self.vert_content = []
         self.H_min = []
         self.H_max =[]
@@ -427,32 +432,34 @@ class AeroOPAC2(object):
         ssa = np.zeros_like(dtau)
 
         if (self.hum_or_reff == 'hum'):
-            hum_or_rh_val = rh
+            hum_or_reff_val = rh
         elif (self.hum_or_reff == 'reff'):
-            hum_or_rh_val = self.reff
+            hum_or_reff_val = self.reff
         else:
             raise NameError("ext and ssa must varies as function of hum or reff.")
         
-        if (np.isscalar(hum_or_rh_val) or
-            (isinstance(hum_or_rh_val, np.ndarray) and hum_or_rh_val.ndim == 0) ) : hum_or_rh_val = np.array([hum_or_rh_val])
-        else                                                                      : hum_or_rh_val = np.array(hum_or_rh_val)
+        if (np.isscalar(hum_or_reff_val) or
+            (isinstance(hum_or_reff_val, np.ndarray) and hum_or_reff_val.ndim == 0) ) : hum_or_reff_val = np.array([hum_or_reff_val])
+        else                                                                          : hum_or_reff_val = np.array(hum_or_reff_val)
         
         ext_ = np.zeros_like(dtau)
         ext_ref_ = np.zeros_like(dtau)
         ssa_ = np.zeros_like(dtau)
         for icont, cont in enumerate(self.vert_content):
-            if (len(hum_or_rh_val) == 1):
-                ext_tmp = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_rh_val[:])][Idx(wav),:]
-                ext_ref_tmp = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_rh_val[:])][Idx(self.w_ref),:]
-                ssa_tmp = cont['ssa'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_rh_val[:])][Idx(wav),:]
+            if ((self.hum_or_reff == 'hum') and (self.force_rh[icont] is not None)) : rh_reff = np.full_like(hum_or_reff_val, self.force_rh[icont])
+            else                                                                    : rh_reff = hum_or_reff_val
+            if (len(rh_reff) == 1):
+                ext_tmp = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(rh_reff[:])][Idx(wav),:]
+                ext_ref_tmp = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(rh_reff[:])][Idx(self.w_ref),:]
+                ssa_tmp = cont['ssa'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(rh_reff[:])][Idx(wav),:]
                 for iz in range (0, len(Z)):
-                    ext_[:,iz] = ext_tmp
-                    ext_ref_[:,iz] = ext_ref_tmp
-                    ssa_[:,iz] = ssa_tmp
+                    ext_[:,iz] = ext_tmp[:,0]
+                    ext_ref_[:,iz] = ext_ref_tmp[:,0]
+                    ssa_[:,iz] = ssa_tmp[:,0]
             else:      
-                ext_ = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_rh_val[:])][Idx(wav),:]
-                ext_ref_ = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_rh_val[:])][Idx(self.w_ref),:]
-                ssa_ = cont['ssa'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_rh_val[:])][Idx(wav),:]
+                ext_ = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(rh_reff[:])][Idx(wav),:]
+                ext_ref_ = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(rh_reff[:])][Idx(self.w_ref),:]
+                ssa_ = cont['ssa'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(rh_reff[:])][Idx(wav),:]
             dtau_ = np.zeros_like(dtau)
             dtau_ref_ = np.zeros_like(dtau_ref)
             h1 = np.maximum(self.H_min[icont], Z[1:])
@@ -523,18 +530,19 @@ class AeroOPAC2(object):
             if (NBTHETA != len(phase_bis.axes[3])): phase_bis = phase_bis.sub()[:,:,:,Idx(theta)]
 
             if (self.hum_or_reff == 'hum'):
+                if (self.force_rh[icont] is not None) : hum_or_reff_val = np.full_like(rh, self.force_rh[icont])
+                else                                  : hum_or_reff_val = rh
+
                 P = LUT(
                     np.zeros((nwav, len(rh)-1, 6, NBTHETA), dtype='float32')+np.NaN,
                     axes=[wav, None, None, theta],
                     names=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
                     )  # nlam_tabulated, nrh, stk, NBTHETA
                 
-                for irh_, rh_ in enumerate(rh[1:]):
+                for irh_, rh_ in enumerate(hum_or_reff_val[1:]):
                     irh = Idx(rh_, round=True, fill_value='extrema')
                     #irh = Idx(rh_, fill_value='extrema')
                     P.data[:,irh_,0:nphamat,:] = phase_bis.sub()[:,irh,:,:].data
-
-                hum_or_rh_val = rh
             elif (self.hum_or_reff == 'reff'):
                 P = LUT(
                     np.zeros((nwav, 1, 6, NBTHETA), dtype='float32')+np.NaN,
@@ -545,13 +553,13 @@ class AeroOPAC2(object):
                 irh = Idx(self.reff, round=True).index(cont['phase'].axes[0])
                 #irh = Idx(self.reff).index(cont['phase'].axes[0])
                 P.data[:,0,0:nphamat,:] = phase_bis[:,irh,:,:].data
-                hum_or_rh_val = self.reff
+                hum_or_reff_val = self.reff
             else:
                 raise NameError("Phase matrix must varies as function of hum or reff.")
             
-            if (np.isscalar(hum_or_rh_val) or
-            (isinstance(hum_or_rh_val, np.ndarray) and hum_or_rh_val.ndim == 0) ) : hum_or_rh_val = np.array([hum_or_rh_val])
-            else                                                                  : hum_or_rh_val = np.array(hum_or_rh_val)
+            if (np.isscalar(hum_or_reff_val) or
+            (isinstance(hum_or_reff_val, np.ndarray) and hum_or_reff_val.ndim == 0) ) : hum_or_reff_val = np.array([hum_or_reff_val])
+            else                                                                      : hum_or_reff_val = np.array(hum_or_reff_val)
 
             if conv_Iparper:
                 # convert I, Q into Ipar, Iper
@@ -577,15 +585,15 @@ class AeroOPAC2(object):
             dtau_ =  np.zeros((len(wav), len(Z)), dtype=np.float32)
             ext_ = np.zeros_like(dtau_)
             ssa_ = np.zeros_like(dtau_)
-            if (len(hum_or_rh_val) == 1):
-                ext_tmp = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_rh_val[:])][Idx(wav),:]
-                ssa_tmp = cont['ssa'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_rh_val[:])][Idx(wav),:]
+            if (len(hum_or_reff_val) == 1):
+                ext_tmp = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_reff_val[:])][Idx(wav),:]
+                ssa_tmp = cont['ssa'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_reff_val[:])][Idx(wav),:]
                 for iz in range (0, len(Z)):
                     ext_[:,iz] = ext_tmp
                     ssa_[:,iz] = ssa_tmp
             else:      
-                ext_ = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_rh_val[:])][Idx(wav),:]
-                ssa_ = cont['ssa'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_rh_val[:])][Idx(wav),:]
+                ext_ = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_reff_val[:])][Idx(wav),:]
+                ssa_ = cont['ssa'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_reff_val[:])][Idx(wav),:]
             h1 = np.maximum(self.H_min[icont], Z[1:])
             h2 = np.minimum(self.H_max[icont], Z[:-1])
             cond = h2>h1
