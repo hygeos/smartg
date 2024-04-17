@@ -379,6 +379,7 @@ class AeroOPAC2(object):
         assert exists(self.filename), '{} does not exist'.format(self.filename)
 
         self.mixture = read_mlut(self.filename)
+        self.hum_or_reff = "hum"
         self.free_tropo = None
         self.strato = None
 
@@ -421,24 +422,42 @@ class AeroOPAC2(object):
             self.Z_sh.append(Z_stra)
         
     def dtau_ssa(self, wav, Z, rh):
-
-        # print(rh)
-        # print(Z)
-        # print(wav)
         dtau = np.zeros((len(wav), len(Z)), dtype=np.float32)
         dtau_ref = np.zeros((1, len(Z)), dtype=np.float32)
         ssa = np.zeros_like(dtau)
 
-        for icont, cont in enumerate(self.vert_content):           
-            ext_ = cont['ext'].swapaxes('hum', 'wav').sub()[:,Idx(rh[:])][Idx(wav),:]
-            ext_ref_ = cont['ext'].swapaxes('hum', 'wav').sub()[:,Idx(rh[:])][Idx(self.w_ref),:]
-            ssa_ = cont['ssa'].swapaxes('hum', 'wav').sub()[:,Idx(rh[:])][Idx(wav),:]
+        if (self.hum_or_reff == 'hum'):
+            hum_or_rh_val = rh
+        elif (self.hum_or_reff == 'reff'):
+            hum_or_rh_val = self.reff
+        else:
+            raise NameError("ext and ssa must varies as function of hum or reff.")
+        
+        if (np.isscalar(hum_or_rh_val) or
+            (isinstance(hum_or_rh_val, np.ndarray) and hum_or_rh_val.ndim == 0) ) : hum_or_rh_val = np.array([hum_or_rh_val])
+        else                                                                      : hum_or_rh_val = np.array(hum_or_rh_val)
+        
+        ext_ = np.zeros_like(dtau)
+        ext_ref_ = np.zeros_like(dtau)
+        ssa_ = np.zeros_like(dtau)
+        for icont, cont in enumerate(self.vert_content):
+            if (len(hum_or_rh_val) == 1):
+                ext_tmp = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_rh_val[:])][Idx(wav),:]
+                ext_ref_tmp = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_rh_val[:])][Idx(self.w_ref),:]
+                ssa_tmp = cont['ssa'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_rh_val[:])][Idx(wav),:]
+                for iz in range (0, len(Z)):
+                    ext_[:,iz] = ext_tmp
+                    ext_ref_[:,iz] = ext_ref_tmp
+                    ssa_[:,iz] = ssa_tmp
+            else:      
+                ext_ = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_rh_val[:])][Idx(wav),:]
+                ext_ref_ = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_rh_val[:])][Idx(self.w_ref),:]
+                ssa_ = cont['ssa'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_rh_val[:])][Idx(wav),:]
             dtau_ = np.zeros_like(dtau)
             dtau_ref_ = np.zeros_like(dtau_ref)
             h1 = np.maximum(self.H_min[icont], Z[1:])
             h2 = np.minimum(self.H_max[icont], Z[:-1])
             cond = h2>h1
-            # print(cond)
             dtau_[:,1:][:,cond] = ext_[:,1:][:,cond] * get_aer_dist_integral(self.Z_sh[icont], h1[cond], h2[cond])
             dtau += dtau_
             ssa += dtau_*ssa_
@@ -488,7 +507,7 @@ class AeroOPAC2(object):
 
             if ( (np.max(wav) > np.max(lam_tabulated)) or
                 (np.min(wav) < np.min(lam_tabulated)) ):
-                phase_bis = cont['phase'].swapaxes('wav', 'hum').sub()[Idx(wav),:,:,:]
+                phase_bis = cont['phase'].swapaxes('wav', self.hum_or_reff).sub()[Idx(wav),:,:,:]
             else:
                 # The optimisation consists to not interpolate at all wavelengths of lam_tabulated,
                 # but only the wavelengths of lam_tabulated closely in the range of np.min(wav) and np.max(wav)
@@ -498,21 +517,41 @@ class AeroOPAC2(object):
                 ilam_opti = np.concatenate(np.argwhere((ilam_tabulated >= range_ind[0]) &
                                                     (ilam_tabulated <= range_ind[1])))
 
-                if len(ilam_opti) > 1 : phase_bis = cont['phase'].swapaxes('wav', 'hum').sub()[ilam_opti,:,:,:].sub()[Idx(wav),:,:,:]
-                else                  : phase_bis = cont['phase'].swapaxes('wav', 'hum').sub()[ilam_opti,:,:,:]
+                if len(ilam_opti) > 1 : phase_bis = cont['phase'].swapaxes('wav', self.hum_or_reff).sub()[ilam_opti,:,:,:].sub()[Idx(wav),:,:,:]
+                else                  : phase_bis = cont['phase'].swapaxes('wav', self.hum_or_reff).sub()[ilam_opti,:,:,:]
 
             if (NBTHETA != len(phase_bis.axes[3])): phase_bis = phase_bis.sub()[:,:,:,Idx(theta)]
 
-            P = LUT(
-                np.zeros((nwav, len(rh)-1, 6, NBTHETA), dtype='float32')+np.NaN,
-                axes=[wav, None, None, theta],
-                names=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
-                )  # nlam_tabulated, nrh, stk, NBTHETA
-            
-            for irh_, rh_ in enumerate(rh[1:]):
-                irh = Idx(rh_, round=True, fill_value='extrema')
-                P.data[:,irh_,0:nphamat,:] = phase_bis.sub()[:,irh,:,:].data
+            if (self.hum_or_reff == 'hum'):
+                P = LUT(
+                    np.zeros((nwav, len(rh)-1, 6, NBTHETA), dtype='float32')+np.NaN,
+                    axes=[wav, None, None, theta],
+                    names=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
+                    )  # nlam_tabulated, nrh, stk, NBTHETA
+                
+                for irh_, rh_ in enumerate(rh[1:]):
+                    irh = Idx(rh_, round=True, fill_value='extrema')
+                    #irh = Idx(rh_, fill_value='extrema')
+                    P.data[:,irh_,0:nphamat,:] = phase_bis.sub()[:,irh,:,:].data
 
+                hum_or_rh_val = rh
+            elif (self.hum_or_reff == 'reff'):
+                P = LUT(
+                    np.zeros((nwav, 1, 6, NBTHETA), dtype='float32')+np.NaN,
+                    axes=[wav, None, None, theta],
+                    names=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
+                    )  # nlam_tabulated, nrh, stk, NBTHETA
+                
+                irh = Idx(self.reff, round=True).index(cont['phase'].axes[0])
+                #irh = Idx(self.reff).index(cont['phase'].axes[0])
+                P.data[:,0,0:nphamat,:] = phase_bis[:,irh,:,:].data
+                hum_or_rh_val = self.reff
+            else:
+                raise NameError("Phase matrix must varies as function of hum or reff.")
+            
+            if (np.isscalar(hum_or_rh_val) or
+            (isinstance(hum_or_rh_val, np.ndarray) and hum_or_rh_val.ndim == 0) ) : hum_or_rh_val = np.array([hum_or_rh_val])
+            else                                                                  : hum_or_rh_val = np.array(hum_or_rh_val)
 
             if conv_Iparper:
                 # convert I, Q into Ipar, Iper
@@ -535,10 +574,18 @@ class AeroOPAC2(object):
                     P.data[:,:,1,:] = 0.5*(P0-P4)      # P12=P21
                     P.data[:,:,4,:] = 0.5*(P0-2*P1+P4) # P22
 
-         
-            ext_ = cont['ext'].swapaxes('hum', 'wav').sub()[:,Idx(rh)][Idx(wav),:]
-            ssa_ = cont['ssa'].swapaxes('hum', 'wav').sub()[:,Idx(rh)][Idx(wav),:]
             dtau_ =  np.zeros((len(wav), len(Z)), dtype=np.float32)
+            ext_ = np.zeros_like(dtau_)
+            ssa_ = np.zeros_like(dtau_)
+            if (len(hum_or_rh_val) == 1):
+                ext_tmp = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_rh_val[:])][Idx(wav),:]
+                ssa_tmp = cont['ssa'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_rh_val[:])][Idx(wav),:]
+                for iz in range (0, len(Z)):
+                    ext_[:,iz] = ext_tmp
+                    ssa_[:,iz] = ssa_tmp
+            else:      
+                ext_ = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_rh_val[:])][Idx(wav),:]
+                ssa_ = cont['ssa'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_rh_val[:])][Idx(wav),:]
             h1 = np.maximum(self.H_min[icont], Z[1:])
             h2 = np.minimum(self.H_max[icont], Z[:-1])
             cond = h2>h1
@@ -769,6 +816,50 @@ class AeroOPAC(object):
         '''
         files = glob(join(dir_libradtran_opac, 'standard_aerosol_files', '*.dat'))
         return map(lambda x: basename(x)[:-4], files)
+
+
+class CloudOPAC2(AeroOPAC2):
+    '''
+    Single cloud, localized between zmin and zmax,
+    with and effective radius reff
+
+    Example: CloudOPAC2('wc', 12.68, 2, 3, 10., 550.)
+             # water cloud mie, reff=12.68 between 2 and 3 km
+             # total optical thickness of 10 at 550 nm
+    '''
+    def __init__(self, filename, reff, zmin, zmax, tau_ref, w_ref,
+                 phase=None):
+        self.reff = reff
+        self.tau_ref = tau_ref
+        if (np.isscalar(w_ref) or
+            (isinstance(w_ref, np.ndarray) and w_ref.ndim == 0) ) : self.w_ref = np.array([w_ref])
+        else                                                      : self.w_ref = np.array(w_ref)
+
+        if dirname(filename) == '' : self.filename = join(dir_auxdata, 'new_aer/aerosols/OPAC/clouds', filename)
+        else                       : self.filename = filename
+        if (not "_sol" in filename) and (not filename.endswith('.nc')) : self.filename = self.filename + '_sol.nc'
+        elif (not filename.endswith('.nc'))                            : self.filename += '.nc'
+
+        assert exists(self.filename), '{} does not exist'.format(self.filename)
+
+        self.mixture = read_mlut(self.filename)
+        self.hum_or_reff = "reff"
+        self.free_tropo = None
+        self.strato = None
+
+        self.vert_content = []
+        self.H_min = []
+        self.H_max =[]
+        self.Z_sh =[]
+
+        if (zmax-zmin > 1e-6):
+            self.vert_content.append(self.mixture)
+            self.H_min.append(zmin)
+            self.H_max.append(zmax)
+            self.Z_sh.append(1e6) # constant dist
+
+        self.ssa = None
+        self._phase = phase
 
 
 class CloudOPAC(AeroOPAC):
