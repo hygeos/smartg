@@ -1118,7 +1118,8 @@ class AtmAFGL(Atmosphere):
                  pfwav=None, pfgrid=[100., 0.], prof_abs=None,
                  prof_ray=None, prof_aer=None, prof_phases=None,
                  RH_cst=None, US=True,
-                 cells=None):
+                 cells=None,
+                 new_atm=False):
 
         self.lat = lat
         self.comp = comp
@@ -1131,6 +1132,7 @@ class AtmAFGL(Atmosphere):
         self.RH_cst = RH_cst
         self.US = US
         self.OPT3D = cells is not None
+        self.new_atm=new_atm
         if self.OPT3D : self.cells = cells
 
         self.tauR = tauR
@@ -1150,10 +1152,16 @@ class AtmAFGL(Atmosphere):
             np.savetxt('./tmp.dat', atm_arr)
             atm_filename = "./tmp.dat"
 
-        if dirname(atm_filename) == '':
-            atm_filename = join(dir_libradtran_atmmod, atm_filename)
-        if (not exists(atm_filename)) and (not atm_filename.endswith('.dat')):
-            atm_filename += '.dat'
+        if not new_atm:
+            if dirname(atm_filename) == '':
+                atm_filename = join(dir_libradtran_atmmod, atm_filename)
+            if (not exists(atm_filename)) and (not atm_filename.endswith('.dat')):
+                atm_filename += '.dat'
+        else:
+            if dirname(atm_filename) == '':
+                atm_filename = join(dir_auxdata, 'atmospheres/', atm_filename)
+            if (not exists(atm_filename)) and (not atm_filename.endswith('.nc')):
+                atm_filename += '.nc'
 
         crs_O3_filename  = join(dir_libradtran_crs, 'crs_O3_UBremen_cf.dat')
         crs_NO2_filename = join(dir_libradtran_crs, 'crs_NO2_UBremen_cf.dat')
@@ -1180,9 +1188,14 @@ class AtmAFGL(Atmosphere):
         self.crs_no2
 
         # read afgl file
-        prof = Profile_base(atm_filename, O3=O3,
-                            H2O=H2O, NO2=NO2, P0=P0, RH_cst=RH_cst, US=US, O3_H2O_alt=O3_H2O_alt
-                            )
+        if not new_atm:
+            prof = Profile_base(atm_filename, O3=O3,
+                                H2O=H2O, NO2=NO2, P0=P0, RH_cst=RH_cst, US=US, O3_H2O_alt=O3_H2O_alt
+                                )
+        else:
+            prof = Profile_base2(atm_filename, O3=O3,
+                                H2O=H2O, NO2=NO2, P0=P0, RH_cst=RH_cst, US=US, O3_H2O_alt=O3_H2O_alt
+                                )
 
         #
         # regrid profile if required
@@ -1812,7 +1825,6 @@ class Profile_base(object):
             self.dens_so2 = [0] * nz
 
 
-
     def regrid(self, znew):
         '''
         regrid profile and returns a new profile
@@ -1863,6 +1875,79 @@ class Profile_base(object):
         rh = self.dens_h2o/vapor_pressure(self.T)*100.
         if self.RH_cst is not None : rh[:] = self.RH_cst
         return rh
+
+
+class Profile_base2(Profile_base):
+    '''
+    Profile of physical properties
+    - atm_filename: AFGL filename
+    - O3: total ozone column (Dobson units),
+      or None to use atmospheric profile value (default)
+    - H2O: total water vapour column (g.cm-2), or None to use atmospheric
+      profile value (default)
+    - P0: sea surface pressure (hPa)
+    - RH_cst: force Relative humidity to be constant, (defualt recalculated)
+    '''
+    def __init__(self, atm_filename, O3=None, H2O=None, NO2=True, P0=None, RH_cst=None, US=True, O3_H2O_alt=None):
+
+        if atm_filename is None:
+            return
+        self.atm_filename = atm_filename
+
+
+        data = read_mlut(atm_filename)
+        self.z        = data.axes['z_atm'] # Altitude in km
+        self.P        = data['P'].data     # pressure in hPa
+        self.T        = data['T'].data     # temperature in K
+        self.dens_air = data['dens'].data  # Air density in cm-3
+        self.dens_h2o = data['H2O'].data   # H2O density in cm-3
+        self.dens_o3 = data['O3'].data     # O3 density in cm-3
+        self.dens_n2o = data['N2O'].data   # N2O density in cm-3
+        self.dens_co = data['CO'].data     # CO density in cm-3
+        self.dens_ch4 = data['CH4'].data   # CH4 density in cm-3
+        self.dens_co2 = data['CO2'].data   # CO2 density in cm-3
+        self.dens_o2 = data['O2'].data     # O2 density in cm-3
+        self.dens_n2 = data['N2'].data   # CH4 density in cm-3
+        self.dens_no2 = data['NO2'].data   # CO2 density in cm-3
+        self.dens_so2 = data['SO2'].data     # O2 density in cm-3
+
+        # self.dens_n2 = np.zeros_like(self.dens_air)
+        # self.dens_no2 = np.zeros_like(self.dens_air)
+        # self.dens_so2 = np.zeros_like(self.dens_air)
+
+        self.RH_cst   = RH_cst
+
+        # scale to specified total O3 content
+        if O3 is not None:
+            if O3_H2O_alt is None:
+                self.dens_o3 *= 2.69e16 * O3 / (simpson(y=self.dens_o3, x=-self.z) * 1e5)
+            else:
+                f_dens_o3 = interp1d(self.z, self.dens_o3, fill_value='extrapolate')
+                z_alt = np.append(self.z[self.z>O3_H2O_alt], O3_H2O_alt)
+                dens_o3_alt = f_dens_o3(z_alt)
+                o3_afgl = (simpson(dens_o3_alt, -z_alt) * 1e5)/2.69e16
+                self.dens_o3 *= O3/o3_afgl
+            if O3==0 : self.dens_o3[:] = 0.
+
+        # scale to total H2O content
+        if H2O is not None:
+            M_H2O = 18.015 # g/mol
+            Avogadro = constants.value('Avogadro constant')
+            if O3_H2O_alt is None:
+                self.dens_h2o *= H2O/ M_H2O * Avogadro / (simpson(y=self.dens_h2o, x=-self.z) * 1e5)
+            else:
+                f_dens_h2o = interp1d(self.z, self.dens_h2o, fill_value='extrapolate')
+                z_alt = np.append(self.z[self.z>O3_H2O_alt], O3_H2O_alt)
+                dens_h2o_alt = f_dens_h2o(z_alt)
+                h2o_afgl = (simpson(y=dens_h2o_alt, x=-z_alt) * 1e5 * M_H2O)/Avogadro
+                self.dens_h2o *= H2O/h2o_afgl
+            if H2O==0 : self.dens_h2o[:] = 0.
+
+        if P0 is not None:
+            self.P *= P0/self.P[-1]
+
+        if not NO2:
+            self.dens_no2[:] = 0.
 
 
 def FN2(lam):
