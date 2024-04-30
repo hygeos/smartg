@@ -1366,58 +1366,70 @@ class AtmAFGL(Atmosphere):
             # Ozone optical thickness
             #
             
-            T0 = 273.15  # in K
-            T = LUT(prof.T, names=['temperature'])
-            tau_o3  = self.crs_chappuis.sub()[Idx(wav, fill_value='extrema'), 0]
-            tau_o3 += self.crs_chappuis.sub()[Idx(wav, fill_value='extrema'), 1]*(T - T0)
-            tau_o3 += self.crs_chappuis.sub()[Idx(wav, fill_value='extrema'), 2]*(T - T0)*(T - T0)
-
-            # LUT in 10^(-20) cm2, convert in km-1
-            tau_o3 *= prof.dens_o3 * 1e-15
-            tau_o3 *= dz
-            if not (tau_o3.data >= 0).all():
-                warn('Negative values in tau_o3 ({}%, min value is {}, set to 0)'.format(
-                    100.*np.sum(tau_o3.data<0)/float(tau_o3.data.size),
-                    tau_o3.data[tau_o3.data == np.amin(tau_o3.data)]
-                    #tau_o3.data[tau_o3.data == np.amin(tau_o3.data)][0]
-                    ))
-            tau_o3.data[tau_o3.data < 0] = 0
-
-            #
-            # NO2 optical thickness
-            #
-            tau_no2  = self.crs_no2.sub()[Idx(wav, fill_value='extrema'), 0]
-            tau_no2 += self.crs_no2.sub()[Idx(wav, fill_value='extrema'), 1]*(T - T0)
-            tau_no2 += self.crs_no2.sub()[Idx(wav, fill_value='extrema'), 2]*(T - T0)*(T - T0)
-
-            tau_no2 *= prof.dens_no2 * 1e-15
-            tau_no2 *= dz
-            # if not (tau_no2.data >= 0).all():
-            #     warn('Negative values in tau_no2 ({}%, min value is {}, set to 0)'.format(
-            #         100.*np.sum(tau_no2.data<0)/float(tau_no2.data.size),
-            #         tau_no2.data[tau_no2.data == np.amin(tau_no2.data)][0]
-            #         ))
-            tau_no2.data[tau_no2.data < 0] = 0
-
-            #
-            # other gases (reptran)
-            #
+            # Consider gaseous from reptran/kdis
+            use_o3_acs  = True
+            use_no2_acs = True
             if wav.use_reptran_kdis:
                 tau_mol = wav.calc_profile(self.prof) * dz
                 # If not reptran (i.e. Kdis case) we set 03 and NO2 to 0 (already calculated in Kdis)
                 if not (str(wav.type_wav) == "<class 'smartg.reptran.REPTRAN_IBAND'>"):
-                    tau_o3.data[:] = 0.
-                    tau_no2.data[:] = 0.
+                    all_kdis_gas = wav.data[0].band.kdis.species + wav.data[0].band.kdis.species_c
+                    if 'no2' in all_kdis_gas :
+                        use_no2_acs = False
+                        tau_no2 = LUT(np.zeros((len(wav), len(prof.z)), dtype='float32') , axes=[wav[:], None], names=['wavelength', 'z_atm'])
+                    if 'o3' in all_kdis_gas  :
+                        use_o3_acs  = False
+                        tau_o3 = LUT(np.zeros((len(wav), len(prof.z)), dtype='float32') , axes=[wav[:], None], names=['wavelength', 'z_atm'])
             else:
                 tau_mol = np.zeros((len(wav), len(prof.z)), dtype='float32') * dz
+
+
+            # Compute o3 and no2 (if kdis only compute them if not already computed)
+            if use_no2_acs or use_o3_acs:           
+                T0 = 273.15  # in K
+                #T = LUT(prof.T, names=['temperature'])
+                T = LUT(prof.T, axes=[None], names=['z_atm'])# temperature variability in z
+                if use_o3_acs:
+                    #
+                    # O3 optical thickness
+                    #
+                    tau_o3  = self.crs_chappuis.sub()[Idx(wav[:], fill_value='extrema'), 0]
+                    tau_o3 += self.crs_chappuis.sub()[Idx(wav[:], fill_value='extrema'), 1]*(T - T0)
+                    tau_o3 += self.crs_chappuis.sub()[Idx(wav[:], fill_value='extrema'), 2]*(T - T0)*(T - T0)
+
+                    # LUT in 10^(-20) cm2, convert in km-1
+                    tau_o3 *= prof.dens_o3 * 1e-15
+                    tau_o3 *= dz
+                    if not (tau_o3.data >= 0).all():
+                        warn('Negative values in tau_o3 ({}%, min value is {}, set to 0)'.format(
+                            100.*np.sum(tau_o3.data<0)/float(tau_o3.data.size),
+                            tau_o3.data[tau_o3.data == np.amin(tau_o3.data)]
+                            #tau_o3.data[tau_o3.data == np.amin(tau_o3.data)][0]
+                            ))
+                    tau_o3.data[tau_o3.data < 0] = 0
+                if use_no2_acs:
+                    #
+                    # NO2 optical thickness
+                    #
+                    tau_no2  = self.crs_no2.sub()[Idx(wav[:], fill_value='extrema'), 0]
+                    tau_no2 += self.crs_no2.sub()[Idx(wav[:], fill_value='extrema'), 1]*(T - T0)
+                    tau_no2 += self.crs_no2.sub()[Idx(wav[:], fill_value='extrema'), 2]*(T - T0)*(T - T0)
+
+                    tau_no2 *= prof.dens_no2 * 1e-15
+                    tau_no2 *= dz
+                    # if not (tau_no2.data >= 0).all():
+                    #     warn('Negative values in tau_no2 ({}%, min value is {}, set to 0)'.format(
+                    #         100.*np.sum(tau_no2.data<0)/float(tau_no2.data.size),
+                    #         tau_no2.data[tau_no2.data == np.amin(tau_no2.data)][0]
+                    #         ))
+                    tau_no2.data[tau_no2.data < 0] = 0
                 
             #
             # Total gaseous optical thickness
             #
             dtaug = tau_o3 + tau_no2 + tau_mol
             taug = dtaug.apply(lambda x: np.cumsum(x, axis=1))
-            #taug.attrs['description'] = 'Cumulated gaseous absorption optical thickness'
-            #pro.add_lut(taug, desc='OD_g')
+            
             if not self.OPT3D:
                 pro.add_dataset('OD_g', taug.data,
                 axnames=['wavelength', 'z_atm'],
