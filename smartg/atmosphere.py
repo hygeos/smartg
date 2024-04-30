@@ -1393,35 +1393,24 @@ class AtmAFGL(Atmosphere):
                     #
                     # O3 optical thickness
                     #
-                    tau_o3  = self.crs_chappuis.sub()[Idx(wav[:], fill_value='extrema'), 0]
-                    tau_o3 += self.crs_chappuis.sub()[Idx(wav[:], fill_value='extrema'), 1]*(T - T0)
-                    tau_o3 += self.crs_chappuis.sub()[Idx(wav[:], fill_value='extrema'), 2]*(T - T0)*(T - T0)
+                    tau_o3  = self.crs_chappuis.sub()[Idx(wav[:], round=True, fill_value=0.), 0]
+                    tau_o3 += self.crs_chappuis.sub()[Idx(wav[:], round=True, fill_value=0.), 1]*(T - T0)
+                    tau_o3 += self.crs_chappuis.sub()[Idx(wav[:], round=True, fill_value=0.), 2]*(T - T0)*(T - T0)
 
                     # LUT in 10^(-20) cm2, convert in km-1
                     tau_o3 *= prof.dens_o3 * 1e-15
                     tau_o3 *= dz
-                    if not (tau_o3.data >= 0).all():
-                        warn('Negative values in tau_o3 ({}%, min value is {}, set to 0)'.format(
-                            100.*np.sum(tau_o3.data<0)/float(tau_o3.data.size),
-                            tau_o3.data[tau_o3.data == np.amin(tau_o3.data)]
-                            #tau_o3.data[tau_o3.data == np.amin(tau_o3.data)][0]
-                            ))
                     tau_o3.data[tau_o3.data < 0] = 0
                 if use_no2_acs:
                     #
                     # NO2 optical thickness
                     #
-                    tau_no2  = self.crs_no2.sub()[Idx(wav[:], fill_value='extrema'), 0]
-                    tau_no2 += self.crs_no2.sub()[Idx(wav[:], fill_value='extrema'), 1]*(T - T0)
-                    tau_no2 += self.crs_no2.sub()[Idx(wav[:], fill_value='extrema'), 2]*(T - T0)*(T - T0)
+                    tau_no2  = self.crs_no2.sub()[Idx(wav[:], round=True, fill_value=0.), 0]
+                    tau_no2 += self.crs_no2.sub()[Idx(wav[:], round=True, fill_value=0.), 1]*(T - T0)
+                    tau_no2 += self.crs_no2.sub()[Idx(wav[:], round=True, fill_value=0.), 2]*(T - T0)*(T - T0)
 
                     tau_no2 *= prof.dens_no2 * 1e-15
                     tau_no2 *= dz
-                    # if not (tau_no2.data >= 0).all():
-                    #     warn('Negative values in tau_no2 ({}%, min value is {}, set to 0)'.format(
-                    #         100.*np.sum(tau_no2.data<0)/float(tau_no2.data.size),
-                    #         tau_no2.data[tau_no2.data == np.amin(tau_no2.data)][0]
-                    #         ))
                     tau_no2.data[tau_no2.data < 0] = 0
                 
             #
@@ -1429,7 +1418,7 @@ class AtmAFGL(Atmosphere):
             #
             dtaug = tau_o3 + tau_no2 + tau_mol
             taug = dtaug.apply(lambda x: np.cumsum(x, axis=1))
-            
+
             if not self.OPT3D:
                 pro.add_dataset('OD_g', taug.data,
                 axnames=['wavelength', 'z_atm'],
