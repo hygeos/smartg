@@ -174,7 +174,7 @@ class Species(object):
                 )  # nlam_tabulated, nrh, stk, NBTHETA
             
             for irh_, rh_ in enumerate(rh[1:]):
-                irh = Idx(rh_, round=True, fill_value='extrema')
+                irh = Idx(rh_, fill_value='extrema')
                 P.data[:,irh_,0:nphamat,:] = phase_bis.sub()[:,irh,:,:].data
 
         else: # phase function does not depend on rh
@@ -185,7 +185,7 @@ class Species(object):
                 )  # nlam_tabulated, nrh, stk, NBTHETA
             
             if (self._rh_or_reff == 'reff') and (reff is not None):
-                irh = Idx(reff, round=True).index(self._phase.axes[1])
+                irh = Idx(reff).index(self._phase.axes[1])
             else:
                 irh = 0
             P.data[:,0,0:nphamat,:] = phase_bis[:,irh,:,:].data
@@ -540,7 +540,7 @@ class AeroOPAC2(object):
                     )  # nlam_tabulated, nrh, stk, NBTHETA
                 
                 for irh_, rh_ in enumerate(hum_or_reff_val[1:]):
-                    irh = Idx(rh_, round=True, fill_value='extrema')
+                    irh = Idx(rh_, fill_value='extrema')
                     #irh = Idx(rh_, fill_value='extrema')
                     P.data[:,irh_,0:nphamat,:] = phase_bis.sub()[:,irh,:,:].data
             elif (self.hum_or_reff == 'reff'):
@@ -550,7 +550,7 @@ class AeroOPAC2(object):
                     names=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
                     )  # nlam_tabulated, nrh, stk, NBTHETA
                 
-                irh = Idx(self.reff, round=True).index(cont['phase'].axes[0])
+                irh = Idx(self.reff).index(cont['phase'].axes[0])
                 #irh = Idx(self.reff).index(cont['phase'].axes[0])
                 P.data[:,0,0:nphamat,:] = phase_bis[:,irh,:,:].data
                 hum_or_reff_val = self.reff
