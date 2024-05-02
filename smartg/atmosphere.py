@@ -17,10 +17,8 @@ from scipy.integrate import simpson
 from scipy import constants
 from scipy.constants import speed_of_light, Planck, Boltzmann
 from smartg.bandset import BandSet
-import netCDF4
 from smartg.config import dir_libradtran_opac
 from smartg.config import dir_libradtran_atmmod
-from smartg.config import dir_libradtran_crs
 from smartg.config import dir_auxdata
 from warnings import warn
 import sys
@@ -330,7 +328,7 @@ class SpeciesUser(Species):
         return P
 
 
-class AeroOPAC2(object):
+class AerOPAC(object):
     '''
     Initialize the Aerosol OPAC model
 
@@ -826,12 +824,12 @@ class AeroOPAC(object):
         return map(lambda x: basename(x)[:-4], files)
 
 
-class CloudOPAC2(AeroOPAC2):
+class CldOPAC(AerOPAC):
     '''
     Single cloud, localized between zmin and zmax,
     with and effective radius reff
 
-    Example: CloudOPAC2('wc', 12.68, 2, 3, 10., 550.)
+    Example: CldOPAC('wc', 12.68, 2, 3, 10., 550.)
              # water cloud mie, reff=12.68 between 2 and 3 km
              # total optical thickness of 10 at 550 nm
     '''
@@ -2485,10 +2483,10 @@ def get_AB_coeff2(modelA, modelB, wl1, wl2, AOT_OBS_wl1, AOT_OBS_wl2,
     A, B : factors of model A and B
     """
 
-    prof_MA = AtmAFGL(atm, comp=[AeroOPAC2(modelA, aot_refA, wl_ref)],
+    prof_MA = AtmAFGL(atm, comp=[AerOPAC(modelA, aot_refA, wl_ref)],
                       O3=O3, P0=P0, H2O=H2O, grid=grid, O3_H2O_alt=O3_H2O_alt).calc([wl1, wl2], phase=False)
 
-    prof_MB = AtmAFGL(atm, comp=[AeroOPAC2(modelB, aot_refB, wl_ref)],
+    prof_MB = AtmAFGL(atm, comp=[AerOPAC(modelB, aot_refB, wl_ref)],
                       O3=O3, P0=P0, H2O=H2O, grid=grid, O3_H2O_alt=O3_H2O_alt).calc([wl1, wl2], phase=False)
 
     # Compute AOT of the 2 models at the 2 wavelenghts (wl1 and wl2)
