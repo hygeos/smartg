@@ -20,13 +20,352 @@ from smartg.bandset import BandSet
 from smartg.config import dir_libradtran_opac
 from smartg.config import dir_libradtran_atmmod
 from smartg.config import dir_auxdata
-from warnings import warn
+import warnings
 import sys
 import pandas as pd
 if sys.version_info[:2] >= (3, 0):
     xrange = range
 
 
+
+class AerOPAC(object):
+    '''
+    Initialize the Aerosol OPAC model
+
+    Args:
+        filename: name of the aerosol file.
+                  If no directory is specified, assume directory
+                  auxdata/aerosols/OPAC/mixtures
+                  aerosol files can be:
+                      'antarctic', 'antarctic_spheric', 'arctic', 'continental_average',
+                      'continental_clean', 'continental_polluted',
+                      'desert', 'desert_spheric',
+                      'maritime_clean', 'maritime_polluted', 'mineral_transported'
+                      'maritime_tropical', 'urban'
+
+        tau_ref: optical thickness at wavelength wref
+        w_ref: reference wavelength (nm) for aot
+        H_mix_min/max : force min and max altitude of the mixture
+        H_free_min/max : force min and max altitude of free troposphere
+        H_stra_min/max : force min and max altitude of stratosphere
+        rh_mix/free/stra : force rh of mixture/free tropo/strato
+        ssa: force particle single scattering albedo
+             (scalar or 1-d array-like for multichromatic)
+
+        phase: LUT of phase function
+               (can be read from file with read_phase)
+
+        Example: AeroOPAC('maritime_clean', 0.1, 550.).calc(400.)
+    '''
+
+    def __init__(self, filename, tau_ref, w_ref, H_mix_min=None, H_mix_max=None, 
+                 H_free_min=None, H_free_max=None, H_stra_min=None, H_stra_max=None,
+                 Z_mix=None, Z_free=None, Z_stra=None, ssa=None, phase=None,
+                 rh_mix=None, rh_free=None, rh_stra=None):
+        
+        self.tau_ref = tau_ref
+        if (np.isscalar(w_ref) or
+            (isinstance(w_ref, np.ndarray) and w_ref.ndim == 0) ) : self.w_ref = np.array([w_ref])
+        else                                                      : self.w_ref = np.array(w_ref)
+        self._phase = phase
+
+        if ssa is None : self.ssa = None
+        else           : self.ssa = np.array(ssa)
+
+        if dirname(filename) == '' : self.filename = join(dir_auxdata, 'aerosols_old/OPAC/mixtures', filename)
+        else                       : self.filename = filename
+        if (not "_sol" in filename) and (not filename.endswith('.nc')) : self.filename = self.filename + '_sol.nc'
+        elif (not filename.endswith('.nc'))                            : self.filename += '.nc'
+
+        assert exists(self.filename), '{} does not exist'.format(self.filename)
+
+        self.mixture = read_mlut(self.filename)
+        self.hum_or_reff = "hum"
+        self.free_tropo = None
+        self.strato = None
+
+        if H_mix_min is None : H_mix_min = float(self.mixture.attrs['H_mix_min'])
+        if H_mix_max is None : H_mix_max = float(self.mixture.attrs['H_mix_max'])
+        if H_free_min is None : H_free_min = float(self.mixture.attrs['H_free_min'])
+        if H_free_max is None : H_free_max = float(self.mixture.attrs['H_free_max'])
+        if H_stra_min is None : H_stra_min = float(self.mixture.attrs['H_stra_min'])
+        if H_stra_max is None : H_stra_max = float(self.mixture.attrs['H_stra_max'])
+
+        if Z_mix is None : Z_mix = float(self.mixture.attrs['Z_mix'])
+        if Z_free is None : Z_free = float(self.mixture.attrs['Z_free'])
+        if Z_stra is None :
+            if self.mixture.attrs['Z_stra'] == '99' : Z_stra = 1e6 # -> OPAC Z=99 for constant vertical dist
+            else                                    : Z_stra = float(self.mixture.attrs['Z_stra'])
+
+
+        self.force_rh = [rh_mix, rh_free, rh_stra]
+        self.vert_content = []
+        self.H_min = []
+        self.H_max =[]
+        self.Z_sh =[]
+
+        if (H_mix_max-H_mix_min > 1e-6):
+            self.vert_content.append(self.mixture)
+            self.H_min.append(H_mix_min)
+            self.H_max.append(H_mix_max)
+            self.Z_sh.append(Z_mix)
+        if (H_free_max-H_free_min > 1e-6):
+            filename_tmp = join(dir_auxdata, 'aerosols/OPAC/free_troposphere/free_troposphere_sol.nc')
+            self.free_tropo = read_mlut(filename_tmp)
+            self.vert_content.append(self.free_tropo)
+            self.H_min.append(H_free_min)
+            self.H_max.append(H_free_max)
+            self.Z_sh.append(Z_free)
+        if (H_stra_max-H_stra_min > 1e-6):
+            filename_tmp = join(dir_auxdata, 'aerosols/OPAC/stratosphere/stratosphere_sol.nc')
+            self.strato = read_mlut(filename_tmp)
+            self.vert_content.append(self.strato)
+            self.H_min.append(H_stra_min)
+            self.H_max.append(H_stra_max)
+            self.Z_sh.append(Z_stra)
+        
+    def dtau_ssa(self, wav, Z, rh):
+        dtau = np.zeros((len(wav), len(Z)), dtype=np.float32)
+        dtau_ref = np.zeros((1, len(Z)), dtype=np.float32)
+        ssa = np.zeros_like(dtau)
+
+        if (self.hum_or_reff == 'hum'):
+            hum_or_reff_val = rh
+        elif (self.hum_or_reff == 'reff'):
+            hum_or_reff_val = self.reff
+        else:
+            raise NameError("ext and ssa must varies as function of hum or reff.")
+        
+        if (np.isscalar(hum_or_reff_val) or
+            (isinstance(hum_or_reff_val, np.ndarray) and hum_or_reff_val.ndim == 0) ) : hum_or_reff_val = np.array([hum_or_reff_val])
+        else                                                                          : hum_or_reff_val = np.array(hum_or_reff_val)
+        
+        ext_ = np.zeros_like(dtau)
+        ext_ref_ = np.zeros_like(dtau)
+        ssa_ = np.zeros_like(dtau)
+        for icont, cont in enumerate(self.vert_content):
+            if ((self.hum_or_reff == 'hum') and (self.force_rh[icont] is not None)) : rh_reff = np.full_like(hum_or_reff_val, self.force_rh[icont])
+            else                                                                    : rh_reff = hum_or_reff_val
+            if (len(rh_reff) == 1):
+                ext_tmp = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(rh_reff[:])][Idx(wav),:]
+                ext_ref_tmp = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(rh_reff[:])][Idx(self.w_ref),:]
+                ssa_tmp = cont['ssa'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(rh_reff[:])][Idx(wav),:]
+                for iz in range (0, len(Z)):
+                    ext_[:,iz] = ext_tmp[:,0]
+                    ext_ref_[:,iz] = ext_ref_tmp[:,0]
+                    ssa_[:,iz] = ssa_tmp[:,0]
+            else:      
+                ext_ = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(rh_reff[:])][Idx(wav),:]
+                ext_ref_ = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(rh_reff[:])][Idx(self.w_ref),:]
+                ssa_ = cont['ssa'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(rh_reff[:])][Idx(wav),:]
+            dtau_ = np.zeros_like(dtau)
+            dtau_ref_ = np.zeros_like(dtau_ref)
+            h1 = np.maximum(self.H_min[icont], Z[1:])
+            h2 = np.minimum(self.H_max[icont], Z[:-1])
+            cond = h2>h1
+            dtau_[:,1:][:,cond] = ext_[:,1:][:,cond] * get_aer_dist_integral(self.Z_sh[icont], h1[cond], h2[cond])
+            dtau += dtau_
+            ssa += dtau_*ssa_
+            dtau_ref_[:,1:][:,cond] = ext_ref_[:,1:][:,cond] * get_aer_dist_integral(self.Z_sh[icont], h1[cond], h2[cond])
+            dtau_ref += dtau_ref_
+
+        ssa[dtau!=0] /= dtau[dtau!=0]
+
+        #apply scaling factor to get the required optical thickness at the
+        # specified wavelength
+        if self.tau_ref is not None: dtau *= self.tau_ref/np.sum(dtau_ref)
+
+        return dtau, ssa
+    
+    
+    def phase(self, wav, Z, rh, NBTHETA=721, conv_Iparper=True):
+        '''
+        Phase function calculation at wavelength wav and altitudes Z
+        relative humidity is rh
+        angle resampling over NBTHETA angles
+        '''
+
+        if self._phase is not None:
+            if self._phase.ndim == 2:
+                # convert to 4-dim by inserting empty dimensions wav_phase
+                # and z_phase
+                assert self._phase.names == ['stk', 'theta_atm']
+                pha = LUT(self._phase.data[None,None,:,:],
+                          names = ['wav_phase', 'z_phase'] + self._phase.names,
+                          axes = [np.array([wav[0]]), np.array([0.])] + self._phase.axes,
+                         )
+
+                return pha
+            else:
+                return self._phase
+
+        theta = np.linspace(0., 180., num=NBTHETA)
+        lam_tabulated = np.array(self.mixture.axis('wav'))
+        nwav = len(wav)
+
+        P_tot = 0.
+        dssa = 0.
+        for icont, cont in enumerate(self.vert_content):    
+            # Number of independant components of the phase Matrix
+            # Spheric particles -> 4, non spheric particles -> 6
+            nphamat = cont['phase'].shape[2]
+
+            if ( (np.max(wav) > np.max(lam_tabulated)) or
+                (np.min(wav) < np.min(lam_tabulated)) ):
+                phase_bis = cont['phase'].swapaxes('wav', self.hum_or_reff).sub()[Idx(wav),:,:,:]
+            else:
+                # The optimisation consists to not interpolate at all wavelengths of lam_tabulated,
+                # but only the wavelengths of lam_tabulated closely in the range of np.min(wav) and np.max(wav)
+                range_ind = np.array([np.argwhere((lam_tabulated <= np.min(wav)))[-1][0],
+                                    np.argwhere((lam_tabulated >= np.max(wav)))[0][0]])
+                ilam_tabulated = np.arange(len(lam_tabulated), dtype=int)
+                ilam_opti = np.concatenate(np.argwhere((ilam_tabulated >= range_ind[0]) &
+                                                    (ilam_tabulated <= range_ind[1])))
+
+                if len(ilam_opti) > 1 : phase_bis = cont['phase'].swapaxes('wav', self.hum_or_reff).sub()[ilam_opti,:,:,:].sub()[Idx(wav),:,:,:]
+                else                  : phase_bis = cont['phase'].swapaxes('wav', self.hum_or_reff).sub()[ilam_opti,:,:,:]
+
+            if (NBTHETA != len(phase_bis.axes[3])): phase_bis = phase_bis.sub()[:,:,:,Idx(theta)]
+
+            if (self.hum_or_reff == 'hum'):
+                if (self.force_rh[icont] is not None) : hum_or_reff_val = np.full_like(rh, self.force_rh[icont])
+                else                                  : hum_or_reff_val = rh
+
+                P = LUT(
+                    np.zeros((nwav, len(rh)-1, 6, NBTHETA), dtype='float32')+np.NaN,
+                    axes=[wav, None, None, theta],
+                    names=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
+                    )  # nlam_tabulated, nrh, stk, NBTHETA
+                
+                for irh_, rh_ in enumerate(hum_or_reff_val[1:]):
+                    irh = Idx(rh_, fill_value='extrema')
+                    #irh = Idx(rh_, fill_value='extrema')
+                    P.data[:,irh_,0:nphamat,:] = phase_bis.sub()[:,irh,:,:].data
+            elif (self.hum_or_reff == 'reff'):
+                P = LUT(
+                    np.zeros((nwav, 1, 6, NBTHETA), dtype='float32')+np.NaN,
+                    axes=[wav, None, None, theta],
+                    names=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
+                    )  # nlam_tabulated, nrh, stk, NBTHETA
+                
+                irh = Idx(self.reff).index(cont['phase'].axes[0])
+                #irh = Idx(self.reff).index(cont['phase'].axes[0])
+                P.data[:,0,0:nphamat,:] = phase_bis[:,irh,:,:].data
+                hum_or_reff_val = self.reff
+            else:
+                raise NameError("Phase matrix must varies as function of hum or reff.")
+            
+            if (np.isscalar(hum_or_reff_val) or
+            (isinstance(hum_or_reff_val, np.ndarray) and hum_or_reff_val.ndim == 0) ) : hum_or_reff_val = np.array([hum_or_reff_val])
+            else                                                                      : hum_or_reff_val = np.array(hum_or_reff_val)
+
+            if conv_Iparper:
+                # convert I, Q into Ipar, Iper
+                if (nphamat == 4): # spherical particles
+                    P.data[:,:,4,:] = P.data[:,:,0,:].copy()
+                    P.data[:,:,5,:] = P.data[:,:,2,:].copy()
+                    P0 = P.data[:,:,0,:].copy()
+                    P1 = P.data[:,:,1,:].copy()
+                    P4 = P.data[:,:,4,:].copy()
+                    P.data[:,:,0,:] = 0.5*(P0+2*P1+P4) # P11
+                    P.data[:,:,1,:] = 0.5*(P0-P4)      # P12=P21
+                    P.data[:,:,4,:] = 0.5*(P0-2*P1+P4) # P22
+                elif (nphamat == 6): # non spherical particles
+                    # note: the sign of P43/P34 affects only the sign of V,
+                    # since V=0 for rayleigh scattering it does not matter 
+                    P0 = P.data[:,:,0,:].copy()
+                    P1 = P.data[:,:,1,:].copy()
+                    P4 = P.data[:,:,4,:].copy()
+                    P.data[:,:,0,:] = 0.5*(P0+2*P1+P4) # P11
+                    P.data[:,:,1,:] = 0.5*(P0-P4)      # P12=P21
+                    P.data[:,:,4,:] = 0.5*(P0-2*P1+P4) # P22
+
+            dtau_ =  np.zeros((len(wav), len(Z)), dtype=np.float32)
+            ext_ = np.zeros_like(dtau_)
+            ssa_ = np.zeros_like(dtau_)
+            if (len(hum_or_reff_val) == 1):
+                ext_tmp = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_reff_val[:])][Idx(wav),:]
+                ssa_tmp = cont['ssa'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_reff_val[:])][Idx(wav),:]
+                for iz in range (0, len(Z)):
+                    ext_[:,iz] = ext_tmp
+                    ssa_[:,iz] = ssa_tmp
+            else:      
+                ext_ = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_reff_val[:])][Idx(wav),:]
+                ssa_ = cont['ssa'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_reff_val[:])][Idx(wav),:]
+            h1 = np.maximum(self.H_min[icont], Z[1:])
+            h2 = np.minimum(self.H_max[icont], Z[:-1])
+            cond = h2>h1
+            dtau_[:,1:][:,cond] = ext_[:,1:][:,cond] * get_aer_dist_integral(self.Z_sh[icont], h1[cond], h2[cond])
+            dssa_ = dtau_*ssa_ # NLAM, ALTITUDE
+            dssa_ = dssa_[:,1:,None,None]
+            dssa += dssa_
+            P_tot+= P*dssa_
+
+        
+        with np.errstate(divide='ignore'):
+            P_tot.data /= dssa
+        P_tot.data[np.isnan(P_tot.data)] = 0.
+        P_tot.axes[1] = Z[1:]
+        return P_tot
+    
+    @staticmethod
+    def list():
+        '''
+        list standard aerosol files in opac
+        '''
+        files = glob(join(dir_auxdata, 'aerosols/OPAC/mixtures/*.nc'))
+        for ifile in range (0, len(files)):
+            files[ifile] = basename(files[ifile]).replace('_sol.nc', '')
+        return files
+
+
+class CldOPAC(AerOPAC):
+    '''
+    Single cloud, localized between zmin and zmax,
+    with and effective radius reff
+
+    Example: CldOPAC('wc', 12.68, 2, 3, 10., 550.)
+             # water cloud mie, reff=12.68 between 2 and 3 km
+             # total optical thickness of 10 at 550 nm
+    '''
+    def __init__(self, filename, reff, zmin, zmax, tau_ref, w_ref,
+                 phase=None):
+        self.reff = reff
+        self.tau_ref = tau_ref
+        if (np.isscalar(w_ref) or
+            (isinstance(w_ref, np.ndarray) and w_ref.ndim == 0) ) : self.w_ref = np.array([w_ref])
+        else                                                      : self.w_ref = np.array(w_ref)
+
+        if dirname(filename) == '' : self.filename = join(dir_auxdata, 'aerosols/OPAC/clouds', filename)
+        else                       : self.filename = filename
+        if (not "_sol" in filename) and (not filename.endswith('.nc')) : self.filename = self.filename + '_sol.nc'
+        elif (not filename.endswith('.nc'))                            : self.filename += '.nc'
+
+        assert exists(self.filename), '{} does not exist'.format(self.filename)
+
+        self.mixture = read_mlut(self.filename)
+        self.hum_or_reff = "reff"
+        self.free_tropo = None
+        self.strato = None
+
+        self.vert_content = []
+        self.H_min = []
+        self.H_max =[]
+        self.Z_sh =[]
+
+        if (zmax-zmin > 1e-6):
+            self.vert_content.append(self.mixture)
+            self.H_min.append(zmin)
+            self.H_max.append(zmax)
+            self.Z_sh.append(1e6) # constant dist
+
+        self.ssa = None
+        self._phase = phase
+        
+
+# ============ \ !! / ============
+# Deprecated OPAC way
+# ================================
 class Species(object):
     '''
     Optical properties of one species
@@ -328,297 +667,6 @@ class SpeciesUser(Species):
         return P
 
 
-class AerOPAC(object):
-    '''
-    Initialize the Aerosol OPAC model
-
-    Args:
-        filename: name of the aerosol file.
-                  If no directory is specified, assume directory
-                  auxdata/aerosols/OPAC/mixtures
-                  aerosol files can be:
-                      'antarctic', 'antarctic_spheric', 'arctic', 'continental_average',
-                      'continental_clean', 'continental_polluted',
-                      'desert', 'desert_spheric',
-                      'maritime_clean', 'maritime_polluted', 'mineral_transported'
-                      'maritime_tropical', 'urban'
-
-        tau_ref: optical thickness at wavelength wref
-        w_ref: reference wavelength (nm) for aot
-        H_mix_min/max : force min and max altitude of the mixture
-        H_free_min/max : force min and max altitude of free troposphere
-        H_stra_min/max : force min and max altitude of stratosphere
-        rh_mix/free/stra : force rh of mixture/free tropo/strato
-        ssa: force particle single scattering albedo
-             (scalar or 1-d array-like for multichromatic)
-
-        phase: LUT of phase function
-               (can be read from file with read_phase)
-
-        Example: AeroOPAC('maritime_clean', 0.1, 550.).calc(400.)
-    '''
-
-    def __init__(self, filename, tau_ref, w_ref, H_mix_min=None, H_mix_max=None, 
-                 H_free_min=None, H_free_max=None, H_stra_min=None, H_stra_max=None,
-                 Z_mix=None, Z_free=None, Z_stra=None, ssa=None, phase=None,
-                 rh_mix=None, rh_free=None, rh_stra=None):
-        
-        self.tau_ref = tau_ref
-        if (np.isscalar(w_ref) or
-            (isinstance(w_ref, np.ndarray) and w_ref.ndim == 0) ) : self.w_ref = np.array([w_ref])
-        else                                                      : self.w_ref = np.array(w_ref)
-        self._phase = phase
-
-        if ssa is None : self.ssa = None
-        else           : self.ssa = np.array(ssa)
-
-        if dirname(filename) == '' : self.filename = join(dir_auxdata, 'aerosols_old/OPAC/mixtures', filename)
-        else                       : self.filename = filename
-        if (not "_sol" in filename) and (not filename.endswith('.nc')) : self.filename = self.filename + '_sol.nc'
-        elif (not filename.endswith('.nc'))                            : self.filename += '.nc'
-
-        assert exists(self.filename), '{} does not exist'.format(self.filename)
-
-        self.mixture = read_mlut(self.filename)
-        self.hum_or_reff = "hum"
-        self.free_tropo = None
-        self.strato = None
-
-        if H_mix_min is None : H_mix_min = float(self.mixture.attrs['H_mix_min'])
-        if H_mix_max is None : H_mix_max = float(self.mixture.attrs['H_mix_max'])
-        if H_free_min is None : H_free_min = float(self.mixture.attrs['H_free_min'])
-        if H_free_max is None : H_free_max = float(self.mixture.attrs['H_free_max'])
-        if H_stra_min is None : H_stra_min = float(self.mixture.attrs['H_stra_min'])
-        if H_stra_max is None : H_stra_max = float(self.mixture.attrs['H_stra_max'])
-
-        if Z_mix is None : Z_mix = float(self.mixture.attrs['Z_mix'])
-        if Z_free is None : Z_free = float(self.mixture.attrs['Z_free'])
-        if Z_stra is None :
-            if self.mixture.attrs['Z_stra'] == '99' : Z_stra = 1e6 # -> OPAC Z=99 for constant vertical dist
-            else                                    : Z_stra = float(self.mixture.attrs['Z_stra'])
-
-
-        self.force_rh = [rh_mix, rh_free, rh_stra]
-        self.vert_content = []
-        self.H_min = []
-        self.H_max =[]
-        self.Z_sh =[]
-
-        if (H_mix_max-H_mix_min > 1e-6):
-            self.vert_content.append(self.mixture)
-            self.H_min.append(H_mix_min)
-            self.H_max.append(H_mix_max)
-            self.Z_sh.append(Z_mix)
-        if (H_free_max-H_free_min > 1e-6):
-            filename_tmp = join(dir_auxdata, 'aerosols/OPAC/free_troposphere/free_troposphere_sol.nc')
-            self.free_tropo = read_mlut(filename_tmp)
-            self.vert_content.append(self.free_tropo)
-            self.H_min.append(H_free_min)
-            self.H_max.append(H_free_max)
-            self.Z_sh.append(Z_free)
-        if (H_stra_max-H_stra_min > 1e-6):
-            filename_tmp = join(dir_auxdata, 'aerosols/OPAC/stratosphere/stratosphere_sol.nc')
-            self.strato = read_mlut(filename_tmp)
-            self.vert_content.append(self.strato)
-            self.H_min.append(H_stra_min)
-            self.H_max.append(H_stra_max)
-            self.Z_sh.append(Z_stra)
-        
-    def dtau_ssa(self, wav, Z, rh):
-        dtau = np.zeros((len(wav), len(Z)), dtype=np.float32)
-        dtau_ref = np.zeros((1, len(Z)), dtype=np.float32)
-        ssa = np.zeros_like(dtau)
-
-        if (self.hum_or_reff == 'hum'):
-            hum_or_reff_val = rh
-        elif (self.hum_or_reff == 'reff'):
-            hum_or_reff_val = self.reff
-        else:
-            raise NameError("ext and ssa must varies as function of hum or reff.")
-        
-        if (np.isscalar(hum_or_reff_val) or
-            (isinstance(hum_or_reff_val, np.ndarray) and hum_or_reff_val.ndim == 0) ) : hum_or_reff_val = np.array([hum_or_reff_val])
-        else                                                                          : hum_or_reff_val = np.array(hum_or_reff_val)
-        
-        ext_ = np.zeros_like(dtau)
-        ext_ref_ = np.zeros_like(dtau)
-        ssa_ = np.zeros_like(dtau)
-        for icont, cont in enumerate(self.vert_content):
-            if ((self.hum_or_reff == 'hum') and (self.force_rh[icont] is not None)) : rh_reff = np.full_like(hum_or_reff_val, self.force_rh[icont])
-            else                                                                    : rh_reff = hum_or_reff_val
-            if (len(rh_reff) == 1):
-                ext_tmp = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(rh_reff[:])][Idx(wav),:]
-                ext_ref_tmp = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(rh_reff[:])][Idx(self.w_ref),:]
-                ssa_tmp = cont['ssa'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(rh_reff[:])][Idx(wav),:]
-                for iz in range (0, len(Z)):
-                    ext_[:,iz] = ext_tmp[:,0]
-                    ext_ref_[:,iz] = ext_ref_tmp[:,0]
-                    ssa_[:,iz] = ssa_tmp[:,0]
-            else:      
-                ext_ = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(rh_reff[:])][Idx(wav),:]
-                ext_ref_ = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(rh_reff[:])][Idx(self.w_ref),:]
-                ssa_ = cont['ssa'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(rh_reff[:])][Idx(wav),:]
-            dtau_ = np.zeros_like(dtau)
-            dtau_ref_ = np.zeros_like(dtau_ref)
-            h1 = np.maximum(self.H_min[icont], Z[1:])
-            h2 = np.minimum(self.H_max[icont], Z[:-1])
-            cond = h2>h1
-            dtau_[:,1:][:,cond] = ext_[:,1:][:,cond] * get_aer_dist_integral(self.Z_sh[icont], h1[cond], h2[cond])
-            dtau += dtau_
-            ssa += dtau_*ssa_
-            dtau_ref_[:,1:][:,cond] = ext_ref_[:,1:][:,cond] * get_aer_dist_integral(self.Z_sh[icont], h1[cond], h2[cond])
-            dtau_ref += dtau_ref_
-
-        ssa[dtau!=0] /= dtau[dtau!=0]
-
-        #apply scaling factor to get the required optical thickness at the
-        # specified wavelength
-        if self.tau_ref is not None: dtau *= self.tau_ref/np.sum(dtau_ref)
-
-        return dtau, ssa
-    
-    
-    def phase(self, wav, Z, rh, NBTHETA=721, conv_Iparper=True):
-        '''
-        Phase function calculation at wavelength wav and altitudes Z
-        relative humidity is rh
-        angle resampling over NBTHETA angles
-        '''
-
-        if self._phase is not None:
-            if self._phase.ndim == 2:
-                # convert to 4-dim by inserting empty dimensions wav_phase
-                # and z_phase
-                assert self._phase.names == ['stk', 'theta_atm']
-                pha = LUT(self._phase.data[None,None,:,:],
-                          names = ['wav_phase', 'z_phase'] + self._phase.names,
-                          axes = [np.array([wav[0]]), np.array([0.])] + self._phase.axes,
-                         )
-
-                return pha
-            else:
-                return self._phase
-
-        theta = np.linspace(0., 180., num=NBTHETA)
-        lam_tabulated = np.array(self.mixture.axis('wav'))
-        nwav = len(wav)
-
-        P_tot = 0.
-        dssa = 0.
-        for icont, cont in enumerate(self.vert_content):    
-            # Number of independant components of the phase Matrix
-            # Spheric particles -> 4, non spheric particles -> 6
-            nphamat = cont['phase'].shape[2]
-
-            if ( (np.max(wav) > np.max(lam_tabulated)) or
-                (np.min(wav) < np.min(lam_tabulated)) ):
-                phase_bis = cont['phase'].swapaxes('wav', self.hum_or_reff).sub()[Idx(wav),:,:,:]
-            else:
-                # The optimisation consists to not interpolate at all wavelengths of lam_tabulated,
-                # but only the wavelengths of lam_tabulated closely in the range of np.min(wav) and np.max(wav)
-                range_ind = np.array([np.argwhere((lam_tabulated <= np.min(wav)))[-1][0],
-                                    np.argwhere((lam_tabulated >= np.max(wav)))[0][0]])
-                ilam_tabulated = np.arange(len(lam_tabulated), dtype=int)
-                ilam_opti = np.concatenate(np.argwhere((ilam_tabulated >= range_ind[0]) &
-                                                    (ilam_tabulated <= range_ind[1])))
-
-                if len(ilam_opti) > 1 : phase_bis = cont['phase'].swapaxes('wav', self.hum_or_reff).sub()[ilam_opti,:,:,:].sub()[Idx(wav),:,:,:]
-                else                  : phase_bis = cont['phase'].swapaxes('wav', self.hum_or_reff).sub()[ilam_opti,:,:,:]
-
-            if (NBTHETA != len(phase_bis.axes[3])): phase_bis = phase_bis.sub()[:,:,:,Idx(theta)]
-
-            if (self.hum_or_reff == 'hum'):
-                if (self.force_rh[icont] is not None) : hum_or_reff_val = np.full_like(rh, self.force_rh[icont])
-                else                                  : hum_or_reff_val = rh
-
-                P = LUT(
-                    np.zeros((nwav, len(rh)-1, 6, NBTHETA), dtype='float32')+np.NaN,
-                    axes=[wav, None, None, theta],
-                    names=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
-                    )  # nlam_tabulated, nrh, stk, NBTHETA
-                
-                for irh_, rh_ in enumerate(hum_or_reff_val[1:]):
-                    irh = Idx(rh_, fill_value='extrema')
-                    #irh = Idx(rh_, fill_value='extrema')
-                    P.data[:,irh_,0:nphamat,:] = phase_bis.sub()[:,irh,:,:].data
-            elif (self.hum_or_reff == 'reff'):
-                P = LUT(
-                    np.zeros((nwav, 1, 6, NBTHETA), dtype='float32')+np.NaN,
-                    axes=[wav, None, None, theta],
-                    names=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
-                    )  # nlam_tabulated, nrh, stk, NBTHETA
-                
-                irh = Idx(self.reff).index(cont['phase'].axes[0])
-                #irh = Idx(self.reff).index(cont['phase'].axes[0])
-                P.data[:,0,0:nphamat,:] = phase_bis[:,irh,:,:].data
-                hum_or_reff_val = self.reff
-            else:
-                raise NameError("Phase matrix must varies as function of hum or reff.")
-            
-            if (np.isscalar(hum_or_reff_val) or
-            (isinstance(hum_or_reff_val, np.ndarray) and hum_or_reff_val.ndim == 0) ) : hum_or_reff_val = np.array([hum_or_reff_val])
-            else                                                                      : hum_or_reff_val = np.array(hum_or_reff_val)
-
-            if conv_Iparper:
-                # convert I, Q into Ipar, Iper
-                if (nphamat == 4): # spherical particles
-                    P.data[:,:,4,:] = P.data[:,:,0,:].copy()
-                    P.data[:,:,5,:] = P.data[:,:,2,:].copy()
-                    P0 = P.data[:,:,0,:].copy()
-                    P1 = P.data[:,:,1,:].copy()
-                    P4 = P.data[:,:,4,:].copy()
-                    P.data[:,:,0,:] = 0.5*(P0+2*P1+P4) # P11
-                    P.data[:,:,1,:] = 0.5*(P0-P4)      # P12=P21
-                    P.data[:,:,4,:] = 0.5*(P0-2*P1+P4) # P22
-                elif (nphamat == 6): # non spherical particles
-                    # note: the sign of P43/P34 affects only the sign of V,
-                    # since V=0 for rayleigh scattering it does not matter 
-                    P0 = P.data[:,:,0,:].copy()
-                    P1 = P.data[:,:,1,:].copy()
-                    P4 = P.data[:,:,4,:].copy()
-                    P.data[:,:,0,:] = 0.5*(P0+2*P1+P4) # P11
-                    P.data[:,:,1,:] = 0.5*(P0-P4)      # P12=P21
-                    P.data[:,:,4,:] = 0.5*(P0-2*P1+P4) # P22
-
-            dtau_ =  np.zeros((len(wav), len(Z)), dtype=np.float32)
-            ext_ = np.zeros_like(dtau_)
-            ssa_ = np.zeros_like(dtau_)
-            if (len(hum_or_reff_val) == 1):
-                ext_tmp = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_reff_val[:])][Idx(wav),:]
-                ssa_tmp = cont['ssa'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_reff_val[:])][Idx(wav),:]
-                for iz in range (0, len(Z)):
-                    ext_[:,iz] = ext_tmp
-                    ssa_[:,iz] = ssa_tmp
-            else:      
-                ext_ = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_reff_val[:])][Idx(wav),:]
-                ssa_ = cont['ssa'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_reff_val[:])][Idx(wav),:]
-            h1 = np.maximum(self.H_min[icont], Z[1:])
-            h2 = np.minimum(self.H_max[icont], Z[:-1])
-            cond = h2>h1
-            dtau_[:,1:][:,cond] = ext_[:,1:][:,cond] * get_aer_dist_integral(self.Z_sh[icont], h1[cond], h2[cond])
-            dssa_ = dtau_*ssa_ # NLAM, ALTITUDE
-            dssa_ = dssa_[:,1:,None,None]
-            dssa += dssa_
-            P_tot+= P*dssa_
-
-        
-        with np.errstate(divide='ignore'):
-            P_tot.data /= dssa
-        P_tot.data[np.isnan(P_tot.data)] = 0.
-        P_tot.axes[1] = Z[1:]
-        return P_tot
-    
-    @staticmethod
-    def list():
-        '''
-        list standard aerosol files in opac
-        '''
-        files = glob(join(dir_auxdata, 'aerosols/OPAC/mixtures/*.nc'))
-        for ifile in range (0, len(files)):
-            files[ifile] = basename(files[ifile]).replace('_sol.nc', '')
-        return files
-    
-
 class AeroOPAC(object):
     '''
     Initialize the Aerosol OPAC model
@@ -645,6 +693,11 @@ class AeroOPAC(object):
         Example: AeroOPAC('maritime_clean', 0.1, 550.).calc(400.)
     '''
     def __init__(self, filename, tau_ref, w_ref, zmin=None, zmax=None, ssa=None, phase=None):
+        warnings.simplefilter('always', DeprecationWarning)
+        warn_message = "\nAeroOPAC is deprecated as of SMART-G 1.0.0 " + \
+                       "and will be removed in one of the next release.\n" + \
+                       "Please use AerOPAC instead (where also important corrections have been made)."
+        warnings.warn(warn_message, DeprecationWarning)
         self.tau_ref = tau_ref
         self.w_ref = w_ref
         self.reff = None
@@ -824,48 +877,6 @@ class AeroOPAC(object):
         return map(lambda x: basename(x)[:-4], files)
 
 
-class CldOPAC(AerOPAC):
-    '''
-    Single cloud, localized between zmin and zmax,
-    with and effective radius reff
-
-    Example: CldOPAC('wc', 12.68, 2, 3, 10., 550.)
-             # water cloud mie, reff=12.68 between 2 and 3 km
-             # total optical thickness of 10 at 550 nm
-    '''
-    def __init__(self, filename, reff, zmin, zmax, tau_ref, w_ref,
-                 phase=None):
-        self.reff = reff
-        self.tau_ref = tau_ref
-        if (np.isscalar(w_ref) or
-            (isinstance(w_ref, np.ndarray) and w_ref.ndim == 0) ) : self.w_ref = np.array([w_ref])
-        else                                                      : self.w_ref = np.array(w_ref)
-
-        if dirname(filename) == '' : self.filename = join(dir_auxdata, 'aerosols/OPAC/clouds', filename)
-        else                       : self.filename = filename
-        if (not "_sol" in filename) and (not filename.endswith('.nc')) : self.filename = self.filename + '_sol.nc'
-        elif (not filename.endswith('.nc'))                            : self.filename += '.nc'
-
-        assert exists(self.filename), '{} does not exist'.format(self.filename)
-
-        self.mixture = read_mlut(self.filename)
-        self.hum_or_reff = "reff"
-        self.free_tropo = None
-        self.strato = None
-
-        self.vert_content = []
-        self.H_min = []
-        self.H_max =[]
-        self.Z_sh =[]
-
-        if (zmax-zmin > 1e-6):
-            self.vert_content.append(self.mixture)
-            self.H_min.append(zmin)
-            self.H_max.append(zmax)
-            self.Z_sh.append(1e6) # constant dist
-
-        self.ssa = None
-        self._phase = phase
 
 
 class CloudOPAC(AeroOPAC):
@@ -882,6 +893,10 @@ class CloudOPAC(AeroOPAC):
     '''
     def __init__(self, species, reff, zmin, zmax, tau_ref, w_ref,
                  phase=None, wav_clip=False):
+        warnings.simplefilter('always', DeprecationWarning)
+        warn_message = "\nCloudOPAC is deprecated as of SMART-G 1.0.0 " + \
+                       "and will be removed in one of the next release.\n" + \
+                       "Please use CldOPAC instead (where also important corrections have been made)."
         self.reff = reff
         self.tau_ref = tau_ref
         self.w_ref = w_ref
@@ -1037,8 +1052,9 @@ class CompUser(object):
 
         P.axes[1] = (Z[1:]+Z[:-1])/2.
         return P
-
-
+# ================================
+# End deprecated OPAC way
+# ================================
 
 class Atmosphere(object):
     ''' Base class for atmosphere '''
