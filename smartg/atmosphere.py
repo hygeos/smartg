@@ -43,7 +43,7 @@ class Species(object):
 
         self.name = species
         self.wav_clip = wav_clip
-        fname = join(dir_auxdata, 'aerosols/OPAC', species+'.nc')
+        fname = join(dir_auxdata, 'aerosols_old/OPAC', species+'.nc')
         if not exists(fname):
             raise Exception('file {} does not exist'.format(fname))
         self.fname = fname
@@ -217,7 +217,7 @@ class Species(object):
         '''
         list standard species files in opac
         '''
-        files = glob(join(dir_auxdata, 'aerosols/OPAC', '*.nc'))
+        files = glob(join(dir_auxdata, 'aerosols_old/OPAC', '*.nc'))
         return map(lambda x: basename(x)[:-4], files)
 
 
@@ -335,7 +335,7 @@ class AerOPAC(object):
     Args:
         filename: name of the aerosol file.
                   If no directory is specified, assume directory
-                  auxdata/new_aer/aerosols/OPAC/mixtures
+                  auxdata/aerosols/OPAC/mixtures
                   aerosol files can be:
                       'antarctic', 'antarctic_spheric', 'arctic', 'continental_average',
                       'continental_clean', 'continental_polluted',
@@ -372,7 +372,7 @@ class AerOPAC(object):
         if ssa is None : self.ssa = None
         else           : self.ssa = np.array(ssa)
 
-        if dirname(filename) == '' : self.filename = join(dir_auxdata, 'new_aer/aerosols/OPAC/mixtures', filename)
+        if dirname(filename) == '' : self.filename = join(dir_auxdata, 'aerosols_old/OPAC/mixtures', filename)
         else                       : self.filename = filename
         if (not "_sol" in filename) and (not filename.endswith('.nc')) : self.filename = self.filename + '_sol.nc'
         elif (not filename.endswith('.nc'))                            : self.filename += '.nc'
@@ -410,14 +410,14 @@ class AerOPAC(object):
             self.H_max.append(H_mix_max)
             self.Z_sh.append(Z_mix)
         if (H_free_max-H_free_min > 1e-6):
-            filename_tmp = join(dir_auxdata, 'new_aer/aerosols/OPAC/free_troposphere/free_troposphere_sol.nc')
+            filename_tmp = join(dir_auxdata, 'aerosols/OPAC/free_troposphere/free_troposphere_sol.nc')
             self.free_tropo = read_mlut(filename_tmp)
             self.vert_content.append(self.free_tropo)
             self.H_min.append(H_free_min)
             self.H_max.append(H_free_max)
             self.Z_sh.append(Z_free)
         if (H_stra_max-H_stra_min > 1e-6):
-            filename_tmp = join(dir_auxdata, 'new_aer/aerosols/OPAC/stratosphere/stratosphere_sol.nc')
+            filename_tmp = join(dir_auxdata, 'aerosols/OPAC/stratosphere/stratosphere_sol.nc')
             self.strato = read_mlut(filename_tmp)
             self.vert_content.append(self.strato)
             self.H_min.append(H_stra_min)
@@ -613,7 +613,7 @@ class AerOPAC(object):
         '''
         list standard aerosol files in opac
         '''
-        files = glob(join(dir_auxdata, 'new_aer/aerosols/OPAC/mixtures/*.nc'))
+        files = glob(join(dir_auxdata, 'aerosols/OPAC/mixtures/*.nc'))
         for ifile in range (0, len(files)):
             files[ifile] = basename(files[ifile]).replace('_sol.nc', '')
         return files
@@ -626,7 +626,7 @@ class AeroOPAC(object):
     Args:
         filename: name of the aerosol file.
                   If no directory is specified, assume directory
-                  <libradtran>/data/aerosol/OPAC/standard_aerosol_files
+                  auxdata/aerosols_old/OPAC_vertical_dist
                   aerosol files can be:
                       'antarctic', 'continental_average',
                       'continental_clean', 'continental_polluted',
@@ -653,7 +653,7 @@ class AeroOPAC(object):
         if ssa is None : self.ssa = None
         else           : self.ssa = np.array(ssa)
 
-        if dirname(filename) == '' : self.filename = join(dir_auxdata, 'aerosols/OPAC_vertical_dist', filename)
+        if dirname(filename) == '' : self.filename = join(dir_auxdata, 'aerosols_old/OPAC_vertical_dist', filename)
         else                       : self.filename = filename
 
         if not filename.endswith('.nc') : self.filename += '.nc'
@@ -841,7 +841,7 @@ class CldOPAC(AerOPAC):
             (isinstance(w_ref, np.ndarray) and w_ref.ndim == 0) ) : self.w_ref = np.array([w_ref])
         else                                                      : self.w_ref = np.array(w_ref)
 
-        if dirname(filename) == '' : self.filename = join(dir_auxdata, 'new_aer/aerosols/OPAC/clouds', filename)
+        if dirname(filename) == '' : self.filename = join(dir_auxdata, 'aerosols/OPAC/clouds', filename)
         else                       : self.filename = filename
         if (not "_sol" in filename) and (not filename.endswith('.nc')) : self.filename = self.filename + '_sol.nc'
         elif (not filename.endswith('.nc'))                            : self.filename += '.nc'
