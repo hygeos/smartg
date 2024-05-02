@@ -5,11 +5,12 @@ atm_URL = https://docs.hygeos.com/s/z6MRf9g66WmWeBA/download
 STP_URL = https://docs.hygeos.com/s/NW42DNPtKw3NNW7/download
 valid_URL = https://docs.hygeos.com/s/6EPBqwebn94NYPq/download
 water_URL = https://docs.hygeos.com/s/3NKP5tMsHKnNRpt/download
+kdis_URL = https://docs.hygeos.com/s/CHTFFgHe6to39CR/download
 WGET    = @wget -c -P
 
 
 auxdata_all: auxdata_aerosols_old auxdata_aerosols auxdata_acs auxdata_atm \
- auxdata_STP auxdata_valid auxdata_water
+ auxdata_STP auxdata_valid auxdata_water auxdata_kdis
 
 auxdata_aerosols_old:
 	$(WGET) auxdata/ $(aer_URL_old)/aerosols.zip
@@ -47,6 +48,11 @@ auxdata_water:
 	unzip auxdata/water.zip -d auxdata/
 	rm -f auxdata/water.zip
 
+auxdata_kdis:
+	$(WGET) auxdata/ $(kdis_URL)/kdis.zip
+	unzip auxdata/kdis.zip -d auxdata/
+	rm -f auxdata/kdis.zip
+
 .PHONY: clean
 clean:
 	rm -rf auxdata/aerosols_old
@@ -56,3 +62,4 @@ clean:
 	rm -rf auxdata/STPs
 	rm -rf auxdata/validation
 	rm -rf auxdata/water
+	rm -rf auxdata/kdis
