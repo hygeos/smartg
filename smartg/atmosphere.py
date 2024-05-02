@@ -1091,6 +1091,9 @@ class AtmAFGL(Atmosphere):
                        and  phases is a list of phase matrices LUT (as outputs of the 'read_phase' utility) 
         - RH_cst :  force relative humidity o be constant, default (None, recalculated)
 
+        - O3_acs/NO2_acs : nc file with fit coeffs. cross section SIGMA = 1E-20 * [C0 + C1*T + C2*T^2], in cm^2,
+                           and where T is in degrees Celcius
+
         Phase functions definition:
         - pfwav: a list of wavelengths over which the phase functions are calculated
           default: None (all wavelengths)
@@ -1119,7 +1122,9 @@ class AtmAFGL(Atmosphere):
                  prof_ray=None, prof_aer=None, prof_phases=None,
                  RH_cst=None, US=True,
                  cells=None,
-                 new_atm=False):
+                 new_atm=False,
+                 O3_acs = 'O3_acs_BogumilV3.0_coeffs',
+                 NO2_acs = 'NO2_acs_BogumilV1.0_coeffs'):
 
         self.lat = lat
         self.comp = comp
@@ -1163,29 +1168,23 @@ class AtmAFGL(Atmosphere):
             if (not exists(atm_filename)) and (not atm_filename.endswith('.nc')):
                 atm_filename += '.nc'
 
-        crs_O3_filename  = join(dir_libradtran_crs, 'crs_O3_UBremen_cf.dat')
-        crs_NO2_filename = join(dir_libradtran_crs, 'crs_NO2_UBremen_cf.dat')
-        
-        # read crs ozone file
-        #_crs_chappuis = np.loadtxt(crs_O3_filename, comments="#")
-        _crs_chappuis = pd.read_csv(crs_O3_filename, comment="#", header=None, sep=r'\s+', dtype=float).values
-        #_crs_chappuis = np.genfromtxt(crs_O3_filename, comments="#")
-        self.crs_chappuis = LUT(
-                _crs_chappuis[:,1:],
-                axes=[_crs_chappuis[:,0], None],
-                names=['wavelength', None],
-                )
+        #
+        # read gaseous acs
+        #
+        if dirname(O3_acs) == '':
+            O3_acs_file = join(dir_auxdata, 'acs/', O3_acs)
+        if (not exists(O3_acs_file)) and (not O3_acs_file.endswith('.nc')):
+                O3_acs_file += '.nc'
+        self.acs_o3 = read_mlut(O3_acs_file)
+        self.acs_o3.rename_axis('wav', 'wavelength')
 
-        # read crs no2 file
-        #_crs_no2 = np.loadtxt(crs_NO2_filename, comments="#")
-        #_crs_no2 = np.genfromtxt(crs_NO2_filename, comments="#")
-        _crs_no2 = pd.read_csv(crs_NO2_filename, comment="#", header=None, sep=r'\s+', dtype=float).values
-        self.crs_no2 = LUT(
-                _crs_no2[:,1:],
-                axes=[_crs_no2[:,0], None],
-                names=['wavelength', None],
-                )
-        self.crs_no2
+        if dirname(NO2_acs) == '':
+            NO2_acs_file = join(dir_auxdata, 'acs/', NO2_acs)
+        if (not exists(NO2_acs_file)) and (not NO2_acs_file.endswith('.nc')):
+                NO2_acs_file += '.nc'
+        self.acs_no2 = read_mlut(NO2_acs_file)
+        self.acs_no2.rename_axis('wav', 'wavelength')
+
 
         # read afgl file
         if not new_atm:
@@ -1385,31 +1384,32 @@ class AtmAFGL(Atmosphere):
 
 
             # Compute o3 and no2 (if kdis only compute them if not already computed)
-            if use_no2_acs or use_o3_acs:           
+            if use_no2_acs or use_o3_acs:
+                # Commun part           
                 T0 = 273.15  # in K
-                #T = LUT(prof.T, names=['temperature'])
                 T = LUT(prof.T, axes=[None], names=['z_atm'])# temperature variability in z
                 if use_o3_acs:
-                    #
                     # O3 optical thickness
-                    #
-                    tau_o3  = self.crs_chappuis.sub()[Idx(wav[:], round=True, fill_value=0.), 0]
-                    tau_o3 += self.crs_chappuis.sub()[Idx(wav[:], round=True, fill_value=0.), 1]*(T - T0)
-                    tau_o3 += self.crs_chappuis.sub()[Idx(wav[:], round=True, fill_value=0.), 2]*(T - T0)*(T - T0)
-
-                    # LUT in 10^(-20) cm2, convert in km-1
-                    tau_o3 *= prof.dens_o3 * 1e-15
+                    min_wl = np.min(self.acs_o3.axes['wavelength'])
+                    max_wl = np.max(self.acs_o3.axes['wavelength'])
+                    C0 = self.acs_o3['O3_C0'].sub({'wavelength':Idx(wav[:], round=True, fill_value='extrema')})
+                    C1 = self.acs_o3['O3_C1'].sub({'wavelength':Idx(wav[:], round=True, fill_value='extrema')})
+                    C2 = self.acs_o3['O3_C2'].sub({'wavelength':Idx(wav[:], round=True, fill_value='extrema')})
+                    tau_o3 = C0 + C1*(T - T0) + C2*(T - T0)*(T - T0)
+                    tau_o3.data[~np.logical_and(wav[:]>min_wl, wav[:]<max_wl)] = 0.
+                    tau_o3 *= prof.dens_o3 * 1e-15  # LUT in 10^(-20) cm2, convert in km-1
                     tau_o3 *= dz
                     tau_o3.data[tau_o3.data < 0] = 0
                 if use_no2_acs:
-                    #
                     # NO2 optical thickness
-                    #
-                    tau_no2  = self.crs_no2.sub()[Idx(wav[:], round=True, fill_value=0.), 0]
-                    tau_no2 += self.crs_no2.sub()[Idx(wav[:], round=True, fill_value=0.), 1]*(T - T0)
-                    tau_no2 += self.crs_no2.sub()[Idx(wav[:], round=True, fill_value=0.), 2]*(T - T0)*(T - T0)
-
-                    tau_no2 *= prof.dens_no2 * 1e-15
+                    min_wl = np.min(self.acs_no2.axes['wavelength'])
+                    max_wl = np.max(self.acs_no2.axes['wavelength'])
+                    C0 = self.acs_no2['NO2_C0'].sub({'wavelength':Idx(wav[:], round=True, fill_value='extrema')})
+                    C1 = self.acs_no2['NO2_C1'].sub({'wavelength':Idx(wav[:], round=True, fill_value='extrema')})
+                    C2 = self.acs_no2['NO2_C2'].sub({'wavelength':Idx(wav[:], round=True, fill_value='extrema')})
+                    tau_no2 = C0 + C1*(T - T0) + C2*(T - T0)*(T - T0)
+                    tau_no2.data[~np.logical_and(wav[:]>min_wl, wav[:]<max_wl)] = 0.
+                    tau_no2 *= prof.dens_no2 * 1e-15  # LUT in 10^(-20) cm2, convert in km-1
                     tau_no2 *= dz
                     tau_no2.data[tau_no2.data < 0] = 0
                 
