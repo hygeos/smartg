@@ -15,6 +15,13 @@ from itertools import product
 from smartg.tools.interp import interp2
 import h5py
 
+from smartg.config import dir_auxdata
+from os.path import dirname, join
+dir_kdis = join(dir_auxdata, 'kdis')
+import warnings
+
+import glob
+
 def reduce_kdis(mlut, ibands, use_solar=False, integrated=False, extern_weights=None):
     '''
     Compute the final spectral signal from mlut output of smart_g and
@@ -70,20 +77,32 @@ def Kdis_Avg_Emission(mlut, ibands):
 
 class KDIS(object):
 
-    def __init__(self, model, dir_data, format='ascii'):
+    def __init__(self, model, dir_data='', format=None):
 
         # read the entire K-distribution definition from files
         #
         # Selection of the desired KDIS band or absorbing gases
         # must be done later while setting up the artdeco variables
-   
+        # if dir_data is not specified, standard dir is assumed to be auxdata/kdis dir
+
         self.model = model
+
+        if dirname(dir_data) == '': dir_data = join(dir_kdis, dir_data, model)
     
-        is_sorted = lambda a: np.all(a[:-1] <= a[1:])        
-        
+        is_sorted = lambda a: np.all(a[:-1] <= a[1:])
+
+        if format is None:
+            if (len(glob.glob(str(dir_data) + '/*.h5')) > 0) : format = 'h5'
+            else                                             : format = 'ascii'
+        else:
+            warnings.simplefilter('always', DeprecationWarning)
+            warn_message = "\nThe key argument 'format' is now useless and deprecated as of SMART-G 1.0.0,\n" + \
+                        "and will be removed in one of the next release."
+            warnings.warn(warn_message, DeprecationWarning)
+ 
         if format == 'ascii':
 
-            filename = dir_data+'kdis_'+model+'_def.dat'
+            filename = join(dir_data, 'kdis_'+model+'_def.dat')
             if not os.path.isfile(filename):
                 print("(kdis_coef) ERROR")
                 print("            Missing file:", filename)
@@ -179,7 +198,7 @@ class KDIS(object):
                 self.ki_c    = np.zeros((self.nsp_c,self.nwvl,self.nmaxai,self.np,self.nt,self.nc))
                 self.ai_c    = np.zeros((self.nsp_c,self.nwvl,self.nmaxai))
             for isp in range(self.nsp):
-                filename = dir_data+'kdis_'+model+'_'+self.species[isp]+'.dat'
+                filename = join(dir_data, 'kdis_'+model+'_'+self.species[isp]+'.dat')
                 if not os.path.isfile(filename):
                     print("(kdis_coef) ERROR")
                     print("            Missing file:", filename)
@@ -208,7 +227,7 @@ class KDIS(object):
             else:
                 self.c_desc = "none"
             for isp in range(self.nsp_c):
-                filename = dir_data+'kdis_'+model+'_'+self.species_c[isp]+'.dat'
+                filename = join(dir_data, 'kdis_'+model+'_'+self.species_c[isp]+'.dat')
                 if not os.path.isfile(filename):
                     print("(kdis_coef) ERROR")
                     print("            Missing file:", filename)
@@ -232,9 +251,9 @@ class KDIS(object):
                                         self.ki_c[isp,iwvl,iai,ip,it,ic] = float(tmp.split()[iai])                                  
                 f.close()
             
-            filename = dir_data+'kdis_'+model+'_'+'solarflux.dat'
+            filename = join(dir_data, 'kdis_'+model+'_'+'solarflux.dat')
             if not os.path.isfile(filename):
-                filename = dir_data+'solrad_'+'kdis_'+model+'_'+'thuillier2003.dat'
+                filename = join(dir_data, 'solrad_'+'kdis_'+model+'_'+'thuillier2003.dat')
                 if not os.path.isfile(filename):
                     print("(kdis_coef) ERROR")
                     print("            Missing file:", filename)
@@ -258,7 +277,7 @@ class KDIS(object):
         
         elif format in ["h5","hdf5"]:
 
-            filename = dir_data+'kdis_'+model+'.h5'
+            filename = join(dir_data, 'kdis_'+model+'.h5')
             f = h5py.File(filename,"r")
             self.nmaxai = np.copy(f["def"]["maxnai"])
             species_tot = list(f["coeff"].keys())
