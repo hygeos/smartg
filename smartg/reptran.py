@@ -8,11 +8,12 @@ from luts.luts import LUT, MLUT
 from smartg.atmosphere import od2k, BPlanck
 from os.path import dirname, join
 from scipy.integrate import quad, simpson
-from smartg.config import dir_libradtran_reptran
+from smartg.config import dir_auxdata
 from scipy.interpolate import interp1d
 import netCDF4
 from smartg.tools.interp import interp2, interp3
 
+dir_reptran = join(dir_auxdata, 'reptran')
 
 def reduce_reptran(mlut, ibands, use_solar=False, integrated=False, extern_weights=None):
     '''
@@ -188,12 +189,12 @@ class REPTRAN_BAND(object):
 class REPTRAN(object):
     '''
     REPTRAN correlated-k file
-    if provided without a directory, assuming dir_libradtran_reptran
+    if provided without a directory, look to auxdata/reptran directory
     '''
 
     def __init__(self,filename):
         if dirname(filename) == '':
-            self.filename = join(dir_libradtran_reptran, filename)
+            self.filename = join(dir_reptran, filename)
         else:
             self.filename = filename
 
@@ -337,7 +338,7 @@ class readCRS(object):
         self._readFileGeneral(iband)
 
     def _readFileGeneral(self,iband):
-        nc=netCDF4.Dataset(join(dir_libradtran_reptran, self.filename+'.cdf'))
+        nc=netCDF4.Dataset(join(dir_reptran, self.filename+'.cdf'))
         self.wvl_index=nc.variables['wvl_index'][:]
         ii=list(self.wvl_index).index(iband)
         dat=nc.variables['xsec'][:]
