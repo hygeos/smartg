@@ -72,7 +72,7 @@ class AerOPAC(object):
         if ssa is None : self.ssa = None
         else           : self.ssa = np.array(ssa)
 
-        if dirname(filename) == '' : self.filename = join(dir_auxdata, 'aerosols_old/OPAC/mixtures', filename)
+        if dirname(filename) == '' : self.filename = join(dir_auxdata, 'aerosols/OPAC/mixtures', filename)
         else                       : self.filename = filename
         if (not "_sol" in filename) and (not filename.endswith('.nc')) : self.filename = self.filename + '_sol.nc'
         elif (not filename.endswith('.nc'))                            : self.filename += '.nc'
