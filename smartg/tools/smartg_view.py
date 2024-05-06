@@ -697,6 +697,12 @@ def input_view(mlut, iw=0, kind='atm', zmax=None, ipha=None):
         mlut['phase_'+kind]
         nstk = len(mlut['phase_'+kind][0,:,0])
         if nstk == 4:
+            warnings.simplefilter('always', DeprecationWarning)
+            warn_message = "\nGiving only 4 stk components is deprecated as of SMART-G 1.0.0 " + \
+                           "and will removed in one of the next release.\n" + \
+                           "Please provide phase with the 6 stk components in Iparper convention, where:\n" + \
+                           "stk0 = F11, stk1=F12, stk2=F33, stk3=F34, stk4=F22 and stk5=F44."
+            warnings.warn(warn_message, DeprecationWarning)
             ax1 = subplot2grid((2,3),(0,0))
             ax2 = subplot2grid((2,3),(0,1))
             ax3 = subplot2grid((2,3),(1,0))
