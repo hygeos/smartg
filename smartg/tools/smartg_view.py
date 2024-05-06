@@ -476,46 +476,106 @@ def phase_view(mlut, ipha=None, fig=None, axarr=None, iw=0, kind='atm'):
 
     phase = mlut['phase_'+kind]
     ang = phase.axis('theta_'+kind)
+    nstk = len(phase[0,:,0])
     if (axarr is None):
-        fig, axarr = subplots(2, 2)
-        fig.set_size_inches(10, 6)
+        if nstk == 4:
+            fig, axarr = subplots(2, 2)
+            fig.set_size_inches(10, 6)
+        elif nstk == 6:
+            fig, axarr = subplots(nrows=3, ncols=2)
+            fig.set_size_inches(10, 9)
         
     if (ipha is None) : ni= np.unique(mlut['iphase_'+kind].__getitem__(key)) 
     else:ni=[ipha]
     
     for i in ni:
+        if nstk == 4:
+            P11 = 0.5*(phase[i,0,:]+phase[i,1,:])
+            P12 = 0.5*(phase[i,0,:]-phase[i,1,:])
+            P33 = phase[i,2,:]
+            P43 = phase[i,3,:]
         
-        P11 = 0.5*(phase[i,0,:]+phase[i,1,:])
-        P12 = 0.5*(phase[i,0,:]-phase[i,1,:])
-        P33 = phase[i,2,:]
-        P43 = phase[i,3,:]
-    
-        if (np.max(P11[:]) > 0.) :axarr[0,0].semilogy(ang, P11,label='%3i'%i)
-        axarr[0,0].set_title(r'$P_{11}$'+labw)
-        axarr[0,0].grid()
-        axarr[0,0].set_xlim([0,180])
-        axarr[0,0].set_xticks([0,30,60,90,120,150,180])
-        
-        if (np.max(P11[:]) > 0.) :axarr[0,1].plot(ang, -P12/P11)
-        axarr[0,1].set_title(r'-$P_{12}/P_{11}$')
-        axarr[0,1].grid()
-        axarr[0,1].set_xlim([0,180])
-        axarr[0,1].set_xticks([0,30,60,90,120,150,180])
+            if (np.max(P11[:]) > 0.) :axarr[0,0].semilogy(ang, P11,label='%3i'%i)
+            axarr[0,0].set_title(r'$P_{11}$'+labw)
+            axarr[0,0].grid()
+            axarr[0,0].set_xlim([0,180])
+            axarr[0,0].set_xticks([0,30,60,90,120,150,180])
+            
+            if (np.max(P11[:]) > 0.) :axarr[0,1].plot(ang, -P12/P11)
+            axarr[0,1].set_title(r'-$P_{12}/P_{11}$')
+            axarr[0,1].grid()
+            axarr[0,1].set_xlim([0,180])
+            axarr[0,1].set_xticks([0,30,60,90,120,150,180])
 
+            
+            if (np.max(P11[:]) > 0.) :axarr[1,0].plot(ang, P33/P11)
+            axarr[1,0].set_title(r'$P_{33}/P_{11}$')
+            axarr[1,0].grid()
+            axarr[1,0].set_xlim([0,180])
+            axarr[1,0].set_xlabel(r'$\theta$')
+            axarr[1,0].set_xticks([0,30,60,90,120,150,180])
+                    
+            if (np.max(P11[:]) > 0.) :axarr[1,1].plot(ang, P43/P11)
+            axarr[1,1].set_title(r'$P_{43}/P_{11}$')
+            axarr[1,1].grid()
+            axarr[1,1].set_xlim([0,180])
+            axarr[1,1].set_xlabel(r'$\theta$')
+            axarr[1,1].set_xticks([0,30,60,90,120,150,180])
+        elif nstk == 6:
+            F0 = phase[i,0,:] # F11
+            F1 = phase[i,1,:] # F12 = F21
+            F2 = phase[i,2,:] # F33
+            F3 = phase[i,3,:] # F34 = -F43
+            F4 = phase[i,4,:] # F22
+            F5 = phase[i,5,:] # F44
+
+            P11 = 0.5*(F0+2*F1+F4)
+            P12 = 0.5*(F0-F4)
+            P22 = 0.5*(F0-2*F1+F4)
+            P33 = F2
+            P34 = F3
+            P44 = F5
         
-        if (np.max(P11[:]) > 0.) :axarr[1,0].plot(ang, P33/P11)
-        axarr[1,0].set_title(r'$P_{33}/P_{11}$')
-        axarr[1,0].grid()
-        axarr[1,0].set_xlim([0,180])
-        axarr[1,0].set_xlabel(r'$\theta$')
-        axarr[1,0].set_xticks([0,30,60,90,120,150,180])
-                
-        if (np.max(P11[:]) > 0.) :axarr[1,1].plot(ang, P43/P11)
-        axarr[1,1].set_title(r'$P_{43}/P_{11}$')
-        axarr[1,1].grid()
-        axarr[1,1].set_xlim([0,180])
-        axarr[1,1].set_xlabel(r'$\theta$')
-        axarr[1,1].set_xticks([0,30,60,90,120,150,180])
+            if (np.max(P11[:]) > 0.) :axarr[0,0].semilogy(ang, P11,label='%3i'%i)
+            axarr[0,0].set_title(r'$P_{11}$'+labw)
+            axarr[0,0].grid()
+            axarr[0,0].set_xlim([0,180])
+            axarr[0,0].set_xticks([0,30,60,90,120,150,180])
+            
+            if (np.max(P11[:]) > 0.) :axarr[0,1].plot(ang, -P12/P11)
+            axarr[0,1].set_title(r'-$P_{12}/P_{11}$')
+            axarr[0,1].grid()
+            axarr[0,1].set_xlim([0,180])
+            axarr[0,1].set_xticks([0,30,60,90,120,150,180])
+
+            
+            if (np.max(P11[:]) > 0.) :axarr[1,0].plot(ang, P33/P11)
+            axarr[1,0].set_title(r'$P_{33}/P_{11}$')
+            axarr[1,0].grid()
+            axarr[1,0].set_xlim([0,180])
+            axarr[1,0].set_xlabel(r'$\theta$')
+            axarr[1,0].set_xticks([0,30,60,90,120,150,180])
+                    
+            if (np.max(P11[:]) > 0.) :axarr[1,1].plot(ang, P34/P11)
+            axarr[1,1].set_title(r'$P_{34}/P_{11}$')
+            axarr[1,1].grid()
+            axarr[1,1].set_xlim([0,180])
+            axarr[1,1].set_xlabel(r'$\theta$')
+            axarr[1,1].set_xticks([0,30,60,90,120,150,180])
+
+            if (np.max(P11[:]) > 0.) :axarr[2,0].plot(ang, P22/P11)
+            axarr[2,0].set_title(r'$P_{22}/P_{11}$')
+            axarr[2,0].grid()
+            axarr[2,0].set_xlim([0,180])
+            axarr[2,0].set_xlabel(r'$\theta$')
+            axarr[2,0].set_xticks([0,30,60,90,120,150,180])
+                    
+            if (np.max(P11[:]) > 0.) :axarr[2,1].plot(ang, P44/P11)
+            axarr[2,1].set_title(r'$P_{44}/P_{11}$')
+            axarr[2,1].grid()
+            axarr[2,1].set_xlim([0,180])
+            axarr[2,1].set_xlabel(r'$\theta$')
+            axarr[2,1].set_xticks([0,30,60,90,120,150,180])
     
     setp([a.get_xticklabels() for a in axarr[0, :]], visible=False)
     axarr[0,0].legend(loc='upper center',fontsize = 'medium',labelspacing=0.01)
@@ -635,18 +695,36 @@ def input_view(mlut, iw=0, kind='atm', zmax=None, ipha=None):
     fig.set_size_inches(12,6)
     try:
         mlut['phase_'+kind]
-        ax1 = subplot2grid((2,3),(0,0))
-        ax2 = subplot2grid((2,3),(0,1))
-        ax3 = subplot2grid((2,3),(1,0))
-        ax4 = subplot2grid((2,3),(1,1))
-    
-        axarr = np.array([[ax1,ax2],[ax3,ax4]])
-    
-        _,_= phase_view(mlut, iw=iw, axarr=axarr, kind=kind, ipha=ipha)
+        nstk = len(mlut['phase_'+kind][0,:,0])
+        if nstk == 4:
+            ax1 = subplot2grid((2,3),(0,0))
+            ax2 = subplot2grid((2,3),(0,1))
+            ax3 = subplot2grid((2,3),(1,0))
+            ax4 = subplot2grid((2,3),(1,1))
         
-        ax5 = subplot2grid((2,3),(0,2),rowspan=2,colspan=1)
+            axarr = np.array([[ax1,ax2],[ax3,ax4]])
         
-        _,_= profile_view(mlut, iw=iw, ax=ax5, kind=kind, zmax=zmax)
+            _,_= phase_view(mlut, iw=iw, axarr=axarr, kind=kind, ipha=ipha)
+            
+            ax5 = subplot2grid((2,3),(0,2),rowspan=2,colspan=1)
+            
+            _,_= profile_view(mlut, iw=iw, ax=ax5, kind=kind, zmax=zmax)
+        else:
+            fig.set_size_inches(12,9)
+            ax1 = subplot2grid((3,3),(0,0))
+            ax2 = subplot2grid((3,3),(0,1))
+            ax3 = subplot2grid((3,3),(1,0))
+            ax4 = subplot2grid((3,3),(1,1))
+            ax5 = subplot2grid((3,3),(2,0))
+            ax6 = subplot2grid((3,3),(2,1))
+        
+            axarr = np.array([[ax1,ax2],[ax3,ax4],[ax5,ax6]])
+        
+            _,_= phase_view(mlut, iw=iw, axarr=axarr, kind=kind, ipha=ipha)
+            
+            ax7 = subplot2grid((3,3),(0,2),rowspan=2,colspan=1)
+            
+            _,_= profile_view(mlut, iw=iw, ax=ax7, kind=kind, zmax=zmax)
         
         tight_layout()
         
