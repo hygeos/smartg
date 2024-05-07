@@ -17,7 +17,6 @@ from scipy.integrate import simpson
 from scipy import constants
 from scipy.constants import speed_of_light, Planck, Boltzmann
 from smartg.bandset import BandSet
-from smartg.config import dir_libradtran_opac
 from smartg.config import dir_libradtran_atmmod
 from smartg.config import dir_auxdata
 import warnings
@@ -873,8 +872,8 @@ class AeroOPAC(object):
         '''
         list standard aerosol files in opac
         '''
-        files = glob(join(dir_libradtran_opac, 'standard_aerosol_files', '*.dat'))
-        return map(lambda x: basename(x)[:-4], files)
+        files = glob(join(dir_auxdata, '/auxdata/aerosols_old/OPAC_vertical_dist/', '*.nc'))
+        return map(lambda x: basename(x)[:-3], files)
 
 
 
@@ -1202,6 +1201,10 @@ class AtmAFGL(Atmosphere):
 
         # read afgl file
         if not new_atm:
+            warnings.simplefilter('always', DeprecationWarning)
+            warn_message = "\nThe option new_atm = False is deprecated as of SMART-G 1.0.0. " + \
+                           "The key argument 'new_atm' will be removed in one of the next release.\n"
+            warnings.warn(warn_message, DeprecationWarning)
             prof = Profile_base(atm_filename, O3=O3,
                                 H2O=H2O, NO2=NO2, P0=P0, RH_cst=RH_cst, US=US, O3_H2O_alt=O3_H2O_alt
                                 )
