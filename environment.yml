@@ -16,8 +16,7 @@ dependencies:
   - progressbar2<4.3     # from progressbar import ProgressBar, Percentage, Bar
   - matplotlib<=3.8.3    # import matplotlib
   - pycuda<=2024.1       # import pycuda
-  - nbformat<=5.9.2
-  - nbconvert<=7.16.0
+  - papermill
   - jupyterlab<=4.1.1
   - notebook<=7.1.0
   - ipywidgets<=8.1.2

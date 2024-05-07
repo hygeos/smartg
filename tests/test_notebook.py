@@ -1,5 +1,4 @@
-import nbformat
-from nbconvert.preprocessors import ExecutePreprocessor
+import papermill as pm
 
 # import os
 from os.path import join, dirname, realpath
@@ -9,8 +8,16 @@ def test_demo_notebook():
     """
     Execute the demo notebook
     """
-    with open('notebooks/demo_notebook.ipynb') as f:
-        nb = nbformat.read(f, as_version=4)
-    
-    ep = ExecutePreprocessor(timeout=600, kernel_name='python3')
-    ep.preprocess(nb, {'metadata': {'path': join(ROOTPATH, 'notebooks/')}})
+    print("\nTesting demo_notebook.ipynb...")
+    nb_path = join(ROOTPATH, "notebooks/demo_notebook.ipynb")
+    nb_output_path = join(ROOTPATH, "tests/logs/demo_notebook_log.ipynb")
+    pm.execute_notebook(str(nb_path), str(nb_output_path))
+
+def test_demo_notebook_objects():
+    """
+    Execute the demo notebook objects
+    """
+    print("\nTesting demo_notebook_objects.ipynb...")
+    nb_path = join(ROOTPATH, "notebooks/demo_notebook_objects.ipynb")
+    nb_output_path = join(ROOTPATH, "tests/logs/demo_notebook_objects_log.ipynb")
+    pm.execute_notebook(str(nb_path), str(nb_output_path))
