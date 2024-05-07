@@ -1,14 +1,21 @@
-# SMART-G
-_Speed-up Monte Carlo Advanced Radiative Transfer Code using GPU_
+  SMART-G
+  =======
 
-SMART-G is a radiative transfer code using a Monte-Carlo technique to simulate the propagation of the polarized light in the atmosphere and/or ocean, and using GPU acceleration.
+  SMART-G (Speed-up Monte Carlo Advanced Radiative Transfer Code using GPU) is a radiative transfer code using a Monte-Carlo technique to simulate the propagation of the polarized light in the atmosphere and/or ocean, and using GPU acceleration.
 
-## Installation
-SMART-G is written in python and cuda, and uses the [pycuda](http://mathema.tician.de/software/pycuda/) library. Python3 is recommended.
+  Didier Ramon  
+  Mustapha Moulana  
+  François Steinmetz  
+  Dominique Jolivet  
+  Mathieu Compiègne  
+  [HYGEOS](www.hygeos.com)
 
-We recommend to use the [anaconda python distribution](https://www.anaconda.com/download/). You can create a dedicated [environment](https://conda.io/docs/user-guide/tasks/manage-environments.html) for SMART-G, or use your current environment.
+----------------------------------------------------------------------  
 
-### Using conda
+
+## 1. Installation
+
+### 1.1 Dependencies
 
 The smartg dependencies can be installed on anaconda with the following command:
 
@@ -21,32 +28,21 @@ The smartg dependencies can be installed on anaconda with the following command:
   mamba env update -f environment.yml
 ```
 
-### Using poetry
+### 1.2 Auxiliary data
 
-The dependencies can also be installed with [python-poetry](https://python-poetry.org/), using the following command:
-
-```
-poetry install --no-root
-```
-
-The dependencies are installed in the current environment from the definitions included in `pyproject.toml`
-
-
-## Auxiliary data
-Atmospheric profiles created in atmosphere.py are based on data included in the [libRadtran](http://www.libradtran.org/) library.
-This auxiliary data can be automatically installed using the config.py script (`python smartg/config.py`)
-
-Some auxiliary data must be downloaded using the following command:
+The auxiliary data can be downloaded with the following command:
 ```
 $ make auxdata_all
 ```
 
-## Examples
+## 2. Examples
+
 Examples are provided in the [sample notebooks](notebooks).
 
 [jupyter notebook](http://jupyter.org) has nice possibilities for interactive development and visualization, in particular if you are using a remote cuda computer. Sample notebooks are provided in the folder [notebooks](notebooks).
 
-## Tests
+## 3. Tests
+
 Example of pytest.ini file:
 ```
 [pytest]
@@ -54,17 +50,20 @@ addopts= --html=test_reportv1.html --self-contained-html -s -v
 ```
 Run the command `pytest tests/test_cuda.py tests/test_profile.py tests/test_smartg.py` to check that SMART-G is correctly running.
 
-## Hardware tested
-GeForce GTX 660 Ti (unused for a while), GeForce GTX 970 (unused for a while), GeForce GTX 1070, GeForce TITAN V, Quadro P2000, GeForce RTX 2080 Ti, Geforce RTX 3070, Geforce RTX 3090, Geforce RTX 4090
+## 4. Hardware tested
 
-## Documentation
+GeForce GTX 1070, GeForce TITAN V, GeForce RTX 2080 Ti, Geforce RTX 3070, Geforce RTX 3090, Geforce RTX 4090, A100
 
-Use the provided makefile:
+The use of GPUs before 10xx series (Pascal) is depracated as of SMART-G 1.0.0
 
-* `make help` will provide sphinx help
+## 5. Licencing information
 
-* `make html` will build the doc in html
+This software is available under the SMART-G licence v1.0, available in the LICENCE.TXT file.
 
-* `make serve` will run a small python http server to view the doc
+## 6. Referencing
 
-The sphinx extensions [napoleon](https://www.sphinx-doc.org/en/master/usage/extensions/napoleon.html) is used so that [google](https://google.github.io/styleguide/pyguide.html) or [numpy](https://numpydoc.readthedocs.io/en/latest/format.html#docstring-standard) style docstring can be used.
+When acknowledging the use of SMART-G for scientific papers, reports etc please cite the following reference:
+
+* Ramon, D., Steinmetz, F., Jolivet, D., Compiègne, M., & Frouin, R. (2019). Modeling polarized radiative
+  transfer in the ocean-atmosphere system with the GPU-accelerated SMART-G Monte Carlo code.
+  Journal of Quantitative Spectroscopy and Radiative Transfer, 222, 89-107. https://doi.org/10.1016/j.jqsrt.2018.10.017
