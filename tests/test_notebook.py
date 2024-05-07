@@ -11,7 +11,7 @@ def test_demo_notebook():
     print("\nTesting demo_notebook.ipynb...")
     nb_path = join(ROOTPATH, "notebooks/demo_notebook.ipynb")
     nb_output_path = join(ROOTPATH, "tests/logs/demo_notebook_log.ipynb")
-    pm.execute_notebook(str(nb_path), str(nb_output_path), cwd=join(ROOTPATH, "notebooks/"))
+    pm.execute_notebook(str(nb_path), str(nb_output_path), cwd=ROOTPATH)
 
 def test_demo_notebook_objects():
     """
@@ -20,4 +20,4 @@ def test_demo_notebook_objects():
     print("\nTesting demo_notebook_objects.ipynb...")
     nb_path = join(ROOTPATH, "notebooks/demo_notebook_objects.ipynb")
     nb_output_path = join(ROOTPATH, "tests/logs/demo_notebook_objects_log.ipynb")
-    pm.execute_notebook(str(nb_path), str(nb_output_path), cwd=join(ROOTPATH, "notebooks/"))
+    pm.execute_notebook(str(nb_path), str(nb_output_path), cwd=ROOTPATH)
