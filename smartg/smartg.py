@@ -594,7 +594,7 @@ class Smartg(object):
     def __init__(self, pp=True, debug=False,
                  verbose_photon=False,
                  double=True, alis=False, back=False, bias=True, alt_pp=False, obj3D=False, 
-                 opt3D=False, device=None, sif=False, thermal=False, rng='PHILOX'):
+                 opt3D=False, device=None, sif=False, thermal=False, rng='PHILOX', cache_dir='/tmp/'):
         assert not ((device is not None) and ('CUDA_DEVICE' in os.environ)), "Can not use the 'device' option while the CUDA_DEVICE is set"
 
         if device is not None:
@@ -677,7 +677,7 @@ class Smartg(object):
                            nvcc='nvcc',
                            options=options,
                            no_extern_c=True,
-                           cache_dir='/tmp/',
+                           cache_dir=cache_dir,
                            include_dirs=[dir_src,
                                join(dir_src, 'incRNGs/Random123/')])
 
