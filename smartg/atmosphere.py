@@ -6,7 +6,7 @@ from __future__ import print_function, division, absolute_import
 import numpy as np
 from os.path import join, dirname, exists, basename
 from glob import glob
-from luts.luts import MLUT, LUT, Idx, read_mlut
+from luts.luts import MLUT, LUT, Idx, read_mlut, read_mlut_hdf5
 from smartg.tools.phase import calc_iphase
 try:
     from smartg.tools.third_party_utils import change_altitude_grid
@@ -24,6 +24,8 @@ import sys
 import pandas as pd
 if sys.version_info[:2] >= (3, 0):
     xrange = range
+
+import h5py
 
 
 
@@ -324,7 +326,7 @@ class CldOPAC(AerOPAC):
     with and effective radius reff
 
     Example: CldOPAC('wc', 12.68, 2, 3, 10., 550.)
-             # water cloud mie, reff=12.68 between 2 and 3 km
+             # water cloud, reff=12.68 between 2 and 3 km
              # total optical thickness of 10 at 550 nm
     '''
     def __init__(self, filename, reff, zmin, zmax, tau_ref, w_ref,
@@ -335,7 +337,7 @@ class CldOPAC(AerOPAC):
             (isinstance(w_ref, np.ndarray) and w_ref.ndim == 0) ) : self.w_ref = np.array([w_ref])
         else                                                      : self.w_ref = np.array(w_ref)
 
-        if dirname(filename) == '' : self.filename = join(dir_auxdata, 'aerosols/OPAC/clouds', filename)
+        if dirname(filename) == '' : self.filename = join(dir_auxdata, 'clouds', filename)
         else                       : self.filename = filename
         if (not "_sol" in filename) and (not filename.endswith('.nc')) : self.filename = self.filename + '_sol.nc'
         elif (not filename.endswith('.nc'))                            : self.filename += '.nc'
@@ -360,6 +362,16 @@ class CldOPAC(AerOPAC):
 
         self.ssa = None
         self._phase = phase
+
+    @staticmethod
+    def list():
+        '''
+        list standard aerosol files in opac
+        '''
+        files = glob(join(dir_auxdata, 'clouds/*.nc'))
+        for ifile in range (0, len(files)):
+            files[ifile] = basename(files[ifile]).replace('_sol.nc', '')
+        return files
         
 
 # ============ \ !! / ============
@@ -3021,3 +3033,112 @@ def atm_pro_from_aeronet_opti2(date, time, aod_file, ssa_file, pfn_file, b_wav, 
     atm_pro.add_dataset('iphase_atm', ipha_atm, ['wavelength', 'z_atm'])
 
     return atm_pro
+
+
+def artdeco_to_smartg_cld(input_path, output_path=None, h5_group=None, normalize=True, overwrite=False, veff = None, wl_max = 4500):
+    """
+    Description : Convert ARTDECO cloud h5 file to SMART-G nc file.
+
+    === Parameters:
+    input_path  : ARTDECO cloud h5 file path
+    output_path : If not None: save the converted SMART-G cloud nc file to output_path
+    h5_group    : Group to open in the h5 file
+    normalize   : By default True. Normalize p11 phase component integral to 2
+    overwrite   : If output_path is given, the save option overwrite can be given. By default False.
+    veff        : veff must be given if the cloud properties are dependant with
+    wl_max      : Take only wavelengths less or equal to wl_max (in nm)
+
+    === return
+    m : MLUT object with cloud properties (SMART-G convention)
+    """
+
+    # Deals with the case where h5_group is not provided 
+    if h5_group is None:
+        with h5py.File(input_path, "r") as f:
+            keys = list(f.keys())
+        if len(keys) == 1 :
+            h5_group = keys[0]
+        elif len(keys) > 1:
+            raise NameError("The h5 file has more than one group. Please choose one group between: " + ', '.join(keys))
+
+    art_cld = read_mlut_hdf5(input_path, group=h5_group)
+
+    # If p22 doesn't exist --> convention with 4 stk components
+    # Care, phase_comp elements are sorted in a specific way
+    try:    
+        art_cld["p22_phase_function"]
+        nstk = int(6)
+        phase_comp = ['p11_phase_function', 'p21_phase_function', 'p33_phase_function',
+                    'p34_phase_function', 'p22_phase_function', 'p44_phase_function']
+    except:
+        nstk = int(4)
+        # here p33 = p44
+        phase_comp = ['p11_phase_function', 'p21_phase_function', 'p44_phase_function', 'p34_phase_function']
+
+    # check if the cloud properties are dependant of veff
+    is_veff = False
+    try:
+        art_cld.axes["veff"]
+        is_veff = True
+    except:
+        pass
+
+    if is_veff and veff is None:
+        veff_min = str(np.min(art_cld.axes["veff"]))
+        veff_max = str(np.max(art_cld.axes["veff"]))
+        raise NameError ("The cloud file is dependant of veff. Please give a veff value between: " + veff_min + " and " + veff_max)
+    elif is_veff and veff is not None:   
+        art_cld = art_cld.sub({'veff':Idx(veff)})
+
+    m = MLUT()
+    reff = np.array(art_cld.axes['reff'], dtype=np.float32)
+    m.add_axis('reff', reff)
+    nreff = len(m.axes['reff'])
+
+    wav = np.array(np.round(art_cld.axes['wavelengths']*1e3, decimals=3), dtype=np.float32)
+    m.add_axis('wav', wav[wav<=wl_max])
+    nwav = len(m.axes['wav'])
+
+    stk = np.arange(nstk, dtype=np.int16)
+    m.add_axis('stk', stk)
+
+    theta = np.array(np.rad2deg(np.arccos(np.float64(art_cld.axes['mu']))), dtype=np.float64)
+    m.add_axis('theta', np.sort(theta))
+    ntheta = len(m.axes['theta'])
+
+    phase = np.zeros((nreff, nwav, nstk, ntheta), dtype=np.float32)
+    for ipc, pc in enumerate(phase_comp):
+        # reorder axes, from 'mu', 'reff', 'wavelengths' to 'reff', 'wavelengths', 'mu'
+        phac = art_cld[pc].swapaxes('mu', 'reff').swapaxes('mu', 'wavelengths')
+
+        # only take wavelengths less than wl_max
+        phac = phac[:,np.arange(nwav),:]
+
+        # sort theta (since mu = cos(theta) may be sorted differently)
+        phac = phac[:,:, np.argsort(theta)]
+        phase[:,:,ipc,:] = phac.data
+
+    if nstk == 6 : pha_desc = 'phase matrix integral normalized to 2. stk order: p11, p21, p33, p34, p22 and p44'
+    if nstk == 4 : pha_desc = 'phase matrix integral normalized to 2. stk order: p11, p21, p33 and p34'
+
+    # integral of P11 must be equal to 2
+    if normalize:
+        for iwav in range (0, nwav):
+            for ireff in range (0, nreff):  
+                f = phase[ireff, iwav, 0, :] # P11
+                Norm = np.trapz(f,-art_cld.axes['mu'][::-1])
+                phase[ireff, iwav, :, :] *= 2./abs(Norm)
+
+    m.add_dataset('phase', phase, axnames=['reff', 'wav', 'stk', 'theta'], attrs={'description':pha_desc})
+
+    ext = np.array(art_cld["Cext"][:,np.arange(nwav)], np.float64)
+    m.add_dataset('ext', ext, axnames=['reff', 'wav'], attrs={'description':'extinction coefficient in km^-1'})
+
+    ssa = np.array(art_cld["single_scattering_albedo"][:,np.arange(nwav)], np.float64)
+    m.add_dataset('ssa', ssa, axnames=['reff', 'wav'], attrs={'description':'single scattering albedo'})
+
+    if veff is not None: m.set_attr('veff', veff)
+
+    if output_path is not None: m.save(output_path, overwrite=overwrite)
+
+    return m
