@@ -320,12 +320,12 @@ class AerOPAC(object):
         return files
 
 
-class CldOPAC(AerOPAC):
+class Cloud(AerOPAC):
     '''
     Single cloud, localized between zmin and zmax,
     with and effective radius reff
 
-    Example: CldOPAC('wc', 12.68, 2, 3, 10., 550.)
+    Example: Cloud('wc', 12.68, 2, 3, 10., 550.)
              # water cloud, reff=12.68 between 2 and 3 km
              # total optical thickness of 10 at 550 nm
     '''
@@ -907,7 +907,7 @@ class CloudOPAC(AeroOPAC):
         warnings.simplefilter('always', DeprecationWarning)
         warn_message = "\nCloudOPAC is deprecated as of SMART-G 1.0.0 " + \
                        "and will be removed in one of the next release.\n" + \
-                       "Please use CldOPAC instead (where also important corrections have been made)."
+                       "Please use Cloud instead (where also important corrections have been made)."
         self.reff = reff
         self.tau_ref = tau_ref
         self.w_ref = w_ref
