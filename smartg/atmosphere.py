@@ -142,7 +142,7 @@ class AerOPAC(object):
         else                                                                          : hum_or_reff_val = np.array(hum_or_reff_val)
         
         ext_ = np.zeros_like(dtau)
-        ext_ref_ = np.zeros_like(dtau)
+        ext_ref_ = np.zeros_like(dtau_ref)
         ssa_ = np.zeros_like(dtau)
         for icont, cont in enumerate(self.vert_content):
             if ((self.hum_or_reff == 'hum') and (self.force_rh[icont] is not None)) : rh_reff = np.full_like(hum_or_reff_val, self.force_rh[icont])
@@ -175,6 +175,13 @@ class AerOPAC(object):
         #apply scaling factor to get the required optical thickness at the
         # specified wavelength
         if self.tau_ref is not None: dtau *= self.tau_ref/np.sum(dtau_ref)
+
+        # force ssa
+        if self.ssa is not None:
+            if self.ssa.ndim == 0: # scalar
+                ssa[:,:] = self.ssa
+            else:
+                ssa[:,:] = self.ssa[:,None]
 
         return dtau, ssa
     
@@ -288,8 +295,8 @@ class AerOPAC(object):
                 ext_tmp = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_reff_val[:])][Idx(wav),:]
                 ssa_tmp = cont['ssa'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_reff_val[:])][Idx(wav),:]
                 for iz in range (0, len(Z)):
-                    ext_[:,iz] = ext_tmp
-                    ssa_[:,iz] = ssa_tmp
+                    ext_[:,iz] = ext_tmp[:,0]
+                    ssa_[:,iz] = ssa_tmp[:,0]
             else:      
                 ext_ = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_reff_val[:])][Idx(wav),:]
                 ssa_ = cont['ssa'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_reff_val[:])][Idx(wav),:]
