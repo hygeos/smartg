@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import pytest
-from smartg.atmosphere import AtmAFGL, AeroOPAC, CloudOPAC
+from smartg.atmosphere import AtmAFGL, AerOPAC, Cloud
 import numpy as np
 
 try:
@@ -39,15 +39,15 @@ def test_profile2(wav):
 @pytest.mark.skipif(exist_third_party_utils == False, reason="require third_party_utils external file")
 def test_profile3(wav):
     atm = AtmAFGL('afglms',
-                comp=[AeroOPAC('desert', 0.1, 550.)],
+                comp=[AerOPAC('desert', 0.1, 550.)],
                 grid='100[20]10[1]0',
                 pfgrid=[100., 10., 0.])
     atm.calc(wav)
 
 def test_profile4(wav):
     atm = AtmAFGL('afglms',
-                  comp=[AeroOPAC('desert', 0.1, 550.),
-                        CloudOPAC('wc.sol', 12.68, 2, 3, 10., 550.),
+                  comp=[AerOPAC('desert', 0.1, 550.),
+                        Cloud('wc', 12.68, 2, 3, 10., 550.),
                        ],
                   grid=[100., 50., 20., 10., 5., 2., 1., 0.],
                   pfgrid=[100., 10., 0.])
@@ -65,14 +65,14 @@ def test_profile5():
 def test_profile6():
     # set ssa
     AtmAFGL('afglms', grid=[100, 20, 0.],
-            comp=[AeroOPAC('urban', 0.1, 550., ssa=0.8)]
+            comp=[AerOPAC('urban', 0.1, 550., ssa=0.8)]
             ).calc(400.)
 
     AtmAFGL('afglms', grid=[100, 20, 0.],
-            comp=[AeroOPAC('urban', 0.1, 550., ssa=0.8)]
+            comp=[AerOPAC('urban', 0.1, 550., ssa=0.8)]
             ).calc([400., 500., 600.])
 
     AtmAFGL('afglms', grid=[100, 20, 0.],
-            comp=[AeroOPAC('urban', 0.1, 550., ssa=[0.76, 0.77, 0.78])]
+            comp=[AerOPAC('urban', 0.1, 550., ssa=[0.76, 0.77, 0.78])]
             ).calc([400., 500., 600.])
 
