@@ -67,7 +67,7 @@ logger.addHandler(file_handler)
 @pytest.fixture(scope='module')
 def S1DF():
     '''
-    Backward compilation in 1D
+    Forward compilation in 1D
     '''
     return Smartg(alt_pp=True, back=False, double=True, bias=True)
 
