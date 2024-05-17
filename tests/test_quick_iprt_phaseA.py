@@ -206,7 +206,7 @@ def test_A1(request, S1DF, S1DB):
                                 file_name=tmp_file_a1, output_layer=['_up (TOA)', '_up (TOA)', '_down (0+)', '_up (TOA)', '_down (0+)', '_up (TOA)'])
         
         smartg_a1 = pd.read_csv(tmp_file_a1, header=None, sep=r'\s+', dtype=float, comment="#").values
-        mystic_a1 = pd.read_csv(ROOTPATH + "/tests/IPRT_data/phaseA/iprt_case_a1_mystic.dat", header=None, sep=r'\s+', dtype=float, comment="#").values
+        mystic_a1 = pd.read_csv(ROOTPATH + "/auxdata/IPRT/phaseA/mystic_res/iprt_case_a1_mystic.dat", header=None, sep=r'\s+', dtype=float, comment="#").values
         avoidP=False
 
         lDEP   = [0., 0.03, 0.1]
@@ -259,7 +259,7 @@ def test_A1(request, S1DF, S1DB):
 
     # === Compute the delta_m values and analyse them with the previous saved validated ones
     # SMARTG ref results
-    smartg_a1_ref = pd.read_csv(ROOTPATH + "/tests/IPRT_data/phaseA/smartg_ref_res/iprt_case_a1_smartg_ref.dat", header=None, sep=r'\s+', dtype=float, comment="#").values
+    smartg_a1_ref = pd.read_csv(ROOTPATH + "/auxdata/IPRT/phaseA/smartg_ref_res/iprt_output_format/iprt_case_a1_smartg_ref.dat", header=None, sep=r'\s+', dtype=float, comment="#").values
     for isim in range (0, 3):
         for ialt in range (0, 2):
             I_smartg_ref, Q_smartg_ref, U_smartg_ref, V_smartg_ref, I_smartg_std_ref, Q_smartg_std_ref, U_smartg_std_ref, V_smartg_std_ref \
@@ -333,7 +333,7 @@ def test_A2(request, S1DF):
         
         # === Plot and comparison with MYSTIC (to save in the report)
         smartg_a2 = pd.read_csv(tmp_file_a2, header=None, sep=r'\s+', dtype=float, comment="#").values
-        mystic_a2 = pd.read_csv(ROOTPATH + "/tests/IPRT_data/phaseA/iprt_case_a2_mystic.dat", header=None, sep=r'\s+', dtype=float, comment="#").values
+        mystic_a2 = pd.read_csv(ROOTPATH + "/auxdata/IPRT/phaseA/mystic_res/iprt_case_a2_mystic.dat", header=None, sep=r'\s+', dtype=float, comment="#").values
         avoidP=False
         # 0km of altitude
         title = "IPRT case A2 - depol = 0.03 - 0km - SMARTG"
@@ -405,7 +405,7 @@ def test_A2(request, S1DF):
     IQUV_mystic_tot = groupIQUV(lI=[I_mystic_0km, I_mystic_1km], lQ=[Q_mystic_0km, Q_mystic_1km], lU=[U_mystic_0km, U_mystic_1km], lV=[V_mystic_0km, V_mystic_1km])
 
     # SMARTG ref results
-    smartg_a2_ref = pd.read_csv(ROOTPATH + "/tests/IPRT_data/phaseA/smartg_ref_res/iprt_case_a2_smartg_ref.dat", header=None, sep=r'\s+', dtype=float, comment="#").values
+    smartg_a2_ref = pd.read_csv(ROOTPATH + "/auxdata/IPRT/phaseA/smartg_ref_res/iprt_output_format/iprt_case_a2_smartg_ref.dat", header=None, sep=r'\s+', dtype=float, comment="#").values
     I_smartg_0km_ref, Q_smartg_0km_ref, U_smartg_0km_ref, V_smartg_0km_ref, I_smartg_std_0km_ref, Q_smartg_std_0km_ref, U_smartg_std_0km_ref, V_smartg_std_0km_ref \
           = select_and_plot_polar_iprt(smartg_a2_ref, 0., change_U_sign=True, outputIQUV=True, outputIQUVstd=True, avoid_plot=True)
     I_smartg_1km_ref, Q_smartg_1km_ref, U_smartg_1km_ref, V_smartg_1km_ref, I_smartg_std_1km_ref, Q_smartg_std_1km_ref, U_smartg_std_1km_ref, V_smartg_std_1km_ref \
@@ -444,7 +444,7 @@ def test_A5_pp(request, S1DF):
     cld_ssa = np.full_like(mol_sca, 0.999979, dtype=np.float32)
     prof_aer = (cld_tau_ext, cld_ssa)
     NTH = 18001  # The water cloud has a phase function with a non-negligible peak, then a sufficiently fine resolution is required.
-    file_cld_phase = ROOTPATH + "/tests/IPRT_data/phaseA/watercloud.mie.cdf"
+    file_cld_phase = ROOTPATH + "/auxdata/IPRT/phaseA/opt_prop/watercloud.mie.cdf"
     cld_phase = read_cld_nth_cte(filename=file_cld_phase, nb_theta=NTH)
     pha_atm, ipha_atm = calc_iphase(cld_phase, np.array([800.]), z)
     lpha_lut = []
@@ -483,7 +483,7 @@ def test_A5_pp(request, S1DF):
         
         # === Plot and comparison with MYSTIC (to save in the report)
         smartg_a5_pp = pd.read_csv(tmp_file_a5_pp, header=None, sep=r'\s+', dtype=float, comment="#").values
-    mystic_a5_pp = pd.read_csv(ROOTPATH + "/tests/IPRT_data/phaseA/iprt_case_a5_pp_mystic.dat", header=None, sep=r'\s+', dtype=float, comment="#").values
+    mystic_a5_pp = pd.read_csv(ROOTPATH + "/auxdata/IPRT/phaseA/mystic_res/iprt_case_a5_pp_mystic.dat", header=None, sep=r'\s+', dtype=float, comment="#").values
     VZAn = np.sort(np.concatenate((VZA-180, 180-VZA)))
     NVZA = len(VZAn)
 
@@ -534,7 +534,7 @@ def test_A5_pp(request, S1DF):
 
     # === Compute the delta_m values and analyse them with the previous saved validated ones
     # SMARTG ref results
-    smartg_a5_pp_ref = pd.read_csv(ROOTPATH + "/tests/IPRT_data/phaseA/smartg_ref_res/iprt_case_a5_smartg_pp_ref.dat", header=None, sep=r'\s+', dtype=float, comment="#").values
+    smartg_a5_pp_ref = pd.read_csv(ROOTPATH + "/auxdata/IPRT/phaseA/smartg_ref_res/iprt_output_format/iprt_case_a5_smartg_pp_ref.dat", header=None, sep=r'\s+', dtype=float, comment="#").values
     IQUVS_with_std_ref = seclect_iprt_IQUV(smartg_a5_pp_ref, 1., change_U_sign=False, inv_thetas=True, stdev=True)
     IQUVS_pp_ref = np.zeros((4,NVZA), dtype=np.float32)
     IQUVS_pp_std_ref = np.zeros((4,NVZA), dtype=np.float32)
@@ -580,7 +580,7 @@ def test_A5_al(request, S1DF):
     cld_ssa = np.full_like(mol_sca, 0.999979, dtype=np.float32)
     prof_aer = (cld_tau_ext, cld_ssa)
     NTH = 18001  # The water cloud has a phase function with a non-negligible peak, then a sufficiently fine resolution is required.
-    file_cld_phase = ROOTPATH + "/tests/IPRT_data/phaseA/watercloud.mie.cdf"
+    file_cld_phase = ROOTPATH + "/auxdata/IPRT/phaseA/opt_prop/watercloud.mie.cdf"
     cld_phase = read_cld_nth_cte(filename=file_cld_phase, nb_theta=NTH)
     pha_atm, ipha_atm = calc_iphase(cld_phase, np.array([800.]), z)
     lpha_lut = []
@@ -619,7 +619,7 @@ def test_A5_al(request, S1DF):
         
         # === Plot and comparison with MYSTIC (to save in the report)
         smartg_a5_al = pd.read_csv(tmp_file_a5_al, header=None, sep=r'\s+', dtype=float, comment="#").values
-    mystic_a5_al = pd.read_csv(ROOTPATH + "/tests/IPRT_data/phaseA/iprt_case_a5_al_mystic.dat", header=None, sep=r'\s+', dtype=float, comment="#").values
+    mystic_a5_al = pd.read_csv(ROOTPATH + "/auxdata/IPRT/phaseA/mystic_res/iprt_case_a5_al_mystic.dat", header=None, sep=r'\s+', dtype=float, comment="#").values
     VAAn = VAA
     NVAA = len(VAAn)
 
@@ -670,7 +670,7 @@ def test_A5_al(request, S1DF):
 
     # === Compute the delta_m values and analyse them with the previous saved validated ones
     # SMARTG ref results
-    smartg_a5_al_ref = pd.read_csv(ROOTPATH + "/tests/IPRT_data/phaseA/smartg_ref_res/iprt_case_a5_smartg_al_ref.dat", header=None, sep=r'\s+', dtype=float, comment="#").values
+    smartg_a5_al_ref = pd.read_csv(ROOTPATH + "/auxdata/IPRT/phaseA/smartg_ref_res/iprt_output_format/iprt_case_a5_smartg_al_ref.dat", header=None, sep=r'\s+', dtype=float, comment="#").values
     IQUVS_with_std_ref = seclect_iprt_IQUV(smartg_a5_al_ref, 1., change_U_sign=False, inv_thetas=True, stdev=True)
     IQUVS_al_ref = np.zeros((4,NVAA), dtype=np.float32)
     IQUVS_al_std_ref = np.zeros((4,NVAA), dtype=np.float32)

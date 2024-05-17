@@ -9,6 +9,9 @@ valid_URL = https://docs.hygeos.com/s/6EPBqwebn94NYPq/download
 water_URL = https://docs.hygeos.com/s/3NKP5tMsHKnNRpt/download
 kdis_URL = https://docs.hygeos.com/s/CHTFFgHe6to39CR/download
 
+# some data (mystic res and opt_prop) are taken from: https://www.meteo.physik.uni-muenchen.de/~iprt/doku.php?id=intercomparisons:intercomparisons
+IPRT_URL = https://docs.hygeos.com/s/i4QaxtpjSfjwtNk/download
+
 # reptran source: http://www.libradtran.org
 reptran_URL = http://www.meteo.physik.uni-muenchen.de/~libradtran/lib/exe/fetch.php?media=download:reptran_2017_all.tar.gz
 reptran_URL_hyg = https://docs.hygeos.com/s/jHKMcZZmkf6xy7D/download
@@ -70,6 +73,11 @@ auxdata_reptran_from_libratran_URL:
 	tar -xvf auxdata/reptran.tar.gz --strip-components=2 -C auxdata/
 	rm -f auxdata/reptran.tar.gz
 
+auxdata_IPRT:
+	$(WGET) auxdata/ $(IPRT_URL)/IPRT.zip
+	unzip auxdata/IPRT.zip -d auxdata/
+	rm -f auxdata/IPRT.zip
+
 
 .PHONY: clean
 
@@ -83,3 +91,4 @@ clean:
 	rm -rf auxdata/water
 	rm -rf auxdata/kdis
 	rm -rf auxdata/reptran
+	rm -rf auxdata/IPRT
