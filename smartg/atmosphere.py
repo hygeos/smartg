@@ -1227,6 +1227,10 @@ class AtmAFGL(Atmosphere):
             prof = Profile_base(atm_filename, O3=O3,
                                 H2O=H2O, NO2=NO2, P0=P0, RH_cst=RH_cst, US=US, O3_H2O_alt=O3_H2O_alt
                                 )
+        elif(new_atm and atm_filename == "./tmp.dat"):
+            prof = Profile_base(atm_filename, O3=O3,
+                                H2O=H2O, NO2=NO2, P0=P0, RH_cst=RH_cst, US=US, O3_H2O_alt=O3_H2O_alt
+                                )
         else:
             prof = Profile_base2(atm_filename, O3=O3,
                                 H2O=H2O, NO2=NO2, P0=P0, RH_cst=RH_cst, US=US, O3_H2O_alt=O3_H2O_alt

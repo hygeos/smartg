@@ -9,7 +9,7 @@ import pandas as pd
 from pathlib import Path
 import os
 
-from smartg.atmosphere import AtmAFGL, CloudOPAC, od2k
+from smartg.atmosphere import AtmAFGL, Cloud, od2k
 from smartg.smartg import Sensor
 
 import matplotlib.gridspec as gridspec
@@ -493,7 +493,8 @@ def locate_3Dregular_cells(xgrid,ygrid,zgrid,x,y,z):
 def satellite_view(mlut, xgrid, ygrid, wl, interp_name='none',
                    color_bar='Blues_r', color_reverse=False, fig_size=(8,8), font_size=int(18),
                    vmin = None, vmax = None, scale=False, save_file=None, stk="I", factor=1,
-                   mat_force=None, cb_shrink=0.9, cb_sform = True, fig_title=None):
+                   mat_force=None, cb_shrink=0.9, cb_sform = True, fig_title=None,
+                   xlim=None, ylim=None):
     """
     Description: The function give a 'satellite' 2D image of the SMART-G 3D atm return results
 
@@ -557,6 +558,7 @@ def satellite_view(mlut, xgrid, ygrid, wl, interp_name='none',
         sensor_number = mlut.axes["sensor index"].size
     else:
         sensor_number = int(1)
+    if mat_force: sensor_number = int(mat_force[0].shape[0]*mat_force[0].shape[1])
     if (Nx*Ny != sensor_number):
         raise NameError("The product of Nx and Ny must be equal to the number of sensors!")
 
@@ -599,6 +601,7 @@ def satellite_view(mlut, xgrid, ygrid, wl, interp_name='none',
         else:
             cmaps.append(plt.get_cmap(cbar))
         if (color_reverse[idcb]): cmaps[idcb] = plt.get_cmap(cbar).reversed()
+        cmaps[idcb].set_bad('white',1.)
 
     if len(matrix) == 1:
         if fig_size is None: fig_size = (6,4)
@@ -618,9 +621,13 @@ def satellite_view(mlut, xgrid, ygrid, wl, interp_name='none',
             img = plt.pcolormesh(xgrid, ygrid, matrix[0], vmin=vmin[0], vmax=vmax[0], cmap=cmaps[0])
             plt.axis('scaled') # x and y axes with the same scaling
         
-        cbar = plt.colorbar(img, shrink=cb_shrink, orientation='vertical', format=find_order_or_none(matrix[0], cb_sform), ticks=get_tv(vmin[0], vmax[0], matrix[0]))
+        cbar = plt.colorbar(img, shrink=cb_shrink, orientation='vertical',
+                            format=find_order_or_none(matrix[0][~np.isnan(matrix[0])], cb_sform),
+                            ticks=get_tv(vmin[0], vmax[0], matrix[0][~np.isnan(matrix[0])]))
         cbar.set_label(r''+ stokes_name[0], fontsize = font_size)
 
+        if xlim is not None: plt.xlim(xlim[0], xlim[1])
+        if ylim is not None: plt.ylim(ylim[0], ylim[1])
         plt.xlabel(r'X (km)')
         plt.ylabel(r'Y (km)')
 
@@ -1046,7 +1053,7 @@ class Atm3D(object):
         # TODO s'inspirer de la fonction calc_iphase dans tools/phase.py
         ipha3D = np.zeros((self.wls.size, Nopt), dtype=np.int32) # only one matrix for all cells, then always index 0
 
-        cld = CloudOPAC(species, reff, 2., 3., 1., self.wl_ref) # reff = 2 here but previouly we took 5, why ?
+        cld = Cloud(species, reff, 2., 3., 1., self.wl_ref) # reff = 2 here but previouly we took 5, why ?
         # Create phase matrix and store it in LUT object (function of stokes and theta)
         pha_cld_tmp = AtmAFGL(self.atm_filename, comp=[cld], pfwav=wl_phase).calc(self.wls)['phase_atm']
         pha_cld = []
@@ -1069,7 +1076,7 @@ class Atm3D(object):
 
         return (ipha3D, pha_cld)
 
-    def get_phase_prof_OPAC(self, species='wc.sol', wl_phase=None, phaseOpti=False, nb_theta=721, AOD=1.):
+    def get_phase_prof_OPAC(self, species='wc', wl_phase=None, nb_theta=721, AOD=1.):
         """
         return a tuple with the phase matrix indices to choose, and a list of phase matrix LUT.
         """
@@ -1087,9 +1094,9 @@ class Atm3D(object):
         pha_cld = []
         for iwav in range (0, nwav):
             for ireff in range (0, nreff_unique):
-                cld = CloudOPAC(species, cld_reff_unique[ireff], 2., 3., AOD, self.wl_ref)
+                cld = Cloud(species, cld_reff_unique[ireff], 2., 3., AOD, self.wl_ref)
                 pha_cld.append(AtmAFGL(self.atm_filename, comp=[cld]).calc([wav[iwav]],
-                 phaseOpti=phaseOpti, NBTHETA=nb_theta)['phase_atm'].sub()[0,:,:])
+                               NBTHETA=nb_theta)['phase_atm'].sub()[0,:,:])
     
         # ===== 2) phase matrix indice to take for all cloud cells
         # Obtain the correct indices from the unique radii phase matrix

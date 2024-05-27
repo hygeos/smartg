@@ -3169,7 +3169,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
                 intTime1 *= epsilon;
                 ph->pos = operator+(ph->pos, ph->v * intTime1);
                 #ifndef ALIS
-                if (BEERd == 1) ph->weight *= __expf(-( epsilon * h_cur_abs));
+                if (BEERd == 1) ph->weight *= exp(-( epsilon * h_cur_abs));
                 #else
                 float coef;
                 if (ph->loc==ATMOS) ph->cdist_atm[cell[ph->layer].iabs] += intTime1;
@@ -3196,7 +3196,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
                 if (ph->pos.z < 0) ph->pos.z = 0;
 
                 #ifndef ALIS
-                if (BEERd == 1) ph->weight *= __expf(-( h_cur_abs));
+                if (BEERd == 1) ph->weight *= exp(-( h_cur_abs));
                 #else
                 float coef;
                 if (ph->loc==ATMOS) ph->cdist_atm[cell[ph->layer].iabs] += intTime1;

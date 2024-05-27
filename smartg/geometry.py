@@ -318,7 +318,7 @@ class BBox(object):
         '''
         t0 = 0.
         epsi = 1e-32 * 0.5
-        t1 = 1e32;
+        t1 = np.inf
         gamma3 = (3*epsi)/(1 - 3*epsi)
         for i in range(3):
             if Ray.d[i]!= 0 :
@@ -326,6 +326,7 @@ class BBox(object):
             else: invRayDir=1e32
             tNear = (self.pMin[i] - Ray.o[i]) * invRayDir
             tFar  = (self.pMax[i] - Ray.o[i]) * invRayDir
+
             if (tNear > tFar):
                 tmp  = tNear
                 tNear= tFar
