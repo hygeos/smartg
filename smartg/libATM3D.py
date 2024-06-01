@@ -15,6 +15,10 @@ from smartg.smartg import Sensor
 import matplotlib.gridspec as gridspec
 import matplotlib.ticker as ticker
 
+from os.path import join, dirname, exists
+from smartg.config import dir_auxdata
+from luts.luts import read_mlut
+
 import xarray as xr
 
 def is_sorted(arr):
@@ -200,27 +204,222 @@ def read_cld_nth_cte(filename, nb_theta=int(721)):
         return P
 
 
+# class Cloud3D(object):
+#     """
+#     Description: Represent a 3D cloud profil
+
+#     === Attribut:
+#     phase                : LUT object with the cloud phase Matrix depending on wl, reff, stk, and theta
+#     file_name            : File name with path location. File following the convention of IPRT cloud files
+#                            with exctintion coefficient and reff of each cloud cell.
+#     loc_xgrid, loc_ygrid : Grid location. By default an str: "centered" i.e. the grid center is at coordinate 0.
+#                            Or give a scalar with the starting position of the grid.
+#     reff_acc             : interger with decimal accuracy of reff. By default None then do not replace the read reff values
+
+#     === Others if given circumvent variables read from file_name
+#     xyz_grids            : List with in the indices 0, 1 and 2 the 1D arrays with respectively the x, y and z grid profils
+#     ext_coeff            : Numpy 1D array with the cloud extinction coefficient
+#     cell_indices         : Numpy 3D array with the cloud xyz indices
+#     reff                 : Numpy 1D array with the cloud effective radii
+#     """
+
+#     def __init__(self, phase=None, file_name=None, loc_xgrid = "centered", loc_ygrid = "centered", reff_acc = None,
+#                  xyz_grids=None, ext_coeff=None, cell_indices=None, reff=None, reff_min = None, reff_max = None):
+
+#         if (phase is None):
+#             self.phase = phase
+#         # Check if phase is a LUT object with the correct axes
+#         elif (not isinstance(phase, LUT)):
+#             raise NameError("phase must be a LUT object!")
+#         elif (not all([item in phase.names for item in ['wav_phase', 'reff', 'stk', 'theta_atm']])):
+#             raise NameError("Phase matrix must have 4 dimensions: wav_phase, reff, stk and theta_atm")
+#         else:
+#             self.phase = phase
+
+#         # Check (if not set to None) that the file exists and is readable
+#         if (file_name is None):
+#             self.file_name = None
+#         elif (not Path(file_name).exists()):
+#             raise NameError("The given file does not exists!")
+#         elif (not os.access(file_name, os.R_OK)):
+#             raise NameError("The given file cannot be read!")
+#         else:
+#             self.file_name = file_name
+        
+#         # If file_name is None, all other variables must be specified
+#         if  ( (file_name is None)
+#               and ( xyz_grids is None or ext_coeff is None or cell_indices is None or reff is None) ):
+#             raise NameError("If file_name is set to None all other variables must be given!")
+
+#         # TODO adds checks on the varaibles bellow (if we have np.arrays, ...)
+#         self.xyz_grids    = xyz_grids
+#         self.loc_xgrid    = loc_xgrid
+#         self.loc_ygrid    = loc_ygrid
+#         self.ext_coeff    = ext_coeff
+#         self.cell_indices = cell_indices
+#         self.reff         = reff
+#         self.reff_acc     = reff_acc
+#         self.reff_min     = reff_min
+#         self.reff_max     = reff_max
+
+#     def get_xyz_grid(self):
+#         """
+#         Description: Get the x, y and z 1D grid profils.
+
+#         === Return:
+#         xgrid, ygrid, zgrid : Three 1D arrays with the x, y and z grid profils.
+#         """
+
+#         # First check if we have already the xyz grids
+#         if (self.xyz_grids is not None): return self.xyz_grids[0], self.xyz_grids[1], self.xyz_grids[2]
+
+#         # Read only the needed information, the two first rows.
+#         # Be careful ! The second row have a greater dimension than the first one. Then -> two steps of reading.
+#         contentA = pd.read_csv(self.file_name, skiprows = 1, nrows = 1, header=None, sep=r'\s+', dtype=float).values
+#         contentB = pd.read_csv(self.file_name, skiprows = 2, nrows = 1, header=None, sep=r'\s+', dtype=float).values
+
+#         # If there are empty dimensions remove them
+#         contentA = np.squeeze(contentA)
+#         contentB = np.squeeze(contentB)
+
+#         # Number of cells in x and y axes
+#         Nx = int(contentA[0])
+#         Ny = int(contentA[1])
+
+#         # Cell sizes in x and y axes
+#         Dx = contentB[0]
+#         Dy = contentB[1]
+
+#         # Create x and y grid
+#         xgrid = create_1d_grid(Nx, Dx, loc=self.loc_xgrid)
+#         ygrid = create_1d_grid(Ny, Dy, loc=self.loc_ygrid)
+
+#         # Grid in the z axis can be directly read from the file
+#         zgrid = contentB[2:]
+
+#         return xgrid, ygrid, zgrid
+
+#     def get_ext_coeff(self):
+#         """
+#         Description: Get the cloud extinction coefficient of each cell indices given in the input file
+
+#         === Return:
+#         ext_coeff : Numpy 1D array with the cloud extinction coefficient
+#         """
+
+#         # First check if we have already the ext_coeff
+#         if (self.ext_coeff is not None) : return self.ext_coeff
+
+#         # Read only the disired column
+#         ext_coeff = pd.read_csv(self.file_name, skiprows = 3, header=None, usecols=[3], sep='\s+', dtype=float).values
+
+#         # If there are empty dimensions remove them
+#         ext_coeff = np.squeeze(ext_coeff)
+
+#         return ext_coeff
+
+#     def get_cell_indices(self):
+#         """
+#         Description: Get the cloud cell indices where there are clouds
+
+#         === Return:
+#         cell_indices : Numpy 3D array with the cloud xyz indices
+#         """
+
+#         # First check if we have already the cell_indices
+#         if (self.cell_indices is not None): return self.cell_indices
+
+#         # Read only the disired column
+#         cell_indices = pd.read_csv(self.file_name, skiprows = 3, header=None, usecols=[0,1,2], sep=r'\s+', dtype=float).values
+
+#         # If there are empty dimensions remove them and ensure that we have interger type
+#         cell_indices = np.squeeze(cell_indices.astype(np.int32))
+
+#         # We need to have 2 dimensions, a numpy array as list of another numpy arrays with the x, y and z indices
+#         if(cell_indices.ndim == 1): cell_indices = np.array([cell_indices])
+
+#         return cell_indices
+
+#     def get_reff(self):
+#         """
+#         In progress...
+#         """
+
+#         # First check if we have already reff
+#         if (self.reff is not None): return self.reff
+
+#         # Read only the disired column
+#         reff = pd.read_csv(self.file_name, skiprows = 3, header=None, usecols=[4], sep=r'\s+', dtype=float).values
+#         if self.reff_acc is not None: reff = np.around(reff, decimals=self.reff_acc)
+
+#         # If there are empty dimensions remove them
+#         reff = np.squeeze(reff)
+
+#         if self.reff_min is not None: reff[reff<self.reff_min ] = self.reff_min
+#         if self.reff_max is not None: reff[reff>self.reff_max ] = self.reff_max
+
+#         return reff
+    
+
 class Cloud3D(object):
     """
     Description: Represent a 3D cloud profil
 
     === Attribut:
-    phase                : LUT object with the cloud phase Matrix depending on wl, reff, stk, and theta
-    file_name            : File name with path location. File following the convention of IPRT cloud files
-                           with exctintion coefficient and reff of each cloud cell.
-    loc_xgrid, loc_ygrid : Grid location. By default an str: "centered" i.e. the grid center is at coordinate 0.
-                           Or give a scalar with the starting position of the grid.
-    reff_acc             : interger with decimal accuracy of reff. By default None then do not replace the read reff values
-
-    === Others if given circumvent variables read from file_name
+    filename             : Cloud smartg filename, choice between: wc, ic_baum_asc, ic_baum_ghm and ic_baum_sc
+    w_ref                : Reference wavelength of ext_ref or of the IPRT file
+    reff                 : Numpy 1D array with the cloud effective radii at wavelength w_ref
+    ext_ref              : Numpy 1D array with the cloud extinction coefficient at wavelength w_ref
     xyz_grids            : List with in the indices 0, 1 and 2 the 1D arrays with respectively the x, y and z grid profils
-    ext_coeff            : Numpy 1D array with the cloud extinction coefficient
     cell_indices         : Numpy 3D array with the cloud xyz indices
-    reff                 : Numpy 1D array with the cloud effective radii
+    ext_reff_filename    : File name with path location. File following the convention of IPRT cloud files
+                           with exctintion coefficient and reff of each cloud cell.
+    reff_acc             : Interger with decimal accuracy of reff. By default None then do not replace the read reff values
+    reff_min, reff_max   : The reff values less than reff_min will replaced by reff_min. The same for values greater than reff_max
+    phase                : LUT object with the cloud phase Matrix depending on wl, reff, stk, and theta
+
+    === Be careful !! If reff, ext_ref, xyz_grids or cell_indices are given circumvent variables read from ext_reff_filename !!
+
     """
 
-    def __init__(self, phase=None, file_name=None, loc_xgrid = "centered", loc_ygrid = "centered", reff_acc = None,
-                 xyz_grids=None, ext_coeff=None, cell_indices=None, reff=None):
+    def __init__(self, filename, w_ref,
+                 reff=None, ext_ref=None, xyz_grids=None, cell_indices=None,
+                 ext_reff_filename=None,
+                 reff_acc = None, reff_min = None, reff_max = None,
+                 phase=None):
+        
+        if dirname(filename) == '' : self.filename = join(dir_auxdata, 'clouds', filename)
+        else                       : self.filename = filename
+        if (not "_sol" in filename) and (not filename.endswith('.nc')) : self.filename = self.filename + '_sol.nc'
+        elif (not filename.endswith('.nc'))                            : self.filename += '.nc'
+
+        assert exists(self.filename), '{} does not exist'.format(self.filename)
+        self.cld_mlut = read_mlut(self.filename)
+        self.w_ref = w_ref
+
+        # Check (if not set to None) that the file exists and is readable
+        if (ext_reff_filename is None):
+            self.ext_reff_filename = None
+        elif (not Path(ext_reff_filename).exists()):
+            raise NameError("The given file does not exists!")
+        elif (not os.access(ext_reff_filename, os.R_OK)):
+            raise NameError("The given file cannot be read!")
+        else:
+            self.ext_reff_filename = ext_reff_filename
+        
+        # If file_name is None, all other variables must be specified
+        if  ( (ext_reff_filename is None)
+              and ( reff is None or ext_ref is None or xyz_grids is None or cell_indices is None ) ):
+            raise NameError("If file_name is set to None reff, ext_ref, xyz_grids and cell_indices must be given!")
+
+        # TODO adds checks on the varaibles bellow (if we have np.arrays, ...)
+        self.xyz_grids    = xyz_grids
+        self.ext_ref    = ext_ref
+        self.cell_indices = cell_indices
+        self.reff         = reff
+        self.reff_acc     = reff_acc
+        self.reff_min     = reff_min
+        self.reff_max     = reff_max
 
         if (phase is None):
             self.phase = phase
@@ -232,34 +431,16 @@ class Cloud3D(object):
         else:
             self.phase = phase
 
-        # Check (if not set to None) that the file exists and is readable
-        if (file_name is None):
-            self.file_name = None
-        elif (not Path(file_name).exists()):
-            raise NameError("The given file does not exists!")
-        elif (not os.access(file_name, os.R_OK)):
-            raise NameError("The given file cannot be read!")
-        else:
-            self.file_name = file_name
-        
-        # If file_name is None, all other variables must be specified
-        if  ( (file_name is None)
-              and ( xyz_grids is None or ext_coeff is None or cell_indices is None or reff is None) ):
-            raise NameError("If file_name is set to None all other variables must be given!")
 
-        # TODO adds checks on the varaibles bellow (if we have np.arrays, ...)
-        self.xyz_grids    = xyz_grids
-        self.loc_xgrid    = loc_xgrid
-        self.loc_ygrid    = loc_ygrid
-        self.ext_coeff    = ext_coeff
-        self.cell_indices = cell_indices
-        self.reff         = reff
-        self.reff_acc     = reff_acc
-
-    def get_xyz_grid(self):
+    def get_xyz_grid(self, loc_xgrid = "centered", loc_ygrid = "centered"):
         """
         Description: Get the x, y and z 1D grid profils.
 
+        In case xyz_grids is None and IPRT_filename is provided, we can choose where to place the x and y grids by
+        specifiying the values of loc_xgrid and loc_ygrid -->
+
+        loc_xgrid, loc_ygrid : Grid location. By default an str: "centered" i.e. the grid center is at coordinate 0.
+                               Or give a scalar with the starting position of the grid.
         === Return:
         xgrid, ygrid, zgrid : Three 1D arrays with the x, y and z grid profils.
         """
@@ -269,8 +450,8 @@ class Cloud3D(object):
 
         # Read only the needed information, the two first rows.
         # Be careful ! The second row have a greater dimension than the first one. Then -> two steps of reading.
-        contentA = pd.read_csv(self.file_name, skiprows = 1, nrows = 1, header=None, sep=r'\s+', dtype=float).values
-        contentB = pd.read_csv(self.file_name, skiprows = 2, nrows = 1, header=None, sep=r'\s+', dtype=float).values
+        contentA = pd.read_csv(self.ext_reff_filename, skiprows = 1, nrows = 1, header=None, sep=r'\s+', dtype=float).values
+        contentB = pd.read_csv(self.ext_reff_filename, skiprows = 2, nrows = 1, header=None, sep=r'\s+', dtype=float).values
 
         # If there are empty dimensions remove them
         contentA = np.squeeze(contentA)
@@ -285,46 +466,34 @@ class Cloud3D(object):
         Dy = contentB[1]
 
         # Create x and y grid
-        xgrid = create_1d_grid(Nx, Dx, loc=self.loc_xgrid)
-        ygrid = create_1d_grid(Ny, Dy, loc=self.loc_ygrid)
+        xgrid = create_1d_grid(Nx, Dx, loc=loc_xgrid)
+        ygrid = create_1d_grid(Ny, Dy, loc=loc_ygrid)
 
         # Grid in the z axis can be directly read from the file
         zgrid = contentB[2:]
 
         return xgrid, ygrid, zgrid
 
-    def get_ext_coeff(self):
-        """
-        Description: Get the cloud extinction coefficient of each cell indices given in the input file
-
-        === Return:
-        ext_coeff : Numpy 1D array with the cloud extinction coefficient
-        """
+    def get_ext_ref(self):
 
         # First check if we have already the ext_coeff
-        if (self.ext_coeff is not None) : return self.ext_coeff
+        if (self.ext_ref is not None) : return self.ext_ref
 
         # Read only the disired column
-        ext_coeff = pd.read_csv(self.file_name, skiprows = 3, header=None, usecols=[3], sep='\s+', dtype=float).values
+        ext_ref = pd.read_csv(self.ext_reff_filename, skiprows = 3, header=None, usecols=[3], sep='\s+', dtype=float).values
 
         # If there are empty dimensions remove them
-        ext_coeff = np.squeeze(ext_coeff)
+        ext_ref = np.squeeze(ext_ref)
 
-        return ext_coeff
+        return ext_ref
 
     def get_cell_indices(self):
-        """
-        Description: Get the cloud cell indices where there are clouds
-
-        === Return:
-        cell_indices : Numpy 3D array with the cloud xyz indices
-        """
 
         # First check if we have already the cell_indices
         if (self.cell_indices is not None): return self.cell_indices
 
         # Read only the disired column
-        cell_indices = pd.read_csv(self.file_name, skiprows = 3, header=None, usecols=[0,1,2], sep=r'\s+', dtype=float).values
+        cell_indices = pd.read_csv(self.ext_reff_filename, skiprows = 3, header=None, usecols=[0,1,2], sep=r'\s+', dtype=float).values
 
         # If there are empty dimensions remove them and ensure that we have interger type
         cell_indices = np.squeeze(cell_indices.astype(np.int32))
@@ -335,21 +504,61 @@ class Cloud3D(object):
         return cell_indices
 
     def get_reff(self):
-        """
-        In progress...
-        """
 
         # First check if we have already reff
         if (self.reff is not None): return self.reff
 
         # Read only the disired column
-        reff = pd.read_csv(self.file_name, skiprows = 3, header=None, usecols=[4], sep=r'\s+', dtype=float).values
+        reff = pd.read_csv(self.ext_reff_filename, skiprows = 3, header=None, usecols=[4], sep=r'\s+', dtype=float).values
         if self.reff_acc is not None: reff = np.around(reff, decimals=self.reff_acc)
 
         # If there are empty dimensions remove them
         reff = np.squeeze(reff)
 
+        if self.reff_min is not None: reff[reff<self.reff_min ] = self.reff_min
+        if self.reff_max is not None: reff[reff>self.reff_max ] = self.reff_max
+
         return reff
+    
+    def get_phase(self, NBTHETA=721, conv_Iparper=True):
+
+        # First check if we have already phase
+        if (self.phase is not None): return self.phase
+
+        theta = np.linspace(0., 180., NBTHETA)
+        pha = self.cld_mlut['phase'].swapaxes('reff', 'wav')[:,:,:,Idx(theta)]
+        nwav = pha.shape[0]
+        nreff = pha.shape[1]
+        nstklut = pha.shape[2]
+
+        pha_ = np.zeros((nwav, nreff, 6, NBTHETA), dtype=np.float64)
+        pha_[:,:,:nstklut,:] = pha
+
+        P = LUT(pha_, axes=[self.cld_mlut.axes['wav'], self.cld_mlut.axes['reff'], np.arange(6), theta],
+                names=['wav_phase', 'reff', 'stk', 'theta_atm']) 
+
+        if conv_Iparper:
+            if (nstklut == 4): # spherical particles
+                P.data[:,:,4,:] = P.data[:,:,0,:].copy()
+                P.data[:,:,5,:] = P.data[:,:,2,:].copy()
+                P0 = P.data[:,:,0,:].copy()
+                P1 = P.data[:,:,1,:].copy()
+                P4 = P.data[:,:,4,:].copy()
+                P.data[:,:,0,:] = 0.5*(P0+2*P1+P4) # P11
+                P.data[:,:,1,:] = 0.5*(P0-P4)      # P12=P21
+                P.data[:,:,4,:] = 0.5*(P0-2*P1+P4) # P22
+            elif (nstklut == 6): # non spherical particles
+                # note: the sign of P43/P34 affects only the sign of V,
+                # since V=0 for rayleigh scattering it does not matter 
+                P0 = P.data[:,:,0,:].copy()
+                P1 = P.data[:,:,1,:].copy()
+                P4 = P.data[:,:,4,:].copy()
+                P.data[:,:,0,:] = 0.5*(P0+2*P1+P4) # P11
+                P.data[:,:,1,:] = 0.5*(P0-P4)      # P12=P21
+                P.data[:,:,4,:] = 0.5*(P0-2*P1+P4) # P22
+
+        return P
+
 
 
 def Get_3Dcells_indices(NX, NY, NZ):
@@ -889,9 +1098,7 @@ class Atm3D(object):
     def __init__(self, atm_filename, grid_3d, wls, cloud_3d=None, wl_ref = None,
     lat=45, P0=None, O3=None, H2O=None, NO2=True, tauR=None, mol_sca_coeff=None, mol_abs_coeff=None):
 
-        possible_atm_filename = ['afglms', 'afglmw', 'afglss', 'afglsw', 'afglt', 'afglus',
-         'afglus_ch4_vmr', 'afglus_co_vmr', 'afglus_n2_vmr', 'afglus_n2o_vmr', 'afglus_no2',
-          'mcclams', 'mcclamw']
+        possible_atm_filename = ['afglms', 'afglmw', 'afglss', 'afglsw', 'afglt', 'afglus']
 
         if (atm_filename not in possible_atm_filename):
             raise NameError('Unknown atmosphere file name!')
@@ -900,18 +1107,16 @@ class Atm3D(object):
             raise NameError('grid_3d variable must be a Grid3D object!')
 
         if (cloud_3d is None):
-            self.phase         = None
             self.cloud_3d      = None
-            self.cld_ext_coeff = None
             self.cld_reff      = None
+            self.cld_ext_ref   = None
             self.cloud_indices = None
         elif (not isinstance(cloud_3d, Cloud3D)):
             raise NameError('cloud_3d variable must be a Cloud3D object!')
         else:
-            self.phase         = cloud_3d.phase
             self.cloud_3d      = cloud_3d
-            self.cld_ext_coeff = cloud_3d.get_ext_coeff()
             self.cld_reff      = cloud_3d.get_reff()
+            self.cld_ext_ref   = cloud_3d.get_ext_ref()
             self.cloud_indices = cloud_3d.get_cell_indices() # update if performed bellow
 
             # === Cell indices in SMART-G + consider boundaries:
@@ -1016,7 +1221,7 @@ class Atm3D(object):
         if (cloud_MLUT is not None and not isinstance(cloud_MLUT, MLUT)):
             raise NameError('The given cloud_MLUT variable is not an MLUT object!')
 
-        ext_cld = self.cld_ext_coeff
+        ext_cld = self.cld_ext_ref
 
         if cloud_MLUT is None:
             # In this case, we just take the same ext coeff for each wl
@@ -1039,122 +1244,9 @@ class Atm3D(object):
         ext_cld_3d = np.concatenate([np.zeros_like(self.ext_rayleigh), ext_cld_wls], axis=1)
 
         return ext_cld_3d
-
-    def get_phase_prof_old(self, species='wc.sol', reff=2., wl_phase=None):
-        """
-        For the moment only one phase matrix for all cells containing clouds
-        In progress..
-        return a tuple with the phase matrix indices to choose, and a list of phase matrix LUT.
-        """
-
-        nb_unique_cells = self.cloud_indices.shape[0]
-        Nopt = self.grid_3d.NZ + 1 + nb_unique_cells
-        
-        # TODO s'inspirer de la fonction calc_iphase dans tools/phase.py
-        ipha3D = np.zeros((self.wls.size, Nopt), dtype=np.int32) # only one matrix for all cells, then always index 0
-
-        cld = Cloud(species, reff, 2., 3., 1., self.wl_ref) # reff = 2 here but previouly we took 5, why ?
-        # Create phase matrix and store it in LUT object (function of stokes and theta)
-        pha_cld_tmp = AtmAFGL(self.atm_filename, comp=[cld], pfwav=wl_phase).calc(self.wls)['phase_atm']
-        pha_cld = []
-
-        # if wl_phase is not None:
-        #     for i in range (0, wl_phase.size):
-        #         pha_cld.append(pha_cld_tmp.sub()[Idx(wl_phase[i]),:,:])
-        # else:
-        #     for i in range (0, self.wls.size):
-        #         pha_cld.append(pha_cld_tmp.sub()[i,:,:])
-
-        # Calculate the phase for each wl_phase if given else for each wls
-        if wl_phase is not None: nwav = len(wl_phase)
-        else: nwav = len(self.wls)
-        
-        for i in range (0, nwav):
-            pha_cld.append(pha_cld_tmp.sub()[i,:,:])
-        
-
-
-        return (ipha3D, pha_cld)
-
-    def get_phase_prof_OPAC(self, species='wc', wl_phase=None, nb_theta=721, AOD=1.):
-        """
-        return a tuple with the phase matrix indices to choose, and a list of phase matrix LUT.
-        """
-
-        cld_reff = self.cld_reff
-        cld_reff_unique = np.unique(cld_reff)
-        nreff_unique = cld_reff_unique.size
-
-        if wl_phase is not None: wav = wl_phase
-        else: wav = self.wls
-        nwav = len(wav)
-
-        # Get the LUT of the phase matrix in function of the effective radius and theta
-        # Loop only on the unique cld_reff
-        pha_cld = []
-        for iwav in range (0, nwav):
-            for ireff in range (0, nreff_unique):
-                cld = Cloud(species, cld_reff_unique[ireff], 2., 3., AOD, self.wl_ref)
-                pha_cld.append(AtmAFGL(self.atm_filename, comp=[cld]).calc([wav[iwav]],
-                               NBTHETA=nb_theta)['phase_atm'].sub()[0,:,:])
     
-        # ===== 2) phase matrix indice to take for all cloud cells
-        # Obtain the correct indices from the unique radii phase matrix
-        cld_phase_indices = np.full(cld_reff.size, np.NaN, dtype=np.int32)
-        for ireff in range (0, nreff_unique):
-            cld_phase_indices[np.squeeze(np.argwhere( cld_reff == cld_reff_unique[ireff]))] = ireff
 
-        # Concatenate Rayleigh plan parallel + cloud
-        cld_phase_indices = np.concatenate([np.zeros(self.grid_3d.NZ+1, dtype=np.int32), cld_phase_indices[:]])
-
-        # Consider the wl dimension
-        cld_phase_indices_wl = np.zeros((nwav, cld_phase_indices.size), dtype=np.int32)
-
-        for iwav in range (0, nwav):
-            cld_phase_indices_wl[iwav,:] = cld_phase_indices[:] + (iwav*nreff_unique)
-
-        ipha3D = cld_phase_indices_wl
-
-        return (ipha3D, pha_cld)
-
-    def get_phase_prof_IPRT(self):
-        """
-        In progress...
-        """
-
-        # ===== 1) Calcul des matrices de phases
-        # Get the cloud effective radii
-        cld_reff = self.cld_reff
-        cld_reff_unique = np.unique(cld_reff)
-        nreff_unique = cld_reff_unique.size
-
-        # Get the MLUT of the monochromatic phase matrix in function of the effective radius and theta
-        phase_670 = self.phase
-        luts = []
-
-        # Loop only on the unique cld_reff
-        for ireff in range (0, nreff_unique):
-            luts.append(phase_670.sub()[0,Idx(cld_reff_unique[ireff]), :, :])
-
-        # ===== 2) phase matrix indices to take for all cloud cells
-        # Obtain the correct indices from the unique radii phase matrix
-        cld_phase_indices = np.full(cld_reff.size, np.NaN, dtype=np.int32)
-        for ireff in range (0, nreff_unique):
-            cld_phase_indices[np.squeeze(np.argwhere( cld_reff == cld_reff_unique[ireff]))] = ireff
-
-        # Concatenate Rayleigh plan parallel + cloud
-        cld_phase_indices = np.concatenate([np.zeros(self.grid_3d.NZ+1, dtype=np.int32), cld_phase_indices[:]])
-
-        # Consider the wl dimension (even if its equal to 1)
-        cld_phase_indices_wl = np.zeros((1, cld_phase_indices.size), dtype=np.int32)
-        cld_phase_indices_wl[0,:] = cld_phase_indices[:]
-
-        return (cld_phase_indices_wl, luts)
-
-    def get_phase_prof(self, wl_phase=None):
-        """
-        In progress...
-        """
+    def get_phase_prof(self, wl_phase=None, NBTHETA=721, conv_Iparper=True):
 
         # ===== 1) Calcul des matrices de phases
         # Get the cloud effective radii
@@ -1166,11 +1258,8 @@ class Atm3D(object):
         else: wav = self.wls
         nwav = len(wav)
 
-        # Get the MLUT of the monochromatic phase matrix in function of the effective radius and theta
-        phase = self.phase
-
-        if (phase is None):
-            raise NameError("Phase matrix is none. This method cannot be used! Use instead: get_phase_prof_OPAC().")
+        # Get the phase matrix
+        phase = self.cloud_3d.get_phase(NBTHETA=NBTHETA, conv_Iparper=conv_Iparper)
 
         luts = []
 
