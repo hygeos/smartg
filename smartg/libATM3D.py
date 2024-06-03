@@ -1084,6 +1084,26 @@ class Atm3D(object):
 
         return ext_cld_3d
     
+    
+    def get_3d_cld_ssa(self):
+
+        ext_cld = self.cld_ext_ref
+        cld_reff = self.cld_reff
+
+        wav = self.wls
+        nwav = len(wav)
+
+        ssa_cld_wls = np.ones((nwav, len(ext_cld)), dtype=np.float64)
+        for iw in range (0, nwav):
+            ssa_cld_wls[iw,:] = self.cloud_3d.cld_mlut['ssa'][Idx(cld_reff), Idx(wav[iw])]
+
+        # Create a table with only the cloud properties but in global shape i.e. for each cells
+        #  not sharing the same opt prop, and other commun cells in z, following the plan parallel
+        #  1D atm philosophy
+        ssa_cld_3d = np.concatenate([np.ones_like(self.ext_rayleigh), ssa_cld_wls], axis=1)
+
+        return ssa_cld_3d
+    
 
     def get_phase_prof(self, wl_phase=None, NBTHETA=721, conv_Iparper=True):
 
