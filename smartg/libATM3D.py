@@ -992,16 +992,20 @@ class Atm3D(object):
         else                                 : self.wl_ref   = wl_ref
 
         # Calculate the 1d extinction rayleigh coefficient and store it as attribut
-        znew = grid_3d.zGRID[::-1]
-        atm_1d = AtmAFGL(atm_filename, lat=lat, P0=P0, O3=O3, H2O=H2O, NO2=NO2, tauR=tauR,
-                               grid=znew).calc(wls, phase=False)
-        ext_ray = od2k(atm_1d, 'OD_r')
-        mol_abs = od2k(atm_1d, 'OD_g')
-        self.ext_rayleigh = ext_ray
-        self.molecular_abs_coeff = mol_abs
-
+        if mol_sca_coeff is None or mol_abs_coeff is None:
+            znew = grid_3d.zGRID[::-1]
+            atm_1d = AtmAFGL(atm_filename, lat=lat, P0=P0, O3=O3, H2O=H2O, NO2=NO2, tauR=tauR,
+                             grid=znew).calc(wls, phase=False)
+            
         if mol_sca_coeff is not None : self.ext_rayleigh = mol_sca_coeff
+        else:
+            ext_ray = od2k(atm_1d, 'OD_r')
+            self.ext_rayleigh = ext_ray
+        
         if mol_abs_coeff is not None : self.molecular_abs_coeff = mol_abs_coeff
+        else:
+            mol_abs = od2k(atm_1d, 'OD_g')
+            self.molecular_abs_coeff = mol_abs
         # ===
 
         # TODO -> calulate the 1d aer extinction coeff ??
