@@ -1056,31 +1056,22 @@ class Atm3D(object):
             Nopt = self.grid_3d.NZ + 1 + nb_unique_cells
 
         return np.arange(Nopt)
-
-    def get_3d_cld_ext_coeff(self, cloud_MLUT=None, reff=5.):
-        """
-        cloud_LUT : To consider variation of the ext coeff in function of wls
-        """
-
-        if (cloud_MLUT is not None and not isinstance(cloud_MLUT, MLUT)):
-            raise NameError('The given cloud_MLUT variable is not an MLUT object!')
+    
+    
+    def get_3d_cld_ext_coeff(self):
 
         ext_cld = self.cld_ext_ref
+        cld_reff = self.cld_reff
+        w_ref = self.cloud_3d.w_ref
 
-        if cloud_MLUT is None:
-            # In this case, we just take the same ext coeff for each wl
-            ext_cld_wls = ext_cld
-            for i in range (0, self.wls.size-1):
-                ext_cld_wls = np.concatenate([ext_cld_wls, ext_cld])
-            ext_cld_wls = ext_cld_wls.reshape((self.wls.size, ext_cld.size))
-        else:
-            cloud_sub    = cloud_MLUT.sub({'effective_radius':Idx(reff),'effective_variance':0})
-            wls_micro    = self.wls*1e-3
-            wl_ref_micro = self.wl_ref*1e-3
-            cloud_wls    = cloud_sub['normed_ext_coeff' ][Idx(wls_micro, fill_value='extrema')]
-            cloud_wl_ref = cloud_sub['normed_ext_coeff' ][Idx(wl_ref_micro, fill_value='extrema')]
-            eps_cld      = cloud_wls/cloud_wl_ref
-            ext_cld_wls  = ext_cld[None, :] * eps_cld[:, None]
+        wav = self.wls
+        nwav = len(wav)
+
+        ext_cld_wls = np.zeros((nwav, len(ext_cld)), dtype=np.float64)
+        ext_cld_ref0 = self.cloud_3d.cld_mlut['ext'][Idx(cld_reff), Idx(w_ref)]
+        for iw in range (0, nwav):
+            ext_factor = self.cloud_3d.cld_mlut['ext'][Idx(cld_reff), Idx(wav[iw])]/ext_cld_ref0
+            ext_cld_wls[iw,:] = ext_cld * ext_factor
 
         # Create a table with only the cloud properties but in global shape i.e. for each cells
         #  not sharing the same opt prop, and other commun cells in z, following the plan parallel
