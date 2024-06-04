@@ -939,8 +939,9 @@ class Atm3D(object):
     If wls.size is equal to 1 and wl_ref is None, take wls as reference wavelength
     """
 
-    def __init__(self, atm_filename, grid_3d, wls, cloud_3d=None, wl_ref = None,
-    lat=45, P0=None, O3=None, H2O=None, NO2=True, tauR=None, mol_sca_coeff=None, mol_abs_coeff=None):
+    def __init__(self, atm_filename, grid_3d, wls, comp=[], cloud_3d=None, wl_ref = None,
+    lat=45, P0=None, O3=None, H2O=None, NO2=True, tauR=None, mol_sca_coeff=None, mol_abs_coeff=None,
+    aer_ext_coeff=None, aer_ssa = None):
 
         possible_atm_filename = ['afglms', 'afglmw', 'afglss', 'afglsw', 'afglt', 'afglus']
 
@@ -991,12 +992,19 @@ class Atm3D(object):
         if (wls.size == 1 and wl_ref is None): self.wl_ref   = wls[0]
         else                                 : self.wl_ref   = wl_ref
 
-        # Calculate the 1d extinction rayleigh coefficient and store it as attribut
-        if mol_sca_coeff is None or mol_abs_coeff is None:
+        # Calculate the 1d optical properties
+        if ( (mol_sca_coeff is None) or    # if molecular abs is not given
+             (mol_abs_coeff is None) or    # if rayleigh coeff is not given
+             (aer_ext_coeff is None) or    # if aer coeff is not given
+             (aer_ssa is None) ):          # if aer_ssa is not given
+
+            if len(comp) > 0 : pha_ = True # compute aer phase only if a list of aer is given
+            else             : pha_ = False
             znew = grid_3d.zGRID[::-1]
-            atm_1d = AtmAFGL(atm_filename, lat=lat, P0=P0, O3=O3, H2O=H2O, NO2=NO2, tauR=tauR,
-                             grid=znew).calc(wls, phase=False)
-            
+            atm_1d = AtmAFGL(atm_filename, comp=comp, lat=lat, P0=P0, O3=O3, H2O=H2O, NO2=NO2,
+                             tauR=tauR, grid=znew, pfgrid=znew).calc(wls, phase=pha_)
+            self.ssa_aer = atm_1d['ssa_p_atm']
+    
         if mol_sca_coeff is not None : self.ext_rayleigh = mol_sca_coeff
         else:
             ext_ray = od2k(atm_1d, 'OD_r')
@@ -1006,9 +1014,21 @@ class Atm3D(object):
         else:
             mol_abs = od2k(atm_1d, 'OD_g')
             self.molecular_abs_coeff = mol_abs
-        # ===
 
-        # TODO -> calulate the 1d aer extinction coeff ??
+        self.ipha_aer = None
+        self.pha_aer  = None
+        if aer_ext_coeff is not None :
+            self.ext_aer = aer_ext_coeff
+        else:
+            aer = od2k(atm_1d, 'OD_p')
+            self.ext_aer = aer
+            if len(comp) > 0 :
+                self.ipha_aer = atm_1d['iphase_atm']
+                self.pha_aer  = atm_1d['phase_atm']
+        
+        if aer_ssa is not None: self.ssa_aer = aer_ssa
+        else                  : self.ssa_aer = atm_1d['ssa_p_atm'][:,:]
+        # ===
 
     def get_3d_rayleigh_ext_coeff(self):
         """
@@ -1080,7 +1100,7 @@ class Atm3D(object):
         # Create a table with only the cloud properties but in global shape i.e. for each cells
         #  not sharing the same opt prop, and other commun cells in z, following the plan parallel
         #  1D atm philosophy
-        ext_cld_3d = np.concatenate([np.zeros_like(self.ext_rayleigh), ext_cld_wls], axis=1)
+        ext_cld_3d = np.concatenate([self.ext_aer, ext_cld_wls], axis=1)
 
         return ext_cld_3d
     
@@ -1100,7 +1120,7 @@ class Atm3D(object):
         # Create a table with only the cloud properties but in global shape i.e. for each cells
         #  not sharing the same opt prop, and other commun cells in z, following the plan parallel
         #  1D atm philosophy
-        ssa_cld_3d = np.concatenate([np.ones_like(self.ext_rayleigh), ssa_cld_wls], axis=1)
+        ssa_cld_3d = np.concatenate([self.ssa_aer[:,:], ssa_cld_wls], axis=1)
 
         return ssa_cld_3d
     
