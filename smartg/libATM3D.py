@@ -169,7 +169,7 @@ def read_cld_nth_cte(filename, nb_theta=int(721)):
         reff = ds["reff"].data
         wavelength = ds["wavelen"].data*1e3
 
-        P = LUT( np.full((NWAV, NBREFF, NBSTK, NBTHETA), np.NaN, dtype=np.float32),
+        P = LUT( np.full((NWAV, NBREFF, 6, NBTHETA), np.NaN, dtype=np.float32),
                  axes=[wavelength, reff, None, theta],
                  names=['wav_phase', 'reff', 'stk', 'theta_atm'],
                  desc="phase_atm" )
@@ -185,14 +185,17 @@ def read_cld_nth_cte(filename, nb_theta=int(721)):
 
                     P.data[iwav, ireff, istk, :] = np.interp(theta, th[:nth], phase[iwav,ireff,istk,:nth],  period=np.inf)
 
+
         if (NBSTK == 4): # spherical particles
-            # convert I, Q into Ipar, Iper
+            P.data[:,:,4,:] = P.data[:,:,0,:].copy()
+            P.data[:,:,5,:] = P.data[:,:,2,:].copy()
             P0 = P.data[:,:,0,:].copy()
             P1 = P.data[:,:,1,:].copy()
-            P.data[:,:,0,:] = P0+P1
-            P.data[:,:,1,:] = P0-P1
-        elif (NBSTK) == 6: # non spherical particles
-            # note: the sign of P43/P34 affects only the sign of V, since V=0 for rayleigh scattering it does not matter 
+            P4 = P.data[:,:,4,:].copy()
+            P.data[:,:,0,:] = 0.5*(P0+2*P1+P4) # P11
+            P.data[:,:,1,:] = 0.5*(P0-P4)      # P12=P21
+            P.data[:,:,4,:] = 0.5*(P0-2*P1+P4) # P22
+        elif(NBSTK == 6): # non spherical particles
             P0 = P.data[:,:,0,:].copy()
             P1 = P.data[:,:,1,:].copy()
             P4 = P.data[:,:,4,:].copy()
@@ -367,7 +370,11 @@ class Cloud3D(object):
     def get_phase(self, NBTHETA=721, conv_Iparper=True):
 
         # First check if we have already phase
-        if (self.phase is not None): return self.phase
+        if (self.phase is not None):
+             if (len(self.phase.axes[3]) == NBTHETA): return self.phase
+             else:
+                theta = np.linspace(0., 180., NBTHETA)
+                return self.phase.sub()[:, :, :, Idx(theta)]
 
         theta = np.linspace(0., 180., NBTHETA)
         pha = self.cld_mlut['phase'].swapaxes('reff', 'wav')[:,:,:,Idx(theta)]
@@ -750,10 +757,12 @@ def satellite_view(mlut, xgrid, ygrid, wl, interp_name='none',
         for i in range (0, 2):
             for j in range (0, 2):
                 cax = axs[i,j].imshow(matrix[i*2+j], vmin=vmin[i*2+j], vmax=vmax[i*2+j], origin='lower', cmap=cmaps[i*2+j],
-                        interpolation=interp_name)#, extent=[xgrid.min(),xgrid.max(),ygrid.min(),ygrid.max()])
+                        interpolation=interp_name, extent=[xgrid.min(),xgrid.max(),ygrid.min(),ygrid.max()])
                 cbar = fig.colorbar(cax, ax=axs[i,j], shrink=cb_shrink, orientation='vertical', format=find_order_or_none(matrix[i*2+j], cb_sform), ticks=get_tv(vmin[i*2+j], vmax[i*2+j], matrix[i*2+j]))
                 cbar.set_label(r''+ stokes_name[i*2+j], fontsize = font_size)
                 #axs[i,j].set_xlim(xgrid[0], xgrid[-1])
+                if xlim is not None: axs[i,j].set_xlim(xlim[0], xlim[1])
+                if ylim is not None: axs[i,j].set_ylim(ylim[0], ylim[1])
 
         fig.supxlabel(r'X (km)')
         fig.supylabel(r'Y (km)')
@@ -940,8 +949,8 @@ class Atm3D(object):
     """
 
     def __init__(self, atm_filename, grid_3d, wls, comp=[], cloud_3d=None, wl_ref = None,
-    lat=45, P0=None, O3=None, H2O=None, NO2=True, tauR=None, mol_sca_coeff=None, mol_abs_coeff=None,
-    aer_ext_coeff=None, aer_ssa = None):
+    lat=45, P0=None, O3=None, H2O=None, NO2=True, tauR=None, mol_sca_1d=None, mol_abs_1d=None,
+    aer_ext_1d=None, aer_ssa_1d = None, nth_aer_1d=721, phase_aer_1d=None):
 
         possible_atm_filename = ['afglms', 'afglmw', 'afglss', 'afglsw', 'afglt', 'afglus']
 
@@ -993,71 +1002,73 @@ class Atm3D(object):
         else                                 : self.wl_ref   = wl_ref
 
         # Calculate the 1d optical properties
-        if ( (mol_sca_coeff is None) or    # if molecular abs is not given
-             (mol_abs_coeff is None) or    # if rayleigh coeff is not given
-             (aer_ext_coeff is None) or    # if aer coeff is not given
-             (aer_ssa is None) ):          # if aer_ssa is not given
+        self.ipha_aer_1d = None
+        self.pha_aer_1d  = None
+        if ( (mol_sca_1d is None) or    # if molecular abs is not given
+             (mol_abs_1d is None) or    # if rayleigh coeff is not given
+             (aer_ext_1d is None) or    # if aer coeff is not given
+             (aer_ssa_1d is None)       or    # 
+             (phase_aer_1d is None) ):          # if aer_ssa is not given
 
             if len(comp) > 0 : pha_ = True # compute aer phase only if a list of aer is given
             else             : pha_ = False
-            znew = grid_3d.zGRID[::-1]
-            atm_1d = AtmAFGL(atm_filename, comp=comp, lat=lat, P0=P0, O3=O3, H2O=H2O, NO2=NO2,
-                             tauR=tauR, grid=znew, pfgrid=znew).calc(wls, phase=pha_)
-            self.ssa_aer = atm_1d['ssa_p_atm']
-    
-        if mol_sca_coeff is not None : self.ext_rayleigh = mol_sca_coeff
-        else:
-            ext_ray = od2k(atm_1d, 'OD_r')
-            self.ext_rayleigh = ext_ray
-        
-        if mol_abs_coeff is not None : self.molecular_abs_coeff = mol_abs_coeff
-        else:
-            mol_abs = od2k(atm_1d, 'OD_g')
-            self.molecular_abs_coeff = mol_abs
 
-        self.ipha_aer = None
-        self.pha_aer  = None
-        if aer_ext_coeff is not None :
-            self.ext_aer = aer_ext_coeff
-        else:
-            aer = od2k(atm_1d, 'OD_p')
-            self.ext_aer = aer
-            if len(comp) > 0 :
-                self.ipha_aer = atm_1d['iphase_atm']
-                self.pha_aer  = atm_1d['phase_atm']
+            znew = grid_3d.zGRID[::-1]
+            if pha_ and comp[0].phase is not None : zpf = [100, 0]
+            else                                  : zpf = znew
+
+            atm_1d = AtmAFGL(atm_filename, comp=comp, lat=lat, P0=P0, O3=O3, H2O=H2O, NO2=NO2,
+                             tauR=tauR, grid=znew, pfgrid=zpf).calc(wls, phase=pha_, NBTHETA=nth_aer_1d)
+            self.ssa_aer_1d = atm_1d['ssa_p_atm']
+            if (pha_):
+                self.ipha_aer_1d = atm_1d['iphase_atm']
+                self.pha_aer_1d  = atm_1d['phase_atm']    
+    
+        if mol_sca_1d is not None : self.molecular_sca_1d = mol_sca_1d
+        else                      : self.molecular_sca_1d = od2k(atm_1d, 'OD_r')
         
-        if aer_ssa is not None: self.ssa_aer = aer_ssa
-        else                  : self.ssa_aer = atm_1d['ssa_p_atm'][:,:]
+        if mol_abs_1d is not None : self.molecular_abs_1d = mol_abs_1d
+        else                      : self.molecular_abs_1d = od2k(atm_1d, 'OD_g')
+
+        if aer_ext_1d is not None : self.ext_aer_1d = aer_ext_1d
+        else                      : self.ext_aer_1d = od2k(atm_1d, 'OD_p')   
+
+        if phase_aer_1d is not None:
+            self.ipha_aer_1d = phase_aer_1d[0] 
+            self.pha_aer_1d  = phase_aer_1d[1] 
+
+        if aer_ssa_1d is not None : self.ssa_aer_1d = aer_ssa_1d
+        else                      : self.ssa_aer_1d = atm_1d['ssa_p_atm'][:,:]
         # ===
 
-    def get_3d_rayleigh_ext_coeff(self):
+    def get_glob_molecular_sca(self):
         """
-        Consider all the grid cells with non commun opt property + 1d atm
-        In progress...
+        Get global (1d+3d) molecular scattering (Rayleigh) coefficients
+        2 dimensions : wavelength, iopt (number 1d layers + unique 3d cells)
         """
         if (self.cloud_3d is None):
-            ext_rayleigh_3d = self.ext_rayleigh
+            molecular_sca_glob = self.molecular_sca_1d
         else:
             cloud_indices = self.cloud_indices
 
             # 1d xyz indices where there are clouds
             cloud_1d_indices = np.ravel_multi_index((cloud_indices[:,0], cloud_indices[:,1], cloud_indices[:,2]),
-                                                    dims=(self.grid_3d.NX, self.grid_3d.NY, self.grid_3d.NZ))
+                                                     dims=(self.grid_3d.NX, self.grid_3d.NY, self.grid_3d.NZ))
 
             # calculate the 3d rayleigh extinction coefficient
-            ext_rayleigh_3d = np.concatenate([self.ext_rayleigh,
-                self.ext_rayleigh[:,self.grid_3d.NZ-self.grid_3d.idz[cloud_1d_indices]]], axis=1)
+            molecular_sca_glob = np.concatenate([self.molecular_sca_1d,
+                self.molecular_sca_1d[:,self.grid_3d.NZ-self.grid_3d.idz[cloud_1d_indices]]], axis=1)
 
-        return ext_rayleigh_3d
+        return molecular_sca_glob
 
-    def get_molecular_abs(self):
+    def get_glob_molecular_abs(self):
         """
-        Consider all the grid cells with non commun opt property + 1d atm
-        In progress...
+        Get global (1d+3d) molecular absorption coefficients
+        2 dimensions : wavelength, iopt (number 1d layers + unique 3d cells)
         """
 
         if (self.cloud_3d is None):
-            mol_abs_coeff_3d = self.molecular_abs_coeff
+            mol_abs_glob = self.molecular_abs_1d
         else: # if there are clouds
             cloud_indices = self.cloud_indices
 
@@ -1066,10 +1077,10 @@ class Atm3D(object):
                                                     dims=(self.grid_3d.NX, self.grid_3d.NY, self.grid_3d.NZ))
 
             # calculate the 3d molecular coefficient
-            mol_abs_coeff_3d = np.concatenate([self.molecular_abs_coeff,
-                self.molecular_abs_coeff[:,self.grid_3d.NZ-self.grid_3d.idz[cloud_1d_indices]]], axis=1)
+            mol_abs_glob = np.concatenate([self.molecular_abs_1d,
+                self.molecular_abs_1d[:,self.grid_3d.NZ-self.grid_3d.idz[cloud_1d_indices]]], axis=1)
 
-        return mol_abs_coeff_3d
+        return mol_abs_glob
 
     def get_grid(self):
 
@@ -1082,7 +1093,11 @@ class Atm3D(object):
         return np.arange(Nopt)
     
     
-    def get_3d_cld_ext_coeff(self):
+    def get_glob_aer_ext_ssa(self):
+        """
+        Get global (1d+3d) aerosol extinction coefficients and aerosol single scattering albedos
+        2 dimensions : wavelength, iopt (number 1d layers + unique 3d cells)
+        """
 
         ext_cld = self.cld_ext_ref
         cld_reff = self.cld_reff
@@ -1090,42 +1105,148 @@ class Atm3D(object):
 
         wav = self.wls
         nwav = len(wav)
+        n_unique_cell = len(ext_cld)
+        ext_mix_3d = np.zeros((nwav, n_unique_cell), dtype=np.float64)
+        ssa_mix_3d = np.ones((nwav, n_unique_cell), dtype=np.float64)
 
-        ext_cld_wls = np.zeros((nwav, len(ext_cld)), dtype=np.float64)
-        ext_cld_ref0 = self.cloud_3d.cld_mlut['ext'][Idx(cld_reff), Idx(w_ref)]
-        for iw in range (0, nwav):
-            ext_factor = self.cloud_3d.cld_mlut['ext'][Idx(cld_reff), Idx(wav[iw])]/ext_cld_ref0
-            ext_cld_wls[iw,:] = ext_cld * ext_factor
+
+        if (self.pha_aer_1d is None):
+            ext_cld_ref0 = self.cloud_3d.cld_mlut['ext'][Idx(cld_reff), Idx(w_ref)]
+            for iw in range (0, nwav):
+                ext_factor = self.cloud_3d.cld_mlut['ext'][Idx(cld_reff), Idx(wav[iw])]/ext_cld_ref0
+                ext_mix_3d[iw,:] = ext_cld * ext_factor
+                ssa_mix_3d[iw,:] = self.cloud_3d.cld_mlut['ssa'][Idx(cld_reff), Idx(wav[iw])]
+        else:                    
+            cld_reff = self.cld_reff
+            for iwav in range (0, nwav):
+                idz_atm = []
+                for icell in range (0, n_unique_cell):
+                    idz = self.cloud_indices[icell,2]
+                    id_zatm = self.grid_3d.NZ+1 - idz
+                    idz_atm.append(id_zatm)
+
+                ext_cld_ref0 = self.cloud_3d.cld_mlut['ext'][Idx(cld_reff), Idx(w_ref)]
+                ext_factor = self.cloud_3d.cld_mlut['ext'][Idx(cld_reff), Idx(wav[iwav])]/ext_cld_ref0
+                ext_cld_tmp = self.cld_ext_ref * ext_factor
+                ssa_cld_tmp = self.cloud_3d.cld_mlut['ssa'][Idx(cld_reff), Idx(wav[iwav])]
+
+                ssa_aer_tmp = self.ssa_aer_1d[iwav,idz_atm]
+                ext_aer_tmp = self.ext_aer_1d[iwav,idz_atm]
+                ext_mix_tmp = ext_aer_tmp + ext_cld_tmp
+                ext_mix_3d[iwav,:] = ext_mix_tmp
+                ssa_mix_3d[iwav,:] = (ext_aer_tmp*ssa_aer_tmp + ext_cld_tmp*ssa_cld_tmp) / ext_mix_tmp
 
         # Create a table with only the cloud properties but in global shape i.e. for each cells
         #  not sharing the same opt prop, and other commun cells in z, following the plan parallel
         #  1D atm philosophy
-        ext_cld_3d = np.concatenate([self.ext_aer, ext_cld_wls], axis=1)
+        ext_aer_glob = np.concatenate([self.ext_aer_1d, ext_mix_3d], axis=1)
+        ssa_aer_glob = np.concatenate([self.ssa_aer_1d[:,:], ssa_mix_3d], axis=1)
 
-        return ext_cld_3d
+        return ext_aer_glob, ssa_aer_glob
     
-    
-    def get_3d_cld_ssa(self):
+
+    def get_glob_aer_ssa(self):
+        """
+        Get global (1d+3d) aerosol single scattering albedos
+        2 dimensions : wavelength, iopt (number 1d layers + unique 3d cells)
+        """
 
         ext_cld = self.cld_ext_ref
         cld_reff = self.cld_reff
+        w_ref = self.cloud_3d.w_ref
 
         wav = self.wls
         nwav = len(wav)
+        n_unique_cell = len(ext_cld)
+        ssa_mix_3d = np.ones((nwav, n_unique_cell), dtype=np.float64)
 
-        ssa_cld_wls = np.ones((nwav, len(ext_cld)), dtype=np.float64)
-        for iw in range (0, nwav):
-            ssa_cld_wls[iw,:] = self.cloud_3d.cld_mlut['ssa'][Idx(cld_reff), Idx(wav[iw])]
+        ext_cld_ref0 = self.cloud_3d.cld_mlut['ext'][Idx(cld_reff), Idx(w_ref)]
+
+        if (self.pha_aer_1d is None):
+            for iw in range (0, nwav):
+                ssa_mix_3d[iw,:] = self.cloud_3d.cld_mlut['ssa'][Idx(cld_reff), Idx(wav[iw])]
+        else:
+            cld_reff = self.cld_reff
+            for iwav in range (0, nwav):
+                idz_atm = []
+                for icell in range (0, n_unique_cell):
+                    idz = self.cloud_indices[icell,2]
+                    id_zatm = self.grid_3d.NZ+1 - idz
+                    idz_atm.append(id_zatm)
+
+                ext_cld_ref0 = self.cloud_3d.cld_mlut['ext'][Idx(cld_reff), Idx(w_ref)]
+                ext_factor = self.cloud_3d.cld_mlut['ext'][Idx(cld_reff), Idx(wav[iwav])]/ext_cld_ref0
+                ext_cld_tmp = self.cld_ext_ref * ext_factor
+                ssa_cld_tmp = self.cloud_3d.cld_mlut['ssa'][Idx(cld_reff), Idx(wav[iwav])]
+
+                ssa_aer_tmp = self.ssa_aer_1d[iwav,idz_atm]
+                ext_aer_tmp = self.ext_aer_1d[iwav,idz_atm]
+                ext_mix_tmp = ext_aer_tmp + ext_cld_tmp
+                ssa_mix_3d[iwav,:] = (ext_aer_tmp*ssa_aer_tmp + ext_cld_tmp*ssa_cld_tmp) / ext_mix_tmp
+                        
+        # Create a table with only the cloud properties but in global shape i.e. for each cells
+        #  not sharing the same opt prop, and other commun cells in z, following the plan parallel
+        #  1D atm philosophy
+        ssa_aer_glob = np.concatenate([self.ssa_aer_1d[:,:], ssa_mix_3d], axis=1)
+
+        return ssa_aer_glob
+    
+    
+    def get_glob_aer_ext(self):
+        """
+        Get global (1d+3d) aerosol extinction coefficients
+        2 dimensions : wavelength, iopt (number 1d layers + unique 3d cells)
+        """
+                
+        ext_cld = self.cld_ext_ref
+        cld_reff = self.cld_reff
+        w_ref = self.cloud_3d.w_ref
+
+        wav = self.wls
+        nwav = len(wav)
+        n_unique_cell = len(ext_cld)
+        ext_mix_3d = np.zeros((nwav, n_unique_cell), dtype=np.float64)
+
+
+        if (self.pha_aer_1d is None):
+            ext_cld_ref0 = self.cloud_3d.cld_mlut['ext'][Idx(cld_reff), Idx(w_ref)]
+            for iw in range (0, nwav):
+                ext_factor = self.cloud_3d.cld_mlut['ext'][Idx(cld_reff), Idx(wav[iw])]/ext_cld_ref0
+                ext_mix_3d[iw,:] = ext_cld * ext_factor
+        else:
+            cld_reff = self.cld_reff
+            for iwav in range (0, nwav):
+                idz_atm = []
+                for icell in range (0, n_unique_cell):
+                    idz = self.cloud_indices[icell,2]
+                    id_zatm = self.grid_3d.NZ+1 - idz
+                    idz_atm.append(id_zatm)
+
+                ext_cld_ref0 = self.cloud_3d.cld_mlut['ext'][Idx(cld_reff), Idx(w_ref)]
+                ext_factor = self.cloud_3d.cld_mlut['ext'][Idx(cld_reff), Idx(wav[iwav])]/ext_cld_ref0
+                ext_cld_tmp = self.cld_ext_ref * ext_factor
+
+                ext_aer_tmp = self.ext_aer_1d[iwav,idz_atm]
+                ext_mix_tmp = ext_aer_tmp + ext_cld_tmp
+                ext_mix_3d[iwav,:] = ext_mix_tmp
 
         # Create a table with only the cloud properties but in global shape i.e. for each cells
         #  not sharing the same opt prop, and other commun cells in z, following the plan parallel
         #  1D atm philosophy
-        ssa_cld_3d = np.concatenate([self.ssa_aer[:,:], ssa_cld_wls], axis=1)
+        ext_aer_glob = np.concatenate([self.ext_aer_1d, ext_mix_3d], axis=1)
 
-        return ssa_cld_3d
+        return ext_aer_glob
     
 
-    def get_phase_prof(self, wl_phase=None, NBTHETA=721, conv_Iparper=True):
+    def get_glob_aer_phase(self, wl_phase=None, NBTHETA=721, conv_Iparper=True):
+        """
+        Get global (1d+3d) aerosol phase matrices
+
+        === return:
+        tuple -> (ipha3D, luts)
+        where luts is a list of unique phase luts (1d + 3d)
+        and where ipha3D is a 2d numpy matrix(wavelength, iopt) with the lut phase index of list luts
+        """
 
         # ===== 1) Calcul des matrices de phases
         # Get the cloud effective radii
@@ -1138,33 +1259,190 @@ class Atm3D(object):
         nwav = len(wav)
 
         # Get the phase matrix
+        # Here dim : wav,reff,stk,theta
         phase = self.cloud_3d.get_phase(NBTHETA=NBTHETA, conv_Iparper=conv_Iparper)
 
         luts = []
 
-        for iwav in range (0, nwav):
-            # Loop only on the unique cld_reff
+        if self.pha_aer_1d is not None: # case list of 1d aer is given
+            # Dim of pha_aer: wav, stk, theta.
+            # 3d phase : phase.axes[3] -> theta dim
+            # 1d phase : self.pha_aer.axes[2] -> theta dim
+            if (len(self.pha_aer_1d.axes[2]) == NBTHETA):
+                phase_aer_1d = self.pha_aer_1d
+            else:
+                phase_aer_1d = self.pha_aer_1d.sub()[:, :, Idx(phase.axes[3])]
+
+            # First plan parallel phase 
+            for iwav in range (0, nwav):
+                for iz in range (0, self.grid_3d.NZ+1):
+                    luts.append(phase_aer_1d.sub()[self.ipha_aer_1d[iwav,iz], :, :])
+
+            # Second 3d mix phase
+            ext_cld = self.cld_ext_ref
+            n_unique_cell = len(ext_cld)
+            for iwav in range (0, nwav):
+                idz_atm = []
+                for icell in range (0, n_unique_cell):
+                    idz = self.cloud_indices[icell,2]
+                    id_zatm = self.grid_3d.NZ+1 - idz
+                    idz_atm.append(id_zatm)
+
+                ext_cld_ref0 = self.cloud_3d.cld_mlut['ext'][Idx(cld_reff), Idx(self.cloud_3d.w_ref)]
+                ext_factor = self.cloud_3d.cld_mlut['ext'][Idx(cld_reff), Idx(wav[iwav])]/ext_cld_ref0
+                ext_cld_tmp = self.cld_ext_ref * ext_factor
+                ssa_cld_tmp = self.cloud_3d.cld_mlut['ssa'][Idx(cld_reff), Idx(wav[iwav])]
+
+                ssa_aer_tmp = self.ssa_aer_1d[iwav,idz_atm]
+                ext_aer_tmp = self.ext_aer_1d[iwav,idz_atm]
+                ext_tot = ext_aer_tmp + ext_cld_tmp
+
+                for icell in range (0, n_unique_cell):
+                    pha_cld_tmp = phase.sub()[Idx(wav[iwav]),Idx(cld_reff[icell]), :, :]
+                    pha_aer_tmp = phase_aer_1d.sub()[self.ipha_aer_1d[iwav,idz_atm[icell]], :, :]
+                    pha_tot = ( (pha_aer_tmp*ext_aer_tmp[icell]*ssa_aer_tmp[icell]) +
+                                (pha_cld_tmp*ext_cld_tmp[icell]*ssa_cld_tmp[icell]) ) / ext_tot[icell]
+                    luts.append(pha_tot)
+
+            # Third concatenate plan parallel + 3d optical prop (first without considering wl)
+            nbz = self.ext_aer_1d.shape[1] # nb of z_atm
+            phase_glob_indices_w0 = np.arange(nbz+n_unique_cell, dtype=np.int32)
+        else: # case no 1d aer given
+            for iwav in range (0, nwav):
+                # Loop only on the unique cld_reff
+                for ireff in range (0, nreff_unique):
+                    luts.append(phase.sub()[Idx(wav[iwav]),Idx(cld_reff_unique[ireff]), :, :])
+
+            # ===== 2) phase matrix indices to take for all cloud cells
+            # Obtain the correct indices from the unique radii phase matrix
+            phase_3d_indices_w0 = np.full(cld_reff.size, np.NaN, dtype=np.int32)
             for ireff in range (0, nreff_unique):
-                luts.append(phase.sub()[Idx(wav[iwav]),Idx(cld_reff_unique[ireff]), :, :])
+                phase_3d_indices_w0[np.squeeze(np.argwhere( cld_reff == cld_reff_unique[ireff]))] = ireff
 
-        # ===== 2) phase matrix indices to take for all cloud cells
-        # Obtain the correct indices from the unique radii phase matrix
-        cld_phase_indices = np.full(cld_reff.size, np.NaN, dtype=np.int32)
-        for ireff in range (0, nreff_unique):
-            cld_phase_indices[np.squeeze(np.argwhere( cld_reff == cld_reff_unique[ireff]))] = ireff
+            # Concatenate plan parallel + 3d optical prop (first without considering wl)
+            phase_glob_indices_w0 = np.concatenate([np.zeros(self.grid_3d.NZ+1, dtype=np.int32), phase_3d_indices_w0[:]])
 
-        # Concatenate Rayleigh plan parallel + cloud
-        cld_phase_indices = np.concatenate([np.zeros(self.grid_3d.NZ+1, dtype=np.int32), cld_phase_indices[:]])
 
-        # Consider the wl dimension (even if its equal to 1)
-        cld_phase_indices_wl = np.zeros((nwav, cld_phase_indices.size), dtype=np.int32)
+        # Now consider the wl dimension
+        phase_glob_indices = np.zeros((nwav, phase_glob_indices_w0.size), dtype=np.int32)
 
         for iwav in range (0, nwav):
-            cld_phase_indices_wl[iwav,:] = cld_phase_indices[:] + (iwav*nreff_unique)
+            phase_glob_indices[iwav,:] = phase_glob_indices_w0[:] + (iwav*nreff_unique)
 
-        ipha3D = cld_phase_indices_wl
+        ipha3D = phase_glob_indices
 
         return (ipha3D, luts)
+    
+
+    def get_glob_aer_phase_ext_ssa(self, wl_phase=None, NBTHETA=721, conv_Iparper=True):
+        """
+        Get global (1d+3d) aerosol phase matrices, extinction coefficients and single scattering albedos
+
+        === return:
+        (ipha3D, luts), ext_aer_glob, ssa_aer_glob
+        where luts is a list of unique phase luts (1d + 3d)
+        and where ipha3D is a 2d numpy matrix(wavelength, iopt) with the lut phase index of list luts
+        """
+
+        # ===== 1) Calcul des matrices de phases
+        # Get the cloud effective radii
+        cld_reff = self.cld_reff
+        cld_reff_unique = np.unique(cld_reff)
+        nreff_unique = cld_reff_unique.size
+        w_ref = self.cloud_3d.w_ref
+
+        if wl_phase is not None: wav = wl_phase
+        else: wav = self.wls
+        nwav = len(wav)
+
+        # Get the phase matrix
+        # Here dim : wav,reff,stk,theta
+        phase = self.cloud_3d.get_phase(NBTHETA=NBTHETA, conv_Iparper=conv_Iparper)
+
+        luts = []
+
+        n_unique_cell = len(self.cld_ext_ref)
+        ext_mix_3d = np.zeros((nwav, n_unique_cell), dtype=np.float64)
+        ssa_mix_3d = np.ones((nwav, n_unique_cell), dtype=np.float64)
+
+        if self.pha_aer_1d is not None: # case list of 1d aer is given
+            # Dim of pha_aer: wav, stk, theta.
+            # 3d phase : phase.axes[3] -> theta dim
+            # 1d phase : self.pha_aer.axes[2] -> theta dim
+            if (len(self.pha_aer_1d.axes[2]) == NBTHETA):
+                phase_aer_1d = self.pha_aer_1d
+            else:
+                phase_aer_1d = self.pha_aer_1d.sub()[:, :, Idx(phase.axes[3])]
+
+            # First plan parallel phase 
+            for iwav in range (0, nwav):
+                for iz in range (0, self.grid_3d.NZ+1):
+                    luts.append(phase_aer_1d.sub()[self.ipha_aer_1d[iwav,iz], :, :])
+
+            # Second 3d mix phase
+            for iwav in range (0, nwav):
+                idz_atm = []
+                for icell in range (0, n_unique_cell):
+                    idz = self.cloud_indices[icell,2]
+                    id_zatm = self.grid_3d.NZ+1 - idz
+                    idz_atm.append(id_zatm)
+
+                ext_cld_ref0 = self.cloud_3d.cld_mlut['ext'][Idx(cld_reff), Idx(w_ref)]
+                ext_factor = self.cloud_3d.cld_mlut['ext'][Idx(cld_reff), Idx(wav[iwav])]/ext_cld_ref0
+                ext_cld_tmp = self.cld_ext_ref * ext_factor
+                ssa_cld_tmp = self.cloud_3d.cld_mlut['ssa'][Idx(cld_reff), Idx(wav[iwav])]
+
+                ssa_aer_tmp = self.ssa_aer_1d[iwav,idz_atm]
+                ext_aer_tmp = self.ext_aer_1d[iwav,idz_atm]
+                ext_mix_tmp = ext_aer_tmp + ext_cld_tmp
+                ext_mix_3d[iwav,:] = ext_mix_tmp
+                ssa_mix_3d[iwav,:] = (ext_aer_tmp*ssa_aer_tmp + ext_cld_tmp*ssa_cld_tmp) / ext_mix_tmp
+
+                for icell in range (0, n_unique_cell):
+                    pha_cld_tmp = phase.sub()[Idx(wav[iwav]),Idx(cld_reff[icell]), :, :]
+                    pha_aer_tmp = phase_aer_1d.sub()[self.ipha_aer_1d[iwav,idz_atm[icell]], :, :]
+                    pha_tot = ( (pha_aer_tmp*ext_aer_tmp[icell]*ssa_aer_tmp[icell]) +
+                                (pha_cld_tmp*ext_cld_tmp[icell]*ssa_cld_tmp[icell]) ) / ext_mix_tmp[icell]
+                    luts.append(pha_tot)
+
+            # Third concatenate plan parallel + 3d optical prop (first without considering wl)
+            nbz = self.ext_aer_1d.shape[1] # nb of z_atm
+            tot_phase_indices = np.arange(nbz+n_unique_cell, dtype=np.int32)
+        else: # case no 1d aer given
+            ext_cld_ref0 = self.cloud_3d.cld_mlut['ext'][Idx(cld_reff), Idx(w_ref)]
+            for iwav in range (0, nwav):
+                ext_factor = self.cloud_3d.cld_mlut['ext'][Idx(cld_reff), Idx(wav[iwav])]/ext_cld_ref0
+                ext_mix_3d[iwav,:] = self.cld_ext_ref * ext_factor
+                ssa_mix_3d[iwav,:] = self.cloud_3d.cld_mlut['ssa'][Idx(cld_reff), Idx(wav[iwav])]
+                # Loop only on the unique cld_reff
+                for ireff in range (0, nreff_unique):
+                    luts.append(phase.sub()[Idx(wav[iwav]),Idx(cld_reff_unique[ireff]), :, :])
+
+            # ===== 2) phase matrix indices to take for all cloud cells
+            # Obtain the correct indices from the unique radii phase matrix
+            tot_phase_indices = np.full(cld_reff.size, np.NaN, dtype=np.int32)
+            for ireff in range (0, nreff_unique):
+                tot_phase_indices[np.squeeze(np.argwhere( cld_reff == cld_reff_unique[ireff]))] = ireff
+
+            # Concatenate plan parallel + 3d optical prop (first without considering wl)
+            tot_phase_indices = np.concatenate([np.zeros(self.grid_3d.NZ+1, dtype=np.int32), tot_phase_indices[:]])
+
+        
+        # Create a table with only the cloud properties but in global shape i.e. for each cells
+        #  not sharing the same opt prop, and other commun cells in z, following the plan parallel
+        #  1D atm philosophy
+        ext_aer_glob = np.concatenate([self.ext_aer_1d, ext_mix_3d], axis=1)
+        ssa_aer_glob = np.concatenate([self.ssa_aer_1d[:,:], ssa_mix_3d], axis=1)
+
+        # Now consider the wl dimension
+        tot_phase_indices_wl = np.zeros((nwav, tot_phase_indices.size), dtype=np.int32)
+
+        for iwav in range (0, nwav):
+            tot_phase_indices_wl[iwav,:] = tot_phase_indices[:] + (iwav*nreff_unique)
+
+        ipha3D = tot_phase_indices_wl
+
+        return (ipha3D, luts), ext_aer_glob, ssa_aer_glob
 
 
     def get_cells_info(self):
