@@ -91,7 +91,7 @@ def test_A1(request, S1DF, S1DB):
     SZA = 0.
     SAA = 65.
     PHI_0 = 180.-SAA # To follow MYSTIC convention
-    le     = {'th_deg':np.array([SZA]), 'phi_deg':np.array([PHI_0])}
+    le     = {'th_deg':np.array([SZA]), 'phi_deg':np.array([PHI_0]), 'count_level':np.array([0])}
 
     # BOA radiances
     VZAMIN = 0.
