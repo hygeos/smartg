@@ -815,6 +815,10 @@ class Smartg(object):
                   Angles can be provided as scalar, lists or 1-dim arrays
                   Default None: cone sampling
                   NOTE: Overrides NBPHI and NBTHETA
+                  If 'count_level' is present: dim = NBTHETA
+                  count_level = -2 : count everything
+                  count_level = 0  : count only UPTOA
+                  count_level = 1  : count only DOWN0P
 
             flux: if specified output is 'planar' or 'spherical' flux instead of radiance
 
@@ -1176,6 +1180,11 @@ class Smartg(object):
                     assert NBPHI==NBTHETA
                     ZIP = 1
                     NBPHI = 1 
+            
+            if 'count_level' in le:
+                le['count_level'] = np.array(le['count_level'], dtype='int32').ravel()
+                assert len(le['count_level']) == NBTHETA
+
 
 
         FLUX = 0
@@ -2442,9 +2451,12 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
     if le != None:
         tabthv = to_gpu(le['th'].astype('float32'))
         tabphi = to_gpu(le['phi'].astype('float32'))
+        if 'count_level' in le: tablevel = to_gpu(le['count_level'].astype('int32'))
+        else: tablevel = to_gpu(np.full((NBTHETA), -2).astype('int32'))
     else:
         tabthv = gpuzeros(1, dtype='float32')
         tabphi = gpuzeros(1, dtype='float32')
+        tablevel = to_gpu(np.array([-2]).astype('int32'))
 
     secs_cuda_clock = 0.
     alis_norm = NLAM if NLOW!=0 else 1
@@ -2468,7 +2480,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         # kernel launch
         kern(envmap, spectrum, X0, faer, foce,
              errorcount, nThreadsActive, tabPhotons, tabDist, tabHist, tabTransDir,
-             Counter, NPhotonsIn, NPhotonsOut, tabthv, tabphi, tab_sensor,
+             Counter, NPhotonsIn, NPhotonsOut, tabthv, tabphi, tablevel, tab_sensor,
              prof_atm, prof_oc, cell_atm, cell_oc, wl_proba_icdf, sensor_proba_icdf, cell_proba_icdf, 
              rng.state, tabObjInfo,
              myObjects0, myGObj0, myRObj0, mySPECTObj0, nbPhCat, wPhCat, wPhCat2,

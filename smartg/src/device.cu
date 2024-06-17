@@ -41,7 +41,7 @@ extern "C" {
 							 void *tabTransDir, unsigned long long *Counter,
 							 unsigned long long *NPhotonsIn,
 							 unsigned long long *NPhotonsOut,
-							 float *tabthv, float *tabphi, struct Sensor *tab_sensor,
+							 float *tabthv, float *tabphi, int *tablevel, struct Sensor *tab_sensor,
 							 struct Profile *prof_atm,
 							 struct Profile *prof_oc,
                              struct Cell *cell_atm,
@@ -68,6 +68,7 @@ extern "C" {
 	unsigned int idx = blockIdx.x *blockDim.x + threadIdx.x;
 	int loc_prev;
 	int count_level;
+    int ilevel_le=0;
 	int this_thread_active = 1;
 	unsigned long long iloop = 0;
 
@@ -372,12 +373,12 @@ extern "C" {
                     // Double Loop on directions (zenith ang azimuths)
                     for (int ith=0; ith<NBTHETAd; ith++){
                         for (int iph=0; iph<NBPHId; iph++){
-
-
+                            ilevel_le = (ith + ith0)%NBTHETAd;
+                            if (tablevel[ilevel_le] != count_level_le && tablevel[ilevel_le] != COUNTALL) continue;
                             // Copy of the propagation photon to to the virtual, local estimate photon
                             copyPhoton(&ph, &ph_le);
                             // Computation of the indices of the direction
-                            ph_le.ith = (ith + ith0)%NBTHETAd;
+                            ph_le.ith = ilevel_le;
                             if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
                             else ph_le.iph =  ph_le.ith;
                             // azimuth and zenith LE
@@ -584,8 +585,14 @@ extern "C" {
                     for (int ith=0; ith<NBTHETAd; ith++){
                       for (int iph=0; iph<NBPHId; iph++){
                         // copy propagation to virtual photon
+                        ilevel_le = (ith + ith0)%NBTHETAd;
+                        if ( (tablevel[ilevel_le] != count_level_le) &&
+                             (tablevel[ilevel_le] != COUNTALL)       &&
+                             (tablevel[ilevel_le] != UPTOA)          &&
+                             (tablevel[ilevel_le] != DOWNB) ) 
+                        { continue; }
                         copyPhoton(&ph, &ph_le);
-                        ph_le.ith = (ith + ith0)%NBTHETAd;
+                        ph_le.ith = ilevel_le;
                         if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
                         else ph_le.iph =  ph_le.ith;
 
@@ -618,10 +625,11 @@ extern "C" {
                         copyIGeo(&geoStruc, &geoStruc_le);
                         mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
                         #endif
-                        if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, count_level_le, errorcount, tabPhotons, tabDist, tabHist, tabTransDir, NPhotonsOut); }
+                        if ((!mask_le) && (tablevel[ph_le.ith] == COUNTALL || tablevel[ph_le.ith] == count_level_le) )
+                        { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, count_level_le, errorcount, tabPhotons, tabDist, tabHist, tabTransDir, NPhotonsOut); }
 
                         // Only for upward photons in Atmopshere, count also them up to TOA
-                        if (k==0) { 
+                        if ( (k==0) && (tablevel[ph_le.ith] == COUNTALL || tablevel[ph_le.ith] == UPTOA) ){ 
                             // Final extinction computation n the atmosphere for SP and ALT_PP move mode
                             #ifdef SPHERIQUE
                             if (ph_le.loc==ATMOS)
@@ -655,7 +663,7 @@ extern "C" {
                             #endif
                         }
                         // Only for downward photons in Ocean, count also them up to Bottom 
-                        if (k==1) { 
+                        if ( (k==1) && (tablevel[ph_le.ith] == COUNTALL || tablevel[ph_le.ith] == DOWNB) ){ 
                             // Final extinction computation in the ocean for ALT_PP move mode
                             #ifdef ALT_PP
                             if (ph_le.loc==OCEAN) 
@@ -728,12 +736,16 @@ extern "C" {
                   /* Double loop on zenith and azimuth LE */
                   for (int ith=0; ith<NBTHETAd; ith++){
                     for (int iph=0; iph<NBPHId; iph++){
+                        ilevel_le = (ith + ith0)%NBTHETAd;
+                        if ( (tablevel[ilevel_le] != COUNTALL) &&
+                             (tablevel[ilevel_le] != UP0P)     &&
+                             (tablevel[ilevel_le] != UPTOA) )
+                        {continue;}
                         copyPhoton(&ph, &ph_le);
-                        ph_le.ith = (ith + ith0)%NBTHETAd;
+                        ph_le.ith = ilevel_le;
                         if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
                         else ph_le.iph =  ph_le.ith;
 
-                        /* LE for BRDF type*/
                         surfaceLambert(&ph_le, 1,
                                        #ifdef OBJ3D
                                        tabthv_le, tabphi_le,
@@ -753,41 +765,43 @@ extern "C" {
                         copyIGeo(&geoStruc, &geoStruc_le);
                         mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
                         #endif
-                        if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, tabDist, tabHist, tabTransDir, NPhotonsOut); }
-
+                        if ( (!mask_le) && (tablevel[ph_le.ith] == COUNTALL || tablevel[ph_le.ith] == UP0P) )
+                        { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, tabDist, tabHist, tabTransDir, NPhotonsOut); }
                         // 2) up TOA for all move modes, need final extinction computation
                         // Final extinction computation in the atmosphere for SP and ALT_PP move mode
-                        #ifdef SPHERIQUE
-                        if (ph_le.loc==ATMOS)
+                        if ( tablevel[ph_le.ith] == COUNTALL || tablevel[ph_le.ith] == UPTOA )
                         {
-                            move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
+                            #ifdef SPHERIQUE
+                            if (ph_le.loc==ATMOS)
+                            {
+                                move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
+                                #ifdef OBJ3D
+                                mask_le = false;
+                                mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
+                                #endif
+                            }
+                            #else // if not spheric
+                            #ifdef ALT_PP
+                            if (ph_le.loc==ATMOS) 
+                            {
+                                move_pp2(&ph_le, prof_atm, prof_oc, 
+                                        #ifdef OPT3D
+                                        cell_atm, cell_oc,
+                                        #endif
+                                        1, UPTOA , &rngstate);
+                                #ifdef OBJ3D
+                                mask_le = false;
+                                mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
+                                #endif
+                            }
+                            #endif // END ALT_PP
+                            #endif // END not spheric
+                            // Final extinction computation in FAST PP move mode and counting at the TOA for all move modes
+                            if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist, tabTransDir, NPhotonsOut); }
                             #ifdef OBJ3D
-                            mask_le = false;
-                            mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
+                            if (!mask_le and LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, tabthv_le, tabphi_le); }
                             #endif
                         }
-                        #else // if not spheric
-                        #ifdef ALT_PP
-                        if (ph_le.loc==ATMOS) 
-                        {
-                            move_pp2(&ph_le, prof_atm, prof_oc, 
-                                      #ifdef OPT3D
-                                      cell_atm, cell_oc,
-                                      #endif
-                                      1, UPTOA , &rngstate);
-                            #ifdef OBJ3D
-                            mask_le = false;
-                            mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
-                            #endif
-                        }
-                        #endif // END ALT_PP
-                        #endif // END not spheric
-                        // Final extinction computation in FAST PP move mode and counting at the TOA for all move modes
-                        if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist, tabTransDir, NPhotonsOut); }
-                        #ifdef OBJ3D
-                        if (!mask_le and LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, tabthv_le, tabphi_le); }
-                        #endif
-
                     }//direction
                   }//direction
                 } //LE
@@ -831,8 +845,13 @@ extern "C" {
                  /* Double loop on zenith and azimuths LE*/
                  for (int ith=0; ith<NBTHETAd; ith++){
                     for (int iph=0; iph<NBPHId; iph++){
+                        ilevel_le = (ith + ith0)%NBTHETAd;
+                        if ( (tablevel[ilevel_le] != COUNTALL) &&
+                             (tablevel[ilevel_le] != UP0P)     &&
+                             (tablevel[ilevel_le] != UPTOA) )
+                        {continue;}
                         copyPhoton(&ph, &ph_le);
-                        ph_le.ith = (ith + ith0)%NBTHETAd;
+                        ph_le.ith = ilevel_le;
                         if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
                         else ph_le.iph =  ph_le.ith;
 
@@ -851,36 +870,40 @@ extern "C" {
                         copyIGeo(&geoStruc, &geoStruc_le);
                         mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
                         #endif
-                        if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, tabDist, tabHist, tabTransDir, NPhotonsOut); }
-                        #ifdef SPHERIQUE
-                        if (ph_le.loc==ATMOS)
+                        if ( (!mask_le) && (tablevel[ph_le.ith] == COUNTALL || tablevel[ph_le.ith] == UP0P) )
+                        { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, tabDist, tabHist, tabTransDir, NPhotonsOut); }
+                        if (tablevel[ph_le.ith] == COUNTALL || tablevel[ph_le.ith] == UPTOA)
                         {
-                            move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
+                            #ifdef SPHERIQUE
+                            if (ph_le.loc==ATMOS)
+                            {
+                                move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
+                                #ifdef OBJ3D
+                                mask_le = false;
+                                mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
+                                #endif
+                            }
+                            #else // if not spheric
+                            #ifdef ALT_PP
+                            if (ph_le.loc==ATMOS)
+                            {
+                                move_pp2(&ph_le, prof_atm, prof_oc, 
+                                        #ifdef OPT3D
+                                        cell_atm, cell_oc,
+                                        #endif
+                                        1, UPTOA , &rngstate);
+                                #ifdef OBJ3D
+                                mask_le = false;
+                                mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
+                                #endif
+                            }
+                            #endif // END ALT_PP
+                            #endif // END not spheric
+                            if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist, tabTransDir, NPhotonsOut); }
                             #ifdef OBJ3D
-                            mask_le = false;
-                            mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
+                            if (!mask_le and LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, tabthv_le, tabphi_le); }
                             #endif
                         }
-                        #else // if not spheric
-                        #ifdef ALT_PP
-                        if (ph_le.loc==ATMOS)
-                        {
-                            move_pp2(&ph_le, prof_atm, prof_oc, 
-                                    #ifdef OPT3D
-                                    cell_atm, cell_oc,
-                                    #endif
-                                    1, UPTOA , &rngstate);
-                            #ifdef OBJ3D
-                            mask_le = false;
-                            mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
-                            #endif
-                        }
-                        #endif // END ALT_PP
-                        #endif // END not spheric
-                        if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist, tabTransDir, NPhotonsOut); }
-                        #ifdef OBJ3D
-                        if (!mask_le and LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, tabthv_le, tabphi_le); }
-                        #endif
                     }//direction
                  }//direction
                 } //LE
@@ -930,8 +953,12 @@ extern "C" {
               /* Double loop on zenith and azimuth LE*/
               for (int ith=0; ith<NBTHETAd; ith++){
                 for (int iph=0; iph<NBPHId; iph++){
+                    ilevel_le = (ith + ith0)%NBTHETAd;
+                    if ( (tablevel[ilevel_le] != COUNTALL) &&
+                          (tablevel[ilevel_le] != UP0M) )
+                    {continue;}
                     copyPhoton(&ph, &ph_le);
-                    ph_le.ith = (ith + ith0)%NBTHETAd;
+                    ph_le.ith = ilevel_le;
                     if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
                     else ph_le.iph =  ph_le.ith;
 

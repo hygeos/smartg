@@ -84,6 +84,7 @@
 #define OCEAN_ONLY     3
 
 // indexing of the output levels
+#define COUNTALL -2
 #define NOCOUNT -1
 #define UPTOA   0
 #define DOWN0P	1

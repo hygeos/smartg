@@ -121,7 +121,7 @@ __global__ void launchKernel(
         void *tabTransDir, unsigned long long *Counter,
         unsigned long long *NPhotonsIn,
         unsigned long long *NPhotonsOut,
-        float *tabthv, float *tabphi,  struct Sensor *tab_sensor,
+        float *tabthv, float *tabphi,  int *tablevel, struct Sensor *tab_sensor,
         struct Profile *prof_atm,
         struct Profile *prof_oc,
         struct Cell *cell_atm,
