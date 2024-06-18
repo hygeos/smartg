@@ -592,33 +592,36 @@ def satellite_view(mlut, xgrid, ygrid, wl, interp_name='none',
         else: 
             raise NameError("Unknown stk!")
         
-    # First check the Azimuth and Zenith angles dimensions exist, if not the case return an error message
-    if ("Azimuth angles" or "Zenith angles") not in mlut[stokes_name[0]].names:
-        raise NameError("The Azimuth angles and/or Zenith angles dimension(s) are/is missing")
 
-    axis_number = len(mlut[stokes_name[0]].names)
+    Nx = xgrid.size-1; Ny = ygrid.size-1 # Number of sensors in x and y axis
+    if mat_force is None:
+        # First check the Azimuth and Zenith angles dimensions exist, if not the case return an error message
+        if ("Azimuth angles" or "Zenith angles") not in mlut[stokes_name[0]].names:
+            raise NameError("The Azimuth angles and/or Zenith angles dimension(s) are/is missing")
 
-    ind = [slice(None)]*axis_number # if axis_number = 3, tuple(ind) equivalent to [:,:,:]
+        axis_number = len(mlut[stokes_name[0]].names)
 
-    # Two last indices for axis Azimuth angles and Zenith angles forced to 0 (consider we have only one sun position)
-    ind[-1] = 0; ind[-2] = 0 # TODO Consider also the case where several sun position are given
+        ind = [slice(None)]*axis_number # if axis_number = 3, tuple(ind) equivalent to [:,:,:]
 
-    # if Azimuth dim or Zenith dim > 1 -> return an error message. TODO to remove once the option above is added
-    if ((mlut.axes["Azimuth angles"].size or mlut.axes["Zenith angles"].size) > 1):
-        raise NameError("Dimension size > 1 is not authorized for both Azimuth and Zenith angles")
+        # Two last indices for axis Azimuth angles and Zenith angles forced to 0 (consider we have only one sun position)
+        ind[-1] = 0; ind[-2] = 0 # TODO Consider also the case where several sun position are given
 
-    # If we have the wavelength dimension
-    if "wavelength" in mlut[stokes_name[0]].names:
-        ind[-3] = Idx(wl) # TODO Enable a default value, for example for the monochromatique case
+        # if Azimuth dim or Zenith dim > 1 -> return an error message. TODO to remove once the option above is added
+        if ((mlut.axes["Azimuth angles"].size or mlut.axes["Zenith angles"].size) > 1):
+            raise NameError("Dimension size > 1 is not authorized for both Azimuth and Zenith angles")
 
+        # If we have the wavelength dimension
+        if "wavelength" in mlut[stokes_name[0]].names:
+            ind[-3] = Idx(wl) # TODO Enable a default value, for example for the monochromatique case
+
+        if "sensor index" in mlut[stokes_name[0]].names:
+            sensor_number = mlut.axes["sensor index"].size
+        else:
+            sensor_number = int(1)
+    else:
+        sensor_number = int(mat_force[0].shape[0]*mat_force[0].shape[1])
 
     # Check if the product of Nx and Ny is equal to the number of sensors
-    Nx = xgrid.size-1; Ny = ygrid.size-1 # Number of sensors in x and y axis
-    if "sensor index" in mlut[stokes_name[0]].names:
-        sensor_number = mlut.axes["sensor index"].size
-    else:
-        sensor_number = int(1)
-    if mat_force: sensor_number = int(mat_force[0].shape[0]*mat_force[0].shape[1])
     if (Nx*Ny != sensor_number):
         raise NameError("The product of Nx and Ny must be equal to the number of sensors!")
 

@@ -36,6 +36,12 @@ __device__ __constant__ int FLUXd;
 __device__ __constant__ int FFSd;
 __device__ __constant__ int DIRECTd;
 __device__ __constant__ float cell_sized;
+__device__ __constant__ float sxmind;
+__device__ __constant__ float sxmaxd;
+__device__ __constant__ float symind;
+__device__ __constant__ float symaxd;
+__device__ __constant__ unsigned int nbsxd;
+__device__ __constant__ unsigned int nbsyd;
 __device__ __constant__ int OCEAN_INTERACTIONd;
 __device__ __constant__ int SURd;
 __device__ __constant__ int BRDFd;
@@ -339,6 +345,11 @@ __device__ float H_rpv(float , float );  //  RPV, only H
 
 __device__ float BRDF(int, float3, float3 , struct Spectrum* );  //  general BRDF
 __device__ float BPlanck(float, float );
+#ifdef OPT3D
+#ifndef BACK
+__device__ unsigned int get_isens(Photon* ph, struct Sensor *tab_sensor, int count_level);
+#endif
+#endif
 #ifdef PHILOX
 /**********************************************************
 *	> Fonctions liées au générateur aléatoire

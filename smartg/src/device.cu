@@ -486,6 +486,12 @@ extern "C" {
                              #endif // ALT PP
                             #endif // Spherical
 
+                            #ifdef OPT3D
+                            #ifndef BACK
+                            ph_le.is = get_isens(&ph_le, tab_sensor, count_level_le);
+                            #endif
+                            #endif
+
                             // Finally count the virtual photon
                             /* in FAST PP mode the final extinction until the counting level is done in the countPhoton function */
 							#if defined(OBJ3D)
@@ -626,7 +632,14 @@ extern "C" {
                         mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
                         #endif
                         if ((!mask_le) && (tablevel[ph_le.ith] == COUNTALL || tablevel[ph_le.ith] == count_level_le) )
-                        { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, count_level_le, errorcount, tabPhotons, tabDist, tabHist, tabTransDir, NPhotonsOut); }
+                        {
+                            #ifdef OPT3D
+                            #ifndef BACK
+                            ph_le.is = get_isens(&ph_le, tab_sensor, count_level_le);
+                            #endif
+                            #endif
+                            countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, count_level_le, errorcount, tabPhotons, tabDist, tabHist, tabTransDir, NPhotonsOut);
+                        }
 
                         // Only for upward photons in Atmopshere, count also them up to TOA
                         if ( (k==0) && (tablevel[ph_le.ith] == COUNTALL || tablevel[ph_le.ith] == UPTOA) ){ 
@@ -656,6 +669,11 @@ extern "C" {
                             }
                             #endif // END ALT_PP
                             #endif // END not spheric
+                            #ifdef OPT3D
+                            #ifndef BACK
+                            ph_le.is = get_isens(&ph_le, tab_sensor, UPTOA);
+                            #endif
+                            #endif
                             // Final extinction computation in FAST PP move mode and counting at the TOA for all move modes
                             if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA , errorcount, tabPhotons, tabDist, tabHist, tabTransDir, NPhotonsOut); }
                             #ifdef OBJ3D
@@ -679,6 +697,11 @@ extern "C" {
                                 #endif
                             }
                             #endif // END ALT_PP
+                            #ifdef OPT3D
+                            #ifndef BACK
+                            ph_le.is = get_isens(&ph_le, tab_sensor, DOWNB);
+                            #endif
+                            #endif
                             // Final extinction computation in FAST PP move mode and counting at the Bottom for all move modes
                             if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, DOWNB , errorcount, tabPhotons, tabDist, tabHist, tabTransDir, NPhotonsOut); }
                         }
@@ -766,7 +789,14 @@ extern "C" {
                         mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
                         #endif
                         if ( (!mask_le) && (tablevel[ph_le.ith] == COUNTALL || tablevel[ph_le.ith] == UP0P) )
-                        { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, tabDist, tabHist, tabTransDir, NPhotonsOut); }
+                        {
+                            #ifdef OPT3D
+                            #ifndef BACK
+                            ph_le.is = get_isens(&ph_le, tab_sensor, UP0P);
+                            #endif
+                            #endif
+                            countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, tabDist, tabHist, tabTransDir, NPhotonsOut);
+                        }
                         // 2) up TOA for all move modes, need final extinction computation
                         // Final extinction computation in the atmosphere for SP and ALT_PP move mode
                         if ( tablevel[ph_le.ith] == COUNTALL || tablevel[ph_le.ith] == UPTOA )
@@ -796,6 +826,11 @@ extern "C" {
                             }
                             #endif // END ALT_PP
                             #endif // END not spheric
+                            #ifdef OPT3D
+                            #ifndef BACK
+                            ph_le.is = get_isens(&ph_le, tab_sensor, UPTOA);
+                            #endif
+                            #endif
                             // Final extinction computation in FAST PP move mode and counting at the TOA for all move modes
                             if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist, tabTransDir, NPhotonsOut); }
                             #ifdef OBJ3D
@@ -871,7 +906,14 @@ extern "C" {
                         mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
                         #endif
                         if ( (!mask_le) && (tablevel[ph_le.ith] == COUNTALL || tablevel[ph_le.ith] == UP0P) )
-                        { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, tabDist, tabHist, tabTransDir, NPhotonsOut); }
+                        {
+                            #ifdef OPT3D
+                            #ifndef BACK
+                            ph_le.is = get_isens(&ph_le, tab_sensor, UP0P);
+                            #endif
+                            #endif
+                            countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, tabDist, tabHist, tabTransDir, NPhotonsOut);
+                        }
                         if (tablevel[ph_le.ith] == COUNTALL || tablevel[ph_le.ith] == UPTOA)
                         {
                             #ifdef SPHERIQUE
@@ -899,6 +941,11 @@ extern "C" {
                             }
                             #endif // END ALT_PP
                             #endif // END not spheric
+                            #ifdef OPT3D
+                            #ifndef BACK
+                            ph_le.is = get_isens(&ph_le, tab_sensor, UPTOA);
+                            #endif
+                            #endif
                             if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist, tabTransDir, NPhotonsOut); }
                             #ifdef OBJ3D
                             if (!mask_le and LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, tabthv_le, tabphi_le); }
@@ -987,7 +1034,15 @@ extern "C" {
                         #endif
                     } 
                     #endif
-                    if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UP0M,   errorcount, tabPhotons, tabDist, tabHist, tabTransDir, NPhotonsOut); }
+                    if (!mask_le)
+                    {
+                        #ifdef OPT3D
+                        #ifndef BACK
+                        ph_le.is = get_isens(&ph_le, tab_sensor, UP0M);
+                        #endif
+                        #endif
+                        countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UP0M,   errorcount, tabPhotons, tabDist, tabHist, tabTransDir, NPhotonsOut);
+                    }
 
                 } // directions
               } // directions
@@ -8273,7 +8328,63 @@ __device__ int GetEnvIndex(float3 pos, struct EnvMap *envmap) {
     return ispec;
 }
 
+//##########" Forward atm3 isensor  ################"
+#ifdef OPT3D
+#ifndef BACK
+__device__ unsigned int get_isens(Photon* ph, struct Sensor *tab_sensor, int count_level)
+{
+    unsigned int is;
+    // float ztoa_grid;
+    // ztoa_grid = 5.;
+    //is = 0;
+    // unsigned int idx = blockIdx.x *blockDim.x + threadIdx.x;
+    // if (idx==0) printf("posz =%f; vz=%f \n",ph->pos.z,ph->v.z);
+    //if (ph->v.z > 0 && ph->pos.z >= ztoa_grid-VALMIN)
+    //is = NSENSORd-1;
+    // float xmin, xmax, ymin, ymax;
+    // xmin = 0.;
+    // xmax = 7.;
+    // ymin = 0.;
+    // ymax = 7.;
 
+    float xsens_le, ysens_le;
+    xsens_le = ph->pos.x;
+    ysens_le = ph->pos.y;
+
+    // unsigned int idx = blockIdx.x *blockDim.x + threadIdx.x;
+    // if (idx==0) printf("posx =%f; posy=%f \n",ph->pos.x,ph->pos.y);
+    
+    if (xsens_le > sxmaxd && xsens_le <= sxmaxd+VALMIN2) { xsens_le = sxmaxd;}
+    if (xsens_le < sxmind && xsens_le >= sxmind-VALMIN2) { xsens_le = sxmind;}
+    if (ysens_le > symaxd && ysens_le <= symaxd+VALMIN2) { ysens_le = symaxd;}
+    if (ysens_le < symind && ysens_le >= symind-VALMIN2) { ysens_le = symind;}
+    // here x and y periodic boundary conditions are assumed
+    if (xsens_le  > sxmaxd || xsens_le  < sxmind)
+    {
+        printf("posx =%f; posy=%f \n",xsens_le,ysens_le);
+    }
+
+    if (ysens_le > symaxd || ysens_le < symind)
+    {            
+        printf("posx =%f; posy=%f \n",xsens_le,ysens_le);
+    }
+
+    xsens_le = xsens_le - sxmind;
+    ysens_le = ysens_le - symind;
+
+    unsigned int indx, indy;
+
+    indx = floorf(xsens_le/cell_sized);
+    indy = floorf(ysens_le/cell_sized);
+    if (indx == nbsxd) indx -= 1;
+    if (indy == nbsyd) indy -= 1;
+
+    is = indy*nbsxd+indx;
+
+    return is;
+}
+#endif
+#endif
 //#########################################################################
 //                         KERNEL 2
 //#########################################################################
