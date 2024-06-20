@@ -775,7 +775,7 @@ def satellite_view(mlut, xgrid, ygrid, wl, interp_name='none',
     # If the option save_file is used, save the file in pdf
     if (save_file is not None):
         # Deal with the case where we have not specified the '.pdf' at the end
-        if not save_file.endswith('.pdf'):
+        if ( not save_file.endswith('.pdf') and (not save_file.endswith('.png')) ):
             save_file += '.pdf'
         plt.savefig(save_file)
 
