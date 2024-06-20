@@ -8,6 +8,7 @@ STP_URL = https://docs.hygeos.com/s/NW42DNPtKw3NNW7/download
 valid_URL = https://docs.hygeos.com/s/6EPBqwebn94NYPq/download
 water_URL = https://docs.hygeos.com/s/3NKP5tMsHKnNRpt/download
 kdis_URL = https://docs.hygeos.com/s/CHTFFgHe6to39CR/download
+clouds_URL = https://docs.hygeos.com/s/agDWDy998j64SHf/download
 
 # some data (mystic res and opt_prop) are taken from: https://www.meteo.physik.uni-muenchen.de/~iprt/doku.php?id=intercomparisons:intercomparisons
 IPRT_URL = https://docs.hygeos.com/s/i4QaxtpjSfjwtNk/download
@@ -19,7 +20,7 @@ WGET_c = @wget -c
 
 
 auxdata_all: auxdata_aerosols_old auxdata_aerosols auxdata_acs auxdata_atm \
- auxdata_STP auxdata_valid auxdata_water auxdata_kdis auxdata_reptran
+ auxdata_STP auxdata_valid auxdata_water auxdata_kdis auxdata_clouds auxdata_reptran
 
 
 auxdata_aerosols_old:
@@ -63,6 +64,11 @@ auxdata_kdis:
 	unzip auxdata/kdis.zip -d auxdata/
 	rm -f auxdata/kdis.zip
 
+auxdata_clouds:
+	$(WGET) auxdata/ $(clouds_URL)/clouds.zip
+	unzip auxdata/clouds.zip -d auxdata/
+	rm -f auxdata/clouds.zip
+
 auxdata_reptran:
 	$(WGET) auxdata/ $(reptran_URL_hyg)/reptran.zip
 	unzip auxdata/reptran.zip -d auxdata/
@@ -90,5 +96,6 @@ clean:
 	rm -rf auxdata/validation
 	rm -rf auxdata/water
 	rm -rf auxdata/kdis
+	rm -rf auxdata/clouds
 	rm -rf auxdata/reptran
 	rm -rf auxdata/IPRT
