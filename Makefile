@@ -20,7 +20,7 @@ WGET_c = @wget -c
 
 
 auxdata_all: auxdata_aerosols_old auxdata_aerosols auxdata_acs auxdata_atm \
- auxdata_STP auxdata_valid auxdata_water auxdata_kdis auxdata_clouds auxdata_reptran
+ auxdata_STP auxdata_valid auxdata_water auxdata_kdis auxdata_clouds auxdata_reptran auxdata_IPRT
 
 
 auxdata_aerosols_old:
