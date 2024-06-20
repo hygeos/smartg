@@ -6,6 +6,15 @@
            ###########################
 
 
+v1.0.1
+------
+Release date: 2024-06-20
+
+* Missing auxiliary data in Makefile added (Clouds and IPRT).
+
+* The previous CHANGELOG corrected.
+
+
 v1.0.0
 ------
 Release date: 2024-05-17
@@ -19,8 +28,8 @@ Release date: 2024-05-17
     - The OPAC models vertical distribution can be ajusted (composed of aerosols
       from mixture and/or free troposphere and/or stratophere).
     - OPAC models updated! see [Koepke et al. 2015]. The new desert and antartic models
-      wity spheroid particles are considered. The old spherical versions are also
-      available, see -> 'desert_spherical' and 'antartic_spherical'. 
+      with spheroid particles are considered. The old spherical versions are also
+      available, see -> 'desert_spheric' and 'antartic_spheric'. 
 
 * New cloud models (use Cloud instead of CloudOPAC), taken from ARTDECO
     - small correction on the phase matrix computation
@@ -32,7 +41,11 @@ Release date: 2024-05-17
 * New way to consider the gaseous absorption cross section (NO2 and O3)
     - Add new O3 Bogumil data (Chehade et al. 2013)
     - Add O3 acs from Serdyuchenko et al. 2014
-    - Add NO2 data from Bingen et al. 2019 has been
+    - Add NO2 data from Bingen et al. 2019
+
+* K-distribution now available !
+    - 3 kdis -> kato, kato2 and SENTINEL_2_1_MSI
+    - The kdis format (ascii or h5) is now automatically recognized
 
 * In general: The repository has been cleaned. And several fixes and improvements
   have been made.
