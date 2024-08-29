@@ -63,7 +63,7 @@ def integ_phase(ang, pha):
 
     return np.sum(dtheta*((sin1*pm1+sin2*pm2)/3. + (sin1*pm2+sin2*pm1)/6.), axis=-1)
 
-def calc_iphase(phase, wav_full, z_full):
+def calc_iphase(phase, wav_full, z_full, old_method=False):
     '''
     calculate phase function indices
     phase is a LUT of shape [wav, z, stk, theta]
@@ -80,7 +80,64 @@ def calc_iphase(phase, wav_full, z_full):
     pha = phase.data.reshape(nwav*nz, nstk, ntheta)
 
     ipha_w = np.array([np.abs(wav - x).argmin() for x in wav_full], dtype='int32')
-    ipha_a = np.array([np.abs(altitude - x).argmin() for x in z_full], dtype='int32')
+    if old_method:
+        ipha_a = np.array([np.abs(altitude - x).argmin() for x in z_full], dtype='int32')
+    else:
+        ipha_a = get_ipha_a(z_full=z_full, z_pf=altitude, phase=phase)
     ipha = ipha_a[None,:] + ipha_w[:,None]*len(altitude)
 
     return (pha, ipha)
+
+
+def get_ipha_a(z_full, z_pf, phase=None):
+    grid_full = z_full
+    grid_pf = z_pf
+    size_layers_full = np.concatenate(( np.array([1e6]), np.abs(np.diff(grid_full))))
+    size_layers_pf = np.concatenate(( np.array([1e6]), np.abs(np.diff(grid_pf))))
+
+    nz_full = len(grid_full)
+    nz_pf = len(grid_pf)
+
+    zmin_print = [-1.]
+    zmax_print = [-1.]
+
+    ida = np.full(nz_full, -1, dtype=np.int32)
+    for i_full in range (0, nz_full):
+        idz_full = (nz_full-1)-i_full
+        zmin_full = grid_full[idz_full]
+        zmax_full = grid_full[idz_full] + size_layers_full[idz_full]
+
+        # First find all the z_pf layers respecting the 2 conditions
+        ida_tmp = []
+        for i_pf in range(0, nz_pf):
+            idz_pf = (nz_pf-1)-i_pf
+            zmin_pf = grid_pf[idz_pf]
+            zmax_pf = grid_pf[idz_pf] + size_layers_pf[idz_pf]
+            cond_1 = zmin_pf < zmax_full
+            cond_2 = zmax_pf > zmin_full
+            if (cond_1 and cond_2):
+                ida_tmp.append(idz_pf)
+
+        n_ida_tmp = len(ida_tmp)
+        # if only one pf layer respect the conditions take directly its index
+        if n_ida_tmp == 1 :
+            ida[idz_full] = ida_tmp[0]
+        # if more than one, we have to look which pf layer fill best the layer of z_full 
+        else:
+            pfs_weight = np.zeros(n_ida_tmp)
+            for k in range (0, n_ida_tmp):
+                zmin_pf_k = grid_pf[ida_tmp[k]]
+                zmax_pf_k = grid_pf[ida_tmp[k]] + size_layers_pf[ida_tmp[k]]
+                pf_full_min = max(zmin_pf_k, zmin_full)
+                pf_full_max = min(zmax_pf_k, zmax_full)
+                if ( (phase == None) or (np.sum(phase[0,ida_tmp[k],0,:]) > 0.) ):
+                    pfs_weight[k] = pf_full_max - pf_full_min
+                else:
+                    if (zmax_pf_k < 1e6) and ( (zmin_pf_k not in zmin_print) and (zmax_pf_k not in zmax_print)):
+                        print("Warning: null phase matrix between ", zmin_pf_k, " and ", zmax_pf_k,
+                              " detected! Please check pfgrid and/or grid (z_atm) values.")
+                        zmin_print.append(zmin_pf_k)
+                        zmax_print.append(zmax_pf_k)
+                    pfs_weight[k] = (pf_full_max - pf_full_min)*1e-6
+            ida[idz_full] = ida_tmp[np.argmax(pfs_weight)]
+    return ida
