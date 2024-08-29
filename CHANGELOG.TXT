@@ -6,6 +6,13 @@
            ###########################
 
 
+v1.0.2
+------
+Release date: 2024-08-22
+
+* Correction of a bug that occurs with high values of water vapor (H2O)
+
+
 v1.0.1
 ------
 Release date: 2024-06-20

@@ -148,17 +148,17 @@ class AerOPAC(object):
             if ((self.hum_or_reff == 'hum') and (self.force_rh[icont] is not None)) : rh_reff = np.full_like(hum_or_reff_val, self.force_rh[icont])
             else                                                                    : rh_reff = hum_or_reff_val
             if (len(rh_reff) == 1):
-                ext_tmp = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(rh_reff[:])][Idx(wav),:]
-                ext_ref_tmp = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(rh_reff[:])][Idx(self.w_ref),:]
-                ssa_tmp = cont['ssa'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(rh_reff[:])][Idx(wav),:]
+                ext_tmp = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(rh_reff[:], fill_value='extrema,warn')][Idx(wav),:]
+                ext_ref_tmp = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(rh_reff[:], fill_value='extrema,warn')][Idx(self.w_ref),:]
+                ssa_tmp = cont['ssa'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(rh_reff[:], fill_value='extrema,warn')][Idx(wav),:]
                 for iz in range (0, len(Z)):
                     ext_[:,iz] = ext_tmp[:,0]
                     ext_ref_[:,iz] = ext_ref_tmp[:,0]
                     ssa_[:,iz] = ssa_tmp[:,0]
             else:      
-                ext_ = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(rh_reff[:])][Idx(wav),:]
-                ext_ref_ = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(rh_reff[:])][Idx(self.w_ref),:]
-                ssa_ = cont['ssa'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(rh_reff[:])][Idx(wav),:]
+                ext_ = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(rh_reff[:], fill_value='extrema,warn')][Idx(wav),:]
+                ext_ref_ = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(rh_reff[:], fill_value='extrema,warn')][Idx(self.w_ref),:]
+                ssa_ = cont['ssa'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(rh_reff[:], fill_value='extrema,warn')][Idx(wav),:]
             dtau_ = np.zeros_like(dtau)
             dtau_ref_ = np.zeros_like(dtau_ref)
             h1 = np.maximum(self.H_min[icont], Z[1:])
@@ -292,14 +292,14 @@ class AerOPAC(object):
             ext_ = np.zeros_like(dtau_)
             ssa_ = np.zeros_like(dtau_)
             if (len(hum_or_reff_val) == 1):
-                ext_tmp = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_reff_val[:])][Idx(wav),:]
-                ssa_tmp = cont['ssa'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_reff_val[:])][Idx(wav),:]
+                ext_tmp = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_reff_val[:], fill_value='extrema,warn')][Idx(wav),:]
+                ssa_tmp = cont['ssa'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_reff_val[:], fill_value='extrema,warn')][Idx(wav),:]
                 for iz in range (0, len(Z)):
                     ext_[:,iz] = ext_tmp[:,0]
                     ssa_[:,iz] = ssa_tmp[:,0]
             else:      
-                ext_ = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_reff_val[:])][Idx(wav),:]
-                ssa_ = cont['ssa'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_reff_val[:])][Idx(wav),:]
+                ext_ = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_reff_val[:], fill_value='extrema,warn')][Idx(wav),:]
+                ssa_ = cont['ssa'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_reff_val[:], fill_value='extrema,warn')][Idx(wav),:]
             h1 = np.maximum(self.H_min[icont], Z[1:])
             h2 = np.minimum(self.H_max[icont], Z[:-1])
             cond = h2>h1
