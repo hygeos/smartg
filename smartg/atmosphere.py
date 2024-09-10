@@ -1254,7 +1254,7 @@ class AtmAFGL(Atmosphere):
 
 
 
-    def calc(self, wav, phase=True, NBTHETA=721, conv_Iparper=True):
+    def calc(self, wav, phase=True, NBTHETA=721, conv_Iparper=True, use_old_calc_iphase=False):
         '''
         Profile and phase function calculation at bands wav
 
@@ -1276,7 +1276,7 @@ class AtmAFGL(Atmosphere):
             pha = self.phase(wav_pha, NBTHETA=NBTHETA, conv_Iparper=conv_Iparper)
             
             if pha is not None:
-                pha_, ipha = calc_iphase(pha, profile.axis('wavelength'), profile.axis('z_atm'))
+                pha_, ipha = calc_iphase(pha, profile.axis('wavelength'), profile.axis('z_atm'), use_old_calc_iphase)
                 profile.add_axis('theta_atm', pha.axes[-1])
                 profile.add_dataset('phase_atm', pha_, ['iphase', 'stk', 'theta_atm'])
                 if not self.OPT3D:

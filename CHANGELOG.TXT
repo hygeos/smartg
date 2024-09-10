@@ -6,6 +6,15 @@
            ###########################
 
 
+v1.0.3
+------
+Release date: 2024-08-29
+
+* Correction of a bug in function calc_iphase.
+  - The bug may appear while giving a pfgrid array with a size > 3,
+    and with pfgrid != grid (z_atm)
+
+
 v1.0.2
 ------
 Release date: 2024-08-22
