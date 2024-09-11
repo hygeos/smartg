@@ -90,6 +90,11 @@ def calc_iphase(phase, wav_full, z_full, old_method=False):
 
 
 def get_ipha_a(z_full, z_pf, phase=None):
+    # Particular case with only 1 phase matrix for the whole z column
+    if len(z_pf) == 1:
+        ida = np.zeros_like(z_full, dtype=np.int32)
+        return ida
+    
     grid_full = z_full
     grid_pf = z_pf
     size_layers_full = np.concatenate(( np.array([1e6]), np.abs(np.diff(grid_full))))
@@ -98,8 +103,8 @@ def get_ipha_a(z_full, z_pf, phase=None):
     nz_full = len(grid_full)
     nz_pf = len(grid_pf)
 
-    zmin_print = [-1.]
-    zmax_print = [-1.]
+    zmin_print = [-1e8]
+    zmax_print = [-1e8]
 
     ida = np.full(nz_full, -1, dtype=np.int32)
     for i_full in range (0, nz_full):
@@ -123,7 +128,7 @@ def get_ipha_a(z_full, z_pf, phase=None):
         if n_ida_tmp == 1 :
             ida[idz_full] = ida_tmp[0]
         # if more than one, we have to look which pf layer fill best the layer of z_full 
-        else:
+        elif( n_ida_tmp > 1):
             pfs_weight = np.zeros(n_ida_tmp)
             for k in range (0, n_ida_tmp):
                 zmin_pf_k = grid_pf[ida_tmp[k]]
@@ -140,4 +145,6 @@ def get_ipha_a(z_full, z_pf, phase=None):
                         zmax_print.append(zmax_pf_k)
                     pfs_weight[k] = (pf_full_max - pf_full_min)*1e-6
             ida[idz_full] = ida_tmp[np.argmax(pfs_weight)]
+        elif (n_ida_tmp == 0 and np.sum(z_full) < 0.): # Particular case of min z_pf > min z_full in ocean
+            ida[idz_full] = int(len(z_pf) - 1)
     return ida
