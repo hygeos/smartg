@@ -87,7 +87,7 @@ class IOP(IOP_base):
 
         self.AW = read_aw(dir_aux)
 
-    def calc(self, wav):
+    def calc(self, wav, use_old_calc_iphase=False):
         shp = [x.shape for x in [self.bp, self.bw, self.atot, self.ap, self.aw, self.aCDOM, self.Bp] if x is not None][0]
 
         if not isinstance(wav, BandSet):
@@ -153,7 +153,7 @@ class IOP(IOP_base):
         if self.phase is not None:
 
             pha = self.phase
-            pha_, ipha = calc_iphase(pha, pro.axis('wavelength'), pro.axis('z_oc'))
+            pha_, ipha = calc_iphase(pha, pro.axis('wavelength'), pro.axis('z_oc'), use_old_calc_iphase)
 
             pro.add_axis('theta_oc', pha.axis('theta_oc'))
             pro.add_dataset('phase_oc', pha_, ['iphase', 'stk', 'theta_oc'])
@@ -453,7 +453,7 @@ class IOP_1(IOP_base):
                 }
 
 
-    def calc(self, wav, phase=True):
+    def calc(self, wav, phase=True, use_old_calc_iphase=False):
         '''
         Profile and phase function calculation
 
@@ -476,7 +476,7 @@ class IOP_1(IOP_base):
             Bp = self.calc_iop(wav_pha)['Bp']
             pha = self.phase(wav_pha, Bp)
 
-            pha_, ipha = calc_iphase(pha['phase'], pro.axis('wavelength'), pro.axis('z_oc'))
+            pha_, ipha = calc_iphase(pha['phase'], pro.axis('wavelength'), pro.axis('z_oc'), use_old_calc_iphase)
 
             # index with ipha and reshape to broadcast to [wav, z]
             coef_trunc = pha['coef_trunc'].data.ravel()[ipha][:,0]  # discard dimension 'z_oc'
@@ -830,7 +830,7 @@ class IOP_profile(IOP_base):
                 'FQYC': FQYC
                 }
 
-    def calc(self, wav, phase=True):
+    def calc(self, wav, phase=True, use_old_calc_iphase=False):
         '''
         Profile and phase function calculation
 
@@ -855,7 +855,7 @@ class IOP_profile(IOP_base):
             Bp = self.calc_iop(wav_pha)['Bp']
             pha = self.phase(wav_pha, Bp[:,1:])
 
-            pha_, ipha = calc_iphase(pha['phase'], pro.axis('wavelength'), pro.axis('z_oc'))
+            pha_, ipha = calc_iphase(pha['phase'], pro.axis('wavelength'), pro.axis('z_oc'), use_old_calc_iphase)
 
             # index with ipha and reshape to broadcast to [wav, z]
             coef_trunc = pha['coef_trunc'].data.ravel()[ipha][:,:]

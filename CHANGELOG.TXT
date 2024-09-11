@@ -6,6 +6,14 @@
            ###########################
 
 
+v1.0.4
+------
+Release date: 2024-09-11
+
+* Correction of a crash occuring while using the new calc_iphase function
+  (introduced in v1.0.3) inside ocean.
+
+
 v1.0.3
 ------
 Release date: 2024-08-29
