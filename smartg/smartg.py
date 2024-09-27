@@ -1499,7 +1499,8 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
         m.add_dataset('U_stdev_up (TOA)', sigma[UPTOA,2,isen,ilam,iphi,:], axnames)
         m.add_dataset('V_stdev_up (TOA)', sigma[UPTOA,3,isen,ilam,iphi,:], axnames)
     m.add_dataset('N_up (TOA)', NPhotonsOutTot[UPTOA,isen,ilam,iphi,:], axnames)
-    if len(tabDistFinal) > 1: m.add_dataset('cdist_up (TOA)', tabDistFinal[UPTOA,:,isen,iphi,:], axnames2)
+    #if len(tabDistFinal) > 1: m.add_dataset('cdist_up (TOA)', tabDistFinal[UPTOA,:,isen,iphi,:], axnames2)
+    if len(tabDistFinal) > 1: m.add_dataset('cdist_up (TOA)', tabDistFinal[UPTOA,:,isen,iphi,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
     #if hist : m.add_dataset('disth_up (TOA)', tabHistFinal[:,:,isen,iphi,:],axnames3)
     #if hist : m.add_dataset('disth_up (TOA)', np.squeeze(tabHistFinal[:,:,isen,iphi,:]))
 
@@ -1514,7 +1515,8 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
             m.add_dataset('U_stdev_down (0+)', sigma[DOWN0P,2,isen,ilam,iphi,:], axnames)
             m.add_dataset('V_stdev_down (0+)', sigma[DOWN0P,3,isen,ilam,iphi,:], axnames)
         m.add_dataset('N_down (0+)', NPhotonsOutTot[DOWN0P,isen,ilam,iphi,:], axnames)
-        if len(tabDistFinal) > 1: m.add_dataset('cdist_down (0+)', tabDistFinal[DOWN0P,:,isen,iphi,:],axnames2)
+        #if len(tabDistFinal) > 1: m.add_dataset('cdist_down (0+)', tabDistFinal[DOWN0P,:,isen,iphi,:],axnames2)
+        if len(tabDistFinal) > 1: m.add_dataset('cdist_down (0+)', tabDistFinal[DOWN0P,:,isen,iphi,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
 
         m.add_dataset('I_up (0-)', tabFinal[UP0M,0,isen,ilam,iphi,:], axnames)
         m.add_dataset('Q_up (0-)', tabFinal[UP0M,1,isen,ilam,iphi,:], axnames)
@@ -1526,7 +1528,8 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
             m.add_dataset('U_stdev_up (0-)', sigma[UP0M,2,isen,ilam,iphi,:], axnames)
             m.add_dataset('V_stdev_up (0-)', sigma[UP0M,3,isen,ilam,iphi,:], axnames)
         m.add_dataset('N_up (0-)', NPhotonsOutTot[UP0M,isen,ilam,iphi,:], axnames)
-        if len(tabDistFinal) > 1: m.add_dataset('cdist_up (0-)', tabDistFinal[UP0M,:,isen,iphi,:],axnames2)
+        #if len(tabDistFinal) > 1: m.add_dataset('cdist_up (0-)', tabDistFinal[UP0M,:,isen,iphi,:],axnames2)
+        if len(tabDistFinal) > 1: m.add_dataset('cdist_up (0-)', tabDistFinal[UP0M,:,isen,iphi,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
 
     if OUTPUT_LAYERS & 2:
         m.add_dataset('I_down (0-)', tabFinal[DOWN0M,0,isen,ilam,iphi,:], axnames)
@@ -2424,7 +2427,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         tabTransDir = gpuzeros((1,1), dtype=np.float64)
     
     if ((NATM+NOCE >0) and (NATM_ABS+NOCE_ABS <500) and alis) : 
-        tabDistTot = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI), dtype=np.float64)
+        tabDistTot = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI,2), dtype=np.float64)
     else : 
         tabDistTot = gpuzeros((1), dtype=np.float64)
 
@@ -2463,13 +2466,13 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
     if double:
         tabPhotons = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float64)
         if ((NATM+NOCE >0) and (NATM_ABS+NOCE_ABS <500) and alis) : 
-            tabDist = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI), dtype=np.float64)
+            tabDist = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI,2), dtype=np.float64)
         else :
             tabDist = gpuzeros((1), dtype=np.float64)
     else:
         tabPhotons = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float32)
         if ((NATM+NOCE >0) and (NATM_ABS+NOCE_ABS <500) and alis) : 
-            tabDist = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
+            tabDist = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI,2), dtype=np.float32)
         else : 
             tabDist = gpuzeros((1), dtype=np.float32)
 

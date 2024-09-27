@@ -1315,10 +1315,6 @@ class AtmAFGL(Atmosphere):
             prof = Profile_base(atm_filename, O3=O3,
                                 H2O=H2O, NO2=NO2, P0=P0, RH_cst=RH_cst, US=US, O3_H2O_alt=O3_H2O_alt
                                 )
-        elif(new_atm and atm_filename == "./tmp.dat"):
-            prof = Profile_base(atm_filename, O3=O3,
-                                H2O=H2O, NO2=NO2, P0=P0, RH_cst=RH_cst, US=US, O3_H2O_alt=O3_H2O_alt
-                                )
         else:
             prof = Profile_base2(atm_filename, O3=O3,
                                 H2O=H2O, NO2=NO2, P0=P0, RH_cst=RH_cst, US=US, O3_H2O_alt=O3_H2O_alt
@@ -2233,29 +2229,29 @@ def isnumeric(x):
         return True
     except TypeError:
         return False
+    
 
 def get_o2_abs(z, wl, afgl='afglus', DOWNLOAD=False, P0=None, verbose=False, zint=None):
     '''
     return vertical profile of O2 absorption coefficient
     
     Inputs:
-        wl : 1D array of wavlength (nm)
         z  : 1D array of altitude in descending order (km)
+        wl : 1D array of wavlength (nm)
 
     Keywords:
         afgl : string describing which AFGL standard atmosphere, default 'afglus'
-        DOWNLOAD: Download HITRAN lines parameters, Default False
+        DOWNLOAD: Download HITRAN lines parameters, default False
         P0 : surface pressure (hPa), default None: uses AFGL
-        zint : vertical grid to interpolate into, default None, use z
-
+        zint : vertical grid to interpolate into, default None: uses z
 
     Outputs:
         2D array (NW, NZ) of absorption coefficient in km-1), (in grid zint if present, otherwise z)
     '''
     import hapi
-    from Voigt_gpu import absorptionCoefficient_Voigt_gpu
+    from smartg.Voigt_gpu import absorptionCoefficient_Voigt_gpu
     #Connect to HITRAN database
-    hapi.db_begin('data')
+    hapi.db_begin('/home/did/work/smartg/' + 'notebooks/data')
     vmin = 1e7/wl.max()
     vmax = 1e7/wl.min()
     NW   = wl.size
@@ -2264,8 +2260,8 @@ def get_o2_abs(z, wl, afgl='afglus', DOWNLOAD=False, P0=None, verbose=False, zin
         hapi.fetch('O2i1',7,1,vmin-100,vmax+100)
         hapi.fetch('O2i2',7,2,vmin-100,vmax+100)
         hapi.fetch('O2i3',7,3,vmin-100,vmax+100)  
-    if P0 is None : atm = AtmAFGL(afgl, grid=z, O3=0., NO2=False)
-    else :          atm = AtmAFGL(afgl, grid=z, O3=0., NO2=False, P0=P0)
+        
+    atm = AtmAFGL(afgl, grid=z, O3=0., NO2=False, P0=P0)
     NLE = atm.prof.z.size
     # prepare array for o2 absorption coefficients
     ao2 = np.zeros((NW+5,NLE), dtype=np.float64)
@@ -2305,15 +2301,15 @@ def get_co2_abs(z, wl, afgl='afglus', DOWNLOAD=False, P0=None, verbose=False, zi
 
     Keywords:
         afgl : string describing which AFGL standard atmosphere, default 'afglus'
-        DOWNLOAD: Download HITRAN lines parameters, Default False
+        DOWNLOAD: Download HITRAN lines parameters, default False
         P0 : surface pressure (hPa), default None: uses AFGL
-        zint : vertical grid to interpolate into, default None, use z
+        zint : vertical grid to interpolate into, default None: uses z
 
     Outputs:
         2D array (NW, NZ) of absorption coefficient in km-1), (in grid zint if present, otherwise z)
     '''
     import hapi
-    from Voigt_gpu import absorptionCoefficient_Voigt_gpu
+    from smartg.Voigt_gpu import absorptionCoefficient_Voigt_gpu
     #Connect to HITRAN database
     hapi.db_begin('data')
     vmin = 1e7/wl.max()
@@ -2324,8 +2320,8 @@ def get_co2_abs(z, wl, afgl='afglus', DOWNLOAD=False, P0=None, verbose=False, zi
         hapi.fetch('CO2i1',2,1,vmin-100,vmax+100)
         hapi.fetch('CO2i2',2,2,vmin-100,vmax+100)
         hapi.fetch('CO2i3',2,3,vmin-100,vmax+100)  
-    if P0 is None : atm = AtmAFGL(afgl, grid=z, O3=0., NO2=False)
-    else :          atm = AtmAFGL(afgl, grid=z, O3=0., NO2=False, P0=P0)
+    
+    atm = AtmAFGL(afgl, grid=z, O3=0., NO2=False, P0=P0)
     NLE = atm.prof.z.size
     # prepare array for co2 absorption coefficients
     aco2 = np.zeros((NW+5,NLE), dtype=np.float64)
@@ -2352,6 +2348,67 @@ def get_co2_abs(z, wl, afgl='afglus', DOWNLOAD=False, P0=None, verbose=False, zi
         zint2, wl2 = np.meshgrid(zint, wl)
         return ab[Idx(wl2  , fill_value='extrema'),
                   Idx(zint2, fill_value='extrema')]
+
+
+
+def get_h2o_abs(z, wl, afgl='afglus', DOWNLOAD=False, P0=None, verbose=False, zint=None, H2O=None):
+    '''
+    return vertical profile of H2O absorption coefficient
+    
+    Inputs:
+        wl : 1D array of wavlength (nm)
+        z  : 1D array of altitude in descending order (km)
+
+    Keywords:
+        afgl : string describing which AFGL standard atmosphere, default 'afglus'
+        DOWNLOAD: Download HITRAN lines parameters, default False
+        P0 : surface pressure (hPa), default None: uses AFGL
+        zint : vertical grid to interpolate into, default None: uses z
+        H2O : vertical column of (H2O g/cm-2), default None: uses AFGL)
+
+    Outputs:
+        2D array (NW, NZ) of absorption coefficient in km-1), (in grid zint if present, otherwise z)
+    '''
+    import hapi
+    from smartg.Voigt_gpu import absorptionCoefficient_Voigt_gpu
+    #Connect to HITRAN database
+    hapi.db_begin('data')
+    vmin = 1e7/wl.max()
+    vmax = 1e7/wl.min()
+    NW   = wl.size
+    dv   = (vmax-vmin)/NW
+    if DOWNLOAD:
+        hapi.fetch('HOHi1',1,1,vmin-100,vmax+100)
+        hapi.fetch('HOHi2',1,2,vmin-100,vmax+100)
+        
+    atm = AtmAFGL(afgl, grid=z, O3=0., NO2=False, P0=P0, H2O=H2O)
+    NLE = atm.prof.z.size
+    # prepare array for co2 absorption coefficients
+    ah2o = np.zeros((NW+5,NLE), dtype=np.float64)
+    # compute CO2 absorption coefficient with 'GPU' version of HAPI Voigt profile function
+    j=0
+    for p,t,h2o,z in zip(atm.prof.P,atm.prof.T,atm.prof.dens_h2o,atm.prof.z):
+        nuh2o,coefh2o = absorptionCoefficient_Voigt_gpu(SourceTables=['HOHi1','HOHi2'],
+            HITRAN_units=True,
+            OmegaRange=[vmin,vmax],OmegaStep=dv,GammaL='gamma_self',
+            Environment={'p':p/1013.,'T':t})
+        ah2o[:nuh2o.size,j] = coefh2o * h2o * 1e5
+        j=j+1
+        if verbose : print('level %f completed'%z)
+    wlabs=(1e7/nuh2o)
+    # back to increasing wavelengths
+    wlabs = wlabs[::-1]
+    ah2o   = ah2o[:nuh2o.size,:]
+    ah2o   = ah2o[::-1,:]
+    #interpolation into the solar grid
+    ab    = LUT(ah2o, axes=[wlabs, atm.prof.z], names=['wavelength', 'z'] )
+    
+    if zint is None : return ab[Idx(wl, fill_value='extrema'),:]
+    else : 
+        zint2, wl2 = np.meshgrid(zint, wl)
+        return ab[Idx(wl2  , fill_value='extrema'),
+                  Idx(zint2, fill_value='extrema')]
+
 
 
 def od2k(prof, dataset, axis=1, zreverse=False):

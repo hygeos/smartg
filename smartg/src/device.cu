@@ -6396,6 +6396,9 @@ __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geo
 }
 #endif // End OBJ3D
 
+/*--------------------------------------------------------------------------------------------------*/
+/*                      COUNT PHOTONS                                                                */
+/*--------------------------------------------------------------------------------------------------*/
 
 __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
         struct Profile *prof_atm, struct Profile *prof_oc,
@@ -6406,11 +6409,13 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
         ) {
 
 
-    // test single scattering or photons removed
+    // don't count photons that:
+    // (i) incoherent counting level or absorbed in the mdedium or removed for inconstsitencies during the ray tracing
+    // (ii) photons not enough or too much scattered/reflected (possibility to focus on single or multiple scattering)
+    // (iii) eventually photons having penetrated into the ocean
     if (count_level < 0 || ph->loc==REMOVED || ph->loc==ABSORBED || 
         ph->nint>SMAXd || ph->nint<SMINd || (OCEAN_INTERACTIONd>=0 && ph->iocean!=OCEAN_INTERACTIONd)) {
-    //if (count_level < 0 || ph->loc==REMOVED || ph->loc==ABSORBED) {
-        // don't count anything
+        // don't count anything and return
         return;
     }
 
@@ -6418,29 +6423,27 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
     if (!isfinite(ph->stokes.x) || !isfinite(ph->stokes.y) ||
         !isfinite(ph->stokes.z) || !isfinite(ph->stokes.w) ||
         !isfinite(ph->weight) )  {
-        //printf("%d %g\n",ph->ilam, ph->weight);    
         return;
     }
 
-    // don't count the photons directly transmitted
+    // don't count photons directly transmitted (i.e. without having interacted) unless DIRECT keyword is true
     if (ph->nint == 0 && DIRECTd==0) {
         return;
     }
     
-    // Declaration for double
+    // Declaration for "doubles" accumulating variables
     #ifdef DOUBLE 
      double *tabCount;                   // pointer to the "counting" array:
-     double *tabCountT;                   // pointer to the "counting" array:
-     double dweight;
-	 double4 ds;                         // Stokes vector casted to double 
+     double *tabCountT;                  // pointer to the "counting" array:
+     double dweight;                     // photon's weight casted to double
+	 double4 ds;                         // photon's Stokes vector casted to double 
      #ifdef ALIS
-      double dwsca, dwabs;                // General ALIS variables 
+      double dwsca, dwabs;               // photon's ALIS specific weights casted to double 
       #if ( defined(SPHERIQUE) || defined(ALT_PP) )
-       double *tabCount2;                  // Specific ALIS counting array pointer for path implementation (cumulative distances)
+       double *tabCount2;                // photon's ALIS specific array pointer for path (cumulative distances)
       #endif
      #endif
-
-    // Declaration for single
+    // Declaration for "singles" accumulating variable
     #else                              
      float *tabCount; 
      float *tabCountT; 
@@ -6449,21 +6452,27 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
      #endif
     #endif
 
+
+    // DEV !! ALIS path histories storage
     #if ( defined(SPHERIQUE) || defined(ALT_PP) ) && defined(ALIS)
-     float *tabCount3; // Specific ALIS counting array pointer for path implementation (distances histograms)
+     float *tabCount3; // ALIS specific array pointer for photon's individual path histories
     #endif
 
     // We dont count UPTOA photons leaving in boxes outside SZA range
     if ((LEd==0) && (count_level==UPTOA) && (acosf(ph->v.z) > (SZA_MAXd*90./DEMIPI))) return;
 
-    float theta = acosf(fmin(1.F, fmax(-1.F, ph->v.z)));
 
+    float theta = acosf(fmin(1.F, fmax(-1.F, ph->v.z)));
 	float psi=0.;
+    // indices in output arrays for theta, phi, lambda ans sensor index
 	int ith=0, iphi=0, il=0, is=ph->is;
     float4 st; // replace s1, s2, s3, s4
+
+    // various offsets for array pointers
     unsigned long long II, JJ, JJJ, TT;
 
 
+    // if photon exits at the zenith, psi is undefined
     if ((double)ph->v.x * (double)ph->u.y - (double)ph->v.y * (double)ph->u.x != 0.) {
        ComputePsi(ph, &psi, theta);
     }
@@ -6481,9 +6490,14 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
        }
     }
 
+
+    // Final rotation of the Stokes vector according to psi
     rotateStokes(ph->stokes, psi, &st);
     st.w = ph->stokes.w;
 
+    // In case of backward mode compute the full Mueller matrices multiplication
+    // in the reverse order and
+    // replace then the photon's Stokes vector "st" by "stback"
     #ifdef BACK
     float4x4 L;
     float4 stback = make_float4(0.5F, 0.5F, 0., 0.);
@@ -6498,6 +6512,7 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
     st = stforw;*/
     #endif
 
+    // Copy phitons weights to new variables
 	float weight = ph->weight;
     #ifdef ALIS
         float weight_sca[MAX_NLOW];
@@ -6506,27 +6521,36 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
         }
     #endif
 
-	// Compute Box for outgoing photons in case of cone sampling
+    /******************************************/
+	// Compute outgoing photons boxes         //
+    // Compute final attenuation before exit if necessary //
+    /******************************************/
+    
+    // In case of cone sampling
 	if (LEd == 0) { 
         // if compute box returns 0, it excluded the photon (outside sun disc for example), so we dont count it
         if (!ComputeBox(&ith, &iphi, &il, ph, errorcount, count_level)) return;
     }
 
-
-    // For virtual (LE) photons the direction is stored within photon structure
-    // Moreover we compute also final attenuation for LE 
+    // Else local estimate
     else {
+        //For virtual (LE) photons the direction is stored within photon structure
         ith = ph->ith;
         if (!ZIPd) iphi= ph->iph;
         il  = ph->ilam;
 
+        // We compute also final attenuation for LE 
+        // It is sometimes not necessary:
+        // (i) surface only simulation
+        // (ii) no atmosphere and counting level just above surface or TOA
+        // (iii) no ocean and counting level just above surface
         if (!(   (SIMd==SURF_ONLY) 
               || (NATMd==0 && (count_level==UPTOA || count_level==UP0P)) 
               || (NOCEd==0 && count_level==UP0P)
              )
            ){
 
-        // Computation of final attenutation only in fast PP
+        // Computation of final attenutation only in fast Plane Parallel "move" procedure
         #if !defined(SPHERIQUE) && !defined(ALT_PP)
         int layer_le;
         float tau_le;
@@ -6599,9 +6623,13 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
         #endif // NOT ALIS
         #endif // NOT SPHERIQUE && NOT ALT_PP
      } // SIMd  
-
     }   //LE
+
 	
+
+    /************************************/
+    /* Compute corrections factors for fluxes */
+    /************************************/
     float weight_irr = fabs(ph->v.z);
     // In Forward mode, and in case of spherical flux, update the weight
 	if (FLUXd==2 && LEd==0 & weight_irr > 0.001f) weight /= weight_irr;
@@ -6614,14 +6642,17 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
         if (dot(ph->v, tilted)>=0 ) weight=0.F;
     }
 
-    II = NBTHETAd*NBPHId*NLAMd*NSENSORd;
-    JJJ= NPSTKd*II;
-
+    /*********************************************/
     // Regular counting procedure
+    /*********************************************/
+    II = NBTHETAd*NBPHId*NLAMd*NSENSORd; // array 4 dimensional size
+    JJJ= NPSTKd*II; // array 5 dimensional size (4 + Stokes components)
+
     #ifndef ALIS //=========================================================================================================
+    // photon's box and weight has to be valid
 	if(((ith >= 0) && (ith < NBTHETAd)) && ((iphi >= 0) && (iphi < NBPHId)) && (il >= 0) && (il < NLAMd) && (!isnan(weight)))
 	{
-      JJ = is*NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi;
+      JJ = is*NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi; // Offset for 4 dimensional output array
       TT = is*NLAMd + il;
 
       //int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -6669,12 +6700,13 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
 
     #else //ALIS ===========================================================================================================
     int DL=(NLAMd-1)/(NLOWd-1);
+    float wabs;
 	if(((ith >= 0) && (ith < NBTHETAd)) && ((iphi >= 0) && (iphi < NBPHId)) && (!isnan(weight)))
     {
      if(HISTd==0) {
       // For all wavelengths
       for (il=0; il<NLAMd; il++) {
-          float wabs = 1.0f;
+          wabs=1.f;
           JJ = is*NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi;
 
           // Linear interpolation upon wavelength of the scattering correction
@@ -6894,21 +6926,27 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
           tabCount3[LL2]= (float)(ph->ith);
        } // HISTd==1
 
-       unsigned long long KK  = K*(NATM_ABSd+NOCE_ABSd);
+       unsigned long long KK  = K*2*(NATM_ABSd+NOCE_ABSd);
+       //unsigned long long KK  = K*(NATM_ABSd+NOCE_ABSd);
        #ifdef DOUBLE
           tabCount2   = (double*)tabDist     + count_level*KK;
           for (int n=0; n<NOCE_ABSd; n++){
             LL = n*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
             #if __CUDA_ARCH__ >= 600
-            atomicAdd(tabCount2+LL, (double)ph->cdist_oc[n+1]);
+            atomicAdd(tabCount2+LL, (double)ph->cdist_oc[n+ 1]);
             #else
             DatomicAdd(tabCount2+LL, (double)ph->cdist_oc[n+1]);
             #endif
           }
           for (int n=0; n<NATM_ABSd; n++){
-            LL = (n+NOCE_ABSd)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+            LL = (n+NOCE_ABSd)*K*2 + is*NBPHId*NBTHETAd*2 + ith*NBPHId*2 + iphi*2 + 0;
+            //LL = (n+NOCE_ABSd)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
             #if __CUDA_ARCH__ >= 600
-            atomicAdd(tabCount2+LL, (double)ph->cdist_atm[n+1]);
+            //atomicAdd(tabCount2+LL, (double)ph->cdist_atm[n+1]);
+            //atomicAdd(tabCount2+LL,   (double)ph->weight);
+            //atomicAdd(tabCount2+LL+1, (double)ph->cdist_atm[n+1]*(double)ph->weight);
+            atomicAdd(tabCount2+LL,   (double)weight * (double)wabs);
+            atomicAdd(tabCount2+LL+1, (double)ph->cdist_atm[n+1] * (double)weight * (double)wabs);
             #else
             DatomicAdd(tabCount2+LL, (double)ph->cdist_atm[n+1]);
             #endif
@@ -6935,8 +6973,6 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
     //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 }
-
-
 
 //
 // Rotation of the stokes parameters by an angle psi between the incidence and
