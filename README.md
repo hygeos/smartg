@@ -1,14 +1,21 @@
-  SMART-G
-  =======
+<p align="center">
+<img src="https://hygeos.com/wp-content/uploads/2023/02/SMART-G-300x300.png" width="200">
+</p>
 
-  SMART-G (Speed-up Monte Carlo Advanced Radiative Transfer Code using GPU) is a radiative transfer code using a Monte-Carlo technique to simulate the propagation of the polarized light in the atmosphere and/or ocean, and using GPU acceleration.
+SMART-G
+=======
 
-  Didier Ramon  
-  Mustapha Moulana  
-  François Steinmetz  
-  Dominique Jolivet  
-  Mathieu Compiègne  
-  [HYGEOS](www.hygeos.com)
+[![image](https://img.shields.io/badge/DOI-10.1038%2Fs41586--020--2649--2-blue)](
+https://doi.org/10.1016/j.jqsrt.2018.10.017)
+
+SMART-G (Speed-up Monte Carlo Advanced Radiative Transfer Code using GPU) is a radiative transfer code using a Monte-Carlo technique to simulate the propagation of the polarized light in the atmosphere and/or ocean, and using GPU acceleration.
+
+Didier Ramon  
+Mustapha Moulana  
+François Steinmetz  
+Dominique Jolivet  
+Mathieu Compiègne  
+[HYGEOS](https://hygeos.com/en/)
 
 ----------------------------------------------------------------------  
 

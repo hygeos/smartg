@@ -1,11 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from . import geometry
 from .geometry import Vector, Point, Normal, Ray, BBox
-from .geometry import Dot, Cross, Normalize, CoordinateSystem, \
-    Distance, FaceForward
-import math 
+from .geometry import Normalize
 import numpy as np
 from numpy.linalg import inv
 
@@ -15,7 +12,8 @@ class Transform(object):
     Creation of the class Transform
     '''
 
-    def __init__(self, m = np.identity(4), mInv = None):
+    def __init__(self, m = None, mInv = None):
+        if m is None : m = np.identity(4)
         if (isinstance(m, Transform)):
             self.m = m.m
             self.mInv = m.mInv
@@ -44,40 +42,40 @@ class Transform(object):
 
     def translate(self, v):
         myM = np.identity(4)
-        myM[0,3] = v.x; myM[1,3] = v.y; myM[2,3] = v.z;
+        myM[0,3] = v.x; myM[1,3] = v.y; myM[2,3] = v.z
         myMInv = np.identity(4)
-        myMInv[0,3] = (v.x)*-1; myMInv[1,3] = (v.y)*-1; myMInv[2,3] = (v.z)*-1;
+        myMInv[0,3] = (v.x)*-1; myMInv[1,3] = (v.y)*-1; myMInv[2,3] = (v.z)*-1
         return Transform(myM, myMInv)
 
     def scale(self, x, y, z):
         myM = np.identity(4)
-        myM[0,0] = x; myM[1,1] = y; myM[2,2] = z;
+        myM[0,0] = x; myM[1,1] = y; myM[2,2] = z
         myMInv = np.identity(4)
-        myMInv[0,0] = 1./x; myMInv[1,1] = 1./y; myMInv[2,2] = 1./z;
+        myMInv[0,0] = 1./x; myMInv[1,1] = 1./y; myMInv[2,2] = 1./z
         return Transform(myM, myMInv)
 
     def rotateX(self, angle):
         sin_t = np.sin(angle*(np.pi / 180.))
         cos_t = np.cos(angle*(np.pi / 180.))
         myM = np.identity(4)
-        myM[1,1] = cos_t; myM[1,2] = -1.*sin_t;
-        myM[2,1] = sin_t; myM[2,2] = cos_t;
+        myM[1,1] = cos_t; myM[1,2] = -1.*sin_t
+        myM[2,1] = sin_t; myM[2,2] = cos_t
         return Transform(myM, np.transpose(myM))
 
     def rotateY(self, angle):
         sin_t = np.sin(angle*(np.pi / 180.))
         cos_t = np.cos(angle*(np.pi / 180.))
         myM = np.identity(4)
-        myM[0,0] = cos_t; myM[2,0] = -1.*sin_t;
-        myM[0,2] = sin_t; myM[2,2] = cos_t;
+        myM[0,0] = cos_t; myM[2,0] = -1.*sin_t
+        myM[0,2] = sin_t; myM[2,2] = cos_t
         return Transform(myM, np.transpose(myM))
 
     def rotateZ(self, angle):
         sin_t = np.sin(angle*(np.pi / 180.))
         cos_t = np.cos(angle*(np.pi / 180.))
         myM = np.identity(4)
-        myM[0,0] = cos_t; myM[0,1] = -1.*sin_t;
-        myM[1,0] = sin_t; myM[1,1] = cos_t;
+        myM[0,0] = cos_t; myM[0,1] = -1.*sin_t
+        myM[1,0] = sin_t; myM[1,1] = cos_t
         return Transform(myM, np.transpose(myM))
 
     def rotate(self, angle, axis):
@@ -86,23 +84,23 @@ class Transform(object):
         c = np.cos(angle*(np.pi / 180.))
         myM = np.identity(4)
 
-        myM[0,0] = a.x*a.x+(1-a.x*a.x)*c;
-        myM[0,1] = a.x*a.y*(1-c)-a.z*s;
-        myM[0,2] = a.x*a.z*(1-c)+a.y*s;
+        myM[0,0] = a.x*a.x+(1-a.x*a.x)*c
+        myM[0,1] = a.x*a.y*(1-c)-a.z*s
+        myM[0,2] = a.x*a.z*(1-c)+a.y*s
 
-        myM[1,0] = a.x*a.y*(1-c)+a.z*s;
-        myM[1,1] = a.y*a.y+(1-a.y*a.y)*c;
-        myM[1,2] = a.y*a.z*(1-c)-a.x*s;
+        myM[1,0] = a.x*a.y*(1-c)+a.z*s
+        myM[1,1] = a.y*a.y+(1-a.y*a.y)*c
+        myM[1,2] = a.y*a.z*(1-c)-a.x*s
 
-        myM[2,0] = a.x*a.z*(1-c)-a.y*s;
-        myM[2,1] = a.y*a.z*(1-c)+a.x*s;
-        myM[2,2] = a.z*a.z+(1-a.z*a.z)*c;
+        myM[2,0] = a.x*a.z*(1-c)-a.y*s
+        myM[2,1] = a.y*a.z*(1-c)+a.x*s
+        myM[2,2] = a.z*a.z+(1-a.z*a.z)*c
         
         return Transform(myM, np.transpose(myM))
 
     def __mul__(self, T): 
-        if (type(T) == Transform):
-            return Transform(np.dot(self.m, T.m), np.dot(self.mInv, T.mInv))
+        if (isinstance(T, Transform)):
+            return Transform(np.dot(self.m, T.m), np.dot(T.mInv, self.mInv))
         else:
             raise NameError('mul accepted only with Transform')
 
@@ -112,7 +110,7 @@ class Transform(object):
             yp = self.m[1,0]*c.x + self.m[1,1]*c.y + self.m[1,2]*c.z + self.m[1,3]
             zp = self.m[2,0]*c.x + self.m[2,1]*c.y + self.m[2,2]*c.z + self.m[2,3]
             wp = self.m[3,0]*c.x + self.m[3,1]*c.y + self.m[3,2]*c.z + self.m[3,3]
-            if (wp is 1):
+            if (wp == 1):
                 return Point(xp, yp, zp)
             else: 
                 return Point(xp, yp, zp)/wp
@@ -153,7 +151,7 @@ class Transform(object):
 
 #####################################################################################
 def Aff(Mat, myString = None):
-    if (myString == None):
+    if (myString is None):
         myString = 'My Matrix'
     myString2 = ' '
     for i in range(0, len(myString)-1):

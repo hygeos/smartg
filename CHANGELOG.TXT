@@ -6,6 +6,21 @@
            ###########################
 
 
+v1.0.5
+------
+Release date: 2024-12-03
+
+* Correction of a bug in transform matrix inversion when 2 transform objects
+  are multiplied (Python part not CUDA)
+
+* Cleaning and some corrections
+  - hygeos url link corrected
+  - some cleaning in transform.py
+  - add SMART-G logo and DOI in README
+
+* Rewriting AerOPAC and Cloud python documentation
+
+
 v1.0.4
 ------
 Release date: 2024-09-11
@@ -58,7 +73,7 @@ Release date: 2024-05-17
 * New cloud models (use Cloud instead of CloudOPAC), taken from ARTDECO
     - small correction on the phase matrix computation
     - water cloud can have now an effective radius up 30 um (instead of 14 previouly).
-    - Ice clouds are considered! 3 available: baum_ghm, baum_asc and baum_asc
+    - Ice clouds are considered! 3 available: baum_ghm, baum_asc and baum_sc
 
 * New way to consider the gaseous density vertical distribution (still with AFGL)
 
