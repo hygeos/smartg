@@ -30,34 +30,77 @@ import h5py
 
 
 class AerOPAC(object):
-    '''
+    """
     Initialize the Aerosol OPAC model
 
-    Args:
-        filename: name of the aerosol file.
-                  If no directory is specified, assume directory
-                  auxdata/aerosols/OPAC/mixtures
-                  aerosol files can be:
-                      'antarctic', 'antarctic_spheric', 'arctic', 'continental_average',
-                      'continental_clean', 'continental_polluted',
-                      'desert', 'desert_spheric',
-                      'maritime_clean', 'maritime_polluted', 'mineral_transported'
-                      'maritime_tropical', 'urban'
+    Parameters
+    ----------
+    filename : str,
+        Complete path to the aerosol file or filename for aerosols located in "auxdata/aerosols/OPAC/mixtures/".  
+        Available auxdata aerosols: antarctic, antarctic_spheric, arctic, continental_average,  
+        continental_clean, continental_polluted, desert, desert_spheric, maritime_clean,  
+        maritime_polluted, mineral_transported, maritime_tropical and urban
 
-        tau_ref: optical thickness at wavelength wref
-        w_ref: reference wavelength (nm) for aot
-        H_mix_min/max : force min and max altitude of the mixture
-        H_free_min/max : force min and max altitude of free troposphere
-        H_stra_min/max : force min and max altitude of stratosphere
-        rh_mix/free/stra : force rh of mixture/free tropo/strato
-        ssa: force particle single scattering albedo
-             (scalar or 1-d array-like for multichromatic)
+    tau_ref : float
+        Optical thickness at reference wavelength w_ref
+    w_ref : float
+        Wavelength in nanometers at reference optical depth tau_ref
+    H_mix_min/max : float, optional
+        Force min and max altitude of the mixture
+    H_free_min/max : float, optional
+        Force min and max altitude of free troposphere
+    H_stra_min/max : float, optional
+        Force min and max altitude of stratosphere
+    ssa : float | np.ndarray
+        Force particle single scattering albedo (scalar or 1-d array-like for multichromatic)
+    phase : luts.LUT, optional
+        Phase matrix as function of humidity, wavelength, stoke components and scattering angle    
+        The variable names must be: hum (humidity), wav (wavelength), stk (stoke components) and  
+        theta (scattering angle)  
+        And stoke components must be given in the folowing order: 
+        - P11, P21, P33 and P34 for spherical aerosols
+        - P11, P21, P33, P34, P22 and P44 for non spherical aerosols
+    rh_mix/free/stra : float, optional
+        Force relative humidity of mixture/free tropo/strato
 
-        phase: LUT of phase function
-               (can be read from file with read_phase)
-
-        Example: AeroOPAC('maritime_clean', 0.1, 550.).calc(400.)
-    '''
+    Examples
+    --------
+    >>> from smartg.atmosphere import AerOPAC
+    >>> aer_mc = AeroOPAC('maritime_clean', 0.1, 550.)
+    >>> aer_mc.mixture.describe()
+    <luts.luts.MLUT object at 0x7fbadd61d250>
+    Datasets:
+    [0] ext (float32 in [0.00384, 0.485]), axes=('hum', 'wav')
+        Attributes:
+        _FillValue: nan
+        description: extinction coefficient in km^-1
+    [1] ssa (float32 in [0.436, 1]), axes=('hum', 'wav')
+        Attributes:
+        _FillValue: nan
+        description: single scattering albedo
+    [2] phase (float32 in [-0.818, 5.79e+03]), axes=('hum', 'wav', 'stk', 'theta')
+        Attributes:
+        _FillValue: nan
+        description: scattering phase matrix
+    Axes:
+    [0] hum: 8 values in [0.0, 99.0]
+    [1] wav: 26 values in [250, 4500]
+    [2] theta: 1801 values in [0.0, 180.0]
+    Attributes:
+    name : maritime_clean
+    H_mix_min : 0
+    H_mix_max : 2
+    H_free_min : 2
+    H_free_max : 12
+    H_stra_min : 12
+    H_stra_max : 35
+    Z_mix : 1
+    Z_free : 8
+    Z_stra : 99
+    date : 2024-03-19
+    source : Created by HYGEOS using MOPSMAP v1.0.
+    <luts.luts.MLUT at 0x7fbadd61d250>
+    """
 
     def __init__(self, filename, tau_ref, w_ref, H_mix_min=None, H_mix_max=None, 
                  H_free_min=None, H_free_max=None, H_stra_min=None, H_stra_max=None,
@@ -75,7 +118,7 @@ class AerOPAC(object):
 
         if dirname(filename) == '' : self.filename = join(dir_auxdata, 'aerosols/OPAC/mixtures', filename)
         else                       : self.filename = filename
-        if (not "_sol" in filename) and (not filename.endswith('.nc')) : self.filename = self.filename + '_sol.nc'
+        if ("_sol" not in filename) and (not filename.endswith('.nc')) : self.filename = self.filename + '_sol.nc'
         elif (not filename.endswith('.nc'))                            : self.filename += '.nc'
 
         assert exists(self.filename), '{} does not exist'.format(self.filename)
@@ -328,14 +371,59 @@ class AerOPAC(object):
 
 
 class Cloud(AerOPAC):
-    '''
-    Single cloud, localized between zmin and zmax,
-    with and effective radius reff
+    """
+    Initialize the cloud model
 
-    Example: Cloud('wc', 12.68, 2, 3, 10., 550.)
-             # water cloud, reff=12.68 between 2 and 3 km
-             # total optical thickness of 10 at 550 nm
-    '''
+    Parameters
+    ----------
+    filename : str,
+        Complete path to the cloud file or filename for clouds located in "auxdata/clouds/"  
+        Available auxdata clouds: wc, ic_baum_ghm, ic_baum_asc and ic_baum_sc
+    reff : float
+        Effective radius in micrometers
+    zmin : float,
+        Minimum altitude of the cloud
+    zmax : float,
+        Maximum altitude of the cloud
+    tau_ref : float,
+        Optical thickness at reference wavelength w_ref
+    w_ref : float
+        Wavelength in nanometers at reference optical thickness tau_ref
+    phase : luts.LUT, optional
+        Phase matrix as function of effective radius, wavelength, stoke components and scattering angle    
+        The variable names must be: reff (effective radius), wav (wavelength), stk (stoke components) and  
+        theta (scattering angle)  
+        And stoke components must be given in the folowing order: 
+        - P11, P21, P33 and P34 for spherical clouds (i.e. water clouds)
+        - P11, P21, P33, P34, P22 and P44 for non spherical clouds (i.e. ice clouds)
+
+    Examples
+    --------
+    >>> from smartg.atmophere import Cloud
+    >>> cld_wc = Cloud('wc', 12.68, 2, 3, 10., 550.)
+    >>> cld_wc.mixture.describe(show_attrs=True)
+    <luts.luts.MLUT object at 0x7fbb4c74eb10>
+    Datasets:
+    [0] phase (float32 in [-111, 3.05e+05]), axes=('reff', 'wav', 'stk', 'theta')
+        Attributes:
+        description: phase matrix integral normalized to 2. stk order: p11, p21, p33 and p34
+    [1] ext (float64 in [123, 4.62e+03]), axes=('reff', 'wav')
+        Attributes:
+        description: extinction coefficient in km^-1
+    [2] ssa (float64 in [0.476, 1]), axes=('reff', 'wav')
+        Attributes:
+        description: single scattering albedo
+    Axes:
+    [0] reff: 26 values in [5.0, 30.0]
+    [1] wav: 209 values in [253.0570068359375, 4441.29296875]
+    [2] stk: 4 values in [0, 3]
+    [3] theta: 594 values in [0.0, 180.0]
+    Attributes:
+    veff : 0.1
+    <luts.luts.MLUT at 0x7fbb4c74eb10>
+    
+    """
+
     def __init__(self, filename, reff, zmin, zmax, tau_ref, w_ref,
                  phase=None):
         self.reff = reff
@@ -346,7 +434,7 @@ class Cloud(AerOPAC):
 
         if dirname(filename) == '' : self.filename = join(dir_auxdata, 'clouds', filename)
         else                       : self.filename = filename
-        if (not "_sol" in filename) and (not filename.endswith('.nc')) : self.filename = self.filename + '_sol.nc'
+        if ("_sol" not in filename) and (not filename.endswith('.nc')) : self.filename = self.filename + '_sol.nc'
         elif (not filename.endswith('.nc'))                            : self.filename += '.nc'
 
         assert exists(self.filename), '{} does not exist'.format(self.filename)
