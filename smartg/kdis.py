@@ -6,7 +6,7 @@ import numpy as np
 from numpy.core.fromnumeric import shape
 from luts.luts import LUT, MLUT
 from smartg.atmosphere import od2k, BPlanck
-from scipy.integrate import quad, simps
+from scipy.integrate import quad, simpson
 import sys
 from scipy.interpolate import interp1d
 from scipy.interpolate import interpn
@@ -72,7 +72,7 @@ def Kdis_Avg_Emission(mlut, ibands):
     '''
     Return vertically integrated Thermal emission
     '''
-    return (4*np.pi)*Kdis_Emission(mlut, ibands).reduce(simps, 'z_atm', x=-mlut.axis('z_atm') * 1e3)
+    return (4*np.pi)*Kdis_Emission(mlut, ibands).reduce(simpson, 'z_atm', x=-mlut.axis('z_atm') * 1e3)
 
 
 class KDIS(object):
