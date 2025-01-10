@@ -44,7 +44,7 @@
 #define MAX_NEVT 500 // Max number of scattering evts stored in photon in the ALIS procedure in basic plane parallel mode
 #define MAX_NLOW 801 // Max number of wavelengths stored in the ALIS scattering correction
 #define MAX_NLAYER 200 // Max number of vertical layers recorded in ALIS procedure in spherical or alternate PP mode
-#define MAX_HIST 2048*2048 // Max number of photon's histories
+#define MAX_HIST 4096*4096 // Max number of photon's histories
 #define MAX_NREF 10 // Max number of environment albedo type
 
 

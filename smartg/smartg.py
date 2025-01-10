@@ -14,6 +14,7 @@ from datetime import datetime
 from numpy import pi
 from smartg.atmosphere import Atmosphere, od2k, BPlanck
 from smartg.water import IOP_base
+from smartg.shape import BBox, Sphere
 from os.path import dirname, realpath, join, exists
 from warnings import warn
 from smartg.albedo import Albedo_cst, Albedo_map 
@@ -961,7 +962,7 @@ class Smartg(object):
         NLVL = 6
 
         # warning! values defined in communs.h 
-        MAX_HIST = 2048 * 2048
+        MAX_HIST = 4096 * 4096
         MAX_NLOW = 801
 
         # number of Stokes parameters of the radiation field
@@ -1500,8 +1501,8 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
         m.add_dataset('V_stdev_up (TOA)', sigma[UPTOA,3,isen,ilam,iphi,:], axnames)
     m.add_dataset('N_up (TOA)', NPhotonsOutTot[UPTOA,isen,ilam,iphi,:], axnames)
     #if len(tabDistFinal) > 1: m.add_dataset('cdist_up (TOA)', tabDistFinal[UPTOA,:,isen,iphi,:], axnames2)
-    #if len(tabDistFinal) > 1: m.add_dataset('cdist_up (TOA)', tabDistFinal[UPTOA,:,isen,iphi,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
-    if len(tabDistFinal) > 1: m.add_dataset('cdist_up (TOA)', tabDistFinal[UPTOA,:,isen,iphi,:,:],['None','Zenith angles','iAMF'])
+    if len(tabDistFinal) > 1: m.add_dataset('cdist_up (TOA)', tabDistFinal[UPTOA,:,isen,iphi,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
+    #if len(tabDistFinal) > 1: m.add_dataset('cdist_up (TOA)', tabDistFinal[UPTOA,:,isen,iphi,:,:],['None','Zenith angles','iAMF'])
     #if hist : m.add_dataset('disth_up (TOA)', tabHistFinal[:,:,isen,iphi,:],axnames3)
     #if hist : m.add_dataset('disth_up (TOA)', np.squeeze(tabHistFinal[:,:,isen,iphi,:]))
     
@@ -1519,8 +1520,10 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
             m.add_dataset('V_stdev_down (0+)', sigma[DOWN0P,3,isen,ilam,iphi,:], axnames)
         m.add_dataset('N_down (0+)', NPhotonsOutTot[DOWN0P,isen,ilam,iphi,:], axnames)
         #if len(tabDistFinal) > 1: m.add_dataset('cdist_down (0+)', tabDistFinal[DOWN0P,:,isen,iphi,:],axnames2)
-        if len(tabDistFinal) > 1: m.add_dataset('cdist_down (0+)', tabDistFinal[DOWN0P,:,isen,iphi,:,:],['None','Zenith angles','iAMF'])
+        #if len(tabDistFinal) > 1: m.add_dataset('cdist_down (0+)', tabDistFinal[DOWN0P,:,isen,iphi,:,:],['None','Zenith angles','iAMF'])
+        if len(tabDistFinal) > 1: m.add_dataset('cdist_down (0+)', tabDistFinal[DOWN0P,:,isen,iphi,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
     
+        m.add_dataset('I_up (0-)', tabFinal[UP0M,0,isen,ilam,iphi,:], axnames)
         m.add_dataset('Q_up (0-)', tabFinal[UP0M,1,isen,ilam,iphi,:], axnames)
         m.add_dataset('U_up (0-)', tabFinal[UP0M,2,isen,ilam,iphi,:], axnames)
         m.add_dataset('V_up (0-)', tabFinal[UP0M,3,isen,ilam,iphi,:], axnames)
@@ -1531,7 +1534,8 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
             m.add_dataset('V_stdev_up (0-)', sigma[UP0M,3,isen,ilam,iphi,:], axnames)
         m.add_dataset('N_up (0-)', NPhotonsOutTot[UP0M,isen,ilam,iphi,:], axnames)
         #if len(tabDistFinal) > 1: m.add_dataset('cdist_up (0-)', tabDistFinal[UP0M,:,isen,iphi,:],axnames2)
-        if len(tabDistFinal) > 1: m.add_dataset('cdist_up (0-)', tabDistFinal[UP0M,:,isen,iphi,:,:],['None','Zenith angles','iAMF'])
+        #if len(tabDistFinal) > 1: m.add_dataset('cdist_up (0-)', tabDistFinal[UP0M,:,isen,iphi,:,:],['None','Zenith angles','iAMF'])
+        if len(tabDistFinal) > 1: m.add_dataset('cdist_up (0-)', tabDistFinal[UP0M,:,isen,iphi,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
 
     if OUTPUT_LAYERS & 2:
         m.add_dataset('I_down (0-)', tabFinal[DOWN0M,0,isen,ilam,iphi,:], axnames)
@@ -2346,7 +2350,6 @@ def reduce_histories(kernel2, tabHist, wl, sigma, NLOW, NBTHETA=1, alb_in=None, 
    return res_out, res_sca, res_rrs, res_sif, res_vrs
 
 
- 
 def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX_HIST, NLOW,
                 NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                 NLAM, NSENSOR, double, kern, kern2, p, X0, le, tab_sensor, envmap, spectrum,
@@ -3373,5 +3376,45 @@ def findExtinction(IP, FP, prof_atm, W_IND = int(0)):
     n_ext = np.exp(-abs(tauHit))
 
     return n_ext
+
+    
+def Get_Sensor(VZAboa, VAA=0., RTER=6370., H=120., FOV=0., TYPE=0., PP=True, verbose=False):
+    '''
+    Return the Sensor object that is placed at altitude H for backward simulations where
+    thvboa is the View Zenith Angle defined at the surface: origin (0, 0, RTER) for Spehrical
+    Shell (SS), (0, 0, 0) for Plane Parallel (PP)
+
+    Input:
+        VZA: View Zenith Albgle defined at Bottom of Atmosphere
+        
+    Keywords:
+        VAA :  View Azimuth Angle
+            FOV :  Field of View (de), default 0.
+        TYPE: Type od sensor, default 0 (radiance), 1 (planar irradiance), 2 (spherical irradiance)
+        RTER: Earth radius (km)
+        H: Altitude of the Sensor (km)
+        SS: Plane Parallel (PP default or SS)
+    '''
+    nothing = Transform() # i.e. no rotation and no translation
+    radius = (H + RTER)
+    large_dist = float("inf") # large distance(km)
+    origin = Point(0., 0., 0.) if PP else Point(0., 0., RTER)
+    # Boundaries
+    if PP: Boundary = BBox(Point(-large_dist, -large_dist, 0.), Point(large_dist, large_dist, H)) # Rectangle for atmosphere for PP
+    else : Boundary = Sphere(nothing, nothing, radius, -radius, radius, 360) # Create the Earth + atmosphere sphere for SS
+    # Compute the direction vector object from Zenith and Azimuth angles
+    dir = convertAnglestoV(THETA=VZAboa, TYPE='Sensor', PHI=180+VAA)
+    # Make a ray from origin in direction dir
+    ray = Ray(o=origin, d=dir)
+    # Compute the intersection with the Boundary
+    if PP: (_, t1, hit) = Boundary.IntersectP(ray)
+    else : hit = Boundary.Intersect(ray) 
+    if not hit: raise NameError("The intersection test failed!! Check input paramaters.")
+    # Computations of sensor position
+    if PP: pos = origin + dir*t1
+    else : pos = origin + dir*Boundary.thit
+    if verbose : print("VZA =", VZAboa, "--> pos =", pos)
+
+    return Sensor(POSX=pos.x, POSY=pos.y, POSZ=pos.z, THDEG=180.-VZAboa, PHDEG=VAA, LOC='ATMOS', FOV=FOV, TYPE=TYPE)
 
 
