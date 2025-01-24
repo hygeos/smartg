@@ -717,7 +717,7 @@ class Smartg(object):
              BEER=1, RR=0, WEIGHTRR=0.1, SZA_MAX=90., SUN_DISC=0,
              sensor=None, refraction=False, reflectance=True,
              myObjects=None, interval = None,
-             IsAtm = 1, cusL = None, SMIN=0, SMAX=1e6, FFS=False, DIRECT=False,
+             IsAtm = 1, cusL = None, SMIN=0, SMAX=1e6, RMIN=0, RMAX=1e6, FFS=False, DIRECT=False,
              OCEAN_INTERACTION=None):
         '''
         Run a SMART-G simulation
@@ -857,9 +857,13 @@ class Smartg(object):
             cusL : None is the default mode (sun is a ponctual source targeting the origin (0,0,0)), else it
                       enable to use the RF, FF or B launching mode (see the class CusForward) --> cusL=CusForward(...)
 
-            SMIN : Minimum Scattering order: Default 0
+            SMIN : Minimum Interaction (scattering/reflection) order: Default 0
 
-            SMAX : Maximum Scattering order: Default 1e6
+            SMAX : Maximum Interaction (scattering/reflection) order: Default 1e6
+            
+            RMIN : Minimum Reflection (by surface only, not environement) order: Default 0
+
+            RMAX : Maximum Reflection (by surface only, not environement) order: Default 1e6
 
             FFS : Forced First Scattering (for use in spherical limb geometry only): Default False
 
@@ -962,7 +966,7 @@ class Smartg(object):
         NLVL = 6
 
         # warning! values defined in communs.h 
-        MAX_HIST = 4096 * 4096
+        MAX_HIST = 2048 * 4096
         MAX_NLOW = 801
 
         # number of Stokes parameters of the radiation field
@@ -1271,7 +1275,7 @@ class Smartg(object):
                   XBLOCK, XGRID, NLAM, SIM, NF,
                   NBTHETA, NBPHI, OUTPUT_LAYERS,
                   RTER, LE, ZIP, FLUX, FFS, DIRECT, OCEAN_INTERACTION, NLVL, NPSTK,
-                  NWLPROBA, NSENSORPROBA, NCELLPROBA, BEER, SMIN, SMAX, RR, WEIGHTRR, NLOW, NJAC, 
+                  NWLPROBA, NSENSORPROBA, NCELLPROBA, BEER, SMIN, SMAX, RMIN, RMAX, RR, WEIGHTRR, NLOW, NJAC, 
                   NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj, nGObj, nRObj,
                   Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm,
                   TC, nbCx, nbCy, vSun, HIST, ZTOA, sensor2[0].cell_size,
@@ -1437,12 +1441,9 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
     # add the axes
     axnames  = ['Zenith angles']
     axnames2 = ['None', 'Zenith angles']
-    if hist : 
-        axnames3 = ['N', 'Info', 'Zenith angles']
-        m.add_dataset('Nphotons_in',  NPhotonsInTot)
-        #m.add_dataset('Nphotons_out',  NPhotonsOutTot)
+    if hist : m.add_dataset('Nphotons_in',  NPhotonsInTot)
+
     iphi     = slice(None)
-    #if hist : axnames3 = ['None', 'None', 'Azimuth angles', 'Zenith angles']
     m.set_attr('zip', 'False')
     m.set_attr('NPhotonIn_sum', np.sum(NPhotonsInTot))
 
@@ -1457,15 +1458,12 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
             else:
                 axnames.insert(0, 'Azimuth angles')
                 axnames2.insert(1,'Azimuth angles')
-                if hist : axnames3.insert(2, 'Azimuth angles')
         else:
             axnames.insert(0, 'Azimuth angles')
             axnames2.insert(1,'Azimuth angles')
-            if hist : axnames3.insert(2, 'Azimuth angles')
     else:
         axnames.insert(0, 'Azimuth angles')
         axnames2.insert(1,'Azimuth angles')
-        if hist : axnames3.insert(2, 'Azimuth angles')
 
     m.add_axis('Zenith angles', tabTh*180./np.pi)
     m.add_axis('Azimuth angles', tabPhi*180./np.pi)
@@ -1485,7 +1483,6 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
         isen = slice(None)
         axnames.insert(0, 'sensor index')
         axnames2.insert(1, 'sensor index')
-        if hist: axnames3.insert(2, 'sensor index')
         axnames4.insert(0, 'sensor index')
     else:
         isen=0
@@ -1500,11 +1497,7 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
         m.add_dataset('U_stdev_up (TOA)', sigma[UPTOA,2,isen,ilam,iphi,:], axnames)
         m.add_dataset('V_stdev_up (TOA)', sigma[UPTOA,3,isen,ilam,iphi,:], axnames)
     m.add_dataset('N_up (TOA)', NPhotonsOutTot[UPTOA,isen,ilam,iphi,:], axnames)
-    #if len(tabDistFinal) > 1: m.add_dataset('cdist_up (TOA)', tabDistFinal[UPTOA,:,isen,iphi,:], axnames2)
-    if len(tabDistFinal) > 1: m.add_dataset('cdist_up (TOA)', tabDistFinal[UPTOA,:,isen,iphi,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
-    #if len(tabDistFinal) > 1: m.add_dataset('cdist_up (TOA)', tabDistFinal[UPTOA,:,isen,iphi,:,:],['None','Zenith angles','iAMF'])
-    #if hist : m.add_dataset('disth_up (TOA)', tabHistFinal[:,:,isen,iphi,:],axnames3)
-    #if hist : m.add_dataset('disth_up (TOA)', np.squeeze(tabHistFinal[:,:,isen,iphi,:]))
+    if len(tabDistFinal) > 1: m.add_dataset('cdist_up (TOA)', tabDistFinal[UPTOA,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
     
     if hist : m.add_dataset('histories', tabHistTot)
     
@@ -1519,9 +1512,7 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
             m.add_dataset('U_stdev_down (0+)', sigma[DOWN0P,2,isen,ilam,iphi,:], axnames)
             m.add_dataset('V_stdev_down (0+)', sigma[DOWN0P,3,isen,ilam,iphi,:], axnames)
         m.add_dataset('N_down (0+)', NPhotonsOutTot[DOWN0P,isen,ilam,iphi,:], axnames)
-        #if len(tabDistFinal) > 1: m.add_dataset('cdist_down (0+)', tabDistFinal[DOWN0P,:,isen,iphi,:],axnames2)
-        #if len(tabDistFinal) > 1: m.add_dataset('cdist_down (0+)', tabDistFinal[DOWN0P,:,isen,iphi,:,:],['None','Zenith angles','iAMF'])
-        if len(tabDistFinal) > 1: m.add_dataset('cdist_down (0+)', tabDistFinal[DOWN0P,:,isen,iphi,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
+        if len(tabDistFinal) > 1: m.add_dataset('cdist_down (0+)', tabDistFinal[DOWN0P,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
     
         m.add_dataset('I_up (0-)', tabFinal[UP0M,0,isen,ilam,iphi,:], axnames)
         m.add_dataset('Q_up (0-)', tabFinal[UP0M,1,isen,ilam,iphi,:], axnames)
@@ -1533,9 +1524,7 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
             m.add_dataset('U_stdev_up (0-)', sigma[UP0M,2,isen,ilam,iphi,:], axnames)
             m.add_dataset('V_stdev_up (0-)', sigma[UP0M,3,isen,ilam,iphi,:], axnames)
         m.add_dataset('N_up (0-)', NPhotonsOutTot[UP0M,isen,ilam,iphi,:], axnames)
-        #if len(tabDistFinal) > 1: m.add_dataset('cdist_up (0-)', tabDistFinal[UP0M,:,isen,iphi,:],axnames2)
-        #if len(tabDistFinal) > 1: m.add_dataset('cdist_up (0-)', tabDistFinal[UP0M,:,isen,iphi,:,:],['None','Zenith angles','iAMF'])
-        if len(tabDistFinal) > 1: m.add_dataset('cdist_up (0-)', tabDistFinal[UP0M,:,isen,iphi,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
+        if len(tabDistFinal) > 1: m.add_dataset('cdist_up (0-)', tabDistFinal[UP0M,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
 
     if OUTPUT_LAYERS & 2:
         m.add_dataset('I_down (0-)', tabFinal[DOWN0M,0,isen,ilam,iphi,:], axnames)
@@ -1548,7 +1537,7 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
             m.add_dataset('U_stdev_down (0-)', sigma[DOWN0M,2,isen,ilam,iphi,:], axnames)
             m.add_dataset('V_stdev_down (0-)', sigma[DOWN0M,3,isen,ilam,iphi,:], axnames)
         m.add_dataset('N_down (0-)', NPhotonsOutTot[DOWN0M,isen,ilam,iphi,:], axnames)
-        if len(tabDistFinal) > 1: m.add_dataset('cdist_down (0-)', tabDistFinal[DOWN0M,:,isen,iphi,:],axnames2)
+        if len(tabDistFinal) > 1: m.add_dataset('cdist_down (0-)', tabDistFinal[DOWN0M,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
 
         m.add_dataset('I_up (0+)', tabFinal[UP0P,0,isen,ilam,iphi,:], axnames)
         m.add_dataset('Q_up (0+)', tabFinal[UP0P,1,isen,ilam,iphi,:], axnames)
@@ -1560,7 +1549,7 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
             m.add_dataset('U_stdev_up (0+)', sigma[UP0P,2,isen,ilam,iphi,:], axnames)
             m.add_dataset('V_stdev_up (0+)', sigma[UP0P,3,isen,ilam,iphi,:], axnames)
         m.add_dataset('N_up (0+)', NPhotonsOutTot[UP0P,isen,ilam,iphi,:], axnames)
-        if len(tabDistFinal) > 1: m.add_dataset('cdist_up (0+)', tabDistFinal[UP0P,:,isen,iphi,:],axnames2)
+        if len(tabDistFinal) > 1: m.add_dataset('cdist_up (0+)', tabDistFinal[UP0P,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
 
         m.add_dataset('I_down (B)', tabFinal[DOWNB,0,isen,ilam,iphi,:], axnames)
         m.add_dataset('Q_down (B)', tabFinal[DOWNB,1,isen,ilam,iphi,:], axnames)
@@ -1572,7 +1561,7 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
             m.add_dataset('U_stdev_down (B)', sigma[DOWNB,2,isen,ilam,iphi,:], axnames)
             m.add_dataset('V_stdev_down (B)', sigma[DOWNB,3,isen,ilam,iphi,:], axnames)
         m.add_dataset('N_down (B)', NPhotonsOutTot[DOWNB,isen,ilam,iphi,:], axnames)
-        if len(tabDistFinal) > 1: m.add_dataset('cdist_down (B)', tabDistFinal[DOWNB,:,isen,iphi,:],axnames2)
+        if len(tabDistFinal) > 1: m.add_dataset('cdist_down (B)', tabDistFinal[DOWNB,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
 
 
     # write atmospheric profiles
@@ -1973,7 +1962,7 @@ def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
               XBLOCK, XGRID,NLAM, SIM, NF,
               NBTHETA, NBPHI, OUTPUT_LAYERS,
               RTER, LE, ZIP, FLUX, FFS, DIRECT, OCEAN_INTERACTION, 
-              NLVL, NPSTK, NWLPROBA, NSENSORPROBA, NCELLPROBA,  BEER, SMIN, SMAX, RR, 
+              NLVL, NPSTK, NWLPROBA, NSENSORPROBA, NCELLPROBA,  BEER, SMIN, SMAX, RMIN, RMAX, RR, 
               WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj, nGObj, nRObj,
               Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, vSun, HIST, ZTOA,
               cell_size, sxmin, sxmax, symin, symax, nbsx, nbsy) :
@@ -2045,6 +2034,8 @@ def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
     copy_to_device('BEERd', BEER, np.int32)
     copy_to_device('SMINd', SMIN, np.int32)
     copy_to_device('SMAXd', SMAX, np.int32)
+    copy_to_device('RMINd', RMIN, np.int32)
+    copy_to_device('RMAXd', RMAX, np.int32)
     copy_to_device('RRd', RR, np.int32)
     copy_to_device('WEIGHTRRd', WEIGHTRR, np.float32)
     copy_to_device('NLOWd', NLOW, np.int32)
@@ -2271,7 +2262,8 @@ def reduce_diff(m, varnames, delta=None):
     res.attrs = m.attrs
     return res
 
-
+# for record but no longer the prefered method
+'''
 def reduce_histories(kernel2, tabHist, wl, sigma, NLOW, NBTHETA=1, alb_in=None, XBLOCK=512, XGRID=512, verbose=False):
    NL    = sigma.shape[1]
    w     = tabHist[:, NL+4:-6]
@@ -2348,6 +2340,7 @@ def reduce_histories(kernel2, tabHist, wl, sigma, NLOW, NBTHETA=1, alb_in=None, 
                      to_gpu(nenv_in), to_gpu(ith_in), to_gpu(iwls_in), to_gpu(wwls_in), 
                      block=(XBLOCK,1,1),grid=(XGRID,1,1))
    return res_out, res_sca, res_rrs, res_sif, res_vrs
+'''
 
 
 def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX_HIST, NLOW,
@@ -2436,18 +2429,16 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
     else : 
         tabDistTot = gpuzeros((1), dtype=np.float64)
 
-    #if hist : tabHistTot = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+6),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
+    '''
     if hist : 
-        #tabHistTot = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+6),1,NBTHETA,1), dtype=np.float32)
-        #tabHistTot = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+6),1,1,1), dtype=np.float32)
         tabHistTot = gpuzeros((2,MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+6),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
         dz    = abs(np.diff(prof_atm.get()['z'][0,:]))
         sigma = np.diff(prof_atm.get()['OD_abs'][:,:])/dz
         alb_in= np.concatenate([spectrum.get()['alb_surface'][:], spectrum.get()['alb_env'][:]])
-        # TODO add oceanic absorption
         wl = spectrum.get()['lambda'][:]
     else :
         tabHistTot = gpuzeros((1), dtype=np.float32)
+    '''
 
     # Initialize of the parameters
     tabPhotonsTot = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float64)
@@ -2458,8 +2449,6 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         # finally we extrapolate in 1/sqrt(N_simu)
         sum_x = 0.
         sum_x2 = 0.
-
-
 
     # arrays for counting the input photons (per wavelength)
     NPhotonsIn = gpuzeros((NSENSOR,NLAM), dtype=np.uint64)
@@ -2556,32 +2545,32 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
 
         NPhotonsOutTot += NPhotonsOut
         S = tabPhotons   # sum of weights for the last kernel
-        #test=S.get()
-        #if np.isnan(test).any(): 
-         #   print('pb Nan')
         if(not hist) : 
             tabPhotonsTot += S
         
         T = tabDist
         tabDistTot += T
+        
+        ## for record but no longer the prefered method
+        '''
         if hist :
-            if False : 
-                tabHistTot = tabHist
-                res,res_sca,res_rrs,res_sif,res_vrs = reduce_histories(kern2, np.squeeze(tabHist.get()), wl, sigma, NLOW,
-                                    NBTHETA=NBTHETA, alb_in=alb_in)
-                if NBTHETA>1:
-                    tabPhotonsTot[0,:,:,:,:,:] += res[:,None,:,:,None]
-                    tabPhotonsTot[1,:,:,:,:,:] += res_sca[:,None,:,:,None]
-                    tabPhotonsTot[2,:,:,:,:,:] += res_rrs[:,None,:,:,None]
-                    tabPhotonsTot[3,:,:,:,:,:] += res_sif[:,None,:,:,None]
-                    tabPhotonsTot[4,:,:,:,:,:] += res_vrs[:,None,:,:,None]
-                else :
-                    tabPhotonsTot[0,:,:,:,:,:] += res[:,None,:,None]
-                    tabPhotonsTot[1,:,:,:,:,:] += res_sca[:,None,:,None]
-                    tabPhotonsTot[2,:,:,:,:,:] += res_rrs[:,None,:,None]
-                    tabPhotonsTot[3,:,:,:,:,:] += res_sif[:,None,:,None]
-                    tabPhotonsTot[4,:,:,:,:,:] += res_vrs[:,None,:,None]
-
+            tabHistTot = tabHist
+            res,res_sca,res_rrs,res_sif,res_vrs = reduce_histories(kern2, np.squeeze(tabHist.get()), wl, sigma, NLOW,
+                                NBTHETA=NBTHETA, alb_in=alb_in)
+            if NBTHETA>1:
+                tabPhotonsTot[0,:,:,:,:,:] += res[:,None,:,:,None]
+                tabPhotonsTot[1,:,:,:,:,:] += res_sca[:,None,:,:,None]
+                tabPhotonsTot[2,:,:,:,:,:] += res_rrs[:,None,:,:,None]
+                tabPhotonsTot[3,:,:,:,:,:] += res_sif[:,None,:,:,None]
+                tabPhotonsTot[4,:,:,:,:,:] += res_vrs[:,None,:,:,None]
+            else :
+                tabPhotonsTot[0,:,:,:,:,:] += res[:,None,:,None]
+                tabPhotonsTot[1,:,:,:,:,:] += res_sca[:,None,:,None]
+                tabPhotonsTot[2,:,:,:,:,:] += res_rrs[:,None,:,None]
+                tabPhotonsTot[3,:,:,:,:,:] += res_sif[:,None,:,None]
+                tabPhotonsTot[4,:,:,:,:,:] += res_vrs[:,None,:,None]
+        '''
+        
         N_simu += 1
 
         sphot = np.sum(NPhotonsInTot.get())/alis_norm

@@ -27,7 +27,7 @@ def get_histories(m, LEVEL=0, verbose=False):
             nref : A ndarray of size (NLE) of number of reflection on the surface (as described by the keyword surf in the run method)
             nrrs : A ndarray of size (NLE) of Sun Induced Fluorescence event flag (1 : SIF, 0: no SIF)
             nvrs : A ndarray of size (NLE) of Vibrational Raman Scattering event flag (1 : VRS, 0: no VRS)
-            nref : A ndarray of size (NLE) of reflection on the environement (as described by the keyword env in the run method)
+            nenv : A ndarray of size (NLE) of reflection on the environement (as described by the keyword env in the run method)
             ith  : A ndarray of size (NLE) of index of the Zenith angle LE direction of the virtual photon
     '''
     NL=m.axis('z_atm').size-1

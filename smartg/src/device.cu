@@ -6165,7 +6165,8 @@ __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geo
 	float3 p_t; float sizeX = nbCx*TCd; float sizeY = nbCy*TCd;
 
     // test single scattering or photons removed
-    if (ph->loc==REMOVED || ph->loc==ABSORBED || ph->nint>SMAXd || ph->nint<SMINd) { return; }
+    //if (ph->loc==REMOVED || ph->loc==ABSORBED || ph->nint>SMAXd || ph->nint<SMINd) { return; }
+    if (ph->loc==REMOVED || ph->loc==ABSORBED || ph->nint>SMAXd || ph->nint<SMINd || ph->nref>RMAXd || ph->nref<RMINd) { return; }
 
     // don't count photons with nof finite results
     if (!isfinite(ph->stokes.x) || !isfinite(ph->stokes.y) ||
@@ -6413,7 +6414,8 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
     // (i) incoherent counting level or absorbed in the mdedium or removed for inconstsitencies during the ray tracing
     // (ii) photons not enough or too much scattered/reflected (possibility to focus on single or multiple scattering)
     // (iii) eventually photons having penetrated into the ocean
-    if (count_level < 0 || ph->loc==REMOVED || ph->loc==ABSORBED || 
+    //if (count_level < 0 || ph->loc==REMOVED || ph->loc==ABSORBED || 
+    if (count_level < 0 || ph->loc==REMOVED || ph->loc==ABSORBED || ph->nref>RMAXd || ph->nref<RMINd ||
         ph->nint>SMAXd || ph->nint<SMINd || (OCEAN_INTERACTIONd>=0 && ph->iocean!=OCEAN_INTERACTIONd)) {
         // don't count anything and return
         return;

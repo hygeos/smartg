@@ -69,6 +69,8 @@ __device__ __constant__ float SUN_DISCd;
 __device__ __constant__ int BEERd;
 __device__ __constant__ int SMINd;
 __device__ __constant__ int SMAXd;
+__device__ __constant__ int RMINd;
+__device__ __constant__ int RMAXd;
 __device__ __constant__ int RRd;
 __device__ __constant__ float WEIGHTRRd; // THRESHOLD for RUSSIAN ROULETTE PROCEDURE
 __device__ __constant__ int NLOWd;
