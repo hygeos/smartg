@@ -54,12 +54,12 @@ class AerOPAC(object):
     ssa : float | np.ndarray
         Force particle single scattering albedo (scalar or 1-d array-like for multichromatic)
     phase : luts.LUT, optional
-        Phase matrix as function of humidity, wavelength, stoke components and scattering angle    
+        Phase matrix F as function of humidity, wavelength, stoke components and scattering angle    
         The variable names must be: hum (humidity), wav (wavelength), stk (stoke components) and  
         theta (scattering angle)  
-        And stoke components must be given in the folowing order: 
-        - P11, P21, P33 and P34 for spherical aerosols
-        - P11, P21, P33, P34, P22 and P44 for non spherical aerosols
+        And stoke components (IQUV convention) must be given in the folowing order: 
+        - F11, F21, F33 and F34 for spherical aerosols
+        - F11, F21, F33, F34, F22 and F44 for non spherical aerosols
     rh_mix/free/stra : float, optional
         Force relative humidity of mixture/free tropo/strato
 

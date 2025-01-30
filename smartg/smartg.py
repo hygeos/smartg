@@ -718,7 +718,7 @@ class Smartg(object):
              sensor=None, refraction=False, reflectance=True,
              myObjects=None, interval = None,
              IsAtm = 1, cusL = None, SMIN=0, SMAX=1e6, RMIN=0, RMAX=1e6, FFS=False, DIRECT=False,
-             OCEAN_INTERACTION=None):
+             OCEAN_INTERACTION=None, pol_off=False):
         '''
         Run a SMART-G simulation
 
@@ -870,6 +870,8 @@ class Smartg(object):
             DIRECT : Include directly transmitted photons: Default False
 
             OCEAN_INTERACTION : select photons that interact with ocean : Default None, no selection
+
+            pol_off : if true -> do not consider the polarized light
 
         Return value:
         ------------
@@ -1038,7 +1040,7 @@ class Smartg(object):
             ZTOA = 120.
   
         if prof_atm is not None:
-            faer = calculF(prof_atm, NF, DEPO, kind='atm')
+            faer = calculF(prof_atm, NF, DEPO, kind='atm', pol_off=pol_off)
             prof_atm_gpu, cell_atm_gpu = init_profile(wl, prof_atm, 'atm')
             NATM = len(prof_atm.axis('z_atm')) - 1
             if self.opt3D : 
@@ -1121,7 +1123,7 @@ class Smartg(object):
             raise NameError('water must be an IOP_base class or equal to None!')
 
         if prof_oc is not None:
-            foce = calculF(prof_oc, NF, DEPO_WATER, kind='oc')
+            foce = calculF(prof_oc, NF, DEPO_WATER, kind='oc', pol_off=pol_off)
             prof_oc_gpu, cell_oc_gpu = init_profile(wl, prof_oc, 'oc')
             NOCE = len(prof_oc.axis('z_oc')) - 1
             if self.opt3D : NOCE_ABS = prof_oc['iabs_oc'].data.max().astype(np.int32)
@@ -1794,18 +1796,28 @@ def isotropic(N):
 
 
 
-def rayleigh(N, DEPO):
-    '''
-    Rayleigh phase function, incl. cumulative
-    over N angles
-    DEPO: depolarization coefficient
-    '''
+def rayleigh(N, DEPO, pol_off=False):
+    """
+    Rayleigh phase function, incl. cumulative over N angles
+    
+    Parameters
+    ----------
+    N : int
+        number of angles
+    DEPO : float
+        depolarization coefficient
+    pol_off : bool, optional
+
+    Returns
+    -------
+    out : type_Phase
+        the rayleigh phase information
+    """
     pha = np.zeros(N, dtype=type_Phase, order='C')
 
     GAMA = DEPO / (2- DEPO)
     DELTA = np.float32((1.0 - GAMA) / (1.0 + 2.0 *GAMA))
     DELTA_PRIM = np.float32(GAMA / (1.0 + 2.0*GAMA))
-    DELTA_SECO = np.float32((1.0 - 3.0*GAMA) / (1.0 - GAMA))
     BETA  = np.float32(3./2. * DELTA_PRIM)
     ALPHA = np.float32(1./8. * DELTA)
     A = np.float32(1. + BETA / (3.0 * ALPHA))
@@ -1820,31 +1832,60 @@ def rayleigh(N, DEPO):
     theta = np.arccos(cTh)
     cThLE = np.cos(thetaLE)
     cTh2LE = cThLE*cThLE
+
+    DELTA_SECO = np.float32((1.0 - 3.0*GAMA) / (1.0 - GAMA))
     T_demi = (3.0/2.0)
     P22 = T_demi*(DELTA+DELTA_PRIM)
     P12 = T_demi*DELTA_PRIM
     P33bis = T_demi*DELTA
     P44bis = P33bis*DELTA_SECO
 
-    # parameters equally spaced in scattering probabiliy [0, 1]
-    pha['p_P11'][:] = T_demi*(DELTA*cTh2[:] + DELTA_PRIM)
-    pha['p_P12'][:] = P12
-    pha['p_P22'][:] = P22
-    pha['p_P33'][:] = P33bis*cTh[:] # U
-    pha['p_P44'][:] = P44bis*cTh[:] # V
-    pha['p_ang'][:] = theta[:] # angle
+    if pol_off:
+        # P(theta) -> phase matrix in Iperpar convention
+        # F(theta) -> phase matrix in IQUV convention
+        # from IQUV to IperIpar (in the case only IQUV F11 != 0 i.e. no polarisation)
+        # P11 = ((3./8.)*DELTA*(cTh2[:]-1)) + 0.5
+        # A_P11 = ((3./8.)*DELTA*(cTh2LE[:]-1)) + 0.5
+        P11 = T_demi*(DELTA*cTh2[:] + DELTA_PRIM)
+        A_P11 = T_demi*(DELTA*cTh2LE[:] + DELTA_PRIM)
+        F11 = 0.5 * (P11 + 2*P12 + P22)
+        A_F11 = 0.5 * (A_P11 + 2*P12 + P22)
+        # pha['p_P11'][:] = P11
+        # pha['p_P12'][:] = P11
+        # pha['p_P22'][:] = P11
 
-    # parameters equally spaced in scattering angle [0, 180]
-    pha['a_P11'][:] = T_demi*(DELTA*cTh2LE[:] + DELTA_PRIM) 
-    pha['a_P12'][:] = P12
-    pha['a_P22'][:] = P22
-    pha['a_P33'][:] = P33bis*cThLE[:]  # U
-    pha['a_P44'][:] = P44bis*cThLE[:]  # V
+        # pha['p_ang'][:] = theta[:] # angle
+        # pha['a_P11'][:] = A_P11
+        # pha['a_P12'][:] = A_P11
+        # pha['a_P22'][:] = A_P11
+        pha['p_P11'][:] = 0.5*F11
+        pha['p_P12'][:] = 0.5*F11
+        pha['p_P22'][:] = 0.5*F11
+        pha['p_ang'][:] = theta[:] # angle
+
+        pha['a_P11'][:] = 0.5*A_F11
+        pha['a_P12'][:] = 0.5*A_F11
+        pha['a_P22'][:] = 0.5*A_F11
+    else:
+        # parameters equally spaced in scattering probabiliy [0, 1]
+        pha['p_P11'][:] = T_demi*(DELTA*cTh2[:] + DELTA_PRIM)
+        pha['p_P12'][:] = P12
+        pha['p_P22'][:] = P22
+        pha['p_P33'][:] = P33bis*cTh[:] # U
+        pha['p_P44'][:] = P44bis*cTh[:] # V
+        pha['p_ang'][:] = theta[:] # angle
+
+        # parameters equally spaced in scattering angle [0, 180]
+        pha['a_P11'][:] = T_demi*(DELTA*cTh2LE[:] + DELTA_PRIM) 
+        pha['a_P12'][:] = P12
+        pha['a_P22'][:] = P22
+        pha['a_P33'][:] = P33bis*cThLE[:]  # U
+        pha['a_P44'][:] = P44bis*cThLE[:]  # V
 
     return pha
 
 
-def calculF(profile, N, DEPO, kind):
+def calculF(profile, N, DEPO, kind, pol_off=False):
     '''
     Calculate cumulated phase functions from profile
     N: number of angles
@@ -1870,8 +1911,9 @@ def calculF(profile, N, DEPO, kind):
     phase_H = np.zeros(shp, dtype=type_Phase, order='C')
 
     # Set Rayleigh phase function or isotropic if DEPO <0
-    if DEPO >=0 : phase_H[0,:] = rayleigh(N, DEPO)
-    else : phase_H[0,:]        = isotropic(N)
+    if DEPO >=0 : phase_H[0,:] = rayleigh(N, DEPO, pol_off=pol_off)
+    # no pol_off in isotropic because the function needs first to be corrected
+    else : phase_H[0,:]        = isotropic(N) 
     if 'theta_'+kind in profile.axes:
         angles = profile.axis('theta_'+kind) * pi/180.
         assert angles[-1] < 3.15   # assert that angles are in radians
@@ -1886,6 +1928,18 @@ def calculF(profile, N, DEPO, kind):
     #for ipha in range(nphases-1):
 
         phase = profile[name_phase][ipha, :, :]  # ipha, stk, theta
+
+        if pol_off:
+            if (len(phase[:,0]) == 4):
+                raise NameError("old profiles with only 4 stk available are not supported without polarization")
+            # back to IQUV convention to obtain F11
+            F11 = 0.5 * (phase[0,:] + 2*phase[1,:] + phase[4,:])
+            # reset all values to 0
+            phase[:,:] = 0.
+            # reconvert to Iperpar but without considering polarization
+            phase[0,:] = 0.5 * F11
+            phase[1,:] = 0.5 * F11
+            phase[4,:] = 0.5 * F11
 
         scum = [0]
         pm = phase[1, :] + phase[0, :]
