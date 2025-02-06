@@ -3421,32 +3421,33 @@ def findExtinction(IP, FP, prof_atm, W_IND = int(0)):
     return n_ext
 
     
-def Get_Sensor(VZAboa, VAA=0., RTER=6370., H=120., FOV=0., TYPE=0., PP=True, verbose=False):
+def Get_Sensor(VZA_lev, LEVEL=0., VAA=0., RTER=6370., H=120., FOV=0., TYPE=0., PP=True, verbose=False):
     '''
-    Return the Sensor object that is placed at altitude H for backward simulations where
-    thvboa is the View Zenith Angle defined at the surface: origin (0, 0, RTER) for Spehrical
-    Shell (SS), (0, 0, 0) for Plane Parallel (PP)
+    Return the Sensor object for atmosphere height of H for backward simulations where
+    VZA_lev is the View Zenith Angle defined at the level: origin (0, 0, RTER+LEVEL) for Spherical
+    Shell (SS), (0, 0, LEVEL) for Plane Parallel (PP)
 
     Input:
-        VZA: View Zenith Albgle defined at Bottom of Atmosphere
+        VZA_lev: View Zenith Angle defined at altitude LEVEL of Atmosphere
         
     Keywords:
-        VAA :  View Azimuth Angle
-            FOV :  Field of View (de), default 0.
+        LEV : Altitude (km) where the VZA is defined, default 0. (ground)
+        VAA : View Azimuth Angle
+        FOV : Field of View (de), default 0.
         TYPE: Type od sensor, default 0 (radiance), 1 (planar irradiance), 2 (spherical irradiance)
         RTER: Earth radius (km)
-        H: Altitude of the Sensor (km)
-        SS: Plane Parallel (PP default or SS)
+        H   : Altitude of the Atmosphere (km)
+        SS  : Plane Parallel (PP default or SS)
     '''
     nothing = Transform() # i.e. no rotation and no translation
     radius = (H + RTER)
     large_dist = float("inf") # large distance(km)
-    origin = Point(0., 0., 0.) if PP else Point(0., 0., RTER)
+    origin = Point(0., 0., LEVEL) if PP else Point(0., 0., RTER+LEVEL)
     # Boundaries
     if PP: Boundary = BBox(Point(-large_dist, -large_dist, 0.), Point(large_dist, large_dist, H)) # Rectangle for atmosphere for PP
     else : Boundary = Sphere(nothing, nothing, radius, -radius, radius, 360) # Create the Earth + atmosphere sphere for SS
     # Compute the direction vector object from Zenith and Azimuth angles
-    dir = convertAnglestoV(THETA=VZAboa, TYPE='Sensor', PHI=180+VAA)
+    dir = convertAnglestoV(THETA=VZA_lev, TYPE='Sensor', PHI=180+VAA)
     # Make a ray from origin in direction dir
     ray = Ray(o=origin, d=dir)
     # Compute the intersection with the Boundary
@@ -3456,8 +3457,8 @@ def Get_Sensor(VZAboa, VAA=0., RTER=6370., H=120., FOV=0., TYPE=0., PP=True, ver
     # Computations of sensor position
     if PP: pos = origin + dir*t1
     else : pos = origin + dir*Boundary.thit
-    if verbose : print("VZA =", VZAboa, "--> pos =", pos)
+    if verbose : print("VZA =", VZA_lev, "--> pos =", pos)
 
-    return Sensor(POSX=pos.x, POSY=pos.y, POSZ=pos.z, THDEG=180.-VZAboa, PHDEG=VAA, LOC='ATMOS', FOV=FOV, TYPE=TYPE)
+    return Sensor(POSX=pos.x, POSY=pos.y, POSZ=pos.z, THDEG=180.-VZA_lev, PHDEG=VAA, LOC='ATMOS', FOV=FOV, TYPE=TYPE)
 
 

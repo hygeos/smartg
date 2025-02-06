@@ -41,7 +41,7 @@ class Albedo_spectrum(object):
         self.data = LUT(R, axes=[lam], names=['wavelength'])
 
     def get(self, wl):
-        return self.data[Idx(wl)]
+        return self.data[Idx(wl, fill_value='extrapolate')]
 
 
 class Albedo_map(object):
