@@ -38,7 +38,7 @@ def test_compile(pp, back):
 
 def test_basic(request):
     ''' Most basic test '''
-    m = Smartg().run(500., atm=AtmAFGL('afglms'), NBPHOTONS=NBPHOTONS)
+    m = Smartg(autoinit=True).run(500., atm=AtmAFGL('afglms'), NBPHOTONS=NBPHOTONS)
     smartg_view(m)
     conftest.savefig(request)
 

@@ -38,6 +38,8 @@ from smartg.transform import Transform, Aff
 from smartg.visualizegeo import Mirror, Plane, Spheric, Transformation, \
     Entity, Analyse_create_entity, LambMirror, Matte, convertVtoAngles, \
     convertAnglestoV, GroupE
+    
+import functools
 
 
 # set up directories
@@ -543,6 +545,25 @@ class CusBackward(object):
     def __str__(self):
         return 'CusBackward:-POS={POS}-THDEG={THDEG}-PHDEG={PHDEG}'.format(**self.dict) + \
             '-ALDEG={ALDEG}-TYPE{TYPE}-LMODE={LMODE}'.format(**self.dict)
+            
+
+def with_cuda_context ( func ) :
+    """
+    A decorator that creates a CUDA context before calling
+    a given function ’func ’ and then cleans the context .
+    """
+    @functools.wraps ( func )
+    def wrapper(*args , **kwargs ):
+        cuda.init()
+        ctx = cuda.Device(0).make_context()
+        try :
+            result = func(*args ,**kwargs)
+        finally :
+            ctx.pop()
+            ctx.detach()
+        return result
+    return wrapper
+    
     
 class Smartg(object):
     '''Initialization of the Smartg object
@@ -592,7 +613,7 @@ class Smartg(object):
                 * CURAND_PHILOX
 
     '''
-    def __init__(self, pp=True, debug=False,
+    def __init__(self, pp=True, debug=False, autoinit=False,
                  verbose_photon=False,
                  double=True, alis=False, back=False, bias=True, alt_pp=False, obj3D=False, 
                  opt3D=False, device=None, sif=False, thermal=False, rng='PHILOX', cache_dir='/tmp/'):
@@ -602,8 +623,17 @@ class Smartg(object):
             env_modif = {'CUDA_DEVICE': str(device)}
         else:
             env_modif = {}
-        with modified_environ(**env_modif):
-            import pycuda.autoinit
+        #with modified_environ(**env_modif):
+        #    import pycuda.autoinit
+            
+        if (autoinit):
+            with modified_environ(**env_modif):
+                import pycuda.autoinit
+        else:
+            import pycuda
+            import pycuda.driver as cuda
+            cuda.init()
+            self.ctx = cuda.Device(0).make_context()
 
         self.pp = pp
         self.double = double
@@ -693,11 +723,18 @@ class Smartg(object):
         self.common_attrs = OrderedDict()
         self.common_attrs['compilation_time'] = (datetime.now()
                         - time_before_compilation).total_seconds()
-        self.common_attrs['device'] = pycuda.autoinit.device.name()
-        try:
-            self.common_attrs['device_number'] = pycuda.autoinit.device.get_attributes()[pycuda._driver.device_attribute.MULTI_GPU_BOARD_GROUP_ID]
-        except AttributeError:
-            self.common_attrs['device_number'] = 'undefined'
+        if (autoinit):
+            self.common_attrs['device'] = pycuda.autoinit.device.name()
+            try:
+                self.common_attrs['device_number'] = pycuda.autoinit.device.get_attributes()[pycuda._driver.device_attribute.MULTI_GPU_BOARD_GROUP_ID]
+            except AttributeError:
+                self.common_attrs['device_number'] = 'undefined'
+        else:
+            self.common_attrs['device'] =self.ctx.get_device().name()
+            try:
+                self.common_attrs['device_number'] = self.ctx.getçdevice().get_attributes()[pycuda._driver.device_attribute.MULTI_GPU_BOARD_GROUP_ID]
+            except Exception:
+                self.common_attrs['device_number'] = 'undefined'
         self.common_attrs['pycuda_version'] = pycuda.VERSION_TEXT
         self.common_attrs['cuda_version'] = '.'.join([str(x) for x in pycuda.driver.get_version()])
         self.common_attrs.update(get_git_attrs())
@@ -944,7 +981,8 @@ class Smartg(object):
             if (surfLPH_RF is not None): surfLPH = surfLPH_RF
 
         else:
-            myObjects0 = gpuzeros(1, dtype='int32')
+            myObjects0 = gpuzeros(1, dtype=np.uint32)
+            #myObjects0 = gpuzeros(1, dtype='int32')
             myGObj0 = gpuzeros(1, dtype='int32')
             myRObj0 = gpuzeros(1, dtype='int32')
             mySPECTObj0 = gpuzeros(1, dtype='int32') # normally 2 dims: obj dim + wl dim
@@ -1356,6 +1394,9 @@ class Smartg(object):
         if wl.scalar:
             output = output.dropaxis('wavelength')
             output.attrs['wavelength'] = wl[:]
+        
+
+
 
         return output
 
@@ -1411,6 +1452,9 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
         if le!=None : 
             tabTh = le['th']
             tabPhi = le['phi']
+            if 'zip' not in le.keys():
+                zip = False
+            else : zip = le['zip']
             norm_geo =  1. 
         else : 
             tabTh, tabPhi, tabOmega = calcOmega(NBTHETA, NBPHI, SZA_MAX=SZA_MAX, SUN_DISC=SUN_DISC)
@@ -1499,7 +1543,9 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
         m.add_dataset('U_stdev_up (TOA)', sigma[UPTOA,2,isen,ilam,iphi,:], axnames)
         m.add_dataset('V_stdev_up (TOA)', sigma[UPTOA,3,isen,ilam,iphi,:], axnames)
     m.add_dataset('N_up (TOA)', NPhotonsOutTot[UPTOA,isen,ilam,iphi,:], axnames)
-    if len(tabDistFinal) > 1: m.add_dataset('cdist_up (TOA)', tabDistFinal[UPTOA,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
+    if len(tabDistFinal) > 1: 
+        if zip : m.add_dataset('cdist_up (TOA)', np.squeeze(tabDistFinal[UPTOA,:,isen,:,:]),  ['None','Zenith angles','iAMF'])
+        else   : m.add_dataset('cdist_up (TOA)', tabDistFinal[UPTOA,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
     
     if hist : m.add_dataset('histories', tabHistTot)
     
@@ -1514,7 +1560,9 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
             m.add_dataset('U_stdev_down (0+)', sigma[DOWN0P,2,isen,ilam,iphi,:], axnames)
             m.add_dataset('V_stdev_down (0+)', sigma[DOWN0P,3,isen,ilam,iphi,:], axnames)
         m.add_dataset('N_down (0+)', NPhotonsOutTot[DOWN0P,isen,ilam,iphi,:], axnames)
-        if len(tabDistFinal) > 1: m.add_dataset('cdist_down (0+)', tabDistFinal[DOWN0P,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
+        if len(tabDistFinal) > 1: 
+            if zip : m.add_dataset('cdist_down (0+)', np.squeeze(tabDistFinal[DOWN0P,:,isen,:,:]),  ['None','Zenith angles','iAMF'])
+            else   : m.add_dataset('cdist_down (0+)', tabDistFinal[DOWN0P,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
     
         m.add_dataset('I_up (0-)', tabFinal[UP0M,0,isen,ilam,iphi,:], axnames)
         m.add_dataset('Q_up (0-)', tabFinal[UP0M,1,isen,ilam,iphi,:], axnames)
@@ -1526,7 +1574,9 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
             m.add_dataset('U_stdev_up (0-)', sigma[UP0M,2,isen,ilam,iphi,:], axnames)
             m.add_dataset('V_stdev_up (0-)', sigma[UP0M,3,isen,ilam,iphi,:], axnames)
         m.add_dataset('N_up (0-)', NPhotonsOutTot[UP0M,isen,ilam,iphi,:], axnames)
-        if len(tabDistFinal) > 1: m.add_dataset('cdist_up (0-)', tabDistFinal[UP0M,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
+        if len(tabDistFinal) > 1: 
+            if zip : m.add_dataset('cdist_up (0-)', np.squeeze(tabDistFinal[UP0M,:,isen,:,:]),  ['None','Zenith angles','iAMF'])
+            else   : m.add_dataset('cdist_up (0-)', tabDistFinal[UP0M,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
 
     if OUTPUT_LAYERS & 2:
         m.add_dataset('I_down (0-)', tabFinal[DOWN0M,0,isen,ilam,iphi,:], axnames)
@@ -1539,7 +1589,9 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
             m.add_dataset('U_stdev_down (0-)', sigma[DOWN0M,2,isen,ilam,iphi,:], axnames)
             m.add_dataset('V_stdev_down (0-)', sigma[DOWN0M,3,isen,ilam,iphi,:], axnames)
         m.add_dataset('N_down (0-)', NPhotonsOutTot[DOWN0M,isen,ilam,iphi,:], axnames)
-        if len(tabDistFinal) > 1: m.add_dataset('cdist_down (0-)', tabDistFinal[DOWN0M,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
+        if len(tabDistFinal) > 1: 
+            if zip : m.add_dataset('cdist_down (0-)', np.squeeze(tabDistFinal[DOWN0M,:,isen,:,:]),  ['None','Zenith angles','iAMF'])
+            else   : m.add_dataset('cdist_down (0-)', tabDistFinal[DOWN0M,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
 
         m.add_dataset('I_up (0+)', tabFinal[UP0P,0,isen,ilam,iphi,:], axnames)
         m.add_dataset('Q_up (0+)', tabFinal[UP0P,1,isen,ilam,iphi,:], axnames)
@@ -1551,7 +1603,9 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
             m.add_dataset('U_stdev_up (0+)', sigma[UP0P,2,isen,ilam,iphi,:], axnames)
             m.add_dataset('V_stdev_up (0+)', sigma[UP0P,3,isen,ilam,iphi,:], axnames)
         m.add_dataset('N_up (0+)', NPhotonsOutTot[UP0P,isen,ilam,iphi,:], axnames)
-        if len(tabDistFinal) > 1: m.add_dataset('cdist_up (0+)', tabDistFinal[UP0P,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
+        if len(tabDistFinal) > 1: 
+            if zip : m.add_dataset('cdist_up (0+)', np.squeeze(tabDistFinal[UP0P,:,isen,:,:]),  ['None','Zenith angles','iAMF'])
+            else   : m.add_dataset('cdist_up (0+)', tabDistFinal[UP0P,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
 
         m.add_dataset('I_down (B)', tabFinal[DOWNB,0,isen,ilam,iphi,:], axnames)
         m.add_dataset('Q_down (B)', tabFinal[DOWNB,1,isen,ilam,iphi,:], axnames)
@@ -1563,7 +1617,9 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
             m.add_dataset('U_stdev_down (B)', sigma[DOWNB,2,isen,ilam,iphi,:], axnames)
             m.add_dataset('V_stdev_down (B)', sigma[DOWNB,3,isen,ilam,iphi,:], axnames)
         m.add_dataset('N_down (B)', NPhotonsOutTot[DOWNB,isen,ilam,iphi,:], axnames)
-        if len(tabDistFinal) > 1: m.add_dataset('cdist_down (B)', tabDistFinal[DOWNB,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
+        if len(tabDistFinal) > 1: 
+            if zip : m.add_dataset('cdist_down (B', np.squeeze(tabDistFinal[DOWNB,:,isen,:,:]),  ['None','Zenith angles','iAMF'])
+            else   : m.add_dataset('cdist_down (B)', tabDistFinal[DOWNB,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
 
 
     # write atmospheric profiles
@@ -2434,8 +2490,9 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
 
     """
     # Initializations
-    nThreadsActive = gpuzeros(1, dtype='int32')
-    Counter = gpuzeros(1, dtype='uint64')
+    nThreadsActive = gpuzeros(1, dtype=np.uint32)
+    Counter = gpuzeros(1, dtype=np.uint64)
+
     
     if double : FDTYPE=np.float64
     else : FDTYPE=np.float32
@@ -2529,6 +2586,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         #tabHist = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+6),1,NBTHETA,1), dtype=np.float32)
         #tabHist = gpuzeros((2,MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+6),1,1,1), dtype=np.float32)
         tabHistTot = gpuzeros((2,MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+6),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
+
     else : 
         tabHistTot = gpuzeros((1), dtype=np.float32)
 
@@ -2723,8 +2781,33 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
     else:
         sigma = None
 
-    return NPhotonsInTot.get(), tabPhotonsTot.get(), tabDistTot.get(), tabHistTot.get(), tabTransDir.get(), errorcount, \
-        NPhotonsOutTot.get(), sigma, N_simu, secs_cuda_clock, tabMatRecep, matCats, matLoss, wPhCatTot.get(), wPhCat2Tot.get()
+    NPhotonsInTot_VAL = NPhotonsInTot.get()
+    tabPhotonsTot_VAL = tabPhotonsTot.get()
+    tabDistTot_VAL    = tabDistTot.get()
+    tabHistTot_VAL    = tabHistTot.get()
+    tabTransDir_VAL   = tabTransDir.get()
+    NPhotonsOutTot_VAL= NPhotonsOutTot.get()
+    wPhCatTot_VAL     = wPhCatTot.get()
+    wPhCat2Tot_VAL    = wPhCat2Tot.get()
+    del NPhotonsInTot
+    del tabPhotonsTot
+    del tabDistTot
+    del tabTransDir
+    del NPhotonsOutTot
+    del wPhCatTot
+    del wPhCat2Tot
+    del NPhotonsIn
+    del tabPhotons
+    del tabDist
+    del NPhotonsOut
+    del wPhCat
+    del wPhCat2
+    
+    
+    return NPhotonsInTot_VAL, tabPhotonsTot_VAL, tabDistTot_VAL, tabHistTot_VAL, tabTransDir_VAL, errorcount, \
+        NPhotonsOutTot_VAL, sigma, N_simu, secs_cuda_clock, tabMatRecep, matCats, matLoss, wPhCatTot_VAL, wPhCat2Tot_VAL
+    #return NPhotonsInTot.get(), tabPhotonsTot.get(), tabDistTot.get(), tabHistTot_TEST, tabTransDir.get(), errorcount, \
+        #NPhotonsOutTot.get(), sigma, N_simu, secs_cuda_clock, tabMatRecep, matCats, matLoss, wPhCatTot.get(), wPhCat2Tot.get()
 
 
 def get_git_attrs():
@@ -2915,7 +2998,7 @@ class RNG_CURAND_PHILOX(object):
         self.mod = SourceModule(source, no_extern_c=True)
 
         # get state size
-        s = gpuzeros(1, dtype='int32')
+        s = gpuzeros(1, dtype=np.uint32)
         self.mod.get_function('get_state_size')(s, block=(1, 1, 1), grid=(1, 1, 1))
         self.STATE_SIZE = int(np.squeeze(s.get()))  # size in bytes
 

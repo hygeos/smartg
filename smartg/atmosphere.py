@@ -114,7 +114,8 @@ class AerOPAC(object):
         self._phase = phase
 
         if ssa is None : self.ssa = None
-        else           : self.ssa = np.array(ssa)
+        #else           : self.ssa = np.array(ssa)
+        else           : self.ssa = ssa
 
         if dirname(filename) == '' : self.filename = join(dir_auxdata, 'aerosols/OPAC/mixtures', filename)
         else                       : self.filename = filename
@@ -252,13 +253,22 @@ class AerOPAC(object):
         ssa[dtau!=0] /= dtau[dtau!=0]
 
         #apply scaling factor to get the required optical thickness at the
-        # specified wavelength
-        if self.tau_ref is not None: dtau *= self.tau_ref/np.sum(dtau_ref)
+        # specified wavelength or force tau for all wavelengths
+        if self.tau_ref is not None: 
+            if (isinstance(self.tau_ref, np.ndarray) and self.tau_ref.ndim == 0) or np.isscalar(self.tau_ref):
+                dtau *= self.tau_ref/np.sum(dtau_ref)
+            else:
+                assert isinstance(self.tau_ref, LUT)
+                dtau *= (self.tau_ref[Idx(wav)]/np.sum(dtau, axis=1))[:,None]
 
         # force ssa
         if self.ssa is not None:
-            if self.ssa.ndim == 0: # scalar
+            #if self.ssa.ndim == 0: # scalar
+            #if (isinstance(self.ssa, np.ndarray) and self.ssa.ndim == 0) or np.isscalar(self.ssa):
+            if False:
                 ssa[:,:] = self.ssa
+            elif isinstance(self.ssa, LUT):
+                ssa[:,:] = self.ssa[Idx(wav)][:,None]
             else:
                 ssa[:,:] = self.ssa[:,None]
 
@@ -3334,3 +3344,21 @@ def artdeco_to_smartg_cld(input_path, output_path=None, h5_group=None, normalize
     if output_path is not None: m.save(output_path, overwrite=overwrite)
 
     return m
+
+    
+def extract_split(m):
+    '''
+    Input
+        m: MLUT , result of a previous run
+        
+    extract the optical properties from a previous run and return the vertical profiles
+    prof_abs, prof_ray, prof_aer, and prof_phases the alternative inputs of the AtmAFGL
+    '''
+    pro_aer = diff1(m['OD_p'].data.astype(np.float32), axis=1)
+    ssa_aer = m['ssa_p_atm'].data
+    pro_ray = diff1(m['OD_r'].data.astype(np.float32), axis=1)
+    pro_abs = diff1(m['OD_g'].data.astype(np.float32), axis=1)
+    pro_iphase = m['iphase_atm'].data
+    pro_phases = [m['phase_atm'].sub({'iphase':i}) for i in range(pro_iphase.max()+1)]
+
+    return pro_abs, pro_ray, (pro_aer, ssa_aer), (pro_iphase, pro_phases)
