@@ -5352,13 +5352,10 @@ packages:
 - pypi: .
   name: smartg
   version: 0.1.0
-  sha256: 7c041d23db7b898b9738360cc6eb220e32adc2ec4212eed1d4e16ad8d0fe2d98
+  sha256: e4276c95cd972ea1695c5698bef3328b99e7e9d9b6e946580677ce3f21239e30
   requires_dist:
   - luts @ git+https://github.com/hygeos/luts.git
   - core @ git+https://github.com/hygeos/core
-  - pytest
-  - pytest-html
-  - pytest-xdist
   - xarray
   - pandas
   - netcdf4
@@ -5367,8 +5364,6 @@ packages:
   - pycuda
   - progressbar2
   - scipy
-  - ipykernel
-  - ipywidgets
   - matplotlib
   requires_python: '>=3.11'
   editable: true
