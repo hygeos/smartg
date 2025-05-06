@@ -6,7 +6,28 @@ authors = [
 name = "smartg"
 requires-python = ">= 3.11"
 version = "0.1.0"
-dependencies = ["luts @ git+https://github.com/hygeos/luts.git"]
+dependencies = [
+    "luts @ git+https://github.com/hygeos/luts.git", 
+    "core @ git+https://github.com/hygeos/core",
+    "pytest",
+    "pytest-html",
+    "pytest-xdist",
+    "xarray",
+    "pandas",
+    "netcdf4",
+    "h5py",
+    "papermill",
+    "pycuda",
+    "progressbar2",
+    "scipy",
+    "ipykernel",
+    "ipywidgets",
+    "matplotlib",
+]
+
+[project.scripts]
+smartg = "smartg.cli:entry"
+
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
@@ -21,6 +42,7 @@ smartg = { path = ".", editable = true }
 
 [tool.pixi.tasks]
 tests = "pytest tests"
+packaging = {cmd = "python main.py", cwd = "scripts"}
 
 [tool.pixi.dependencies]
 pytest = "*"
@@ -38,3 +60,13 @@ scipy = "*"
 ipykernel = "*"
 ipywidgets = "*"
 matplotlib = "*"
+cuda-toolkit = ">=12"
+
+[tool.pixi.environments]
+default = { features = ["hyp", "sys"], solve-group = "default" }
+
+[tool.pixi.feature.hyp.dependencies]
+xarray = "*"
+dask = "*"
+scipy = "*"
+[tool.pixi.feature.sys.dependencies]
