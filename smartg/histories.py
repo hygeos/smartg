@@ -1,14 +1,14 @@
-
 import numpy as np
 import jax.numpy as jnp
 from jax import value_and_grad, vmap, jit
+import xarray
 
 def get_histories(m, LEVEL=0, verbose=False):
     ''' 
     Return photons histories main outputs
     
     Input
-        m : a MLUT SMART-G output with the ALIS option and hist=True having been set
+        m : a MLUT (or xarray) SMART-G output with the ALIS option and hist=True having been set
         
     Keyword 
         LEVEL : 0 or 1 (up TOA or down 0+ levels only)
@@ -30,14 +30,13 @@ def get_histories(m, LEVEL=0, verbose=False):
             nenv : A ndarray of size (NLE) of reflection on the environement (as described by the keyword env in the run method)
             ith  : A ndarray of size (NLE) of index of the Zenith angle LE direction of the virtual photon
     '''
-    NL=m.axis('z_atm').size-1
+    NL=m.axis('z_atm').size-1 if not isinstance(m, xarray.Dataset) else m['z_atm'].size-1
     tabHist_ = np.squeeze(m['histories'].data)
     tabHist = tabHist_[LEVEL, :,:]
     if verbose : print (tabHist.shape)
-    w0      = tabHist[:, NL+4:-6]
-    good    = w0[:,0]!=0
+    w0      = tabHist[:, NL+4:-6] 
     #D0      = tabHist[:,0]
-    #good    = D0!=0
+    good    = w0[:,0]!=0
     ngood   = np.sum(good)
     N = m['Nphotons_in'].data[0,0]
     ###################
@@ -55,6 +54,7 @@ def get_histories(m, LEVEL=0, verbose=False):
     if verbose : print('Number of photons in : {}\nNumber of LE photons : {}\nNumber of LR wavelengths : {}\nNumber of Layers : {}'.format(N, *w.shape, NL))
     
     return N, S, D, w, nrrs, nref, nsif, nvrs, nenv, ith
+
 
 
 
