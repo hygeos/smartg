@@ -61,6 +61,7 @@ ipykernel = "*"
 ipywidgets = "*"
 matplotlib = "*"
 cuda-toolkit = ">=12"
+cuda-nvcc = "*"
 
 [tool.pixi.environments]
 default = { features = ["hyp", "sys"], solve-group = "default" }
