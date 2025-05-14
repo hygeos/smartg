@@ -2,8 +2,9 @@ import numpy as np
 import jax.numpy as jnp
 from jax import value_and_grad, vmap, jit
 import xarray
+import jax
 
-def get_histories(m, LEVEL=0, verbose=False):
+def get_histories(m, LEVEL=0, IDIR=0,verbose=False):
     ''' 
     Return photons histories main outputs
     
@@ -28,7 +29,8 @@ def get_histories(m, LEVEL=0, verbose=False):
             nrrs : A ndarray of size (NLE) of Sun Induced Fluorescence event flag (1 : SIF, 0: no SIF)
             nvrs : A ndarray of size (NLE) of Vibrational Raman Scattering event flag (1 : VRS, 0: no VRS)
             nenv : A ndarray of size (NLE) of reflection on the environement (as described by the keyword env in the run method)
-            ith  : A ndarray of size (NLE) of index of the Zenith angle LE direction of the virtual photon
+            //ith  : A ndarray of size (NLE) of index of the Zenith angle LE direction of the virtual photon
+            nint : A ndarray of size (NLE) of number of reflection or scattering
     '''
     NL=m.axis('z_atm').size-1 if not isinstance(m, xarray.Dataset) else m['z_atm'].size-1
     tabHist_ = np.squeeze(m['histories'].data)
@@ -49,11 +51,12 @@ def get_histories(m, LEVEL=0, verbose=False):
     nsif    = tabHist[good,      -4  ]
     nvrs    = tabHist[good,      -3  ]
     nenv    = tabHist[good,      -2  ]
-    ith     = tabHist[good,      -1  ]
+    #ith     = tabHist[good,      -1  ]
+    nint     = tabHist[good,      -1  ]
     #
     if verbose : print('Number of photons in : {}\nNumber of LE photons : {}\nNumber of LR wavelengths : {}\nNumber of Layers : {}'.format(N, *w.shape, NL))
     
-    return N, S, D, w, nrrs, nref, nsif, nvrs, nenv, ith
+    return N, S, D, w, nrrs, nref, nsif, nvrs, nenv, nint
 
 
 
@@ -105,6 +108,7 @@ def BigSum(S, grad=None, only_I=False):
     '''
     JAX based function for computing ALL the Stokes vectors for ALL High Resolution wavelengths and for ALL LE photons
     '''
+    jax.XLA_PYTHON_CLIENT_PREALLOCATE=False
     if grad is not None : S = value_and_grad(S, argnums=grad)
     f1m = vmap(S,  in_axes=(0   ,    0,    0, None, None, None, None, None))  # co varying wavelengths inputs
     f2m = vmap(f1m,in_axes=(None, None, None,    0,    0,    0,    0, None)) # co vaying LE photons inputs

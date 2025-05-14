@@ -22,7 +22,7 @@ dependencies = [
     "scipy",
     # "ipykernel",
     # "ipywidgets",
-    "matplotlib",
+    "matplotlib", "jax", "geoclide", "statsmodels",
 ]
 
 [project.scripts]
@@ -62,6 +62,9 @@ ipywidgets = "*"
 matplotlib = "*"
 cuda-toolkit = ">=12"
 cuda-nvcc = "*"
+jax = "*"
+geoclide = "*"
+statsmodels = "*"
 
 [tool.pixi.environments]
 default = { features = ["hyp", "sys"], solve-group = "default" }

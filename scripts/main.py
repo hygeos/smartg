@@ -9,8 +9,8 @@ if __name__ == "__main__":
     print("Running SMARTG basic example")
     
     """ Most basic SMARTG test """
-    NBPHOTONS = 1e3
-    m = Smartg().run(500., atm=AtmAFGL('afglms'), NBPHOTONS=NBPHOTONS)
+    NBPHOTONS = 1e8
+    m = Smartg().run(500., THVDEG=45.,  atm=AtmAFGL('afglms'), NBPHOTONS=NBPHOTONS)
     fig = smartg_view(m)
     plt.savefig("fig.png")
     

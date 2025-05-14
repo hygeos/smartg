@@ -608,10 +608,6 @@ class Smartg(object):
             Please note that after the first pycuda.autoinit, the device used by pycuda will not change.
         - sif : boolean, if True Sun Induced Fluorescence included, default False
 
-        - rng: choice of pseudo-random number generator:
-                * PHILOX
-                * CURAND_PHILOX
-
     '''
     def __init__(self, pp=True, debug=False, autoinit=False,
                  verbose_photon=False,
@@ -1006,7 +1002,8 @@ class Smartg(object):
         NLVL = 6
 
         # warning! values defined in communs.h 
-        MAX_HIST = 2048 * 4096
+        # Maximum number of photons histories (alis=True and alis_options['hist'] = True), otherwise 0 (no histories)
+        MAX_HIST = np.int64(1)
         MAX_NLOW = 801
 
         # number of Stokes parameters of the radiation field
@@ -1032,7 +1029,11 @@ class Smartg(object):
         NJAC=0
         if alis_options is not None :
             if 'hist' in alis_options.keys():
-                if alis_options['hist']: hist=True
+                if alis_options['hist']: 
+                    hist=True
+                    if 'max_hist' in alis_options.keys():
+                        MAX_HIST=np.int64(alis_options['max_hist'])
+                    else : MAX_HIST=np.int64(8000000)
             if 'njac' in alis_options.keys():
                 NJAC=alis_options['njac']
             if (alis_options['nlow'] ==-1) : NLOW=NLAM
@@ -2622,7 +2623,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
 
         # kernel launch
         kern(envmap, spectrum, X0, faer, foce,
-             errorcount, nThreadsActive, tabPhotons, tabDist, tabHistTot, tabTransDir,
+             errorcount, nThreadsActive, tabPhotons, tabDist, tabHistTot, MAX_HIST, tabTransDir,
              Counter, NPhotonsIn, NPhotonsOut, tabthv, tabphi, tablevel, tab_sensor,
              prof_atm, prof_oc, cell_atm, cell_oc, wl_proba_icdf, sensor_proba_icdf, cell_proba_icdf, 
              rng.state, tabObjInfo,
