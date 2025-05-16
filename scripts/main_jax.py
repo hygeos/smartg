@@ -38,8 +38,10 @@ def test_smartg_jax(N_WL_ABS, NBPHOTONS, MAX_HIST=1e6, fmt='-'):
         sigma = od2k(atm.calc(wl_abs), 'OD_g')[:,1:]
         m=Run1(atm, wl_sca, NB=NBPHOTONS, MAX_HIST=MAX_HIST)
         m0=Run1(atm, wl_abs, NB=NBPHOTONS, MAX_HIST=MAX_HIST, hist=False, ALB=ALB).dropaxis('Zenith angles').dropaxis('Azimuth angles')
-        I=GetI(m, wl_sca, wl_abs, sigma, alb, LEVEL)
-        p=plt.plot(wl_abs, I, fmt, label='AOD@550: {:.1f}; NBPH={:.0e}; NBHIST={:.0e}'.format(AOD, np.int64(NBPHOTONS), np.int64(MAX_HIST)))
+        N, S, D, w, _, nref, _, _, _, _ = get_histories(m, LEVEL=LEVEL, verbose=False)
+        for i in range(20):  
+            I = BigSum(Si, only_I=True)(wl_abs, sigma*float(i)/10., alb, S[:,0], w, D, nref, wl_sca).sum(axis=0)/N
+            p=plt.plot(wl_abs, I, fmt, label='AOD@550: {:.1f}; NBPH={:.0e}; NBHIST={:.0e}'.format(AOD, np.int64(NBPHOTONS), np.int64(MAX_HIST)))
         m0['I_up (TOA)'].plot(color=p[0].get_color(), linestyle='--', label='reference')
         plt.xlabel(r'$\lambda (nm)$')
         plt.ylabel('TOA reflectance')
@@ -58,5 +60,5 @@ if __name__ == "__main__":
     test_smartg_jax(N_WL_ABS, NBPHOTONS=1e4, MAX_HIST=1e6, fmt='r-')    
     #test_smartg_jax(N_WL_ABS, NBPHOTONS=1e4, MAX_HIST=1e7, fmt='r+-')
     #test_smartg_jax(N_WL_ABS, NBPHOTONS=1e5, MAX_HIST=1e6, fmt='b-')
-    test_smartg_jax(N_WL_ABS, NBPHOTONS=1e5, MAX_HIST=1e7, fmt='b-')
+    #test_smartg_jax(N_WL_ABS, NBPHOTONS=1e5, MAX_HIST=1e7, fmt='b-')
     plt.savefig("fig.png")

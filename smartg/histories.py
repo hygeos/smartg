@@ -75,7 +75,6 @@ def Si(lam, kabs, alb, sik, wi_lr, Dij, Ki, lam_lr_grid):
         Ki   : Number of reflection on the surface
         lam_lr_grid : A ndarray of size (NLR) LR wavelengths grid
     '''
-    jax.XLA_PYTHON_CLIENT_PREALLOCATE=False
     # interpolation of scattering weights at low spectral resolution to current lambda
     wi = jnp.interp(lam, lam_lr_grid, wi_lr)
     
@@ -108,7 +107,6 @@ def BigSum(S, grad=None, only_I=False):
     '''
     JAX based function for computing ALL the Stokes vectors for ALL High Resolution wavelengths and for ALL LE photons
     '''
-    jax.XLA_PYTHON_CLIENT_PREALLOCATE=False
     if grad is not None : S = value_and_grad(S, argnums=grad)
     f1m = vmap(S,  in_axes=(0   ,    0,    0, None, None, None, None, None))  # co varying wavelengths inputs
     f2m = vmap(f1m,in_axes=(None, None, None,    0,    0,    0,    0, None)) # co vaying LE photons inputs

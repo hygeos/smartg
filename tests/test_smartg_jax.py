@@ -10,6 +10,9 @@ from smartg.albedo import Albedo_cst
 from luts import LUT
 from smartg.tools.smartg_view import mdesc
 from tests import conftest
+import os
+#os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"]   = "platform"
 
 @with_cuda_context
 def GetI(m, wl_sca, wl_abs, sigma, alb, LEVEL):
@@ -32,8 +35,13 @@ def GetI(m, wl_sca, wl_abs, sigma, alb, LEVEL):
     return I
 
 
+@with_cuda_context
+def jSmartg(alis=True, alt_pp=True, **kwargs):
+    """"""
+    return Smartg(alis=alis, alt_pp=alt_pp).run(**kwargs)
 
-@pytest.mark.parametrize('N_WL_ABS', [121])
+
+@pytest.mark.parametrize('N_WL_ABS', [521])
 def test_smartg_jax2(N_WL_ABS, request, NBPHOTONS=1e5, MAX_HIST=1e7):
     ALB_SNOW     = Albedo_cst(0.6)
     ALB_HIST     = Albedo_cst(1.0)
@@ -42,19 +50,15 @@ def test_smartg_jax2(N_WL_ABS, request, NBPHOTONS=1e5, MAX_HIST=1e7):
     alb          = ALB_SNOW.get(wl_abs)
     lez          = {'th_deg':np.array([0.]), 'phi_deg':np.array([0.]), 'zip':False}
 
-    for AOD,fmt0,fmt1 in zip(np.linspace(0., 0.3, num=2), ['.m', '.c'], ['-m', '-c']):
+    for AOD, fmt1 in zip(np.linspace(0., 0.3, num=2), ['-m', '-c']):
         LEVEL=0 # BOA dowanward reflectance, 0 : TOA
         atm = AtmAFGL('afglms', comp=[AerOPAC('urban',AOD, 550.)], grid=np.linspace(50., 0., num=40))
         sigma = od2k(atm.calc(wl_abs), 'OD_abs_atm')[:,1:]
         m  = jSmartg(THVDEG=45., wl=wl_sca, surf=LambSurface(ALB_HIST), le=lez, BEER=0, atm=atm.calc(wl_sca), 
             alis_options={'nlow':wl_sca.size,'hist':True, 'max_hist':np.int64(MAX_HIST)},
             NBPHOTONS=NBPHOTONS, NBLOOP=NBPHOTONS, NF=1e3).dropaxis('Zenith angles').dropaxis('Azimuth angles')
-        m0 = jSmartg(THVDEG=45., wl=wl_abs, surf=LambSurface(ALB_SNOW), le=lez, BEER=0, atm=atm.calc(wl_abs),
-            alis_options={'nlow':wl_sca.size, 'hist':False},
-            NBPHOTONS=NBPHOTONS, NF=1e3).dropaxis('Zenith angles').dropaxis('Azimuth angles')
         I = GetI(m, wl_sca, wl_abs, sigma, alb, LEVEL)
         plt.plot(wl_abs, I, fmt1, label='AOD@550: {:.1f}; NBPH={:.0e}; NBHIST={:.0e}'.format(AOD, np.int64(NBPHOTONS), np.int64(MAX_HIST)))
-        m0['I_up (TOA)'].plot(fmt=fmt0, label='AOD@550: {:.1f}; NBPH={:.0e}; no hist.'.format(AOD, np.int64(NBPHOTONS)))
         plt.xlabel(r'$\lambda (nm)$')
         plt.ylabel('TOA reflectance')
         plt.ylim(0.2,0.7)
@@ -62,13 +66,6 @@ def test_smartg_jax2(N_WL_ABS, request, NBPHOTONS=1e5, MAX_HIST=1e7):
         plt.grid()
     plt.legend()
     conftest.savefig(request)
-
-
-
-@with_cuda_context
-def jSmartg(alis=True, alt_pp=True, **kwargs):
-    """"""
-    return Smartg(alis=alis, alt_pp=alt_pp).run(**kwargs)
 
     
     
