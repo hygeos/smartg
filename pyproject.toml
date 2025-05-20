@@ -25,7 +25,7 @@ dependencies = [
     "matplotlib", 
     # "jax", 
     "geoclide", 
-    "statsmodels",
+    "statsmodels", "gatiab",
 ]
 
 [project.scripts]
@@ -65,6 +65,7 @@ cudnn = "*" # add to system ?
 
 geoclide = "*"
 statsmodels = "*"
+gatiab = "*"
 
 [tool.pixi.environments]
 default = { features = ["hyp", "sys"], solve-group = "default" }

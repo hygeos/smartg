@@ -1078,7 +1078,8 @@ class CompOPAC(AeroOPAC):
         self.rh = rh
         self.tau_ref = tau_ref
         self.w_ref = w_ref
-        self.species = [Species(species+'.mie', wav_clip=wav_clip)]
+        self.species = [Species(species, wav_clip=wav_clip)]
+        #self.species = [Species(species+'.mie', wav_clip=wav_clip)]
         self.dens_mlut = MLUT()
         self.dens_mlut.add_axis('z_opac', z)
         self.dens_mlut.add_dataset('dens_'+self.species[0].name.split('_sol')[0], density, axnames=['z_opac'],
