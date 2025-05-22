@@ -547,24 +547,6 @@ class CusBackward(object):
             '-ALDEG={ALDEG}-TYPE{TYPE}-LMODE={LMODE}'.format(**self.dict)
             
 
-def with_cuda_context ( func ) :
-    """
-    A decorator that creates a CUDA context before calling
-    a given function ’func ’ and then cleans the context .
-    """
-    @functools.wraps ( func )
-    def wrapper(*args , **kwargs ):
-        cuda.init()
-        ctx = cuda.Device(0).make_context()
-        try :
-            result = func(*args ,**kwargs)
-        finally :
-            ctx.pop()
-            ctx.detach()
-        return result
-    return wrapper
-    
-    
 class Smartg(object):
     '''Initialization of the Smartg object
 
@@ -736,7 +718,14 @@ class Smartg(object):
         self.common_attrs.update(get_git_attrs())
 
 
-    
+    def __del__(self):
+        try:
+            self.ctx.detach()
+            self.ctx = None
+            print("CUDA context detached")
+        except Exception as e:
+            print("Error while detaching CUDA context : ", e)
+            pass
 
 
     def run(self, wl,

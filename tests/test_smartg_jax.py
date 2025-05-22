@@ -2,8 +2,8 @@
 import numpy as np
 import pytest
 import matplotlib.pyplot as plt
-from smartg.histories import get_histories, BigSum, Si
-from smartg.smartg import Smartg, with_cuda_context
+from smartg.histories import get_histories, BigSum, Si, Si2
+from smartg.smartg import Smartg
 from smartg.smartg import LambSurface, Albedo_cst
 from smartg.atmosphere import AtmAFGL, AerOPAC, od2k, diff1
 from smartg.albedo import Albedo_cst
@@ -11,57 +11,44 @@ from luts import LUT
 from smartg.tools.smartg_view import mdesc
 from tests import conftest
 import os
-#os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
-os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"]   = "platform"
+os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+#os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"]   = "platform"
 
-@with_cuda_context
-def GetI(m, wl_sca, wl_abs, sigma, alb, LEVEL):
-    """
-    Compute the intensity (I) based on the provided parameters and simulation data.
-
-    Parameters:
-        m (int): The MLUT output of smartg including histories to process.
-        wl_sca (float): The scattering wavelength.
-        wl_abs (float): The absorption wavelength.
-        sigma (float): The 2D (wavelength, altitude) absorption coefficients.
-        alb (float): The albedo of the surface.
-        LEVEL (int): The level of detail or depth for the simulation.
-
-    Returns:
-        numpy.ndarray: The computed intensity (I) as a 1D array, normalized by the number of histories (N).
-    """
-    N, S, D, w, _, nref, _, _, _, _ = get_histories(m, LEVEL=LEVEL, verbose=False)
-    I       = BigSum(Si, only_I=True)(wl_abs, sigma, alb, S[:,0], w, D, nref, wl_sca).sum(axis=0)/N
-    return I
-
-
-@with_cuda_context
-def jSmartg(alis=True, alt_pp=True, **kwargs):
-    """"""
-    return Smartg(alis=alis, alt_pp=alt_pp).run(**kwargs)
-
-
-@pytest.mark.parametrize('N_WL_ABS', [521])
-def test_smartg_jax2(N_WL_ABS, request, NBPHOTONS=1e5, MAX_HIST=1e7):
+@pytest.mark.parametrize('N_WL_ABS', [221])
+@pytest.mark.parametrize('WMAX', [350.])
+@pytest.mark.parametrize('WMIN', [320.])
+def test_smartg_jax2(N_WL_ABS, WMIN, WMAX, request, NBPHOTONS=2e4, MAX_HIST=2e7):
     ALB_SNOW     = Albedo_cst(0.6)
     ALB_HIST     = Albedo_cst(1.0)
-    wl_sca       = np.linspace(320., 350., num=11)
-    wl_abs       = np.linspace(320., 350., num=N_WL_ABS)
+    wl_sca       = np.linspace(WMIN, WMAX, num=11)
+    wl_abs       = np.linspace(WMIN, WMAX, num=N_WL_ABS)
     alb          = ALB_SNOW.get(wl_abs)
     lez          = {'th_deg':np.array([0.]), 'phi_deg':np.array([0.]), 'zip':False}
 
-    for AOD, fmt1 in zip(np.linspace(0., 0.3, num=2), ['-m', '-c']):
-        LEVEL=0 # BOA dowanward reflectance, 0 : TOA
+    for AOD, fmt1 in zip(np.linspace(0.3, 0.3, num=1), ['-m', '-c']):
+        LEVEL=0 # 1: BOA downward reflectance, 0 : TOA
         atm = AtmAFGL('afglms', comp=[AerOPAC('urban',AOD, 550.)], grid=np.linspace(50., 0., num=40))
         sigma = od2k(atm.calc(wl_abs), 'OD_abs_atm')[:,1:]
-        m  = jSmartg(THVDEG=45., wl=wl_sca, surf=LambSurface(ALB_HIST), le=lez, BEER=0, atm=atm.calc(wl_sca), 
+        m  = Smartg(alis=True, alt_pp=True). run(THVDEG=45., wl=wl_sca, surf=LambSurface(ALB_HIST), le=lez, BEER=0, atm=atm.calc(wl_sca), 
             alis_options={'nlow':wl_sca.size,'hist':True, 'max_hist':np.int64(MAX_HIST)},
             NBPHOTONS=NBPHOTONS, NBLOOP=NBPHOTONS, NF=1e3).dropaxis('Zenith angles').dropaxis('Azimuth angles')
-        I = GetI(m, wl_sca, wl_abs, sigma, alb, LEVEL)
-        plt.plot(wl_abs, I, fmt1, label='AOD@550: {:.1f}; NBPH={:.0e}; NBHIST={:.0e}'.format(AOD, np.int64(NBPHOTONS), np.int64(MAX_HIST)))
+        m0 = Smartg(alis=True, alt_pp=True). run(THVDEG=45., wl=wl_abs, surf=LambSurface(ALB_SNOW), le=lez, BEER=0, atm=atm.calc(wl_abs), 
+            alis_options={'nlow':wl_sca.size,'hist':False},
+            NBPHOTONS=NBPHOTONS, NF=1e3).dropaxis('Zenith angles').dropaxis('Azimuth angles')
+        N, S, D, w, _, nref, _, _, _, _ = get_histories(m, LEVEL=LEVEL, verbose=False)
+        I  = BigSum(Si,  only_I=True) (wl_abs, sigma, alb, S[:,0], w, D, nref, wl_sca).sum(axis=0)/N
+        I2 = BigSum(Si2, only_I=True) (wl_abs, sigma, alb, S[:,0], w, D, nref, wl_sca).sum(axis=0)/N
+        Std     = np.sqrt((I2-I**2)/N)
+        upper   = I + 1.95*Std
+        lower   = I - 1.95*Std
+        p=plt.plot(wl_abs, I, fmt1, label='AOD@550: {:.1f}; NBPH={:.0e}; NBHIST={:.0e}'.format(AOD, np.int64(NBPHOTONS), np.int64(MAX_HIST)))
+        col = p[0].get_color()
+        print(I2, Std)
+        plt.fill_between(wl_abs, lower, upper, facecolor=col, edgecolor=col, alpha=0.4, label='95 percent confidence')
+        plt.plot(wl_abs, m0['I_up (TOA)'][:], marker='+', ls='', label='AOD@550: {:.1f}; NBPH={:.0e}; NO HIST'.format(AOD, np.int64(NBPHOTONS)), color=p[0].get_color())
         plt.xlabel(r'$\lambda (nm)$')
         plt.ylabel('TOA reflectance')
-        plt.ylim(0.2,0.7)
+        #plt.ylim(0.,0.7)
         plt.title('Urban aerosols, SZA=45°, nadir viewing, snow albedo') 
         plt.grid()
     plt.legend()
@@ -117,9 +104,9 @@ def test_validation_artdeco(request, NB=1e6, VALPATH='/home/did/RTC/SMART-G/'):
     NLOW = 3
     wl_lr= np.linspace(w_valid.min(), w_valid.max(), num=NLOW)
     
-    m1 = jSmartg(THVDEG=30., wl=w_valid, surf=None, le=le, BEER=0, atm=atm_valid.calc(w_valid), DEPO=0.,
+    m1 = Smartg(alis=True, alt_pp=True).run(THVDEG=30., wl=w_valid, surf=None, le=le, BEER=0, atm=atm_valid.calc(w_valid), DEPO=0.,
         alis_options={'nlow':NLOW,'hist':False}, NBPHOTONS=NB, NBLOOP=NB, NF=1e3).dropaxis('Zenith angles').dropaxis('Azimuth angles')
-    m2 = jSmartg(THVDEG=30., wl=w_valid, surf=None, le=le, BEER=0, atm=atm_valid.calc(w_valid), DEPO=0.,
+    m2 = Smartg(alis=True, alt_pp=True).run(THVDEG=30., wl=w_valid, surf=None, le=le, BEER=0, atm=atm_valid.calc(w_valid), DEPO=0.,
         alis_options={'nlow':NLOW,'hist':True, 'max_hist':np.int64(1e7)}, NBPHOTONS=NB, NBLOOP=NB, NF=1e3).dropaxis('Zenith angles').dropaxis('Azimuth angles')
     print ('GPU time no hist: %.4f'%float(m1.attrs['kernel time (s)']), 's')
     print ('GPU time hist: %.4f'%float(m2.attrs['kernel time (s)']), 's')
