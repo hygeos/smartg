@@ -6,6 +6,14 @@
            ###########################
 
 
+v1.0.6
+------
+Release data: 2025-05-25
+
+* Avoid bug due to scipy function renaming since version 1.14
+  - Force scipy version<1.14 while installing python dependencies
+
+
 v1.0.5
 ------
 Release date: 2024-12-03
