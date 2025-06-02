@@ -607,6 +607,7 @@ class Smartg(object):
         if (autoinit):
             with modified_environ(**env_modif):
                 import pycuda.autoinit
+                self.ctx = pycuda.autoinit.context
         else:
             import pycuda
             import pycuda.driver as cuda

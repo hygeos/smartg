@@ -24,7 +24,7 @@ def test_smartg_jax(N_WL_ABS, NBPHOTONS, MAX_HIST=1e6, fmt='-'):
     wl_abs       = np.linspace(320., 350., num=N_WL_ABS)
     alb          = np.full_like(wl_abs, fill_value=ALB)
 
-    for AOD in np.linspace(0.3, 0.3, num=1):
+    for AOD in np.linspace(0.3, 0.3, num=2):
         LEVEL=0 # BOA dowanward reflectance, 0 : TOA
         atm = AtmAFGL('afglms', comp=[AerOPAC('urban',AOD, 550.)], grid=np.linspace(50., 0., num=40))
         sigma = od2k(atm.calc(wl_abs), 'OD_g')[:,1:]
