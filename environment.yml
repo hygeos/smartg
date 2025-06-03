@@ -1,8 +1,8 @@
 # to update current environment:
-# mamba env update -f environment.yml
+# $ conda env create -p /path/to/env/env-name -f "environment.yml"
+#
 channels:
   - conda-forge
-  - defaults
 dependencies:
   - python<3.12
   - numpy<=1.26.4        # import numpy
