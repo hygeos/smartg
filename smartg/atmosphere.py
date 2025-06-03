@@ -35,22 +35,33 @@ class AerOPAC(object):
 
     Parameters
     ----------
-    filename : str,
+    filename : str
         Complete path to the aerosol file or filename for aerosols located in "auxdata/aerosols/OPAC/mixtures/".  
         Available auxdata aerosols: antarctic, antarctic_spheric, arctic, continental_average,  
         continental_clean, continental_polluted, desert, desert_spheric, maritime_clean,  
         maritime_polluted, mineral_transported, maritime_tropical and urban
-
     tau_ref : float
         Optical thickness at reference wavelength w_ref
     w_ref : float
         Wavelength in nanometers at reference optical depth tau_ref
-    H_mix_min/max : float, optional
-        Force min and max altitude of the mixture
-    H_free_min/max : float, optional
-        Force min and max altitude of free troposphere
-    H_stra_min/max : float, optional
-        Force min and max altitude of stratosphere
+    H_mix_min : float, optional
+        Force min altitude of the mixture
+    H_mix_max : float, optional
+        Force max altitude of the mixture
+    H_free_min : float, optional
+        Force min altitude of the free troposphere
+    H_free_max : float, optional
+        Force max altitude of the free troposphere
+    H_stra_min : float, optional
+        Force min altitude of the stratosphere
+    H_stra_max : float, optional
+        Force max altitude of the stratosphere
+    Z_mix : float, optional
+        Force scale height (see notes) of the mixture
+    Z_free : float, optional
+        Force scale height (see notes) of the free troposphere
+    Z_stra : float, optional
+        Force scale height (see notes) of the stratosphere
     ssa : float | np.ndarray
         Force particle single scattering albedo (scalar or 1-d array-like for multichromatic)
     phase : luts.LUT, optional
@@ -62,6 +73,14 @@ class AerOPAC(object):
         - P11, P21, P33, P34, P22 and P44 for non spherical aerosols
     rh_mix/free/stra : float, optional
         Force relative humidity of mixture/free tropo/strato
+
+    Notes
+    -----
+    The scale height (see Hess et al. 2004) is the variable Z in the following equation:
+
+    - :math:`N(h) = N(0)exp(-h/Z)`
+
+    with N the number density and h the altitude
 
     Examples
     --------
