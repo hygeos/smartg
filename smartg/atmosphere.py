@@ -124,6 +124,18 @@ class AerOPAC(object):
         assert exists(self.filename), '{} does not exist'.format(self.filename)
 
         self.mixture = read_mlut(self.filename)
+        # check if hum dim size == 1 (to avoid lut sub bug)
+        if (self.mixture.axes['hum'].size == 1):
+            from copy import deepcopy
+            from luts.luts import merge
+            hum_v1 = self.mixture.axes['hum'][0]
+            hum_v2 = hum_v1 + 1
+            m1 = deepcopy(self.mixture).sub({'hum':0.})
+            m2 = deepcopy(m1)
+            m1.set_attr('hum',hum_v1)
+            m2.set_attr('hum',hum_v2)
+            m3 = merge([m1,m2], ['hum'])
+            self.mixture = m3
         self.hum_or_reff = "hum"
         self.free_tropo = None
         self.strato = None
