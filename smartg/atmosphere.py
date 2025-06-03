@@ -168,6 +168,15 @@ class AerOPAC(object):
         if (H_free_max-H_free_min > 1e-6):
             filename_tmp = join(dir_auxdata, 'aerosols/OPAC/free_troposphere/free_troposphere_sol.nc')
             self.free_tropo = read_mlut(filename_tmp)
+            # check we have the same wl dim than previous aer pro in vert_content
+            if len(self.vert_content) > 0:
+                aer_prev = self.vert_content[-1]
+                w_cur = self.free_tropo.axes['wav']
+                w_prev = aer_prev.axes['wav']
+                nwcur = len(w_cur)
+                nwprev = len(w_prev)
+                if (nwcur != nwprev or (nwcur == nwprev and not np.array_equal(w_cur, w_prev)) ):
+                    self.free_tropo = self.free_tropo.sub({'wav': Idx(w_prev, fill_value='extrema,warn')})
             self.vert_content.append(self.free_tropo)
             self.H_min.append(H_free_min)
             self.H_max.append(H_free_max)
@@ -175,6 +184,15 @@ class AerOPAC(object):
         if (H_stra_max-H_stra_min > 1e-6):
             filename_tmp = join(dir_auxdata, 'aerosols/OPAC/stratosphere/stratosphere_sol.nc')
             self.strato = read_mlut(filename_tmp)
+            # check we have the same wl dim than previous aer pro in vert_content
+            if len(self.vert_content) > 0:
+                aer_prev = self.vert_content[-1]
+                w_cur = self.strato.axes['wav']
+                w_prev = aer_prev.axes['wav']
+                nwcur = len(w_cur)
+                nwprev = len(w_prev)
+                if (nwcur != nwprev or (nwcur == nwprev and not np.array_equal(w_cur, w_prev)) ):
+                    self.strato = self.strato.sub({'wav': Idx(w_prev, fill_value='extrema,warn')})
             self.vert_content.append(self.strato)
             self.H_min.append(H_stra_min)
             self.H_max.append(H_stra_max)
