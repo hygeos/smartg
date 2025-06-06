@@ -95,11 +95,7 @@ def Si2(lam, kabs, alb, sik, wi_lr, Dij, Ki, lam_lr_grid):
         Ki   : Number of reflection on the surface
         lam_lr_grid : A ndarray of size (NLR) LR wavelengths grid
     '''
-    
-    # interpolation of scattering weights at low spectral resolution to current lambda
-    wi = jnp.interp(lam, lam_lr_grid, wi_lr)
-
-    return (sik * wi * jnp.exp(- jnp.sum(Dij * kabs)) * alb**Ki)**2
+    return Si(lam, kabs, alb, sik, wi_lr, Dij, Ki, lam_lr_grid)**2
 
 
 

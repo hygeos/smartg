@@ -26,6 +26,7 @@ if sys.version_info[:2] >= (3, 0):
     xrange = range
 
 import h5py
+import xarray
 
 
 
@@ -2474,7 +2475,11 @@ def od2k(prof, dataset, axis=1, zreverse=False):
         2D array (NW, NZ) of vertical coefficient (km-1)
     '''
     ot = diff1(prof[dataset].data.astype(np.float32), axis=axis)
-    dz = diff1(prof.axis('z_atm')).astype(np.float32)
+    #dz = diff1(prof.axis('z_atm')).astype(np.float32)
+    zz = prof.axis('z_atm') if not isinstance(prof, xarray.Dataset) else prof['z_atm']
+    dz = diff1(zz).astype(np.float32)
+    
+    
     k  = abs(ot/dz)
     k[np.isnan(k)] = 0
     sl = slice(None,None,-1 if zreverse else 1)
