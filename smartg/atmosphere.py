@@ -52,8 +52,8 @@ class AerOPAC(object):
         Force min and max altitude of free troposphere
     H_stra_min/max : float, optional
         Force min and max altitude of stratosphere
-    ssa : float | np.ndarray
-        Force particle single scattering albedo (scalar or 1-d array-like for multichromatic)
+    ssa : float | list | 1-D ndarray | 2-D ndarray | LUT
+        Force particle single scattering albedo. If a list is given, it will be converted into an ndarray.
     phase : luts.LUT, optional
         Phase matrix F as function of humidity, wavelength, stoke components and scattering angle    
         The variable names must be: hum (humidity), wav (wavelength), stk (stoke components) and  
@@ -115,8 +115,15 @@ class AerOPAC(object):
         self._phase = phase
 
         if ssa is None : self.ssa = None
-        #else           : self.ssa = np.array(ssa)
-        else           : self.ssa = ssa
+        else           :
+            if (isinstance(ssa, list)) :
+                ssa = np.array(ssa)
+            if ( np.isscalar(ssa)                                 or
+                 (isinstance(ssa, np.ndarray) and (ssa.ndim <=2)) or
+                 isinstance(ssa, LUT) ):
+                self.ssa = ssa
+            else:
+                raise ValueError ("The ssa variable must a scalar, a list, an ndarray of dim <= 2, or a LUT.")
 
         if dirname(filename) == '' : self.filename = join(dir_auxdata, 'aerosols/OPAC/mixtures', filename)
         else                       : self.filename = filename
@@ -264,15 +271,14 @@ class AerOPAC(object):
 
         # force ssa
         if self.ssa is not None:
-            #if self.ssa.ndim == 0: # scalar
-            #if (isinstance(self.ssa, np.ndarray) and self.ssa.ndim == 0) or np.isscalar(self.ssa):
-            if False:
-                ssa[:,:] = self.ssa
-            elif isinstance(self.ssa, LUT):
-                ssa[:,:] = self.ssa[Idx(wav)][:,None]
-            else:
-                ssa[:,:] = self.ssa[:,None]
-
+            if np.isscalar(self.ssa): # scalar
+                ssa[:,:] = float(self.ssa)
+            elif isinstance(self.ssa, np.ndarray): # ndarray with dim <= 2
+                if self.ssa.ndim == 0: ssa[:,:] = self.ssa
+                elif self.ssa.ndim == 1: ssa[:,:] = self.ssa[:,None] # If 1d array -> wl considered constant
+                elif self.ssa.ndim == 2: ssa[:,:] = self.ssa[:,:]
+            else: # LUT
+                ssa[:,:] = self.ssa[Idx(wav)][:,None] # introduced by DR. Why only considering 1 wl?
         return dtau, ssa
     
     
