@@ -1,8 +1,14 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
-import numpy as np
 import pytest
+try:
+    from smartg.histories import get_histories, BigSum, Si, Si2
+    SKIP = False
+except ModuleNotFoundError:
+    SKIP = True
+import numpy as np
 import matplotlib.pyplot as plt
-from smartg.histories import get_histories, BigSum, Si, Si2
 from smartg.smartg import Smartg
 from smartg.smartg import LambSurface, Albedo_cst
 from smartg.atmosphere import AtmAFGL, AerOPAC, od2k, diff1
@@ -17,6 +23,7 @@ os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 @pytest.mark.parametrize('N_WL_ABS', [221])
 @pytest.mark.parametrize('WMAX', [350.])
 @pytest.mark.parametrize('WMIN', [320.])
+@pytest.mark.skipif(SKIP, reason="cannot test this since the jax package is not installed.")
 def test_smartg_jax2(N_WL_ABS, WMIN, WMAX, request, NBPHOTONS=2e4, MAX_HIST=2e7):
     ALB_SNOW     = Albedo_cst(0.6)
     ALB_HIST     = Albedo_cst(1.0)
@@ -55,7 +62,7 @@ def test_smartg_jax2(N_WL_ABS, WMIN, WMAX, request, NBPHOTONS=2e4, MAX_HIST=2e7)
     conftest.savefig(request)
 
     
-    
+@pytest.mark.skipif(SKIP, reason="cannot test this since the jax package is not installed.")    
 def test_validation_artdeco(request, NB=1e6, VALPATH='/home/did/RTC/SMART-G/'):
     '''
     Validation of SMART-G with ARTDECO validation data
