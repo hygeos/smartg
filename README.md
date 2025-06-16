@@ -26,13 +26,10 @@ Mathieu Compiègne
 
 The smartg dependencies can be installed on anaconda with the following command:
 
-```
-  # create a new environment and activate it (optional but recommended)
-  conda create -n smartg -c conda-forge mamba
-  conda activate smartg
-
-  # install all SMART-G dependencies
-  mamba env update -f environment.yml
+```bash
+  # create a new environment with all the dependencies
+  conda create -n smartg-env -f environment.yml
+  conda activate smartg-env
 ```
 
 ### 1.2 Auxiliary data
@@ -50,16 +47,22 @@ Examples are provided in the [sample notebooks](notebooks).
 
 ## 3. Tests
 
-Example of pytest.ini file:
+To check that SMART-G is running correctly, run the following command at the root of the project:
+
+```bash
+pytest tests/test_cuda.py tests/test_profile.py tests/test_smartg.py -s -v
+```
+
+To avoid repeating some pytest arguments, a `pytest.ini` file can be created (in the root directory). The following is an example of the contents of such a file:
 ```
 [pytest]
 addopts= --html=test_reportv1.html --self-contained-html -s -v
 ```
-Run the command `pytest tests/test_cuda.py tests/test_profile.py tests/test_smartg.py` to check that SMART-G is correctly running.
+The arguments "--html=test_reportv1.html --self-contained-html" are used to generate an html report containing the results of the tests (sometime with more details e.g. plots), named "test_reportv1.html".
 
 ## 4. Hardware tested
 
-GeForce GTX 1070, GeForce TITAN V, GeForce RTX 2080 Ti, Geforce RTX 3070, Geforce RTX 3090, Geforce RTX 4090, A100
+GeForce GTX 1070, GeForce TITAN V, GeForce RTX 2080 Ti, Geforce RTX 3070, Geforce RTX 3090, Geforce RTX 4090, A100, Geforce RTX 5070 ti
 
 The use of GPUs before 10xx series (Pascal) is depracated as of SMART-G 1.0.0
 

@@ -36,22 +36,33 @@ class AerOPAC(object):
 
     Parameters
     ----------
-    filename : str,
+    filename : str
         Complete path to the aerosol file or filename for aerosols located in "auxdata/aerosols/OPAC/mixtures/".  
         Available auxdata aerosols: antarctic, antarctic_spheric, arctic, continental_average,  
         continental_clean, continental_polluted, desert, desert_spheric, maritime_clean,  
         maritime_polluted, mineral_transported, maritime_tropical and urban
-
     tau_ref : float
         Optical thickness at reference wavelength w_ref
     w_ref : float
         Wavelength in nanometers at reference optical depth tau_ref
-    H_mix_min/max : float, optional
-        Force min and max altitude of the mixture
-    H_free_min/max : float, optional
-        Force min and max altitude of free troposphere
-    H_stra_min/max : float, optional
-        Force min and max altitude of stratosphere
+    H_mix_min : float, optional
+        Force min altitude of the mixture
+    H_mix_max : float, optional
+        Force max altitude of the mixture
+    H_free_min : float, optional
+        Force min altitude of the free troposphere
+    H_free_max : float, optional
+        Force max altitude of the free troposphere
+    H_stra_min : float, optional
+        Force min altitude of the stratosphere
+    H_stra_max : float, optional
+        Force max altitude of the stratosphere
+    Z_mix : float, optional
+        Force scale height (see notes) of the mixture
+    Z_free : float, optional
+        Force scale height (see notes) of the free troposphere
+    Z_stra : float, optional
+        Force scale height (see notes) of the stratosphere
     ssa : float | list | 1-D ndarray | 2-D ndarray | LUT
         Force particle single scattering albedo. If a list is given, it will be converted into an ndarray.
     phase : luts.LUT, optional
@@ -63,6 +74,14 @@ class AerOPAC(object):
         - F11, F21, F33, F34, F22 and F44 for non spherical aerosols
     rh_mix/free/stra : float, optional
         Force relative humidity of mixture/free tropo/strato
+
+    Notes
+    -----
+    The scale height (see Hess et al. 2004) is the variable Z in the following equation:
+
+    - :math:`N(h) = N(0)exp(-h/Z)`
+
+    with N the number density and h the altitude
 
     Examples
     --------
@@ -133,20 +152,18 @@ class AerOPAC(object):
         assert exists(self.filename), '{} does not exist'.format(self.filename)
 
         self.mixture = read_mlut(self.filename)
-
         # check if hum dim size == 1 (to avoid lut sub bug)
         if (self.mixture.axes['hum'].size == 1):
             from copy import deepcopy
             from luts.luts import merge
             hum_v1 = self.mixture.axes['hum'][0]
             hum_v2 = hum_v1 + 1
-            m1 = deepcopy(self.mixture).sub({'hum':0})
+            m1 = deepcopy(self.mixture).sub({'hum':0.})
             m2 = deepcopy(m1)
             m1.set_attr('hum',hum_v1)
             m2.set_attr('hum',hum_v2)
             m3 = merge([m1,m2], ['hum'])
             self.mixture = m3
-
         self.hum_or_reff = "hum"
         self.free_tropo = None
         self.strato = None
@@ -179,7 +196,6 @@ class AerOPAC(object):
         if (H_free_max-H_free_min > 1e-6):
             filename_tmp = join(dir_auxdata, 'aerosols/OPAC/free_troposphere/free_troposphere_sol.nc')
             self.free_tropo = read_mlut(filename_tmp)
-
             # check we have the same wl dim than previous aer pro in vert_content
             if len(self.vert_content) > 0:
                 aer_prev = self.vert_content[-1]
@@ -189,7 +205,6 @@ class AerOPAC(object):
                 nwprev = len(w_prev)
                 if (nwcur != nwprev or (nwcur == nwprev and not np.array_equal(w_cur, w_prev)) ):
                     self.free_tropo = self.free_tropo.sub({'wav': Idx(w_prev, fill_value='extrema,warn')})
-
             self.vert_content.append(self.free_tropo)
             self.H_min.append(H_free_min)
             self.H_max.append(H_free_max)
@@ -197,7 +212,6 @@ class AerOPAC(object):
         if (H_stra_max-H_stra_min > 1e-6):
             filename_tmp = join(dir_auxdata, 'aerosols/OPAC/stratosphere/stratosphere_sol.nc')
             self.strato = read_mlut(filename_tmp)
-
             # check we have the same wl dim than previous aer pro in vert_content
             if len(self.vert_content) > 0:
                 aer_prev = self.vert_content[-1]
@@ -207,7 +221,6 @@ class AerOPAC(object):
                 nwprev = len(w_prev)
                 if (nwcur != nwprev or (nwcur == nwprev and not np.array_equal(w_cur, w_prev)) ):
                     self.strato = self.strato.sub({'wav': Idx(w_prev, fill_value='extrema,warn')})
-
             self.vert_content.append(self.strato)
             self.H_min.append(H_stra_min)
             self.H_max.append(H_stra_max)

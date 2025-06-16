@@ -6,6 +6,30 @@
            ###########################
 
 
+v1.0.7
+------
+Release data: 2025-06-03
+
+* Correct the env file by removing default conda channel
+
+* Update the README
+
+* Correct several bugs occuring when a user incorporate its own mixture file
+  - For mixture with wl axis dimension different to the provided mixture wl dimension
+  - For mixture with a humidity axis size equal to 1
+
+* Complete the python doc of AerOPAC
+  - Missing Z_mix, Z_free and Z_stra definitions
+
+
+v1.0.6
+------
+Release data: 2025-05-25
+
+* Avoid bug due to scipy function renaming since version 1.14
+  - Force scipy version<1.14 while installing python dependencies
+
+
 v1.0.5
 ------
 Release date: 2024-12-03
