@@ -711,7 +711,7 @@ class Smartg(object):
         else:
             self.common_attrs['device'] =self.ctx.get_device().name()
             try:
-                self.common_attrs['device_number'] = self.ctx.getçdevice().get_attributes()[pycuda._driver.device_attribute.MULTI_GPU_BOARD_GROUP_ID]
+                self.common_attrs['device_number'] = self.ctx.get_device().get_attributes()[pycuda._driver.device_attribute.MULTI_GPU_BOARD_GROUP_ID]
             except Exception:
                 self.common_attrs['device_number'] = 'undefined'
         self.common_attrs['pycuda_version'] = pycuda.VERSION_TEXT
