@@ -591,29 +591,44 @@ class Smartg(object):
         - sif : boolean, if True Sun Induced Fluorescence included, default False
 
     '''
-    def __init__(self, pp=True, debug=False, autoinit=False,
+    def __init__(self, pp=True, debug=False, autoinit=True,
                  verbose_photon=False,
                  double=True, alis=False, back=False, bias=True, alt_pp=False, obj3D=False, 
-                 opt3D=False, device=None, sif=False, thermal=False, rng='PHILOX', cache_dir='/tmp/'):
+                 opt3D=False, device=None, sif=False, thermal=False, rng='PHILOX', cache_dir='/tmp/',
+                 keep_context=None):
         assert not ((device is not None) and ('CUDA_DEVICE' in os.environ)), "Can not use the 'device' option while the CUDA_DEVICE is set"
 
         if device is not None:
             env_modif = {'CUDA_DEVICE': str(device)}
         else:
             env_modif = {}
-        #with modified_environ(**env_modif):
-        #    import pycuda.autoinit
+
+        if not autoinit:
+            self.keep_context = keep_context if keep_context is not None else False
+        else:
+            if keep_context is not None:
+                raise ValueError("The parameter keep_context can be defined only if 'autoinit' is False.")
+            self.keep_context = True
             
         if (autoinit):
             with modified_environ(**env_modif):
-                import pycuda.autoinit
-                self.ctx = pycuda.autoinit.context
+                try:
+                    import pycuda.autoinit
+                    self.ctx = pycuda.autoinit.context
+                except:
+                    # In case cuda context has been manually popped
+                    from importlib import reload, import_module
+                    pycuda.autoinit = import_module('pycuda.autoinit')
+                    reload(pycuda.autoinit)
+                    self.ctx = pycuda.autoinit.context
         else:
             import pycuda
             import pycuda.driver as cuda
             cuda.init()
-            self.ctx = cuda.Device(0).make_context()
-
+            from pycuda.tools import make_default_context
+            self.ctx = make_default_context()
+        
+        self.autoinit = autoinit
         self.pp = pp
         self.double = double
         self.alis = alis
@@ -719,14 +734,19 @@ class Smartg(object):
         self.common_attrs.update(get_git_attrs())
 
 
-    def __del__(self):
+    def clear_context(self):
         try:
+            self.ctx.pop()
             self.ctx.detach()
             self.ctx = None
-            print("CUDA context detached")
-        except Exception as e:
-            print("Error while detaching CUDA context : ", e)
-            pass
+            from pycuda.tools import clear_context_caches
+            clear_context_caches()
+            if self.autoinit:
+                # In case of autoinit delete pycuda.autoinit
+                import pycuda.autoinit
+                del pycuda.autoinit
+        except:
+            print("There is no current context to clear.")
 
 
     def run(self, wl,
@@ -1386,8 +1406,12 @@ class Smartg(object):
             output = output.dropaxis('wavelength')
             output.attrs['wavelength'] = wl[:]
         
-
-
+        if not self.autoinit and not self.keep_context:
+            self.ctx.pop()
+            self.ctx.detach()
+            self.ctx = None
+            from pycuda.tools import clear_context_caches
+            clear_context_caches()
 
         return output
 
@@ -2772,33 +2796,9 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
     else:
         sigma = None
 
-    NPhotonsInTot_VAL = NPhotonsInTot.get()
-    tabPhotonsTot_VAL = tabPhotonsTot.get()
-    tabDistTot_VAL    = tabDistTot.get()
-    tabHistTot_VAL    = tabHistTot.get()
-    tabTransDir_VAL   = tabTransDir.get()
-    NPhotonsOutTot_VAL= NPhotonsOutTot.get()
-    wPhCatTot_VAL     = wPhCatTot.get()
-    wPhCat2Tot_VAL    = wPhCat2Tot.get()
-    del NPhotonsInTot
-    del tabPhotonsTot
-    del tabDistTot
-    del tabTransDir
-    del NPhotonsOutTot
-    del wPhCatTot
-    del wPhCat2Tot
-    del NPhotonsIn
-    del tabPhotons
-    del tabDist
-    del NPhotonsOut
-    del wPhCat
-    del wPhCat2
-    
-    
-    return NPhotonsInTot_VAL, tabPhotonsTot_VAL, tabDistTot_VAL, tabHistTot_VAL, tabTransDir_VAL, errorcount, \
-        NPhotonsOutTot_VAL, sigma, N_simu, secs_cuda_clock, tabMatRecep, matCats, matLoss, wPhCatTot_VAL, wPhCat2Tot_VAL
-    #return NPhotonsInTot.get(), tabPhotonsTot.get(), tabDistTot.get(), tabHistTot_TEST, tabTransDir.get(), errorcount, \
-        #NPhotonsOutTot.get(), sigma, N_simu, secs_cuda_clock, tabMatRecep, matCats, matLoss, wPhCatTot.get(), wPhCat2Tot.get()
+
+    return NPhotonsInTot.get(), tabPhotonsTot.get(), tabDistTot.get(), tabHistTot.get(), tabTransDir.get(), errorcount, \
+        NPhotonsOutTot.get(), sigma, N_simu, secs_cuda_clock, tabMatRecep, matCats, matLoss, wPhCatTot.get(), wPhCat2Tot.get()
 
 
 def get_git_attrs():
