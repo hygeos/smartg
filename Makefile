@@ -1,3 +1,8 @@
+# !!
+# Using this makefile is now deprecated.
+# Please use the method described in the README file to download the auxiliary data.
+# !!
+
 WGET = @wget -c -P
 # auxdata source: HYGEOS
 aer_URL_old = https://docs.hygeos.com/s/F5L9t86DfAiPBBB/download
