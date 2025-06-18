@@ -34,9 +34,26 @@ The smartg dependencies can be installed on anaconda with the following command:
 
 ### 1.2 Auxiliary data
 
-The auxiliary data can be downloaded with the following command:
+The auxiliary data can be downloaded as follow:
+
+```python
+>>> # Example to download all the data. See the docstring for more details.
+>>> from smartg.auxdata import download
+>>> download('dir/path/where/to/save/data/', data_type='all')
 ```
-$ make auxdata_all
+
+The environment variable `SMARTG_AUXDATA_DIR` have to be defined.
+
+For example, in the `.bashrc` / `.zshrc` file the following can be added:
+
+```
+export SMARTG_AUXDATA_DIR="dir/path/where/to/save/data/"
+```
+
+or in a `.env` file in the SMART-G root directory:
+
+```
+SMARTG_AUXDATA_DIR=dir/path/where/to/save/data/
 ```
 
 ## 2. Examples
