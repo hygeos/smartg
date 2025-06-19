@@ -169,7 +169,7 @@ def read_cld_nth_cte(filename, nb_theta=int(721)):
         reff = ds["reff"].data
         wavelength = ds["wavelen"].data*1e3
 
-        P = LUT( np.full((NWAV, NBREFF, 6, NBTHETA), np.NaN, dtype=np.float32),
+        P = LUT( np.full((NWAV, NBREFF, 6, NBTHETA), np.nan, dtype=np.float32),
                  axes=[wavelength, reff, None, theta],
                  names=['wav_phase', 'reff', 'stk', 'theta_atm'],
                  desc="phase_atm" )
@@ -327,7 +327,7 @@ class Cloud3D(object):
         if (self.ext_ref is not None) : return self.ext_ref
 
         # Read only the disired column
-        ext_ref = pd.read_csv(self.ext_reff_filename, skiprows = 3, header=None, usecols=[3], sep='\s+', dtype=float).values
+        ext_ref = pd.read_csv(self.ext_reff_filename, skiprows = 3, header=None, usecols=[3], sep=r'\s+', dtype=float).values
 
         # If there are empty dimensions remove them
         ext_ref = np.squeeze(ext_ref)
@@ -1318,7 +1318,7 @@ class Atm3D(object):
 
             # ===== 2) phase matrix indices to take for all cloud cells
             # Obtain the correct indices from the unique radii phase matrix
-            phase_3d_indices_w0 = np.full(cld_reff.size, np.NaN, dtype=np.int32)
+            phase_3d_indices_w0 = np.full(cld_reff.size, np.nan, dtype=np.int32)
             for ireff in range (0, nreff_unique):
                 phase_3d_indices_w0[np.squeeze(np.argwhere( cld_reff == cld_reff_unique[ireff]))] = ireff
 
@@ -1423,7 +1423,7 @@ class Atm3D(object):
 
             # ===== 2) phase matrix indices to take for all cloud cells
             # Obtain the correct indices from the unique radii phase matrix
-            tot_phase_indices = np.full(cld_reff.size, np.NaN, dtype=np.int32)
+            tot_phase_indices = np.full(cld_reff.size, np.nan, dtype=np.int32)
             for ireff in range (0, nreff_unique):
                 tot_phase_indices[np.squeeze(np.argwhere( cld_reff == cld_reff_unique[ireff]))] = ireff
 

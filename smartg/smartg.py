@@ -10,7 +10,7 @@ Speed-up Monte Carlo Advanced Radiative Transfer Code using GPU
 
 import os
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timezone
 from numpy import pi
 from smartg.atmosphere import Atmosphere, od2k, BPlanck
 from smartg.water import IOP_base
@@ -2951,8 +2951,9 @@ class RNG_PHILOX(object):
     def setup(self, SEED, XBLOCK, XGRID):
         if SEED == -1:
             # SEED is based on clock
-            SEED = np.uint32((datetime.now()
-                - datetime.utcfromtimestamp(0)).total_seconds()*1000)
+            # A multiply by 1000 has been removed to avoid OverflowError due to uint32 limit
+            SEED = np.uint32((datetime.now(tz=timezone.utc)
+                              - datetime(1970, 1, 1, tzinfo=timezone.utc)).total_seconds())
 
         state = np.zeros(XBLOCK*XGRID+1, dtype='uint32')
         state[0] = SEED
@@ -2996,8 +2997,8 @@ class RNG_CURAND_PHILOX(object):
     def setup(self, SEED, XBLOCK, XGRID):
         if SEED == -1:
             # SEED is based on clock
-            SEED = np.uint32((datetime.now()
-                - datetime.utcfromtimestamp(0)).total_seconds()*1000)
+            SEED = np.uint32((datetime.now(tz=timezone.utc)
+                             - datetime(1970, 1, 1, tzinfo=timezone.utc)).total_seconds())
 
         cuda.memcpy_htod(self.mod.get_global('XBLOCKd')[0], np.array([XBLOCK], dtype=np.int32))
         cuda.memcpy_htod(self.mod.get_global('XGRIDd')[0], np.array([XGRID], dtype=np.int32))

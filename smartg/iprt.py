@@ -475,7 +475,7 @@ def read_phase_nth_cte(filename, nb_theta=int(721), convert_IparIper=True, norma
     theta = np.linspace(0., 180., num=NBTHETA)
     wavelength = ds["wavelen"].data*1e3
 
-    P = LUT( np.full((NWAV, NBRH_OR_REFF, NBSTK, NBTHETA), np.NaN, dtype=np.float32),
+    P = LUT( np.full((NWAV, NBRH_OR_REFF, NBSTK, NBTHETA), np.nan, dtype=np.float32),
                 axes=[wavelength, rh_reff, None, theta],
                 names=['wav_phase', rh_or_reff, 'stk', 'theta_atm'],
                 desc="phase_atm" )

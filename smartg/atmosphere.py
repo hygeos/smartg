@@ -349,7 +349,7 @@ class AerOPAC(object):
                 else                                  : hum_or_reff_val = rh
 
                 P = LUT(
-                    np.zeros((nwav, len(rh)-1, 6, NBTHETA), dtype='float32')+np.NaN,
+                    np.zeros((nwav, len(rh)-1, 6, NBTHETA), dtype='float32')+np.nan,
                     axes=[wav, None, None, theta],
                     names=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
                     )  # nlam_tabulated, nrh, stk, NBTHETA
@@ -360,7 +360,7 @@ class AerOPAC(object):
                     P.data[:,irh_,0:nphamat,:] = phase_bis.sub()[:,irh,:,:].data
             elif (self.hum_or_reff == 'reff'):
                 P = LUT(
-                    np.zeros((nwav, 1, 6, NBTHETA), dtype='float32')+np.NaN,
+                    np.zeros((nwav, 1, 6, NBTHETA), dtype='float32')+np.nan,
                     axes=[wav, None, None, theta],
                     names=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
                     )  # nlam_tabulated, nrh, stk, NBTHETA
@@ -677,7 +677,7 @@ class Species(object):
         if (self._nrh_reff > 1) and (self._rh_or_reff == 'rh'):
             # drop first altitude element
             P = LUT(
-                np.zeros((nwav, len(rh)-1, 6, NBTHETA), dtype='float32')+np.NaN,
+                np.zeros((nwav, len(rh)-1, 6, NBTHETA), dtype='float32')+np.nan,
                 axes=[wav, None, None, theta],
                 names=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
                 )  # nlam_tabulated, nrh, stk, NBTHETA
@@ -688,7 +688,7 @@ class Species(object):
 
         else: # phase function does not depend on rh
             P = LUT(
-                np.zeros((nwav, 1, 6, NBTHETA), dtype='float32')+np.NaN,
+                np.zeros((nwav, 1, 6, NBTHETA), dtype='float32')+np.nan,
                 axes=[wav, None, None, theta],
                 names=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
                 )  # nlam_tabulated, nrh, stk, NBTHETA
@@ -808,7 +808,7 @@ class SpeciesUser(Species):
         if (NBTHETA != len(phase_bis.axes[3])): phase_bis = phase_bis.sub()[:,:,:,Idx(theta)]
 
         P = LUT(
-            np.zeros((nwav, 1, 6, NBTHETA), dtype='float32')+np.NaN,
+            np.zeros((nwav, 1, 6, NBTHETA), dtype='float32')+np.nan,
             axes=[wav, None, None, theta],
             names=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
             )  # nlam_tabulated, nrh, stk, NBTHETA
@@ -2200,15 +2200,35 @@ def ma(co2):
     return 15.0556 * co2*1e-6 + 28.9595
 
 def raycrs(lam, co2):
-    ''' Rayleigh cross section (N wavelengths x M layers)
-        lam : um (N)
-        co2 : ppm ((M)
-    '''
-    LAM = lam.reshape((-1,1))
+    """
+    Compute the Rayleigh cross section 
+    
+    Parameters:
+    -----------
+    lam : 1-D ndarray
+        The wavelength(s) in um
+    co2 : float | 1-D ndarray
+        CO2 concentration(s) in ppm
+
+    Returns:
+    out : 2-D ndarray
+        The Rayleigh cross section (N wavelengths x M layers)
+    """
+
+    if not isinstance(lam, np.ndarray):
+        raise ValueError("The parameter lam must be a 1-D np.ndarray.")
+    if not np.isscalar(co2) and not isinstance(co2, np.ndarray):
+        raise ValueError("The parameter co2 must be a scalar or a 1-D ndarray.")
+
+    # Ensure float64 due to numpy 2
+    lam = lam.astype(np.float64)
+    co2 = np.float64(co2)
+
     Avogadro = constants.value('Avogadro constant')
     Ns = Avogadro/22.4141 * 273.15/288.15 * 1e-3
     nn2 = n_air(lam, co2)**2
-    return (24*np.pi**3 * (nn2-1)**2/(LAM*1e-4)**4/Ns**2/(nn2+2)**2 * Fair(lam, co2))
+
+    return (24*np.pi**3 * (nn2-1)**2/(lam[:,None]*1e-4)**4/Ns**2/(nn2+2)**2 * Fair(lam, co2))
 
 def g0(lat):
     ''' gravity acceleration at the ground
