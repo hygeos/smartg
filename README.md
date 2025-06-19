@@ -56,14 +56,6 @@ or (not recommended) in a `.env` file in the SMART-G root directory:
 SMARTG_AUXDATA_DIR=dir/path/where/to/save/data/
 ```
 
-but here, the `.env` file should be sourced every time a new terminal session is opened:
-
-```bash
-set -a
-source .env
-set +a
-```
-
 
 ## 2. Examples
 

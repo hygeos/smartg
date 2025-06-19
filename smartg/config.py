@@ -15,7 +15,7 @@ dir_root = dirname(dirname(realpath(__file__)))
 NPSTK = 4
 dir_auxdata_old = join(dir_root, 'auxdata')
 
-load_dotenv(dir_root) # To consider .env file
+load_dotenv(join(dir_root, '.env')) # To consider .env file
 
 # Allow old way in v1.1, but remove it in next releases
 try:
