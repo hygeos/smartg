@@ -27,3 +27,4 @@ dependencies:
     - pycuda
     - git+https://github.com/hygeos/luts.git
     - hitran-api
+    - jax[cuda12]
