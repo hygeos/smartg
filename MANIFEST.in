@@ -1,2 +1,4 @@
 recursive-include smartg/tools *
 recursive-include smartg/src *
+include notebooks/*.ipynb
+recursive-include smartg/tests *
