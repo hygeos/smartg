@@ -1,83 +1,91 @@
+[build-system]
+build-backend = "setuptools.build_meta"
+requires = ["setuptools>=42"]
+
 [project]
+name = "smartg"
+version = "1.1.0.dev2"
+description = """
+SMART-G (Speed-up Monte Carlo Advanced Radiative Transfer Code using GPU) is a radiative \
+transfer code using a Monte-Carlo technique to simulate the propagation of the polarized \
+light in the atmosphere and/or ocean, and using GPU acceleration."""
 authors = [
     {name = "Didier Ramon", email = "dr@hygeos.com"},
-    {name = "Mustapha Moulana", email = "mm@hygeos.com"}
+    {name = "Mustapha Moulana", email = "mm@hygeos.com"},
+    {name = "François Steinmetz", email = "fs@hygeos.com"},
+    {name = "Dominique Jolivet", email = "dj@hygeos.com"},
+    {name = "Mathieu Compiègne", email = "mc@hygeos.com"}
 ]
-name = "smartg"
-requires-python = ">= 3.11"
-version = "0.1.0"
+readme = "README.md"
+classifiers = [
+    'Development Status :: 5 - Production/Stable',
+    'License :: Free for non-commercial use',
+    'License :: Other/Proprietary License',
+    'Intended Audience :: Science/Research',
+    'Intended Audience :: Developers',
+    'Programming Language :: Python',
+    'Programming Language :: Python :: 3.10',
+    'Programming Language :: Python :: 3.11',
+    'Programming Language :: Python :: 3.12',
+    'Programming Language :: Python :: 3.13',
+    'Topic :: Scientific/Engineering'
+]
+requires-python = ">= 3.10,< 3.14"
 dependencies = [
-    "luts @ git+https://github.com/hygeos/luts.git", 
-    "core @ git+https://github.com/hygeos/core",
-    # "pytest",
-    # "pytest-html",
-    # "pytest-xdist",
-    "xarray",
-    "pandas",
-    "netcdf4",
-    "h5py",
-    "papermill",
-    # "pycuda",
-    "progressbar2",
-    "scipy",
-    # "ipykernel",
-    # "ipywidgets",
+    "numpy", 
+    "pandas", 
+    "scipy", 
+    "h5py", 
+    "pyarrow", 
+    "openpyxl", 
+    "progressbar2", 
     "matplotlib", 
-    # "jax", 
-    "geoclide", 
-    "statsmodels", "gatiab",
+    "python-dotenv",
+    "notebook",
+    "ipywidgets",
+    "ipympl",
+    "pyhdf",
+    "pycuda",
+    "luts @ git+https://github.com/hygeos/luts.git",
+    "hitran-api"
 ]
 
-[project.scripts]
-smartg = "smartg.cli:entry"
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "pytest-xdist",
+    "pytest-html",
+    "papermill"
+]
+extra = [
+    "gatiab",
+    "geoclide",
+    "statsmodels",
+    "jax[cuda12]"
+]
 
 
-[build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+[project.urls]
+Source = "https://github.com/hygeos/smartg"
 
-[tool.pixi.project]
+[tool.setuptools]
+packages = ["smartg"]
+
+# **** pixi configuration ****
+[tool.pixi.workspace]
 channels = ["conda-forge"]
 platforms = ["linux-64"]
 
 [tool.pixi.pypi-dependencies]
 smartg = { path = ".", editable = true }
 
-[tool.pixi.dependencies]
-pytest = "*"
-pytest-html = "*"
-pytest-xdist = "*"
-matplotlib-base = "*"
-xarray = "*"
-pandas = "*"
-netcdf4 = "*"
-h5py = "*"
-papermill = "*"
-pycuda = "*"
-progressbar2 = "*"
-scipy = "*"
-ipykernel = "*"
-ipywidgets = "*"
-matplotlib = "*"
-
-pip = "*"
-cudnn = "*" # add to system ?
-
-geoclide = "*"
-statsmodels = "*"
-gatiab = "*"
-
 [tool.pixi.environments]
-default = { features = ["hyp", "sys"], solve-group = "default" }
-
-[tool.pixi.feature.hyp.dependencies]
-xarray = "*"
-dask = "*"
-scipy = "*"
-[tool.pixi.feature.sys.dependencies]
-
+# pixi shell # default environment
+# pixi shell --environment extra # environment with extra dependencies
+default = { features = ["test"], solve-group = "default" }
+extra = { features = ["test", "extra"], solve-group = "default" }
 
 [tool.pixi.tasks]
-jax_test = "python -c 'import jax; print(jax.devices())'"
-packaging = {cmd = "python main.py", cwd = "scripts"}
-jax_install = "pip install 'jax[cuda12-local]'"
+# pixi run test-basic
+test-basic = "pytest tests/test_cuda.py tests/test_profile.py tests/test_smartg.py -s -v"
+test-all = "pytest tests/ -s -v"
