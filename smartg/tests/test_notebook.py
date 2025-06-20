@@ -2,7 +2,7 @@ import papermill as pm
 
 # import os
 from os.path import join, dirname, realpath
-ROOTPATH = dirname(dirname(realpath(__file__)))
+ROOTPATH = dirname(dirname(dirname(realpath(__file__))))
 
 def test_demo_notebook():
     """

@@ -8,7 +8,7 @@ from pathlib import Path
 import logging
 
 # ***************************** Global variable(s) ******************************
-ROOTPATH = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+ROOTPATH = os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
 AER_SPHERIC = ['continental_clean','continental_average','continental_polluted','urban','desert_spheric',
                'maritime_clean','maritime_polluted','maritime_tropical','arctic','antarctic_spheric']

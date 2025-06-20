@@ -16,7 +16,7 @@ from luts.luts import LUT
 from smartg.config import DIR_AUXDATA
 
 import os
-from tests import conftest
+from smartg.tests import conftest
 
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
@@ -619,7 +619,7 @@ def test_A5_al(request, S1DF):
         
         # === Plot and comparison with MYSTIC (to save in the report)
         smartg_a5_al = pd.read_csv(tmp_file_a5_al, header=None, sep=r'\s+', dtype=float, comment="#").values
-    mystic_a5_al = pd.read_csv(ROOTPATH + "/auxdata/IPRT/phaseA/mystic_res/iprt_case_a5_al_mystic.dat", header=None, sep=r'\s+', dtype=float, comment="#").values
+    mystic_a5_al = pd.read_csv(DIR_AUXDATA + "/IPRT/phaseA/mystic_res/iprt_case_a5_al_mystic.dat", header=None, sep=r'\s+', dtype=float, comment="#").values
     VAAn = VAA
     NVAA = len(VAAn)
 
@@ -670,7 +670,7 @@ def test_A5_al(request, S1DF):
 
     # === Compute the delta_m values and analyse them with the previous saved validated ones
     # SMARTG ref results
-    smartg_a5_al_ref = pd.read_csv(ROOTPATH + "/auxdata/IPRT/phaseA/smartg_ref_res/iprt_output_format/iprt_case_a5_smartg_al_ref.dat", header=None, sep=r'\s+', dtype=float, comment="#").values
+    smartg_a5_al_ref = pd.read_csv(DIR_AUXDATA + "/IPRT/phaseA/smartg_ref_res/iprt_output_format/iprt_case_a5_smartg_al_ref.dat", header=None, sep=r'\s+', dtype=float, comment="#").values
     IQUVS_with_std_ref = seclect_iprt_IQUV(smartg_a5_al_ref, 1., change_U_sign=False, inv_thetas=True, stdev=True)
     IQUVS_al_ref = np.zeros((4,NVAA), dtype=np.float32)
     IQUVS_al_std_ref = np.zeros((4,NVAA), dtype=np.float32)

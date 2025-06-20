@@ -13,8 +13,7 @@ from smartg.water import IOP_1
 from smartg.reptran import REPTRAN, reduce_reptran
 from smartg.tools.smartg_view import smartg_view
 import os
-from . import conftest
-os.environ['PATH'] += ':/usr/local/cuda/bin'
+from smartg.tests import conftest
 
 NBPHOTONS = 1e4
 
