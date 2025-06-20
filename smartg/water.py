@@ -11,7 +11,7 @@ from os.path import realpath, dirname, join
 from smartg.config import NPSTK
 from smartg.tools.phase import fournierForand, integ_phase, calc_iphase
 from smartg.bandset import BandSet
-from smartg.config import dir_auxdata as dir_aux
+from smartg.config import DIR_AUXDATA as dir_aux
 
 def diff2(x):
     return np.ediff1d(x, to_end=[0.])

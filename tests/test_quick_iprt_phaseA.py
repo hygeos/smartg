@@ -13,10 +13,10 @@ from smartg.iprt import convert_SGout_to_IPRTout, select_and_plot_polar_iprt, co
 from smartg.libATM3D import read_cld_nth_cte
 from smartg.tools.phase import calc_iphase
 from luts.luts import LUT
+from smartg.config import DIR_AUXDATA
 
 import os
 from tests import conftest
-# os.environ['PATH'] += ':/usr/local/cuda/bin'
 
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg

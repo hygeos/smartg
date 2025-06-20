@@ -20,7 +20,7 @@ load_dotenv(join(dir_root, '.env')) # To consider .env file
 # Allow old way in v1.1, but remove it in next releases
 try:
     dir_auxdata_new = environ['SMARTG_DIR_AUXDATA']
-    dir_auxdata = dir_auxdata_new
+    DIR_AUXDATA = dir_auxdata_new
 except KeyError:
     if not (isdir(dir_auxdata_old)):
         raise NameError("The environment variable 'SMARTG_DIR_AUXDATA' does not exist!")
@@ -31,8 +31,8 @@ except KeyError:
                        "not be allowed in next releases. Please give the auxdata directory path by \n" + \
                        "using the environment variable 'SMARTG_DIR_AUXDATA' instead."
         warnings.warn(warn_message, DeprecationWarning)
-        dir_auxdata = dir_auxdata_old
+        DIR_AUXDATA = dir_auxdata_old
 
 # TODO for constant variable must use uppercase 
-dir_libradtran = join(dir_auxdata, 'libRadtran')
+dir_libradtran = join(DIR_AUXDATA, 'libRadtran')
 dir_libradtran_atmmod = join(dir_libradtran, 'data/atmmod/')

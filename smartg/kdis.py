@@ -15,9 +15,9 @@ from itertools import product
 from smartg.tools.interp import interp2
 import h5py
 
-from smartg.config import dir_auxdata
+from smartg.config import DIR_AUXDATA
 from os.path import dirname, join
-dir_kdis = join(dir_auxdata, 'kdis')
+dir_kdis = join(DIR_AUXDATA, 'kdis')
 import warnings
 
 import glob

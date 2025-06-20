@@ -16,7 +16,7 @@ import matplotlib.gridspec as gridspec
 import matplotlib.ticker as ticker
 
 from os.path import join, dirname, exists
-from smartg.config import dir_auxdata
+from smartg.config import DIR_AUXDATA
 from luts.luts import read_mlut
 
 import xarray as xr
@@ -235,7 +235,7 @@ class Cloud3D(object):
                  reff_acc = None, reff_min = None, reff_max = None,
                  phase=None):
         
-        if dirname(filename) == '' : self.filename = join(dir_auxdata, 'clouds', filename)
+        if dirname(filename) == '' : self.filename = join(DIR_AUXDATA, 'clouds', filename)
         else                       : self.filename = filename
         if (not "_sol" in filename) and (not filename.endswith('.nc')) : self.filename = self.filename + '_sol.nc'
         elif (not filename.endswith('.nc'))                            : self.filename += '.nc'

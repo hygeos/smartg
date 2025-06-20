@@ -8,12 +8,12 @@ from luts.luts import LUT, MLUT
 from smartg.atmosphere import od2k, BPlanck
 from os.path import dirname, join
 from scipy.integrate import quad, simpson
-from smartg.config import dir_auxdata
+from smartg.config import DIR_AUXDATA
 from scipy.interpolate import interp1d
 import netCDF4
 from smartg.tools.interp import interp2, interp3
 
-dir_reptran = join(dir_auxdata, 'reptran')
+dir_reptran = join(DIR_AUXDATA, 'reptran')
 
 def reduce_reptran(mlut, ibands, use_solar=False, integrated=False, extern_weights=None):
     '''
