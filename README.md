@@ -23,16 +23,33 @@ Mathieu Compiègne
 ## 1. Installation
 
 ### 1.1 Dependencies
+### 1.1.1 Pixi (recommended)
+[Pixi](https://pixi.sh/) is recommended for its fast dependency resolution and robust environment management. Unlike Conda, which only considers Conda packages during conflict resolution, Pixi consider both Conda and pip package versions when solving dependencies.
 
-The smartg dependencies can be installed on anaconda with the following command:
+To create and activate the environment, use the following command:
 
 ```bash
-  # create a new environment with all the dependencies
+  pixi shell
+```
+
+To consider all extra dependencies (e.g. jax), use instead:
+
+```bash
+  pixi shell --environment extra
+```
+
+
+
+### 1.1.2 Anaconda/Miniconda (alternative)
+
+With Anaconda/Miniconda, use the following command:
+
+```bash
   conda create -n smartg-env -f environment.yml
   conda activate smartg-env
 ```
 
-For a full installation (e.g. with jax support), replace `environment.yml` by `environment-extra.yml`.
+For a full installation (extra dependencies), replace `environment.yml` by `environment-extra.yml`.
 
 ### 1.2 Auxiliary data
 

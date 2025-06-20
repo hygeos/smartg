@@ -23,6 +23,7 @@ dependencies:
   - ipympl
   - pyhdf
   - gatiab
+  - geoclide
   - statsmodels
   - pip
   - pip:
