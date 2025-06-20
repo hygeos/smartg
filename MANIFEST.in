@@ -1,0 +1,3 @@
+recursive-include smartg/tools *
+recursive-include smartg/src *
+recursive-include smartg/validation *
