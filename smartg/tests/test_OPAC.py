@@ -32,7 +32,7 @@ DELTA_R_SSA = 0.2 # relative error in %
 
 # *********************************** logging ***********************************
 # Create log file
-Path(os.path.join(ROOTPATH, "tests/logs/")).mkdir(parents=True, exist_ok=True)
+Path(os.path.join(ROOTPATH, "smartg/tests/logs/")).mkdir(parents=True, exist_ok=True)
 
 # Create a named logger
 logger = logging.getLogger('test_OPAC')
@@ -51,7 +51,7 @@ console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
 # Create a file handler
-file_handler = logging.FileHandler(ROOTPATH + "/tests/logs/OPAC.log", mode='w')
+file_handler = logging.FileHandler(ROOTPATH + "/smartg/tests/logs/OPAC.log", mode='w')
 file_handler.setLevel(logging.INFO)
 
 # Set the formatter for the file handler

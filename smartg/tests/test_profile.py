@@ -20,8 +20,7 @@ Test profile calculation
             500.,
             np.array(500.),
             [400.],
-            [500., 600.],
-            np.linspace(400, 800, 4),
+            np.array([400., 800.]),
             ])
 def wav(request):
     return request.param

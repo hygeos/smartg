@@ -1,15 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import pytest
 import pycuda.driver as drv
-import pycuda.tools
 import pycuda.autoinit
 import numpy
-import numpy.linalg as la
 from pycuda.compiler import SourceModule
 from pycuda.gpuarray import zeros as gpuzeros
-import os
 
 
 def test_pycuda():

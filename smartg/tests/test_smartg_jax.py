@@ -16,7 +16,7 @@ from smartg.atmosphere import AtmAFGL, AerOPAC, od2k, diff1
 from smartg.albedo import Albedo_cst
 from luts import LUT
 from smartg.tools.smartg_view import mdesc
-from smartg.tests import conftest
+from smartg import conftest
 import os
 #os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"]   = "platform"

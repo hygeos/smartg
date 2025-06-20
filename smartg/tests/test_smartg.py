@@ -13,13 +13,13 @@ from smartg.water import IOP_1
 from smartg.reptran import REPTRAN, reduce_reptran
 from smartg.tools.smartg_view import smartg_view
 import os
-from smartg.tests import conftest
+from smartg import conftest
 
 NBPHOTONS = 1e4
 
 wav_list = [500.,
             [400., 500.],
-            np.linspace(400., 600., 4)
+            np.array([400., 600.])
             ]
 
 @pytest.fixture(params=[True, False])

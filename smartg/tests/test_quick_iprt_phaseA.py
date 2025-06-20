@@ -16,7 +16,7 @@ from luts.luts import LUT
 from smartg.config import DIR_AUXDATA
 
 import os
-from smartg.tests import conftest
+from smartg import conftest
 
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
