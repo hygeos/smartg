@@ -32,7 +32,7 @@ The smartg dependencies can be installed on anaconda with the following command:
   conda activate smartg-env
 ```
 
-For a full installation with jax support, replace `environment.yml` by `environment-extra.yml`.
+For a full installation (e.g. with jax support), replace `environment.yml` by `environment-extra.yml`.
 
 ### 1.2 Auxiliary data
 

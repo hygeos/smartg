@@ -22,6 +22,8 @@ dependencies:
   - ipywidgets
   - ipympl
   - pyhdf
+  - gatiab
+  - statsmodels
   - pip
   - pip:
     - pycuda
