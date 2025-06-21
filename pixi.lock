@@ -2655,7 +2655,7 @@ packages:
 - pypi: .
   name: smartg
   version: 1.1.0.dev2
-  sha256: b1f39e5a2109bb613853fc93276effab8cacda63752ce9d1291e583ae0b5a010
+  sha256: e4433487f639862289453f3315b443cacee371a4b3cb226fa8f84f832662ec58
   requires_dist:
   - numpy
   - pandas
