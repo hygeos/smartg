@@ -548,49 +548,56 @@ class CusBackward(object):
             
 
 class Smartg(object):
-    '''Initialization of the Smartg object
+    """
+    Initialization of the Smartg object
 
     Performs the compilation and loading of the kernel.
     This class is designed so split compilation and kernel loading from the
     code execution: in case of successive smartg executions, the kernel
     loading time is not repeated.
 
-    Args:
-
-        pp: plane parallel or spherical
-            True: use plane parallel geometry (default)
-            False: use spherical shell geometry
-
-        debug: set to True to activate debug mode (optional stdout if problems are detected)
-
-        verbose_photon: activate the display of photon path for the thread 0
-
-        double: accumulate photons table in double precision, default double
-            This operation is much faster on GPUs with ARCH >= 600
-            (Pascal architecture, like GeForce 10xx or greater)
-
-        alis: boolean, if present implement the ALIS method (Emde et al. 2010) for treating gaseous absorption and perturbed profile
-
-        back: boolean, if True, run in backward mode, default forward mode
-
-        bias: boolean, if True, use the bias sampling scheme, default True
-
-        obj3D: Set to True to enable simulation with 3D objects
-
-        opt3D: Set to True to enable simulation with 3D optical properties
-
-        alt_pp: boolean, if True new PP progation scheme is used
-
-        rng: choice of pseudo-random number generator:
-            * PHILOX
-            * CURAND_PHILOX
-
-        - device: device number (str or int) to be set to CUDA_DEVICE environment variable for use by 'import pycuda.autoinit'
-            see https://documen.tician.de/pycuda/util.html
-            Please note that after the first pycuda.autoinit, the device used by pycuda will not change.
-        - sif : boolean, if True Sun Induced Fluorescence included, default False
-
-    '''
+    Parameters
+    ----------
+    pp :  bool, optional
+        Use a plane parallel atmosphere, else spherical atmosphere
+    autoinit : bool, optional
+        Use pycuda autoinit to initialize pycuda context.
+    debug : bool, optional
+        Activate debug mode (optional stdout if problems are detected)
+    verbose_photon : bool, optional
+        Activate the display of photon path for the thread 0
+    double : bool, optional
+        Accumulate photons table in double precision (default double).
+    alis : bool, optional
+        Use the ALIS method (Emde et al. 2010) for treating gaseous absorption and perturbed profile.
+        The parameter alt_pp must be set to True.
+    back : bool, optional
+        Activate backward mode (else forward)
+    bias : bool, optional
+        Use the bias sampling scheme
+    alt_pp : bool, optional
+        Use a plane parallel propagation scheme following the photon at each layer.
+        Increase the computational time, but allow the use of the ALIS method
+    obj3D : bool, optional
+        Allow 3D objects
+    opt3D : bool, optional
+        Activate the 3D atmosphere mode
+    device : int | str, optional
+        The device number / GPU to use. The GPU numbers can be obtained with the command `nvidia-smi`.
+    sif : bool, optional
+        Include the Sun Induced Fluorescence
+    thermal : bool, optional
+        Still in dev...
+    rng : str, optional
+        The pseudo-random number generator to use, only 2 choice:
+        - PHILOX
+        - CURAND_PHILOX
+    cache_dir : str, optional
+        Path to the directory where the cache files are stored.
+    keep_context: None | bool, optional
+        Only in case autoinit is set to False. This parameter allows to keep or not the context 
+        after the use of the run method. By default (for the case autoinit=False) kill the context after the use of the run method.
+    """
     def __init__(self, pp=True, debug=False, autoinit=True,
                  verbose_photon=False,
                  double=True, alis=False, back=False, bias=True, alt_pp=False, obj3D=False, 
@@ -735,6 +742,12 @@ class Smartg(object):
 
 
     def clear_context(self):
+        """
+        Manually kill the cuda context
+
+        - Once you call this, you can no longer use the method run(), 
+          for that the smartg object must be reinitialized.
+        """
         try:
             self.ctx.pop()
             self.ctx.detach()
