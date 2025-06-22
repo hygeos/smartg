@@ -1235,71 +1235,90 @@ class Atmosphere(object):
 
 
 class AtmAFGL(Atmosphere):
-    '''
+    """
     Atmospheric profile definition using AFGL data
 
-    Arguments:
-        - atm_filename AFGL atmosphere file
-          if provided without a directory, use default directory dir_libradtran_atmmod
-          atmosphere files should be:
-            'afglms', 'afglmw', 'afglss', 'afglsw', 'afglt',
-            'afglus', 'afglus_ch4_vmr', 'afglus_co_vmr', 'afglus_n2_vmr',
-            'afglus_n2o_vmr', 'afglus_no2', 'mcclams', 'mcclamw'
+    Parameters
+    ----------
 
-   Keywords:
-        - comp: list of components particles objects (aerosol, clouds)
-        - grid: new grid altitudes (list of decreasing altitudes in km), if None, the default AFGL grid is kept
-        - lat: latitude (for Rayleigh optical depth calculation, default=45.)
-        - P0: Sea surface pressure (default: SSP from AFGL)
-        Gaseous absorption:
-        - O3: total ozone column (Dobson units),
-          or None to use atmospheric profile value (default)
-        - H2O: total water vapour column (g.cm-2), or None to use atmospheric
-          profile value (default)
-        - NO2: activate NO2 absorption (default True)
-        - O3_H2O_alt : altitude of H2O and O3 values, by default None and scale from z=0km
-        - tauR: Rayleigh optical thickness, default None: computed
-          from atmospheric profile and wavelength
-
-        User specified optical properties:
-            One can specify directly the optical properties of the medium:
-            in 1D it corresponds to vertical profile
-            in 3D is is just an optical properties index, it must be completed by the cells grid
-        - prof_abs: the gaseous absorption optical thickness profile  provided by user
-                    if directly used, it shortcuts any further gaseous absorption computation
-                    array of dimension (NWavelength,NZ)
-        - prof_ray: the rayleigh scattering optical thickness profile  provided by user
-                    if directly used, it shortcuts any further rayleigh scattering computation
-                    array of dimension (NWavelength,NZ)
-        - prof_aer: a tuple (ext,ssa) the aerosol extinction optical thickness profile and single scattering albedo arrays  
-                    provided by user, each array has dimensions (NWavelength,NZ)
-                    if directly used, it shortcuts any further particles scattering computation
-        - prof_phases: a tuple (iphase, phases ) where iphase is the phase matrix indices profile (NWavelength,NZ), 
-                       and  phases is a list of phase matrices LUT (as outputs of the 'read_phase' utility) 
-        - RH_cst :  force relative humidity o be constant, default (None, recalculated)
-
-        - O3_acs/NO2_acs : nc file with fit coeffs. cross section SIGMA = 1E-20 * [C0 + C1*T + C2*T^2], in cm^2,
-                           and where T is in degrees Celcius
-
-        Phase functions definition:
-        - pfwav: a list of wavelengths over which the phase functions are calculated
-          default: None (all wavelengths)
-        - pfgrid: altitude grid over which the phase function is calculated
-          can be provided as an array of decreasing altitudes or a gridspec
-          default value: [100, 0]
-
-        3D:
-        - if cells is present: then atmosphere is 3D
-           Cells represent the 3D definition of  atmosphere
-           1) 'iopt' gives the number of the optical property corresponding to the cells; iopt(Ncell)
-           2) 'iabs' gives the number of the absorption property corresponding to the cells; iabs(Ncell)
-           3) Bounding Boxes(1 Point Bottom Left pmin, 1 Point Top Right pmax) of the cells; pmin(3,Ncell); pmax(3,Ncell)
-           and 6 neighbours index (positive X, negative X, positive Y, negative Y, positive Z, negative Z); neighbour(6,Ncell)
+    atm_filename : str
+        The AFGL atmosphere profile to use. Choice are:
+            - 'afglms' for Mid-Latitude Summer (45N July)
+            - 'afglmw' for Mid-Latitude Winter (45N Jan)
+            - 'afglss' for Sub Arctic Summer (60N July)
+            - 'afglsw' for Sub Arctic Winter (60N Jan)
+            - 'afglt' for Tropic (15N Annual Average)
+            - 'afglus' for U.S. Standard (1976)
+    comp:  list, optional
+        Components particles (aerosols or clouds) to consider, i.e. a list of aerOPAC or/and Cloud objects.
+    grid : None | 1-D array-like, optional
+      The vertical grid (from TOA to BOA). The optical properties of the atmosphere are recalculated following 
+      the new grid. If None, the AFGL grid is kept.
+    lat : float, optional
+        The latitude used for Rayleigh optical depth calculation. Default=45.
+    P0:  None | float, optional
+        The sea surface pressure. If None take P0 from the AFGL profil.
+    O3 : None | float, optional
+        The total ozone column in Dobson units. If None keep the total ozone content of the chosen atmospheric 
+        profile.
+    H2O : None | float, optional
+        The total water vapor column in g.cm-2. If None keep the total water vapor content of the chosen 
+        atmospheric profile.
+    NO2: bool, optional
+        Activate NO2 absorption (default True)
+    O3_H2O_alt : None | float, optional
+        The altitude of H2O and O3 values. Rescale the total column profil of H2O and O3 to get 
+        the total content from TOA to altitude O3_H2O_alt the given values of O3 and H2O.
+    tauR : None | float, optional
+        Force the Rayleigh optical thickness. If None, computed from atmospheric profile and wavelength.
+    pfwav : None | list, optional
+        The list of wavelengths over which the phase matrices are calculated. Then use the nearest wavelength 
+        during cuda simulation. Useful to reduce the memory. If None, compute the phase matrix at all wavelengths.
+    pfgrid : list, optional
+        The vertcial grid (from TOA to BOA) over which the phase matrices are calculated. This parameter can help 
+        reduce the memory but must be used with care. If misused, it may lead to innaccurate results especially when 
+        multiple aerosols are mixed. The default value is [100, 0], meaning a single phase matrix is calculated over 
+        the entire column from 0 to 100 km. This is effcient and accurate when only 1 type of aerosol is present. 
+        However, if multiple aerosols are mixed (with different vertical distributions), a single phase matrix may 
+        introduce an important bias.
+    prof_abs : None | 2-D ndarray, optional
+        - In 1D atm mode -> force the gaseous absorption optical thickness vertical profile (NWavelength,NZ),
+        it shortcuts any further gaseous absorption computation.
+        - In 3D atm mode -> just an optical properties index, it must be completed by the cells grid
+    prof_ray : None | 2-D ndarray, optional
+        - In 1D atm mode -> force the Rayleigh scattering optical thickness vertical profile (NWavelength,NZ),
+        it shortcuts any further Rayleigh scattering computation.
+        - In 3D atm mode -> just an optical properties index, it must be completed by the cells grid
+    prof_aer : None | tuple, optional
+        - In 1D atm mode - > A tuple (ext,ssa) with the aerosol extinction optical thickness profile (ext) and 
+        single scattering albedo arrays (ssa), it shortcuts any further particles scattering computation.
+        - In 3D atm mode -> just an optical properties index, it must be completed by the cells grid
+    prof_phases : None | tuple, optional
+        A tuple (iphase, phases ) where iphase is the phase matrix indices profile (NWavelength,NZ), 
+        and  phases is a list of phase matrices LUT (as outputs of the `read_phase` utility).
+    RH_cst : None | float, optional
+        Force relative humidity to be constant. If None calculated depending on H2O vertical profile.
+    O3_acs : str, optional
+        Path to ozone netcdf4 file with absorption coefficient cross section (SIGMA = 1E-20 * [C0 + C1*T + C2*T^2], 
+        in cm^2, and where T is in degrees Celcius). If only filename is given automatically look at "auxdata/acs/".
+        By default use Bogumil Version 3.0 data. Available files in auxdata:
+            - 'O3_acs_BogumilV3.0_coeffs.nc'
+            - 'O3_acs_Chehade(Bogumil_revised)V4.1_coeffs.nc'
+            - 'O3_acs_SerdyuchenkoV2.0_coeffs.nc'
+    NO2_acs : str, optional
+        Path to NO2 netcdf4 file with absorption coefficient cross section (SIGMA = 1E-20 * [C0 + C1*T + C2*T^2], 
+        in cm^2, and where T is in degrees Celcius). If only filename is given automatically look at "auxdata/acs/".
+        By default use Bogumil Version 1.0 data. Available files in auxdata:
+            - 'NO2_acs_BogumilV1.0_coeffs.nc'
+            - 'NO2_acs_Bingen_coeffs.nc'
+    cells : None | tuple, optional 
+        If cells is given, then we are in 3D mode. Definitions:
+           - 'iopt' gives the number of the optical property corresponding to the cells. iopt(Ncell)
+           - 'iabs' gives the number of the absorption property corresponding to the cells. iabs(Ncell)
+           - Bounding Boxes(1 Point Bottom Left pmin, 1 Point Top Right pmax) of the cells. pmin(3,Ncell). pmax(3,Ncell) 
+           and 6 neighbours index (positive X, negative X, positive Y, negative Y, positive Z, negative Z). neighbour(6,Ncell)
            it returns coefficients in (km-1) instead of optical thicknesses
-             
-   Outputs:
-        By default return vertically integrated optical thicknesses from TOA
-    '''
+    """
     def __init__(self, atm_filename, comp=[],
                  grid=None, lat=45.,
                  P0=None, O3=None, H2O=None, NO2=True,
