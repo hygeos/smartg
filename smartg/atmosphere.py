@@ -1425,13 +1425,25 @@ class AtmAFGL(Atmosphere):
 
 
     def calc(self, wav, phase=True, NBTHETA=721, conv_Iparper=True, use_old_calc_iphase=False):
-        '''
-        Profile and phase function calculation at bands wav
+        """
+        Profile and phase matrix calculation at bands / wav
 
-        phase: boolean (activate phase function calculation)
+        Parameters
+        ----------
+        wav : float | 1-D ndarray | BandSet | list
+            Wavelengths at which to calculate the profile. It can be a list of REPTRAN_IBAND or KDIS_IBAND.
+        NBTHETA : int, optional
+            The number of angles to be considered for the phase matrix.
+        conv_Iparper : bool, optional
+            Convert to I parallel I perpendicular convention.
+        use_old_calc_iphase : bool, optional
+            Use the old way to compute iphase (depracated).
 
-        Returns: profile + phase function MLUT
-        '''
+        Returns
+        -------
+        out : MLUT
+            An MLUT object with the profile and (if phase = True) the phase matrices.
+        """
         
         if not isinstance(wav, BandSet):
             wav = BandSet(wav)
