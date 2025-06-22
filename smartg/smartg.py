@@ -10,11 +10,10 @@ Speed-up Monte Carlo Advanced Radiative Transfer Code using GPU
 
 import os
 import numpy as np
-from datetime import datetime, timezone
+from datetime import datetime
 from numpy import pi
 from smartg.atmosphere import Atmosphere, od2k, BPlanck
 from smartg.water import IOP_base
-from smartg.shape import BBox, Sphere
 from os.path import dirname, realpath, join, exists
 from warnings import warn
 from smartg.albedo import Albedo_cst, Albedo_map 
@@ -23,7 +22,7 @@ from smartg.tools.cdf import ICDF2D
 from smartg.tools.modified_environ import modified_environ
 from luts.luts import LUT, MLUT
 from scipy.interpolate import interp1d
-#from scipy.integrate import simpson
+from scipy.integrate import simpson
 import subprocess
 from collections import OrderedDict
 from pycuda.gpuarray import to_gpu, zeros as gpuzeros
@@ -38,8 +37,6 @@ from smartg.transform import Transform, Aff
 from smartg.visualizegeo import Mirror, Plane, Spheric, Transformation, \
     Entity, Analyse_create_entity, LambMirror, Matte, convertVtoAngles, \
     convertAnglestoV, GroupE
-    
-import functools
 
 
 # set up directories
@@ -545,97 +542,68 @@ class CusBackward(object):
     def __str__(self):
         return 'CusBackward:-POS={POS}-THDEG={THDEG}-PHDEG={PHDEG}'.format(**self.dict) + \
             '-ALDEG={ALDEG}-TYPE{TYPE}-LMODE={LMODE}'.format(**self.dict)
-            
-
+    
 class Smartg(object):
-    """
-    Initialization of the Smartg object
+    '''Initialization of the Smartg object
 
     Performs the compilation and loading of the kernel.
     This class is designed so split compilation and kernel loading from the
     code execution: in case of successive smartg executions, the kernel
     loading time is not repeated.
 
-    Parameters
-    ----------
-    pp :  bool, optional
-        Use a plane parallel atmosphere, else spherical atmosphere
-    autoinit : bool, optional
-        Use pycuda autoinit to initialize pycuda context.
-    debug : bool, optional
-        Activate debug mode (optional stdout if problems are detected)
-    verbose_photon : bool, optional
-        Activate the display of photon path for the thread 0
-    double : bool, optional
-        Accumulate photons table in double precision (default double).
-    alis : bool, optional
-        Use the ALIS method (Emde et al. 2010) for treating gaseous absorption and perturbed profile.
-        The parameter alt_pp must be set to True.
-    back : bool, optional
-        Activate backward mode (else forward)
-    bias : bool, optional
-        Use the bias sampling scheme
-    alt_pp : bool, optional
-        Use a plane parallel propagation scheme following the photon at each layer.
-        Increase the computational time, but allow the use of the ALIS method
-    obj3D : bool, optional
-        Allow 3D objects
-    opt3D : bool, optional
-        Activate the 3D atmosphere mode
-    device : int | str, optional
-        The device number / GPU to use. The GPU numbers can be obtained with the command `nvidia-smi`.
-    sif : bool, optional
-        Include the Sun Induced Fluorescence
-    thermal : bool, optional
-        Still in dev...
-    rng : str, optional
-        The pseudo-random number generator to use, only 2 choice:
-        - PHILOX
-        - CURAND_PHILOX
-    cache_dir : str, optional
-        Path to the directory where the cache files are stored.
-    keep_context: None | bool, optional
-        Only in case autoinit is set to False. This parameter allows to keep or not the context 
-        after the use of the run method. By default (for the case autoinit=False) kill the context after the use of the run method.
-    """
-    def __init__(self, pp=True, debug=False, autoinit=True,
+    Args:
+
+        pp: plane parallel or spherical
+            True: use plane parallel geometry (default)
+            False: use spherical shell geometry
+
+        debug: set to True to activate debug mode (optional stdout if problems are detected)
+
+        verbose_photon: activate the display of photon path for the thread 0
+
+        double: accumulate photons table in double precision, default double
+            This operation is much faster on GPUs with ARCH >= 600
+            (Pascal architecture, like GeForce 10xx or greater)
+
+        alis: boolean, if present implement the ALIS method (Emde et al. 2010) for treating gaseous absorption and perturbed profile
+
+        back: boolean, if True, run in backward mode, default forward mode
+
+        bias: boolean, if True, use the bias sampling scheme, default True
+
+        obj3D: Set to True to enable simulation with 3D objects
+
+        opt3D: Set to True to enable simulation with 3D optical properties
+
+        alt_pp: boolean, if True new PP progation scheme is used
+
+        rng: choice of pseudo-random number generator:
+            * PHILOX
+            * CURAND_PHILOX
+
+        - device: device number (str or int) to be set to CUDA_DEVICE environment variable for use by 'import pycuda.autoinit'
+            see https://documen.tician.de/pycuda/util.html
+            Please note that after the first pycuda.autoinit, the device used by pycuda will not change.
+        - sif : boolean, if True Sun Induced Fluorescence included, default False
+
+        - rng: choice of pseudo-random number generator:
+                * PHILOX
+                * CURAND_PHILOX
+
+    '''
+    def __init__(self, pp=True, debug=False,
                  verbose_photon=False,
                  double=True, alis=False, back=False, bias=True, alt_pp=False, obj3D=False, 
-                 opt3D=False, device=None, sif=False, thermal=False, rng='PHILOX', cache_dir='/tmp/',
-                 keep_context=None):
+                 opt3D=False, device=None, sif=False, thermal=False, rng='PHILOX', cache_dir='/tmp/'):
         assert not ((device is not None) and ('CUDA_DEVICE' in os.environ)), "Can not use the 'device' option while the CUDA_DEVICE is set"
 
         if device is not None:
             env_modif = {'CUDA_DEVICE': str(device)}
         else:
             env_modif = {}
+        with modified_environ(**env_modif):
+            import pycuda.autoinit
 
-        if not autoinit:
-            self.keep_context = keep_context if keep_context is not None else False
-        else:
-            if keep_context is not None:
-                raise ValueError("The parameter keep_context can be defined only if 'autoinit' is False.")
-            self.keep_context = True
-            
-        if (autoinit):
-            with modified_environ(**env_modif):
-                try:
-                    import pycuda.autoinit
-                    self.ctx = pycuda.autoinit.context
-                except:
-                    # In case cuda context has been manually popped
-                    from importlib import reload, import_module
-                    pycuda.autoinit = import_module('pycuda.autoinit')
-                    reload(pycuda.autoinit)
-                    self.ctx = pycuda.autoinit.context
-        else:
-            import pycuda
-            import pycuda.driver as cuda
-            cuda.init()
-            from pycuda.tools import make_default_context
-            self.ctx = make_default_context()
-        
-        self.autoinit = autoinit
         self.pp = pp
         self.double = double
         self.alis = alis
@@ -724,42 +692,17 @@ class Smartg(object):
         self.common_attrs = OrderedDict()
         self.common_attrs['compilation_time'] = (datetime.now()
                         - time_before_compilation).total_seconds()
-        if (autoinit):
-            self.common_attrs['device'] = pycuda.autoinit.device.name()
-            try:
-                self.common_attrs['device_number'] = pycuda.autoinit.device.get_attributes()[pycuda._driver.device_attribute.MULTI_GPU_BOARD_GROUP_ID]
-            except AttributeError:
-                self.common_attrs['device_number'] = 'undefined'
-        else:
-            self.common_attrs['device'] =self.ctx.get_device().name()
-            try:
-                self.common_attrs['device_number'] = self.ctx.get_device().get_attributes()[pycuda._driver.device_attribute.MULTI_GPU_BOARD_GROUP_ID]
-            except Exception:
-                self.common_attrs['device_number'] = 'undefined'
+        self.common_attrs['device'] = pycuda.autoinit.device.name()
+        try:
+            self.common_attrs['device_number'] = pycuda.autoinit.device.get_attributes()[pycuda._driver.device_attribute.MULTI_GPU_BOARD_GROUP_ID]
+        except AttributeError:
+            self.common_attrs['device_number'] = 'undefined'
         self.common_attrs['pycuda_version'] = pycuda.VERSION_TEXT
         self.common_attrs['cuda_version'] = '.'.join([str(x) for x in pycuda.driver.get_version()])
         self.common_attrs.update(get_git_attrs())
 
 
-    def clear_context(self):
-        """
-        Manually kill the cuda context
-
-        - Once you call this, you can no longer use the method run(), 
-          for that the smartg object must be reinitialized.
-        """
-        try:
-            self.ctx.pop()
-            self.ctx.detach()
-            self.ctx = None
-            from pycuda.tools import clear_context_caches
-            clear_context_caches()
-            if self.autoinit:
-                # In case of autoinit delete pycuda.autoinit
-                import pycuda.autoinit
-                del pycuda.autoinit
-        except:
-            print("There is no current context to clear.")
+    
 
 
     def run(self, wl,
@@ -773,8 +716,8 @@ class Smartg(object):
              BEER=1, RR=0, WEIGHTRR=0.1, SZA_MAX=90., SUN_DISC=0,
              sensor=None, refraction=False, reflectance=True,
              myObjects=None, interval = None,
-             IsAtm = 1, cusL = None, SMIN=0, SMAX=1e6, RMIN=0, RMAX=1e6, FFS=False, DIRECT=False,
-             OCEAN_INTERACTION=None, pol_off=False):
+             IsAtm = 1, cusL = None, SMIN=0, SMAX=1e6, FFS=False, DIRECT=False,
+             OCEAN_INTERACTION=None):
         '''
         Run a SMART-G simulation
 
@@ -820,7 +763,7 @@ class Smartg(object):
                 NOTE: in plane parallel geometry, due to Fermat's principle, we
                 can exchange the positions of the sun and observer.
 
-            PHVDEG: azimuth angle of the observer in degrees
+            PHVDEG: azimuth angle of the observeSmartg(device=0)r in degrees
                 the result corresponds to various positions of the sun
                 NOTE: It can be very useful to modify only this value instead
                       of all the positions of all the objects
@@ -872,10 +815,6 @@ class Smartg(object):
                   Angles can be provided as scalar, lists or 1-dim arrays
                   Default None: cone sampling
                   NOTE: Overrides NBPHI and NBTHETA
-                  If 'count_level' is present: dim = NBTHETA
-                  count_level = -2 : count everything
-                  count_level = 0  : count only UPTOA
-                  count_level = 1  : count only DOWN0P
 
             flux: if specified output is 'planar' or 'spherical' flux instead of radiance
 
@@ -913,21 +852,15 @@ class Smartg(object):
             cusL : None is the default mode (sun is a ponctual source targeting the origin (0,0,0)), else it
                       enable to use the RF, FF or B launching mode (see the class CusForward) --> cusL=CusForward(...)
 
-            SMIN : Minimum Interaction (scattering/reflection) order: Default 0
+            SMIN : Minimum Scattering order: Default 0
 
-            SMAX : Maximum Interaction (scattering/reflection) order: Default 1e6
-            
-            RMIN : Minimum Reflection (by surface only, not environement) order: Default 0
-
-            RMAX : Maximum Reflection (by surface only, not environement) order: Default 1e6
+            SMAX : Maximum Scattering order: Default 1e6
 
             FFS : Forced First Scattering (for use in spherical limb geometry only): Default False
 
             DIRECT : Include directly transmitted photons: Default False
 
             OCEAN_INTERACTION : select photons that interact with ocean : Default None, no selection
-
-            pol_off : if true -> do not consider the polarized light
 
         Return value:
         ------------
@@ -1000,8 +933,7 @@ class Smartg(object):
             if (surfLPH_RF is not None): surfLPH = surfLPH_RF
 
         else:
-            myObjects0 = gpuzeros(1, dtype=np.uint32)
-            #myObjects0 = gpuzeros(1, dtype='int32')
+            myObjects0 = gpuzeros(1, dtype='int32')
             myGObj0 = gpuzeros(1, dtype='int32')
             myRObj0 = gpuzeros(1, dtype='int32')
             mySPECTObj0 = gpuzeros(1, dtype='int32') # normally 2 dims: obj dim + wl dim
@@ -1025,8 +957,7 @@ class Smartg(object):
         NLVL = 6
 
         # warning! values defined in communs.h 
-        # Maximum number of photons histories (alis=True and alis_options['hist'] = True), otherwise 0 (no histories)
-        MAX_HIST = np.int64(1)
+        MAX_HIST = 2048 * 2048
         MAX_NLOW = 801
 
         # number of Stokes parameters of the radiation field
@@ -1052,11 +983,7 @@ class Smartg(object):
         NJAC=0
         if alis_options is not None :
             if 'hist' in alis_options.keys():
-                if alis_options['hist']: 
-                    hist=True
-                    if 'max_hist' in alis_options.keys():
-                        MAX_HIST=np.int64(alis_options['max_hist'])
-                    else : MAX_HIST=np.int64(8000000)
+                if alis_options['hist']: hist=True
             if 'njac' in alis_options.keys():
                 NJAC=alis_options['njac']
             if (alis_options['nlow'] ==-1) : NLOW=NLAM
@@ -1102,7 +1029,7 @@ class Smartg(object):
             ZTOA = 120.
   
         if prof_atm is not None:
-            faer = calculF(prof_atm, NF, DEPO, kind='atm', pol_off=pol_off)
+            faer = calculF(prof_atm, NF, DEPO, kind='atm')
             prof_atm_gpu, cell_atm_gpu = init_profile(wl, prof_atm, 'atm')
             NATM = len(prof_atm.axis('z_atm')) - 1
             if self.opt3D : 
@@ -1149,31 +1076,6 @@ class Smartg(object):
                   tab_sensor[i][k] = s.dict[k]
         tab_sensor = to_gpu(tab_sensor)
 
-        # The min and max posx and posy of sensors. Useful for forward mode in 3d atm
-        sxmin = np.inf
-        sxmax = -np.inf
-        symin = np.inf
-        symax = -np.inf
-        for sens in sensor2:
-            if (sens.cell_size > 0):
-                half_csize = 0.5*sens.cell_size
-                sxmin = min(sxmin, sens.dict['POSX']-half_csize)
-                sxmax = max(sxmax, sens.dict['POSX']+half_csize)
-                symin = min(symin, sens.dict['POSY']-half_csize)
-                symax = max(symax, sens.dict['POSY']+half_csize)
-            else:
-                sxmin = min(sxmin, sens.dict['POSX'])
-                sxmax = max(sxmax, sens.dict['POSX'])
-                symin = min(symin, sens.dict['POSY'])
-                symax = max(symax, sens.dict['POSY'])
-        if sensor2[0].cell_size > 0:
-            nbsx = round((sxmax - sxmin)/sensor2[0].cell_size)
-            nbsy = round((symax - symin)/sensor2[0].cell_size)
-        else:
-            nbsx = 0
-            nbsy = 0
-
-
         #
         # ocean
         #
@@ -1185,7 +1087,7 @@ class Smartg(object):
             raise NameError('water must be an IOP_base class or equal to None!')
 
         if prof_oc is not None:
-            foce = calculF(prof_oc, NF, DEPO_WATER, kind='oc', pol_off=pol_off)
+            foce = calculF(prof_oc, NF, DEPO_WATER, kind='oc')
             prof_oc_gpu, cell_oc_gpu = init_profile(wl, prof_oc, 'oc')
             NOCE = len(prof_oc.axis('z_oc')) - 1
             if self.opt3D : NOCE_ABS = prof_oc['iabs_oc'].data.max().astype(np.int32)
@@ -1274,11 +1176,6 @@ class Smartg(object):
                     assert NBPHI==NBTHETA
                     ZIP = 1
                     NBPHI = 1 
-            
-            if 'count_level' in le:
-                le['count_level'] = np.array(le['count_level'], dtype='int32').ravel()
-                assert len(le['count_level']) == NBTHETA
-
 
 
         FLUX = 0
@@ -1339,11 +1236,10 @@ class Smartg(object):
                   XBLOCK, XGRID, NLAM, SIM, NF,
                   NBTHETA, NBPHI, OUTPUT_LAYERS,
                   RTER, LE, ZIP, FLUX, FFS, DIRECT, OCEAN_INTERACTION, NLVL, NPSTK,
-                  NWLPROBA, NSENSORPROBA, NCELLPROBA, BEER, SMIN, SMAX, RMIN, RMAX, RR, WEIGHTRR, NLOW, NJAC, 
+                  NWLPROBA, NSENSORPROBA, NCELLPROBA, BEER, SMIN, SMAX, RR, WEIGHTRR, NLOW, NJAC, 
                   NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj, nGObj, nRObj,
                   Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm,
-                  TC, nbCx, nbCy, vSun, HIST, ZTOA, sensor2[0].cell_size,
-                  sxmin, sxmax, symin, symax, nbsx, nbsy)
+                  TC, nbCx, nbCy, vSun, HIST, ZTOA, sensor2[0].cell_size)
 
         # Initialize the progress bar
         p = Progress(NBPHOTONS, progress)
@@ -1352,8 +1248,8 @@ class Smartg(object):
         SEED = self.rng.setup(SEED, XBLOCK, XGRID)
 
         # Loop and kernel call
-        (NPhotonsInTot, tabPhotonsTot, tabDistTot, tabHistTot, tabTransDir, errorcount, 
-         NPhotonsOutTot, sigma, Nkernel, secs_cuda_clock, cMatVisuRecep, matCats, matLoss, wPhCats, wPhCats2
+        (NPhotonsInTot, tabPhotonsTot, tabPhotonsTotRayleigh, tabDistTot, tabHistTot, tabTransDir, errorcount, 
+         NPhotonsOutTot, NPhotonsOutTotRayleigh, sigma, Nkernel, secs_cuda_clock, cMatVisuRecep, matCats, matLoss, wPhCats, wPhCats2
         ) = loop_kernel(NBPHOTONS, faer, foce,
                         NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX_HIST, NLOW, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                         NLAM, NSENSOR, self.double, self.kernel, self.kernel2, p, X0, le, tab_sensor, envmap, spectrum,
@@ -1394,7 +1290,8 @@ class Smartg(object):
             dicSTP = None; matLoss = None #; weightR=0
                 
         # finalization
-        output = finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl[:], NPhotonsInTot, errorcount, NPhotonsOutTot,
+        output = finalize(tabPhotonsTot, tabPhotonsTotRayleigh, tabDistTot, tabHistTot, wl[:], NPhotonsInTot, errorcount, \
+                          NPhotonsOutTot,   NPhotonsOutTotRayleigh,
                           OUTPUT_LAYERS, tabTransDir, tabTransDir_analytic, SIM, attrs, prof_atm, prof_oc,
                           sigma, THVDEG, HORIZ, le=le, flux=flux, back=self.back, 
                           SZA_MAX=SZA_MAX, SUN_DISC=SUN_DISC, hist=hist, cMatVisuRecep=cMatVisuRecep,
@@ -1418,13 +1315,6 @@ class Smartg(object):
         if wl.scalar:
             output = output.dropaxis('wavelength')
             output.attrs['wavelength'] = wl[:]
-        
-        if not self.autoinit and not self.keep_context:
-            self.ctx.pop()
-            self.ctx.detach()
-            self.ctx = None
-            from pycuda.tools import clear_context_caches
-            clear_context_caches()
 
         return output
 
@@ -1463,7 +1353,7 @@ def calcOmega(NBTHETA, NBPHI, SZA_MAX=90., SUN_DISC=0):
     return tabTh, tabPhi, tabOmega
 
 
-def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
+def finalize(tabPhotonsTot, tabPhotonsTotRayleigh, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot, NPhotonsOutTotRayleigh,
              OUTPUT_LAYERS, tabTransDir, tabTransDir_analytic, SIM, attrs, prof_atm, prof_oc,
              sigma, THVDEG, HORIZ, le=None, flux=None,
              back=False, SZA_MAX=90., SUN_DISC=0, hist=False, cMatVisuRecep = None,
@@ -1480,9 +1370,6 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
         if le!=None : 
             tabTh = le['th']
             tabPhi = le['phi']
-            if 'zip' not in le.keys():
-                zip = False
-            else : zip = le['zip']
             norm_geo =  1. 
         else : 
             tabTh, tabPhi, tabOmega = calcOmega(NBTHETA, NBPHI, SZA_MAX=SZA_MAX, SUN_DISC=SUN_DISC)
@@ -1494,14 +1381,21 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
 
     # normalization
     tabFinal = tabPhotonsTot.astype('float64')/(norm_geo*norm_npho)
+    tabFinalRayleigh = tabPhotonsTotRayleigh.astype('float64')/(norm_geo*norm_npho)
     tabDistFinal = tabDistTot.astype('float64')
-    #if hist : tabHistFinal = tabHistTot
+    if hist : tabHistFinal = tabHistTot
 
     # swapaxes : (th, phi) -> (phi, theta)
     tabFinal = tabFinal.swapaxes(4,5)
+    tabFinalRayleigh = tabFinalRayleigh.swapaxes(4,5)
+    
     if len(tabDistFinal) >1 : tabDistFinal = tabDistFinal.swapaxes(3,4)
-    if hist : tabHistTot = tabHistTot.swapaxes(3,4)
+
+    if hist : tabHistFinal = tabHistFinal.swapaxes(3,4)
     NPhotonsOutTot = NPhotonsOutTot.swapaxes(3,4)
+    
+    NPhotonsOutTotRayleigh = NPhotonsOutTotRayleigh.swapaxes(3,4)
+    
     if sigma is not None:
         sigma /= norm_geo
         sigma = sigma.swapaxes(4,5)
@@ -1515,9 +1409,12 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
     # add the axes
     axnames  = ['Zenith angles']
     axnames2 = ['None', 'Zenith angles']
-    if hist : m.add_dataset('Nphotons_in',  NPhotonsInTot)
-
+    if hist : 
+        axnames3 = ['N', 'Info', 'Zenith angles']
+        m.add_dataset('Nphotons_in',  NPhotonsInTot)
+        #m.add_dataset('Nphotons_out',  NPhotonsOutTot)
     iphi     = slice(None)
+    #if hist : axnames3 = ['None', 'None', 'Azimuth angles', 'Zenith angles']
     m.set_attr('zip', 'False')
     m.set_attr('NPhotonIn_sum', np.sum(NPhotonsInTot))
 
@@ -1532,12 +1429,15 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
             else:
                 axnames.insert(0, 'Azimuth angles')
                 axnames2.insert(1,'Azimuth angles')
+                if hist : axnames3.insert(2, 'Azimuth angles')
         else:
             axnames.insert(0, 'Azimuth angles')
             axnames2.insert(1,'Azimuth angles')
+            if hist : axnames3.insert(2, 'Azimuth angles')
     else:
         axnames.insert(0, 'Azimuth angles')
         axnames2.insert(1,'Azimuth angles')
+        if hist : axnames3.insert(2, 'Azimuth angles')
 
     m.add_axis('Zenith angles', tabTh*180./np.pi)
     m.add_axis('Azimuth angles', tabPhi*180./np.pi)
@@ -1557,6 +1457,7 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
         isen = slice(None)
         axnames.insert(0, 'sensor index')
         axnames2.insert(1, 'sensor index')
+        if hist: axnames3.insert(2, 'sensor index')
         axnames4.insert(0, 'sensor index')
     else:
         isen=0
@@ -1565,89 +1466,127 @@ def finalize(tabPhotonsTot, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcoun
     m.add_dataset('Q_up (TOA)', tabFinal[UPTOA,1,isen,ilam,iphi,:], axnames)
     m.add_dataset('U_up (TOA)', tabFinal[UPTOA,2,isen,ilam,iphi,:], axnames)
     m.add_dataset('V_up (TOA)', tabFinal[UPTOA,3,isen,ilam,iphi,:], axnames)
+
+    m.add_dataset('I_up (TOA), Rayleigh', tabFinalRayleigh[UPTOA,0,isen,ilam,iphi,:], axnames)
+    m.add_dataset('Q_up (TOA), Rayleigh', tabFinalRayleigh[UPTOA,1,isen,ilam,iphi,:], axnames)
+    m.add_dataset('U_up (TOA), Rayleigh', tabFinalRayleigh[UPTOA,2,isen,ilam,iphi,:], axnames)
+    m.add_dataset('V_up (TOA), Rayleigh', tabFinalRayleigh[UPTOA,3,isen,ilam,iphi,:], axnames)    
     if sigma is not None:
         m.add_dataset('I_stdev_up (TOA)', sigma[UPTOA,0,isen,ilam,iphi,:], axnames)
         m.add_dataset('Q_stdev_up (TOA)', sigma[UPTOA,1,isen,ilam,iphi,:], axnames)
         m.add_dataset('U_stdev_up (TOA)', sigma[UPTOA,2,isen,ilam,iphi,:], axnames)
         m.add_dataset('V_stdev_up (TOA)', sigma[UPTOA,3,isen,ilam,iphi,:], axnames)
     m.add_dataset('N_up (TOA)', NPhotonsOutTot[UPTOA,isen,ilam,iphi,:], axnames)
-    if len(tabDistFinal) > 1: 
-        if zip : m.add_dataset('cdist_up (TOA)', np.squeeze(tabDistFinal[UPTOA,:,isen,:,:]),  ['None','Zenith angles','iAMF'])
-        else   : m.add_dataset('cdist_up (TOA)', tabDistFinal[UPTOA,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
     
-    if hist : m.add_dataset('histories', tabHistTot)
+    m.add_dataset('N_up (TOA), Rayleigh', NPhotonsOutTotRayleigh[UPTOA,isen,ilam,iphi,:], axnames)
     
+    if len(tabDistFinal) > 1: m.add_dataset('cdist_up (TOA)', tabDistFinal[UPTOA,:,isen,iphi,:], axnames2)
+    #if hist : m.add_dataset('disth_up (TOA)', tabHistFinal[:,:,isen,iphi,:],axnames3)
+    #if hist : m.add_dataset('disth_up (TOA)', np.squeeze(tabHistFinal[:,:,isen,iphi,:]))
+
     if OUTPUT_LAYERS & 1:
         m.add_dataset('I_down (0+)', tabFinal[DOWN0P,0,isen,ilam,iphi,:], axnames)
         m.add_dataset('Q_down (0+)', tabFinal[DOWN0P,1,isen,ilam,iphi,:], axnames)
         m.add_dataset('U_down (0+)', tabFinal[DOWN0P,2,isen,ilam,iphi,:], axnames)
         m.add_dataset('V_down (0+)', tabFinal[DOWN0P,3,isen,ilam,iphi,:], axnames)
+
+        m.add_dataset('I_down (0+), Rayleigh', tabFinalRayleigh[DOWN0P,0,isen,ilam,iphi,:], axnames)
+        m.add_dataset('Q_down (0+), Rayleigh', tabFinalRayleigh[DOWN0P,1,isen,ilam,iphi,:], axnames)
+        m.add_dataset('U_down (0+), Rayleigh', tabFinalRayleigh[DOWN0P,2,isen,ilam,iphi,:], axnames)
+        m.add_dataset('V_down (0+), Rayleigh', tabFinalRayleigh[DOWN0P,3,isen,ilam,iphi,:], axnames)
+        
         if sigma is not None:
             m.add_dataset('I_stdev_down (0+)', sigma[DOWN0P,0,isen,ilam,iphi,:], axnames)
             m.add_dataset('Q_stdev_down (0+)', sigma[DOWN0P,1,isen,ilam,iphi,:], axnames)
             m.add_dataset('U_stdev_down (0+)', sigma[DOWN0P,2,isen,ilam,iphi,:], axnames)
             m.add_dataset('V_stdev_down (0+)', sigma[DOWN0P,3,isen,ilam,iphi,:], axnames)
+            
         m.add_dataset('N_down (0+)', NPhotonsOutTot[DOWN0P,isen,ilam,iphi,:], axnames)
-        if len(tabDistFinal) > 1: 
-            if zip : m.add_dataset('cdist_down (0+)', np.squeeze(tabDistFinal[DOWN0P,:,isen,:,:]),  ['None','Zenith angles','iAMF'])
-            else   : m.add_dataset('cdist_down (0+)', tabDistFinal[DOWN0P,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
-    
+        m.add_dataset('N_down (0+), Rayleigh', NPhotonsOutTotRayleigh[DOWN0P,isen,ilam,iphi,:], axnames)
+        
+        if len(tabDistFinal) > 1: m.add_dataset('cdist_down (0+)', tabDistFinal[DOWN0P,:,isen,iphi,:],axnames2)
+
         m.add_dataset('I_up (0-)', tabFinal[UP0M,0,isen,ilam,iphi,:], axnames)
         m.add_dataset('Q_up (0-)', tabFinal[UP0M,1,isen,ilam,iphi,:], axnames)
         m.add_dataset('U_up (0-)', tabFinal[UP0M,2,isen,ilam,iphi,:], axnames)
         m.add_dataset('V_up (0-)', tabFinal[UP0M,3,isen,ilam,iphi,:], axnames)
+
+        m.add_dataset('I_up (0-), Rayleigh', tabFinalRayleigh[UP0M,0,isen,ilam,iphi,:], axnames)
+        m.add_dataset('Q_up (0-), Rayleigh', tabFinalRayleigh[UP0M,1,isen,ilam,iphi,:], axnames)
+        m.add_dataset('U_up (0-), Rayleigh', tabFinalRayleigh[UP0M,2,isen,ilam,iphi,:], axnames)
+        m.add_dataset('V_up (0-), Rayleigh', tabFinalRayleigh[UP0M,3,isen,ilam,iphi,:], axnames)
+
         if sigma is not None:
             m.add_dataset('I_stdev_up (0-)', sigma[UP0M,0,isen,ilam,iphi,:], axnames)
             m.add_dataset('Q_stdev_up (0-)', sigma[UP0M,1,isen,ilam,iphi,:], axnames)
             m.add_dataset('U_stdev_up (0-)', sigma[UP0M,2,isen,ilam,iphi,:], axnames)
             m.add_dataset('V_stdev_up (0-)', sigma[UP0M,3,isen,ilam,iphi,:], axnames)
+            
         m.add_dataset('N_up (0-)', NPhotonsOutTot[UP0M,isen,ilam,iphi,:], axnames)
-        if len(tabDistFinal) > 1: 
-            if zip : m.add_dataset('cdist_up (0-)', np.squeeze(tabDistFinal[UP0M,:,isen,:,:]),  ['None','Zenith angles','iAMF'])
-            else   : m.add_dataset('cdist_up (0-)', tabDistFinal[UP0M,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
+        m.add_dataset('N_up (0-), Rayleigh', NPhotonsOutTotRayleigh[UP0M,isen,ilam,iphi,:], axnames)
+        
+        if len(tabDistFinal) > 1: m.add_dataset('cdist_up (0-)', tabDistFinal[UP0M,:,isen,iphi,:],axnames2)
 
     if OUTPUT_LAYERS & 2:
         m.add_dataset('I_down (0-)', tabFinal[DOWN0M,0,isen,ilam,iphi,:], axnames)
         m.add_dataset('Q_down (0-)', tabFinal[DOWN0M,1,isen,ilam,iphi,:], axnames)
         m.add_dataset('U_down (0-)', tabFinal[DOWN0M,2,isen,ilam,iphi,:], axnames)
         m.add_dataset('V_down (0-)', tabFinal[DOWN0M,3,isen,ilam,iphi,:], axnames)
+
+        m.add_dataset('I_down (0-), Rayleigh', tabFinalRayleigh[DOWN0M,0,isen,ilam,iphi,:], axnames)
+        m.add_dataset('Q_down (0-), Rayleigh', tabFinalRayleigh[DOWN0M,1,isen,ilam,iphi,:], axnames)
+        m.add_dataset('U_down (0-), Rayleigh', tabFinalRayleigh[DOWN0M,2,isen,ilam,iphi,:], axnames)
+        m.add_dataset('V_down (0-), Rayleigh', tabFinalRayleigh[DOWN0M,3,isen,ilam,iphi,:], axnames)
+        
         if sigma is not None:
             m.add_dataset('I_stdev_down (0-)', sigma[DOWN0M,0,isen,ilam,iphi,:], axnames)
             m.add_dataset('Q_stdev_down (0-)', sigma[DOWN0M,1,isen,ilam,iphi,:], axnames)
             m.add_dataset('U_stdev_down (0-)', sigma[DOWN0M,2,isen,ilam,iphi,:], axnames)
             m.add_dataset('V_stdev_down (0-)', sigma[DOWN0M,3,isen,ilam,iphi,:], axnames)
+        
         m.add_dataset('N_down (0-)', NPhotonsOutTot[DOWN0M,isen,ilam,iphi,:], axnames)
-        if len(tabDistFinal) > 1: 
-            if zip : m.add_dataset('cdist_down (0-)', np.squeeze(tabDistFinal[DOWN0M,:,isen,:,:]),  ['None','Zenith angles','iAMF'])
-            else   : m.add_dataset('cdist_down (0-)', tabDistFinal[DOWN0M,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
+        m.add_dataset('N_down (0-), Rayleigh', NPhotonsOutTotRayleigh[DOWN0M,isen,ilam,iphi,:], axnames)
+        
+        if len(tabDistFinal) > 1: m.add_dataset('cdist_down (0-)', tabDistFinal[DOWN0M,:,isen,iphi,:],axnames2)
 
         m.add_dataset('I_up (0+)', tabFinal[UP0P,0,isen,ilam,iphi,:], axnames)
         m.add_dataset('Q_up (0+)', tabFinal[UP0P,1,isen,ilam,iphi,:], axnames)
         m.add_dataset('U_up (0+)', tabFinal[UP0P,2,isen,ilam,iphi,:], axnames)
         m.add_dataset('V_up (0+)', tabFinal[UP0P,3,isen,ilam,iphi,:], axnames)
+
+        m.add_dataset('I_up (0+), Rayleigh', tabFinalRayleigh[UP0P,0,isen,ilam,iphi,:], axnames)
+        m.add_dataset('Q_up (0+), Rayleigh', tabFinalRayleigh[UP0P,1,isen,ilam,iphi,:], axnames)
+        m.add_dataset('U_up (0+), Rayleigh', tabFinalRayleigh[UP0P,2,isen,ilam,iphi,:], axnames)
+        m.add_dataset('V_up (0+), Rayleigh', tabFinalRayleigh[UP0P,3,isen,ilam,iphi,:], axnames)
+        
         if sigma is not None:
             m.add_dataset('I_stdev_up (0+)', sigma[UP0P,0,isen,ilam,iphi,:], axnames)
             m.add_dataset('Q_stdev_up (0+)', sigma[UP0P,1,isen,ilam,iphi,:], axnames)
             m.add_dataset('U_stdev_up (0+)', sigma[UP0P,2,isen,ilam,iphi,:], axnames)
             m.add_dataset('V_stdev_up (0+)', sigma[UP0P,3,isen,ilam,iphi,:], axnames)
+            
         m.add_dataset('N_up (0+)', NPhotonsOutTot[UP0P,isen,ilam,iphi,:], axnames)
-        if len(tabDistFinal) > 1: 
-            if zip : m.add_dataset('cdist_up (0+)', np.squeeze(tabDistFinal[UP0P,:,isen,:,:]),  ['None','Zenith angles','iAMF'])
-            else   : m.add_dataset('cdist_up (0+)', tabDistFinal[UP0P,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
+        m.add_dataset('N_up (0+), Rayleigh', NPhotonsOutTotRayleigh[UP0P,isen,ilam,iphi,:], axnames)
+        if len(tabDistFinal) > 1: m.add_dataset('cdist_up (0+)', tabDistFinal[UP0P,:,isen,iphi,:],axnames2)
 
         m.add_dataset('I_down (B)', tabFinal[DOWNB,0,isen,ilam,iphi,:], axnames)
         m.add_dataset('Q_down (B)', tabFinal[DOWNB,1,isen,ilam,iphi,:], axnames)
         m.add_dataset('U_down (B)', tabFinal[DOWNB,2,isen,ilam,iphi,:], axnames)
         m.add_dataset('V_down (B)', tabFinal[DOWNB,3,isen,ilam,iphi,:], axnames)
+
+        m.add_dataset('I_down (B), Rayleigh', tabFinalRayleigh[DOWNB,0,isen,ilam,iphi,:], axnames)
+        m.add_dataset('Q_down (B), Rayleigh', tabFinalRayleigh[DOWNB,1,isen,ilam,iphi,:], axnames)
+        m.add_dataset('U_down (B), Rayleigh', tabFinalRayleigh[DOWNB,2,isen,ilam,iphi,:], axnames)
+        m.add_dataset('V_down (B), Rayleigh', tabFinalRayleigh[DOWNB,3,isen,ilam,iphi,:], axnames)
+        
         if sigma is not None:
             m.add_dataset('I_stdev_down (B)', sigma[DOWNB,0,isen,ilam,iphi,:], axnames)
             m.add_dataset('Q_stdev_down (B)', sigma[DOWNB,1,isen,ilam,iphi,:], axnames)
             m.add_dataset('U_stdev_down (B)', sigma[DOWNB,2,isen,ilam,iphi,:], axnames)
             m.add_dataset('V_stdev_down (B)', sigma[DOWNB,3,isen,ilam,iphi,:], axnames)
         m.add_dataset('N_down (B)', NPhotonsOutTot[DOWNB,isen,ilam,iphi,:], axnames)
-        if len(tabDistFinal) > 1: 
-            if zip : m.add_dataset('cdist_down (B', np.squeeze(tabDistFinal[DOWNB,:,isen,:,:]),  ['None','Zenith angles','iAMF'])
-            else   : m.add_dataset('cdist_down (B)', tabDistFinal[DOWNB,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
+        m.add_dataset('N_down (B), Rayleigh', NPhotonsOutTotRayleigh[DOWNB,isen,ilam,iphi,:], axnames)
+        if len(tabDistFinal) > 1: m.add_dataset('cdist_down (B)', tabDistFinal[DOWNB,:,isen,iphi,:],axnames2)
 
 
     # write atmospheric profiles
@@ -1880,28 +1819,18 @@ def isotropic(N):
 
 
 
-def rayleigh(N, DEPO, pol_off=False):
-    """
-    Rayleigh phase function, incl. cumulative over N angles
-    
-    Parameters
-    ----------
-    N : int
-        number of angles
-    DEPO : float
-        depolarization coefficient
-    pol_off : bool, optional
-
-    Returns
-    -------
-    out : type_Phase
-        the rayleigh phase information
-    """
+def rayleigh(N, DEPO):
+    '''
+    Rayleigh phase function, incl. cumulative
+    over N angles
+    DEPO: depolarization coefficient
+    '''
     pha = np.zeros(N, dtype=type_Phase, order='C')
 
     GAMA = DEPO / (2- DEPO)
     DELTA = np.float32((1.0 - GAMA) / (1.0 + 2.0 *GAMA))
     DELTA_PRIM = np.float32(GAMA / (1.0 + 2.0*GAMA))
+    DELTA_SECO = np.float32((1.0 - 3.0*GAMA) / (1.0 - GAMA))
     BETA  = np.float32(3./2. * DELTA_PRIM)
     ALPHA = np.float32(1./8. * DELTA)
     A = np.float32(1. + BETA / (3.0 * ALPHA))
@@ -1916,60 +1845,31 @@ def rayleigh(N, DEPO, pol_off=False):
     theta = np.arccos(cTh)
     cThLE = np.cos(thetaLE)
     cTh2LE = cThLE*cThLE
-
-    DELTA_SECO = np.float32((1.0 - 3.0*GAMA) / (1.0 - GAMA))
     T_demi = (3.0/2.0)
     P22 = T_demi*(DELTA+DELTA_PRIM)
     P12 = T_demi*DELTA_PRIM
     P33bis = T_demi*DELTA
     P44bis = P33bis*DELTA_SECO
 
-    if pol_off:
-        # P(theta) -> phase matrix in Iperpar convention
-        # F(theta) -> phase matrix in IQUV convention
-        # from IQUV to IperIpar (in the case only IQUV F11 != 0 i.e. no polarisation)
-        # P11 = ((3./8.)*DELTA*(cTh2[:]-1)) + 0.5
-        # A_P11 = ((3./8.)*DELTA*(cTh2LE[:]-1)) + 0.5
-        P11 = T_demi*(DELTA*cTh2[:] + DELTA_PRIM)
-        A_P11 = T_demi*(DELTA*cTh2LE[:] + DELTA_PRIM)
-        F11 = 0.5 * (P11 + 2*P12 + P22)
-        A_F11 = 0.5 * (A_P11 + 2*P12 + P22)
-        # pha['p_P11'][:] = P11
-        # pha['p_P12'][:] = P11
-        # pha['p_P22'][:] = P11
+    # parameters equally spaced in scattering probabiliy [0, 1]
+    pha['p_P11'][:] = T_demi*(DELTA*cTh2[:] + DELTA_PRIM)
+    pha['p_P12'][:] = P12
+    pha['p_P22'][:] = P22
+    pha['p_P33'][:] = P33bis*cTh[:] # U
+    pha['p_P44'][:] = P44bis*cTh[:] # V
+    pha['p_ang'][:] = theta[:] # angle
 
-        # pha['p_ang'][:] = theta[:] # angle
-        # pha['a_P11'][:] = A_P11
-        # pha['a_P12'][:] = A_P11
-        # pha['a_P22'][:] = A_P11
-        pha['p_P11'][:] = 0.5*F11
-        pha['p_P12'][:] = 0.5*F11
-        pha['p_P22'][:] = 0.5*F11
-        pha['p_ang'][:] = theta[:] # angle
-
-        pha['a_P11'][:] = 0.5*A_F11
-        pha['a_P12'][:] = 0.5*A_F11
-        pha['a_P22'][:] = 0.5*A_F11
-    else:
-        # parameters equally spaced in scattering probabiliy [0, 1]
-        pha['p_P11'][:] = T_demi*(DELTA*cTh2[:] + DELTA_PRIM)
-        pha['p_P12'][:] = P12
-        pha['p_P22'][:] = P22
-        pha['p_P33'][:] = P33bis*cTh[:] # U
-        pha['p_P44'][:] = P44bis*cTh[:] # V
-        pha['p_ang'][:] = theta[:] # angle
-
-        # parameters equally spaced in scattering angle [0, 180]
-        pha['a_P11'][:] = T_demi*(DELTA*cTh2LE[:] + DELTA_PRIM) 
-        pha['a_P12'][:] = P12
-        pha['a_P22'][:] = P22
-        pha['a_P33'][:] = P33bis*cThLE[:]  # U
-        pha['a_P44'][:] = P44bis*cThLE[:]  # V
+    # parameters equally spaced in scattering angle [0, 180]
+    pha['a_P11'][:] = T_demi*(DELTA*cTh2LE[:] + DELTA_PRIM) 
+    pha['a_P12'][:] = P12
+    pha['a_P22'][:] = P22
+    pha['a_P33'][:] = P33bis*cThLE[:]  # U
+    pha['a_P44'][:] = P44bis*cThLE[:]  # V
 
     return pha
 
 
-def calculF(profile, N, DEPO, kind, pol_off=False):
+def calculF(profile, N, DEPO, kind):
     '''
     Calculate cumulated phase functions from profile
     N: number of angles
@@ -1995,9 +1895,8 @@ def calculF(profile, N, DEPO, kind, pol_off=False):
     phase_H = np.zeros(shp, dtype=type_Phase, order='C')
 
     # Set Rayleigh phase function or isotropic if DEPO <0
-    if DEPO >=0 : phase_H[0,:] = rayleigh(N, DEPO, pol_off=pol_off)
-    # no pol_off in isotropic because the function needs first to be corrected
-    else : phase_H[0,:]        = isotropic(N) 
+    if DEPO >=0 : phase_H[0,:] = rayleigh(N, DEPO)
+    else : phase_H[0,:]        = isotropic(N)
     if 'theta_'+kind in profile.axes:
         angles = profile.axis('theta_'+kind) * pi/180.
         assert angles[-1] < 3.15   # assert that angles are in radians
@@ -2012,18 +1911,6 @@ def calculF(profile, N, DEPO, kind, pol_off=False):
     #for ipha in range(nphases-1):
 
         phase = profile[name_phase][ipha, :, :]  # ipha, stk, theta
-
-        if pol_off:
-            if (len(phase[:,0]) == 4):
-                raise NameError("old profiles with only 4 stk available are not supported without polarization")
-            # back to IQUV convention to obtain F11
-            F11 = 0.5 * (phase[0,:] + 2*phase[1,:] + phase[4,:])
-            # reset all values to 0
-            phase[:,:] = 0.
-            # reconvert to Iperpar but without considering polarization
-            phase[0,:] = 0.5 * F11
-            phase[1,:] = 0.5 * F11
-            phase[4,:] = 0.5 * F11
 
         scum = [0]
         pm = phase[1, :] + phase[0, :]
@@ -2100,10 +1987,9 @@ def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
               XBLOCK, XGRID,NLAM, SIM, NF,
               NBTHETA, NBPHI, OUTPUT_LAYERS,
               RTER, LE, ZIP, FLUX, FFS, DIRECT, OCEAN_INTERACTION, 
-              NLVL, NPSTK, NWLPROBA, NSENSORPROBA, NCELLPROBA,  BEER, SMIN, SMAX, RMIN, RMAX, RR, 
+              NLVL, NPSTK, NWLPROBA, NSENSORPROBA, NCELLPROBA,  BEER, SMIN, SMAX, RR, 
               WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj, nGObj, nRObj,
-              Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, vSun, HIST, ZTOA,
-              cell_size, sxmin, sxmax, symin, symax, nbsx, nbsy) :
+              Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, vSun, HIST, ZTOA, cell_size) :
     """
     Initialize the constants in python and send them to the device memory
 
@@ -2156,12 +2042,6 @@ def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
     copy_to_device('FFSd', 1 if FFS else 0, np.int32)
     copy_to_device('DIRECTd', 1 if DIRECT else 0, np.int32)
     copy_to_device('cell_sized', cell_size, np.float32)
-    copy_to_device('sxmind', sxmin, np.float32)
-    copy_to_device('sxmaxd', sxmax, np.float32)
-    copy_to_device('symind', symin, np.float32)
-    copy_to_device('symaxd', symax, np.float32)
-    copy_to_device('nbsxd', nbsx, np.uint32)
-    copy_to_device('nbsyd', nbsy, np.uint32)
     if OCEAN_INTERACTION is None:
         copy_to_device('OCEAN_INTERACTIONd', -1, np.int32)
     else:
@@ -2172,8 +2052,6 @@ def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
     copy_to_device('BEERd', BEER, np.int32)
     copy_to_device('SMINd', SMIN, np.int32)
     copy_to_device('SMAXd', SMAX, np.int32)
-    copy_to_device('RMINd', RMIN, np.int32)
-    copy_to_device('RMAXd', RMAX, np.int32)
     copy_to_device('RRd', RR, np.int32)
     copy_to_device('WEIGHTRRd', WEIGHTRR, np.float32)
     copy_to_device('NLOWd', NLOW, np.int32)
@@ -2400,8 +2278,7 @@ def reduce_diff(m, varnames, delta=None):
     res.attrs = m.attrs
     return res
 
-# for record but no longer the prefered method
-'''
+
 def reduce_histories(kernel2, tabHist, wl, sigma, NLOW, NBTHETA=1, alb_in=None, XBLOCK=512, XGRID=512, verbose=False):
    NL    = sigma.shape[1]
    w     = tabHist[:, NL+4:-6]
@@ -2478,9 +2355,9 @@ def reduce_histories(kernel2, tabHist, wl, sigma, NLOW, NBTHETA=1, alb_in=None, 
                      to_gpu(nenv_in), to_gpu(ith_in), to_gpu(iwls_in), to_gpu(wwls_in), 
                      block=(XBLOCK,1,1),grid=(XGRID,1,1))
    return res_out, res_sca, res_rrs, res_sif, res_vrs
-'''
 
 
+ 
 def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX_HIST, NLOW,
                 NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                 NLAM, NSENSOR, double, kern, kern2, p, X0, le, tab_sensor, envmap, spectrum,
@@ -2518,9 +2395,8 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
 
     """
     # Initializations
-    nThreadsActive = gpuzeros(1, dtype=np.uint32)
-    Counter = gpuzeros(1, dtype=np.uint64)
-
+    nThreadsActive = gpuzeros(1, dtype='int32')
+    Counter = gpuzeros(1, dtype='uint64')
     
     if double : FDTYPE=np.float64
     else : FDTYPE=np.float32
@@ -2564,23 +2440,25 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         tabTransDir = gpuzeros((1,1), dtype=np.float64)
     
     if ((NATM+NOCE >0) and (NATM_ABS+NOCE_ABS <500) and alis) : 
-        tabDistTot = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI,2), dtype=np.float64)
+        tabDistTot = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI), dtype=np.float64)
     else : 
         tabDistTot = gpuzeros((1), dtype=np.float64)
 
-    '''
+    #if hist : tabHistTot = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+6),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
     if hist : 
-        tabHistTot = gpuzeros((2,MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+6),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
+        #tabHistTot = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+6),1,NBTHETA,1), dtype=np.float32)
+        tabHistTot = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+6),1,1,1), dtype=np.float32)
         dz    = abs(np.diff(prof_atm.get()['z'][0,:]))
         sigma = np.diff(prof_atm.get()['OD_abs'][:,:])/dz
         alb_in= np.concatenate([spectrum.get()['alb_surface'][:], spectrum.get()['alb_env'][:]])
+        # TODO add oceanic absorption
         wl = spectrum.get()['lambda'][:]
     else :
         tabHistTot = gpuzeros((1), dtype=np.float32)
-    '''
 
     # Initialize of the parameters
     tabPhotonsTot = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float64)
+    tabPhotonsTotRayleigh = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float64)
     N_simu = 0
     if stdev:
         # to calculate the standard deviation of the result, we accumulate the
@@ -2589,51 +2467,55 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         sum_x = 0.
         sum_x2 = 0.
 
+
+
     # arrays for counting the input photons (per wavelength)
     NPhotonsIn = gpuzeros((NSENSOR,NLAM), dtype=np.uint64)
     NPhotonsInTot = gpuzeros((NSENSOR,NLAM), dtype=np.uint64)
     
     # arrays for counting the output photons
     NPhotonsOut = gpuzeros((NLVL,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.uint64)
+    NPhotonsOutRayleigh = gpuzeros((NLVL,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.uint64)
     NPhotonsOutTot = gpuzeros((NLVL,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.uint64)
+    NPhotonsOutTotRayleigh = gpuzeros((NLVL,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.uint64)
 
     if double:
         tabPhotons = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float64)
+        tabPhotonsRayleigh = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float64)
         if ((NATM+NOCE >0) and (NATM_ABS+NOCE_ABS <500) and alis) : 
-            tabDist = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI,2), dtype=np.float64)
+            tabDist = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI), dtype=np.float64)
         else :
             tabDist = gpuzeros((1), dtype=np.float64)
     else:
         tabPhotons = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float32)
+        tabPhotonsRayleigh = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float32)
         if ((NATM+NOCE >0) and (NATM_ABS+NOCE_ABS <500) and alis) : 
-            tabDist = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI,2), dtype=np.float32)
+            tabDist = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
         else : 
             tabDist = gpuzeros((1), dtype=np.float32)
 
     if hist : 
-        #tabHist = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+6),1,NBTHETA,1), dtype=np.float32)
-        #tabHist = gpuzeros((2,MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+6),1,1,1), dtype=np.float32)
-        tabHistTot = gpuzeros((2,MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+6),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
-
+        #tabHist = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTNPhotonsOut = gpuzeros((NLVL,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.uint64)K+NLOW+6),1,NBTHETA,1), dtype=np.float32)
+        tabHist = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+6),1,1,1), dtype=np.float32)
+        #tabHist = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+6),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
     else : 
-        tabHistTot = gpuzeros((1), dtype=np.float32)
+        tabHist = gpuzeros((1), dtype=np.float32)
 
     # local estimates angles
     if le != None:
         tabthv = to_gpu(le['th'].astype('float32'))
         tabphi = to_gpu(le['phi'].astype('float32'))
-        if 'count_level' in le: tablevel = to_gpu(le['count_level'].astype('int32'))
-        else: tablevel = to_gpu(np.full((NBTHETA), -2).astype('int32'))
     else:
         tabthv = gpuzeros(1, dtype='float32')
         tabphi = gpuzeros(1, dtype='float32')
-        tablevel = to_gpu(np.array([-2]).astype('int32'))
 
     secs_cuda_clock = 0.
     alis_norm = NLAM if NLOW!=0 else 1
     while((np.sum(NPhotonsInTot.get())/alis_norm) < NBPHOTONS):
         tabPhotons.fill(0.)
+        tabPhotonsRayleigh.fill(0.)
         NPhotonsOut.fill(0)
+        NPhotonsOutRayleigh.fill(0)
         NPhotonsIn.fill(0)
         Counter.fill(0)
         # en rapport avec les objets
@@ -2650,8 +2532,8 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
 
         # kernel launch
         kern(envmap, spectrum, X0, faer, foce,
-             errorcount, nThreadsActive, tabPhotons, tabDist, tabHistTot, MAX_HIST, tabTransDir,
-             Counter, NPhotonsIn, NPhotonsOut, tabthv, tabphi, tablevel, tab_sensor,
+             errorcount, nThreadsActive, tabPhotons, tabPhotonsRayleigh, tabDist, tabHist, tabTransDir,
+             Counter, NPhotonsIn, NPhotonsOut, NPhotonsOutRayleigh, tabthv, tabphi, tab_sensor,
              prof_atm, prof_oc, cell_atm, cell_oc, wl_proba_icdf, sensor_proba_icdf, cell_proba_icdf, 
              rng.state, tabObjInfo,
              myObjects0, myGObj0, myRObj0, mySPECTObj0, nbPhCat, wPhCat, wPhCat2,
@@ -2685,18 +2567,23 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
 
         NPhotonsOutTot += NPhotonsOut
         S = tabPhotons   # sum of weights for the last kernel
-        if(not hist) : 
+
+        NPhotonsOutTotRayleigh += NPhotonsOutRayleigh
+        SRayleigh = tabPhotonsRayleigh   # sum of weights for the last kernel
+        
+        #test=S.get()
+        #if np.isnan(test).any(): 
+         #   print('pb Nan')
+        if(~hist) : 
             tabPhotonsTot += S
+            tabPhotonsTotRayleigh += SRayleigh
         
         T = tabDist
         tabDistTot += T
-        
-        ## for record but no longer the prefered method
-        '''
         if hist :
             tabHistTot = tabHist
             res,res_sca,res_rrs,res_sif,res_vrs = reduce_histories(kern2, np.squeeze(tabHist.get()), wl, sigma, NLOW,
-                                NBTHETA=NBTHETA, alb_in=alb_in)
+                                  NBTHETA=NBTHETA, alb_in=alb_in)
             if NBTHETA>1:
                 tabPhotonsTot[0,:,:,:,:,:] += res[:,None,:,:,None]
                 tabPhotonsTot[1,:,:,:,:,:] += res_sca[:,None,:,:,None]
@@ -2709,8 +2596,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
                 tabPhotonsTot[2,:,:,:,:,:] += res_rrs[:,None,:,None]
                 tabPhotonsTot[3,:,:,:,:,:] += res_sif[:,None,:,None]
                 tabPhotonsTot[4,:,:,:,:,:] += res_vrs[:,None,:,None]
-        '''
-        
+
         N_simu += 1
 
         sphot = np.sum(NPhotonsInTot.get())/alis_norm
@@ -2772,7 +2658,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         elif (stdev and stdev_lim is not None):
             # update of the progression Bar
             p.update(sphot, f"Launched {sphot:.3g} photons; err[abs] = {max_aerr:{format_std}}; err[rel] = {max_rerr:{format_std}};")
-        else:
+        else: 
             # update of the progression Bar
             p.update(sphot, 'Launched {:.3g} photons'.format(sphot))
             
@@ -2809,9 +2695,9 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
     else:
         sigma = None
 
-
-    return NPhotonsInTot.get(), tabPhotonsTot.get(), tabDistTot.get(), tabHistTot.get(), tabTransDir.get(), errorcount, \
-        NPhotonsOutTot.get(), sigma, N_simu, secs_cuda_clock, tabMatRecep, matCats, matLoss, wPhCatTot.get(), wPhCat2Tot.get()
+    return NPhotonsInTot.get(), tabPhotonsTot.get(), tabPhotonsTotRayleigh.get(), tabDistTot.get(), tabHistTot.get(), \
+tabTransDir.get(), errorcount, NPhotonsOutTot.get(), NPhotonsOutTotRayleigh.get(),sigma, N_simu, secs_cuda_clock, tabMatRecep, \
+matCats, matLoss, wPhCatTot.get(), wPhCat2Tot.get()
 
 
 def get_git_attrs():
@@ -2964,9 +2850,8 @@ class RNG_PHILOX(object):
     def setup(self, SEED, XBLOCK, XGRID):
         if SEED == -1:
             # SEED is based on clock
-            # A multiply by 1000 has been removed to avoid OverflowError due to uint32 limit
-            SEED = np.uint32((datetime.now(tz=timezone.utc)
-                              - datetime(1970, 1, 1, tzinfo=timezone.utc)).total_seconds())
+            SEED = np.uint32((datetime.now()
+                - datetime.utcfromtimestamp(0)).total_seconds()*1000)
 
         state = np.zeros(XBLOCK*XGRID+1, dtype='uint32')
         state[0] = SEED
@@ -3003,15 +2888,15 @@ class RNG_CURAND_PHILOX(object):
         self.mod = SourceModule(source, no_extern_c=True)
 
         # get state size
-        s = gpuzeros(1, dtype=np.uint32)
+        s = gpuzeros(1, dtype='int32')
         self.mod.get_function('get_state_size')(s, block=(1, 1, 1), grid=(1, 1, 1))
         self.STATE_SIZE = int(np.squeeze(s.get()))  # size in bytes
 
     def setup(self, SEED, XBLOCK, XGRID):
         if SEED == -1:
             # SEED is based on clock
-            SEED = np.uint32((datetime.now(tz=timezone.utc)
-                             - datetime(1970, 1, 1, tzinfo=timezone.utc)).total_seconds())
+            SEED = np.uint32((datetime.now()
+                - datetime.utcfromtimestamp(0)).total_seconds()*1000)
 
         cuda.memcpy_htod(self.mod.get_global('XBLOCKd')[0], np.array([XBLOCK], dtype=np.int32))
         cuda.memcpy_htod(self.mod.get_global('XGRIDd')[0], np.array([XGRID], dtype=np.int32))
@@ -3507,46 +3392,5 @@ def findExtinction(IP, FP, prof_atm, W_IND = int(0)):
     n_ext = np.exp(-abs(tauHit))
 
     return n_ext
-
-    
-def Get_Sensor(VZA_lev, LEVEL=0., VAA=0., RTER=6370., H=120., FOV=0., TYPE=0., PP=True, verbose=False):
-    '''
-    Return the Sensor object for atmosphere height of H for backward simulations where
-    VZA_lev is the View Zenith Angle defined at the level: origin (0, 0, RTER+LEVEL) for Spherical
-    Shell (SS), (0, 0, LEVEL) for Plane Parallel (PP)
-
-    Input:
-        VZA_lev: View Zenith Angle defined at altitude LEVEL of Atmosphere
-        
-    Keywords:
-        LEV : Altitude (km) where the VZA is defined, default 0. (ground)
-        VAA : View Azimuth Angle
-        FOV : Field of View (de), default 0.
-        TYPE: Type od sensor, default 0 (radiance), 1 (planar irradiance), 2 (spherical irradiance)
-        RTER: Earth radius (km)
-        H   : Altitude of the Atmosphere (km)
-        SS  : Plane Parallel (PP default or SS)
-    '''
-    nothing = Transform() # i.e. no rotation and no translation
-    radius = (H + RTER)
-    large_dist = float("inf") # large distance(km)
-    origin = Point(0., 0., LEVEL) if PP else Point(0., 0., RTER+LEVEL)
-    # Boundaries
-    if PP: Boundary = BBox(Point(-large_dist, -large_dist, 0.), Point(large_dist, large_dist, H)) # Rectangle for atmosphere for PP
-    else : Boundary = Sphere(nothing, nothing, radius, -radius, radius, 360) # Create the Earth + atmosphere sphere for SS
-    # Compute the direction vector object from Zenith and Azimuth angles
-    dir = convertAnglestoV(THETA=VZA_lev, TYPE='Sensor', PHI=180+VAA)
-    # Make a ray from origin in direction dir
-    ray = Ray(o=origin, d=dir)
-    # Compute the intersection with the Boundary
-    if PP: (_, t1, hit) = Boundary.IntersectP(ray)
-    else : hit = Boundary.Intersect(ray) 
-    if not hit: raise NameError("The intersection test failed!! Check input paramaters.")
-    # Computations of sensor position
-    if PP: pos = origin + dir*t1
-    else : pos = origin + dir*Boundary.thit
-    if verbose : print("VZA =", VZA_lev, "--> pos =", pos)
-
-    return Sensor(POSX=pos.x, POSY=pos.y, POSZ=pos.z, THDEG=180.-VZA_lev, PHDEG=VAA, LOC='ATMOS', FOV=FOV, TYPE=TYPE)
 
 

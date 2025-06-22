@@ -36,12 +36,6 @@ __device__ __constant__ int FLUXd;
 __device__ __constant__ int FFSd;
 __device__ __constant__ int DIRECTd;
 __device__ __constant__ float cell_sized;
-__device__ __constant__ float sxmind;
-__device__ __constant__ float sxmaxd;
-__device__ __constant__ float symind;
-__device__ __constant__ float symaxd;
-__device__ __constant__ unsigned int nbsxd;
-__device__ __constant__ unsigned int nbsyd;
 __device__ __constant__ int OCEAN_INTERACTIONd;
 __device__ __constant__ int SURd;
 __device__ __constant__ int BRDFd;
@@ -69,8 +63,6 @@ __device__ __constant__ float SUN_DISCd;
 __device__ __constant__ int BEERd;
 __device__ __constant__ int SMINd;
 __device__ __constant__ int SMAXd;
-__device__ __constant__ int RMINd;
-__device__ __constant__ int RMAXd;
 __device__ __constant__ int RRd;
 __device__ __constant__ float WEIGHTRRd; // THRESHOLD for RUSSIAN ROULETTE PROCEDURE
 __device__ __constant__ int NLOWd;
@@ -125,11 +117,12 @@ __global__ void launchKernel(
         struct EnvMap *envmap,
         struct Spectrum *spectrum, float *X0,
         struct Phase *faer, struct Phase *foce2,
-        unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons, void *tabDist, void *tabHist, unsigned long long MAX_HIST,
+        unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons, void *tabPhotonsRayleigh, void *tabDist, void *tabHist,
         void *tabTransDir, unsigned long long *Counter,
         unsigned long long *NPhotonsIn,
         unsigned long long *NPhotonsOut,
-        float *tabthv, float *tabphi,  int *tablevel, struct Sensor *tab_sensor,
+        unsigned long long *NPhotonsOutRayleigh,
+        float *tabthv, float *tabphi,  struct Sensor *tab_sensor,
         struct Profile *prof_atm,
         struct Profile *prof_oc,
         struct Cell *cell_atm,
@@ -257,7 +250,7 @@ __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geo
 #endif
 
 __device__ void countPhoton(Photon* , struct Spectrum* spectrum, struct Profile* prof_atm, struct Profile* prof_oc, float*, float *,
-        int, unsigned long long*, void*, void*, void*, unsigned long long, void*, unsigned long long*);
+        int, unsigned long long*, void*, void*, void*, void*, void*, unsigned long long*, unsigned long long*);
 
 // rotation of the stokes parameters by an angle psi
 __device__ void rotateStokes(float4 s, float psi, float4 *sr);
@@ -347,11 +340,6 @@ __device__ float H_rpv(float , float );  //  RPV, only H
 
 __device__ float BRDF(int, float3, float3 , struct Spectrum* );  //  general BRDF
 __device__ float BPlanck(float, float );
-#ifdef OPT3D
-#ifndef BACK
-__device__ unsigned int get_isens(Photon* ph, struct Sensor *tab_sensor, int count_level);
-#endif
-#endif
 #ifdef PHILOX
 /**********************************************************
 *	> Fonctions liées au générateur aléatoire
