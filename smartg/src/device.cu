@@ -37,13 +37,11 @@ extern "C" {
                              struct EnvMap *envmap,
 							 struct Spectrum *spectrum, float *X0,
 							 struct Phase *faer, struct Phase *foce,
-							 unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons, void *tabPhotonsRayleigh, 
-                             void *tabDist, void *tabHist, 
+							 unsigned long long *errorcount, int *nThreadsActive, void *tabPhotons, void *tabDist, void *tabHist, unsigned long long MAX_HIST,
 							 void *tabTransDir, unsigned long long *Counter,
 							 unsigned long long *NPhotonsIn,
 							 unsigned long long *NPhotonsOut,
-                             unsigned long long *NPhotonsOutRayleigh,
-							 float *tabthv, float *tabphi, struct Sensor *tab_sensor,
+							 float *tabthv, float *tabphi, int *tablevel, struct Sensor *tab_sensor,
 							 struct Profile *prof_atm,
 							 struct Profile *prof_oc,
                              struct Cell *cell_atm,
@@ -70,6 +68,7 @@ extern "C" {
 	unsigned int idx = blockIdx.x *blockDim.x + threadIdx.x;
 	int loc_prev;
 	int count_level;
+    int ilevel_le=0;
 	int this_thread_active = 1;
 	unsigned long long iloop = 0;
 
@@ -312,7 +311,7 @@ extern "C" {
         //
 		/* Cone Sampling */
 		if (LEd ==0) countPhoton(&ph, spectrum, prof_atm, prof_oc, tabthv, tabphi, count_level,
-            errorcount, tabPhotons, tabPhotonsRayleigh, tabDist, tabHist, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh);
+            errorcount, tabPhotons, tabDist, tabHist, MAX_HIST, tabTransDir, NPhotonsOut);
 
 		#if defined(BACK) && defined(OBJ3D)
 		if (count_level == UPTOA and LMODEd == 4 and LEd == 0) // the photon reach TOA
@@ -374,12 +373,12 @@ extern "C" {
                     // Double Loop on directions (zenith ang azimuths)
                     for (int ith=0; ith<NBTHETAd; ith++){
                         for (int iph=0; iph<NBPHId; iph++){
-
-
+                            ilevel_le = (ith + ith0)%NBTHETAd;
+                            if (tablevel[ilevel_le] != count_level_le && tablevel[ilevel_le] != COUNTALL) continue;
                             // Copy of the propagation photon to to the virtual, local estimate photon
                             copyPhoton(&ph, &ph_le);
                             // Computation of the indices of the direction
-                            ph_le.ith = (ith + ith0)%NBTHETAd;
+                            ph_le.ith = ilevel_le;
                             if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
                             else ph_le.iph =  ph_le.ith;
                             // azimuth and zenith LE
@@ -487,6 +486,12 @@ extern "C" {
                              #endif // ALT PP
                             #endif // Spherical
 
+                            #ifdef OPT3D
+                            #ifndef BACK
+                            ph_le.is = get_isens(&ph_le, tab_sensor, count_level_le);
+                            #endif
+                            #endif
+
                             // Finally count the virtual photon
                             /* in FAST PP mode the final extinction until the counting level is done in the countPhoton function */
 							#if defined(OBJ3D)
@@ -495,7 +500,7 @@ extern "C" {
                             mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
                             if (!mask_le and count_level_le == UPTOA and LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, tabthv_le, tabphi_le); }
 							#endif
-                            if (!mask_le) {countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, count_level_le, errorcount, tabPhotons, tabPhotonsRayleigh, tabDist, tabHist, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh); }
+                            if (!mask_le) {countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, count_level_le, errorcount, tabPhotons, tabDist, tabHist, MAX_HIST, tabTransDir, NPhotonsOut); }
 
                         } //directions
                     } // directions
@@ -586,8 +591,14 @@ extern "C" {
                     for (int ith=0; ith<NBTHETAd; ith++){
                       for (int iph=0; iph<NBPHId; iph++){
                         // copy propagation to virtual photon
+                        ilevel_le = (ith + ith0)%NBTHETAd;
+                        if ( (tablevel[ilevel_le] != count_level_le) &&
+                             (tablevel[ilevel_le] != COUNTALL)       &&
+                             (tablevel[ilevel_le] != UPTOA)          &&
+                             (tablevel[ilevel_le] != DOWNB) ) 
+                        { continue; }
                         copyPhoton(&ph, &ph_le);
-                        ph_le.ith = (ith + ith0)%NBTHETAd;
+                        ph_le.ith = ilevel_le;
                         if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
                         else ph_le.iph =  ph_le.ith;
 
@@ -620,10 +631,18 @@ extern "C" {
                         copyIGeo(&geoStruc, &geoStruc_le);
                         mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
                         #endif
-                        if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, count_level_le, errorcount, tabPhotons, tabPhotonsRayleigh, tabDist, tabHist, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh); }
+                        if ((!mask_le) && (tablevel[ph_le.ith] == COUNTALL || tablevel[ph_le.ith] == count_level_le) )
+                        {
+                            #ifdef OPT3D
+                            #ifndef BACK
+                            ph_le.is = get_isens(&ph_le, tab_sensor, count_level_le);
+                            #endif
+                            #endif
+                            countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, count_level_le, errorcount, tabPhotons, tabDist, tabHist, MAX_HIST, tabTransDir, NPhotonsOut);
+                        }
 
                         // Only for upward photons in Atmopshere, count also them up to TOA
-                        if (k==0) { 
+                        if ( (k==0) && (tablevel[ph_le.ith] == COUNTALL || tablevel[ph_le.ith] == UPTOA) ){ 
                             // Final extinction computation n the atmosphere for SP and ALT_PP move mode
                             #ifdef SPHERIQUE
                             if (ph_le.loc==ATMOS)
@@ -650,14 +669,19 @@ extern "C" {
                             }
                             #endif // END ALT_PP
                             #endif // END not spheric
+                            #ifdef OPT3D
+                            #ifndef BACK
+                            ph_le.is = get_isens(&ph_le, tab_sensor, UPTOA);
+                            #endif
+                            #endif
                             // Final extinction computation in FAST PP move mode and counting at the TOA for all move modes
-                            if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA , errorcount, tabPhotons, tabPhotonsRayleigh, tabDist, tabHist, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh); }
+                            if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA , errorcount, tabPhotons, tabDist, tabHist, MAX_HIST, tabTransDir, NPhotonsOut); }
                             #ifdef OBJ3D
                             if (!mask_le and LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, tabthv_le, tabphi_le); }
                             #endif
                         }
                         // Only for downward photons in Ocean, count also them up to Bottom 
-                        if (k==1) { 
+                        if ( (k==1) && (tablevel[ph_le.ith] == COUNTALL || tablevel[ph_le.ith] == DOWNB) ){ 
                             // Final extinction computation in the ocean for ALT_PP move mode
                             #ifdef ALT_PP
                             if (ph_le.loc==OCEAN) 
@@ -673,8 +697,13 @@ extern "C" {
                                 #endif
                             }
                             #endif // END ALT_PP
+                            #ifdef OPT3D
+                            #ifndef BACK
+                            ph_le.is = get_isens(&ph_le, tab_sensor, DOWNB);
+                            #endif
+                            #endif
                             // Final extinction computation in FAST PP move mode and counting at the Bottom for all move modes
-                            if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, DOWNB , errorcount, tabPhotons, tabPhotonsRayleigh, tabDist, tabHist, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh); }
+                            if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, DOWNB , errorcount, tabPhotons, tabDist, tabHist, MAX_HIST, tabTransDir, NPhotonsOut); }
                         }
                       }//direction
                     }//direction
@@ -730,12 +759,16 @@ extern "C" {
                   /* Double loop on zenith and azimuth LE */
                   for (int ith=0; ith<NBTHETAd; ith++){
                     for (int iph=0; iph<NBPHId; iph++){
+                        ilevel_le = (ith + ith0)%NBTHETAd;
+                        if ( (tablevel[ilevel_le] != COUNTALL) &&
+                             (tablevel[ilevel_le] != UP0P)     &&
+                             (tablevel[ilevel_le] != UPTOA) )
+                        {continue;}
                         copyPhoton(&ph, &ph_le);
-                        ph_le.ith = (ith + ith0)%NBTHETAd;
+                        ph_le.ith = ilevel_le;
                         if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
                         else ph_le.iph =  ph_le.ith;
 
-                        /* LE for BRDF type*/
                         surfaceLambert(&ph_le, 1,
                                        #ifdef OBJ3D
                                        tabthv_le, tabphi_le,
@@ -755,41 +788,55 @@ extern "C" {
                         copyIGeo(&geoStruc, &geoStruc_le);
                         mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
                         #endif
-                        if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, tabPhotonsRayleigh, tabDist, tabHist, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh); }
-
+                        if ( (!mask_le) && (tablevel[ph_le.ith] == COUNTALL || tablevel[ph_le.ith] == UP0P) )
+                        {
+                            #ifdef OPT3D
+                            #ifndef BACK
+                            ph_le.is = get_isens(&ph_le, tab_sensor, UP0P);
+                            #endif
+                            #endif
+                            countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, tabDist, tabHist, MAX_HIST, tabTransDir, NPhotonsOut);
+                        }
                         // 2) up TOA for all move modes, need final extinction computation
                         // Final extinction computation in the atmosphere for SP and ALT_PP move mode
-                        #ifdef SPHERIQUE
-                        if (ph_le.loc==ATMOS)
+                        if ( tablevel[ph_le.ith] == COUNTALL || tablevel[ph_le.ith] == UPTOA )
                         {
-                            move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
+                            #ifdef SPHERIQUE
+                            if (ph_le.loc==ATMOS)
+                            {
+                                move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
+                                #ifdef OBJ3D
+                                mask_le = false;
+                                mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
+                                #endif
+                            }
+                            #else // if not spheric
+                            #ifdef ALT_PP
+                            if (ph_le.loc==ATMOS) 
+                            {
+                                move_pp2(&ph_le, prof_atm, prof_oc, 
+                                        #ifdef OPT3D
+                                        cell_atm, cell_oc,
+                                        #endif
+                                        1, UPTOA , &rngstate);
+                                #ifdef OBJ3D
+                                mask_le = false;
+                                mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
+                                #endif
+                            }
+                            #endif // END ALT_PP
+                            #endif // END not spheric
+                            #ifdef OPT3D
+                            #ifndef BACK
+                            ph_le.is = get_isens(&ph_le, tab_sensor, UPTOA);
+                            #endif
+                            #endif
+                            // Final extinction computation in FAST PP move mode and counting at the TOA for all move modes
+                            if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist, MAX_HIST, tabTransDir, NPhotonsOut); }
                             #ifdef OBJ3D
-                            mask_le = false;
-                            mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
+                            if (!mask_le and LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, tabthv_le, tabphi_le); }
                             #endif
                         }
-                        #else // if not spheric
-                        #ifdef ALT_PP
-                        if (ph_le.loc==ATMOS) 
-                        {
-                            move_pp2(&ph_le, prof_atm, prof_oc, 
-                                      #ifdef OPT3D
-                                      cell_atm, cell_oc,
-                                      #endif
-                                      1, UPTOA , &rngstate);
-                            #ifdef OBJ3D
-                            mask_le = false;
-                            mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
-                            #endif
-                        }
-                        #endif // END ALT_PP
-                        #endif // END not spheric
-                        // Final extinction computation in FAST PP move mode and counting at the TOA for all move modes
-                        if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabPhotonsRayleigh, tabDist, tabHist, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh); }
-                        #ifdef OBJ3D
-                        if (!mask_le and LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, tabthv_le, tabphi_le); }
-                        #endif
-
                     }//direction
                   }//direction
                 } //LE
@@ -833,8 +880,13 @@ extern "C" {
                  /* Double loop on zenith and azimuths LE*/
                  for (int ith=0; ith<NBTHETAd; ith++){
                     for (int iph=0; iph<NBPHId; iph++){
+                        ilevel_le = (ith + ith0)%NBTHETAd;
+                        if ( (tablevel[ilevel_le] != COUNTALL) &&
+                             (tablevel[ilevel_le] != UP0P)     &&
+                             (tablevel[ilevel_le] != UPTOA) )
+                        {continue;}
                         copyPhoton(&ph, &ph_le);
-                        ph_le.ith = (ith + ith0)%NBTHETAd;
+                        ph_le.ith = ilevel_le;
                         if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
                         else ph_le.iph =  ph_le.ith;
 
@@ -853,36 +905,52 @@ extern "C" {
                         copyIGeo(&geoStruc, &geoStruc_le);
                         mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
                         #endif
-                        if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, tabPhotonsRayleigh, tabDist, tabHist, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh); }
-                        #ifdef SPHERIQUE
-                        if (ph_le.loc==ATMOS)
+                        if ( (!mask_le) && (tablevel[ph_le.ith] == COUNTALL || tablevel[ph_le.ith] == UP0P) )
                         {
-                            move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
+                            #ifdef OPT3D
+                            #ifndef BACK
+                            ph_le.is = get_isens(&ph_le, tab_sensor, UP0P);
+                            #endif
+                            #endif
+                            countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UP0P,  errorcount, tabPhotons, tabDist, tabHist, MAX_HIST, tabTransDir, NPhotonsOut);
+                        }
+                        if (tablevel[ph_le.ith] == COUNTALL || tablevel[ph_le.ith] == UPTOA)
+                        {
+                            #ifdef SPHERIQUE
+                            if (ph_le.loc==ATMOS)
+                            {
+                                move_sp(&ph_le, prof_atm, 1, UPTOA, &rngstate);
+                                #ifdef OBJ3D
+                                mask_le = false;
+                                mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
+                                #endif
+                            }
+                            #else // if not spheric
+                            #ifdef ALT_PP
+                            if (ph_le.loc==ATMOS)
+                            {
+                                move_pp2(&ph_le, prof_atm, prof_oc, 
+                                        #ifdef OPT3D
+                                        cell_atm, cell_oc,
+                                        #endif
+                                        1, UPTOA , &rngstate);
+                                #ifdef OBJ3D
+                                mask_le = false;
+                                mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
+                                #endif
+                            }
+                            #endif // END ALT_PP
+                            #endif // END not spheric
+                            #ifdef OPT3D
+                            #ifndef BACK
+                            ph_le.is = get_isens(&ph_le, tab_sensor, UPTOA);
+                            #endif
+                            #endif
+                            if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist, MAX_HIST, tabTransDir, NPhotonsOut); }
                             #ifdef OBJ3D
-                            mask_le = false;
-                            mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
+                            if (!mask_le and LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, tabthv_le, tabphi_le); }
                             #endif
                         }
-                        #else // if not spheric
-                        #ifdef ALT_PP
-                        if (ph_le.loc==ATMOS)
-                        {
-                            move_pp2(&ph_le, prof_atm, prof_oc, 
-                                    #ifdef OPT3D
-                                    cell_atm, cell_oc,
-                                    #endif
-                                    1, UPTOA , &rngstate);
-                            #ifdef OBJ3D
-                            mask_le = false;
-                            mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
-                            #endif
-                        }
-                        #endif // END ALT_PP
-                        #endif // END not spheric
-                        if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabPhotonsRayleigh, tabDist, tabHist, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh); }
-                        #ifdef OBJ3D
-                        if (!mask_le and LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, tabthv_le, tabphi_le); }
-                        #endif
                     }//direction
                  }//direction
                 } //LE
@@ -932,8 +1000,12 @@ extern "C" {
               /* Double loop on zenith and azimuth LE*/
               for (int ith=0; ith<NBTHETAd; ith++){
                 for (int iph=0; iph<NBPHId; iph++){
+                    ilevel_le = (ith + ith0)%NBTHETAd;
+                    if ( (tablevel[ilevel_le] != COUNTALL) &&
+                          (tablevel[ilevel_le] != UP0M) )
+                    {continue;}
                     copyPhoton(&ph, &ph_le);
-                    ph_le.ith = (ith + ith0)%NBTHETAd;
+                    ph_le.ith = ilevel_le;
                     if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
                     else ph_le.iph =  ph_le.ith;
 
@@ -962,7 +1034,15 @@ extern "C" {
                         #endif
                     } 
                     #endif
-                    if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UP0M,   errorcount, tabPhotons, tabPhotonsRayleigh, tabDist, tabHist, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh); }
+                    if (!mask_le)
+                    {
+                        #ifdef OPT3D
+                        #ifndef BACK
+                        ph_le.is = get_isens(&ph_le, tab_sensor, UP0M);
+                        #endif
+                        #endif
+                        countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UP0M,   errorcount, tabPhotons, tabDist, tabHist, MAX_HIST, tabTransDir, NPhotonsOut);
+                    }
 
                 } // directions
               } // directions
@@ -1023,7 +1103,7 @@ extern "C" {
                             mask_le = false;
                             copyIGeo(&geoStruc, &geoStruc_le);
                             mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
-                            if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UP0P, errorcount, tabPhotons, tabPhotonsRayleigh, tabDist, tabHist, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh); }
+                            if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UP0P, errorcount, tabPhotons, tabDist, tabHist, MAX_HIST, tabTransDir, NPhotonsOut); }
                             #ifdef SPHERIQUE
 							// for spherical case attenuation if performed usin move_sp
 							if (ph_le.loc==ATMOS)
@@ -1033,7 +1113,7 @@ extern "C" {
                                 mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
                             }
 						    #endif
-							if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabPhotonsRayleigh, tabDist, tabHist, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh); }
+							if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist, MAX_HIST, tabTransDir, NPhotonsOut); }
                             if (!mask_le and LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, tabthv_le, tabphi_le); }
 						}//direction
 					}//direction
@@ -1072,7 +1152,7 @@ extern "C" {
                             mask_le = false;
                             copyIGeo(&geoStruc, &geoStruc_le);
                             mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
-                            if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UP0P, errorcount, tabPhotons, tabPhotonsRayleigh, tabDist, tabHist, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh); }
+                            if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UP0P, errorcount, tabPhotons, tabDist, tabHist, MAX_HIST, tabTransDir, NPhotonsOut); }
                             #ifdef SPHERIQUE
 							// for spherical case attenuation if performed usin move_sp
                             // once spherical case with OBJ implemented, must check if le still works
@@ -1083,7 +1163,7 @@ extern "C" {
                                 mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
                             }
 						    #endif
-							if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabPhotonsRayleigh, tabDist, tabHist, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh); }
+							if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist, MAX_HIST, tabTransDir, NPhotonsOut); }
                             if (!mask_le and LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, tabthv_le, tabphi_le); }
                             
 						}//direction
@@ -1145,7 +1225,7 @@ extern "C" {
 		
         /* Cone Sampling */
         if (LEd == 0) countPhoton(&ph, spectrum, prof_atm, prof_oc, tabthv, tabphi, count_level, errorcount,
-             tabPhotons, tabPhotonsRayleigh, tabDist, tabHist, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh);
+             tabPhotons, tabDist, tabHist, MAX_HIST, tabTransDir, NPhotonsOut);
 
 
         //--------------------------
@@ -1225,9 +1305,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     #if !defined(ALT_PP) && !defined(SPHERIQUE)
     float dz, dz_i, delta_i, epsilon;
     #endif
-
-    ph->only_rayleigh = true;
-
+	
 	//int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
 	
     #ifdef OBJ3D
@@ -3173,7 +3251,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
                 intTime1 *= epsilon;
                 ph->pos = operator+(ph->pos, ph->v * intTime1);
                 #ifndef ALIS
-                if (BEERd == 1) ph->weight *= __expf(-( epsilon * h_cur_abs));
+                if (BEERd == 1) ph->weight *= exp(-( epsilon * h_cur_abs));
                 #else
                 float coef;
                 if (ph->loc==ATMOS) ph->cdist_atm[cell[ph->layer].iabs] += intTime1;
@@ -3200,7 +3278,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
                 if (ph->pos.z < 0) ph->pos.z = 0;
 
                 #ifndef ALIS
-                if (BEERd == 1) ph->weight *= __expf(-( h_cur_abs));
+                if (BEERd == 1) ph->weight *= exp(-( h_cur_abs));
                 #else
                 float coef;
                 if (ph->loc==ATMOS) ph->cdist_atm[cell[ph->layer].iabs] += intTime1;
@@ -3848,8 +3926,6 @@ __device__ void scatter(Photon* ph,
         int le, float refrac_angle,
         float* tabthv, float* tabphi, int count_level,
         struct RNG_State *rngstate) {
-
-    if (ph->loc!=OCEAN & ph->scatterer == PTCLE) { ph->only_rayleigh = false; }
 
 	float cTh=0.f;
 	float zang=0.f, theta=0.f;
@@ -6089,7 +6165,8 @@ __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geo
 	float3 p_t; float sizeX = nbCx*TCd; float sizeY = nbCy*TCd;
 
     // test single scattering or photons removed
-    if (ph->loc==REMOVED || ph->loc==ABSORBED || ph->nint>SMAXd || ph->nint<SMINd) { return; }
+    //if (ph->loc==REMOVED || ph->loc==ABSORBED || ph->nint>SMAXd || ph->nint<SMINd) { return; }
+    if (ph->loc==REMOVED || ph->loc==ABSORBED || ph->nint>SMAXd || ph->nint<SMINd || ph->nref>RMAXd || ph->nref<RMINd) { return; }
 
     // don't count photons with nof finite results
     if (!isfinite(ph->stokes.x) || !isfinite(ph->stokes.y) ||
@@ -6320,21 +6397,27 @@ __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geo
 }
 #endif // End OBJ3D
 
+/*--------------------------------------------------------------------------------------------------*/
+/*                      COUNT PHOTONS                                                                */
+/*--------------------------------------------------------------------------------------------------*/
 
 __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
         struct Profile *prof_atm, struct Profile *prof_oc,
         float *tabthv, float *tabphi,
         int count_level,
 		unsigned long long *errorcount,
-        void *tabPhotons, void *tabPhotonsRayleigh, void *tabDist, void *tabHist, void*tabTransDir, unsigned long long *NPhotonsOut, unsigned long long *NPhotonsOutRayleigh
+        void *tabPhotons, void *tabDist, void *tabHist, unsigned long long MAX_HIST, void*tabTransDir, unsigned long long *NPhotonsOut
         ) {
 
 
-    // test single scattering or photons removed
-    if (count_level < 0 || ph->loc==REMOVED || ph->loc==ABSORBED || 
+    // don't count photons that:
+    // (i) incoherent counting level or absorbed in the mdedium or removed for inconstsitencies during the ray tracing
+    // (ii) photons not enough or too much scattered/reflected (possibility to focus on single or multiple scattering)
+    // (iii) eventually photons having penetrated into the ocean
+    //if (count_level < 0 || ph->loc==REMOVED || ph->loc==ABSORBED || 
+    if (count_level < 0 || ph->loc==REMOVED || ph->loc==ABSORBED || ph->nref>RMAXd || ph->nref<RMINd ||
         ph->nint>SMAXd || ph->nint<SMINd || (OCEAN_INTERACTIONd>=0 && ph->iocean!=OCEAN_INTERACTIONd)) {
-    //if (count_level < 0 || ph->loc==REMOVED || ph->loc==ABSORBED) {
-        // don't count anything
+        // don't count anything and return
         return;
     }
 
@@ -6342,54 +6425,62 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
     if (!isfinite(ph->stokes.x) || !isfinite(ph->stokes.y) ||
         !isfinite(ph->stokes.z) || !isfinite(ph->stokes.w) ||
         !isfinite(ph->weight) )  {
-        //printf("%d %g\n",ph->ilam, ph->weight);    
         return;
     }
 
-    // don't count the photons directly transmitted
+    // don't count photons directly transmitted (i.e. without having interacted) unless DIRECT keyword is true
     if (ph->nint == 0 && DIRECTd==0) {
         return;
     }
     
-    // Declaration for double
+    // Declaration for "doubles" accumulating variables
     #ifdef DOUBLE 
      double *tabCount;                   // pointer to the "counting" array:
-     double *tabCountT;                   // pointer to the "counting" array:
-     double *tabCountRayleigh;             // Added Rayleigh counter
-     double dweight;
-	 double4 ds;                         // Stokes vector casted to double 
+     #ifndef ALIS
+      double *tabCountT;
+     #endif                  // pointer to the "counting" array:
+     double dweight;                     // photon's weight casted to double
+	 double4 ds;                         // photon's Stokes vector casted to double 
      #ifdef ALIS
-      double dwsca, dwabs;                // General ALIS variables 
+      double dwsca, dwabs;               // photon's ALIS specific weights casted to double 
       #if ( defined(SPHERIQUE) || defined(ALT_PP) )
-       double *tabCount2;                  // Specific ALIS counting array pointer for path implementation (cumulative distances)
+       double *tabCount2;                // photon's ALIS specific array pointer for path (cumulative distances)
       #endif
      #endif
-
-    // Declaration for single
+    // Declaration for "singles" accumulating variable
     #else                              
-     float *tabCount; 
-     float *tabCountT; 
-     float *tabCountRayleigh
+     float *tabCount;
+     #ifndef ALIS
+      float *tabCountT; 
+     #endif
      #if ( defined(SPHERIQUE) || defined(ALT_PP) ) && defined(ALIS)
       float *tabCount2;
      #endif
     #endif
 
+
+    // DEV !! ALIS path histories storage
     #if ( defined(SPHERIQUE) || defined(ALT_PP) ) && defined(ALIS)
-     float *tabCount3; // Specific ALIS counting array pointer for path implementation (distances histograms)
+     float *tabCount3; // ALIS specific array pointer for photon's individual path histories
     #endif
 
     // We dont count UPTOA photons leaving in boxes outside SZA range
     if ((LEd==0) && (count_level==UPTOA) && (acosf(ph->v.z) > (SZA_MAXd*90./DEMIPI))) return;
 
-    float theta = acosf(fmin(1.F, fmax(-1.F, ph->v.z)));
 
+    float theta = acosf(fmin(1.F, fmax(-1.F, ph->v.z)));
 	float psi=0.;
+    // indices in output arrays for theta, phi, lambda ans sensor index
 	int ith=0, iphi=0, il=0, is=ph->is;
     float4 st; // replace s1, s2, s3, s4
-    unsigned long long II, JJ, JJJ, TT;
 
+    // various offsets for array pointers
+    unsigned long long II, JJ, JJJ;
+    #ifndef ALIS
+     unsigned long long TT;
+    #endif
 
+    // if photon exits at the zenith, psi is undefined
     if ((double)ph->v.x * (double)ph->u.y - (double)ph->v.y * (double)ph->u.x != 0.) {
        ComputePsi(ph, &psi, theta);
     }
@@ -6407,9 +6498,14 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
        }
     }
 
+
+    // Final rotation of the Stokes vector according to psi
     rotateStokes(ph->stokes, psi, &st);
     st.w = ph->stokes.w;
 
+    // In case of backward mode compute the full Mueller matrices multiplication
+    // in the reverse order and
+    // replace then the photon's Stokes vector "st" by "stback"
     #ifdef BACK
     float4x4 L;
     float4 stback = make_float4(0.5F, 0.5F, 0., 0.);
@@ -6424,6 +6520,7 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
     st = stforw;*/
     #endif
 
+    // Copy phitons weights to new variables
 	float weight = ph->weight;
     #ifdef ALIS
         float weight_sca[MAX_NLOW];
@@ -6432,27 +6529,36 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
         }
     #endif
 
-	// Compute Box for outgoing photons in case of cone sampling
+    /******************************************/
+	// Compute outgoing photons boxes         //
+    // Compute final attenuation before exit if necessary //
+    /******************************************/
+    
+    // In case of cone sampling
 	if (LEd == 0) { 
         // if compute box returns 0, it excluded the photon (outside sun disc for example), so we dont count it
         if (!ComputeBox(&ith, &iphi, &il, ph, errorcount, count_level)) return;
     }
 
-
-    // For virtual (LE) photons the direction is stored within photon structure
-    // Moreover we compute also final attenuation for LE 
+    // Else local estimate
     else {
+        //For virtual (LE) photons the direction is stored within photon structure
         ith = ph->ith;
         if (!ZIPd) iphi= ph->iph;
         il  = ph->ilam;
 
+        // We compute also final attenuation for LE 
+        // It is sometimes not necessary:
+        // (i) surface only simulation
+        // (ii) no atmosphere and counting level just above surface or TOA
+        // (iii) no ocean and counting level just above surface
         if (!(   (SIMd==SURF_ONLY) 
               || (NATMd==0 && (count_level==UPTOA || count_level==UP0P)) 
               || (NOCEd==0 && count_level==UP0P)
              )
            ){
 
-        // Computation of final attenutation only in fast PP
+        // Computation of final attenutation only in fast Plane Parallel "move" procedure
         #if !defined(SPHERIQUE) && !defined(ALT_PP)
         int layer_le;
         float tau_le;
@@ -6525,9 +6631,13 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
         #endif // NOT ALIS
         #endif // NOT SPHERIQUE && NOT ALT_PP
      } // SIMd  
-
     }   //LE
+
 	
+
+    /************************************/
+    /* Compute corrections factors for fluxes */
+    /************************************/
     float weight_irr = fabs(ph->v.z);
     // In Forward mode, and in case of spherical flux, update the weight
 	if (FLUXd==2 && LEd==0 & weight_irr > 0.001f) weight /= weight_irr;
@@ -6540,14 +6650,17 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
         if (dot(ph->v, tilted)>=0 ) weight=0.F;
     }
 
-    II = NBTHETAd*NBPHId*NLAMd*NSENSORd;
-    JJJ= NPSTKd*II;
-
+    /*********************************************/
     // Regular counting procedure
+    /*********************************************/
+    II = NBTHETAd*NBPHId*NLAMd*NSENSORd; // array 4 dimensional size
+    JJJ= NPSTKd*II; // array 5 dimensional size (4 + Stokes components)
+
     #ifndef ALIS //=========================================================================================================
+    // photon's box and weight has to be valid
 	if(((ith >= 0) && (ith < NBTHETAd)) && ((iphi >= 0) && (iphi < NBPHId)) && (il >= 0) && (il < NLAMd) && (!isnan(weight)))
 	{
-      JJ = is*NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi;
+      JJ = is*NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi; // Offset for 4 dimensional output array
       TT = is*NLAMd + il;
 
       //int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -6556,7 +6669,6 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
       #ifdef DOUBLE 
       // select the appropriate level (count_level)
       tabCount = (double*)tabPhotons + count_level*JJJ;
-      tabCountRayleigh = (double*)tabPhotonsRayleigh + count_level*JJJ; // Intialize Rayleigh counter
       tabCountT= (double*)tabTransDir;
       tabCountT[TT] = (double)ph->taumax;
       dweight = (double)weight;
@@ -6569,46 +6681,23 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
       atomicAdd(tabCount+(1*II+JJ), dweight*(ds.x-ds.y));
       atomicAdd(tabCount+(2*II+JJ), dweight*ds.z);
       atomicAdd(tabCount+(3*II+JJ), dweight*ds.w);
-      if (ph->only_rayleigh) {
-          atomicAdd(tabCountRayleigh+(0*II+JJ), dweight*(ds.x+ds.y));
-          atomicAdd(tabCountRayleigh+(1*II+JJ), dweight*(ds.x-ds.y));
-          atomicAdd(tabCountRayleigh+(2*II+JJ), dweight*ds.z);
-          atomicAdd(tabCountRayleigh+(3*II+JJ), dweight*ds.w);
-      }
       #else
       DatomicAdd(tabCount+(0*II+JJ), dweight*(ds.x+ds.y));
 	  DatomicAdd(tabCount+(1*II+JJ), dweight*(ds.x-ds.y));
 	  DatomicAdd(tabCount+(2*II+JJ), dweight*ds.z);
 	  DatomicAdd(tabCount+(3*II+JJ), dweight*ds.w);
-      if (ph->only_rayleigh) {
-          DatomicAdd(tabCountRayleigh+(0*II+JJ), dweight*(ds.x+ds.y));
-	      DatomicAdd(tabCountRayleigh+(1*II+JJ), dweight*(ds.x-ds.y));
-	      DatomicAdd(tabCountRayleigh+(2*II+JJ), dweight*ds.z);
-	      DatomicAdd(tabCountRayleigh+(3*II+JJ), dweight*ds.w);
-      }
 	  #endif
 
       #else
       tabCount = (float*)tabPhotons + count_level*JJJ;
-      tabCountRayleigh = (float*)tabPhotonsRayleigh + count_level*JJJ;
       tabCountT= (float*)tabTransDir;
       tabCountT[TT] = ph->taumax;
       atomicAdd(tabCount+(0*II+JJ), weight * (st.x+st.y));
       atomicAdd(tabCount+(1*II+JJ), weight * (st.x-st.y));
       atomicAdd(tabCount+(2*II+JJ), weight * st.z);
       atomicAdd(tabCount+(3*II+JJ), weight * st.w);
-
-      if (ph->only_rayleigh) {
-          atomicAdd(tabCountRayleigh+(0*II+JJ), weight * (st.x+st.y));
-          atomicAdd(tabCountRayleigh+(1*II+JJ), weight * (st.x-st.y));
-          atomicAdd(tabCountRayleigh+(2*II+JJ), weight * st.z);
-          atomicAdd(tabCountRayleigh+(3*II+JJ), weight * st.w);
-      }
       #endif
 
-      if (ph->only_rayleigh) {
-          atomicAdd(NPhotonsOutRayleigh + (((count_level*NSENSORd + is)*NLAMd + il)*NBTHETAd + ith)*NBPHId + iphi, 1);
-      }
       atomicAdd(NPhotonsOut + (((count_level*NSENSORd + is)*NLAMd + il)*NBTHETAd + ith)*NBPHId + iphi, 1);
 	}
 	else
@@ -6619,12 +6708,13 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
 
     #else //ALIS ===========================================================================================================
     int DL=(NLAMd-1)/(NLOWd-1);
+    float wabs;
 	if(((ith >= 0) && (ith < NBTHETAd)) && ((iphi >= 0) && (iphi < NBPHId)) && (!isnan(weight)))
     {
      if(HISTd==0) {
       // For all wavelengths
       for (il=0; il<NLAMd; il++) {
-          float wabs = 1.0f;
+          wabs=1.f;
           JJ = is*NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi;
 
           // Linear interpolation upon wavelength of the scattering correction
@@ -6758,7 +6848,6 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
 
           #ifdef DOUBLE 
           tabCount = (double*)tabPhotons + count_level*JJJ;
-          tabCountRayeleigh = (double*)tabPhotonsRayleigh + count_level*JJJ;
           dweight = (double)weight;
           ds = make_double4(st.x, st.y, st.z, st.w);
           dwsca=(double)wsca;
@@ -6769,49 +6858,22 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
           atomicAdd(tabCount+(1*II+JJ), dweight * dwsca * dwabs * (ds.x-ds.y));
 		  atomicAdd(tabCount+(2*II+JJ), dweight * dwsca * dwabs * ds.z);
           atomicAdd(tabCount+(3*II+JJ), dweight * dwsca * dwabs * ds.w);
-
-          if (ph->only_rayleigh) {
-              atomicAdd(tabCountRayleigh+(0*II+JJ), dweight * dwsca * dwabs * (ds.x+ds.y));
-              atomicAdd(tabCountRayleigh+(1*II+JJ), dweight * dwsca * dwabs * (ds.x-ds.y));
-		      atomicAdd(tabCountRayleigh+(2*II+JJ), dweight * dwsca * dwabs * ds.z);
-              atomicAdd(tabCountRayleigh+(3*II+JJ), dweight * dwsca * dwabs * ds.w);
-          }
 		  #else
 		  // If GTX 1000 or more recent use native double atomic add
           DatomicAdd(tabCount+(0*II+JJ), dweight * dwsca * dwabs * (ds.x+ds.y));
           DatomicAdd(tabCount+(1*II+JJ), dweight * dwsca * dwabs * (ds.x-ds.y));
           DatomicAdd(tabCount+(2*II+JJ), dweight * dwsca * dwabs * ds.z);
           DatomicAdd(tabCount+(3*II+JJ), dweight * dwsca * dwabs * ds.w);
-          if (ph->only_rayleigh) {
-              DatomicAdd(tabCountRayleigh+(0*II+JJ), dweight * dwsca * dwabs * (ds.x+ds.y));
-              DatomicAdd(tabCountRayleigh+(1*II+JJ), dweight * dwsca * dwabs * (ds.x-ds.y));
-              DatomicAdd(tabCountRayleigh+(2*II+JJ), dweight * dwsca * dwabs * ds.z);
-              DatomicAdd(tabCountRayleigh+(3*II+JJ), dweight * dwsca * dwabs * ds.w);
-          }
-
 		  #endif		  
 
           #else
           tabCount = (float*)tabPhotons + count_level*JJJ;
-          tabCountRayleigh = (float*)tabPhotonsRayleigh + count_level*JJJ;
           atomicAdd(tabCount+(0*II+JJ), weight * wsca * wabs * (st.x+st.y));
           atomicAdd(tabCount+(1*II+JJ), weight * wsca * wabs * (st.x-st.y));
           atomicAdd(tabCount+(2*II+JJ), weight * wsca * wabs * st.z);
           atomicAdd(tabCount+(3*II+JJ), weight * wsca * wabs * st.w);
-
-          
-          if (ph->only_rayleigh) {
-              atomicAdd(tabCountRayleigh+(0*II+JJ), weight * wsca * wabs * (st.x+st.y));
-              atomicAdd(tabCountRayleigh+(1*II+JJ), weight * wsca * wabs * (st.x-st.y));
-              atomicAdd(tabCountRayleigh+(2*II+JJ), weight * wsca * wabs * st.z);
-              atomicAdd(tabCountRayleigh+(3*II+JJ), weight * wsca * wabs * st.w);
-          }
-
-
           #endif    
-          if (ph->only_rayleigh) {
-              atomicAdd(NPhotonsOutRayleigh + (((count_level*NSENSORd + is)*NLAMd + il)*NBTHETAd + ith)*NBPHId + iphi, 1);
-          }            
+
           atomicAdd(NPhotonsOut + (((count_level*NSENSORd +is)*NLAMd + il)*NBTHETAd + ith)*NBPHId + iphi, 1);
       } // wavelength loop 
      } //  if HISTd==0
@@ -6819,7 +6881,7 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
      #if ( defined(SPHERIQUE) || defined(ALT_PP) )
      unsigned long long K   = NBTHETAd*NBPHId*NSENSORd; /* number of potential output per photon*/
      unsigned long long LL;
-     if (HISTd==1 && count_level==UPTOA) { // Histories stored for absorption computation afterward (only spherical or alt_pp)
+     if (HISTd==1 && ((count_level==UPTOA) || (count_level==DOWN0P))) { // Histories stored for absorption computation afterward (only spherical or alt_pp)
           //int idx = blockIdx.x * blockDim.x + threadIdx.x;
           unsigned long long counter2;
           counter2=atomicAdd(NPhotonsOut, 1);
@@ -6827,52 +6889,64 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
           unsigned long long KK2 = NATM_ABSd+NOCE_ABSd+4+NLOWd+6; /* Number of information per local estmate photon (Record length)*/
           //unsigned long long KK2 = K*(NATM_ABSd+NOCE_ABSd+4+NLOWd+5); /* Number of information per local estmate photon (Record length)*/
           //unsigned long long KK2 = K*(NATMd+NOCEd+4+NLOWd+5); /* Number of information per local estmate photon (Record length)*/
-          //unsigned long long KKK2= KK2 * MAX_HIST; /* Number of individual information per vertical Level (Number of Records)*/
+          unsigned long long KKK2  = K*KK2 * MAX_HIST;/* Number of individual information per vertical Level (Number of Records)*/
           unsigned long long LL2;
-          tabCount3   = (float*)tabHist     ; /* we position the pointer at the good vertical level*/
-          //tabCount3   = (float*)tabHist     + count_level*KKK2; /* we position the pointer at the good vertical level*/
+          //tabCount3   = (float*)tabHist     ; /* we position the pointer at the good vertical level*/
+          tabCount3   = (float*)tabHist     + count_level*KKK2; /* we position the pointer at the good vertical level*/
           for (int n=0; n<NOCE_ABSd; n++){
                 /* The offset is the number of previous writing (counter2) * Record Length
                    + the offset of the individual information  + the place of the physical quantity */
-                LL2 = counter2*KK2 +  n;
-                //LL2 = counter2*KK2 +  n*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+                //LL2 = counter2*KK2 +  n;
+                LL2 = counter2*KK2 +  n*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
                 tabCount3[LL2]= ph->cdist_oc[n+1];
           }
           //for (int n=0; n<NATMd; n++){
           for (int n=0; n<NATM_ABSd; n++){
-                LL2 = counter2*KK2 +  n+NOCE_ABSd;
-                //LL2 = counter2*KK2 +  (n+NOCE_ABSd)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+                //LL2 = counter2*KK2 +  n+NOCE_ABSd;
+                LL2 = counter2*KK2 +  (n+NOCE_ABSd)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
                 tabCount3[LL2]= ph->cdist_atm[n+1];
           }
-          LL2 = counter2*KK2 +  NATM_ABSd+NOCE_ABSd+0;
-          //LL2 = counter2*KK2 +  (NATM_ABSd+NOCE_ABSd+0)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          //LL2 = counter2*KK2 +  NATM_ABSd+NOCE_ABSd+0;
+          LL2 = counter2*KK2 +  (NATM_ABSd+NOCE_ABSd+0)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= weight * (st.x+st.y);
-          LL2 = counter2*KK2 +  NATM_ABSd+NOCE_ABSd+1;
+          //LL2 = counter2*KK2 +  NATM_ABSd+NOCE_ABSd+1;
+          LL2 = counter2*KK2 +  (NATM_ABSd+NOCE_ABSd+1)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= weight * (st.x-st.y);
-          LL2 = counter2*KK2 +  NATM_ABSd+NOCE_ABSd+2;
+          //LL2 = counter2*KK2 +  NATM_ABSd+NOCE_ABSd+2;
+          LL2 = counter2*KK2 +  (NATM_ABSd+NOCE_ABSd+2)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= weight * (st.z);
-          LL2 = counter2*KK2 +  NATM_ABSd+NOCE_ABSd+3;
+          //LL2 = counter2*KK2 +  NATM_ABSd+NOCE_ABSd+3;
+          LL2 = counter2*KK2 +  (NATM_ABSd+NOCE_ABSd+3)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= weight * (st.w);
 
           for (int n=0; n<NLOWd; n++){
-                LL2 = counter2*KK2 + n+NATM_ABSd+NOCE_ABSd+4;
+                //LL2 = counter2*KK2 + n+NATM_ABSd+NOCE_ABSd+4;
+                LL2 = counter2*KK2 +  (n+NATM_ABSd+NOCE_ABSd+4)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
                 tabCount3[LL2]= weight_sca[n];
           }
-          LL2 = counter2*KK2 +  NLOWd+NATM_ABSd+NOCE_ABSd+4;
+          //LL2 = counter2*KK2 +  NLOWd+NATM_ABSd+NOCE_ABSd+4+0;
+          LL2 = counter2*KK2 +   (NLOWd+NATM_ABSd+NOCE_ABSd+4+0)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= (float)(ph->nrrs>=1);
-          LL2 = counter2*KK2 +  NLOWd+NATM_ABSd+NOCE_ABSd+4+1;
+          //LL2 = counter2*KK2 +  NLOWd+NATM_ABSd+NOCE_ABSd+4+1;
+          LL2 = counter2*KK2 +   (NLOWd+NATM_ABSd+NOCE_ABSd+4+1)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= (float)(ph->nref);
-          LL2 = counter2*KK2 +  NLOWd+NATM_ABSd+NOCE_ABSd+4+2;
+          //LL2 = counter2*KK2 +  NLOWd+NATM_ABSd+NOCE_ABSd+4+2;
+          LL2 = counter2*KK2 +   (NLOWd+NATM_ABSd+NOCE_ABSd+4+2)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= (float)(ph->nsif);
-          LL2 = counter2*KK2 +  NLOWd+NATM_ABSd+NOCE_ABSd+4+3;
+          //LL2 = counter2*KK2 +  NLOWd+NATM_ABSd+NOCE_ABSd+4+3;
+          LL2 = counter2*KK2 +   (NLOWd+NATM_ABSd+NOCE_ABSd+4+3)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= (float)(ph->nvrs>=1);
-          LL2 = counter2*KK2 +  NLOWd+NATM_ABSd+NOCE_ABSd+4+4;
+          //LL2 = counter2*KK2 +  NLOWd+NATM_ABSd+NOCE_ABSd+4+4;
+          LL2 = counter2*KK2 +   (NLOWd+NATM_ABSd+NOCE_ABSd+4+4)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= (float)(ph->nenv);
-          LL2 = counter2*KK2 +  NLOWd+NATM_ABSd+NOCE_ABSd+4+5;
-          tabCount3[LL2]= (float)(ph->ith);
+          //LL2 = counter2*KK2 +  NLOWd+NATM_ABSd+NOCE_ABSd+4+5;
+          LL2 = counter2*KK2 +   (NLOWd+NATM_ABSd+NOCE_ABSd+4+5)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          tabCount3[LL2]= (float)(ph->nint);
+          //tabCount3[LL2]= (float)(ph->ith);
        } // HISTd==1
 
-       unsigned long long KK  = K*(NATM_ABSd+NOCE_ABSd);
+       unsigned long long KK  = K*2*(NATM_ABSd+NOCE_ABSd);
+       //unsigned long long KK  = K*(NATM_ABSd+NOCE_ABSd);
        #ifdef DOUBLE
           tabCount2   = (double*)tabDist     + count_level*KK;
           for (int n=0; n<NOCE_ABSd; n++){
@@ -6884,9 +6958,14 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
             #endif
           }
           for (int n=0; n<NATM_ABSd; n++){
-            LL = (n+NOCE_ABSd)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+            LL = (n+NOCE_ABSd)*K*2 + is*NBPHId*NBTHETAd*2 + ith*NBPHId*2 + iphi*2 + 0;
+            //LL = (n+NOCE_ABSd)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
             #if __CUDA_ARCH__ >= 600
-            atomicAdd(tabCount2+LL, (double)ph->cdist_atm[n+1]);
+            //atomicAdd(tabCount2+LL, (double)ph->cdist_atm[n+1]);
+            //atomicAdd(tabCount2+LL,   (double)ph->weight);
+            //atomicAdd(tabCount2+LL+1, (double)ph->cdist_atm[n+1]*(double)ph->weight);
+            atomicAdd(tabCount2+LL,   (double)weight * (double)wabs);
+            atomicAdd(tabCount2+LL+1, (double)ph->cdist_atm[n+1] * (double)weight * (double)wabs);
             #else
             DatomicAdd(tabCount2+LL, (double)ph->cdist_atm[n+1]);
             #endif
@@ -6913,8 +6992,6 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
     //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 }
-
-
 
 //
 // Rotation of the stokes parameters by an angle psi between the incidence and
@@ -7305,7 +7382,6 @@ __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
     ph_le->wavel = ph->wavel;
     ph_le->ilam = ph->ilam;
 	ph_le->scatterer=ph->scatterer;
-    ph_le->only_rayleigh=ph->only_rayleigh;
 	ph_le->nrrs=ph->nrrs;
 	ph_le->nvrs=ph->nvrs;
     ph_le->pos = ph->pos; // float3
@@ -8307,7 +8383,63 @@ __device__ int GetEnvIndex(float3 pos, struct EnvMap *envmap) {
     return ispec;
 }
 
+//##########" Forward atm3 isensor  ################"
+#ifdef OPT3D
+#ifndef BACK
+__device__ unsigned int get_isens(Photon* ph, struct Sensor *tab_sensor, int count_level)
+{
+    unsigned int is;
+    // float ztoa_grid;
+    // ztoa_grid = 5.;
+    //is = 0;
+    // unsigned int idx = blockIdx.x *blockDim.x + threadIdx.x;
+    // if (idx==0) printf("posz =%f; vz=%f \n",ph->pos.z,ph->v.z);
+    //if (ph->v.z > 0 && ph->pos.z >= ztoa_grid-VALMIN)
+    //is = NSENSORd-1;
+    // float xmin, xmax, ymin, ymax;
+    // xmin = 0.;
+    // xmax = 7.;
+    // ymin = 0.;
+    // ymax = 7.;
 
+    float xsens_le, ysens_le;
+    xsens_le = ph->pos.x;
+    ysens_le = ph->pos.y;
+
+    // unsigned int idx = blockIdx.x *blockDim.x + threadIdx.x;
+    // if (idx==0) printf("posx =%f; posy=%f \n",ph->pos.x,ph->pos.y);
+    
+    if (xsens_le > sxmaxd && xsens_le <= sxmaxd+VALMIN2) { xsens_le = sxmaxd;}
+    if (xsens_le < sxmind && xsens_le >= sxmind-VALMIN2) { xsens_le = sxmind;}
+    if (ysens_le > symaxd && ysens_le <= symaxd+VALMIN2) { ysens_le = symaxd;}
+    if (ysens_le < symind && ysens_le >= symind-VALMIN2) { ysens_le = symind;}
+    // here x and y periodic boundary conditions are assumed
+    if (xsens_le  > sxmaxd || xsens_le  < sxmind)
+    {
+        printf("posx =%f; posy=%f \n",xsens_le,ysens_le);
+    }
+
+    if (ysens_le > symaxd || ysens_le < symind)
+    {            
+        printf("posx =%f; posy=%f \n",xsens_le,ysens_le);
+    }
+
+    xsens_le = xsens_le - sxmind;
+    ysens_le = ysens_le - symind;
+
+    unsigned int indx, indy;
+
+    indx = floorf(xsens_le/cell_sized);
+    indy = floorf(ysens_le/cell_sized);
+    if (indx == nbsxd) indx -= 1;
+    if (indy == nbsyd) indy -= 1;
+
+    is = indy*nbsxd+indx;
+
+    return is;
+}
+#endif
+#endif
 //#########################################################################
 //                         KERNEL 2
 //#########################################################################

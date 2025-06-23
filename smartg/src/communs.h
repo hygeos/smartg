@@ -44,7 +44,7 @@
 #define MAX_NEVT 500 // Max number of scattering evts stored in photon in the ALIS procedure in basic plane parallel mode
 #define MAX_NLOW 801 // Max number of wavelengths stored in the ALIS scattering correction
 #define MAX_NLAYER 200 // Max number of vertical layers recorded in ALIS procedure in spherical or alternate PP mode
-#define MAX_HIST 2048*2048 // Max number of photon's histories
+//#define MAX_HIST 1024*1024 // Max number of photon's histories
 #define MAX_NREF 10 // Max number of environment albedo type
 
 
@@ -84,6 +84,7 @@
 #define OCEAN_ONLY     3
 
 // indexing of the output levels
+#define COUNTALL -2
 #define NOCOUNT -1
 #define UPTOA   0
 #define DOWN0P	1
@@ -233,8 +234,6 @@ public:
 
 	// scatterer encountered
 	short int scatterer;
-
-    bool only_rayleigh; // Tracks if photons only undergoes Rayleight scattering
 
     /* Counters */
     // Number of interaction (scattering or reflection/transmission)
