@@ -235,6 +235,8 @@ public:
 	// scatterer encountered
 	short int scatterer;
 
+    bool only_rayleigh; // Tracks if photons only undergoes Rayleight scattering
+
     /* Counters */
     // Number of interaction (scattering or reflection/transmission)
     unsigned short nint;
