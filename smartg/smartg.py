@@ -773,7 +773,7 @@ class Smartg(object):
             sensor=None, refraction=False, reflectance=True,
             myObjects=None, interval = None,
             IsAtm = 1, cusL = None, SMIN=0, SMAX=1e6, RMIN=0, RMAX=1e6, FFS=False, DIRECT=False,
-            OCEAN_INTERACTION=None, pol_off=False):
+            OCEAN_INTERACTION=None, pol_off=False, no_aer_output=False):
         """
         Run a SMART-G simulation
 
@@ -924,6 +924,9 @@ class Smartg(object):
             If OCEAN_INTERACTION=1 select photons that interact with ocean. Default None, no selection.
         pol_off : bool, optional
             Deactivate (if True) the consideration of polarized light. Default False.
+        no_aer_output : bool, optional
+            Add output where only photons not scattered by aerosols are considered. Default False.
+            For example, in output MLUT we have m['I_up (TOA)'], so now we will get also m['I_up (TOA), no_aer'].
 
         Returns
         -------
@@ -1364,7 +1367,7 @@ class Smartg(object):
                   NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj, nGObj, nRObj,
                   Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm,
                   TC, nbCx, nbCy, vSun, HIST, ZTOA, sensor2[0].cell_size,
-                  sxmin, sxmax, symin, symax, nbsx, nbsy)
+                  sxmin, sxmax, symin, symax, nbsx, nbsy, no_aer_output)
 
         # Initialize the progress bar
         p = Progress(NBPHOTONS, progress)
@@ -1373,8 +1376,8 @@ class Smartg(object):
         SEED = self.rng.setup(SEED, XBLOCK, XGRID)
 
         # Loop and kernel call
-        (NPhotonsInTot, tabPhotonsTot, tabPhotonsTotRayleigh, tabDistTot, tabHistTot, tabTransDir, errorcount, 
-         NPhotonsOutTot, NPhotonsOutTotRayleigh, sigma, Nkernel, secs_cuda_clock, cMatVisuRecep, matCats, matLoss, wPhCats, wPhCats2
+        (NPhotonsInTot, tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, tabTransDir, errorcount, 
+         NPhotonsOutTot, NPhotonsOutTotNoAer, sigma, Nkernel, secs_cuda_clock, cMatVisuRecep, matCats, matLoss, wPhCats, wPhCats2
         ) = loop_kernel(NBPHOTONS, faer, foce,
                         NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX_HIST, NLOW, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                         NLAM, NSENSOR, self.double, self.kernel, self.kernel2, p, X0, le, tab_sensor, envmap, spectrum,
@@ -1415,11 +1418,12 @@ class Smartg(object):
             dicSTP = None; matLoss = None #; weightR=0
                 
         # finalization
-        output = finalize(tabPhotonsTot, tabPhotonsTotRayleigh, tabDistTot, tabHistTot, wl[:], NPhotonsInTot, errorcount,
-                          NPhotonsOutTot, NPhotonsOutTotRayleigh, OUTPUT_LAYERS, tabTransDir, tabTransDir_analytic, SIM,
+        output = finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl[:], NPhotonsInTot, errorcount,
+                          NPhotonsOutTot, NPhotonsOutTotNoAer, OUTPUT_LAYERS, tabTransDir, tabTransDir_analytic, SIM,
                           attrs, prof_atm, prof_oc, sigma, THVDEG, HORIZ, le=le, flux=flux, back=self.back, 
                           SZA_MAX=SZA_MAX, SUN_DISC=SUN_DISC, hist=hist, cMatVisuRecep=cMatVisuRecep,
-                          dicSTP=dicSTP, matCats=matCats, matLoss=matLoss, wPhCats=wPhCats, wPhCats2=wPhCats2)
+                          dicSTP=dicSTP, matCats=matCats, matLoss=matLoss, wPhCats=wPhCats, wPhCats2=wPhCats2,
+                          no_aer_output=no_aer_output)
         
         output.set_attr('processing time (s)', (datetime.now() - t0).total_seconds())
 
@@ -1484,11 +1488,11 @@ def calcOmega(NBTHETA, NBPHI, SZA_MAX=90., SUN_DISC=0):
     return tabTh, tabPhi, tabOmega
 
 
-def finalize(tabPhotonsTot, tabPhotonsTotRayleigh, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
-             NPhotonsOutTotRayleigh, OUTPUT_LAYERS, tabTransDir, tabTransDir_analytic, SIM, attrs, prof_atm, prof_oc,
+def finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
+             NPhotonsOutTotNoAer, OUTPUT_LAYERS, tabTransDir, tabTransDir_analytic, SIM, attrs, prof_atm, prof_oc,
              sigma, THVDEG, HORIZ, le=None, flux=None,
              back=False, SZA_MAX=90., SUN_DISC=0, hist=False, cMatVisuRecep = None,
-             dicSTP = None, matCats=None, matLoss=None, wPhCats=None, wPhCats2=None):
+             dicSTP = None, matCats=None, matLoss=None, wPhCats=None, wPhCats2=None, no_aer_output=False):
     '''
     create and return the final output
     '''
@@ -1515,17 +1519,17 @@ def finalize(tabPhotonsTot, tabPhotonsTotRayleigh, tabDistTot, tabHistTot, wl, N
 
     # normalization
     tabFinal = tabPhotonsTot.astype('float64')/(norm_geo*norm_npho)
-    tabFinalRayleigh = tabPhotonsTotRayleigh.astype('float64')/(norm_geo*norm_npho)
+    tabFinalNoAer = tabPhotonsTotNoAer.astype('float64')/(norm_geo*norm_npho)
     tabDistFinal = tabDistTot.astype('float64')
     #if hist : tabHistFinal = tabHistTot
 
     # swapaxes : (th, phi) -> (phi, theta)
     tabFinal = tabFinal.swapaxes(4,5)
-    tabFinalRayleigh = tabFinalRayleigh.swapaxes(4,5)
+    tabFinalNoAer = tabFinalNoAer.swapaxes(4,5)
     if len(tabDistFinal) >1 : tabDistFinal = tabDistFinal.swapaxes(3,4)
     if hist : tabHistTot = tabHistTot.swapaxes(3,4)
     NPhotonsOutTot = NPhotonsOutTot.swapaxes(3,4)
-    NPhotonsOutTotRayleigh = NPhotonsOutTotRayleigh.swapaxes(3,4)
+    NPhotonsOutTotNoAer = NPhotonsOutTotNoAer.swapaxes(3,4)
     if sigma is not None:
         sigma /= norm_geo
         sigma = sigma.swapaxes(4,5)
@@ -1589,17 +1593,18 @@ def finalize(tabPhotonsTot, tabPhotonsTotRayleigh, tabDistTot, tabHistTot, wl, N
     m.add_dataset('Q_up (TOA)', tabFinal[UPTOA,1,isen,ilam,iphi,:], axnames)
     m.add_dataset('U_up (TOA)', tabFinal[UPTOA,2,isen,ilam,iphi,:], axnames)
     m.add_dataset('V_up (TOA)', tabFinal[UPTOA,3,isen,ilam,iphi,:], axnames)
-    m.add_dataset('I_up (TOA), Rayleigh', tabFinalRayleigh[UPTOA,0,isen,ilam,iphi,:], axnames)
-    m.add_dataset('Q_up (TOA), Rayleigh', tabFinalRayleigh[UPTOA,1,isen,ilam,iphi,:], axnames)
-    m.add_dataset('U_up (TOA), Rayleigh', tabFinalRayleigh[UPTOA,2,isen,ilam,iphi,:], axnames)
-    m.add_dataset('V_up (TOA), Rayleigh', tabFinalRayleigh[UPTOA,3,isen,ilam,iphi,:], axnames)
     if sigma is not None:
         m.add_dataset('I_stdev_up (TOA)', sigma[UPTOA,0,isen,ilam,iphi,:], axnames)
         m.add_dataset('Q_stdev_up (TOA)', sigma[UPTOA,1,isen,ilam,iphi,:], axnames)
         m.add_dataset('U_stdev_up (TOA)', sigma[UPTOA,2,isen,ilam,iphi,:], axnames)
         m.add_dataset('V_stdev_up (TOA)', sigma[UPTOA,3,isen,ilam,iphi,:], axnames)
     m.add_dataset('N_up (TOA)', NPhotonsOutTot[UPTOA,isen,ilam,iphi,:], axnames)
-    m.add_dataset('N_up (TOA), Rayleigh', NPhotonsOutTotRayleigh[UPTOA,isen,ilam,iphi,:], axnames)
+    if no_aer_output:
+        m.add_dataset('I_up (TOA), no_aer', tabFinalNoAer[UPTOA,0,isen,ilam,iphi,:], axnames)
+        m.add_dataset('Q_up (TOA), no_aer', tabFinalNoAer[UPTOA,1,isen,ilam,iphi,:], axnames)
+        m.add_dataset('U_up (TOA), no_aer', tabFinalNoAer[UPTOA,2,isen,ilam,iphi,:], axnames)
+        m.add_dataset('V_up (TOA), no_aer', tabFinalNoAer[UPTOA,3,isen,ilam,iphi,:], axnames)
+        m.add_dataset('N_up (TOA), no_aer', NPhotonsOutTotNoAer[UPTOA,isen,ilam,iphi,:], axnames)
     if len(tabDistFinal) > 1: 
         if zip : m.add_dataset('cdist_up (TOA)', np.squeeze(tabDistFinal[UPTOA,:,isen,:,:]),  ['None','Zenith angles','iAMF'])
         else   : m.add_dataset('cdist_up (TOA)', tabDistFinal[UPTOA,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
@@ -1611,17 +1616,18 @@ def finalize(tabPhotonsTot, tabPhotonsTotRayleigh, tabDistTot, tabHistTot, wl, N
         m.add_dataset('Q_down (0+)', tabFinal[DOWN0P,1,isen,ilam,iphi,:], axnames)
         m.add_dataset('U_down (0+)', tabFinal[DOWN0P,2,isen,ilam,iphi,:], axnames)
         m.add_dataset('V_down (0+)', tabFinal[DOWN0P,3,isen,ilam,iphi,:], axnames)
-        m.add_dataset('I_down (0+), Rayleigh', tabFinalRayleigh[DOWN0P,0,isen,ilam,iphi,:], axnames)
-        m.add_dataset('Q_down (0+), Rayleigh', tabFinalRayleigh[DOWN0P,1,isen,ilam,iphi,:], axnames)
-        m.add_dataset('U_down (0+), Rayleigh', tabFinalRayleigh[DOWN0P,2,isen,ilam,iphi,:], axnames)
-        m.add_dataset('V_down (0+), Rayleigh', tabFinalRayleigh[DOWN0P,3,isen,ilam,iphi,:], axnames)
         if sigma is not None:
             m.add_dataset('I_stdev_down (0+)', sigma[DOWN0P,0,isen,ilam,iphi,:], axnames)
             m.add_dataset('Q_stdev_down (0+)', sigma[DOWN0P,1,isen,ilam,iphi,:], axnames)
             m.add_dataset('U_stdev_down (0+)', sigma[DOWN0P,2,isen,ilam,iphi,:], axnames)
             m.add_dataset('V_stdev_down (0+)', sigma[DOWN0P,3,isen,ilam,iphi,:], axnames)
         m.add_dataset('N_down (0+)', NPhotonsOutTot[DOWN0P,isen,ilam,iphi,:], axnames)
-        m.add_dataset('N_down (0+), Rayleigh', NPhotonsOutTotRayleigh[DOWN0P,isen,ilam,iphi,:], axnames)
+        if no_aer_output:
+            m.add_dataset('I_down (0+), no_aer', tabFinalNoAer[DOWN0P,0,isen,ilam,iphi,:], axnames)
+            m.add_dataset('Q_down (0+), no_aer', tabFinalNoAer[DOWN0P,1,isen,ilam,iphi,:], axnames)
+            m.add_dataset('U_down (0+), no_aer', tabFinalNoAer[DOWN0P,2,isen,ilam,iphi,:], axnames)
+            m.add_dataset('V_down (0+), no_aer', tabFinalNoAer[DOWN0P,3,isen,ilam,iphi,:], axnames)
+            m.add_dataset('N_down (0+), no_aer', NPhotonsOutTotNoAer[DOWN0P,isen,ilam,iphi,:], axnames)
         if len(tabDistFinal) > 1: 
             if zip : m.add_dataset('cdist_down (0+)', np.squeeze(tabDistFinal[DOWN0P,:,isen,:,:]),  ['None','Zenith angles','iAMF'])
             else   : m.add_dataset('cdist_down (0+)', tabDistFinal[DOWN0P,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
@@ -1630,17 +1636,18 @@ def finalize(tabPhotonsTot, tabPhotonsTotRayleigh, tabDistTot, tabHistTot, wl, N
         m.add_dataset('Q_up (0-)', tabFinal[UP0M,1,isen,ilam,iphi,:], axnames)
         m.add_dataset('U_up (0-)', tabFinal[UP0M,2,isen,ilam,iphi,:], axnames)
         m.add_dataset('V_up (0-)', tabFinal[UP0M,3,isen,ilam,iphi,:], axnames)
-        m.add_dataset('I_up (0-), Rayleigh', tabFinalRayleigh[UP0M,0,isen,ilam,iphi,:], axnames)
-        m.add_dataset('Q_up (0-), Rayleigh', tabFinalRayleigh[UP0M,1,isen,ilam,iphi,:], axnames)
-        m.add_dataset('U_up (0-), Rayleigh', tabFinalRayleigh[UP0M,2,isen,ilam,iphi,:], axnames)
-        m.add_dataset('V_up (0-), Rayleigh', tabFinalRayleigh[UP0M,3,isen,ilam,iphi,:], axnames)
         if sigma is not None:
             m.add_dataset('I_stdev_up (0-)', sigma[UP0M,0,isen,ilam,iphi,:], axnames)
             m.add_dataset('Q_stdev_up (0-)', sigma[UP0M,1,isen,ilam,iphi,:], axnames)
             m.add_dataset('U_stdev_up (0-)', sigma[UP0M,2,isen,ilam,iphi,:], axnames)
             m.add_dataset('V_stdev_up (0-)', sigma[UP0M,3,isen,ilam,iphi,:], axnames)
         m.add_dataset('N_up (0-)', NPhotonsOutTot[UP0M,isen,ilam,iphi,:], axnames)
-        m.add_dataset('N_up (0-), Rayleigh', NPhotonsOutTotRayleigh[UP0M,isen,ilam,iphi,:], axnames)
+        if no_aer_output:
+            m.add_dataset('I_up (0-), no_aer', tabFinalNoAer[UP0M,0,isen,ilam,iphi,:], axnames)
+            m.add_dataset('Q_up (0-), no_aer', tabFinalNoAer[UP0M,1,isen,ilam,iphi,:], axnames)
+            m.add_dataset('U_up (0-), no_aer', tabFinalNoAer[UP0M,2,isen,ilam,iphi,:], axnames)
+            m.add_dataset('V_up (0-), no_aer', tabFinalNoAer[UP0M,3,isen,ilam,iphi,:], axnames)
+            m.add_dataset('N_up (0-), no_aer', NPhotonsOutTotNoAer[UP0M,isen,ilam,iphi,:], axnames)
         if len(tabDistFinal) > 1: 
             if zip : m.add_dataset('cdist_up (0-)', np.squeeze(tabDistFinal[UP0M,:,isen,:,:]),  ['None','Zenith angles','iAMF'])
             else   : m.add_dataset('cdist_up (0-)', tabDistFinal[UP0M,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
@@ -1650,17 +1657,18 @@ def finalize(tabPhotonsTot, tabPhotonsTotRayleigh, tabDistTot, tabHistTot, wl, N
         m.add_dataset('Q_down (0-)', tabFinal[DOWN0M,1,isen,ilam,iphi,:], axnames)
         m.add_dataset('U_down (0-)', tabFinal[DOWN0M,2,isen,ilam,iphi,:], axnames)
         m.add_dataset('V_down (0-)', tabFinal[DOWN0M,3,isen,ilam,iphi,:], axnames)
-        m.add_dataset('I_down (0-), Rayleigh', tabFinalRayleigh[DOWN0M,0,isen,ilam,iphi,:], axnames)
-        m.add_dataset('Q_down (0-), Rayleigh', tabFinalRayleigh[DOWN0M,1,isen,ilam,iphi,:], axnames)
-        m.add_dataset('U_down (0-), Rayleigh', tabFinalRayleigh[DOWN0M,2,isen,ilam,iphi,:], axnames)
-        m.add_dataset('V_down (0-), Rayleigh', tabFinalRayleigh[DOWN0M,3,isen,ilam,iphi,:], axnames)
         if sigma is not None:
             m.add_dataset('I_stdev_down (0-)', sigma[DOWN0M,0,isen,ilam,iphi,:], axnames)
             m.add_dataset('Q_stdev_down (0-)', sigma[DOWN0M,1,isen,ilam,iphi,:], axnames)
             m.add_dataset('U_stdev_down (0-)', sigma[DOWN0M,2,isen,ilam,iphi,:], axnames)
             m.add_dataset('V_stdev_down (0-)', sigma[DOWN0M,3,isen,ilam,iphi,:], axnames)
         m.add_dataset('N_down (0-)', NPhotonsOutTot[DOWN0M,isen,ilam,iphi,:], axnames)
-        m.add_dataset('N_down (0-), Rayleigh', NPhotonsOutTotRayleigh[DOWN0M,isen,ilam,iphi,:], axnames)
+        if no_aer_output:
+            m.add_dataset('I_down (0-), no_aer', tabFinalNoAer[DOWN0M,0,isen,ilam,iphi,:], axnames)
+            m.add_dataset('Q_down (0-), no_aer', tabFinalNoAer[DOWN0M,1,isen,ilam,iphi,:], axnames)
+            m.add_dataset('U_down (0-), no_aer', tabFinalNoAer[DOWN0M,2,isen,ilam,iphi,:], axnames)
+            m.add_dataset('V_down (0-), no_aer', tabFinalNoAer[DOWN0M,3,isen,ilam,iphi,:], axnames)
+            m.add_dataset('N_down (0-), no_aer', NPhotonsOutTotNoAer[DOWN0M,isen,ilam,iphi,:], axnames)
         if len(tabDistFinal) > 1: 
             if zip : m.add_dataset('cdist_down (0-)', np.squeeze(tabDistFinal[DOWN0M,:,isen,:,:]),  ['None','Zenith angles','iAMF'])
             else   : m.add_dataset('cdist_down (0-)', tabDistFinal[DOWN0M,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
@@ -1669,17 +1677,18 @@ def finalize(tabPhotonsTot, tabPhotonsTotRayleigh, tabDistTot, tabHistTot, wl, N
         m.add_dataset('Q_up (0+)', tabFinal[UP0P,1,isen,ilam,iphi,:], axnames)
         m.add_dataset('U_up (0+)', tabFinal[UP0P,2,isen,ilam,iphi,:], axnames)
         m.add_dataset('V_up (0+)', tabFinal[UP0P,3,isen,ilam,iphi,:], axnames)
-        m.add_dataset('I_up (0+), Rayleigh', tabFinalRayleigh[UP0P,0,isen,ilam,iphi,:], axnames)
-        m.add_dataset('Q_up (0+), Rayleigh', tabFinalRayleigh[UP0P,1,isen,ilam,iphi,:], axnames)
-        m.add_dataset('U_up (0+), Rayleigh', tabFinalRayleigh[UP0P,2,isen,ilam,iphi,:], axnames)
-        m.add_dataset('V_up (0+), Rayleigh', tabFinalRayleigh[UP0P,3,isen,ilam,iphi,:], axnames)
         if sigma is not None:
             m.add_dataset('I_stdev_up (0+)', sigma[UP0P,0,isen,ilam,iphi,:], axnames)
             m.add_dataset('Q_stdev_up (0+)', sigma[UP0P,1,isen,ilam,iphi,:], axnames)
             m.add_dataset('U_stdev_up (0+)', sigma[UP0P,2,isen,ilam,iphi,:], axnames)
             m.add_dataset('V_stdev_up (0+)', sigma[UP0P,3,isen,ilam,iphi,:], axnames)
         m.add_dataset('N_up (0+)', NPhotonsOutTot[UP0P,isen,ilam,iphi,:], axnames)
-        m.add_dataset('N_up (0+), Rayleigh', NPhotonsOutTotRayleigh[UP0P,isen,ilam,iphi,:], axnames)
+        if no_aer_output:
+            m.add_dataset('I_up (0+), no_aer', tabFinalNoAer[UP0P,0,isen,ilam,iphi,:], axnames)
+            m.add_dataset('Q_up (0+), no_aer', tabFinalNoAer[UP0P,1,isen,ilam,iphi,:], axnames)
+            m.add_dataset('U_up (0+), no_aer', tabFinalNoAer[UP0P,2,isen,ilam,iphi,:], axnames)
+            m.add_dataset('V_up (0+), no_aer', tabFinalNoAer[UP0P,3,isen,ilam,iphi,:], axnames)
+            m.add_dataset('N_up (0+), no_aer', NPhotonsOutTotNoAer[UP0P,isen,ilam,iphi,:], axnames)
         if len(tabDistFinal) > 1: 
             if zip : m.add_dataset('cdist_up (0+)', np.squeeze(tabDistFinal[UP0P,:,isen,:,:]),  ['None','Zenith angles','iAMF'])
             else   : m.add_dataset('cdist_up (0+)', tabDistFinal[UP0P,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
@@ -1688,17 +1697,18 @@ def finalize(tabPhotonsTot, tabPhotonsTotRayleigh, tabDistTot, tabHistTot, wl, N
         m.add_dataset('Q_down (B)', tabFinal[DOWNB,1,isen,ilam,iphi,:], axnames)
         m.add_dataset('U_down (B)', tabFinal[DOWNB,2,isen,ilam,iphi,:], axnames)
         m.add_dataset('V_down (B)', tabFinal[DOWNB,3,isen,ilam,iphi,:], axnames)
-        m.add_dataset('I_down (B), Rayleigh', tabFinalRayleigh[DOWNB,0,isen,ilam,iphi,:], axnames)
-        m.add_dataset('Q_down (B), Rayleigh', tabFinalRayleigh[DOWNB,1,isen,ilam,iphi,:], axnames)
-        m.add_dataset('U_down (B), Rayleigh', tabFinalRayleigh[DOWNB,2,isen,ilam,iphi,:], axnames)
-        m.add_dataset('V_down (B), Rayleigh', tabFinalRayleigh[DOWNB,3,isen,ilam,iphi,:], axnames)
         if sigma is not None:
             m.add_dataset('I_stdev_down (B)', sigma[DOWNB,0,isen,ilam,iphi,:], axnames)
             m.add_dataset('Q_stdev_down (B)', sigma[DOWNB,1,isen,ilam,iphi,:], axnames)
             m.add_dataset('U_stdev_down (B)', sigma[DOWNB,2,isen,ilam,iphi,:], axnames)
             m.add_dataset('V_stdev_down (B)', sigma[DOWNB,3,isen,ilam,iphi,:], axnames)
         m.add_dataset('N_down (B)', NPhotonsOutTot[DOWNB,isen,ilam,iphi,:], axnames)
-        m.add_dataset('N_down (B), Rayleigh', NPhotonsOutTotRayleigh[DOWNB,isen,ilam,iphi,:], axnames)
+        if no_aer_output:
+            m.add_dataset('I_down (B), no_aer', tabFinalNoAer[DOWNB,0,isen,ilam,iphi,:], axnames)
+            m.add_dataset('Q_down (B), no_aer', tabFinalNoAer[DOWNB,1,isen,ilam,iphi,:], axnames)
+            m.add_dataset('U_down (B), no_aer', tabFinalNoAer[DOWNB,2,isen,ilam,iphi,:], axnames)
+            m.add_dataset('V_down (B), no_aer', tabFinalNoAer[DOWNB,3,isen,ilam,iphi,:], axnames)
+            m.add_dataset('N_down (B), no_aer', NPhotonsOutTotNoAer[DOWNB,isen,ilam,iphi,:], axnames)
         if len(tabDistFinal) > 1: 
             if zip : m.add_dataset('cdist_down (B', np.squeeze(tabDistFinal[DOWNB,:,isen,:,:]),  ['None','Zenith angles','iAMF'])
             else   : m.add_dataset('cdist_down (B)', tabDistFinal[DOWNB,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
@@ -2157,7 +2167,7 @@ def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
               NLVL, NPSTK, NWLPROBA, NSENSORPROBA, NCELLPROBA,  BEER, SMIN, SMAX, RMIN, RMAX, RR, 
               WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj, nGObj, nRObj,
               Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, vSun, HIST, ZTOA,
-              cell_size, sxmin, sxmax, symin, symax, nbsx, nbsy) :
+              cell_size, sxmin, sxmax, symin, symax, nbsx, nbsy, no_aer_output) :
     """
     Initialize the constants in python and send them to the device memory
 
@@ -2216,6 +2226,7 @@ def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
     copy_to_device('symaxd', symax, np.float32)
     copy_to_device('nbsxd', nbsx, np.uint32)
     copy_to_device('nbsyd', nbsy, np.uint32)
+    copy_to_device('no_aer_outd', int(no_aer_output), np.int32)
     if OCEAN_INTERACTION is None:
         copy_to_device('OCEAN_INTERACTIONd', -1, np.int32)
     else:
@@ -2635,7 +2646,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
 
     # Initialize of the parameters
     tabPhotonsTot = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float64)
-    tabPhotonsTotRayleigh = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float64)
+    tabPhotonsTotNoAer = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float64)
     N_simu = 0
     if stdev:
         # to calculate the standard deviation of the result, we accumulate the
@@ -2650,20 +2661,20 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
     
     # arrays for counting the output photons
     NPhotonsOut = gpuzeros((NLVL,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.uint64)
-    NPhotonsOutRayleigh = gpuzeros((NLVL,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.uint64)
+    NPhotonsOutNoAer = gpuzeros((NLVL,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.uint64)
     NPhotonsOutTot = gpuzeros((NLVL,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.uint64)
-    NPhotonsOutTotRayleigh = gpuzeros((NLVL,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.uint64)
+    NPhotonsOutTotNoAer = gpuzeros((NLVL,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.uint64)
 
     if double:
         tabPhotons = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float64)
-        tabPhotonsRayleigh = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float64)
+        tabPhotonsNoAer = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float64)
         if ((NATM+NOCE >0) and (NATM_ABS+NOCE_ABS <500) and alis) : 
             tabDist = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI,2), dtype=np.float64)
         else :
             tabDist = gpuzeros((1), dtype=np.float64)
     else:
         tabPhotons = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float32)
-        tabPhotonsRayleigh = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float32)
+        tabPhotonsNoAer = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float32)
         if ((NATM+NOCE >0) and (NATM_ABS+NOCE_ABS <500) and alis) : 
             tabDist = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI,2), dtype=np.float32)
         else : 
@@ -2692,9 +2703,9 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
     alis_norm = NLAM if NLOW!=0 else 1
     while((np.sum(NPhotonsInTot.get())/alis_norm) < NBPHOTONS):
         tabPhotons.fill(0.)
-        tabPhotonsRayleigh.fill(0.)
+        tabPhotonsNoAer.fill(0.)
         NPhotonsOut.fill(0)
-        NPhotonsOutRayleigh.fill(0)
+        NPhotonsOutNoAer.fill(0)
         NPhotonsIn.fill(0)
         Counter.fill(0)
         # en rapport avec les objets
@@ -2711,8 +2722,8 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
 
         # kernel launch
         kern(envmap, spectrum, X0, faer, foce,
-             errorcount, nThreadsActive, tabPhotons, tabDist, tabHistTot, MAX_HIST, tabPhotonsRayleigh, tabTransDir,
-             Counter, NPhotonsIn, NPhotonsOut, NPhotonsOutRayleigh, tabthv, tabphi, tablevel, tab_sensor,
+             errorcount, nThreadsActive, tabPhotons, tabDist, tabHistTot, MAX_HIST, tabPhotonsNoAer, tabTransDir,
+             Counter, NPhotonsIn, NPhotonsOut, NPhotonsOutNoAer, tabthv, tabphi, tablevel, tab_sensor,
              prof_atm, prof_oc, cell_atm, cell_oc, wl_proba_icdf, sensor_proba_icdf, cell_proba_icdf, 
              rng.state, tabObjInfo,
              myObjects0, myGObj0, myRObj0, mySPECTObj0, nbPhCat, wPhCat, wPhCat2,
@@ -2747,12 +2758,12 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         NPhotonsOutTot += NPhotonsOut
         S = tabPhotons   # sum of weights for the last kernel
 
-        NPhotonsOutTotRayleigh += NPhotonsOutRayleigh
-        SRayleigh = tabPhotonsRayleigh   # sum of weights for the last kernel
+        NPhotonsOutTotNoAer += NPhotonsOutNoAer
+        SRayleigh = tabPhotonsNoAer   # sum of weights for the last kernel
 
         if(not hist) : 
             tabPhotonsTot += S
-            tabPhotonsTotRayleigh += SRayleigh
+            tabPhotonsTotNoAer += SRayleigh
         
         T = tabDist
         tabDistTot += T
@@ -2876,8 +2887,8 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         sigma = None
 
 
-    return NPhotonsInTot.get(), tabPhotonsTot.get(), tabPhotonsTotRayleigh.get(), tabDistTot.get(), tabHistTot.get(), tabTransDir.get(), errorcount, \
-        NPhotonsOutTot.get(), NPhotonsOutTotRayleigh.get(), sigma, N_simu, secs_cuda_clock, tabMatRecep, matCats, matLoss, wPhCatTot.get(), wPhCat2Tot.get()
+    return NPhotonsInTot.get(), tabPhotonsTot.get(), tabPhotonsTotNoAer.get(), tabDistTot.get(), tabHistTot.get(), tabTransDir.get(), errorcount, \
+        NPhotonsOutTot.get(), NPhotonsOutTotNoAer.get(), sigma, N_simu, secs_cuda_clock, tabMatRecep, matCats, matLoss, wPhCatTot.get(), wPhCat2Tot.get()
 
 
 def get_git_attrs():

@@ -42,6 +42,7 @@ __device__ __constant__ float symind;
 __device__ __constant__ float symaxd;
 __device__ __constant__ unsigned int nbsxd;
 __device__ __constant__ unsigned int nbsyd;
+__device__ __constant__ int no_aer_outd;
 __device__ __constant__ int OCEAN_INTERACTIONd;
 __device__ __constant__ int SURd;
 __device__ __constant__ int BRDFd;
@@ -127,11 +128,11 @@ __global__ void launchKernel(
         struct Phase *faer, struct Phase *foce2,
         unsigned long long *errorcount, int *nThreadsActive,
         void *tabPhotons, void *tabDist, void *tabHist, unsigned long long MAX_HIST,
-        void *tabPhotonsRayleigh,
+        void *tabPhotonsNoAer,
         void *tabTransDir, unsigned long long *Counter,
         unsigned long long *NPhotonsIn,
         unsigned long long *NPhotonsOut,
-        unsigned long long *NPhotonsOutRayleigh,
+        unsigned long long *NPhotonsOutNoAer,
         float *tabthv, float *tabphi,  int *tablevel, struct Sensor *tab_sensor,
         struct Profile *prof_atm,
         struct Profile *prof_oc,

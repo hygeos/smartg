@@ -235,7 +235,7 @@ public:
 	// scatterer encountered
 	short int scatterer;
 
-    bool only_rayleigh; // Tracks if photons only undergoes Rayleight scattering
+    int no_aer; // To track also photons without aerosol scattering
 
     /* Counters */
     // Number of interaction (scattering or reflection/transmission)
