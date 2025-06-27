@@ -762,187 +762,208 @@ class Smartg(object):
             print("There is no current context to clear.")
 
 
-    def run(self, wl,
-             atm=None, surf=None, water=None, env=None, alis_options=None,
-             NBPHOTONS=1e9, DEPO=0.0279, DEPO_WATER= 0.0906, THVDEG=0., PHVDEG=0., SEED=-1,
-             RTER=6371., wl_proba=None, sensor_proba=None, cell_proba=None,
-             NBTHETA=45, NBPHI=90, NF=1e6,
-             OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
-             NBLOOP=None, progress=True, 
-             le=None, flux=None, stdev=False, stdev_lim=None,
-             BEER=1, RR=0, WEIGHTRR=0.1, SZA_MAX=90., SUN_DISC=0,
-             sensor=None, refraction=False, reflectance=True,
-             myObjects=None, interval = None,
-             IsAtm = 1, cusL = None, SMIN=0, SMAX=1e6, RMIN=0, RMAX=1e6, FFS=False, DIRECT=False,
-             OCEAN_INTERACTION=None, pol_off=False):
-        '''
+    def run(self, wl, atm=None, surf=None, water=None, env=None, alis_options=None,
+            NBPHOTONS=1e9, DEPO=0.0279, DEPO_WATER= 0.0906, THVDEG=0., PHVDEG=0., SEED=-1,
+            RTER=6371., wl_proba=None, sensor_proba=None, cell_proba=None,
+            NBTHETA=45, NBPHI=90, NF=1e6,
+            OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
+            NBLOOP=None, progress=True, 
+            le=None, flux=None, stdev=False, stdev_lim=None,
+            BEER=1, RR=0, WEIGHTRR=0.1, SZA_MAX=90., SUN_DISC=0,
+            sensor=None, refraction=False, reflectance=True,
+            myObjects=None, interval = None,
+            IsAtm = 1, cusL = None, SMIN=0, SMAX=1e6, RMIN=0, RMAX=1e6, FFS=False, DIRECT=False,
+            OCEAN_INTERACTION=None, pol_off=False):
+        """
         Run a SMART-G simulation
 
-        Arguments:
+        Parameters
+        ----------
+        wl : float | list | 1-D ndarray
+            Wavelength(s) in nm. It can be a list of REPTRAN_IBAND or KDIS_IBAND objects.
+        atm : None | AtmAFGL | MLUT, optional
+            The atmosphere profile. If None, there is no atmosphere.
+        surf : None | RoughSurface | FlatSurface | LambSurface, optional
+            The surface profile. If None, there is no surface.
+        water : None | IOP | IOP_1, optional
+            The water profile. If None, there is no water.
+        env : None | Environemnt, optional
+            The environment (adjacency effect) profile. If None, there is no environment.
+        alis_options : None | dict, optional
+            The alis options (the compilation option alis must be set to True).
+            The dictionary keys:
 
-            wl: a scalar or list/array of wavelengths (in nm)
-                  or a list of REPTRAN or KDIS IBANDS
+            * 'nlow' : int
+                -> The number of low spectral resolution computation. If nlow = -1 select all wavelengths.
+            * 'hist' : bool, optional
+                -> Activate history. If the key does not exist the history mode is not activated.
+            * 'max_hist' : int, optional
+                -> The max number of history (only if hist is True). Default 8e6.
+            * 'njac' : int, optional
+                -> The number of perturbed profiles. Default no Jacobian.
 
-            atm: Profile object
-                default None (no atmosphere)
-                Example:
-                    # clear atmosphere, AFGL midlatitude summer
-                    AtmAFGL('afglms')
-                    # AFGL tropical with maritime clear aerosols AOT(550)=0.3
-                    AtmAFGL('afglt', aer=[AeroOPAC('maritime_clean', 0.3, 550.)])
+            Note: Optional for the dictionary keys indicate that the key is not required to be present.
+        NBPHOTONS : int, optional
+            The total number of photons used for the simulation. Default 1e9.
+        DEPO : float, optional
+            The Rayleigh depolarization factor (air). Default 0.0279.
+        DEPO_WATER : float, optional
+            The Rayleigh depolarization factor (water). Default 0.0906.
+        THVDEG : float, optional
+            The sun/viewing zenith angle in forward/backward mode, in degrees. This parameter is ignored 
+            if the parameter `sensor` is used.
+        PHVDEG : float, optional
+            The sun/viewing azimuth angle in forward/backward mode, in degrees. This parameter is ignored 
+            if the parameter `sensor` is used.
+        SEED : int, optional
+            The seed used to initiate the series of random numbers. Default based on clock time.
+        RTER : float, optional 
+            The earth radius in km
+        wl_proba : None | 1-D ndarray, optional
+            The inversed cumulative distribution function for wavelength selection. It is for example 
+            the result of function ICDF(proba, N).
+        sensor_proba : None | 1-D ndarray, optional
+           The inversed cumulative distribution function for sensor selection. It is for example 
+           the result of function ICDF(proba, N).
+        cell_proba : None | 2-D ndarray, optional
+            The inversed cumulative distribution function for cell selection. It is for example 
+            the result of function ICDF2D(proba, N).
+        NBTHETA : int, optional
+            The number of viewing/sun zenith angles in forward/backward for the cone sampling.
+            This parameter is ignored if the parameter `le` is used.
+        NBPHI : int, optional
+            The number of viewing/sun azimuth angles in forward/backward for the cone sampling.
+            This parameter is ignored if the parameter `le` is used.
+        NF : int, optional
+            The number of discretization of:
+                - the inversed aerosol phase functions
+                - the inversed ocean phase functions
+                - the inversed probability of each wavelength occurence
+        OUTPUT_LAYERS : int, optional
+            To control the output layers. Definitions are the following:
+                - 0 -> top of atmosphere only (TOA)
+                - 1 -> add output layers at (0+, down) and (0-, up)
+                - 2 -> add output layers at (0-, down) and (0+, up)
+                - 3 -> use all output layers.
+        XBLOCK : int, optional
+            The number of cuda blocks.
+        XGRID : int, optional
+            The number of cuda grids.
+        NBLOOP : None | float, optional
+            The number of photons launched in one kernel run.
+        progress : bool, optional
+            Activate the progress bar. Default True.    
+        le : None | dict, optional 
+            Activate the Local Estimate method. The le dictionary keys:
 
-            surf: Surface object
-
-                * default None (no surface)
-                * RoughSurface(WIND=5.)  # wind-roughened ocean surface
-                * FlatSurface()          # flat air-water interface
-                * LambSurface(ALB=Alb_cst(0.1))   # Lambertian surface of constant albedo 0.1
-
-            water: water object, providing options relative to the ocean surface
-                default None (no ocean)
-
-            env: environment effect object (a.k.a. adjacency effect)
-                default None (no environment effect)
-
-            alis_options : required if compiled already with the alis option. Dictionary, field 'nlow'
-                is the number of wavelength  where the spectral dependency of scattering is calculated, 
-                nlow-1 has to divide NW-1 where NW is the number of wavelengths, nlow has to be lesser than MAX_NLOW that is defined in communs.h,
-                optionnal field 'njac' is the number of perturbed profiles, default is zero (None): no Jacobian
-
-            NBPHOTONS: number of photons launched
-
-            DEPO: (Air) Rayleigh depolarization ratio
-
-            DEPO_WATER: (Water) Rayleigh depolarization ratio
-
-            THVDEG: zenith angle of the observer in degrees
-                the result corresponds to various positions of the sun
-                NOTE: in plane parallel geometry, due to Fermat's principle, we
-                can exchange the positions of the sun and observer.
-
-            PHVDEG: azimuth angle of the observer in degrees
-                the result corresponds to various positions of the sun
-                NOTE: It can be very useful to modify only this value instead
-                      of all the positions of all the objects
-
-            SEED: integer used to initiate the series of random numbers
-                default: based on clock time
-
-            RTER: earth radius in km
-
-            wl_proba: inversed cumulative distribution function for wavelength selection
-                        (it is the result of function ICDF(proba, N))
-
-            sensor_proba: inversed cumulative distribution function for sensor selection
-                        (it is the result of function ICDF(proba, N))
-
-            cell_proba: inversed cumulative distribution function for cell selection
-                        (it is the result of function ICDF2(proba, N))
-
-            NBTHETA: number of zenith angles in output
-
-            NBPHI: number of azimuth angles in output
-
-            NF: number of discretization of :
-                    * the inversed aerosol phase functions
-                    * the inversed ocean phase functions
-                    * the inversed probability of each wavelength occurence
-
-            OUTPUT_LAYERS: control the output layers. Add the following values:
-                0: top of atmosphere only (TOA)
-                1: add output layers at (0+, down) and (0-, up)
-                2: add output layers at (0-, down) and (0+, up)
-                Example: OUTPUT_LAYERS=3 to use all output layers.
-
-            XBLOCK and XGRID: control the number of blocks and grid size for
-              the GPU execution
-
-            NBLOOP: number of photons launched in one kernel run
-
-            progress: whether to show a progress bar (True/False)
-
-            le: Local Estimate method activation
-                  Provide output geometries in radians like so:
-                  le={'th': <array-like>, 'phi': <array-like>}
-                  or:
-                  le={'th_deg': <array-like>, 'phi_deg': <array-like>}    # to provide angles in degrees
-                  The defaut output is two dimensional NBPHI x NBTHETA
-                  If 'zip' is present in the dictionary, then 'th' and 'phi' covary and the output is only
-                  one-dimensional NBTHETA, but user should verify that NBPHI==NBTHETA
-                  Angles can be provided as scalar, lists or 1-dim arrays
-                  Default None: cone sampling
-                  NOTE: Overrides NBPHI and NBTHETA
-                  If 'count_level' is present: dim = NBTHETA
-                  count_level = -2 : count everything
-                  count_level = 0  : count only UPTOA
-                  count_level = 1  : count only DOWN0P
-
-            flux: if specified output is 'planar' or 'spherical' flux instead of radiance
-
-            stdev: calculate the standard deviation between each kernel run
-
-            stdev_lim : Stdevlim class, can only be activated if stdev=True
-
-            RR: Russian Roulette ON  = 1
-                                   OFF = 0
-
-            WEIGHTRR threshold weight to apply the Russian Roulette
-
-            BEER: if BEER=1 compute absorption using Beer-Lambert law, otherwise compute it with the Single scattering albedo
-                (BEER automatically set to 1 if ALIS is chosen)
-
-            SZA_MAX : Maximum SZA for solar BOXES in case a Regulard grid and cone sampling
-
-            SUN_DISC : Angular size of the Sun disc in degree, 0 (default means no angular size)
-
-            sensor : sensor object or list, backward mode (from sensor to source), back should be set to True in the smartg constructor
-
-            refraction : include atmospheric refraction
-
-            reflectance : if flux is None, output is in reflectance units if True,(for plane parallel atmosphere). Otherwise
-                is is in radiance units with Solar irradiance set to PI (default False)
+            * 'th' : 1-D ndarray | list, optional
+                -> The zenith angles in radians.
+            * 'phi' : 1-D ndarray | list, optional
+                -> The azimuth angles in radians.
+            * 'th_deg' : 1-D ndarray | list, optional
+                -> The zenith angles in degrees. Only if 'th' is not provided.
+            * 'phi_deg' : 1-D ndarray | list, optional
+                -> The azimuth angles in degrees. Only if 'phi' is not provided.
+            * 'zip' : bool, optional
+               -> If True, then 'th' and 'phi' covary and the output is only one-dimensional NBTHETA, 
+               but user should verify that NBPHI==NBTHETA.
+            * 'count_level' : int, optional
+                -> The level(s) to consider. 3 choices are -2 (all levels), 0 (only UPTOA) and 1 (only DOWN0P).
             
-            myObjects : liste d'objets (objets de classe entity)
-        
-            interval : liste composée de deux listes [[pxmin, pymin, pzmin], [[pxmin, pymin, pzmin]]
-                         interval définit l'interval d'études des objets délimitée par deux points (pmin et pmax).
+            Note: Optional for the dictionary keys indicate that the key is not required to be present. 
+            If th/phi are not provided, th_deg/phi_deg must be given.     
+        flux : None | str, optional
+            Activate the flux mode (instead of radiance). Only 2 choices:
+                - 'planar'
+                - 'spherical'
+        stdev : bool, optional
+            Activate the calculation of the standard deviation (between each kernel run).
+        stdev_lim : None | StdevLim, optional
+            To stop the computation if the standard deviation is above a certain limit. Only if stdev is True.
+        BEER : int, optional
+            If BEER=1 compute absorption using Beer-Lambert law, otherwise compute it with the Single scattering albedo. 
+            BEER automatically set to 1 if ALIS is True.
+        RR: int, optional
+            Activate the Russian Roulette. ON = 1 and OFF = 0.
+        WEIGHTRR : float, optional
+            The threshold weight to apply to the Russian Roulette.
+        SZA_MAX : float, optional
+            The maximum SZA value for solar BOXES in case a Regulard grid and cone sampling.
+        SUN_DISC : float, optional
+            The angular size of the Sun disc in degrees, 0 (default means no angular size)
+        sensor : None | Sensor | list, optional
+            The light source / sensor (Sensor object or list of Sensor objects) in forward / backward mode.
+        refraction : bool, option
+            If True include atmospheric refraction.
+        reflectance : bool, optional
+           Convert output to reflectance units, otherwise in radiance units with Solar irradiance set to PI. 
+           Only of flux is None and for plane parallel atmosphere.
+        myObjects : None | list, optional
+            A list of 3d objects (Entity objects) that will be used in the simulation. Currently sphere and plane objects 
+            are considered. The compilation option `obj3d` must be set to True.
+        interval : None | list, optional
+            A principal bounding box in case 3d objects are incorporated. It must be a list composed of 2 lists with the bbox 
+            min and max values [[xmin, ymin, zmin], [xmax, ymax, zmax]].
+        IsAtm : int, optional
+            If IsAtm=0 provide more robust test with 3d objects in case the atmosphere we remove the atmosphere.
+        cusL : None | CusForward | CusForward, optional
+            Use the RF, FF (CusFroward) or B (CusBackward) launching modes. The compilation option `obj3d` must be set to True.
+        SMIN : int, optional
+            The minimum number of interactions (scattering/reflection). Default 0.
+        SMAX : int, optional
+            The maximum number of iteractions (scattering/reflection). Default 1e6.
+        RMIN : int, optional
+            The minimum number of reflections (by surface only, not environement). Default 0.
+        RMAX : int, optional
+            The maximum number of reflections (by surface only, not environement). Default 1e6
+        FFS : bool, optional
+            Forced First Scattering (for use in spherical limb geometry only). Default False.
+        DIRECT : bool, optional
+            Include directly transmitted photons. Default False.
+        OCEAN_INTERACTION : None | int, optional
+            If OCEAN_INTERACTION=1 select photons that interact with ocean. Default None, no selection.
+        pol_off : bool, optional
+            Deactivate (if True) the consideration of polarized light. Default False.
 
-            IsAtm (effet uniquement si myObjects != None) : si égal à 0 , cela permet dans le cas sans atmosphère,
-                      d'empêcher certaines fuites de photons.
-
-            cusL : None is the default mode (sun is a ponctual source targeting the origin (0,0,0)), else it
-                      enable to use the RF, FF or B launching mode (see the class CusForward) --> cusL=CusForward(...)
-
-            SMIN : Minimum Interaction (scattering/reflection) order: Default 0
-
-            SMAX : Maximum Interaction (scattering/reflection) order: Default 1e6
-            
-            RMIN : Minimum Reflection (by surface only, not environement) order: Default 0
-
-            RMAX : Maximum Reflection (by surface only, not environement) order: Default 1e6
-
-            FFS : Forced First Scattering (for use in spherical limb geometry only): Default False
-
-            DIRECT : Include directly transmitted photons: Default False
-
-            OCEAN_INTERACTION : select photons that interact with ocean : Default None, no selection
-
-            pol_off : if true -> do not consider the polarized light
-
-        Return value:
-        ------------
-
-        Returns a MLUT object containing:
-            - the polarized dimensionless reflectance (I,Q,U,V) at the
-              different layers
+        Returns
+        -------
+        out : MLUT
+            A look-up table containing the simulation results and more, e.g.:
+            - the polarized dimensionless reflectance (I,Q,U,V) at the different layers
             - the number of photons (N) received at each layer
             - the profiles and phase functions
             - attributes
+            - ...
 
-        Example:
-            M = Smartg().run(wl=400., NBPHOTONS=1e7, atm=Profile('afglt'))
-            M['I_up (TOA)'][:,:] contains the top of atmosphere radiance/reflectance
-        '''
+        Notes
+        -----
+
+        In cone sampling, the sun/sensor is targeting the origin (0,0,0) in forward/backward.
+            
+        Examples
+        --------
+        >>> from smartg.smartg import Smartg, RoughSurface
+        >>> from smartg.atmosphere import AtmAFGL, AerOPAC
+        >>> from smartg.water import IOP_1
+        >>> atm = AtmAFGL('afglt', comp=[AerOPAC('maritime_clean', 0.5, 550.)])
+        >>> water = IOP_1(chl=0.5, DEPTH=5.)
+        >>> surf = RoughSurface(WIND=5., NH2O=1.34)
+        >>> m = Smartg().run(wl=550., atm=atm, water=water, surf=surf)
+        >>> # Look at the top of atmosphere radiance/reflectance (key: 'I_up (TOA)')
+        >>> m['I_up (TOA)'].describe()
+        LUT "I_up (TOA)" (float64 between 0.0704 and 0.161):
+          Dim 0 (Azimuth angles): 90 values in [0.0, 356.0]
+          Dim 1 (Zenith angles): 45 values in [1.0, 89.0]
+        >>> m['I_up (TOA)'].data
+        array([[0.15751, 0.14705, 0.14806, ..., 0.12496, 0.11015, 0.07649],
+               [0.15424, 0.14913, 0.1453 , ..., 0.12659, 0.11015, 0.07356],
+               [0.14755, 0.14612, 0.14571, ..., 0.12354, 0.11139, 0.07547],
+               ...,
+               [0.15698, 0.14824, 0.14262, ..., 0.12455, 0.10815, 0.07464],
+               [0.15662, 0.15111, 0.14541, ..., 0.12609, 0.11155, 0.07262],
+               [0.15648, 0.14717, 0.14103, ..., 0.12593, 0.10935, 0.07744]], shape=(90, 45))
+
+        """
 
         if (not self.pp and water is not None): raise NameError("Ocean + spherical atm is not allowed! Still in progress...")
 
