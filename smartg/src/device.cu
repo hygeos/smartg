@@ -313,7 +313,7 @@ extern "C" {
 		// 3- Count the photons
         //
 		/* Cone Sampling */
-		if (LEd ==0) countPhoton(&ph, spectrum, prof_atm, prof_oc, tabthv, tabphi, count_level, errorcount, tabPhotons, tabDist,
+		if (LEd ==0 && if_count(count_level)) countPhoton(&ph, spectrum, prof_atm, prof_oc, tabthv, tabphi, count_level, errorcount, tabPhotons, tabDist,
             tabHist, tabPhotonsNoAer, MAX_HIST, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh);
 
 		#if defined(BACK) && defined(OBJ3D)
@@ -503,7 +503,7 @@ extern "C" {
                             mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
                             if (!mask_le and count_level_le == UPTOA and LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, tabthv_le, tabphi_le); }
 							#endif
-                            if (!mask_le)
+                            if (!mask_le && if_count(count_level_le))
                             {
                                 countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, count_level_le, errorcount, tabPhotons, tabDist, tabHist,
                                     tabPhotonsNoAer, MAX_HIST, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh);
@@ -638,7 +638,7 @@ extern "C" {
                         copyIGeo(&geoStruc, &geoStruc_le);
                         mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
                         #endif
-                        if ((!mask_le) && (tablevel[ph_le.ith] == COUNTALL || tablevel[ph_le.ith] == count_level_le) )
+                        if ((!mask_le) && (tablevel[ph_le.ith] == COUNTALL || tablevel[ph_le.ith] == count_level_le) && if_count(count_level_le) )
                         {
                             #ifdef OPT3D
                             #ifndef BACK
@@ -683,7 +683,7 @@ extern "C" {
                             #endif
                             #endif
                             // Final extinction computation in FAST PP move mode and counting at the TOA for all move modes
-                            if (!mask_le)
+                            if (!mask_le && if_count(UPTOA))
                             {
                                 countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA , errorcount, tabPhotons, tabDist, tabHist,
                                     tabPhotonsNoAer, MAX_HIST, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh);
@@ -715,7 +715,7 @@ extern "C" {
                             #endif
                             #endif
                             // Final extinction computation in FAST PP move mode and counting at the Bottom for all move modes
-                            if (!mask_le)
+                            if (!mask_le && if_count(DOWNB))
                             {
                                 countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, DOWNB , errorcount, tabPhotons, tabDist, tabHist,
                                     tabPhotonsNoAer, MAX_HIST, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh);
@@ -804,7 +804,7 @@ extern "C" {
                         copyIGeo(&geoStruc, &geoStruc_le);
                         mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
                         #endif
-                        if ( (!mask_le) && (tablevel[ph_le.ith] == COUNTALL || tablevel[ph_le.ith] == UP0P) )
+                        if ( (!mask_le) && (tablevel[ph_le.ith] == COUNTALL || tablevel[ph_le.ith] == UP0P) && if_count(UP0P) )
                         {
                             #ifdef OPT3D
                             #ifndef BACK
@@ -849,7 +849,7 @@ extern "C" {
                             #endif
                             #endif
                             // Final extinction computation in FAST PP move mode and counting at the TOA for all move modes
-                            if (!mask_le) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist,
+                            if (!mask_le && if_count(UPTOA)) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist,
                                 tabPhotonsNoAer, MAX_HIST, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh); }
                             #ifdef OBJ3D
                             if (!mask_le and LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, tabthv_le, tabphi_le); }
@@ -923,7 +923,7 @@ extern "C" {
                         copyIGeo(&geoStruc, &geoStruc_le);
                         mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
                         #endif
-                        if ( (!mask_le) && (tablevel[ph_le.ith] == COUNTALL || tablevel[ph_le.ith] == UP0P) )
+                        if ( (!mask_le) && (tablevel[ph_le.ith] == COUNTALL || tablevel[ph_le.ith] == UP0P) && if_count(UP0P) )
                         {
                             #ifdef OPT3D
                             #ifndef BACK
@@ -965,7 +965,7 @@ extern "C" {
                             ph_le.is = get_isens(&ph_le, tab_sensor, UPTOA);
                             #endif
                             #endif
-                            if (!mask_le)
+                            if (!mask_le && if_count(UPTOA))
                             {
                                 countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist,
                                     tabPhotonsNoAer, MAX_HIST, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh);
@@ -1057,7 +1057,7 @@ extern "C" {
                         #endif
                     } 
                     #endif
-                    if (!mask_le)
+                    if (!mask_le && if_count(UP0M))
                     {
                         #ifdef OPT3D
                         #ifndef BACK
@@ -1127,7 +1127,7 @@ extern "C" {
                             mask_le = false;
                             copyIGeo(&geoStruc, &geoStruc_le);
                             mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
-                            if (!mask_le)
+                            if (!mask_le && if_count(UP0P))
                             {
                                 countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UP0P, errorcount, tabPhotons, tabDist, tabHist,
                                     tabPhotonsNoAer, MAX_HIST, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh);
@@ -1141,7 +1141,7 @@ extern "C" {
                                 mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
                             }
 						    #endif
-							if (!mask_le)
+							if (!mask_le && if_count(UPTOA))
                             {
                                 countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist,
                                     tabPhotonsNoAer, MAX_HIST, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh);
@@ -1184,7 +1184,7 @@ extern "C" {
                             mask_le = false;
                             copyIGeo(&geoStruc, &geoStruc_le);
                             mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
-                            if (!mask_le)
+                            if (!mask_le && if_count(UP0P))
                             {
                                 countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UP0P, errorcount, tabPhotons, tabDist, tabHist,
                                     tabPhotonsNoAer, MAX_HIST, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh);
@@ -1199,7 +1199,7 @@ extern "C" {
                                 mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
                             }
 						    #endif
-							if (!mask_le)
+							if (!mask_le && if_count(UPTOA))
                             {
                                 countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist,
                                     tabPhotonsNoAer, MAX_HIST, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh); }
@@ -1263,7 +1263,7 @@ extern "C" {
         }
 		
         /* Cone Sampling */
-        if (LEd == 0) countPhoton(&ph, spectrum, prof_atm, prof_oc, tabthv, tabphi, count_level, errorcount,
+        if (LEd == 0 && if_count(count_level)) countPhoton(&ph, spectrum, prof_atm, prof_oc, tabthv, tabphi, count_level, errorcount,
              tabPhotons, tabDist, tabHist, tabPhotonsNoAer, MAX_HIST, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh);
 
 
@@ -7742,6 +7742,50 @@ __device__ float fVRS(float lam){
 }
 
 /*---------------*/
+
+
+__device__ bool if_count(int count_level)
+{
+
+    if (count_level == -2)
+    {
+        return true;
+    }
+    else if (count_level == -1)
+    {
+        return false;
+    }
+    else if (count_level > 5) // here for count_level = UP0M2 or other new level
+    {
+       return true;
+    }
+    else
+    {
+        if (OUTPUT_LAYERSd == 0 && count_level==UPTOA) 
+        {
+            return true;
+        }
+        else if (OUTPUT_LAYERSd == 1 &&
+                (count_level==UPTOA || DOWN0P || UP0M))
+        {
+            return true;
+        }
+        else if (OUTPUT_LAYERSd == 2 &&
+                (count_level == UPTOA || count_level == DOWN0M || 
+                count_level == UP0P || count_level == DOWNB))
+        {
+            return true;
+        }
+        else if (OUTPUT_LAYERSd == 3)
+        {
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+}
 
 #ifdef PHILOX
 

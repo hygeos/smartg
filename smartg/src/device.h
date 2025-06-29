@@ -351,6 +351,8 @@ __device__ float H_rpv(float , float );  //  RPV, only H
 
 __device__ float BRDF(int, float3, float3 , struct Spectrum* );  //  general BRDF
 __device__ float BPlanck(float, float );
+
+__device__ bool if_count(int);
 #ifdef OPT3D
 #ifndef BACK
 __device__ unsigned int get_isens(Photon* ph, struct Sensor *tab_sensor, int count_level);
