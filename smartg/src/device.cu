@@ -7766,7 +7766,7 @@ __device__ bool if_count(int count_level)
             return true;
         }
         else if (OUTPUT_LAYERSd == 1 &&
-                (count_level==UPTOA || DOWN0P || UP0M))
+                (count_level==UPTOA || count_level==DOWN0P || count_level==UP0M))
         {
             return true;
         }
