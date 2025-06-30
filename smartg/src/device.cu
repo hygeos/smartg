@@ -7746,7 +7746,8 @@ __device__ float fVRS(float lam){
 
 __device__ bool if_count(int count_level)
 {
-
+    if (OUTPUT_LAYERSd == -1) return false;
+    
     if (count_level == -2)
     {
         return true;
@@ -7777,6 +7778,26 @@ __device__ bool if_count(int count_level)
             return true;
         }
         else if (OUTPUT_LAYERSd == 3)
+        {
+            return true;
+        }
+        else if (OUTPUT_LAYERSd == 4 &&
+                (count_level==DOWN0P || count_level==UP0M))
+        {
+            return true;
+        }
+        else if (OUTPUT_LAYERSd == 5 &&
+                (count_level == DOWN0M || count_level == UP0P || count_level == DOWNB))
+        {
+            return true;
+        }
+        else if (OUTPUT_LAYERSd == 6 &&
+                (count_level == DOWN0M || count_level == UP0P))
+        {
+            return true;
+        }
+        else if (OUTPUT_LAYERSd == 7 &&
+                (count_level == UPTOA || count_level == DOWN0P))
         {
             return true;
         }

@@ -12,7 +12,7 @@
 __device__ __constant__ unsigned int NBLOOPd;
 __device__ __constant__ int NOCEd;
 __device__ __constant__ int NOCE_ABSd;
-__device__ __constant__ unsigned int OUTPUT_LAYERSd;
+__device__ __constant__ int OUTPUT_LAYERSd;
 __device__ __constant__ unsigned int NF;
 __device__ __constant__ int NATMd;
 __device__ __constant__ int NATM_ABSd;

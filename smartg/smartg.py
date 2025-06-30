@@ -840,11 +840,18 @@ class Smartg(object):
                 - the inversed ocean phase functions
                 - the inversed probability of each wavelength occurence
         OUTPUT_LAYERS : int, optional
-            To control the output layers. Definitions are the following:
-                - 0 -> top of atmosphere only (TOA)
-                - 1 -> add output layers at (0+, down) and (0-, up)
-                - 2 -> add output layers at (0-, down) and (0+, up)
-                - 3 -> use all output layers.
+            Which layers to consider. Possibilities are the following:
+                - -1 -> consider no layer (for development purposes)
+                -  0 -> up (TOA)
+                -  1 -> up (TOA), down (0+) and up (0-)
+                -  2 -> up (TOA), down (0-), up (0+) and down (B)
+                -  3 -> consider all output layers.
+                -  4 -> down (0+) and up (0-)
+                -  5 -> down (0-), up (0+) and down (B)
+                -  6 -> down (0-) and up (0+)
+                -  7 -> up (TOA) and down (0+)
+
+            Note: Consider only the needed layers may reduce significantly the computational time.
         XBLOCK : int, optional
             The number of cuda blocks.
         XGRID : int, optional
@@ -969,6 +976,9 @@ class Smartg(object):
         """
 
         if (not self.pp and water is not None): raise NameError("Ocean + spherical atm is not allowed! Still in progress...")
+
+        if ( not (OUTPUT_LAYERS in (np.arange(9, dtype=np.int32)-1)) ):
+            raise ValueError('The OUTPUT_LAYERS value must be an integer between -1 and 7.')
 
         # Compute the sun direction as vector 
         vSun = convertAnglestoV(THETA=THVDEG, PHI=PHVDEG, TYPE="Sun") 
@@ -1589,29 +1599,37 @@ def finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPho
     else:
         isen=0
 
-    m.add_dataset('I_up (TOA)', tabFinal[UPTOA,0,isen,ilam,iphi,:], axnames)
-    m.add_dataset('Q_up (TOA)', tabFinal[UPTOA,1,isen,ilam,iphi,:], axnames)
-    m.add_dataset('U_up (TOA)', tabFinal[UPTOA,2,isen,ilam,iphi,:], axnames)
-    m.add_dataset('V_up (TOA)', tabFinal[UPTOA,3,isen,ilam,iphi,:], axnames)
-    if sigma is not None:
-        m.add_dataset('I_stdev_up (TOA)', sigma[UPTOA,0,isen,ilam,iphi,:], axnames)
-        m.add_dataset('Q_stdev_up (TOA)', sigma[UPTOA,1,isen,ilam,iphi,:], axnames)
-        m.add_dataset('U_stdev_up (TOA)', sigma[UPTOA,2,isen,ilam,iphi,:], axnames)
-        m.add_dataset('V_stdev_up (TOA)', sigma[UPTOA,3,isen,ilam,iphi,:], axnames)
-    m.add_dataset('N_up (TOA)', NPhotonsOutTot[UPTOA,isen,ilam,iphi,:], axnames)
-    if no_aer_output:
-        m.add_dataset('I_up (TOA), no_aer', tabFinalNoAer[UPTOA,0,isen,ilam,iphi,:], axnames)
-        m.add_dataset('Q_up (TOA), no_aer', tabFinalNoAer[UPTOA,1,isen,ilam,iphi,:], axnames)
-        m.add_dataset('U_up (TOA), no_aer', tabFinalNoAer[UPTOA,2,isen,ilam,iphi,:], axnames)
-        m.add_dataset('V_up (TOA), no_aer', tabFinalNoAer[UPTOA,3,isen,ilam,iphi,:], axnames)
-        m.add_dataset('N_up (TOA), no_aer', NPhotonsOutTotNoAer[UPTOA,isen,ilam,iphi,:], axnames)
-    if len(tabDistFinal) > 1: 
-        if zip : m.add_dataset('cdist_up (TOA)', np.squeeze(tabDistFinal[UPTOA,:,isen,:,:]),  ['None','Zenith angles','iAMF'])
-        else   : m.add_dataset('cdist_up (TOA)', tabDistFinal[UPTOA,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
+    write_UPTOA = OUTPUT_LAYERS in (0, 1, 2, 3, 7)
+    write_DOWN0P = OUTPUT_LAYERS in (1, 3, 4, 7)
+    write_DOWN0M = OUTPUT_LAYERS in (2, 3, 5, 6)
+    write_UP0P = OUTPUT_LAYERS in (2, 3, 5, 6)
+    write_UP0M = OUTPUT_LAYERS in (1, 3, 4)
+    write_DOWNB = OUTPUT_LAYERS in (2, 3, 5)
+
+    if write_UPTOA:
+        m.add_dataset('I_up (TOA)', tabFinal[UPTOA,0,isen,ilam,iphi,:], axnames)
+        m.add_dataset('Q_up (TOA)', tabFinal[UPTOA,1,isen,ilam,iphi,:], axnames)
+        m.add_dataset('U_up (TOA)', tabFinal[UPTOA,2,isen,ilam,iphi,:], axnames)
+        m.add_dataset('V_up (TOA)', tabFinal[UPTOA,3,isen,ilam,iphi,:], axnames)
+        if sigma is not None:
+            m.add_dataset('I_stdev_up (TOA)', sigma[UPTOA,0,isen,ilam,iphi,:], axnames)
+            m.add_dataset('Q_stdev_up (TOA)', sigma[UPTOA,1,isen,ilam,iphi,:], axnames)
+            m.add_dataset('U_stdev_up (TOA)', sigma[UPTOA,2,isen,ilam,iphi,:], axnames)
+            m.add_dataset('V_stdev_up (TOA)', sigma[UPTOA,3,isen,ilam,iphi,:], axnames)
+        m.add_dataset('N_up (TOA)', NPhotonsOutTot[UPTOA,isen,ilam,iphi,:], axnames)
+        if no_aer_output:
+            m.add_dataset('I_up (TOA), no_aer', tabFinalNoAer[UPTOA,0,isen,ilam,iphi,:], axnames)
+            m.add_dataset('Q_up (TOA), no_aer', tabFinalNoAer[UPTOA,1,isen,ilam,iphi,:], axnames)
+            m.add_dataset('U_up (TOA), no_aer', tabFinalNoAer[UPTOA,2,isen,ilam,iphi,:], axnames)
+            m.add_dataset('V_up (TOA), no_aer', tabFinalNoAer[UPTOA,3,isen,ilam,iphi,:], axnames)
+            m.add_dataset('N_up (TOA), no_aer', NPhotonsOutTotNoAer[UPTOA,isen,ilam,iphi,:], axnames)
+        if len(tabDistFinal) > 1: 
+            if zip : m.add_dataset('cdist_up (TOA)', np.squeeze(tabDistFinal[UPTOA,:,isen,:,:]),  ['None','Zenith angles','iAMF'])
+            else   : m.add_dataset('cdist_up (TOA)', tabDistFinal[UPTOA,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
     
     if hist : m.add_dataset('histories', tabHistTot)
     
-    if OUTPUT_LAYERS & 1:
+    if write_DOWN0P:
         m.add_dataset('I_down (0+)', tabFinal[DOWN0P,0,isen,ilam,iphi,:], axnames)
         m.add_dataset('Q_down (0+)', tabFinal[DOWN0P,1,isen,ilam,iphi,:], axnames)
         m.add_dataset('U_down (0+)', tabFinal[DOWN0P,2,isen,ilam,iphi,:], axnames)
@@ -1631,7 +1649,7 @@ def finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPho
         if len(tabDistFinal) > 1: 
             if zip : m.add_dataset('cdist_down (0+)', np.squeeze(tabDistFinal[DOWN0P,:,isen,:,:]),  ['None','Zenith angles','iAMF'])
             else   : m.add_dataset('cdist_down (0+)', tabDistFinal[DOWN0P,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
-    
+    if write_UP0M:
         m.add_dataset('I_up (0-)', tabFinal[UP0M,0,isen,ilam,iphi,:], axnames)
         m.add_dataset('Q_up (0-)', tabFinal[UP0M,1,isen,ilam,iphi,:], axnames)
         m.add_dataset('U_up (0-)', tabFinal[UP0M,2,isen,ilam,iphi,:], axnames)
@@ -1652,7 +1670,7 @@ def finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPho
             if zip : m.add_dataset('cdist_up (0-)', np.squeeze(tabDistFinal[UP0M,:,isen,:,:]),  ['None','Zenith angles','iAMF'])
             else   : m.add_dataset('cdist_up (0-)', tabDistFinal[UP0M,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
 
-    if OUTPUT_LAYERS & 2:
+    if write_DOWN0M:
         m.add_dataset('I_down (0-)', tabFinal[DOWN0M,0,isen,ilam,iphi,:], axnames)
         m.add_dataset('Q_down (0-)', tabFinal[DOWN0M,1,isen,ilam,iphi,:], axnames)
         m.add_dataset('U_down (0-)', tabFinal[DOWN0M,2,isen,ilam,iphi,:], axnames)
@@ -1672,7 +1690,7 @@ def finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPho
         if len(tabDistFinal) > 1: 
             if zip : m.add_dataset('cdist_down (0-)', np.squeeze(tabDistFinal[DOWN0M,:,isen,:,:]),  ['None','Zenith angles','iAMF'])
             else   : m.add_dataset('cdist_down (0-)', tabDistFinal[DOWN0M,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
-
+    if write_UP0P:
         m.add_dataset('I_up (0+)', tabFinal[UP0P,0,isen,ilam,iphi,:], axnames)
         m.add_dataset('Q_up (0+)', tabFinal[UP0P,1,isen,ilam,iphi,:], axnames)
         m.add_dataset('U_up (0+)', tabFinal[UP0P,2,isen,ilam,iphi,:], axnames)
@@ -1692,7 +1710,7 @@ def finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPho
         if len(tabDistFinal) > 1: 
             if zip : m.add_dataset('cdist_up (0+)', np.squeeze(tabDistFinal[UP0P,:,isen,:,:]),  ['None','Zenith angles','iAMF'])
             else   : m.add_dataset('cdist_up (0+)', tabDistFinal[UP0P,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
-
+    if write_DOWNB:
         m.add_dataset('I_down (B)', tabFinal[DOWNB,0,isen,ilam,iphi,:], axnames)
         m.add_dataset('Q_down (B)', tabFinal[DOWNB,1,isen,ilam,iphi,:], axnames)
         m.add_dataset('U_down (B)', tabFinal[DOWNB,2,isen,ilam,iphi,:], axnames)
@@ -2202,7 +2220,7 @@ def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
     copy_to_device('NBLOOPd', NBLOOP, np.uint32)
     copy_to_device('NOCEd', NOCE, np.int32)
     copy_to_device('NOCE_ABSd', NOCE_ABS, np.int32)
-    copy_to_device('OUTPUT_LAYERSd', OUTPUT_LAYERS, np.uint32)
+    copy_to_device('OUTPUT_LAYERSd', OUTPUT_LAYERS, np.int32)
     copy_to_device('NF', NF, np.uint32)
     copy_to_device('NATMd', NATM, np.int32)
     copy_to_device('NATM_ABSd', NATM_ABS, np.int32)
