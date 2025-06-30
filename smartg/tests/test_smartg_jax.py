@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import pytest
+import gc
 try:
     from smartg.histories import get_histories, BigSum, Si, Si2
     import jax
@@ -21,6 +22,14 @@ import os
 #os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"]   = "platform"
 
+
+# Clean jax memory after each test
+@pytest.fixture(scope="function", autouse=True)
+def cleanup_after_each_test():
+    yield
+    jax.clear_caches()
+    gc.collect()
+
 @pytest.mark.parametrize('N_WL_ABS', [221])
 @pytest.mark.parametrize('WMAX', [350.])
 @pytest.mark.parametrize('WMIN', [320.])
@@ -37,12 +46,14 @@ def test_smartg_jax2(N_WL_ABS, WMIN, WMAX, request, NBPHOTONS=2e4, MAX_HIST=2e7)
         LEVEL=0 # 1: BOA downward reflectance, 0 : TOA
         atm = AtmAFGL('afglms', comp=[AerOPAC('urban',AOD, 550.)], grid=np.linspace(50., 0., num=40))
         sigma = od2k(atm.calc(wl_abs), 'OD_abs_atm')[:,1:]
-        m  = Smartg(alis=True, alt_pp=True, autoinit=False). run(THVDEG=45., wl=wl_sca, surf=LambSurface(ALB_HIST), le=lez, BEER=0, atm=atm.calc(wl_sca), 
+        sg = Smartg(alis=True, alt_pp=True)
+        m  = sg.run(THVDEG=45., wl=wl_sca, surf=LambSurface(ALB_HIST), le=lez, BEER=0, atm=atm.calc(wl_sca), 
             alis_options={'nlow':wl_sca.size,'hist':True, 'max_hist':np.int64(MAX_HIST)},
             NBPHOTONS=NBPHOTONS, NBLOOP=NBPHOTONS, NF=1e3).dropaxis('Zenith angles').dropaxis('Azimuth angles')
-        m0 = Smartg(alis=True, alt_pp=True, autoinit=False). run(THVDEG=45., wl=wl_abs, surf=LambSurface(ALB_SNOW), le=lez, BEER=0, atm=atm.calc(wl_abs), 
+        m0 = sg.run(THVDEG=45., wl=wl_abs, surf=LambSurface(ALB_SNOW), le=lez, BEER=0, atm=atm.calc(wl_abs), 
             alis_options={'nlow':wl_sca.size,'hist':False},
             NBPHOTONS=NBPHOTONS, NF=1e3).dropaxis('Zenith angles').dropaxis('Azimuth angles')
+        sg.clear_context()
         
         jax.default_backend() # jax.devices("cpu") # jax.devices("gpu")
         N, S, D, w, _, nref, _, _, _, _ = get_histories(m, LEVEL=LEVEL, verbose=False)
@@ -114,10 +125,12 @@ def test_validation_artdeco(request, NB=1e6, VALPATH='/home/did/RTC/SMART-G/'):
     NLOW = 3
     wl_lr= np.linspace(w_valid.min(), w_valid.max(), num=NLOW)
     
-    m1 = Smartg(alis=True, alt_pp=True, autoinit=False).run(THVDEG=30., wl=w_valid, surf=None, le=le, BEER=0, atm=atm_valid.calc(w_valid), DEPO=0.,
+    sg = Smartg(alis=True, alt_pp=True)
+    m1 = sg.run(THVDEG=30., wl=w_valid, surf=None, le=le, BEER=0, atm=atm_valid.calc(w_valid), DEPO=0.,
         alis_options={'nlow':NLOW,'hist':False}, NBPHOTONS=NB, NBLOOP=NB, NF=1e3).dropaxis('Zenith angles').dropaxis('Azimuth angles')
-    m2 = Smartg(alis=True, alt_pp=True, autoinit=False).run(THVDEG=30., wl=w_valid, surf=None, le=le, BEER=0, atm=atm_valid.calc(w_valid), DEPO=0.,
+    m2 = sg.run(THVDEG=30., wl=w_valid, surf=None, le=le, BEER=0, atm=atm_valid.calc(w_valid), DEPO=0.,
         alis_options={'nlow':NLOW,'hist':True, 'max_hist':np.int64(1e7)}, NBPHOTONS=NB, NBLOOP=NB, NF=1e3).dropaxis('Zenith angles').dropaxis('Azimuth angles')
+    sg.clear_context()
     print ('GPU time no hist: %.4f'%float(m1.attrs['kernel time (s)']), 's')
     print ('GPU time hist: %.4f'%float(m2.attrs['kernel time (s)']), 's')
     
