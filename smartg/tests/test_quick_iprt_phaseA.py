@@ -114,7 +114,7 @@ def test_A1(request, S1DF, S1DB):
             PHI = -aa+180
             lsensors.append(Sensor(POSZ=np.min(z), THDEG=za, PHDEG=PHI, LOC='ATMOS'))
 
-    mA1B = S1DB.run(wl=550., NBPHOTONS=1e7*NBDIR, NBLOOP=1e7, atm=atm, sensor=lsensors,
+    mA1B = S1DB.run(wl=550., NBPHOTONS=1e7*NBDIR, NBLOOP=1e7, atm=atm, sensor=lsensors, OUTPUT_LAYERS=0,
                     le=le, surf=surf, XBLOCK = 64, XGRID = 1024, BEER=1, DEPO=0.0, stdev=True, progress=True)
 
     mA1B = mA1B.dropaxis('Azimuth angles', 'Zenith angles')
@@ -146,7 +146,7 @@ def test_A1(request, S1DF, S1DB):
             PHI = -aa+180
             lsensors.append(Sensor(POSZ=np.max(z), THDEG=za, PHDEG=PHI, LOC='ATMOS'))
 
-    mA1B = S1DB.run(wl=550., NBPHOTONS=1e7*NBDIR, NBLOOP=1e7, atm=atm, sensor=lsensors,
+    mA1B = S1DB.run(wl=550., NBPHOTONS=1e7*NBDIR, NBLOOP=1e7, atm=atm, sensor=lsensors, OUTPUT_LAYERS=0,
                     le=le, surf=surf, XBLOCK = 64, XGRID = 1024, BEER=1, DEPO=0.0, stdev=True, progress=True)
 
     mA1B = mA1B.dropaxis('Azimuth angles', 'Zenith angles')
@@ -173,7 +173,7 @@ def test_A1(request, S1DF, S1DB):
     SZA = 30.0
     SAA = 0.
     PHI_0 = 180.-SAA # SMART-G anticlockwise converted to be consistent with MYSTIC
-    mA1F_dep003 = S1DF.run(THVDEG=SZA, PHVDEG=PHI_0, wl=550., NBPHOTONS=1e7, NBLOOP=1e5, atm=atm, OUTPUT_LAYERS=int(1),
+    mA1F_dep003 = S1DF.run(THVDEG=SZA, PHVDEG=PHI_0, wl=550., NBPHOTONS=1e7, NBLOOP=1e5, atm=atm, OUTPUT_LAYERS=int(7),
                         le=le, surf=surf, XBLOCK = 64, XGRID = 1024, BEER=1, DEPO=0.03, stdev=True)
 
     # ************************* DEPOL = 0.1 **************************
@@ -181,7 +181,7 @@ def test_A1(request, S1DF, S1DB):
     SZA = 30.0
     SAA = 65.0
     PHI_0 = 180.-SAA # SMART-G anticlockwise converted to be consistent with MYSTIC
-    mA1F_dep01 = S1DF.run(THVDEG=SZA, PHVDEG=PHI_0, wl=550., NBPHOTONS=1e7, NBLOOP=1e5, atm=atm, OUTPUT_LAYERS=int(1),
+    mA1F_dep01 = S1DF.run(THVDEG=SZA, PHVDEG=PHI_0, wl=550., NBPHOTONS=1e7, NBLOOP=1e5, atm=atm, OUTPUT_LAYERS=int(7),
                         le=le, surf=surf, XBLOCK = 64, XGRID = 1024, BEER=1, DEPO=0.1, stdev=True)
     # *****************************************************************
 
@@ -322,7 +322,7 @@ def test_A2(request, S1DF):
     PHI_0 = 180.-SAA # SMART-G anticlockwise converted to be consistent with MYSTIC
 
     # === Simulation
-    mA2F = S1DF.run(THVDEG=SZA, PHVDEG=PHI_0, wl=550., NBPHOTONS=1e7, NBLOOP=1e6, atm=atm, OUTPUT_LAYERS=int(1),
+    mA2F = S1DF.run(THVDEG=SZA, PHVDEG=PHI_0, wl=550., NBPHOTONS=1e7, NBLOOP=1e6, atm=atm, OUTPUT_LAYERS=int(7),
                     le=le, surf=surf, XBLOCK = 64, XGRID = 1024, BEER=1, DEPO=0.03, stdev=True, SEED=SEED)
 
     with TemporaryDirectory() as tmpdir:
@@ -472,7 +472,7 @@ def test_A5_pp(request, S1DF):
     le     = {'th_deg':TH, 'phi_deg':PHI}#, 'zip':True}
 
     # === Simulation
-    mA5F_pp = S1DF.run(THVDEG=SZA, PHVDEG=PHI_0, wl=800., NBPHOTONS=1e7, NBLOOP=1e6, NF=NTH,atm=pro, OUTPUT_LAYERS=int(1),
+    mA5F_pp = S1DF.run(THVDEG=SZA, PHVDEG=PHI_0, wl=800., NBPHOTONS=1e7, NBLOOP=1e6, NF=NTH,atm=pro, OUTPUT_LAYERS=int(7),
                        le=le, surf=surf, XBLOCK = 64, XGRID = 1024, BEER=1, DEPO=0.03, stdev=True, SEED=SEED)
     
     with TemporaryDirectory() as tmpdir:
@@ -608,7 +608,7 @@ def test_A5_al(request, S1DF):
     le     = {'th_deg':TH, 'phi_deg':PHI}
 
     # === Simulation
-    mA5F_al = S1DF.run(THVDEG=SZA, PHVDEG=PHI_0, wl=800., NBPHOTONS=1e7, NBLOOP=1e6, NF=NTH,atm=pro, OUTPUT_LAYERS=int(1),
+    mA5F_al = S1DF.run(THVDEG=SZA, PHVDEG=PHI_0, wl=800., NBPHOTONS=1e7, NBLOOP=1e6, NF=NTH,atm=pro, OUTPUT_LAYERS=int(7),
                        le=le, surf=surf, XBLOCK = 64, XGRID = 1024, BEER=1, DEPO=0.03, stdev=True, SEED=SEED)
     
     with TemporaryDirectory() as tmpdir:
