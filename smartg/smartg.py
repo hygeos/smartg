@@ -874,8 +874,11 @@ class Smartg(object):
             * 'zip' : bool, optional
                -> If True, then 'th' and 'phi' covary and the output is only one-dimensional NBTHETA, 
                but user should verify that NBPHI==NBTHETA.
-            * 'count_level' : int, optional
-                -> The level(s) to consider. 3 choices are -2 (all levels), 0 (only UPTOA) and 1 (only DOWN0P).
+            * 'count_level' : 1-D ndarray | list, optional
+                -> The level to consider. Possibilities: -2(all), -1(none), 0(UPTOA), 1(DOWN0P), 2(DOWN0M),
+                   3(UP0P), 4(UP0M) or 5(DOWNB). The level to consider may change only with th/th_deg. The 
+                   array must be of length NBTHETA. If the key is not present it will be the same as 
+                   count_level = np.full_like(th/th_deg, -2, dtype=np.int32).
             
             Note: Optional for the dictionary keys indicate that the key is not required to be present. 
             If th/phi are not provided, th_deg/phi_deg must be given.     
