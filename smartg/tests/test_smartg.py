@@ -18,7 +18,7 @@ from smartg import conftest
 NBPHOTONS = 1e4
 
 wav_list = [500.,
-            [400., 500.],
+            [500.],
             np.array([400., 600.])
             ]
 
@@ -125,3 +125,39 @@ def test_rng(rng):
 
 def test_adjacency():
     pytest.skip("Cannot test this, it is still in progress.")
+
+
+def test_no_aer_output():
+    atm1 = AtmAFGL('afglt')
+    water = IOP_1(chl=0.5, DEPTH=5.)
+    surf = RoughSurface(WIND=5., NH2O=1.34)
+    sg = Smartg()
+    le = {'th_deg': np.array([0., 45., 89.9]), 'phi_deg': np.array([0., 15.6, 289.])}
+    m1 = sg.run(550., atm=atm1, surf=surf, water=water, OUTPUT_LAYERS=3, le=le,
+                NBPHOTONS=1e6, NBLOOP=1e6, no_aer_output=True)
+    m1 = m1.to_xarray() # to prepare transition luts to xarray
+    assert (np.allclose(m1['I_up (TOA)'].values, m1['I_up (TOA), no_aer'].values, 0, 1e-13, equal_nan=True))
+    assert (np.allclose(m1['Q_up (TOA)'].values, m1['Q_up (TOA), no_aer'].values, 0, 1e-13, equal_nan=True))
+    assert (np.allclose(m1['U_up (TOA)'].values, m1['U_up (TOA), no_aer'].values, 0, 1e-13, equal_nan=True))
+    assert (np.allclose(m1['V_up (TOA)'].values, m1['V_up (TOA), no_aer'].values, 0, 1e-13, equal_nan=True))
+    assert (np.allclose(m1['I_down (0+)'].values, m1['I_down (0+), no_aer'].values, 0, 1e-13, equal_nan=True))
+    assert (np.allclose(m1['Q_down (0+)'].values, m1['Q_down (0+), no_aer'].values, 0, 1e-13, equal_nan=True))
+    assert (np.allclose(m1['U_down (0+)'].values, m1['U_down (0+), no_aer'].values, 0, 1e-13, equal_nan=True))
+    assert (np.allclose(m1['V_down (0+)'].values, m1['V_down (0+), no_aer'].values, 0, 1e-13, equal_nan=True))
+    assert (np.allclose(m1['I_down (0-)'].values, m1['I_down (0-), no_aer'].values, 0, 1e-13, equal_nan=True))
+    assert (np.allclose(m1['Q_down (0-)'].values, m1['Q_down (0-), no_aer'].values, 0, 1e-13, equal_nan=True))
+    assert (np.allclose(m1['U_down (0-)'].values, m1['U_down (0-), no_aer'].values, 0, 1e-13, equal_nan=True))
+    assert (np.allclose(m1['V_down (0-)'].values, m1['V_down (0-), no_aer'].values, 0, 1e-13, equal_nan=True))
+    assert (np.allclose(m1['I_up (0+)'].values, m1['I_up (0+), no_aer'].values, 0, 1e-13, equal_nan=True))
+    assert (np.allclose(m1['Q_up (0+)'].values, m1['Q_up (0+), no_aer'].values, 0, 1e-13, equal_nan=True))
+    assert (np.allclose(m1['U_up (0+)'].values, m1['U_up (0+), no_aer'].values, 0, 1e-13, equal_nan=True))
+    assert (np.allclose(m1['V_up (0+)'].values, m1['V_up (0+), no_aer'].values, 0, 1e-13, equal_nan=True))
+    assert (np.allclose(m1['I_up (0-)'].values, m1['I_up (0-), no_aer'].values, 0, 1e-13, equal_nan=True))
+    assert (np.allclose(m1['Q_up (0-)'].values, m1['Q_up (0-), no_aer'].values, 0, 1e-13, equal_nan=True))
+    assert (np.allclose(m1['U_up (0-)'].values, m1['U_up (0-), no_aer'].values, 0, 1e-13, equal_nan=True))
+    assert (np.allclose(m1['V_up (0-)'].values, m1['V_up (0-), no_aer'].values, 0, 1e-13, equal_nan=True))
+    assert (np.allclose(m1['I_down (B)'].values, m1['I_down (B), no_aer'].values, 0, 1e-13, equal_nan=True))
+    assert (np.allclose(m1['Q_down (B)'].values, m1['Q_down (B), no_aer'].values, 0, 1e-13, equal_nan=True))
+    assert (np.allclose(m1['U_down (B)'].values, m1['U_down (B), no_aer'].values, 0, 1e-13, equal_nan=True))
+    assert (np.allclose(m1['V_down (B)'].values, m1['V_down (B), no_aer'].values, 0, 1e-13, equal_nan=True))
+    
