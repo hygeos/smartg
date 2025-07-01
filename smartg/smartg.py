@@ -224,15 +224,18 @@ type_GObj = [
 ]
 
 class FlatSurface(object):
-    '''
+    """
     Definition of a flat sea surface
 
-    Arguments:
-        SUR: Processes at the surface dioptre
-            # 1 Forced reflection
-            # 3 Reflection and transmission
-        NH2O: Relative refarctive index air/water
-    '''
+    Parameters
+    ----------
+    SUR : int, optional
+        The processes at the surface dioptre. 2 choices:
+            - 1 -> Force reflection
+            - 3 -> Reflection and transmission
+    NH2O : float, optional
+        The relative refarctive index air/water
+    """
     def __init__(self, SUR=3, NH2O=1.33):
         self.dict = {
                 'SUR': SUR,
@@ -247,19 +250,26 @@ class FlatSurface(object):
         return 'FLATSURF-SUR={SUR}'.format(**self.dict)
 
 class RoughSurface(object):
-    '''
+    """
     Definition of a roughened sea surface
 
-    Arguments:
-        WIND: wind speed (m/s)
-        SUR: Processes at the surface dioptre
-            # 1 Forced reflection
-            # 3 Reflection and transmission
-        NH2O: Relative refarctive index air/water
-        WAVE_SHADOW : include wave shadowing effect (default not)
-        BRDF : replace slope sampling by Cox & Munk BRDF, no ocean, just reflection
-        SINGLE: dont allow multiple reflections/refractions at the interface, default False
-    '''
+    Parameters
+    ----------
+    WIND : float, optional
+        The wind speed (m/s)
+    SUR : int, optional
+        The processes at the surface dioptre. 2 choices:
+            - 1 -> Force reflection
+            - 3 -> Reflection and transmission
+    NH2O : float, optional
+        The relative refarctive index air/water
+    WAVE_SHADOW : bool, optional
+        Include wave shadowing effect. Default False.
+    BRDF : bool, optional
+        Replace slope sampling by Cox & Munk BRDF, no ocean, just reflection
+    SINGLE : bool, optional
+        Deactivate multiple reflections/refractions at the interface. Default False.
+    """
     def __init__(self, WIND=5., SUR=3, NH2O=1.33, WAVE_SHADOW=False, BRDF=False, SINGLE=False):
 
         self.dict = {
@@ -278,10 +288,14 @@ class RoughSurface(object):
 
 
 class LambSurface(object):
-    '''
+    """
     Definition of a lambertian reflector
-    ALB: albedo spectral model
-    '''
+
+    Parameters
+    ----------
+    ALB : Albedo_cst, optional
+        The albedo spectral model.
+    """
     def __init__(self, ALB=Albedo_cst(0.5)):
         self.dict = {
                 'SUR': 1,
@@ -298,13 +312,21 @@ class LambSurface(object):
 
 
 class RTLSSurface(object):
-    '''
+    """
     Definition of a Ross-Thick Li-Sparse reflector
-    kp = (k0 , k1p, k2p): a tuple of
-        k0 : Spectral Albedo of the isotropic (lambertian) kernel
-        k1p: Spectral relative weight the F1 (geometric) kernel (=K1/K0)
-        k2p: Spectral relative weight the F2 (volumetric) kernel(=K2/K0)
-    '''
+
+    Parameters
+    ----------
+    kp: tuple, optional
+        The Ross-Thick Li-Sparse coefficients. Form of the tuple:
+         
+        * k0 : Albedo_cst
+            -> The spectral albedo of the isotropic (lambertian) kernel
+        * k1p: Albedo_cst
+           -> The relative weight of the F1 (geometric) kernel (=K1/K0)
+        * k2p: Albedo_cst
+           -> The relative weight of the F2 (volumetric) kernel (=K2/K0)
+    """
     def __init__(self, kp=(Albedo_cst(0.5), Albedo_cst(0.0), Albedo_cst(0.0))):
         self.dict = {
                 'SUR': 1,
@@ -322,17 +344,30 @@ class RTLSSurface(object):
 
 
 class RPVSurface(object):
-    '''
-    Definition of a RPV reflector:
-    "Rahman, H., M. M. Verstraete, and B. Pinty, (1993) Coupled surface-atmosphere reflectance (CSAR) model. 
-    1. Model description and inversion on synthetic data, JGR, 98, 20,779-20,789."
+    """
+    Definition of a RPV reflector
 
-    kp = (r0 , k, bt, rc): a tuple of
-        r0 : Normalization 
-        k: Minnaert exponent
-        bt: Henyey-Greenstein asymetry parameter
-        rc: Hotpsot parameter
-    '''
+    Parameters
+    ----------
+    kp : tuple, optional
+        The RPV coefficients. Form of the tuple:
+
+        * r0 : Albedo_cst
+            -> Normalization
+        * k : Albedo_cst
+            -> Minnaert exponent
+        * bt : Albedo_cst
+            -> Henyey-Greenstein asymetry parameter
+        * rc : Albedo_cst
+            -> Hotspot parameter
+    
+    References
+    ----------
+    Rahman, H., M. M. Verstraete, and B. Pinty, (1993) Coupled surface-atmosphere 
+    reflectance (CSAR) model. 1. Model description and inversion on synthetic data, 
+    JGR, 98, 20,779-20,789.
+
+    """
     def __init__(self, kp=(Albedo_cst(0.5), Albedo_cst(1.0), Albedo_cst(0.0), Albedo_cst(0.0))):
         self.dict = {
                 'SUR': 1,
@@ -351,23 +386,45 @@ class RPVSurface(object):
 
 
 class Environment(object):
-    '''
+    """
     Stores the smartg parameters relative the the environment effect
 
-    ENV: environment effect (default 0: deactivated, 1: horizontal cst albedo ALB outside an horizontal disk, 
-                             water is inside, lambertian ALB is outside. if -1 it is the opposite.
-                             2: ALB is a gaussian centred on X0,Y0 with a maximum of ALB_SURF and a
-                             asymptotic value of ALB of the environement. The square of the sigma is ENV_SIZE.
-                             3: ALB map2D modulated by checkerboard spatial function)
-                             4: same as 1 but for a band defined as Abs(X) <= ENV_SIZE, -4 for Abs(X)>= ENV_SIZE
-                             5: 2D horizontal map of albedos for the whole surface, need ALB to be ALbedo_map object
-                                in that case the surface keyword of Smartg run method is not unused
-    ENV_SIZE, X0, Y0: radius and position of the circle outside which ALB model is applied for abs(ENV)=1,
-                             The square of the sigma of the gaussian (ENV=2),
-                             size of the spatial pattern (in km), origin of the checkerboard at X0,Y0 for ENV=3
-    ALB: albedo spectral model
+    Parameters
+    ----------
+    ENV : int, optional
+        The type of environment to consider. Possibilities are:
 
-    '''
+        * -1 -> The opposite of 1
+        *  0 -> Deactivated. The default value.
+        *  1 -> Horizontal cst albedo ALB outside an horizontal disk, water is inside, 
+                lambertian ALB is outside.
+        *  2 -> ALB is a gaussian centred on X0,Y0 with a maximum of ALB_SURF and an asymptotic value 
+                of ALB of the environement. The square of the sigma is ENV_SIZE.
+        *  3 -> ALB map2D modulated by checkerboard spatial function
+        *  4 -> Same as 1 but for a band defined as Abs(X) <= ENV_SIZE, -4 for Abs(X)>= ENV_SIZE
+        *  5 -> 2D horizontal map of albedos for the whole surface, need ALB to be ALbedo_map object 
+                in that case the surface keyword of Smartg run method is not unused
+    
+    ENV_SIZE : float, optional
+        Definitions:
+        
+            - The radius (in km) of the circle outside which ALB model is applied for ENV = -1 or 1.
+            - The square (in km) of the sigma of the gaussian for ENV = 2
+            - The size of the spatial pattern (in km) for ENV = 3
+    X0 : float, optional
+        The X origin position
+    Y0 : float, optional
+        The Y origin position
+    ALB : Albedo object, optional
+        The albedo spectral model
+    NENV : int, optional
+        In progress...
+    NXENVMAP : int, optional
+        In progress...
+    NYENVMAP : int, optional
+        In progress...
+
+    """
     def __init__(self, ENV=0, ENV_SIZE=1.e6, X0=0., Y0=0., ALB=Albedo_cst(0.0), NENV=1,
                 NXENVMAP=0, NYENVMAP=0):
         self.dict = {
@@ -385,17 +442,43 @@ class Environment(object):
         return 'ENV={ENV_SIZE}-X={X0:.1f}-Y={Y0:.1f}'.format(**self.dict)
 
 class Sensor(object):
-    '''
+    """
     Definition of the sensor
 
-    POS: Position (X,Y,Z) in cartesian coordinates, default origin
-    TH,PH: Direction (theta, phi) of zenith and azimuth angles of viewing direction
-            (Zenith> 90 for downward looking, <90 for upward, default Zenith)
-    LOC: Localization (default SURF0P)
-    FOV: Field of View (deg, default 0.)
-    TYPE: Radiance (0), Planar flux (1), Spherical Flux (2), default 0
-    ICELL: Box index in which the sensor is (3D)
-    '''
+    Parameters
+    ----------
+    POSX : float, optional
+       The sensor position along the x axis. Default 0.
+    POSY : float, optional
+        The sensor position along the y axis. Default 0.
+    POSZ : float, optional
+        The sensor position along the z axis. Default 0.
+    THDEG : float, optional
+        The source/viewing zenith angle in forward/backward mode. Zenith > 90 for downward looking, 
+        < 90 for upward. Default Zenith.
+    PHDEG : float, optional
+        The source/viewing azimuth angle in forward/backward mode. Zenith > 90 for downward looking,
+        <90 for upward. Default Zenith.
+    LOC : str, optional
+        Localization of the sensor. Possibilities are:
+
+        * 'SURF0P' -> Start from the surface looking upward, at TOA (air side). Default value.
+        * 'SURF0M' -> Start from the surface looking downward, at ocean surface (water side).
+        * 'ATMOS' -> Start from the atmosphere.
+        * 'OCEAN' -> Start from the ocean.
+        * 'SEAFLOOM' -> Start from the ocean surface.
+        * 'OBJSURF' -> Start from a 3d object surface.
+    FOV : float, optional
+        The field of view in degrees. Default 0.
+    TYPE : int, optional
+        The radiative quantity type. Three possibilities:
+
+        * 0 -> Radiance (default).
+        * 1 -> Planar flux.
+        * 2 -> Spherical flux.
+    ICELL : int, optional
+        The box index where the sensor is located. Only for simulations with a 3D atmosphere.
+    """
     def __init__(self, POSX=0., POSY=0., POSZ=0., THDEG=0., PHDEG=180.,
                  LOC='SURF0P', FOV=0., TYPE=0, ICELL=0, ILAM_0=-1, ILAM_1=-1, V = None, CELL_SIZE = -1):
 
@@ -423,18 +506,30 @@ class Sensor(object):
         return 'SENSOR=-POSX{POSX}-POSY{POSY}-POSZ{POSZ}-THETA={THDEG:.3f}-PHI={PHDEG:.3f}'.format(**self.dict)
 
 class StdevLim(object):
-    '''
+    """
     Definition of the class StdevLim
-    !!! Be careful. For the moment, it does not work correctly with kdis and reptran !!!
 
-    err_abs_min : minimum absolute error. Stop sim if max abs error <= err_abs_min
-    err_rel_min : minimum relative error in percentage
-    nb_loop_min : minimum loop number
-    stk         : stoke vector to consider (I = 0, Q = 1, U = 2, V = 3)
-    loc         : integer, if UPTOA->0, DOWN0->1, DOWN0M->2, UP0P->3, UP0M->4 or DOWNB->5
-    verbose     : if True, for each loop print the max absolute and relative errors
-    format      : print format for abs and rel max values
-    '''
+    - Be careful! For the moment, it does not work correctly with kdis and reptran.
+    - Also Still in progress, the parameters may change.
+
+    Parameters
+    ----------
+    err_abs_min : float, optional
+        The minimum absolute error. Stop the simulation if max abs error <= err_abs_min.
+    err_rel_min : float, optional
+        Theminimum relative error in percentage.
+    nb_loop_min : int, optional
+        The minimum kernel loop number before allowing to stop the simulation.
+    stk : int, optional
+        The stoke vector to consider. I = 0, Q = 1, U = 2, V = 3.
+    loc : int, optional
+       The level to use to analyse the standart deviations. If UPTOA->0, DOWN0->1, 
+       DOWN0M->2, UP0P->3, UP0M->4 or DOWNB->5
+    verbose : bool, optional
+        Activate verbose mode to print the max absolute and relative errors at each kernel loop.
+    format : str, optional
+        The verbose print format for abs and rel max values.
+    """
 
     def __init__(self, err_abs_min=float(0), err_rel_min=float(0), nb_loop_min=int(10),
      stk=int(0), loc=int(0), verbose=False, format=".5e"):
@@ -454,24 +549,36 @@ class StdevLim(object):
         ' nb_loop_min={nb_loop_min}; stk={stk}; loc={loc}; verbose={verbose}'.format(**self.dict)
         
 class CusForward(object):
-    '''
+    """
     Definition of CusForward 
 
-    Custum rectangular forward mode of surface X*Y
+    - Custum rectangular forward mode of surface X*Y
 
-    CFX  : Size in X (only for FF LMODE)
-    CFY  : Size in Y (only for FF LMODE)
-    CFTX : Translation in x axis (only for FF LMODE)
-    CFTY : Translation in y axis (only for FF LMODE)
-    FOV  : Field of view or half-angle of the sun (only for FF LMODE)
-    TYPE : Sampling type, 2 choices: 'lambertian' or 'isotropic' (only for FF LMODE)
-    LMODE (Launching mode) : RF = Restricted Forward OR FF = Full Forward
-                             RF --> Launch the photons such that the direct beams
-                                    fill only reflector objects
-                             FF --> Launch the photons in a rectangle from TOA
-                                    whrere the beams at the center, with the solar
-                                    dir, targets by default the origin point (0,0,0)
-    '''
+    Parameters
+    ----------
+    CFX : float, optional
+        The size along the x axis (only for FF LMODE)
+    CFY : float, optional
+        The size along the y axis (only for FF LMODE)
+    CFTX : float, optional
+        The translation to apply in x axis (only for FF LMODE)
+    CFTY : float, optional
+        The translation to apply in y axis (only for FF LMODE)
+    FOV : float, optional
+        The field of view or half-angle of the sun (only for FF LMODE)
+    TYPE : str, optional
+        The sampling type (only for FF LMODE). 2 choices:
+         
+            * 'lambertian'
+            * 'isotropic'
+    LMODE : str, optional
+        The launching mode. Two choices:
+
+            * 'RF' -> Restricted Forward. Launch the photons such that the direct beams
+                      fill only reflector objects
+            * 'FF' -> Full Forward. Launch the photons in a rectangle from TOA whrere the 
+                      beams at the center targets the origin point (0,0,0).
+    """
     def __init__(self, CFX=0., CFY=0., CFTX = 0., CFTY = 0., CFTZ= 0., FOV = 0., TYPE = "isotropic",
                  LMODE = "RF", LPH=None, LPR=None):
 
@@ -499,25 +606,41 @@ class CusForward(object):
             '-FOV{FOV}-TYPE{TYPE}-LMODE{LMODE}'.format(**self.dict)
 
 class CusBackward(object):
-    '''
-    Definition of CusBackward 
+    """
+    Definition of CusBackward
 
-    POS     : Position (X,Y,Z) in cartesian coordinates, default origin (class Point)
-    TH,PH   : Direction (theta, phi) of zenith and azimuth angles of viewing direction
-              (Zenith> 90 for downward looking, <90 for upward, default Zenith)
-    ALDEG   : Launch in a solid angle where alpha is the half-angle of the cone
-    V       : Receveir normal but represented by a Vector type, if not None replace TH, PH
-    REC     : Receiver object must be specified in and only in BR mode
-    TYPE    : Sampling type : 2 choices: 'lambertian' or 'isotropic' (only BR mode)
-    LMODE (Launching mode) : B = basic Backward, BR = Backward with receiver
-                             B->  Launch the photons from a given point in a given
-                                  direction (eventually can choose a ramdom vector
-                                  in a solid angle arround a given direction delimited
-                                  by the half-angle ALDEG)
-                             BR-> Launch the photons from a given receiver (plane obj)
-                                  in a given direction (also eventually can choose a
-                                  ramdom vector in a solid angle delimited by ALDEG)
-    '''
+    - Use a point/plane receiver sensor in backward.
+
+    Parameters
+    ----------
+    POS : Point, optional
+        The position (X,Y,Z) in cartesian coordinates.
+    THDEG : float, optional
+        The zenith angle in degrees.
+    PHDEG : float, optional
+        The azimuth angle in degrees.
+    V : Vector, optional
+        The normal vector of the receiver. If provided, circumvent THDEG and PHDEG.
+    ALDEG : float, optional
+        Launch in a solid angle where alpha is the half-angle of the cone.
+    REC : Entity, optional
+        The receiver object to be used in 'BR' mode. It must be a plane Entity object of 
+        type 'receiver'. The photon position is sampled at the receiver surface.
+    TYPE : str, optional
+        The sampling type (only for BR LMODE). 2 choices:
+         
+            * 'lambertian'
+            * 'isotropic'
+    LMODE : str, optional
+        The launching mode. 2 choices:
+
+            * 'B' -> Basic backward. Launch the photons from a given point in a given direction 
+                     (eventually can choose a ramdom vector in a solid angle arround a given direction
+                     delimited by the half-angle ALDEG).
+            * 'BR' -> Backward with receiver. Launch the photons from a given receiver (plane object)
+                      in a given direction (also eventually can choose a ramdom vector in a solid angle 
+                      delimited by ALDEG).
+    """
     def __init__(self, POS = Point(0., 0., 0.), THDEG = 0., PHDEG = 0., V = None,
                  ALDEG = 0., REC = None, TYPE = "lambertian", LMODE = "B", LPH = None, LPR = None):
 
@@ -2055,13 +2178,22 @@ def rayleigh(N, DEPO, pol_off=False):
 
 
 def calculF(profile, N, DEPO, kind, pol_off=False):
-    '''
+    """
     Calculate cumulated phase functions from profile
-    N: number of angles
-    DEPO: depolarization factor 'atmospheric'
-    kind: 'atm' or 'oc'
-    ray (boolean): include rayleigh phase function
-    '''
+
+    Parameters
+    ----------
+    profile : MLUT
+        The atmosphere/ocean profile.
+    N : int
+        The number of angles
+    DEPO : float
+        The depolarization factor 'atmospheric'.
+    kind : str
+        The kind of profile. Can be 'atm' or 'oc'.
+    pol_off : bool, optional
+        Deactivate polarization. Default False (meaning polarization is on).
+    """
 
     name_phase = 'phase_{}'.format(kind)
     if name_phase in profile.datasets():
