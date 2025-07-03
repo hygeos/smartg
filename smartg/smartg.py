@@ -569,8 +569,6 @@ class StdevLim(object):
     """
     Definition of the class StdevLim
 
-    - Be careful! For the moment, it does not work correctly with kdis and reptran.
-    - Also Still in progress, the parameters may change.
 
     Parameters
     ----------
@@ -581,32 +579,49 @@ class StdevLim(object):
     nb_loop_min : int, optional
         The minimum kernel loop number before allowing to stop the simulation.
     stk : int, optional
-        The stoke vector to consider. I = 0, Q = 1, U = 2, V = 3.
-    loc : int, optional
-       The level to use to analyse the standart deviations. If UPTOA->0, DOWN0->1, 
-       DOWN0M->2, UP0P->3, UP0M->4 or DOWNB->5
+        The stoke component to consider. Choices are:
+        
+            * 0 -> I stoke component (Default)
+            * 1 -> Q stoke component
+            * 2 -> U stoke component
+            * 3 -> V stoke component
+    llevl : int, optional
+        The level to use to analyse the standart deviations. Six choices:
+
+            * 0 -> UPTOA (Default)
+            * 1 -> DOWN0P
+            * 2 -> DOWN0M
+            * 3 -> UP0P
+            * 4 -> UP0M
+            * 5 -> DOWNB
     verbose : bool, optional
         Activate verbose mode to print the max absolute and relative errors at each kernel loop.
     format : str, optional
         The verbose print format for abs and rel max values.
+
+    Notes
+    -----
+    For the moment, it does not work correctly with kdis and reptran.
     """
 
     def __init__(self, err_abs_min=float(0), err_rel_min=float(0), nb_loop_min=int(10),
-     stk=int(0), loc=int(0), verbose=False, format=".5e"):
+     stk=int(0), level=int(0), verbose=False, format=".5e"):
       
         self.dict = {
             'err_abs_min':  err_abs_min,
             'err_rel_min':  err_rel_min,
             'nb_loop_min':  nb_loop_min,
             'stk'        :  stk,
-            'loc'        :  loc,
+            'level'      :  level,
             'verbose'    :  verbose,
             'format'     :  format
         }
 
     def __str__(self):
-        return 'StdevLim: err_abs_min={err_abs_min}; err_rel_min={err_rel_min:.2f};' + \
-        ' nb_loop_min={nb_loop_min}; stk={stk}; loc={loc}; verbose={verbose}'.format(**self.dict)
+        return self.dict.__str__()
+    
+    def __repr__(self):
+        return 'Stdevlim dict: %s' %  self.dict.__repr__()
         
 class CusForward(object):
     """
@@ -3021,14 +3036,14 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
                 rel_min = stdev_lim.dict['err_rel_min']
                 min_loop = stdev_lim.dict['nb_loop_min']
                 stk_stdev = stdev_lim.dict['stk']
-                loc_stdev = stdev_lim.dict['loc']
+                level_stdev = stdev_lim.dict['level']
                 format_std = stdev_lim.dict['format']
 
                 avg = sum_x/N_simu
                 err_rel = (sigma_bis / avg)*100
                 err_rel[np.isnan(err_rel)] = 0
-                max_rerr = np.max(err_rel[loc_stdev,stk_stdev,:,:,:,:])
-                max_aerr = np.max(sigma_bis[loc_stdev,stk_stdev,:,:,:,:])
+                max_rerr = np.max(err_rel[level_stdev,stk_stdev,:,:,:,:])
+                max_aerr = np.max(sigma_bis[level_stdev,stk_stdev,:,:,:,:])
 
                 if (stdev_lim.dict['verbose']):
                     print(f"max rel_err = {max_rerr:{format_std}}; max abs_err = {max_aerr:{format_std}}")
