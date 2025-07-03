@@ -16,8 +16,8 @@ from smartg.atmosphere import Atmosphere, od2k, BPlanck
 from smartg.water import IOP_base
 from smartg.shape import BBox, Sphere
 from os.path import dirname, realpath, join, exists
-from warnings import warn
-from smartg.albedo import Albedo_cst, Albedo_map 
+from warnings import warn, simplefilter
+from smartg.albedo import Albedo_cst, Albedo_speclib, Albedo_spectrum, Albedo_map
 from smartg.tools.progress import Progress
 from smartg.tools.cdf import ICDF2D
 from smartg.tools.modified_environ import modified_environ
@@ -40,6 +40,10 @@ from smartg.visualizegeo import Mirror, Plane, Spheric, Transformation, \
     convertAnglestoV, GroupE
     
 import functools
+from copy import deepcopy
+
+
+simplefilter('always', DeprecationWarning)
 
 
 # set up directories
@@ -293,10 +297,14 @@ class LambSurface(object):
 
     Parameters
     ----------
-    ALB : Albedo_cst, optional
+    ALB : Albedo_cst, | Albedo_speclib | Albedo_spectrum | Albedo_map, optional
         The albedo spectral model.
     """
     def __init__(self, ALB=Albedo_cst(0.5)):
+
+        if (not isinstance(ALB, (Albedo_cst, Albedo_speclib, Albedo_spectrum, Albedo_map))):
+            raise ValueError('The parameter ALB must be one of the following objects: Albedo_cst, ' + 
+                             'Albedo_speclib, Albedo_spectrum or Albedo_map.')
         self.dict = {
                 'SUR': 1,
                 'DIOPTRE': 3,
@@ -317,17 +325,41 @@ class RTLSSurface(object):
 
     Parameters
     ----------
-    kp: tuple, optional
-        The Ross-Thick Li-Sparse coefficients. Form of the tuple:
+    kp: None | tuple, optional
+        The Ross-Thick Li-Sparse coefficients (deprecated, see notes). Form of the tuple:
          
-        * k0 : Albedo_cst
+        * k0 : Albedo_cst | Albedo_speclib | Albedo_spectrum | Albedo_map
             -> The spectral albedo of the isotropic (lambertian) kernel
-        * k1p: Albedo_cst
+        * k1p: Albedo_cst | Albedo_speclib | Albedo_spectrum | Albedo_map
            -> The relative weight of the F1 (geometric) kernel (=K1/K0)
-        * k2p: Albedo_cst
+        * k2p: Albedo_cst | Albedo_speclib | Albedo_spectrum | Albedo_map
            -> The relative weight of the F2 (volumetric) kernel (=K2/K0)
+    k0 : None | Albedo_cst | Albedo_speclib | Albedo_spectrum | Albedo_map, optional
+        The spectral albedo of the isotropic (lambertian) kernel. Default Albedo_cst(0.5).
+    k1p : None | Albedo_cst | Albedo_speclib | Albedo_spectrum | Albedo_map, optional
+        The relative weight of the F1 (geometric) kernel (=K1/K0). Default Albedo_cst(0.5).
+    k2p : None | Albedo_cst | Albedo_speclib | Albedo_spectrum | Albedo_map, optional
+        The relative weight of the F2 (volumetric) kernel (=K2/K0). Default Albedo_cst(0.5).
+
+    Notes
+    -----
+    The parameter kp is depracated. Use k0, k1p and k2p instead. Providing parameters k0, k1p 
+    and k2p with kp will circumvent kp values.
     """
-    def __init__(self, kp=(Albedo_cst(0.5), Albedo_cst(0.0), Albedo_cst(0.0))):
+    def __init__(self, kp=None, k0=None, k1p=None, k2p=None):
+
+        kp_bis = (Albedo_cst(0.5), Albedo_cst(0.0), Albedo_cst(0.0))
+        if kp is not None:
+            warn_message = "\nThe use of parameter `kp` is deprecated as of SMART-G 1.1.0 " + \
+                           "and will be removed in one of the next release.\n" + \
+                           "Please use k0, k1p and k2p instead."
+            warn(warn_message, DeprecationWarning)
+            kp_bis = deepcopy(kp)
+        
+        if k0 is not None: kp_bis[0] = k0
+        if k1p is not None: kp_bis[1] = k1p
+        if k2p is not None : kp_bis[2] = k2p
+
         self.dict = {
                 'SUR': 1,
                 'DIOPTRE': 4,
@@ -337,7 +369,7 @@ class RTLSSurface(object):
                 'BRDF': 1,
                 'SINGLE': 1,
                 }
-        self.kp = kp+(Albedo_cst(0.0),)
+        self.kp = kp_bis+(Albedo_cst(0.0),)
         self.alb= None
     def __str__(self):
         return 'RTLS-ALB={SURFALB}'.format(**self.dict)
@@ -353,14 +385,28 @@ class RPVSurface(object):
         The RPV coefficients. Form of the tuple:
 
         * r0 : Albedo_cst
-            -> Normalization
+            -> Normalization.
         * k : Albedo_cst
-            -> Minnaert exponent
+            -> Minnaert exponent.
         * bt : Albedo_cst
-            -> Henyey-Greenstein asymetry parameter
+            -> Henyey-Greenstein asymetry parameter.
         * rc : Albedo_cst
-            -> Hotspot parameter
+            -> Hotspot parameter.
     
+    r0 : None | Albedo_cst | Albedo_speclib | Albedo_spectrum | Albedo_map, optional
+       Normalization.
+    k : None | Albedo_cst | Albedo_speclib | Albedo_spectrum | Albedo_map, optional
+        Minnaert exponent.
+    bt : None | Albedo_cst | Albedo_speclib | Albedo_spectrum | Albedo_map, optional
+        Henyey-Greenstein asymetry parameter.
+    rc : None | Albedo_cst | Albedo_speclib | Albedo_spectrum | Albedo_map, optional
+        Hotspot parameter.
+    
+    Notes
+    -----
+    The parameter kp is depracated. Use r0, k, bt and rc instead. Providing parameters r0, 
+    k, bt and rc with kp will circumvent kp values.
+
     References
     ----------
     Rahman, H., M. M. Verstraete, and B. Pinty, (1993) Coupled surface-atmosphere 
@@ -368,7 +414,21 @@ class RPVSurface(object):
     JGR, 98, 20,779-20,789.
 
     """
-    def __init__(self, kp=(Albedo_cst(0.5), Albedo_cst(1.0), Albedo_cst(0.0), Albedo_cst(0.0))):
+    def __init__(self, kp=None, r0=None, k=None, bt=None, rc=None):
+
+        kp_bis = (Albedo_cst(0.5), Albedo_cst(0.0), Albedo_cst(0.0), Albedo_cst(0.0))
+        if kp is not None:
+            warn_message = "\nThe use of parameter `kp` is deprecated as of SMART-G 1.1.0 " + \
+                           "and will be removed in one of the next release.\n" + \
+                           "Please use r0, k, bt and rc instead."
+            warn(warn_message, DeprecationWarning)
+            kp_bis = deepcopy(kp)
+        
+        if r0 is not None: kp_bis[0] = r0
+        if k is not None: kp_bis[1] = k
+        if bt is not None : kp_bis[2] = bt
+        if rc is not None : kp_bis[3] = rc
+
         self.dict = {
                 'SUR': 1,
                 'DIOPTRE': 5,
@@ -378,7 +438,7 @@ class RPVSurface(object):
                 'BRDF': 1,
                 'SINGLE': 1,
                 }
-        self.kp = kp
+        self.kp = kp_bis
         self.alb= None
     def __str__(self):
         return 'RTLS-ALB={SURFALB}'.format(**self.dict)
@@ -415,7 +475,7 @@ class Environment(object):
         The X origin position
     Y0 : float, optional
         The Y origin position
-    ALB : Albedo object, optional
+    ALB : Albedo_cst | Albedo_speclib | Albedo_spectrum | Albedo_map, optional
         The albedo spectral model
     NENV : int, optional
         In progress...
