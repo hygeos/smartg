@@ -709,15 +709,21 @@ class CusBackward(object):
     LMODE : str, optional
         The launching mode. 2 choices:
 
-            * 'B' -> Basic backward. Launch the photons from a given point in a given direction 
-                     (eventually can choose a ramdom vector in a solid angle arround a given direction
-                     delimited by the half-angle ALDEG).
+            * 'B' -> Basic backward (depracated, see notes). Launch the photons from a given point in a 
+                     given direction with a field of view ALDEG.
             * 'BR' -> Backward with receiver. Launch the photons from a given receiver (plane object)
-                      in a given direction (also eventually can choose a ramdom vector in a solid angle 
-                      delimited by ALDEG).
+                      in a given direction with a field of view ALDEG. Default value.
+    LPH : None, optional
+        In progress...
+    LPR : None, optional
+        In progress...
+
+    Notes
+    -----
+    The 'B' mode is depracated and may leads to wrong results. Use instead the Sensor class.
     """
     def __init__(self, POS = Point(0., 0., 0.), THDEG = 0., PHDEG = 0., V = None,
-                 ALDEG = 0., REC = None, TYPE = "lambertian", LMODE = "B", LPH = None, LPR = None):
+                 ALDEG = 0., REC = None, TYPE = "lambertian", LMODE = "BR", LPH = None, LPR = None):
 
         if (isinstance(V, Vector)): THDEG, PHDEG = convertVtoAngles(V)
         elif (V != None): raise NameError('V argument must be a Vector')
@@ -726,6 +732,12 @@ class CusBackward(object):
         if (TYPE == "lambertian"): TYPE = 1
         elif (TYPE == "isotropic"): TYPE = 2
         else: raise NameError('You must choose lambertian or isotropic sampling')
+
+        if LMODE == "B":
+            warn_message = "\nThe LMODE `B` is deprecated as of SMART-G 1.1.0 " + \
+                           "and will be removed in one of the next release.\n" + \
+                           "Please use LMODE `BR` or the class Sensor instead."
+            warn(warn_message, DeprecationWarning)
 
         self.dict = {
             'POS':    POS,
@@ -1188,6 +1200,8 @@ class Smartg(object):
         # First check if back option is activated in case of the use of cusBackward launching mode
         surfLPH = 0
         if (cusL is not None):
+            if myObjects is None:
+                raise NameError('The parameter cusL can be used only if parameter myObjects is provided.')
             if (cusL.dict['LMODE'] == "B" and self.back == False):
                 raise NameError('CusBackward can be use only with the compilation option back=True')
             elif (sensor != None):
