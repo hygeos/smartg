@@ -454,12 +454,18 @@ class Environment(object):
     ENV : int, optional
         The type of environment to consider. Possibilities are:
 
-        * -1 -> The opposite of 1
+        * -1 -> Activate the disk mode, i.e., an horizontal disk centered at X0,Y0 of radius `ENV_SIZE`. 
+                The surface profile used inside the disk is a LambSurface(ALB) object using the Environment
+                parameter `ALB`. The surface profile used outside the disk is the parameter surf of the 
+                Smartg method run.
         *  0 -> Deactivated. The default value.
-        *  1 -> Horizontal cst albedo ALB outside an horizontal disk, water is inside, 
-                lambertian ALB is outside.
-        *  2 -> ALB is a gaussian centred on X0,Y0 with a maximum of ALB_SURF and an asymptotic value 
-                of ALB of the environement. The square of the sigma is ENV_SIZE.
+        *  1 -> Same as -1 but the opposite.
+        *  2 -> Activate the gaussian mode. A LambSurface(ALB) object using the Environment parameter `ALB` 
+                is used and corrected by a gaussian centred on X0,Y0 with a maximum of ALB_SURF and an 
+                asymptotic value of ALB of the environement. The square of the sigma is ENV_SIZE.
+                The form of the gaussian:
+
+                    - :math:`exp(- ((x-X0)**2 + (y-Y0)**2))/ENV_SIZE)`
         *  3 -> ALB map2D modulated by checkerboard spatial function
         *  4 -> Same as 1 but for a band defined as Abs(X) <= ENV_SIZE, -4 for Abs(X)>= ENV_SIZE
         *  5 -> 2D horizontal map of albedos for the whole surface, need ALB to be ALbedo_map object 
@@ -468,7 +474,7 @@ class Environment(object):
     ENV_SIZE : float, optional
         Definitions:
         
-            - The radius (in km) of the circle outside which ALB model is applied for ENV = -1 or 1.
+            - The radius (in km) of the disk for ENV = -1 or 1.
             - The square (in km) of the sigma of the gaussian for ENV = 2
             - The size of the spatial pattern (in km) for ENV = 3
     X0 : float, optional
