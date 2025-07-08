@@ -14,7 +14,6 @@ from datetime import datetime, timezone
 from numpy import pi
 from smartg.atmosphere import Atmosphere, od2k, BPlanck
 from smartg.water import IOP_base
-from smartg.shape import BBox, Sphere
 from os.path import dirname, realpath, join
 from warnings import warn
 from smartg.albedo import Albedo_cst, Albedo_speclib, Albedo_spectrum, Albedo_map
@@ -31,12 +30,12 @@ import pycuda.driver as cuda
 from smartg.bandset import BandSet
 from pycuda.compiler import SourceModule
 # bellow necessary for object incorporation
-from smartg.geometry import Vector, Point, Ray, BBox, Normalize, Dot
 from smartg.transform import Transform
 from smartg.visualizegeo import Mirror, Plane, Spheric, \
-    Entity, LambMirror, Matte, convertVtoAngles, convertAnglestoV
+    Entity, LambMirror, Matte
     
 from copy import deepcopy
+import geoclide as gc
 
 
 
@@ -542,8 +541,8 @@ class Sensor(object):
     def __init__(self, POSX=0., POSY=0., POSZ=0., THDEG=0., PHDEG=180.,
                  LOC='SURF0P', FOV=0., TYPE=0, ICELL=0, ILAM_0=-1, ILAM_1=-1, V = None, CELL_SIZE = -1):
 
-        if (isinstance(V, Vector)):
-            THDEG, PHDEG = convertVtoAngles(V)
+        if (isinstance(V, gc.Vector)):
+            THDEG, PHDEG = gc.vec2ang(V)
         elif (V != None):
             raise NameError('V argument must be a Vector')
         
@@ -722,10 +721,10 @@ class CusBackward(object):
     -----
     The 'B' mode is depracated and may leads to wrong results. Use instead the Sensor class.
     """
-    def __init__(self, POS = Point(0., 0., 0.), THDEG = 0., PHDEG = 0., V = None,
+    def __init__(self, POS = gc.Point(0., 0., 0.), THDEG = 0., PHDEG = 0., V = None,
                  ALDEG = 0., REC = None, TYPE = "lambertian", LMODE = "BR", LPH = None, LPR = None):
 
-        if (isinstance(V, Vector)): THDEG, PHDEG = convertVtoAngles(V)
+        if (isinstance(V, gc.Vector)): THDEG, PHDEG = gc.vec2ang(V)
         elif (V != None): raise NameError('V argument must be a Vector')
         if LMODE == "BR" and not isinstance(REC, Entity):
             raise NameError('In BR LMODE you have to specify a receiver!')
@@ -1194,8 +1193,8 @@ class Smartg(object):
             raise ValueError('The OUTPUT_LAYERS value must be an integer between -1 and 7.')
 
         # Compute the sun direction as vector 
-        vSun = convertAnglestoV(THETA=THVDEG, PHI=PHVDEG, TYPE="Sun") 
-        vSun = Normalize(vSun)
+        vSun = gc.ang2vec(THVDEG, PHVDEG, vec_view='nadir') 
+        vSun = gc.normalize(vSun)
 
         # First check if back option is activated in case of the use of cusBackward launching mode
         surfLPH = 0
@@ -1221,7 +1220,7 @@ class Smartg(object):
                                 #FOV=cusL.dict['ALDEG'], TYPE=cusL.dict['TYPE'])
             elif (cusL.dict['LMODE'] == "FF"):
                 # The projected surface at TOA where the photons are launched
-                DotNN = Dot(vSun*-1, Vector(0., 0., 1.))
+                DotNN = gc.dot(vSun*-1, gc.Vector(0., 0., 1.))
                 if (cusL.dict['TYPE'] == 2 and cusL.dict['FOV'] > 1e-6): #isotropic
                     surfLPH = float(cusL.dict['CFX'])*float(cusL.dict['CFY'])
                 else:
@@ -3478,13 +3477,12 @@ def initObj(LGOBJ, vSun, wl, CUSL=None):
 
             # Get the normal of the plane Object after considering transform
             # 1) The intial normal is known ->
-            normalBase = Vector(0, 0, 1)
+            normalBase = gc.Vector(0, 0, 1)
 
             # 2) Consider the rotation transform in X, Y et Z
-            TpT0 = Transform()
-            TpRX0 = TpT0.rotateX(LOBJ[i].transformation.rotation[0])
-            TpRY0 = TpT0.rotateY(LOBJ[i].transformation.rotation[1])
-            TpRZ0 = TpT0.rotateZ(LOBJ[i].transformation.rotation[2])
+            TpRX0 = gc.get_rotateX_tf(LOBJ[i].transformation.rotation[0])
+            TpRY0 = gc.get_rotateY_tf(LOBJ[i].transformation.rotation[1])
+            TpRZ0 = gc.get_rotateZ_tf(LOBJ[i].transformation.rotation[2])
             if (LOBJ[i].transformation.rotOrder == "XYZ"):
                 TpT0 = TpRX0*TpRY0*TpRZ0
             elif(LOBJ[i].transformation.rotOrder == "XZY"):
@@ -3501,8 +3499,8 @@ def initObj(LGOBJ, vSun, wl, CUSL=None):
                 raise NameError('Unknown rotation order')
 
             # 3) Application of rotation transform
-            normalBase = TpT0[normalBase]
-            normalBase = Normalize(normalBase)
+            normalBase = TpT0(normalBase)
+            normalBase = gc.normalize(normalBase)
             LOBJGPU['nBx'][i] = normalBase.x
             LOBJGPU['nBy'][i] = normalBase.y
             LOBJGPU['nBz'][i] = normalBase.z
@@ -3607,7 +3605,7 @@ def initObj(LGOBJ, vSun, wl, CUSL=None):
                 nb_H += 1
                 zAlt_H += LOBJ[i].transformation.transz
                 totS_H += abs(LOBJ[i].geo.p1.x)*abs(LOBJ[i].geo.p1.y)*4
-                ncos += Dot(normalBase, Vector(-vSun.x, -vSun.y, -vSun.z))
+                ncos += gc.dot(normalBase, gc.Vector(-vSun.x, -vSun.y, -vSun.z))
 
             # Crucial step for the result visualization in RF mode
             if (CUSL is not None and CUSL.dict['LMODE'] == "RF"):
@@ -3615,7 +3613,7 @@ def initObj(LGOBJ, vSun, wl, CUSL=None):
                 pp1 = LOBJ[i].geo.p1; pp2 = LOBJ[i].geo.p2
                 pp3 = LOBJ[i].geo.p3; pp4 = LOBJ[i].geo.p4
                 # Method to find the area of a convex rectangle
-                DotP = Dot(vSun*-1, normalBase)
+                DotP = gc.dot(vSun*-1, normalBase)
                 TwoAAbis = abs((pp1.x - pp4.x)*(pp2.y - pp3.y)) + abs((pp2.x - pp3.x)*(pp1.y - pp4.y))
                 surfLPHbis = (TwoAAbis/2.) * DotP
                 surfLPH += surfLPHbis
@@ -3764,7 +3762,7 @@ def findExtinction(IP, FP, prof_atm, W_IND = int(0)):
     n_ext   : Extinction between IP and FP
     '''
     # Be sure IP and FP are Point classes
-    if not all(isinstance(i, Point) for i in [IP, FP]):
+    if not all(isinstance(i, gc.Point) for i in [IP, FP]):
         raise NameError('Both IP and FP must be Point classes!')
 
     # If there is no atm then there are no scattering and abs -> n_ext = 1
@@ -3846,17 +3844,16 @@ def Get_Sensor(VZA_lev, LEVEL=0., VAA=0., RTER=6370., H=120., FOV=0., TYPE=0., P
         H   : Altitude of the Atmosphere (km)
         SS  : Plane Parallel (PP default or SS)
     '''
-    nothing = Transform() # i.e. no rotation and no translation
     radius = (H + RTER)
     large_dist = float("inf") # large distance(km)
-    origin = Point(0., 0., LEVEL) if PP else Point(0., 0., RTER+LEVEL)
+    origin = gc.Point(0., 0., LEVEL) if PP else gc.Point(0., 0., RTER+LEVEL)
     # Boundaries
-    if PP: Boundary = BBox(Point(-large_dist, -large_dist, 0.), Point(large_dist, large_dist, H)) # Rectangle for atmosphere for PP
-    else : Boundary = Sphere(nothing, nothing, radius, -radius, radius, 360) # Create the Earth + atmosphere sphere for SS
+    if PP: Boundary = gc.BBox(gc.Point(-large_dist, -large_dist, 0.), gc.Point(large_dist, large_dist, H)) # Rectangle for atmosphere for PP
+    else : Boundary = gc.Sphere(radius, -radius, radius, 360) # Create the Earth + atmosphere sphere for SS
     # Compute the direction vector object from Zenith and Azimuth angles
-    dir = convertAnglestoV(THETA=VZA_lev, TYPE='Sensor', PHI=180+VAA)
+    dir = gc.ang2vec(VZA_lev, 180+VAA)
     # Make a ray from origin in direction dir
-    ray = Ray(o=origin, d=dir)
+    ray = gc.Ray(o=origin, d=dir)
     # Compute the intersection with the Boundary
     if PP: (_, t1, hit) = Boundary.IntersectP(ray)
     else : hit = Boundary.Intersect(ray) 
