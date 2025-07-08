@@ -1270,7 +1270,8 @@ def Analyse_create_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYC
                           np.array([E[k].geo.p4.x, E[k].geo.p4.y, E[k].geo.p4.z])], dtype = np.float64)
             
             #PlaneMesh = TriangleMesh(tt, tt_inv, vi, P)
-            PlaneMesh = gc.TriangleMesh(vertices=P, faces=vi, oTw=tt, wTo=tt_inv)
+            PlaneMesh = gc.TriangleMesh(vertices=P, faces=vi)
+            PlaneMesh.apply_tf(tt)
 
             if(E[k].name == "reflector" and THEDEG != None):
                 for i in range(0, LMir):
@@ -1368,8 +1369,9 @@ def Analyse_create_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYC
 
         elif isinstance(E[k].geo, Spheric):
 
-            S = gc.Sphere(E[k].geo.radius, E[k].geo.z0, E[k].geo.z1, E[k].geo.phi, oTw=tt, wTo=tt_inv)
+            S = gc.Sphere(E[k].geo.radius, E[k].geo.z0, E[k].geo.z1, E[k].geo.phi)
             S_mesh = S.to_trianglemesh()
+            S_mesh.apply_tf(tt)
             if S_mesh.oTw.is_identity(): vertices_sm = S_mesh.vertices
             else: vertices_sm = S_mesh.oTw(gc.Point(S_mesh.vertices)).to_numpy()
 
@@ -1530,7 +1532,6 @@ def visualize_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYCOLOR 
     for k in range (0, len(E_ref)):
         # Get the transformation
         tt = E_ref[k].get_transformation()
-        tt_inv = tt.inverse()
 
         photon_pos = gc.Point(wsx+E_ref[k].transformation.transx, wsy+E_ref[k].transformation.transy, wsz+E_ref[k].transformation.transz)
         photon = gc.Ray(o = photon_pos, d = vSun, maxt = 1200.)
@@ -1546,7 +1547,8 @@ def visualize_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYCOLOR 
                           np.array([E[k].geo.p3.x, E[k].geo.p3.y, E[k].geo.p3.z]),
                           np.array([E[k].geo.p4.x, E[k].geo.p4.y, E[k].geo.p4.z])], dtype = np.float64)
             
-            PlaneMesh = gc.TriangleMesh(vertices=P, faces=vi, oTw=tt, wTo=tt_inv)
+            PlaneMesh = gc.TriangleMesh(vertices=P, faces=vi)
+            PlaneMesh.apply_tf(tt)
             lplaneMesh.append(PlaneMesh)
 
             ds = gc.calc_intersection(PlaneMesh, photon)
@@ -1571,7 +1573,6 @@ def visualize_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYCOLOR 
     for k in range (0, len(E_rec)):
         # Get the transformation
         tt = E_rec[k].get_transformation()
-        tt_inv = tt.inverse()
 
         if isinstance(E_rec[k].geo, Plane):
             # Vertex triangle indices
@@ -1584,7 +1585,8 @@ def visualize_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYCOLOR 
                           np.array([E[k].geo.p3.x, E[k].geo.p3.y, E[k].geo.p3.z]),
                           np.array([E[k].geo.p4.x, E[k].geo.p4.y, E[k].geo.p4.z])], dtype = np.float64)
             
-            PlaneMesh = gc.TriangleMesh(vertices=P, faces=vi, oTw=tt, wTo=tt_inv)
+            PlaneMesh = gc.TriangleMesh(vertices=P, faces=vi)
+            PlaneMesh.apply_tf(tt)
             lplaneMesh.append(PlaneMesh)
 
             for i in range(0, lMir_int):
@@ -1608,10 +1610,10 @@ def visualize_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYCOLOR 
         # First method (draw even if there is error with an object, useful for debug):
         # ----------------------------->
         if (PLANEDM == 'FM'):
-            for itri in range(0, PlaneMesh.ntriangles):
-                p0 = gc.Point(PlaneMesh.vertices[PlaneMesh.faces[itri,0],:])
-                p1 = gc.Point(PlaneMesh.vertices[PlaneMesh.faces[itri,1],:])
-                p2 = gc.Point(PlaneMesh.vertices[PlaneMesh.faces[itri,2],:])
+            for itri in range(0, pMesh.ntriangles):
+                p0 = gc.Point(pMesh.vertices[pMesh.faces[itri,0],:])
+                p1 = gc.Point(pMesh.vertices[pMesh.faces[itri,1],:])
+                p2 = gc.Point(pMesh.vertices[pMesh.faces[itri,2],:])
                 Mat = np.array([[p0.x, p0.y, p0.z], \
                                 [p1.x, p1.y, p1.z], \
                                 [p2.x, p2.y, p2.z]])
@@ -1622,12 +1624,12 @@ def visualize_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYCOLOR 
         # Second method (better visual, avoid some matplotlib bugs):
         # ----------------------------->
         if (PLANEDM == 'SM'):
-            p0_t0 = gc.Point(PlaneMesh.vertices[PlaneMesh.faces[0,0],:])
-            p1_t0 = gc.Point(PlaneMesh.vertices[PlaneMesh.faces[0,1],:])
-            p2_t0 = gc.Point(PlaneMesh.vertices[PlaneMesh.faces[0,2],:])
-            p0_t1 = gc.Point(PlaneMesh.vertices[PlaneMesh.faces[1,0],:])
-            p1_t1 = gc.Point(PlaneMesh.vertices[PlaneMesh.faces[1,1],:])
-            p2_t1 = gc.Point(PlaneMesh.vertices[PlaneMesh.faces[1,2],:])
+            p0_t0 = gc.Point(pMesh.vertices[pMesh.faces[0,0],:])
+            p1_t0 = gc.Point(pMesh.vertices[pMesh.faces[0,1],:])
+            p2_t0 = gc.Point(pMesh.vertices[pMesh.faces[0,2],:])
+            p0_t1 = gc.Point(pMesh.vertices[pMesh.faces[1,0],:])
+            p1_t1 = gc.Point(pMesh.vertices[pMesh.faces[1,1],:])
+            p2_t1 = gc.Point(pMesh.vertices[pMesh.faces[1,2],:])
             Mat = np.array([[p0_t0.x, p0_t0.y, p0_t0.z], \
                             [p1_t0.x, p1_t0.y, p1_t0.z], \
                             [p2_t0.x, p2_t0.y, p2_t0.z], \
