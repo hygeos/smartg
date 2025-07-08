@@ -1,19 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from . import geometry
-from .geometry import Vector, Point, Normal, Ray, BBox, rotation3D
-from .geometry import Dot, Cross, Normalize, CoordinateSystem, \
-    Distance, FaceForward
-from . import diffgeom
-from .diffgeom import DifferentialGeometry
-from . import transform
-from .transform import Transform, Aff
-from . import shape
-from .shape import Shape, Sphere, TriangleM, TriangleMesh, swap, \
-    Clamp, Quadratic, Triangle
-import math 
-# from mpl_toolkits.mplot3d import Axes3D
+from smartg.geometry import Vector, Point, Ray, rotation3D
+from smartg.geometry import Dot, Cross, Normalize, FaceForward
+from smartg.transform import Transform
+from smartg.shape import Sphere, TriangleMesh, Clamp
+
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -21,7 +13,6 @@ from luts.luts import LUT, MLUT
 
 from mpl_toolkits.mplot3d import Axes3D
 import mpl_toolkits.mplot3d as mp3d
-from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from matplotlib import colors as mcolors
 
 import re, six
