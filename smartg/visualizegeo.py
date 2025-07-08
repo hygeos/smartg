@@ -1,10 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from smartg.geometry import Vector, Point, Ray, rotation3D
-from smartg.geometry import Dot, Cross, Normalize, FaceForward
-from smartg.transform import Transform
-from smartg.shape import Sphere, TriangleMesh, Clamp
+import geoclide as gc
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -366,9 +363,9 @@ def nopt_view(SMLUT, BACK=False, ACC = 6, NCL="68%", fl_TOA=None, NAATM=False):
             dw_temp = ld*NBIS*(sumZ2[i]-sum2Z[i])**0.5
             dw.append(dw_temp)
         
-        nopt=Clamp(k*w7, 0, 1);k_s = k/float(m.attrs['n_cos']);
-        ncos=float(m.attrs['n_cos']);nsha=Clamp(k_s*w0, 0, 1);nref=Clamp(1-(w1/w0), 0, 1);
-        nblo=Clamp(1-(w3/w2), 0, 1);nspi=Clamp(1-(w5/w4), 0, 1);natm=Clamp(w7/w6, 0, 1)
+        nopt=gc.clamp(k*w7, 0, 1);k_s = k/float(m.attrs['n_cos']);
+        ncos=float(m.attrs['n_cos']);nsha=gc.clamp(k_s*w0, 0, 1);nref=gc.clamp(1-(w1/w0), 0, 1);
+        nblo=gc.clamp(1-(w3/w2), 0, 1);nspi=gc.clamp(1-(w5/w4), 0, 1);natm=gc.clamp(w7/w6, 0, 1)
 
         d_nopt=abs(k)*dw[7];d_ncos=0.;d_nsha=abs(k_s)*dw[0];
         d_nref=abs(-1./w0)*dw[1] + abs(w1/w0**2)*dw[0]
@@ -397,8 +394,8 @@ def nopt_view(SMLUT, BACK=False, ACC = 6, NCL="68%", fl_TOA=None, NAATM=False):
         for i in range (0, len(sum2Z)):
             dw_temp = ld*NBIS*(sumZ2[i]-sum2Z[i])**0.5
             dw.append(dw_temp)
-        nopt = Clamp(k*w2, 0, 1);ncos=float(m.attrs['n_cos']);nref=Clamp(1-(w1/w0), 0, 1);
-        nsbsa = Clamp((k*w2)/(ncos*nref), 0, 1);
+        nopt = gc.clamp(k*w2, 0, 1);ncos=float(m.attrs['n_cos']);nref=gc.clamp(1-(w1/w0), 0, 1);
+        nsbsa = gc.clamp((k*w2)/(ncos*nref), 0, 1);
 
         d_nopt=abs(k)*dw[2];d_ncos = 0.;
         d_nref=abs(-1./w0)*dw[1] + abs(w1/w0**2)*dw[0]
@@ -504,10 +501,10 @@ class Plane(object):
     p3 : x --> negative and y --> positive
     p4 : x --> positive and y --> positive
     '''
-    def __init__(self, p1 = Point(-0.5, -0.5, 0.), p2 = Point(0.5, -0.5, 0.), \
-                 p3 = Point(-0.5, 0.5, 0.), p4 = Point(0.5, 0.5, 0.)):
-        if (isinstance(p1, Point) and isinstance(p2, Point) and \
-            isinstance(p3, Point) and isinstance(p4, Point)):
+    def __init__(self, p1 = gc.Point(-0.5, -0.5, 0.), p2 = gc.Point(0.5, -0.5, 0.), \
+                 p3 = gc.Point(-0.5, 0.5, 0.), p4 = gc.Point(0.5, 0.5, 0.)):
+        if (isinstance(p1, gc.Point) and isinstance(p2, gc.Point) and \
+            isinstance(p3, gc.Point) and isinstance(p4, gc.Point)):
             if (  ( (p1.x == p3.x) and (p1.x < 0) )  and \
                   ( (p2.x == p4.x) and (p2.x > 0) )  and \
                   ( (p1.y == p2.y) and (p1.y < 0) )  and \
@@ -609,7 +606,7 @@ class Entity(object):
     '''
     def __init__(self, entity = None, name="reflector", TC = 0.01, materialAV=Matte(), \
                  materialAR=Matte(), geo=Plane(), transformation=Transformation(), \
-                 bboxGPmin = Point(-100000., -100000., 0.), bboxGPmax = Point(100000., 100000., 120.),
+                 bboxGPmin = gc.Point(-100000., -100000., 0.), bboxGPmax = gc.Point(100000., 100000., 120.),
                  color = 'grey', alpha_color = 0.5):
         if isinstance(entity, Entity) :
             self.name = entity.name; self.TC = entity.TC; self.materialAV = entity.materialAV
@@ -632,17 +629,16 @@ class Entity(object):
 
     def __str__(self):
         return 'The entity is a ' + str(self.name) + ' with the following carac:\n' + \
-            str(self.material) + '\n' + \
+            str(self.materialAV) + '\n' + \
             str(self.geo) + '\n' + \
             str(self.transformation)
     
     def get_transformation(self):
-        tr = Transform()
-        Trans = tr.translate(Vector(self.transformation.transx, self.transformation.transy, \
-                                    self.transformation.transz))
-        Rotx = tr.rotateX(self.transformation.rotx)
-        Roty = tr.rotateY(self.transformation.roty)
-        Rotz = tr.rotateZ(self.transformation.rotz)
+        Trans = gc.get_translate_tf(gc.Vector(self.transformation.transx, self.transformation.transy, \
+                                              self.transformation.transz))
+        Rotx = gc.get_rotateX_tf(self.transformation.rotx)
+        Roty = gc.get_rotateY_tf(self.transformation.roty)
+        Rotz = gc.get_rotateZ_tf(self.transformation.rotz)
 
         # total tt of all transform together
         tt = None
@@ -671,7 +667,7 @@ class Heliostat(object):
     REF           : Reflectivity of the heliostat
     ROUGH         : Roughness of the heliostat
     '''
-    def __init__(self, POS = Point(0., 0., 0.), SPX=int(2), SPY=int(2), HSX=0.02,
+    def __init__(self, POS = gc.Point(0., 0., 0.), SPX=int(2), SPY=int(2), HSX=0.02,
                  HSY=0.02, CURVE_FL=None, REF=1., ROUGH=0):
         # Be sure that we split a heliostat by at least 2
         if (SPX*SPY < 2):
@@ -731,17 +727,17 @@ def findRots(UI=None, UO=None, vecNF=None):
     list[2] -> TTT   : Rotation transform object 
     '''
     # 1)Find the normal of the facet but filled in a vector class
-    if vecNF is not None: vNF = Vector(vecNF)
+    if vecNF is not None: vNF = gc.Vector(vecNF)
     else: vNF = (UI + UO)*(-0.5)
-    vNF = Normalize(vNF)
+    vNF = gc.normalize(vNF)
     vNF.z = np.clip(vNF.z, -1, 1) # Avoid nan value in next operations
 
     # 2) Apply the inverse rotation operations to find the necessary angles
     # 2.a) Initialisation
-    loop=int(0); TT=Transform(); rotY=0; rotZ=0; opeZ=0;
+    loop=int(0); rotY=0; rotZ=0; opeZ=0;
     # The initial value of the facet normal is (0, 0, 1) but forced to (0, 0, 0)
     # to be sure to activate the while loop below
-    vNF_initial = Vector(0., 0., 0.)
+    vNF_initial = gc.Vector(0., 0., 0.)
 
     # 2.b) Rotations are found in the loop bellow, at the end we check if after applying
     #      the transform to the initial normal of the facet 'vNF_initial' we have the same
@@ -779,13 +775,13 @@ def findRots(UI=None, UO=None, vecNF=None):
             rotZ = -np.arccos(opeZ)
  
         rotYD = np.degrees(rotY); rotZD = np.degrees(rotZ);
-        TTZ = TT.rotateZ(rotZD); TTY = TT.rotateY(rotYD);
+        TTZ = gc.get_rotateZ_tf(rotZD); TTY = gc.get_rotateY_tf(rotYD);
         TTT = TTZ*TTY
-        vNF_initial = Normalize(TTT[Vector(0., 0., 1.)])
+        vNF_initial = gc.normalize(TTT(gc.Vector(0., 0., 1.)))
 
     return [rotYD, rotZD, TTT]
 
-def generateMTF(HELIO=Heliostat(), PR = Point(0., 0., 0.)):
+def generateMTF(HELIO=Heliostat(), PR = gc.Point(0., 0., 0.)):
     '''
     Under development...
 
@@ -802,25 +798,25 @@ def generateMTF(HELIO=Heliostat(), PR = Point(0., 0., 0.)):
     SFX = HELIO.hSx/SPX; SFY = HELIO.hSy/SPY
     wMx = SFX/2; wMy = SFY/2 # Size of a facet divided by 2
 
-    POSH = Point(HELIO.pos.x, HELIO.pos.y, HELIO.pos.z)
-    APOSR = Point(0., 0., 0.+(POSH - PR).Length())
+    POSH = gc.Point(HELIO.pos.x, HELIO.pos.y, HELIO.pos.z)
+    APOSR = gc.Point(0., 0., 0.+(POSH - PR).Length())
 
     # Find the positions of facets and store them in matrix MPF[i][j]
     MPF = np.zeros((SPX, SPY), dtype="object") # Matrix of Point object of each facets
     for i in range (0, SPX):
         for j in range (0, SPY):
-            MPF[i][j] = Point(-(HELIO.hSx/2.) + (i*SFX) + wMx, -(HELIO.hSy/2.) + (j*SFY) + wMy, 0.)
+            MPF[i][j] = gc.Point(-(HELIO.hSx/2.) + (i*SFX) + wMx, -(HELIO.hSy/2.) + (j*SFY) + wMy, 0.)
 
     # Find transform in function of focal length (for the curve)
     MTF = np.zeros((SPX, SPY), dtype="object") # Matrix of Transform object of each facets
     for i in range (0, SPX):
         for j in range (0, SPY):
-            UI = Point(0., 0., 0.) - APOSR
-            UI = Normalize(UI)
+            UI = gc.Point(0., 0., 0.) - APOSR
+            UI = gc.normalize(UI)
             UO = MPF[i][j] - APOSR
-            UO = Normalize(UO)
+            UO = gc.normalize(UO)
             RINF  = findRots(UI=UI, UO=UO)
-            MTF[i][j] = Transform(RINF[2])
+            MTF[i][j] = gc.Transform(RINF[2])
 
     return MTF
 
@@ -857,11 +853,11 @@ def generateLEfH(HELIO = Heliostat(), PR = None, THEDEG = 0., PHIDEG = 0., MTF=N
     # Be sure that the correct agrs have been given
     if not isinstance(HELIO, Heliostat):
         raise Exception("HELIO must be a Heliostat class!")
-    if not isinstance(PR, Point):
+    if not isinstance(PR, gc.Point):
         raise Exception("The receiver position 'PR' must be a Point class!")
 
     # Direction of the sun (from (x,y,z) to (0,0,0))
-    vSun = convertAnglestoV(THETA=THEDEG, PHI=PHIDEG, TYPE="Sun")
+    vSun = gc.ang2vec(THEDEG, PHIDEG, vec_view="nadir")
     # Heliostat is splited in facets in x and y directions
     SPX = HELIO.sPx; SPY = HELIO.sPy;
     # Size in x and y of a given facet
@@ -869,15 +865,15 @@ def generateLEfH(HELIO = Heliostat(), PR = None, THEDEG = 0., PHIDEG = 0., MTF=N
     # Focal length or distance between heliostat and receiver
     FL = HELIO.curveFL
     # Position of the heliostat
-    POSH = Point(HELIO.pos.x, HELIO.pos.y, HELIO.pos.z)
+    POSH = gc.Point(HELIO.pos.x, HELIO.pos.y, HELIO.pos.z)
     # Receiver assumed position or the assumed focal length point.
     # Needed to curve the heliostat
     if (FL is not None):
-        APOSR = Point(0., 0., 0.+FL)
+        APOSR = gc.Point(0., 0., 0.+FL)
     else:
-        PHTEMP = Point(POSH)
-        DTEMP = (PHTEMP - PR).Length()
-        APOSR = Point(0., 0., 0.+DTEMP)
+        PHTEMP = gc.Point(POSH)
+        DTEMP = (PHTEMP - PR).length()
+        APOSR = gc.Point(0., 0., 0.+DTEMP)
     # For the bounding box
     bboxDist = np.sqrt(HELIO.hSx*HELIO.hSx + HELIO.hSy*HELIO.hSy)/2
         
@@ -888,10 +884,10 @@ def generateLEfH(HELIO = Heliostat(), PR = None, THEDEG = 0., PHIDEG = 0., MTF=N
     F1 = Entity(name = "reflector", \
                 materialAV = Mirror(reflectivity = HELIO.ref, roughness = HELIO.rough), \
                 materialAR = Matte(), \
-                geo = Plane( p1 = Point(-wMx, -wMy, 0.),
-                             p2 = Point(wMx, -wMy, 0.),
-                             p3 = Point(-wMx, wMy, 0.),
-                             p4 = Point(wMx, wMy, 0.) ), \
+                geo = Plane( p1 = gc.Point(-wMx, -wMy, 0.),
+                             p2 = gc.Point(wMx, -wMy, 0.),
+                             p3 = gc.Point(-wMx, wMy, 0.),
+                             p4 = gc.Point(wMx, wMy, 0.) ), \
                 transformation = Transformation( rotation = np.array([0., 0., 0.]), \
                                                  translation = np.array([0., 0., 0.]) ))
     
@@ -899,25 +895,24 @@ def generateLEfH(HELIO = Heliostat(), PR = None, THEDEG = 0., PHIDEG = 0., MTF=N
     MPF = np.zeros((SPX, SPY), dtype="object") # Matrix of Point object of each facets
     for i in range (0, SPX):
         for j in range (0, SPY):
-            MPF[i][j] = Point(-(HELIO.hSx/2.) + (i*SFX) + wMx, -(HELIO.hSy/2.) + (j*SFY) + wMy, 0.)
+            MPF[i][j] = gc.Point(-(HELIO.hSx/2.) + (i*SFX) + wMx, -(HELIO.hSy/2.) + (j*SFY) + wMy, 0.)
 
     # Find transform in function of focal length (for the curve)
     if MTF is None:
         MTF = np.zeros((SPX, SPY), dtype="object") # Matrix of Transform object of each facets
         for i in range (0, SPX):
             for j in range (0, SPY):
-                UI = Point(0., 0., 0.) - APOSR
-                UI = Normalize(UI)
+                UI = gc.Point(0., 0., 0.) - APOSR
+                UI = gc.normalize(UI)
                 UO = MPF[i][j] - APOSR
-                UO = Normalize(UO)
+                UO = gc.normalize(UO)
                 RINF  = findRots(UI=UI, UO=UO)
-                MTF[i][j] = Transform(RINF[2])
+                MTF[i][j] = gc.Transform(RINF[2])
 
 
     # Find the general heliostat rotation transform (like helistat is a unique facet)
-    TT = Transform()
-    UI = Vector(vSun.x, vSun.y, vSun.z); UO = POSH - PR;
-    UI = Normalize(UI); UO = Normalize(UO);
+    UI = gc.Vector(vSun.x, vSun.y, vSun.z); UO = POSH - PR;
+    UI = gc.normalize(UI); UO = gc.normalize(UO);
     RINF2  = findRots(UI=UI, UO=UO)
     TTZY = RINF2[2]
 
@@ -927,17 +922,17 @@ def generateLEfH(HELIO = Heliostat(), PR = None, THEDEG = 0., PHIDEG = 0., MTF=N
     MPFAT = np.zeros((SPX, SPY), dtype="object") # equals to MPF after application of transform
     for i in range (0, SPX):
         for j in range (0, SPY):
-            tempP = Point(MPF[i][j])
-            tempP = TTZY[tempP]
+            tempP = gc.Point(MPF[i][j])
+            tempP = TTZY(tempP)
             tempP.x += POSH.x; tempP.y += POSH.y; tempP.z += POSH.z;
-            MPFAT[i][j] = Point(tempP)
+            MPFAT[i][j] = gc.Point(tempP)
 
     # Write the initial coordinate system in term of vectors (x, y and z)
-    vecX = Vector(1., 0., 0.); vecY = Vector(0., 1., 0.); vecZ = Vector(0., 0., 1.);
+    vecX = gc.Vector(1., 0., 0.); vecY = gc.Vector(0., 1., 0.); vecZ = gc.Vector(0., 0., 1.);
 
     # Apply the general rotation transform to find the new coordinate system of the heliostat
-    vecX = TTZY[vecX]; vecY = TTZY[vecY]; vecZ = TTZY[vecZ];
-    vecX = Normalize(vecX); vecY = Normalize(vecY); vecZ = Normalize(vecZ);
+    vecX = TTZY(vecX); vecY = TTZY(vecY); vecZ = TTZY(vecZ);
+    vecX = gc.normalize(vecX); vecY = gc.normalize(vecY); vecZ = gc.normalize(vecZ);
 
     # Create the transformation matrix allowing to move between the 2 coordinate systems
     nn1 = vecX; nn2 = vecY;nn3 = vecZ; 
@@ -949,21 +944,21 @@ def generateLEfH(HELIO = Heliostat(), PR = None, THEDEG = 0., PHIDEG = 0., MTF=N
     mm2[3,0] = 0.    ; mm2[3,1] = 0.    ; mm2[3,2] = 0.    ; mm2[3,3] = 1. ;
     # Now create the transform object with the transformation matrix and its inverse
     mm2Inv = np.transpose(mm2)
-    wTo = Transform(m = mm2, mInv = mm2Inv) # move from world/initial to object∕new basis
-    oTw = Transform(m = mm2Inv, mInv = mm2) # move from object∕new to world/initial basis
+    wTo = gc.Transform(m = mm2, mInv = mm2Inv) # move from world/initial to object∕new basis
+    oTw = gc.Transform(m = mm2Inv, mInv = mm2) # move from object∕new to world/initial basis
 
     # The normal of the heliostat vecNH = z axis of the new coordinate system
-    vecNH = Vector(vecZ) # stored as a vector for transformation purposes
+    vecNH = gc.Vector(vecZ) # stored as a vector for transformation purposes
     for i in range (0, SPX):
         for j in range (0, SPY):
             # come back to the initial coordinate system
-            vecNF = oTw[vecNH]
+            vecNF = oTw(vecNH)
             # apply the transform of the facet to consider the curve effect
-            vecNF = MTF[i][j][vecNF]
+            vecNF = MTF[i][j](vecNF)
             # Now we return to the new coordinate system, which gives
             # then the normal of the facet (not heliostat) stored in MTF[i][j]
-            vecNF = wTo[vecNF]
-            vecNF = Normalize(vecNF)
+            vecNF = wTo(vecNF)
+            vecNF = gc.normalize(vecNF)
     
             # Find the rotation transform
             RINF3 = findRots(vecNF=vecNF)
@@ -973,15 +968,15 @@ def generateLEfH(HELIO = Heliostat(), PR = None, THEDEG = 0., PHIDEG = 0., MTF=N
             tempF1.transformation = Transformation( rotation = np.array([0., RINF3[0], RINF3[1]]), \
                                                     translation = np.array([MPFAT[i][j].x, MPFAT[i][j].y, MPFAT[i][j].z]), \
                                                     rotationOrder = "ZYX")
-            tempPP = Point(POSH)
+            tempPP = gc.Point(POSH)
             
-            tempF1.bboxGPmin = Point(tempPP.x-bboxDist, tempPP.y-bboxDist, tempPP.z-bboxDist)
-            tempF1.bboxGPmax = Point(tempPP.x+bboxDist, tempPP.y+bboxDist, tempPP.z+bboxDist)
+            tempF1.bboxGPmin = gc.Point(tempPP.x-bboxDist, tempPP.y-bboxDist, tempPP.z-bboxDist)
+            tempF1.bboxGPmax = gc.Point(tempPP.x+bboxDist, tempPP.y+bboxDist, tempPP.z+bboxDist)
             LF.append(tempF1)
 
     return LF
 
-def generateBox(dimXYZ=[0.05, 0.05, 0.05], pos=Point(0., 0., 0.), matAV = "LambMirror",
+def generateBox(dimXYZ=[0.05, 0.05, 0.05], pos=gc.Point(0., 0., 0.), matAV = "LambMirror",
         ref=[1., 1., 1., 1., 1., 1.], rough=[0.2, 0.2, 0.2, 0.2, 0.2, 0.2], rotZ = 0., gap=0.0001,
         obj_type="environment", colors=None, alpha_color=None):
     """
@@ -1034,9 +1029,9 @@ def generateBox(dimXYZ=[0.05, 0.05, 0.05], pos=Point(0., 0., 0.), matAV = "LambM
     wMx = dimXYZ[0]/2.; wMy = dimXYZ[1]/2.; wMz = dimXYZ[2]/2.
     
     # With the global Z rotation, 4 translations are needed in the direction after the rotation, for Face 0 to 3 
-    TT = Transform(); TT = TT.rotateZ(rotZ)
-    TX = Vector(1., 0., 0.); TX = TT[TX]; TX = Normalize(TX)*wMx
-    TY = Vector(0., 1., 0.); TY = TT[TY]; TY = Normalize(TY)*wMy
+    TT = gc.get_rotateZ_tf(rotZ)
+    TX = gc.Vector(1., 0., 0.); TX = TT(TX); TX = gc.normalize(TX)*wMx
+    TY = gc.Vector(0., 1., 0.); TY = TT(TY); TY = gc.normalize(TY)*wMy
     
     # Initialize a numpy array list of Points (p1 to p4 to construct a face) for all faces (from face 0 to 5)
     p1_F = np.empty(6, dtype=object); p2_F = np.empty(6, dtype=object); p3_F = np.empty(6, dtype=object); p4_F = np.empty(6, dtype=object)
@@ -1051,32 +1046,32 @@ def generateBox(dimXYZ=[0.05, 0.05, 0.05], pos=Point(0., 0., 0.), matAV = "LambM
     
     
     # Face 0 unique parameters
-    p1_F[0] = Point(-wMz, -wMy, 0.); p2_F[0] = Point(wMz, -wMy, 0.); p3_F[0] = Point(-wMz, wMy, 0.); p4_F[0] = Point(wMz, wMy, 0.)
+    p1_F[0] = gc.Point(-wMz, -wMy, 0.); p2_F[0] = gc.Point(wMz, -wMy, 0.); p3_F[0] = gc.Point(-wMz, wMy, 0.); p4_F[0] = gc.Point(wMz, wMy, 0.)
     rotX_F[0] = 0.; rotY_F[0] = 90.
     transX_F[0] = pos.x+TX.x; transY_F[0] = pos.y+TX.y; transZ_F[0] = pos.z + wMz
     
     # Face 1 unique parameters
-    p1_F[1] = Point(-wMz, -wMy, 0.); p2_F[1] = Point(wMz, -wMy, 0.); p3_F[1] = Point(-wMz, wMy, 0.); p4_F[1] = Point(wMz, wMy, 0.)
+    p1_F[1] = gc.Point(-wMz, -wMy, 0.); p2_F[1] = gc.Point(wMz, -wMy, 0.); p3_F[1] = gc.Point(-wMz, wMy, 0.); p4_F[1] = gc.Point(wMz, wMy, 0.)
     rotX_F[1] = 0.; rotY_F[1] = -90.
     transX_F[1] = pos.x-TX.x; transY_F[1] = pos.y-TX.y; transZ_F[1] = pos.z + wMz
     
     # Face 2 unique parameters
-    p1_F[2] = Point(-wMx, -wMz, 0.); p2_F[2] = Point(wMx, -wMz, 0.); p3_F[2] = Point(-wMx, wMz, 0.); p4_F[2] = Point(wMx, wMz, 0.)
+    p1_F[2] = gc.Point(-wMx, -wMz, 0.); p2_F[2] = gc.Point(wMx, -wMz, 0.); p3_F[2] = gc.Point(-wMx, wMz, 0.); p4_F[2] = gc.Point(wMx, wMz, 0.)
     rotX_F[2] = -90.; rotY_F[2] = 0.
     transX_F[2] = pos.x+TY.x; transY_F[2] = pos.y+TY.y; transZ_F[2] = pos.z + wMz
     
     # Face 3 unique parameters
-    p1_F[3] = Point(-wMx, -wMz, 0.); p2_F[3] = Point(wMx, -wMz, 0.); p3_F[3] = Point(-wMx, wMz, 0.); p4_F[3] = Point(wMx, wMz, 0.)
+    p1_F[3] = gc.Point(-wMx, -wMz, 0.); p2_F[3] = gc.Point(wMx, -wMz, 0.); p3_F[3] = gc.Point(-wMx, wMz, 0.); p4_F[3] = gc.Point(wMx, wMz, 0.)
     rotX_F[3] = 90.; rotY_F[3] = 0.
     transX_F[3] = pos.x-TY.x; transY_F[3] = pos.y-TY.y; transZ_F[3] = pos.z + wMz
     
     # Face 4 unique parameters
-    p1_F[4] = Point(-wMx, -wMy, 0.); p2_F[4] = Point(wMx, -wMy, 0.); p3_F[4] = Point(-wMx, wMy, 0.); p4_F[4] = Point(wMx, wMy, 0.)
+    p1_F[4] = gc.Point(-wMx, -wMy, 0.); p2_F[4] = gc.Point(wMx, -wMy, 0.); p3_F[4] = gc.Point(-wMx, wMy, 0.); p4_F[4] = gc.Point(wMx, wMy, 0.)
     rotX_F[4] = 0.; rotY_F[4] = 0.
     transX_F[4] = pos.x; transY_F[4] = pos.y; transZ_F[4] = pos.z + 2*wMz
     
     # Face 5 unique parameters
-    p1_F[5] = Point(-wMx, -wMy, 0.); p2_F[5] = Point(wMx, -wMy, 0.); p3_F[5] = Point(-wMx, wMy, 0.); p4_F[5] = Point(wMx, wMy, 0.)
+    p1_F[5] = gc.Point(-wMx, -wMy, 0.); p2_F[5] = gc.Point(wMx, -wMy, 0.); p3_F[5] = gc.Point(-wMx, wMy, 0.); p4_F[5] = gc.Point(wMx, wMy, 0.)
     rotX_F[5] = 0.; rotY_F[5] = 180.
     transX_F[5] = pos.x; transY_F[5] = pos.y; transZ_F[5] = pos.z
     
@@ -1095,8 +1090,8 @@ def generateBox(dimXYZ=[0.05, 0.05, 0.05], pos=Point(0., 0., 0.), matAV = "LambM
     
     # Create a group of object with a global bounding box (can improve significantly the computational time!)
     maxXY = max(pos.x, 2*max(wMx, wMy))
-    p_min = Point( pos.x - maxXY - gap, pos.y - maxXY - gap, pos.z - gap)
-    p_max = Point( pos.x + maxXY + gap, pos.y + maxXY + gap, pos.z + 2*wMz + gap )
+    p_min = gc.Point( pos.x - maxXY - gap, pos.y - maxXY - gap, pos.z - gap)
+    p_max = gc.Point( pos.x + maxXY + gap, pos.y + maxXY + gap, pos.z + 2*wMz + gap )
     GOBJ = GroupE(LE = LOBJ, BBOX = [p_min, p_max])
     
     return GOBJ
@@ -1112,31 +1107,31 @@ def Ref_Fresnel(dirEnt, geoTrans):
 
     return a Vector class containing the direction of the reflected ray
     '''
-    if isinstance(dirEnt, Vector) :
+    if isinstance(dirEnt, gc.Vector) :
         dirE = dirEnt
     else :
         raise Exception("the dirEnt argument must be a Vector class")
-    if isinstance(geoTrans, Transform) :
+    if isinstance(geoTrans, gc.Transform) :
         geoT = geoTrans
     else :
         raise Exception("the geoTrans argument must be a Transform class")
 
     # Default value of the surface plane normal
-    NN = Vector(0., 0., 1)
+    NN = gc.Vector(0., 0., 1)
     
     # Real value of the normal after considering transformation
     TT = geoT
-    NN = TT[NN]
+    NN = TT(NN)
 
     # Information needed from the incoming ray
     V = dirE
-    V = Vector(-V.x, -V.y, -V.z)
+    V = gc.Vector(-V.x, -V.y, -V.z)
     
     # Use the equation of Fresnel reflection (plenty explained in pbrtv3 book)
-    V = dirE + NN*(2*Dot(NN, V))
+    V = dirE + NN*(2*gc.dot(NN, V))
 
     # Be sure V is normalized
-    V = Normalize(V)
+    V = gc.normalize(V)
     
     return V
 
@@ -1205,7 +1200,7 @@ def Analyse_create_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYC
                         ' of Entity Objects ')
 
     # calculate the sun direction vector
-    vSun = convertAnglestoV(THETA=THEDEG, PHI=PHIDEG, TYPE="Sun")
+    vSun = gc.ang2vec(THEDEG, PHIDEG, vec_view='nadir')
     
     wsx = -vSun.x; wsy=-vSun.y; wsz=-vSun.z;
     xs = np.linspace(0, 0.1*wsx, 100)
@@ -1223,8 +1218,8 @@ def Analyse_create_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYC
             atLeastOneInt = np.append(atLeastOneInt, False)
             xn = np.append(xn, None); yn = np.append(yn, None); zn = np.append(zn, None);
             xr = np.append(xr, None); yr = np.append(yr, None); zr = np.append(zr, None);      
-            TabPhoton = np.append(TabPhoton, Ray(o = Point(wsx+E[i].transformation.transx, wsy+E[i].transformation.transy, wsz+E[i].transformation.transz), \
-                                                 d = Vector( sunDirection.x, sunDirection.y, sunDirection.z ), end = 1200.))
+            TabPhoton = np.append(TabPhoton, gc.Ray(o = gc.Point(wsx+E[i].transformation.transx, wsy+E[i].transformation.transy, wsz+E[i].transformation.transz), \
+                                                    d = gc.Vector( sunDirection.x, sunDirection.y, sunDirection.z ), maxt = 1200.))
 
     # create the matplotlib figure
     fig = plt.figure()#figsize=[128, 96])
@@ -1236,12 +1231,11 @@ def Analyse_create_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYC
         # En commun (!!reinitialized for each loop!!)
         # ===================================================================================
         # all transform separetly       
-        tr = Transform()
-        Trans = tr.translate(Vector(E[k].transformation.transx, E[k].transformation.transy, \
-                                    E[k].transformation.transz))
-        Rotx = tr.rotateX(E[k].transformation.rotx)
-        Roty = tr.rotateY(E[k].transformation.roty)
-        Rotz = tr.rotateZ(E[k].transformation.rotz)
+        Trans = gc.get_translate_tf(gc.Vector(E[k].transformation.transx, E[k].transformation.transy, \
+                                              E[k].transformation.transz))
+        Rotx = gc.get_rotateX_tf(E[k].transformation.rotx)
+        Roty = gc.get_rotateY_tf(E[k].transformation.roty)
+        Rotz = gc.get_rotateZ_tf(E[k].transformation.rotz)
 
         # total tt of all transform together
         tt = None
@@ -1260,38 +1254,40 @@ def Analyse_create_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYC
         else:
             raise NameError('Unknown rotation order')
         
-        tt_inv = tt.inverse(tt)
+        tt_inv = tt.inverse()
         
         # ===================================================================================
         
         if isinstance(E[k].geo, Plane):
             # Vertex triangle indices
-            vi = np.array([0, 1, 2,                   # indices or triangle 1
-                           2, 3, 1], dtype=np.int32)  # indices of triangle 2
+            vi = np.array([np.array([0, 1, 2]),                   # indices or triangle 1
+                           np.array([2, 3, 1])], dtype=np.int32)  # indices of triangle 2
 
             # List of points of the plane
-            P = np.array([Point(E[k].geo.p1.x, E[k].geo.p1.y, E[k].geo.p1.z),
-                          Point(E[k].geo.p2.x, E[k].geo.p2.y, E[k].geo.p2.z),
-                          Point(E[k].geo.p3.x, E[k].geo.p3.y, E[k].geo.p3.z),
-                          Point(E[k].geo.p4.x, E[k].geo.p4.y, E[k].geo.p4.z)], dtype = Point)
+            P = np.array([np.array([E[k].geo.p1.x, E[k].geo.p1.y, E[k].geo.p1.z]),
+                          np.array([E[k].geo.p2.x, E[k].geo.p2.y, E[k].geo.p2.z]),
+                          np.array([E[k].geo.p3.x, E[k].geo.p3.y, E[k].geo.p3.z]),
+                          np.array([E[k].geo.p4.x, E[k].geo.p4.y, E[k].geo.p4.z])], dtype = np.float64)
             
-            PlaneMesh = TriangleMesh(tt, tt_inv, vi, P)
+            #PlaneMesh = TriangleMesh(tt, tt_inv, vi, P)
+            PlaneMesh = gc.TriangleMesh(vertices=P, faces=vi, oTw=tt, wTo=tt_inv)
 
             if(E[k].name == "reflector" and THEDEG != None):
                 for i in range(0, LMir):
                     t_hit = float('inf')
-                    if(PlaneMesh.Intersect(TabPhoton[i])):
-                        if (PlaneMesh.thit < t_hit):
+                    ds = gc.calc_intersection(PlaneMesh, TabPhoton[i])
+                    if(ds['is_intersection'].values):
+                        if (ds['thit'].values < t_hit):
                             atLeastOneInt[i] = True
                             LMir2 += 1
                             xr2 = np.append(xr2, None); yr2 = np.append(yr2, None); zr2 = np.append(zr2, None); 
                             atLeastOneInt2 = np.append(atLeastOneInt2, False)
-                            p_hit = PlaneMesh.dg.p
-                            t_hit = PlaneMesh.thit
+                            p_hit = gc.Point(ds['phit'].values)
+                            t_hit = ds['thit'].values
                             sunDistance = sunDirection*t_hit
                             tnn = np.linspace(0, 0.001, 20)
-                            P1 = PlaneMesh.dg.p ; N1 = PlaneMesh.dg.nn;
-                            N1 = FaceForward(N1, sunDirection * -1)
+                            P1 = p_hit  ; N1 = gc.Normal(ds['nhit'].values);
+                            N1 = gc.face_forward(N1, sunDirection * -1)
                             # For ploting the normal and the red ray
                             xn[i] = P1.x + tnn * N1.x
                             yn[i] = P1.y + tnn * N1.y
@@ -1304,16 +1300,17 @@ def Analyse_create_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYC
                             vecTemp = Ref_Fresnel(dirEnt = TabPhoton[i].d, geoTrans = tt)
                             # print("TabPhoton.d = (", TabPhoton[i].d.x, ", ", TabPhoton[i].d.y, ", ", TabPhoton[i].d.z, ")")
                             # print("vecTemp = (", vecTemp.x, ", ", vecTemp.y, ", ", vecTemp.z, ")")
-                            TabPhoton2 = np.append(TabPhoton2, Ray(o=p_hit, d=vecTemp, end=120))
+                            TabPhoton2 = np.append(TabPhoton2, gc.Ray(o=p_hit, d=vecTemp, maxt=120))
                                                
             if (E[k].name == "receiver" and THEDEG != None):
                 for i in range(0, LMir2):
                     t_hit = float('inf')
-                    if(PlaneMesh.Intersect(TabPhoton2[i])):
+                    ds = gc.calc_intersection(PlaneMesh, TabPhoton2[i])
+                    if(ds['is_intersection'].values):
                         atLeastOneInt2[i] = True
-                        if (PlaneMesh.thit < t_hit):
-                            p_hit = PlaneMesh.dg.p
-                            t_hit = PlaneMesh.thit
+                        if (ds['thit'].values < t_hit):
+                            p_hit = gc.Point(ds['phit'].values)
+                            t_hit = ds['thit'].values
                             tr = np.linspace(TabPhoton2[i].mint, t_hit, 100)
                             xr2[i] = TabPhoton2[i].o.x + tr*TabPhoton2[i].d.x
                             yr2[i] = TabPhoton2[i].o.y + tr*TabPhoton2[i].d.y
@@ -1323,10 +1320,13 @@ def Analyse_create_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYC
             # First method (draw even if there is error with an object, useful for debug):
             # ----------------------------->
             if (PLANEDM == 'FM'):
-                for i in range(0, PlaneMesh.ntris):
-                    Mat = np.array([[PlaneMesh.reftri[i].p1.x, PlaneMesh.reftri[i].p1.y, PlaneMesh.reftri[i].p1.z], \
-                                    [PlaneMesh.reftri[i].p2.x, PlaneMesh.reftri[i].p2.y, PlaneMesh.reftri[i].p2.z], \
-                                    [PlaneMesh.reftri[i].p3.x, PlaneMesh.reftri[i].p3.y, PlaneMesh.reftri[i].p3.z]])
+                for itri in range(0, PlaneMesh.ntriangles):
+                    p0 = gc.Point(PlaneMesh.vertices[PlaneMesh.faces[itri,0],:])
+                    p1 = gc.Point(PlaneMesh.vertices[PlaneMesh.faces[itri,1],:])
+                    p2 = gc.Point(PlaneMesh.vertices[PlaneMesh.faces[itri,2],:])
+                    Mat = np.array([[p0.x, p0.y, p0.z], \
+                                    [p1.x, p1.y, p1.z], \
+                                    [p2.x, p2.y, p2.z]])
                     face1 = mp3d.art3d.Poly3DCollection([Mat], alpha = E[k].alpha_color, linewidths=0.2)
                     face1.set_facecolor(mcolors.to_rgba(E[k].color))
                     ax.add_collection3d(face1)
@@ -1334,12 +1334,18 @@ def Analyse_create_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYC
             # Second method (better visual, avoid some matplotlib bugs):
             # ----------------------------->
             if (PLANEDM == 'SM'):
-                Mat = np.array([[PlaneMesh.reftri[0].p1.x, PlaneMesh.reftri[0].p1.y, PlaneMesh.reftri[0].p1.z], \
-                                [PlaneMesh.reftri[0].p2.x, PlaneMesh.reftri[0].p2.y, PlaneMesh.reftri[0].p2.z], \
-                                [PlaneMesh.reftri[0].p3.x, PlaneMesh.reftri[0].p3.y, PlaneMesh.reftri[0].p3.z], \
-                                [PlaneMesh.reftri[1].p1.x, PlaneMesh.reftri[1].p1.y, PlaneMesh.reftri[1].p1.z], \
-                                [PlaneMesh.reftri[1].p2.x, PlaneMesh.reftri[1].p2.y, PlaneMesh.reftri[1].p2.z], \
-                                [PlaneMesh.reftri[1].p3.x, PlaneMesh.reftri[1].p3.y, PlaneMesh.reftri[1].p3.z]])
+                p0_t0 = gc.Point(PlaneMesh.vertices[PlaneMesh.faces[0,0],:])
+                p1_t0 = gc.Point(PlaneMesh.vertices[PlaneMesh.faces[0,1],:])
+                p2_t0 = gc.Point(PlaneMesh.vertices[PlaneMesh.faces[0,2],:])
+                p0_t1 = gc.Point(PlaneMesh.vertices[PlaneMesh.faces[1,0],:])
+                p1_t1 = gc.Point(PlaneMesh.vertices[PlaneMesh.faces[1,1],:])
+                p2_t1 = gc.Point(PlaneMesh.vertices[PlaneMesh.faces[1,2],:])
+                Mat = np.array([[p0_t0.x, p0_t0.y, p0_t0.z], \
+                                [p1_t0.x, p1_t0.y, p1_t0.z], \
+                                [p2_t0.x, p2_t0.y, p2_t0.z], \
+                                [p0_t1.x, p0_t1.y, p0_t1.z], \
+                                [p1_t1.x, p1_t1.y, p1_t1.z], \
+                                [p2_t1.x, p2_t1.y, p2_t1.z]])
                 
                 if (np.array_equal(Mat[:,0], np.full((6), Mat[0,0]))):
                     yy, zz = np.meshgrid(Mat[:,0], Mat[:,2])
@@ -1362,31 +1368,26 @@ def Analyse_create_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYC
 
         elif isinstance(E[k].geo, Spheric):
 
-            S = Sphere(tt, tt_inv, E[k].geo.radius, E[k].geo.z0, E[k].geo.z1, E[k].geo.phi)
+            S = gc.Sphere(E[k].geo.radius, E[k].geo.z0, E[k].geo.z1, E[k].geo.phi, oTw=tt, wTo=tt_inv)
+            S_mesh = S.to_trianglemesh()
+            if S_mesh.oTw.is_identity(): vertices_sm = S_mesh.vertices
+            else: vertices_sm = S_mesh.oTw(gc.Point(S_mesh.vertices)).to_numpy()
 
-            # Plot parameters
-            u1 = np.linspace(0, S.phiMax, 20)
-            v1 = np.linspace(S.thetaMin, S.thetaMax, 20)
-            myP = tt[Point(S.radius * np.outer(np.cos(u1), np.sin(v1)), \
-                           S.radius * np.outer(np.sin(u1), np.sin(v1)), \
-                           S.radius * np.outer(np.ones(np.size(u1)), np.cos(v1)))]
-            x1 = myP.x
-            y1 = myP.y
-            z1 = myP.z
-            
-            ax.plot_surface(x1, y1, z1, rstride=1, cstride=1, color=E[k].color, alpha=E[k].alpha_color)
+            ax.plot_trisurf(vertices_sm[:,0], vertices_sm[:,1], vertices_sm[:,2],
+                            triangles = S_mesh.faces, color=E[k].color, alpha=E[k].alpha_color)
 
             for i in range(0, LMir):
-                if(S.Intersect(TabPhoton[i])):
+                ds = gc.calc_intersection(S, TabPhoton[i])
+                if(ds['is_intersection'].values):
                     atLeastOneInt[i] = True
                     t_hit = float('inf')
-                    if (S.thit < t_hit):
-                        p_hit = S.dg.p
-                        t_hit = S.thit
+                    if (ds['thit'].values < t_hit):
+                        p_hit = gc.Point(ds['phit'].values)
+                        t_hit = ds['thit'].values
                         sunDistance = sunDirection*t_hit
                         tnn = np.linspace(0, 0.001, 20)
-                        P1 = S.dg.p ; N1 = S.dg.nn;
-                        N1 = FaceForward(N1, sunDirection * -1)
+                        P1 = p_hit ; N1 = ds['nhit'].values;
+                        N1 = gc.face_forward(N1, sunDirection * -1)
                         # For ploting the normal and the red ray
                         xn[i] = P1.x + tnn * N1.x
                         yn[i] = P1.y + tnn * N1.y
@@ -1454,7 +1455,7 @@ def Analyse_create_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYC
 
 
 def visualize_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYCOLOR = 'r', SR_VIEW=1,
-                               xyz_limit = None, show_rays=True, rs_fac = 1):
+                     xyz_limit = None, show_rays=True, rs_fac = 1):
     '''
     Definition of visualize_entity
 
@@ -1511,7 +1512,7 @@ def visualize_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYCOLOR 
                         ' of Entity Objects ')
 
     # calculate the sun direction vector
-    vSun = convertAnglestoV(THETA=THEDEG, PHI=PHIDEG, TYPE="Sun")
+    vSun = gc.ang2vec(THEDEG, PHIDEG, vec_view='nadir')
     wsx = -vSun.x; wsy=-vSun.y; wsz=-vSun.z
 
     lplaneMesh = []
@@ -1529,36 +1530,37 @@ def visualize_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYCOLOR 
     for k in range (0, len(E_ref)):
         # Get the transformation
         tt = E_ref[k].get_transformation()
-        tt_inv = tt.inverse(tt)
+        tt_inv = tt.inverse()
 
-        photon_pos = Point(wsx+E_ref[k].transformation.transx, wsy+E_ref[k].transformation.transy, wsz+E_ref[k].transformation.transz)
-        photon = Ray(o = photon_pos, d = vSun, end = 1200.)
+        photon_pos = gc.Point(wsx+E_ref[k].transformation.transx, wsy+E_ref[k].transformation.transy, wsz+E_ref[k].transformation.transz)
+        photon = gc.Ray(o = photon_pos, d = vSun, maxt = 1200.)
     
         if isinstance(E_ref[k].geo, Plane):
-            # Vertex triangle indices
-            vi = np.array([0, 1, 2,                   # indices or triangle 1
-                           2, 3, 1], dtype=np.int32)  # indices of triangle 2
+           # Vertex triangle indices
+            vi = np.array([np.array([0, 1, 2]),                   # indices or triangle 1
+                           np.array([2, 3, 1])], dtype=np.int32)  # indices of triangle 2
 
             # List of points of the plane
-            P = np.array([Point(E_ref[k].geo.p1.x, E_ref[k].geo.p1.y, E_ref[k].geo.p1.z),
-                          Point(E_ref[k].geo.p2.x, E_ref[k].geo.p2.y, E_ref[k].geo.p2.z),
-                          Point(E_ref[k].geo.p3.x, E_ref[k].geo.p3.y, E_ref[k].geo.p3.z),
-                          Point(E_ref[k].geo.p4.x, E_ref[k].geo.p4.y, E_ref[k].geo.p4.z)], dtype = Point)
+            P = np.array([np.array([E[k].geo.p1.x, E[k].geo.p1.y, E[k].geo.p1.z]),
+                          np.array([E[k].geo.p2.x, E[k].geo.p2.y, E[k].geo.p2.z]),
+                          np.array([E[k].geo.p3.x, E[k].geo.p3.y, E[k].geo.p3.z]),
+                          np.array([E[k].geo.p4.x, E[k].geo.p4.y, E[k].geo.p4.z])], dtype = np.float64)
             
-            PlaneMesh = TriangleMesh(tt, tt_inv, vi, P)
+            PlaneMesh = gc.TriangleMesh(vertices=P, faces=vi, oTw=tt, wTo=tt_inv)
             lplaneMesh.append(PlaneMesh)
 
-            if(THEDEG != None and PlaneMesh.Intersect(photon) and PlaneMesh.thit < float('inf')):
+            ds = gc.calc_intersection(PlaneMesh, photon)
+            if(ds['is_intersection'].values and ds['thit'].values < float('inf')):
                 atLeastOneInt[k] = True
                 lMir_int += int(1)
-                p_hit = PlaneMesh.dg.p
-                t_hit = PlaneMesh.thit
+                p_hit = gc.Point(ds['phit'].values)
+                t_hit = ds['thit'].values
                 tr = np.linspace(t_hit*0.98*(1/rs_fac), t_hit, 100)
                 xr[k] = photon.o.x + tr*photon.d.x
                 yr[k] = photon.o.y + tr*photon.d.y
                 zr[k] = photon.o.z + tr*photon.d.z
                 vecTemp = Ref_Fresnel(dirEnt = photon.d, geoTrans = tt)
-                TabPhoton2 = np.append(TabPhoton2, Ray(o=p_hit, d=vecTemp, end=120))
+                TabPhoton2 = np.append(TabPhoton2, gc.Ray(o=p_hit, d=vecTemp, maxt=120))
 
         else: raise NameError('This geometry is unknown or not yet accepted!')
 
@@ -1569,27 +1571,28 @@ def visualize_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYCOLOR 
     for k in range (0, len(E_rec)):
         # Get the transformation
         tt = E_rec[k].get_transformation()
-        tt_inv = tt.inverse(tt)
+        tt_inv = tt.inverse()
 
         if isinstance(E_rec[k].geo, Plane):
             # Vertex triangle indices
-            vi = np.array([0, 1, 2,                   # indices or triangle 1
-                           2, 3, 1], dtype=np.int32)  # indices of triangle 2
+            vi = np.array([np.array([0, 1, 2]),                   # indices or triangle 1
+                           np.array([2, 3, 1])], dtype=np.int32)  # indices of triangle 2
 
             # List of points of the plane
-            P = np.array([Point(E_rec[k].geo.p1.x, E_rec[k].geo.p1.y, E_rec[k].geo.p1.z),
-                          Point(E_rec[k].geo.p2.x, E_rec[k].geo.p2.y, E_rec[k].geo.p2.z),
-                          Point(E_rec[k].geo.p3.x, E_rec[k].geo.p3.y, E_rec[k].geo.p3.z),
-                          Point(E_rec[k].geo.p4.x, E_rec[k].geo.p4.y, E_rec[k].geo.p4.z)], dtype = Point)
+            P = np.array([np.array([E[k].geo.p1.x, E[k].geo.p1.y, E[k].geo.p1.z]),
+                          np.array([E[k].geo.p2.x, E[k].geo.p2.y, E[k].geo.p2.z]),
+                          np.array([E[k].geo.p3.x, E[k].geo.p3.y, E[k].geo.p3.z]),
+                          np.array([E[k].geo.p4.x, E[k].geo.p4.y, E[k].geo.p4.z])], dtype = np.float64)
             
-            PlaneMesh = TriangleMesh(tt, tt_inv, vi, P)
+            PlaneMesh = gc.TriangleMesh(vertices=P, faces=vi, oTw=tt, wTo=tt_inv)
             lplaneMesh.append(PlaneMesh)
 
             for i in range(0, lMir_int):
-                if(THEDEG != None and PlaneMesh.Intersect(TabPhoton2[i]) and PlaneMesh.thit < float('inf')):
+                ds = gc.calc_intersection(PlaneMesh, TabPhoton2[i])
+                if(ds['is_intersection'].values and ds['thit'].values < float('inf')):
                     atLeastOneInt2[i] = True
-                    p_hit = PlaneMesh.dg.p
-                    t_hit = PlaneMesh.thit
+                    p_hit = gc.Point(ds['phit'].values)
+                    t_hit = ds['thit'].values
                     tr = np.linspace(TabPhoton2[i].mint, t_hit, 100)
                     xr2[i] = TabPhoton2[i].o.x + tr*TabPhoton2[i].d.x
                     yr2[i] = TabPhoton2[i].o.y + tr*TabPhoton2[i].d.y
@@ -1605,10 +1608,13 @@ def visualize_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYCOLOR 
         # First method (draw even if there is error with an object, useful for debug):
         # ----------------------------->
         if (PLANEDM == 'FM'):
-            for i in range(0, pMesh.ntris):
-                Mat = np.array([[pMesh.reftri[i].p1.x, pMesh.reftri[i].p1.y, pMesh.reftri[i].p1.z], \
-                                [pMesh.reftri[i].p2.x, pMesh.reftri[i].p2.y, pMesh.reftri[i].p2.z], \
-                                [pMesh.reftri[i].p3.x, pMesh.reftri[i].p3.y, pMesh.reftri[i].p3.z]])
+            for itri in range(0, PlaneMesh.ntriangles):
+                p0 = gc.Point(PlaneMesh.vertices[PlaneMesh.faces[itri,0],:])
+                p1 = gc.Point(PlaneMesh.vertices[PlaneMesh.faces[itri,1],:])
+                p2 = gc.Point(PlaneMesh.vertices[PlaneMesh.faces[itri,2],:])
+                Mat = np.array([[p0.x, p0.y, p0.z], \
+                                [p1.x, p1.y, p1.z], \
+                                [p2.x, p2.y, p2.z]])
                 face1 = mp3d.art3d.Poly3DCollection([Mat], alpha = E[k].alpha_color, linewidths=0.2)
                 face1.set_facecolor(mcolors.to_rgba(E[k].color))
                 ax.add_collection3d(face1)
@@ -1616,12 +1622,18 @@ def visualize_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYCOLOR 
         # Second method (better visual, avoid some matplotlib bugs):
         # ----------------------------->
         if (PLANEDM == 'SM'):
-            Mat = np.array([[pMesh.reftri[0].p1.x, pMesh.reftri[0].p1.y, pMesh.reftri[0].p1.z], \
-                            [pMesh.reftri[0].p2.x, pMesh.reftri[0].p2.y, pMesh.reftri[0].p2.z], \
-                            [pMesh.reftri[0].p3.x, pMesh.reftri[0].p3.y, pMesh.reftri[0].p3.z], \
-                            [pMesh.reftri[1].p1.x, pMesh.reftri[1].p1.y, pMesh.reftri[1].p1.z], \
-                            [pMesh.reftri[1].p2.x, pMesh.reftri[1].p2.y, pMesh.reftri[1].p2.z], \
-                            [pMesh.reftri[1].p3.x, pMesh.reftri[1].p3.y, pMesh.reftri[1].p3.z]])
+            p0_t0 = gc.Point(PlaneMesh.vertices[PlaneMesh.faces[0,0],:])
+            p1_t0 = gc.Point(PlaneMesh.vertices[PlaneMesh.faces[0,1],:])
+            p2_t0 = gc.Point(PlaneMesh.vertices[PlaneMesh.faces[0,2],:])
+            p0_t1 = gc.Point(PlaneMesh.vertices[PlaneMesh.faces[1,0],:])
+            p1_t1 = gc.Point(PlaneMesh.vertices[PlaneMesh.faces[1,1],:])
+            p2_t1 = gc.Point(PlaneMesh.vertices[PlaneMesh.faces[1,2],:])
+            Mat = np.array([[p0_t0.x, p0_t0.y, p0_t0.z], \
+                            [p1_t0.x, p1_t0.y, p1_t0.z], \
+                            [p2_t0.x, p2_t0.y, p2_t0.z], \
+                            [p0_t1.x, p0_t1.y, p0_t1.z], \
+                            [p1_t1.x, p1_t1.y, p1_t1.z], \
+                            [p2_t1.x, p2_t1.y, p2_t1.z]])
             
             if (np.array_equal(Mat[:,0], np.full((6), Mat[0,0]))):
                 yy, zz = np.meshgrid(Mat[:,0], Mat[:,2])
@@ -1678,7 +1690,7 @@ def visualize_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYCOLOR 
     return fig
 
 
-def generateHfP(THEDEG=0., PHIDEG = 0., PH = [Point(0., 0., 0.)], PR = Point(0., 0., 0.), \
+def generateHfP(THEDEG=0., PHIDEG = 0., PH = [gc.Point(0., 0., 0.)], PR = gc.Point(0., 0., 0.), \
                 HSX = 0.001, HSY = 0.001, REF = 1, ROUGH=0, HTYPE = None, LMTF = None):
     '''
     Definition of generateHfP
@@ -1702,17 +1714,17 @@ def generateHfP(THEDEG=0., PHIDEG = 0., PH = [Point(0., 0., 0.)], PR = Point(0.,
     # Case where the heliostat is totally plane
     if (HTYPE is None):
         # compute the sun direction vector
-        vSun = convertAnglestoV(THETA=THEDEG, PHI=PHIDEG, TYPE="Sun")
+        vSun = gc.ang2vec(THEDEG, PHIDEG, vec_view='nadir')
         bboxDist = np.sqrt(HSX*HSX + HSY*HSY)/2
 
         Hxx = HSX/2; Hyy = HSY/2
         objM = Entity(name = "reflector", \
                       materialAV = Mirror(reflectivity = REF, roughness = ROUGH), \
                       materialAR = Matte(reflectivity = 0.), \
-                      geo = Plane( p1 = Point(-Hxx, -Hyy, 0.),
-                                   p2 = Point(Hxx, -Hyy, 0.),
-                                   p3 = Point(-Hxx, Hyy, 0.),
-                                   p4 = Point(Hxx, Hyy, 0.) ), \
+                      geo = Plane( p1 = gc.Point(-Hxx, -Hyy, 0.),
+                                   p2 = gc.Point(Hxx, -Hyy, 0.),
+                                   p3 = gc.Point(-Hxx, Hyy, 0.),
+                                   p4 = gc.Point(Hxx, Hyy, 0.) ), \
                       transformation = Transformation( rotation = np.array([0., 0., 0.]), \
                                                        translation = np.array([0., 0., 0.]) ))
 
@@ -1720,7 +1732,7 @@ def generateHfP(THEDEG=0., PHIDEG = 0., PH = [Point(0., 0., 0.)], PR = Point(0.,
         for i in range (0, len(PH)):
             # 1) Find the normalized vector colinear (and same dir) to the normal of heliostat surface
             vecHR = PH[i]-PR
-            vecHR = Normalize(vecHR)
+            vecHR = gc.normalize(vecHR)
 
             # 2) Find the necessary rotations to apply on the heliostat to reflect to the receiver
             rInfo = findRots(UI=vSun, UO=vecHR)
@@ -1728,8 +1740,8 @@ def generateHfP(THEDEG=0., PHIDEG = 0., PH = [Point(0., 0., 0.)], PR = Point(0.,
 
             # 3) Once the rotation angles have been found, create heliostat objects
             objMi = Entity(objM);
-            objMi.bboxGPmin = Point(PH[i].x-bboxDist, PH[i].y-bboxDist, PH[i].z-bboxDist)
-            objMi.bboxGPmax = Point(PH[i].x+bboxDist, PH[i].y+bboxDist, PH[i].z+bboxDist)
+            objMi.bboxGPmin = gc.Point(PH[i].x-bboxDist, PH[i].y-bboxDist, PH[i].z-bboxDist)
+            objMi.bboxGPmax = gc.Point(PH[i].x+bboxDist, PH[i].y+bboxDist, PH[i].z+bboxDist)
             objMi.transformation = Transformation( rotation = np.array([0., rotYD, rotZD]), \
                                                    translation = np.array([PH[i].x, PH[i].y, PH[i].z]), \
                                                    rotationOrder = "ZYX")
@@ -1750,7 +1762,7 @@ def generateHfP(THEDEG=0., PHIDEG = 0., PH = [Point(0., 0., 0.)], PR = Point(0.,
     return lObj
 
 
-def generateHfA(THEDEG=0., PHIDEG = 0., PR = Point(0., 0., 50.), MINANG=0., \
+def generateHfA(THEDEG=0., PHIDEG = 0., PR = gc.Point(0., 0., 50.), MINANG=0., \
                 MAXANG=360., GAPDEG = 5., FDRH = 0.1, NBH = 10, GAPDIST = 0.01, \
                 HSX = 0.001, HSY = 0.001, PILLH = 0.006, REF = 1, ROUGH=0,
                 HTYPE=None, LMTF = None, RLPH = False):
@@ -1797,25 +1809,24 @@ def generateHfA(THEDEG=0., PHIDEG = 0., PR = Point(0., 0., 50.), MINANG=0., \
     
     pH = []
     myRotZ = MINANG
-    RotZT = Transform()
 
     if (MINANG != MAXANG):
         for i in range (0, nbI):
             Dhr = FDRH
             for j in range (0, NBH):
-                myP = Point(Dhr, 0., 0.)
-                RotZT = RotZT.rotateZ(myRotZ)
-                myP=RotZT[myP]
-                pH.append( Point(myP.x, myP.y, myP.z+PILLH) )
+                myP = gc.Point(Dhr, 0., 0.)
+                RotZT = gc.get_rotateZ_tf(myRotZ)
+                myP=RotZT(myP)
+                pH.append( gc.Point(myP.x, myP.y, myP.z+PILLH) )
                 Dhr += GAPDIST
             myRotZ += GAPDEG
     else:
         Dhr = FDRH
+        RotZT = gc.get_rotateZ_tf(myRotZ)
         for j in range (0, NBH):
-            myP = Point(Dhr, 0., 0.)
-            RotZT = RotZT.rotateZ(myRotZ)
-            myP=RotZT[myP]
-            pH.append( Point(myP.x, myP.y, myP.z+PILLH) )
+            myP = gc.Point(Dhr, 0., 0.)
+            myP=RotZT(myP)
+            pH.append( gc.Point(myP.x, myP.y, myP.z+PILLH) )
             Dhr += GAPDIST      
 
 
@@ -1825,24 +1836,24 @@ def generateHfA(THEDEG=0., PHIDEG = 0., PR = Point(0., 0., 50.), MINANG=0., \
     # Case where the heliostat is totally plane
     if (HTYPE is None):
         # calculate the sun direction vector
-        vSun = convertAnglestoV(THETA=THEDEG, PHI=PHIDEG, TYPE="Sun")
+        vSun = gc.ang2vec(THEDEG, PHIDEG, vec_view='nadir')
         bboxDist = np.sqrt(HSX*HSX + HSY*HSY)/2
 
         Hxx = HSX/2; Hyy = HSY/2
         objM = Entity(name = "reflector", \
                       materialAV = Mirror(reflectivity = REF, roughness = ROUGH), \
                       materialAR = Matte(), \
-                      geo = Plane( p1 = Point(-Hxx, -Hyy, 0.),
-                                   p2 = Point(Hxx, -Hyy, 0.),
-                                   p3 = Point(-Hxx, Hyy, 0.),
-                                   p4 = Point(Hxx, Hyy, 0.) ), \
+                      geo = Plane( p1 = gc.Point(-Hxx, -Hyy, 0.),
+                                   p2 = gc.Point(Hxx, -Hyy, 0.),
+                                   p3 = gc.Point(-Hxx, Hyy, 0.),
+                                   p4 = gc.Point(Hxx, Hyy, 0.) ), \
                       transformation = Transformation( rotation = np.array([0., 0., 0.]), \
                                                        translation = np.array([0., 0., 0.]) ))
 
         for i in range (0, len(pH)):
             # 1) The vector of the photon after a reflection (here the opposite direction) 
             vecHR = pH[i]-PR
-            vecHR = Normalize(vecHR)
+            vecHR = gc.normalize(vecHR)
 
             # 2) The incoming (vSun) and outcoming (vecHR) directions are known then find
             #    the rotation angles
@@ -1851,8 +1862,8 @@ def generateHfA(THEDEG=0., PHIDEG = 0., PR = Point(0., 0., 50.), MINANG=0., \
 
             # 3) Once the rotation angles have been found, create heliostat objects 
             objMi = Entity(objM);
-            objMi.bboxGPmin = Point(pH[i].x-bboxDist, pH[i].y-bboxDist, pH[i].z-bboxDist)
-            objMi.bboxGPmax = Point(pH[i].x+bboxDist, pH[i].y+bboxDist, pH[i].z+bboxDist)
+            objMi.bboxGPmin = gc.Point(pH[i].x-bboxDist, pH[i].y-bboxDist, pH[i].z-bboxDist)
+            objMi.bboxGPmax = gc.Point(pH[i].x+bboxDist, pH[i].y+bboxDist, pH[i].z+bboxDist)
             objMi.transformation = Transformation( rotation = np.array([0., rotYD, rotZD]), \
                                                    translation = np.array([pH[i].x, pH[i].y, pH[i].z]), \
                                                    rotationOrder = "ZYX")
@@ -1926,12 +1937,12 @@ def convertVtoAngles(v, TYPE="Sensor", verbose=False):
     Phi   : Azimuth angle, start at X+ in plane XY going in
             the trigonométric direction arround z axis
     """
-    if isinstance(v, Vector):
+    if isinstance(v, gc.Vector):
         # First be sure that the vector v is normalized
         if (TYPE == "Sensor"):
-            v = Normalize(v)
+            v = gc.normalize(v)
         elif (TYPE == "Sun"):
-            v = Normalize(Vector(-v.x, -v.y, -v.z)) # Sun we look at the oposite side
+            v = gc.normalize(gc.Vector(-v.x, -v.y, -v.z)) # Sun we look at the oposite side
         else:
             raise NameError('TYPE arg must be str(Sensor) or str(Sun)')
 
@@ -1975,24 +1986,21 @@ def convertAnglestoV(THETA=0., PHI=0., TYPE="Sensor"):
     """
     if (TYPE == "Sensor"):
         # By default the vector v = (0, 0, 1) for THETA=0 and PHI=0
-        v = Vector(0, 0, 1)
+        v = gc.Vector(0, 0, 1)
     elif (TYPE == "Sun"):
         # By default the vector v = (0, 0, -1) for THETA=0 and PHI=0
-        v = Vector(0, 0, -1)
+        v = gc.Vector(0, 0, -1)
     else:
         raise NameError('TYPE arg must be str(Sensor) or str(Sun)')
-    
-    # Creation of the transform object
-    TT = Transform()
 
     # Take the zenith angle for the first rotation in Y axis
-    v = TT.rotateY(THETA)[v]
+    v = gc.get_rotateY_tf(THETA)(v)
 
     # Take the azimuth angle for the second rotation in Z axis
-    v = TT.rotateZ(PHI)[v]
+    v = gc.get_rotateZ_tf(PHI)(v)
 
     # Be sure v is normalized
-    v = Normalize(v)
+    v = gc.normalize(v)
     
     return v
 
@@ -2018,23 +2026,26 @@ def rotate_vector(vector, rot_x, rot_y, rot_z, rot_order="xyz"):
     Return:
     rotated_vector : The rotated (normalized) direction (also a Vector class)
     """
-    TT = Transform()
+    TT = gc.Transform()
+    tr_x = gc.get_rotateX_tf(rot_x)
+    tr_y = gc.get_rotateY_tf(rot_y)
+    tr_z = gc.get_rotateZ_tf(rot_z) 
     if rot_order == "XYZ":
-        TT = TT.rotateX(rot_x)*TT.rotateY(rot_y)*TT.rotateZ(rot_z)
+        TT = tr_x*tr_y*tr_z
     elif rot_order == "XZY":
-        TT = TT.rotateX(rot_x)*TT.rotateZ(rot_z)*TT.rotateY(rot_y)
+        TT = tr_x*tr_z*tr_y
     elif rot_order == "YXZ":
-        TT = TT.rotateY(rot_y)*TT.rotateX(rot_x)*TT.rotateZ(rot_z)
+        TT = tr_y*tr_x*tr_z
     elif rot_order == "YZX":
-        TT = TT.rotateY(rot_y)*TT.rotateZ(rot_z)*TT.rotateX(rot_x)
+        TT = tr_y*tr_z*tr_x
     elif rot_order == "ZXY":
-        TT = TT.rotateZ(rot_z)*TT.rotateX(rot_x)*TT.rotateY(rot_y)
+        TT = tr_z*tr_x*tr_y
     elif rot_order == "ZYX":
-        TT = TT.rotateZ(rot_z)*TT.rotateY(rot_y)*TT.rotateX(rot_x)
+        TT = tr_z*tr_y*tr_x
     else:
         raise NameError("Unknown rot_order value!")
-    rotated_vector = TT[vector]
-    rotated_vector = Normalize(rotated_vector)
+    rotated_vector = TT(vector)
+    rotated_vector = gc.normalize(rotated_vector)
 
     return rotated_vector
 
@@ -2111,8 +2122,8 @@ def extractPoints(filename):
     # # Fill the x, y and z coordinates into a list of Point classes
     lPH = []
     for i in range (0, nbH):
-        lPH.append(  Point( float(listVal[i*nbDim]), float(listVal[(i*nbDim)+1]),
-                            float(listVal[(i*nbDim)+2]) )  )
+        lPH.append(  gc.Point( float(listVal[i*nbDim]), float(listVal[(i*nbDim)+1]),
+                               float(listVal[(i*nbDim)+2]) )  )
 
     return lPH
 
@@ -2131,16 +2142,16 @@ def random_equal_area_geometries(theta_in_degrees, phi_in_degrees, fov_radius_in
     if (theta_in_degrees == 0):
         return {'th_deg': t, 'phi_deg': p, 'zip':True}
     # unit vector around which to rotate all previous directions
-    u=Normalize(Cross(convertAnglestoV(), convertAnglestoV(THETA=theta_in_degrees, PHI=phi_in_degrees)))
+    u=gc.normalize(gc.cross(gc.ang2vec(0.,0.), gc.ang2vec(theta_in_degrees, phi_in_degrees)))
     # rotation matrix calculation
-    R=rotation3D(theta_in_degrees,u)
+    R = gc.get_rotate_tf(theta_in_degrees, u).m[0:3,0:3]
     # new directions
     t2 = np.zeros_like(t)
     p2 = np.zeros_like(p)
     for k in range(N):
         v = convertAnglestoV(THETA=t[k],PHI=p[k]).asarr()
-        vv = Vector(R.dot(v))
-        t2[k],p2[k] = convertVtoAngles(vv)
+        vv = gc.Vector(R.dot(v))
+        t2[k],p2[k] = gc.vec2ang(vv)
 
     return {'th_deg': t2, 'phi_deg': p2, 'zip':True}
 
@@ -2203,24 +2214,27 @@ def packed_geometries(theta_in_degrees, phi_in_degrees, fov_radius_in_degrees=0.
 if __name__ == '__main__':
 
     Heliostat1 = Entity(name = "reflector", \
-                       material = Mirror(reflectivity = 1., roughness = 0.1), \
-                       geo = Plane( p1 = Point(-10., -10., 0.),
-                                    p2 = Point(-10., 10., 0.),
-                                    p3 = Point(10., -10., 0.),
-                                    p4 = Point(10., 10., 0.) ), \
+                       materialAV = Mirror(reflectivity = 1., roughness = 0.1), \
+                       materialAR = Matte(), \
+                       geo = Plane( p1 = gc.Point(-10., -10., 0.),
+                                    p2 = gc.Point(10., -10., 0.),
+                                    p3 = gc.Point(-10., 10., 0.),
+                                    p4 = gc.Point(10., 10., 0.) ), \
                        transformation = Transformation( rotation = np.array([0., 0., 0.]), \
                                                         translation = np.array([0., 0., 0.]) ))
 
     Recepteur1 = Entity(name = "receiver", \
-                        material = Mirror(reflectivity = 1., roughness = 0.1), \
-                        geo = Plane( p1 = Point(-10., -10., 0.),
-                                     p2 = Point(-10., 10., 0.),
-                                     p3 = Point(10., -10., 0.),
-                                     p4 = Point(10., 10., 0.) ), \
+                        materialAV = Mirror(reflectivity = 1., roughness = 0.1), \
+                        materialAR = Matte(), \
+                        geo = Plane( p1 = gc.Point(-10., -10., 0.),
+                                     p2 = gc.Point(10., -10., 0.),
+                                     p3 = gc.Point(-10., 10., 0.),
+                                     p4 = gc.Point(10., 10., 0.) ), \
                         transformation = Transformation( rotation = np.array([45., 0., 0.]), \
                                                          translation = np.array([0., -10., 80.]) ))
     Heliostat2 = Entity(name = "reflector", \
-                        material = Mirror(reflectivity = 1., roughness = 0.1), \
+                        materialAV = Mirror(reflectivity = 1., roughness = 0.1), \
+                        materialAR = Matte(), \
                         geo = Spheric( radius = 20.,
                                        z0 = -0.,
                                        z1 = 20.,
@@ -2235,4 +2249,4 @@ if __name__ == '__main__':
     
     fig = Analyse_create_entity([Heliostat1, Recepteur1, Heliostat2], THEDEG = 0.)
 
-    plt.show(fig)
+    fig.show()
