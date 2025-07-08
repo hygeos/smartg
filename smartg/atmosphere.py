@@ -19,7 +19,7 @@ from scipy.constants import speed_of_light, Planck, Boltzmann
 from smartg.bandset import BandSet
 from smartg.config import dir_libradtran_atmmod
 from smartg.config import DIR_AUXDATA
-import warnings
+from warnings import warn
 import sys
 import pandas as pd
 if sys.version_info[:2] >= (3, 0):
@@ -865,11 +865,10 @@ class AeroOPAC(object):
         Example: AeroOPAC('maritime_clean', 0.1, 550.).calc(400.)
     '''
     def __init__(self, filename, tau_ref, w_ref, zmin=None, zmax=None, ssa=None, phase=None):
-        warnings.simplefilter('always', DeprecationWarning)
         warn_message = "\nAeroOPAC is deprecated as of SMART-G 1.0.0 " + \
                        "and will be removed in one of the next release.\n" + \
                        "Please use AerOPAC instead (where also important corrections have been made)."
-        warnings.warn(warn_message, DeprecationWarning)
+        warn(warn_message, DeprecationWarning)
         self.tau_ref = tau_ref
         self.w_ref = w_ref
         self.reff = None
@@ -1065,10 +1064,10 @@ class CloudOPAC(AeroOPAC):
     '''
     def __init__(self, species, reff, zmin, zmax, tau_ref, w_ref,
                  phase=None, wav_clip=False):
-        warnings.simplefilter('always', DeprecationWarning)
         warn_message = "\nCloudOPAC is deprecated as of SMART-G 1.0.0 " + \
                        "and will be removed in one of the next release.\n" + \
                        "Please use Cloud instead (where also important corrections have been made)."
+        warn(warn_message, DeprecationWarning)
         self.reff = reff
         self.tau_ref = tau_ref
         self.w_ref = w_ref

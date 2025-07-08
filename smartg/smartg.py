@@ -15,8 +15,8 @@ from numpy import pi
 from smartg.atmosphere import Atmosphere, od2k, BPlanck
 from smartg.water import IOP_base
 from smartg.shape import BBox, Sphere
-from os.path import dirname, realpath, join, exists
-from warnings import warn, simplefilter
+from os.path import dirname, realpath, join
+from warnings import warn
 from smartg.albedo import Albedo_cst, Albedo_speclib, Albedo_spectrum, Albedo_map
 from smartg.tools.progress import Progress
 from smartg.tools.cdf import ICDF2D
@@ -30,20 +30,14 @@ from pycuda.gpuarray import to_gpu, zeros as gpuzeros
 import pycuda.driver as cuda
 from smartg.bandset import BandSet
 from pycuda.compiler import SourceModule
-from pycuda.driver import module_from_buffer
 # bellow necessary for object incorporation
-from smartg.geometry import Vector, Point, Normal, Ray, BBox, CoordinateSystem, \
-    Normalize, Dot
-from smartg.transform import Transform, Aff
-from smartg.visualizegeo import Mirror, Plane, Spheric, Transformation, \
-    Entity, Analyse_create_entity, LambMirror, Matte, convertVtoAngles, \
-    convertAnglestoV, GroupE
+from smartg.geometry import Vector, Point, Ray, BBox, Normalize, Dot
+from smartg.transform import Transform
+from smartg.visualizegeo import Mirror, Plane, Spheric, \
+    Entity, LambMirror, Matte, convertVtoAngles, convertAnglestoV
     
-import functools
 from copy import deepcopy
 
-
-simplefilter('always', DeprecationWarning)
 
 
 # set up directories
