@@ -1,8 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+# This module is depracated. It will be removed in one of the next versions of smartg.
+# All the classes/functions are now available in the geoclide package.
+
 import math 
 import numpy as np
+from warnings import warn
 
 #####################################################################################
 class Vector(object):
@@ -14,6 +18,9 @@ class Vector(object):
     args : x, y and z directions
     '''
     def __init__(self, x = 0, y = 0, z = 0):
+        warn_message = 'Using Vector from smartg.geometry is depracated as of smartg v1.1.0. ' + \
+            'Use geoclide package instead.\n For example: import geoclide as gc; gc.Vector().'
+        warn(warn_message, DeprecationWarning)
         if isinstance(x, Vector) or isinstance(x, Point) or isinstance(x, Normal):
             self.x = x.x; self.y = x.y; self.z = x.z;
         elif isinstance(x, np.ndarray):
@@ -81,6 +88,9 @@ class Point(object):
     args : x, y and z coordinates
     '''
     def __init__(self, x = 0, y = 0, z = 0):
+        warn_message = 'Using Point from smartg.geometry is depracated as of smartg v1.1.0. ' + \
+            'Use geoclide package instead.\n For example: import geoclide as gc; gc.Point().'
+        warn(warn_message, DeprecationWarning)
         if isinstance(x, Vector) or isinstance(x, Point) or isinstance(x, Normal):
             self.x = x.x; self.y = x.y; self.z = x.z;
         else:
@@ -142,6 +152,9 @@ class Normal(object):
     args : x, y and z directions
     '''
     def __init__(self, x = 0, y = 0, z = 0):
+        warn_message = 'Using Normal from smartg.geometry is depracated as of smartg v1.1.0. ' + \
+            'Use geoclide package instead.\n For example: import geoclide as gc; gc.Normal().'
+        warn(warn_message, DeprecationWarning)
         if isinstance(x, Vector) or isinstance(x, Point) or isinstance(x, Normal):
             self.x = x.x; self.y = x.y; self.z = x.z;
         else:
@@ -212,6 +225,9 @@ class Ray(object):
 
     '''
     def __init__(self, o = Point(), d = Vector(), t = 0, start = 0, end = float("inf")):
+        warn_message = 'Using Ray from smartg.geometry is depracated as of smartg v1.1.0. ' + \
+            'Use geoclide package instead.\n For example: import geoclide as gc; gc.Ray().'
+        warn(warn_message, DeprecationWarning)
         if isinstance(o, Ray):
             self.o = o.o
             self.d = o.d
@@ -244,6 +260,9 @@ class BBox(object):
     p2 : Second point (Point class)
     '''
     def __init__(self, p1 = None, p2 = None):
+        warn_message = 'Using BBox from smartg.geometry is depracated as of smartg v1.1.0. ' + \
+            'Use geoclide package instead.\n For example: import geoclide as gc; gc.BBox().'
+        warn(warn_message, DeprecationWarning)
         if (isinstance(p1, Point) or (p1 is None)) and \
            (isinstance(p2, Point) or (p2 is None)):
             if ((p1 is None) and (p2 is None)):
@@ -342,6 +361,9 @@ def CommonVertices(BBox1, BBox2):
     ''' 
     return a list of boolean checking if vertices are common between BBoxes 
     '''
+    warn_message = 'Using CommonVertices from smartg.geometry is depracated as of smartg v1.1.0. ' + \
+                   'Use geoclide package instead.\n For example: import geoclide as gc; gc.get_common_vertices().'
+    warn(warn_message, DeprecationWarning)
     return np.array(list((map(lambda x: x in BBox2.get_vertices(), BBox1.get_vertices()))))
 
 def CommonFace(BBox1, BBox2, Fill_value=None):
@@ -351,6 +373,9 @@ def CommonFace(BBox1, BBox2, Fill_value=None):
     # (en.wikipedia.org/wiki/Cube_mapping)
     return Fill if there is no common face
     '''
+    warn_message = 'Using CommonFace from smartg.geometry is depracated as of smartg v1.1.0. ' + \
+                   'Use geoclide package instead.\n For example: import geoclide as gc; gc.get_common_face().'
+    warn(warn_message, DeprecationWarning)
     ok = CommonVertices(BBox1, BBox2)
     if ok.sum()==4:
         n  = np.arange(8)[ok]
@@ -373,6 +398,9 @@ def CommonFace(BBox1, BBox2, Fill_value=None):
 
 #####################################################################################
 def Dot(a, b):
+    warn_message = 'Using Dot from smartg.geometry is depracated as of smartg v1.1.0. ' + \
+                   'Use geoclide package instead.\n For example: import geoclide as gc; gc.dot().'
+    warn(warn_message, DeprecationWarning)
     if (isinstance(a, Vector) or isinstance(a, Normal)) and \
        (isinstance(b, Vector) or isinstance(b, Normal)):
         return (a.x*b.x + a.y*b.y + a.z*b.z)
@@ -380,6 +408,9 @@ def Dot(a, b):
         raise NameError('Dot argments have to be Vector or Normal classes')
 
 def Cross(a, b):
+    warn_message = 'Using Cross from smartg.geometry is depracated as of smartg v1.1.0. ' + \
+                   'Use geoclide package instead.\n For example: import geoclide as gc; gc.cross().'
+    warn(warn_message, DeprecationWarning)
     if (isinstance(a, Vector) and isinstance(b, Vector)) or \
     (isinstance(a, Vector) and isinstance(b, Normal)) or \
     (isinstance(a, Normal) and isinstance(b, Vector)):
@@ -390,6 +421,9 @@ def Cross(a, b):
         raise NameError('Cross args must be Vector or Normal')
 
 def Normalize(v):
+    warn_message = 'Using Normalize from smartg.geometry is depracated as of smartg v1.1.0. ' + \
+                   'Use geoclide package instead.\n For example: import geoclide as gc; gc.normalize().'
+    warn(warn_message, DeprecationWarning)
     if isinstance(v, Vector) or isinstance(v, Normal):
         return v / v.Length()
     else:
@@ -399,6 +433,9 @@ def CoordinateSystem(v1):
     '''
     Create an orthogonal coordinate system from 1 vector (v1)
     '''
+    warn_message = 'Using CoordinateSystem from smartg.geometry is depracated as of smartg v1.1.0. ' + \
+                   'Use geoclide package instead.\n For example: import geoclide as gc; gc.coordinate_system().'
+    warn(warn_message, DeprecationWarning)
     if (abs(v1.x) > abs(v1.y)):
         invLen = 1/ math.sqrt(v1.x*v1.x + v1.z*v1.z)
         v2 = Vector(-v1.z*invLen, 0, v1.x*invLen)
@@ -409,6 +446,9 @@ def CoordinateSystem(v1):
     return v2, v3
 
 def Distance(p1, p2):
+    warn_message = 'Using Distance from smartg.geometry is depracated as of smartg v1.1.0. ' + \
+                   'Use geoclide package instead.\n For example: import geoclide as gc; gc.distance().'
+    warn(warn_message, DeprecationWarning)
     if isinstance(p1, Point) and isinstance(p2, Point):
         return (p1 - p2).Length()
     else:
@@ -422,6 +462,9 @@ def FaceForward(a, b):
     Args : Vector or Normal a, b
     Output : Possibly fliped Vector or Normal a
     '''
+    warn_message = 'Using FaceForward from smartg.geometry is depracated as of smartg v1.1.0. ' + \
+                   'Use geoclide package instead.\n For example: import geoclide as gc; gc.face_forward().'
+    warn(warn_message, DeprecationWarning)
     if (isinstance(a, Vector) or isinstance(a, Normal)) and \
     (isinstance(b, Vector) or isinstance(b, Normal)):
         return (a*-1) if (Dot(a, b) < 0) else a
@@ -432,6 +475,10 @@ def rotation3D(theta, u):
     ''' 
     rotation matrix of an angle theta in degree around unit vector u
     '''
+    warn_message = 'Using rotation3D from smartg.geometry is depracated as of smartg v1.1.0. ' + \
+                   'Use geoclide package instead.\n For example: import geoclide as gc; gc.get_rotate_tf(). ' + \
+                   'Note that gc.get_rotate_tf() returns 4x4 matrix instead of 3x3 matrix with rotation3D.'
+    warn(warn_message, DeprecationWarning)
     # Rodrigues rotation formula
     ct = np.cos(np.radians(theta))
     st = np.sqrt(1-ct*ct)
@@ -449,6 +496,9 @@ def rotation3D(theta, u):
 
 
 def MaxDimension(v):
+    warn_message = 'Using MaxDimension from smartg.geometry is depracated as of smartg v1.1.0. ' + \
+                   'Use geoclide package instead.\n For example: import geoclide as gc; gc.vmax().'
+    warn(warn_message, DeprecationWarning)
     if isinstance(v, Vector):
         val = 0
         if (v.x > v.y):
@@ -466,6 +516,9 @@ def MaxDimension(v):
         raise NameError('v argument must be a Vector')
         
 def Permute(v, xx, yy, zz):
+    warn_message = 'Using Permute from smartg.geometry is depracated as of smartg v1.1.0. ' + \
+                   'Use geoclide package instead.\n For example: import geoclide as gc; gc.permute().'
+    warn(warn_message, DeprecationWarning)
     if isinstance(v, Vector):
         return Vector(v[xx], v[yy], v[zz])
     else:
