@@ -17,6 +17,12 @@ from itertools import dropwhile
 
 from scipy import interpolate
 
+#TODO import below will be moved in the next major version
+from smartg.geometry import Point, Vector, Normalize
+from smartg.transform import Transform
+from warnings import warn
+
+
 def receiver_view(SMLUT, CAT = int(0), LOG_I=False, NAME_FILE = None, MTOA = 1320,
                   VMIN=None, VMAX=None, INT='none', W_VIEW = 'W'):
 
@@ -503,6 +509,11 @@ class Plane(object):
     '''
     def __init__(self, p1 = gc.Point(-0.5, -0.5, 0.), p2 = gc.Point(0.5, -0.5, 0.), \
                  p3 = gc.Point(-0.5, 0.5, 0.), p4 = gc.Point(0.5, 0.5, 0.)):
+        # Avoid crash from old notebooks/scripts
+        if isinstance(p1, Point): p1 = gc.Point(p1.x, p1.y, p1.z)
+        if isinstance(p2, Point): p2 = gc.Point(p2.x, p2.y, p2.z)
+        if isinstance(p3, Point): p3 = gc.Point(p3.x, p3.y, p3.z)
+        if isinstance(p4, Point): p4 = gc.Point(p4.x, p4.y, p4.z)
         if (isinstance(p1, gc.Point) and isinstance(p2, gc.Point) and \
             isinstance(p3, gc.Point) and isinstance(p4, gc.Point)):
             if (  ( (p1.x == p3.x) and (p1.x < 0) )  and \
@@ -608,6 +619,9 @@ class Entity(object):
                  materialAR=Matte(), geo=Plane(), transformation=Transformation(), \
                  bboxGPmin = gc.Point(-100000., -100000., 0.), bboxGPmax = gc.Point(100000., 100000., 120.),
                  color = 'grey', alpha_color = 0.5):
+        # Avoid crash from old notebooks/scripts
+        if isinstance(bboxGPmin, Point): bboxGPmin = gc.Point(bboxGPmin.x, bboxGPmin.y, bboxGPmin.z)
+        if isinstance(bboxGPmax, Point): bboxGPmax = gc.Point(bboxGPmax.x, bboxGPmax.x, bboxGPmax.y)
         if isinstance(entity, Entity) :
             self.name = entity.name; self.TC = entity.TC; self.materialAV = entity.materialAV
             self.materialAR = entity.materialAR; self.geo = entity.geo 
@@ -669,6 +683,8 @@ class Heliostat(object):
     '''
     def __init__(self, POS = gc.Point(0., 0., 0.), SPX=int(2), SPY=int(2), HSX=0.02,
                  HSY=0.02, CURVE_FL=None, REF=1., ROUGH=0):
+        # Avoid crash from old notebooks/scripts
+        if isinstance(POS, Point): POS = gc.Point(POS.x, POS.y, POS.z)
         # Be sure that we split a heliostat by at least 2
         if (SPX*SPY < 2):
             raise Exception("The number of facets must be >= 2!")
@@ -791,7 +807,8 @@ def generateMTF(HELIO=Heliostat(), PR = gc.Point(0., 0., 0.)):
     facets to curve the heliostat allowing facets to reflect in the
     center of the receiver (For the moment only on-axis method)
     '''
-
+    # Avoid crash from old notebooks/scripts
+    if isinstance(PR, Point): PR = gc.Point(PR.x, PR.y, PR.z)
     # Heliostat is splited in facets in x and y directions
     SPX = HELIO.sPx; SPY = HELIO.sPy;
     # Size in x and y of a given facet
@@ -850,6 +867,8 @@ def generateLEfH(HELIO = Heliostat(), PR = None, THEDEG = 0., PHIDEG = 0., MTF=N
        ----------|----------
                  x
     '''
+    # Avoid crash from old notebooks/scripts
+    if isinstance(PR, Point): PR = gc.Point(PR.x, PR.y, PR.z)
     # Be sure that the correct agrs have been given
     if not isinstance(HELIO, Heliostat):
         raise Exception("HELIO must be a Heliostat class!")
@@ -1007,7 +1026,8 @@ def generateBox(dimXYZ=[0.05, 0.05, 0.05], pos=gc.Point(0., 0., 0.), matAV = "La
     ===RETURN:
     Return a group of objects (i.e. a GroupE class composed of plane objects)
     """
-    
+    # Avoid crash from old notebooks/scripts
+    if isinstance(pos, Point): pos = gc.Point(pos.x, pos.y, pos.z)
     # Material AV = front part (i.e. part outside the box) of Face 0 to Face 5,
     # back part (i.e. part inside the box) will be definite as matte (totally absorbant)
     matAVL = []
@@ -1710,6 +1730,11 @@ def generateHfP(THEDEG=0., PHIDEG = 0., PH = [gc.Point(0., 0., 0.)], PR = gc.Poi
     LMTF    : Under development
     return a list with Entity/GroupE object
     '''
+    # Avoid crash from old notebooks/scripts
+    PH_ = PH.copy()
+    for iph in range(len(PH)):
+        if isinstance(PH[iph], Point): PH_[iph] = gc.Point(PH[iph].x, PH[iph].y, PH[iph].z)
+    if isinstance(PR, Point): PR = gc.Point(PR.x, PR.y, PR.z)
 
     lObj = []
 
@@ -1733,7 +1758,7 @@ def generateHfP(THEDEG=0., PHIDEG = 0., PH = [gc.Point(0., 0., 0.)], PR = gc.Poi
 
         for i in range (0, len(PH)):
             # 1) Find the normalized vector colinear (and same dir) to the normal of heliostat surface
-            vecHR = PH[i]-PR
+            vecHR = PH_[i]-PR
             vecHR = gc.normalize(vecHR)
 
             # 2) Find the necessary rotations to apply on the heliostat to reflect to the receiver
@@ -1742,10 +1767,10 @@ def generateHfP(THEDEG=0., PHIDEG = 0., PH = [gc.Point(0., 0., 0.)], PR = gc.Poi
 
             # 3) Once the rotation angles have been found, create heliostat objects
             objMi = Entity(objM);
-            objMi.bboxGPmin = gc.Point(PH[i].x-bboxDist, PH[i].y-bboxDist, PH[i].z-bboxDist)
-            objMi.bboxGPmax = gc.Point(PH[i].x+bboxDist, PH[i].y+bboxDist, PH[i].z+bboxDist)
+            objMi.bboxGPmin = gc.Point(PH_[i].x-bboxDist, PH_[i].y-bboxDist, PH_[i].z-bboxDist)
+            objMi.bboxGPmax = gc.Point(PH_[i].x+bboxDist, PH_[i].y+bboxDist, PH_[i].z+bboxDist)
             objMi.transformation = Transformation( rotation = np.array([0., rotYD, rotZD]), \
-                                                   translation = np.array([PH[i].x, PH[i].y, PH[i].z]), \
+                                                   translation = np.array([PH_[i].x, PH_[i].y, PH_[i].z]), \
                                                    rotationOrder = "ZYX")
             lObj.append(objMi)
     # Case where the heliostat is composed by facets (i.g. to consider the curvature)
@@ -1755,7 +1780,7 @@ def generateHfP(THEDEG=0., PHIDEG = 0., PH = [gc.Point(0., 0., 0.)], PR = gc.Poi
         
         # Generate all the facets and store them as entity object in a list 
         for i in range (0, len(PH)):
-            H0 = Heliostat(SPX=SPX, SPY=SPY, HSX=HSX, HSY=HSY, CURVE_FL=CURVE_FL, POS=PH[i], REF=REF, ROUGH=ROUGH)
+            H0 = Heliostat(SPX=SPX, SPY=SPY, HSX=HSX, HSY=HSY, CURVE_FL=CURVE_FL, POS=PH_[i], REF=REF, ROUGH=ROUGH)
             if LMTF is None: TLE = generateLEfH(HELIO=H0, PR=PR, THEDEG=THEDEG, PHIDEG=PHIDEG)
             else: TLE = generateLEfH(HELIO=H0, PR=PR, THEDEG=THEDEG, PHIDEG=PHIDEG, MTF = LMTF[i])
             GTEMP = GroupE(LE = TLE)
@@ -1797,6 +1822,8 @@ def generateHfA(THEDEG=0., PHIDEG = 0., PR = gc.Point(0., 0., 50.), MINANG=0., \
 
     return a list with Entity/GroupE objects
     '''
+    # Avoid crash from old notebooks/scripts
+    if isinstance(PR, Point): PR = gc.Point(PR.x, PR.y, PR.z)
 
     # I) Find the position of all heliostats
     lenpH = int(  ( (MAXANG-MINANG)/GAPDEG )*NBH  )
@@ -1939,17 +1966,21 @@ def convertVtoAngles(v, TYPE="Sensor", verbose=False):
     Phi   : Azimuth angle, start at X+ in plane XY going in
             the trigonométric direction arround z axis
     """
-    if isinstance(v, gc.Vector):
+    warn_message = 'Using convertVtoAngles from smartg.visualizegeo is depracated as of smartg v1.1.0. ' + \
+                   'Use geoclide package instead.\n For example: import geoclide as gc; gc.vec2ang().'
+    warn(warn_message, DeprecationWarning)
+
+    if isinstance(v, Vector):
         # First be sure that the vector v is normalized
         if (TYPE == "Sensor"):
-            v = gc.normalize(v)
+            v = Normalize(v)
         elif (TYPE == "Sun"):
-            v = gc.normalize(gc.Vector(-v.x, -v.y, -v.z)) # Sun we look at the oposite side
+            v = Normalize(Vector(-v.x, -v.y, -v.z)) # Sun we look at the oposite side
         else:
             raise NameError('TYPE arg must be str(Sensor) or str(Sun)')
 
         # Find rotations in Y and Z direction (see the function findRots)
-        rInfo = findRots(vecNF=v)
+        rInfo = findRots(vecNF=gc.Vector(v.x,v.y,v.z))
         Theta = rInfo[0]; Phi = rInfo[1];
 
         if verbose : print("Theta=", Theta, "Phi=", Phi)
@@ -1986,23 +2017,30 @@ def convertAnglestoV(THETA=0., PHI=0., TYPE="Sensor"):
     Return a normalized vector v:
     v     : A direction described by Vector class object
     """
+    warn_message = 'Using convertAnglestoV from smartg.visualizegeo is depracated as of smartg v1.1.0. ' + \
+                   'Use geoclide package instead.\n For example: import geoclide as gc; gc.ang2vec().'
+    warn(warn_message, DeprecationWarning)
+
     if (TYPE == "Sensor"):
         # By default the vector v = (0, 0, 1) for THETA=0 and PHI=0
-        v = gc.Vector(0, 0, 1)
+        v = Vector(0, 0, 1)
     elif (TYPE == "Sun"):
         # By default the vector v = (0, 0, -1) for THETA=0 and PHI=0
-        v = gc.Vector(0, 0, -1)
+        v = Vector(0, 0, -1)
     else:
         raise NameError('TYPE arg must be str(Sensor) or str(Sun)')
+    
+    # Creation of the transform object
+    TT = Transform()
 
     # Take the zenith angle for the first rotation in Y axis
-    v = gc.get_rotateY_tf(THETA)(v)
+    v = TT.rotateY(THETA)[v]
 
     # Take the azimuth angle for the second rotation in Z axis
-    v = gc.get_rotateZ_tf(PHI)(v)
+    v = TT.rotateZ(PHI)[v]
 
     # Be sure v is normalized
-    v = gc.normalize(v)
+    v = Normalize(v)
     
     return v
 
@@ -2028,6 +2066,9 @@ def rotate_vector(vector, rot_x, rot_y, rot_z, rot_order="xyz"):
     Return:
     rotated_vector : The rotated (normalized) direction (also a Vector class)
     """
+    # Avoid crash from old notebooks/scripts
+    if isinstance(v, Vector): v = gc.Vector(v.x, v.y, v.z)
+
     TT = gc.Transform()
     tr_x = gc.get_rotateX_tf(rot_x)
     tr_y = gc.get_rotateY_tf(rot_y)
@@ -2151,7 +2192,7 @@ def random_equal_area_geometries(theta_in_degrees, phi_in_degrees, fov_radius_in
     t2 = np.zeros_like(t)
     p2 = np.zeros_like(p)
     for k in range(N):
-        v = convertAnglestoV(THETA=t[k],PHI=p[k]).asarr()
+        v = gc.ang2vec(theta=t[k], phi=p[k]).to_numpy()
         vv = gc.Vector(R.dot(v))
         t2[k],p2[k] = gc.vec2ang(vv)
 
