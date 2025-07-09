@@ -1,11 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from . import geometry
-from .geometry import Vector, Point, Normal, Ray
-from .geometry import Dot, Cross, Normalize, CoordinateSystem, \
+# This module is deprecated. It will be removed in one of the next versions of smartg.
+# All the classes/functions are now available in the geoclide package.
+
+from smartg.geometry import Vector, Point, Normal, Ray
+from smartg.geometry import Dot, Cross, Normalize, CoordinateSystem, \
     Distance, FaceForward
-import math 
+from warnings import warn
 
 
 #####################################################################################
@@ -15,6 +17,9 @@ class DifferentialGeometry(object):
     other files several shapes without the need to distinguish them.
     '''
     def __init__(self, p, dpdu, dpdv, uu, vv, shape = None):
+        warn_message = 'DifferentialGeometry is depracated as of smartg v1.1.0. ' + \
+                       'and will be removed in one of the next versions of smartg.'
+        warn(warn_message, DeprecationWarning)
         if isinstance(p, Point) and isinstance(dpdu, Vector) and \
            isinstance(dpdv, Vector):
             self.p = p
