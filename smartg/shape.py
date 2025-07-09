@@ -1,21 +1,21 @@
 #!/usr/bin/env python2
 # -*- coding: utf-8 -*-
 
-from . import geometry
-from .geometry import Vector, Point, Normal, Ray, BBox
-from .geometry import Dot, Cross, Normalize, CoordinateSystem, \
-    Distance, FaceForward, MaxDimension, Permute
-from . import diffgeom
-from .diffgeom import DifferentialGeometry
-from . import transform
-from .transform import Transform
+# This module is deprecated. It will be removed in one of the next versions of smartg.
+# All the classes/functions are now available in the geoclide package.
+
+from smartg.geometry import Vector, Point, Ray
+from smartg.geometry import Dot, Cross, Normalize, CoordinateSystem, \
+    FaceForward, MaxDimension, Permute
+from smartg.diffgeom import DifferentialGeometry
+from smartg.transform import Transform
 import math 
-from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 import numpy as np
 
-from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+from warnings import warn
+
 
 #####################################################################################
 class Shape(object):
@@ -24,6 +24,10 @@ class Shape(object):
     '''
     indShape = 0
     def __init__(self, ObjectToWorld, WorldToObject):
+        warn_message = 'Using Sphere, Triangle or TriangleMesh from smartg.shape ' + \
+                       'is depracated as of smartg v1.1.0. Use geoclide package instead.\n ' + \
+                       'For example: import geoclide as gc; gc.Sphere(); gc.Triangle(); gc.TriangleMesh().'
+        warn(warn_message, DeprecationWarning)
         Shape.indShape += 1
         self.oTw = ObjectToWorld
         self.wTo = WorldToObject
@@ -402,14 +406,24 @@ class TriangleMesh(Shape):
         return True
 #####################################################################################
 def swap(a, b):
+    warn_message = 'Using swap from smartg.shape is depracated as of smartg v1.1.0.'
+    warn(warn_message, DeprecationWarning)
     return b, a
 
 def Clamp(val, low, high):
+    warn_message = 'Using Clamp from smartg.shape is depracated as of smartg v1.1.0. ' + \
+                   'Use geoclide or numpy package instead.\n ' + \
+                   'For example: import geoclide as gc; gc.clamp();import numpy as np; np.clip()'
+    warn(warn_message, DeprecationWarning)
     if (val < low): return low
     elif (val > high): return high
     else: return val
 
 def Quadratic(exist, t0, t1, A, B, C):
+    warn_message = 'Using Quadratic from smartg.shape is depracated as of smartg v1.1.0. ' + \
+                   'Use geoclide package instead.\n ' + \
+                   'For example: import geoclide as gc; gc.quadratic().'
+    warn(warn_message, DeprecationWarning)
     #  Find quadratic discriminant
     discrim = (B * B) - (4 * A * C)
     if (discrim < 0): return False, None, None
