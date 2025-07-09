@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# This module is depracated. It will be removed in one of the next versions of smartg.
+# This module is deprecated. It will be removed in one of the next versions of smartg.
 # All the classes/functions are now available in the geoclide package.
 
 import math 

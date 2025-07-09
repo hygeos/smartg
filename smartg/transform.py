@@ -1,10 +1,14 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from .geometry import Vector, Point, Normal, Ray, BBox
-from .geometry import Normalize
+# This module is deprecated. It will be removed in one of the next versions of smartg.
+# All the classes/functions are now available in the geoclide package.
+
+from smartg.geometry import Vector, Point, Normal, Ray, BBox
+from smartg.geometry import Normalize
 import numpy as np
 from numpy.linalg import inv
+from warnings import warn
 
 #####################################################################################
 class Transform(object):
@@ -13,6 +17,9 @@ class Transform(object):
     '''
 
     def __init__(self, m = None, mInv = None):
+        warn_message = 'Using Transform from smartg.transform is depracated as of smartg v1.1.0. ' + \
+                       'Use geoclide package instead.\n For example: import geoclide as gc; gc.Transform().'
+        warn(warn_message, DeprecationWarning)
         if m is None : m = np.identity(4)
         if (isinstance(m, Transform)):
             self.m = m.m
