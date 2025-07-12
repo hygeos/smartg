@@ -46,6 +46,7 @@ dependencies = [
     "ipympl",
     "pyhdf",
     "pycuda",
+    "geoclide",
     "luts @ git+https://github.com/hygeos/luts.git",
     "hitran-api"
 ]
@@ -59,7 +60,6 @@ test = [
 ]
 extra = [
     "gatiab",
-    "geoclide",
     "statsmodels",
     "jax[cuda12]"
 ]
