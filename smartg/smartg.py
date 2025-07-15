@@ -3861,8 +3861,9 @@ def Get_Sensor(VZA_lev, LEVEL=0., VAA=0., RTER=6370., H=120., FOV=0., TYPE=0., P
     # Make a ray from origin in direction dir
     ray = gc.Ray(o=origin, d=dir)
     # Compute the intersection with the Boundary
-    if PP: (_, t1, hit) = Boundary.IntersectP(ray)
-    else : hit = Boundary.Intersect(ray) 
+    if PP: (_, t1, hit) = Boundary.intersect(ray, ds_output=False)
+    #if PP: (_, t1, hit) = Boundary.IntersectP(ray)
+    else : hit = Boundary.intersect(ray, ds_output=False) 
     if not hit: raise NameError("The intersection test failed!! Check input paramaters.")
     # Computations of sensor position
     if PP: pos = origin + dir*t1
