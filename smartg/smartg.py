@@ -3855,19 +3855,17 @@ def Get_Sensor(VZA_lev, LEVEL=0., VAA=0., RTER=6370., H=120., FOV=0., TYPE=0., P
     origin = gc.Point(0., 0., LEVEL) if PP else gc.Point(0., 0., RTER+LEVEL)
     # Boundaries
     if PP: Boundary = gc.BBox(gc.Point(-large_dist, -large_dist, 0.), gc.Point(large_dist, large_dist, H)) # Rectangle for atmosphere for PP
-    else : Boundary = gc.Sphere(radius, -radius, radius, 360) # Create the Earth + atmosphere sphere for SS
+    else : Boundary = gc.Sphere(radius) # Create the Earth + atmosphere sphere for SS
     # Compute the direction vector object from Zenith and Azimuth angles
     dir = gc.ang2vec(VZA_lev, 180+VAA)
     # Make a ray from origin in direction dir
     ray = gc.Ray(o=origin, d=dir)
     # Compute the intersection with the Boundary
-    if PP: (_, t1, hit) = Boundary.intersect(ray, ds_output=False)
-    #if PP: (_, t1, hit) = Boundary.IntersectP(ray)
-    else : hit = Boundary.intersect(ray, ds_output=False) 
+    if PP: _, t1, hit = Boundary.intersect(ray, ds_output=False)
+    else : t1, hit = Boundary.is_intersection_t(ray) 
     if not hit: raise NameError("The intersection test failed!! Check input paramaters.")
     # Computations of sensor position
-    if PP: pos = origin + dir*t1
-    else : pos = origin + dir*Boundary.thit
+    pos = origin + dir*t1
     if verbose : print("VZA =", VZA_lev, "--> pos =", pos)
 
     return Sensor(POSX=pos.x, POSY=pos.y, POSZ=pos.z, THDEG=180.-VZA_lev, PHDEG=VAA, LOC='ATMOS', FOV=FOV, TYPE=TYPE)
