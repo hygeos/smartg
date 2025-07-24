@@ -61,7 +61,7 @@ The auxiliary data can be downloaded as follow:
 >>> download('dir/path/where/to/save/data/', data_type='all')
 ```
 
-The environment variable `SMARTG_AUXDATA_DIR` have to be defined.
+The environment variable `SMARTG_DIR_AUXDATA` have to be defined.
 
 For example, in the `.bashrc` / `.zshrc` file the following can be added:
 
