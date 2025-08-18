@@ -87,7 +87,13 @@ Examples are provided in the [sample notebooks](smartg/notebooks).
 To check that SMART-G is running correctly, run the following command at the root of the project:
 
 ```bash
-pytest tests/test_cuda.py tests/test_profile.py tests/test_smartg.py -s -v
+pytest smartg/tests/test_cuda.py smartg/tests/test_profile.py smartg/tests/test_smartg.py -s -v
+```
+
+A full testing is recommended in dev:
+
+```bash
+pytest smartg/tests/ -s -v
 ```
 
 To avoid repeating some pytest arguments, a `pytest.ini` file can be created (in the root directory). The following is an example of the contents of such a file:
