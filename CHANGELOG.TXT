@@ -6,6 +6,15 @@
            ###########################
 
 
+v1.0.8
+------
+Release date: 2025-08-18
+
+* Correct an important bug with the photon orthogonal direction initialization
+  - Wrong values were visible only for the Q and U stokes components in case
+    we are not in radiance. Otherwise no impact.
+
+
 v1.0.7
 ------
 Release data: 2025-06-03

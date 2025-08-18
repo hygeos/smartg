@@ -1729,9 +1729,12 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 	    ph->v.y   = sinf(phi)*sTh;
 	    ph->v.z   = cTh;
 	    // Initialization of the orthogonal vector to the propagation
-        ph->u.x   = cosf(phi)*cTh;
-        ph->u.y   = sinf(phi)*cTh;
-	    ph->u.z   = -sTh;
+        // Bellow method from geoclide coordinate system function (ensure u and v are totally perpendicular)
+        float term_1=-1./(1. + ph->v.z);
+        float term_2=ph->v.x * ph->v.y * term_1;
+        ph->u.x = 1 +  (ph->v.x*ph->v.x) * term_1;
+        ph->u.y = term_2;
+        ph->u.z = -1. * ph->v.x;
     }
     else {
         // One fixed direction (for radiance)
