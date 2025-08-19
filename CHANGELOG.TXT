@@ -6,6 +6,55 @@
            ###########################
 
 
+v1.1.0
+------
+Release date: 2025-08-19
+
+* Smartg can be used with Jax (see demo_notebook)
+
+* New way to download and consider auxiliary data
+
+* Manual pycuda context init now possible
+
+* Adaptation to numpy 2
+
+* A pyproject.toml is now available i.e., installation with pip now possible
+
+* The polarization can be desactivated by setting pol_off=True in smartg run method.
+
+* The intern python geometric modules are now depracated, the geoclide package is used instead
+  - See https://github.com/hygeos/geoclide
+  - Several bugs are corrected
+  - Best performance thanks to numpy
+  - More functionalities are available
+
+* Update of several notebooks
+
+* Results with only photons not scattered by aerosols can be added to the output by setting 
+  no_aer_output=True in smartg run method
+
+* The OUTPUT_LAYERS parameter of the smartg run method improved
+  - more options
+  - not only remove useless outputs but avoid also useless photon counting
+
+* New key for local estimate intput dictionary
+  - the key 'count_level' to choose if we want to count only a particular level (in plan parallel), 
+    see the doctring of the smartg run method
+
+* The smartg 3D atm mode is now validated, but still in dev!!
+  - A huge change (modules, classes, ...) is planned for this mode, so it is not recommended to use it for now.
+  - The IPRT phase B C2 and C3 test cases have been validated
+  - The notebook validation_SMARTG_IPRT_phaseB-C2.ipynb is available with examples but will be 
+    obselete in future release!
+  - Only clouds in 3D for the moment
+  - Only 1 type of cloud per simulation for the moment
+
+* Several improvements
+  - Rewrite the python docstring of several functions and classes
+  - Some corrections
+  - ...
+
+
 v1.0.8
 ------
 Release date: 2025-08-18
