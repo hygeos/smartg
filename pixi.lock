@@ -92,7 +92,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/54/09/2032e7d15c544a0e3cd831c51d77a8ca57f7555b2e1b2922142eddb02a84/jupyterlab_server-2.27.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/43/6a/ca128561b22b60bd5a0c4ea26649e68c8556b82bc70a0c396eebc977fe86/jupyterlab_widgets-3.0.15-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8f/e9/6a7d025d8da8c4931522922cd706105aa32b3291d1add8c5427cdcd66e63/kiwisolver-1.4.8-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-      - pypi: git+https://github.com/hygeos/luts.git#354b37df2eb0f3aee1bede05d9e366316ba80bf5
+      - pypi: https://files.pythonhosted.org/packages/34/ae/ab1eee33e575cba95d47461418150cd5bd769a2bf2cfc585f0c25b80de7c/luts-1.0.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/87/fb/99f81ac72ae23375f22b7afdb7642aba97c00a713c217124420147681a2f/mako-1.3.10-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0c/91/96cf928db8236f1bfab6ce15ad070dfdd02ed88261c2afafd4b43575e9e9/MarkupSafe-3.0.2-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/f5/64/41c4367bcaecbc03ef0d2a3ecee58a7065d0a36ae1aa817fe573a2da66d4/matplotlib-3.10.3-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
@@ -270,7 +270,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/54/09/2032e7d15c544a0e3cd831c51d77a8ca57f7555b2e1b2922142eddb02a84/jupyterlab_server-2.27.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/43/6a/ca128561b22b60bd5a0c4ea26649e68c8556b82bc70a0c396eebc977fe86/jupyterlab_widgets-3.0.15-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8f/e9/6a7d025d8da8c4931522922cd706105aa32b3291d1add8c5427cdcd66e63/kiwisolver-1.4.8-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-      - pypi: git+https://github.com/hygeos/luts.git#354b37df2eb0f3aee1bede05d9e366316ba80bf5
+      - pypi: https://files.pythonhosted.org/packages/34/ae/ab1eee33e575cba95d47461418150cd5bd769a2bf2cfc585f0c25b80de7c/luts-1.0.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/87/fb/99f81ac72ae23375f22b7afdb7642aba97c00a713c217124420147681a2f/mako-1.3.10-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0c/91/96cf928db8236f1bfab6ce15ad070dfdd02ed88261c2afafd4b43575e9e9/MarkupSafe-3.0.2-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/f5/64/41c4367bcaecbc03ef0d2a3ecee58a7065d0a36ae1aa817fe573a2da66d4/matplotlib-3.10.3-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
@@ -1572,9 +1572,10 @@ packages:
   purls: []
   size: 60963
   timestamp: 1727963148474
-- pypi: git+https://github.com/hygeos/luts.git#354b37df2eb0f3aee1bede05d9e366316ba80bf5
+- pypi: https://files.pythonhosted.org/packages/34/ae/ab1eee33e575cba95d47461418150cd5bd769a2bf2cfc585f0c25b80de7c/luts-1.0.3-py3-none-any.whl
   name: luts
   version: 1.0.3
+  sha256: e6899b440215051f0a4d80d181788bbb61c220efc2ec745320a3eccb8d5719e0
   requires_dist:
   - numpy
   - scipy
@@ -2701,7 +2702,7 @@ packages:
 - pypi: ./
   name: smartg
   version: 1.1.0
-  sha256: 47c927fb24fa75a1622a240086df3031ece0a83db9f29feebd7f5a0d786704fc
+  sha256: 179a61af1211fa2acbe8243e331d6c04f4ccf7f5085895e5c20aff3eef6e382a
   requires_dist:
   - numpy
   - pandas
@@ -2718,7 +2719,7 @@ packages:
   - pyhdf
   - pycuda
   - geoclide
-  - luts @ git+https://github.com/hygeos/luts.git
+  - luts
   - hitran-api
   - pytest ; extra == 'test'
   - pytest-xdist ; extra == 'test'
