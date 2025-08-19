@@ -10,8 +10,8 @@ SMART-G (Speed-up Monte Carlo Advanced Radiative Transfer Code using GPU) is a r
 transfer code using a Monte-Carlo technique to simulate the propagation of the polarized \
 light in the atmosphere and/or ocean, and using GPU acceleration."""
 authors = [
-    {name = "Didier Ramon", email = "dr@hygeos.com"},
     {name = "Mustapha Moulana", email = "mm@hygeos.com"},
+    {name = "Didier Ramon", email = "dr@hygeos.com"},
     {name = "François Steinmetz", email = "fs@hygeos.com"},
     {name = "Dominique Jolivet", email = "dj@hygeos.com"},
     {name = "Mathieu Compiègne", email = "mc@hygeos.com"}
@@ -47,7 +47,7 @@ dependencies = [
     "pyhdf",
     "pycuda",
     "geoclide",
-    "luts @ git+https://github.com/hygeos/luts.git",
+    "luts",
     "hitran-api"
 ]
 
