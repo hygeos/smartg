@@ -6,7 +6,7 @@ import numpy as np
 import os 
 
 from smartg.smartg import Smartg, Sensor, LambSurface, RoughSurface
-from smartg.atmosphere import AtmAFGL
+from smartg.atmosphere import AtmAFGL, AerOPAC
 from smartg.albedo import Albedo_cst
 
 import geoclide as gc
@@ -23,6 +23,10 @@ from smartg.tools.phase import calc_iphase
 from smartg.iprt import read_phase_nth_cte
 
 from luts.luts import LUT, Idx
+
+from tempfile import TemporaryDirectory
+from pathlib import Path
+
 
 S1DB = Smartg(back=True, double=True, bias=True, pp=False)
 
@@ -170,13 +174,13 @@ def to_iprt_output(case_name, sza, saa, vza, vaa, z,
         ds.to_netcdf(f_path)
 
 def run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
-            sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons, wl, le, surf, pro, dep, z):
+            sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons, wl, le, surf, pro, dep, z, ntheta=18001):
      # BOA
     if overwrite or not fboa_exist:
         sensors = get_d1_to_e5_boa_sensors(vza, phi, nvza, nvaa, earth_r)
         m_boa = S1DB.run(wl=wl, NBPHOTONS=nvza*nvaa*nphotons, NBLOOP=nphotons, atm=pro, sensor=sensors, OUTPUT_LAYERS=1,
                         le=le, surf=surf, XBLOCK = 64, XGRID = 1024, BEER=1, DEPO=dep, reflectance=False,
-                        stdev=True, progress=True)
+                        stdev=True, progress=True, NF=ntheta)
 
         m_boa = m_boa.dropaxis('Azimuth angles')
         m_boa.add_axis('sza', sza)
@@ -207,7 +211,7 @@ def run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
         sensors = get_d1_to_e5_toa_sensors(vza, phi, nvza, nvaa, earth_r, z)
         m_toa = S1DB.run(wl=wl, NBPHOTONS=nvza*nvaa*nphotons, NBLOOP=nphotons, atm=pro, sensor=sensors, OUTPUT_LAYERS=1,
                         le=le, surf=surf, XBLOCK = 64, XGRID = 1024, BEER=1, DEPO=dep, 
-                        stdev=True, progress=True)
+                        stdev=True, progress=True, NF=ntheta)
 
         m_toa = m_toa.dropaxis('Azimuth angles')
         m_toa.add_axis('sza', sza)
@@ -546,7 +550,67 @@ def case_D4(nphotons=1e8, overwrite=True, output_dir='./'):
     # open intermediate files and convert to iprt phase3 output format 
     to_iprt_output('d4', sza, saa, vza, vaa, z,
                    overwrite=overwrite, output_dir=output_dir)
+
+
+def case_D4_bis(nphotons=1e8, overwrite=True, output_dir='./'):
     
+    dir_output = Path(output_dir)
+    Path(dir_output).mkdir(parents=True, exist_ok=True)
+    fboa_name = f'iprt_phase3_d4_bis_boa.nc'
+    ftoa_name = f'iprt_phase3_d4_bis_toa.nc'
+    fboa_path = dir_output / fboa_name
+    ftoa_path = dir_output / ftoa_name
+    fboa_exist = fboa_path.exists()
+    ftoa_exist = ftoa_path.exists()
+
+
+    sza = np.array([30., 60., 80., 87., 90., 93., 96., 99.])
+    saa = np.array([0.])
+    vza = np.array([0., 9., 18., 26., 34., 41., 48., 54., 60., 65., 70.,
+                        74., 78., 81., 84., 86., 88., 89., 90.])
+    vaa = np.linspace(0., 180., 19)
+    z = np.array([120., 0.])
+
+    if (overwrite      or 
+        not fboa_exist or 
+        not ftoa_exist  ):
+
+        mol_sca = np.array([0., 0.])[None,:]
+        mol_abs= np.array([0., 0.])[None,:]
+        z = np.array([120., 0.])
+        wl = np.array([350.])
+        NTH = 1801
+
+        ds_spheroid = aer2smartg(OPT_PROP_PATH_PHASE3 + "sizedistr_spheroid.cdf",
+                                 nb_theta=NTH, rh_or_reff='hum', rh_reff=np.array([0.]))
+
+        with TemporaryDirectory() as tmpdir:
+            file_path = Path(tmpdir)/'spheroid_d4.nc'
+            ds_spheroid.to_netcdf(file_path)
+            aer = AerOPAC(str(file_path), 0.2, 350., H_mix_min=0., H_mix_max=120.,
+                          H_free_min=120., H_free_max=120., H_stra_min=120., H_stra_max=120., Z_mix=1e6,
+                          rh_mix=0.)
+        pro = AtmAFGL('afglt', comp=[aer], grid=z, prof_ray=mol_sca, prof_abs=mol_abs).calc(wl, phase=True, NBTHETA=NTH)
+        surf  = None
+
+        nvza = len(vza)
+        nvaa = len(vaa)
+        phi = -vaa
+        dep = 0.03
+        earth_r = 6371.
+
+        count_lvl = np.zeros_like(sza, dtype=np.int32)
+        phi_0 = -saa # To follow iprt anti-clockwise convention
+        le     = {'th_deg':sza, 'phi_deg':phi_0, 'count_level':count_lvl}
+
+        # run simulations and create intermediate files
+        run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
+                sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons, wl, le, surf, pro, dep, z, ntheta=NTH)
+
+    # open intermediate files and convert to iprt phase3 output format 
+    to_iprt_output('d4_bis', sza, saa, vza, vaa, z,
+                   overwrite=overwrite, output_dir=output_dir)
+
 
 def case_D5(nphotons=1e8, overwrite=True, output_dir='./'):
     
@@ -950,20 +1014,20 @@ def case_E4(nphotons=1e8, overwrite=True, output_dir='./'):
     # open intermediate files and convert to iprt phase3 output format 
     to_iprt_output('e4', sza, saa, vza, vaa, z,
                    overwrite=overwrite, output_dir=output_dir)
-    
 
 
 if __name__ == '__main__':
     # D - Test cases for fully spherical geometry with one layer
-    case_D1(nphotons=1e7, overwrite=False, output_dir='./res_iprt_phase3_1e7photons/')
-    case_D2(nphotons=1e7, overwrite=False, output_dir='./res_iprt_phase3_1e7photons/')
-    case_D3(nphotons=1e7, overwrite=False, output_dir='./res_iprt_phase3_1e7photons/')
-    case_D4(nphotons=1e7, overwrite=False, output_dir='./res_iprt_phase3_1e7photons/')
-    case_D5(nphotons=1e7, overwrite=False, output_dir='./res_iprt_phase3_1e7photons/')
-    case_D6(nphotons=1e7, overwrite=False, output_dir='./res_iprt_phase3_1e7photons/')
+    # case_D1(nphotons=1e7, overwrite=False, output_dir='./res_iprt_phase3_1e7photons/')
+    # case_D2(nphotons=1e7, overwrite=False, output_dir='./res_iprt_phase3_1e7photons/')
+    # case_D3(nphotons=1e7, overwrite=False, output_dir='./res_iprt_phase3_1e7photons/')
+    case_D4(nphotons=1e8, overwrite=False, output_dir='./res_iprt_phase3_1e8photons/')
+    case_D4_bis(nphotons=1e8, overwrite=True, output_dir='./res_iprt_phase3_1e8photons/')
+    # case_D5(nphotons=1e7, overwrite=False, output_dir='./res_iprt_phase3_1e7photons/')
+    # case_D6(nphotons=1e7, overwrite=False, output_dir='./res_iprt_phase3_1e7photons/')
 
     # E - Test cases for fully spherical geometry for a vertically inhomogeneous atmosphere
-    case_E1(nphotons=1e7, overwrite=False, output_dir='./res_iprt_phase3_1e7photons/')
-    case_E2(nphotons=1e7, overwrite=False, output_dir='./res_iprt_phase3_1e7photons/')
-    case_E3(nphotons=1e7, overwrite=False, output_dir='./res_iprt_phase3_1e7photons/')
-    case_E4(nphotons=1e7, overwrite=False, output_dir='./res_iprt_phase3_1e7photons/')
+    # case_E1(nphotons=1e7, overwrite=False, output_dir='./res_iprt_phase3_1e7photons/')
+    # case_E2(nphotons=1e7, overwrite=False, output_dir='./res_iprt_phase3_1e7photons/')
+    # case_E3(nphotons=1e7, overwrite=False, output_dir='./res_iprt_phase3_1e7photons/')
+    # case_E4(nphotons=1e7, overwrite=False, output_dir='./res_iprt_phase3_1e7photons/')
