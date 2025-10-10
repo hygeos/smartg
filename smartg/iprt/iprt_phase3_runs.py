@@ -3,6 +3,8 @@
 
 import numpy as np
 
+import os 
+
 from smartg.smartg import Smartg, Sensor, LambSurface, RoughSurface
 from smartg.atmosphere import AtmAFGL
 from smartg.albedo import Albedo_cst
