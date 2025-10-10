@@ -232,6 +232,74 @@ def run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
         m_toa.save(str(ftoa_path), overwrite=overwrite)
 
 
+def aer2smartg(filename, nb_theta=int(1801), rh_or_reff=None, rh_reff=None):
+    """
+    In progress
+    """
+
+    ds = xr.open_dataset(filename)
+
+    if 'hum' in ds.variables: 
+        if rh_reff is None: rh_reff = ds["hum"].values
+        if rh_or_reff is None: rh_or_reff = 'hum'
+    elif 'reff' in ds.variables:
+        if rh_reff is None: rh_reff = ds["reff"].values
+        if rh_or_reff is None: rh_or_reff = 'reff'
+    else:
+        raise Exception('Error')
+    
+    phase = ds["phase"][:, :, :, :].values
+
+    NBSTK   = ds.nphamat.size
+    NBTHETA = nb_theta
+    NBRH_OR_REFF  = rh_reff.size
+    theta = np.linspace(0., 180., num=NBTHETA)
+    NWAV    = max(ds["wavelen"].size, int(2))
+    if NWAV > ds["wavelen"].size:
+        wavelength = np.concatenate((ds["wavelen"].values*1e3, ds["wavelen"].values*1e3 + 0.1))
+    else:
+        wavelength = ds["wavelen"].values*1e3
+
+    ext_out = np.zeros((NBRH_OR_REFF, NWAV), dtype=np.float64)
+    ssa_out = np.zeros_like(ext_out)
+    pha_out = np.zeros((NBRH_OR_REFF, NWAV, NBSTK, NBTHETA), dtype=np.float64)
+
+    for iwav in range (0, ds["wavelen"].size):
+        for irhreff in range(NBRH_OR_REFF):
+            ext_out[irhreff,iwav] = ds["ext"][iwav,irhreff]
+            ssa_out[irhreff,iwav] = ds["ssa"][iwav,irhreff]
+            for istk in range (NBSTK):
+                # ntheta (wl, reff, stk)
+                nth = ds["ntheta"][iwav,irhreff,istk].data
+                # theta (wl, reff, stk, ntheta)
+                th = ds["theta"][iwav,irhreff,istk,:].data
+                pha_out[irhreff,iwav,istk,:] = np.interp(theta, th[:nth], phase[iwav,irhreff,istk,:nth],  period=np.inf)
+    
+    if NWAV > ds["wavelen"].size:
+        ext_out[:,-1] = ext_out[irhreff,0]
+        ssa_out[:,-1] = ssa_out[irhreff,0]
+        pha_out[:,-1,:,:] = pha_out[:,0,:,:]
+        
+    ds_out = xr.Dataset(coords={rh_or_reff:rh_reff, 'wav':wavelength, 'theta': theta})
+    ds_out['ext'] = xr.DataArray(ext_out, dims=[rh_or_reff, 'wav'])
+    ds_out['ext'].attrs = {'description': 'Extinction coefficient'}
+    ds_out['ssa'] = xr.DataArray(ssa_out, dims=[rh_or_reff, 'wav'])
+    ds_out['ssa'].attrs = {'description': 'Single scattering albedo'}
+    ds_out['phase'] = xr.DataArray(pha_out, dims=[rh_or_reff, 'wav', 'stk', 'theta'])
+    ds_out['phase'].attrs = {'description': 'scattering phase matrix'}
+    ds_out.attrs = {'name': os.path.basename(filename),
+                    'H_mix_min': '0.',
+                    'H_mix_max': '2',
+                    'H_free_min': '2',
+                    'H_free_max': '12',
+                    'H_stra_max': '12',
+                    'Z_mix': '8',
+                    'Z_free': '8',
+                    'Z_stra': '99'}
+
+    return ds_out
+
+
 def case_D1(nphotons=1e8, overwrite=True, output_dir='./'):
     
     dir_output = Path(output_dir)
