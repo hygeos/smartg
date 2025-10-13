@@ -20,7 +20,7 @@ from smartg.config import DIR_AUXDATA
 from smartg.tools.phase import calc_iphase
 
 # may be to replace
-from smartg.iprt import read_phase_nth_cte
+from smartg.iprt.iprt import read_phase_nth_cte
 
 from luts.luts import LUT, Idx
 

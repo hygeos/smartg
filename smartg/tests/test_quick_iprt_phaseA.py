@@ -9,7 +9,7 @@ from smartg.atmosphere import AtmAFGL
 import pandas as pd
 import numpy as np
 
-from smartg.iprt import convert_SGout_to_IPRTout, select_and_plot_polar_iprt, compute_deltam, seclect_iprt_IQUV, plot_iprt_radiances, groupIQUV
+from smartg.iprt.iprt import convert_SGout_to_IPRTout, select_and_plot_polar_iprt, compute_deltam, seclect_iprt_IQUV, plot_iprt_radiances, groupIQUV
 from smartg.libATM3D import read_cld_nth_cte
 from smartg.tools.phase import calc_iphase
 from luts.luts import LUT
