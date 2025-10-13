@@ -12,7 +12,7 @@ from smartg.albedo import Albedo_cst
 import geoclide as gc
 import pandas as pd
 import xarray as xr
-import math
+import matplotlib.pyplot as plt
 
 from pathlib import Path
 from smartg.config import DIR_AUXDATA
@@ -304,6 +304,101 @@ def aer2smartg(filename, nb_theta=int(1801), rh_or_reff=None, rh_reff=None):
                     'Z_stra': '99'}
 
     return ds_out
+
+
+def plot_polar_iprt(I, Q, U, V, thetas, phis, change_Q_sign=False, change_U_sign=False,
+                    change_V_sign=False, maxI=None, maxQ=None, maxU=None, maxV=None,  cmapI=None, cmapQ=None, cmapU=None, cmapV=None,
+                    title=None, save_fig=None, sym=False, minI=None):
+    """
+    In progress...
+    """
+
+    
+    if sym: phis = np.concatenate((phis, phis+180))
+    NTH = len(thetas)
+    NPH = len(phis)
+    if sym: NPH_D = round(NPH/2)
+    else: NPH_D = NPH
+
+    valI = np.zeros((NTH, NPH))
+    valQ = np.zeros((NTH, NPH))
+    valU = np.zeros((NTH, NPH))
+    valV = np.zeros((NTH, NPH))
+
+    if change_Q_sign: Q_sign = int(-1)
+    else            : Q_sign = int(1) 
+    if change_U_sign: U_sign = int(-1)
+    else            : U_sign = int(1)
+    if change_V_sign: V_sign = int(-1)
+    else            : V_sign = int(1)
+
+    valI[:,0:NPH_D] = I
+    valQ[:,0:NPH_D] = Q*Q_sign
+    valU[:,0:NPH_D] = U*U_sign
+    valV[:,0:NPH_D] = V*V_sign 
+
+    if sym:
+        for i in range(NTH):
+                for j in range(NPH_D):
+                    valI[i,NPH_D+j] =  valI[i,NPH_D-j-1]
+                    valQ[i,NPH_D+j] =  valQ[i,NPH_D-j-1]
+                    valU[i,NPH_D+j] =  valU[i,NPH_D-j-1]
+                    valV[i,NPH_D+j] =  valV[i,NPH_D-j-1]
+
+    plt.rcParams.update({'font.size':13})
+
+    thetas_scaled = (thetas - np.min(thetas))/(np.max(thetas)- np.min(thetas))*90.
+    if maxI is None:
+        maxI = max(np.abs(np.min(valI)), np.abs(np.max(valI)))
+        if minI is None: minI = 0.
+    else:
+        if minI is None: minI=-maxI
+    
+    if maxQ is None: maxQ = max(np.abs(np.min(valQ)), np.abs(np.max(valQ)))
+    if maxU is None: maxU = max(np.abs(np.min(valU)), np.abs(np.max(valU)))
+    if maxV is None: maxV = max(np.abs(np.min(valV)), np.abs(np.max(valV)))
+
+    if cmapI is None: cmapI = "jet"
+    if cmapQ is None: cmapQ = "RdBu_r"
+    if cmapU is None: cmapU = "RdBu_r"
+    if cmapV is None: cmapV = "RdBu_r"
+
+    fig, ax = plt.subplots(1,4, figsize=(12,4),subplot_kw=dict(projection='polar'))
+    if title is not None: fig.suptitle(title)
+    #csI = ax[0].contourf(np.deg2rad(phis), thetas[::-1], valI, cmap='jet', levels=np.linspace(0., 9.5e-2, 100, endpoint=True))
+    ax[0].grid(False)
+    csI = ax[0].pcolormesh(np.deg2rad(phis), thetas_scaled, valI, cmap=cmapI, vmin=minI, vmax=maxI, shading='gouraud')
+    cbarI = fig.colorbar(csI, ax=ax[0], shrink=0.8, orientation='horizontal', ticks=np.linspace(minI, maxI, 3, endpoint=True), format="%4.1e")
+    cbarI.set_label(r'I')
+    ax[0].set_yticklabels([])
+    ax[0].grid(axis='both', linewidth=1.5, linestyle=':', color='black', alpha=0.5)
+
+    #csQ = ax[1].contourf(np.deg2rad(phis), thetas[::-1], valQ, cmap='RdBu_r', levels=np.linspace(-1.4e-2, 1.4e-2, 100, endpoint=True))
+    ax[1].grid(False)
+    csQ = ax[1].pcolormesh(np.deg2rad(phis), thetas_scaled, valQ, cmap=cmapQ, vmin=-maxQ, vmax=maxQ, shading='gouraud')
+    cbarQ = fig.colorbar(csQ, ax=ax[1], shrink=0.8, orientation='horizontal', ticks=np.linspace(-maxQ, maxQ, 3, endpoint=True), format="%4.1e")
+    cbarQ.set_label(r'Q')
+    ax[1].set_yticklabels([])
+    ax[1].grid(axis='both', linewidth=1.5, linestyle=':', color='black', alpha=0.5)
+
+    #csU = ax[2].contourf(np.deg2rad(phis), thetas[::-1], -valU, cmap='RdBu_r', levels=np.linspace(-2.6e-2, 2.6e-2, 100, endpoint=True))
+    ax[2].grid(False)
+    csU = ax[2].pcolormesh(np.deg2rad(phis), thetas_scaled, valU, cmap=cmapU, vmin=-maxU, vmax=maxU, shading='gouraud')
+    cbarU = fig.colorbar(csU, ax=ax[2], shrink=0.8, orientation='horizontal', ticks=np.linspace(-maxU, maxU, 3, endpoint=True), format="%4.1e")
+    cbarU.set_label(r'U')
+    ax[2].set_yticklabels([])
+    ax[2].grid(axis='both', linewidth=1.5, linestyle=':', color='black', alpha=0.5)
+
+    #csV = ax[3].contourf(np.deg2rad(phis), thetas[::-1], valV, cmap='RdBu_r', levels=np.linspace(-1e-5, 1e-5, 100, endpoint=True))
+    ax[3].grid(False)
+    csV = ax[3].pcolormesh(np.deg2rad(phis), thetas_scaled, valV, cmap=cmapV, vmin=-maxV, vmax=maxV, shading='gouraud')
+    cbarV = fig.colorbar(csV, ax=ax[3], shrink=0.8, orientation='horizontal', ticks=np.linspace(-maxV, maxV, 3, endpoint=True), format="%4.1e")
+    cbarV.set_label(r'V')
+    ax[3].set_yticklabels([])
+    ax[3].grid(axis='both', linewidth=1.5, linestyle=':', color='black', alpha=0.5)
+    
+    fig.tight_layout()
+    if save_fig is not None: plt.savefig(save_fig)
 
 
 def case_D1(nphotons=1e8, overwrite=True, output_dir='./'):
