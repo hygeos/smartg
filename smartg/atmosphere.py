@@ -66,10 +66,19 @@ class AerOPAC(object):
     ssa : float | list | 1-D ndarray | 2-D ndarray | LUT
         Force particle single scattering albedo. If a list is given, it will be converted into an ndarray.
     phase : luts.LUT, optional
-        Phase matrix F as function of humidity, wavelength, stoke components and scattering angle    
-        The variable names must be: hum (humidity), wav (wavelength), stk (stoke components) and  
-        theta (scattering angle)  
-        And stoke components (IQUV convention) must be given in the folowing order: 
+        Phase matrix F as function of wavelength, altitude, stoke components and scattering angle    
+        The variable names must be:  
+        If 4-D matrix -> wav_phase, z_phase, stk, theta  
+        If 2-D matrix (assumed monochromatic and contant vertically) -> stk, theta   
+        Where:  
+        - wav_phase is the wavelength. It must be equal to the `pfwav` parameter of AtmAFGL  
+          if defined, else `wav` parameter vavelengths of the AtmAFGL calc method.
+        - z_phase is the phase altitude. It must be equal to the `pfgrid[1:]` parameter
+          of AtmAFGL  
+        - stk the stokes component.  
+        - theta the scattering angle.  
+        
+        The stoke components (IQUV convention) must be given in the folowing order: 
         - F11, F21, F33 and F34 for spherical aerosols
         - F11, F21, F33, F34, F22 and F44 for non spherical aerosols
     rh_mix/free/stra : float, optional
@@ -307,14 +316,19 @@ class AerOPAC(object):
                 # convert to 4-dim by inserting empty dimensions wav_phase
                 # and z_phase
                 assert self._phase.names == ['stk', 'theta_atm']
-                pha = LUT(self._phase.data[None,None,:,:],
+
+                if conv_Iparper: pha_ = pha2Iparperconv(self._phase.data[:,:])
+                else: pha_ = self._phase.data[:,:]
+                pha = LUT(pha_.data[None,None,:,:],
                           names = ['wav_phase', 'z_phase'] + self._phase.names,
                           axes = [np.array([wav[0]]), np.array([0.])] + self._phase.axes,
                          )
 
                 return pha
             else:
-                return self._phase
+                if conv_Iparper: pha_ = pha2Iparperconv(self._phase.data[:,:,:,:])
+                else: pha_ = self._phase.data[:,:,:,:]
+                return pha_
 
         theta = np.linspace(0., 180., num=NBTHETA)
         lam_tabulated = np.array(self.mixture.axis('wav'))
@@ -3437,3 +3451,75 @@ def extract_split(m):
     pro_phases = [m['phase_atm'].sub({'iphase':i}) for i in range(pro_iphase.max()+1)]
 
     return pro_abs, pro_ray, (pro_aer, ssa_aer), (pro_iphase, pro_phases)
+
+
+def pha2Iparperconv(pha):
+    """
+    Convert phase to I parallel/perpendicular convertion
+
+    Parameters
+    ----------
+    pha : 2-D ndarray | 4-D ndarray
+        The phase matrix to be converted. In 2-D, stk in in dim 0, and in 4-D in dim3.
+    
+    Returns
+    -------
+    out : 2-D ndarray | 4-D ndarray
+        The phase matrix converted.
+    """
+
+    ndim = len(pha.shape)
+    if (ndim != 2 or ndim != 4):
+        raise ValueError("The phase matrix dimension must be 2 or 4!")
+    
+    if ndim == 2:
+        nstk = pha.shape[0]
+        nth = pha.shape[1]
+    else :
+        nstk = pha.shape[2]
+        nth = pha.shape[3]
+    
+    if (nstk != 4 or nstk != 6):
+        raise ValueError("The number of stk components must be equal to 4 (spheric) or 6 (spheroid)!")
+
+    if ndim == 2:
+        pha_converted = np.zeros((nstk,nth), dtype=np.float64)
+        if (nstk == 4): # spherical particles
+            pha_converted[0:4,:] = pha.copy()
+            pha_converted[4,:] = pha[0,:].copy()
+            pha_converted[5,:] = pha[2,:].copy()
+            p0 = pha[0,:].copy()
+            p1 = pha[1,:].copy()
+            p4 = pha[4,:].copy()
+            pha_converted[0,:] = 0.5*(p0+2*p1+p4) # P11
+            pha_converted[1,:] = 0.5*(p0-p4)      # P12=P21
+            pha_converted[4,:] = 0.5*(p0-2*p1+p4) # P22
+        elif (nstk == 6): # non spherical particles
+            pha_converted[:,:] = pha.copy()
+            p0 = pha_converted[0,:].copy()
+            p1 = pha_converted[1,:].copy()
+            p4 = pha_converted[4,:].copy()
+            pha_converted[0,:] = 0.5*(p0+2*p1+p4) # P11
+            pha_converted[1,:] = 0.5*(p0-p4)      # P12=P21
+            pha_converted[4,:] = 0.5*(p0-2*p1+p4) # P22
+    else: # ndim = 4
+        pha_converted = np.zeros((nstk,nth), dtype=np.float64)
+        if (nstk == 4): # spherical particles
+            pha_converted[:,:,0:4,:] = pha.copy()
+            pha_converted[:,:,4,:] = pha[0,:].copy()
+            pha_converted[:,:,5,:] = pha[2,:].copy()
+            p0 = pha[:,:,0,:].copy()
+            p1 = pha[:,:,1,:].copy()
+            p4 = pha[:,:,4,:].copy()
+            pha_converted[:,:,0,:] = 0.5*(p0+2*p1+p4) # P11
+            pha_converted[:,:,1,:] = 0.5*(p0-p4)      # P12=P21
+            pha_converted[:,:,4,:] = 0.5*(p0-2*p1+p4) # P22
+        elif (nstk == 6): # non spherical particles
+            pha_converted[:,:] = pha.copy()
+            p0 = pha_converted[:,:,0,:].copy()
+            p1 = pha_converted[:,:,1,:].copy()
+            p4 = pha_converted[:,:,4,:].copy()
+            pha_converted[:,:,0,:] = 0.5*(p0+2*p1+p4) # P11
+            pha_converted[:,:,1,:] = 0.5*(p0-p4)      # P12=P21
+            pha_converted[:,:,4,:] = 0.5*(p0-2*p1+p4) # P22
+    return pha_converted
