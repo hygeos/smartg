@@ -77,7 +77,7 @@ class AerOPAC(object):
           of AtmAFGL  
         - stk the stokes component.  
         - theta the scattering angle.  
-        
+
         The stoke components (IQUV convention) must be given in the folowing order: 
         - F11, F21, F33 and F34 for spherical aerosols
         - F11, F21, F33, F34, F22 and F44 for non spherical aerosols
@@ -470,12 +470,21 @@ class Cloud(AerOPAC):
     w_ref : float
         Wavelength in nanometers at reference optical thickness tau_ref
     phase : luts.LUT, optional
-        Phase matrix as function of effective radius, wavelength, stoke components and scattering angle    
-        The variable names must be: reff (effective radius), wav (wavelength), stk (stoke components) and  
-        theta (scattering angle)  
-        And stoke components must be given in the folowing order: 
-        - P11, P21, P33 and P34 for spherical clouds (i.e. water clouds)
-        - P11, P21, P33, P34, P22 and P44 for non spherical clouds (i.e. ice clouds)
+        Phase matrix F as function of wavelength, altitude, stoke components and scattering angle    
+        The variable names must be:  
+        If 4-D matrix -> wav_phase, z_phase, stk, theta  
+        If 2-D matrix (assumed monochromatic and contant vertically) -> stk, theta   
+        Where:  
+        - wav_phase is the wavelength. It must be equal to the `pfwav` parameter of AtmAFGL  
+          if defined, else `wav` parameter vavelengths of the AtmAFGL calc method.
+        - z_phase is the phase altitude. It must be equal to the `pfgrid[1:]` parameter
+          of AtmAFGL  
+        - stk the stokes component.  
+        - theta the scattering angle.  
+        
+        The stoke components (IQUV convention) must be given in the folowing order: 
+        - F11, F21, F33 and F34 for spherical aerosols
+        - F11, F21, F33, F34, F22 and F44 for non spherical aerosols
 
     Examples
     --------
