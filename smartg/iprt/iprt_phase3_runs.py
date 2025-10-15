@@ -6,7 +6,7 @@ import numpy as np
 import os 
 
 from smartg.smartg import Smartg, Sensor, LambSurface, RoughSurface
-from smartg.atmosphere import AtmAFGL, AerOPAC
+from smartg.atmosphere import AtmAFGL, AerOPAC, Cloud
 from smartg.albedo import Albedo_cst
 
 import geoclide as gc
@@ -250,10 +250,24 @@ def run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
 
 def aer2smartg(filename, nb_theta=int(1801), rh_or_reff=None, rh_reff=None):
     """
+    
     In progress
+
+    Parameters
+    ----------
+    filename : str | pathlib.Path | xr.Dataset
+        The path to the file to be converted. It can be directly an xr.Dataset.
+    nb_theta : int
+        The number of angles for the phase matrix
+    
+    Results
+    -------
+    out : xr.Dataset
+        The converted dataset.
     """
 
-    ds = xr.open_dataset(filename)
+    if isinstance(filename, xr.Dataset): ds = filename
+    else: ds = xr.open_dataset(filename)
 
     if 'hum' in ds.variables: 
         if rh_reff is None: rh_reff = ds["hum"].values
@@ -303,15 +317,20 @@ def aer2smartg(filename, nb_theta=int(1801), rh_or_reff=None, rh_reff=None):
     ds_out['ssa'].attrs = {'description': 'Single scattering albedo'}
     ds_out['phase'] = xr.DataArray(pha_out, dims=[rh_or_reff, 'wav', 'stk', 'theta'])
     ds_out['phase'].attrs = {'description': 'scattering phase matrix'}
-    ds_out.attrs = {'name': os.path.basename(filename),
-                    'H_mix_min': '0.',
-                    'H_mix_max': '2',
-                    'H_free_min': '2',
-                    'H_free_max': '12',
-                    'H_stra_max': '12',
-                    'Z_mix': '8',
-                    'Z_free': '8',
-                    'Z_stra': '99'}
+    if isinstance(filename, str) : name = os.path.basename(filename)
+    else: name = 'none'
+    if rh_or_reff == 'hum':
+        ds_out.attrs = {'name': name,
+                        'H_mix_min': '0.',
+                        'H_mix_max': '2',
+                        'H_free_min': '2',
+                        'H_free_max': '12',
+                        'H_stra_max': '12',
+                        'Z_mix': '8',
+                        'Z_free': '8',
+                        'Z_stra': '99'}
+    else:
+        ds_out.attrs = {'name': name}
 
     return ds_out
 
@@ -1029,39 +1048,21 @@ def case_E3(nphotons=1e8, overwrite=True, output_dir='./'):
         mol_sca_filename  =  OPT_PROP_PATH_PHASE3 + "tau_rayleigh_450nm_usstd.dat"
         mol_abs_filename  =  OPT_PROP_PATH_PHASE3 + "tau_absorption_450nm_usstd.dat"
         wl = np.array([450.])
-        nwl= len(wl)
         z = np.squeeze(pd.read_csv(mol_sca_filename, header=None, usecols=[0], dtype=float, skiprows=1, sep=r'\s+', comment='#').values)
         ZS = len(z)
-        nz = len(z[1:])
         sca = pd.read_csv(mol_sca_filename, header=None, usecols=[1], dtype=float, skiprows=1, sep=r'\s+', comment='#').values.reshape(1,ZS)
         abs = pd.read_csv(mol_abs_filename, header=None, usecols=[1], dtype=float, skiprows=1, sep=r'\s+', comment='#').values.reshape(1,ZS)
+        NTH = 18001
 
-        # aerosol extinction and single scattering albedo
-        aer_tau_ext = np.zeros_like(sca)
-        aer_tau_ext[0,-3:] = 0.5 / 3. # constant AOT between 0 and 3km
-        ds_desert = xr.open_dataset(OPT_PROP_PATH_PHASE3 + "desert.cdf")
-        ssa_450 = ds_desert['ssa'].values[1,0]
-        aer_ssa  = np.full_like(aer_tau_ext, ssa_450)
-        prof_aer = (aer_tau_ext, aer_ssa)
+        file_aer1_phase = OPT_PROP_PATH_PHASE3 + "desert.cdf"
+        ds_desert = aer2smartg(file_aer1_phase, nb_theta=NTH, rh_or_reff='hum', rh_reff=np.array([0.]))
+        with TemporaryDirectory() as tmpdir:
+            file_path = Path(tmpdir)/'desert_e3.nc'
+            ds_desert.to_netcdf(file_path)
+            aer1 = AerOPAC(str(file_path), 0.5, wl[0], H_mix_min=0., H_mix_max=3.,
+                           H_free_min=2., H_free_max=2., H_stra_min=12., H_stra_max=12., Z_mix=1e6, rh_mix=0.)
 
-        # aerosol phase matrix
-        NTH = 18001 
-        theta = np.linspace(0, 180, NTH)
-        file_aer_phase = OPT_PROP_PATH_PHASE3 + "desert.cdf"
-        aer_phase = read_phase_nth_cte(filename=file_aer_phase, nb_theta=NTH, normalize=True)
-        nstk = aer_phase.shape[2]
-        aer_pha = np.zeros((nwl, nz, nstk, NTH), dtype=np.float32)
-        # Same phase for all altitude (here only one)
-        for iz in range (0, nz):
-            aer_pha[:,iz,:,:] = aer_phase.sub()[:,0,:,:].sub({'wav_phase':Idx(wl)}).sub({'theta_atm':Idx(theta)}).data
-        aer_phase = LUT(aer_pha, axes=[wl, z[1:], None, theta], names=['wav', 'z', 'stk', 'theta'])
-        pha_atm, ipha_atm = calc_iphase(aer_phase, wl, z)
-        lpha_lut = []
-        for i in range (0, pha_atm.shape[0]):
-            lpha_lut.append(LUT(pha_atm[i,:,:], axes=[None, theta], names=['stk', 'theta_atm']))
-
-        pro = AtmAFGL('afglt', grid=z, prof_ray=sca, prof_abs=abs,
-                      prof_aer=prof_aer, prof_phases=(ipha_atm, lpha_lut)).calc(wl, phase=False)
+        pro = AtmAFGL('afglt', comp=[aer1], grid=z, prof_ray=sca, prof_abs=abs).calc(wl, phase=True, NBTHETA=NTH)
         surf = None
         
         nvza = len(vza)
@@ -1076,7 +1077,7 @@ def case_E3(nphotons=1e8, overwrite=True, output_dir='./'):
 
         # run simulations and create intermediate files
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
-                sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons, wl, le, surf, pro, dep, z)
+                sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons, wl, le, surf, pro, dep, z, ntheta=NTH)
 
     # open intermediate files and convert to iprt phase3 output format 
     to_iprt_output('e3', sza, saa, vza, vaa, z,
@@ -1154,6 +1155,72 @@ def case_E4(nphotons=1e8, overwrite=True, output_dir='./'):
     # open intermediate files and convert to iprt phase3 output format 
     to_iprt_output('e4', sza, saa, vza, vaa, z,
                    overwrite=overwrite, output_dir=output_dir)
+    
+
+def case_E5(nphotons=1e8, overwrite=True, output_dir='./'):
+    
+    dir_output = Path(output_dir)
+    Path(dir_output).mkdir(parents=True, exist_ok=True)
+    fboa_name = f'iprt_phase3_e5_boa.nc'
+    ftoa_name = f'iprt_phase3_e5_toa.nc'
+    fboa_path = dir_output / fboa_name
+    ftoa_path = dir_output / ftoa_name
+    fboa_exist = fboa_path.exists()
+    ftoa_exist = ftoa_path.exists()
+
+
+    sza = np.array([30., 60., 80., 87., 89.9999, 93., 96., 99.])
+    saa = np.array([0.])
+    vza = np.array([0., 9., 18., 26., 34., 41., 48., 54., 60., 65., 70.,
+                        74., 78., 81., 84., 86., 88., 89., 90.])
+    vaa = np.linspace(0., 180., 19)
+    z = None
+
+    if (overwrite      or 
+        not fboa_exist or 
+        not ftoa_exist  ):
+
+        # atmosphere profil
+        mol_sca_filename  =  OPT_PROP_PATH_PHASE3 + "tau_rayleigh_450nm_usstd.dat"
+        mol_abs_filename  =  OPT_PROP_PATH_PHASE3 + "tau_absorption_450nm_usstd.dat"
+        wl = np.array([450.])
+        z = np.squeeze(pd.read_csv(mol_sca_filename, header=None, usecols=[0], dtype=float, skiprows=1, sep=r'\s+', comment='#').values)
+        ZS = len(z)
+        sca = pd.read_csv(mol_sca_filename, header=None, usecols=[1], dtype=float, skiprows=1, sep=r'\s+', comment='#').values.reshape(1,ZS)
+        abs = pd.read_csv(mol_abs_filename, header=None, usecols=[1], dtype=float, skiprows=1, sep=r'\s+', comment='#').values.reshape(1,ZS)
+        NTH = 18001
+
+        file_cld1_phase = OPT_PROP_PATH_PHASE3 + "ic.ghm.baum.cdf"
+        ds_ic_baum_ghm_ = xr.open_dataset(file_cld1_phase)
+        wav_ = ds_ic_baum_ghm_.wavelen.values
+        nlam_ = np.squeeze(np.argwhere(np.logical_and(wav_>=0.4, wav_<=0.5))) # wav in micrometers, here take only between 400 and 500nm
+        ds_ic_baum_ghm_  = ds_ic_baum_ghm_ .sel(nlam = nlam_)
+        ds_ic_baum_ghm = aer2smartg(ds_ic_baum_ghm_, nb_theta=NTH)
+        with TemporaryDirectory() as tmpdir:
+            file_path = Path(tmpdir)/'ic_ghm_baum_e5.nc'
+            ds_ic_baum_ghm.to_netcdf(file_path)
+            cld1 = Cloud('./tmp_ic_baum_ghm.nc', reff=50., zmin=10., zmax=11., tau_ref=1., w_ref=wl[0])
+
+        pro = AtmAFGL('afglt', comp=[cld1], grid=z, prof_ray=sca, prof_abs=abs).calc(wl, phase=True, NBTHETA=NTH)
+        surf = None
+        
+        nvza = len(vza)
+        nvaa = len(vaa)
+        phi = -vaa
+        dep = 0.03
+        earth_r = 6371.
+
+        count_lvl = np.zeros_like(sza, dtype=np.int32)
+        phi_0 = -saa # To follow iprt anti-clockwise convention
+        le     = {'th_deg':sza, 'phi_deg':phi_0, 'count_level':count_lvl}
+
+        # run simulations and create intermediate files
+        run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
+                sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons, wl, le, surf, pro, dep, z)
+
+    # open intermediate files and convert to iprt phase3 output format 
+    to_iprt_output('e5', sza, saa, vza, vaa, z,
+                   overwrite=overwrite, output_dir=output_dir)
 
 
 if __name__ == '__main__':
@@ -1167,7 +1234,8 @@ if __name__ == '__main__':
     case_D6(nphotons=1e8, overwrite=False, output_dir=output_dir)
 
     # E - Test cases for fully spherical geometry for a vertically inhomogeneous atmosphere
-    # case_E1(nphotons=1e7, overwrite=False, output_dir='./res_iprt_phase3_1e7photons/')
-    # case_E2(nphotons=1e7, overwrite=False, output_dir='./res_iprt_phase3_1e7photons/')
-    # case_E3(nphotons=1e7, overwrite=False, output_dir='./res_iprt_phase3_1e7photons/')
-    # case_E4(nphotons=1e7, overwrite=False, output_dir='./res_iprt_phase3_1e7photons/')
+    case_E1(nphotons=1e8, overwrite=False, output_dir=output_dir)
+    case_E2(nphotons=1e8, overwrite=False, output_dir=output_dir)
+    case_E3(nphotons=1e8, overwrite=False, output_dir=output_dir)
+    case_E4(nphotons=1e8, overwrite=False, output_dir=output_dir)
+    case_E5(nphotons=1e8, overwrite=False, output_dir=output_dir)
