@@ -5120,8 +5120,455 @@ __device__ float4x4 FresnelR(float3 vi, float3 vr) {
     return R;
 }
 
+
+
 /* Surface BRDF */
 __device__ void surfaceBRDF(Photon* ph, int le,
+                            float* tabthv, float* tabphi, int count_level,
+                            struct RNG_State *rngstate)
+{
+    if( SIMd == ATM_ONLY){ // Atmosphere only, surface absorbs all
+		ph->loc = ABSORBED;
+		return;
+	}
+
+    ph->nint += 1;
+
+    #ifdef OBJ3D
+	ph->E += 1;
+    #endif
+
+    #ifdef SPHERIQUE 
+	float3 macroFnormal_n0 = normalize(ph->pos);       // - the (big) macrofacet normal n
+    float3 macroFnormal_n = make_float3(0.F,0.F,1.F);  // - the (big) macrofacet in local frame
+    #else
+    float3 macroFnormal_n0 = make_float3(0.F,0.F,1.F); // - the (big) macrofacet normal n
+    #endif
+    float thv, phi;
+    float3 v_o;                                        // outgoing direction
+    Transform transfo;
+
+    if (le)
+    {
+        phi = tabphi[ph->iph];
+        thv = tabthv[ph->ith];
+
+        v_o = make_float3(0.F,0.F,1.F);
+        v_o = transfo.RotateY(degrees(thv))(v_o,2);
+        v_o = transfo.RotateZ(degrees(phi))(v_o,2);
+        v_o = normalize(v_o);
+	    if(isBackward(macroFnormal_n0, v_o) & ph->loc==SURF0P) {ph->loc=ABSORBED; return;};
+    }
+    else
+    {
+        phi = RAND*DEUXPI;
+        thv = acosf(sqrtf( RAND ));
+
+        v_o = make_float3(0.F,0.F,1.F);
+        v_o = transfo.RotateY(degrees(thv))(v_o,2);
+        v_o = transfo.RotateZ(degrees(phi))(v_o,2);
+        v_o = normalize(v_o);
+
+        #ifdef SPHERIQUE
+        // Go to global frame - because we sampled phi and thv from a facet n=(0,0,1) -
+        // vec2transform routine return the tranformation that we have to apply to a vector=(0,0,1) to 
+        // be equal to the vector given as parameter (here macroFnormal_n0)
+        transfo = transfo.vec2transform(macroFnormal_n0);
+        v_o = normalize(transfo(v_o, 2)); // local to global frame
+        #endif
+    }
+    
+
+	float3 v_i;                                     // - direction of the incoming photon
+	float3 u_i;                                     // - perp direction of the incoming photon
+	float3 u_o;                                     //   outgoing perp direction
+	float cTheta_i;                                 // - cos of the angle between normal m and the
+	                                                //   direction of the incoming photon v
+	float sTheta_i;                                 // - sin of theta_i
+	float3 microFnormal_m;                          // - the (small) random microfacet normal m
+	float cTheta_m;                                 // - cos of theta_m
+	float nind = NH2Od;                             // - relative refractive index air/ocean
+	float3 h_r;                                     // - half-direction for reflection used in LE 
+    float theta_i;
+    float avz_i, avz_o;
+
+    v_i = ph->v;
+    u_i = ph->u;
+
+    h_r = v_o - v_i;
+    h_r = normalize(h_r);
+    microFnormal_m = h_r;
+
+    cTheta_i = fabs(dot(microFnormal_m, v_i));
+    theta_i = acosf(fmin(1.F-VALMIN, fmax(-(1.F-VALMIN), cTheta_i)));
+    #ifdef SPHERIQUE 
+    cTheta_m = fabs(dot(macroFnormal_n0, microFnormal_m)); // cBeta
+    cTheta_m = clamp(cTheta_m, VALMIN, (1.F-VALMIN));
+    avz_i = fabs(dot(macroFnormal_n0, v_i));
+    avz_o = fabs(dot(macroFnormal_n0, v_o));
+    
+    // int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    // if(idx==0 and !le) printf("before: %f  ; after: %f ; v_o.z: %f ; %f %f %f\n", 
+    //                           avz_bis, dot(macroFnormal_n0, v_o), v_o.z,
+    //                           macroFnormal_n.x, macroFnormal_n.y, macroFnormal_n.z);
+    #else
+    cTheta_m = fabs(microFnormal_m.z);
+    avz_i = fabs(v_i.z);
+    avz_o = fabs(v_o.z);
+    #endif
+	sTheta_i = __sinf(theta_i);
+
+	// ********************************************************
+	// Rotation of the stokes vector
+	// ********************************************************
+	// Compute psi angle and rotation matrix L in (For/Back)ward mode
+	float psi; float4x4 LF;
+	psi = computePsiFN(u_i, v_i, microFnormal_m, sTheta_i);
+	rotationM(psi, &LF); // fill the rotation matrix LF (forward mode)
+	
+	#ifdef BACK
+	float4x4 LB;
+	float4x4 L = make_diag_float4x4 (1.F);
+	rotationM(-psi, &LB); // fill the rotation matrix LB (backward mode)
+	#endif
+
+	// Reflection matrix R
+	float4x4 R; float sR;
+	if (nind == -1.F) {R = perfect_mirrorRF(); sR = 1.F;} 
+	else {refMat(nind, cTheta_i, sTheta_i, &R, &sR);}
+	
+	// Muller matrix for reflection (forward mode)
+	float4x4 Mu_r; // Mu_r = (1/scaR)*R*L -> Ramon et al. 2019
+	Mu_r = mul(R, LF); // relfection totale scaR = 1
+
+    #ifndef BIAS
+	ph->weight *= ph->stokes.x + ph->stokes.y;
+	ph->stokes /= ph->stokes.x + ph->stokes.y; 
+    #endif
+
+    #ifdef BACK
+    ph->M = mul(ph->M, mul(LB, R));
+	#endif
+	
+	// update the stokes vector (forward mode)
+	ph->stokes = mul(Mu_r, ph->stokes); //S_l = Mu_r*S_l-1
+	// ********************************************************
+
+	// ********************************************
+	// Reflection of the direction v and perp dir u
+	// ********************************************
+	u_o = (microFnormal_m-(cTheta_i*v_o))/sTheta_i;
+	u_o = normalize(u_o);
+	// ********************************************
+
+
+    float cTheta2_m, alph2, p_m;
+
+    cTheta2_m = cTheta_m*cTheta_m;
+    alph2 = 0.003 + 0.00512*WINDSPEEDd;
+    
+    p_m = __fdividef( __expf(-((1.F-cTheta2_m)/(cTheta2_m*alph2))) , cTheta2_m*cTheta2_m * alph2);
+    float jac, p_o;
+    
+    jac = __fdividef(1.F, 4.F);
+    if(HORIZd)
+    {
+        if (le) {p_o = __fdividef(p_m, fabs(cosf(tabthv[ph->ith])));}
+        else {p_o = __fdividef(p_m, avz_o);}
+    }
+    else
+    {
+        if (le) {p_o = p_m;}
+        else {p_o = __fdividef(p_m, avz_o);}
+    }
+    ph->weight *= fdividef(p_o*jac, avz_i);
+
+
+    // ********************************************************************
+	// Shadowing-Masking
+	// ********************************************************************
+	if (WAVE_SHADOWd)
+    {
+        // Add Wave shadowing
+        // compute wave shadow outgoing photon
+        float LambdaR, LambdaS;
+        LambdaS  =  LambdaM(avz_i,alph2*0.5);
+        LambdaR  =  LambdaM(avz_o,alph2*0.5);
+        ph->weight *= __fdividef(1.F, 1.F + LambdaR + LambdaS);
+    }
+	// ********************************************************************
+
+    if (isnan(ph->weight)) {ph->loc=REMOVED; return;}
+
+	// **********************************************
+	// update photon directions u, v, location and albedo
+	// **********************************************
+    if ( (isnan(v_o.x)) || (isnan(v_o.y)) || (isnan(v_o.z)) || 
+		 (isnan(u_o.x)) || (isnan(u_o.y)) || (isnan(u_o.z)) )
+    {
+        ph->loc = REMOVED;
+        return;
+    }
+    ph->v = v_o;
+	ph->u = u_o;
+
+    // photon next location
+    if( SIMd==SURF_ONLY || SIMd==OCEAN_SURF )
+    {
+        ph->loc = SPACE;
+    }
+    else
+    {
+        ph->loc = ATMOS;
+        #ifdef OPT3D
+        ph->layer = NATMd;
+        #endif
+    }
+
+	// **********************************************
+
+    if (!le)
+    {
+        // Russian roulette for propagating photons
+		if (RRd==1)
+        {
+		    if( ph->weight < WEIGHTRRd )
+            {
+		 		if( RAND < __fdividef(ph->weight, WEIGHTRRd) ){ ph->weight = WEIGHTRRd; }
+		 		else { ph->loc = ABSORBED; }
+		 	}
+		}
+    }
+}
+
+
+
+// /* Surface BRDF */
+__device__ void surfaceBRDF_global2local(Photon* ph, int le,
+                              float* tabthv, float* tabphi, int count_level,
+                              struct RNG_State *rngstate)
+{
+    if( SIMd == ATM_ONLY){ // Atmosphere only, surface absorbs all
+		ph->loc = ABSORBED;
+		return;
+	}
+	
+	float3 v_i;                             // - direction of the incoming photon
+	float3 u_i;                             // - perp direction of the incoming photon
+	float3 v_o, u_o;                                // outgoing directions
+	float cTheta_i;                                 // - cos of the angle between normal m and the
+	                                                //   direction of the incoming photon v
+	float sTheta_i;                                 // - sin of theta_i
+    #ifdef SPHERIQUE 
+	float3 macroFnormal_n0 = normalize(ph->pos);     // - the (big) macrofacet normal n
+    #endif
+    float3 macroFnormal_n = make_float3(0.F,0.F,1.F);     // - the (big) macrofacet normal n
+	float3 microFnormal_m;                          // - the (small) random microfacet normal m
+	float cTheta_m;                                 // - cos of theta_m
+	float nind = NH2Od;                             // - relative refractive index air/ocean
+	float3 h_r;                                     // half-direction for reflection used in LE
+	float thv, phi;                                 // 
+    float theta_i;
+    Transform transfo;
+    float avz_i, avz_o;
+
+    ph->nint += 1;
+
+    #ifdef OBJ3D
+	ph->E += 1;
+    #endif
+
+    v_i = ph->v;
+    u_i = ph->u;
+
+    #ifdef SPHERIQUE 
+    Transform invTransfo;
+
+    float th_tf=0.F, ph_tf=0.F;
+    findRots(macroFnormal_n0, &th_tf, &ph_tf);
+    transfo = transfo.RotateZ(degrees(ph_tf)) * transfo.RotateY(degrees(th_tf));
+    invTransfo = transfo.Inverse(transfo);
+
+    v_i = normalize(invTransfo(v_i,2));
+    u_i = normalize(invTransfo(u_i,2));
+    #endif
+
+	if (le)
+	{
+		phi = tabphi[ph->iph];
+        thv = tabthv[ph->ith];
+
+        v_o = make_float3(0.F,0.F,1.F);
+        v_o = transfo.RotateY(degrees(thv))(v_o,2);
+        v_o = transfo.RotateZ(degrees(phi))(v_o,2);
+        v_o = normalize(v_o);
+
+        // into the local frame
+        #ifdef SPHERIQUE
+        v_o = normalize(invTransfo(v_o,2));
+        if(v_o.z < 0.F) {ph->loc=ABSORBED; return;};
+        #endif
+	}
+	else 
+	{
+        phi = RAND*DEUXPI;
+        thv = acosf(sqrtf( RAND ));
+
+        v_o = make_float3(0.F,0.F,1.F);
+        v_o = transfo.RotateY(degrees(thv))(v_o,2);
+        v_o = transfo.RotateZ(degrees(phi))(v_o,2);
+        v_o = normalize(v_o);
+        
+        // Here in spheric nothing to do, we are already in local frame since we are sampling
+        // with the assumption of a macrofacet normal n=(0,0,1)
+	}
+
+    h_r = v_o - v_i;
+    h_r = normalize(h_r);
+    microFnormal_m = h_r;
+
+    cTheta_i = fabs(dot(microFnormal_m, v_i));
+    theta_i = acosf(fmin(1.F-VALMIN, fmax(-(1.F-VALMIN), cTheta_i)));
+
+    cTheta_m = fabs(microFnormal_m.z);
+    cTheta_m = clamp(cTheta_m, VALMIN, (1.F-VALMIN));
+
+    avz_i = fabs(v_i.z);
+    avz_o = fabs(v_o.z);
+
+	sTheta_i = __sinf(theta_i);
+
+	// ********************************************************
+	// Rotation of the stokes vector
+	// ********************************************************
+	// Compute psi angle and rotation matrix L in (For/Back)ward mode
+	float psi; float4x4 LF;
+	psi = computePsiFN(u_i, v_i, microFnormal_m, sTheta_i);
+	rotationM(psi, &LF); // fill the rotation matrix LF (forward mode)
+	
+	#ifdef BACK
+	float4x4 LB;
+	float4x4 L = make_diag_float4x4 (1.F);
+	rotationM(-psi, &LB); // fill the rotation matrix LB (backward mode)
+	#endif
+
+	// Reflection matrix R
+	float4x4 R; float sR;
+	if (nind == -1.F) {R = perfect_mirrorRF(); sR = 1.F;} 
+	else {refMat(nind, cTheta_i, sTheta_i, &R, &sR);}
+	
+	// Muller matrix for reflection (forward mode)
+	float4x4 Mu_r; // Mu_r = (1/scaR)*R*L -> Ramon et al. 2019
+	Mu_r = mul(R, LF); // relfection totale scaR = 1
+
+    #ifndef BIAS
+	ph->weight *= ph->stokes.x + ph->stokes.y;
+	ph->stokes /= ph->stokes.x + ph->stokes.y; 
+    #endif
+
+    #ifdef BACK
+    ph->M = mul(ph->M, mul(LB, R));
+	#endif
+	
+	// update the stokes vector (forward mode)
+	ph->stokes = mul(Mu_r, ph->stokes); //S_l = Mu_r*S_l-1
+	// ********************************************************
+
+	// ********************************************
+	// Reflection of the direction v and perp dir u
+	// ********************************************
+	u_o = (microFnormal_m-cTheta_i*v_o)/sTheta_i;
+	u_o = normalize(u_o);
+	// ********************************************
+
+    float cTheta2_m, alph2, p_m;
+
+    cTheta2_m = cTheta_m*cTheta_m;
+    alph2 = 0.003 + 0.00512*WINDSPEEDd;
+    
+    p_m = __fdividef( __expf(-((1.F-cTheta2_m)/(cTheta2_m*alph2))) , cTheta2_m*cTheta2_m * alph2);
+    float jac, p_o;
+    
+    jac = __fdividef(1.F, 4.F);
+    if(HORIZd)
+    {
+        if (le) {p_o = __fdividef(p_m, fabs(cosf(tabthv[ph->ith])));}
+        else {p_o = __fdividef(p_m, avz_o);}
+    }
+    else
+    {
+        if (le) {p_o = p_m;}
+        else {p_o = __fdividef(p_m, avz_o);}
+    }
+    ph->weight *= fdividef(p_o*jac, avz_i);
+
+
+    // ********************************************************************
+	// Shadowing-Masking
+	// ********************************************************************
+	if (WAVE_SHADOWd)
+    {
+        // Add Wave shadowing
+        // compute wave shadow outgoing photon
+        float LambdaR, LambdaS;
+        LambdaS  =  LambdaM(avz_i,alph2*0.5);
+        LambdaR  =  LambdaM(avz_o,alph2*0.5);
+        ph->weight *= __fdividef(1.F, 1.F + LambdaR + LambdaS);
+
+    }
+	// ********************************************************************
+
+    if (isnan(ph->weight)) {ph->loc=REMOVED; return;}
+
+	// **********************************************
+	// update photon directions u, v, location and albedo
+	// **********************************************
+	#ifdef SPHERIQUE
+    // come back to global frame
+    v_o = normalize(transfo(v_o,2));
+    u_o = normalize(transfo(u_o,2));
+    #endif
+    if ( (isnan(v_o.x)) || (isnan(v_o.y)) || (isnan(v_o.z)) || 
+		 (isnan(u_o.x)) || (isnan(u_o.y)) || (isnan(u_o.z)) )
+    {
+        ph->loc = REMOVED;
+        return;
+    }
+    ph->v = v_o;
+	ph->u = u_o;
+
+    // photon next location
+    if( SIMd==SURF_ONLY || SIMd==OCEAN_SURF )
+    {
+        ph->loc = SPACE;
+    }
+    else
+    {
+        ph->loc = ATMOS;
+        #ifdef OPT3D
+        ph->layer = NATMd;
+        #endif
+    }
+
+	// **********************************************
+
+    if (!le)
+    {
+        // Russian roulette for propagating photons
+		if (RRd==1)
+        {
+		    if( ph->weight < WEIGHTRRd )
+            {
+		 		if( RAND < __fdividef(ph->weight, WEIGHTRRd) ){ ph->weight = WEIGHTRRd; }
+		 		else { ph->loc = ABSORBED; }
+		 	}
+		}
+    }
+}
+
+
+/* Surface BRDF */
+__device__ void surfaceBRDF_old(Photon* ph, int le,
                               float* tabthv, float* tabphi, int count_level,
                               struct RNG_State *rngstate) {
 	
@@ -5196,7 +5643,25 @@ __device__ void surfaceBRDF(Photon* ph, int le,
 
     v.x  = cosf(phi) * sinf(thv);
     v.y  = sinf(phi) * sinf(thv);
-    v.z  = cosf(thv);  
+    v.z  = cosf(thv);
+
+    v = normalize(v);
+
+    #ifdef SPHERIQUE
+    if (!le)
+    {
+        Transform transfo;
+        // Go to global frame - because in le==0 we sampled phi and thv from a facet n=(0,0,1) i.e. local frame-
+        // vec2transform routine return the tranformation that we have to apply to a vector=(0,0,1) to 
+        // be equal to the vector given as parameter (here Nz)
+        transfo = transfo.vec2transform(Nz);
+        v = normalize(transfo(v, 2)); // local to global frame
+    }
+    else
+    {
+        if(isBackward(Nz, v) & ph->loc==SURF0P) {ph->loc=ABSORBED; return;};
+    }
+    #endif
      
     // vector equation for determining the half direction h = sign(i dot o) (i + o)
 	no = operator-(v, ph->v);
@@ -5210,7 +5675,7 @@ __device__ void surfaceBRDF(Photon* ph, int le,
 
     #ifdef SPHERIQUE
     // facet slope
-    cBeta = fabs(dot(no, Nz));
+    cBeta = clamp(fabs(dot(no, Nz)), VALMIN, (1.F-VALMIN));
     #else
     cBeta = fabs(no.z);
     #endif
@@ -5218,9 +5683,13 @@ __device__ void surfaceBRDF(Photon* ph, int le,
 
     #ifdef SPHERIQUE
     // avz is the projection of V on the local vertical
+    // avz_o same as avz (incoming photon) but for outgoing photon
 	float avz = fabs(dot(Nz, ph->v));
+    float avz_o = fabs(dot(Nz, v));
+    //float avz_o = fabs(v.z);//fabs(dot(Nz, v)); 
     #else
     float avz = fabs(ph->v.z);
+    float avz_o = fabs(v.z); 
     #endif
 
 	// Rotation of Stokes parameters
@@ -5251,7 +5720,18 @@ __device__ void surfaceBRDF(Photon* ph, int le,
 
     // BRDF Weighting
     float cBeta2 = cBeta*cBeta;
-    ph->weight *=  __fdividef( __expf(-(1.F-cBeta2)/(cBeta2*sig2)), 4.F * cBeta2*cBeta2 * avz * fabs(v.z) * sig2);
+    if (HORIZd)
+    {
+        if (le) { ph->weight *=  __fdividef( __expf(-(1.F-cBeta2)/(cBeta2*sig2)), 4.F * cBeta2*cBeta2 * avz * fabs(v.z) * sig2); }
+        else { ph->weight *=  __fdividef( __expf(-(1.F-cBeta2)/(cBeta2*sig2)), 4.F * cBeta2*cBeta2 * avz * avz_o * sig2); }
+    }
+    else 
+    {
+        if (le) { ph->weight *=  __fdividef( __expf(-(1.F-cBeta2)/(cBeta2*sig2)), 4.F * cBeta2*cBeta2 * avz * sig2); }
+        else { ph->weight *=  __fdividef( __expf(-(1.F-cBeta2)/(cBeta2*sig2)), 4.F * cBeta2*cBeta2 * avz * avz_o * sig2); }
+    }
+
+    if (isnan(ph->weight)) {ph->loc=REMOVED; return;}
 
 	R= make_float4x4(
 	   rpar2, 0., 0., 0.,
@@ -5273,7 +5753,14 @@ __device__ void surfaceBRDF(Photon* ph, int le,
     ph->v = v;
 	ph->u = operator/(operator-(no, cTh*ph->v), sTh);	
 
-        // photon next location
+    if ( (isnan(ph->v.x)) || (isnan(ph->v.y)) || (isnan(ph->v.z)) || 
+		 (isnan(ph->u.x)) || (isnan(ph->u.y)) || (isnan(ph->u.z)) )
+    {
+        ph->loc = REMOVED;
+        return;
+    }
+
+    // photon next location
     if( SIMd==SURF_ONLY || SIMd==OCEAN_SURF ){
         ph->loc = SPACE;
     } else {
@@ -5288,7 +5775,7 @@ __device__ void surfaceBRDF(Photon* ph, int le,
         // compute wave shadow outgoing photon
         float LambdaR, LambdaS;
         LambdaS  =  LambdaM(avz,sig2*0.5);
-        LambdaR  =  LambdaM(fabs(v.z),sig2*0.5);
+        LambdaR  =  LambdaM(avz_o,sig2*0.5);
         ph->weight *= __fdividef(1.F, 1.F + LambdaR + LambdaS);
     }
 
