@@ -440,6 +440,13 @@ inline __host__ __device__ float2x2 make_float2x2(float m00, float m01,
 	return M;
 }
 
+inline __host__ __device__ float2x2 make_float2x2(double2x2 m){
+	float2x2 M;
+	M.r0.x=m.r0.x; M.r0.y=m.r0.y; // row 0
+	M.r1.x=m.r1.x; M.r1.y=m.r1.y; // row 1
+	return M;
+}
+
 inline __host__ __device__ float3x3 make_float3x3(float m00, float m01,float m02,
 												  float m10, float m11, float m12,
 												  float m20, float m21, float m22){
@@ -447,6 +454,14 @@ inline __host__ __device__ float3x3 make_float3x3(float m00, float m01,float m02
 	M.r0.x=m00; M.r0.y=m01; M.r0.z=m02; // row 0
 	M.r1.x=m10; M.r1.y=m11; M.r1.z=m12; // row 1
 	M.r2.x=m20; M.r2.y=m21; M.r2.z=m22; // row 2
+	return M;
+}
+
+inline __host__ __device__ float3x3 make_float3x3(double3x3 m){
+	float3x3 M;
+	M.r0.x=m.r0.x; M.r0.y=m.r0.y; M.r0.z=m.r0.z; // row 0
+	M.r1.x=m.r1.x; M.r1.y=m.r1.y; M.r1.z=m.r1.z; // row 1
+	M.r2.x=m.r2.x; M.r2.y=m.r2.y; M.r2.z=m.r2.z; // row 2
 	return M;
 }
 
@@ -462,12 +477,28 @@ inline __host__ __device__ float4x4 make_float4x4(float m00, float m01, float m0
 	return M;
 }
 
+inline __host__ __device__ float4x4 make_float4x4(double4x4 m){
+	float4x4 M;
+	M.r0.x=m.r0.x; M.r0.y=m.r0.y; M.r0.z=m.r0.z; M.r0.w=m.r0.w; // row 0
+	M.r1.x=m.r1.x; M.r1.y=m.r1.y; M.r1.z=m.r1.z; M.r1.w=m.r1.w; // row 1
+	M.r2.x=m.r2.x; M.r2.y=m.r2.y; M.r2.z=m.r2.z; M.r2.w=m.r2.w; // row 2
+	M.r3.x=m.r3.x; M.r3.y=m.r3.y; M.r3.z=m.r3.z; M.r3.w=m.r3.w; // row 3
+	return M;
+}
+
 //**********************
 inline __host__ __device__ double2x2 make_double2x2(float m00, float m01,
 													float m10, float m11){
 	double2x2 M;
 	M.r0.x=m00; M.r0.y=m01; // row 0
 	M.r1.x=m10; M.r1.y=m11; // row 1
+	return M;
+}
+
+inline __host__ __device__ double2x2 make_double2x2(float2x2 m){
+	double2x2 M;
+	M.r0.x=m.r0.x; M.r0.y=m.r0.y; // row 0
+	M.r1.x=m.r1.x; M.r1.y=m.r1.y; // row 1
 	return M;
 }
 
@@ -481,6 +512,14 @@ inline __host__ __device__ double3x3 make_double3x3(float m00, float m01,float m
 	return M;
 }
 
+inline __host__ __device__ double3x3 make_double3x3(float3x3 m){
+	double3x3 M;
+	M.r0.x=m.r0.x; M.r0.y=m.r0.y; M.r0.z=m.r0.z; // row 0
+	M.r1.x=m.r1.x; M.r1.y=m.r1.y; M.r1.z=m.r1.z; // row 1
+	M.r2.x=m.r2.x; M.r2.y=m.r2.y; M.r2.z=m.r2.z; // row 2
+	return M;
+}
+
 inline __host__ __device__ double4x4 make_double4x4(float m00, float m01, float m02, float m03,
 													float m10, float m11, float m12, float m13,
 													float m20, float m21, float m22, float m23,
@@ -490,6 +529,15 @@ inline __host__ __device__ double4x4 make_double4x4(float m00, float m01, float 
 	M.r1.x=m10; M.r1.y=m11; M.r1.z=m12; M.r1.w=m13; // row 1
 	M.r2.x=m20; M.r2.y=m21; M.r2.z=m22; M.r2.w=m23; // row 2
 	M.r3.x=m30; M.r3.y=m31; M.r3.z=m32; M.r3.w=m33; // row 3
+	return M;
+}
+
+inline __host__ __device__ double4x4 make_double4x4(float4x4 m){
+	double4x4 M;
+	M.r0.x=m.r0.x; M.r0.y=m.r0.y; M.r0.z=m.r0.z; M.r0.w=m.r0.w; // row 0
+	M.r1.x=m.r1.x; M.r1.y=m.r1.y; M.r1.z=m.r1.z; M.r1.w=m.r1.w; // row 1
+	M.r2.x=m.r2.x; M.r2.y=m.r2.y; M.r2.z=m.r2.z; M.r2.w=m.r2.w; // row 2
+	M.r3.x=m.r3.x; M.r3.y=m.r3.y; M.r3.z=m.r3.z; M.r3.w=m.r3.w; // row 3
 	return M;
 }
 
