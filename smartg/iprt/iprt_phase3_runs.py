@@ -106,6 +106,38 @@ def get_d1_to_e5_toa_sensors(vza, phi, nvza, nvaa, earth_r, z):
             sensors.append(sen_tmp)
     return sensors
 
+
+def get_e6_toa_sensors(vza, phi, nvza, nvaa, earth_r, z):
+    sensors = []
+    zeros = np.zeros((nvaa), dtype=np.float64)
+    origin = gc.Point(zeros, zeros, np.full((nvaa), 3e5, dtype=np.float64))
+    toa_layer = gc.Sphere(earth_r+np.max(z))
+
+    vza_toa = 180.-vza
+    phi_toa = phi + 180.
+
+    for ivza in range (0, nvza):
+        dirs_tmp = -gc.ang2vec(theta=vza[ivza], phi=phi)
+        ray_tmp = gc.Ray(o=origin, d=dirs_tmp)
+        ds_geo_tmp = gc.calc_intersection(toa_layer, ray_tmp)
+        for ivaa in range (0, nvaa):
+            if not (ds_geo_tmp['is_intersection'].values[ivaa]):
+                raise NameError(f"No intersection have been found for VZA={vza[ivza]} and VAA={phi[ivaa]}." + \
+                                " Please check input paramaters.")
+            phit = gc.Point(ds_geo_tmp['phit'].values[ivaa,:])
+            sen_tmp = Sensor(
+                            POSX = phit.x,
+                            POSY = phit.y,
+                            POSZ = phit.z,
+                            THDEG= vza_toa[ivza],#180-vza[ivza],
+                            PHDEG= phi_toa[ivaa],
+                            LOC  = 'ATMOS',
+                            TYPE = 0
+                            )
+            sensors.append(sen_tmp)
+    return sensors
+
+
 def to_iprt_output(case_name, sza, saa, vza, vaa, z,
                    overwrite=True, output_dir='./'):
     
@@ -129,44 +161,65 @@ def to_iprt_output(case_name, sza, saa, vza, vaa, z,
         print(f'File {f_path} already exists. Skipping.')
     
     else:
-        fboa_name = f'iprt_phase3_{case_name}_boa.nc'
-        fboa_path = dir_output/ fboa_name
-        ds_boa = xr.open_dataset(fboa_path)
+        if case_name != 'e6':
+            fboa_name = f'iprt_phase3_{case_name}_boa.nc'
+            fboa_path = dir_output/ fboa_name
+            ds_boa = xr.open_dataset(fboa_path)
         ftoa_name = f'iprt_phase3_{case_name}_toa.nc'
         ftoa_path = dir_output / ftoa_name
         ds_toa = xr.open_dataset(ftoa_path)
-
-        ds = xr.Dataset(coords={f'{case_name}_sza':sza,
-                                f'{case_name}_saa':saa,
-                                f'{case_name}_vza':vza,
-                                f'{case_name}_vaa':vaa,
-                                f'{case_name}_zout':np.array([0.,np.max(z)]),
-                                'stokes':np.arange(4, dtype=np.int32)})
+        if case_name != 'e6':
+            ds = xr.Dataset(coords={f'{case_name}_sza':sza,
+                                    f'{case_name}_saa':saa,
+                                    f'{case_name}_vza':vza,
+                                    f'{case_name}_vaa':vaa,
+                                    f'{case_name}_zout':np.array([0.,np.max(z)]),
+                                    'stokes':np.arange(4, dtype=np.int32)})
+        else:
+            ds = xr.Dataset(coords={f'{case_name}_sza':sza,
+                                    f'{case_name}_saa':saa,
+                                    f'{case_name}_vza':vza,
+                                    f'{case_name}_vaa':vaa,
+                                    f'{case_name}_zout':np.array([3e5]),
+                                    'stokes':np.arange(4, dtype=np.int32)})
         nsza = len(sza)
         nsaa = len(saa)
         nvza = len(vza)
         nvaa = len(vaa)
-        nzout = 2
+        if case_name != 'e6': nzout = 2
+        else : nzout = 1
         nstokes = 4
 
         radiance = np.zeros((nzout,nsza,nsaa,nvza,nvaa,nstokes), dtype=np.float32)
         std = np.zeros_like(radiance)
-        radiance[0,:,0,:,:,0] = np.swapaxes(ds_boa['I_up (TOA)'].values, 1,2)
-        radiance[0,:,0,:,:,1] = np.swapaxes(ds_boa['Q_up (TOA)'].values, 1,2)
-        radiance[0,:,0,:,:,2] = np.swapaxes(ds_boa['U_up (TOA)'].values, 1,2)
-        radiance[0,:,0,:,:,3] = np.swapaxes(ds_boa['V_up (TOA)'].values, 1,2)
-        radiance[1,:,0,:,:,0] = np.swapaxes(ds_toa['I_up (TOA)'].values, 1,2)
-        radiance[1,:,0,:,:,1] = np.swapaxes(ds_toa['Q_up (TOA)'].values, 1,2)
-        radiance[1,:,0,:,:,2] = np.swapaxes(ds_toa['U_up (TOA)'].values, 1,2)
-        radiance[1,:,0,:,:,3] = np.swapaxes(ds_toa['V_up (TOA)'].values, 1,2)
-        std[0,:,0,:,:,0] = np.swapaxes(ds_boa['I_stdev_up (TOA)'].values, 1,2)
-        std[0,:,0,:,:,1] = np.swapaxes(ds_boa['Q_stdev_up (TOA)'].values, 1,2)
-        std[0,:,0,:,:,2] = np.swapaxes(ds_boa['U_stdev_up (TOA)'].values, 1,2)
-        std[0,:,0,:,:,3] = np.swapaxes(ds_boa['V_stdev_up (TOA)'].values, 1,2)
-        std[1,:,0,:,:,0] = np.swapaxes(ds_toa['I_stdev_up (TOA)'].values, 1,2)
-        std[1,:,0,:,:,1] = np.swapaxes(ds_toa['Q_stdev_up (TOA)'].values, 1,2)
-        std[1,:,0,:,:,2] = np.swapaxes(ds_toa['U_stdev_up (TOA)'].values, 1,2)
-        std[1,:,0,:,:,3] = np.swapaxes(ds_toa['V_stdev_up (TOA)'].values, 1,2)
+        if case_name != 'e6':
+            radiance[0,:,0,:,:,0] = np.swapaxes(ds_boa['I_up (TOA)'].values, 1,2)
+            radiance[0,:,0,:,:,1] = np.swapaxes(ds_boa['Q_up (TOA)'].values, 1,2)
+            radiance[0,:,0,:,:,2] = np.swapaxes(ds_boa['U_up (TOA)'].values, 1,2)
+            radiance[0,:,0,:,:,3] = np.swapaxes(ds_boa['V_up (TOA)'].values, 1,2)
+            radiance[1,:,0,:,:,0] = np.swapaxes(ds_toa['I_up (TOA)'].values, 1,2)
+            radiance[1,:,0,:,:,1] = np.swapaxes(ds_toa['Q_up (TOA)'].values, 1,2)
+            radiance[1,:,0,:,:,2] = np.swapaxes(ds_toa['U_up (TOA)'].values, 1,2)
+            radiance[1,:,0,:,:,3] = np.swapaxes(ds_toa['V_up (TOA)'].values, 1,2)
+            std[0,:,0,:,:,0] = np.swapaxes(ds_boa['I_stdev_up (TOA)'].values, 1,2)
+            std[0,:,0,:,:,1] = np.swapaxes(ds_boa['Q_stdev_up (TOA)'].values, 1,2)
+            std[0,:,0,:,:,2] = np.swapaxes(ds_boa['U_stdev_up (TOA)'].values, 1,2)
+            std[0,:,0,:,:,3] = np.swapaxes(ds_boa['V_stdev_up (TOA)'].values, 1,2)
+            std[1,:,0,:,:,0] = np.swapaxes(ds_toa['I_stdev_up (TOA)'].values, 1,2)
+            std[1,:,0,:,:,1] = np.swapaxes(ds_toa['Q_stdev_up (TOA)'].values, 1,2)
+            std[1,:,0,:,:,2] = np.swapaxes(ds_toa['U_stdev_up (TOA)'].values, 1,2)
+            std[1,:,0,:,:,3] = np.swapaxes(ds_toa['V_stdev_up (TOA)'].values, 1,2)
+        else:
+
+            radiance[0,:,0,:,:,0] = np.swapaxes(ds_toa['I_up (TOA)'].values, 1,2)
+            radiance[0,:,0,:,:,1] = np.swapaxes(ds_toa['Q_up (TOA)'].values, 1,2)
+            radiance[0,:,0,:,:,2] = np.swapaxes(ds_toa['U_up (TOA)'].values, 1,2)
+            radiance[0,:,0,:,:,3] = np.swapaxes(ds_toa['V_up (TOA)'].values, 1,2)
+            std[0,:,0,:,:,0] = np.swapaxes(ds_toa['I_stdev_up (TOA)'].values, 1,2)
+            std[0,:,0,:,:,1] = np.swapaxes(ds_toa['Q_stdev_up (TOA)'].values, 1,2)
+            std[0,:,0,:,:,2] = np.swapaxes(ds_toa['U_stdev_up (TOA)'].values, 1,2)
+            std[0,:,0,:,:,3] = np.swapaxes(ds_toa['V_stdev_up (TOA)'].values, 1,2)
+
         
         ds[f'radiance_{case_name}'] = xr.DataArray(radiance, dims=[f'{case_name}_zout', f'{case_name}_sza', f'{case_name}_saa',
                                                                    f'{case_name}_vza', f'{case_name}_vaa', 'stokes' ])
@@ -176,7 +229,7 @@ def to_iprt_output(case_name, sza, saa, vza, vaa, z,
 
 def run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
             sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons, wl, le,
-            surf, pro, dep, z, ntheta=18001, pp=False):
+            surf, pro, dep, z, ntheta=18001, pp=False, is_e6=False):
     
     if pp :
         sg = S1DB_PP
@@ -186,11 +239,11 @@ def run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
         RTER=earth_r
 
     # BOA
-    if overwrite or not fboa_exist:
+    if (overwrite or not fboa_exist) and not is_e6:
         sensors = get_d1_to_e5_boa_sensors(vza, phi, nvza, nvaa, earth_r)
         m_boa = sg.run(wl=wl, NBPHOTONS=nvza*nvaa*nphotons, NBLOOP=nphotons, atm=pro, sensor=sensors, OUTPUT_LAYERS=1,
-                        le=le, surf=surf, XBLOCK = 64, XGRID = 1024, BEER=1, DEPO=dep, reflectance=True, RTER=RTER,
-                        stdev=True, progress=True, NF=ntheta)
+                        le=le, surf=surf, XBLOCK = 64, XGRID = 1024, BEER=1, DEPO=dep, reflectance=False, RTER=RTER,
+                        stdev=True, progress=True, NF=ntheta)#, SEED=1e8)
 
         m_boa = m_boa.dropaxis('Azimuth angles')
         m_boa.add_axis('sza', sza)
@@ -218,10 +271,11 @@ def run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
 
     # TOA
     if overwrite or not ftoa_exist:
-        sensors = get_d1_to_e5_toa_sensors(vza, phi, nvza, nvaa, earth_r, z)
+        if not is_e6: sensors = get_d1_to_e5_toa_sensors(vza, phi, nvza, nvaa, earth_r, z)
+        else : sensors = get_e6_toa_sensors(vza, phi, nvza, nvaa, earth_r, z)
         m_toa = sg.run(wl=wl, NBPHOTONS=nvza*nvaa*nphotons, NBLOOP=nphotons, atm=pro, sensor=sensors, OUTPUT_LAYERS=1,
-                        le=le, surf=surf, XBLOCK = 64, XGRID = 1024, BEER=1, DEPO=dep, reflectance=True, RTER=RTER,
-                        stdev=True, progress=True, NF=ntheta)
+                        le=le, surf=surf, XBLOCK = 64, XGRID = 1024, BEER=1, DEPO=dep, reflectance=False, RTER=RTER,
+                        stdev=True, progress=True, NF=ntheta)#, SEED=1e8)
 
         m_toa = m_toa.dropaxis('Azimuth angles')
         m_toa.add_axis('sza', sza)
@@ -442,7 +496,7 @@ def case_D1(nphotons=1e8, overwrite=True, output_dir='./'):
     ftoa_exist = ftoa_path.exists()
 
 
-    sza = np.array([30., 60., 80., 87., 89.9999, 93., 96., 99.])
+    sza = np.array([30., 60., 80., 87., 90., 93., 96., 99.])
     saa = np.array([0.])
     vza = np.array([0., 9., 18., 26., 34., 41., 48., 54., 60., 65., 70.,
                         74., 78., 81., 84., 86., 88., 89., 90.])
@@ -490,7 +544,7 @@ def case_D2(nphotons=1e8, overwrite=True, output_dir='./'):
     ftoa_exist = ftoa_path.exists()
 
 
-    sza = np.array([30., 60., 80., 87., 89.9999, 93., 96., 99.])
+    sza = np.array([30., 60., 80., 87., 90., 93., 96., 99.])
     saa = np.array([0.])
     vza = np.array([0., 9., 18., 26., 34., 41., 48., 54., 60., 65., 70.,
                         74., 78., 81., 84., 86., 88., 89., 90.])
@@ -538,7 +592,7 @@ def case_D3(nphotons=1e8, overwrite=True, output_dir='./'):
     ftoa_exist = ftoa_path.exists()
 
 
-    sza = np.array([30., 60., 80., 87., 89.9999, 93., 96., 99.])
+    sza = np.array([30., 60., 80., 87., 90., 93., 96., 99.])
     saa = np.array([0.])
     vza = np.array([0., 9., 18., 26., 34., 41., 48., 54., 60., 65., 70.,
                         74., 78., 81., 84., 86., 88., 89., 90.])
@@ -613,7 +667,7 @@ def case_D4(nphotons=1e8, overwrite=True, output_dir='./'):
     ftoa_exist = ftoa_path.exists()
 
 
-    sza = np.array([30., 60., 80., 87., 89.9999, 93., 96., 99.])
+    sza = np.array([30., 60., 80., 87., 90., 93., 96., 99.])
     saa = np.array([0.])
     vza = np.array([0., 9., 18., 26., 34., 41., 48., 54., 60., 65., 70.,
                         74., 78., 81., 84., 86., 88., 89., 90.])
@@ -690,7 +744,7 @@ def case_D4_bis(nphotons=1e8, overwrite=True, output_dir='./'):
     ftoa_exist = ftoa_path.exists()
 
 
-    sza = np.array([30., 60., 80., 87., 89.9999, 93., 96., 99.])
+    sza = np.array([30., 60., 80., 87., 90., 93., 96., 99.])
     saa = np.array([0.])
     vza = np.array([0., 9., 18., 26., 34., 41., 48., 54., 60., 65., 70.,
                         74., 78., 81., 84., 86., 88., 89., 90.])
@@ -750,7 +804,7 @@ def case_D5(nphotons=1e8, overwrite=True, output_dir='./'):
     ftoa_exist = ftoa_path.exists()
 
 
-    sza = np.array([30., 60., 80., 87., 89.9999, 93., 96., 99.])
+    sza = np.array([30., 60., 80., 87., 90., 93., 96., 99.])
     saa = np.array([0.])
     vza = np.array([0., 9., 18., 26., 34., 41., 48., 54., 60., 65., 70.,
                         74., 78., 81., 84., 86., 88., 89., 90.])
@@ -828,7 +882,7 @@ def case_D6(nphotons=1e8, overwrite=True, output_dir='./'):
     ftoa_exist = ftoa_path.exists()
 
 
-    sza = np.array([30., 60., 80., 87., 89.9999, 93., 96., 99.])
+    sza = np.array([30., 60., 80., 87., 90., 93., 96., 99.])
     saa = np.array([0.])
     vza = np.array([0., 9., 18., 26., 34., 41., 48., 54., 60., 65., 70.,
                         74., 78., 81., 84., 86., 88., 89., 90.])
@@ -878,10 +932,10 @@ def case_D6_pp(nphotons=1e8, overwrite=True, output_dir='./'):
     ftoa_exist = ftoa_path.exists()
 
 
-    sza = np.array([30., 60., 80., 87., 89.9999, 93., 96., 99.])
+    sza = np.array([30., 60., 80., 87.])
     saa = np.array([0.])
     vza = np.array([0., 9., 18., 26., 34., 41., 48., 54., 60., 65., 70.,
-                        74., 78., 81., 84., 86., 88., 89., 90.])
+                        74., 78., 81., 84., 86., 88., 89.])
     vaa = np.linspace(0., 180., 19)
     z = None
 
@@ -896,6 +950,8 @@ def case_D6_pp(nphotons=1e8, overwrite=True, output_dir='./'):
         
         # atmosphere profil
         pro = AtmAFGL('afglt', grid=z, prof_ray=mol_sca, prof_abs=mol_abs).calc(wl)
+        # surf = RoughSurface(WIND=2., BRDF=False, WAVE_SHADOW=True, NH2O=1.33,
+        #                     SUR=1, SINGLE=True)
         surf = RoughSurface(WIND=2., BRDF=True, WAVE_SHADOW=True, NH2O=1.33)
 
         nvza = len(vza)
@@ -929,7 +985,7 @@ def case_E1(nphotons=1e8, overwrite=True, output_dir='./'):
     ftoa_exist = ftoa_path.exists()
 
 
-    sza = np.array([30., 60., 80., 87., 89.9999, 93., 96., 99.])
+    sza = np.array([30., 60., 80., 87., 90., 93., 96., 99.])
     saa = np.array([0.])
     vza = np.array([0., 9., 18., 26., 34., 41., 48., 54., 60., 65., 70.,
                         74., 78., 81., 84., 86., 88., 89., 90.])
@@ -980,7 +1036,7 @@ def case_E2(nphotons=1e8, overwrite=True, output_dir='./'):
     ftoa_exist = ftoa_path.exists()
 
 
-    sza = np.array([30., 60., 80., 87., 89.9999, 93., 96., 99.])
+    sza = np.array([30., 60., 80., 87., 90., 93., 96., 99.])
     saa = np.array([0.])
     vza = np.array([0., 9., 18., 26., 34., 41., 48., 54., 60., 65., 70.,
                         74., 78., 81., 84., 86., 88., 89., 90.])
@@ -1033,7 +1089,7 @@ def case_E3(nphotons=1e8, overwrite=True, output_dir='./'):
     ftoa_exist = ftoa_path.exists()
 
 
-    sza = np.array([30., 60., 80., 87., 89.9999, 93., 96., 99.])
+    sza = np.array([30., 60., 80., 87., 90., 93., 96., 99.])
     saa = np.array([0.])
     vza = np.array([0., 9., 18., 26., 34., 41., 48., 54., 60., 65., 70.,
                         74., 78., 81., 84., 86., 88., 89., 90.])
@@ -1096,7 +1152,7 @@ def case_E4(nphotons=1e8, overwrite=True, output_dir='./'):
     ftoa_exist = ftoa_path.exists()
 
 
-    sza = np.array([30., 60., 80., 87., 89.9999, 93., 96., 99.])
+    sza = np.array([30., 60., 80., 87., 90., 93., 96., 99.])
     saa = np.array([0.])
     vza = np.array([0., 9., 18., 26., 34., 41., 48., 54., 60., 65., 70.,
                         74., 78., 81., 84., 86., 88., 89., 90.])
@@ -1169,7 +1225,7 @@ def case_E5(nphotons=1e8, overwrite=True, output_dir='./'):
     ftoa_exist = ftoa_path.exists()
 
 
-    sza = np.array([30., 60., 80., 87., 89.9999, 93., 96., 99.])
+    sza = np.array([30., 60., 80., 87., 90., 93., 96., 99.])
     saa = np.array([0.])
     vza = np.array([0., 9., 18., 26., 34., 41., 48., 54., 60., 65., 70.,
                         74., 78., 81., 84., 86., 88., 89., 90.])
@@ -1199,7 +1255,7 @@ def case_E5(nphotons=1e8, overwrite=True, output_dir='./'):
         with TemporaryDirectory() as tmpdir:
             file_path = Path(tmpdir)/'ic_ghm_baum_e5.nc'
             ds_ic_baum_ghm.to_netcdf(file_path)
-            cld1 = Cloud('./tmp_ic_baum_ghm.nc', reff=50., zmin=10., zmax=11., tau_ref=1., w_ref=wl[0])
+            cld1 = Cloud(str(file_path), reff=50., zmin=10., zmax=11., tau_ref=1., w_ref=wl[0])
 
         pro = AtmAFGL('afglt', comp=[cld1], grid=z, prof_ray=sca, prof_abs=abs).calc(wl, phase=True, NBTHETA=nth)
         surf = None
@@ -1223,9 +1279,58 @@ def case_E5(nphotons=1e8, overwrite=True, output_dir='./'):
                    overwrite=overwrite, output_dir=output_dir)
 
 
+def case_E6(nphotons=1e8, overwrite=True, output_dir='./'):
+    
+    dir_output = Path(output_dir)
+    Path(dir_output).mkdir(parents=True, exist_ok=True)
+    ftoa_name = f'iprt_phase3_e6_toa.nc'
+    ftoa_path = dir_output / ftoa_name
+    ftoa_exist = ftoa_path.exists()
+
+
+    sza = np.array([50., 90., 110., 130.])
+    saa = np.array([0.])
+    vza = np.arange(0., 1.2+0.04, 0.04)
+    vaa = np.arange(0., 360.+10, 10)
+    z = None
+
+    if (overwrite      or 
+        not ftoa_exist  ):
+
+        # atmosphere profil
+        mol_sca_filename  =  OPT_PROP_PATH_PHASE3 + "tau_rayleigh_450nm_usstd.dat"
+        mol_abs_filename  =  OPT_PROP_PATH_PHASE3 + "tau_absorption_450nm_usstd.dat"
+        wl = np.array([450.])
+        z = np.squeeze(pd.read_csv(mol_sca_filename, header=None, usecols=[0], dtype=float, skiprows=1, sep=r'\s+', comment='#').values)
+        zs = len(z)
+        sca = pd.read_csv(mol_sca_filename, header=None, usecols=[1], dtype=float, skiprows=1, sep=r'\s+', comment='#').values.reshape(1,zs)
+        abs = pd.read_csv(mol_abs_filename, header=None, usecols=[1], dtype=float, skiprows=1, sep=r'\s+', comment='#').values.reshape(1,zs)
+        pro = AtmAFGL('afglt', grid=z, prof_ray=sca, prof_abs=abs).calc(wl)
+        surf = RoughSurface(WIND=5., BRDF=True, WAVE_SHADOW=True, NH2O=1.33)
+        
+        nvza = len(vza)
+        nvaa = len(vaa)
+        phi = -vaa
+        dep = 0.03
+        earth_r = 6371.
+
+        count_lvl = np.zeros_like(sza, dtype=np.int32)
+        phi_0 = -saa # To follow iprt anti-clockwise convention
+        le     = {'th_deg':sza, 'phi_deg':phi_0, 'count_level':count_lvl}
+
+        # run simulations and create intermediate files
+        run_sim(overwrite, False, ftoa_exist, 'none.nc', ftoa_path,
+                sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons, 
+                wl, le, surf, pro, dep, z, is_e6=True)
+
+    # open intermediate files and convert to iprt phase3 output format 
+    to_iprt_output('e6', sza, saa, vza, vaa, z,
+                   overwrite=overwrite, output_dir=output_dir)
+
+
 if __name__ == '__main__':
     # D - Test cases for fully spherical geometry with one layer
-    output_dir='./res_iprt_phase3_1e8photons_v3/'
+    output_dir='./res_iprt_phase3_1e8photons/'
     case_D1(nphotons=1e8, overwrite=False, output_dir=output_dir)
     case_D2(nphotons=1e8, overwrite=False, output_dir=output_dir)
     case_D3(nphotons=1e8, overwrite=False, output_dir=output_dir)
@@ -1233,9 +1338,11 @@ if __name__ == '__main__':
     case_D5(nphotons=1e8, overwrite=False, output_dir=output_dir)
     case_D6(nphotons=1e8, overwrite=False, output_dir=output_dir)
 
+
     # E - Test cases for fully spherical geometry for a vertically inhomogeneous atmosphere
     case_E1(nphotons=1e8, overwrite=False, output_dir=output_dir)
     case_E2(nphotons=1e8, overwrite=False, output_dir=output_dir)
     case_E3(nphotons=1e8, overwrite=False, output_dir=output_dir)
     case_E4(nphotons=1e8, overwrite=False, output_dir=output_dir)
     case_E5(nphotons=1e8, overwrite=False, output_dir=output_dir)
+    case_E6(nphotons=1e8, overwrite=False, output_dir=output_dir)
