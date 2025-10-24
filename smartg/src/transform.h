@@ -57,6 +57,7 @@ public:
 	__host__ __device__ Transform RotateY(float angle);             // rot par rapport à Y  
 	__host__ __device__ Transform RotateZ(float angle);             // rot par rapport à Z
 	__host__ __device__ Transform Rotate(float angle, const float3 &axis);
+	__host__ __device__ Transform vec2transform(float3 vi);
 
 	private:
 	// Paramètres privés
@@ -427,6 +428,80 @@ Transform Transform::Rotate(float angle, const float3 &axis) {
     return Transform(m, transpose(m));
 }
 
+Transform Transform::vec2transform(float3 vi)
+{
+	// this function gives the needed transform to get the vector vi from
+	// an intial vector=(0,0,1)
+    double acc=1e-4;
+    double3 v_ini = make_double3(0., 0., 1.);
+    double roty_rad;
+    double rotz_rad;
+    double cosphi;
+    double theta;
+    double phi;
+    Transform tf;
+    Transform nothing;
+    double3 v_ini_rotated;
+	double3 v = make_double3(vi.x, vi.y, vi.z);
+	v = normalize(v);
+
+
+    // In case v = v_ini -> no rotations
+    if (abs(v.x-v_ini.x) < acc & abs(v.y-v_ini.y) < acc & abs(v.z-v_ini.z) < acc)
+    {
+        return nothing;
+    }
+
+    for (int icase = 1; icase < 6; ++icase)
+	{
+        if (icase == 1)
+        {
+            roty_rad = acos(v.z);
+            if (v.x == 0 & roty_rad == 0) cosphi = 0.;
+            else cosphi = clamp(v.x/sin(roty_rad), -1., 1.);
+            rotz_rad = acos(cosphi);
+        }
+        else if(icase == 2)
+        {
+            roty_rad = acos(v.z);
+            if (v.x == 0 & roty_rad == 0) cosphi = 0.;
+            else cosphi = clamp(v.x/sin(roty_rad), -1., 1.);
+            rotz_rad = -acos(cosphi);
+        }
+        else if(icase == 3)
+        {
+            roty_rad = -acos(v.z);
+            if (v.x == 0 & roty_rad == 0) cosphi = 0.;
+            else cosphi = clamp(v.x/sin(roty_rad), -1., 1.);
+            rotz_rad = acos(cosphi);
+        }
+        else if(icase == 4)
+        {
+            roty_rad = -acos(v.z);
+            if (v.x == 0 & roty_rad == 0) cosphi = 0.;
+            else cosphi = clamp(v.x/sin(roty_rad), -1., 1.);
+            rotz_rad = -acos(cosphi);
+        }
+        else
+        {
+            return nothing;
+        }
+
+        
+        theta = roty_rad * (180./CUDART_PI);
+        phi = rotz_rad * (180./CUDART_PI);
+        
+        tf = nothing.RotateZ(phi)*nothing.RotateY(theta);
+        v_ini_rotated = normalize(make_double3(tf(make_float3(v_ini), 2)));
+
+        if (abs(v.x-v_ini_rotated.x) < acc & abs(v.y-v_ini_rotated.y) < acc & abs(v.z-v_ini_rotated.z) < acc)
+        {
+			return tf;
+        }
+	}
+	return nothing;
+}
+
 //**************************************************************
 //**************************************************************
 //**************************************************************
@@ -469,6 +544,7 @@ public:
 	__host__ __device__ Transformd RotateY(double angle);               // rot par rapport à Y  
 	__host__ __device__ Transformd RotateZ(double angle);               // rot par rapport à Z
 	__host__ __device__ Transformd Rotate(double angle, const double3 &axis);
+	__host__ __device__ Transformd vec2transform(double3 vi);
 
 private:
 	// Paramètres privés
@@ -783,6 +859,80 @@ Transformd Transformd::Rotate(double angle, const double3 &axis) {
 	m[2][2] = a.z * a.z + (1. - a.z * a.z) * c;
 
     return Transformd(m, transpose(m));
+}
+
+Transformd Transformd::vec2transform(double3 vi)
+{
+	// this function gives the needed transform to get the vector vi from
+	// an intial vector=(0,0,1)
+    double acc=1e-4;
+    double3 v_ini = make_double3(0., 0., 1.);
+    double roty_rad;
+    double rotz_rad;
+    double cosphi;
+    double theta;
+    double phi;
+    Transformd tf;
+    Transformd nothing;
+    double3 v_ini_rotated;
+	double3 v = make_double3(vi.x, vi.y, vi.z);
+	v = normalize(v);
+
+
+    // In case v = v_ini -> no rotations
+    if (abs(v.x-v_ini.x) < acc & abs(v.y-v_ini.y) < acc & abs(v.z-v_ini.z) < acc)
+    {
+        return nothing;
+    }
+
+    for (int icase = 1; icase < 6; ++icase)
+	{
+        if (icase == 1)
+        {
+            roty_rad = acos(v.z);
+            if (v.x == 0 & roty_rad == 0) cosphi = 0.;
+            else cosphi = clamp(v.x/sin(roty_rad), -1., 1.);
+            rotz_rad = acos(cosphi);
+        }
+        else if(icase == 2)
+        {
+            roty_rad = acos(v.z);
+            if (v.x == 0 & roty_rad == 0) cosphi = 0.;
+            else cosphi = clamp(v.x/sin(roty_rad), -1., 1.);
+            rotz_rad = -acos(cosphi);
+        }
+        else if(icase == 3)
+        {
+            roty_rad = -acos(v.z);
+            if (v.x == 0 & roty_rad == 0) cosphi = 0.;
+            else cosphi = clamp(v.x/sin(roty_rad), -1., 1.);
+            rotz_rad = acos(cosphi);
+        }
+        else if(icase == 4)
+        {
+            roty_rad = -acos(v.z);
+            if (v.x == 0 & roty_rad == 0) cosphi = 0.;
+            else cosphi = clamp(v.x/sin(roty_rad), -1., 1.);
+            rotz_rad = -acos(cosphi);
+        }
+        else
+        {
+            return nothing;
+        }
+
+        
+        theta = roty_rad * (180./CUDART_PI);
+        phi = rotz_rad * (180./CUDART_PI);
+        
+        tf = nothing.RotateZ(phi)*nothing.RotateY(theta);
+        v_ini_rotated = normalize(tf(v_ini, 2));
+
+        if (abs(v.x-v_ini_rotated.x) < acc & abs(v.y-v_ini_rotated.y) < acc & abs(v.z-v_ini_rotated.z) < acc)
+        {
+			return tf;
+        }
+	}
+	return nothing;
 }
 // -------------------------------------------------------
 
