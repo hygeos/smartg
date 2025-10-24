@@ -2999,7 +2999,7 @@ inline __device__ __host__ bool isBackward(double3 a, double3 b)
 
 ////////////////////////////////////////////////////////////////////////////////
 // radians
-// - convert degree to radians
+// - convert degrees to radians
 ////////////////////////////////////////////////////////////////////////////////
 
 inline __device__ __host__ float radians(float deg) {
@@ -3008,6 +3008,19 @@ inline __device__ __host__ float radians(float deg) {
 
 inline __device__ __host__ double radiansd(double deg) {
     return (CUDART_PI/180.) * deg;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// radians
+// - convert radians to degrees //TODO degreesd to remove and use template
+////////////////////////////////////////////////////////////////////////////////
+
+inline __device__ __host__ float degrees(float rad) {
+    return (180.f/PI) * rad;
+}
+
+inline __device__ __host__ double degreesd(double rad) {
+    return (180./CUDART_PI) * rad;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
