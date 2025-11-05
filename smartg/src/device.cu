@@ -122,7 +122,7 @@ extern "C" {
 	while (this_thread_active > 0 and nThreadsActive[0] > 0) {
 		iloop += 1;
 		
-		#ifdef OBJ3D
+		#if defined(OBJ3D) && !defined(SPHERIQUE)
 		/* ************************************************************************************************** */
 		/* si on simule des objs on utilise cette astuce pour lancer exactement le nombre souhaité de photons */
 		/* Si le nombre de ph lancés NBLOOPd > 256000 et que le compteur devient > (NBLOOPd-256000) alors     */
@@ -1053,7 +1053,7 @@ extern "C" {
                         #ifdef OBJ3D
                         mask_le = false;
                         copyIGeo(&geoStruc, &geoStruc_le);
-                        mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam)
+                        mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
                         #endif
                     } 
                     #endif
@@ -1864,6 +1864,41 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     #endif
 
 
+    #if defined(SPHERIQUE) && defined(OBJ3D)
+    if (cell_sized == -2)
+    {
+        float toa_rad = RTER+ZTOAd+10;
+        float toa_rad2 = RTER+ZTOAd;
+        Transform nothing;
+        // BBox bbox_(make_float3(-toa_rad, -toa_rad, -toa_rad), make_float3(toa_rad, toa_rad, toa_rad));
+        Ray r1(ph->pos, ph->v, 0);
+        if (true)//bbox_.IntersectP(r1))
+        {
+            // int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+            // if (idx==0) printf("%f %f %f %f; v= %f %f %f\n", ph->pos.x, ph->pos.y, ph->pos.z, ph->radius, ph->v.x, ph->v.y, ph->v.z);
+            Sphere toa_sph(&nothing, &nothing, toa_rad2, -toa_rad2, toa_rad2, 360.);
+            float t_fac = 0.;
+            bool is_intersection = false;
+            DifferentialGeometry diff_geo;
+            is_intersection = toa_sph.Intersect(r1, &t_fac, &diff_geo);
+            if (is_intersection)
+            {
+                ph->pos = r1(t_fac);
+                ph->radius = length(ph->pos);
+            }
+            else
+            {
+                ph->loc=REMOVED;//ph->loc=ABSORBED;
+                return;
+            }
+        }
+        // else
+        // {
+        //     ph->loc=REMOVED;//ABSORBED;
+        //     return;
+        // }
+    }
+    #endif
 
     /* ----------------------------------------------------------------------------------------- */
     //   OBJ3D Specific initialization
