@@ -546,6 +546,35 @@ def plot_polar_iprt(I, Q, U, V, thetas, phis, change_Q_sign=False, change_U_sign
     fig.tight_layout()
     if save_fig is not None: plt.savefig(save_fig)
 
+def plot_camera_iprt(I, Q, U, V, title=None, save_fig=None):
+    """
+    """
+
+    fig_size = (20,4)
+    fig, axs = plt.subplots(1,4, figsize=fig_size, constrained_layout=True, sharex=True, sharey=True)
+    if title is not None: fig.suptitle(title, fontsize=20)
+    
+    caxI = axs[0].imshow(I, vmin=0., vmax=None, origin='lower', cmap=plt.get_cmap('viridis'))
+    cbarI = plt.colorbar(caxI)
+    cbarI.set_label('I', fontsize=20)
+
+    caxQ = axs[1].imshow(Q, vmin=-np.max(np.abs(Q)), vmax=np.max(np.abs(Q)),
+                        origin='upper', cmap=plt.get_cmap('coolwarm'))
+    cbarQ = plt.colorbar(caxQ)
+    cbarQ.set_label('Q', fontsize=20)
+
+    caxU = axs[2].imshow(U, vmin=-np.max(np.abs(U)), vmax=np.max(np.abs(U)),
+                        origin='upper', cmap=plt.get_cmap('coolwarm'))
+    cbarU = plt.colorbar(caxU)
+    cbarU.set_label('U', fontsize=20)
+
+    caxV = axs[3].imshow(V, vmin=-np.max(np.abs(V)), vmax=np.max(np.abs(V)),
+                        origin='upper', cmap=plt.get_cmap('coolwarm'))
+    cbarV = plt.colorbar(caxV)
+    cbarV.set_label('V', fontsize=20)
+
+    if save_fig is not None: plt.savefig(save_fig)
+
 
 def case_D1(nphotons=1e8, overwrite=True, output_dir='./'):
     
