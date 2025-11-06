@@ -227,6 +227,69 @@ def to_iprt_output(case_name, sza, saa, vza, vaa, z,
                                                          f'{case_name}_vza', f'{case_name}_vaa', 'stokes' ])
         ds.to_netcdf(f_path)
 
+
+def to_iprt_output_e6_v1(case_name, sza, saa, nx, ny, is_sens, vecs,
+                         overwrite=True, output_dir='./'):
+    
+    dir_output = Path(output_dir)
+    Path(dir_output).mkdir(parents=True, exist_ok=True)
+
+    output_name = f'iprt_phase3_{case_name}.nc'
+    f_path = dir_output / output_name
+    f_exists_tmp = f_path.exists()
+    if not overwrite and f_exists_tmp:
+        print(f'File {f_path} already exists. Skipping.')
+    else:
+        ftoa_name = f'iprt_phase3_{case_name}_toa.nc'
+        ftoa_path = dir_output / ftoa_name
+        ds0 = xr.open_dataset(ftoa_path) 
+        ds = xr.Dataset(coords={f'{case_name}_lat':saa,
+                                f'{case_name}_lon':sza,
+                                f'{case_name}_prow':np.arange(ny, dtype=np.int32),
+                                f'{case_name}_pcol':np.arange(nx, dtype=np.int32),
+                                f'{case_name}_zout':np.array([3e5]),
+                                'stokes':np.arange(4, dtype=np.int32)})
+        nzout = int(1)
+        nlat = len(ds[f'{case_name}_lat'].values)
+        nlon = len(ds[f'{case_name}_lon'].values)
+        nprow = len(ds[f'{case_name}_prow'].values)
+        npcol = len(ds[f'{case_name}_pcol'].values)
+        nstokes = int(4)
+
+        radiance = np.zeros((nzout,nlat,nlon,nprow,npcol,nstokes), dtype=np.float32)
+        std = np.zeros_like(radiance)
+        vza_ = np.zeros((nprow,npcol), dtype=np.float64)
+        vaa_ = np.zeros_like(vza_)
+
+        for ilon in range (0, nlon):
+            ic = 0
+            ic_ = 0
+            for ix in range (0, nx):
+                for iy in range(0, ny):
+                    th, ph = gc.vec2ang(gc.Vector(vecs.x[ic], vecs.y[ic], vecs.z[ic]), vec_view='nadir')
+                    if (th == 0. or th == 180.): ph = 0.
+                    vza_[iy,ix] = th
+                    vaa_[iy,ix] = ph
+                    if is_sens[ic]:
+                        radiance[0,0,ilon,iy,ix,0] = ds0['I_up (TOA)'].values[ic_,0,ilon]
+                        radiance[0,0,ilon,iy,ix,1] = ds0['Q_up (TOA)'].values[ic_,0,ilon]
+                        radiance[0,0,ilon,iy,ix,2] = ds0['U_up (TOA)'].values[ic_,0,ilon]
+                        radiance[0,0,ilon,iy,ix,3] = ds0['V_up (TOA)'].values[ic_,0,ilon]
+                        std[0,0,ilon,iy,ix,0] = ds0['I_stdev_up (TOA)'].values[ic_,0,ilon]
+                        std[0,0,ilon,iy,ix,1] = ds0['Q_stdev_up (TOA)'].values[ic_,0,ilon]
+                        std[0,0,ilon,iy,ix,2] = ds0['U_stdev_up (TOA)'].values[ic_,0,ilon]
+                        std[0,0,ilon,iy,ix,3] = ds0['V_stdev_up (TOA)'].values[ic_,0,ilon]
+                        ic_+=1
+                    ic += 1
+
+        ds[f'radiance_{case_name}'] = xr.DataArray(radiance, dims=[f'{case_name}_zout', f'{case_name}_lat', f'{case_name}_lon',
+                                                                f'{case_name}_prow', f'{case_name}_pcol', 'stokes' ])
+        ds[f'std_{case_name}'] = xr.DataArray(std, dims=[f'{case_name}_zout', f'{case_name}_lat', f'{case_name}_lon',
+                                                        f'{case_name}_prow', f'{case_name}_pcol', 'stokes' ])
+        ds[f'vza_{case_name}'] = xr.DataArray(vza_, dims=[f'{case_name}_prow', f'{case_name}_pcol'])
+        ds[f'vaa_{case_name}'] = xr.DataArray(vaa_, dims=[f'{case_name}_prow', f'{case_name}_pcol'])
+        ds.to_netcdf(f_path)
+
 def run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
             sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons, wl, le,
             surf, pro, dep, z, ntheta=18001, pp=False, is_e6=False):
@@ -1279,7 +1342,7 @@ def case_E5(nphotons=1e8, overwrite=True, output_dir='./'):
                    overwrite=overwrite, output_dir=output_dir)
 
 
-def case_E6(nphotons=1e8, overwrite=True, output_dir='./'):
+def case_E6_old(nphotons=1e8, overwrite=True, output_dir='./'):
     
     dir_output = Path(output_dir)
     Path(dir_output).mkdir(parents=True, exist_ok=True)
@@ -1326,23 +1389,128 @@ def case_E6(nphotons=1e8, overwrite=True, output_dir='./'):
     # open intermediate files and convert to iprt phase3 output format 
     to_iprt_output('e6', sza, saa, vza, vaa, z,
                    overwrite=overwrite, output_dir=output_dir)
+    
+    
+def case_E6_v1(nphotons=1e8, overwrite=True, output_dir='./'):
+    """
+    In this version 1, we take one direction at each pixel center
+    """
+    
+    dir_output = Path(output_dir)
+    Path(dir_output).mkdir(parents=True, exist_ok=True)
+    ftoa_name = f'iprt_phase3_e6_v1_toa.nc'
+    ftoa_path = dir_output / ftoa_name
+    ftoa_exist = ftoa_path.exists()
+
+
+    sza = np.array([50., 90., 110., 130.])
+    saa = np.array([0.])
+    vza = np.arange(0., 1.2+0.04, 0.04)
+    vaa = np.arange(0., 360.+10, 10)
+    z = None
+    nx = 61
+    ny = 61
+    nsens = nx*ny
+    ntheta = 18001
+
+    # atmosphere profil
+    mol_sca_filename  =  OPT_PROP_PATH_PHASE3 + "tau_rayleigh_450nm_usstd.dat"
+    mol_abs_filename  =  OPT_PROP_PATH_PHASE3 + "tau_absorption_450nm_usstd.dat"
+    wl = np.array([450.])
+    z = np.squeeze(pd.read_csv(mol_sca_filename, header=None, usecols=[0], dtype=float, skiprows=1, sep=r'\s+', comment='#').values)
+    zs = len(z)
+    sca = pd.read_csv(mol_sca_filename, header=None, usecols=[1], dtype=float, skiprows=1, sep=r'\s+', comment='#').values.reshape(1,zs)
+    abs = pd.read_csv(mol_abs_filename, header=None, usecols=[1], dtype=float, skiprows=1, sep=r'\s+', comment='#').values.reshape(1,zs)
+    pro = AtmAFGL('afglt', grid=z, prof_ray=sca, prof_abs=abs).calc(wl)
+    surf = RoughSurface(WIND=5., BRDF=True, WAVE_SHADOW=True, NH2O=1.33)
+    
+    nvza = len(vza)
+    nvaa = len(vaa)
+    phi = -vaa
+    dep = 0.03
+    earth_r = 6371.
+
+    count_lvl = np.zeros_like(sza, dtype=np.int32)
+    phi_0 = -saa # To follow iprt anti-clockwise convention
+    le     = {'th_deg':sza, 'phi_deg':phi_0, 'count_level':count_lvl}
+
+    # run simulations and create intermediate files
+    # ==== Get directions
+    zeros = np.zeros((nvza), dtype=np.float64)
+    sen = gc.Point(zeros, zeros,np.full((nvza), 1, dtype=np.float64))
+    dirs = -gc.ang2vec(theta=vza, phi=180.)
+    rays = gc.Ray(o=sen, d=dirs)
+    ground = gc.BBox(p1=gc.Point(-np.inf, -np.inf, 0.), p2=gc.Point(np.inf, np.inf, 0.))
+    ds = gc.calc_intersection(ground, rays)
+
+    coord = np.concatenate((-(ds['phit'][1:,0].values)[::-1], ds['phit'][:,0].values))
+    pts = np.zeros((nsens,3), dtype=np.float64)
+    ic = 0
+    for ix in range (0, nx):
+        for iy in range(0, ny):
+            pts[ic,0] = coord[ix]
+            pts[ic,1] = coord[::-1][iy] # to begin from top left pixel
+            ic += 1
+    points = gc.Point(pts)
+
+    zeros_ini = np.zeros((nsens), dtype=np.float64)
+    points_ini = gc.Point(zeros_ini, zeros_ini, np.full((nsens), 1, dtype=np.float64))
+
+    vecs = gc.normalize(points - points_ini)
+    # ==== create toa sensors
+    is_sens = np.full((nsens), False, dtype=np.bool)
+    zeros = np.zeros((nsens), dtype=np.float64)
+    origin = gc.Point(zeros, zeros, np.full((nsens), 3e5, dtype=np.float64))
+    toa_layer = gc.Sphere(earth_r+np.max(z))
+    rays = gc.Ray(o=origin, d=vecs)
+    ds_toa = gc.calc_intersection(toa_layer, rays)
+    sensors = []
+    for isens in range (0, nsens):
+        if (ds_toa['is_intersection'].values[isens]):
+            is_sens[isens] = True
+            phit = gc.Point(ds_toa['phit'].values[isens,:])
+            th, ph = gc.vec2ang(gc.Vector(vecs.x[isens], vecs.y[isens], vecs.z[isens]))
+            if (th == 0. or th == 180.): ph = 0.
+            sen_tmp = Sensor(
+                            POSX = phit.x,
+                            POSY = phit.y,
+                            POSZ = phit.z,
+                            THDEG= th,
+                            PHDEG= ph,
+                            LOC  = 'ATMOS',
+                            TYPE = 0,
+                            )
+            sensors.append(sen_tmp)
+    if (overwrite      or 
+        not ftoa_exist  ):
+        sg = S1DB
+        m_toa = sg.run(wl=wl, NBPHOTONS=nsens*nphotons, NBLOOP=nphotons, atm=pro, sensor=sensors, OUTPUT_LAYERS=1,
+                    le=le, surf=surf, XBLOCK = 64, XGRID = 1024, BEER=1, DEPO=dep, reflectance=False, RTER=earth_r,
+                    stdev=True, progress=True, NF=ntheta)
+        m_toa.save(str(ftoa_path), overwrite=overwrite)
+        
+
+    # open intermediate files and convert to iprt phase3 output format
+    to_iprt_output_e6_v1('e6_v1', sza, saa, nx, ny, is_sens, vecs,
+                         overwrite=overwrite, output_dir=output_dir)
 
 
 if __name__ == '__main__':
     # D - Test cases for fully spherical geometry with one layer
-    output_dir='./res_iprt_phase3_1e8photons/'
-    case_D1(nphotons=1e8, overwrite=False, output_dir=output_dir)
-    case_D2(nphotons=1e8, overwrite=False, output_dir=output_dir)
-    case_D3(nphotons=1e8, overwrite=False, output_dir=output_dir)
-    case_D4(nphotons=1e8, overwrite=False, output_dir=output_dir)
-    case_D5(nphotons=1e8, overwrite=False, output_dir=output_dir)
-    case_D6(nphotons=1e8, overwrite=False, output_dir=output_dir)
+    output_dir='./res_iprt_phase3_1e8photons_v5/'
+    # case_D1(nphotons=1e8, overwrite=False, output_dir=output_dir)
+    # case_D2(nphotons=1e8, overwrite=False, output_dir=output_dir)
+    # case_D3(nphotons=1e8, overwrite=False, output_dir=output_dir)
+    # case_D4(nphotons=1e8, overwrite=False, output_dir=output_dir)
+    # case_D5(nphotons=1e8, overwrite=False, output_dir=output_dir)
+    # case_D6(nphotons=1e8, overwrite=False, output_dir=output_dir)
 
 
     # E - Test cases for fully spherical geometry for a vertically inhomogeneous atmosphere
-    case_E1(nphotons=1e8, overwrite=False, output_dir=output_dir)
-    case_E2(nphotons=1e8, overwrite=False, output_dir=output_dir)
-    case_E3(nphotons=1e8, overwrite=False, output_dir=output_dir)
-    case_E4(nphotons=1e8, overwrite=False, output_dir=output_dir)
-    case_E5(nphotons=1e8, overwrite=False, output_dir=output_dir)
-    case_E6(nphotons=1e8, overwrite=False, output_dir=output_dir)
+    # case_E1(nphotons=1e8, overwrite=False, output_dir=output_dir)
+    # case_E2(nphotons=1e8, overwrite=False, output_dir=output_dir)
+    # case_E3(nphotons=1e8, overwrite=False, output_dir=output_dir)
+    # case_E4(nphotons=1e8, overwrite=False, output_dir=output_dir)
+    # case_E5(nphotons=1e8, overwrite=False, output_dir=output_dir)
+    # case_E6_old(nphotons=1e8, overwrite=False, output_dir=output_dir)
+    case_E6_v1(nphotons=1e6, overwrite=False, output_dir=output_dir)
