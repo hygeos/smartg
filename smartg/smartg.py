@@ -3832,7 +3832,7 @@ def findExtinction(IP, FP, prof_atm, W_IND = int(0)):
     return n_ext
 
     
-def Get_Sensor(VZA_lev, LEVEL=0., VAA=0., RTER=6370., H=120., FOV=0., TYPE=0., PP=True, verbose=False):
+def Get_Sensor(VZA_lev, LEVEL=0., VAA=0., RTER=6371., H=120., FOV=0., TYPE=0., PP=True, verbose=False):
     '''
     Return the Sensor object for atmosphere height of H for backward simulations where
     VZA_lev is the View Zenith Angle defined at the level: origin (0, 0, RTER+LEVEL) for Spherical
@@ -3857,7 +3857,7 @@ def Get_Sensor(VZA_lev, LEVEL=0., VAA=0., RTER=6370., H=120., FOV=0., TYPE=0., P
     if PP: Boundary = gc.BBox(gc.Point(-large_dist, -large_dist, 0.), gc.Point(large_dist, large_dist, H)) # Rectangle for atmosphere for PP
     else : Boundary = gc.Sphere(radius) # Create the Earth + atmosphere sphere for SS
     # Compute the direction vector object from Zenith and Azimuth angles
-    dir = gc.ang2vec(VZA_lev, 180+VAA)
+    dir = gc.ang2vec(VZA_lev, VAA)
     # Make a ray from origin in direction dir
     ray = gc.Ray(o=origin, d=dir)
     # Compute the intersection with the Boundary
@@ -3868,6 +3868,8 @@ def Get_Sensor(VZA_lev, LEVEL=0., VAA=0., RTER=6370., H=120., FOV=0., TYPE=0., P
     pos = origin + dir*t1
     if verbose : print("VZA =", VZA_lev, "--> pos =", pos)
 
-    return Sensor(POSX=pos.x, POSY=pos.y, POSZ=pos.z, THDEG=180.-VZA_lev, PHDEG=VAA, LOC='ATMOS', FOV=FOV, TYPE=TYPE)
+    th, ph = gc.vec2ang(dir, vec_view='nadir')
+    if (th == 0. or th ==180.): ph=VAA-180. # no impact on I value, but possible impact o Q, U and V
+    return Sensor(POSX=pos.x, POSY=pos.y, POSZ=pos.z, THDEG=th, PHDEG=ph, LOC='ATMOS', FOV=FOV, TYPE=TYPE)
 
 
