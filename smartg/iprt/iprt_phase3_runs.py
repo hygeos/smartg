@@ -606,7 +606,9 @@ def plot_polar_iprt(I, Q, U, V, thetas, phis, change_Q_sign=False, change_U_sign
     fig.tight_layout()
     if save_fig is not None: plt.savefig(save_fig)
 
-def plot_camera_iprt(I, Q, U, V, title=None, save_fig=None):
+def plot_camera_iprt(I, Q, U, V,
+                     I_min=0., I_max=None, I_cmap='viridis',
+                     title=None, save_fig=None):
     """
     """
     matplotlib.rcParams.update({'font.size': 16})
@@ -614,7 +616,7 @@ def plot_camera_iprt(I, Q, U, V, title=None, save_fig=None):
     fig, axs = plt.subplots(1,4, figsize=fig_size, constrained_layout=True, sharex=True, sharey=True)
     if title is not None: fig.suptitle(title, fontsize=20)
     
-    caxI = axs[0].imshow(I, vmin=0., vmax=None, origin='lower', cmap=plt.get_cmap('viridis'))
+    caxI = axs[0].imshow(I, vmin=I_min, vmax=I_max, origin='upper', cmap=plt.get_cmap(I_cmap))
     cbarI = plt.colorbar(caxI)
     cbarI.set_label('I', fontsize=20)
 
@@ -1495,7 +1497,6 @@ def case_E6_v1(nphotons=1e8, overwrite=True, output_dir='./'):
     sza = np.array([50., 90., 110., 130.])
     saa = np.array([0.])
     vza = np.arange(0., 1.2+0.04, 0.04)
-    vaa = np.arange(0., 360.+10, 10)
     z = None
     nx = 61
     ny = 61
@@ -1514,8 +1515,6 @@ def case_E6_v1(nphotons=1e8, overwrite=True, output_dir='./'):
     surf = RoughSurface(WIND=5., BRDF=True, WAVE_SHADOW=True, NH2O=1.33)
     
     nvza = len(vza)
-    nvaa = len(vaa)
-    phi = -vaa
     dep = 0.03
     earth_r = 6371.
 
@@ -1598,7 +1597,6 @@ def case_E6_v2(nphotons=1e8, overwrite=True, output_dir='./'):
     sza = np.array([50., 90., 110., 130.])
     saa = np.array([0.])
     vza = np.arange(0., 1.2+0.04, 0.04)
-    vaa = np.arange(0., 360.+10, 10)
     z = None
     nx = 61
     ny = 61
@@ -1617,8 +1615,6 @@ def case_E6_v2(nphotons=1e8, overwrite=True, output_dir='./'):
     surf = RoughSurface(WIND=5., BRDF=True, WAVE_SHADOW=True, NH2O=1.33)
     
     nvza = len(vza)
-    nvaa = len(vaa)
-    phi = -vaa
     dep = 0.03
     earth_r = 6371.
 
@@ -1679,6 +1675,104 @@ def case_E6_v2(nphotons=1e8, overwrite=True, output_dir='./'):
     to_iprt_output_e6_v2('e6_v2', sza, saa, nx, ny, vecs,
                          overwrite=overwrite, output_dir=output_dir)
 
+def case_E6_v3(nphotons=1e8, overwrite=True, output_dir='./'):
+    """
+    In this version 1, we take one direction at each pixel center
+    """
+    
+    dir_output = Path(output_dir)
+    Path(dir_output).mkdir(parents=True, exist_ok=True)
+    ftoa_name = f'iprt_phase3_e6_v3_toa.nc'
+    ftoa_path = dir_output / ftoa_name
+    ftoa_exist = ftoa_path.exists()
+
+
+    sza = np.array([50., 90., 110., 130.])
+    saa = np.array([0.])
+    vza = np.arange(0., 1.2+0.04, 0.04)
+    z = None
+    nx = 61
+    ny = 61
+    nsens = nx*ny
+    ntheta = 18001
+
+    # atmosphere profil
+    mol_sca_filename  =  OPT_PROP_PATH_PHASE3 + "tau_rayleigh_450nm_usstd.dat"
+    mol_abs_filename  =  OPT_PROP_PATH_PHASE3 + "tau_absorption_450nm_usstd.dat"
+    wl = np.array([450.])
+    z = np.squeeze(pd.read_csv(mol_sca_filename, header=None, usecols=[0], dtype=float, skiprows=1, sep=r'\s+', comment='#').values)
+    zs = len(z)
+    sca = pd.read_csv(mol_sca_filename, header=None, usecols=[1], dtype=float, skiprows=1, sep=r'\s+', comment='#').values.reshape(1,zs)
+    abs = pd.read_csv(mol_abs_filename, header=None, usecols=[1], dtype=float, skiprows=1, sep=r'\s+', comment='#').values.reshape(1,zs)
+    
+    z = np.concatenate((np.array([3e5]), z))
+    sca = np.concatenate((np.array([[0.]]), sca), axis=1)
+    abs = np.concatenate((np.array([[0.]]), abs), axis=1)
+    
+    pro = AtmAFGL('afglt', grid=z, prof_ray=sca, prof_abs=abs).calc(wl)
+    surf = RoughSurface(WIND=5., BRDF=True, WAVE_SHADOW=True, NH2O=1.33)
+    
+    nvza = len(vza)
+    dep = 0.03
+    earth_r = 6371.
+
+    count_lvl = np.zeros_like(sza, dtype=np.int32)
+    phi_0 = -saa # To follow iprt anti-clockwise convention
+    le     = {'th_deg':sza, 'phi_deg':phi_0, 'count_level':count_lvl}
+
+    # run simulations and create intermediate files
+    # ==== Get directions
+    zeros = np.zeros((nvza), dtype=np.float64)
+    sen = gc.Point(zeros, zeros,np.full((nvza), 1, dtype=np.float64))
+    dirs = -gc.ang2vec(theta=vza, phi=180.)
+    rays = gc.Ray(o=sen, d=dirs)
+    ground = gc.BBox(p1=gc.Point(-np.inf, -np.inf, 0.), p2=gc.Point(np.inf, np.inf, 0.))
+    ds = gc.calc_intersection(ground, rays)
+
+    coord = np.concatenate((-(ds['phit'][1:,0].values)[::-1], ds['phit'][:,0].values))
+    pts = np.zeros((nsens,3), dtype=np.float64)
+    ic = 0
+    for ix in range (0, nx):
+        for iy in range(0, ny):
+            pts[ic,0] = coord[ix]
+            pts[ic,1] = coord[::-1][iy] # to begin from top left pixel
+            ic += 1
+    points = gc.Point(pts)
+
+    zeros_ini = np.zeros((nsens), dtype=np.float64)
+    points_ini = gc.Point(zeros_ini, zeros_ini, np.full((nsens), 1, dtype=np.float64))
+
+    vecs = gc.normalize(points - points_ini)
+    # ==== create toa sensors
+    sensors = []
+    for isens in range (0, nsens):
+        th, ph = gc.vec2ang(gc.Vector(vecs.x[isens], vecs.y[isens], vecs.z[isens]))
+        if (th == 0. or th == 180.): ph = 0.
+        sen_tmp = Sensor(
+                        POSX = 0.,
+                        POSY = 0.,
+                        POSZ = 3e5,
+                        THDEG= th,
+                        PHDEG= ph,
+                        LOC  = 'ATMOS',
+                        TYPE = 1,
+                        FOV = 0.04,
+                        )
+        sensors.append(sen_tmp)
+    if (overwrite      or 
+        not ftoa_exist  ):
+        sg = S1DB
+        m_toa = sg.run(wl=wl, NBPHOTONS=nsens*nphotons, NBLOOP=nphotons, atm=pro, sensor=sensors, OUTPUT_LAYERS=1,
+                    le=le, surf=surf, XBLOCK = 64, XGRID = 1024, BEER=1, DEPO=dep, reflectance=False, RTER=earth_r,
+                    stdev=True, progress=True, NF=ntheta)
+        m_toa.save(str(ftoa_path), overwrite=overwrite)
+        
+
+    # open intermediate files and convert to iprt phase3 output format
+    # we can use v2 for v3
+    to_iprt_output_e6_v2('e6_v3', sza, saa, nx, ny, vecs,
+                         overwrite=overwrite, output_dir=output_dir)
+
 
 if __name__ == '__main__':
     # D - Test cases for fully spherical geometry with one layer
@@ -1700,3 +1794,4 @@ if __name__ == '__main__':
     # case_E6_old(nphotons=1e8, overwrite=False, output_dir=output_dir)
     case_E6_v1(nphotons=1e8, overwrite=False, output_dir=output_dir)
     case_E6_v2(nphotons=1e8, overwrite=False, output_dir=output_dir)
+    case_E6_v3(nphotons=1e6, overwrite=False, output_dir=output_dir)
