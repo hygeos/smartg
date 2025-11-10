@@ -117,7 +117,7 @@ public:
     __device__ BBox ObjectBoundSphere() const;
     __device__ BBox WorldBoundSphere() const;
 
-    __host__ __device__ bool Intersect(const Ray &ray, float* tHit,
+    __host__ __device__ bool Intersect(const Ray<float> &ray, float* tHit,
 									   DifferentialGeometry *Dg) const;
     __host__ __device__ float Area() const;
 
@@ -147,8 +147,8 @@ Sphere::Sphere(const Transform *o2w, const Transform *w2o,
 	: Shape(o2w, w2o)
 {
     radius = rad;
-    zmin = clamp(min(z0, z1), -radius, radius);
-    zmax = clamp(max(z0, z1), -radius, radius);
+    zmin = clamp(float(min(z0, z1)), float(-radius), float(radius));
+    zmax = clamp(float(max(z0, z1)), float(-radius), float(radius));
     thetaMin = acosf(clamp(zmin/radius, -1.f, 1.f));
     thetaMax = acosf(clamp(zmax/radius, -1.f, 1.f));
     phiMax = radians(clamp(pm, 0.0f, 360.0f));
@@ -183,12 +183,12 @@ __device__ BBox Sphere::ObjectBoundSphere() const
 	}
 }
 
-bool Sphere::Intersect(const Ray &r, float *tHit, DifferentialGeometry *dg) const
+bool Sphere::Intersect(const Ray<float> &r, float *tHit, DifferentialGeometry *dg) const
 {
     float phi;
     float3 phit;
 
-	Ray ray;
+	Ray<float> ray;
     // Passage (transform) du rayon "ray" dans l'espace de l'objet
 	(*WorldToObject)(r, &ray);
 
@@ -283,12 +283,12 @@ public:
     __device__ BBox ObjectBoundTriangle() const;
     __device__ BBox WorldBoundTriangle() const;
 
-    __host__ __device__ bool Intersect(const Ray &ray, float* tHit,
+    __host__ __device__ bool Intersect(const Ray<float> &ray, float* tHit,
 									   DifferentialGeometry *dg) const;
-	__device__ bool Intersect2(const Ray &ray, float* tHit,
+	__device__ bool Intersect2(const Ray<float> &ray, float* tHit,
 									   DifferentialGeometry *dg) const;
-	__host__ __device__ bool IntersectP(const Ray &ray) const;
-	__device__ bool IntersectP2(const Ray &ray) const;
+	__host__ __device__ bool IntersectP(const Ray<float> &ray) const;
+	__device__ bool IntersectP2(const Ray<float> &ray) const;
     __host__ __device__ float Area() const;
 
 private:
@@ -430,7 +430,7 @@ Triangle::Triangle(const Transform *o2w, const Transform *w2o,
 /* 	return true; */
 /* } */
 
-__device__ bool Triangle::Intersect2(const Ray &ray, float *tHit,
+__device__ bool Triangle::Intersect2(const Ray<float> &ray, float *tHit,
 									DifferentialGeometry *dg) const
 {
 	double3 p0t, p1t, p2t;
@@ -538,7 +538,7 @@ __device__ bool Triangle::Intersect2(const Ray &ray, float *tHit,
 	return true;
 }
 
-__device__ bool Triangle::IntersectP2(const Ray &ray) const
+__device__ bool Triangle::IntersectP2(const Ray<float> &ray) const
 {
     double3 p0t, p1t, p2t;
 	double3 P0, P1, P2;
@@ -611,7 +611,7 @@ __device__ bool Triangle::IntersectP2(const Ray &ray) const
 
 #ifndef DOUBLE
 // Méthode de Möller-Trumbore pour l'intersection rayon/triangle
-bool Triangle::Intersect(const Ray &ray, float *tHit,
+bool Triangle::Intersect(const Ray<float> &ray, float *tHit,
 						 DifferentialGeometry *dg) const
 {
 	float3 e1 = p2 - p1;
@@ -681,7 +681,7 @@ bool Triangle::Intersect(const Ray &ray, float *tHit,
 	return true;
 }
 // Méthode de Möller-Trumbore pour l'intersection rayon/triangle
-bool Triangle::IntersectP(const Ray &ray) const
+bool Triangle::IntersectP(const Ray<float> &ray) const
 {
 	float3 e1 = p2 - p1;
 	float3 e2 = p3 - p1;
@@ -796,7 +796,7 @@ bool Triangle::Intersect(const Ray &ray, float *tHit,
 }
 
 // Möller-Trumbore for ray/triangle intersection simple bool test
-bool Triangle::IntersectP(const Ray &ray) const
+bool Triangle::IntersectP(const Ray<float> &ray) const
 {
 	double3 p1d = make_double3(double(p1.x), double(p1.y), double(p1.z));
 	double3 p2d = make_double3(double(p2.x), double(p2.y), double(p2.z));
@@ -868,12 +868,12 @@ public:
     __device__ BBox ObjectBoundTriangleMesh() const;
     __device__ BBox WorldBoundTriangleMesh() const;
 
-    __host__ __device__ bool Intersect(const Ray &ray, float* tHit,
+    __host__ __device__ bool Intersect(const Ray<float> &ray, float* tHit,
 									   DifferentialGeometry *dg) const;
-	__device__ bool Intersect2(const Ray &ray, float* tHit,
+	__device__ bool Intersect2(const Ray<float> &ray, float* tHit,
 							   DifferentialGeometry *dg) const;
-	__host__ __device__ bool IntersectP(const Ray &ray) const;
-	__device__ bool IntersectP2(const Ray &ray) const;
+	__host__ __device__ bool IntersectP(const Ray<float> &ray) const;
+	__device__ bool IntersectP2(const Ray<float> &ray) const;
     __host__ __device__ float Area() const;
 	float3 *p;
 private:
@@ -902,7 +902,7 @@ TriangleMesh::TriangleMesh(const Transform *o2w, const Transform *w2o,
 }
 
 
-bool TriangleMesh::Intersect(const Ray &ray, float* tHit,
+bool TriangleMesh::Intersect(const Ray<float> &ray, float* tHit,
 							 DifferentialGeometry *dg) const
 {
     bool dgbool = false;
@@ -935,7 +935,7 @@ bool TriangleMesh::Intersect(const Ray &ray, float* tHit,
 	return dgbool;
 }
 
-__device__ bool TriangleMesh::Intersect2(const Ray &ray, float* tHit,
+__device__ bool TriangleMesh::Intersect2(const Ray<float> &ray, float* tHit,
 							 DifferentialGeometry *dg) const
 {
     bool dgbool = false;
@@ -968,7 +968,7 @@ __device__ bool TriangleMesh::Intersect2(const Ray &ray, float* tHit,
 	return dgbool;
 }
 
-bool TriangleMesh::IntersectP(const Ray &ray) const
+bool TriangleMesh::IntersectP(const Ray<float> &ray) const
 {
 	Transform nothing;
 	for (int i = 0; i < ntris; ++i)
@@ -984,7 +984,7 @@ bool TriangleMesh::IntersectP(const Ray &ray) const
 	return false;
 }
 
-__device__ bool TriangleMesh::IntersectP2(const Ray &ray) const
+__device__ bool TriangleMesh::IntersectP2(const Ray<float> &ray) const
 {
 	Transform nothing;
 	for (int i = 0; i < ntris; ++i)

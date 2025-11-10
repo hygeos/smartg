@@ -299,56 +299,93 @@ private:
 typedef Normal<double> Normald;
 typedef Normal<float> Normalf;
 
+
+template <typename T = float> //T -> float / double
 class Ray
 // ========================================================
-// Classe Rayon
+// Ray class
 // ========================================================
 {
 public:
-	// Méthodes publiques du rayon
+	// Public methods of class Ray
+
+	// Constexpr infinity value based on T, using a lambda for initialization
+    // Constant class attribute
+	static constexpr T RAY_INF =
+	#if __CUDA_ARCH__ >= 200
+		std::is_same_v<T, float> ? CUDART_INF_F : CUDART_INF;
+	#else
+		std::numeric_limits<T>::max();
+	#endif
+
 	__host__ __device__ Ray()
 	{
-        #if __CUDA_ARCH__ >= 200
-		maxt = CUDART_INF_F;
-        #elif !defined(__CUDA_ARCH__)
-		maxt = std::numeric_limits<float>::max();
-        #endif
-		mint = 0.F; time = 0.F;
-		o = make_float3c(0.F, 0.F, 0.F);
-		d = make_float3c(0.F, 0.F, 0.F);
+		maxt = RAY_INF;
+		mint = 0.; time = 0.;
+		if constexpr (std::is_same_v<T, float>)
+		{
+			o = make_float3c(0., 0., 0.);
+			d = make_float3c(0., 0., 0.);
+		}
+		else //double
+		{
+			o = make_double3c(0., 0., 0.);
+			d = make_double3c(0., 0., 0.);
+		}
 	}
 
-	__host__ __device__ Ray(const Ray &r)
+	template <typename U>
+	__host__ __device__ Ray(const Ray<U> &r)
 	{
-		mint = r.mint; maxt = r.maxt, time = r.time;
-		o = r.o; d = r.d;
+		mint = T(r.mint); maxt = T(r.maxt), time = T(r.time);
+		if constexpr (std::is_same_v<T, float>)
+		{
+			o = make_float3c(r.o);
+			d = make_float3c(r.d);
+		}
+		else
+		{
+			o = make_double3c(r.o);
+			d = make_double3c(r.d);
+		}
 	}
 
-	__device__ Ray(const float3 &origin, const float3 &direction, float start=0.F,
-				   #if __CUDA_ARCH__ >= 200
-				   float end = CUDART_INF_F, float t = 0.F)
-		           #elif !defined(__CUDA_ARCH__)
-		           float end = std::numeric_limits<float>::max(), float t = 0.F)
-				   #endif
+	template <typename U3>
+	__device__ Ray(const U3 &origin, const U3 &direction, T start=0.,
+				   T end = RAY_INF, T t = 0.)
 	{
 		mint = start; maxt = end, time = t;
-		o = make_float3c(origin);
-		d = make_float3c(direction);
+		if constexpr (std::is_same_v<T, float>)
+		{
+			o = make_float3c(origin);
+			d = make_float3c(direction);
+		}
+		else
+		{
+			o = make_double3c(origin);
+			d = make_double3c(direction);
+		}
 	}
 
-    __host__ __device__ float3 operator()(float t) const
+	using U3 = std::conditional_t<std::is_same_v<T, float>, float3, double3>;
+	template <typename U>
+    __host__ __device__ U3 operator()(U t) const
 	{
-		return o + d*t;
+		return o + d*T(t);
 	}
 
-	// Paramètres publiques du rayon
-	float3c o;           // point d'origine du rayon
-	float3c d;           // vecteur de direction du rayon
-	float mint, maxt;    // valeur min et max de t
-	float time;          // variable t: ray = o + d*t
+	using U3c = std::conditional_t<std::is_same_v<T, float>, float3c, double3c>;
+	// Public parameters
+	U3c o;           // point d'origine du rayon
+	U3c d;           // vecteur de direction du rayon
+	T mint, maxt;    // valeur min et max de t
+	T time;          // variable t: ray = o + d*t
  
 private:
 };
+
+using Rayd = Ray<double>;
+using Rayf = Ray<float>;
 
 
 class BBox
@@ -481,7 +518,7 @@ public:
 
 
 
-	__host__ __device__ bool IntersectP(const Ray &ray, float *hitt0 = NULL,
+	__host__ __device__ bool IntersectP(const Ray<float> &ray, float *hitt0 = NULL,
 										float *hitt1 = NULL) const
 	{
 		float t0 = 0.F, gamma3;
