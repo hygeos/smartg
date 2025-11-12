@@ -36,9 +36,9 @@
 #define VALMIN5 0.000005F
 
 /* Mathématiques */
-#define PI 3.1415927F
-#define DEUXPI 6.2831853F
-#define DEMIPI 1.5707963F
+#define PI 3.141592654f
+#define DEUXPI 6.283185307f
+#define DEMIPI 1.570796327f
 
 #define MAX_LOOP 1000000000
 #define MAX_NEVT 500 // Max number of scattering evts stored in photon in the ALIS procedure in basic plane parallel mode
