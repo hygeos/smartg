@@ -49,7 +49,7 @@ __device__ float machine_eps_dbl() {
 *     - ex: Un Point, Un vecteur, une normal, un rayon...
 ***********************************************************/
 
-template <typename T>
+template <typename T = float>
 class Vector {
 // ========================================================
 // Classe Vector
@@ -129,10 +129,11 @@ public:
 private:
 };
 
-typedef Vector<double> Vectord;
-typedef Vector<float> Vectorf;
+using Vectorf=Vector<float>;
+using Vectord=Vector<double>;
 
-template <typename T>
+
+template <typename T = float>
 class Point {
 // ========================================================
 // Classe Point
@@ -212,11 +213,11 @@ public:
 private:
 };
 
-typedef Point<double> Pointd;
-typedef Point<float> Pointf;
+using Pointf=Point<float>;
+using Pointd=Point<double>;
 
 
-template <typename T>
+template <typename T = float>
 class Normal {
 // ========================================================
 // Classe Normal
@@ -296,8 +297,8 @@ public:
 private:
 };
 
-typedef Normal<double> Normald;
-typedef Normal<float> Normalf;
+using Normalf=Normal<float>;
+using Normald=Normal<double>;
 
 
 template <typename T = float> //T -> float / double
