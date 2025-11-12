@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import pytest
-import gc
+from gc import collect
 try:
     from smartg.histories import get_histories, BigSum, Si, Si2
     import jax
@@ -28,7 +28,7 @@ os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"]   = "platform"
 def cleanup_after_each_test():
     yield
     jax.clear_caches()
-    gc.collect()
+    collect()
 
 @pytest.mark.parametrize('N_WL_ABS', [221])
 @pytest.mark.parametrize('WMAX', [350.])

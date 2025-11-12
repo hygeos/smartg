@@ -319,16 +319,19 @@ class AerOPAC(object):
 
                 if conv_Iparper: pha_ = pha2Iparperconv(self._phase.data[:,:])
                 else: pha_ = self._phase.data[:,:]
-                pha = LUT(pha_.data[None,None,:,:],
+                pha = LUT(pha_[None,None,:,:],
                           names = ['wav_phase', 'z_phase'] + self._phase.names,
                           axes = [np.array([wav[0]]), np.array([0.])] + self._phase.axes,
                          )
 
                 return pha
             else:
-                if conv_Iparper: pha_ = pha2Iparperconv(self._phase.data[:,:,:,:])
-                else: pha_ = self._phase.data[:,:,:,:]
-                return pha_
+                if conv_Iparper:
+                    pha_ = pha2Iparperconv(self._phase.data[:,:,:,:]) # be careful, if nstk=4 convert to nstk=6
+                    pha = LUT(pha_,names = self._phase.names,axes = self._phase.axes)
+                    return pha
+                else:
+                    return self._phase
 
         theta = np.linspace(0., 180., num=NBTHETA)
         lam_tabulated = np.array(self.mixture.axis('wav'))
@@ -3491,15 +3494,16 @@ def pha2Iparperconv(pha):
     if (nstk != 4 and nstk != 6):
         raise ValueError("The number of stk components must be equal to 4 (spheric) or 6 (spheroid)!")
 
+
     if ndim == 2:
-        pha_converted = np.zeros((nstk,nth), dtype=np.float64)
+        pha_converted = np.zeros((6,nth), dtype=np.float64)
         if (nstk == 4): # spherical particles
             pha_converted[0:4,:] = pha.copy()
             pha_converted[4,:] = pha[0,:].copy()
             pha_converted[5,:] = pha[2,:].copy()
-            p0 = pha[0,:].copy()
-            p1 = pha[1,:].copy()
-            p4 = pha[4,:].copy()
+            p0 = pha_converted[0,:].copy()
+            p1 = pha_converted[1,:].copy()
+            p4 = pha_converted[4,:].copy()
             pha_converted[0,:] = 0.5*(p0+2*p1+p4) # P11
             pha_converted[1,:] = 0.5*(p0-p4)      # P12=P21
             pha_converted[4,:] = 0.5*(p0-2*p1+p4) # P22
@@ -3512,19 +3516,19 @@ def pha2Iparperconv(pha):
             pha_converted[1,:] = 0.5*(p0-p4)      # P12=P21
             pha_converted[4,:] = 0.5*(p0-2*p1+p4) # P22
     else: # ndim = 4
-        pha_converted = np.zeros((nstk,nth), dtype=np.float64)
+        pha_converted = np.zeros((pha.shape[0],pha.shape[1],6,nth), dtype=np.float64)
         if (nstk == 4): # spherical particles
             pha_converted[:,:,0:4,:] = pha.copy()
-            pha_converted[:,:,4,:] = pha[0,:].copy()
-            pha_converted[:,:,5,:] = pha[2,:].copy()
-            p0 = pha[:,:,0,:].copy()
-            p1 = pha[:,:,1,:].copy()
-            p4 = pha[:,:,4,:].copy()
+            pha_converted[:,:,4,:] = pha[:,:,0,:].copy()
+            pha_converted[:,:,5,:] = pha[:,:,2,:].copy()
+            p0 = pha_converted[:,:,0,:].copy()
+            p1 = pha_converted[:,:,1,:].copy()
+            p4 = pha_converted[:,:,4,:].copy()
             pha_converted[:,:,0,:] = 0.5*(p0+2*p1+p4) # P11
             pha_converted[:,:,1,:] = 0.5*(p0-p4)      # P12=P21
             pha_converted[:,:,4,:] = 0.5*(p0-2*p1+p4) # P22
         elif (nstk == 6): # non spherical particles
-            pha_converted[:,:] = pha.copy()
+            pha_converted[:,:,:,:] = pha.copy()
             p0 = pha_converted[:,:,0,:].copy()
             p1 = pha_converted[:,:,1,:].copy()
             p4 = pha_converted[:,:,4,:].copy()
