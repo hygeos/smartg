@@ -3478,7 +3478,7 @@ def pha2Iparperconv(pha):
     """
 
     ndim = len(pha.shape)
-    if (ndim != 2 or ndim != 4):
+    if (ndim != 2 and ndim != 4):
         raise ValueError("The phase matrix dimension must be 2 or 4!")
     
     if ndim == 2:
@@ -3488,7 +3488,7 @@ def pha2Iparperconv(pha):
         nstk = pha.shape[2]
         nth = pha.shape[3]
     
-    if (nstk != 4 or nstk != 6):
+    if (nstk != 4 and nstk != 6):
         raise ValueError("The number of stk components must be equal to 4 (spheric) or 6 (spheroid)!")
 
     if ndim == 2:
