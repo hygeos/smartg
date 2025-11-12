@@ -1867,36 +1867,27 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     #if defined(SPHERIQUE) && defined(OBJ3D)
     if (cell_sized == -2)
     {
-        //float toa_rad = RTER+ZTOAd+10;
-        float toa_rad2 = RTER+ZTOAd;
+        float toa_rad = RTER+ZTOAd;
         Transform nothing;
-        // BBox bbox_(make_float3(-toa_rad, -toa_rad, -toa_rad), make_float3(toa_rad, toa_rad, toa_rad));
-        Ray<float> r1(ph->pos, ph->v, 0);
-        if (true)//bbox_.IntersectP(r1))
+        Ray<float> r1(ph->pos, ph->v, 0.f);
+
+        // int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+        // if (idx==0) printf("%f %f %f %f; v= %f %f %f\n", ph->pos.x, ph->pos.y, ph->pos.z, ph->radius, ph->v.x, ph->v.y, ph->v.z);
+        Sphere toa_sph(&nothing, &nothing, toa_rad, -toa_rad, toa_rad, 360.f);
+        float t_fac = 0.f;
+        bool is_intersection = false;
+        DifferentialGeometry diff_geo;
+        is_intersection = toa_sph.Intersect(r1, &t_fac, &diff_geo);
+        if (is_intersection)
         {
-            // int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
-            // if (idx==0) printf("%f %f %f %f; v= %f %f %f\n", ph->pos.x, ph->pos.y, ph->pos.z, ph->radius, ph->v.x, ph->v.y, ph->v.z);
-            Sphere toa_sph(&nothing, &nothing, toa_rad2, -toa_rad2, toa_rad2, 360.);
-            float t_fac = 0.;
-            bool is_intersection = false;
-            DifferentialGeometry diff_geo;
-            is_intersection = toa_sph.Intersect(r1, &t_fac, &diff_geo);
-            if (is_intersection)
-            {
-                ph->pos = r1(t_fac);
-                ph->radius = length(ph->pos);
-            }
-            else
-            {
-                ph->loc=REMOVED;//ph->loc=ABSORBED;
-                return;
-            }
+            ph->pos = r1(t_fac);
+            ph->radius = length(ph->pos);
         }
-        // else
-        // {
-        //     ph->loc=REMOVED;//ABSORBED;
-        //     return;
-        // }
+        else
+        {
+            ph->loc=REMOVED;
+            return;
+        }
     }
     #endif
 
