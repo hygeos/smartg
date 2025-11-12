@@ -716,7 +716,7 @@ bool Triangle::IntersectP(const Ray<float> &ray) const
 //*******************************************************************************
 #else
 // Méthode de Möller-Trumbore pour l'intersection rayon/triangle
-bool Triangle::Intersect(const Ray &ray, float *tHit,
+bool Triangle::Intersect(const Ray<float> &ray, float *tHit,
 						 DifferentialGeometry *dg) const
 {
 	double3 p1d = make_double3(double(p1.x), double(p1.y), double(p1.z));

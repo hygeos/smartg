@@ -42,8 +42,8 @@ public:
 	inline __host__ __device__ void operator()(const Pointf &c, float3 *ctrans) const;
 	inline __host__ __device__ void operator()(const Vectorf &c, float3 *ctrans) const;
 	inline __host__ __device__ void operator()(const Normalf &c, float3 *ctrans) const;
-    inline __host__ __device__ Ray operator()(const Ray &r) const;
-    inline __host__ __device__ void operator()(const Ray &r, Ray *rt) const;
+    inline __host__ __device__ Ray<float> operator()(const Ray<float> &r) const;
+    inline __host__ __device__ void operator()(const Ray<float> &r, Ray<float> *rt) const;
     __host__ __device__ BBox operator()(const BBox &b) const;
 	#endif
     __host__ __device__ Transform operator*(const Transform &t2) const;
@@ -250,16 +250,16 @@ inline void Transform::operator()(const Normalf &c, float3 *ctrans) const
 	ctrans->z = mInv[0][2]*x + mInv[1][2]*y + mInv[2][2]*z;
 }
 
-inline Ray Transform::operator()(const Ray &r) const
+inline Ray<float> Transform::operator()(const Ray<float> &r) const
 {
-    Ray ret = r;
+    Ray<float> ret = r;
 	(*this)(Pointf(ret.o), &ret.o);
     (*this)(Vectorf(ret.d), &ret.d);
     return ret;
 }
 
 
-inline void Transform::operator()(const Ray &r, Ray *rt) const
+inline void Transform::operator()(const Ray<float> &r, Ray<float> *rt) const
 {
 	(*this)(Pointf(r.o), &rt->o);
     (*this)(Vectorf(r.d), &rt->d);
@@ -529,8 +529,8 @@ public:
 	inline __host__ __device__ void operator()(const Pointd &c, double3 *ctrans) const;
 	inline __host__ __device__ void operator()(const Vectord &c, double3 *ctrans) const;
 	inline __host__ __device__ void operator()(const Normald &c, double3 *ctrans) const;
-	/* inline __host__ __device__ Ray operator()(const Ray &r) const; */
-    /* inline __host__ __device__ void operator()(const Ray &r, Ray *rt) const; */
+	/* inline __host__ __device__ Ray<float> operator()(const Ray<float> &r) const; */
+    /* inline __host__ __device__ void operator()(const Ray<float> &r, Ray<float> *rt) const; */
     /* __host__ __device__ BBox operator()(const BBox &b) const; */
 	#endif
     __host__ __device__ Transformd operator*(const Transformd &t2) const;

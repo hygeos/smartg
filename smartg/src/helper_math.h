@@ -305,23 +305,40 @@ inline __host__ __device__ double2c make_double2c(double2 s)
   double2c t; t.x = s.x; t.y = s.y; return t;
 }
 
+// inline __host__ __device__ double2c make_double2c(float2 s)
+// {
+//   double2c t; t.x = double(s.x); t.y = double(s.y); return t;
+// }
+
 inline __host__ __device__ double3c make_double3c(double x, double y, double z)
 {
   double3c t; t.x = x; t.y = y; t.z = z; return t;
 }
+
 inline __host__ __device__ double3c make_double3c(double3 s)
 {
   double3c t; t.x = s.x; t.y = s.y; t.z = s.z; return t;
 }
 
+// inline __host__ __device__ double3c make_double3c(float3 s)
+// {
+//   double3c t; t.x = double(s.x); t.y = double(s.y); t.z = double(s.z); return t;
+// }
+
 inline __host__ __device__ double4c make_double4c(double x, double y, double z, double w)
 {
   double4c t; t.x = x; t.y = y; t.z = z; t.w = w; return t;
 }
+
 inline __host__ __device__ double4c make_double4c(double4 s)
 {
   double4c t; t.x = s.x; t.y = s.y; t.z = s.z; t.w = s.w; return t;
 }
+
+// inline __host__ __device__ double4c make_double4c(float4 s)
+// {
+//   double4c t; t.x = double(s.x); t.y = double(s.y); t.z = double(s.z); t.w = double(s.w); return t;
+// }
 
 ////////////////////////////////////////////////////////////////////////////////
 // BEGIN MATRICES
@@ -3482,5 +3499,50 @@ __device__ int MaxDim(double3 v)
 {
 	return (v.x>v.y) ? ((v.x>v.z)?0:2) : ((v.y>v.z)?1:2);
 }
-#endif
 
+
+////////////////////////////////////////////////////////////////////////////////
+// Contants that can be used with templates
+////////////////////////////////////////////////////////////////////////////////
+
+inline __host__ __device__ constexpr float get_const_inf(float)
+{
+    #if __CUDA_ARCH__ >= 200
+    return CUDART_INF_F;
+    #else
+    return std::numeric_limits<float>::max();
+    #endif
+}
+inline __device__ constexpr double get_const_inf(double)
+{
+    #if __CUDA_ARCH__ >= 200
+    return CUDART_INF;
+    #else
+    return std::numeric_limits<double>::max();
+    #endif
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+// templates 
+////////////////////////////////////////////////////////////////////////////////
+
+// float3/double3
+template <typename T> struct VecType;
+template <> struct VecType<float>  { using type = float3;  };
+template <> struct VecType<double> { using type = double3; };
+template <typename T> using vec3 = typename VecType<T>::type;
+template <typename T> __host__ __device__ vec3<T> make_vec3(T x, T y, T z);
+template <> __host__ __device__ inline float3  make_vec3<float> (float  x, float  y, float  z) { return make_float3(x, y, z); }
+template <> __host__ __device__ inline double3 make_vec3<double>(double x, double y, double z) { return make_double3(x, y, z); }
+
+// float3c/double3c
+template <typename T> struct VecTypeC;
+template <> struct VecTypeC<float>  { using type = float3c;  };
+template <> struct VecTypeC<double> { using type = double3c; };
+template <typename T> using vec3c = typename VecTypeC<T>::type;
+template <typename T> __host__ __device__ vec3c<T> make_vec3c(T x, T y, T z);
+template <> __host__ __device__ inline float3c  make_vec3c<float> (float  x, float  y, float  z) { return make_float3c(x, y, z); }
+template <> __host__ __device__ inline double3c make_vec3c<double>(double x, double y, double z) { return make_double3c(x, y, z); }
+
+#endif

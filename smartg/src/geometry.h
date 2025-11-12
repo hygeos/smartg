@@ -308,73 +308,40 @@ class Ray
 {
 public:
 	// Public methods of class Ray
-
-	// Constexpr infinity value based on T, using a lambda for initialization
-    // Constant class attribute
-	static constexpr T RAY_INF =
-	#if __CUDA_ARCH__ >= 200
-		std::is_same_v<T, float> ? CUDART_INF_F : CUDART_INF;
-	#else
-		std::numeric_limits<T>::max();
-	#endif
+	using U3  = vec3<T>;
+    using U3c = vec3c<T>;
 
 	__host__ __device__ Ray()
 	{
-		maxt = RAY_INF;
+		//maxt = RAY_INF;
 		mint = 0.; time = 0.;
-		if constexpr (std::is_same_v<T, float>)
-		{
-			o = make_float3c(0., 0., 0.);
-			d = make_float3c(0., 0., 0.);
-		}
-		else //double
-		{
-			o = make_double3c(0., 0., 0.);
-			d = make_double3c(0., 0., 0.);
-		}
+		maxt = get_const_inf(T{});
+		o = make_vec3c<T>(T(0), T(0), T(0));
+		d = make_vec3c<T>(T(0), T(0), T(0));
 	}
 
 	template <typename U>
 	__host__ __device__ Ray(const Ray<U> &r)
 	{
 		mint = T(r.mint); maxt = T(r.maxt), time = T(r.time);
-		if constexpr (std::is_same_v<T, float>)
-		{
-			o = make_float3c(r.o);
-			d = make_float3c(r.d);
-		}
-		else
-		{
-			o = make_double3c(r.o);
-			d = make_double3c(r.d);
-		}
+		o = make_vec3c<T>(T(r.o.x), T(r.o.y), T(r.o.z));
+		d = make_vec3c<T>(T(r.d.x), T(r.d.y), T(r.d.z));
 	}
 
-	template <typename U3>
-	__device__ Ray(const U3 &origin, const U3 &direction, T start=0.,
-				   T end = RAY_INF, T t = 0.)
+	__host__ __device__ Ray(const U3 &origin, const U3 &direction, T start=T(0.),
+				   T end = get_const_inf(T{}), T t = T(0.))
 	{
-		mint = start; maxt = end, time = t;
-		if constexpr (std::is_same_v<T, float>)
-		{
-			o = make_float3c(origin);
-			d = make_float3c(direction);
-		}
-		else
-		{
-			o = make_double3c(origin);
-			d = make_double3c(direction);
-		}
+		mint = start; maxt = end; time = t;
+		o = make_vec3c<T>(T(origin.x), T(origin.y), T(origin.z));
+		d = make_vec3c<T>(T(direction.x), T(direction.y), T(direction.z));
 	}
 
-	using U3 = std::conditional_t<std::is_same_v<T, float>, float3, double3>;
 	template <typename U>
     __host__ __device__ U3 operator()(U t) const
 	{
 		return o + d*T(t);
 	}
 
-	using U3c = std::conditional_t<std::is_same_v<T, float>, float3c, double3c>;
 	// Public parameters
 	U3c o;           // point d'origine du rayon
 	U3c d;           // vecteur de direction du rayon
@@ -384,8 +351,9 @@ public:
 private:
 };
 
-using Rayd = Ray<double>;
 using Rayf = Ray<float>;
+using Rayd = Ray<double>;
+
 
 
 class BBox

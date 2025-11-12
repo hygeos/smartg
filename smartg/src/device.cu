@@ -1867,11 +1867,11 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     #if defined(SPHERIQUE) && defined(OBJ3D)
     if (cell_sized == -2)
     {
-        float toa_rad = RTER+ZTOAd+10;
+        //float toa_rad = RTER+ZTOAd+10;
         float toa_rad2 = RTER+ZTOAd;
         Transform nothing;
         // BBox bbox_(make_float3(-toa_rad, -toa_rad, -toa_rad), make_float3(toa_rad, toa_rad, toa_rad));
-        Ray r1(ph->pos, ph->v, 0);
+        Ray<float> r1(ph->pos, ph->v, 0);
         if (true)//bbox_.IntersectP(r1))
         {
             // int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
@@ -2833,7 +2833,7 @@ __device__ void move_pp2_bak(Photon* ph, struct Profile *prof_atm, struct Profil
         }
 
         // Intersection with current cell boundaries
-		Ray Ray_cur(ph->pos, ph->v, 0);
+		Ray<float> Ray_cur(ph->pos, ph->v, 0);
         pmin = make_float3(cell[ph->layer].pminx, cell[ph->layer].pminy, cell[ph->layer].pminz);
         pmax = make_float3(cell[ph->layer].pmaxx, cell[ph->layer].pmaxy, cell[ph->layer].pmaxz);
         BBox Box_cur(pmin, pmax);
@@ -3079,7 +3079,7 @@ __device__ void move_pp2_bak(Photon* ph, struct Profile *prof_atm, struct Profil
 //         }
 
 //         // Intersection with current cell boundaries
-// 		Ray Ray_cur(ph->pos, ph->v, 0);
+// 		Ray<float> Ray_cur(ph->pos, ph->v, 0);
 //         pmin = make_float3(cell[ph->layer].pminx, cell[ph->layer].pminy, cell[ph->layer].pminz);
 //         pmax = make_float3(cell[ph->layer].pmaxx, cell[ph->layer].pmaxy, cell[ph->layer].pmaxz);
 //         BBox Box_cur(pmin, pmax);
@@ -3296,7 +3296,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
         }
 
         // Intersection with current cell boundaries
-		Ray Ray_cur(ph->pos, ph->v, 0.);
+		Ray<float> Ray_cur(ph->pos, ph->v, 0.);
         pmin = make_float3(cell[ph->layer].pminx, cell[ph->layer].pminy, cell[ph->layer].pminz);
         pmax = make_float3(cell[ph->layer].pmaxx, cell[ph->layer].pmaxy, cell[ph->layer].pmaxz);
         BBox Box_cur(pmin, pmax);
@@ -3800,7 +3800,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 		if (nObj > 0 && !mytest && IsAtm == 0)
 		{
 			BBox boite(make_float3(-1200000., -1200000., 0.F), make_float3(12000.F, 12000.F, ZTOAd));
-			Ray Rayon(ph->pos, ph->v, 0);
+			Ray<float> Rayon(ph->pos, ph->v, 0);
 			float intTime0=-10.F, intTime1=-10.F;
 			bool intersectBox;
 			float3 intersectPoint = make_float3(-1.F, -1.F, -1.F);
@@ -8399,7 +8399,7 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct I
                         struct GObj *myGObj, struct Spectrum_obj *mySPECTObj, int ilam)
 {
 	// Initialization of the ray for the intersection study
-	Ray R1(o, dir, 0.00025); // 0.0001 -> ray begin 10cm further in direction "dir"
+	Ray<float> R1(o, dir, 0.00025); // 0.0001 -> ray begin 10cm further in direction "dir"
 
 	// ******************interval of study******************
 	BBox interval(make_float3(Pmin_x-VALMIN, Pmin_y-VALMIN, Pmin_z-VALMIN),
@@ -8536,7 +8536,7 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct I
 __device__ bool geoTestMir(float3 o, float3 dir, struct IObjets *ObjT, struct GObj *myGObj)
 {
 	// Initialization of the ray for the intersection study
-	Ray R1(o, dir, 0.00025); // 0.0001 -> ray begin 10cm further in direction "dir"
+	Ray<float> R1(o, dir, 0.00025); // 0.0001 -> ray begin 10cm further in direction "dir"
 	
 	// *************Specific to plane objects***************
 	int vi[6] = {0, 1, 2,  // vertices index for triangle 1
@@ -8604,7 +8604,7 @@ __device__ bool geoTestMir(float3 o, float3 dir, struct IObjets *ObjT, struct GO
 __device__ bool geoTestRec(float3 o, float3 dir, struct IObjets *ObjT)
 {
 	// Initialization of the ray for the intersection study
-	Ray R1(o, dir, 0.00025); // 0.0001 -> ray begin 10cm further in direction "dir"
+	Ray<float> R1(o, dir, 0.00025); // 0.0001 -> ray begin 10cm further in direction "dir"
 	// ******************interval of study******************
 	BBox interval(make_float3(Pmin_x, Pmin_y, Pmin_z),
 				  make_float3(Pmax_x, Pmax_y, Pmax_z));
