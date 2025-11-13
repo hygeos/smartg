@@ -96,13 +96,13 @@ public:
 
 	template <typename U>
     __host__ __device__ Vector<T> operator/(U f) const {
-        float inv = 1.f / f;
+        T inv = T(1) / f;
         return Vector<T>(x * inv, y * inv, z * inv);
     }
 
 	template <typename U>
     __host__ __device__ Vector<T> &operator/=(U f) {
-        float inv = 1.f / f;
+        T inv = T(1) / f;
         x *= inv; y *= inv; z *= inv;
         return *this;
     }
@@ -180,13 +180,13 @@ public:
 
 	template <typename U>
     __host__ __device__ Point<T> operator/(U f) const {
-        float inv = 1.f / f;
+        T inv = T(1) / f;
         return Point<T>(x * inv, y * inv, z * inv);
     }
 
 	template <typename U>
     __host__ __device__ Point<T> &operator/=(U f) {
-        float inv = 1.f / f;
+        T inv = T(1) / f;
         x *= inv; y *= inv; z *= inv;
         return *this;
     }
@@ -264,13 +264,13 @@ public:
 
 	template <typename U>
     __host__ __device__ Normal<T> operator/(U f) const {
-        float inv = 1.f / f;
+        T inv = T(1) / f;
         return Normal<T>(x * inv, y * inv, z * inv);
     }
 
 	template <typename U>
     __host__ __device__ Normal<T> &operator/=(U f) {
-        float inv = 1.f / f;
+        T inv = T(1) / f;
         x *= inv; y *= inv; z *= inv;
         return *this;
     }
