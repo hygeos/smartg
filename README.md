@@ -5,6 +5,9 @@
 SMART-G
 =======
 
+[![image](https://img.shields.io/pypi/v/smartg.svg)](https://pypi.python.org/pypi/smartg)
+[![image](https://img.shields.io/github/v/tag/hygeos/smartg?label=github&color=blue)](https://github.com/hygeos/smartg)
+[![image](https://pepy.tech/badge/smartg)](https://pepy.tech/project/smartg)
 [![image](https://img.shields.io/badge/DOI-10.1038%2Fs41586--020--2649--2-blue)](
 https://doi.org/10.1016/j.jqsrt.2018.10.017)
 
@@ -109,9 +112,9 @@ GeForce GTX 1070, GeForce TITAN V, GeForce RTX 2080 Ti, Geforce RTX 3070, Geforc
 
 The use of GPUs before 10xx series (Pascal) is depracated as of SMART-G 1.0.0
 
-## 5. Licencing information
+## 5. Licensing information
 
-This software is available under the SMART-G licence v1.0, available in the LICENCE.TXT file.
+This software is available under the SMART-G license v1.0, available in the LICENSE.TXT file.
 
 ## 6. Referencing
 
