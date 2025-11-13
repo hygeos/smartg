@@ -344,10 +344,10 @@ public:
 	}
 
 	// Public parameters
-	U3c o;           // point d'origine du rayon
-	U3c d;           // vecteur de direction du rayon
-	T mint, maxt;    // valeur min et max de t
-	T time;          // variable t: ray = o + d*t
+	U3c o;           // ray origin point
+	U3c d;           // ray direction vector
+	T mint, maxt;    // t min and max values
+	T time;          // variable t such that ray = o + d*t
  
 private:
 };
@@ -372,15 +372,13 @@ public:
         pMin = make_vec3c<T>(get_const_inf(T{}), get_const_inf(T{}), get_const_inf(T{}));
         pMax = make_vec3c<T>(-get_const_inf(T{}), -get_const_inf(T{}), -get_const_inf(T{}));
 	}
-
-    __host__ __device__ BBox(const float3 &p)
+    
+    template <typename P3> // P3 for float3/double3
+    __host__ __device__ BBox(const P3 &p)
 		: pMin(make_vec3c<T>(T(p.x),T(p.y),T(p.z))), pMax(make_vec3c<T>(T(p.x),T(p.y),T(p.z))) { }
     
-    __host__ __device__ BBox(const double3 &p)
-		: pMin(make_vec3c<T>(T(p.x),T(p.y),T(p.z))), pMax(make_vec3c<T>(T(p.x),T(p.y),T(p.z))) { }
-
-
-	__host__ __device__ BBox(const float3 &p1, const float3 &p2)
+    template <typename P3_1, typename P3_2> // P3_1 and P3_2 for float3/double3  
+    __host__ __device__ BBox(const P3_1 &p1, const P3_2 &p2)
 	{
         // min instead of fmin to avoid ignoring a nan value
         // also min is for both float and double
@@ -388,26 +386,8 @@ public:
         pMax = make_vec3c<T>(max(T(p1.x), T(p2.x)), max(T(p1.y), T(p2.y)), max(T(p1.z), T(p2.z)));
     }
 
-	__host__ __device__ BBox(const float3 &p1, const double3 &p2)
-	{
-        pMin = make_vec3c<T>(min(T(p1.x), T(p2.x)), min(T(p1.y), T(p2.y)), min(T(p1.z), T(p2.z)));
-        pMax = make_vec3c<T>(max(T(p1.x), T(p2.x)), max(T(p1.y), T(p2.y)), max(T(p1.z), T(p2.z)));
-    }
-
-    __host__ __device__ BBox(const double3 &p1, const float3 &p2)
-	{
-        pMin = make_vec3c<T>(min(T(p1.x), T(p2.x)), min(T(p1.y), T(p2.y)), min(T(p1.z), T(p2.z)));
-        pMax = make_vec3c<T>(max(T(p1.x), T(p2.x)), max(T(p1.y), T(p2.y)), max(T(p1.z), T(p2.z)));
-    }
-
-	__host__ __device__ BBox(const double3 &p1, const double3 &p2)
-	{
-        pMin = make_vec3c<T>(min(T(p1.x), T(p2.x)), min(T(p1.y), T(p2.y)), min(T(p1.z), T(p2.z)));
-        pMax = make_vec3c<T>(max(T(p1.x), T(p2.x)), max(T(p1.y), T(p2.y)), max(T(p1.z), T(p2.z)));
-    }
-
-    template <typename U>
-	__host__ __device__ BBox<T> Union(const BBox<U> &b, const float3 &p)
+    template <typename U, typename P3>
+	__host__ __device__ BBox<T> UnionPoint(const BBox<U> &b, const P3 &p)
 	{
 		BBox<T> ret;
 		ret.pMin.x = min(T(b.pMin.x), T(p.x));
@@ -418,19 +398,10 @@ public:
 		ret.pMax.z = max(T(b.pMax.z), T(p.z));
 		return ret;
 	}
-
     template <typename U>
-	__host__ __device__ BBox<T> Union(const BBox<U> &b, const double3 &p)
-	{
-		BBox<T> ret;
-		ret.pMin.x = min(T(b.pMin.x), T(p.x));
-		ret.pMin.y = min(T(b.pMin.y), T(p.y));
-		ret.pMin.z = min(T(b.pMin.z), T(p.z));
-		ret.pMax.x = max(T(b.pMax.x), T(p.x));
-		ret.pMax.y = max(T(b.pMax.y), T(p.y));
-		ret.pMax.z = max(T(b.pMax.z), T(p.z));
-		return ret;
-	}
+	__host__ __device__ BBox<T> Union(const BBox<U> &b, const float3 &p){return UnionPoint<T>(b, p);}
+    template <typename U>
+	__host__ __device__ BBox<T> Union(const BBox<U> &b, const double3 &p){return UnionPoint<T>(b, p);}
 
 	template <typename U_1, typename U_2>
 	__host__ __device__ BBox<T> Union(const BBox<U_1> &b, const BBox<U_2> &b2)
@@ -445,21 +416,16 @@ public:
 		return ret;
 	}
 
-    __host__ __device__ bool Inside(const float3 &pt) const
+    template <typename P3>
+    __host__ __device__ bool Inside(const P3 &pt) const
 	{
         return (T(pt.x) >= pMin.x && T(pt.x) <= pMax.x &&
                 T(pt.y) >= pMin.y && T(pt.y) <= pMax.y &&
                 T(pt.z) >= pMin.z && T(pt.z) <= pMax.z);
     }
 
-    __host__ __device__ bool Inside(const double3 &pt) const
-	{
-        return (T(pt.x) >= pMin.x && T(pt.x) <= pMax.x &&
-                T(pt.y) >= pMin.y && T(pt.y) <= pMax.y &&
-                T(pt.z) >= pMin.z && T(pt.z) <= pMax.z);
-    }
-
-    __host__ __device__ bool AlmostInside(const float3 &pt) const
+    template <typename P3>
+    __host__ __device__ bool AlmostInside(const P3 &pt) const
 	{
         T EPS = 1e-4;
         return (T(pt.x) >= (pMin.x-EPS) && T(pt.x) <= (pMax.x+EPS) &&
@@ -467,15 +433,8 @@ public:
                 T(pt.z) >= (pMin.z-EPS) && T(pt.z) <= (pMax.z+EPS));
     }
 
-    __host__ __device__ bool AlmostInside(const double3 &pt) const
-	{
-        T EPS = 1e-4;
-        return (T(pt.x) >= (pMin.x-EPS) && T(pt.x) <= (pMax.x+EPS) &&
-                T(pt.y) >= (pMin.y-EPS) && T(pt.y) <= (pMax.y+EPS) &&
-                T(pt.z) >= (pMin.z-EPS) && T(pt.z) <= (pMax.z+EPS));
-    }
-
-    __host__ __device__ U3 RoundInside(const float3 &pt)
+    template <typename P3>
+    __host__ __device__ U3 RoundInside(const P3 &pt)
 	{
         U3 ret;
         ret =  make_vec3<T>(
@@ -485,28 +444,8 @@ public:
 		return ret;
     }
 
-    __host__ __device__ U3 RoundInside(const double3 &pt)
-	{
-        U3 ret;
-        ret =  make_vec3<T>(
-               min(max(T(pt.x), pMin.x), pMax.x),
-               min(max(T(pt.y), pMin.y), pMax.y),
-               min(max(T(pt.z), pMin.z), pMax.z));
-		return ret;
-    }
-
-    __host__ __device__ U3 RoundAlmostInside(const float3 &pt)
-	{
-        T EPS = 1e-5;
-        U3 ret;
-        ret =  make_vec3<T>(
-               min(max(T(pt.x), pMin.x+EPS), pMax.x-EPS),
-               min(max(T(pt.y), pMin.y+EPS), pMax.y-EPS),
-               min(max(T(pt.z), pMin.z+EPS), pMax.z-EPS));
-		return ret;
-    }
-
-    __host__ __device__ U3 RoundAlmostInside(const double3 &pt)
+    template <typename P3>
+    __host__ __device__ U3 RoundAlmostInside(const P3 &pt)
 	{
         T EPS = 1e-5;
         U3 ret;
@@ -521,7 +460,7 @@ public:
 	__host__ __device__ bool IntersectP(const Ray<U> &ray, T *hitt0 = NULL,
 										T *hitt1 = NULL) const
 	{
-		T t0 = T(0.), gamma3;
+		T t0 = T(0), gamma3;
         #if __CUDA_ARCH__ >= 200
 		T epsi = machine_eps_flt() * T(0.5);
 		#elif !defined(__CUDA_ARCH__)
@@ -529,13 +468,13 @@ public:
 		#endif
         T t1 = get_const_inf(T{});
 
-		gamma3 = (3*epsi)/(1 - 3*epsi);
+		gamma3 = (T(3)*epsi)/(T(1) - T(3)*epsi);
 
 		for (int i = 0; i < 3; ++i)
 		{
             // Update interval for _i_th bounding box slab
             T invRayDir;
-			if(T(ray.d[i]) != T(0.)) invRayDir = T(1.) / T(ray.d[i]);
+			if(T(ray.d[i]) != T(0)) invRayDir = T(1) / T(ray.d[i]);
             else invRayDir  = 1e32;
 			T tNear = (pMin[i] - T(ray.o[i])) * invRayDir;
 			T tFar  = (pMax[i] - T(ray.o[i])) * invRayDir;
@@ -554,8 +493,8 @@ public:
 		return true;
 	}
 
-	// Paramètres publiques de la Box
-    U3c pMin, pMax; // point min et point max
+	// Public parameters
+    U3c pMin, pMax; // min and max points (U3c -> float3c/double3c)
 private:
 };
 
