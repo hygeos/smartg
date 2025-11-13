@@ -3534,19 +3534,19 @@ inline __device__ constexpr double get_const_inf(double)
 ////////////////////////////////////////////////////////////////////////////////
 
 // float3/double3
-template <typename T> struct VecType;
-template <> struct VecType<float>  { using type = float3;  };
-template <> struct VecType<double> { using type = double3; };
-template <typename T> using vec3 = typename VecType<T>::type;
+template <typename T> struct VecType3;
+template <> struct VecType3<float>  { using type = float3;  };
+template <> struct VecType3<double> { using type = double3; };
+template <typename T> using vec3 = typename VecType3<T>::type;
 template <typename T> __host__ __device__ vec3<T> make_vec3(T x, T y, T z);
 template <> __host__ __device__ inline float3  make_vec3<float> (float  x, float  y, float  z) { return make_float3(x, y, z); }
 template <> __host__ __device__ inline double3 make_vec3<double>(double x, double y, double z) { return make_double3(x, y, z); }
 
 // float3c/double3c
-template <typename T> struct VecTypeC;
-template <> struct VecTypeC<float>  { using type = float3c;  };
-template <> struct VecTypeC<double> { using type = double3c; };
-template <typename T> using vec3c = typename VecTypeC<T>::type;
+template <typename T> struct VecType3C;
+template <> struct VecType3C<float>  { using type = float3c;  };
+template <> struct VecType3C<double> { using type = double3c; };
+template <typename T> using vec3c = typename VecType3C<T>::type;
 template <typename T> __host__ __device__ vec3c<T> make_vec3c(T x, T y, T z);
 template <> __host__ __device__ inline float3c  make_vec3c<float> (float  x, float  y, float  z) { return make_float3c(x, y, z); }
 template <> __host__ __device__ inline double3c make_vec3c<double>(double x, double y, double z) { return make_double3c(x, y, z); }
