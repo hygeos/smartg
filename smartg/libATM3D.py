@@ -21,6 +21,8 @@ from luts.luts import read_mlut
 
 import xarray as xr
 
+import math
+
 def is_sorted(arr):
     """
     Description : Check if the numpy array values are in the ascending order.
@@ -59,7 +61,7 @@ class OOMFormatter(ticker.ScalarFormatter):
              self.format = r'$\mathdefault{%s}$' % self.format
 
 def find_order(mat):
-    return np.math.floor(np.math.log(np.max(np.abs(mat)), 10))
+    return math.floor(math.log(np.max(np.abs(mat)), 10))
 
 def find_order_or_none(mat, cb_sform):
     if cb_sform : return OOMFormatter(find_order(mat))
