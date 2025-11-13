@@ -329,7 +329,8 @@ public:
 		d = make_vec3c<T>(T(r.d.x), T(r.d.y), T(r.d.z));
 	}
 
-	__host__ __device__ Ray(const U3 &origin, const U3 &direction, T start=T(0.),
+    template <typename P3, typename V3>
+	__host__ __device__ Ray(const P3 &origin, const V3 &direction, T start=T(0.),
 				   T end = get_const_inf(T{}), T t = T(0.))
 	{
 		mint = start; maxt = end; time = t;
