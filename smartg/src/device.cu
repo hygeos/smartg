@@ -2773,7 +2773,7 @@ __device__ void move_pp2_bak(Photon* ph, struct Profile *prof_atm, struct Profil
     int next_layer=ph->layer;
     pmin = make_float3(cell[ph->layer].pminx, cell[ph->layer].pminy, cell[ph->layer].pminz);
     pmax = make_float3(cell[ph->layer].pmaxx, cell[ph->layer].pmaxy, cell[ph->layer].pmaxz);
-    BBox Box_ini(pmin, pmax);
+    BBox<float> Box_ini(pmin, pmax);
     ph->pos = Box_ini.RoundAlmostInside(ph->pos);
     //if (!Box_ini.AlmostInside(ph->pos) && ph->layer>=0 ) {
     //if (!Box_ini.Inside(ph->pos) && ph->layer>=0 ) {
@@ -2827,7 +2827,7 @@ __device__ void move_pp2_bak(Photon* ph, struct Profile *prof_atm, struct Profil
 		Ray<float> Ray_cur(ph->pos, ph->v, 0);
         pmin = make_float3(cell[ph->layer].pminx, cell[ph->layer].pminy, cell[ph->layer].pminz);
         pmax = make_float3(cell[ph->layer].pmaxx, cell[ph->layer].pmaxy, cell[ph->layer].pmaxz);
-        BBox Box_cur(pmin, pmax);
+        BBox<float> Box_cur(pmin, pmax);
 		intersectBox = Box_cur.IntersectP(Ray_cur, &intTime0, &intTime1);
 
         //if (intTime1 !=0) { // the photon is not already on a boundary
@@ -3073,7 +3073,7 @@ __device__ void move_pp2_bak(Photon* ph, struct Profile *prof_atm, struct Profil
 // 		Ray<float> Ray_cur(ph->pos, ph->v, 0);
 //         pmin = make_float3(cell[ph->layer].pminx, cell[ph->layer].pminy, cell[ph->layer].pminz);
 //         pmax = make_float3(cell[ph->layer].pmaxx, cell[ph->layer].pmaxy, cell[ph->layer].pmaxz);
-//         BBox Box_cur(pmin, pmax);
+//         BBox<float> Box_cur(pmin, pmax);
 // 		intersectBox = Box_cur.IntersectP(Ray_cur, &intTime0, &intTime1);
 
 //         if (intersectBox) { // the photon is not already on a boundary
@@ -3290,7 +3290,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
 		Ray<float> Ray_cur(ph->pos, ph->v, 0.);
         pmin = make_float3(cell[ph->layer].pminx, cell[ph->layer].pminy, cell[ph->layer].pminz);
         pmax = make_float3(cell[ph->layer].pmaxx, cell[ph->layer].pmaxy, cell[ph->layer].pmaxz);
-        BBox Box_cur(pmin, pmax);
+        BBox<float> Box_cur(pmin, pmax);
 		intersectBox = Box_cur.IntersectP(Ray_cur, &intTime0, &intTime1);
 
         // Case where the photon is blocked in a box corner... avoid infinite loop
@@ -3790,7 +3790,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 		// if there is not an intersect with an objet we have a special treatment
 		if (nObj > 0 && !mytest && IsAtm == 0)
 		{
-			BBox boite(make_float3(-1200000., -1200000., 0.F), make_float3(12000.F, 12000.F, ZTOAd));
+			BBox<float> boite(make_float3(-1200000., -1200000., 0.F), make_float3(12000.F, 12000.F, ZTOAd));
 			Ray<float> Rayon(ph->pos, ph->v, 0);
 			float intTime0=-10.F, intTime1=-10.F;
 			bool intersectBox;
@@ -8393,7 +8393,7 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct I
 	Ray<float> R1(o, dir, 0.00025); // 0.0001 -> ray begin 10cm further in direction "dir"
 
 	// ******************interval of study******************
-	BBox interval(make_float3(Pmin_x-VALMIN, Pmin_y-VALMIN, Pmin_z-VALMIN),
+	BBox<float> interval(make_float3(Pmin_x-VALMIN, Pmin_y-VALMIN, Pmin_z-VALMIN),
 				  make_float3(Pmax_x+VALMIN, Pmax_y+VALMIN, Pmax_z+VALMIN));
 	if (!interval.IntersectP(R1))
 		return false;
@@ -8417,7 +8417,7 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct I
 		int NE  = myGObj[i].nObj;   // Number of entity in the group i
 
 		// We test firstly the bounding box of the group
-		BBox bboxG(make_float3(myGObj[i].bPminx, myGObj[i].bPminy, myGObj[i].bPminz),
+		BBox<float> bboxG(make_float3(myGObj[i].bPminx, myGObj[i].bPminy, myGObj[i].bPminz),
 				   make_float3(myGObj[i].bPmaxx, myGObj[i].bPmaxy, myGObj[i].bPmaxz));
 
 			
@@ -8456,7 +8456,7 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct I
 					Sphere myObject(&Tj, &invTj, ObjT[IND+j].myRad, ObjT[IND+j].z0,
 									ObjT[IND+j].z1, ObjT[IND+j].phi);
 		
-					BBox myBBox = myObject.WorldBoundSphere();
+					BBox<float> myBBox = myObject.WorldBoundSphere();
 
 					if (myBBox.IntersectP(R1))
 						myBj = myObject.Intersect(R1, &myTj, &myDgj);
@@ -8472,7 +8472,7 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct I
 					// Create the triangleMesh (2 = number of triangle ; 4 = number of vertices)
 					TriangleMesh myObject(&Tj, &invTj, 2, 4, vi, Pvec);
 				
-					BBox myBBox = myObject.WorldBoundTriangleMesh();
+					BBox<float> myBBox = myObject.WorldBoundTriangleMesh();
 					if (myBBox.IntersectP(R1))
 						myBj = myObject.Intersect2(R1, &myTj, &myDgj);
 					if(myBj)
@@ -8540,7 +8540,7 @@ __device__ bool geoTestMir(float3 o, float3 dir, struct IObjets *ObjT, struct GO
 		int NE  = myGObj[i].nObj;   // Number of entity in the group i
 
 		// We test firstly the bounding box of the group
-		BBox bboxG(make_float3(myGObj[i].bPminx, myGObj[i].bPminy, myGObj[i].bPminz),
+		BBox<float> bboxG(make_float3(myGObj[i].bPminx, myGObj[i].bPminy, myGObj[i].bPminz),
 				   make_float3(myGObj[i].bPmaxx, myGObj[i].bPmaxy, myGObj[i].bPmaxz));
 		
 		// If the test with bboxG is ok then perform intersection test with all the obj inside
@@ -8582,7 +8582,7 @@ __device__ bool geoTestMir(float3 o, float3 dir, struct IObjets *ObjT, struct GO
 					// Create the triangleMesh (2 = number of triangle ; 4 = number of vertices)
 					TriangleMesh myObject(&Tj, &invTj, 2, 4, vi, Pvec);
 				
-					BBox myBBox = myObject.WorldBoundTriangleMesh();
+					BBox<float> myBBox = myObject.WorldBoundTriangleMesh();
 					if (myBBox.IntersectP(R1)) myBj = myObject.IntersectP2(R1);
 					if(myBj) return true;
 				}
@@ -8597,7 +8597,7 @@ __device__ bool geoTestRec(float3 o, float3 dir, struct IObjets *ObjT)
 	// Initialization of the ray for the intersection study
 	Ray<float> R1(o, dir, 0.00025); // 0.0001 -> ray begin 10cm further in direction "dir"
 	// ******************interval of study******************
-	BBox interval(make_float3(Pmin_x, Pmin_y, Pmin_z),
+	BBox<float> interval(make_float3(Pmin_x, Pmin_y, Pmin_z),
 				  make_float3(Pmax_x, Pmax_y, Pmax_z));
 	
 	if (!interval.IntersectP(R1))
@@ -8646,7 +8646,7 @@ __device__ bool geoTestRec(float3 o, float3 dir, struct IObjets *ObjT)
 			// Create the triangleMesh (2 = number of triangle ; 4 = number of vertices)
 			TriangleMesh myObject(&Ti, &invTi, 2, 4, vi, Pvec);
 			
-			BBox myBBox = myObject.WorldBoundTriangleMesh();
+			BBox<float> myBBox = myObject.WorldBoundTriangleMesh();
 			if (myBBox.IntersectP(R1))
 				myBi = myObject.IntersectP2(R1);	
 			if (myBi) return true;

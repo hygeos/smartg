@@ -3505,14 +3505,20 @@ __device__ int MaxDim(double3 v)
 // Contants that can be used with templates
 ////////////////////////////////////////////////////////////////////////////////
 
+//-------------------- FLOAT --------------------
 inline __host__ __device__ constexpr float get_const_inf(float)
 {
     #if __CUDA_ARCH__ >= 200
+    /* TODO explore the following:
+    #include <cuda/std/limits>
+    float value = ::cuda::std::numeric_limits<float>::max(); */
     return CUDART_INF_F;
     #else
     return std::numeric_limits<float>::max();
     #endif
 }
+
+//-------------------- DOUBLE --------------------
 inline __device__ constexpr double get_const_inf(double)
 {
     #if __CUDA_ARCH__ >= 200

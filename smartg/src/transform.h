@@ -44,7 +44,7 @@ public:
 	inline __host__ __device__ void operator()(const Normalf &c, float3 *ctrans) const;
     inline __host__ __device__ Ray<float> operator()(const Ray<float> &r) const;
     inline __host__ __device__ void operator()(const Ray<float> &r, Ray<float> *rt) const;
-    __host__ __device__ BBox operator()(const BBox &b) const;
+    __host__ __device__ BBox<float> operator()(const BBox<float> &b) const;
 	#endif
     __host__ __device__ Transform operator*(const Transform &t2) const;
 
@@ -273,7 +273,7 @@ inline void Transform::operator()(const Ray<float> &r, Ray<float> *rt) const
 
 // les 8 coins d'une box peuvent être défini en fonction
 // d'un seul point et de ces trois vecteurs unitaires
-BBox Transform::operator()(const BBox &b) const
+BBox<float> Transform::operator()(const BBox<float> &b) const
 {
     const Transform &M = *this;
 
@@ -287,7 +287,7 @@ BBox Transform::operator()(const BBox &b) const
 	V3 = M(Vectorf(0, 0, b.pMax.z-b.pMin.z));
 
 	// Creation de la box avec le 1er point P
-	BBox ret(P);
+	BBox<float> ret(P);
 
     // élargir la box en prenant une face du cube
 	// Face avec 4 points : P, P+V.x, P+V.y, P+(V.x, V.y)

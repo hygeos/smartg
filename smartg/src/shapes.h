@@ -114,8 +114,8 @@ public:
 							   float rad, float zmin, float zmax, float phiMax);
 
     /* uniquement device pour éviter des problèmes de mémoires */
-    __device__ BBox ObjectBoundSphere() const;
-    __device__ BBox WorldBoundSphere() const;
+    __device__ BBox<float> ObjectBoundSphere() const;
+    __device__ BBox<float> WorldBoundSphere() const;
 
     __host__ __device__ bool Intersect(const Ray<float> &ray, float* tHit,
 									   DifferentialGeometry *Dg) const;
@@ -154,31 +154,31 @@ Sphere::Sphere(const Transform *o2w, const Transform *w2o,
     phiMax = radians(clamp(pm, 0.0f, 360.0f));
 }
 
-__device__ BBox Sphere::WorldBoundSphere() const
+__device__ BBox<float> Sphere::WorldBoundSphere() const
 {
 	return (*ObjectToWorld)(ObjectBoundSphere());
 }
 
-__device__ BBox Sphere::ObjectBoundSphere() const
+__device__ BBox<float> Sphere::ObjectBoundSphere() const
 {
 	if (phiMax < PI/2)
 	{
-		return BBox(make_float3( 0.f, 0.f, zmin),
+		return BBox<float>(make_float3( 0.f, 0.f, zmin),
 					make_float3( radius, radius*sinf(phiMax), zmax));
 	}
 	else if (phiMax < PI)
 	{
-		return BBox(make_float3( radius*cosf(phiMax), 0.f, zmin),
+		return BBox<float>(make_float3( radius*cosf(phiMax), 0.f, zmin),
 					make_float3( radius, radius, zmax));
 	}
 	else if (phiMax < 3*PI/2)
 	{
-	    return BBox(make_float3(-radius, radius*sinf(phiMax), zmin),
+	    return BBox<float>(make_float3(-radius, radius*sinf(phiMax), zmin),
 					make_float3( radius,  radius, zmax));
 	}
 	else //if (phiMax >= 3*PI/2)
 	{
-	    return BBox(make_float3(-radius, -radius, zmin),
+	    return BBox<float>(make_float3(-radius, -radius, zmin),
 					make_float3( radius,  radius, zmax));
 	}
 }
@@ -280,8 +280,8 @@ public:
 								 float3 a, float3 b, float3 c);
 
     /* uniquement device pour éviter des problèmes de mémoires */
-    __device__ BBox ObjectBoundTriangle() const;
-    __device__ BBox WorldBoundTriangle() const;
+    __device__ BBox<float> ObjectBoundTriangle() const;
+    __device__ BBox<float> WorldBoundTriangle() const;
 
     __host__ __device__ bool Intersect(const Ray<float> &ray, float* tHit,
 									   DifferentialGeometry *dg) const;
@@ -836,15 +836,15 @@ bool Triangle::IntersectP(const Ray<float> &ray) const
 }
 #endif
 
-__device__ BBox Triangle::ObjectBoundTriangle() const
+__device__ BBox<float> Triangle::ObjectBoundTriangle() const
 {
-	BBox objectBounds((*WorldToObject)(Pointf(p1)), (*WorldToObject)(Pointf(p2)));
+	BBox<float> objectBounds((*WorldToObject)(Pointf(p1)), (*WorldToObject)(Pointf(p2)));
 	return objectBounds.Union(objectBounds, (*WorldToObject)(Pointf(p3)));
 }
 
-__device__ BBox Triangle::WorldBoundTriangle() const
+__device__ BBox<float> Triangle::WorldBoundTriangle() const
 {
-	BBox worldBounds(p1, p2);
+	BBox<float> worldBounds(p1, p2);
     return worldBounds.Union(worldBounds, p3);
 }
 
@@ -865,8 +865,8 @@ public:
 									 int nt, int nv, int *vi, float3 *P);
 
     /* uniquement device pour éviter des problèmes de mémoires */
-    __device__ BBox ObjectBoundTriangleMesh() const;
-    __device__ BBox WorldBoundTriangleMesh() const;
+    __device__ BBox<float> ObjectBoundTriangleMesh() const;
+    __device__ BBox<float> WorldBoundTriangleMesh() const;
 
     __host__ __device__ bool Intersect(const Ray<float> &ray, float* tHit,
 									   DifferentialGeometry *dg) const;
@@ -1000,18 +1000,18 @@ __device__ bool TriangleMesh::IntersectP2(const Ray<float> &ray) const
 	return false;
 }
 
-__device__ BBox TriangleMesh::ObjectBoundTriangleMesh() const
+__device__ BBox<float> TriangleMesh::ObjectBoundTriangleMesh() const
 {
-	BBox objectBounds;
+	BBox<float> objectBounds;
     for (int i = 0; i < nverts; i++) {
 		float3 pW = (*WorldToObject)(Pointf(p[i]));
 		objectBounds = objectBounds.Union(objectBounds, pW);}
     return objectBounds;
 }
 
-__device__ BBox TriangleMesh::WorldBoundTriangleMesh() const
+__device__ BBox<float> TriangleMesh::WorldBoundTriangleMesh() const
 {
-    BBox worldBounds;
+    BBox<float> worldBounds;
     for (int i = 0; i < nverts; i++)
 		worldBounds = worldBounds.Union(worldBounds, p[i]);
     return worldBounds;

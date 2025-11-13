@@ -356,159 +356,189 @@ using Rayf = Ray<float>;
 using Rayd = Ray<double>;
 
 
-
+template <typename T = float> //T -> float / double
 class BBox
 // ========================================================
 // Classe BBox
 // ========================================================
 {
 public:
-	// Méthodes publiques de la Box
+    using U3  = vec3<T>;
+    using U3c = vec3c<T>;
+
+	// Public methods
 	__host__ __device__ BBox()
 	{
-        #if __CUDA_ARCH__ >= 200
-		pMin = make_float3c( CUDART_INF_F,  CUDART_INF_F,  CUDART_INF_F);
-		pMax = make_float3c(-CUDART_INF_F, -CUDART_INF_F, -CUDART_INF_F);
-        #elif !defined(__CUDA_ARCH__)
-		pMin = make_float3c(std::numeric_limits<float>::max(),
-							std::numeric_limits<float>::max(),
-							std::numeric_limits<float>::max());
-		pMax = make_float3c(-std::numeric_limits<float>::max(),
-							-std::numeric_limits<float>::max(),
-							-std::numeric_limits<float>::max());
-        #endif
+        pMin = make_vec3c<T>(get_const_inf(T{}), get_const_inf(T{}), get_const_inf(T{}));
+        pMax = make_vec3c<T>(-get_const_inf(T{}), -get_const_inf(T{}), -get_const_inf(T{}));
 	}
+
     __host__ __device__ BBox(const float3 &p)
-		: pMin(make_float3c(p)), pMax(make_float3c(p)) { }
+		: pMin(make_vec3c<T>(T(p.x),T(p.y),T(p.z))), pMax(make_vec3c<T>(T(p.x),T(p.y),T(p.z))) { }
+    
+    __host__ __device__ BBox(const double3 &p)
+		: pMin(make_vec3c<T>(T(p.x),T(p.y),T(p.z))), pMax(make_vec3c<T>(T(p.x),T(p.y),T(p.z))) { }
+
 
 	__host__ __device__ BBox(const float3 &p1, const float3 &p2)
 	{
-		#if __CUDA_ARCH__ >= 200
-        pMin = make_float3c(fmin(p1.x, p2.x), fmin(p1.y, p2.y), fmin(p1.z, p2.z));
-        pMax = make_float3c(fmax(p1.x, p2.x), fmax(p1.y, p2.y), fmax(p1.z, p2.z));
-		#elif !defined(__CUDA_ARCH__)
-		pMin = make_float3c(min(p1.x, p2.x), min(p1.y, p2.y), min(p1.z, p2.z));
-        pMax = make_float3c(max(p1.x, p2.x), max(p1.y, p2.y), max(p1.z, p2.z));
-		#endif
+        // min instead of fmin to avoid ignoring a nan value
+        // also min is for both float and double
+        pMin = make_vec3c<T>(min(T(p1.x), T(p2.x)), min(T(p1.y), T(p2.y)), min(T(p1.z), T(p2.z)));
+        pMax = make_vec3c<T>(max(T(p1.x), T(p2.x)), max(T(p1.y), T(p2.y)), max(T(p1.z), T(p2.z)));
     }
 
-	__host__ __device__ BBox Union(const BBox &b, const float3 &p)
+	__host__ __device__ BBox(const float3 &p1, const double3 &p2)
 	{
-		BBox ret = b;
-        #if __CUDA_ARCH__ >= 200
-		ret.pMin.x = fmin(b.pMin.x, p.x);
-		ret.pMin.y = fmin(b.pMin.y, p.y);
-		ret.pMin.z = fmin(b.pMin.z, p.z);
-		ret.pMax.x = fmax(b.pMax.x, p.x);
-		ret.pMax.y = fmax(b.pMax.y, p.y);
-		ret.pMax.z = fmax(b.pMax.z, p.z);
-		#elif !defined(__CUDA_ARCH__)
-		ret.pMin.x = min(b.pMin.x, p.x);
-		ret.pMin.y = min(b.pMin.y, p.y);
-		ret.pMin.z = min(b.pMin.z, p.z);
-		ret.pMax.x = max(b.pMax.x, p.x);
-		ret.pMax.y = max(b.pMax.y, p.y);
-		ret.pMax.z = max(b.pMax.z, p.z);
-		#endif
+        pMin = make_vec3c<T>(min(T(p1.x), T(p2.x)), min(T(p1.y), T(p2.y)), min(T(p1.z), T(p2.z)));
+        pMax = make_vec3c<T>(max(T(p1.x), T(p2.x)), max(T(p1.y), T(p2.y)), max(T(p1.z), T(p2.z)));
+    }
+
+    __host__ __device__ BBox(const double3 &p1, const float3 &p2)
+	{
+        pMin = make_vec3c<T>(min(T(p1.x), T(p2.x)), min(T(p1.y), T(p2.y)), min(T(p1.z), T(p2.z)));
+        pMax = make_vec3c<T>(max(T(p1.x), T(p2.x)), max(T(p1.y), T(p2.y)), max(T(p1.z), T(p2.z)));
+    }
+
+	__host__ __device__ BBox(const double3 &p1, const double3 &p2)
+	{
+        pMin = make_vec3c<T>(min(T(p1.x), T(p2.x)), min(T(p1.y), T(p2.y)), min(T(p1.z), T(p2.z)));
+        pMax = make_vec3c<T>(max(T(p1.x), T(p2.x)), max(T(p1.y), T(p2.y)), max(T(p1.z), T(p2.z)));
+    }
+
+    template <typename U>
+	__host__ __device__ BBox<T> Union(const BBox<U> &b, const float3 &p)
+	{
+		BBox<T> ret;
+		ret.pMin.x = min(T(b.pMin.x), T(p.x));
+		ret.pMin.y = min(T(b.pMin.y), T(p.y));
+		ret.pMin.z = min(T(b.pMin.z), T(p.z));
+		ret.pMax.x = max(T(b.pMax.x), T(p.x));
+		ret.pMax.y = max(T(b.pMax.y), T(p.y));
+		ret.pMax.z = max(T(b.pMax.z), T(p.z));
 		return ret;
 	}
-	
-	__host__ __device__ BBox Union(const BBox &b, const BBox &b2)
+
+    template <typename U>
+	__host__ __device__ BBox<T> Union(const BBox<U> &b, const double3 &p)
 	{
-		BBox ret;
-		#if __CUDA_ARCH__ >= 200
-		ret.pMin.x = fmin(b.pMin.x, b2.pMin.x);
-		ret.pMin.y = fmin(b.pMin.y, b2.pMin.y);
-		ret.pMin.z = fmin(b.pMin.z, b2.pMin.z);
-		ret.pMax.x = fmax(b.pMax.x, b2.pMax.x);
-		ret.pMax.y = fmax(b.pMax.y, b2.pMax.y);
-		ret.pMax.z = fmax(b.pMax.z, b2.pMax.z);
-		#elif !defined(__CUDA_ARCH__)
-		ret.pMin.x = min(b.pMin.x, b2.pMin.x);
-		ret.pMin.y = min(b.pMin.y, b2.pMin.y);
-		ret.pMin.z = min(b.pMin.z, b2.pMin.z);
-		ret.pMax.x = max(b.pMax.x, b2.pMax.x);
-		ret.pMax.y = max(b.pMax.y, b2.pMax.y);
-		ret.pMax.z = max(b.pMax.z, b2.pMax.z);
-		#endif
+		BBox<T> ret;
+		ret.pMin.x = min(T(b.pMin.x), T(p.x));
+		ret.pMin.y = min(T(b.pMin.y), T(p.y));
+		ret.pMin.z = min(T(b.pMin.z), T(p.z));
+		ret.pMax.x = max(T(b.pMax.x), T(p.x));
+		ret.pMax.y = max(T(b.pMax.y), T(p.y));
+		ret.pMax.z = max(T(b.pMax.z), T(p.z));
+		return ret;
+	}
+
+	template <typename U_1, typename U_2>
+	__host__ __device__ BBox<T> Union(const BBox<U_1> &b, const BBox<U_2> &b2)
+	{
+		BBox<T> ret;
+		ret.pMin.x = min(T(b.pMin.x), T(b2.pMin.x));
+		ret.pMin.y = min(T(b.pMin.y), T(b2.pMin.y));
+		ret.pMin.z = min(T(b.pMin.z), T(b2.pMin.z));
+		ret.pMax.x = max(T(b.pMax.x), T(b2.pMax.x));
+		ret.pMax.y = max(T(b.pMax.y), T(b2.pMax.y));
+		ret.pMax.z = max(T(b.pMax.z), T(b2.pMax.z));
 		return ret;
 	}
 
     __host__ __device__ bool Inside(const float3 &pt) const
 	{
-        return (pt.x >= pMin.x && pt.x <= pMax.x &&
-                pt.y >= pMin.y && pt.y <= pMax.y &&
-                pt.z >= pMin.z && pt.z <= pMax.z);
+        return (T(pt.x) >= pMin.x && T(pt.x) <= pMax.x &&
+                T(pt.y) >= pMin.y && T(pt.y) <= pMax.y &&
+                T(pt.z) >= pMin.z && T(pt.z) <= pMax.z);
+    }
+
+    __host__ __device__ bool Inside(const double3 &pt) const
+	{
+        return (T(pt.x) >= pMin.x && T(pt.x) <= pMax.x &&
+                T(pt.y) >= pMin.y && T(pt.y) <= pMax.y &&
+                T(pt.z) >= pMin.z && T(pt.z) <= pMax.z);
     }
 
     __host__ __device__ bool AlmostInside(const float3 &pt) const
 	{
-        float EPS = 1e-4;
-        return (pt.x >= (pMin.x-EPS) && pt.x <= (pMax.x+EPS) &&
-                pt.y >= (pMin.y-EPS) && pt.y <= (pMax.y+EPS) &&
-                pt.z >= (pMin.z-EPS) && pt.z <= (pMax.z+EPS));
+        T EPS = 1e-4;
+        return (T(pt.x) >= (pMin.x-EPS) && T(pt.x) <= (pMax.x+EPS) &&
+                T(pt.y) >= (pMin.y-EPS) && T(pt.y) <= (pMax.y+EPS) &&
+                T(pt.z) >= (pMin.z-EPS) && T(pt.z) <= (pMax.z+EPS));
     }
 
-    __host__ __device__ float3 RoundInside(const float3 &pt)
+    __host__ __device__ bool AlmostInside(const double3 &pt) const
 	{
-        float3 ret;
-		#if __CUDA_ARCH__ >= 200
-        ret =  make_float3(
-               fmin(fmax(pt.x, pMin.x), pMax.x),
-               fmin(fmax(pt.y, pMin.y), pMax.y),
-               fmin(fmax(pt.z, pMin.z), pMax.z));
-		#elif !defined(__CUDA_ARCH__)
-        ret =  make_float3(
-               min(max(pt.x, pMin.x), pMax.x),
-               min(max(pt.y, pMin.y), pMax.y),
-               min(max(pt.z, pMin.z), pMax.z));
-		#endif
+        T EPS = 1e-4;
+        return (T(pt.x) >= (pMin.x-EPS) && T(pt.x) <= (pMax.x+EPS) &&
+                T(pt.y) >= (pMin.y-EPS) && T(pt.y) <= (pMax.y+EPS) &&
+                T(pt.z) >= (pMin.z-EPS) && T(pt.z) <= (pMax.z+EPS));
+    }
+
+    __host__ __device__ U3 RoundInside(const float3 &pt)
+	{
+        U3 ret;
+        ret =  make_vec3<T>(
+               min(max(T(pt.x), pMin.x), pMax.x),
+               min(max(T(pt.y), pMin.y), pMax.y),
+               min(max(T(pt.z), pMin.z), pMax.z));
 		return ret;
     }
 
-
-    __host__ __device__ float3 RoundAlmostInside(const float3 &pt)
+    __host__ __device__ U3 RoundInside(const double3 &pt)
 	{
-        float EPS = 1e-5;
-        float3 ret;
-		#if __CUDA_ARCH__ >= 200
-        ret =  make_float3(
-               fmin(fmax(pt.x, pMin.x+EPS), pMax.x-EPS),
-               fmin(fmax(pt.y, pMin.y+EPS), pMax.y-EPS),
-               fmin(fmax(pt.z, pMin.z+EPS), pMax.z-EPS));
-		#elif !defined(__CUDA_ARCH__)
-        ret =  make_float3(
-               min(max(pt.x, pMin.x+EPS), pMax.x-EPS),
-               min(max(pt.y, pMin.y+EPS), pMax.y-EPS),
-               min(max(pt.z, pMin.z+EPS), pMax.z-EPS));
-		#endif
+        U3 ret;
+        ret =  make_vec3<T>(
+               min(max(T(pt.x), pMin.x), pMax.x),
+               min(max(T(pt.y), pMin.y), pMax.y),
+               min(max(T(pt.z), pMin.z), pMax.z));
 		return ret;
     }
 
-
-
-	__host__ __device__ bool IntersectP(const Ray<float> &ray, float *hitt0 = NULL,
-										float *hitt1 = NULL) const
+    __host__ __device__ U3 RoundAlmostInside(const float3 &pt)
 	{
-		float t0 = 0.F, gamma3;
+        T EPS = 1e-5;
+        U3 ret;
+        ret =  make_vec3<T>(
+               min(max(T(pt.x), pMin.x+EPS), pMax.x-EPS),
+               min(max(T(pt.y), pMin.y+EPS), pMax.y-EPS),
+               min(max(T(pt.z), pMin.z+EPS), pMax.z-EPS));
+		return ret;
+    }
+
+    __host__ __device__ U3 RoundAlmostInside(const double3 &pt)
+	{
+        T EPS = 1e-5;
+        U3 ret;
+        ret =  make_vec3<T>(
+               min(max(T(pt.x), pMin.x+EPS), pMax.x-EPS),
+               min(max(T(pt.y), pMin.y+EPS), pMax.y-EPS),
+               min(max(T(pt.z), pMin.z+EPS), pMax.z-EPS));
+		return ret;
+    }
+
+    template <typename U>
+	__host__ __device__ bool IntersectP(const Ray<U> &ray, T *hitt0 = NULL,
+										T *hitt1 = NULL) const
+	{
+		T t0 = T(0.), gamma3;
         #if __CUDA_ARCH__ >= 200
-		float epsi = machine_eps_flt() * 0.5;
-		float t1 = CUDART_INF_F;
+		T epsi = machine_eps_flt() * T(0.5);
 		#elif !defined(__CUDA_ARCH__)
-		float epsi = (std::numeric_limits<float>::epsilon() * 0.5);
-		float t1 = std::numeric_limits<float>::max();
+		T epsi = (std::numeric_limits<T>::epsilon() * 0.5);
 		#endif
+        T t1 = get_const_inf(T{});
 
 		gamma3 = (3*epsi)/(1 - 3*epsi);
 
 		for (int i = 0; i < 3; ++i)
 		{
             // Update interval for _i_th bounding box slab
-            float invRayDir;
-			if(ray.d[i] != 0.) invRayDir = 1.F / ray.d[i];
+            T invRayDir;
+			if(T(ray.d[i]) != T(0.)) invRayDir = T(1.) / T(ray.d[i]);
             else invRayDir  = 1e32;
-			float tNear = (pMin[i] - ray.o[i]) * invRayDir;
-			float tFar  = (pMax[i] - ray.o[i]) * invRayDir;
+			T tNear = (pMin[i] - T(ray.o[i])) * invRayDir;
+			T tFar  = (pMax[i] - T(ray.o[i])) * invRayDir;
 			
 			// Update parametric interval from slab intersection $t$s
 			if (tNear > tFar) {swap(&tNear, &tFar);}
@@ -525,7 +555,11 @@ public:
 	}
 
 	// Paramètres publiques de la Box
-    float3c pMin, pMax; // point min et point max
+    U3c pMin, pMax; // point min et point max
 private:
 };
+
+using BBoxf = BBox<float>;
+using BBoxd = BBox<double>;
+
 #endif // _GEOMETRY_H_
