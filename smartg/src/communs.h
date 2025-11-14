@@ -422,17 +422,17 @@ struct IGeo
 		normalBase = nB;
 	}
 	
-	float3 normal;      /* normal at the surface impact   */
-	float3 normalBase;  /* front(AV) surface normal       */
-	int material;       /* material of the object         */
-	float reflectivity; /* albedo of the object           */
-	float roughness;    /* roughness of the object        */
-	int shadow;         /* shadow option of the object    */
-	float nind;         /* refractive index of the object */
-	int dist;           /* distribution: Beckmann, GGX,.. */
-    Transform mvTF;     /* transformation of the object   */
-	int type;           /* 1 = reflector, 2 = receiver    */
-	float3 mvR;         /* rotation angles in x, y, z     */
+	float3 normal;         /* normal at the surface impact   */
+	float3 normalBase;     /* front(AV) surface normal       */
+	int material;          /* material of the object         */
+	float reflectivity;    /* albedo of the object           */
+	float roughness;       /* roughness of the object        */
+	int shadow;            /* shadow option of the object    */
+	float nind;            /* refractive index of the object */
+	int dist;              /* distribution: Beckmann, GGX,.. */
+    Transform<float> mvTF; /* transformation of the object   */
+	int type;              /* 1 = reflector, 2 = receiver    */
+	float3 mvR;            /* rotation angles in x, y, z     */
 };
 
 struct IObjets {

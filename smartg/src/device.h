@@ -391,7 +391,7 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV , struct 
                         struct GObj *myGObj, struct Spectrum_obj *mySPECTObj, int ilam);
 __device__ bool geoTestMir(float3 o, float3 dir, struct IObjets *ObjT, struct GObj *myGObj);
 __device__ bool geoTestRec(float3 o, float3 dir, struct IObjets *ObjT);
-__device__ Transform addRotAndParseOrder(Transform Ti, IObjets object);
-__device__ Transformd DaddRotAndParseOrder(Transformd Tid, IObjets object);
+__device__ Transform<float> addRotAndParseOrder(Transform<float> Ti, IObjets object);
+__device__ Transform<double> DaddRotAndParseOrder(Transform<double> Tid, IObjets object);
 #endif
 #endif // DEVICE_H

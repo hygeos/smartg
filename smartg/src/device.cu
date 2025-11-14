@@ -1480,7 +1480,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 	ph->loc = tab_sensor[ph->is].LOC;
 
 	#ifdef OBJ3D
-	Transform TRotZ; int mPP = 1; //char mPP[]="Point";
+	Transform<float> TRotZ; int mPP = 1; //char mPP[]="Point";
 	TRotZ = TRotZ.RotateZ(tab_sensor[ph->is].PHDEG-180.);
 	ph->pos = TRotZ(ph->pos, mPP);
 	#endif
@@ -1868,7 +1868,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     if (cell_sized == -2)
     {
         float toa_rad = RTER+ZTOAd;
-        Transform nothing;
+        Transform<float> nothing;
         Ray<float> r1(ph->pos, ph->v, 0.f);
 
         // int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
@@ -1919,7 +1919,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 			THconed = (    acos(   sqrt(1-(  RAND*(1-cos(radiansd(SUN_DISCd)))  ))   )*180    )/PI;
 
 			// Creation of transforms to consider alpha and beta for the computation of photon dirs
-			Transformd TPHconed, TTHconed;
+			Transform<double> TPHconed, TTHconed;
 			TPHconed = TPHconed.RotateZ(PHconed); TTHconed = TTHconed.RotateY(THconed);
 		
 			// Apply transforms to vector u and v in function to alpha and beta
@@ -1928,7 +1928,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		}
 		
 		// Creation des tranformations (pour le calcul de la direction du photon)	
-		Transformd TThetad, TPhid;
+		Transform<double> TThetad, TPhid;
 		TThetad = TThetad.RotateY(sunTheta);
 		TPhid = TPhid.RotateZ(sunPhi);		
 
@@ -1955,7 +1955,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 			THcone = (    acosf(   sqrtf(1-(  RAND*(1-cosf(radians(SUN_DISCd)))  ))   )*180    )/PI;
 
 			// Creation of transforms to consider alpha and beta for the computation of photon dirs
-			Transform TPHcone, TTHcone;
+			Transform<float> TPHcone, TTHcone;
 			TPHcone = TPHcone.RotateZ(PHcone); TTHcone = TTHcone.RotateY(THcone);
 		
 			// Apply transforms to vector u and v in function to alpha and beta
@@ -1964,7 +1964,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		}
 		
 		//Creation des tranformations (pour le calcul de la direction du photon)
-		Transform TTheta, TPhi;
+		Transform<float> TTheta, TPhi;
 		TTheta = TTheta.RotateY(sunTheta);
 		TPhi = TPhi.RotateZ(sunPhi);		
 
@@ -2000,7 +2000,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		{
 			#ifdef DOUBLE
 			// // Création des transformations depuis les valeurs python du reflecteur		
-			Transformd Tid;
+			Transform<double> Tid;
 			double posxd, posyd;
 
 			// add rotation transformation
@@ -2037,7 +2037,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 			ph->pos=make_float3(float(posTransd.x), float(posTransd.y), float(posTransd.z));		
 			#else // IF NOT DOUBLE
 			// // Création des transformations depuis les valeurs python du reflecteur
-			Transform Ti;
+			Transform<float> Ti;
 			// add rotation transformation
 			Ti = addRotAndParseOrder(Ti, objP);
 
@@ -2123,12 +2123,12 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 				// ph->weight*=Gamm;
 			}
 			// Transformations to consider the solar cone sampling	
-			Transform TPHcone, TTHcone;
+			Transform<float> TPHcone, TTHcone;
 			TPHcone = TPHcone.RotateZ(PHcone); TTHcone = TTHcone.RotateY(THcone);		
 			vfloat = TPHcone(   Vectorf(  TTHcone( Vectorf(vfloat) )  )   );
 			ufloat = TPHcone(   Vectorf(  TTHcone( Vectorf(ufloat) )  )   );
             // Transformations to consider the sun direction
-			Transform TTheta, TPhi;
+			Transform<float> TTheta, TPhi;
 			TTheta = TTheta.RotateY(sunTheta); TPhi = TPhi.RotateZ(sunPhi);
 			vfloat = TPhi(   Vectorf(  TTheta( Vectorf(vfloat) )  )   );
 			ufloat = TPhi(   Vectorf(  TTheta( Vectorf(ufloat) )  )   );
@@ -2171,7 +2171,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		}
 		
 		// Creation of transforms
-		Transformd TPHconed, TTHconed;
+		Transform<double> TPHconed, TTHconed;
 		TPHconed = TPHconed.RotateZ(PHconed); TTHconed = TTHconed.RotateY(THconed);
 		
 		// Apply transforms to vector u and v
@@ -2179,7 +2179,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		udouble2 = TPHconed(   Vectord(  TTHconed( Vectord(udouble2) )  )   );
 
 		// Creation of transforms to consider theta and phi for the computation of photon dirs
-		Transformd TTheta, TPhi;
+		Transform<double> TTheta, TPhi;
 		TTheta = TTheta.RotateY(tab_sensor[ph->is].THDEG);
 		TPhi = TPhi.RotateZ(tab_sensor[ph->is].PHDEG);		
 
@@ -2198,11 +2198,11 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		IObjets objP;
 		objP = myObjets[nObj];
 		
-		Transform TR; // declare the transformation of the receiver
+		Transform<float> TR; // declare the transformation of the receiver
 
 		// If x, y or z values are different to 0 then there is a translation
 		if (objP.mvTx != 0 or objP.mvTy != 0 or objP.mvTz != 0) {
-			Transform TmT;
+			Transform<float> TmT;
 			TmT = TR.Translate(make_float3(objP.mvTx, objP.mvTy, objP.mvTz));
 			TR = TmT; }
 
@@ -5172,7 +5172,7 @@ __device__ void surfaceBRDF(Photon* ph, int le,
     #endif
     float thv, phi;
     float3 v_o;                                        // outgoing direction
-    Transform transfo;
+    Transform<float> transfo;
 
     if (le)
     {
@@ -5395,7 +5395,7 @@ __device__ void surfaceBRDF_global2local(Photon* ph, int le,
 	float3 h_r;                                     // half-direction for reflection used in LE
 	float thv, phi;                                 // 
     float theta_i;
-    Transform transfo;
+    Transform<float> transfo;
     float avz_i, avz_o;
 
     ph->nint += 1;
@@ -5408,7 +5408,7 @@ __device__ void surfaceBRDF_global2local(Photon* ph, int le,
     u_i = ph->u;
 
     #ifdef SPHERIQUE 
-    Transform invTransfo;
+    Transform<float> invTransfo;
 
     float th_tf=0.F, ph_tf=0.F;
     findRots(macroFnormal_n0, &th_tf, &ph_tf);
@@ -5676,7 +5676,7 @@ __device__ void surfaceBRDF_old(Photon* ph, int le,
     #ifdef SPHERIQUE
     if (!le)
     {
-        Transform transfo;
+        Transform<float> transfo;
         // Go to global frame - because in le==0 we sampled phi and thv from a facet n=(0,0,1) i.e. local frame-
         // vec2transform routine return the tranformation that we have to apply to a vector=(0,0,1) to 
         // be equal to the vector given as parameter (here Nz)
@@ -6209,7 +6209,7 @@ __device__ void surfaceLambert3D(Photon* ph, int le, float* tabthv, float* tabph
 		vecY=make_float3(0., 1., 0.);
 		vecZ=make_float3(0., 0., 1.);
    
-		Transform transfo=geoS->mvTF;
+		Transform<float> transfo=geoS->mvTF;
 		vecX=transfo(Vectorf(vecX)); vecX=normalize(vecX);
 		vecY=transfo(Vectorf(vecY)); vecY=normalize(vecY);
 		vecZ=transfo(Vectorf(vecZ)); vecZ=normalize(vecZ);
@@ -6222,7 +6222,7 @@ __device__ void surfaceLambert3D(Photon* ph, int le, float* tabthv, float* tabph
 			);
 
 		float4x4 tM = transpose(M);	
-		Transform wTo(M, tM);
+		Transform<float> wTo(M, tM);
 
 		// apply the transformation
 		v_n = wTo(Vectorf(v_n));
@@ -6328,7 +6328,7 @@ __device__ void surfaceRugueuse3D(Photon* ph, IGeo* geoS, struct RNG_State *rngs
     #ifdef BACK
 	ph->M   = mul(ph->M,mul(L,R));
     #endif
-	Transform transfo, invTransfo, aRot;
+	Transform<float> transfo, invTransfo, aRot;
 	
 	transfo = geoS->mvTF;
 	aRot = aRot.RotateZ(180);
@@ -6410,7 +6410,7 @@ __device__ void Obj3DRoughSurf(Photon* ph, int le, float* tabthv, float* tabphi,
 	{
 		// The initial normal of the obj before transfo is colinear to the z axis,
 		// then create the transfo inverse for the direction v_i and simplify sampling
-		Transform transfo=geoS->mvTF, invTransfo;
+		Transform<float> transfo=geoS->mvTF, invTransfo;
 		invTransfo = transfo.Inverse(transfo);
 		
 		// Incident direction v if obj normal colinear to z axis
@@ -6772,7 +6772,7 @@ __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geo
     }
 	else
 	{
-		Transform transfo, invTransfo;
+		Transform<float> transfo, invTransfo;
 		p_t = ph->pos;
 		transfo = geoS->mvTF;
 		invTransfo = transfo.Inverse(transfo);
@@ -6789,7 +6789,7 @@ __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geo
 	#endif
 		return;
 	
-	Transform transfo, invTransfo;
+	Transform<float> transfo, invTransfo;
 	p_t = ph->pos;
 	transfo = geoS->mvTF;
 	invTransfo = transfo.Inverse(transfo);
@@ -8143,7 +8143,7 @@ __device__ void DirectionToUV2(float th, float phi, float3* u, float3* v, struct
         //float th_c = asin(sqrt(RAND)*sin(radiansd(SUN_DISCd)))*180./CUDART_PI; //lambertian, but must find the correct normalisation...
 
         // Creation of transforms
-	    Transformd TPHconed, TTHconed;
+	    Transform<double> TPHconed, TTHconed;
 	    TPHconed = TPHconed.RotateZ(ph_c); TTHconed = TTHconed.RotateY(th_c);
 		
 	    // Apply transforms to vector u and v
@@ -8154,7 +8154,7 @@ __device__ void DirectionToUV2(float th, float phi, float3* u, float3* v, struct
     if (th > 1e-6)
     {
 	    // Creation of transforms to consider theta and phi for the computation of photon dirs
-	    Transformd TTheta, TPhi;
+	    Transform<double> TTheta, TPhi;
 	    TTheta = TTheta.RotateY(th);
 	    TPhi = TPhi.RotateZ(phi);		
 
@@ -8431,7 +8431,7 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct I
 				DifferentialGeometry myDgj;
 				// *****************************First Step********************************
 				// Consider all the transformation of object (j)
-				Transform Tj, invTj; // Declaration of the tranform and its inverse
+				Transform<float> Tj, invTj; // Declaration of the tranform and its inverse
 
 				/* !!! We note that it is crucial to begin with the translation because if there
 				   is a rotation then the coordinate system change (x or y or z axis) !!! */
@@ -8440,7 +8440,7 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct I
 				if ( (ObjT[IND+j].mvTx>VALMIN and ObjT[IND+j].mvTx<-VALMIN) or
 					 (ObjT[IND+j].mvTy>VALMIN and ObjT[IND+j].mvTy>-VALMIN) or
 					 (ObjT[IND+j].mvTz>VALMIN and ObjT[IND+j].mvTz>-VALMIN)) {
-					Transform TmT;
+					Transform<float> TmT;
 					TmT = Tj.Translate(make_float3(ObjT[IND+j].mvTx, ObjT[IND+j].mvTy,
 												   ObjT[IND+j].mvTz));
 					Tj = TmT; }
@@ -8551,7 +8551,7 @@ __device__ bool geoTestMir(float3 o, float3 dir, struct IObjets *ObjT, struct GO
 				bool myBj = false;
 				// *****************************First Step********************************
 				// Consider all the transformation of object (j)
-				Transform Tj, invTj; // Declaration of the tranform and its inverse
+				Transform<float> Tj, invTj; // Declaration of the tranform and its inverse
 
 				/* !!! We note that it is crucial to begin with the translation because if there
 				   is a rotation then the coordinate system change (x or y or z axis) !!! */
@@ -8560,7 +8560,7 @@ __device__ bool geoTestMir(float3 o, float3 dir, struct IObjets *ObjT, struct GO
 				if ( (ObjT[IND+j].mvTx>VALMIN and ObjT[IND+j].mvTx<-VALMIN) or
 					 (ObjT[IND+j].mvTy>VALMIN and ObjT[IND+j].mvTy>-VALMIN) or
 					 (ObjT[IND+j].mvTz>VALMIN and ObjT[IND+j].mvTz>-VALMIN)) {
-					Transform TmT;
+					Transform<float> TmT;
 					TmT = Tj.Translate(make_float3(ObjT[IND+j].mvTx, ObjT[IND+j].mvTy,
 												   ObjT[IND+j].mvTz));
 					Tj = TmT; }
@@ -8614,7 +8614,7 @@ __device__ bool geoTestRec(float3 o, float3 dir, struct IObjets *ObjT)
 		bool myBi = false;
 		// *****************************First Step********************************
 		// Consider all the transformation of object (i)
-		Transform Ti, invTi; // Declaration of the tranform and its inverse
+		Transform<float> Ti, invTi; // Declaration of the tranform and its inverse
 
 		/* !!! We note that it is crucial to begin with the translation because if there
 		   is a rotation then the coordinate system change (x or y or z axis) !!! */
@@ -8623,7 +8623,7 @@ __device__ bool geoTestRec(float3 o, float3 dir, struct IObjets *ObjT)
 		if ( (ObjT[i].mvTx>VALMIN and ObjT[i].mvTx<-VALMIN) or
 			 (ObjT[i].mvTy>VALMIN and ObjT[i].mvTy>-VALMIN) or
 			 (ObjT[i].mvTz>VALMIN and ObjT[i].mvTz>-VALMIN)) {
-			Transform TmT;
+			Transform<float> TmT;
 			TmT = Ti.Translate(make_float3(ObjT[i].mvTx, ObjT[i].mvTy,
 										   ObjT[i].mvTz));
 			Ti = TmT; }
@@ -8656,7 +8656,7 @@ __device__ bool geoTestRec(float3 o, float3 dir, struct IObjets *ObjT)
 	return false;
 } // END OF THE FUNCTION geoTestRec()
 
-__device__ Transform addRotAndParseOrder(Transform Ti, IObjets object)
+__device__ Transform<float> addRotAndParseOrder(Transform<float> Ti, IObjets object)
 {
 	// Add the rotation tranformartions + Consider the rotation order
 	switch (object.rotOrder)
@@ -8714,7 +8714,7 @@ __device__ Transform addRotAndParseOrder(Transform Ti, IObjets object)
 	return Ti;
 } // END OF THE FUNCTION addRotAndParseOrder()
 
-__device__ Transformd DaddRotAndParseOrder(Transformd Tid, IObjets object)
+__device__ Transform<double> DaddRotAndParseOrder(Transform<double> Tid, IObjets object)
 {
 	// Add the rotation tranformartions + Consider the rotation order
 	switch (object.rotOrder)
@@ -8858,7 +8858,7 @@ __device__ void findRots(float3 vecNF, float *th, float *ph)
     int loop=0;
     double rotY=0, rotZ=0, opeZ=0;
     double rotYD; float rotZD;
-    Transformd TT;
+    Transform<double> TT;
 
     double3 vNF_initial = make_double3(0., 0., 0.);
 
@@ -8905,8 +8905,8 @@ __device__ void findRots(float3 vecNF, float *th, float *ph)
 
         rotYD = rotY*(180.0/PI);
         rotZD = rotZ*(180.0/PI);
-        Transformd TTY = TT.RotateY(rotYD);
-        Transformd TTZ = TT.RotateZ(rotZD);
+        Transform<double> TTY = TT.RotateY(rotYD);
+        Transform<double> TTZ = TT.RotateZ(rotZD);
 
         // number '2' for Vector
         vNF_initial = normalize(  TTZ( TTY(make_double3(0., 0., 1.), 2), 2 )  );

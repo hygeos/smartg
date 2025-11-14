@@ -3519,7 +3519,7 @@ inline __host__ __device__ constexpr float get_const_inf(float)
 }
 
 //-------------------- DOUBLE --------------------
-inline __device__ constexpr double get_const_inf(double)
+inline __host__ __device__ constexpr double get_const_inf(double)
 {
     #if __CUDA_ARCH__ >= 200
     return CUDART_INF;
@@ -3527,6 +3527,60 @@ inline __device__ constexpr double get_const_inf(double)
     return std::numeric_limits<double>::max();
     #endif
 }
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Functions that can be used with templates
+////////////////////////////////////////////////////////////////////////////////
+
+// ************ sin()
+//-------------------- FLOAT --------------------
+inline __host__ __device__ float get_func_sin(float x)
+{
+    #if __CUDA_ARCH__ >= 200
+    return ::sinf(x);
+    #else
+    return std::sin(x);
+    #endif
+}
+
+//-------------------- DOUBLE --------------------
+inline __host__ __device__ double get_func_sin(double x)
+{
+    #if __CUDA_ARCH__ >= 200
+    return ::sin(x);
+    #else
+    return std::sin(x);
+    #endif
+}
+
+// ************ cos()
+//-------------------- FLOAT --------------------
+inline __host__ __device__ float get_func_cos(float x)
+{
+    #if __CUDA_ARCH__ >= 200
+    return ::cosf(x);
+    #else
+    return std::cos(x);
+    #endif
+}
+
+//-------------------- DOUBLE --------------------
+inline __host__ __device__ double get_func_cos(double x)
+{
+    #if __CUDA_ARCH__ >= 200
+    return ::cos(x);
+    #else
+    return std::cos(x);
+    #endif
+}
+
+// ************ radians()
+//-------------------- FLOAT --------------------
+inline __host__ __device__ float get_func_radians(float x) {return radians(x);}
+
+//-------------------- DOUBLE --------------------
+inline __host__ __device__ double get_func_radians(double x){return radiansd(x);}
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -3550,5 +3604,50 @@ template <typename T> using vec3c = typename VecType3C<T>::type;
 template <typename T> __host__ __device__ vec3c<T> make_vec3c(T x, T y, T z);
 template <> __host__ __device__ inline float3c  make_vec3c<float> (float  x, float  y, float  z) { return make_float3c(x, y, z); }
 template <> __host__ __device__ inline double3c make_vec3c<double>(double x, double y, double z) { return make_double3c(x, y, z); }
+
+// float4x4/double4x4
+template <typename T> struct MatType4x4;
+template <> struct MatType4x4<float>  { using type = float4x4;  };
+template <> struct MatType4x4<double> { using type = double4x4; };
+template <typename T> using mat4x4 = typename MatType4x4<T>::type;
+template <typename T>
+__host__ __device__ mat4x4<T> make_mat4x4(T m00, T m01, T m02, T m03,
+										  T m10, T m11, T m12, T m13,
+										  T m20, T m21, T m22, T m23,
+										  T m30, T m31, T m32, T m33);
+template <>
+__host__ __device__ inline float4x4 make_mat4x4<float> (float m00, float m01, float m02, float m03,
+													    float m10, float m11, float m12, float m13,
+													    float m20, float m21, float m22, float m23,
+													    float m30, float m31, float m32, float m33)
+{
+    return make_float4x4(m00, m01, m02, m03,
+					     m10, m11, m12, m13,
+					     m20, m21, m22, m23,
+					     m30, m31, m32, m33);
+}
+template <>
+__host__ __device__ inline double4x4 make_mat4x4<double> (double m00, double m01, double m02, double m03,
+													      double m10, double m11, double m12, double m13,
+													      double m20, double m21, double m22, double m23,
+													      double m30, double m31, double m32, double m33)
+{
+    return make_double4x4(m00, m01, m02, m03,
+					      m10, m11, m12, m13,
+					      m20, m21, m22, m23,
+					      m30, m31, m32, m33);
+}
+template <typename T>                                    
+__host__ __device__ mat4x4<T> make_diag_mat4x4(T x);
+template <>
+__host__ __device__ inline float4x4 make_diag_mat4x4<float> (float x)
+{
+    return make_diag_float4x4(x);
+}
+template <>
+__host__ __device__ inline double4x4 make_diag_mat4x4<double> (double x)
+{
+    return make_diag_double4x4(x);
+}
 
 #endif

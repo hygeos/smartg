@@ -30,7 +30,6 @@ import pycuda.driver as cuda
 from smartg.bandset import BandSet
 from pycuda.compiler import SourceModule
 # bellow necessary for object incorporation
-from smartg.transform import Transform
 from smartg.visualizegeo import Mirror, Plane, Spheric, \
     Entity, LambMirror, Matte
     

@@ -38,12 +38,12 @@ public:
         #endif
 
 		// Initialisation avec des transformations "nulles"
-		Transform nothing;
+		Transform<float> nothing;
 		ObjectToWorld = &nothing;
 		WorldToObject = &nothing;
 	}
 
-	__host__ __device__ Shape(const Transform *o2w, const Transform *w2o)
+	__host__ __device__ Shape(const Transform<float> *o2w, const Transform<float> *w2o)
 		: ObjectToWorld(o2w), WorldToObject(w2o)
 	{
         #if __CUDA_ARCH__ >= 200
@@ -60,7 +60,7 @@ public:
     #elif !defined(__CUDA_ARCH__)
 	static unsigned long int shapeId;
     #endif
-    const Transform *ObjectToWorld, *WorldToObject;
+    const Transform<float> *ObjectToWorld, *WorldToObject;
 
 private:
 };
@@ -110,7 +110,7 @@ class Sphere : public Shape
 public:
 	// Méthodes publiques de la sphère
 	__host__ __device__ Sphere();
-	__host__ __device__ Sphere(const Transform *o2w, const Transform *w2o,
+	__host__ __device__ Sphere(const Transform<float> *o2w, const Transform<float> *w2o,
 							   float rad, float zmin, float zmax, float phiMax);
 
     /* uniquement device pour éviter des problèmes de mémoires */
@@ -142,7 +142,7 @@ Sphere::Sphere() : Shape()
     phiMax = 0.f;
 }
 
-Sphere::Sphere(const Transform *o2w, const Transform *w2o,
+Sphere::Sphere(const Transform<float> *o2w, const Transform<float> *w2o,
 			   float rad, float z0, float z1, float pm)
 	: Shape(o2w, w2o)
 {
@@ -252,7 +252,7 @@ bool Sphere::Intersect(const Ray<float> &r, float *tHit, DifferentialGeometry *d
 							  -radius * sinf(theta)) * (thetaMax-thetaMin);
 
     // Initialisation de  _DifferentialGeometry_ depuis les données paramétriques
-    const Transform &o2w = *ObjectToWorld;
+    const Transform<float> &o2w = *ObjectToWorld;
 	
     *dg = DifferentialGeometry(o2w(Pointf(phit)), o2w(Normalf(dpdu)), o2w(Normalf(dpdv)), u, v, this);
 
@@ -275,8 +275,8 @@ class Triangle : public Shape
 public:
 	// Méthodes publiques de classe triangle
 	__host__ __device__ Triangle();
-	__host__ __device__ Triangle(const Transform *o2w, const Transform *w2o);
-	__host__ __device__ Triangle(const Transform *o2w, const Transform *w2o,
+	__host__ __device__ Triangle(const Transform<float> *o2w, const Transform<float> *w2o);
+	__host__ __device__ Triangle(const Transform<float> *o2w, const Transform<float> *w2o,
 								 float3 a, float3 b, float3 c);
 
     /* uniquement device pour éviter des problèmes de mémoires */
@@ -307,7 +307,7 @@ Triangle::Triangle()
 	p3 = make_float3(0.f, 0.f, 0.f);
 }
 
-Triangle::Triangle(const Transform *o2w, const Transform *w2o)
+Triangle::Triangle(const Transform<float> *o2w, const Transform<float> *w2o)
 	: Shape(o2w, w2o)
 {
 	p1 = make_float3(0.f, 0.f, 0.f);
@@ -315,7 +315,7 @@ Triangle::Triangle(const Transform *o2w, const Transform *w2o)
 	p3 = make_float3(0.f, 0.f, 0.f);
 }
 
-Triangle::Triangle(const Transform *o2w, const Transform *w2o,
+Triangle::Triangle(const Transform<float> *o2w, const Transform<float> *w2o,
 				   float3 a, float3 b, float3 c)
 	: Shape(o2w, w2o)
 {
@@ -861,7 +861,7 @@ class TriangleMesh : public Shape
 {
 public:
 	// Méthodes publiques de classe triangleMesh
-	__host__ __device__ TriangleMesh(const Transform *o2w, const Transform *w2o,
+	__host__ __device__ TriangleMesh(const Transform<float> *o2w, const Transform<float> *w2o,
 									 int nt, int nv, int *vi, float3 *P);
 
     /* uniquement device pour éviter des problèmes de mémoires */
@@ -887,7 +887,7 @@ private:
 // -------------------------------------------------------
 // définitions des méthodes de la classe TriangleMesh
 // -------------------------------------------------------
-TriangleMesh::TriangleMesh(const Transform *o2w, const Transform *w2o,
+TriangleMesh::TriangleMesh(const Transform<float> *o2w, const Transform<float> *w2o,
 						   int nt, int nv, int *vi, float3 *P)
 	: Shape(o2w, w2o)
 {
@@ -906,7 +906,7 @@ bool TriangleMesh::Intersect(const Ray<float> &ray, float* tHit,
 							 DifferentialGeometry *dg) const
 {
     bool dgbool = false;
-	Transform nothing;
+	Transform<float> nothing;
     #if __CUDA_ARCH__ >= 200
 	*tHit = CUDART_INF_F;
     #elif !defined(__CUDA_ARCH__)
@@ -939,7 +939,7 @@ __device__ bool TriangleMesh::Intersect2(const Ray<float> &ray, float* tHit,
 							 DifferentialGeometry *dg) const
 {
     bool dgbool = false;
-	Transform nothing;
+	Transform<float> nothing;
     #if __CUDA_ARCH__ >= 200
 	*tHit = CUDART_INF_F;
     #elif !defined(__CUDA_ARCH__)
@@ -970,7 +970,7 @@ __device__ bool TriangleMesh::Intersect2(const Ray<float> &ray, float* tHit,
 
 bool TriangleMesh::IntersectP(const Ray<float> &ray) const
 {
-	Transform nothing;
+	Transform<float> nothing;
 	for (int i = 0; i < ntris; ++i)
 	{
 		/* // créer le triangle i en fonction de *vi et *P	 */
@@ -986,7 +986,7 @@ bool TriangleMesh::IntersectP(const Ray<float> &ray) const
 
 __device__ bool TriangleMesh::IntersectP2(const Ray<float> &ray) const
 {
-	Transform nothing;
+	Transform<float> nothing;
 	for (int i = 0; i < ntris; ++i)
 	{
 		/* // créer le triangle i en fonction de *vi et *P	 */
