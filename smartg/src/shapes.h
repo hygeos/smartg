@@ -71,21 +71,23 @@ template <typename T>
 unsigned long int Shape<T>::shapeId = 1;
 #endif
 
-
-struct DifferentialGeometry // doit être défini avant les classes filles de Shape
+template <typename T = float> //T -> float / double
+struct DifferentialGeometry // must be defined before child classes
 // ========================================================
-// Struture d'une géomértie différentielle
+// DifferentialGeometry class
 // ========================================================
 {
+	using U3  = vec3<T>;
+
     __host__ __device__ DifferentialGeometry()
 	{
-		p = make_float3(0, 0, 0); dpdu = make_float3(0, 0, 0);
-		dpdv = make_float3(0, 0, 0); nn = make_float3(0, 0, 0);
-		u = v = 0.; shape = NULL;
+		p = make_vec3<T>(T(0), T(0), T(0)); dpdu = make_vec3<T>(T(0), T(0), T(0));
+		dpdv = make_vec3<T>(T(0), T(0), T(0)); nn = make_vec3<T>(T(0), T(0), T(0));
+		u = v = T(0); shape = NULL;
 	}
 
-    __host__ __device__ DifferentialGeometry(const float3 &P, const float3 &DPDU,
-						 const float3 &DPDV, float uu, float vv, const Shape<float> *sh)
+    __host__ __device__ DifferentialGeometry(const U3 &P, const U3 &DPDU,
+						 const U3 &DPDV, T uu, T vv, const Shape<float> *sh)
 		: p(P), dpdu(DPDU), dpdv(DPDV)
 	{
 		nn = normalize(cross(dpdu, dpdv));
@@ -94,13 +96,13 @@ struct DifferentialGeometry // doit être défini avant les classes filles de Sh
 		shape = sh;
 	}
 
-	float3 p;             // Position du point d'intersection
-	float3 dpdu;          // Dérivée partielle par rapport à u
-	float3 dpdv;          // Dérivée partielle par rapport à v
-	float3 nn;            // Normal au point d'intersection
-	float u;              // parmètre: P=f(u,v)
-	float v;              // parmètre: P=f(u,v)
-	const Shape<float> *shape;   // la géométrie utilisé
+	U3 p;             // intersection point position
+	U3 dpdu;          // partial derivative with respect to u
+	U3 dpdv;          // partial derivative with respect to v
+	U3 nn;            // normal at intersection point
+	T u;              // parameter: P=f(u,v)
+	T v;              // parameter: P=f(u,v)
+	const Shape<float> *shape;   // the geometry used
 };
 
 
@@ -120,7 +122,7 @@ public:
     __device__ BBox<float> WorldBoundSphere() const;
 
     __host__ __device__ bool Intersect(const Ray<float> &ray, float* tHit,
-									   DifferentialGeometry *Dg) const;
+									   DifferentialGeometry<float> *Dg) const;
     __host__ __device__ float Area() const;
 
 private:
@@ -134,7 +136,7 @@ private:
 // -------------------------------------------------------
 // définitions des méthodes de la classe sphere
 // -------------------------------------------------------
-Sphere::Sphere() : Shape<float>::Shape()
+Sphere::Sphere() : Shape<float>()
 {
     radius = 0.f;
     zmin = 0.f;
@@ -146,7 +148,7 @@ Sphere::Sphere() : Shape<float>::Shape()
 
 Sphere::Sphere(const Transform<float> *o2w, const Transform<float> *w2o,
 			   float rad, float z0, float z1, float pm)
-	: Shape<float>::Shape(o2w, w2o)
+	: Shape<float>(o2w, w2o)
 {
     radius = rad;
     zmin = clamp(float(min(z0, z1)), float(-radius), float(radius));
@@ -185,7 +187,7 @@ __device__ BBox<float> Sphere::ObjectBoundSphere() const
 	}
 }
 
-bool Sphere::Intersect(const Ray<float> &r, float *tHit, DifferentialGeometry *dg) const
+bool Sphere::Intersect(const Ray<float> &r, float *tHit, DifferentialGeometry<float> *dg) const
 {
     float phi;
     float3 phit;
@@ -256,7 +258,10 @@ bool Sphere::Intersect(const Ray<float> &r, float *tHit, DifferentialGeometry *d
     // Initialisation de  _DifferentialGeometry_ depuis les données paramétriques
     const Transform<float> &o2w = *ObjectToWorld;
 	
-    *dg = DifferentialGeometry(o2w(Pointf(phit)), o2w(Normalf(dpdu)), o2w(Normalf(dpdv)), u, v, this);
+    *dg = DifferentialGeometry<float>(o2w(Pointf(phit)),
+									  o2w(Normalf(dpdu)),
+									  o2w(Normalf(dpdv)),
+									  u, v, this);
 
     // mise a jour de _tHit_
     *tHit = thit;
@@ -286,9 +291,9 @@ public:
     __device__ BBox<float> WorldBoundTriangle() const;
 
     __host__ __device__ bool Intersect(const Ray<float> &ray, float* tHit,
-									   DifferentialGeometry *dg) const;
+									   DifferentialGeometry<float> *dg) const;
 	__device__ bool Intersect2(const Ray<float> &ray, float* tHit,
-									   DifferentialGeometry *dg) const;
+									   DifferentialGeometry<float> *dg) const;
 	__host__ __device__ bool IntersectP(const Ray<float> &ray) const;
 	__device__ bool IntersectP2(const Ray<float> &ray) const;
     __host__ __device__ float Area() const;
@@ -310,7 +315,7 @@ Triangle::Triangle()
 }
 
 Triangle::Triangle(const Transform<float> *o2w, const Transform<float> *w2o)
-	: Shape<float>::Shape(o2w, w2o)
+	: Shape<float>(o2w, w2o)
 {
 	p1 = make_float3(0.f, 0.f, 0.f);
 	p2 = make_float3(0.f, 0.f, 0.f);
@@ -319,7 +324,7 @@ Triangle::Triangle(const Transform<float> *o2w, const Transform<float> *w2o)
 
 Triangle::Triangle(const Transform<float> *o2w, const Transform<float> *w2o,
 				   float3 a, float3 b, float3 c)
-	: Shape<float>::Shape(o2w, w2o)
+	: Shape<float>(o2w, w2o)
 {
 	p1 = a; p2 =b; p3 = c;
 }
@@ -433,7 +438,7 @@ Triangle::Triangle(const Transform<float> *o2w, const Transform<float> *w2o,
 /* } */
 
 __device__ bool Triangle::Intersect2(const Ray<float> &ray, float *tHit,
-									DifferentialGeometry *dg) const
+									DifferentialGeometry<float> *dg) const
 {
 	double3 p0t, p1t, p2t;
 	double3 P0, P1, P2;
@@ -530,10 +535,10 @@ __device__ bool Triangle::Intersect2(const Ray<float> &ray, float *tHit,
 
 	double3 phit = b0*P0+b1*P1+b2*P2;
 
-	*dg = DifferentialGeometry(make_float3(phit.x, phit.y, phit.z),
-							   make_float3(dpdu.x, dpdu.y, dpdu.z),
-							   make_float3(dpdv.x, dpdv.y, dpdv.z),
-							   0.F, 0.F, this);
+	*dg = DifferentialGeometry<float>(make_float3(phit.x, phit.y, phit.z),
+							          make_float3(dpdu.x, dpdu.y, dpdu.z),
+							          make_float3(dpdv.x, dpdv.y, dpdv.z),
+							          0.F, 0.F, this);
     // mise a jour de _tHit_
     *tHit = float(t);
 	
@@ -614,7 +619,7 @@ __device__ bool Triangle::IntersectP2(const Ray<float> &ray) const
 #ifndef DOUBLE
 // Méthode de Möller-Trumbore pour l'intersection rayon/triangle
 bool Triangle::Intersect(const Ray<float> &ray, float *tHit,
-						 DifferentialGeometry *dg) const
+						 DifferentialGeometry<float> *dg) const
 {
 	float3 e1 = p2 - p1;
 	float3 e2 = p3 - p1;
@@ -676,7 +681,7 @@ bool Triangle::Intersect(const Ray<float> &ray, float *tHit,
     float tv = b0*uvsC1[0] + b1*uvsC1[1] + b2*uvsC1[2];
 
     // Initialisation de  _DifferentialGeometry_ depuis les données paramétriques
-    *dg = DifferentialGeometry(ray(t), dpdu, dpdv, tu, tv, this);
+    *dg = DifferentialGeometry<float>(ray(t), dpdu, dpdv, tu, tv, this);
 
     // mise a jour de _tHit_
 	*tHit = t;
@@ -719,7 +724,7 @@ bool Triangle::IntersectP(const Ray<float> &ray) const
 #else
 // Méthode de Möller-Trumbore pour l'intersection rayon/triangle
 bool Triangle::Intersect(const Ray<float> &ray, float *tHit,
-						 DifferentialGeometry *dg) const
+						 DifferentialGeometry<float> *dg) const
 {
 	double3 p1d = make_double3(double(p1.x), double(p1.y), double(p1.z));
 	double3 p2d = make_double3(double(p2.x), double(p2.y), double(p2.z));
@@ -790,7 +795,7 @@ bool Triangle::Intersect(const Ray<float> &ray, float *tHit,
 	float3 dpduf = make_float3(float(dpdu.x), float(dpdu.y), float(dpdu.z));
 	float3 dpdvf = make_float3(float(dpdv.x), float(dpdv.y), float(dpdv.z));
 	
-	*dg = DifferentialGeometry(ray(float(t)), dpduf, dpdvf, float(tu), float(tv), this);
+	*dg = DifferentialGeometry<float>(ray(float(t)), dpduf, dpdvf, float(tu), float(tv), this);
 
     // mise a jour de _tHit_
 	*tHit = float(t);
@@ -871,9 +876,9 @@ public:
     __device__ BBox<float> WorldBoundTriangleMesh() const;
 
     __host__ __device__ bool Intersect(const Ray<float> &ray, float* tHit,
-									   DifferentialGeometry *dg) const;
+									   DifferentialGeometry<float> *dg) const;
 	__device__ bool Intersect2(const Ray<float> &ray, float* tHit,
-							   DifferentialGeometry *dg) const;
+							   DifferentialGeometry<float> *dg) const;
 	__host__ __device__ bool IntersectP(const Ray<float> &ray) const;
 	__device__ bool IntersectP2(const Ray<float> &ray) const;
     __host__ __device__ float Area() const;
@@ -891,7 +896,7 @@ private:
 // -------------------------------------------------------
 TriangleMesh::TriangleMesh(const Transform<float> *o2w, const Transform<float> *w2o,
 						   int nt, int nv, int *vi, float3 *P)
-	: Shape<float>::Shape(o2w, w2o)
+	: Shape<float>(o2w, w2o)
 {
 	ntris = nt; nverts = nv;
 	vertexIndex = vi;
@@ -905,7 +910,7 @@ TriangleMesh::TriangleMesh(const Transform<float> *o2w, const Transform<float> *
 
 
 bool TriangleMesh::Intersect(const Ray<float> &ray, float* tHit,
-							 DifferentialGeometry *dg) const
+							 DifferentialGeometry<float> *dg) const
 {
     bool dgbool = false;
 	Transform<float> nothing;
@@ -918,7 +923,7 @@ bool TriangleMesh::Intersect(const Ray<float> &ray, float* tHit,
 	for (int i = 0; i < ntris; ++i)
 	{
 		float triHit;
-		DifferentialGeometry dgTri;
+		DifferentialGeometry<float> dgTri;
 		/* // créer le triangle i en fonction de *vi et *P	 */
 		float3 PA = p[vertexIndex[3*i]];
 		float3 PB = p[vertexIndex[3*i + 1]];
@@ -938,7 +943,7 @@ bool TriangleMesh::Intersect(const Ray<float> &ray, float* tHit,
 }
 
 __device__ bool TriangleMesh::Intersect2(const Ray<float> &ray, float* tHit,
-							 DifferentialGeometry *dg) const
+							 DifferentialGeometry<float> *dg) const
 {
     bool dgbool = false;
 	Transform<float> nothing;
@@ -951,7 +956,7 @@ __device__ bool TriangleMesh::Intersect2(const Ray<float> &ray, float* tHit,
 	for (int i = 0; i < ntris; ++i)
 	{
 		float triHit;
-		DifferentialGeometry dgTri;
+		DifferentialGeometry<float> dgTri;
 		/* // créer le triangle i en fonction de *vi et *P	 */
 		float3 PA = p[vertexIndex[3*i]];
 		float3 PB = p[vertexIndex[3*i + 1]];

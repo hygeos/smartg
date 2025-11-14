@@ -1876,7 +1876,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
         Sphere toa_sph(&nothing, &nothing, toa_rad, -toa_rad, toa_rad, 360.f);
         float t_fac = 0.f;
         bool is_intersection = false;
-        DifferentialGeometry diff_geo;
+        DifferentialGeometry<float> diff_geo;
         is_intersection = toa_sph.Intersect(r1, &t_fac, &diff_geo);
         if (is_intersection)
         {
@@ -8402,7 +8402,7 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct I
 	// ***************common to all objects*****************
 	float myT = CUDART_INF_F; // myT = time
 	bool myB = false;
-	DifferentialGeometry myDg;
+	DifferentialGeometry<float> myDg;
 	float3 tempPhit; // Temporary variable of Phit
     // *****************************************************
 	
@@ -8428,7 +8428,7 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct I
 			{
 				float myTj = CUDART_INF_F;
 				bool myBj = false;
-				DifferentialGeometry myDgj;
+				DifferentialGeometry<float> myDgj;
 				// *****************************First Step********************************
 				// Consider all the transformation of object (j)
 				Transform<float> Tj, invTj; // Declaration of the tranform and its inverse
