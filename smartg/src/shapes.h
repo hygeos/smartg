@@ -21,6 +21,7 @@
 // - nécessaire d'initialiser la variable au début de la fonction kernel.
 __device__ static unsigned long int bigCount;
 
+template <typename T = float> //T -> float / double
 class Shape // doit être défini avant la structure DifferentialGeometry
 // ========================================================
 // Classe Shape : commun avec toute les géométries
@@ -38,12 +39,12 @@ public:
         #endif
 
 		// Initialisation avec des transformations "nulles"
-		Transform<float> nothing;
+		Transform<T> nothing;
 		ObjectToWorld = &nothing;
 		WorldToObject = &nothing;
 	}
 
-	__host__ __device__ Shape(const Transform<float> *o2w, const Transform<float> *w2o)
+	__host__ __device__ Shape(const Transform<T> *o2w, const Transform<T> *w2o)
 		: ObjectToWorld(o2w), WorldToObject(w2o)
 	{
         #if __CUDA_ARCH__ >= 200
@@ -60,13 +61,14 @@ public:
     #elif !defined(__CUDA_ARCH__)
 	static unsigned long int shapeId;
     #endif
-    const Transform<float> *ObjectToWorld, *WorldToObject;
+    const Transform<T> *ObjectToWorld, *WorldToObject;
 
 private:
 };
 
 #if !defined(__CUDA_ARCH__)
-unsigned long int Shape::shapeId = 1;
+template <typename T> 
+unsigned long int Shape<T>::shapeId = 1;
 #endif
 
 
@@ -83,7 +85,7 @@ struct DifferentialGeometry // doit être défini avant les classes filles de Sh
 	}
 
     __host__ __device__ DifferentialGeometry(const float3 &P, const float3 &DPDU,
-						 const float3 &DPDV, float uu, float vv, const Shape *sh)
+						 const float3 &DPDV, float uu, float vv, const Shape<float> *sh)
 		: p(P), dpdu(DPDU), dpdv(DPDV)
 	{
 		nn = normalize(cross(dpdu, dpdv));
@@ -98,11 +100,11 @@ struct DifferentialGeometry // doit être défini avant les classes filles de Sh
 	float3 nn;            // Normal au point d'intersection
 	float u;              // parmètre: P=f(u,v)
 	float v;              // parmètre: P=f(u,v)
-	const Shape *shape;   // la géométrie utilisé
+	const Shape<float> *shape;   // la géométrie utilisé
 };
 
 
-class Sphere : public Shape
+class Sphere : public Shape<float>
 // ========================================================
 // Classe Sphere
 // ========================================================
@@ -132,7 +134,7 @@ private:
 // -------------------------------------------------------
 // définitions des méthodes de la classe sphere
 // -------------------------------------------------------
-Sphere::Sphere() : Shape()
+Sphere::Sphere() : Shape<float>::Shape()
 {
     radius = 0.f;
     zmin = 0.f;
@@ -144,7 +146,7 @@ Sphere::Sphere() : Shape()
 
 Sphere::Sphere(const Transform<float> *o2w, const Transform<float> *w2o,
 			   float rad, float z0, float z1, float pm)
-	: Shape(o2w, w2o)
+	: Shape<float>::Shape(o2w, w2o)
 {
     radius = rad;
     zmin = clamp(float(min(z0, z1)), float(-radius), float(radius));
@@ -161,17 +163,17 @@ __device__ BBox<float> Sphere::WorldBoundSphere() const
 
 __device__ BBox<float> Sphere::ObjectBoundSphere() const
 {
-	if (phiMax < PI/2)
+	if (phiMax < CUDART_PI_F/2.f)
 	{
 		return BBox<float>(make_float3( 0.f, 0.f, zmin),
 					make_float3( radius, radius*sinf(phiMax), zmax));
 	}
-	else if (phiMax < PI)
+	else if (phiMax < CUDART_PI_F)
 	{
 		return BBox<float>(make_float3( radius*cosf(phiMax), 0.f, zmin),
 					make_float3( radius, radius, zmax));
 	}
-	else if (phiMax < 3*PI/2)
+	else if (phiMax < 3*CUDART_PI_F/2.f)
 	{
 	    return BBox<float>(make_float3(-radius, radius*sinf(phiMax), zmin),
 					make_float3( radius,  radius, zmax));
@@ -267,7 +269,7 @@ float Sphere::Area() const {
 }
 
 
-class Triangle : public Shape
+class Triangle : public Shape<float>
 // ========================================================
 // Classe triangle
 // ========================================================
@@ -308,7 +310,7 @@ Triangle::Triangle()
 }
 
 Triangle::Triangle(const Transform<float> *o2w, const Transform<float> *w2o)
-	: Shape(o2w, w2o)
+	: Shape<float>::Shape(o2w, w2o)
 {
 	p1 = make_float3(0.f, 0.f, 0.f);
 	p2 = make_float3(0.f, 0.f, 0.f);
@@ -317,7 +319,7 @@ Triangle::Triangle(const Transform<float> *o2w, const Transform<float> *w2o)
 
 Triangle::Triangle(const Transform<float> *o2w, const Transform<float> *w2o,
 				   float3 a, float3 b, float3 c)
-	: Shape(o2w, w2o)
+	: Shape<float>::Shape(o2w, w2o)
 {
 	p1 = a; p2 =b; p3 = c;
 }
@@ -854,7 +856,7 @@ float Triangle::Area() const
 }
 
 
-class TriangleMesh : public Shape
+class TriangleMesh : public Shape<float>
 // ========================================================
 // Classe triangleMesh
 // ========================================================
@@ -889,7 +891,7 @@ private:
 // -------------------------------------------------------
 TriangleMesh::TriangleMesh(const Transform<float> *o2w, const Transform<float> *w2o,
 						   int nt, int nv, int *vi, float3 *P)
-	: Shape(o2w, w2o)
+	: Shape<float>::Shape(o2w, w2o)
 {
 	ntris = nt; nverts = nv;
 	vertexIndex = vi;
