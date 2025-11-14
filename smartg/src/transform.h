@@ -524,4 +524,7 @@ Transform<T> Transform<T>::vec2transform(vec3<T> vi)
 	return nothing;
 }
 
+using Transformf = Transform<float>;
+using Transformd = Transform<double>;
+
 #endif // _TRANSFORM_H_
