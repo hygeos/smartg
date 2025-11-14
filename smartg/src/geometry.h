@@ -360,7 +360,7 @@ using Rayd = Ray<double>;
 template <typename T = float> //T -> float / double
 class BBox
 // ========================================================
-// Classe BBox
+// BBox class
 // ========================================================
 {
 public:
@@ -484,7 +484,7 @@ public:
 			if (tNear > tFar) {swap(&tNear, &tFar);}
 			
 			// Update _tFar_ to ensure robust ray--bounds intersection
-			tFar *= 1 + 2*gamma3;
+			tFar *= T(1) + T(2)*gamma3;
 			t0 = tNear > t0 ? tNear : t0;
 			t1 = tFar  < t1 ? tFar  : t1;
 			if (t0 > t1) {return false;}
