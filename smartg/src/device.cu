@@ -113,7 +113,6 @@ extern "C" {
 	#ifdef OBJ3D
 	IGeo geoStruc, geoStruc_le;
     float3 phit_le=make_float3(0.f, 0.f, 0.f);
-	bigCount = 1;   // Initialisation de la variable globale bigCount (voir geometry.h)
     float tabthv_le[NTHLE];
     float tabphi_le[NPHILE];
     #endif

@@ -11,68 +11,40 @@
 #include <helper_math.h>
 #include <stdio.h>
 
-/**********************************************************
-*	> Classes/structures liées à l'étude de géométries
-***********************************************************/
-
-
-// Variable globale (coté device)
-// - La fonction kernel est appelée à plusieurs reprises, il est donc
-// - nécessaire d'initialiser la variable au début de la fonction kernel.
-__device__ static unsigned long int bigCount;
+/************************************************************************
+*	> Class(es)/structure(s) representing a shape (sphere, triangle, ...)
+************************************************************************/
 
 template <typename T = float> //T -> float / double
-class Shape // doit être défini avant la structure DifferentialGeometry
+class Shape // must be defined before the DifferentialGeometry structure
 // ========================================================
-// Classe Shape : commun avec toute les géométries
+// Shape class. Parent to all shape classes
 // ========================================================
 {
 public:
-    // Méthodes publiques
+    // public parameters
 	__host__ __device__ Shape()
 	{
-        #if __CUDA_ARCH__ >= 200
-		shapeId = bigCount;
-		bigCount++;
-		#elif !defined(__CUDA_ARCH__)
-		shapeId++;
-        #endif
-
-		// Initialisation avec des transformations "nulles"
+		// Initialize transformations with an empty Transform object
 		Transform<T> nothing;
 		ObjectToWorld = &nothing;
 		WorldToObject = &nothing;
+		shapeId = 0; // for the moment not used at all
 	}
 
 	__host__ __device__ Shape(const Transform<T> *o2w, const Transform<T> *w2o)
-		: ObjectToWorld(o2w), WorldToObject(w2o)
-	{
-        #if __CUDA_ARCH__ >= 200
-		shapeId = bigCount;
-		bigCount++;
-		#elif !defined(__CUDA_ARCH__)
-		shapeId++;
-        #endif
-	}
+		: ObjectToWorld(o2w), WorldToObject(w2o) { shapeId = 0; }
 
-    // Paramètres publiques
-    #if __CUDA_ARCH__ >= 200
+    // private parameters
 	unsigned long int shapeId;
-    #elif !defined(__CUDA_ARCH__)
-	static unsigned long int shapeId;
-    #endif
     const Transform<T> *ObjectToWorld, *WorldToObject;
 
 private:
 };
 
-#if !defined(__CUDA_ARCH__)
-template <typename T> 
-unsigned long int Shape<T>::shapeId = 1;
-#endif
 
 template <typename T = float> //T -> float / double
-struct DifferentialGeometry // must be defined before child classes
+struct DifferentialGeometry // must be defined before shape child classes
 // ========================================================
 // DifferentialGeometry class
 // ========================================================
@@ -109,11 +81,11 @@ struct DifferentialGeometry // must be defined before child classes
 template <typename T = float> //T -> float / double
 class Sphere : public Shape<T>
 // ========================================================
-// Classe Sphere
+// Sphere class
 // ========================================================
 {
 public:
-	// Méthodes publiques de la sphère
+	// public methods
 	__host__ __device__ Sphere();
 	__host__ __device__ Sphere(const Transform<T> *o2w, const Transform<T> *w2o,
 							   T rad, T zmin, T zmax, T phiMax);
@@ -127,15 +99,15 @@ public:
     __host__ __device__ T Area() const;
 
 private:
-	// Paramètres privés de la sphère
-	T radius;               // Rayon de la sphere
-    T phiMax;               // phimax = 360 pour une sphere pleine
-    T zmin, zmax;           // zmin = (-1)*zmax = (-1)*rayon pour une sphere pleine
-    T thetaMin, thetaMax;   // calculées en fonction de zmin et zmax
+	// private parameters
+	T radius;               // sphere radius
+    T phiMax;               // phimax = 360° for a complete sphere
+    T zmin, zmax;           // zmin = (-1)*zmax = (-1)*radius for a complete sphere
+    T thetaMin, thetaMax;   // computed as function of zmin et zmax
 };
 
 // -------------------------------------------------------
-// définitions des méthodes de la classe sphere
+// definitions of sphere class methods
 // -------------------------------------------------------
 template <typename T> 
 Sphere<T>::Sphere() : Shape<T>()
@@ -199,22 +171,21 @@ bool Sphere<T>::Intersect(const Ray<T> &r, T *tHit, DifferentialGeometry<T> *dg)
     vec3<T> phit;
 
 	Ray<T> ray;
-    // Passage (transform) du rayon "ray" dans l'espace de l'objet
+    // passing the "ray" into the sphere space
 	(*this->WorldToObject)(r, &ray);
 
-	// printf("ray(%f) = (%f, %f, %f)\n", ray.maxt, ray(ray.maxt).x, ray(ray.maxt).y, ray(ray.maxt).z);
-    // Calcul des coefficients quadratiques de la sphere
+    // Compute the quadratic coefficients of the sphere
     T A = ray.d.x*ray.d.x + ray.d.y*ray.d.y + ray.d.z*ray.d.z;
     T B = 2 * (ray.d.x*ray.o.x + ray.d.y*ray.o.y + ray.d.z*ray.o.z);
     T C = ray.o.x*ray.o.x + ray.o.y*ray.o.y +
               ray.o.z*ray.o.z - radius*radius;
 
-    // Résoudre l'équation du second degrée pour obtenir t0 et t1
+    // Solve the equation of second order to get t0 and t1
     T t0, t1;
     if (!quadratic(&t0, &t1, A, B, C))
         return false;
 
-    // Calcul à quel temps t le rayon intersecte la sphere
+    // Calculate the factor t at which the ray is reaching the sphere
     if (t0 > ray.maxt || t1 < ray.mint)
         return false;
     T thit = t0;
@@ -224,20 +195,20 @@ bool Sphere<T>::Intersect(const Ray<T> &r, T *tHit, DifferentialGeometry<T> *dg)
         if (thit > ray.maxt) {return false;}
     }
 
-    // Calcul la position de l'intersection ainsi que la valeur de $\phi$
+    // Compute the intersection position and $\phi$
     phit = ray(thit);
     if (phit.x == T(0) && phit.y == T(0)) {phit.x = (1e-5) * radius;}
     phi = get_func_atan2(phit.y, phit.x);
     if (phi < T(0)) {phi += T(2)*get_const_pi(T{});}
 
-    // Prendre en compte les paramètres d'une sphere partiel
+    // Consider additional parameters in case of partial sphere
     if ((zmin > -radius && phit.z < zmin) ||
         (zmax <  radius && phit.z > zmax) || phi > phiMax)
 	{
         if (thit == t1) {return false;}
         if (t1 > ray.maxt) {return false;}
         thit = t1;
-        // Calcul la position ainsi que la valeur de $\phi$
+        // Compute instersection position and $\phi$
         phit = ray(thit);
         if (phit.x == T(0) && phit.y == T(0)) {phit.x = T(1e-5) * radius;}
         phi = get_func_atan2(phit.y, phit.x);
@@ -247,12 +218,12 @@ bool Sphere<T>::Intersect(const Ray<T> &r, T *tHit, DifferentialGeometry<T> *dg)
             return false;
     }
 
-    // Trouve la représentation paramétrique au point d'intersection
+    // Find the parameteric representation at the intersection point
     T u = phi / phiMax;
     T theta = get_func_acos(clamp(phit.z / radius, T(-1), T(1)));
     T v = (theta - thetaMin) / (thetaMax - thetaMin);
 
-    // Calcul des dérivées partielles $\dpdu$ et $\dpdv$
+    // Compute the partial derivatives $\dpdu$ et $\dpdv$
     T zradius = get_func_sqrt(phit.x*phit.x + phit.y*phit.y);
     T invzradius = T(1) / zradius;
     T cosphi = phit.x * invzradius;
@@ -261,15 +232,14 @@ bool Sphere<T>::Intersect(const Ray<T> &r, T *tHit, DifferentialGeometry<T> *dg)
     vec3<T> dpdv = make_vec3<T>(phit.z * cosphi, phit.z * sinphi,
 							    -radius * get_func_sin(theta)) * (thetaMax-thetaMin);
 
-    // Initialisation de  _DifferentialGeometry_ depuis les données paramétriques
+    // create the DifferentialGeometry object
     const Transform<T> &o2w = *this->ObjectToWorld;
-	
     *dg = DifferentialGeometry<T>(o2w(Point<T>(phit)),
 								  o2w(Normal<T>(dpdu)),
 								  o2w(Normal<T>(dpdv)),
 								  u, v, this);
 
-    // mise a jour de _tHit_
+    // update _tHit_
     *tHit = thit;
 
     return true;
