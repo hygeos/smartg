@@ -22,7 +22,7 @@ class Shape // must be defined before the DifferentialGeometry structure
 // ========================================================
 {
 public:
-    // public parameters
+    // Public parameters
 	__host__ __device__ Shape()
 	{
 		// Initialize transformations with an empty Transform object
@@ -35,7 +35,7 @@ public:
 	__host__ __device__ Shape(const Transform<T> *o2w, const Transform<T> *w2o)
 		: ObjectToWorld(o2w), WorldToObject(w2o) { shapeId = 0; }
 
-    // private parameters
+    // Private parameters
 	unsigned long int shapeId;
     const Transform<T> *ObjectToWorld, *WorldToObject;
 
@@ -91,12 +91,11 @@ class Sphere : public Shape<T>
 // ========================================================
 {
 public:
-	// public methods
+	// Public methods
 	__host__ __device__ Sphere();
 	__host__ __device__ Sphere(const Transform<T> *o2w, const Transform<T> *w2o,
 							   T rad, T zmin, T zmax, T phiMax);
 
-    /* uniquement device pour éviter des problèmes de mémoires */
     __device__ BBox<T> ObjectBoundSphere() const;
     __device__ BBox<T> WorldBoundSphere() const;
 
@@ -113,7 +112,7 @@ private:
 };
 
 // -------------------------------------------------------
-// definitions of sphere class methods
+// Definitions of Sphere class methods
 // -------------------------------------------------------
 template <typename T> 
 Sphere<T>::Sphere() : Shape<T>()
@@ -177,7 +176,7 @@ bool Sphere<T>::Intersect(const Ray<T> &r, T *tHit, DifferentialGeometry<T> *dg)
     vec3<T> phit;
 
 	Ray<T> ray;
-    // passing the "ray" into the sphere space
+    // Passing the "ray" into the sphere space
 	(*this->WorldToObject)(r, &ray);
 
     // Compute the quadratic coefficients of the sphere
@@ -238,14 +237,14 @@ bool Sphere<T>::Intersect(const Ray<T> &r, T *tHit, DifferentialGeometry<T> *dg)
     vec3<T> dpdv = make_vec3<T>(phit.z * cosphi, phit.z * sinphi,
 							    -radius * get_func_sin(theta)) * (thetaMax-thetaMin);
 
-    // create the DifferentialGeometry object
+    // Create the DifferentialGeometry object
     const Transform<T> &o2w = *this->ObjectToWorld;
     *dg = DifferentialGeometry<T>(o2w(Point<T>(phit)),
 								  o2w(Normal<T>(dpdu)),
 								  o2w(Normal<T>(dpdv)),
 								  u, v, this);
 
-    // update _tHit_
+    // Update tHit
     *tHit = thit;
 
     return true;
@@ -262,17 +261,16 @@ using Sphered = Sphere<double>;
 
 class Triangle : public Shape<float>
 // ========================================================
-// Classe triangle
+// Triangle class
 // ========================================================
 {
 public:
-	// Méthodes publiques de classe triangle
+	// Public methods
 	__host__ __device__ Triangle();
 	__host__ __device__ Triangle(const Transform<float> *o2w, const Transform<float> *w2o);
 	__host__ __device__ Triangle(const Transform<float> *o2w, const Transform<float> *w2o,
 								 float3 a, float3 b, float3 c);
 
-    /* uniquement device pour éviter des problèmes de mémoires */
     __device__ BBox<float> ObjectBoundTriangle() const;
     __device__ BBox<float> WorldBoundTriangle() const;
 
@@ -285,15 +283,14 @@ public:
     __host__ __device__ float Area() const;
 
 private:
-	// Paramètres privés de la classe triangle
+	// Private parameters
 	float3 p1, p2, p3;
 };
 
 // -------------------------------------------------------
-// définitions des méthodes de la classe Triangle
+// Definitions of Triangle class methods
 // -------------------------------------------------------
 Triangle::Triangle()
-// Donne la possibilité de créer un tableau de triangle
 {
 	p1 = make_float3(0.f, 0.f, 0.f);
 	p2 = make_float3(0.f, 0.f, 0.f);
@@ -521,11 +518,12 @@ __device__ bool Triangle::Intersect2(const Ray<float> &ray, float *tHit,
 
 	double3 phit = b0*P0+b1*P1+b2*P2;
 
+	// Create the DifferentialGeometry object
 	*dg = DifferentialGeometry<float>(make_float3(phit.x, phit.y, phit.z),
 							          make_float3(dpdu.x, dpdu.y, dpdu.z),
 							          make_float3(dpdv.x, dpdv.y, dpdv.z),
 							          0.F, 0.F, this);
-    // mise a jour de _tHit_
+    // Update tHit
     *tHit = float(t);
 	
 	return true;
@@ -603,7 +601,7 @@ __device__ bool Triangle::IntersectP2(const Ray<float> &ray) const
 }
 
 #ifndef DOUBLE
-// Méthode de Möller-Trumbore pour l'intersection rayon/triangle
+// Möller-Trumbore method for ray/triangle intersection
 bool Triangle::Intersect(const Ray<float> &ray, float *tHit,
 						 DifferentialGeometry<float> *dg) const
 {
@@ -616,32 +614,32 @@ bool Triangle::Intersect(const Ray<float> &ray, float *tHit,
 	{return false;}
 	float invDivisor = 1.F/divisor;
 
-	// Calcul de la 1er composante des coordonnées baricentriques
+	// Compute the first baricentric coordinate component
 	float3 s = ray.o - p1;
 	float b1 = dot(s, s1) * invDivisor;
 
     if (b1 < -0.0000001 || b1 > 1.0000001)
 	{return false;}
 
-    // Calcul de la 2nd composante des coordonnées baricentriques
+    // Compute the second component
     float3 s2 = cross(s, e1);
     float b2 = dot(ray.d, s2) * invDivisor;
 	if (b2 < 0. || b1 + b2 > 1.)
         return false;
 
-    // Calcul de temps t du rayon pour atteindre le point d'intersection
+    // Compute t
     float t = dot(e2, s2) * invDivisor;
 	
     if (t < ray.mint || t > ray.maxt)
         return false;
 
-    // Calcul des dérivée partielles du triangle
+    // Compute partial derivatives
 	float3 dpdu, dpdv;
 	float3c uvsC0, uvsC1; // row1 and row2
 	uvsC0 = make_float3c(0., 1., 1.);
 	uvsC1 = make_float3c(0., 0., 1.);
 		
-    // Calcul du Delta pour les dérivée partielles du triangle
+    // Compute Delta
 	float du1 = uvsC0[0] - uvsC0[2];
 	float du2 = uvsC0[1] - uvsC0[2];
     float dv1 = uvsC1[0] - uvsC1[2];
@@ -651,7 +649,7 @@ bool Triangle::Intersect(const Ray<float> &ray, float *tHit,
 
     if (determinant == 0.)
 	{
-        // Gestion du cas où le déterminant est nul
+        // Manage the case where the determinant is equal to 0
         coordinateSystem(normalize(cross(e2, e1)), &dpdu, &dpdv);
     }
     else
@@ -661,19 +659,20 @@ bool Triangle::Intersect(const Ray<float> &ray, float *tHit,
         dpdv = (-du2 * dp1 + du1 * dp2) * invdet;
     }
 
-    // Interpolation des coordonnées paramétrique du triangle $(u,v)$
+    // Parametric coordinate interpolations of triangle $(u,v)$
     float b0 = 1 - b1 - b2;
     float tu = b0*uvsC0[0] + b1*uvsC0[1] + b2*uvsC0[2];
     float tv = b0*uvsC1[0] + b1*uvsC1[1] + b2*uvsC1[2];
 
-    // Initialisation de  _DifferentialGeometry_ depuis les données paramétriques
+    // Create the DifferentialGeometry object
     *dg = DifferentialGeometry<float>(ray(t), dpdu, dpdv, tu, tv, this);
 
-    // mise a jour de _tHit_
+    // Update tHit
 	*tHit = t;
 	return true;
 }
-// Méthode de Möller-Trumbore pour l'intersection rayon/triangle
+
+// Möller-Trumbore method for ray/triangle intersection
 bool Triangle::IntersectP(const Ray<float> &ray) const
 {
 	float3 e1 = p2 - p1;
@@ -685,20 +684,20 @@ bool Triangle::IntersectP(const Ray<float> &ray) const
 	{return false;}
 	float invDivisor = 1.F/divisor;
 
-	// Calcul de la 1er composante des coordonnées baricentriques
+	// Compute the first baricentric coordinate component
 	float3 s = ray.o - p1;
 	float b1 = dot(s, s1) * invDivisor;
 
     if (b1 < -0.0000001 || b1 > 1.0000001)
 	{return false;}
 
-    // Calcul de la 2nd composante des coordonnées baricentriques
+    // Compute the second component
     float3 s2 = cross(s, e1);
     float b2 = dot(ray.d, s2) * invDivisor;
 	if (b2 < 0. || b1 + b2 > 1.)
         return false;
 
-    // Calcul de temps t du rayon pour atteindre le point d'intersection
+    // Compute t
     float t = dot(e2, s2) * invDivisor;
 	
     if (t < ray.mint || t > ray.maxt)
@@ -708,7 +707,8 @@ bool Triangle::IntersectP(const Ray<float> &ray) const
 }
 //*******************************************************************************
 #else
-// Méthode de Möller-Trumbore pour l'intersection rayon/triangle
+
+// Möller-Trumbore method for ray/triangle intersection
 bool Triangle::Intersect(const Ray<float> &ray, float *tHit,
 						 DifferentialGeometry<float> *dg) const
 {
@@ -727,32 +727,32 @@ bool Triangle::Intersect(const Ray<float> &ray, float *tHit,
 	{return false;}
 	double invDivisor = 1./divisor;
 
-	// Calcul de la 1er composante des coordonnées baricentriques
+	// Compute the first baricentric coordinate component
 	double3 s = dray_o - p1d;
 	double b1 = dot(s, s1) * invDivisor;
 
     if (b1 < -0.0000000001 || b1 > 1.0000000001)
 	{return false;}
 
-    // Calcul de la 2nd composante des coordonnées baricentriques
+    // Compute the second component
     double3 s2 = cross(s, e1);
     double b2 = dot(dray_d, s2) * invDivisor;
 	if (b2 < 0. || b1 + b2 > 1.)
         return false;
 
-    // Calcul de temps t du rayon pour atteindre le point d'intersection
+    // Compute t
     double t = dot(e2, s2) * invDivisor;
 	
     if (t < ray.mint || t > ray.maxt)
         return false;
 
-    // Calcul des dérivée partielles du triangle
+    // Compute partial derivatives
 	double3 dpdu, dpdv;
 	double3c uvsC0, uvsC1; // row1 and row2
 	uvsC0 = make_double3c(0., 1., 1.);
 	uvsC1 = make_double3c(0., 0., 1.);
 		
-    // Calcul du Delta pour les dérivée partielles du triangle
+    // Compute Delta
 	double du1 = uvsC0[0] - uvsC0[2];
 	double du2 = uvsC0[1] - uvsC0[2];
     double dv1 = uvsC1[0] - uvsC1[2];
@@ -762,7 +762,7 @@ bool Triangle::Intersect(const Ray<float> &ray, float *tHit,
 
     if (determinant == 0.)
 	{
-        // Gestion du cas où le déterminant est nul
+        // Manage the case where the determinant is equal to 0
         coordinateSystem(normalize(cross(e2, e1)), &dpdu, &dpdv);
     }
     else
@@ -772,23 +772,22 @@ bool Triangle::Intersect(const Ray<float> &ray, float *tHit,
         dpdv = (-du2 * dp1 + du1 * dp2) * invdet;
     }
 
-    // Interpolation des coordonnées paramétrique du triangle $(u,v)$
+    // Parametric coordinate interpolations of triangle $(u,v)$
     double b0 = 1 - b1 - b2;
     double tu = b0*uvsC0[0] + b1*uvsC0[1] + b2*uvsC0[2];
     double tv = b0*uvsC1[0] + b1*uvsC1[1] + b2*uvsC1[2];
 
-    // Initialisation de  _DifferentialGeometry_ depuis les données paramétriques
+    // Create the DifferentialGeometry object
 	float3 dpduf = make_float3(float(dpdu.x), float(dpdu.y), float(dpdu.z));
 	float3 dpdvf = make_float3(float(dpdv.x), float(dpdv.y), float(dpdv.z));
-	
 	*dg = DifferentialGeometry<float>(ray(float(t)), dpduf, dpdvf, float(tu), float(tv), this);
 
-    // mise a jour de _tHit_
+    // Update tHit
 	*tHit = float(t);
 	return true;
 }
 
-// Möller-Trumbore for ray/triangle intersection simple bool test
+// Möller-Trumbore method for ray/triangle intersection
 bool Triangle::IntersectP(const Ray<float> &ray) const
 {
 	double3 p1d = make_double3(double(p1.x), double(p1.y), double(p1.z));
@@ -806,20 +805,20 @@ bool Triangle::IntersectP(const Ray<float> &ray) const
 	{return false;}
 	double invDivisor = 1./divisor;
 
-	// Calcul de la 1er composante des coordonnées baricentriques
+	// Compute the first baricentric coordinate component
 	double3 s = dray_o - p1d;
 	double b1 = dot(s, s1) * invDivisor;
 
     if (b1 < -0.0000000001 || b1 > 1.0000000001)
 	{return false;}
 
-    // Calcul de la 2nd composante des coordonnées baricentriques
+    // Compute the second component
     double3 s2 = cross(s, e1);
     double b2 = dot(dray_d, s2) * invDivisor;
 	if (b2 < 0. || b1 + b2 > 1.)
         return false;
 
-    // Calcul de temps t du rayon pour atteindre le point d'intersection
+    // Compute t
     double t = dot(e2, s2) * invDivisor;
 	
     if (t < ray.mint || t > ray.maxt)
@@ -849,15 +848,14 @@ float Triangle::Area() const
 
 class TriangleMesh : public Shape<float>
 // ========================================================
-// Classe triangleMesh
+// TriangleMesh class
 // ========================================================
 {
 public:
-	// Méthodes publiques de classe triangleMesh
+	// Public method
 	__host__ __device__ TriangleMesh(const Transform<float> *o2w, const Transform<float> *w2o,
 									 int nt, int nv, int *vi, float3 *P);
 
-    /* uniquement device pour éviter des problèmes de mémoires */
     __device__ BBox<float> ObjectBoundTriangleMesh() const;
     __device__ BBox<float> WorldBoundTriangleMesh() const;
 
@@ -870,7 +868,7 @@ public:
     __host__ __device__ float Area() const;
 	float3 *p;
 private:
-	// Paramètres privés de la classe triangleMesh
+	// Private parameters
 	int ntris, nverts;
 	int *vertexIndex;
 	//float3 *p;
@@ -878,7 +876,7 @@ private:
 };
 
 // -------------------------------------------------------
-// définitions des méthodes de la classe TriangleMesh
+// Definitions of TriangleMesh class methods
 // -------------------------------------------------------
 TriangleMesh::TriangleMesh(const Transform<float> *o2w, const Transform<float> *w2o,
 						   int nt, int nv, int *vi, float3 *P)
@@ -889,7 +887,7 @@ TriangleMesh::TriangleMesh(const Transform<float> *o2w, const Transform<float> *
 	/* refTri = rt; */
 	p = P;
 
-	// Applique les transformations sur le maillage	
+	// Apply the transformations to the triangle mesh	
 	for (int i = 0; i < nverts; ++i)
 		p[i] = (*ObjectToWorld)(Pointf(p[i]));
 }
@@ -910,7 +908,7 @@ bool TriangleMesh::Intersect(const Ray<float> &ray, float* tHit,
 	{
 		float triHit;
 		DifferentialGeometry<float> dgTri;
-		/* // créer le triangle i en fonction de *vi et *P	 */
+		/* // Create the triangle i as function of *vi et *P	 */
 		float3 PA = p[vertexIndex[3*i]];
 		float3 PB = p[vertexIndex[3*i + 1]];
 		float3 PC = p[vertexIndex[3*i + 2]];
@@ -943,7 +941,7 @@ __device__ bool TriangleMesh::Intersect2(const Ray<float> &ray, float* tHit,
 	{
 		float triHit;
 		DifferentialGeometry<float> dgTri;
-		/* // créer le triangle i en fonction de *vi et *P	 */
+		/* // Create the triangle i as function of *vi et *P	 */
 		float3 PA = p[vertexIndex[3*i]];
 		float3 PB = p[vertexIndex[3*i + 1]];
 		float3 PC = p[vertexIndex[3*i + 2]];
@@ -966,7 +964,7 @@ bool TriangleMesh::IntersectP(const Ray<float> &ray) const
 	Transform<float> nothing;
 	for (int i = 0; i < ntris; ++i)
 	{
-		/* // créer le triangle i en fonction de *vi et *P	 */
+		/* // Create the triangle i as function of *vi et *P	 */
 		float3 PA = p[vertexIndex[3*i]];
 		float3 PB = p[vertexIndex[3*i + 1]];
 		float3 PC = p[vertexIndex[3*i + 2]];
@@ -982,7 +980,7 @@ __device__ bool TriangleMesh::IntersectP2(const Ray<float> &ray) const
 	Transform<float> nothing;
 	for (int i = 0; i < ntris; ++i)
 	{
-		/* // créer le triangle i en fonction de *vi et *P	 */
+		/* // Create the triangle i as function of *vi et *P	 */
 		float3 PA = p[vertexIndex[3*i]];
 		float3 PB = p[vertexIndex[3*i + 1]];
 		float3 PC = p[vertexIndex[3*i + 2]];

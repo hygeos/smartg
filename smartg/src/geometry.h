@@ -18,17 +18,17 @@
 
 #include <iterator>
 /**********************************************************
-*	> Classe(s) représentant géométriquement quelque chose
-*     - ex: Un Point, Un vecteur, une normal, un rayon...
+*	> Basic geometric classe(s), e.g., a point, a vector,
+      a normal, a ray...
 ***********************************************************/
 
 template <typename T = float>
 class Vector {
 // ========================================================
-// Classe Vector
+// Vector class
 // ========================================================
 public:
-    // Vector Public Methods
+    // Public methods
     __host__ __device__ Vector() { x = 0; y = 0; z = 0; }
 	
     __host__ __device__ Vector(T xx, T yy, T zz)
@@ -97,7 +97,7 @@ public:
     __host__ __device__ bool operator!=(const Vector<T> &v) const
 	{ return x != v.x || y != v.y || z != v.z; }
 
-    // Vector Public Attributs
+    // Public parameters
     T x, y, z;
 private:
 };
@@ -109,10 +109,10 @@ using Vectord=Vector<double>;
 template <typename T = float>
 class Point {
 // ========================================================
-// Classe Point
+// Point class
 // ========================================================
 public:
-    // Point Public Methods
+    // Public methods
     __host__ __device__ Point() { x = 0; y = 0; z = 0; }
 	
     __host__ __device__ Point(T xx, T yy, T zz)
@@ -181,7 +181,7 @@ public:
     __host__ __device__ bool operator!=(const Point<T> &p) const
 	{ return x != p.x || y != p.y || z != p.z; }
 
-    // Vector Public Data
+    // Public parameters
     T x, y, z;
 private:
 };
@@ -193,10 +193,10 @@ using Pointd=Point<double>;
 template <typename T = float>
 class Normal {
 // ========================================================
-// Classe Normal
+// Normal class
 // ========================================================
 public:
-    // Point Public Methods
+    // Public methods
     __host__ __device__ Normal() { x = 0; y = 0; z = 0; }
 	
     __host__ __device__ Normal(T xx, T yy, T zz)
