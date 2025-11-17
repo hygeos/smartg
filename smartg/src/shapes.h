@@ -87,7 +87,7 @@ struct DifferentialGeometry // must be defined before child classes
 	}
 
     __host__ __device__ DifferentialGeometry(const U3 &P, const U3 &DPDU,
-						 const U3 &DPDV, T uu, T vv, const Shape<float> *sh)
+						                     const U3 &DPDV, T uu, T vv, const Shape<T> *sh)
 		: p(P), dpdu(DPDU), dpdv(DPDV)
 	{
 		nn = normalize(cross(dpdu, dpdv));
@@ -102,11 +102,12 @@ struct DifferentialGeometry // must be defined before child classes
 	U3 nn;            // normal at intersection point
 	T u;              // parameter: P=f(u,v)
 	T v;              // parameter: P=f(u,v)
-	const Shape<float> *shape;   // the geometry used
+	const Shape<T> *shape;   // the geometry used
 };
 
 
-class Sphere : public Shape<float>
+template <typename T = float> //T -> float / double
+class Sphere : public Shape<T>
 // ========================================================
 // Classe Sphere
 // ========================================================
@@ -114,104 +115,109 @@ class Sphere : public Shape<float>
 public:
 	// Méthodes publiques de la sphère
 	__host__ __device__ Sphere();
-	__host__ __device__ Sphere(const Transform<float> *o2w, const Transform<float> *w2o,
-							   float rad, float zmin, float zmax, float phiMax);
+	__host__ __device__ Sphere(const Transform<T> *o2w, const Transform<T> *w2o,
+							   T rad, T zmin, T zmax, T phiMax);
 
     /* uniquement device pour éviter des problèmes de mémoires */
-    __device__ BBox<float> ObjectBoundSphere() const;
-    __device__ BBox<float> WorldBoundSphere() const;
+    __device__ BBox<T> ObjectBoundSphere() const;
+    __device__ BBox<T> WorldBoundSphere() const;
 
-    __host__ __device__ bool Intersect(const Ray<float> &ray, float* tHit,
-									   DifferentialGeometry<float> *Dg) const;
-    __host__ __device__ float Area() const;
+    __host__ __device__ bool Intersect(const Ray<T> &ray, T* tHit,
+									   DifferentialGeometry<T> *Dg) const;
+    __host__ __device__ T Area() const;
 
 private:
 	// Paramètres privés de la sphère
-	float radius;               // Rayon de la sphere
-    float phiMax;               // phimax = 360 pour une sphere pleine
-    float zmin, zmax;           // zmin = (-1)*zmax = (-1)*rayon pour une sphere pleine
-    float thetaMin, thetaMax;   // calculées en fonction de zmin et zmax
+	T radius;               // Rayon de la sphere
+    T phiMax;               // phimax = 360 pour une sphere pleine
+    T zmin, zmax;           // zmin = (-1)*zmax = (-1)*rayon pour une sphere pleine
+    T thetaMin, thetaMax;   // calculées en fonction de zmin et zmax
 };
 
 // -------------------------------------------------------
 // définitions des méthodes de la classe sphere
 // -------------------------------------------------------
-Sphere::Sphere() : Shape<float>()
+template <typename T> 
+Sphere<T>::Sphere() : Shape<T>()
 {
-    radius = 0.f;
-    zmin = 0.f;
-    zmax = 0.f;
-    thetaMin = 0.f;
-    thetaMax = 0.f;
-    phiMax = 0.f;
+    radius = T(0);
+    zmin = T(0);
+    zmax = T(0);
+    thetaMin = T(0);
+    thetaMax = T(0);
+    phiMax = T(0);
 }
 
-Sphere::Sphere(const Transform<float> *o2w, const Transform<float> *w2o,
-			   float rad, float z0, float z1, float pm)
-	: Shape<float>(o2w, w2o)
+template <typename T> 
+Sphere<T>::Sphere(const Transform<T> *o2w, const Transform<T> *w2o,
+			      T rad, T z0, T z1, T pm)
+	: Shape<T>(o2w, w2o)
 {
     radius = rad;
-    zmin = clamp(float(min(z0, z1)), float(-radius), float(radius));
-    zmax = clamp(float(max(z0, z1)), float(-radius), float(radius));
-    thetaMin = acosf(clamp(zmin/radius, -1.f, 1.f));
-    thetaMax = acosf(clamp(zmax/radius, -1.f, 1.f));
-    phiMax = radians(clamp(pm, 0.0f, 360.0f));
+    zmin = clamp(T(min(z0, z1)), T(-radius), T(radius));
+    zmax = clamp(T(max(z0, z1)), T(-radius), T(radius));
+    thetaMin = get_func_acos(clamp(zmin/radius, T(-1), T(1)));
+    thetaMax = get_func_acos(clamp(zmax/radius, T(-1), T(1)));
+    phiMax = get_func_radians(clamp(pm, T(0), T(360)));
 }
 
-__device__ BBox<float> Sphere::WorldBoundSphere() const
+template <typename T> 
+__device__ BBox<T> Sphere<T>::WorldBoundSphere() const
 {
-	return (*ObjectToWorld)(ObjectBoundSphere());
+	return (*this->ObjectToWorld)(ObjectBoundSphere());
 }
 
-__device__ BBox<float> Sphere::ObjectBoundSphere() const
+template <typename T> 
+__device__ BBox<T> Sphere<T>::ObjectBoundSphere() const
 {
-	if (phiMax < CUDART_PI_F/2.f)
+	if (phiMax < get_const_pi(T{})/T(2))
 	{
-		return BBox<float>(make_float3( 0.f, 0.f, zmin),
-					make_float3( radius, radius*sinf(phiMax), zmax));
+		return BBox<T>(make_vec3<T>( T(0), T(0), zmin),
+					   make_vec3<T>( radius, radius*get_func_sin(phiMax), zmax));
 	}
-	else if (phiMax < CUDART_PI_F)
+	else if (phiMax < get_const_pi(T{}))
 	{
-		return BBox<float>(make_float3( radius*cosf(phiMax), 0.f, zmin),
-					make_float3( radius, radius, zmax));
+		return BBox<T>(make_vec3<T>( radius*get_func_cos(phiMax), T(0), zmin),
+					   make_vec3<T>( radius, radius, zmax));
 	}
-	else if (phiMax < 3*CUDART_PI_F/2.f)
+	else if (phiMax < T(3)*get_const_pi(T{})/T(2))
 	{
-	    return BBox<float>(make_float3(-radius, radius*sinf(phiMax), zmin),
-					make_float3( radius,  radius, zmax));
+	    return BBox<T>(make_vec3<T>(-radius, radius*get_func_sin(phiMax), zmin),
+					   make_vec3<T>( radius,  radius, zmax));
 	}
 	else //if (phiMax >= 3*PI/2)
 	{
-	    return BBox<float>(make_float3(-radius, -radius, zmin),
-					make_float3( radius,  radius, zmax));
+	    return BBox<T>(make_vec3<T>(-radius, -radius, zmin),
+					   make_vec3<T>( radius,  radius, zmax));
 	}
 }
 
-bool Sphere::Intersect(const Ray<float> &r, float *tHit, DifferentialGeometry<float> *dg) const
+template <typename T> 
+bool Sphere<T>::Intersect(const Ray<T> &r, T *tHit, DifferentialGeometry<T> *dg) const
 {
-    float phi;
-    float3 phit;
+    T phi;
+    vec3<T> phit;
 
-	Ray<float> ray;
+	Ray<T> ray;
     // Passage (transform) du rayon "ray" dans l'espace de l'objet
-	(*WorldToObject)(r, &ray);
+	(*this->WorldToObject)(r, &ray);
 
 	// printf("ray(%f) = (%f, %f, %f)\n", ray.maxt, ray(ray.maxt).x, ray(ray.maxt).y, ray(ray.maxt).z);
     // Calcul des coefficients quadratiques de la sphere
-    float A = ray.d.x*ray.d.x + ray.d.y*ray.d.y + ray.d.z*ray.d.z;
-    float B = 2 * (ray.d.x*ray.o.x + ray.d.y*ray.o.y + ray.d.z*ray.o.z);
-    float C = ray.o.x*ray.o.x + ray.o.y*ray.o.y +
+    T A = ray.d.x*ray.d.x + ray.d.y*ray.d.y + ray.d.z*ray.d.z;
+    T B = 2 * (ray.d.x*ray.o.x + ray.d.y*ray.o.y + ray.d.z*ray.o.z);
+    T C = ray.o.x*ray.o.x + ray.o.y*ray.o.y +
               ray.o.z*ray.o.z - radius*radius;
 
     // Résoudre l'équation du second degrée pour obtenir t0 et t1
-    float t0, t1;
+    T t0, t1;
     if (!quadratic(&t0, &t1, A, B, C))
         return false;
 
     // Calcul à quel temps t le rayon intersecte la sphere
     if (t0 > ray.maxt || t1 < ray.mint)
         return false;
-    float thit = t0;
+    T thit = t0;
     if (t0 < ray.mint)
 	{
         thit = t1;
@@ -220,9 +226,9 @@ bool Sphere::Intersect(const Ray<float> &r, float *tHit, DifferentialGeometry<fl
 
     // Calcul la position de l'intersection ainsi que la valeur de $\phi$
     phit = ray(thit);
-    if (phit.x == 0.f && phit.y == 0.f) {phit.x = 1e-5f * radius;}
-    phi = atan2f(phit.y, phit.x);
-    if (phi < 0.) {phi += 2.f*PI;}
+    if (phit.x == T(0) && phit.y == T(0)) {phit.x = (1e-5) * radius;}
+    phi = get_func_atan2(phit.y, phit.x);
+    if (phi < T(0)) {phi += T(2)*get_const_pi(T{});}
 
     // Prendre en compte les paramètres d'une sphere partiel
     if ((zmin > -radius && phit.z < zmin) ||
@@ -233,35 +239,35 @@ bool Sphere::Intersect(const Ray<float> &r, float *tHit, DifferentialGeometry<fl
         thit = t1;
         // Calcul la position ainsi que la valeur de $\phi$
         phit = ray(thit);
-        if (phit.x == 0.f && phit.y == 0.f) {phit.x = 1e-5f * radius;}
-        phi = atan2f(phit.y, phit.x);
-        if (phi < 0.) {phi += 2.f*PI;}
+        if (phit.x == T(0) && phit.y == T(0)) {phit.x = T(1e-5) * radius;}
+        phi = get_func_atan2(phit.y, phit.x);
+        if (phi < T(0)) {phi += T(2)*get_const_pi(T{});}
         if ((zmin > -radius && phit.z < zmin) ||
             (zmax <  radius && phit.z > zmax) || phi > phiMax)
             return false;
     }
 
     // Trouve la représentation paramétrique au point d'intersection
-    float u = phi / phiMax;
-    float theta = acosf(clamp(phit.z / radius, -1.f, 1.f));
-    float v = (theta - thetaMin) / (thetaMax - thetaMin);
+    T u = phi / phiMax;
+    T theta = get_func_acos(clamp(phit.z / radius, T(-1), T(1)));
+    T v = (theta - thetaMin) / (thetaMax - thetaMin);
 
     // Calcul des dérivées partielles $\dpdu$ et $\dpdv$
-    float zradius = sqrtf(phit.x*phit.x + phit.y*phit.y);
-    float invzradius = 1.f / zradius;
-    float cosphi = phit.x * invzradius;
-    float sinphi = phit.y * invzradius;
-    float3 dpdu = make_float3(-phiMax * phit.y, phiMax * phit.x, 0);
-    float3 dpdv = make_float3(phit.z * cosphi, phit.z * sinphi,
-							  -radius * sinf(theta)) * (thetaMax-thetaMin);
+    T zradius = get_func_sqrt(phit.x*phit.x + phit.y*phit.y);
+    T invzradius = T(1) / zradius;
+    T cosphi = phit.x * invzradius;
+    T sinphi = phit.y * invzradius;
+    vec3<T> dpdu = make_vec3<T>(-phiMax * phit.y, phiMax * phit.x, T(0));
+    vec3<T> dpdv = make_vec3<T>(phit.z * cosphi, phit.z * sinphi,
+							    -radius * get_func_sin(theta)) * (thetaMax-thetaMin);
 
     // Initialisation de  _DifferentialGeometry_ depuis les données paramétriques
-    const Transform<float> &o2w = *ObjectToWorld;
+    const Transform<T> &o2w = *this->ObjectToWorld;
 	
-    *dg = DifferentialGeometry<float>(o2w(Pointf(phit)),
-									  o2w(Normalf(dpdu)),
-									  o2w(Normalf(dpdv)),
-									  u, v, this);
+    *dg = DifferentialGeometry<T>(o2w(Point<T>(phit)),
+								  o2w(Normal<T>(dpdu)),
+								  o2w(Normal<T>(dpdv)),
+								  u, v, this);
 
     // mise a jour de _tHit_
     *tHit = thit;
@@ -269,7 +275,8 @@ bool Sphere::Intersect(const Ray<float> &r, float *tHit, DifferentialGeometry<fl
     return true;
 }
 
-float Sphere::Area() const {
+template <typename T> 
+T Sphere<T>::Area() const {
     return phiMax * radius * (zmax-zmin);
 }
 

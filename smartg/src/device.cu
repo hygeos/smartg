@@ -1873,7 +1873,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 
         // int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
         // if (idx==0) printf("%f %f %f %f; v= %f %f %f\n", ph->pos.x, ph->pos.y, ph->pos.z, ph->radius, ph->v.x, ph->v.y, ph->v.z);
-        Sphere toa_sph(&nothing, &nothing, toa_rad, -toa_rad, toa_rad, 360.f);
+        Sphere<float> toa_sph(&nothing, &nothing, toa_rad, -toa_rad, toa_rad, 360.f);
         float t_fac = 0.f;
         bool is_intersection = false;
         DifferentialGeometry<float> diff_geo;
@@ -8453,8 +8453,8 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct I
 				// See if there is an intersection with object(j)
 				if (ObjT[IND+j].geo == 1) // Case with a spherical object
 				{
-					Sphere myObject(&Tj, &invTj, ObjT[IND+j].myRad, ObjT[IND+j].z0,
-									ObjT[IND+j].z1, ObjT[IND+j].phi);
+					Sphere<float> myObject(&Tj, &invTj, ObjT[IND+j].myRad, ObjT[IND+j].z0,
+									       ObjT[IND+j].z1, ObjT[IND+j].phi);
 		
 					BBox<float> myBBox = myObject.WorldBoundSphere();
 

@@ -3505,6 +3505,7 @@ __device__ int MaxDim(double3 v)
 // Contants that can be used with templates
 ////////////////////////////////////////////////////////////////////////////////
 
+// ************ INF
 //-------------------- FLOAT --------------------
 inline __host__ __device__ constexpr float get_const_inf(float)
 {
@@ -3527,6 +3528,13 @@ inline __host__ __device__ constexpr double get_const_inf(double)
     return std::numeric_limits<double>::max();
     #endif
 }
+
+// ************ PI
+//-------------------- FLOAT --------------------
+inline __host__ __device__ constexpr float get_const_pi(float){return CUDART_PI_F;}
+
+//-------------------- DOUBLE --------------------
+inline __host__ __device__ constexpr double get_const_pi(double){return CUDART_PI;}
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -3581,6 +3589,69 @@ inline __host__ __device__ float get_func_radians(float x) {return radians(x);}
 
 //-------------------- DOUBLE --------------------
 inline __host__ __device__ double get_func_radians(double x){return radiansd(x);}
+
+// ************ acos()
+//-------------------- FLOAT --------------------
+inline __host__ __device__ float get_func_acos(float x)
+{
+    #if __CUDA_ARCH__ >= 200
+    return ::acosf(x);
+    #else
+    return std::acos(x);
+    #endif
+}
+
+//-------------------- DOUBLE --------------------
+inline __host__ __device__ double get_func_acos(double x)
+{
+    #if __CUDA_ARCH__ >= 200
+    return ::acos(x);
+    #else
+    return std::acos(x);
+    #endif
+}
+
+// ************ atan2()
+//-------------------- FLOAT --------------------
+inline __host__ __device__ float get_func_atan2(float x, float y)
+{
+    #if __CUDA_ARCH__ >= 200
+    return ::atan2f(x,y);
+    #else
+    return std::atan2(x,y);
+    #endif
+}
+
+//-------------------- DOUBLE --------------------
+inline __host__ __device__ double get_func_atan2(double x, double y)
+{
+    #if __CUDA_ARCH__ >= 200
+    return ::atan2(x,y);
+    #else
+    return std::atan2(x,y);
+    #endif
+}
+
+// ************ sqrt()
+//-------------------- FLOAT --------------------
+inline __host__ __device__ float get_func_sqrt(float x)
+{
+    #if __CUDA_ARCH__ >= 200
+    return ::sqrtf(x);
+    #else
+    return std::sqrt(x);
+    #endif
+}
+
+//-------------------- DOUBLE --------------------
+inline __host__ __device__ double get_func_sqrt(double x)
+{
+    #if __CUDA_ARCH__ >= 200
+    return ::sqrt(x);
+    #else
+    return std::sqrt(x);
+    #endif
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////
