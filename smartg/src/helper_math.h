@@ -3536,6 +3536,51 @@ inline __host__ __device__ constexpr float get_const_pi(float){return CUDART_PI_
 //-------------------- DOUBLE --------------------
 inline __host__ __device__ constexpr double get_const_pi(double){return CUDART_PI;}
 
+// ************ MACHINE_EPS
+__device__ float machine_eps_flt() {
+    typedef union {
+        int i32;
+        float f32;
+    } flt_32;
+
+    flt_32 s;
+
+    s.f32 = 1.;
+    s.i32++;
+    return (s.f32 - 1.);
+}
+__device__ double machine_eps_dbl() {
+    typedef union {
+        long long i64;
+        double d64;
+    } dbl_64;
+
+    dbl_64 s;
+
+    s.d64 = 1.;
+    s.i64++;
+    return (s.d64 - 1.);
+}
+//-------------------- FLOAT --------------------
+inline __host__ __device__ constexpr float get_const_machine_eps(float)
+{
+    #if __CUDA_ARCH__ >= 200
+    return machine_eps_flt();
+    #else
+    return std::numeric_limits<float>::epsilon();
+    #endif
+}
+
+//-------------------- DOUBLE --------------------
+inline __host__ __device__ constexpr double get_const_machine_eps(double)
+{
+    #if __CUDA_ARCH__ >= 200
+    return machine_eps_dbl();
+    #else
+    return std::numeric_limits<double>::epsilon();
+    #endif
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // Functions that can be used with templates

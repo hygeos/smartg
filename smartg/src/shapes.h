@@ -479,7 +479,7 @@ __device__ bool Triangle::Intersect2(const Ray<float> &ray, float *tHit,
 
 	double maxZt = max( abs(p0t.z), max( abs(p1t.z), abs(p2t.z) )  );
 	//double eps = machine_eps_dbl() * 0.5;
-	double eps = machine_eps_flt() * 0.5;
+	double eps = get_const_machine_eps(double{}) * double(0.5);
 	double deltaZ = Gamma_eps(3, eps) * maxZt;
 
 	double maxXt = max( abs(p0t.x), max( abs(p1t.x), abs(p2t.x) )  );
@@ -584,7 +584,7 @@ __device__ bool Triangle::IntersectP2(const Ray<float> &ray) const
         return false;
 
 	double maxZt = max( abs(p0t.z), max( abs(p1t.z), abs(p2t.z) )  );
-	double eps = machine_eps_flt() * 0.5;
+	double eps = get_const_machine_eps(float{}) * 0.5f;
 	double deltaZ = Gamma_eps(3, eps) * maxZt;
 
 	double maxXt = max( abs(p0t.x), max( abs(p1t.x), abs(p2t.x) )  );

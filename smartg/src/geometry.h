@@ -8,33 +8,6 @@
 #include <limits>
 #include <stdio.h>
 
-#if __CUDA_ARCH__ >= 200
-__device__ float machine_eps_flt() {
-    typedef union {
-        int i32;
-        float f32;
-    } flt_32;
-
-    flt_32 s;
-
-    s.f32 = 1.;
-    s.i32++;
-    return (s.f32 - 1.);
-}
-__device__ float machine_eps_dbl() {
-    typedef union {
-        long long i64;
-        double d64;
-    } dbl_64;
-
-    dbl_64 s;
-
-    s.d64 = 1.;
-    s.i64++;
-    return (s.d64 - 1.);
-}
-#endif
-
 #ifndef DEBUG
 #define myError(expr) ((void)0)
 #else
@@ -462,11 +435,7 @@ public:
 										T *hitt1 = NULL) const
 	{
 		T t0 = T(0), gamma3;
-        #if __CUDA_ARCH__ >= 200
-		T epsi = machine_eps_flt() * T(0.5);
-		#elif !defined(__CUDA_ARCH__)
-		T epsi = (std::numeric_limits<T>::epsilon() * 0.5);
-		#endif
+		T epsi = get_const_machine_eps(T{}) * T(0.5);
         T t1 = get_const_inf(T{});
 
 		gamma3 = (T(3)*epsi)/(T(1) - T(3)*epsi);
