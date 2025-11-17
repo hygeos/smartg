@@ -42,6 +42,9 @@ public:
 private:
 };
 
+using Shapef = Shape<float>;
+using Shaped = Shape<double>;
+
 
 template <typename T = float> //T -> float / double
 struct DifferentialGeometry // must be defined before shape child classes
@@ -76,6 +79,9 @@ struct DifferentialGeometry // must be defined before shape child classes
 	T v;              // parameter: P=f(u,v)
 	const Shape<T> *shape;   // the geometry used
 };
+
+using DifferentialGeometryf = DifferentialGeometry<float>;
+using DifferentialGeometryd = DifferentialGeometry<double>;
 
 
 template <typename T = float> //T -> float / double
@@ -249,6 +255,9 @@ template <typename T>
 T Sphere<T>::Area() const {
     return phiMax * radius * (zmax-zmin);
 }
+
+using Spheref = Sphere<float>;
+using Sphered = Sphere<double>;
 
 
 class Triangle : public Shape<float>
