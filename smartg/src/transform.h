@@ -31,6 +31,8 @@ public:
 	__host__ __device__ Transform();
 	__host__ __device__ Transform(const U4x4 &mat);
 	__host__ __device__ Transform(const U4x4 &mat, const U4x4 &matInv);
+	template <typename U>
+	__host__ __device__ Transform(const Transform<U> &t2);
     __host__ __device__ bool operator<(const Transform<T> &t2) const;
     __host__ __device__ bool IsIdentity() const;
 
@@ -107,6 +109,24 @@ Transform<T>::Transform(const mat4x4<T> &mat, const mat4x4<T> &matInv)
 		   matInv.r1.x, matInv.r1.y, matInv.r1.z, matInv.r1.w,
 		   matInv.r2.x, matInv.r2.y, matInv.r2.z, matInv.r2.w,
 		   matInv.r3.x, matInv.r3.y, matInv.r3.z, matInv.r3.w
+		   );
+}
+
+template <typename T>
+template <typename U>
+Transform<T>::Transform(const Transform<U> &t2)
+{
+	m = make_mat4x4<T>(
+		T(t2.m.r0.x), T(t2.m.r0.y), T(t2.m.r0.z), T(t2.m.r0.w),
+		T(t2.m.r1.x), T(t2.m.r1.y), T(t2.m.r1.z), T(t2.m.r1.w),
+		T(t2.m.r2.x), T(t2.m.r2.y), T(t2.m.r2.z), T(t2.m.r2.w),
+		T(t2.m.r3.x), T(t2.m.r3.y), T(t2.m.r3.z), T(t2.m.r3.w)
+		);
+	mInv = make_mat4x4<T>(
+		   T(t2.mInv.r0.x), T(t2.mInv.r0.y), T(t2.mInv.r0.z), T(t2.mInv.r0.w),
+		   T(t2.mInv.r1.x), T(t2.mInv.r1.y), T(t2.mInv.r1.z), T(t2.mInv.r1.w),
+		   T(t2.mInv.r2.x), T(t2.mInv.r2.y), T(t2.mInv.r2.z), T(t2.mInv.r2.w),
+		   T(t2.mInv.r3.x), T(t2.mInv.r3.y), T(t2.mInv.r3.z), T(t2.mInv.r3.w)
 		   );
 }
 
