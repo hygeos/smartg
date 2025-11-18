@@ -3703,6 +3703,15 @@ inline __host__ __device__ double get_func_sqrt(double x)
 // templates 
 ////////////////////////////////////////////////////////////////////////////////
 
+// float2/double2
+template <typename T> struct VecType2;
+template <> struct VecType2<float>  { using type = float2;  };
+template <> struct VecType2<double> { using type = double2; };
+template <typename T> using vec2 = typename VecType2<T>::type;
+template <typename T> __host__ __device__ vec2<T> make_vec2(T x, T y);
+template <> __host__ __device__ inline float2  make_vec2<float> (float  x, float  y) { return make_float2(x, y); }
+template <> __host__ __device__ inline double2 make_vec2<double>(double x, double y) { return make_double2(x, y); }
+
 // float3/double3
 template <typename T> struct VecType3;
 template <> struct VecType3<float>  { using type = float3;  };

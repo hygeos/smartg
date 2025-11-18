@@ -8473,7 +8473,7 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct I
 				
 					BBox<float> myBBox = myObject.WorldBoundTriangleMesh();
 					if (myBBox.IntersectP(R1))
-						myBj = myObject.Intersect2(R1, &myTj, &myDgj);
+						myBj = myObject.Intersect(R1, &myTj, &myDgj);
 					if(myBj)
 						myDgj.nn = faceForward(make_float3(ObjT[IND+j].nBx, ObjT[IND+j].nBy, ObjT[IND+j].nBz), -1.*R1.d);
 				}
@@ -8582,7 +8582,7 @@ __device__ bool geoTestMir(float3 o, float3 dir, struct IObjets *ObjT, struct GO
 					TriangleMesh myObject(&Tj, &invTj, 2, 4, vi, Pvec);
 				
 					BBox<float> myBBox = myObject.WorldBoundTriangleMesh();
-					if (myBBox.IntersectP(R1)) myBj = myObject.IntersectP2(R1);
+					if (myBBox.IntersectP(R1)) myBj = myObject.IntersectP(R1);
 					if(myBj) return true;
 				}
 			}// END FOR j LOOP
@@ -8647,7 +8647,7 @@ __device__ bool geoTestRec(float3 o, float3 dir, struct IObjets *ObjT)
 			
 			BBox<float> myBBox = myObject.WorldBoundTriangleMesh();
 			if (myBBox.IntersectP(R1))
-				myBi = myObject.IntersectP2(R1);	
+				myBi = myObject.IntersectP(R1);	
 			if (myBi) return true;
 		}
 		// ***********************************************************************

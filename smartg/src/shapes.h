@@ -259,590 +259,434 @@ using Spheref = Sphere<float>;
 using Sphered = Sphere<double>;
 
 
-class Triangle : public Shape<float>
+template <typename T = float> //T -> float / double
+class Triangle : public Shape<T>
 // ========================================================
 // Triangle class
 // ========================================================
 {
 public:
+	using U3  = vec3<T>;
+	using U2  = vec2<T>;   // used in Intersect_v3 method
+	using U3c  = vec3c<T>; // used in Intersect_v2 method
+
 	// Public methods
 	__host__ __device__ Triangle();
-	__host__ __device__ Triangle(const Transform<float> *o2w, const Transform<float> *w2o);
-	__host__ __device__ Triangle(const Transform<float> *o2w, const Transform<float> *w2o,
-								 float3 a, float3 b, float3 c);
+	__host__ __device__ Triangle(const Transform<T> *o2w, const Transform<T> *w2o);
+	__host__ __device__ Triangle(const Transform<T> *o2w, const Transform<T> *w2o,
+								 U3 a, U3 b, U3 c);
 
-    __device__ BBox<float> ObjectBoundTriangle() const;
-    __device__ BBox<float> WorldBoundTriangle() const;
+    __device__ BBox<T> ObjectBoundTriangle() const;
+    __device__ BBox<T> WorldBoundTriangle() const;
 
-    __host__ __device__ bool Intersect(const Ray<float> &ray, float* tHit,
-									   DifferentialGeometry<float> *dg) const;
-	__device__ bool Intersect2(const Ray<float> &ray, float* tHit,
-									   DifferentialGeometry<float> *dg) const;
-	__host__ __device__ bool IntersectP(const Ray<float> &ray) const;
-	__device__ bool IntersectP2(const Ray<float> &ray) const;
-    __host__ __device__ float Area() const;
+	// v2 -> use pbrtv2 method ; v3 -> pbrtv3
+	// Möller-Trumbore for ray/triangle intersection
+    __host__ __device__ bool Intersect_v2(const Ray<T> &ray, T* tHit,
+		DifferentialGeometry<T> *dg) const;
+	__host__ __device__ bool Intersect_v3(const Ray<T> &ray, T* tHit,
+		DifferentialGeometry<T> *dg) const;								   
+	__host__ __device__ bool IntersectP_v2(const Ray<T> &ray) const;
+	__host__ __device__ bool IntersectP_v3(const Ray<T> &ray) const;
+	__host__ __device__ bool Intersect(const Ray<T> &ray, T* tHit,
+		DifferentialGeometry<T> *dg, int version = 3) const;
+	__host__ __device__ bool IntersectP(const Ray<T> &ray, int version = 3) const;	
+    __host__ __device__ T Area() const;
 
 private:
 	// Private parameters
-	float3 p1, p2, p3;
+	U3 p1, p2, p3;
 };
 
 // -------------------------------------------------------
 // Definitions of Triangle class methods
 // -------------------------------------------------------
-Triangle::Triangle()
+template <typename T> 
+Triangle<T>::Triangle()
 {
-	p1 = make_float3(0.f, 0.f, 0.f);
-	p2 = make_float3(0.f, 0.f, 0.f);
-	p3 = make_float3(0.f, 0.f, 0.f);
+	p1 = make_vec3<T>(T(0), T(0), T(0));
+	p2 = make_vec3<T>(T(0), T(0), T(0));
+	p3 = make_vec3<T>(T(0), T(0), T(0));
 }
 
-Triangle::Triangle(const Transform<float> *o2w, const Transform<float> *w2o)
-	: Shape<float>(o2w, w2o)
+template <typename T> 
+Triangle<T>::Triangle(const Transform<T> *o2w, const Transform<T> *w2o)
+	: Shape<T>(o2w, w2o)
 {
-	p1 = make_float3(0.f, 0.f, 0.f);
-	p2 = make_float3(0.f, 0.f, 0.f);
-	p3 = make_float3(0.f, 0.f, 0.f);
+	p1 = make_vec3<T>(T(0), T(0), T(0));
+	p2 = make_vec3<T>(T(0), T(0), T(0));
+	p3 = make_vec3<T>(T(0), T(0), T(0));
 }
 
-Triangle::Triangle(const Transform<float> *o2w, const Transform<float> *w2o,
-				   float3 a, float3 b, float3 c)
-	: Shape<float>(o2w, w2o)
+template <typename T> 
+Triangle<T>::Triangle(const Transform<T> *o2w, const Transform<T> *w2o,
+				      vec3<T> a, vec3<T> b, vec3<T> c): Shape<T>(o2w, w2o)
 {
 	p1 = a; p2 =b; p3 = c;
 }
 
-/* __device__ bool Triangle::Intersect2(const Ray &ray, float *tHit, */
-/* 									DifferentialGeometry *dg) const */
-/* { */
-/* 	float3 p0t, p1t, p2t; */
-/* 	p0t = p1 - ray.o; p1t = p2 - ray.o; p2t = p3 - ray.o; */
-	
-/* 	int kz = MaxDim( make_float3(abs(ray.d.x),abs(ray.d.y),abs(ray.d.z)) ); */
-/* 	int kx = kz + 1; */
-/* 	if(kx == 3) kx = 0; */
-/* 	int ky = kx+1; */
-/* 	if(ky == 3) ky = 0; */
-/* 	float3 d = Permute(ray.d, kx, ky, kz); */
-/* 	p0t = Permute(p0t, kx, ky, kz); */
-/* 	p1t = Permute(p1t, kx, ky, kz); */
-/* 	p2t = Permute(p2t, kx, ky, kz); */
-
-/* 	float Sx=-d.x/d.z; float Sy=-d.y/d.z; float Sz=1.F/d.z; */
-/* 	p0t.x += Sx*p0t.z; p0t.y += Sy*p0t.z; */
-/* 	p1t.x += Sx*p1t.z; p1t.y += Sy*p1t.z; */
-/* 	p2t.x += Sx*p2t.z; p2t.y += Sy*p2t.z; */
-
-/* 	float e0 = p1t.x * p2t.y - p1t.y * p2t.x; */
-/* 	float e1 = p2t.x * p0t.y - p2t.y * p0t.x; */
-/* 	float e2 = p0t.x * p1t.y - p0t.y * p1t.x; */
-
-/* 	if ( e0 == 0.F || e1 == 0.F || e2 == 0.F ) */
-/* 	{ */
-/* 		double p2txp1ty = (double)p2t.x * (double)p1t.y; */
-/* 		double p2typ1tx = (double)p2t.y * (double)p1t.x; */
-/* 		e0 = (float)(p2typ1tx - p2txp1ty); */
-/* 		double p0txp2ty = (double)p0t.x * (double)p2t.y; */
-/* 		double p0typ2tx = (double)p0t.y * (double)p2t.x; */
-/* 		e1 = (float)(p0typ2tx - p0txp2ty); */
-/* 		double p1txp0ty = (double)p1t.x * (double)p0t.y; */
-/* 		double p1typ0tx = (double)p1t.y * (double)p0t.x; */
-/* 		e2 = (float)(p1typ0tx - p1txp0ty); */
-/* 	} */
-
-/* 	if((e0<0 || e1<0 || e2<0) && (e0>0 || e1>0 || e2>0)) */
-/* 		return false; */
-/* 	float det = e0 + e1 + e2; */
-/* 	if(det == 0) return false; */
-
-/* 	p0t *= Sz; p1t *= Sz; p2t *= Sz; */
-/* 	float tScaled = e0*p0t.z + e1*p1t.z + e2*p2t.z; */
-/* 	if(det < 0 && (tScaled >= 0 || tScaled < ray.maxt*det)) */
-/* 		return false; */
-/* 	else if (det > 0 && (tScaled <= 0 || tScaled > ray.maxt*det)) */
-/* 		return false; */
-
-/* 	float invDet = 1/det; */
-/* 	float b0 = e0*invDet; float b1 = e1*invDet; float b2 = e2*invDet; */
-/* 	float t = tScaled*invDet; */
-
-/* 	if (t < ray.mint || t > ray.maxt) */
-/*         return false; */
-
-/* 	float maxZt = max( abs(p0t.z), max( abs(p1t.z), abs(p2t.z) )  ); */
-/* 	float eps = machine_eps_flt() * 0.5; */
-/* 	float deltaZ = Gamma_eps(3, eps) * maxZt; */
-
-/* 	float maxXt = max( abs(p0t.x), max( abs(p1t.x), abs(p2t.x) )  ); */
-/* 	float maxYt = max( abs(p0t.y), max( abs(p1t.y), abs(p2t.y) )  ); */
-/* 	float deltaX = Gamma_eps(5, eps) * (maxXt + maxZt); */
-/* 	float deltaY = Gamma_eps(5, eps) * (maxYt + maxZt); */
-
-/* 	float deltaE = 2*(Gamma_eps(2, eps)*maxXt*maxYt + */
-/* 					  deltaY*maxXt + deltaX*maxYt); */
-/* 	float maxE = max( abs(e0), max( abs(e1), abs(e2) )  ); */
-/* 	float deltaT = 3*(Gamma_eps(3, eps)*maxE*maxZt + deltaE*maxZt + */
-/* 					  deltaZ*maxE)*abs(invDet); */
-/* 	if(t <= deltaT) return false; */
-
-/* 	float3 dpdu, dpdv; */
-/* 	float2 uv[3]; */
-/* 	uv[0] = make_float2(0,0); */
-/* 	uv[1] = make_float2(1,0); */
-/* 	uv[2] = make_float2(1,1); */
-	
-/* 	float2 duv02 = uv[0]-uv[2], duv12 = uv[1]-uv[2]; */
-/* 	float3 dp02 = p1-p3, dp12=p2-p3; */
-/* 	float determinant = duv02.x*duv12.y - duv02.y*duv12.x; */
-/* 	bool degenerateUV = abs(determinant) < 1e-8; */
-/* 	if(!degenerateUV) */
-/* 	{ */
-/* 		float invdet = 1/ determinant; */
-/* 		dpdu = (duv12.y*dp02 - duv02.y*dp12)*invdet; */
-/* 		dpdv = (-duv12.x*dp02 - duv02.x*dp12)*invdet; */
-/* 	} */
-/* 	float3 croD = cross(dpdu, dpdv); */
-/* 	if(degenerateUV || (croD.x*croD.x + croD.y*croD.y + croD.z*croD.z) == 0) */
-/* 	{ */
-/* 		float3 ng = cross(p3-p1, p2-p1); */
-/* 		if ((ng.x*ng.x + ng.y*ng.y + ng.z*ng.z) == 0) */
-/* 			return false; // the intersection is bogus */
-/* 		coordinateSystem(normalize(ng), &dpdu, &dpdv); */
-/* 	} */
-
-/* 	float3 phit = b0*p1+b1*p2+b2*p3; */
-
-/* 	*dg = DifferentialGeometry(phit, dpdu, dpdv, */
-/* 							   0.F, 0.F, this); */
-/*     // mise a jour de _tHit_ */
-/*     *tHit = t; */
-	
-/* 	return true; */
-/* } */
-
-__device__ bool Triangle::Intersect2(const Ray<float> &ray, float *tHit,
-									DifferentialGeometry<float> *dg) const
+template <typename T> 
+bool Triangle<T>::Intersect_v2(const Ray<T> &ray, T *tHit,
+						       DifferentialGeometry<T> *dg) const
 {
-	double3 p0t, p1t, p2t;
-	double3 P0, P1, P2;
+	U3 e1 = p2 - p1;
+	U3 e2 = p3 - p1;
+	U3 s1 = cross(ray.d, e2);
+    T divisor = dot(s1, e1);
 
-	P0 = make_double3(p1.x, p1.y, p1.z);
-	P1 = make_double3(p2.x, p2.y, p2.z);
-	P2 = make_double3(p3.x, p3.y, p3.z);
-
-	double3 p_o, p_d;
-	p_o = make_double3(ray.o.x, ray.o.y, ray.o.z);
-	p_d = make_double3(ray.d.x, ray.d.y, ray.d.z);
-
-	p0t = P0 - p_o; p1t = P1 - p_o; p2t = P2 - p_o;
-	
-	int kz = MaxDim( make_double3(abs(p_d.x),abs(p_d.y),abs(p_d.z)) );
-	int kx = kz + 1;
-	if(kx == 3) kx = 0;
-	int ky = kx+1;
-	if(ky == 3) ky = 0;
-	double3 d = Permute(p_d, kx, ky, kz);
-	p0t = Permute(p0t, kx, ky, kz);
-	p1t = Permute(p1t, kx, ky, kz);
-	p2t = Permute(p2t, kx, ky, kz);
-
-	double Sx=-d.x/d.z; double Sy=-d.y/d.z; double Sz=1.F/d.z;
-	p0t.x += Sx*p0t.z; p0t.y += Sy*p0t.z;
-	p1t.x += Sx*p1t.z; p1t.y += Sy*p1t.z;
-	p2t.x += Sx*p2t.z; p2t.y += Sy*p2t.z;
-
-	double e0 = p1t.x * p2t.y - p1t.y * p2t.x;
-	double e1 = p2t.x * p0t.y - p2t.y * p0t.x;
-	double e2 = p0t.x * p1t.y - p0t.y * p1t.x;
-
-	if((e0<0 || e1<0 || e2<0) && (e0>0 || e1>0 || e2>0))
-		return false;
-	double det = e0 + e1 + e2;
-	if(det == 0) return false;
-
-	p0t *= Sz; p1t *= Sz; p2t *= Sz;
-	double tScaled = e0*p0t.z + e1*p1t.z + e2*p2t.z;
-	if(det < 0 && (tScaled >= 0 || tScaled < ray.maxt*det))
-		return false;
-	else if (det > 0 && (tScaled <= 0 || tScaled > ray.maxt*det))
-		return false;
-
-	double invDet = 1/det;
-	double b0 = e0*invDet; double b1 = e1*invDet; double b2 = e2*invDet;
-	double t = tScaled*invDet;
-
-	if (t < ray.mint || t > ray.maxt)
-        return false;
-
-	double maxZt = max( abs(p0t.z), max( abs(p1t.z), abs(p2t.z) )  );
-	//double eps = machine_eps_dbl() * 0.5;
-	double eps = get_const_machine_eps(double{}) * double(0.5);
-	double deltaZ = Gamma_eps(3, eps) * maxZt;
-
-	double maxXt = max( abs(p0t.x), max( abs(p1t.x), abs(p2t.x) )  );
-	double maxYt = max( abs(p0t.y), max( abs(p1t.y), abs(p2t.y) )  );
-	double deltaX = Gamma_eps(5, eps) * (maxXt + maxZt);
-	double deltaY = Gamma_eps(5, eps) * (maxYt + maxZt);
-
-	double deltaE = 2*(Gamma_eps(2, eps)*maxXt*maxYt +
-					  deltaY*maxXt + deltaX*maxYt);
-	double maxE = max( abs(e0), max( abs(e1), abs(e2) )  );
-	double deltaT = 3*(Gamma_eps(3, eps)*maxE*maxZt + deltaE*maxZt +
-					  deltaZ*maxE)*abs(invDet);
-	if(t <= deltaT) return false;
-
-	double3 dpdu, dpdv;
-	double2 uv[3];
-	uv[0] = make_double2(0,0);
-	uv[1] = make_double2(1,0);
-	uv[2] = make_double2(1,1);
-	
-	double2 duv02 = uv[0]-uv[2], duv12 = uv[1]-uv[2];
-	double3 dp02 = P0-P2, dp12=P1-P2;
-	double determinant = duv02.x*duv12.y - duv02.y*duv12.x;
-	bool degenerateUV = abs(determinant) < 1e-8;
-	if(!degenerateUV)
-	{
-		double invdet = 1/ determinant;
-		dpdu = (duv12.y*dp02 - duv02.y*dp12)*invdet;
-		dpdv = (-duv12.x*dp02 - duv02.x*dp12)*invdet;
-	}
-	double3 croD = cross(dpdu, dpdv);
-	if(degenerateUV || (croD.x*croD.x + croD.y*croD.y + croD.z*croD.z) == 0)
-	{
-		double3 ng = cross(P2-P0, P1-P0);
-		if ((ng.x*ng.x + ng.y*ng.y + ng.z*ng.z) == 0)
-			return false; // the intersection is bogus
-		coordinateSystem(normalize(ng), &dpdu, &dpdv);
-	}
-
-	double3 phit = b0*P0+b1*P1+b2*P2;
-
-	// Create the DifferentialGeometry object
-	*dg = DifferentialGeometry<float>(make_float3(phit.x, phit.y, phit.z),
-							          make_float3(dpdu.x, dpdu.y, dpdu.z),
-							          make_float3(dpdv.x, dpdv.y, dpdv.z),
-							          0.F, 0.F, this);
-    // Update tHit
-    *tHit = float(t);
-	
-	return true;
-}
-
-__device__ bool Triangle::IntersectP2(const Ray<float> &ray) const
-{
-    double3 p0t, p1t, p2t;
-	double3 P0, P1, P2;
-
-	P0 = make_double3(p1.x, p1.y, p1.z);
-	P1 = make_double3(p2.x, p2.y, p2.z);
-	P2 = make_double3(p3.x, p3.y, p3.z);
-
-	double3 p_o, p_d;
-	p_o = make_double3(ray.o.x, ray.o.y, ray.o.z);
-	p_d = make_double3(ray.d.x, ray.d.y, ray.d.z);
-
-	p0t = P0 - p_o; p1t = P1 - p_o; p2t = P2 - p_o;
-	
-	int kz = MaxDim( make_double3(abs(p_d.x),abs(p_d.y),abs(p_d.z)) );
-	int kx = kz + 1;
-	if(kx == 3) kx = 0;
-	int ky = kx+1;
-	if(ky == 3) ky = 0;
-	double3 d = Permute(p_d, kx, ky, kz);
-	p0t = Permute(p0t, kx, ky, kz);
-	p1t = Permute(p1t, kx, ky, kz);
-	p2t = Permute(p2t, kx, ky, kz);
-
-	double Sx=-d.x/d.z; double Sy=-d.y/d.z; double Sz=1.F/d.z;
-	p0t.x += Sx*p0t.z; p0t.y += Sy*p0t.z;
-	p1t.x += Sx*p1t.z; p1t.y += Sy*p1t.z;
-	p2t.x += Sx*p2t.z; p2t.y += Sy*p2t.z;
-
-	double e0 = p1t.x * p2t.y - p1t.y * p2t.x;
-	double e1 = p2t.x * p0t.y - p2t.y * p0t.x;
-	double e2 = p0t.x * p1t.y - p0t.y * p1t.x;
-
-	if((e0<0 || e1<0 || e2<0) && (e0>0 || e1>0 || e2>0))
-		return false;
-	double det = e0 + e1 + e2;
-	if(det == 0) return false;
-
-	p0t *= Sz; p1t *= Sz; p2t *= Sz;
-	double tScaled = e0*p0t.z + e1*p1t.z + e2*p2t.z;
-	if(det < 0 && (tScaled >= 0 || tScaled < ray.maxt*det))
-		return false;
-	else if (det > 0 && (tScaled <= 0 || tScaled > ray.maxt*det))
-		return false;
-
-	double invDet = 1/det;
-	double t = tScaled*invDet;
-
-	if (t < ray.mint || t > ray.maxt)
-        return false;
-
-	double maxZt = max( abs(p0t.z), max( abs(p1t.z), abs(p2t.z) )  );
-	double eps = get_const_machine_eps(float{}) * 0.5f;
-	double deltaZ = Gamma_eps(3, eps) * maxZt;
-
-	double maxXt = max( abs(p0t.x), max( abs(p1t.x), abs(p2t.x) )  );
-	double maxYt = max( abs(p0t.y), max( abs(p1t.y), abs(p2t.y) )  );
-	double deltaX = Gamma_eps(5, eps) * (maxXt + maxZt);
-	double deltaY = Gamma_eps(5, eps) * (maxYt + maxZt);
-
-	double deltaE = 2*(Gamma_eps(2, eps)*maxXt*maxYt +
-					  deltaY*maxXt + deltaX*maxYt);
-	double maxE = max( abs(e0), max( abs(e1), abs(e2) )  );
-	double deltaT = 3*(Gamma_eps(3, eps)*maxE*maxZt + deltaE*maxZt +
-					  deltaZ*maxE)*abs(invDet);
-	if(t <= deltaT) return false;
-
-	return true;
-}
-
-#ifndef DOUBLE
-// Möller-Trumbore method for ray/triangle intersection
-bool Triangle::Intersect(const Ray<float> &ray, float *tHit,
-						 DifferentialGeometry<float> *dg) const
-{
-	float3 e1 = p2 - p1;
-	float3 e2 = p3 - p1;
-	float3 s1 = cross(ray.d, e2);
-    float divisor = dot(s1, e1);
-
-	if (divisor == 0.)
+	if (divisor == T(0))
 	{return false;}
-	float invDivisor = 1.F/divisor;
+	T invDivisor = T(1) / divisor;
 
 	// Compute the first baricentric coordinate component
-	float3 s = ray.o - p1;
-	float b1 = dot(s, s1) * invDivisor;
+	U3 s = ray.o - p1;
+	T b1 = dot(s, s1) * invDivisor;
 
-    if (b1 < -0.0000001 || b1 > 1.0000001)
-	{return false;}
+    if (b1 < T(0) || b1 > T(1)) {return false;}
 
     // Compute the second component
-    float3 s2 = cross(s, e1);
-    float b2 = dot(ray.d, s2) * invDivisor;
-	if (b2 < 0. || b1 + b2 > 1.)
-        return false;
+    U3 s2 = cross(s, e1);
+    T b2 = dot(ray.d, s2) * invDivisor;
+	if (b2 < T(0) || b1 + b2 > T(1)) {return false;}
 
     // Compute t
-    float t = dot(e2, s2) * invDivisor;
+    T t = dot(e2, s2) * invDivisor;
 	
-    if (t < ray.mint || t > ray.maxt)
-        return false;
+    if (t < ray.mint || t > ray.maxt) {return false;}
 
     // Compute partial derivatives
-	float3 dpdu, dpdv;
-	float3c uvsC0, uvsC1; // row1 and row2
-	uvsC0 = make_float3c(0., 1., 1.);
-	uvsC1 = make_float3c(0., 0., 1.);
+	U3 dpdu, dpdv;
+	U3c uvsC0, uvsC1; // row1 and row2
+	uvsC0 = make_vec3c<T>(T(0), T(1), T(1));
+	uvsC1 = make_vec3c<T>(T(0), T(0), T(1));
 		
-    // Compute Delta
-	float du1 = uvsC0[0] - uvsC0[2];
-	float du2 = uvsC0[1] - uvsC0[2];
-    float dv1 = uvsC1[0] - uvsC1[2];
-    float dv2 = uvsC1[1] - uvsC1[2];
-    float3 dp1 = p1 - p3, dp2 = p2 - p3;
-    float determinant = du1 * dv2 - dv1 * du2;
+    // Compute Deltas
+	T du1 = uvsC0[0] - uvsC0[2];
+	T du2 = uvsC0[1] - uvsC0[2];
+    T dv1 = uvsC1[0] - uvsC1[2];
+    T dv2 = uvsC1[1] - uvsC1[2];
+    U3 dp1 = p1 - p3, dp2 = p2 - p3;
+    T determinant = du1 * dv2 - dv1 * du2;
 
-    if (determinant == 0.)
+    if (determinant == T(0))
 	{
         // Manage the case where the determinant is equal to 0
         coordinateSystem(normalize(cross(e2, e1)), &dpdu, &dpdv);
     }
     else
 	{
-        double invdet = 1. / determinant;
+        T invdet = T(1) / determinant;
         dpdu = (dv2 * dp1 - dv1 * dp2) * invdet;
         dpdv = (-du2 * dp1 + du1 * dp2) * invdet;
     }
 
     // Parametric coordinate interpolations of triangle $(u,v)$
-    float b0 = 1 - b1 - b2;
-    float tu = b0*uvsC0[0] + b1*uvsC0[1] + b2*uvsC0[2];
-    float tv = b0*uvsC1[0] + b1*uvsC1[1] + b2*uvsC1[2];
+    T b0 = T(1) - b1 - b2;
+    T tu = b0*uvsC0[0] + b1*uvsC0[1] + b2*uvsC0[2];
+    T tv = b0*uvsC1[0] + b1*uvsC1[1] + b2*uvsC1[2];
 
     // Create the DifferentialGeometry object
-    *dg = DifferentialGeometry<float>(ray(t), dpdu, dpdv, tu, tv, this);
+    *dg = DifferentialGeometry<T>(ray(t), dpdu, dpdv, tu, tv, this);
 
     // Update tHit
 	*tHit = t;
 	return true;
 }
 
-// Möller-Trumbore method for ray/triangle intersection
-bool Triangle::IntersectP(const Ray<float> &ray) const
+template <typename T> 
+__device__ bool Triangle<T>::Intersect_v3(const Ray<T> &ray, T *tHit,
+									      DifferentialGeometry<T> *dg) const
 {
-	float3 e1 = p2 - p1;
-	float3 e2 = p3 - p1;
-	float3 s1 = cross(ray.d, e2);
-    float divisor = dot(s1, e1);
+	U3 p0t, p1t, p2t;
+	U3 P0, P1, P2;
 
-	if (divisor == 0.)
-	{return false;}
-	float invDivisor = 1.F/divisor;
+	P0 = make_vec3<T>(T(p1.x), T(p1.y), T(p1.z));
+	P1 = make_vec3<T>(T(p2.x), T(p2.y), T(p2.z));
+	P2 = make_vec3<T>(T(p3.x), T(p3.y), T(p3.z));
 
-	// Compute the first baricentric coordinate component
-	float3 s = ray.o - p1;
-	float b1 = dot(s, s1) * invDivisor;
+	U3 p_o, p_d;
+	p_o = make_vec3<T>(T(ray.o.x), T(ray.o.y), T(ray.o.z));
+	p_d = make_vec3<T>(T(ray.d.x), T(ray.d.y), T(ray.d.z));
 
-    if (b1 < -0.0000001 || b1 > 1.0000001)
-	{return false;}
-
-    // Compute the second component
-    float3 s2 = cross(s, e1);
-    float b2 = dot(ray.d, s2) * invDivisor;
-	if (b2 < 0. || b1 + b2 > 1.)
-        return false;
-
-    // Compute t
-    float t = dot(e2, s2) * invDivisor;
+	p0t = P0 - p_o; p1t = P1 - p_o; p2t = P2 - p_o;
 	
-    if (t < ray.mint || t > ray.maxt)
-        return false;
+	int kz = MaxDim( make_vec3<T>(abs(p_d.x),abs(p_d.y),abs(p_d.z)) );
+	int kx = kz + 1;
+	if(kx == 3) kx = 0;
+	int ky = kx+1;
+	if(ky == 3) ky = 0;
+	U3 d = Permute(p_d, kx, ky, kz);
+	p0t = Permute(p0t, kx, ky, kz);
+	p1t = Permute(p1t, kx, ky, kz);
+	p2t = Permute(p2t, kx, ky, kz);
 
-	return true;
-}
-//*******************************************************************************
-#else
+	T Sx=-d.x/d.z; T Sy=-d.y/d.z; T Sz=T(1)/d.z;
+	p0t.x += Sx*p0t.z; p0t.y += Sy*p0t.z;
+	p1t.x += Sx*p1t.z; p1t.y += Sy*p1t.z;
+	p2t.x += Sx*p2t.z; p2t.y += Sy*p2t.z;
 
-// Möller-Trumbore method for ray/triangle intersection
-bool Triangle::Intersect(const Ray<float> &ray, float *tHit,
-						 DifferentialGeometry<float> *dg) const
-{
-	double3 p1d = make_double3(double(p1.x), double(p1.y), double(p1.z));
-	double3 p2d = make_double3(double(p2.x), double(p2.y), double(p2.z));
-	double3 p3d = make_double3(double(p3.x), double(p3.y), double(p3.z));
-	double3 dray_o = make_double3(double(ray.o.x), double(ray.o.y), double(ray.o.z));
-	double3 dray_d = make_double3(double(ray.d.x), double(ray.d.y), double(ray.d.z));
-	
-	double3 e1 = p2d - p1d;
-	double3 e2 = p3d - p1d;
-	double3 s1 = cross(dray_d, e2);
-    double divisor = dot(s1, e1);
+	T e0 = p1t.x * p2t.y - p1t.y * p2t.x;
+	T e1 = p2t.x * p0t.y - p2t.y * p0t.x;
+	T e2 = p0t.x * p1t.y - p0t.y * p1t.x;
 
-	if (divisor == 0.)
-	{return false;}
-	double invDivisor = 1./divisor;
-
-	// Compute the first baricentric coordinate component
-	double3 s = dray_o - p1d;
-	double b1 = dot(s, s1) * invDivisor;
-
-    if (b1 < -0.0000000001 || b1 > 1.0000000001)
-	{return false;}
-
-    // Compute the second component
-    double3 s2 = cross(s, e1);
-    double b2 = dot(dray_d, s2) * invDivisor;
-	if (b2 < 0. || b1 + b2 > 1.)
-        return false;
-
-    // Compute t
-    double t = dot(e2, s2) * invDivisor;
-	
-    if (t < ray.mint || t > ray.maxt)
-        return false;
-
-    // Compute partial derivatives
-	double3 dpdu, dpdv;
-	double3c uvsC0, uvsC1; // row1 and row2
-	uvsC0 = make_double3c(0., 1., 1.);
-	uvsC1 = make_double3c(0., 0., 1.);
-		
-    // Compute Delta
-	double du1 = uvsC0[0] - uvsC0[2];
-	double du2 = uvsC0[1] - uvsC0[2];
-    double dv1 = uvsC1[0] - uvsC1[2];
-    double dv2 = uvsC1[1] - uvsC1[2];
-    double3 dp1 = p1d - p3d, dp2 = p2d - p3d;
-    double determinant = du1 * dv2 - dv1 * du2;
-
-    if (determinant == 0.)
+	if constexpr (std::is_same_v<T, float>)
 	{
-        // Manage the case where the determinant is equal to 0
-        coordinateSystem(normalize(cross(e2, e1)), &dpdu, &dpdv);
-    }
-    else
+		if (e0 == 0.0f || e1 == 0.0f || e2 == 0.0f)
+		{
+			double p2txp1ty = (double)p2t.x * (double)p1t.y;
+			double p2typ1tx = (double)p2t.y * (double)p1t.x;
+			e0 = (float)(p2typ1tx - p2txp1ty);
+			double p0txp2ty = (double)p0t.x * (double)p2t.y;
+			double p0typ2tx = (double)p0t.y * (double)p2t.x;
+			e1 = (float)(p0typ2tx - p0txp2ty);
+			double p1txp0ty = (double)p1t.x * (double)p0t.y;
+			double p1typ0tx = (double)p1t.y * (double)p0t.x;
+			e2 = (float)(p1typ0tx - p1txp0ty);
+		}
+	} 
+
+	if((e0<0 || e1<0 || e2<0) && (e0>0 || e1>0 || e2>0)) {return false;}
+	T det = e0 + e1 + e2;
+	if(det == 0) {return false;}
+
+	p0t *= Sz; p1t *= Sz; p2t *= Sz;
+	T tScaled = e0*p0t.z + e1*p1t.z + e2*p2t.z;
+	if(det < T(0) && (tScaled >= T(0) || tScaled < ray.maxt*det)) {return false;}
+	else if (det > T(0) && (tScaled <= T(0) || tScaled > ray.maxt*det))	{return false;}
+
+	// Compute barycentric coordinates and t value
+	T invDet = T(1) / det;
+	T b0 = e0*invDet; T b1 = e1*invDet; T b2 = e2*invDet;
+	T t = tScaled*invDet;
+
+	if (t < ray.mint || t > ray.maxt) {return false;}
+
+	T maxZt = max( abs(p0t.z), max( abs(p1t.z), abs(p2t.z) )  );
+	T eps = get_const_machine_eps(T{}) * T(0.5);
+	T deltaZ = Gamma_eps(3, eps) * maxZt;
+
+	T maxXt = max( abs(p0t.x), max( abs(p1t.x), abs(p2t.x) )  );
+	T maxYt = max( abs(p0t.y), max( abs(p1t.y), abs(p2t.y) )  );
+	T deltaX = Gamma_eps(5, eps) * (maxXt + maxZt);
+	T deltaY = Gamma_eps(5, eps) * (maxYt + maxZt);
+
+	T deltaE = 2*(Gamma_eps(2, eps)*maxXt*maxYt +
+				  deltaY*maxXt + deltaX*maxYt);
+	T maxE = max( abs(e0), max( abs(e1), abs(e2) )  );
+	T deltaT = 3*(Gamma_eps(3, eps)*maxE*maxZt + deltaE*maxZt +
+					  deltaZ*maxE)*abs(invDet);
+	if(t <= deltaT) {return false;}
+
+	U3 dpdu, dpdv;
+	U2 uv[3];
+	uv[0] = make_vec2<T>(0,0);
+	uv[1] = make_vec2<T>(1,0);
+	uv[2] = make_vec2<T>(1,1);
+	
+	U2 duv02 = uv[0]-uv[2], duv12 = uv[1]-uv[2];
+	U3 dp02 = P0-P2, dp12=P1-P2;
+	T determinant = duv02.x*duv12.y - duv02.y*duv12.x;
+	bool degenerateUV = abs(determinant) < T(1e-8);
+	if(!degenerateUV)
 	{
-        double invdet = 1. / determinant;
-        dpdu = (dv2 * dp1 - dv1 * dp2) * invdet;
-        dpdv = (-du2 * dp1 + du1 * dp2) * invdet;
-    }
+		T invdet = T(1) / determinant;
+		dpdu = (duv12.y*dp02 - duv02.y*dp12)*invdet;
+		dpdv = (-duv12.x*dp02 - duv02.x*dp12)*invdet;
+	}
+	U3 croD = cross(dpdu, dpdv);
+	if(degenerateUV || (croD.x*croD.x + croD.y*croD.y + croD.z*croD.z) == 0)
+	{
+		U3 ng = cross(P2-P0, P1-P0);
+		if ((ng.x*ng.x + ng.y*ng.y + ng.z*ng.z) == T(0))
+			return false; // the intersection is bogus
+		coordinateSystem(normalize(ng), &dpdu, &dpdv);
+	}
 
-    // Parametric coordinate interpolations of triangle $(u,v)$
-    double b0 = 1 - b1 - b2;
-    double tu = b0*uvsC0[0] + b1*uvsC0[1] + b2*uvsC0[2];
-    double tv = b0*uvsC1[0] + b1*uvsC1[1] + b2*uvsC1[2];
+	U3 phit = b0*P0+b1*P1+b2*P2;
 
-    // Create the DifferentialGeometry object
-	float3 dpduf = make_float3(float(dpdu.x), float(dpdu.y), float(dpdu.z));
-	float3 dpdvf = make_float3(float(dpdv.x), float(dpdv.y), float(dpdv.z));
-	*dg = DifferentialGeometry<float>(ray(float(t)), dpduf, dpdvf, float(tu), float(tv), this);
-
+	// Create the DifferentialGeometry object
+	*dg = DifferentialGeometry<T>(make_vec3<T>(phit.x, phit.y, phit.z),
+							      make_vec3<T>(dpdu.x, dpdu.y, dpdu.z),
+							      make_vec3<T>(dpdv.x, dpdv.y, dpdv.z),
+							      T(0), T(0), this);
     // Update tHit
-	*tHit = float(t);
+    *tHit = float(t);
+	
 	return true;
 }
 
-// Möller-Trumbore method for ray/triangle intersection
-bool Triangle::IntersectP(const Ray<float> &ray) const
+template <typename T> 
+bool Triangle<T>::Intersect(const Ray<T> &ray, T *tHit,
+						    DifferentialGeometry<T> *dg, int version) const
 {
-	double3 p1d = make_double3(double(p1.x), double(p1.y), double(p1.z));
-	double3 p2d = make_double3(double(p2.x), double(p2.y), double(p2.z));
-	double3 p3d = make_double3(double(p3.x), double(p3.y), double(p3.z));
-	double3 dray_o = make_double3(double(ray.o.x), double(ray.o.y), double(ray.o.z));
-	double3 dray_d = make_double3(double(ray.d.x), double(ray.d.y), double(ray.d.z));
-	
-	double3 e1 = p2d - p1d;
-	double3 e2 = p3d - p1d;
-	double3 s1 = cross(dray_d, e2);
-    double divisor = dot(s1, e1);
+	if (version == 2) { return Intersect_v2(ray, tHit, dg); }
+	else { return Intersect_v3(ray, tHit, dg); }
+}
 
-	if (divisor == 0.)
-	{return false;}
-	double invDivisor = 1./divisor;
+template <typename T> 
+bool Triangle<T>::IntersectP_v2(const Ray<T> &ray) const
+{
+	U3 e1 = p2 - p1;
+	U3 e2 = p3 - p1;
+	U3 s1 = cross(ray.d, e2);
+    T divisor = dot(s1, e1);
+
+	if (divisor == 0.) {return false;}
+	T invDivisor = T(1) / divisor;
 
 	// Compute the first baricentric coordinate component
-	double3 s = dray_o - p1d;
-	double b1 = dot(s, s1) * invDivisor;
+	U3 s = ray.o - p1;
+	T b1 = dot(s, s1) * invDivisor;
 
-    if (b1 < -0.0000000001 || b1 > 1.0000000001)
+    if (b1 < T(0) || b1 > T(1))
 	{return false;}
 
     // Compute the second component
-    double3 s2 = cross(s, e1);
-    double b2 = dot(dray_d, s2) * invDivisor;
-	if (b2 < 0. || b1 + b2 > 1.)
-        return false;
+    U3 s2 = cross(s, e1);
+    T b2 = dot(ray.d, s2) * invDivisor;
+	if (b2 < T(0) || b1 + b2 > T(1)) {return false;}
 
     // Compute t
-    double t = dot(e2, s2) * invDivisor;
+    T t = dot(e2, s2) * invDivisor;
 	
-    if (t < ray.mint || t > ray.maxt)
-        return false;
+    if (t < ray.mint || t > ray.maxt) {return false;}
 
 	return true;
 }
-#endif
 
-__device__ BBox<float> Triangle::ObjectBoundTriangle() const
+template <typename T> 
+__device__ bool Triangle<T>::IntersectP_v3(const Ray<T> &ray) const
 {
-	BBox<float> objectBounds((*WorldToObject)(Pointf(p1)), (*WorldToObject)(Pointf(p2)));
-	return objectBounds.Union(objectBounds, (*WorldToObject)(Pointf(p3)));
+    U3 p0t, p1t, p2t;
+	U3 P0, P1, P2;
+
+	P0 = make_vec3<T>(p1.x, p1.y, p1.z);
+	P1 = make_vec3<T>(p2.x, p2.y, p2.z);
+	P2 = make_vec3<T>(p3.x, p3.y, p3.z);
+
+	U3 p_o, p_d;
+	p_o = make_vec3<T>(ray.o.x, ray.o.y, ray.o.z);
+	p_d = make_vec3<T>(ray.d.x, ray.d.y, ray.d.z);
+
+	p0t = P0 - p_o; p1t = P1 - p_o; p2t = P2 - p_o;
+	
+	int kz = MaxDim( make_vec3<T>(abs(p_d.x),abs(p_d.y),abs(p_d.z)) );
+	int kx = kz + 1;
+	if(kx == 3) kx = 0;
+	int ky = kx+1;
+	if(ky == 3) ky = 0;
+	U3 d = Permute(p_d, kx, ky, kz);
+	p0t = Permute(p0t, kx, ky, kz);
+	p1t = Permute(p1t, kx, ky, kz);
+	p2t = Permute(p2t, kx, ky, kz);
+
+	T Sx=-d.x/d.z; T Sy=-d.y/d.z; T Sz=T(1)/d.z;
+	p0t.x += Sx*p0t.z; p0t.y += Sy*p0t.z;
+	p1t.x += Sx*p1t.z; p1t.y += Sy*p1t.z;
+	p2t.x += Sx*p2t.z; p2t.y += Sy*p2t.z;
+
+	T e0 = p1t.x * p2t.y - p1t.y * p2t.x;
+	T e1 = p2t.x * p0t.y - p2t.y * p0t.x;
+	T e2 = p0t.x * p1t.y - p0t.y * p1t.x;
+
+	if constexpr (std::is_same_v<T, float>)
+	{
+		if (e0 == 0.0f || e1 == 0.0f || e2 == 0.0f)
+		{
+			double p2txp1ty = (double)p2t.x * (double)p1t.y;
+			double p2typ1tx = (double)p2t.y * (double)p1t.x;
+			e0 = (float)(p2typ1tx - p2txp1ty);
+			double p0txp2ty = (double)p0t.x * (double)p2t.y;
+			double p0typ2tx = (double)p0t.y * (double)p2t.x;
+			e1 = (float)(p0typ2tx - p0txp2ty);
+			double p1txp0ty = (double)p1t.x * (double)p0t.y;
+			double p1typ0tx = (double)p1t.y * (double)p0t.x;
+			e2 = (float)(p1typ0tx - p1txp0ty);
+		}
+	}  
+
+	if((e0<0 || e1<0 || e2<0) && (e0>0 || e1>0 || e2>0)) {return false;}
+	T det = e0 + e1 + e2;
+	if(det == 0) {return false;}
+
+	p0t *= Sz; p1t *= Sz; p2t *= Sz;
+	T tScaled = e0*p0t.z + e1*p1t.z + e2*p2t.z;
+	if(det < T(0) && (tScaled >= T(0) || tScaled < ray.maxt*det)) {return false;}
+	else if (det > T(0) && (tScaled <= T(0) || tScaled > ray.maxt*det)) {return false;}
+
+	T invDet = T(1) / det;
+	T t = tScaled*invDet;
+
+	if (t < ray.mint || t > ray.maxt) {return false;}
+
+	T maxZt = max( abs(p0t.z), max( abs(p1t.z), abs(p2t.z) )  );
+	T eps = get_const_machine_eps(T{}) * T(0.5);
+	T deltaZ = Gamma_eps(3, eps) * maxZt;
+
+	T maxXt = max( abs(p0t.x), max( abs(p1t.x), abs(p2t.x) )  );
+	T maxYt = max( abs(p0t.y), max( abs(p1t.y), abs(p2t.y) )  );
+	T deltaX = Gamma_eps(5, eps) * (maxXt + maxZt);
+	T deltaY = Gamma_eps(5, eps) * (maxYt + maxZt);
+
+	T deltaE = 2*(Gamma_eps(2, eps)*maxXt*maxYt +
+					  deltaY*maxXt + deltaX*maxYt);
+	T maxE = max( abs(e0), max( abs(e1), abs(e2) )  );
+	T deltaT = 3*(Gamma_eps(3, eps)*maxE*maxZt + deltaE*maxZt +
+					  deltaZ*maxE)*abs(invDet);
+	if(t <= deltaT) {return false;}
+
+	U3 dpdu, dpdv;
+	U2 uv[3];
+	uv[0] = make_vec2<T>(0,0);
+	uv[1] = make_vec2<T>(1,0);
+	uv[2] = make_vec2<T>(1,1);
+	
+	U2 duv02 = uv[0]-uv[2], duv12 = uv[1]-uv[2];
+	U3 dp02 = P0-P2, dp12=P1-P2;
+	T determinant = duv02.x*duv12.y - duv02.y*duv12.x;
+	bool degenerateUV = abs(determinant) < T(1e-8);
+	if(!degenerateUV)
+	{
+		T invdet = T(1) / determinant;
+		dpdu = (duv12.y*dp02 - duv02.y*dp12)*invdet;
+		dpdv = (-duv12.x*dp02 - duv02.x*dp12)*invdet;
+	}
+	U3 croD = cross(dpdu, dpdv);
+	if(degenerateUV || (croD.x*croD.x + croD.y*croD.y + croD.z*croD.z) == 0)
+	{
+		U3 ng = cross(P2-P0, P1-P0);
+		if ((ng.x*ng.x + ng.y*ng.y + ng.z*ng.z) == T(0))
+			return false; // the intersection is bogus
+		coordinateSystem(normalize(ng), &dpdu, &dpdv);
+	}
+
+	return true;
 }
 
-__device__ BBox<float> Triangle::WorldBoundTriangle() const
+template <typename T> 
+bool Triangle<T>::IntersectP(const Ray<T> &ray, int version) const
+{
+	if (version == 2) { return IntersectP_v2(ray); }
+	else { return IntersectP_v3(ray); }
+}
+
+template <typename T> 
+__device__ BBox<T> Triangle<T>::ObjectBoundTriangle() const
+{
+	BBox<T> objectBounds((*this->WorldToObject)(Point<T>(p1)), (*this->WorldToObject)(Point<T>(p2)));
+	return objectBounds.Union(objectBounds, (*this->WorldToObject)(Point<T>(p3)));
+}
+
+template <typename T> 
+__device__ BBox<T> Triangle<T>::WorldBoundTriangle() const
 {
 	BBox<float> worldBounds(p1, p2);
     return worldBounds.Union(worldBounds, p3);
 }
 
-float Triangle::Area() const
+template <typename T> 
+T Triangle<T>::Area() const
 {
-    return 0.5f * length(cross(p2-p1, p3-p1));
+    return T(0.5) * length(cross(p2-p1, p3-p1));
 }
 
 
@@ -861,18 +705,14 @@ public:
 
     __host__ __device__ bool Intersect(const Ray<float> &ray, float* tHit,
 									   DifferentialGeometry<float> *dg) const;
-	__device__ bool Intersect2(const Ray<float> &ray, float* tHit,
-							   DifferentialGeometry<float> *dg) const;
 	__host__ __device__ bool IntersectP(const Ray<float> &ray) const;
-	__device__ bool IntersectP2(const Ray<float> &ray) const;
     __host__ __device__ float Area() const;
-	float3 *p;
+	float3 *p; // list of all the triangle mesh points
 private:
 	// Private parameters
 	int ntris, nverts;
 	int *vertexIndex;
-	//float3 *p;
-	Triangle *refTri;
+	Triangle<float> *refTri;
 };
 
 // -------------------------------------------------------
@@ -889,9 +729,8 @@ TriangleMesh::TriangleMesh(const Transform<float> *o2w, const Transform<float> *
 
 	// Apply the transformations to the triangle mesh	
 	for (int i = 0; i < nverts; ++i)
-		p[i] = (*ObjectToWorld)(Pointf(p[i]));
+		p[i] = (*this->ObjectToWorld)(p[i], 1); // 1 for point transformation
 }
-
 
 bool TriangleMesh::Intersect(const Ray<float> &ray, float* tHit,
 							 DifferentialGeometry<float> *dg) const
@@ -912,41 +751,8 @@ bool TriangleMesh::Intersect(const Ray<float> &ray, float* tHit,
 		float3 PA = p[vertexIndex[3*i]];
 		float3 PB = p[vertexIndex[3*i + 1]];
 		float3 PC = p[vertexIndex[3*i + 2]];
-		Triangle rt(&nothing, &nothing, PA, PB, PC);
+		Triangle<float> rt(&nothing, &nothing, PA, PB, PC);
 		if (rt.Intersect(ray, &triHit, &dgTri))
-		{
-			dgbool = true;
-			if (*tHit > triHit)
-			{
-				*dg = dgTri;
-				*tHit = triHit;
-			}
-		}
-	}
-	return dgbool;
-}
-
-__device__ bool TriangleMesh::Intersect2(const Ray<float> &ray, float* tHit,
-							 DifferentialGeometry<float> *dg) const
-{
-    bool dgbool = false;
-	Transform<float> nothing;
-    #if __CUDA_ARCH__ >= 200
-	*tHit = CUDART_INF_F;
-    #elif !defined(__CUDA_ARCH__)
-	*tHit = std::numeric_limits<float>::max();
-    #endif
-
-	for (int i = 0; i < ntris; ++i)
-	{
-		float triHit;
-		DifferentialGeometry<float> dgTri;
-		/* // Create the triangle i as function of *vi et *P	 */
-		float3 PA = p[vertexIndex[3*i]];
-		float3 PB = p[vertexIndex[3*i + 1]];
-		float3 PC = p[vertexIndex[3*i + 2]];
-		Triangle rt(&nothing, &nothing, PA, PB, PC);
-		if (rt.Intersect2(ray, &triHit, &dgTri))
 		{
 			dgbool = true;
 			if (*tHit > triHit)
@@ -975,27 +781,11 @@ bool TriangleMesh::IntersectP(const Ray<float> &ray) const
 	return false;
 }
 
-__device__ bool TriangleMesh::IntersectP2(const Ray<float> &ray) const
-{
-	Transform<float> nothing;
-	for (int i = 0; i < ntris; ++i)
-	{
-		/* // Create the triangle i as function of *vi et *P	 */
-		float3 PA = p[vertexIndex[3*i]];
-		float3 PB = p[vertexIndex[3*i + 1]];
-		float3 PC = p[vertexIndex[3*i + 2]];
-		Triangle rt(&nothing, &nothing, PA, PB, PC);
-		if (rt.IntersectP2(ray))
-			return true;
-	}
-	return false;
-}
-
 __device__ BBox<float> TriangleMesh::ObjectBoundTriangleMesh() const
 {
 	BBox<float> objectBounds;
     for (int i = 0; i < nverts; i++) {
-		float3 pW = (*WorldToObject)(Pointf(p[i]));
+		float3 pW = (*this->WorldToObject)(p[i], 1);
 		objectBounds = objectBounds.Union(objectBounds, pW);}
     return objectBounds;
 }
