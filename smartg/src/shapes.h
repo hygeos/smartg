@@ -62,14 +62,17 @@ struct DifferentialGeometry // must be defined before shape child classes
 		u = v = T(0); shape = NULL;
 	}
 
-    __host__ __device__ DifferentialGeometry(const U3 &P, const U3 &DPDU,
-						                     const U3 &DPDV, T uu, T vv, const Shape<T> *sh)
-		: p(P), dpdu(DPDU), dpdv(DPDV)
+	template <typename C3_1, typename C3_2, typename C3_3, typename U_1, typename U_2, typename U_3>
+    __host__ __device__ DifferentialGeometry(const C3_1 &P, const C3_2 &DPDU,
+						                     const C3_3 &DPDV, U_1 uu, U_2 vv, const Shape<U_3> *sh)
 	{
+		p = make_vec3<T>(T(P.x), T(P.y), T(P.z));
+		dpdu = make_vec3<T>(T(DPDU.x), T(DPDU.y), T(DPDU.z));
+		dpdv = make_vec3<T>(T(DPDV.x), T(DPDV.y), T(DPDV.z));
 		nn = normalize(cross(dpdu, dpdv));
-		u = uu;
-		v = vv;
-		shape = sh;
+		u = T(uu);
+		v = T(vv);
+		shape = reinterpret_cast<const Shape<T>*>(sh);
 	}
 
 	U3 p;             // intersection point position
