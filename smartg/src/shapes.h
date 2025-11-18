@@ -97,14 +97,17 @@ class Sphere : public Shape<T>
 public:
 	// Public methods
 	__host__ __device__ Sphere();
-	__host__ __device__ Sphere(const Transform<T> *o2w, const Transform<T> *w2o,
-							   T rad, T zmin, T zmax, T phiMax);
+	template <typename U_1, typename U_2, typename U_3, typename U_4,
+	          typename U_5, typename U_6>
+	__host__ __device__ Sphere(const Transform<U_1> *o2w, const Transform<U_2> *w2o,
+							   U_3 rad, U_4 zmin, U_5 zmax, U_6 phiMax);
 
     __device__ BBox<T> ObjectBoundSphere() const;
     __device__ BBox<T> WorldBoundSphere() const;
 
-    __host__ __device__ bool Intersect(const Ray<T> &ray, T* tHit,
-									   DifferentialGeometry<T> *Dg) const;
+	template <typename U_1, typename U_2, typename U_3>
+    __host__ __device__ bool Intersect(const Ray<U_1> &ray, U_2* tHit,
+									   DifferentialGeometry<U_3> *Dg) const;
     __host__ __device__ T Area() const;
 
 private:
@@ -130,16 +133,18 @@ Sphere<T>::Sphere() : Shape<T>()
 }
 
 template <typename T> 
-Sphere<T>::Sphere(const Transform<T> *o2w, const Transform<T> *w2o,
-			      T rad, T z0, T z1, T pm)
+template <typename U_1, typename U_2, typename U_3, typename U_4,
+	      typename U_5, typename U_6>
+Sphere<T>::Sphere(const Transform<U_1> *o2w, const Transform<U_2> *w2o,
+			      U_3 rad, U_4 z0, U_5 z1, U_6 pm)
 	: Shape<T>(o2w, w2o)
 {
-    radius = rad;
-    zmin = clamp(T(min(z0, z1)), T(-radius), T(radius));
-    zmax = clamp(T(max(z0, z1)), T(-radius), T(radius));
+    radius = T(rad);
+    zmin = clamp(T(min(T(z0), T(z1))), T(-radius), T(radius));
+    zmax = clamp(T(max(T(z0), T(z1))), T(-radius), T(radius));
     thetaMin = get_func_acos(clamp(zmin/radius, T(-1), T(1)));
     thetaMax = get_func_acos(clamp(zmax/radius, T(-1), T(1)));
-    phiMax = get_func_radians(clamp(pm, T(0), T(360)));
+    phiMax = get_func_radians(clamp(T(pm), T(0), T(360)));
 }
 
 template <typename T> 
@@ -173,13 +178,14 @@ __device__ BBox<T> Sphere<T>::ObjectBoundSphere() const
 	}
 }
 
-template <typename T> 
-bool Sphere<T>::Intersect(const Ray<T> &r, T *tHit, DifferentialGeometry<T> *dg) const
+template <typename T>
+template <typename U_1, typename U_2, typename U_3>
+bool Sphere<T>::Intersect(const Ray<U_1> &r, U_2 *tHit, DifferentialGeometry<U_3> *dg) const
 {
     T phi;
     vec3<T> phit;
 
-	Ray<T> ray;
+	Ray<T> ray(r);
     // Passing the "ray" into the sphere space
 	(*this->WorldToObject)(r, &ray);
 
@@ -243,10 +249,10 @@ bool Sphere<T>::Intersect(const Ray<T> &r, T *tHit, DifferentialGeometry<T> *dg)
 
     // Create the DifferentialGeometry object
     const Transform<T> &o2w = *this->ObjectToWorld;
-    *dg = DifferentialGeometry<T>(o2w(Point<T>(phit)),
-								  o2w(Normal<T>(dpdu)),
-								  o2w(Normal<T>(dpdv)),
-								  u, v, this);
+    *dg = DifferentialGeometry<U_3>(o2w(Point<U_3>(phit)),
+								    o2w(Normal<U_3>(dpdu)),
+								    o2w(Normal<U_3>(dpdv)),
+								    u, v, this);
 
     // Update tHit
     *tHit = thit;
