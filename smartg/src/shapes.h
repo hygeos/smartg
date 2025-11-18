@@ -32,7 +32,8 @@ public:
 		shapeId = 0; // for the moment not used at all
 	}
 
-	__host__ __device__ Shape(const Transform<T> *o2w, const Transform<T> *w2o)
+	template <typename U_1, typename U_2>
+	__host__ __device__ Shape(const Transform<U_1> *o2w, const Transform<U_2> *w2o)
 		: ObjectToWorld(o2w), WorldToObject(w2o) { shapeId = 0; }
 
     // Private parameters
