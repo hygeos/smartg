@@ -8469,7 +8469,7 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct I
 									  make_float3(ObjT[IND+j].p3x, ObjT[IND+j].p3y, ObjT[IND+j].p3z)};
 					
 					// Create the triangleMesh (2 = number of triangle ; 4 = number of vertices)
-					TriangleMesh myObject(&Tj, &invTj, 2, 4, vi, Pvec);
+					TriangleMesh<float> myObject(&Tj, &invTj, 2, 4, vi, Pvec);
 				
 					BBox<float> myBBox = myObject.WorldBoundTriangleMesh();
 					if (myBBox.IntersectP(R1))
@@ -8579,7 +8579,7 @@ __device__ bool geoTestMir(float3 o, float3 dir, struct IObjets *ObjT, struct GO
 									  make_float3(ObjT[IND+j].p3x, ObjT[IND+j].p3y, ObjT[IND+j].p3z)};
 					
 					// Create the triangleMesh (2 = number of triangle ; 4 = number of vertices)
-					TriangleMesh myObject(&Tj, &invTj, 2, 4, vi, Pvec);
+					TriangleMesh<float> myObject(&Tj, &invTj, 2, 4, vi, Pvec);
 				
 					BBox<float> myBBox = myObject.WorldBoundTriangleMesh();
 					if (myBBox.IntersectP(R1)) myBj = myObject.IntersectP(R1);
@@ -8643,7 +8643,7 @@ __device__ bool geoTestRec(float3 o, float3 dir, struct IObjets *ObjT)
 							  make_float3(ObjT[i].p3x, ObjT[i].p3y, ObjT[i].p3z)};
 			
 			// Create the triangleMesh (2 = number of triangle ; 4 = number of vertices)
-			TriangleMesh myObject(&Ti, &invTi, 2, 4, vi, Pvec);
+			TriangleMesh<float> myObject(&Ti, &invTi, 2, 4, vi, Pvec);
 			
 			BBox<float> myBBox = myObject.WorldBoundTriangleMesh();
 			if (myBBox.IntersectP(R1))
