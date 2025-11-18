@@ -12,9 +12,9 @@
 
 
 /**********************************************************
-*	> Classe qui permet le déplacement d'un objet.
-*     - Translation en x, y et z
-*     - Rotation par rapport à x, y et z
+*	> The class bellow enables the movement of objects
+*     - Translations in x, y et z
+*     - Rotations in à x, y et z
 ***********************************************************/
 
 template <typename T = float> //T -> float / double
@@ -38,36 +38,40 @@ public:
 	__host__ __device__ Transform(const M4x4 &mat);
 	template <typename M4x4_1, typename M4x4_2>
 	__host__ __device__ Transform(const M4x4_1 &mat, const M4x4_2 &matInv);
-
-    __host__ __device__ bool operator<(const Transform<T> &t2) const;
+	template <typename U>
+    __host__ __device__ bool operator<(const Transform<U> &t2) const;
     __host__ __device__ bool IsIdentity() const;
-
-	inline __host__ __device__ U3 operator()(const U3 &c, const int type) const;
-	inline __host__ __device__ void operator()(const U3 &c, U3 *ctrans, const int type) const;
-
+	template <typename C3>
+	inline __host__ __device__ U3 operator()(const C3 &c, const int type) const;
+	template <typename C3_1, typename C3_2>
+	inline __host__ __device__ void operator()(const C3_1 &c, C3_2 *ctrans, const int type) const;
 	#ifdef OBJ3D
-	inline __host__ __device__ U3 operator()(const Point<T> &c) const;
-	inline __host__ __device__ U3 operator()(const Vector<T> &c) const;
-	inline __host__ __device__ U3 operator()(const Normal<T> &c) const;
-	inline __host__ __device__ void operator()(const Point<T> &c, U3 *ctrans) const;
-	inline __host__ __device__ void operator()(const Vector<T> &c, U3 *ctrans) const;
-	inline __host__ __device__ void operator()(const Normal<T> &c, U3 *ctrans) const;
-    inline __host__ __device__ Ray<T> operator()(const Ray<T> &r) const;
-    inline __host__ __device__ void operator()(const Ray<T> &r, Ray<T> *rt) const;
-    __host__ __device__ BBox<T> operator()(const BBox<T> &b) const;
+	template <typename U> inline __host__ __device__ U3 operator()(const Point<U> &c) const;
+	template <typename U> inline __host__ __device__ U3 operator()(const Vector<U> &c) const;
+	template <typename U> inline __host__ __device__ U3 operator()(const Normal<U> &c) const;
+	template <typename U, typename C3>
+	inline __host__ __device__ void operator()(const Point<U> &c, C3 *ctrans) const;
+	template <typename U, typename C3>
+	inline __host__ __device__ void operator()(const Vector<U> &c, C3 *ctrans) const;
+	template <typename U, typename C3>
+	inline __host__ __device__ void operator()(const Normal<U> &c, C3 *ctrans) const;
+    template <typename U> inline __host__ __device__ Ray<T> operator()(const Ray<U> &r) const;
+	template <typename U_1, typename U_2>
+    inline __host__ __device__ void operator()(const Ray<U_1> &r, Ray<U_2> *rt) const;
+    template <typename U> __host__ __device__ BBox<T> operator()(const BBox<U> &b) const;
 	#endif
-    __host__ __device__ Transform<T> operator*(const Transform<T> &t2) const;
-
+    template <typename U> __host__ __device__ Transform<T> operator*(const Transform<U> &t2) const;
     __host__ __device__ const U4x4 &GetMatrix() const { return m; }
     __host__ __device__ const U4x4 &GetInverseMatrix() const { return mInv; }
-    __host__ __device__ Transform<T> Inverse(const Transform<T> &t);
-    __host__ __device__	Transform<T> Translate(const U3 &delta); // delta doit être un vecteur
-	__host__ __device__ Transform<T> Scale(T x, T y, T z); // Echelle (facteur) en x, y et z
-	__host__ __device__ Transform<T> RotateX(T angle);             // rot par rapport à X  
-	__host__ __device__ Transform<T> RotateY(T angle);             // rot par rapport à Y  
-	__host__ __device__ Transform<T> RotateZ(T angle);             // rot par rapport à Z
-	__host__ __device__ Transform<T> Rotate(T angle, const U3 &axis);
-	__host__ __device__ Transform<T> vec2transform(U3 vi);
+    template <typename U> __host__ __device__ Transform<T> Inverse(const Transform<U> &t);
+    template <typename C3> __host__ __device__	Transform<T> Translate(const C3 &delta); // delta must be a vector
+	template <typename U_1, typename U_2, typename U_3>
+	__host__ __device__ Transform<T> Scale(U_1 x, U_2 y, U_3 z);                         // scale (factor) in x, y et z
+	template <typename U> __host__ __device__ Transform<T> RotateX(U angle);             // rot in X  
+	template <typename U> __host__ __device__ Transform<T> RotateY(U angle);             // rot in Y  
+	template <typename U> __host__ __device__ Transform<T> RotateZ(U angle);             // rot in Z
+	template <typename U, typename C3> __host__ __device__ Transform<T> Rotate(U angle, const C3 &axis);
+	template <typename C3> __host__ __device__ Transform<T> vec2transform(C3 vi);
 
 	private:
 	// Private parameters
@@ -139,14 +143,15 @@ Transform<T>::Transform(const Transform<U> &t2)
 }
 
 template <typename T>
-bool Transform<T>::operator<(const Transform<T> &t2) const
+template <typename U>
+bool Transform<T>::operator<(const Transform<U> &t2) const
 {
 	for (int i = 0; i < 4; ++i)
 	{
 		for (int j = 0; j < 4; ++j)
 		{
-			if (m[i][j] < t2.m[i][j]) return true;
-			if (m[i][j] > t2.m[i][j]) return false;
+			if (m[i][j] < T(t2.m[i][j])) return true;
+			if (m[i][j] > T(t2.m[i][j])) return false;
 		}
 	}
 	return false;
@@ -166,9 +171,10 @@ bool Transform<T>::IsIdentity() const
 }
 
 template <typename T>
-inline vec3<T> Transform<T>::operator()(const vec3<T> &c, const int type) const
+template <typename C3>
+inline vec3<T> Transform<T>::operator()(const C3 &c, const int type) const
 {
-	T x = c.x, y = c.y, z = c.z;
+	T x = T(c.x), y = T(c.y), z = T(c.z);
 	
 	/* 1 = Point, 2 = Vector and 3 = Normal */
 	if (type == 1)
@@ -204,9 +210,10 @@ inline vec3<T> Transform<T>::operator()(const vec3<T> &c, const int type) const
 }
 
 template <typename T>
-inline void Transform<T>::operator()(const vec3<T> &c, vec3<T> *ctrans, const int type) const
+template <typename C3_1, typename C3_2>
+inline void Transform<T>::operator()(const C3_1 &c, C3_2 *ctrans, const int type) const
 {
-	T x = c.x, y = c.y, z = c.z;
+	T x = T(c.x), y = T(c.y), z = T(c.z);
 
 	/* 1 = Point, 2 = Vector and 3 = Normal */
 	if (type == 1)
@@ -238,9 +245,10 @@ inline void Transform<T>::operator()(const vec3<T> &c, vec3<T> *ctrans, const in
 
 #ifdef OBJ3D
 template <typename T>
-inline vec3<T> Transform<T>::operator()(const Point<T> &c) const
+template <typename U>
+inline vec3<T> Transform<T>::operator()(const Point<U> &c) const
 {
-	T x = c.x, y = c.y, z = c.z;
+	T x = T(c.x), y = T(c.y), z = T(c.z);
 	
 	T xp = m[0][0]*x + m[0][1]*y + m[0][2]*z + m[0][3];
 	T yp = m[1][0]*x + m[1][1]*y + m[1][2]*z + m[1][3];
@@ -252,9 +260,10 @@ inline vec3<T> Transform<T>::operator()(const Point<T> &c) const
 }
 
 template <typename T>
-inline vec3<T> Transform<T>::operator()(const Vector<T> &c) const
+template <typename U>
+inline vec3<T> Transform<T>::operator()(const Vector<U> &c) const
 {
-	T x = c.x, y = c.y, z = c.z;
+	T x = T(c.x), y = T(c.y), z = T(c.z);
 	
 	T xv = m[0][0]*x + m[0][1]*y + m[0][2]*z;
 	T yv = m[1][0]*x + m[1][1]*y + m[1][2]*z;
@@ -264,9 +273,10 @@ inline vec3<T> Transform<T>::operator()(const Vector<T> &c) const
 }
 
 template <typename T>
-inline vec3<T> Transform<T>::operator()(const Normal<T> &c) const
+template <typename U>
+inline vec3<T> Transform<T>::operator()(const Normal<U> &c) const
 {
-	T x = c.x, y = c.y, z = c.z;
+	T x = T(c.x), y = T(c.y), z = T(c.z);
 
 	T xn = mInv[0][0]*x + mInv[1][0]*y + mInv[2][0]*z;
 	T yn = mInv[0][1]*x + mInv[1][1]*y + mInv[2][1]*z;
@@ -276,9 +286,10 @@ inline vec3<T> Transform<T>::operator()(const Normal<T> &c) const
 }
 
 template <typename T>
-inline void Transform<T>::operator()(const Point<T> &c, vec3<T> *ctrans) const
+template <typename U, typename C3>
+inline void Transform<T>::operator()(const Point<U> &c, C3 *ctrans) const
 {
-	T x = c.x, y = c.y, z = c.z;
+	T x = T(c.x), y = T(c.y), z = T(c.z);
 
 	ctrans->x = m[0][0]*x + m[0][1]*y + m[0][2]*z + m[0][3];
 	ctrans->y = m[1][0]*x + m[1][1]*y + m[1][2]*z + m[1][3];
@@ -289,9 +300,10 @@ inline void Transform<T>::operator()(const Point<T> &c, vec3<T> *ctrans) const
 }
 
 template <typename T>
-inline void Transform<T>::operator()(const Vector<T> &c, vec3<T> *ctrans) const
+template <typename U, typename C3>
+inline void Transform<T>::operator()(const Vector<U> &c, C3 *ctrans) const
 {
-	T x = c.x, y = c.y, z = c.z;
+	T x = T(c.x), y = T(c.y), z = T(c.z);
 
 	ctrans->x = m[0][0]*x + m[0][1]*y + m[0][2]*z;
 	ctrans->y = m[1][0]*x + m[1][1]*y + m[1][2]*z;
@@ -299,9 +311,10 @@ inline void Transform<T>::operator()(const Vector<T> &c, vec3<T> *ctrans) const
 }
 
 template <typename T>
-inline void Transform<T>::operator()(const Normal<T> &c, vec3<T> *ctrans) const
+template <typename U, typename C3>
+inline void Transform<T>::operator()(const Normal<U> &c, C3 *ctrans) const
 {
-	T x = c.x, y = c.y, z = c.z;
+	T x = T(c.x), y = T(c.y), z = T(c.z);
 
 	ctrans->x = mInv[0][0]*x + mInv[1][0]*y + mInv[2][0]*z;
 	ctrans->y = mInv[0][1]*x + mInv[1][1]*y + mInv[2][1]*z;
@@ -309,16 +322,18 @@ inline void Transform<T>::operator()(const Normal<T> &c, vec3<T> *ctrans) const
 }
 
 template <typename T>
-inline Ray<T> Transform<T>::operator()(const Ray<T> &r) const
+template <typename U>
+inline Ray<T> Transform<T>::operator()(const Ray<U> &r) const
 {
-    Ray<T> ret = r;
+    Ray<T> ret(r);
 	(*this)(Point<T>(ret.o), &ret.o);
     (*this)(Vector<T>(ret.d), &ret.d);
     return ret;
 }
 
 template <typename T>
-inline void Transform<T>::operator()(const Ray<T> &r, Ray<T> *rt) const
+template <typename U_1, typename U_2>
+inline void Transform<T>::operator()(const Ray<U_1> &r, Ray<U_2> *rt) const
 {
 	(*this)(Point<T>(r.o), &rt->o);
     (*this)(Vector<T>(r.d), &rt->d);
@@ -331,29 +346,30 @@ inline void Transform<T>::operator()(const Ray<T> &r, Ray<T> *rt) const
 }
 
 template <typename T>
-BBox<T> Transform<T>::operator()(const BBox<T> &b) const
+template <typename U>
+BBox<T> Transform<T>::operator()(const BBox<U> &b) const
 {
     const Transform<T> &M = *this;
 
-    // creation du point P et du vecteur V=(v1, v2, v3)
+    // Create point P and vectors V1, V2 and V3
 	vec3<T> P, V1, V2, V3;
 
-	// Application des transformations
+	// Apply transformations
 	P = M(Point<T>(b.pMin));
-	V1 = M(Vector<T>(b.pMax.x-b.pMin.x, T(0), T(0)));
-	V2 = M(Vector<T>(T(0), b.pMax.y-b.pMin.y, T(0)));
-	V3 = M(Vector<T>(T(0), T(0), b.pMax.z-b.pMin.z));
+	V1 = M(Vector<T>(T(b.pMax.x)-T(b.pMin.x), T(0), T(0)));
+	V2 = M(Vector<T>(T(0), T(b.pMax.y)-T(b.pMin.y), T(0)));
+	V3 = M(Vector<T>(T(0), T(0), T(b.pMax.z)-T(b.pMin.z)));
 
-	// Creation de la box avec le 1er point P
+	// Create the box with the first point P
 	BBox<T> ret(P);
 
-    // élargir la box en prenant une face du cube
-	// Face avec 4 points : P, P+V.x, P+V.y, P+(V.x, V.y)
+    // Enlarge the box by taking one cube face
+	// Face with 4 points : P, P+V.x, P+V.y, P+(V.x, V.y)
 	ret = ret.Union(ret, P+V1);
 	ret = ret.Union(ret, P+V2);
 	ret = ret.Union(ret, P+V1+V2);
 
-	// un point en z est suffisant (symétrie)
+	// A point in z is enough (symetry)
 	ret = ret.Union(ret, P+V3);
 	/* ret = ret.Union(ret, P+V1+V3); */
 	/* ret = ret.Union(ret, P+V2+V3); */
@@ -363,58 +379,64 @@ BBox<T> Transform<T>::operator()(const BBox<T> &b) const
 #endif
 
 template <typename T>
-Transform<T> Transform<T>::operator*(const Transform<T> &t2) const
+template <typename U>
+Transform<T> Transform<T>::operator*(const Transform<U> &t2) const
 {
-    mat4x4<T> myM = mul(m, t2.m);
-    mat4x4<T> myMinv = mul(t2.mInv, mInv);
+	Transform<T> t2_(t2);
+    mat4x4<T> myM = mul(m, t2_.m);
+    mat4x4<T> myMinv = mul(t2_.mInv, mInv);
     return Transform<T>(myM, myMinv);
 }
 
 template <typename T>
-Transform<T> Transform<T>::Inverse(const Transform<T> &t)
+template <typename U>
+Transform<T> Transform<T>::Inverse(const Transform<U> &t)
 {
 	return Transform<T>(t.mInv, t.m);
 }
 
 template <typename T>
-Transform<T> Transform<T>::Translate(const vec3<T> &delta)
+template <typename C3>
+Transform<T> Transform<T>::Translate(const C3 &delta)
 {
 	mat4x4<T> myM = make_mat4x4<T>(
-		T(1), T(0), T(0), delta.x,
-		T(0), T(1), T(0), delta.y,
-		T(0), T(0), T(1), delta.z,
-		T(0), T(0), T(0),     T(1)
+		T(1), T(0), T(0), T(delta.x),
+		T(0), T(1), T(0), T(delta.y),
+		T(0), T(0), T(1), T(delta.z),
+		T(0), T(0), T(0),       T(1)
 		);
     mat4x4<T> myMinv = make_mat4x4<T>(
-		T(1), T(0), T(0), -delta.x,
-		T(0), T(1), T(0), -delta.y,
-		T(0), T(0), T(1), -delta.z,
-		T(0), T(0), T(0),      T(1)
+		T(1), T(0), T(0), T(-delta.x),
+		T(0), T(1), T(0), T(-delta.y),
+		T(0), T(0), T(1), T(-delta.z),
+		T(0), T(0), T(0),        T(1)
 		);
     return Transform<T>(myM, myMinv);
 }
 
 template <typename T>
-Transform<T> Transform<T>::Scale(T x, T y, T z) {
+template <typename U_1, typename U_2, typename U_3>
+Transform<T> Transform<T>::Scale(U_1 x, U_2 y, U_3 z) {
     mat4x4<T> myM = make_mat4x4<T>(
-		x,    T(0), T(0), T(0),
-		T(0), y,    T(0), T(0),
-		T(0), T(0), z,    T(0),
+		T(x), T(0), T(0), T(0),
+		T(0), T(y), T(0), T(0),
+		T(0), T(0), T(z), T(0),
 		T(0), T(0), T(0), T(1)
 		);
     mat4x4<T> myMinv = make_mat4x4<T>(
-		T(1)/x, T(0),   T(0),   T(0),
-		T(0),   T(1)/y, T(0),   T(0),
-		T(0),   T(0),   T(1)/z, T(0),
-		T(0),   T(0),   T(0),   T(1))
+		T(1)/T(x), T(0),      T(0),      T(0),
+		T(0),      T(1)/T(y), T(0),      T(0),
+		T(0),      T(0),      T(1)/T(z), T(0),
+		T(0),      T(0),      T(0),      T(1))
 		;
     return Transform<T>(myM, myMinv);
 }
 
 template <typename T>
-Transform<T> Transform<T>::RotateX(T angle) {
-	T sin_t = get_func_sin(get_func_radians(angle));
-	T cos_t = get_func_cos(get_func_radians(angle));
+template <typename U>
+Transform<T> Transform<T>::RotateX(U angle) {
+	T sin_t = get_func_sin(get_func_radians(T(angle)));
+	T cos_t = get_func_cos(get_func_radians(T(angle)));
     mat4x4<T> myM = make_mat4x4<T>(
 		T(1),  T(0),   T(0), T(0),
 		T(0), cos_t, -sin_t, T(0),
@@ -425,9 +447,10 @@ Transform<T> Transform<T>::RotateX(T angle) {
 }
 
 template <typename T>
-Transform<T> Transform<T>::RotateY(T angle) {
-	T sin_t = get_func_sin(get_func_radians(angle));
-	T cos_t = get_func_cos(get_func_radians(angle));
+template <typename U>
+Transform<T> Transform<T>::RotateY(U angle) {
+	T sin_t = get_func_sin(get_func_radians(T(angle)));
+	T cos_t = get_func_cos(get_func_radians(T(angle)));
     mat4x4<T> myM = make_mat4x4<T>(
 		cos_t , T(0), sin_t, T(0),
 		T(0),   T(1),  T(0), T(0),
@@ -438,9 +461,10 @@ Transform<T> Transform<T>::RotateY(T angle) {
 }
 
 template <typename T>
-Transform<T> Transform<T>::RotateZ(T angle) {
-	T sin_t = get_func_sin(get_func_radians(angle));
-	T cos_t = get_func_cos(get_func_radians(angle));
+template <typename U>
+Transform<T> Transform<T>::RotateZ(U angle) {
+	T sin_t = get_func_sin(get_func_radians(T(angle)));
+	T cos_t = get_func_cos(get_func_radians(T(angle)));
     mat4x4<T> m = make_mat4x4<T>(
 		cos_t, -sin_t, T(0), T(0),
 		sin_t,  cos_t, T(0), T(0),
@@ -450,11 +474,13 @@ Transform<T> Transform<T>::RotateZ(T angle) {
 }
 
 template <typename T>
-Transform<T> Transform<T>::Rotate(T angle, const vec3<T> &axis) {
+template <typename U, typename C3>
+Transform<T> Transform<T>::Rotate(U angle, const C3 &axis) {
 	
-	vec3<T> a = normalize(axis);
-	T s = get_func_sin(get_func_radians(angle));
-	T c = get_func_cos(get_func_radians(angle));
+	vec3<T> a = make_vec3<T>(T(axis.x), T(axis.y), T(axis.z));
+	a = normalize(a);
+	T s = get_func_sin(get_func_radians(T(angle)));
+	T c = get_func_cos(get_func_radians(T(angle)));
 	mat4x4<T> m = make_diag_mat4x4<T>(T(1));
 	
 	m[0][0] = a.x * a.x + (T(1) - a.x * a.x) * c;
@@ -473,7 +499,8 @@ Transform<T> Transform<T>::Rotate(T angle, const vec3<T> &axis) {
 }
 
 template <typename T>
-Transform<T> Transform<T>::vec2transform(vec3<T> vi)
+template <typename C3>
+Transform<T> Transform<T>::vec2transform(C3 vi)
 {
 	// this function gives the needed transform to get the vector vi from
 	// an intial vector=(0,0,1)
