@@ -29,10 +29,16 @@ public:
 	
 	// Public methods
 	__host__ __device__ Transform();
-	__host__ __device__ Transform(const U4x4 &mat);
-	__host__ __device__ Transform(const U4x4 &mat, const U4x4 &matInv);
 	template <typename U>
 	__host__ __device__ Transform(const Transform<U> &t2);
+	template <typename M4x4,
+	          typename Enable = typename std::enable_if<
+			  !std::is_base_of<Transform<typename M4x4::value_type>, M4x4>::value
+			  >::type>
+	__host__ __device__ Transform(const M4x4 &mat);
+	template <typename M4x4_1, typename M4x4_2>
+	__host__ __device__ Transform(const M4x4_1 &mat, const M4x4_2 &matInv);
+
     __host__ __device__ bool operator<(const Transform<T> &t2) const;
     __host__ __device__ bool IsIdentity() const;
 
@@ -84,32 +90,34 @@ Transform<T>::Transform()
 }
 
 template <typename T>
-Transform<T>::Transform(const mat4x4<T> &mat)
+template <typename M4x4, typename Enable>
+Transform<T>::Transform(const M4x4 &mat)
 {
 	m = make_mat4x4<T>(
-		mat.r0.x, mat.r0.y, mat.r0.z, mat.r0.w,
-		mat.r1.x, mat.r1.y, mat.r1.z, mat.r1.w,
-		mat.r2.x, mat.r2.y, mat.r2.z, mat.r2.w,
-		mat.r3.x, mat.r3.y, mat.r3.z, mat.r3.w
-		);
+		   T(mat.r0.x), T(mat.r0.y), T(mat.r0.z), T(mat.r0.w),
+		   T(mat.r1.x), T(mat.r1.y), T(mat.r1.z), T(mat.r1.w),
+		   T(mat.r2.x), T(mat.r2.y), T(mat.r2.z), T(mat.r2.w),
+		   T(mat.r3.x), T(mat.r3.y), T(mat.r3.z), T(mat.r3.w)
+		   );
 	mInv = inverse(m);
 }
 
 template <typename T>
-Transform<T>::Transform(const mat4x4<T> &mat, const mat4x4<T> &matInv)
+template <typename M4x4_1, typename M4x4_2>
+Transform<T>::Transform(const M4x4_1 &mat, const M4x4_2 &matInv)
 {
 	m = make_mat4x4<T>(
-		mat.r0.x, mat.r0.y, mat.r0.z, mat.r0.w,
-		mat.r1.x, mat.r1.y, mat.r1.z, mat.r1.w,
-		mat.r2.x, mat.r2.y, mat.r2.z, mat.r2.w,
-		mat.r3.x, mat.r3.y, mat.r3.z, mat.r3.w
-		);
+			T(mat.r0.x), T(mat.r0.y), T(mat.r0.z), T(mat.r0.w),
+			T(mat.r1.x), T(mat.r1.y), T(mat.r1.z), T(mat.r1.w),
+			T(mat.r2.x), T(mat.r2.y), T(mat.r2.z), T(mat.r2.w),
+		    T(mat.r3.x), T(mat.r3.y), T(mat.r3.z), T(mat.r3.w)
+		    );
 	mInv = make_mat4x4<T>(
-		   matInv.r0.x, matInv.r0.y, matInv.r0.z, matInv.r0.w,
-		   matInv.r1.x, matInv.r1.y, matInv.r1.z, matInv.r1.w,
-		   matInv.r2.x, matInv.r2.y, matInv.r2.z, matInv.r2.w,
-		   matInv.r3.x, matInv.r3.y, matInv.r3.z, matInv.r3.w
-		   );
+		   	T(matInv.r0.x), T(matInv.r0.y), T(matInv.r0.z), T(matInv.r0.w),
+		   	T(matInv.r1.x), T(matInv.r1.y), T(matInv.r1.z), T(matInv.r1.w),
+		   	T(matInv.r2.x), T(matInv.r2.y), T(matInv.r2.z), T(matInv.r2.w),
+		   	T(matInv.r3.x), T(matInv.r3.y), T(matInv.r3.z), T(matInv.r3.w)
+		   	);
 }
 
 template <typename T>
