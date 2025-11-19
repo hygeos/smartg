@@ -302,9 +302,9 @@ public:
 	template <typename U_1, typename U_2, typename U_3>
 	__host__ __device__ bool Intersect(const Ray<U_1> &r, U_2* tHit,
 		                               DifferentialGeometry<U_3> *dg, int version = 3) const;								   									  
-	template <typename U > __host__ __device__ bool IntersectP_v2(const Ray<U> &r) const;
-	template <typename U > __host__ __device__ bool IntersectP_v3(const Ray<U> &r) const;
-	template <typename U >
+	template <typename U> __host__ __device__ bool IntersectP_v2(const Ray<U> &r) const;
+	template <typename U> __host__ __device__ bool IntersectP_v3(const Ray<U> &r) const;
+	template <typename U>
 	__host__ __device__ bool IntersectP(const Ray<U> &r, int version = 3) const;	
     __host__ __device__ T Area() const;
 
@@ -733,60 +733,62 @@ public:
 	using U3  = vec3<T>;
 
 	// Public methods
-	__host__ __device__ TriangleMesh(const Transform<T> *o2w, const Transform<T> *w2o,
-									 int nt, int nv, int *vi, U3 *P);
-
+	template <typename U_1, typename U_2, typename C3>
+	__host__ __device__ TriangleMesh(const Transform<U_1> *o2w, const Transform<U_2> *w2o,
+									 int nt, int nv, int *vi, C3 *P);
     __device__ BBox<T> ObjectBoundTriangleMesh() const;
     __device__ BBox<T> WorldBoundTriangleMesh() const;
-
-    __host__ __device__ bool Intersect(const Ray<T> &ray, T* tHit,
-									   DifferentialGeometry<T> *dg) const;
-	__host__ __device__ bool IntersectP(const Ray<T> &ray) const;
+	template <typename U_1, typename U_2, typename U_3>
+    __host__ __device__ bool Intersect(const Ray<U_1> &r, U_2* tHit,
+									   DifferentialGeometry<U_3> *dg) const;
+	template <typename U > __host__ __device__ bool IntersectP(const Ray<U> &r) const;
     __host__ __device__ T Area() const;
 	U3 *p; // list of all the triangle mesh points
 private:
 	// Private parameters
 	int ntris, nverts;
 	int *vertexIndex;
-	Triangle<T> *refTri;
+	/* Triangle<T> *refTri; */
 };
 
 // -------------------------------------------------------
 // Definitions of TriangleMesh class methods
 // -------------------------------------------------------
-template <typename T> 
-TriangleMesh<T>::TriangleMesh(const Transform<T> *o2w, const Transform<T> *w2o,
-						      int nt, int nv, int *vi, U3 *P)
+template <typename T>
+template <typename U_1, typename U_2, typename C3>
+TriangleMesh<T>::TriangleMesh(const Transform<U_1> *o2w, const Transform<U_2> *w2o,
+						      int nt, int nv, int *vi, C3 *P)
 	: Shape<T>(o2w, w2o)
 {
 	ntris = nt; nverts = nv;
 	vertexIndex = vi;
 	/* refTri = rt; */
-	p = P;
+	p = reinterpret_cast<U3*>(P);
 
 	// Apply the transformations to the triangle mesh	
 	for (int i = 0; i < nverts; ++i)
 		p[i] = (*this->ObjectToWorld)(p[i], 1); // 1 for point transformation
 }
 
-template <typename T> 
-bool TriangleMesh<T>::Intersect(const Ray<T> &ray, T* tHit,
-							    DifferentialGeometry<T> *dg) const
+template <typename T>
+template <typename U_1, typename U_2, typename U_3>
+bool TriangleMesh<T>::Intersect(const Ray<U_1> &r, U_2* tHit,
+							    DifferentialGeometry<U_3> *dg) const
 {
     bool dgbool = false;
 	Transform<T> nothing;
-	*tHit = get_const_inf(T{});
+	*tHit = get_const_inf(U_2{});
 
 	for (int i = 0; i < ntris; ++i)
 	{
-		T triHit;
-		DifferentialGeometry<T> dgTri;
+		U_2 triHit;
+		DifferentialGeometry<U_3> dgTri;
 		/* // Create the triangle i as function of *vi et *P	 */
 		U3 PA = p[vertexIndex[3*i]];
 		U3 PB = p[vertexIndex[3*i + 1]];
 		U3 PC = p[vertexIndex[3*i + 2]];
 		Triangle<T> rt(&nothing, &nothing, PA, PB, PC);
-		if (rt.Intersect(ray, &triHit, &dgTri))
+		if (rt.Intersect(r, &triHit, &dgTri))
 		{
 			dgbool = true;
 			if (*tHit > triHit)
@@ -800,7 +802,8 @@ bool TriangleMesh<T>::Intersect(const Ray<T> &ray, T* tHit,
 }
 
 template <typename T>
-bool TriangleMesh<T>::IntersectP(const Ray<T> &ray) const
+template <typename U>
+bool TriangleMesh<T>::IntersectP(const Ray<U> &r) const
 {
 	Transform<T> nothing;
 	for (int i = 0; i < ntris; ++i)
@@ -810,7 +813,7 @@ bool TriangleMesh<T>::IntersectP(const Ray<T> &ray) const
 		U3 PB = p[vertexIndex[3*i + 1]];
 		U3 PC = p[vertexIndex[3*i + 2]];
 		Triangle<T> rt(&nothing, &nothing, PA, PB, PC);
-		if (rt.IntersectP(ray))
+		if (rt.IntersectP(r))
 			return true;
 	}
 	return false;
@@ -821,7 +824,7 @@ __device__ BBox<T> TriangleMesh<T>::ObjectBoundTriangleMesh() const
 {
 	BBox<T> objectBounds;
     for (int i = 0; i < nverts; i++) {
-		float3 pW = (*this->WorldToObject)(p[i], 1);
+		U3 pW = (*this->WorldToObject)(p[i], 1);
 		objectBounds = objectBounds.Union(objectBounds, pW);}
     return objectBounds;
 }
