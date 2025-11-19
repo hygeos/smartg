@@ -337,12 +337,21 @@ inline void Transform<T>::operator()(const Ray<U_1> &r, Ray<U_2> *rt) const
 {
 	(*this)(Point<T>(r.o), &rt->o);
     (*this)(Vector<T>(r.d), &rt->d);
-    if (rt != &r)
+	if constexpr (std::is_same_v<U_1, U_2>)
 	{
-        rt->mint = r.mint;
-        rt->maxt = r.maxt;
-        rt->time = r.time;
-    }
+		if (rt != &r)
+		{
+			rt->mint = r.mint;
+			rt->maxt = r.maxt;
+			rt->time = r.time;
+		}
+	}
+	else
+	{
+		rt->mint = r.mint;
+		rt->maxt = r.maxt;
+		rt->time = r.time;
+	}
 }
 
 template <typename T>
