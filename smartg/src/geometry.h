@@ -347,10 +347,20 @@ public:
         pMax = make_vec3c<T>(-get_const_inf(T{}), -get_const_inf(T{}), -get_const_inf(T{}));
 	}
     
-    template <typename P3> // P3 for float3/double3
+    template <typename P3, // P3 for float3/double3
+              typename = typename std::enable_if<
+                         !std::is_base_of<BBox<T>, std::decay_t<P3>>::value
+                         >::type>
     __host__ __device__ BBox(const P3 &p)
 		: pMin(make_vec3c<T>(T(p.x),T(p.y),T(p.z))), pMax(make_vec3c<T>(T(p.x),T(p.y),T(p.z))) { }
-    
+
+    template <typename U>
+    __host__ __device__ BBox(const BBox<U> &b)
+    {
+        pMin = make_vec3c<T>(T(b.pMin.x), T(b.pMin.y), T(b.pMin.z));
+        pMax = make_vec3c<T>(T(b.pMax.x), T(b.pMax.y), T(b.pMax.z));
+    }
+
     template <typename P3_1, typename P3_2> // P3_1 and P3_2 for float3/double3  
     __host__ __device__ BBox(const P3_1 &p1, const P3_2 &p2)
 	{
