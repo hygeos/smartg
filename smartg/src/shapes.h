@@ -282,24 +282,30 @@ public:
 
 	// Public methods
 	__host__ __device__ Triangle();
-	__host__ __device__ Triangle(const Transform<T> *o2w, const Transform<T> *w2o);
-	__host__ __device__ Triangle(const Transform<T> *o2w, const Transform<T> *w2o,
-								 U3 a, U3 b, U3 c);
+	template <typename U_1, typename U_2>
+	__host__ __device__ Triangle(const Transform<U_1> *o2w, const Transform<U_2> *w2o);
+	template <typename U_1, typename U_2, typename C3_1, typename C3_2, typename C3_3>
+	__host__ __device__ Triangle(const Transform<U_1> *o2w, const Transform<U_2> *w2o,
+								 C3_1 a, C3_2 b, C3_3 c);
 
     __device__ BBox<T> ObjectBoundTriangle() const;
     __device__ BBox<T> WorldBoundTriangle() const;
 
 	// v2 -> use pbrtv2 method ; v3 -> pbrtv3
 	// Möller-Trumbore for ray/triangle intersection
-    __host__ __device__ bool Intersect_v2(const Ray<T> &ray, T* tHit,
-		DifferentialGeometry<T> *dg) const;
-	__host__ __device__ bool Intersect_v3(const Ray<T> &ray, T* tHit,
-		DifferentialGeometry<T> *dg) const;								   
-	__host__ __device__ bool IntersectP_v2(const Ray<T> &ray) const;
-	__host__ __device__ bool IntersectP_v3(const Ray<T> &ray) const;
-	__host__ __device__ bool Intersect(const Ray<T> &ray, T* tHit,
-		DifferentialGeometry<T> *dg, int version = 3) const;
-	__host__ __device__ bool IntersectP(const Ray<T> &ray, int version = 3) const;	
+	template <typename U_1, typename U_2, typename U_3>
+    __host__ __device__ bool Intersect_v2(const Ray<U_1> &r, U_2* tHit,
+		                                  DifferentialGeometry<U_3> *dg) const;
+	template <typename U_1, typename U_2, typename U_3>
+	__host__ __device__ bool Intersect_v3(const Ray<U_1> &r, U_2* tHit,
+		                                  DifferentialGeometry<U_3> *dg) const;
+	template <typename U_1, typename U_2, typename U_3>
+	__host__ __device__ bool Intersect(const Ray<U_1> &r, U_2* tHit,
+		                               DifferentialGeometry<U_3> *dg, int version = 3) const;								   									  
+	template <typename U > __host__ __device__ bool IntersectP_v2(const Ray<U> &r) const;
+	template <typename U > __host__ __device__ bool IntersectP_v3(const Ray<U> &r) const;
+	template <typename U >
+	__host__ __device__ bool IntersectP(const Ray<U> &r, int version = 3) const;	
     __host__ __device__ T Area() const;
 
 private:
@@ -310,7 +316,7 @@ private:
 // -------------------------------------------------------
 // Definitions of Triangle class methods
 // -------------------------------------------------------
-template <typename T> 
+template <typename T>
 Triangle<T>::Triangle()
 {
 	p1 = make_vec3<T>(T(0), T(0), T(0));
@@ -318,8 +324,9 @@ Triangle<T>::Triangle()
 	p3 = make_vec3<T>(T(0), T(0), T(0));
 }
 
-template <typename T> 
-Triangle<T>::Triangle(const Transform<T> *o2w, const Transform<T> *w2o)
+template <typename T>
+template <typename U_1, typename U_2>
+Triangle<T>::Triangle(const Transform<U_1> *o2w, const Transform<U_2> *w2o)
 	: Shape<T>(o2w, w2o)
 {
 	p1 = make_vec3<T>(T(0), T(0), T(0));
@@ -327,17 +334,22 @@ Triangle<T>::Triangle(const Transform<T> *o2w, const Transform<T> *w2o)
 	p3 = make_vec3<T>(T(0), T(0), T(0));
 }
 
-template <typename T> 
-Triangle<T>::Triangle(const Transform<T> *o2w, const Transform<T> *w2o,
-				      vec3<T> a, vec3<T> b, vec3<T> c): Shape<T>(o2w, w2o)
+template <typename T>
+template <typename U_1, typename U_2, typename C3_1, typename C3_2, typename C3_3>
+Triangle<T>::Triangle(const Transform<U_1> *o2w, const Transform<U_2> *w2o,
+				      C3_1 a, C3_2 b, C3_3 c): Shape<T>(o2w, w2o)
 {
-	p1 = a; p2 =b; p3 = c;
+	p1 = make_vec3<T>(T(a.x), T(a.y), T(a.z));
+	p2 = make_vec3<T>(T(b.x), T(b.y), T(b.z));
+	p3 = make_vec3<T>(T(c.x), T(c.y), T(c.z));
 }
 
-template <typename T> 
-bool Triangle<T>::Intersect_v2(const Ray<T> &ray, T *tHit,
-						       DifferentialGeometry<T> *dg) const
+template <typename T>
+template <typename U_1, typename U_2, typename U_3>
+bool Triangle<T>::Intersect_v2(const Ray<U_1> &r, U_2 *tHit,
+						       DifferentialGeometry<U_3> *dg) const
 {
+	Ray<T> ray(r);
 	U3 e1 = p2 - p1;
 	U3 e2 = p3 - p1;
 	U3 s1 = cross(ray.d, e2);
@@ -395,17 +407,19 @@ bool Triangle<T>::Intersect_v2(const Ray<T> &ray, T *tHit,
     T tv = b0*uvsC1[0] + b1*uvsC1[1] + b2*uvsC1[2];
 
     // Create the DifferentialGeometry object
-    *dg = DifferentialGeometry<T>(ray(t), dpdu, dpdv, tu, tv, this);
+    *dg = DifferentialGeometry<U_3>(ray(t), dpdu, dpdv, tu, tv, this);
 
     // Update tHit
 	*tHit = t;
 	return true;
 }
 
-template <typename T> 
-__device__ bool Triangle<T>::Intersect_v3(const Ray<T> &ray, T *tHit,
-									      DifferentialGeometry<T> *dg) const
+template <typename T>
+template <typename U_1, typename U_2, typename U_3>
+__device__ bool Triangle<T>::Intersect_v3(const Ray<U_1> &r, U_2 *tHit,
+									      DifferentialGeometry<U_3> *dg) const
 {
+	Ray<T> ray(r);
 	U3 p0t, p1t, p2t;
 	U3 P0, P1, P2;
 
@@ -514,27 +528,29 @@ __device__ bool Triangle<T>::Intersect_v3(const Ray<T> &ray, T *tHit,
 	U3 phit = b0*P0+b1*P1+b2*P2;
 
 	// Create the DifferentialGeometry object
-	*dg = DifferentialGeometry<T>(make_vec3<T>(phit.x, phit.y, phit.z),
-							      make_vec3<T>(dpdu.x, dpdu.y, dpdu.z),
-							      make_vec3<T>(dpdv.x, dpdv.y, dpdv.z),
-							      T(0), T(0), this);
+	*dg = DifferentialGeometry<U_3>(phit, dpdu, dpdv, 0, 0, this);
+
     // Update tHit
-    *tHit = float(t);
+    *tHit = t;
 	
 	return true;
 }
 
-template <typename T> 
-bool Triangle<T>::Intersect(const Ray<T> &ray, T *tHit,
-						    DifferentialGeometry<T> *dg, int version) const
+template <typename T>
+template <typename U_1, typename U_2, typename U_3>
+bool Triangle<T>::Intersect(const Ray<U_1> &r, U_2 *tHit,
+						    DifferentialGeometry<U_3> *dg, int version) const
 {
-	if (version == 2) { return Intersect_v2(ray, tHit, dg); }
-	else { return Intersect_v3(ray, tHit, dg); }
+	if (version == 2) { return Intersect_v2(r, tHit, dg); }
+	else { return Intersect_v3(r, tHit, dg); }
 }
 
-template <typename T> 
-bool Triangle<T>::IntersectP_v2(const Ray<T> &ray) const
+template <typename T>
+template <typename U>
+bool Triangle<T>::IntersectP_v2(const Ray<U> &r) const
 {
+	Ray<T> ray(r);
+
 	U3 e1 = p2 - p1;
 	U3 e2 = p3 - p1;
 	U3 s1 = cross(ray.d, e2);
@@ -563,9 +579,12 @@ bool Triangle<T>::IntersectP_v2(const Ray<T> &ray) const
 	return true;
 }
 
-template <typename T> 
-__device__ bool Triangle<T>::IntersectP_v3(const Ray<T> &ray) const
+template <typename T>
+template <typename U>
+__device__ bool Triangle<T>::IntersectP_v3(const Ray<U> &r) const
 {
+	Ray<T> ray(r);
+
     U3 p0t, p1t, p2t;
 	U3 P0, P1, P2;
 
@@ -574,8 +593,8 @@ __device__ bool Triangle<T>::IntersectP_v3(const Ray<T> &ray) const
 	P2 = make_vec3<T>(p3.x, p3.y, p3.z);
 
 	U3 p_o, p_d;
-	p_o = make_vec3<T>(ray.o.x, ray.o.y, ray.o.z);
-	p_d = make_vec3<T>(ray.d.x, ray.d.y, ray.d.z);
+	p_o = ray.o;
+	p_d = ray.d;
 
 	p0t = P0 - p_o; p1t = P1 - p_o; p2t = P2 - p_o;
 	
@@ -672,11 +691,12 @@ __device__ bool Triangle<T>::IntersectP_v3(const Ray<T> &ray) const
 	return true;
 }
 
-template <typename T> 
-bool Triangle<T>::IntersectP(const Ray<T> &ray, int version) const
+template <typename T>
+template <typename U>
+bool Triangle<T>::IntersectP(const Ray<U> &r, int version) const
 {
-	if (version == 2) { return IntersectP_v2(ray); }
-	else { return IntersectP_v3(ray); }
+	if (version == 2) { return IntersectP_v2(r); }
+	else { return IntersectP_v3(r); }
 }
 
 template <typename T> 
