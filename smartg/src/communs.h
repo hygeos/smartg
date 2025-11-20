@@ -159,7 +159,11 @@
 
 #endif
 
-
+#ifdef DOUBLE
+using real_clvl_1 = double;
+#else
+using real_clvl_1 = float;
+#endif
 
 /**********************************************************
 *	> Définition des structures

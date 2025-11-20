@@ -1867,17 +1867,17 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     if (cell_sized == -2)
     {
         float toa_rad = RTER+ZTOAd;
-        Transform<double> nothing;
-        Ray<double> r1(ph->pos, ph->v, 0.f);
+        Transform<real_clvl_1> nothing;
+        Ray<real_clvl_1> r1(ph->pos, ph->v, 0.f);
 
-        Sphere<double,double> toa_sph(&nothing, &nothing, toa_rad, -toa_rad, toa_rad, 360.f);
+        Sphere<real_clvl_1,real_clvl_1> toa_sph(&nothing, &nothing, toa_rad, -toa_rad, toa_rad, 360.f);
         float t_fac = 0.f;
         bool is_intersection = false;
         DifferentialGeometry<float> diff_geo;
         is_intersection = toa_sph.Intersect(r1, &t_fac, &diff_geo);
         if (is_intersection)
         {
-            double3 pos_tmp = r1(t_fac);
+            vec3<real_clvl_1> pos_tmp = r1(t_fac);
             ph->pos = make_float3(pos_tmp.x, pos_tmp.y, pos_tmp.z);
             ph->radius = length(ph->pos);
         }
@@ -8462,15 +8462,13 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct I
 				else if (ObjT[IND+j].geo == 2) // Case with a plane object
 				{
 					// declaration of a table of float3 which contains P0, P1, P2, P3
-                    double3 Pvec[4] = {make_double3(ObjT[IND+j].p0x, ObjT[IND+j].p0y, ObjT[IND+j].p0z),
-									   make_double3(ObjT[IND+j].p1x, ObjT[IND+j].p1y, ObjT[IND+j].p1z),
-									   make_double3(ObjT[IND+j].p2x, ObjT[IND+j].p2y, ObjT[IND+j].p2z),
-									   make_double3(ObjT[IND+j].p3x, ObjT[IND+j].p3y, ObjT[IND+j].p3z)};
+                    vec3<real_clvl_1> Pvec[4] = {make_vec3<real_clvl_1>(ObjT[IND+j].p0x, ObjT[IND+j].p0y, ObjT[IND+j].p0z),
+									             make_vec3<real_clvl_1>(ObjT[IND+j].p1x, ObjT[IND+j].p1y, ObjT[IND+j].p1z),
+									             make_vec3<real_clvl_1>(ObjT[IND+j].p2x, ObjT[IND+j].p2y, ObjT[IND+j].p2z),
+									             make_vec3<real_clvl_1>(ObjT[IND+j].p3x, ObjT[IND+j].p3y, ObjT[IND+j].p3z)};
 					
 					// Create the triangleMesh (2 = number of triangle ; 4 = number of vertices)
-                    // Transform<float> TF_tmp(Tj.GetMatrix(),Tj.GetInverseMatrix());
-                    // Transform<float> TFinv_tmp(invTj.GetMatrix(),invTj.GetInverseMatrix());
-					TriangleMesh<double,float,double> myObject(&Tj, &invTj, 2, 4, vi, Pvec);
+					TriangleMesh<real_clvl_1,float,real_clvl_1> myObject(&Tj, &invTj, 2, 4, vi, Pvec);
 				
 					BBox<float> myBBox(myObject.WorldBoundTriangleMesh());
 					if (myBBox.IntersectP(R1))
@@ -8574,17 +8572,13 @@ __device__ bool geoTestMir(float3 o, float3 dir, struct IObjets *ObjT, struct GO
 			    if (ObjT[IND+j].geo == 2 and ObjT[IND+j].type == HELIOSTAT)
 				{
 					// Declaration of a table of float3 which contains P0, P1, P2, P3
-                    double3 Pvec[4] = {make_double3(ObjT[IND+j].p0x, ObjT[IND+j].p0y, ObjT[IND+j].p0z),
-									   make_double3(ObjT[IND+j].p1x, ObjT[IND+j].p1y, ObjT[IND+j].p1z),
-									   make_double3(ObjT[IND+j].p2x, ObjT[IND+j].p2y, ObjT[IND+j].p2z),
-									   make_double3(ObjT[IND+j].p3x, ObjT[IND+j].p3y, ObjT[IND+j].p3z)};
-					// float3 Pvec[4] = {make_float3(ObjT[IND+j].p0x, ObjT[IND+j].p0y, ObjT[IND+j].p0z),
-					// 				  make_float3(ObjT[IND+j].p1x, ObjT[IND+j].p1y, ObjT[IND+j].p1z),
-					// 				  make_float3(ObjT[IND+j].p2x, ObjT[IND+j].p2y, ObjT[IND+j].p2z),
-					// 				  make_float3(ObjT[IND+j].p3x, ObjT[IND+j].p3y, ObjT[IND+j].p3z)};
+                    vec3<real_clvl_1> Pvec[4] = {make_vec3<real_clvl_1>(ObjT[IND+j].p0x, ObjT[IND+j].p0y, ObjT[IND+j].p0z),
+									             make_vec3<real_clvl_1>(ObjT[IND+j].p1x, ObjT[IND+j].p1y, ObjT[IND+j].p1z),
+									             make_vec3<real_clvl_1>(ObjT[IND+j].p2x, ObjT[IND+j].p2y, ObjT[IND+j].p2z),
+									             make_vec3<real_clvl_1>(ObjT[IND+j].p3x, ObjT[IND+j].p3y, ObjT[IND+j].p3z)};
 					
 					// Create the triangleMesh (2 = number of triangle ; 4 = number of vertices)
-					TriangleMesh<double,float,double> myObject(&Tj, &invTj, 2, 4, vi, Pvec);
+					TriangleMesh<real_clvl_1,float,real_clvl_1> myObject(&Tj, &invTj, 2, 4, vi, Pvec);
 				
 					BBox<float> myBBox(myObject.WorldBoundTriangleMesh());
 					if (myBBox.IntersectP(R1)) myBj = myObject.IntersectP(R1);
@@ -8642,13 +8636,13 @@ __device__ bool geoTestRec(float3 o, float3 dir, struct IObjets *ObjT)
 		if (ObjT[i].geo == 2 and ObjT[i].type == RECEIVER)
 		{
 			// Declaration of a table of float3 which contains P0, P1, P2, P3
-            double3 Pvec[4] = {make_double3(ObjT[i].p0x, ObjT[i].p0y, ObjT[i].p0z),
-							   make_double3(ObjT[i].p1x, ObjT[i].p1y, ObjT[i].p1z),
-							   make_double3(ObjT[i].p2x, ObjT[i].p2y, ObjT[i].p2z),
-							   make_double3(ObjT[i].p3x, ObjT[i].p3y, ObjT[i].p3z)};
+            vec3<real_clvl_1> Pvec[4] = {make_vec3<real_clvl_1>(ObjT[i].p0x, ObjT[i].p0y, ObjT[i].p0z),
+							             make_vec3<real_clvl_1>(ObjT[i].p1x, ObjT[i].p1y, ObjT[i].p1z),
+							             make_vec3<real_clvl_1>(ObjT[i].p2x, ObjT[i].p2y, ObjT[i].p2z),
+							             make_vec3<real_clvl_1>(ObjT[i].p3x, ObjT[i].p3y, ObjT[i].p3z)};
 			
 			// Create the triangleMesh (2 = number of triangle ; 4 = number of vertices)
-			TriangleMesh<double,float,double> myObject(&Ti, &invTi, 2, 4, vi, Pvec);
+			TriangleMesh<real_clvl_1,float,real_clvl_1> myObject(&Ti, &invTi, 2, 4, vi, Pvec);
 			
 			BBox<float> myBBox(myObject.WorldBoundTriangleMesh());
 			if (myBBox.IntersectP(R1))
