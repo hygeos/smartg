@@ -34,9 +34,15 @@ public:
 
 	template <typename U_1, typename U_2>
 	__host__ __device__ Shape(const Transform<U_1> *o2w, const Transform<U_2> *w2o)
-		: ObjectToWorld(o2w), WorldToObject(w2o) { shapeId = 0; }
+		{
+			Transform<T> o2w_prv(o2w->GetMatrix(), o2w->GetInverseMatrix());
+			Transform<T> w2o_prv(w2o->GetMatrix(), w2o->GetInverseMatrix());
+			ObjectToWorld = &o2w_prv;
+			WorldToObject = &w2o_prv;
+			shapeId = 0; // for the moment not used at all
+		}
 
-    // Private parameters
+    // Public parameters
 	unsigned long int shapeId;
     const Transform<T> *ObjectToWorld, *WorldToObject;
 
@@ -88,8 +94,10 @@ using DifferentialGeometryf = DifferentialGeometry<float>;
 using DifferentialGeometryd = DifferentialGeometry<double>;
 
 
-template <typename T = float> //T -> float / double
-class Sphere : public Shape<T>
+template <typename T = float, typename TF = float> //T -> float / double
+// T is type for the BBox/attributs of the class and for main operation inside the methods
+// TF is type used in parent Shape class i.e., transformation
+class Sphere : public Shape<TF>
 // ========================================================
 // Sphere class
 // ========================================================
@@ -121,8 +129,8 @@ private:
 // -------------------------------------------------------
 // Definitions of Sphere class methods
 // -------------------------------------------------------
-template <typename T> 
-Sphere<T>::Sphere() : Shape<T>()
+template <typename T, typename TF> 
+Sphere<T,TF>::Sphere() : Shape<TF>()
 {
     radius = T(0);
     zmin = T(0);
@@ -132,12 +140,12 @@ Sphere<T>::Sphere() : Shape<T>()
     phiMax = T(0);
 }
 
-template <typename T> 
+template <typename T, typename TF> 
 template <typename U_1, typename U_2, typename U_3, typename U_4,
 	      typename U_5, typename U_6>
-Sphere<T>::Sphere(const Transform<U_1> *o2w, const Transform<U_2> *w2o,
-			      U_3 rad, U_4 z0, U_5 z1, U_6 pm)
-	: Shape<T>(o2w, w2o)
+Sphere<T,TF>::Sphere(const Transform<U_1> *o2w, const Transform<U_2> *w2o,
+			         U_3 rad, U_4 z0, U_5 z1, U_6 pm)
+	                : Shape<TF>(o2w, w2o)
 {
     radius = T(rad);
     zmin = clamp(T(min(T(z0), T(z1))), T(-radius), T(radius));
@@ -147,14 +155,14 @@ Sphere<T>::Sphere(const Transform<U_1> *o2w, const Transform<U_2> *w2o,
     phiMax = get_func_radians(clamp(T(pm), T(0), T(360)));
 }
 
-template <typename T> 
-__device__ BBox<T> Sphere<T>::WorldBoundSphere() const
+template <typename T, typename TF> 
+__device__ BBox<T> Sphere<T,TF>::WorldBoundSphere() const
 {
 	return (*this->ObjectToWorld)(ObjectBoundSphere());
 }
 
-template <typename T> 
-__device__ BBox<T> Sphere<T>::ObjectBoundSphere() const
+template <typename T, typename TF> 
+__device__ BBox<T> Sphere<T,TF>::ObjectBoundSphere() const
 {
 	if (phiMax < get_const_pi(T{})/T(2))
 	{
@@ -178,9 +186,9 @@ __device__ BBox<T> Sphere<T>::ObjectBoundSphere() const
 	}
 }
 
-template <typename T>
+template <typename T, typename TF>
 template <typename U_1, typename U_2, typename U_3>
-bool Sphere<T>::Intersect(const Ray<U_1> &r, U_2 *tHit, DifferentialGeometry<U_3> *dg) const
+bool Sphere<T,TF>::Intersect(const Ray<U_1> &r, U_2 *tHit, DifferentialGeometry<U_3> *dg) const
 {
     T phi;
     vec3<T> phit;
@@ -248,7 +256,7 @@ bool Sphere<T>::Intersect(const Ray<U_1> &r, U_2 *tHit, DifferentialGeometry<U_3
 							    -radius * get_func_sin(theta)) * (thetaMax-thetaMin);
 
     // Create the DifferentialGeometry object
-    const Transform<T> &o2w = *this->ObjectToWorld;
+    const Transform<TF> &o2w = *this->ObjectToWorld;
     *dg = DifferentialGeometry<U_3>(o2w(Point<U_3>(phit)),
 								    o2w(Normal<U_3>(dpdu)),
 								    o2w(Normal<U_3>(dpdv)),
@@ -260,19 +268,24 @@ bool Sphere<T>::Intersect(const Ray<U_1> &r, U_2 *tHit, DifferentialGeometry<U_3
     return true;
 }
 
-template <typename T> 
-T Sphere<T>::Area() const {
+template <typename T, typename TF> 
+T Sphere<T,TF>::Area() const {
     return phiMax * radius * (zmax-zmin);
 }
 
-using Spheref = Sphere<float>;
-using Sphered = Sphere<double>;
+using Sphereff = Sphere<float,float>;
+using Spherefd = Sphere<float,double>;
+using Spheredf = Sphere<double,float>;
+using Spheredd = Sphere<double,double>;
 
 
-template <typename T = float> //T -> float / double
-class Triangle : public Shape<T>
+template <typename T = float, typename TF = float> //T/TF -> float / double
+// T is type for the BBox/attributs of the class and for main operation inside the methods
+// TF is type used in parent Shape class i.e., transformation
+class Triangle : public Shape<TF>
 // ========================================================
 // Triangle class
+// ! Care ! transformation are not used here!
 // ========================================================
 {
 public:
@@ -316,38 +329,38 @@ private:
 // -------------------------------------------------------
 // Definitions of Triangle class methods
 // -------------------------------------------------------
-template <typename T>
-Triangle<T>::Triangle()
+template <typename T, typename TF>
+Triangle<T,TF>::Triangle()
 {
 	p1 = make_vec3<T>(T(0), T(0), T(0));
 	p2 = make_vec3<T>(T(0), T(0), T(0));
 	p3 = make_vec3<T>(T(0), T(0), T(0));
 }
 
-template <typename T>
+template <typename T, typename TF>
 template <typename U_1, typename U_2>
-Triangle<T>::Triangle(const Transform<U_1> *o2w, const Transform<U_2> *w2o)
-	: Shape<T>(o2w, w2o)
+Triangle<T,TF>::Triangle(const Transform<U_1> *o2w, const Transform<U_2> *w2o)
+: Shape<TF>(o2w, w2o)
 {
 	p1 = make_vec3<T>(T(0), T(0), T(0));
 	p2 = make_vec3<T>(T(0), T(0), T(0));
 	p3 = make_vec3<T>(T(0), T(0), T(0));
 }
 
-template <typename T>
+template <typename T, typename TF>
 template <typename U_1, typename U_2, typename C3_1, typename C3_2, typename C3_3>
-Triangle<T>::Triangle(const Transform<U_1> *o2w, const Transform<U_2> *w2o,
-				      C3_1 a, C3_2 b, C3_3 c): Shape<T>(o2w, w2o)
+Triangle<T,TF>::Triangle(const Transform<U_1> *o2w, const Transform<U_2> *w2o,
+				         C3_1 a, C3_2 b, C3_3 c): Shape<TF>(o2w, w2o)
 {
 	p1 = make_vec3<T>(T(a.x), T(a.y), T(a.z));
 	p2 = make_vec3<T>(T(b.x), T(b.y), T(b.z));
 	p3 = make_vec3<T>(T(c.x), T(c.y), T(c.z));
 }
 
-template <typename T>
+template <typename T, typename TF>
 template <typename U_1, typename U_2, typename U_3>
-bool Triangle<T>::Intersect_v2(const Ray<U_1> &r, U_2 *tHit,
-						       DifferentialGeometry<U_3> *dg) const
+bool Triangle<T,TF>::Intersect_v2(const Ray<U_1> &r, U_2 *tHit,
+						          DifferentialGeometry<U_3> *dg) const
 {
 	Ray<T> ray(r);
 	U3 e1 = p2 - p1;
@@ -414,10 +427,10 @@ bool Triangle<T>::Intersect_v2(const Ray<U_1> &r, U_2 *tHit,
 	return true;
 }
 
-template <typename T>
+template <typename T, typename TF>
 template <typename U_1, typename U_2, typename U_3>
-__device__ bool Triangle<T>::Intersect_v3(const Ray<U_1> &r, U_2 *tHit,
-									      DifferentialGeometry<U_3> *dg) const
+__device__ bool Triangle<T,TF>::Intersect_v3(const Ray<U_1> &r, U_2 *tHit,
+									         DifferentialGeometry<U_3> *dg) const
 {
 	Ray<T> ray(r);
 	U3 p0t, p1t, p2t;
@@ -536,18 +549,18 @@ __device__ bool Triangle<T>::Intersect_v3(const Ray<U_1> &r, U_2 *tHit,
 	return true;
 }
 
-template <typename T>
+template <typename T, typename TF>
 template <typename U_1, typename U_2, typename U_3>
-bool Triangle<T>::Intersect(const Ray<U_1> &r, U_2 *tHit,
-						    DifferentialGeometry<U_3> *dg, int version) const
+bool Triangle<T,TF>::Intersect(const Ray<U_1> &r, U_2 *tHit,
+						       DifferentialGeometry<U_3> *dg, int version) const
 {
 	if (version == 2) { return Intersect_v2(r, tHit, dg); }
 	else { return Intersect_v3(r, tHit, dg); }
 }
 
-template <typename T>
+template <typename T, typename TF>
 template <typename U>
-bool Triangle<T>::IntersectP_v2(const Ray<U> &r) const
+bool Triangle<T,TF>::IntersectP_v2(const Ray<U> &r) const
 {
 	Ray<T> ray(r);
 
@@ -579,9 +592,9 @@ bool Triangle<T>::IntersectP_v2(const Ray<U> &r) const
 	return true;
 }
 
-template <typename T>
+template <typename T, typename TF>
 template <typename U>
-__device__ bool Triangle<T>::IntersectP_v3(const Ray<U> &r) const
+__device__ bool Triangle<T,TF>::IntersectP_v3(const Ray<U> &r) const
 {
 	Ray<T> ray(r);
 
@@ -691,51 +704,57 @@ __device__ bool Triangle<T>::IntersectP_v3(const Ray<U> &r) const
 	return true;
 }
 
-template <typename T>
+template <typename T, typename TF>
 template <typename U>
-bool Triangle<T>::IntersectP(const Ray<U> &r, int version) const
+bool Triangle<T,TF>::IntersectP(const Ray<U> &r, int version) const
 {
 	if (version == 2) { return IntersectP_v2(r); }
 	else { return IntersectP_v3(r); }
 }
 
-template <typename T> 
-__device__ BBox<T> Triangle<T>::ObjectBoundTriangle() const
+template <typename T, typename TF> 
+__device__ BBox<T> Triangle<T,TF>::ObjectBoundTriangle() const
 {
 	BBox<T> objectBounds((*this->WorldToObject)(Point<T>(p1)), (*this->WorldToObject)(Point<T>(p2)));
 	return objectBounds.Union(objectBounds, (*this->WorldToObject)(Point<T>(p3)));
 }
 
-template <typename T> 
-__device__ BBox<T> Triangle<T>::WorldBoundTriangle() const
+template <typename T, typename TF> 
+__device__ BBox<T> Triangle<T,TF>::WorldBoundTriangle() const
 {
-	BBox<float> worldBounds(p1, p2);
+	BBox<T> worldBounds(p1, p2);
     return worldBounds.Union(worldBounds, p3);
 }
 
-template <typename T> 
-T Triangle<T>::Area() const
+template <typename T, typename TF> 
+T Triangle<T,TF>::Area() const
 {
     return T(0.5) * length(cross(p2-p1, p3-p1));
 }
 
-using Trianglef = Triangle<float>;
-using Triangled = Triangle<double>;
+using Triangleff = Triangle<float,float>;
+using Trianglefd = Triangle<float,double>;
+using Trianglesf = Triangle<double,float>;
+using Triangledd = Triangle<double,double>;
 
 
-template <typename T = float> //T -> float / double
-class TriangleMesh : public Shape<T>
+template <typename T = float, typename TF = float, typename TP = float > //T/TP/TP -> float / double
+// T is type for the BBox/attributs of the class and for main operation inside the methods
+// TF is type used in parent Shape class i.e., transformation
+// TP is base type for the given triangle list of points vec3<TP> *P
+class TriangleMesh : public Shape<TF>
 // ========================================================
 // TriangleMesh class
 // ========================================================
 {
 public:
 	using U3  = vec3<T>;
+	using U3TP  = vec3<TP>;
 
 	// Public methods
-	template <typename U_1, typename U_2, typename C3>
+	template <typename U_1, typename U_2>
 	__host__ __device__ TriangleMesh(const Transform<U_1> *o2w, const Transform<U_2> *w2o,
-									 int nt, int nv, int *vi, C3 *P);
+									 int nt, int nv, int *vi, U3TP *P);
     __device__ BBox<T> ObjectBoundTriangleMesh() const;
     __device__ BBox<T> WorldBoundTriangleMesh() const;
 	template <typename U_1, typename U_2, typename U_3>
@@ -743,51 +762,52 @@ public:
 									   DifferentialGeometry<U_3> *dg) const;
 	template <typename U > __host__ __device__ bool IntersectP(const Ray<U> &r) const;
     __host__ __device__ T Area() const;
-	U3 *p; // list of all the triangle mesh points
+	U3TP *p; // list of all the triangle mesh points
+
 private:
 	// Private parameters
 	int ntris, nverts;
 	int *vertexIndex;
-	/* Triangle<T> *refTri; */
 };
 
 // -------------------------------------------------------
 // Definitions of TriangleMesh class methods
 // -------------------------------------------------------
-template <typename T>
-template <typename U_1, typename U_2, typename C3>
-TriangleMesh<T>::TriangleMesh(const Transform<U_1> *o2w, const Transform<U_2> *w2o,
-						      int nt, int nv, int *vi, C3 *P)
-	: Shape<T>(o2w, w2o)
+template <typename T, typename TF, typename TP>
+template <typename U_1, typename U_2>
+TriangleMesh<T,TF,TP>::TriangleMesh(const Transform<U_1> *o2w, const Transform<U_2> *w2o,
+						            int nt, int nv, int *vi, U3TP *P)
+	: Shape<TF>(o2w, w2o)
 {
 	ntris = nt; nverts = nv;
 	vertexIndex = vi;
-	/* refTri = rt; */
-	p = reinterpret_cast<U3*>(P);
+	p = P;
 
-	// Apply the transformations to the triangle mesh	
+	// Apply the transformations to the triangle mesh
+	Point<TP> pbis;
 	for (int i = 0; i < nverts; ++i)
-		p[i] = (*this->ObjectToWorld)(p[i], 1); // 1 for point transformation
+	{
+		pbis.x = p[i].x; pbis.y = p[i].y; pbis.y = p[i].y;
+		(*this->ObjectToWorld)(pbis, &p[i]);
+	}
 }
 
-template <typename T>
+template <typename T, typename TF, typename TP>
 template <typename U_1, typename U_2, typename U_3>
-bool TriangleMesh<T>::Intersect(const Ray<U_1> &r, U_2* tHit,
-							    DifferentialGeometry<U_3> *dg) const
+bool TriangleMesh<T,TF,TP>::Intersect(const Ray<U_1> &r, U_2* tHit,
+							          DifferentialGeometry<U_3> *dg) const
 {
     bool dgbool = false;
-	Transform<T> nothing;
+	Transform<TF> nothing;
 	*tHit = get_const_inf(U_2{});
 
+	U_2 triHit;
+	DifferentialGeometry<U_3> dgTri;
 	for (int i = 0; i < ntris; ++i)
 	{
-		U_2 triHit;
-		DifferentialGeometry<U_3> dgTri;
 		/* // Create the triangle i as function of *vi et *P	 */
-		U3 PA = p[vertexIndex[3*i]];
-		U3 PB = p[vertexIndex[3*i + 1]];
-		U3 PC = p[vertexIndex[3*i + 2]];
-		Triangle<T> rt(&nothing, &nothing, PA, PB, PC);
+		Triangle<T> rt(&nothing, &nothing, p[vertexIndex[3*i]], p[vertexIndex[3*i + 1]],
+			           p[vertexIndex[3*i + 2]]);
 		if (rt.Intersect(r, &triHit, &dgTri))
 		{
 			dgbool = true;
@@ -801,36 +821,38 @@ bool TriangleMesh<T>::Intersect(const Ray<U_1> &r, U_2* tHit,
 	return dgbool;
 }
 
-template <typename T>
+template <typename T, typename TF, typename TP>
 template <typename U>
-bool TriangleMesh<T>::IntersectP(const Ray<U> &r) const
+bool TriangleMesh<T,TF,TP>::IntersectP(const Ray<U> &r) const
 {
-	Transform<T> nothing;
+	Transform<TF> nothing;
 	for (int i = 0; i < ntris; ++i)
 	{
 		/* // Create the triangle i as function of *vi et *P	 */
-		U3 PA = p[vertexIndex[3*i]];
-		U3 PB = p[vertexIndex[3*i + 1]];
-		U3 PC = p[vertexIndex[3*i + 2]];
-		Triangle<T> rt(&nothing, &nothing, PA, PB, PC);
+		Triangle<T> rt(&nothing, &nothing, p[vertexIndex[3*i]], p[vertexIndex[3*i + 1]],
+			           p[vertexIndex[3*i + 2]]);
 		if (rt.IntersectP(r))
 			return true;
 	}
 	return false;
 }
 
-template <typename T>
-__device__ BBox<T> TriangleMesh<T>::ObjectBoundTriangleMesh() const
+template <typename T, typename TF, typename TP>
+__device__ BBox<T> TriangleMesh<T,TF,TP>::ObjectBoundTriangleMesh() const
 {
 	BBox<T> objectBounds;
-    for (int i = 0; i < nverts; i++) {
-		U3 pW = (*this->WorldToObject)(p[i], 1);
-		objectBounds = objectBounds.Union(objectBounds, pW);}
+	Point<TP> pW;
+    for (int i = 0; i < nverts; i++)
+	{
+		pW.x = TP(p[i].x); pW.y = TP(p[i].y); pW.z = TP(p[i].z);
+		(*this->WorldToObject)(p[i], &pW); // pointer to keep pW type
+		objectBounds = objectBounds.UnionPoint(objectBounds, pW);
+	}
     return objectBounds;
 }
 
-template <typename T>
-__device__ BBox<T> TriangleMesh<T>::WorldBoundTriangleMesh() const
+template <typename T, typename TF, typename TP>
+__device__ BBox<T> TriangleMesh<T,TF,TP>::WorldBoundTriangleMesh() const
 {
     BBox<T> worldBounds;
     for (int i = 0; i < nverts; i++)
@@ -838,20 +860,29 @@ __device__ BBox<T> TriangleMesh<T>::WorldBoundTriangleMesh() const
     return worldBounds;
 }
 
-template <typename T>
-T TriangleMesh<T>::Area() const
+template <typename T, typename TF, typename TP>
+T TriangleMesh<T,TF,TP>::Area() const
 {
 	T Area = T(0);
     for (int i = 0; i < ntris; ++i)
 	{
-		U3 PA = p[vertexIndex[3*i]];
-		U3 PB = p[vertexIndex[3*i + 1]];
-		U3 PC = p[vertexIndex[3*i + 2]];
+		U3TP pa = p[vertexIndex[3*i]];
+		U3TP pb = p[vertexIndex[3*i + 1]];
+		U3TP pc = p[vertexIndex[3*i + 2]];
+		U3 PA = make_vec3<T>(T(pa.x), T(pa.y), T(pa.z));
+		U3 PB = make_vec3<T>(T(pb.x), T(pb.y), T(pb.z));
+		U3 PC = make_vec3<T>(T(pc.x), T(pc.y), T(pc.z));
 		Area += T(0.5) * length(cross(PB-PA, PC-PA));
 	}
     return Area;
 }
 
-using TriangleMeshf = TriangleMesh<float>;
-using TriangleMeshd = TriangleMesh<double>;
+using TriangleMeshfff = TriangleMesh<float,float,float>;
+using TriangleMeshfdf = TriangleMesh<float,double,float>;
+using TriangleMeshffd = TriangleMesh<float,float,double>;
+using TriangleMeshfdd = TriangleMesh<float,double,double>;
+using TriangleMeshdff = TriangleMesh<double,float,float>;
+using TriangleMeshddf = TriangleMesh<double,double,float>;
+using TriangleMeshdfd = TriangleMesh<double,float,double>;
+using TriangleMeshddd = TriangleMesh<double,double,double>;
 #endif // _SHAPES_H_
