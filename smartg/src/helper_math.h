@@ -3708,7 +3708,15 @@ template <typename T> struct VecType2;
 template <> struct VecType2<float>  { using type = float2;  };
 template <> struct VecType2<double> { using type = double2; };
 template <typename T> using vec2 = typename VecType2<T>::type;
-template <typename T> __host__ __device__ vec2<T> make_vec2(T x, T y);
+template <typename T, typename U1, typename U2>
+__host__ __device__
+vec2<T> make_vec2(U1 x, U2 y)
+{
+    return make_vec2<T>(
+        static_cast<T>(x),
+        static_cast<T>(y)
+    );
+}
 template <> __host__ __device__ inline float2  make_vec2<float> (float  x, float  y) { return make_float2(x, y); }
 template <> __host__ __device__ inline double2 make_vec2<double>(double x, double y) { return make_double2(x, y); }
 
@@ -3717,7 +3725,16 @@ template <typename T> struct VecType3;
 template <> struct VecType3<float>  { using type = float3;  };
 template <> struct VecType3<double> { using type = double3; };
 template <typename T> using vec3 = typename VecType3<T>::type;
-template <typename T> __host__ __device__ vec3<T> make_vec3(T x, T y, T z);
+template <typename T, typename U1, typename U2, typename U3>
+__host__ __device__
+vec3<T> make_vec3(U1 x, U2 y, U3 z)
+{
+    return make_vec3<T>(
+        static_cast<T>(x),
+        static_cast<T>(y),
+        static_cast<T>(z)
+    );
+}
 template <> __host__ __device__ inline float3  make_vec3<float> (float  x, float  y, float  z) { return make_float3(x, y, z); }
 template <> __host__ __device__ inline double3 make_vec3<double>(double x, double y, double z) { return make_double3(x, y, z); }
 
@@ -3726,7 +3743,16 @@ template <typename T> struct VecType3C;
 template <> struct VecType3C<float>  { using type = float3c;  };
 template <> struct VecType3C<double> { using type = double3c; };
 template <typename T> using vec3c = typename VecType3C<T>::type;
-template <typename T> __host__ __device__ vec3c<T> make_vec3c(T x, T y, T z);
+template <typename T, typename U1, typename U2, typename U3>
+__host__ __device__
+vec3c<T> make_vec3c(U1 x, U2 y, U3 z)
+{
+    return make_vec3c<T>(
+        static_cast<T>(x),
+        static_cast<T>(y),
+        static_cast<T>(z)
+    );
+}
 template <> __host__ __device__ inline float3c  make_vec3c<float> (float  x, float  y, float  z) { return make_float3c(x, y, z); }
 template <> __host__ __device__ inline double3c make_vec3c<double>(double x, double y, double z) { return make_double3c(x, y, z); }
 
@@ -3735,11 +3761,26 @@ template <typename T> struct MatType4x4;
 template <> struct MatType4x4<float>  { using type = float4x4;  };
 template <> struct MatType4x4<double> { using type = double4x4; };
 template <typename T> using mat4x4 = typename MatType4x4<T>::type;
-template <typename T>
-__host__ __device__ mat4x4<T> make_mat4x4(T m00, T m01, T m02, T m03,
-										  T m10, T m11, T m12, T m13,
-										  T m20, T m21, T m22, T m23,
-										  T m30, T m31, T m32, T m33);
+template <typename T,
+          typename U00, typename U01, typename U02, typename U03,
+          typename U10, typename U11, typename U12, typename U13,
+          typename U20, typename U21, typename U22, typename U23,
+          typename U30, typename U31, typename U32, typename U33
+          >
+__host__ __device__
+mat4x4<T> make_mat4x4(U00 m00, U01 m01, U02 m02, U03 m03,
+                      U10 m10, U11 m11, U12 m12, U13 m13,
+                      U20 m20, U21 m21, U22 m22, U23 m23,
+                      U30 m30, U31 m31, U32 m32, U33 m33
+)
+{
+    return make_mat4x4<T>(
+        static_cast<T>(m00), static_cast<T>(m01), static_cast<T>(m02), static_cast<T>(m03),
+        static_cast<T>(m10), static_cast<T>(m11), static_cast<T>(m12), static_cast<T>(m13),
+        static_cast<T>(m20), static_cast<T>(m21), static_cast<T>(m22), static_cast<T>(m23),
+        static_cast<T>(m30), static_cast<T>(m31), static_cast<T>(m32), static_cast<T>(m33)
+    );
+}                                          
 template <>
 __host__ __device__ inline float4x4 make_mat4x4<float> (float m00, float m01, float m02, float m03,
 													    float m10, float m11, float m12, float m13,
@@ -3762,8 +3803,11 @@ __host__ __device__ inline double4x4 make_mat4x4<double> (double m00, double m01
 					      m20, m21, m22, m23,
 					      m30, m31, m32, m33);
 }
-template <typename T>                                    
-__host__ __device__ mat4x4<T> make_diag_mat4x4(T x);
+template <typename T, typename U>                                    
+__host__ __device__ mat4x4<T> make_diag_mat4x4(U x)
+{
+    return make_diag_mat4x4<T>(static_cast<T>(x));
+}
 template <>
 __host__ __device__ inline float4x4 make_diag_mat4x4<float> (float x)
 {
