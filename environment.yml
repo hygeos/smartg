@@ -22,8 +22,9 @@ dependencies:
   - ipywidgets
   - ipympl
   - pyhdf
+  - geoclide
+  - luts
   - pip
   - pip:
     - pycuda
-    - git+https://github.com/hygeos/luts.git
     - hitran-api

@@ -25,9 +25,9 @@ dependencies:
   - gatiab
   - geoclide
   - statsmodels
+  - luts
   - pip
   - pip:
     - pycuda
-    - git+https://github.com/hygeos/luts.git
     - hitran-api
     - jax[cuda12]
