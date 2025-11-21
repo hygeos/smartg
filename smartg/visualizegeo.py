@@ -2130,30 +2130,34 @@ def is_comment(s):
 
 def extractPoints(filename):
     """
-    Definition of the function extractPoints
+    Extract the coordinates of heliostats from a file.
 
-    filename : Name of the file (str type) and its location (absolute of
-               relative path) containing the x, y and z positions of
-               heliostats. The format of the file must contain at least a
-               first comment begining by '#', then an empty line and
-               finally each lines with the x, y and z coordinates of each
-               heliostats seperated by a comma.
+    The input file must contain at least:
+    1. A first comment line beginning with '#'
+    2. An empty line
+    3. Lines with the x, y, and z coordinates of each heliostat, separated by commas
 
-    return : List of class point containing the coordinates of heliostats
+    Parameters
+    ----------
+    filename : str | pathlib.Path
+        The path to the file containing the heliostat coordinates.
+    
+    Returns
+    -------
+    out : list
+        A list of `gc.Point` objects, each containing the x, y, and z coordinates
+        of a heliostat.
     """
-    # First check if filename is an str type
-    if not isinstance(filename, six.string_types) :
-        raise NameError('filename must be an str type!')
 
-    # Check if filename can be read, if yes read it
+    # First check if filename is an str type
     try:
         with open(filename, "r") as file:
             for curline in dropwhile(is_comment, file):
                 insideFile = file.read()
     except FileNotFoundError:
-        print(filename + ' has been not found')
+        print(str(filename) + ' has been not found')
     except IOError:
-        print("Enter/Exit error with " + filename)
+        print("Enter/Exit error with " + str(filename))
             
     # Looking for a float and fill it in listVal
     listVal = re.findall(r"-?[0-9]+\.?[0-9]*", insideFile)
