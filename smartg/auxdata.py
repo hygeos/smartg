@@ -104,8 +104,10 @@ def download(savepath, data_type="all"):
 
     Examples
     --------
-    >>> import smartg.auxdata.download as download
-    >>> download('/dir/where/to/save/data/', data_type="all")
+    >>> from pathlib import Path
+    >>> from smartg.auxdata import download
+    >>> savepath = Path("/dir/where/to/save/data")
+    >>> download(savepath, data_type="all")
     """
 
     list_kind = ["all"] + list(AUXDATA_DICT.keys())
