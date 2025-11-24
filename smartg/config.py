@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from os import environ
-from os.path import join, dirname, realpath, isdir
+from pathlib import Path
 from dotenv import load_dotenv
 import warnings
 
@@ -11,18 +11,18 @@ SMART-G constant variables
 
 '''
 
-dir_root = dirname(dirname(realpath(__file__)))
+dir_root = Path(__file__).resolve().parent.parent
 NPSTK = 4
-dir_auxdata_old = join(dir_root, 'auxdata')
+dir_auxdata_old = dir_root / 'auxdata'
 
-load_dotenv(join(dir_root, '.env')) # To consider .env file
+load_dotenv(dir_root / '.env') # To consider .env file
 
 # Allow old way in v1.1, but remove it in next releases
 try:
     dir_auxdata_new = environ['SMARTG_DIR_AUXDATA']
-    DIR_AUXDATA = dir_auxdata_new
+    DIR_AUXDATA = Path(dir_auxdata_new)
 except KeyError:
-    if not (isdir(dir_auxdata_old)):
+    if not dir_auxdata_old.is_dir():
         raise NameError("The environment variable 'SMARTG_DIR_AUXDATA' does not exist!")
     else:
         warnings.simplefilter('always', DeprecationWarning)
@@ -34,5 +34,5 @@ except KeyError:
         DIR_AUXDATA = dir_auxdata_old
 
 # TODO for constant variable must use uppercase 
-dir_libradtran = join(DIR_AUXDATA, 'libRadtran')
-dir_libradtran_atmmod = join(dir_libradtran, 'data/atmmod/')
+dir_libradtran = DIR_AUXDATA / 'libRadtran'
+dir_libradtran_atmmod = dir_libradtran / 'data' / 'atmmod'
