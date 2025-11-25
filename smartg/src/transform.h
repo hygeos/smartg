@@ -574,7 +574,7 @@ Transform<T> Transform<T>::vec2transform(C3 vi)
         phi = rotz_rad * (180./CUDART_PI);
         
         tf = nothing.RotateZ(T(phi))*nothing.RotateY(T(theta));
-		v_tmp = tf(make_float3(v_ini), 2);
+		v_tmp = tf(make_vec3<T>(v_ini.x, v_ini.y, v_ini.z), 2);
 		v_ini_rotated.x = T(v_tmp.x);
 		v_ini_rotated.y = T(v_tmp.y);
 		v_ini_rotated.z = T(v_tmp.z);
