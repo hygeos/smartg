@@ -5082,7 +5082,7 @@ __device__ void surfaceWaterRough(Photon* ph, int le,
         }
 	} // Transmission
 
-    LambdaR  =  LambdaM(fabs(ph->v.z),sig2*0.5);
+    LambdaR  =  LambdaM(vzn,sig2*0.5);
 
     if (!le) {
         if (WAVE_SHADOWd) ph->weight *= __fdividef(fabs(cTh), cBeta * (1.F + LambdaS + LambdaR) * avz );
