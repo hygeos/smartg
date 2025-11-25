@@ -7,7 +7,6 @@ from smartg.atmosphere import diff1
 import numpy as np
 from warnings import warn
 from smartg.albedo import Albedo_cst
-from os.path import realpath, dirname, join
 from smartg.config import NPSTK
 from smartg.tools.phase import fournierForand, integ_phase, calc_iphase
 from smartg.bandset import BandSet
@@ -24,7 +23,7 @@ def read_aw(dir_aux):
     '''
 
     # Pope&Fry
-    with open(join(dir_aux, 'water', 'pope97.dat'), 'rb') as fp:
+    with open(dir_aux / 'water' / 'pope97.dat', 'rb') as fp:
         for i in range(6): fp.readline()  # skip the first 6 lines
         data_pf = np.genfromtxt(fp)
     aw_pf = data_pf[:,1] * 100 #  convert from cm-1 to m-1
@@ -32,7 +31,7 @@ def read_aw(dir_aux):
     ok_pf = lam_pf <= 725
 
     # Palmer&Williams
-    data_pw = np.genfromtxt(join(dir_aux, 'water', 'palmer74.dat'), skip_header=5)
+    data_pw = np.genfromtxt(dir_aux / 'water' / 'palmer74.dat', skip_header=5)
     aw_pw = data_pw[::-1,1] * 100 #  convert from cm-1 to m-1
     lam_pw = data_pw[::-1,0]
     ok_pw = lam_pw > 725
@@ -368,7 +367,7 @@ class IOP_1(IOP_base):
         self.aw = read_aw(dir_aux)
 
         # Bricaud (98)
-        ap_bricaud = np.genfromtxt(join(dir_aux, 'water', 'aph_bricaud_1998.txt'),
+        ap_bricaud = np.genfromtxt(dir_aux / 'water' / 'aph_bricaud_1998.txt',
                                    delimiter=',', skip_header=12)  # header is lambda,Ap,Ep,Aphi,Ephi
         self.BRICAUD = MLUT()
         self.BRICAUD.add_axis('wav', ap_bricaud[:,0])
@@ -658,7 +657,7 @@ class IOP_profile(IOP_base):
 
         # Bricaud (98)
         # Absorption of the phytoplankton
-        ap_bricaud = np.genfromtxt(join(dir_aux, 'water', 'aph_bricaud_1998.txt'),
+        ap_bricaud = np.genfromtxt(dir_aux / 'water' / 'aph_bricaud_1998.txt',
                                    delimiter=',', skip_header=12)  # header is lambda,Ap,Ep,Aphi,Ephi
         # Add extension to 360 nm (Wei et al., 2016)
         # spectral slope of aph is symetrical wrt 440 nm in the 360-520 spectral range

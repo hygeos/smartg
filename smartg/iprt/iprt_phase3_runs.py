@@ -444,7 +444,9 @@ def aer2smartg(filename, nb_theta=int(1801), rh_or_reff=None, rh_reff=None):
     """
 
     if isinstance(filename, xr.Dataset): ds = filename
-    else: ds = xr.open_dataset(filename)
+    else:
+        filename = Path(filename)
+        ds = xr.open_dataset(filename)
 
     if 'hum' in ds.variables: 
         if rh_reff is None: rh_reff = ds["hum"].values
@@ -494,7 +496,7 @@ def aer2smartg(filename, nb_theta=int(1801), rh_or_reff=None, rh_reff=None):
     ds_out['ssa'].attrs = {'description': 'Single scattering albedo'}
     ds_out['phase'] = xr.DataArray(pha_out, dims=[rh_or_reff, 'wav', 'stk', 'theta'])
     ds_out['phase'].attrs = {'description': 'scattering phase matrix'}
-    if isinstance(filename, str) : name = os.path.basename(filename)
+    if isinstance(filename, Path) : name = filename.name
     else: name = 'none'
     if rh_or_reff == 'hum':
         ds_out.attrs = {'name': name,

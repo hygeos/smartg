@@ -11,11 +11,11 @@ SMART-G constant variables
 
 '''
 
-dir_root = Path(__file__).resolve().parent.parent
+DIR_ROOT = Path(__file__).resolve().parent.parent
 NPSTK = 4
-dir_auxdata_old = dir_root / 'auxdata'
+dir_auxdata_old = DIR_ROOT / 'auxdata'
 
-load_dotenv(dir_root / '.env') # To consider .env file
+load_dotenv(DIR_ROOT / '.env') # To consider .env file
 
 # Allow old way in v1.1, but remove it in next releases
 try:

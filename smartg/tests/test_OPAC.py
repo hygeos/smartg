@@ -3,12 +3,11 @@
 
 import pytest
 from smartg.atmosphere import AtmAFGL, AerOPAC
-import os
 from pathlib import Path
 import logging
 
 # ***************************** Global variable(s) ******************************
-ROOTPATH = os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+ROOTPATH = Path(__file__).resolve().parent.parent.parent
 
 AER_SPHERIC = ['continental_clean','continental_average','continental_polluted','urban','desert_spheric',
                'maritime_clean','maritime_polluted','maritime_tropical','arctic','antarctic_spheric']
@@ -32,7 +31,7 @@ DELTA_R_SSA = 0.2 # relative error in %
 
 # *********************************** logging ***********************************
 # Create log file
-Path(os.path.join(ROOTPATH, "smartg/tests/logs/")).mkdir(parents=True, exist_ok=True)
+Path(ROOTPATH / 'smartg' / 'tests' / 'logs').mkdir(parents=True, exist_ok=True)
 
 # Create a named logger
 logger = logging.getLogger('test_OPAC')
@@ -51,7 +50,7 @@ console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
 # Create a file handler
-file_handler = logging.FileHandler(ROOTPATH + "/smartg/tests/logs/OPAC.log", mode='w')
+file_handler = logging.FileHandler(ROOTPATH / 'smartg' / 'tests' / 'logs' / 'OPAC.log', mode='w')
 file_handler.setLevel(logging.INFO)
 
 # Set the formatter for the file handler

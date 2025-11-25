@@ -3,8 +3,7 @@
 
 
 from numpy import sin, cos, pi, allclose
-from os.path import exists, dirname
-from os import makedirs, remove
+from pathlib import Path
 import warnings
 
 warnings.warn('deprecated')
@@ -81,16 +80,15 @@ class PhaseFunction(object):
         '''
         write the phase function to a text file filename
         '''
-
-        if exists(filename):
+        filename = Path(filename)
+        if filename.exists():
             if overwrite:
-                print 'INFO: overwriting {}'.format(filename)
-                remove(filename)
+                print(f"INFO: overwriting {filename}")
+                filename.unlink()
             else:
-                raise Exception('File {} exists'.format(filename))
-
-        if not exists(dirname(filename)):
-            makedirs(dirname(filename))
+                raise Exception(f"File {filename} exists")
+            
+        filename.parent.mkdir(parents=True, exist_ok=True)
 
         #
         # write the phase function
@@ -105,7 +103,7 @@ class PhaseFunction(object):
                 line = line+'\n'
             fo.write(line)
 
-        for i in xrange(self.N):
+        for i in range(self.N):
             ang = self.ang[i]
             if not self.degrees:
                 ang *= 180./pi
@@ -192,9 +190,9 @@ if __name__ == '__main__':
     from numpy import trapz, linspace
 
     th = linspace(1e-7, pi, 1e6)
-    print 'Normalization'
-    print 'HG', trapz(henyeyGreenstein(th, 0.5)*sin(th), x=th)
-    print 'FF', trapz(fournierForand(th, 1.15, 3.5)*sin(th), x=th)
+    print('Normalization')
+    print('HG', trapz(henyeyGreenstein(th, 0.5)*sin(th), x=th))
+    print('FF', trapz(fournierForand(th, 1.15, 3.5)*sin(th), x=th))
 
     # test()
 

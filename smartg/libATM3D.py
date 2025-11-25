@@ -15,7 +15,6 @@ from smartg.smartg import Sensor
 import matplotlib.gridspec as gridspec
 import matplotlib.ticker as ticker
 
-from os.path import join, dirname, exists
 from smartg.config import DIR_AUXDATA
 from luts.luts import read_mlut
 
@@ -237,12 +236,18 @@ class Cloud3D(object):
                  reff_acc = None, reff_min = None, reff_max = None,
                  phase=None):
         
-        if dirname(filename) == '' : self.filename = join(DIR_AUXDATA, 'clouds', filename)
-        else                       : self.filename = filename
-        if (not "_sol" in filename) and (not filename.endswith('.nc')) : self.filename = self.filename + '_sol.nc'
-        elif (not filename.endswith('.nc'))                            : self.filename += '.nc'
+        filename = Path(filename)
+        if filename.parent == Path('.'): filename = Path(DIR_AUXDATA) / 'clouds' / filename
 
-        assert exists(self.filename), '{} does not exist'.format(self.filename)
+        if "_sol" not in filename.name and filename.suffix != ".nc":
+            filename = filename.with_name(filename.stem + "_sol.nc")
+        elif filename.suffix != ".nc":
+            filename = filename.with_name(filename.name + ".nc")
+
+        if not filename.exists():
+            raise FileNotFoundError(f"{filename} does not exist")
+        
+        self.filename = filename
         self.cld_mlut = read_mlut(self.filename)
         self.w_ref = w_ref
 
@@ -251,10 +256,10 @@ class Cloud3D(object):
             self.ext_reff_filename = None
         elif (not Path(ext_reff_filename).exists()):
             raise NameError("The given file does not exists!")
-        elif (not os.access(ext_reff_filename, os.R_OK)):
+        elif (not os.access(Path(ext_reff_filename), os.R_OK)):
             raise NameError("The given file cannot be read!")
         else:
-            self.ext_reff_filename = ext_reff_filename
+            self.ext_reff_filename = Path(ext_reff_filename)
         
         # If file_name is None, all other variables must be specified
         if  ( (ext_reff_filename is None)

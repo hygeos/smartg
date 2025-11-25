@@ -14,7 +14,6 @@ from datetime import datetime, timezone
 from numpy import pi
 from smartg.atmosphere import Atmosphere, od2k, BPlanck
 from smartg.water import IOP_base
-from os.path import dirname, realpath, join
 from warnings import warn
 from smartg.albedo import Albedo_cst, Albedo_speclib, Albedo_spectrum, Albedo_map
 from smartg.tools.progress import Progress
@@ -41,10 +40,10 @@ from smartg.geometry import Vector
 
 
 # set up directories
-dir_root = dirname(dirname(realpath(__file__)))
-dir_src = join(dir_root, 'smartg/src/')
-src_device = join(dir_src, 'device.cu')
-src_kernel2 = join(dir_src, 'kernel2.cu')
+from smartg.config import DIR_ROOT
+dir_src = DIR_ROOT / 'smartg' / 'src'
+src_device = dir_src / 'device.cu'
+src_kernel2 = dir_src / 'kernel2.cu'
 # constants definition
 # (should match #defines in src/communs.h)
 SPACE    =  0
@@ -924,8 +923,8 @@ class Smartg(object):
                            options=options,
                            no_extern_c=True,
                            cache_dir=cache_dir,
-                           include_dirs=[dir_src,
-                               join(dir_src, 'incRNGs/Random123/')])
+                           include_dirs=[str(dir_src),
+                                         str(dir_src / 'incRNGs' / 'Random123')])
 
         # load the kernel
         self.kernel = self.mod.get_function('launchKernel')

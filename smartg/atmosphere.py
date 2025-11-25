@@ -4,7 +4,7 @@
 
 from __future__ import print_function, division, absolute_import
 import numpy as np
-from os.path import join, dirname, exists, basename
+from pathlib import Path
 from glob import glob
 from luts.luts import MLUT, LUT, Idx, read_mlut, read_mlut_hdf5
 from smartg.tools.phase import calc_iphase
@@ -152,13 +152,21 @@ class AerOPAC(object):
                 self.ssa = ssa
             else:
                 raise ValueError ("The ssa variable must a scalar, a list, an ndarray of dim <= 2, or a LUT.")
+                    
+        filename = Path(filename)
+        if filename.parent == Path('.'):  # no directory given
+            filename = DIR_AUXDATA / 'aerosols' / 'OPAC' / 'mixtures' / filename.name
 
-        if dirname(filename) == '' : self.filename = join(DIR_AUXDATA, 'aerosols/OPAC/mixtures', filename)
-        else                       : self.filename = filename
-        if ("_sol" not in filename) and (not filename.endswith('.nc')) : self.filename = self.filename + '_sol.nc'
-        elif (not filename.endswith('.nc'))                            : self.filename += '.nc'
+        # Add extension if needed
+        if "_sol" not in filename.name and not filename.suffix == ".nc":
+            filename = filename.with_name(filename.name + "_sol.nc")
+        elif filename.suffix != ".nc":
+            filename = filename.with_name(filename.name + ".nc")
 
-        assert exists(self.filename), '{} does not exist'.format(self.filename)
+        if not filename.exists():
+            raise FileNotFoundError(f"{filename} does not exist")
+
+        self.filename = filename
 
         self.mixture = read_mlut(self.filename)
         # check if hum dim size == 1 (to avoid lut sub bug)
@@ -203,7 +211,7 @@ class AerOPAC(object):
             self.H_max.append(H_mix_max)
             self.Z_sh.append(Z_mix)
         if (H_free_max-H_free_min > 1e-6):
-            filename_tmp = join(DIR_AUXDATA, 'aerosols/OPAC/free_troposphere/free_troposphere_sol.nc')
+            filename_tmp = DIR_AUXDATA / 'aerosols' / 'OPAC' / 'free_troposphere' / 'free_troposphere_sol.nc'
             self.free_tropo = read_mlut(filename_tmp)
             # check we have the same wl dim than previous aer pro in vert_content
             if len(self.vert_content) > 0:
@@ -219,7 +227,7 @@ class AerOPAC(object):
             self.H_max.append(H_free_max)
             self.Z_sh.append(Z_free)
         if (H_stra_max-H_stra_min > 1e-6):
-            filename_tmp = join(DIR_AUXDATA, 'aerosols/OPAC/stratosphere/stratosphere_sol.nc')
+            filename_tmp = DIR_AUXDATA / 'aerosols' / 'OPAC' / 'stratosphere' / 'stratosphere_sol.nc'
             self.strato = read_mlut(filename_tmp)
             # check we have the same wl dim than previous aer pro in vert_content
             if len(self.vert_content) > 0:
@@ -447,10 +455,9 @@ class AerOPAC(object):
         '''
         list standard aerosol files in opac
         '''
-        files = glob(join(DIR_AUXDATA, 'aerosols/OPAC/mixtures/*.nc'))
-        for ifile in range (0, len(files)):
-            files[ifile] = basename(files[ifile]).replace('_sol.nc', '')
-        return files
+        base_dir = DIR_AUXDATA / 'aerosols' / 'OPAC' / 'mixtures'
+        files = list(base_dir.glob("*.nc"))
+        return [f.stem.replace('_sol', '') for f in files]
 
 
 class Cloud(AerOPAC):
@@ -524,12 +531,20 @@ class Cloud(AerOPAC):
             (isinstance(w_ref, np.ndarray) and w_ref.ndim == 0) ) : self.w_ref = np.array([w_ref])
         else                                                      : self.w_ref = np.array(w_ref)
 
-        if dirname(filename) == '' : self.filename = join(DIR_AUXDATA, 'clouds', filename)
-        else                       : self.filename = filename
-        if ("_sol" not in filename) and (not filename.endswith('.nc')) : self.filename = self.filename + '_sol.nc'
-        elif (not filename.endswith('.nc'))                            : self.filename += '.nc'
+        filename = Path(filename)
+        if filename.parent == Path('.'):  # no directory given
+            base_dir = Path(DIR_AUXDATA) / 'clouds'
+            filename = base_dir / filename.name
 
-        assert exists(self.filename), '{} does not exist'.format(self.filename)
+        if "_sol" not in filename.name and not filename.suffix == ".nc":
+            filename = filename.with_name(filename.name + "_sol.nc")
+        elif filename.suffix != ".nc":
+            filename = filename.with_name(filename.name + ".nc")
+
+        if not filename.exists():
+            raise FileNotFoundError(f"{filename} does not exist")
+
+        self.filename = filename
 
         self.mixture = read_mlut(self.filename)
         self.hum_or_reff = "reff"
@@ -555,10 +570,9 @@ class Cloud(AerOPAC):
         '''
         list standard aerosol files in opac
         '''
-        files = glob(join(DIR_AUXDATA, 'clouds/*.nc'))
-        for ifile in range (0, len(files)):
-            files[ifile] = basename(files[ifile]).replace('_sol.nc', '')
-        return files
+        base_dir = Path(DIR_AUXDATA) / "clouds"
+        files = list(base_dir.glob("*.nc"))
+        return [f.stem.replace('_sol', '') for f in files]
         
 
 # ============ \ !! / ============
@@ -580,9 +594,9 @@ class Species(object):
 
         self.name = species
         self.wav_clip = wav_clip
-        fname = join(DIR_AUXDATA, 'aerosols_old/OPAC', species+'.nc')
-        if not exists(fname):
-            raise Exception('file {} does not exist'.format(fname))
+        fname = DIR_AUXDATA / 'aerosols_old' / 'OPAC' / f"{species}.nc"
+        if not fname.exists():
+            raise FileNotFoundError(f"file {fname} does not exist")
         self.fname = fname
 
         s_mlut = read_mlut(fname)
@@ -754,9 +768,9 @@ class Species(object):
         '''
         list standard species files in opac
         '''
-        files = glob(join(DIR_AUXDATA, 'aerosols_old/OPAC', '*.nc'))
-        return map(lambda x: basename(x)[:-4], files)
-
+        base_dir = Path(DIR_AUXDATA) / 'aerosols_old' / 'OPAC'
+        files = base_dir.glob("*.nc")
+        return [f.stem for f in files]
 
 
 class SpeciesUser(Species):
@@ -903,15 +917,16 @@ class AeroOPAC(object):
         if ssa is None : self.ssa = None
         else           : self.ssa = np.array(ssa)
 
-        if dirname(filename) == '' : self.filename = join(DIR_AUXDATA, 'aerosols_old/OPAC_vertical_dist', filename)
-        else                       : self.filename = filename
+        filename = Path(filename)
 
-        if not filename.endswith('.nc') : self.filename += '.nc'
+        if filename.parent == Path('.'):
+            filename = Path(DIR_AUXDATA) / 'aerosols_old' / 'OPAC_vertical_dist' / filename.name
 
-        self.basename = basename(self.filename)
-        if self.basename.endswith('.nc') : self.basename = self.basename.split('.nc')[0]
+        if filename.suffix != ".nc":
+            filename = filename.with_name(filename.name + ".nc")
 
-        assert exists(self.filename), '{} does not exist'.format(self.filename)
+        self.filename = filename
+        self.basename = filename.stem
 
         #
         # read mlut with aer component mass densities
@@ -1070,10 +1085,9 @@ class AeroOPAC(object):
         '''
         list standard aerosol files in opac
         '''
-        files = glob(join(DIR_AUXDATA, '/auxdata/aerosols_old/OPAC_vertical_dist/', '*.nc'))
-        return map(lambda x: basename(x)[:-3], files)
-
-
+        base_dir = Path(DIR_AUXDATA) / 'auxdata' / 'aerosols_old' / 'OPAC_vertical_dist'
+        files = base_dir.glob("*.nc")
+        return [f.stem for f in files]
 
 
 class CloudOPAC(AeroOPAC):
@@ -1377,43 +1391,48 @@ class AtmAFGL(Atmosphere):
 
         assert (np.diff(pfgrid) < 0.).all()
 
+        atm_filename = Path(atm_filename)
+
         #
         # init directories
         #
         # TODO Trick bellow to improve
-        if atm_filename == "ATM3D":
+        if atm_filename.name == "ATM3D":
             Nopt = grid.size
             atm_arr = np.zeros((Nopt,9))
             atm_arr[:,0] = np.arange(Nopt)[::-1]
-            np.savetxt('./tmp.dat', atm_arr)
-            atm_filename = "./tmp.dat"
+            tmp_f =Path('./tmp.dat')
+            np.savetxt(tmp_f, atm_arr)
+            atm_filename = atm_filename
 
         if not new_atm:
-            if dirname(atm_filename) == '':
-                atm_filename = join(dir_libradtran_atmmod, atm_filename)
-            if (not exists(atm_filename)) and (not atm_filename.endswith('.dat')):
-                atm_filename += '.dat'
+            if atm_filename.parent == Path('.'):
+                atm_filename = dir_libradtran_atmmod / atm_filename.name
+            if not atm_filename.exists() and atm_filename.suffix != '.dat':
+                atm_filename = atm_filename.with_name(atm_filename.name + ".nc")
         else:
-            if dirname(atm_filename) == '':
-                atm_filename = join(DIR_AUXDATA, 'atmospheres/', atm_filename)
-            if (not exists(atm_filename)) and (not atm_filename.endswith('.nc')):
-                atm_filename += '.nc'
+            if atm_filename.parent == Path('.'):
+                atm_filename = DIR_AUXDATA / 'atmospheres' / atm_filename.name
+            if not atm_filename.exists() and atm_filename.suffix != '.nc':
+                atm_filename = atm_filename.with_name(atm_filename.name + ".nc")
 
         #
         # read gaseous acs
         #
-        if dirname(O3_acs) == '':
-            O3_acs_file = join(DIR_AUXDATA, 'acs/', O3_acs)
-        if (not exists(O3_acs_file)) and (not O3_acs_file.endswith('.nc')):
-                O3_acs_file += '.nc'
-        self.acs_o3 = read_mlut(O3_acs_file)
+        O3_acs_path = Path(O3_acs)
+        if O3_acs_path.parent == Path('.'):
+            O3_acs_path = DIR_AUXDATA / 'acs' / O3_acs_path.name
+        if not O3_acs_path.exists() and O3_acs_path.suffix != '.nc':
+            O3_acs_path = O3_acs_path.with_name(O3_acs_path.name + ".nc")
+        self.acs_o3 = read_mlut(O3_acs_path)
         self.acs_o3.rename_axis('wav', 'wavelength')
 
-        if dirname(NO2_acs) == '':
-            NO2_acs_file = join(DIR_AUXDATA, 'acs/', NO2_acs)
-        if (not exists(NO2_acs_file)) and (not NO2_acs_file.endswith('.nc')):
-                NO2_acs_file += '.nc'
-        self.acs_no2 = read_mlut(NO2_acs_file)
+        NO2_acs_path = Path(NO2_acs)
+        if NO2_acs_path.parent == Path('.'):
+            NO2_acs_path = DIR_AUXDATA / 'acs' / NO2_acs_path.name
+        if not NO2_acs_path.exists() and NO2_acs_path.suffix != '.nc':
+            NO2_acs_path = NO2_acs_path.with_name(NO2_acs_path.name + ".nc")
+        self.acs_no2 = read_mlut(NO2_acs_path)
         self.acs_no2.rename_axis('wav', 'wavelength')
 
 
@@ -1952,6 +1971,7 @@ class Profile_base(object):
 
         if atm_filename is None:
             return
+        atm_filename = Path(atm_filename)
         self.atm_filename = atm_filename
         with open(atm_filename) as f:
             lines = f.readlines()
@@ -2042,10 +2062,10 @@ class Profile_base(object):
         '''
 
         if US:
-            ch4_filename = join(dir_libradtran_atmmod, 'afglus_ch4_vmr.dat')
-            co_filename = join(dir_libradtran_atmmod, 'afglus_co_vmr.dat')
-            n2o_filename = join(dir_libradtran_atmmod, 'afglus_n2o_vmr.dat')
-            n2_filename = join(dir_libradtran_atmmod, 'afglus_n2_vmr.dat')
+            ch4_filename = dir_libradtran_atmmod / 'afglus_ch4_vmr.dat'
+            co_filename = dir_libradtran_atmmod / 'afglus_co_vmr.dat'
+            n2o_filename = dir_libradtran_atmmod / 'afglus_n2o_vmr.dat'
+            n2_filename = dir_libradtran_atmmod / 'afglus_n2_vmr.dat'
             #datach4 = np.loadtxt(ch4_filename, comments="#")
             datach4 = pd.read_csv(ch4_filename, comment="#", header=None, sep=r'\s+', dtype=float).values
             self.dens_ch4 = interp1d(datach4[:,0] , datach4[:,1])(self.z) * self.dens_air # CH4 density en cm-3
@@ -2140,6 +2160,7 @@ class Profile_base2(Profile_base):
 
         if atm_filename is None:
             return
+        atm_filename = Path(atm_filename)
         self.atm_filename = atm_filename
 
 

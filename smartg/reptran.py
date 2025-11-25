@@ -6,14 +6,14 @@ from __future__ import print_function, division, absolute_import
 import numpy as np
 from luts.luts import LUT, MLUT
 from smartg.atmosphere import od2k, BPlanck
-from os.path import dirname, join
+from pathlib import Path
 from scipy.integrate import quad, simpson
 from smartg.config import DIR_AUXDATA
 from scipy.interpolate import interp1d
 import netCDF4
 from smartg.tools.interp import interp2, interp3
 
-dir_reptran = join(DIR_AUXDATA, 'reptran')
+dir_reptran = DIR_AUXDATA / 'reptran'
 
 def reduce_reptran(mlut, ibands, use_solar=False, integrated=False, extern_weights=None):
     '''
@@ -87,7 +87,7 @@ class REPTRAN_IBAND(object):
         self.extra = band.aextra[index]  # solar irradiance
         self.crs_source = band.across_section_source[index,:]  # table of absorbing gases
         self.species=['H2O','CO2','O3','N2O','CO','CH4','O2','N2']
-        self.filename = band.filename
+        self.filename = Path(band.filename)
 
     def calc_profile(self, prof):
         '''
@@ -123,7 +123,8 @@ class REPTRAN_IBAND(object):
             if self.crs_source[ig]==1:
 
                 # on recupere la LUT d'absorption
-                crs_filename = self.filename[:-4] + '.lookup.' + self.species[ig]
+                crs_filename = self.filename.with_suffix('')  # supprime l'extension
+                crs_filename = crs_filename.with_name(f"{crs_filename.name}.lookup.{self.species[ig]}")
                 crs_mol = readCRS(crs_filename, self._iband)
 
                 # interpolation du profil vertical de temperature de reference dans les LUT
@@ -159,7 +160,7 @@ class REPTRAN_BAND(object):
         self.aextra = reptran.extra[self._iband-1] # the extra terrestrial solar irradiance of the internal bands for this channel
         self.across_section_source = reptran.cross_section_source[self._iband-1] # the source of absorption by species of the internal bands for this channel
         self.name = reptran.band_names[band]
-        self.filename = reptran.filename    
+        self.filename = Path(reptran.filename)    
         # the wavelength integral (width) of this channel
         self.Rint = reptran.wvl_integral[self.band]
         
@@ -193,13 +194,14 @@ class REPTRAN(object):
     '''
 
     def __init__(self,filename):
-        if dirname(filename) == '':
-            self.filename = join(dir_reptran, filename)
+        filename = Path(filename)
+        if filename.parent == Path('.'):
+            self.filename = dir_reptran / filename
         else:
             self.filename = filename
 
-        if not self.filename.endswith('.cdf'):
-            self.filename += '.cdf'
+        if not filename.suffix == '.cdf':
+            self.filename = self.filename.with_name(self.filename.name + '.cdf')
 
         self._readFileGeneral()
 
@@ -334,11 +336,11 @@ class REPTRAN_IBAND_LIST(object):
 
 class readCRS(object):
     def __init__(self,filename,iband):
-        self.filename=filename
+        self.filename=Path(filename)
         self._readFileGeneral(iband)
 
     def _readFileGeneral(self,iband):
-        nc=netCDF4.Dataset(join(dir_reptran, self.filename+'.cdf'))
+        nc=netCDF4.Dataset(dir_reptran / f'{self.filename.name}.cdf')
         self.wvl_index=nc.variables['wvl_index'][:]
         ii=list(self.wvl_index).index(iband)
         dat=nc.variables['xsec'][:]

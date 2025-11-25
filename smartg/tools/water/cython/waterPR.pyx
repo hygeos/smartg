@@ -1,8 +1,7 @@
 import numpy as np
 cimport numpy as np
 
-from os.path import join
-
+from pathlib import Path
 from clut cimport CLUT
 from libc.math cimport exp, M_PI, isnan, log
 from warnings import warn
@@ -58,7 +57,7 @@ cdef class ParkRuddick(WaterModel):
         self.debug = debug
         self.alt_gamma_bb = alt_gamma_bb
         self.min_abs = min_abs  # activate mineral absorption
-
+        directory = Path(directory)
         self.read_iop(directory)
         self.read_gi(directory)
 
@@ -67,7 +66,8 @@ cdef class ParkRuddick(WaterModel):
         #
         # read water scattering coefficient
         #
-        data_bw = np.genfromtxt(join(directory, 'morel_buiteveld_bsw.txt'), skip_header=1)
+        directory = Path(directory)
+        data_bw = np.genfromtxt(directory / 'morel_buiteveld_bsw.txt', skip_header=1)
         self.BW = CLUT(data_bw[:,1], axes=[data_bw[:,0]])
         assert data_bw[-1,0] == 500.
         self.bw500 = data_bw[-1,1]
@@ -76,18 +76,18 @@ cdef class ParkRuddick(WaterModel):
         # read pure water absorption coefficient
         #
         # Pope&Fry
-        data = np.genfromtxt(join(directory, 'pope97.dat'), skip_header=6)
+        data = np.genfromtxt(directory / 'pope97.dat', skip_header=6)
         data[:,1] *= 100 #  convert from cm-1 to m-1
         self.AW_POPEFRY = CLUT(data[:,1], axes=[data[:,0]])
         # Palmer&Williams
-        data = np.genfromtxt(join(directory, 'palmer74.dat'), skip_header=5)
+        data = np.genfromtxt(directory / 'palmer74.dat', skip_header=5)
         data[:,1] *= 100 #  convert from cm-1 to m-1
         self.AW_PALMERW = CLUT(data[:,1], axes=[data[:,0]])
 
         #
         # read phytoplankton absorption
         #
-        ap_bricaud = np.loadtxt(join(directory, 'aph_bricaud_1995.txt'), delimiter=',')
+        ap_bricaud = np.loadtxt(directory / 'aph_bricaud_1995.txt', delimiter=',')
         lambda_bric95 = ap_bricaud[:, 0]
         self.AB_BRIC = CLUT(ap_bricaud[:,1:], axes=[lambda_bric95, None])
         assert lambda_bric95[-1] == 700
@@ -96,14 +96,14 @@ cdef class ParkRuddick(WaterModel):
         #
         # read mineral absorption
         #
-        astar_ = np.genfromtxt(join(directory, 'astarmin_average_2015_SLSTR.txt'), comments='%')
+        astar_ = np.genfromtxt(directory / 'astarmin_average_2015_SLSTR.txt', comments='%')
         self.ASTAR = CLUT(astar_[:-1,1],
                           axes=[astar_[:-1,0]])
 
         #
         # read Raman correction
         #
-        raman = np.genfromtxt(join(directory, 'raman_westberry13.txt'), comments='#')
+        raman = np.genfromtxt(directory / 'raman_westberry13.txt', comments='#')
         # (wl, chl)
         self.RAMAN = CLUT(raman[:,1:], axes=[raman[:,0],
                 [0.01,0.02,0.03,0.04,0.07,0.1,0.2,0.3,0.5,0.7,1.,2.,5.]])
@@ -112,8 +112,8 @@ cdef class ParkRuddick(WaterModel):
         '''
         read gi coefficients
         '''
-
-        fp = open(join(directory, 'AboveRrs_gCoef_w5.dat'))
+        directory = Path(directory)
+        fp = open(directory / 'AboveRrs_gCoef_w5.dat')
 
         # read first lines
         fp.readline() # first line useless

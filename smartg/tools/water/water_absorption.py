@@ -4,7 +4,7 @@
 
 
 from numpy import loadtxt, zeros, NaN, interp
-from os.path import dirname, join
+from pathlib import Path
 
 
 def a_w(lam):
@@ -12,9 +12,9 @@ def a_w(lam):
     pure water absorption from Pope and Fry + Palmer and Williams
     '''
 
-    this_dir = dirname(__file__)
-    file_pope97 = join(this_dir, 'data', 'pope97.dat')
-    file_palmer = join(this_dir, 'data', 'palmer74.dat')
+    this_dir = Path(__file__).parent
+    file_pope97 = this_dir / 'data' / 'pope97.dat'
+    file_palmer = this_dir / 'data' / 'palmer74.dat'
 
     # 1) Pope&Fry
     wl_popefry = loadtxt(file_pope97, skiprows=6, usecols=(0,))

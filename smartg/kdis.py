@@ -16,8 +16,8 @@ from smartg.tools.interp import interp2
 import h5py
 
 from smartg.config import DIR_AUXDATA
-from os.path import dirname, join
-dir_kdis = join(DIR_AUXDATA, 'kdis')
+from pathlib import Path
+dir_kdis = DIR_AUXDATA / 'kdis'
 import warnings
 
 import glob
@@ -87,7 +87,8 @@ class KDIS(object):
 
         self.model = model
 
-        if dirname(dir_data) == '': dir_data = join(dir_kdis, dir_data, model)
+        dir_data = Path(dir_data)
+        if dir_data.parent == Path('.') : dir_data = dir_kdis / dir_kdis / model
     
         is_sorted = lambda a: np.all(a[:-1] <= a[1:])
 
@@ -101,9 +102,8 @@ class KDIS(object):
             warnings.warn(warn_message, DeprecationWarning)
  
         if format == 'ascii':
-
-            filename = join(dir_data, 'kdis_'+model+'_def.dat')
-            if not os.path.isfile(filename):
+            filename = dir_data / f'kdis_{model}_def.dat'
+            if not filename.is_file():
                 print("(kdis_coef) ERROR")
                 print("            Missing file:", filename)
                 sys.exit()
@@ -198,8 +198,8 @@ class KDIS(object):
                 self.ki_c    = np.zeros((self.nsp_c,self.nwvl,self.nmaxai,self.np,self.nt,self.nc))
                 self.ai_c    = np.zeros((self.nsp_c,self.nwvl,self.nmaxai))
             for isp in range(self.nsp):
-                filename = join(dir_data, 'kdis_'+model+'_'+self.species[isp]+'.dat')
-                if not os.path.isfile(filename):
+                filename = dir_data / f'kdis_{model}_{self.species[isp]}.dat'
+                if not filename.is_file():
                     print("(kdis_coef) ERROR")
                     print("            Missing file:", filename)
                     sys.exit()                    
@@ -227,8 +227,8 @@ class KDIS(object):
             else:
                 self.c_desc = "none"
             for isp in range(self.nsp_c):
-                filename = join(dir_data, 'kdis_'+model+'_'+self.species_c[isp]+'.dat')
-                if not os.path.isfile(filename):
+                filename = dir_data / f'kdis_{model}_{self.species_c[isp]}.dat'
+                if not filename.is_file():
                     print("(kdis_coef) ERROR")
                     print("            Missing file:", filename)
                     sys.exit()                    
@@ -251,10 +251,10 @@ class KDIS(object):
                                         self.ki_c[isp,iwvl,iai,ip,it,ic] = float(tmp.split()[iai])                                  
                 f.close()
             
-            filename = join(dir_data, 'kdis_'+model+'_'+'solarflux.dat')
-            if not os.path.isfile(filename):
-                filename = join(dir_data, 'solrad_'+'kdis_'+model+'_'+'thuillier2003.dat')
-                if not os.path.isfile(filename):
+            filename = dir_data / f'kdis_{model}_solarflux.dat'
+            if not filename.is_file():
+                filename = dir_data /f'solrad_kdis_{model}_thuillier2003.dat'
+                if not filename.is_file():
                     print("(kdis_coef) ERROR")
                     print("            Missing file:", filename)
                     sys.exit()
@@ -277,7 +277,7 @@ class KDIS(object):
         
         elif format in ["h5","hdf5"]:
 
-            filename = join(dir_data, 'kdis_'+model+'.h5')
+            filename = dir_data / f'kdis_{model}.h5'
             f = h5py.File(filename,"r")
             self.nmaxai = np.copy(f["def"]["maxnai"])
             species_tot = list(f["coeff"].keys())
