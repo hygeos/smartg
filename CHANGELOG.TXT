@@ -6,6 +6,28 @@
            ###########################
 
 
+v1.1.1
+------
+Release date: 2025-11-25
+
+* Corrections in AerOPAC and Cloud classes
+  - Proper handling of the `phase` parameter
+  - Docstring updated and corrected
+  
+* Correction of bugs while using RoughSurface for simulations in spherical shell geometry
+  - Fix bug when using reflectance=false (for both BRDF=true and BRDF=False)
+  - Fig bug with showdowing-masking function. Completely fixed for BRDF=true. 
+    Partially for BRDF=false, still very small bias for very high VZA values with
+    sensor at TOA. 
+    
+
+* Use of template for all geometric classes in the source CUDA code
+
+* Remove an unused notebook
+
+* Only use of pathlib to improve cross-platform compatibility
+
+
 v1.1.0
 ------
 Release date: 2025-08-19
