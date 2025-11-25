@@ -4874,7 +4874,11 @@ __device__ void surfaceWaterRough(Photon* ph, int le,
      }
 
      // Reflected/Refracted direction, Normalization of qv
+     #ifdef SPHERIQUE
+     LambdaR  =  LambdaM(fabs(dot(v, Nz)),sig2*0.5);
+     #else
      LambdaR  =  LambdaM(fabs(v.z),sig2*0.5);
+     #endif
 
      float norma;
      if (WAVE_SHADOWd) norma = 1. + LambdaS + LambdaR;
@@ -5082,7 +5086,7 @@ __device__ void surfaceWaterRough(Photon* ph, int le,
         }
 	} // Transmission
 
-    LambdaR  =  LambdaM(vzn,sig2*0.5);
+    LambdaR  =  LambdaM(fabs(vzn),sig2*0.5);
 
     if (!le) {
         if (WAVE_SHADOWd) ph->weight *= __fdividef(fabs(cTh), cBeta * (1.F + LambdaS + LambdaR) * avz );
