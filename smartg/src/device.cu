@@ -4855,14 +4855,16 @@ __device__ void surfaceWaterRough(Photon* ph, int le,
 
      if ((ph->loc==SURF0P) && (count_level==UP0P) ||
          (ph->loc==SURF0M) && (count_level==DOWN0M)) { // Reflection geometry
-            qv  = __fdividef(p * fabs(cTh), cBeta * fabs(v.z));
+            if(HORIZd) {qv  = __fdividef(p * fabs(cTh), cBeta * fabs(v.z));}
+            else {qv  = __fdividef(p * fabs(cTh), cBeta);}
             // Multiplication by the reflection Jacobian
             jac = __fdividef(1.F, 4.F * fabs(cTh) );
      }
      if ((ph->loc==SURF0P) && (count_level==DOWN0M) ||
          (ph->loc==SURF0M) && (count_level==UP0P))   { // Refraction geometry
             if (sTh <= nind) {
-                qv  =  __fdividef(p * fabs(cTh), cBeta * fabs(v.z));
+                if(HORIZd) {qv  =  __fdividef(p * fabs(cTh), cBeta * fabs(v.z));}
+                else {qv  =  __fdividef(p * fabs(cTh), cBeta);}
                 // Multiplication by the refraction Jacobian
                 #ifndef BACK
                 jac = __fdividef(nind*nind * cot, (ncot - cTh)*(ncot - cTh)); // See Zhai et al., 2010
