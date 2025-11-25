@@ -31,9 +31,8 @@ from pathlib import Path
 
 S1DB = Smartg(back=True, double=True, bias=True, pp=False)
 S1DB_PP = Smartg(back=True, double=True, bias=True, pp=True, alt_pp=True)
-
-# 
-OPT_PROP_PATH_PHASE3 = DIR_AUXDATA + "/IPRT/phase3/opt_prop/"
+ 
+OPT_PROP_PATH_PHASE3 = DIR_AUXDATA / 'IPRT' / 'phase3' / 'opt_prop'
 
 def get_d1_to_e5_boa_sensors(vza, phi, nvza, nvaa, earth_r):
     sensors = []
