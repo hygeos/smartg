@@ -48,7 +48,6 @@ dependencies = [
     "pycuda",
     "geoclide",
     "luts",
-    "hitran-api"
 ]
 
 [project.optional-dependencies]
