@@ -2,3 +2,4 @@ recursive-include smartg/tools *
 recursive-include smartg/src *
 include smartg/notebooks/demo_notebook*.ipynb
 recursive-include smartg/tests *
+recursive-include smartg/iprt *
