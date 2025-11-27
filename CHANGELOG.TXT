@@ -6,6 +6,20 @@
            ###########################
 
 
+v1.1.2
+Release date: 2025-11-27
+
+* Remove hitran-api
+
+* Correction in MANIFEST.in file
+
+* Require geoclide >= 3 and remove python maximum version constraint.
+
+* Correction in test_smartg_jax
+
+* Cleaning before preparing a release for conda-forge
+
+
 v1.1.1
 ------
 Release date: 2025-11-25
