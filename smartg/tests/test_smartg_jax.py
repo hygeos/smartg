@@ -19,6 +19,9 @@ from luts import LUT
 from smartg.tools.smartg_view import mdesc
 from smartg import conftest
 import os
+from pathlib import Path
+from smartg.config import DIR_AUXDATA
+
 #os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"]   = "platform"
 
@@ -77,24 +80,24 @@ def test_smartg_jax2(N_WL_ABS, WMIN, WMAX, request, NBPHOTONS=2e4, MAX_HIST=2e7)
 
     
 @pytest.mark.skipif(SKIP, reason="cannot test this since the jax package is not installed.")    
-def test_validation_artdeco(request, NB=1e6, VALPATH='/home/did/RTC/SMART-G/'):
+def test_validation_artdeco(request, NB=1e6, VALPATH=DIR_AUXDATA):
     '''
     Validation of SMART-G with ARTDECO validation data
     '''
     typ='urban' # tau=0.25
     ####################""""""
-    fgas = VALPATH+'smartg/validation/cTauGas_ray_%s_O2.dat'%typ
+    fgas = Path(VALPATH) / 'validation' / f"cTauGas_ray_{typ}_O2.dat"
     gas_valid   = diff1(np.loadtxt(fgas, skiprows=7)[:,1:].T, axis=1)
     z_valid   = np.loadtxt(fgas, skiprows=7)[:,0]
     w_valid   = np.array(open(fgas).readlines()[5].split()).astype(float)
-    fray = VALPATH+'smartg/validation/cTauRay_ray_%s_O2.dat'%typ
+    fray = Path(VALPATH) / 'validation' / f"cTauRay_ray_{typ}_O2.dat"
     ray_valid = diff1(np.loadtxt(fray, skiprows=7)[:,1:].T, axis=1)
-    faer_abs = VALPATH+'smartg/validation/cTauAbs_ptcle_ray_%s_O2.dat'%typ
+    faer_abs = Path(VALPATH) / 'validation' / f"cTauAbs_ptcle_ray_{typ}_O2.dat"
     aer_abs_valid = diff1(np.loadtxt(faer_abs, skiprows=7)[:,1:].T, axis=1)
-    faer_sca = VALPATH+'smartg/validation/cTauSca_ptcle_ray_%s_O2.dat'%typ
+    faer_sca = Path(VALPATH) / 'validation' / f"cTauSca_ptcle_ray_{typ}_O2.dat"
     aer_sca_valid = diff1(np.loadtxt(faer_sca, skiprows=7)[:,1:].T, axis=1)
     # aerosols phase matrix import
-    faer_phase= VALPATH+'smartg/validation/phasemat_ray_%s_O2.dat'%typ
+    faer_phase= Path(VALPATH) / 'validation' / f"phasemat_ray_{typ}_O2.dat"
     f=open(faer_phase,'r')
     N=np.genfromtxt(faer_phase, usecols=range(1), max_rows=1, dtype=int)
     pfwav=[]
@@ -108,7 +111,7 @@ def test_validation_artdeco(request, NB=1e6, VALPATH='/home/did/RTC/SMART-G/'):
     phase_valid = LUT(data[:,:,1:,:],
             names = ['wav_phase_atm', 'z_phase_atm', 'stk','theta'] ,
             axes  = [pfwav, [0], None, data[0,0,0,:]])
-    data_valid=np.loadtxt(VALPATH+'smartg/validation/artdeco_lbl_nstr_32_ray_%s_O2.dat'%typ)
+    data_valid=np.loadtxt(Path(VALPATH) / 'validation' / f"artdeco_lbl_nstr_32_ray_{typ}_O2.dat")
     aer_ext_valid  = aer_sca_valid + aer_abs_valid
     aer_ssa_valid  = aer_sca_valid / aer_ext_valid
     aer_ssa_valid[aer_ext_valid==0]=1.
