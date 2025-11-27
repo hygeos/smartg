@@ -24,8 +24,29 @@ Mathieu Compiègne
 
 ## 1. Installation
 
-### 1.1 Dependencies
-### 1.1.1 Pixi (recommended)
+### 1.1 Install from pypi
+To install SMART-G from PyPI:
+
+```bash
+  pip install smartg
+```
+
+To include extra dependencies use instead:
+
+```bash
+  pip install smartg[extra]
+```
+
+### 1.2 Install from github
+First clone the repository:
+
+```bash
+  git clone https://github.com/hygeos/smartg.git
+```
+
+You can now choose between Pixi or Conda for your development environment.
+
+#### 1.2.1 Using Pixi (recommended)
 [Pixi](https://pixi.sh/) is recommended for its fast dependency resolution and robust environment management. Unlike Conda, which only considers Conda packages during conflict resolution, Pixi consider both Conda and pip package versions when solving dependencies.
 
 To create and activate the environment, use the following command:
@@ -40,9 +61,7 @@ To consider all extra dependencies (e.g. jax), use instead:
   pixi shell --environment extra
 ```
 
-
-
-### 1.1.2 Anaconda/Miniconda (alternative)
+#### 1.2.2 Anaconda/Miniconda (alternative)
 
 With Anaconda/Miniconda, use the following command:
 
@@ -60,7 +79,8 @@ The auxiliary data can be downloaded as follow:
 ```python
 >>> # Example to download all the data. See the docstring for more details.
 >>> from smartg.auxdata import download
->>> download('dir/path/where/to/save/data/', data_type='all')
+>>> from pathlib import Path
+>>> download(Path('dir/path/where/to/save/data/'), data_type='all')
 ```
 
 The environment variable `SMARTG_DIR_AUXDATA` have to be defined.
