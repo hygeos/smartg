@@ -147,8 +147,12 @@ This software is available under the SMART-G license v1.0, available in the LICE
 
 ## 6. Referencing
 
-When acknowledging the use of SMART-G for scientific papers, reports etc please cite the following reference:
+When acknowledging the use of SMART-G for scientific papers, reports etc please cite the following reference(s):
 
 * Ramon, D., Steinmetz, F., Jolivet, D., Compiègne, M., & Frouin, R. (2019). Modeling polarized radiative
   transfer in the ocean-atmosphere system with the GPU-accelerated SMART-G Monte Carlo code.
   Journal of Quantitative Spectroscopy and Radiative Transfer, 222, 89-107. https://doi.org/10.1016/j.jqsrt.2018.10.017
+
+* Moulana, M., Cornet, C., Elias, T., Ramon, D., Caliot, C., & Compiègne, M. (2024). Concentrated solar flux
+  modeling in solar power  towers with a 3D objects-atmosphere hybrid system to consider atmospheric and environmental
+  gains. Solar Energy, 277, 112675. https://doi.org/10.1016/j.solener.2024.112675
