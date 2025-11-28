@@ -6,6 +6,7 @@ SMART-G
 =======
 
 [![image](https://img.shields.io/pypi/v/smartg.svg)](https://pypi.python.org/pypi/smartg)
+[![image](https://img.shields.io/conda/vn/conda-forge/smartg.svg)](https://anaconda.org/conda-forge/smartg)
 [![image](https://pepy.tech/badge/smartg)](https://pepy.tech/project/smartg)
 [![image](https://img.shields.io/badge/DOI-10.1038%2Fs41586--020--2649--2-blue)](
 https://doi.org/10.1016/j.jqsrt.2018.10.017)
@@ -28,20 +29,29 @@ Mathieu Compiègne
 To install SMART-G from PyPI:
 
 ```bash
-  pip install smartg
+pip install smartg
 ```
 
 To include extra dependencies use instead:
 
 ```bash
-  pip install smartg[extra]
+pip install smartg[extra]
 ```
+
+### 1.1 Install from conda-forge
+Use the command:
+
+```bash
+conda install -c conda-forge smartg
+```
+
+If you need extra dependencies (jax with cuda) we recommend to use pip instead.
 
 ### 1.2 Install from github
 First clone the repository:
 
 ```bash
-  git clone https://github.com/hygeos/smartg.git
+git clone https://github.com/hygeos/smartg.git
 ```
 
 You can now choose between Pixi or Conda for your development environment.
@@ -52,13 +62,13 @@ You can now choose between Pixi or Conda for your development environment.
 To create and activate the environment, use the following command:
 
 ```bash
-  pixi shell
+pixi shell
 ```
 
 To consider all extra dependencies (e.g. jax), use instead:
 
 ```bash
-  pixi shell --environment extra
+pixi shell --environment extra
 ```
 
 #### 1.2.2 Anaconda/Miniconda (alternative)
@@ -66,8 +76,8 @@ To consider all extra dependencies (e.g. jax), use instead:
 With Anaconda/Miniconda, use the following command:
 
 ```bash
-  conda create -n smartg-env -f environment.yml
-  conda activate smartg-env
+conda create -n smartg-env -f environment.yml
+conda activate smartg-env
 ```
 
 For a full installation (extra dependencies), replace `environment.yml` by `environment-extra.yml`.
@@ -87,14 +97,14 @@ The environment variable `SMARTG_DIR_AUXDATA` have to be defined.
 
 For example, in the `.bashrc` / `.zshrc` file the following can be added:
 
-```
-export SMARTG_AUXDATA_DIR="dir/path/where/to/save/data/"
+```bash
+export SMARTG_DIR_AUXDATA="dir/path/where/to/save/data/"
 ```
 
 or (not recommended) in a `.env` file in the SMART-G root directory:
 
 ```
-SMARTG_AUXDATA_DIR=dir/path/where/to/save/data/
+SMARTG_DIR_AUXDATA =dir/path/where/to/save/data/
 ```
 
 
