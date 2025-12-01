@@ -34,6 +34,7 @@ from smartg.visualizegeo import Mirror, Plane, Spheric, \
     
 from copy import deepcopy
 import geoclide as gc
+import tempfile
 
 #TODO import below will be moved in the next major version
 from smartg.geometry import Vector
@@ -805,7 +806,7 @@ class Smartg(object):
         The pseudo-random number generator to use, only 2 choice:
         - PHILOX
         - CURAND_PHILOX
-    cache_dir : str, optional
+    cache_dir : str | Path, optional
         Path to the directory where the cache files are stored.
     keep_context: None | bool, optional
         Only in case autoinit is set to False. This parameter allows to keep or not the context 
@@ -814,7 +815,7 @@ class Smartg(object):
     def __init__(self, pp=True, debug=False, autoinit=True,
                  verbose_photon=False,
                  double=True, alis=False, back=False, bias=True, alt_pp=False, obj3D=False, 
-                 opt3D=False, device=None, sif=False, thermal=False, rng='PHILOX', cache_dir='/tmp/',
+                 opt3D=False, device=None, sif=False, thermal=False, rng='PHILOX', cache_dir=None,
                  keep_context=None):
         assert not ((device is not None) and ('CUDA_DEVICE' in os.environ)), "Can not use the 'device' option while the CUDA_DEVICE is set"
 
@@ -829,6 +830,8 @@ class Smartg(object):
             if keep_context is not None:
                 raise ValueError("The parameter keep_context can be defined only if 'autoinit' is False.")
             self.keep_context = True
+        
+        if cache_dir is None: cache_dir = tempfile.gettempdir()
             
         if (autoinit):
             with modified_environ(**env_modif):
@@ -922,7 +925,7 @@ class Smartg(object):
                            nvcc='nvcc',
                            options=options,
                            no_extern_c=True,
-                           cache_dir=cache_dir,
+                           cache_dir=str(cache_dir),
                            include_dirs=[str(dir_src),
                                          str(dir_src / 'incRNGs' / 'Random123')])
 
