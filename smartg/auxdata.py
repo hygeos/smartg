@@ -65,12 +65,26 @@ def extract_zip(zfile, dest):
         z.extractall(dest)
 
 
-def extract_tar(tfile, dest):
+def extract_tar(tfile, dest, target_folder=None):
     with tarfile.open(tfile, "r:gz") as tar:
-        print(f"Extracting TAR {tfile} → {dest}")
-        for member in tar.getmembers():
-            print("  extracting:", member.name)
-        tar.extractall(dest)
+        if target_folder is None:
+            print(f"Extracting TAR {tfile} → {dest}")
+            for member in tar.getmembers():
+                print("  extracting:", member.name)
+            tar.extractall(dest)
+        else:
+            print(f"Extracting TAR {tfile} → {dest} (only folder '{target_folder}')")
+            for member in tar.getmembers():
+                if target_folder in member.name:
+                    parts = member.name.split('/')
+                    try:
+                        idx = parts.index(target_folder)
+                        # rewrite to keep only the path starting at target_folder
+                        member.name = '/'.join(parts[idx:])
+                        print("  extracting:", member.name)
+                        tar.extract(member, dest)
+                    except ValueError:
+                        continue
 
 
 def download(savepath, data_type="all"):
@@ -122,7 +136,7 @@ def download(savepath, data_type="all"):
             if name == "reptran":
                 out = savepath / f"{name}.tar.gz"
                 safe_download(AUXDATA_DICT[name], out)
-                extract_tar(out, savepath)
+                extract_tar(out, savepath, target_folder='reptran')
                 Path(out).unlink(missing_ok=True)
 
             else:
