@@ -25,7 +25,8 @@ Mathieu Compiègne
 
 ## 1. Installation
 
-### 1.1 Install from pypi
+### 1.1 PyPI
+
 To install SMART-G from PyPI:
 
 ```bash
@@ -36,51 +37,60 @@ To include extra dependencies use instead:
 
 ```bash
 pip install smartg[extra]
-```
+  ```
 
-### 1.1 Install from conda-forge
+
+### 1.2 conda-forge
+
 Use the command:
 
 ```bash
 conda install -c conda-forge smartg
 ```
 
-If you need extra dependencies (jax with cuda) we recommend to use pip instead.
+If you need extra dependencies (jax with cuda) we recommend the installation with pip instead.
 
-### 1.2 Install from github
-First clone the repository:
 
-```bash
-git clone https://github.com/hygeos/smartg.git
-```
 
-You can now choose between Pixi or Conda for your development environment.
+### 1.3 github clone (for development)
+<details>
+  <summary>Click here</summary>
 
-#### 1.2.1 Using Pixi (recommended)
-[Pixi](https://pixi.sh/) is recommended for its fast dependency resolution and robust environment management. Unlike Conda, which only considers Conda packages during conflict resolution, Pixi consider both Conda and pip package versions when solving dependencies.
+  First clone the repository:
 
-To create and activate the environment, use the following command:
+  ```bash
+  git clone https://github.com/hygeos/smartg.git
+  ```
 
-```bash
-pixi shell
-```
+  You can now choose between Pixi or Conda for your development environment.
 
-To consider all extra dependencies (e.g. jax), use instead:
+  #### 1.3.1 Pixi (recommended)
+  [Pixi](https://pixi.sh/) is recommended for its fast dependency resolution and robust environment management. Unlike Conda, which only considers Conda packages during conflict resolution, Pixi consider both Conda and pip package versions when solving dependencies.
 
-```bash
-pixi shell --environment extra
-```
+  To create and activate the environment, use the following command:
 
-#### 1.2.2 Anaconda/Miniconda (alternative)
+  ```bash
+  pixi shell
+  ```
 
-With Anaconda/Miniconda, use the following command:
+  To consider all extra dependencies (e.g. jax), use instead:
 
-```bash
-conda create -n smartg-env -f environment.yml
-conda activate smartg-env
-```
+  ```bash
+  pixi shell --environment extra
+  ```
 
-For a full installation (extra dependencies), replace `environment.yml` by `environment-extra.yml`.
+  #### 1.3.2 Anaconda/Miniconda (alternative)
+
+  With Anaconda/Miniconda, use the following command:
+
+  ```bash
+  conda create -n smartg-env -f environment.yml
+  conda activate smartg-env
+  ```
+
+  For a full installation (extra dependencies), replace `environment.yml` by `environment-extra.yml`.
+
+</details>
 
 ### 1.2 Auxiliary data
 
