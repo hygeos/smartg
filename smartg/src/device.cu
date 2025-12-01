@@ -106,7 +106,7 @@ extern "C" {
 
 	unsigned long long nbPhotonsThr = 0;  // Number of photons processed by the thread
 	
-	Photon ph, ph_le; 	// Photons structure for prapagation and Local Estimate (virtual photon)	
+	Photon ph, ph_le; 	// Photons structure for prapagation && Local Estimate (virtual photon)	
     float refrac_angle=0.F;
 
     bool mask_le = false;
@@ -118,7 +118,7 @@ extern "C" {
     #endif
 
 
-	while (this_thread_active > 0 and nThreadsActive[0] > 0) {
+	while (this_thread_active > 0 && nThreadsActive[0] > 0) {
 		iloop += 1;
 		
 		#if defined(OBJ3D) && !defined(SPHERIQUE)
@@ -151,9 +151,9 @@ extern "C" {
 
 
         /* Termination rule */
-        /* Active threads are deactivated if general loop counter has reached maximum or individual loop counter iloop imaximum exceeded*/
+        /* Active threads are deactivated if general loop counter has reached maximum || individual loop counter iloop imaximum exceeded*/
         /* Photons should be new ones (loc==None)*/
-		if ((this_thread_active == 1 and Counter[0] >= NBLOOPd and ph.loc == NONE) or (iloop > MAX_LOOP))
+		if ((this_thread_active == 1 && Counter[0] >= NBLOOPd && ph.loc == NONE) || (iloop > MAX_LOOP))
 		{
 			this_thread_active = 0;
             atomicSub(nThreadsActive, 1);
@@ -186,7 +186,7 @@ extern "C" {
         /*--------------------------------------------------------------------------------------------------------  */
         /*                      MOVE                                                                                */
         /*--------------------------------------------------------------------------------------------------------  */
-        /*       It concerns photons in OCEAN or ATMOS                                                              */
+        /*       It concerns photons in OCEAN || ATMOS                                                              */
         /*--------------------------------------------------------------------------------------------------------  */
         loc_prev = ph.loc;
 
@@ -226,13 +226,13 @@ extern "C" {
 				   , &geoStruc, myObjets, myGObj, mySPECTObj, tabObjInfo
 				#endif
 			    );
-            #endif // ALT or FAST
+            #endif // ALT || FAST
 
             #ifdef VERBOSE_PHOTON
 		    display("MOVE_STOP", &ph);
             #endif
 
-           #endif // SP or PP
+           #endif // SP || PP
         }
 
 		if(ph.loc == OCEAN) {
@@ -257,14 +257,14 @@ extern "C" {
 		   display("MOVE_STOP", &ph);
            #endif
 
-           #endif // ALT or FAST
+           #endif // ALT || FAST
             }
 
 
         //--------------------------
         // count after move:
-        // count the photons finishing in space (or source for thermal backward) 
-        // and/or reaching surface from above or below
+        // count the photons finishing in space  || source for thermal backward) 
+        // && || reaching surface from above || below
         //--------------------------
         count_level = NOCOUNT; // Initialize the counting level
 
@@ -282,7 +282,7 @@ extern "C" {
         /* photons having reached SPACE are counted in the TOA level*/
 		if (ph.loc == SPACE) {
             count_level = UPTOA;
-        #endif // Thermal backward or general
+        #endif // Thermal backward || general
             
             /* Terminating photon life */
             // increment the photon counter (for this thread)
@@ -316,7 +316,7 @@ extern "C" {
             tabHist, tabPhotonsNoAer, MAX_HIST, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh);
 
 		#if defined(BACK) && defined(OBJ3D)
-		if (count_level == UPTOA and LMODEd == 4 and LEd == 0) // the photon reach TOA
+		if (count_level == UPTOA && LMODEd == 4 && LEd == 0) // the photon reach TOA
 		{ countPhotonObj3D(&ph, 0, tabObjInfo, &geoStruc, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, tabthv_le, tabphi_le);}
         #endif
 
@@ -327,7 +327,7 @@ extern "C" {
         /*--------------------------------------------------------------------------------------------------------  */
         /*                      SCATTER                                                                             */
         /*--------------------------------------------------------------------------------------------------------  */
-        /*       It concerns photons in OCEAN or ATMOS                                                              */
+        /*       It concerns photons in OCEAN || ATMOS                                                              */
         /*--------------------------------------------------------------------------------------------------------  */
 		if( ((ph.loc == ATMOS) || (ph.loc == OCEAN)) ) {
             //
@@ -348,15 +348,15 @@ extern "C" {
             //
             if (LEd == 1) {
 			    int NK, up_level, down_level, count_level_le;
-			    int ith0 = idx%NBTHETAd; //index shifts in LE zenith and azimuth angles
+			    int ith0 = idx%NBTHETAd; //index shifts in LE zenith && azimuth angles
                 int iph0 = idx%NBPHId;
-                /* Two levels for counting if photon is in ATMOS, 1) up TOA and 2) down 0+*/
+                /* Two levels for counting if photon is in ATMOS, 1) up TOA && 2) down 0+*/
 			    if (ph.loc == ATMOS) {
 			        NK=2;
 			        up_level = UPTOA;
 			        down_level = DOWN0P;
 		        }
-                /* Two levels for counting if photon is in OCEAN, 1) up 0- and 2) down Bottom*/
+                /* Two levels for counting if photon is in OCEAN, 1) up 0- && 2) down Bottom*/
 			    if (ph.loc == OCEAN) {
 			        NK=2;
                     up_level = UP0M;
@@ -367,7 +367,7 @@ extern "C" {
                 float3 no = normalize(ph.pos);
                 float3x3 R;
 
-                /* Loop on levels for counting (upward and downward) */
+                /* Loop on levels for counting (upward && downward) */
 			    for(int k=0; k<NK; k++){
 			        if (k==0) count_level_le = up_level;
 			        else count_level_le = down_level;
@@ -383,7 +383,7 @@ extern "C" {
                             ph_le.ith = ilevel_le;
                             if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
                             else ph_le.iph =  ph_le.ith;
-                            // azimuth and zenith LE
+                            // azimuth && zenith LE
                             #ifdef OBJ3D
                             phi = tabphi_le[ph_le.iph];
                             thv = tabthv_le[ph_le.ith];
@@ -392,7 +392,7 @@ extern "C" {
                             thv = tabthv[ph_le.ith];
                             #endif
                             // LEMOD
-                            // here function to randomly choose new phi and thv
+                            // here function to randomly choose new phi && thv
 
                             //
                             // 2-1 Estimation of the refraction angle
@@ -429,7 +429,7 @@ extern "C" {
                                    ph_le.v   = v;
                                    ph_le.u   = u;
                                    /* We rotate the direction of the new LE photon around the unit vector uu, perpendicular
-                                   to the current direction and the local vertical  by an angle equal to the refraction angle */
+                                   to the current direction && the local vertical  by an angle equal to the refraction angle */
                                    R  = rotation3D(ra, uu);
                                    ph_le.v = mul(R, ph_le.v);
                                    iter++;
@@ -446,7 +446,7 @@ extern "C" {
                             else refrac_angle = 0.F; // if no refraction option is chosen
 
                             //
-                            // 2-2 Scatter the virtual photon, using le=1, and count_level for the scattering angle computation
+                            // 2-2 Scatter the virtual photon, using le=1, && count_level for the scattering angle computation
                             //
                             scatter(&ph_le, prof_atm, prof_oc, 
                                     #ifdef OPT3D
@@ -477,7 +477,7 @@ extern "C" {
 
                             #else
                              #ifdef ALT_PP
-                            /* in alternative PP mode (for ATMOS or OCEAN), move the virtual photon until the counting level to calculate 
+                            /* in alternative PP mode (for ATMOS || OCEAN), move the virtual photon until the counting level to calculate 
                             the extinction along the final path */
                              if ((ph_le.loc==ATMOS) || (ph_le.loc==OCEAN)) 
                                  move_pp2(&ph_le, prof_atm, prof_oc, 
@@ -500,7 +500,7 @@ extern "C" {
                             mask_le = false;
                             copyIGeo(&geoStruc, &geoStruc_le);
                             mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
-                            if (!mask_le and count_level_le == UPTOA and LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, tabthv_le, tabphi_le); }
+                            if (!mask_le && count_level_le == UPTOA && LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, tabthv_le, tabphi_le); }
 							#endif
                             if (!mask_le && if_count(count_level_le))
                             {
@@ -515,7 +515,7 @@ extern "C" {
 
             
             //
-		    // 3- Scattering of the propagation photon (&ph and le=0 in scatter call)
+		    // 3- Scattering of the propagation photon (&ph && le=0 in scatter call)
             //
             scatter(&ph, prof_atm, prof_oc, 
                     #ifdef OPT3D
@@ -535,7 +535,7 @@ extern "C" {
             display("SCATTER", &ph);
             #endif
 
-        } // photon in ATMOS or OCEAN
+        } // photon in ATMOS || OCEAN
         
 
 
@@ -549,9 +549,9 @@ extern "C" {
         /*--------------------------------------------------------------------------------------------------------  */
         loc_prev = ph.loc;
         if ((ph.loc == SURF0M) || (ph.loc == SURF0P)){
-           // Eventually evaluate Downward 0+ and Upward 0- radiance
+           // Eventually evaluate Downward 0+ && Upward 0- radiance
 
-           /* Define distance form the photon surface impact coordinates and the center of the ENV zone X0d,Y0d */
+           /* Define distance form the photon surface impact coordinates && the center of the ENV zone X0d,Y0d */
            float dis = sqrtf((ph.pos.x-X0d)*(ph.pos.x-X0d) +(ph.pos.y-Y0d)*(ph.pos.y-Y0d));
            int ispec=0;
            if (ENVd==5) ispec = GetEnvIndex(ph.pos, envmap);
@@ -560,12 +560,12 @@ extern "C" {
            // if no environment effects 
            // OR
            // photon is reflected by the target:
-           // dis <= ENV_SIZEd if ENVd=1 (Environment outside disk) or dis >= ENV_SIZEd if ENVd=-1 (Environment inside disk)
-           // or if ENV==2 it is a exponentially decreasing albedo between target and environment
-           // or if ENV==3 and checkerboard return white square of albedo map
-           // or abs(X) <= ENV_SIZEd if ENVd=4 (Environment outside disk) 
-           // or abs(X) >= ENV_SIZEd if ENVd=-4 (Environment inside disk)
-           // if ENV==5 and ispec <0 (Map 2D environement, points to surface land or ocean seafloor if photon is reaching ocean bottom)
+           // dis <= ENV_SIZEd if ENVd=1 (Environment outside disk) || dis >= ENV_SIZEd if ENVd=-1 (Environment inside disk)
+           // || if ENV==2 it is a exponentially decreasing albedo between target && environment
+           // || if ENV==3 && checkerboard return white square of albedo map
+           // || abs(X) <= ENV_SIZEd if ENVd=4 (Environment outside disk) 
+           // || abs(X) >= ENV_SIZEd if ENVd=-4 (Environment inside disk)
+           // if ENV==5 && ispec <0 (Map 2D environement, points to surface land || ocean seafloor if photon is reaching ocean bottom)
            ////////////////////////////
            if( (ENVd==0) || (ENVd==2) || 
                ((ENVd==3) && checkerboard(ph.pos, X0d, Y0d)) ||
@@ -584,16 +584,16 @@ extern "C" {
                 if (LEd == 1 && SIMd != ATM_ONLY) {
                   int NK, count_level_le;
                   if (NOCEd==0) NK=1; // if there is no ocean, just one level for contribution of surface to LE : up 0+ 
-                  else NK=2; // otherwise 2 : up 0+ and down 0-
+                  else NK=2; // otherwise 2 : up 0+ && down 0-
                   int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
                   int iph0 = idx%NBPHId;
 
-                  /* Loop on levels for counting (upward and downward) */
+                  /* Loop on levels for counting (upward && downward) */
                   for(int k=0; k<NK; k++){
                     if (k==0) count_level_le = UP0P;
                     else count_level_le = DOWN0M;
 
-                    /* Double loop on zenith and azimuth LE */
+                    /* Double loop on zenith && azimuth LE */
                     for (int ith=0; ith<NBTHETAd; ith++){
                       for (int iph=0; iph<NBPHId; iph++){
                         // copy propagation to virtual photon
@@ -608,7 +608,7 @@ extern "C" {
                         if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
                         else ph_le.iph =  ph_le.ith;
 
-                        // Reflect or Tramsit the virtual photon, using le=1 and count_level
+                        // Reflect || Tramsit the virtual photon, using le=1 && count_level
                         if (BRDFd != 0)
                             surfaceBRDF(&ph_le, 1,
                                       #ifdef OBJ3D
@@ -631,7 +631,7 @@ extern "C" {
                         else display("SURFACE LE DOWN", &ph_le);
                         #endif
 
-                        // Count the photon up to the counting levels (at the surface UP0P or DOW0M)
+                        // Count the photon up to the counting levels (at the surface UP0P || DOW0M)
                         #ifdef OBJ3D
                         mask_le = false;
                         copyIGeo(&geoStruc, &geoStruc_le);
@@ -650,7 +650,7 @@ extern "C" {
 
                         // Only for upward photons in Atmopshere, count also them up to TOA
                         if ( (k==0) && (tablevel[ph_le.ith] == COUNTALL || tablevel[ph_le.ith] == UPTOA) ){ 
-                            // Final extinction computation n the atmosphere for SP and ALT_PP move mode
+                            // Final extinction computation n the atmosphere for SP && ALT_PP move mode
                             #ifdef SPHERIQUE
                             if (ph_le.loc==ATMOS)
                             {
@@ -681,14 +681,14 @@ extern "C" {
                             ph_le.is = get_isens(&ph_le, tab_sensor, UPTOA);
                             #endif
                             #endif
-                            // Final extinction computation in FAST PP move mode and counting at the TOA for all move modes
+                            // Final extinction computation in FAST PP move mode && counting at the TOA for all move modes
                             if (!mask_le && if_count(UPTOA))
                             {
                                 countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA , errorcount, tabPhotons, tabDist, tabHist,
                                     tabPhotonsNoAer, MAX_HIST, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh);
                             }
                             #ifdef OBJ3D
-                            if (!mask_le and LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, tabthv_le, tabphi_le); }
+                            if (!mask_le && LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, tabthv_le, tabphi_le); }
                             #endif
                         }
                         // Only for downward photons in Ocean, count also them up to Bottom 
@@ -713,7 +713,7 @@ extern "C" {
                             ph_le.is = get_isens(&ph_le, tab_sensor, DOWNB);
                             #endif
                             #endif
-                            // Final extinction computation in FAST PP move mode and counting at the Bottom for all move modes
+                            // Final extinction computation in FAST PP move mode && counting at the Bottom for all move modes
                             if (!mask_le && if_count(DOWNB))
                             {
                                 countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, DOWNB , errorcount, tabPhotons, tabDist, tabHist,
@@ -726,7 +726,7 @@ extern "C" {
                 } //LE
 
                 //
-		        // 3- REflection/Transmission of the propagation photon (&ph and le=0 in scatter call)
+		        // 3- REflection/Transmission of the propagation photon (&ph && le=0 in scatter call)
                 //
                 if (BRDFd != 0)
 				    surfaceBRDF(&ph, 0,
@@ -753,7 +753,7 @@ extern "C" {
 			else { 
                 #ifdef SIF
                 /* if Sun Induced Fluorescence is activated*/
-			    /* Choose the emitter : Fluorescence or Solar reflection*/
+			    /* Choose the emitter : Fluorescence || Solar reflection*/
                 choose_emitter(&ph, prof_atm, prof_oc,  spectrum, 
                              &rngstate); 
 
@@ -771,7 +771,7 @@ extern "C" {
                   int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
                   int iph0 = idx%NBPHId;
 
-                  /* Double loop on zenith and azimuth LE */
+                  /* Double loop on zenith && azimuth LE */
                   for (int ith=0; ith<NBTHETAd; ith++){
                     for (int iph=0; iph<NBPHId; iph++){
                         ilevel_le = (ith + ith0)%NBTHETAd;
@@ -796,7 +796,7 @@ extern "C" {
                         display("SURFACE LE UP", &ph_le);
                         #endif
 
-                        // Only two levels for counting by definition (up 0+ and up TOA)
+                        // Only two levels for counting by definition (up 0+ && up TOA)
                         // 1) up 0+ for all move modes
                         #ifdef OBJ3D
                         mask_le = false;
@@ -814,7 +814,7 @@ extern "C" {
                                 tabPhotonsNoAer, MAX_HIST, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh);
                         }
                         // 2) up TOA for all move modes, need final extinction computation
-                        // Final extinction computation in the atmosphere for SP and ALT_PP move mode
+                        // Final extinction computation in the atmosphere for SP && ALT_PP move mode
                         if ( tablevel[ph_le.ith] == COUNTALL || tablevel[ph_le.ith] == UPTOA )
                         {
                             #ifdef SPHERIQUE
@@ -847,11 +847,11 @@ extern "C" {
                             ph_le.is = get_isens(&ph_le, tab_sensor, UPTOA);
                             #endif
                             #endif
-                            // Final extinction computation in FAST PP move mode and counting at the TOA for all move modes
+                            // Final extinction computation in FAST PP move mode && counting at the TOA for all move modes
                             if (!mask_le && if_count(UPTOA)) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist,
                                 tabPhotonsNoAer, MAX_HIST, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh); }
                             #ifdef OBJ3D
-                            if (!mask_le and LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, tabthv_le, tabphi_le); }
+                            if (!mask_le && LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, tabthv_le, tabphi_le); }
                             #endif
                         }
                     }//direction
@@ -870,14 +870,14 @@ extern "C" {
                                envmap, spectrum, &rngstate);
 
             } // BRDF interface (DIOPTRE=!3)
-           } // No environment effects or interaction with the target
+           } // No environment effects || interaction with the target
 
 
            ////////////////////////////
            // Environment effects
            // photon is reflected by the environment:
-           // dis > ENV_SIZEd if ENVd=1 (Environment outside disk) or dis < ENV_SIZEd if ENVd=-1 (Environment inside disk)
-           // if ENV==5 and ispec >=0 (Map 2D environement, points to land environment index)
+           // dis > ENV_SIZEd if ENVd=1 (Environment outside disk) || dis < ENV_SIZEd if ENVd=-1 (Environment inside disk)
+           // if ENV==5 && ispec >=0 (Map 2D environement, points to land environment index)
            ////////////////////////////
            else if( ((ENVd==1) && (dis>ENV_SIZEd)) || 
                     ((ENVd==3) && !checkerboard(ph.pos, X0d, Y0d)) ||
@@ -894,7 +894,7 @@ extern "C" {
                  int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
                  int iph0 = idx%NBPHId;
 
-                 /* Double loop on zenith and azimuths LE*/
+                 /* Double loop on zenith && azimuths LE*/
                  for (int ith=0; ith<NBTHETAd; ith++){
                     for (int iph=0; iph<NBPHId; iph++){
                         ilevel_le = (ith + ith0)%NBTHETAd;
@@ -970,7 +970,7 @@ extern "C" {
                                     tabPhotonsNoAer, MAX_HIST, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh);
                             }
                             #ifdef OBJ3D
-                            if (!mask_le and LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, tabthv_le, tabphi_le); }
+                            if (!mask_le && LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, tabthv_le, tabphi_le); }
                             #endif
                         }
                     }//direction
@@ -1000,7 +1000,7 @@ extern "C" {
            display("SURFACE", &ph);
            #endif
 
-        } // Photon at the surface (SURF0P or SURF0M)
+        } // Photon at the surface (SURF0P || SURF0M)
 
 
 		__syncthreads();
@@ -1019,7 +1019,7 @@ extern "C" {
            if (LEd == 1 && SIMd != ATM_ONLY) {
               int ith0 = idx%NBTHETAd; //index shifts in LE geometry loop
               int iph0 = idx%NBPHId;
-              /* Double loop on zenith and azimuth LE*/
+              /* Double loop on zenith && azimuth LE*/
               for (int ith=0; ith<NBTHETAd; ith++){
                 for (int iph=0; iph<NBPHId; iph++){
                     ilevel_le = (ith + ith0)%NBTHETAd;
@@ -1103,7 +1103,7 @@ extern "C" {
         if(ph.loc == OBJSURF)
 		{
 
-			if (geoStruc.type == RECEIVER and LMODEd != 4 and LEd == 0) // this is a receiver
+			if (geoStruc.type == RECEIVER && LMODEd != 4 && LEd == 0) // this is a receiver
 			{ countPhotonObj3D(&ph, 0, tabObjInfo, &geoStruc, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, tabthv_le, tabphi_le);}
 
 			ph.weight_loss[0] = ph.weight;
@@ -1145,7 +1145,7 @@ extern "C" {
                                 countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist,
                                     tabPhotonsNoAer, MAX_HIST, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh);
                             }
-                            if (!mask_le and LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, tabthv_le, tabphi_le); }
+                            if (!mask_le && LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, tabthv_le, tabphi_le); }
 						}//direction
 					}//direction
                 } //LE
@@ -1162,7 +1162,7 @@ extern "C" {
 				ph.loc = ABSORBED;
 				ph.weight = 0.F;
 				if (geoStruc.type == HELIOSTAT) ph.H+=1;
-				else if (geoStruc.type == RECEIVER or geoStruc.type == ENVIRONMENT) ph.E+=1;
+				else if (geoStruc.type == RECEIVER || geoStruc.type == ENVIRONMENT) ph.E+=1;
 				ph.weight_loss[0] = 0.F;
             } // End Matte
 
@@ -1202,7 +1202,7 @@ extern "C" {
                             {
                                 countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist,
                                     tabPhotonsNoAer, MAX_HIST, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh); }
-                            if (!mask_le and LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, tabthv_le, tabphi_le); }
+                            if (!mask_le && LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, tabthv_le, tabphi_le); }
                             
 						}//direction
 					}//direction
@@ -1217,16 +1217,16 @@ extern "C" {
 			else {ph.loc = REMOVED;} // unknow material
 
 			#ifndef BACK
-			if (geoStruc.type == HELIOSTAT and ph.direct == 0 and ph.loc != REMOVED and ph.loc != ABSORBED)
+			if (geoStruc.type == HELIOSTAT && ph.direct == 0 && ph.loc != REMOVED && ph.loc != ABSORBED)
 			{
 				ph.weight_loss[1] = 0.F;
 				ph.weight_loss[2] = 0.F;
 				ph.weight_loss[3] = 0.F;
-				// Look if the ray is blocked by an obj located between the ref point and the rec
+				// Look if the ray is blocked by an obj located between the ref point && the rec
 				if (geoTestMir(ph.pos, ph.v, myObjets, myGObj))
 					ph.weight_loss[1] = ph.weight; // w_BM
 				else
-				{   // If the ray is not blocked look if the ray miss or not the rec
+				{   // If the ray is not blocked look if the ray miss || not the rec
 					if ( geoTestRec(ph.pos, ph.v, myRObj) )
 						ph.weight_loss[2] = ph.weight; // w_SP
 					else
@@ -1248,7 +1248,7 @@ extern "C" {
 
         //--------------------------
         // count after surface:
-        // count the photons leaving the surface towards the ocean or atmosphere
+        // count the photons leaving the surface towards the ocean || atmosphere
         //--------------------------
         count_level = -1;
         if ((loc_prev == SURF0M) || (loc_prev == SURF0P)) {
@@ -1270,12 +1270,12 @@ extern "C" {
         // Final counts
         //--------------------------
 
-        /* absorbed photons during their life are terimnated and initialized again, they are counted*/
+        /* absorbed photons during their life are terimnated && initialized again, they are counted*/
 		if(ph.loc == ABSORBED){
 			ph.loc = NONE;
 			nbPhotonsThr++;
 		}
-        /* removed photons during their life are terimnated and initialized again, they are NOT counted*/
+        /* removed photons during their life are terimnated && initialized again, they are NOT counted*/
 		if(ph.loc == REMOVED){
 			ph.loc = NONE;
         }
@@ -1382,14 +1382,14 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 
     // To consider sun solid angle. For the moment only for one direction.
     #ifdef OBJ3D
-    if (LEd == 1 && SUN_DISCd > 1e-6 && NBPHId ==1 and NBTHETAd == 1)
+    if (LEd == 1 && SUN_DISCd > 1e-6 && NBPHId ==1 && NBTHETAd == 1)
     {
         float3 u_bis, v_bis;
 
         DirectionToUV2(tabthv[0]*(180.0/PI), tabphi[0]*(180.0/PI), &u_bis, &v_bis, rngstate);
         findRots(v_bis, &tabthv_le[0], &tabphi_le[0]);
 
-        // very rare case where SZA almost = 90 deg and we look at a sampled SZA ( + sun solid angle) > 90 deg
+        // very rare case where SZA almost = 90 deg && we look at a sampled SZA ( + sun solid angle) > 90 deg
         if (cos(tabthv_le[0]) <= 0) { ph->loc = ABSORBED; return;}
         
     }
@@ -1424,7 +1424,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
         // if NJACd = 0: no jacobian -> one unperturbed profile
         // otherwise the 'real' wavelengths number is limited to NLAMd/NJACd
         // other indices correspond to the repetition of the initial wavelengths
-        // several times (NJACd) for perturbed atmospheric or oceanic profiles
+        // several times (NJACd) for perturbed atmospheric || oceanic profiles
         ph->ilam = __float2uint_rz(RAND * NLAMd/(NJACd+1));
         #else
 
@@ -1465,13 +1465,13 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     }
     else
     {
-        // Read and define posiion using sensor attributes
+        // Read && define posiion using sensor attributes
         ph->pos = make_float3(tab_sensor[ph->is].POSX,
                             tab_sensor[ph->is].POSY,
                             tab_sensor[ph->is].POSZ);
     }
     #else
-    //Read and define posiion using sensor attributes
+    //Read && define posiion using sensor attributes
     ph->pos = make_float3(tab_sensor[ph->is].POSX,
                           tab_sensor[ph->is].POSY,
                           tab_sensor[ph->is].POSZ);
@@ -1583,7 +1583,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     }
 
     /////////////////////////////////////
-    // Atmosphere or object near surface
+    // Atmosphere || object near surface
     /////////////////////////////////////
     /*
     Z          layer index i
@@ -1686,7 +1686,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     }
 
     /////////////////////////////////////
-    // SURFACE (0+ or 0-)
+    // SURFACE (0+ || 0-)
     /////////////////////////////////////
     if((ph->loc == SURF0P) || (ph->loc == SURF0M)){
         if (ph->loc == SURF0P) ph->layer   = NATMd;
@@ -1728,7 +1728,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 	    ph->v.y   = sinf(phi)*sTh;
 	    ph->v.z   = cTh;
 	    // Initialization of the orthogonal vector to the propagation
-        // Bellow method from geoclide coordinate system function (ensure u and v are totally perpendicular)
+        // Bellow method from geoclide coordinate system function (ensure u && v are totally perpendicular)
         float term_1=-1./(1. + ph->v.z);
         float term_2=ph->v.x * ph->v.y * term_1;
         ph->u.x = 1 +  (ph->v.x*ph->v.x) * term_1;
@@ -1748,7 +1748,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     }
 
     ///////////////
-    // Direction Rotations of v and u in the detector direction THDEG,PHDEG
+    // Direction Rotations of v && u in the detector direction THDEG,PHDEG
     ///////////////
 	float cPh, sPh;
     #ifdef OBJ3D
@@ -1809,7 +1809,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		0.F,  0.F,  1.F                 
         );
 
-    /* Rotation of v and u vectors */
+    /* Rotation of v && u vectors */
 	ph->v = mul(LTh,ph->v);
 	ph->v = mul(LPh,ph->v);
 	ph->u = mul(LTh,ph->u);
@@ -1830,13 +1830,13 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     ph->nevt = 0;
     if (ph->loc == ATMOS) ph->layer_prev[ph->nevt]   = ph->layer;
     if (ph->loc == OCEAN || ph->loc == SURF0M) ph->layer_prev[ph->nevt]   = -ph->layer;
-    // the record consists also in the direction and epsilon in each layer
+    // the record consists also in the direction && epsilon in each layer
     ph->vz_prev[ph->nevt]      = ph->v.z;
     ph->epsilon_prev[ph->nevt] = epsilon;
 
     /* Standard Move Mode */
     #else
-    /* We initialize the cumulative distance counters in each layer in atmosphere and ocean*/
+    /* We initialize the cumulative distance counters in each layer in atmosphere && ocean*/
     for (int k=0; k<(NATM_ABSd+1); k++) ph->cdist_atm[k]= 0.F;
     for (int k=0; k<(NOCE_ABSd+1); k++) ph->cdist_oc[k] = 0.F;
     #endif
@@ -1913,14 +1913,14 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		{
 			double PHconed, THconed;
 			PHconed = RAND*360;
-			// Sampling between 0 and SUN_DISCd degrees uniformly following mu² -> acos(sqrt())
+			// Sampling between 0 && SUN_DISCd degrees uniformly following mu² -> acos(sqrt())
 			THconed = (    acos(   sqrt(1-(  RAND*(1-cos(radiansd(SUN_DISCd)))  ))   )*180    )/PI;
 
-			// Creation of transforms to consider alpha and beta for the computation of photon dirs
+			// Creation of transforms to consider alpha && beta for the computation of photon dirs
 			Transform<double> TPHconed, TTHconed;
 			TPHconed = TPHconed.RotateZ(PHconed); TTHconed = TTHconed.RotateY(THconed);
 		
-			// Apply transforms to vector u and v in function to alpha and beta
+			// Apply transforms to vector u && v in function to alpha && beta
 			vdouble = TPHconed(   Vectord(  TTHconed( Vectord(vdouble) )  )   );
 			udouble = TPHconed(   Vectord(  TTHconed( Vectord(udouble) )  )   );
 		}
@@ -1952,11 +1952,11 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 			PHcone = RAND*360;
 			THcone = (    acosf(   sqrtf(1-(  RAND*(1-cosf(radians(SUN_DISCd)))  ))   )*180    )/PI;
 
-			// Creation of transforms to consider alpha and beta for the computation of photon dirs
+			// Creation of transforms to consider alpha && beta for the computation of photon dirs
 			Transform<float> TPHcone, TTHcone;
 			TPHcone = TPHcone.RotateZ(PHcone); TTHcone = TTHcone.RotateY(THcone);
 		
-			// Apply transforms to vector u and v in function to alpha and beta
+			// Apply transforms to vector u && v in function to alpha && beta
 			vfloat = TPHcone(   Vectorf(  TTHcone( Vectorf(vfloat) )  )   );
 			ufloat = TPHcone(   Vectorf(  TTHcone( Vectorf(ufloat) )  )   );
 		}
@@ -2109,7 +2109,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 			if (TYPEd == 3) //in development
 			{
 				//disk cone sampling
-				//Mixte between disk sampling (Dunn & Shultis 2011) and cone sampling 
+				//Mixte between disk sampling (Dunn & Shultis 2011) && cone sampling 
 				float rd, Rd;
 				PHcone = 360*RAND;
 				Rd = __tanf(radians(ALDEGd));
@@ -2131,7 +2131,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 			vfloat = TPhi(   Vectorf(  TTheta( Vectorf(vfloat) )  )   );
 			ufloat = TPhi(   Vectorf(  TTheta( Vectorf(ufloat) )  )   );
 			
-			// Update the values of u and v
+			// Update the values of u && v
 			ph->v = normalize(make_float3(vfloat.x, vfloat.y, vfloat.z));
 			ph->u = normalize(make_float3(ufloat.x, ufloat.y, ufloat.z));
 
@@ -2143,7 +2143,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 
 	} //END LMODEd == 2
     #else // else if Backward modes
-	if (LMODEd == 3 or LMODEd == 4) // common part between mode B and BR (cusBackward)
+	if (LMODEd == 3 || LMODEd == 4) // common part between mode B && BR (cusBackward)
 	{		
 		// Initialization of the cosine vector (v), the orthogonal vector (u), ...
 		double3 vdouble2 = make_double3(0., 0., 1.); double3 udouble2 = make_double3(1., 0., 0.);
@@ -2172,24 +2172,24 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		Transform<double> TPHconed, TTHconed;
 		TPHconed = TPHconed.RotateZ(PHconed); TTHconed = TTHconed.RotateY(THconed);
 		
-		// Apply transforms to vector u and v
+		// Apply transforms to vector u && v
 		vdouble2 = TPHconed(   Vectord(  TTHconed( Vectord(vdouble2) )  )   );
 		udouble2 = TPHconed(   Vectord(  TTHconed( Vectord(udouble2) )  )   );
 
-		// Creation of transforms to consider theta and phi for the computation of photon dirs
+		// Creation of transforms to consider theta && phi for the computation of photon dirs
 		Transform<double> TTheta, TPhi;
 		TTheta = TTheta.RotateY(tab_sensor[ph->is].THDEG);
 		TPhi = TPhi.RotateZ(tab_sensor[ph->is].PHDEG);		
 
-		// Apply transforms to vector u and v in function to theta and phi
+		// Apply transforms to vector u && v in function to theta && phi
 		vdouble2 = TPhi(   Vectord(  TTheta( Vectord(vdouble2) )  )   );
 		udouble2 = TPhi(   Vectord(  TTheta( Vectord(udouble2) )  )   );
 
-		// update of u and v
+		// update of u && v
 		ph->v = make_float3(float(vdouble2.x), float(vdouble2.y), float(vdouble2.z));
 		ph->u = make_float3(float(udouble2.x), float(udouble2.y), float(udouble2.z));
 
-	} //END LMODEd == 3 or LMODEd == 4
+	} //END LMODEd == 3 || LMODEd == 4
 	if (LMODEd == 4) // LMODE = "BR" Backward with receiver
 	{
 		// Collect the receiver object
@@ -2198,8 +2198,8 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		
 		Transform<float> TR; // declare the transformation of the receiver
 
-		// If x, y or z values are different to 0 then there is a translation
-		if (objP.mvTx != 0 or objP.mvTy != 0 or objP.mvTz != 0) {
+		// If x, y || z values are different to 0 then there is a translation
+		if (objP.mvTx != 0 || objP.mvTy != 0 || objP.mvTz != 0) {
 			Transform<float> TmT;
 			TmT = TR.Translate(make_float3(objP.mvTx, objP.mvTy, objP.mvTz));
 			TR = TmT; }
@@ -2211,7 +2211,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		Pointf p_t(sizeX*0.5 - (RAND*sizeX), sizeY*0.5 - (RAND*sizeY), 0.);
 		ph->posIni = make_float3(p_t.x, p_t.y, p_t.z);
 		
-		// Apply transfo and update the value of the photon position
+		// Apply transfo && update the value of the photon position
 		ph->pos = TR(p_t);
 	} //END LMODEd == 4
 	#endif // END !defined(BACK)
@@ -2239,7 +2239,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
     float d;
     float rat;
     int sign_direction;
-    int i_layer_fw, i_layer_bh; // index or layers forward and behind the photon
+    int i_layer_fw, i_layer_bh; // index || layers forward && behind the photon
     float costh, sinth2;
     int ilam = ph->ilam*(NATMd+1);  // wavelength offset in optical thickness table
     float3 no, v0, u0;
@@ -2248,7 +2248,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
     if (ph->layer == 0) ph->layer = 1;
 
     // Random Optical Thickness to go through
-    // Two cases : (i) Forced First Scattering (taumax!=0 and no interaction yet)
+    // Two cases : (i) Forced First Scattering (taumax!=0 && no interaction yet)
     // the random optical thickness draw is biased (limited to tau_max)
     // (ii): general case, the classical exponential probability law is used 
     if (!le) {
@@ -2260,7 +2260,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
     }
     // if called with LE mode, it serves to compute the transmission
     // from photon last interaction position to TOA, thus 
-    // photon is forced to exit upward or downward and tauRdm is chosen to be an upper limit
+    // photon is forced to exit upward || downward && tauRdm is chosen to be an upper limit
     else tauRdm = 1e6;
 
     ph->radius = length(ph->pos);
@@ -2317,9 +2317,9 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
         //
         // ri : radius of next layer boundary ri=zi+RTER
         // r  : radius of current point along the path 
-        // costh: angle between the position vector and the direction vector
+        // costh: angle between the position vector && the direction vector
         // In the triangle we have ri² = d² + r² + 2*d*r*costh
-        // or: d**2 + 2*r*costh*d + r**2-ri**2 = 0 , to be solved for d
+        // ||: d**2 + 2*r*costh*d + r**2-ri**2 = 0 , to be solved for d
         // delta = 4.r².costh² - 4(r²-ri²) = 4*r²*((ri/r)²-sinth²) = 4*r²*delta1
         // with delta1 = (ri/r)²-sinth²
         rat = (prof_atm[i_layer_fw].z+RTER)/ph->radius;
@@ -2328,7 +2328,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
         if (delta1 < 0) {
             if (sign_direction > 0) {
                 // because of numerical uncertainties, a downward photon may
-                // not strictly be between zi and zi+1
+                // not strictly be between zi && zi+1
                 // in rare case of grazing angle there is sometimes no intersection
                 // with current layer because photon is actually slightly above it.
                 // therefore we consider that delta=0 such that the photon is
@@ -2344,13 +2344,13 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
         /* Now, there are two real solutions for d
         *  The solution is the smallest positive one
         *
-        * if photon goes towards higher layers (sign_direction == 1) and costh>0
+        * if photon goes towards higher layers (sign_direction == 1) && costh>0
         * => we keep the smallest solution in abs. val   (both terms are of opposite signs)
         *
-        * if photon goes towards lower layers (sign_direction == -1) and costh<0
+        * if photon goes towards lower layers (sign_direction == -1) && costh<0
         * => we keep the smallest solution in abs. val   (both terms are of opposite signs)
         *
-        * if photon goes towards higher layers (sign_direction == 1) and costh<0
+        * if photon goes towards higher layers (sign_direction == 1) && costh<0
         * => we keep the greatest solution in abs. val   (both terms are of same signs)
         *
         */
@@ -2359,8 +2359,8 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
         AMF = __fdividef(d, abs(prof_atm[i_layer_bh].z - prof_atm[i_layer_fw].z)); // Air Mass Factor
 
         //
-        // calculate the optical thicknesses h_cur and h_cur_abs to the next layer
-        // We compute the layer extinction coefficient of the layer DTau/Dz and multiply by the distance within the layer
+        // calculate the optical thicknesses h_cur && h_cur_abs to the next layer
+        // We compute the layer extinction coefficient of the layer DTau/Dz && multiply by the distance within the layer
         //
         tau_cur = abs(get_OD(BEERd,prof_atm[i_layer_bh+ilam]) - get_OD(BEERd,prof_atm[i_layer_fw+ilam]));
         h_cur   = tau_cur * AMF;
@@ -2389,7 +2389,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
             // in the general case absorption is computed until final position if BEER
             if (BEERd == 1) ph->weight *= __expf(-( epsilon * h_cur_abs));
             #else
-            // for ALIS case record cumulative distances and scatering corrections
+            // for ALIS case record cumulative distances && scatering corrections
             float tau;
             ph->cdist_atm[ph->layer] += d;
             int DL=(NLAMd-1)/(NLOWd-1);
@@ -2429,7 +2429,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
                 // 1. sin_i just to verify if refraction occurs
                 float s1    = sqrt(1. - vzn*vzn);
                 if (s1 > 1.) s1=1.;
-                // 2. determine old and new refraction indices from old and new layer indices
+                // 2. determine old && new refraction indices from old && new layer indices
                 float nind  = __fdividef(prof_atm[i_layer_fw+ilam].n, prof_atm[i_layer_bh+ilam].n);
                 float i2, alpha = 0.; // emergent direction, deviation angle
                 if (s1!=0. && nind!=1.) { // in case of refraction
@@ -2453,7 +2453,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
             // in the general case absorption is computed until new position if BEER
             if (BEERd == 1) ph->weight *= __expf(-( h_cur_abs));
             #else
-            // for ALIS case record cumulative distances and scatering corrections
+            // for ALIS case record cumulative distances && scatering corrections
             float tau;
             ph->cdist_atm[ph->layer] += d;
             int DL=(NLAMd-1)/(NLOWd-1);
@@ -2492,9 +2492,9 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
 
     // LE mode used to compute transmission
     if (le) {
-        // if the transmission to be evaluated is toward TOA and the photon is not in SPACE
-        // it has been stopped somewhere (hidden) and thus transmission is zero (weight=0)
-        // same reasoning for a transmission toward the surface and the photon location not at the surface
+        // if the transmission to be evaluated is toward TOA && the photon is not in SPACE
+        // it has been stopped somewhere (hidden) && thus transmission is zero (weight=0)
+        // same reasoning for a transmission toward the surface && the photon location not at the surface
         // we also update taumax of the photon to be eventually used in the Forced First Scattering mode
         if (( (count_level==UPTOA)  && (ph->loc==SPACE ) ) || 
             ( (count_level==DOWN0P) && (ph->loc==SURF0P) )) ph->weight *= __expf(-hph);
@@ -2517,7 +2517,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
 /*                      MOVE PHOTONS                                                                */
 /*--------------------------------------------------------------------------------------------------*/
 /*                      2) Plane Parrallel 1D Standard mode                                         */
-/*                      (OCEAN or ATMOS)
+/*                      (OCEAN || ATMOS)
 /*--------------------------------------------------------------------------------------------------*/
 #ifdef ALT_PP
  #ifndef OPT3D // 1D
@@ -2536,7 +2536,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm,
     #endif
     float d;
     int sign_direction;
-    int i_layer_fw, i_layer_bh; // index or layers forward and behind the photon
+    int i_layer_fw, i_layer_bh; // index || layers forward && behind the photon
     int ilam; 
     struct Profile *prof;
     int  NL;
@@ -2558,7 +2558,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm,
     if (!le) tauRdm = -logf(1.F-RAND);
     // if called with le mode, it serves to compute the transmission
     // from photon last intercation position to TOA, thus 
-    // photon is forced to exit upward or downward and tauRdm is chosen to be an upper limit
+    // photon is forced to exit upward || downward && tauRdm is chosen to be an upper limit
     else tauRdm = 1e6;
 
     vzn = ph->v.z;
@@ -2629,9 +2629,9 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm,
         AMF = __fdividef(d, abs(prof[i_layer_bh].z - prof[i_layer_fw].z)); // Air Mass Factor
 
         //
-        // calculate the optical thicknesses h_cur and h_cur_abs to the next layer
+        // calculate the optical thicknesses h_cur && h_cur_abs to the next layer
         // We compute the layer extinction coefficient of the layer DTau/Dz 
-        // and multiply by the distance within the layer
+        // && multiply by the distance within the layer
         //
         tau_cur = abs(get_OD(BEERd,prof[i_layer_bh+ilam]) 
                     - get_OD(BEERd,prof[i_layer_fw+ilam]));
@@ -2694,11 +2694,11 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm,
 
     } // while loop
 
-    // if the transmission to be evaluated is toward TOA and the photon is not in SPACE
-    // it has been stopped somewhere (hidden) and thus transmission is zero (weight=0)
-    // same reasoning for a transmission toward the surface 0+ and the photon location not at the surface 0+
-    // same reasoning for a transmission toward the surface 0- and the photon location not at the surface 0-
-    // same reasoning for a transmission toward the seafloor  and the photon location not at the seafloor
+    // if the transmission to be evaluated is toward TOA && the photon is not in SPACE
+    // it has been stopped somewhere (hidden) && thus transmission is zero (weight=0)
+    // same reasoning for a transmission toward the surface 0+ && the photon location not at the surface 0+
+    // same reasoning for a transmission toward the surface 0- && the photon location not at the surface 0-
+    // same reasoning for a transmission toward the seafloor  && the photon location not at the seafloor
     if (le) {
         if (( (count_level==UPTOA)  && (ph->loc==SPACE ) ) || 
             ( (count_level==DOWN0P) && (ph->loc==SURF0P) ) ||
@@ -2709,7 +2709,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm,
         else ph->weight = 0.;
     }
 
-    // in case of propagation, if the photon is still in the atmosphere or ocean
+    // in case of propagation, if the photon is still in the atmosphere || ocean
     // compute the absorption using Single Scattering Albedo if BEER=0
     if ((BEERd == 0) && ((ph->loc == ATMOS) || (ph->loc == OCEAN))) {
         ph->weight *= prof[ph->layer+ilam].ssa;
@@ -2722,7 +2722,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm,
 /*                      MOVE PHOTONS                                                                */
 /*--------------------------------------------------------------------------------------------------*/
 /*                      3) Plane Parrallel 3D Standard mode                                         */
-/*                      (OCEAN or ATMOS)                                                            */
+/*                      (OCEAN || ATMOS)                                                            */
 /*--------------------------------------------------------------------------------------------------*/
 #else// OPT3D
 __device__ void move_pp2_bak(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc, 
@@ -2763,7 +2763,7 @@ __device__ void move_pp2_bak(Photon* ph, struct Profile *prof_atm, struct Profil
     if (!le) tauRdm = -logf(1.F-RAND);
     // if called with le mode, it serves to compute the transmission
     // from photon last intercation position to TOA, thus 
-    // photon is forced to exit upward or downward and tauRdm is chosen to be an upper limit
+    // photon is forced to exit upward || downward && tauRdm is chosen to be an upper limit
     else tauRdm = 1e6;
 
     // Init photon position
@@ -2789,7 +2789,7 @@ __device__ void move_pp2_bak(Photon* ph, struct Profile *prof_atm, struct Profil
             break;}
         if (ph->loc == REMOVED) break;
 
-        // Update photon location if exit and cell number
+        // Update photon location if exit && cell number
         if (next_layer == BOUNDARY_ABS){
             ph->loc = ABSORBED;
             break;
@@ -2844,8 +2844,8 @@ __device__ void move_pp2_bak(Photon* ph, struct Profile *prof_atm, struct Profil
         //}
         
         //
-        // calculate the optical thicknesses h_cur and h_cur_abs to the next layer
-        // We get the layer extinction coefficient and multiply by the distance within the layer
+        // calculate the optical thicknesses h_cur && h_cur_abs to the next layer
+        // We get the layer extinction coefficient && multiply by the distance within the layer
         //
         coef_cur = get_OD(BEERd,prof[cell[ph->layer].iopt+ilam]);
         h_cur    = coef_cur * intTime1;
@@ -3017,7 +3017,7 @@ __device__ void move_pp2_bak(Photon* ph, struct Profile *prof_atm, struct Profil
 //     if (!le) tauRdm = -logf(1.F-RAND);
 //     // if called with le mode, it serves to compute the transmission
 //     // from photon last intercation position to TOA, thus 
-//     // photon is forced to exit upward or downward and tauRdm is chosen to be an upper limit
+//     // photon is forced to exit upward || downward && tauRdm is chosen to be an upper limit
 //     else tauRdm = 1e6;
 
 //     // Init photon cell
@@ -3031,13 +3031,13 @@ __device__ void move_pp2_bak(Photon* ph, struct Profile *prof_atm, struct Profil
 //         // stop propagating useless photons
 //         if (ph->loc == REMOVED) break;
 
-//         // identify absorbed photons and stop propagating them
+//         // identify absorbed photons && stop propagating them
 //         if (next_layer == BOUNDARY_ABS){
 //             ph->loc = ABSORBED;
 //             break;
 //         }
 
-//         // Update photon location, and cell number if still in atmosphere
+//         // Update photon location, && cell number if still in atmosphere
 //         if (ph->loc == ATMOS) {
 //          if (next_layer == BOUNDARY_0P) {
 //             ph->loc = SURF0P;
@@ -3052,7 +3052,7 @@ __device__ void move_pp2_bak(Photon* ph, struct Profile *prof_atm, struct Profil
 //          }
 //         } 
 
-//         // Update photon location, and cell number if still in ocean
+//         // Update photon location, && cell number if still in ocean
 //         if (ph->loc == OCEAN) {
 //          if (next_layer == BOUNDARY_FLOOR) {
 //             ph->loc = SEAFLOOR;
@@ -3077,8 +3077,8 @@ __device__ void move_pp2_bak(Photon* ph, struct Profile *prof_atm, struct Profil
 //         if (intersectBox) { // the photon is not already on a boundary
 //         //
 //         intersectPoint = operator+(ph->pos, ph->v * intTime1);
-//         // calculate the optical thicknesses h_cur and h_cur_abs to the next layer
-//         // We get the layer extinction coefficient and multiply by the distance within the layer
+//         // calculate the optical thicknesses h_cur && h_cur_abs to the next layer
+//         // We get the layer extinction coefficient && multiply by the distance within the layer
 //         //
 //         coef_cur = get_OD(BEERd,prof[cell[ph->layer].iopt+ilam]);
 //         h_cur    = coef_cur * intTime1;
@@ -3237,7 +3237,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
     if (!le) tauRdm = -logf(1.F-RAND);
     // if called with le mode, it serves to compute the transmission
     // from photon last intercation position to TOA, thus 
-    // photon is forced to exit upward or downward and tauRdm is chosen to be an upper limit
+    // photon is forced to exit upward || downward && tauRdm is chosen to be an upper limit
     else tauRdm = 1e7;
 
     // Init photon cell
@@ -3258,17 +3258,17 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
         // Stop the removed photon
         if (ph->loc == REMOVED) {return;}
 
-        // If the travelled distance (in x or y axis) exceeds 1000 kilometers then absorb the photon
+        // If the travelled distance (in x || y axis) exceeds 1000 kilometers then absorb the photon
         //if (fmax(distX, distY) >= limXY) {ph->loc=ABSORBED; return;}
 
 
         // Normally we will never get an infinite loop, but just a security
         if (count >= 10000000) { printf("Warning! Count limit has been exceeded!"); ph->loc=REMOVED; return; }
 
-        // Identify absorbed photons and stop propagating them
+        // Identify absorbed photons && stop propagating them
         if (next_layer == BOUNDARY_ABS) { ph->loc = ABSORBED; return; }
 
-        // Update photon location, and cell number if still in atmosphere
+        // Update photon location, && cell number if still in atmosphere
         if (ph->loc == ATMOS)
         {
             if (next_layer == BOUNDARY_0P) { ph->loc = SURF0P; break; }
@@ -3276,7 +3276,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
             else { ph->layer = next_layer; }
         }
 
-        // Update photon location, and cell number if still in ocean
+        // Update photon location, && cell number if still in ocean
         if (ph->loc == OCEAN)
         {
             if (next_layer == BOUNDARY_FLOOR) { ph->loc = SEAFLOOR; break; }
@@ -3298,8 +3298,8 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
         {   // the photon is not already on a boundary
             intersectPoint = operator+(ph->pos, ph->v * intTime1);
 
-            // calculate the optical thicknesses h_cur and h_cur_abs to the next layer
-            // We get the layer extinction coefficient and multiply by the distance within the layer
+            // calculate the optical thicknesses h_cur && h_cur_abs to the next layer
+            // We get the layer extinction coefficient && multiply by the distance within the layer
             //
             coef_cur = get_OD(BEERd,prof[cell[ph->layer].iopt+ilam]);
             h_cur    = coef_cur * intTime1;
@@ -3335,7 +3335,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
             }
             else // photon advances to the next layer
             {
-                // Update the photon travelled distance in the x and y axes
+                // Update the photon travelled distance in the x && y axes
                 distX += fabs(intersectPoint.x - ph->pos.x);
                 distY += fabs(intersectPoint.y - ph->pos.y);
 
@@ -3465,7 +3465,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
 /*                      MOVE PHOTONS                                                                */
 /*--------------------------------------------------------------------------------------------------*/
 /*                      4) Plane Parrallel 1D Fast mode                                             */
-/*                      (OCEAN or ATMOS)                                                            */
+/*                      (OCEAN || ATMOS)                                                            */
 /*--------------------------------------------------------------------------------------------------*/
 #if !defined(ALT_PP) && !defined(SPHERIQUE)
 __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *prof_oc,
@@ -3516,9 +3516,9 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             epsilon   = 0.F;
             #ifndef ALIS
             // in the general case absorption using BEER law
-            if (BEERd == 1) {// absorption between start and stop
+            if (BEERd == 1) {// absorption between start && stop
                 ab =  0.F; // absorption OD at the surface
-                // absorption between current photon tau_abs and final value ab
+                // absorption between current photon tau_abs && final value ab
                 ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
             }
             #else
@@ -3538,7 +3538,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             }
             #endif
 
-            // update of the reference wavelength photon tau and tau_abs values to the surface values : here 0 
+            // update of the reference wavelength photon tau && tau_abs values to the surface values : here 0 
             ph->tau = 0.F;
             ph->tau_abs = 0.F;
             // location update
@@ -3566,7 +3566,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             ph->layer = NOCEd;
             epsilon   = 1.F;
             #ifndef ALIS
-            if (BEERd == 1) {// absorption between start and stop
+            if (BEERd == 1) {// absorption between start && stop
                 // at the seafloor ab=TAU_OCEAN_ABS
                 ab = prof_oc[NOCEd + ph->ilam *(NOCEd+1)].OD_abs;
                 ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
@@ -3626,7 +3626,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
                      - epsilon * 
                      (prof_oc[ilayer-1+ph->ilam*(NOCEd+1)].OD_abs 
                     - prof_oc[ilayer  +ph->ilam*(NOCEd+1)].OD_abs);
-                // absorption between start and stop
+                // absorption between start && stop
                 ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
                 // update photon absorption tau
                 ph->tau_abs = ab;
@@ -3678,7 +3678,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 
 
 		// Launch the function geoTest to see if there are an intersection with the 
-		// geometry, return true/false and give the position phit of the intersection
+		// geometry, return true/false && give the position phit of the intersection
 		// nObj = le nombre d'objets, si = 0 alors le test n'est pas nécessaire.
 	    if (nObj > 0){
 			mytest = geoTest(ph->pos, ph->v, &phit, geoS, myObjets, myGObj, mySPECTObj, ph->ilam);
@@ -3692,7 +3692,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 			}
 		}
 
-		// if mytest = true (intersection with the geometry) and the position of the intersection is in
+		// if mytest = true (intersection with the geometry) && the position of the intersection is in
 		// the atmosphere (0 < Z < 120), then: Begin to analyse is there is really an intersection
 		if(mytest && phit.z > -VALMIN5 && phit.z < (ZTOAd+VALMIN5) && IsAtm == 1)
 		{
@@ -3726,7 +3726,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 				if (ilayer==0) {ilayer=1;}   // be sure that we're not out of the atmosphere
 				oldP = ph->pos;                // initialise with the actual position
 
-				// check if the photon come from higher or lower layers
+				// check if the photon come from higher || lower layers
 				if(ilayer < ilayer2) // true if the photon come from higher layers
 					higher =  true;
 
@@ -3746,7 +3746,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 					oldP = newP; //Update the position of the photon
 				}
 
-				// Calculate and add the last tau distance when ilayer is equal to ilayer2
+				// Calculate && add the last tau distance when ilayer is equal to ilayer2
 				delta_i = fabs(get_OD(BEERd, prof_atm[ilayer2+ph->ilam*(NATMd+1)]) - 
 							   get_OD(BEERd, prof_atm[ilayer2-1+ph->ilam*(NATMd+1)]));
 				tauHit += (length(phit, oldP)/fabs(prof_atm[ilayer2 - 1].z - prof_atm[ilayer2].z))*delta_i;
@@ -3769,7 +3769,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 					float ab = prof_atm[NATMd+ph->ilam*(NATMd+1)].OD_abs - 
 						(epsilon * (prof_atm[ilayer2+ph->ilam*(NATMd+1)].OD_abs - prof_atm[ilayer2-1+ph->ilam*(NATMd+1)].OD_abs) +
 						 prof_atm[ilayer2-1+ph->ilam*(NATMd+1)].OD_abs);
-					// absorption between start and stop
+					// absorption between start && stop
 					ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
 					ph->tau_abs = ab;
 					//ph->weight *= exp(-fabs(tauHit));
@@ -3839,7 +3839,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             ph->layer = NATMd;
             epsilon = 0.F;
             #ifndef ALIS
-            if (BEERd == 1) {// absorption between start and stop
+            if (BEERd == 1) {// absorption between start && stop
                 ab =  0.F;
                 ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
             }
@@ -3876,7 +3876,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             ph->layer = 0;
             epsilon = 0.F;
             #ifndef ALIS
-		    if (BEERd == 1) {// absorption between start and stop
+		    if (BEERd == 1) {// absorption between start && stop
                 ab = prof_atm[NATMd + ph->ilam *(NATMd+1)].OD_abs;
                 ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
             }
@@ -3931,7 +3931,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
                      epsilon * 
                      (prof_atm[ilayer  +ph->ilam*(NATMd+1)].OD_abs 
                     - prof_atm[ilayer-1+ph->ilam*(NATMd+1)].OD_abs) ;
-                // absorption between start and stop
+                // absorption between start && stop
                 ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
                 ph->tau_abs = ab;
             }
@@ -4026,8 +4026,8 @@ __device__ void scatter(Photon* ph,
     #endif
 
     if (le){
-        /* in case of LE the photon units vectors, scattering angle and Psi rotation angles
-         are determined by output zenith and azimuth angles*/
+        /* in case of LE the photon units vectors, scattering angle && Psi rotation angles
+         are determined by output zenith && azimuth angles*/
         float thv, phi;
         float3 v;
 
@@ -4063,7 +4063,7 @@ __device__ void scatter(Photon* ph,
 			func = faer; // atm phases
 			
 			/************************************/
-			/* Rayleigh or ptcle scattering */
+			/* Rayleigh || ptcle scattering */
 			/************************************/
 			if( ph->scatterer == RAY ){ipha  = 0;}   // Rayleigh index
 			else if(ph->scatterer == PTCLE ){ipha  = prof_atm[ilay].iphase + 2;} // particle index
@@ -4090,7 +4090,7 @@ __device__ void scatter(Photon* ph,
 
 		if(!le) {
 
-			/* in the case of propagation (not LE) the photons scattering angle and Psi
+			/* in the case of propagation (not LE) the photons scattering angle && Psi
 			   rotation angle are determined randomly */
 			/////////////
 			// Get Theta from Cumulative Distribution Function
@@ -4147,7 +4147,7 @@ __device__ void scatter(Photon* ph,
 		}else {
 	
 			/////////////
-			// Get Index of scattering angle and Scattering matrix directly 
+			// Get Index of scattering angle && Scattering matrix directly 
 			zang = theta * (NF-1)/PI ;
 			iang = __float2int_rd(zang);
 			zang = zang - iang;
@@ -4186,7 +4186,7 @@ __device__ void scatter(Photon* ph,
 		if (!le){
 			float debias = 1.F;
             #ifdef BIAS
-			// Bias sampling scheme 2): Debiasing and normalizing
+			// Bias sampling scheme 2): Debiasing && normalizing
 			debias = __fdividef(2.F, P11 + P22 + 2*P12 ); // Debias is equal to the inverse of the phase function
             #else
 			debias = __fdividef(1.F, ph->stokes.x + ph->stokes.y);
@@ -4243,7 +4243,7 @@ __device__ void scatter(Photon* ph,
 	}
 
     #ifdef ALIS
-	if ( (ph->scatterer == RAY) or (ph->scatterer == PTCLE) or (ph->scatterer == VRS)){
+	if ( (ph->scatterer == RAY) || (ph->scatterer == PTCLE) || (ph->scatterer == VRS)){
         Profile *prof;                                             
         #ifdef OPT3D
         Cell *cell;
@@ -4282,7 +4282,7 @@ __device__ void scatter(Photon* ph,
             #else
 			int ipharef = prof[cell[ph->layer].iopt+ph->ilam*(layer_end+1)].iphase + 2; 
             #endif
-			// Phase functions of particles and molecules, and mixture of both at reference wavelength
+			// Phase functions of particles && molecules, && mixture of both at reference wavelength
 			P11_aer_ref = (1-zang)*func[ipharef*NF+iang].a_P11 + zang*func[ipharef*NF+iang+1].a_P11;
 			P11_ray     = (1-zang)*func[0      *NF+iang].a_P11 + zang*func[0      *NF+iang+1].a_P11;
 			P22_aer_ref = (1-zang)*func[ipharef*NF+iang].a_P22 + zang*func[ipharef*NF+iang+1].a_P22;
@@ -4314,7 +4314,7 @@ __device__ void scatter(Photon* ph,
 				float P11_aer = (1-zang)*func[iphak*NF+iang].a_P11 + zang*func[iphak*NF+iang+1].a_P11;
 				float P22_aer = (1-zang)*func[iphak*NF+iang].a_P22 + zang*func[iphak*NF+iang+1].a_P22;
 				float P12_aer = (1-zang)*func[iphak*NF+iang].a_P12 + zang*func[iphak*NF+iang+1].a_P12;
-				// Phase functions of the mixture of particles and molecules at other wavelengths
+				// Phase functions of the mixture of particles && molecules at other wavelengths
 				float P_k   = (P11_ray+P22_ray+2.F*P12_ray) * pmol_k + (P11_aer+P22_aer+2.F*P12_aer) * (1.-pmol_k);
 				ph->weight_sca[k] *= __fdividef(P_k, P_ref);
 			}
@@ -4405,7 +4405,7 @@ __device__ void choose_scatterer(Photon* ph,
     #ifndef THERMAL
     ph->nint += 1;
     #else
-    // in forward thermal mode, A thermal emission is not counted as interaction and choose_scatterer does not do anything
+    // in forward thermal mode, A thermal emission is not counted as interaction && choose_scatterer does not do anything
     // #ifndef BACK
     if (ph->scatterer!=THERMAL_EM) ph->nint +=1;
     else return;
@@ -4535,7 +4535,7 @@ __device__ void surfaceWaterRough(Photon* ph, int le,
 	// Reflection rough dioptre
 	float theta;	// reflection polar angle[rad]
 	float psi;		// reflection azimuth angle [rad]
-	float cTh, sTh;	// cos and sin of photon incident angle on the dioptre
+	float cTh, sTh;	// cos && sin of photon incident angle on the dioptre
 	
 	float sig, sig2  ;
 	float beta = 0.F;	// polar angle of the facet normal 
@@ -4567,13 +4567,13 @@ __device__ void surfaceWaterRough(Photon* ph, int le,
     float thv, phi;
 	float3 v, v_l;
 
-    // Reflection  and Transmission Matrices
+    // Reflection  && Transmission Matrices
     float4x4 R, T;
 
     // Determination of the relative refractive index
     // a: air, b: water , Mobley 2015 nind = nba = nb/na
-    // in general nind = n_t/n_i or no/ni (transmitted over incident or output versus input)
-    // and sign for further computation, sign positive for upward facet normal for reflection
+    // in general nind = n_t/n_i || no/ni (transmitted over incident || output versus input)
+    // && sign for further computation, sign positive for upward facet normal for reflection
     float sign;
     if (ph->loc == SURF0M)  {
         nind = __fdividef(1.f,NH2Od);
@@ -4586,7 +4586,7 @@ __device__ void surfaceWaterRough(Photon* ph, int le,
      
 	
     #ifdef SPHERIQUE
-    // define 3 vectors Nx, Ny and Nz in cartesian coordinates which define a
+    // define 3 vectors Nx, Ny && Nz in cartesian coordinates which define a
     // local orthonormal basis at the impact point.
     // Nz is the local vertical direction, the direction of the 2 others does not matter
     // because the azimuth is chosen randomly
@@ -4594,7 +4594,7 @@ __device__ void surfaceWaterRough(Photon* ph, int le,
 	Nz = ph->pos; // Nz is the vertical at the impact point
     // Ny is chosen arbitrarily by cross product of Nz with axis X = (1,0,0)
 	Ny = cross(Nz, make_float3(1.0,0.0,0.0));
-    // Nx is the cross product of Ny and Nz
+    // Nx is the cross product of Ny && Nz
 	Nx = cross(Ny, Nz);
 	// Normalization
 	Nx = normalize(Nx);
@@ -4613,18 +4613,18 @@ __device__ void surfaceWaterRough(Photon* ph, int le,
     if (ph->loc==SURF0M) v_l = ph->v;
 
 	/** **/
-    //  Estimation of the probability P of interaction of the photon with zentih angle theta with a facet of slope beta and azimut alpha	
-    //  P_alpha_beta : Probability of occurence of a given azimuth and slope
-    //  P_alpha_beta = P_Cox_Munk(beta) * P(alpha | beta), conditional probability, for normal incidence, independent variables and P(alpha|beta)=P(alpha)=1/2pi
+    //  Estimation of the probability P of interaction of the photon with zentih angle theta with a facet of slope beta && azimut alpha	
+    //  P_alpha_beta : Probability of occurence of a given azimuth && slope
+    //  P_alpha_beta = P_Cox_Munk(beta) * P(alpha | beta), conditional probability, for normal incidence, independent variables && P(alpha|beta)=P(alpha)=1/2pi
     //  following Plass75:
     //  Pfacet : Probability of occurence of a facet
     //  Pfacet = projected area of the facet divided by unit area of the possible interaction surface * P_alpha_beta
     //  Pfacet = P_alpha_beta / cos(beta)
-    //  for non normal incident angle, the probability of interaction between the photon and the facet is proportional to the surface of the facet seen by the photon so
+    //  for non normal incident angle, the probability of interaction between the photon && the facet is proportional to the surface of the facet seen by the photon so
     //  that is cosine of incident angle of photon on the facet theta_inc=f(alpha,beta,theta)
     //  P # Pfacet * cos(theta_inc) for cos(theta_inc) >0
     //  P = 0 for cos(theta_inc)<=0
-    //  for having a true probability, one has to normalize this to 1. The A normalization factor depends on theta and is the sum on all alpha and beta with the condition
+    //  for having a true probability, one has to normalize this to 1. The A normalization factor depends on theta && is the sum on all alpha && beta with the condition
     //  cos(theta_inc)>0 (visible facet)
     //  A = Sum_0_2pi Sumr_0_pi/2 P_alpha_beta /cos(beta) cos(theta_inc) dalpha dbeta
     //  Finally P = 1/A * P_alpha_beta  /cos(beta) cos(theta_inc)
@@ -4641,7 +4641,7 @@ __device__ void surfaceWaterRough(Photon* ph, int le,
 
         theta = DEMIPI;
         //  Computation of P_alpha_beta = P_Cox_Munk(beta) * P(alpha | beta)
-        //  we draw beta first according to Cox_Munk isotropic and then draw alpha, conditional probability
+        //  we draw beta first according to Cox_Munk isotropic && then draw alpha, conditional probability
         //  rejection method: to exclude unphysical azimuth (leading to incident angle theta >=PI/2)
         //  we continue until acceptable value for alpha
 
@@ -4698,7 +4698,7 @@ __device__ void surfaceWaterRough(Photon* ph, int le,
      if ((ph->loc==SURF0P) && (count_level==DOWN0M) ||
          (ph->loc==SURF0M) && (count_level==UP0P))   { // Refraction geometry
         // vector equation for determining the half direction half = - (no*o + ni*i)
-        // or half = - (nind*o + i)
+        // || half = - (nind*o + i)
         // The convention in Walter is h pointing towards the medieum with lowest index of refraction
         /*****/
         // So
@@ -4795,7 +4795,7 @@ __device__ void surfaceWaterRough(Photon* ph, int le,
         tpar2= tpar * tpar;
         tper2= tper * tper;
         tparper = tpar * tper;
-        // DR rat is the energetic reflection factor used to normalize the R and T matrix (see Xun 2014)
+        // DR rat is the energetic reflection factor used to normalize the R && T matrix (see Xun 2014)
         #ifdef BIAS
 		rat =  __fdividef(rpar2 + rper2, 2.F);
         #else
@@ -4803,7 +4803,7 @@ __device__ void surfaceWaterRough(Photon* ph, int le,
         #endif
 		ReflTot = 0;
         #ifdef BACK
-        // in backward mode, nind -> 1/nind and incidence angle <-> emergence angle
+        // in backward mode, nind -> 1/nind && incidence angle <-> emergence angle
         cTh_b = cot;
         float cot_b = cTh;
         float nind_b= 1.F/nind;
@@ -4930,8 +4930,8 @@ __device__ void surfaceWaterRough(Photon* ph, int le,
         //  the reflection coefficient is taken into account:
         //  once in the random selection (Rand < rat)
         //  once in the reflection matrix multiplication
-        //  so twice and thus we normalize by rat (Xun 2014).
-        //  not to be applied for forced reflection (SUR=1 or total reflection) where there is no random selection
+        //  so twice && thus we normalize by rat (Xun 2014).
+        //  not to be applied for forced reflection (SUR=1 || total reflection) where there is no random selection
 		if (SURd==3 && !ReflTot && !le) {
             ph->weight /=rat;
 			}
@@ -4947,7 +4947,7 @@ __device__ void surfaceWaterRough(Photon* ph, int le,
         //
         if (ph->loc == SURF0P) {
             if (vzn > 0) {  // avoid multiple reflexion above the surface
-                // SURF0P becomes ATM or SPACE
+                // SURF0P becomes ATM || SPACE
                 if( SIMd==SURF_ONLY || SIMd==OCEAN_SURF ){
                     ph->loc = SPACE;
                 } else{
@@ -4960,7 +4960,7 @@ __device__ void surfaceWaterRough(Photon* ph, int le,
             else if (SINGLEd) ph->loc = REMOVED;
         } else {
             if (vzn < 0) {  // avoid multiple reflexion under the surface
-               // SURF0M becomes OCEAN or ABSORBED
+               // SURF0M becomes OCEAN || ABSORBED
                if( SIMd==SURF_ATM ){
                   ph->loc = ABSORBED;
                } else{
@@ -5053,7 +5053,7 @@ __device__ void surfaceWaterRough(Photon* ph, int le,
         //
         if (ph->loc == SURF0M) {
          if (vzn > 0) {
-            // SURF0P becomes ATM or SPACE
+            // SURF0P becomes ATM || SPACE
             if( SIMd==SURF_ONLY || SIMd==OCEAN_SURF ){
                 ph->loc = SPACE;
             } else{
@@ -5069,7 +5069,7 @@ __device__ void surfaceWaterRough(Photon* ph, int le,
          }
         } else {
            if (vzn < 0) {  // avoid multiple reflexion under the surface
-              // SURF0M becomes OCEAN or ABSORBED
+              // SURF0M becomes OCEAN || ABSORBED
               if( SIMd==SURF_ONLY || SIMd==SURF_ATM ){
                 ph->loc = ABSORBED;
               } else{
@@ -5093,10 +5093,10 @@ __device__ void surfaceWaterRough(Photon* ph, int le,
     if (!le) {
         if (WAVE_SHADOWd) ph->weight *= __fdividef(fabs(cTh), cBeta * (1.F + LambdaS + LambdaR) * avz );
         else              ph->weight *= __fdividef(fabs(cTh), cBeta * (1.F + LambdaS) * avz );
-        // Ross et al 2005, Ross and Dion, 2007, Zeisse 1995
+        // Ross et al 2005, Ross && Dion, 2007, Zeisse 1995
         // Slope sampling bias correction using the normalized interaction PDF q
         // weight has to be multiplied by q/p, where p is the slope PDF
-        // Coefficient Lambda for normalization of q taking into acount slope shadowing and hiding
+        // Coefficient Lambda for normalization of q taking into acount slope shadowing && hiding
         // Including wave shadows is performed at the end after the outgoing direction is calculated
 
 		if (RRd==1){
@@ -5118,7 +5118,7 @@ __device__ float4x4 FresnelR(float3 vi, float3 vr) {
     float4x4 R;
     // Determination of the relative refractive index
     // a: air, b: water , Mobley 2015 nind = nba = nb/na
-    // and sign for further computation
+    // && sign for further computation
     float nind = NH2Od;
     // vector equation for determining the half direction h = sign(i dot o) (i + o)
 	float3 no = operator-(vr, vi);
@@ -5200,7 +5200,7 @@ __device__ void surfaceBRDF(Photon* ph, int le,
         v_o = normalize(v_o);
 
         #ifdef SPHERIQUE
-        // Go to global frame - because we sampled phi and thv from a facet n=(0,0,1) -
+        // Go to global frame - because we sampled phi && thv from a facet n=(0,0,1) -
         // vec2transform routine return the tranformation that we have to apply to a vector=(0,0,1) to 
         // be equal to the vector given as parameter (here macroFnormal_n0)
         transfo = transfo.vec2transform(macroFnormal_n0);
@@ -5212,7 +5212,7 @@ __device__ void surfaceBRDF(Photon* ph, int le,
 	float3 v_i;                                     // - direction of the incoming photon
 	float3 u_i;                                     // - perp direction of the incoming photon
 	float3 u_o;                                     //   outgoing perp direction
-	float cTheta_i;                                 // - cos of the angle between normal m and the
+	float cTheta_i;                                 // - cos of the angle between normal m && the
 	                                                //   direction of the incoming photon v
 	float sTheta_i;                                 // - sin of theta_i
 	float3 microFnormal_m;                          // - the (small) random microfacet normal m
@@ -5238,7 +5238,7 @@ __device__ void surfaceBRDF(Photon* ph, int le,
     avz_o = fabs(dot(macroFnormal_n0, v_o));
     
     // int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    // if(idx==0 and !le) printf("before: %f  ; after: %f ; v_o.z: %f ; %f %f %f\n", 
+    // if(idx==0 && !le) printf("before: %f  ; after: %f ; v_o.z: %f ; %f %f %f\n", 
     //                           avz_bis, dot(macroFnormal_n0, v_o), v_o.z,
     //                           macroFnormal_n.x, macroFnormal_n.y, macroFnormal_n.z);
     #else
@@ -5251,7 +5251,7 @@ __device__ void surfaceBRDF(Photon* ph, int le,
 	// ********************************************************
 	// Rotation of the stokes vector
 	// ********************************************************
-	// Compute psi angle and rotation matrix L in (For/Back)ward mode
+	// Compute psi angle && rotation matrix L in (For/Back)ward mode
 	float psi; float4x4 LF;
 	psi = computePsiFN(u_i, v_i, microFnormal_m, sTheta_i);
 	rotationM(psi, &LF); // fill the rotation matrix LF (forward mode)
@@ -5285,7 +5285,7 @@ __device__ void surfaceBRDF(Photon* ph, int le,
 	// ********************************************************
 
 	// ********************************************
-	// Reflection of the direction v and perp dir u
+	// Reflection of the direction v && perp dir u
 	// ********************************************
 	u_o = (microFnormal_m-(cTheta_i*v_o))/sTheta_i;
 	u_o = normalize(u_o);
@@ -5331,7 +5331,7 @@ __device__ void surfaceBRDF(Photon* ph, int le,
     if (isnan(ph->weight)) {ph->loc=REMOVED; return;}
 
 	// **********************************************
-	// update photon directions u, v, location and albedo
+	// update photon directions u, v, location && albedo
 	// **********************************************
     if ( (isnan(v_o.x)) || (isnan(v_o.y)) || (isnan(v_o.z)) || 
 		 (isnan(u_o.x)) || (isnan(u_o.y)) || (isnan(u_o.z)) )
@@ -5386,7 +5386,7 @@ __device__ void surfaceBRDF_global2local(Photon* ph, int le,
 	float3 v_i;                             // - direction of the incoming photon
 	float3 u_i;                             // - perp direction of the incoming photon
 	float3 v_o, u_o;                                // outgoing directions
-	float cTheta_i;                                 // - cos of the angle between normal m and the
+	float cTheta_i;                                 // - cos of the angle between normal m && the
 	                                                //   direction of the incoming photon v
 	float sTheta_i;                                 // - sin of theta_i
     #ifdef SPHERIQUE 
@@ -5471,7 +5471,7 @@ __device__ void surfaceBRDF_global2local(Photon* ph, int le,
 	// ********************************************************
 	// Rotation of the stokes vector
 	// ********************************************************
-	// Compute psi angle and rotation matrix L in (For/Back)ward mode
+	// Compute psi angle && rotation matrix L in (For/Back)ward mode
 	float psi; float4x4 LF;
 	psi = computePsiFN(u_i, v_i, microFnormal_m, sTheta_i);
 	rotationM(psi, &LF); // fill the rotation matrix LF (forward mode)
@@ -5505,7 +5505,7 @@ __device__ void surfaceBRDF_global2local(Photon* ph, int le,
 	// ********************************************************
 
 	// ********************************************
-	// Reflection of the direction v and perp dir u
+	// Reflection of the direction v && perp dir u
 	// ********************************************
 	u_o = (microFnormal_m-cTheta_i*v_o)/sTheta_i;
 	u_o = normalize(u_o);
@@ -5551,7 +5551,7 @@ __device__ void surfaceBRDF_global2local(Photon* ph, int le,
     if (isnan(ph->weight)) {ph->loc=REMOVED; return;}
 
 	// **********************************************
-	// update photon directions u, v, location and albedo
+	// update photon directions u, v, location && albedo
 	// **********************************************
 	#ifdef SPHERIQUE
     // come back to global frame
@@ -5634,16 +5634,16 @@ __device__ void surfaceBRDF_old(Photon* ph, int le,
     float thv, phi;
 	float3 v;
 
-    // Reflection  and Transmission Matrices
+    // Reflection  && Transmission Matrices
     float4x4 R;
 
     // Determination of the relative refractive index
     // a: air, b: water , Mobley 2015 nind = nba = nb/na
-    // and sign for further computation
+    // && sign for further computation
     nind = NH2Od;
      
     #ifdef SPHERIQUE
-    // define 3 vectors Nx, Ny and Nz in cartesian coordinates which define a
+    // define 3 vectors Nx, Ny && Nz in cartesian coordinates which define a
     // local orthonormal basis at the impact point.
     // Nz is the local vertical direction, the direction of the 2 others does not matter
     // because the azimuth is chosen randomly
@@ -5651,7 +5651,7 @@ __device__ void surfaceBRDF_old(Photon* ph, int le,
 	Nz = ph->pos; // Nz is the vertical at the impact point
     // Ny is chosen arbitrarily by cross product of Nz with axis X = (1,0,0)
 	Ny = cross(Nz, make_float3(1.0,0.0,0.0));
-    // Nx is the cross product of Ny and Nz
+    // Nx is the cross product of Ny && Nz
 	Nx = cross(Ny, Nz);
 	// Normalizatioin
 	Nx = normalize(Nx);
@@ -5681,7 +5681,7 @@ __device__ void surfaceBRDF_old(Photon* ph, int le,
     if (!le)
     {
         Transform<float> transfo;
-        // Go to global frame - because in le==0 we sampled phi and thv from a facet n=(0,0,1) i.e. local frame-
+        // Go to global frame - because in le==0 we sampled phi && thv from a facet n=(0,0,1) i.e. local frame-
         // vec2transform routine return the tranformation that we have to apply to a vector=(0,0,1) to 
         // be equal to the vector given as parameter (here Nz)
         transfo = transfo.vec2transform(Nz);
@@ -5844,7 +5844,7 @@ __device__ void surfaceLambert(Photon* ph, int le,
     float3 v0=ph->v;
 
     #ifdef SPHERIQUE
-    // define 3 vectors Nx, Ny and Nz in cartesian coordinates which define a
+    // define 3 vectors Nx, Ny && Nz in cartesian coordinates which define a
     // local orthonormal basis at the impact point.
     // Nz is the local vertical direction, the direction of the 2 others does not matter
     // because the azimuth is chosen randomly
@@ -5914,7 +5914,7 @@ __device__ void surfaceLambert(Photon* ph, int le,
     #endif
 
 	/***************************************************/
-	/* Update of photon location and weight */
+	/* Update of photon location && weight */
 	/***************************************************/
 	if (ph->loc == SURF0P){
 		bool test_s = ( SIMd == SURF_ONLY);
@@ -6010,13 +6010,13 @@ __device__ void surfaceBRDF_new(Photon* ph, int le,
 	float3 vr; // photon outgoing direction in the LOCAL frame
 	float3 vi; // photon ingoing  direction in the LOCAL frame
 	float3 v , u;  // photon outgoing direction in the GLOBAL frame
-    float3 no_n, no; // normal to the facet LOCAL and GLOBAL frame
+    float3 no_n, no; // normal to the facet LOCAL && GLOBAL frame
     //float3 w_ne, w_ol;
     float cBeta2; //facet slope squared
     float4x4 R; // Fresnel Reflection Matrix
 
     #ifdef SPHERIQUE
-    // define 3 vectors Nx, Ny and Nz in cartesian coordinates which define a
+    // define 3 vectors Nx, Ny && Nz in cartesian coordinates which define a
     // local orthonormal basis at the impact point.
     // Nz is the local vertical direction, the direction of the 2 others does not matter
     // because the azimuth is chosen randomly
@@ -6071,7 +6071,7 @@ __device__ void surfaceBRDF_new(Photon* ph, int le,
     #endif
 
     /***************************************************/
-    /* Computation of slope and weight */
+    /* Computation of slope && weight */
     /***************************************************/
 	no_n   = operator-(vr, vi);
     no_n   = normalize(no_n);
@@ -6175,7 +6175,7 @@ __device__ void surfaceLambert3D(Photon* ph, int le, float* tabthv, float* tabph
 		else { ph->E += 1; } // AR traité comme environnement
         if (ph->direct == 0) {ph->v_i = make_float3(-ph->v.x, -ph->v.y, -ph->v.z);}
 	}
-	else if ( geoS->type == RECEIVER or geoS->type == ENVIRONMENT)
+	else if ( geoS->type == RECEIVER || geoS->type == ENVIRONMENT)
 	{ ph->E += 1; }
 
 
@@ -6239,7 +6239,7 @@ __device__ void surfaceLambert3D(Photon* ph, int le, float* tabthv, float* tabph
 			return;
 		}
 	
-		// Update the value of u and v of the photon	
+		// Update the value of u && v of the photon	
 		ph->v = v_n;
 		ph->u = u_n;
     }
@@ -6262,7 +6262,7 @@ __device__ void surfaceLambert3D(Photon* ph, int le, float* tabthv, float* tabph
     #endif
 	
 	/***************************************************/
-	/* Update of photon location and weight */
+	/* Update of photon location && weight */
 	/***************************************************/
 	ph->locPrev = OBJSURF;
 	ph->loc = ATMOS;
@@ -6296,7 +6296,7 @@ __device__ void surfaceRugueuse3D(Photon* ph, IGeo* geoS, struct RNG_State *rngs
 		{ ph->H += 1; }
 		else { ph->E += 1; } // AR traité comme environnement
 	}
-	else if ( geoS->type == RECEIVER or geoS->type == ENVIRONMENT)
+	else if ( geoS->type == RECEIVER || geoS->type == ENVIRONMENT)
 	{ ph->E += 1; }
 	
 	float3 u_n, v_n;	// Vecteur du photon après reflexion
@@ -6356,7 +6356,7 @@ __device__ void surfaceRugueuse3D(Photon* ph, IGeo* geoS, struct RNG_State *rngs
 		return;
 	}
 	
-	// Update the value of u and v of the photon	
+	// Update the value of u && v of the photon	
 	ph->locPrev = OBJSURF;
 	ph->loc = ATMOS;
 	ph->v = normalize(v_n);
@@ -6382,22 +6382,22 @@ __device__ void Obj3DRoughSurf(Photon* ph, int le, float* tabthv, float* tabphi,
 	float3 v_i = ph->v;                    // - direction of the incoming photon
 	float3 u_i = ph->u;                    // - perp direction of the incoming photon
 	float3 v_o, u_o;                       // outcoming directions
-	float cTheta_i;                        // - cos of the angle between normal m and the
+	float cTheta_i;                        // - cos of the angle between normal m && the
 	                                       //   direction of the incoming photon v
 	float sTheta_i;                        // - sin of theta_i
 	float3 macroFnormal_n = geoS->normal;  // - the (big) macrofacet normal n
-	float alpha = geoS->roughness;         // - Slope error or rugosity parameter
+	float alpha = geoS->roughness;         // - Slope error || rugosity parameter
 	float3 microFnormal_m;                 // - the (small) random microfacet normal m
-	float theta_m, phi_m;                  // - theta_m and phi_m respectively the azi
-	                                       //   and zen angles between normals n and m
+	float theta_m, phi_m;                  // - theta_m && phi_m respectively the azi
+	                                       //   && zen angles between normals n && m
 	float tTheta_m;                        // - tan(theta_m)
-	float cTheta_m, sTheta_m;              // - cos and sin of theta_m
-	float cPhi_m, sPhi_m;                  // - cos and sin of phi_m
+	float cTheta_m, sTheta_m;              // - cos && sin of theta_m
+	float cPhi_m, sPhi_m;                  // - cos && sin of phi_m
 	float nind = geoS->nind;               // - relative refractive index air/obj
 	float3 h_r;                            // half-direction for reflection used in LE
 	float thv, phi;                        // used only in LE
 
-	// Find if the photon come from the front(1) or back(-1) of the obj surface
+	// Find if the photon come from the front(1) || back(-1) of the obj surface
 	// geoS->normalBase is the obj normal of the front surface
 	int sign = (isBackward(macroFnormal_n, v_i)) ? 1 : -1;
     float avz;
@@ -6407,13 +6407,13 @@ __device__ void Obj3DRoughSurf(Photon* ph, int le, float* tabthv, float* tabphi,
 		if (sign > 0) { ph->H += 1; }
 		else { ph->E += 1; } // Back heliostat surface considered as environnement
 	}
-	else if ( geoS->type == RECEIVER or geoS->type == ENVIRONMENT)
+	else if ( geoS->type == RECEIVER || geoS->type == ENVIRONMENT)
 	{ ph->E += 1; }
 
 	if (le == 0)
 	{
 		// The initial normal of the obj before transfo is colinear to the z axis,
-		// then create the transfo inverse for the direction v_i and simplify sampling
+		// then create the transfo inverse for the direction v_i && simplify sampling
 		Transform<float> transfo=geoS->mvTF, invTransfo;
 		invTransfo = transfo.Inverse(transfo);
 		
@@ -6437,7 +6437,7 @@ __device__ void Obj3DRoughSurf(Photon* ph, int le, float* tabthv, float* tabphi,
 				theta_m = atanf(tTheta_m);
 				phi_m   = DEUXPI * rand2;
 		
-				// find the normal of the microfacet m thanks to thata_m and phi_m sampling
+				// find the normal of the microfacet m thanks to thata_m && phi_m sampling
 				cTheta_m = __cosf(theta_m); sTheta_m = __sinf(theta_m);
 				cPhi_m = __cosf(phi_m); sPhi_m = __sinf(phi_m);
 				microFnormal_m = make_float3( sTheta_m*cPhi_m,  sTheta_m*sPhi_m, cTheta_m );
@@ -6446,7 +6446,7 @@ __device__ void Obj3DRoughSurf(Photon* ph, int le, float* tabthv, float* tabphi,
 				cTheta_i = clamp(cTheta_i, -1.F, 1.F);
 			}
 		}
-		else // Roughness equal zero (or very very close) --> perfect flat surface
+		else // Roughness equal zero  || very very close) --> perfect flat surface
 		{
 			microFnormal_m = make_float3(0.F, 0.F, 1.F);
 			microFnormal_m *= sign;
@@ -6477,7 +6477,7 @@ __device__ void Obj3DRoughSurf(Photon* ph, int le, float* tabthv, float* tabphi,
         avz = fabs(dot(macroFnormal_n, v_i));
 	} // end le==1
 
-	// Less expensive than find theta from arcos and apply the sin
+	// Less expensive than find theta from arcos && apply the sin
 	sTheta_i = sqrtf( fmaxf(VALMIN,  1.F-(cTheta_i*cTheta_i)) );
 
 	// ***********************************************************************************
@@ -6485,7 +6485,7 @@ __device__ void Obj3DRoughSurf(Photon* ph, int le, float* tabthv, float* tabphi,
 	// ********************************************************
 	// Rotation of the stokes vector
 	// ********************************************************
-	// Compute psi angle and rotation matrix L in (For/Back)ward mode
+	// Compute psi angle && rotation matrix L in (For/Back)ward mode
 	float psi; float4x4 LF;
 	psi = computePsiFN(u_i, v_i, microFnormal_m, sTheta_i);
 	rotationM(psi, &LF); // fill the rotation matrix LF (forward mode)
@@ -6523,7 +6523,7 @@ __device__ void Obj3DRoughSurf(Photon* ph, int le, float* tabthv, float* tabphi,
 	// ********************************************************
 
 	// ********************************************
-	// Reflection of the direction v and perp dir u
+	// Reflection of the direction v && perp dir u
 	// ********************************************
 	if (le == 0) { v_o = specularFNC(v_i, microFnormal_m, cTheta_i);}
 	u_o = (microFnormal_m-cTheta_i*v_o)/sTheta_i;
@@ -6543,7 +6543,7 @@ __device__ void Obj3DRoughSurf(Photon* ph, int le, float* tabthv, float* tabphi,
 		tTheta_iN = __fdividef(sTheta_iN, cTheta_iN);
 		int xsiPi, xsiPo; // positive characteristic function	
 		xsiPi = ( __fdividef(dotViM, dotViN) > 0) ? 1 : 0;
-		if (xsiPi == 0 and le == 0) { ph->loc = ABSORBED; return; }
+		if (xsiPi == 0 && le == 0) { ph->loc = ABSORBED; return; }
 		if (geoS->dist == DIST_GGX){G1_i = G1GGX(alpha*alpha, tTheta_iN*tTheta_iN);}
 		else {G1_i = G1B(alpha, tTheta_iN);} // Beckmann
 		
@@ -6553,13 +6553,13 @@ __device__ void Obj3DRoughSurf(Photon* ph, int le, float* tabthv, float* tabphi,
 		sTheta_oN = sqrtf(fmaxf( 0.F,  1.F - (cTheta_oN*cTheta_oN) ));
 		tTheta_oN = __fdividef(sTheta_oN, cTheta_oN);	
 		xsiPo = ( __fdividef(dot(v_o, microFnormal_m), dotVoN) > 0) ? 1 : 0;
-		if (xsiPo == 0 and le == 0) { ph->loc = ABSORBED; return; }
+		if (xsiPo == 0 && le == 0) { ph->loc = ABSORBED; return; }
 		if (geoS->dist == DIST_GGX){G1_o = G1GGX(alpha*alpha, tTheta_oN*tTheta_oN);}
 		else{G1_o = G1B(alpha, tTheta_oN);} // Beckmann
 		
 		// Several methods possible, we choose to compute from G1
 		// Bellow best approximation than G2 = G1_i*G1_o
-		// G2 = 1/(1 + LambO + LambI) and G1_[i or o] = 1/(1 + Lamb[i or o]) then
+		// G2 = 1/(1 + LambO + LambI) && G1_[i || o] = 1/(1 + Lamb[i || o]) then
 		// G2 = 1/(1/G1_i + 1/G1_o - 1) -->
 		float invG1_i, invG1_o;
 		invG1_i = fdividef(1.F, G1_i);
@@ -6594,12 +6594,12 @@ __device__ void Obj3DRoughSurf(Photon* ph, int le, float* tabthv, float* tabphi,
 
 		
 
-		if (geoS->dist == DIST_GGX and xsiP_mn)
+		if (geoS->dist == DIST_GGX && xsiP_mn)
 		{
 			// pdf without the pi, but be careful no validation with GGX!!
 			p_m = __fdividef(alph2, cTheta2_m*cTheta2_m*(alph2 + tTheta2_m)*(alph2 + tTheta2_m));
 		}
-		else if (geoS->dist == DIST_BECKMANN and xsiP_mn)
+		else if (geoS->dist == DIST_BECKMANN && xsiP_mn)
 		{
 			// pdf without the pi (mistake in ramon et al 2019 formulation?)
 			//p_m = __fdividef( __expf(-(1.F-cTheta2_m)/(cTheta2_m*alph2)) , cTheta2_m*cTheta_m * alph2);
@@ -6627,7 +6627,7 @@ __device__ void Obj3DRoughSurf(Photon* ph, int le, float* tabthv, float* tabphi,
 	} //end le==1
 
 	// **********************************************
-	// update photon directions u, v, location and albedo
+	// update photon directions u, v, location && albedo
 	// **********************************************
 	ph->v = v_o;
 	ph->u = u_o;
@@ -6707,7 +6707,7 @@ __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, void *wPhLoss2)
 		atomicAdd(wPhLossC+5, w_SM); atomicAdd(wPhLossC2+5, w_SM*w_SM);
 		atomicAdd(wPhLossC+6, w_SP); atomicAdd(wPhLossC2+6, w_SP*w_SP);
         #endif // END BACK
-        #else // double and old nvidia card
+        #else // double && old nvidia card
 		DatomicAdd(wPhLossC, w_I); DatomicAdd(wPhLossC2, w_I*w_I);
 		DatomicAdd(wPhLossC+1, w_rhoM); DatomicAdd(wPhLossC2+1, w_rhoM*w_rhoM);
 		#ifndef BACK
@@ -6727,7 +6727,7 @@ __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geo
 	int indI = 0; int indJ = 0;
 	float3 p_t; float sizeX = nbCx*TCd; float sizeY = nbCy*TCd;
 
-    // test single scattering or photons removed
+    // test single scattering || photons removed
     //if (ph->loc==REMOVED || ph->loc==ABSORBED || ph->nint>SMAXd || ph->nint<SMINd) { return; }
     if (ph->loc==REMOVED || ph->loc==ABSORBED || ph->nint>SMAXd || ph->nint<SMINd || ph->nref>RMAXd || ph->nref<RMINd) { return; }
 
@@ -6745,7 +6745,7 @@ __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geo
     }
 	
     #if defined(BACK)	
-	if (LMODEd == 4 and le == 0 )
+	if (LMODEd == 4 && le == 0 )
 	{
 	    // Use also double precison operations due to simple precison limit 
 		double cosANGD, cosPHSUN;
@@ -6768,7 +6768,7 @@ __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geo
 		    if (ph->direct == 0){countLoss(ph, geoS, wPhLoss, wPhLoss2);}
         }
 	}
-    else if (LMODEd == 4 and le == 1)
+    else if (LMODEd == 4 && le == 1)
     {
         p_t = ph->posIni;
         // For the moment only one direction is considered
@@ -6832,7 +6832,7 @@ __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geo
         Profile *prof;
         int layer_end;
 
-        // define correct start and end layers and profiles for LE
+        // define correct start && end layers && profiles for LE
         layer_le = 0; 
         layer_end= NATMd;
         prof = prof_atm;
@@ -6903,7 +6903,7 @@ __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geo
 		atomicAdd(nbPhCat+7, 1);
 		atomicAdd(tabCountObj+(8*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}		
-    #else // If DOUBLE and not a new nvidia card
+    #else // If DOUBLE && not a new nvidia card
 	DatomicAdd(tabCountObj+(nbCy*indI)+indJ, weight);
 
 	// Les huit catégories
@@ -6975,13 +6975,13 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
 
 
     // don't count photons that:
-    // (i) incoherent counting level or absorbed in the mdedium or removed for inconstsitencies during the ray tracing
-    // (ii) photons not enough or too much scattered/reflected (possibility to focus on single or multiple scattering)
+    // (i) incoherent counting level || absorbed in the mdedium || removed for inconstsitencies during the ray tracing
+    // (ii) photons not enough || too much scattered/reflected (possibility to focus on single || multiple scattering)
     // (iii) eventually photons having penetrated into the ocean
     //if (count_level < 0 || ph->loc==REMOVED || ph->loc==ABSORBED || 
     if (count_level < 0 || ph->loc==REMOVED || ph->loc==ABSORBED || ph->nref>RMAXd || ph->nref<RMINd ||
         ph->nint>SMAXd || ph->nint<SMINd || (OCEAN_INTERACTIONd>=0 && ph->iocean!=OCEAN_INTERACTIONd)) {
-        // don't count anything and return
+        // don't count anything && return
         return;
     }
 
@@ -7070,7 +7070,7 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
     st.w = ph->stokes.w;
 
     // In case of backward mode compute the full Mueller matrices multiplication
-    // in the reverse order and
+    // in the reverse order &&
     // replace then the photon's Stokes vector "st" by "stback"
     #ifdef BACK
     float4x4 L;
@@ -7116,8 +7116,8 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
         // We compute also final attenuation for LE 
         // It is sometimes not necessary:
         // (i) surface only simulation
-        // (ii) no atmosphere and counting level just above surface or TOA
-        // (iii) no ocean and counting level just above surface
+        // (ii) no atmosphere && counting level just above surface || TOA
+        // (iii) no ocean && counting level just above surface
         if (!(   (SIMd==SURF_ONLY) 
               || (NATMd==0 && (count_level==UPTOA || count_level==UP0P)) 
               || (NOCEd==0 && count_level==UP0P)
@@ -7131,7 +7131,7 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
         Profile *prof;
         int layer_end;
 
-        // define correct start and end layers and profiles for LE
+        // define correct start && end layers && profiles for LE
         if (count_level==UPTOA) {
             layer_le = 0; 
             layer_end= NATMd;
@@ -7182,7 +7182,7 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
         ph->vz_prev[ph->nevt] = ph->v.z;
         ph->epsilon_prev[ph->nevt] = 0.f;
         
-        // Attenuation by scattering only of the main 'central' or 'reference' photon
+        // Attenuation by scattering only of the main 'central' || 'reference' photon
         // First get the scattering optical depth at the counting level
         tau_le = prof[(layer_end-layer_le) + ph->ilam *(layer_end+1)].OD_sca;
         // LE attenuation to count_level without absorption, central wavelength
@@ -7205,7 +7205,7 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
     /* Compute corrections factors for fluxes */
     /************************************/
     float weight_irr = fabs(ph->v.z);
-    // In Forward mode, and in case of spherical flux, update the weight
+    // In Forward mode, && in case of spherical flux, update the weight
 	if (FLUXd==2 && LEd==0 & weight_irr > 0.001f) weight /= weight_irr;
     //if (count_level == UPTOA && HORIZd == 0 && LEd == 1) weight *= weight_irr;
     //if (count_level == UPTOA && HORIZd == 0) weight *= weight_irr;
@@ -7223,7 +7223,7 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
     JJJ= NPSTKd*II; // array 5 dimensional size (4 + Stokes components)
 
     #ifndef ALIS //=========================================================================================================
-    // photon's box and weight has to be valid
+    // photon's box && weight has to be valid
 	if(((ith >= 0) && (ith < NBTHETAd)) && ((iphi >= 0) && (iphi < NBPHId)) && (il >= 0) && (il < NLAMd) && (!isnan(weight)))
 	{
       JJ = is*NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi; // Offset for 4 dimensional output array
@@ -7243,7 +7243,7 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
 
 
 	  #if __CUDA_ARCH__ >= 600
-	  // If GTX 1000 or more recent use native double atomic add
+	  // If GTX 1000 || more recent use native double atomic add
       atomicAdd(tabCount+(0*II+JJ), dweight*(ds.x+ds.y));
       atomicAdd(tabCount+(1*II+JJ), dweight*(ds.x-ds.y));
       atomicAdd(tabCount+(2*II+JJ), dweight*ds.z);
@@ -7330,7 +7330,7 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
         
           #if !defined(SPHERIQUE) && !defined(ALT_PP)
           Profile *prof;
-          // Computation of the absorption along photon history with heights and direction cosines 
+          // Computation of the absorption along photon history with heights && direction cosines 
           for (int n=0; n<ph->nevt; n++){
               //Computing absorption optical depths form start to stop for all segments
               float tau_abs1, tau_abs2;
@@ -7459,7 +7459,7 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
             atomicAdd(tabCountNoAer+(3*II+JJ), dweight * dwsca * dwabs * ds.w);
           }
 		  #else
-		  // If GTX 1000 or more recent use native double atomic add
+		  // If GTX 1000 || more recent use native double atomic add
           DatomicAdd(tabCount+(0*II+JJ), dweight * dwsca * dwabs * (ds.x+ds.y));
           DatomicAdd(tabCount+(1*II+JJ), dweight * dwsca * dwabs * (ds.x-ds.y));
           DatomicAdd(tabCount+(2*II+JJ), dweight * dwsca * dwabs * ds.z);
@@ -7499,7 +7499,7 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
      #if ( defined(SPHERIQUE) || defined(ALT_PP) )
      unsigned long long K   = NBTHETAd*NBPHId*NSENSORd; /* number of potential output per photon*/
      unsigned long long LL;
-     if (HISTd==1 && ((count_level==UPTOA) || (count_level==DOWN0P))) { // Histories stored for absorption computation afterward (only spherical or alt_pp)
+     if (HISTd==1 && ((count_level==UPTOA) || (count_level==DOWN0P))) { // Histories stored for absorption computation afterward (only spherical || alt_pp)
           //int idx = blockIdx.x * blockDim.x + threadIdx.x;
           unsigned long long counter2;
           counter2=atomicAdd(NPhotonsOut, 1);
@@ -7599,7 +7599,7 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
             atomicAdd(tabCount2+LL, ph->cdist_atm[n+1]);
           }
        #endif 
-      #endif // SPHERIQUE or ALT_PP
+      #endif // SPHERIQUE || ALT_PP
 
     } // correct output box
 	else
@@ -7612,7 +7612,7 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
 }
 
 //
-// Rotation of the stokes parameters by an angle psi between the incidence and
+// Rotation of the stokes parameters by an angle psi between the incidence &&
 // the emergence planes
 // input: float4 stokes parameters
 //        rotation angle psi in radians
@@ -7634,7 +7634,7 @@ __device__ void rotateStokes(float4 s, float psi, float4 *sr)
 }
 
 //
-// Rotation Matrix L from an angle psi between the incidence and
+// Rotation Matrix L from an angle psi between the incidence &&
 // the emergence planes
 __device__ void rotationM(float psi, float4x4 *L)
 {
@@ -7765,7 +7765,7 @@ __device__ int ComputeBox(int* ith, int* iphi, int* il,
 
         // Boxes centred on 0., dphi, 2dphi, ..., 180-dphi, 180., 180.+dphi,...., 360-dphi .
         // Boxes indices 0, 1, 2, ..., NBPHI/2-1, NBPHI/2, NBPHI/2 +1,..., NBPHI-2, NBPHI -1
-        // So 2 boxes on 0 and 180 + NBPHI/2-1 boxes with vy>0 and NBPHI/2 -1 boxes with vy<0
+        // So 2 boxes on 0 && 180 + NBPHI/2-1 boxes with vy>0 && NBPHI/2 -1 boxes with vy<0
         // Total NBPHI boxes from 0 to NBPHI -1; NBPHI has to be even
         // if the azimuth is within the zeroth boxe centered on 0. of width dphi/2 (half width dphi/4)
         if(cPhiP >= cosf(dphi/2.)) *iphi = 0;
@@ -7922,7 +7922,7 @@ __device__ void ComputePsiLE( float3 u0, float3 v0, float3 v1, float* psi, float
 
 	else{ operator/=(w1, den); }
 	
-	cpsi = dot(w0,w1); 	//  Compute the scalar product between w0 and w1
+	cpsi = dot(w0,w1); 	//  Compute the scalar product between w0 && w1
 
 	if (cpsi >  1.0) 
 		cpsi =  1.0;
@@ -7951,12 +7951,12 @@ __device__ void ComputePsiLE( float3 u0, float3 v0, float3 v1, float* psi, float
 
 __device__ float ComputeTheta(float3 v0, float3 v1){
 	// compute the diffusion angle theta between
-	// to direction cosine {vx0, vy0, vz0} and {vx1, vy1, vz1} 
+	// to direction cosine {vx0, vy0, vz0} && {vx1, vy1, vz1} 
 
 	float cs;
 	float theta;
 	
-	//--- Find cos(theta) and sin(theta)
+	//--- Find cos(theta) && sin(theta)
 	cs =  dot(v1,v0)  ;//  produit scalaire
 	
 	// test cs to avois acos(cs)=NaN
@@ -8150,24 +8150,24 @@ __device__ void DirectionToUV2(float th, float phi, float3* u, float3* v, struct
 	    Transform<double> TPHconed, TTHconed;
 	    TPHconed = TPHconed.RotateZ(ph_c); TTHconed = TTHconed.RotateY(th_c);
 		
-	    // Apply transforms to vector u and v
+	    // Apply transforms to vector u && v
 	    vd = TPHconed(   Vectord(  TTHconed( Vectord(vd) )  )   );
 	    ud = TPHconed(   Vectord(  TTHconed( Vectord(ud) )  )   );
     }
 
     if (th > 1e-6)
     {
-	    // Creation of transforms to consider theta and phi for the computation of photon dirs
+	    // Creation of transforms to consider theta && phi for the computation of photon dirs
 	    Transform<double> TTheta, TPhi;
 	    TTheta = TTheta.RotateY(th);
 	    TPhi = TPhi.RotateZ(phi);		
 
-	    // Apply transforms to vector u and v in function to theta and phi
+	    // Apply transforms to vector u && v in function to theta && phi
 	    vd = TPhi(   Vectord(  TTheta( Vectord(vd) )  )   );
 	    ud = TPhi(   Vectord(  TTheta( Vectord(ud) )  )   );
     }
 
-	// update of u and v
+	// update of u && v
 	*v = normalize(make_float3(float(vd.x), float(vd.y), float(vd.z)));
 	*u = normalize(make_float3(float(ud.x), float(ud.y), float(ud.z)));
 }
@@ -8276,7 +8276,7 @@ __device__ bool if_count(int count_level)
     {
         return false;
     }
-    else if (count_level > 5) // here for count_level = UP0M2 or other new level
+    else if (count_level > 5) // here for count_level = UP0M2 || other new level
     {
        return true;
     }
@@ -8435,15 +8435,15 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct I
 				DifferentialGeometry<float> myDgj;
 				// *****************************First Step********************************
 				// Consider all the transformation of object (j)
-				Transform<float> Tj, invTj; // Declaration of the tranform and its inverse
+				Transform<float> Tj, invTj; // Declaration of the tranform && its inverse
 
 				/* !!! We note that it is crucial to begin with the translation because if there
-				   is a rotation then the coordinate system change (x or y or z axis) !!! */
+				   is a rotation then the coordinate system change (x || y || z axis) !!! */
 
-				// If a value in x, y or z is diff of 0 then there is a translation
-				if ( (ObjT[IND+j].mvTx>VALMIN and ObjT[IND+j].mvTx<-VALMIN) or
-					 (ObjT[IND+j].mvTy>VALMIN and ObjT[IND+j].mvTy>-VALMIN) or
-					 (ObjT[IND+j].mvTz>VALMIN and ObjT[IND+j].mvTz>-VALMIN)) {
+				// If a value in x, y || z is diff of 0 then there is a translation
+				if ( (ObjT[IND+j].mvTx>VALMIN && ObjT[IND+j].mvTx<-VALMIN) ||
+					 (ObjT[IND+j].mvTy>VALMIN && ObjT[IND+j].mvTy>-VALMIN) ||
+					 (ObjT[IND+j].mvTz>VALMIN && ObjT[IND+j].mvTz>-VALMIN)) {
 					Transform<float> TmT;
 					TmT = Tj.Translate(make_float3(ObjT[IND+j].mvTx, ObjT[IND+j].mvTy,
 												   ObjT[IND+j].mvTz));
@@ -8555,15 +8555,15 @@ __device__ bool geoTestMir(float3 o, float3 dir, struct IObjets *ObjT, struct GO
 				bool myBj = false;
 				// *****************************First Step********************************
 				// Consider all the transformation of object (j)
-				Transform<float> Tj, invTj; // Declaration of the tranform and its inverse
+				Transform<float> Tj, invTj; // Declaration of the tranform && its inverse
 
 				/* !!! We note that it is crucial to begin with the translation because if there
-				   is a rotation then the coordinate system change (x or y or z axis) !!! */
+				   is a rotation then the coordinate system change (x || y || z axis) !!! */
 
-				// If a value in x, y or z is diff of 0 then there is a translation
-				if ( (ObjT[IND+j].mvTx>VALMIN and ObjT[IND+j].mvTx<-VALMIN) or
-					 (ObjT[IND+j].mvTy>VALMIN and ObjT[IND+j].mvTy>-VALMIN) or
-					 (ObjT[IND+j].mvTz>VALMIN and ObjT[IND+j].mvTz>-VALMIN)) {
+				// If a value in x, y || z is diff of 0 then there is a translation
+				if ( (ObjT[IND+j].mvTx>VALMIN && ObjT[IND+j].mvTx<-VALMIN) ||
+					 (ObjT[IND+j].mvTy>VALMIN && ObjT[IND+j].mvTy>-VALMIN) ||
+					 (ObjT[IND+j].mvTz>VALMIN && ObjT[IND+j].mvTz>-VALMIN)) {
 					Transform<float> TmT;
 					TmT = Tj.Translate(make_float3(ObjT[IND+j].mvTx, ObjT[IND+j].mvTy,
 												   ObjT[IND+j].mvTz));
@@ -8575,7 +8575,7 @@ __device__ bool geoTestMir(float3 o, float3 dir, struct IObjets *ObjT, struct GO
 
 				// ******************************Second Step******************************
 				// See if there is an intersection with object(j)
-			    if (ObjT[IND+j].geo == 2 and ObjT[IND+j].type == HELIOSTAT)
+			    if (ObjT[IND+j].geo == 2 && ObjT[IND+j].type == HELIOSTAT)
 				{
 					// Declaration of a table of float3 which contains P0, P1, P2, P3
                     vec3<real_clvl_1> Pvec[4] = {make_vec3<real_clvl_1>(ObjT[IND+j].p0x, ObjT[IND+j].p0y, ObjT[IND+j].p0z),
@@ -8618,15 +8618,15 @@ __device__ bool geoTestRec(float3 o, float3 dir, struct IObjets *ObjT)
 		bool myBi = false;
 		// *****************************First Step********************************
 		// Consider all the transformation of object (i)
-		Transform<float> Ti, invTi; // Declaration of the tranform and its inverse
+		Transform<float> Ti, invTi; // Declaration of the tranform && its inverse
 
 		/* !!! We note that it is crucial to begin with the translation because if there
-		   is a rotation then the coordinate system change (x or y or z axis) !!! */
+		   is a rotation then the coordinate system change (x || y || z axis) !!! */
 
-		// If a value in x, y or z is diff of 0 then there is a translation
-		if ( (ObjT[i].mvTx>VALMIN and ObjT[i].mvTx<-VALMIN) or
-			 (ObjT[i].mvTy>VALMIN and ObjT[i].mvTy>-VALMIN) or
-			 (ObjT[i].mvTz>VALMIN and ObjT[i].mvTz>-VALMIN)) {
+		// If a value in x, y || z is diff of 0 then there is a translation
+		if ( (ObjT[i].mvTx>VALMIN && ObjT[i].mvTx<-VALMIN) ||
+			 (ObjT[i].mvTy>VALMIN && ObjT[i].mvTy>-VALMIN) ||
+			 (ObjT[i].mvTz>VALMIN && ObjT[i].mvTz>-VALMIN)) {
 			Transform<float> TmT;
 			TmT = Ti.Translate(make_float3(ObjT[i].mvTx, ObjT[i].mvTy,
 										   ObjT[i].mvTz));
@@ -8639,7 +8639,7 @@ __device__ bool geoTestRec(float3 o, float3 dir, struct IObjets *ObjT)
 		
 		// ******************************Second Step******************************
 	    // See if there is an intersection with an object
-		if (ObjT[i].geo == 2 and ObjT[i].type == RECEIVER)
+		if (ObjT[i].geo == 2 && ObjT[i].type == RECEIVER)
 		{
 			// Declaration of a table of float3 which contains P0, P1, P2, P3
             vec3<real_clvl_1> Pvec[4] = {make_vec3<real_clvl_1>(ObjT[i].p0x, ObjT[i].p0y, ObjT[i].p0z),
@@ -8876,7 +8876,7 @@ __device__ void findRots(float3 vecNF, float *th, float *ph)
         if (loop == 1)
         {
             rotY = acos(vNF.z);
-            if (vNF.x == 0 and rotY == 0) opeZ = 0;
+            if (vNF.x == 0 && rotY == 0) opeZ = 0;
             else opeZ = vNF.x/sin(rotY);
             opeZ = clamp(opeZ, double(-1), double(1));
             rotZ = acos(opeZ);
@@ -8884,7 +8884,7 @@ __device__ void findRots(float3 vecNF, float *th, float *ph)
         else if(loop == 2)
         {
             rotY = acos(vNF.z);
-            if (vNF.x == 0 and rotY == 0) opeZ = 0;
+            if (vNF.x == 0 && rotY == 0) opeZ = 0;
             else opeZ = vNF.x/sin(rotY);
             opeZ = clamp(opeZ, double(-1), double(1));
             rotZ = -acos(opeZ);
@@ -8892,7 +8892,7 @@ __device__ void findRots(float3 vecNF, float *th, float *ph)
         else if(loop == 3)
         {
             rotY = -acos(vNF.z);
-            if (vNF.x == 0 and rotY == 0) opeZ = 0;
+            if (vNF.x == 0 && rotY == 0) opeZ = 0;
             else opeZ = vNF.x/sin(rotY);
             opeZ = clamp(opeZ, double(-1), double(1));
             rotZ = acos(opeZ);
@@ -8900,7 +8900,7 @@ __device__ void findRots(float3 vecNF, float *th, float *ph)
         else if(loop == 4)
         {
             rotY = -acos(vNF.z);
-            if (vNF.x == 0 and rotY == 0) opeZ = 0;
+            if (vNF.x == 0 && rotY == 0) opeZ = 0;
             else opeZ = vNF.x/sin(rotY);
             opeZ = clamp(opeZ, double(-1), double(1));
             rotZ = -acos(opeZ);
@@ -9037,8 +9037,8 @@ __device__ int GetEnvIndex(float3 pos, struct EnvMap *envmap) {
     #ifdef SPHERIQUE
     // Origin of env map grid in geocentric frame
     float3 ref = make_float3(0.F, 0.F, RTER);
-    float dist = acosf(dot(ref, pos)/(RTER*RTER)) * RTER; // distance on Earth between point and origin
-    float distXY = sqrtf(pos.x*pos.x+pos.y*pos.y); // planar distance between projected point on plane Z=0 and origin
+    float dist = acosf(dot(ref, pos)/(RTER*RTER)) * RTER; // distance on Earth between point && origin
+    float distXY = sqrtf(pos.x*pos.x+pos.y*pos.y); // planar distance between projected point on plane Z=0 && origin
     if (distXY !=0.) {
         posx=pos.x*dist/distXY;
         posy=pos.y*dist/distXY;
@@ -9097,7 +9097,7 @@ __device__ unsigned int get_isens(Photon* ph, struct Sensor *tab_sensor, int cou
     if (xsens_le < sxmind && xsens_le >= sxmind-VALMIN2) { xsens_le = sxmind;}
     if (ysens_le > symaxd && ysens_le <= symaxd+VALMIN2) { ysens_le = symaxd;}
     if (ysens_le < symind && ysens_le >= symind-VALMIN2) { ysens_le = symind;}
-    // here x and y periodic boundary conditions are assumed
+    // here x && y periodic boundary conditions are assumed
     if (xsens_le  > sxmaxd || xsens_le  < sxmind)
     {
         printf("posx =%f; posy=%f \n",xsens_le,ysens_le);
@@ -9140,7 +9140,7 @@ __global__ void reduce_absorption_gpu(unsigned long long NPHOTON, unsigned long 
     unsigned long long n,nstart,nstop,ns;
     unsigned long long iw,ig,l,s;
     unsigned long long nl,li;
-    double wabs, walb0, walb1, walb, Jwalb, Jwabs; // absorption and albedo high resolution weigths
+    double wabs, walb0, walb1, walb, Jwalb, Jwabs; // absorption && albedo high resolution weigths
     float wsca1,wsca2,wsca;
     unsigned long long iw1,iw2;
     unsigned long long offset;
