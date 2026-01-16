@@ -369,12 +369,13 @@ class AerOPAC(object):
 
             if (NBTHETA != len(phase_bis.axes[3])): phase_bis = phase_bis.sub()[:,:,:,Idx(theta)]
 
+            nphamat_ = 6
             if (self.hum_or_reff == 'hum'):
                 if (self.force_rh[icont] is not None) : hum_or_reff_val = np.full_like(rh, self.force_rh[icont])
                 else                                  : hum_or_reff_val = rh
 
                 P = LUT(
-                    np.zeros((nwav, len(rh)-1, 6, NBTHETA), dtype='float32')+np.nan,
+                    np.zeros((nwav, len(rh)-1, nphamat_, NBTHETA), dtype='float32')+np.nan,
                     axes=[wav, None, None, theta],
                     names=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
                     )  # nlam_tabulated, nrh, stk, NBTHETA
@@ -385,7 +386,7 @@ class AerOPAC(object):
                     P.data[:,irh_,0:nphamat,:] = phase_bis.sub()[:,irh,:,:].data
             elif (self.hum_or_reff == 'reff'):
                 P = LUT(
-                    np.zeros((nwav, 1, 6, NBTHETA), dtype='float32')+np.nan,
+                    np.zeros((nwav, 1, nphamat_, NBTHETA), dtype='float32')+np.nan,
                     axes=[wav, None, None, theta],
                     names=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
                     )  # nlam_tabulated, nrh, stk, NBTHETA
@@ -421,6 +422,9 @@ class AerOPAC(object):
                     P.data[:,:,0,:] = 0.5*(P0+2*P1+P4) # P11
                     P.data[:,:,1,:] = 0.5*(P0-P4)      # P12=P21
                     P.data[:,:,4,:] = 0.5*(P0-2*P1+P4) # P22
+            else:
+                P.data[:,:,4,:] = P.data[:,:,0,:].copy()
+                P.data[:,:,5,:] = P.data[:,:,2,:].copy()
 
             dtau_ =  np.zeros((len(wav), len(Z)), dtype=np.float32)
             ext_ = np.zeros_like(dtau_)
@@ -1480,7 +1484,8 @@ class AtmAFGL(Atmosphere):
 
 
 
-    def calc(self, wav, phase=True, NBTHETA=721, conv_Iparper=True, use_old_calc_iphase=False):
+    def calc(self, wav, phase=True, NBTHETA=721, conv_Iparper=True, use_old_calc_iphase=False,
+             truncation=None):
         """
         Profile and phase matrix calculation at bands / wav
 
@@ -1494,6 +1499,8 @@ class AtmAFGL(Atmosphere):
             Convert to I parallel I perpendicular convention.
         use_old_calc_iphase : bool, optional
             Use the old way to compute iphase (depracated).
+        truncation : None | DM_trunc | GT_trunc, optional
+            The scattering phase truncation to use.
 
         Returns
         -------
@@ -1511,12 +1518,55 @@ class AtmAFGL(Atmosphere):
                 wav_pha = wav[:]
             else:
                 wav_pha = self.pfwav
-            pha = self.phase(wav_pha, NBTHETA=NBTHETA, conv_Iparper=conv_Iparper)
+            pha = self.phase(wav_pha, NBTHETA=NBTHETA, conv_Iparper=False)
+            
             
             if pha is not None:
                 pha_, ipha = calc_iphase(pha, profile.axis('wavelength'), profile.axis('z_atm'), use_old_calc_iphase)
+                nphase = pha_.shape[0]
+
+                # If truncation parameter is given compute truncated phase function
+                if truncation is not None:
+                    from pytrunc.truncation import delta_m_phase_approx, gt_phase_approx
+
+                    theta = pha.axes[-1]
+                    pha_tr = np.zeros(pha_.shape, dtype=np.float64)
+                    nphac = pha_.shape[1]
+                    if (truncation.tr_method == 'DM'):
+                        m_max = truncation.m_max
+                    elif (truncation.tr_method == 'GT'):
+                        f_ = truncation.trunc_frac
+                        th_tol = truncation.theta_tol
+                        l_opti = truncation.lobatto_optimization
+                        th_f = truncation.theta_tr
+                    else:
+                        raise ValueError("truncation method not recognized")
+                    method = truncation.integral_method
+                    for iph in range (nphase):
+                        if (truncation.tr_method == 'DM'):
+                            _, f, f11_tr, _ = delta_m_phase_approx(pha_[iph,0,:], theta, m_max, method=method)
+                        elif (truncation.tr_method == 'GT'):
+                            _, f, f11_tr, = gt_phase_approx(pha_[iph,0,:], theta, f_, method=method,
+                                                            th_tol=th_tol, th_f=th_f, lobatto_optimization=l_opti)
+                        pha_tr[iph,0,:] = f11_tr
+                        beta = pha_tr[iph,0,:]/pha_[iph,0,:]
+                        for icomp in range(1, nphac):
+                            pha_tr[iph,icomp,:] = pha_[iph,icomp,:]*beta
+
+                if conv_Iparper:
+                    print(pha_.shape)
+                    for iph in range (nphase):
+                        pha_[iph,:,:] = pha2Iparperconv(pha_[iph,:,:])
+                        if truncation is not None:
+                            pha_tr[iph,:,:] = pha2Iparperconv(pha_tr[iph,:,:])
+
                 profile.add_axis('theta_atm', pha.axes[-1])
                 profile.add_dataset('phase_atm', pha_, ['iphase', 'stk', 'theta_atm'])
+
+                if truncation is not None:
+                    profile.add_dataset('phase_atm_tr', pha_tr, axnames=['iphase', 'stk', 'theta_atm'])
+                    profile['phase_atm_tr'].describe(show_attrs=True)
+
                 if not self.OPT3D:
                     profile.add_dataset('iphase_atm', ipha, ['wavelength', 'z_atm'])
                 else :
