@@ -451,7 +451,8 @@ def spectrum_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up 
 
         return fig1, fig2
         
-def phase_view(mlut, ipha=None, fig=None, axarr=None, iw=0, kind='atm'):
+def phase_view(mlut, ipha=None, fig=None, axarr=None, iw=0, kind='atm',
+               show_trunc=False, force_4stk=False):
     '''
     visualization of a smartg MLUT phase function from output
 
@@ -475,10 +476,11 @@ def phase_view(mlut, ipha=None, fig=None, axarr=None, iw=0, kind='atm'):
         labw=''
 
     phase = mlut['phase_'+kind]
+    if show_trunc : phase_tr = mlut['phase_'+kind+'_tr']
     ang = phase.axis('theta_'+kind)
     nstk = len(phase[0,:,0])
     if (axarr is None):
-        if nstk == 4:
+        if nstk == 4 or force_4stk:
             fig, axarr = subplots(2, 2)
             fig.set_size_inches(10, 6)
         elif nstk == 6:
@@ -494,28 +496,41 @@ def phase_view(mlut, ipha=None, fig=None, axarr=None, iw=0, kind='atm'):
             P12 = 0.5*(phase[i,0,:]-phase[i,1,:])
             P33 = phase[i,2,:]
             P43 = phase[i,3,:]
+            if show_trunc : 
+                P11_tr = 0.5*(phase_tr[i,0,:]+phase_tr[i,1,:])
+                P12_tr = 0.5*(phase_tr[i,0,:]-phase_tr[i,1,:])
+                P33_tr = phase_tr[i,2,:]
+                P43_tr = phase_tr[i,3,:]
         
-            if (np.max(P11[:]) > 0.) :axarr[0,0].semilogy(ang, P11,label='%3i'%i)
+            if (np.max(P11[:]) > 0.) :
+                axarr[0,0].semilogy(ang, P11,label='%3i'%i)
+                if show_trunc : axarr[0,0].semilogy(ang, P11_tr, 'k--')
             axarr[0,0].set_title(r'$P_{11}$'+labw)
             axarr[0,0].grid()
             axarr[0,0].set_xlim([0,180])
             axarr[0,0].set_xticks([0,30,60,90,120,150,180])
             
-            if (np.max(P11[:]) > 0.) :axarr[0,1].plot(ang, -P12/P11)
+            if (np.max(P11[:]) > 0.) :
+                axarr[0,1].plot(ang, -P12/P11)
+                if show_trunc : axarr[0,1].plot(ang, -P12_tr/P11, 'k--')
             axarr[0,1].set_title(r'-$P_{12}/P_{11}$')
             axarr[0,1].grid()
             axarr[0,1].set_xlim([0,180])
             axarr[0,1].set_xticks([0,30,60,90,120,150,180])
 
             
-            if (np.max(P11[:]) > 0.) :axarr[1,0].plot(ang, P33/P11)
+            if (np.max(P11[:]) > 0.) :
+                axarr[1,0].plot(ang, P33/P11)
+                if show_trunc : axarr[1,0].plot(ang, P33_tr/P11, 'k--')
             axarr[1,0].set_title(r'$P_{33}/P_{11}$')
             axarr[1,0].grid()
             axarr[1,0].set_xlim([0,180])
             axarr[1,0].set_xlabel(r'$\theta$')
             axarr[1,0].set_xticks([0,30,60,90,120,150,180])
                     
-            if (np.max(P11[:]) > 0.) :axarr[1,1].plot(ang, P43/P11)
+            if (np.max(P11[:]) > 0.) :
+                axarr[1,1].plot(ang, P43/P11)
+                if show_trunc : axarr[1,1].plot(ang, P43_tr/P11, 'k--')
             axarr[1,1].set_title(r'$P_{43}/P_{11}$')
             axarr[1,1].grid()
             axarr[1,1].set_xlim([0,180])
@@ -535,47 +550,79 @@ def phase_view(mlut, ipha=None, fig=None, axarr=None, iw=0, kind='atm'):
             P33 = F2
             P34 = F3
             P44 = F5
+            if show_trunc : 
+                F0_tr = phase_tr[i,0,:] # F11
+                F1_tr = phase_tr[i,1,:] # F12 = F21
+                F2_tr = phase_tr[i,2,:] # F33
+                F3_tr = phase_tr[i,3,:] # F34 = -F43
+                F4_tr = phase_tr[i,4,:] # F22
+                F5_tr = phase_tr[i,5,:] # F44
+
+                P11_tr = 0.5*(F0_tr+2*F1_tr+F4_tr)
+                P12_tr = 0.5*(F0_tr-F4_tr)
+                P22_tr = 0.5*(F0_tr-2*F1_tr+F4_tr)
+                P33_tr = F2_tr
+                P34_tr = F3_tr
+                P44_tr = F5_tr
         
-            if (np.max(P11[:]) > 0.) :axarr[0,0].semilogy(ang, P11,label='%3i'%i)
+            if (np.max(P11[:]) > 0.) :
+                axarr[0,0].semilogy(ang, P11,label='%3i'%i)
+                if show_trunc : axarr[0,0].semilogy(ang, P11_tr, 'k--')
             axarr[0,0].set_title(r'$P_{11}$'+labw)
             axarr[0,0].grid()
             axarr[0,0].set_xlim([0,180])
             axarr[0,0].set_xticks([0,30,60,90,120,150,180])
             
-            if (np.max(P11[:]) > 0.) :axarr[0,1].plot(ang, -P12/P11)
+            if (np.max(P11[:]) > 0.) :
+                axarr[0,1].plot(ang, -P12/P11)
+                if show_trunc : axarr[0,1].plot(ang, -P12_tr/P11, 'k--')
             axarr[0,1].set_title(r'-$P_{12}/P_{11}$')
             axarr[0,1].grid()
             axarr[0,1].set_xlim([0,180])
             axarr[0,1].set_xticks([0,30,60,90,120,150,180])
 
             
-            if (np.max(P11[:]) > 0.) :axarr[1,0].plot(ang, P33/P11)
+            if (np.max(P11[:]) > 0.) :
+                axarr[1,0].plot(ang, P33/P11)
+                if show_trunc : axarr[1,0].plot(ang, P33_tr/P11, 'k--')
             axarr[1,0].set_title(r'$P_{33}/P_{11}$')
             axarr[1,0].grid()
             axarr[1,0].set_xlim([0,180])
-            axarr[1,0].set_xlabel(r'$\theta$')
             axarr[1,0].set_xticks([0,30,60,90,120,150,180])
+            if force_4stk:
+                axarr[1,0].set_xlabel(r'$\theta$')
+                
                     
-            if (np.max(P11[:]) > 0.) :axarr[1,1].plot(ang, P34/P11)
+            if (np.max(P11[:]) > 0.) :
+                axarr[1,1].plot(ang, P34/P11)
+                if show_trunc : axarr[1,1].plot(ang, P34_tr/P11, 'k--')
             axarr[1,1].set_title(r'$P_{34}/P_{11}$')
             axarr[1,1].grid()
             axarr[1,1].set_xlim([0,180])
-            axarr[1,1].set_xlabel(r'$\theta$')
             axarr[1,1].set_xticks([0,30,60,90,120,150,180])
+            if force_4stk:
+                axarr[1,1].set_xlabel(r'$\theta$')
+               
 
-            if (np.max(P11[:]) > 0.) :axarr[2,0].plot(ang, P22/P11)
-            axarr[2,0].set_title(r'$P_{22}/P_{11}$')
-            axarr[2,0].grid()
-            axarr[2,0].set_xlim([0,180])
-            axarr[2,0].set_xlabel(r'$\theta$')
-            axarr[2,0].set_xticks([0,30,60,90,120,150,180])
-                    
-            if (np.max(P11[:]) > 0.) :axarr[2,1].plot(ang, P44/P11)
-            axarr[2,1].set_title(r'$P_{44}/P_{11}$')
-            axarr[2,1].grid()
-            axarr[2,1].set_xlim([0,180])
-            axarr[2,1].set_xlabel(r'$\theta$')
-            axarr[2,1].set_xticks([0,30,60,90,120,150,180])
+            if not force_4stk:
+                if (np.max(P11[:]) > 0.) :
+                    axarr[2,0].plot(ang, P22/P11)
+                    if show_trunc : axarr[2,0].plot(ang, P22_tr/P11, 'k--')
+                axarr[2,0].set_title(r'$P_{22}/P_{11}$')
+                axarr[2,0].grid()
+                axarr[2,0].set_xlim([0,180])
+                axarr[2,0].set_xlabel(r'$\theta$')
+                axarr[2,0].set_xticks([0,30,60,90,120,150,180])
+                        
+                if (np.max(P11[:]) > 0.) :
+                    axarr[2,1].plot(ang, P44/P11)
+                    if show_trunc : axarr[2,1].plot(ang, P44_tr/P11, 'k--')
+                axarr[2,1].set_title(r'$P_{44}/P_{11}$')
+                axarr[2,1].grid()
+                axarr[2,1].set_xlim([0,180])
+                axarr[2,1].set_xlabel(r'$\theta$')
+                axarr[2,1].set_xticks([0,30,60,90,120,150,180])
+                setp([a.get_xticklabels() for a in axarr[1, :]], visible=False)
     
     setp([a.get_xticklabels() for a in axarr[0, :]], visible=False)
     axarr[0,0].legend(loc='upper center',fontsize = 'medium',labelspacing=0.01)
