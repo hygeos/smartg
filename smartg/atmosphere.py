@@ -63,9 +63,9 @@ class AerOPAC(object):
         Force scale height (see notes) of the free troposphere
     Z_stra : float, optional
         Force scale height (see notes) of the stratosphere
-    ssa : float | list | 1-D ndarray | 2-D ndarray | LUT
+    ssa : None | float | list | 1-D ndarray | 2-D ndarray | LUT, optional
         Force particle single scattering albedo. If a list is given, it will be converted into an ndarray.
-    phase : luts.LUT, optional
+    phase : None | luts.LUT, optional
         Phase matrix F as function of wavelength, altitude, stoke components and scattering angle    
         The variable names must be:  
         If 4-D matrix -> wav_phase, z_phase, stk, theta  
@@ -479,7 +479,9 @@ class Cloud(AerOPAC):
         Optical thickness at reference wavelength w_ref
     w_ref : float
         Wavelength in nanometers at reference optical thickness tau_ref
-    phase : luts.LUT, optional
+    ssa : None | float | list | 1-D ndarray | 2-D ndarray | LUT, optional
+        Force particle single scattering albedo. If a list is given, it will be converted into an ndarray.
+    phase : None | luts.LUT, optional
         Phase matrix F as function of wavelength, altitude, stoke components and scattering angle    
         The variable names must be:  
         If 4-D matrix -> wav_phase, z_phase, stk, theta  
@@ -523,13 +525,24 @@ class Cloud(AerOPAC):
     
     """
 
-    def __init__(self, filename, reff, zmin, zmax, tau_ref, w_ref,
+    def __init__(self, filename, reff, zmin, zmax, tau_ref, w_ref, ssa=None,
                  phase=None):
         self.reff = reff
         self.tau_ref = tau_ref
         if (np.isscalar(w_ref) or
             (isinstance(w_ref, np.ndarray) and w_ref.ndim == 0) ) : self.w_ref = np.array([w_ref])
         else                                                      : self.w_ref = np.array(w_ref)
+
+        if ssa is None : self.ssa = None
+        else           :
+            if (isinstance(ssa, list)) :
+                ssa = np.array(ssa)
+            if ( np.isscalar(ssa)                                 or
+                 (isinstance(ssa, np.ndarray) and (ssa.ndim <=2)) or
+                 isinstance(ssa, LUT) ):
+                self.ssa = ssa
+            else:
+                raise ValueError ("The ssa variable must a scalar, a list, an ndarray of dim <= 2, or a LUT.")
 
         filename = Path(filename)
         if filename.parent == Path('.'):  # no directory given
@@ -562,7 +575,6 @@ class Cloud(AerOPAC):
             self.H_max.append(zmax)
             self.Z_sh.append(1e6) # constant dist
 
-        self.ssa = None
         self._phase = phase
 
     @staticmethod
