@@ -1563,14 +1563,82 @@ class AtmAFGL(Atmosphere):
                 profile.add_axis('theta_atm', pha.axes[-1])
                 profile.add_dataset('phase_atm', pha_, ['iphase', 'stk', 'theta_atm'])
 
-                if truncation is not None:
-                    profile.add_dataset('phase_atm_tr', pha_tr, axnames=['iphase', 'stk', 'theta_atm'])
-                    profile['phase_atm_tr'].describe(show_attrs=True)
-
                 if not self.OPT3D:
                     profile.add_dataset('iphase_atm', ipha, ['wavelength', 'z_atm'])
                 else :
                     profile.add_dataset('iphase_atm', ipha, ['wavelength', 'iopt'])
+
+                if truncation is not None:
+                    profile.add_dataset('phase_atm_tr', pha_tr, axnames=['iphase', 'stk', 'theta_atm'])
+                    profile['phase_atm_tr'].describe(show_attrs=True)
+
+                    # case tau instead of coeff (1D atm)
+                    if not self.OPT3D:
+                        dtau_p = diff1(profile['OD_p'].data, axis=1)
+                        dtau_p_tr = (1 - f*profile['ssa_p_atm'].data) * dtau_p
+                        tau_p_tr = np.cumsum(dtau_p_tr, axis=1)
+                        profile.add_dataset('OD_p_tr', tau_p_tr, axnames=['wavelength', 'z_atm'],
+                                            attrs=profile['OD_p'].attrs)
+                        
+                        ssa_p_atm_tr = profile['ssa_p_atm'].data * ( (1-f) / (1 - f*profile['ssa_p_atm'].data) )
+                        profile.add_dataset('ssa_p_atm_tr', ssa_p_atm_tr, axnames=['wavelength', 'z_atm'],
+                                            attrs=profile['ssa_p_atm'].attrs)
+                        
+                        tau_atm_tr = tau_p_tr + profile['OD_r'].data + profile['OD_g'].data
+                        profile.add_dataset('OD_atm_tr', tau_atm_tr, axnames=['wavelength', 'z_atm'],
+                                            attrs=profile['OD_atm'].attrs)
+                        
+                        dtau_r = diff1(profile['OD_r'].data, axis=1)
+                        tau_sca_tr = np.cumsum(dtau_r + dtau_p_tr*ssa_p_atm_tr, axis=1)
+                        profile.add_dataset('OD_sca_atm_tr', tau_sca_tr, axnames=['wavelength', 'z_atm'],
+                                            attrs=profile['OD_sca_atm'].attrs)
+
+                        with np.errstate(invalid='ignore', divide='ignore'):
+                            ssa_atm_tr = (dtau_r+ dtau_p_tr*ssa_p_atm_tr)/diff1(tau_atm_tr, axis=1)
+                        ssa_atm_tr[np.isnan(ssa_atm_tr)] = 1.
+                        profile.add_dataset('ssa_atm_tr', ssa_atm_tr, axnames=['wavelength', 'z_atm'],
+                                            attrs=profile['ssa_atm'].attrs)
+
+                        with np.errstate(invalid='ignore', divide='ignore'):
+                            pmol_tr = dtau_r/(dtau_r + dtau_p_tr*ssa_p_atm_tr)
+                        pmol_tr[np.isnan(pmol_tr)] = 1.
+                        profile.add_dataset('pmol_atm_tr', pmol_tr, axnames=['wavelength', 'z_atm'],
+                                            attrs=profile['pmol_atm'].attrs)
+                    # case coeff instead of tau (3D atm)
+                    # sig for coeficients
+                    else:
+                        sig_p = profile['OD_p'].data
+                        sig_p_tr = (1 - f*profile['ssa_p_atm'].data) * sig_p
+                        profile.add_dataset('OD_p_tr', sig_p_tr, axnames=['wavelength', 'z_atm'],
+                                            attrs=profile['OD_p'].attrs)
+
+                        ssa_p_atm_tr = profile['ssa_p_atm'].data * ( (1-f) / (1 - f*profile['ssa_p_atm'].data) )
+                        profile.add_dataset('ssa_p_atm_tr', ssa_p_atm_tr, axnames=['wavelength', 'z_atm'],
+                                            attrs=profile['ssa_p_atm'].attrs)
+
+                        sig_atm_tr = sig_p_tr + profile['OD_r'].data + profile['OD_g'].data
+                        profile.add_dataset('OD_atm_tr', sig_atm_tr, axnames=['wavelength', 'z_atm'],
+                                            attrs=profile['OD_atm'].attrs)
+                        
+                        sig_sca_tr = profile['OD_r'].data  + sig_p_tr*ssa_p_atm_tr
+                        profile.add_dataset('OD_sca_atm_tr', sig_sca_tr, axnames=['wavelength', 'z_atm'],
+                                            attrs=profile['OD_sca_atm'].attrs)
+                        
+                        with np.errstate(invalid='ignore', divide='ignore'):
+                            ssa_atm_tr = (profile['OD_r'].data + sig_p_tr*ssa_p_atm_tr)/sig_atm_tr
+                        ssa_atm_tr[np.isnan(ssa_atm_tr)] = 1.
+                        profile.add_dataset('ssa_atm_tr', ssa_atm_tr, axnames=['wavelength', 'z_atm'],
+                                            attrs=profile['ssa_atm'].attrs)
+                        
+                        dz = np.abs(diff1(profile.axes['z_atm'].data))
+                        dtau_r = dz * profile['OD_r'].data
+                        dtau_p_tr = dz * sig_p_tr
+                        with np.errstate(invalid='ignore', divide='ignore'):
+                            pmol_tr = dtau_r/(dtau_r + dtau_p_tr*ssa_p_atm_tr)
+                        pmol_tr[np.isnan(pmol_tr)] = 1.
+                        profile.add_dataset('pmol_atm_tr', pmol_tr, axnames=['wavelength', 'z_atm'],
+                                            attrs=profile['pmol_atm'].attrs)
+
         return profile
 
 
