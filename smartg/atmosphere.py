@@ -1554,7 +1554,6 @@ class AtmAFGL(Atmosphere):
                             pha_tr[iph,icomp,:] = pha_[iph,icomp,:]*beta
 
                 if conv_Iparper:
-                    print(pha_.shape)
                     for iph in range (nphase):
                         pha_[iph,:,:] = pha2Iparperconv(pha_[iph,:,:])
                         if truncation is not None:
