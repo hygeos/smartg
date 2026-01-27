@@ -1558,6 +1558,10 @@ class AtmAFGL(Atmosphere):
                         beta = pha_tr[iph,0,:]/pha_[iph,0,:]
                         for icomp in range(1, nphac):
                             pha_tr[iph,icomp,:] = pha_[iph,icomp,:]*beta
+                        if truncation.pha_scale_method == 2:
+                            beta2 = 1. / (1 - f)
+                            pha_tr[iph,1,:] = pha_[iph,1,:] * beta2
+                            pha_tr[iph,3,:] = pha_[iph,3,:] * beta2
 
                 if conv_Iparper:
                     for iph in range (nphase):
