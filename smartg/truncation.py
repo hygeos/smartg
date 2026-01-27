@@ -1,3 +1,4 @@
+import numbers
 
 
 class DM_trunc(object):
@@ -21,6 +22,17 @@ class DM_trunc(object):
         - 2 : use ARTDECO way, (same as 1, but with diffferent rescalling for F21 and F34)
     """
     def __init__(self, nb_streams, integral_method='lobatto', pha_scale_method=1):
+        # check parameter values
+        if ( isinstance(nb_streams, bool) or not 
+             isinstance(nb_streams, numbers.Integral) or 
+             nb_streams < 1 ):
+            raise ValueError("The nb_streams parameter must be an integer >= 1.")
+        integral_methods_ok = ['lobatto', 'trapezoid', 'simpson']
+        if integral_method not in integral_methods_ok:
+            raise ValueError(f"Choices for integral_method parameter are: {integral_methods_ok}.")
+        if pha_scale_method not in [1, 2]:
+            raise ValueError("Choices for pha_scale_method parameter are: 1 or 2.")
+
         self.tr_method = 'DM'
         self.m_max = nb_streams
         self.integral_method = integral_method
@@ -56,6 +68,24 @@ class GT_trunc(object):
     """
     def __init__(self, trunc_frac, integral_method='lobatto', theta_tol=None, theta_tr=None, 
                  lobatto_optimization=False, pha_scale_method=1):
+        # check parameter values
+        if (  ( isinstance(trunc_frac, bool) or not 
+                isinstance(trunc_frac, numbers.Real) ) and
+              ( 0. < trunc_frac < 1. )  ):
+            raise ValueError("The trunc_frac parameter must be a scalar in the inteval ]0; 1[.")
+        integral_methods_ok = ['lobatto', 'trapezoid', 'simpson']
+        if integral_method not in integral_methods_ok:
+            raise ValueError(f"Choices for integral_method parameter are: {integral_methods_ok}.")
+        if theta_tol is not None:
+            if (  ( isinstance(theta_tol, bool) or not 
+                    isinstance(theta_tol, numbers.Real) ) and
+                ( 0. < theta_tol < 180. )  ):
+                raise ValueError("The theta_tol parameter must be a scalar in the inteval ]0; 180[.")
+        if not isinstance(lobatto_optimization, bool):
+            raise ValueError("The lobatto_optimization parameter must be a boolean.")
+        if pha_scale_method not in [1, 2]:
+            raise ValueError("Choices for pha_scale_method parameter are: 1 or 2.")
+        
         self.tr_method = 'GT'
         self.trunc_frac = trunc_frac
         self.integral_method = integral_method
