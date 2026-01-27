@@ -84,12 +84,12 @@ class AerOPAC(object):
           if defined, else `wav` parameter vavelengths of the AtmAFGL calc method.
         - z_phase is the phase altitude. It must be equal to the `pfgrid[1:]` parameter
           of AtmAFGL  
-        - stk the stokes component.  
+        - stk the phase matrix unique terms.  
         - theta the scattering angle.  
 
-        The stoke components (IQUV convention) must be given in the folowing order: 
-        - F11, F21, F33 and F34 for spherical aerosols
-        - F11, F21, F33, F34, F22 and F44 for non spherical aerosols
+        The phase matrix terms (IQUV convention) must be given in the folowing order: 
+        - F11, F21, F33 and F34 if only 4 terms are given (only for spherical particles)
+        - F11, F21, F33, F34, F22 and F44 if 6 terms are given (for both spherical and non-spherical particles)
     rh_mix/free/stra : float, optional
         Force relative humidity of mixture/free tropo/strato
 
@@ -503,7 +503,6 @@ class Cloud(AerOPAC):
 
         Note that LUT is more flexible since it allows interpolation if wavelengths  
         in calc method are different (but not the case for the altitude axis).
-
     phase : None | luts.LUT, optional
         Phase matrix F as function of wavelength, altitude, stoke components and scattering angle    
         The variable names must be:  
@@ -514,12 +513,12 @@ class Cloud(AerOPAC):
           if defined, else `wav` parameter wavelengths of the AtmAFGL calc method.
         - z_phase is the phase altitude. It must be equal to the `pfgrid[1:]` parameter
           of AtmAFGL  
-        - stk the stokes component.  
+        - stk the phase matrix unique terms.  
         - theta the scattering angle.  
-        
-        The stoke components (IQUV convention) must be given in the folowing order: 
-        - F11, F21, F33 and F34 for spherical aerosols
-        - F11, F21, F33, F34, F22 and F44 for non spherical aerosols
+
+        The phase matrix terms (IQUV convention) must be given in the folowing order: 
+        - F11, F21, F33 and F34 if only 4 terms are given (only for spherical particles)
+        - F11, F21, F33, F34, F22 and F44 if 6 terms are given (for both spherical and non-spherical particles)
 
     Examples
     --------
