@@ -64,7 +64,16 @@ class AerOPAC(object):
     Z_stra : float, optional
         Force scale height (see notes) of the stratosphere
     ssa : None | float | list | 1-D ndarray | 2-D ndarray | LUT, optional
-        Force particle single scattering albedo. If a list is given, it will be converted into an ndarray.
+        Force particle single scattering albedo. 
+        
+        - if float -> same value for all wavelengths and altitudes
+        - if list -> it will be converted into a 1-D ndarray.
+        - if 1-D ndarray -> only wavelength dependence is considered 
+        - if 2-D ndarray -> wavelength and altitude dependence is considered
+        - if LUT -> wavelength and altitude dependence is considered
+
+        Note that LUT is more flexible since it allows interpolation if wavelengths  
+        in calc method are different (but not the case for the altitude axis).
     phase : None | luts.LUT, optional
         Phase matrix F as function of wavelength, altitude, stoke components and scattering angle    
         The variable names must be:  
@@ -305,10 +314,10 @@ class AerOPAC(object):
                 ssa[:,:] = float(self.ssa)
             elif isinstance(self.ssa, np.ndarray): # ndarray with dim <= 2
                 if self.ssa.ndim == 0: ssa[:,:] = self.ssa
-                elif self.ssa.ndim == 1: ssa[:,:] = self.ssa[:,None] # If 1d array -> wl considered constant
+                elif self.ssa.ndim == 1: ssa[:,:] = self.ssa[:,None] # If 1d array -> consider only wl variability
                 elif self.ssa.ndim == 2: ssa[:,:] = self.ssa[:,:]
             else: # LUT
-                ssa[:,:] = self.ssa[Idx(wav)][:,None] # introduced by DR. Why only considering 1 wl?
+                ssa[:,:] = self.ssa[Idx(wav)][:,None]
         return dtau, ssa
     
     
@@ -484,7 +493,17 @@ class Cloud(AerOPAC):
     w_ref : float
         Wavelength in nanometers at reference optical thickness tau_ref
     ssa : None | float | list | 1-D ndarray | 2-D ndarray | LUT, optional
-        Force particle single scattering albedo. If a list is given, it will be converted into an ndarray.
+        Force particle single scattering albedo. 
+        
+        - if float -> same value for all wavelengths and altitudes
+        - if list -> it will be converted into a 1-D ndarray.
+        - if 1-D ndarray -> only wavelength dependence is considered 
+        - if 2-D ndarray -> wavelength and altitude dependence is considered
+        - if LUT -> wavelength and altitude dependence is considered
+
+        Note that LUT is more flexible since it allows interpolation if wavelengths  
+        in calc method are different (but not the case for the altitude axis).
+
     phase : None | luts.LUT, optional
         Phase matrix F as function of wavelength, altitude, stoke components and scattering angle    
         The variable names must be:  
@@ -492,7 +511,7 @@ class Cloud(AerOPAC):
         If 2-D matrix (assumed monochromatic and contant vertically) -> stk, theta   
         Where:  
         - wav_phase is the wavelength. It must be equal to the `pfwav` parameter of AtmAFGL  
-          if defined, else `wav` parameter vavelengths of the AtmAFGL calc method.
+          if defined, else `wav` parameter wavelengths of the AtmAFGL calc method.
         - z_phase is the phase altitude. It must be equal to the `pfgrid[1:]` parameter
           of AtmAFGL  
         - stk the stokes component.  
