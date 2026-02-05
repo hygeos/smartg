@@ -9,9 +9,108 @@ warnings.simplefilter("ignore",DeprecationWarning)
 from pylab import figure, subplot2grid, tight_layout, setp, subplots, xlabel, ylabel, FormatStrFormatter
 import numpy as np
 np.seterr(invalid='ignore', divide='ignore') # ignore division by zero errors
-from luts.luts import plot_polar, transect2D, Idx
+from luts.luts import plot_polar, transect2D as _transect2D_orig, Idx, Idx_base
 from smartg.atmosphere import diff1
 from smartg.water import diff2
+
+
+def transect2D(lut, index=None, vmin=None, vmax=None, sym=True, swap='auto', fig=None, sub=121, color='k', percent=False, fmt='-'):
+    '''
+    Transect of 2D LUT - Fixed version that reuses existing axes
+    
+    This is a patched version of luts.transect2D that properly reuses existing
+    subplot axes when overlaying multiple transects on the same figure.
+    '''
+    assert lut.ndim == 2
+
+    if fig is None:
+        fig = figure(figsize=(4.5, 2.5))
+
+    if swap == 'auto':
+        if ('azi' in lut.names[1].lower()) and ('azi' not in lut.names[0].lower()):
+            swap = True
+        else:
+            swap = False
+
+    # ax1 is angle, ax2 is radius
+    if swap:
+        ax1, ax2 = lut.axes[1], lut.axes[0]
+        name1, name2 = lut.names[1], lut.names[0]
+        data = np.swapaxes(lut.data, 0, 1)
+    else:
+        ax1, ax2 = lut.axes[0], lut.axes[1]
+        name1, name2 = lut.names[0], lut.names[1]
+        data = lut.data
+
+    if vmin is None:
+        vmin = np.amin(lut.data[~np.isnan(lut.data)])
+    if vmax is None:
+        vmax = np.amax(lut.data[~np.isnan(lut.data)])
+    if vmin == vmax:
+        vmin -= 0.001
+        vmax += 0.001
+    if vmin > vmax:
+        vmin, vmax = vmax, vmin
+    if percent:
+        vmin = 0.
+        vmax = 100.
+
+    ax1_scaled = ax1
+    label2 = name2
+
+    # convert Idx instance to index if necessary
+    if isinstance(index, Idx_base):
+        index = int(np.around(index.index(ax1)))
+    mirror_index = (ax1_scaled.shape[0] // 2 + index) % ax1_scaled.shape[0]
+
+    if swap:
+        title = lut.axes[1][index]
+    else:
+        title = lut.axes[0][index]
+
+    ax2_min = np.amin(ax2)
+    ax2_max = np.amax(ax2)
+    label1 = name1 + ' {:7.2f}'.format(title)
+
+    # Parse subplot specification
+    nrows = sub // 100
+    ncols = (sub // 10) % 10
+    idx = (sub % 10) - 1  # 0-based index
+
+    # Check if subplot already exists by using a marker attribute
+    ax_cart = None
+    marker_name = f'_transect2D_sub_{sub}'
+    if hasattr(fig, marker_name):
+        ax_cart = getattr(fig, marker_name)
+    
+    is_new_axes = ax_cart is None
+    if is_new_axes:
+        ax_cart = fig.add_subplot(sub)
+        setattr(fig, marker_name, ax_cart)  # Store reference
+        ax_cart.grid(True)
+        ax_cart.set_xlabel(label2)
+        if sym:
+            ax_cart.set_xlim(-ax2_max, ax2_max)
+        else:
+            ax_cart.set_xlim(ax2_min, ax2_max)
+        ax_cart.set_ylim(vmin, vmax)
+        ax_cart._transect2D_first = True
+    else:
+        # Expand ylim to accommodate new data
+        current_ylim = ax_cart.get_ylim()
+        new_vmin = min(current_ylim[0], vmin)
+        new_vmax = max(current_ylim[1], vmax)
+        ax_cart.set_ylim(new_vmin, new_vmax)
+    
+    ax_cart.ticklabel_format(axis='y', style='sci', scilimits=(-2, 2))
+
+    # Plot transects
+    ax_cart.plot(ax2, data[index, :], fmt, color=color)
+    if sym:
+        ax_cart.plot(-ax2, data[mirror_index, :], fmt, color=color)
+
+    if lut.desc is not None:
+        ax_cart.set_title(lut.desc)
 
 
 def mdesc(desc, logI=False):

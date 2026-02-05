@@ -25,6 +25,7 @@ import pandas as pd
 if sys.version_info[:2] >= (3, 0):
     xrange = range
 
+import netCDF4  # noqa: F401 - must be imported before h5py to avoid HDF5 library conflicts
 import h5py
 import xarray
 
