@@ -1163,7 +1163,7 @@ class CompUser(object):
         self.w_ref = w_ref
         self.dens_mlut = MLUT()
         self.dens_mlut.add_axis('z_opac', z)
-        self.dens_mlut.add_dataset('dens_'+species.name.split('_sol')[0], density/np.trapz(density, x=-z), axnames=['z_opac'],
+        self.dens_mlut.add_dataset('dens_'+species.name.split('_sol')[0], density/np.trapezoid(density, x=-z), axnames=['z_opac'],
                                    attrs={'description': 'mass density in gramme per cubic merter'})
         self._phase = phase
         self.species=[species]
@@ -1900,7 +1900,7 @@ def read_phase(filename, standard=False, kind='atm'):
     # Normalization to Sum_-1_+1 P(mu) dmu = 2.
     f = (pha[:,0] + pha[:,1])/2.
     mu= np.cos(np.radians(theta))
-    Norm = np.trapz(f,-mu)
+    Norm = np.trapezoid(f,-mu)
     pha *= (2./abs(Norm))
 
     P = LUT(pha.swapaxes(0, 1),  # stk, theta
@@ -1951,7 +1951,7 @@ def trapzinterp(y, x, xnew, samesize=True):
         yy = np.insert(yy, 0, ynew[i])
         yy = np.append(yy, ynew[i+1])
 
-        integ = np.append(integ, np.trapz(yy, x=xx)/(xnew[i+1] - xnew[i]))
+        integ = np.append(integ, np.trapezoid(yy, x=xx)/(xnew[i+1] - xnew[i]))
 
     return integ
 
@@ -3271,7 +3271,7 @@ def artdeco_to_smartg_cld(input_path, output_path=None, h5_group=None, normalize
         for iwav in range (0, nwav):
             for ireff in range (0, nreff):  
                 f = phase[ireff, iwav, 0, :] # P11
-                Norm = np.trapz(f,-art_cld.axes['mu'][::-1])
+                Norm = np.trapezoid(f,-art_cld.axes['mu'][::-1])
                 phase[ireff, iwav, :, :] *= 2./abs(Norm)
 
     m.add_dataset('phase', phase, axnames=['reff', 'wav', 'stk', 'theta'], attrs={'description':pha_desc})

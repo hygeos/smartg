@@ -515,6 +515,6 @@ def read_phase_nth_cte(filename, nb_theta=int(721), convert_IparIper=True, norma
                     # Note: from Ipar Iper phase, if NBSTK=4 -> P0=(P11+P12)/2, and if NBSTK=6 -> P0=(P11+P22+2*P12)/2
                     f = P0[iwav, irhreff,:]
                     mu= np.cos(np.radians(theta))
-                    Norm = np.trapz(f,-mu)
+                    Norm = np.trapezoid(f,-mu)
                     P.data[iwav,irhreff,:,:] *= 2./abs(Norm)
     return P
