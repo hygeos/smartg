@@ -187,12 +187,12 @@ def test():
     show()
 
 if __name__ == '__main__':
-    from numpy import trapz, linspace
+    from numpy import trapezoid, linspace
 
     th = linspace(1e-7, pi, 1e6)
     print('Normalization')
-    print('HG', trapz(henyeyGreenstein(th, 0.5)*sin(th), x=th))
-    print('FF', trapz(fournierForand(th, 1.15, 3.5)*sin(th), x=th))
+    print('HG', trapezoid(henyeyGreenstein(th, 0.5)*sin(th), x=th))
+    print('FF', trapezoid(fournierForand(th, 1.15, 3.5)*sin(th), x=th))
 
     # test()
 
