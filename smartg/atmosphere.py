@@ -1564,10 +1564,13 @@ class AtmAFGL(Atmosphere):
                     f_pha = np.zeros(nphase, dtype=np.float64)
                     for iph in range (nphase):
                         if (truncation.tr_method == 'DM'):
-                            _, f, f11_tr, _ = delta_m_phase_approx(pha_[iph,0,:], theta, m_max, method=method)
+                            ds_pha = delta_m_phase_approx(pha_[iph,0,:], theta, m_max, method=method)
+                            
                         elif (truncation.tr_method == 'GT'):
-                            _, f, f11_tr, = gt_phase_approx(pha_[iph,0,:], theta, f_, method=method,
-                                                            th_tol=th_tol, th_f=th_f, lobatto_optimization=l_opti)
+                            ds_pha = gt_phase_approx(pha_[iph,0,:], theta, f_, method=method,
+                                                     th_tol=th_tol, th_f=th_f, lobatto_optimization=l_opti)
+                        f11_tr = ds_pha['phase_tr'].values
+                        f = ds_pha['f'].values
                         f_pha[iph] = f
                         # Ensure for the moment only 1 unique truncation factor
                         if iph > 0 and not np.isclose(f_pha[iph], f_pha[0], atol=1e-6):
