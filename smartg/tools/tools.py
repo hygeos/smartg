@@ -72,7 +72,7 @@ def Irr(L, azimuth='Azimuth angles', zenith='Zenith angles'):
     '''
     mu = (L.axis(zenith, aslut=True)*pi/180.).apply(cos)
     phi = L.axis(azimuth, aslut=True)*pi/180.
-    return 1./pi*(mu*L).reduce(trapz, zenith, x=-mu[:]).reduce(trapz, azimuth, x=phi[:])
+    return 1./pi*(mu*L).reduce(trapezoid, zenith, x=-mu[:]).reduce(trapezoid, azimuth, x=phi[:])
 
 def SpherIrr(L, azimuth='Azimuth angles', zenith='Zenith angles'):
     '''
@@ -84,7 +84,7 @@ def SpherIrr(L, azimuth='Azimuth angles', zenith='Zenith angles'):
     '''
     mu = (L.axis(zenith, aslut=True)*pi/180.).apply(cos)
     phi = L.axis(azimuth, aslut=True)*pi/180.
-    return 1./pi*(L).reduce(trapz, zenith, x=-mu[:]).reduce(trapz, azimuth, x=phi[:]) 
+    return 1./pi*(L).reduce(trapezoid, zenith, x=-mu[:]).reduce(trapezoid, azimuth, x=phi[:]) 
 
 def reduce_Irr(m):
     res = MLUT()

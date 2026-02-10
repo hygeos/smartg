@@ -29,5 +29,4 @@ dependencies:
   - pip
   - pip:
     - pycuda
-    - hitran-api
     - jax[cuda12]

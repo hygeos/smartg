@@ -27,4 +27,3 @@ dependencies:
   - pip
   - pip:
     - pycuda
-    - hitran-api

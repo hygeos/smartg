@@ -704,8 +704,8 @@ class IOP_profile(IOP_base):
         chl  = self.chls*self.chi(zeta)/self.chi(0.)
         chl[chl<0.]=1e-8
         self.chl = chl
-        self.chlmean = np.trapz(chl,-self.z)/DEPTH
-        #self.chlmean = np.trapz(chl,self.z)/DEPTH
+        self.chlmean = np.trapezoid(chl,-self.z)/DEPTH
+        #self.chlmean = np.trapezoid(chl,self.z)/DEPTH
 
     def chi(self, zeta):
         return self.chi_b - self.s*zeta + self.chi_max*np.exp(-((zeta-self.zeta_max)/self.Dzeta)**2)
