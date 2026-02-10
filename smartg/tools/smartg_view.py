@@ -60,7 +60,8 @@ def transect2D(lut, index=None, vmin=None, vmax=None, sym=True, swap='auto', fig
 
     # convert Idx instance to index if necessary
     if isinstance(index, Idx_base):
-        index = int(np.around(index.index(ax1)))
+        idx_result = np.around(index.index(ax1))
+        index = int(idx_result.flat[0])
     mirror_index = (ax1_scaled.shape[0] // 2 + index) % ax1_scaled.shape[0]
 
     if swap:
