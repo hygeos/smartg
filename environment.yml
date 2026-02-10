@@ -24,6 +24,7 @@ dependencies:
   - pyhdf
   - geoclide
   - luts
+  - pytrunc
   - pip
   - pip:
     - pycuda

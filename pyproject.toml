@@ -49,6 +49,7 @@ dependencies = [
     "pycuda",
     "geoclide>=3",
     "luts",
+    "pytrunc",
 ]
 
 [project.optional-dependencies]
