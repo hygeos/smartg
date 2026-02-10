@@ -6,6 +6,19 @@
            ###########################
 
 
+v1.1.4
+------
+Release date: 2025-02-10
+
+* Corrections in demo_notebook and atmosphere.py
+  - Add patched transect2D function in smartg_view.py that properly reuses
+    existing subplot axes when overlaying multiple transects on the same figure
+  - Add early netCDF4 import in atmosphere.py to prevent HDF5 library conflicts
+
+* Correct crash occuring with newer numpy version
+  - Replace np.trapz by np.trapezoid
+
+  
 v1.1.3
 ------
 Release date: 2025-12-01
