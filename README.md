@@ -92,7 +92,7 @@ If you need extra dependencies (jax with cuda) we recommend the installation wit
 
 </details>
 
-### 1.2 Auxiliary data
+## 2. Auxiliary data
 
 The auxiliary data can be downloaded as follow:
 
@@ -118,13 +118,13 @@ SMARTG_DIR_AUXDATA =dir/path/where/to/save/data/
 ```
 
 
-## 2. Examples
+## 3. Examples
 
 Examples are provided in the [sample notebooks](smartg/notebooks).
 
 [jupyter notebook](http://jupyter.org) has nice possibilities for interactive development and visualization, in particular if you are using a remote cuda computer. Sample notebooks are provided in the folder [notebooks](smartg/notebooks).
 
-## 3. Tests
+## 4. Tests
 
 To check that SMART-G is running correctly, run the following command at the root of the project:
 
@@ -145,17 +145,17 @@ addopts= --html=test_reportv1.html --self-contained-html -s -v
 ```
 The arguments "--html=test_reportv1.html --self-contained-html" are used to generate an html report containing the results of the tests (sometime with more details e.g. plots), named "test_reportv1.html".
 
-## 4. Hardware tested
+## 5. Hardware tested
 
 GeForce GTX 1070, GeForce TITAN V, GeForce RTX 2080 Ti, Geforce RTX 3070, Geforce RTX 3090, Geforce RTX 4090, A100, Geforce RTX 5070 ti
 
 The use of GPUs before 10xx series (Pascal) is depracated as of SMART-G 1.0.0
 
-## 5. Licensing information
+## 6. Licensing information
 
 This software is available under the SMART-G license v1.0, available in the LICENSE.TXT file.
 
-## 6. Referencing
+## 7. Referencing
 
 When acknowledging the use of SMART-G for scientific papers, reports etc please cite the following reference(s):
 
