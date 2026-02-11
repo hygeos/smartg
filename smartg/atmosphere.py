@@ -1533,6 +1533,14 @@ class AtmAFGL(Atmosphere):
             
             if pha is not None:
                 pha_, ipha = calc_iphase(pha, profile.axis('wavelength'), profile.axis('z_atm'), use_old_calc_iphase)
+                if pha_.shape[1] == 4:
+                    # if only 4 components extend to 6 to use general formulas
+                    pha_tmp = np.zeros((pha_.shape[0], 6, pha_.shape[2]), dtype=np.float64)
+                    pha_tmp[:,0:4,:] = pha_.copy()
+                    pha_tmp[:,4,:] = pha_tmp[:,0,:]
+                    pha_tmp[:,5,:] = pha_tmp[:,2,:]
+                    pha_ = pha_tmp
+
                 nphase = pha_.shape[0]
 
                 # If truncation parameter is given compute truncated phase function
