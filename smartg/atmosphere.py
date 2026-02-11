@@ -412,29 +412,20 @@ class AerOPAC(object):
             (isinstance(hum_or_reff_val, np.ndarray) and hum_or_reff_val.ndim == 0) ) : hum_or_reff_val = np.array([hum_or_reff_val])
             else                                                                      : hum_or_reff_val = np.array(hum_or_reff_val)
 
+            if (nphamat == 4): # only for spherical particles
+                P.data[:,:,4,:] = P.data[:,:,0,:].copy() # F22 = F11
+                P.data[:,:,5,:] = P.data[:,:,2,:].copy() # F44 = F33
+
             if conv_Iparper:
-                # convert I, Q into Ipar, Iper
-                if (nphamat == 4): # spherical particles
-                    P.data[:,:,4,:] = P.data[:,:,0,:].copy()
-                    P.data[:,:,5,:] = P.data[:,:,2,:].copy()
-                    P0 = P.data[:,:,0,:].copy()
-                    P1 = P.data[:,:,1,:].copy()
-                    P4 = P.data[:,:,4,:].copy()
-                    P.data[:,:,0,:] = 0.5*(P0+2*P1+P4) # P11
-                    P.data[:,:,1,:] = 0.5*(P0-P4)      # P12=P21
-                    P.data[:,:,4,:] = 0.5*(P0-2*P1+P4) # P22
-                elif (nphamat == 6): # non spherical particles
-                    # note: the sign of P43/P34 affects only the sign of V,
-                    # since V=0 for rayleigh scattering it does not matter 
-                    P0 = P.data[:,:,0,:].copy()
-                    P1 = P.data[:,:,1,:].copy()
-                    P4 = P.data[:,:,4,:].copy()
-                    P.data[:,:,0,:] = 0.5*(P0+2*P1+P4) # P11
-                    P.data[:,:,1,:] = 0.5*(P0-P4)      # P12=P21
-                    P.data[:,:,4,:] = 0.5*(P0-2*P1+P4) # P22
-            else:
-                P.data[:,:,4,:] = P.data[:,:,0,:].copy()
-                P.data[:,:,5,:] = P.data[:,:,2,:].copy()
+                # convert I, Q into Ipar, Iper ; Fij -> Pij
+                # use general formulas (valid for both spherical and non-spherical particles)
+                # P33=F33, P34=F34 and P44=F44
+                F11 = P.data[:,:,0,:].copy()
+                F21 = P.data[:,:,1,:].copy()
+                F22 = P.data[:,:,4,:].copy()
+                P.data[:,:,0,:] = 0.5*(F11+2*F21+F22) # P11
+                P.data[:,:,1,:] = 0.5*(F11-F22)       # P21
+                P.data[:,:,4,:] = 0.5*(F11-2*F21+F22) # P22
 
             dtau_ =  np.zeros((len(wav), len(Z)), dtype=np.float32)
             ext_ = np.zeros_like(dtau_)
