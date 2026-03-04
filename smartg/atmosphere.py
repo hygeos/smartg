@@ -3513,7 +3513,7 @@ def extract_split(m):
 
 def pha2Iparperconv(pha):
     """
-    Convert phase to I parallel/perpendicular convertion
+    Convert phase to I parallel/perpendicular convention
 
     Parameters
     ----------
@@ -3538,7 +3538,7 @@ def pha2Iparperconv(pha):
         nth = pha.shape[3]
     
     if (nstk != 4 and nstk != 6):
-        raise ValueError("The number of stk components must be equal to 4 (spheric) or 6 (spheroid)!")
+        raise ValueError("The number of phase matrix terms must be equal to 4 or 6!")
 
 
     if ndim == 2:
