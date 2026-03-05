@@ -6,9 +6,21 @@
            ###########################
 
 
+v1.1.5
+------
+Release date: 2026-03-05
+
+* Correct crash occuring when creating a 3D atmospheric profil
+
+* Update IPRT phase B C2 notebook
+
+* Add warning message in case FOV > 0 and TYPE=0 in Sensor class
+  - FOV is forced to 0 is that case
+
+
 v1.1.4
 ------
-Release date: 2025-02-10
+Release date: 2026-02-10
 
 * Corrections in demo_notebook and atmosphere.py
   - Add patched transect2D function in smartg_view.py that properly reuses

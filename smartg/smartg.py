@@ -549,6 +549,11 @@ class Sensor(object):
         elif (V != None):
             raise NameError('V argument must be a Vector')
         
+        if FOV > 0. and TYPE == 0:
+            import warnings
+            warnings.warn('FOV > 0 is not yet allowed for radiance sensor (TYPE=0). It will be forced to 0.')
+            FOV = 0. # also already forced to 0 in the CUDA code 
+
         self.dict = {
             'POSX':  POSX,
             'POSY':  POSY,

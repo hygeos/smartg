@@ -1420,27 +1420,40 @@ class AtmAFGL(Atmosphere):
         atm_filename = Path(atm_filename)
 
         #
-        # init directories
+        # init directories and read atm file
         #
         # TODO Trick bellow to improve
         if atm_filename.name == "ATM3D":
             Nopt = grid.size
             atm_arr = np.zeros((Nopt,9))
             atm_arr[:,0] = np.arange(Nopt)[::-1]
-            tmp_f =Path('./tmp.dat')
+            tmp_f = Path.cwd() / "tmp.dat"
             np.savetxt(tmp_f, atm_arr)
-            atm_filename = atm_filename
-
-        if not new_atm:
+            atm_filename = tmp_f
+            prof = Profile_base(atm_filename, O3=O3,
+                                H2O=H2O, NO2=NO2, P0=P0, RH_cst=RH_cst, US=US, O3_H2O_alt=O3_H2O_alt
+                                )
+        elif not new_atm:
             if atm_filename.parent == Path('.'):
                 atm_filename = dir_libradtran_atmmod / atm_filename.name
             if not atm_filename.exists() and atm_filename.suffix != '.dat':
                 atm_filename = atm_filename.with_name(atm_filename.name + ".nc")
+
+            simplefilter('always', DeprecationWarning)
+            warn_message = "\nThe option new_atm = False is deprecated as of SMART-G 1.0.0. " + \
+                           "The key argument 'new_atm' will be removed in one of the next release.\n"
+            warn(warn_message, DeprecationWarning)
+            prof = Profile_base(atm_filename, O3=O3,
+                                H2O=H2O, NO2=NO2, P0=P0, RH_cst=RH_cst, US=US, O3_H2O_alt=O3_H2O_alt
+                                )
         else:
             if atm_filename.parent == Path('.'):
                 atm_filename = DIR_AUXDATA / 'atmospheres' / atm_filename.name
             if not atm_filename.exists() and atm_filename.suffix != '.nc':
                 atm_filename = atm_filename.with_name(atm_filename.name + ".nc")
+            prof = Profile_base2(atm_filename, O3=O3,
+                                H2O=H2O, NO2=NO2, P0=P0, RH_cst=RH_cst, US=US, O3_H2O_alt=O3_H2O_alt
+                                )
 
         #
         # read gaseous acs
@@ -1461,20 +1474,6 @@ class AtmAFGL(Atmosphere):
         self.acs_no2 = read_mlut(NO2_acs_path)
         self.acs_no2.rename_axis('wav', 'wavelength')
 
-
-        # read afgl file
-        if not new_atm:
-            simplefilter('always', DeprecationWarning)
-            warn_message = "\nThe option new_atm = False is deprecated as of SMART-G 1.0.0. " + \
-                           "The key argument 'new_atm' will be removed in one of the next release.\n"
-            warn(warn_message, DeprecationWarning)
-            prof = Profile_base(atm_filename, O3=O3,
-                                H2O=H2O, NO2=NO2, P0=P0, RH_cst=RH_cst, US=US, O3_H2O_alt=O3_H2O_alt
-                                )
-        else:
-            prof = Profile_base2(atm_filename, O3=O3,
-                                H2O=H2O, NO2=NO2, P0=P0, RH_cst=RH_cst, US=US, O3_H2O_alt=O3_H2O_alt
-                                )
 
         #
         # regrid profile if required
