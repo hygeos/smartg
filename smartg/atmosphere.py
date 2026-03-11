@@ -1528,25 +1528,30 @@ class AtmAFGL(Atmosphere):
             else:
                 wav_pha = self.pfwav
             pha = self.phase(wav_pha, NBTHETA=NBTHETA, conv_Iparper=False)
-            
-            
-            if pha is not None:
-                pha_, ipha = calc_iphase(pha, profile.axis('wavelength'), profile.axis('z_atm'), use_old_calc_iphase)
-                if pha_.shape[1] == 4:
-                    # if only 4 components extend to 6 to use general formulas
-                    pha_tmp = np.zeros((pha_.shape[0], 6, pha_.shape[2]), dtype=np.float64)
-                    pha_tmp[:,0:4,:] = pha_.copy()
-                    pha_tmp[:,4,:] = pha_tmp[:,0,:]
-                    pha_tmp[:,5,:] = pha_tmp[:,2,:]
-                    pha_ = pha_tmp
+
+            pro_var = profile.datasets()
+            if (  pha is not None  or 
+                  ( self.OPT3D and ('phase_atm' in pro_var) and truncation )  ):
+                
+                if pha is not None:
+                    pha_, ipha = calc_iphase(pha, profile.axis('wavelength'), profile.axis('z_atm'), use_old_calc_iphase)
+                    if pha_.shape[1] == 4:
+                        # if only 4 components extend to 6 to use general formulas
+                        pha_tmp = np.zeros((pha_.shape[0], 6, pha_.shape[2]), dtype=np.float64)
+                        pha_tmp[:,0:4,:] = pha_.copy()
+                        pha_tmp[:,4,:] = pha_tmp[:,0,:]
+                        pha_tmp[:,5,:] = pha_tmp[:,2,:]
+                        pha_ = pha_tmp
+                else: # 3D ATM
+                    pha_ = profile['phase_atm'].data
 
                 nphase = pha_.shape[0]
 
                 # If truncation parameter is given compute truncated phase function
                 if truncation is not None:
                     from pytrunc.truncation import delta_m_phase_approx, gt_phase_approx
-
-                    theta = pha.axes[-1]
+                    if self.OPT3D: theta = profile.axis('theta_atm')
+                    else: theta = pha.axes[-1]
                     pha_tr = np.zeros(pha_.shape, dtype=np.float64)
                     nphac = pha_.shape[1]
                     if (truncation.tr_method == 'DM'):
@@ -1589,13 +1594,15 @@ class AtmAFGL(Atmosphere):
                         if truncation is not None:
                             pha_tr[iph,:,:] = pha2Iparperconv(pha_tr[iph,:,:])
 
-                profile.add_axis('theta_atm', pha.axes[-1])
-                profile.add_dataset('phase_atm', pha_, ['iphase', 'stk', 'theta_atm'])
-
                 if not self.OPT3D:
+                    profile.add_axis('theta_atm', pha.axes[-1])
+                    profile.add_dataset('phase_atm', pha_, ['iphase', 'stk', 'theta_atm'])
                     profile.add_dataset('iphase_atm', ipha, ['wavelength', 'z_atm'])
                 else :
-                    profile.add_dataset('iphase_atm', ipha, ['wavelength', 'iopt'])
+                    attrs_tmp = profile['phase_atm'].attrs
+                    profile.rm_lut('phase_atm')
+                    profile.add_dataset('phase_atm', pha_, ['iphase', 'stk', 'theta_atm'],
+                                        attrs=attrs_tmp)
 
                 if truncation is not None:
                     # profile.add_dataset('phase_atm_tr', pha_tr, axnames=['iphase', 'stk', 'theta_atm'])
@@ -1667,11 +1674,9 @@ class AtmAFGL(Atmosphere):
                         with np.errstate(invalid='ignore', divide='ignore'):
                             ssa_atm_tr = (profile['OD_r'].data + sig_p_tr*ssa_p_atm_tr)/sig_atm_tr
                         ssa_atm_tr[np.isnan(ssa_atm_tr)] = 1.
-                        dz = np.abs(diff1(profile.axes['z_atm'].data))
-                        dtau_r = dz * profile['OD_r'].data
-                        dtau_p_tr = dz * sig_p_tr
+                        sig_r = profile['OD_r'].data
                         with np.errstate(invalid='ignore', divide='ignore'):
-                            pmol_tr = dtau_r/(dtau_r + dtau_p_tr*ssa_p_atm_tr)
+                            pmol_tr = sig_r/(sig_r + sig_p_tr*ssa_p_atm_tr)
                         pmol_tr[np.isnan(pmol_tr)] = 1.
                         
                         
@@ -1690,27 +1695,27 @@ class AtmAFGL(Atmosphere):
                         
                         attrs_tmp = profile['OD_p'].attrs
                         profile.rm_lut('OD_p')
-                        profile.add_dataset('OD_p', sig_p_tr, axnames=['wavelength', 'z_atm'],
+                        profile.add_dataset('OD_p', sig_p_tr, axnames=['wavelength', 'iopt'],
                                             attrs=attrs_tmp)
                         attrs_tmp = profile['ssa_p_atm'].attrs
                         profile.rm_lut('ssa_p_atm')
-                        profile.add_dataset('ssa_p_atm', ssa_p_atm_tr, axnames=['wavelength', 'z_atm'],
+                        profile.add_dataset('ssa_p_atm', ssa_p_atm_tr, axnames=['wavelength', 'iopt'],
                                             attrs=attrs_tmp)
                         attrs_tmp = profile['OD_atm'].attrs
                         profile.rm_lut('OD_atm')
-                        profile.add_dataset('OD_atm', sig_atm_tr, axnames=['wavelength', 'z_atm'],
+                        profile.add_dataset('OD_atm', sig_atm_tr, axnames=['wavelength', 'iopt'],
                                             attrs=attrs_tmp)
                         attrs_tmp = profile['OD_sca_atm'].attrs
                         profile.rm_lut('OD_sca_atm')
-                        profile.add_dataset('OD_sca_atm', sig_sca_tr, axnames=['wavelength', 'z_atm'],
+                        profile.add_dataset('OD_sca_atm', sig_sca_tr, axnames=['wavelength', 'iopt'],
                                             attrs=attrs_tmp)
                         attrs_tmp = profile['ssa_atm'].attrs
                         profile.rm_lut('ssa_atm')
-                        profile.add_dataset('ssa_atm', ssa_atm_tr, axnames=['wavelength', 'z_atm'],
+                        profile.add_dataset('ssa_atm', ssa_atm_tr, axnames=['wavelength', 'iopt'],
                                             attrs=attrs_tmp)
                         attrs_tmp = profile['pmol_atm'].attrs
                         profile.rm_lut('pmol_atm')
-                        profile.add_dataset('pmol_atm', pmol_tr, axnames=['wavelength', 'z_atm'],
+                        profile.add_dataset('pmol_atm', pmol_tr, axnames=['wavelength', 'iopt'],
                                             attrs=attrs_tmp)
 
         return profile
