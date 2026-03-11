@@ -3136,8 +3136,8 @@ packages:
   timestamp: 1753199211006
 - pypi: ./
   name: smartg
-  version: 1.1.4
-  sha256: ba481e0afb840a7eb56185dc211699c6824fb055b949bcb07e8c3b6d54faeb96
+  version: 1.1.5
+  sha256: be712e2e94d59d01b271686e9b88f68875f1857be9ec3f1638232770622e894b
   requires_dist:
   - numpy
   - pandas
