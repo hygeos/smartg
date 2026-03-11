@@ -1626,19 +1626,6 @@ class AtmAFGL(Atmosphere):
                             pmol_tr = dtau_r/(dtau_r + dtau_p_tr*ssa_p_atm_tr)
                         pmol_tr[np.isnan(pmol_tr)] = 1.
                         
-                        # profile.add_dataset('OD_p_tr', tau_p_tr, axnames=['wavelength', 'z_atm'],
-                        #                     attrs=profile['OD_p'].attrs)
-                        # profile.add_dataset('ssa_p_atm_tr', ssa_p_atm_tr, axnames=['wavelength', 'z_atm'],
-                        #                     attrs=profile['ssa_p_atm'].attrs)
-                        # profile.add_dataset('OD_atm_tr', tau_atm_tr, axnames=['wavelength', 'z_atm'],
-                        #                     attrs=profile['OD_atm'].attrs)
-                        # profile.add_dataset('OD_sca_atm_tr', tau_sca_tr, axnames=['wavelength', 'z_atm'],
-                        #                     attrs=profile['OD_sca_atm'].attrs)
-                        # profile.add_dataset('ssa_atm_tr', ssa_atm_tr, axnames=['wavelength', 'z_atm'],
-                        #                     attrs=profile['ssa_atm'].attrs)
-                        # profile.add_dataset('pmol_atm_tr', pmol_tr, axnames=['wavelength', 'z_atm'],
-                        #                     attrs=profile['pmol_atm'].attrs)
-                        
                         attrs_tmp = profile['OD_p'].attrs
                         profile.rm_lut('OD_p')
                         profile.add_dataset('OD_p', tau_p_tr, axnames=['wavelength', 'z_atm'],
@@ -1678,20 +1665,6 @@ class AtmAFGL(Atmosphere):
                         with np.errstate(invalid='ignore', divide='ignore'):
                             pmol_tr = sig_r/(sig_r + sig_p_tr*ssa_p_atm_tr)
                         pmol_tr[np.isnan(pmol_tr)] = 1.
-                        
-                        
-                        # profile.add_dataset('OD_p_tr', sig_p_tr, axnames=['wavelength', 'z_atm'],
-                        #                     attrs=profile['OD_p'].attrs)
-                        # profile.add_dataset('ssa_p_atm_tr', ssa_p_atm_tr, axnames=['wavelength', 'z_atm'],
-                        #                     attrs=profile['ssa_p_atm'].attrs)
-                        # profile.add_dataset('OD_atm_tr', sig_atm_tr, axnames=['wavelength', 'z_atm'],
-                        #                     attrs=profile['OD_atm'].attrs)
-                        # profile.add_dataset('OD_sca_atm_tr', sig_sca_tr, axnames=['wavelength', 'z_atm'],
-                        #                     attrs=profile['OD_sca_atm'].attrs)
-                        # profile.add_dataset('ssa_atm_tr', ssa_atm_tr, axnames=['wavelength', 'z_atm'],
-                        #                     attrs=profile['ssa_atm'].attrs)
-                        # profile.add_dataset('pmol_atm_tr', pmol_tr, axnames=['wavelength', 'z_atm'],
-                        #                     attrs=profile['pmol_atm'].attrs)
                         
                         attrs_tmp = profile['OD_p'].attrs
                         profile.rm_lut('OD_p')
