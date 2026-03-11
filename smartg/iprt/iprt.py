@@ -443,16 +443,24 @@ def groupIQUV(lI, lQ, lU, lV):
 
 def read_phase_nth_cte(filename, nb_theta=int(721), convert_IparIper=True, normalize=False):
     """
-    Description: Read libRatran aerosol/cloud files (i.g. wc.sol.mie.cdf) or monochromatic IPRT netcdf aerosol/cloud files,
+    Read libRatran aerosol/cloud files (i.g. wc.sol.mie.cdf) or monochromatic IPRT netcdf aerosol/cloud files,
     and convert to LUT object with a constant theta discretisation i.e. nb_theta = cte.
 
-    === Parameters:
-    filename         : File name with path location of netcdf file.
-    nb_theta         : Number of theta discretization between 0 and 180 degrees.
-    convert_IparIper : Convert IQUV phase matrix into IparIperUV phase matrix
-    normalize        : Normalize such that the integral of P0 is equal to 2
-    === Return:
-    LUT object with the cloud phase matrix but with a constant theta number = nb_theta
+    Parameters
+    ----------
+    filename : str 
+        File name with path location of netcdf file.
+    nb_theta : int
+        Number of theta discretization between 0 and 180 degrees.
+    convert_IparIper : bool
+        Convert IQUV phase matrix into IparIperUV phase matrix
+    normalize : bool
+        Normalize such that the integral of P0 is equal to 2
+        
+    Returns
+    -------
+    out : LUT
+        The cloud phase matrix with a constant theta number
     """
 
     ds = xr.open_dataset(filename)
@@ -475,7 +483,7 @@ def read_phase_nth_cte(filename, nb_theta=int(721), convert_IparIper=True, norma
     theta = np.linspace(0., 180., num=NBTHETA)
     wavelength = ds["wavelen"].data*1e3
 
-    P = LUT( np.full((NWAV, NBRH_OR_REFF, NBSTK, NBTHETA), np.nan, dtype=np.float32),
+    P = LUT( np.full((NWAV, NBRH_OR_REFF, 6, NBTHETA), np.nan, dtype=np.float32),
                 axes=[wavelength, rh_reff, None, theta],
                 names=['wav_phase', rh_or_reff, 'stk', 'theta_atm'],
                 desc="phase_atm" )
@@ -490,15 +498,29 @@ def read_phase_nth_cte(filename, nb_theta=int(721), convert_IparIper=True, norma
                 th = ds["theta"][iwav, irhreff, istk, :].data
 
                 P.data[iwav, irhreff, istk, :] = np.interp(theta, th[:nth], phase[iwav,irhreff,istk,:nth],  period=np.inf)
+    if NBSTK == 4:
+        P.data[:,:,4,:] = P.data[:,:,0,:].copy()
+        P.data[:,:,5,:] = P.data[:,:,2,:].copy()
+
+    if normalize:
+        for iwav in range (0, NWAV):
+            for irhreff in range (0, NBRH_OR_REFF):
+                # Note: from Ipar Iper phase, if NBSTK=4 -> P0=(P11+P12)/2, and if NBSTK=6 -> P0=(P11+P22+2*P12)/2
+                f = P.data[iwav,irhreff,0,:]
+                mu= np.cos(np.radians(theta))
+                Norm = np.trapezoid(f,-mu)
+                P.data[iwav,irhreff,:,:] *= 2./abs(Norm)
 
     if (convert_IparIper):
         # convert I, Q into Ipar, Iper
-        if (NBSTK == 4): # spherical particles
+        if (NBSTK == 4): # only spherical particles
             P0 = P.data[:,:,0,:].copy()
             P1 = P.data[:,:,1,:].copy()
-            P.data[:,:,0,:] = P0+P1
-            P.data[:,:,1,:] = P0-P1
-        elif (NBSTK) == 6: # non spherical particles
+            P4 = P.data[:,:,4,:].copy()
+            P.data[:,:,0,:] = 0.5*(P0+2*P1+P4) # P11
+            P.data[:,:,1,:] = 0.5*(P0-P4)      # P12=P21
+            P.data[:,:,4,:] = 0.5*(P0-2*P1+P4) # P22
+        elif (NBSTK) == 6: # spherical or non spherical particles
             # note: the sign of P43/P34 affects only the sign of V, since V=0 for rayleigh scattering it does not matter 
             P0 = P.data[:,:,0,:].copy()
             P1 = P.data[:,:,1,:].copy()
@@ -509,12 +531,4 @@ def read_phase_nth_cte(filename, nb_theta=int(721), convert_IparIper=True, norma
         else:
             raise NameError("Number of unique phase components is different than 4 or 6!")
         
-        if normalize:
-            for iwav in range (0, NWAV):
-                for irhreff in range (0, NBRH_OR_REFF):
-                    # Note: from Ipar Iper phase, if NBSTK=4 -> P0=(P11+P12)/2, and if NBSTK=6 -> P0=(P11+P22+2*P12)/2
-                    f = P0[iwav, irhreff,:]
-                    mu= np.cos(np.radians(theta))
-                    Norm = np.trapezoid(f,-mu)
-                    P.data[iwav,irhreff,:,:] *= 2./abs(Norm)
     return P
