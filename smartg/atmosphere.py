@@ -1528,6 +1528,7 @@ class AtmAFGL(Atmosphere):
             else:
                 wav_pha = self.pfwav
             pha = self.phase(wav_pha, NBTHETA=NBTHETA, conv_Iparper=False)
+            is_Iparper = False
 
             pro_var = profile.datasets()
             if (  pha is not None  or 
@@ -1544,8 +1545,14 @@ class AtmAFGL(Atmosphere):
                         pha_ = pha_tmp
                 else: # 3D ATM
                     pha_ = profile['phase_atm'].data
+                    is_Iparper = True
 
                 nphase = pha_.shape[0]
+
+                # if Iparper convention come back to IQUV for truncation
+                if is_Iparper:
+                    for iph in range (nphase):
+                        pha_[iph,:,:] = pha2Iparperconv(pha_[iph,:,:])
 
                 # If truncation parameter is given compute truncated phase function
                 if truncation is not None:
@@ -1588,7 +1595,7 @@ class AtmAFGL(Atmosphere):
                             pha_tr[iph,1,:] = pha_[iph,1,:] * beta2
                             pha_tr[iph,3,:] = pha_[iph,3,:] * beta2
 
-                if conv_Iparper:
+                if conv_Iparper or is_Iparper:
                     for iph in range (nphase):
                         pha_[iph,:,:] = pha2Iparperconv(pha_[iph,:,:])
                         if truncation is not None:
