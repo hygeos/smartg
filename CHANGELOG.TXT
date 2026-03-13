@@ -6,6 +6,17 @@
            ###########################
 
 
+v1.2.0
+------
+Release date: 2026-03-13
+
+* The use of a scattering phase truncation is now possible. Two truncation methods added.
+  - The Delta-m trunctation (DM) 
+  - The Geometric Truncation (GT)
+
+* Update of the demo notebook by adding an example using the GT truncation method
+
+
 v1.1.5
 ------
 Release date: 2026-03-05
