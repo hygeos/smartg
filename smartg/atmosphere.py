@@ -2174,26 +2174,43 @@ def get_AB_coeff2(modelA, modelB, wl1, wl2, AOT_OBS_wl1, AOT_OBS_wl2,
     else : return A, B
 
 
-def check_date (dates, year):
+def check_date(dates, year):
     """
-    Description: Make sure the parameter "dates" does not have dates of different years and
-                 make sure the unique year of all the dates is equal to the "year" parameter
+    Validate that all dates are from a single year and match the provided year.
 
-    ===Parameters:
-    dates : Numpy array or list of dates at format "yyyy:mm:dd"
-    year  : Interger at format yyyy
+    Parameters
+    ----------
+    dates : 1d-array | list 
+        Dates in format "dd:mm:yyyy" (numpy array or list)
+    year : int
+        Expected year in format yyyy
+
+    Raises
+    ------
+    ValueError
+        If dates contain multiple years or if the year doesn't match the expected year
+
+    Returns
+    -------
+    None
     """
+    if len(dates) == 0:
+        raise ValueError("dates cannot be empty")
 
-    date_list = []
-    dates_unique = np.unique(dates)
-    for date in dates_unique: date_list.append(date.split(':')[-1])
-    date_list = np.unique(date_list)
+    # Extract years from dates using list comprehension
+    years = np.unique([int(date.split(':')[-1]) for date in dates])
 
-    if date_list.size != 1: raise NameError('Since the return result is with a "day of year" dimension, " \
-                                        + " a file on several years of data is not authorised!')
-    if int(date_list) != year: raise NameError('The chosen year and the data year are not the same!')
+    if years.size != 1:
+        raise ValueError(
+            f"Multiple years found in dates: {years}. "
+            "Data spanning multiple years is not supported for 'day of year' dimension."
+        )
 
-    return
+    extracted_year = years[0]
+    if extracted_year != year:
+        raise ValueError(
+            f"Date year ({extracted_year}) does not match expected year ({year})."
+        )
 
 def read_Aeronet_AOD(file, year):
     """
