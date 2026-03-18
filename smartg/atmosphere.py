@@ -2108,10 +2108,10 @@ def get_AB_coeff(modelA, modelB, wl1, wl2, AOT_OBS_wl1, AOT_OBS_wl2,
     A, B : factors of model A and B
     """
 
-    prof_MA = AtmAFGL(atm, comp=[AeroOPAC(modelA, aot_refA, wl_ref)],
+    prof_MA = AtmAFGL(atm, comp=[AerOPAC(modelA, aot_refA, wl_ref)],
                       O3=O3, P0=P0, H2O=H2O, grid=grid, O3_H2O_alt=O3_H2O_alt).calc([wl1, wl2], phase=False)
 
-    prof_MB = AtmAFGL(atm, comp=[AeroOPAC(modelB, aot_refB, wl_ref)],
+    prof_MB = AtmAFGL(atm, comp=[AerOPAC(modelB, aot_refB, wl_ref)],
                       O3=O3, P0=P0, H2O=H2O, grid=grid, O3_H2O_alt=O3_H2O_alt).calc([wl1, wl2], phase=False)
 
     # Compute AOT of the 2 models at the 2 wavelenghts (wl1 and wl2)
