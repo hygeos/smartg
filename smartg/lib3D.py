@@ -141,6 +141,49 @@ def locate_3Dregular_cells(xgrid,ygrid,zgrid,x,y,z):
                      dims = (len(xgrid)-1, len(ygrid)-1, len(zgrid)-1))
 
 
+def locate_voxel_index(xgrid, ygrid, zgrid, x, y, z):
+    '''
+    Locate voxel index for given coordinates.
+    
+    Parameters
+    ----------
+    xgrid : 1D ndarray
+        The x-axis grid boundaries of the voxels.
+    ygrid : 1D ndarray
+        The y-axis grid boundaries of the voxels.
+    zgrid : 1D ndarray
+        The z-axis grid boundaries of the voxels.
+    x, y, z : float
+        The coordinates for which to locate the voxel index.
+    
+    Returns
+    -------
+    out : int
+        Flat index of the voxel containing the given coordinates.
+    '''
+    
+    # check if coordinates are within grid boundaries
+    if x < xgrid[0] or x > xgrid[-1]:
+        raise ValueError(f"x value is outside the range of xgrid.")
+    if y < ygrid[0] or y > ygrid[-1]:
+        raise ValueError(f"y value is outside the range of ygrid.")
+    if z < zgrid[0] or z > zgrid[-1]:
+        raise ValueError(f"z value is outside the range of zgrid.")
+    
+    # find cell indices using binary search (faster than interp1d)
+    ix = np.searchsorted(xgrid, x, side='right') - 1
+    iy = np.searchsorted(ygrid, y, side='right') - 1
+    iz = np.searchsorted(zgrid, z, side='right') - 1
+    
+    # handle out-of-bounds coordinates
+    ix = np.clip(ix, 0, len(xgrid) - 2)
+    iy = np.clip(iy, 0, len(ygrid) - 2)
+    iz = np.clip(iz, 0, len(zgrid) - 2)
+    
+    return np.ravel_multi_index((ix, iy, iz), 
+                                dims=(len(xgrid)-1, len(ygrid)-1, len(zgrid)-1))
+
+
 def satellite_view(mlut, Nx, Ny, x0, y0, wl, interp_name='none',
                    color_bar='Blues_r', fig_size=(8,8), font_size=int(18),
                    vmin = None, vmax = None, scale=False, save_file=None):
