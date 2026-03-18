@@ -20,7 +20,9 @@ from luts.luts import read_mlut
 
 import xarray as xr
 
+from warnings import warn
 import math
+
 
 def is_sorted(arr):
     """
@@ -550,11 +552,59 @@ def locate_3Dregular_cells(xgrid,ygrid,zgrid,x,y,z):
     return the cells indices corresponding the the coordinates x,y,z
     in a regular grid whose limits are defined by xgrid,ygrid and zgrid
     '''
+    warn_message = "\nlocate_3Dregular_cells is deprecated as of SMART-G 1.3.0 " + \
+                   "and will be removed in one of the next release.\n" + \
+                   "Please use locate_voxel_index instead (more robust and faster)."
+    warn(warn_message, DeprecationWarning)
+
     return  np.ravel_multi_index(( \
             np.floor(interp1d(xgrid, np.arange(len(xgrid)))(x)).astype(int) ,
             np.floor(interp1d(ygrid, np.arange(len(ygrid)))(y)).astype(int) ,
             np.floor(interp1d(zgrid, np.arange(len(zgrid)))(z)).astype(int)),
                      dims = (len(xgrid)-1, len(ygrid)-1, len(zgrid)-1))
+
+
+def locate_voxel_index(xgrid, ygrid, zgrid, x, y, z):
+    '''
+    Locate voxel index for given coordinates.
+    
+    Parameters
+    ----------
+    xgrid : 1D ndarray
+        The x-axis grid boundaries of the voxels.
+    ygrid : 1D ndarray
+        The y-axis grid boundaries of the voxels.
+    zgrid : 1D ndarray
+        The z-axis grid boundaries of the voxels.
+    x, y, z : float
+        The coordinates for which to locate the voxel index.
+    
+    Returns
+    -------
+    out : int
+        Flat index of the voxel containing the given coordinates.
+    '''
+    
+    # check if coordinates are within grid boundaries
+    if x < xgrid[0] or x > xgrid[-1]:
+        raise ValueError(f"x value is outside the range of xgrid.")
+    if y < ygrid[0] or y > ygrid[-1]:
+        raise ValueError(f"y value is outside the range of ygrid.")
+    if z < zgrid[0] or z > zgrid[-1]:
+        raise ValueError(f"z value is outside the range of zgrid.")
+    
+    # find cell indices using binary search (faster than interp1d)
+    ix = np.searchsorted(xgrid, x, side='right') - 1
+    iy = np.searchsorted(ygrid, y, side='right') - 1
+    iz = np.searchsorted(zgrid, z, side='right') - 1
+    
+    # handle out-of-bounds coordinates
+    ix = np.clip(ix, 0, len(xgrid) - 2)
+    iy = np.clip(iy, 0, len(ygrid) - 2)
+    iz = np.clip(iz, 0, len(zgrid) - 2)
+    
+    return np.ravel_multi_index((ix, iy, iz), 
+                                dims=(len(xgrid)-1, len(ygrid)-1, len(zgrid)-1))
 
 
 def satellite_view(mlut, xgrid, ygrid, wl, interp_name='none',
