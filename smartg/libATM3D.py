@@ -576,35 +576,61 @@ def locate_voxel_index(xgrid, ygrid, zgrid, x, y, z):
         The y-axis grid boundaries of the voxels.
     zgrid : 1D ndarray
         The z-axis grid boundaries of the voxels.
-    x, y, z : float
+    x, y, z : float | 1D ndarray
         The coordinates for which to locate the voxel index.
+        Either all scalars or all 1D arrays of same size.
     
     Returns
     -------
-    out : int
-        Flat index of the voxel containing the given coordinates.
+    out : int | 1D ndarray
+        Flat index of the voxel(s) containing the given coordinates.
+        Returns int if input coordinates are scalars, ndarray if arrays.
     '''
+    # check input types and shapes
+    is_x_scalar = np.isscalar(x)
+    is_y_scalar = np.isscalar(y)
+    is_z_scalar = np.isscalar(z)
+    
+    # verify all coordinates are same type
+    if not (is_x_scalar and is_y_scalar and is_z_scalar) and \
+       not (not is_x_scalar and not is_y_scalar and not is_z_scalar):
+        raise TypeError("Coordinates must be either all scalars or all arrays")
+    
+    # deals only with numpy arrays for consistent handling
+    x_arr = np.atleast_1d(x)
+    y_arr = np.atleast_1d(y)
+    z_arr = np.atleast_1d(z)
+    
+    # check that arrays have same size
+    if not (x_arr.ndim == 1 and y_arr.ndim == 1 and z_arr.ndim == 1):
+        raise TypeError("Coordinates must be scalars or 1D arrays")
+    
+    if not (x_arr.size == y_arr.size == z_arr.size):
+        raise TypeError(f"Coordinate arrays must have same size")
     
     # check if coordinates are within grid boundaries
-    if x < xgrid[0] or x > xgrid[-1]:
-        raise ValueError(f"x value is outside the range of xgrid.")
-    if y < ygrid[0] or y > ygrid[-1]:
-        raise ValueError(f"y value is outside the range of ygrid.")
-    if z < zgrid[0] or z > zgrid[-1]:
-        raise ValueError(f"z value is outside the range of zgrid.")
+    if np.any(x_arr < xgrid[0]) or np.any(x_arr > xgrid[-1]):
+        raise ValueError(f"x coordinates outside range [{xgrid[0]}, {xgrid[-1]}]")
+    if np.any(y_arr < ygrid[0]) or np.any(y_arr > ygrid[-1]):
+        raise ValueError(f"y coordinates outside range [{ygrid[0]}, {ygrid[-1]}]")
+    if np.any(z_arr < zgrid[0]) or np.any(z_arr > zgrid[-1]):
+        raise ValueError(f"z coordinates outside range [{zgrid[0]}, {zgrid[-1]}]")
     
     # find cell indices using binary search (faster than interp1d)
-    ix = np.searchsorted(xgrid, x, side='right') - 1
-    iy = np.searchsorted(ygrid, y, side='right') - 1
-    iz = np.searchsorted(zgrid, z, side='right') - 1
+    ix = np.searchsorted(xgrid, x_arr, side='right') - 1
+    iy = np.searchsorted(ygrid, y_arr, side='right') - 1
+    iz = np.searchsorted(zgrid, z_arr, side='right') - 1
     
     # handle out-of-bounds coordinates
     ix = np.clip(ix, 0, len(xgrid) - 2)
     iy = np.clip(iy, 0, len(ygrid) - 2)
     iz = np.clip(iz, 0, len(zgrid) - 2)
     
-    return np.ravel_multi_index((ix, iy, iz), 
-                                dims=(len(xgrid)-1, len(ygrid)-1, len(zgrid)-1))
+    result = np.ravel_multi_index((ix, iy, iz), 
+                                  dims=(len(xgrid)-1, len(ygrid)-1, len(zgrid)-1))
+    
+    # Return scalar if input was scalar
+    return result[0] if is_x_scalar else result
 
 
 def satellite_view(mlut, xgrid, ygrid, wl, interp_name='none',
@@ -850,7 +876,7 @@ def get_sensors_pos_icells_from_3Dgrid(grid3D, POSZ):
 
     xx,yy  = np.meshgrid(x0, y0)
     zz     = np.zeros_like(xx) + POSZ
-    icells = locate_3Dregular_cells(g.xGRID, g.yGRID, g.zGRID, xx.ravel(), yy.ravel(), zz.ravel())
+    icells = locate_voxel_index(g.xGRID, g.yGRID, g.zGRID, xx.ravel(), yy.ravel(), zz.ravel())
 
     return x0, y0, xx, yy, icells
 
