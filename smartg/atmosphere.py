@@ -2240,10 +2240,9 @@ def read_Aeronet_AOD(file, year):
 
     mat_ext = np.zeros((NTIME_AOD, NWAV_EXT), dtype=np.float64)
     for itime in range (0, NTIME_AOD):
-        ind = (AOD.index == itime)
         for iwav, wav in enumerate(wav_ext):
             key = 'AOD_Extinction-Total[' + str(int(wav)) + 'nm]'
-            mat_ext[itime, iwav] = AOD[ind][key]
+            mat_ext[itime, iwav] = AOD.iloc[itime][key]
 
     AOD_ext_lut = LUT(mat_ext, axes=[AOD["Day_of_Year(Fraction)"].values, wav_ext],
                       names=['Day_of_Year(Fraction)', 'wavelength'])
@@ -2277,10 +2276,9 @@ def read_Aeronet_SSA(file, year):
 
     mat_ssa = np.zeros((NTIME_SSA, NWAV_SSA), dtype=np.float64)
     for itime in range (0, NTIME_SSA):
-        ind = (SSA.index == itime)
         for iwav, wav in enumerate(wav_ssa):
             key = 'Single_Scattering_Albedo[' + str(int(wav)) + 'nm]'
-            mat_ssa[itime, iwav] = SSA[ind][key]
+            mat_ssa[itime, iwav] = SSA.iloc[itime][key]
 
     SSA_lut = LUT(mat_ssa, axes=[SSA["Day_of_Year(Fraction)"].values, wav_ssa],
                   names=['Day_of_Year(Fraction)', 'wavelength'])
@@ -2318,12 +2316,11 @@ def read_Aeronet_PFN(file, year):
 
     mat_pfn = np.zeros((NTIME_PFN, NWAV_PFN, NANG), dtype=np.float64)
     for itime in range (0, NTIME_PFN):
-        ind = (PFN.index == itime)
         for iwav, wav in enumerate(wav_pfn):
             for iang, ag in enumerate(ang):
                 ang_str = "%.6f" % float(ag)
                 key = ang_str + "[" + str(int(wav)) + 'nm]'
-                mat_pfn[itime, iwav, iang] = PFN[ind][key]
+                mat_pfn[itime, iwav, iang] = PFN.iloc[itime][key]
     
     phase_lut = LUT(mat_pfn, axes=[PFN["Day_of_Year(Fraction)"].values, wav_pfn, ang],
                     names=['Day_of_Year(Fraction)', 'wavelength', 'theta_atm'])
