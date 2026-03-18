@@ -2,6 +2,8 @@ import numpy as np
 from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
 from luts.luts import Idx
+from warnings import warn
+
 
 def Get_3Dcells_indices(NX, NY, NZ):
     '''
@@ -134,6 +136,11 @@ def locate_3Dregular_cells(xgrid,ygrid,zgrid,x,y,z):
     return the cells indices corresponding the the coordinates x,y,z
     in a regular grid whose limits are defined by xgrid,ygrid and zgrid
     '''
+    warn_message = "\nlocate_3Dregular_cells is deprecated as of SMART-G 1.3.0 " + \
+                   "and will be removed in one of the next release.\n" + \
+                   "Please use locate_voxel_index instead (more robust and faster)."
+    warn(warn_message, DeprecationWarning)
+
     return  np.ravel_multi_index(( \
             np.floor(interp1d(xgrid, np.arange(len(xgrid)))(x)).astype(int) ,
             np.floor(interp1d(ygrid, np.arange(len(ygrid)))(y)).astype(int) ,
