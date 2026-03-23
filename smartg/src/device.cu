@@ -25,6 +25,13 @@
 /*****/
 #define _FLIP(x) (x%2==0 ? x+1 : x-1)
 
+/** Number of iAMF components per atmosphere layer: 2 default, 3 with AMF_VARIANCE */
+#ifdef AMF_VARIANCE
+#define TABDIST_NIAMF 3
+#else
+#define TABDIST_NIAMF 2
+#endif
+
 
 /****************************************************************************************************/
 /****************************************************************************************************/
@@ -311,8 +318,8 @@ extern "C" {
         //
 		// 3- Count the photons
         //
-		/* Cone Sampling */
-		if (LEd ==0 && if_count(count_level)) countPhoton(&ph, spectrum, prof_atm, prof_oc, tabthv, tabphi, count_level, errorcount, tabPhotons, tabDist,
+		/* Cone Sampling (standard mode without LE) */
+		if (LEd == 0 && if_count(count_level)) countPhoton(&ph, spectrum, prof_atm, prof_oc, tabthv, tabphi, count_level, errorcount, tabPhotons, tabDist,
             tabHist, tabPhotonsNoAer, MAX_HIST, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh);
 
 		#if defined(BACK) && defined(OBJ3D)
@@ -2970,7 +2977,7 @@ __device__ void move_pp2_bak(Photon* ph, struct Profile *prof_atm, struct Profil
         else ph->weight = 0.;
     }
 
-    if ((BEERd == 0) && ((ph->loc == ATMOS) || (ph->loc == OCEAN))) {
+    if ((BEERd == 0) && (ph->layer >= 0) && ((ph->loc == ATMOS) || (ph->loc == OCEAN))) {
         ph->weight *= prof[cell[ph->layer].iopt+ilam].ssa;
     }
 }
@@ -3452,7 +3459,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
         else { ph->weight = 0.; }
     }
 
-    if ( (BEERd == 0) && ((ph->loc == ATMOS) || (ph->loc == OCEAN)) )
+    if ( (BEERd == 0) && (ph->layer >= 0) && ((ph->loc == ATMOS) || (ph->loc == OCEAN)) )
     { ph->weight *= prof[cell[ph->layer].iopt+ilam].ssa; }
 }
 #endif // 3D
@@ -7224,7 +7231,7 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
 
     #ifndef ALIS //=========================================================================================================
     // photon's box && weight has to be valid
-	if(((ith >= 0) && (ith < NBTHETAd)) && ((iphi >= 0) && (iphi < NBPHId)) && (il >= 0) && (il < NLAMd) && (!isnan(weight)))
+	if(((ith >= 0) && (ith < NBTHETAd)) && ((iphi >= 0) && (iphi < NBPHId)) && (il >= 0) && (il < NLAMd) && (is >= 0) && (is < NSENSORd) && (!isnan(weight))) // FIX #11
 	{
       JJ = is*NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi; // Offset for 4 dimensional output array
       TT = is*NLAMd + il;
@@ -7301,7 +7308,7 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
     #else //ALIS ===========================================================================================================
     int DL=(NLAMd-1)/(NLOWd-1);
     float wabs;
-	if(((ith >= 0) && (ith < NBTHETAd)) && ((iphi >= 0) && (iphi < NBPHId)) && (!isnan(weight)))
+	if(((ith >= 0) && (ith < NBTHETAd)) && ((iphi >= 0) && (iphi < NBPHId)) && (is >= 0) && (is < NSENSORd) && (!isnan(weight))) // FIX #11
     {
      if(HISTd==0) {
       // For all wavelengths
@@ -7563,7 +7570,7 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
           //tabCount3[LL2]= (float)(ph->ith);
        } // HISTd==1
 
-       unsigned long long KK  = K*2*(NATM_ABSd+NOCE_ABSd);
+       unsigned long long KK  = K*TABDIST_NIAMF*(NATM_ABSd+NOCE_ABSd);
        //unsigned long long KK  = K*(NATM_ABSd+NOCE_ABSd);
        #ifdef DOUBLE
           tabCount2   = (double*)tabDist     + count_level*KK;
@@ -7576,14 +7583,19 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
             #endif
           }
           for (int n=0; n<NATM_ABSd; n++){
-            LL = (n+NOCE_ABSd)*K*2 + is*NBPHId*NBTHETAd*2 + ith*NBPHId*2 + iphi*2 + 0;
+            float d_n = ph->cdist_atm[n+1];
+            float w_n = (float)weight * (float)wabs;
+            LL = (n+NOCE_ABSd)*K*TABDIST_NIAMF + is*NBPHId*NBTHETAd*TABDIST_NIAMF + ith*NBPHId*TABDIST_NIAMF + iphi*TABDIST_NIAMF + 0;
             //LL = (n+NOCE_ABSd)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
             #if __CUDA_ARCH__ >= 600
             //atomicAdd(tabCount2+LL, (double)ph->cdist_atm[n+1]);
             //atomicAdd(tabCount2+LL,   (double)ph->weight);
             //atomicAdd(tabCount2+LL+1, (double)ph->cdist_atm[n+1]*(double)ph->weight);
-            atomicAdd(tabCount2+LL,   (double)weight * (double)wabs);
-            atomicAdd(tabCount2+LL+1, (double)ph->cdist_atm[n+1] * (double)weight * (double)wabs);
+            atomicAdd(tabCount2+LL,   (double)w_n);
+            atomicAdd(tabCount2+LL+1, (double)(d_n * w_n));
+            #ifdef AMF_VARIANCE
+            atomicAdd(tabCount2+LL+2, (double)(d_n * d_n * w_n));
+            #endif
             #else
             DatomicAdd(tabCount2+LL, (double)ph->cdist_atm[n+1]);
             #endif
@@ -7595,8 +7607,14 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
             atomicAdd(tabCount2+LL, ph->cdist_oc[n+1]);
           }
           for (int n=0; n<NATM_ABSd; n++){
-            LL = (n+NOCE_ABSd)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
-            atomicAdd(tabCount2+LL, ph->cdist_atm[n+1]);
+            float d_n = ph->cdist_atm[n+1];
+            float w_n = weight * wabs;
+            LL = (n+NOCE_ABSd)*K*TABDIST_NIAMF + is*NBPHId*NBTHETAd*TABDIST_NIAMF + ith*NBPHId*TABDIST_NIAMF + iphi*TABDIST_NIAMF + 0;
+            atomicAdd(tabCount2+LL,   w_n);
+            atomicAdd(tabCount2+LL+1, d_n * w_n);
+            #ifdef AMF_VARIANCE
+            atomicAdd(tabCount2+LL+2, d_n * d_n * w_n);
+            #endif
           }
        #endif 
       #endif // SPHERIQUE || ALT_PP

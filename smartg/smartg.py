@@ -68,7 +68,7 @@ UP0M = 4
 DOWNB = 5
 
 #
-MAX_NREF = 10
+MAX_NREF = 100
 
 #
 # type definitions (should match cuda struct definitions)
@@ -816,12 +816,28 @@ class Smartg(object):
     keep_context: None | bool, optional
         Only in case autoinit is set to False. This parameter allows to keep or not the context 
         after the use of the run method. By default (for the case autoinit=False) kill the context after the use of the run method.
+    amf_variance : bool, optional, default=False
+        Enable storage of the second moment of photon path lengths (⟨D²⟩)
+        in tabDist, for Jensen bias correction of the mean-path AMF
+        approximation. Requires ``alis=True`` since tabDist and per-photon
+        cumulative distances (ph->cdist) are only available under the ALIS
+        method. When enabled, the output ``cdist`` datasets have an
+        ``iAMF`` axis of size 3 instead of 2:
+
+        * iAMF=0: Σ(w · T_abs)  — weighted intensity
+        * iAMF=1: Σ(d · w · T_abs) — weighted path length
+        * iAMF=2: Σ(d² · w · T_abs) — weighted squared path length
+
+    Raises
+    ------
+    ValueError
+        If amf_variance=True is used without alis=True.
     """
     def __init__(self, pp=True, debug=False, autoinit=True,
                  verbose_photon=False,
                  double=True, alis=False, back=False, bias=True, alt_pp=False, obj3D=False, 
                  opt3D=False, device=None, sif=False, thermal=False, rng='PHILOX', cache_dir=None,
-                 keep_context=None):
+                 keep_context=None, amf_variance=False):
         assert not ((device is not None) and ('CUDA_DEVICE' in os.environ)), "Can not use the 'device' option while the CUDA_DEVICE is set"
 
         if device is not None:
@@ -860,6 +876,9 @@ class Smartg(object):
         self.pp = pp
         self.double = double
         self.alis = alis
+        if amf_variance and not alis:
+            raise ValueError('amf_variance=True requires alis=True (tabDist and ph->cdist need ALIS)')
+        self.amf_variance = amf_variance
         self.rng = init_rng(rng)
         self.back= back
         self.thermal=thermal
@@ -897,6 +916,8 @@ class Smartg(object):
             options.append('-DDOUBLE')
         if alis:
             options.append('-DALIS')
+        if amf_variance:
+            options.append('-DAMF_VARIANCE')  # Store cdist² for Jensen bias correction
         if sif:
             options.append('-DSIF')
         if thermal:
@@ -990,7 +1011,7 @@ class Smartg(object):
             OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
             NBLOOP=None, progress=True, 
             le=None, flux=None, stdev=False, stdev_lim=None,
-            BEER=1, RR=0, WEIGHTRR=0.1, SZA_MAX=90., SUN_DISC=0,
+            BEER=1, RR=0, WEIGHTRR=0.1, SZA_MAX=90., SUN_DISC=0.,
             sensor=None, refraction=False, reflectance=True,
             myObjects=None, interval = None,
             IsAtm = 1, cusL = None, SMIN=0, SMAX=1e6, RMIN=0, RMAX=1e6, FFS=False, DIRECT=False,
@@ -1409,6 +1430,14 @@ class Smartg(object):
                   tab_sensor[i][k] = s.dict[k]
         tab_sensor = to_gpu(tab_sensor)
 
+        # Auto-set SUN_DISC from sensor FOV if not explicitly set
+        # This ensures sensor cone angle is available in kernel for direct beam tolerance
+        if SUN_DISC == 0:
+            for sens in sensor2:
+                if sens.dict['TYPE'] == 1 and sens.dict['FOV'] > 1e-6:
+                    SUN_DISC = sens.dict['FOV']
+                    break  # Use first sensor with cone FOV
+
         # The min and max posx and posy of sensors. Useful for forward mode in 3d atm
         sxmin = np.inf
         sxmax = -np.inf
@@ -1511,7 +1540,6 @@ class Smartg(object):
         envmap = to_gpu(envmap)
         spectrum = to_gpu(spectrum)
 
-
         # Local Estimate option
         LE = 0
         ZIP= 0
@@ -1598,7 +1626,8 @@ class Smartg(object):
                   NBPHOTONS, NBLOOP, THVDEG, DEPO,
                   XBLOCK, XGRID, NLAM, SIM, NF,
                   NBTHETA, NBPHI, OUTPUT_LAYERS,
-                  RTER, LE, ZIP, FLUX, FFS, DIRECT, OCEAN_INTERACTION, NLVL, NPSTK,
+                  RTER, LE, ZIP,
+                  FLUX, FFS, DIRECT, OCEAN_INTERACTION, NLVL, NPSTK,
                   NWLPROBA, NSENSORPROBA, NCELLPROBA, BEER, SMIN, SMAX, RMIN, RMAX, RR, WEIGHTRR, NLOW, NJAC, 
                   NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj, nGObj, nRObj,
                   Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm,
@@ -1619,7 +1648,8 @@ class Smartg(object):
                         NLAM, NSENSOR, self.double, self.kernel, self.kernel2, p, X0, le, tab_sensor, envmap, spectrum,
                         prof_atm_gpu, prof_oc_gpu, cell_atm_gpu, cell_oc_gpu,
                         wl_proba_icdf, sensor_proba_icdf, cell_proba_icdf, stdev, stdev_lim, self.rng, self.alis,
-                        myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, mySPECTObj0, hist=hist)
+                        myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, mySPECTObj0, hist=hist,
+                        amf_variance=self.amf_variance)
 
         attrs['kernel time (s)'] = secs_cuda_clock
         attrs['number of kernel iterations'] = Nkernel
@@ -1832,6 +1862,13 @@ def finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPho
     write_UP0M = OUTPUT_LAYERS in (1, 3, 4)
     write_DOWNB = OUTPUT_LAYERS in (2, 3, 5)
 
+    # Build axis names for cdist datasets (ALIS mode)
+    cdist_axnames_zip = ['None', 'Zenith angles', 'iAMF']
+    cdist_axnames_full = ['None']
+    if NSENSOR > 1:
+        cdist_axnames_full.append('sensor index')
+    cdist_axnames_full.extend(['Azimuth angles', 'Zenith angles', 'iAMF'])
+
     if write_UPTOA:
         m.add_dataset('I_up (TOA)', tabFinal[UPTOA,0,isen,ilam,iphi,:], axnames)
         m.add_dataset('Q_up (TOA)', tabFinal[UPTOA,1,isen,ilam,iphi,:], axnames)
@@ -1850,8 +1887,8 @@ def finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPho
             m.add_dataset('V_up (TOA), no_aer', tabFinalNoAer[UPTOA,3,isen,ilam,iphi,:], axnames)
             m.add_dataset('N_up (TOA), no_aer', NPhotonsOutTotNoAer[UPTOA,isen,ilam,iphi,:], axnames)
         if len(tabDistFinal) > 1: 
-            if zip : m.add_dataset('cdist_up (TOA)', np.squeeze(tabDistFinal[UPTOA,:,isen,:,:]),  ['None','Zenith angles','iAMF'])
-            else   : m.add_dataset('cdist_up (TOA)', tabDistFinal[UPTOA,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
+            if zip : m.add_dataset('cdist_up (TOA)', np.squeeze(tabDistFinal[UPTOA,:,isen,:,:]),  cdist_axnames_zip)
+            else   : m.add_dataset('cdist_up (TOA)', tabDistFinal[UPTOA,:,isen,:,:,:],cdist_axnames_full)
     
     if hist : m.add_dataset('histories', tabHistTot)
     
@@ -1873,8 +1910,8 @@ def finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPho
             m.add_dataset('V_down (0+), no_aer', tabFinalNoAer[DOWN0P,3,isen,ilam,iphi,:], axnames)
             m.add_dataset('N_down (0+), no_aer', NPhotonsOutTotNoAer[DOWN0P,isen,ilam,iphi,:], axnames)
         if len(tabDistFinal) > 1: 
-            if zip : m.add_dataset('cdist_down (0+)', np.squeeze(tabDistFinal[DOWN0P,:,isen,:,:]),  ['None','Zenith angles','iAMF'])
-            else   : m.add_dataset('cdist_down (0+)', tabDistFinal[DOWN0P,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
+            if zip : m.add_dataset('cdist_down (0+)', np.squeeze(tabDistFinal[DOWN0P,:,isen,:,:]),  cdist_axnames_zip)
+            else   : m.add_dataset('cdist_down (0+)', tabDistFinal[DOWN0P,:,isen,:,:,:],cdist_axnames_full)
     if write_UP0M:
         m.add_dataset('I_up (0-)', tabFinal[UP0M,0,isen,ilam,iphi,:], axnames)
         m.add_dataset('Q_up (0-)', tabFinal[UP0M,1,isen,ilam,iphi,:], axnames)
@@ -1893,8 +1930,8 @@ def finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPho
             m.add_dataset('V_up (0-), no_aer', tabFinalNoAer[UP0M,3,isen,ilam,iphi,:], axnames)
             m.add_dataset('N_up (0-), no_aer', NPhotonsOutTotNoAer[UP0M,isen,ilam,iphi,:], axnames)
         if len(tabDistFinal) > 1: 
-            if zip : m.add_dataset('cdist_up (0-)', np.squeeze(tabDistFinal[UP0M,:,isen,:,:]),  ['None','Zenith angles','iAMF'])
-            else   : m.add_dataset('cdist_up (0-)', tabDistFinal[UP0M,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
+            if zip : m.add_dataset('cdist_up (0-)', np.squeeze(tabDistFinal[UP0M,:,isen,:,:]),  cdist_axnames_zip)
+            else   : m.add_dataset('cdist_up (0-)', tabDistFinal[UP0M,:,isen,:,:,:],cdist_axnames_full)
 
     if write_DOWN0M:
         m.add_dataset('I_down (0-)', tabFinal[DOWN0M,0,isen,ilam,iphi,:], axnames)
@@ -1914,8 +1951,8 @@ def finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPho
             m.add_dataset('V_down (0-), no_aer', tabFinalNoAer[DOWN0M,3,isen,ilam,iphi,:], axnames)
             m.add_dataset('N_down (0-), no_aer', NPhotonsOutTotNoAer[DOWN0M,isen,ilam,iphi,:], axnames)
         if len(tabDistFinal) > 1: 
-            if zip : m.add_dataset('cdist_down (0-)', np.squeeze(tabDistFinal[DOWN0M,:,isen,:,:]),  ['None','Zenith angles','iAMF'])
-            else   : m.add_dataset('cdist_down (0-)', tabDistFinal[DOWN0M,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
+            if zip : m.add_dataset('cdist_down (0-)', np.squeeze(tabDistFinal[DOWN0M,:,isen,:,:]),  cdist_axnames_zip)
+            else   : m.add_dataset('cdist_down (0-)', tabDistFinal[DOWN0M,:,isen,:,:,:],cdist_axnames_full)
     if write_UP0P:
         m.add_dataset('I_up (0+)', tabFinal[UP0P,0,isen,ilam,iphi,:], axnames)
         m.add_dataset('Q_up (0+)', tabFinal[UP0P,1,isen,ilam,iphi,:], axnames)
@@ -1934,8 +1971,8 @@ def finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPho
             m.add_dataset('V_up (0+), no_aer', tabFinalNoAer[UP0P,3,isen,ilam,iphi,:], axnames)
             m.add_dataset('N_up (0+), no_aer', NPhotonsOutTotNoAer[UP0P,isen,ilam,iphi,:], axnames)
         if len(tabDistFinal) > 1: 
-            if zip : m.add_dataset('cdist_up (0+)', np.squeeze(tabDistFinal[UP0P,:,isen,:,:]),  ['None','Zenith angles','iAMF'])
-            else   : m.add_dataset('cdist_up (0+)', tabDistFinal[UP0P,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
+            if zip : m.add_dataset('cdist_up (0+)', np.squeeze(tabDistFinal[UP0P,:,isen,:,:]),  cdist_axnames_zip)
+            else   : m.add_dataset('cdist_up (0+)', tabDistFinal[UP0P,:,isen,:,:,:],cdist_axnames_full)
     if write_DOWNB:
         m.add_dataset('I_down (B)', tabFinal[DOWNB,0,isen,ilam,iphi,:], axnames)
         m.add_dataset('Q_down (B)', tabFinal[DOWNB,1,isen,ilam,iphi,:], axnames)
@@ -1954,8 +1991,8 @@ def finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPho
             m.add_dataset('V_down (B), no_aer', tabFinalNoAer[DOWNB,3,isen,ilam,iphi,:], axnames)
             m.add_dataset('N_down (B), no_aer', NPhotonsOutTotNoAer[DOWNB,isen,ilam,iphi,:], axnames)
         if len(tabDistFinal) > 1: 
-            if zip : m.add_dataset('cdist_down (B', np.squeeze(tabDistFinal[DOWNB,:,isen,:,:]),  ['None','Zenith angles','iAMF'])
-            else   : m.add_dataset('cdist_down (B)', tabDistFinal[DOWNB,:,isen,:,:,:],['None','Azimuth angles','Zenith angles','iAMF'])
+            if zip : m.add_dataset('cdist_down (B', np.squeeze(tabDistFinal[DOWNB,:,isen,:,:]),  cdist_axnames_zip)
+            else   : m.add_dataset('cdist_down (B)', tabDistFinal[DOWNB,:,isen,:,:,:],cdist_axnames_full)
 
 
     # write atmospheric profiles
@@ -2416,7 +2453,8 @@ def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
               NBPHOTONS, NBLOOP, THVDEG, DEPO,
               XBLOCK, XGRID,NLAM, SIM, NF,
               NBTHETA, NBPHI, OUTPUT_LAYERS,
-              RTER, LE, ZIP, FLUX, FFS, DIRECT, OCEAN_INTERACTION, 
+              RTER, LE, ZIP,
+              FLUX, FFS, DIRECT, OCEAN_INTERACTION, 
               NLVL, NPSTK, NWLPROBA, NSENSORPROBA, NCELLPROBA,  BEER, SMIN, SMAX, RMIN, RMAX, RR, 
               WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj, nGObj, nRObj,
               Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, vSun, HIST, ZTOA,
@@ -2803,7 +2841,8 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
                 NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                 NLAM, NSENSOR, double, kern, kern2, p, X0, le, tab_sensor, envmap, spectrum,
                 prof_atm, prof_oc, cell_atm, cell_oc, wl_proba_icdf, sensor_proba_icdf, cell_proba_icdf,
-                stdev, stdev_lim, rng, alis, myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, mySPECTObj0, hist=False):
+                stdev, stdev_lim, rng, alis, myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, mySPECTObj0, hist=False,
+                amf_variance=False):
     """
     launch the kernel several time until the targeted number of photons injected is reached
 
@@ -2882,7 +2921,8 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         tabTransDir = gpuzeros((1,1), dtype=np.float64)
     
     if ((NATM+NOCE >0) and (NATM_ABS+NOCE_ABS <500) and alis) : 
-        tabDistTot = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI,2), dtype=np.float64)
+        NIAMF = 3 if amf_variance else 2
+        tabDistTot = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI,NIAMF), dtype=np.float64)
     else : 
         tabDistTot = gpuzeros((1), dtype=np.float64)
 
@@ -2922,14 +2962,14 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         tabPhotons = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float64)
         tabPhotonsNoAer = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float64)
         if ((NATM+NOCE >0) and (NATM_ABS+NOCE_ABS <500) and alis) : 
-            tabDist = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI,2), dtype=np.float64)
+            tabDist = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI,NIAMF), dtype=np.float64)
         else :
             tabDist = gpuzeros((1), dtype=np.float64)
     else:
         tabPhotons = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float32)
         tabPhotonsNoAer = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float32)
         if ((NATM+NOCE >0) and (NATM_ABS+NOCE_ABS <500) and alis) : 
-            tabDist = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI,2), dtype=np.float32)
+            tabDist = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI,NIAMF), dtype=np.float32)
         else : 
             tabDist = gpuzeros((1), dtype=np.float32)
 
@@ -3147,8 +3187,22 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
 def get_git_attrs():
     R = {}
 
+    # Try to find git executable
+    import shutil
+    git_cmd = shutil.which('git')
+    if git_cmd is None:
+        # Git not found in PATH, try common locations
+        for git_path in ['/usr/bin/git', '/usr/local/bin/git', '/bin/git']:
+            if os.path.exists(git_path):
+                git_cmd = git_path
+                break
+
+    if git_cmd is None:
+        # Git not available, return empty dict
+        return {}
+
     # check current commit
-    p = subprocess.Popen(['git', 'rev-parse', 'HEAD'],
+    p = subprocess.Popen([git_cmd, 'rev-parse', 'HEAD'],
                          stdout=subprocess.PIPE,
                          stderr=subprocess.PIPE)
     if p.wait():
@@ -3158,7 +3212,7 @@ def get_git_attrs():
         R.update({'git_commit_ref': shasum})
 
     # check if repo is dirty
-    p = subprocess.Popen(['git', 'status', '--porcelain',
+    p = subprocess.Popen([git_cmd, 'status', '--porcelain',
                           '--untracked-files=no'],
                           stdout=subprocess.PIPE,
                           stderr=subprocess.PIPE)
