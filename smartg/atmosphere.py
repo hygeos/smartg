@@ -2348,8 +2348,15 @@ def read_Aeronet_AOD(file, year):
             key = 'AOD_Extinction-Total[' + str(int(wav)) + 'nm]'
             mat_ext[itime, iwav] = AOD.iloc[itime][key]
 
-    AOD_ext_lut = LUT(mat_ext, axes=[AOD["Day_of_Year(Fraction)"].values, wav_ext],
-                      names=['Day_of_Year(Fraction)', 'wavelength'])
+    AOD_ext_lut = xr.DataArray(
+                               mat_ext,
+                               coords={
+                                        'Day_of_Year(Fraction)': AOD["Day_of_Year(Fraction)"].values,
+                                        'wavelength': wav_ext
+                                       },
+                               dims=['Day_of_Year(Fraction)', 'wavelength'],
+                               name='aod'
+                              )
 
     return AOD_ext_lut
     
@@ -2384,8 +2391,15 @@ def read_Aeronet_SSA(file, year):
             key = 'Single_Scattering_Albedo[' + str(int(wav)) + 'nm]'
             mat_ssa[itime, iwav] = SSA.iloc[itime][key]
 
-    SSA_lut = LUT(mat_ssa, axes=[SSA["Day_of_Year(Fraction)"].values, wav_ssa],
-                  names=['Day_of_Year(Fraction)', 'wavelength'])
+    SSA_lut = xr.DataArray(
+                           mat_ssa,
+                           coords={
+                                    'Day_of_Year(Fraction)': SSA["Day_of_Year(Fraction)"].values,
+                                    'wavelength': wav_ssa
+                                   },
+                           dims=['Day_of_Year(Fraction)', 'wavelength'],
+                           name='ssa'
+                           )
 
     return SSA_lut
 
@@ -2428,6 +2442,16 @@ def read_Aeronet_PFN(file, year):
     
     phase_lut = LUT(mat_pfn, axes=[PFN["Day_of_Year(Fraction)"].values, wav_pfn, ang],
                     names=['Day_of_Year(Fraction)', 'wavelength', 'theta_atm'])
+    phase_lut = xr.DataArray(
+                              mat_pfn,
+                              coords={
+                                       'Day_of_Year(Fraction)': PFN["Day_of_Year(Fraction)"].values,
+                                       'wavelength': wav_pfn,
+                                       'theta_atm': ang
+                                      },
+                              dims=['Day_of_Year(Fraction)', 'wavelength', 'theta_atm'],
+                              name='pfn'
+                            )
 
     return phase_lut
 
