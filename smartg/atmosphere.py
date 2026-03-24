@@ -27,8 +27,9 @@ if sys.version_info[:2] >= (3, 0):
 
 import netCDF4  # noqa: F401 - must be imported before h5py to avoid HDF5 library conflicts
 import h5py
-import xarray
+import xarray as xr
 
+from tempfile import TemporaryDirectory
 
 
 class AerOPAC(object):
@@ -600,6 +601,109 @@ class Cloud(AerOPAC):
         files = list(base_dir.glob("*.nc"))
         return [f.stem.replace('_sol', '') for f in files]
         
+
+class AerUser(AerOPAC):
+    """
+    Initialize the user-defined aerosol model
+
+    Parameters
+    ----------
+    aod : 2-D ndarray
+        aerosol optical depth values with shape (len(hum), len(wav))
+    ssa : 2-D ndarray
+        Single scattering albedo values with shape (len(hum), len(wav))
+    phase : 4-D ndarray
+        Phase function values with shape (len(hum), len(wav), len(stk), len(theta)).
+
+        Where len(stk) is the number of unique phase terms.
+
+        The phase matrix terms must be given in the folowing order: 
+        - F11, F21, F33 and F34 if only 4 terms are given (only for spherical particles)
+        - F11, F21, F33, F34, F22 and F44 if 6 terms are given (for both spherical and non-spherical particles)
+    hum : 1-D ndarray
+        Relative humidity values in percentage
+    wav : 1-D ndarray
+        Wavelength values in nanometers
+    theta : 1-D ndarray
+        Scattering angle values in degrees
+    H_mix_min : float, optional
+        Force min altitude of the mixture
+    H_mix_max : float, optional
+        Force max altitude of the mixture
+    Z_mix : float, optional
+        Force scale height (see notes) of the mixture
+
+    Notes
+    -----
+    The scale height (see Hess et al. 2004) is the variable Z in the following equation:
+
+    - :math:`N(h) = N(0)exp(-h/Z)`
+
+    with N the number density and h the altitude
+    
+    """
+
+    def __init__(self, aod, ssa, phase, hum, wav, theta,  
+                 H_mix_min=0., H_mix_max=2., Z_mix=2):
+        
+
+        self.filename = 'none'
+        self.tau_ref = None
+        ext = aod / (Z_mix * (np.exp(-H_mix_min/Z_mix) - np.exp(-H_mix_max/Z_mix)))
+        
+        # Create an xarray Dataset to hold the mixture data
+        ds = xr.Dataset( {'ext': (('hum', 'wav'), ext),
+                        'ssa': (('hum', 'wav'), ssa),
+                        'phase': (('hum', 'wav', 'stk', 'theta'), phase)},
+                        coords={'hum': hum, 'wav': wav, 'theta': theta,
+                                'stk': np.arange(phase.shape[2])}
+        )
+
+        ds.attrs['name'] = 'none'
+        ds.attrs['H_mix_min'] = str(H_mix_min)
+        ds.attrs['H_mix_max'] = str(H_mix_max)
+        ds.attrs['Z_mix'] = str(Z_mix)
+
+        with TemporaryDirectory() as tmpdir:
+            tmp_file = Path(tmpdir)/'tmp_lut.nc'
+            ds.to_netcdf(tmp_file)
+            ds = read_mlut(tmp_file)
+
+        self.w_ref = np.array([ds.axes['wav'][0]])
+        self.ssa = None
+
+        self.mixture = ds
+        # check if hum dim size == 1 (to avoid lut sub bug)
+        if (self.mixture.axes['hum'].size == 1):
+            from copy import deepcopy
+            from luts.luts import merge
+            hum_v1 = self.mixture.axes['hum'][0]
+            hum_v2 = hum_v1 + 1
+            m1 = deepcopy(self.mixture).sub({'hum':0.})
+            m2 = deepcopy(m1)
+            m1.set_attr('hum',hum_v1)
+            m2.set_attr('hum',hum_v2)
+            m3 = merge([m1,m2], ['hum'])
+            self.mixture = m3
+
+        self.hum_or_reff = "hum"
+        self.free_tropo = None
+        self.strato = None
+
+        self.force_rh = [None]
+        self.vert_content = []
+        self.H_min = []
+        self.H_max =[]
+        self.Z_sh =[]
+
+        if (H_mix_max-H_mix_min > 1e-6):
+            self.vert_content.append(self.mixture)
+            self.H_min.append(H_mix_min)
+            self.H_max.append(H_mix_max)
+            self.Z_sh.append(Z_mix)
+
+        self._phase = None
+
 
 
 class Atmosphere(object):
@@ -1909,7 +2013,7 @@ def od2k(prof, dataset, axis=1, zreverse=False):
     '''
     ot = diff1(prof[dataset].data.astype(np.float32), axis=axis)
     #dz = diff1(prof.axis('z_atm')).astype(np.float32)
-    zz = prof.axis('z_atm') if not isinstance(prof, xarray.Dataset) else prof['z_atm']
+    zz = prof.axis('z_atm') if not isinstance(prof, xr.Dataset) else prof['z_atm']
     dz = diff1(zz).astype(np.float32)
     
     
