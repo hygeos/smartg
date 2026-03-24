@@ -2468,32 +2468,61 @@ def read_Aeronet_PFN(file, year):
     return phase_lut
 
 
-def atm_pro_from_aeronet(date, time, aod_file, ssa_file, pfn_file, b_wav, pfwav=None,
-                         z_profil=np.linspace(100., 0., num=101), dens = None,
-                         atm_name="afglt", P0=None, O3=None, H2O=None, O3_H2O_alt=None,
-                         fill_value_time=None):
+def atm_pro_from_aeronet(date, time, aod_file, ssa_file, pfn_file, b_wav, 
+                         pfwav=None, grid=None,  
+                         atm_name="afglt", 
+                         P0=None, O3=None, H2O=None, O3_H2O_alt=None,
+                         H_mix_min=0., H_mix_max=2., Z_mix=8):
     """
-    Description: Create an atmosphere MLUT object from aeronet files.
+    Create an atmosphere profil from aeronet files
 
-    === Parameters:
-    date            : Date in the following format -> "yyyy-mm-dd"
-    time            : Time in the following format -> "hh:mm:ss"
-    AOD_file        : Extinction AOD aeronet file (finishing by .aod) or aod LUT
-    ssa_file        : Single scattering albedo aeronet file (finishing by .ssa) or ssa LUT
-    pfn_file        : Phase matrix aeronet file (finishing by .pfn) or pfn LUT
-    bwav            : Kdis bands or list of wavelenghts
-    pfwav           : List of wavelenghts where the phase functions are computed
-    z_profil        : Altitude grid profil
-    dens            : aerosol density in funtion of z_profil
-    atm_name        : The atmAFGL atmosphere used
-    P0              : Surface pressure
-    O3              : Scale ozone vertical column (Dobson units)
-    H2O             : Scale Water vertical column
-    O3_H2O_alt      : Altitude of H2O and O3 values, by default None and scale from z=0km
-    fill_value_time : Passed to interp1d for time interpolation e.g "fill_value='extrema'"
+    Parameters
+    ----------
+    date : str
+        Date in the following format -> "yyyy-mm-dd"
+    time : str
+        Time in the following format -> "hh:mm:ss"
+    aod_file : str | LUT
+        Extinction AOD aeronet file (finishing by .aod) or aod LUT
+    ssa_file : str | LUT
+        Single scattering albedo aeronet file (finishing by .ssa) or ssa LUT
+    pfn_file : str | LUT
+        Phase matrix aeronet file (finishing by .pfn) or pfn LUT
+    b_wav : list | BandSet
+        Kdis bands or list of wavelenghts
+    pfwav : list
+        List of wavelenghts where the phase functions are computed
+    grid : array-like
+        Altitude grid profil
+    atm_name : str
+        The atmAFGL atmosphere used
+    P0 : float
+        Surface pressure
+    O3 : float
+        Scale ozone vertical column (Dobson units)
+    H2O : float
+        Scale Water vertical column
+    O3_H2O_alt : float
+        Altitude of H2O and O3 values, by default None and scale from z=0km
+    H_mix_min : float, optional
+        Force min altitude of the mixture
+    H_mix_max : float, optional
+        Force max altitude of the mixture
+    Z_mix : float, optional
+        Force scale height (see notes) of the mixture
 
-    === return
-    SMART-G atmosphere profil MLUT
+    Returns
+    -------
+    out : MLUT
+        The atmophere profil. Similar to the output of the calc method of AtmAFGL.
+
+    Notes
+    -----
+    The scale height (see Hess et al. 2004) is the variable Z in the following equation:
+
+    - :math:`N(h) = N(0)exp(-h/Z)`
+
+    with N the number density and h the altitude
     """
 
     pd_date = pd.Timestamp(date + " " + time)
@@ -2502,16 +2531,12 @@ def atm_pro_from_aeronet(date, time, aod_file, ssa_file, pfn_file, b_wav, pfwav=
     day_year_frac = pd_date.day_of_year + day_frac; print('day_year_frac =', day_year_frac)
     year = pd_date.year
 
-    if isinstance(aod_file, LUT): aod_lut = aod_file
+    if isinstance(aod_file, xr.DataArray): aod_lut = aod_file
     else: aod_lut = read_Aeronet_AOD(aod_file, year=year)
-    if isinstance(ssa_file, LUT): ssa_lut = ssa_file
+    if isinstance(ssa_file, xr.DataArray): ssa_lut = ssa_file
     else: ssa_lut = read_Aeronet_SSA(ssa_file, year=year)
-    if isinstance(pfn_file, LUT): pfn_lut = pfn_file
+    if isinstance(pfn_file, xr.DataArray): pfn_lut = pfn_file
     else: pfn_lut = read_Aeronet_PFN(pfn_file, year=year)
-       
-    aod_lut = aod_lut.sub({"Day_of_Year(Fraction)": Idx(day_year_frac, fill_value=fill_value_time)})
-    ssa_lut = ssa_lut.sub({"Day_of_Year(Fraction)": Idx(day_year_frac, fill_value=fill_value_time)})
-    pfn_lut = pfn_lut.sub({"Day_of_Year(Fraction)": Idx(day_year_frac, fill_value=fill_value_time)})
 
     if not isinstance(b_wav, BandSet): b_wav_BS = BandSet(b_wav)
     else : b_wav_BS = b_wav
@@ -2519,46 +2544,52 @@ def atm_pro_from_aeronet(date, time, aod_file, ssa_file, pfn_file, b_wav, pfwav=
     if (pfwav is None): pf_wav = b_wav_unique
     else: pf_wav = pfwav
 
-    f_ext      = interp1d(aod_lut.axes[0], aod_lut[:], fill_value='extrapolate')
-    ext_interp = f_ext(b_wav_unique)
-    if (np.any(ext_interp < 0)):
-        print("Warning: AOD interpolation have values < 0, those values will be set to 0.")
-        ext_interp[ext_interp < 0] = 0
-
-    f_ssa      = interp1d(ssa_lut.axes[0], ssa_lut[:], fill_value='extrapolate')
-    ssa_interp = f_ssa(b_wav_unique)
-    if (np.any(ssa_interp < 0)):
-        print("Warning: SSA interpolation have values < 0, those values will be set to 0.")
-        ssa_interp[ssa_interp < 0] = 0
-    if (np.any(ssa_interp > 1)):
-        print("Warning: SSA interpolation have values > 1, those values will be set to 1.")
-        ssa_interp[ssa_interp > 1] = 1
-    
-    wav_pfn = pfn_lut.axes[0]
-    ang_pfn = pfn_lut.axes[1]
-    pfn_interp = np.zeros((len(b_wav_unique), len(ang_pfn)), dtype=np.float64)  
-    for iang in range (0, len(ang_pfn)):
-        f_pfn = interp1d(wav_pfn, pfn_lut[:,iang], fill_value='extrapolate')
-        pfn_interp[:,iang] = f_pfn(b_wav_unique)
-    pfn_interp = np.stack([pfn_interp[:,:]]*4, axis=1)
-    pfn_interp[:,2:3,:]=0.
-    if(np.any(pfn_interp < 0)):
-        print("Warning: PFN interpolation have values < 0, those values will be set to 0.")
-        pfn_interp[pfn_interp < 0] = 0
-    
-    ext_interp_lut = LUT(ext_interp, axes=[b_wav_unique], names=['wavelength'])
-    ssa_interp_lut = LUT(ssa_interp, axes=[b_wav_unique], names=['wavelength'])
-    pfn_interp_lut = LUT(pfn_interp, axes=[b_wav_unique, None, ang_pfn], names=['wavelength', 'None', 'theta_atm'])
-    aeronet_specie = SpeciesUser(name='aeronet', ext=ext_interp_lut, ssa=ssa_interp_lut, phase=pfn_interp_lut, fill_value='extrema')
+    fv_time = 'extrapolate'
+    aod_lut = aod_lut.interp(
+        {'Day_of_Year(Fraction)': day_year_frac, 'wavelength': b_wav_unique}, 
+        method='linear', 
+        kwargs={'fill_value': fv_time}
+                            ).drop_vars('Day_of_Year(Fraction)')
+    ssa_lut = ssa_lut.interp(
+        {'Day_of_Year(Fraction)': day_year_frac, 'wavelength': b_wav_unique}, 
+        method='linear', 
+        kwargs={'fill_value': fv_time}
+                            ).drop_vars('Day_of_Year(Fraction)')
+    pfn_lut = pfn_lut.interp(
+        {'Day_of_Year(Fraction)': day_year_frac, 'wavelength': b_wav_unique}, 
+        method='linear', 
+        kwargs={'fill_value': fv_time}
+                            ).drop_vars('Day_of_Year(Fraction)')
 
 
-    if dens is None: D=0.33; aero_dens = np.exp(-(z_profil-5)**2/D**2)
-    else: aero_dens = dens
+    aod_lut = aod_lut.where(aod_lut >= 0, 0)
+    ssa_lut = ssa_lut.where((ssa_lut >= 0) & (ssa_lut <= 1), np.clip(ssa_lut, 0, 1))
+    pfn_lut = pfn_lut.where(pfn_lut >= 0, 0)
 
-    comp  = CompUser(aeronet_specie, aero_dens, z_profil, aod_lut[0], aod_lut.axes[0][0])
-    atm_pro = AtmAFGL(atm_name, grid=z_profil, P0=P0, O3=O3, H2O=H2O, comp=[comp], pfwav=pf_wav, O3_H2O_alt=O3_H2O_alt).calc(b_wav_BS)
 
-    return atm_pro
+    pfn_val = pfn_lut.values
+    pfn_val = np.stack([pfn_val[:,:]]*4, axis=1)
+    pfn_val[:,2:3,:]=0.
+    pfn_lut = xr.DataArray(pfn_val, 
+                        dims=['wavelength', 'stk', 'theta_atm'],
+                        coords={'wavelength': pfn_lut.wavelength,
+                                'stk': np.arange(4),
+                                'theta_atm': pfn_lut.theta_atm})
+
+    hum = np.array([0.])
+    wav = aod_lut.wavelength.values.copy()
+    theta = pfn_lut.theta_atm.values.copy()
+    aod = aod_lut.values[None,:]
+    ssa = ssa_lut.values[None,:]
+    phase = pfn_lut.values[None,:,:,:]
+
+    aer = AerUser(aod, ssa, phase, hum, wav, theta, 
+                  H_mix_min=H_mix_min, H_mix_max=H_mix_max, Z_mix=Z_mix)
+    pro = AtmAFGL(atm_name, comp=[aer], grid=grid, P0=P0, O3=O3, H2O=H2O, pfwav=pf_wav, 
+                  O3_H2O_alt=O3_H2O_alt).calc(b_wav_BS)
+
+    return pro
+
 
 def atm_pro_from_aeronet_opti(date, time, aod_file, ssa_file, pfn_file, b_wav, pfwav=None,
                               z_profil=np.linspace(100., 0., num=101), dens = None,
