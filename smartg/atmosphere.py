@@ -2440,8 +2440,6 @@ def read_Aeronet_PFN(file, year):
                 key = ang_str + "[" + str(int(wav)) + 'nm]'
                 mat_pfn[itime, iwav, iang] = PFN.iloc[itime][key]
     
-    phase_lut = LUT(mat_pfn, axes=[PFN["Day_of_Year(Fraction)"].values, wav_pfn, ang],
-                    names=['Day_of_Year(Fraction)', 'wavelength', 'theta_atm'])
     phase_lut = xr.DataArray(
                               mat_pfn,
                               coords={
