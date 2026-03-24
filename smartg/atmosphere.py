@@ -2318,15 +2318,19 @@ def check_date(dates, year):
 
 def read_Aeronet_AOD(file, year):
     """
-    Description: Extraction of AOD data from Aeronet file
-                 and incoporate them in a LUT object
+    Extract AOD data from Aeronet file
 
-    === Parameters:
-    file : Extinction AOD aeronet file (finishing by .aod)
-    year : The year for 'Day_of_Year(Fraction)' dimension creation
+    Parameters
+    ----------
+    file : str | Pathlike
+        Extinction AOD aeronet file path
+    year : int
+        The year for 'Day_of_Year(Fraction)' dimension creation
 
-    === Return
-    LUT object with extinction AOD in function of Day_of_Year(Fraction) and wavelength
+    Returns
+    -------
+    out : xr.DataArray
+        Lookup table with extinction AOD as function of Day_of_Year(Fraction) and wavelength
     """
 
     AOD = pd.read_csv(file, sep=',', skiprows=6)
@@ -2362,15 +2366,20 @@ def read_Aeronet_AOD(file, year):
     
 def read_Aeronet_SSA(file, year):
     """
-    Description: Extraction of SSA data from Aeronet file
-                 and incoporate them in a LUT object
+    Extract SSA data from Aeronet file
 
-    === Parameters:
-    file : Single scattering albedo aeronet file (finishing by .ssa)
-    year : The year for 'Day_of_Year(Fraction)' dimension creation
+    Parameters
+    ----------
+    file : str | Pathlike
+        Single scattering albedo aeronet file path
+    year : int
+        The year for 'Day_of_Year(Fraction)' dimension creation
 
-    === Return
-    LUT object with SSA in function of Day_of_Year(Fraction) and wavelength
+    Returns
+    -------
+    out : xr.DataArray
+        Lookup table with single scattering albedo as function of Day_of_Year(Fraction) 
+        and wavelength
     """
     SSA = pd.read_csv(file, sep=',', skiprows=6)
     NTIME_SSA = SSA.index.size
@@ -2405,15 +2414,20 @@ def read_Aeronet_SSA(file, year):
 
 def read_Aeronet_PFN(file, year):
     """
-    Description: Extraction of PFN data from Aeronet file
-                 and incoporate them in a LUT object
+    Extract PFN data from Aeronet file
 
-    === Parameters:
-    file : Phase matrix aeronet file (finishing by .pfn)
-    year : The year for 'Day_of_Year(Fraction)' dimension creation
+    Parameters
+    ----------
+    file : str | Pathlike
+        Phase matrix aeronet file path
+    year : int
+        The year for 'Day_of_Year(Fraction)' dimension creation
 
-    === Return
-    LUT object with PFN in function of Day_of_Year(Fraction), wavelength and thetha_atm
+    Returns
+    -------
+    out : xr.DataArray
+        Lookup table with phase function matrix as function of Day_of_Year(Fraction), 
+        wavelength and theta_atm
     """
     PFN = pd.read_csv(file, sep=',', skiprows=6)
     PFN = PFN[PFN['Phase_Function_Mode']=='Total'] # take only total of fine + coarse
