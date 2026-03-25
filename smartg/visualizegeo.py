@@ -1537,7 +1537,7 @@ def visualize_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYCOLOR 
     vSun = gc.ang2vec(THEDEG, PHIDEG, vec_view='nadir')
     wsx = -vSun.x; wsy=-vSun.y; wsz=-vSun.z
 
-    lplaneMesh = []
+    ltmesh = []
     lMir_int = int(0)
     E_rec = []; E_ref = []
     for i in range(0, len(E)):
@@ -1562,16 +1562,16 @@ def visualize_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYCOLOR 
                            np.array([2, 3, 1])], dtype=np.int32)  # indices of triangle 2
 
             # List of points of the plane
-            P = np.array([np.array([E[k].geo.p1.x, E[k].geo.p1.y, E[k].geo.p1.z]),
-                          np.array([E[k].geo.p2.x, E[k].geo.p2.y, E[k].geo.p2.z]),
-                          np.array([E[k].geo.p3.x, E[k].geo.p3.y, E[k].geo.p3.z]),
-                          np.array([E[k].geo.p4.x, E[k].geo.p4.y, E[k].geo.p4.z])], dtype = np.float64)
+            P = np.array([np.array([E_ref[k].geo.p1.x, E_ref[k].geo.p1.y, E_ref[k].geo.p1.z]),
+                          np.array([E_ref[k].geo.p2.x, E_ref[k].geo.p2.y, E_ref[k].geo.p2.z]),
+                          np.array([E_ref[k].geo.p3.x, E_ref[k].geo.p3.y, E_ref[k].geo.p3.z]),
+                          np.array([E_ref[k].geo.p4.x, E_ref[k].geo.p4.y, E_ref[k].geo.p4.z])], dtype = np.float64)
             
-            PlaneMesh = gc.TriangleMesh(vertices=P, faces=vi)
-            PlaneMesh.apply_tf(tt)
-            lplaneMesh.append(PlaneMesh)
+            tmesh = gc.TriangleMesh(vertices=P, faces=vi)
+            tmesh.apply_tf(tt)
+            ltmesh.append(tmesh)
 
-            ds = gc.calc_intersection(PlaneMesh, photon)
+            ds = gc.calc_intersection(tmesh, photon)
             if(ds['is_intersection'].values and ds['thit'].values < float('inf')):
                 atLeastOneInt[k] = True
                 lMir_int += int(1)
@@ -1600,17 +1600,17 @@ def visualize_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYCOLOR 
                            np.array([2, 3, 1])], dtype=np.int32)  # indices of triangle 2
 
             # List of points of the plane
-            P = np.array([np.array([E[k].geo.p1.x, E[k].geo.p1.y, E[k].geo.p1.z]),
-                          np.array([E[k].geo.p2.x, E[k].geo.p2.y, E[k].geo.p2.z]),
-                          np.array([E[k].geo.p3.x, E[k].geo.p3.y, E[k].geo.p3.z]),
-                          np.array([E[k].geo.p4.x, E[k].geo.p4.y, E[k].geo.p4.z])], dtype = np.float64)
+            P = np.array([np.array([E_rec[k].geo.p1.x, E_rec[k].geo.p1.y, E_rec[k].geo.p1.z]),
+                          np.array([E_rec[k].geo.p2.x, E_rec[k].geo.p2.y, E_rec[k].geo.p2.z]),
+                          np.array([E_rec[k].geo.p3.x, E_rec[k].geo.p3.y, E_rec[k].geo.p3.z]),
+                          np.array([E_rec[k].geo.p4.x, E_rec[k].geo.p4.y, E_rec[k].geo.p4.z])], dtype = np.float64)
             
-            PlaneMesh = gc.TriangleMesh(vertices=P, faces=vi)
-            PlaneMesh.apply_tf(tt)
-            lplaneMesh.append(PlaneMesh)
+            tmesh = gc.TriangleMesh(vertices=P, faces=vi)
+            tmesh.apply_tf(tt)
+            ltmesh.append(tmesh)
 
             for i in range(0, lMir_int):
-                ds = gc.calc_intersection(PlaneMesh, TabPhoton2[i])
+                ds = gc.calc_intersection(tmesh, TabPhoton2[i])
                 if(ds['is_intersection'].values and ds['thit'].values < float('inf')):
                     atLeastOneInt2[i] = True
                     p_hit = gc.Point(ds['phit'].values)
@@ -1625,15 +1625,15 @@ def visualize_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYCOLOR 
     ax = fig.add_subplot(111, projection=Axes3D.name)
     ax.scatter([-1,1], [-1,1], [-1,1], alpha=0.0)
 
-    for pMesh in lplaneMesh:
+    for itmesh in ltmesh:
         # Triangles mesh parameters for plot
         # First method (draw even if there is error with an object, useful for debug):
         # ----------------------------->
         if (PLANEDM == 'FM'):
-            for itri in range(0, pMesh.ntriangles):
-                p0 = gc.Point(pMesh.vertices[pMesh.faces[itri,0],:])
-                p1 = gc.Point(pMesh.vertices[pMesh.faces[itri,1],:])
-                p2 = gc.Point(pMesh.vertices[pMesh.faces[itri,2],:])
+            for itri in range(0, itmesh.ntriangles):
+                p0 = gc.Point(itmesh.vertices[itmesh.faces[itri,0],:])
+                p1 = gc.Point(itmesh.vertices[itmesh.faces[itri,1],:])
+                p2 = gc.Point(itmesh.vertices[itmesh.faces[itri,2],:])
                 Mat = np.array([[p0.x, p0.y, p0.z], \
                                 [p1.x, p1.y, p1.z], \
                                 [p2.x, p2.y, p2.z]])
@@ -1644,12 +1644,12 @@ def visualize_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYCOLOR 
         # Second method (better visual, avoid some matplotlib bugs):
         # ----------------------------->
         if (PLANEDM == 'SM'):
-            p0_t0 = gc.Point(pMesh.vertices[pMesh.faces[0,0],:])
-            p1_t0 = gc.Point(pMesh.vertices[pMesh.faces[0,1],:])
-            p2_t0 = gc.Point(pMesh.vertices[pMesh.faces[0,2],:])
-            p0_t1 = gc.Point(pMesh.vertices[pMesh.faces[1,0],:])
-            p1_t1 = gc.Point(pMesh.vertices[pMesh.faces[1,1],:])
-            p2_t1 = gc.Point(pMesh.vertices[pMesh.faces[1,2],:])
+            p0_t0 = gc.Point(itmesh.vertices[itmesh.faces[0,0],:])
+            p1_t0 = gc.Point(itmesh.vertices[itmesh.faces[0,1],:])
+            p2_t0 = gc.Point(itmesh.vertices[itmesh.faces[0,2],:])
+            p0_t1 = gc.Point(itmesh.vertices[itmesh.faces[1,0],:])
+            p1_t1 = gc.Point(itmesh.vertices[itmesh.faces[1,1],:])
+            p2_t1 = gc.Point(itmesh.vertices[itmesh.faces[1,2],:])
             Mat = np.array([[p0_t0.x, p0_t0.y, p0_t0.z], \
                             [p1_t0.x, p1_t0.y, p1_t0.z], \
                             [p2_t0.x, p2_t0.y, p2_t0.z], \
@@ -2059,7 +2059,7 @@ def rotate_vector(vector, rot_x, rot_y, rot_z, rot_order="xyz"):
     in the x,y,z axes, with in option the rotation order
 
     Arg:
-    vector    : A direction described by Vector class object
+    v         : A direction described by Vector class object
     rotx,y,z  : Rotations in x,y and z in degrees
     rot_order : str with the order of rotations i.g. 'xyz', zxy', ...
 
@@ -2067,7 +2067,7 @@ def rotate_vector(vector, rot_x, rot_y, rot_z, rot_order="xyz"):
     rotated_vector : The rotated (normalized) direction (also a Vector class)
     """
     # Avoid crash from old notebooks/scripts
-    if isinstance(v, Vector): v = gc.Vector(v.x, v.y, v.z)
+    if isinstance(vector, Vector): vector = gc.Vector(vector.x, vector.y, vector.z)
 
     TT = gc.Transform()
     tr_x = gc.get_rotateX_tf(rot_x)
