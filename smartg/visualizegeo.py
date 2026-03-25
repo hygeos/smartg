@@ -1411,22 +1411,44 @@ def visualize_entity(entities, th_deg = 0., ph_deg = 0., draw_method = 'SM', ray
 
 def generateHfP(THEDEG=0., PHIDEG = 0., PH = [gc.Point(0., 0., 0.)], PR = gc.Point(0., 0., 0.), \
                 HSX = 0.001, HSY = 0.001, REF = 1, ROUGH=0, HTYPE = None, LMTF = None):
-    '''
-    Definition of generateHfP
+    """Generate well-oriented Heliostats from their positions.
 
-    Enable to generate well oriented Heliostats from their positions
+    Generates a list of heliostat entities oriented to reflect sun rays toward
+    a receiver. Can handle either planar heliostats or curved (faceted) heliostats
+    depending on the HTYPE parameter.
 
-    THEDEG  : Sun zenith angle (degree)
-    PHIDEG  : Sun azimuth angle (degree)
-    PH      : Coordinates of the center of heliostats (list of point classes)
-    PR      : Coordinate of the center of the receiver (point class)
-    HSX     : Heliostat size in x axis (kilometer)
-    HSY     : Heliostat size in y axis (kilometer)
-    REF     : reflectivity of the heliostats
-    HTYPE   : If specified must be a class heliostat
-    LMTF    : Under development
-    return a list with Entity/GroupE object
-    '''
+    Parameters
+    ----------
+    THEDEG : float, optional
+        Sun zenith angle in degrees. Default is 0.
+    PHIDEG : float, optional
+        Sun azimuth angle in degrees. Default is 0.
+    PH : list of Point, optional
+        Coordinates of the center of heliostats. List of Point objects (geoclide).
+        Default is [gc.Point(0., 0., 0.)].
+    PR : Point, optional
+        Coordinate of the center of the receiver (geoclide Point object).
+        Default is gc.Point(0., 0., 0.).
+    HSX : float, optional
+        Heliostat size in x-axis in kilometers. Default is 0.001.
+    HSY : float, optional
+        Heliostat size in y-axis in kilometers. Default is 0.001.
+    REF : float, optional
+        Reflectivity of the heliostats. Default is 1.
+    ROUGH : float, optional
+        Surface roughness of the heliostats. Default is 0.
+    HTYPE : Heliostat or None, optional
+        If specified, must be a Heliostat class instance for generating curved
+        (faceted) heliostats. If None (default), generates planar heliostats.
+    LMTF : None or object, optional
+        Under development. Default is None.
+
+    Returns
+    -------
+    out : list
+        List of Entity or GroupE objects, each properly oriented to
+        reflect solar rays towards the receiver.
+    """
     # Avoid crash from old notebooks/scripts
     PH_ = PH.copy()
     for iph in range(len(PH)):
@@ -1490,35 +1512,76 @@ def generateHfA(THEDEG=0., PHIDEG = 0., PR = gc.Point(0., 0., 50.), MINANG=0., \
                 MAXANG=360., GAPDEG = 5., FDRH = 0.1, NBH = 10, GAPDIST = 0.01, \
                 HSX = 0.001, HSY = 0.001, PILLH = 0.006, REF = 1, ROUGH=0,
                 HTYPE=None, LMTF = None, RLPH = False):
-    '''
-    Definition of generateHfA
+    """Generate well-oriented Heliostats arranged in an angular sector around receiver.
 
-    Enable to generate well oriented Heliostats from two angles [MINANG, MAXANG] 
- 
-          y
-          ^ 
-          |/) ANG
-          ---> x
+    Generates heliostats positioned between MINANG and MAXANG angles, properly
+    oriented to reflect sun rays toward a central receiver. Heliostats are arranged
+    in concentric patterns with specified angular and radial gaps.
 
-    THEDEG  : Sun zenith angle (degree)
-    PHIDEG  : Sun azimuth angle (degree)
-    PR      : Coordinate of the center of the receiver (point class)
-            # Heliostats are filled between MINANG and MAXANG
-    MINANG  : min value of ANG (degree)
-    MAXANG  : max value of ANG (degree)
-    GAPDEG  : Fill heliostats every GAPDEG inside [MINANG, MAXANG] (degree)
-    FDRH    : First Distance Receiver-Heliostat (kilometer)
-    NBH     : number of heliostats to put every GAPDEG
-    GAPDIST : After FDRH, the gap between heliostats (kilometer)
-    HSX     : Heliostat size in x axis (kilometer)
-    HSY     : Heliostat size in y axis (kilometer)
-    PILLH   : Pillar height, distance Ground-Heliostat (kilometer)
-    REF     : reflectivity of the heliostats
-    HTYPE   : If specified must be a class heliostat
-    RLPH    : I true return also the list with heliostat positions
+    The angular coordinate system is defined as:
 
-    return a list with Entity/GroupE objects
-    '''
+    .. code-block:: text
+
+        y
+        ^ 
+        |/) ANG
+        ---> x
+
+    where ANG is measured from the positive x-axis.
+
+    Parameters
+    ----------
+    THEDEG : float, optional
+        Sun zenith angle in degrees. Default is 0.
+    PHIDEG : float, optional
+        Sun azimuth angle in degrees. Default is 0.
+    PR : Point, optional
+        Coordinate of the center of the receiver (geoclide Point object).
+        Heliostats are filled between MINANG and MAXANG around this receiver.
+        Default is gc.Point(0., 0., 50.).
+    MINANG : float, optional
+        Minimum angular position in degrees. Default is 0.
+    MAXANG : float, optional
+        Maximum angular position in degrees. Default is 360.
+    GAPDEG : float, optional
+        Angular spacing in degrees for placing heliostats between MINANG and MAXANG.
+        Default is 5.
+    FDRH : float, optional
+        First distance between receiver and heliostat center in kilometers.
+        Default is 0.1.
+    NBH : int, optional
+        Number of heliostats to place at each angular position (radial direction).
+        Default is 10.
+    GAPDIST : float, optional
+        Radial gap between heliostats in kilometers after the first distance FDRH.
+        Default is 0.01.
+    HSX : float, optional
+        Heliostat size in x-axis in kilometers. Default is 0.001.
+    HSY : float, optional
+        Heliostat size in y-axis in kilometers. Default is 0.001.
+    PILLH : float, optional
+        Pillar height (distance from ground to heliostat) in kilometers.
+        Default is 0.006.
+    REF : float, optional
+        Reflectivity of the heliostats. Default is 1.
+    ROUGH : float, optional
+        Surface roughness of the heliostats. Default is 0.
+    HTYPE : Heliostat or None, optional
+        If specified, must be a Heliostat class instance for generating curved
+        (faceted) heliostats. If None (default), generates planar heliostats.
+    LMTF : None or object, optional
+        Under development. Default is None.
+    RLPH : bool, optional
+        If True, also return the list of heliostat positions. Default is False.
+
+    Returns
+    -------
+    out1 : list
+        List of heliostat Entity or GroupE objects arranged in the angular sector.
+    out2 : list
+        If RLPH is True, also returns the list of heliostat center positions
+        (geoclide Point objects).
+    """
     # Avoid crash from old notebooks/scripts
     if isinstance(PR, Point): PR = gc.Point(PR.x, PR.y, PR.z)
 
@@ -1584,10 +1647,10 @@ def generateHfA(THEDEG=0., PHIDEG = 0., PR = gc.Point(0., 0., 50.), MINANG=0., \
             # 2) The incoming (vSun) and outcoming (vecHR) directions are known then find
             #    the rotation angles
             rInfo = findRots(UI=vSun, UO=vecHR)
-            rotYD = rInfo[0]; rotZD = rInfo[1];
+            rotYD = rInfo[0]; rotZD = rInfo[1]
 
             # 3) Once the rotation angles have been found, create heliostat objects 
-            objMi = Entity(objM);
+            objMi = Entity(objM)
             objMi.bboxGPmin = gc.Point(pH[i].x-bboxDist, pH[i].y-bboxDist, pH[i].z-bboxDist)
             objMi.bboxGPmax = gc.Point(pH[i].x+bboxDist, pH[i].y+bboxDist, pH[i].z+bboxDist)
             objMi.transformation = Transformation( rotation = np.array([0., rotYD, rotZD]), \
@@ -1598,7 +1661,7 @@ def generateHfA(THEDEG=0., PHIDEG = 0., PR = gc.Point(0., 0., 50.), MINANG=0., \
     # Case where the heliostat is composed by facets (i.g. to consider the curvature)
     else:
         # Take the commun parameters of all heliostats
-        SPX = HTYPE.sPx; SPY = HTYPE.sPy; HSX = HTYPE.hSx; HSY = HTYPE.hSy; CURVE_FL = HTYPE.curveFL;
+        SPX = HTYPE.sPx; SPY = HTYPE.sPy; HSX = HTYPE.hSx; HSY = HTYPE.hSy; CURVE_FL = HTYPE.curveFL
         
         # Generate all the facets and store them as entity object in a list 
         for i in range (0, len(pH)):
