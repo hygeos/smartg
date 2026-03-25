@@ -998,33 +998,69 @@ def generateLEfH(HELIO = Heliostat(), PR = None, THEDEG = 0., PHIDEG = 0., MTF=N
 def generateBox(dimXYZ=[0.05, 0.05, 0.05], pos=gc.Point(0., 0., 0.), matAV = "LambMirror",
         ref=[1., 1., 1., 1., 1., 1.], rough=[0.2, 0.2, 0.2, 0.2, 0.2, 0.2], rotZ = 0., gap=0.0001,
         obj_type="environment", colors=None, alpha_color=None):
-    """
-    Description of the function :
-    This function creates a box/building. The faces composing the box are
-    following the convention used by Didier for 3D atm in SMART-G:
-    Face 0 : Right. In the face -> (top Y+ ; right Z-)
-    Face 1 : Left.  In the face -> (top Y+ ; right Z+)
-    Face 2 : Back.  In the face -> (top Z- ; right X+)
-    Face 3 : Front. In the face -> (top Z+ ; right X+)
-    Face 4 : Top.   In the face -> (top Y+ ; right X+)
-    Face 5 : Bot.   In the face -> (top Y+ ; right X-)
+    """Create a 3D box/building composed of six planar faces.
+
+    Generates a box with six faces following Didier's 3D atmosphere convention in SMART-G.
+    Each face can have different materials and properties. The origin is located at the
+    center of the bottom face (Face 5), not at the center of the box.
+
+    Face convention and orientation:
     
-    !! BE CAREFUL !! origin is at the centre of Face 5, not a the center of the box !!
-    
-    ===ARGS:
-    dimXYZ   : List with the dimensions of the box in x, y and z
-    pos      : Point class with the localisation of the box, where origin is the center of F5
-    matAV    : We can choose between "LambMirror" or "Mirror" for constant material in each faces,
-               or a list of the material classes (Matte(), LambMirror() and Mirror()) for the 6 faces
-    ref      : If matAV is "LambMirror" or "Mirror", we can specify the reflectivity of the faces
-    rough    : If matAV is "Mirror" we can specify the roughness of the faces
-    rotZ     : Global rotation of the box in the Z axis, in degrees (only global rotation in Z is enabled)
-    gap      : gap to add in the global bounding box, can be sometimes useful for very small objects
-    obj_type : choice between: 'environment', 'reflector' and 'receiver'
-    colors   : list of str with face colors
-    
-    ===RETURN:
-    Return a group of objects (i.e. a GroupE class composed of plane objects)
+    - Face 0: Right   - In face: top Y+, right Z-
+    - Face 1: Left    - In face: top Y+, right Z+
+    - Face 2: Back    - In face: top Z-, right X+
+    - Face 3: Front   - In face: top Z+, right X+
+    - Face 4: Top     - In face: top Y+, right X+
+    - Face 5: Bottom  - In face: top Y+, right X-
+
+    Parameters
+    ----------
+    dimXYZ : list, optional
+        Dimensions of the box in [x, y, z] in kilometers. Default is [0.05, 0.05, 0.05].
+    pos : gc.Point, optional
+        Position of the box center. Origin is at the center of Face 5 (bottom).
+        Default is gc.Point(0., 0., 0.).
+    matAV : str | list, optional
+        Material for the front side of faces. Either:
+        
+        - "LambMirror" : Lambertian mirror for all faces (constant reflectivity)
+        - "Mirror" : Specular mirror for all faces (with roughness)
+        - list : List of 6 material objects (Matte, LambMirror, Mirror) for each face
+        
+        Default is "LambMirror".
+    ref : list, optional
+        Reflectivity values for each face when matAV is "Mirror" or "LambMirror".
+        List of 6 floats, one per face. Default is [1., 1., 1., 1., 1., 1.].
+    rough : list, optional
+        Surface roughness for each face when matAV is "Mirror".
+        List of 6 floats, one per face. Default is [0.2, 0.2, 0.2, 0.2, 0.2, 0.2].
+    rotZ : float, optional
+        Global rotation angle in degrees around the Z-axis. Default is 0.
+    gap : float, optional
+        Gap to add to the global bounding box, useful for very small objects.
+        Default is 0.0001.
+    obj_type : str, optional
+        Type of object. Choices are: 'environment', 'reflector', or 'receiver'.
+        Default is 'environment'.
+    colors : list, optional
+        List of str colors for each of the 6 faces. If None, all faces are colored grey.
+        Default is None.
+    alpha_color : list, optional
+        List of transparency float values (0-1) for each of the 6 faces. If None, all faces have 0.5.
+        Default is None.
+
+    Returns
+    -------
+    out : GroupE
+        A group object (GroupE class) composed of six plane objects representing
+        the box faces.
+
+    Notes
+    -----
+    - Origin is at the center of Face 5 (bottom), NOT at the center of the box.
+    - Global rotation in Z-axis only (other rotations not yet enabled).
+    - Front side of each face uses the specified material (matAV);
+      back side is always Matte (totally absorptive).
     """
     # Avoid crash from old notebooks/scripts
     if isinstance(pos, Point): pos = gc.Point(pos.x, pos.y, pos.z)
@@ -1117,16 +1153,23 @@ def generateBox(dimXYZ=[0.05, 0.05, 0.05], pos=gc.Point(0., 0., 0.), matAV = "La
     return GOBJ
 
 def Ref_Fresnel(dirEnt, geoTrans):
-    '''
-    Definition of Ref_Fresnel
+    """Calculate Fresnel reflection direction for a ray on a transformed surface.
 
-    Simple Fresnel reflection
+    Computes the direction of a reflected ray using simple Fresnel reflection
+    based on the incident ray direction and the surface transformation.
 
-    dirE     : Direction of the ray entering on the surface of reflection
-    geoTrans : Transformation of the surface where there is reflection
+    Parameters
+    ----------
+    dirEnt : gc.Vector
+        Direction vector of the incident ray entering the reflecting surface.
+    geoTrans : gc.Transform
+        Transformation (rotation and translation) of the surface where reflection occurs.
 
-    return a Vector class containing the direction of the reflected ray
-    '''
+    Returns
+    -------
+    out : gc.Vector
+        Direction vector of the reflected ray.
+    """
     if isinstance(dirEnt, gc.Vector) :
         dirE = dirEnt
     else :
@@ -1677,16 +1720,24 @@ def generateHfA(THEDEG=0., PHIDEG = 0., PR = gc.Point(0., 0., 50.), MINANG=0., \
         return lObj
 
 def convertLGtoLE(LGOBJ):
-    '''
-    Definition of the function convertLGtoLE
-    
-    ==== ARGS:
-    LGOBJ : List containing Entity and GroupE objects
+    """Convert a mixed list of Entity and GroupE objects to Entity objects only.
 
-    ==== RETURN:
-    LOBJ  : List with only Entity object
-    '''
-    nGObj=len(LGOBJ); LOBJ=[];
+    Flattens groups by expanding all GroupE objects into their constituent
+    Entity objects, resulting in a list containing only Entity objects.
+
+    Parameters
+    ----------
+    LGOBJ : list
+        List containing Entity and/or GroupE objects to be converted.
+
+    Returns
+    -------
+    out : list
+        Flattened list containing only Entity objects. GroupE objects are
+        converted into their constituent Entity objects.
+    """
+    nGObj=len(LGOBJ)
+    LOBJ=[]
 
     for i in range (0, nGObj):
         if isinstance(LGOBJ[i], GroupE):
@@ -1784,23 +1835,26 @@ def is_comment(s):
     return s.startswith('#')
 
 def extractPoints(filename):
-    """
-    Extract the coordinates of heliostats from a file.
+    """Extract heliostat coordinates from a file.
 
-    The input file must contain at least:
-    1. A first comment line beginning with '#'
-    2. An empty line
-    3. Lines with the x, y, and z coordinates of each heliostat, separated by commas
+    Reads a file and extracts the (x, y, z) coordinates of each heliostat,
+    returning them as geoclide Point objects.
+
+    The input file must follow this format:
+
+    - First line: comment line beginning with '#'
+    - Second line: empty line
+    - Subsequent lines: x, y, and z coordinates of each heliostat, separated by commas
 
     Parameters
     ----------
     filename : str | pathlib.Path
-        The path to the file containing the heliostat coordinates.
-    
+        Path to the file containing the heliostat coordinates.
+
     Returns
     -------
     out : list
-        A list of `gc.Point` objects, each containing the x, y, and z coordinates
+        List of geoclide.Point objects, each containing the x, y, and z coordinates
         of a heliostat.
     """
 
