@@ -706,20 +706,27 @@ class Heliostat(object):
                 "HSY=" + str(self.hSy)  + '; ' + "CURVE_FL=" + str(self.curveFL) + \
                 '; ' + "REF=" + str(self.ref) + '; ' + "ROUGH=" + str(self.rough)
 
+
 class GroupE(object):
-    '''
-    Definition of GroupE
+    """Container for grouping multiple Entity objects.
 
-    This class is a group of entity objects
+    A GroupE instance represents a collection of Entity objects with a shared
+    bounding box. This is useful for managing related geometric objects as a
+    single unit, such as a set of heliostats or building components.
 
-    LE   : List of entity objects
-    BBOX : List with Pmin and Pmax (Point classes) to construct a custum
-           bounding box, if None -> take Pmin and Pmax of LE[0]
-    '''
+    Parameters
+    ----------
+    LE : list, optional
+        List of Entity objects to group. Default is [Entity()].
+    BBOX : list, optional
+        Custom bounding box as [Pmin, Pmax] where Pmin and Pmax are geoclide.Point
+        objects. If None (default), bounding box is computed from LE[0].
+    """
     def __init__(self, LE=[Entity()], BBOX=None):
         self.le  = LE
         self.nob = len(LE)
         if BBOX is None:
+            # TODO: loop on all entities to automatically compute the global bounding box
             self.bboxGPmin = LE[0].bboxGPmin
             self.bboxGPmax = LE[0].bboxGPmax
         else:
@@ -727,21 +734,50 @@ class GroupE(object):
             self.bboxGPmax = BBOX[1]
         self.check = "GroupE"
 
+
 def findRots(UI=None, UO=None, vecNF=None):
-    '''
-    Description of the function findRots:
+    """Compute rotation angles to reflect an incoming ray toward an outgoing direction.
 
-    ===ARGS:
-    UI    : Direction of the incoming ray or sun direction
-    UO    : Opposite direction of the outcoming ray / direction from receiver to facet
-    vecNF : Normal of the reflection surface, if given UI and UO are not needed
+    Determines the Y and Z rotation angles necessary to orient a surface so that
+    it reflects an incoming ray (UI) toward an outgoing direction (-UO). Can work
+    with either incoming/outgoing ray directions or a pre-computed surface normal.
 
-    ===RETURN:
-    Return a list with rotation information, to reflect UI to -UO:
-    list[0] -> rotYD : Rotation in Y direction
-    list[0] -> rotZD : Rotation in Z direction
-    list[2] -> TTT   : Rotation transform object 
-    '''
+    Parameters
+    ----------
+    UI : gc.Vector, optional
+        Direction vector of the incoming ray or sun direction (geoclide.Vector).
+        Required unless vecNF is provided. Default is None.
+    UO : gc.Vector, optional
+        Direction vector of the outgoing ray, typically from receiver to facet center.
+        The surface will be oriented to reflect UI toward -UO.
+        Required unless vecNF is provided. Default is None.
+    vecNF : gc.Vector, optional
+        Pre-computed normal vector of the reflection surface (geoclide.Vector).
+        If provided, UI and UO are not used. Allows direct specification of the
+        desired surface normal. Default is None.
+
+    Returns
+    -------
+    list
+        A list containing rotation information:
+
+        - **list[0]** : rotYD (float)
+            Rotation angle around Y-axis in radians
+        - **list[1]** : rotZD (float)
+            Rotation angle around Z-axis in radians
+        - **list[2]** : TTT (gc.Transform)
+            Combined rotation transformation (geoclide.Transform object) that applies
+            both rotations to orient the surface normal from (0, 0, 1) to the target direction
+
+    Notes
+    -----
+    The function uses an iterative method to find rotation angles that align the
+    initial surface normal (0, 0, 1) with the target normal computed from UI and UO.
+    The algorithm applies Y-rotation first, then Z-rotation to achieve the desired
+    reflection geometry.
+
+    If vecNF is provided, it takes precedence and UI/UO are ignored.
+    """
     # 1)Find the normal of the facet but filled in a vector class
     if vecNF is not None: vNF = gc.Vector(vecNF)
     else: vNF = (UI + UO)*(-0.5)
@@ -798,19 +834,32 @@ def findRots(UI=None, UO=None, vecNF=None):
     return [rotYD, rotZD, TTT]
 
 def generateMTF(HELIO=Heliostat(), PR = gc.Point(0., 0., 0.)):
-    '''
-    Under development...
+    """Compute transformations for curved heliostat facet orientation.
 
-    Giving a heliostat 'HELIO' and the position of a receiver 'PR'
-    -->
-    This function enables the computation of the transforms of each
-    facets to curve the heliostat allowing facets to reflect in the
-    center of the receiver (For the moment only on-axis method)
-    '''
+    Generates transformation matrices for each facet of a heliostat to enable
+    facet curvature. Each facet is oriented such that it reflects solar rays
+    toward the center of a specified receiver position.
+
+    Parameters
+    ----------
+    HELIO : Heliostat, optional
+        A Heliostat class object defining the base heliostat geometry and segmentation.
+        Default is Heliostat().
+    PR : gc.Point, optional
+        Position of the receiver center as a geoclide Point object.
+        Facets are oriented to focus reflected rays toward this point.
+        Default is gc.Point(0., 0., 0.).
+
+    Returns
+    -------
+    MTF : 2-D ndarray of Transform
+        2D array of transformation matrices (geoclide.Transform objects) of shape (SPX, SPY),
+        one for each facet. Each transformation positions and orients the corresponding facet.
+    """
     # Avoid crash from old notebooks/scripts
     if isinstance(PR, Point): PR = gc.Point(PR.x, PR.y, PR.z)
     # Heliostat is splited in facets in x and y directions
-    SPX = HELIO.sPx; SPY = HELIO.sPy;
+    SPX = HELIO.sPx; SPY = HELIO.sPy
     # Size in x and y of a given facet
     SFX = HELIO.hSx/SPX; SFY = HELIO.hSy/SPY
     wMx = SFX/2; wMy = SFY/2 # Size of a facet divided by 2
