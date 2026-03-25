@@ -1476,8 +1476,8 @@ def Analyse_create_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYC
     return fig
 
 
-def visualize_entity(entities, th_deg = 0., ph_deg = 0., draw_method = 'SM', ray_color = 'r', sr_view=1,
-                     xyz_limit = None, show_rays=True, rs_fac = 1):
+def visualize_entity(entities, th_deg = 0., ph_deg = 0., draw_method = 'SM', ray_color = 'r', 
+                     sr_view=1, xyz_limit = None, show_rays=True, rs_fac = 1):
     """Enable a 3D visualization of created objects.
 
     Parameters
@@ -1524,11 +1524,16 @@ def visualize_entity(entities, th_deg = 0., ph_deg = 0., draw_method = 'SM', ray
     box = gc.BBox()
     for i in range(0, len(E)):
         E_tf.append(E[i].get_transformation())
-        if isinstance(E[0].geo, Plane):
+        if isinstance(E[i].geo, Plane):
             box = box.union(E_tf[i](E[i].geo.p1))
             box = box.union(E_tf[i](E[i].geo.p2))
             box = box.union(E_tf[i](E[i].geo.p3))
             box = box.union(E_tf[i](E[i].geo.p4))
+        elif isinstance(E[i].geo, Spheric):
+            p1 = E_tf[i](gc.Point(-E[i].geo.radius, -E[i].geo.radius, E[i].geo.z0))
+            p2 = E_tf[i](gc.Point(E[i].geo.radius, E[i].geo.radius, E[i].geo.z1))
+            box = box.union(p1)
+            box = box.union(p2)
  
     box_center = box.pmin + 0.5*(box.pmax - box.pmin)
     box_max_size = gc.vmax(box.pmax - box.pmin)
@@ -1539,8 +1544,6 @@ def visualize_entity(entities, th_deg = 0., ph_deg = 0., draw_method = 'SM', ray
                       box_center.y + 0.75*box_max_size, 
                       box_center.z + 0.75*box_max_size)
     box_n = gc.BBox(pmin_n, pmax_n)
-    print(box_n.pmin, box.pmin)
-    print(box_n.pmax, box.pmax)
 
     # calculate the sun direction vector
     vSun = gc.ang2vec(th_deg, ph_deg, vec_view='nadir')
@@ -1549,9 +1552,14 @@ def visualize_entity(entities, th_deg = 0., ph_deg = 0., draw_method = 'SM', ray
     ltmesh = []
     lMir_int = int(0)
     E_rec = []; E_ref = []
+    E_rec_tf = []; E_ref_tf = []
     for i in range(0, len(E)):
-        if (E[i].name == "reflector"): E_ref.append(E[i])
-        if (E[i].name == "receiver") : E_rec.append(E[i])
+        if (E[i].name == "reflector"): 
+            E_ref.append(E[i])
+            E_ref_tf.append(E_tf[i])
+        if (E[i].name == "receiver") : 
+            E_rec.append(E[i])
+            E_rec_tf.append(E_tf[i])
 
     nbRef = len(E_ref)
     xr = [None]*nbRef; yr = [None]*nbRef; zr = [None]*nbRef
@@ -1560,7 +1568,7 @@ def visualize_entity(entities, th_deg = 0., ph_deg = 0., draw_method = 'SM', ray
 
     for k in range (0, len(E_ref)):
         # Get the transformation
-        tt = E_ref[k].get_transformation()
+        tt = E_ref_tf[k]
 
         photon_pos = gc.Point(wsx+E_ref[k].transformation.transx, wsy+E_ref[k].transformation.transy, wsz+E_ref[k].transformation.transz)
         photon = gc.Ray(o = photon_pos, d = vSun, maxt = 1200.)
@@ -1577,23 +1585,27 @@ def visualize_entity(entities, th_deg = 0., ph_deg = 0., draw_method = 'SM', ray
                           np.array([E_ref[k].geo.p4.x, E_ref[k].geo.p4.y, E_ref[k].geo.p4.z])], dtype = np.float64)
             
             tmesh = gc.TriangleMesh(vertices=P, faces=vi)
-            tmesh.apply_tf(tt)
-            ltmesh.append(tmesh)
+        elif isinstance(E_ref[k].geo, Spheric):
+            sphere = gc.Sphere(E_ref[k].geo.radius, E_ref[k].geo.z0, E_ref[k].geo.z1, E_ref[k].geo.phi)
+            tmesh = sphere.to_trianglemesh()
+        else: 
+            raise NameError('This geometry is unknown or not yet accepted!')
+        
+        tmesh.apply_tf(tt)
+        ltmesh.append(tmesh)
 
-            ds = gc.calc_intersection(tmesh, photon)
-            if(ds['is_intersection'].values and ds['thit'].values < float('inf')):
-                atLeastOneInt[k] = True
-                lMir_int += int(1)
-                p_hit = gc.Point(ds['phit'].values)
-                t_hit = ds['thit'].values
-                tr = np.linspace(t_hit*0.98*(1/rs_fac), t_hit, 100)
-                xr[k] = photon.o.x + tr*photon.d.x
-                yr[k] = photon.o.y + tr*photon.d.y
-                zr[k] = photon.o.z + tr*photon.d.z
-                vecTemp = Ref_Fresnel(dirEnt = photon.d, geoTrans = tt)
-                TabPhoton2 = np.append(TabPhoton2, gc.Ray(o=p_hit, d=vecTemp, maxt=120))
-
-        else: raise NameError('This geometry is unknown or not yet accepted!')
+        ds = gc.calc_intersection(tmesh, photon)
+        if(ds['is_intersection'].values and ds['thit'].values < float('inf')):
+            atLeastOneInt[k] = True
+            lMir_int += int(1)
+            p_hit = gc.Point(ds['phit'].values)
+            t_hit = ds['thit'].values
+            tr = np.linspace(t_hit*0.98*(1/rs_fac), t_hit, 100)
+            xr[k] = photon.o.x + tr*photon.d.x
+            yr[k] = photon.o.y + tr*photon.d.y
+            zr[k] = photon.o.z + tr*photon.d.z
+            vecTemp = Ref_Fresnel(dirEnt = photon.d, geoTrans = tt)
+            TabPhoton2 = np.append(TabPhoton2, gc.Ray(o=p_hit, d=vecTemp, maxt=120))
 
 
     xr2 = [None]*lMir_int; yr2 = [None]*lMir_int; zr2 = [None]*lMir_int
@@ -1615,50 +1627,55 @@ def visualize_entity(entities, th_deg = 0., ph_deg = 0., draw_method = 'SM', ray
                           np.array([E_rec[k].geo.p4.x, E_rec[k].geo.p4.y, E_rec[k].geo.p4.z])], dtype = np.float64)
             
             tmesh = gc.TriangleMesh(vertices=P, faces=vi)
-            tmesh.apply_tf(tt)
-            ltmesh.append(tmesh)
+        elif isinstance(E_rec[k].geo, Spheric):
+            sphere = gc.Sphere(E_rec[k].geo.radius, E_rec[k].geo.z0, E_rec[k].geo.z1, E_rec[k].geo.phi)
+            tmesh = sphere.to_trianglemesh()
+        else:
+            raise NameError('This geometry is unknown or not yet accepted!')
+        tmesh.apply_tf(tt)
+        ltmesh.append(tmesh)
 
-            for i in range(0, lMir_int):
-                ds = gc.calc_intersection(tmesh, TabPhoton2[i])
-                if(ds['is_intersection'].values and ds['thit'].values < float('inf')):
-                    atLeastOneInt2[i] = True
-                    p_hit = gc.Point(ds['phit'].values)
-                    t_hit = ds['thit'].values
-                    tr = np.linspace(TabPhoton2[i].mint, t_hit, 100)
-                    xr2[i] = TabPhoton2[i].o.x + tr*TabPhoton2[i].d.x
-                    yr2[i] = TabPhoton2[i].o.y + tr*TabPhoton2[i].d.y
-                    zr2[i] = TabPhoton2[i].o.z + tr*TabPhoton2[i].d.z
+        for i in range(0, lMir_int):
+            ds = gc.calc_intersection(tmesh, TabPhoton2[i])
+            if(ds['is_intersection'].values and ds['thit'].values < float('inf')):
+                atLeastOneInt2[i] = True
+                p_hit = gc.Point(ds['phit'].values)
+                t_hit = ds['thit'].values
+                tr = np.linspace(TabPhoton2[i].mint, t_hit, 100)
+                xr2[i] = TabPhoton2[i].o.x + tr*TabPhoton2[i].d.x
+                yr2[i] = TabPhoton2[i].o.y + tr*TabPhoton2[i].d.y
+                zr2[i] = TabPhoton2[i].o.z + tr*TabPhoton2[i].d.z
 
     # create the matplotlib figure
     fig = plt.figure()#figsize=[128, 96])
     ax = fig.add_subplot(111, projection=Axes3D.name)
     ax.scatter([-1,1], [-1,1], [-1,1], alpha=0.0)
 
-    for itmesh in ltmesh:
+    for itmesh, tmesh in enumerate(ltmesh):
         # Triangles mesh parameters for plot
         # First method (draw even if there is error with an object, useful for debug):
         # ----------------------------->
         if (draw_method == 'FM'):
-            for itri in range(0, itmesh.ntriangles):
-                p0 = gc.Point(itmesh.vertices[itmesh.faces[itri,0],:])
-                p1 = gc.Point(itmesh.vertices[itmesh.faces[itri,1],:])
-                p2 = gc.Point(itmesh.vertices[itmesh.faces[itri,2],:])
+            for itri in range(0, tmesh.ntriangles):
+                p0 = gc.Point(tmesh.vertices[tmesh.faces[itri,0],:])
+                p1 = gc.Point(tmesh.vertices[tmesh.faces[itri,1],:])
+                p2 = gc.Point(tmesh.vertices[tmesh.faces[itri,2],:])
                 Mat = np.array([[p0.x, p0.y, p0.z], \
                                 [p1.x, p1.y, p1.z], \
                                 [p2.x, p2.y, p2.z]])
-                face1 = mp3d.art3d.Poly3DCollection([Mat], alpha = E[k].alpha_color, linewidths=0.2)
-                face1.set_facecolor(mcolors.to_rgba(E[k].color))
+                face1 = mp3d.art3d.Poly3DCollection([Mat], alpha = E[itmesh].alpha_color, linewidths=0.2)
+                face1.set_facecolor(mcolors.to_rgba(E[itmesh].color))
                 ax.add_collection3d(face1)
 
         # Second method (better visual, avoid some matplotlib bugs):
         # ----------------------------->
         if (draw_method == 'SM'):
-            p0_t0 = gc.Point(itmesh.vertices[itmesh.faces[0,0],:])
-            p1_t0 = gc.Point(itmesh.vertices[itmesh.faces[0,1],:])
-            p2_t0 = gc.Point(itmesh.vertices[itmesh.faces[0,2],:])
-            p0_t1 = gc.Point(itmesh.vertices[itmesh.faces[1,0],:])
-            p1_t1 = gc.Point(itmesh.vertices[itmesh.faces[1,1],:])
-            p2_t1 = gc.Point(itmesh.vertices[itmesh.faces[1,2],:])
+            p0_t0 = gc.Point(tmesh.vertices[tmesh.faces[0,0],:])
+            p1_t0 = gc.Point(tmesh.vertices[tmesh.faces[0,1],:])
+            p2_t0 = gc.Point(tmesh.vertices[tmesh.faces[0,2],:])
+            p0_t1 = gc.Point(tmesh.vertices[tmesh.faces[1,0],:])
+            p1_t1 = gc.Point(tmesh.vertices[tmesh.faces[1,1],:])
+            p2_t1 = gc.Point(tmesh.vertices[tmesh.faces[1,2],:])
             Mat = np.array([[p0_t0.x, p0_t0.y, p0_t0.z], \
                             [p1_t0.x, p1_t0.y, p1_t0.z], \
                             [p2_t0.x, p2_t0.y, p2_t0.z], \
@@ -1669,20 +1686,20 @@ def visualize_entity(entities, th_deg = 0., ph_deg = 0., draw_method = 'SM', ray
             if (np.array_equal(Mat[:,0], np.full((6), Mat[0,0]))):
                 yy, zz = np.meshgrid(Mat[:,0], Mat[:,2])
                 xx = np.full((6,6), Mat[0,0])
-                ax.plot_surface(xx, yy, zz, color = mcolors.to_rgba(E[k].color), alpha = E[k].alpha_color, \
+                ax.plot_surface(xx, yy, zz, color = mcolors.to_rgba(E[itmesh].color), alpha = E[itmesh].alpha_color, \
                                 linewidth=0.2, antialiased=True)
             elif (np.array_equal(Mat[:,1], np.full((6), Mat[0,1]))):
                 xx, zz = np.meshgrid(Mat[:,0], Mat[:,2])
                 yy = np.full((6,6), Mat[0,1])
-                ax.plot_surface(xx, yy, zz, color = mcolors.to_rgba(E[k].color), alpha = E[k].alpha_color, \
+                ax.plot_surface(xx, yy, zz, color = mcolors.to_rgba(E[itmesh].color), alpha = E[itmesh].alpha_color, \
                                 linewidth=0.2, antialiased=True)
             elif (np.array_equal(Mat[:,2], np.full((6), Mat[0,2]))): # need to be verified
                 xx, yy = np.meshgrid(Mat[:,0], Mat[:,1])
                 zz = np.full((6,6), Mat[0,2])
-                ax.plot_surface(xx, yy, zz, color = mcolors.to_rgba(E[k].color), alpha = E[k].alpha_color, \
+                ax.plot_surface(xx, yy, zz, color = mcolors.to_rgba(E[itmesh].color), alpha = E[itmesh].alpha_color, \
                                 linewidth=0.2, antialiased=True)
             else:
-                ax.plot_trisurf(Mat[:,0], Mat[:,1], Mat[:,2], color = mcolors.to_rgba(E[k].color), \
+                ax.plot_trisurf(Mat[:,0], Mat[:,1], Mat[:,2], color = mcolors.to_rgba(E[itmesh].color), \
                                 alpha = 0.5, linewidth=0.2, antialiased=True)
 
     # ==============================================
