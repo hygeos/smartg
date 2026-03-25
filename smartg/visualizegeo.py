@@ -838,35 +838,67 @@ def generateMTF(HELIO=Heliostat(), PR = gc.Point(0., 0., 0.)):
     return MTF
 
 def generateLEfH(HELIO = Heliostat(), PR = None, THEDEG = 0., PHIDEG = 0., MTF=None):
-    '''
-    Definition of the function generateLEfH
-    This function enables the conversion of an object heliostat to a list of 
-    well oriented plane entity / facets to reflect to a given receiver
+    """Convert a heliostat to well-oriented plane facets for receiver reflection.
 
-    ===ARGS:
-    HELIO          : A heliostat class object
-    THEDEG, PHIDEG : The theta and phi angles in degrees for the sun direction
-    PR             : A class Point with the position of the receiver receiver
-    MTF            : Under development
-    
-    ===RETURN:
-    List of all well oriented plane entity / facets
+    Generates a list of properly oriented planar entity/facets from a heliostat object.
+    Each facet is independently oriented to reflect solar rays toward a given receiver.
+    This function manages the conversion of curved or segmented heliostats into their
+    constituent facet entities.
 
-    Convention -> here an example of a heliostat splited in 4 in x and y
-    directions, the matrices used below follow this:
+    The facet indexing follows a matrix convention based on the heliostat's segmentation
+    in x and y directions. See Notes section for the indexing convention.
 
-         j0   j1   j2   j3
-       ---------------------
-    i0 |f00 |f01 |f02 |f03 |    i, j           : matrix indices
-       ---------------------    f00, f10, ...  : facet 0, 1, ...
-    i1 |f10 |f11 |f12 |f13 |  
-       -----------------------> y
-    i2 |f20 |f21 |f22 |f23 |
-       ----------|----------
-    i3 |f30 |f31 |f32 |f33 |
-       ----------|----------
-                 x
-    '''
+    Parameters
+    ----------
+    HELIO : Heliostat, optional
+        A Heliostat class object representing the heliostat to be converted.
+        Default is Heliostat().
+    PR : gc.Point, optional
+        Position of the receiver as a geoclide.Point object. Used to orient facets
+        toward the target. If None, a default point is used. Default is None.
+    THEDEG : float, optional
+        Solar zenith angle in degrees. Default is 0.
+    PHIDEG : float, optional
+        Solar azimuth angle in degrees. Default is 0.
+    MTF : None | 2-D ndarray, optional
+        A 2D ndarray of Transform objects of dim (SPX, SPY) representing the orientation 
+        of each facet. If None, The transforms are computed automatically based on the 
+        heliostat and receiver positions.
+
+    Returns
+    -------
+    out : list
+        List of plane Entity objects, each representing a facet properly oriented
+        to reflect solar rays toward the receiver.
+
+    Notes
+    -----
+    **Facet indexing convention:**
+
+    Each facet is identified by a two-index notation **fij** where:
+
+    - **i** is the row index (0 to SPX-1), representing position along the x-direction
+    - **j** is the column index (0 to SPY-1), representing position along the y-direction
+
+    Example with 4x4 segmentation::
+
+                j0   j1   j2   j3
+              +----+----+----+----+
+        i0   |f00 |f01 |f02 |f03 |
+              +----+----+----+----+
+        i1   |f10 |f11 |f12 |f13 |
+              +----+----+----+----+
+        i2   |f20 |f21 |f22 |f23 |
+              +----+----+----+----+
+        i3   |f30 |f31 |f32 |f33 |
+              +----+----+----+----+
+                   ↑ y
+              ← x
+
+    The first row contains f00, f01, f02, f03; the second row contains f10, f11, f12, f13,
+    and so on. This row-major ordering allows easy identification of any facet
+    from its position in the segmented heliostat grid.
+    """
     # Avoid crash from old notebooks/scripts
     if isinstance(PR, Point): PR = gc.Point(PR.x, PR.y, PR.z)
     # Be sure that the correct agrs have been given
@@ -1718,6 +1750,7 @@ def generateHfA(THEDEG=0., PHIDEG = 0., PR = gc.Point(0., 0., 50.), MINANG=0., \
         return lObj, pH
     else:
         return lObj
+    
 
 def convertLGtoLE(LGOBJ):
     """Convert a mixed list of Entity and GroupE objects to Entity objects only.
