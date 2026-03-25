@@ -1476,22 +1476,22 @@ def Analyse_create_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYC
     return fig
 
 
-def visualize_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYCOLOR = 'r', SR_VIEW=1,
+def visualize_entity(entities, th_deg = 0., ph_deg = 0., draw_method = 'SM', ray_color = 'r', sr_view=1,
                      xyz_limit = None, show_rays=True, rs_fac = 1):
     """Enable a 3D visualization of created objects.
 
     Parameters
     ----------
-    entity : list of Entity
+    entities : list | Entity
         A list of Entity objects to visualize.
-    thedeg : float, optional
+    th_deg : float, optional
         The zenith angle of the sun in degrees. Default is 0.
-    phideg : float, optional
+    ph_deg : float, optional
         The azimuth angle of the sun in degrees. Default is 0.
-    planedm : {'SM', 'FM'}, optional
-        Plane draw method. 'SM' (Second Method) is the default and recommended.
+    draw_method : str, optional
+        The drawing method. 'SM' (Second Method) is the default and recommended.
         'FM' (First Method) is useful for debugging issues.
-    raycolor : str, optional
+    ray_color : str, optional
         Sun rays color, e.g., 'r', 'b', 'g', etc. Default is 'r'.
     sr_view : int, optional
         Number of sun rays that can be seen in the figure. Default is 1.
@@ -1507,48 +1507,43 @@ def visualize_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYCOLOR 
 
     Returns
     -------
-    matplotlib.figure.Figure
+    out : matplotlib.figure.Figure
         A matplotlib figure object containing the 3D visualization.
     """
-    
-    ENTITY = convertLGtoLE(ENTITY)
 
-    if (isinstance(ENTITY, Entity)):
-        E = []
-        E = np.append(E, ENTITY)
-        # Enable generic local visualization (part1)
+    if not isinstance(entities, (list)): entities = [entities]
+
+    if not (all(isinstance(x, (Entity, GroupE)) for x in entities)):
+        raise NameError('The only objects accepted for entities parameter are: Entity or GroupE')
+
+    # ensure we have only Entity objects (converts if necessary GroupE to Entity objects)
+    entities = convertLGtoLE(entities)
+
+    E = entities
+    E_tf = []
+    box = gc.BBox()
+    for i in range(0, len(E)):
+        E_tf.append(E[i].get_transformation())
         if isinstance(E[0].geo, Plane):
-            GLXmin = min(E[0].geo.p1.x, E[0].geo.p2.x, E[0].geo.p3.x, E[0].geo.p4.x)
-            GLYmin = min(E[0].geo.p1.y, E[0].geo.p2.y, E[0].geo.p3.y, E[0].geo.p4.y)
-            GLZmin = min(E[0].geo.p1.z, E[0].geo.p2.z, E[0].geo.p3.z, E[0].geo.p4.z)
-            GLXmax = max(E[0].geo.p1.x, E[0].geo.p2.x, E[0].geo.p3.x, E[0].geo.p4.x)
-            GLYmax = max(E[0].geo.p1.y, E[0].geo.p2.y, E[0].geo.p3.y, E[0].geo.p4.y)
-            GLZmax = max(E[0].geo.p1.z, E[0].geo.p2.z, E[0].geo.p3.z, E[0].geo.p4.z)
-            GLEcaX = abs(GLXmin-GLXmax); GLEcaY = abs(GLYmin-GLYmax); GLEcaZ = abs(GLZmin-GLZmax);
-            GLEcaM = max(GLEcaX, GLEcaY, GLEcaZ)
-        # End (part1)
-            
-    elif (all(isinstance(x, Entity) for x in ENTITY)):
-        E = ENTITY
-        # Enable generic local visualization (part2)
-        # Be carful, if the local is greater than 100km the code below need to be modified!
-        GLXmin = 100.; GLYmin = 100.; GLZmin = 100.; GLXmax = -100.; GLYmax = -100.; GLZmax = -100.
-        for i in range(0, len(E)):
-            if E[i].transformation.transx < GLXmin : GLXmin = E[i].transformation.transx
-            if E[i].transformation.transx > GLXmax : GLXmax = E[i].transformation.transx
-            if E[i].transformation.transy < GLYmin : GLYmin = E[i].transformation.transy
-            if E[i].transformation.transy > GLYmax : GLYmax = E[i].transformation.transy
-            if E[i].transformation.transz < GLZmin : GLZmin = E[i].transformation.transz
-            if E[i].transformation.transz > GLZmax : GLZmax = E[i].transformation.transz
-        GLEcaX = abs(GLXmin-GLXmax); GLEcaY = abs(GLYmin-GLYmax); GLEcaZ = abs(GLZmin-GLZmax)
-        GLEcaM = max(GLEcaX, GLEcaY, GLEcaZ)
-        # End (part2)
-    else:
-        raise NameError('ENTITY argument needs to be an Entity object or a list' + \
-                        ' of Entity Objects ')
+            box = box.union(E_tf[i](E[i].geo.p1))
+            box = box.union(E_tf[i](E[i].geo.p2))
+            box = box.union(E_tf[i](E[i].geo.p3))
+            box = box.union(E_tf[i](E[i].geo.p4))
+ 
+    box_center = box.pmin + 0.5*(box.pmax - box.pmin)
+    box_max_size = gc.vmax(box.pmax - box.pmin)
+    pmin_n = gc.Point(box_center.x - 0.75*box_max_size, 
+                      box_center.y - 0.75*box_max_size, 
+                      box_center.z - 0.75*box_max_size)
+    pmax_n = gc.Point(box_center.x + 0.75*box_max_size, 
+                      box_center.y + 0.75*box_max_size, 
+                      box_center.z + 0.75*box_max_size)
+    box_n = gc.BBox(pmin_n, pmax_n)
+    print(box_n.pmin, box.pmin)
+    print(box_n.pmax, box.pmax)
 
     # calculate the sun direction vector
-    vSun = gc.ang2vec(THEDEG, PHIDEG, vec_view='nadir')
+    vSun = gc.ang2vec(th_deg, ph_deg, vec_view='nadir')
     wsx = -vSun.x; wsy=-vSun.y; wsz=-vSun.z
 
     ltmesh = []
@@ -1643,7 +1638,7 @@ def visualize_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYCOLOR 
         # Triangles mesh parameters for plot
         # First method (draw even if there is error with an object, useful for debug):
         # ----------------------------->
-        if (PLANEDM == 'FM'):
+        if (draw_method == 'FM'):
             for itri in range(0, itmesh.ntriangles):
                 p0 = gc.Point(itmesh.vertices[itmesh.faces[itri,0],:])
                 p1 = gc.Point(itmesh.vertices[itmesh.faces[itri,1],:])
@@ -1657,7 +1652,7 @@ def visualize_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYCOLOR 
 
         # Second method (better visual, avoid some matplotlib bugs):
         # ----------------------------->
-        if (PLANEDM == 'SM'):
+        if (draw_method == 'SM'):
             p0_t0 = gc.Point(itmesh.vertices[itmesh.faces[0,0],:])
             p1_t0 = gc.Point(itmesh.vertices[itmesh.faces[0,1],:])
             p2_t0 = gc.Point(itmesh.vertices[itmesh.faces[0,2],:])
@@ -1694,33 +1689,24 @@ def visualize_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYCOLOR 
     # plot all the geometries
     if (show_rays):
         for i in range(0, nbRef):
-            if (atLeastOneInt[i] and i%SR_VIEW ==0): ax.plot(xr[i], yr[i], zr[i], color=RAYCOLOR, linewidth=1*rs_fac)
+            if (atLeastOneInt[i] and i%sr_view ==0): ax.plot(xr[i], yr[i], zr[i], color=ray_color, linewidth=1*rs_fac)
 
         for i in range(0, lMir_int):
-            if (atLeastOneInt2[i] and i%SR_VIEW ==0): ax.plot(xr2[i], yr2[i], zr2[i], color=RAYCOLOR, linewidth=1*rs_fac)
+            if (atLeastOneInt2[i] and i%sr_view ==0): ax.plot(xr2[i], yr2[i], zr2[i], color=ray_color, linewidth=1*rs_fac)
 
     if (xyz_limit is not None):
         ax.set_xlim3d(xyz_limit['x_min'], xyz_limit['x_max'])
         ax.set_ylim3d(xyz_limit['y_min'], xyz_limit['y_max'])
         ax.set_zlim3d(xyz_limit['z_min'], xyz_limit['z_max'])
-    # Enable generic local visualization (part3)   
-    elif (len(E) == 1):
-        if (GLEcaZ == GLEcaM): ax.set_zlim3d(E[0].transformation.transz+GLZmin, E[0].transformation.transz+GLZmax)
-        else                 : ax.set_zlim3d(E[0].transformation.transz + GLZmin-(0.5*GLEcaM), E[0].transformation.transz + GLZmax+(0.5*GLEcaM))
-        if (GLEcaX == GLEcaM): ax.set_xlim3d(E[0].transformation.transx+GLXmin, E[0].transformation.transx+GLXmax)
-        else                 : ax.set_xlim3d(E[0].transformation.transx+GLXmin-(0.5*GLEcaM), E[0].transformation.transx+GLXmax+(0.5*GLEcaM))
-        if (GLEcaY == GLEcaM): ax.set_ylim3d(E[0].transformation.transy+GLYmin, E[0].transformation.transy+GLYmax)
-        else                 : ax.set_ylim3d(E[0].transformation.transy+GLYmin-(0.5*GLEcaM), E[0].transformation.transy+GLYmax+(0.5*GLEcaM)) 
-    else:
-        ax.set_zlim3d(0, GLEcaM)
-        if (GLEcaX == GLEcaM): ax.set_xlim3d(GLXmin, GLXmax)
-        else                 : ax.set_xlim3d(GLXmin-(0.5*GLEcaM), GLXmax+(0.5*GLEcaM))
-        if (GLEcaY == GLEcaM): ax.set_ylim3d(GLYmin, GLYmax)
-        else                 : ax.set_ylim3d(GLYmin-(0.5*GLEcaM), GLYmax+(0.5*GLEcaM)) 
-    # End (part3)    
+    else: # generic local visualization
+        ax.set_xlim3d(box_n.pmin.x, box_n.pmax.x)
+        ax.set_ylim3d(box_n.pmin.y, box_n.pmax.y)
+        ax.set_zlim3d(box_n.pmin.z, box_n.pmax.z)
+    
     ax.set_xlabel('X Label')
     ax.set_ylabel('Y Label')
     ax.set_zlabel('Z Label')
+
     # Show the geometries
     fig = ax.get_figure()
     return fig
