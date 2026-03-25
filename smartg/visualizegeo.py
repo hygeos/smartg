@@ -1478,24 +1478,38 @@ def Analyse_create_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYC
 
 def visualize_entity(ENTITY, THEDEG = 0., PHIDEG = 0., PLANEDM = 'SM', RAYCOLOR = 'r', SR_VIEW=1,
                      xyz_limit = None, show_rays=True, rs_fac = 1):
-    '''
-    Definition of visualize_entity
+    """Enable a 3D visualization of created objects.
 
-    Enable a 3D visualization of the created objects
+    Parameters
+    ----------
+    entity : list of Entity
+        A list of Entity objects to visualize.
+    thedeg : float, optional
+        The zenith angle of the sun in degrees. Default is 0.
+    phideg : float, optional
+        The azimuth angle of the sun in degrees. Default is 0.
+    planedm : {'SM', 'FM'}, optional
+        Plane draw method. 'SM' (Second Method) is the default and recommended.
+        'FM' (First Method) is useful for debugging issues.
+    raycolor : str, optional
+        Sun rays color, e.g., 'r', 'b', 'g', etc. Default is 'r'.
+    sr_view : int, optional
+        Number of sun rays that can be seen in the figure. Default is 1.
+    xyz_limit : dict, optional
+        Dictionary specifying x, y, z view limits in km. If None (default),
+        limits are automatically chosen. Example format:
+        {'x_min': 0., 'x_max': 10., 'y_min': 0., 'y_max': 10., 
+         'z_min': 0., 'z_max': 10.}
+    show_rays : bool, optional
+        Whether to show sun rays. Default is True.
+    rs_fac : float, optional
+        Ray scale factor. Default is 1.
 
-    ENTITY    : A list of objects (Entity classes)
-    THEDEG    : The zenith angle of the sun
-    PHIDEG    : The azimuth angle of the sun
-    PlaneDM   : Plane Draw method, two choices 'FM' (First Method) or 'SM'(seconde
-                Method). By default 'SM', 'FM' is useful for debug issues
-    RAYCOLR   : Sun rays color i.g. 'r', 'b', ...
-    SR_VIEW   : Split the number of sun rays that can be seen in the figure
-    xyz_limit : By default None and automatically choose x,y,z view limits,
-                or can be forced by giving a dictionnary with x,y,z values (in km),
-                i.g. {'x_min': 0., 'x_max': 10., 'y_min': 0., 'y_max':10., 'z_min': 0., 'z_max':10.}
-
-    return a matplotlib fig
-    '''
+    Returns
+    -------
+    matplotlib.figure.Figure
+        A matplotlib figure object containing the 3D visualization.
+    """
     
     ENTITY = convertLGtoLE(ENTITY)
 
