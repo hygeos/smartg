@@ -7592,9 +7592,9 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
             //atomicAdd(tabCount2+LL,   (double)ph->weight);
             //atomicAdd(tabCount2+LL+1, (double)ph->cdist_atm[n+1]*(double)ph->weight);
             atomicAdd(tabCount2+LL,   (double)w_n);
-            atomicAdd(tabCount2+LL+1, (double)(d_n * w_n));
+            atomicAdd(tabCount2+LL+1, (double)d_n * (double)w_n);
             #ifdef AMF_VARIANCE
-            atomicAdd(tabCount2+LL+2, (double)(d_n * d_n * w_n));
+            atomicAdd(tabCount2+LL+2, (double)d_n * (double)d_n * (double)w_n);
             #endif
             #else
             DatomicAdd(tabCount2+LL, (double)ph->cdist_atm[n+1]);
