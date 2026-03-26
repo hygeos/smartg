@@ -12,15 +12,10 @@ from mpl_toolkits.mplot3d import Axes3D
 import mpl_toolkits.mplot3d as mp3d
 from matplotlib import colors as mcolors
 
-import re, six
+import re
 from itertools import dropwhile
 
 from scipy import interpolate
-
-#TODO import below will be moved in the next major version
-from smartg.geometry import Point, Vector, Normalize
-from smartg.transform import Transform
-from warnings import warn
 
 
 def receiver_view(SMLUT, CAT = int(0), LOG_I=False, NAME_FILE = None, MTOA = 1320,
@@ -659,11 +654,6 @@ class Plane(object):
     """
     def __init__(self, p1 = gc.Point(-0.5, -0.5, 0.), p2 = gc.Point(0.5, -0.5, 0.), \
                  p3 = gc.Point(-0.5, 0.5, 0.), p4 = gc.Point(0.5, 0.5, 0.)):
-        # Avoid crash from old notebooks/scripts
-        if isinstance(p1, Point): p1 = gc.Point(p1.x, p1.y, p1.z)
-        if isinstance(p2, Point): p2 = gc.Point(p2.x, p2.y, p2.z)
-        if isinstance(p3, Point): p3 = gc.Point(p3.x, p3.y, p3.z)
-        if isinstance(p4, Point): p4 = gc.Point(p4.x, p4.y, p4.z)
         if (isinstance(p1, gc.Point) and isinstance(p2, gc.Point) and \
             isinstance(p3, gc.Point) and isinstance(p4, gc.Point)):
             if (  ( (p1.x == p3.x) and (p1.x < 0) )  and \
@@ -845,9 +835,6 @@ class Entity(object):
                  materialAR=Matte(), geo=Plane(), transformation=Transformation(), \
                  bboxGPmin = gc.Point(-100000., -100000., 0.), bboxGPmax = gc.Point(100000., 100000., 120.),
                  color = 'grey', alpha_color = 0.5):
-        # Avoid crash from old notebooks/scripts
-        if isinstance(bboxGPmin, Point): bboxGPmin = gc.Point(bboxGPmin.x, bboxGPmin.y, bboxGPmin.z)
-        if isinstance(bboxGPmax, Point): bboxGPmax = gc.Point(bboxGPmax.x, bboxGPmax.x, bboxGPmax.y)
         if isinstance(entity, Entity) :
             self.name = entity.name; self.TC = entity.TC; self.materialAV = entity.materialAV
             self.materialAR = entity.materialAR; self.geo = entity.geo 
@@ -958,8 +945,6 @@ class Heliostat(object):
     """
     def __init__(self, POS = gc.Point(0., 0., 0.), SPX=int(2), SPY=int(2), HSX=0.02,
                  HSY=0.02, CURVE_FL=None, REF=1., ROUGH=0):
-        # Avoid crash from old notebooks/scripts
-        if isinstance(POS, Point): POS = gc.Point(POS.x, POS.y, POS.z)
         # Be sure that we split a heliostat by at least 2
         if (SPX*SPY < 2):
             raise Exception("The number of facets must be >= 2!")
@@ -1131,8 +1116,6 @@ def generateMTF(HELIO=Heliostat(), PR = gc.Point(0., 0., 0.)):
         2D array of transformation matrices (geoclide.Transform objects) of shape (SPX, SPY),
         one for each facet. Each transformation positions and orients the corresponding facet.
     """
-    # Avoid crash from old notebooks/scripts
-    if isinstance(PR, Point): PR = gc.Point(PR.x, PR.y, PR.z)
     # Heliostat is splited in facets in x and y directions
     SPX = HELIO.sPx; SPY = HELIO.sPy
     # Size in x and y of a given facet
@@ -1224,8 +1207,6 @@ def generateLEfH(HELIO = Heliostat(), PR = None, THEDEG = 0., PHIDEG = 0., MTF=N
     and so on. This row-major ordering allows easy identification of any facet
     from its position in the segmented heliostat grid.
     """
-    # Avoid crash from old notebooks/scripts
-    if isinstance(PR, Point): PR = gc.Point(PR.x, PR.y, PR.z)
     # Be sure that the correct agrs have been given
     if not isinstance(HELIO, Heliostat):
         raise Exception("HELIO must be a Heliostat class!")
@@ -1423,8 +1404,6 @@ def generateBox(dimXYZ=[0.05, 0.05, 0.05], pos=gc.Point(0., 0., 0.), matAV = "La
     - Front side of each face uses the specified material (matAV);
       back side is always Matte (totally absorptive).
     """
-    # Avoid crash from old notebooks/scripts
-    if isinstance(pos, Point): pos = gc.Point(pos.x, pos.y, pos.z)
     # Material AV = front part (i.e. part outside the box) of Face 0 to Face 5,
     # back part (i.e. part inside the box) will be definite as matte (totally absorbant)
     matAVL = []
@@ -1854,12 +1833,7 @@ def generateHfP(THEDEG=0., PHIDEG = 0., PH = [gc.Point(0., 0., 0.)], PR = gc.Poi
         List of Entity or GroupE objects, each properly oriented to
         reflect solar rays towards the receiver.
     """
-    # Avoid crash from old notebooks/scripts
     PH_ = PH.copy()
-    for iph in range(len(PH)):
-        if isinstance(PH[iph], Point): PH_[iph] = gc.Point(PH[iph].x, PH[iph].y, PH[iph].z)
-    if isinstance(PR, Point): PR = gc.Point(PR.x, PR.y, PR.z)
-
     lObj = []
 
     # Case where the heliostat is totally plane
@@ -1987,9 +1961,6 @@ def generateHfA(THEDEG=0., PHIDEG = 0., PR = gc.Point(0., 0., 50.), MINANG=0., \
         If RLPH is True, also returns the list of heliostat center positions
         (geoclide Point objects).
     """
-    # Avoid crash from old notebooks/scripts
-    if isinstance(PR, Point): PR = gc.Point(PR.x, PR.y, PR.z)
-
     # I) Find the position of all heliostats
     lenpH = int(  ( (MAXANG-MINANG)/GAPDEG )*NBH  )
     
@@ -2135,9 +2106,6 @@ def rotate_vector(vector, rot_x, rot_y, rot_z, rot_order="xyz"):
     Return:
     rotated_vector : The rotated (normalized) direction (also a Vector class)
     """
-    # Avoid crash from old notebooks/scripts
-    if isinstance(vector, Vector): vector = gc.Vector(vector.x, vector.y, vector.z)
-
     TT = gc.Transform()
     tr_x = gc.get_rotateX_tf(rot_x)
     tr_y = gc.get_rotateY_tf(rot_y)
