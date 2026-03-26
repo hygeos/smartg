@@ -1472,6 +1472,37 @@ class AtmAFGL(Atmosphere):
         return pro_abs, pro_ray, (pro_aer, ssa_aer), (pro_iphase, pro_phases)
 
 
+def read_phase(filename, standard=False, kind='atm'):
+    '''
+    Read phase function from filename as a LUT
+
+    standard: standard phase function definition, otherwise Smart-g definition
+    '''
+    data2 = pd.read_csv(filename, sep=r'\s+', header=None)
+
+    theta = np.array(data2[0])
+    pha   = np.array(data2[[1,2,3,4]])
+
+    if standard:
+        pha[:,0] = data2[1] + data2[2]
+        pha[:,1] = data2[1] - data2[2]
+        pha[:,2] = data2[3]
+        pha[:,3] = data2[4]
+
+    # Normalization to Sum_-1_+1 P(mu) dmu = 2.
+    f = (pha[:,0] + pha[:,1])/2.
+    mu= np.cos(np.radians(theta))
+    Norm = np.trapezoid(f,-mu)
+    pha *= (2./abs(Norm))
+
+    P = LUT(pha.swapaxes(0, 1),  # stk, theta
+            axes=[None, theta],
+            names=['stk', 'theta_'+kind],
+           )
+
+    return P
+
+
 class Profile_base(object):
     '''
     Profile of physical properties
