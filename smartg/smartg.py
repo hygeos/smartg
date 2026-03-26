@@ -36,9 +36,6 @@ from copy import deepcopy
 import geoclide as gc
 import tempfile
 
-#TODO import below will be moved in the next major version
-from smartg.geometry import Vector
-
 
 # set up directories
 from smartg.config import DIR_ROOT
@@ -542,8 +539,6 @@ class Sensor(object):
     def __init__(self, POSX=0., POSY=0., POSZ=0., THDEG=0., PHDEG=180.,
                  LOC='SURF0P', FOV=0., TYPE=0, ICELL=0, ILAM_0=-1, ILAM_1=-1, V = None, CELL_SIZE = -1):
 
-        # Avoid crash from old notebooks/scripts
-        if isinstance(V, Vector): V = gc.Vector(V.x, V.y, V.z)
         if (isinstance(V, gc.Vector)):
             THDEG, PHDEG = gc.vec2ang(V)
         elif (V != None):
@@ -731,8 +726,6 @@ class CusBackward(object):
     """
     def __init__(self, POS = gc.Point(0., 0., 0.), THDEG = 0., PHDEG = 0., V = None,
                  ALDEG = 0., REC = None, TYPE = "lambertian", LMODE = "BR", LPH = None, LPR = None):
-        # Avoid crash from old notebooks/scripts
-        if isinstance(V, Vector): V = gc.Vector(V.x, V.y, V.z)
         
         if (isinstance(V, gc.Vector)): THDEG, PHDEG = gc.vec2ang(V)
         elif (V != None): raise NameError('V argument must be a Vector')
