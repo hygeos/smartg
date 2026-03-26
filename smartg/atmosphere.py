@@ -15,7 +15,6 @@ from scipy.integrate import simpson
 from scipy import constants
 from scipy.constants import speed_of_light, Planck, Boltzmann
 from smartg.bandset import BandSet
-from smartg.config import dir_libradtran_atmmod
 from smartg.config import DIR_AUXDATA
 from warnings import warn, simplefilter
 import pandas as pd
@@ -721,6 +720,12 @@ class AtmAFGL(Atmosphere):
             - 'afglsw' for Sub Arctic Winter (60N Jan)
             - 'afglt' for Tropic (15N Annual Average)
             - 'afglus' for U.S. Standard (1976)
+        
+        File format: If a full path is not provided (only filename), the atmospheric 
+        auxdata directory is automatically prepended to the path. The file extension 
+        defaults to '.nc' if not specified. Only '.nc' (NetCDF) and '.dat' file 
+        formats are accepted. For '.dat' files, the libratran atmosphere file 
+        convention is used.
     comp:  list, optional
         Components particles (aerosols or clouds) to consider, i.e. a list of aerOPAC or/and Cloud objects.
     grid : None | 1-D array-like, optional
@@ -800,7 +805,6 @@ class AtmAFGL(Atmosphere):
                  prof_ray=None, prof_aer=None, prof_phases=None,
                  RH_cst=None, US=True,
                  cells=None,
-                 new_atm=True,
                  O3_acs = 'O3_acs_BogumilV3.0_coeffs',
                  NO2_acs = 'NO2_acs_BogumilV1.0_coeffs'):
 
@@ -815,7 +819,6 @@ class AtmAFGL(Atmosphere):
         self.RH_cst = RH_cst
         self.US = US
         self.OPT3D = cells is not None
-        self.new_atm=new_atm
         if self.OPT3D : self.cells = cells
 
         self.tauR = tauR
@@ -829,38 +832,32 @@ class AtmAFGL(Atmosphere):
         #
         # init directories and read atm file
         #
-        # TODO Trick bellow to improve
         if atm_filename.name == "ATM3D":
             Nopt = grid.size
-            atm_arr = np.zeros((Nopt,9))
-            atm_arr[:,0] = np.arange(Nopt)[::-1]
-            tmp_f = Path.cwd() / "tmp.dat"
-            np.savetxt(tmp_f, atm_arr)
-            atm_filename = tmp_f
-            prof = Profile_base(atm_filename, O3=O3,
-                                H2O=H2O, NO2=NO2, P0=P0, RH_cst=RH_cst, US=US, O3_H2O_alt=O3_H2O_alt
-                                )
-        elif not new_atm:
-            if atm_filename.parent == Path('.'):
-                atm_filename = dir_libradtran_atmmod / atm_filename.name
-            if not atm_filename.exists() and atm_filename.suffix != '.dat':
-                atm_filename = atm_filename.with_name(atm_filename.name + ".nc")
-
-            simplefilter('always', DeprecationWarning)
-            warn_message = "\nThe option new_atm = False is deprecated as of SMART-G 1.0.0. " + \
-                           "The key argument 'new_atm' will be removed in one of the next release.\n"
-            warn(warn_message, DeprecationWarning)
-            prof = Profile_base(atm_filename, O3=O3,
-                                H2O=H2O, NO2=NO2, P0=P0, RH_cst=RH_cst, US=US, O3_H2O_alt=O3_H2O_alt
-                                )
+            prof = Profile_base(None)
+            prof.z = np.arange(Nopt, dtype=np.float32)[::-1]
+            attr_names = ["P", "T", "dens_air", "dens_h2o", "dens_o3", "dens_n2o", 
+                          "dens_co", "dens_ch4", "dens_co2", "dens_o2", "dens_n2", 
+                          "dens_no2", "dens_so2"]
+            for attr_name in attr_names:
+                setattr(prof, attr_name, np.zeros(Nopt, dtype=np.float32))
+            prof.RH_cst = RH_cst
         else:
             if atm_filename.parent == Path('.'):
                 atm_filename = DIR_AUXDATA / 'atmospheres' / atm_filename.name
-            if not atm_filename.exists() and atm_filename.suffix != '.nc':
+            # By default if no suffix is given consider it as a netcdf file
+            if not atm_filename.exists() and atm_filename.suffix == '':
                 atm_filename = atm_filename.with_name(atm_filename.name + ".nc")
-            prof = Profile_base2(atm_filename, O3=O3,
-                                H2O=H2O, NO2=NO2, P0=P0, RH_cst=RH_cst, US=US, O3_H2O_alt=O3_H2O_alt
-                                )
+            
+            if atm_filename.suffix == '.nc':
+                prof = Profile_base2(atm_filename, O3=O3, H2O=H2O, NO2=NO2, P0=P0, 
+                                    RH_cst=RH_cst, US=US, O3_H2O_alt=O3_H2O_alt)
+            elif atm_filename.suffix == '.dat':
+                prof = Profile_base(atm_filename, O3=O3, H2O=H2O, NO2=NO2, P0=P0, 
+                                    RH_cst=RH_cst, US=US, O3_H2O_alt=O3_H2O_alt)
+            else:
+                raise NameError("This file format is not supported. Only '.nc' and '.dat' are supported.")
+                
 
         #
         # read gaseous acs
