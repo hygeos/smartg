@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-
-from __future__ import print_function, division, absolute_import
 import numpy as np
 from pathlib import Path
 from glob import glob
@@ -20,10 +18,7 @@ from smartg.bandset import BandSet
 from smartg.config import dir_libradtran_atmmod
 from smartg.config import DIR_AUXDATA
 from warnings import warn, simplefilter
-import sys
 import pandas as pd
-if sys.version_info[:2] >= (3, 0):
-    xrange = range
 
 import netCDF4  # noqa: F401 - must be imported before h5py to avoid HDF5 library conflicts
 import h5py
@@ -1534,7 +1529,7 @@ def trapzinterp(y, x, xnew, samesize=True):
     integ = np.array([], dtype='f')
     if samesize:
         integ = np.append(integ, ynew[0])
-    for i in xrange(nnew-1):
+    for i in range(nnew-1):
 
         i1, i2 = idx[i], idx[i+1]
 
