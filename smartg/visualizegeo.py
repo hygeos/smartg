@@ -26,29 +26,45 @@ from warnings import warn
 def receiver_view(SMLUT, CAT = int(0), LOG_I=False, NAME_FILE = None, MTOA = 1320,
                   VMIN=None, VMAX=None, INT='none', W_VIEW = 'W'):
 
-    '''
-    Definition of receiver_view
+    """
+    Display the distribution of the radiant flux at a given receiver.
 
-    Display the distribution of the radiant flux at a given receiver in the relative
-    coordinates i.e. the coordinates specific to the object (which move with the
-    object if there is a use of transformation)
+    Coordinate system::
 
         ^ x
-        |     Print with the following cordinate system
-    y <--    
+        |
+    y <--
 
-    SMLUT     : SMART-G return MLUT
-    CAT       : By default = 0 (sum of all cats), else from cat 1 to 8
-    LOG_I     : Enable log interval
-    NAME_FILE : By default None. If not None create a pdf file in auxdata directory
-                of the current print with the specified name
-    MTOA      : Radiant exitance at TOA (Unit depending on W_VIEW, by default W/m2)
-    VMIN      : Minimal distribution value (Unit depending on W_VIEW), not for log print
-    VMAX      : Maximal distribution value (Unit depending on W_VIEW), not for log print
-    INT       : Interpolations for imshow/matshow, i.e. nearest, bilinear, bicubic, ...
-    W_VIEW    : Choices between "W" for Watt, "kW" for kiloWatt or "MW" for MegaWatt
-
-    '''
+    Print with the following cordinate system
+    
+    Parameters
+    ----------
+    SMLUT : MLUT
+        SMART-G return MLUT object.
+    CAT : int, optional
+        Category. By default = 0 (sum of all cats), else from cat 1 to 8.
+        Default: 0
+    LOG_I : bool, optional
+        Enable log interval.
+    NAME_FILE : str, optional
+        File name for PDF output. By default None. If not None, creates a pdf 
+        file in auxdata directory with the specified name.
+        Default: None
+    MTOA : float, optional
+        Radiant exitance at TOA (Unit depending on W_VIEW).
+        Default: W/m²
+    VMIN : float, optional
+        Minimal distribution value (Unit depending on W_VIEW). Not used for log scale.
+    VMAX : float, optional
+        Maximal distribution value (Unit depending on W_VIEW). Not used for log scale.
+    INT : str, optional
+        Interpolation method for imshow/matshow (e.g., 'nearest', 'bilinear', 
+        'bicubic', ...).
+    W_VIEW : str, optional
+        Unit for radiant flux display. Options are 'W' (Watt), 'kW' (kiloWatt), 
+        or 'MW' (MegaWatt).
+        Default: 'W'
+    """
 
     m = SMLUT['C_Receiver'][CAT,:,:]
     # Size of a Cell where the Cell surface = S_Cell*S_Cell
@@ -93,28 +109,55 @@ def receiver_view(SMLUT, CAT = int(0), LOG_I=False, NAME_FILE = None, MTOA = 132
         plt.savefig(NAME_FILE + '.pdf')  
 
 
-
 def cat_view(SMLUT, MTOA = 1320, NCL = "68%", UNIT = "FLUX_DENSITY", W_VIEW = "W", M_VIEW = "m",
              PRINT=True, ACC = 6, kdis_rep_bands=None):
-    '''
-    Definition of cat_view: The function take the photon weight collected by a receiver available from
-    the MLUT returned by a SMART-G simulation, and normalize it to get results in term of flux,
-    flux density or radiance in an other MLUT.
+    """
+    Takes the photon weight collected by a receiver available from the MLUT returned 
+    by a SMART-G simulation and normalizes it to get results in terms of flux, flux 
+    density or radiance in another MLUT.
 
-    ===ARGS:
-    SMLUT          : SMART-G return MLUT (Multi-Layer Unit Tabular)
-    MTOA           : Solar flux at TOA. If there is wl dim give an np.array with the flux in function of wl
-    NCL            : Nominal Confidence Limit (for the error)
-    UNIT           : Choice between 'FLUX' (Watt), 'FLUX_DENSITY' (Watt/meter²) and RADIANCE (Watt/meter²/sr)
-    W_VIEW         : Choices between "W" for Watt, "kW" for kiloWatt or "MW" for MegaWatt
-    M_VIEW         : Choices between "cm" for centimeter, "m" for meter,  "km" for kilometer, ...
-    PRINT          : If True print results, if there is a dimension wl then print the spectraly integrated results
-    ACC            : Accuracy, number of decimal points to show (integer) if print == True
-    kdis_rep_bands : KDIS_IBAND_LIST or REPTRAN_IBAND_LIST object
+    Parameters
+    ----------
+    SMLUT : MLUT
+        SMART-G return MLUT (Multi-Layer Unit Tabular)
+    MTOA : float | 1-D ndarray, optional
+        Solar flux at TOA (W/m²). If there is a wavelength dimension, provide 
+        an np.array with the flux as a function of wavelength.
+        Default: 1320
+    NCL : str, optional
+        Nominal Confidence Limit for the error estimation.
+        Default: "68%"
+    UNIT : str, optional
+        Output unit type. Choices are:
+        - 'FLUX' (Watt)
+        - 'FLUX_DENSITY' (Watt/meter²)
+        - 'RADIANCE' (Watt/meter²/sr)
+        Default: "FLUX_DENSITY"
+    W_VIEW : str, optional
+        Power unit for display. Choices are "W" (Watt), "kW" (kiloWatt), 
+        or "MW" (MegaWatt).
+        Default: "W"
+    M_VIEW : str, optional
+        Length unit for display. Choices are "cm" (centimeter), "m" (meter), 
+        "km" (kilometer), etc.
+        Default: "m"
+    PRINT : bool, optional
+        If True, print results. If there is a wavelength dimension, prints 
+        the spectrally integrated results.
+        Default: True
+    ACC : int, optional
+        Accuracy: number of decimal points to display when printing.
+        Default: 6
+    kdis_rep_bands : KDIS_IBAND_LIST | REPTRAN_IBAND_LIST, optional
+        Band information object. Used for spectral processing.
+        Default: None
 
-    ===RETURN:
-    output : return an MLUT with the intensity (flux, flux density or radiance) with the errors
-    '''
+    Returns
+    -------
+    output : MLUT
+        MLUT containing the intensity (flux, flux density, or radiance) with 
+        associated error estimates.
+    """
     
     m = SMLUT
 
@@ -315,11 +358,58 @@ def cat_view(SMLUT, MTOA = 1320, NCL = "68%", UNIT = "FLUX_DENSITY", W_VIEW = "W
 
 
 def nopt_view(SMLUT, BACK=False, ACC = 6, NCL="68%", fl_TOA=None, NAATM=False):
-    '''
-    Definition of nopt_view
+    """
+    Calculate and display the detailed optical efficiencies with associated error
+    estimates of a Solar Tower Power simulated with SMART-G.
 
-    In progress...
-    '''
+    Parameters
+    ----------
+    SMLUT : MLUT
+        SMART-G return MLUT containing simulation results.
+    BACK : bool, optional
+        False for forward mode (default), True for backward mode. Determines 
+        which efficiency metrics are calculated and displayed.
+        Default: False
+    ACC : int, optional
+        Accuracy: number of decimal points to display in the output.
+        Default: 6
+    NCL : str, optional
+        Nominal Confidence Limit for error estimation. Options are:
+        - "68%" (1 sigma)
+        - "87%" (1.5 sigma)
+        - "95%" (2 sigma)
+        - "99%" (3 sigma)
+        - "99.99%" (4 sigma)
+        Default: "68%"
+    fl_TOA : None | 1-D ndarray, optional
+        Solar flux at TOA for each wavelength band. If None, uses the 
+        total power. If provided, weights the calculation by flux per band.
+        Default: None
+    NAATM : bool, optional
+        If True, calculate and display the analytic approximation of 
+        atmospheric transmission (naatm) in backward mode. Ignored in forward mode.
+        Default: False
+
+        
+    Notes
+    -----
+    In forward mode, displays:
+    - nopt: Total optical efficiency
+    - ncos: Cosine efficiency
+    - nsha: Shading efficiency
+    - nref: Reflection efficiency
+    - nblo: Blocking efficiency
+    - nspi: Spillage efficiency
+    - natm: Atmospheric transmission
+
+    In backward mode, displays:
+    - nopt: Total optical efficiency
+    - ncos: Cosine efficiency
+    - nref: Reflection efficiency
+    - nsbsa: Product of blocking, shading, and atmospheric efficiencies
+
+    Each metric includes an estimate of absolute error and relative error.
+    """
     m = SMLUT
     # Number of photons launched
     NPH = float(m.attrs['NPHOTONS'])
@@ -427,19 +517,39 @@ def nopt_view(SMLUT, BACK=False, ACC = 6, NCL="68%", fl_TOA=None, NAATM=False):
 
 
 class Mirror(object):
-    '''
-    Definition of Mirror
+    """
+    Glossy/specular mirror material surface model.
 
-    Glossy/specular material as pure and highly polished aluminum, silver
-    behind glass mirror, ...
+    Represents glossy/specular reflective materials such as pure and highly 
+    polished aluminum, silver-backed glass mirrors, and similar surfaces. Uses 
+    microfacet theory with configurable roughness distribution models.
 
-    reflectivity : The albedo of the object
-    roughness    : Equal to alpha parameter according to Walter et al. 2007
-    shadow       : Shadowing-Masking effect, by default not considered
-    nind         : Relative refractive index air/material, by default
-                   is None -> case of perfect mirror (nind = infinity)
-    distribution : Two choices --> "Beckmann" or "GGX"
-    '''
+    Attributes
+    ----------
+    reflectivity : float, optional
+        Albedo (reflectance) of the object. Must be between 0 and 1.
+        Default: 1.0
+    roughness : float, optional
+        Surface roughness parameter (alpha) according to Walter et al. 2007.
+        Characterizes the distribution of microfacet slopes. Default: 0.0
+    shadow : bool, optional
+        Whether to include shadowing-masking effects from surface roughness.
+        Default: False
+    nind : float or None, optional
+        Relative refractive index (air/material). If None, represents a perfect 
+        mirror (nind = infinity). The internal value becomes -1 for perfect mirrors.
+        Default: None
+    distribution : str, optional
+        Microfacet distribution model. Options are:
+        - "Beckmann": Beckmann distribution (internally value 1)
+        - "GGX": GGX/Trowbridge-Reitz distribution (internally value 2)
+        Default: "Beckmann"
+
+    References
+    ----------
+    Walter, B., Marschner, S. R., Li, H., & Torrance, K. E. (2007).
+    Microfacet models for refraction through rough surfaces.
+    """
     def __init__(self, reflectivity = 1., roughness = 0., shadow = False, nind = None,
                  distribution = "Beckmann"):
         self.reflectivity = reflectivity
@@ -462,15 +572,21 @@ class Mirror(object):
             + ', shadow=' + str(self.shadow) + ', nind=' + str(self.nind) \
             + ', distribution=' + str(self.distribution)
 
+
 class LambMirror(object):
-    '''
-    Definition of LambMirror
+    """
+    Lambertian mirror material surface model.
 
-    Lambertian material, same probability of reflection in all the direction
-    inside the hemisphere of the normal of the object surface
+    Represents a Lambertian reflective material with equal probability of reflection 
+    in all directions within the hemisphere normal to the object surface
 
-    reflectivity : The albedo of the object
-    '''
+    Parameters
+    ----------
+    reflectivity : float, optional
+        Albedo (reflectance) of the object. Must be between 0 and 1.
+        Controls the fraction of incident light that is reflected.
+        Default: 0.5
+    """
     def __init__(self, reflectivity = 0.5):
         self.reflectivity = reflectivity
         
@@ -479,15 +595,29 @@ class LambMirror(object):
         return 'Material -> Lambertian Mirror : ' \
             'reflectivity=' + str(self.reflectivity)
 
+
 class Matte(object):
-    '''
-    Definition of Matte
+    """
+    Matte material surface model.
 
-    Diffuse material as Concrete, plastic, dust, ...
+    Represents matte materials such as concrete, plastic, dust, 
+    and similar surfaces with diffuse reflectance properties.
 
-    reflectivity : The albedo of the object
-    roughness    : Not yet available
-    '''
+    Parameters
+    ----------
+    reflectivity : float, optional
+        Albedo (reflectance) of the object. Must be between 0 and 1.
+        Default: 0.0
+    roughness : float, optional
+        Surface roughness parameter.
+        Default: 0.0
+
+    Notes
+    -----
+    Be careful !!
+
+    - For the moment this material is only used for totally absorbant surfaces.
+    """
     def __init__(self, reflectivity = 0., roughness = 0.):
         self.reflectivity = reflectivity
         self.roughness = roughness
@@ -496,17 +626,37 @@ class Matte(object):
         return 'Material -> Matte : ' \
             'reflectivity=' + str(self.reflectivity) + ', roughness=' + str(self.roughness)
 
+
 class Plane(object):
-    '''
-    Definition of Plane
+    """
+    Planar surface defined by four corner points.
 
-    Plane constructed with 4 points : p1, p2, p3, p4
+    Defines a rectangular plane surface constructed from four corner points.
+    The plane must satisfy specific coordinate constraints for each point.
 
-    p1 : x --> negative and y --> negative
-    p2 : x --> positive and y --> negative
-    p3 : x --> negative and y --> positive
-    p4 : x --> positive and y --> positive
-    '''
+    Parameters
+    ----------
+    p1 : gc.Point, optional
+        Bottom-left corner point (x negative, y negative).
+        Default: gc.Point(-0.5, -0.5, 0.)
+    p2 : gc.Point, optional
+        Bottom-right corner point (x positive, y negative).
+        Default: gc.Point(0.5, -0.5, 0.)
+    p3 : gc.Point, optional
+        Top-left corner point (x negative, y positive).
+        Default: gc.Point(-0.5, 0.5, 0.)
+    p4 : gc.Point, optional
+        Top-right corner point (x positive, y positive).
+        Default: gc.Point(0.5, 0.5, 0.)
+
+    Notes
+    -----
+    The plane geometry requires:
+    - p1 and p3 have the same negative x-coordinate
+    - p2 and p4 have the same positive x-coordinate
+    - p1 and p2 have the same negative y-coordinate
+    - p3 and p4 have the same positive y-coordinate
+    """
     def __init__(self, p1 = gc.Point(-0.5, -0.5, 0.), p2 = gc.Point(0.5, -0.5, 0.), \
                  p3 = gc.Point(-0.5, 0.5, 0.), p4 = gc.Point(0.5, 0.5, 0.)):
         # Avoid crash from old notebooks/scripts
@@ -545,16 +695,37 @@ class Plane(object):
             '-> p4=(' + str(self.p4.x) + ', ' + str(self.p4.y) + ', ' + str(self.p4.z) + ')'
 
 class Spheric(object):
-    '''
-    Definition of Spheric
+    """
+    Spherical surface model.
 
-    Sphere constructed with --->
+    Represents a spherical (or partial spherical) surface defined by radius 
+    and optional height constraints. Can represent a full sphere or a partial 
+    sphere.
 
-    radius   : The radius of th e sphere
-    radiusZ0 : Take into account all the sphere -> radiusZ0 = -radius
-    radiusZ1 : Take into account all the sphere -> radiusZ1 = +radius
-    phi      : The value of phi, 360 degrees is the value of a full sphere
-    '''
+    Parameters
+    ----------
+    radius : float, optional
+        Radius of the sphere. Must be positive.
+        Default: 10.0
+    z0 : float or None, optional
+        Minimum height (bottom) of the spherical surface. If None, defaults 
+        to -radius (full sphere from bottom). For partial spheres, specify 
+        custom z0 value.
+        Default: None (becomes -radius)
+    z1 : float or None, optional
+        Maximum height (top) of the spherical surface. If None, defaults 
+        to +radius (full sphere to top). For partial spheres, specify 
+        custom z1 value.
+        Default: None (becomes +radius)
+    phi : float, optional
+        Azimuthal angle range in degrees. 360 degrees represents a full 
+        sphere; smaller values create a partial spherical sector.
+        Default: 360.0
+
+    Notes
+    -----
+    For a full sphere, use default values: z0 = -radius, z1 = +radius, phi = 360°
+    """
     def __init__(self, radius = 10., z0 = None, z1 = None, phi = 360.):
         self.radius = radius
         self.phi = phi
@@ -576,15 +747,33 @@ class Spheric(object):
 
 
 class Transformation():
-    '''
-    Definition of Transformation
+    """
+    Apply rotation and translation transformations to objects.
 
-    Enable to move, rotate a given object
+    Enables flexible transformation of objects through rotation and translation 
+    operations. Supports multiple rotation order conventions for specifying 
+    the sequence of rotations around different axes.
 
-    rotation      : 1D np array, 3 values for rotation in x, y and z (degree)
-    translation   : 1D np array, 3 values for translation in x, y and z (kilometer)
-    rotationOrder : Order of rotation, 6 choices : XYZ, XZY, YXZ, YZX, ZXY, ZYX
-    '''
+    Parameters
+    ----------
+    rotation : 1-D ndarray, optional
+        An array with 3 elements specifying rotation angles (in degrees) 
+        around the x, y, and z axes respectively.
+        Default: np.zeros(3, dtype=float) (no rotation)
+    translation : 1-D ndarray, optional
+        An array with 3 elements specifying translation distances (in kilometers) 
+        along the x, y, and z axes respectively.
+        Default: np.zeros(3, dtype=float) (no translation)
+    rotationOrder : str, optional
+        Specifies the order in which rotations are applied. Options are:
+        - "XYZ": Rotate around X, then Y, then Z
+        - "XZY": Rotate around X, then Z, then Y
+        - "YXZ": Rotate around Y, then X, then Z
+        - "YZX": Rotate around Y, then Z, then X
+        - "ZXY": Rotate around Z, then X, then Y
+        - "ZYX": Rotate around Z, then Y, then X
+        Default: "XYZ"
+    """
     def __init__(self, rotation = np.zeros(3, dtype=float), translation=np.zeros(3, dtype=float), \
                  rotationOrder = "XYZ"):
         self.rotation = rotation
@@ -603,18 +792,55 @@ class Transformation():
             str(self.transy) + ', ' + str(self.transz) + ')'
     
 class Entity(object):
-    '''
-    Definition of Entity
+    """
+    3D object representation with geometry and material properties.
 
-    This class enables the creation a 3D object
+    Enables the creation and management of 3D objects with customizable 
+    geometry, materials, transformations, and visualization properties. 
+    Objects can be either reflectors or receivers. Receivers will have 
+    their flux distribution tracked during simulations.
 
-    entity : By default None. But useful in case where we need a copy of a given
-             object
-    name   : 2 choices --> reflector or receiver.
-             If receiver is chosen, smartg will count the distribution flux
-    TC     : Taille Cellules --> size of cells for the flux distribution (kilometer)
-    bboxGPmin/max : in development...
-    '''
+    Parameters
+    ----------
+    entity : Entity or None, optional
+        Existing Entity object to copy. If provided, all properties are 
+        copied from the source entity. If None, properties are set 
+        individually from other parameters.
+        Default: None
+    name : str, optional
+        Object type. Options are:
+        - "reflector": Passive reflecting surface
+        - "receiver": Active receiver that tracks flux distribution
+        Default: "reflector"
+    TC : float, optional
+        Cell size for flux distribution calculation (Taille Cellules in km).
+        Defines the spatial resolution for flux binning.
+        Default: 0.01
+    materialAV : Material, optional
+        Material for the object's front surface (above-view side).
+        Default: Matte()
+    materialAR : Material, optional
+        Material for the object's back surface (reverse side).
+        Default: Matte()
+    geo : Geometry, optional
+        Geometric shape of the object (e.g., Plane, Spheric).
+        Default: Plane()
+    transformation : Transformation, optional
+        Rotation and translation transformation to apply to the object.
+        Default: Transformation() (identity transformation)
+    bboxGPmin : gc.Point, optional
+        Minimum corner of the bounding box (in development).
+        Default: gc.Point(-100000., -100000., 0.)
+    bboxGPmax : gc.Point, optional
+        Maximum corner of the bounding box (in development).
+        Default: gc.Point(100000., 100000., 120.)
+    color : str, optional
+        Color for visualization/rendering.
+        Default: 'grey'
+    alpha_color : float, optional
+        Transparency alpha value for visualization (0.0 to 1.0).
+        Default: 0.5
+    """
     def __init__(self, entity = None, name="reflector", TC = 0.01, materialAV=Matte(), \
                  materialAR=Matte(), geo=Plane(), transformation=Transformation(), \
                  bboxGPmin = gc.Point(-100000., -100000., 0.), bboxGPmax = gc.Point(100000., 100000., 120.),
@@ -626,6 +852,7 @@ class Entity(object):
             self.name = entity.name; self.TC = entity.TC; self.materialAV = entity.materialAV
             self.materialAR = entity.materialAR; self.geo = entity.geo 
             self.transformation = entity.transformation
+            #TODO: Compute automatically bboxGPmin and bboxGPmax from geo and transformation
             self.bboxGPmin = entity.bboxGPmin; self.bboxGPmax = entity.bboxGPmax
             self.color = entity.color; self.alpha_color = alpha_color
         else:
@@ -648,6 +875,30 @@ class Entity(object):
             str(self.transformation)
     
     def get_transformation(self):
+        """
+        Compute the combined transformation matrix for the entity.
+
+        Returns
+        -------
+        out : gc.Transform
+            Combined transformation matrix (translation * rotations in specified order).
+            The rotation order is determined by the entity's transformation.rotOrder 
+            attribute (e.g., "XYZ", "ZYX", etc.).
+
+        Notes
+        -----
+        The transformation is applied as::
+
+            combined = Translation * Rotation_sequence
+
+        where Rotation_sequence depends on rotOrder:
+        - "XYZ": Rx * Ry * Rz
+        - "XZY": Rx * Rz * Ry
+        - "YXZ": Ry * Rx * Rz
+        - "YZX": Ry * Rz * Rx
+        - "ZXY": Rz * Rx * Ry
+        - "ZYX": Rz * Ry * Rx
+        """
         Trans = gc.get_translate_tf(gc.Vector(self.transformation.transx, self.transformation.transy, \
                                               self.transformation.transz))
         Rotx = gc.get_rotateX_tf(self.transformation.rotx)
@@ -667,20 +918,44 @@ class Entity(object):
         return tt
 
 class Heliostat(object):
-    '''
-    Definition of Heliostat
-    
-    This class enables the creation of heliostats i.e. a group of facets:
+    """
+    Composite heliostat assembly consisting of multiple facets.
 
-    POS           : Heliostat position stored in a Point class
-    SPX, SPY      : The heliostat is splited in facets : SPx -> the number of time
-                    we split in the x direction, SPy -> the same in y direction
-    HSX           : Heliostat size in x direction
-    HSY           : Heliostat size in y direction
-    CURVE_FL      : Focal length : A curved heliostat is possible if curveFL is given
-    REF           : Reflectivity of the heliostat
-    ROUGH         : Roughness of the heliostat
-    '''
+    Represents a heliostat composed of multiple individual facets arranged 
+    in a grid pattern.
+
+    Parameters
+    ----------
+    POS : gc.Point, optional
+        Heliostat position (center point) stored as a Point class.
+        Default: gc.Point(0., 0., 0.)
+    SPX : int, optional
+        Number of facet divisions in the x direction. Controls how many times 
+        the heliostat is split along the x-axis. Must be >= 1 (total facets >= 2).
+        Default: 2
+    SPY : int, optional
+        Number of facet divisions in the y direction. Controls how many times 
+        the heliostat is split along the y-axis. Must be >= 1 (total facets >= 2).
+        Default: 2
+    HSX : float, optional
+        Heliostat size in the x direction (meters).
+        Default: 0.02
+    HSY : float, optional
+        Heliostat size in the y direction (meters).
+        Default: 0.02
+    CURVE_FL : float | None, optional
+        Focal length (in km) for curvature. If None, the focal length is computed
+        automatically based on the distance to the receiver. A virtual value of 
+        infinity means a flat heliostat with no curvature.
+        Default: None
+    REF : float, optional
+        Reflectivity of the heliostat (between 0 and 1). Represents the 
+        fraction of incident radiation that is reflected.
+        Default: 1.0
+    ROUGH : float, optional
+        Surface roughness of the heliostat facets.
+        Default: 0
+    """
     def __init__(self, POS = gc.Point(0., 0., 0.), SPX=int(2), SPY=int(2), HSX=0.02,
                  HSY=0.02, CURVE_FL=None, REF=1., ROUGH=0):
         # Avoid crash from old notebooks/scripts
@@ -886,6 +1161,7 @@ def generateMTF(HELIO=Heliostat(), PR = gc.Point(0., 0., 0.)):
 
     return MTF
 
+
 def generateLEfH(HELIO = Heliostat(), PR = None, THEDEG = 0., PHIDEG = 0., MTF=None):
     """Convert a heliostat to well-oriented plane facets for receiver reflection.
 
@@ -1076,6 +1352,7 @@ def generateLEfH(HELIO = Heliostat(), PR = None, THEDEG = 0., PHIDEG = 0., MTF=N
 
     return LF
 
+
 def generateBox(dimXYZ=[0.05, 0.05, 0.05], pos=gc.Point(0., 0., 0.), matAV = "LambMirror",
         ref=[1., 1., 1., 1., 1., 1.], rough=[0.2, 0.2, 0.2, 0.2, 0.2, 0.2], rotZ = 0., gap=0.0001,
         obj_type="environment", colors=None, alpha_color=None):
@@ -1106,15 +1383,18 @@ def generateBox(dimXYZ=[0.05, 0.05, 0.05], pos=gc.Point(0., 0., 0.), matAV = "La
         
         - "LambMirror" : Lambertian mirror for all faces (constant reflectivity)
         - "Mirror" : Specular mirror for all faces (with roughness)
-        - list : List of 6 material objects (Matte, LambMirror, Mirror) for each face
+        - list : List containing 6 material objects (e.g., Matte, LambMirror, Mirror) 
+                 for each face
         
         Default is "LambMirror".
     ref : list, optional
         Reflectivity values for each face when matAV is "Mirror" or "LambMirror".
         List of 6 floats, one per face. Default is [1., 1., 1., 1., 1., 1.].
+        Else ignored if matAV is a list of material objects.
     rough : list, optional
         Surface roughness for each face when matAV is "Mirror".
         List of 6 floats, one per face. Default is [0.2, 0.2, 0.2, 0.2, 0.2, 0.2].
+        Else ignored if matAV is "LambMirror" or a list of material objects.
     rotZ : float, optional
         Global rotation angle in degrees around the Z-axis. Default is 0.
     gap : float, optional
@@ -1232,6 +1512,7 @@ def generateBox(dimXYZ=[0.05, 0.05, 0.05], pos=gc.Point(0., 0., 0.), matAV = "La
     GOBJ = GroupE(LE = LOBJ, BBOX = [p_min, p_max])
     
     return GOBJ
+
 
 def Ref_Fresnel(dirEnt, geoTrans):
     """Calculate Fresnel reflection direction for a ray on a transformed surface.
