@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+from html import entities
+
 import geoclide as gc
 
 import matplotlib.pyplot as plt
@@ -818,12 +820,12 @@ class Entity(object):
     transformation : Transformation, optional
         Rotation and translation transformation to apply to the object.
         Default: Transformation() (identity transformation)
-    bboxGPmin : gc.Point, optional
+    bboxGPmin : None | gc.Point, optional
         Minimum corner of the bounding box (in development).
-        Default: gc.Point(-100000., -100000., 0.)
-    bboxGPmax : gc.Point, optional
+        Default: None
+    bboxGPmax : None | gc.Point, optional
         Maximum corner of the bounding box (in development).
-        Default: gc.Point(100000., 100000., 120.)
+        Default: None
     color : str, optional
         Color for visualization/rendering.
         Default: 'grey'
@@ -833,8 +835,7 @@ class Entity(object):
     """
     def __init__(self, entity = None, name="reflector", TC = 0.01, materialAV=Matte(), \
                  materialAR=Matte(), geo=Plane(), transformation=Transformation(), \
-                 bboxGPmin = gc.Point(-100000., -100000., 0.), bboxGPmax = gc.Point(100000., 100000., 120.),
-                 color = 'grey', alpha_color = 0.5):
+                 bboxGPmin = None, bboxGPmax = None, color = 'grey', alpha_color = 0.5):
         if isinstance(entity, Entity) :
             self.name = entity.name; self.TC = entity.TC; self.materialAV = entity.materialAV
             self.materialAR = entity.materialAR; self.geo = entity.geo 
@@ -843,12 +844,34 @@ class Entity(object):
             self.bboxGPmin = entity.bboxGPmin; self.bboxGPmax = entity.bboxGPmax
             self.color = entity.color; self.alpha_color = alpha_color
         else:
+            if not isinstance(geo, (Plane, Spheric)):
+                raise NameError('For the moment only Plane or a Spheric geo are accepted.')
+            
             self.name = name
             self.TC = TC
             self.materialAV = materialAV
             self.materialAR = materialAR
             self.geo = geo
             self.transformation = transformation
+
+            # if bbox pmin and pmax are not provided compute them automatically 
+            # based on the geometry and transformation 
+            if bboxGPmin is None or bboxGPmax is None:
+                box = gc.BBox()
+                E_tf = self.get_transformation()
+                if isinstance(self.geo, Plane):
+                    box = box.union(E_tf(self.geo.p1))
+                    box = box.union(E_tf(self.geo.p2))
+                    box = box.union(E_tf(self.geo.p3))
+                    box = box.union(E_tf(self.geo.p4))
+                elif isinstance(self.geo, Spheric):
+                    p1 = E_tf(gc.Point(-self.geo.radius, -self.geo.radius, self.geo.z0))
+                    p2 = E_tf(gc.Point(self.geo.radius, self.geo.radius, self.geo.z1))
+                    box = box.union(p1)
+                    box = box.union(p2)
+                if bboxGPmin is None: bboxGPmin = box.pmin
+                if bboxGPmax is None: bboxGPmax = box.pmax
+
             self.bboxGPmin = bboxGPmin
             self.bboxGPmax = bboxGPmax
             self.color = color
