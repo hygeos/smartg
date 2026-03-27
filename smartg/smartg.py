@@ -821,16 +821,28 @@ class Smartg(object):
         * iAMF=1: Σ(d · w · T_abs) — weighted path length
         * iAMF=2: Σ(d² · w · T_abs) — weighted squared path length
 
+    nscl : int, optional, default=1
+        Number of scatter classes for AMF decomposition by last scattering
+        layer (Approach 2). When ``nscl=1`` (default), no classification is
+        performed and the output is identical to the standard AMF. When
+        ``nscl>1``, photons are classified by the atmospheric layer in which
+        their last scattering event occurred, and the ``cdist`` output
+        datasets gain an extra ``iSCL`` dimension of size ``nscl``. 
+        Typically set to ``NATM_ABS`` (one class per absorption layer), but
+        can be smaller to group layers into fewer classes. Requires
+        ``alis=True``.
+
     Raises
     ------
     ValueError
         If amf_variance=True is used without alis=True.
+        If nscl>1 is used without alis=True.
     """
     def __init__(self, pp=True, debug=False, autoinit=True,
                  verbose_photon=False,
                  double=True, alis=False, back=False, bias=True, alt_pp=False, obj3D=False, 
                  opt3D=False, device=None, sif=False, thermal=False, rng='PHILOX', cache_dir=None,
-                 keep_context=None, amf_variance=False):
+                 keep_context=None, amf_variance=False, nscl=1):
         assert not ((device is not None) and ('CUDA_DEVICE' in os.environ)), "Can not use the 'device' option while the CUDA_DEVICE is set"
 
         if device is not None:
@@ -872,6 +884,9 @@ class Smartg(object):
         if amf_variance and not alis:
             raise ValueError('amf_variance=True requires alis=True (tabDist and ph->cdist need ALIS)')
         self.amf_variance = amf_variance
+        if nscl > 1 and not alis:
+            raise ValueError('nscl>1 requires alis=True (scatter-class decomposition needs ALIS cdist)')
+        self.nscl = int(nscl)
         self.rng = init_rng(rng)
         self.back= back
         self.thermal=thermal
@@ -1625,7 +1640,7 @@ class Smartg(object):
                   NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj, nGObj, nRObj,
                   Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm,
                   TC, nbCx, nbCy, vSun, HIST, ZTOA, sensor2[0].cell_size,
-                  sxmin, sxmax, symin, symax, nbsx, nbsy, no_aer_output)
+                  sxmin, sxmax, symin, symax, nbsx, nbsy, no_aer_output, NSCL=self.nscl)
 
         # Initialize the progress bar
         p = Progress(NBPHOTONS, progress)
@@ -1642,7 +1657,7 @@ class Smartg(object):
                         prof_atm_gpu, prof_oc_gpu, cell_atm_gpu, cell_oc_gpu,
                         wl_proba_icdf, sensor_proba_icdf, cell_proba_icdf, stdev, stdev_lim, self.rng, self.alis,
                         myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, mySPECTObj0, hist=hist,
-                        amf_variance=self.amf_variance)
+                        amf_variance=self.amf_variance, nscl=self.nscl)
 
         attrs['kernel time (s)'] = secs_cuda_clock
         attrs['number of kernel iterations'] = Nkernel
@@ -1856,11 +1871,28 @@ def finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPho
     write_DOWNB = OUTPUT_LAYERS in (2, 3, 5)
 
     # Build axis names for cdist datasets (ALIS mode)
-    cdist_axnames_zip = ['None', 'Zenith angles', 'iAMF']
-    cdist_axnames_full = ['None']
-    if NSENSOR > 1:
-        cdist_axnames_full.append('sensor index')
-    cdist_axnames_full.extend(['Azimuth angles', 'Zenith angles', 'iAMF'])
+    # Shape after swapaxes: (NLVL, N_LAYERS, NSENSOR, NBPHI, NBTHETA, [NSCL,] NIAMF)
+    # When NSCL=1, squeeze it away for backward compatibility
+    if len(tabDistFinal) > 1 and tabDistFinal.shape[-2] == 1:
+        tabDistFinal = tabDistFinal[..., 0, :]  # remove trivial NSCL dim
+        _has_scl = False
+    elif len(tabDistFinal) > 1:
+        _has_scl = True
+    else:
+        _has_scl = False
+
+    if _has_scl:
+        cdist_axnames_zip = ['None', 'Zenith angles', 'iSCL', 'iAMF']
+        cdist_axnames_full = ['None']
+        if NSENSOR > 1:
+            cdist_axnames_full.append('sensor index')
+        cdist_axnames_full.extend(['Azimuth angles', 'Zenith angles', 'iSCL', 'iAMF'])
+    else:
+        cdist_axnames_zip = ['None', 'Zenith angles', 'iAMF']
+        cdist_axnames_full = ['None']
+        if NSENSOR > 1:
+            cdist_axnames_full.append('sensor index')
+        cdist_axnames_full.extend(['Azimuth angles', 'Zenith angles', 'iAMF'])
 
     if write_UPTOA:
         m.add_dataset('I_up (TOA)', tabFinal[UPTOA,0,isen,ilam,iphi,:], axnames)
@@ -1880,8 +1912,8 @@ def finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPho
             m.add_dataset('V_up (TOA), no_aer', tabFinalNoAer[UPTOA,3,isen,ilam,iphi,:], axnames)
             m.add_dataset('N_up (TOA), no_aer', NPhotonsOutTotNoAer[UPTOA,isen,ilam,iphi,:], axnames)
         if len(tabDistFinal) > 1: 
-            if zip : m.add_dataset('cdist_up (TOA)', np.squeeze(tabDistFinal[UPTOA,:,isen,:,:]),  cdist_axnames_zip)
-            else   : m.add_dataset('cdist_up (TOA)', tabDistFinal[UPTOA,:,isen,:,:,:],cdist_axnames_full)
+            if zip : m.add_dataset('cdist_up (TOA)', np.squeeze(tabDistFinal[UPTOA,:,isen]),  cdist_axnames_zip)
+            else   : m.add_dataset('cdist_up (TOA)', tabDistFinal[UPTOA,:,isen],cdist_axnames_full)
     
     if hist : m.add_dataset('histories', tabHistTot)
     
@@ -1903,8 +1935,8 @@ def finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPho
             m.add_dataset('V_down (0+), no_aer', tabFinalNoAer[DOWN0P,3,isen,ilam,iphi,:], axnames)
             m.add_dataset('N_down (0+), no_aer', NPhotonsOutTotNoAer[DOWN0P,isen,ilam,iphi,:], axnames)
         if len(tabDistFinal) > 1: 
-            if zip : m.add_dataset('cdist_down (0+)', np.squeeze(tabDistFinal[DOWN0P,:,isen,:,:]),  cdist_axnames_zip)
-            else   : m.add_dataset('cdist_down (0+)', tabDistFinal[DOWN0P,:,isen,:,:,:],cdist_axnames_full)
+            if zip : m.add_dataset('cdist_down (0+)', np.squeeze(tabDistFinal[DOWN0P,:,isen]),  cdist_axnames_zip)
+            else   : m.add_dataset('cdist_down (0+)', tabDistFinal[DOWN0P,:,isen],cdist_axnames_full)
     if write_UP0M:
         m.add_dataset('I_up (0-)', tabFinal[UP0M,0,isen,ilam,iphi,:], axnames)
         m.add_dataset('Q_up (0-)', tabFinal[UP0M,1,isen,ilam,iphi,:], axnames)
@@ -1923,8 +1955,8 @@ def finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPho
             m.add_dataset('V_up (0-), no_aer', tabFinalNoAer[UP0M,3,isen,ilam,iphi,:], axnames)
             m.add_dataset('N_up (0-), no_aer', NPhotonsOutTotNoAer[UP0M,isen,ilam,iphi,:], axnames)
         if len(tabDistFinal) > 1: 
-            if zip : m.add_dataset('cdist_up (0-)', np.squeeze(tabDistFinal[UP0M,:,isen,:,:]),  cdist_axnames_zip)
-            else   : m.add_dataset('cdist_up (0-)', tabDistFinal[UP0M,:,isen,:,:,:],cdist_axnames_full)
+            if zip : m.add_dataset('cdist_up (0-)', np.squeeze(tabDistFinal[UP0M,:,isen]),  cdist_axnames_zip)
+            else   : m.add_dataset('cdist_up (0-)', tabDistFinal[UP0M,:,isen],cdist_axnames_full)
 
     if write_DOWN0M:
         m.add_dataset('I_down (0-)', tabFinal[DOWN0M,0,isen,ilam,iphi,:], axnames)
@@ -1944,8 +1976,8 @@ def finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPho
             m.add_dataset('V_down (0-), no_aer', tabFinalNoAer[DOWN0M,3,isen,ilam,iphi,:], axnames)
             m.add_dataset('N_down (0-), no_aer', NPhotonsOutTotNoAer[DOWN0M,isen,ilam,iphi,:], axnames)
         if len(tabDistFinal) > 1: 
-            if zip : m.add_dataset('cdist_down (0-)', np.squeeze(tabDistFinal[DOWN0M,:,isen,:,:]),  cdist_axnames_zip)
-            else   : m.add_dataset('cdist_down (0-)', tabDistFinal[DOWN0M,:,isen,:,:,:],cdist_axnames_full)
+            if zip : m.add_dataset('cdist_down (0-)', np.squeeze(tabDistFinal[DOWN0M,:,isen]),  cdist_axnames_zip)
+            else   : m.add_dataset('cdist_down (0-)', tabDistFinal[DOWN0M,:,isen],cdist_axnames_full)
     if write_UP0P:
         m.add_dataset('I_up (0+)', tabFinal[UP0P,0,isen,ilam,iphi,:], axnames)
         m.add_dataset('Q_up (0+)', tabFinal[UP0P,1,isen,ilam,iphi,:], axnames)
@@ -1964,8 +1996,8 @@ def finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPho
             m.add_dataset('V_up (0+), no_aer', tabFinalNoAer[UP0P,3,isen,ilam,iphi,:], axnames)
             m.add_dataset('N_up (0+), no_aer', NPhotonsOutTotNoAer[UP0P,isen,ilam,iphi,:], axnames)
         if len(tabDistFinal) > 1: 
-            if zip : m.add_dataset('cdist_up (0+)', np.squeeze(tabDistFinal[UP0P,:,isen,:,:]),  cdist_axnames_zip)
-            else   : m.add_dataset('cdist_up (0+)', tabDistFinal[UP0P,:,isen,:,:,:],cdist_axnames_full)
+            if zip : m.add_dataset('cdist_up (0+)', np.squeeze(tabDistFinal[UP0P,:,isen]),  cdist_axnames_zip)
+            else   : m.add_dataset('cdist_up (0+)', tabDistFinal[UP0P,:,isen],cdist_axnames_full)
     if write_DOWNB:
         m.add_dataset('I_down (B)', tabFinal[DOWNB,0,isen,ilam,iphi,:], axnames)
         m.add_dataset('Q_down (B)', tabFinal[DOWNB,1,isen,ilam,iphi,:], axnames)
@@ -1984,8 +2016,8 @@ def finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPho
             m.add_dataset('V_down (B), no_aer', tabFinalNoAer[DOWNB,3,isen,ilam,iphi,:], axnames)
             m.add_dataset('N_down (B), no_aer', NPhotonsOutTotNoAer[DOWNB,isen,ilam,iphi,:], axnames)
         if len(tabDistFinal) > 1: 
-            if zip : m.add_dataset('cdist_down (B', np.squeeze(tabDistFinal[DOWNB,:,isen,:,:]),  cdist_axnames_zip)
-            else   : m.add_dataset('cdist_down (B)', tabDistFinal[DOWNB,:,isen,:,:,:],cdist_axnames_full)
+            if zip : m.add_dataset('cdist_down (B)', np.squeeze(tabDistFinal[DOWNB,:,isen]),  cdist_axnames_zip)
+            else   : m.add_dataset('cdist_down (B)', tabDistFinal[DOWNB,:,isen],cdist_axnames_full)
 
 
     # write atmospheric profiles
@@ -2451,7 +2483,7 @@ def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
               NLVL, NPSTK, NWLPROBA, NSENSORPROBA, NCELLPROBA,  BEER, SMIN, SMAX, RMIN, RMAX, RR, 
               WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj, nGObj, nRObj,
               Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, vSun, HIST, ZTOA,
-              cell_size, sxmin, sxmax, symin, symax, nbsx, nbsy, no_aer_output) :
+              cell_size, sxmin, sxmax, symin, symax, nbsx, nbsy, no_aer_output, NSCL=1) :
     """
     Initialize the constants in python and send them to the device memory
 
@@ -2529,6 +2561,7 @@ def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
     copy_to_device('NJACd', NJAC, np.int32)
     copy_to_device('HISTd', HIST, np.int32)
     copy_to_device('NSENSORd', NSENSOR, np.int32)
+    copy_to_device('NSCLd', NSCL, np.int32)
     if surf != None:
         copy_to_device('SURd', surf.dict['SUR'], np.int32)
         copy_to_device('BRDFd', surf.dict['BRDF'], np.int32)
@@ -2835,7 +2868,7 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
                 NLAM, NSENSOR, double, kern, kern2, p, X0, le, tab_sensor, envmap, spectrum,
                 prof_atm, prof_oc, cell_atm, cell_oc, wl_proba_icdf, sensor_proba_icdf, cell_proba_icdf,
                 stdev, stdev_lim, rng, alis, myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, mySPECTObj0, hist=False,
-                amf_variance=False):
+                amf_variance=False, nscl=1):
     """
     launch the kernel several time until the targeted number of photons injected is reached
 
@@ -2915,8 +2948,10 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
     
     if ((NATM+NOCE >0) and (NATM_ABS+NOCE_ABS <500) and alis) : 
         NIAMF = 3 if amf_variance else 2
-        tabDistTot = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI,NIAMF), dtype=np.float64)
+        NSCL = nscl
+        tabDistTot = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI,NSCL,NIAMF), dtype=np.float64)
     else : 
+        NSCL = 1
         tabDistTot = gpuzeros((1), dtype=np.float64)
 
     '''
@@ -2955,14 +2990,14 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         tabPhotons = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float64)
         tabPhotonsNoAer = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float64)
         if ((NATM+NOCE >0) and (NATM_ABS+NOCE_ABS <500) and alis) : 
-            tabDist = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI,NIAMF), dtype=np.float64)
+            tabDist = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI,NSCL,NIAMF), dtype=np.float64)
         else :
             tabDist = gpuzeros((1), dtype=np.float64)
     else:
         tabPhotons = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float32)
         tabPhotonsNoAer = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float32)
         if ((NATM+NOCE >0) and (NATM_ABS+NOCE_ABS <500) and alis) : 
-            tabDist = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI,NIAMF), dtype=np.float32)
+            tabDist = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI,NSCL,NIAMF), dtype=np.float32)
         else : 
             tabDist = gpuzeros((1), dtype=np.float32)
 

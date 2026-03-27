@@ -78,6 +78,7 @@ __device__ __constant__ int NLOWd;
 __device__ __constant__ int NJACd;
 __device__ __constant__ int HISTd;
 __device__ __constant__ int NSENSORd;
+__device__ __constant__ int NSCLd; // Number of Scatter Classes for AMF decomposition (Approach 2)
 #ifdef OBJ3D
 // copy en rapport avec les objets :
 __device__ __constant__ int nObj;

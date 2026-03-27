@@ -1846,6 +1846,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     /* We initialize the cumulative distance counters in each layer in atmosphere && ocean*/
     for (int k=0; k<(NATM_ABSd+1); k++) ph->cdist_atm[k]= 0.F;
     for (int k=0; k<(NOCE_ABSd+1); k++) ph->cdist_oc[k] = 0.F;
+    ph->last_scatter_layer = -1; // no scattering yet
     #endif
 
     /* Initialize scattering corrections */
@@ -4387,6 +4388,7 @@ __device__ void choose_emitter(Photon* ph,
             //for (int k=0; k<NATMd+1; k++) ph->cdist_atm[k] = 0.F;
             //for (int k=0; k<NOCEd+1; k++) ph->cdist_oc[k] = 0.F;
             for (int k=0; k<NOCE_ABSd+1; k++) ph->cdist_oc[k] = 0.F;
+            ph->last_scatter_layer = -1; // reset for SIF re-emission
 		} else {
 			ph->emitter = SOLAR_REF; // SOLAR reflection index
             if (ph->env) ph->nenv +=1;
@@ -4418,6 +4420,11 @@ __device__ void choose_scatterer(Photon* ph,
     else return;
     #endif
     //#endif
+
+    // Track last scattering layer for AMF scatter-class decomposition (Approach 2)
+    #if defined(ALIS) && (defined(SPHERIQUE) || defined(ALT_PP))
+    ph->last_scatter_layer = ph->layer;
+    #endif
   
 	float pmol;
 	float pine;
@@ -7570,7 +7577,14 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
           //tabCount3[LL2]= (float)(ph->ith);
        } // HISTd==1
 
-       unsigned long long KK  = K*TABDIST_NIAMF*(NATM_ABSd+NOCE_ABSd);
+       // Compute scatter class index from last scattering layer (Approach 2)
+       int iclass = 0; // default: all photons to class 0
+       if (NSCLd > 1 && ph->last_scatter_layer >= 0) {
+           iclass = (ph->last_scatter_layer * NSCLd) / NATM_ABSd;
+           if (iclass >= NSCLd) iclass = NSCLd - 1;
+       }
+
+       unsigned long long KK  = K*TABDIST_NIAMF*NSCLd*(NATM_ABSd+NOCE_ABSd);
        //unsigned long long KK  = K*(NATM_ABSd+NOCE_ABSd);
        #ifdef DOUBLE
           tabCount2   = (double*)tabDist     + count_level*KK;
@@ -7585,12 +7599,9 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
           for (int n=0; n<NATM_ABSd; n++){
             float d_n = ph->cdist_atm[n+1];
             float w_n = (float)weight * (float)wabs;
-            LL = (n+NOCE_ABSd)*K*TABDIST_NIAMF + is*NBPHId*NBTHETAd*TABDIST_NIAMF + ith*NBPHId*TABDIST_NIAMF + iphi*TABDIST_NIAMF + 0;
+            LL = (n+NOCE_ABSd)*K*TABDIST_NIAMF*NSCLd + is*NBPHId*NBTHETAd*TABDIST_NIAMF*NSCLd + ith*NBPHId*TABDIST_NIAMF*NSCLd + iphi*TABDIST_NIAMF*NSCLd + iclass*TABDIST_NIAMF + 0;
             //LL = (n+NOCE_ABSd)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
             #if __CUDA_ARCH__ >= 600
-            //atomicAdd(tabCount2+LL, (double)ph->cdist_atm[n+1]);
-            //atomicAdd(tabCount2+LL,   (double)ph->weight);
-            //atomicAdd(tabCount2+LL+1, (double)ph->cdist_atm[n+1]*(double)ph->weight);
             atomicAdd(tabCount2+LL,   (double)w_n);
             atomicAdd(tabCount2+LL+1, (double)d_n * (double)w_n);
             #ifdef AMF_VARIANCE
@@ -7609,7 +7620,7 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
           for (int n=0; n<NATM_ABSd; n++){
             float d_n = ph->cdist_atm[n+1];
             float w_n = weight * wabs;
-            LL = (n+NOCE_ABSd)*K*TABDIST_NIAMF + is*NBPHId*NBTHETAd*TABDIST_NIAMF + ith*NBPHId*TABDIST_NIAMF + iphi*TABDIST_NIAMF + 0;
+            LL = (n+NOCE_ABSd)*K*TABDIST_NIAMF*NSCLd + is*NBPHId*NBTHETAd*TABDIST_NIAMF*NSCLd + ith*NBPHId*TABDIST_NIAMF*NSCLd + iphi*TABDIST_NIAMF*NSCLd + iclass*TABDIST_NIAMF + 0;
             atomicAdd(tabCount2+LL,   w_n);
             atomicAdd(tabCount2+LL+1, d_n * w_n);
             #ifdef AMF_VARIANCE
@@ -8050,6 +8061,7 @@ __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
     //for (k=0; k<(NATMd+1); k++) ph_le->cdist_atm[k] = ph->cdist_atm[k];
     //for (k=0; k<(NOCEd+1); k++) ph_le->cdist_oc[k]  = ph->cdist_oc[k];
     for (k=0; k<(NOCE_ABSd+1); k++) ph_le->cdist_oc[k]  = ph->cdist_oc[k];
+    ph_le->last_scatter_layer = ph->last_scatter_layer;
     #endif
     for (k=0; k<NLOWd; k++) ph_le->weight_sca[k] = ph->weight_sca[k];
     ph_le->nsif = ph->nsif;
