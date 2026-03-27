@@ -927,6 +927,55 @@ class Entity(object):
 
         return tt
 
+    def set_transformation(self, transformation, recompute_bbox=True):
+        """
+        Update the entity's transformation and optionally recompute bounding box.
+
+        Parameters
+        ----------
+        transformation : Transformation
+            New transformation object containing rotation angles (rotx, roty, rotz),
+            rotation order (rotOrder), and translation components (transx, transy, transz).
+        recompute_bbox : bool, optional
+            If True (default), recompute the bounding box (bboxGPmin and bboxGPmax)
+            based on the new transformation and the entity's geometry.
+            If False, keep the existing bounding box values.
+            Default: True
+
+        Notes
+        -----
+        The bounding box is automatically recomputed by transforming all geometry
+        points using the new transformation matrix and computing their extent.
+
+        Examples
+        --------
+        >>> entity = Entity(geo=Plane(...), transformation=Transformation())
+        >>> new_tf = Transformation(translation=np.array([1., 2., 3.]))
+        >>> entity.set_transformation(new_tf)  # Update position and recompute bbox
+        >>> entity.set_transformation(new_tf, recompute_bbox=False)  # Update without bbox update
+        """
+        self.transformation = transformation
+
+        if recompute_bbox:
+            # Recompute bounding box based on new transformation
+            box = gc.BBox()
+            E_tf = self.get_transformation()
+            
+            if isinstance(self.geo, Plane):
+                box = box.union(E_tf(self.geo.p1))
+                box = box.union(E_tf(self.geo.p2))
+                box = box.union(E_tf(self.geo.p3))
+                box = box.union(E_tf(self.geo.p4))
+            elif isinstance(self.geo, Spheric):
+                p1 = E_tf(gc.Point(-self.geo.radius, -self.geo.radius, self.geo.z0))
+                p2 = E_tf(gc.Point(self.geo.radius, self.geo.radius, self.geo.z1))
+                box = box.union(p1)
+                box = box.union(p2)
+            
+            self.bboxGPmin = box.pmin
+            self.bboxGPmax = box.pmax
+
+
 class Heliostat(object):
     """
     Composite heliostat assembly consisting of multiple facets.
@@ -1614,25 +1663,17 @@ def visualize_entity(entities, th_deg = 0., ph_deg = 0., draw_method = 'SM', ray
     box = gc.BBox()
     for i in range(0, len(E)):
         E_tf.append(E[i].get_transformation())
-        if isinstance(E[i].geo, Plane):
-            box = box.union(E_tf[i](E[i].geo.p1))
-            box = box.union(E_tf[i](E[i].geo.p2))
-            box = box.union(E_tf[i](E[i].geo.p3))
-            box = box.union(E_tf[i](E[i].geo.p4))
-        elif isinstance(E[i].geo, Spheric):
-            p1 = E_tf[i](gc.Point(-E[i].geo.radius, -E[i].geo.radius, E[i].geo.z0))
-            p2 = E_tf[i](gc.Point(E[i].geo.radius, E[i].geo.radius, E[i].geo.z1))
-            box = box.union(p1)
-            box = box.union(p2)
+        box = box.union((E[i].bboxGPmin))
+        box = box.union((E[i].bboxGPmax))
  
     box_center = box.pmin + 0.5*(box.pmax - box.pmin)
     box_max_size = gc.vmax(box.pmax - box.pmin)
-    pmin_n = gc.Point(box_center.x - 0.75*box_max_size, 
-                      box_center.y - 0.75*box_max_size, 
-                      box_center.z - 0.75*box_max_size)
-    pmax_n = gc.Point(box_center.x + 0.75*box_max_size, 
-                      box_center.y + 0.75*box_max_size, 
-                      box_center.z + 0.75*box_max_size)
+    pmin_n = gc.Point(box_center.x - 0.5*box_max_size, 
+                      box_center.y - 0.5*box_max_size, 
+                      box_center.z - 0.5*box_max_size)
+    pmax_n = gc.Point(box_center.x + 0.5*box_max_size, 
+                      box_center.y + 0.5*box_max_size, 
+                      box_center.z + 0.5*box_max_size)
     box_n = gc.BBox(pmin_n, pmax_n)
 
     # calculate the sun direction vector
