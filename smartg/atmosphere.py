@@ -6,10 +6,6 @@ from pathlib import Path
 from glob import glob
 from luts.luts import MLUT, LUT, Idx, read_mlut, read_mlut_hdf5
 from smartg.tools.phase import calc_iphase
-try:
-    from smartg.tools.third_party_utils import change_altitude_grid
-except ModuleNotFoundError:
-    pass
 from scipy.interpolate import interp1d
 from scipy.integrate import simpson
 from scipy import constants
@@ -888,7 +884,7 @@ class AtmAFGL(Atmosphere):
             self.prof = prof
         else:
             if isinstance(grid, str):
-                grid = change_altitude_grid(prof.z, grid)
+                grid = str2grid_array(grid)
             self.prof = prof.regrid(np.array(grid))
 
         #
@@ -2679,3 +2675,112 @@ def pha2Iparperconv(pha):
             pha_converted[:,:,1,:] = 0.5*(p0-p4)      # P12=P21
             pha_converted[:,:,4,:] = 0.5*(p0-2*p1+p4) # P22
     return pha_converted
+
+
+def str2grid_array(str_grid):
+    """
+    Convert altitude grid specification string to numpy array.
+
+    This function adopts py4cats' compact grid specification format, providing
+    py4cats users with familiar syntax for altitude grid definition in SMARTG.
+
+    Parameters
+    ----------
+    str_grid : str
+        Compact grid specification string describing a piecewise-linear altitude
+        grid. Format: 'start[step1]stop1[step2]stop2[step3]stop3...'
+        
+        Each segment is defined by:
+        - start: starting altitude value (float, int, or scientific notation)
+        - [step]: step size enclosed in square brackets
+        - stop: ending altitude value (float, int, or scientific notation)
+        
+        Supports both positive and negative steps. Results are always monotonic
+        across all segments.
+
+    Returns
+    -------
+    ndarray
+        1D array of altitude values. The array is sorted and contains the
+        generated grid points covering all specified segments.
+
+    Notes
+    -----
+    - Each segment creates a uniformly spaced array using numpy.linspace
+    - The final endpoint is always included in the output
+    - Intermediate endpoints between segments are included with their exact value
+    - Step sizes can be positive or negative
+    - Supports scientific notation (e.g., 1e-3, 2.5E+2)
+    
+
+    Examples
+    --------
+    Simple grid from TOA to ground (100 km to 0 km with step 1 km):
+    
+    >>> grid = str2grid_array('100[1]0')
+    >>> grid
+    array([100.,  99.,  98., ...,   2.,   1.,   0.])
+    >>> len(grid)
+    101
+
+    Multi-segment grid with varying resolution (TOA to ground):
+    
+    >>> grid = str2grid_array('500[10]100[1]0')
+    >>> grid[:5]
+    array([500., 490., 480., 470., 460.])
+    >>> grid[40:43]
+    array([100.,  99.,  98.])
+    
+    Grid with scientific notation:
+    
+    >>> grid = str2grid_array('1[1e-1]1e-1[1e-2]0')
+    >>> grid
+    array([1.  , 0.9 , 0.8 , 0.7 , 0.6 , 0.5 , 0.4 , 0.3 , 0.2 , 0.1 ,
+           0.09, 0.08, 0.07, 0.06, 0.05, 0.04, 0.03, 0.02, 0.01, 0.  ])
+    >>> len(grid)
+    20
+    """
+    import re
+
+    # Split by bracketed steps to extract numbers and steps separately
+    # re.split with capturing group keeps the steps
+    # Result: [start, step1, stop1, step2, stop2, ...]
+    parts = re.split(r'\[([\d.eE+-]+)\]', str_grid)
+
+    if len(parts) < 3 or len(parts) % 2 == 0:
+        raise ValueError(f'Cannot parse grid specification: "{str_grid}"\n'
+                         'Expected format: start[step]stop[step]stop...\n'
+                         'Example: "0[1]100[10]500"')
+
+    # Extract numbers (at even indices) and steps (at odd indices)
+    numbers_str = [parts[i] for i in range(0, len(parts), 2)]
+    steps_str = [parts[i] for i in range(1, len(parts), 2)]
+
+    # Validate we have sensible input
+    if not numbers_str or not steps_str:
+        raise ValueError(f'Cannot parse grid specification: "{str_grid}"\n'
+                         'Expected format: start[step]stop[step]stop...\n'
+                         'Example: "0[1]100[10]500"')
+
+    # Convert to floats
+    try:
+        numbers = [float(x) for x in numbers_str]
+        steps = [float(x) for x in steps_str]
+    except ValueError as e:
+        raise ValueError(f'Invalid numeric value in grid specification: {e}')
+
+    # Validate steps are non-zero
+    if any(step == 0 for step in steps):
+        raise ValueError('Step size cannot be zero')
+
+    # Convert to numpy arrays for vectorized operations
+    numbers = np.asarray(numbers)
+    steps = np.asarray(steps)
+
+    # Vectorized calculation of points per segment
+    n_array = np.round(np.abs(np.diff(numbers) / steps)).astype(int)
+    n_array[-1] += 1  # Ensure final endpoint is included
+
+    # Build piecewise linear grid with list comprehension
+    return np.concatenate([np.linspace(numbers[i], numbers[i + 1], n, endpoint=(i == len(steps) - 1))
+                           for i, n in enumerate(n_array)])
