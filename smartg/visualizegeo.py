@@ -1001,7 +1001,7 @@ class GroupE(object):
     ----------
     LE : list, optional
         List of Entity objects to group. Default is [Entity()].
-    BBOX : list, optional
+    BBOX : None | list, optional
         Custom bounding box as [Pmin, Pmax] where Pmin and Pmax are geoclide.Point
         objects. If None (default), bounding box is computed from LE[0].
     """
@@ -1009,9 +1009,12 @@ class GroupE(object):
         self.le  = LE
         self.nob = len(LE)
         if BBOX is None:
-            # TODO: loop on all entities to automatically compute the global bounding box
-            self.bboxGPmin = LE[0].bboxGPmin
-            self.bboxGPmax = LE[0].bboxGPmax
+            box = gc.BBox(LE[0].bboxGPmin, LE[0].bboxGPmax)
+            for i in range (1, self.nob):
+                box = box.union(LE[i].bboxGPmin)
+                box = box.union(LE[i].bboxGPmax)
+            self.bboxGPmin = box.pmin
+            self.bboxGPmax = box.pmax
         else:
             self.bboxGPmin = BBOX[0]
             self.bboxGPmax = BBOX[1]
