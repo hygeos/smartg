@@ -342,40 +342,43 @@ def transect_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up 
     DoP = 100*IP/I
     DoP.desc = prefix+r'$DoP$'
 
+    if isinstance(ind, Idx_base):
+        ind = np.round(ind.index(mlut.axes['Azimuth angles'])).astype(int)
+
     if not full:
         if QU:
             if fig is None: fig = figure(figsize=(8, 8))
             if logI:
                 lI=I.apply(np.log10)
                 lI.desc = mdesc(I.desc, logI=logI)
-                transect2D(lI,  index=ind, sub=221, fig=fig, color=color,  **kwargs)
+                transect2D_xr(lut_to_xr(lI),  index=ind, sub=221, fig=fig, color=color,  **kwargs)
             else:
                 I.desc = mdesc(I.desc)
-                transect2D(I,  index=ind, sub=221, fig=fig, color=color,   **kwargs)
+                transect2D_xr(lut_to_xr(I),  index=ind, sub=221, fig=fig, color=color,   **kwargs)
             Q.desc = mdesc(Q.desc)
             U.desc = mdesc(U.desc)
-            transect2D(Q,  index=ind, sub=222, fig=fig, color=color, **kwargs)
-            transect2D(U,  index=ind, sub=223, fig=fig, color=color, **kwargs)
+            transect2D_xr(lut_to_xr(Q),  index=ind, sub=222, fig=fig, color=color, **kwargs)
+            transect2D_xr(lut_to_xr(U),  index=ind, sub=223, fig=fig, color=color, **kwargs)
             if Circ:
                 V.desc = mdesc(V.desc)
-                transect2D(V, index=ind, sub=224, fig=fig, color=color, **kwargs)
+                transect2D_xr(lut_to_xr(V), index=ind, sub=224, fig=fig, color=color, **kwargs)
             else:
-                transect2D(DoP, index=ind, sub=224, fig=fig,  color=color, percent=True, **kwargs)
+                transect2D_xr(lut_to_xr(DoP), index=ind, sub=224, fig=fig,  color=color, percent=True, **kwargs)
         else:
             # show only I and PR
             if fig is None: fig = figure(figsize=(8, 4))
             if logI:
                 lI=I.apply(np.log10)
                 lI.desc = mdesc(I.desc, logI=logI)
-                transect2D(lI,  index=ind, sub=121, fig=fig, color=color,   **kwargs)
+                transect2D_xr(lut_to_xr(lI),  index=ind, sub=121, fig=fig, color=color,   **kwargs)
             else:
                 I.desc = mdesc(I.desc)
-                transect2D(I,  index=ind, sub=121, fig=fig, color=color,  **kwargs)
+                transect2D_xr(lut_to_xr(I),  index=ind, sub=121, fig=fig, color=color,  **kwargs)
 
             if Circ:
-                transect2D(DoCP, index=ind, sub=122, fig=fig,  color=color, percent=True, **kwargs)
+                transect2D_xr(lut_to_xr(DoCP), index=ind, sub=122, fig=fig,  color=color, percent=True, **kwargs)
             else:
-                transect2D(DoP, index=ind, sub=122, fig=fig, color=color, percent=True, **kwargs)
+                transect2D_xr(lut_to_xr(DoP), index=ind, sub=122, fig=fig, color=color, percent=True, **kwargs)
 
         return fig
 
@@ -392,18 +395,18 @@ def transect_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up 
         Q.desc = mdesc(Q.desc)
         U.desc = mdesc(U.desc)
         V.desc = mdesc(V.desc)
-        transect2D(I,  index=ind,  sub=141, fig=fig1, color=color,  **kwargs)
-        transect2D(Q,  index=ind,  sub=142, fig=fig1, color=color, **kwargs)
-        transect2D(U,  index=ind, sub=143, fig=fig1, color=color, **kwargs)
-        transect2D(V,  index=ind, sub=144, fig=fig1, color=color, **kwargs)
+        transect2D_xr(lut_to_xr(I),  index=ind,  sub=141, fig=fig1, color=color,  **kwargs)
+        transect2D_xr(lut_to_xr(Q),  index=ind,  sub=142, fig=fig1, color=color, **kwargs)
+        transect2D_xr(lut_to_xr(U),  index=ind, sub=143, fig=fig1, color=color, **kwargs)
+        transect2D_xr(lut_to_xr(V),  index=ind, sub=144, fig=fig1, color=color, **kwargs)
         
         Q.desc = mdesc(Q.desc)
         U.desc = mdesc(U.desc)
         V.desc = mdesc(V.desc)
-        transect2D(lI,  index=ind, sub=141,fig=fig2, color=color, **kwargs)
-        transect2D(DoLP,  index=ind, sub=142, fig=fig2, color=color, percent=True, **kwargs)
-        transect2D(DoCP,  index=ind, sub=143, fig=fig2, color=color, percent=True, **kwargs)
-        transect2D(DoP,  index=ind,  sub=144, fig=fig2, color=color, percent=True, **kwargs)
+        transect2D_xr(lut_to_xr(lI),  index=ind, sub=141,fig=fig2, color=color, **kwargs)
+        transect2D_xr(lut_to_xr(DoLP),  index=ind, sub=142, fig=fig2, color=color, percent=True, **kwargs)
+        transect2D_xr(lut_to_xr(DoCP),  index=ind, sub=143, fig=fig2, color=color, percent=True, **kwargs)
+        transect2D_xr(lut_to_xr(DoP),  index=ind,  sub=144, fig=fig2, color=color, percent=True, **kwargs)
         #transect2D(AoLP, index=ind,  sub=144, fig=fig2, color=color, **kwargs)
 
         return fig1, fig2
@@ -937,8 +940,7 @@ def input_view(ds_sg, iw=0, kind='atm', zmax=None, ipha=None):
     Parameters
     ----------
     ds_sg : xr.Dataset
-        Multi-dimensional Look-Up Table (MLUT) xarray Dataset from SMART-G,
-        can be from simulation results or smartg input profile,
+        An xarray Dataset from SMART-G, can be from simulation results or smartg input profile,
         containing phase function data and optical depth profiles.
     iw : int, optional
         Wavelength index for multi-wavelength simulations. Default is 0.
