@@ -9,6 +9,12 @@ warnings.simplefilter("ignore",DeprecationWarning)
 from pylab import figure, subplot2grid, tight_layout, setp, subplots, xlabel, ylabel, FormatStrFormatter
 import numpy as np
 np.seterr(invalid='ignore', divide='ignore') # ignore division by zero errors
+import xarray as xr
+import mpl_toolkits.axisartist.angle_helper as angle_helper
+from matplotlib.transforms import Affine2D
+from mpl_toolkits.axisartist import floating_axes
+from matplotlib.projections import PolarAxes
+from matplotlib import cm
 from luts.luts import plot_polar, transect2D as _transect2D_orig, Idx, Idx_base
 from smartg.atmosphere import diff1
 from smartg.water import diff2
@@ -133,7 +139,7 @@ def mdesc(desc, logI=False):
         return pref + stokes + r'^{\uparrow}' + '_{'+desc[sep2+1:sep3]+'}' + desc[sep3+1:] +'$'
     else:
         return pref + stokes + r'^{\downarrow}' + '_{'+desc[sep2+1:sep3]+'}' + desc[sep3+1:] +'$'
-    
+
 
 def smartg_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (TOA)', prefix='', ind=[0], cmap=None, fig=None, subdict=None,
         Imin=None, Imax=None, Pmin=0, Pmax=100):
@@ -1238,4 +1244,385 @@ def compare_spectrum(mlut, mref, field='up (TOA)',errb=False, logI=False, U_sign
                 ax[1,i].set_ylabel(r'$\Delta$')
                 ax[2,i].set_ylabel(r'$\Delta (\%)$')
             ax[2,i].set_xlabel(lambda_title)
+    return fig
+
+
+# ============================================================================
+# xarray-compatible versions of plotting functions
+# ============================================================================
+
+def bin_edges(x, min=None, max=None):
+    """Helper function to compute bin edges from bin centers"""
+    edges = np.zeros(len(x) + 1)
+    edges[1:-1] = (x[1:] + x[:-1]) / 2.0
+    edges[0] = 2 * x[0] - edges[1]
+    edges[-1] = 2 * x[-1] - edges[-2]
+    if min is not None:
+        edges[0] = min
+    if max is not None:
+        edges[-1] = max
+    return edges
+
+
+def plot_polar_xr(da, index=None, vmin=None, vmax=None, rect=211, sub=212,
+                  sym=True, swap='auto', fig=None, cmap=None, semi=False):
+    """
+    Contour and optionally transect of 2D DataArray on a semi-polar plot.
+    
+    xarray version of luts.plot_polar, compatible with xr.DataArray objects.
+
+    Parameters
+    ----------
+    da : xr.DataArray
+        2D data array with dimensions (angle, radius) or similar
+        Angle is assumed to be in degrees and is not scaled
+    index : int, array, or list, optional
+        Index/indices of the item to transect in the first dimension
+        If None (default), no transect
+    vmin, vmax : float, optional
+        Range of values. If None, determined from data
+    rect : int
+        Subplot position of the main plot (111 for example)
+    sub : int
+        Subplot position of the transect
+    sym : bool
+        If True, the transect uses symmetrical axis
+    swap : bool or 'auto'
+        If True or 'auto', swap the order of the 2 axes
+        If 'auto', searches for 'azi' in both dimension names
+    fig : matplotlib.figure.Figure, optional
+        Destination figure. If None, create a new figure
+    cmap : matplotlib.cm.Colormap, optional
+        Color map to use
+    semi : bool
+        If True, use semi-polar (180 deg), otherwise polar (360 deg)
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        The figure containing the plot
+    """
+    
+    # Initialization
+    Phimax = 360.
+    if semi:
+        Phimax = 180.
+
+    assert da.ndim == 2, "DataArray must be 2D"
+
+    show_sub = index is not None
+    if fig is None:
+        if show_sub:
+            fig = figure(figsize=(4.5, 4.5))
+        else:
+            fig = figure(figsize=(4.5, 6))
+
+    # Get dimension names
+    dim_names = list(da.dims)
+    dim0_name, dim1_name = dim_names[0], dim_names[1]
+
+    # Determine if we need to swap axes
+    if swap == 'auto':
+        if ('azi' in dim1_name.lower()) and ('azi' not in dim0_name.lower()):
+            swap = True
+        else:
+            swap = False
+
+    # Get axes values and data
+    if swap:
+        ax1_name, ax2_name = dim1_name, dim0_name
+        ax1 = da.coords[dim1_name].values
+        ax2 = da.coords[dim0_name].values
+        data = da.values.T  # Transpose to get (angle, radius)
+    else:
+        ax1_name, ax2_name = dim0_name, dim1_name
+        ax1 = da.coords[dim0_name].values
+        ax2 = da.coords[dim1_name].values
+        data = da.values
+
+    # Determine axis labels
+    label1 = da.coords[ax1_name].attrs.get('long_name', ax1_name)
+    label2 = da.coords[ax2_name].attrs.get('long_name', ax2_name)
+
+    # Determine min/max values
+    if vmin is None:
+        vmin = np.nanmin(data)
+    if vmax is None:
+        vmax = np.nanmax(data)
+    if vmin == vmax:
+        vmin -= 0.001
+        vmax += 0.001
+    if vmin > vmax:
+        vmin, vmax = vmax, vmin
+
+    # Semi-polar axis setup
+    ax1_scaled = ax1
+    ax2_min = np.amin(ax2)
+    ax2_max = np.amax(ax2)
+    ax2_scaled = (ax2 - ax2_min) / (ax2_max - ax2_min) * 90.
+
+    # Setup angle and radius axis locators/formatters
+    grid_locator1 = angle_helper.LocatorDMS({True: 4, False: 8}[semi], include_last=False)
+    tick_formatter1 = angle_helper.FormatterDMS()
+
+    class Locator(object):
+        def __call__(self, *args):
+            return [np.array([0, 30, 60, 90]), 4, 1.0]
+
+    class Formatter(object):
+        def __call__(self, *args):
+            return list(map(lambda x: '{:.3g}'.format(x), np.linspace(ax2_min, ax2_max, 4)))
+
+    # Radius axis locator/formatter
+    if ((ax2_min < 10.) and (ax2_min >= 0)
+            and (ax2_max <= 90) and (ax2_max > 80)):
+        grid_locator2 = angle_helper.LocatorDMS(4)
+        tick_formatter2 = angle_helper.FormatterDMS()
+    else:
+        grid_locator2 = Locator()
+        tick_formatter2 = Formatter()
+
+    # Setup transform
+    tr_rotate = Affine2D().translate(0, 0)
+    tr_scale = Affine2D().scale(np.pi / 180., 1.)
+    tr = tr_rotate + tr_scale + PolarAxes.PolarTransform()
+
+    # Create grid helper and floating subplot
+    grid_helper = floating_axes.GridHelperCurveLinear(
+        tr,
+        extremes=(0., Phimax, 0., 90.),
+        grid_locator1=grid_locator1,
+        grid_locator2=grid_locator2,
+        tick_formatter1=tick_formatter1,
+        tick_formatter2=tick_formatter2,
+    )
+
+    ax_polar = floating_axes.FloatingSubplot(fig, rect, grid_helper=grid_helper)
+    fig.add_subplot(ax_polar)
+
+    # Adjust polar axis
+    ax_polar.grid(True)
+    ax_polar.axis["left"].set_axis_direction("bottom")
+    ax_polar.axis["right"].set_axis_direction("top")
+    ax_polar.axis["bottom"].set_visible(False)
+    ax_polar.axis["top"].set_axis_direction("bottom")
+    ax_polar.axis["top"].toggle(ticklabels=True, label=True)
+    ax_polar.axis["top"].major_ticklabels.set_axis_direction("top")
+    ax_polar.axis["top"].label.set_axis_direction("top")
+
+    ax_polar.axis["top"].axes.text(0.72, 0.98, label1,
+                                    transform=ax_polar.transAxes,
+                                    ha='left', va='bottom')
+    ax_polar.axis["left"].axes.text(0.10, -0.03, label2,
+                                    transform=ax_polar.transAxes,
+                                    ha='center', va='top')
+
+    # Create auxiliary polar axes
+    aux_ax_polar = ax_polar.get_aux_axes(tr)
+    aux_ax_polar.patch = ax_polar.patch
+    ax_polar.patch.zorder = 0.9
+
+    # Initialize cartesian axis for transect
+    if show_sub:
+        ax_cart = fig.add_subplot(sub)
+        if sym:
+            ax_cart.set_xlim(-ax2_max, ax2_max)
+        else:
+            ax_cart.set_xlim(ax2_min, ax2_max)
+        ax_cart.set_ylim(vmin, vmax)
+        ax_cart.ticklabel_format(axis='y', style='sci', scilimits=(-2, 2))
+        ax_cart.grid(True)
+
+    # Setup colormap
+    if cmap is None:
+        cmap = cm.rainbow.copy()
+        cmap.set_under('black')
+        cmap.set_over('white')
+        cmap.set_bad('0.5')
+
+    # Draw colormesh
+    r, t = np.meshgrid(bin_edges(ax2_scaled, min=0, max=90), bin_edges(ax1_scaled))
+    masked_data = np.ma.masked_where(np.isnan(data) | np.isinf(data), data)
+    im = aux_ax_polar.pcolormesh(t, r, masked_data, cmap=cmap, vmin=vmin, vmax=vmax)
+
+    # Draw transects if requested
+    if show_sub:
+        # Ensure index is array-like
+        if isinstance(index, (int, np.integer)):
+            indexes = [index]
+        elif isinstance(index, (list, tuple)):
+            indexes = list(index)
+        else:
+            indexes = np.atleast_1d(index).astype(int)
+
+        for ii, idx in enumerate(indexes):
+            if semi:
+                mirror_index = -1 - idx
+            else:
+                mirror_index = (ax1_scaled.shape[0] // 2 + idx) % ax1_scaled.shape[0]
+
+            # Draw line over colormesh
+            vertex0 = np.array([[0, 0], [ax1_scaled[idx], ax2_max]])
+            vertex1 = np.array([[0, 0], [ax1_scaled[mirror_index], ax2_max]])
+            aux_ax_polar.plot(vertex0[:, 0], vertex0[:, 1], 'w')
+            if sym:
+                aux_ax_polar.plot(vertex1[:, 0], vertex1[:, 1], 'w--', linewidth=2)
+
+            # Plot transects
+            color = ['k', 'r', 'g', 'b', 'm', 'y'][ii % 6]
+            ax_cart.plot(ax2, data[idx, :], '-' + color)
+            if sym:
+                ax_cart.plot(-ax2, data[mirror_index, :], '--' + color)
+
+    # Add colorbar
+    fig.colorbar(im, orientation='horizontal',
+                 extend='both', ticks=np.linspace(vmin, vmax, 5),
+                 shrink=0.7)
+
+    # Add title
+    title = da.attrs.get('long_name', da.name)
+    if title is not None:
+        ax_polar.set_title(title, weight='bold', position=(0.05, 0.97))
+
+    return fig
+
+
+def transect2D_xr(da, index=None, vmin=None, vmax=None, sym=True, swap='auto', 
+                  fig=None, sub=121, color='k', percent=False, fmt='-'):
+    """
+    xarray-compatible version of transect2D.
+    
+    Transect of 2D DataArray - Fixed version that reuses existing axes.
+
+    Parameters
+    ----------
+    da : xr.DataArray
+        2D data array to display
+    index : int or array-like, optional
+        Index/indices to transect
+    vmin, vmax : float, optional
+        Value range
+    sym : bool
+        Use symmetrical axis
+    swap : bool or 'auto'
+        Swap axes if needed
+    fig : matplotlib.figure.Figure, optional
+        Destination figure
+    sub : int
+        Subplot position
+    color : str
+        Color for the plot
+    percent : bool
+        If True, set scale to 0-100%
+    fmt : str
+        Plot format string
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+    """
+    
+    assert da.ndim == 2, "DataArray must be 2D"
+
+    if fig is None:
+        fig = figure(figsize=(4.5, 2.5))
+
+    # Get dimension names
+    dim_names = list(da.dims)
+    
+    if swap == 'auto':
+        if ('azi' in dim_names[1].lower()) and ('azi' not in dim_names[0].lower()):
+            swap = True
+        else:
+            swap = False
+
+    # Get axes and data
+    if swap:
+        ax1 = da.coords[dim_names[1]].values
+        ax2 = da.coords[dim_names[0]].values
+        name1 = dim_names[1]
+        name2 = dim_names[0]
+        data = da.values.T
+    else:
+        ax1 = da.coords[dim_names[0]].values
+        ax2 = da.coords[dim_names[1]].values
+        name1 = dim_names[0]
+        name2 = dim_names[1]
+        data = da.values
+
+    # Determine value range
+    if vmin is None:
+        vmin = np.nanmin(data)
+    if vmax is None:
+        vmax = np.nanmax(data)
+    if vmin == vmax:
+        vmin -= 0.001
+        vmax += 0.001
+    if vmin > vmax:
+        vmin, vmax = vmax, vmin
+    if percent:
+        vmin = 0.
+        vmax = 100.
+
+    ax1_scaled = ax1
+    label2 = da.coords[name2].attrs.get('long_name', name2)
+
+    # Ensure index is an integer
+    if index is not None:
+        if isinstance(index, (list, tuple)):
+            index = int(index[0])
+        else:
+            index = int(index)
+    
+    if index is None:
+        index = 0
+
+    mirror_index = (ax1_scaled.shape[0] // 2 + index) % ax1_scaled.shape[0]
+
+    ax2_min = np.amin(ax2)
+    ax2_max = np.amax(ax2)
+    label1 = name1 + ' {:7.2f}'.format(ax1_scaled[index])
+
+    # Parse subplot specification
+    nrows = sub // 100
+    ncols = (sub // 10) % 10
+    idx = (sub % 10) - 1
+
+    # Check if subplot already exists
+    ax_cart = None
+    marker_name = f'_transect2D_sub_{sub}'
+    if hasattr(fig, marker_name):
+        ax_cart = getattr(fig, marker_name)
+
+    is_new_axes = ax_cart is None
+    if is_new_axes:
+        ax_cart = fig.add_subplot(sub)
+        setattr(fig, marker_name, ax_cart)
+        ax_cart.grid(True)
+        ax_cart.set_xlabel(label2)
+        if sym:
+            ax_cart.set_xlim(-ax2_max, ax2_max)
+        else:
+            ax_cart.set_xlim(ax2_min, ax2_max)
+        ax_cart.set_ylim(vmin, vmax)
+        ax_cart._transect2D_first = True
+    else:
+        # Expand ylim to accommodate new data
+        current_ylim = ax_cart.get_ylim()
+        new_vmin = min(current_ylim[0], vmin)
+        new_vmax = max(current_ylim[1], vmax)
+        ax_cart.set_ylim(new_vmin, new_vmax)
+
+    ax_cart.ticklabel_format(axis='y', style='sci', scilimits=(-2, 2))
+
+    # Plot transects
+    ax_cart.plot(ax2, data[index, :], fmt, color=color)
+    if sym:
+        ax_cart.plot(-ax2, data[mirror_index, :], fmt, color=color)
+
+    # Add title
+    title = da.attrs.get('long_name', da.name)
+    if title is not None:
+        ax_cart.set_title(title)
+
     return fig
