@@ -580,16 +580,16 @@ def spectrum_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up 
 
         return fig1, fig2
         
-def phase_view(ds_out, ipha=None, fig=None, axarr=None, iw=0, kind='atm',
+def phase_view(ds_sg, ipha=None, fig=None, axarr=None, iw=0, kind='atm',
                show_trunc=False, force_4stk=False):
     """
     Visualization of SMART-G phase function from output.
 
     Parameters
     ----------
-    ds_out : xr.Dataset
-        Multi-dimensional Look-Up Table of a SMART-G simulation return result, 
-        containing phase function data with variables 'phase_atm' or 'phase_oc', 
+    ds_sg : xr.Dataset
+        An xarray Dataset from SMART-G, can be from simulation results or smartg input
+        profile, containing phase function data with variables 'phase_atm' or 'phase_oc', 
         and 'OD_atm' or 'OD_oc'.
     ipha : int, optional
         Absolute index of the phase function coming from Profile.
@@ -615,34 +615,34 @@ def phase_view(ds_out, ipha=None, fig=None, axarr=None, iw=0, kind='atm',
         Array of matplotlib axes.
     """
 
-    if isinstance(ds_out, MLUT):
-        warn_message = "\nUsing an MLUT for ds_out is deprecated, use an xarray.Dataset instead."
+    if isinstance(ds_sg, MLUT):
+        warn_message = "\nUsing an MLUT for ds_sg is deprecated, use an xarray.Dataset instead."
         warnings.warn(warn_message, DeprecationWarning)
-        ds_out = ds_out.to_xarray()
+        ds_sg = ds_sg.to_xarray()
 
     od_key = 'OD_'+kind
     phase_key = 'phase_'+kind
     theta_key = 'theta_'+kind
     
     # Handle multi-wavelength case
-    od_data = ds_out[od_key]
+    od_data = ds_sg[od_key]
     nd = len(od_data.dims)
     
     if nd > 1:
         # Find wavelength dimension index
         if 'wavelength' in od_data.dims:
-            wavelength = ds_out.coords['wavelength'].values
+            wavelength = ds_sg.coords['wavelength'].values
             labw = r' at $%.1f nm$' % wavelength[iw]
         else:
             labw = ''
     else:
         labw = ''
 
-    phase = ds_out[phase_key].values
+    phase = ds_sg[phase_key].values
     if show_trunc:
-        phase_tr = ds_out['phase_'+kind+'_tr'].values
+        phase_tr = ds_sg['phase_'+kind+'_tr'].values
     
-    ang = ds_out.coords[theta_key].values
+    ang = ds_sg.coords[theta_key].values
     nstk = phase.shape[1]
     
     if (axarr is None):
@@ -655,8 +655,8 @@ def phase_view(ds_out, ipha=None, fig=None, axarr=None, iw=0, kind='atm',
         
     if ipha is None:
         iphase_key = 'iphase_'+kind
-        if iphase_key in ds_out:
-            iphase_data = ds_out[iphase_key].values
+        if iphase_key in ds_sg:
+            iphase_data = ds_sg[iphase_key].values
             if nd > 1:
                 ni = np.unique(iphase_data)
             else:
