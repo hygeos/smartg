@@ -282,34 +282,34 @@ def transect_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up 
             if logI:
                 lI=I.apply(np.log10)
                 lI.desc = mdesc(I.desc, logI=logI)
-                transect2D_xr(lut_to_xr(lI),  index=ind, sub=221, fig=fig, color=color,  **kwargs)
+                transect2D(lut_to_xr(lI),  index=ind, sub=221, fig=fig, color=color,  **kwargs)
             else:
                 I.desc = mdesc(I.desc)
-                transect2D_xr(lut_to_xr(I),  index=ind, sub=221, fig=fig, color=color,   **kwargs)
+                transect2D(lut_to_xr(I),  index=ind, sub=221, fig=fig, color=color,   **kwargs)
             Q.desc = mdesc(Q.desc)
             U.desc = mdesc(U.desc)
-            transect2D_xr(lut_to_xr(Q),  index=ind, sub=222, fig=fig, color=color, **kwargs)
-            transect2D_xr(lut_to_xr(U),  index=ind, sub=223, fig=fig, color=color, **kwargs)
+            transect2D(lut_to_xr(Q),  index=ind, sub=222, fig=fig, color=color, **kwargs)
+            transect2D(lut_to_xr(U),  index=ind, sub=223, fig=fig, color=color, **kwargs)
             if Circ:
                 V.desc = mdesc(V.desc)
-                transect2D_xr(lut_to_xr(V), index=ind, sub=224, fig=fig, color=color, **kwargs)
+                transect2D(lut_to_xr(V), index=ind, sub=224, fig=fig, color=color, **kwargs)
             else:
-                transect2D_xr(lut_to_xr(DoP), index=ind, sub=224, fig=fig,  color=color, percent=True, **kwargs)
+                transect2D(lut_to_xr(DoP), index=ind, sub=224, fig=fig,  color=color, percent=True, **kwargs)
         else:
             # show only I and PR
             if fig is None: fig = figure(figsize=(8, 4))
             if logI:
                 lI=I.apply(np.log10)
                 lI.desc = mdesc(I.desc, logI=logI)
-                transect2D_xr(lut_to_xr(lI),  index=ind, sub=121, fig=fig, color=color,   **kwargs)
+                transect2D(lut_to_xr(lI),  index=ind, sub=121, fig=fig, color=color,   **kwargs)
             else:
                 I.desc = mdesc(I.desc)
-                transect2D_xr(lut_to_xr(I),  index=ind, sub=121, fig=fig, color=color,  **kwargs)
+                transect2D(lut_to_xr(I),  index=ind, sub=121, fig=fig, color=color,  **kwargs)
 
             if Circ:
-                transect2D_xr(lut_to_xr(DoCP), index=ind, sub=122, fig=fig,  color=color, percent=True, **kwargs)
+                transect2D(lut_to_xr(DoCP), index=ind, sub=122, fig=fig,  color=color, percent=True, **kwargs)
             else:
-                transect2D_xr(lut_to_xr(DoP), index=ind, sub=122, fig=fig, color=color, percent=True, **kwargs)
+                transect2D(lut_to_xr(DoP), index=ind, sub=122, fig=fig, color=color, percent=True, **kwargs)
 
         return fig
 
@@ -326,18 +326,18 @@ def transect_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up 
         Q.desc = mdesc(Q.desc)
         U.desc = mdesc(U.desc)
         V.desc = mdesc(V.desc)
-        transect2D_xr(lut_to_xr(I),  index=ind,  sub=141, fig=fig1, color=color,  **kwargs)
-        transect2D_xr(lut_to_xr(Q),  index=ind,  sub=142, fig=fig1, color=color, **kwargs)
-        transect2D_xr(lut_to_xr(U),  index=ind, sub=143, fig=fig1, color=color, **kwargs)
-        transect2D_xr(lut_to_xr(V),  index=ind, sub=144, fig=fig1, color=color, **kwargs)
+        transect2D(lut_to_xr(I),  index=ind,  sub=141, fig=fig1, color=color,  **kwargs)
+        transect2D(lut_to_xr(Q),  index=ind,  sub=142, fig=fig1, color=color, **kwargs)
+        transect2D(lut_to_xr(U),  index=ind, sub=143, fig=fig1, color=color, **kwargs)
+        transect2D(lut_to_xr(V),  index=ind, sub=144, fig=fig1, color=color, **kwargs)
         
         Q.desc = mdesc(Q.desc)
         U.desc = mdesc(U.desc)
         V.desc = mdesc(V.desc)
-        transect2D_xr(lut_to_xr(lI),  index=ind, sub=141,fig=fig2, color=color, **kwargs)
-        transect2D_xr(lut_to_xr(DoLP),  index=ind, sub=142, fig=fig2, color=color, percent=True, **kwargs)
-        transect2D_xr(lut_to_xr(DoCP),  index=ind, sub=143, fig=fig2, color=color, percent=True, **kwargs)
-        transect2D_xr(lut_to_xr(DoP),  index=ind,  sub=144, fig=fig2, color=color, percent=True, **kwargs)
+        transect2D(lut_to_xr(lI),  index=ind, sub=141,fig=fig2, color=color, **kwargs)
+        transect2D(lut_to_xr(DoLP),  index=ind, sub=142, fig=fig2, color=color, percent=True, **kwargs)
+        transect2D(lut_to_xr(DoCP),  index=ind, sub=143, fig=fig2, color=color, percent=True, **kwargs)
+        transect2D(lut_to_xr(DoP),  index=ind,  sub=144, fig=fig2, color=color, percent=True, **kwargs)
 
         return fig1, fig2
 
@@ -1654,7 +1654,7 @@ def plot_polar_xr(da, index=None, vmin=None, vmax=None, rect=211, sub=212,
     return fig
 
 
-def transect2D_xr(da, index=None, vmin=None, vmax=None, sym=True, swap='auto', 
+def transect2D(da, index=None, vmin=None, vmax=None, sym=True, swap='auto', 
                   fig=None, sub=121, color='k', percent=False, fmt='-'):
     """
     xarray-compatible version of transect2D.
