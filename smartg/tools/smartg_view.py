@@ -15,7 +15,7 @@ from matplotlib.transforms import Affine2D
 from mpl_toolkits.axisartist import floating_axes
 from matplotlib.projections import PolarAxes
 from matplotlib import cm
-from luts.luts import plot_polar, transect2D as _transect2D_orig, Idx, Idx_base
+from luts.luts import plot_polar, transect2D as _transect2D_orig, Idx, Idx_base, MLUT
 from smartg.atmosphere import diff1
 from smartg.water import diff2
 
@@ -580,34 +580,71 @@ def spectrum_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up 
 
         return fig1, fig2
         
-def phase_view(mlut, ipha=None, fig=None, axarr=None, iw=0, kind='atm',
+def phase_view(ds_out, ipha=None, fig=None, axarr=None, iw=0, kind='atm',
                show_trunc=False, force_4stk=False):
-    '''
-    visualization of a smartg MLUT phase function from output
+    """
+    Visualization of SMART-G phase function from output.
 
-    Options:
-        ipha: absolute index of the phase function coming from Profile
-        fig : fig object to be created or included in
-        axarr : system of axes (2,2) to be created or used
-        iw : in case of multi wavelength simulation, index of wavelength to be plotted
-        kind : atmopsheric 'atm' or oceanic 'oc' phase function
-    '''
+    Parameters
+    ----------
+    ds_out : xr.Dataset
+        Multi-dimensional Look-Up Table of a SMART-G simulation return result, 
+        containing phase function data with variables 'phase_atm' or 'phase_oc', 
+        and 'OD_atm' or 'OD_oc'.
+    ipha : int, optional
+        Absolute index of the phase function coming from Profile.
+        If None, uses all unique indices from iphase_kind.
+    fig : matplotlib.figure.Figure, optional
+        Figure object. If None, creates a new figure.
+    axarr : numpy.ndarray, optional
+        2D array of matplotlib axes. If None, creates appropriate subplot grid.
+    iw : int, optional
+        Wavelength index for multi-wavelength simulations. Default is 0.
+    kind : {'atm', 'oc'}, optional
+        Phase function type: 'atm' for atmospheric, 'oc' for oceanic. Default is 'atm'.
+    show_trunc : bool, optional
+        If True, also plots truncated phase function. Default is False.
+    force_4stk : bool, optional
+        If True, forces 2x2 subplot layout even for 6-stokes. Default is False.
 
-    nd = mlut['OD_'+kind].ndim
-    if nd>1:
-        wi = mlut['OD_'+kind].names.index('wavelength') # Wavelength index
-        key = [slice(None)]*nd
-        key[wi] = iw
-        key=tuple(key)
-        labw=r' at $%.1f nm$'%mlut.axes['wavelength'][iw]
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        Figure object containing the phase function plots.
+    axarr : numpy.ndarray
+        Array of matplotlib axes.
+    """
+
+    if isinstance(ds_out, MLUT):
+        warn_message = "\nUsing an MLUT for ds_out is deprecated, use an xarray.Dataset instead."
+        warnings.warn(warn_message, DeprecationWarning)
+        ds_out = ds_out.to_xarray()
+
+    od_key = 'OD_'+kind
+    phase_key = 'phase_'+kind
+    theta_key = 'theta_'+kind
+    
+    # Handle multi-wavelength case
+    od_data = ds_out[od_key]
+    nd = len(od_data.dims)
+    
+    if nd > 1:
+        # Find wavelength dimension index
+        if 'wavelength' in od_data.dims:
+            wavelength = ds_out.coords['wavelength'].values
+            labw = r' at $%.1f nm$' % wavelength[iw]
+        else:
+            labw = ''
     else:
-        key=tuple([slice(None)])
-        labw=''
+        labw = ''
 
-    phase = mlut['phase_'+kind]
-    if show_trunc : phase_tr = mlut['phase_'+kind+'_tr']
-    ang = phase.axis('theta_'+kind)
-    nstk = len(phase[0,:,0])
+    phase = ds_out[phase_key].values
+    if show_trunc:
+        phase_tr = ds_out['phase_'+kind+'_tr'].values
+    
+    ang = ds_out.coords[theta_key].values
+    nstk = phase.shape[1]
+    
     if (axarr is None):
         if nstk == 4 or force_4stk:
             fig, axarr = subplots(2, 2)
@@ -616,8 +653,18 @@ def phase_view(mlut, ipha=None, fig=None, axarr=None, iw=0, kind='atm',
             fig, axarr = subplots(nrows=3, ncols=2)
             fig.set_size_inches(10, 9)
         
-    if (ipha is None) : ni= np.unique(mlut['iphase_'+kind].__getitem__(key)) 
-    else:ni=[ipha]
+    if ipha is None:
+        iphase_key = 'iphase_'+kind
+        if iphase_key in ds_out:
+            iphase_data = ds_out[iphase_key].values
+            if nd > 1:
+                ni = np.unique(iphase_data)
+            else:
+                ni = np.unique(iphase_data)
+        else:
+            ni = [0]
+    else:
+        ni = [ipha]
     
     for i in ni:
         if nstk == 4:
