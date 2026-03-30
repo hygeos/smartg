@@ -411,61 +411,82 @@ def transect_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up 
 
         return fig1, fig2
 
-def spectrum(lut, vmin=None, vmax=None, sub='111', fig=None, color='k', percent=False, fmt='-'):
-    '''
-    spectrum of a 1D LUT
 
-    lut:  1D look-up table to display
-            with axis 'wavelength'
-    vmin, vmax: range of values
-                default None: determine min/max from values
-    fig : destination figure. If None (default), create a new figure.
-    color : color of the transect
-    percent: if True set scale to 0 to 100%
-    '''
+def spectrum(da, vmin=None, vmax=None, sub='111', fig=None, color='k', percent=False, fmt='-'):
+    """
+    Plot spectrum of a 1D DataArray.
+
+    Parameters
+    ----------
+    da : xr.DataArray
+        One-dimensional xarray DataArray with 'wavelength' dimension.
+    vmin, vmax : float, optional
+        Range of values. If None (default), determined from data min/max.
+    sub : str, optional
+        Subplot specification. Default is '111'.
+    fig : matplotlib.figure.Figure, optional
+        Destination figure. If None, creates a new figure.
+    color : str, optional
+        Color of the plot line. Default is 'k' (black).
+    percent : bool, optional
+        If True, scale y-axis to 0-100%. Default is False.
+    fmt : str, optional
+        Line format. Default is '-'.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        Figure object containing the spectrum plot.
+    """
     from pylab import figure
 
-    assert 'wavelength' in lut.names
+    if isinstance(da, object) and hasattr(da, 'names') and hasattr(da, 'axes'):
+        warn_message = "\nUsing an LUT for da is deprecated, use an xarray.DataArray instead."
+        warnings.warn(warn_message, DeprecationWarning)
+        da = da.to_xarray()
+
+    assert 'wavelength' in da.dims, "DataArray must have 'wavelength' dimension"
 
     if fig is None:
         fig = figure(figsize=(4.5, 2.5))
 
-    ax1   = lut.axes[0]
-    data  = lut.data
+    ax1 = da.coords['wavelength'].values
+    data = da.values
 
     if vmin is None:
-        vmin = np.amin(lut.data[~np.isnan(lut.data)])
+        vmin = np.amin(data[~np.isnan(data)])
     if vmax is None:
-        vmax = np.amax(lut.data[~np.isnan(lut.data)])
+        vmax = np.amax(data[~np.isnan(data)])
     if vmin == vmax:
         vmin -= 0.001
         vmax += 0.001
-    if vmin > vmax: vmin, vmax = vmax, vmin
+    if vmin > vmax: 
+        vmin, vmax = vmax, vmin
     if percent:
-        vmin=0.
-        vmax=100.
+        vmin = 0.
+        vmax = 100.
 
     ax1_min = np.amin(ax1)
     ax1_max = np.amax(ax1)
-    #
 
     ax_cart = fig.add_subplot(sub)
     ax_cart.grid(True)
 
     ax_cart.set_xlim(ax1_min, ax1_max)
     ax_cart.set_ylim(vmin, vmax)
-    ax_cart.ticklabel_format(axis='y', style='sci', scilimits=(-2,2))
-    #ax_cart.ticklabel_format(axis='x', style='sci', scilimits=(-2,2))
+    ax_cart.ticklabel_format(axis='y', style='sci', scilimits=(-2, 2))
     ax_cart.grid(True)
     ax_cart.set_xlabel(r'$\lambda$ (nm)')
 
-    #
-    # plot
-    #
-    ax_cart.plot(ax1 , data[:], fmt, color=color)
+    # Plot
+    ax_cart.plot(ax1, data[:], fmt, color=color)
 
-    if lut.desc is not None:
-        ax_cart.set_title(lut.desc)
+    # Add title from description
+    desc = da.attrs.get('long_name', None)
+    if desc is not None:
+        ax_cart.set_title(desc)
+
+    return fig
 
 
 def spectrum_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (TOA)', prefix='', fig=None, color='k', subdict=None, 
