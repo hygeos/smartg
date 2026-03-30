@@ -121,6 +121,37 @@ def transect2D(lut, index=None, vmin=None, vmax=None, sym=True, swap='auto', fig
 
 
 def mdesc(desc, logI=False):
+    """
+    Format Stokes parameter description for display with LaTeX notation.
+
+    Parses a description string to extract Stokes parameter, direction, and other 
+    components, then formats them with proper LaTeX notation including directional 
+    arrows (up/down).
+
+    Parameters
+    ----------
+    desc : str
+        Description string in format 'Stokes_direction(component)_info' 
+        (e.g., 'I_up(TOA)', 'Q_down(0+)').
+    logI : bool, optional
+        If True and Stokes parameter is 'I', prepends 'log10' to the output. 
+        Default is False.
+
+    Returns
+    -------
+    str
+        Formatted LaTeX string with Stokes parameter, directional arrow, 
+        component subscripts, and optional log scale notation.
+
+    Examples
+    --------
+    >>> mdesc('I_up(TOA)')
+    '$I^{\\uparrow}_{TOA}$'
+    >>> mdesc('I_up(TOA)', logI=True)
+    '$log_{10} I^{\\uparrow}_{TOA}$'
+    >>> mdesc('Q_down(0+)')
+    '$Q^{\\downarrow}_{0+}$'
+    """
     sep1=desc.find('_')
     sep2=desc.find('(')
     sep3=desc.find(')')
