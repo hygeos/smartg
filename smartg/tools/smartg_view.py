@@ -5,7 +5,6 @@
 from __future__ import print_function, division, absolute_import
 
 import warnings
-warnings.simplefilter("ignore",DeprecationWarning)
 from pylab import figure, subplot2grid, tight_layout, setp, subplots, xlabel, ylabel, FormatStrFormatter
 import numpy as np
 np.seterr(invalid='ignore', divide='ignore') # ignore division by zero errors
@@ -15,7 +14,7 @@ from matplotlib.transforms import Affine2D
 from mpl_toolkits.axisartist import floating_axes
 from matplotlib.projections import PolarAxes
 from matplotlib import cm
-from luts.luts import plot_polar, transect2D as _transect2D_orig, Idx, Idx_base, MLUT
+from luts.luts import Idx, Idx_base, MLUT
 from smartg.atmosphere import diff1
 from smartg.water import diff2
 
@@ -161,34 +160,34 @@ def smartg_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (T
             if logI:
                 lI=I.apply(np.log10)
                 lI.desc = mdesc(I.desc, logI=logI)
-                plot_polar_xr(lut_to_xr(lI),  index=ind, rect=421, sub=423, fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
+                plot_polar(lut_to_xr(lI),  index=ind, rect=421, sub=423, fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
             else:
                 I.desc = mdesc(I.desc)
-                plot_polar_xr(lut_to_xr(I),  index=ind, rect=421, sub=423, fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
+                plot_polar(lut_to_xr(I),  index=ind, rect=421, sub=423, fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
             Q.desc = mdesc(Q.desc)
             U.desc = mdesc(U.desc)
-            plot_polar_xr(lut_to_xr(Q),  index=ind, rect=422, sub=424, fig=fig, cmap=cmap)
-            plot_polar_xr(lut_to_xr(U),  index=ind, rect=425, sub=427, fig=fig, cmap=cmap)
+            plot_polar(lut_to_xr(Q),  index=ind, rect=422, sub=424, fig=fig, cmap=cmap)
+            plot_polar(lut_to_xr(U),  index=ind, rect=425, sub=427, fig=fig, cmap=cmap)
             if Circ:
                 V.desc = mdesc(V.desc)
-                plot_polar_xr(lut_to_xr(V), index=ind, rect=426, sub=428, fig=fig, cmap=cmap)
+                plot_polar(lut_to_xr(V), index=ind, rect=426, sub=428, fig=fig, cmap=cmap)
             else:
-                plot_polar_xr(lut_to_xr(DoP), index=ind, rect=426, sub=428, fig=fig, vmin=Pmin, vmax=Pmax, cmap=cmap)
+                plot_polar(lut_to_xr(DoP), index=ind, rect=426, sub=428, fig=fig, vmin=Pmin, vmax=Pmax, cmap=cmap)
         else:
             # show only I and PR
             if fig is None: fig = figure(figsize=(9, 4.5))
             if logI:
                 lI=I.apply(np.log10)
                 lI.desc = mdesc(I.desc, logI=logI)
-                plot_polar_xr(lut_to_xr(lI),  index=ind, rect=221, sub=223, fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
+                plot_polar(lut_to_xr(lI),  index=ind, rect=221, sub=223, fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
             else:
                 I.desc = mdesc(I.desc)
-                plot_polar_xr(lut_to_xr(I),  index=ind, rect=221, sub=223, fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
+                plot_polar(lut_to_xr(I),  index=ind, rect=221, sub=223, fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
 
             if Circ:
-                plot_polar_xr(lut_to_xr(DoCP), index=ind, rect=222, sub=224, fig=fig, vmin=0, vmax=Pmax, cmap=cmap)
+                plot_polar(lut_to_xr(DoCP), index=ind, rect=222, sub=224, fig=fig, vmin=0, vmax=Pmax, cmap=cmap)
             else:
-                plot_polar_xr(lut_to_xr(DoP), index=ind, rect=222, sub=224, fig=fig, vmin=Pmin, vmax=Pmax, cmap=cmap)
+                plot_polar(lut_to_xr(DoP), index=ind, rect=222, sub=224, fig=fig, vmin=Pmin, vmax=Pmax, cmap=cmap)
 
         return fig
 
@@ -202,20 +201,19 @@ def smartg_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (T
         Q.desc = mdesc(Q.desc)
         U.desc = mdesc(U.desc)
         V.desc = mdesc(V.desc)
-        plot_polar_xr(lut_to_xr(I),  index=ind, rect=241, sub=245, fig=fig1, cmap=cmap, vmin=Imin, vmax=Imax)
-        plot_polar_xr(lut_to_xr(Q),  index=ind, rect=242, sub=246, fig=fig1, cmap=cmap)
-        plot_polar_xr(lut_to_xr(U),  index=ind, rect=243, sub=247, fig=fig1, cmap=cmap)
-        plot_polar_xr(lut_to_xr(V),  index=ind, rect=244, sub=248, fig=fig1, cmap=cmap)
+        plot_polar(lut_to_xr(I),  index=ind, rect=241, sub=245, fig=fig1, cmap=cmap, vmin=Imin, vmax=Imax)
+        plot_polar(lut_to_xr(Q),  index=ind, rect=242, sub=246, fig=fig1, cmap=cmap)
+        plot_polar(lut_to_xr(U),  index=ind, rect=243, sub=247, fig=fig1, cmap=cmap)
+        plot_polar(lut_to_xr(V),  index=ind, rect=244, sub=248, fig=fig1, cmap=cmap)
         
         fig2 = figure(figsize=(16, 4))
         Q.desc = mdesc(Q.desc)
         U.desc = mdesc(U.desc)
         V.desc = mdesc(V.desc)
-        plot_polar_xr(lut_to_xr(lI),  index=ind, rect=241, sub=245, fig=fig2, cmap=cmap)
-        plot_polar_xr(lut_to_xr(DoLP),  index=ind, rect=242, sub=246, fig=fig2, vmin=Pmin, vmax=Pmax, cmap=cmap)
-        plot_polar_xr(lut_to_xr(DoCP),  index=ind, rect=243, sub=247, fig=fig2, vmin=Pmin, vmax=Pmax, cmap=cmap)
-        plot_polar_xr(lut_to_xr(DoP),  index=ind, rect=244, sub=248, fig=fig2, vmin=Pmin, vmax=Pmax, cmap=cmap)
-        #plot_polar_xr(lut_to_xr(AoLP),  index=ind, rect='244', sub='248', fig=fig2, vmin=-180, vmax=180, cmap=cmap)
+        plot_polar(lut_to_xr(lI),  index=ind, rect=241, sub=245, fig=fig2, cmap=cmap)
+        plot_polar(lut_to_xr(DoLP),  index=ind, rect=242, sub=246, fig=fig2, vmin=Pmin, vmax=Pmax, cmap=cmap)
+        plot_polar(lut_to_xr(DoCP),  index=ind, rect=243, sub=247, fig=fig2, vmin=Pmin, vmax=Pmax, cmap=cmap)
+        plot_polar(lut_to_xr(DoP),  index=ind, rect=244, sub=248, fig=fig2, vmin=Pmin, vmax=Pmax, cmap=cmap)
 
         return fig1, fig2
 
@@ -1414,10 +1412,6 @@ def compare_spectrum(mlut, mref, field='up (TOA)',errb=False, logI=False, U_sign
     return fig
 
 
-# ============================================================================
-# xarray-compatible versions of plotting functions
-# ============================================================================
-
 def bin_edges(x, min=None, max=None):
     """Helper function to compute bin edges from bin centers"""
     edges = np.zeros(len(x) + 1)
@@ -1431,8 +1425,8 @@ def bin_edges(x, min=None, max=None):
     return edges
 
 
-def plot_polar_xr(da, index=None, vmin=None, vmax=None, rect=211, sub=212,
-                  sym=True, swap='auto', fig=None, cmap=None, semi=False):
+def plot_polar(da, index=None, vmin=None, vmax=None, rect=211, sub=212,
+               sym=True, swap='auto', fig=None, cmap=None, semi=False):
     """
     Contour and optionally transect of 2D DataArray on a semi-polar plot.
     
@@ -1657,9 +1651,7 @@ def plot_polar_xr(da, index=None, vmin=None, vmax=None, rect=211, sub=212,
 def transect2D(da, index=None, vmin=None, vmax=None, sym=True, swap='auto', 
                   fig=None, sub=121, color='k', percent=False, fmt='-'):
     """
-    xarray-compatible version of transect2D.
-    
-    Transect of 2D DataArray - Fixed version that reuses existing axes.
+    Transect of 2D DataArray
 
     Parameters
     ----------
