@@ -583,7 +583,7 @@ def spectrum_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up 
 def phase_view(ds_sg, ipha=None, fig=None, axarr=None, iw=0, kind='atm',
                show_trunc=False, force_4stk=False):
     """
-    Visualization of SMART-G phase function from output.
+    Visualization of SMART-G phase function.
 
     Parameters
     ----------
@@ -806,95 +806,121 @@ def phase_view(ds_sg, ipha=None, fig=None, axarr=None, iw=0, kind='atm',
     return fig, axarr
 
     
-def profile_view(mlut, fig=None, ax=None, iw=0, kind='atm', zmax=None):
-    '''
-    visualization of a smartg MLUT profile from output
+def profile_view(ds_sg, fig=None, ax=None, iw=0, kind='atm', zmax=None):
+    """
+    Visualization of SMART-G vertical profile.
 
-    Options:
-        fig : fig object to be created or included in
-        axarr : system of axes (2,2) to be created or used
-        iw : in case of multi wavelength simulation, index of wavelength to be plotted
-        kind : atmopsheric 'atm' or oceanic 'oc' profile
-        zmax: max altitude or depth of the plot
-    '''
+    Parameters
+    ----------
+    ds_sg : xr.Dataset
+        An xarray Dataset from SMART-G, can be from simulation results or smartg input profile,
+        containing optical depth and other profile data with variables 'OD_atm' or 'OD_oc', and 
+        related optical properties.
+    fig : matplotlib.figure.Figure, optional
+        Figure object. If None, creates a new figure.
+    ax : matplotlib.axes.Axes, optional
+        Axes object. If None, creates a new axes.
+    iw : int, optional
+        Wavelength index for multi-wavelength simulations. Default is 0.
+    kind : {'atm', 'oc'}, optional
+        Profile type: 'atm' for atmospheric, 'oc' for oceanic. Default is 'atm'.
+    zmax : float, optional
+        Maximum altitude (for 'atm') or depth (for 'oc') to plot. 
+        If None, automatically determined from data.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        Figure object containing the profile plot.
+    ax : matplotlib.axes.Axes
+        Axes object containing the profile plot.
+    """
+
+    if isinstance(ds_sg, MLUT):
+        warn_message = "\nUsing an MLUT for ds_sg is deprecated, use an xarray.Dataset instead."
+        warnings.warn(warn_message, DeprecationWarning)
+        ds_sg = ds_sg.to_xarray()
 
     if (ax is None):
         fig, ax = subplots(1, 1)
         fig.set_size_inches(5, 5)
     
-    nd = mlut['OD_'+kind].ndim
-    if nd>1:
-        wi = mlut['OD_'+kind].names.index('wavelength') # Wavelength index
-        key = [slice(None)]*nd
-        key[wi] = iw
-        key=tuple(key)
-        labw=r' at $%.1f nm$'%mlut.axes['wavelength'][iw]
-        
-    else:
-        key=tuple([slice(None)])
-        labw=''
+    od_key = 'OD_'+kind
+    z_key = 'z_'+kind
+    
+    od_data = ds_sg[od_key]
+    nd = len(od_data.dims)
+    
+    # Handle multi-wavelength case
+    labw = ''
+    if nd > 1 and 'wavelength' in od_data.dims:
+        wavelength = ds_sg.coords['wavelength'].values
+        labw = r' at $%.1f nm$' % wavelength[iw]
 
-    z = mlut.axis('z_'+kind, aslut=True)
-    if kind=='oc': 
-        sign=-1.
+    z = ds_sg.coords[z_key].values
+    if kind == 'oc': 
+        sign = -1.
         func = diff2
     else:
-        sign=1.    
+        sign = 1.    
         func = diff1
-    Dz = z.apply(func)
-    Dz = Dz.apply(abs,'Dz')
-    Dtau     = sign * mlut['OD_'+kind    ].sub().__getitem__(key).apply(func,'Dtau')
-    Dtau_Sca = sign * mlut['OD_sca_'+kind].sub().__getitem__(key).apply(func,'Dtau_Sca')
-    Dtau_Abs = sign * mlut['OD_abs_'+kind].sub().__getitem__(key).apply(func,'Dtau_Abs')
-    if kind=='atm':
-        Dtau_ExtA = sign * mlut['OD_p'].sub().__getitem__(key).apply(func,'Dtau_ExtA')
-        Dtau_ScaR = sign * mlut['OD_r'].sub().__getitem__(key).apply(func,'Dtau_ScaR')
-        Dtau_AbsG = sign * mlut['OD_g'].sub().__getitem__(key).apply(func,'Dtau_AbsG')
-        ssa_p = mlut['ssa_p_'+kind].sub().__getitem__(key)
+    
+    Dz = np.abs(func(z))
+    
+    # Extract and compute optical depths
+    Dtau = sign * func(ds_sg[od_key].values)
+    Dtau_Sca = sign * func(ds_sg['OD_sca_'+kind].values)
+    Dtau_Abs = sign * func(ds_sg['OD_abs_'+kind].values)
+    if kind == 'atm':
+        Dtau_ExtA = sign * func(ds_sg['OD_p'].values)
+        Dtau_ScaR = sign * func(ds_sg['OD_r'].values)
+        Dtau_AbsG = sign * func(ds_sg['OD_g'].values)
+        ssa_p = ds_sg['ssa_p_'+kind].values
         Dtau_ScaA = Dtau_ExtA * ssa_p
         Dtau_AbsA = Dtau_ExtA * (1. - ssa_p)
-        if (np.max(Dtau_AbsA[:]) > 0.) : ax.semilogx((Dtau_AbsA/Dz)[:], z[:], 'r--',label=r'$\sigma_{abs}^{a+c}$')
-        if (np.max(Dtau_ScaA[:]) > 0.) : ax.semilogx((Dtau_ScaA/Dz)[:], z[:], 'r',  label=r'$\sigma_{sca}^{a+c}$')
-        if (np.max(Dtau_AbsG[:]) > 0.) : ax.semilogx((Dtau_AbsG/Dz)[:], z[:], 'g--',  label=r'$\sigma_{abs}^{gas}$')
-        ax.semilogx((Dtau_ScaR/Dz)[:], z[:], 'b', label=r'$\sigma_{sca}^{R}$' )
+        if (np.max(Dtau_AbsA) > 0.) : ax.semilogx((Dtau_AbsA/Dz), z, 'r--',label=r'$\sigma_{abs}^{a+c}$')
+        if (np.max(Dtau_ScaA) > 0.) : ax.semilogx((Dtau_ScaA/Dz), z, 'r',  label=r'$\sigma_{sca}^{a+c}$')
+        if (np.max(Dtau_AbsG) > 0.) : ax.semilogx((Dtau_AbsG/Dz), z, 'g--',  label=r'$\sigma_{abs}^{gas}$')
+        ax.semilogx((Dtau_ScaR/Dz), z, 'b', label=r'$\sigma_{sca}^{R}$' )
         ax.set_xlim(1e-6,10)
         xlabel('Vertical profile'+labw + r' $(km^{-1})$')
         ylabel(r'$z (km)$')
-        if zmax is None : zmax = max(100.,z.data.max())
-        ax.set_ylim(0,zmax)
+        if zmax is None : zmax = max(100., z.max())
+        ax.set_ylim(0, zmax)
     else :
-        Dtau_ExtP = sign * mlut['OD_p_oc'].sub().__getitem__(key).apply(func,'Dtau_ExtP')
-        Dtau_ExtW = sign * mlut['OD_w'].sub().__getitem__(key).apply(func,'Dtau_ExtW')
-        Dtau_AbsY = sign * mlut['OD_y'].sub().__getitem__(key).apply(func,'Dtau_AbsY')
-        ssa_p = mlut['ssa_p_'+kind].sub().__getitem__(key)
-        ssa_w = mlut['ssa_w'].sub().__getitem__(key)
-        pine  = mlut['pine_oc'].sub().__getitem__(key)
+        Dtau_ExtP = sign * func(ds_sg['OD_p_oc'].values)
+        Dtau_ExtW = sign * func(ds_sg['OD_w'].values)
+        Dtau_AbsY = sign * func(ds_sg['OD_y'].values)
+        ssa_p = ds_sg['ssa_p_'+kind].values
+        ssa_w = ds_sg['ssa_w'].values
+        pine  = ds_sg['pine_oc'].values
         Dtau_ScaP = Dtau_ExtP * ssa_p
         Dtau_AbsP = Dtau_ExtP * (1. - ssa_p)
         Dtau_ScaW = Dtau_ExtW * ssa_w
         Dtau_AbsW = Dtau_ExtW * (1. - ssa_w)
         Dtau_Ine  = Dtau_Sca  * pine
-        if (np.max(Dtau_AbsP[:]) > 0.) : ax.semilogx((Dtau_AbsP/Dz)[:], z[:], 'r--',label=r'$\sigma_{abs}^{p}$')
-        if (np.max(Dtau_ScaP[:]) > 0.) : ax.semilogx((Dtau_ScaP/Dz)[:], z[:], 'r',  label=r'$\sigma_{sca}^{p}$')
-        if (np.max(Dtau_AbsW[:]) > 0.) : ax.semilogx((Dtau_AbsW/Dz)[:], z[:], 'b--',label=r'$\sigma_{abs}^{w}$')
-        if (np.max(Dtau_ScaW[:]) > 0.) : ax.semilogx((Dtau_ScaW/Dz)[:], z[:], 'b',  label=r'$\sigma_{sca}^{w}$')
-        if (np.max(Dtau_AbsY[:]) > 0.) : ax.semilogx((Dtau_AbsY/Dz)[:], z[:], 'y--',label=r'$\sigma_{abs}^{y}$')
-        if (np.max(Dtau_Ine[:])  > 0.) : ax.semilogx((Dtau_Ine/Dz)[:] , z[:], 'm:' ,label=r'$\sigma_{ine}^{}$')
+        if (np.max(Dtau_AbsP) > 0.) : ax.semilogx((Dtau_AbsP/Dz), z, 'r--',label=r'$\sigma_{abs}^{p}$')
+        if (np.max(Dtau_ScaP) > 0.) : ax.semilogx((Dtau_ScaP/Dz), z, 'r',  label=r'$\sigma_{sca}^{p}$')
+        if (np.max(Dtau_AbsW) > 0.) : ax.semilogx((Dtau_AbsW/Dz), z, 'b--',label=r'$\sigma_{abs}^{w}$')
+        if (np.max(Dtau_ScaW) > 0.) : ax.semilogx((Dtau_ScaW/Dz), z, 'b',  label=r'$\sigma_{sca}^{w}$')
+        if (np.max(Dtau_AbsY) > 0.) : ax.semilogx((Dtau_AbsY/Dz), z, 'y--',label=r'$\sigma_{abs}^{y}$')
+        if (np.max(Dtau_Ine) > 0.) : ax.semilogx((Dtau_Ine/Dz), z, 'm:' ,label=r'$\sigma_{ine}^{}$')
         ax.set_xlim(1e-4,10)
         xlabel('Vertical profile'+labw + r' $(m^{-1})$')
         ylabel(r'$z (m)$')
-        if zmax is None : zmax = min(-100.,z.data.min())
-        ax.set_ylim(zmax,0)
-    ax.semilogx((Dtau/Dz)[:], z[:], 'k.-', label=r'$\sigma_{ext}^{tot}$')
-    ax.semilogx((Dtau_Abs/Dz)[:], z[:], 'k.--', label=r'$\sigma_{abs}^{tot}$')
+        if zmax is None : zmax = min(-100., z.min())
+        ax.set_ylim(zmax, 0)
+    ax.semilogx((Dtau/Dz), z, 'k.-', label=r'$\sigma_{ext}^{tot}$')
+    ax.semilogx((Dtau_Abs/Dz), z, 'k.--', label=r'$\sigma_{abs}^{tot}$')
     #ax.set_title('Vertical profile'+labw)
     ax.grid()
     ax.legend()
 
     try :
         ax2 = ax.twiny()
-        nf= mlut['iphase_'+kind].__getitem__(key) 
-        ax2.plot(nf[1:], mlut.axis('z_'+kind)[1:], 'm-', drawstyle='steps-post', label='i')
+        nf = ds_sg['iphase_'+kind].values
+        z_vals = ds_sg.coords[z_key].values
+        ax2.plot(nf[1:], z_vals[1:], 'm-', drawstyle='steps-post', label='i')
         ax2.set_xlabel('Phase Matrix index', color='m')
         ax2.tick_params('x', colors='m')
         ax2.xaxis.set_major_formatter(FormatStrFormatter('%i'))
