@@ -1065,29 +1065,66 @@ def input_view(ds_sg, iw=0, kind='atm', zmax=None, ipha=None):
     tight_layout()
 
 
-def compare(mlut, mref, field='up (TOA)',errb=False, logI=False, U_sign=1, same_U_convention=True, U_symetry=True,
-                  Nparam=4, vmax=None, vmin=None, emax=None, ermax=None, same_azimuth_convention=True,
-                  azimuth=[0.,90.], title='', SZA_MAX=89., zenith_title=r'$SZA (°)$', errref=None):
-    '''
-    compare the results of two smartg runs : mlut vs mref in two different azimuth planes
-    outputs: a figure
-    keywords:
-        field : name of the output level to be compared 
-        errb  : error bar visible for mlut : should have been run with the stdev option
-        LogI  : plot Intensity in log scale
-        U_sign: change sign for U
-        same_U_convention: mlut and mref have the same convention for U
-        U_symetry:  U changes sign convention for the  two halves of the plane
-        Nparam: number of parameters :  by defaut 4 for I,Q,U, DoLP; 5 adds V:, 2 keeps only I and DoLP 
-        vmin,vmax: min and max values for parameters: list of length Nparam
-        emax: max absolute error scale : length Nparam
-        ermax: max relative error scale (in percent) : length Nparam
-        same_azimuth_convention: mlut and mref have the same azimuth convention
-        azimuth: list of azimuths
-        title: plot title
-        SZA_MAX: SZA max for the comparison
-        errref : eventually intensity absolute error on refence points
-    '''
+def compare(ds_sg, ds_ref, field='up (TOA)',errb=False, logI=False, U_sign=1, same_U_convention=True, U_symetry=True,
+            Nparam=4, vmax=None, vmin=None, emax=None, ermax=None, same_azimuth_convention=True,
+            azimuth=[0.,90.], title='', SZA_MAX=89., zenith_title=r'$SZA (°)$', errref=None):
+    """
+    Compare results of two SMART-G simulations in two different azimuth planes.
+
+    Parameters
+    ----------
+    ds_sg : xr.Dataset
+        An xarray Dataset from SMART-G simulation.
+    ds_ref : xr.Dataset
+        Reference Dataset for comparison.
+    field : str, optional
+        Name of the output level to compare. Default is 'up (TOA)'.
+    errb : bool, optional
+        If True, show error bars for ds_sg (requires stdev data). Default is False.
+    logI : bool, optional
+        If True, plot Intensity (I) in log10 scale. Default is False.
+    U_sign : int, optional
+        Sign convention for U parameter. Default is 1.
+    same_U_convention : bool, optional
+        If True, ds_sg and ds_ref have the same U convention. Default is True.
+    U_symetry : bool, optional
+        If True, U changes sign convention for the two halves of the plane. Default is True.
+    Nparam : int, optional
+        Number of parameters to plot: 4 for I,Q,U,DoLP (default); 5 adds V; 2 keeps only I,DoLP.
+    vmin, vmax : list, optional
+        List of min/max values for each parameter. If None, use defaults.
+    emax : list, optional
+        List of max absolute error scales for each parameter. If None, use defaults.
+    ermax : list, optional
+        List of max relative error scales (in %) for each parameter. If None, use defaults.
+    same_azimuth_convention : bool, optional
+        If True, ds_sg and ds_ref have the same azimuth convention. Default is True.
+    azimuth : list, optional
+        List of two azimuth angles to display. Default is [0., 90.].
+    title : str, optional
+        Title for the figure. Default is empty string.
+    SZA_MAX : float, optional
+        Maximum SZA (Solar Zenith Angle) for x-axis limits. Default is 89.
+    zenith_title : str, optional
+        Label for zenith angle axis. Default is '$SZA (°)$'.
+    errref : array-like, optional
+        Reference intensity absolute error. Default is None.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        Figure object containing the comparison plots.
+    """
+
+    if isinstance(ds_sg, MLUT):
+        warn_message = "\nUsing an MLUT for ds_sg is deprecated, use an xarray.Dataset instead."
+        warnings.warn(warn_message, DeprecationWarning)
+        ds_sg = ds_sg.to_xarray()
+    
+    if isinstance(ds_ref, MLUT):
+        warn_message = "\nUsing an MLUT for ds_ref is deprecated, use an xarray.Dataset instead."
+        warnings.warn(warn_message, DeprecationWarning)
+        ds_ref = ds_ref.to_xarray()
 
     from pylab import subplots
     if vmax is None : vmax=[0.1]*Nparam 
@@ -1096,7 +1133,7 @@ def compare(mlut, mref, field='up (TOA)',errb=False, logI=False, U_sign=1, same_
     if ermax is None : ermax=[0.1]*Nparam
     stokesT = ['I','Q','U','V']
     stokes=stokesT[:Nparam-1]
-    signT = [1,1,U_sign*1,1,1] # sign convention for both mluts
+    signT = [1,1,U_sign*1,1,1] # sign convention for both datasets
     sign=signT[:Nparam-1]+[1]
     if same_U_convention: diffsignT = [1,1,1,1,1]    # sign convention difference
     else: diffsignT = [1,1,-1,1,1]
@@ -1111,36 +1148,65 @@ def compare(mlut, mref, field='up (TOA)',errb=False, logI=False, U_sign=1, same_
     
     for i in range(Nparam):
         if i!=Nparam-1 :
-            S = mlut[stokes[i] + '_' + field]
-            if S.names.index('Azimuth angles') == 0: th = S.axes[1]   
-            else: th = S.axes[0]
-            Sref = mref[stokes[i] + '_' + field]
-            S.desc = mdesc(S.desc)
-            if errb : E = mlut[stokes[i] + '_' + 'stdev' + '_' + field]
+            S = ds_sg[stokes[i] + '_' + field]
+            Sref = ds_ref[stokes[i] + '_' + field]
+            
+            # Determine which dimension is azimuth angle and get coordinate values
+            if 'Azimuth angles' in S.dims:
+                az_idx = S.dims.index('Azimuth angles')
+                if az_idx == 0:
+                    th = S.coords[list(S.dims)[1]].values
+                else:
+                    th = S.coords[list(S.dims)[0]].values
+            else:
+                # Fallback: use first dimension coordinate
+                th = S.coords[list(S.dims)[0]].values
+            
+            # Extract description from attributes
+            desc = S.attrs.get('long_name', stokes[i])
+            desc = mdesc(desc)
+            
+            if errb : 
+                E = ds_sg[stokes[i] + '_' + 'stdev' + '_' + field]
+            
             if logI and stokes[i]=='I':
-                S=S.apply(np.log10)
-                Sref=Sref.apply(np.log10)
-                S.desc=r'$log_{10}$ '+S.desc
+                S = np.log10(S)
+                Sref = np.log10(Sref)
+                desc = r'$log_{10}$ '+desc
         else:
-            I=mlut['I' + '_' + field]
-            Q=mlut['Q' + '_' + field]
-            U=mlut['U' + '_' + field]
-            Ip= ((Q*Q+U*U).apply(np.sqrt))
-            S= (Ip/I) * 100
-            S.desc= r'$DoLP' + I.desc[1:3] + I.desc[4:] + '$'
-            S.desc= 'DoLP' + I.desc[1:]
-            S.desc = mdesc(S.desc)
+            I = ds_sg['I' + '_' + field]
+            Q = ds_sg['Q' + '_' + field]
+            U = ds_sg['U' + '_' + field]
+            
+            Ip = np.sqrt(Q*Q + U*U)
+            S = (Ip/I) * 100
+            
+            Iref = ds_ref['I' + '_' + field]
+            Qref = ds_ref['Q' + '_' + field]
+            Uref = ds_ref['U' + '_' + field]
+            Sref = (np.sqrt(Qref*Qref + Uref*Uref)/Iref) * 100
+            
+            # Get description
+            I_desc = I.attrs.get('long_name', 'I')
+            desc = 'DoLP' + I_desc[1:]
+            desc = mdesc(desc)
+            
+            # Determine azimuth coordinate
+            if 'Azimuth angles' in S.dims:
+                az_idx = S.dims.index('Azimuth angles')
+                if az_idx == 0:
+                    th = S.coords[list(S.dims)[1]].values
+                else:
+                    th = S.coords[list(S.dims)[0]].values
+            else:
+                th = S.coords[list(S.dims)[0]].values
             
             if errb: 
-                dI=mlut['I' + '_' + 'stdev' + '_' + field]
-                dQ=mlut['Q' + '_' + 'stdev' + '_' + field]
-                dU=mlut['U' + '_' + 'stdev' + '_' + field]
-                dIp= ((dQ*dQ+dU*dU).apply(np.sqrt))
-                E = (dI/I + dIp/Ip) * S
-            Iref=mref['I' + '_' + field]
-            Qref=mref['Q' + '_' + field]
-            Uref=mref['U' + '_' + field]
-            Sref= (((Qref*Qref+Uref*Uref).apply(np.sqrt))/Iref) * 100           
+                dI = ds_sg['I' + '_' + 'stdev' + '_' + field]
+                dQ = ds_sg['Q' + '_' + 'stdev' + '_' + field]
+                dU = ds_sg['U' + '_' + 'stdev' + '_' + field]
+                dIp = np.sqrt(dQ*dQ + dU*dU)
+                E = (dI/I + dIp/Ip) * S           
      
         vmi=vmin[i]
         vma=vmax[i]
@@ -1152,38 +1218,65 @@ def compare(mlut, mref, field='up (TOA)',errb=False, logI=False, U_sign=1, same_
 
             # both points at their own abscissas
             if same_azimuth_convention:
-
-                if S.names.index('Azimuth angles') == 0: # check right order of axes
-                    refp = sign[i]*Sref[Idx(phi0,round=True),:] # reference for >0 view angle
-                    refm = sign[i]*Sref[Idx(180.-phi0,round=True),:] #      reference for <0 view angle
-                    sp   = diffsign[i]*sign[i]*S[Idx(phi0),:]       #     simulation for >0 view angle
-                    sm   = symetry[i]*diffsign[i]*sign[i]*S[Idx(180-phi0),:]
+                # For xarray, use .sel() to select by azimuth angle value
+                if 'Azimuth angles' in S.dims:
+                    az_dim = 'Azimuth angles'
+                    other_dim = [d for d in S.dims if d != az_dim][0]
+                    
+                    # Find closest azimuth angle values
+                    az_vals = S.coords['Azimuth angles'].values
+                    phi0_idx = np.argmin(np.abs(az_vals - phi0))
+                    phi180_idx = np.argmin(np.abs(az_vals - (180. - phi0)))
+                    
+                    refp = sign[i] * Sref.isel(**{az_dim: phi0_idx}).values
+                    refm = sign[i] * Sref.isel(**{az_dim: phi180_idx}).values
+                    sp = diffsign[i] * sign[i] * S.isel(**{az_dim: phi0_idx}).values
+                    sm = symetry[i] * diffsign[i] * sign[i] * S.isel(**{az_dim: phi180_idx}).values
+                    
                     if errb:
-                        dsp  = E[Idx(phi0),:]         #     simulation error for >0 view angle
-                        dsm  = E[Idx(180.-phi0),:]
+                        dsp = E.isel(**{az_dim: phi0_idx}).values
+                        dsm = E.isel(**{az_dim: phi180_idx}).values
                     else:
-                        (dsp,dsm) = (0,0)
+                        (dsp, dsm) = (0, 0)
                 else:
-                    refm = sign[i]*Sref.swapaxes(0,1)[Idx(phi0,round=True),:] # reference for >0 view angle
-                    refp = sign[i]*Sref.swapaxes(0,1)[Idx(180.-phi0,round=True),:] #      reference for <0 view angle
-                    sp   = diffsign[i]*sign[i]*S.swapaxes(0,1)[Idx(phi0),:]       #     simulation for >0 view angle
-                    sm   = symetry[i]*diffsign[i]*sign[i]*S.swapaxes(0,1)[Idx(180-phi0),:]
+                    # Fallback if dimension naming differs
+                    refp = sign[i] * Sref.values.ravel()
+                    refm = sign[i] * Sref.values.ravel()
+                    sp = diffsign[i] * sign[i] * S.values.ravel()
+                    sm = symetry[i] * diffsign[i] * sign[i] * S.values.ravel()
                     if errb:
-                        dsp  = E.swapaxes(0,1)[Idx(phi0),:]         #     simulation error for >0 view angle
-                        dsm  = E.swapaxes(0,1)[Idx(180.-phi0),:]
+                        dsp = E.values.ravel()
+                        dsm = E.values.ravel()
                     else:
-                        (dsp,dsm) = (0,0)
-                        
+                        (dsp, dsm) = (0, 0)
             else:
-                refp = sign[i]*Sref[Idx(180.-phi0,round=True),:] # reference for >0 view angle
-                refm = sign[i]*Sref[Idx(phi0,round=True),:] #      reference for <0 view angle
-                sp   = diffsign[i]*sign[i]*S[Idx(phi0),:]       #     simulation for >0 view angle
-                sm   = symetry[i]*diffsign[i]*sign[i]*S[Idx(180-phi0),:]
-                if errb:
-                    dsp  = E[Idx(phi0),:]         #     simulation error for >0 view angle
-                    dsm  = E[Idx(180-phi0),:]
+                # Different azimuth convention - swap angle selection
+                if 'Azimuth angles' in S.dims:
+                    az_dim = 'Azimuth angles'
+                    az_vals = S.coords['Azimuth angles'].values
+                    phi0_idx = np.argmin(np.abs(az_vals - phi0))
+                    phi180_idx = np.argmin(np.abs(az_vals - (180. - phi0)))
+                    
+                    refp = sign[i] * Sref.isel(**{az_dim: phi180_idx}).values
+                    refm = sign[i] * Sref.isel(**{az_dim: phi0_idx}).values
+                    sp = diffsign[i] * sign[i] * S.isel(**{az_dim: phi0_idx}).values
+                    sm = symetry[i] * diffsign[i] * sign[i] * S.isel(**{az_dim: phi180_idx}).values
+                    
+                    if errb:
+                        dsp = E.isel(**{az_dim: phi0_idx}).values
+                        dsm = E.isel(**{az_dim: phi180_idx}).values
+                    else:
+                        (dsp, dsm) = (0, 0)
                 else:
-                    (dsp,dsm) = (0,0)
+                    refp = sign[i] * Sref.values.ravel()
+                    refm = sign[i] * Sref.values.ravel()
+                    sp = diffsign[i] * sign[i] * S.values.ravel()
+                    sm = symetry[i] * diffsign[i] * sign[i] * S.values.ravel()
+                    if errb:
+                        dsp = E.values.ravel()
+                        dsm = E.values.ravel()
+                    else:
+                        (dsp, dsm) = (0, 0)
                     
             ax[0,i].plot(th, refp,'k'+'.')
             ax[0,i].plot(-th,refm,'k'+'.',label=labref)
@@ -1238,7 +1331,7 @@ def compare(mlut, mref, field='up (TOA)',errb=False, logI=False, U_sign=1, same_
             ax[2,i].plot([-SZA_MAX,SZA_MAX],[0.,0.],'k--')
             ax[1,i].ticklabel_format(axis='y', style='sci', scilimits=(-2,2))
 
-            ax[0,i].set_title(S.desc)   
+            ax[0,i].set_title(desc)   
             if i==0: 
  
                 ax[0,i].legend(loc='upper center',fontsize = 8,labelspacing=0.0)
