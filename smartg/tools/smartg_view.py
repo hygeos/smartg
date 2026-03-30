@@ -469,22 +469,36 @@ def spectrum(da, vmin=None, vmax=None, sub='111', fig=None, color='k', percent=F
     ax1_min = np.amin(ax1)
     ax1_max = np.amax(ax1)
 
-    ax_cart = fig.add_subplot(sub)
-    ax_cart.grid(True)
-
-    ax_cart.set_xlim(ax1_min, ax1_max)
-    ax_cart.set_ylim(vmin, vmax)
-    ax_cart.ticklabel_format(axis='y', style='sci', scilimits=(-2, 2))
-    ax_cart.grid(True)
-    ax_cart.set_xlabel(r'$\lambda$ (nm)')
+    # Check if subplot already exists by using a marker attribute
+    marker_name = f'_spectrum_sub_{sub}'
+    ax_cart = None
+    is_new_axes = True
+    if hasattr(fig, marker_name):
+        ax_cart = getattr(fig, marker_name)
+        is_new_axes = False
+    
+    if is_new_axes:
+        ax_cart = fig.add_subplot(sub)
+        setattr(fig, marker_name, ax_cart)  # Store reference
+        ax_cart.grid(True)
+        ax_cart.set_xlim(ax1_min, ax1_max)
+        ax_cart.set_ylim(vmin, vmax)
+        ax_cart.ticklabel_format(axis='y', style='sci', scilimits=(-2, 2))
+        ax_cart.set_xlabel(r'$\lambda$ (nm)')
+    else:
+        # Extend ylimits if needed
+        current_ylim = ax_cart.get_ylim()
+        new_vmin = min(current_ylim[0], vmin)
+        new_vmax = max(current_ylim[1], vmax)
+        ax_cart.set_ylim(new_vmin, new_vmax)
 
     # Plot
     ax_cart.plot(ax1, data[:], fmt, color=color)
 
-    # Add title from description
-    desc = da.attrs.get('long_name', None)
-    if desc is not None:
-        ax_cart.set_title(desc)
+    # Add title
+    title = da.attrs.get('long_name', da.name)
+    if title is not None:
+        ax_cart.set_title(title)
 
     return fig
 
