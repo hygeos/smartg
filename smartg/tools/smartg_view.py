@@ -930,61 +930,72 @@ def profile_view(ds_sg, fig=None, ax=None, iw=0, kind='atm', zmax=None):
         return fig, ax
     
     
-def input_view(mlut, iw=0, kind='atm', zmax=None, ipha=None):
-    ''' 
-    visualization of a smartg MLUT profile and phase functions from output
+def input_view(ds_sg, iw=0, kind='atm', zmax=None, ipha=None):
+    """
+    Visualization of SMART-G input profile and phase functions.
 
-    Options:
-        iw : in case of multi wavelength simulation, index of wavelength to be plotted
-        kind : atmopsheric 'atm' or oceanic 'oc' profile
-        zmax: max altitude or depth of the plot
-        ipha: absolute index of the phase function coming from Profile
-    '''
-    fig = figure()
-    fig.set_size_inches(12,6)
-    try:
-        mlut['phase_'+kind]
-        nstk = len(mlut['phase_'+kind][0,:,0])
+    Parameters
+    ----------
+    ds_sg : xr.Dataset
+        Multi-dimensional Look-Up Table (MLUT) xarray Dataset from SMART-G,
+        can be from simulation results or smartg input profile,
+        containing phase function data and optical depth profiles.
+    iw : int, optional
+        Wavelength index for multi-wavelength simulations. Default is 0.
+    kind : {'atm', 'oc'}, optional
+        Profile type: 'atm' for atmospheric, 'oc' for oceanic. Default is 'atm'.
+    zmax : float, optional
+        Maximum altitude (for 'atm') or depth (for 'oc') to plot.
+        If None, automatically determined from data.
+    ipha : int, optional
+        Absolute index of the phase function coming from Profile.
+        If None, uses all unique indices.
+    """
+
+    if isinstance(ds_sg, MLUT):
+        warn_message = "\nUsing an MLUT for ds_sg is deprecated, use an xarray.Dataset instead."
+        warnings.warn(warn_message, DeprecationWarning)
+        ds_sg = ds_sg.to_xarray()
+
+    if 'phase_'+kind in ds_sg:
+        fig = figure()
+        phase_data = ds_sg['phase_'+kind].values
+        nstk = phase_data.shape[1]
         if nstk == 4:
-            warnings.simplefilter('always', DeprecationWarning)
-            warn_message = "\nGiving only 4 stk components is deprecated as of SMART-G 1.0.0 " + \
-                           "and will removed in one of the next release.\n" + \
-                           "Please provide phase with the 6 stk components in Iparper convention, where:\n" + \
-                           "stk0 = F11, stk1=F12, stk2=F33, stk3=F34, stk4=F22 and stk5=F44."
-            warnings.warn(warn_message, DeprecationWarning)
-            ax1 = subplot2grid((2,3),(0,0))
-            ax2 = subplot2grid((2,3),(0,1))
-            ax3 = subplot2grid((2,3),(1,0))
-            ax4 = subplot2grid((2,3),(1,1))
+            fig.set_size_inches(12, 6)
+            ax1 = subplot2grid((2, 3), (0, 0))
+            ax2 = subplot2grid((2, 3), (0, 1))
+            ax3 = subplot2grid((2, 3), (1, 0))
+            ax4 = subplot2grid((2, 3), (1, 1))
         
-            axarr = np.array([[ax1,ax2],[ax3,ax4]])
+            axarr = np.array([[ax1, ax2], [ax3, ax4]])
         
-            _,_= phase_view(mlut, iw=iw, axarr=axarr, kind=kind, ipha=ipha)
+            _,_ = phase_view(ds_sg, iw=iw, axarr=axarr, kind=kind, ipha=ipha)
             
-            ax5 = subplot2grid((2,3),(0,2),rowspan=2,colspan=1)
+            ax5 = subplot2grid((2, 3), (0, 2), rowspan=2, colspan=1)
             
-            _,_= profile_view(mlut, iw=iw, ax=ax5, kind=kind, zmax=zmax)
+            profile_view(ds_sg, iw=iw, ax=ax5, kind=kind, zmax=zmax)
         else:
-            fig.set_size_inches(12,9)
-            ax1 = subplot2grid((3,3),(0,0))
-            ax2 = subplot2grid((3,3),(0,1))
-            ax3 = subplot2grid((3,3),(1,0))
-            ax4 = subplot2grid((3,3),(1,1))
-            ax5 = subplot2grid((3,3),(2,0))
-            ax6 = subplot2grid((3,3),(2,1))
+            fig.set_size_inches(12, 9)
+            ax1 = subplot2grid((3, 3), (0, 0))
+            ax2 = subplot2grid((3, 3), (0, 1))
+            ax3 = subplot2grid((3, 3), (1, 0))
+            ax4 = subplot2grid((3, 3), (1, 1))
+            ax5 = subplot2grid((3, 3), (2, 0))
+            ax6 = subplot2grid((3, 3), (2, 1))
         
-            axarr = np.array([[ax1,ax2],[ax3,ax4],[ax5,ax6]])
+            axarr = np.array([[ax1, ax2], [ax3, ax4], [ax5, ax6]])
         
-            _,_= phase_view(mlut, iw=iw, axarr=axarr, kind=kind, ipha=ipha)
+            _,_ = phase_view(ds_sg, iw=iw, axarr=axarr, kind=kind, ipha=ipha)
             
-            ax7 = subplot2grid((3,3),(0,2),rowspan=2,colspan=1)
+            ax7 = subplot2grid((3, 3), (0, 2), rowspan=2, colspan=1)
             
-            _,_= profile_view(mlut, iw=iw, ax=ax7, kind=kind, zmax=zmax)
-        
-        tight_layout()
-        
-    except:
-        _,_= profile_view(mlut, iw=iw, kind=kind, zmax=zmax)
+            profile_view(ds_sg, iw=iw, ax=ax7, kind=kind, zmax=zmax)
+    else:
+        fig, _ = profile_view(ds_sg, iw=iw, kind=kind, zmax=zmax)
+
+    tight_layout()
+
 
 def compare(mlut, mref, field='up (TOA)',errb=False, logI=False, U_sign=1, same_U_convention=True, U_symetry=True,
                   Nparam=4, vmax=None, vmin=None, emax=None, ermax=None, same_azimuth_convention=True,
