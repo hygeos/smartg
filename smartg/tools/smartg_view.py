@@ -140,11 +140,6 @@ def smartg_view(ds_sg, logI=False, QU=False, Circ=False, full=False, field='up (
     fig : matplotlib.figure.Figure or tuple of matplotlib.figure.Figure
         If full is False: single figure containing azimuthal slices of Stokes parameters.
         If full is True: tuple of (fig1, fig2) with raw and processed Stokes parameters.
-
-    Notes
-    -----
-    - MLUT objects are deprecated and will be converted automatically with a deprecation warning.
-    - The `ind` parameter using `luts.Idx_base` objects is deprecated and will raise an error in future versions.
     """
 
     if isinstance(ds_sg, MLUT):
@@ -268,125 +263,178 @@ def smartg_view(ds_sg, logI=False, QU=False, Circ=False, full=False, field='up (
 
         return fig1, fig2
 
-def transect_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (TOA)', prefix='', ind=[0], fig=None, color='k', subdict=None, 
+
+def transect_view(ds_sg, logI=False, QU=False, Circ=False, full=False, field='up (TOA)', prefix='', ind=[0], fig=None, color='k', subdict=None, interp_dict=None,
          **kwargs):
-    '''
-    visualization of a smartg MLUT
+    """
+    Transect visualization of SMART-G output.
 
-    Options:
-        logI: shows log10 of I
-        Circ: shows Circular polarization 
-        QU:  shows Q U and DoP
-        field: level of output
-        ind: list of indices of azimutal planes
-        full: shows all
-        color: color of the transect
-        subdict: dictionnary of LUT subsetter (see LUT class , sub() method)
+    Parameters
+    ----------
+    ds_sg : xr.Dataset
+        An xarray Dataset from SMART-G simulation.
+    logI : bool, optional
+        If True, display Intensity (I) in log10 scale. Default is False.
+    QU : bool, optional
+        If True, show Q, U, and DoLP. If False, show only I and polarization metrics. Default is False.
+    Circ : bool, optional
+        If True, show circular polarization metrics. If False, show linear polarization. Default is False.
+    full : bool, optional
+        If True, return two figures with full and reduced polarization info. If False, return one figure. Default is False.
+    field : str, optional
+        Name of the output level to visualize. Default is 'up (TOA)'.
+    prefix : str, optional
+        Prefix for field variable names. Default is empty string.
+    ind : int or list of int, optional
+        Azimuthal plane indices to display. Default is [0].
+    fig : matplotlib.figure.Figure, optional
+        Existing figure to plot on. If None, creates a new figure. Default is None.
+    color : str, optional
+        Color for the transect line. Default is 'k' (black).
+    subdict : dict, optional
+        **Deprecated**. Use `interp_dict` instead. Dictionary of coordinate values for interpolation.
+        This parameter corresponds to the input dictionary of the `sub()` method of deprecated 
+        LUT and MLUT objects, for backward compatibility. Default is None.
+    interp_dict : dict, optional
+        Dictionary of coordinate values for interpolation. Keys are dimension names, 
+        values are the coordinate values to interpolate to. Uses xarray's `interp()` method. 
+        Mutually exclusive with `subdict`. Default is None.
+    **kwargs
+        Additional keyword arguments passed to transect2D, including:
+            - vmin, vmax : float, optional. Minimum and maximum values for data range display. 
+              If None, determined from data.
+            - sym : bool, optional. If True, use symmetrical axis for the transect. Default is True.
+            - swap : bool or 'auto', optional. If True or 'auto', swap the order of the 2 axes. 
+              If 'auto', searches for 'azi' in dimension names. Default is 'auto'.
+            - fmt : str, optional. Plot format string (e.g., '-', '--', '.', etc.). Default is '-'.
 
-    Outputs:
-    if full is False, it returns 1 figure
-    if full is True,  it returns 2 figures
-    '''
+    Returns
+    -------
+    fig : matplotlib.figure.Figure or tuple of matplotlib.figure.Figure
+        If full is False: single figure containing transect slices of Stokes parameters.
+        If full is True: tuple of (fig1, fig2) with raw and processed Stokes parameters.
+    """
 
-    I = mlut[prefix+'I_' + field]
-    Q = mlut[prefix+'Q_' + field]
-    U = mlut[prefix+'U_' + field]
-    V = mlut[prefix+'V_' + field]
+    if isinstance(ds_sg, MLUT):
+        warn_message = "\nUsing an MLUT for ds_sg is deprecated, use an xarray.Dataset instead."
+        warnings.warn(warn_message, DeprecationWarning)
+        ds_sg = ds_sg.to_xarray()
 
-    if subdict is not None :
-        I = I.sub(d=subdict)
-        Q = Q.sub(d=subdict)
-        U = U.sub(d=subdict)
-        V = V.sub(d=subdict)
+    if isinstance(ind, Idx_base):
+        warn_message = (
+            "\nUsing luts.Idx_base objects for the 'ind' parameter is "
+            "deprecated and will result in an error in future versions."
+        )
+        warnings.warn(warn_message, DeprecationWarning)
+        ind = np.round(ind.index(ds_sg.coords['Azimuth angles'].values)).astype(int)
+        if not isinstance(ind, (list, np.ndarray)):
+            ind = [ind]
+
+    I = ds_sg[prefix+'I_' + field]
+    Q = ds_sg[prefix+'Q_' + field]
+    U = ds_sg[prefix+'U_' + field]
+    V = ds_sg[prefix+'V_' + field]
+
+    # Handle deprecated subdict parameter
+    if subdict is not None and interp_dict is not None:
+        raise ValueError("Cannot specify both 'subdict' and 'interp_dict'. Use 'interp_dict' instead.")
+    
+    if subdict is not None:
+        warn_message = (
+            "\nThe 'subdict' parameter is deprecated. Use 'interp_dict' instead."
+        )
+        warnings.warn(warn_message, DeprecationWarning)
+        # Convert Idx_base objects to values before converting to interp_dict
+        for dic_name in list(subdict.keys()):
+            if isinstance(subdict[dic_name], Idx_base):
+                subdict[dic_name] = subdict[dic_name].value
+            else:
+                subdict[dic_name] = ds_sg[dic_name][subdict[dic_name]]
+        interp_dict = subdict
+    
+    if interp_dict is not None:
+        # Identify dimensions to drop (those with scalar values)
+        dims_to_drop = [dim for dim in interp_dict.keys() if 
+                        np.atleast_1d(interp_dict[dim]).size <= 1]
+        I = I.interp(interp_dict).drop(dims_to_drop)
+        Q = Q.interp(interp_dict).drop(dims_to_drop)
+        U = U.interp(interp_dict).drop(dims_to_drop)
+        V = V.interp(interp_dict).drop(dims_to_drop)
 
     # Linearly polarized reflectance
-    IPL = (Q*Q + U*U).apply(np.sqrt, 'Lin. Pol. ref.')
+    IPL = np.sqrt(Q*Q + U*U)
     
     # Polarized reflectance
-    IP = (Q*Q + U*U +V*V).apply(np.sqrt, 'Pol. ref.')
+    IP = np.sqrt(Q*Q + U*U + V*V)
 
     # Degree of Linear Polarization (%)
     DoLP = 100*IPL/I
-    DoLP.desc = prefix+r'$DoLP$'
+    DoLP.attrs['latex_name'] = prefix+r'$DoLP$'
     
     # Angle of Linear Polarization (deg)
-    AoLP = (U/Q)
-    AoLP.apply(np.arctan)*90/np.pi
-    AoLP.desc = prefix+r'$AoLP$'
+    AoLP = np.arctan(U/Q)*90/np.pi
+    AoLP.attrs['latex_name'] = prefix+r'$AoLP$'
     
     # Degree of Circular Polarization (%)
-    DoCP = 100*V.apply(abs)/I
-    DoCP.desc = prefix+r'$DoCP$'
+    DoCP = 100*np.abs(V)/I
+    DoCP.attrs['latex_name'] = prefix+r'$DoCP$'
 
     # Degree of Polarization (%)
     DoP = 100*IP/I
-    DoP.desc = prefix+r'$DoP$'
-
-    if isinstance(ind, Idx_base):
-        ind = np.round(ind.index(mlut.axes['Azimuth angles'])).astype(int)
+    DoP.attrs['latex_name'] = prefix+r'$DoP$'
 
     if not full:
         if QU:
             if fig is None: fig = figure(figsize=(8, 8))
             if logI:
-                lI=I.apply(np.log10)
-                lI.desc = mdesc(I.desc, logI=logI)
-                transect2D(lut_to_xr(lI),  index=ind, sub=221, fig=fig, color=color,  **kwargs)
+                lI = np.log10(I)
+                lI.attrs['latex_name'] = 'log$_{10}$ ' + I.attrs.get('latex_name', 'I')
+                transect2D(lI, index=ind, sub=221, fig=fig, color=color, **kwargs)
             else:
-                I.desc = mdesc(I.desc)
-                transect2D(lut_to_xr(I),  index=ind, sub=221, fig=fig, color=color,   **kwargs)
-            Q.desc = mdesc(Q.desc)
-            U.desc = mdesc(U.desc)
-            transect2D(lut_to_xr(Q),  index=ind, sub=222, fig=fig, color=color, **kwargs)
-            transect2D(lut_to_xr(U),  index=ind, sub=223, fig=fig, color=color, **kwargs)
+                transect2D(I, index=ind, sub=221, fig=fig, color=color, **kwargs)
+            transect2D(Q, index=ind, sub=222, fig=fig, color=color, **kwargs)
+            transect2D(U, index=ind, sub=223, fig=fig, color=color, **kwargs)
             if Circ:
-                V.desc = mdesc(V.desc)
-                transect2D(lut_to_xr(V), index=ind, sub=224, fig=fig, color=color, **kwargs)
+                transect2D(V, index=ind, sub=224, fig=fig, color=color, **kwargs)
             else:
-                transect2D(lut_to_xr(DoP), index=ind, sub=224, fig=fig,  color=color, percent=True, **kwargs)
+                transect2D(DoP, index=ind, sub=224, fig=fig, color=color, percent=True, **kwargs)
         else:
             # show only I and PR
             if fig is None: fig = figure(figsize=(8, 4))
             if logI:
-                lI=I.apply(np.log10)
-                lI.desc = mdesc(I.desc, logI=logI)
-                transect2D(lut_to_xr(lI),  index=ind, sub=121, fig=fig, color=color,   **kwargs)
+                lI = np.log10(I)
+                lI.attrs['latex_name'] = 'log$_{10}$ ' + I.attrs.get('latex_name', 'I')
+                transect2D(lI, index=ind, sub=121, fig=fig, color=color, **kwargs)
             else:
-                I.desc = mdesc(I.desc)
-                transect2D(lut_to_xr(I),  index=ind, sub=121, fig=fig, color=color,  **kwargs)
+                transect2D(I, index=ind, sub=121, fig=fig, color=color, **kwargs)
 
             if Circ:
-                transect2D(lut_to_xr(DoCP), index=ind, sub=122, fig=fig,  color=color, percent=True, **kwargs)
+                transect2D(DoCP, index=ind, sub=122, fig=fig, color=color, percent=True, **kwargs)
             else:
-                transect2D(lut_to_xr(DoP), index=ind, sub=122, fig=fig, color=color, percent=True, **kwargs)
+                transect2D(DoP, index=ind, sub=122, fig=fig, color=color, percent=True, **kwargs)
 
         return fig
-
 
     else:
         # full plots
         if fig is None: 
             fig1 = figure(figsize=(16, 4))
             fig2 = figure(figsize=(16, 4))
-        else : fig1,fig2 = fig
-        lI=I.apply(np.log10)
-        lI.desc = mdesc(I.desc,logI=True)
-        I.desc = mdesc(I.desc)
-        Q.desc = mdesc(Q.desc)
-        U.desc = mdesc(U.desc)
-        V.desc = mdesc(V.desc)
-        transect2D(lut_to_xr(I),  index=ind,  sub=141, fig=fig1, color=color,  **kwargs)
-        transect2D(lut_to_xr(Q),  index=ind,  sub=142, fig=fig1, color=color, **kwargs)
-        transect2D(lut_to_xr(U),  index=ind, sub=143, fig=fig1, color=color, **kwargs)
-        transect2D(lut_to_xr(V),  index=ind, sub=144, fig=fig1, color=color, **kwargs)
+        else:
+            fig1, fig2 = fig
         
-        Q.desc = mdesc(Q.desc)
-        U.desc = mdesc(U.desc)
-        V.desc = mdesc(V.desc)
-        transect2D(lut_to_xr(lI),  index=ind, sub=141,fig=fig2, color=color, **kwargs)
-        transect2D(lut_to_xr(DoLP),  index=ind, sub=142, fig=fig2, color=color, percent=True, **kwargs)
-        transect2D(lut_to_xr(DoCP),  index=ind, sub=143, fig=fig2, color=color, percent=True, **kwargs)
-        transect2D(lut_to_xr(DoP),  index=ind,  sub=144, fig=fig2, color=color, percent=True, **kwargs)
+        lI = np.log10(I)
+        lI.attrs['latex_name'] = 'log$_{10}$ ' + I.attrs.get('latex_name', 'I')
+        
+        transect2D(I, index=ind, sub=141, fig=fig1, color=color, **kwargs)
+        transect2D(Q, index=ind, sub=142, fig=fig1, color=color, **kwargs)
+        transect2D(U, index=ind, sub=143, fig=fig1, color=color, **kwargs)
+        transect2D(V, index=ind, sub=144, fig=fig1, color=color, **kwargs)
+        
+        transect2D(lI, index=ind, sub=141, fig=fig2, color=color, **kwargs)
+        transect2D(DoLP, index=ind, sub=142, fig=fig2, color=color, percent=True, **kwargs)
+        transect2D(DoCP, index=ind, sub=143, fig=fig2, color=color, percent=True, **kwargs)
+        transect2D(DoP, index=ind, sub=144, fig=fig2, color=color, percent=True, **kwargs)
 
         return fig1, fig2
 
