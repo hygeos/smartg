@@ -932,15 +932,33 @@ def profile_view(ds_sg, fig=None, ax=None, iw=0, kind='atm', zmax=None):
     
     Dz = np.abs(func(z))
     
+    # Select wavelength index if multi-wavelength data
+    if nd > 1 and 'wavelength' in od_data.dims:
+        od_data_sel = od_data.isel(wavelength=iw)
+        sca_data = ds_sg['OD_sca_'+kind].isel(wavelength=iw)
+        abs_data = ds_sg['OD_abs_'+kind].isel(wavelength=iw)
+    else:
+        od_data_sel = od_data
+        sca_data = ds_sg['OD_sca_'+kind]
+        abs_data = ds_sg['OD_abs_'+kind]
+    
     # Extract and compute optical depths
-    Dtau = sign * func(ds_sg[od_key].values)
-    Dtau_Sca = sign * func(ds_sg['OD_sca_'+kind].values)
-    Dtau_Abs = sign * func(ds_sg['OD_abs_'+kind].values)
+    Dtau = sign * func(od_data_sel.values)
+    Dtau_Sca = sign * func(sca_data.values)
+    Dtau_Abs = sign * func(abs_data.values)
     if kind == 'atm':
-        Dtau_ExtA = sign * func(ds_sg['OD_p'].values)
-        Dtau_ScaR = sign * func(ds_sg['OD_r'].values)
-        Dtau_AbsG = sign * func(ds_sg['OD_g'].values)
-        ssa_p = ds_sg['ssa_p_'+kind].values
+        if nd > 1 and 'wavelength' in od_data.dims:
+            Dtau_ExtA = sign * func(ds_sg['OD_p'].isel(wavelength=iw).values)
+            Dtau_ScaR = sign * func(ds_sg['OD_r'].isel(wavelength=iw).values)
+            Dtau_AbsG = sign * func(ds_sg['OD_g'].isel(wavelength=iw).values)
+        else:
+            Dtau_ExtA = sign * func(ds_sg['OD_p'].values)
+            Dtau_ScaR = sign * func(ds_sg['OD_r'].values)
+            Dtau_AbsG = sign * func(ds_sg['OD_g'].values)
+        if nd > 1 and 'wavelength' in od_data.dims:
+            ssa_p = ds_sg['ssa_p_'+kind].isel(wavelength=iw).values
+        else:
+            ssa_p = ds_sg['ssa_p_'+kind].values
         Dtau_ScaA = Dtau_ExtA * ssa_p
         Dtau_AbsA = Dtau_ExtA * (1. - ssa_p)
         if (np.max(Dtau_AbsA) > 0.) : ax.semilogx((Dtau_AbsA/Dz), z, 'r--',label=r'$\sigma_{abs}^{a+c}$')
@@ -953,12 +971,20 @@ def profile_view(ds_sg, fig=None, ax=None, iw=0, kind='atm', zmax=None):
         if zmax is None : zmax = max(100., z.max())
         ax.set_ylim(0, zmax)
     else :
-        Dtau_ExtP = sign * func(ds_sg['OD_p_oc'].values)
-        Dtau_ExtW = sign * func(ds_sg['OD_w'].values)
-        Dtau_AbsY = sign * func(ds_sg['OD_y'].values)
-        ssa_p = ds_sg['ssa_p_'+kind].values
-        ssa_w = ds_sg['ssa_w'].values
-        pine  = ds_sg['pine_oc'].values
+        if nd > 1 and 'wavelength' in od_data.dims:
+            Dtau_ExtP = sign * func(ds_sg['OD_p_oc'].isel(wavelength=iw).values)
+            Dtau_ExtW = sign * func(ds_sg['OD_w'].isel(wavelength=iw).values)
+            Dtau_AbsY = sign * func(ds_sg['OD_y'].isel(wavelength=iw).values)
+            ssa_p = ds_sg['ssa_p_'+kind].isel(wavelength=iw).values
+            ssa_w = ds_sg['ssa_w'].isel(wavelength=iw).values
+            pine  = ds_sg['pine_oc'].isel(wavelength=iw).values
+        else:
+            Dtau_ExtP = sign * func(ds_sg['OD_p_oc'].values)
+            Dtau_ExtW = sign * func(ds_sg['OD_w'].values)
+            Dtau_AbsY = sign * func(ds_sg['OD_y'].values)
+            ssa_p = ds_sg['ssa_p_'+kind].values
+            ssa_w = ds_sg['ssa_w'].values
+            pine  = ds_sg['pine_oc'].values
         Dtau_ScaP = Dtau_ExtP * ssa_p
         Dtau_AbsP = Dtau_ExtP * (1. - ssa_p)
         Dtau_ScaW = Dtau_ExtW * ssa_w
