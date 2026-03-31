@@ -1632,9 +1632,8 @@ def plot_polar(da, index=None, vmin=None, vmax=None, rect=211, sub=212,
     # Add title
     if 'latex_name' not in da.attrs and da.name != '':
         da.attrs['latex_name'] = mdesc(da.name)
-        title = da.attrs['latex_name']
-    else:
-        title = None
+    title = da.attrs['latex_name']
+
 
     if title is not None:
         ax_polar.set_title(title, weight='bold', position=(0.05, 0.97))
@@ -1776,9 +1775,7 @@ def transect2D(da, index=None, vmin=None, vmax=None, sym=True, swap='auto',
     # Add title
     if 'latex_name' not in da.attrs and da.name != '':
         da.attrs['latex_name'] = mdesc(da.name)
-        title = da.attrs['latex_name']
-    else:
-        title = None
+    title = da.attrs['latex_name']
 
     if title is not None:
         ax_cart.set_title(title)
