@@ -73,7 +73,7 @@ def mdesc(desc, logI=False):
 
 def lut_to_xr(lut):
     """
-    Convert a LUT object to xr.DataArray, preserving the desc as long_name.
+    Convert a LUT object to xr.DataArray, preserving the desc as latex_name.
     
     Parameters
     ----------
@@ -87,7 +87,7 @@ def lut_to_xr(lut):
     """
     da = lut.to_xarray()
     if hasattr(lut, 'desc') and lut.desc is not None:
-        da.attrs['long_name'] = lut.desc
+        da.attrs['latex_name'] = lut.desc
     return da
     
 
@@ -187,7 +187,7 @@ def smartg_view(ds, logI=False, QU=False, Circ=False, full=False, field='up (TOA
             if fig is None: fig = figure(figsize=(9, 9))
             if logI:
                 lI = np.log10(I)
-                lI.attrs['long_name'] = 'log$_{10}$ ' + I.attrs.get('long_name', 'I')
+                lI.attrs['latex_name'] = 'log$_{10}$ ' + I.attrs.get('latex_name', 'I')
                 plot_polar(lI.assign_coords(lI.coords), index=ind, rect=421, sub=423, fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
             else:
                 plot_polar(I.assign_coords(I.coords), index=ind, rect=421, sub=423, fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
@@ -196,23 +196,23 @@ def smartg_view(ds, logI=False, QU=False, Circ=False, full=False, field='up (TOA
             if Circ:
                 plot_polar(V.assign_coords(V.coords), index=ind, rect=426, sub=428, fig=fig, cmap=cmap)
             else:
-                DoP.attrs['long_name'] = r'$DoP$'
+                DoP.attrs['latex_name'] = r'$DoP$'
                 plot_polar(DoP.assign_coords(DoP.coords), index=ind, rect=426, sub=428, fig=fig, vmin=Pmin, vmax=Pmax, cmap=cmap)
         else:
             # show only I and PR
             if fig is None: fig = figure(figsize=(9, 4.5))
             if logI:
                 lI = np.log10(I)
-                lI.attrs['long_name'] = 'log$_{10}$ ' + I.attrs.get('long_name', 'I')
+                lI.attrs['latex_name'] = 'log$_{10}$ ' + I.attrs.get('latex_name', 'I')
                 plot_polar(lI.assign_coords(lI.coords), index=ind, rect=221, sub=223, fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
             else:
                 plot_polar(I.assign_coords(I.coords), index=ind, rect=221, sub=223, fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
 
             if Circ:
-                DoCP.attrs['long_name'] = r'$DoCP$'
+                DoCP.attrs['latex_name'] = r'$DoCP$'
                 plot_polar(DoCP.assign_coords(DoCP.coords), index=ind, rect=222, sub=224, fig=fig, vmin=0, vmax=Pmax, cmap=cmap)
             else:
-                DoP.attrs['long_name'] = r'$DoP$'
+                DoP.attrs['latex_name'] = r'$DoP$'
                 plot_polar(DoP.assign_coords(DoP.coords), index=ind, rect=222, sub=224, fig=fig, vmin=Pmin, vmax=Pmax, cmap=cmap)
 
         return fig
@@ -222,7 +222,7 @@ def smartg_view(ds, logI=False, QU=False, Circ=False, full=False, field='up (TOA
         # full plots
         fig1 = figure(figsize=(16, 4))
         lI = np.log10(I)
-        lI.attrs['long_name'] = 'log$_{10}$ ' + I.attrs.get('long_name', 'I')
+        lI.attrs['latex_name'] = 'log$_{10}$ ' + I.attrs.get('latex_name', 'I')
         plot_polar(I.assign_coords(I.coords), index=ind, rect=241, sub=245, fig=fig1, cmap=cmap, vmin=Imin, vmax=Imax)
         plot_polar(Q.assign_coords(Q.coords), index=ind, rect=242, sub=246, fig=fig1, cmap=cmap)
         plot_polar(U.assign_coords(U.coords), index=ind, rect=243, sub=247, fig=fig1, cmap=cmap)
@@ -230,11 +230,11 @@ def smartg_view(ds, logI=False, QU=False, Circ=False, full=False, field='up (TOA
         
         fig2 = figure(figsize=(16, 4))
         plot_polar(lI.assign_coords(lI.coords), index=ind, rect=241, sub=245, fig=fig2, cmap=cmap)
-        DoLP.attrs['long_name'] = r'$DoLP$'
+        DoLP.attrs['latex_name'] = r'$DoLP$'
         plot_polar(DoLP.assign_coords(DoLP.coords), index=ind, rect=242, sub=246, fig=fig2, vmin=Pmin, vmax=Pmax, cmap=cmap)
-        DoCP.attrs['long_name'] = r'$DoCP$'
+        DoCP.attrs['latex_name'] = r'$DoCP$'
         plot_polar(DoCP.assign_coords(DoCP.coords), index=ind, rect=243, sub=247, fig=fig2, vmin=Pmin, vmax=Pmax, cmap=cmap)
-        DoP.attrs['long_name'] = r'$DoP$'
+        DoP.attrs['latex_name'] = r'$DoP$'
         plot_polar(DoP.assign_coords(DoP.coords), index=ind, rect=244, sub=248, fig=fig2, vmin=Pmin, vmax=Pmax, cmap=cmap)
 
         return fig1, fig2
@@ -446,7 +446,7 @@ def spectrum(da, vmin=None, vmax=None, sub='111', fig=None, color='k', percent=F
     ax_cart.plot(ax1, data[:], fmt, color=color)
 
     # Add title
-    title = da.attrs.get('long_name', da.name)
+    title = da.attrs.get('latex_name', da.name)
     if title is not None:
         ax_cart.set_title(title)
 
@@ -1082,7 +1082,7 @@ def compare(ds_sg, ds_ref, field='up (TOA)',errb=False, logI=False, U_sign=1, sa
                 th = S.coords[list(S.dims)[0]].values
             
             # Extract description from attributes
-            desc = S.attrs.get('long_name', stokes[i])
+            desc = S.attrs.get('latex_name', stokes[i])
             desc = mdesc(desc)
             
             if errb : 
@@ -1106,7 +1106,7 @@ def compare(ds_sg, ds_ref, field='up (TOA)',errb=False, logI=False, U_sign=1, sa
             Sref = (np.sqrt(Qref*Qref + Uref*Uref)/Iref) * 100
             
             # Get description
-            I_desc = I.attrs.get('long_name', 'I')
+            I_desc = I.attrs.get('latex_name', 'I')
             desc = 'DoLP' + I_desc[1:]
             desc = mdesc(desc)
             
@@ -1352,8 +1352,8 @@ def plot_polar(da, index=None, vmin=None, vmax=None, rect=211, sub=212,
         data = da.values
 
     # Determine axis labels
-    label1 = da.coords[ax1_name].attrs.get('long_name', ax1_name)
-    label2 = da.coords[ax2_name].attrs.get('long_name', ax2_name)
+    label1 = da.coords[ax1_name].attrs.get('latex_name', ax1_name)
+    label2 = da.coords[ax2_name].attrs.get('latex_name', ax2_name)
 
     # Determine min/max values
     if vmin is None:
@@ -1491,7 +1491,7 @@ def plot_polar(da, index=None, vmin=None, vmax=None, rect=211, sub=212,
                  shrink=0.7)
 
     # Add title
-    title = da.attrs.get('long_name', da.name)
+    title = da.attrs.get('latex_name', da.name)
     if title is not None:
         ax_polar.set_title(title, weight='bold', position=(0.05, 0.97))
 
@@ -1574,7 +1574,7 @@ def transect2D(da, index=None, vmin=None, vmax=None, sym=True, swap='auto',
         vmax = 100.
 
     ax1_scaled = ax1
-    label2 = da.coords[name2].attrs.get('long_name', name2)
+    label2 = da.coords[name2].attrs.get('latex_name', name2)
 
     # Ensure index is an integer
     if index is not None:
@@ -1630,7 +1630,7 @@ def transect2D(da, index=None, vmin=None, vmax=None, sym=True, swap='auto',
         ax_cart.plot(-ax2, data[mirror_index, :], fmt, color=color)
 
     # Add title
-    title = da.attrs.get('long_name', da.name)
+    title = da.attrs.get('latex_name', da.name)
     if title is not None:
         ax_cart.set_title(title)
 
