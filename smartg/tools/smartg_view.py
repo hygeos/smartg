@@ -1607,11 +1607,11 @@ def transect2D(da, index=None, vmin=None, vmax=None, sym=True, swap='auto',
 
     # Ensure index is an integer
     if index is not None:
-        if isinstance(index, (list, tuple)):
+        if ( isinstance(index, (list, tuple)) or \
+                      (isinstance(index, np.ndarray) and index.ndim == 1) ):
             index = int(index[0])
         else:
             index = int(index)
-    
     if index is None:
         index = 0
 
