@@ -91,15 +91,15 @@ def lut_to_xr(lut):
     return da
     
 
-def smartg_view(ds, logI=False, QU=False, Circ=False, full=False, field='up (TOA)', prefix='', ind=[0], cmap=None, fig=None, subdict=None,
+def smartg_view(ds_sg, logI=False, QU=False, Circ=False, full=False, field='up (TOA)', prefix='', ind=[0], cmap=None, fig=None, subdict=None, interp_dict=None,
         Imin=None, Imax=None, Pmin=0, Pmax=100):
     """
     Visualization of SMART-G output in polar coordinates.
 
     Parameters
     ----------
-    ds : xr.Dataset
-        An xarray Dataset from SMART-G simulation, can be a Dataset or legacy MLUT object.
+    ds_sg : xr.Dataset
+        An xarray Dataset from SMART-G simulation.
     logI : bool, optional
         If True, display Intensity (I) in log10 scale. Default is False.
     QU : bool, optional
@@ -119,7 +119,13 @@ def smartg_view(ds, logI=False, QU=False, Circ=False, full=False, field='up (TOA
     fig : matplotlib.figure.Figure, optional
         Existing figure to plot on. If None, creates a new figure. Default is None.
     subdict : dict, optional
-        Dictionary of LUT subsetter parameters. Default is None.
+        **Deprecated**. Use `interp_dict` instead. Dictionary of coordinate values for interpolation.
+        This parameter corresponds to the input dictionary of the `sub()` method of deprecated 
+        LUT and MLUT objects, for backward compatibility. Default is None.
+    interp_dict : dict, optional
+        Dictionary of coordinate values for interpolation. Keys are dimension names, 
+        values are the coordinate values to interpolate to. Uses xarray's `interp()` method. 
+        Mutually exclusive with `subdict`. Default is None.
     Imin : float, optional
         Minimum value for Intensity display. If None, determined from data. Default is None.
     Imax : float, optional
@@ -141,10 +147,10 @@ def smartg_view(ds, logI=False, QU=False, Circ=False, full=False, field='up (TOA
     - The `ind` parameter using `luts.Idx_base` objects is deprecated and will raise an error in future versions.
     """
 
-    if isinstance(ds, MLUT):
-        warn_message = "\nUsing an MLUT for ds is deprecated, use an xarray.Dataset instead."
+    if isinstance(ds_sg, MLUT):
+        warn_message = "\nUsing an MLUT for ds_sg is deprecated, use an xarray.Dataset instead."
         warnings.warn(warn_message, DeprecationWarning)
-        ds = ds.to_xarray()
+        ds_sg = ds_sg.to_xarray()
 
     if isinstance(ind, Idx_base):
         warn_message = (
@@ -152,17 +158,40 @@ def smartg_view(ds, logI=False, QU=False, Circ=False, full=False, field='up (TOA
             "deprecated and will result in an error in future versions."
         )
         warnings.warn(warn_message, DeprecationWarning)
-        ind = np.round(ind.index(ds.coords['Azimuth angles'].values)).astype(int)
+        ind = np.round(ind.index(ds_sg.coords['Azimuth angles'].values)).astype(int)
         if not isinstance(ind, (list, np.ndarray)):
             ind = [ind]
 
-    I = ds[prefix+'I_' + field]
-    Q = ds[prefix+'Q_' + field]
-    U = ds[prefix+'U_' + field]
-    V = ds[prefix+'V_' + field]
+    I = ds_sg[prefix+'I_' + field]
+    Q = ds_sg[prefix+'Q_' + field]
+    U = ds_sg[prefix+'U_' + field]
+    V = ds_sg[prefix+'V_' + field]
 
-    # Note: subdict subsetting is not supported for xarray Datasets yet
-    # Users should subset the Dataset before calling this function if needed
+    # Handle deprecated subdict parameter
+    if subdict is not None and interp_dict is not None:
+        raise ValueError("Cannot specify both 'subdict' and 'interp_dict'. Use 'interp_dict' instead.")
+    
+    if subdict is not None:
+        warn_message = (
+            "\nThe 'subdict' parameter is deprecated. Use 'interp_dict' instead."
+        )
+        warnings.warn(warn_message, DeprecationWarning)
+        # Convert Idx_base objects to values before converting to interp_dict
+        for dic_name in list(subdict.keys()):
+            if isinstance(subdict[dic_name], Idx_base):
+                subdict[dic_name] = subdict[dic_name].value
+            else:
+                subdict[dic_name] = ds_sg[dic_name][subdict[dic_name]]
+        interp_dict = subdict
+    
+    if interp_dict is not None:
+        # Identify dimensions to drop (those with scalar values)
+        dims_to_drop = [dim for dim in interp_dict.keys() if 
+                        np.atleast_1d(interp_dict[dim]).size <= 1]
+        I = I.interp(interp_dict).drop(dims_to_drop)
+        Q = Q.interp(interp_dict).drop(dims_to_drop)
+        U = U.interp(interp_dict).drop(dims_to_drop)
+        V = V.interp(interp_dict).drop(dims_to_drop)
 
     # Linearly polarized reflectance
     IPL = np.sqrt(Q*Q + U*U)
