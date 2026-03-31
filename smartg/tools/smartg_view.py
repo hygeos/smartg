@@ -91,103 +91,129 @@ def lut_to_xr(lut):
     return da
     
 
-def smartg_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (TOA)', prefix='', ind=[0], cmap=None, fig=None, subdict=None,
+def smartg_view(ds, logI=False, QU=False, Circ=False, full=False, field='up (TOA)', prefix='', ind=[0], cmap=None, fig=None, subdict=None,
         Imin=None, Imax=None, Pmin=0, Pmax=100):
-    '''
-    visualization of a smartg MLUT
+    """
+    Visualization of SMART-G output in polar coordinates.
 
-    Options:
-        logI: shows log10 of I
-        Circ: shows Circular polarization 
-        QU:  shows Q U and DoP
-        field: level of output
-        prefix: eventually a prefix for field
-        ind: list of indices of azimutal planes
-        full: shows all
-        cmap: color map
-        fig: already existing figure
-        subdict: dictionnary of LUT subsetter (see LUT class , sub() method)
-        Imin: min value of I
-        Imax: max value of I
-        Pmin: min value of DOP
-        Pmax: max value of DOP
+    Parameters
+    ----------
+    ds : xr.Dataset
+        An xarray Dataset from SMART-G simulation, can be a Dataset or legacy MLUT object.
+    logI : bool, optional
+        If True, display Intensity (I) in log10 scale. Default is False.
+    QU : bool, optional
+        If True, show Q, U, and DoLP. If False, show only I and polarization metrics. Default is False.
+    Circ : bool, optional
+        If True, show circular polarization metrics. If False, show linear polarization. Default is False.
+    full : bool, optional
+        If True, return two figures with full and reduced polarization info. If False, return one figure. Default is False.
+    field : str, optional
+        Name of the output level to visualize. Default is 'up (TOA)'.
+    prefix : str, optional
+        Prefix for field variable names. Default is empty string.
+    ind : int or list of int, optional
+        Azimuthal plane indices to display. Default is [0].
+    cmap : str, optional
+        Colormap name for polar plots. Default is None (uses default colormap).
+    fig : matplotlib.figure.Figure, optional
+        Existing figure to plot on. If None, creates a new figure. Default is None.
+    subdict : dict, optional
+        Dictionary of LUT subsetter parameters. Default is None.
+    Imin : float, optional
+        Minimum value for Intensity display. If None, determined from data. Default is None.
+    Imax : float, optional
+        Maximum value for Intensity display. If None, determined from data. Default is None.
+    Pmin : float, optional
+        Minimum value for polarization display. Default is 0.
+    Pmax : float, optional
+        Maximum value for polarization display. Default is 100.
 
-    Outputs:
-    if full is False, it returns 1 figure
-    if full is True,  it returns 2 figures
-    '''
+    Returns
+    -------
+    fig : matplotlib.figure.Figure or tuple of matplotlib.figure.Figure
+        If full is False: single figure containing azimuthal slices of Stokes parameters.
+        If full is True: tuple of (fig1, fig2) with raw and processed Stokes parameters.
 
-    I = mlut[prefix+'I_' + field]
-    Q = mlut[prefix+'Q_' + field]
-    U = mlut[prefix+'U_' + field]
-    V = mlut[prefix+'V_' + field]
+    Notes
+    -----
+    - MLUT objects are deprecated and will be converted automatically with a deprecation warning.
+    - The `ind` parameter using `luts.Idx_base` objects is deprecated and will raise an error in future versions.
+    """
 
-    if subdict is not None :
-        I = I.sub(d=subdict)
-        Q = Q.sub(d=subdict)
-        U = U.sub(d=subdict)
-        V = V.sub(d=subdict)
+    if isinstance(ds, MLUT):
+        warn_message = "\nUsing an MLUT for ds is deprecated, use an xarray.Dataset instead."
+        warnings.warn(warn_message, DeprecationWarning)
+        ds = ds.to_xarray()
+
+    if isinstance(ind, Idx_base):
+        warn_message = (
+            "\nUsing luts.Idx_base objects for the 'ind' parameter is "
+            "deprecated and will result in an error in future versions."
+        )
+        warnings.warn(warn_message, DeprecationWarning)
+        ind = np.round(ind.index(ds.coords['Azimuth angles'].values)).astype(int)
+        if not isinstance(ind, (list, np.ndarray)):
+            ind = [ind]
+
+    I = ds[prefix+'I_' + field]
+    Q = ds[prefix+'Q_' + field]
+    U = ds[prefix+'U_' + field]
+    V = ds[prefix+'V_' + field]
+
+    # Note: subdict subsetting is not supported for xarray Datasets yet
+    # Users should subset the Dataset before calling this function if needed
 
     # Linearly polarized reflectance
-    IPL = (Q*Q + U*U).apply(np.sqrt, 'Lin. Pol. ref.')
+    IPL = np.sqrt(Q*Q + U*U)
     
     # Polarized reflectance
-    IP = (Q*Q + U*U + V*V).apply(np.sqrt, 'Pol. ref.')
+    IP = np.sqrt(Q*Q + U*U + V*V)
 
     # Degree of Linear Polarization (%)
     DoLP = 100*IPL/I
-    DoLP.desc = prefix+r'$DoLP$'
     
     # Angle of Linear Polarization (deg)
-    AoLP = (U/Q)
-    AoLP.apply(np.arctan)*90/np.pi
-    AoLP.desc = prefix+r'$AoLP$'
+    AoLP = np.arctan(U/Q)*90/np.pi
     
     # Degree of Circular Polarization (%)
-    DoCP = 100*V.apply(abs)/I
-    DoCP.desc = prefix+r'$DoCP$'
+    DoCP = 100*np.abs(V)/I
 
     # Degree of Polarization (%)
     DoP = 100*IP/I
-    DoP.desc = prefix+r'$DoP\,(\%)$'
-
-    if isinstance(ind, Idx_base):
-        ind = np.round(ind.index(mlut.axes['Azimuth angles'])).astype(int)
 
     if not full:
         if QU:
             if fig is None: fig = figure(figsize=(9, 9))
             if logI:
-                lI=I.apply(np.log10)
-                lI.desc = mdesc(I.desc, logI=logI)
-                plot_polar(lut_to_xr(lI),  index=ind, rect=421, sub=423, fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
+                lI = np.log10(I)
+                lI.attrs['long_name'] = 'log$_{10}$ ' + I.attrs.get('long_name', 'I')
+                plot_polar(lI.assign_coords(lI.coords), index=ind, rect=421, sub=423, fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
             else:
-                I.desc = mdesc(I.desc)
-                plot_polar(lut_to_xr(I),  index=ind, rect=421, sub=423, fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
-            Q.desc = mdesc(Q.desc)
-            U.desc = mdesc(U.desc)
-            plot_polar(lut_to_xr(Q),  index=ind, rect=422, sub=424, fig=fig, cmap=cmap)
-            plot_polar(lut_to_xr(U),  index=ind, rect=425, sub=427, fig=fig, cmap=cmap)
+                plot_polar(I.assign_coords(I.coords), index=ind, rect=421, sub=423, fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
+            plot_polar(Q.assign_coords(Q.coords), index=ind, rect=422, sub=424, fig=fig, cmap=cmap)
+            plot_polar(U.assign_coords(U.coords), index=ind, rect=425, sub=427, fig=fig, cmap=cmap)
             if Circ:
-                V.desc = mdesc(V.desc)
-                plot_polar(lut_to_xr(V), index=ind, rect=426, sub=428, fig=fig, cmap=cmap)
+                plot_polar(V.assign_coords(V.coords), index=ind, rect=426, sub=428, fig=fig, cmap=cmap)
             else:
-                plot_polar(lut_to_xr(DoP), index=ind, rect=426, sub=428, fig=fig, vmin=Pmin, vmax=Pmax, cmap=cmap)
+                DoP.attrs['long_name'] = r'$DoP$'
+                plot_polar(DoP.assign_coords(DoP.coords), index=ind, rect=426, sub=428, fig=fig, vmin=Pmin, vmax=Pmax, cmap=cmap)
         else:
             # show only I and PR
             if fig is None: fig = figure(figsize=(9, 4.5))
             if logI:
-                lI=I.apply(np.log10)
-                lI.desc = mdesc(I.desc, logI=logI)
-                plot_polar(lut_to_xr(lI),  index=ind, rect=221, sub=223, fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
+                lI = np.log10(I)
+                lI.attrs['long_name'] = 'log$_{10}$ ' + I.attrs.get('long_name', 'I')
+                plot_polar(lI.assign_coords(lI.coords), index=ind, rect=221, sub=223, fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
             else:
-                I.desc = mdesc(I.desc)
-                plot_polar(lut_to_xr(I),  index=ind, rect=221, sub=223, fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
+                plot_polar(I.assign_coords(I.coords), index=ind, rect=221, sub=223, fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
 
             if Circ:
-                plot_polar(lut_to_xr(DoCP), index=ind, rect=222, sub=224, fig=fig, vmin=0, vmax=Pmax, cmap=cmap)
+                DoCP.attrs['long_name'] = r'$DoCP$'
+                plot_polar(DoCP.assign_coords(DoCP.coords), index=ind, rect=222, sub=224, fig=fig, vmin=0, vmax=Pmax, cmap=cmap)
             else:
-                plot_polar(lut_to_xr(DoP), index=ind, rect=222, sub=224, fig=fig, vmin=Pmin, vmax=Pmax, cmap=cmap)
+                DoP.attrs['long_name'] = r'$DoP$'
+                plot_polar(DoP.assign_coords(DoP.coords), index=ind, rect=222, sub=224, fig=fig, vmin=Pmin, vmax=Pmax, cmap=cmap)
 
         return fig
 
@@ -195,25 +221,21 @@ def smartg_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (T
     else:
         # full plots
         fig1 = figure(figsize=(16, 4))
-        lI=I.apply(np.log10)
-        lI.desc = mdesc(I.desc,logI=True)
-        I.desc = mdesc(I.desc)
-        Q.desc = mdesc(Q.desc)
-        U.desc = mdesc(U.desc)
-        V.desc = mdesc(V.desc)
-        plot_polar(lut_to_xr(I),  index=ind, rect=241, sub=245, fig=fig1, cmap=cmap, vmin=Imin, vmax=Imax)
-        plot_polar(lut_to_xr(Q),  index=ind, rect=242, sub=246, fig=fig1, cmap=cmap)
-        plot_polar(lut_to_xr(U),  index=ind, rect=243, sub=247, fig=fig1, cmap=cmap)
-        plot_polar(lut_to_xr(V),  index=ind, rect=244, sub=248, fig=fig1, cmap=cmap)
+        lI = np.log10(I)
+        lI.attrs['long_name'] = 'log$_{10}$ ' + I.attrs.get('long_name', 'I')
+        plot_polar(I.assign_coords(I.coords), index=ind, rect=241, sub=245, fig=fig1, cmap=cmap, vmin=Imin, vmax=Imax)
+        plot_polar(Q.assign_coords(Q.coords), index=ind, rect=242, sub=246, fig=fig1, cmap=cmap)
+        plot_polar(U.assign_coords(U.coords), index=ind, rect=243, sub=247, fig=fig1, cmap=cmap)
+        plot_polar(V.assign_coords(V.coords), index=ind, rect=244, sub=248, fig=fig1, cmap=cmap)
         
         fig2 = figure(figsize=(16, 4))
-        Q.desc = mdesc(Q.desc)
-        U.desc = mdesc(U.desc)
-        V.desc = mdesc(V.desc)
-        plot_polar(lut_to_xr(lI),  index=ind, rect=241, sub=245, fig=fig2, cmap=cmap)
-        plot_polar(lut_to_xr(DoLP),  index=ind, rect=242, sub=246, fig=fig2, vmin=Pmin, vmax=Pmax, cmap=cmap)
-        plot_polar(lut_to_xr(DoCP),  index=ind, rect=243, sub=247, fig=fig2, vmin=Pmin, vmax=Pmax, cmap=cmap)
-        plot_polar(lut_to_xr(DoP),  index=ind, rect=244, sub=248, fig=fig2, vmin=Pmin, vmax=Pmax, cmap=cmap)
+        plot_polar(lI.assign_coords(lI.coords), index=ind, rect=241, sub=245, fig=fig2, cmap=cmap)
+        DoLP.attrs['long_name'] = r'$DoLP$'
+        plot_polar(DoLP.assign_coords(DoLP.coords), index=ind, rect=242, sub=246, fig=fig2, vmin=Pmin, vmax=Pmax, cmap=cmap)
+        DoCP.attrs['long_name'] = r'$DoCP$'
+        plot_polar(DoCP.assign_coords(DoCP.coords), index=ind, rect=243, sub=247, fig=fig2, vmin=Pmin, vmax=Pmax, cmap=cmap)
+        DoP.attrs['long_name'] = r'$DoP$'
+        plot_polar(DoP.assign_coords(DoP.coords), index=ind, rect=244, sub=248, fig=fig2, vmin=Pmin, vmax=Pmax, cmap=cmap)
 
         return fig1, fig2
 
