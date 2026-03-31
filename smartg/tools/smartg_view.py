@@ -1533,9 +1533,9 @@ def plot_polar(da, index=None, vmin=None, vmax=None, rect=211, sub=212,
         tick_formatter2 = Formatter()
 
     # Setup transform
-    tr_rotate = Affine2D().translate(0, 0)
+    tr_translate = Affine2D().translate(0, 0)
     tr_scale = Affine2D().scale(np.pi / 180., 1.)
-    tr = tr_rotate + tr_scale + PolarAxes.PolarTransform()
+    tr = tr_translate + tr_scale + PolarAxes.PolarTransform(apply_theta_transforms=False)
 
     # Create grid helper and floating subplot
     grid_helper = floating_axes.GridHelperCurveLinear(
