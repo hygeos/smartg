@@ -530,91 +530,144 @@ def spectrum(da, vmin=None, vmax=None, sub='111', fig=None, color='k', percent=F
     return fig
 
 
-def spectrum_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up (TOA)', prefix='', fig=None, color='k', subdict=None, 
-         **kwargs):
-    '''
-    visualization of a smartg MLUT
+def spectrum_view(ds_sg, logI=False, QU=False, Circ=False, full=False, field='up (TOA)', prefix='', fig=None, color='k', subdict=None, interp_dict=None, **kwargs):
+    """
+    Visualization of SMART-G spectrum (wavelength-dependent Stokes parameters).
 
-    Options:
-        logI: shows log10 of I
-        Circ: shows Circular polarization 
-        QU:  shows Q U and DoP
-        field: level of output
-        full: shows all
-        color: color of the transect
-        subdict: dictionnary of LUT subsetter (see LUT class , sub() method)
+    Parameters
+    ----------
+    ds_sg : xr.Dataset
+        An xarray Dataset from SMART-G simulation.
+    logI : bool, optional
+        If True, display Intensity (I) in log10 scale. Default is False.
+    QU : bool, optional
+        If True, show Q, U, and DoLP. If False, show only I and polarization metrics. Default is False.
+    Circ : bool, optional
+        If True, show circular polarization metrics. If False, show linear polarization. Default is False.
+    full : bool, optional
+        If True, return two figures with full and reduced polarization info. If False, return one figure. Default is False.
+    field : str, optional
+        Name of the output level to visualize. Default is 'up (TOA)'.
+    prefix : str, optional
+        Prefix for field variable names. Default is empty string.
+    fig : matplotlib.figure.Figure or tuple of matplotlib.figure.Figure, optional
+        Existing figure to plot on. If None, creates a new figure. Default is None.
+    color : str, optional
+        Color for the spectrum lines. Default is 'k' (black).
+    subdict : dict, optional
+        **Deprecated**. Use `interp_dict` instead. Dictionary of coordinate values for interpolation.
+        This parameter corresponds to the input dictionary of the `sub()` method of deprecated 
+        LUT and MLUT objects, for backward compatibility. Default is None.
+    interp_dict : dict, optional
+        Dictionary of coordinate values for interpolation. Keys are dimension names, 
+        values are the coordinate values to interpolate to. Uses xarray's `interp()` method. 
+        Mutually exclusive with `subdict`. Default is None.
+    **kwargs
+        Additional keyword arguments passed to the spectrum plotting function 
+        (vmin, vmax, fmt, etc.).
 
-    Outputs:
-    if full is False, it returns 1 figure
-    if full is True,  it returns 2 figures
-    '''
+    Returns
+    -------
+    fig : matplotlib.figure.Figure or tuple of matplotlib.figure.Figure
+        If full is False: single figure containing spectrum plots.
+        If full is True: tuple of (fig1, fig2) with raw Stokes parameters and processed metrics.
+    """
 
-    I = mlut[prefix+'I_' + field]
-    Q = mlut[prefix+'Q_' + field]
-    U = mlut[prefix+'U_' + field]
-    V = mlut[prefix+'V_' + field]
+    if isinstance(ds_sg, MLUT):
+        warn_message = "\nUsing an MLUT for ds_sg is deprecated, use an xarray.Dataset instead."
+        warnings.warn(warn_message, DeprecationWarning)
+        ds_sg = ds_sg.to_xarray()
 
-    if subdict is not None :
-        I = I.sub(d=subdict)
-        Q = Q.sub(d=subdict)
-        U = U.sub(d=subdict)
-        V = V.sub(d=subdict)
+    # Handle deprecated subdict parameter
+    if subdict is not None and interp_dict is not None:
+        raise ValueError("Cannot specify both 'subdict' and 'interp_dict'. Use 'interp_dict' instead.")
+    
+    if subdict is not None:
+        warn_message = (
+            "\nThe 'subdict' parameter is deprecated. Use 'interp_dict' instead."
+        )
+        warnings.warn(warn_message, DeprecationWarning)
+        # Convert Idx_base objects to values before converting to interp_dict
+        for dic_name in list(subdict.keys()):
+            if isinstance(subdict[dic_name], Idx_base):
+                subdict[dic_name] = subdict[dic_name].value
+            else:
+                subdict[dic_name] = ds_sg[dic_name][subdict[dic_name]]
+        interp_dict = subdict
+
+    I = ds_sg[prefix+'I_' + field]
+    Q = ds_sg[prefix+'Q_' + field]
+    U = ds_sg[prefix+'U_' + field]
+    V = ds_sg[prefix+'V_' + field]
+
+    # Handle interpolation for multi-dimensional data
+    if interp_dict is not None:
+        # Identify dimensions to drop (those with scalar values)
+        dims_to_drop = [dim for dim in interp_dict.keys() if 
+                        np.atleast_1d(interp_dict[dim]).size <= 1]
+        I = I.interp(interp_dict).drop(dims_to_drop)
+        Q = Q.interp(interp_dict).drop(dims_to_drop)
+        U = U.interp(interp_dict).drop(dims_to_drop)
+        V = V.interp(interp_dict).drop(dims_to_drop)
 
     # Linearly polarized reflectance
-    IPL = (Q*Q + U*U).apply(np.sqrt, 'Lin. Pol. ref.')
+    IPL = np.sqrt(Q*Q + U*U)
+    IPL.attrs['latex_name'] = prefix+r'$Lin. Pol. ref.$'
     
     # Polarized reflectance
-    IP = (Q*Q + U*U +V*V).apply(np.sqrt, 'Pol. ref.')
+    IP = np.sqrt(Q*Q + U*U + V*V)
+    IP.attrs['latex_name'] = prefix+r'$Pol. ref.$'
 
     # Degree of Linear Polarization (%)
     DoLP = 100*IPL/I
-    DoLP.desc = prefix+r'$DoLP$'
+    DoLP.attrs['latex_name'] = prefix+r'$DoLP$'
     
     # Angle of Linear Polarization (deg)
-    AoLP = (U/Q)
-    AoLP.apply(np.arctan)*90/np.pi
-    AoLP.desc = prefix+r'$AoLP$'
+    AoLP = np.arctan(U/Q)*90/np.pi
+    AoLP.attrs['latex_name'] = prefix+r'$AoLP$'
     
     # Degree of Circular Polarization (%)
-    DoCP = 100*V.apply(abs)/I
-    DoCP.desc = prefix+r'$DoCP$'
+    DoCP = 100*np.abs(V)/I
+    DoCP.attrs['latex_name'] = prefix+r'$DoCP$'
 
     # Degree of Polarization (%)
     DoP = 100*IP/I
-    DoP.desc = prefix+r'$DoP$'
+    DoP.attrs['latex_name'] = prefix+r'$DoP$'
 
     if not full:
         if QU:
-            if fig is None: fig = figure(figsize=(8, 8))
+            if fig is None:
+                fig = figure(figsize=(8, 8))
             if logI:
-                lI=I.apply(np.log10)
-                lI.desc = mdesc(I.desc, logI=logI)
-                spectrum(lI, sub=221, fig=fig, color=color,  **kwargs)
+                lI = np.log10(I)
+                lI.attrs['latex_name'] = mdesc(I.name or 'I', logI=True)
+                spectrum(lI, sub=221, fig=fig, color=color, **kwargs)
             else:
-                I.desc = mdesc(I.desc)
-                spectrum(I,  sub=221, fig=fig, color=color,   **kwargs)
-            Q.desc = mdesc(Q.desc)
-            U.desc = mdesc(U.desc)
+                I.attrs['latex_name'] = mdesc(I.name or 'I')
+                spectrum(I, sub=221, fig=fig, color=color, **kwargs)
+            Q.attrs['latex_name'] = mdesc(Q.name or 'Q')
+            U.attrs['latex_name'] = mdesc(U.name or 'U')
             spectrum(Q, sub=222, fig=fig, color=color, **kwargs)
             spectrum(U, sub=223, fig=fig, color=color, **kwargs)
             if Circ:
-                V.desc = mdesc(V.desc)
+                V.attrs['latex_name'] = mdesc(V.name or 'V')
                 spectrum(V, sub=224, fig=fig, color=color, **kwargs)
             else:
-                spectrum(DoP, sub=224, fig=fig,  color=color, percent=True, **kwargs)
+                spectrum(DoP, sub=224, fig=fig, color=color, percent=True, **kwargs)
         else:
-            # show only I and PR
-            if fig is None: fig = figure(figsize=(8, 4))
+            # show only I and polarization
+            if fig is None:
+                fig = figure(figsize=(8, 4))
             if logI:
-                lI=I.apply(np.log10)
-                lI.desc = mdesc(I.desc, logI=logI)
-                spectrum(lI, sub=121, fig=fig, color=color,   **kwargs)
+                lI = np.log10(I)
+                lI.attrs['latex_name'] = mdesc(I.name or 'I', logI=True)
+                spectrum(lI, sub=121, fig=fig, color=color, **kwargs)
             else:
-                I.desc = mdesc(I.desc)
-                spectrum(I, sub=121, fig=fig, color=color,  **kwargs)
+                I.attrs['latex_name'] = mdesc(I.name or 'I')
+                spectrum(I, sub=121, fig=fig, color=color, **kwargs)
 
             if Circ:
-                spectrum(DoCP, sub=122, fig=fig,  color=color, percent=True, **kwargs)
+                spectrum(DoCP, sub=122, fig=fig, color=color, percent=True, **kwargs)
             else:
                 spectrum(DoP, sub=122, fig=fig, color=color, percent=True, **kwargs)
 
@@ -622,17 +675,20 @@ def spectrum_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up 
 
     else:
         # full plots
-        if fig is None: 
+        if fig is None:
             fig1 = figure(figsize=(16, 4))
             fig2 = figure(figsize=(16, 4))
-        else : fig1,fig2 = fig
-        lI=I.apply(np.log10)
-        lI.desc = mdesc(I.desc,logI=True)
-        I.desc = mdesc(I.desc)
-        Q.desc = mdesc(Q.desc)
-        U.desc = mdesc(U.desc)
-        V.desc = mdesc(V.desc)
-        spectrum(I, sub=141, fig=fig1, color=color,  **kwargs)
+        else:
+            fig1, fig2 = fig
+        
+        lI = np.log10(I)
+        lI.attrs['latex_name'] = mdesc(I.name or 'I', logI=True)
+        I.attrs['latex_name'] = mdesc(I.name or 'I')
+        Q.attrs['latex_name'] = mdesc(Q.name or 'Q')
+        U.attrs['latex_name'] = mdesc(U.name or 'U')
+        V.attrs['latex_name'] = mdesc(V.name or 'V')
+        
+        spectrum(I, sub=141, fig=fig1, color=color, **kwargs)
         spectrum(Q, sub=142, fig=fig1, color=color, **kwargs)
         spectrum(U, sub=143, fig=fig1, color=color, **kwargs)
         spectrum(V, sub=144, fig=fig1, color=color, **kwargs)
@@ -641,10 +697,10 @@ def spectrum_view(mlut, logI=False, QU=False, Circ=False, full=False, field='up 
         spectrum(DoLP, sub=142, fig=fig2, color=color, percent=True, **kwargs)
         spectrum(DoCP, sub=143, fig=fig2, color=color, percent=True, **kwargs)
         spectrum(DoP, sub=144, fig=fig2, color=color, percent=True, **kwargs)
-        #spectrum(AoLP, index=ind,  sub=144, fig=fig2, color=color, **kwargs)
 
         return fig1, fig2
         
+
 def phase_view(ds_sg, ipha=None, fig=None, axarr=None, iw=0, kind='atm',
                show_trunc=False, force_4stk=False):
     """
