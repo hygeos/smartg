@@ -69,26 +69,6 @@ def mdesc(desc, logI=False):
         return pref + stokes + r'^{\uparrow}' + '_{'+desc[sep2+1:sep3]+'}' + desc[sep3+1:] +'$'
     else:
         return pref + stokes + r'^{\downarrow}' + '_{'+desc[sep2+1:sep3]+'}' + desc[sep3+1:] +'$'
-
-
-def lut_to_xr(lut):
-    """
-    Convert a LUT object to xr.DataArray, preserving the desc as latex_name.
-    
-    Parameters
-    ----------
-    lut : LUT
-        A LUT object with `.to_xarray()` method and optional `.desc` attribute
-        
-    Returns
-    -------
-    xr.DataArray
-        DataArray with dimensions and description preserved
-    """
-    da = lut.to_xarray()
-    if hasattr(lut, 'desc') and lut.desc is not None:
-        da.attrs['latex_name'] = lut.desc
-    return da
     
 
 def smartg_view(ds_sg, logI=False, QU=False, Circ=False, full=False, field='up (TOA)', prefix='', ind=[0], cmap=None, fig=None, subdict=None, interp_dict=None,
