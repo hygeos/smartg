@@ -1429,8 +1429,8 @@ def plot_polar(da, index=None, vmin=None, vmax=None, rect=211, sub=212,
         data = da.values
 
     # Determine axis labels
-    label1 = da.coords[ax1_name].attrs.get('latex_name', ax1_name)
-    label2 = da.coords[ax2_name].attrs.get('latex_name', ax2_name)
+    label1 = da.coords[ax1_name].attrs.get('long_name', ax1_name)
+    label2 = da.coords[ax2_name].attrs.get('long_name', ax2_name)
 
     # Determine min/max values
     if vmin is None:
@@ -1568,7 +1568,12 @@ def plot_polar(da, index=None, vmin=None, vmax=None, rect=211, sub=212,
                  shrink=0.7)
 
     # Add title
-    title = da.attrs.get('latex_name', da.name)
+    if 'latex_name' not in da.attrs and da.name != '':
+        da.attrs['latex_name'] = mdesc(da.name)
+        title = da.attrs['latex_name']
+    else:
+        title = None
+
     if title is not None:
         ax_polar.set_title(title, weight='bold', position=(0.05, 0.97))
 
@@ -1707,7 +1712,12 @@ def transect2D(da, index=None, vmin=None, vmax=None, sym=True, swap='auto',
         ax_cart.plot(-ax2, data[mirror_index, :], fmt, color=color)
 
     # Add title
-    title = da.attrs.get('latex_name', da.name)
+    if 'latex_name' not in da.attrs and da.name != '':
+        da.attrs['latex_name'] = mdesc(da.name)
+        title = da.attrs['latex_name']
+    else:
+        title = None
+
     if title is not None:
         ax_cart.set_title(title)
 
