@@ -1414,6 +1414,32 @@ def bin_edges(x, min=None, max=None):
     return edges
 
 
+def _parse_subplot_position(position):
+    """
+    Convert subplot position to format for add_subplot.
+    
+    Parameters
+    ----------
+    position : int, str, or tuple
+        - int : 3-digit integer (e.g., 211)
+        - str : converted to int (e.g., '211')
+        - tuple : 3-value tuple (rows, cols, position) for positions >= 10
+    
+    Returns
+    -------
+    int or tuple
+        Format compatible with fig.add_subplot()
+    """
+    if isinstance(position, int):
+        return position
+    elif isinstance(position, str):
+        return int(position)
+    elif isinstance(position, tuple) and len(position) == 3:
+        return position
+    else:
+        raise ValueError(f"position must be int, str, or 3-element tuple, got {type(position)}: {position}")
+
+
 def plot_polar(da, index=None, vmin=None, vmax=None, rect=211, sub=212,
                sym=True, swap='auto', fig=None, cmap=None, semi=False):
     """
@@ -1431,10 +1457,13 @@ def plot_polar(da, index=None, vmin=None, vmax=None, rect=211, sub=212,
         If None (default), no transect
     vmin, vmax : float, optional
         Range of values. If None, determined from data
-    rect : int
-        Subplot position of the main plot (111 for example)
-    sub : int
-        Subplot position of the transect
+    rect : int, str, or tuple
+        Subplot position of the main plot
+        - int: 3-digit integer (e.g., 211)
+        - str: string converted to int (e.g., '211')
+        - tuple: (rows, cols, position) for positions >= 10 (e.g., (4, 4, 13))
+    sub : int, str, or tuple
+        Subplot position of the transect (same format options as rect)
     sym : bool
         If True, the transect uses symmetrical axis
     swap : bool or 'auto'
@@ -1452,6 +1481,10 @@ def plot_polar(da, index=None, vmin=None, vmax=None, rect=211, sub=212,
     fig : matplotlib.figure.Figure
         The figure containing the plot
     """
+    
+    # Convert subplot positions
+    rect = _parse_subplot_position(rect)
+    sub = _parse_subplot_position(sub)
     
     # Initialization
     Phimax = 360.
@@ -1547,7 +1580,11 @@ def plot_polar(da, index=None, vmin=None, vmax=None, rect=211, sub=212,
         tick_formatter2=tick_formatter2,
     )
 
-    ax_polar = floating_axes.FloatingSubplot(fig, rect, grid_helper=grid_helper)
+    # Unpack rect if it's a tuple
+    if isinstance(rect, tuple):
+        ax_polar = floating_axes.FloatingSubplot(fig, *rect, grid_helper=grid_helper)
+    else:
+        ax_polar = floating_axes.FloatingSubplot(fig, rect, grid_helper=grid_helper)
     fig.add_subplot(ax_polar)
 
     # Adjust polar axis
@@ -1574,7 +1611,11 @@ def plot_polar(da, index=None, vmin=None, vmax=None, rect=211, sub=212,
 
     # Initialize cartesian axis for transect
     if show_sub:
-        ax_cart = fig.add_subplot(sub)
+        # Unpack sub if it's a tuple
+        if isinstance(sub, tuple):
+            ax_cart = fig.add_subplot(*sub)
+        else:
+            ax_cart = fig.add_subplot(sub)
         if sym:
             ax_cart.set_xlim(-ax2_max, ax2_max)
         else:
