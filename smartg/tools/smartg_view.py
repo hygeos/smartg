@@ -1665,9 +1665,9 @@ def plot_polar(da, index=None, vmin=None, vmax=None, rect=211, sub=212,
                 ax_cart.plot(-ax2, data[mirror_index, :], '--' + color)
 
     # Add colorbar
-    fig.colorbar(im, orientation='horizontal',
+    fig.colorbar(im, ax=ax_polar, orientation='horizontal',
                  extend='both', ticks=np.linspace(vmin, vmax, 5),
-                 shrink=0.7)
+                 shrink=1.0, pad=0.15, fraction=0.06, aspect=20)
 
     # Add title
     if 'latex_name' not in da.attrs and da.name != '':
