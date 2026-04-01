@@ -14,6 +14,7 @@ from matplotlib.transforms import Affine2D
 from mpl_toolkits.axisartist import floating_axes
 from matplotlib.projections import PolarAxes
 from matplotlib import cm
+from matplotlib.ticker import ScalarFormatter
 from luts.luts import Idx, Idx_base, MLUT
 from smartg.atmosphere import diff1
 from smartg.water import diff2
@@ -1687,9 +1688,14 @@ def plot_polar(da, index=None, vmin=None, vmax=None, rect=211, sub=212,
                 ax_cart.plot(-ax2, data[mirror_index, :], '--' + color)
 
     # Add colorbar
-    fig.colorbar(im, ax=ax_polar, orientation='horizontal',
-                 extend='both', ticks=np.linspace(vmin, vmax, 5),
-                 shrink=1.0, pad=0.15, fraction=0.06, aspect=20)
+    cbar = fig.colorbar(im, ax=ax_polar, orientation='horizontal',
+                        extend='both', ticks=np.linspace(vmin, vmax, 5),
+                        shrink=1.0, pad=0.15, fraction=0.06, aspect=20)
+    
+    # Format colorbar tick labels with scientific notation when needed
+    formatter = ScalarFormatter(useMathText=True)
+    formatter.set_powerlimits((-2, 5))  # Use scientific notation for numbers < 10^-2 or >= 10^5
+    cbar.ax.xaxis.set_major_formatter(formatter)
 
     # Add title
     if 'latex_name' not in da.attrs and da.name != '':
