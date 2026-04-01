@@ -87,7 +87,7 @@ def smartg_view(ds_sg, logI=False, QU=False, Circ=False, full=False, field='up (
     Circ : bool, optional
         If True, show circular polarization metrics. If False, show linear polarization. Default is False.
     full : bool, optional
-        If True, return two figures with full and reduced polarization info. If False, return one figure. Default is False.
+        If True, display everything. Default is False.
     field : str, optional
         Name of the output level to visualize. Default is 'up (TOA)'.
     prefix : str, optional
@@ -118,8 +118,6 @@ def smartg_view(ds_sg, logI=False, QU=False, Circ=False, full=False, field='up (
     Returns
     -------
     fig : matplotlib.figure.Figure or tuple of matplotlib.figure.Figure
-        If full is False: single figure containing azimuthal slices of Stokes parameters.
-        If full is True: tuple of (fig1, fig2) with raw and processed Stokes parameters.
     """
 
     if isinstance(ds_sg, MLUT):
@@ -224,24 +222,25 @@ def smartg_view(ds_sg, logI=False, QU=False, Circ=False, full=False, field='up (
 
     else:
         # full plots
-        fig1 = figure(figsize=(16, 4))
         lI = np.log10(I)
         lI.attrs['latex_name'] = 'log$_{10}$ ' + I.attrs.get('latex_name', 'I')
-        plot_polar(I.assign_coords(I.coords), index=ind, rect=241, sub=245, fig=fig1, cmap=cmap, vmin=Imin, vmax=Imax)
-        plot_polar(Q.assign_coords(Q.coords), index=ind, rect=242, sub=246, fig=fig1, cmap=cmap)
-        plot_polar(U.assign_coords(U.coords), index=ind, rect=243, sub=247, fig=fig1, cmap=cmap)
-        plot_polar(V.assign_coords(V.coords), index=ind, rect=244, sub=248, fig=fig1, cmap=cmap)
-        
-        fig2 = figure(figsize=(16, 4))
-        plot_polar(lI.assign_coords(lI.coords), index=ind, rect=241, sub=245, fig=fig2, cmap=cmap)
         DoLP.attrs['latex_name'] = r'$DoLP$'
-        plot_polar(DoLP.assign_coords(DoLP.coords), index=ind, rect=242, sub=246, fig=fig2, vmin=Pmin, vmax=Pmax, cmap=cmap)
         DoCP.attrs['latex_name'] = r'$DoCP$'
-        plot_polar(DoCP.assign_coords(DoCP.coords), index=ind, rect=243, sub=247, fig=fig2, vmin=Pmin, vmax=Pmax, cmap=cmap)
         DoP.attrs['latex_name'] = r'$DoP$'
-        plot_polar(DoP.assign_coords(DoP.coords), index=ind, rect=244, sub=248, fig=fig2, vmin=Pmin, vmax=Pmax, cmap=cmap)
 
-        return fig1, fig2
+        if fig is None: fig = figure(figsize=(18, 12))
+        
+        plot_polar(I.assign_coords(I.coords), index=ind, rect=441, sub=445, fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
+        plot_polar(Q.assign_coords(Q.coords), index=ind, rect=442, sub=446, fig=fig, cmap=cmap)
+        plot_polar(U.assign_coords(U.coords), index=ind, rect=443, sub=447, fig=fig, cmap=cmap)
+        plot_polar(V.assign_coords(V.coords), index=ind, rect=444, sub=448, fig=fig, cmap=cmap)
+        
+        plot_polar(lI.assign_coords(lI.coords), index=ind, rect=449, sub=(4,4,13), fig=fig, cmap=cmap)
+        plot_polar(DoLP.assign_coords(DoLP.coords), index=ind, rect=(4,4,10), sub=(4,4,14), fig=fig, vmin=Pmin, vmax=Pmax, cmap=cmap)
+        plot_polar(DoCP.assign_coords(DoCP.coords), index=ind, rect=(4,4,11), sub=(4,4,15), fig=fig, vmin=Pmin, vmax=Pmax, cmap=cmap)
+        plot_polar(DoP.assign_coords(DoP.coords), index=ind, rect=(4,4,12), sub=(4,4,16), fig=fig, vmin=Pmin, vmax=Pmax, cmap=cmap)
+
+        return fig
 
 
 def transect_view(ds_sg, logI=False, QU=False, Circ=False, full=False, field='up (TOA)', prefix='', ind=[0], fig=None, color='k', subdict=None, interp_dict=None,
