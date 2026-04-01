@@ -7596,9 +7596,12 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
             DatomicAdd(tabCount2+LL, (double)ph->cdist_oc[n+1]);
             #endif
           }
+          // Intensity-weighted cdist moments: w_n = weight * I, where I = (Ix+Iy) = st.x+st.y
+          // This is wavelength-independent (correct for ALIS) and consistent
+          // with individual histories where S[:,0] = weight*(Ix+Iy).
+          float w_n = (float)weight * (st.x + st.y);
           for (int n=0; n<NATM_ABSd; n++){
             float d_n = ph->cdist_atm[n+1];
-            float w_n = (float)weight * (float)wabs;
             LL = (n+NOCE_ABSd)*K*TABDIST_NIAMF*NSCLd + is*NBPHId*NBTHETAd*TABDIST_NIAMF*NSCLd + ith*NBPHId*TABDIST_NIAMF*NSCLd + iphi*TABDIST_NIAMF*NSCLd + iclass*TABDIST_NIAMF + 0;
             //LL = (n+NOCE_ABSd)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
             #if __CUDA_ARCH__ >= 600
@@ -7617,9 +7620,10 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
             LL = n*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
             atomicAdd(tabCount2+LL, ph->cdist_oc[n+1]);
           }
+          // Intensity-weighted cdist moments (same as DOUBLE branch above)
+          float w_n = weight * (st.x + st.y);
           for (int n=0; n<NATM_ABSd; n++){
             float d_n = ph->cdist_atm[n+1];
-            float w_n = weight * wabs;
             LL = (n+NOCE_ABSd)*K*TABDIST_NIAMF*NSCLd + is*NBPHId*NBTHETAd*TABDIST_NIAMF*NSCLd + ith*NBPHId*TABDIST_NIAMF*NSCLd + iphi*TABDIST_NIAMF*NSCLd + iclass*TABDIST_NIAMF + 0;
             atomicAdd(tabCount2+LL,   w_n);
             atomicAdd(tabCount2+LL+1, d_n * w_n);

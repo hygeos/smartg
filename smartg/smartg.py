@@ -817,9 +817,9 @@ class Smartg(object):
         method. When enabled, the output ``cdist`` datasets have an
         ``iAMF`` axis of size 3 instead of 2:
 
-        * iAMF=0: Σ(w · T_abs)  — weighted intensity
-        * iAMF=1: Σ(d · w · T_abs) — weighted path length
-        * iAMF=2: Σ(d² · w · T_abs) — weighted squared path length
+        * iAMF=0: Σ(w · I)  — intensity-weighted count  (I = Stokes I = Ix+Iy)
+        * iAMF=1: Σ(d · w · I) — intensity-weighted path length
+        * iAMF=2: Σ(d² · w · I) — intensity-weighted squared path length
 
     nscl : int, optional, default=1
         Number of scatter classes for AMF decomposition by last scattering
