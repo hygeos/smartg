@@ -85,7 +85,9 @@ def smartg_view(ds_sg, logI=False, QU=False, Circ=False, full=False, field='up (
     QU : bool, optional
         If True, show Q, U, and DoLP. If False, show only I and polarization metrics. Default is False.
     Circ : bool, optional
-        If True, show circular polarization metrics. If False, show linear polarization. Default is False.
+        If True, display DoCP (Degree of Circular Polarization).
+        If False, display instead DoLP (Degree of Linear Polarization).
+        When ``full=True``, both are displayed. Default is False. See notes for more details.
     full : bool, optional
         If True, display everything. Default is False.
     field : str, optional
@@ -118,6 +120,23 @@ def smartg_view(ds_sg, logI=False, QU=False, Circ=False, full=False, field='up (
     Returns
     -------
     fig : matplotlib.figure.Figure or tuple of matplotlib.figure.Figure
+
+
+    Notes
+    -----
+    Polarization metrics are computed from Stokes parameters (I, Q, U, V):
+
+    - **Degree of Linear Polarization (DoLP)**: 
+      
+      DoLP = 100 * sqrt(Q² + U²) / I
+
+    - **Degree of Polarization (DoP)**: 
+      
+      DoP = 100 * sqrt(Q² + U² + V²) / I
+
+    - **Degree of Circular Polarization (DoCP)**: 
+      
+      DoCP = 100 * |V| / I
     """
 
     if isinstance(ds_sg, MLUT):
