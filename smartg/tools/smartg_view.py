@@ -1722,8 +1722,11 @@ def transect2D(da, index=None, vmin=None, vmax=None, sym=True, swap='auto',
         Swap axes if needed
     fig : matplotlib.figure.Figure, optional
         Destination figure
-    sub : int
+    sub : int, str, or tuple
         Subplot position
+        - int: 3-digit integer (e.g., 121)
+        - str: string converted to int (e.g., '121')
+        - tuple: (rows, cols, position) for positions >= 10 (e.g., (4, 4, 13))
     color : str
         Color for the plot
     percent : bool
@@ -1798,10 +1801,15 @@ def transect2D(da, index=None, vmin=None, vmax=None, sym=True, swap='auto',
     label1 = name1 + ' {:7.2f}'.format(ax1_scaled[index])
 
     # Parse subplot specification
-    nrows = sub // 100
-    ncols = (sub // 10) % 10
-    idx = (sub % 10) - 1
+    sub = _parse_subplot_position(sub)
 
+    # Create a valid marker name from sub (handle both int and tuple)
+    if isinstance(sub, tuple):
+        marker_key = '_'.join(map(str, sub))
+    else:
+        marker_key = str(sub)
+    marker_name = f'_transect2D_sub_{marker_key}'
+    
     # Check if subplot already exists
     ax_cart = None
     marker_name = f'_transect2D_sub_{sub}'
@@ -1810,7 +1818,11 @@ def transect2D(da, index=None, vmin=None, vmax=None, sym=True, swap='auto',
 
     is_new_axes = ax_cart is None
     if is_new_axes:
-        ax_cart = fig.add_subplot(sub)
+        # Unpack sub if it's a tuple
+        if isinstance(sub, tuple):
+            ax_cart = fig.add_subplot(*sub)
+        else:
+            ax_cart = fig.add_subplot(sub)
         setattr(fig, marker_name, ax_cart)
         ax_cart.grid(True)
         ax_cart.set_xlabel(label2)
