@@ -85,9 +85,10 @@ def smartg_view(ds_sg, logI=False, QU=False, Circ=False, full=False, field='up (
     QU : bool, optional
         If True, show Q, U, and DoLP. If False, show only I and polarization metrics. Default is False.
     Circ : bool, optional
-        If True, display DoCP (Degree of Circular Polarization).
-        If False, display instead DoLP (Degree of Linear Polarization).
-        When ``full=True``, both are displayed. Default is False. See notes for more details.
+        If True, display circular polarization metrics (V and DoCP - Degree of Circular Polarization).
+        If False, display linear polarization metrics (Q, U, and DoLP - Degree of Linear Polarization).
+        Effective with both ``QU=True`` and ``QU=False``. When ``full=True``, both circular and 
+        linear polarization metrics are displayed. Default is False.
     full : bool, optional
         If True, display everything. Default is False.
     field : str, optional
@@ -120,7 +121,6 @@ def smartg_view(ds_sg, logI=False, QU=False, Circ=False, full=False, field='up (
     Returns
     -------
     fig : matplotlib.figure.Figure or tuple of matplotlib.figure.Figure
-
 
     Notes
     -----
@@ -205,26 +205,32 @@ def smartg_view(ds_sg, logI=False, QU=False, Circ=False, full=False, field='up (
 
     if not full:
         if QU:
-            if fig is None: fig = figure(figsize=(9, 9))
+            if fig is None: fig = figure(figsize=(9, 14))
             if logI:
                 lI = np.log10(I)
-                lI.attrs['latex_name'] = 'log$_{10}$ ' + I.attrs.get('latex_name', 'I')
+                lI.attrs['latex_name'] = mdesc(I.name or 'I', logI=True)
                 plot_polar(lI.assign_coords(lI.coords), index=ind, rect=421, sub=423, fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
             else:
                 plot_polar(I.assign_coords(I.coords), index=ind, rect=421, sub=423, fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
             plot_polar(Q.assign_coords(Q.coords), index=ind, rect=422, sub=424, fig=fig, cmap=cmap)
-            plot_polar(U.assign_coords(U.coords), index=ind, rect=425, sub=427, fig=fig, cmap=cmap)
+            if ind is not None : rectU = 425
+            else : rectU = 423
+            plot_polar(U.assign_coords(U.coords), index=ind, rect=rectU, sub=427, fig=fig, cmap=cmap)
             if Circ:
-                plot_polar(V.assign_coords(V.coords), index=ind, rect=426, sub=428, fig=fig, cmap=cmap)
+                if ind is not None : rectV = 426
+                else : rectV = 424
+                plot_polar(V.assign_coords(V.coords), index=ind, rect=rectV, sub=428, fig=fig, cmap=cmap)
             else:
+                if ind is not None : rectDoP = 426
+                else : rectDoP = 424
                 DoP.attrs['latex_name'] = r'$DoP$'
-                plot_polar(DoP.assign_coords(DoP.coords), index=ind, rect=426, sub=428, fig=fig, vmin=Pmin, vmax=Pmax, cmap=cmap)
+                plot_polar(DoP.assign_coords(DoP.coords), index=ind, rect=rectDoP, sub=428, fig=fig, vmin=Pmin, vmax=Pmax, cmap=cmap)
         else:
             # show only I and PR
-            if fig is None: fig = figure(figsize=(9, 4.5))
+            if fig is None: fig = figure(figsize=(9, 6))
             if logI:
                 lI = np.log10(I)
-                lI.attrs['latex_name'] = 'log$_{10}$ ' + I.attrs.get('latex_name', 'I')
+                lI.attrs['latex_name'] = mdesc(I.name or 'I', logI=True)
                 plot_polar(lI.assign_coords(lI.coords), index=ind, rect=221, sub=223, fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
             else:
                 plot_polar(I.assign_coords(I.coords), index=ind, rect=221, sub=223, fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
@@ -235,14 +241,10 @@ def smartg_view(ds_sg, logI=False, QU=False, Circ=False, full=False, field='up (
             else:
                 DoP.attrs['latex_name'] = r'$DoP$'
                 plot_polar(DoP.assign_coords(DoP.coords), index=ind, rect=222, sub=224, fig=fig, vmin=Pmin, vmax=Pmax, cmap=cmap)
-
-        return fig
-
-
     else:
         # full plots
         lI = np.log10(I)
-        lI.attrs['latex_name'] = 'log$_{10}$ ' + I.attrs.get('latex_name', 'I')
+        lI.attrs['latex_name'] = mdesc(I.name or 'I', logI=True)
         DoLP.attrs['latex_name'] = r'$DoLP$'
         DoCP.attrs['latex_name'] = r'$DoCP$'
         DoP.attrs['latex_name'] = r'$DoP$'
@@ -259,7 +261,8 @@ def smartg_view(ds_sg, logI=False, QU=False, Circ=False, full=False, field='up (
         plot_polar(DoCP.assign_coords(DoCP.coords), index=ind, rect=(4,4,11), sub=(4,4,15), fig=fig, vmin=Pmin, vmax=Pmax, cmap=cmap)
         plot_polar(DoP.assign_coords(DoP.coords), index=ind, rect=(4,4,12), sub=(4,4,16), fig=fig, vmin=Pmin, vmax=Pmax, cmap=cmap)
 
-        return fig
+    fig.subplots_adjust(hspace=0.3)
+    return fig
 
 
 def transect_view(ds_sg, logI=False, QU=False, Circ=False, full=False, field='up (TOA)', prefix='', ind=[0], fig=None, color='k', subdict=None, interp_dict=None,
