@@ -249,7 +249,7 @@ def smartg_view(ds_sg, logI=False, QU=False, Circ=False, full=False, field='up (
         DoCP.attrs['latex_name'] = r'$DoCP$'
         DoP.attrs['latex_name'] = r'$DoP$'
 
-        if fig is None: fig = figure(figsize=(18, 12))
+        if fig is None: fig = figure(figsize=(18, 14))
         
         plot_polar(I.assign_coords(I.coords), index=ind, rect=441, sub=445, fig=fig, cmap=cmap, vmin=Imin, vmax=Imax)
         plot_polar(Q.assign_coords(Q.coords), index=ind, rect=442, sub=446, fig=fig, cmap=cmap)
