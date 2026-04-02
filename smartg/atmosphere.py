@@ -56,7 +56,7 @@ class AerOPAC(object):
     Z_stra : float, optional
         Force scale height (see notes) of the stratosphere
     ssa : None | float | list | 1-D ndarray | 2-D ndarray | LUT, optional
-        Force particle single scattering albedo. 
+        Force particle single scattering albedo. Default None.
         
         - if float -> same value for all wavelengths and altitudes
         - if list -> it will be converted into a 1-D ndarray.
@@ -82,8 +82,8 @@ class AerOPAC(object):
         The phase matrix terms (IQUV convention) must be given in the folowing order: 
         - F11, F21, F33 and F34 if only 4 terms are given (only for spherical particles)
         - F11, F21, F33, F34, F22 and F44 if 6 terms are given (for both spherical and non-spherical particles)
-    rh_mix/free/stra : float, optional
-        Force relative humidity of mixture/free tropo/strato
+    rh_mix/free/stra : None | float, optional
+        Force relative humidity of mixture/free tropo/strato. Default None.
 
     Notes
     -----
@@ -245,6 +245,34 @@ class AerOPAC(object):
             self.Z_sh.append(Z_stra)
         
     def dtau_ssa(self, wav, Z, rh):
+        '''
+        Calculate optical depth and single scattering albedo.
+        
+        Computes the spectral optical depth (dtau) and single scattering albedo (ssa)
+        for aerosol/cloud layers at specified wavelengths and altitudes. This method
+        works with both AerOPAC (aerosol) and Cloud classes (which inherits from AerOPAC).
+        Handles vertical profiles (mixtures, free troposphere, stratosphere) and optional
+        scaling/forcing of optical properties.
+        
+        Parameters
+        ----------
+        wav : array-like
+            Wavelengths (in nm) at which to calculate optical properties
+        Z : array-like
+            Altitude profile (in km) for which to calculate optical properties
+        rh : float or array-like, optional
+            Relative humidity (0-100). Only used with AerOPAC class; ignored for Cloud.
+            Also ignored for specific vertical layers if their corresponding layer-specific
+            humidity values (rh_mix, rh_free, rh_stra) are set to non-None during initialization.
+            For example, if only rh_mix is specified, rh is ignored only in the mixture layer.
+            
+        Returns
+        -------
+        dtau : ndarray
+            Optical depth with shape (len(wav), len(Z))
+        ssa : ndarray
+            Single scattering albedo with shape (len(wav), len(Z))
+        '''
         dtau = np.zeros((len(wav), len(Z)), dtype=np.float32)
         dtau_ref = np.zeros((1, len(Z)), dtype=np.float32)
         ssa = np.zeros_like(dtau)
