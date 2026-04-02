@@ -7577,11 +7577,19 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
           //tabCount3[LL2]= (float)(ph->ith);
        } // HISTd==1
 
-       // Compute scatter class index from last scattering layer (Approach 2)
+       // Compute scatter class index (Approach 2)
+       // SCL_MODEd: 0=none, 1=last_scattering_layer, 2=scattering_order
        int iclass = 0; // default: all photons to class 0
-       if (NSCLd > 1 && ph->last_scatter_layer >= 0) {
-           iclass = (ph->last_scatter_layer * NSCLd) / NATM_ABSd;
-           if (iclass >= NSCLd) iclass = NSCLd - 1;
+       if (NSCLd > 1) {
+           if (SCL_MODEd == 1 && ph->last_scatter_layer >= 0) {
+               // Classify by last scattering layer
+               iclass = (ph->last_scatter_layer * NSCLd) / NATM_ABSd;
+               if (iclass >= NSCLd) iclass = NSCLd - 1;
+           } else if (SCL_MODEd == 2 && ph->nint > 0) {
+               // Classify by scattering order (nint = number of interactions)
+               iclass = ph->nint - 1;
+               if (iclass >= NSCLd) iclass = NSCLd - 1;
+           }
        }
 
        unsigned long long KK  = K*TABDIST_NIAMF*NSCLd*(NATM_ABSd+NOCE_ABSd);
