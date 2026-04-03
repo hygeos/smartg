@@ -1797,14 +1797,6 @@ def FO2(lam):
     '''
     return 1.096 + 1.385 *1e-3 *lam**(-2) + 1.448 *1e-4 *lam**(-4)
 
-def vapor_pressure(T):
-    T0=273.15
-    A=T0/T
-    Avogadro = constants.value('Avogadro constant')
-    M_H2O=18.015
-    mh2o=M_H2O/Avogadro
-    return A*np.exp(18.916758 - A * (14.845878 + A*2.4918766))/mh2o/1.e6
-
 
 def Fair(lam, co2):
     ''' depolarisation factor of air for CO2 (N wavelengths x M layers)
