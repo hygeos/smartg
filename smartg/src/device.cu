@@ -7594,6 +7594,44 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
 
        unsigned long long KK  = K*TABDIST_NIAMF*NSCLd*(NATM_ABSd+NOCE_ABSd);
        //unsigned long long KK  = K*(NATM_ABSd+NOCE_ABSd);
+
+       // Compute wsca at reference wavelength (ph->ilam) for cdist weighting
+       float wsca_ref;
+       {
+           int ik_ref = ph->ilam / DL;
+           if (ph->ilam != NLAMd-1)
+               wsca_ref = __fdividef((ph->ilam - ik_ref*DL)*1.0f, DL*1.0f) * (weight_sca[ik_ref+1] - weight_sca[ik_ref]) + weight_sca[ik_ref];
+           else
+               wsca_ref = weight_sca[NLOWd-1];
+       }
+
+       #ifdef CDIST_WABS
+       // Compute absorption weight for the reference wavelength (ph->ilam)
+       // At the reference wavelength, surface albedo ratios are 1, so only
+       // volumetric absorption matters.
+       float wabs_cdist = 0.F;
+       #ifndef OPT3D
+       for (int n=0; n<NATMd; n++){
+           wabs_cdist += abs(__fdividef(prof_atm[n+1 + ph->ilam*(NATMd+1)].OD_abs -
+                                        prof_atm[n   + ph->ilam*(NATMd+1)].OD_abs,
+                                        prof_atm[n+1].z - prof_atm[n].z)) * ph->cdist_atm[n+1];
+       }
+       for (int n=0; n<NOCEd; n++){
+           wabs_cdist += abs(__fdividef(prof_oc[n+1 + ph->ilam*(NOCEd+1)].OD_abs -
+                                        prof_oc[n   + ph->ilam*(NOCEd+1)].OD_abs,
+                                        prof_oc[n+1].z - prof_oc[n].z)) * ph->cdist_oc[n+1];
+       }
+       #else
+       for (int n=0; n<(NATM_ABSd); n++){
+           wabs_cdist += prof_atm[n+1 + ph->ilam*(NATMd+1)].OD_abs * ph->cdist_atm[n];
+       }
+       for (int n=0; n<(NOCE_ABSd); n++){
+           wabs_cdist += prof_oc[n+1 + ph->ilam*(NOCEd+1)].OD_abs * ph->cdist_oc[n];
+       }
+       #endif
+       wabs_cdist = exp(-wabs_cdist);
+       #endif // CDIST_WABS
+
        #ifdef DOUBLE
           tabCount2   = (double*)tabDist     + count_level*KK;
           for (int n=0; n<NOCE_ABSd; n++){
@@ -7604,10 +7642,13 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
             DatomicAdd(tabCount2+LL, (double)ph->cdist_oc[n+1]);
             #endif
           }
-          // Intensity-weighted cdist moments: w_n = weight * I, where I = (Ix+Iy) = st.x+st.y
-          // This is wavelength-independent (correct for ALIS) and consistent
-          // with individual histories where S[:,0] = weight*(Ix+Iy).
-          float w_n = (float)weight * (st.x + st.y);
+          // Intensity-weighted cdist moments: w_n = weight * wsca * I, where I = (Ix+Iy) = st.x+st.y
+          // wsca_ref is the scattering correction at the reference wavelength.
+          #ifdef CDIST_WABS
+          float w_n = (float)weight * wsca_ref * wabs_cdist * (st.x + st.y);
+          #else
+          float w_n = (float)weight * wsca_ref * (st.x + st.y);
+          #endif
           for (int n=0; n<NATM_ABSd; n++){
             float d_n = ph->cdist_atm[n+1];
             LL = (n+NOCE_ABSd)*K*TABDIST_NIAMF*NSCLd + is*NBPHId*NBTHETAd*TABDIST_NIAMF*NSCLd + ith*NBPHId*TABDIST_NIAMF*NSCLd + iphi*TABDIST_NIAMF*NSCLd + iclass*TABDIST_NIAMF + 0;
@@ -7629,7 +7670,11 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
             atomicAdd(tabCount2+LL, ph->cdist_oc[n+1]);
           }
           // Intensity-weighted cdist moments (same as DOUBLE branch above)
-          float w_n = weight * (st.x + st.y);
+          #ifdef CDIST_WABS
+          float w_n = weight * wsca_ref * wabs_cdist * (st.x + st.y);
+          #else
+          float w_n = weight * wsca_ref * (st.x + st.y);
+          #endif
           for (int n=0; n<NATM_ABSd; n++){
             float d_n = ph->cdist_atm[n+1];
             LL = (n+NOCE_ABSd)*K*TABDIST_NIAMF*NSCLd + is*NBPHId*NBTHETAd*TABDIST_NIAMF*NSCLd + ith*NBPHId*TABDIST_NIAMF*NSCLd + iphi*TABDIST_NIAMF*NSCLd + iclass*TABDIST_NIAMF + 0;

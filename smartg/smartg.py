@@ -821,6 +821,13 @@ class Smartg(object):
         * iAMF=1: Σ(d · w · I) — intensity-weighted path length
         * iAMF=2: Σ(d² · w · I) — intensity-weighted squared path length
 
+    cdist_wabs : bool, optional, default=False
+        When True, include the absorption weight (Tabs = exp(-τ_abs)) in
+        the intensity weight ``w_n`` used for the ``cdist`` (tabDist)
+        accumulation.  By default the cdist moments are accumulated with
+        ``w_n = weight · I`` (scattering weight only); with this option
+        ``w_n = weight · Tabs · I``.  Requires ``alis=True``.
+
     nscl : int, optional, default=1
         Number of scatter classes for AMF decomposition (Approach 2).
         When ``nscl=1`` (default), no classification is performed and the
@@ -855,7 +862,7 @@ class Smartg(object):
                  verbose_photon=False,
                  double=True, alis=False, back=False, bias=True, alt_pp=False, obj3D=False, 
                  opt3D=False, device=None, sif=False, thermal=False, rng='PHILOX', cache_dir=None,
-                 keep_context=None, amf_variance=False, nscl=1, scatter_classes='last_scattering_layer'):
+                 keep_context=None, amf_variance=False, cdist_wabs=False, nscl=1, scatter_classes='last_scattering_layer'):
         assert not ((device is not None) and ('CUDA_DEVICE' in os.environ)), "Can not use the 'device' option while the CUDA_DEVICE is set"
 
         if device is not None:
@@ -897,6 +904,9 @@ class Smartg(object):
         if amf_variance and not alis:
             raise ValueError('amf_variance=True requires alis=True (tabDist and ph->cdist need ALIS)')
         self.amf_variance = amf_variance
+        if cdist_wabs and not alis:
+            raise ValueError('cdist_wabs=True requires alis=True (tabDist and ph->cdist need ALIS)')
+        self.cdist_wabs = cdist_wabs
         _valid_scatter_classes = ('none', 'last_scattering_layer', 'scattering_order')
         if scatter_classes not in _valid_scatter_classes:
             raise ValueError(f'scatter_classes must be one of {_valid_scatter_classes}, got {scatter_classes!r}')
@@ -947,6 +957,8 @@ class Smartg(object):
             options.append('-DALIS')
         if amf_variance:
             options.append('-DAMF_VARIANCE')  # Store cdist² for Jensen bias correction
+        if cdist_wabs:
+            options.append('-DCDIST_WABS')  # Include absorption weight in cdist accumulation
         if sif:
             options.append('-DSIF')
         if thermal:
