@@ -1904,9 +1904,36 @@ class Profile_base(object):
         return prof
 
     def relative_humidity(self):
-        '''
-        returns profile of relative humidity (in %) for each layer
-        '''
+        """
+        Calculate relative humidity profile for each atmospheric layer.
+        
+        Computes the relative humidity at all altitude levels based on the atmospheric 
+        profile's water vapor density, air density, pressure, and temperature. 
+        
+        Returns
+        -------
+        rh : ndarray
+            Relative humidity profile [%] with shape matching altitude grid.
+            Values can exceed 100% if atmospheric conditions are supersaturated.
+            
+        Notes
+        -----
+        The relative humidity is calculated as:
+        
+        rh = (p_H₂O / p_sat) x 100
+        
+        where:
+        
+        - p_H₂O is the partial pressure of water vapor (from density ratio)
+        - p_sat is the saturation vapor pressure at the given temperature
+        
+        If RH_cst (constant relative humidity) was set during initialization, 
+        that constant value is returned for all layers instead of calculating 
+        from the density/temperature profile.
+        
+        The saturation pressure calculation accounts for both water and ice phases 
+        using temperature-dependent formulas.
+        """
         if self.RH_cst is not None : 
             rh[:] = self.RH_cst
         else:
