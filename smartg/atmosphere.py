@@ -1172,15 +1172,65 @@ class AtmAFGL(Atmosphere):
 
         return profile
 
-
     def profile(self, wav, prof=None):
-        '''
-        Calculate the profile of optical properties at given wavelengths
-        wav: array of wavelength in nm
-        prof: profile of densities (default: self.prof)
-
-        returns: the profile of optical properties
-        '''
+        """
+        Calculate the profile of optical properties at given wavelengths.
+        
+        Computes atmospheric optical properties (extinction, scattering, absorption) 
+        as a function of wavelength and altitude, including contributions from 
+        Rayleigh scattering, aerosols, and gaseous absorbers (O3, NO2, and molecular gases).
+        
+        Parameters
+        ----------
+        wav : array-like or BandSet
+            Wavelengths at which to calculate optical properties [nm].
+            If not a BandSet, it will be converted to one.
+        prof : Profile_base, optional
+            Atmospheric profile containing altitude grids, temperature, pressure, 
+            and density profiles. Default is None; uses self.prof if not provided.
+            
+        Returns
+        -------
+        profile : MLUT
+            Multi-dimensional lookup table containing atmospheric optical properties 
+            with dimensions as a function of wavelength and altitude (or iopt grid for 3D mode).
+            
+            Key datasets included:
+            
+            - **n_atm**: Atmospheric refractive index [wavelength, z_atm]
+            - **T_atm**: Temperature profile [z_atm] (K)
+            - **OD_r**: Rayleigh cumulated optical thickness [wavelength, z_atm] 
+              or scattering coefficient (km⁻¹) in 3D mode
+            - **OD_p**: Particles cumulated optical thickness [wavelength, z_atm]
+              or extinction coefficient (km⁻¹) in 3D mode
+            - **ssa_p_atm**: Particle single scattering albedo [wavelength, z_atm] or [wavelength, iopt]
+            - **OD_g**: Cumulated gaseous absorption optical thickness [wavelength, z_atm]
+              or absorption coefficient (km⁻¹) in 3D mode
+            - **OD_atm**: Total cumulated optical thickness [wavelength, z_atm]
+              or total extinction coefficient (km⁻¹) in 3D mode
+            - **OD_sca_atm**: Cumulated scattering optical thickness [wavelength, z_atm]
+            - **OD_abs_atm**: Cumulated absorption optical thickness [wavelength, z_atm]
+            - **ssa_atm**: Total single scattering albedo [wavelength, z_atm]
+            
+        Notes
+        -----
+        The method can operate in two modes:
+        
+        - **1D Mode (OPT3D=False)**: Returns cumulated optical thicknesses with axes 
+          [wavelength, z_atm]
+        - **3D Mode (OPT3D=True)**: Returns extinction/absorption coefficients with axes 
+          [wavelength, iopt] for use in 3D radiative transfer calculations
+          
+        Optical properties include:
+        
+        - Rayleigh scattering (from self.prof_ray or computed using Rayleigh optical depth)
+        - Aerosol scattering and absorption from aerosol components
+        - Gaseous absorption from ozone, NO2, and molecular gases (H2O, O2, CO2)
+          using cross-sections (acs_o3, acs_no2) or REPTRAN/KDIS spectral databases
+          
+        Single scattering albedo is calculated as the ratio of scattering to extinction 
+        optical thicknesses for each layer.
+        """
         if not isinstance(wav, BandSet):
             wav = BandSet(wav)
 
