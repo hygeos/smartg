@@ -836,7 +836,8 @@ class Smartg(object):
         ``cdist`` output datasets gain an extra ``iSCL`` dimension of size
         ``nscl``. Typically set to ``NATM_ABS`` (one class per absorption
         layer) for ``'last_scattering_layer'`` mode, or to the maximum
-        expected scattering order for ``'scattering_order'`` mode.
+        expected scattering order for ``'scattering_order'`` mode, or to
+        ``NATM_ABS * norders`` for ``'scattering_order_per_layer'`` mode.
         Requires ``alis=True``.
 
     scatter_classes : str, optional, default='last_scattering_layer'
@@ -850,6 +851,15 @@ class Smartg(object):
           number of scattering events (``ph->nint``). Class index is
           ``min(nint, nscl) - 1``, so the last class collects all photons
           with ``nint >= nscl``.
+        * ``'scattering_order_per_layer'`` — combined classification by
+          both the last scattering layer and the scattering order. Class
+          index is ``layer * norders + order``. Requires ``norders >= 1``.
+          Set ``nscl = NATM_ABS * norders``.
+
+    norders : int, optional, default=1
+        Number of scattering order bins per layer for the
+        ``'scattering_order_per_layer'`` mode. The last bin collects all
+        photons with ``nint >= norders``. Ignored for other modes.
 
     Raises
     ------
@@ -857,12 +867,14 @@ class Smartg(object):
         If amf_variance=True is used without alis=True.
         If nscl>1 is used without alis=True.
         If scatter_classes is not one of the accepted values.
+        If scatter_classes='scattering_order_per_layer' and norders < 1.
     """
     def __init__(self, pp=True, debug=False, autoinit=True,
                  verbose_photon=False,
                  double=True, alis=False, back=False, bias=True, alt_pp=False, obj3D=False, 
                  opt3D=False, device=None, sif=False, thermal=False, rng='PHILOX', cache_dir=None,
-                 keep_context=None, amf_variance=False, cdist_wabs=False, nscl=1, scatter_classes='last_scattering_layer'):
+                 keep_context=None, amf_variance=False, cdist_wabs=False, nscl=1, scatter_classes='last_scattering_layer',
+                 norders=1):
         assert not ((device is not None) and ('CUDA_DEVICE' in os.environ)), "Can not use the 'device' option while the CUDA_DEVICE is set"
 
         if device is not None:
@@ -907,16 +919,20 @@ class Smartg(object):
         if cdist_wabs and not alis:
             raise ValueError('cdist_wabs=True requires alis=True (tabDist and ph->cdist need ALIS)')
         self.cdist_wabs = cdist_wabs
-        _valid_scatter_classes = ('none', 'last_scattering_layer', 'scattering_order')
+        _valid_scatter_classes = ('none', 'last_scattering_layer', 'scattering_order', 'scattering_order_per_layer')
         if scatter_classes not in _valid_scatter_classes:
             raise ValueError(f'scatter_classes must be one of {_valid_scatter_classes}, got {scatter_classes!r}')
         if scatter_classes == 'none':
             nscl = 1
+        if scatter_classes == 'scattering_order_per_layer':
+            if norders < 1:
+                raise ValueError(f'norders must be >= 1 for scattering_order_per_layer mode, got {norders}')
         if nscl > 1 and not alis:
             raise ValueError('nscl>1 requires alis=True (scatter-class decomposition needs ALIS cdist)')
         self.nscl = int(nscl)
         self.scatter_classes = scatter_classes
-        # SCL_MODE: 0=none, 1=last_scattering_layer, 2=scattering_order
+        self.norders = int(norders)
+        # SCL_MODE: 0=none, 1=last_scattering_layer, 2=scattering_order, 3=scattering_order_per_layer
         self._scl_mode = _valid_scatter_classes.index(scatter_classes)
         self.rng = init_rng(rng)
         self.back= back
@@ -1673,7 +1689,7 @@ class Smartg(object):
                   NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj, nGObj, nRObj,
                   Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm,
                   TC, nbCx, nbCy, vSun, HIST, ZTOA, sensor2[0].cell_size,
-                  sxmin, sxmax, symin, symax, nbsx, nbsy, no_aer_output, NSCL=self.nscl, SCL_MODE=self._scl_mode)
+                  sxmin, sxmax, symin, symax, nbsx, nbsy, no_aer_output, NSCL=self.nscl, SCL_MODE=self._scl_mode, NORDERS=self.norders)
 
         # Initialize the progress bar
         p = Progress(NBPHOTONS, progress)
@@ -2516,7 +2532,7 @@ def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
               NLVL, NPSTK, NWLPROBA, NSENSORPROBA, NCELLPROBA,  BEER, SMIN, SMAX, RMIN, RMAX, RR, 
               WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj, nGObj, nRObj,
               Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, vSun, HIST, ZTOA,
-              cell_size, sxmin, sxmax, symin, symax, nbsx, nbsy, no_aer_output, NSCL=1, SCL_MODE=0) :
+              cell_size, sxmin, sxmax, symin, symax, nbsx, nbsy, no_aer_output, NSCL=1, SCL_MODE=0, NORDERS=1) :
     """
     Initialize the constants in python and send them to the device memory
 
@@ -2596,6 +2612,7 @@ def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
     copy_to_device('NSENSORd', NSENSOR, np.int32)
     copy_to_device('NSCLd', NSCL, np.int32)
     copy_to_device('SCL_MODEd', SCL_MODE, np.int32)
+    copy_to_device('NORDERSd', NORDERS, np.int32)
     if surf != None:
         copy_to_device('SURd', surf.dict['SUR'], np.int32)
         copy_to_device('BRDFd', surf.dict['BRDF'], np.int32)
