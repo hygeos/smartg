@@ -1737,6 +1737,48 @@ class Profile_base(object):
         return rh
 
 
+def saturation_pressure(T):
+    """
+    Calculate saturation vapor pressure for water and ice phases.
+    
+    Uses the Huang (2018) empirical formula, which provides accurate
+    saturation vapor pressure calculations for both liquid water and ice phases.
+    
+    Parameters
+    ----------
+    T : float or array-like
+        Temperature in Kelvin [K]
+        
+    Returns
+    -------
+    sat_press : float or numpy.ndarray
+        Saturation vapor pressure [hPa]
+        
+    Notes
+    -----
+    The function automatically selects the appropriate formula based on temperature:
+    - For T > 273.15 K (0°C): liquid water phase formula
+    - For T ≤ 273.15 K (0°C): ice phase formula
+    
+    References
+    ----------
+    Huang, J. (2018). A Simple Accurate Formula for Calculating Saturation 
+    Vapor Pressure of Water and Ice. Journal of Applied Meteorology and Climatology, 57(6), 1265-1272.
+    """
+    tc = T-273.15 # temperature in C°
+    sat_press = np.zeros_like(tc)
+    
+    is_water = tc > 0
+    is_ice = np.logical_not(is_water)
+    
+    sat_press[is_water] = ( np.exp(34.494 - 4924.99 / (tc[is_water] + 237.1)) ) / \
+                          ( (tc[is_water] + 105)**1.57 )
+
+    sat_press[is_ice] = ( np.exp(43.494 - (6545.8 / (tc[is_ice] + 278))) ) / \
+                        ( (tc[is_ice] + 868)**2 )
+    return sat_press * 1e-2
+
+
 def FN2(lam):
     ''' depolarisation factor of N2
         lam : um
