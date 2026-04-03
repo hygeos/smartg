@@ -1548,14 +1548,57 @@ class AtmAFGL(Atmosphere):
 
         return pro
 
-
     def phase(self, wav, NBTHETA=721, conv_Iparper=True):
-        '''
-        Phase functions calculation at bands, using reduced profile
-        '''
-        wav = np.array(wav)
-        if wav.ndim == 0:
-            wav = wav.reshape(1)
+        """
+        Calculate phase matrix of aerosols and clouds at specified wavelengths.
+        
+        Computes weighted average phase functions for all aerosol components 
+        using the reduced atmospheric profile. Each component's contribution 
+        is weighted by its optical depth and single scattering albedo.
+        
+        Parameters
+        ----------
+        wav : scalar or array-like
+            Wavelengths at which to calculate phase matrix [nm].
+            If scalar, will be converted to 1-D array.
+        NBTHETA : int, optional
+            Number of scattering angles for angle resampling. Default is 721,
+            corresponding to angles from 0° to 180°.
+        conv_Iparper : bool, optional
+            If True (default), converts the phase matrix from I/Q Stokes convention 
+            to Ipar/Iper convention. This applies general conversion formulas valid 
+            for both spherical and non-spherical particles.
+            
+        Returns
+        -------
+        phase_matrix : LUT or None
+            Lookup table containing the weighted average phase matrix with axes 
+            [wav_phase, z_phase, stk, theta_atm] if aerosol components are present.
+            Shape is (len(wav), nz, nphamat, NBTHETA) where:
+            - nz: number of altitude levels in the reduced profile (self.pfgrid)
+            - nphamat = 4 for spherical particles only (phase matrix unique terms P11, P21, P33, P34)
+            - nphamat = 6 for spherical and non-spherical particles (additional terms P22, P44)
+            - theta_atm: scattering angles from 0° to 180°
+            
+            Returns None if no aerosol components are defined (self.comp is empty).
+            
+        Notes
+        -----
+        **Weighted averaging:** The phase matrix is computed as a weighted average 
+        across all aerosol components defined in the comp attribute:
+        
+        pha_total = [∑_i (pha_i x Δτ_i x ssa_i)) / (∑_i (Δτ_i x ssa_i)]
+        
+        where:
+        
+        - pha_i is the phase matrix of component i
+        - Δτ_i is the optical depth of component i  
+        - ssa_i is the single scattering albedo of component i
+        
+        The relative humidity used for calculations is obtained from 
+        the reduced profile (self.prof_red).
+        """
+        wav = np.atleast_1d(wav)
         pha = 0.
         norm = 0.
         rh = self.prof_red.relative_humidity()
