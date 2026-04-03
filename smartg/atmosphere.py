@@ -1208,7 +1208,7 @@ class AtmAFGL(Atmosphere):
             dtaua = np.zeros((len(wav), len(prof.z)), dtype='float32')
             ssa_p = np.zeros((len(wav), len(prof.z)), dtype='float32')
             for comp in self.comp:
-                dtau_, ssa_ = comp.dtau_ssa(wav[:], prof.z, prof.RH())
+                dtau_, ssa_ = comp.dtau_ssa(wav[:], prof.z, prof.relative_humidity())
                 dtaua += dtau_
                 ssa_p+= dtau_ * ssa_
             ssa_p[dtaua!=0] /= dtaua[dtaua!=0]
@@ -1466,7 +1466,7 @@ class AtmAFGL(Atmosphere):
             wav = wav.reshape(1)
         pha = 0.
         norm = 0.
-        rh = self.prof_red.RH()
+        rh = self.prof_red.relative_humidity()
 
         for comp in self.comp:
             dtau, ssa_p = comp.dtau_ssa(wav, self.pfgrid, rh=rh)
@@ -1728,12 +1728,17 @@ class Profile_base(object):
 
         return prof
 
-    def RH(self):
+    def relative_humidity(self):
         '''
-        returns profile of relative humidity for each layer
+        returns profile of relative humidity (in %) for each layer
         '''
-        rh = self.dens_h2o/vapor_pressure(self.T)*100.
-        if self.RH_cst is not None : rh[:] = self.RH_cst
+        if self.RH_cst is not None : 
+            rh[:] = self.RH_cst
+        else:
+            p_h2o = (self.dens_h2o / self.dens_air) * self.P
+            p_sat = saturation_pressure(self.T)
+            rh = (p_h2o / p_sat) * 100 
+
         return rh
 
 
