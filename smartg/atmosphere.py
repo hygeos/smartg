@@ -340,13 +340,55 @@ class AerOPAC(object):
                 ssa[:,:] = self.ssa[Idx(wav)][:,None]
         return dtau, ssa
     
-    
     def phase(self, wav, Z, rh, NBTHETA=721, conv_Iparper=True):
-        '''
-        Phase function calculation at wavelength wav and altitudes Z
-        relative humidity is rh
-        angle resampling over NBTHETA angles
-        '''
+        """
+        Calculate phase matrix for aerosols and clouds.
+        
+        Computes the phase matrix at specified wavelengths and altitudes for aerosol/cloud
+        layers. This method works with both AerOPAC (aerosol) and Cloud classes (which 
+        inherits from AerOPAC). Handles vertical profiles (mixtures, free troposphere, 
+        stratosphere) and performs angle resampling. Supports both spherical (4 Stokes 
+        components) and non-spherical (6 components) particles.
+        
+        Parameters
+        ----------
+        wav : array-like
+            Wavelengths (in nm) at which to calculate phase matrix
+        Z : array-like
+            Altitude profile (in km) for which to calculate phase matrix
+        rh : array-like
+            Relative humidity (%). Must have size similar to Z (altitude profile). 
+            Only used with AerOPAC class; ignored for Cloud.
+            Relative humidity can be greater than 100% (supersaturation).
+            Also ignored for specific vertical layers if their corresponding layer-specific
+            humidity values (rh_mix, rh_free, rh_stra) are set to non-None during initialization.
+            For example, if only rh_mix is specified, rh is ignored only in the mixture layer.
+        NBTHETA : int, optional
+            Number of scattering angles for angle resampling. Default is 721.
+        conv_Iparper : bool, optional
+            If True (default), converts the phase matrix from I/Q convention to Ipar/Iper
+            convention. This applies general conversion formulas valid for both spherical
+            and non-spherical particles.
+            
+        Returns
+        -------
+        phase_matrix : LUT
+            Lookup table containing the phase matrix with axes [wav_phase, z_phase, stk, theta_atm].
+            Shape is (len(wav), len(Z)-1, nphamat, NBTHETA) where:
+            - nphamat = 4 for spherical particles only (phase matrix unique terms P11, P21, P33, P34)
+            - nphamat = 6 for spherical and non-spherical particles (additional phase matrix unique terms P22, P44)
+            - theta_atm: scattering angles from 0° to 180°
+            
+        Notes
+        -----
+        **AerOPAC only (aerosols):** The method handles vertical averaging based on the input altitude profile Z 
+        and the defined aerosol layer altitudes (mixture, free troposphere, stratosphere). 
+        If the provided Z profile has a resolution such that multiple input layers fall within 
+        a single internal zgrid interval, the phase matrix is averaged across those layers 
+        according to the vertical distribution of aerosols in each of the three stratospheric 
+        layers (mixture, free troposphere, and stratosphere). This ensures proper vertical 
+        integration when the requested altitude resolution is coarser than the internal grid.
+        """
 
         if self._phase is not None:
             if self._phase.ndim == 2:
@@ -1626,11 +1668,11 @@ class Profile_base(object):
                 self.dens_co2 = data2[:,3] # CO2 density in cm-3
                 self.dens_no2 = data2[:,4] # NO2 density in cm-3
                 nz = data.shape[0]
-                self.dens_ch4 = [0] * nz
-                self.dens_co = [0] * nz
-                self.dens_n2o = [0] * nz
-                self.dens_n2 = [0] * nz
-                self.dens_so2 = [0] * nz
+                self.dens_ch4 = np.zeros(nz, dtype=np.float32)
+                self.dens_co = np.zeros(nz, dtype=np.float32)
+                self.dens_n2o = np.zeros(nz, dtype=np.float32)
+                self.dens_n2 = np.zeros(nz, dtype=np.float32)
+                self.dens_so2 = np.zeros(nz, dtype=np.float32)
             else:
                 raise NameError('Invalid atmospheric file format')
         elif atm_filename.suffix == '.nc':
@@ -1646,9 +1688,9 @@ class Profile_base(object):
             self.dens_ch4 = data['CH4'].data   # CH4 density in cm-3
             self.dens_co2 = data['CO2'].data   # CO2 density in cm-3
             self.dens_o2 = data['O2'].data     # O2 density in cm-3
-            self.dens_n2 = data['N2'].data   # CH4 density in cm-3
-            self.dens_no2 = data['NO2'].data   # CO2 density in cm-3
-            self.dens_so2 = data['SO2'].data     # O2 density in cm-3
+            self.dens_n2 = data['N2'].data     # N2 density in cm-3
+            self.dens_no2 = data['NO2'].data   # NO2 density in cm-3
+            self.dens_so2 = data['SO2'].data   # SO2 density in cm-3
 
         self.RH_cst   = RH_cst
 
@@ -1684,7 +1726,6 @@ class Profile_base(object):
         if not NO2:
             self.dens_no2[:] = 0.
 
-
     def regrid(self, znew):
         '''
         regrid profile and returns a new profile
@@ -1713,17 +1754,7 @@ class Profile_base(object):
         prof.dens_n2o = interp1d(z, self.dens_n2o, bounds_error=False, fill_value=(0., 0.))  (znew)
         prof.dens_n2  = interp1d(z, self.dens_n2, bounds_error=False, fill_value=(0., 0.))  (znew)
         prof.dens_so2 = interp1d(z, self.dens_so2, bounds_error=False, fill_value=(0., 0.))  (znew)
-        
-        # prof.dens_air = np.interp(znew, z, self.dens_air, right=0., left=0.)
-        # prof.dens_o3  = np.interp(znew, z, self.dens_o3, right=0., left=0.)
-        # prof.dens_o2  = np.interp(znew, z, self.dens_o2, right=0., left=0.)
-        # prof.dens_h2o = np.interp(znew, z, self.dens_h2o, right=0., left=0.)
-        # prof.dens_co2 = np.interp(znew, z, self.dens_co2, right=0., left=0.)
-        # prof.dens_no2 = np.interp(znew, z, self.dens_no2, right=0., left=0.)
-        # prof.dens_ch4 = np.interp(znew, z, self.dens_ch4, right=0., left=0.)
-        # prof.dens_co  = np.interp(znew, z, self.dens_co, right=0., left=0.)
-        # prof.dens_n2o = np.interp(znew, z, self.dens_n2o, right=0., left=0.)
-        # prof.dens_n2  = np.interp(znew, z, self.dens_n2, right=0., left=0.)
+
         prof.RH_cst   = self.RH_cst
 
         return prof
