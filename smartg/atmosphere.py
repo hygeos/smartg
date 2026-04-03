@@ -1588,6 +1588,9 @@ class Profile_base(object):
         atm_filename = Path(atm_filename)
         self.atm_filename = atm_filename
 
+        if not atm_filename.is_file():
+            raise FileNotFoundError(f"Atmospheric profile file not found: {atm_filename}")
+
         if atm_filename.suffix == '.dat':
             with open(atm_filename) as f:
                 lines = f.readlines()
