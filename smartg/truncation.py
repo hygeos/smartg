@@ -1,3 +1,40 @@
+"""
+Truncation methods for phase matrix simplification.
+
+This module provides classes for phase matrix truncation techniques used in 
+Monte Carlo radiative transfer calculations. Truncation improves Monte Carlo 
+convergence by removing the sharp forward peak in the phase function, which 
+causes convergence problems requiring excessive sampling. By truncating this 
+forward peak, fewer photon rays are needed to achieve the same statistical 
+accuracy (standard deviation).
+
+Truncation benefits vary with aerosol type:
+
+- **Large aerosols** (e.g., desert, clouds, sea salt): Significant convergence 
+  improvement and computational speedup
+- **Small aerosols** (e.g., continental): Limited or no improvement
+
+**Important:** Truncation introduces a bias in the results and should be used 
+with care. The trade-off between reduced computational cost and introduced bias 
+needs to be carefully considered for each application.
+
+Available truncation methods:
+
+- **Delta-M (DM)**: Classical Delta-M truncation that scales the first 
+  backscatter peak and removes high-order terms.
+- **GT (Generalized Truncation)**: GT truncation as in Iwabuchi and Suzuki (2009), 
+  which provides an alternative approach to phase matrix simplification.
+
+These methods support different integration techniques (Lobatto quadrature, 
+trapezoid, Simpson) for computing phase matrix moments and offer flexible 
+scaling approaches.
+
+Examples
+--------
+>>> from smartg.truncation import DM_trunc
+>>> trunc = DM_trunc(nb_streams=16, integral_method='lobatto')
+"""
+
 import numbers
 
 
