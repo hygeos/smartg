@@ -1618,10 +1618,61 @@ class AtmAFGL(Atmosphere):
             return None
 
     def calc_split(self, wav, phase=True, NBTHETA=721):
-        '''
-        compute optical properties and return the vertical profiles
-        prof_abs, prof_ray, prof_aer, and prof_phases the alternative inputs of the AtmAFGL
-        '''
+        """
+        Computes atmospheric optical properties at specified wavelengths and 
+        separates them into decomposed components (absorption, Rayleigh scattering, 
+        aerosols, and phase functions). These returned profiles can be used as 
+        alternative inputs to initialize a new AtmAFGL instance.
+        
+        Parameters
+        ----------
+        wav : scalar or array-like
+            Wavelengths at which to calculate optical properties [nm].
+        phase : bool, optional
+            If True (default), calculates phase functions. Set to False to skip 
+            phase function computations for faster execution.
+        NBTHETA : int, optional
+            Number of scattering angles for phase function resampling. Default is 721,
+            corresponding to angles from 0° to 180°. Only used if phase=True.
+            
+        Returns
+        -------
+        prof_abs : ndarray
+            Gaseous absorption coefficient [wavelength, altitude] (km⁻¹).
+            Differential optical thickness for absorption from cumulated profile.
+        prof_ray : ndarray
+            Rayleigh scattering coefficient [wavelength, altitude] (km⁻¹).
+            Differential optical thickness for Rayleigh from cumulated profile.
+        (prof_aer, ssa_aer) : tuple
+            Aerosol profiles with:
+            
+            - prof_aer: Aerosol extinction coefficient [wavelength, altitude] (km⁻¹)
+            - ssa_aer: Particle single scattering albedo [wavelength, altitude]
+            
+        (pro_iphase, pro_phases) : tuple
+            Phase function profiles with:
+            
+            - pro_iphase: Phase matrix indices array [wavelength, altitude]
+            - pro_phases: List of phase matrix LUT objects, one for each phase index
+            
+        Notes
+        -----
+        This method is useful for decomposing atmospheric optical properties into 
+        separate components. The returned profiles can be used to recreate the 
+        atmospheric model by passing them as alternative inputs:
+        
+        - prof_abs: passed as the prof_abs parameter
+        - prof_ray: passed as the prof_ray parameter  
+        - (prof_aer, ssa_aer): passed as the prof_aer parameter
+        - (pro_iphase, pro_phases): passed to phase parameter handling
+        
+        All returned arrays are cast to float32 for memory efficiency.
+        
+        Examples
+        --------
+        >>> atm = AtmAFGL(...)
+        >>> prof_abs, prof_ray, (prof_aer, ssa_aer), (pro_iphase, pro_phases) = atm.calc_split(wav=500.)
+        """
         pro = self.calc(wav=wav, phase=phase, NBTHETA=NBTHETA)
         pro_aer = diff1(pro['OD_p'].data.astype(np.float32), axis=1)
         ssa_aer = pro['ssa_p_atm'].data
