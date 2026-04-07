@@ -2051,13 +2051,19 @@ def f_n2(lam):
 
     Parameters
     ----------
-    lam : float | ndarray
+    lam : float | 1-D ndarray
         Wavelength in micrometers (μm).
 
     Returns
     -------
-    float | ndarray
+    out : float | 1-D ndarray
         Depolarization factor of N2. Same shape as input `lam`.
+    
+    References
+    ----------
+    .. [1] Bodhaine, B. A., Wood, N. B., Dutton, E. G., & Slusser, J. R. (1999).
+        On Rayleigh Optical Depth Calculations. *Journal of Atmospheric and Oceanic
+        Technology*, 16, 1854-1861.
     """
     return 1.034 + 3.17 *1e-4 *lam**(-2)
 
@@ -2068,13 +2074,19 @@ def f_o2(lam):
 
     Parameters
     ----------
-    lam : float | ndarray
+    lam : float | 1-D ndarray
         Wavelength in micrometers (μm).
 
     Returns
     -------
-    float | ndarray
+    out : float | 1-D ndarray
         Depolarization factor of O2. Same shape as input `lam`.
+    
+    References
+    ----------
+    .. [1] Bodhaine, B. A., Wood, N. B., Dutton, E. G., & Slusser, J. R. (1999).
+        On Rayleigh Optical Depth Calculations. *Journal of Atmospheric and Oceanic
+        Technology*, 16, 1854-1861.
     """
     return 1.096 + 1.385 *1e-3 *lam**(-2) + 1.448 *1e-4 *lam**(-4)
 
@@ -2094,9 +2106,15 @@ def f_air_co2(lam, co2):
 
     Returns
     -------
-    ndarray
+    out : 2-D ndarray
         Depolarization factor of air. Shape: (N, M), where N is the number of
         wavelengths and M is the number of layers.
+    
+    References
+    ----------
+    .. [1] Bodhaine, B. A., Wood, N. B., Dutton, E. G., & Slusser, J. R. (1999).
+        On Rayleigh Optical Depth Calculations. *Journal of Atmospheric and Oceanic
+        Technology*, 16, 1854-1861.
     """
     _FN2 = f_n2(lam).reshape((-1,1))
     _FO2 = f_o2(lam).reshape((-1,1))
@@ -2117,7 +2135,7 @@ def n_air_co2_300(lam):
 
     Returns
     -------
-    float | ndarray
+    out : float | 1-D ndarray
         Refractive index of dry air at 300 ppm CO2. Same shape as input `lam`.
     
     References
