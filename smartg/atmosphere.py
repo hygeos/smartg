@@ -2045,7 +2045,7 @@ def saturation_pressure(T):
     return sat_press * 1e-2
 
 
-def FN2(lam):
+def f_n2(lam):
     """
     Compute the depolarization factor of N2 as a function of wavelength.
 
@@ -2062,7 +2062,7 @@ def FN2(lam):
     return 1.034 + 3.17 *1e-4 *lam**(-2)
 
 
-def FO2(lam):
+def f_o2(lam):
     """
     Compute the depolarization factor of O2 as a function of wavelength.
 
@@ -2079,7 +2079,7 @@ def FO2(lam):
     return 1.096 + 1.385 *1e-3 *lam**(-2) + 1.448 *1e-4 *lam**(-4)
 
 
-def Fair(lam, co2):
+def f_air_co2(lam, co2):
     """
     Calculates the depolarization factor for air using a composite formula based on
     the depolarization factors of N2 and O2, and the CO2 concentration. Produces
@@ -2098,8 +2098,8 @@ def Fair(lam, co2):
         Depolarization factor of air. Shape: (N, M), where N is the number of
         wavelengths and M is the number of layers.
     """
-    _FN2 = FN2(lam).reshape((-1,1))
-    _FO2 = FO2(lam).reshape((-1,1))
+    _FN2 = f_n2(lam).reshape((-1,1))
+    _FO2 = f_o2(lam).reshape((-1,1))
     _CO2 = co2.reshape((1,-1))
 
     return ((78.084 * _FN2 + 20.946 * _FO2 + 0.934 +
@@ -2210,7 +2210,7 @@ def raycrs(lam, co2):
     Ns = Avogadro/22.4141 * 273.15/288.15 * 1e-3
     nn2 = n_air_co2(lam, co2)**2
 
-    return (24*np.pi**3 * (nn2-1)**2/(lam[:,None]*1e-4)**4/Ns**2/(nn2+2)**2 * Fair(lam, co2))
+    return (24*np.pi**3 * (nn2-1)**2/(lam[:,None]*1e-4)**4/Ns**2/(nn2+2)**2 * f_air_co2(lam, co2))
 
 def g0(lat):
     ''' gravity acceleration at the ground
