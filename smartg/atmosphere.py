@@ -2199,7 +2199,7 @@ def m_dry_air(co2):
     return 15.0556 * co2*1e-6 + 28.9595
 
 
-def raycrs(lam, co2):
+def rayleigh_crs(lam, co2):
     """
     Compute the Rayleigh cross section 
     
@@ -2272,7 +2272,7 @@ def rod(lam, co2=400., lat=45., z=0., P=1013.25, pressure='surface'):
     else:
         raise ValueError(f'Invalid pressure type ({pressure})')
 
-    return raycrs(lam, co2) * Psurf * Avogadro/m_dry_air(co2)/G
+    return rayleigh_crs(lam, co2) * Psurf * Avogadro/m_dry_air(co2)/G
 
 def refractivity(lam,P,T,co2):
     ''' Refractivity of air
