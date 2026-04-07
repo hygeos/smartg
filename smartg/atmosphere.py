@@ -2107,26 +2107,62 @@ def Fair(lam, co2):
 
 
 def n300(lam):
-    ''' index of refraction of dry air  (300 ppm CO2)
-        lam : um
-    '''
+    """
+    Compute the refractive index of dry air at 300 ppm CO2 as a function of wavelength.
+
+    Parameters
+    ----------
+    lam : float | ndarray
+        Wavelength in micrometers (μm).
+
+    Returns
+    -------
+    float | ndarray
+        Refractive index of dry air at 300 ppm CO2. Same shape as input `lam`.
+    """
     return 1e-8 * ( 8060.51 + 2480990/(132.274 - lam**(-2)) + 17455.7/(39.32957 - lam**(-2))) + 1.
 
 
 def n_air(lam, co2):
-    ''' index of refraction of dry air (N wavelengths x M layers)
-        lam : um (N)
-        co2 : ppm (M)
-    '''
+    """
+    Calculates the refractive index for air using the base refractive index at 300 ppm CO2
+    and adjusting for variable CO2 concentrations. Produces a 2-D array with one value
+    per wavelength-layer combination.
+
+    Parameters
+    ----------
+    lam : 1-D ndarray
+        Wavelength values in micrometers (μm). Shape: (N,)
+    co2 : 1-D ndarray
+        CO2 concentration in parts per million (ppm). Shape: (M,)
+
+    Returns
+    -------
+    ndarray
+        Refractive index of air. Shape: (N, M), where N is the number of wavelengths
+        and M is the number of layers.
+    """
     N300 = n300(lam).reshape((-1,1))
     CO2 = co2.reshape((1,-1))
     return ((N300 - 1) * (1 + 0.54*(CO2*1e-6 - 0.0003)) + 1.)
 
+
 def ma(co2):
-    ''' molecular volume
-        co2 : ppm
-    '''
+    """
+    Compute the molecular mass of air as a function of CO2 concentration.
+
+    Parameters
+    ----------
+    co2 : float | ndarray
+        CO2 concentration in parts per million (ppm).
+
+    Returns
+    -------
+    float | ndarray
+        Molecular mass of air in g/mol. Same shape as input `co2`.
+    """
     return 15.0556 * co2*1e-6 + 28.9595
+
 
 def raycrs(lam, co2):
     """
