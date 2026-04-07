@@ -2046,24 +2046,58 @@ def saturation_pressure(T):
 
 
 def FN2(lam):
-    ''' depolarisation factor of N2
-        lam : um
-    '''
+    """
+    Compute the depolarization factor of N2 as a function of wavelength.
+
+    Parameters
+    ----------
+    lam : float | ndarray
+        Wavelength in micrometers (μm).
+
+    Returns
+    -------
+    float | ndarray
+        Depolarization factor of N2. Same shape as input `lam`.
+    """
     return 1.034 + 3.17 *1e-4 *lam**(-2)
 
 
 def FO2(lam):
-    ''' depolarisation factor of O2
-        lam : um
-    '''
+    """
+    Compute the depolarization factor of O2 as a function of wavelength.
+
+    Parameters
+    ----------
+    lam : float | ndarray
+        Wavelength in micrometers (μm).
+
+    Returns
+    -------
+    float | ndarray
+        Depolarization factor of O2. Same shape as input `lam`.
+    """
     return 1.096 + 1.385 *1e-3 *lam**(-2) + 1.448 *1e-4 *lam**(-4)
 
 
 def Fair(lam, co2):
-    ''' depolarisation factor of air for CO2 (N wavelengths x M layers)
-        lam : um (N)
-        co2 : ppm (M)
-    '''
+    """
+    Calculates the depolarization factor for air using a composite formula based on
+    the depolarization factors of N2 and O2, and the CO2 concentration. Produces
+    a 2-D array with one value per wavelength-layer combination.
+
+    Parameters
+    ----------
+    lam : 1-D ndarray
+        Wavelength values in micrometers (μm). Shape: (N,)
+    co2 : 1-D ndarray
+        CO2 concentration in parts per million (ppm). Shape: (M,)
+
+    Returns
+    -------
+    ndarray
+        Depolarization factor of air. Shape: (N, M), where N is the number of
+        wavelengths and M is the number of layers.
+    """
     _FN2 = FN2(lam).reshape((-1,1))
     _FO2 = FO2(lam).reshape((-1,1))
     _CO2 = co2.reshape((1,-1))
@@ -2290,6 +2324,7 @@ def check_date(dates, year):
             f"Date year ({extracted_year}) does not match expected year ({year})."
         )
 
+
 def read_Aeronet_AOD(file, year):
     """
     Extract AOD data from Aeronet file
@@ -2337,7 +2372,8 @@ def read_Aeronet_AOD(file, year):
                               )
 
     return AOD_ext_lut
-    
+
+
 def read_Aeronet_SSA(file, year):
     """
     Extract SSA data from Aeronet file
@@ -2385,6 +2421,7 @@ def read_Aeronet_SSA(file, year):
                            )
 
     return SSA_lut
+
 
 def read_Aeronet_PFN(file, year):
     """
