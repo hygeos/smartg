@@ -2236,23 +2236,66 @@ def rayleigh_crs(lam, co2):
 
     return (24*np.pi**3 * (nn2-1)**2/(lam[:,None]*1e-4)**4/Ns**2/(nn2+2)**2 * f_air_co2(lam, co2))
 
+
 def gravity_z0(lat):
-    ''' gravity acceleration at the ground
-        lat : deg
-    '''
-    assert isnumeric(lat)
+    """
+    Compute gravitational acceleration at Earth's surface as a function of latitude.
+
+    Parameters
+    ----------
+    lat : float
+        Latitude in degrees (positive for North, negative for South).
+
+    Returns
+    -------
+    out : float
+        Gravitational acceleration at ground level in m/s².
+
+    References
+    ----------
+    .. [1] List, R. J. (1968). *Smithsonian Meteorological Tables* (Sixth revised
+           edition; fourth reprint issued 1968). Smithsonian Institution Press,
+           City of Washington, 527 pp.
+
+    """
+    if not np.isscalar(lat):
+        raise ValueError("The parameter lat must be a scalar value.")
+    
     return (980.6160 * (1. - 0.0026372 * np.cos(2*lat*np.pi/180.)
             + 0.0000059 * np.cos(2*lat*np.pi/180.)**2))
 
+
 def gravity_z(lat, z) :
-    ''' gravity acceleration at altitude z
-        lat : deg (scalar)
-        z : m
-    '''
-    assert isnumeric(lat)
+    """
+    Compute gravitational acceleration at a given altitude and latitude.
+
+    Parameters
+    ----------
+    lat : float
+        Latitude in degrees (positive for North, negative for South).
+    z : float | 1D-ndarray | list
+        Altitude(s) above sea level in meters.
+
+    Returns
+    -------
+    out : float | 1D-ndarray
+        Gravitational acceleration at the given altitude(s) and latitude in m/s².
+
+    References
+    ----------
+    .. [1] List, R. J. (1968). *Smithsonian Meteorological Tables* (Sixth revised
+           edition; fourth reprint issued 1968). Smithsonian Institution Press,
+           City of Washington, 527 pp.
+    """
+    if not np.isscalar(lat):
+        raise ValueError("The parameter lat must be a scalar value.")
+    
+    if isinstance(z, list): z = np.asarray(z)
+    
     return (gravity_z0(lat) - (3.085462 * 1.e-4 + 2.27 * 1.e-7 * np.cos(2*lat*np.pi/180.)) * z
             + (7.254 * 1e-11 + 1e-13 * np.cos(2*lat*np.pi/180.)) * z**2
             - (1.517 * 1e-17 + 6 * 1e-20 * np.cos(2*lat*np.pi/180.)) * z**3)
+
 
 def rayleigh_od(lam, co2=400., lat=45., z=0., P=1013.25, pressure='surface'):
     """
