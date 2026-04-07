@@ -2106,7 +2106,7 @@ def Fair(lam, co2):
             _CO2*1e-4 *1.15)/(78.084+20.946+0.934+_CO2*1e-4))
 
 
-def n300(lam):
+def n_air_co2_300(lam):
     """
     Compute the refractive index of dry air at 300 ppm CO2 as a function of wavelength.
 
@@ -2129,7 +2129,7 @@ def n300(lam):
     return 1e-8 * ( 8060.51 + 2480990/(132.274 - lam**(-2)) + 17455.7/(39.32957 - lam**(-2))) + 1.
 
 
-def n_air(lam, co2):
+def n_air_co2(lam, co2):
     """
     Calculates the refractive index as function of wavelength and CO2 concentration.
 
@@ -2152,7 +2152,7 @@ def n_air(lam, co2):
         On Rayleigh Optical Depth Calculations. *Journal of Atmospheric and Oceanic
         Technology*, 16, 1854-1861.
     """
-    N300 = n300(lam).reshape((-1,1))
+    N300 = n_air_co2_300(lam).reshape((-1,1))
     CO2 = co2.reshape((1,-1))
     return ((N300 - 1) * (1 + 0.54*(CO2*1e-6 - 0.0003)) + 1.)
 
@@ -2208,7 +2208,7 @@ def raycrs(lam, co2):
 
     Avogadro = constants.value('Avogadro constant')
     Ns = Avogadro/22.4141 * 273.15/288.15 * 1e-3
-    nn2 = n_air(lam, co2)**2
+    nn2 = n_air_co2(lam, co2)**2
 
     return (24*np.pi**3 * (nn2-1)**2/(lam[:,None]*1e-4)**4/Ns**2/(nn2+2)**2 * Fair(lam, co2))
 
@@ -2265,7 +2265,7 @@ def refractivity(lam,P,T,co2):
     '''
     p= P*100.
     t = T-273.15
-    Ntp = 1 + (n_air(lam[:],co2) - 1) * p * (1.+p*(60.1-0.972*t)*1e-10)\
+    Ntp = 1 + (n_air_co2(lam[:],co2) - 1) * p * (1.+p*(60.1-0.972*t)*1e-10)\
         /(96095.43 * (1 + 0.003661 * t))
     return Ntp
 
