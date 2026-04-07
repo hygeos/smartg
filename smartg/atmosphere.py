@@ -2708,13 +2708,50 @@ def artdeco_to_smartg_cld(input_path, output_path=None, h5_group=None, normalize
 
     
 def extract_split(m):
-    '''
-    Input
-        m: MLUT , result of a previous run
+    """
+    Use a SMART-G run results' MLUT object to compute atmospheric optical 
+    properties at specified wavelengths and separates them into decomposed 
+    components (absorption, Rayleigh scattering, aerosols, and phase functions).
+    These returned profiles can be used as alternative inputs to initialize a 
+    new AtmAFGL instance.
+
+    Parameters
+    ----------
+    m : MLUT
+        An MLUT object containing results of a SMART-G run. 
+        Must include the following datasets:
         
-    extract the optical properties from a previous run and return the vertical profiles
-    prof_abs, prof_ray, prof_aer, and prof_phases the alternative inputs of the AtmAFGL
-    '''
+        - OD_p: particulate optical depth
+        - OD_r: Rayleigh optical depth
+        - OD_g: gaseous optical depth
+        - ssa_p_atm: single scattering albedo of particles
+        - iphase_atm: phase function indices
+        - phase_atm: phase matrix function
+
+    Returns
+    -------
+    prof_abs : ndarray
+        Gaseous absorption optical depth profile.
+    prof_ray : ndarray
+        Rayleigh optical depth profile.
+    prof_aer : tuple of (ndarray, ndarray)
+        Tuple containing:
+        
+        - prof_aer[0]: Aerosol optical depth profile
+        - prof_aer[1]: Single scattering albedo profile of aerosols
+    prof_phase : tuple of (ndarray, list)
+        Tuple containing:
+        
+        - prof_phase[0]: Phase function indices (iphase_atm) 
+        - prof_phase[1]: List of phase matrix functions for each index
+
+    Examples
+    --------
+    >>> from smartg.atmosphere import extract_split, AtmAFGL
+    >>> prof_abs, prof_ray, prof_aer, prof_phases = extract_split(mlut_result)
+    >>> new_atm = AtmAFGL('afglt', prof_abs=prof_abs, prof_ray=prof_ray, 
+    ...     prof_aer=prof_aer, prof_phases=prof_phases)
+    """
     pro_aer = diff1(m['OD_p'].data.astype(np.float32), axis=1)
     ssa_aer = m['ssa_p_atm'].data
     pro_ray = diff1(m['OD_r'].data.astype(np.float32), axis=1)
