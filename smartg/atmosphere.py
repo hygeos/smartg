@@ -2567,19 +2567,50 @@ def atm_pro_from_aeronet(date, time, aod_file, ssa_file, pfn_file, b_wav,
 
 def artdeco_to_smartg_cld(input_path, output_path=None, h5_group=None, normalize=True, overwrite=False, veff = None, wl_max = 4500):
     """
-    Description : Convert ARTDECO cloud h5 file to SMART-G nc file.
+    Convert ARTDECO cloud HDF5 file to SMART-G NetCDF file format.
 
-    === Parameters:
-    input_path  : ARTDECO cloud h5 file path
-    output_path : If not None: save the converted SMART-G cloud nc file to output_path
-    h5_group    : Group to open in the h5 file
-    normalize   : By default True. Normalize p11 phase component integral to 2
-    overwrite   : If output_path is given, the save option overwrite can be given. By default False.
-    veff        : veff must be given if the cloud properties are dependant with
-    wl_max      : Take only wavelengths less or equal to wl_max (in nm)
+    Reads cloud optical properties from an ARTDECO HDF5 file and converts them 
+    to MLUT format.
 
-    === return
-    m : MLUT object with cloud properties (SMART-G convention)
+    Parameters
+    ----------
+    input_path : str | Path
+        Path to the ARTDECO cloud HDF5 file.
+    output_path : str | Path, optional
+        Output path for saving the converted SMART-G cloud NetCDF file.
+        If None, the converted data is not saved to disk. Default: None
+    h5_group : str, optional
+        Group name within the HDF5 file to open. If None and the file contains
+        only one group, that group is automatically selected. If the file contains
+        multiple groups, a group name must be specified. Default: None
+    normalize : bool, optional
+        If True (default), normalize the p11 phase matrix component integral to 2.
+        Default: True
+    overwrite : bool, optional
+        If True and output_path is given, overwrite existing file. Default: False
+    veff : float, optional
+        Effective volume fraction. Required if cloud properties are dependent on veff.
+        Default: None
+    wl_max : float, optional
+        Maximum wavelength in nanometers. Only wavelengths <= wl_max are included.
+        Default: 4500
+
+    Returns
+    -------
+    m : MLUT
+        Multi-dimensional lookup table (MLUT) object containing cloud optical properties.
+        Includes axes:
+        
+        - reff: effective radius
+        - wav: wavelength (nm)
+        - stk: Stokes components (4 or 6 terms)
+        - theta: scattering angle (degrees)
+        
+        And datasets:
+        
+        - phase: phase matrix (normalized to 2 if normalize=True)
+        - ext: extinction coefficient (km⁻¹)
+        - ssa: single scattering albedo
     """
     import netCDF4  # noqa: F401 - must be imported before h5py to avoid HDF5 library conflicts
     import h5py
