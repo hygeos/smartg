@@ -518,12 +518,23 @@ class AerOPAC(object):
     
     @staticmethod
     def list():
-        '''
-        list standard aerosol files in opac
-        '''
+        """
+        List available standard OPAC aerosol mixture files.
+        
+        Returns
+        -------
+        list of str
+            List of available OPAC aerosol mixture filenames (without suffix).
+            
+        Examples
+        --------
+        >>> from smartg.atmosphere import AerOPAC
+        >>> AerOPAC.list()
+        ['antarctic', 'antarctic_spheric', 'arctic', 'continental_average', ...]
+        """
         base_dir = DIR_AUXDATA / 'aerosols' / 'OPAC' / 'mixtures'
         files = list(base_dir.glob("*.nc"))
-        return [f.stem.replace('_sol', '') for f in files]
+        return sorted([f.stem.replace('_sol', '') for f in files])
 
 
 class Cloud(AerOPAC):
@@ -654,12 +665,23 @@ class Cloud(AerOPAC):
 
     @staticmethod
     def list():
-        '''
-        list standard aerosol files in opac
-        '''
+        """
+        List available standard cloud model files.
+        
+        Returns
+        -------
+        list of str
+            List of available cloud model filenames (without suffix).
+            
+        Examples
+        --------
+        >>> from smartg.atmosphere import Cloud
+        >>> Cloud.list()
+        ['ic_baum_asc', 'ic_baum_ghm', 'ic_baum_sc', 'wc']
+        """
         base_dir = Path(DIR_AUXDATA) / "clouds"
         files = list(base_dir.glob("*.nc"))
-        return [f.stem.replace('_sol', '') for f in files]
+        return sorted([f.stem.replace('_sol', '') for f in files])
         
 
 class AerUser(AerOPAC):
