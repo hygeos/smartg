@@ -2213,6 +2213,12 @@ def rayleigh_crs(lam, co2):
     Returns:
     out : 2-D ndarray
         The Rayleigh cross section (N wavelengths x M layers)
+    
+    References
+    ----------
+    .. [1] Bodhaine, B. A., Wood, N. B., Dutton, E. G., & Slusser, J. R. (1999).
+        On Rayleigh Optical Depth Calculations. *Journal of Atmospheric and Oceanic
+        Technology*, 16, 1854-1861.
     """
 
     if not isinstance(lam, np.ndarray):
@@ -2230,7 +2236,7 @@ def rayleigh_crs(lam, co2):
 
     return (24*np.pi**3 * (nn2-1)**2/(lam[:,None]*1e-4)**4/Ns**2/(nn2+2)**2 * f_air_co2(lam, co2))
 
-def g0(lat):
+def gravity_z0(lat):
     ''' gravity acceleration at the ground
         lat : deg
     '''
@@ -2238,13 +2244,13 @@ def g0(lat):
     return (980.6160 * (1. - 0.0026372 * np.cos(2*lat*np.pi/180.)
             + 0.0000059 * np.cos(2*lat*np.pi/180.)**2))
 
-def g(lat, z) :
+def gravity_z(lat, z) :
     ''' gravity acceleration at altitude z
         lat : deg (scalar)
         z : m
     '''
     assert isnumeric(lat)
-    return (g0(lat) - (3.085462 * 1.e-4 + 2.27 * 1.e-7 * np.cos(2*lat*np.pi/180.)) * z
+    return (gravity_z0(lat) - (3.085462 * 1.e-4 + 2.27 * 1.e-7 * np.cos(2*lat*np.pi/180.)) * z
             + (7.254 * 1e-11 + 1e-13 * np.cos(2*lat*np.pi/180.)) * z**2
             - (1.517 * 1e-17 + 6 * 1e-20 * np.cos(2*lat*np.pi/180.)) * z**3)
 
@@ -2263,7 +2269,7 @@ def rod(lam, co2=400., lat=45., z=0., P=1013.25, pressure='surface'):
     """
     Avogadro = constants.value('Avogadro constant')
     zs = 0.73737 * z + 5517.56  # effective mass-weighted altitude
-    G = g(lat, zs)
+    G = gravity_z(lat, zs)
     # air pressure at the pixel (i.e. at altitude) in hPa
     if pressure == 'sea-level':
         Psurf = (P * (1. - 0.0065 * z / 288.15) ** 5.255) * 1000.  # air pressure at pixel location in dyn / cm2, which is hPa * 1000
