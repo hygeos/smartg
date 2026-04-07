@@ -2119,15 +2119,19 @@ def n300(lam):
     -------
     float | ndarray
         Refractive index of dry air at 300 ppm CO2. Same shape as input `lam`.
+    
+    References
+    ----------
+    .. [1] Bodhaine, B. A., Wood, N. B., Dutton, E. G., & Slusser, J. R. (1999).
+        On Rayleigh Optical Depth Calculations. *Journal of Atmospheric and Oceanic
+        Technology*, 16, 1854-1861.
     """
     return 1e-8 * ( 8060.51 + 2480990/(132.274 - lam**(-2)) + 17455.7/(39.32957 - lam**(-2))) + 1.
 
 
 def n_air(lam, co2):
     """
-    Calculates the refractive index for air using the base refractive index at 300 ppm CO2
-    and adjusting for variable CO2 concentrations. Produces a 2-D array with one value
-    per wavelength-layer combination.
+    Calculates the refractive index as function of wavelength and CO2 concentration.
 
     Parameters
     ----------
@@ -2138,9 +2142,15 @@ def n_air(lam, co2):
 
     Returns
     -------
-    ndarray
+    out : 2-D ndarray
         Refractive index of air. Shape: (N, M), where N is the number of wavelengths
         and M is the number of layers.
+    
+    References
+    ----------
+    .. [1] Bodhaine, B. A., Wood, N. B., Dutton, E. G., & Slusser, J. R. (1999).
+        On Rayleigh Optical Depth Calculations. *Journal of Atmospheric and Oceanic
+        Technology*, 16, 1854-1861.
     """
     N300 = n300(lam).reshape((-1,1))
     CO2 = co2.reshape((1,-1))
@@ -2149,7 +2159,8 @@ def n_air(lam, co2):
 
 def ma(co2):
     """
-    Compute the molecular mass of air as a function of CO2 concentration.
+    Compute the mean molecular weight of dry air as a function 
+    of CO2 concentration.
 
     Parameters
     ----------
@@ -2159,7 +2170,13 @@ def ma(co2):
     Returns
     -------
     float | ndarray
-        Molecular mass of air in g/mol. Same shape as input `co2`.
+        Mean molecular weight of dry air in g/mol. Same shape as input `co2`.
+
+    References
+    ----------
+    .. [1] Bodhaine, B. A., Wood, N. B., Dutton, E. G., & Slusser, J. R. (1999).
+        On Rayleigh Optical Depth Calculations. *Journal of Atmospheric and Oceanic
+        Technology*, 16, 1854-1861.
     """
     return 15.0556 * co2*1e-6 + 28.9595
 
