@@ -3,7 +3,6 @@
 
 import numpy as np
 from pathlib import Path
-from glob import glob
 from luts.luts import MLUT, LUT, Idx, read_mlut, read_mlut_hdf5
 from smartg.tools.phase import calc_iphase
 from scipy.interpolate import interp1d
@@ -12,13 +11,9 @@ from scipy import constants
 from scipy.constants import speed_of_light, Planck, Boltzmann
 from smartg.bandset import BandSet
 from smartg.config import DIR_AUXDATA
-from warnings import warn, simplefilter
 import pandas as pd
 
-import netCDF4  # noqa: F401 - must be imported before h5py to avoid HDF5 library conflicts
-import h5py
 import xarray as xr
-
 from tempfile import TemporaryDirectory
 
 
@@ -1903,9 +1898,41 @@ class Profile_base(object):
             self.dens_no2[:] = 0.
 
     def regrid(self, znew):
-        '''
-        regrid profile and returns a new profile
-        '''
+        """
+        Regrid atmospheric profile to a new altitude grid.
+
+        Interpolates all atmospheric properties (pressure, temperature, and gas densities)
+        from the current altitude grid to a new altitude grid using linear interpolation.
+        Special boundary conditions are applied for pressure (using bounds_error=False with
+        specific fill values) and temperature (using extrapolation).
+
+        Parameters
+        ----------
+        znew : 1-D ndarray
+            New altitude grid in kilometers. Must be a 1-D array of altitude values.
+            The new grid can be coarser, finer, or irregular compared to the original grid.
+
+        Returns
+        -------
+        Profile_base
+            New Profile_base object with all atmospheric properties interpolated to the
+            new altitude grid `znew`. The following attributes are interpolated:
+            - z: altitude (km)
+            - P: pressure (hPa)
+            - T: temperature (K)
+            - dens_air: air density (molecule/cm³)
+            - dens_o3: ozone density (molecule/cm³)
+            - dens_o2: oxygen density (molecule/cm³)
+            - dens_h2o: water vapor density (molecule/cm³)
+            - dens_co2: carbon dioxide density (molecule/cm³)
+            - dens_no2: nitrogen dioxide density (molecule/cm³)
+            - dens_ch4: methane density (molecule/cm³)
+            - dens_co: carbon monoxide density (molecule/cm³)
+            - dens_n2o: nitrous oxide density (molecule/cm³)
+            - dens_n2: nitrogen density (molecule/cm³)
+            - dens_so2: sulfur dioxide density (molecule/cm³)
+            - RH_cst: constant relative humidity (None | float)
+        """
 
         prof = Profile_base(None)
         z = self.z
@@ -2797,6 +2824,8 @@ def artdeco_to_smartg_cld(input_path, output_path=None, h5_group=None, normalize
     === return
     m : MLUT object with cloud properties (SMART-G convention)
     """
+    import netCDF4  # noqa: F401 - must be imported before h5py to avoid HDF5 library conflicts
+    import h5py
 
     # Deals with the case where h5_group is not provided 
     if h5_group is None:
