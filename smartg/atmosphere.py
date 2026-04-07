@@ -1286,7 +1286,7 @@ class AtmAFGL(Atmosphere):
         #
         # cumulated Rayleigh optical thickness (wav, z)
         if self.prof_ray is None :
-            tauray = rod(wav[:]*1e-3, prof.dens_co2/prof.dens_air*1e6, self.lat,
+            tauray = rayleigh_od(wav[:]*1e-3, prof.dens_co2/prof.dens_air*1e6, self.lat,
                      prof.z*1e3, prof.P)
             dtaur  = diff1(tauray, axis=1)
         else : 
@@ -2254,7 +2254,7 @@ def gravity_z(lat, z) :
             + (7.254 * 1e-11 + 1e-13 * np.cos(2*lat*np.pi/180.)) * z**2
             - (1.517 * 1e-17 + 6 * 1e-20 * np.cos(2*lat*np.pi/180.)) * z**3)
 
-def rod(lam, co2=400., lat=45., z=0., P=1013.25, pressure='surface'):
+def rayleigh_od(lam, co2=400., lat=45., z=0., P=1013.25, pressure='surface'):
     """
     Rayleigh optical depth from Bodhaine et al, 99 (N wavelengths x M layers)
         lam : wavelength in um (N)
