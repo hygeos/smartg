@@ -2157,7 +2157,7 @@ def n_air_co2(lam, co2):
     return ((N300 - 1) * (1 + 0.54*(CO2*1e-6 - 0.0003)) + 1.)
 
 
-def ma(co2):
+def m_dry_air(co2):
     """
     Compute the mean molecular weight of dry air as a function 
     of CO2 concentration.
@@ -2254,7 +2254,7 @@ def rod(lam, co2=400., lat=45., z=0., P=1013.25, pressure='surface'):
     else:
         raise ValueError(f'Invalid pressure type ({pressure})')
 
-    return raycrs(lam, co2) * Psurf * Avogadro/ma(co2)/G
+    return raycrs(lam, co2) * Psurf * Avogadro/m_dry_air(co2)/G
 
 def refractivity(lam,P,T,co2):
     ''' Refractivity of air
