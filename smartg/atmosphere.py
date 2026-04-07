@@ -786,6 +786,16 @@ class AerUser(AerOPAC):
 
         self._phase = None
 
+    @staticmethod
+    def list():
+        """
+        """
+        raise NotImplementedError(
+            "The list() method is not available for user-defined aerosols. "
+            "User-defined aerosols are custom configurations and do not have "
+            "a predefined list of available files."
+        )
+
 
 
 class Atmosphere(object):
