@@ -2323,18 +2323,38 @@ def rayleigh_od(lam, co2=400., lat=45., z=0., P=1013.25, pressure='surface'):
 
     return rayleigh_crs(lam, co2) * Psurf * Avogadro/m_dry_air(co2)/G
 
-def refractivity(lam,P,T,co2):
-    ''' Refractivity of air
-        lam : um (N)
-        P   : hPa (M)
-        T   : K (M)
-        co2 : ppm (M)
-    '''
+
+def refractivity(lam, P, T, co2):
+    """
+    Calculate the refractive index of air as a function of wavelength, pressure,
+    temperature, and CO2 concentration.
+    
+    Parameters
+    ----------
+    lam : array_like
+        Wavelength in micrometers (um), shape (N,)
+    P : array_like
+        Atmospheric pressure in hectopascals (hPa), shape (M,)
+    T : array_like
+        Temperature in Kelvin (K), shape (M,)
+    co2 : array_like
+        CO2 concentration in parts per million (ppm), shape (M,)
+    
+    Returns
+    -------
+    ndarray
+        Refractive index of air at the given conditions, shape (N, M)
+    
+    References
+    ----------
+    .. [1] Edlén, B. (1966). The refractive index of air. Metrologia, 2(2), 71-80.
+    """
     p= P*100.
     t = T-273.15
     Ntp = 1 + (n_air_co2(lam[:],co2) - 1) * p * (1.+p*(60.1-0.972*t)*1e-10)\
         /(96095.43 * (1 + 0.003661 * t))
     return Ntp
+
 
 def diff1(A, axis=0, samesize=True):
     if samesize:
