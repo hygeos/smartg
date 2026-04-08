@@ -2354,18 +2354,7 @@ def average(A):
     returns averaged array of size N-1
     '''
     return 0.5*(A[1:] + A[:-1])
-
-
-def isiterable(x):
-    return hasattr(x, '__iter__')
-
-def isnumeric(x):
-    try:
-        float(x)
-        return True
-    except TypeError:
-        return False
-    
+ 
 
 def od2k(prof, dataset, axis=1, zreverse=False):
     '''
