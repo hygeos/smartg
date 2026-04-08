@@ -2365,15 +2365,6 @@ def diff1(A, axis=0, samesize=True):
         return B
     else:
         return np.diff(A, axis=axis)
-
-def average(A):
-    '''
-    returns average value within each interval
-
-    A: input array, size N
-    returns averaged array of size N-1
-    '''
-    return 0.5*(A[1:] + A[:-1])
  
 
 def od2k(prof, dataset, axis=1, zreverse=False):
