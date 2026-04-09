@@ -1,9 +1,43 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+"""
+Preprocessing of atmospheric optical properties for SMART-G simulations.
+
+This module provides tools to build and preprocess atmospheric profiles for use 
+as input to SMART-G radiative transfer simulations. It implements various 
+atmospheric models and aerosol/cloud properties that can be combined into 
+complete atmospheric profiles ready for simulation.
+
+Workflow
+--------
+Typical usage involves:
+1. Create an atmospheric profile using model classes (e.g., AtmAFGL)
+2. Add atmospheric components (aerosols, clouds, surface) as needed
+3. (Optional) Call the profile's `calc()` method to compute optical properties 
+   with specific parameters (if using optional parameters not set by default)
+4. Pass the resulting profile object as the `atm` parameter to `smartg.run()`
+
+Key Classes
+-----------
+AtmAFGL
+    AFGL Standard U.S. Atmosphere model. Provides vertical temperature and 
+    pressure profiles. Aerosols, clouds, and ocean surface can be added to 
+    build a complete atmospheric model.
+
+AerOPAC
+    Aerosol Optical Properties from OPAC (Optical Properties of Aerosols 
+    and Clouds) database. Computes aerosol optical depth, single scattering 
+    albedo, and phase matrices for aerosol mixtures.
+
+Cloud
+    Cloud optical properties model. Similar to AerOPAC, provides cloud optical 
+    depth, single scattering albedo, and phase matrices. Used for representing 
+    cloud layers in atmospheric profiles.
+"""
 
 import numpy as np
 from pathlib import Path
-from luts.luts import MLUT, LUT, Idx, read_mlut, read_mlut_hdf5
+from luts.luts import MLUT, LUT, Idx, read_mlut, read_mlut_hdf5, merge
 from smartg.tools.phase import calc_iphase
 from scipy.interpolate import interp1d
 from scipy.integrate import simpson
@@ -12,9 +46,13 @@ from scipy.constants import speed_of_light, Planck, Boltzmann
 from smartg.bandset import BandSet
 from smartg.config import DIR_AUXDATA
 import pandas as pd
-
 import xarray as xr
 from tempfile import TemporaryDirectory
+import re
+from copy import deepcopy
+from pytrunc.truncation import delta_m_phase_approx, gt_phase_approx
+import netCDF4  # noqa: F401 - must be imported before h5py to avoid HDF5 library conflicts
+import h5py
 
 
 class AerOPAC(object):
@@ -167,8 +205,6 @@ class AerOPAC(object):
         self.mixture = read_mlut(self.filename)
         # check if hum dim size == 1 (to avoid lut sub bug)
         if (self.mixture.axes['hum'].size == 1):
-            from copy import deepcopy
-            from luts.luts import merge
             hum_v1 = self.mixture.axes['hum'][0]
             hum_v2 = hum_v1 + 1
             m1 = deepcopy(self.mixture).sub({'hum':0.})
@@ -752,8 +788,6 @@ class AerUser(AerOPAC):
         self.mixture = ds
         # check if hum dim size == 1 (to avoid lut sub bug)
         if (self.mixture.axes['hum'].size == 1):
-            from copy import deepcopy
-            from luts.luts import merge
             hum_v1 = self.mixture.axes['hum'][0]
             hum_v2 = hum_v1 + 1
             m1 = deepcopy(self.mixture).sub({'hum':0.})
@@ -1055,7 +1089,6 @@ class AtmAFGL(Atmosphere):
 
                 # If truncation parameter is given compute truncated phase function
                 if truncation is not None:
-                    from pytrunc.truncation import delta_m_phase_approx, gt_phase_approx
                     if self.OPT3D: theta = profile.axis('theta_atm')
                     else: theta = pha.axes[-1]
                     pha_tr = np.zeros(pha_.shape, dtype=np.float64)
@@ -2885,9 +2918,6 @@ def artdeco_to_smartg_cld(input_path, output_path=None, h5_group=None, normalize
         - ext: extinction coefficient (km⁻¹)
         - ssa: single scattering albedo
     """
-    import netCDF4  # noqa: F401 - must be imported before h5py to avoid HDF5 library conflicts
-    import h5py
-
     # Deals with the case where h5_group is not provided 
     if h5_group is None:
         with h5py.File(input_path, "r") as f:
@@ -3193,7 +3223,6 @@ def str2grid_array(str_grid):
     >>> len(grid)
     20
     """
-    import re
 
     # Split by bracketed steps to extract numbers and steps separately
     # re.split with capturing group keeps the steps
