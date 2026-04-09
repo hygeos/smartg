@@ -2357,6 +2357,41 @@ def refractivity(lam, P, T, co2):
 
 
 def diff1(A, axis=0, samesize=True):
+    """
+    Calculate the first difference of an array along a specified axis.
+    
+    Computes the difference between consecutive elements of the array along
+    the specified axis using `numpy.diff`. By default (samesize=True), 
+    preserves the original array shape by padding with zeros.
+    
+    Parameters
+    ----------
+    A : ndarray
+        Input array for which to compute differences.
+    axis : int, optional
+        Axis along which differences are computed. Default is 0.
+    samesize : bool, optional
+        If True (default), the output has the same shape as the input array
+        with the first slice along the specified axis set to zero. If False,
+        the output has size reduced by 1 along the specified axis.
+    
+    Returns
+    -------
+    diff : ndarray
+        Differences between consecutive elements along the specified axis.
+        If `samesize=True`, the result has the same shape as `A`.
+        If `samesize=False`, the result has shape ``A.shape[axis] - 1`` along
+        the specified axis.
+    
+    Examples
+    --------
+    >>> A = np.array([[1, 2, 4, 8], [10, 20, 40, 80]])
+    >>> diff1(A, axis=0, samesize=True)
+    array([[ 0,  0,  0,  0],
+           [ 9, 18, 36, 72]])
+    >>> diff1(A, axis=0, samesize=False) # equivalent to np.diff(A, axis=0)
+    array([[ 9, 18, 36, 72]])
+    """
     if samesize:
         B = np.zeros_like(A)
         key = [slice(None)]*A.ndim
