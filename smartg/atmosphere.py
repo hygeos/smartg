@@ -391,7 +391,7 @@ class AerOPAC(object):
                 # and z_phase
                 assert self._phase.names == ['stk', 'theta_atm']
 
-                if conv_Iparper: pha_ = pha2Iparperconv(self._phase.data[:,:])
+                if conv_Iparper: pha_ = convert_phase_to_iparper(self._phase.data[:,:])
                 else: pha_ = self._phase.data[:,:]
                 pha = LUT(pha_[None,None,:,:],
                           names = ['wav_phase', 'z_phase'] + self._phase.names,
@@ -401,7 +401,7 @@ class AerOPAC(object):
                 return pha
             else:
                 if conv_Iparper:
-                    pha_ = pha2Iparperconv(self._phase.data[:,:,:,:]) # be careful, if nstk=4 convert to nstk=6
+                    pha_ = convert_phase_to_iparper(self._phase.data[:,:,:,:]) # be careful, if nstk=4 convert to nstk=6
                     pha = LUT(pha_,names = self._phase.names,axes = self._phase.axes)
                     return pha
                 else:
@@ -1051,7 +1051,7 @@ class AtmAFGL(Atmosphere):
                 # if Iparper convention come back to IQUV for truncation
                 if is_Iparper:
                     for iph in range (nphase):
-                        pha_[iph,:,:] = pha2Iparperconv(pha_[iph,:,:])
+                        pha_[iph,:,:] = convert_phase_to_iparper(pha_[iph,:,:])
 
                 # If truncation parameter is given compute truncated phase function
                 if truncation is not None:
@@ -1096,9 +1096,9 @@ class AtmAFGL(Atmosphere):
 
                 if conv_Iparper or is_Iparper:
                     for iph in range (nphase):
-                        pha_[iph,:,:] = pha2Iparperconv(pha_[iph,:,:])
+                        pha_[iph,:,:] = convert_phase_to_iparper(pha_[iph,:,:])
                         if truncation is not None:
-                            pha_tr[iph,:,:] = pha2Iparperconv(pha_tr[iph,:,:])
+                            pha_tr[iph,:,:] = convert_phase_to_iparper(pha_tr[iph,:,:])
 
                 if not self.OPT3D:
                     profile.add_axis('theta_atm', pha.axes[-1])
@@ -1719,8 +1719,10 @@ def read_phase_dat(filename, standard=False, kind='atm'):
     '''
     df = pd.read_csv(filename, sep=r'\s+', header=None)
 
-    theta = np.array(df[0])
-    pha   = np.array(df[[1,2,3,4]])
+    theta = df.iloc[:, 0].values
+    pha = df.iloc[:, 1:].values
+
+
 
     if standard:
         pha[:,0] = df[1] + df[2]
@@ -3033,7 +3035,7 @@ def extract_split(m):
     return pro_abs, pro_ray, (pro_aer, ssa_aer), (pro_iphase, pro_phases)
 
 
-def pha2Iparperconv(pha):
+def convert_phase_to_iparper(pha):
     """
     Convert phase to I parallel/perpendicular convention
 
