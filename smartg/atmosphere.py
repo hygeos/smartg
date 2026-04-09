@@ -3037,17 +3037,39 @@ def extract_split(m):
 
 def convert_phase_to_iparper(pha):
     """
-    Convert phase to I parallel/perpendicular convention
+    Convert phase matrix to parallel/perpendicular intensity convention.
+
+    Converts the phase matrix from the standard IQUV (Stokes vector) convention 
+    to the Ipar/Iper (parallel/perpendicular intensity) convention used throughout 
+    SMART-G. This conversion is necessary when using the alternative Stokes 
+    representation where polarized light is characterized by (Ipar, Iper, U, V) 
+    instead of (I, Q, U, V).
 
     Parameters
     ----------
-    pha : 2-D ndarray | 4-D ndarray
-        The phase matrix to be converted. In 2-D, stk in in dim 0, and in 4-D in dim3.
+    pha : ndarray
+        The phase matrix in IQUV convention. Can be either:
+        - 2-D array of shape (nphamat, nth): phase matrix with Stokes components in dimension 0
+        - 4-D array of shape (n1, n2, nphamat, nth): batch of phase matrices with Stokes 
+          components in dimension 2
+        where nphamat is 4 (only spherical particles) or 6 (spherical and non-spherical particles),
+        and nth is the number of scattering angles.
+        
+        Input phase matrix components in order:
+        - If nphamat=4: p11, p21, p33, p34
+        - If nphamat=6: p11, p21, p33, p34, p22, p44
     
     Returns
     -------
-    out : 2-D ndarray | 4-D ndarray
-        The phase matrix converted.
+    out : ndarray
+        The phase matrix converted to Ipar/Iper convention. Always has 6 components 
+        output (dimensions are preserved except Stokes dimension becomes 6):
+        - 2-D input returns shape (6, nth)
+        - 4-D input returns shape (n1, n2, 6, nth)
+
+    References
+    ----------
+    .. [1] Chandrasekhar, S. (2013). Radiative transfer. Courier Corporation.
     """
 
     ndim = len(pha.shape)
@@ -3055,19 +3077,19 @@ def convert_phase_to_iparper(pha):
         raise ValueError("The phase matrix dimension must be 2 or 4!")
     
     if ndim == 2:
-        nstk = pha.shape[0]
+        nphamat = pha.shape[0]
         nth = pha.shape[1]
     else :
-        nstk = pha.shape[2]
+        nphamat = pha.shape[2]
         nth = pha.shape[3]
     
-    if (nstk != 4 and nstk != 6):
+    if (nphamat != 4 and nphamat != 6):
         raise ValueError("The number of phase matrix terms must be equal to 4 or 6!")
 
 
     if ndim == 2:
         pha_converted = np.zeros((6,nth), dtype=np.float64)
-        if (nstk == 4): # spherical particles
+        if (nphamat == 4): # spherical particles
             pha_converted[0:4,:] = pha.copy()
             pha_converted[4,:] = pha[0,:].copy()
             pha_converted[5,:] = pha[2,:].copy()
@@ -3077,7 +3099,7 @@ def convert_phase_to_iparper(pha):
             pha_converted[0,:] = 0.5*(p0+2*p1+p4) # P11
             pha_converted[1,:] = 0.5*(p0-p4)      # P12=P21
             pha_converted[4,:] = 0.5*(p0-2*p1+p4) # P22
-        elif (nstk == 6): # non spherical particles
+        elif (nphamat == 6): # non spherical particles
             pha_converted[:,:] = pha.copy()
             p0 = pha_converted[0,:].copy()
             p1 = pha_converted[1,:].copy()
@@ -3087,7 +3109,7 @@ def convert_phase_to_iparper(pha):
             pha_converted[4,:] = 0.5*(p0-2*p1+p4) # P22
     else: # ndim = 4
         pha_converted = np.zeros((pha.shape[0],pha.shape[1],6,nth), dtype=np.float64)
-        if (nstk == 4): # spherical particles
+        if (nphamat == 4): # spherical particles
             pha_converted[:,:,0:4,:] = pha.copy()
             pha_converted[:,:,4,:] = pha[:,:,0,:].copy()
             pha_converted[:,:,5,:] = pha[:,:,2,:].copy()
@@ -3097,7 +3119,7 @@ def convert_phase_to_iparper(pha):
             pha_converted[:,:,0,:] = 0.5*(p0+2*p1+p4) # P11
             pha_converted[:,:,1,:] = 0.5*(p0-p4)      # P12=P21
             pha_converted[:,:,4,:] = 0.5*(p0-2*p1+p4) # P22
-        elif (nstk == 6): # non spherical particles
+        elif (nphamat == 6): # non spherical particles
             pha_converted[:,:,:,:] = pha.copy()
             p0 = pha_converted[:,:,0,:].copy()
             p1 = pha_converted[:,:,1,:].copy()
