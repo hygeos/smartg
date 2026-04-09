@@ -2431,10 +2431,48 @@ def od2k(prof, dataset, axis=1, zreverse=False):
 
 
 def BPlanck(wav, T):
-    a = 2.0*Planck*speed_of_light**2
-    b = Planck*speed_of_light/(wav*Boltzmann*T)
-    intensity = a/ ( (wav**5) * (np.exp(b) - 1.0) )
-    return intensity
+    """
+    Calculate the spectral blackbody radiance.
+    
+    Computes the spectral radiance of a perfectly emitting blackbody 
+    at a given wavelength and temperature according to Planck's law
+    of blackbody radiation.
+    
+    Parameters
+    ----------
+    wav : float or ndarray
+        Wavelength in meters.
+    T : float or ndarray
+        Temperature in Kelvin.
+    
+    Returns
+    -------
+    L_b_wl : float or ndarray
+        Spectral radiance in W·m⁻³·sr⁻¹.
+    
+    References
+    ----------
+    .. [1] Lenoble, J. (1993). Atmospheric radiative transfer. 
+           A. Deepak Publishing.
+    
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from scipy.constants import speed_of_light, Planck, Boltzmann
+    >>> wav = 10e-6  # 10 micrometers (thermal infrared)
+    >>> T = 288.0    # 288 K (room temperature)
+    >>> L_b_wl = BPlanck(wav, T)
+    >>> print(f"Spectral radiance: {L_b_wl:.2e} W·m⁻³·sr⁻¹")
+    
+    >>> # Calculate for multiple wavelengths at a fixed temperature
+    >>> wavelengths = np.array([0.5e-6, 1e-6, 10e-6]) # UV, NIR, TIR
+    >>> T = 5778  # Sun's surface temperature
+    >>> L_b_wl = BPlanck(wavelengths, T)
+    """
+    c1 = 2.0*Planck*speed_of_light**2
+    c2 = Planck*speed_of_light/Boltzmann
+    L_b_wl = c1/ ( (wav**5) * (np.exp(c2/(wav*T)) - 1.0) )
+    return L_b_wl
 
 
 def get_aer_dist_integral(Z, H_min, H_max):
