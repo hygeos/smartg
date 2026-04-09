@@ -2356,7 +2356,7 @@ def refractivity(lam, P, T, co2):
     return Ntp
 
 
-def diff1(A, axis=0, samesize=True):
+def diff1(a, axis=0, samesize=True):
     """
     Calculate the first difference of an array along a specified axis.
     
@@ -2366,7 +2366,7 @@ def diff1(A, axis=0, samesize=True):
     
     Parameters
     ----------
-    A : ndarray
+    a : ndarray
         Input array for which to compute differences.
     axis : int, optional
         Axis along which differences are computed. Default is 0.
@@ -2379,27 +2379,27 @@ def diff1(A, axis=0, samesize=True):
     -------
     diff : ndarray
         Differences between consecutive elements along the specified axis.
-        If `samesize=True`, the result has the same shape as `A`.
-        If `samesize=False`, the result has shape ``A.shape[axis] - 1`` along
+        If `samesize=True`, the result has the same shape as `a`.
+        If `samesize=False`, the result has shape ``a.shape[axis] - 1`` along
         the specified axis.
     
     Examples
     --------
-    >>> A = np.array([[1, 2, 4, 8], [10, 20, 40, 80]])
-    >>> diff1(A, axis=0, samesize=True)
+    >>> a = np.array([[1, 2, 4, 8], [10, 20, 40, 80]])
+    >>> diff1(a, axis=0, samesize=True)
     array([[ 0,  0,  0,  0],
            [ 9, 18, 36, 72]])
-    >>> diff1(A, axis=0, samesize=False) # equivalent to np.diff(A, axis=0)
+    >>> diff1(a, axis=0, samesize=False) # equivalent to np.diff(a, axis=0)
     array([[ 9, 18, 36, 72]])
     """
     if samesize:
-        B = np.zeros_like(A)
-        key = [slice(None)]*A.ndim
+        b = np.zeros_like(a)
+        key = [slice(None)]*a.ndim
         key[axis] = slice(1, None, None)
-        B[tuple(key)] = np.diff(A, axis=axis)[:]
-        return B
+        b[tuple(key)] = np.diff(a, axis=axis)[:]
+        return b
     else:
-        return np.diff(A, axis=axis)
+        return np.diff(a, axis=axis)
  
 
 def od2k(prof, dataset, axis=1, zreverse=False):
