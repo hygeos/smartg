@@ -12,7 +12,7 @@ import os
 import numpy as np
 from datetime import datetime, timezone
 from numpy import pi
-from smartg.atmosphere import Atmosphere, od2k, BPlanck
+from smartg.atmosphere import Atmosphere, od2k, blackbody_radiance
 from smartg.water import IOP_base
 from warnings import warn
 from smartg.albedo import Albedo_cst, Albedo_speclib, Albedo_spectrum, Albedo_map
@@ -1657,7 +1657,7 @@ class Smartg(object):
             if (cell_proba == 'auto') and not self.back and self.thermal:
                 kabs = od2k(prof_atm, 'OD_abs_atm')
                 z = -prof_atm.axis('z_atm')
-                B = BPlanck(wl[:, None], prof_atm['T_atm'].data[None, :])
+                B = blackbody_radiance(wl[:, None], prof_atm['T_atm'].data[None, :])
                 Emission     = LUT(kabs * B, axes = [wl, z], names= ['wavelength','z_atm'])
                 Norm_Emission = (4*np.pi) * Emission.reduce(np.sum, 'z_atm')
                 P_Emission   = Emission * (4*np.pi) / Norm_Emission

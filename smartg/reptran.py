@@ -5,7 +5,7 @@
 from __future__ import print_function, division, absolute_import
 import numpy as np
 from luts.luts import LUT, MLUT
-from smartg.atmosphere import od2k, BPlanck
+from smartg.atmosphere import od2k, blackbody_radiance
 from pathlib import Path
 from scipy.integrate import quad, simpson
 from smartg.config import DIR_AUXDATA
@@ -53,7 +53,7 @@ def Reptran_Emission(mlut, ibands):
         for j,T in enumerate(mlut['T_atm'].data):
             lmin, lmax = wmin*1e-9, wmax*1e-9 # m
             dl         = wmax-wmin # nm
-            Avg_B[i,j] = quad(BPlanck, lmin, lmax, args=T)[0]/(dl)
+            Avg_B[i,j] = quad(blackbody_radiance, lmin, lmax, args=T)[0]/(dl)
     Emission = LUT(kabs * Avg_B[bsgroup, :], 
                axes = [mlut.axis('wavelength'), z], 
                names= ['wavelength','z_atm'])

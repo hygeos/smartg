@@ -2430,7 +2430,7 @@ def od2k(prof, dataset, axis=1, zreverse=False):
     return k[:,sl]
 
 
-def BPlanck(wav, T):
+def blackbody_radiance(wav, T):
     """
     Calculate the spectral blackbody radiance.
     
@@ -2461,13 +2461,13 @@ def BPlanck(wav, T):
     >>> from scipy.constants import speed_of_light, Planck, Boltzmann
     >>> wav = 10e-6  # 10 micrometers (thermal infrared)
     >>> T = 288.0    # 288 K (room temperature)
-    >>> L_b_wl = BPlanck(wav, T)
+    >>> L_b_wl = blackbody_radiance(wav, T)
     >>> print(f"Spectral radiance: {L_b_wl:.2e} W·m⁻³·sr⁻¹")
     
     >>> # Calculate for multiple wavelengths at a fixed temperature
     >>> wavelengths = np.array([0.5e-6, 1e-6, 10e-6]) # UV, NIR, TIR
     >>> T = 5778  # Sun's surface temperature
-    >>> L_b_wl = BPlanck(wavelengths, T)
+    >>> L_b_wl = blackbody_radiance(wavelengths, T)
     """
     c1 = 2.0*Planck*speed_of_light**2
     c2 = Planck*speed_of_light/Boltzmann
