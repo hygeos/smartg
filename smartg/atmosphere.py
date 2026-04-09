@@ -1711,22 +1711,22 @@ class AtmAFGL(Atmosphere):
         return pro_abs, pro_ray, (pro_aer, ssa_aer), (pro_iphase, pro_phases)
 
 
-def read_phase(filename, standard=False, kind='atm'):
+def read_phase_dat(filename, standard=False, kind='atm'):
     '''
     Read phase function from filename as a LUT
 
     standard: standard phase function definition, otherwise Smart-g definition
     '''
-    data2 = pd.read_csv(filename, sep=r'\s+', header=None)
+    df = pd.read_csv(filename, sep=r'\s+', header=None)
 
-    theta = np.array(data2[0])
-    pha   = np.array(data2[[1,2,3,4]])
+    theta = np.array(df[0])
+    pha   = np.array(df[[1,2,3,4]])
 
     if standard:
-        pha[:,0] = data2[1] + data2[2]
-        pha[:,1] = data2[1] - data2[2]
-        pha[:,2] = data2[3]
-        pha[:,3] = data2[4]
+        pha[:,0] = df[1] + df[2]
+        pha[:,1] = df[1] - df[2]
+        pha[:,2] = df[3]
+        pha[:,3] = df[4]
 
     # Normalization to Sum_-1_+1 P(mu) dmu = 2.
     f = (pha[:,0] + pha[:,1])/2.
@@ -1740,6 +1740,25 @@ def read_phase(filename, standard=False, kind='atm'):
            )
 
     return P
+
+
+def read_phase(filename, standard=False, kind='atm'):
+    """
+
+    """
+
+    filename = Path(filename)
+
+    if not filename.is_file():
+        raise FileNotFoundError(f"Phase function file not found: {filename}")
+
+    supported_formats = ['.dat']
+
+    if filename.suffix == '.dat':
+        return read_phase_dat(filename, standard=standard, kind=kind)
+    else:
+        raise ValueError(f"Unsupported phase function file format: " + \
+                         f"{filename.suffix}. Supported formats: {supported_formats}")
 
 
 class Profile_base(object):
