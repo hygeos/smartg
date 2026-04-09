@@ -2476,6 +2476,28 @@ def blackbody_radiance(wav, T):
 
 
 def get_aer_dist_integral(Z, H_min, H_max):
+    """
+    Compute the integral of exponential vertical distribution between two altitudes.
+    
+    Calculates the integral of an exponential distribution function over a vertical 
+    layer, used for computing the optical depth contribution of aerosols or clouds 
+    with a scale height Z between altitudes H_min and H_max.
+    
+    Parameters
+    ----------
+    Z : float or ndarray
+        Scale height in km. Defines the vertical distribution as N(h) = N(0)*exp(-h/Z).
+    H_min : float or ndarray
+        Minimum altitude in km (bottom of the layer).
+    H_max : float or ndarray
+        Maximum altitude in km (top of the layer).
+    
+    Returns
+    -------
+    float or ndarray
+        Integral of the exponential distribution between H_min and H_max, 
+        normalized by Z.
+    """
     return (-(Z)*np.exp(-H_max/Z) + (Z)*np.exp(-H_min/Z))
 
 
