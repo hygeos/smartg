@@ -1796,6 +1796,60 @@ def read_phase(filename, standard=False, kind='atm'):
                          f"{filename.suffix}. Supported formats: {supported_formats}")
 
 
+def read_phase_cdf(filename, kind='atm', normalize=True):
+    """
+    """
+
+    ds = xr.open_dataset(filename)
+
+    if 'hum' in ds.variables: 
+        rh_reff = ds["hum"].data
+        rh_or_reff = 'rh'
+    elif 'reff' in ds.variables:
+        rh_reff = ds["reff"].data
+        rh_or_reff = 'reff'
+    else:
+        raise Exception('Error')
+    
+    phase = ds["phase"][:, :, :, :].data
+
+    dtheta_min = np.nanmin(np.abs(np.diff(ds.theta.values, axis=3)))
+    ntheta = np.ceil(180 / dtheta_min).astype(int) + 1
+    ntheta = min(ntheta, 18001) # be sure to not exceed 18001
+    nphamat = ds.nphamat.size
+    n_rh_reff = rh_reff.size
+    nwl = ds["wavelen"].size
+    theta = np.linspace(0, 180, ntheta)
+    wl = ds["wavelen"].data*1e3
+
+    da_pha = xr.DataArray(np.zeros((nwl, n_rh_reff, 6, ntheta)), 
+                          coords=[wl, rh_reff, np.arange(6), theta],
+                          dims=['wavelength', rh_or_reff, 'nphamat', 'theta_'+kind],
+                          name='phase_'+kind)
+    
+    for iwav in range (0, nwl):
+        for irhreff in range(n_rh_reff):
+            for istk in range (nphamat):
+                nth = ds["ntheta"][iwav, irhreff, istk].data
+                th = ds["theta"][iwav, irhreff, istk, :].data
+                da_pha.data[iwav, irhreff, istk, :] = np.interp(theta, th[:nth], 
+                                                                phase[iwav,irhreff,istk,:nth],  
+                                                                period=np.inf)
+
+    if normalize:
+        for iwav in range (0, nwl):
+            for irhreff in range (0, n_rh_reff):
+                f = da_pha.data[iwav,irhreff,0,:]
+                mu= np.cos(np.radians(theta))
+                Norm = np.trapezoid(f,-mu)
+                da_pha.data[iwav,irhreff,:,:] *= 2./abs(Norm)
+    
+    # libRadtran cdf file use (I,Q,U,V) Stokes convention, we convert to Ipar/Iper convention
+    da_pha[:,:,:,:] = convert_phase_to_iparper(da_pha.values)
+
+    return da_pha
+
+
 class Profile_base(object):
     """
     Atmospheric profile with physical properties.
