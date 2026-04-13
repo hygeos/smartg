@@ -1,0 +1,153 @@
+# =============================================================================
+# Workflow: Automatic publishing to PyPI
+# =============================================================================
+# This workflow is triggered when a tag (e.g. v1.2.0) is pushed.
+# It checks that only the authorized user pushed the tag,
+# then builds the Python package and publishes it to PyPI.
+#
+# Prerequisites:
+#   - Configure a "Trusted Publisher" on pypi.org for this GitHub repository.
+#     (PyPI project Settings > Publishing > Add a new publisher)
+#     with: owner = <org/user>, repo = <repo>, workflow = push_pypi.yml,
+#           environment = pypi
+# =============================================================================
+
+name: Publish to PyPI
+
+# ---------------------------------------------------------------------------
+# Trigger: the workflow runs when a tag starting with "v" is pushed
+# (e.g. v1.0.0, v2.3.1, etc.)
+# ---------------------------------------------------------------------------
+on:
+  push:
+    tags:
+      - "v*"   # Filter on version-like tags (v1.0.0, v1.2.3, etc.)
+
+# ---------------------------------------------------------------------------
+# Workflow jobs
+# ---------------------------------------------------------------------------
+jobs:
+
+  # ==========================================================================
+  # Job 1: Build the Python package
+  # ==========================================================================
+  build:
+    name: "Build package"
+
+    # Run this job ONLY if the authorized user triggered the workflow
+    # (i.e. the user who pushed the tag).
+    if: github.actor == 'Mustapha-hygeos'
+
+    runs-on: ubuntu-latest
+
+    steps:
+      # ----------------------------------------------------------------------
+      # Step 1: Checkout the source code
+      # "checkout" clones the repository into the GitHub runner environment.
+      # We fetch all branches so we can check if the tag belongs to master.
+      # ----------------------------------------------------------------------
+      - name: Checkout source code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # Fetch full history (needed to check branch ancestry)
+
+      # ----------------------------------------------------------------------
+      # Step 2: Verify the tag is on the master branch
+      # "git branch --contains" lists all branches that contain the tagged
+      # commit. We check that "master" is among them. If not, the workflow
+      # stops here with an error.
+      # ----------------------------------------------------------------------
+      - name: Verify tag is on master branch
+        run: |
+          if ! git branch -r --contains "${{ github.sha }}" | grep -q 'origin/master'; then
+            echo "::error::Tag ${{ github.ref_name }} is not on the master branch. Aborting."
+            exit 1
+          fi
+          echo "Tag ${{ github.ref_name }} is on master branch. Proceeding."
+
+      # ----------------------------------------------------------------------
+      # Step 3: Set up Python
+      # Install the desired Python version on the runner.
+      # ----------------------------------------------------------------------
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # ----------------------------------------------------------------------
+      # Step 3: Install build tools
+      # - build: standard tool to build Python packages
+      #          (generates the sdist .tar.gz and the wheel .whl)
+      # ----------------------------------------------------------------------
+      - name: Install build tools
+        run: python -m pip install --upgrade pip build
+
+      # ----------------------------------------------------------------------
+      # Step 4: Build the package
+      # "python -m build" reads pyproject.toml and produces:
+      #   - dist/smartg-x.y.z.tar.gz          (source distribution)
+      #   - dist/smartg-x.y.z-py3-none-any.whl (wheel / binary distribution)
+      # ----------------------------------------------------------------------
+      - name: Build package (sdist + wheel)
+        run: python -m build
+
+      # ----------------------------------------------------------------------
+      # Step 5: Upload build artifacts
+      # Store the contents of the dist/ folder so they are available to the
+      # next job (publish). Artifacts are retained for 1 day.
+      # ----------------------------------------------------------------------
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+          retention-days: 1
+
+  # ==========================================================================
+  # Job 2: Publish to PyPI
+  # ==========================================================================
+  publish:
+    name: "Publish to PyPI"
+
+    # This job runs only after the "build" job succeeds
+    needs: build
+
+    runs-on: ubuntu-latest
+
+    # -----------------------------------------------------------------------
+    # GitHub environment "pypi"
+    # This environment must be created in the repo's Settings > Environments.
+    # It enables Trusted Publishing (OIDC) with PyPI, which removes the need
+    # to store an API token in the repository secrets.
+    # -----------------------------------------------------------------------
+    environment:
+      name: pypi
+      url: https://pypi.org/p/smartg
+
+    # -----------------------------------------------------------------------
+    # OIDC permissions
+    # "id-token: write" is required so GitHub can generate an OIDC token
+    # that will be validated by PyPI (Trusted Publishing).
+    # -----------------------------------------------------------------------
+    permissions:
+      id-token: write
+
+    steps:
+      # ----------------------------------------------------------------------
+      # Step 1: Download build artifacts from the "build" job
+      # Retrieves the .tar.gz and .whl files into dist/
+      # ----------------------------------------------------------------------
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      # ----------------------------------------------------------------------
+      # Step 2: Publish to PyPI
+      # The official pypa/gh-action-pypi-publish action uses
+      # Trusted Publishing (OIDC): no API token needed.
+      # It automatically uploads all files from the dist/ folder to PyPI.
+      # ----------------------------------------------------------------------
+      - name: Publish to PyPI via Trusted Publishing
+        uses: pypa/gh-action-pypi-publish@release/v1
