@@ -1844,6 +1844,15 @@ def read_phase_cdf(filename, standard=True,
             "parameter (float or 1-D array) "
             f"to select/interpolate the desired {rh_or_reff} value(s)."
         )
+    if n_rh_reff > 1 and (not np.isscalar(z_rh_reff)):
+        z_rh_reff_arr = np.atleast_1d(z_rh_reff)
+        pfgrid_arr = np.atleast_1d(pfgrid)
+        if z_rh_reff_arr.size != pfgrid_arr.size - 1:
+            raise ValueError(
+                "Invalid 'z_rh_reff' size: when 'z_rh_reff' is a 1-D array, "
+                "its size must be len(pfgrid) - 1. "
+                f"Got len(z_rh_reff)={z_rh_reff_arr.size} and len(pfgrid)={pfgrid_arr.size}."
+            )
 
     da_pha = xr.DataArray(np.zeros((nwl, n_rh_reff, 6, ntheta)), 
                           coords=[wl, rh_reff, np.arange(6), theta],
