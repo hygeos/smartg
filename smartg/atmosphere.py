@@ -1744,7 +1744,7 @@ class AtmAFGL(Atmosphere):
         return pro_abs, pro_ray, (pro_aer, ssa_aer), (pro_iphase, pro_phases)
 
 
-def read_phase_dat(filename, standard=False, kind='atm'):
+def read_phase_dat(filename, standard=False, kind='atm', normalize=True):
     '''
     Read phase function from filename as a LUT
 
@@ -1757,30 +1757,25 @@ def read_phase_dat(filename, standard=False, kind='atm'):
 
     theta = df.iloc[:, 0].values
     pha = df.iloc[:, 1:].values
+    pha = pha.swapaxes(0, 1)
+
+    if normalize:
+        f = pha[0,:] # P11 term
+        mu= np.cos(np.radians(theta))
+        Norm = np.trapezoid(f,-mu)
+        pha *= (2./abs(Norm))
+
+    if standard: pha = convert_phase_to_iparper(pha)
+
+    da_pha = xr.DataArray(pha, 
+                          coords=[np.arange(6), theta],
+                          dims=['stk', 'theta_'+kind],
+                          name='phase_'+kind)
+
+    return da_pha
 
 
-
-    if standard:
-        pha[:,0] = df[1] + df[2]
-        pha[:,1] = df[1] - df[2]
-        pha[:,2] = df[3]
-        pha[:,3] = df[4]
-
-    # Normalization to Sum_-1_+1 P(mu) dmu = 2.
-    f = (pha[:,0] + pha[:,1])/2.
-    mu= np.cos(np.radians(theta))
-    Norm = np.trapezoid(f,-mu)
-    pha *= (2./abs(Norm))
-
-    P = LUT(pha.swapaxes(0, 1),  # stk, theta
-            axes=[None, theta],
-            names=['stk', 'theta_'+kind],
-           )
-
-    return P
-
-
-def read_phase(filename, standard=False, kind='atm'):
+def read_phase(filename, standard=False, kind='atm', normalize=True):
     """
 
     """
@@ -1793,7 +1788,7 @@ def read_phase(filename, standard=False, kind='atm'):
     supported_formats = ['.dat']
 
     if filename.suffix == '.dat':
-        return read_phase_dat(filename, standard=standard, kind=kind)
+        return read_phase_dat(filename, standard=standard, kind=kind, normalize=normalize)
     else:
         raise ValueError(f"Unsupported phase function file format: " + \
                          f"{filename.suffix}. Supported formats: {supported_formats}")
