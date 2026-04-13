@@ -1803,6 +1803,97 @@ def read_phase_cdf(filename, standard=True,
                    kind='atm', normalize=True, ntheta_max=18001,
                    pfwav=None, pfgrid=None, z_rh_reff=None):
     """
+    Read and process phase function data from libRadtran NetCDF aerosol/cloud files.
+
+    Loads phase matrix data from libRadtran aerosol and cloud phase function files
+    with .cdf suffix (e.g., 'ssam.mie.cdf', 'wc.sol.mie.cdf'). Handles non-uniform
+    theta grids from libRadtran by resampling to a uniform scattering angle grid.
+    Supports wavelength and humidity/effective radius interpolation, normalization,
+    and conversion to the Iparper convention. Produces phase function data ready for
+    SMART-G's AerOPAC/Cloud phase parameter.
+
+    Parameters
+    ----------
+    filename : str | Path
+        Path to a libRadtran phase function NetCDF file (suffix: .cdf).
+        Examples: 'ssam.mie.cdf', 'wc.sol.mie.cdf', 'cloud.water.cdf'.
+        
+        The file must include variables:
+        - 'phase': phase matrix data [wavelength, rh/reff, nphamat, theta]
+        - 'wavelen': wavelength values (in micrometers)
+        - 'theta': scattering angle grids (non-uniform, varies per entry)
+        - 'ntheta': number of valid theta values per entry
+        - 'nphamat': number of Stokes matrix elements (typically 6)
+        - 'hum' or 'reff': relative humidity (%) or effective radius values
+
+    standard : bool, optional
+        If True, input phase matrices are assumed to follow the standard Stokes
+        vector convention (I, Q, U, V). In this case, the phase matrix is
+        converted to the SMART-G convention using ``convert_phase_to_iparper``.
+        Default: True
+
+    kind : str, optional
+        Medium label used in the theta dimension name ('theta_' + kind).
+        Accepted values are:
+        - 'atm' for atmosphere
+        - 'oc' for ocean
+        Default: 'atm'
+
+    normalize : bool, optional
+        If True, normalize the phase matrix P11 term such that the integral 
+        over all angles equals 2.
+
+    ntheta_max : int, optional
+        Maximum number of scattering angle points to use. If the file provides
+        higher resolution, it will be reduced to this limit.
+        Default: 18001
+
+    pfwav : float or array-like, optional
+        Wavelength(s) (in micrometers) to interpolate to. Required if the file
+        contains multiple wavelengths (nwl > 1).
+        This parameter has the same meaning as ``pfwav`` in the ``AtmAFGL``
+        constructor.
+        Default: None
+
+    pfgrid : array-like, optional
+        Altitude grid [z_top, z_1, z_2, ..., z_bottom] (in km, descending order) for
+        altitude-dependent phase functions. If provided with n_rh_reff > 1, the
+        z_rh_reff values will be interpolated onto this grid. The first element
+        (z_top) is skipped; remaining elements define the z_phase coordinate.
+        This parameter has the same meaning as ``pfgrid`` in the ``AtmAFGL``
+        constructor.
+        Default: None
+
+    z_rh_reff : float or array-like, optional
+        Interpolation target for the second phase-function axis:
+        - aerosol files: relative humidity (%)
+        - cloud files: effective radius (reff)
+        Required if the file contains multiple rh/reff values (n_rh_reff > 1).
+        If array-like (1-D), pfgrid must also be provided to map these values
+        to specific altitudes, and ``len(z_rh_reff)`` must equal
+        ``len(pfgrid) - 1``.
+        Default: None
+
+    Returns
+    -------
+    xr.DataArray
+        Phase matrix as xarray DataArray with dimensions:
+        - 'wav_phase': wavelength (in nm) [or removed if size=1]
+        - 'z_phase': altitude (in km) from pfgrid or [0.] [or removed if size=1]
+        - 'stk': Stokes matrix element index (0-5)
+        - 'theta_'+kind: scattering angle (in degrees)
+
+        Coordinates are replaced/renamed such that the rh/reff dimension
+        becomes 'z_phase' with values from pfgrid[1:] or [0.] if pfgrid is None.
+
+    Examples
+    --------
+    Read phase function for a single wavelength and rh value:
+
+    >>> pha = read_phase_cdf('ssam.mie.cdf', pfwav=550.0, z_rh_reff=[70.0, 60., 58.],
+        ...                  pfgrid=[100., 50., 10., 0.], normalize=True)
+    >>> pha.shape
+    (1, 3, 6, 18001)  # (wav_phase, z_phase, stk, theta_atm)
     """
 
     ds = xr.open_dataset(filename)
