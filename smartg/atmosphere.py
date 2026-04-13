@@ -174,7 +174,11 @@ class AerOPAC(object):
         if (np.isscalar(w_ref) or
             (isinstance(w_ref, np.ndarray) and w_ref.ndim == 0) ) : self.w_ref = np.array([w_ref])
         else                                                      : self.w_ref = np.array(w_ref)
-        self._phase = phase
+        
+        if isinstance(phase, xr.DataArray):
+            self._phase = LUT(phase.data, names=phase.dims, axes=[phase.coords[dim].values for dim in phase.dims])
+        else:
+            self._phase = phase
 
         if ssa is None : self.ssa = None
         else           :
@@ -692,7 +696,10 @@ class Cloud(AerOPAC):
             self.H_max.append(zmax)
             self.Z_sh.append(1e6) # constant dist
 
-        self._phase = phase
+        if isinstance(phase, xr.DataArray):
+            self._phase = LUT(phase.data, names=phase.dims, axes=[phase.coords[dim].values for dim in phase.dims])
+        else:
+            self._phase = phase
 
     @staticmethod
     def list():
