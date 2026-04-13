@@ -1801,7 +1801,7 @@ def read_phase(filename, standard=False, kind='atm'):
 
 def read_phase_cdf(filename, standard=True,
                    kind='atm', normalize=True, ntheta_max=18001,
-                   pfwav=None, pfgrid=None, z_rh=None):
+                   pfwav=None, pfgrid=None, z_rh_reff=None):
     """
     """
 
@@ -1827,9 +1827,27 @@ def read_phase_cdf(filename, standard=True,
     theta = np.linspace(0, 180, ntheta)
     wl = ds["wavelen"].data*1e3
 
+    # checks at the beginning to avoid unnecessary computations
+    if nwl > 1 and pfwav is None:
+        raise ValueError( 
+            "Phase function file contains more than 1 wavelength. "
+            "Please provide the 'pfwav' parameter (float or 1-D array) "
+            "to select/interpolate the desired wavelength(s)."
+            )
+    if (  n_rh_reff > 1 and 
+          ( z_rh_reff is None or 
+            (not np.isscalar(z_rh_reff) and pfgrid is None ) )  ):
+        raise ValueError(
+            f"Phase function file contains more than 1 {rh_or_reff} value. "
+            "Please provide the 'z_rh_reff' parameter (float or 1-D array). "
+            "If 'z_rh_reff' is a 1-D array, also provide the 'pfgrid' "
+            "parameter (float or 1-D array) "
+            f"to select/interpolate the desired {rh_or_reff} value(s)."
+        )
+
     da_pha = xr.DataArray(np.zeros((nwl, n_rh_reff, 6, ntheta)), 
                           coords=[wl, rh_reff, np.arange(6), theta],
-                          dims=['wavelength', rh_or_reff, 'stk', 'theta_'+kind],
+                          dims=['wav_phase', rh_or_reff, 'stk', 'theta_'+kind],
                           name='phase_'+kind)
     
     for iwav in range (0, nwl):
@@ -1851,8 +1869,26 @@ def read_phase_cdf(filename, standard=True,
     
     if standard : da_pha[:,:,:,:] = convert_phase_to_iparper(da_pha.values)
 
-    if da_pha.sizes['wavelength'] == 1 and da_pha.sizes[rh_or_reff] == 1:
-        da_pha = da_pha.squeeze(['wavelength', rh_or_reff], drop=True)
+    if nwl > 1:
+        pfwav = np.atleast_1d(pfwav).astype(float)
+        da_pha = da_pha.interp(wav_phase=pfwav)
+
+    if n_rh_reff > 1:
+        z_rh_reff = np.atleast_1d(z_rh_reff).astype(np.float32)
+        da_pha = da_pha.interp({rh_or_reff: z_rh_reff}, kwargs={'bounds_error': True})
+
+    if pfgrid is None: z_phase = np.array([0.], dtype=float)
+    else: z_phase = np.atleast_1d(pfgrid).astype(np.float32)[1:]
+    
+    if da_pha.sizes[rh_or_reff] != z_phase.size:
+        raise ValueError(
+            f"Cannot replace '{rh_or_reff}' with 'z_phase': size mismatch "
+            f"({da_pha.sizes[rh_or_reff]} vs {z_phase.size})."
+        )
+    da_pha = da_pha.assign_coords({rh_or_reff: z_phase}).rename({rh_or_reff: 'z_phase'})
+
+    if da_pha.sizes['wav_phase'] == 1 and da_pha.sizes['z_phase'] == 1:
+        da_pha = da_pha.squeeze(['wav_phase', 'z_phase'], drop=True)
 
     return da_pha
 
