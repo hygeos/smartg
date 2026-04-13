@@ -103,7 +103,7 @@ class AerOPAC(object):
         Phase matrix F as function of wavelength, altitude, stoke components and scattering angle    
         The variable names must be:  
         If 4-D matrix -> wav_phase, z_phase, stk, theta  
-        If 2-D matrix (assumed monochromatic and contant vertically) -> stk, theta   
+        If 2-D matrix (assumed monochromatic and constant vertically) -> stk, theta   
         Where:  
         - wav_phase is the wavelength. It must be equal to the `pfwav` parameter of AtmAFGL  
           if defined, else `wav` parameter vavelengths of the AtmAFGL calc method.
@@ -1748,6 +1748,9 @@ def read_phase_dat(filename, standard=False, kind='atm'):
     '''
     Read phase function from filename as a LUT
 
+    only monochromatique phase.
+    and assumed to be the same for all altitudes (i.e. no wavelength or altitude dependence)
+
     standard: standard phase function definition, otherwise Smart-g definition
     '''
     df = pd.read_csv(filename, sep=r'\s+', header=None)
@@ -1796,7 +1799,9 @@ def read_phase(filename, standard=False, kind='atm'):
                          f"{filename.suffix}. Supported formats: {supported_formats}")
 
 
-def read_phase_cdf(filename, kind='atm', normalize=True):
+def read_phase_cdf(filename, standard=True,
+                   kind='atm', normalize=True, ntheta_max=18001,
+                   pfwav=None, pfgrid=None, z_rh=None):
     """
     """
 
@@ -1815,7 +1820,7 @@ def read_phase_cdf(filename, kind='atm', normalize=True):
 
     dtheta_min = np.nanmin(np.abs(np.diff(ds.theta.values, axis=3)))
     ntheta = np.ceil(180 / dtheta_min).astype(int) + 1
-    ntheta = min(ntheta, 18001) # be sure to not exceed 18001
+    ntheta = min(ntheta, ntheta_max) # be sure to not exceed ntheta_max
     nphamat = ds.nphamat.size
     n_rh_reff = rh_reff.size
     nwl = ds["wavelen"].size
@@ -1824,7 +1829,7 @@ def read_phase_cdf(filename, kind='atm', normalize=True):
 
     da_pha = xr.DataArray(np.zeros((nwl, n_rh_reff, 6, ntheta)), 
                           coords=[wl, rh_reff, np.arange(6), theta],
-                          dims=['wavelength', rh_or_reff, 'nphamat', 'theta_'+kind],
+                          dims=['wavelength', rh_or_reff, 'stk', 'theta_'+kind],
                           name='phase_'+kind)
     
     for iwav in range (0, nwl):
@@ -1844,8 +1849,10 @@ def read_phase_cdf(filename, kind='atm', normalize=True):
                 Norm = np.trapezoid(f,-mu)
                 da_pha.data[iwav,irhreff,:,:] *= 2./abs(Norm)
     
-    # libRadtran cdf file use (I,Q,U,V) Stokes convention, we convert to Ipar/Iper convention
-    da_pha[:,:,:,:] = convert_phase_to_iparper(da_pha.values)
+    if standard : da_pha[:,:,:,:] = convert_phase_to_iparper(da_pha.values)
+
+    if da_pha.sizes['wavelength'] == 1 and da_pha.sizes[rh_or_reff] == 1:
+        da_pha = da_pha.squeeze(['wavelength', rh_or_reff], drop=True)
 
     return da_pha
 
