@@ -174,9 +174,14 @@ class AerOPAC(object):
         if (np.isscalar(w_ref) or
             (isinstance(w_ref, np.ndarray) and w_ref.ndim == 0) ) : self.w_ref = np.array([w_ref])
         else                                                      : self.w_ref = np.array(w_ref)
-        
+
         if isinstance(phase, xr.DataArray):
-            self._phase = LUT(phase.data, names=phase.dims, axes=[phase.coords[dim].values for dim in phase.dims])
+            with TemporaryDirectory() as tmpdir:
+                ftmp = Path(tmpdir) / 'phase_tmp.nc'
+                phase.to_netcdf(ftmp)
+                phase_tmp = read_mlut(ftmp)
+                phase_tmp = phase_tmp[phase_tmp.datasets()[0]]
+                self._phase = phase_tmp
         else:
             self._phase = phase
 
@@ -697,7 +702,12 @@ class Cloud(AerOPAC):
             self.Z_sh.append(1e6) # constant dist
 
         if isinstance(phase, xr.DataArray):
-            self._phase = LUT(phase.data, names=phase.dims, axes=[phase.coords[dim].values for dim in phase.dims])
+            with TemporaryDirectory() as tmpdir:
+                ftmp = Path(tmpdir) / 'phase_tmp.nc'
+                phase.to_netcdf(ftmp)
+                phase_tmp = read_mlut(ftmp)
+                phase_tmp = phase_tmp[phase_tmp.datasets()[0]]
+                self._phase = phase_tmp
         else:
             self._phase = phase
 
@@ -1775,7 +1785,7 @@ def read_phase_dat(filename, standard=False, kind='atm', normalize=True):
     if standard: pha = convert_phase_to_iparper(pha)
 
     da_pha = xr.DataArray(pha, 
-                          coords=[np.arange(6), theta],
+                          coords=[np.arange(pha.shape[0]), theta],
                           dims=['stk', 'theta_'+kind],
                           name='phase_'+kind)
 
