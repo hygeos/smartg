@@ -1864,7 +1864,7 @@ def read_phase_cdf(filename, standard=True,
         Phase matrix as xarray DataArray with dimensions:
         - 'wav_phase': wavelength (in nm) [or removed if size=1]
         - 'z_phase': altitude (in km) from pfgrid or [0.] [or removed if size=1]
-        - 'stk': Stokes matrix element index (0-5)
+        - 'stk': phase matrix unique terms (0 to nphamat-1)
         - 'theta_'+kind: scattering angle (in degrees)
 
         Coordinates are replaced/renamed such that the rh/reff dimension
@@ -3088,7 +3088,7 @@ def artdeco_to_smartg_cld(input_path, output_path=None, h5_group=None, normalize
         
         - reff: effective radius
         - wav: wavelength (nm)
-        - stk: Stokes components (4 or 6 terms)
+        - stk: phase matrix unique terms (4 or 6)
         - theta: scattering angle (degrees)
         
         And datasets:
