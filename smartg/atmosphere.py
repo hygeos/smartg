@@ -418,16 +418,6 @@ class AerOPAC(object):
             - nphamat = 4 for spherical particles only (phase matrix unique terms P11, P21, P33, P34)
             - nphamat = 6 for spherical and non-spherical particles (additional phase matrix unique terms P22, P44)
             - theta_atm: scattering angles from 0° to 180°
-            
-        Notes
-        -----
-        **AerOPAC only (aerosols):** The method handles vertical averaging based on the input altitude profile Z 
-        and the defined aerosol layer altitudes (mixture, free troposphere, stratosphere). 
-        If the provided Z profile has a resolution such that multiple input layers fall within 
-        a single internal zgrid interval, the phase matrix is averaged across those layers 
-        according to the vertical distribution of aerosols in each of the three stratospheric 
-        layers (mixture, free troposphere, and stratosphere). This ensures proper vertical 
-        integration when the requested altitude resolution is coarser than the internal grid.
         """
 
         if self._phase is not None:
