@@ -1742,7 +1742,7 @@ class AtmAFGL(Atmosphere):
         return pro_abs, pro_ray, (pro_aer, ssa_aer), (pro_iphase, pro_phases)
 
 
-def read_phase_dat(filename, standard=False, kind='atm', normalize=True):
+def read_phase_dat(filename, kind='atm', normalize=True):
     '''
     Read phase function from filename as a LUT
 
@@ -1762,8 +1762,6 @@ def read_phase_dat(filename, standard=False, kind='atm', normalize=True):
         mu= np.cos(np.radians(theta))
         Norm = np.trapezoid(f,-mu)
         pha *= (2./abs(Norm))
-
-    if standard: pha = convert_phase_to_iparper(pha)
 
     da_pha = xr.DataArray(pha, 
                           coords=[np.arange(pha.shape[0]), theta],
@@ -1801,9 +1799,8 @@ def read_phase_cdf(filename, standard=True,
     Loads phase matrix data from libRadtran aerosol and cloud phase function files
     with .cdf suffix (e.g., 'ssam.mie.cdf', 'wc.sol.mie.cdf'). Handles non-uniform
     theta grids from libRadtran by resampling to a uniform scattering angle grid.
-    Supports wavelength and humidity/effective radius interpolation, normalization,
-    and conversion to the Iparper convention. Produces phase function data ready for
-    SMART-G's AerOPAC/Cloud phase parameter.
+    Supports wavelength and humidity/effective radius interpolation and normalization.
+    Produces phase function data ready for SMART-G's AerOPAC/Cloud phase parameter.
 
     Parameters
     ----------
@@ -1818,12 +1815,6 @@ def read_phase_cdf(filename, standard=True,
         - 'ntheta': number of valid theta values per entry
         - 'nphamat': number of Stokes matrix elements (typically 6)
         - 'hum' or 'reff': relative humidity (%) or effective radius values
-
-    standard : bool, optional
-        If True, input phase matrices are assumed to follow the standard Stokes
-        vector convention (I, Q, U, V). In this case, the phase matrix is
-        converted to the SMART-G convention using ``convert_phase_to_iparper``.
-        Default: True
 
     kind : str, optional
         Medium label used in the theta dimension name ('theta_' + kind).
@@ -1959,8 +1950,6 @@ def read_phase_cdf(filename, standard=True,
                 mu= np.cos(np.radians(theta))
                 Norm = np.trapezoid(f,-mu)
                 da_pha.data[iwav,irhreff,:,:] *= 2./abs(Norm)
-    
-    if standard : da_pha[:,:,:,:] = convert_phase_to_iparper(da_pha.values)
 
     if nwl > 1:
         pfwav = np.atleast_1d(pfwav).astype(float)
