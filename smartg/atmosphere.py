@@ -1743,14 +1743,44 @@ class AtmAFGL(Atmosphere):
 
 
 def read_phase_dat(filename, kind='atm', normalize=True):
-    '''
-    Read phase function from filename as a LUT
+    """
+    Read a phase matrix from a space-separated `.dat` file.
 
-    only monochromatique phase.
-    and assumed to be the same for all altitudes (i.e. no wavelength or altitude dependence)
+    The file is expected to have no header. The first column contains the
+    scattering angles (in degrees), and the remaining columns contain the
+    phase matrix elements (one column per element). The phase matrix is
+    assumed to be monochromatic and vertically uniform (no wavelength or
+    altitude dependence).
 
-    standard: standard phase function definition, otherwise Smart-g definition
-    '''
+    Parameters
+    ----------
+    filename : str or Path
+        Path to the `.dat` phase function file.
+    kind : str, optional
+        Medium label used in the theta dimension name ('theta_' + kind).
+        Accepted values are:
+        - 'atm' for atmosphere
+        - 'oc' for ocean
+        Default: 'atm'
+    normalize : bool, optional
+        If True, normalize the phase matrix P11 term such that the integral
+        over all angles equals 2.
+        Default: True.
+
+    Returns
+    -------
+    xr.DataArray
+        Phase matrix with dimensions:
+
+        - ``'stk'`` : phase matrix element index (0 to nphamat-1)
+        - ``'theta_' + kind`` : scattering angle in degrees
+
+    Examples
+    --------
+    >>> pha = read_phase_dat('phase.dat', kind='atm', normalize=True)
+    >>> pha.dims
+    ('stk', 'theta_atm')
+    """
     df = pd.read_csv(filename, sep=r'\s+', header=None)
 
     theta = df.iloc[:, 0].values
