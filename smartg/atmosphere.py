@@ -432,25 +432,16 @@ class AerOPAC(object):
 
         if self._phase is not None:
             if self._phase.ndim == 2:
-                # convert to 4-dim by inserting empty dimensions wav_phase
-                # and z_phase
+                # convert to 4-dim by inserting empty dimensions wav_phase and z_phase
                 assert self._phase.names == ['stk', 'theta_atm']
-
-                if conv_Iparper: pha_ = convert_phase_to_iparper(self._phase.data[:,:])
-                else: pha_ = self._phase.data[:,:]
+                pha_ = self._phase.data[:,:]
                 pha = LUT(pha_[None,None,:,:],
                           names = ['wav_phase', 'z_phase'] + self._phase.names,
                           axes = [np.array([wav[0]]), np.array([0.])] + self._phase.axes,
                          )
-
                 return pha
             else:
-                if conv_Iparper:
-                    pha_ = convert_phase_to_iparper(self._phase.data[:,:,:,:]) # be careful, if nstk=4 convert to nstk=6
-                    pha = LUT(pha_,names = self._phase.names,axes = self._phase.axes)
-                    return pha
-                else:
-                    return self._phase
+                return self._phase
 
         theta = np.linspace(0., 180., num=NBTHETA)
         lam_tabulated = np.array(self.mixture.axis('wav'))
