@@ -1817,7 +1817,7 @@ def read_phase_nc(filename,
     --------
     Read phase function for a single wavelength and rh value:
 
-    >>> pha = read_phase_nc('aerosol.nc', pfwav=550.0, z_rh_reff=[70.0, 60., 58.],
+    >>> pha = read_phase_nc('desert_sol.nc', pfwav=550.0, z_rh_reff=[70.0, 60., 58.],
     ...                     pfgrid=[100., 50., 10., 0.], normalize=True)
     >>> pha.shape
     (1, 3, 6, 721)  # (wav_phase, z_phase, stk, theta_atm)
@@ -2125,7 +2125,61 @@ def read_phase_cdf(filename,
 
 def read_phase(filename, kind='atm', normalize=True, **kwargs):
     """
+    Read phase function data from a file and dispatch to the proper reader.
 
+    This convenience function selects the backend according to the file suffix:
+
+    - ``.dat`` -> :func:`read_phase_dat`
+    - ``.nc`` -> :func:`read_phase_nc`
+    - ``.cdf`` -> :func:`read_phase_cdf`
+
+    Parameters
+    ----------
+    filename : str | Path
+        Path to a phase function file. Supported formats are ``.dat``, ``.nc``,
+        and ``.cdf``.
+
+    kind : str, optional
+        Medium label used in the theta dimension name ('theta_' + kind).
+        Accepted values are:
+        - 'atm' for atmosphere
+        - 'oc' for ocean
+        Default: 'atm'
+
+    normalize : bool, optional
+        If True, normalize the phase matrix P11 term such that the integral
+        over all angles equals 2.
+        Default: True
+
+    **kwargs : dict, optional
+        Additional keyword arguments forwarded to the selected backend reader:
+
+        - for ``.nc``: forwarded to :func:`read_phase_nc`
+        - for ``.cdf``: forwarded to :func:`read_phase_cdf`
+
+        Typical arguments include ``pfwav``, ``pfgrid``, ``z_rh_reff``, and
+        ``ntheta_max`` (only for ``.cdf``).
+
+    Returns
+    -------
+    xr.DataArray
+        Phase matrix data as returned by the selected backend reader.
+        Depending on input format and interpolation options, dimensions are
+        typically one of:
+
+        - ``('stk', 'theta_' + kind)``
+        - ``('wav_phase', 'z_phase', 'stk', 'theta_' + kind)``
+
+    Examples
+    --------
+    >>> pha = read_phase('phase.dat', kind='atm', normalize=True)
+    >>> pha = read_phase('desert_sol.nc', kind='atm', pfwav=550.0,
+    ...                  z_rh_reff=[70.0, 60.0, 58.0],
+    ...                  pfgrid=[100.0, 50.0, 10.0, 0.0])
+    >>> pha = read_phase('ssam.mie.cdf', kind='atm', pfwav=550.0,
+    ...                  z_rh_reff=[70.0, 60.0, 58.0],
+    ...                  pfgrid=[100.0, 50.0, 10.0, 0.0],
+    ...                  ntheta_max=18001)
     """
 
     filename = Path(filename)
