@@ -1758,10 +1758,10 @@ def read_phase_dat(filename, kind='atm', normalize=True):
     pha = pha.swapaxes(0, 1)
 
     if normalize:
+        mu = np.cos(np.deg2rad(theta))
+        idmu = np.argsort(mu)
         f = pha[0,:] # P11 term
-        mu= np.cos(np.radians(theta))
-        Norm = np.trapezoid(f,-mu)
-        pha *= (2./abs(Norm))
+        pha = (2.*pha) / np.trapezoid(f[idmu],mu[idmu])
 
     da_pha = xr.DataArray(pha, 
                           coords=[np.arange(pha.shape[0]), theta],
@@ -1944,12 +1944,13 @@ def read_phase_cdf(filename, standard=True,
                                                                 period=np.inf)
 
     if normalize:
+        mu = np.cos(np.deg2rad(theta))
+        idmu = np.argsort(mu)
         for iwav in range (0, nwl):
             for irhreff in range (0, n_rh_reff):
-                f = da_pha.data[iwav,irhreff,0,:]
-                mu= np.cos(np.radians(theta))
-                Norm = np.trapezoid(f,-mu)
-                da_pha.data[iwav,irhreff,:,:] *= 2./abs(Norm)
+                f = da_pha.data[iwav,irhreff,0,:] # P11 term
+                norm = np.trapezoid(f[idmu],mu[idmu])
+                da_pha.data[iwav,irhreff,:,:] *= 2./abs(norm)
 
     if nwl > 1:
         pfwav = np.atleast_1d(pfwav).astype(float)
