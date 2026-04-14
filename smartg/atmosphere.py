@@ -2123,7 +2123,7 @@ def read_phase_cdf(filename,
     return da_pha
 
 
-def read_phase(filename, kind='atm', normalize=True):
+def read_phase(filename, kind='atm', normalize=True, **kwargs):
     """
 
     """
@@ -2133,10 +2133,14 @@ def read_phase(filename, kind='atm', normalize=True):
     if not filename.is_file():
         raise FileNotFoundError(f"Phase function file not found: {filename}")
 
-    supported_formats = ['.dat']
+    supported_formats = ['.dat', '.nc', '.cdf']
 
     if filename.suffix == '.dat':
         return read_phase_dat(filename, kind=kind, normalize=normalize)
+    elif filename.suffix == '.nc':
+        return read_phase_nc(filename, kind=kind, normalize=normalize, **kwargs)
+    elif filename.suffix == '.cdf':
+        return read_phase_cdf(filename, kind=kind, normalize=normalize, **kwargs)
     else:
         raise ValueError(f"Unsupported phase function file format: " + \
                          f"{filename.suffix}. Supported formats: {supported_formats}")
