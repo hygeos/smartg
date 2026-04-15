@@ -258,26 +258,26 @@ class IOP(IOP_base):
         pha = np.zeros((nwav, nz, NPSTK, self.NANG), dtype='float64')
         r1 = ((self.Bp - 0.002)/0.028)[:,:,None]
 
-        pha[:,:,0,:] = 0.5*(r1*ff1 + (1-r1)*ff2)
+        pha[:,:,0,:] = r1*ff1 + (1-r1)*ff2
 
         # truncate
         pha[:,:,0,:itronc] = pha[:,:,0,itronc][:,:,None]
 
-        pha[:,:,1,:] = pha[:,:,0,:]
+        pha[:,:,1,:] = 0.
         pha[:,:,2,:] = 0.
         pha[:,:,3,:] = 0.
 
         pha[:,:,:,0] = 0.
 
         # normalize
-        integ_ff = integ_phase(ang, (pha[:,:,0,:] + pha[:,:,1,:])/2.)
+        integ_ff = integ_phase(ang, pha[:,:,0,:])
         pha *= 2./integ_ff[:,:,None,None]
 
         P = LUT(pha,  # stk, theta
             axes=[wav, self.Z, None, np.rad2deg(ang)],
             names=['wav_phase_oc', 'z_phase_oc', 'stk', 'theta_oc'],
            )
-        coef_trunc = LUT(integ_ff[:,:], axes=[wav, self.Z], names=['wav_phase_oc', 'z_phase_oc'])
+        coef_trunc = LUT(integ_ff[:,:]*0.5, axes=[wav, self.Z], names=['wav_phase_oc', 'z_phase_oc'])
 
         return P, coef_trunc
 
@@ -594,19 +594,19 @@ class IOP_1(IOP_base):
         pha = np.zeros((nwav, 1, NPSTK, self.NANG), dtype='float64')
         r1 = ((Bp - 0.002)/0.028)[:,None]
 
-        pha[:,0,0,:] = 0.5*(r1*ff1 + (1-r1)*ff2)
+        pha[:,0,0,:] = r1*ff1 + (1-r1)*ff2
 
         # truncate
         pha[:,0,0,:itronc] = pha[:,0,0,itronc][:,None]
 
-        pha[:,0,1,:] = pha[:,0,0,:]
+        pha[:,0,1,:] = 0.
         pha[:,0,2,:] = 0.
         pha[:,0,3,:] = 0.
 
         pha[:,:,:,0] = 0.
 
         # normalize
-        integ_ff = integ_phase(ang, (pha[:,0,0,:] + pha[:,0,1,:])/2.)
+        integ_ff = integ_phase(ang, pha[:,0,0,:])
         pha *= 2./integ_ff[:,None,None,None]
 
         # create output MLUT
@@ -615,7 +615,7 @@ class IOP_1(IOP_base):
         result.add_axis('z_phase_oc', np.array([0.]))
         result.add_axis('theta_oc', ang*180./np.pi)
         result.add_dataset('phase', pha, ['wav_phase_oc', 'z_phase_oc', 'stk', 'theta_oc'])
-        result.add_dataset('coef_trunc', integ_ff[:,None], ['wav_phase_oc', 'z_phase_oc'])
+        result.add_dataset('coef_trunc', integ_ff[:,None]*0.5, ['wav_phase_oc', 'z_phase_oc'])
 
         return result
 
@@ -971,19 +971,19 @@ class IOP_profile(IOP_base):
         pha = np.zeros((nwav, nz, NPSTK, self.NANG), dtype='float64')
         r1 = ((Bp - 0.002)/0.028)[:,:,None]
 
-        pha[:,:,0,:] = 0.5*(r1*ff1 + (1-r1)*ff2)
+        pha[:,:,0,:] = r1*ff1 + (1-r1)*ff2
 
         # truncate
         pha[:,:,0,:itronc] = pha[:,:,0,itronc][:,:,None]
 
-        pha[:,:,1,:] = pha[:,:,0,:]
+        pha[:,:,1,:] = 0.
         pha[:,:,2,:] = 0.
         pha[:,:,3,:] = 0.
 
         pha[:,:,:,0] = 0.
 
         # normalize
-        integ_ff = integ_phase(ang, (pha[:,:,0,:] + pha[:,:,1,:])/2.)
+        integ_ff = integ_phase(ang, pha[:,:,0,:])
         pha *= 2./integ_ff[:,:,None,None]
 
         # create output MLUT
@@ -993,6 +993,6 @@ class IOP_profile(IOP_base):
         #result.add_axis('z_phase_oc', -self.z[:-1])
         result.add_axis('theta_oc', ang*180./np.pi)
         result.add_dataset('phase', pha, ['wav_phase_oc', 'z_phase_oc', 'stk', 'theta_oc'])
-        result.add_dataset('coef_trunc', integ_ff[:,:], ['wav_phase_oc', 'z_phase_oc'])
+        result.add_dataset('coef_trunc', integ_ff[:,:]*0.5, ['wav_phase_oc', 'z_phase_oc'])
 
         return result

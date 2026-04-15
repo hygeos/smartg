@@ -2442,11 +2442,7 @@ def calculF(profile, N, DEPO, kind, pol_off=False):
 
         phase = profile[name_phase][ipha, :, :]  # ipha, stk, theta
         
-        # TODO: The ocean phase function should also follow the upstream 
-        # standard convention, so that conversion happens only at this 
-        # point in the code. This ensures the same procedure is used
-        # for both atmosphere and ocean cases.
-        if kind == 'atm' : phase = convert_phase_to_iparper(phase)
+        phase = convert_phase_to_iparper(phase)
 
         if pol_off:
             if (len(phase[:,0]) == 4):
