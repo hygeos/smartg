@@ -3506,61 +3506,36 @@ def convert_phase_to_iparper(pha):
     .. [1] Chandrasekhar, S. (2013). Radiative transfer. Courier Corporation.
     """
 
-    ndim = len(pha.shape)
-    if (ndim != 2 and ndim != 4):
+    ndim = pha.ndim
+    if ndim not in (2, 4):
         raise ValueError("The phase matrix dimension must be 2 or 4!")
-    
+
+    # Normalize to 4D: (n1, n2, nphamat, nth)
     if ndim == 2:
-        nphamat = pha.shape[0]
-        nth = pha.shape[1]
-    else :
-        nphamat = pha.shape[2]
-        nth = pha.shape[3]
-    
-    if (nphamat != 4 and nphamat != 6):
+        pha = pha[np.newaxis, np.newaxis, :, :]
+
+    nphamat = pha.shape[2]
+    nth = pha.shape[3]
+    if nphamat not in (4, 6):
         raise ValueError("The number of phase matrix terms must be equal to 4 or 6!")
 
+    pha_converted = np.zeros((pha.shape[0], pha.shape[1], 6, nth), dtype=np.float64)
+    if nphamat == 4: # spherical particles
+        pha_converted[:,:,0:4,:] = pha
+        pha_converted[:,:,4,:] = pha[:,:,0,:] # p22 = p11
+        pha_converted[:,:,5,:] = pha[:,:,2,:] # p44 = p33
+    else: # non spherical particles
+        pha_converted[:,:,:,:] = pha
 
-    if ndim == 2:
-        pha_converted = np.zeros((6,nth), dtype=np.float64)
-        if (nphamat == 4): # spherical particles
-            pha_converted[0:4,:] = pha.copy()
-            pha_converted[4,:] = pha[0,:].copy()
-            pha_converted[5,:] = pha[2,:].copy()
-            p0 = pha_converted[0,:].copy()
-            p1 = pha_converted[1,:].copy()
-            p4 = pha_converted[4,:].copy()
-            pha_converted[0,:] = 0.5*(p0+2*p1+p4) # P11
-            pha_converted[1,:] = 0.5*(p0-p4)      # P12=P21
-            pha_converted[4,:] = 0.5*(p0-2*p1+p4) # P22
-        elif (nphamat == 6): # non spherical particles
-            pha_converted[:,:] = pha.copy()
-            p0 = pha_converted[0,:].copy()
-            p1 = pha_converted[1,:].copy()
-            p4 = pha_converted[4,:].copy()
-            pha_converted[0,:] = 0.5*(p0+2*p1+p4) # P11
-            pha_converted[1,:] = 0.5*(p0-p4)      # P12=P21
-            pha_converted[4,:] = 0.5*(p0-2*p1+p4) # P22
-    else: # ndim = 4
-        pha_converted = np.zeros((pha.shape[0],pha.shape[1],6,nth), dtype=np.float64)
-        if (nphamat == 4): # spherical particles
-            pha_converted[:,:,0:4,:] = pha.copy()
-            pha_converted[:,:,4,:] = pha[:,:,0,:].copy()
-            pha_converted[:,:,5,:] = pha[:,:,2,:].copy()
-            p0 = pha_converted[:,:,0,:].copy()
-            p1 = pha_converted[:,:,1,:].copy()
-            p4 = pha_converted[:,:,4,:].copy()
-            pha_converted[:,:,0,:] = 0.5*(p0+2*p1+p4) # P11
-            pha_converted[:,:,1,:] = 0.5*(p0-p4)      # P12=P21
-            pha_converted[:,:,4,:] = 0.5*(p0-2*p1+p4) # P22
-        elif (nphamat == 6): # non spherical particles
-            pha_converted[:,:,:,:] = pha.copy()
-            p0 = pha_converted[:,:,0,:].copy()
-            p1 = pha_converted[:,:,1,:].copy()
-            p4 = pha_converted[:,:,4,:].copy()
-            pha_converted[:,:,0,:] = 0.5*(p0+2*p1+p4) # P11
-            pha_converted[:,:,1,:] = 0.5*(p0-p4)      # P12=P21
-            pha_converted[:,:,4,:] = 0.5*(p0-2*p1+p4) # P22
+    p0 = pha_converted[:,:,0,:].copy()
+    p1 = pha_converted[:,:,1,:].copy()
+    p4 = pha_converted[:,:,4,:].copy()
+    pha_converted[:,:,0,:] = 0.5*(p0+2*p1+p4) # P11
+    pha_converted[:,:,1,:] = 0.5*(p0-p4)      # P12=P21
+    pha_converted[:,:,4,:] = 0.5*(p0-2*p1+p4) # P22
+
+    if ndim == 2: return pha_converted[0, 0, :, :]
+
     return pha_converted
 
 
