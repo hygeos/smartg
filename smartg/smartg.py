@@ -13,6 +13,7 @@ import numpy as np
 from datetime import datetime, timezone
 from numpy import pi
 from smartg.atmosphere import Atmosphere, od2k, blackbody_radiance
+from smartg.atmosphere import convert_phase_to_iparper
 from smartg.water import IOP_base
 from warnings import warn
 from smartg.albedo import Albedo_cst, Albedo_speclib, Albedo_spectrum, Albedo_map
@@ -2440,6 +2441,7 @@ def calculF(profile, N, DEPO, kind, pol_off=False):
     #for ipha in range(nphases-1):
 
         phase = profile[name_phase][ipha, :, :]  # ipha, stk, theta
+        phase = convert_phase_to_iparper(phase)
 
         if pol_off:
             if (len(phase[:,0]) == 4):

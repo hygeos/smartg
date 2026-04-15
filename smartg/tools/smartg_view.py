@@ -791,13 +791,13 @@ def phase_view(ds_sg, ipha=None, fig=None, axarr=None, iw=0, kind='atm',
     
     for i in ni:
         if nstk == 4:
-            P11 = 0.5*(phase[i,0,:]+phase[i,1,:])
-            P12 = 0.5*(phase[i,0,:]-phase[i,1,:])
+            P11 = phase[i,0,:] # P11
+            P12 = phase[i,1,:] # P12 = P21
             P33 = phase[i,2,:]
             P43 = phase[i,3,:]
             if show_trunc : 
-                P11_tr = 0.5*(phase_tr[i,0,:]+phase_tr[i,1,:])
-                P12_tr = 0.5*(phase_tr[i,0,:]-phase_tr[i,1,:])
+                P11_tr = phase_tr[i,0,:] # P11
+                P12_tr = phase_tr[i,1,:] # P12 = P21
                 P33_tr = phase_tr[i,2,:]
                 P43_tr = phase_tr[i,3,:]
         
@@ -836,33 +836,19 @@ def phase_view(ds_sg, ipha=None, fig=None, axarr=None, iw=0, kind='atm',
             axarr[1,1].set_xlabel(r'$\theta$')
             axarr[1,1].set_xticks([0,30,60,90,120,150,180])
         elif nstk == 6:
-            F0 = phase[i,0,:] # F11
-            F1 = phase[i,1,:] # F12 = F21
-            F2 = phase[i,2,:] # F33
-            F3 = phase[i,3,:] # F34 = -F43
-            F4 = phase[i,4,:] # F22
-            F5 = phase[i,5,:] # F44
-
-            P11 = 0.5*(F0+2*F1+F4)
-            P12 = 0.5*(F0-F4)
-            P22 = 0.5*(F0-2*F1+F4)
-            P33 = F2
-            P34 = F3
-            P44 = F5
+            P11 = phase[i,0,:] # P11
+            P12 = phase[i,1,:] # P12 = P21
+            P22 = phase[i,4,:] # P22
+            P33 = phase[i,2,:] # P33
+            P34 = phase[i,3,:] # P34 = -P43
+            P44 = phase[i,5,:] # P44
             if show_trunc : 
-                F0_tr = phase_tr[i,0,:] # F11
-                F1_tr = phase_tr[i,1,:] # F12 = F21
-                F2_tr = phase_tr[i,2,:] # F33
-                F3_tr = phase_tr[i,3,:] # F34 = -F43
-                F4_tr = phase_tr[i,4,:] # F22
-                F5_tr = phase_tr[i,5,:] # F44
-
-                P11_tr = 0.5*(F0_tr+2*F1_tr+F4_tr)
-                P12_tr = 0.5*(F0_tr-F4_tr)
-                P22_tr = 0.5*(F0_tr-2*F1_tr+F4_tr)
-                P33_tr = F2_tr
-                P34_tr = F3_tr
-                P44_tr = F5_tr
+                P11_tr = phase_tr[i,0,:] # P11
+                P12_tr = phase_tr[i,1,:] # P12 = P21
+                P22_tr = phase_tr[i,4,:] # P22
+                P33_tr = phase_tr[i,2,:] # P33
+                P34_tr = phase_tr[i,3,:] # P34 = -P43
+                P44_tr = phase_tr[i,5,:] # P44
         
             if (np.max(P11[:]) > 0.) :
                 axarr[0,0].semilogy(ang, P11,label='%3i'%i)

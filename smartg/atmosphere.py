@@ -380,7 +380,7 @@ class AerOPAC(object):
                 ssa[:,:] = self.ssa[Idx(wav)][:,None]
         return dtau, ssa
     
-    def phase(self, wav, Z, rh, NBTHETA=721, conv_Iparper=True):
+    def phase(self, wav, Z, rh, NBTHETA=721):
         """
         Calculate phase matrix for aerosols and clouds.
         
@@ -405,10 +405,6 @@ class AerOPAC(object):
             For example, if only rh_mix is specified, rh is ignored only in the mixture layer.
         NBTHETA : int, optional
             Number of scattering angles for angle resampling. Default is 721.
-        conv_Iparper : bool, optional
-            If True (default), converts the phase matrix from I/Q convention to Ipar/Iper
-            convention. This applies general conversion formulas valid for both spherical
-            and non-spherical particles.
             
         Returns
         -------
@@ -518,17 +514,6 @@ class AerOPAC(object):
             if (nphamat == 4): # only for spherical particles
                 P.data[:,:,4,:] = P.data[:,:,0,:].copy() # F22 = F11
                 P.data[:,:,5,:] = P.data[:,:,2,:].copy() # F44 = F33
-
-            if conv_Iparper:
-                # convert I, Q into Ipar, Iper ; Fij -> Pij
-                # use general formulas (valid for both spherical and non-spherical particles)
-                # P33=F33, P34=F34 and P44=F44
-                F11 = P.data[:,:,0,:].copy()
-                F21 = P.data[:,:,1,:].copy()
-                F22 = P.data[:,:,4,:].copy()
-                P.data[:,:,0,:] = 0.5*(F11+2*F21+F22) # P11
-                P.data[:,:,1,:] = 0.5*(F11-F22)       # P21
-                P.data[:,:,4,:] = 0.5*(F11-2*F21+F22) # P22
 
             dtau_ =  np.zeros((len(wav), len(Z)), dtype=np.float32)
             ext_ = np.zeros_like(dtau_)
@@ -1045,7 +1030,7 @@ class AtmAFGL(Atmosphere):
 
 
 
-    def calc(self, wav, phase=True, NBTHETA=721, conv_Iparper=True, use_old_calc_iphase=False,
+    def calc(self, wav, phase=True, NBTHETA=721, use_old_calc_iphase=False,
              truncation=None):
         """
         Profile and phase matrix calculation at bands / wav
@@ -1056,8 +1041,6 @@ class AtmAFGL(Atmosphere):
             Wavelengths at which to calculate the profile. It can be a list of REPTRAN_IBAND or KDIS_IBAND.
         NBTHETA : int, optional
             The number of angles to be considered for the phase matrix.
-        conv_Iparper : bool, optional
-            Convert to I parallel I perpendicular convention.
         use_old_calc_iphase : bool, optional
             Use the old way to compute iphase (depracated).
         truncation : None | DM_trunc | GT_trunc, optional
@@ -1079,8 +1062,7 @@ class AtmAFGL(Atmosphere):
                 wav_pha = wav[:]
             else:
                 wav_pha = self.pfwav
-            pha = self.phase(wav_pha, NBTHETA=NBTHETA, conv_Iparper=False)
-            is_Iparper = False
+            pha = self.phase(wav_pha, NBTHETA=NBTHETA)
 
             pro_var = profile.datasets()
             if (  pha is not None  or 
@@ -1090,14 +1072,8 @@ class AtmAFGL(Atmosphere):
                     pha_, ipha = calc_iphase(pha, profile.axis('wavelength'), profile.axis('z_atm'), use_old_calc_iphase)
                 else: # 3D ATM
                     pha_ = profile['phase_atm'].data
-                    is_Iparper = True
 
                 nphase = pha_.shape[0]
-
-                # if Iparper convention come back to IQUV for truncation
-                if is_Iparper:
-                    for iph in range (nphase):
-                        pha_[iph,:,:] = convert_phase_to_iparper(pha_[iph,:,:])
 
                 # If truncation parameter is given compute truncated phase function
                 if truncation is not None:
@@ -1138,12 +1114,6 @@ class AtmAFGL(Atmosphere):
                             beta2 = 1. / (1 - f)
                             pha_tr[iph,1,:] = pha_[iph,1,:] * beta2
                             pha_tr[iph,3,:] = pha_[iph,3,:] * beta2
-
-                if conv_Iparper or is_Iparper:
-                    for iph in range (nphase):
-                        pha_[iph,:,:] = convert_phase_to_iparper(pha_[iph,:,:])
-                        if truncation is not None:
-                            pha_tr[iph,:,:] = convert_phase_to_iparper(pha_tr[iph,:,:])
 
                 if not self.OPT3D:
                     profile.add_axis('theta_atm', pha.axes[-1])
@@ -1620,7 +1590,7 @@ class AtmAFGL(Atmosphere):
 
         return pro
 
-    def phase(self, wav, NBTHETA=721, conv_Iparper=True):
+    def phase(self, wav, NBTHETA=721):
         """
         Calculate phase matrix of aerosols and clouds at specified wavelengths.
         
@@ -1636,10 +1606,6 @@ class AtmAFGL(Atmosphere):
         NBTHETA : int, optional
             Number of scattering angles for angle resampling. Default is 721,
             corresponding to angles from 0° to 180°.
-        conv_Iparper : bool, optional
-            If True (default), converts the phase matrix from I/Q Stokes convention 
-            to Ipar/Iper convention. This applies general conversion formulas valid 
-            for both spherical and non-spherical particles.
             
         Returns
         -------
@@ -1679,7 +1645,7 @@ class AtmAFGL(Atmosphere):
             dtau, ssa_p = comp.dtau_ssa(wav, self.pfgrid, rh=rh)
             dtau = dtau[:,1:][:,:,None,None]
             ssa_p = ssa_p[:,1:][:,:,None,None]
-            pha += comp.phase(wav, self.pfgrid, rh, NBTHETA=NBTHETA, conv_Iparper=conv_Iparper)*dtau*ssa_p
+            pha += comp.phase(wav, self.pfgrid, rh, NBTHETA=NBTHETA)*dtau*ssa_p
             norm += dtau*ssa_p
         if len(self.comp) > 0:
             pha /= norm
