@@ -425,12 +425,33 @@ class AerOPAC(object):
                 # convert to 4-dim by inserting empty dimensions wav_phase and z_phase
                 assert self._phase.names == ['stk', 'theta_atm']
                 pha_ = self._phase.data[:,:]
+                if pha_.shape[0] == 4:
+                    pha_6 = np.zeros((6, pha_.shape[1]), dtype=pha_.dtype)
+                    pha_6[0:4,:] = pha_
+                    pha_6[4,:] = pha_[0,:].copy() # F22 = F11
+                    pha_6[5,:] = pha_[2,:].copy() # F44 = F33
+                    pha_ = pha_6
+                axes = [np.array([wav[0]]), np.array([0.])] + self._phase.axes
+                axes[2] = np.arange(6)
                 pha = LUT(pha_[None,None,:,:],
                           names = ['wav_phase', 'z_phase'] + self._phase.names,
-                          axes = [np.array([wav[0]]), np.array([0.])] + self._phase.axes,
+                          axes = axes,
                          )
                 return pha
             else:
+                if self._phase.shape[2] == 4:
+                    pha_ = self._phase.data
+                    pha_6 = np.zeros((pha_.shape[0], pha_.shape[1], 6, pha_.shape[3]), dtype=pha_.dtype)
+                    pha_6[:,:,0:4,:] = pha_
+                    pha_6[:,:,4,:] = pha_[:,:,0,:].copy() # F22 = F11
+                    pha_6[:,:,5,:] = pha_[:,:,2,:].copy() # F44 = F33
+                    axes = list(self._phase.axes)
+                    axes[2] = np.arange(6)
+                    return LUT(
+                        pha_6,
+                        names=self._phase.names,
+                        axes=axes,
+                    )
                 return self._phase
 
         theta = np.linspace(0., 180., num=NBTHETA)
@@ -1067,13 +1088,6 @@ class AtmAFGL(Atmosphere):
                 
                 if pha is not None:
                     pha_, ipha = calc_iphase(pha, profile.axis('wavelength'), profile.axis('z_atm'), use_old_calc_iphase)
-                    if pha_.shape[1] == 4 and truncation is not None:
-                        # if only 4 components extend to 6 to use general formulas
-                        pha_tmp = np.zeros((pha_.shape[0], 6, pha_.shape[2]), dtype=np.float64)
-                        pha_tmp[:,0:4,:] = pha_.copy()
-                        pha_tmp[:,4,:] = pha_tmp[:,0,:]
-                        pha_tmp[:,5,:] = pha_tmp[:,2,:]
-                        pha_ = pha_tmp
                 else: # 3D ATM
                     pha_ = profile['phase_atm'].data
                     is_Iparper = True
