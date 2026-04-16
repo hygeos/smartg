@@ -1788,6 +1788,9 @@ def read_phase_nc(filename,
         - 'wav_phase': wavelength (in nm)
         - 'z_phase': altitude (in km) from pfgrid or [0.]
         - 'stk': phase matrix unique terms (0 to nphamat-1)
+          nphamat = 4 for spherical particles only
+          nphamat = 6 for spherical or non-spherical particles
+          (for spherical: P22=P11, P44=P33)
         - 'theta_'+kind: scattering angle (in degrees)
 
         Coordinates are replaced/renamed such that the rh/reff dimension
@@ -1819,8 +1822,11 @@ def read_phase_nc(filename,
     theta = ds.theta.values
     wl = ds.wav.values
     
-    da_pha = xr.DataArray(np.zeros((nwl, n_rh_reff, 6, ntheta)), 
-                          coords=[wl, rh_reff, np.arange(6), theta],
+    # Get nphamat from phase data shape
+    nphamat = ds['phase'].shape[2]
+    
+    da_pha = xr.DataArray(np.zeros((nwl, n_rh_reff, nphamat, ntheta)), 
+                          coords=[wl, rh_reff, np.arange(nphamat), theta],
                           dims=['wav_phase', rh_or_reff, 'stk', 'theta_'+kind],
                           name='phase_'+kind)
     da_pha.data[:,:,:,:] = ds['phase'].values.swapaxes(0, 1)
@@ -1888,6 +1894,9 @@ def read_phase_dat(filename, kind='atm', normalize=True):
         - ``'wav_phase'`` : wavelength (single value: 0.0)
         - ``'z_phase'`` : altitude (single value: 0.0 km)
         - ``'stk'`` : phase matrix element index (0 to nphamat-1)
+          nphamat = 4 for spherical particles only
+          nphamat = 6 for spherical or non-spherical particles
+          (for spherical: P22=P11, P44=P33)
         - ``'theta_' + kind`` : scattering angle in degrees
 
     Examples
@@ -1996,6 +2005,9 @@ def read_phase_cdf(filename,
         - 'wav_phase': wavelength (in nm)
         - 'z_phase': altitude (in km) from pfgrid or [0.]
         - 'stk': phase matrix unique terms (0 to nphamat-1)
+          nphamat = 4 for spherical particles only
+          nphamat = 6 for spherical or non-spherical particles
+          (for spherical: P22=P11, P44=P33)
         - 'theta_'+kind: scattering angle (in degrees)
 
         Coordinates are replaced/renamed such that the rh/reff dimension
@@ -2060,8 +2072,8 @@ def read_phase_cdf(filename,
                 f"Got len(z_rh_reff)={z_rh_reff_arr.size} and len(pfgrid)={pfgrid_arr.size}."
             )
 
-    da_pha = xr.DataArray(np.zeros((nwl, n_rh_reff, 6, ntheta)), 
-                          coords=[wl, rh_reff, np.arange(6), theta],
+    da_pha = xr.DataArray(np.zeros((nwl, n_rh_reff, nphamat, ntheta)), 
+                          coords=[wl, rh_reff, np.arange(nphamat), theta],
                           dims=['wav_phase', rh_or_reff, 'stk', 'theta_'+kind],
                           name='phase_'+kind)
     
@@ -2148,6 +2160,11 @@ def read_phase(filename, kind='atm', normalize=True, **kwargs):
         All backends return a 4-dimensional array with dimensions:
 
         - ``('wav_phase', 'z_phase', 'stk', 'theta_' + kind)``
+        
+        where 'stk' has size nphamat:
+        - nphamat = 4 for spherical particles only
+        - nphamat = 6 for spherical or non-spherical particles
+          (for spherical: P22=P11, P44=P33)
 
     Examples
     --------
