@@ -13,7 +13,7 @@ import numpy as np
 from datetime import datetime, timezone
 from numpy import pi
 from smartg.atmosphere import Atmosphere, od2k, blackbody_radiance
-from smartg.atmosphere import convert_phase_to_iparper
+from smartg.phase import convert_phase_to_iparper
 from smartg.water import IOP_base
 from warnings import warn
 from smartg.albedo import Albedo_cst, Albedo_speclib, Albedo_spectrum, Albedo_map
