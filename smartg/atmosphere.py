@@ -1785,8 +1785,8 @@ def read_phase_nc(filename,
     -------
     xr.DataArray
         Phase matrix as xarray DataArray with dimensions:
-        - 'wav_phase': wavelength (in nm) [or removed if size=1]
-        - 'z_phase': altitude (in km) from pfgrid or [0.] [or removed if size=1]
+        - 'wav_phase': wavelength (in nm)
+        - 'z_phase': altitude (in km) from pfgrid or [0.]
         - 'stk': phase matrix unique terms (0 to nphamat-1)
         - 'theta_'+kind: scattering angle (in degrees)
 
@@ -1852,9 +1852,6 @@ def read_phase_nc(filename,
         )
     da_pha = da_pha.assign_coords({rh_or_reff: z_phase}).rename({rh_or_reff: 'z_phase'})
 
-    if da_pha.sizes['wav_phase'] == 1 and da_pha.sizes['z_phase'] == 1:
-        da_pha = da_pha.squeeze(['wav_phase', 'z_phase'], drop=True)
-
     return da_pha
 
 
@@ -1888,6 +1885,8 @@ def read_phase_dat(filename, kind='atm', normalize=True):
     xr.DataArray
         Phase matrix with dimensions:
 
+        - ``'wav_phase'`` : wavelength (single value: 0.0)
+        - ``'z_phase'`` : altitude (single value: 0.0 km)
         - ``'stk'`` : phase matrix element index (0 to nphamat-1)
         - ``'theta_' + kind`` : scattering angle in degrees
 
@@ -1895,7 +1894,7 @@ def read_phase_dat(filename, kind='atm', normalize=True):
     --------
     >>> pha = read_phase_dat('phase.dat', kind='atm', normalize=True)
     >>> pha.dims
-    ('stk', 'theta_atm')
+    ('wav_phase', 'z_phase', 'stk', 'theta_atm')
     """
     df = pd.read_csv(filename, sep=r'\s+', header=None)
 
@@ -1909,9 +1908,14 @@ def read_phase_dat(filename, kind='atm', normalize=True):
         f = pha[0,:] # P11 term
         pha = (2.*pha) / np.trapezoid(f[idmu],mu[idmu])
 
-    da_pha = xr.DataArray(pha, 
-                          coords=[np.arange(pha.shape[0]), theta],
-                          dims=['stk', 'theta_'+kind],
+    # Add wav_phase and z_phase dimensions for consistency with other readers
+    wav_phase = np.array([0.], dtype=float)
+    z_phase = np.array([0.], dtype=float)
+    pha_4d = pha[np.newaxis, np.newaxis, :, :]  # Add two dimensions at the front
+
+    da_pha = xr.DataArray(pha_4d, 
+                          coords=[wav_phase, z_phase, np.arange(pha.shape[0]), theta],
+                          dims=['wav_phase', 'z_phase', 'stk', 'theta_'+kind],
                           name='phase_'+kind)
 
     return da_pha
@@ -1989,8 +1993,8 @@ def read_phase_cdf(filename,
     -------
     xr.DataArray
         Phase matrix as xarray DataArray with dimensions:
-        - 'wav_phase': wavelength (in nm) [or removed if size=1]
-        - 'z_phase': altitude (in km) from pfgrid or [0.] [or removed if size=1]
+        - 'wav_phase': wavelength (in nm)
+        - 'z_phase': altitude (in km) from pfgrid or [0.]
         - 'stk': phase matrix unique terms (0 to nphamat-1)
         - 'theta_'+kind: scattering angle (in degrees)
 
@@ -2097,9 +2101,6 @@ def read_phase_cdf(filename,
         )
     da_pha = da_pha.assign_coords({rh_or_reff: z_phase}).rename({rh_or_reff: 'z_phase'})
 
-    if da_pha.sizes['wav_phase'] == 1 and da_pha.sizes['z_phase'] == 1:
-        da_pha = da_pha.squeeze(['wav_phase', 'z_phase'], drop=True)
-
     return da_pha
 
 
@@ -2144,10 +2145,8 @@ def read_phase(filename, kind='atm', normalize=True, **kwargs):
     -------
     xr.DataArray
         Phase matrix data as returned by the selected backend reader.
-        Depending on input format and interpolation options, dimensions are
-        typically one of:
+        All backends return a 4-dimensional array with dimensions:
 
-        - ``('stk', 'theta_' + kind)``
         - ``('wav_phase', 'z_phase', 'stk', 'theta_' + kind)``
 
     Examples
