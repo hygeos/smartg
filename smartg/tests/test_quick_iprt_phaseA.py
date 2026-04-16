@@ -5,12 +5,12 @@
 import pytest
 
 from smartg.smartg import Smartg, Sensor, LambSurface, Albedo_cst
-from smartg.atmosphere import AtmAFGL
+from smartg.atmosphere import AtmAFGL, read_phase
 import pandas as pd
 import numpy as np
 
-from smartg.iprt.iprt import convert_SGout_to_IPRTout, select_and_plot_polar_iprt, compute_deltam, seclect_iprt_IQUV, plot_iprt_radiances, groupIQUV
-from smartg.libATM3D import read_cld_nth_cte
+from smartg.iprt.iprt import convert_SGout_to_IPRTout, select_and_plot_polar_iprt, \
+    compute_deltam, seclect_iprt_IQUV, plot_iprt_radiances, groupIQUV
 from smartg.tools.phase import calc_iphase
 from luts.luts import LUT
 from smartg.config import DIR_AUXDATA
@@ -449,10 +449,11 @@ def test_A5_pp(request, S1DF):
     prof_aer = (cld_tau_ext, cld_ssa)
     NTH = 18001  # The water cloud has a phase function with a non-negligible peak, then a sufficiently fine resolution is required.
     file_cld_phase = DIR_AUXDATA / 'IPRT' / 'phaseA' / 'opt_prop' / 'watercloud.mie.cdf'
-    cld_phase = read_cld_nth_cte(filename=file_cld_phase, nb_theta=NTH)
+    cld_phase = read_phase(filename=file_cld_phase)
     pha_atm, ipha_atm = calc_iphase(cld_phase, np.array([800.]), z)
     lpha_lut = []
-    for i in range (0, pha_atm.shape[0]): lpha_lut.append(LUT(pha_atm[i,:,:], axes=[None, np.linspace(0, 180, NTH)], names=['stk', 'theta_atm'])) 
+    for i in range (0, pha_atm.shape[0]): 
+        lpha_lut.append(LUT(pha_atm[i,:,:], axes=[None, np.linspace(0, 180, NTH)], names=['stk', 'theta_atm'])) 
     atm = AtmAFGL('afglt', grid=z, prof_ray=mol_sca, prof_abs=mol_abs, prof_aer=prof_aer, prof_phases=(ipha_atm, lpha_lut))
     pro = atm.calc(800., phase=False)
     surf  = None
@@ -587,10 +588,11 @@ def test_A5_al(request, S1DF):
     prof_aer = (cld_tau_ext, cld_ssa)
     NTH = 18001  # The water cloud has a phase function with a non-negligible peak, then a sufficiently fine resolution is required.
     file_cld_phase = DIR_AUXDATA / 'IPRT' / 'phaseA' / 'opt_prop' / 'watercloud.mie.cdf'
-    cld_phase = read_cld_nth_cte(filename=file_cld_phase, nb_theta=NTH)
+    cld_phase = read_phase(filename=file_cld_phase)
     pha_atm, ipha_atm = calc_iphase(cld_phase, np.array([800.]), z)
     lpha_lut = []
-    for i in range (0, pha_atm.shape[0]): lpha_lut.append(LUT(pha_atm[i,:,:], axes=[None, np.linspace(0, 180, NTH)], names=['stk', 'theta_atm'])) 
+    for i in range (0, pha_atm.shape[0]): 
+        lpha_lut.append(LUT(pha_atm[i,:,:], axes=[None, np.linspace(0, 180, NTH)], names=['stk', 'theta_atm'])) 
     atm = AtmAFGL('afglt', grid=z, prof_ray=mol_sca, prof_abs=mol_abs, prof_aer=prof_aer, prof_phases=(ipha_atm, lpha_lut))
     pro = atm.calc(800., phase=False)
     surf  = None
