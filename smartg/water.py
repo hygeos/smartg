@@ -8,7 +8,7 @@ import numpy as np
 from warnings import warn
 from smartg.albedo import Albedo_cst
 from smartg.config import NPSTK
-from smartg.tools.phase import fournierForand, integ_phase, calc_iphase
+from smartg.phase import fournierForand, integ_phase, calc_iphase
 from smartg.bandset import BandSet
 from smartg.config import DIR_AUXDATA as dir_aux
 

@@ -18,7 +18,7 @@ import matplotlib
 from pathlib import Path
 from smartg.config import DIR_AUXDATA
 
-from smartg.tools.phase import calc_iphase
+from smartg.phase import calc_iphase
 
 # may be to replace
 from smartg.iprt.iprt import read_phase_nth_cte

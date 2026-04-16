@@ -38,7 +38,7 @@ Cloud
 import numpy as np
 from pathlib import Path
 from luts.luts import MLUT, LUT, Idx, read_mlut, read_mlut_hdf5, merge
-from smartg.tools.phase import calc_iphase
+from smartg.phase import calc_iphase
 from scipy.interpolate import interp1d
 from scipy.integrate import simpson
 from scipy import constants

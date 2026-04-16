@@ -11,7 +11,7 @@ import numpy as np
 
 from smartg.iprt.iprt import convert_SGout_to_IPRTout, select_and_plot_polar_iprt, \
     compute_deltam, seclect_iprt_IQUV, plot_iprt_radiances, groupIQUV
-from smartg.tools.phase import calc_iphase
+from smartg.phase import calc_iphase
 from luts.luts import LUT
 from smartg.config import DIR_AUXDATA
 
