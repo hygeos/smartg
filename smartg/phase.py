@@ -4,6 +4,9 @@
 from __future__ import print_function, division
 from numpy import sin, cos, pi
 import numpy as np
+from pathlib import Path
+import pandas as pd
+import xarray as xr
 
 
 def fournierForand(ang, n, mu):
@@ -157,3 +160,478 @@ def get_ipha_a(z_full, z_pf, phase=None):
         elif (n_ida_tmp == 0 and np.sum(z_full) < 0.): # Particular case of min z_pf > min z_full in ocean
             ida[idz_full] = int(len(z_pf) - 1)
     return ida
+
+
+def read_phase_nc(filename,
+                  kind='atm', normalize=True,
+                  pfwav=None, pfgrid=None, z_rh_reff=None):
+    """
+    Read and process phase function data from SMART-G NetCDF aerosol/cloud files.
+
+    Loads phase matrix data from SMART-G aerosol and cloud files with .nc suffix. 
+    Supports wavelength and humidity/effective radius interpolation and normalization.
+    Produces phase function data ready for SMART-G's AerOPAC/Cloud phase parameter.
+
+    Parameters
+    ----------
+    filename : str | Path
+        Path to a SMART-G phase function NetCDF file (suffix: .nc).
+
+        The file must include variables:
+        - 'phase': phase matrix data [rh/reff, wav, stk, theta]
+        - 'wav': wavelength values (in nm)
+        - 'theta': scattering angle grid (uniform, in degrees)
+        - 'hum' or 'reff': relative humidity (%) or effective radius values
+
+    kind : str, optional
+        Medium label used in the theta dimension name ('theta_' + kind).
+        Accepted values are:
+        - 'atm' for atmosphere
+        - 'oc' for ocean
+        Default: 'atm'
+
+    normalize : bool, optional
+        If True, normalize the phase matrix P11 term such that the integral
+        over all angles equals 2.
+        Default: True
+
+    pfwav : float or array-like, optional
+        Wavelength(s) (in nm) to interpolate to. Required if the file
+        contains multiple wavelengths (nwl > 1).
+        This parameter has the same meaning as ``pfwav`` in the ``AtmAFGL``
+        constructor.
+        Default: None
+
+    pfgrid : array-like, optional
+        Altitude grid [z_top, z_1, z_2, ..., z_bottom] (in km, descending order) for
+        altitude-dependent phase functions. If provided with n_rh_reff > 1, the
+        z_rh_reff values will be interpolated onto this grid. The first element
+        (z_top) is skipped; remaining elements define the z_phase coordinate.
+        This parameter has the same meaning as ``pfgrid`` in the ``AtmAFGL``
+        constructor.
+        Default: None
+
+    z_rh_reff : float or array-like, optional
+        Interpolation target for the second phase-function axis:
+        - aerosol files: relative humidity (%)
+        - cloud files: effective radius (reff)
+        Required if the file contains multiple rh/reff values (n_rh_reff > 1).
+        If array-like (1-D), pfgrid must also be provided to map these values
+        to specific altitudes, and ``len(z_rh_reff)`` must equal
+        ``len(pfgrid) - 1``.
+        Default: None
+
+    Returns
+    -------
+    xr.DataArray
+        Phase matrix as xarray DataArray with dimensions:
+        - 'wav_phase': wavelength (in nm)
+        - 'z_phase': altitude (in km) from pfgrid or [0.]
+        - 'stk': phase matrix unique terms (0 to nphamat-1)
+          nphamat = 4 for spherical particles only
+          nphamat = 6 for spherical or non-spherical particles
+          (for spherical: P22=P11, P44=P33)
+        - 'theta_'+kind: scattering angle (in degrees)
+
+        Coordinates are replaced/renamed such that the rh/reff dimension
+        becomes 'z_phase' with values from pfgrid[1:] or [0.] if pfgrid is None.
+
+    Examples
+    --------
+    Read phase function for a single wavelength and rh value:
+
+    >>> pha = read_phase_nc('desert_sol.nc', pfwav=550.0, z_rh_reff=[70.0, 60., 58.],
+    ...                     pfgrid=[100., 50., 10., 0.], normalize=True)
+    >>> pha.shape
+    (1, 3, 6, 721)  # (wav_phase, z_phase, stk, theta_atm)
+    """
+    ds = xr.open_dataset(filename)
+
+    if 'hum' in ds.variables: 
+        rh_reff = ds["hum"].data
+        rh_or_reff = 'rh'
+    elif 'reff' in ds.variables:
+        rh_reff = ds["reff"].data
+        rh_or_reff = 'reff'
+    else:
+        raise Exception('Error')
+    
+    ntheta = ds.dims['theta']
+    n_rh_reff = rh_reff.size
+    nwl = ds.dims['wav']
+    theta = ds.theta.values
+    wl = ds.wav.values
+    
+    # Get nphamat from phase data shape
+    nphamat = ds['phase'].shape[2]
+    
+    da_pha = xr.DataArray(np.zeros((nwl, n_rh_reff, nphamat, ntheta)), 
+                          coords=[wl, rh_reff, np.arange(nphamat), theta],
+                          dims=['wav_phase', rh_or_reff, 'stk', 'theta_'+kind],
+                          name='phase_'+kind)
+    da_pha.data[:,:,:,:] = ds['phase'].values.swapaxes(0, 1)
+
+    if normalize:
+        mu = np.cos(np.deg2rad(theta))
+        idmu = np.argsort(mu)
+        for iwav in range (0, nwl):
+            for irhreff in range (0, n_rh_reff):
+                f = da_pha.data[iwav,irhreff,0,:] # P11 term
+                norm = np.trapezoid(f[idmu],mu[idmu])
+                da_pha.data[iwav,irhreff,:,:] *= 2./abs(norm)
+
+    if nwl > 1:
+        pfwav = np.atleast_1d(pfwav).astype(float)
+        da_pha = da_pha.interp(wav_phase=pfwav)
+
+    if n_rh_reff > 1:
+        z_rh_reff = np.atleast_1d(z_rh_reff).astype(np.float32)
+        da_pha = da_pha.interp({rh_or_reff: z_rh_reff}, kwargs={'bounds_error': True})
+
+    if pfgrid is None: z_phase = np.array([0.], dtype=float)
+    else: z_phase = np.atleast_1d(pfgrid).astype(np.float32)[1:]
+    
+    if da_pha.sizes[rh_or_reff] != z_phase.size:
+        raise ValueError(
+            f"Cannot replace '{rh_or_reff}' with 'z_phase': size mismatch "
+            f"({da_pha.sizes[rh_or_reff]} vs {z_phase.size})."
+        )
+    da_pha = da_pha.assign_coords({rh_or_reff: z_phase}).rename({rh_or_reff: 'z_phase'})
+
+    return da_pha
+
+
+def read_phase_dat(filename, kind='atm', normalize=True):
+    """
+    Read a phase matrix from a space-separated `.dat` file.
+
+    The file is expected to have no header. The first column contains the
+    scattering angles (in degrees), and the remaining columns contain the
+    phase matrix elements (one column per element). The phase matrix is
+    assumed to be monochromatic and vertically uniform (no wavelength or
+    altitude dependence).
+
+    Parameters
+    ----------
+    filename : str or Path
+        Path to the `.dat` phase function file.
+    kind : str, optional
+        Medium label used in the theta dimension name ('theta_' + kind).
+        Accepted values are:
+        - 'atm' for atmosphere
+        - 'oc' for ocean
+        Default: 'atm'
+    normalize : bool, optional
+        If True, normalize the phase matrix P11 term such that the integral
+        over all angles equals 2.
+        Default: True.
+
+    Returns
+    -------
+    xr.DataArray
+        Phase matrix with dimensions:
+
+        - ``'wav_phase'`` : wavelength (single value: 0.0)
+        - ``'z_phase'`` : altitude (single value: 0.0 km)
+        - ``'stk'`` : phase matrix element index (0 to nphamat-1)
+          nphamat = 4 for spherical particles only
+          nphamat = 6 for spherical or non-spherical particles
+          (for spherical: P22=P11, P44=P33)
+        - ``'theta_' + kind`` : scattering angle in degrees
+
+    Examples
+    --------
+    >>> pha = read_phase_dat('phase.dat', kind='atm', normalize=True)
+    >>> pha.dims
+    ('wav_phase', 'z_phase', 'stk', 'theta_atm')
+    """
+    df = pd.read_csv(filename, sep=r'\s+', header=None)
+
+    theta = df.iloc[:, 0].values
+    pha = df.iloc[:, 1:].values
+    pha = pha.swapaxes(0, 1)
+
+    if normalize:
+        mu = np.cos(np.deg2rad(theta))
+        idmu = np.argsort(mu)
+        f = pha[0,:] # P11 term
+        pha = (2.*pha) / np.trapezoid(f[idmu],mu[idmu])
+
+    # Add wav_phase and z_phase dimensions for consistency with other readers
+    wav_phase = np.array([0.], dtype=float)
+    z_phase = np.array([0.], dtype=float)
+    pha_4d = pha[np.newaxis, np.newaxis, :, :]  # Add two dimensions at the front
+
+    da_pha = xr.DataArray(pha_4d, 
+                          coords=[wav_phase, z_phase, np.arange(pha.shape[0]), theta],
+                          dims=['wav_phase', 'z_phase', 'stk', 'theta_'+kind],
+                          name='phase_'+kind)
+
+    return da_pha
+
+
+def read_phase_cdf(filename,
+                   kind='atm', normalize=True, ntheta_max=18001,
+                   pfwav=None, pfgrid=None, z_rh_reff=None):
+    """
+    Read and process phase function data from libRadtran NetCDF aerosol/cloud files.
+
+    Loads phase matrix data from libRadtran aerosol and cloud phase function files
+    with .cdf suffix (e.g., 'ssam.mie.cdf', 'wc.sol.mie.cdf'). Handles non-uniform
+    theta grids from libRadtran by resampling to a uniform scattering angle grid.
+    Supports wavelength and humidity/effective radius interpolation and normalization.
+    Produces phase function data ready for SMART-G's AerOPAC/Cloud phase parameter.
+
+    Parameters
+    ----------
+    filename : str | Path
+        Path to a libRadtran phase function NetCDF file (suffix: .cdf).
+        Examples: 'ssam.mie.cdf', 'wc.sol.mie.cdf', 'cloud.water.cdf'.
+        
+        The file must include variables:
+        - 'phase': phase matrix data [wavelength, rh/reff, nphamat, theta]
+        - 'wavelen': wavelength values (in micrometers)
+        - 'theta': scattering angle grids (non-uniform, varies per entry)
+        - 'ntheta': number of valid theta values per entry
+        - 'nphamat': number of Stokes matrix elements (typically 6)
+        - 'hum' or 'reff': relative humidity (%) or effective radius values
+
+    kind : str, optional
+        Medium label used in the theta dimension name ('theta_' + kind).
+        Accepted values are:
+        - 'atm' for atmosphere
+        - 'oc' for ocean
+        Default: 'atm'
+
+    normalize : bool, optional
+        If True, normalize the phase matrix P11 term such that the integral 
+        over all angles equals 2.
+
+    ntheta_max : int, optional
+        Maximum number of scattering angle points to use. If the file provides
+        higher resolution, it will be reduced to this limit.
+        Default: 18001
+
+    pfwav : float or array-like, optional
+        Wavelength(s) (in micrometers) to interpolate to. Required if the file
+        contains multiple wavelengths (nwl > 1).
+        This parameter has the same meaning as ``pfwav`` in the ``AtmAFGL``
+        constructor.
+        Default: None
+
+    pfgrid : array-like, optional
+        Altitude grid [z_top, z_1, z_2, ..., z_bottom] (in km, descending order) for
+        altitude-dependent phase functions. If provided with n_rh_reff > 1, the
+        z_rh_reff values will be interpolated onto this grid. The first element
+        (z_top) is skipped; remaining elements define the z_phase coordinate.
+        This parameter has the same meaning as ``pfgrid`` in the ``AtmAFGL``
+        constructor.
+        Default: None
+
+    z_rh_reff : float or array-like, optional
+        Interpolation target for the second phase-function axis:
+        - aerosol files: relative humidity (%)
+        - cloud files: effective radius (reff)
+        Required if the file contains multiple rh/reff values (n_rh_reff > 1).
+        If array-like (1-D), pfgrid must also be provided to map these values
+        to specific altitudes, and ``len(z_rh_reff)`` must equal
+        ``len(pfgrid) - 1``.
+        Default: None
+
+    Returns
+    -------
+    xr.DataArray
+        Phase matrix as xarray DataArray with dimensions:
+        - 'wav_phase': wavelength (in nm)
+        - 'z_phase': altitude (in km) from pfgrid or [0.]
+        - 'stk': phase matrix unique terms (0 to nphamat-1)
+          nphamat = 4 for spherical particles only
+          nphamat = 6 for spherical or non-spherical particles
+          (for spherical: P22=P11, P44=P33)
+        - 'theta_'+kind: scattering angle (in degrees)
+
+        Coordinates are replaced/renamed such that the rh/reff dimension
+        becomes 'z_phase' with values from pfgrid[1:] or [0.] if pfgrid is None.
+
+    Examples
+    --------
+    Read phase function for a single wavelength and rh value:
+
+    >>> pha = read_phase_cdf('ssam.mie.cdf', pfwav=550.0, z_rh_reff=[70.0, 60., 58.],
+        ...                  pfgrid=[100., 50., 10., 0.], normalize=True)
+    >>> pha.shape
+    (1, 3, 6, 18001)  # (wav_phase, z_phase, stk, theta_atm)
+    """
+
+    ds = xr.open_dataset(filename)
+
+    if 'hum' in ds.variables: 
+        rh_reff = ds["hum"].data
+        rh_or_reff = 'rh'
+    elif 'reff' in ds.variables:
+        rh_reff = ds["reff"].data
+        rh_or_reff = 'reff'
+    else:
+        raise Exception('Error')
+    
+    phase = ds["phase"][:, :, :, :].data
+
+    dtheta_min = np.nanmin(np.abs(np.diff(ds.theta.values, axis=3)))
+    ntheta = np.ceil(180 / dtheta_min).astype(int) + 1
+    ntheta = min(ntheta, ntheta_max) # be sure to not exceed ntheta_max
+    nphamat = ds.nphamat.size
+    n_rh_reff = rh_reff.size
+    nwl = ds["wavelen"].size
+    theta = np.linspace(0, 180, ntheta)
+    wl = ds["wavelen"].data*1e3
+
+    # checks at the beginning to avoid unnecessary computations
+    if nwl > 1 and pfwav is None:
+        raise ValueError( 
+            "Phase function file contains more than 1 wavelength. "
+            "Please provide the 'pfwav' parameter (float or 1-D array) "
+            "to select/interpolate the desired wavelength(s)."
+            )
+    if (  n_rh_reff > 1 and 
+          ( z_rh_reff is None or 
+            (not np.isscalar(z_rh_reff) and pfgrid is None ) )  ):
+        raise ValueError(
+            f"Phase function file contains more than 1 {rh_or_reff} value. "
+            "Please provide the 'z_rh_reff' parameter (float or 1-D array). "
+            "If 'z_rh_reff' is a 1-D array, also provide the 'pfgrid' "
+            "parameter (float or 1-D array) "
+            f"to select/interpolate the desired {rh_or_reff} value(s)."
+        )
+    if n_rh_reff > 1 and (not np.isscalar(z_rh_reff)):
+        z_rh_reff_arr = np.atleast_1d(z_rh_reff)
+        pfgrid_arr = np.atleast_1d(pfgrid)
+        if z_rh_reff_arr.size != pfgrid_arr.size - 1:
+            raise ValueError(
+                "Invalid 'z_rh_reff' size: when 'z_rh_reff' is a 1-D array, "
+                "its size must be len(pfgrid) - 1. "
+                f"Got len(z_rh_reff)={z_rh_reff_arr.size} and len(pfgrid)={pfgrid_arr.size}."
+            )
+
+    da_pha = xr.DataArray(np.zeros((nwl, n_rh_reff, nphamat, ntheta)), 
+                          coords=[wl, rh_reff, np.arange(nphamat), theta],
+                          dims=['wav_phase', rh_or_reff, 'stk', 'theta_'+kind],
+                          name='phase_'+kind)
+    
+    for iwav in range (0, nwl):
+        for irhreff in range(n_rh_reff):
+            for istk in range (nphamat):
+                nth = ds["ntheta"][iwav, irhreff, istk].data
+                th = ds["theta"][iwav, irhreff, istk, :].data
+                da_pha.data[iwav, irhreff, istk, :] = np.interp(theta, th[:nth], 
+                                                                phase[iwav,irhreff,istk,:nth],  
+                                                                period=np.inf)
+
+    if normalize:
+        mu = np.cos(np.deg2rad(theta))
+        idmu = np.argsort(mu)
+        for iwav in range (0, nwl):
+            for irhreff in range (0, n_rh_reff):
+                f = da_pha.data[iwav,irhreff,0,:] # P11 term
+                norm = np.trapezoid(f[idmu],mu[idmu])
+                da_pha.data[iwav,irhreff,:,:] *= 2./abs(norm)
+
+    if nwl > 1:
+        pfwav = np.atleast_1d(pfwav).astype(float)
+        da_pha = da_pha.interp(wav_phase=pfwav)
+
+    if n_rh_reff > 1:
+        z_rh_reff = np.atleast_1d(z_rh_reff).astype(np.float32)
+        da_pha = da_pha.interp({rh_or_reff: z_rh_reff}, kwargs={'bounds_error': True})
+
+    if pfgrid is None: z_phase = np.array([0.], dtype=float)
+    else: z_phase = np.atleast_1d(pfgrid).astype(np.float32)[1:]
+    
+    if da_pha.sizes[rh_or_reff] != z_phase.size:
+        raise ValueError(
+            f"Cannot replace '{rh_or_reff}' with 'z_phase': size mismatch "
+            f"({da_pha.sizes[rh_or_reff]} vs {z_phase.size})."
+        )
+    da_pha = da_pha.assign_coords({rh_or_reff: z_phase}).rename({rh_or_reff: 'z_phase'})
+
+    return da_pha
+
+
+def read_phase(filename, kind='atm', normalize=True, **kwargs):
+    """
+    Read phase function data from a file and dispatch to the proper reader.
+
+    This convenience function selects the backend according to the file suffix:
+
+    - ``.dat`` -> :func:`read_phase_dat`
+    - ``.nc`` -> :func:`read_phase_nc`
+    - ``.cdf`` -> :func:`read_phase_cdf`
+
+    Parameters
+    ----------
+    filename : str | Path
+        Path to a phase function file. Supported formats are ``.dat``, ``.nc``,
+        and ``.cdf``.
+
+    kind : str, optional
+        Medium label used in the theta dimension name ('theta_' + kind).
+        Accepted values are:
+        - 'atm' for atmosphere
+        - 'oc' for ocean
+        Default: 'atm'
+
+    normalize : bool, optional
+        If True, normalize the phase matrix P11 term such that the integral
+        over all angles equals 2.
+        Default: True
+
+    **kwargs : dict, optional
+        Additional keyword arguments forwarded to the selected backend reader:
+
+        - for ``.nc``: forwarded to :func:`read_phase_nc`
+        - for ``.cdf``: forwarded to :func:`read_phase_cdf`
+
+        Typical arguments include ``pfwav``, ``pfgrid``, ``z_rh_reff``, and
+        ``ntheta_max`` (only for ``.cdf``).
+
+    Returns
+    -------
+    xr.DataArray
+        Phase matrix data as returned by the selected backend reader.
+        All backends return a 4-dimensional array with dimensions:
+
+        - ``('wav_phase', 'z_phase', 'stk', 'theta_' + kind)``
+        
+        where 'stk' has size nphamat:
+        - nphamat = 4 for spherical particles only
+        - nphamat = 6 for spherical or non-spherical particles
+          (for spherical: P22=P11, P44=P33)
+
+    Examples
+    --------
+    >>> pha = read_phase('phase.dat', kind='atm', normalize=True)
+    >>> pha = read_phase('desert_sol.nc', kind='atm', pfwav=550.0,
+    ...                  z_rh_reff=[70.0, 60.0, 58.0],
+    ...                  pfgrid=[100.0, 50.0, 10.0, 0.0])
+    >>> pha = read_phase('ssam.mie.cdf', kind='atm', pfwav=550.0,
+    ...                  z_rh_reff=[70.0, 60.0, 58.0],
+    ...                  pfgrid=[100.0, 50.0, 10.0, 0.0],
+    ...                  ntheta_max=18001)
+    """
+
+    filename = Path(filename)
+
+    if not filename.is_file():
+        raise FileNotFoundError(f"Phase function file not found: {filename}")
+
+    supported_formats = ['.dat', '.nc', '.cdf']
+
+    if filename.suffix == '.dat':
+        return read_phase_dat(filename, kind=kind, normalize=normalize)
+    elif filename.suffix == '.nc':
+        return read_phase_nc(filename, kind=kind, normalize=normalize, **kwargs)
+    elif filename.suffix == '.cdf':
+        return read_phase_cdf(filename, kind=kind, normalize=normalize, **kwargs)
+    else:
+        raise ValueError(f"Unsupported phase function file format: " + \
+                         f"{filename.suffix}. Supported formats: {supported_formats}")
+

@@ -5,7 +5,8 @@
 import pytest
 
 from smartg.smartg import Smartg, Sensor, LambSurface, Albedo_cst
-from smartg.atmosphere import AtmAFGL, read_phase
+from smartg.atmosphere import AtmAFGL
+from smartg.phase import read_phase
 import pandas as pd
 import numpy as np
 
