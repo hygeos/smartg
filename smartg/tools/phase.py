@@ -4,7 +4,7 @@
 from __future__ import print_function, division
 from numpy import sin, cos, pi
 import numpy as np
-#from luts.luts import LUT
+
 
 def fournierForand(ang, n, mu):
     '''
@@ -66,18 +66,23 @@ def integ_phase(ang, pha):
 def calc_iphase(phase, wav_full, z_full, old_method=False):
     '''
     calculate phase function indices
-    phase is a LUT of shape [wav, z, stk, theta]
+    phase is an xr.DataArray of shape [wav_phase, z_phase, stk, theta]
+    or a LUT object (will be converted to xr.DataArray)
 
     returns (pha, ipha) where:
         * pha is an array reshaped from phase to [wav*z, stk, theta]
         * ipha is an array of phase function indices (starting from 0)
           in the full array [wav_full, z_full]
     '''
-    wav = phase.axes[0]
-    altitude = phase.axes[1]
+    # Deals with the case where the legacy LUT object is used for phase
+    if hasattr(phase, 'to_xarray'): phase = phase.to_xarray()
+    
+    # Extract wavelength and altitude coordinates from DataArray
+    wav = phase.coords['wav_phase'].values
+    altitude = phase.coords['z_phase'].values
 
     nwav, nz, nstk, ntheta = phase.shape
-    pha = phase.data.reshape(nwav*nz, nstk, ntheta)
+    pha = phase.values.reshape(nwav*nz, nstk, ntheta)
 
     ipha_w = np.array([np.abs(wav - x).argmin() for x in wav_full], dtype='int32')
     if old_method:
@@ -135,15 +140,19 @@ def get_ipha_a(z_full, z_pf, phase=None):
                 zmax_pf_k = grid_pf[ida_tmp[k]] + size_layers_pf[ida_tmp[k]]
                 pf_full_min = max(zmin_pf_k, zmin_full)
                 pf_full_max = min(zmax_pf_k, zmax_full)
-                if ( (phase == None) or (np.sum(phase[0,ida_tmp[k],0,:]) > 0.) ):
+                # Check if phase matrix is non-zero
+                if phase is None:
                     pfs_weight[k] = pf_full_max - pf_full_min
-                else:
-                    if (zmax_pf_k < 1e6) and ( (zmin_pf_k not in zmin_print) and (zmax_pf_k not in zmax_print)):
-                        print("Warning: null phase matrix between ", zmin_pf_k, " and ", zmax_pf_k,
-                              " detected! Please check pfgrid and/or grid (z_atm) values.")
-                        zmin_print.append(zmin_pf_k)
-                        zmax_print.append(zmax_pf_k)
-                    pfs_weight[k] = (pf_full_max - pf_full_min)*1e-6
+                else:  # phase is an xr.DataArray
+                    if np.sum(phase.values[0, ida_tmp[k], 0, :]) > 0.:
+                        pfs_weight[k] = pf_full_max - pf_full_min
+                    else:
+                        if (zmax_pf_k < 1e6) and ( (zmin_pf_k not in zmin_print) and (zmax_pf_k not in zmax_print)):
+                            print("Warning: null phase matrix between ", zmin_pf_k, " and ", zmax_pf_k,
+                                  " detected! Please check pfgrid and/or grid (z_atm) values.")
+                            zmin_print.append(zmin_pf_k)
+                            zmax_print.append(zmax_pf_k)
+                        pfs_weight[k] = (pf_full_max - pf_full_min)*1e-6
             ida[idz_full] = ida_tmp[np.argmax(pfs_weight)]
         elif (n_ida_tmp == 0 and np.sum(z_full) < 0.): # Particular case of min z_pf > min z_full in ocean
             ida[idz_full] = int(len(z_pf) - 1)
