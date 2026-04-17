@@ -109,7 +109,7 @@ def test_validation_artdeco(request, NB=1e6, VALPATH=DIR_AUXDATA):
         data[k,0,:,:] = np.genfromtxt(faer_phase, usecols=range(5), skip_header=(1+(2+N)*k+2), max_rows=N)
     data=data.swapaxes(2,3)
     phase_valid = LUT(data[:,:,1:,:],
-            names = ['wav_phase_atm', 'z_phase_atm', 'stk','theta'] ,
+            names = ['wav_phase', 'z_phase', 'stk','theta_atm'] ,
             axes  = [pfwav, [0], None, data[0,0,0,:]])
     data_valid=np.loadtxt(Path(VALPATH) / 'validation' / f"artdeco_lbl_nstr_32_ray_{typ}_O2.dat")
     aer_ext_valid  = aer_sca_valid + aer_abs_valid
