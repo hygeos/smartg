@@ -50,6 +50,7 @@ dependencies = [
     "geoclide>=3",
     "luts",
     "pytrunc",
+    "gatiab",
 ]
 
 [project.optional-dependencies]
@@ -60,7 +61,6 @@ test = [
     "papermill"
 ]
 extra = [
-    "gatiab",
     "statsmodels",
     "jax[cuda12]"
 ]
