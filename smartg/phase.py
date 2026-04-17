@@ -705,3 +705,48 @@ def convert_phase_to_iparper(pha):
 
     return pha_converted
 
+
+def get_prof_phases(phase, wav, z):
+    """
+    Generate prof_phases parameter for AtmAFGL from phase function data.
+    
+    Constructs the prof_phases tuple required by AtmAFGL initialization. This 
+    function directly produces the format needed for the prof_phases parameter.
+    
+    Parameters
+    ----------
+    phase : xr.DataArray
+        Phase matrix data read from read_phase(). Expected dimensions:
+        ('wav_phase', 'z_phase', 'stk', 'theta_atm')
+    wav : 1-D ndarray
+        Full wavelength grid in nanometers. Must match the wavelengths used
+        in AtmAFGL.calc() method. Equivalent to the 'wav' parameter passed 
+        to AtmAFGL.calc().
+    z : 1-D ndarray
+        Full altitude grid in kilometers (descending order from TOA to BOA). 
+        Must match the 'grid' parameter used in AtmAFGL initialization.
+    
+    Returns
+    -------
+    tuple
+        A tuple (ipha, phases) representing prof_phases parameter:
+        
+        - ipha : ndarray
+            Phase matrix indices for mapping the full wavelength/altitude grid
+        - phases : list of xr.DataArray
+            List of phase matrix DataArrays with dimensions 
+            ('stk', 'theta_atm')
+    """
+
+    pha_atm, ipha_atm = calc_iphase(phase, wav, z)
+    lpha_da = []
+    for i in range(pha_atm.shape[0]):
+        lpha_da.append(xr.DataArray(
+            pha_atm[i, :, :],
+            dims=['stk', 'theta_atm'],
+            coords={'theta_atm': phase.theta_atm.values}
+        ))
+
+    prof_phases = (ipha_atm, lpha_da)
+
+    return prof_phases
