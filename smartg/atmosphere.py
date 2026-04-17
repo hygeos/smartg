@@ -1571,9 +1571,12 @@ class AtmAFGL(Atmosphere):
                                'index of phase matrix'})
 
             # set the number of scattering angles to the maximum
-            ip  = np.array([p.axis('theta_atm').size for p in phases]).argmax()
-            theta = phases[ip].axis('theta_atm')
-            pha = np.stack([p[:,Idx(theta)] for p in phases])
+            # # convert legacy LUT to DataArray objects
+            phases = [x.to_xarray() if hasattr(x, 'to_xarray') else x for x in phases]
+            ip  = np.array([p.sizes['theta_atm'] for p in phases]).argmax()
+            theta = phases[ip].coords['theta_atm'].values
+            #TODO: use gatiab vec_float_indexing function bellow
+            pha = np.stack([p.interp(theta_atm=theta).values for p in phases])
             pro.add_axis('theta_atm', theta)
             pro.add_dataset('phase_atm', pha, axnames=['iphase', 'stk', 'theta_atm'],
                     attrs={'description':
