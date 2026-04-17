@@ -331,21 +331,29 @@ class AerOPAC(object):
         ext_ = np.zeros_like(dtau)
         ext_ref_ = np.zeros_like(dtau_ref)
         ssa_ = np.zeros_like(dtau)
+        hor = self.hum_or_reff
         for icont, cont in enumerate(self.vert_content):
-            if ((self.hum_or_reff == 'hum') and (self.force_rh[icont] is not None)) : rh_reff = np.full_like(hum_or_reff_val, self.force_rh[icont])
-            else                                                                    : rh_reff = hum_or_reff_val
+            cont = cont.to_xarray() if not isinstance(cont, xr.Dataset) else cont
+            if ((hor == 'hum') and (self.force_rh[icont] is not None)) : rh_reff = np.full_like(hum_or_reff_val, self.force_rh[icont])
+            else                                                      : rh_reff = hum_or_reff_val
+            # Clip to axis extrema to emulate legacy `fill_value='extrema,warn'` behavior
+            hor_vals = cont.coords[hor].values
+            wav_vals = cont.coords['wav'].values
+            rh_reff_c = np.clip(rh_reff, hor_vals.min(), hor_vals.max())
+            wav_c = np.clip(wav, wav_vals.min(), wav_vals.max())
+            w_ref_c = np.clip(self.w_ref, wav_vals.min(), wav_vals.max())
             if (len(rh_reff) == 1):
-                ext_tmp = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(rh_reff[:], fill_value='extrema,warn')][Idx(wav),:]
-                ext_ref_tmp = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(rh_reff[:], fill_value='extrema,warn')][Idx(self.w_ref),:]
-                ssa_tmp = cont['ssa'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(rh_reff[:], fill_value='extrema,warn')][Idx(wav),:]
+                ext_tmp = cont['ext'].interp({hor: rh_reff_c, 'wav': wav_c}).transpose('wav', hor).values
+                ext_ref_tmp = cont['ext'].interp({hor: rh_reff_c, 'wav': w_ref_c}).transpose('wav', hor).values
+                ssa_tmp = cont['ssa'].interp({hor: rh_reff_c, 'wav': wav_c}).transpose('wav', hor).values
                 for iz in range (0, len(Z)):
                     ext_[:,iz] = ext_tmp[:,0]
                     ext_ref_[:,iz] = ext_ref_tmp[:,0]
                     ssa_[:,iz] = ssa_tmp[:,0]
-            else:      
-                ext_ = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(rh_reff[:], fill_value='extrema,warn')][Idx(wav),:]
-                ext_ref_ = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(rh_reff[:], fill_value='extrema,warn')][Idx(self.w_ref),:]
-                ssa_ = cont['ssa'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(rh_reff[:], fill_value='extrema,warn')][Idx(wav),:]
+            else:
+                ext_ = cont['ext'].interp({hor: rh_reff_c, 'wav': wav_c}).transpose('wav', hor).values
+                ext_ref_ = cont['ext'].interp({hor: rh_reff_c, 'wav': w_ref_c}).transpose('wav', hor).values
+                ssa_ = cont['ssa'].interp({hor: rh_reff_c, 'wav': wav_c}).transpose('wav', hor).values
             dtau_ = np.zeros_like(dtau)
             dtau_ref_ = np.zeros_like(dtau_ref)
             h1 = np.maximum(self.H_min[icont], Z[1:])
