@@ -74,6 +74,17 @@ class IOP(IOP_base):
         self.atot = atot
         self.ap = ap
         self.aw = aw
+        if phase is not None and phase.shape[2] == 4:
+            pha_6 = np.zeros((phase.shape[0], phase.shape[1], 6, phase.shape[3]), dtype=np.float64)
+            pha_6[:,:,0:4,:] = phase[:,:,:,:].copy() # F11, F12, F33, F34
+            pha_6[:,:,4,:] = phase[:,:,0,:].copy() # F22 = F11
+            pha_6[:,:,5,:] = phase[:,:,2,:].copy() # F44 = F33
+            axes = list(phase.axes)
+            axes[2] = np.arange(6)
+            phase = LUT(
+                pha_6,
+                names=phase.names,
+                axes=axes,)
         self.phase = phase
         self.aCDOM = aCDOM
         self.Bp  = Bp
@@ -255,7 +266,7 @@ class IOP(IOP_base):
         ff2 = fournierForand(ang, 1.05, 3.259)[None,None,:]
 
         itronc = int(self.NANG * self.ang_trunc/180.)
-        pha = np.zeros((nwav, nz, NPSTK, self.NANG), dtype='float64')
+        pha = np.zeros((nwav, nz, 6, self.NANG), dtype='float64')
         r1 = ((self.Bp - 0.002)/0.028)[:,:,None]
 
         pha[:,:,0,:] = r1*ff1 + (1-r1)*ff2
@@ -266,6 +277,8 @@ class IOP(IOP_base):
         pha[:,:,1,:] = 0.
         pha[:,:,2,:] = 0.
         pha[:,:,3,:] = 0.
+        pha[:,:,4,:] = pha[:,:,0,:].copy() # P22 = P11
+        pha[:,:,5,:] = pha[:,:,2,:].copy() # P44 = P33
 
         pha[:,:,:,0] = 0.
 
@@ -275,9 +288,9 @@ class IOP(IOP_base):
 
         P = LUT(pha,  # stk, theta
             axes=[wav, self.Z, None, np.rad2deg(ang)],
-            names=['wav_phase_oc', 'z_phase_oc', 'stk', 'theta_oc'],
+            names=['wav_phase', 'z_phase', 'stk', 'theta_oc'],
            )
-        coef_trunc = LUT(integ_ff[:,:]*0.5, axes=[wav, self.Z], names=['wav_phase_oc', 'z_phase_oc'])
+        coef_trunc = LUT(integ_ff[:,:]*0.5, axes=[wav, self.Z], names=['wav_phase', 'z_phase'])
 
         return P, coef_trunc
 
@@ -591,7 +604,7 @@ class IOP_1(IOP_base):
         ff2 = fournierForand(ang, 1.05, 3.259)[None,:]
 
         itronc = int(self.NANG * self.ang_trunc/180.)
-        pha = np.zeros((nwav, 1, NPSTK, self.NANG), dtype='float64')
+        pha = np.zeros((nwav, 1, 6, self.NANG), dtype='float64')
         r1 = ((Bp - 0.002)/0.028)[:,None]
 
         pha[:,0,0,:] = r1*ff1 + (1-r1)*ff2
@@ -602,6 +615,8 @@ class IOP_1(IOP_base):
         pha[:,0,1,:] = 0.
         pha[:,0,2,:] = 0.
         pha[:,0,3,:] = 0.
+        pha[:,0,4,:] = pha[:,0,0,:].copy() # P22 = P11
+        pha[:,0,5,:] = pha[:,0,2,:].copy() # P44 = P33
 
         pha[:,:,:,0] = 0.
 
@@ -611,11 +626,11 @@ class IOP_1(IOP_base):
 
         # create output MLUT
         result = MLUT()
-        result.add_axis('wav_phase_oc', wav)
-        result.add_axis('z_phase_oc', np.array([0.]))
+        result.add_axis('wav_phase', wav)
+        result.add_axis('z_phase', np.array([0.]))
         result.add_axis('theta_oc', ang*180./np.pi)
-        result.add_dataset('phase', pha, ['wav_phase_oc', 'z_phase_oc', 'stk', 'theta_oc'])
-        result.add_dataset('coef_trunc', integ_ff[:,None]*0.5, ['wav_phase_oc', 'z_phase_oc'])
+        result.add_dataset('phase', pha, ['wav_phase', 'z_phase', 'stk', 'theta_oc'])
+        result.add_dataset('coef_trunc', integ_ff[:,None]*0.5, ['wav_phase', 'z_phase'])
 
         return result
 
@@ -853,6 +868,17 @@ class IOP_profile(IOP_base):
                 wav_pha = self.pfwav
             Bp = self.calc_iop(wav_pha)['Bp']
             pha = self.phase(wav_pha, Bp[:,1:])
+            if self.pha.shape[2] == 4:
+                pha_6 = np.zeros((pha.shape[0], pha.shape[1], 6, pha.shape[3]), dtype=np.float64)
+                pha_6[:,:,0:4,:] = pha[:,:,:,:].copy() # F11, F12, F33, F34
+                pha_6[:,:,4,:] = pha[:,:,0,:].copy() # F22 = F11
+                pha_6[:,:,5,:] = pha[:,:,2,:].copy() # F44 = F33
+                axes = list(pha.axes)
+                axes[2] = np.arange(6)
+                pha = LUT(
+                    pha_6,
+                    names=pha.names,
+                    axes=axes,)
 
             pha_, ipha = calc_iphase(pha['phase'], pro.axis('wavelength'), pro.axis('z_oc'), use_old_calc_iphase)
 
@@ -968,7 +994,7 @@ class IOP_profile(IOP_base):
         ff2 = fournierForand(ang, 1.05, 3.259)[None,None,:]
 
         itronc = int(self.NANG * self.ang_trunc/180.)
-        pha = np.zeros((nwav, nz, NPSTK, self.NANG), dtype='float64')
+        pha = np.zeros((nwav, nz, 6, self.NANG), dtype='float64')
         r1 = ((Bp - 0.002)/0.028)[:,:,None]
 
         pha[:,:,0,:] = r1*ff1 + (1-r1)*ff2
@@ -979,6 +1005,8 @@ class IOP_profile(IOP_base):
         pha[:,:,1,:] = 0.
         pha[:,:,2,:] = 0.
         pha[:,:,3,:] = 0.
+        pha[:,:,4,:] = pha[:,:,0,:].copy() # P22 = P11
+        pha[:,:,5,:] = pha[:,:,2,:].copy() # P44 = P
 
         pha[:,:,:,0] = 0.
 
@@ -988,11 +1016,11 @@ class IOP_profile(IOP_base):
 
         # create output MLUT
         result = MLUT()
-        result.add_axis('wav_phase_oc', wav)
-        result.add_axis('z_phase_oc', self.z[:-1])
-        #result.add_axis('z_phase_oc', -self.z[:-1])
-        result.add_axis('theta_oc', ang*180./np.pi)
-        result.add_dataset('phase', pha, ['wav_phase_oc', 'z_phase_oc', 'stk', 'theta_oc'])
-        result.add_dataset('coef_trunc', integ_ff[:,:]*0.5, ['wav_phase_oc', 'z_phase_oc'])
+        result.add_axis('wav_phase', wav)
+        result.add_axis('z_phase', self.z[:-1])
+        #result.add_axis('z_phase', -self.z[:-1])
+        result.add_axis('theta', ang*180./np.pi)
+        result.add_dataset('phase', pha, ['wav_phase', 'z_phase', 'stk', 'theta_oc'])
+        result.add_dataset('coef_trunc', integ_ff[:,:]*0.5, ['wav_phase', 'z_phase'])
 
         return result
