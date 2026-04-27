@@ -408,5 +408,7 @@ def test_desert_one_wl(request):
     fig.tight_layout()
     conftest.savefig(request, bbox_inches='tight')
 
-    assert np.all(np.isclose(pro['phase_atm'].values[:,0:4,:], pro_ref['phase_atm'].values[:,0:4,:], atol=1e-4, rtol=0.1)), \
+    ipha = pro['iphase_atm'][0,:].values
+    ipha_ref = pro_ref['iphase_atm'][0,:].values
+    assert np.all(np.isclose(pro['phase_atm'].values[ipha,0:4,:], pro_ref['phase_atm'].values[ipha_ref,0:4,:], atol=1e-4, rtol=0.1)), \
         f"Problem with desert one wl phase function"
