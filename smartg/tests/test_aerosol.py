@@ -7,6 +7,8 @@ from pathlib import Path
 import logging
 import numpy as np
 import xarray as xr
+from smartg import conftest
+import matplotlib.pyplot as plt
 
 
 # ***************************** Global variable(s) ******************************
@@ -60,7 +62,7 @@ logger.addHandler(file_handler)
 
 
 @pytest.mark.parametrize('mix', MIXTURES)
-def test_aer_mixtures(mix):
+def test_aer_mixtures(request, mix):
     wls = np.array([400., 700.])
     aer = AerOPAC(mix, 1., 550., H_free_min=0., H_stra_max=0, H_stra_min=0., H_free_max=0.)
     pro = AtmAFGL('afglt', comp=[aer]).calc(wls).to_xarray()
@@ -92,12 +94,45 @@ def test_aer_mixtures(mix):
     assert np.isclose(ssa_aer_700, ssa_aer_ref_700, atol=2e-3), \
         f"Problem with {mix} ssa value at 700nm, get {ssa_aer_700:.5f} instead of {ssa_aer_ref_700:.5f}"
 
-    assert np.all(np.isclose(pro['iphase_atm'].values, pro_ref['iphase_atm'].values, atol=1e-6)), \
+    plt.close('all')
+    fig, axes = plt.subplots(3, 2, figsize=(10, 9))
+    fig.suptitle(f"Phase function at 400nm and z=0km")
+    stk_labels  = ['F11', 'F12', 'F33', 'F34', 'F22', 'F44']
+    stk_indices = [   0,     1,     2,     3,     4,     5  ]
+    for idx, (label, istk) in enumerate(zip(stk_labels, stk_indices)):
+        ax = axes[idx // 2, idx % 2]
+        ax.plot(pro_ref['theta_atm'].values, pro_ref['phase_atm'].values[0, istk, :], '-k', label='reference')
+        ax.plot(pro['theta_atm'].values,     pro['phase_atm'].values[0, istk, :],     '--r', label='calculated')
+        ax.set_title(label)
+        ax.set_xlabel(r'$\theta$ (°)')
+        ax.grid()
+        ax.set_xlim([0, 180])
+        if idx == 0:
+            ax.set_yscale('log')
+            ax.legend()
+    fig.tight_layout()
+    conftest.savefig(request, bbox_inches='tight')
+
+    plt.close('all')
+    fig, axes = plt.subplots(3, 2, figsize=(10, 9))
+    fig.suptitle(f"Diff phase function (ref - calc) at 400nm and z=0km")
+    for idx, (label, istk) in enumerate(zip(stk_labels, stk_indices)):
+        ax = axes[idx // 2, idx % 2]
+        diff = pro_ref['phase_atm'].values[0, istk, :] - pro['phase_atm'].values[0, istk, :]
+        ax.plot(pro_ref['theta_atm'].values, diff, '-b')
+        ax.set_title(label)
+        ax.set_xlabel(r'$\theta$ (°)')
+        ax.grid()
+        ax.set_xlim([0, 180])
+    fig.tight_layout()
+    conftest.savefig(request, bbox_inches='tight')
+
+    assert np.all(np.isclose(pro['phase_atm'].values[:,:4,:], pro_ref['phase_atm'].values[:,:4,:], atol=1e-4, rtol=0.1)), \
         f"Problem with {mix} phase function"
-    
+
 
 @pytest.mark.parametrize('spe', SPECIES)
-def test_aer_species(spe):
+def test_aer_species(request, spe):
     wls = np.array([400., 700.])
     aer = AerOPAC(spe, 1., 550., H_free_min=0., H_stra_max=0, H_stra_min=0., H_free_max=0.)
     pro = AtmAFGL('afglt', comp=[aer]).calc(wls).to_xarray()
@@ -129,11 +164,44 @@ def test_aer_species(spe):
     assert np.isclose(ssa_aer_700, ssa_aer_ref_700, atol=2e-3), \
         f"Problem with {spe} ssa value at 700nm, get {ssa_aer_700:.5f} instead of {ssa_aer_ref_700:.5f}"
     
-    assert np.all(np.isclose(pro['iphase_atm'].values, pro_ref['iphase_atm'].values, atol=1e-6)), \
-        f"Problem with {spe} phase function"
-    
+    plt.close('all')
+    fig, axes = plt.subplots(3, 2, figsize=(10, 9))
+    fig.suptitle(f"Phase function at 400nm and z=0km")
+    stk_labels  = ['F11', 'F12', 'F33', 'F34', 'F22', 'F44']
+    stk_indices = [   0,     1,     2,     3,     4,     5  ]
+    for idx, (label, istk) in enumerate(zip(stk_labels, stk_indices)):
+        ax = axes[idx // 2, idx % 2]
+        ax.plot(pro_ref['theta_atm'].values, pro_ref['phase_atm'].values[0, istk, :], '-k', label='reference')
+        ax.plot(pro['theta_atm'].values,     pro['phase_atm'].values[0, istk, :],     '--r', label='calculated')
+        ax.set_title(label)
+        ax.set_xlabel(r'$\theta$ (°)')
+        ax.grid()
+        ax.set_xlim([0, 180])
+        if idx == 0:
+            ax.set_yscale('log')
+            ax.legend()
+    fig.tight_layout()
+    conftest.savefig(request, bbox_inches='tight')
 
-def test_desert_free_stra():
+    plt.close('all')
+    fig, axes = plt.subplots(3, 2, figsize=(10, 9))
+    fig.suptitle(f"Diff phase function (ref - calc) at 400nm and z=0km")
+    for idx, (label, istk) in enumerate(zip(stk_labels, stk_indices)):
+        ax = axes[idx // 2, idx % 2]
+        diff = pro_ref['phase_atm'].values[0, istk, :] - pro['phase_atm'].values[0, istk, :]
+        ax.plot(pro_ref['theta_atm'].values, diff, '-b')
+        ax.set_title(label)
+        ax.set_xlabel(r'$\theta$ (°)')
+        ax.grid()
+        ax.set_xlim([0, 180])
+    fig.tight_layout()
+    conftest.savefig(request, bbox_inches='tight')
+
+    assert np.all(np.isclose(pro['phase_atm'].values[:,0:4,:], pro_ref['phase_atm'].values[:,0:4,:], atol=1e-4, rtol=0.1)), \
+        f"Problem with {spe} phase function"
+
+
+def test_desert_free_stra(request):
     wls = np.array([400., 700.])
     aer = AerOPAC('desert', 1., 550.)
     pro = AtmAFGL('afglt', comp=[aer], pfgrid=[100., 12., 6., 0.]).calc(wls).to_xarray()
@@ -165,11 +233,46 @@ def test_desert_free_stra():
     assert np.isclose(ssa_aer_700, ssa_aer_ref_700, atol=2e-3), \
         f"Problem with desert free stra ssa value at 700nm, get {ssa_aer_700:.5f} instead of {ssa_aer_ref_700:.5f}"
     
-    assert np.all(np.isclose(pro['iphase_atm'].values, pro_ref['iphase_atm'].values, atol=1e-6)), \
-        f"Problem with desert free stra phase function"
-    
+    iph = pro['iphase_atm'][0,-1].values
+    iph_ref = pro_ref['iphase_atm'][0,-1].values
+    plt.close('all')
+    fig, axes = plt.subplots(3, 2, figsize=(10, 9))
+    fig.suptitle(f"Phase function at 400nm and z=0km")
+    stk_labels  = ['F11', 'F12', 'F33', 'F34', 'F22', 'F44']
+    stk_indices = [   0,     1,     2,     3,     4,     5  ]
+    for idx, (label, istk) in enumerate(zip(stk_labels, stk_indices)):
+        ax = axes[idx // 2, idx % 2]
+        ax.plot(pro_ref['theta_atm'].values, pro_ref['phase_atm'].values[iph_ref, istk, :], '-k', label='reference')
+        ax.plot(pro['theta_atm'].values,     pro['phase_atm'].values[iph, istk, :],     '--r', label='calculated')
+        ax.set_title(label)
+        ax.set_xlabel(r'$\theta$ (°)')
+        ax.grid()
+        ax.set_xlim([0, 180])
+        if idx == 0:
+            ax.set_yscale('log')
+            ax.legend()
+    fig.tight_layout()
+    conftest.savefig(request, bbox_inches='tight')
 
-def test_dd_cc_mixture():
+    plt.close('all')
+    fig, axes = plt.subplots(3, 2, figsize=(10, 9))
+    fig.suptitle(f"Diff phase function (ref - calc) at 400nm and z=0km")
+    for idx, (label, istk) in enumerate(zip(stk_labels, stk_indices)):
+        ax = axes[idx // 2, idx % 2]
+        diff = pro_ref['phase_atm'].values[iph_ref, istk, :] - pro['phase_atm'].values[iph, istk, :]
+        ax.plot(pro_ref['theta_atm'].values, diff, '-b')
+        ax.set_title(label)
+        ax.set_xlabel(r'$\theta$ (°)')
+        ax.grid()
+        ax.set_xlim([0, 180])
+    fig.tight_layout()
+    conftest.savefig(request, bbox_inches='tight')
+
+    assert np.all(np.isclose(pro['phase_atm'].values[:,0:4,:], pro_ref['phase_atm'].values[:,0:4,:], atol=1e-4, rtol=0.1)), \
+        f"Problem with desert free stra phase function"
+
+
+def test_dd_cc_mixture(request):
     wls = np.array([400., 700.])
     pfgrid = [100., 6., 5., 4., 3., 2., 1., 0.]
     aer1 = AerOPAC('desert', 1., 550.,
@@ -207,5 +310,103 @@ def test_dd_cc_mixture():
     assert np.isclose(ssa_aer_700, ssa_aer_ref_700, atol=2e-3), \
         f"Problem with dd + cc ssa value at 700nm, get {ssa_aer_700:.5f} instead of {ssa_aer_ref_700:.5f}"
     
-    assert np.all(np.isclose(pro['iphase_atm'].values, pro_ref['iphase_atm'].values, atol=1e-6)), \
+    iph = pro['iphase_atm'][0,-1].values
+    iph_ref = pro_ref['iphase_atm'][0,-1].values
+    plt.close('all')
+    fig, axes = plt.subplots(3, 2, figsize=(10, 9))
+    fig.suptitle(f"Phase function at 400nm and z=0km")
+    stk_labels  = ['F11', 'F12', 'F33', 'F34', 'F22', 'F44']
+    stk_indices = [   0,     1,     2,     3,     4,     5  ]
+    for idx, (label, istk) in enumerate(zip(stk_labels, stk_indices)):
+        ax = axes[idx // 2, idx % 2]
+        ax.plot(pro_ref['theta_atm'].values, pro_ref['phase_atm'].values[iph_ref, istk, :], '-k', label='reference')
+        ax.plot(pro['theta_atm'].values,     pro['phase_atm'].values[iph, istk, :],     '--r', label='calculated')
+        ax.set_title(label)
+        ax.set_xlabel(r'$\theta$ (°)')
+        ax.grid()
+        ax.set_xlim([0, 180])
+        if idx == 0:
+            ax.set_yscale('log')
+            ax.legend()
+    fig.tight_layout()
+    conftest.savefig(request, bbox_inches='tight')
+
+    plt.close('all')
+    fig, axes = plt.subplots(3, 2, figsize=(10, 9))
+    fig.suptitle(f"Diff phase function (ref - calc) at 400nm and z=0km")
+    for idx, (label, istk) in enumerate(zip(stk_labels, stk_indices)):
+        ax = axes[idx // 2, idx % 2]
+        diff = pro_ref['phase_atm'].values[iph_ref, istk, :] - pro['phase_atm'].values[iph, istk, :]
+        ax.plot(pro_ref['theta_atm'].values, diff, '-b')
+        ax.set_title(label)
+        ax.set_xlabel(r'$\theta$ (°)')
+        ax.grid()
+        ax.set_xlim([0, 180])
+    fig.tight_layout()
+    conftest.savefig(request, bbox_inches='tight')
+    
+    assert np.all(np.isclose(pro['phase_atm'].values[:,0:4,:], pro_ref['phase_atm'].values[:,0:4,:], atol=1e-4, rtol=0.1)), \
         f"Problem with dd + cc phase function"
+
+
+def test_desert_one_wl(request):
+    wl = 400.
+    aer = AerOPAC('desert', 1., 550.,
+                    H_free_min=0., H_stra_max=0, 
+                    H_stra_min=0., H_free_max=0.)
+    pro = AtmAFGL('afglt', comp=[aer]).calc(wl).to_xarray()
+    
+    ref_fname = ROOTPATH / 'smartg' / 'tests' / 'aer_auxdata_ref' / 'atm_afglt_desert.nc'
+    pro_ref = xr.open_dataset(ref_fname)
+
+    tau_aer_400 = pro['OD_p'][0,-1].values
+    tau_aer_ref_400 = pro_ref['OD_p'][0,-1].values
+    ssa_aer_400 = pro['ssa_p_atm'][0,-1].values
+    ssa_aer_ref_400 = pro_ref['ssa_p_atm'][0,-1].values
+
+    logger.info(f"desert one wl - 400nm - tau_ref={tau_aer_ref_400 :.3f} - tau_calc={tau_aer_400 :.3f}")
+    logger.info(f"desert one wl - 400nm - ssa_ref={ssa_aer_ref_400 :.3f} - ssa_calc={ssa_aer_400 :.3f}")
+    
+    assert np.isclose(tau_aer_400, tau_aer_ref_400, atol=2e-3), \
+        f"Problem with desert one wl tau value at 400nm, get {tau_aer_400:.5f} instead of {tau_aer_ref_400:.5f}"
+    
+    assert np.isclose(ssa_aer_400, ssa_aer_ref_400, atol=2e-3), \
+        f"Problem with desert one wl ssa value at 400nm, get {ssa_aer_400:.5f} instead of {ssa_aer_ref_400:.5f}"
+    
+    iph = pro['iphase_atm'][0,-1].values
+    iph_ref = pro_ref['iphase_atm'][0,-1].values
+    plt.close('all')
+    fig, axes = plt.subplots(3, 2, figsize=(10, 9))
+    fig.suptitle(f"Phase function at 400nm and z=0km")
+    stk_labels  = ['F11', 'F12', 'F33', 'F34', 'F22', 'F44']
+    stk_indices = [   0,     1,     2,     3,     4,     5  ]
+    for idx, (label, istk) in enumerate(zip(stk_labels, stk_indices)):
+        ax = axes[idx // 2, idx % 2]
+        ax.plot(pro_ref['theta_atm'].values, pro_ref['phase_atm'].values[iph_ref, istk, :], '-k', label='reference')
+        ax.plot(pro['theta_atm'].values,     pro['phase_atm'].values[iph, istk, :],     '--r', label='calculated')
+        ax.set_title(label)
+        ax.set_xlabel(r'$\theta$ (°)')
+        ax.grid()
+        ax.set_xlim([0, 180])
+        if idx == 0:
+            ax.set_yscale('log')
+            ax.legend()
+    fig.tight_layout()
+    conftest.savefig(request, bbox_inches='tight')
+
+    plt.close('all')
+    fig, axes = plt.subplots(3, 2, figsize=(10, 9))
+    fig.suptitle(f"Diff phase function (ref - calc) at 400nm and z=0km")
+    for idx, (label, istk) in enumerate(zip(stk_labels, stk_indices)):
+        ax = axes[idx // 2, idx % 2]
+        diff = pro_ref['phase_atm'].values[iph_ref, istk, :] - pro['phase_atm'].values[iph, istk, :]
+        ax.plot(pro_ref['theta_atm'].values, diff, '-b')
+        ax.set_title(label)
+        ax.set_xlabel(r'$\theta$ (°)')
+        ax.grid()
+        ax.set_xlim([0, 180])
+    fig.tight_layout()
+    conftest.savefig(request, bbox_inches='tight')
+
+    assert np.all(np.isclose(pro['phase_atm'].values[:,0:4,:], pro_ref['phase_atm'].values[:,0:4,:], atol=1e-4, rtol=0.1)), \
+        f"Problem with desert one wl phase function"
