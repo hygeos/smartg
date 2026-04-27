@@ -92,6 +92,9 @@ def test_aer_mixtures(mix):
     assert np.isclose(ssa_aer_700, ssa_aer_ref_700, atol=2e-3), \
         f"Problem with {mix} ssa value at 700nm, get {ssa_aer_700:.5f} instead of {ssa_aer_ref_700:.5f}"
 
+    assert np.all(np.isclose(pro['iphase_atm'].values, pro_ref['iphase_atm'].values, atol=1e-6)), \
+        f"Problem with {mix} phase function"
+    
 
 @pytest.mark.parametrize('spe', SPECIES)
 def test_aer_species(spe):
@@ -125,3 +128,6 @@ def test_aer_species(spe):
         f"Problem with {spe} ssa value at 400nm, get {ssa_aer_400:.5f} instead of {ssa_aer_ref_400:.5f}"
     assert np.isclose(ssa_aer_700, ssa_aer_ref_700, atol=2e-3), \
         f"Problem with {spe} ssa value at 700nm, get {ssa_aer_700:.5f} instead of {ssa_aer_ref_700:.5f}"
+    
+    assert np.all(np.isclose(pro['iphase_atm'].values, pro_ref['iphase_atm'].values, atol=1e-6)), \
+        f"Problem with {spe} phase function"
