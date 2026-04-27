@@ -168,3 +168,44 @@ def test_desert_free_stra():
     assert np.all(np.isclose(pro['iphase_atm'].values, pro_ref['iphase_atm'].values, atol=1e-6)), \
         f"Problem with desert free stra phase function"
     
+
+def test_dd_cc_mixture():
+    wls = np.array([400., 700.])
+    pfgrid = [100., 6., 5., 4., 3., 2., 1., 0.]
+    aer1 = AerOPAC('desert', 1., 550.,
+                    H_free_min=0., H_stra_max=0, 
+                    H_stra_min=0., H_free_max=0.)
+    aer2 = AerOPAC('continental_clean', 1., 550.,
+                    H_free_min=0., H_stra_max=0, 
+                    H_stra_min=0., H_free_max=0.)
+    pro = AtmAFGL('afglt', comp=[aer1, aer2], pfgrid=pfgrid).calc(wls).to_xarray()
+    
+    ref_fname = ROOTPATH / 'smartg' / 'tests' / 'aer_auxdata_ref' / 'atm_afglt_desert_cont_clean_mix.nc'
+    pro_ref = xr.open_dataset(ref_fname)
+
+    tau_aer_400 = pro['OD_p'][0,-1].values
+    tau_aer_ref_400 = pro_ref['OD_p'][0,-1].values
+    tau_aer_700 = pro['OD_p'][1,-1].values
+    tau_aer_ref_700 = pro_ref['OD_p'][1,-1].values
+    ssa_aer_400 = pro['ssa_p_atm'][0,-1].values
+    ssa_aer_ref_400 = pro_ref['ssa_p_atm'][0,-1].values
+    ssa_aer_700 = pro['ssa_p_atm'][1,-1].values
+    ssa_aer_ref_700 = pro_ref['ssa_p_atm'][1,-1].values
+
+    logger.info(f"dd + cc - 400nm - tau_ref={tau_aer_ref_400 :.3f} - tau_calc={tau_aer_400 :.3f}")
+    logger.info(f"dd + cc - 700nm - tau_ref={tau_aer_ref_700 :.3f} - tau_calc={tau_aer_700 :.3f}")
+    logger.info(f"dd + cc - 400nm - ssa_ref={ssa_aer_ref_400 :.3f} - ssa_calc={ssa_aer_400 :.3f}")
+    logger.info(f"dd + cc - 700nm - ssa_ref={ssa_aer_ref_700 :.3f} - ssa_calc={ssa_aer_700 :.3f}")
+
+    assert np.isclose(tau_aer_400, tau_aer_ref_400, atol=2e-3), \
+        f"Problem with dd + cc tau value at 400nm, get {tau_aer_400:.5f} instead of {tau_aer_ref_400:.5f}"
+    assert np.isclose(tau_aer_700, tau_aer_ref_700, atol=2e-3), \
+        f"Problem with dd + cc tau value at 700nm, get {tau_aer_700:.5f} instead of {tau_aer_ref_700:.5f}"
+    
+    assert np.isclose(ssa_aer_400, ssa_aer_ref_400, atol=2e-3), \
+        f"Problem with dd + cc ssa value at 400nm, get {ssa_aer_400:.5f} instead of {ssa_aer_ref_400:.5f}"
+    assert np.isclose(ssa_aer_700, ssa_aer_ref_700, atol=2e-3), \
+        f"Problem with dd + cc ssa value at 700nm, get {ssa_aer_700:.5f} instead of {ssa_aer_ref_700:.5f}"
+    
+    assert np.all(np.isclose(pro['iphase_atm'].values, pro_ref['iphase_atm'].values, atol=1e-6)), \
+        f"Problem with dd + cc phase function"
