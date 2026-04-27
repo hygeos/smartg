@@ -9,11 +9,10 @@ import numpy as np
 import xarray as xr
 from smartg import conftest
 import matplotlib.pyplot as plt
+from smartg.config import DIR_AUXDATA, DIR_ROOT
 
 
 # ***************************** Global variable(s) ******************************
-ROOTPATH = Path(__file__).resolve().parent.parent.parent
-
 MIXTURES = ['continental_clean','continental_average','continental_polluted',
             'urban','desert_spheric', 'desert', 'maritime_clean','maritime_polluted',
             'maritime_tropical','arctic','antarctic_spheric', 'antarctic']
@@ -30,7 +29,7 @@ SPECIES = ['miam','micm','minm',
 
 # *********************************** logging ***********************************
 # Create log file
-Path(ROOTPATH / 'smartg' / 'tests' / 'logs').mkdir(parents=True, exist_ok=True)
+Path(DIR_ROOT / 'smartg' / 'tests' / 'logs').mkdir(parents=True, exist_ok=True)
 
 # Create a named logger
 logger = logging.getLogger('test_aerosol')
@@ -49,7 +48,7 @@ console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
 # Create a file handler
-file_handler = logging.FileHandler(ROOTPATH / 'smartg' / 'tests' / 'logs' / 'aerosol.log', mode='w')
+file_handler = logging.FileHandler(DIR_ROOT / 'smartg' / 'tests' / 'logs' / 'aerosol.log', mode='w')
 file_handler.setLevel(logging.INFO)
 
 # Set the formatter for the file handler
@@ -67,7 +66,7 @@ def test_aer_mixtures(request, mix):
     aer = AerOPAC(mix, 1., 550., H_free_min=0., H_stra_max=0, H_stra_min=0., H_free_max=0.)
     pro = AtmAFGL('afglt', comp=[aer]).calc(wls).to_xarray()
 
-    ref_fname = ROOTPATH / 'smartg' / 'tests' / 'aer_auxdata_ref' / 'atm_afglt_{}.nc'.format(mix)
+    ref_fname = DIR_AUXDATA / 'aerosols' / 'test_ref' / 'atm_afglt_{}.nc'.format(mix)
     pro_ref = xr.open_dataset(ref_fname)
 
     tau_aer_400 = pro['OD_p'][0,-1].values
@@ -137,7 +136,7 @@ def test_aer_species(request, spe):
     aer = AerOPAC(spe, 1., 550., H_free_min=0., H_stra_max=0, H_stra_min=0., H_free_max=0.)
     pro = AtmAFGL('afglt', comp=[aer]).calc(wls).to_xarray()
 
-    ref_fname = ROOTPATH / 'smartg' / 'tests' / 'aer_auxdata_ref' / 'atm_afglt_{}.nc'.format(spe)
+    ref_fname = DIR_AUXDATA / 'aerosols' / 'test_ref' / 'atm_afglt_{}.nc'.format(spe)
     pro_ref = xr.open_dataset(ref_fname)
 
     tau_aer_400 = pro['OD_p'][0,-1].values
@@ -206,7 +205,7 @@ def test_desert_free_stra(request):
     aer = AerOPAC('desert', 1., 550.)
     pro = AtmAFGL('afglt', comp=[aer], pfgrid=[100., 12., 6., 0.]).calc(wls).to_xarray()
     
-    ref_fname = ROOTPATH / 'smartg' / 'tests' / 'aer_auxdata_ref' / 'atm_afglt_desert_free_stra.nc'
+    ref_fname = DIR_AUXDATA / 'aerosols' / 'test_ref' / 'atm_afglt_desert_free_stra.nc'
     pro_ref = xr.open_dataset(ref_fname)
 
     tau_aer_400 = pro['OD_p'][0,-1].values
@@ -283,7 +282,7 @@ def test_dd_cc_mixture(request):
                     H_stra_min=0., H_free_max=0.)
     pro = AtmAFGL('afglt', comp=[aer1, aer2], pfgrid=pfgrid).calc(wls).to_xarray()
     
-    ref_fname = ROOTPATH / 'smartg' / 'tests' / 'aer_auxdata_ref' / 'atm_afglt_desert_cont_clean_mix.nc'
+    ref_fname = DIR_AUXDATA / 'aerosols' / 'test_ref' / 'atm_afglt_desert_cont_clean_mix.nc'
     pro_ref = xr.open_dataset(ref_fname)
 
     tau_aer_400 = pro['OD_p'][0,-1].values
@@ -356,7 +355,7 @@ def test_desert_one_wl(request):
                     H_stra_min=0., H_free_max=0.)
     pro = AtmAFGL('afglt', comp=[aer]).calc(wl).to_xarray()
     
-    ref_fname = ROOTPATH / 'smartg' / 'tests' / 'aer_auxdata_ref' / 'atm_afglt_desert.nc'
+    ref_fname = DIR_AUXDATA / 'aerosols' / 'test_ref' / 'atm_afglt_desert.nc'
     pro_ref = xr.open_dataset(ref_fname)
 
     tau_aer_400 = pro['OD_p'][0,-1].values
