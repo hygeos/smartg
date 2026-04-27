@@ -131,3 +131,40 @@ def test_aer_species(spe):
     
     assert np.all(np.isclose(pro['iphase_atm'].values, pro_ref['iphase_atm'].values, atol=1e-6)), \
         f"Problem with {spe} phase function"
+    
+
+def test_desert_free_stra():
+    wls = np.array([400., 700.])
+    aer = AerOPAC('desert', 1., 550.)
+    pro = AtmAFGL('afglt', comp=[aer], pfgrid=[100., 12., 6., 0.]).calc(wls).to_xarray()
+    
+    ref_fname = ROOTPATH / 'smartg' / 'tests' / 'aer_auxdata_ref' / 'atm_afglt_desert_free_stra.nc'
+    pro_ref = xr.open_dataset(ref_fname)
+
+    tau_aer_400 = pro['OD_p'][0,-1].values
+    tau_aer_ref_400 = pro_ref['OD_p'][0,-1].values
+    tau_aer_700 = pro['OD_p'][1,-1].values
+    tau_aer_ref_700 = pro_ref['OD_p'][1,-1].values
+    ssa_aer_400 = pro['ssa_p_atm'][0,-1].values
+    ssa_aer_ref_400 = pro_ref['ssa_p_atm'][0,-1].values
+    ssa_aer_700 = pro['ssa_p_atm'][1,-1].values
+    ssa_aer_ref_700 = pro_ref['ssa_p_atm'][1,-1].values
+
+    logger.info(f"desert free stra - 400nm - tau_ref={tau_aer_ref_400 :.3f} - tau_calc={tau_aer_400 :.3f}")
+    logger.info(f"desert free stra - 700nm - tau_ref={tau_aer_ref_700 :.3f} - tau_calc={tau_aer_700 :.3f}")
+    logger.info(f"desert free stra - 400nm - ssa_ref={ssa_aer_ref_400 :.3f} - ssa_calc={ssa_aer_400 :.3f}")
+    logger.info(f"desert free stra - 700nm - ssa_ref={ssa_aer_ref_700 :.3f} - ssa_calc={ssa_aer_700 :.3f}")
+
+    assert np.isclose(tau_aer_400, tau_aer_ref_400, atol=2e-3), \
+        f"Problem with desert free stra tau value at 400nm, get {tau_aer_400:.5f} instead of {tau_aer_ref_400:.5f}"
+    assert np.isclose(tau_aer_700, tau_aer_ref_700, atol=2e-3), \
+        f"Problem with desert free stra tau value at 700nm, get {tau_aer_700:.5f} instead of {tau_aer_ref_700:.5f}"
+    
+    assert np.isclose(ssa_aer_400, ssa_aer_ref_400, atol=2e-3), \
+        f"Problem with desert free stra ssa value at 400nm, get {ssa_aer_400:.5f} instead of {ssa_aer_ref_400:.5f}"
+    assert np.isclose(ssa_aer_700, ssa_aer_ref_700, atol=2e-3), \
+        f"Problem with desert free stra ssa value at 700nm, get {ssa_aer_700:.5f} instead of {ssa_aer_ref_700:.5f}"
+    
+    assert np.all(np.isclose(pro['iphase_atm'].values, pro_ref['iphase_atm'].values, atol=1e-6)), \
+        f"Problem with desert free stra phase function"
+    

@@ -29,6 +29,7 @@ def fournierForand(ang, n, mu):
 
     return res
 
+
 def fournierForandB(n, mu):
     '''
     backscatter fraction of the Fournier-Forand phase function
@@ -37,6 +38,7 @@ def fournierForandB(n, mu):
     v = (3.-mu)/2.
     B   = 1 - (1 - d90**(v+1) - 0.5*(1-d90**v))/((1-d90)*d90**v)
     return B
+
 
 def henyeyGreenstein(angle, g):
     '''
@@ -49,6 +51,7 @@ def henyeyGreenstein(angle, g):
     See http://www.oceanopticsbook.info/view/scattering/the_henyeygreenstein_phase_function
     '''
     return (1 - g*g)/((1 + g*g - 2*g*cos(angle))**1.5)
+
 
 def integ_phase(ang, pha):
     '''
@@ -65,6 +68,7 @@ def integ_phase(ang, pha):
     sin2 = np.sin(ang[1:])
 
     return np.sum(dtheta*((sin1*pm1+sin2*pm2)/3. + (sin1*pm2+sin2*pm1)/6.), axis=-1)
+
 
 def calc_iphase(phase, wav_full, z_full, old_method=False):
     '''
