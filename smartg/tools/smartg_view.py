@@ -790,13 +790,18 @@ def phase_view(ds_sg, ipha=None, fig=None, axarr=None, iw=0, kind='atm',
         else:
             ni = [0]
     else:
-        # Handle ipha as int or 1-D ndarray
-        if isinstance(ipha, np.ndarray):
-            ni = ipha.tolist()
-        elif isinstance(ipha, (list, tuple)):
-            ni = list(ipha)
+        # Handle ipha as int-like scalar, DataArray scalar, or 1-D iterable.
+        if hasattr(ipha, 'values'):
+            ipha_arr = np.asarray(ipha.values)
         else:
-            ni = [ipha]
+            ipha_arr = np.asarray(ipha)
+
+        if ipha_arr.ndim == 0:
+            ni = [int(ipha_arr.item())]
+        elif ipha_arr.ndim == 1:
+            ni = [int(x) for x in ipha_arr.tolist()]
+        else:
+            raise ValueError("ipha must be an int-like scalar or a 1-D array of int-like values")
         
         # Validate that all given ipha values exist in iphase_data at wavelength iw
         iphase_key = 'iphase_'+kind
@@ -806,8 +811,9 @@ def phase_view(ds_sg, ipha=None, fig=None, axarr=None, iw=0, kind='atm',
                 valid_phases = np.unique(iphase_data[iw, :])
             else:
                 valid_phases = np.unique(iphase_data)
+            valid_phases_set = set(np.asarray(valid_phases).astype(int).tolist())
             for phase_idx in ni:
-                if phase_idx not in valid_phases:
+                if phase_idx not in valid_phases_set:
                     raise ValueError(f"Phase index {phase_idx} not found in iphase_{kind} at wavelength index {iw}. Valid indices: {sorted(valid_phases.tolist())}")
     
     for i in ni:
