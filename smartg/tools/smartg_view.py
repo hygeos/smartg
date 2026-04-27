@@ -714,8 +714,9 @@ def phase_view(ds_sg, ipha=None, fig=None, axarr=None, iw=0, kind='atm',
         An xarray Dataset from SMART-G, can be from simulation results or smartg input
         profile, containing phase function data with variables 'phase_atm' or 'phase_oc', 
         and 'OD_atm' or 'OD_oc'.
-    ipha : int, optional
-        Absolute index of the phase function coming from Profile.
+    ipha : int | 1-D ndarray, optional
+        Absolute index (or indices) of the phase function(s) coming from Profile.
+        Can be an int (single index) or 1-D ndarray of int indices.
         If None, uses all unique indices from iphase_kind.
     fig : matplotlib.figure.Figure, optional
         Figure object. If None, creates a new figure.
@@ -787,7 +788,13 @@ def phase_view(ds_sg, ipha=None, fig=None, axarr=None, iw=0, kind='atm',
         else:
             ni = [0]
     else:
-        ni = [ipha]
+        # Handle ipha as int or 1-D ndarray
+        if isinstance(ipha, np.ndarray):
+            ni = ipha.tolist()
+        elif isinstance(ipha, (list, tuple)):
+            ni = list(ipha)
+        else:
+            ni = [ipha]
     
     for i in ni:
         if nstk == 4:
