@@ -127,7 +127,7 @@ def test_aer_mixtures(request, mix):
     fig.tight_layout()
     conftest.savefig(request, bbox_inches='tight')
 
-    assert np.all(np.isclose(pro['phase_atm'].values[:,:4,:], pro_ref['phase_atm'].values[:,:4,:], atol=1e-4, rtol=0.1)), \
+    assert np.all(np.isclose(pro['phase_atm'].values[:,:4,:], pro_ref['phase_atm'].values[:,:4,:], atol=1e-5, rtol=1e-3)), \
         f"Problem with {mix} phase function"
 
 
@@ -197,7 +197,7 @@ def test_aer_species(request, spe):
     fig.tight_layout()
     conftest.savefig(request, bbox_inches='tight')
 
-    assert np.all(np.isclose(pro['phase_atm'].values[:,0:4,:], pro_ref['phase_atm'].values[:,0:4,:], atol=1e-4, rtol=0.1)), \
+    assert np.all(np.isclose(pro['phase_atm'].values[:,0:4,:], pro_ref['phase_atm'].values[:,0:4,:], atol=1e-5, rtol=1e-3)), \
         f"Problem with {spe} phase function"
 
 
@@ -268,7 +268,7 @@ def test_desert_free_stra(request):
     fig.tight_layout()
     conftest.savefig(request, bbox_inches='tight')
 
-    assert np.all(np.isclose(pro['phase_atm'].values[:,0:4,:], pro_ref['phase_atm'].values[:,0:4,:], atol=1e-4, rtol=0.1)), \
+    assert np.all(np.isclose(pro['phase_atm'].values[:,0:4,:], pro_ref['phase_atm'].values[:,0:4,:], atol=1e-5, rtol=1e-3)), \
         f"Problem with desert free stra phase function"
 
 
@@ -345,7 +345,7 @@ def test_dd_cc_mixture(request):
     fig.tight_layout()
     conftest.savefig(request, bbox_inches='tight')
     
-    assert np.all(np.isclose(pro['phase_atm'].values[:,0:4,:], pro_ref['phase_atm'].values[:,0:4,:], atol=1e-4, rtol=0.1)), \
+    assert np.all(np.isclose(pro['phase_atm'].values[:,0:4,:], pro_ref['phase_atm'].values[:,0:4,:], atol=1e-5, rtol=1e-3)), \
         f"Problem with dd + cc phase function"
 
 
@@ -410,5 +410,5 @@ def test_desert_one_wl(request):
 
     ipha = pro['iphase_atm'][0,:].values
     ipha_ref = pro_ref['iphase_atm'][0,:].values
-    assert np.all(np.isclose(pro['phase_atm'].values[ipha,0:4,:], pro_ref['phase_atm'].values[ipha_ref,0:4,:], atol=1e-4, rtol=0.1)), \
+    assert np.all(np.isclose(pro['phase_atm'].values[ipha,0:4,:], pro_ref['phase_atm'].values[ipha_ref,0:4,:], atol=1e-5, rtol=1e-3)), \
         f"Problem with desert one wl phase function"
