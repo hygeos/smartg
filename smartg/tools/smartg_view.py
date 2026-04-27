@@ -782,8 +782,10 @@ def phase_view(ds_sg, ipha=None, fig=None, axarr=None, iw=0, kind='atm',
         if iphase_key in ds_sg:
             iphase_data = ds_sg[iphase_key].values
             if nd > 1:
-                ni = np.unique(iphase_data)
+                # Multi-wavelength case: get unique phases at the specific wavelength iw
+                ni = np.unique(iphase_data[iw, :])
             else:
+                # Single wavelength case
                 ni = np.unique(iphase_data)
         else:
             ni = [0]
@@ -795,6 +797,18 @@ def phase_view(ds_sg, ipha=None, fig=None, axarr=None, iw=0, kind='atm',
             ni = list(ipha)
         else:
             ni = [ipha]
+        
+        # Validate that all given ipha values exist in iphase_data at wavelength iw
+        iphase_key = 'iphase_'+kind
+        if iphase_key in ds_sg:
+            iphase_data = ds_sg[iphase_key].values
+            if nd > 1:
+                valid_phases = np.unique(iphase_data[iw, :])
+            else:
+                valid_phases = np.unique(iphase_data)
+            for phase_idx in ni:
+                if phase_idx not in valid_phases:
+                    raise ValueError(f"Phase index {phase_idx} not found in iphase_{kind} at wavelength index {iw}. Valid indices: {sorted(valid_phases.tolist())}")
     
     for i in ni:
         if nstk == 4:
