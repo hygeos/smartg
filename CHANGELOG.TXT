@@ -6,6 +6,94 @@
            ###########################
 
 
+v2.0.0
+------
+Release date: xxx
+
+Note: this changelog entry has been started during the `v2.0.0dev1` stage and
+will be completed and corrected before the final `v2.0.0` release.
+
+* Several breaking changes
+  - The `phase` module has been moved from `smartg/tools/` to `smartg/`
+    -> import from `smartg.phase` instead of `smartg.tools.phase`
+  - The `read_phase`, `read_phase_dat`, `read_phase_nc`, `read_phase_cdf` and
+    `convert_phase_to_iparper` functions have been moved from `smartg.atmosphere`
+    to `smartg.phase`
+  - `read_phase_dat`, `read_phase_nc` and `read_phase_cdf` now always return a
+    4-D `xr.DataArray` (dims: `wav_phase`, `z_phase`, `stk`, `theta_atm/oc`).
+    The `nphamat` dimension is no longer squeezed when its size is 1.
+  - The `conv_Iparper` parameter has been removed from `AerOPAC.phase()`,
+    `Cloud.phase()` and `AtmAFGL.calc()`. The IQ → Ipar/Iper conversion is now
+    performed automatically inside the `run()` method (only for atmospheric phases).
+  - Several functions in `smartg.atmosphere` have been renamed for consistency:
+    - `pha2Iparperconv`  → `convert_phase_to_iparper`
+    - `BPlanck`          → `blackbody_radiance`
+    - `rod`              → `rayleigh_od`
+    - `raycrs`           → `rayleigh_crs`
+    - `g` / `g0`         → `gravity_z` / `gravity_z0`
+    - `FN2` / `FO2` / `Fair` → `f_n2` / `f_o2` / `f_air_co2`
+    - `ma`               → `m_dry_air`
+    - `n300` / `n_air`   → `n_air_co2_300` / `n_air_co2`
+    - `RH` method        → `relative_humidity`
+  - Several functions in `smartg.tools.smartg_view` have been renamed:
+    - `plot_polar_xr`    → `plot_polar`
+    - `transect2D_xr`    → `transect2D`
+    - `ds_out` parameter → `ds_sg` in `smartg_view`
+  - `smartg_view`, `transect_view`, `spectrum_view`, `profile_view` and `phase_view`
+    now expect an `xr.Dataset` instead of an MLUT (MLUT still accepted with a
+    deprecation warning)
+  - The `new_atm` parameter of `AtmAFGL` has been removed
+  - The `change_altitude_grid` external function has been removed (use `str2grid_arr`)
+  - The deprecated `lib3D` module and legacy geometric modules have been removed
+  - Several obsolete utility functions removed: `average`, `isiterable`, `isnumeric`,
+    `vapor_pressure`, `lut_to_xr`, `compare_spectrum`, `convertVtoAngles`,
+    `convertAnglestoV`, `Analyse_create_entity`, `trapzinterp`
+
+* New features
+  - New `AerUser` class in `smartg.atmosphere` to define custom aerosol / cloud
+    optical properties (extinction, SSA, phase matrix) from user-supplied data
+  - New `get_prof_phases` utility function to easily extract phase matrices from
+    an existing simulation profile
+  - `prof_phases` parameter of `AtmAFGL` now also accepts `xr.DataArray` objects
+    in addition to LUT objects
+  - New `read_phase` dispatcher function accepting `.dat`, `.nc` and `.cdf` files
+  - New `read_phase_nc` function to read phase matrices from NetCDF files
+  - New `read_phase_cdf` function to read phase matrices from libRadtran-style
+    CDF files, with optional wavelength / altitude sub-selection
+  - ALIS mode: new options for AMF computation (`amf_variance`, `cdist_wabs`,
+    `nscl`, `scatter_classes`, `norders` parameters of `Smartg`)
+    - `amf_variance=True`: enables storage of ⟨D²⟩ (second moment of photon
+      path lengths) for Jensen bias correction
+    - `cdist_wabs=True`: includes absorption weight in `cdist` accumulation
+    - `nscl` / `scatter_classes` / `norders`: scatter-class decomposition for
+      AMF (by last-scattering layer, scattering order, or both combined)
+  - `MAX_NREF` increased from 10 to 100
+  - Aeronet read functions (`read_Aeronet_PFN`, etc.) now return `xr.DataArray`
+    instead of LUT objects
+  - Push to PyPI workflow added
+
+* Corrections
+  - Important corrections in the water (ocean) module:
+    - Phase matrix always extended to 6 Stokes components (P22=P11, P44=P33 for
+      spherical particles)
+    - Dimension names harmonised (`wav_phase_oc` / `z_phase_oc` → `wav_phase` /
+      `z_phase`) for consistency with the atmospheric phase pipeline
+  - Fix out-of-bounds index error in `AerOPAC.dtau_ssa` when relative humidity
+    or wavelength is exactly at the upper axis boundary
+  - The `ipha` parameter of `phase_view` in `smartg_view` is now flexible:
+    accepts an `int`, an `xr.DataArray` scalar, or a 1-D ndarray of indices;
+    validation against the correct wavelength slice of `iphase_atm/oc` is performed
+
+* Deprecation removal
+  - All functions and classes deprecated before v1.2.0 have been removed
+    (see breaking changes above)
+  - Removed deprecated modules:
+    - `smartg.geometry`
+    - `smartg.transform`
+    - deprecated legacy geometric modules replaced by `geoclide`
+    - old deprecated `lib3D` module
+
+
 v1.2.0
 ------
 Release date: 2026-03-13
