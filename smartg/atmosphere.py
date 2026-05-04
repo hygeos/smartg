@@ -45,6 +45,7 @@ from scipy import constants
 from scipy.constants import speed_of_light, Planck, Boltzmann
 from smartg.bandset import BandSet
 from smartg.config import DIR_AUXDATA
+from gatiab import vec_float_indexing
 import pandas as pd
 import xarray as xr
 from tempfile import TemporaryDirectory
@@ -336,24 +337,38 @@ class AerOPAC(object):
             cont = cont.to_xarray() if not isinstance(cont, xr.Dataset) else cont
             if ((hor == 'hum') and (self.force_rh[icont] is not None)) : rh_reff = np.full_like(hum_or_reff_val, self.force_rh[icont])
             else                                                      : rh_reff = hum_or_reff_val
-            # Clip to axis extrema to emulate legacy `fill_value='extrema,warn'` behavior
-            hor_vals = cont.coords[hor].values
-            wav_vals = cont.coords['wav'].values
-            rh_reff_c = np.clip(rh_reff, hor_vals.min(), hor_vals.max())
-            wav_c = np.clip(wav, wav_vals.min(), wav_vals.max())
-            w_ref_c = np.clip(self.w_ref, wav_vals.min(), wav_vals.max())
+            # Axes values
+            hor_vals = cont.coords[hor].values.astype(np.float64)
+            wav_vals = cont.coords['wav'].values.astype(np.float64)
+            # Data in (hor, wav) order
+            ext_data = cont['ext'].values.astype(np.float64)  # (hor, wav)
+            ssa_data = cont['ssa'].values.astype(np.float64)  # (hor, wav)
+            # Float indices with extrema fill for humidity/reff, strict bounds for wavelength
+            nhor = len(hor_vals)
+            nwav_orig = len(wav_vals)
+            idf_hor = interp1d(hor_vals, np.arange(nhor), bounds_error=False, fill_value=(0, nhor-1))(np.float64(rh_reff))
+            idf_wav = interp1d(wav_vals, np.arange(nwav_orig))(np.float64(wav))
+            idf_wav_ref = interp1d(wav_vals, np.arange(nwav_orig))(np.float64(self.w_ref))
             if (len(rh_reff) == 1):
-                ext_tmp = cont['ext'].interp({hor: rh_reff_c, 'wav': wav_c}).transpose('wav', hor).values
-                ext_ref_tmp = cont['ext'].interp({hor: rh_reff_c, 'wav': w_ref_c}).transpose('wav', hor).values
-                ssa_tmp = cont['ssa'].interp({hor: rh_reff_c, 'wav': wav_c}).transpose('wav', hor).values
+                # Interpolate along hor (dim 0) -> (1, wav_orig)
+                ext_at_hor = vec_float_indexing(ext_data, [idf_hor, slice(None)])  # (1, wav_orig)
+                ssa_at_hor = vec_float_indexing(ssa_data, [idf_hor, slice(None)])  # (1, wav_orig)
+                # Transpose to (wav_orig, 1), interpolate along wav (dim 0) -> (nwav, 1)
+                ext_tmp = vec_float_indexing(ext_at_hor.T, [idf_wav, slice(None)])      # (nwav, 1)
+                ext_ref_tmp = vec_float_indexing(ext_at_hor.T, [idf_wav_ref, slice(None)])  # (nwav_ref, 1)
+                ssa_tmp = vec_float_indexing(ssa_at_hor.T, [idf_wav, slice(None)])      # (nwav, 1)
                 for iz in range (0, len(Z)):
                     ext_[:,iz] = ext_tmp[:,0]
                     ext_ref_[:,iz] = ext_ref_tmp[:,0]
                     ssa_[:,iz] = ssa_tmp[:,0]
             else:
-                ext_ = cont['ext'].interp({hor: rh_reff_c, 'wav': wav_c}).transpose('wav', hor).values
-                ext_ref_ = cont['ext'].interp({hor: rh_reff_c, 'wav': w_ref_c}).transpose('wav', hor).values
-                ssa_ = cont['ssa'].interp({hor: rh_reff_c, 'wav': wav_c}).transpose('wav', hor).values
+                # Interpolate along hor (dim 0) -> (nhor_query, wav_orig)
+                ext_at_hor = vec_float_indexing(ext_data, [idf_hor, slice(None)])  # (nhor, wav_orig)
+                ssa_at_hor = vec_float_indexing(ssa_data, [idf_hor, slice(None)])  # (nhor, wav_orig)
+                # Transpose to (wav_orig, nhor), interpolate along wav (dim 0) -> (nwav, nhor)
+                ext_ = vec_float_indexing(ext_at_hor.T, [idf_wav, slice(None)])      # (nwav, nhor)
+                ext_ref_ = vec_float_indexing(ext_at_hor.T, [idf_wav_ref, slice(None)])  # (nwav_ref, nhor)
+                ssa_ = vec_float_indexing(ssa_at_hor.T, [idf_wav, slice(None)])      # (nwav, nhor)
             dtau_ = np.zeros_like(dtau)
             dtau_ref_ = np.zeros_like(dtau_ref)
             h1 = np.maximum(self.H_min[icont], Z[1:])
