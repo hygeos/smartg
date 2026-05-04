@@ -22,7 +22,7 @@ dependencies:
   - ipywidgets
   - ipympl
   - pyhdf
-  - gatiab
+  - gatiab>=1.1.1
   - geoclide
   - statsmodels
   - luts
