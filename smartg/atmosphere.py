@@ -171,7 +171,7 @@ class AerOPAC(object):
                  Z_mix=None, Z_free=None, Z_stra=None, ssa=None, phase=None,
                  rh_mix=None, rh_free=None, rh_stra=None):
         
-        self.tau_ref = tau_ref
+        self.tau_ref = tau_ref.to_xarray() if isinstance(tau_ref, LUT) else tau_ref
         if (np.isscalar(w_ref) or
             (isinstance(w_ref, np.ndarray) and w_ref.ndim == 0) ) : self.w_ref = np.array([w_ref])
         else                                                      : self.w_ref = np.array(w_ref)
@@ -187,12 +187,14 @@ class AerOPAC(object):
         else           :
             if (isinstance(ssa, list)) :
                 ssa = np.array(ssa)
-            if ( np.isscalar(ssa)                                 or
-                 (isinstance(ssa, np.ndarray) and (ssa.ndim <=2)) or
-                 isinstance(ssa, LUT) ):
+            if np.isscalar(ssa) or (isinstance(ssa, np.ndarray) and (ssa.ndim <=2)):
+                self.ssa = ssa
+            elif isinstance(ssa, LUT):
+                self.ssa = ssa.to_xarray()
+            elif isinstance(ssa, xr.DataArray):
                 self.ssa = ssa
             else:
-                raise ValueError ("The ssa variable must a scalar, a list, an ndarray of dim <= 2, or a LUT.")
+                raise ValueError ("The ssa variable must a scalar, a list, an ndarray of dim <= 2, a LUT or a DataArray.")
                     
         filename = Path(filename)
         if filename.parent == Path('.'):  # no directory given
@@ -209,20 +211,13 @@ class AerOPAC(object):
 
         self.filename = filename
 
-        self.mixture = read_mlut(self.filename)
-        # check if hum dim size == 1 (to avoid lut sub bug)
-        if (self.mixture.axes['hum'].size == 1):
-            hum_v1 = self.mixture.axes['hum'][0]
+        self.mixture = xr.open_dataset(self.filename)
+        # check if hum dim size == 1 (to avoid interpolation/indexing crash)
+        if self.mixture.sizes['hum'] == 1:
+            hum_v1 = float(self.mixture.coords['hum'].values[0])
             hum_v2 = hum_v1 + 1
-            m1 = deepcopy(self.mixture).sub({'hum':0.})
-            m2 = deepcopy(m1)
-            m1.set_attr('hum',hum_v1)
-            m2.set_attr('hum',hum_v2)
-            m3 = merge([m1,m2], ['hum'])
-            self.mixture = m3
-        self.hum_or_reff = "hum"
-        self.free_tropo = None
-        self.strato = None
+            ds2 = self.mixture.assign_coords(hum=[hum_v2])
+            self.mixture = xr.concat([self.mixture, ds2], dim='hum')
 
         if H_mix_min is None : H_mix_min = float(self.mixture.attrs['H_mix_min'])
         if H_mix_max is None : H_mix_max = float(self.mixture.attrs['H_mix_max'])
@@ -237,6 +232,9 @@ class AerOPAC(object):
             if self.mixture.attrs['Z_stra'] == '99' : Z_stra = 1e6 # -> OPAC Z=99 for constant vertical dist
             else                                    : Z_stra = float(self.mixture.attrs['Z_stra'])
 
+        self.hum_or_reff = "hum"
+        self.free_tropo = None
+        self.strato = None
 
         self.force_rh = [rh_mix, rh_free, rh_stra]
         self.vert_content = []
@@ -256,11 +254,12 @@ class AerOPAC(object):
             if len(self.vert_content) > 0:
                 aer_prev = self.vert_content[-1]
                 w_cur = self.free_tropo.axes['wav']
-                w_prev = aer_prev.axes['wav']
+                w_prev = aer_prev.wav.values
                 nwcur = len(w_cur)
                 nwprev = len(w_prev)
                 if (nwcur != nwprev or (nwcur == nwprev and not np.array_equal(w_cur, w_prev)) ):
                     self.free_tropo = self.free_tropo.sub({'wav': Idx(w_prev, fill_value='extrema,warn')})
+                self.free_tropo = self.free_tropo.to_xarray()
             self.vert_content.append(self.free_tropo)
             self.H_min.append(H_free_min)
             self.H_max.append(H_free_max)
@@ -272,11 +271,12 @@ class AerOPAC(object):
             if len(self.vert_content) > 0:
                 aer_prev = self.vert_content[-1]
                 w_cur = self.strato.axes['wav']
-                w_prev = aer_prev.axes['wav']
+                w_prev = aer_prev.wav.values
                 nwcur = len(w_cur)
                 nwprev = len(w_prev)
                 if (nwcur != nwprev or (nwcur == nwprev and not np.array_equal(w_cur, w_prev)) ):
                     self.strato = self.strato.sub({'wav': Idx(w_prev, fill_value='extrema,warn')})
+                self.strato = self.strato.to_xarray()
             self.vert_content.append(self.strato)
             self.H_min.append(H_stra_min)
             self.H_max.append(H_stra_max)
@@ -331,16 +331,10 @@ class AerOPAC(object):
         ssa_ = np.zeros_like(dtau)
         hor = self.hum_or_reff
         for icont, cont in enumerate(self.vert_content):
-            if isinstance(cont, xr.Dataset):
-                cont_hor_vals = cont.coords[hor].values.astype(np.float64)
-                cont_wav_vals = cont.coords['wav'].values.astype(np.float64)
-                ext_data = cont['ext'].values.astype(np.float64)
-                ssa_data = cont['ssa'].values.astype(np.float64)
-            else:  # MLUT
-                cont_hor_vals = np.asarray(cont.axis(hor), dtype=np.float64)
-                cont_wav_vals = np.asarray(cont.axis('wav'), dtype=np.float64)
-                ext_data = cont['ext'].data.astype(np.float64)
-                ssa_data = cont['ssa'].data.astype(np.float64)
+            cont_hor_vals = cont.coords[hor].values.astype(np.float64)
+            cont_wav_vals = cont.coords['wav'].values.astype(np.float64)
+            ext_data = cont['ext'].values.astype(np.float64)
+            ssa_data = cont['ssa'].values.astype(np.float64)
             if ((hor == 'hum') and (self.force_rh[icont] is not None)) : rh_reff = np.full_like(hum_or_reff_val, self.force_rh[icont])
             else                                                      : rh_reff = hum_or_reff_val
             # Axes values
@@ -391,8 +385,10 @@ class AerOPAC(object):
             if (isinstance(self.tau_ref, np.ndarray) and self.tau_ref.ndim == 0) or np.isscalar(self.tau_ref):
                 dtau *= self.tau_ref/np.sum(dtau_ref)
             else:
-                assert isinstance(self.tau_ref, LUT)
-                dtau *= (self.tau_ref[Idx(wav)]/np.sum(dtau, axis=1))[:,None]
+                # xr.DataArray
+                wav_axis = self.tau_ref.coords[self.tau_ref.dims[0]].values.astype(np.float64)
+                tau_ref_interp = interp1d(wav_axis, self.tau_ref.values)(np.float64(wav)) 
+                dtau *= (tau_ref_interp/np.sum(dtau, axis=1))[:,None]
 
         # force ssa
         if self.ssa is not None:
@@ -402,8 +398,10 @@ class AerOPAC(object):
                 if self.ssa.ndim == 0: ssa[:,:] = self.ssa
                 elif self.ssa.ndim == 1: ssa[:,:] = self.ssa[:,None] # If 1d array -> consider only wl variability
                 elif self.ssa.ndim == 2: ssa[:,:] = self.ssa[:,:]
-            else: # LUT
-                ssa[:,:] = self.ssa[Idx(wav)][:,None]
+            else: # xr.DataArray
+                wav_axis = self.ssa.coords[self.ssa.dims[0]].values.astype(np.float64)
+                ssa_interp = interp1d(wav_axis, self.ssa.values)(np.float64(wav))
+                ssa[:,:] = ssa_interp[:,None]
         return dtau, ssa
     
     def phase(self, wav, Z, rh, NBTHETA=721):
@@ -478,7 +476,7 @@ class AerOPAC(object):
                 return LUT(pha_, names=dims, axes=axes)
 
         theta = np.linspace(0., 180., num=NBTHETA)
-        lam_tabulated = np.array(self.mixture.axis('wav'))
+        lam_tabulated = self.mixture.coords['wav'].values
         nwav = len(wav)
 
         P_tot = 0.
@@ -486,21 +484,12 @@ class AerOPAC(object):
         for icont, cont in enumerate(self.vert_content):
             hor = self.hum_or_reff
 
-            # Access data directly from MLUT or xr.Dataset
-            if isinstance(cont, xr.Dataset):
-                phase_data = cont['phase'].values
-                hor_vals = cont.coords[hor].values.astype(np.float64)
-                wav_vals = cont.coords['wav'].values.astype(np.float64)
-                theta_orig = cont.coords['theta'].values.astype(np.float64)
-                ext_data = cont['ext'].values.astype(np.float64)
-                ssa_data = cont['ssa'].values.astype(np.float64)
-            else:  # MLUT
-                phase_data = cont['phase'].data
-                hor_vals = np.asarray(cont.axis(hor), dtype=np.float64)
-                wav_vals = np.asarray(cont.axis('wav'), dtype=np.float64)
-                theta_orig = np.asarray(cont['phase'].axes[cont['phase'].names.index('theta')], dtype=np.float64)
-                ext_data = cont['ext'].data.astype(np.float64)
-                ssa_data = cont['ssa'].data.astype(np.float64)
+            phase_data = cont['phase'].values
+            hor_vals = cont.coords[hor].values.astype(np.float64)
+            wav_vals = cont.coords['wav'].values.astype(np.float64)
+            theta_orig = cont.coords['theta'].values.astype(np.float64)
+            ext_data = cont['ext'].values.astype(np.float64)
+            ssa_data = cont['ssa'].values.astype(np.float64)
 
             nphamat = phase_data.shape[2]
             nhor = len(hor_vals)
@@ -719,12 +708,14 @@ class Cloud(AerOPAC):
         else           :
             if (isinstance(ssa, list)) :
                 ssa = np.array(ssa)
-            if ( np.isscalar(ssa)                                 or
-                 (isinstance(ssa, np.ndarray) and (ssa.ndim <=2)) or
-                 isinstance(ssa, LUT) ):
+            if np.isscalar(ssa) or (isinstance(ssa, np.ndarray) and (ssa.ndim <=2)):
+                self.ssa = ssa
+            elif isinstance(ssa, LUT):
+                self.ssa = ssa.to_xarray()
+            elif isinstance(ssa, xr.DataArray):
                 self.ssa = ssa
             else:
-                raise ValueError ("The ssa variable must a scalar, a list, an ndarray of dim <= 2, or a LUT.")
+                raise ValueError ("The ssa variable must a scalar, a list, an ndarray of dim <= 2, a LUT or a DataArray.")
 
         filename = Path(filename)
         if filename.parent == Path('.'):  # no directory given
@@ -741,7 +732,14 @@ class Cloud(AerOPAC):
 
         self.filename = filename
 
-        self.mixture = read_mlut(self.filename)
+        self.mixture = xr.open_dataset(self.filename)
+        # check if reff dim size == 1 (to avoid interpolation/indexing crash)
+        if self.mixture.sizes['reff'] == 1:
+            reff_v1 = float(self.mixture.coords['reff'].values[0])
+            reff_v2 = reff_v1 + 1
+            ds2 = self.mixture.assign_coords(reff=[reff_v2])
+            self.mixture = xr.concat([self.mixture, ds2], dim='reff')
+
         self.hum_or_reff = "reff"
         self.free_tropo = None
         self.strato = None
@@ -847,25 +845,16 @@ class AerUser(AerOPAC):
         ds.attrs['H_mix_max'] = str(H_mix_max)
         ds.attrs['Z_mix'] = str(Z_mix)
 
-        with TemporaryDirectory() as tmpdir:
-            tmp_file = Path(tmpdir)/'tmp_lut.nc'
-            ds.to_netcdf(tmp_file)
-            ds = read_mlut(tmp_file)
-
-        self.w_ref = np.array([ds.axes['wav'][0]])
-        self.ssa = None
-
         self.mixture = ds
-        # check if hum dim size == 1 (to avoid lut sub bug)
-        if (self.mixture.axes['hum'].size == 1):
-            hum_v1 = self.mixture.axes['hum'][0]
+        # check if hum dim size == 1 (to avoid interpolation/indexing crash)
+        if self.mixture.sizes['hum'] == 1:
+            hum_v1 = float(self.mixture.coords['hum'].values[0])
             hum_v2 = hum_v1 + 1
-            m1 = deepcopy(self.mixture).sub({'hum':0.})
-            m2 = deepcopy(m1)
-            m1.set_attr('hum',hum_v1)
-            m2.set_attr('hum',hum_v2)
-            m3 = merge([m1,m2], ['hum'])
-            self.mixture = m3
+            ds2 = self.mixture.assign_coords(hum=[hum_v2])
+            self.mixture = xr.concat([self.mixture, ds2], dim='hum')
+
+        self.w_ref = np.array([float(self.mixture.coords['wav'].values[0])])
+        self.ssa = None
 
         self.hum_or_reff = "hum"
         self.free_tropo = None
