@@ -177,14 +177,11 @@ class AerOPAC(object):
         else                                                      : self.w_ref = np.array(w_ref)
 
         if isinstance(phase, xr.DataArray):
-            with TemporaryDirectory() as tmpdir:
-                ftmp = Path(tmpdir) / 'phase_tmp.nc'
-                phase.to_netcdf(ftmp)
-                phase_tmp = read_mlut(ftmp)
-                phase_tmp = phase_tmp[phase_tmp.datasets()[0]]
-                self._phase = phase_tmp
-        else:
             self._phase = phase
+        elif isinstance(phase, LUT):
+            self._phase = phase.to_xarray()
+        else:
+            self._phase = phase  # None
 
         if ssa is None : self.ssa = None
         else           :
@@ -334,15 +331,21 @@ class AerOPAC(object):
         ssa_ = np.zeros_like(dtau)
         hor = self.hum_or_reff
         for icont, cont in enumerate(self.vert_content):
-            cont = cont.to_xarray() if not isinstance(cont, xr.Dataset) else cont
+            if isinstance(cont, xr.Dataset):
+                cont_hor_vals = cont.coords[hor].values.astype(np.float64)
+                cont_wav_vals = cont.coords['wav'].values.astype(np.float64)
+                ext_data = cont['ext'].values.astype(np.float64)
+                ssa_data = cont['ssa'].values.astype(np.float64)
+            else:  # MLUT
+                cont_hor_vals = np.asarray(cont.axis(hor), dtype=np.float64)
+                cont_wav_vals = np.asarray(cont.axis('wav'), dtype=np.float64)
+                ext_data = cont['ext'].data.astype(np.float64)
+                ssa_data = cont['ssa'].data.astype(np.float64)
             if ((hor == 'hum') and (self.force_rh[icont] is not None)) : rh_reff = np.full_like(hum_or_reff_val, self.force_rh[icont])
             else                                                      : rh_reff = hum_or_reff_val
             # Axes values
-            hor_vals = cont.coords[hor].values.astype(np.float64)
-            wav_vals = cont.coords['wav'].values.astype(np.float64)
-            # Data in (hor, wav) order
-            ext_data = cont['ext'].values.astype(np.float64)  # (hor, wav)
-            ssa_data = cont['ssa'].values.astype(np.float64)  # (hor, wav)
+            hor_vals = cont_hor_vals
+            wav_vals = cont_wav_vals
             # Float indices with extrema fill for humidity/reff, strict bounds for wavelength
             nhor = len(hor_vals)
             nwav_orig = len(wav_vals)
@@ -442,36 +445,37 @@ class AerOPAC(object):
         if self._phase is not None:
             if self._phase.ndim == 2:
                 # convert to 4-dim by inserting empty dimensions wav_phase and z_phase
-                assert self._phase.names == ['stk', 'theta_atm']
-                pha_ = self._phase.data[:,:]
+                dims = list(self._phase.dims)
+                assert dims == ['stk', 'theta_atm']
+                pha_ = self._phase.values[:,:]
                 if pha_.shape[0] == 4:
                     pha_6 = np.zeros((6, pha_.shape[1]), dtype=pha_.dtype)
                     pha_6[0:4,:] = pha_
                     pha_6[4,:] = pha_[0,:].copy() # F22 = F11
                     pha_6[5,:] = pha_[2,:].copy() # F44 = F33
                     pha_ = pha_6
-                axes = [np.array([wav[0]]), np.array([0.])] + self._phase.axes
-                axes[2] = np.arange(6)
+                axes = [np.array([wav[0]]), np.array([0.]),
+                        np.arange(6), self._phase.coords['theta_atm'].values]
                 pha = LUT(pha_[None,None,:,:],
-                          names = ['wav_phase', 'z_phase'] + self._phase.names,
+                          names = ['wav_phase', 'z_phase', 'stk', 'theta_atm'],
                           axes = axes,
                          )
                 return pha
             else:
-                if self._phase.shape[2] == 4:
-                    pha_ = self._phase.data
+                dims = list(self._phase.dims)
+                pha_ = self._phase.values
+                if pha_.shape[2] == 4:
                     pha_6 = np.zeros((pha_.shape[0], pha_.shape[1], 6, pha_.shape[3]), dtype=pha_.dtype)
                     pha_6[:,:,0:4,:] = pha_
                     pha_6[:,:,4,:] = pha_[:,:,0,:].copy() # F22 = F11
                     pha_6[:,:,5,:] = pha_[:,:,2,:].copy() # F44 = F33
-                    axes = list(self._phase.axes)
-                    axes[2] = np.arange(6)
-                    return LUT(
-                        pha_6,
-                        names=self._phase.names,
-                        axes=axes,
-                    )
-                return self._phase
+                    axes = [self._phase.coords[dims[0]].values,
+                            self._phase.coords[dims[1]].values,
+                            np.arange(6),
+                            self._phase.coords[dims[3]].values]
+                    return LUT(pha_6, names=dims, axes=axes)
+                axes = [self._phase.coords[d].values for d in dims]
+                return LUT(pha_, names=dims, axes=axes)
 
         theta = np.linspace(0., 180., num=NBTHETA)
         lam_tabulated = np.array(self.mixture.axis('wav'))
@@ -479,77 +483,119 @@ class AerOPAC(object):
 
         P_tot = 0.
         dssa = 0.
-        for icont, cont in enumerate(self.vert_content):    
-            # Number of independant components of the phase Matrix
-            # Spheric particles -> 4, non spheric particles -> 6
-            nphamat = cont['phase'].shape[2]
+        for icont, cont in enumerate(self.vert_content):
+            hor = self.hum_or_reff
 
+            # Access data directly from MLUT or xr.Dataset
+            if isinstance(cont, xr.Dataset):
+                phase_data = cont['phase'].values
+                hor_vals = cont.coords[hor].values.astype(np.float64)
+                wav_vals = cont.coords['wav'].values.astype(np.float64)
+                theta_orig = cont.coords['theta'].values.astype(np.float64)
+                ext_data = cont['ext'].values.astype(np.float64)
+                ssa_data = cont['ssa'].values.astype(np.float64)
+            else:  # MLUT
+                phase_data = cont['phase'].data
+                hor_vals = np.asarray(cont.axis(hor), dtype=np.float64)
+                wav_vals = np.asarray(cont.axis('wav'), dtype=np.float64)
+                theta_orig = np.asarray(cont['phase'].axes[cont['phase'].names.index('theta')], dtype=np.float64)
+                ext_data = cont['ext'].data.astype(np.float64)
+                ssa_data = cont['ssa'].data.astype(np.float64)
+
+            nphamat = phase_data.shape[2]
+            nhor = len(hor_vals)
+            nwav_orig = len(wav_vals)
+
+            # Wavelength optimization: subset to bracketing wavelengths
             if ( (np.max(wav) > np.max(lam_tabulated)) or
                 (np.min(wav) < np.min(lam_tabulated)) ):
-                phase_bis = cont['phase'].swapaxes('wav', self.hum_or_reff).sub()[Idx(wav),:,:,:]
+                # Out of range: use full axis
+                wav_subset = wav_vals
+                phase_subset = phase_data
             else:
-                # The optimisation consists to not interpolate at all wavelengths of lam_tabulated,
-                # but only the wavelengths of lam_tabulated closely in the range of np.min(wav) and np.max(wav)
                 range_ind = np.array([np.argwhere((lam_tabulated <= np.min(wav)))[-1][0],
                                     np.argwhere((lam_tabulated >= np.max(wav)))[0][0]])
                 ilam_tabulated = np.arange(len(lam_tabulated), dtype=int)
                 ilam_opti = np.concatenate(np.argwhere((ilam_tabulated >= range_ind[0]) &
                                                     (ilam_tabulated <= range_ind[1])))
+                wav_subset = wav_vals[ilam_opti]
+                phase_subset = phase_data[:, ilam_opti, :, :]
 
-                if len(ilam_opti) > 1 : phase_bis = cont['phase'].swapaxes('wav', self.hum_or_reff).sub()[ilam_opti,:,:,:].sub()[Idx(wav),:,:,:]
-                else                  : phase_bis = cont['phase'].swapaxes('wav', self.hum_or_reff).sub()[ilam_opti,:,:,:]
+            nwav_sub = len(wav_subset)
 
-            if (NBTHETA != len(phase_bis.axes[3])): phase_bis = phase_bis.sub()[:,:,:,Idx(theta)]
+            # Interpolate along wav: transpose to (wav, hor, stk, theta) for vec_float_indexing
+            if nwav_sub > 1:
+                idf_wav = interp1d(wav_subset, np.arange(nwav_sub))(np.float64(wav))
+                phase_at_wav = vec_float_indexing(
+                    np.ascontiguousarray(phase_subset.transpose(1, 0, 2, 3)),
+                    [idf_wav, slice(None), slice(None), slice(None)])
+            else:
+                phase_at_wav = np.broadcast_to(
+                    phase_subset.transpose(1, 0, 2, 3), (nwav, nhor, nphamat, len(theta_orig))).copy()
+            # Result: (nwav, hor, stk, theta_orig)
 
+            # Theta resampling if needed: transpose to (theta, nwav, hor, stk)
+            if (NBTHETA != len(theta_orig)):
+                idf_theta = interp1d(theta_orig, np.arange(len(theta_orig)))(theta)
+                phase_at_wav = vec_float_indexing(
+                    np.ascontiguousarray(phase_at_wav.transpose(3, 0, 1, 2)),
+                    [idf_theta, slice(None), slice(None), slice(None)])
+                # Result: (NBTHETA, nwav, hor, stk) -> transpose to (nwav, hor, stk, NBTHETA)
+                phase_at_wav = phase_at_wav.transpose(1, 2, 3, 0)
+            # phase_at_wav: (nwav, hor, stk, NBTHETA)
+
+            # Determine humidity/reff values
             nphamat_ = 6
             if (self.hum_or_reff == 'hum'):
                 if (self.force_rh[icont] is not None) : hum_or_reff_val = np.full_like(rh, self.force_rh[icont])
                 else                                  : hum_or_reff_val = rh
-
-                P = LUT(
-                    np.zeros((nwav, len(rh)-1, nphamat_, NBTHETA), dtype='float32')+np.nan,
-                    axes=[wav, None, None, theta],
-                    names=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
-                    )  # nlam_tabulated, nrh, stk, NBTHETA
-                
-                for irh_, rh_ in enumerate(hum_or_reff_val[1:]):
-                    irh = Idx(rh_, fill_value='extrema')
-                    #irh = Idx(rh_, fill_value='extrema')
-                    P.data[:,irh_,0:nphamat,:] = phase_bis.sub()[:,irh,:,:].data
             elif (self.hum_or_reff == 'reff'):
-                P = LUT(
-                    np.zeros((nwav, 1, nphamat_, NBTHETA), dtype='float32')+np.nan,
-                    axes=[wav, None, None, theta],
-                    names=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
-                    )  # nlam_tabulated, nrh, stk, NBTHETA
-                
-                irh = Idx(self.reff).index(cont['phase'].axes[0])
-                #irh = Idx(self.reff).index(cont['phase'].axes[0])
-                P.data[:,0,0:nphamat,:] = phase_bis[:,irh,:,:].data
                 hum_or_reff_val = self.reff
             else:
                 raise NameError("Phase matrix must varies as function of hum or reff.")
-            
+
             if (np.isscalar(hum_or_reff_val) or
             (isinstance(hum_or_reff_val, np.ndarray) and hum_or_reff_val.ndim == 0) ) : hum_or_reff_val = np.array([hum_or_reff_val])
             else                                                                      : hum_or_reff_val = np.array(hum_or_reff_val)
 
-            if (nphamat == 4): # only for spherical particles
-                P.data[:,:,4,:] = P.data[:,:,0,:].copy() # F22 = F11
-                P.data[:,:,5,:] = P.data[:,:,2,:].copy() # F44 = F33
+            # Interpolate along hor: transpose to (hor, nwav, stk, NBTHETA)
+            idf_hor = interp1d(hor_vals, np.arange(nhor), bounds_error=False, fill_value=(0, nhor-1))(np.float64(hum_or_reff_val[1:]))
+            P_data = vec_float_indexing(
+                np.ascontiguousarray(phase_at_wav.transpose(1, 0, 2, 3)),
+                [idf_hor, slice(None), slice(None), slice(None)])
+            # Result: (nz, nwav, stk, NBTHETA) -> transpose to (nwav, nz, stk, NBTHETA)
+            P_data = np.ascontiguousarray(P_data.transpose(1, 0, 2, 3)).astype(np.float32)
 
-            dtau_ =  np.zeros((len(wav), len(Z)), dtype=np.float32)
-            ext_ = np.zeros_like(dtau_)
-            ssa_ = np.zeros_like(dtau_)
+            # Expand 4 stk to 6 if needed
+            if (nphamat == 4):
+                P_data_6 = np.zeros((nwav, len(hum_or_reff_val)-1, nphamat_, NBTHETA), dtype='float32')
+                P_data_6[:,:,0:4,:] = P_data
+                P_data_6[:,:,4,:] = P_data[:,:,0,:].copy() # F22 = F11
+                P_data_6[:,:,5,:] = P_data[:,:,2,:].copy() # F44 = F33
+                P_data = P_data_6
+            elif nphamat == 6:
+                pass
+            else:
+                P_data_6 = np.zeros((nwav, len(hum_or_reff_val)-1, nphamat_, NBTHETA), dtype='float32')
+                P_data_6[:,:,0:nphamat,:] = P_data
+                P_data = P_data_6
+
+            P = LUT(P_data,
+                    axes=[wav, None, None, theta],
+                    names=['wav_phase', 'z_phase', 'stk', 'theta_atm'])
+
+            # Compute dtau and ssa using vec_float_indexing (same as dtau_ssa)
+            idf_hor_ext = interp1d(hor_vals, np.arange(nhor), bounds_error=False, fill_value=(0, nhor-1))(np.float64(hum_or_reff_val))
+            idf_wav_ext = interp1d(wav_vals, np.arange(nwav_orig))(np.float64(wav))
+            ext_at_hor = vec_float_indexing(ext_data, [idf_hor_ext, slice(None)])
+            ssa_at_hor = vec_float_indexing(ssa_data, [idf_hor_ext, slice(None)])
+            ext_ = vec_float_indexing(ext_at_hor.T, [idf_wav_ext, slice(None)])  # (nwav, nhor_q)
+            ssa_ = vec_float_indexing(ssa_at_hor.T, [idf_wav_ext, slice(None)])  # (nwav, nhor_q)
             if (len(hum_or_reff_val) == 1):
-                ext_tmp = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_reff_val[:], fill_value='extrema,warn')][Idx(wav),:]
-                ssa_tmp = cont['ssa'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_reff_val[:], fill_value='extrema,warn')][Idx(wav),:]
-                for iz in range (0, len(Z)):
-                    ext_[:,iz] = ext_tmp[:,0]
-                    ssa_[:,iz] = ssa_tmp[:,0]
-            else:      
-                ext_ = cont['ext'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_reff_val[:], fill_value='extrema,warn')][Idx(wav),:]
-                ssa_ = cont['ssa'].swapaxes(self.hum_or_reff, 'wav').sub()[:,Idx(hum_or_reff_val[:], fill_value='extrema,warn')][Idx(wav),:]
+                ext_ = np.broadcast_to(ext_, (nwav, len(Z))).copy()
+                ssa_ = np.broadcast_to(ssa_, (nwav, len(Z))).copy()
+
+            dtau_ = np.zeros((len(wav), len(Z)), dtype=np.float32)
             h1 = np.maximum(self.H_min[icont], Z[1:])
             h2 = np.minimum(self.H_max[icont], Z[:-1])
             cond = h2>h1
@@ -560,7 +606,7 @@ class AerOPAC(object):
             P_tot+= P*dssa_
 
         
-        with np.errstate(divide='ignore'):
+        with np.errstate(divide='ignore', invalid='ignore'):
             P_tot.data /= dssa
         P_tot.data[np.isnan(P_tot.data)] = 0.
         P_tot.axes[1] = Z[1:]
@@ -712,14 +758,11 @@ class Cloud(AerOPAC):
             self.Z_sh.append(1e6) # constant dist
 
         if isinstance(phase, xr.DataArray):
-            with TemporaryDirectory() as tmpdir:
-                ftmp = Path(tmpdir) / 'phase_tmp.nc'
-                phase.to_netcdf(ftmp)
-                phase_tmp = read_mlut(ftmp)
-                phase_tmp = phase_tmp[phase_tmp.datasets()[0]]
-                self._phase = phase_tmp
-        else:
             self._phase = phase
+        elif isinstance(phase, LUT):
+            self._phase = phase.to_xarray()
+        else:
+            self._phase = phase  # None
 
     @staticmethod
     def list():
