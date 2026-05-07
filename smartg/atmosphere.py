@@ -259,7 +259,7 @@ class AerOPAC(object):
                 nwprev = len(w_prev)
                 if (nwcur != nwprev or (nwcur == nwprev and not np.array_equal(w_cur, w_prev)) ):
                     wav_clip = w_prev.clip(min=w_cur.min().item(), max=w_cur.max().item())
-                    self.free_tropo = self.free_tropo.sub({'wav': Idx(wav_clip, fill_value='extrema,warn')})
+                    self.free_tropo = self.free_tropo.interp(wav=wav_clip)
             self.vert_content.append(self.free_tropo)
             self.H_min.append(H_free_min)
             self.H_max.append(H_free_max)
@@ -276,7 +276,7 @@ class AerOPAC(object):
                 nwprev = len(w_prev)
                 if (nwcur != nwprev or (nwcur == nwprev and not np.array_equal(w_cur, w_prev)) ):
                     wav_clip = w_prev.clip(min=w_cur.min().item(), max=w_cur.max().item())
-                    self.strato = self.strato.sub({'wav': Idx(wav_clip, fill_value='extrema,warn')})
+                    self.strato = self.strato.interp(wav=wav_clip)
             self.vert_content.append(self.strato)
             self.H_min.append(H_stra_min)
             self.H_max.append(H_stra_max)
