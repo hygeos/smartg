@@ -424,8 +424,8 @@ class AerOPAC(object):
             
         Returns
         -------
-        phase_matrix : LUT
-            Lookup table containing the phase matrix with axes [wav_phase, z_phase, stk, theta_atm].
+        phase_matrix : xr.DataArray
+            DataArray containing the phase matrix with dimensions [wav_phase, z_phase, stk, theta_atm].
             Shape is (len(wav), len(Z)-1, nphamat, NBTHETA) where:
             - nphamat = 4 for spherical particles only (phase matrix unique terms P11, P21, P33, P34)
             - nphamat = 6 for spherical and non-spherical particles (additional phase matrix unique terms P22, P44)
@@ -444,13 +444,16 @@ class AerOPAC(object):
                     pha_6[4,:] = pha_[0,:].copy() # F22 = F11
                     pha_6[5,:] = pha_[2,:].copy() # F44 = F33
                     pha_ = pha_6
-                axes = [np.array([wav[0]]), np.array([0.]),
-                        np.arange(6), self._phase.coords['theta_atm'].values]
-                pha = LUT(pha_[None,None,:,:],
-                          names = ['wav_phase', 'z_phase', 'stk', 'theta_atm'],
-                          axes = axes,
-                         )
-                return pha
+                return xr.DataArray(
+                    pha_[None,None,:,:],
+                    dims=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
+                    coords={
+                        'wav_phase': [wav[0]],
+                        'z_phase': [0.],
+                        'stk': np.arange(6),
+                        'theta_atm': self._phase.coords['theta_atm'].values
+                    }
+                )
             else:
                 dims = list(self._phase.dims)
                 pha_ = self._phase.values
@@ -459,13 +462,21 @@ class AerOPAC(object):
                     pha_6[:,:,0:4,:] = pha_
                     pha_6[:,:,4,:] = pha_[:,:,0,:].copy() # F22 = F11
                     pha_6[:,:,5,:] = pha_[:,:,2,:].copy() # F44 = F33
-                    axes = [self._phase.coords[dims[0]].values,
-                            self._phase.coords[dims[1]].values,
-                            np.arange(6),
-                            self._phase.coords[dims[3]].values]
-                    return LUT(pha_6, names=dims, axes=axes)
-                axes = [self._phase.coords[d].values for d in dims]
-                return LUT(pha_, names=dims, axes=axes)
+                    return xr.DataArray(
+                        pha_6,
+                        dims=dims,
+                        coords={
+                            dims[0]: self._phase.coords[dims[0]].values,
+                            dims[1]: self._phase.coords[dims[1]].values,
+                            'stk': np.arange(6),
+                            dims[3]: self._phase.coords[dims[3]].values
+                        }
+                    )
+                return xr.DataArray(
+                    pha_,
+                    dims=dims,
+                    coords={d: self._phase.coords[d].values for d in dims}
+                )
 
         theta = np.linspace(0., 180., num=NBTHETA)
         lam_tabulated = self.mixture.coords['wav'].values
@@ -561,9 +572,16 @@ class AerOPAC(object):
                 P_data_6[:,:,0:nphamat,:] = P_data
                 P_data = P_data_6
 
-            P = LUT(P_data,
-                    axes=[wav, None, None, theta],
-                    names=['wav_phase', 'z_phase', 'stk', 'theta_atm'])
+            P = xr.DataArray(
+                P_data,
+                dims=['wav_phase', 'z_phase', 'stk', 'theta_atm'],
+                coords={
+                    'wav_phase': wav,
+                    'z_phase': np.arange(P_data.shape[1]),
+                    'stk': np.arange(P_data.shape[2]),
+                    'theta_atm': theta
+                }
+            )
 
             # Compute dtau and ssa using vec_float_indexing (same as dtau_ssa)
             idf_hor_ext = interp1d(hor_vals, np.arange(nhor), bounds_error=False, fill_value=(0, nhor-1))(np.float64(hum_or_reff_val))
@@ -590,7 +608,7 @@ class AerOPAC(object):
         with np.errstate(divide='ignore', invalid='ignore'):
             P_tot.data /= dssa
         P_tot.data[np.isnan(P_tot.data)] = 0.
-        P_tot.axes[1] = Z[1:]
+        P_tot = P_tot.assign_coords(z_phase=Z[1:])
         return P_tot
     
     @staticmethod
@@ -1695,7 +1713,13 @@ class AtmAFGL(Atmosphere):
             dtau, ssa_p = comp.dtau_ssa(wav, self.pfgrid, rh=rh)
             dtau = dtau[:,1:][:,:,None,None]
             ssa_p = ssa_p[:,1:][:,:,None,None]
-            pha += comp.phase(wav, self.pfgrid, rh, NBTHETA=NBTHETA)*dtau*ssa_p
+            comp_pha = comp.phase(wav, self.pfgrid, rh, NBTHETA=NBTHETA)
+            if hasattr(comp_pha, 'to_xarray'):
+                comp_pha = comp_pha.to_xarray()
+            comp_pha_lut = LUT(comp_pha.values,
+                               axes=[comp_pha.coords[d].values for d in comp_pha.dims],
+                               names=list(comp_pha.dims))
+            pha += comp_pha_lut*dtau*ssa_p
             norm += dtau*ssa_p
         if len(self.comp) > 0:
             pha /= norm
