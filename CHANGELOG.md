@@ -1,13 +1,7 @@
-
-           ###########################
-           #                         #
-           #    SMART-G CHANGELOG    #
-           #                         #
-           ###########################
+# SMART-G CHANGELOG
 
 
-v2.0.0
-------
+## v2.0.0
 Release date: xxx
 
 Note: this changelog entry has been started during the `v2.0.0dev1` stage and
@@ -94,8 +88,7 @@ will be completed and corrected before the final `v2.0.0` release.
     - old deprecated `lib3D` module
 
 
-v1.2.0
-------
+## v1.2.0
 Release date: 2026-03-13
 
 * The use of a scattering phase truncation is now possible. Two truncation methods added.
@@ -105,8 +98,7 @@ Release date: 2026-03-13
 * Update of the demo notebook by adding an example using the GT truncation method
 
 
-v1.1.5
-------
+## v1.1.5
 Release date: 2026-03-05
 
 * Correct crash occuring when creating a 3D atmospheric profil
@@ -117,8 +109,7 @@ Release date: 2026-03-05
   - FOV is forced to 0 is that case
 
 
-v1.1.4
-------
+## v1.1.4
 Release date: 2026-02-10
 
 * Corrections in demo_notebook and atmosphere.py
@@ -130,8 +121,7 @@ Release date: 2026-02-10
   - Replace np.trapz by np.trapezoid
 
   
-v1.1.3
-------
+## v1.1.3
 Release date: 2025-12-01
 
 * Correction in device.cu to avoid an NVCC crash on Windows
@@ -143,8 +133,7 @@ Release date: 2025-12-01
 * Correction in the extraction for the reptran auxdata .tar archive
 
 
-v1.1.2
-------
+## v1.1.2
 Release date: 2025-11-27
 
 * Remove hitran-api
@@ -158,8 +147,7 @@ Release date: 2025-11-27
 * Cleaning before preparing a release for conda-forge
 
 
-v1.1.1
-------
+## v1.1.1
 Release date: 2025-11-25
 
 * Corrections in AerOPAC and Cloud classes
@@ -180,8 +168,7 @@ Release date: 2025-11-25
 * Only use of pathlib to improve cross-platform compatibility
 
 
-v1.1.0
-------
+## v1.1.0
 Release date: 2025-08-19
 
 * Smartg can be used with Jax (see demo_notebook)
@@ -229,8 +216,7 @@ Release date: 2025-08-19
   - ...
 
 
-v1.0.8
-------
+## v1.0.8
 Release date: 2025-08-18
 
 * Correct an important bug with the photon orthogonal direction initialization
@@ -238,8 +224,7 @@ Release date: 2025-08-18
     we are not in radiance. Otherwise no impact.
 
 
-v1.0.7
-------
+## v1.0.7
 Release data: 2025-06-03
 
 * Correct the env file by removing default conda channel
@@ -254,16 +239,14 @@ Release data: 2025-06-03
   - Missing Z_mix, Z_free and Z_stra definitions
 
 
-v1.0.6
-------
+## v1.0.6
 Release data: 2025-05-25
 
 * Avoid bug due to scipy function renaming since version 1.14
   - Force scipy version<1.14 while installing python dependencies
 
 
-v1.0.5
-------
+## v1.0.5
 Release date: 2024-12-03
 
 * Correction of a bug in transform matrix inversion when 2 transform objects
@@ -277,16 +260,14 @@ Release date: 2024-12-03
 * Rewriting AerOPAC and Cloud python documentation
 
 
-v1.0.4
-------
+## v1.0.4
 Release date: 2024-09-11
 
 * Correction of a crash occuring while using the new calc_iphase function
   (introduced in v1.0.3) inside ocean.
 
 
-v1.0.3
-------
+## v1.0.3
 Release date: 2024-08-29
 
 * Correction of a bug in function calc_iphase.
@@ -294,15 +275,13 @@ Release date: 2024-08-29
     and with pfgrid != grid (z_atm)
 
 
-v1.0.2
-------
+## v1.0.2
 Release date: 2024-08-22
 
 * Correction of a bug that occurs with high values of water vapor (H2O)
 
 
-v1.0.1
-------
+## v1.0.1
 Release date: 2024-06-20
 
 * Missing auxiliary data in Makefile added (Clouds and IPRT).
@@ -310,8 +289,7 @@ Release date: 2024-06-20
 * The previous CHANGELOG corrected.
 
 
-v1.0.0
-------
+## v1.0.0
 Release date: 2024-05-17
 
 * Downloading libRadtran is not needed anymore. Auxiliary data has been completely
@@ -346,8 +324,7 @@ Release date: 2024-05-17
   have been made.
 
 
-v0.9.4
-------
+## v0.9.4
 Release date: 2024-02-27
 
 * Bug corrections
@@ -355,9 +332,7 @@ Release date: 2024-02-27
     - bug when using pfgrid in the calculation of the phase matrix corrected
 
 
-v0.9.3
-------
-
+## v0.9.3
 Release date: 2024-02-19
 
 * General Updates (codes and notebooks) to work with last python packages, and corrections
@@ -378,9 +353,7 @@ Release date: 2024-02-19
 * Several improvements in 3D atmosphere mode. But still in development and not documented
 
 
-v0.9.2
-------
-
+## v0.9.2
 Release date: 2019-05-23
 
 * Source code release !
@@ -415,9 +388,7 @@ Release date: 2019-05-23
 * New! 3D atmosphere (in development - undocumented)
 
 
-v0.9.1
-------
-
+## v0.9.1
 Release date: 2018-11-01
 
 * Add compilation support for additional architectures, including GeForce 20xx
@@ -426,9 +397,7 @@ Release date: 2018-11-01
 * Add aerosol altitude scaling options
 
 
-v0.9
-----
-
+## v0.9
 Release date: 2018-09-21
 
 First public release.
