@@ -87,18 +87,18 @@ class AerOPAC(object):
         Force scale height (see notes) of the free troposphere
     Z_stra : float, optional
         Force scale height (see notes) of the stratosphere
-    ssa : None | float | list | 1-D ndarray | 2-D ndarray | LUT, optional
+    ssa : None | float | list | 1-D ndarray | 2-D ndarray | xr.DataArray, optional
         Force particle single scattering albedo. Default None.
         
         - if float -> same value for all wavelengths and altitudes
         - if list -> it will be converted into a 1-D ndarray.
         - if 1-D ndarray -> only wavelength dependence is considered 
         - if 2-D ndarray -> wavelength and altitude dependence is considered
-        - if LUT -> wavelength and altitude dependence is considered
+        - if xr.DataArray -> wavelength and altitude dependence is considered
 
-        Note that LUT is more flexible since it allows interpolation if wavelengths  
+        Note that xr.DataArray is more flexible since it allows interpolation if wavelengths  
         in calc method are different (but not the case for the altitude axis).
-    phase : None | luts.LUT, optional
+    phase : None | xr.DataArray, optional
         Phase matrix F as function of wavelength, altitude, stoke components and scattering angle    
         The variable names must be:  
         If 4-D matrix -> wav_phase, z_phase, stk, theta  
@@ -128,40 +128,32 @@ class AerOPAC(object):
     Examples
     --------
     >>> from smartg.atmosphere import AerOPAC
-    >>> aer_mc = AeroOPAC('maritime_clean', 0.1, 550.)
-    >>> aer_mc.mixture.describe()
-    <luts.luts.MLUT object at 0x7fbadd61d250>
-    Datasets:
-    [0] ext (float32 in [0.00384, 0.485]), axes=('hum', 'wav')
-        Attributes:
-        _FillValue: nan
-        description: extinction coefficient in km^-1
-    [1] ssa (float32 in [0.436, 1]), axes=('hum', 'wav')
-        Attributes:
-        _FillValue: nan
-        description: single scattering albedo
-    [2] phase (float32 in [-0.818, 5.79e+03]), axes=('hum', 'wav', 'stk', 'theta')
-        Attributes:
-        _FillValue: nan
-        description: scattering phase matrix
-    Axes:
-    [0] hum: 8 values in [0.0, 99.0]
-    [1] wav: 26 values in [250, 4500]
-    [2] theta: 1801 values in [0.0, 180.0]
+    >>> aer_mc = AerOPAC('maritime_clean', 0.1, 550.)
+    >>> print(aer_mc.mixture)
+    <xarray.Dataset> Size: 6MB
+    Dimensions:  (hum: 8, wav: 26, stk: 4, theta: 1801)
+    Coordinates:
+    * hum      (hum) float32 32B 0.0 50.0 70.0 80.0 90.0 95.0 98.0 99.0
+    * wav      (wav) float32 104B 250.0 300.0 350.0 ... 3.75e+03 4e+03 4.5e+03
+    * theta    (theta) float32 7kB 0.0 0.1 0.2 0.3 0.4 ... 179.7 179.8 179.9 180.0
+    Dimensions without coordinates: stk
+    Data variables:
+        ext      (hum, wav) float32 832B ...
+        ssa      (hum, wav) float32 832B ...
+        phase    (hum, wav, stk, theta) float32 6MB ...
     Attributes:
-    name : maritime_clean
-    H_mix_min : 0
-    H_mix_max : 2
-    H_free_min : 2
-    H_free_max : 12
-    H_stra_min : 12
-    H_stra_max : 35
-    Z_mix : 1
-    Z_free : 8
-    Z_stra : 99
-    date : 2024-03-19
-    source : Created by HYGEOS using MOPSMAP v1.0.
-    <luts.luts.MLUT at 0x7fbadd61d250>
+        name:        maritime_clean
+        H_mix_min:   0
+        H_mix_max:   2
+        H_free_min:  2
+        H_free_max:  12
+        H_stra_min:  12
+        H_stra_max:  35
+        Z_mix:       1
+        Z_free:      8
+        Z_stra:      99
+        date:        2025-06-03
+        source:      Created by HYGEOS using MOPSMAP v1.0.
     """
 
     def __init__(self, filename, tau_ref, w_ref, H_mix_min=None, H_mix_max=None, 
