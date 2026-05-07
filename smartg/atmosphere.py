@@ -48,9 +48,7 @@ from smartg.config import DIR_AUXDATA
 from gatiab import vec_float_indexing
 import pandas as pd
 import xarray as xr
-from tempfile import TemporaryDirectory
 import re
-from copy import deepcopy
 from pytrunc.truncation import delta_m_phase_approx, gt_phase_approx
 import netCDF4  # noqa: F401 - must be imported before h5py to avoid HDF5 library conflicts
 import h5py
