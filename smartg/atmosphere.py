@@ -663,18 +663,18 @@ class Cloud(AerOPAC):
         Optical thickness at reference wavelength w_ref
     w_ref : float
         Wavelength in nanometers at reference optical thickness tau_ref
-    ssa : None | float | list | 1-D ndarray | 2-D ndarray | LUT, optional
+    ssa : None | float | list | 1-D ndarray | 2-D ndarray | xr.DataArray, optional
         Force particle single scattering albedo. 
         
         - if float -> same value for all wavelengths and altitudes
         - if list -> it will be converted into a 1-D ndarray.
         - if 1-D ndarray -> only wavelength dependence is considered 
         - if 2-D ndarray -> wavelength and altitude dependence is considered
-        - if LUT -> wavelength and altitude dependence is considered
+        - if xr.DataArray -> wavelength and altitude dependence is considered
 
-        Note that LUT is more flexible since it allows interpolation if wavelengths  
+        Note that xr.DataArray is more flexible since it allows interpolation if wavelengths  
         in calc method are different (but not the case for the altitude axis).
-    phase : None | luts.LUT, optional
+    phase : None | xr.DataArray, optional
         Phase matrix F as function of wavelength, altitude, stoke components and scattering angle    
         The variable names must be:  
         If 4-D matrix -> wav_phase, z_phase, stk, theta  
@@ -732,12 +732,12 @@ class Cloud(AerOPAC):
                 ssa = np.array(ssa)
             if np.isscalar(ssa) or (isinstance(ssa, np.ndarray) and (ssa.ndim <=2)):
                 self.ssa = ssa
-            elif isinstance(ssa, LUT):
+            elif hasattr(ssa, 'to_xarray'):
                 self.ssa = ssa.to_xarray()
             elif isinstance(ssa, xr.DataArray):
                 self.ssa = ssa
             else:
-                raise ValueError ("The ssa variable must a scalar, a list, an ndarray of dim <= 2, a LUT or a DataArray.")
+                raise ValueError ("The ssa variable must a scalar, a list, an ndarray of dim <= 2, or an xr.DataArray.")
 
         filename = Path(filename)
         if filename.parent == Path('.'):  # no directory given
@@ -779,10 +779,12 @@ class Cloud(AerOPAC):
 
         if isinstance(phase, xr.DataArray):
             self._phase = phase
-        elif isinstance(phase, LUT):
+        elif hasattr(phase, 'to_xarray'):
             self._phase = phase.to_xarray()
+        elif phase is None:
+            self._phase = phase
         else:
-            self._phase = phase  # None
+            raise ValueError ("The phase variable must be an xr.DataArray or be None.")
 
     @staticmethod
     def list():
