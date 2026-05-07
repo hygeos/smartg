@@ -249,7 +249,7 @@ class AerOPAC(object):
             self.Z_sh.append(Z_mix)
         if (H_free_max-H_free_min > 1e-6):
             filename_tmp = DIR_AUXDATA / 'aerosols' / 'OPAC' / 'free_troposphere' / 'free_troposphere_sol.nc'
-            self.free_tropo = read_mlut(filename_tmp).to_xarray()
+            self.free_tropo = xr.open_dataset(filename_tmp)
             # check we have the same wl dim than previous aer pro in vert_content
             if len(self.vert_content) > 0:
                 aer_prev = self.vert_content[-1]
@@ -266,7 +266,7 @@ class AerOPAC(object):
             self.Z_sh.append(Z_free)
         if (H_stra_max-H_stra_min > 1e-6):
             filename_tmp = DIR_AUXDATA / 'aerosols' / 'OPAC' / 'stratosphere' / 'stratosphere_sol.nc'
-            self.strato = read_mlut(filename_tmp).to_xarray()
+            self.strato = xr.open_dataset(filename_tmp)
             # check we have the same wl dim than previous aer pro in vert_content
             if len(self.vert_content) > 0:
                 aer_prev = self.vert_content[-1]
