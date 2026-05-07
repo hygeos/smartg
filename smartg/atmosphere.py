@@ -161,17 +161,19 @@ class AerOPAC(object):
                  Z_mix=None, Z_free=None, Z_stra=None, ssa=None, phase=None,
                  rh_mix=None, rh_free=None, rh_stra=None):
         
-        self.tau_ref = tau_ref.to_xarray() if isinstance(tau_ref, LUT) else tau_ref
+        self.tau_ref = tau_ref.to_xarray() if hasattr(tau_ref, 'to_xarray') else tau_ref
         if (np.isscalar(w_ref) or
             (isinstance(w_ref, np.ndarray) and w_ref.ndim == 0) ) : self.w_ref = np.array([w_ref])
         else                                                      : self.w_ref = np.array(w_ref)
 
         if isinstance(phase, xr.DataArray):
             self._phase = phase
-        elif isinstance(phase, LUT):
+        elif hasattr(phase, 'to_xarray'):
             self._phase = phase.to_xarray()
+        elif phase is None:
+            self._phase = phase
         else:
-            self._phase = phase  # None
+            raise ValueError ("The phase variable must be an xr.DataArray or be None.")
 
         if ssa is None : self.ssa = None
         else           :
@@ -179,12 +181,12 @@ class AerOPAC(object):
                 ssa = np.array(ssa)
             if np.isscalar(ssa) or (isinstance(ssa, np.ndarray) and (ssa.ndim <=2)):
                 self.ssa = ssa
-            elif isinstance(ssa, LUT):
+            elif hasattr(ssa, 'to_xarray'):
                 self.ssa = ssa.to_xarray()
             elif isinstance(ssa, xr.DataArray):
                 self.ssa = ssa
             else:
-                raise ValueError ("The ssa variable must a scalar, a list, an ndarray of dim <= 2, a LUT or a DataArray.")
+                raise ValueError ("The ssa variable must a scalar, a list, an ndarray of dim <= 2, or an xr.DataArray.")
                     
         filename = Path(filename)
         if filename.parent == Path('.'):  # no directory given
