@@ -695,27 +695,20 @@ class Cloud(AerOPAC):
     --------
     >>> from smartg.atmophere import Cloud
     >>> cld_wc = Cloud('wc', 12.68, 2, 3, 10., 550.)
-    >>> cld_wc.mixture.describe(show_attrs=True)
-    <luts.luts.MLUT object at 0x7fbb4c74eb10>
-    Datasets:
-    [0] phase (float32 in [-111, 3.05e+05]), axes=('reff', 'wav', 'stk', 'theta')
-        Attributes:
-        description: phase matrix integral normalized to 2. stk order: p11, p21, p33 and p34
-    [1] ext (float64 in [123, 4.62e+03]), axes=('reff', 'wav')
-        Attributes:
-        description: extinction coefficient in km^-1
-    [2] ssa (float64 in [0.476, 1]), axes=('reff', 'wav')
-        Attributes:
-        description: single scattering albedo
-    Axes:
-    [0] reff: 26 values in [5.0, 30.0]
-    [1] wav: 209 values in [253.0570068359375, 4441.29296875]
-    [2] stk: 4 values in [0, 3]
-    [3] theta: 594 values in [0.0, 180.0]
+    >>> print(cld_wc.mixture)
+    <xarray.Dataset> Size: 52MB
+    Dimensions:  (reff: 26, wav: 209, stk: 4, theta: 594)
+    Coordinates:
+    * reff     (reff) float32 104B 5.0 6.0 7.0 8.0 9.0 ... 27.0 28.0 29.0 30.0
+    * wav      (wav) float32 836B 253.1 256.6 260.2 ... 4.38e+03 4.441e+03
+    * stk      (stk) int16 8B 0 1 2 3
+    * theta    (theta) float64 5kB 0.0 0.01 0.02 0.03 ... 179.2 179.5 179.8 180.0
+    Data variables:
+        phase    (reff, wav, stk, theta) float32 52MB 8.765e+03 8.759e+03 ... 0.0
+        ext      (reff, wav) float64 43kB 123.1 123.1 123.2 ... 4.619e+03 4.622e+03
+        ssa      (reff, wav) float64 43kB 1.0 1.0 1.0 1.0 ... 0.6522 0.636 0.6203
     Attributes:
-    veff : 0.1
-    <luts.luts.MLUT at 0x7fbb4c74eb10>
-    
+        veff:     0.1    
     """
 
     def __init__(self, filename, reff, zmin, zmax, tau_ref, w_ref, ssa=None,
