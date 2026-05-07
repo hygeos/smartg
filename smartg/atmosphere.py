@@ -551,16 +551,28 @@ class AerOPAC(object):
             else                                                                      : hum_or_reff_val = np.array(hum_or_reff_val)
 
             # Interpolate along hor: transpose to (hor, nwav, stk, NBTHETA)
-            idf_hor = interp1d(hor_vals, np.arange(nhor), bounds_error=False, fill_value=(0, nhor-1))(np.float64(hum_or_reff_val[1:]))
+            if len(hum_or_reff_val) == 1:
+                hor_query = hum_or_reff_val
+                nz_phase = len(Z) - 1
+            else:
+                hor_query = hum_or_reff_val[1:]
+                nz_phase = len(hum_or_reff_val) - 1
+
+            idf_hor = interp1d(hor_vals, np.arange(nhor), bounds_error=False, fill_value=(0, nhor-1))(np.float64(hor_query))
             P_data = vec_float_indexing(
                 np.ascontiguousarray(phase_at_wav.transpose(1, 0, 2, 3)),
                 [idf_hor, slice(None), slice(None), slice(None)])
             # Result: (nz, nwav, stk, NBTHETA) -> transpose to (nwav, nz, stk, NBTHETA)
             P_data = np.ascontiguousarray(P_data.transpose(1, 0, 2, 3)).astype(np.float32)
+            if len(hum_or_reff_val) == 1:
+                P_data = np.broadcast_to(
+                    P_data,
+                    (nwav, nz_phase, P_data.shape[2], P_data.shape[3]),
+                ).copy()
 
             # Expand 4 stk to 6 if needed
             if (nphamat == 4):
-                P_data_6 = np.zeros((nwav, len(hum_or_reff_val)-1, nphamat_, NBTHETA), dtype='float32')
+                P_data_6 = np.zeros((nwav, nz_phase, nphamat_, NBTHETA), dtype='float32')
                 P_data_6[:,:,0:4,:] = P_data
                 P_data_6[:,:,4,:] = P_data[:,:,0,:].copy() # F22 = F11
                 P_data_6[:,:,5,:] = P_data[:,:,2,:].copy() # F44 = F33
@@ -568,7 +580,7 @@ class AerOPAC(object):
             elif nphamat == 6:
                 pass
             else:
-                P_data_6 = np.zeros((nwav, len(hum_or_reff_val)-1, nphamat_, NBTHETA), dtype='float32')
+                P_data_6 = np.zeros((nwav, nz_phase, nphamat_, NBTHETA), dtype='float32')
                 P_data_6[:,:,0:nphamat,:] = P_data
                 P_data = P_data_6
 
