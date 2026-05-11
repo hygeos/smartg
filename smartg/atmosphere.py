@@ -1908,21 +1908,21 @@ class Profile_base(object):
             else:
                 raise NameError('Invalid atmospheric file format')
         elif atm_filename.suffix == '.nc':
-            data = read_mlut(atm_filename)
-            self.z        = data.axes['z_atm'] # Altitude in km
-            self.P        = data['P'].data     # pressure in hPa
-            self.T        = data['T'].data     # temperature in K
-            self.dens_air = data['dens'].data  # Air density in cm-3
-            self.dens_h2o = data['H2O'].data   # H2O density in cm-3
-            self.dens_o3 = data['O3'].data     # O3 density in cm-3
-            self.dens_n2o = data['N2O'].data   # N2O density in cm-3
-            self.dens_co = data['CO'].data     # CO density in cm-3
-            self.dens_ch4 = data['CH4'].data   # CH4 density in cm-3
-            self.dens_co2 = data['CO2'].data   # CO2 density in cm-3
-            self.dens_o2 = data['O2'].data     # O2 density in cm-3
-            self.dens_n2 = data['N2'].data     # N2 density in cm-3
-            self.dens_no2 = data['NO2'].data   # NO2 density in cm-3
-            self.dens_so2 = data['SO2'].data   # SO2 density in cm-3
+            with xr.open_dataset(atm_filename) as data:
+                self.z = data.coords['z_atm'].values  # Altitude in km
+                self.P = data['P'].values             # pressure in hPa
+                self.T = data['T'].values             # temperature in K
+                self.dens_air = data['dens'].values   # Air density in cm-3
+                self.dens_h2o = data['H2O'].values    # H2O density in cm-3
+                self.dens_o3 = data['O3'].values      # O3 density in cm-3
+                self.dens_n2o = data['N2O'].values    # N2O density in cm-3
+                self.dens_co = data['CO'].values      # CO density in cm-3
+                self.dens_ch4 = data['CH4'].values    # CH4 density in cm-3
+                self.dens_co2 = data['CO2'].values    # CO2 density in cm-3
+                self.dens_o2 = data['O2'].values      # O2 density in cm-3
+                self.dens_n2 = data['N2'].values      # N2 density in cm-3
+                self.dens_no2 = data['NO2'].values    # NO2 density in cm-3
+                self.dens_so2 = data['SO2'].values    # SO2 density in cm-3
 
         self.RH_cst   = RH_cst
 
