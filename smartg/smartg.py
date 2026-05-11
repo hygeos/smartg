@@ -4009,7 +4009,7 @@ def findExtinction(IP, FP, prof_atm, W_IND = int(0)):
     return n_ext
 
     
-def Get_Sensor(VZA_lev, LEVEL=0., VAA=0., RTER=6371., H=120., FOV=0., TYPE=0., PP=True, verbose=False):
+def get_sensor(VZA_lev, LEVEL=0., VAA=0., RTER=6371., H=120., FOV=0., TYPE=0., PP=True, verbose=False):
     '''
     Return the Sensor object for atmosphere height of H for backward simulations where
     VZA_lev is the View Zenith Angle defined at the level: origin (0, 0, RTER+LEVEL) for Spherical
