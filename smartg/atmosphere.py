@@ -37,7 +37,7 @@ Cloud
 
 import numpy as np
 from pathlib import Path
-from luts.luts import MLUT, LUT, Idx, read_mlut, read_mlut_hdf5, merge
+from luts.luts import MLUT, LUT, Idx, read_mlut, merge
 from smartg.phase import calc_iphase
 from scipy.interpolate import interp1d
 from scipy.integrate import simpson
@@ -50,8 +50,7 @@ import pandas as pd
 import xarray as xr
 import re
 from pytrunc.truncation import delta_m_phase_approx, gt_phase_approx
-import netCDF4  # noqa: F401 - must be imported before h5py to avoid HDF5 library conflicts
-import h5py
+import netCDF4  # noqa: F401 - imported early to avoid HDF5 library conflicts with HDF5-backed readers
 
 
 class AerOPAC(object):
@@ -2887,12 +2886,55 @@ def atm_pro_from_aeronet(date, time, aod_file, ssa_file, pfn_file, b_wav,
     return pro
 
 
+def _open_lut_datatree_as_xarray(input_path, group=None, datasets=None):
+    """Read a LUT-style HDF5 group into an xarray.Dataset using xarray.open_datatree."""
+    data_vars = {}
+
+    tree = xr.open_datatree(input_path)
+    try:
+        group_path = "/" if group in (None, "") else f"/{str(group).strip('/')}"
+        axis_path = "/axis" if group_path == "/" else f"{group_path}/axis"
+        data_path = "/data" if group_path == "/" else f"{group_path}/data"
+
+        axis_ds = tree[axis_path].to_dataset(inherit=False).load()
+        data_ds = tree[data_path].to_dataset(inherit=False).load()
+    finally:
+        tree.close()
+
+    if datasets is None:
+        dataset_names = list(data_ds.data_vars)
+    else:
+        dataset_names = list(datasets)
+
+    coords = {name: axis_ds[name].to_numpy() for name in axis_ds.data_vars}
+
+    for name in dataset_names:
+        if name not in data_ds:
+            raise KeyError(f'Dataset "{name}" not available in DataTree group')
+
+        dimensions = data_ds[name].attrs.get('dimensions')
+        if dimensions is None:
+            raise ValueError(f'Missing dimensions attribute for dataset "{name}"')
+        if isinstance(dimensions, bytes):
+            dimensions = dimensions.decode()
+        dims = tuple(dim.strip() for dim in dimensions.split(',') if dim.strip())
+
+        if len(dims) != data_ds[name].ndim:
+            raise ValueError(
+                f'Dataset "{name}" declares {len(dims)} dimensions but has {data_ds[name].ndim} axes'
+            )
+
+        data_vars[name] = (dims, data_ds[name].to_numpy())
+
+    return xr.Dataset(data_vars=data_vars, coords=coords)
+
+
 def artdeco_to_smartg_cld(input_path, output_path=None, h5_group=None, normalize=True, overwrite=False, veff = None, wl_max = 4500):
     """
     Convert ARTDECO cloud HDF5 file to SMART-G NetCDF file format.
 
     Reads cloud optical properties from an ARTDECO HDF5 file and converts them 
-    to MLUT format.
+    to an xarray dataset compatible with SMART-G cloud inputs.
 
     Parameters
     ----------
@@ -2919,9 +2961,8 @@ def artdeco_to_smartg_cld(input_path, output_path=None, h5_group=None, normalize
 
     Returns
     -------
-    m : MLUT
-        Multi-dimensional lookup table (MLUT) object containing cloud optical properties.
-        Includes axes:
+    xr.Dataset
+        Dataset containing cloud optical properties. Includes coordinates:
         
         - reff: effective radius
         - wav: wavelength (nm)
@@ -2936,69 +2977,74 @@ def artdeco_to_smartg_cld(input_path, output_path=None, h5_group=None, normalize
     """
     # Deals with the case where h5_group is not provided 
     if h5_group is None:
-        with h5py.File(input_path, "r") as f:
-            keys = list(f.keys())
-        if len(keys) == 1 :
-            h5_group = keys[0]
-        elif len(keys) > 1:
-            raise NameError("The h5 file has more than one group. Please choose one group between: " + ', '.join(keys))
+        tree = xr.open_datatree(input_path)
+        try:
+            if {'axis', 'data'}.issubset(tree.children):
+                h5_group = None
+            else:
+                keys = [
+                    name for name, child in tree.children.items()
+                    if {'axis', 'data'}.issubset(child.children)
+                ]
+        finally:
+            tree.close()
 
-    art_cld = read_mlut_hdf5(input_path, group=h5_group)
+        if h5_group is None and 'keys' in locals():
+            if len(keys) == 1:
+                h5_group = keys[0]
+            elif len(keys) > 1:
+                raise NameError("The h5 file has more than one group. Please choose one group between: " + ', '.join(keys))
+            else:
+                raise NameError("Could not identify an ARTDECO group containing axis and data nodes.")
+
+    art_cld = _open_lut_datatree_as_xarray(input_path, group=h5_group)
 
     # If p22 doesn't exist --> convention with 4 stk components
     # Care, phase_comp elements are sorted in a specific way
-    try:    
-        art_cld["p22_phase_function"]
+    if "p22_phase_function" in art_cld:
         nstk = int(6)
         phase_comp = ['p11_phase_function', 'p21_phase_function', 'p33_phase_function',
                     'p34_phase_function', 'p22_phase_function', 'p44_phase_function']
-    except:
+    else:
         nstk = int(4)
         # here p33 = p44
         phase_comp = ['p11_phase_function', 'p21_phase_function', 'p44_phase_function', 'p34_phase_function']
 
     # check if the cloud properties are dependant of veff
-    is_veff = False
-    try:
-        art_cld.axes["veff"]
-        is_veff = True
-    except:
-        pass
+    is_veff = 'veff' in art_cld.coords
 
     if is_veff and veff is None:
-        veff_min = str(np.min(art_cld.axes["veff"]))
-        veff_max = str(np.max(art_cld.axes["veff"]))
+        veff_min = str(float(art_cld.coords['veff'].min()))
+        veff_max = str(float(art_cld.coords['veff'].max()))
         raise NameError ("The cloud file is dependant of veff. Please give a veff value between: " + veff_min + " and " + veff_max)
-    elif is_veff and veff is not None:   
-        art_cld = art_cld.sub({'veff':Idx(veff)})
+    elif is_veff:
+        art_cld = art_cld.interp(veff=np.array([veff])).squeeze('veff', drop=True)
 
-    m = MLUT()
-    reff = np.array(art_cld.axes['reff'], dtype=np.float32)
-    m.add_axis('reff', reff)
-    nreff = len(m.axes['reff'])
+    reff = art_cld.coords['reff'].to_numpy().astype(np.float32, copy=False)
+    nreff = len(reff)
 
-    wav = np.array(np.round(art_cld.axes['wavelengths']*1e3, decimals=3), dtype=np.float32)
-    m.add_axis('wav', wav[wav<=wl_max])
-    nwav = len(m.axes['wav'])
+    wav_full = np.round(
+        art_cld.coords['wavelengths'].to_numpy().astype(np.float64, copy=False) * 1e3,
+        decimals=3,
+    ).astype(np.float32, copy=False)
+    wav_idx = np.flatnonzero(wav_full <= wl_max)
+    wav = wav_full[wav_idx]
+    nwav = len(wav)
 
     stk = np.arange(nstk, dtype=np.int16)
-    m.add_axis('stk', stk)
 
-    theta = np.array(np.rad2deg(np.arccos(np.float64(art_cld.axes['mu']))), dtype=np.float64)
-    m.add_axis('theta', np.sort(theta))
-    ntheta = len(m.axes['theta'])
+    mu = art_cld.coords['mu'].to_numpy().astype(np.float64, copy=False)
+    theta_unsorted = np.rad2deg(np.arccos(mu))
+    theta_idx = np.argsort(theta_unsorted)
+    theta = theta_unsorted[theta_idx]
+    mu_sorted = mu[theta_idx]
+    ntheta = len(theta)
 
     phase = np.zeros((nreff, nwav, nstk, ntheta), dtype=np.float32)
     for ipc, pc in enumerate(phase_comp):
-        # reorder axes, from 'mu', 'reff', 'wavelengths' to 'reff', 'wavelengths', 'mu'
-        phac = art_cld[pc].swapaxes('mu', 'reff').swapaxes('mu', 'wavelengths')
-
-        # only take wavelengths less than wl_max
-        phac = phac[:,np.arange(nwav),:]
-
-        # sort theta (since mu = cos(theta) may be sorted differently)
-        phac = phac[:,:, np.argsort(theta)]
-        phase[:,:,ipc,:] = phac.data
+        phac = art_cld[pc].transpose('reff', 'wavelengths', 'mu')
+        phac = phac.isel(wavelengths=wav_idx, mu=theta_idx)
+        phase[:,:,ipc,:] = phac.to_numpy().astype(np.float32, copy=False)
 
     if nstk == 6 : pha_desc = 'phase matrix integral normalized to 2. stk order: p11, p21, p33, p34, p22 and p44'
     if nstk == 4 : pha_desc = 'phase matrix integral normalized to 2. stk order: p11, p21, p33 and p34'
@@ -3008,22 +3054,48 @@ def artdeco_to_smartg_cld(input_path, output_path=None, h5_group=None, normalize
         for iwav in range (0, nwav):
             for ireff in range (0, nreff):  
                 f = phase[ireff, iwav, 0, :] # P11
-                Norm = np.trapezoid(f,-art_cld.axes['mu'][::-1])
+                Norm = np.trapezoid(f, -mu_sorted)
                 phase[ireff, iwav, :, :] *= 2./abs(Norm)
 
-    m.add_dataset('phase', phase, axnames=['reff', 'wav', 'stk', 'theta'], attrs={'description':pha_desc})
+    ext = art_cld['Cext'].transpose('reff', 'wavelengths').isel(wavelengths=wav_idx)
+    ssa = art_cld['single_scattering_albedo'].transpose('reff', 'wavelengths').isel(wavelengths=wav_idx)
 
-    ext = np.array(art_cld["Cext"][:,np.arange(nwav)], np.float64)
-    m.add_dataset('ext', ext, axnames=['reff', 'wav'], attrs={'description':'extinction coefficient in km^-1'})
+    ds = xr.Dataset(
+        data_vars={
+            'phase': (
+                ('reff', 'wav', 'stk', 'theta'),
+                phase,
+                {'description': pha_desc},
+            ),
+            'ext': (
+                ('reff', 'wav'),
+                ext.to_numpy().astype(np.float64, copy=False),
+                {'description': 'extinction coefficient in km^-1'},
+            ),
+            'ssa': (
+                ('reff', 'wav'),
+                ssa.to_numpy().astype(np.float64, copy=False),
+                {'description': 'single scattering albedo'},
+            ),
+        },
+        coords={
+            'reff': reff,
+            'wav': wav,
+            'stk': stk,
+            'theta': theta,
+        },
+    )
 
-    ssa = np.array(art_cld["single_scattering_albedo"][:,np.arange(nwav)], np.float64)
-    m.add_dataset('ssa', ssa, axnames=['reff', 'wav'], attrs={'description':'single scattering albedo'})
+    if veff is not None:
+        ds.attrs['veff'] = veff
 
-    if veff is not None: m.set_attr('veff', veff)
+    if output_path is not None:
+        output_path = Path(output_path)
+        if output_path.exists() and not overwrite:
+            raise FileExistsError(f"{output_path} already exists")
+        ds.to_netcdf(output_path)
 
-    if output_path is not None: m.save(output_path, overwrite=overwrite)
-
-    return m
+    return ds
 
     
 def extract_split(m):
