@@ -32,7 +32,7 @@ from pycuda.compiler import SourceModule
 # bellow necessary for object incorporation
 from smartg.visualizegeo import Mirror, Plane, Spheric, \
     Entity, LambMirror, Matte
-    
+import xarray as xr
 from copy import deepcopy
 import geoclide as gc
 import tempfile
@@ -1430,22 +1430,27 @@ class Smartg(object):
         #          
         if isinstance(atm, Atmosphere):
             prof_atm = atm.calc(wl)
-        elif (isinstance(atm, MLUT) or (atm is None)):
+        elif isinstance(atm, xr.Dataset) or (atm is None):
             prof_atm = atm
+        elif hasattr(atm, 'to_xarray'):
+            prof_atm = atm.to_xarray()
         else:
-            raise NameError('atm must be an Atmosphere class or an MLUT class or equal to None!')
+            raise NameError('atm must be an Atmosphere class, an xr.Dataset, an MLUT-like object or equal to None!')
 
-        if (isinstance(atm, MLUT)):
-            ZTOA = atm.axes['z_atm'][0]
+        if hasattr(prof_atm, 'to_xarray'):
+            prof_atm = prof_atm.to_xarray()
+
+        if prof_atm is not None:
+            ZTOA = prof_atm.coords['z_atm'].to_numpy()[0]
         else:
             ZTOA = 120.
   
         if prof_atm is not None:
             faer = calculF(prof_atm, NF, DEPO, kind='atm', pol_off=pol_off)
             prof_atm_gpu, cell_atm_gpu = init_profile(wl, prof_atm, 'atm')
-            NATM = len(prof_atm.axis('z_atm')) - 1
+            NATM = len(prof_atm.coords['z_atm']) - 1
             if self.opt3D : 
-                NATM_ABS = prof_atm['iabs_atm'].data.max().astype(np.int32)
+                NATM_ABS = np.int32(prof_atm['iabs_atm'].to_numpy().max())
             else : NATM_ABS = NATM
         else:
             faer = gpuzeros(1, dtype='float32')
@@ -1526,16 +1531,21 @@ class Smartg(object):
         #
         if isinstance(water, IOP_base):
             prof_oc = water.calc(wl)
-        elif(isinstance(water, MLUT) or (water is None)):
+        elif isinstance(water, xr.Dataset) or (water is None):
             prof_oc = water
+        elif hasattr(water, 'to_xarray'):
+            prof_oc = water.to_xarray()
         else:
-            raise NameError('water must be an IOP_base class or equal to None!')
+            raise NameError('water must be an IOP_base class, an xr.Dataset, an MLUT-like object or equal to None!')
+
+        if hasattr(prof_oc, 'to_xarray'):
+            prof_oc = prof_oc.to_xarray()
 
         if prof_oc is not None:
             foce = calculF(prof_oc, NF, DEPO_WATER, kind='oc', pol_off=pol_off)
             prof_oc_gpu, cell_oc_gpu = init_profile(wl, prof_oc, 'oc')
-            NOCE = len(prof_oc.axis('z_oc')) - 1
-            if self.opt3D : NOCE_ABS = prof_oc['iabs_oc'].data.max().astype(np.int32)
+            NOCE = len(prof_oc.coords['z_oc']) - 1
+            if self.opt3D : NOCE_ABS = np.int32(prof_oc['iabs_oc'].to_numpy().max())
             else : NOCE_ABS = NOCE
         else:
             foce = gpuzeros(1, dtype='float32')
@@ -1657,12 +1667,16 @@ class Smartg(object):
         if cell_proba is not None:
             if (cell_proba == 'auto') and not self.back and self.thermal:
                 kabs = od2k(prof_atm, 'OD_abs_atm')
-                z = -prof_atm.axis('z_atm')
-                B = blackbody_radiance(wl[:, None], prof_atm['T_atm'].data[None, :])
-                Emission     = LUT(kabs * B, axes = [wl, z], names= ['wavelength','z_atm'])
-                Norm_Emission = (4*np.pi) * Emission.reduce(np.sum, 'z_atm')
-                P_Emission   = Emission * (4*np.pi) / Norm_Emission
-                cell_proba_icdf   = to_gpu(ICDF2D(P_Emission.data).T)
+                z = -prof_atm.coords['z_atm'].to_numpy()
+                B = blackbody_radiance(wl[:][:, None], prof_atm['T_atm'].to_numpy()[None, :])
+                emission = xr.DataArray(
+                    kabs * B,
+                    dims=['wavelength', 'z_atm'],
+                    coords={'wavelength': wl[:], 'z_atm': z},
+                )
+                norm_emission = (4*np.pi) * emission.sum(dim='z_atm')
+                p_emission = emission * (4*np.pi) / norm_emission
+                cell_proba_icdf = to_gpu(ICDF2D(p_emission.to_numpy()).T)
                 NCELLPROBA = cell_proba_icdf.shape[0]
             else:
                 assert cell_proba.shape[1] == NLAM
@@ -1820,6 +1834,11 @@ def finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPho
     '''
     create and return the final output
     '''
+    if hasattr(prof_atm, 'to_xarray'):
+        prof_atm = prof_atm.to_xarray()
+    if hasattr(prof_oc, 'to_xarray'):
+        prof_oc = prof_oc.to_xarray()
+
     (_,_,NSENSOR,NLAM,NBTHETA,NBPHI) = tabPhotonsTot.shape
 
     # normalization in case of radiance
@@ -2077,60 +2096,55 @@ def finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPho
                    axnames=['wavelength'])
         m.add_dataset('direct transmission (dev)', np.exp(-tabTransDir[isen,ilam]), axnames4)
 
-        m.add_lut(prof_atm['n_atm'])
-        m.add_lut(prof_atm['T_atm'])
-        m.add_lut(prof_atm['OD_r'])
-        m.add_lut(prof_atm['OD_p'])
-        m.add_lut(prof_atm['OD_g'])
-        m.add_lut(prof_atm['OD_atm'])
-        m.add_lut(prof_atm['OD_sca_atm'])
-        m.add_lut(prof_atm['OD_abs_atm'])
-        m.add_lut(prof_atm['pmol_atm'])
-        m.add_lut(prof_atm['ssa_atm'])
-        m.add_lut(prof_atm['ssa_p_atm'])
-        if 'phase_atm' in prof_atm.datasets():
-            m.add_lut(prof_atm['phase_atm'])
-            m.add_lut(prof_atm['iphase_atm'])
-        if 'pine_atm' in prof_atm.datasets():
-            m.add_lut(prof_atm['pine_atm'])
-            m.add_lut(prof_atm['FQY1_atm'])
+        for axis_name in prof_atm.coords:
+            if axis_name not in m.axes:
+                m.add_axis(axis_name, prof_atm.coords[axis_name].to_numpy())
 
-        if 'neighbour_atm' in prof_atm.datasets():
-            m.add_lut(prof_atm['iopt_atm'])
-            m.add_lut(prof_atm['iabs_atm'])
-            m.add_lut(prof_atm['pmin_atm'])
-            m.add_lut(prof_atm['pmax_atm'])
-            m.add_lut(prof_atm['neighbour_atm'])
+        for name in ['n_atm', 'T_atm', 'OD_r', 'OD_p', 'OD_g', 'OD_atm', 'OD_sca_atm', 'OD_abs_atm', 'pmol_atm', 'ssa_atm', 'ssa_p_atm']:
+            da = prof_atm[name]
+            m.add_dataset(name, da.to_numpy(), list(da.dims), attrs=da.attrs)
+        if 'phase_atm' in prof_atm.data_vars:
+            for name in ['phase_atm', 'iphase_atm']:
+                da = prof_atm[name]
+                m.add_dataset(name, da.to_numpy(), list(da.dims), attrs=da.attrs)
+        if 'pine_atm' in prof_atm.data_vars:
+            for name in ['pine_atm', 'FQY1_atm']:
+                da = prof_atm[name]
+                m.add_dataset(name, da.to_numpy(), list(da.dims), attrs=da.attrs)
+
+        if 'neighbour_atm' in prof_atm.data_vars:
+            for name in ['iopt_atm', 'iabs_atm', 'pmin_atm', 'pmax_atm', 'neighbour_atm']:
+                da = prof_atm[name]
+                m.add_dataset(name, da.to_numpy(), list(da.dims), attrs=da.attrs)
 
     # write ocean profiles
     if prof_oc is not None:
-        m.add_lut(prof_oc['T_oc'])
-        m.add_lut(prof_oc['OD_w'])
-        m.add_lut(prof_oc['OD_p_oc'])
-        m.add_lut(prof_oc['OD_y'])
-        m.add_lut(prof_oc['OD_oc'])
-        m.add_lut(prof_oc['OD_sca_oc'])
-        m.add_lut(prof_oc['OD_abs_oc'])
-        m.add_lut(prof_oc['pmol_oc'])
-        m.add_lut(prof_oc['ssa_oc'])
-        if 'ssa_w' in prof_oc.datasets():
-            m.add_lut(prof_oc['ssa_w'])
-        if 'ssa_p_oc' in prof_oc.datasets():
-            m.add_lut(prof_oc['ssa_p_oc'])
-        if 'phase_oc' in prof_oc.datasets():
-            m.add_lut(prof_oc['phase_oc'])
-            m.add_lut(prof_oc['iphase_oc'])
-        if 'pine_oc' in prof_oc.datasets():
-            m.add_lut(prof_oc['pine_oc'])
-            m.add_lut(prof_oc['FQY1_oc'])
-        m.add_lut(prof_oc['albedo_seafloor'])
+        for axis_name in prof_oc.coords:
+            if axis_name not in m.axes:
+                m.add_axis(axis_name, prof_oc.coords[axis_name].to_numpy())
 
-        if 'neighbour_oc' in prof_oc.datasets():
-            m.add_lut(prof_oc['iopt_oc'])
-            m.add_lut(prof_oc['iabs_oc'])
-            m.add_lut(prof_oc['pmin_oc'])
-            m.add_lut(prof_oc['pmax_oc'])
-            m.add_lut(prof_oc['neighbour_oc'])
+        for name in ['T_oc', 'OD_w', 'OD_p_oc', 'OD_y', 'OD_oc', 'OD_sca_oc', 'OD_abs_oc', 'pmol_oc', 'ssa_oc', 'albedo_seafloor']:
+            da = prof_oc[name]
+            m.add_dataset(name, da.to_numpy(), list(da.dims), attrs=da.attrs)
+        if 'ssa_w' in prof_oc.data_vars:
+            da = prof_oc['ssa_w']
+            m.add_dataset('ssa_w', da.to_numpy(), list(da.dims), attrs=da.attrs)
+        if 'ssa_p_oc' in prof_oc.data_vars:
+            da = prof_oc['ssa_p_oc']
+            m.add_dataset('ssa_p_oc', da.to_numpy(), list(da.dims), attrs=da.attrs)
+        if 'phase_oc' in prof_oc.data_vars:
+            for name in ['phase_oc', 'iphase_oc']:
+                da = prof_oc[name]
+                m.add_dataset(name, da.to_numpy(), list(da.dims), attrs=da.attrs)
+        if 'pine_oc' in prof_oc.data_vars:
+            for name in ['pine_oc', 'FQY1_oc']:
+                da = prof_oc[name]
+                m.add_dataset(name, da.to_numpy(), list(da.dims), attrs=da.attrs)
+
+        if 'neighbour_oc' in prof_oc.data_vars:
+            for name in ['iopt_oc', 'iabs_oc', 'pmin_oc', 'pmax_oc', 'neighbour_oc']:
+                da = prof_oc[name]
+                m.add_dataset(name, da.to_numpy(), list(da.dims), attrs=da.attrs)
 
     # write the error )count
     err = errorcount.get()
@@ -2216,13 +2230,14 @@ def finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPho
 
         # find the atm layer where the mean heliostats z altitude is located
         Ci = 0
-        while(prof_atm.axis('z_atm')[Ci] > dicSTP["MZAlt_H"]):
+        zatm = prof_atm.coords['z_atm'].to_numpy()
+        od_atm = prof_atm['OD_atm'].to_numpy()
+        while(zatm[Ci] > dicSTP["MZAlt_H"]):
             Ci += 1
 
         for i in range (0, lwl):
-            tau_ext[i] = (prof_atm['OD_atm'].data[i,Ci] -  prof_atm['OD_atm'].data[i,Ci-1]) * \
-                         (dicSTP["MZAlt_H"]/prof_atm.axis('z_atm')[Ci-1])
-            tau_ext[i] = prof_atm['OD_atm'].data[i,Ci] - tau_ext[i]
+            tau_ext[i] = (od_atm[i,Ci] - od_atm[i,Ci-1]) * (dicSTP["MZAlt_H"]/zatm[Ci-1])
+            tau_ext[i] = od_atm[i,Ci] - tau_ext[i]
             # Beer-Lamber law to find the transmisttance
             Tr_tau[i] = np.exp(-abs(tau_ext[i]/-dicSTP["vSun"].z))
             # theoric computation of the total power collected by all the heliostats
@@ -2407,8 +2422,11 @@ def calculF(profile, N, DEPO, kind, pol_off=False):
         Deactivate polarization. Default False (meaning polarization is on).
     """
 
+    if hasattr(profile, 'to_xarray'):
+        profile = profile.to_xarray()
+
     name_phase = 'phase_{}'.format(kind)
-    if name_phase in profile.datasets():
+    if name_phase in profile.data_vars:
         nphases = profile[name_phase].shape[0]
     else:
         nphases = 0
@@ -2427,8 +2445,8 @@ def calculF(profile, N, DEPO, kind, pol_off=False):
     if DEPO >=0 : phase_H[0,:] = rayleigh(N, DEPO, pol_off=pol_off)
     # no pol_off in isotropic because the function needs first to be corrected
     else : phase_H[0,:]        = isotropic(N) 
-    if 'theta_'+kind in profile.axes:
-        angles = profile.axis('theta_'+kind) * pi/180.
+    if 'theta_'+kind in profile.coords:
+        angles = profile.coords['theta_'+kind].to_numpy() * pi/180.
         assert angles[-1] < 3.15   # assert that angles are in radians
         dtheta = np.diff(angles)
 
@@ -2440,7 +2458,7 @@ def calculF(profile, N, DEPO, kind, pol_off=False):
     for ipha in range(nphases-2):
     #for ipha in range(nphases-1):
 
-        phase = profile[name_phase][ipha, :, :]  # ipha, stk, theta
+        phase = profile[name_phase][ipha, :, :].to_numpy()  # ipha, stk, theta
         
         phase = convert_phase_to_iparper(phase)
 
@@ -2693,59 +2711,65 @@ def init_profile(wl, prof, kind):
     kind = 'atm' or 'oc' for atmosphere or ocean
     '''
 
+    if hasattr(prof, 'to_xarray'):
+        prof = prof.to_xarray()
+
     #NREF = len(prof.axis('z_'+kind))
     # reformat to smartg format
-    if 'iopt_'+kind in prof.datasets(): 
-        NLAY = len(prof['OD_'+kind].data[0,:])
+    if 'iopt_'+kind in prof.data_vars:
+        NLAY = len(prof['OD_'+kind].to_numpy()[0,:])
     else:
-        NLAY = len(prof.axis('z_'+kind))
+        NLAY = len(prof.coords['z_'+kind])
     shp = (len(wl), NLAY)
     prof_gpu = np.zeros(shp, dtype=type_Profile, order='C')
 
     if kind == "oc":
-        if 'iopt_oc' not in prof.datasets():
-            prof_gpu['z'][0,:] = prof.axis('z_'+kind)
-            #prof_gpu['z'][0,:] = prof.axis('z_'+kind)  * 1e-3 # to Km
-            prof_gpu['T'][0,:] = prof['T_'+kind].data[:]
+        if 'iopt_oc' not in prof.data_vars:
+            prof_gpu['z'][0,:] = prof.coords['z_'+kind].to_numpy()
+            #prof_gpu['z'][0,:] = prof.coords['z_'+kind].to_numpy()  * 1e-3 # to Km
+            prof_gpu['T'][0,:] = prof['T_'+kind].to_numpy()
             cell_gpu = np.zeros(1, dtype=type_Cell)
         else: 
-            cell_gpu = np.zeros(len(prof['iopt_oc'].data), dtype=type_Cell)
+            cell_gpu = np.zeros(len(prof['iopt_oc'].to_numpy()), dtype=type_Cell)
         prof_gpu['n'][0,:] = 1.34
     else:
-        if 'iopt_atm' not in prof.datasets():
-            prof_gpu['z'][0,:] = prof.axis('z_'+kind)
-            prof_gpu['T'][0,:] = prof['T_'+kind].data[:]
-            prof_gpu['n'][:,:] = prof['n_'+kind].data[...]
+        if 'iopt_atm' not in prof.data_vars:
+            prof_gpu['z'][0,:] = prof.coords['z_'+kind].to_numpy()
+            prof_gpu['T'][0,:] = prof['T_'+kind].to_numpy()
+            prof_gpu['n'][:,:] = prof['n_'+kind].to_numpy()
             cell_gpu = np.zeros(1, dtype=type_Cell)
         else:
-            cell_gpu = np.zeros(len(prof['iopt_atm'].data), dtype=type_Cell)
+            cell_gpu = np.zeros(len(prof['iopt_atm'].to_numpy()), dtype=type_Cell)
     prof_gpu['z'][1:,:] = -999.      # other wavelengths are NaN
 
-    prof_gpu['OD'][:,:] = prof['OD_'+kind].data[...]
-    prof_gpu['OD_sca'][:] = prof['OD_sca_'+kind].data[...]
-    prof_gpu['OD_abs'][:] = prof['OD_abs_'+kind].data[...]
-    prof_gpu['pmol'][:] = prof['pmol_'+kind].data[...]
-    prof_gpu['ssa'][:] = prof['ssa_'+kind].data[...]
-    prof_gpu['pine'][:] = prof['pine_'+kind].data[...]
-    prof_gpu['FQY1'][:] = prof['FQY1_'+kind].data[...]
-    if 'iphase_'+kind in prof.datasets():
-        prof_gpu['iphase'][:] = prof['iphase_'+kind].data[...]
+    prof_gpu['OD'][:,:] = prof['OD_'+kind].to_numpy()
+    prof_gpu['OD_sca'][:] = prof['OD_sca_'+kind].to_numpy()
+    prof_gpu['OD_abs'][:] = prof['OD_abs_'+kind].to_numpy()
+    prof_gpu['pmol'][:] = prof['pmol_'+kind].to_numpy()
+    prof_gpu['ssa'][:] = prof['ssa_'+kind].to_numpy()
+    prof_gpu['pine'][:] = prof['pine_'+kind].to_numpy()
+    prof_gpu['FQY1'][:] = prof['FQY1_'+kind].to_numpy()
+    if 'iphase_'+kind in prof.data_vars:
+        prof_gpu['iphase'][:] = prof['iphase_'+kind].to_numpy()
 
     if len(cell_gpu)>1:
-        cell_gpu['iopt'][:]  = prof['iopt_'+kind].data[...]
-        cell_gpu['iabs'][:]  = prof['iabs_'+kind].data[...]
-        cell_gpu['pminx'][:] = prof['pmin_'+kind].data[0,:]
-        cell_gpu['pminy'][:] = prof['pmin_'+kind].data[1,:]
-        cell_gpu['pminz'][:] = prof['pmin_'+kind].data[2,:]
-        cell_gpu['pmaxx'][:] = prof['pmax_'+kind].data[0,:]
-        cell_gpu['pmaxy'][:] = prof['pmax_'+kind].data[1,:]
-        cell_gpu['pmaxz'][:] = prof['pmax_'+kind].data[2,:]
-        cell_gpu['neighbour1'][:] = prof['neighbour_'+kind].data[0,:]
-        cell_gpu['neighbour2'][:] = prof['neighbour_'+kind].data[1,:]
-        cell_gpu['neighbour3'][:] = prof['neighbour_'+kind].data[2,:]
-        cell_gpu['neighbour4'][:] = prof['neighbour_'+kind].data[3,:]
-        cell_gpu['neighbour5'][:] = prof['neighbour_'+kind].data[4,:]
-        cell_gpu['neighbour6'][:] = prof['neighbour_'+kind].data[5,:]
+        cell_gpu['iopt'][:]  = prof['iopt_'+kind].to_numpy()
+        cell_gpu['iabs'][:]  = prof['iabs_'+kind].to_numpy()
+        pmin = prof['pmin_'+kind].to_numpy()
+        pmax = prof['pmax_'+kind].to_numpy()
+        neighbour = prof['neighbour_'+kind].to_numpy()
+        cell_gpu['pminx'][:] = pmin[0,:]
+        cell_gpu['pminy'][:] = pmin[1,:]
+        cell_gpu['pminz'][:] = pmin[2,:]
+        cell_gpu['pmaxx'][:] = pmax[0,:]
+        cell_gpu['pmaxy'][:] = pmax[1,:]
+        cell_gpu['pmaxz'][:] = pmax[2,:]
+        cell_gpu['neighbour1'][:] = neighbour[0,:]
+        cell_gpu['neighbour2'][:] = neighbour[1,:]
+        cell_gpu['neighbour3'][:] = neighbour[2,:]
+        cell_gpu['neighbour4'][:] = neighbour[3,:]
+        cell_gpu['neighbour5'][:] = neighbour[4,:]
+        cell_gpu['neighbour6'][:] = neighbour[5,:]
         
     return to_gpu(prof_gpu), to_gpu(cell_gpu)
 
@@ -3318,9 +3342,14 @@ def impactInit(prof_atm, NLAM, THVDEG, Rter, pp):
         Hatm = 0.
         natm = 0
     else:
-        Zatm = prof_atm.axis('z_atm')
+        if hasattr(prof_atm, 'to_xarray'):
+            prof_atm = prof_atm.to_xarray()
+        Zatm = prof_atm.coords['z_atm'].to_numpy()
         Hatm = Zatm[0]
         natm = len(Zatm)-1
+
+    if prof_atm is not None:
+        od_atm = prof_atm['OD_atm'].to_numpy()
 
     vx = -np.sin(THVDEG * np.pi / 180)
     vy = 0.
@@ -3339,11 +3368,11 @@ def impactInit(prof_atm, NLAM, THVDEG, Rter, pp):
                 if prof_atm['OD_atm'].ndim == 2:
                     # lam, z
                     #tautot[ilam] = prof_atm['OD_atm'][ilam, natm]/np.cos(THVDEG*pi/180.)
-                    tautot[ilam] = prof_atm['OD_atm'][ilam, -1]/np.cos(THVDEG*pi/180.)
+                    tautot[ilam] = od_atm[ilam, -1]/np.cos(THVDEG*pi/180.)
                 elif prof_atm['OD_atm'].ndim == 1:
                     # z
                     #tautot[ilam] = prof_atm['OD_atm'][natm]/np.cos(THVDEG*pi/180.)
-                    tautot[ilam] = prof_atm['OD_atm'][-1]/np.cos(THVDEG*pi/180.)
+                    tautot[ilam] = od_atm[-1]/np.cos(THVDEG*pi/180.)
                 else:
                     raise Exception('invalid number of dimensions in prof_atm')
     else:
@@ -3400,7 +3429,7 @@ def impactInit(prof_atm, NLAM, THVDEG, Rter, pp):
 
             for ilam in range(NLAM):
                 # optical thickness of the layer in vertical direction
-                hlay0 = abs(prof_atm['OD_atm'][ilam, i] - prof_atm['OD_atm'][ilam, i - 1])
+                hlay0 = abs(od_atm[ilam, i] - od_atm[ilam, i - 1])
 
                 # thickness of the layer
                 D0 = abs(Zatm[i-1] - Zatm[i])
@@ -3918,12 +3947,18 @@ def findExtinction(IP, FP, prof_atm, W_IND = int(0)):
         n_ext = 1
         return n_ext
 
+    if hasattr(prof_atm, 'to_xarray'):
+        prof_atm = prof_atm.to_xarray()
+
+    zatm = prof_atm.coords['z_atm'].to_numpy()
+    od_atm = prof_atm['OD_atm'].to_numpy()
+
     # Vector/direction from IP to FP
     Vec = FP - IP
 
     # Find the atm layer of the initial location
     lay = int(0)
-    while(prof_atm.axis('z_atm')[lay] > IP.z):
+    while(zatm[lay] > IP.z):
         lay += int(1)
         
     # Initialization
@@ -3931,15 +3966,15 @@ def findExtinction(IP, FP, prof_atm, W_IND = int(0)):
     ilayer2 = lay
 
     # Case with only 1 layer: n = 1
-    if (FP.z >= prof_atm.axis('z_atm')[ilayer2] and FP.z < prof_atm.axis('z_atm')[ilayer2-1]):
+    if (FP.z >= zatm[ilayer2] and FP.z < zatm[ilayer2-1]):
         # delta_i is: Delta(tau)1 = |tau(i-1) - tau(i)|
-        delta_i = abs(prof_atm['OD_atm'].data[W_IND, ilayer2-1] - prof_atm['OD_atm'].data[W_IND, ilayer2])
+        delta_i = abs(od_atm[W_IND, ilayer2-1] - od_atm[W_IND, ilayer2])
         # tauHit = (Delat(D1)/Delat(Z1))*delta_i
-        tauHit += ((IP - FP).Length()/abs(prof_atm.axis('z_atm')[ilayer2-1]-prof_atm.axis('z_atm')[ilayer2]))*delta_i
+        tauHit += ((IP - FP).Length()/abs(zatm[ilayer2-1]-zatm[ilayer2]))*delta_i
     else: # Case with several layers: n >= 2
         # Find the layer where there is intersection
         ilayer2 = int(1)
-        while(prof_atm.axis('z_atm')[ilayer2] > FP.z and prof_atm.axis('z_atm')[ilayer2] > 0.):
+        while(zatm[ilayer2] > FP.z and zatm[ilayer2] > 0.):
             ilayer2+=int(1)
 
         higher = False
@@ -3952,12 +3987,12 @@ def findExtinction(IP, FP, prof_atm, W_IND = int(0)):
 
         while(ilayer != ilayer2):
             if(higher):
-                timeT = abs(prof_atm.axis('z_atm')[ilayer] - oldP.z)/abs(Vec.z)
+                timeT = abs(zatm[ilayer] - oldP.z)/abs(Vec.z)
             else:
-                timeT = abs(prof_atm.axis('z_atm')[ilayer-1] - oldP.z)/abs(Vec.z)
+                timeT = abs(zatm[ilayer-1] - oldP.z)/abs(Vec.z)
             newP = oldP + (Vec*timeT)
-            delta_i = abs(prof_atm['OD_atm'].data[W_IND, ilayer]-prof_atm['OD_atm'].data[W_IND, ilayer-1])
-            tauHit += ((newP - oldP).Length()/abs(prof_atm.axis('z_atm')[ilayer-1]-prof_atm.axis('z_atm')[ilayer]))*delta_i
+            delta_i = abs(od_atm[W_IND, ilayer]-od_atm[W_IND, ilayer-1])
+            tauHit += ((newP - oldP).Length()/abs(zatm[ilayer-1]-zatm[ilayer]))*delta_i
         
             if(higher): # the photon come from higher layer
                 ilayer+= int(1)
@@ -3966,8 +4001,8 @@ def findExtinction(IP, FP, prof_atm, W_IND = int(0)):
             oldP = newP # Update the position of the photon
         
         # Calculate and add the last tau distance when ilayer is equal to ilayer2
-        delta_i = abs(prof_atm['OD_atm'].data[W_IND, ilayer2]-prof_atm['OD_atm'].data[W_IND, ilayer2-1])
-        tauHit += ((FP - oldP).Length()/abs(prof_atm.axis('z_atm')[ilayer2-1]-prof_atm.axis('z_atm')[ilayer2]))*delta_i
+        delta_i = abs(od_atm[W_IND, ilayer2]-od_atm[W_IND, ilayer2-1])
+        tauHit += ((FP - oldP).Length()/abs(zatm[ilayer2-1]-zatm[ilayer2]))*delta_i
 
     n_ext = np.exp(-abs(tauHit))
 
